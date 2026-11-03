@@ -11,8 +11,8 @@
 // DepthCS: the eye distance of each occlusion pixel's centre scene target pixel (0 for the far plane) into u0.
 // AoCS: occlusion and eye distance from t2 (DepthCS's output) into u0.
 // DenoiseCS: the depth-weighted tent of t1 into u0.
-// ApplyVS/ApplyPS: per scene target pixel the denoised occlusion (depth-weighted bilinear), the colour multiplier of a
-// multiplicative blend (g_size.w 1: the occlusion itself, the scene replaced; GALAXY_AO_VIEW).
+// UpsampleCS: per scene target pixel the denoised occlusion (depth-weighted bilinear) as the colour multiplier, into u0.
+// ApplyVS/ApplyPS: that multiplier in a multiplicative blend; it reads no depth, so it can draw in the scene's own pass.
 
 cbuffer AoConstants : register(b0) {
     float4 g_ray;         // an scene target pixel's eye ray at distance 1: x = px * x + y, y = py * z + w (z = -1)
@@ -22,18 +22,39 @@ cbuffer AoConstants : register(b0) {
     uint4 g_size;         // occlusion target width, height; scene target pixels per occlusion pixel; 1: show the occlusion
 };
 
+#if defined(AO_PASS_distance_cs) || defined(AO_PASS_occlusion_cs) || defined(AO_PASS_denoise_cs) || defined(AO_PASS_upsample_cs)
+#ifndef AO_COMPUTE
+#define AO_COMPUTE 1
+#endif
+#endif
+
+#ifdef AO_STORAGE_FORMAT
+#define AO_FORMAT(name) [[spv::format_##name]]
+#else
+#define AO_FORMAT(name)
+#endif
+
 Texture2D<float> t_depth : register(t0);       // the scene target's depth
-Texture2D<float2> t_occlusion : register(t1);  // occlusion, eye distance
-SamplerState s_block : register(s0);           // point, clamped: the apply's 2x2 gathers
+Texture2D<float4> t_occlusion : register(t1);  // occlusion, eye distance (the multiply: the multiplier)
 Texture2D<float> t_distance : register(t2);    // DepthCS's eye distance
-RWTexture2D<float2> u_occlusion : register(u0);
-RWTexture2D<float> u_distance : register(u0);
+#if defined(AO_PASS_distance_cs)
+AO_FORMAT(r32f) RWTexture2D<float> u_distance : register(u0);
+#elif defined(AO_PASS_upsample_cs)
+AO_FORMAT(rgba8) RWTexture2D<float4> u_scale : register(u0);
+#elif defined(AO_COMPUTE)
+AO_FORMAT(rgba16f) RWTexture2D<float4> u_occlusion : register(u0);
+#endif
 
 static const float kPi = 3.14159265f;
 static const uint kSlices = 2u;
 static const uint kSteps = 3u;
 // XeGTAO's falloff: full weight to 38.5% of the radius, then linearly to none at the radius.
 static const float kFalloffRange = 0.615f;
+// XeGTAO's thin occluder compensation: a surface far in front along the view (a leaf, an ear's other sheet) weighs less
+// than one beside the point: depth alone cannot tell a sheet from a wall.
+static const float kThinOccluder = 1.5f;
+// The game's worlds are lit for a stylised picture: a deep crease darkens, it does not turn black.
+static const float kLeastVisibility = 0.2f;
 
 float depth_to_eye_z(float depth) {
     const float ndc = (depth - g_depth.z) / max(g_depth.w - g_depth.z, 1e-7f);
@@ -65,6 +86,7 @@ float fast_acos(float x) {
     return x >= 0.0f ? r : kPi - r;
 }
 
+#ifdef AO_PASS_distance_cs
 [numthreads(8, 8, 1)]
 void DepthCS(uint3 id : SV_DispatchThreadID) {
     if (id.x >= g_size.x || id.y >= g_size.y) {
@@ -74,6 +96,7 @@ void DepthCS(uint3 id : SV_DispatchThreadID) {
     const float depth = t_depth.Load(int3(int2(centre), 0));
     u_distance[id.xy] = inside(centre) && !far_plane(depth) ? -depth_to_eye_z(depth) : 0.0f;
 }
+#endif
 
 // The eye position at occlusion pixel o; false for the far plane, outside the viewport or the target.
 bool point_at(int2 o, out float3 p) {
@@ -116,6 +139,7 @@ float3 surface_normal(int2 o, float3 p) {
 // 4x4 Bayer order: each of 16 slice rotations and step offsets once per 4x4 block.
 static const uint kBayer[16] = {0u, 8u, 2u, 10u, 12u, 4u, 14u, 6u, 3u, 11u, 1u, 9u, 15u, 7u, 13u, 5u};
 
+#ifdef AO_PASS_occlusion_cs
 [numthreads(8, 8, 1)]
 void AoCS(uint3 id : SV_DispatchThreadID) {
     if (id.x >= g_size.x || id.y >= g_size.y) {
@@ -124,14 +148,14 @@ void AoCS(uint3 id : SV_DispatchThreadID) {
     const int2 o = int2(id.xy);
     float3 p;
     if (!point_at(o, p)) {
-        u_occlusion[id.xy] = float2(1.0f, 0.0f);
+        u_occlusion[id.xy] = float4(1.0f, 0.0f, 0.0f, 0.0f);
         return;
     }
     // The radius in occlusion pixels; below two nothing is resolved.
     const float radius = g_params.x;
     const float screen_radius = min(radius / (g_ray.x * -p.z * float(g_size.z)), g_params.w);
     if (screen_radius < 2.0f) {
-        u_occlusion[id.xy] = float2(1.0f, -p.z);
+        u_occlusion[id.xy] = float4(1.0f, -p.z, 0.0f, 0.0f);
         return;
     }
     const float3 n = surface_normal(o, p);
@@ -174,13 +198,15 @@ void AoCS(uint3 id : SV_DispatchThreadID) {
             if (point_at(o + offset, sp)) {
                 const float3 delta = sp - p;
                 const float distance = length(delta);
-                const float weight = saturate(distance * falloff_mul + falloff_add);
+                const float reach = length(float3(delta.xy, delta.z * (1.0f + kThinOccluder)));
+                const float weight = saturate(reach * falloff_mul + falloff_add);
                 horizon0 = max(horizon0, lerp(low0, dot(delta, v) / distance, weight));
             }
             if (point_at(o - offset, sp)) {
                 const float3 delta = sp - p;
                 const float distance = length(delta);
-                const float weight = saturate(distance * falloff_mul + falloff_add);
+                const float reach = length(float3(delta.xy, delta.z * (1.0f + kThinOccluder)));
+                const float weight = saturate(reach * falloff_mul + falloff_add);
                 horizon1 = max(horizon1, lerp(low1, dot(delta, v) / distance, weight));
             }
         }
@@ -193,14 +219,15 @@ void AoCS(uint3 id : SV_DispatchThreadID) {
         visibility += projected_length * (arc0 + arc1);
         direction = float2(direction.x * turn.x - direction.y * turn.y, direction.x * turn.y + direction.y * turn.x);
     }
-    visibility = pow(saturate(visibility / float(kSlices)), g_params.y);
-    u_occlusion[id.xy] = float2(visibility, -p.z);
+    visibility = max(pow(saturate(visibility / float(kSlices)), g_params.y), kLeastVisibility);
+    u_occlusion[id.xy] = float4(visibility, -p.z, 0.0f, 0.0f);
 }
+#endif
 
 // The 5x5 tent (0.5, 1, 1, 1, 0.5 per axis): every cell of the 4x4 patterns counts once. Neighbours at another depth
 // (beyond 3% of the distance) count less, the far plane not at all. Each group reads its 12x12 neighbourhood into
 // shared memory once.
-#ifdef AO_COMPUTE
+#ifdef AO_PASS_denoise_cs
 groupshared float2 gs_tile[12][12];
 
 [numthreads(8, 8, 1)]
@@ -208,7 +235,7 @@ void DenoiseCS(uint3 id : SV_DispatchThreadID, uint3 group : SV_GroupID, uint in
     const int2 origin = int2(group.xy) * 8 - 2;
     for (uint i = index; i < 144u; i += 64u) {
         const int2 at = clamp(origin + int2(i % 12u, i / 12u), int2(0, 0), int2(g_size.xy) - 1);
-        gs_tile[i / 12u][i % 12u] = t_occlusion.Load(int3(at, 0));
+        gs_tile[i / 12u][i % 12u] = t_occlusion.Load(int3(at, 0)).xy;
     }
     GroupMemoryBarrierWithGroupSync();
     if (id.x >= g_size.x || id.y >= g_size.y) {
@@ -217,7 +244,7 @@ void DenoiseCS(uint3 id : SV_DispatchThreadID, uint3 group : SV_GroupID, uint in
     const int2 local = int2(id.xy) - origin;
     const float2 centre = gs_tile[local.y][local.x];
     if (centre.y <= 0.0f) {
-        u_occlusion[id.xy] = centre;
+        u_occlusion[id.xy] = float4(centre, 0.0f, 0.0f);
         return;
     }
     const float tolerance = 1.0f / (0.03f * centre.y + 1.0f);
@@ -234,7 +261,7 @@ void DenoiseCS(uint3 id : SV_DispatchThreadID, uint3 group : SV_GroupID, uint in
             weight += w;
         }
     }
-    u_occlusion[id.xy] = float2(weight > 0.0f ? sum / weight : centre.x, centre.y);
+    u_occlusion[id.xy] = float4(weight > 0.0f ? sum / weight : centre.x, centre.y, 0.0f, 0.0f);
 }
 #endif
 
@@ -263,29 +290,15 @@ float ao_scale(float visibility) {
     return pow(max(lerp(1.0f, multi_bounce(saturate(visibility)), g_params.z), 0.0f), 1.0f / 2.2f);
 }
 
-float4 ApplyPS(ApplyOut i) : SV_Target {
-    const int2 q = int2(i.position.xy);
-    const bool view = g_size.w == 1u;
-    // The four nearest occlusion pixels (one per g_size.z x g_size.z scene target pixels), as gathers of their 2x2 block:
-    // components (0,1), (1,1), (1,0), (0,0) from its top-left `base`.
-    const float2 f = (i.position.xy - float(g_size.z / 2u) - 0.5f) / float(g_size.z);
-    const int2 base = int2(floor(f));
-    const float2 corner = (float2(base) + 1.0f) / float2(g_size.xy);
-    float4 block = 1.0f;
-    if (g_size.z > 1u) {
-        block = t_occlusion.GatherRed(s_block, corner);
-        // The visibility is a weighted mean of these four (or one): where even the least of them changes the colour
-        // by less than a half level the pixel keeps it, whatever its depth.
-        if (!view && ao_scale(min(min(block.x, block.y), min(block.z, block.w))) > 1.0f - 0.5f / 255.0f) {
-            discard;
-        }
-    }
+#ifdef AO_PASS_upsample_cs
+[numthreads(8, 8, 1)]
+void UpsampleCS(uint3 id : SV_DispatchThreadID) {
+    const int2 q = int2(id.xy);
+    const float2 pixel = float2(q) + 0.5f;
     const float depth = t_depth.Load(int3(q, 0));
-    if (far_plane(depth) || !inside(i.position.xy)) {
-        if (view) {
-            return float4(1.0f, 1.0f, 1.0f, 1.0f);
-        }
-        discard;
+    if (far_plane(depth) || !inside(pixel)) {
+        u_scale[id.xy] = 1.0f;
+        return;
     }
     const float z = -depth_to_eye_z(depth);
     float visibility;
@@ -293,17 +306,16 @@ float4 ApplyPS(ApplyOut i) : SV_Target {
         visibility = t_occlusion.Load(int3(q, 0)).x;
     } else {
         // The four nearest occlusion pixels, bilinear and weighted by their distance's agreement with this pixel's.
+        const float2 f = (pixel - float(g_size.z / 2u) - 0.5f) / float(g_size.z);
+        const int2 base = int2(floor(f));
         const float2 w = f - float2(base);
         const float tolerance = 1.0f / (0.03f * z + 1.0f);
-        const float4 distances = t_occlusion.GatherGreen(s_block, corner);
-        const float4 occlusion_k = float4(block.w, block.z, block.x, block.y);
-        const float4 distance_k = float4(distances.w, distances.z, distances.x, distances.y);
         float sum = 0.0f;
         float weight = 0.0f;
         [unroll]
         for (int k = 0; k < 4; ++k) {
             const int2 o = int2(k & 1, k >> 1);
-            const float2 s = float2(occlusion_k[k], distance_k[k]);
+            const float2 s = t_occlusion.Load(int3(clamp(base + o, int2(0, 0), int2(g_size.xy) - 1), 0)).xy;
             const float bilinear = (o.x != 0 ? w.x : 1.0f - w.x) * (o.y != 0 ? w.y : 1.0f - w.y);
             const float agree = s.y > 0.0f ? saturate(1.0f - abs(s.y - z) * tolerance) : 0.0f;
             sum += s.x * bilinear * agree;
@@ -311,12 +323,14 @@ float4 ApplyPS(ApplyOut i) : SV_Target {
         }
         visibility = weight > 1e-4f ? sum / weight : 1.0f;
     }
-    // The occlusion scales light, linear; the scene target holds display-encoded colour. A pixel it would change by less than a
-    // half level (8-bit) keeps its colour without a write.
-    const float scale = ao_scale(visibility);
-    if (view) {
-        return float4(scale, scale, scale, 1.0f);
-    }
+    u_scale[id.xy] = ao_scale(visibility);
+}
+#endif
+
+// The occlusion scales light, linear; the scene target holds display-encoded colour. A pixel it would change by less
+// than half a level (8-bit) keeps its colour without a write.
+float4 ApplyPS(ApplyOut i) : SV_Target {
+    const float scale = t_occlusion.Load(int3(int2(i.position.xy), 0)).x;
     if (scale > 1.0f - 0.5f / 255.0f) {
         discard;
     }

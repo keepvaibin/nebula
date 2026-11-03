@@ -21,6 +21,8 @@ enum {
     NEBULA_TEST_SHAKE_CAMERA,     /* the screen shakes until the scene ends (MR::shakeCameraInfinity, Dodoryu's quake) */
     NEBULA_TEST_PLACE_PLAYER_WATER, /* the player placed in water body `scenario` of the scene's, in turn */
     NEBULA_TEST_PLACE_PLAYER_ACTOR, /* the player placed at live actor `scenario` of the scene's, in turn */
+    NEBULA_TEST_LIST_MATERIALS,   /* the materials of the live actors whose model is `stage`: names, native shaders, states */
+    NEBULA_TEST_KOOPA_HIT,        /* Bowser takes the player's next hit (his damage state, then spin hits); the player's life is restored */
     NEBULA_TEST_APPEAR_ACTOR,     /* the dead actors whose model is `stage` appear (a boss a stage switch holds back) */
     NEBULA_TEST_KILL_ACTOR,       /* the live actors whose model is `stage` killed (their kill(): what they leave behind) */
 };

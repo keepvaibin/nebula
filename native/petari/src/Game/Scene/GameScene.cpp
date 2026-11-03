@@ -74,6 +74,19 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Screen/GameSceneLayoutHolder.hpp"
+#if !defined(NEBULA_RELEASE)
+#include "Game/Boss/Koopa.hpp"
+#include "Game/Boss/KoopaSequencer.hpp"
+#include "Game/Util/ModelUtil.hpp"
+#include "JSystem/J3DGraphAnimator/J3DModelData.hpp"
+#include "JSystem/J3DGraphBase/J3DMaterial.hpp"
+#include "JSystem/JUtility/JUTNameTab.hpp"
+#include <nebula_cooked_material.h>
+#include "Game/Player/MarioAccess.hpp"
+#include "Game/Player/MarioActor.hpp"
+#include "Game/Map/StageSwitch.hpp"
+#include "Game/Util/ActorSwitchUtil.hpp"
+#endif
 #include "Game/NPC/NebulaAchievementLuma.hpp"
 #include "Game/Screen/NebulaAchievementBoard.hpp"
 #include "Game/Screen/NebulaAchievementToast.hpp"
@@ -523,6 +536,7 @@ void GameScene::draw3D() const {
     SceneFunction::executeDrawBufferListNormalOpa();
     SceneFunction::executeDrawListOpa();
     CategoryList::drawOpa(MR::DrawBufferType_UNK_0x18);
+    MR::sceneOpaqueEnd();
     SceneFunction::executeDrawBufferListNormalXlu();
     SceneFunction::executeDrawListXlu();
     CategoryList::drawXlu(MR::DrawBufferType_UNK_0x18);

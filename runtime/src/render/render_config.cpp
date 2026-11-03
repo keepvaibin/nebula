@@ -147,6 +147,7 @@ static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
     else if (std::strcmp(key, "curved_surfaces") == 0) cfg.curved_surfaces = parse_bool(val, cfg.curved_surfaces);
     else if (std::strcmp(key, "enhanced_lighting") == 0) cfg.enhanced_lighting = parse_bool(val, cfg.enhanced_lighting);
     else if (std::strcmp(key, "ambient_occlusion") == 0) cfg.ambient_occlusion = parse_bool(val, cfg.ambient_occlusion);
+    else if (std::strcmp(key, "wide_scene") == 0) cfg.wide_scene = parse_bool(val, cfg.wide_scene);
     else if (std::strcmp(key, "bloom") == 0) cfg.bloom = std::min(parse_uint(val, cfg.bloom), kMaxBloom);
     else if (std::strcmp(key, "post_process") == 0) cfg.post_process = parse_bool(val, cfg.post_process);
     else if (std::strcmp(key, "hud_output_resolution") == 0) cfg.hud_output_resolution = parse_bool(val, cfg.hud_output_resolution);
@@ -271,14 +272,6 @@ static void clamp_unimplemented_features(RenderConfig& cfg) {
     cfg.temporal_quality = 0u;
     cfg.sharpness = 0u;
     cfg.frame_generation = 0u;
-    cfg.aa_mode = 0u;
-    cfg.msaa_samples = 1u;
-    cfg.anisotropic_filtering = 1u;
-    cfg.enhanced_mipmaps = false;
-    cfg.curved_surfaces = false;
-    cfg.per_pixel_lighting = false;
-    cfg.enhanced_lighting = false;
-    cfg.ambient_occlusion = false;
     cfg.hud_output_resolution = false;
     if (cfg.max_fps <= 0.0f || cfg.max_fps > 60.0f) {
         cfg.max_fps = 60.0f;  // no interpolated frames
@@ -586,6 +579,7 @@ bool save_render_config_to_file() {
              << "ambient_occlusion="
              << (cfg.ambient_occlusion ? 1u : 0u) << '\n'
              << "bloom=" << std::min(cfg.bloom, kMaxBloom) << '\n'
+             << "wide_scene=" << (cfg.wide_scene ? 1u : 0u) << '\n'
              << "aa=" << cfg.aa_mode << '\n'
              << "smaa_quality=" << cfg.smaa_quality << '\n'
              << "msaa_samples=" << cfg.msaa_samples << '\n'

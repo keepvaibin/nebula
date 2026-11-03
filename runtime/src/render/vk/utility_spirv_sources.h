@@ -16,6 +16,8 @@ extern const unsigned char galaxy_post_smaa_hlsl[];
 extern const unsigned char galaxy_post_ffx_a_h[];
 extern const unsigned char galaxy_post_ffx_fsr1_h[];
 extern const unsigned char galaxy_post_game_bloom_hlsl[];
+extern const unsigned char galaxy_post_ambient_occlusion_hlsl[];
+extern const unsigned char galaxy_post_scene_camera_hlsl[];
 }  // namespace galaxy::render
 
 namespace galaxy::render::vk {
@@ -97,6 +99,20 @@ inline const char* smaa_preset(unsigned quality) {
 // game_bloom.hlsl's registers: t0-t2 sampled and u0-u2 storage images in set 0, s0 in set 1, the constants pushed.
 constexpr RegisterBinding kBloomBindings[] = {{"b0", 0, 0, true}, {"t0", 0, 0}, {"t1", 0, 1}, {"t2", 0, 2},
                                          {"u0", 0, 3},       {"u1", 0, 4}, {"u2", 0, 5}, {"s0", 1, 0}};
+
+// ambient_occlusion.hlsl's registers: t0-t2 sampled and u0 a storage image in set 0, the constants pushed.
+constexpr RegisterBinding kAoBindings[] = {{"b0", 0, 0, true}, {"t0", 0, 0}, {"t1", 0, 1}, {"t2", 0, 2}, {"u0", 0, 3}};
+
+inline std::string ao_source() {
+    return "#define AO_STORAGE_FORMAT 1\n" + annotate(reinterpret_cast<const char*>(galaxy_post_ambient_occlusion_hlsl), kAoBindings);
+}
+
+// scene_camera.hlsl's registers: t0-t1 sampled and u0 a storage image in set 0, the constants pushed.
+constexpr RegisterBinding kCameraBindings[] = {{"b0", 0, 0, true}, {"t0", 0, 0}, {"t1", 0, 1}, {"u0", 0, 2}};
+
+inline std::string camera_source() {
+    return "#define CAMERA_STORAGE_FORMAT 1\n" + annotate(reinterpret_cast<const char*>(galaxy_post_scene_camera_hlsl), kCameraBindings);
+}
 
 inline std::string bloom_source() {
     return annotate(reinterpret_cast<const char*>(galaxy_post_game_bloom_hlsl), kBloomBindings);

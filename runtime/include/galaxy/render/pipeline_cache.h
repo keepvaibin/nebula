@@ -50,7 +50,7 @@ public:
 
     // RENDER THREAD ONLY. A native material's pipeline: its build-compiled shaders under the draw's render state; null
     // when the build has none or the driver refuses it.
-    [[nodiscard]] ID3D12PipelineState* get_native(std::uint32_t shader, const RenderStateKey& render_state);
+    [[nodiscard]] ID3D12PipelineState* get_native(std::uint32_t shader, const RenderStateKey& render_state, bool pixel_lit = false);
     // Starts building the seed pipelines on background threads; merge_prepared takes in what they finished.
     void start_prepare();
     void merge_prepared();

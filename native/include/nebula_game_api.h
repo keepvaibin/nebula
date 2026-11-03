@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 116u
+#define NEBULA_GAME_API_VERSION 117u
 
 /* Viewports, scissors, clears, target sizes and picture points count this many units across a frame on each axis. */
 #define NEBULA_FRAME_UNITS 65536.0f
@@ -387,9 +387,10 @@ typedef struct NebulaShapeCorner {
     uint16_t color[2];
     uint16_t texcoord[8];
     uint8_t position_matrix;
-    uint8_t texture_matrix[8];
+    uint8_t texture_matrix[8]; /* the coordinate's texture place, or NEBULA_CORNER_POSITION_MATRIX */
     uint8_t reserved[3];
 } NebulaShapeCorner;
+#define NEBULA_CORNER_POSITION_MATRIX 0xFFu /* the coordinate starts from the corner's own position matrix */
 
 /* Which arrays a shape group's corners read and which matrix places they carry (NebulaShapeGeometry::attributes). */
 enum {
@@ -556,6 +557,7 @@ enum {
     NEBULA_SCENE_3D_END,
     NEBULA_SCENE_2D_BEGIN, /* GameScene::draw2D's begin */
     NEBULA_SCENE_2D_END,
+    NEBULA_SCENE_3D_OPAQUE_END, /* GameScene::draw3D, before the lists that blend: the scene's projection terms and viewport (12 floats) */
 };
 
 /* The movie player's sound (movie_audio_control). */

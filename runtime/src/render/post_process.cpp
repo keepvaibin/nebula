@@ -77,7 +77,7 @@ D3D12_SHADER_BYTECODE code(ShaderBytes shader) noexcept {
 
 bool PostProcessor::create_pipeline(D3D12_SHADER_BYTECODE vs, D3D12_SHADER_BYTECODE ps,
                                     DXGI_FORMAT format, int stencil,
-                                    ComPtr<ID3D12PipelineState>& out, UINT8 write_mask) {
+                                    ComPtr<ID3D12PipelineState>& out, UINT8 write_mask, UINT samples) {
     D3D12_GRAPHICS_PIPELINE_STATE_DESC pd{};
     pd.pRootSignature = root_signature_.Get();
     pd.VS = vs;
@@ -90,7 +90,7 @@ bool PostProcessor::create_pipeline(D3D12_SHADER_BYTECODE vs, D3D12_SHADER_BYTEC
     pd.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     pd.NumRenderTargets = 1;
     pd.RTVFormats[0] = format;
-    pd.SampleDesc.Count = 1;
+    pd.SampleDesc.Count = samples;
     // stencil: 0 none, 1 write 1 where the pixel shader keeps the pixel,
     // 2 draw only where the stencil is 1 (SMAA's edge mask).
     if (stencil != 0) {
@@ -362,6 +362,9 @@ void PostProcessor::shutdown() noexcept {
     fxaa_.Reset();
     smaa_blend_rgb_.Reset();
     fxaa_rgb_.Reset();
+    for (auto& pass : scene_pass_ms_) {
+        for (auto& pipeline : pass) pipeline.Reset();
+    }
     easu_.Reset();
     rcas_.Reset();
     rcas_scaled_.Reset();
@@ -631,7 +634,7 @@ AaRun PostProcessor::record_scene_aa(ID3D12GraphicsCommandList* list, Descriptor
                                      unsigned width, unsigned height, unsigned picture_width,
                                      unsigned picture_height, unsigned display_width,
                                      unsigned display_height, std::uint64_t frame_index,
-                                     unsigned frames_in_flight) {
+                                     unsigned frames_in_flight, unsigned samples) {
     if (!ready_ || color == nullptr || width == 0u || height == 0u) {
         return AaRun::kNone;
     }
@@ -677,7 +680,7 @@ AaRun PostProcessor::record_scene_aa(ID3D12GraphicsCommandList* list, Descriptor
     set_post_input_size(c, width, height);
     if (pass == AaRun::kFxaa) {
         list->OMSetRenderTargets(1, &color_rtv, FALSE, nullptr);
-        draw(list, srv_ring, fxaa_rgb_.Get(), {source}, {kColorFormat}, viewport, c);
+        draw(list, srv_ring, scene_pass_pipeline(false, samples), {source}, {kColorFormat}, viewport, c);
         return pass;
     }
     constexpr float kZero[4] = {0.0f, 0.0f, 0.0f, 0.0f};
@@ -698,9 +701,30 @@ AaRun PostProcessor::record_scene_aa(ID3D12GraphicsCommandList* list, Descriptor
          viewport, c);
     transition(list, weights_, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
     list->OMSetRenderTargets(1, &color_rtv, FALSE, nullptr);
-    draw(list, srv_ring, smaa_blend_rgb_.Get(), {source, weights_.resource.Get()},
+    draw(list, srv_ring, scene_pass_pipeline(true, samples), {source, weights_.resource.Get()},
          {kColorFormat, kColorFormat}, viewport, c);
     return pass;
+}
+
+// The last pass of the scene's AA, into the scene target: over MSAA every sample takes the result. Those are made at
+// first use.
+ID3D12PipelineState* PostProcessor::scene_pass_pipeline(bool smaa, unsigned samples) {
+    if (samples <= 1u) {
+        return smaa ? smaa_blend_rgb_.Get() : fxaa_rgb_.Get();
+    }
+    ComPtr<ID3D12PipelineState>& out = scene_pass_ms_[smaa ? 1u : 0u][std::min(std::countr_zero(samples), 3)];
+    if (!out) {
+        constexpr UINT8 kRgb = D3D12_COLOR_WRITE_ENABLE_RED | D3D12_COLOR_WRITE_ENABLE_GREEN |
+                               D3D12_COLOR_WRITE_ENABLE_BLUE;
+        const bool made = smaa ? create_pipeline(code(bytes(g_post_smaa_blend_vs)), code(bytes(g_post_smaa_blend_keep_ps)),
+                                                 kColorFormat, 0, out, kRgb, samples)
+                               : create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_fxaa_ps)), kColorFormat,
+                                                 0, out, kRgb, samples);
+        if (!made) {
+            return nullptr;
+        }
+    }
+    return out.Get();
 }
 
 void PostProcessor::self_test(ID3D12CommandQueue* queue) {

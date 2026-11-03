@@ -52,7 +52,7 @@ public:
                            unsigned picture_width, unsigned picture_height, unsigned display_width,
                            unsigned display_height, const SetAllocator& allocate);
     void finish_scene_aa(VkCommandBuffer commands, AaRun pass, unsigned width, unsigned height,
-                         const SetAllocator& allocate);
+                         const SetAllocator& allocate, VkRenderPass scene_pass, unsigned samples_log2);
     // The targets recorded scene AA reads, for a command buffer submitted again later (the interpolation replay):
     // it keeps them alive.
     void hold_scene_targets(std::vector<std::shared_ptr<Texture>>& held) const;
@@ -99,7 +99,9 @@ private:
 
     VkShaderModule module(Program program) const;
     VkPipeline create_pipeline(Program vs, Program ps, VkRenderPass pass, VkColorComponentFlags write_mask,
-                               int stencil) const;
+                               int stencil,
+                               VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT) const;
+    [[nodiscard]] VkPipeline scene_pass_pipeline(bool smaa, VkRenderPass pass, unsigned samples_log2);
     bool build_pipelines();
     void destroy_pipelines() noexcept;
     bool create_lookup_textures(VkCommandBuffer commands, std::vector<std::shared_ptr<Buffer>>& staging);
@@ -147,6 +149,8 @@ private:
     VkPipeline smaa_blend_rgb_ = VK_NULL_HANDLE;  // scene target pass, RGB only
     VkPipeline fxaa_ = VK_NULL_HANDLE;
     VkPipeline fxaa_rgb_ = VK_NULL_HANDLE;
+    // FXAA's, SMAA's last pass over MSAA: per sample count (log2).
+    VkPipeline scene_pass_ms_[2][4]{};
     PassPipelines to_color_{};
     PassPipelines to_present_{};
 

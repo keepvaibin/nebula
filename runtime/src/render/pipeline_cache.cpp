@@ -358,9 +358,8 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> PipelineCache::create_native(std::ui
     const D3D12_SHADER_BYTECODE ps = code(native_shader_bytes(shader, variant, true));
     // A curved surface's patches: the native patch stages for the output layout.
     const bool curved = (rs.primitive_topology & kTopologyTypeMask) == kTopologyPatch;
-    const bool motion = variant == kNativeVariantMotion;
-    const D3D12_SHADER_BYTECODE hs = curved ? code(native_curved_bytes(motion, false)) : D3D12_SHADER_BYTECODE{};
-    const D3D12_SHADER_BYTECODE ds = curved ? code(native_curved_bytes(motion, true)) : D3D12_SHADER_BYTECODE{};
+    const D3D12_SHADER_BYTECODE hs = curved ? code(native_curved_bytes(variant, false)) : D3D12_SHADER_BYTECODE{};
+    const D3D12_SHADER_BYTECODE ds = curved ? code(native_curved_bytes(variant, true)) : D3D12_SHADER_BYTECODE{};
     Microsoft::WRL::ComPtr<ID3D12PipelineState> pso;
     if (vs.pShaderBytecode && ps.pShaderBytecode && (!curved || (hs.pShaderBytecode && ds.pShaderBytecode))) {
         pso = create_pso(device_.Get(), root_signature_.Get(), rs, vs, ps, hs, ds);
@@ -368,12 +367,13 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> PipelineCache::create_native(std::ui
     return pso;
 }
 
-ID3D12PipelineState* PipelineCache::get_native(std::uint32_t shader, const RenderStateKey& render_state) {
+ID3D12PipelineState* PipelineCache::get_native(std::uint32_t shader, const RenderStateKey& render_state, bool pixel_lit) {
     if (!device_ || !root_signature_) {
         return nullptr;
     }
     const RenderStateKey rs = native_render_state(render_state);
-    const unsigned variant = native_shader_variant(rs.blend_bits);
+    const unsigned variant = native_draw_variant(shader, native_shader_variant(rs.blend_bits),
+                                                 rs.samples_log2 & kSceneVariantSamplesMask, true, pixel_lit);
     const std::uint32_t id = shader * kNativeVariants + variant;
     const std::uint64_t hash = combine64(hash_key_words(&rs, sizeof(rs)), id);
     auto& bucket = native_psos_[hash];

@@ -766,7 +766,8 @@ void RendererD3D12::record_scene_resolve(ID3D12GraphicsCommandList* list, bool c
         barriers[1].Transition.pResource = scene_color_.Get();
         barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_RESOLVE_DEST;
         list->ResourceBarrier(2u, barriers);
-        list->ResolveSubresource(scene_color_.Get(), 0u, msaa.color.Get(), 0u, kSceneColorFormat);
+        list->ResolveSubresource(scene_color_.Get(), 0u, msaa.color.Get(), 0u,
+                                 scene_hdr_ ? kSceneHdrColorFormat : kSceneColorFormat);
         for (auto& barrier : barriers) {
             std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
         }
@@ -2270,8 +2271,12 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
                 std::cerr << "[post-process] aa=" << cfg.aa_mode << " smaa-quality=" << cfg.smaa_quality
                           << " upscaler=" << cfg.upscaler << " sharpness=" << cfg.sharpness << '\n';
             }
+            set_curved_surfaces_offered(true);
             if (!ambient_occlusion_.initialize(device_.Get())) {
                 std::cerr << "[ambient-occlusion] unavailable\n";
+            }
+            if (!camera_pass_.initialize(device_.Get())) {
+                std::cerr << "[scene-camera] unavailable: the scene stays in the scene target\n";
             }
             if (!game_bloom_.initialize(device_.Get())) {
                 std::cerr << "[bloom] unavailable: the game's own chain\n";
@@ -2426,6 +2431,7 @@ void RendererD3D12::shutdown() {
     s_blit_root_sig.Reset();
     post_process_.shutdown();
     ambient_occlusion_.shutdown();
+    camera_pass_.shutdown();
     game_bloom_.shutdown();
     {
         const PlacedTextureAllocator::Stats heap = frame_pass_heap_.stats();
@@ -4102,7 +4108,7 @@ void RendererD3D12::present_to_swap_chain() {
             if (pass_query_heap_) {
                 static constexpr const char* kPassNames[] = {"scene", "resolve", "frame-read", "display-copy", "bloom",
                                                              "scene-aa", "scene-ao", "upscale", "rt", "present",
-                                                             "curve-sort"};
+                                                             "curve-sort", "camera"};
                 static_assert(std::size(kPassNames) == static_cast<std::size_t>(GpuPass::Count));
                 message << " gpu-pass-ms=";
                 const double presents = static_cast<double>(std::max<std::uint64_t>(telemetry_present_count_, 1u));
@@ -6014,6 +6020,12 @@ bool RendererD3D12::record_replay_list(ReplayList& entry) {
             case ReplayKind::Bloom:
                 record_game_bloom(run_blooms_[op.index]);
                 break;
+            case ReplayKind::HdrBegin:
+                record_hdr_begin();
+                break;
+            case ReplayKind::HdrEnd:
+                record_hdr_end();
+                break;
             }
         }
         // The log ends after its display copy, on the output scene target when it switched.
@@ -7222,13 +7234,14 @@ void RendererD3D12::present_fg_hudless(const DisplayTexture& source, const D3D12
 void RendererD3D12::record_scene_aa() {
     settle_owed_scene();
     const GpuPassScope pass{*this, GpuPass::SceneAa};
-    if (!post_process_.ready() || output_scene_active_ || scene_temporal_ || !scene_color_ || scene_msaa_.samples > 1u ||
+    if (!post_process_.ready() || output_scene_active_ || scene_temporal_ || !scene_color_ ||
         post_process_.settings().aa == PostProcessSettings::Aa::kOff) {
         return;
     }
     if (replay_recording_) [[unlikely]] {
         replay_ops_.push_back({ReplayKind::SceneAa, 0u});
     }
+    resolve_scene(false, true);
     // The picture the display copy takes decides AUTO.
     const auto aspect = galaxy::experimental_effective_host_aspect();
     const galaxy::ContentViewport content = galaxy::fit_content_viewport(
@@ -7239,10 +7252,167 @@ void RendererD3D12::record_scene_aa() {
         command_list_.Get(), srv_ring_, scene_color_.Get(), scene_rtv_, static_cast<unsigned>(desc.Width),
         desc.Height, frame_.width, frame_.height,
         static_cast<unsigned>(std::max(content.width, 1)), static_cast<unsigned>(std::max(content.height, 1)),
-        frame_index_, kFramesInFlight));
+        frame_index_, kFramesInFlight, scene_msaa_.samples));
+    if (scene_msaa_.samples > 1u) {
+        scene_msaa_.color_dirty = true;
+    }
     command_list_->SetGraphicsRootSignature(root_signature_.Get());
     invalidate_draw_bindings();
     bound_rt_aux_ = 0xFFu;
+}
+
+// The wide colour targets for the live scene target's size and samples, over its depth. False when the device cannot
+// make them: the scene then stays in the scene target.
+bool RendererD3D12::ensure_wide_set(SceneTargetSet& set, ComPtr<ID3D12DescriptorHeap>& rtv_heap) {
+    const D3D12_RESOURCE_DESC desc = scene_color_->GetDesc();
+    const unsigned samples = scene_msaa_.samples;
+    const bool same = set.color && set.color->GetDesc().Width == desc.Width &&
+                      set.color->GetDesc().Height == desc.Height && set.msaa.samples == samples;
+    if (!same) {
+        if (set.color) {
+            wait_for_gpu();
+        }
+        set.color.Reset();
+        set.msaa.color.Reset();
+        if (!rtv_heap) {
+            D3D12_DESCRIPTOR_HEAP_DESC heap{};
+            heap.NumDescriptors = 2;
+            heap.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+            d3d_check(device_->CreateDescriptorHeap(&heap, IID_PPV_ARGS(&rtv_heap)), "wide scene RTV heap");
+        }
+        D3D12_HEAP_PROPERTIES hp{};
+        hp.Type = D3D12_HEAP_TYPE_DEFAULT;
+        D3D12_RESOURCE_DESC rd{};
+        rd.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        rd.Width = desc.Width;
+        rd.Height = desc.Height;
+        rd.DepthOrArraySize = 1;
+        rd.MipLevels = 1;
+        rd.Format = kSceneHdrColorFormat;
+        rd.SampleDesc.Count = 1;
+        rd.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+        D3D12_CLEAR_VALUE cv{};
+        cv.Format = kSceneHdrColorFormat;
+        cv.Color[3] = 1.0f;
+        if (FAILED(device_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_RENDER_TARGET, &cv,
+                                                    IID_PPV_ARGS(&set.color)))) {
+            return false;
+        }
+        D3D12_CPU_DESCRIPTOR_HANDLE rtv = rtv_heap->GetCPUDescriptorHandleForHeapStart();
+        device_->CreateRenderTargetView(set.color.Get(), nullptr, rtv);
+        set.rtv = rtv;
+        if (samples > 1u) {
+            rd.SampleDesc.Count = samples;
+            if (FAILED(device_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_RENDER_TARGET,
+                                                        &cv, IID_PPV_ARGS(&set.msaa.color)))) {
+                set.color.Reset();
+                return false;
+            }
+            rtv.ptr += device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+            device_->CreateRenderTargetView(set.msaa.color.Get(), nullptr, rtv);
+            set.rtv = rtv;
+        }
+        set.msaa.samples = samples;
+        set.depth.Reset();
+    }
+    if (samples > 1u && !scene_msaa_.depth_srv) {
+        write_msaa_depth_view(scene_msaa_);
+    }
+    set.hdr = true;
+    set.map = frame_;
+    set.dsv = scene_dsv_;
+    set.msaa.depth = scene_msaa_.depth;
+    set.msaa.dsv_heap = scene_msaa_.dsv_heap;
+    set.msaa.depth_srv = scene_msaa_.depth_srv;
+    set.msaa.color_dirty = false;
+    set.msaa.depth_dirty = scene_msaa_.depth_dirty;
+    if (set.depth != scene_depth_) {
+        set.depth = scene_depth_;
+        write_scene_set_views(set, set.conv_table ? *set.conv_table : srv_ring_.allocate_persistent(2u));
+    }
+    return true;
+}
+
+void RendererD3D12::begin_wide_scene(bool wanted) {
+    if (!wanted || scene_hdr_ || !camera_pass_.ready() || !scene_color_ || output_scene_active_ || target_pass_active_) {
+        return;
+    }
+    settle_owed_scene();
+    SceneTargetSet& set = hdr_scene_scene_;
+    if (!ensure_wide_set(set, hdr_scene_rtv_heap_)) {
+        return;
+    }
+    if (replay_recording_) [[unlikely]] {
+        replay_ops_.push_back({ReplayKind::HdrBegin, 0u});
+    }
+    record_hdr_begin();
+}
+
+void RendererD3D12::record_hdr_begin() {
+    const GpuPassScope pass{*this, GpuPass::Camera};
+    SceneTargetSet& set = replay_playing_ ? replay_hdr_scene_ : hdr_scene_scene_;
+    if (replay_playing_ && !ensure_wide_set(set, replay_hdr_rtv_heap_)) {
+        return;
+    }
+    // What the scene target holds goes on under the scene.
+    resolve_scene(false, true);
+    const D3D12_RESOURCE_DESC desc = scene_color_->GetDesc();
+    SceneCamera::WidenInputs in{};
+    in.picture = scene_color_.Get();
+    in.rtv = set.rtv;
+    in.width = static_cast<unsigned>(desc.Width);
+    in.height = desc.Height;
+    in.samples = scene_msaa_.samples;
+    static_cast<void>(camera_pass_.widen(command_list_.Get(), srv_ring_, in));
+    set.msaa.color_dirty = scene_msaa_.samples > 1u;
+    set.msaa.depth_dirty = scene_msaa_.depth_dirty;
+    swap_scene_with(set);
+    command_list_->SetGraphicsRootSignature(root_signature_.Get());
+    bound_rt_aux_ = 0xFFu;
+    bind_scene();
+}
+
+void RendererD3D12::end_wide_scene() {
+    if (!scene_hdr_) {
+        return;
+    }
+    settle_owed_scene();
+    if (replay_recording_) [[unlikely]] {
+        replay_ops_.push_back({ReplayKind::HdrEnd, 0u});
+    }
+    record_hdr_end();
+}
+
+void RendererD3D12::record_hdr_end() {
+    if (!scene_hdr_) {
+        return;
+    }
+    const GpuPassScope pass{*this, GpuPass::Camera};
+    resolve_scene(false, true);
+    SceneTargetSet& set = replay_playing_ ? replay_hdr_scene_ : hdr_scene_scene_;
+    swap_scene_with(set);
+    scene_msaa_.depth_dirty = set.msaa.depth_dirty;
+    const auto now = std::chrono::steady_clock::now();
+    const float seconds = std::chrono::duration<float>(now - camera_metered_).count();
+    camera_metered_ = now;
+    const D3D12_RESOURCE_DESC desc = set.color->GetDesc();
+    SceneCamera::Inputs in{};
+    in.wide = set.color.Get();
+    in.wide_ms = set.msaa.samples > 1u ? set.msaa.color.Get() : nullptr;
+    in.rtv = scene_rtv_;
+    in.width = static_cast<unsigned>(desc.Width);
+    in.height = desc.Height;
+    in.samples = set.msaa.samples;
+    // After a load or a long pause the eye starts open.
+    in.seconds = seconds > 1.0f ? -1.0f : seconds;
+    static_cast<void>(camera_pass_.record(command_list_.Get(), srv_ring_, in));
+    if (scene_msaa_.samples > 1u) {
+        scene_msaa_.color_dirty = true;
+    }
+    command_list_->SetGraphicsRootSignature(root_signature_.Get());
+    invalidate_draw_bindings();
+    bound_rt_aux_ = 0xFFu;
+    bind_scene();
 }
 
 // The scene target's depth, single-sample (MSAA resolves it, sample 0), read by the occlusion; the product lands on the
@@ -7270,7 +7440,6 @@ void RendererD3D12::record_scene_ao() {
     in.depth = scene_depth_.Get();
     in.width = static_cast<unsigned>(desc.Width);
     in.height = desc.Height;
-    in.occlusion_divisor = static_cast<unsigned>(std::lround(frame_.height / kAuthoredLines));
     in.color_rtv = scene_rtv_;
     in.samples = scene_msaa_.samples;
     in.hdr = scene_hdr_;

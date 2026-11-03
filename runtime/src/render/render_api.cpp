@@ -51,6 +51,10 @@ void attach_scene_marker(SceneMarker marker) {
     backend().attach_scene_marker(marker);
 }
 
+void attach_scene_opaque(const float view[12]) noexcept {
+    backend().attach_scene_opaque(view);
+}
+
 void attach_scene_view(const float view[12], const float* up, const char* stage) noexcept {
     backend().attach_scene_view(view, up, stage);
 }

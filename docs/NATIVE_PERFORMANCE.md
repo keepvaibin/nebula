@@ -138,8 +138,8 @@ pixel-bound there (24 million pixel shader invocations against 4.1 million at 1x
   on both (open; measured on AMD's Windows driver only). Placing the rings in device memory changed nothing.
   Pictures: same run, paused, identical at 1x; at 3x with 4x MSAA two pixels differ by 1 of 255. Curved surfaces had
   never drawn on Vulkan (the curve data, TEXCOORD16, had no location between stages); once built they drew unculled,
-  under a lower-left domain origin that reversed their winding. NVIDIA's driver crashes building them: they stay off
-  there (`DeviceQuirks::no_tessellation`).
+  under a lower-left domain origin that reversed their winding. NVIDIA's compiler crashed building them on a `Patch`
+  decoration glslang puts on `SV_DomainLocation` (`TessCoord`), which the compile now drops.
 - Pipelines were created again at every start (`GALAXY_TEST_HITCHES=1`, frames of 50 ms or more, stand-in at 1x: 7 on
   a second start, the worst 748 ms; 11-13 on the first, 800-860 ms). psos.bin's reload stopped at the first curved
   surface's key (patch topology, which the key check did not accept) and the repair dropped the rest: 2 of 167 keys

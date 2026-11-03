@@ -21,11 +21,19 @@ namespace {
     bool sScissorSet = false;
     u32 sScissor[4] = {};
 
+    // The rectangle in frame pixels and the depth range (0 near .. 1 far) the near and far values make.
+    void hostViewport(const f32* pViewport, f32* pOut) {
+        const f32 viewport[6] = {pViewport[0] * J3DNativeView::cUnitsAcross, pViewport[1] * J3DNativeView::cUnitsDown,
+                                 pViewport[2] * J3DNativeView::cUnitsAcross, pViewport[3] * J3DNativeView::cUnitsDown, pViewport[4] * sDepthScale + sDepthOffset,
+                                 pViewport[5] * sDepthScale + sDepthOffset};
+        for (u32 i = 0; i < 6; i++) {
+            pOut[i] = viewport[i];
+        }
+    }
+
     void sendViewport() {
-        // The rectangle in frame pixels and the depth range (0 near .. 1 far) the near and far planes map to.
-        const f32 viewport[6] = {sViewport[0] * J3DNativeView::cUnitsAcross, sViewport[1] * J3DNativeView::cUnitsDown,
-                                 sViewport[2] * J3DNativeView::cUnitsAcross, sViewport[3] * J3DNativeView::cUnitsDown, sViewport[4] * sDepthScale + sDepthOffset,
-                                 sViewport[5] * sDepthScale + sDepthOffset};
+        f32 viewport[6];
+        hostViewport(sViewport, viewport);
         J3DNativeDraw::flush();
         const NebulaHostServices* pHost = nebula_host();
         pHost->view_viewport(pHost->user, viewport);
@@ -75,6 +83,17 @@ namespace J3DNativeView {
 
     void setPerspective(const f32 (*pMtx)[4]) {
         setProjection(pMtx, true);
+    }
+
+    void hostView(const f32 (*pMtx)[4], f32 left, f32 top, f32 width, f32 height, f32 nearZ, f32 farZ, f32* pOut) {
+        pOut[0] = pMtx[0][0];
+        pOut[1] = pMtx[0][2];
+        pOut[2] = pMtx[1][1];
+        pOut[3] = pMtx[1][2];
+        pOut[4] = pMtx[2][2];
+        pOut[5] = pMtx[2][3];
+        const f32 viewport[6] = {left, top, width, height, nearZ, farZ};
+        hostViewport(viewport, pOut + 6);
     }
 
     void setOrthographic(const f32 (*pMtx)[4]) {
