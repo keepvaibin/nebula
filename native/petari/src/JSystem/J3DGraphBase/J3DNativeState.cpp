@@ -335,15 +335,15 @@ namespace J3DPass {
         sPass.point_offsets = spreadTexture ? 7 : 0;
     }
 
-    void materialColor(u8 index, NebulaColor8 color) {
+    void registerColor(J3DRegister reg, NebulaColor8 color) {
         J3DNativeShape::flushState();
-        J3DNativeMaterial::setColorRegister(index, color);
+        J3DNativeMaterial::setColorRegister(reg, color);
         J3DNativeMaterial::sendRegisters();
     }
 
-    void materialColorWide(u8 index, const NebulaColor16& rColor) {
+    void registerColorWide(J3DRegister reg, const NebulaColor16& rColor) {
         J3DNativeShape::flushState();
-        J3DNativeMaterial::setColorRegisterWide(index, rColor);
+        J3DNativeMaterial::setColorRegisterWide(reg, rColor);
         J3DNativeMaterial::sendRegisters();
     }
 
