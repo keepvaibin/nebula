@@ -183,8 +183,19 @@ const std::uint8_t* AssetStore::map(std::uint64_t position, std::size_t size) co
 }
 
 // A view starts where the system's granularity allows, at most 64 KB before the file; the bytes before it are the store's.
+// Where a view of the store can start: 64 KB on Windows, a page elsewhere (where mmap returns a page, whatever the file
+// offset). map_private and unmap_private round by the same value, as unmap_private has only the address to go on.
+static std::uint64_t view_granularity() noexcept {
+#if defined(_WIN32)
+    return 0x10000u;
+#else
+    static const auto page = static_cast<std::uint64_t>(sysconf(_SC_PAGESIZE));
+    return page;
+#endif
+}
+
 std::uint8_t* AssetStore::map_private(std::uint64_t position, std::size_t size) const {
-    constexpr std::uint64_t granularity = 0x10000u;
+    const std::uint64_t granularity = view_granularity();
     if (view_ == nullptr || position > size_ || size_ - position < size) {
         return nullptr;
     }
@@ -208,7 +219,7 @@ std::uint8_t* AssetStore::map_private(std::uint64_t position, std::size_t size) 
 }
 
 void AssetStore::unmap_private(void* data, std::size_t size) const {
-    constexpr std::uintptr_t granularity = 0x10000u;
+    const auto granularity = static_cast<std::uintptr_t>(view_granularity());
     const auto at = reinterpret_cast<std::uintptr_t>(data);
     const std::uintptr_t base = at & ~(granularity - 1u);
 #if defined(_WIN32)
