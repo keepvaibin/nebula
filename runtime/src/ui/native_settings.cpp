@@ -108,6 +108,7 @@ bool settings_page_tab(unsigned tab) { return tab != 2u && tab != 3u; }
 unsigned temporal_upscaler(const RenderConfig& render) {
     if (render.upscaler == 2u && fsr3_available()) return 2u;
     if (render.upscaler == 3u && host_window::upscaler_caps().dlss) return 3u;
+    if (render.upscaler == 4u && host_window::upscaler_caps().xess) return 4u;
     return 0u;
 }
 
@@ -116,6 +117,7 @@ std::vector<unsigned> available_upscalers() {
     std::vector<unsigned> choices{0u, 1u};
     if (fsr3_available()) choices.push_back(2u);
     if (host_window::upscaler_caps().dlss || dlss_offered()) choices.push_back(3u);
+    if (host_window::upscaler_caps().xess) choices.push_back(4u);
     return choices;
 }
 

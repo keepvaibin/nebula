@@ -17,6 +17,7 @@
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/curved_surfaces.h"
 #include "galaxy/render/streamline_bridge.h"
+#include "galaxy/render/xess_library.h"
 #include "galaxy/render/texture_store.h"
 #include "galaxy/render/draw_constants.h"
 #include "galaxy/motion_signals.h"
@@ -4374,7 +4375,8 @@ void RendererD3D12::wait_for_fence_value(std::uint64_t fence_value) {
 
 bool RendererD3D12::temporal_mode() const {
     const unsigned upscaler = get_render_config().upscaler;
-    return (upscaler == 2u && fsr3_available()) || (upscaler == 3u && streamline::dlss_supported());
+    return (upscaler == 2u && fsr3_available()) || (upscaler == 3u && streamline::dlss_supported()) ||
+           (upscaler == 4u && xess_library::available());
 }
 
 bool RendererD3D12::ensure_motion_target() {
@@ -6518,7 +6520,7 @@ void RendererD3D12::prepare_temporal_upscaler() {
     const unsigned quality = std::min(cfg.temporal_quality, 4u);
     // A failed creation is not retried until its sizes or mode change.
     if (rw == temporal_render_w_ && rh == temporal_render_h_ && ow == temporal_output_w_ &&
-        oh == temporal_output_h_ && kind == temporal_kind_ && (kind != 3u || quality == temporal_quality_)) {
+        oh == temporal_output_h_ && kind == temporal_kind_ && (kind < 3u || quality == temporal_quality_)) {
         if (temporal_pending_.valid() &&
             temporal_pending_.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
             temporal_ = temporal_pending_.get();
@@ -6543,6 +6545,13 @@ void RendererD3D12::prepare_temporal_upscaler() {
     temporal_render_h_ = rh;
     temporal_output_w_ = ow;
     temporal_output_h_ = oh;
+    if (kind == 4u) {
+        // Until it is ready the scene renders at the render scale without the upscale.
+        temporal_pending_ = std::async(std::launch::async, [device = device_, ow, oh, quality] {
+            return create_xess_upscaler(device.Get(), ow, oh, quality);
+        });
+        return;
+    }
     if (kind != 3u) {
         // Until it is ready the scene renders at the render scale without the upscale.
         temporal_pending_ = std::async(std::launch::async, [device = device_, rw, rh, ow, oh] {
@@ -6650,7 +6659,11 @@ bool RendererD3D12::record_temporal_upscale(const FrameMap& output) {
     in.camera_near = scene_camera_[0];
     in.camera_far = scene_camera_[1];
     in.fov_y = scene_camera_[2];
-    in.frame_ms = 1000.0f / 60.0f;
+    // The time since the last upscale, as measured.
+    const std::int64_t now_us = std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
+    in.frame_ms = temporal_last_upscale_us_ != 0 ? static_cast<float>(now_us - temporal_last_upscale_us_) * 0.001f : 0.0f;
+    temporal_last_upscale_us_ = now_us;
     in.reset = !temporal_history_valid_;
     in.view = scene_view_;
     in.view_known = scene_view_known_;

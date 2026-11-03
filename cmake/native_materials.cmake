@@ -12,7 +12,8 @@ set(galaxy_native_materials whirlpool ocean_bowl screen_blur flat_color clip_fil
     vertex_color dd_texture dd_texture_color tex_vertex_alpha tex_alpha_lerp
     trample_star tex_const_alpha font_text j2d_picture fur particle ocean_bowl_bloom mii_face mii_texture image_effect gaussian_blur dof_final normal_map
     movie water_camera frame_ripple frame_depth)
-set(galaxy_native_variants base reactive layer motion dual sample sample_dual pixel pixel_dual pixel_sample pixel_sample_dual)
+set(galaxy_native_variants base reactive layer motion dual sample sample_dual pixel pixel_dual pixel_sample pixel_sample_dual
+    pixel_reactive pixel_layer pixel_motion)
 set(galaxy_native_defines_base "")
 set(galaxy_native_defines_reactive "NATIVE_REACTIVE")
 set(galaxy_native_defines_layer "NATIVE_REACTIVE;NATIVE_LAYER")
@@ -26,6 +27,9 @@ set(galaxy_native_defines_pixel "NATIVE_PIXEL_LIT")
 set(galaxy_native_defines_pixel_dual "NATIVE_PIXEL_LIT;NATIVE_DUAL")
 set(galaxy_native_defines_pixel_sample "NATIVE_PIXEL_LIT;NATIVE_SAMPLE")
 set(galaxy_native_defines_pixel_sample_dual "NATIVE_PIXEL_LIT;NATIVE_SAMPLE;NATIVE_DUAL")
+set(galaxy_native_defines_pixel_reactive "NATIVE_PIXEL_LIT;NATIVE_REACTIVE")
+set(galaxy_native_defines_pixel_layer "NATIVE_PIXEL_LIT;NATIVE_REACTIVE;NATIVE_LAYER")
+set(galaxy_native_defines_pixel_motion "NATIVE_PIXEL_LIT;NATIVE_MOTION")
 get_filename_component(galaxy_native_cmake_root "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
 set(galaxy_native_material_dir "${galaxy_native_cmake_root}/runtime/src/render/materials")
 set(galaxy_j3d_materials "")
@@ -44,17 +48,23 @@ macro(galaxy_native_material_rules material source)
             string(APPEND row "{}, ")
             continue()
         endif()
-        # Feature outputs wait for section W; keep their ABI slots empty. Only an alpha-tested material shades per sample.
+        # Only an alpha-tested material shades per sample.
         if(variant MATCHES "sample" AND material_discards STREQUAL "")
-            string(APPEND row "{}, ")
-            continue()
-        endif()
-        if(variant STREQUAL "reactive" OR variant STREQUAL "layer" OR variant STREQUAL "motion")
             string(APPEND row "{}, ")
             continue()
         endif()
         set(entries "")
         foreach(stage vs ps)
+            if(stage STREQUAL "vs" AND (variant STREQUAL "reactive" OR variant STREQUAL "layer"))
+                set(base_vs "g_native_${material}_base_vs")
+                string(APPEND entries "${base_vs}, sizeof(${base_vs}), ")
+                continue()
+            endif()
+            if(stage STREQUAL "vs" AND (variant STREQUAL "pixel_reactive" OR variant STREQUAL "pixel_layer"))
+                set(base_vs "g_native_${material}_pixel_vs")
+                string(APPEND entries "${base_vs}, sizeof(${base_vs}), ")
+                continue()
+            endif()
             if(stage STREQUAL "vs" AND variant STREQUAL "sample")
                 set(base_vs "g_native_${material}_base_vs")
                 string(APPEND entries "${base_vs}, sizeof(${base_vs}), ")
@@ -140,9 +150,10 @@ function(galaxy_native_material_sources out_var backend)
     if(rows STREQUAL "")
         set(rows "    {},\n")
     endif()
-    # The curved surfaces' patch stages (native_curved.hlsl), once per output layout: 0 without, 1 with motion vectors.
+    # The curved surfaces' patch stages (native_curved.hlsl), once per output layout: 0 plain, 1 with motion vectors, 2 lit
+    # at the pixel, 3 both.
     set(curved_rows "")
-    foreach(layout IN ITEMS 0 1 2)
+    foreach(layout IN ITEMS 0 1 2 3)
         set(entries "")
         foreach(stage hs ds)
             set(name "g_native_curved_${layout}_${stage}")
@@ -154,6 +165,8 @@ function(galaxy_native_material_sources out_var backend)
                     set(defines "-DNATIVE_MOTION=1")
                 elseif(layout STREQUAL "2")
                     set(defines "-DNATIVE_PIXEL_LIT=1")
+                elseif(layout STREQUAL "3")
+                    set(defines "-DNATIVE_MOTION=1" "-DNATIVE_PIXEL_LIT=1")
                 endif()
                 add_custom_command(OUTPUT "${header}"
                     COMMAND "${GALAXY_DXC}" -nologo -T ${stage}_6_0 -E native_${stage} -O3 -WX -Qstrip_debug
@@ -167,6 +180,8 @@ function(galaxy_native_material_sources out_var backend)
                     set(defines "NATIVE_MOTION")
                 elseif(layout STREQUAL "2")
                     set(defines "NATIVE_PIXEL_LIT")
+                elseif(layout STREQUAL "3")
+                    set(defines "NATIVE_MOTION" "NATIVE_PIXEL_LIT")
                 endif()
                 add_custom_command(OUTPUT "${header}"
                     COMMAND galaxy_native_spirv "${source}" "${galaxy_native_material_dir}" ${stage} ${name} "${header}"
@@ -202,21 +217,30 @@ ${hand_rows}};
 const Pair kJ3DShaders[][kNativeVariants] = {
 ${rows}};
 constexpr std::uint32_t kJ3DCount = ${j3d_count}u;
-const Pair kCurved[3] = {
+const Pair kCurved[4] = {
 ${curved_rows}};
 }  // namespace
 
 NativeShaderBytes native_curved_bytes(unsigned variant, bool domain) noexcept {
-    const Pair& p = kCurved[variant == kNativeVariantMotion ? 1 : variant >= kNativeVariantPixel ? 2 : 0];
+    const Pair& p = kCurved[variant == kNativeVariantPixelMotion ? 3
+                            : variant == kNativeVariantMotion    ? 1
+                            : variant >= kNativeVariantPixel     ? 2
+                                                                 : 0];
     return domain ? NativeShaderBytes{p.ps, p.ps_size} : NativeShaderBytes{p.vs, p.vs_size};
 }
 
 unsigned native_draw_variant(std::uint32_t shader, unsigned variant, unsigned samples_log2, bool per_sample, bool pixel_lit) noexcept {
+    const auto exists = [shader](unsigned v) { return native_shader_bytes(shader, v, true).size != 0u; };
+    if (pixel_lit && (variant == kNativeVariantReactive || variant == kNativeVariantLayer || variant == kNativeVariantMotion)) {
+        const unsigned lit = variant == kNativeVariantReactive ? kNativeVariantPixelReactive
+                             : variant == kNativeVariantLayer  ? kNativeVariantPixelLayer
+                                                               : kNativeVariantPixelMotion;
+        return exists(lit) ? lit : variant;
+    }
     if (variant != kNativeVariantBase && variant != kNativeVariantDual) {
         return variant;
     }
     const bool dual = variant == kNativeVariantDual;
-    const auto exists = [shader](unsigned v) { return native_shader_bytes(shader, v, true).size != 0u; };
     const bool sampled = per_sample && samples_log2 != 0u;
     if (pixel_lit) {
         const unsigned lit = dual ? kNativeVariantPixelDual : kNativeVariantPixel;

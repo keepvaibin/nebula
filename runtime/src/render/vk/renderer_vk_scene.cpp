@@ -59,7 +59,7 @@ bool RendererVk::create_scene_set(SceneSet& set, const FrameMap& map, unsigned s
     gpu::TextureRef color = context.create_texture(
         width, height, 1u, VK_FORMAT_R8G8B8A8_UNORM,
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
-            VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+            VK_IMAGE_USAGE_TRANSFER_DST_BIT | (scene_set_storage_ ? VK_IMAGE_USAGE_STORAGE_BIT : 0u),
         true, "scene target color");
     gpu::TextureRef depth = context.create_texture(
         width, height, 1u, depth_format_,
@@ -220,6 +220,10 @@ bool RendererVk::create_scene_targets(const FrameMap& map, unsigned samples) {
 }
 
 unsigned RendererVk::wanted_msaa_samples() const {
+    // A temporal upscaler antialiases the scene itself.
+    if (temporal_mode()) {
+        return 1u;
+    }
     return std::min(std::bit_floor(std::clamp(get_render_config().msaa_samples, 1u, 8u)), msaa_max_samples_);
 }
 
@@ -313,7 +317,13 @@ void RendererVk::apply_window_size() {
     if (content.width <= 0 || content.height <= 0) {
         return;
     }
-    const FrameMap wanted(static_cast<unsigned>(content.width), static_cast<unsigned>(content.height));
+    FrameMap wanted(static_cast<unsigned>(content.width), static_cast<unsigned>(content.height));
+    upscale_output_ = wanted;
+    const float render_fraction = host_window::upscaler_render_fraction(get_render_config(), wanted.width, wanted.height);
+    if (render_fraction < 1.0f) {
+        wanted = FrameMap(std::max(static_cast<unsigned>(std::lround(wanted.width * render_fraction)), 1u),
+                          std::max(static_cast<unsigned>(std::lround(wanted.height * render_fraction)), 1u));
+    }
     const unsigned samples = wanted_msaa_samples();
     // Not while the output scene target holds the scene target's place (its scale is the window's).
     if ((wanted == scene_map_ && samples == scene_.samples) || !scene_.color || output_scene_active_) {
@@ -403,8 +413,15 @@ void RendererVk::carry_over_scene_contents() {
 }
 
 void RendererVk::begin_scene_pass(const SceneClearValues* clear) {
+    begin_scene_pass_with(0u, clear);
+}
+
+void RendererVk::begin_scene_pass_with(unsigned aux, const SceneClearValues* clear) {
     if (scene_pass_open_) {
-        return;
+        if (scene_pass_aux_ == aux) {
+            return;
+        }
+        end_scene_pass();
     }
     if (scene_owed_ && !replaying_) [[unlikely]] {
         if (clear != nullptr) {
@@ -417,8 +434,10 @@ void RendererVk::begin_scene_pass(const SceneClearValues* clear) {
     }
     const VkCommandBuffer commands = commands_;
     VkRenderPassBeginInfo begin{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
-    begin.renderPass = draw_layout_.pass_for(scene_variant(), clear != nullptr);
-    begin.framebuffer = scene_framebuffer();
+    begin.renderPass = aux != 0u ? draw_layout_.aux_pass_for(scene_variant(), aux)
+                                 : draw_layout_.pass_for(scene_variant(), clear != nullptr);
+    begin.framebuffer = aux != 0u ? motion_framebuffer(aux) : scene_framebuffer();
+    scene_pass_aux_ = aux;
     scene_.depth_dirty = scene_.samples > 1u;
     // The set's own size: the scene target, or a target pass's smaller target (E-07).
     begin.renderArea = {{0, 0}, {scene_.color->width, scene_.color->height}};
@@ -801,12 +820,264 @@ bool RendererVk::publish_frame_pass(const FramePassRequest& params, gpu::Texture
     return publish_picture(params.key, size.width, size.height, std::move(texture), 0u, 0u, textures);
 }
 
+bool RendererVk::temporal_mode() const {
+    const unsigned upscaler = get_render_config().upscaler;
+    return (upscaler == 2u && fsr3_available() && vk::Context::get().temporal_upscaling()) ||
+           (upscaler == 4u && vk::Context::get().xess_upscaling());
+}
+
+void RendererVk::prepare_temporal_upscaler() {
+    const FrameMap render_map = output_scene_active_ ? alt_scene_map_ : scene_map_;
+    const FrameMap output_map = upscale_output_;
+    if (!temporal_mode() || output_map.empty() || render_map.width > output_map.width) {
+        if (temporal_) {
+            drain_gpu();
+            temporal_.reset();
+        }
+        temporal_pending_ = {};
+        temporal_render_w_ = temporal_render_h_ = 0u;
+        temporal_output_w_ = temporal_output_h_ = 0u;
+        temporal_history_valid_ = false;
+        return;
+    }
+    const unsigned rw = render_map.width;
+    const unsigned rh = render_map.height;
+    const unsigned ow = output_map.width;
+    const unsigned oh = output_map.height;
+    const RenderConfig cfg = get_render_config();
+    const unsigned kind = cfg.upscaler;
+    const unsigned quality = std::min(cfg.temporal_quality, 4u);
+    // A failed creation is not retried until its sizes or mode change.
+    if (rw == temporal_render_w_ && rh == temporal_render_h_ && ow == temporal_output_w_ && oh == temporal_output_h_ &&
+        kind == temporal_kind_ && (kind < 3u || quality == temporal_quality_)) {
+        if (temporal_pending_.valid() &&
+            temporal_pending_.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+            temporal_ = temporal_pending_.get();
+            temporal_history_valid_ = false;
+            if (temporal_) {
+                std::cout << "[Renderer] " << temporal_->name() << " " << rw << "x" << rh << " -> " << ow << "x" << oh << "\n";
+            }
+        }
+        return;
+    }
+    if (temporal_) {
+        drain_gpu();
+        temporal_.reset();
+    }
+    // A creation still running for older sizes is waited for and dropped.
+    temporal_pending_ = {};
+    temporal_history_valid_ = false;
+    temporal_render_w_ = rw;
+    temporal_render_h_ = rh;
+    temporal_output_w_ = ow;
+    temporal_output_h_ = oh;
+    temporal_kind_ = kind;
+    temporal_quality_ = quality;
+    const vk::Context& context = vk::Context::get();
+    // Until it is ready the scene renders at the render scale without the upscale.
+    temporal_pending_ = std::async(std::launch::async, [instance = context.instance(), device = context.device(),
+                                                        physical = context.physical_device(), rw, rh, ow, oh, kind, quality] {
+        return kind == 4u ? vk::create_xess_upscaler(instance, physical, device, ow, oh, quality)
+                          : vk::create_fsr3_upscaler(device, physical, rw, rh, ow, oh);
+    });
+}
+
+bool RendererVk::scene_temporal_begin(float& jitter_x, float& jitter_y) {
+    jitter_x = 0.0f;
+    jitter_y = 0.0f;
+    scene_temporal_ = false;
+    scene_motion_ = false;
+    const unsigned rw = scene_map_.width;
+    const unsigned ow = temporal_output_w_;
+    // The context is replaced only by begin_frame (prepare_temporal_upscaler).
+    if (!temporal_ || !temporal_mode() || output_scene_active_ || target_pass_active_ || rw != temporal_render_w_ ||
+        scene_map_.height != temporal_render_h_) {
+        temporal_history_valid_ = false;
+        return false;
+    }
+    const unsigned phases = std::max(temporal_->jitter_phase_count(rw, ow), 1u);
+    temporal_->jitter_offset(temporal_frame_ % phases, phases, jitter_x, jitter_y);
+    ++temporal_frame_;
+    scene_jitter_[0] = jitter_x;
+    scene_jitter_[1] = jitter_y;
+    scene_temporal_ = true;
+    scene_motion_ = true;
+    return true;
+}
+
+void RendererVk::destroy_motion_framebuffers() {
+    const VkDevice device = vk::Context::get().device();
+    for (VkFramebuffer& framebuffer : motion_.framebuffers) {
+        if (framebuffer != VK_NULL_HANDLE) {
+            const VkFramebuffer retired = framebuffer;
+            vk::Context::get().defer([device, retired] { vkDestroyFramebuffer(device, retired, nullptr); });
+            framebuffer = VK_NULL_HANDLE;
+        }
+    }
+    motion_.framebuffer_color = VK_NULL_HANDLE;
+    motion_.framebuffer_depth = VK_NULL_HANDLE;
+}
+
+bool RendererVk::ensure_motion_targets() {
+    if (motion_.motion && motion_.map == scene_map_) {
+        return true;
+    }
+    destroy_motion_framebuffers();
+    retire(std::move(motion_.motion));
+    retire(std::move(motion_.reactive));
+    motion_.map = FrameMap{};
+    vk::Context& context = vk::Context::get();
+    const std::uint32_t width = scene_.color->width;
+    const std::uint32_t height = scene_.color->height;
+    const VkImageUsageFlags usage =
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    gpu::TextureRef motion = context.create_texture(width, height, 1u, VK_FORMAT_R16G16_SFLOAT, usage, true, "motion vectors");
+    gpu::TextureRef reactive = context.create_texture(width, height, 1u, VK_FORMAT_R8_UNORM, usage, true, "reactive mask");
+    if (!motion || !reactive) {
+        std::cerr << "[Renderer] motion targets " << width << 'x' << height << " allocation failed\n";
+        return false;
+    }
+    run_one_time([&](VkCommandBuffer commands) {
+        for (const vk::Texture* target : {motion.get(), reactive.get()}) {
+            image_barrier(commands, target->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0,
+                          VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                          VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+        }
+    });
+    motion_.motion = std::move(motion);
+    motion_.reactive = std::move(reactive);
+    motion_.map = scene_map_;
+    return true;
+}
+
+VkFramebuffer RendererVk::motion_framebuffer(unsigned aux) {
+    const VkImageView color = scene_.color->target_view;
+    const VkImageView depth = scene_.depth->target_view;
+    if (motion_.framebuffer_color != color || motion_.framebuffer_depth != depth) {
+        destroy_motion_framebuffers();
+        motion_.framebuffer_color = color;
+        motion_.framebuffer_depth = depth;
+    }
+    VkFramebuffer& framebuffer = motion_.framebuffers[aux - 1u];
+    if (framebuffer == VK_NULL_HANDLE) {
+        const VkImageView views[3] = {color, depth, aux == 1u ? motion_.motion->target_view : motion_.reactive->target_view};
+        VkFramebufferCreateInfo info{VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
+        info.renderPass = draw_layout_.aux_pass_for(scene_variant(), aux);
+        info.attachmentCount = 3;
+        info.pAttachments = views;
+        info.width = scene_.color->width;
+        info.height = scene_.color->height;
+        info.layers = 1;
+        vk::check(vkCreateFramebuffer(vk::Context::get().device(), &info, nullptr, &framebuffer), "temporal scene framebuffer");
+    }
+    return framebuffer;
+}
+
+bool RendererVk::begin_motion_scene() {
+    if (!scene_motion_ || !ensure_motion_targets()) {
+        return false;
+    }
+    end_scene_pass();
+    const VkClearColorValue zero{};
+    const VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u};
+    for (const vk::Texture* target : {motion_.motion.get(), motion_.reactive.get()}) {
+        image_barrier(commands_, target->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                      VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                      VK_ACCESS_TRANSFER_WRITE_BIT);
+        vkCmdClearColorImage(commands_, target->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &zero, 1u, &range);
+        image_barrier(commands_, target->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
+                      VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                      VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+    }
+    return true;
+}
+
+bool RendererVk::ensure_output_set(const FrameMap& output, bool storage) {
+    if (alt_scene_.color && alt_scene_map_ == output && (alt_scene_storage_ || !storage)) {
+        return true;
+    }
+    if (alt_scene_.color) {
+        destroy_scene_set(alt_scene_);
+    }
+    scene_set_storage_ = storage;
+    const bool made = create_scene_set(alt_scene_, output);
+    scene_set_storage_ = false;
+    if (!made) {
+        alt_scene_map_ = FrameMap{};
+        return false;
+    }
+    alt_scene_map_ = output;
+    alt_scene_storage_ = storage;
+    return true;
+}
+
+bool RendererVk::record_temporal_upscale(const FrameMap& output) {
+    end_scene_pass();
+    settle_owed_scene();
+    const GpuPassScope pass{*this, GpuPass::Upscale};
+    const auto image = [](const vk::Texture& texture, VkFormat format, VkImageUsageFlags usage) {
+        return vk::TemporalImage{texture.image, texture.view, VK_IMAGE_ASPECT_COLOR_BIT, format, texture.width, texture.height, usage};
+    };
+    constexpr VkImageUsageFlags kColor = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    if (!temporal_ || !motion_.motion || !scene_.color || !alt_scene_.color || scene_map_.width != temporal_render_w_ ||
+        scene_map_.height != temporal_render_h_ || output.width != temporal_output_w_ || output.height != temporal_output_h_ ||
+        scene_.wide) {
+        temporal_history_valid_ = false;
+        return false;
+    }
+    vk::TemporalUpscaleInputs in{};
+    in.commands = commands_;
+    in.color = image(*scene_.color, VK_FORMAT_R8G8B8A8_UNORM, kColor);
+    in.depth = image(*scene_.depth, depth_format_, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+    in.depth.barrier_aspects = depth_aspects(depth_format_);
+    in.motion = image(*motion_.motion, VK_FORMAT_R16G16_SFLOAT, kColor);
+    in.reactive = image(*motion_.reactive, VK_FORMAT_R8_UNORM, kColor);
+    in.output = image(*alt_scene_.color, VK_FORMAT_R8G8B8A8_UNORM, kColor | VK_IMAGE_USAGE_STORAGE_BIT);
+    in.output.view = alt_scene_.color->target_view;
+    in.render_width = scene_map_.width;
+    in.render_height = scene_map_.height;
+    in.output_width = output.width;
+    in.output_height = output.height;
+    in.jitter_x = scene_jitter_[0];
+    in.jitter_y = scene_jitter_[1];
+    in.camera_near = scene_camera_[0];
+    in.camera_far = scene_camera_[1];
+    in.fov_y = scene_camera_[2];
+    // The time since the last upscale, as measured.
+    const std::int64_t now_us = std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
+    in.frame_ms = temporal_last_upscale_us_ != 0 ? static_cast<float>(now_us - temporal_last_upscale_us_) * 0.001f : 0.0f;
+    temporal_last_upscale_us_ = now_us;
+    in.reset = !temporal_history_valid_;
+    const bool recorded = temporal_->evaluate(in);
+    // The upscaler binds its own pipelines and descriptor sets.
+    reset_draw_bindings();
+    temporal_history_valid_ = recorded;
+    return recorded;
+}
+
 bool RendererVk::begin_output_scene() {
+    const bool temporal = scene_temporal_;
+    scene_temporal_ = false;
     if (output_scene_active_) {
         return false;
     }
-    const FrameMap output = output_frame_for_window();
-    if (!get_render_config().hud_output_resolution || output.empty() || output.width <= scene_map_.width) {
+    if (temporal) {
+        const FrameMap upscaled_map(temporal_output_w_, temporal_output_h_);
+        if (!upscaled_map.empty() && upscaled_map.width >= scene_map_.width && !logging() &&
+            ensure_output_set(upscaled_map, true) && record_temporal_upscale(upscaled_map)) {
+            swap_scene_sets();
+            bind_scene();
+            clear_scene(0u, false, false, true);
+            return true;
+        }
+        temporal_history_valid_ = false;
+    }
+    const FrameMap output = temporal && !upscale_output_.empty() ? upscale_output_ : output_frame_for_window();
+    if ((!temporal && !get_render_config().hud_output_resolution) || output.empty() || output.width <= scene_map_.width) {
         return false;
     }
     if (logging()) {
@@ -819,15 +1090,8 @@ bool RendererVk::begin_output_scene() {
 // alpha kept), which then takes the scene target's place with its depth cleared to the far plane.
 bool RendererVk::enter_output_scene(const FrameMap& output) {
     const LogPause pause(*this);
-    if (!alt_scene_.color || alt_scene_map_ != output) {
-        if (alt_scene_.color) {
-            destroy_scene_set(alt_scene_);
-        }
-        if (!create_scene_set(alt_scene_, output)) {
-            alt_scene_map_ = FrameMap{};
-            return false;
-        }
-        alt_scene_map_ = output;
+    if (!ensure_output_set(output, false)) {
+        return false;
     }
     const unsigned width = output.width;
     const unsigned height = output.height;
@@ -1611,7 +1875,7 @@ void RendererVk::draw(const DrawCall& call) {
         recording_log_.draws.push_back(call);
     }
     const LogPause pause{*this};
-    begin_scene_pass();
+    begin_scene_pass_with(call.aux_target, nullptr);
     const VkCommandBuffer commands = commands_;
     const vk::Context& context = vk::Context::get();
     const bool split = call.flat_pipeline != nullptr;

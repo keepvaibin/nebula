@@ -29,6 +29,7 @@
 #include "galaxy/render/ui_canvas.h"
 #include "galaxy/render/gpu_upload_ring.h"
 #include "galaxy/render/vk/ambient_occlusion_vk.h"
+#include "galaxy/render/vk/temporal_upscaler_vk.h"
 #include "galaxy/render/vk/scene_camera_vk.h"
 #include "galaxy/render/vk/game_bloom_vk.h"
 #include "galaxy/render/vk/post_process_vk.h"
@@ -46,6 +47,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <future>
 #include <memory>
 #include <mutex>
 #include <span>
@@ -75,6 +77,12 @@ struct RenderLayout {
     // The same passes over the wide scene's colour format (kSceneVariantHdr), by samples.
     std::array<VkRenderPass, 4> wide_passes{};
     std::array<VkRenderPass, 4> wide_passes_clear{};
+    // A temporal scene's passes: the scene target and depth with one more target, single-sample (DrawCall::aux_target: 1 the
+    // motion vectors, 2 the reactive mask), over the 8-bit or the wide scene's colour.
+    std::array<std::array<VkRenderPass, 2>, 2> aux_passes{};
+    [[nodiscard]] VkRenderPass aux_pass_for(unsigned samples_log2, unsigned aux) const noexcept {
+        return aux_passes[(samples_log2 & kSceneVariantHdr) != 0u ? 1u : 0u][aux - 1u];
+    }
     [[nodiscard]] VkRenderPass pass_for(unsigned samples_log2, bool clear) const noexcept {
         if ((samples_log2 & kSceneVariantHdr) != 0u) {
             const unsigned samples = samples_log2 & kSceneVariantSamplesMask;
@@ -214,7 +222,7 @@ public:
     // Diagnostics (GALAXY_INTERP_VERIFY): the next sub-frame's evaluated output, read back once its fence passed.
     void request_eval_readback() noexcept { eval_readback_requested_ = true; }
     [[nodiscard]] bool take_eval_readback(std::vector<std::uint32_t>& words, float& t);
-    [[nodiscard]] bool temporal_mode() const { return false; }
+    [[nodiscard]] bool temporal_mode() const;
     // A copy right after the display copy, from the output scene target the 2D layer drew in (the scene target itself without one).
     [[nodiscard]] bool draw_frame_pass_from_output(const FramePassRequest& params, TextureCache& textures);
 
@@ -287,12 +295,13 @@ public:
     [[nodiscard]] bool target_pass_active() const noexcept { return target_pass_active_; }
     void end_output_scene();
     [[nodiscard]] bool output_scene_active() const noexcept { return output_scene_active_; }
-    // Not on Vulkan yet: temporal upscaling.
-    [[nodiscard]] bool scene_temporal_begin(float&, float&) noexcept { return false; }
-    [[nodiscard]] bool begin_motion_scene() noexcept { return false; }
+    // Temporal upscaling (RendererD3D12's).
+    [[nodiscard]] bool scene_temporal_begin(float& jitter_x, float& jitter_y);
+    [[nodiscard]] bool begin_motion_scene();
     void record_motion_debug_view() noexcept {}
-    void reset_temporal_history() noexcept {}
-    [[nodiscard]] unsigned matrix_history_frames() const noexcept { return 0u; }
+    void reset_temporal_history() noexcept { temporal_history_valid_ = false; }
+    // Matrix-ring segment advances back whose palettes are still alive while this frame executes.
+    [[nodiscard]] unsigned matrix_history_frames() const noexcept { return matrix_segments_ - kFramesInFlight; }
     // The matrix ring's rewinds (renderer_d3d12.h).
     [[nodiscard]] std::uint64_t matrix_segment_serial() const noexcept { return matrix_ring_.epoch(); }
     // A completed log waits (interpolation mode); start_replay_playback makes it the playing one.
@@ -315,7 +324,11 @@ public:
         total_ms = std::exchange(subframe_gpu_ms_, 0.0);
         samples = std::exchange(subframe_gpu_samples_, 0u);
     }
-    void set_scene_camera(float, float, float) noexcept {}
+    void set_scene_camera(float near_plane, float far_plane, float fov_y) noexcept {
+        scene_camera_[0] = near_plane;
+        scene_camera_[1] = far_plane;
+        scene_camera_[2] = fov_y;
+    }
 
     [[nodiscard]] double measured_present_hz() const noexcept {
         return measured_present_hz_.load(std::memory_order_relaxed);
@@ -439,6 +452,8 @@ private:
     // Frame recording.
     // `clear`: begins with both targets cleared to it (scene_pass_clear).
     void begin_scene_pass(const SceneClearValues* clear = nullptr);
+    // The same with a temporal scene's second target (DrawCall::aux_target); a pass open with another one ends.
+    void begin_scene_pass_with(unsigned aux, const SceneClearValues* clear);
     void end_scene_pass();
     void reset_draw_bindings() noexcept;
     [[nodiscard]] VkDescriptorSet allocate_frame_set(VkDescriptorSetLayout layout);
@@ -610,6 +625,46 @@ private:
     gpu::TextureRef scene_carry_depth_;
     bool scene_carry_clear_ = false;  // the new targets start cleared (MSAA before or after the change)
     bool scene_pass_open_ = false;
+    unsigned scene_pass_aux_ = 0u;
+    // The temporal scene (RendererD3D12's scene_temporal_, its targets and its upscaler).
+    struct MotionTargets {
+        gpu::TextureRef motion;
+        gpu::TextureRef reactive;
+        std::array<VkFramebuffer, 2> framebuffers{};
+        VkImageView framebuffer_color = VK_NULL_HANDLE;
+        VkImageView framebuffer_depth = VK_NULL_HANDLE;
+        FrameMap map{};
+    };
+    MotionTargets motion_;
+    [[nodiscard]] bool ensure_motion_targets();
+    void destroy_motion_framebuffers();
+    [[nodiscard]] VkFramebuffer motion_framebuffer(unsigned aux);
+    void prepare_temporal_upscaler();
+    [[nodiscard]] bool record_temporal_upscale(const FrameMap& output);
+    [[nodiscard]] bool ensure_output_set(const FrameMap& output, bool storage);
+    std::unique_ptr<vk::TemporalUpscaler> temporal_;
+    std::future<std::unique_ptr<vk::TemporalUpscaler>> temporal_pending_;
+    FrameMap upscale_output_{};
+    unsigned temporal_render_w_ = 0u;
+    unsigned temporal_render_h_ = 0u;
+    unsigned temporal_output_w_ = 0u;
+    unsigned temporal_output_h_ = 0u;
+    unsigned temporal_frame_ = 0u;
+    unsigned temporal_kind_ = 0u;
+    unsigned temporal_quality_ = 0u;
+    bool temporal_history_valid_ = false;
+    bool scene_temporal_ = false;
+    bool scene_motion_ = false;
+    float scene_jitter_[2]{};
+    float scene_camera_[3]{1.0f, 100000.0f, 1.0f};
+    std::int64_t temporal_last_upscale_us_ = 0;
+    bool scene_set_storage_ = false;  // create_scene_set: its colour takes the upscaler's output
+    bool alt_scene_storage_ = false;
+    unsigned matrix_segments_ = kFramesInFlight;
+    unsigned matrix_segment_ = 0u;
+    bool matrix_segment_used_ = false;
+    bool matrix_segment_started_ = false;
+    std::size_t matrix_begin_cursor_ = 0u;
     bool present_black_ = false;  // present()'s `black`, for present_display
     bool scene_seeded_ = false;
 
@@ -709,7 +764,7 @@ private:
     // Interpolated sub-frames (renderer_vk_replay.cpp).
     // Ring mode: in Interp the upload rings, texture-table descriptors and retired textures are segmented per game
     // frame (kInterpSegments), so a logged frame's data lives until its segment comes round again.
-    enum class RingMode : std::uint8_t { Normal, Interp };
+    enum class RingMode : std::uint8_t { Normal, Temporal, Interp };
     struct Segment {
         VkDescriptorPool descriptors = VK_NULL_HANDLE;
         std::vector<VkDescriptorPool> overflow;

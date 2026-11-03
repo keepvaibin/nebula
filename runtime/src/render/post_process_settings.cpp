@@ -216,8 +216,14 @@ std::string post_process_caps_text(const PostProcessStatus& status) {
 }
 
 #if defined(NEBULA_GPU_VULKAN)
-// Temporal upscaling is D3D12 only (temporal_upscaler.cpp).
-bool fsr3_available() noexcept { return false; }
+// Whether the build holds it (temporal_upscaler_vk.cpp); the device decides in RendererVk::temporal_mode.
+bool fsr3_available() noexcept {
+#if defined(GALAXY_WITH_FSR3_VK)
+    return true;
+#else
+    return false;
+#endif
+}
 #endif
 
 }  // namespace galaxy::render

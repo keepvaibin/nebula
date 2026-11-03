@@ -3,6 +3,11 @@
 #include "galaxy/run_options.h"
 #include "galaxy/render/vk/vk_context.h"
 
+#include "galaxy/render/vk/temporal_upscaler_vk.h"
+#include "galaxy/render/xess_library.h"
+
+#include <xess/xess_vk.h>
+
 #include "galaxy/render/gpu_types.h"
 
 #include <vk_mem_alloc.h>
@@ -166,6 +171,22 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
     app.pApplicationName = "Nebula";
     app.pEngineName = "Nebula";
     app.apiVersion = VK_API_VERSION_1_1;
+    // XeSS's instance needs, where its library is here.
+    if (const auto required = xess_library::get<decltype(xessVKGetRequiredInstanceExtensions)>("xessVKGetRequiredInstanceExtensions")) {
+        std::uint32_t count = 0u;
+        const char* const* names = nullptr;
+        std::uint32_t version = 0u;
+        if (required(&count, &names, &version) == XESS_RESULT_SUCCESS) {
+            for (std::uint32_t i = 0u; i < count; ++i) {
+                if (std::none_of(instance_extensions.begin(), instance_extensions.end(),
+                                 [&](const char* have) { return std::strcmp(have, names[i]) == 0; })) {
+                    instance_extensions.push_back(names[i]);
+                }
+            }
+            app.apiVersion = std::max(app.apiVersion, version);
+            xess_instance_ready_ = true;
+        }
+    }
     VkInstanceCreateInfo instance_info{VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
     instance_info.pApplicationInfo = &app;
     instance_info.enabledExtensionCount = static_cast<std::uint32_t>(instance_extensions.size());
@@ -343,6 +364,36 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
             device_extensions.push_back(VK_EXT_DEPTH_CLIP_ENABLE_EXTENSION_NAME);
         }
     }
+    // FSR 3 (temporal_upscaler_vk.cpp): half floats, 16-bit storage and its compute shaders' subgroup sizes, and a depth
+    // aspect read while the stencil aspect stays an attachment (its barriers name the depth alone).
+    VkPhysicalDeviceShaderFloat16Int8Features float16{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES};
+    VkPhysicalDevice16BitStorageFeatures storage16{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_16BIT_STORAGE_FEATURES};
+    VkPhysicalDeviceSubgroupSizeControlFeaturesEXT subgroup{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_FEATURES_EXT};
+    VkPhysicalDeviceSeparateDepthStencilLayoutsFeaturesKHR separate{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SEPARATE_DEPTH_STENCIL_LAYOUTS_FEATURES_KHR};
+    if (fsr3_compiled() && has_device_extension(physical_, VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME) &&
+        has_device_extension(physical_, VK_EXT_SUBGROUP_SIZE_CONTROL_EXTENSION_NAME) &&
+        has_device_extension(physical_, VK_KHR_SEPARATE_DEPTH_STENCIL_LAYOUTS_EXTENSION_NAME) &&
+        has_device_extension(physical_, VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME) &&
+        available.independentBlend == VK_TRUE && available.shaderStorageImageWriteWithoutFormat == VK_TRUE &&
+        available.shaderStorageImageExtendedFormats == VK_TRUE) {
+        float16.pNext = &storage16;
+        storage16.pNext = &subgroup;
+        subgroup.pNext = &separate;
+        VkPhysicalDeviceFeatures2 features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
+        features.pNext = &float16;
+        vkGetPhysicalDeviceFeatures2(physical_, &features);
+        temporal_upscaling_ = float16.shaderFloat16 == VK_TRUE && storage16.storageBuffer16BitAccess == VK_TRUE &&
+                              subgroup.subgroupSizeControl == VK_TRUE && subgroup.computeFullSubgroups == VK_TRUE &&
+                              separate.separateDepthStencilLayouts == VK_TRUE;
+        if (temporal_upscaling_) {
+            device_extensions.push_back(VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME);
+            device_extensions.push_back(VK_EXT_SUBGROUP_SIZE_CONTROL_EXTENSION_NAME);
+            device_extensions.push_back(VK_KHR_SEPARATE_DEPTH_STENCIL_LAYOUTS_EXTENSION_NAME);
+            device_extensions.push_back(VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME);
+            enabled.shaderStorageImageWriteWithoutFormat = VK_TRUE;
+            enabled.shaderStorageImageExtendedFormats = VK_TRUE;
+        }
+    }
     depth_clamp_ = available.depthClamp == VK_TRUE;
     VkDeviceCreateInfo device_info{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
     if (depth_clip_enable_) {
@@ -350,11 +401,48 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
         depth_clip.depthClipEnable = VK_TRUE;
         device_info.pNext = &depth_clip;
     }
+    if (temporal_upscaling_) {
+        float16.shaderInt8 = VK_FALSE;
+        storage16.storageBuffer16BitAccess = VK_TRUE;
+        storage16.uniformAndStorageBuffer16BitAccess = VK_FALSE;
+        storage16.storagePushConstant16 = VK_FALSE;
+        storage16.storageInputOutput16 = VK_FALSE;
+        separate.pNext = const_cast<void*>(device_info.pNext);
+        device_info.pNext = &float16;
+    }
+    // XeSS's device needs, where its library is here: its features through the chain (its function adds to it).
+    VkPhysicalDeviceFeatures2 enabled_chain{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
+    const auto xess_extensions = xess_library::get<decltype(xessVKGetRequiredDeviceExtensions)>("xessVKGetRequiredDeviceExtensions");
+    const auto xess_features = xess_library::get<decltype(xessVKGetRequiredDeviceFeatures)>("xessVKGetRequiredDeviceFeatures");
+    if (xess_instance_ready_ && xess_extensions != nullptr && xess_features != nullptr) {
+        std::uint32_t count = 0u;
+        const char* const* names = nullptr;
+        bool have_all = xess_extensions(instance_, physical_, &count, &names) == XESS_RESULT_SUCCESS;
+        for (std::uint32_t i = 0u; have_all && i < count; ++i) {
+            have_all = has_device_extension(physical_, names[i]);
+        }
+        if (have_all && available.shaderStorageImageWriteWithoutFormat == VK_TRUE) {
+            enabled.shaderStorageImageWriteWithoutFormat = VK_TRUE;
+            enabled_chain.features = enabled;
+            enabled_chain.pNext = const_cast<void*>(device_info.pNext);
+            void* chain = &enabled_chain;
+            if (xess_features(instance_, physical_, &chain) == XESS_RESULT_SUCCESS) {
+                for (std::uint32_t i = 0u; i < count; ++i) {
+                    if (std::none_of(device_extensions.begin(), device_extensions.end(),
+                                     [&](const char* have) { return std::strcmp(have, names[i]) == 0; })) {
+                        device_extensions.push_back(names[i]);
+                    }
+                }
+                device_info.pNext = chain;
+                xess_upscaling_ = true;
+            }
+        }
+    }
     device_info.queueCreateInfoCount = 1;
     device_info.pQueueCreateInfos = &queue_info;
     device_info.enabledExtensionCount = static_cast<std::uint32_t>(device_extensions.size());
     device_info.ppEnabledExtensionNames = device_extensions.data();
-    device_info.pEnabledFeatures = &enabled;
+    device_info.pEnabledFeatures = xess_upscaling_ ? nullptr : &enabled;
     if (vkCreateDevice(physical_, &device_info, nullptr, &device_) != VK_SUCCESS) {
         device_ = VK_NULL_HANDLE;
         return fail("vkCreateDevice failed");

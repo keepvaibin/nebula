@@ -34,14 +34,16 @@ constexpr VkDeviceSize kEvalFrameBlock = 256u;
 bool RendererVk::interpolation_mode() const {
     const RenderConfig cfg = get_render_config();
     const double rate = present_frame_rate(presented_max_fps(cfg), cfg.vsync_interval, display_refresh_hz_);
-    return interpolated_frames_per_game_frame(rate) != 0u;
+    // A temporal upscale of the sub-frames is not on Vulkan yet: the scene upscales at the game's rate.
+    return !temporal_mode() && interpolated_frames_per_game_frame(rate) != 0u;
 }
 
 // Interp: the upload rings, texture tables and retired textures are segmented per game frame, so a logged frame's
 // data lives until its segment comes round again; Normal: per frame slot. A change, or a ring whose frames took over
 // half their budget, waits for an idle GPU.
 void RendererVk::update_ring_mode() {
-    const RingMode mode = interpolation_mode() ? RingMode::Interp : RingMode::Normal;
+    const RingMode mode = interpolation_mode() ? RingMode::Interp
+        : temporal_mode() ? RingMode::Temporal : RingMode::Normal;
     const bool grow = !ring_growth_failed_ &&
         (vertex_ring_.wants_growth() || index_ring_.wants_growth() || constant_ring_.wants_growth() ||
          matrix_ring_.wants_growth());
@@ -52,7 +54,9 @@ void RendererVk::update_ring_mode() {
     const bool interp = mode == RingMode::Interp;
     const unsigned segments = interp ? kInterpSegments : kFramesInFlight;
     const VkDevice device = vk::Context::get().device();
-    const auto place = [&](UploadRing& ring, const char* name) {
+    // Temporal: one matrix segment more holds the previous scene's palettes.
+    const unsigned matrix_segments = mode == RingMode::Temporal ? kFramesInFlight + 1u : segments;
+    const auto place = [&](UploadRing& ring, const char* name, unsigned segments) {
         const std::size_t had = ring.capacity();
         std::size_t capacity = ring_growth_failed_ ? had : ring.grown_capacity(segments);
         if (capacity == 0u) {
@@ -71,10 +75,14 @@ void RendererVk::update_ring_mode() {
         ring_growth_failed_ = true;
         return ring.initialize(device, name, UploadRing::budget(had, segments), segments, had);
     };
-    if (!place(vertex_ring_, "vertex") || !place(index_ring_, "index") || !place(constant_ring_, "constant") ||
-        !place(matrix_ring_, "matrix")) {
+    if (!place(vertex_ring_, "vertex", segments) || !place(index_ring_, "index", segments) ||
+        !place(constant_ring_, "constant", segments) || !place(matrix_ring_, "matrix", matrix_segments)) {
         throw std::runtime_error("upload ring resize failed");
     }
+    matrix_segments_ = mode == RingMode::Temporal ? matrix_segments : kFramesInFlight;
+    matrix_segment_ = 0u;
+    matrix_segment_used_ = false;
+    matrix_segment_started_ = false;
     // Rebuilt rings may be new buffers: no cached set may name the old ones.
     constants_sets_.clear();
     reset_draw_bindings();
