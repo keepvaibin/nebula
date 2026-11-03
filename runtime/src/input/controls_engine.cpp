@@ -827,7 +827,7 @@ void apply_pointer_sweep_env(
         read_env_u64_optional(NEBULA_TEST_ENV("GALAXY_INPUT_POINTER_SWEEP_DURATION"));
     if (start.has_value() != duration.has_value()) {
         throw std::runtime_error(
-            "native input pointer sweep requires both VI and duration");
+            "native input pointer sweep requires both frame and duration");
     }
     if (!start.has_value()) {
         return;
@@ -887,7 +887,7 @@ void apply_pointer_path_env(
     if (points.empty() || current_vi < points.front().vi || current_vi > points.back().vi) {
         return;
     }
-    // The first point at or after this VI, and the one before it.
+    // The first point at or after this frame, and the one before it.
     const auto after = std::lower_bound(points.begin(), points.end(), current_vi,
                                         [](const PointerPathPoint& point, std::uint64_t vi) { return point.vi < vi; });
     float x = after->x;
@@ -1068,7 +1068,7 @@ galaxy::input::PlayerInput build_replayed_input(
     apply_script_buttons_to_input(snapshot, script);
 
     // The live pointer model (pointer_control.h) on the replay timeline: the
-    // last moved source owns the pointer and dt comes from the VI clock, so a
+    // last moved source owns the pointer and dt comes from the frame clock, so a
     // recorded stick moves the pointer at the same speed at any sample rate.
     static float s_replay_pointer_x = 0.0f;
     static float s_replay_pointer_y = 0.0f;

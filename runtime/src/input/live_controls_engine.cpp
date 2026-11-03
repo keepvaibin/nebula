@@ -46,7 +46,7 @@ LiveControlsResult LiveControlsEngine::sample(const LiveControlsFrame& frame, Li
     const float trigger_threshold = static_cast<float>(kXInputTriggerThreshold) / 255.0f;
     if (s_pad_history.capacity() < live_pads.size()) s_pad_history.reserve(live_pads.size());
     for (auto& history : s_pad_history) history.seen = false;
-    // Each scheme's bindings turn its physical inputs into Wii targets. Pad
+    // Each scheme's bindings turn its physical inputs into game targets. Pad
     // and keyboard pointer axes stay apart: they are different pointer
     // sources (velocity from the stick, keys at the keyboard speed).
     galaxy::input::LogicalInput logic{};
@@ -65,7 +65,7 @@ LiveControlsResult LiveControlsEngine::sample(const LiveControlsFrame& frame, Li
     float pointer_hide_seconds = 0.0f;
     float pointer_hide_radius = galaxy::input::kDefaultPointerHideRadius;
     // The controller in use: the last one with any input (buttons, sticks, triggers, a gyro turn, a
-    // shake). A key or mouse button bound to a Wii input hands control to the keyboard. In the tilt
+    // shake). A key or mouse button bound to a game input hands control to the keyboard. In the tilt
     // sections (tilt.h) its tilt steers when it has motion sensors (Pro Controller 1/2); otherwise the
     // stick steers (Xbox, keyboard). Vibration goes to it.
     const auto pad_key = [](const LivePad& pad) {

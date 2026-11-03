@@ -5,7 +5,7 @@
 //                      the disc's own folders in the mod (or in its one subfolder) count as files/,
 //   loose files        files beside nothing else (Mario.arc): each replaces every disc file of its name, as
 //                      Riivolution's disc paths without a '/' do,
-//   textures/          a texture pack (the community's tex1_ names, as Dolphin loads them); tex1_ files anywhere in a
+//   textures/          a texture pack (the community's tex1_ names); tex1_ files anywhere in a
 //                      mod with nothing else make it a pack,
 //   movies/            HD videos for the game's movies (movie_replacement.h).
 // A mod whose text covers some of the disc's languages but not the one played shows its own text in that language

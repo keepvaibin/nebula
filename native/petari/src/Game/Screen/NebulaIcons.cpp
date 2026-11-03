@@ -681,7 +681,7 @@ namespace {
     // 40, centred, its shading reversed).
     enum { LookText, LookUp, LookPressed };
 
-    // The icon of `glyph` at `place` in `style` on the canvas (cleared first); false when the Wii's own shows.
+    // The icon of `glyph` at `place` in `style` on the canvas (cleared first); false when the game's own shows.
     bool paint(Canvas& rCanvas, s32 style, s32 glyph, s32 place, s32 look) {
         static const char* const cNintendoFaces[4] = {"B", "A", "Y", "X"};
         static const char* const cXboxLetters[4] = {"A", "B", "X", "Y"};
@@ -757,7 +757,7 @@ namespace {
         }
         case NEBULA_ICON_START:
             if (family == 1) {
-                return false;  // Plus: the Wii's own
+                return false;  // Plus: the game's own
             }
             drawShape(rCanvas, family == 2 ? pill : circle, ringColor, ring, faceTop, faceBottom);
             // Three lines (Menu, Options).
@@ -767,7 +767,7 @@ namespace {
             return true;
         case NEBULA_ICON_BACK:
             if (family == 1) {
-                return false;  // Minus: the Wii's own
+                return false;  // Minus: the game's own
             }
             drawShape(rCanvas, family == 2 ? pill : circle, ringColor, ring, faceTop, faceBottom);
             if (xbox) {
@@ -1298,7 +1298,7 @@ namespace {
     Font sFont;
     enum { FontUnread, FontReady, FontUnusable };
     s32 sFontState = FontUnread;
-    NebulaButtonIcons sShown;  // zero: the Wii's own
+    NebulaButtonIcons sShown;  // zero: the game's own
 
     u16 originalGlyph(s32 icon) {
         return sFont.mOriginal[cCodes[icon] - cMapFirst];
@@ -1337,7 +1337,7 @@ namespace {
             usable = pFont->HasGlyph(cCodes[i]);
         }
         if (!usable) {
-            JUTNativeLog("NebulaIcons: the picture font's sheets are not RGBA8 records of usual cells; its icons stay the Wii's\n");
+            JUTNativeLog("NebulaIcons: the picture font's sheets are not RGBA8 records of usual cells; its icons stay the game's\n");
             return FontUnusable;
         }
         Font& f = sFont;
@@ -1514,7 +1514,7 @@ namespace {
         return originalGlyph(icon);
     }
 
-    // The glyph icon `icon` shows: ours, a Wii icon in its place (Plus, Minus, HOME or the Control Pad, which a Nintendo
+    // The glyph icon `icon` shows: ours, the game's icon in its place (Plus, Minus, HOME or the Control Pad, which a Nintendo
     // controller's look like), or its own.
     u16 shownGlyph(s32 family, s32 icon, s32 glyph, s32 place) {
         if (family < 0 || glyph == NEBULA_ICON_KEEP) {
@@ -1539,7 +1539,7 @@ namespace {
     Picture sExportPicture;  // GALAXY_EXPORT_ART's A bubble picture
     bool sPicturesShown = false;
 
-    // The font's glyph `glyph` scaled into the canvas (an icon the style borrows from the Wii's).
+    // The font's glyph `glyph` scaled into the canvas (an icon the style borrows from the game's).
     void paintFromGlyph(Canvas& rCanvas, u16 glyph) {
         rCanvas.clear();
         u8* pSheet;
@@ -2043,7 +2043,7 @@ namespace NebulaIcons {
         }
         sFontState = install();
         if (sFontState == FontUnread) {
-            JUTNativeLog("NebulaIcons: the picture font is not loaded; its icons stay the Wii's\n");
+            JUTNativeLog("NebulaIcons: the picture font is not loaded; its icons stay the game's\n");
             sFontState = FontUnusable;
         } else if (sFontState == FontReady && NebulaHost::artExport(nullptr) != 0) {
             exportArt();

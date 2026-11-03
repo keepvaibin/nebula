@@ -33,7 +33,7 @@ struct RuntimeAudioSettings {
 
 // The style of the game's button icons: the controller in use (a Wii Remote's for the keyboard and controllers it does
 // not know), or one style always.
-enum class ButtonIcons : std::uint8_t { Auto, Wii, Xbox, Nintendo, PlayStation, Keyboard };
+enum class ButtonIcons : std::uint8_t { Auto, Game, Xbox, Nintendo, PlayStation, Keyboard };
 
 // The game's languages, by the game's language codes; the disc's release picks each one's
 // folder (UsEnglish on North America's disc, EuEnglish on Europe's, JpJapanese on Japan's). Auto: the system's language

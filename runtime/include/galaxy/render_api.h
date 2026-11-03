@@ -32,7 +32,7 @@ struct HostPointerState {
     int client_height = 0;
     std::uint64_t absolute_sequence = 0;
     // GetTickCount64 time (ms) at which the position of absolute_sequence was published; a host clock, not the
-    // Wii time base of HID report deadlines.
+    // The time base of HID report deadlines.
     std::uint64_t absolute_acquired_ms = 0;
     std::uint32_t debug_flags = 0;
     std::uint32_t debug_error = 0;
@@ -248,7 +248,7 @@ void request_sharp_2d(bool on) noexcept;
 // pointer_wheel: the settings menu takes the wheel itself while it shows). Any thread.
 [[nodiscard]] std::int32_t take_pointer_wheel() noexcept;
 
-// The native game's HOME Menu with the console menu's choices, taking the keyboard and controllers while open: return
+// The native game's HOME Menu with its choices, taking the keyboard and controllers while open: return
 // to the game, reset, or leave it, the last two after "are you sure?". The game opens it
 // (HBMInit) and polls each frame: -1 nothing chosen yet, 0 return to the game, 1 leave the game, 2 reset. The game
 // draws it from home_menu_view (NEBULA_HBM_VIEW, `drawing`) and sends the pointer's answers; until it draws it, the
