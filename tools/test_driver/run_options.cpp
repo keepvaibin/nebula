@@ -66,6 +66,7 @@ RunOptions read_options() {
     o.trace_present_stats = nebula_switch::trace_present_stats();
     o.trace_thread_cpu = nebula_switch::trace_thread_cpu();
     o.vk_simulate_driver = nebula_switch::vk_simulate_driver();
+    o.trace_interp_slots = nebula_switch::trace_interp_slots();
     o.vk_test_no_feature = nebula_switch::vk_test_no_feature();
     o.vk_test_refuse = nebula_switch::vk_test_refuse();
     o.vulkan_validation = nebula_switch::vulkan_validation();

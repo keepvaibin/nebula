@@ -597,6 +597,15 @@ inline constexpr const char* vk_simulate_driver_name() noexcept { return "GALAXY
 inline constexpr const wchar_t* vk_simulate_driver_wide_name() noexcept { return L"GALAXY_VK_SIMULATE_DRIVER"; }
 #endif
 #if defined(NEBULA_RELEASE)
+inline const char* trace_interp_slots() noexcept { return nullptr; }
+inline constexpr const char* trace_interp_slots_name() noexcept { return ""; }
+inline constexpr const wchar_t* trace_interp_slots_wide_name() noexcept { return L""; }
+#else
+inline const char* trace_interp_slots() noexcept { return std::getenv("GALAXY_TRACE_INTERP_SLOTS"); }
+inline constexpr const char* trace_interp_slots_name() noexcept { return "GALAXY_TRACE_INTERP_SLOTS"; }
+inline constexpr const wchar_t* trace_interp_slots_wide_name() noexcept { return L"GALAXY_TRACE_INTERP_SLOTS"; }
+#endif
+#if defined(NEBULA_RELEASE)
 inline const char* vk_test_no_feature() noexcept { return nullptr; }
 inline constexpr const char* vk_test_no_feature_name() noexcept { return ""; }
 inline constexpr const wchar_t* vk_test_no_feature_wide_name() noexcept { return L""; }
