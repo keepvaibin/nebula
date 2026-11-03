@@ -32,7 +32,7 @@ enum J3DDiffFlag {
     J3DDiffFlag_Changed = 1u << 31,
 };
 
-// A material's typed snapshot (J3DNativeMaterial), where J3D kept the material's display list: made with its owner
+// A material's typed snapshot (J3DNativeMaterial): made with its owner
 // (a material, a material packet, an instance's shape packet), refreshed where J3D built or patched the list.
 class J3DMaterialSnapshot {
 public:

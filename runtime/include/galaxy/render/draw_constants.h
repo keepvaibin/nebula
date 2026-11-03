@@ -22,7 +22,7 @@ inline constexpr unsigned kMaxColorChannels = 2;
 #pragma warning(disable : 4324)  // structure padded due to alignment specifier
 #endif
 
-// Vertex-stage constants (root CBV b0). The XF matrix palette is a structured buffer (root SRV) instead: it is
+// Vertex-stage constants (root CBV b0). The matrix palette is a structured buffer (root SRV) instead: it is
 // large and is snapshotted again whenever LOAD_INDX changes it mid-frame.
 struct alignas(256) VertexConstants {
     float projection[4][4];

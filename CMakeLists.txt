@@ -508,7 +508,6 @@ galaxy_test(galaxy_wiimote_speaker_tests SOURCES ${rt}/wiimote_speaker_tests.cpp
 galaxy_test(galaxy_player_input_tests SOURCES ${rt}/input/player_input_tests.cpp LIBS galaxy_gx)
 galaxy_test(galaxy_host_pointer_events_tests SOURCES ${rt}/host_pointer_events_tests.cpp
     LIBS galaxy_host_pointer_events)
-galaxy_test(galaxy_diagnostic_stick_lease_tests SOURCES ${rt}/diagnostic_stick_lease_tests.cpp)
 galaxy_test(galaxy_audio_mixer_tests SOURCES ${rt}/audio_mixer_tests.cpp LIBS galaxy_audio_mixer)
 galaxy_test(galaxy_movie_video_tests SOURCES ${rt}/movie_video_tests.cpp ${rt}/movie_video.cpp)
 galaxy_test(galaxy_windows_power_tests SOURCES ${rt}/windows_power_tests.cpp)

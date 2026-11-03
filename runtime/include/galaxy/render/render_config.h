@@ -28,10 +28,6 @@ struct RenderConfig {
     unsigned vsync_interval      = 0;
 
     // Swap-chain options, read once at start.
-    bool     wait_for_frame_latency = false;
-    unsigned swap_chain_frame_latency = 2;
-    bool     allow_tearing = false;
-    bool     flip_discard = true;
 
     // scene target multisampling (1, 2, 4 or 8), up to what the adapter supports; single-sampled with temporal upscaling or
     // ray tracing.
@@ -43,7 +39,7 @@ struct RenderConfig {
     // Frames per second presented (0: the display's rate, at least 60; see present_frame_rate).
     float    max_fps             = 60.0f;
 
-    // Submits the game's FIFO at its own 60 Hz cadence instead of one present per game frame.
+    // Submits the game's records at their own 60 Hz cadence instead of one present per game frame.
     bool     frame_rate_decouple = false;
 
     // Mip LOD bias in units of 0.5 LOD levels (0 full detail, 2 quarter), applied to every sampler.
@@ -58,7 +54,7 @@ struct RenderConfig {
     // Curved models rounded on the GPU where the renderer tessellates (curved_surfaces.h).
     bool     curved_surfaces     = true;
 
-    // Lit color channels evaluated per pixel instead of per vertex (the XF light formulas on the interpolated
+    // Lit color channels evaluated per pixel instead of per vertex (the light formulas on the interpolated
     // eye-space position and normal), in specialized triangle pipelines.
     bool     per_pixel_lighting  = false;
 

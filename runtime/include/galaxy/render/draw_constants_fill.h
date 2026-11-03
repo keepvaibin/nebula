@@ -27,7 +27,7 @@ inline void fill_vs_projection(const NativeDrawState& draw, float out[4][4]) {
     const std::uint32_t type = draw.projection_type;
 
     // NDC z runs from -1 (near) to 0 (far). Negating the clip z gives D3D's [0, 1] reversed (far 0, near 1),
-    //  the XF viewport depth range and the flipped depth compares
+    //  the viewport depth range and the flipped depth compares
     // (pipeline_cache) complete the mapping. With far at 1.0, float error clips SMG's far-plane depth-clear quad
     // and the skybox. The (1 - 1e-7) factor keeps far-plane geometry inside the clip volume with
     // DepthClipEnable on.

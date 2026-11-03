@@ -1920,7 +1920,7 @@ bool RendererVk::copy_scene_to_texture(const CaptureRequest& params, TextureCach
             scene_copy_dests_.erase(dest_key);
             static std::atomic<unsigned> reported{0u};
             if (reported.fetch_add(1u, std::memory_order_relaxed) < 8u) {
-                std::cerr << "[efb-copy] destination allocation failed size=" << w << 'x' << h
+                std::cerr << "[frame-read] destination allocation failed size=" << w << 'x' << h
                           << "; copy skipped\n";
             }
             return false;

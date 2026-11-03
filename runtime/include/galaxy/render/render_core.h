@@ -251,7 +251,7 @@ private:
     void on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uint64_t a, std::uint64_t b);
 
     // Consumes state_'s dirty bits: rebuilds the shader and render-state keys, writes
-    // VertexConstants/PixelConstants into the constant ring, snapshots the XF matrix palette into the
+    // VertexConstants/PixelConstants into the constant ring, snapshots the matrix palette into the
     // matrix ring and refreshes the texture tables of the sampled maps. Returns the draw's pipeline,
     // or nullptr when none is ready (the draw is skipped).
     gpu::Pipeline* flush_draw_state(
@@ -343,7 +343,7 @@ private:
     // run, repeated while the settings overlay is open. `in_frame`: inside a render chunk's
     // begin_frame/end_frame.
     void present_vi_black(bool in_frame);
-    bool vi_black_shown_ = false;
+    bool black_shown_ = false;
     PointerResponseStamp producer_pointer_response_{}, render_pointer_response_{}, last_response_{};
     std::array<float, 12> producer_scene_view_{};
     bool producer_scene_view_valid_ = false;
@@ -356,7 +356,7 @@ private:
     // Render thread: the scene's sky up changed; the next draw uploads its VS constants.
     bool sky_up_dirty_ = false;
     std::vector<StripeParticleMark> producer_stripe_particles_;
-    // Render thread: the chunk's stripe marks while its FIFO is parsed (log
+    // Render thread: the chunk's stripe marks while its records run (log
     // recording), and the stripe vertices of the pending draw batch.
     std::span<const StripeParticleMark> parse_stripes_{};
     std::size_t parse_stripe_next_ = 0;
@@ -382,7 +382,7 @@ private:
     // between them) are told apart by their order.
     std::uint64_t identity_last_base_ = 0;
     std::uint32_t identity_sub_index_ = 0;
-    // A render chunk began (FIFO streaming cuts frames mid-scene): its first
+    // A render chunk began (streaming cuts frames mid-scene): its first
     // VS upload re-states the bindings and may continue the open record.
     bool scene_chunk_restart_ = false;
     std::uint64_t interp_chunk_continues_ = 0;   // records continued across a chunk start
@@ -729,7 +729,7 @@ private:
     std::uint64_t interp_cadence_drops_ = 0;
     double interp_cadence_fps_ = 0.0;
     double interp_cadence_own_misses_ = 0.0;   // the game's own misses per second: their lowest recent rate
-    // The game thread's time blocked on the render thread (queue space, drains, PE completions, scene target peeks), in QPC
+    // The game thread's time blocked on the render thread (queue space, drains, completions, scene target peeks), in QPC
     // ticks: the sub-frames' share of it tells their misses from the game's own.
     std::atomic<std::uint64_t> game_wait_qpc_{0};
     std::uint64_t interp_cadence_wait_seen_ = 0;
@@ -846,7 +846,7 @@ private:
 
     // Frame queue: the sim thread is the producer, the render thread the consumer. The producer may
     // run a small bounded number of frames ahead, then blocks on queue_space_cv_. This is the
-    // a frame-granular throttle. fifo_pool_ recycles chunk
+    // a frame-granular throttle. chunk_pool_ recycles chunk
     // buffers, so the steady state does not allocate.
     std::thread render_thread_;
     std::mutex queue_mutex_;
@@ -910,12 +910,7 @@ private:
     gpu::Address resident_vertex_gpu_ = 0;
     gpu::Device* resident_vertex_device_ = nullptr;
     bool resident_vertex_buffer_failed_ = false;
-    std::uint64_t frame_resident_vertex_hits_ = 0;
     // Curved surface triangles drawn plain (no corner bends) and as patches, and the draws split between them.
-    std::uint64_t frame_curved_flat_triangles_ = 0;
-    std::uint64_t frame_curved_patch_triangles_ = 0;
-    std::uint64_t frame_curved_split_draws_ = 0;
-    std::uint64_t frame_resident_vertex_bytes_ = 0;
     [[nodiscard]] bool ensure_resident_vertex_buffer();
     void release_resident_vertex_buffer() noexcept;
     // `triangles` (indices into `vertices`) with those no corner bends first, into `split`; how many indices those
@@ -1252,17 +1247,9 @@ private:
 
     std::uint64_t frame_index_ = 0;
     // frame_index_ published once per frame for the producer's sampling decision; it orders nothing.
-    std::atomic<std::uint64_t> timing_frame_index_{0};
     cadence::Session* cadence_diagnostics_ = nullptr;
     bool initialized_ = false;
     // The per-draw clock reads run this frame: on stall-traced frames and on frames sampled by
-    // GALAXY_GX_FRAME_TIMING_SAMPLE.
-    bool frame_time_detail_ = false;
-    bool frame_time_sample_ = false;
-    // render_start of the last emitted [render-frame-timing] line, for frame-interval-us.
-    std::chrono::steady_clock::time_point last_frame_timing_emit_{};
-    bool last_frame_timing_emit_valid_ = false;
-    // One-time scene target seed clear; clears only through the copy command's clear bit (on_scene_copy).
     bool scene_seeded_ = false;
 
     // The last display copy came from the output scene target and nothing has drawn or cleared since: an scene target-to-texture
@@ -1272,68 +1259,21 @@ private:
     // Bring-up stats, reported every 300 frames.
     std::uint64_t stat_draws_issued_ = 0;
     std::uint64_t stat_draws_no_pso_ = 0;
-    std::uint64_t frame_draws_issued_ = 0;
-    std::uint64_t frame_draw_batches_ = 0;
-    std::uint64_t frame_draws_no_pso_ = 0;
-    std::uint64_t frame_display_copies_ = 0;
-    std::uint64_t frame_tex_copies_ = 0;
-    std::uint64_t frame_scene_alias_updates_ = 0;
-    std::uint64_t frame_scene_alias_noops_ = 0;
-    std::uint64_t frame_texture_binding_cache_hits_ = 0;
-    std::uint64_t frame_texture_binding_cache_misses_ = 0;
-    std::uint64_t frame_texture_binding_cache_prunes_ = 0;
-    std::uint64_t frame_nontri_skips_ = 0;
-    std::uint64_t frame_scissor_skips_ = 0;
-    std::uint64_t frame_flush_us_ = 0;
-    std::uint64_t frame_flush_pso_us_ = 0;
     // PSO-resolution thread cycles this frame; valid only when every resolution was measured.
-    std::uint64_t frame_flush_pso_cycles_ = 0;
-    bool frame_flush_pso_cycles_valid_ = false;
-    bool pso_cycles_enabled = false;
     // Sampled wall time of whole flush_draw_state calls (ScopedFlushTiming) and the sample count; unlike
     // frame_flush_us_ it needs no per-draw instrumentation.
-    std::uint64_t frame_flush_total_us_ = 0;
-    std::uint64_t frame_flush_timed_samples_ = 0;
-    std::uint64_t frame_flush_timed_calls_ = 0;
     // Sub-slices of frame_flush_pso_us_: memo hits (no PipelineCache call), the PipelineCache::get() call,
     // and the PsoKey hash and compare work.
-    std::uint64_t frame_pso_memo_hits_ = 0;
-    std::uint64_t frame_pso_get_calls_ = 0;
-    std::uint64_t frame_pso_get_us_ = 0;
-    std::uint64_t frame_pso_get_max_us_ = 0;
     // Cached display-list replay path per batch: the parser offers the two batched paths before per-packet
     // replay.
-    std::uint64_t frame_replay_prepared_batches_ = 0;
-    std::uint64_t frame_replay_packet_batches_ = 0;
-    std::uint64_t frame_native_shape_draws_ = 0;
-    std::uint64_t frame_native_shape_misses_ = 0;
-    std::uint64_t frame_replay_simple_batches_ = 0;
-    std::uint64_t frame_replay_generic_draws_ = 0;
-    std::uint64_t frame_flush_matrix_us_ = 0;
     // Bytes written to the matrix upload ring this frame, always counted.
-    std::uint64_t frame_matrix_upload_bytes_ = 0;
     // Per-frame deltas of PipelineCache::CompileStats against frame_compile_stats_baseline_: driver builds
     // (pso-compiles), builds from the D3D12 pipeline library (pso-library-loads), FXC-generated shader pairs
     // and pairs whose DXBC came from disk.
-    std::uint64_t frame_pso_compiles_ = 0;
-    std::uint64_t frame_pso_library_loads_ = 0;
-    std::uint64_t frame_shader_pair_compiles_ = 0;
     // FXC microseconds this frame.
-    std::uint64_t frame_blob_compile_us_ = 0;
-    std::uint64_t frame_blobs_from_cache_ = 0;
-    std::uint64_t frame_flush_constants_us_ = 0;
-    std::uint64_t frame_flush_texture_us_ = 0;
-    std::uint64_t frame_vertex_load_us_ = 0;
-    std::uint64_t frame_cached_vertex_validation_us_ = 0;
     std::uint64_t frame_texture_decode_join_us_ = 0;
-    std::uint64_t frame_cached_vertex_upload_us_ = 0;
-    std::uint64_t frame_draw_record_us_ = 0;
-    std::uint64_t frame_scene_copy_us_ = 0;
     // Always-counted structural counters (the timing fields above need frame_time_detail_). The memo and
     // get() routes are frame_pso_memo_hits_ and frame_pso_get_calls_.
-    std::uint64_t frame_flush_calls_ = 0;
-    std::uint64_t frame_pso_resolutions_ = 0;
-    std::uint64_t frame_pso_route_early_ = 0;
     PendingDrawBatch pending_draw_batch_{};
     bool cached_draw_run_active_ = false;
     bool cached_draw_run_scissor_reject_ = false;

@@ -236,7 +236,7 @@ public:
     // Bounded wait for one queue signal (the synchronous rendering path only).
     void wait_for_fence_value(std::uint64_t fence_value);
 
-    // Binds scene target RTV+DSV and applies the viewport from the XF viewport regs.
+    // Binds scene target RTV+DSV and applies the viewport from the draw.
     void bind_scene();
 
     // HUD split: from the end of the game's 3D scene to the display copy the
@@ -502,7 +502,7 @@ public:
             scene_view_ = *view;
         }
     }
-    // copy-clear: color from the latched AR/GB regs, depth from depth24
+    // copy-clear: color and 24-bit depth from the caller
     // (converted depth24 / 0xFFFFFF into the D24 target).  The clear is scoped to
     // the given rect in unscaled scene target pixels (w==0 -> full target), matching
     // hardware: PE_COPY_EXECUTE's clear bit wipes the copy's src rect only
@@ -1548,7 +1548,7 @@ private:
     UploadRing vertex_ring_;
     UploadRing index_ring_;
     UploadRing constant_ring_;
-    UploadRing matrix_ring_;        // XF palette snapshots (structured)
+    UploadRing matrix_ring_;        // palette snapshots (structured)
     DescriptorRing srv_ring_;
 
     unsigned frame_slot_ = 0;

@@ -23,7 +23,7 @@
 // pass; 8 light load; 9-11 the 2D layer's identity (layout pane, layout
 // actor, star pointer); 12 material.
 //
-// 2D layer: GameScene::draw2D's entry and epilogue are FIFO markers like the
+// 2D layer: GameScene::draw2D's entry and epilogue are record-list markers like the
 // 3D scene's (render::SceneMarker::Scene2DBegin / Scene2DEnd). Layout markers sit
 // at the start of a pane's, layout actor's or star pointer's draw: a function
 // entry or the path after its visibility test, never inside a a draw.

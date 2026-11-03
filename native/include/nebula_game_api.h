@@ -186,7 +186,7 @@ typedef struct NebulaLight {
     float direction[3];
 } NebulaLight;
 
-/* An image (texture_image): its identity (the game's address of its bytes), format (GXTexFmt), size, mipmap levels
+/* An image (texture_image): its identity (the game's address of its bytes), format (the image file's format number), size, mipmap levels
    and its bytes (`size` of them, in the format's layout). */
 typedef struct NebulaTextureImage {
     const void* bytes;
@@ -349,7 +349,7 @@ typedef struct NebulaNativeMaterial {
         uint8_t reserved[3];
     } textures[8];
     NebulaMaterialLight light[8];
-    /* Texgen i's post-transform matrix row (GX_PTTEXMTX0 + 3k as 3k; 61 the identity), | 0x80 to normalize first: the
+    /* Texgen i's post-transform matrix row (3k for matrix k; 61 the identity), | 0x80 to normalize first: the
        drawing state's until a draw's own texgens replace it (a shape's env map or projection); NEBULA_NATIVE_KEPT keeps the
        draw's (an instance's differed list that loads no texgens). */
     uint8_t texgen_post[8];
@@ -523,7 +523,6 @@ typedef enum NebulaInputMode {
 /* Nebula options the game follows (option). */
 enum {
     NEBULA_OPTION_TEXT_SPEED = 1, /* 1 to 3: text steps revealed per frame; 4: each page at once */
-    NEBULA_OPTION_TEST_DUMP_LAYOUTS, /* tests: 1 logs each layout's pane tree once (GALAXY_TEST_DUMP_LAYOUTS) */
     NEBULA_OPTION_DRAW_IDENTITIES, /* 1 while the renderer reads host markers (NebulaRender::hostMarker) */
     NEBULA_OPTION_INPUT_MODE,        /* NebulaInputMode: the input mode the player chose */
     NEBULA_OPTION_BLOOM,             /* 1 when the renderer's bloom is built: BloomEffect and BloomEffectSimple give it
@@ -533,8 +532,6 @@ enum {
                                         (the preparation screen shows) */
     NEBULA_OPTION_RT_PREPARE_PROGRESS, /* while NEBULA_OPTION_RT_PREPARATION is 2: its progress, 0 to 10000, never
                                           going back */
-    NEBULA_OPTION_TEST_NATIVE_J3D,     /* tests (GALAXY_TEST_NATIVE_J3D=lo-hi): first << 16 | last J3D material number
-                                          (from 1) drawn, the others not; 0 all */
     NEBULA_OPTION_TEST_ARENA_FILL,     /* tests (GALAXY_TEST_ARENA_FILL=<hex byte>): 0x100 | the byte every arena block starts as; 0 without it */
     NEBULA_OPTION_TEST_TRACE_LOADS,    /* tests (GALAXY_TRACE_LOADS): 1 logs what each scene change loads */
 };
@@ -720,7 +717,7 @@ typedef struct NebulaArtExport {
     const void* texels;
     uint32_t width;
     uint32_t height;
-    uint32_t format; /* GX_TF_* */
+    uint32_t format; /* the image file's format number */
     const uint8_t* rgba;
     const uint8_t* hd;
     uint32_t hd_width;
@@ -1046,7 +1043,7 @@ typedef struct NebulaHostServices {
     /* A name for the galaxy select in the game's own words in the played language (UTF-16, NUL-terminated): galaxy
        `index`'s (`star` 0) or its star's. */
     void (*galaxy_select_name)(void* user, uint32_t index, uint32_t star, const uint16_t* name);
-    /* A model the game loaded (J3D), for its curved surfaces (galaxy/gx/curved_surfaces.h): its position array's
+    /* A model the game loaded (J3D), for its curved surfaces (galaxy/render/curved_surfaces.h): its position array's
        identity (`key`, as shape_draw names it), its positions and normals (3 floats each), and its triangles, three
        corners each, a corner a position index then a normal index. */
     void (*curved_surface)(void* user, uint64_t key, const float* positions, uint32_t position_count,
