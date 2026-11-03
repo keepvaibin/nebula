@@ -18,7 +18,7 @@
 extern "C" const NebulaHostServices* nebula_host(void);
 extern "C" void nebula_log(const char* format, ...);
 
-// A display list's material: its program and its values (nebula_game_api.h).
+// A material: its program and its values (nebula_game_api.h).
 struct NebulaMaterialParts {
     J3DMaterialSetup setup;
     J3DMaterialValues values;
@@ -145,20 +145,6 @@ namespace {
         }
     }
 
-    // Whether J3D materials draw as their native shaders (tests can limit them to a range).
-    bool nativeDrawn(u32 shader) {
-        const NebulaHostServices* pHost = nebula_host();
-        // Tests: only a range of the J3D materials (GALAXY_TEST_NATIVE_J3D).
-        static u32 sRange = 0;
-        static bool sRangeRead = false;
-        if (!sRangeRead) {
-            sRange = pHost->option(pHost->user, NEBULA_OPTION_TEST_NATIVE_J3D);
-            sRangeRead = true;
-        }
-        const u32 number = shader - NEBULA_SHADER_J3D_FIRST + 1;
-        return sRange == 0 || (number >= (sRange >> 16) && number <= (sRange & 0xFFFF));
-    }
-
     u8 nativeFactor(u8 stored, bool source) {
         // The file's colour factors name the other side's colour (a source factor 2 is the destination's colour).
         if (stored == 2 || stored == 3) {
@@ -189,7 +175,7 @@ namespace {
     // The draw's native material from the list's program and values (j3d_material.hlsli's constants).
     void sendNative(const J3DMaterialSetup& rSetup, const J3DMaterialValues& rValues, u32 shader,
                     bool keepDepthCull = false, const NebulaCookedMaterial* cooked = NULL) {
-        // Texture matrices into their places (as the material's display list loads them).
+        // Texture matrices into their places (as the material's data has them).
         const bool differed = rSetup.diff_flags != 0;
         if (!differed || ((rSetup.diff_flags >> 8) & 15) != 0) {
             for (u32 i = 0; i < 8; i++) {
@@ -383,11 +369,11 @@ namespace J3DNativeMaterial {
         }
 
         // The null register block has no textures or orders.
-        const bool tev = pTev->hasTextures();
+        const bool textured = pTev->hasTextures();
         // Textures first: their sizes fill the coordinate scale table.
         u16 sizes[16];
         memset(sizes, 0, sizeof(sizes));
-        for (u32 map = 0; tev && map < 8; map++) {
+        for (u32 map = 0; textured && map < 8; map++) {
             const u16 texNo = pTev->getTexNo(map);
             if (texNo != 0xFFFF) {
                 texture(pTexture, map, texNo, pVal, sizes);
@@ -556,7 +542,7 @@ namespace J3DNativeMaterial {
         J3DNativeShape::flushState();
         if (pList != NULL && pList->mNebulaCaptured) {
             const NebulaMaterialParts& rParts = *pList->mpNebulaMaterial;
-            if (rParts.nativeShader != 0 && nativeDrawn(rParts.nativeShader)) {
+            if (rParts.nativeShader != 0) {
                 sendNative(rParts.setup, rParts.values, rParts.nativeShader, false, rParts.cooked);
                 return;
             }
@@ -566,7 +552,7 @@ namespace J3DNativeMaterial {
         // A list from the model file, which has no snapshot: its material built now, its program with it.
         build(pMaterial, pTexture, &sParts);
         const u32 shader = cookedShaderOf(pMaterial);
-        if (shader != 0 && nativeDrawn(shader)) {
+        if (shader != 0) {
             sendNative(sParts.setup, sParts.values, shader, false, sParts.cooked);
             return;
         }
@@ -578,7 +564,7 @@ namespace J3DNativeMaterial {
             return;
         }
         const NebulaMaterialParts& rParts = *pList->mpNebulaMaterial;
-        if (rParts.nativeShader != 0 && nativeDrawn(rParts.nativeShader)) {
+        if (rParts.nativeShader != 0) {
             sendNative(rParts.setup, rParts.values, rParts.nativeShader, false, rParts.cooked);
             return;
         }
@@ -639,7 +625,7 @@ namespace J3DNativeMaterial {
     }
 
     void sendWhole(u32 shader, const J3DMaterialSetup& rSetup, const J3DMaterialValues& rValues) {
-        if (shader != 0 && nativeDrawn(shader)) {
+        if (shader != 0) {
             sendNative(rSetup, rValues, shader, true);
             return;
         }

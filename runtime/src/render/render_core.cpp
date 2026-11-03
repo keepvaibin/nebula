@@ -173,61 +173,6 @@ std::uint64_t read_env_u64(const char* name, std::uint64_t fallback) {
     return end == value ? fallback : parsed;
 }
 
-// GALAXY_TRACE_LIGHTS=1: the actor-light aim every 600 scenes, the first moved draws and the CPU
-// cycles ([rt-actor-light]); =2: the aim of every scene.
-std::uint64_t actor_light_trace_level() {
-    static const std::uint64_t level = read_env_u64(nebula_switch::trace_lights_name(), 0u);
-    return level;
-}
-
-bool trace_actor_lights_enabled() {
-    return actor_light_trace_level() != 0u;
-}
-
-// The light trace's cycle counter: the TSC on x86, the monotonic clock's nanoseconds elsewhere.
-std::uint64_t trace_cycles() noexcept {
-#if defined(_M_X64) || defined(__x86_64__)
-    return __rdtsc();
-#else
-    return static_cast<std::uint64_t>(galaxy::qpc_now());
-#endif
-}
-
-bool trace_stalls_enabled() {
-    static const bool enabled = [] {
-        char value[16]{};
-        std::size_t length = 0;
-        return getenv_s(
-                   &length,
-                   value,
-                   sizeof(value),
-                   nebula_switch::trace_gx_stalls_name()) == 0 &&
-               length > 1 && value[0] != '0';
-    }();
-    return enabled;
-}
-
-// A game frame presents when the chunk with its frame end ends, not at the next retrace (that finds it shown): about
-// 14 ms sooner at 60 fps. Not while frames interpolate (their sequences keep their own clock).
-// GALAXY_PRESENT_ON_COPY=0 waits for the retrace (A/B).
-bool present_on_copy_enabled() {
-    static const bool enabled = read_env_u64("GALAXY_PRESENT_ON_COPY", 1u) != 0u;
-    return enabled;
-}
-
-// GALAXY_GX_FRAME_TIMING_SAMPLE=N times every draw of one frame in N (N >= 2), so a recording holds
-// attributed frames among frames at full speed; the per-draw clocks are too costly for every frame.
-bool frame_timing_sample_enabled(std::uint64_t frame_index) {
-    static const std::uint64_t period = read_env_u64(
-        "GALAXY_GX_FRAME_TIMING_SAMPLE", 0u);
-    if (period < 2u) {
-        return false;
-    }
-    // frame_index is the count before this frame's increment.
-    return (frame_index + 1u) % period == 0u;
-}
-
-
 [[nodiscard]] unsigned snapshot_full_mip_chain_levels(
     std::uint32_t width,
     std::uint32_t height) {
@@ -296,12 +241,6 @@ struct GameWaitTimer {
     }
 };
 
-std::uint64_t trace_stall_threshold_us() {
-    static const std::uint64_t threshold =
-        read_env_u64(nebula_switch::trace_render_stall_us_name(), 1000u);
-    return threshold;
-}
-
 std::uint64_t elapsed_us(
     std::chrono::steady_clock::time_point start,
     std::chrono::steady_clock::time_point end) {
@@ -333,17 +272,6 @@ ThreadCounterSample thread_cycle_count() noexcept {
 #endif
 }
 
-bool pso_cycles_requested() {
-    static const bool enabled = [] {
-        char value[16]{};
-        std::size_t length = 0;
-        return getenv_s(&length, value, sizeof(value),
-                        "GALAXY_GX_PSO_CYCLES") == 0 &&
-               length > 1 && value[0] != '0';
-    }();
-    return enabled;
-}
-
 ThreadCounterSample thread_cpu_time_100ns() noexcept {
 #if defined(_WIN32)
     // Kernel plus user CPU time of this thread, in 100 ns units.
@@ -373,39 +301,6 @@ ThreadCounterSample thread_cpu_time_100ns() noexcept {
 // off the render thread's per-draw cost. flush-mean-us (total / samples) is the per-call cost;
 // flush-total-us sums the sampled calls only and is not scaled up.
 constexpr std::uint64_t kFlushTimingSampleStride = 64u;
-
-struct ScopedFlushTiming {
-    std::chrono::steady_clock::time_point start{};
-    std::uint64_t* sampled_total_us = nullptr;
-    std::uint64_t* sampled_count = nullptr;
-    bool armed = false;
-
-    ScopedFlushTiming(
-        std::uint64_t& call_count,
-        std::uint64_t& sampled_total_us,
-        std::uint64_t& sampled_count) noexcept {
-        // call_count runs across the session, not per frame, so the samples spread over every call
-        // position even when a frame makes fewer than 64 flushes.
-        if ((call_count % kFlushTimingSampleStride) == 0u) {
-            start = std::chrono::steady_clock::now();
-            this->sampled_total_us = &sampled_total_us;
-            this->sampled_count = &sampled_count;
-            armed = true;
-        }
-        ++call_count;
-    }
-
-    ~ScopedFlushTiming() {
-        if (armed) {
-            *this->sampled_total_us += elapsed_us(
-                start, std::chrono::steady_clock::now());
-            ++*this->sampled_count;
-        }
-    }
-
-    ScopedFlushTiming(const ScopedFlushTiming&) = delete;
-    ScopedFlushTiming& operator=(const ScopedFlushTiming&) = delete;
-};
 
 void topology_for_primitive(gpu::Topology& topology, gpu::TopologyType& topology_type) {
     topology = gpu::kTopologyTriangleList;
@@ -482,7 +377,6 @@ void RenderCore::reset_session_state() {
 
     // Frame stamps, seeding and display picture addresses restart with the new scene target/display picture resources.
     frame_index_ = 0u;
-    timing_frame_index_.store(0u, std::memory_order_relaxed);
     scene_seeded_ = false;
     present_epoch_ = 0u;
     display_serial_accounting_ = {};
@@ -565,7 +459,7 @@ bool RenderCore::initialize(int w, int h) {
     present_chunks_in_flight_ = 0;
     utility_chunks_in_flight_ = 0;
     render_thread_ = std::thread(&RenderCore::render_thread_main, this);
-    if (read_env_u64("GALAXY_FRAME_TELEMETRY", 1u) != 0u) {
+    {
         try {
             frame_telemetry_ = std::make_unique<galaxy::telemetry::Publisher>([this] {
                 const auto stats = display_present_stats();
@@ -1009,12 +903,6 @@ void RenderCore::render_frame(
         return;
     }
 
-    const bool trace_stalls_cached = trace_stalls_enabled();
-    // frame_index_ belongs to the render thread; the producer samples on its published copy.
-    const bool producer_time_detail =
-        trace_stalls_cached ||
-        frame_timing_sample_enabled(
-            timing_frame_index_.load(std::memory_order_relaxed));
     // Nothing to render: nothing attached (records, scene markers, captures).
     const bool empty = producer_shape_records_.empty() && producer_stripe_particles_.empty();
     if (empty) {
@@ -1033,9 +921,6 @@ void RenderCore::render_frame(
     galaxy::timeline::record(galaxy::timeline::Event::SubmitBegin, 0u);
     // Taken under the same condition that measures producer_wait_ns (the simulation thread's wait
     // for queue space), so a measured frame never subtracts a default time_point.
-    const auto wait_start = producer_time_detail
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
     FrameChunk chunk;
     chunk.pointer_response=producer_pointer_response_;
     take_attached_stripe_particles(chunk);
@@ -1097,12 +982,6 @@ void RenderCore::render_frame(
                       diagnostic_queue_wait_start_ns
                 : 0u;
         }
-        if (producer_time_detail) {
-            const auto wait_end = std::chrono::steady_clock::now();
-            producer_wait_ns = static_cast<std::uint64_t>(
-                std::chrono::duration_cast<std::chrono::nanoseconds>(
-                    wait_end - wait_start).count());
-        }
         if (render_thread_error_ != nullptr) {
             // Rethrow the render thread's failure here rather than leave a frozen display.
             std::exception_ptr error = render_thread_error_;
@@ -1134,13 +1013,6 @@ void RenderCore::render_frame(
             diagnostic_queue_wait_ns);
     }
     queue_cv_.notify_one();
-    const std::uint64_t producer_wait_us = producer_wait_ns / 1000u;
-    if (trace_stalls_cached &&
-        producer_wait_us >= trace_stall_threshold_us()) {
-        std::cerr << "[render-queue-wait] wait-us=" << producer_wait_us
-                  << " queue-depth=" << queue_depth_after_push
-                  << " queue-limit=" << queue_depth_limit << '\n';
-    }
     galaxy::timeline::record(galaxy::timeline::Event::SubmitEnd, 0u, 0u);
 }
 
@@ -1271,7 +1143,7 @@ void RenderCore::write_scene_vs_constants(const VertexConstants& cpu, VertexCons
     record.particle = identity_continuity_particle_;
     record.palette = cpu_vs_constants_.per_vertex != 0u;
     if (record.palette) {
-        // PNMTX0 (XF rows 0-2) stands for the per-vertex palette's object.
+        // Position matrix 0 (rows 0-2) stands for the per-vertex palette's object.
         for (unsigned i = 0; i < 12u; ++i) record.position[i] = matrices_.matrix_value(i / 4u, i % 4u);
         record.palette_offset = palette_offset;
     } else {
@@ -2478,13 +2350,10 @@ void RenderCore::advance_interp_sequence(bool flush) {
             if (snapshot.empty()) {
                 snapshot = present_snapshot_path();  // sub-frames count as presents
             }
-            // GALAXY_TEST_CAPTURE_NO_WAIT=1: a sub-frame is saved only when the last save's readback is done (else
-            // skipped), never waited for: waiting holds the CPU behind the GPU and hides what a race between them shows.
-            static const bool capture_no_wait = read_env_u64(nebula_switch::test_capture_no_wait_name(), 0u) != 0u;
             if (!snapshot.empty()) {
                 renderer_.set_debug_capture_paths({}, snapshot);
                 renderer_.set_subframe_capture(true);
-                renderer_.set_capture_waits(!capture_no_wait);
+                renderer_.set_capture_waits(true);
             }
             // GALAXY_INTERP_FORCE_T=<0..1>: every sub-frame at that t (replay checks: 1 must
             // reproduce the frame, 0 the frame before).
@@ -3519,7 +3388,7 @@ void RenderCore::poll_screen_probes() {
 
 void RenderCore::present_vi_black(bool in_frame) {
     const DisplayTexture* layout = scene_copies_.latest();
-    if (layout == nullptr || (vi_black_shown_ && !native_settings_overlay_visible())) {
+    if (layout == nullptr || (black_shown_ && !native_settings_overlay_visible())) {
         return;
     }
     const std::string snapshot_path = present_snapshot_path();
@@ -3536,7 +3405,7 @@ void RenderCore::present_vi_black(bool in_frame) {
     if (!in_frame) {
         renderer_.end_frame();
     }
-    vi_black_shown_ = true;
+    black_shown_ = true;
     // The frame shown next is new to the display, even when it repeats the last display picture.
     last_presented_display_serial_.store(~std::uint64_t{0}, std::memory_order_relaxed);
 }
@@ -3562,7 +3431,7 @@ void RenderCore::present_cached_display_on_thread(
         }
         return;
     }
-    vi_black_shown_ = false;
+    black_shown_ = false;
     const DisplayTexture* selected = slot ? scene_copies_.picture(*slot) : scene_copies_.latest();
     if (selected == nullptr) {
         if (sleep_if_missing) {
@@ -3646,68 +3515,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
     render_pointer_response_=chunk.pointer_response;
     render_movie_content_=chunk.prerecorded_movie;
     render_movie_frame_=chunk.movie_frame;
-    const bool trace_stalls_cached = trace_stalls_enabled();
-    // Per-draw clock reads run on stall-traced and sampled frames only.
-    frame_time_sample_ = frame_timing_sample_enabled(frame_index_);
-    frame_time_detail_ = trace_stalls_cached || frame_time_sample_;
-    // Thread CPU time and cycles of the frame and of its PSO resolution, on request or with the stall trace.
-    pso_cycles_enabled = pso_cycles_requested() || trace_stalls_cached;
-    // Per-frame phase timing takes a few clock reads and is always on.
-    constexpr bool frame_timing_enabled = true;
-    const ThreadCounterSample frame_cpu_start = pso_cycles_enabled
-        ? thread_cpu_time_100ns() : ThreadCounterSample{};
-    const ThreadCounterSample frame_cycles_start = pso_cycles_enabled
-        ? thread_cycle_count() : ThreadCounterSample{};
-    const auto render_start = frame_timing_enabled
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
-    frame_draws_issued_ = 0;
-    frame_draw_batches_ = 0;
-    frame_draws_no_pso_ = 0;
-    frame_display_copies_ = 0;
-    frame_tex_copies_ = 0;
-    frame_scene_alias_updates_ = 0;
-    frame_scene_alias_noops_ = 0;
-    frame_texture_binding_cache_hits_ = 0;
-    frame_texture_binding_cache_misses_ = 0;
-    frame_texture_binding_cache_prunes_ = 0;
-    frame_nontri_skips_ = 0;
-    frame_scissor_skips_ = 0;
-    frame_flush_us_ = 0;
-    frame_flush_pso_us_ = 0;
-    frame_flush_pso_cycles_ = 0;
-    frame_flush_pso_cycles_valid_ = pso_cycles_enabled;
-    frame_flush_total_us_ = 0;
-    frame_flush_timed_samples_ = 0;
-    // frame_flush_timed_calls_ runs across frames (ScopedFlushTiming).
-    frame_pso_memo_hits_ = 0;
-    frame_pso_get_calls_ = 0;
-    frame_pso_get_us_ = 0;
-    frame_pso_get_max_us_ = 0;
-    frame_flush_calls_ = 0;
-    frame_pso_resolutions_ = 0;
-    frame_pso_route_early_ = 0;
-    frame_replay_prepared_batches_ = 0;
-    frame_replay_packet_batches_ = 0;
-    frame_native_shape_draws_ = 0;
-    frame_native_shape_misses_ = 0;
-    frame_replay_simple_batches_ = 0;
-    frame_replay_generic_draws_ = 0;
-    frame_flush_matrix_us_ = 0;
-    frame_matrix_upload_bytes_ = 0;
-    frame_flush_constants_us_ = 0;
-    frame_flush_texture_us_ = 0;
     frame_texture_decode_join_us_ = 0;
-    frame_vertex_load_us_ = 0;
-    frame_cached_vertex_validation_us_ = 0;
-    frame_cached_vertex_upload_us_ = 0;
-    frame_draw_record_us_ = 0;
-    frame_scene_copy_us_ = 0;
-    frame_resident_vertex_hits_ = 0;
-    frame_resident_vertex_bytes_ = 0;
-    frame_curved_flat_triangles_ = 0;
-    frame_curved_patch_triangles_ = 0;
-    frame_curved_split_draws_ = 0;
     pending_draw_batch_ = {};
     const RenderServices* services = chunk.services;
 
@@ -3888,20 +3696,17 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
     matrix_blocks_valid_ = false;
     scene_chunk_restart_ = true;
 
-    // Bind scene target with default (null) viewport. The XF viewport registers
-    // will provide the actual values once processed from the FIFO.
+    // Bind scene target with default (null) viewport. The viewport
+    // will provide the actual values once its records run.
     renderer_.bind_scene();
 
     // game keeps the scene target across frames; only an scene target copy with the clear bit set clears it (on_scene_copy,
-    // with the latched copy-clear registers). One initial clear (depth = far) seeds the targets.
+    // with the copy's clear values). One initial clear (depth = far) seeds the targets.
     if (!scene_seeded_) {
         scene_seeded_ = true;
         renderer_.clear_scene(0u, 0x00FFFFFFu, true, true, true);
     }
 
-    const auto parse_start = frame_timing_enabled
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
     const std::uint64_t diagnostic_parse_start_ns =
         cadence::steady_now_ns_if_enabled(cadence_diagnostics_);
     if (!chunk.shape_records.empty() || !chunk.stripe_particles.empty()) {
@@ -3939,32 +3744,20 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
                 ? diagnostic_parse_end_ns - diagnostic_parse_start_ns
                 : 0u);
     }
-    const auto parse_end = frame_timing_enabled
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
 
-    const auto post_parse_flush_start = frame_timing_enabled
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
     {
         const cadence::ScopedPhaseTimer post_parse_flush_timer{
             cadence_diagnostics_,
             cadence::TimingPhase::RenderPostParseFlush};
         flush_pending_draw_batch();
     }
-    const auto post_parse_flush_end = frame_timing_enabled
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
-    const std::uint64_t post_parse_flush_us = frame_timing_enabled
-        ? elapsed_us(post_parse_flush_start, post_parse_flush_end)
-        : 0u;
 
     // The chunk with a game frame's end presents its picture (present_on_copy_enabled); a present between frames
     // shows the newest. Not while the output is black, the settings overlay draws over every present, or presents are paced elsewhere
     // (interpolation, a temporal upscaler, frame generation).
-    const bool copy_present = !chunk.present_swap_chain && display_copied_in_chunk_ && present_on_copy_enabled() &&
+    const bool copy_present = !chunk.present_swap_chain && display_copied_in_chunk_ &&
         frame_end_presents_.load(std::memory_order_relaxed) &&
-        !interp_recording_ && !vi_black_shown_ && !native_settings_overlay_visible() && !renderer_.temporal_mode() &&
+        !interp_recording_ && !black_shown_ && !native_settings_overlay_visible() && !renderer_.temporal_mode() &&
         !frame_generation_running();
     const bool presents = chunk.present_swap_chain || copy_present;
     if (presents) {
@@ -3995,7 +3788,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
         supersede_interp_sequence();
         interp_log_waiting_ = false;
     } else if (presents) {
-        vi_black_shown_ = false;
+        black_shown_ = false;
     }
     if (interp_recording_) {
         note_interp_log_completion();
@@ -4018,17 +3811,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
             note_interp_real_present();
         }
     }
-    const auto pre_present_end = frame_timing_enabled
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
-    const std::uint64_t pre_present_us = frame_timing_enabled
-        ? elapsed_us(post_parse_flush_end, pre_present_end)
-        : 0u;
-    std::uint64_t present_record_us = 0;
     if (present_swap_chain) {
-        const auto present_record_start = frame_timing_enabled
-            ? std::chrono::steady_clock::now()
-            : std::chrono::steady_clock::time_point{};
         if (copy_present) {
             renderer_.wait_for_frame_latency_before_present();
             copy_presented_serial_ = selected_display->copy_serial;
@@ -4043,10 +3826,6 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
             renderer_.set_debug_capture_paths({}, {});
             renderer_.set_capture_waits(false);
         }
-        if (frame_timing_enabled) {
-            present_record_us =
-                elapsed_us(present_record_start, std::chrono::steady_clock::now());
-        }
     } else if (present_black) {
         present_vi_black(true);
     }
@@ -4054,23 +3833,13 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
     if (skip_duplicate_present && selected_display->copy_serial != copy_presented_serial_) {
         record_skipped_duplicate_display_present(*selected_display);
     }
-    const auto end_frame_start = frame_timing_enabled
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
     struct SubmissionContext {
         RenderCore* backend;
         FrameChunk* chunk;
     } submission_context{this, &chunk};
     // Every staging byte the command list copies from must be written.
     {
-        const auto join_start = frame_timing_enabled
-            ? std::chrono::steady_clock::now()
-            : std::chrono::steady_clock::time_point{};
         texture_cache_.finish_pending_decodes();
-        if (frame_timing_enabled) {
-            frame_texture_decode_join_us_ =
-                elapsed_us(join_start, std::chrono::steady_clock::now());
-        }
     }
     (void)renderer_.end_frame(
         present_swap_chain,
@@ -4088,180 +3857,10 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
     } else if (present_black) {
         present_epoch_ = current_present_epoch;
     }
-    const auto end_frame_end = frame_timing_enabled
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
-    const std::uint64_t end_frame_us = frame_timing_enabled
-        ? elapsed_us(end_frame_start, end_frame_end)
-        : 0u;
-    const auto gpu_submit_end = frame_timing_enabled
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
     // Nonblocking: a later frame writes a finished present snapshot.
     renderer_.debug_log_backbuffer_readback();
 
     ++frame_index_;
-    timing_frame_index_.store(frame_index_, std::memory_order_relaxed);
-    const auto render_end = frame_timing_enabled
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
-
-    // Capture beside the wall endpoint, before diagnostic formatting/logging.
-    const ThreadCounterSample frame_cpu_interval = thread_counter_interval(
-        frame_cpu_start, pso_cycles_enabled
-            ? thread_cpu_time_100ns() : ThreadCounterSample{});
-    const ThreadCounterSample frame_cycles_interval = thread_counter_interval(
-        frame_cycles_start, pso_cycles_enabled
-            ? thread_cycle_count() : ThreadCounterSample{});
-
-
-
-    // [render-frame-timing]: stall-traced frames over GALAXY_TRACE_RENDER_STALL_US (selected=1) and frames
-    // sampled by GALAXY_GX_FRAME_TIMING_SAMPLE (sample=1). The per-draw *-us fields are measured on
-    // those frames only (detail=1); fifo-*-us fields only with the stall trace (the parser profile).
-    if (trace_stalls_cached || frame_time_sample_) {
-        const std::uint64_t total_us = elapsed_us(render_start, render_end);
-        // Wall-clock time since the previous emitted line: total-us covers only this function's span,
-        // so it cannot tell a busy render thread from an idle one. On a sampled run it spans the
-        // sample interval.
-        std::uint64_t frame_interval_us = 0u;
-        if (last_frame_timing_emit_valid_) {
-            frame_interval_us = elapsed_us(last_frame_timing_emit_, render_start);
-        }
-        last_frame_timing_emit_ = render_start;
-        last_frame_timing_emit_valid_ = true;
-        const std::uint64_t parse_us = elapsed_us(parse_start, parse_end);
-        const std::uint64_t submit_us = elapsed_us(parse_end, gpu_submit_end);
-        const std::uint64_t producer_wait_us = chunk.producer_wait_ns / 1000u;
-        if (frame_time_sample_ ||
-            total_us >= trace_stall_threshold_us() ||
-            producer_wait_us >= trace_stall_threshold_us()) {
-            std::ostringstream timing_message;
-            timing_message << "[render-frame-timing] frame=" << frame_index_
-                  // A frame can be both selected and sampled; selected=0 rows are the unbiased sample.
-                  << " selected="
-                  << ((total_us >= trace_stall_threshold_us() ||
-                       producer_wait_us >= trace_stall_threshold_us())
-                          ? 1
-                          : 0)
-                  << " sample=" << (frame_time_sample_ ? 1 : 0)
-                  << " profile=" << (trace_stalls_cached ? 1 : 0)
-                  << " detail=" << (frame_time_detail_ ? 1 : 0)
-                  << " total-us=" << total_us
-                  << " frame-interval-us=" << frame_interval_us
-                  << " thread-cpu-us=" << frame_cpu_interval.value / 10u
-                  << " thread-cpu-valid=" << (frame_cpu_interval.available ? 1 : 0)
-                  << " thread-cycles=" << frame_cycles_interval.value
-                  << " thread-cycles-valid=" << (frame_cycles_interval.available ? 1 : 0)
-                  << " parse-us=" << parse_us
-                  << " submit-us=" << submit_us
-                  << " post-parse-flush-us=" << post_parse_flush_us
-                  << " pre-present-us=" << pre_present_us
-                  << " present-record-us=" << present_record_us
-                  << " end-frame-us=" << end_frame_us
-                  << " begin-latency-wait-us="
-                  << renderer_.last_latency_wait_us()
-                  << " begin-slot-wait-us="
-                  << renderer_.last_frame_slot_wait_us()
-                  << " begin-timestamp-us="
-                  << renderer_.last_timestamp_read_us()
-                  << " begin-reset-us="
-                  << renderer_.last_begin_reset_us()
-                  << " producer-wait-us=" << producer_wait_us
-                  << " draws=" << frame_draws_issued_
-                  << " draw-batches=" << frame_draw_batches_
-                  << " no-pso=" << frame_draws_no_pso_
-                  << " display-copies=" << frame_display_copies_
-                  << " tex-copies=" << frame_tex_copies_
-                  << " read-alias-updates=" << frame_scene_alias_updates_
-                  << " read-alias-noops=" << frame_scene_alias_noops_
-                  << " texture-binding-cache-hits="
-                  << frame_texture_binding_cache_hits_
-                  << " texture-binding-cache-misses="
-                  << frame_texture_binding_cache_misses_
-                  << " texture-binding-cache-prunes="
-                  << frame_texture_binding_cache_prunes_
-                  << " nontri-skips=" << frame_nontri_skips_
-                  << " scissor-skips=" << frame_scissor_skips_
-                  << " flush-us=" << frame_flush_us_
-                  << " flush-pso-us=" << frame_flush_pso_us_
-                  << " flush-pso-cycles=" << frame_flush_pso_cycles_
-                  << " flush-pso-cycles-valid=" << (frame_flush_pso_cycles_valid_ ? 1 : 0)
-                  << " pso-memo-hits=" << frame_pso_memo_hits_
-                  << " pso-get-calls=" << frame_pso_get_calls_
-                  << " pso-get-us=" << frame_pso_get_us_
-                  << " pso-get-max-us=" << frame_pso_get_max_us_
-                  // pso-route-early + pso-route-memo + pso-route-get = pso-resolutions. flush-us times the
-                  // flush bodies (detail=1 only, early reuse excluded); flush-total-us and flush-mean-us
-                  // come from ScopedFlushTiming's sampled whole calls.
-                  << " flush-calls=" << frame_flush_calls_
-                  << " flush-total-us=" << frame_flush_total_us_
-                  << " flush-timed-samples=" << frame_flush_timed_samples_
-                  << " flush-mean-us="
-                  << (frame_flush_timed_samples_ != 0u
-                          ? frame_flush_total_us_ /
-                                frame_flush_timed_samples_
-                          : 0u)
-                  << " pso-resolutions=" << frame_pso_resolutions_
-                  << " pso-route-early=" << frame_pso_route_early_
-                  // Builds done this frame, against the resolutions requested above.
-                  << " pso-compiles=" << frame_pso_compiles_
-                  << " pso-library-loads=" << frame_pso_library_loads_
-                  << " pso-shader-pairs=" << frame_shader_pair_compiles_
-                  << " pso-blob-us=" << frame_blob_compile_us_
-                  << " pso-blobs-from-cache=" << frame_blobs_from_cache_
-                  << " pso-route-memo=" << frame_pso_memo_hits_
-                  << " pso-route-get=" << frame_pso_get_calls_
-                  // replay-generic-draws: draws the batched paths refused. The packet and simple counts
-                  // are offers; fifo-call-dl-replay-packet-run-count counts accepted packet runs.
-                  << " replay-prepared-batches="
-                  << frame_replay_prepared_batches_
-                  << " replay-packet-offers=" << frame_replay_packet_batches_
-                  << " native-shape-draws=" << frame_native_shape_draws_
-                  << " native-shape-misses=" << frame_native_shape_misses_
-                  << " replay-simple-offers=" << frame_replay_simple_batches_
-                  << " replay-generic-draws=" << frame_replay_generic_draws_
-                  << " flush-matrix-us=" << frame_flush_matrix_us_
-                  << " flush-matrix-bytes=" << frame_matrix_upload_bytes_
-                  << " flush-constants-us=" << frame_flush_constants_us_
-                  << " flush-texture-us=" << frame_flush_texture_us_
-                  << " tex-decode-join-us=" << frame_texture_decode_join_us_
-                  << " tex-async-decodes-total=" << texture_cache_.async_decode_jobs()
-                  << " vertex-load-us=" << frame_vertex_load_us_
-                  << " cached-vertex-validation-us=" << frame_cached_vertex_validation_us_
-                  << " cached-vertex-upload-us=" << frame_cached_vertex_upload_us_
-                  << " immutable-vertex-reused-bytes=" << renderer_.vertex_ring().reused_bytes()
-                  << " immutable-vertex-copied-bytes=" << renderer_.vertex_ring().copied_bytes()
-                  << " immutable-vertex-uploads=" << renderer_.vertex_ring().immutable_upload_calls()
-                  << " draw-record-us=" << frame_draw_record_us_
-                  << " frame-read-us=" << frame_scene_copy_us_
-                  << " resident-vtx-hits=" << frame_resident_vertex_hits_
-                  << " curved-split-draws=" << frame_curved_split_draws_
-                  << " curved-flat-tris=" << frame_curved_flat_triangles_
-                  << " curved-patch-tris=" << frame_curved_patch_triangles_
-                  << " resident-vtx-bytes=" << frame_resident_vertex_bytes_
-                  << " resident-vtx-used-bytes="
-                  << static_cast<std::uint64_t>(resident_vertices_.used_units()) *
-                         sizeof(RenderVertex)
-                  << " decoded-tex-resident-bytes="
-                  << texture_cache_.decoded_map_stats().resident_bytes
-                  << " decoded-tex-budget-bytes="
-                  << texture_cache_.decoded_map_stats().budget_bytes
-                  << " decoded-tex-evicted-entries="
-                  << texture_cache_.decoded_map_stats().evicted_entries
-                  << " decoded-tex-evicted-bytes="
-                  << texture_cache_.decoded_map_stats().evicted_bytes
-                  << " decoded-tex-entries="
-                  << texture_cache_.decoded_map_stats().entries
-                  // scene target-copy destinations are allocated at the frame's size (bytes grow with its area).
-                  << " frame-read-dest-bytes="
-                  << renderer_.scene_copy_dest_bytes()
-                  << " frame-read-dest-budget-bytes="
-                  << renderer_.scene_copy_dest_budget_bytes()
-                  << '\n';
-            std::cerr << timing_message.str();
-        }
-    }
 
 }
 
@@ -4417,7 +4016,6 @@ void RenderCore::prune_dirty_texture_binding_tables() {
                 }
             }
             if (erase) {
-                ++frame_texture_binding_cache_prunes_;
                 it = cache.erase(it);
             } else {
                 ++it;
@@ -4483,9 +4081,7 @@ std::uint32_t RenderCore::split_curved_triangles(std::span<const RenderVertex> v
 
 gpu::Pipeline* RenderCore::flush_draw_state(
     gpu::TopologyType primitive_topology_type, std::uint8_t vtxfmt) {
-    const bool time_detail = frame_time_detail_;
     // Always counted: the denominator of every *_us field.
-    ++frame_flush_calls_;
     if (screen_run_ && !frame_scene_seen_ && !screen_frame_open_ && interp_recording_ && !history_scene_) [[unlikely]] {
         begin_screen_frame();
     }
@@ -4543,15 +4139,9 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         (current_texture_map_mask_ == 0u ||
          current_texture_table_.ptr != 0) &&
         curved == current_curved_ && (curved || render_state_key_.primitive_topology == topology_key)) {
-        ++frame_pso_route_early_;
         return current_pipeline_;
     }
 
-    // Body timing, on detail frames only, excludes the reuse decision above; ScopedFlushTiming's
-    // sampled whole-call timing includes it.
-    const auto flush_start = time_detail
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
 
     // Rebuild canonical keys only for their dirty inputs; hash only changed
     // keys. Uniform updates still upload their constants below.
@@ -4720,9 +4310,6 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     current_palette_required_ = palette_required;
     if (palette_required && (matrix_palette_stale_ || current_matrix_palette_ == 0)) {
         // Clock reads on detail frames only; the upload counts below are always kept.
-        const auto matrix_start = time_detail
-            ? std::chrono::steady_clock::now()
-            : std::chrono::steady_clock::time_point{};
         std::uint32_t kinds = matrices_.changed();
         if (!matrix_blocks_valid_ || renderer_.matrix_ring().epoch() != matrix_blocks_epoch_) {
             // Blocks from before the ring's latest rewind are another segment's: every kind is appended again.
@@ -4731,7 +4318,6 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         }
         scene_kinds_pending_ |= kinds;
         if (kinds != 0u || matrix_blocks_forced_) {
-            const std::uint64_t snapshot_start = trace_actor_lights_enabled() ? trace_cycles() : 0u;
             // The changed kinds' blocks, then the draw's moved lights (a light block of its own: the game's stay).
             constexpr bool moved = false;  // no moved light blocks (they were the ray tracer's)
             std::uint32_t rows = moved ? draw_rows::kLightRows : 0u;
@@ -4760,8 +4346,6 @@ gpu::Pipeline* RenderCore::flush_draw_state(
             }
             draw_light_base_ = matrix_block_base_[kLightKind];
             std::array<std::uint32_t, draw_rows::kLightRows * 4u> moved_lights{};
-            if (snapshot_start != 0u) [[unlikely]] {
-            }
             current_matrix_palette_ = bytes != 0u ? mtx_alloc.gpu : current_matrix_palette_;
                 if (interp_recording_ && history_scene_) [[unlikely]] {
                 InterpScene& scene = interp_scenes_[interp_scene_];
@@ -4798,15 +4382,10 @@ gpu::Pipeline* RenderCore::flush_draw_state(
             matrix_blocks_forced_ = false;
             matrix_bases_changed_ = true;
             matrices_.clear_changed();
-            frame_matrix_upload_bytes_ += bytes;
         }
         // Every chunk is valid in this frame slot, so current_matrix_palette_ already points into this
         // frame's segment.
         matrix_palette_stale_ = false;
-        if (time_detail) {
-            frame_flush_matrix_us_ +=
-                elapsed_us(matrix_start, std::chrono::steady_clock::now());
-        }
     }
     // The rows' binding: the ring from its start (draws name their blocks' rows from it).
     draw_matrix_palette_ = current_matrix_palette_ != 0u ? renderer_.matrix_ring().gpu_base() : 0u;
@@ -4840,9 +4419,6 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         xf_dirty || vcd_dirty || inline_matrices_stale_ ||
         frame_bindings_dirty_ || dirty == ~0u || std::exchange(matrix_bases_changed_, false) ||
         (history_scene_ && current_matrix_palette_ != temporal_vs_palette_va_)) {
-        const auto constants_start = time_detail
-            ? std::chrono::steady_clock::now()
-            : std::chrono::steady_clock::time_point{};
         const VertexConstants& vs_c = cpu_vs_constants_.update(
             matrices_, draw_state_, dirty, RasterScale{renderer_.frame_map().sx, renderer_.frame_map().sy}, frame_bindings_dirty_);
         UploadRing::Allocation vs_alloc =
@@ -4864,10 +4440,6 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         }
         current_vs_constants_ = vs_alloc.gpu;
         inline_matrices_stale_ = false;
-        if (time_detail) {
-            frame_flush_constants_us_ +=
-                elapsed_us(constants_start, std::chrono::steady_clock::now());
-        }
     }
 
     // Texture tables are refreshed only when a texture input changed. tex_dirty covers every input:
@@ -4877,12 +4449,6 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     // copy followed by matrix-only flushes would keep its entries for the rest of the frame. Most
     // flushes carry kDirtyXfMatrices alone (the game loads matrices per object with LOAD_INDX).
     if (tex_dirty || !dirty_texture_aliases_.empty()) {
-        const auto texture_start = time_detail
-            ? std::chrono::steady_clock::now()
-            : std::chrono::steady_clock::time_point{};
-        std::uint64_t texture_get_us = 0;
-        std::uint64_t texture_table_us = 0;
-        std::uint64_t sampler_table_us = 0;
         if (texture_bindings_dirty_) {
             prune_dirty_texture_binding_tables();
         }
@@ -4907,11 +4473,9 @@ gpu::Pipeline* RenderCore::flush_draw_state(
                     texture_cache_.touch_cached_handle(handle);
                 }
                 binding_cache_hit = true;
-                ++frame_texture_binding_cache_hits_;
             }
 
             if (!binding_cache_hit) {
-                ++frame_texture_binding_cache_misses_;
                 std::array<TextureHandle, kMaxTextureMaps> texture_handles{};
                 TextureBindingTables binding_tables{};
                 TextureTableKey table_key{};
@@ -4933,15 +4497,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
                                 persistent_it != texture_handle_cache_.end()) {
                                 texture_handles[m] = persistent_it->second;
                             } else {
-                                const auto get_start = time_detail
-                                    ? std::chrono::steady_clock::now()
-                                    : std::chrono::steady_clock::time_point{};
                                 texture_handles[m] = texture_cache_.get(texture, mode);
-                                if (time_detail) {
-                                    texture_get_us += elapsed_us(
-                                        get_start,
-                                        std::chrono::steady_clock::now());
-                                }
                                 texture_handle_cache_.emplace(
                                     handle_key,
                                     texture_handles[m]);
@@ -4968,9 +4524,6 @@ gpu::Pipeline* RenderCore::flush_draw_state(
                     table_key.widths[m] = th.width;
                     table_key.heights[m] = th.height;
                 }
-                const auto table_start = time_detail
-                    ? std::chrono::steady_clock::now()
-                    : std::chrono::steady_clock::time_point{};
                 if (const auto table_it =
                         frame_texture_tables_.find(table_key);
                     table_it != frame_texture_tables_.end()) {
@@ -4983,10 +4536,6 @@ gpu::Pipeline* RenderCore::flush_draw_state(
                         texture_handles.data(), kMaxTextureMaps, texture_cache_);
                     frame_texture_tables_.emplace(table_key, current_texture_table_);
                 }
-                if (time_detail) {
-                    texture_table_us = elapsed_us(
-                        table_start, std::chrono::steady_clock::now());
-                }
 
                 // Per-map sampler state from TexMode0/1 (wrap, filters, LOD
                 // bias and range).  Packed key layout documented at
@@ -4994,15 +4543,8 @@ gpu::Pipeline* RenderCore::flush_draw_state(
                 // cached for this frame's fence-owned sampler heap.
                 const auto samp_keys = capture_sampler_keys(
                     texture_map_mask, texture_handles);
-                const auto sampler_start = time_detail
-                    ? std::chrono::steady_clock::now()
-                    : std::chrono::steady_clock::time_point{};
                 current_sampler_table_ =
                     renderer_.sampler_table_for(samp_keys.data());
-                if (time_detail) {
-                    sampler_table_us = elapsed_us(
-                        sampler_start, std::chrono::steady_clock::now());
-                }
                 TextureBindingTables cached_tables{
                     current_texture_table_,
                     current_sampler_table_,
@@ -5039,24 +4581,6 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         current_texture_binding_key_ = texture_binding_key;
         current_texture_binding_key_valid_ = true;
         current_texture_binding_key_mask_ = texture_map_mask;
-        if (time_detail) {
-            const std::uint64_t total_texture_us =
-                elapsed_us(texture_start, std::chrono::steady_clock::now());
-            frame_flush_texture_us_ += total_texture_us;
-            if (trace_stalls_enabled() &&
-                total_texture_us >= trace_stall_threshold_us()) {
-                std::cerr
-                    << "[render-texture-flush] frame=" << frame_index_
-                    << " map-mask=0x" << std::hex
-                    << static_cast<unsigned>(texture_map_mask)
-                    << std::dec
-                    << " get-us=" << texture_get_us
-                    << " table-us=" << texture_table_us
-                    << " sampler-us=" << sampler_table_us
-                    << " total-us=" << total_texture_us
-                    << "\n";
-            }
-        }
     }
 
     {
@@ -5075,10 +4599,6 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     texture_bindings_dirty_ = false;
     // The frame's detail flag guards both endpoints. A zero on an ordinary
     // frame denotes an unavailable timing, not zero renderer work.
-    if (time_detail) {
-        frame_flush_us_ +=
-            elapsed_us(flush_start, std::chrono::steady_clock::now());
-    }
     return current_pipeline_;
 }
 
@@ -5119,10 +4639,6 @@ void RenderCore::flush_pending_draw_batch() {
         return;
     }
 
-    const bool time_detail = frame_time_detail_;
-    const auto draw_record_start = time_detail
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
     if (!pending_stripe_vertices_.empty()) [[unlikely]] {
         renderer_.note_stripe_vertices(pending_stripe_vertices_);
         pending_stripe_vertices_.clear();
@@ -5130,17 +4646,9 @@ void RenderCore::flush_pending_draw_batch() {
     if (!pending_draw_batch_.hidden) {
         const DrawCall& call = pending_draw_batch_.call;
         if (call.topology == gpu::kTopologyTrianglePatches) {
-            frame_curved_flat_triangles_ += call.flat_index_count / 3u;
-            frame_curved_patch_triangles_ += (call.index_count - call.flat_index_count) / 3u;
-            frame_curved_split_draws_ += call.flat_pipeline != nullptr ? 1u : 0u;
         }
         renderer_.draw(call);
     }
-    if (time_detail) {
-        frame_draw_record_us_ +=
-            elapsed_us(draw_record_start, std::chrono::steady_clock::now());
-    }
-    ++frame_draw_batches_;
     pending_draw_batch_ = {};
 }
 
@@ -5151,7 +4659,7 @@ bool RenderCore::begin_cached_draw_run(
     (void)draw_count;
     if (cached_draw_run_active_) {
         throw std::runtime_error(
-            "RenderCore: nested cached display-list draw run");
+            "RenderCore: nested cached draw run");
     }
     gpu::Topology topology{};
     gpu::TopologyType topology_type{};
@@ -5180,10 +4688,6 @@ bool RenderCore::begin_cached_draw_run(
 
     gpu::Pipeline* pso = nullptr;
     {
-        ScopedFlushTiming flush_timing{
-            frame_flush_timed_calls_,
-            frame_flush_total_us_,
-            frame_flush_timed_samples_};
         pso = flush_draw_state(topology_type, vtxfmt);
     }
     if (pso == nullptr) {
@@ -5528,7 +5032,6 @@ void RenderCore::draw_record_shape(const shapes::Record& record) {
     }
     const auto found = record_shapes_.find(record.key);
     if (found == record_shapes_.end() || found->second.geometry == nullptr) {
-        ++frame_native_shape_misses_;
         static bool warned = false;
         if (!warned) {
             warned = true;
@@ -5570,7 +5073,6 @@ void RenderCore::draw_record_shape(const shapes::Record& record) {
         shape.curved = curved::find_model(keys[0]);
         if (!shapes::expand(geometry, arrays, position_matrix, shape.curved.get(), expand_scratch_) ||
             expand_scratch_.empty() || expand_scratch_.size() > 0x10000u) {
-            ++frame_native_shape_misses_;
             static bool warned = false;
             if (!warned) {
                 warned = true;
@@ -5597,7 +5099,6 @@ void RenderCore::draw_record_shape(const shapes::Record& record) {
         shape.resident_epoch = 0u;
         const std::optional<std::uint32_t> offset = resident_vertices_.allocate(block_units);
         if (!offset.has_value()) {
-            ++frame_native_shape_misses_;
             return;
         }
         // Written once while the block belongs to this group, so no in-flight frame sees a partial write.
@@ -5638,14 +5139,11 @@ void RenderCore::draw_record_shape(const shapes::Record& record) {
         return;
     }
     scope.run = true;
-    ++frame_native_shape_draws_;
     if (cached_draw_run_scissor_reject_) {
-        ++frame_scissor_skips_;
         return;
     }
     if (cached_draw_run_no_pso_) {
         ++stat_draws_no_pso_;
-        ++frame_draws_no_pso_;
         return;
     }
     flush_pending_draw_batch();
@@ -5668,9 +5166,6 @@ void RenderCore::draw_record_shape(const shapes::Record& record) {
     const auto index_count = static_cast<std::uint32_t>(indices.size());
     const std::size_t vertex_byte_offset = static_cast<std::size_t>(shape.resident_offset) * sizeof(RenderVertex);
     ++stat_draws_issued_;
-    ++frame_draws_issued_;
-    ++frame_resident_vertex_hits_;
-    frame_resident_vertex_bytes_ += static_cast<std::uint64_t>(units) * sizeof(RenderVertex);
 
     const gpu::VertexView vbv = gpu::vertex_view(resident_vertex_gpu_ + vertex_byte_offset,
                                                  units * static_cast<std::uint32_t>(sizeof(RenderVertex)),
@@ -5739,12 +5234,10 @@ void RenderCore::draw_record_immediate(const shapes::Record& record) {
     }
     scope.run = true;
     if (cached_draw_run_scissor_reject_) {
-        ++frame_scissor_skips_;
         return;
     }
     if (cached_draw_run_no_pso_) {
         ++stat_draws_no_pso_;
-        ++frame_draws_no_pso_;
         return;
     }
     const DrawCall& state_call = cached_draw_run_state_call_;
@@ -5777,7 +5270,6 @@ void RenderCore::draw_record_immediate(const shapes::Record& record) {
         indices[i] = static_cast<std::uint16_t>(immediate_indices_[i] + bias);
     }
     ++stat_draws_issued_;
-    ++frame_draws_issued_;
     if (append) {
         pending_draw_batch_.call.index_count += index_count;
         pending_draw_batch_.call.vertex_view.SizeInBytes += count * static_cast<std::uint32_t>(sizeof(RenderVertex));
@@ -5821,10 +5313,6 @@ void RenderCore::on_scene_copy(const CaptureRequest& params) {
         galaxy::timeline::record(galaxy::timeline::Event::DisplayCopy, stat_display_copies_);
         display_copied_in_chunk_ = true;
     }
-    const bool time_copy = frame_time_detail_;
-    const auto copy_start = time_copy
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
 
 
     if (params.display) {
@@ -5858,11 +5346,9 @@ void RenderCore::on_scene_copy(const CaptureRequest& params) {
             display_picture->prerecorded_movie=render_movie_content_;
             scene_copies_.mark_display_copied(*display_picture, frame_index_);
             ++stat_display_copies_;
-            ++frame_display_copies_;
             record_monotonic_cadence_sample(display_copy_production_cadence_);
         }
     } else {
-        ++frame_tex_copies_;
         // The capture replaces what its buffer (the key) held: an image handed over there no longer describes it.
         const bool decoded_evicted = texture_cache_.forget(params.key) != 0u;
         const bool is_depth_copy = params.depth;
@@ -5873,30 +5359,15 @@ void RenderCore::on_scene_copy(const CaptureRequest& params) {
             ? renderer_.copy_output_scene_to_texture(params, texture_cache_)
             : renderer_.copy_scene_to_texture(params, texture_cache_, is_depth_copy);
         if (alias_updated || decoded_evicted) {
-            ++frame_scene_alias_updates_;
             // One address can alternate between format-keyed GPU resources, and the game need not
             // rewrite the texture state after a copy, so the next draw refreshes every frame table
             // that referenced this alias. A reused texture is updated in place; its SRV stays valid.
             mark_texture_binding_alias_dirty(params);
             texture_bindings_dirty_ = true;
         } else {
-            ++frame_scene_alias_noops_;
         }
     }
 
-    const std::uint64_t copy_us = time_copy
-        ? elapsed_us(copy_start, std::chrono::steady_clock::now())
-        : 0u;
-    if (time_copy) {
-        frame_scene_copy_us_ += copy_us;
-    }
-    if (trace_stalls_enabled() &&
-        copy_us >= trace_stall_threshold_us()) {
-        std::cerr << "[frame-read-timing] frame=" << frame_index_
-                  << " kind=" << (params.display ? "display" : "texture")
-                  << " us=" << copy_us
-                  << " dst=0x" << std::hex << params.key << std::dec << '\n';
-    }
 }
 
 void RenderCore::load_light(const state::Op& op) {

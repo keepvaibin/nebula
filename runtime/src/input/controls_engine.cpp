@@ -38,14 +38,6 @@ const NativeInputReplaySample* native_input_replay_sample_for_vi(std::uint64_t) 
     return nullptr;
 }
 
-std::uint64_t script_pointer_live_mouse_grace_ms() {
-    return 0u;
-}
-
-bool script_pointer_force_enabled() {
-    return false;
-}
-
 galaxy::input::PlayerInput build_replayed_input(std::uint64_t, const NativeInputReplaySample&,
                                                 const NativeInputScriptOverlay&, galaxy::RuntimeInputMode,
                                                 galaxy::input::tilt::Section,

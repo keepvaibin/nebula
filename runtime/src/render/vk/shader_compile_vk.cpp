@@ -21,7 +21,7 @@ namespace galaxy::render::vk {
 
 namespace {
 
-constexpr RegisterBinding kGxDrawBindings[] = {
+constexpr RegisterBinding kDrawBindings[] = {
     {"b0", 0, 0},
     {"b1", 0, 1},
     {"t0, space1", 0, 2},
@@ -257,7 +257,7 @@ EShLanguage language(ShaderStage stage) {
 }  // namespace
 
 std::span<const RegisterBinding> draw_bindings() noexcept {
-    return kGxDrawBindings;
+    return kDrawBindings;
 }
 
 std::string with_point_size(std::string_view vertex_hlsl) {

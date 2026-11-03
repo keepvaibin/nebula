@@ -10,7 +10,7 @@ namespace galaxy::render {
 
 // uv holds all eight texture coordinates;
 // mtx_indices holds the position/normal matrix index and the eight texture matrix indices
-// that the vertex shader uses to index the XF matrix palette; curve what a curved surface's
+// that the vertex shader uses to index the matrix palette; curve what a curved surface's
 // vertex carries (curved_surfaces.h's Model): its corner's displacement normal and its place's
 // crease normal (both packed, zero for none) and its place with the first crease neighbour
 // (place | neighbour << 16); the second crease neighbour rides in mtx_indices[2]'s high half.

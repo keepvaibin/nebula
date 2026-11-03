@@ -209,7 +209,7 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC make_pso_desc_impl(
     // Depth is reversed-Z relative to the game depth24 values (near=1, far=0; the projection negation
     // in render_core.cpp fill_projection), so game LESS maps to D3D GREATER, game LEQUAL to
     // GREATER_EQUAL, and so on.
-    static constexpr D3D12_COMPARISON_FUNC kGxDepthFunc[8] = {
+    static constexpr D3D12_COMPARISON_FUNC kDepthFunc[8] = {
         D3D12_COMPARISON_FUNC_NEVER,           // NEVER
         D3D12_COMPARISON_FUNC_GREATER,         // LESS     (reversed-Z)
         D3D12_COMPARISON_FUNC_EQUAL,           // EQUAL
@@ -222,7 +222,7 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC make_pso_desc_impl(
     const std::uint32_t zb = rs.zmode_bits;
     if (zb & 1u) {
         pd.DepthStencilState.DepthEnable = TRUE;
-        pd.DepthStencilState.DepthFunc = kGxDepthFunc[(zb >> 1) & 0x7u];
+        pd.DepthStencilState.DepthFunc = kDepthFunc[(zb >> 1) & 0x7u];
         pd.DepthStencilState.DepthWriteMask = (zb & (1u << 4))
             ? D3D12_DEPTH_WRITE_MASK_ALL
             : D3D12_DEPTH_WRITE_MASK_ZERO;

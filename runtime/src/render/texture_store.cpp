@@ -47,20 +47,6 @@ std::uint64_t align_up(std::uint64_t value, std::uint64_t alignment) {
     return (value + alignment - 1u) & ~(alignment - 1u);
 }
 
-bool trace_stalls_enabled() {
-    static const bool enabled = [] {
-        char value[16]{};
-        std::size_t length = 0;
-        return getenv_s(
-                   &length,
-                   value,
-                   sizeof(value),
-                   nebula_switch::trace_gx_stalls_name()) == 0 &&
-               length > 1 && value[0] != '0';
-    }();
-    return enabled;
-}
-
 std::uint64_t read_env_u64(const char* name, std::uint64_t fallback) {
     char value[32]{};
     std::size_t length = 0;
@@ -76,20 +62,6 @@ std::uint64_t read_env_u64(const char* name, std::uint64_t fallback) {
     const auto parsed = std::strtoull(value, &end, 10);
     return errno == ERANGE || end == value || *end != '\0'
         ? fallback : static_cast<std::uint64_t>(parsed);
-}
-
-std::uint64_t trace_stall_threshold_us() {
-    static const std::uint64_t threshold =
-        read_env_u64(nebula_switch::trace_render_stall_us_name(), 1000u);
-    return threshold;
-}
-
-std::uint64_t elapsed_us(
-    std::chrono::steady_clock::time_point start,
-    std::chrono::steady_clock::time_point end) {
-    return static_cast<std::uint64_t>(
-        std::chrono::duration_cast<std::chrono::microseconds>(
-            end - start).count());
 }
 
 [[nodiscard]] static unsigned full_mip_chain_levels(
@@ -1267,10 +1239,6 @@ TextureHandle TextureCache::get(std::uint64_t texture, const TextureSampler& mod
             }
         }
     }
-    const bool trace_stalls = trace_stalls_enabled();
-    const auto get_start = trace_stalls
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
 
     // The key includes the chain length and whether it is generated: the game hand-authors lower levels (fog, lava
     // and water tinting; ), so authored mips must never alias generated chains.
@@ -1304,9 +1272,6 @@ TextureHandle TextureCache::get(std::uint64_t texture, const TextureSampler& mod
         source_levels = levels = 1u;
         generated_mips = false;
     }
-    const auto config_end = trace_stalls
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
 
     Key key{};
     key.address  = image.key;
@@ -1319,13 +1284,7 @@ TextureHandle TextureCache::get(std::uint64_t texture, const TextureSampler& mod
     if (image.key + total_source_size < image.key) {
         throw std::runtime_error("[TextureCache] texture address overflow");
     }
-    const auto key_end = trace_stalls
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
 
-    const auto alias_end = trace_stalls
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
 
     {
         const auto it = entries_.find(key);
@@ -1334,9 +1293,6 @@ TextureHandle TextureCache::get(std::uint64_t texture, const TextureSampler& mod
             return it->second.handle;
         }
     }
-    const auto cache_end = trace_stalls
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
 
     // Miss: decode. Authored levels are contiguous and block-aligned and resolve as one range; generated mips
     // read level 0 only.
@@ -1398,30 +1354,7 @@ TextureHandle TextureCache::get(std::uint64_t texture, const TextureSampler& mod
             }
         }
     }
-    const auto resolve_end = trace_stalls
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
 
-    const auto miss_start = trace_stalls
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
-    if (trace_stalls) {
-        const std::uint64_t pre_miss_us =
-            elapsed_us(get_start, miss_start);
-        if (pre_miss_us >= trace_stall_threshold_us()) {
-            std::cerr << "[render-texture-premiss] addr=0x" << std::hex
-                      << image.key << std::dec
-                      << " size=" << total_source_size
-                      << " config-us="
-                      << elapsed_us(get_start, config_end)
-                      << " key-us=" << elapsed_us(config_end, key_end)
-                      << " alias-us=" << elapsed_us(key_end, alias_end)
-                      << " cache-us=" << elapsed_us(alias_end, cache_end)
-                      << " resolve-us=" << elapsed_us(cache_end, resolve_end)
-                      << " total-us=" << pre_miss_us
-                      << '\n';
-        }
-    }
     // A record the GPU can sample as it is goes up as it is.
     const TexelFormat format = record != nullptr && !pack_dump && !generated_mips ? sampled_format(*record) : TexelFormat::Rgba8;
     // Only the pixel fill moves off-thread. Texture-pack dumps, which read the decoded pixels here, and unknown
@@ -1438,9 +1371,6 @@ TextureHandle TextureCache::get(std::uint64_t texture, const TextureSampler& mod
             level_pixels[0].assign(static_cast<std::size_t>(w) * h, RGBA8{});
         }
     }
-    const auto decode_end = trace_stalls
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
 
     // One staging buffer holds every level at a 512-aligned placed footprint (256-aligned row pitch), copied into a
     // DEFAULT-heap Texture2D on the frame's command list. The shader samples Texture2D: a buffer SRV in that slot
@@ -1515,9 +1445,6 @@ TextureHandle TextureCache::get(std::uint64_t texture, const TextureSampler& mod
             dst_base, w, h, levels, level_offset.data(), level_pitch.data(),
             level_pixels);
     }
-    const auto staging_end = trace_stalls
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
 
     gpu::TextureRef resource;
     std::uint64_t allocation_bytes = 0;
@@ -1525,22 +1452,13 @@ TextureHandle TextureCache::get(std::uint64_t texture, const TextureSampler& mod
     if (!reused_resource) {
         resource = backend_.create_texture(w, h, levels, allocation_bytes, format);
     }
-    const auto resource_end = trace_stalls
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
 
     backend_.record_upload(gpu::raw(resource), reused_resource, *staging.chunk, staging.offset, w, h, levels,
                            level_offset.data(), level_pitch.data());
 
     const std::uint32_t srv_idx = allocate_srv_index();
     backend_.write_view(srv_idx, gpu::raw(resource), levels);
-    const auto upload_record_end = trace_stalls
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
 
-    const auto entry_build_start = trace_stalls
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
     TextureHandle handle{};
     handle.resource      = gpu::raw(resource);
     handle.srv_index     = srv_idx;
@@ -1557,69 +1475,17 @@ TextureHandle TextureCache::get(std::uint64_t texture, const TextureSampler& mod
     entry.texture = std::move(resource);
     entry.allocation_bytes = allocation_bytes;
     entry.handle  = handle;
-    const auto entry_build_end = trace_stalls
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
 
-    const auto tex_dump_start = trace_stalls
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
     if (pack_dump) {
         // Synchronous decode in dump mode: level_pixels holds the base level.
         packs_.dump(pack_name, w, h, reinterpret_cast<const std::uint8_t*>(level_pixels[0].data()));
     }
-    const auto tex_dump_end = trace_stalls
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
 
     const TextureHandle result = entry.handle;
-    const auto emplace_start = trace_stalls
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
     const auto decoded = entries_.emplace(key, std::move(entry)).first;
     decoded_lru_track(key);
     if (pack_slot != TexturePacks::kNone) {
         wait_for_replacement(key, decoded->second, pack_slot);
-    }
-    const auto emplace_end = trace_stalls
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
-    const std::uint64_t total_us = trace_stalls
-        ? elapsed_us(miss_start, upload_record_end) : 0u;
-    if (trace_stalls) {
-        const std::uint64_t post_record_us =
-            elapsed_us(upload_record_end, emplace_end);
-        if (post_record_us >= trace_stall_threshold_us()) {
-            std::cerr << "[render-texture-postrecord] addr=0x" << std::hex
-                      << image.key << std::dec
-                      << " entry-us="
-                      << elapsed_us(entry_build_start, entry_build_end)
-                      << " texdump-us="
-                      << elapsed_us(tex_dump_start, tex_dump_end)
-                      << " emplace-us="
-                      << elapsed_us(emplace_start, emplace_end)
-                      << " total-us=" << post_record_us
-                      << '\n';
-        }
-    }
-    if (trace_stalls &&
-        total_us >= trace_stall_threshold_us()) {
-        std::cerr << "[render-texture-miss] addr=0x" << std::hex
-                  << image.key << std::dec
-                  << " fmt=" << static_cast<unsigned>(image.disc_format)
-                  << " size=" << w << 'x' << h
-                  << " levels=" << levels
-                  << " native-mips=" << (generated_mips ? 1u : 0u)
-                  << " record-bytes=" << total_source_size
-                  << " staging-bytes=" << staging_size
-                  << " srv=" << srv_idx
-                  << " async-decode=" << (async_decode ? 1u : 0u)
-                  << " decode-us=" << elapsed_us(miss_start, decode_end)
-                  << " staging-us=" << elapsed_us(decode_end, staging_end)
-                  << " resource-us=" << elapsed_us(staging_end, resource_end)
-                  << " record-us=" << elapsed_us(resource_end, upload_record_end)
-                  << " total-us=" << total_us
-                  << '\n';
     }
     return result;
 }

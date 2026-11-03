@@ -73,7 +73,7 @@ struct TransformRecord {
     // Palette snapshot, in float4 elements from the matrix ring base.
     std::uint32_t palette_offset = kNoPaletteOffset;
     bool palette = false;
-    // Hash of the XF matrix-load destinations since the record's marker
+    // Hash of the matrix-load destinations since the record's marker
     // (DrawMatrices::load_signature): an identity match must have the same
     // sequence of loads, not only the same count.
     std::uint64_t load_signature = 0;

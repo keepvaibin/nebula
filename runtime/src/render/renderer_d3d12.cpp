@@ -157,74 +157,6 @@ bool trace_present_stats_enabled() {
     return enabled;
 }
 
-// Frame GPU timestamps (two queries and a resolve per command list) are always on: Match Output's GPU budget reads
-// them. GALAXY_GPU_TIMESTAMPS=0 turns them off, and the budget with them.
-bool gpu_timestamps_enabled() {
-    static const bool enabled = [] {
-        char value[16]{};
-        std::size_t length = 0;
-        if (getenv_s(
-                &length, value, sizeof(value),
-                "GALAXY_GPU_TIMESTAMPS") == 0 &&
-            length > 1) {
-            return value[0] != '0' && value[0] != 'n' && value[0] != 'N';
-        }
-        return true;
-    }();
-    return enabled;
-}
-
-bool allow_tearing_enabled() {
-    static const bool enabled = [] {
-        char value[16]{};
-        std::size_t length = 0;
-        if (getenv_s(
-                &length, value, sizeof(value),
-                "GALAXY_ALLOW_TEARING") != 0 ||
-            length <= 1) {
-            return get_render_config().allow_tearing;
-        }
-        return value[0] != '0' && value[0] != 'n' && value[0] != 'N';
-    }();
-    return enabled;
-}
-
-bool flip_discard_enabled() {
-    static const bool enabled = [] {
-        char value[16]{};
-        std::size_t length = 0;
-        if (getenv_s(
-                &length, value, sizeof(value),
-                "GALAXY_FLIP_DISCARD") != 0 ||
-            length <= 1) {
-            return get_render_config().flip_discard;
-        }
-        return value[0] != '0' && value[0] != 'n' && value[0] != 'N';
-    }();
-    return enabled;
-}
-
-unsigned swap_chain_frame_latency() {
-    static const unsigned latency = [] {
-        char value[16]{};
-        std::size_t length = 0;
-        if (getenv_s(
-                &length, value, sizeof(value),
-                "GALAXY_SWAP_CHAIN_FRAME_LATENCY") != 0 ||
-            length <= 1) {
-            return std::clamp(
-                get_render_config().swap_chain_frame_latency,
-                1u,
-                kFramesInFlight);
-        }
-        return std::clamp(
-            static_cast<unsigned>(std::strtoul(value, nullptr, 10)),
-            1u,
-            kFramesInFlight);
-    }();
-    return latency;
-}
-
 // Installed physical memory in MiB (0 if it cannot be queried). Logged with the
 // adapter's figures: on a unified-memory adapter the graphics budget is the OS cap
 // of half of system memory.
@@ -238,21 +170,6 @@ std::uint64_t host_ram_mb() {
         return static_cast<std::uint64_t>(status.ullTotalPhys) / (1024ull * 1024ull);
     }();
     return megabytes;
-}
-
-bool frame_latency_wait_enabled() {
-    static const bool enabled = [] {
-        char value[16]{};
-        std::size_t length = 0;
-        if (getenv_s(
-                &length, value, sizeof(value),
-                "GALAXY_WAIT_FOR_FRAME_LATENCY") != 0 ||
-            length <= 1) {
-            return get_render_config().wait_for_frame_latency;
-        }
-        return value[0] != '0' && value[0] != 'n' && value[0] != 'N';
-    }();
-    return enabled;
 }
 
 static void d3d_check(HRESULT hr, const char* label) {
@@ -1076,7 +993,7 @@ HRESULT create_draw_root_signature(
     params[4].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
     params[4].Descriptor.ShaderRegister = 0;
     params[4].Descriptor.RegisterSpace  = 1;
-    // The matrix palette also holds the XF lights, which per-pixel lighting
+    // The matrix palette also holds the lights, which per-pixel lighting
     // reads in the pixel shader.
     params[4].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
 
@@ -2095,7 +2012,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
             "GetTimestampFrequency");
         QueryPerformanceFrequency(&qpc_frequency_);
 
-        if (gpu_timestamps_enabled()) {
+        if (true) {
             D3D12_QUERY_HEAP_DESC qhd{};
             qhd.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
             qhd.Count = kFramesInFlight * 2u;
@@ -2169,9 +2086,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
         scd.Height       = host_window::backbuffer_height;
         scd.Format       = kBackbufferFormat;
         scd.BufferUsage  = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-        scd.SwapEffect   = flip_discard_enabled()
-            ? DXGI_SWAP_EFFECT_FLIP_DISCARD
-            : DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
+        scd.SwapEffect   = DXGI_SWAP_EFFECT_FLIP_DISCARD;
         scd.SampleDesc.Count = 1;
         scd.Scaling      = DXGI_SCALING_STRETCH;
         scd.AlphaMode    = DXGI_ALPHA_MODE_IGNORE;
@@ -2179,18 +2094,6 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
         // the selected resolution and refresh rate.
         scd.Flags = DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT |
                     DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
-        if (allow_tearing_enabled()) {
-            ComPtr<IDXGIFactory5> factory5;
-            BOOL supported = FALSE;
-            if (SUCCEEDED(factory.As(&factory5)) &&
-                SUCCEEDED(factory5->CheckFeatureSupport(
-                    DXGI_FEATURE_PRESENT_ALLOW_TEARING,
-                    &supported, sizeof(supported))) &&
-                supported) {
-                tearing_supported_ = true;
-                scd.Flags |= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
-            }
-        }
         ComPtr<IDXGISwapChain1> sc1;
         // Through Streamline's factory when it runs: its presents go through it.
         d3d_check(streamline::swap_chain_factory(factory.Get())
@@ -2200,8 +2103,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
         {
             ComPtr<IDXGISwapChain2> swap_chain2;
             d3d_check(swap_chain_.As(&swap_chain2), "SwapChain2 As");
-            d3d_check(swap_chain2->SetMaximumFrameLatency(
-                          swap_chain_frame_latency()),
+            d3d_check(swap_chain2->SetMaximumFrameLatency(1u),
                       "SetMaximumFrameLatency");
             frame_latency_waitable_ =
                 swap_chain2->GetFrameLatencyWaitableObject();
@@ -3950,26 +3852,6 @@ void RendererD3D12::wait_for_frame_latency_if_needed(
     if (collect_present_telemetry) {
         QueryPerformanceCounter(&latency_wait_start);
     }
-    if (frame_latency_wait_enabled() && frame_latency_waitable_ != nullptr) {
-        const auto latency_wait_start_steady = collect_present_telemetry
-            ? std::chrono::steady_clock::now()
-            : std::chrono::steady_clock::time_point{};
-        constexpr DWORD kFrameLatencyWaitTimeoutMs = 17;
-        const DWORD latency_result =
-            WaitForSingleObjectEx(
-                frame_latency_waitable_,
-                kFrameLatencyWaitTimeoutMs,
-                FALSE);
-        if (latency_result != WAIT_OBJECT_0 &&
-            latency_result != WAIT_TIMEOUT) {
-            throw std::runtime_error("frame latency wait failed");
-        }
-        if (collect_present_telemetry) {
-            last_latency_wait_us_ = elapsed_us(
-                latency_wait_start_steady,
-                std::chrono::steady_clock::now());
-        }
-    }
     if (collect_present_telemetry) {
         QueryPerformanceCounter(&latency_wait_end);
     }
@@ -4268,7 +4150,7 @@ void RendererD3D12::present_to_swap_chain() {
                 << " tearing-enabled=" << (tearing_supported_ ? 1 : 0)
                 << " remote-session="
                 << (GetSystemMetrics(SM_REMOTESESSION) != 0 ? 1 : 0)
-                << " gpu-timing=" << (!gpu_timestamps_enabled() ? "disabled" :
+                << " gpu-timing=" << (false ? "disabled" :
                     telemetry_gpu_samples_ == 0u ? "pending" : "measured")
                 << " gpu-ms(avg)=";
             if (telemetry_gpu_samples_ != 0u) message << gpu_avg;
@@ -7734,7 +7616,7 @@ void RendererD3D12::clear_scene(
     }
     if (depth_enable) {
         // REVERSED-Z buffer: game depth24 (near=0, far=2^24) inverts into the D3D depth value.
-        // GX_MAX_Z24 (0xFFFFFF = "clear to farthest") becomes about 0.0 here, which the flipped
+        // 0xFFFFFF ("clear to farthest") becomes about 0.0 here, which the flipped
         // GEQUAL-style funcs pass.
         command_list_->ClearDepthStencilView(
             dsv, D3D12_CLEAR_FLAG_DEPTH, clear.reversed_depth, 0, num_rects, rects);
@@ -7893,7 +7775,7 @@ void RendererD3D12::draw(const DrawCall& call) {
         command_list_->IASetPrimitiveTopology(first_topology);
         bound_topology_ = first_topology;
     }
-    // A replayed display list rebinds the same vertex-ring allocation for
+    // A run of shapes rebinds the same vertex-ring allocation for
     // thousands of consecutive draws, so the view is compared before binding.
     // Every other writer of stream 0 (the UI helpers, the conversion blit, the
     // clear quad) is followed by invalidate_draw_bindings(), and begin_frame()

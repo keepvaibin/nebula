@@ -119,7 +119,7 @@ struct RowView {
 // Whether rows first .. first + count - 1 hold the same words in a and b.
 [[nodiscard]] bool same_rows(RowView a, RowView b, unsigned first, unsigned count) noexcept;
 
-// One XF palette snapshot pair (a may be empty: no previous snapshot).
+// One palette snapshot pair (a may be empty: no previous snapshot).
 struct PaletteMotion {
     std::array<EyeMotion, 10> position{};
     std::array<NormalMotion, 10> normal{};
@@ -145,7 +145,7 @@ void palette_at(const PaletteMotion& m, RowView a, RowView b,
                 const CameraMotion& camera, const Affine34& camera_t, float t,
                 std::uint32_t* out) noexcept;
 
-// One light (16 XF words) at t: color and attenuation lerped; position and
+// One light (16 words) at t: color and attenuation lerped; position and
 // direction interpolated in world space when `split` (else in eye space). A
 // null `a` (no previous snapshot) is b's light held still in the world.
 void light_at(const std::uint32_t* a, const std::uint32_t* b, const CameraMotion& camera,

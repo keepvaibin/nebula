@@ -2,11 +2,10 @@
 
 // ResidentVertexArena: allocator for GPU-resident decoded vertices.
 //
-// A decoded packet-run cache entry depends only on the cached display-list bytes, the
-// VCD/VAT/array key and the validated indexed-array snapshot, so its vertices live in one block
-// of a persistently mapped buffer that draws reference directly, instead of being copied into
-// the upload ring on every replay. The arena tracks vertex offsets only and owns no GPU object.
-//   * allocate() is first-fit from the lowest offset, so entries created in replay order stay
+// A shape's vertices never change after it is made, so they live in one block of a persistently
+// mapped buffer that draws reference directly, instead of being copied into the upload ring on
+// every draw. The arena tracks vertex offsets only and owns no GPU object.
+//   * allocate() is first-fit from the lowest offset, so entries created in draw order stay
 //     contiguous and adjacent runs can merge into one draw batch.
 //   * A released block becomes free only after `frames_in_flight` more advance_frame() calls,
 //     once the GPU can no longer be reading it.

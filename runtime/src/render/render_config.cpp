@@ -134,10 +134,6 @@ static unsigned parse_aspect_mode(const char* v, unsigned def) {
 
 static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
     if (std::strcmp(key, "vsync_interval") == 0) cfg.vsync_interval      = std::clamp(parse_uint(val, cfg.vsync_interval), 0u, 2u);
-    else if (std::strcmp(key, "wait_for_frame_latency") == 0) cfg.wait_for_frame_latency = parse_bool(val, cfg.wait_for_frame_latency);
-    else if (std::strcmp(key, "swap_chain_frame_latency") == 0) cfg.swap_chain_frame_latency = std::clamp(parse_uint(val, cfg.swap_chain_frame_latency), 1u, 2u);
-    else if (std::strcmp(key, "allow_tearing") == 0) cfg.allow_tearing = parse_bool(val, cfg.allow_tearing);
-    else if (std::strcmp(key, "flip_discard") == 0) cfg.flip_discard = parse_bool(val, cfg.flip_discard);
     else if (std::strcmp(key, "msaa_samples")   == 0) cfg.msaa_samples        = std::clamp(parse_uint(val, 1), 1u, 8u);
     else if (std::strcmp(key, "taa_enabled")    == 0) cfg.taa_enabled         = parse_bool(val, false);
     else if (std::strcmp(key, "max_fps")        == 0) cfg.max_fps             = parse_float(val, cfg.max_fps);
@@ -244,10 +240,6 @@ static void apply_env(RenderConfig& cfg, const char* env_name, const char* key) 
 
 static void apply_env_overrides(RenderConfig& cfg) {
     apply_env(cfg, "GALAXY_VSYNC_INTERVAL", "vsync_interval");
-    apply_env(cfg, "GALAXY_WAIT_FOR_FRAME_LATENCY", "wait_for_frame_latency");
-    apply_env(cfg, "GALAXY_SWAP_CHAIN_FRAME_LATENCY", "swap_chain_frame_latency");
-    apply_env(cfg, "GALAXY_ALLOW_TEARING", "allow_tearing");
-    apply_env(cfg, "GALAXY_FLIP_DISCARD", "flip_discard");
     apply_env(cfg, "GALAXY_MSAA_SAMPLES", "msaa_samples");
     apply_env(cfg, "GALAXY_TAA_ENABLED", "taa_enabled");
     apply_env(cfg, "GALAXY_MAX_FPS", "max_fps");
@@ -293,8 +285,6 @@ static void apply_env_overrides(RenderConfig& cfg) {
 static void clamp_unimplemented_features(RenderConfig& cfg) {
     // Clamps every value into its range; settings the renderer does not implement stay parseable but off.
     cfg.vsync_interval = std::clamp(cfg.vsync_interval, 0u, 2u);
-    cfg.swap_chain_frame_latency =
-        std::clamp(cfg.swap_chain_frame_latency, 1u, 2u);
     if (!std::isfinite(cfg.max_fps) || (cfg.max_fps != 0.0f && cfg.max_fps < kMinFrameRate) || cfg.max_fps > kMaxFrameRate) {
         cfg.max_fps = RenderConfig{}.max_fps;
     }
@@ -633,12 +623,6 @@ bool save_render_config_to_file() {
     std::ostringstream contents;
     contents.imbue(std::locale::classic());
     contents << "vsync_interval=" << cfg.vsync_interval << '\n'
-             << "wait_for_frame_latency="
-             << (cfg.wait_for_frame_latency ? 1u : 0u) << '\n'
-             << "swap_chain_frame_latency="
-             << std::clamp(cfg.swap_chain_frame_latency, 1u, 2u) << '\n'
-             << "allow_tearing=" << (cfg.allow_tearing ? 1u : 0u) << '\n'
-             << "flip_discard=" << (cfg.flip_discard ? 1u : 0u) << '\n'
              << std::setprecision(std::numeric_limits<float>::max_digits10)
              << "max_fps=" << cfg.max_fps << '\n'
              << "texture_lod_bias=" << cfg.texture_lod_bias << '\n'
