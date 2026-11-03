@@ -16,13 +16,7 @@
 #include "Game/System/NebulaArena.hpp"
 
 namespace {
-    const f32 sPointNumInPart = 0.0f;
     const f32 sDistancePartMesh = 13000.0f;
-    const f32 sFlowSpeedTexRate = 0.0f;
-    const f32 sFlowSpeedTexRateMin = 0.0f;
-    const f32 sTexRate0 = 0.0f;
-    const f32 sTexRate1 = 0.0f;
-    const f32 sTexRate2 = 0.0f;
     const f32 sTexSpeed0U = -0.003f;
     const f32 sTexSpeed0V = -0.001f;
     const f32 sTexSpeed1U = -0.002f;
@@ -31,10 +25,6 @@ namespace {
     const f32 sIndirectScale = 0.1f;
     const f32 sBloomCameraOffsetZ = 3000.0f;
     const f32 sDistancePartDrawBloom = 4000.0f;
-    const f32 sBloomCameraUpMin = 0.0f;
-    const f32 sBloomCameraUpMax = 0.0f;
-    const f32 sBloomCameraDepthMin = 0.0f;
-    const f32 sBloomCameraDepthMax = 0.0f;
 
     static NebulaColor8 color1 = {0x28, 0x28, 0x28, 0x14};
     static NebulaColor8 color2 = {0x76, 0xD7, 0xFF, 0xFF};
@@ -229,7 +219,6 @@ void OceanRingPartDrawer::drawDynamic() const {
 
 void OceanRingPartDrawer::drawDynamicBloom() const {
     f32 f30 = 0.05f;
-    f32 f29;
     f32 f28;
     f32 f27;
     f32 f26;
@@ -238,7 +227,6 @@ void OceanRingPartDrawer::drawDynamicBloom() const {
     f32 f21 = 1.0f;
 
     f28 = f30 * f21;
-    f29 = 0.1f * f21;
     f27 = _1C;
     f25 = _20;
     f26 = _1C;
@@ -492,9 +480,7 @@ void OceanRingDrawer::loadMaterialBloom() const {
     f32 v6 = ((MR::clamp(zDir.y, -0.2f, 0.1f) - -0.2f) / 0.3f);
     f32 v8 = ((MR::clamp(WaterAreaFunction::getCameraWaterDepth(), 150.0f, 300.0f) - 150.0f) / 150.0f);
 
-    if (v6 >= v8) {
-        v8 = v8;
-    } else {
+    if (v6 < v8) {
         v8 = v6;
     }
 

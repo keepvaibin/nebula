@@ -178,7 +178,6 @@ void DrawBuffer::remove(const LiveActor* pActor) {
 }
 
 void DrawBuffer::resetLightSort(const ActorLightCtrl* pLightCtrl) {
-    J3DModel* model = MR::getJ3DModel(pLightCtrl->mActor);
 
     for (s32 idx = 0; idx < mNumMaterials; idx++) {
         getShapeDrawerByMatNo(idx)->resetLightSort(pLightCtrl);

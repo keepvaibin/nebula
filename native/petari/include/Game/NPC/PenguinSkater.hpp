@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Game/Util/Array.hpp"
 #include "Game/NPC/NPCActor.hpp"
 
 class ActorCameraInfo;
@@ -44,7 +45,7 @@ public:
     ActorCameraInfo* mCameraInfo;
     NPCSupportRail* mCurrentRail;
     NPCSupportRail* mSwitchRail;
-    NPCSupportRail* mSwitchRails[16];
+    MR::GrowTable< NPCSupportRail*, 16 > mSwitchRails;
     NPCSupportRail* mRail;
     s32 mNumRails;
     s32 mCrossPoint;

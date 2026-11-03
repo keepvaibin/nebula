@@ -34,15 +34,6 @@ namespace {
 }  // namespace
 
 namespace {
-    inline u32 packPathColor(const TVec3f& rColor, const f32& rAlpha) {
-        // The 0xRRGGBBAA word (its bytes stored r, g, b, a).
-        return (u32)(u8)static_cast< s32 >(255.0f * MR::abs(rColor.x)) << 24 | (u32)(u8)static_cast< s32 >(255.0f * MR::abs(rColor.y)) << 16 |
-               (u32)(u8)static_cast< s32 >(255.0f * MR::abs(rColor.z)) << 8 | (u32)(u8)static_cast< s32 >(255.0f * MR::abs(rAlpha));
-    }
-
-    static const f32 sDrawMinInterval = 0.0f;
-    static const f32 sDrawCurveLimit = 0.0f;
-    static const f32 sLineWidth = 0.0f;
 };  // namespace
 
 SpinDriverPathDrawInit::SpinDriverPathDrawInit()
@@ -318,14 +309,6 @@ void SpinDriverPathDrawer::draw() const {
     J3DNativeShape::setTexture(0, mtx, 2);
 
     for (u32 i = 1; i < mPositionCount; i++) {
-        f32 alpha;
-        f32 green;
-        alpha = 2.0f * _9C[i] - 1.0f;
-        green = 1.0f - _9C[i];
-        const f32 square = alpha * alpha;
-        alpha = square * square;
-        u32 color = ::packPathColor(TVec3f(1.0f, green, 0.0f), 1.0f - alpha);
-
         TVec3f prev90(_90[i - 1]), curr90(_90[i]);
         TVec3f prev94(_94[i - 1] * 100.0f), curr94(_94[i] * 100.0f);
         TVec3f prev98(_98[i - 1] * 100.0f), curr98(_98[i] * 100.0f);

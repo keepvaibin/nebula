@@ -438,7 +438,7 @@ void MarioActor::initCommonEffect() {
                 continue;
             }
 
-            const char* const* effectList;
+            const char* const* effectList = smokeEffects;
             switch (materialIndex) {
             case 0:
                 effectList = useFollow ? smokeFollowEffects : smokeEffects;

@@ -33,10 +33,6 @@ std::vector<SettingsRow> display_page(const RenderConfig& render, const DisplayP
                 const std::string& device = live.monitors[next].id;
                 draft.monitor.fill('\0');
                 std::memcpy(draft.monitor.data(), device.data(), std::min(device.size(), draft.monitor.size() - 1u));
-                // A fullscreen mode belongs to its monitor; start from the new one's desktop mode.
-                draft.fullscreen_width = 0u;
-                draft.fullscreen_height = 0u;
-                draft.fullscreen_refresh_hz = 0u;
                 host.changed(DisplayChange::Monitor, draft);
             };
         }

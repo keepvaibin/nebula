@@ -310,13 +310,11 @@ void OtaRock::exeDown() {
 
         if (!mNoThrowCocoNut) {
             for (s32 i = 0; i < 4; i++) {
-                CocoNutBall* cocoNut = &mCocoNutArray[i];
                 if (!MR::isDead(&mCocoNutArray[i]))
                     mCocoNutArray[i].kill();
             }
         }
         for (s32 i = 0; i < 3; i++) {
-            FireBall* fireBall = &mFireBallArray[i];
             if (!MR::isDead(&mFireBallArray[i]))
                 mFireBallArray[i].kill();
         }

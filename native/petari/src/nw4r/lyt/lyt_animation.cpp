@@ -10,13 +10,12 @@
 #include "nw4r/lyt/resourceAccessor.h"
 #include <new>
 
-const f32 R_SAME_TOLERANCE = 1.0e-5F;
 const f32 R_FRAME_TOLERANCE = 0.001F;
 
 namespace nw4r {
     namespace lyt {
         namespace {
-            inline bool RIsSame(const f32 a, const f32 b, const f32 tolerance = R_SAME_TOLERANCE) {
+            inline bool RIsSame(const f32 a, const f32 b, const f32 tolerance) {
                 f32 c = a - b;
                 return (-tolerance < c && c < tolerance);
             }
@@ -256,7 +255,7 @@ namespace nw4r {
             mAnimLinkAry = static_cast< AnimationLink* >(Layout::AllocMemory(sizeof(AnimationLink) * animNum));
             if (mAnimLinkAry != nullptr) {
                 mAnimLinkNum = animNum;
-                memset(mAnimLinkAry, 0, animNum * sizeof(AnimationLink));
+                memset((void*)mAnimLinkAry, 0, animNum * sizeof(AnimationLink));
 
                 for (u16 i = 0; i < animNum; i++) {
                     new (&mAnimLinkAry[i]) AnimationLink();

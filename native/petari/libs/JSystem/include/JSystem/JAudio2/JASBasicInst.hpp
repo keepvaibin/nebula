@@ -5,7 +5,7 @@
 #include "JSystem/JAudio2/JASOscillator.hpp"
 #include "JSystem/JAudio2/JASSoundParams.hpp"
 
-struct NebulaArena;
+class NebulaArena;
 
 struct JASInstEffect;
 

@@ -96,7 +96,7 @@ void PenguinSkater::initAfterPlacement() {
                     mSwitchRail = static_cast< NPCSupportRail* >(actor);
                 }
             } else {
-                mSwitchRails[mNumRails++] = static_cast< NPCSupportRail* >(actor);
+                mSwitchRails.at(mNumRails++) = static_cast< NPCSupportRail* >(actor);
             }
         }
         mRail = mCurrentRail;

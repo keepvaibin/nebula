@@ -19,7 +19,6 @@
 #include "galaxy/pointer_control.h"
 #include "galaxy/rumble.h"
 #include "galaxy/tilt.h"
-#include "galaxy/diagnostic_stick_lease.h"
 #include "galaxy/experimental_ultrawide_aspect.h"
 #include "galaxy/render_api.h"
 #include "galaxy/runtime_settings.h"
@@ -67,7 +66,7 @@ namespace {
 
 bool xinput_requires_focus() {
     static const bool requires_focus =
-        read_env_flag("GALAXY_XINPUT_REQUIRE_FOCUS", true);
+        read_env_flag(nebula_switch::xinput_require_focus_name(), true);
     return requires_focus;
 }
 
@@ -946,55 +945,6 @@ galaxy::input::NativeMousePointerProjection project_client_mouse_pointer(
     });
 }
 
-// GALAXY_INPUT_STICK_COMMAND_FILE=<file>: a stick (and A) command another process writes while the game runs
-// (diagnostic_stick_lease.h), read at most every 100 ms.
-void apply_diagnostic_stick_command_file(NativeInputScriptOverlay& overlay) {
-    static const std::optional<std::string> path =
-        read_env_string(nebula_switch::input_stick_command_file_name());
-    if (!path.has_value()) return;
-
-    static galaxy::input::DiagnosticStickLease lease;
-    static bool polled = false;
-    static std::uint64_t last_poll_ms = 0u;
-    std::uint64_t now_ms = static_cast<std::uint64_t>(GetTickCount64());
-    if (polled && now_ms < last_poll_ms) {
-        lease.cancel();
-        return;
-    }
-    if (!polled || now_ms - last_poll_ms >= 100u) {
-        polled = true;
-        last_poll_ms = now_ms;
-        const HANDLE file = CreateFileA(
-            path->c_str(), GENERIC_READ,
-            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-            nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
-        if (file == INVALID_HANDLE_VALUE) {
-            lease.cancel();
-        } else {
-            // A bounded read rejects a larger or partly written command; the writer replaces the file atomically.
-            std::array<char, 129> text{};
-            DWORD count = 0u;
-            const BOOL read = ReadFile(
-                file, text.data(), static_cast<DWORD>(text.size()),
-                &count, nullptr);
-            CloseHandle(file);
-            now_ms = static_cast<std::uint64_t>(GetTickCount64());
-            if (read == FALSE || count == text.size()) {
-                lease.cancel();
-            } else {
-                lease.observe(
-                    std::string_view(text.data(), count), now_ms);
-            }
-        }
-    }
-    if (const auto active = lease.active(now_ms); active.has_value()) {
-        overlay.has_stick = true;
-        overlay.stick_x = active->x;
-        overlay.stick_y = active->y;
-        overlay.buttons.a = overlay.buttons.a || active->a;
-    }
-}
-
 class WindowLiveControlsHost final : public LiveControlsHost {
 public:
     WindowLiveControlsHost(HWND window, bool focused) : window_(window), focused_(focused) {}
@@ -1119,7 +1069,7 @@ galaxy::input::PlayerInput build_live_input(
     galaxy::input::PlayContext play_context,
     galaxy::input::tilt::Section tilt_section) {
     const NativeInputScriptOverlay script = build_native_input_script_overlay(
-        current_vi, {apply_diagnostic_stick_command_file, galaxy::qpc_now});
+        current_vi, {galaxy::qpc_now});
     if (const NativeInputReplaySample* replay =
             native_input_replay_sample_for_vi(current_vi);
         replay != nullptr) {
@@ -1265,8 +1215,7 @@ galaxy::input::PlayerInput build_live_input(
     frame.keyboard_levels = keyboard_levels;
     frame.script = script;
     frame.vi = current_vi;
-    frame.script_pointer_grace_ms = script_pointer_live_mouse_grace_ms();
-    frame.script_pointer_force = script_pointer_force_enabled();
+    frame.script_pointer_grace_ms = 250u;
     frame.window_focused = window_focused;
     frame.use_keyboard = use_keyboard;
     frame.use_pads = use_pads;

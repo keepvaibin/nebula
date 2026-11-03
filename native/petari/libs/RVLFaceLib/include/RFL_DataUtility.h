@@ -8,7 +8,7 @@ extern "C" {
 #endif
 
 // Forward declarations
-typedef struct MiiMiddleDB;
+struct MiiMiddleDB;
 
 typedef struct MiiAdditionalInfo {
     char16_t name[MII_NAME_LEN + 1];

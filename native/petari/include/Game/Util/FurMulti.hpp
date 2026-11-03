@@ -1,4 +1,5 @@
 #pragma once
+#include "Game/Util/Array.hpp"
 
 
 class FurCtrl;
@@ -33,18 +34,14 @@ public:
 class FurBank {
 public:
     FurBank() : mCount() {
-        for (u32 i = 0; i < 32; i++) {
-            mEntries[i] = nullptr;
-            mLayerMasks[i] = 0;
-        }
     }
 
     FurMulti* check(J3DModelData*, u32);
     void regist(FurMulti*, u32);
 
     u32 mCount;
-    FurMulti* mEntries[32];
-    u32 mLayerMasks[32];
+    MR::GrowTable< FurMulti*, 32 > mEntries;
+    MR::GrowTable< u32, 32 > mLayerMasks;
 };
 
 namespace MR {

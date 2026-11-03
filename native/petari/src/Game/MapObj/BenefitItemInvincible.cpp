@@ -8,6 +8,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include <nebula_format.h>
 
 namespace {
     f32 cAppearThrowUpSpd = 10.0f;
@@ -127,8 +128,7 @@ void BenefitItemInvincible::doEscape() {
 void BenefitItemInvincible::runEfx(const char* pEffect) {
     char str[0x40];
     if (!strcmp(pEffect, "Glow")) {
-        strcpy(str, pEffect);
-        strcat(str, "PowerUpInvincible");
+        nebula_snprintf(str, sizeof(str), "%sPowerUpInvincible", pEffect);
         MR::emitEffect(this, str);
     }
 }
@@ -136,8 +136,7 @@ void BenefitItemInvincible::runEfx(const char* pEffect) {
 void BenefitItemInvincible::stopEfx(const char* pEffect) {
     char str[0x40];
     if (!strcmp(pEffect, "Glow")) {
-        strcpy(str, pEffect);
-        strcat(str, "PowerUpInvincible");
+        nebula_snprintf(str, sizeof(str), "%sPowerUpInvincible", pEffect);
         MR::emitEffect(this, str);
     }
 }

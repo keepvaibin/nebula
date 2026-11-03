@@ -61,7 +61,6 @@ JAISoundHandle* AudSingleBgm::start(u32 soundID, bool lock) {
     if (id.getSectionID() == 0x2) {  // STM
         AudWrap::getSystem()->getStreamMgr().startSound(id, &mHandle, nullptr);
     } else {  // BGM or MBGM
-        AudSoundInfo* info = AudWrap::getSoundInfo();
         AudWrap::getSystem()->getSeqMgr().startSound(id, &mHandle, nullptr);
         if (mHandle.isSoundAttached()) {
             startTrackControl();

@@ -75,96 +75,6 @@ inline constexpr const char* hide_window_name() noexcept { return "GALAXY_HIDE_W
 inline constexpr const wchar_t* hide_window_wide_name() noexcept { return L"GALAXY_HIDE_WINDOW"; }
 #endif
 #if defined(NEBULA_RELEASE)
-inline constexpr const char* input_autopress_a() noexcept { return nullptr; }
-inline constexpr const char* input_autopress_a_name() noexcept { return ""; }
-inline constexpr const wchar_t* input_autopress_a_wide_name() noexcept { return L""; }
-#else
-inline const char* input_autopress_a() noexcept { return std::getenv("GALAXY_INPUT_AUTOPRESS_A"); }
-inline constexpr const char* input_autopress_a_name() noexcept { return "GALAXY_INPUT_AUTOPRESS_A"; }
-inline constexpr const wchar_t* input_autopress_a_wide_name() noexcept { return L"GALAXY_INPUT_AUTOPRESS_A"; }
-#endif
-#if defined(NEBULA_RELEASE)
-inline constexpr const char* input_autopress_a2() noexcept { return nullptr; }
-inline constexpr const char* input_autopress_a2_name() noexcept { return ""; }
-inline constexpr const wchar_t* input_autopress_a2_wide_name() noexcept { return L""; }
-#else
-inline const char* input_autopress_a2() noexcept { return std::getenv("GALAXY_INPUT_AUTOPRESS_A2"); }
-inline constexpr const char* input_autopress_a2_name() noexcept { return "GALAXY_INPUT_AUTOPRESS_A2"; }
-inline constexpr const wchar_t* input_autopress_a2_wide_name() noexcept { return L"GALAXY_INPUT_AUTOPRESS_A2"; }
-#endif
-#if defined(NEBULA_RELEASE)
-inline constexpr const char* input_autopress_a3() noexcept { return nullptr; }
-inline constexpr const char* input_autopress_a3_name() noexcept { return ""; }
-inline constexpr const wchar_t* input_autopress_a3_wide_name() noexcept { return L""; }
-#else
-inline const char* input_autopress_a3() noexcept { return std::getenv("GALAXY_INPUT_AUTOPRESS_A3"); }
-inline constexpr const char* input_autopress_a3_name() noexcept { return "GALAXY_INPUT_AUTOPRESS_A3"; }
-inline constexpr const wchar_t* input_autopress_a3_wide_name() noexcept { return L"GALAXY_INPUT_AUTOPRESS_A3"; }
-#endif
-#if defined(NEBULA_RELEASE)
-inline constexpr const char* input_autopress_a4() noexcept { return nullptr; }
-inline constexpr const char* input_autopress_a4_name() noexcept { return ""; }
-inline constexpr const wchar_t* input_autopress_a4_wide_name() noexcept { return L""; }
-#else
-inline const char* input_autopress_a4() noexcept { return std::getenv("GALAXY_INPUT_AUTOPRESS_A4"); }
-inline constexpr const char* input_autopress_a4_name() noexcept { return "GALAXY_INPUT_AUTOPRESS_A4"; }
-inline constexpr const wchar_t* input_autopress_a4_wide_name() noexcept { return L"GALAXY_INPUT_AUTOPRESS_A4"; }
-#endif
-#if defined(NEBULA_RELEASE)
-inline constexpr const char* input_autopress_a5() noexcept { return nullptr; }
-inline constexpr const char* input_autopress_a5_name() noexcept { return ""; }
-inline constexpr const wchar_t* input_autopress_a5_wide_name() noexcept { return L""; }
-#else
-inline const char* input_autopress_a5() noexcept { return std::getenv("GALAXY_INPUT_AUTOPRESS_A5"); }
-inline constexpr const char* input_autopress_a5_name() noexcept { return "GALAXY_INPUT_AUTOPRESS_A5"; }
-inline constexpr const wchar_t* input_autopress_a5_wide_name() noexcept { return L"GALAXY_INPUT_AUTOPRESS_A5"; }
-#endif
-#if defined(NEBULA_RELEASE)
-inline constexpr const char* input_autopress_a6() noexcept { return nullptr; }
-inline constexpr const char* input_autopress_a6_name() noexcept { return ""; }
-inline constexpr const wchar_t* input_autopress_a6_wide_name() noexcept { return L""; }
-#else
-inline const char* input_autopress_a6() noexcept { return std::getenv("GALAXY_INPUT_AUTOPRESS_A6"); }
-inline constexpr const char* input_autopress_a6_name() noexcept { return "GALAXY_INPUT_AUTOPRESS_A6"; }
-inline constexpr const wchar_t* input_autopress_a6_wide_name() noexcept { return L"GALAXY_INPUT_AUTOPRESS_A6"; }
-#endif
-#if defined(NEBULA_RELEASE)
-inline constexpr const char* input_autopress_a7() noexcept { return nullptr; }
-inline constexpr const char* input_autopress_a7_name() noexcept { return ""; }
-inline constexpr const wchar_t* input_autopress_a7_wide_name() noexcept { return L""; }
-#else
-inline const char* input_autopress_a7() noexcept { return std::getenv("GALAXY_INPUT_AUTOPRESS_A7"); }
-inline constexpr const char* input_autopress_a7_name() noexcept { return "GALAXY_INPUT_AUTOPRESS_A7"; }
-inline constexpr const wchar_t* input_autopress_a7_wide_name() noexcept { return L"GALAXY_INPUT_AUTOPRESS_A7"; }
-#endif
-#if defined(NEBULA_RELEASE)
-inline constexpr const char* input_autopress_a8() noexcept { return nullptr; }
-inline constexpr const char* input_autopress_a8_name() noexcept { return ""; }
-inline constexpr const wchar_t* input_autopress_a8_wide_name() noexcept { return L""; }
-#else
-inline const char* input_autopress_a8() noexcept { return std::getenv("GALAXY_INPUT_AUTOPRESS_A8"); }
-inline constexpr const char* input_autopress_a8_name() noexcept { return "GALAXY_INPUT_AUTOPRESS_A8"; }
-inline constexpr const wchar_t* input_autopress_a8_wide_name() noexcept { return L"GALAXY_INPUT_AUTOPRESS_A8"; }
-#endif
-#if defined(NEBULA_RELEASE)
-inline constexpr const char* input_autopress_ab() noexcept { return nullptr; }
-inline constexpr const char* input_autopress_ab_name() noexcept { return ""; }
-inline constexpr const wchar_t* input_autopress_ab_wide_name() noexcept { return L""; }
-#else
-inline const char* input_autopress_ab() noexcept { return std::getenv("GALAXY_INPUT_AUTOPRESS_AB"); }
-inline constexpr const char* input_autopress_ab_name() noexcept { return "GALAXY_INPUT_AUTOPRESS_AB"; }
-inline constexpr const wchar_t* input_autopress_ab_wide_name() noexcept { return L"GALAXY_INPUT_AUTOPRESS_AB"; }
-#endif
-#if defined(NEBULA_RELEASE)
-inline constexpr const char* input_autopress_a_duration() noexcept { return nullptr; }
-inline constexpr const char* input_autopress_a_duration_name() noexcept { return ""; }
-inline constexpr const wchar_t* input_autopress_a_duration_wide_name() noexcept { return L""; }
-#else
-inline const char* input_autopress_a_duration() noexcept { return std::getenv("GALAXY_INPUT_AUTOPRESS_A_DURATION"); }
-inline constexpr const char* input_autopress_a_duration_name() noexcept { return "GALAXY_INPUT_AUTOPRESS_A_DURATION"; }
-inline constexpr const wchar_t* input_autopress_a_duration_wide_name() noexcept { return L"GALAXY_INPUT_AUTOPRESS_A_DURATION"; }
-#endif
-#if defined(NEBULA_RELEASE)
 inline constexpr const char* input_autopress_script() noexcept { return nullptr; }
 inline constexpr const char* input_autopress_script_name() noexcept { return ""; }
 inline constexpr const wchar_t* input_autopress_script_wide_name() noexcept { return L""; }
@@ -172,24 +82,6 @@ inline constexpr const wchar_t* input_autopress_script_wide_name() noexcept { re
 inline const char* input_autopress_script() noexcept { return std::getenv("GALAXY_INPUT_AUTOPRESS_SCRIPT"); }
 inline constexpr const char* input_autopress_script_name() noexcept { return "GALAXY_INPUT_AUTOPRESS_SCRIPT"; }
 inline constexpr const wchar_t* input_autopress_script_wide_name() noexcept { return L"GALAXY_INPUT_AUTOPRESS_SCRIPT"; }
-#endif
-#if defined(NEBULA_RELEASE)
-inline constexpr const char* input_autopress_script_stop_at_mario_control() noexcept { return nullptr; }
-inline constexpr const char* input_autopress_script_stop_at_mario_control_name() noexcept { return ""; }
-inline constexpr const wchar_t* input_autopress_script_stop_at_mario_control_wide_name() noexcept { return L""; }
-#else
-inline const char* input_autopress_script_stop_at_mario_control() noexcept { return std::getenv("GALAXY_INPUT_AUTOPRESS_SCRIPT_STOP_AT_MARIO_CONTROL"); }
-inline constexpr const char* input_autopress_script_stop_at_mario_control_name() noexcept { return "GALAXY_INPUT_AUTOPRESS_SCRIPT_STOP_AT_MARIO_CONTROL"; }
-inline constexpr const wchar_t* input_autopress_script_stop_at_mario_control_wide_name() noexcept { return L"GALAXY_INPUT_AUTOPRESS_SCRIPT_STOP_AT_MARIO_CONTROL"; }
-#endif
-#if defined(NEBULA_RELEASE)
-inline constexpr const char* input_autopress_script_stop_fallback_vi() noexcept { return nullptr; }
-inline constexpr const char* input_autopress_script_stop_fallback_vi_name() noexcept { return ""; }
-inline constexpr const wchar_t* input_autopress_script_stop_fallback_vi_wide_name() noexcept { return L""; }
-#else
-inline const char* input_autopress_script_stop_fallback_vi() noexcept { return std::getenv("GALAXY_INPUT_AUTOPRESS_SCRIPT_STOP_FALLBACK_VI"); }
-inline constexpr const char* input_autopress_script_stop_fallback_vi_name() noexcept { return "GALAXY_INPUT_AUTOPRESS_SCRIPT_STOP_FALLBACK_VI"; }
-inline constexpr const wchar_t* input_autopress_script_stop_fallback_vi_wide_name() noexcept { return L"GALAXY_INPUT_AUTOPRESS_SCRIPT_STOP_FALLBACK_VI"; }
 #endif
 #if defined(NEBULA_RELEASE)
 inline constexpr const char* input_mode() noexcept { return nullptr; }
@@ -210,13 +102,13 @@ inline constexpr const char* input_pointer2_duration_name() noexcept { return "G
 inline constexpr const wchar_t* input_pointer2_duration_wide_name() noexcept { return L"GALAXY_INPUT_POINTER2_DURATION"; }
 #endif
 #if defined(NEBULA_RELEASE)
-inline constexpr const char* input_pointer2_vi() noexcept { return nullptr; }
-inline constexpr const char* input_pointer2_vi_name() noexcept { return ""; }
-inline constexpr const wchar_t* input_pointer2_vi_wide_name() noexcept { return L""; }
+inline constexpr const char* input_pointer2_frame() noexcept { return nullptr; }
+inline constexpr const char* input_pointer2_frame_name() noexcept { return ""; }
+inline constexpr const wchar_t* input_pointer2_frame_wide_name() noexcept { return L""; }
 #else
-inline const char* input_pointer2_vi() noexcept { return std::getenv("GALAXY_INPUT_POINTER2_VI"); }
-inline constexpr const char* input_pointer2_vi_name() noexcept { return "GALAXY_INPUT_POINTER2_VI"; }
-inline constexpr const wchar_t* input_pointer2_vi_wide_name() noexcept { return L"GALAXY_INPUT_POINTER2_VI"; }
+inline const char* input_pointer2_frame() noexcept { return std::getenv("GALAXY_INPUT_POINTER2_FRAME"); }
+inline constexpr const char* input_pointer2_frame_name() noexcept { return "GALAXY_INPUT_POINTER2_FRAME"; }
+inline constexpr const wchar_t* input_pointer2_frame_wide_name() noexcept { return L"GALAXY_INPUT_POINTER2_FRAME"; }
 #endif
 #if defined(NEBULA_RELEASE)
 inline constexpr const char* input_pointer2_x() noexcept { return nullptr; }
@@ -237,150 +129,6 @@ inline constexpr const char* input_pointer2_y_name() noexcept { return "GALAXY_I
 inline constexpr const wchar_t* input_pointer2_y_wide_name() noexcept { return L"GALAXY_INPUT_POINTER2_Y"; }
 #endif
 #if defined(NEBULA_RELEASE)
-inline constexpr const char* input_pointer3_duration() noexcept { return nullptr; }
-inline constexpr const char* input_pointer3_duration_name() noexcept { return ""; }
-inline constexpr const wchar_t* input_pointer3_duration_wide_name() noexcept { return L""; }
-#else
-inline const char* input_pointer3_duration() noexcept { return std::getenv("GALAXY_INPUT_POINTER3_DURATION"); }
-inline constexpr const char* input_pointer3_duration_name() noexcept { return "GALAXY_INPUT_POINTER3_DURATION"; }
-inline constexpr const wchar_t* input_pointer3_duration_wide_name() noexcept { return L"GALAXY_INPUT_POINTER3_DURATION"; }
-#endif
-#if defined(NEBULA_RELEASE)
-inline constexpr const char* input_pointer3_vi() noexcept { return nullptr; }
-inline constexpr const char* input_pointer3_vi_name() noexcept { return ""; }
-inline constexpr const wchar_t* input_pointer3_vi_wide_name() noexcept { return L""; }
-#else
-inline const char* input_pointer3_vi() noexcept { return std::getenv("GALAXY_INPUT_POINTER3_VI"); }
-inline constexpr const char* input_pointer3_vi_name() noexcept { return "GALAXY_INPUT_POINTER3_VI"; }
-inline constexpr const wchar_t* input_pointer3_vi_wide_name() noexcept { return L"GALAXY_INPUT_POINTER3_VI"; }
-#endif
-#if defined(NEBULA_RELEASE)
-inline constexpr const char* input_pointer3_x() noexcept { return nullptr; }
-inline constexpr const char* input_pointer3_x_name() noexcept { return ""; }
-inline constexpr const wchar_t* input_pointer3_x_wide_name() noexcept { return L""; }
-#else
-inline const char* input_pointer3_x() noexcept { return std::getenv("GALAXY_INPUT_POINTER3_X"); }
-inline constexpr const char* input_pointer3_x_name() noexcept { return "GALAXY_INPUT_POINTER3_X"; }
-inline constexpr const wchar_t* input_pointer3_x_wide_name() noexcept { return L"GALAXY_INPUT_POINTER3_X"; }
-#endif
-#if defined(NEBULA_RELEASE)
-inline constexpr const char* input_pointer3_y() noexcept { return nullptr; }
-inline constexpr const char* input_pointer3_y_name() noexcept { return ""; }
-inline constexpr const wchar_t* input_pointer3_y_wide_name() noexcept { return L""; }
-#else
-inline const char* input_pointer3_y() noexcept { return std::getenv("GALAXY_INPUT_POINTER3_Y"); }
-inline constexpr const char* input_pointer3_y_name() noexcept { return "GALAXY_INPUT_POINTER3_Y"; }
-inline constexpr const wchar_t* input_pointer3_y_wide_name() noexcept { return L"GALAXY_INPUT_POINTER3_Y"; }
-#endif
-#if defined(NEBULA_RELEASE)
-inline constexpr const char* input_pointer4_duration() noexcept { return nullptr; }
-inline constexpr const char* input_pointer4_duration_name() noexcept { return ""; }
-inline constexpr const wchar_t* input_pointer4_duration_wide_name() noexcept { return L""; }
-#else
-inline const char* input_pointer4_duration() noexcept { return std::getenv("GALAXY_INPUT_POINTER4_DURATION"); }
-inline constexpr const char* input_pointer4_duration_name() noexcept { return "GALAXY_INPUT_POINTER4_DURATION"; }
-inline constexpr const wchar_t* input_pointer4_duration_wide_name() noexcept { return L"GALAXY_INPUT_POINTER4_DURATION"; }
-#endif
-#if defined(NEBULA_RELEASE)
-inline constexpr const char* input_pointer4_vi() noexcept { return nullptr; }
-inline constexpr const char* input_pointer4_vi_name() noexcept { return ""; }
-inline constexpr const wchar_t* input_pointer4_vi_wide_name() noexcept { return L""; }
-#else
-inline const char* input_pointer4_vi() noexcept { return std::getenv("GALAXY_INPUT_POINTER4_VI"); }
-inline constexpr const char* input_pointer4_vi_name() noexcept { return "GALAXY_INPUT_POINTER4_VI"; }
-inline constexpr const wchar_t* input_pointer4_vi_wide_name() noexcept { return L"GALAXY_INPUT_POINTER4_VI"; }
-#endif
-#if defined(NEBULA_RELEASE)
-inline constexpr const char* input_pointer4_x() noexcept { return nullptr; }
-inline constexpr const char* input_pointer4_x_name() noexcept { return ""; }
-inline constexpr const wchar_t* input_pointer4_x_wide_name() noexcept { return L""; }
-#else
-inline const char* input_pointer4_x() noexcept { return std::getenv("GALAXY_INPUT_POINTER4_X"); }
-inline constexpr const char* input_pointer4_x_name() noexcept { return "GALAXY_INPUT_POINTER4_X"; }
-inline constexpr const wchar_t* input_pointer4_x_wide_name() noexcept { return L"GALAXY_INPUT_POINTER4_X"; }
-#endif
-#if defined(NEBULA_RELEASE)
-inline constexpr const char* input_pointer4_y() noexcept { return nullptr; }
-inline constexpr const char* input_pointer4_y_name() noexcept { return ""; }
-inline constexpr const wchar_t* input_pointer4_y_wide_name() noexcept { return L""; }
-#else
-inline const char* input_pointer4_y() noexcept { return std::getenv("GALAXY_INPUT_POINTER4_Y"); }
-inline constexpr const char* input_pointer4_y_name() noexcept { return "GALAXY_INPUT_POINTER4_Y"; }
-inline constexpr const wchar_t* input_pointer4_y_wide_name() noexcept { return L"GALAXY_INPUT_POINTER4_Y"; }
-#endif
-#if defined(NEBULA_RELEASE)
-inline constexpr const char* input_pointer5_duration() noexcept { return nullptr; }
-inline constexpr const char* input_pointer5_duration_name() noexcept { return ""; }
-inline constexpr const wchar_t* input_pointer5_duration_wide_name() noexcept { return L""; }
-#else
-inline const char* input_pointer5_duration() noexcept { return std::getenv("GALAXY_INPUT_POINTER5_DURATION"); }
-inline constexpr const char* input_pointer5_duration_name() noexcept { return "GALAXY_INPUT_POINTER5_DURATION"; }
-inline constexpr const wchar_t* input_pointer5_duration_wide_name() noexcept { return L"GALAXY_INPUT_POINTER5_DURATION"; }
-#endif
-#if defined(NEBULA_RELEASE)
-inline constexpr const char* input_pointer5_vi() noexcept { return nullptr; }
-inline constexpr const char* input_pointer5_vi_name() noexcept { return ""; }
-inline constexpr const wchar_t* input_pointer5_vi_wide_name() noexcept { return L""; }
-#else
-inline const char* input_pointer5_vi() noexcept { return std::getenv("GALAXY_INPUT_POINTER5_VI"); }
-inline constexpr const char* input_pointer5_vi_name() noexcept { return "GALAXY_INPUT_POINTER5_VI"; }
-inline constexpr const wchar_t* input_pointer5_vi_wide_name() noexcept { return L"GALAXY_INPUT_POINTER5_VI"; }
-#endif
-#if defined(NEBULA_RELEASE)
-inline constexpr const char* input_pointer5_x() noexcept { return nullptr; }
-inline constexpr const char* input_pointer5_x_name() noexcept { return ""; }
-inline constexpr const wchar_t* input_pointer5_x_wide_name() noexcept { return L""; }
-#else
-inline const char* input_pointer5_x() noexcept { return std::getenv("GALAXY_INPUT_POINTER5_X"); }
-inline constexpr const char* input_pointer5_x_name() noexcept { return "GALAXY_INPUT_POINTER5_X"; }
-inline constexpr const wchar_t* input_pointer5_x_wide_name() noexcept { return L"GALAXY_INPUT_POINTER5_X"; }
-#endif
-#if defined(NEBULA_RELEASE)
-inline constexpr const char* input_pointer5_y() noexcept { return nullptr; }
-inline constexpr const char* input_pointer5_y_name() noexcept { return ""; }
-inline constexpr const wchar_t* input_pointer5_y_wide_name() noexcept { return L""; }
-#else
-inline const char* input_pointer5_y() noexcept { return std::getenv("GALAXY_INPUT_POINTER5_Y"); }
-inline constexpr const char* input_pointer5_y_name() noexcept { return "GALAXY_INPUT_POINTER5_Y"; }
-inline constexpr const wchar_t* input_pointer5_y_wide_name() noexcept { return L"GALAXY_INPUT_POINTER5_Y"; }
-#endif
-#if defined(NEBULA_RELEASE)
-inline constexpr const char* input_pointer6_duration() noexcept { return nullptr; }
-inline constexpr const char* input_pointer6_duration_name() noexcept { return ""; }
-inline constexpr const wchar_t* input_pointer6_duration_wide_name() noexcept { return L""; }
-#else
-inline const char* input_pointer6_duration() noexcept { return std::getenv("GALAXY_INPUT_POINTER6_DURATION"); }
-inline constexpr const char* input_pointer6_duration_name() noexcept { return "GALAXY_INPUT_POINTER6_DURATION"; }
-inline constexpr const wchar_t* input_pointer6_duration_wide_name() noexcept { return L"GALAXY_INPUT_POINTER6_DURATION"; }
-#endif
-#if defined(NEBULA_RELEASE)
-inline constexpr const char* input_pointer6_vi() noexcept { return nullptr; }
-inline constexpr const char* input_pointer6_vi_name() noexcept { return ""; }
-inline constexpr const wchar_t* input_pointer6_vi_wide_name() noexcept { return L""; }
-#else
-inline const char* input_pointer6_vi() noexcept { return std::getenv("GALAXY_INPUT_POINTER6_VI"); }
-inline constexpr const char* input_pointer6_vi_name() noexcept { return "GALAXY_INPUT_POINTER6_VI"; }
-inline constexpr const wchar_t* input_pointer6_vi_wide_name() noexcept { return L"GALAXY_INPUT_POINTER6_VI"; }
-#endif
-#if defined(NEBULA_RELEASE)
-inline constexpr const char* input_pointer6_x() noexcept { return nullptr; }
-inline constexpr const char* input_pointer6_x_name() noexcept { return ""; }
-inline constexpr const wchar_t* input_pointer6_x_wide_name() noexcept { return L""; }
-#else
-inline const char* input_pointer6_x() noexcept { return std::getenv("GALAXY_INPUT_POINTER6_X"); }
-inline constexpr const char* input_pointer6_x_name() noexcept { return "GALAXY_INPUT_POINTER6_X"; }
-inline constexpr const wchar_t* input_pointer6_x_wide_name() noexcept { return L"GALAXY_INPUT_POINTER6_X"; }
-#endif
-#if defined(NEBULA_RELEASE)
-inline constexpr const char* input_pointer6_y() noexcept { return nullptr; }
-inline constexpr const char* input_pointer6_y_name() noexcept { return ""; }
-inline constexpr const wchar_t* input_pointer6_y_wide_name() noexcept { return L""; }
-#else
-inline const char* input_pointer6_y() noexcept { return std::getenv("GALAXY_INPUT_POINTER6_Y"); }
-inline constexpr const char* input_pointer6_y_name() noexcept { return "GALAXY_INPUT_POINTER6_Y"; }
-inline constexpr const wchar_t* input_pointer6_y_wide_name() noexcept { return L"GALAXY_INPUT_POINTER6_Y"; }
-#endif
-#if defined(NEBULA_RELEASE)
 inline constexpr const char* input_pointer_path() noexcept { return nullptr; }
 inline constexpr const char* input_pointer_path_name() noexcept { return ""; }
 inline constexpr const wchar_t* input_pointer_path_wide_name() noexcept { return L""; }
@@ -388,24 +136,6 @@ inline constexpr const wchar_t* input_pointer_path_wide_name() noexcept { return
 inline const char* input_pointer_path() noexcept { return std::getenv("GALAXY_INPUT_POINTER_PATH"); }
 inline constexpr const char* input_pointer_path_name() noexcept { return "GALAXY_INPUT_POINTER_PATH"; }
 inline constexpr const wchar_t* input_pointer_path_wide_name() noexcept { return L"GALAXY_INPUT_POINTER_PATH"; }
-#endif
-#if defined(NEBULA_RELEASE)
-inline constexpr const char* input_pointer_sweep_duration() noexcept { return nullptr; }
-inline constexpr const char* input_pointer_sweep_duration_name() noexcept { return ""; }
-inline constexpr const wchar_t* input_pointer_sweep_duration_wide_name() noexcept { return L""; }
-#else
-inline const char* input_pointer_sweep_duration() noexcept { return std::getenv("GALAXY_INPUT_POINTER_SWEEP_DURATION"); }
-inline constexpr const char* input_pointer_sweep_duration_name() noexcept { return "GALAXY_INPUT_POINTER_SWEEP_DURATION"; }
-inline constexpr const wchar_t* input_pointer_sweep_duration_wide_name() noexcept { return L"GALAXY_INPUT_POINTER_SWEEP_DURATION"; }
-#endif
-#if defined(NEBULA_RELEASE)
-inline constexpr const char* input_pointer_sweep_vi() noexcept { return nullptr; }
-inline constexpr const char* input_pointer_sweep_vi_name() noexcept { return ""; }
-inline constexpr const wchar_t* input_pointer_sweep_vi_wide_name() noexcept { return L""; }
-#else
-inline const char* input_pointer_sweep_vi() noexcept { return std::getenv("GALAXY_INPUT_POINTER_SWEEP_VI"); }
-inline constexpr const char* input_pointer_sweep_vi_name() noexcept { return "GALAXY_INPUT_POINTER_SWEEP_VI"; }
-inline constexpr const wchar_t* input_pointer_sweep_vi_wide_name() noexcept { return L"GALAXY_INPUT_POINTER_SWEEP_VI"; }
 #endif
 #if defined(NEBULA_RELEASE)
 inline constexpr const char* input_pointer_x() noexcept { return nullptr; }
@@ -426,15 +156,6 @@ inline constexpr const char* input_pointer_y_name() noexcept { return "GALAXY_IN
 inline constexpr const wchar_t* input_pointer_y_wide_name() noexcept { return L"GALAXY_INPUT_POINTER_Y"; }
 #endif
 #if defined(NEBULA_RELEASE)
-inline constexpr const char* input_read_sample() noexcept { return nullptr; }
-inline constexpr const char* input_read_sample_name() noexcept { return ""; }
-inline constexpr const wchar_t* input_read_sample_wide_name() noexcept { return L""; }
-#else
-inline const char* input_read_sample() noexcept { return std::getenv("GALAXY_INPUT_READ_SAMPLE"); }
-inline constexpr const char* input_read_sample_name() noexcept { return "GALAXY_INPUT_READ_SAMPLE"; }
-inline constexpr const wchar_t* input_read_sample_wide_name() noexcept { return L"GALAXY_INPUT_READ_SAMPLE"; }
-#endif
-#if defined(NEBULA_RELEASE)
 inline constexpr const char* input_replay_log() noexcept { return nullptr; }
 inline constexpr const char* input_replay_log_name() noexcept { return ""; }
 inline constexpr const wchar_t* input_replay_log_wide_name() noexcept { return L""; }
@@ -442,24 +163,6 @@ inline constexpr const wchar_t* input_replay_log_wide_name() noexcept { return L
 inline const char* input_replay_log() noexcept { return std::getenv("GALAXY_INPUT_REPLAY_LOG"); }
 inline constexpr const char* input_replay_log_name() noexcept { return "GALAXY_INPUT_REPLAY_LOG"; }
 inline constexpr const wchar_t* input_replay_log_wide_name() noexcept { return L"GALAXY_INPUT_REPLAY_LOG"; }
-#endif
-#if defined(NEBULA_RELEASE)
-inline constexpr const char* input_script_pointer_force() noexcept { return nullptr; }
-inline constexpr const char* input_script_pointer_force_name() noexcept { return ""; }
-inline constexpr const wchar_t* input_script_pointer_force_wide_name() noexcept { return L""; }
-#else
-inline const char* input_script_pointer_force() noexcept { return std::getenv("GALAXY_INPUT_SCRIPT_POINTER_FORCE"); }
-inline constexpr const char* input_script_pointer_force_name() noexcept { return "GALAXY_INPUT_SCRIPT_POINTER_FORCE"; }
-inline constexpr const wchar_t* input_script_pointer_force_wide_name() noexcept { return L"GALAXY_INPUT_SCRIPT_POINTER_FORCE"; }
-#endif
-#if defined(NEBULA_RELEASE)
-inline constexpr const char* input_script_pointer_live_mouse_ms() noexcept { return nullptr; }
-inline constexpr const char* input_script_pointer_live_mouse_ms_name() noexcept { return ""; }
-inline constexpr const wchar_t* input_script_pointer_live_mouse_ms_wide_name() noexcept { return L""; }
-#else
-inline const char* input_script_pointer_live_mouse_ms() noexcept { return std::getenv("GALAXY_INPUT_SCRIPT_POINTER_LIVE_MOUSE_MS"); }
-inline constexpr const char* input_script_pointer_live_mouse_ms_name() noexcept { return "GALAXY_INPUT_SCRIPT_POINTER_LIVE_MOUSE_MS"; }
-inline constexpr const wchar_t* input_script_pointer_live_mouse_ms_wide_name() noexcept { return L"GALAXY_INPUT_SCRIPT_POINTER_LIVE_MOUSE_MS"; }
 #endif
 #if defined(NEBULA_RELEASE)
 inline constexpr const char* input_shake_script() noexcept { return nullptr; }
@@ -471,15 +174,6 @@ inline constexpr const char* input_shake_script_name() noexcept { return "GALAXY
 inline constexpr const wchar_t* input_shake_script_wide_name() noexcept { return L"GALAXY_INPUT_SHAKE_SCRIPT"; }
 #endif
 #if defined(NEBULA_RELEASE)
-inline constexpr const char* input_stick_command_file() noexcept { return nullptr; }
-inline constexpr const char* input_stick_command_file_name() noexcept { return ""; }
-inline constexpr const wchar_t* input_stick_command_file_wide_name() noexcept { return L""; }
-#else
-inline const char* input_stick_command_file() noexcept { return std::getenv("GALAXY_INPUT_STICK_COMMAND_FILE"); }
-inline constexpr const char* input_stick_command_file_name() noexcept { return "GALAXY_INPUT_STICK_COMMAND_FILE"; }
-inline constexpr const wchar_t* input_stick_command_file_wide_name() noexcept { return L"GALAXY_INPUT_STICK_COMMAND_FILE"; }
-#endif
-#if defined(NEBULA_RELEASE)
 inline constexpr const char* input_stick_script() noexcept { return nullptr; }
 inline constexpr const char* input_stick_script_name() noexcept { return ""; }
 inline constexpr const wchar_t* input_stick_script_wide_name() noexcept { return L""; }
@@ -487,24 +181,6 @@ inline constexpr const wchar_t* input_stick_script_wide_name() noexcept { return
 inline const char* input_stick_script() noexcept { return std::getenv("GALAXY_INPUT_STICK_SCRIPT"); }
 inline constexpr const char* input_stick_script_name() noexcept { return "GALAXY_INPUT_STICK_SCRIPT"; }
 inline constexpr const wchar_t* input_stick_script_wide_name() noexcept { return L"GALAXY_INPUT_STICK_SCRIPT"; }
-#endif
-#if defined(NEBULA_RELEASE)
-inline constexpr const char* input_stick_script_relative_fallback_vi() noexcept { return nullptr; }
-inline constexpr const char* input_stick_script_relative_fallback_vi_name() noexcept { return ""; }
-inline constexpr const wchar_t* input_stick_script_relative_fallback_vi_wide_name() noexcept { return L""; }
-#else
-inline const char* input_stick_script_relative_fallback_vi() noexcept { return std::getenv("GALAXY_INPUT_STICK_SCRIPT_RELATIVE_FALLBACK_VI"); }
-inline constexpr const char* input_stick_script_relative_fallback_vi_name() noexcept { return "GALAXY_INPUT_STICK_SCRIPT_RELATIVE_FALLBACK_VI"; }
-inline constexpr const wchar_t* input_stick_script_relative_fallback_vi_wide_name() noexcept { return L"GALAXY_INPUT_STICK_SCRIPT_RELATIVE_FALLBACK_VI"; }
-#endif
-#if defined(NEBULA_RELEASE)
-inline constexpr const char* input_stick_script_relative_mario_control() noexcept { return nullptr; }
-inline constexpr const char* input_stick_script_relative_mario_control_name() noexcept { return ""; }
-inline constexpr const wchar_t* input_stick_script_relative_mario_control_wide_name() noexcept { return L""; }
-#else
-inline const char* input_stick_script_relative_mario_control() noexcept { return std::getenv("GALAXY_INPUT_STICK_SCRIPT_RELATIVE_MARIO_CONTROL"); }
-inline constexpr const char* input_stick_script_relative_mario_control_name() noexcept { return "GALAXY_INPUT_STICK_SCRIPT_RELATIVE_MARIO_CONTROL"; }
-inline constexpr const wchar_t* input_stick_script_relative_mario_control_wide_name() noexcept { return L"GALAXY_INPUT_STICK_SCRIPT_RELATIVE_MARIO_CONTROL"; }
 #endif
 #if defined(NEBULA_RELEASE)
 inline constexpr const char* interp_snapshot_dir() noexcept { return nullptr; }
@@ -606,15 +282,6 @@ inline constexpr const char* test_arena_fill_name() noexcept { return "GALAXY_TE
 inline constexpr const wchar_t* test_arena_fill_wide_name() noexcept { return L"GALAXY_TEST_ARENA_FILL"; }
 #endif
 #if defined(NEBULA_RELEASE)
-inline constexpr const char* test_capture_no_wait() noexcept { return nullptr; }
-inline constexpr const char* test_capture_no_wait_name() noexcept { return ""; }
-inline constexpr const wchar_t* test_capture_no_wait_wide_name() noexcept { return L""; }
-#else
-inline const char* test_capture_no_wait() noexcept { return std::getenv("GALAXY_TEST_CAPTURE_NO_WAIT"); }
-inline constexpr const char* test_capture_no_wait_name() noexcept { return "GALAXY_TEST_CAPTURE_NO_WAIT"; }
-inline constexpr const wchar_t* test_capture_no_wait_wide_name() noexcept { return L"GALAXY_TEST_CAPTURE_NO_WAIT"; }
-#endif
-#if defined(NEBULA_RELEASE)
 inline constexpr const char* test_cpu_affinity() noexcept { return nullptr; }
 inline constexpr const char* test_cpu_affinity_name() noexcept { return ""; }
 inline constexpr const wchar_t* test_cpu_affinity_wide_name() noexcept { return L""; }
@@ -640,15 +307,6 @@ inline constexpr const wchar_t* test_disc_delay_us_wide_name() noexcept { return
 inline const char* test_disc_delay_us() noexcept { return std::getenv("GALAXY_TEST_DISC_DELAY_US"); }
 inline constexpr const char* test_disc_delay_us_name() noexcept { return "GALAXY_TEST_DISC_DELAY_US"; }
 inline constexpr const wchar_t* test_disc_delay_us_wide_name() noexcept { return L"GALAXY_TEST_DISC_DELAY_US"; }
-#endif
-#if defined(NEBULA_RELEASE)
-inline constexpr const char* test_dump_layouts() noexcept { return nullptr; }
-inline constexpr const char* test_dump_layouts_name() noexcept { return ""; }
-inline constexpr const wchar_t* test_dump_layouts_wide_name() noexcept { return L""; }
-#else
-inline const char* test_dump_layouts() noexcept { return std::getenv("GALAXY_TEST_DUMP_LAYOUTS"); }
-inline constexpr const char* test_dump_layouts_name() noexcept { return "GALAXY_TEST_DUMP_LAYOUTS"; }
-inline constexpr const wchar_t* test_dump_layouts_wide_name() noexcept { return L"GALAXY_TEST_DUMP_LAYOUTS"; }
 #endif
 #if defined(NEBULA_RELEASE)
 inline constexpr const char* test_events() noexcept { return nullptr; }
@@ -768,15 +426,6 @@ inline constexpr const char* test_memory_at_name() noexcept { return "GALAXY_TES
 inline constexpr const wchar_t* test_memory_at_wide_name() noexcept { return L"GALAXY_TEST_MEMORY_AT"; }
 #endif
 #if defined(NEBULA_RELEASE)
-inline constexpr const char* test_native_j3d() noexcept { return nullptr; }
-inline constexpr const char* test_native_j3d_name() noexcept { return ""; }
-inline constexpr const wchar_t* test_native_j3d_wide_name() noexcept { return L""; }
-#else
-inline const char* test_native_j3d() noexcept { return std::getenv("GALAXY_TEST_NATIVE_J3D"); }
-inline constexpr const char* test_native_j3d_name() noexcept { return "GALAXY_TEST_NATIVE_J3D"; }
-inline constexpr const wchar_t* test_native_j3d_wide_name() noexcept { return L"GALAXY_TEST_NATIVE_J3D"; }
-#endif
-#if defined(NEBULA_RELEASE)
 inline constexpr const char* test_one_game() noexcept { return nullptr; }
 inline constexpr const char* test_one_game_name() noexcept { return ""; }
 inline constexpr const wchar_t* test_one_game_wide_name() noexcept { return L""; }
@@ -894,24 +543,6 @@ inline constexpr const char* trace_file_reads_name() noexcept { return "GALAXY_T
 inline constexpr const wchar_t* trace_file_reads_wide_name() noexcept { return L"GALAXY_TRACE_FILE_READS"; }
 #endif
 #if defined(NEBULA_RELEASE)
-inline constexpr const char* trace_gx_stalls() noexcept { return nullptr; }
-inline constexpr const char* trace_gx_stalls_name() noexcept { return ""; }
-inline constexpr const wchar_t* trace_gx_stalls_wide_name() noexcept { return L""; }
-#else
-inline const char* trace_gx_stalls() noexcept { return std::getenv("GALAXY_TRACE_GX_STALLS"); }
-inline constexpr const char* trace_gx_stalls_name() noexcept { return "GALAXY_TRACE_GX_STALLS"; }
-inline constexpr const wchar_t* trace_gx_stalls_wide_name() noexcept { return L"GALAXY_TRACE_GX_STALLS"; }
-#endif
-#if defined(NEBULA_RELEASE)
-inline constexpr const char* trace_lights() noexcept { return nullptr; }
-inline constexpr const char* trace_lights_name() noexcept { return ""; }
-inline constexpr const wchar_t* trace_lights_wide_name() noexcept { return L""; }
-#else
-inline const char* trace_lights() noexcept { return std::getenv("GALAXY_TRACE_LIGHTS"); }
-inline constexpr const char* trace_lights_name() noexcept { return "GALAXY_TRACE_LIGHTS"; }
-inline constexpr const wchar_t* trace_lights_wide_name() noexcept { return L"GALAXY_TRACE_LIGHTS"; }
-#endif
-#if defined(NEBULA_RELEASE)
 inline constexpr const char* trace_loads() noexcept { return nullptr; }
 inline constexpr const char* trace_loads_name() noexcept { return ""; }
 inline constexpr const wchar_t* trace_loads_wide_name() noexcept { return L""; }
@@ -939,15 +570,6 @@ inline constexpr const char* trace_present_stats_name() noexcept { return "GALAX
 inline constexpr const wchar_t* trace_present_stats_wide_name() noexcept { return L"GALAXY_TRACE_PRESENT_STATS"; }
 #endif
 #if defined(NEBULA_RELEASE)
-inline constexpr const char* trace_render_stall_us() noexcept { return nullptr; }
-inline constexpr const char* trace_render_stall_us_name() noexcept { return ""; }
-inline constexpr const wchar_t* trace_render_stall_us_wide_name() noexcept { return L""; }
-#else
-inline const char* trace_render_stall_us() noexcept { return std::getenv("GALAXY_TRACE_RENDER_STALL_US"); }
-inline constexpr const char* trace_render_stall_us_name() noexcept { return "GALAXY_TRACE_RENDER_STALL_US"; }
-inline constexpr const wchar_t* trace_render_stall_us_wide_name() noexcept { return L"GALAXY_TRACE_RENDER_STALL_US"; }
-#endif
-#if defined(NEBULA_RELEASE)
 inline constexpr const char* trace_thread_cpu() noexcept { return nullptr; }
 inline constexpr const char* trace_thread_cpu_name() noexcept { return ""; }
 inline constexpr const wchar_t* trace_thread_cpu_wide_name() noexcept { return L""; }
@@ -957,13 +579,13 @@ inline constexpr const char* trace_thread_cpu_name() noexcept { return "GALAXY_T
 inline constexpr const wchar_t* trace_thread_cpu_wide_name() noexcept { return L"GALAXY_TRACE_THREAD_CPU"; }
 #endif
 #if defined(NEBULA_RELEASE)
-inline constexpr const char* trace_vi_times() noexcept { return nullptr; }
-inline constexpr const char* trace_vi_times_name() noexcept { return ""; }
-inline constexpr const wchar_t* trace_vi_times_wide_name() noexcept { return L""; }
+inline constexpr const char* trace_frame_times() noexcept { return nullptr; }
+inline constexpr const char* trace_frame_times_name() noexcept { return ""; }
+inline constexpr const wchar_t* trace_frame_times_wide_name() noexcept { return L""; }
 #else
-inline const char* trace_vi_times() noexcept { return std::getenv("GALAXY_TRACE_VI_TIMES"); }
-inline constexpr const char* trace_vi_times_name() noexcept { return "GALAXY_TRACE_VI_TIMES"; }
-inline constexpr const wchar_t* trace_vi_times_wide_name() noexcept { return L"GALAXY_TRACE_VI_TIMES"; }
+inline const char* trace_frame_times() noexcept { return std::getenv("GALAXY_TRACE_FRAME_TIMES"); }
+inline constexpr const char* trace_frame_times_name() noexcept { return "GALAXY_TRACE_FRAME_TIMES"; }
+inline constexpr const wchar_t* trace_frame_times_wide_name() noexcept { return L"GALAXY_TRACE_FRAME_TIMES"; }
 #endif
 #if defined(NEBULA_RELEASE)
 inline constexpr const char* vk_simulate_driver() noexcept { return nullptr; }
@@ -987,6 +609,186 @@ inline constexpr const wchar_t* vk_test_refuse_wide_name() noexcept { return L"G
 inline constexpr const char* test_path_guard_name() noexcept { return ""; }
 #else
 inline constexpr const char* test_path_guard_name() noexcept { return "GALAXY_TEST_PATH_GUARD"; }
+#endif
+#if defined(NEBULA_RELEASE)
+inline constexpr const char* bloom_log() noexcept { return nullptr; }
+inline constexpr const char* bloom_log_name() noexcept { return ""; }
+inline constexpr const wchar_t* bloom_log_wide_name() noexcept { return L""; }
+#else
+inline const char* bloom_log() noexcept { return std::getenv("GALAXY_BLOOM_LOG"); }
+inline constexpr const char* bloom_log_name() noexcept { return "GALAXY_BLOOM_LOG"; }
+inline constexpr const wchar_t* bloom_log_wide_name() noexcept { return L"GALAXY_BLOOM_LOG"; }
+#endif
+#if defined(NEBULA_RELEASE)
+inline constexpr const char* d3d_debug() noexcept { return nullptr; }
+inline constexpr const char* d3d_debug_name() noexcept { return ""; }
+inline constexpr const wchar_t* d3d_debug_wide_name() noexcept { return L""; }
+#else
+inline const char* d3d_debug() noexcept { return std::getenv("GALAXY_D3D_DEBUG"); }
+inline constexpr const char* d3d_debug_name() noexcept { return "GALAXY_D3D_DEBUG"; }
+inline constexpr const wchar_t* d3d_debug_wide_name() noexcept { return L"GALAXY_D3D_DEBUG"; }
+#endif
+#if defined(NEBULA_RELEASE)
+inline constexpr const char* d3d_dred() noexcept { return nullptr; }
+inline constexpr const char* d3d_dred_name() noexcept { return ""; }
+inline constexpr const wchar_t* d3d_dred_wide_name() noexcept { return L""; }
+#else
+inline const char* d3d_dred() noexcept { return std::getenv("GALAXY_D3D_DRED"); }
+inline constexpr const char* d3d_dred_name() noexcept { return "GALAXY_D3D_DRED"; }
+inline constexpr const wchar_t* d3d_dred_wide_name() noexcept { return L"GALAXY_D3D_DRED"; }
+#endif
+#if defined(NEBULA_RELEASE)
+inline constexpr const char* deband() noexcept { return nullptr; }
+inline constexpr const char* deband_name() noexcept { return ""; }
+inline constexpr const wchar_t* deband_wide_name() noexcept { return L""; }
+#else
+inline const char* deband() noexcept { return std::getenv("GALAXY_DEBAND"); }
+inline constexpr const char* deband_name() noexcept { return "GALAXY_DEBAND"; }
+inline constexpr const wchar_t* deband_wide_name() noexcept { return L"GALAXY_DEBAND"; }
+#endif
+#if defined(NEBULA_RELEASE)
+inline constexpr const char* discord_client_id() noexcept { return nullptr; }
+inline constexpr const char* discord_client_id_name() noexcept { return ""; }
+inline constexpr const wchar_t* discord_client_id_wide_name() noexcept { return L""; }
+#else
+inline const char* discord_client_id() noexcept { return std::getenv("GALAXY_DISCORD_CLIENT_ID"); }
+inline constexpr const char* discord_client_id_name() noexcept { return "GALAXY_DISCORD_CLIENT_ID"; }
+inline constexpr const wchar_t* discord_client_id_wide_name() noexcept { return L"GALAXY_DISCORD_CLIENT_ID"; }
+#endif
+#if defined(NEBULA_RELEASE)
+inline constexpr const char* gpu_draws() noexcept { return nullptr; }
+inline constexpr const char* gpu_draws_name() noexcept { return ""; }
+inline constexpr const wchar_t* gpu_draws_wide_name() noexcept { return L""; }
+#else
+inline const char* gpu_draws() noexcept { return std::getenv("GALAXY_GPU_DRAWS"); }
+inline constexpr const char* gpu_draws_name() noexcept { return "GALAXY_GPU_DRAWS"; }
+inline constexpr const wchar_t* gpu_draws_wide_name() noexcept { return L"GALAXY_GPU_DRAWS"; }
+#endif
+#if defined(NEBULA_RELEASE)
+inline constexpr const char* gpu_passes() noexcept { return nullptr; }
+inline constexpr const char* gpu_passes_name() noexcept { return ""; }
+inline constexpr const wchar_t* gpu_passes_wide_name() noexcept { return L""; }
+#else
+inline const char* gpu_passes() noexcept { return std::getenv("GALAXY_GPU_PASSES"); }
+inline constexpr const char* gpu_passes_name() noexcept { return "GALAXY_GPU_PASSES"; }
+inline constexpr const wchar_t* gpu_passes_wide_name() noexcept { return L"GALAXY_GPU_PASSES"; }
+#endif
+#if defined(NEBULA_RELEASE)
+inline constexpr const char* gpu_preference() noexcept { return nullptr; }
+inline constexpr const char* gpu_preference_name() noexcept { return ""; }
+inline constexpr const wchar_t* gpu_preference_wide_name() noexcept { return L""; }
+#else
+inline const char* gpu_preference() noexcept { return std::getenv("GALAXY_GPU_PREFERENCE"); }
+inline constexpr const char* gpu_preference_name() noexcept { return "GALAXY_GPU_PREFERENCE"; }
+inline constexpr const wchar_t* gpu_preference_wide_name() noexcept { return L"GALAXY_GPU_PREFERENCE"; }
+#endif
+#if defined(NEBULA_RELEASE)
+inline constexpr const char* log_native_materials() noexcept { return nullptr; }
+inline constexpr const char* log_native_materials_name() noexcept { return ""; }
+inline constexpr const wchar_t* log_native_materials_wide_name() noexcept { return L""; }
+#else
+inline const char* log_native_materials() noexcept { return std::getenv("GALAXY_LOG_NATIVE_MATERIALS"); }
+inline constexpr const char* log_native_materials_name() noexcept { return "GALAXY_LOG_NATIVE_MATERIALS"; }
+inline constexpr const wchar_t* log_native_materials_wide_name() noexcept { return L"GALAXY_LOG_NATIVE_MATERIALS"; }
+#endif
+#if defined(NEBULA_RELEASE)
+inline constexpr const char* movie_dir() noexcept { return nullptr; }
+inline constexpr const char* movie_dir_name() noexcept { return ""; }
+inline constexpr const wchar_t* movie_dir_wide_name() noexcept { return L""; }
+#else
+inline const char* movie_dir() noexcept { return std::getenv("GALAXY_MOVIE_DIR"); }
+inline constexpr const char* movie_dir_name() noexcept { return "GALAXY_MOVIE_DIR"; }
+inline constexpr const wchar_t* movie_dir_wide_name() noexcept { return L"GALAXY_MOVIE_DIR"; }
+#endif
+#if defined(NEBULA_RELEASE)
+inline constexpr const char* no_pipeline_prepare() noexcept { return nullptr; }
+inline constexpr const char* no_pipeline_prepare_name() noexcept { return ""; }
+inline constexpr const wchar_t* no_pipeline_prepare_wide_name() noexcept { return L""; }
+#else
+inline const char* no_pipeline_prepare() noexcept { return std::getenv("GALAXY_NO_PIPELINE_PREPARE"); }
+inline constexpr const char* no_pipeline_prepare_name() noexcept { return "GALAXY_NO_PIPELINE_PREPARE"; }
+inline constexpr const wchar_t* no_pipeline_prepare_wide_name() noexcept { return L"GALAXY_NO_PIPELINE_PREPARE"; }
+#endif
+#if defined(NEBULA_RELEASE)
+inline constexpr const char* pipeline_seed_out() noexcept { return nullptr; }
+inline constexpr const char* pipeline_seed_out_name() noexcept { return ""; }
+inline constexpr const wchar_t* pipeline_seed_out_wide_name() noexcept { return L""; }
+#else
+inline const char* pipeline_seed_out() noexcept { return std::getenv("GALAXY_PIPELINE_SEED_OUT"); }
+inline constexpr const char* pipeline_seed_out_name() noexcept { return "GALAXY_PIPELINE_SEED_OUT"; }
+inline constexpr const wchar_t* pipeline_seed_out_wide_name() noexcept { return L"GALAXY_PIPELINE_SEED_OUT"; }
+#endif
+#if defined(NEBULA_RELEASE)
+inline constexpr const char* render_config_path() noexcept { return nullptr; }
+inline constexpr const char* render_config_path_name() noexcept { return ""; }
+inline constexpr const wchar_t* render_config_path_wide_name() noexcept { return L""; }
+#else
+inline const char* render_config_path() noexcept { return std::getenv("GALAXY_RENDER_CONFIG_PATH"); }
+inline constexpr const char* render_config_path_name() noexcept { return "GALAXY_RENDER_CONFIG_PATH"; }
+inline constexpr const wchar_t* render_config_path_wide_name() noexcept { return L"GALAXY_RENDER_CONFIG_PATH"; }
+#endif
+#if defined(NEBULA_RELEASE)
+inline constexpr const char* rt_log_glows() noexcept { return nullptr; }
+inline constexpr const char* rt_log_glows_name() noexcept { return ""; }
+inline constexpr const wchar_t* rt_log_glows_wide_name() noexcept { return L""; }
+#else
+inline const char* rt_log_glows() noexcept { return std::getenv("GALAXY_RT_LOG_GLOWS"); }
+inline constexpr const char* rt_log_glows_name() noexcept { return "GALAXY_RT_LOG_GLOWS"; }
+inline constexpr const wchar_t* rt_log_glows_wide_name() noexcept { return L"GALAXY_RT_LOG_GLOWS"; }
+#endif
+#if defined(NEBULA_RELEASE)
+inline constexpr const char* runtime_settings_path() noexcept { return nullptr; }
+inline constexpr const char* runtime_settings_path_name() noexcept { return ""; }
+inline constexpr const wchar_t* runtime_settings_path_wide_name() noexcept { return L""; }
+#else
+inline const char* runtime_settings_path() noexcept { return std::getenv("GALAXY_RUNTIME_SETTINGS_PATH"); }
+inline constexpr const char* runtime_settings_path_name() noexcept { return "GALAXY_RUNTIME_SETTINGS_PATH"; }
+inline constexpr const wchar_t* runtime_settings_path_wide_name() noexcept { return L"GALAXY_RUNTIME_SETTINGS_PATH"; }
+#endif
+#if defined(NEBULA_RELEASE)
+inline constexpr const char* texture_dump_dir() noexcept { return nullptr; }
+inline constexpr const char* texture_dump_dir_name() noexcept { return ""; }
+inline constexpr const wchar_t* texture_dump_dir_wide_name() noexcept { return L""; }
+#else
+inline const char* texture_dump_dir() noexcept { return std::getenv("GALAXY_TEXTURE_DUMP_DIR"); }
+inline constexpr const char* texture_dump_dir_name() noexcept { return "GALAXY_TEXTURE_DUMP_DIR"; }
+inline constexpr const wchar_t* texture_dump_dir_wide_name() noexcept { return L"GALAXY_TEXTURE_DUMP_DIR"; }
+#endif
+#if defined(NEBULA_RELEASE)
+inline constexpr const char* texture_pack_dir() noexcept { return nullptr; }
+inline constexpr const char* texture_pack_dir_name() noexcept { return ""; }
+inline constexpr const wchar_t* texture_pack_dir_wide_name() noexcept { return L""; }
+#else
+inline const char* texture_pack_dir() noexcept { return std::getenv("GALAXY_TEXTURE_PACK_DIR"); }
+inline constexpr const char* texture_pack_dir_name() noexcept { return "GALAXY_TEXTURE_PACK_DIR"; }
+inline constexpr const wchar_t* texture_pack_dir_wide_name() noexcept { return L"GALAXY_TEXTURE_PACK_DIR"; }
+#endif
+#if defined(NEBULA_RELEASE)
+inline constexpr const char* texture_pack_trace() noexcept { return nullptr; }
+inline constexpr const char* texture_pack_trace_name() noexcept { return ""; }
+inline constexpr const wchar_t* texture_pack_trace_wide_name() noexcept { return L""; }
+#else
+inline const char* texture_pack_trace() noexcept { return std::getenv("GALAXY_TEXTURE_PACK_TRACE"); }
+inline constexpr const char* texture_pack_trace_name() noexcept { return "GALAXY_TEXTURE_PACK_TRACE"; }
+inline constexpr const wchar_t* texture_pack_trace_wide_name() noexcept { return L"GALAXY_TEXTURE_PACK_TRACE"; }
+#endif
+#if defined(NEBULA_RELEASE)
+inline constexpr const char* vulkan_validation() noexcept { return nullptr; }
+inline constexpr const char* vulkan_validation_name() noexcept { return ""; }
+inline constexpr const wchar_t* vulkan_validation_wide_name() noexcept { return L""; }
+#else
+inline const char* vulkan_validation() noexcept { return std::getenv("GALAXY_VULKAN_VALIDATION"); }
+inline constexpr const char* vulkan_validation_name() noexcept { return "GALAXY_VULKAN_VALIDATION"; }
+inline constexpr const wchar_t* vulkan_validation_wide_name() noexcept { return L"GALAXY_VULKAN_VALIDATION"; }
+#endif
+#if defined(NEBULA_RELEASE)
+inline constexpr const char* xinput_require_focus() noexcept { return nullptr; }
+inline constexpr const char* xinput_require_focus_name() noexcept { return ""; }
+inline constexpr const wchar_t* xinput_require_focus_wide_name() noexcept { return L""; }
+#else
+inline const char* xinput_require_focus() noexcept { return std::getenv("GALAXY_XINPUT_REQUIRE_FOCUS"); }
+inline constexpr const char* xinput_require_focus_name() noexcept { return "GALAXY_XINPUT_REQUIRE_FOCUS"; }
+inline constexpr const wchar_t* xinput_require_focus_wide_name() noexcept { return L"GALAXY_XINPUT_REQUIRE_FOCUS"; }
 #endif
 }  // namespace nebula_switch
 

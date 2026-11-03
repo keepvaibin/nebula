@@ -2,7 +2,7 @@
 
 #include "JSystem/JGeometry/TVec.hpp"
 
-class JPAEmitterWorkData;
+struct JPAEmitterWorkData;
 
 struct JPADynamicsBlockData {
     // Common header.

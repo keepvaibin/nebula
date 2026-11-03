@@ -21,7 +21,7 @@ namespace JASResArcLoader {
     };
 
     u32 getResSize(AssetFolder const*, u16);
-    static void loadResourceCallback(void*);
+    void loadResourceCallback(void*);
     int loadResourceAsync(AssetFolder*, u16, u8*, u32, void (*)(u32, uintptr_t), uintptr_t);
 }  // namespace JASResArcLoader
 

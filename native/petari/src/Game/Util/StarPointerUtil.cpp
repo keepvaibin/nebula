@@ -455,7 +455,6 @@ namespace MR {
     }
 
     bool isStarPointerPointing(const TVec3f& rPos, f32 radius, s32 channel, bool enableTouch) {
-        f32 r = getStarPointerRadius(channel);
         StarPointerTarget target(radius, &rPos, nullptr, TVec3f(0.0f, 0.0f, 0.0f));
 
         StarPointerController* controller = ::getStarPointerController(channel);

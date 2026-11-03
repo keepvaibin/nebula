@@ -883,10 +883,6 @@ namespace JGeometry {
         }
 
         inline void normalizeBasis() {
-            f32 scale = JGeometry::TUtil< f32 >::sqrt(
-                (this->get(0, 0) * this->get(0, 0)) + (this->get(1, 0) * this->get(1, 0)) + (this->get(2, 0) * this->get(2, 0)) +
-                (this->get(0, 1) * this->get(0, 1)) + (this->get(1, 1) * this->get(1, 1)) + (this->get(2, 1) * this->get(2, 1)) +
-                (this->get(0, 2) * this->get(0, 2)) + (this->get(1, 2) * this->get(1, 2)) + (this->get(2, 2) * this->get(2, 2)));
 
             f32 invLenX = JGeometry::TUtil< f32 >::inv_sqrt((this->get(0, 0) * this->get(0, 0)) + (this->get(1, 0) * this->get(1, 0)) +
                                                             (this->get(2, 0) * this->get(2, 0)));
@@ -1053,11 +1049,11 @@ namespace JGeometry {
         TProjection3() {};
 
         TProjection3(const Mtx44Ptr rSrc) {
-            __builtin_memcpy(this, rSrc, sizeof(Mtx44));
+            __builtin_memcpy((void*)this, rSrc, sizeof(Mtx44));
         }
 
         TProjection3(const TProjection3& rSrc) {
-            __builtin_memcpy(this, rSrc, sizeof(Mtx44));
+            __builtin_memcpy((void*)this, rSrc, sizeof(Mtx44));
         }
 
         f32 getFocalLength(f32 fov) {

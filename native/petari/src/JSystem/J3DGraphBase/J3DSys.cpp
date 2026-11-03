@@ -19,11 +19,11 @@ static struct {
 J3DTexCoordScaleInfo J3DSys::sTexCoordScaleTable[8];
 
 static Mtx j3dIdentityMtx = {
-    1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f,
+    {1.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, 0.0f},
 };
 
 static Mtx23 IndMtx = {
-    0.5f, 0.0f, 0.0f, 0.0f, 0.5f, 0.0f,
+    {0.5f, 0.0f, 0.0f}, {0.0f, 0.5f, 0.0f},
 };
 
 u32 j3dDefaultViewNo;

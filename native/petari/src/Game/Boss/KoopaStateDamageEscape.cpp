@@ -250,8 +250,8 @@ bool KoopaStateDamageEscape::tryDamage(u32 msg, HitSensor* pSender, HitSensor* p
 bool KoopaStateDamageEscape::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     if (MR::isSensorPlayer(pReceiver)) {
         if ((isNerve(GET_NERVE(KoopaStateDamageEscape, KoopaStateDamageEscapeNrvEscapeRun)) ||
-             (isNerve(GET_NERVE(KoopaStateDamageEscape, KoopaStateDamageEscapeNrvDamageTailRun))) &&
-                 !(KoopaFunction::isKoopaVs1(mHost) && KoopaFunction::isKoopaLv1(mHost)) ||
+             ((isNerve(GET_NERVE(KoopaStateDamageEscape, KoopaStateDamageEscapeNrvDamageTailRun))) &&
+                 !(KoopaFunction::isKoopaVs1(mHost) && KoopaFunction::isKoopaLv1(mHost))) ||
              isNerve(GET_NERVE(KoopaStateDamageEscape, KoopaStateDamageEscapeNrvDamageTailRunFinal))) &&
             MR::isSensor(pSender, "DamageEscapePush") && MR::isSensorPlayer(pReceiver) && MR::sendMsgEnemyAttackFlipMaximum(pReceiver, pSender)) {
             return true;

@@ -29,28 +29,6 @@ namespace {
 namespace nw4r {
     namespace lyt {
         namespace {
-            bool IsIncludeAnimationGroupRef(GroupContainer* pGroupContainer, const AnimationGroupRef* const groupRefs, u16 bindGroupNum,
-                                            bool bDescendingBind, Pane* pTargetPane) {
-                for (u16 grpIdx = 0; grpIdx < bindGroupNum; ++grpIdx) {
-                    Group* const pGroup = pGroupContainer->FindGroupByName(groupRefs[grpIdx].GetName());
-                    PaneLinkList& paneList = pGroup->GetPaneList();
-                    for (PaneLinkList::Iterator it = paneList.GetBeginIter(); it != paneList.GetEndIter(); ++it) {
-                        if (it->mTarget == pTargetPane) {
-                            return true;
-                        }
-
-                        if (bDescendingBind) {
-                            for (Pane* pParentPane = pTargetPane->GetParent(); pParentPane; pParentPane = pParentPane->GetParent()) {
-                                if (it->mTarget == pParentPane) {
-                                    return true;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                return false;
-            }
         };  // namespace
 
 

@@ -147,7 +147,6 @@ void FurCtrl::drawFur() {
     }
 
     mModel->mShapePacket[mShapeIndex].setModel(mModel);
-    NebulaColor8 fogColor = {0, 0, 0, 0};
     J3DPass::noFog();
 }
 

@@ -237,7 +237,7 @@ void ArrowSwitch::exeRotate() {
     mRotAngle = MR::repeat(mRotAngle, -180.0f, 360.0f);
     f32 diff = MR::repeat(::sRotYTargetList[mRotYTargetIndex] - mRotAngle, -180.0f, 360.0f);
 
-    if (mIsRotPlus && diff < 0.0f || !mIsRotPlus && diff > 0.0f) {
+    if ((mIsRotPlus && diff < 0.0f) || (!mIsRotPlus && diff > 0.0f)) {
         mRotAngle = ::sRotYTargetList[mRotYTargetIndex];
         mRotSpeed = 0.0f;
 

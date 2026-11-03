@@ -69,7 +69,7 @@ void PukupukuStateLanding::exeLandingMoveLand() {
 
     bool move = false;
 
-    if (mValueCtrl->isFrameMaxFrame() || MR::isBinded(mHost) && 0.5f < mValueCtrl->getValue()) {
+    if (mValueCtrl->isFrameMaxFrame() || (MR::isBinded(mHost) && 0.5f < mValueCtrl->getValue())) {
         move = true;
     }
 
@@ -101,7 +101,7 @@ void PukupukuStateLanding::exeLandingJumpFromWater() {
 
     bool move = false;
 
-    if (mValueCtrl->isFrameMaxFrame() || MR::isBinded(mHost) && 0.5f < mValueCtrl->getValue()) {
+    if (mValueCtrl->isFrameMaxFrame() || (MR::isBinded(mHost) && 0.5f < mValueCtrl->getValue())) {
         move = true;
     }
 

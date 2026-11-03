@@ -150,7 +150,7 @@ void WaterPressureBullet::exeFly() {
         }
     }
 
-    if (!_B2 && MR::isGreaterEqualStep(this, 180) || _B2 && MR::isGreaterEqualStep(this, 300)) {
+    if ((!_B2 && MR::isGreaterEqualStep(this, 180)) || (_B2 && MR::isGreaterEqualStep(this, 300))) {
         kill();
     }
 }

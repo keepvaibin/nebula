@@ -169,7 +169,6 @@ s32 MR::getClingNumMax() {
         return 0;
     }
 
-    KarikariDirector* director = ::getKarikariDirector();
     return ::hKarikariHoldingMax;
 }
 

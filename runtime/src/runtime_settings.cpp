@@ -174,7 +174,7 @@ std::filesystem::path settings_path() {
     const int query_error = _wdupenv_s(
         &override_value,
         &override_length,
-        L"GALAXY_RUNTIME_SETTINGS_PATH");
+        nebula_switch::runtime_settings_path_wide_name());
     const std::unique_ptr<wchar_t, decltype(&std::free)> owned_override(
         override_value, &std::free);
     if (query_error != 0) {
@@ -194,7 +194,7 @@ std::filesystem::path settings_path() {
     }
 
 #else
-    if (const char* override_value = std::getenv("GALAXY_RUNTIME_SETTINGS_PATH");
+    if (const char* override_value = std::getenv(nebula_switch::runtime_settings_path_name());
         override_value != nullptr && override_value[0] != '\0') {
         const std::filesystem::path path(override_value);
         if (path.filename().empty()) {
@@ -275,30 +275,11 @@ void parse_settings_file(RuntimeSettings& settings, input::ControlsConfig& contr
     migrate_settings_file(controls, controls_version);
 }
 
-void apply_env(RuntimeSettings& settings, const char* env, const char* key) {
-    char value[128]{};
-    std::size_t length = 0;
-    if (getenv_s(&length, value, sizeof(value), env) == 0 && length > 1u) {
-        apply_kv(settings, key, value);
-    }
-}
-
-void apply_env_overrides(RuntimeSettings& settings) {
-    apply_env(settings, nebula_switch::input_mode_name(), "input_mode");
-    apply_env(settings, "GALAXY_AUDIO_MASTER_GAIN", "audio_master_gain");
-    apply_env(settings, "GALAXY_AUDIO_MUSIC_GAIN", "audio_music_gain");
-    apply_env(settings, "GALAXY_AUDIO_EFFECTS_GAIN", "audio_sfx_gain");
-    apply_env(settings, "GALAXY_AUDIO_SFX_GAIN", "audio_sfx_gain");
-    apply_env(settings, "GALAXY_AUDIO_VOICE_GAIN", "audio_voice_gain");
-    apply_env(
-        settings, "GALAXY_AUDIO_AMBIENCE_GAIN", "audio_ambience_gain");
-    apply_env(
-        settings, "GALAXY_AUDIO_CUTSCENE_GAIN", "audio_cutscene_gain");
-    apply_env(
-        settings, "GALAXY_AUDIO_WIIMOTE_SPEAKER_GAIN", "audio_wiimote_speaker_gain");
-    apply_env(settings, "GALAXY_TEXT_SPEED", "text_speed");
-    apply_env(settings, "GALAXY_LANGUAGE", "language");
-}
+#if defined(NEBULA_RELEASE)
+void apply_env_overrides(RuntimeSettings&) {}
+#else
+#include "../../tools/test_driver/runtime_settings_env.inc"
+#endif
 
 }  // namespace
 

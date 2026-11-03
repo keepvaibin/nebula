@@ -384,7 +384,7 @@ void DodoryuStateLv2::exeKnockDown() {
         knockOver();
     }
 
-    if (mChaseParam->mKnockDownStep >= 0 && MR::isGreaterEqualStep(this, mChaseParam->mKnockDownStep) ||
+    if ((mChaseParam->mKnockDownStep >= 0 && MR::isGreaterEqualStep(this, mChaseParam->mKnockDownStep)) ||
         (mChaseParam->mKnockDownStep < 0 && MR::isBckOneTimeAndStopped(mHost))) {
         mHost->endSpinOutCamera();
         mHost->nextState();

@@ -11,7 +11,7 @@ class DinoPackunDemoPosition;
 class DinoPackunEggShell;
 class DinoPackunSequencer;
 class DinoPackunTail;
-class JointControllerInfo;
+struct JointControllerInfo;
 class FootPrint;
 class PartsModel;
 

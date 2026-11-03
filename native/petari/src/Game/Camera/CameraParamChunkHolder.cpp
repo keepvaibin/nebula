@@ -1,4 +1,5 @@
 #include "Game/Camera/CameraParamChunkHolder.hpp"
+#include "Game/Util/Array.hpp"
 #include "Game/Camera/CameraHolder.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraParamChunk.hpp"
@@ -30,6 +31,11 @@ CameraParamChunk* CameraParamChunkHolder::createChunk(const CameraParamChunkID& 
             chunk = new (pHeap, 0) CameraParamChunkGame(mCameraHolder, rID);
         } else {
             chunk = new (pHeap, 0) CameraParamChunk(mCameraHolder, rID);
+        }
+
+        if (mNrChunks == mChunkCapacity) {
+            mChunks = MR::growArray(mChunks, static_cast< s32 >(mNrChunks));
+            mChunkCapacity *= 2;
         }
 
         mChunks[mNrChunks++] = chunk;

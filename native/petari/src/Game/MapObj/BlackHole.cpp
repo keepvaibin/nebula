@@ -26,9 +26,7 @@ void BlackHole::init(const JMapInfoIter& rIter) {
     f32 radius = _A0;
     f32 val = 500.0f * _9C;
 
-    if (radius >= val) {
-        radius = radius;
-    } else {
+    if (radius < val) {
         radius = val;
     }
 

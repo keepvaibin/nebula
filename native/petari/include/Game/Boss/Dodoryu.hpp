@@ -18,7 +18,7 @@ namespace DodoryuSub {
 };  // namespace DodoryuSub
 
 class JointController;
-class JointControllerInfo;
+struct JointControllerInfo;
 class JointRumbler;
 class TalkMessageCtrl;
 

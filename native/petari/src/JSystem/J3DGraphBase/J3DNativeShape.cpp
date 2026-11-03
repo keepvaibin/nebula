@@ -28,17 +28,6 @@ namespace {
         return static_cast< u64 >(reinterpret_cast< uintptr_t >(p));
     }
 
-    u32 typeBytes(u32 type) {
-        return type == J3D_U8 || type == J3D_S8 ? 1 : type == J3D_U16 || type == J3D_S16 ? 2 : 4;
-    }
-
-    // A vertex component or display-list field as the importer cooks VTX1 and SHP1 (host order).
-    u16 host16(const u8* p) {
-        u16 v;
-        memcpy(&v, p, sizeof(v));
-        return v;
-    }
-
     // The arrays a model's shapes read (J3DVertexData::mNebulaArrayCount): position, normal, NBT, colour 0 and 1,
     // texture coordinates 0-7.
     enum {

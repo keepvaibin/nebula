@@ -46,7 +46,7 @@ DemoActionInfo::DemoActionInfo() {
     mFunctors = nullptr;
     mNerves = nullptr;
     _2C = 0;
-    mCastList = new LiveActor*[128];
+    mCastList = new LiveActor*[_18];
     mFunctors = new MR::FunctorBase*[_18];
     mNerves = new const Nerve*[_18];
     for (s32 i = 0; i < _18; i++) {
@@ -57,6 +57,17 @@ DemoActionInfo::DemoActionInfo() {
 }
 
 void DemoActionInfo::registerCast(LiveActor* pActor) {
+    if (mCastCount == _18) {
+        mCastList = MR::growArray(mCastList, _18);
+        mFunctors = MR::growArray(mFunctors, _18);
+        mNerves = MR::growArray(mNerves, _18);
+        for (s32 i = _18; i < _18 * 2; i++) {
+            mFunctors[i] = nullptr;
+            mNerves[i] = nullptr;
+        }
+        _18 *= 2;
+    }
+
     mCastList[mCastCount] = pActor;
     mCastCount++;
 }

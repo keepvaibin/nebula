@@ -11,13 +11,13 @@ namespace MR {
 
 namespace {
     template < typename T >
-    class NameObjRealDelegator {
+    class NameObjRealDelegator final {
     public:
         NameObjRealDelegator(T pMethod) {
             mNameObjFunc = pMethod;
         }
 
-        virtual void operator()(NameObj* pNameObj);
+        void operator()(NameObj* pNameObj);
 
         T mNameObjFunc;
     };

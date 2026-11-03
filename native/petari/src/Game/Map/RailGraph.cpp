@@ -1,4 +1,5 @@
 #include "Game/Map/RailGraph.hpp"
+#include "Game/Util/Array.hpp"
 #include "Game/Map/RailGraphEdge.hpp"
 #include "Game/Map/RailGraphIter.hpp"
 #include "Game/Map/RailGraphNode.hpp"
@@ -14,7 +15,7 @@ RailGraph::RailGraph() {
     mNodes = new RailGraphNode[0x100];
     mNodeCount = 0x100;
     mEdges = new RailGraphEdge[0x100];
-    mEdgeCount = 0x200;
+    mEdgeCount = 0x100;
 }
 
 s32 RailGraph::addNode(const TVec3f& rVec) {
@@ -24,6 +25,10 @@ s32 RailGraph::addNode(const TVec3f& rVec) {
     node._0.z = rVec.z;
     s32 cnt = _8;
     _8 = cnt + 1;
+    if (cnt == mNodeCount) {
+        mNodes = MR::growArray(mNodes, mNodeCount);
+        mNodeCount *= 2;
+    }
 
     RailGraphNode* nodes = &mNodes[cnt];
     nodes->_0 = node._0;
@@ -45,6 +50,10 @@ void RailGraph::connectNodeTwoWay(s32 a1, s32 a2, const RailGraphEdge* pEdge) {
     edge.mDistance = mNodes[a1]._0.distance(mNodes[a2]._0);
     s32 cnt = _14;
     _14 = cnt + 1;
+    if (cnt == mEdgeCount) {
+        mEdges = MR::growArray(mEdges, mEdgeCount);
+        mEdgeCount *= 2;
+    }
     mEdges[cnt] = edge;
     s32 edgeIdx = _14 - 1;
     connectEdgeToNode(a1, edgeIdx);

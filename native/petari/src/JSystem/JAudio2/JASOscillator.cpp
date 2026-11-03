@@ -79,7 +79,6 @@ void JASOscillator::initStart(JASOscillator::Data const* data) {
 }
 
 void JASOscillator::incCounter(f32 param_0) {
-    const short* v1;
     switch (_1C) {
     case 0:
     case 2:

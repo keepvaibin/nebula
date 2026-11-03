@@ -4,7 +4,7 @@
     if (NebulaHost::testSceneFrame(&action)) {
         static char sStage[sizeof(action.stage)];  // the stage change keeps a pointer to the name
         if (action.kind == NEBULA_TEST_CHANGE_STAGE) {
-            strcpy(sStage, action.stage);
+            nebula_snprintf(sStage, sizeof(sStage), "%s", action.stage);
             MR::requestChangeStageInGameMoving(sStage, action.scenario);
         } else if (action.kind == NEBULA_TEST_PLACE_PLAYER) {
             MR::setPlayerPos(TVec3f(action.position[0], action.position[1], action.position[2]));
@@ -31,10 +31,10 @@
             // scene's second frame, every dome would stay a shell without its pillars, lamps and glass top, a state
             // play never reaches. The galaxy select names the Observatory; tests start the stage played again.
             if (action.stage[0] != '\0') {
-                strcpy(sStage, action.stage);
+                nebula_snprintf(sStage, sizeof(sStage), "%s", action.stage);
                 MR::requestChangeStageInGameMoving(sStage, 1);
             } else {
-                strcpy(sStage, MR::getCurrentStageName());
+                nebula_snprintf(sStage, sizeof(sStage), "%s", MR::getCurrentStageName());
                 MR::requestChangeStageInGameMoving(sStage, MR::getCurrentScenarioNo());
             }
         } else if (action.kind == NEBULA_TEST_SET_EVENT_FLAG) {
@@ -78,7 +78,6 @@
                 // With the animation it plays (none: no BCK started), its frame and rate; whether its model is shown;
                 // whether the game clips it.
                 const char* pBck = MR::getPlayingBckName(pActor);
-                const ClippingActorInfo* pInfo = MR::getClippingDirector()->mActorHolder->find(pActor);
                 JUTNativeLog("actor %s %.0f %.0f %.0f bck=%s frame=%.1f rate=%.2f stopped=%d hidden=%d clipped=%d\n",
                          MR::getModelResName(pActor), pActor->mPosition.x, pActor->mPosition.y, pActor->mPosition.z,
                          pBck != nullptr ? pBck : "none", pBck != nullptr ? MR::getBckFrame(pActor) : 0.0f,

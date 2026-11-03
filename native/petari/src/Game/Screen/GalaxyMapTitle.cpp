@@ -5,7 +5,6 @@
 namespace {
     NEW_NERVE(GalaxyMapTitleHide, GalaxyMapTitle, Hide);
     NEW_NERVE(GalaxyMapTitleDisplay, GalaxyMapTitle, Display);
-    NEW_NERVE(GalaxyMapTitleDisappear, GalaxyMapTitle, Disappear);
     NEW_NERVE(GalaxyMapTitleAppearToAnother, GalaxyMapTitle, AppearToAnother);
     NEW_NERVE(GalaxyMapTitleDisappearToAnother, GalaxyMapTitle, DisappearToAnother);
 };  // namespace

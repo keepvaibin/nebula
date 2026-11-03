@@ -153,7 +153,6 @@ void SpinDriverOperateRing::calcOperatePowerByDPD(TVec3f* pVec) const {
         pVec->set(_C8 - _8C - _A4);
 
         TVec3f vec(_C8 - _8C - _A4);
-        TVec3f dir;
         f32 scalar;
         MR::separateScalarAndDirection(&scalar, &vec, vec);
 

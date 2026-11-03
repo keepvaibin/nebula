@@ -41,13 +41,12 @@ int main() {
         galaxy::ui::RenderConfig config;
         config.display_mode = galaxy::render::kDisplayWindowed;
         config.window_width = 1280; config.window_height = 720;
-        config.fullscreen_width = 1920; config.fullscreen_height = 1080;
-        config.fullscreen_refresh_hz = 60; config.aspect_mode = 0;
+        config.aspect_mode = 0;
         auto rows = galaxy::ui::display_page(config, host);
         check(row(rows, "MONITOR").value == "1 First", "monitor label");
         check(row(rows, "REFRESH RATE").value == "144 HZ", "refresh label");
         row(rows, "MONITOR").change(config, 1);
-        check(std::strcmp(config.monitor.data(), "second") == 0 && config.fullscreen_width == 0 && config.fullscreen_refresh_hz == 0, "monitor identity and mode reset");
+        check(std::strcmp(config.monitor.data(), "second") == 0, "monitor identity");
         check(host.last == static_cast<int>(galaxy::ui::DisplayChange::Monitor), "monitor host validation");
         row(rows, "RESOLUTION").change(config, 1);
         check(config.window_width == 1920 && config.window_height == 1080, "window resolution action");

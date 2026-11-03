@@ -310,7 +310,6 @@ void IceMerameraKing::tearDownThrow() {
 }
 
 void IceMerameraKing::exeExtinguish() {
-    f32 temp = ::hOnAirParam._4;  // it just exists
     if (MR::isFirstStep(this)) {
         MR::startAction(this, "GoOut");
         MR::startSound(this, "SE_BM_ICEMERAKING_BLOW");

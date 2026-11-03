@@ -505,9 +505,9 @@ bool HammerHeadPackun::isAttackSensorValid() const {
 
 bool HammerHeadPackun::isChance() const {
     bool isChance = false;
-    if (isNerve(GET_NERVE_ANON(HammerHeadPackunNrvRest)) && !MR::isNewNerve(this) || isNerve(GET_NERVE_ANON(HammerHeadPackunNrvDamage)) ||
-        isNerve(GET_NERVE_ANON(HammerHeadPackunNrvRecover)) && MR::isLessEqualStep(this, 50) ||
-        isNerve(GET_NERVE_ANON(HammerHeadPackunNrvRise)) && MR::isLessEqualStep(this, 30) || isNerve(GET_NERVE_ANON(HammerHeadPackunNrvNumb))) {
+    if ((isNerve(GET_NERVE_ANON(HammerHeadPackunNrvRest)) && !MR::isNewNerve(this)) || isNerve(GET_NERVE_ANON(HammerHeadPackunNrvDamage)) ||
+        (isNerve(GET_NERVE_ANON(HammerHeadPackunNrvRecover)) && MR::isLessEqualStep(this, 50)) ||
+        (isNerve(GET_NERVE_ANON(HammerHeadPackunNrvRise)) && MR::isLessEqualStep(this, 30)) || isNerve(GET_NERVE_ANON(HammerHeadPackunNrvNumb))) {
         isChance = true;
     }
     return isChance;

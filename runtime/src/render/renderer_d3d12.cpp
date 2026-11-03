@@ -138,7 +138,7 @@ void copy_adapter_description(
 DXGI_GPU_PREFERENCE adapter_preference() {
     char value[16]{};
     std::size_t length = 0;
-    if (getenv_s(&length, value, sizeof(value), "GALAXY_GPU_PREFERENCE") == 0 &&
+    if (getenv_s(&length, value, sizeof(value), nebula_switch::gpu_preference_name()) == 0 &&
         length > 1 && (value[0] == 'l' || value[0] == 'L' || value[0] == 'm' || value[0] == 'M')) {
         return DXGI_GPU_PREFERENCE_MINIMUM_POWER;
     }
@@ -157,74 +157,6 @@ bool trace_present_stats_enabled() {
     return enabled;
 }
 
-// Frame GPU timestamps (two queries and a resolve per command list) are always on: Match Output's GPU budget reads
-// them. GALAXY_GPU_TIMESTAMPS=0 turns them off, and the budget with them.
-bool gpu_timestamps_enabled() {
-    static const bool enabled = [] {
-        char value[16]{};
-        std::size_t length = 0;
-        if (getenv_s(
-                &length, value, sizeof(value),
-                "GALAXY_GPU_TIMESTAMPS") == 0 &&
-            length > 1) {
-            return value[0] != '0' && value[0] != 'n' && value[0] != 'N';
-        }
-        return true;
-    }();
-    return enabled;
-}
-
-bool allow_tearing_enabled() {
-    static const bool enabled = [] {
-        char value[16]{};
-        std::size_t length = 0;
-        if (getenv_s(
-                &length, value, sizeof(value),
-                "GALAXY_ALLOW_TEARING") != 0 ||
-            length <= 1) {
-            return get_render_config().allow_tearing;
-        }
-        return value[0] != '0' && value[0] != 'n' && value[0] != 'N';
-    }();
-    return enabled;
-}
-
-bool flip_discard_enabled() {
-    static const bool enabled = [] {
-        char value[16]{};
-        std::size_t length = 0;
-        if (getenv_s(
-                &length, value, sizeof(value),
-                "GALAXY_FLIP_DISCARD") != 0 ||
-            length <= 1) {
-            return get_render_config().flip_discard;
-        }
-        return value[0] != '0' && value[0] != 'n' && value[0] != 'N';
-    }();
-    return enabled;
-}
-
-unsigned swap_chain_frame_latency() {
-    static const unsigned latency = [] {
-        char value[16]{};
-        std::size_t length = 0;
-        if (getenv_s(
-                &length, value, sizeof(value),
-                "GALAXY_SWAP_CHAIN_FRAME_LATENCY") != 0 ||
-            length <= 1) {
-            return std::clamp(
-                get_render_config().swap_chain_frame_latency,
-                1u,
-                kFramesInFlight);
-        }
-        return std::clamp(
-            static_cast<unsigned>(std::strtoul(value, nullptr, 10)),
-            1u,
-            kFramesInFlight);
-    }();
-    return latency;
-}
-
 // Installed physical memory in MiB (0 if it cannot be queried). Logged with the
 // adapter's figures: on a unified-memory adapter the graphics budget is the OS cap
 // of half of system memory.
@@ -238,21 +170,6 @@ std::uint64_t host_ram_mb() {
         return static_cast<std::uint64_t>(status.ullTotalPhys) / (1024ull * 1024ull);
     }();
     return megabytes;
-}
-
-bool frame_latency_wait_enabled() {
-    static const bool enabled = [] {
-        char value[16]{};
-        std::size_t length = 0;
-        if (getenv_s(
-                &length, value, sizeof(value),
-                "GALAXY_WAIT_FOR_FRAME_LATENCY") != 0 ||
-            length <= 1) {
-            return get_render_config().wait_for_frame_latency;
-        }
-        return value[0] != '0' && value[0] != 'n' && value[0] != 'N';
-    }();
-    return enabled;
 }
 
 static void d3d_check(HRESULT hr, const char* label) {
@@ -919,7 +836,7 @@ void RendererD3D12::carry_over_scene_contents() {
     settle_owed_scene();
     if (!scene_carry_color_ || !scene_carry_depth_ || scene_msaa_.samples > 1u) {
         if (scene_msaa_.samples > 1u && scene_carry_color_) {
-            const auto far_values = make_scene_clear_values(0u, 0x00FFFFFFu, 0u);
+            const auto far_values = make_scene_clear_values(0u, 0u);
             const float black[4] = {0.0f, 0.0f, 0.0f, 1.0f};
             command_list_->ClearRenderTargetView(scene_rtv_, black, 0u, nullptr);
             command_list_->ClearDepthStencilView(scene_dsv_, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL,
@@ -1008,7 +925,7 @@ void RendererD3D12::carry_over_scene_contents() {
         command_list_->SetGraphicsRootDescriptorTable(0, depth_gpu);
         command_list_->DrawInstanced(3, 1, 0, 0);
     } else {
-        const auto far_values = make_scene_clear_values(0u, 0x00FFFFFFu, 0u);
+        const auto far_values = make_scene_clear_values(0u, 0u);
         command_list_->ClearDepthStencilView(
             scene_dsv_, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL,
             far_values.reversed_depth, 0u, 0u, nullptr);
@@ -1076,7 +993,7 @@ HRESULT create_draw_root_signature(
     params[4].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
     params[4].Descriptor.ShaderRegister = 0;
     params[4].Descriptor.RegisterSpace  = 1;
-    // The matrix palette also holds the XF lights, which per-pixel lighting
+    // The matrix palette also holds the lights, which per-pixel lighting
     // reads in the pixel shader.
     params[4].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
 
@@ -1737,7 +1654,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
     {
         char buf[16]{};
         std::size_t len = 0;
-        if (getenv_s(&len, buf, sizeof(buf), "GALAXY_D3D_DEBUG") == 0 &&
+        if (getenv_s(&len, buf, sizeof(buf), nebula_switch::d3d_debug_name()) == 0 &&
             len > 0) {
             d3d_debug_level =
                 static_cast<unsigned>(std::strtoul(buf, nullptr, 10));
@@ -1760,7 +1677,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
         {
             char dred_env[8]{};
             std::size_t dred_len = 0;
-            if (getenv_s(&dred_len, dred_env, sizeof(dred_env), "GALAXY_D3D_DRED") == 0 && dred_len > 0 &&
+            if (getenv_s(&dred_len, dred_env, sizeof(dred_env), nebula_switch::d3d_dred_name()) == 0 && dred_len > 0 &&
                 dred_env[0] != '0') {
                 ComPtr<ID3D12DeviceRemovedExtendedDataSettings> dred;
                 if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&dred)))) {
@@ -2095,7 +2012,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
             "GetTimestampFrequency");
         QueryPerformanceFrequency(&qpc_frequency_);
 
-        if (gpu_timestamps_enabled()) {
+        if (true) {
             D3D12_QUERY_HEAP_DESC qhd{};
             qhd.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
             qhd.Count = kFramesInFlight * 2u;
@@ -2124,7 +2041,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
             const bool passes = [] {
                 char value[8]{};
                 std::size_t length = 0u;
-                return getenv_s(&length, value, sizeof(value), "GALAXY_GPU_PASSES") == 0 && length > 1u &&
+                return getenv_s(&length, value, sizeof(value), nebula_switch::gpu_passes_name()) == 0 && length > 1u &&
                        value[0] == '1';
             }();
             if (passes) {
@@ -2149,7 +2066,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
             const bool draws = [] {
                 char value[8]{};
                 std::size_t length = 0u;
-                return getenv_s(&length, value, sizeof(value), "GALAXY_GPU_DRAWS") == 0 && length > 1u &&
+                return getenv_s(&length, value, sizeof(value), nebula_switch::gpu_draws_name()) == 0 && length > 1u &&
                        value[0] == '1';
             }();
             if (draws) {
@@ -2169,28 +2086,11 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
         scd.Height       = host_window::backbuffer_height;
         scd.Format       = kBackbufferFormat;
         scd.BufferUsage  = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-        scd.SwapEffect   = flip_discard_enabled()
-            ? DXGI_SWAP_EFFECT_FLIP_DISCARD
-            : DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
+        scd.SwapEffect   = DXGI_SWAP_EFFECT_FLIP_DISCARD;
         scd.SampleDesc.Count = 1;
         scd.Scaling      = DXGI_SCALING_STRETCH;
         scd.AlphaMode    = DXGI_ALPHA_MODE_IGNORE;
-        // ALLOW_MODE_SWITCH lets exclusive fullscreen switch the monitor to
-        // the selected resolution and refresh rate.
-        scd.Flags = DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT |
-                    DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
-        if (allow_tearing_enabled()) {
-            ComPtr<IDXGIFactory5> factory5;
-            BOOL supported = FALSE;
-            if (SUCCEEDED(factory.As(&factory5)) &&
-                SUCCEEDED(factory5->CheckFeatureSupport(
-                    DXGI_FEATURE_PRESENT_ALLOW_TEARING,
-                    &supported, sizeof(supported))) &&
-                supported) {
-                tearing_supported_ = true;
-                scd.Flags |= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
-            }
-        }
+        scd.Flags = DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
         ComPtr<IDXGISwapChain1> sc1;
         // Through Streamline's factory when it runs: its presents go through it.
         d3d_check(streamline::swap_chain_factory(factory.Get())
@@ -2200,8 +2100,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
         {
             ComPtr<IDXGISwapChain2> swap_chain2;
             d3d_check(swap_chain_.As(&swap_chain2), "SwapChain2 As");
-            d3d_check(swap_chain2->SetMaximumFrameLatency(
-                          swap_chain_frame_latency()),
+            d3d_check(swap_chain2->SetMaximumFrameLatency(1u),
                       "SetMaximumFrameLatency");
             frame_latency_waitable_ =
                 swap_chain2->GetFrameLatencyWaitableObject();
@@ -2472,11 +2371,6 @@ void RendererD3D12::shutdown() {
         CloseHandle(frame_latency_waitable_);
         frame_latency_waitable_ = nullptr;
     }
-    if (swap_chain_ && exclusive_fullscreen_active_) {
-        swap_chain_->SetFullscreenState(FALSE, nullptr);
-        exclusive_fullscreen_active_ = false;
-        host_window::exclusive_fullscreen_active.store(false, std::memory_order_release);
-    }
     s_blit_root_sig.Reset();
     post_process_.shutdown();
     ambient_occlusion_.shutdown();
@@ -2656,104 +2550,15 @@ void RendererD3D12::resize_swap_chain(UINT new_width, UINT new_height, bool forc
     }
 }
 
-bool RendererD3D12::enter_exclusive_fullscreen(
-    const std::wstring& monitor_device, unsigned width, unsigned height,
-    unsigned refresh_hz) {
-    if (!swap_chain_ || !adapter3_) {
-        return false;
-    }
-    ComPtr<IDXGIOutput> output;
-    for (UINT index = 0u;; ++index) {
-        ComPtr<IDXGIOutput> candidate;
-        if (adapter3_->EnumOutputs(index, &candidate) == DXGI_ERROR_NOT_FOUND) {
-            break;
-        }
-        DXGI_OUTPUT_DESC desc{};
-        if (candidate && SUCCEEDED(candidate->GetDesc(&desc)) &&
-            _wcsicmp(desc.DeviceName, monitor_device.c_str()) == 0) {
-            output = candidate;
-            break;
-        }
-    }
-    if (!output) {
-        // The monitor is driven by another GPU (hybrid laptops): borderless
-        // fullscreen on it is the closest equivalent.
-        std::cerr << "[Renderer] exclusive fullscreen: monitor not on the rendering GPU;"
-                     " using borderless\n";
-        return false;
-    }
-    DXGI_MODE_DESC wanted{};
-    wanted.Width = width;
-    wanted.Height = height;
-    wanted.RefreshRate = {refresh_hz, refresh_hz != 0u ? 1u : 0u};
-    wanted.Format = kBackbufferFormat;
-    DXGI_MODE_DESC closest{};
-    if (width == 0u || height == 0u ||
-        FAILED(output->FindClosestMatchingMode(&wanted, &closest, device_.Get()))) {
-        DXGI_OUTPUT_DESC desc{};
-        (void)output->GetDesc(&desc);
-        closest = wanted;
-        closest.Width = static_cast<UINT>(desc.DesktopCoordinates.right - desc.DesktopCoordinates.left);
-        closest.Height = static_cast<UINT>(desc.DesktopCoordinates.bottom - desc.DesktopCoordinates.top);
-        closest.RefreshRate = {0u, 0u};
-    }
-    wait_for_gpu();
-    (void)swap_chain_->ResizeTarget(&closest);
-    const HRESULT hr = swap_chain_->SetFullscreenState(TRUE, output.Get());
-    if (FAILED(hr)) {
-        std::cerr << "[Renderer] exclusive fullscreen unavailable hr=0x" << std::hex
-                  << static_cast<unsigned long>(hr) << std::dec << "; using borderless\n";
-        return false;
-    }
-    exclusive_fullscreen_active_ = true;
-    host_window::exclusive_fullscreen_active.store(true, std::memory_order_release);
-    resize_swap_chain(closest.Width, closest.Height, true);
-    std::cout << "[Renderer] exclusive fullscreen " << closest.Width << 'x' << closest.Height
-              << " @ " << (closest.RefreshRate.Denominator != 0u
-                               ? closest.RefreshRate.Numerator / closest.RefreshRate.Denominator
-                               : 0u)
-              << " Hz\n";
-    return true;
-}
-
-void RendererD3D12::leave_exclusive_fullscreen() {
-    if (!swap_chain_ || !exclusive_fullscreen_active_) {
-        return;
-    }
-    wait_for_gpu();
-    (void)swap_chain_->SetFullscreenState(FALSE, nullptr);
-    exclusive_fullscreen_active_ = false;
-    host_window::exclusive_fullscreen_active.store(false, std::memory_order_release);
-}
-
 void RendererD3D12::reconcile_display_state() {
     if (!swap_chain_ || window_ == nullptr || host_window::hidden_window_mode_enabled()) {
         return;
     }
     const RenderConfig cfg = get_render_config();
-    const unsigned mode = std::min(cfg.display_mode, kDisplayExclusive);
+    const unsigned mode = std::min(cfg.display_mode, kDisplayBorderless);
     AppliedDisplay& applied = applied_display_;
-    const bool same_display = applied.valid && applied.mode == mode &&
-        applied.monitor == cfg.monitor &&
-        (mode != kDisplayExclusive ||
-         (applied.fullscreen_width == cfg.fullscreen_width &&
-          applied.fullscreen_height == cfg.fullscreen_height &&
-          applied.fullscreen_refresh_hz == cfg.fullscreen_refresh_hz));
+    const bool same_display = applied.valid && applied.mode == mode && applied.monitor == cfg.monitor;
     if (same_display) {
-        if (mode == kDisplayExclusive) {
-            // Alt+Tab leaves exclusive fullscreen; return once the game is
-            // in front again. Checked twice a second.
-            if (++display_checks_ % 30u == 0u) {
-                BOOL fullscreen = FALSE;
-                if (SUCCEEDED(swap_chain_->GetFullscreenState(&fullscreen, nullptr)) &&
-                    !fullscreen && GetForegroundWindow() == window_) {
-                    exclusive_fullscreen_active_ = false;
-                    host_window::exclusive_fullscreen_active.store(false, std::memory_order_release);
-                    applied.valid = false;
-                }
-            }
-            return;
-        }
         if (mode != kDisplayWindowed ||
             (applied.window_width == cfg.window_width &&
              applied.window_height == cfg.window_height) ||
@@ -2766,9 +2571,6 @@ void RendererD3D12::reconcile_display_state() {
     const MonitorInfo* monitor = find_monitor(monitors, widen_utf8(cfg.monitor.data()));
     if (monitor == nullptr) {
         return;
-    }
-    if (exclusive_fullscreen_active_) {
-        leave_exclusive_fullscreen();
     }
     host_window::WindowPlacement placement{};
     if (mode == kDisplayWindowed) {
@@ -2787,31 +2589,19 @@ void RendererD3D12::reconcile_display_state() {
         std::cerr << "[Renderer] display change: the window did not respond\n";
         return;
     }
-    bool exclusive = false;
-    if (mode == kDisplayExclusive) {
-        exclusive = enter_exclusive_fullscreen(monitor->device, cfg.fullscreen_width,
-                                               cfg.fullscreen_height, cfg.fullscreen_refresh_hz);
-    }
-    if (!exclusive) {
-        // The placed window's client size (WM_SIZE can lag behind the
-        // cross-thread placement).
-        RECT client{};
-        if (GetClientRect(window_, &client) && client.right > 0 && client.bottom > 0) {
-            resize_swap_chain(static_cast<UINT>(client.right),
-                              static_cast<UINT>(client.bottom), false);
-        }
+    // The placed window's client size (WM_SIZE can lag behind the
+    // cross-thread placement).
+    RECT client{};
+    if (GetClientRect(window_, &client) && client.right > 0 && client.bottom > 0) {
+        resize_swap_chain(static_cast<UINT>(client.right),
+                          static_cast<UINT>(client.bottom), false);
     }
     applied.valid = true;
     applied.mode = mode;
     applied.monitor = cfg.monitor;
-    applied.fullscreen_width = cfg.fullscreen_width;
-    applied.fullscreen_height = cfg.fullscreen_height;
-    applied.fullscreen_refresh_hz = cfg.fullscreen_refresh_hz;
     applied.window_width = cfg.window_width;
     applied.window_height = cfg.window_height;
-    std::cout << "[Renderer] display " << (mode == kDisplayWindowed ? "windowed"
-                                           : mode == kDisplayBorderless ? "borderless"
-                                                                        : "fullscreen")
+    std::cout << "[Renderer] display " << (mode == kDisplayWindowed ? "windowed" : "borderless")
               << ' ' << narrow_utf8(monitor->device) << ' ' << host_window::backbuffer_width << 'x'
               << host_window::backbuffer_height << '\n';
 }
@@ -3950,26 +3740,6 @@ void RendererD3D12::wait_for_frame_latency_if_needed(
     if (collect_present_telemetry) {
         QueryPerformanceCounter(&latency_wait_start);
     }
-    if (frame_latency_wait_enabled() && frame_latency_waitable_ != nullptr) {
-        const auto latency_wait_start_steady = collect_present_telemetry
-            ? std::chrono::steady_clock::now()
-            : std::chrono::steady_clock::time_point{};
-        constexpr DWORD kFrameLatencyWaitTimeoutMs = 17;
-        const DWORD latency_result =
-            WaitForSingleObjectEx(
-                frame_latency_waitable_,
-                kFrameLatencyWaitTimeoutMs,
-                FALSE);
-        if (latency_result != WAIT_OBJECT_0 &&
-            latency_result != WAIT_TIMEOUT) {
-            throw std::runtime_error("frame latency wait failed");
-        }
-        if (collect_present_telemetry) {
-            last_latency_wait_us_ = elapsed_us(
-                latency_wait_start_steady,
-                std::chrono::steady_clock::now());
-        }
-    }
     if (collect_present_telemetry) {
         QueryPerformanceCounter(&latency_wait_end);
     }
@@ -4055,8 +3825,7 @@ void RendererD3D12::present_to_swap_chain() {
     const UINT vsync = generating ? std::min(1u, cfg.vsync_interval)
                                   : present_sync_interval(std::min(2u, cfg.vsync_interval), cfg.max_fps);
     const UINT present_flags =
-        (vsync == 0 && tearing_supported_ && !exclusive_fullscreen_active_) ? DXGI_PRESENT_ALLOW_TEARING
-                                           : 0u;
+        0u;
     // Interpolation presents on its own slot clock.
     const double pace_wait_ms =
         ring_mode_ == RingMode::Interp ? 0.0 : present_pacer_.pace(cfg.vsync_interval, presented_max_fps(cfg));
@@ -4265,10 +4034,9 @@ void RendererD3D12::present_to_swap_chain() {
                 << telemetry_present_max_ms_
                 << " vsync=" << vsync
                 << " present-flags=" << present_flags
-                << " tearing-enabled=" << (tearing_supported_ ? 1 : 0)
                 << " remote-session="
                 << (GetSystemMetrics(SM_REMOTESESSION) != 0 ? 1 : 0)
-                << " gpu-timing=" << (!gpu_timestamps_enabled() ? "disabled" :
+                << " gpu-timing=" << (false ? "disabled" :
                     telemetry_gpu_samples_ == 0u ? "pending" : "measured")
                 << " gpu-ms(avg)=";
             if (telemetry_gpu_samples_ != 0u) message << gpu_avg;
@@ -6094,7 +5862,7 @@ bool RendererD3D12::record_replay_list(ReplayList& entry) {
         }
         replay_playing_ = true;
         bind_scene();
-        const auto far_values = make_scene_clear_values(0u, 0x00FFFFFFu, 0u);
+        const auto far_values = make_scene_clear_values(0u, 0u);
         // The log before's vertices are gone once its segment came round (a
         // later game frame records there while this sequence still plays).
         const bool blend = sequence.vertex_blend && prev_run_valid_ &&
@@ -6135,7 +5903,7 @@ bool RendererD3D12::record_replay_list(ReplayList& entry) {
                 break;
             case ReplayKind::Clear: {
                 const ReplayClear& c = run_clears_[op.index];
-                clear_scene(c.rgba, c.depth24, c.color, c.alpha, c.depth, c.x, c.y, c.w, c.h, c.format);
+                clear_scene(c.rgba, c.color, c.alpha, c.depth, c.x, c.y, c.w, c.h, c.format);
                 break;
             }
             case ReplayKind::Copy: {
@@ -7516,7 +7284,7 @@ void RendererD3D12::record_game_bloom(const ReplayBloom& bloom) {
                 hand_over_scene_color(game_bloom_.take_kept_image(command_list_.Get(), in, frame_index_, kFramesInFlight));
             scene_owed_.Reset();
             game_bloom_.keep_picture(std::move(picture), in);
-            clear_scene(0u, 0x00FFFFFFu, true, true, false);
+            clear_scene(0u, true, true, false);
             return;
         }
         static_cast<void>(game_bloom_.keep(command_list_.Get(), in, frame_index_, kFramesInFlight));
@@ -7576,7 +7344,7 @@ bool RendererD3D12::begin_output_scene() {
     scene_temporal_ = false;
     if (upscaled) {
         swap_scene_sets();
-        const auto far_values = make_scene_clear_values(0u, 0x00FFFFFFu, 0u);
+        const auto far_values = make_scene_clear_values(0u, 0u);
         command_list_->ClearDepthStencilView(
             scene_dsv_, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL,
             far_values.reversed_depth, 0u, 0u, nullptr);
@@ -7612,7 +7380,7 @@ bool RendererD3D12::begin_output_scene() {
         record_conversion_blit(alt_scene_.color.Get(), w, h, {}, false, kCopyLayoutDisplay, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y);
         swap_scene_sets();
     }
-    const auto far_values = make_scene_clear_values(0u, 0x00FFFFFFu, 0u);
+    const auto far_values = make_scene_clear_values(0u, 0u);
     command_list_->ClearDepthStencilView(
         scene_dsv_, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL,
         far_values.reversed_depth, 0u, 0u, nullptr);
@@ -7660,7 +7428,7 @@ void RendererD3D12::bind_scene() {
 }
 
 void RendererD3D12::clear_scene(
-    std::uint32_t clear_rgba, std::uint32_t clear_depth,
+    std::uint32_t clear_rgba,
     bool color_enable, bool alpha_enable, bool depth_enable,
     unsigned rect_x, unsigned rect_y, unsigned rect_w, unsigned rect_h,
     std::uint8_t pixel_format) {
@@ -7669,10 +7437,10 @@ void RendererD3D12::clear_scene(
     }
     if (replay_recording_) [[unlikely]] {
         replay_ops_.push_back({ReplayKind::Clear, static_cast<std::uint32_t>(replay_clears_.size())});
-        replay_clears_.push_back({clear_rgba, clear_depth, color_enable, alpha_enable,
+        replay_clears_.push_back({clear_rgba, color_enable, alpha_enable,
                                   depth_enable, rect_x, rect_y, rect_w, rect_h, pixel_format});
     } else if (ring_mode_ == RingMode::Interp && ring_advance_pending_ && !replay_playing_) [[unlikely]] {
-        log_start_clear_ = {clear_rgba, clear_depth, color_enable, alpha_enable,
+        log_start_clear_ = {clear_rgba, color_enable, alpha_enable,
                             depth_enable, rect_x, rect_y, rect_w, rect_h, pixel_format};
         log_start_clear_valid_ = true;
     }
@@ -7705,7 +7473,7 @@ void RendererD3D12::clear_scene(
         const bool rgba = color_enable && (alpha_enable || pixel_format != 1u);
         restore_owed_scene(rgba ? &rect : nullptr);
     }
-    const auto clear = make_scene_clear_values(clear_rgba, clear_depth, pixel_format);
+    const auto clear = make_scene_clear_values(clear_rgba, pixel_format);
     if (color_enable || alpha_enable) {
         if (pixel_format != 1u) alpha_enable = true;
         const float* col = clear.color.data();
@@ -7733,9 +7501,7 @@ void RendererD3D12::clear_scene(
         }
     }
     if (depth_enable) {
-        // REVERSED-Z buffer: game depth24 (near=0, far=2^24) inverts into the D3D depth value.
-        // GX_MAX_Z24 (0xFFFFFF = "clear to farthest") becomes about 0.0 here, which the flipped
-        // GEQUAL-style funcs pass.
+        // Reversed depth: far is 0, which the flipped compares pass.
         command_list_->ClearDepthStencilView(
             dsv, D3D12_CLEAR_FLAG_DEPTH, clear.reversed_depth, 0, num_rects, rects);
     }
@@ -7855,13 +7621,9 @@ void RendererD3D12::draw(const DrawCall& call) {
         bound_scissor_input_valid_ = true;
     }
 
-    // Per-draw XF viewport with its depth range: SMG clears depth by drawing fullscreen quads with
+    // Per-draw viewport with its depth range: the game clears depth by drawing fullscreen quads with
     // the state near == far == 1.0, so such a quad writes z = FAR whatever its geometry z.
-    // XF layout: wd, ht, zRange, xOrig, yOrig, farZ.
-    // Depth range (the REVERSED-Z form for backends
-    // without reversed-range support):
-    //   min_filter = (farZ - zRange) / 2^24,  max_filter = farZ / 2^24
-    //   MinDepth = 1 - max_filter,  MaxDepth = 1 - min_filter
+    // Reversed: MinDepth = 1 - far, MaxDepth = 1 - near.
     // Composes with the negated projection z (fill_projection): game near maps to the depth MaxDepth
     // side, game far to the MinDepth side; depth funcs are flipped in pipeline_cache to match.
     if (call.has_viewport) {
@@ -7893,7 +7655,7 @@ void RendererD3D12::draw(const DrawCall& call) {
         command_list_->IASetPrimitiveTopology(first_topology);
         bound_topology_ = first_topology;
     }
-    // A replayed display list rebinds the same vertex-ring allocation for
+    // A run of shapes rebinds the same vertex-ring allocation for
     // thousands of consecutive draws, so the view is compared before binding.
     // Every other writer of stream 0 (the UI helpers, the conversion blit, the
     // clear quad) is followed by invalidate_draw_bindings(), and begin_frame()

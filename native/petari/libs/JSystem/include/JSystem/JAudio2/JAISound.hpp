@@ -6,7 +6,7 @@
 #include <stdint.h>
 
 class JAISound;
-class JASTrack;
+struct JASTrack;
 
 class JAISoundID {
 public:

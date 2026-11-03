@@ -56,7 +56,6 @@ void OceanRingPipeOutside::draw() const {
     mMesh.draw();
 }
 
-const NebulaColor8 sFogCol = {0xFF, 0xFF, 0xFF, 0xFF};
 
 void OceanRingPipeOutside::loadMaterial() const {
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
@@ -76,7 +75,7 @@ void OceanRingPipeOutside::loadMaterial() const {
     scaleMtx.identity();
     scaleMtx.scale(::sEnvMapScale);
 
-    static Mtx qMtx2 = {0.5f, 0.0f, 0.0f, 0.5f, 0.0f, -0.5f, 0.0f, 0.5f, 0.0f, 0.0f, 1.0f, 0.0f};
+    static Mtx qMtx2 = {{0.5f, 0.0f, 0.0f, 0.5f}, {0.0f, -0.5f, 0.0f, 0.5f}, {0.0f, 0.0f, 1.0f, 0.0f}};
 
     MR::multMtx(mtx2, scaleMtx, mtx2);
     MR::multMtx(mtx2, qMtx2, mtx2);

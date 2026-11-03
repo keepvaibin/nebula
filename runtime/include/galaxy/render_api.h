@@ -154,11 +154,11 @@ struct GameLight {
 // The lights noted within `max_age_ms` (not black), at most `out.size()`; returns the count.
 std::size_t game_point_lights(std::span<GameLight> out, std::uint64_t max_age_ms) noexcept;
 std::size_t game_world_lights(std::span<GameLight> out, std::uint64_t max_age_ms) noexcept;
-// Simulation thread: one particle of a JPA stripe at `stream_offset` bytes into the next submitted FIFO; its two
+// Simulation thread: one particle of a JPA stripe at `stream_offset` bytes into the next submitted frame; its two
 // strip vertices follow. The next render_frame submission carries it.
 void attach_stripe_particle(std::size_t stream_offset, std::uint64_t particle, std::uint32_t age_lifetime,
                             std::uint8_t strip);
-// Simulation thread: a native shape record (native_shapes.h) at its offset into the next submitted FIFO.
+// Simulation thread: a native shape record (native_shapes.h) at its offset into the next submitted frame.
 void attach_shape_record(shapes::Record&& record);
 [[nodiscard]] shapes::Matrix* reserve_record_matrices(shapes::Record& record, std::uint32_t count);
 [[nodiscard]] state::Op* reserve_record_ops(shapes::Record& record, std::uint32_t count);

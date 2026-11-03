@@ -7,7 +7,7 @@ extern "C" {
 #endif
 
 // Forward declarations
-typedef struct Mii_Texture;
+struct Mii_Texture;
 
 typedef enum {
     MII_ORIGIN_CENTER,

@@ -11,9 +11,6 @@ namespace {
     // static const f32 hDebugPrintX =
     // static const f32 hDebugPrintY =
 
-    // debug symbol
-    const char* getStringStarPointerMode(s32 mode);
-
     // to help clean up the code so it is not a nightmare to read
     inline StarPointerDirector* getStarPointerDirector() {
         return StarPointerFunction::getStarPointerDirector();

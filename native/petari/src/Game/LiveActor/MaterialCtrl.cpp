@@ -187,7 +187,7 @@ void MirrorReflectionMtxSetter::addUpdatingTexMtxFromTexCoord(J3DMaterial* pMate
 }
 
 void MirrorReflectionMtxSetter::addUpdatingTexMtx(J3DTexMtx* pTexMtx) {
-    mUpdatingTexMtx[mNumUpdatingTexMtx] = pTexMtx;
+    mUpdatingTexMtx.at(mNumUpdatingTexMtx) = pTexMtx;
     mNumUpdatingTexMtx++;
 }
 

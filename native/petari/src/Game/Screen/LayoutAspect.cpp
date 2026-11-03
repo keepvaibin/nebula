@@ -205,21 +205,6 @@ namespace {
         pPane->mGlbMtx._13 = inner + (m13 - inner) * k;
     }
 
-    // Tests (NEBULA_OPTION_TEST_DUMP_LAYOUTS): the authored tree, one line per pane: depth, name, translation, size,
-    // base position (0-8, row-major), visibility.
-    void dumpPane(const char* pLayout, const nw4r::lyt::Pane* pPane, s32 depth) {
-        if (depth > 16) {
-            return;
-        }
-        JUTNativeLog("layout %s: %*s%s t=(%.1f,%.1f) size=(%.1f,%.1f) base=%u %s\n", pLayout, depth * 2, "", pPane->mName,
-                 pPane->mTranslate.x, pPane->mTranslate.y, pPane->mSize.width, pPane->mSize.height,
-                 (u32)pPane->mBasePosition, pPane->IsVisible() ? "" : "hidden");
-        nw4r::lyt::PaneList& children = const_cast< nw4r::lyt::Pane* >(pPane)->GetChildList();
-        for (nw4r::lyt::PaneList::Iterator it = children.GetBeginIter(); it != children.GetEndIter(); ++it) {
-            dumpPane(pLayout, &*it, depth + 1);
-        }
-    }
-
     // True when the branch moved, so the copied matrices need copying again.
     bool applyFit(nw4r::lyt::Pane* pPane, const FitRule& rRule, const Extent& rExtent) {
         const f32 wide = rExtent.mWidth / NebulaFrameClock::cLayoutWidth;
@@ -344,9 +329,6 @@ namespace LayoutAspect {
 
         // This layout's rules and panes, looked up once.
         if (pManager->mFitRuleCount < 0) {
-            if (NebulaHost::option(NEBULA_OPTION_TEST_DUMP_LAYOUTS) != 0) {
-                dumpPane(pManager->mLayoutName != nullptr ? pManager->mLayoutName : "?", pRoot, 0);
-            }
             pManager->mFitRuleCount = 0;
             for (u32 i = 0; i < sizeof(cFitRules) / sizeof(cFitRules[0]); i++) {
                 if (pManager->mLayoutName == nullptr || strcmp(cFitRules[i].mLayout, pManager->mLayoutName) != 0) {

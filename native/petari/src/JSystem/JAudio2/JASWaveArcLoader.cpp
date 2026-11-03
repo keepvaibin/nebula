@@ -7,11 +7,12 @@
 #include <cstring>
 #include <stdint.h>
 #include "Game/System/GameAssets.hpp"
+#include <nebula_format.h>
 
 char JASWaveArcLoader::sCurrentDir[DIR_MAX] = "/AudioRes/Waves/";
 
 void JASWaveArcLoader::setCurrentDir(char const* dir) {
-    strcpy(sCurrentDir, dir);
+    nebula_snprintf(sCurrentDir, DIR_MAX - 1, "%s", dir);
     u32 len = strlen(sCurrentDir);
     if (sCurrentDir[len - 1] != '/') {
         sCurrentDir[len] = '/';

@@ -18,7 +18,6 @@ namespace {
     NEW_NERVE(MiiSelectIconNrvCreate, MiiSelectIcon, Create);
     NEW_NERVE(MiiSelectIconNrvWait, MiiSelectIcon, Wait);
     NEW_NERVE(MiiSelectIconNrvSelected, MiiSelectIcon, Selected);
-    NEW_NERVE(MiiSelectIconNrvDisappear, MiiSelectIcon, Disappear);
     NEW_NERVE(MiiSelectIconNrvInvalid, MiiSelectIcon, Invalid);
 };  // namespace
 

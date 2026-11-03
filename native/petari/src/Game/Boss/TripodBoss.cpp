@@ -1164,9 +1164,6 @@ s32 TripodBoss::getPartIDFromBoneID(s32 boneID) {
 void TripodBossBone::setAttachBaseMatrix(const TPos3f& rPos) {
     _0.invert(rPos);
 
-    f32 scale = JGeometry::TUtil< f32 >::sqrt((_0.get(0, 0) * _0.get(0, 0)) + (_0.get(1, 0) * _0.get(1, 0)) + (_0.get(2, 0) * _0.get(2, 0)) +
-                                              (_0.get(0, 1) * _0.get(0, 1)) + (_0.get(1, 1) * _0.get(1, 1)) + (_0.get(2, 1) * _0.get(2, 1)) +
-                                              (_0.get(0, 2) * _0.get(0, 2)) + (_0.get(1, 2) * _0.get(1, 2)) + (_0.get(2, 2) * _0.get(2, 2)));
 
     if (_0.toMtxPtr() != nullptr) {
         f32 invLenX =

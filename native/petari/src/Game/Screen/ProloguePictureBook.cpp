@@ -45,7 +45,6 @@ void ProloguePictureBook::kill() {
 }
 
 void ProloguePictureBook::exeActive() {
-    J3DFrameCtrl* animCtrl = MR::getAnimCtrl(this, 0);
 
     if (MR::isAnimStopped(this, 0)) {
         setNerve(GET_NERVE(ProloguePictureBook, ProloguePictureBookEnd));

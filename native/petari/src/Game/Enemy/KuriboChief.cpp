@@ -225,7 +225,7 @@ void KuriboChief::calcAndSetBaseMtx() {
 
 void KuriboChief::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     if (pSender != getSensor("Punch") &&
-        ((isEnableAttack() || !MR::isSensorPlayer(pReceiver)) && !MR::isSensorEnemy(pReceiver) ||
+        (((isEnableAttack() || !MR::isSensorPlayer(pReceiver)) && !MR::isSensorEnemy(pReceiver)) ||
          !MR::sendMsgPushAndKillVelocityToTarget(this, pReceiver, pSender)) &&
         isEnableAttack() && MR::isSensorPlayer(pReceiver) && !MR::sendMsgEnemyAttack(pReceiver, pSender)) {
         MR::sendMsgPush(pReceiver, pSender);

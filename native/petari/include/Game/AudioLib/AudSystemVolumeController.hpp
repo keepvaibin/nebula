@@ -1,4 +1,5 @@
 #pragma once
+#include "Game/Util/Array.hpp"
 
 
 class AudSystem;
@@ -29,6 +30,6 @@ public:
     AudSystem* mSystem;
     s32 mVolumeSetDelay;
     s32 mCurrVolumeSet;
-    s32 mVolumeSets[8];
+    MR::GrowTable< s32, 8 > mVolumeSets;
     s32 mNumVolumeSets;
 };

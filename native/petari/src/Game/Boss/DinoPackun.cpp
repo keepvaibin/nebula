@@ -398,22 +398,7 @@ void DinoPackun::updateFootPrintNerve(s32 a2, s32 a3) {
 
 void DinoPackun::updateCameraInfo() {
     if (_F4 != -1) {
-        f32 v2 = 0.0;
-        f32 v3 = (_108 + _104);
-        _108 += _104;
-
-        if (v3 < 0.0f) {
-            v3 = v3;
-        } else {
-            v2 = 1.0f;
-            if (v3 > 1.0f) {
-                v2 = v2;
-            } else {
-                v2 = v3;
-            }
-        }
-
-        _108 = v2;
+        _108 = MR::clamp01(_108 + _104);
         TVec3f v6(0, 0, 0);
         TVec3f v5;
         _BC.getYDir(v5);

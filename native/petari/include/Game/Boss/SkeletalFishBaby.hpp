@@ -5,7 +5,7 @@
 
 class AnimScaleController;
 class JointController;
-class JointControllerInfo;
+struct JointControllerInfo;
 class SkeletalFishRailControl;
 
 class SkeletalFishBaby : public LiveActor {

@@ -9,7 +9,7 @@ class CameraTargetDemoActor;
 class FixedPosition;
 template < typename T >
 class JointControlDelegator;
-class JointControllerInfo;
+struct JointControllerInfo;
 class Meramera;
 class SpinPullParticleCallBack;
 class ThrowingIce;

@@ -129,7 +129,6 @@ namespace MR {
 
         if (within && wasInside != isInside) {
             if (pResult != nullptr) {
-                TVec3f correction(nextPosition - contactDirection * (distance + rSphere.getRadius()));
                 pResult->mContactPosition = closest;
                 pResult->mNormal = -contactDirection;
                 pResult->mIsBound = true;

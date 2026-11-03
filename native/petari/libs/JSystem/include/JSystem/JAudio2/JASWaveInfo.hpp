@@ -1,7 +1,7 @@
 #pragma once
 
 
-class JASWaveArc;
+struct JASWaveArc;
 
 struct JASWaveInfo {
     JASWaveInfo() {

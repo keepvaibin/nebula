@@ -255,7 +255,7 @@ f32 KoopaJrShip::getPropellerRotSpeed() const {
         return 0.0f;
     }
 
-    if (isNerve(GET_NERVE(KoopaJrShip, HostTypePowerUp)) || 2 >= _D0 && !isNerve(GET_NERVE(KoopaJrShip, HostTypeDamage))) {
+    if (isNerve(GET_NERVE(KoopaJrShip, HostTypePowerUp)) || (2 >= _D0 && !isNerve(GET_NERVE(KoopaJrShip, HostTypeDamage)))) {
         return 40.0f;
     }
 
@@ -263,10 +263,6 @@ f32 KoopaJrShip::getPropellerRotSpeed() const {
 }
 
 void KoopaJrShip::updateCoordSpeed() {
-    switch (_D0) {
-    case 2:
-        0.0f;
-    }
     f32 rate = 0.0f;
     MR::calcRailRateToNextPoint(&rate, this);
 

@@ -1,4 +1,5 @@
 #pragma once
+#include "Game/Util/Array.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 class JUTTexture;
 class SnowFloor : public LiveActor {
@@ -45,7 +46,7 @@ public:
     f32 mWalkingResist;
     u16 mResistFrames;
     u16 mCheckCount;
-    HitSensor* mCheckList[8];
+    MR::GrowTable< HitSensor*, 8 > mCheckList;
     JUTTexture* mTextures[2];
     u8 mTextureIndex;
 };

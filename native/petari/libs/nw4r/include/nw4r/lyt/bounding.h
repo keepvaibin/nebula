@@ -4,7 +4,7 @@
 
 namespace nw4r {
     namespace lyt {
-        class ResBlockSet;
+        struct ResBlockSet;
 
         class Bounding : public Pane {
         public:

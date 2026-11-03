@@ -60,7 +60,6 @@ namespace {
     const s32 cWaitFrame = 75;
     const f32 cValidThrowCocoNutDistance = 500.0f;
     const s32 cThrowCocoNutStep = 70;
-    const s32 cCocoNutThrowNum = 1;
     const f32 cThrowAngleMin = 2.5f;
     const f32 cThrowAngleMax = 5.0f;
     const s32 cThrowCocoNutWaitFrame = 45;

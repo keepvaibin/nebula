@@ -3,7 +3,7 @@
 #include "JSystem/JGeometry/TVec.hpp"
 
 class NebulaArena;
-class JPAEmitterWorkData;
+struct JPAEmitterWorkData;
 class JPABaseParticle;
 class JPAFieldBlock;
 

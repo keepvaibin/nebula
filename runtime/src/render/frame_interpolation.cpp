@@ -105,7 +105,7 @@ Affine34 load_matrix(const std::uint32_t* words) noexcept {
 void store_matrix(const Affine34& m, std::uint32_t* words) noexcept {
     for (unsigned i = 0; i < 12u; ++i) words[i] = float_word(m[i]);
 }
-// XF normal matrices are 3x3 (9 words, row-major) without translation.
+// Normal matrices are 3x3 (9 words, row-major) without translation.
 Affine34 load_normal(const std::uint32_t* words) noexcept {
     Affine34 m{};
     for (unsigned row = 0; row < 3u; ++row) {
@@ -453,7 +453,7 @@ void light_at(const std::uint32_t* a, const std::uint32_t* b, const CameraMotion
     }
 }
 namespace {
-// Row numbers of the palette's parts (XF words / 4).
+// Row numbers of the palette's parts (words / 4).
 constexpr unsigned kNormalRow = kNormalBase / 4u;
 constexpr unsigned kTexRow = 30u;
 constexpr unsigned kPostRow = kPostBase / 4u;

@@ -3,7 +3,7 @@
 #include "Game/RhythmLib/AudBgmTempoAdjuster.hpp"
 #include <JSystem/JAudio2/JASSeqParser.hpp>
 
-class JASTrack;
+struct JASTrack;
 
 class AudRhythmSeqParser : public JASSeqParser {
 public:

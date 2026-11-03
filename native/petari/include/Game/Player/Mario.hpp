@@ -54,7 +54,7 @@ class MarioWarp;
 class Triangle;
 struct SoundList;
 
-class Mario : public MarioModule {
+class Mario final : public MarioModule {
 public:
     enum SeVersion {
         SeVersion_NORMAL = 0,
@@ -64,7 +64,7 @@ public:
     typedef bool (Mario::*Task)(u32);
     Mario(MarioActor*);
 
-    virtual bool postureCtrl(MtxPtr);
+    bool postureCtrl(MtxPtr);
 
     void initMember();
 

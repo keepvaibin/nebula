@@ -38,7 +38,7 @@ namespace MR {
 
         // The next frame's blur: the screen shrunk into the blur texture (128x64), a pass into its own target.
         JUTTexture* pBlur = MR::getFullScreenBlurTexture();
-        J3DNativeTarget::begin(pBlur->mImage, pBlur->getWidth(), pBlur->getHeight(), 0, 0xFFFFFF);
+        J3DNativeTarget::begin(pBlur->mImage, pBlur->getWidth(), pBlur->getHeight(), 0);
         NebulaNativeMaterial shrink;
         TDDraw::setupNative(&shrink, 1, 1, 2);
         NativeShader::setTexture(shrink, 0, &texture);

@@ -11,6 +11,7 @@
 #include <JSystem/JSupport/JSupport.hpp>
 #include <cstring>
 #include "Game/System/GameAssets.hpp"
+#include <nebula_format.h>
 
 JASChannel* JASBank::noteOn(JASBank const* pBank, int progNo, u8 pitch, u8 velocity, u16 priority, JASChannel::Callback pCallback,
                             void* pChannelMgr) {
@@ -137,9 +138,7 @@ void JASWaveArc::setFileName(const char* pName) {
     size_t length = strlen(currentDir);
     length = length + strlen(pName);
     char* path = new (JASKernel::getSystemHeap(), -4) char[length + 1];
-    strcpy(path, currentDir);
-    strcat(path, pName);
-    path[length] = '\0';
+    nebula_snprintf(path, length + 1, "%s%s", currentDir, pName);
 
     const char* fileName = path;
 

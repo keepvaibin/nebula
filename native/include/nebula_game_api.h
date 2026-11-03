@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 112u
+#define NEBULA_GAME_API_VERSION 113u
 
 /* Viewports, scissors, clears, target sizes and picture points count this many units across a frame on each axis. */
 #define NEBULA_FRAME_UNITS 65536.0f
@@ -186,7 +186,7 @@ typedef struct NebulaLight {
     float direction[3];
 } NebulaLight;
 
-/* An image (texture_image): its identity (the game's address of its bytes), format (GXTexFmt), size, mipmap levels
+/* An image (texture_image): its identity (the game's address of its bytes), format (the image file's format number), size, mipmap levels
    and its bytes (`size` of them, in the format's layout). */
 typedef struct NebulaTextureImage {
     const void* bytes;
@@ -349,7 +349,7 @@ typedef struct NebulaNativeMaterial {
         uint8_t reserved[3];
     } textures[8];
     NebulaMaterialLight light[8];
-    /* Texgen i's post-transform matrix row (GX_PTTEXMTX0 + 3k as 3k; 61 the identity), | 0x80 to normalize first: the
+    /* Texgen i's post-transform matrix row (3k for matrix k; 61 the identity), | 0x80 to normalize first: the
        drawing state's until a draw's own texgens replace it (a shape's env map or projection); NEBULA_NATIVE_KEPT keeps the
        draw's (an instance's differed list that loads no texgens). */
     uint8_t texgen_post[8];
@@ -523,7 +523,6 @@ typedef enum NebulaInputMode {
 /* Nebula options the game follows (option). */
 enum {
     NEBULA_OPTION_TEXT_SPEED = 1, /* 1 to 3: text steps revealed per frame; 4: each page at once */
-    NEBULA_OPTION_TEST_DUMP_LAYOUTS, /* tests: 1 logs each layout's pane tree once (GALAXY_TEST_DUMP_LAYOUTS) */
     NEBULA_OPTION_DRAW_IDENTITIES, /* 1 while the renderer reads host markers (NebulaRender::hostMarker) */
     NEBULA_OPTION_INPUT_MODE,        /* NebulaInputMode: the input mode the player chose */
     NEBULA_OPTION_BLOOM,             /* 1 when the renderer's bloom is built: BloomEffect and BloomEffectSimple give it
@@ -533,8 +532,6 @@ enum {
                                         (the preparation screen shows) */
     NEBULA_OPTION_RT_PREPARE_PROGRESS, /* while NEBULA_OPTION_RT_PREPARATION is 2: its progress, 0 to 10000, never
                                           going back */
-    NEBULA_OPTION_TEST_NATIVE_J3D,     /* tests (GALAXY_TEST_NATIVE_J3D=lo-hi): first << 16 | last J3D material number
-                                          (from 1) drawn, the others not; 0 all */
     NEBULA_OPTION_TEST_ARENA_FILL,     /* tests (GALAXY_TEST_ARENA_FILL=<hex byte>): 0x100 | the byte every arena block starts as; 0 without it */
     NEBULA_OPTION_TEST_TRACE_LOADS,    /* tests (GALAXY_TRACE_LOADS): 1 logs what each scene change loads */
 };
@@ -720,7 +717,7 @@ typedef struct NebulaArtExport {
     const void* texels;
     uint32_t width;
     uint32_t height;
-    uint32_t format; /* GX_TF_* */
+    uint32_t format; /* the image file's format number */
     const uint8_t* rgba;
     const uint8_t* hd;
     uint32_t hd_width;
@@ -1046,7 +1043,7 @@ typedef struct NebulaHostServices {
     /* A name for the galaxy select in the game's own words in the played language (UTF-16, NUL-terminated): galaxy
        `index`'s (`star` 0) or its star's. */
     void (*galaxy_select_name)(void* user, uint32_t index, uint32_t star, const uint16_t* name);
-    /* A model the game loaded (J3D), for its curved surfaces (galaxy/gx/curved_surfaces.h): its position array's
+    /* A model the game loaded (J3D), for its curved surfaces (galaxy/render/curved_surfaces.h): its position array's
        identity (`key`, as shape_draw names it), its positions and normals (3 floats each), and its triangles, three
        corners each, a corner a position index then a normal index. */
     void (*curved_surface)(void* user, uint64_t key, const float* positions, uint32_t position_count,
@@ -1085,14 +1082,13 @@ typedef struct NebulaHostServices {
     void (*immediate)(void* user, const NebulaImmediate* draw);
     /* A pass into a texture target the renderer owns (E-07): the records until target_end draw into it, not the
        frame; its top left `width` x `height` (in NEBULA_FRAME_UNITS) cleared to `clear_rgba`
-       (R << 24 | G << 16 | B << 8 | A) and depth `clear_z` (24 bits). */
-    void (*target_begin)(void* user, uint64_t key, uint32_t width, uint32_t height, uint32_t clear_rgba,
-                         uint32_t clear_z);
+       (R << 24 | G << 16 | B << 8 | A) and depth to far. */
+    void (*target_begin)(void* user, uint64_t key, uint32_t width, uint32_t height, uint32_t clear_rgba);
     /* Ends the pass: its picture, at full precision, becomes the texture `key` names (an image or texture load
        naming `key` reads it, whatever format it names), carrying `channels` (NebulaTargetChannels). */
     void (*target_end)(void* user, uint64_t key, uint32_t channels);
-    /* Clears channels of the open target pass (`channels`: 1 colour, 2 alpha, 4 depth) to `clear_rgba` / `clear_z`. */
-    void (*target_clear)(void* user, uint32_t clear_rgba, uint32_t clear_z, uint32_t channels);
+    /* Clears channels of the open target pass (`channels`: 1 colour, 2 alpha, 4 depth) to `clear_rgba` and far. */
+    void (*target_clear)(void* user, uint32_t clear_rgba, uint32_t channels);
     /* The whole frame drawn so far becomes texture `key` as target_end's pictures do, carrying `channels`
        (NebulaTargetChannels); `flags`: NebulaCaptureFlags. */
     void (*frame_read)(void* user, uint64_t key, uint32_t channels, uint32_t flags);
@@ -1110,9 +1106,9 @@ typedef struct NebulaHostServices {
        Never waits for the GPU. */
     uint32_t (*screen_probe_results)(void* user, uint32_t channel, NebulaScreenProbe* probes, uint32_t capacity);
     /* Clears channels (NebulaClearChannels) of the frame's rectangle at `left`, `top` (`width` x `height`, the
-       viewport's units) to `clear_rgba` (R << 24 | G << 16 | B << 8 | A) and depth `clear_z` (24 bits, far 0xFFFFFF). */
+       viewport's units) to `clear_rgba` (R << 24 | G << 16 | B << 8 | A) and depth to far. */
     void (*frame_clear)(void* user, uint32_t left, uint32_t top, uint32_t width, uint32_t height, uint32_t clear_rgba,
-                        uint32_t clear_z, uint32_t channels);
+                        uint32_t channels);
     /* The frame drawn so far is the picture shown. */
     void (*frame_show)(void* user);
     /* The game's frame is complete (its picture was shown earlier): the renderer takes every record made before. */

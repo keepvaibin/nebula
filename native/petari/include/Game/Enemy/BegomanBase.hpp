@@ -5,13 +5,13 @@
 
 class AnimScaleController;
 class BegomanBaby;
-class JointControllerInfo;
+struct JointControllerInfo;
 template < typename T >
 class JointControlDelegator;
 class WalkerStateBindStarPointer;
 
 namespace MR {
-    class ActorMoveParam;
+    struct ActorMoveParam;
     class FunctorBase;
 };  // namespace MR
 

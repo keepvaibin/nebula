@@ -12,7 +12,6 @@ namespace {
     // const s32 cJumpOutStopFrame = _;
     // const f32 cJumpOutStartSpeed = _;
     const f32 cJumpOutRotateSpeed = -18.0f;
-    const f32 cJumpOutRotateEndAngle = -PI / 4.0f;
     const f32 cJumpOutNearClipDistance = 250.0f;
     const s32 cWhiteOutFrame = 146;
     const s32 cBgmStartFrame = 108;

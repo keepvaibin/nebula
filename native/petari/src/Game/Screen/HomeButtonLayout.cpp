@@ -109,6 +109,8 @@ void HomeButtonLayout::exeActive() {
         GameSystemFunction::onHomeButtonMenuEndAllRumble();
         MR::setStarPointerModeBase();
         break;
+    default:
+        break;
     }
 
     if (!bVar1) {

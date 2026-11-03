@@ -385,9 +385,7 @@ bool AudSystem::isSubmitSeByVolumeSetting(JAISoundID soundID) {
         return false;
     }
 
-    if (mVolumeController->mCurrVolumeSet >= 3 || mVolumeController->mCurrVolumeSet < 1) {
-        f32 f1 = 0.0f;
-    } else {
+    if (mVolumeController->mCurrVolumeSet < 3 && mVolumeController->mCurrVolumeSet >= 1) {
         switch (soundID) {
         case SE_SY_TIMER_A_2:
         case SE_SY_TIMER_A_1:

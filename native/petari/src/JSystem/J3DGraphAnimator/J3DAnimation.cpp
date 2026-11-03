@@ -404,7 +404,6 @@ void J3DAnmTransformFullWithLerp::getTransform(u16 jointNo, J3DTransformInfo* pT
             }
         } else {
             f32 rate = mFrame - frame;
-            f32 var_f30 = 1.0f - rate;
 
             u32 next_frame = frame + 1;
 

@@ -790,7 +790,7 @@ void Dodoryu::updateCameraTarget() {
     _14C->mMatrix.setInline(m1);
 }
 
-DodoryuBank::DodoryuBank() : ModelObj("\203\150\203\150\203\212\203\205\203\105\220\267\223\171" /* ドドリュウ盛土 */, "DodoryuBank", _90, MR::DrawBufferType_MapObjStrongLight, -2, -2, false) {
+DodoryuBank::DodoryuBank() : ModelObj("\203\150\203\150\203\212\203\205\203\105\220\267\223\171" /* ドドリュウ盛土 */, "DodoryuBank", reinterpret_cast< MtxPtr >(&_90), MR::DrawBufferType_MapObjStrongLight, -2, -2, false) {
     _90.identity();
 }
 
@@ -807,7 +807,7 @@ void DodoryuBank::exeAppear() {
 }
 
 DodoryuRabbit::DodoryuRabbit(Dodoryu* pHost, const JMapInfoIter& rIter)
-    : ModelObj("\203\150\203\150\203\212\203\205\203\105\202\311\222\307\202\355\202\352\202\351\203\105\203\124\203\115" /* ドドリュウに追われるウサギ */, "DodoryuRabbit", _94, MR::DrawBufferType_NPC, -2, -2, false), mHost(pHost), _C4(), mTalkCtrl(), _CC(300),
+    : ModelObj("\203\150\203\150\203\212\203\205\203\105\202\311\222\307\202\355\202\352\202\351\203\105\203\124\203\115" /* ドドリュウに追われるウサギ */, "DodoryuRabbit", reinterpret_cast< MtxPtr >(&_94), MR::DrawBufferType_NPC, -2, -2, false), mHost(pHost), _C4(), mTalkCtrl(), _CC(300),
       _D0(), _D4(), _D8(), mIsDisplayMessage() {
     _94.identity();
 

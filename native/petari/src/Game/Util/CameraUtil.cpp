@@ -315,7 +315,6 @@ namespace MR {
         CameraParamChunkEvent* chunk = getCameraDirector()->getEventParameter(pCamInfo->mZoneID, pAnimName);
         if (chunk != nullptr) {
             chunk->setCameraType("CAM_TYPE_ANIM", getCameraDirector()->mHolder);
-            CameraGeneralParam* param = chunk->mGeneralParam;
             chunk->mGeneralParam->mAnimData = reinterpret_cast< u8* >(pAnimData);
             chunk->mGeneralParam->mDist = 1.0f;
             chunk->getGeneralParam()->mNum2 = CameraAnim::getAnimFrame(reinterpret_cast< u8* >(pAnimData));
@@ -496,8 +495,9 @@ namespace {
         char buff[256];
         nebula_snprintf(buff, 256, "%s-%d", pNameObj->getName(), id);
 
-        char* out = new char[strlen(buff) + 1];
-        strcpy(out, buff);
+        const size_t size = strlen(buff) + 1;
+        char* out = new char[size];
+        memcpy(out, buff, size);
         return out;
     }
 };  // namespace

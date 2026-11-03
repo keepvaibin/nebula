@@ -37,7 +37,6 @@ extern std::atomic<std::int32_t> pointer_wheel;
 // The game's files (set_native_settings_content_root in render_api.h).
 extern std::string native_settings_content_root;
 extern std::atomic<bool> borderless_active;
-extern std::atomic<bool> exclusive_fullscreen_active;
 // The last internal resolution refused for the video-memory budget (0: none).
 // The window is being moved or sized.
 extern std::atomic<bool> move_size_active;

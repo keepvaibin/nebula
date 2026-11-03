@@ -165,7 +165,6 @@ void PlayerPoseSetterInWater::update() {
     _1C++;
     _1C = (_1C + 90) % 90;
 
-    f32 pitching = MR::cos((_1C / 90.0f) * TWO_PI);
 
     TPos3f syatiMtx;
     syatiMtx.setQuat(_C);

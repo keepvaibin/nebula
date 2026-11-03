@@ -71,9 +71,7 @@ void SpinDriverShootPath::calcDirection(TVec3f* pOutDirection, f32 a2, f32 a3) c
         v6 = 1.0f;
         v7 = (1.0f - a3);
 
-        if (a2 > v7) {
-            v7 = v7;
-        } else {
+        if (a2 <= v7) {
             v7 = a2;
             v6 = (a2 + a3);
         }

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Post-processing settings, pass planning, FSR 1 constants, the AA self-test and the overlay's status text.
 #include "galaxy/render/post_process_settings.h"
+#include "galaxy/test_hooks.h"
 #include "galaxy/render/render_config.h"
 
 #include <algorithm>
@@ -60,9 +61,9 @@ bool deband_wanted() noexcept {
 #if defined(_MSC_VER)
         char value[8]{};
         std::size_t length = 0u;
-        return getenv_s(&length, value, sizeof(value), "GALAXY_DEBAND") != 0 || length <= 1u || value[0] != '0';
+        return getenv_s(&length, value, sizeof(value), nebula_switch::deband_name()) != 0 || length <= 1u || value[0] != '0';
 #else
-        const char* value = std::getenv("GALAXY_DEBAND");
+        const char* value = std::getenv(nebula_switch::deband_name());
         return value == nullptr || value[0] != '0';
 #endif
     }();

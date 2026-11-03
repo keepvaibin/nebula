@@ -68,13 +68,17 @@ if(NEBULA_AUDIT_FLOAT_CASTS AND Python3_Interpreter_FOUND)
         VERBATIM)
 endif()
 
-# Audit builds, not for shipping: these diagnostics in place of -Wno-everything
-# (which no later -W option undoes), e.g. -Wshorten-64-to-32 for tools/narrowing.py.
+# The game builds warning free: a new warning stops the build. The names turned off are style in code kept as
+# written (field order, packed comparisons) or layouts the compiler handles (offsetof on the intrusive lists).
+# An audit build replaces all of it, e.g. -Wshorten-64-to-32 for tools/narrowing.py.
 set(NEBULA_AUDIT_FLAGS "" CACHE STRING "Diagnostics for an audit build")
 if(NEBULA_AUDIT_FLAGS)
     separate_arguments(diagnostics UNIX_COMMAND "${NEBULA_AUDIT_FLAGS}")
 else()
-    set(diagnostics -Wno-everything)
+    set(diagnostics -Wall -Wextra -Werror -Wconditional-uninitialized
+        -Wno-unused-parameter -Wno-unused-private-field -Wno-missing-field-initializers -Wno-sign-compare
+        -Wno-reorder-ctor -Wno-unknown-pragmas -Wno-ignored-qualifiers -Wno-microsoft-anon-tag -Wno-invalid-offsetof
+        -Wno-deprecated-copy-with-user-provided-copy -Wno-undefined-var-template -D_CRT_SECURE_NO_WARNINGS)
 endif()
 
 # docs/NATIVE_PORT.md, "Build of the game code", has the reason for each, and docs/NATIVE_PERFORMANCE.md the cost:

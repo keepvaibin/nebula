@@ -29,7 +29,6 @@ namespace {
     f32 cSwingDigRadius = 100.0f;
     f32 cHipdropDigAmount = 1000.0f;
     f32 cHipdropDigRadius = 50.0f;
-    const u16 sCellSize = 128 / sTextureSize;
 };  // namespace
 
 SnowFloorTile::~SnowFloorTile() {

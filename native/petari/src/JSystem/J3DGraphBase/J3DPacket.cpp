@@ -92,14 +92,7 @@ void J3DMatPacket::draw() {
     }
 }
 
-static u32 sDifferedRegister[7] = {
-    J3DDiffFlag_MatColor, J3DDiffFlag_ColorChan,  J3DDiffFlag_TevReg,
-    J3DDiffFlag_Fog,      J3DDiffFlag_Blend,    J3DDiffFlag_KonstColor, J3DDiffFlag_TevStageIndirect,
-};
 
-static s32 sSizeOfDiffered[7] = {
-    13, 21, 120, 55, 15, 19, 45,
-};
 
 J3DShapePacket::J3DShapePacket() {
     mpShape = NULL;

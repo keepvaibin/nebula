@@ -33,16 +33,12 @@ namespace Nebula.Launcher
 
         internal static void ApplyRecording(ProcessStartInfo start, RecordingMode mode)
         {
-            bool record = mode != RecordingMode.None, detailed = mode == RecordingMode.Detailed;
+            bool record = mode != RecordingMode.None;
             var env = start.EnvironmentVariables;
-            foreach (var flag in new[] { "GALAXY_MONITOR_POINTER_LATENCY",
-                "GALAXY_MONITOR_FRAME_TAILS", "GALAXY_MONITOR_DISPLAY_LAYOUT", "GALAXY_FRAME_TELEMETRY" })
+            foreach (var flag in new[] { "GALAXY_MONITOR_POINTER_LATENCY", "GALAXY_MONITOR_FRAME_TAILS" })
                 env[flag] = record ? "1" : "0";
             env["GALAXY_FRAME_TIMELINE"] = record ? "1" : "0";
             env["GALAXY_FRAME_TIMELINE_EVENTS"] = "4000000";
-            env["GALAXY_GPU_TIMESTAMPS"] = detailed ? "1" : "0";
-            env["GALAXY_GX_FRAME_TIMING_SAMPLE"] = detailed ? "32" : "0";
-            env["GALAXY_GX_PSO_CYCLES"] = detailed ? "1" : "0";
         }
 
         public static void ValidatePair(string app)

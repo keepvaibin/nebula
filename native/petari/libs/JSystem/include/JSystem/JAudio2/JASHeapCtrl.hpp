@@ -213,7 +213,6 @@ public:
         while (chunk != nullptr) {
             if (chunk->checkArea(ptr)) {
                 chunk->free(ptr);
-                bool r26 = false;
                 if (chunk != mChunk && chunk->isEmpty()) {
                     MemoryChunk* nextChunk = chunk->getNextChunk();
                     delete chunk;
