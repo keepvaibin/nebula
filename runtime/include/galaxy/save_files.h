@@ -21,6 +21,8 @@ enum Result : std::int32_t {
 [[nodiscard]] Result read(const std::filesystem::path& folder, std::string_view name, void* buffer,
                           std::uint32_t capacity, std::uint32_t* length) noexcept;
 // Replaces the whole file: a reader sees the old contents or the new, never a part (galaxy/atomic_file.h).
+// The first version 3 GameData.bin over a version 2 one keeps the old file once as GameData.bin.v2 (an install's rollback
+// restores it); if that cannot be kept, nothing is replaced.
 [[nodiscard]] Result write(const std::filesystem::path& folder, std::string_view name, const void* data,
                            std::uint32_t size) noexcept;
 [[nodiscard]] Result remove(const std::filesystem::path& folder, std::string_view name) noexcept;

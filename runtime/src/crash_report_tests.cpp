@@ -27,6 +27,14 @@ std::string code_of(const Facts& facts) { return classify(facts).code; }
 }  // namespace
 
 int main() {
+    expect(galaxy::crash::translated("The game crashed", "EuGerman") == "Das Spiel ist abgest\xC3\xBCrzt", "a row in a language");
+    expect(galaxy::crash::translated("The game crashed", "UsEnglish") == "The game crashed", "English is the words given");
+    expect(galaxy::crash::translated("no such row", "EuGerman") == "no such row", "no row: the words given");
+    expect(galaxy::crash::translated("The game crashed", "Klingon") == "The game crashed", "no such folder: the words given");
+    expect(galaxy::crash::translated_report("NEB-C01: The game crashed\n\nsome detail\n\nNebula crashed", "EuItalian") ==
+               "NEB-C01: Il gioco si \xC3\xA8 bloccato\n\nsome detail\n\nNebula si \xC3\xA8 bloccato",
+           "a report keeps its code and its details");
+
     Facts fault;
     fault.kind = Facts::Kind::Fault;
     fault.in_game = true;

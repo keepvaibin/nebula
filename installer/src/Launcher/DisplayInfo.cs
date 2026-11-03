@@ -24,8 +24,8 @@ namespace Nebula.Launcher
 
         public string Label(int index)
         {
-            string name = string.IsNullOrEmpty(Name) ? "Display" : Name;
-            return string.Format("{0}: {1} ({2} × {3}){4}", index + 1, name, Width, Height, Primary ? ", main" : "");
+            string name = string.IsNullOrEmpty(Name) ? NebulaText.Of("Display") : Name;
+            return string.Format("{0}: {1} ({2} × {3}){4}", index + 1, name, Width, Height, Primary ? NebulaText.Of(", main") : "");
         }
 
         /// <summary>Distinct resolutions, largest first.</summary>

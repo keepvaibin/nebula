@@ -144,7 +144,7 @@ namespace Nebula.Launcher
                 if (!File.Exists(Path.Combine(Content, "game.pak")))
                     return "Nebula could not find the game content (game.pak). Choose it in Nebula settings.";
                 if (RuntimeLeaseHeld() && !EndRunningGame())
-                    return "Nebula is already running.";
+                    return NebulaText.Of("Nebula is already running.");
                 LaunchOptions.ValidatePair(App);
                 if (Portable) LaunchOptions.PreserveUserData(NebulaPaths.DataRoot, "portable-" + BuildInfo.Version);
                 Directory.CreateDirectory(NebulaPaths.Saves);
@@ -199,7 +199,7 @@ namespace Nebula.Launcher
             if (running.Count == 0) return false;
             try
             {
-                if (MessageBox.Show("Nebula is already running. End it and start again?", "Nebula",
+                if (MessageBox.Show(NebulaText.Of("Nebula is already running. End it and start again?"), "Nebula",
                                     MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return false;
                 foreach (var process in running)
                 {
@@ -354,9 +354,9 @@ namespace Nebula.Launcher
             rayTracingOffered = GraphicsSettings.RayTracingAdapter(graphics.Gpu);
             bool firstRun = !session.SetupComplete;
 #if NEBULA_SETTINGS_APP
-            Text = "Nebula settings";
+            Text = NebulaText.Of("Nebula settings");
 #else
-            Text = firstRun ? "Welcome to Nebula" : "Nebula settings";
+            Text = firstRun ? NebulaText.Of("Welcome to Nebula") : NebulaText.Of("Nebula settings");
 #endif
             try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch (Exception) { }
             Font = new Font("Segoe UI", 10f);
@@ -369,23 +369,23 @@ namespace Nebula.Launcher
             var intro = new Label
             {
                 Location = new Point(12, 10), Size = new Size(736, 40),
-                Text = "In game: F1, View + Menu (Xbox) or Minus + Plus (Switch) opens the settings."
+                Text = NebulaText.Of("In game: F1, View + Menu (Xbox) or Minus + Plus (Switch) opens the settings.")
             };
             Controls.Add(intro);
 
             var tabs = new TabControl { Location = new Point(12, 54), Size = new Size(736, 560), SizeMode = TabSizeMode.Fixed };
-            var display = new TabPage("Display");
-            var image = new TabPage("Graphics");
-            var sound = new TabPage("Audio");
-            var input = new TabPage("Controls");
-            var generalPage = new TabPage("General");
-            var advanced = new TabPage("Advanced");
+            var display = new TabPage(NebulaText.Of("Display"));
+            var image = new TabPage(NebulaText.Of("Graphics"));
+            var sound = new TabPage(NebulaText.Of("Audio"));
+            var input = new TabPage(NebulaText.Of("Controls"));
+            var generalPage = new TabPage(NebulaText.Of("General"));
+            var advanced = new TabPage(NebulaText.Of("Advanced"));
             var pages = new List<TabPage> { display, image, input, sound, generalPage };
             if (ModsPage.Available(session.App))
             {
                 // The game's mods (ModsPage). Added with the others: TabPages.Insert is ignored before the control
                 // has a window.
-                var modsTab = new TabPage("Mods");
+                var modsTab = new TabPage(NebulaText.Of("Mods"));
                 pages.Add(modsTab);
                 new ModsPage(modsTab, session.App, session.Content);
             }
@@ -397,26 +397,26 @@ namespace Nebula.Launcher
             displayPage = display;
             if (gpus.Count >= 2)
             {
-                Row(display, "Graphics card", gpuBox, ref y);
-                gpuBox.Items.Add("Automatic (" + gpus[0].Name + ")");
+                Row(display, NebulaText.Of("Graphics card"), gpuBox, ref y);
+                gpuBox.Items.Add(NebulaText.Of("Automatic ({0})", gpus[0].Name));
                 foreach (var gpu in gpus) gpuBox.Items.Add(GpuAdapters.Label(gpus, gpu));
             }
-            Row(display, "Monitor", monitor, ref y);
+            Row(display, NebulaText.Of("Monitor"), monitor, ref y);
             displayNotice.Location = new Point(12, y - 8);
             displayNotice.Size = new Size(700, 26);
             displayNotice.ForeColor = SystemColors.GrayText;
             displayNotice.Visible = false;
             display.Controls.Add(displayNotice);
-            Row(display, "Display mode", mode, ref y);
-            Row(display, "Resolution", resolution, ref y);
-            Row(display, "Refresh rate", refresh, ref y);
-            Row(display, "Aspect ratio", aspect, ref y);
-            vsync.Text = "Vertical sync";
+            Row(display, NebulaText.Of("Display mode"), mode, ref y);
+            Row(display, NebulaText.Of("Resolution"), resolution, ref y);
+            Row(display, NebulaText.Of("Refresh rate"), refresh, ref y);
+            Row(display, NebulaText.Of("Aspect ratio"), aspect, ref y);
+            vsync.Text = NebulaText.Of("Vertical sync");
             vsync.Location = new Point(12, y);
             vsync.Size = new Size(600, 28);
             display.Controls.Add(vsync);
             y += 32;
-            hudOutput.Text = "HUD at display resolution";
+            hudOutput.Text = NebulaText.Of("HUD at display resolution");
             hudOutput.Location = new Point(12, y);
             hudOutput.Size = new Size(600, 28);
             display.Controls.Add(hudOutput);
@@ -425,9 +425,9 @@ namespace Nebula.Launcher
             aspect.Items.AddRange(GraphicsSettings.Aspects);
 
             y = 16;
-            Row(image, "Upscaling", upscaler, ref y);
-            Row(image, "Upscaler quality", dlssQuality, ref y);
-            Label(image, "Sharpening (0-100)", 12, y + 3);
+            Row(image, NebulaText.Of("Upscaling"), upscaler, ref y);
+            Row(image, NebulaText.Of("Upscaler quality"), dlssQuality, ref y);
+            Label(image, NebulaText.Of("Sharpening (0-100)"), 12, y + 3);
             sharpness.Location = new Point(320, y);
             sharpness.Size = new Size(120, 28);
             sharpness.Minimum = 0;
@@ -435,27 +435,27 @@ namespace Nebula.Launcher
             sharpness.Increment = 10;
             image.Controls.Add(sharpness);
             y += 40;
-            Row(image, "Anti-aliasing", antiAliasing, ref y);
-            Row(image, "Anti-aliasing quality", aaQuality, ref y);
+            Row(image, NebulaText.Of("Anti-aliasing"), antiAliasing, ref y);
+            Row(image, NebulaText.Of("Anti-aliasing quality"), aaQuality, ref y);
             Row(image, "MSAA", msaa, ref y);
-            Row(image, "Interpolation", interpolation, ref y);
+            Row(image, NebulaText.Of("Interpolation"), interpolation, ref y);
             frameRateLabel.Location = new Point(12, y + 3);
             frameRateLabel.Size = new Size(300, 26);
             image.Controls.Add(frameRateLabel);
             Combo(image, frameRate, 320, y);
             y += 40;
-            Row(image, "Texture filtering", textureFilter, ref y);
-            Row(image, "Lighting", lighting, ref y);
-            mipmaps.Text = "Generated mipmaps";
+            Row(image, NebulaText.Of("Texture filtering"), textureFilter, ref y);
+            Row(image, NebulaText.Of("Lighting"), lighting, ref y);
+            mipmaps.Text = NebulaText.Of("Generated mipmaps");
             mipmaps.Location = new Point(12, y);
             mipmaps.Size = new Size(300, 28);
             image.Controls.Add(mipmaps);
-            occlusion.Text = "Ambient occlusion";
+            occlusion.Text = NebulaText.Of("Ambient occlusion");
             occlusion.Location = new Point(320, y);
             occlusion.Size = new Size(300, 28);
             image.Controls.Add(occlusion);
             y += 32;
-            rayTracing.Text = "Ray tracing";
+            rayTracing.Text = NebulaText.Of("Ray tracing");
             rayTracing.Location = new Point(12, y);
             rayTracing.Size = new Size(300, 28);
             rayTracing.Visible = rayTracingOffered;
@@ -493,59 +493,59 @@ namespace Nebula.Launcher
             BuildControlsTab(input);
 
             y = 16;
-            Row(generalPage, "Text speed", textSpeed, ref y);
+            Row(generalPage, NebulaText.Of("Text speed"), textSpeed, ref y);
             textSpeed.Items.AddRange(GeneralSettings.TextSpeeds);
-            Row(generalPage, "Language", languageBox, ref y);
+            Row(generalPage, NebulaText.Of("Language"), languageBox, ref y);
             foreach (int language in offeredLanguages) languageBox.Items.Add(GeneralSettings.LanguageNames[language]);
 
             y = 16;
-            Label(advanced, "Game content", 12, y + 3);
-            Button(advanced, "Change…", 590, y, 120).Click += delegate { ChooseContent(); };
+            Label(advanced, NebulaText.Of("Game content"), 12, y + 3);
+            Button(advanced, NebulaText.Of("Change…"), 590, y, 120).Click += delegate { ChooseContent(); };
             contentLabel.Location = new Point(12, y + 36);
             contentLabel.Size = new Size(700, 26);
             contentLabel.AutoEllipsis = true;
             contentLabel.ForeColor = SystemColors.GrayText;
             advanced.Controls.Add(contentLabel);
             y += 76;
-            Label(advanced, "Recording (next launch)", 12, y + 3);
-            recording.Items.AddRange(new[] { "No recording", "Lightweight recording", "Detailed recording" });
+            Label(advanced, NebulaText.Of("Recording (next launch)"), 12, y + 3);
+            recording.Items.AddRange(new[] { NebulaText.Of("No recording"), NebulaText.Of("Lightweight recording"), NebulaText.Of("Detailed recording") });
             Combo(advanced, recording, 320, y);
             y += 44;
-            Button(advanced, "Export saves…", 12, y, 170).Click += delegate { ExportSaves(); };
-            var importSaves = Button(advanced, "Import saves…", 190, y, 170);
+            Button(advanced, NebulaText.Of("Export saves…"), 12, y, 170).Click += delegate { ExportSaves(); };
+            var importSaves = Button(advanced, NebulaText.Of("Import saves…"), 190, y, 170);
             var importMenu = new ContextMenuStrip();
-            importMenu.Items.Add("From a zip file…", null, delegate { ImportSaves(true); });
-            importMenu.Items.Add("From a folder…", null, delegate { ImportSaves(false); });
+            importMenu.Items.Add(NebulaText.Of("From a zip file…"), null, delegate { ImportSaves(true); });
+            importMenu.Items.Add(NebulaText.Of("From a folder…"), null, delegate { ImportSaves(false); });
             importSaves.Click += delegate { importMenu.Show(importSaves, new Point(0, importSaves.Height)); };
-            Button(advanced, "Open save folder", 368, y, 170).Click += delegate
+            Button(advanced, NebulaText.Of("Open save folder"), 368, y, 170).Click += delegate
             {
                 Directory.CreateDirectory(NebulaPaths.Saves);
                 Process.Start("explorer.exe", "\"" + NebulaPaths.Saves + "\"");
             };
-            Button(advanced, "Open diagnostics", 546, y, 170).Click += delegate
+            Button(advanced, NebulaText.Of("Open diagnostics"), 546, y, 170).Click += delegate
             {
                 Directory.CreateDirectory(NebulaPaths.Sessions);
                 Process.Start("explorer.exe", "\"" + NebulaPaths.Sessions + "\"");
             };
             y += 44;
-            Button(advanced, session.Portable ? "Beta releases" : "Check for updates", 12, y, 200).Click += delegate
+            Button(advanced, session.Portable ? NebulaText.Of("Beta releases") : NebulaText.Of("Check for updates"), 12, y, 200).Click += delegate
             {
                 if (session.Portable) { Process.Start("https://github.com/" + BuildInfo.Repository + "/releases"); return; }
                 string setup = Path.Combine(session.Root, "Nebula-Setup.exe");
                 if (File.Exists(setup)) Process.Start(new ProcessStartInfo(setup, "--update") { WorkingDirectory = session.Root });
             };
-            askUpdates.Text = "Check for updates at start";
+            askUpdates.Text = NebulaText.Of("Check for updates at start");
             askUpdates.Location = new Point(222, y + 6);
             askUpdates.Size = new Size(360, 24);
             askUpdates.Checked = session.AskAboutUpdates;
             askUpdates.Visible = !session.Portable;
             advanced.Controls.Add(askUpdates);
 
-            var play = new Button { Text = "Save and play", Location = new Point(608, 628), Size = new Size(140, 38) };
+            var play = new Button { Text = NebulaText.Of("Save and play"), Location = new Point(608, 628), Size = new Size(140, 38) };
             play.Click += delegate { if (Commit()) Play(); };
             Controls.Add(play);
             AcceptButton = play;
-            var save = new Button { Text = "Save", Location = new Point(496, 628), Size = new Size(104, 38) };
+            var save = new Button { Text = NebulaText.Of("Save"), Location = new Point(496, 628), Size = new Size(104, 38) };
             save.Click += delegate { if (Commit()) Close(); };
             Controls.Add(save);
 #if !NEBULA_SETTINGS_APP
@@ -626,17 +626,17 @@ namespace Nebula.Launcher
         private void BuildControlsTab(TabPage page)
         {
             int y = 12;
-            SmallLabel(page, "Input", 12, y + 3, 180);
+            SmallLabel(page, NebulaText.Of("Input"), 12, y + 3, 180);
             Combo(page, inputSource, 200, y);
             inputSource.Width = 300;
-            inputSource.Items.AddRange(new object[] { "Auto (keyboard, mouse and controllers)", "Keyboard and mouse only", "Controller only" });
-            if (controls.InputMode == ControlsSettings.ModeRealWiimote) { inputSource.Items.Add("Wii Remote"); inputSource.Enabled = false; }
+            inputSource.Items.AddRange(new object[] { NebulaText.Of("Auto (keyboard, mouse and controllers)"), NebulaText.Of("Keyboard and mouse only"), NebulaText.Of("Controller only") });
+            if (controls.InputMode == ControlsSettings.ModeRealWiimote) { inputSource.Items.Add(NebulaText.Of("Wii Remote")); inputSource.Enabled = false; }
             y += 36;
-            SmallLabel(page, "Edit controls for", 12, y + 3, 180);
+            SmallLabel(page, NebulaText.Of("Edit controls for"), 12, y + 3, 180);
             Combo(page, editScheme, 200, y);
             editScheme.Width = 300;
             editScheme.Items.AddRange(ControlsSettings.SchemeLabels);
-            vibrationOn.Text = "Vibration";
+            vibrationOn.Text = NebulaText.Of("Vibration");
             vibrationOn.Location = new Point(516, y + 1);
             vibrationOn.Size = new Size(96, 24);
             page.Controls.Add(vibrationOn);
@@ -652,8 +652,8 @@ namespace Nebula.Launcher
             bindingList.MultiSelect = false;
             bindingList.HideSelection = false;
             bindingList.HeaderStyle = ColumnHeaderStyle.Nonclickable;
-            bindingList.Columns.Add("Wii input", 170);
-            bindingList.Columns.Add("Bound to", 226);
+            bindingList.Columns.Add(NebulaText.Of("Wii input"), 170);
+            bindingList.Columns.Add(NebulaText.Of("Bound to"), 226);
             bindingList.ClientSizeChanged += delegate
             {
                 int width = bindingList.ClientSize.Width - 1;
@@ -666,15 +666,15 @@ namespace Nebula.Launcher
             page.Controls.Add(bindingList);
 
             int x = 466;
-            Button(page, "Add…", x, y, 80).Click += delegate { StartCapture(); };
-            Button(page, "Clear", x + 84, y, 80).Click += delegate
+            Button(page, NebulaText.Of("Add…"), x, y, 80).Click += delegate { StartCapture(); };
+            Button(page, NebulaText.Of("Clear"), x + 84, y, 80).Click += delegate
             {
                 int target = SelectedTarget();
                 if (target < 0) return;
                 controls.Bindings[Scheme][target] = new InputSource[0];
                 RefreshBindings();
             };
-            Button(page, "Defaults", x + 168, y, 80).Click += delegate
+            Button(page, NebulaText.Of("Defaults"), x + 168, y, 80).Click += delegate
             {
                 EndCapture();
                 controls.Bindings[Scheme] = ControlsSettings.DefaultTable(Scheme);
@@ -688,29 +688,29 @@ namespace Nebula.Launcher
             page.Controls.Add(captureLabel);
             y += 30;
 
-            TuningRow(page, "Pointer speed", pointerSpeed, x, ref y, 0.2m, 6.0m, 0.2m, 1);
-            TuningRow(page, "Stick deadzone %", stickDeadzone, x, ref y, 0m, 50m, 2m, 0);
-            TuningRow(page, "Pointer stick deadzone %", pointerDeadzone, x, ref y, 0m, 50m, 2m, 0);
-            TuningRow(page, "Hide idle pointer (s)", pointerHide, x, ref y, 0m, 30m, 1m, 0);
-            invertPointer.Text = "Invert pointer Y";
+            TuningRow(page, NebulaText.Of("Pointer speed"), pointerSpeed, x, ref y, 0.2m, 6.0m, 0.2m, 1);
+            TuningRow(page, NebulaText.Of("Stick deadzone %"), stickDeadzone, x, ref y, 0m, 50m, 2m, 0);
+            TuningRow(page, NebulaText.Of("Pointer stick deadzone %"), pointerDeadzone, x, ref y, 0m, 50m, 2m, 0);
+            TuningRow(page, NebulaText.Of("Hide idle pointer (s)"), pointerHide, x, ref y, 0m, 30m, 1m, 0);
+            invertPointer.Text = NebulaText.Of("Invert pointer Y");
             invertPointer.Location = new Point(x, y);
             invertPointer.Size = new Size(250, 24);
             page.Controls.Add(invertPointer);
             y += 26;
-            SmallLabel(page, "Motion", x, y + 3, 88);
+            SmallLabel(page, NebulaText.Of("Motion"), x, y + 3, 88);
             motion.Location = new Point(x + 92, y);
             motion.Width = 158;
             motion.DropDownStyle = ComboBoxStyle.DropDownList;
             motion.Items.AddRange(ControlsSettings.MotionLabels);
             page.Controls.Add(motion);
             y += 27;
-            TuningRow(page, "Shake sensitivity", shakeSensitivity, x, ref y, 1m, 5m, 1m, 0);
-            gyroPointer.Text = "Gyro pointer (right stick: camera)";
+            TuningRow(page, NebulaText.Of("Shake sensitivity"), shakeSensitivity, x, ref y, 1m, 5m, 1m, 0);
+            gyroPointer.Text = NebulaText.Of("Gyro pointer (right stick: camera)");
             gyroPointer.Location = new Point(x, y);
             gyroPointer.Size = new Size(250, 24);
             page.Controls.Add(gyroPointer);
             y += 26;
-            TuningRow(page, "Gyro sensitivity", gyroSensitivity, x, ref y, 0.2m, 5.0m, 0.1m, 1);
+            TuningRow(page, NebulaText.Of("Gyro sensitivity"), gyroSensitivity, x, ref y, 0.2m, 5.0m, 0.1m, 1);
 
             pointerSpeed.ValueChanged += delegate { if (!loading) controls.Tuning[Scheme].PointerSpeed = (float)pointerSpeed.Value; };
             stickDeadzone.ValueChanged += delegate { if (!loading) controls.Tuning[Scheme].StickDeadzone = (float)stickDeadzone.Value / 100f; };
@@ -781,7 +781,7 @@ namespace Nebula.Launcher
         {
             for (int t = 0; t < ControlsSettings.TargetCount; t++)
                 bindingList.Items[t].SubItems[1].Text = captureTarget == t
-                    ? "Press an input…" : ControlsSettings.FormatBindings(Scheme, controls.Bindings[Scheme][t]);
+                    ? NebulaText.Of("Press an input…") : ControlsSettings.FormatBindings(Scheme, controls.Bindings[Scheme][t]);
         }
 
         private int SelectedTarget()
@@ -792,18 +792,18 @@ namespace Nebula.Launcher
         private void StartCapture()
         {
             int target = SelectedTarget();
-            if (target < 0) { captureLabel.Text = "Select a Wii input first."; return; }
+            if (target < 0) { captureLabel.Text = NebulaText.Of("Select a Wii input first."); return; }
             EndCapture();
             captureTarget = target;
             captureDeadline = DateTime.UtcNow.AddSeconds(8);
             captureBaseline = null;
             if (Scheme == ControlsSettings.Keyboard)
             {
-                captureLabel.Text = "Press a key or mouse button. Esc cancels.";
+                captureLabel.Text = NebulaText.Of("Press a key or mouse button. Esc cancels.");
             }
             else
             {
-                captureLabel.Text = "Press a button, push a stick or pull a trigger. Esc cancels.";
+                captureLabel.Text = NebulaText.Of("Press a button, push a stick or pull a trigger. Esc cancels.");
                 padReader = new PadCaptureReader(Scheme != ControlsSettings.Xbox);
             }
             captureFilter = new CaptureFilter(this);
@@ -828,7 +828,7 @@ namespace Nebula.Launcher
             if (target < 0) return;
             if (!ControlsSettings.Allowed(scheme, target, source))
             {
-                captureLabel.Text = ControlsSettings.FormatSource(scheme, source) + " cannot drive " + ControlsSettings.TargetLabels[target] + ".";
+                captureLabel.Text = NebulaText.Of("{0} cannot drive {1}.", ControlsSettings.FormatSource(scheme, source), ControlsSettings.TargetLabels[target]);
                 return;
             }
             controls.Bindings[scheme][target] = ControlsSettings.AddBinding(controls.Bindings[scheme][target], source);
@@ -842,7 +842,7 @@ namespace Nebula.Launcher
             if (DateTime.UtcNow > captureDeadline) { EndCapture(); captureLabel.Text = ""; return; }
             if (padReader == null) return;
             var sample = padReader.Read(Scheme);
-            if (!sample.Connected) { captureLabel.Text = "No " + ControlsSettings.SchemeLabels[Scheme] + " found. Esc cancels."; return; }
+            if (!sample.Connected) { captureLabel.Text = NebulaText.Of("No {0} found. Esc cancels.", ControlsSettings.SchemeLabels[Scheme]); return; }
             if (captureBaseline == null) { captureBaseline = sample; return; }
             InputSource source;
             if (PadCaptureReader.Detect(captureBaseline, sample, out source)) FinishCapture(source);
@@ -998,7 +998,7 @@ namespace Nebula.Launcher
             if (mode.SelectedIndex == 1)
             {
                 resolutionChoices.Add(new Size(screen.Width, screen.Height));
-                resolution.Items.Add(string.Format("{0} × {1} (desktop)", screen.Width, screen.Height));
+                resolution.Items.Add(NebulaText.Of("{0} × {1} (desktop)", screen.Width, screen.Height));
             }
             else
             {
@@ -1043,7 +1043,7 @@ namespace Nebula.Launcher
             var screen = SelectedMonitor;
             refresh.Items.Clear();
             refreshChoices.Clear();
-            refresh.Items.Add(string.Format("Desktop ({0} Hz)", screen.Refresh));
+            refresh.Items.Add(NebulaText.Of("Desktop ({0} Hz)", screen.Refresh));
             refresh.SelectedIndex = 0;
             refresh.Enabled = false;
             resolution.Enabled = mode.SelectedIndex != 1;
@@ -1116,7 +1116,7 @@ namespace Nebula.Launcher
                 upscalerChoices[upscaler.SelectedIndex] == 3;
             frameRateChoices.Clear();
             frameRateChoices.AddRange(GraphicsSettings.InterpolationTargets(interpolationMode, refreshHz, dlss));
-            frameRateLabel.Text = interpolationMode == 0 ? "Frame rate limit" : "Target frame rate";
+            frameRateLabel.Text = interpolationMode == 0 ? NebulaText.Of("Frame rate limit") : NebulaText.Of("Target frame rate");
             frameRate.Items.Clear();
             int wanted = want == 0 ? (refreshHz != 0 ? refreshHz : 1000) : want;
             int selected = interpolationMode == 0 ? frameRateChoices.Count - 1 : 0;
@@ -1124,7 +1124,7 @@ namespace Nebula.Launcher
             {
                 int rate = frameRateChoices[i];
                 frameRate.Items.Add(rate != 0 ? rate + " FPS"
-                    : refreshHz != 0 ? string.Format("Match refresh rate ({0} Hz)", refreshHz) : "Match refresh rate");
+                    : refreshHz != 0 ? NebulaText.Of("Match refresh rate ({0} Hz)", refreshHz) : NebulaText.Of("Match refresh rate"));
                 int value = rate == 0 ? (refreshHz != 0 ? refreshHz : 1000) : rate;
                 if (value <= wanted) selected = i;
             }
@@ -1189,7 +1189,7 @@ namespace Nebula.Launcher
             }
             catch (Exception error)
             {
-                MessageBox.Show(this, "Settings could not be saved: " + error.Message, "Nebula", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(this, NebulaText.Of("Settings could not be saved: {0}", error.Message), "Nebula", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return false;
             }
         }
@@ -1227,13 +1227,13 @@ namespace Nebula.Launcher
 
         private void ExportSaves()
         {
-            using (var dialog = new FolderBrowserDialog { Description = "Choose a folder for the saves archive." })
+            using (var dialog = new FolderBrowserDialog { Description = NebulaText.Of("Choose a folder for the saves archive.") })
             {
                 if (dialog.ShowDialog(this) != DialogResult.OK) return;
                 try
                 {
                     string archive = SaveArchive.Export(dialog.SelectedPath);
-                    MessageBox.Show(this, "Saves exported to " + archive + ".", "Nebula", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show(this, NebulaText.Of("Saves exported to {0}.", archive), "Nebula", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
                 catch (Exception error) { MessageBox.Show(this, error.Message, "Nebula", MessageBoxButtons.OK, MessageBoxIcon.Error); }
             }
@@ -1245,7 +1245,7 @@ namespace Nebula.Launcher
             string source = null;
             if (zip)
             {
-                using (var dialog = new OpenFileDialog { Title = "Import saves", Filter = "Zip archives (*.zip)|*.zip", CheckFileExists = true })
+                using (var dialog = new OpenFileDialog { Title = NebulaText.Of("Import saves"), Filter = NebulaText.Of("Zip archives (*.zip)|*.zip"), CheckFileExists = true })
                     if (dialog.ShowDialog(this) == DialogResult.OK) source = dialog.FileName;
             }
             else
@@ -1258,7 +1258,7 @@ namespace Nebula.Launcher
             {
                 string message = SaveArchive.Import(source, delegate
                 {
-                    return MessageBox.Show(this, "Replace the current saves? They are moved to a backup folder.", "Nebula",
+                    return MessageBox.Show(this, NebulaText.Of("Replace the current saves? They are moved to a backup folder."), "Nebula",
                                            MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes;
                 });
                 if (message != null) MessageBox.Show(this, message, "Nebula", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -1310,7 +1310,7 @@ namespace Nebula.Launcher
                 string path = Path.Combine(parent, DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff") + "-" + Guid.NewGuid().ToString("N"));
                 if (!Directory.Exists(path)) { Directory.CreateDirectory(path); return path; }
             }
-            throw new IOException("Could not create a new session folder.");
+            throw new IOException(NebulaText.Of("Could not create a new session folder."));
         }
 
         /// <summary>
@@ -1384,16 +1384,16 @@ namespace Nebula.Launcher
                     { "exitCode", process.ExitCode }, { "elapsedSeconds", (DateTime.UtcNow - started).TotalSeconds },
                     { "endUtc", DateTime.UtcNow.ToString("o") }
                 });
-                string result = "Recording saved to " + session;
+                string result = NebulaText.Of("Recording saved to {0}", session);
                 string saved = session;
                 try
                 {
                     System.IO.Compression.ZipFile.CreateFromDirectory(session, session + ".zip", System.IO.Compression.CompressionLevel.Optimal, false);
-                    result = "Recording saved to " + session + ".zip";
+                    result = NebulaText.Of("Recording saved to {0}", session + ".zip");
                     saved = session + ".zip";
                 }
                 catch (Exception) { /* Logs remain available if ZIP creation fails. */ }
-                if (process.ExitCode != 0) result = "The game exited with code " + process.ExitCode + ".\r\n" + result;
+                if (process.ExitCode != 0) result = NebulaText.Of("The game exited with code {0}.", process.ExitCode) + "\r\n" + result;
                 RecordingNotice.Show(result, process.ExitCode != 0, saved);
                 Environment.Exit(0);
             });

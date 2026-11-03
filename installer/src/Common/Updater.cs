@@ -91,7 +91,7 @@ namespace Nebula
                 if (VerifySignature(exe, sig)) return exe;
                 File.Delete(exe);
                 if (attempt == 1)
-                    throw new InvalidDataException("The downloaded Nebula " + release.Version + " setup is not signed by the Nebula release key. It was deleted and not run.");
+                    throw new InvalidDataException(NebulaText.Of("The downloaded Nebula {0} setup is not signed by the Nebula release key. It was deleted and not run.", release.Version));
             }
         }
 
