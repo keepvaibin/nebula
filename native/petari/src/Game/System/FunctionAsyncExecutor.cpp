@@ -105,9 +105,9 @@ void FunctionAsyncExecutor::waitForEnd(const char* pName) {
         cur++;
     }
 
-    // A function startOnMainThread ran at once (its caller was the main thread) has no entry: it has ended. The console
-    // reads past the list's end here and waits on whatever entry lies there; natively that can be a stale entry that
-    // never ends (ResourceHolderManager::createAndAddInner on the main thread would hang).
+    // A function startOnMainThread ran at once (its caller was the main thread) has no entry: it has ended. Reading
+    // past the list's end could wait on a stale entry that never ends (ResourceHolderManager::createAndAddInner on the
+    // main thread would hang).
     if (cur == lst) {
         (MR::MutexHolder< 2 >::sMutex).unlock();
         return;

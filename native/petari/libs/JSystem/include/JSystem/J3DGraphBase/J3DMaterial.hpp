@@ -44,9 +44,7 @@ public:
     s32 newSharedSnapshot();
 
     inline J3DMaterialAnm* getMaterialAnm() {
-        // The console's test (a cached MEM1/MEM2 address, below 0xC0000000) would reject every host heap address
-        // above 3 GiB and with it every material animation (BTP, BRK, BTK, BPK). The field only ever holds NULL or a
-        // MaterialAnmBuffer entry.
+        // The field only ever holds NULL or a MaterialAnmBuffer entry.
         return mMaterialAnm;
     }
 

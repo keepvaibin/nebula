@@ -15,7 +15,7 @@ namespace ImageEffectLocalUtil {
     };
 
     // The stage the texture draws use: setupDrawTexture's (modulate) or the brightness threshold (red above the
-    // material colour's, konst alpha).
+    // material colour's, constant alpha).
     enum EStage {
         Stage_Modulate,
         Stage_Threshold,

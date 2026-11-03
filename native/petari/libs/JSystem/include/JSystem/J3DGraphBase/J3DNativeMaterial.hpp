@@ -39,7 +39,7 @@ struct J3DMaterialSetup {
 
 // The material's values.
 struct J3DMaterialValues {
-    s16 tev_color[4][4];
+    s16 register_color[4][4];
     u8 konst_color[4][4];
     u8 material_color[2][4], ambient_color[2][4];
     u8 light_mask;  // the lights below that are set

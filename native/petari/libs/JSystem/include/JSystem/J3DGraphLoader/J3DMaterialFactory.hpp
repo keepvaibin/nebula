@@ -10,7 +10,7 @@ struct J3DMaterialInitData {
     u8 mCullModeIdx;
     u8 mColorChanNumIdx;
     u8 mTexGenNumIdx;
-    u8 mTevStageNumIdx;
+    u8 mStageCountIdx;
     u8 mZCompLocIdx;
     u8 mZModeIdx;
     u8 mUnused7Idx;
@@ -126,7 +126,7 @@ public:
     u32* mpCullMode;
     NebulaColor16* mpRegisterColor;
     NebulaColor8* mpConstantColor;
-    u8* mpTevStageNum;
+    u8* mpStageCount;
     J3DFogInfo* mpFogInfo;
     J3DAlphaCompInfo* mpAlphaCompInfo;
     J3DBlendInfo* mpBlendInfo;

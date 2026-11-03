@@ -28,8 +28,7 @@ void PauseButtonCheckerInGame::update() {
     }
 }
 
-// A press pauses the first frame it is permitted: a tap is enough (the console waited for 12 frames of holding, longer
-// than a quick press), and a press made while A or B is held pauses once they are let go.
+// A press pauses the first frame it is permitted: a tap is enough, and a press made while A or B is held pauses once they are let go.
 bool PauseButtonCheckerInGame::isPermitToPlusPause() const {
     if (mPlusHoldFrame == 0 || mPlusUsed || !isPermitToPause()) {
         return false;
@@ -49,8 +48,7 @@ bool PauseButtonCheckerInGame::isPermitToMinusPause() const {
     return true;
 }
 
-// Not while A or B is held. The console also waited for the controller to be still, which drops a press made while the
-// controller moves (a gyro pointer, a hand in motion).
+// Not while A or B is held.
 bool PauseButtonCheckerInGame::isPermitToPause() const {
     return !MR::isHeldJump(PLAYER_1) && !MR::isHeldFire(PLAYER_1);
 }

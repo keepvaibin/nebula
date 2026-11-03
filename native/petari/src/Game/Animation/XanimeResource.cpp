@@ -192,8 +192,7 @@ u32 XanimeResourceTable::initGroupInfo(ResourceHolder* pResourceHolder, XanimeGr
             entry->mLoop = 0.0f;
             entry->mAttribute = 0;
         } else {
-            // A J3DAnmBase (ResourceHolder loads every .bck): its fields, which the console read at byte offsets 4
-            // and 6, past a 4-byte vtable pointer.
+            // A J3DAnmBase (ResourceHolder loads every .bck): its fields, read through the class.
             const J3DAnmBase* pAnm = static_cast< const J3DAnmBase* >(entry->_20[0]);
             entry->mAttribute = pAnm->getAttribute();
             entry->mLoop = 0.0f;

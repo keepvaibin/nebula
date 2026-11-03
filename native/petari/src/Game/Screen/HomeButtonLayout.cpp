@@ -28,8 +28,7 @@ HomeButtonLayout::HomeButtonLayout() : LayoutActor("HOME\203\173\203\136\203\223
 }
 
 void HomeButtonLayout::init(const JMapInfoIter& rIter) {
-    // The console loaded the HOME button library's layout, sounds, messages and settings from the disc here; the
-    // host keeps the menu (NebulaHomeMenu).
+    // The host keeps the menu (NebulaHomeMenu).
     mIsInitialized = true;
     initNerve(GET_NERVE(HomeButtonLayout, HomeButtonLayoutDeactive));
     appear();
@@ -96,7 +95,7 @@ void HomeButtonLayout::exeActive() {
     case NebulaHomeMenu::cChoiceLeaveGame:
         AudWrap::getSystem()->preProcessToReset();
         bVar1 = true;
-        GameSystemFunction::requestGoWiiMenu(true);
+        GameSystemFunction::requestQuitGame(true);
         GameSystemFunction::onHomeButtonMenuEndAllRumble();
         MR::setStarPointerModeBase();
         break;

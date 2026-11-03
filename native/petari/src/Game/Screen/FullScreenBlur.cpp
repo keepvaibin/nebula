@@ -35,8 +35,7 @@ namespace MR {
         NativeShader::send(layer);
         TDDraw::drawTexture(TVec2f(-param2, -param2), MR::getFullScreenBlurTexture(), TVec2f(screenWidth + param2 * 2.0f, 456.0f + param2 * 2.0f));
 
-        // The next frame's blur: the screen shrunk into the blur texture (128x64), a pass into its own target. The
-        // console drew it below the frame (a scissor-box offset of -464 rows) and copied those rows back.
+        // The next frame's blur: the screen shrunk into the blur texture (128x64), a pass into its own target.
         JUTTexture* pBlur = MR::getFullScreenBlurTexture();
         J3DNativeTarget::begin(pBlur->mImage, pBlur->getWidth(), pBlur->getHeight(), 0, 0xFFFFFF);
         NebulaNativeMaterial shrink;

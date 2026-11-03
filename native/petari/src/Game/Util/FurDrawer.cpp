@@ -108,7 +108,7 @@ void FurDrawer::setupMaterial(DynamicFurParam* pParam) const {
     sMaterial.color_write = 1;
     sMaterial.alpha_write = 0;
 
-    // The fog (start, end, near, far; colour; console type): the fog control's, or TDDraw's mixed fog (linear over the
+    // The fog (start, end, near, far; colour; type): the fog control's, or TDDraw's mixed fog (linear over the
     // sphere around the fog position, colour 0xFF000080), or none.
     f32* pFog = sMaterial.constants + 32;
     if (pParam->mFogCtrl) {
@@ -196,7 +196,7 @@ void FurDrawer::setupLayerMaterial(s32 layer) const {
     f32 alpha = mBrightness.calcValue(layer, mNumLayers);
     f32 brightness = mAlpha.calcValue(mNumLayers - layer - 1, mNumLayers);
     f32 blend = mColorBlend.calcValue(mNumLayers - layer - 1, mNumLayers);
-    // the console's constant colour 3 as the shell's (8-bit channels).
+    // constant colour 3 as the shell's (8-bit channels).
     sMaterial.constants[16] = static_cast< u8 >((s32)(alpha)) / 255.0f;
     sMaterial.constants[17] = static_cast< u8 >((s32)(brightness)) / 255.0f;
     sMaterial.constants[18] = static_cast< u8 >((s32)(blend)) / 255.0f;
@@ -208,9 +208,7 @@ void FurDrawer::setupLayerMaterial(s32 layer) const {
 
 void FurDrawer::createFurMap() {
     u32 count;
-    // LA8 texels in rows (NEBULA_TEXTURE_LINEAR_LA8): intensity, then alpha. The game wrote each strand at index
-    // x + width * y of an IA8 image in the console's 4x4 tiles; it lands where those tiles showed it, so the map is
-    // the one the game drew.
+    // LA8 texels in rows (NEBULA_TEXTURE_LINEAR_LA8): intensity, then alpha. Each strand is written at its place in the rows.
     u8* pTexels = mFurTexture->mImage;
     u32 width = mFurTexture->getTexInfo()->mWidth;
     u32 height = mFurTexture->getTexInfo()->mHeight;

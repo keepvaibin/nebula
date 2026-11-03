@@ -48,8 +48,8 @@ namespace MR {
         static const int SHUFFLE_MIN = -4;
         static const int SHUFFLE_MAX = 5;
         static const int SELECTION_SORT_MIN = 20;
-        // The console's pivots sit at a quarter and three quarters of the range: its iterators (pointers) are 4 bytes.
-        // Natively sizeof(TIt) is 8, which would put the second pivot past the end of short ranges.
+        // The pivots sit at a quarter and three quarters of the range, whatever the iterator's size: sizeof(TIt)
+        // here would put the second pivot past the end of short ranges.
         static const long PIVOT_PARTS = 4;
 
         while (true) {

@@ -102,7 +102,7 @@ namespace {
     // The value at `step` arrives: it must be the vertex's next.
     void arrive(u32 step) {
         if (sVertex >= sCount || sNext != step) {
-            fail("a vertex value outside its primitive or out of GX's order");
+            fail("a vertex value outside its primitive or out of order");
         }
         sNext++;
         advance();

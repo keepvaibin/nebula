@@ -127,15 +127,15 @@ void FallOutFieldDraw::draw() const {
     J3DNativeView::setZScaleOffset(0.0f, 0.0f);
     // The mask: alpha 255 where the screen's alpha is under (or, by arg 0, over) 1, a pass of its own at half size, then
     // halved again and blurred, each into its own texture.
-    const NebulaColor8 konst = {0, 0, 0, 1};
+    const NebulaColor8 constantAlpha = {0, 0, 0, 1};
     const NebulaColor8 white = {255, 255, 255, 255};
-    ImageEffectLocalUtil::setMode(_C ? ImageEffectLocalUtil::Mode_MaskAbove : ImageEffectLocalUtil::Mode_MaskBelow, konst,
+    ImageEffectLocalUtil::setMode(_C ? ImageEffectLocalUtil::Mode_MaskAbove : ImageEffectLocalUtil::Mode_MaskBelow, constantAlpha,
                                   white);
     J3DNativeTarget::begin(mMask->mImage, mMask->getWidth(), mMask->getHeight(), 0, 0xFFFFFF);
     ImageEffectLocalUtil::drawTexture(pScreenAlphaTexture2, 2, 0, 255, ImageEffectLocalUtil::TexDrawType_0);
     J3DNativeTarget::end(mMask->mImage, NEBULA_TARGET_ALPHA);
 
-    ImageEffectLocalUtil::setMode(ImageEffectLocalUtil::Mode_Alpha, konst, ::sEdgeColor);
+    ImageEffectLocalUtil::setMode(ImageEffectLocalUtil::Mode_Alpha, constantAlpha, ::sEdgeColor);
     J3DNativeTarget::begin(pScreenAlphaTexture3->mImage, pScreenAlphaTexture3->getWidth(), pScreenAlphaTexture3->getHeight(), 0,
                            0xFFFFFF);
     ImageEffectLocalUtil::drawTexture(mMask, 4, 0, 255, ImageEffectLocalUtil::TexDrawType_0);
@@ -147,7 +147,7 @@ void FallOutFieldDraw::draw() const {
     J3DNativeTarget::end(pScreenAlphaTexture4->mImage, NEBULA_TARGET_ALPHA);
 
     setUpEdgeAndClearAlpha();
-    ImageEffectLocalUtil::setMode(ImageEffectLocalUtil::Mode_Edge, konst, ::sEdgeColor);
+    ImageEffectLocalUtil::setMode(ImageEffectLocalUtil::Mode_Edge, constantAlpha, ::sEdgeColor);
     ImageEffectLocalUtil::drawTexture(pScreenAlphaTexture4, 1, 0, 255, ImageEffectLocalUtil::TexDrawType_2);
     setUpFillScreen();
 
