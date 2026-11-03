@@ -709,9 +709,10 @@ void JASTrack::channelUpdateCallback(u32 a, JASChannel* channel, JASVoice* dspCh
 }
 
 JASTrack* JASTrack::getRootTrack() {
-    JASTrack *next, *parent = this;
-    for (; next = parent->mParent; parent = next)
-        ;
+    JASTrack* parent = this;
+    while (parent->mParent != nullptr) {
+        parent = parent->mParent;
+    }
     return parent;
 }
 

@@ -6,7 +6,7 @@
 
 class AnimScaleController;
 class JointController;
-class JointControllerInfo;
+struct JointControllerInfo;
 class LodCtrl;
 class NameObjArchiveListCollector;
 class NPCActorItem;

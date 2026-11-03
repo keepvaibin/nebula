@@ -18,9 +18,6 @@
 namespace {
     const f32 mRubyBaseLineOffset = 3.0f;
     const f32 mRubyCharSpace = 2.0f;
-    const f32 mFontSizeOffset = 0.175f;
-    const f32 mPictureFontOffset = -2.0f;
-    const f32 mOffsetOffset = 0.0f;
 
     NebulaColor8 sTextColor[] = {{255, 255, 255, 255}, {220, 130, 130, 255}, {80, 170, 80, 255},   {80, 140, 210, 255},
                             {235, 200, 0, 255},   {180, 110, 200, 255}, {255, 190, 190, 255}, {110, 243, 70, 255},
@@ -139,9 +136,7 @@ namespace nw4r {
             f32 xOrigin = GetCursorX();
             f32 yOrigin = GetCursorY();
             const bool bUseLimit = (mWidthLimit < nw4r::math::F_MAX);
-            const f32 orgCursorX = xOrigin;
             const f32 orgCursorY = yOrigin;
-            f32 xCursorAdj = 0.0f;
             f32 yCursorAdj = 0.0f;
             f32 textWidth = 0;
             bool bCharSpace = false;
@@ -150,7 +145,6 @@ namespace nw4r {
 
             {
                 textWidth = AdjustCursor(&xOrigin, &yOrigin, str, length);
-                xCursorAdj = orgCursorX - GetCursorX();
                 yCursorAdj = orgCursorY - GetCursorY();
             }
 

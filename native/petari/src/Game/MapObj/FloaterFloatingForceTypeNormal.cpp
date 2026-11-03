@@ -159,8 +159,8 @@ void FloaterFloatingForceTypeNormal::exeMove() {
     updateVelocity(isOnPlayer);
     soundMoveSE();
 
-    if (!isOnPlayer && isNerve(GET_NERVE(FloaterFloatingForceTypeNormal, HostTypeMoveOnPlayer)) && MapPartsFunction::getStep() >= 7 ||
-        isOnPlayer && MapPartsFunction::isNerve(GET_NERVE(FloaterFloatingForceTypeNormal, HostTypeMoveOffPlayer))) {
+    if ((!isOnPlayer && isNerve(GET_NERVE(FloaterFloatingForceTypeNormal, HostTypeMoveOnPlayer)) && MapPartsFunction::getStep() >= 7) ||
+        (isOnPlayer && MapPartsFunction::isNerve(GET_NERVE(FloaterFloatingForceTypeNormal, HostTypeMoveOffPlayer)))) {
         setStateMove();
     }
 }

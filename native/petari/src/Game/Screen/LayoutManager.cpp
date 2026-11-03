@@ -28,6 +28,7 @@
 #include <nw4r/ut/Rect.h>
 #include <nw4r/ut/RuntimeTypeInfo.h>
 #include <nebula_math.h>
+#include <nebula_format.h>
 
 namespace {
     namespace Local {
@@ -105,8 +106,7 @@ namespace {
                         pName = (*child).mName;
                         length = strlen(pName) - 4;
                         char name[17];
-                        strncpy(name, pName, length);
-                        name[length] = '\0';
+                        nebula_snprintf(name, sizeof(name), "%.*s", static_cast< int >(length), pName);
                         (*child).SetName(name);
                     } else {
                         pPane->RemoveChild(&*child);

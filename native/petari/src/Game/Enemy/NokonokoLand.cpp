@@ -39,11 +39,6 @@ namespace {
     const s32 sShellWaitTime = 180;
     const s32 sSceneStopTimePunch = 3;
     const f32 sWalkSpeedFast = 3.2f;
-    const s32 sFlyAwayTime = 33;
-    const f32 sGravityAccel = 1.5f;
-    const f32 sAirFrec = 0.99f;
-    const f32 sFlyAwayInitSpeedHoli = 15.0f;
-    const f32 sFlyAwayInitSpeedVert = 35.0f;
     const s32 sShellStartPeakPosFrame = 27;
     const f32 sPushPower = 0.0f;
 

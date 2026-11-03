@@ -3,7 +3,7 @@
 #include "Game/Util/SingletonHolder.hpp"
 #include <JSystem/JAudio2/JAISound.hpp>
 
-class JAUSoundNameTable;
+struct JAUSoundNameTable;
 
 class AudSoundNameData {
 public:

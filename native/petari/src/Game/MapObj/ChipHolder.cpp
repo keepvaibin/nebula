@@ -10,7 +10,7 @@ ChipHolder::ChipHolder(const char* pName, s32 chipType) : NameObj(pName), mChipC
 }
 
 void ChipHolder::registerChipGroup(ChipGroup* pChipGroup) {
-    mChipGroups[mNumChipGroups] = pChipGroup;
+    mChipGroups.at(mNumChipGroups) = pChipGroup;
     mNumChipGroups++;
 }
 
@@ -111,8 +111,6 @@ ChipHolder::~ChipHolder() {
 }
 
 void ChipHolder::init(const JMapInfoIter& rIter) {
-    mChipGroups = new ChipGroup*[64];
-
     switch (mChipType) {
     case ChipBase::Type_Blue:
         mChipCounter = new ChipCounter("\203\165\203\213\201\133\203\140\203\142\203\166\203\112\203\105\203\223\203\136\201\133" /* ブルーチップカウンター */, mChipType);

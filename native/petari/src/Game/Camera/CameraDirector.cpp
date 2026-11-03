@@ -36,6 +36,7 @@
 #include "Game/Util/SequenceUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <cstring>
+#include <nebula_format.h>
 
 namespace {
     // static const s32 sDefaultBlendFrame =
@@ -355,9 +356,10 @@ void CameraDirector::endEvent(s32 zoneID, const char* pName, bool resetView, s32
 
 void CameraDirector::endEventAtLanding(s32 zoneID, const char* pName, s32 frame) {
     if (getCurrentCameraMan() == mCameraManEvent) {
-        mEvents[mEventNum].mZoneID = zoneID;
-        strcpy(mEvents[mEventNum].mName, pName);
-        mEvents[mEventNum].mFrame = frame;
+        CameraEvent& rEvent = mEvents.at(mEventNum);
+        rEvent.mZoneID = zoneID;
+        nebula_snprintf(rEvent.mName, sizeof(rEvent.mName), "%s", pName);
+        rEvent.mFrame = frame;
         mEventNum++;
     }
 }
@@ -739,7 +741,7 @@ void CameraDirector::removeEndEventAtLanding(s32 zoneID, const char* pName) {
             }
 
             mEvents[idx].mZoneID = mEvents[mEventNum - 1].mZoneID;
-            strcpy(mEvents[idx].mName, mEvents[mEventNum - 1].mName);
+            memcpy(mEvents[idx].mName, mEvents[mEventNum - 1].mName, sizeof(mEvents[idx].mName));
             mEvents[idx].mFrame = mEvents[mEventNum - 1].mFrame;
             mEventNum--;
             return;

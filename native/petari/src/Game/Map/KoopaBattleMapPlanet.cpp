@@ -15,9 +15,6 @@
 #include "Game/Util/ObjUtil.hpp"
 
 namespace {
-    static const f32 sRotateAccelWeak = 0.0f;    // ?
-    static const f32 sRotateAccelStrong = 0.0f;  // ?
-    static const f32 sRotateSpeedMax = 0.0f;     // ?
     static const f32 sRotateFriction = 0.995f;
 };  // namespace
 

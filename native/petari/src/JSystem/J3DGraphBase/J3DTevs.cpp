@@ -17,10 +17,10 @@ void J3DTexMtx::calcTexMtx(const Mtx param_0) {
     Mtx44 mtx2;
 
     static Mtx qMtx = {
-        0.5f, 0.0f, 0.5f, 0.0f, 0.0f, -0.5f, 0.5f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f,
+        {0.5f, 0.0f, 0.5f, 0.0f}, {0.0f, -0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f, 0.0f},
     };
     static Mtx qMtx2 = {
-        0.5f, 0.0f, 0.0f, 0.5f, 0.0f, -0.5f, 0.0f, 0.5f, 0.0f, 0.0f, 1.0f, 0.0f,
+        {0.5f, 0.0f, 0.0f, 0.5f}, {0.0f, -0.5f, 0.0f, 0.5f}, {0.0f, 0.0f, 1.0f, 0.0f},
     };
 
     u32 r28 = mTexMtxInfo.mInfo & 0x3f;
@@ -108,10 +108,10 @@ void J3DTexMtx::calcPostTexMtx(const Mtx param_0) {
     Mtx44 mtx2;
 
     static Mtx qMtx = {
-        0.5f, 0.0f, 0.5f, 0.0f, 0.0f, -0.5f, 0.5f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f,
+        {0.5f, 0.0f, 0.5f, 0.0f}, {0.0f, -0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f, 0.0f},
     };
     static Mtx qMtx2 = {
-        0.5f, 0.0f, 0.0f, 0.5f, 0.0f, -0.5f, 0.0f, 0.5f, 0.0f, 0.0f, 1.0f, 0.0f,
+        {0.5f, 0.0f, 0.0f, 0.5f}, {0.0f, -0.5f, 0.0f, 0.5f}, {0.0f, 0.0f, 1.0f, 0.0f},
     };
 
     u32 r29 = mTexMtxInfo.mInfo & 0x3f;
@@ -230,24 +230,24 @@ J3DTexMtxInfo const j3dDefaultTexMtxInfo = {
     {{1.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 0.0f, 1.0f}},
 };
 
-J3DIndTexMtxInfo const j3dDefaultIndTexMtxInfo = {0.5f, 0.0f, 0.0f, 0.0f, 0.5f, 0.0f, 1};
+J3DIndTexMtxInfo const j3dDefaultIndTexMtxInfo = {{{0.5f, 0.0f, 0.0f}, {0.0f, 0.5f, 0.0f}}, 1};
 
 const NebulaColor16 j3dDefaultRegisterColor = {0xFF, 0xFF, 0xFF, 0xFF};
 
 J3DFogInfo const j3dDefaultFogInfo = {
-    0x00,   0x00,   0x0140, 0.0f,   0.0f,   0.1f,   10000.0f, 0xFF,   0xFF,   0xFF,   0x00,
-    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,   0x0000, 0x0000, 0x0000,
+    0x00,   0x00,   0x0140, 0.0f,   0.0f,   0.1f,   10000.0f, {0xFF,   0xFF,   0xFF,   0x00},
+    {0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,   0x0000, 0x0000, 0x0000},
 };
 
 J3DNBTScaleInfo const j3dDefaultNBTScaleInfo = {
     0x00,
+    {1.0f,
     1.0f,
-    1.0f,
-    1.0f,
+    1.0f},
 };
 
 const J3DColorChanInfo j3dDefaultColorChanInfo = {
-    0x00, 0x00, 0x00, 0x02, 0x02, 0x00, 0xFF, 0xFF,
+    0x00, 0x00, 0x00, 0x02, 0x02, 0x00, {0xFF, 0xFF},
 };
 
 

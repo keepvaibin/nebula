@@ -6,7 +6,7 @@ extern "C" {
 #endif
 
 // Forward declarations
-typedef struct Mii_Texture;
+struct Mii_Texture;
 
 typedef struct Mii_Archive {
     u16 numFiles;

@@ -390,7 +390,6 @@ void ScenarioSelectLayout::fadeInText() {
 }
 
 void ScenarioSelectLayout::fadeOutText() {
-    const char* stageName = MR::getCurrentStageName();
 
     _A4 = 1;
 

@@ -2,7 +2,7 @@
 
 #include "JSystem/JAudio2/JASBasicInst.hpp"
 
-class JASInstParam;
+struct JASInstParam;
 
 struct JASInstEffect {
     enum EffectType {

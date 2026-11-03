@@ -84,9 +84,8 @@ void JAISeCategoryMgr::sortByPriority_() {
             current = current->getNext();
         }
 
-        bool result = mSeList.remove(link);
-
-        result = mSeList.append(link);
+        mSeList.remove(link);
+        mSeList.append(link);
     }
 }
 
@@ -117,14 +116,12 @@ void JAISeCategoryMgr::JAISeMgr_mixOut_(const JAISoundParamsMove& params, JAISou
     mixParams.combine(params.mParams, mParams.mParams);
     JSULink< JAISe >* i = mSeList.getFirst();
     int maxActiveSe = getMaxActiveSe();
-    int sp28;
 
     if (maxActiveSe > 0) {
         while (i != mSeList.getEnd() && maxActiveSe > 0 && !i->getObject()->isFarAway()) {
             i->getObject()->JAISeCategoryMgr_mixOut_(true, mixParams, activity);
             i = i->getNext();
             maxActiveSe--;
-            sp28 = maxActiveSe;
         }
         for (; i != mSeList.getEnd(); i = i->getNext()) {
             i->getObject()->JAISeCategoryMgr_mixOut_(false, mixParams, activity);

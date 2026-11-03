@@ -46,7 +46,7 @@ s32 SpinDriverPathStorageOne::serialize(u8* pData) const {
         return 0;
     }
 
-    pData[0] = mSpinDriverId & SpinDriverDataId_Mask | SpinDriverDataFlag_Interrupted;
+    pData[0] = (mSpinDriverId & SpinDriverDataId_Mask) | SpinDriverDataFlag_Interrupted;
 
     s32 writeSize;
     s32 drawRange = 256.0f * getDrawRange();
@@ -131,7 +131,7 @@ s32 SpinDriverPathStorageScenario::serialize(u8* pData, u32 dataSize) const {
         for (s32 idx = 0; idx < mOneStorage.size(); idx++) {
             if (zone == mOneStorage[idx].mZoneId) {
                 if (newZone) {
-                    *(u8*)(pData + 2 + size) = zone & ~(SpinDriverScenarioDataFlag_ZoneDataStart) | SpinDriverScenarioDataFlag_ZoneDataStart;
+                    *(u8*)(pData + 2 + size) = (zone & ~(SpinDriverScenarioDataFlag_ZoneDataStart)) | SpinDriverScenarioDataFlag_ZoneDataStart;
                     size += 1;
                     newZone = false;
                 }

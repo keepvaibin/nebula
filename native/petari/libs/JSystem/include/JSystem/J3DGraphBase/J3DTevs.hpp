@@ -92,7 +92,7 @@ struct J3DTexCoord {
     }
 
     void setTexCoordInfo(const J3DTexCoordInfo& info) {
-        memcpy(this, &info, sizeof(J3DTexCoordInfo));
+        memcpy((void*)this, &info, sizeof(J3DTexCoordInfo));
     }
 
     u8 getTexGenType() const {
@@ -120,7 +120,7 @@ struct J3DTexCoord {
     }
 
     J3DTexCoord& operator=(const J3DTexCoord& other) {
-        memcpy(this, &other, sizeof(J3DTexCoordInfo));
+        memcpy((void*)this, &other, sizeof(J3DTexCoordInfo));
         return *this;
     }
 
@@ -135,12 +135,12 @@ struct J3DTexCoord {
 struct J3DBlend : public J3DBlendInfo {
     J3DBlend() {
         // The four bytes as they are.
-        memcpy(this, &j3dDefaultBlendInfo, sizeof(u32));
+        memcpy((void*)this, &j3dDefaultBlendInfo, sizeof(u32));
     }
 
     J3DBlend(J3DBlendInfo const& info) {
         // The four bytes as they are.
-        memcpy(this, &info, sizeof(u32));
+        memcpy((void*)this, &info, sizeof(u32));
     }
 
     void setType(u8 i_type) {
@@ -248,14 +248,8 @@ public:
     }
 
     inline void setColorChanInfo(J3DColorChanInfo const& info) {
-        // !@bug: It compares info.mAmbSrc (an 8 bit integer) with 0xFFFF instead of 0xFF.
-        // This inline is only called by the default constructor J3DColorChan().
-        // The J3DColorChan(const J3DColorChanInfo&) constructor does not call this inline, and instead duplicates the
-        // same logic but without the bug.
-        // See J3DMaterialFactory::newColorChan - both the bugged and correct behavior are present there, as it calls
-        // both constructors.
         set(info.mEnable, info.mMatSrc, info.mLightMask, info.mDiffuseFn, info.mAttnFn,
-            info.mAmbSrc == 0xFFFF ? 0 : info.mAmbSrc);
+            info.mAmbSrc);
     }
 
     void set(u8 enable, u8 matSrc, u8 lightMask, u8 diffuseFn, u8 attnFn, u8 ambSrc) {

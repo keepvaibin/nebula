@@ -6,7 +6,7 @@
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 
-class JASSoundParams;
+struct JASSoundParams;
 class JAISoundHandles;
 
 class JAUSoundAnimationSound {

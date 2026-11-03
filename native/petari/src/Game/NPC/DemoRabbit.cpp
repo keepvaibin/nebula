@@ -125,7 +125,6 @@ void DemoRabbit::fadeIn() {
     TVec3f gravityVector;
     MR::calcGravityVector(this, railEndPos, &gravityVector, nullptr, 0);
 
-    TVec3f poly;
 
     MR::getFirstPolyOnLineToMap(&railEndPos, nullptr, railEndPos - gravityVector * 100.0f, gravityVector * 1000.0f);
     mPosition.set(railEndPos);

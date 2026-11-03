@@ -371,7 +371,7 @@ namespace {
         pos.identity();
         pos.set(MR::getCameraViewMtx());
         pos.zeroTrans();
-        static Mtx qMtx2 = {0.5f, 0.0f, 0.0f, 0.5f, 0.0f, -0.5f, 0.0f, 0.5f, 0.0f, 0.0f, 1.0f, 0.0f};
+        static Mtx qMtx2 = {{0.5f, 0.0f, 0.0f, 0.5f}, {0.0f, -0.5f, 0.0f, 0.5f}, {0.0f, 0.0f, 1.0f, 0.0f}};
         MR::multMtx(pos.mMtx, qMtx2, pos.mMtx);
         J3DNativeShape::setTexture(place, pos.mMtx, 2);
     }

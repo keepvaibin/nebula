@@ -28,7 +28,6 @@ namespace {
     NEW_NERVE(SkeletalFishGuardNrvApart, SkeletalFishGuard, Apart);
     NEW_NERVE(SkeletalFishGuardNrvFollow, SkeletalFishGuard, Follow);
     NEW_NERVE(SkeletalFishGuardNrvStraight, SkeletalFishGuard, Straight);
-    NEW_NERVE(SkeletalFishGuardNrvDefence, SkeletalFishGuard, Defence);
     NEW_NERVE(SkeletalFishGuardNrvKill, SkeletalFishGuard, Kill);
     NEW_NERVE_ONEND(SkeletalFishGuardNrvNumb, SkeletalFishGuard, Numb, Numb);
 };  // namespace
@@ -348,7 +347,6 @@ void SkeletalFishGuard::calcAndSetBaseMtx() {
         if (MR::isNearZero(stack_24)) {
             MtxPtr mtx = getBaseMtx();
             TPos3f stack_A0;
-            f32 x, y, z;
             stack_A0.setInline(mtx);
             stack_A0.getXDir(stack_24);
             stack_A0.getYDir(stack_30);
@@ -584,7 +582,6 @@ bool SkeletalFishGuard::isLineOfSightClear() const {
     v11.orthogonalize2(_100);
     v12.orthogonalize2(_100);
 
-    bool ret = true;
 
     if (!MR::isNearZero(v11) && !MR::isNearZero(v12)) {
         f64 angle = MR::asin(mFishBoss->getBodyThickness() / v11.length());

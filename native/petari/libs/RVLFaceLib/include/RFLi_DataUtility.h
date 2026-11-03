@@ -1,4 +1,4 @@
-#ifndef RVL_FACE_LIBRARY_INTENRAL_DATA_UTILITY_H
+#ifndef RVL_FACE_LIBRARY_INTERNAL_DATA_UTILITY_H
 #define RVL_FACE_LIBRARY_INTERNAL_DATA_UTILITY_H
 #include "RFLi_Types.h"
 #ifdef __cplusplus
@@ -6,7 +6,7 @@ extern "C" {
 #endif
 
 // Forward declarations
-typedef struct MiiMiddleDB;
+struct MiiMiddleDB;
 
 BOOL Mii_CheckValidInfo(const Mii_CharInfo* info);
 BOOL Mii_IsValidOnNAND(const Mii_CharInfo* info);

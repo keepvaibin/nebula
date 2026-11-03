@@ -10,7 +10,7 @@ u32 JASResArcLoader::getResSize(AssetFolder const* archive, u16 id) {
     return archive->getItem(archive->getEntry(), id, &item) ? item.mSize : 0;
 }
 
-static void JASResArcLoader::loadResourceCallback(void* args) {
+void JASResArcLoader::loadResourceCallback(void* args) {
     TLoadResInfo* castedArgs = (TLoadResInfo*)args;
     u32 readResult = 0;
     AssetFolder::Item item;

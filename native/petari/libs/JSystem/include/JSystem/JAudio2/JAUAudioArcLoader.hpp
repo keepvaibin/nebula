@@ -2,7 +2,7 @@
 
 #include "JSystem/JAudio2/JAUAudioArcInterpreter.hpp"
 
-struct JAUSection;
+class JAUSection;
 
 class JAUAudioArcLoader : public JAUAudioArcInterpreter {
 public:

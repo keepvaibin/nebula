@@ -101,7 +101,7 @@ bool JAUAudioArcInterpreter::readCommand_() {
         break;
     }
     case 'sect': {
-        u8 var1 = readU8_();
+        readU8_();
         u8 var2 = readU8_();
         u8 var3 = readU8_();
         u8 var4 = readU8_();

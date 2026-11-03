@@ -64,8 +64,8 @@ void InputPointer::update() {
             mValidInScreenTime = 0;
             mInValidOutScreenTime++;
         } else {
-            if (!mIsPointInScreen && mValidInScreenTime >= ::sIsValidInScreenTime ||
-                mIsPointInScreen && mInValidOutScreenTime <= ::sIsInValidOutScreenTime) {
+            if ((!mIsPointInScreen && mValidInScreenTime >= ::sIsValidInScreenTime) ||
+                (mIsPointInScreen && mInValidOutScreenTime <= ::sIsInValidOutScreenTime)) {
                 mPointingPosArray[mEnablePastCount].x = curStatus->mPointerPos.x;
                 mPointingPosArray[mEnablePastCount].y = curStatus->mPointerPos.y;
                 mHorizonArray[mEnablePastCount].x = curStatus->mHorizon.x;

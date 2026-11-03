@@ -41,7 +41,6 @@ CameraTargetObj* CameraDead::calc() {
     }
 
     if (mDeadFrame <= mDeadTime) {
-        f32 f2 = (CameraLocalUtil::getPos(this) - CameraLocalUtil::getTarget(this)->getPosition()).length();
 
         f32 angle = MR::atan2(CameraLocalUtil::getTarget(this)->getRadius() / mDist,
                               (CameraLocalUtil::getPos(this) - CameraLocalUtil::getTarget(this)->getPosition()).length());

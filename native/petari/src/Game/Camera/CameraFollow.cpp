@@ -19,8 +19,6 @@ namespace {
     static const f32 sColCheckHeight = 100.0f;
     static const f32 sRoundAddition = 0.08f;
     static const f32 sRoundResetAddition = 0.2f;
-    static const f32 sCollisionCheckOffset = 50.0f;
-    static const f32 sCollisionCheckDist = 100.0f;
     static const f32 sRoundInterval = JGeometry::TUtil< f32 >::PI() / 4.0f;
     static const f32 sLookDownAngle = 75.0f * JGeometry::TUtil< f32 >::PI() / 180.0f;
 };  // namespace

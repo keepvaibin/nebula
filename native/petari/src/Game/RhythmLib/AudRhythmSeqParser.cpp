@@ -226,7 +226,7 @@ s32 AudRhythmSeqParser::getNextNoteOff(JASTrack* pTrack, u32 channel) {
         if ((data & 0x80) == 0) {
             u8 ctrlFlags = ctrl->readByte();
             data = ctrlFlags & 7;
-            u8 velocity = ctrl->readByte();
+            ctrl->readByte();
 
             if (data == channel) {
                 goto foundNote;

@@ -79,7 +79,7 @@ f32 Birikyu::getHitRadius() const {
     return 120.0f;
 }
 
-char* Birikyu::getCenterJointName() const {
+const char* Birikyu::getCenterJointName() const {
     return "Root";
 }
 
@@ -312,6 +312,6 @@ f32 BirikyuWithFace::getHitRadius() const {
     return 50.0f;
 }
 
-char* BirikyuWithFace::getCenterJointName() const {
+const char* BirikyuWithFace::getCenterJointName() const {
     return "Center";
 }

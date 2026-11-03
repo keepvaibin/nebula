@@ -2,7 +2,7 @@
 
 #include "JSystem/JAudio2/JASInstEffect.hpp"
 
-class JASInstParam;
+struct JASInstParam;
 
 class JASInstRand : public JASInstEffect {
 public:

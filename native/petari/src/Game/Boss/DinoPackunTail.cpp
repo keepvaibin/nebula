@@ -177,7 +177,6 @@ void DinoPackunTail::addAccelKeepDistance() {
         nodes[i]->addNodeVelocityHost(v17 * v7);
 
         if (i != 0) {
-            DinoPackunTailNode** nodes = mNodes;
             getNodeRef(i - 1)->addNodeVelocityHost(-v17 * v7);
         }
 

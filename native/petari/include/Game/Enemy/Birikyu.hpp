@@ -15,7 +15,7 @@ public:
     virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
     virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
     virtual f32 getHitRadius() const;
-    virtual char* getCenterJointName() const;
+    virtual const char* getCenterJointName() const;
 
     void initFromJmpArgs(const JMapInfoIter&);
     void initRail(const JMapInfoIter&);
@@ -48,7 +48,7 @@ public:
     virtual void init(const JMapInfoIter&);
     virtual void calcAndSetBaseMtx();
     virtual f32 getHitRadius() const;
-    virtual char* getCenterJointName() const;
+    virtual const char* getCenterJointName() const;
 
     bool _CC;
 };

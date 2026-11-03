@@ -120,7 +120,6 @@ namespace MR {
     }
 
     f32 getEaseInValue(f32 x, f32 start, f32 end, f32 max) {
-        f32 t = x / max * pi() / 2.0f;
         return getInterpolateValue(1.0f - JMACosRadian(x / max * pi() / 2.0f), start, end);
     }
 
@@ -580,7 +579,6 @@ namespace MR {
             return;
         }
 
-        f32 degree = JMACosDegree(angle);
 
         rotateVecDegree(pDst, rBase, axis, angle);
     }

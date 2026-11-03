@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Game/Util/Array.hpp"
 #include "Game/NameObj/NameObj.hpp"
 
 class ChipBase;
@@ -18,7 +19,7 @@ public:
     ChipGroup* findChipGroup(s32) const;
 
     ChipCounter* mChipCounter;
-    ChipGroup** mChipGroups;
+    MR::GrowTable< ChipGroup*, 64 > mChipGroups;
     s32 mNumChipGroups;
     s32 mChipType;  ///< Determines whether the chip is blue (`0`) or yellow (`1`).
 };

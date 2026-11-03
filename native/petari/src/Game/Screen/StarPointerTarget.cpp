@@ -1,4 +1,5 @@
 #include "Game/Screen/StarPointerTarget.hpp"
+#include "Game/Util/Array.hpp"
 #include "Game/System/NebulaInput.hpp"
 #include "Game/Screen/LayoutCoreUtil.hpp"
 #include "Game/Util/CameraUtil.hpp"
@@ -181,6 +182,11 @@ StarPointerLayoutTarget* StarPointerLayoutTargetKeeper::getTarget(const char* pL
 }
 
 void StarPointerLayoutTargetKeeper::registerTarget(StarPointerLayoutTarget* pTarget) {
+    if (mNumTargets == mMaxNumTargets) {
+        mTargets = MR::growArray(mTargets, mMaxNumTargets);
+        mMaxNumTargets *= 2;
+    }
+
     mTargets[mNumTargets] = pTarget;
     mNumTargets++;
 }

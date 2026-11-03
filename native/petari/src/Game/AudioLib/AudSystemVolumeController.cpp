@@ -49,7 +49,7 @@ void AudSystemVolumeController::setSeVolumeSetInner(s32 volumeSet, u32 maxSteps)
 }
 
 void AudSystemVolumeController::pushVolumeSet() {
-    mVolumeSets[mNumVolumeSets] = mCurrVolumeSet;
+    mVolumeSets.at(mNumVolumeSets) = mCurrVolumeSet;
     mNumVolumeSets++;
 }
 

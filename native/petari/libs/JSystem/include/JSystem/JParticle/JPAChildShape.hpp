@@ -2,7 +2,7 @@
 
 #include <NebulaGpu.h>
 
-class JPAEmitterWorkData;
+struct JPAEmitterWorkData;
 class JPABaseParticle;
 
 struct JPAChildShapeData {

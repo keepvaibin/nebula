@@ -2,7 +2,6 @@
 #include "Game/Util/PlayerInputUtil.hpp"
 
 namespace {
-    static const s32 sHoldCounterMax = 12;
 };  // namespace
 
 PauseButtonCheckerInGame::PauseButtonCheckerInGame()

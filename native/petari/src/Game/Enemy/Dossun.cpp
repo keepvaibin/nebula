@@ -24,7 +24,6 @@ namespace {
     const f32 sQuickRatio = 2.5f;
     const f32 sCamShakeDistanceStrong = 2000.0f;
     const f32 sCamShakeDistanceWeak = 3500.0f;
-    const f32 sShadowDropDepth = 0.0f;
 };  // namespace
 
 namespace NrvDossun {

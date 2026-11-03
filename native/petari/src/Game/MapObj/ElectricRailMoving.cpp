@@ -193,7 +193,6 @@ void ElectricRailMoving::initPoints() {
 
             TVec3f v16;
             v16.set(startPos);
-            u32 v8 = v6;
 
             for (s32 i = 1; i < mStackHeight; i++) {
                 v16.add(g);
@@ -261,9 +260,7 @@ void ElectricRailMoving::drawPlaneGX(f32 a1, f32 a2, f32 a3, f32 a4) const {
 void ElectricRailMoving::setVertexAttribute(int a2, int a3, f32 a4, f32 a5, f32 a6, f32 a7, NativeMesh* pMesh) const {
     f32 railLength = MR::getRailTotalLength(this);
 
-    if (100.0f * a2 >= railLength) {
-        railLength = railLength;
-    } else {
+    if (100.0f * a2 < railLength) {
         railLength = 100.0f * a2;
     }
 
@@ -322,7 +319,6 @@ void ElectricRailMoving::updateHitSensorPos() {
         MR::calcGravityVector(this, mSensorOffsets[0], &v9, nullptr, 0);
         v9 *= -100.0f;
 
-        s32 v5 = 1;
 
         for (s32 i = 1; i < mStackHeight; i++) {
             mSensorOffsets[i].add(mSensorOffsets[i - 1], v9);

@@ -162,7 +162,6 @@ void MarioLauncher::exeReady() {
     }
 
     s32 maxFrame = MR::getBckFrameMaxPlayer();
-    f32 f1 = MR::calcNerveEaseInRate(this, maxFrame);
 
     MR::blendMtx(mPlayerBaseMtx, mLauncherBaseMtx, MR::calcNerveRate(this, maxFrame), mPlayerMtx);
 

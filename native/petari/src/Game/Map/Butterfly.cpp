@@ -60,13 +60,6 @@ namespace {
 
     static const Vec sMarioCapPosOffset = {0.0f, 50.2f, 24.9f};
 
-    f32 getScreenDistanceToStarPointer(const LiveActor* pActor, s32 port) {
-        TVec2f screenPos;
-        MR::calcScreenPosition(&screenPos, pActor->mPosition);
-        TVec2f pointerScreenPos;
-        pointerScreenPos.set(*MR::getStarPointerScreenPosition(port));
-        return screenPos.distance(pointerScreenPos);
-    }
 };  // namespace
 
 Butterfly::Butterfly(const char* pName) : LiveActor(pName), mHomePos(gZeroVec), mColorIndex(), mPerchTarget(), mStarPieceAppeared() {

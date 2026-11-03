@@ -2,7 +2,7 @@
 
 #include "JSystem/JAudio2/JASBasicInst.hpp"
 
-struct NebulaArena;
+class NebulaArena;
 
 const int PERC_MAX = 0x80;
 

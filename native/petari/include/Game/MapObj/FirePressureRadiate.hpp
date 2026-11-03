@@ -4,7 +4,7 @@
 #include <JSystem/JGeometry/TMatrix.hpp>
 
 class JointController;
-class JointControllerInfo;
+struct JointControllerInfo;
 class MsgSharedGroup;
 
 class FirePressureRadiate : public LiveActor {

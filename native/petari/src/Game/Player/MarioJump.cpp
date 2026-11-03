@@ -1076,7 +1076,6 @@ void Mario::initActiveJumpVec() {
 }
 
 void Mario::initJumpParam() {
-    const u32 flags1 = _1C_WORD;
     mMovementStates._13 = true;
 
     if ((_1C._A) || (_1C._B)) {
@@ -1213,10 +1212,6 @@ void Mario::procJump(bool a1) {
     if (useConnectGravity) {
         MarioConstTable* pTable = mActor->getConst().getTable();
         gravityScale = pTable->mGravityRatioA;
-        f32 connectRatio = _3BC <= 45 ? 0.0f : 1.0f;
-        if (_3BC <= 45) {
-            connectRatio = static_cast< f32 >(_3BC) / 45.0f;
-        }
     }
 
     if (a1) {

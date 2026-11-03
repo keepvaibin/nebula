@@ -368,7 +368,6 @@ bool Tamakoro::requestBind(HitSensor* pSensor) {
     } else {
         setNerve(GET_NERVE(Tamakoro, TamakoroNrvBindStart));
 
-        TVec3f v3;  // vec order shenanigans... not used
         TVec3f vPlayerToThis;
         vPlayerToThis = mPosition - mMarioPos;
         vPlayerToThis.orthogonalize(mGravity);

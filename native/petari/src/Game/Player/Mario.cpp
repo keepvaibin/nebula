@@ -64,7 +64,6 @@ Mario::Mario(MarioActor* pActor) : MarioModule(pActor) {
     _290 = mSideVec;
     mAirGravityVec.set(0.0f, -1.0f, 0.0f);
     _1E4.zero();
-    bool nearZero = MR::isNearZero(mAirGravityVec);
     mHeadVec = -mAirGravityVec;
     _1FC = mHeadVec;
     _938 = mHeadVec;

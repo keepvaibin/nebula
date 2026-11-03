@@ -303,7 +303,7 @@ void Fluff::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
 
 bool Fluff::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
     if (MR::isMsgPlayerSpinAttack(msg)) {
-        if (isNerve(GET_NERVE(Fluff, FluffNrvFreeBloom)) && MR::isGreaterStep(this, ::sFreeBloomFlyUpStep) ||
+        if ((isNerve(GET_NERVE(Fluff, FluffNrvFreeBloom)) && MR::isGreaterStep(this, ::sFreeBloomFlyUpStep)) ||
             isNerve(GET_NERVE(Fluff, FluffNrvFreeWaitOnGround))) {
             MR::tryRumblePadMiddle(this, PLAYER_1);
             mVelocity.set(mGravity * -::sSpeedWaitAir);

@@ -7,7 +7,7 @@
 class AnimScaleController;
 template < typename T >
 class JointControlDelegator;
-class JointControllerInfo;
+struct JointControllerInfo;
 class WalkerStateBindStarPointer;
 
 class BombTeresa : public LiveActor {

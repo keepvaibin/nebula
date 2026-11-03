@@ -3,8 +3,8 @@
 #include "Game/AudioLib/AudSoundObject.hpp"
 #include <JSystem/JAudio2/JAUSoundAnimator.hpp>
 
-class JAISoundStarter;
-class JASSoundParams;
+struct JAISoundStarter;
+struct JASSoundParams;
 class JAUSoundAnimationSound;
 
 class AudAnmSoundObject : public AudSoundObject, public JAUSoundAnimator {

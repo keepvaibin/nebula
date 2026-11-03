@@ -202,7 +202,6 @@ const u8 J3DMaterialFactory::newColorChanNum(int i_idx) const {
 }
 
 J3DColorChan J3DMaterialFactory::newColorChan(int i_idx, int i_no) const {
-    u32 r29 = 0;
     J3DMaterialInitData* init_data = &mpMaterialInitData[mpMaterialID[i_idx]];
     if (init_data->mColorChanIdx[i_no] != 0xffff) {
         return J3DColorChan(mpColorChanInfo[init_data->mColorChanIdx[i_no]]);
@@ -222,7 +221,6 @@ J3DColor J3DMaterialFactory::newAmbColor(int i_idx, int i_no) const {
 }
 
 u32 J3DMaterialFactory::newTexGenNum(int i_idx) const {
-    u32 r30 = 0;
     J3DMaterialInitData* mtl_init_data = &mpMaterialInitData[mpMaterialID[i_idx]];
     if (mtl_init_data->mTexGenNumIdx != 0xff) {
         return mpTexGenNum[mtl_init_data->mTexGenNumIdx];
@@ -251,7 +249,6 @@ J3DTexMtx* J3DMaterialFactory::newTexMtx(int i_idx, int i_no) const {
 }
 
 u8 J3DMaterialFactory::newCullMode(int i_idx) const {
-    u32 r30 = 0;
     J3DMaterialInitData* mtl_init_data = &mpMaterialInitData[mpMaterialID[i_idx]];
     if (mtl_init_data->mCullModeIdx != 0xff) {
         return mpCullMode[mtl_init_data->mCullModeIdx];
@@ -337,7 +334,6 @@ J3DBlend J3DMaterialFactory::newBlend(int i_idx) const {
 }
 
 J3DZMode J3DMaterialFactory::newZMode(int i_idx) const {
-    u32 r29 = 0;
     J3DMaterialInitData* mtl_init_data = &mpMaterialInitData[mpMaterialID[i_idx]];
     if (mtl_init_data->mZModeIdx != 0xff) {
         return J3DZMode(mpZModeInfo[mtl_init_data->mZModeIdx]);

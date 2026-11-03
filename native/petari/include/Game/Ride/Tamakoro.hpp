@@ -7,7 +7,7 @@
 
 class AudTamakoroBgmCtrl;
 class JointController;
-class JointControllerInfo;
+struct JointControllerInfo;
 class SphereAccelSensorController;
 class TamakoroTutorial;
 

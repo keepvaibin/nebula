@@ -941,7 +941,6 @@ namespace {
         rMaterial.constants_only = constantsOnly ? 3 : 2;
         J3DNativeShape::flushState();
         J3DNativeMaterial::watch(&rMaterial);
-        const NebulaHostServices* pHost = nebula_host();
     J3DNativeState::sendMaterial(&rMaterial);
     }
 

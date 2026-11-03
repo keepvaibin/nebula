@@ -49,7 +49,6 @@
 template void JGeometry::SMatrix34C< f32 >::set(const f32 (*)[4]);
 
 bool gIsLuigi;
-static f32 BASE_ROTATION = 0.0f;
 
 MarioActor::MarioActor(const char* pName) : LiveActor(pName), _1B0(0xFFFFFFFF) {
     initMember();
@@ -1194,9 +1193,8 @@ void MarioActor::updateSwingAction() {
     bool requestRush = isRequestRush();
     bool requestSpinJump2P = false;
     if (!requestRush) {
-        if (requestRush = isRequestSpinJump2P()) {
-            requestSpinJump2P = true;
-        }
+        requestRush = isRequestSpinJump2P();
+        requestSpinJump2P = requestRush;
     }
 
     _1E1 = requestRush;

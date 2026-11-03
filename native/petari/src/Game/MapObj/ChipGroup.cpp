@@ -9,14 +9,6 @@
 #include "Game/Util/SoundUtil.hpp"
 
 ChipGroup::ChipGroup(const char* pName, s32 chipType) : NameObj(pName) {
-    ChipEntry* pEntry = mChips;
-
-    do {
-        pEntry->mChip = nullptr;
-        pEntry->mIsGotten = false;
-        pEntry++;
-    } while (pEntry < mChips + 5);
-
     mSwitchCtrl = nullptr;
     mGotCount = 0;
     mTotalCount = 0;
@@ -93,7 +85,7 @@ void ChipGroup::registerChip(ChipBase* pChip) {
         pChip->deactive();
     }
 
-    mChips[mTotalCount].mChip = pChip;
+    mChips.at(mTotalCount).mChip = pChip;
     mTotalCount++;
     updateUIRange();
 }

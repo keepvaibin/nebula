@@ -5,7 +5,7 @@
 class JMapIdInfo;
 class JMapInfoIter;
 class LiveActor;
-class ViewGroupCtrlDataEntry;
+struct ViewGroupCtrlDataEntry;
 
 class ClippingActorInfo {
 public:

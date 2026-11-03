@@ -85,11 +85,10 @@ s32 JAUDynamicSeqDataBlocks::getSeqData(JAISoundID param_0, JAISeqDataUser* para
 
 bool JAUDynamicSeqDataBlocks::appendDynamicSeqDataBlock(JAUSeqDataBlock* seqDataBlock) {
     rearrangeLoadingSeqs_();
-    bool result;
     if (seqDataBlock->mSoundID.isAnonymous()) {
-        result = mFreeBlocks.append(&seqDataBlock->mLink);
+        mFreeBlocks.append(&seqDataBlock->mLink);
     } else {
-        result = mLoadedBlocks.append(&seqDataBlock->mLink);
+        mLoadedBlocks.append(&seqDataBlock->mLink);
     }
     return 1;
 }
