@@ -46,14 +46,14 @@ namespace Nebula.Launcher
             string manifest = Path.Combine(app, "validation-pair.json");
             if (!File.Exists(manifest)) return; // Standard setup validates its own payload.
             var files = Json.Obj(Json.Load(manifest), "files");
-            if (files == null) throw new InvalidDataException("The portable build manifest is missing.");
+            if (files == null) throw new InvalidDataException(NebulaText.Of("The portable build manifest is missing."));
             string prefix = Path.GetFullPath(app).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
             foreach (var file in files)
             {
                 string path = Path.GetFullPath(Path.Combine(app, file.Key));
                 if (!path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) || !File.Exists(path) ||
                     !string.Equals(FileUtil.Sha256File(path), Convert.ToString(file.Value), StringComparison.OrdinalIgnoreCase))
-                    throw new InvalidDataException("Portable build file mismatch: " + file.Key + ". Extract the complete ZIP again.");
+                    throw new InvalidDataException(NebulaText.Of("Portable build file mismatch: {0}. Extract the complete ZIP again.", file.Key));
             }
         }
 
@@ -61,7 +61,7 @@ namespace Nebula.Launcher
         public static void PreserveUserData(string dataRoot, string backupKey)
         {
             if (backupKey.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || backupKey == "." || backupKey == "..")
-                throw new ArgumentException("Invalid backup identity.");
+                throw new ArgumentException(NebulaText.Of("Invalid backup identity."));
             string backup = Path.Combine(dataRoot, "backups", backupKey);
             string completed = Path.Combine(backup, "backup.json");
             if (File.Exists(completed)) return;
@@ -85,17 +85,17 @@ namespace Nebula.Launcher
                         var a = FileUtil.StreamDigests(entry);
                         var b = FileUtil.StreamDigests(Path.Combine(target, relative));
                         if (a.Count != b.Count || a.Any(p => !b.ContainsKey(p.Key) || b[p.Key] != p.Value))
-                            throw new IOException("Save/cache backup verification failed: " + relative + ". The game was not started.");
+                            throw new IOException(NebulaText.Of("Save/cache backup verification failed: {0}. The game was not started.", relative));
                     }
                 }
                 foreach (string name in new[] { "settings.json", "config.ini" })
                 {
                     string source = Path.Combine(dataRoot, name), target = Path.Combine(snapshot, name);
                     if (!File.Exists(source)) continue;
-                    if (!NativeMethods.CopyFileW(source, target, true)) throw new IOException("Settings backup failed: " + name);
+                    if (!NativeMethods.CopyFileW(source, target, true)) throw new IOException(NebulaText.Of("Settings backup failed: {0}", name));
                     var a = FileUtil.StreamDigests(source); var b = FileUtil.StreamDigests(target);
                     if (a.Count != b.Count || a.Any(p => !b.ContainsKey(p.Key) || b[p.Key] != p.Value))
-                        throw new IOException("Settings backup verification failed: " + name);
+                        throw new IOException(NebulaText.Of("Settings backup verification failed: {0}", name));
                 }
                 Json.Save(completed, new Dictionary<string, object> { { "createdUtc", DateTime.UtcNow.ToString("o") },
                     { "source", dataRoot }, { "version", backupKey }, { "snapshot", snapshot } });

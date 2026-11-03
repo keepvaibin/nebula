@@ -297,7 +297,7 @@ namespace Nebula
                                 cancel.ThrowIfCancellationRequested();
                                 filled += read;
                             }
-                            if (filled != count) throw new IOException("The download was cut short.");
+                            if (filled != count) throw new IOException(NebulaText.Of("The download was cut short."));
                             return buffer;
                         }
                     }

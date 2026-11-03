@@ -80,31 +80,31 @@ namespace Nebula.Launcher
             pak = content != null ? Path.Combine(content, "game.pak") : null;
             lastList = offList;
 
-            Column("Disabled", offSearch, offList, 12, false);
-            Column("Enabled (top has priority)", onSearch, onList, 368, true);
+            Column(NebulaText.Of("Disabled"), offSearch, offList, 12, false);
+            Column(NebulaText.Of("Enabled (top has priority)"), onSearch, onList, 368, true);
             dropLine.Height = 2;
             dropLine.BackColor = SystemColors.Highlight;
             dropLine.Visible = false;
             onList.Controls.Add(dropLine);
 
             int middle = ListTop + ListHeight / 2;
-            Action(SmallButton("→", 320, middle - 40, "Enable (Enter)")).Click += delegate { Safe(() => Enable(Selected(offList), 0)); };
-            Action(SmallButton("←", 320, middle + 4, "Disable (Enter)")).Click += delegate { Safe(() => Disable(Selected(onList))); };
-            Action(SmallButton("↑", 676, middle - 40, "Move up (Alt+Up)")).Click += delegate { Safe(() => Move(-1)); };
-            Action(SmallButton("↓", 676, middle + 4, "Move down (Alt+Down)")).Click += delegate { Safe(() => Move(1)); };
+            Action(SmallButton("→", 320, middle - 40, NebulaText.Of("Enable (Enter)"))).Click += delegate { Safe(() => Enable(Selected(offList), 0)); };
+            Action(SmallButton("←", 320, middle + 4, NebulaText.Of("Disable (Enter)"))).Click += delegate { Safe(() => Disable(Selected(onList))); };
+            Action(SmallButton("↑", 676, middle - 40, NebulaText.Of("Move up (Alt+Up)"))).Click += delegate { Safe(() => Move(-1)); };
+            Action(SmallButton("↓", 676, middle + 4, NebulaText.Of("Move down (Alt+Down)"))).Click += delegate { Safe(() => Move(1)); };
 
             details.Location = new Point(12, ListTop + ListHeight + 8);
             details.Size = new Size(704, 44);
             page.Controls.Add(details);
 
             int x = 12, y = ListTop + ListHeight + 58;
-            Action(WideButton("Import file…", ref x, y, 130)).Click += delegate { Safe(ImportFiles); };
-            Action(WideButton("Import folder…", ref x, y, 130)).Click += delegate { Safe(ImportFolder); };
-            optionsButton = Action(WideButton("Options…", ref x, y, 100));
+            Action(WideButton(NebulaText.Of("Import file…"), ref x, y, 130)).Click += delegate { Safe(ImportFiles); };
+            Action(WideButton(NebulaText.Of("Import folder…"), ref x, y, 130)).Click += delegate { Safe(ImportFolder); };
+            optionsButton = Action(WideButton(NebulaText.Of("Options…"), ref x, y, 100));
             optionsButton.Click += delegate { Safe(EditOptions); };
             optionsButton.Enabled = false;
-            Action(WideButton("Remove", ref x, y, 100)).Click += delegate { Safe(Remove); };
-            WideButton("Open mods folder", ref x, y, 150).Click += delegate { Safe(OpenFolder); };
+            Action(WideButton(NebulaText.Of("Remove"), ref x, y, 100)).Click += delegate { Safe(Remove); };
+            WideButton(NebulaText.Of("Open mods folder"), ref x, y, 150).Click += delegate { Safe(OpenFolder); };
 
             status.Location = new Point(12, y + 40);
             status.Size = new Size(704, 26);
@@ -117,7 +117,7 @@ namespace Nebula.Launcher
             page.DragEnter += delegate(object sender, DragEventArgs e) { Safe(() => OnDragOver(null, e)); };
             page.DragOver += delegate(object sender, DragEventArgs e) { Safe(() => OnDragOver(null, e)); };
             page.DragDrop += delegate(object sender, DragEventArgs e) { Safe(() => OnDragDrop(null, e)); };
-            status.Text = "Reading mods…";
+            status.Text = NebulaText.Of("Reading mods…");
             Read();
         }
 
@@ -131,7 +131,7 @@ namespace Nebula.Launcher
             });
             search.Location = new Point(x, 40);
             search.Width = SideWidth;
-            search.HandleCreated += delegate { SendMessage(search.Handle, 0x1501 /* EM_SETCUEBANNER */, (IntPtr)1, "Search"); };
+            search.HandleCreated += delegate { SendMessage(search.Handle, 0x1501 /* EM_SETCUEBANNER */, (IntPtr)1, NebulaText.Of("Search")); };
             search.TextChanged += delegate { Safe(Show); };
             // Enter or Down goes to the list (Enter would otherwise press Save and play).
             search.PreviewKeyDown += delegate(object sender, PreviewKeyDownEventArgs e) { if (e.KeyCode == Keys.Enter) e.IsInputKey = true; };
@@ -158,8 +158,8 @@ namespace Nebula.Launcher
             view.ShowItemToolTips = true;
             view.HeaderStyle = ColumnHeaderStyle.Nonclickable;
             if (ordered) view.Columns.Add("#", 36, HorizontalAlignment.Right);
-            view.Columns.Add("Name", 160);
-            view.Columns.Add("Type", 100);
+            view.Columns.Add(NebulaText.Of("Name"), 160);
+            view.Columns.Add(NebulaText.Of("Type"), 100);
             view.ClientSizeChanged += delegate { FitColumns(view); };
             view.Enter += delegate
             {
@@ -201,12 +201,12 @@ namespace Nebula.Launcher
             int fixedWidth = 0;
             foreach (ColumnHeader column in view.Columns)
             {
-                if (column.Text == "Name") continue;
+                if (column.Text == NebulaText.Of("Name")) continue;
                 column.Width = (int)((column.Text == "#" ? 30 : 90) * scale);
                 fixedWidth += column.Width;
             }
             foreach (ColumnHeader column in view.Columns)
-                if (column.Text == "Name") column.Width = Math.Max(60, view.ClientSize.Width - fixedWidth - 1);
+                if (column.Text == NebulaText.Of("Name")) column.Width = Math.Max(60, view.ClientSize.Width - fixedWidth - 1);
         }
 
         private Button SmallButton(string text, int x, int y, string tip)
@@ -239,7 +239,7 @@ namespace Nebula.Launcher
             try { action(); }
             catch (Exception error)
             {
-                if (!status.IsDisposed) status.Text = "That did not work: " + error.Message;
+                if (!status.IsDisposed) status.Text = NebulaText.Of("That did not work: {0}", error.Message);
             }
         }
 
@@ -276,13 +276,13 @@ namespace Nebula.Launcher
                     string output = process.StandardOutput.ReadToEnd();
                     process.WaitForExit();
                     string line = output.Split('\n').Select(l => l.Trim()).LastOrDefault(l => l.StartsWith("{"));
-                    if (line == null) error = "Nebula could not read the mods (exit code " + process.ExitCode + ").";
+                    if (line == null) error = NebulaText.Of("Nebula could not read the mods (exit code {0}).", process.ExitCode);
                     return line == null ? null : Json.Parse(line);
                 }
             }
             catch (Exception failure)
             {
-                error = "Nebula could not read the mods: " + failure.Message;
+                error = NebulaText.Of("Nebula could not read the mods: {0}", failure.Message);
                 return null;
             }
         }
@@ -375,22 +375,22 @@ namespace Nebula.Launcher
                 Select(onList, on.Where(m => selected.Contains(m.Id)));
                 Select(offList, off.Where(m => selected.Contains(m.Id)));
             }
-            if (on.Count + off.Count == 0) status.Text = "No mods yet. Import one, or drop it here.";
-            else if (status.Text.StartsWith("No mods yet") || status.Text == "Reading mods…") status.Text = "";
+            if (on.Count + off.Count == 0) status.Text = NebulaText.Of("No mods yet. Import one, or drop it here.");
+            else if (status.Text == NebulaText.Of("No mods yet. Import one, or drop it here.") || status.Text == NebulaText.Of("Reading mods…")) status.Text = "";
         }
 
         private static Mod Describe(Dictionary<string, object> mod)
         {
             var kinds = new List<string>();
             if (Json.Bool(mod, "riivolution")) kinds.Add("Riivolution");
-            if (Json.Bool(mod, "files")) kinds.Add("game files");
-            if (Json.Bool(mod, "textures")) kinds.Add("textures");
-            if (Json.Bool(mod, "movies")) kinds.Add("movies");
+            if (Json.Bool(mod, "files")) kinds.Add(NebulaText.Of("game files"));
+            if (Json.Bool(mod, "textures")) kinds.Add(NebulaText.Of("textures"));
+            if (Json.Bool(mod, "movies")) kinds.Add(NebulaText.Of("movies"));
             var notes = new List<string>();
             string problem = Json.Str(mod, "problem");
             if (!string.IsNullOrEmpty(problem)) notes.Add(Capitalize(problem));
             long code = Json.Long(mod, "code_patches");
-            if (code != 0) notes.Add(code + (code == 1 ? " code change" : " code changes") + " cannot run in Nebula");
+            if (code != 0) notes.Add(code == 1 ? NebulaText.Of("{0} code change cannot run in Nebula", code) : NebulaText.Of("{0} code changes cannot run in Nebula", code));
             object overlaps;
             if (mod.TryGetValue("overlaps", out overlaps) && overlaps is object[])
             {
@@ -399,11 +399,15 @@ namespace Nebula.Launcher
                     var overlap = o as Dictionary<string, object>;
                     if (overlap == null) continue;
                     long files = Json.Long(overlap, "files"), textures = Json.Long(overlap, "textures");
-                    string what = files != 0 ? files + (files == 1 ? " file" : " files") : "";
-                    if (textures != 0) what += (what.Length != 0 ? " and " : "") + textures + (textures == 1 ? " texture" : " textures");
+                    string what = files == 0 ? "" : files == 1 ? NebulaText.Of("{0} file", files) : NebulaText.Of("{0} files", files);
+                    if (textures != 0)
+                    {
+                        string pictures = textures == 1 ? NebulaText.Of("{0} texture", textures) : NebulaText.Of("{0} textures", textures);
+                        what = what.Length != 0 ? NebulaText.Of("{0} and {1}", what, pictures) : pictures;
+                    }
                     notes.Add(Json.Bool(overlap, "above")
-                        ? Capitalize(what) + " replaced by " + Json.Str(overlap, "other")
-                        : "Replaces " + what + " of " + Json.Str(overlap, "other"));
+                        ? NebulaText.Of("{0} replaced by {1}", Capitalize(what), Json.Str(overlap, "other"))
+                        : NebulaText.Of("Replaces {0} of {1}", what, Json.Str(overlap, "other")));
                 }
             }
             var options = new List<ModOption>();
@@ -440,7 +444,7 @@ namespace Nebula.Launcher
             return new Mod
             {
                 Id = Json.Str(mod, "id"),
-                Kinds = kindText.Length != 0 ? char.ToUpperInvariant(kindText[0]) + kindText.Substring(1) : "Nothing usable",
+                Kinds = kindText.Length != 0 ? char.ToUpperInvariant(kindText[0]) + kindText.Substring(1) : NebulaText.Of("Nothing usable"),
                 Notes = string.Join(". ", notes),
                 Unusable = kinds.Count == 0,
                 Options = options
@@ -512,7 +516,7 @@ namespace Nebula.Launcher
             if (optionsButton != null) optionsButton.Enabled = !busy && mods.Count == 1 && mods[0].Options.Count != 0;
             if (mods.Count == 1)
                 details.Text = mods[0].Id + ": " + mods[0].Kinds.ToLowerInvariant() + (mods[0].Notes.Length != 0 ? ". " + mods[0].Notes + "." : ".");
-            else details.Text = mods.Count > 1 ? mods.Count + " selected." : "";
+            else details.Text = mods.Count > 1 ? NebulaText.Of("{0} selected.", mods.Count) : "";
         }
 
         // Into the enabled list at `at` (0 is the top), in their order.
@@ -698,9 +702,9 @@ namespace Nebula.Launcher
                     if (option.Section.Length != 0 && option.Section != option.Name) title = option.Section + ": " + title;
                     rows.Controls.Add(new Label { Text = title, Location = new Point(0, y + 4), Size = new Size(260, 24), AutoEllipsis = true });
                     var box = new ComboBox { Location = new Point(268, y), Width = 230, DropDownStyle = ComboBoxStyle.DropDownList };
-                    box.Items.Add("Off");
+                    box.Items.Add(NebulaText.Of("Off"));
                     for (int c = 0; c < option.Choices.Count; c++)
-                        box.Items.Add(option.Choices[c] + (c < option.OtherRegion.Count && option.OtherRegion[c] ? " (another region)" : ""));
+                        box.Items.Add(option.Choices[c] + (c < option.OtherRegion.Count && option.OtherRegion[c] ? NebulaText.Of(" (another region)") : ""));
                     box.SelectedIndex = Math.Max(0, Math.Min(option.Selected, box.Items.Count - 1));
                     rows.Controls.Add(box);
                     boxes.Add(box);
@@ -710,7 +714,7 @@ namespace Nebula.Launcher
                 dialog.Controls.Add(rows);
                 int bottom = rows.Bottom + 12;
                 var ok = new Button { Text = "OK", DialogResult = DialogResult.OK, Location = new Point(320, bottom), Size = new Size(96, 32) };
-                var cancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Location = new Point(424, bottom), Size = new Size(96, 32) };
+                var cancel = new Button { Text = NebulaText.Of("Cancel"), DialogResult = DialogResult.Cancel, Location = new Point(424, bottom), Size = new Size(96, 32) };
                 dialog.Controls.Add(ok);
                 dialog.Controls.Add(cancel);
                 dialog.AcceptButton = ok;
@@ -817,8 +821,8 @@ namespace Nebula.Launcher
         {
             using (var dialog = new OpenFileDialog
             {
-                Title = "Import mods",
-                Filter = "Mods and texture packs (zip, 7z, rar, tar)|*.zip;*.7z;*.rar;*.tar;*.tgz;*.gz;*.txz;*.xz|All files (*.*)|*.*",
+                Title = NebulaText.Of("Import mods"),
+                Filter = NebulaText.Of("Mods and texture packs (zip, 7z, rar, tar)|*.zip;*.7z;*.rar;*.tar;*.tgz;*.gz;*.txz;*.xz|All files (*.*)|*.*"),
                 Multiselect = true,
                 CheckFileExists = true
             })
@@ -829,7 +833,7 @@ namespace Nebula.Launcher
 
         private void ImportFolder()
         {
-            using (var dialog = new FolderBrowserDialog { Description = "Import a mod folder" })
+            using (var dialog = new FolderBrowserDialog { Description = NebulaText.Of("Import a mod folder") })
             {
                 if (dialog.ShowDialog(page.FindForm()) == DialogResult.OK) Import(new[] { dialog.SelectedPath });
             }
@@ -840,7 +844,7 @@ namespace Nebula.Launcher
         {
             if (busy || paths == null || paths.Length == 0) return;
             SetBusy(true);
-            status.Text = "Importing " + (paths.Length == 1 ? Path.GetFileName(paths[0].TrimEnd('\\', '/')) : paths.Length + " mods") + "…";
+            status.Text = NebulaText.Of("Importing {0}…", paths.Length == 1 ? Path.GetFileName(paths[0].TrimEnd('\\', '/')) : NebulaText.Of("{0} mods", paths.Length));
             new Thread(() =>
             {
                 string error;
@@ -859,7 +863,7 @@ namespace Nebula.Launcher
                             if (Json.Bool(one, "ok"))
                             {
                                 imported.Add(Json.Str(one, "id"));
-                                messages.Add((Json.Bool(one, "replaced") ? "Updated " : "Imported ") + Json.Str(one, "id"));
+                                messages.Add(Json.Bool(one, "replaced") ? NebulaText.Of("Updated {0}", Json.Str(one, "id")) : NebulaText.Of("Imported {0}", Json.Str(one, "id")));
                             }
                             else messages.Add(Capitalize(Json.Str(one, "message")));
                         }
@@ -867,7 +871,7 @@ namespace Nebula.Launcher
                     Read(() =>
                     {
                         SetBusy(false);
-                        status.Text = messages.Count != 0 ? string.Join(". ", messages) + "." : error ?? "The import did not finish.";
+                        status.Text = messages.Count != 0 ? string.Join(". ", messages) + "." : error ?? NebulaText.Of("The import did not finish.");
                         lastList = onList;
                         Select(onList, on.Where(m => imported.Contains(m.Id)));
                         ShowDetails(onList);
@@ -882,11 +886,11 @@ namespace Nebula.Launcher
             var mods = Selected(lastList);
             if (mods.Count == 0)
             {
-                status.Text = "Select a mod to remove.";
+                status.Text = NebulaText.Of("Select a mod to remove.");
                 return;
             }
-            string what = mods.Count == 1 ? "\"" + mods[0].Id + "\"" : mods.Count + " mods";
-            if (MessageBox.Show(page.FindForm(), "Move " + what + " to the Recycle Bin?", "Remove", MessageBoxButtons.OKCancel,
+            string what = mods.Count == 1 ? "\"" + mods[0].Id + "\"" : NebulaText.Of("{0} mods", mods.Count);
+            if (MessageBox.Show(page.FindForm(), NebulaText.Of("Move {0} to the Recycle Bin?", what), NebulaText.Of("Remove"), MessageBoxButtons.OKCancel,
                     MessageBoxIcon.Question) != DialogResult.OK)
                 return;
             SetBusy(true);
@@ -904,7 +908,7 @@ namespace Nebula.Launcher
                 Post(() => Read(() =>
                 {
                     SetBusy(false);
-                    status.Text = failures.Count != 0 ? string.Join(" ", failures) : "Moved " + what + " to the Recycle Bin.";
+                    status.Text = failures.Count != 0 ? string.Join(" ", failures) : NebulaText.Of("Moved {0} to the Recycle Bin.", what);
                 }));
             }) { IsBackground = true }.Start();
         }
