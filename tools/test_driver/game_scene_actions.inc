@@ -105,6 +105,26 @@
                     }
                 }
             }
+        } else if (action.kind == NEBULA_TEST_LIST_MATERIALS) {
+            AllLiveActorGroup* pGroup = MR::getAllLiveActorGroup();
+            for (s32 i = 0; pGroup != nullptr && i < pGroup->getObjNum(); ++i) {
+                LiveActor* pActor = pGroup->getActor(i);
+                if (pActor != nullptr && pActor->mModelManager != nullptr &&
+                    MR::isEqualStringCase(MR::getModelResName(pActor), action.stage)) {
+                    J3DModelData* pData = MR::getJ3DModelData(pActor);
+                    for (u16 m = 0; pData != nullptr && m < pData->getMaterialNum(); ++m) {
+                        const J3DMaterial* pMaterial = pData->getMaterialNodePointer(m);
+                        const NebulaCookedMaterial* pCooked = pMaterial->mNativeMaterial;
+                        JUTNativeLog("test: material %s %u %s shader %u blend %u %u %u %u depth %u %u %u cull %u\n", action.stage, m,
+                                     pData->getMaterialName()->getName(m), pCooked != nullptr ? pCooked->shader : 0u,
+                                     pCooked != nullptr ? pCooked->blend_op : 0u, pCooked != nullptr ? pCooked->blend_src : 0u,
+                                     pCooked != nullptr ? pCooked->blend_dst : 0u, pCooked != nullptr ? pCooked->logic_op : 0u,
+                                     pCooked != nullptr ? pCooked->depth_test : 0u, pCooked != nullptr ? pCooked->depth_func : 0u,
+                                     pCooked != nullptr ? pCooked->depth_write : 0u, pCooked != nullptr ? pCooked->cull : 0u);
+                    }
+                    break;
+                }
+            }
         } else if (action.kind == NEBULA_TEST_KOOPA_HIT) {
             AllLiveActorGroup* pGroup = MR::getAllLiveActorGroup();
             for (s32 i = 0; pGroup != nullptr && i < pGroup->getObjNum(); ++i) {

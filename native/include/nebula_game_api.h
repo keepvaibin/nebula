@@ -387,9 +387,10 @@ typedef struct NebulaShapeCorner {
     uint16_t color[2];
     uint16_t texcoord[8];
     uint8_t position_matrix;
-    uint8_t texture_matrix[8];
+    uint8_t texture_matrix[8]; /* the coordinate's texture place, or NEBULA_CORNER_POSITION_MATRIX */
     uint8_t reserved[3];
 } NebulaShapeCorner;
+#define NEBULA_CORNER_POSITION_MATRIX 0xFFu /* the coordinate starts from the corner's own position matrix */
 
 /* Which arrays a shape group's corners read and which matrix places they carry (NebulaShapeGeometry::attributes). */
 enum {
