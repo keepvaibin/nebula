@@ -471,10 +471,10 @@ void RendererVk::bind_scene() {
     }
 }
 
-void RendererVk::clear_scene(std::uint32_t clear_rgba, std::uint32_t clear_z24,
+void RendererVk::clear_scene(std::uint32_t clear_rgba, std::uint32_t clear_depth,
                            bool color_enable, bool alpha_enable, bool depth_enable, unsigned rect_x, unsigned rect_y,
                            unsigned rect_w, unsigned rect_h, std::uint8_t pixel_format) {
-    const ReplayClear logged{clear_rgba, clear_z24, color_enable, alpha_enable, depth_enable,
+    const ReplayClear logged{clear_rgba, clear_depth, color_enable, alpha_enable, depth_enable,
                              rect_x, rect_y, rect_w, rect_h, pixel_format};
     if (logging()) {
         recording_log_.ops.push_back({ReplayKind::Clear, static_cast<std::uint32_t>(recording_log_.clears.size())});
@@ -500,7 +500,7 @@ void RendererVk::clear_scene(std::uint32_t clear_rgba, std::uint32_t clear_z24,
                         {static_cast<std::uint32_t>(scaled.right - scaled.left),
                          static_cast<std::uint32_t>(scaled.bottom - scaled.top)}};
     }
-    const SceneClearValues clear = make_scene_clear_values(clear_rgba, clear_z24, pixel_format);
+    const SceneClearValues clear = make_scene_clear_values(clear_rgba, clear_depth, pixel_format);
     // The whole scene target, every channel, while the pass is closed (a copy-clear): the pass begins cleared.
     const bool has_alpha = pixel_format == 1u;
     if (scene_owed_ && !replaying_) [[unlikely]] {

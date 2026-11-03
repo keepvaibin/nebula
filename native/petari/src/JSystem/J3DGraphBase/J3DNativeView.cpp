@@ -45,8 +45,10 @@ namespace J3DNativeView {
         const u32 sent = count < NEBULA_SCREEN_PROBES_MAX ? count : NEBULA_SCREEN_PROBES_MAX;
         for (u32 i = 0; i < sent; i++) {
             probes[i] = pProbes[i];
-            probes[i].x *= cUnitsAcross;
-            probes[i].y *= cUnitsDown;
+            if (probes[i].x >= 0.0f) {
+                probes[i].x *= cUnitsAcross;
+                probes[i].y *= cUnitsDown;
+            }
         }
         const NebulaHostServices* pHost = nebula_host();
         pHost->screen_probe(pHost->user, channel, what, probes, sent);

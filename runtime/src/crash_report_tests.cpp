@@ -75,7 +75,7 @@ int main() {
 
     Facts gpu;
     gpu.kind = Facts::Kind::Startup;
-    gpu.text = "renderer: [RendererD3D12] Present HRESULT=0x487A0005";
+    gpu.text = "renderer: [RendererD3D12] Present HRESULT=887A0005";
     expect(code_of(gpu) == "NEB-G01", "the graphics card was lost mid-game");
     Facts renderer;
     renderer.kind = Facts::Kind::Exception;

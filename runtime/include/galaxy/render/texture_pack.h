@@ -3,9 +3,9 @@
 
 // Texture packs: higher-resolution replacements for the game's textures, found by the community naming convention
 // (a data convention, implemented from its public description):
-//   <pack>/[<GameID or its 3-letter prefix>/]**/tex1_<w>x<h>[_m]_<hash>[_<tlut hash>|_$]_<fmt>[_mip<n>|_arb].png|.dds
-// <w>x<h> and <fmt> are the game texture's size and format; <hash> the source bytes of its base level, <tlut hash>
-// the palette entries a C4/C8/C14X2 texture uses ($: any palette). A replacement is sampled with the game texture's
+//   <pack>/[<GameID or its 3-letter prefix>/]**/tex1_<w>x<h>[_m]_<hash>[_<palette hash>|_$]_<fmt>[_mip<n>|_arb].png|.dds
+// <w>x<h> and <fmt> are the game texture's size and format; <hash> the source bytes of its base level, <palette hash>
+// the palette entries a palette texture uses ($: any palette). A replacement is sampled with the game texture's
 // normalized coordinates at any size; its sampler LOD range shifts by log2 of the scale (TextureHandle::lod_shift_x16).
 //
 // TexturePacks owns the index of every pack folder (the player's pack and the mods' textures/ folders, a later folder
@@ -45,16 +45,16 @@ struct TexturePackName {
     std::uint8_t format = 0;
     std::uint8_t level = 0;   // _mip<n>
     bool mipmapped = false;   // _m
-    bool any_tlut = false;    // _$
+    bool any_palette = false;    // _$
     bool arbitrary = false;   // _arb: levels with their own content, each shown where the game shows that level
     std::uint64_t hash = 0;
-    std::uint64_t tlut = 0;
+    std::uint64_t palette = 0;
 };
 // A file name's stem (no folder, no extension); nullopt when it is not a texture name.
 [[nodiscard]] std::optional<TexturePackName> parse_texture_pack_name(std::string_view stem) noexcept;
 // The stem a texture is dumped under (level 0; `level` adds _mip<n>).
 [[nodiscard]] std::string texture_pack_name(const TexturePackName& name);
-[[nodiscard]] bool texture_format_palettized(TexFormat format) noexcept;
+[[nodiscard]] bool texture_format_palettized(TexturePackFormat format) noexcept;
 
 // A DDS file's layout: levels are contiguous after the header(s).
 enum class DdsFormat : std::uint8_t { Unknown, BC1, BC2, BC3, BC4, BC5, BC7, RGBA8, BGRA8 };
@@ -135,10 +135,10 @@ public:
     [[nodiscard]] bool enabled() const noexcept { return settings_.enabled && index_ != nullptr; }
     [[nodiscard]] bool dumping() const noexcept { return settings_.dump && !settings_.dumps.empty(); }
     // The index has names for this source size and format (hashing is needed only then).
-    [[nodiscard]] bool may_match(std::uint32_t width, std::uint32_t height, TexFormat format) const noexcept;
+    [[nodiscard]] bool may_match(std::uint32_t width, std::uint32_t height, TexturePackFormat format) const noexcept;
     // The replacement slot for a texture's names, or kNone.
-    [[nodiscard]] std::uint32_t find(std::uint32_t width, std::uint32_t height, TexFormat format, std::uint64_t hash,
-                                     std::uint64_t tlut, bool mipmapped = false) const;
+    [[nodiscard]] std::uint32_t find(std::uint32_t width, std::uint32_t height, TexturePackFormat format, std::uint64_t hash,
+                                     std::uint64_t palette, bool mipmapped = false) const;
     // Null until the slot's texture is on the GPU.
     [[nodiscard]] const TextureReplacement* resident(std::uint32_t slot) const noexcept;
     // The file a slot loads from (traces).
@@ -201,7 +201,7 @@ public:
         std::vector<Record> records;
         std::unordered_set<std::uint64_t> sizes;                  // (w, h, fmt) with any name
         std::unordered_map<std::uint64_t, std::uint32_t> exact;   // name key -> record
-        std::unordered_map<std::uint64_t, std::uint32_t> any_tlut;
+        std::unordered_map<std::uint64_t, std::uint32_t> any_palette;
         std::uint64_t files = 0;
         std::uint64_t folders = 0;
         std::uint64_t levels = 0;     // custom lower levels (_mip<n>) of the textures
@@ -232,7 +232,7 @@ private:
     };
 
     static std::uint64_t size_key(std::uint32_t width, std::uint32_t height, std::uint32_t format) noexcept;
-    static std::uint64_t name_key(std::uint64_t size, std::uint64_t hash, std::uint64_t tlut, bool mipmapped) noexcept;
+    static std::uint64_t name_key(std::uint64_t size, std::uint64_t hash, std::uint64_t palette, bool mipmapped) noexcept;
     std::unique_ptr<Load> load(const Record& record, std::uint32_t slot, std::uint64_t generation) const;
     void request(std::uint32_t slot);
     void evict_to_budget(std::uint64_t incoming);

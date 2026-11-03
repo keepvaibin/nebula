@@ -502,14 +502,14 @@ public:
             scene_view_ = *view;
         }
     }
-    // copy-clear: color from the latched AR/GB regs, depth from z24
-    // (converted z24 / 0xFFFFFF into the D24 target).  The clear is scoped to
+    // copy-clear: color from the latched AR/GB regs, depth from depth24
+    // (converted depth24 / 0xFFFFFF into the D24 target).  The clear is scoped to
     // the given rect in unscaled scene target pixels (w==0 -> full target), matching
     // hardware: PE_COPY_EXECUTE's clear bit wipes the copy's src rect only
     // (Dolphin BPStructs ClearScreen(srcRect)).
     void clear_scene(
         std::uint32_t clear_rgba,
-        std::uint32_t clear_z24,
+        std::uint32_t clear_depth,
         bool color_enable,
         bool alpha_enable,
         bool depth_enable,
@@ -536,7 +536,7 @@ public:
     // conversion blit (
     // half-scale box / display picture y-scale stretch / depth-source packing) instead
     // of a raw CopyTextureRegion, 
-    // semantics. `is_depth_copy` is true when the PE pixel format is Z24 at copy time
+    // semantics. `is_depth_copy` is true when the PE pixel format is Depth24 at copy time
     void copy_scene_to_display(const CaptureRequest& params, DisplayTexture& dest);
     // Native presentation: whether this display copy can take the scene target's colour target instead of copying it
     // (hand_over_scene_color): an exact copy of the scene target's top rows (the identity filter, no gamma or scaling) on the
@@ -1055,7 +1055,7 @@ private:
         std::uint8_t mode = 0;  // 0 texture, 1 display copy, 2 output-scene target resample
     };
     struct ReplayClear {
-        std::uint32_t rgba = 0, z24 = 0;
+        std::uint32_t rgba = 0, depth24 = 0;
         bool color = false, alpha = false, depth = false;
         unsigned x = 0, y = 0, w = 0, h = 0;
         std::uint8_t format = 0;

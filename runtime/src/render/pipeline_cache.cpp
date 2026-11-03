@@ -206,7 +206,7 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC make_pso_desc_impl(
     pd.RasterizerState.FrontCounterClockwise = FALSE;
     pd.RasterizerState.DepthClipEnable = TRUE;
 
-    // Depth is reversed-Z relative to the console z24 values (near=1, far=0; the projection negation
+    // Depth is reversed-Z relative to the console depth24 values (near=1, far=0; the projection negation
     // in render_core.cpp fill_projection), so console LESS maps to D3D GREATER, console LEQUAL to
     // GREATER_EQUAL, and so on.
     static constexpr D3D12_COMPARISON_FUNC kGxDepthFunc[8] = {

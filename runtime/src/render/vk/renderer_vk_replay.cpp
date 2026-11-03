@@ -1196,7 +1196,7 @@ bool RendererVk::record_replay_list(ReplayList& list) {
             break;
         case ReplayKind::Clear: {
             const ReplayClear& c = run_log_.clears[op.index];
-            clear_scene(c.rgba, c.z24, c.color, c.alpha, c.depth, c.x, c.y, c.w, c.h, c.format);
+            clear_scene(c.rgba, c.depth24, c.color, c.alpha, c.depth, c.x, c.y, c.w, c.h, c.format);
             break;
         }
         case ReplayKind::SceneAa:

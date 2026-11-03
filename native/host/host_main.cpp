@@ -2450,9 +2450,9 @@ uint32_t svc_art_export(void*, const NebulaArtExport* art) {
         }
     };
     std::string line = art->name != nullptr ? art->name : "";
-    constexpr uint32_t kRgb5a3 = static_cast<uint32_t>(galaxy::render::TexFormat::RGB5A3);
+    constexpr uint32_t kPackedColor = static_cast<uint32_t>(galaxy::render::TexturePackFormat::Packed16);
     const bool linear = art->format >= NEBULA_TEXTURE_LINEAR_L8 && art->format <= NEBULA_TEXTURE_LINEAR_RGBA8;
-    if (art->texels != nullptr && (linear || (art->format == kRgb5a3 && art->width % 4u == 0u && art->height % 4u == 0u))) {
+    if (art->texels != nullptr && (linear || (art->format == kPackedColor && art->width % 4u == 0u && art->height % 4u == 0u))) {
         galaxy::render::TexturePackName name{};
         name.width = static_cast<uint16_t>(art->width);
         name.height = static_cast<uint16_t>(art->height);

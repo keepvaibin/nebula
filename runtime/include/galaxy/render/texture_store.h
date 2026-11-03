@@ -57,11 +57,11 @@ void generate_rgba8_mip_level(const std::vector<RGBA8>& source,
                              std::uint32_t source_width, std::uint32_t source_height,
                              std::vector<RGBA8>& dest,
                              std::uint32_t dest_width, std::uint32_t dest_height);
-// A level of at least 4x4 texels that alternates two values on every texel is a dither the game painted for
+// A level of at least 4x4 texels that alternates two values on every texel is a grain the game painted for
 // the Wii's 6-bit framebuffer (the sky's DotNoise, the white and red plastics). In 8-bit colour it only shows,
 // magnified, as a grid of dots; it becomes the two values' rounded average. Returns whether it was one.
 bool flatten_texel_checker(std::vector<RGBA8>& pixels, std::uint32_t width, std::uint32_t height);
-// A level whose texel-scale detail is a one-texel checker over its content: the art's ordered dither, baked in before
+// A level whose texel-scale detail is a one-texel checker over its content: the art's ordered grain, baked in before
 // the texture was compressed (lawns, turf, sand, concrete, bed cloth). Detected where at least a fifth of the texels
 // differ from their four neighbours' mean by 2 levels or more and the sign of that difference follows one checker
 // phase in at least 95 % of them. Each colour channel loses the checker at its local amplitude (the 3x3 mean of the
@@ -105,7 +105,7 @@ struct TextureInfo {
 // The disc formats whose texels are colour (a generated mip chain is only made for those).
 [[nodiscard]] constexpr bool disc_format_is_colour(std::uint8_t format) noexcept {
     return format == 4u || format == 5u || format == 6u || format == 8u || format == 9u || format == 10u ||
-           format == 14u;  // RGB565, RGB5A3, RGBA8, C4, C8, C14X2, CMPR
+           format == 14u;
 }
 
 class TextureCache {
