@@ -68,8 +68,6 @@ struct DisplayTexture {
     std::uint64_t frame_stamp = 0;  // frame index of the last copy into it
     PointerResponseStamp pointer_response{};
     bool prerecorded_movie{};
-    // Scene-owned surround travels with this copy, never with a later producer.
-    float safety_surround{};
     std::uint64_t copy_serial = 0;  // monotonically published copy order
     // Render thread only: the serial last counted as presented, so each copy's first presentation counts once.
     mutable std::uint64_t last_accounted_present_serial =

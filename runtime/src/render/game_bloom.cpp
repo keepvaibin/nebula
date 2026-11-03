@@ -522,7 +522,6 @@ D3D12_GPU_DESCRIPTOR_HANDLE GameBloom::table(DescriptorRing& ring, const std::ar
 void GameBloom::draw_composite(ID3D12GraphicsCommandList* list, DescriptorRing& ring, const Inputs& in,
                                ID3D12PipelineState* pipeline, const Target& scene, const Target& first,
                                const Target& second, Constants c) {
-    c.params[3] = in.hdr ? 0.0f : 1.0f;  // 8 bits: the bloom rounded stochastically
     const D3D12_GPU_DESCRIPTOR_HANDLE gpu =
         table(ring, {scene.resource.Get(), first.resource.Get(), second.resource.Get()},
               {scene.format, first.format, second.format}, {nullptr, nullptr, nullptr});

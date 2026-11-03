@@ -49,6 +49,11 @@ FallOutFieldDraw::FallOutFieldDraw(const char* pName) : NameObj(pName), _C() {
     mMask->mWrapT = NEBULA_WRAP_CLAMP;
     mMask->mMinType = NEBULA_FILTER_LINEAR;
     mMask->mMagType = NEBULA_FILTER_LINEAR;
+    mBlurScratch = new JUTTexture(MR::getScreenUnitsAcross() / 4, MR::getScreenUnitsDown() / 4);
+    mBlurScratch->mWrapS = NEBULA_WRAP_CLAMP;
+    mBlurScratch->mWrapT = NEBULA_WRAP_CLAMP;
+    mBlurScratch->mMinType = NEBULA_FILTER_LINEAR;
+    mBlurScratch->mMagType = NEBULA_FILTER_LINEAR;
 }
 
 namespace {
@@ -141,10 +146,7 @@ void FallOutFieldDraw::draw() const {
     ImageEffectLocalUtil::drawTexture(mMask, 4, 0, 255, ImageEffectLocalUtil::TexDrawType_0);
     J3DNativeTarget::end(pScreenAlphaTexture3->mImage, NEBULA_TARGET_ALPHA);
 
-    J3DNativeTarget::begin(pScreenAlphaTexture4->mImage, pScreenAlphaTexture4->getWidth(), pScreenAlphaTexture4->getHeight(), 0,
-                           0xFFFFFF);
-    ImageEffectLocalUtil::blurTexture(pScreenAlphaTexture3, 4, 0, 5, 0.004f, 1.0f);
-    J3DNativeTarget::end(pScreenAlphaTexture4->mImage, NEBULA_TARGET_ALPHA);
+    ImageEffectLocalUtil::blurTexture(pScreenAlphaTexture3, mBlurScratch, pScreenAlphaTexture4, 0.004f, NEBULA_TARGET_ALPHA, 5.0f);
 
     setUpEdgeAndClearAlpha();
     ImageEffectLocalUtil::setMode(ImageEffectLocalUtil::Mode_Edge, constantAlpha, ::sEdgeColor);

@@ -172,9 +172,6 @@ void attach_movie_frame(const char* name, std::int32_t frame, float frame_rate, 
                         std::uint64_t v, std::uint32_t width, std::uint32_t height) noexcept;
 // Any thread: a replacement video's frames show for the open movie (its THP frames need no decode).
 [[nodiscard]] bool movie_replacement_showing() noexcept;
-// The grey (0 black to 1 white) of the borders around a fitted picture for the scene being drawn: the strap
-// screen's white backing as it fades.
-void set_safety_scene_surround(float intensity) noexcept;
 
 // Channel `channel`'s latest finished probes (nebula_game_api.h NebulaHostServices::screen_probe_results).
 [[nodiscard]] std::uint32_t screen_probe_results(std::uint32_t channel, ScreenProbe* probes, std::uint32_t capacity);
@@ -281,8 +278,6 @@ void native_settings_set_controllers_for_tests(std::span<const input::Controller
                                                std::optional<input::DeviceKey> active);
 // The Joy-Con halves connected, for tests.
 void native_settings_set_joycons_for_tests(unsigned lefts, unsigned rights);
-// Whether a Wii Remote is connected, for tests.
-void native_settings_set_wii_remote_for_tests(bool present);
 // The text of a row of the open page as drawn.
 [[nodiscard]] std::string native_settings_row_text_for_tests(unsigned row);
 // The settings the menu would apply (its draft), for tests.

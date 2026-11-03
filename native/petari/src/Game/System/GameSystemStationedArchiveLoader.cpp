@@ -54,10 +54,6 @@ NebulaArena* ConditionUsePlayerHeap::getProperHeap(const MR::StationedFileInfo* 
     }
 }
 
-namespace {
-    const u32 cPlayerHeapBytes = 0x800000;
-}
-
 PlayerHeapHolder::PlayerHeapHolder() : mCondition(), mNapaHeap(), mGDDRHeap(), mIsDataMario(true) {
     ConditionUsePlayerHeap* condition = new ConditionUsePlayerHeap();
     // Room for either player's archives: a change of player loads the other's in the same heaps at any time. Pages not used cost nothing.

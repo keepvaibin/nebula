@@ -2,6 +2,7 @@
 // stick, shake, pointer), a replayed keyboard and a replayed XInput controller, and tilt (the Star Ball's upright hold
 // loses the pointer). Hidden window: no live keyboard or mouse.
 
+#include "galaxy/runtime_settings.h"
 #include "galaxy/input/host_input.h"
 #include "galaxy/native_input.h"
 
@@ -96,6 +97,9 @@ void replayed_input() {
         "2000\t1\t-1\t-1\t1280\t720\t0x4000020\t0\t0x0\t0\t0\t0\t0\t0\t0\n"
         "4000\t1\t-1\t-1\t1280\t720\t0x0\t1\t0x1000\t0\t0\t-32768\t0\t0\t0\n");
     set_env("GALAXY_INPUT_REPLAY_LOG", log.string().c_str());
+    galaxy::RuntimeSettings settings = galaxy::get_runtime_settings();
+    settings.input_mode = galaxy::RuntimeInputMode::Auto;
+    galaxy::set_runtime_settings(settings);
     galaxy::input::PlayerInput in = input_at(30);
     expect(in.buttons.a && in.buttons.c && !in.buttons.b && in.shake, "replayed keys: A, C and shake");
     expect(in.stick_x == 1.0f && in.stick_y == 0.0f, "replayed D: the stick right");

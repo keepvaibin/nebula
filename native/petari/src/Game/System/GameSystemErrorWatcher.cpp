@@ -10,7 +10,9 @@
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/TriggerChecker.hpp"
+#include "Game/System/NebulaHost.hpp"
 #include "Game/System/NebulaInput.hpp"
+#include <nebula_game_api.h>
 
 #define INPUT_STATUS_OK 0
 #define INPUT_STATUS_DISCONNECT 1
@@ -24,6 +26,14 @@ namespace {
     };
     const GameSystemErrorWatcher::Message cMessageDisconnect = {
         "ControllerLost",
+        ErrorMessageWindow::MessageType_Nebula,
+    };
+    const GameSystemErrorWatcher::Message cMessageWiiRemoteLost = {
+        "WiiRemoteLost",
+        ErrorMessageWindow::MessageType_Nebula,
+    };
+    const GameSystemErrorWatcher::Message cMessageNoControls = {
+        "ControlsMissing",
         ErrorMessageWindow::MessageType_Nebula,
     };
     const GameSystemErrorWatcher::Message cMessageNoBattery = {
@@ -233,7 +243,14 @@ const GameSystemErrorWatcher::Message* GameSystemErrorWatcher::getProperMessageI
     case INPUT_STATUS_NO_MOVE_STICK:
         return &::cMessageUnplagged;
     case INPUT_STATUS_DISCONNECT:
-        return &::cMessageDisconnect;
+        switch (NebulaHost::option(NEBULA_OPTION_INPUT_MODE)) {
+        case NEBULA_INPUT_MODE_CONTROLLER:
+            return &::cMessageDisconnect;
+        case NEBULA_INPUT_MODE_WII_REMOTE:
+            return &::cMessageWiiRemoteLost;
+        default:
+            return &::cMessageNoControls;
+        }
     case INPUT_STATUS_NO_BATTERY:
         return &::cMessageNoBattery;
     default:
