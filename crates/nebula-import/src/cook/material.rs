@@ -619,6 +619,32 @@ pub fn pass_program(source: &[u8], pass: u32) -> Vec<u8> {
     p
 }
 
+/// A material this build has no shader for, in a mod's conversion: it takes a number from its key and comes with the mod.
+pub const MOD_SHADER_FIRST: u32 = 0x4000_0000;
+
+/// While set, a mod's conversion is running: materials the build lacks are collected for it to compile, by number.
+pub static MOD_MATERIALS: std::sync::Mutex<Option<BTreeMap<u32, [u8; PROGRAM_BYTES]>>> = std::sync::Mutex::new(None);
+
+std::thread_local! {
+    /// Whether this file's materials need their pass variants: the player's models, which draw through them.
+    pub static MOD_FILE_NEEDS_PASSES: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+fn key_hash(bytes: &[u8]) -> Result<u64> {
+    Ok(shader_key(bytes)?.iter().fold(0xcbf29ce484222325u64, |h, &b| (h ^ u64::from(b)).wrapping_mul(0x100000001b3)))
+}
+
+/// The material's number in a mod's conversion, its program kept; None outside one.
+fn mod_material(bytes: &[u8]) -> Result<Option<u32>> {
+    let mut guard = MOD_MATERIALS.lock().unwrap_or_else(|e| e.into_inner());
+    let Some(materials) = guard.as_mut() else {
+        return Ok(None);
+    };
+    let id = MOD_SHADER_FIRST | (key_hash(bytes)? as u32 & 0x3FFF_FFFF);
+    materials.entry(id).or_insert(normalize_program(bytes)?);
+    Ok(Some(id))
+}
+
 /// While set, a material this build has no shader for is noted here instead of refused: the tool that lists what mods
 /// need (`nebula-import mod-materials`), never a game's cook.
 pub static NOTE_MISSING: std::sync::Mutex<Option<Vec<[u8; PROGRAM_BYTES]>>> = std::sync::Mutex::new(None);
@@ -632,6 +658,9 @@ fn pass_shader(bytes: &[u8], pass: u32) -> u32 {
         Ok(None) => {
             if let (Some(noted), Ok(program)) = (NOTE_PASSES.lock().unwrap_or_else(|e| e.into_inner()).as_mut(), normalize_program(bytes)) {
                 noted.push((pass as u8, program));
+            }
+            if MOD_FILE_NEEDS_PASSES.get() {
+                return mod_material(bytes).ok().flatten().unwrap_or(0);
             }
             0
         }
@@ -659,12 +688,10 @@ pub fn cooked_shader(bytes: &[u8]) -> Result<u32> {
         noted.push(normalize_program(bytes)?);
         return Ok(1);
     }
-    let hash = shader_key(bytes)?
-        .iter()
-        .fold(0xcbf29ce484222325u64, |h, &b| {
-            (h ^ u64::from(b)).wrapping_mul(0x100000001b3)
-        });
-    bail!("source material shader {hash:016x} absent from this build");
+    if let Some(id) = mod_material(bytes)? {
+        return Ok(id);
+    }
+    bail!("source material shader {:016x} absent from this build", key_hash(bytes)?);
 }
 
 /// The build's shader table, passed explicitly so a cook cannot silently use a

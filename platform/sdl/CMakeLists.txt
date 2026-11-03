@@ -91,6 +91,7 @@ add_library(galaxy_render_vk STATIC
     ${rt}/render/vk/utility_spirv.cpp
     ${rt}/render/vk/texture_backend_vk.cpp
     ${rt}/render/vk/pipeline_cache_vk.cpp
+    ${rt}/render/mod_shaders.cpp
     ${rt}/render/pipeline_seed.cpp
     ${rt}/render/vk/compile_journal.cpp
     ${rt}/render/vk/renderer_vk.cpp

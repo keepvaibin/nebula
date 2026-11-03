@@ -77,6 +77,8 @@ pub fn write_overlay(game_id: &str, changes: &[Change], base: Option<&Path>, out
     let mut placed = Vec::new();
     let mut failed = Vec::new();
     for change in changes {
+        let lower = change.path.to_ascii_lowercase();
+        super::material::MOD_FILE_NEEDS_PASSES.set(lower.contains("mario") || lower.contains("luigi"));
         let result = fs::read(&change.source)
             .with_context(|| format!("{} cannot be read", change.source.display()))
             .and_then(|bytes| {
