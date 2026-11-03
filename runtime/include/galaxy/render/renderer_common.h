@@ -4,7 +4,7 @@
 // What both renderers share (renderer_d3d12.h, vk/renderer_vk.h): frame and ring counts, the scene target's logical
 // size, one resolved draw, clear values, the scene target conversion shader and its constants, and the sampler-table cache.
 
-#include "galaxy/render/capture.h"
+#include "galaxy/render/frame_pass.h"
 #include "galaxy/render/gpu_types.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render_api.h"
@@ -146,7 +146,7 @@ struct UiSolidQuadConstants {
 };
 static_assert(sizeof(UiSolidQuadConstants) == 13u * sizeof(std::uint32_t));
 [[nodiscard]] SceneConversionShaderConstants make_scene_conversion_constants(
-    bool is_depth_copy,
+    bool from_depth,
     std::uint8_t channels,
     float src_x,
     float src_y,
@@ -160,7 +160,6 @@ static_assert(sizeof(UiSolidQuadConstants) == 13u * sizeof(std::uint32_t));
 // The scene target-copy destination cache's byte budget, 192 MiB. The cache grows with the internal resolution squared while
 // the budget stays fixed, so it is the one resolution-scaled GPU pool that is neither a render target nor visible in
 // a recording.
-[[nodiscard]] std::uint64_t scene_copy_dest_budget_bytes();
 
 // Effect copies (destinations up to 320x228: the bloom pyramid, simple bloom, depth of field, Mario's 160x160
 // shadow capture) are built at the game's own resolution, box-filtered over the scaled scene target. Their low resolution is

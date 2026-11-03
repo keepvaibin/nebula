@@ -6,7 +6,8 @@
 //   material colour's (COMP_R8_GT), alpha 1; 2 mask below, the edge colour (register 0) where the texture's alpha is
 //   under the constant's (COMP_A8_GT), else its colour at alpha 0; 3 mask above, where it is over; 4 alpha, the
 //   texture's alpha in every channel; 5 edge, the edge colour at its alpha times the texture's; 6 luminance, the
-//   texture's in every channel, alpha 1.
+//   texture's in every channel, alpha 1; 7 modulate as 0, the texture being four times the pass's size: four taps,
+//   each two texels wide, so every texel under the pixel counts.
 //   params.y 1: nothing drawn where the alpha is 0 (the fall-out field's fill).
 struct MaterialConstants {
     float4 color;   // the material colour (rgba, 0-1)
@@ -22,8 +23,17 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
 }
 
 float4 material_color(NativeVaryings i) {
-    const float4 t = tex[0].Sample(samp[0], i.uv[0].xy);
     const uint mode = uint(material.params.x);
+    if (mode == 7u) {
+        uint width, height;
+        tex[0].GetDimensions(width, height);
+        const float2 texel = 1.0 / float2(width, height);
+        const float2 uv = i.uv[0].xy;
+        const float4 box = (tex[0].Sample(samp[0], uv + float2(-texel.x, -texel.y)) + tex[0].Sample(samp[0], uv + float2(texel.x, -texel.y)) +
+                            tex[0].Sample(samp[0], uv + float2(-texel.x, texel.y)) + tex[0].Sample(samp[0], uv + float2(texel.x, texel.y))) * 0.25;
+        return saturate(box * material.color);
+    }
+    const float4 t = tex[0].Sample(samp[0], i.uv[0].xy);
     if (mode == 0u) {
         return saturate(t * material.color);
     }

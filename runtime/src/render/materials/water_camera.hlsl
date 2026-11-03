@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // WaterCameraFilter (Game/Screen/WaterCameraFilter.cpp): under water, the screen behind (texture 1, coordinate 1)
 // warped by the filter texture (texture 0, coordinate 0 turned by the filter's matrix) and darkened by the water's
-// colour; alpha the filter's, drawn where above zero.
+// colour, blended here by the filter's alpha, drawn where above zero.
 struct MaterialConstants {
     float4 water;          // the water's colour (rgb), subtracted from the screen's, and the filter's alpha (a)
     float4 filter_row[2];  // coordinate 0 -> the filter texture's s and t (the wave's turn about the middle)
@@ -16,10 +16,10 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
 }
 
 float4 material_color(NativeVaryings i) {
-    if (round(material.water.a * 255.0) <= 0.0) {
-        discard;
-    }
+    const float4 frame = tex[1].Sample(samp[1], i.uv[0].zw);
     const float2 step = round(tex[0].Sample(samp[0], i.uv[0].xy).ab * 255.0) - 128.0;
     const float3 screen = tex[1].Sample(samp[1], i.uv[0].zw + step * material.warp.xy).rgb;
-    return float4(saturate(screen - material.water.rgb), material.water.a);
+    // Opaque over the taken frame: its own blend by the filter's alpha, the frame's alpha kept.
+    const float a = round(material.water.a * 255.0) <= 0.0 ? 0.0 : material.water.a;
+    return float4(lerp(frame.rgb, saturate(screen - material.water.rgb), a), frame.a);
 }

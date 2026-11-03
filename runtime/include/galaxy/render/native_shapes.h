@@ -136,7 +136,7 @@ struct PassState {
 struct Record {
     enum class Kind : std::uint8_t {
         Array, Geometry, Draw, State, Immediate, TextureImage, Readback, Marker,
-        TargetBegin, TargetEnd, TargetClear, TargetCapture, NativeMaterial, FrameShow, FrameClear, Forget, Scene
+        TargetBegin, TargetEnd, TargetClear, FramePass, FrameTake, NativeMaterial, FrameShow, FrameClear, Forget, Scene
     };
     Kind kind = Kind::Draw;
     std::uint64_t key = 0;   // the array's or the group's
@@ -170,11 +170,14 @@ struct Record {
     // A target pass (TargetBegin and TargetEnd, the target at `key`): its size, clear colour (RGBA) and depth.
     std::uint32_t target_width = 0, target_height = 0;
     std::uint32_t target_clear_rgba = 0;
-    // TargetClear, FrameClear: the channels cleared (1 colour, 2 alpha, 4 depth); TargetEnd, TargetCapture:
+    // TargetBegin: the textures that are the frame and its depth during the pass (0: not sampled), the frame carrying
+    // target_channels.
+    std::uint64_t target_frame_key = 0, target_depth_key = 0;
+    // TargetClear, FrameClear: the channels cleared (1 colour, 2 alpha, 4 depth); TargetEnd, FramePass:
     // NebulaTargetChannels. FrameClear: its rectangle (target_x, target_y, target_width x target_height).
     std::uint8_t target_channels = 0;
-    // TargetCapture: the frame's rectangle (target_x, target_y, target_width x target_height), NebulaCaptureFlags;
-    // FrameShow: the picture shown (target_width x target_height) and its NebulaCaptureFlags.
+    // FramePass: the frame's rectangle (target_x, target_y, target_width x target_height), NebulaFramePassFlags;
+    // FrameShow: the picture shown (target_width x target_height) and its NebulaFramePassFlags.
     std::uint16_t target_x = 0, target_y = 0;
     std::uint8_t target_flags = 0;
 };

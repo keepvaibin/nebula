@@ -38,7 +38,7 @@ MiiRecord mii(std::uint32_t id, std::uint8_t flags = 0x80u) {
     return record;
 }
 
-// A Wii field (RVLFaceLib RFLi_Endian.h position and width).
+// A Wii field (MiiLib MII_Endian.h position and width).
 unsigned field(const MiiRecord& r, unsigned pos, unsigned len) {
     const std::size_t unit = (pos >> 4u) * 2u;
     const unsigned word = static_cast<unsigned>(r[unit]) << 8u | static_cast<unsigned>(r[unit + 1u]);

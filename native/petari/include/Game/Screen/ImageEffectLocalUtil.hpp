@@ -22,7 +22,6 @@ namespace ImageEffectLocalUtil {
         Stage_Luminance,
     };
 
-    // `filtered`: through the display's vertical filter (NEBULA_CAPTURE_FILTERED).
     void setStage(EStage stage);
     // The fall-out field's passes (runtime/src/render/materials/image_effect.hlsl modes 2-5): its mask by the texture's
     // alpha under or over the constant's, the alpha alone (its blur), the edge colour at the texture's alpha.
@@ -31,11 +30,16 @@ namespace ImageEffectLocalUtil {
         Mode_MaskAbove = 3,
         Mode_Alpha = 4,
         Mode_Edge = 5,
+        Mode_QuarterBox = 7,
     };
     void setMode(EMode mode, const NebulaColor8& rKonst, const NebulaColor8& rEdge);
     void setupDrawTexture();
     void drawTexture(JUTTexture* pTexture, s32 divisions, s32 tile, u8 intensity, ETexDrawType texDrawType);
     void sendTextureVertex(s32 divisions, s32 tile);
+    // A small texture whose key stands for the frame or its depth in a pass that samples them.
+    JUTTexture* createFrameKey();
+    // The frame's depth into `pTarget`, half the screen; `pDepthKey` from createFrameKey. Leaves setupDrawTexture's state.
+    void drawFrameDepth(JUTTexture* pTarget, JUTTexture* pDepthKey);
     // A Gaussian standing for a ring of `radius` (fractions of the screen), one pass across into `pScratch`, one down
     // into `pTarget`, all of the picture's size (a quarter of the screen). An alpha picture's result is times `alphaGain`,
     // clamped.

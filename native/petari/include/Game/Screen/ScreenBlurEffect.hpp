@@ -21,6 +21,7 @@ public:
 
     JUTTexture* _14;
     JUTTexture* _18;
+    JUTTexture* mFrameDepthKey;  // the frame's depth, in the depth pass
     f32 mScale;
     bool _20;
     f32 mIntensity;

@@ -2,7 +2,7 @@
 
 #include "Game/LiveActor/LiveActorGroup.hpp"
 #include <JSystem/JKernel/JKRDisposer.hpp>
-#include <RVLFaceLib.h>
+#include <MiiLib.h>
 
 class MiiDatabase;
 class MiiFaceParts;

@@ -15,6 +15,8 @@
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
+#include "galaxy/run_options.h"
+#include <cwchar>
 #include <Windows.h>
 #endif
 
@@ -103,13 +105,13 @@ inline void record(Event event, std::uint64_t a = 0u, std::uint64_t b = 0u) noex
 inline void initialize_from_environment() noexcept {
     char flag[8]{};
     std::size_t length = 0;
-    if (getenv_s(&length, flag, sizeof(flag), "GALAXY_FRAME_TIMELINE") != 0 || length < 2 ||
+    if (::galaxy::run_option_read(&length, flag, sizeof(flag), ::galaxy::run_options().frame_timeline) != 0 || length < 2 ||
         flag[0] == '0') {
         return;
     }
     std::uint64_t capacity = 2'000'000u;  // 64 MB, about 25 minutes at 60 frames/s
     char count[32]{};
-    if (getenv_s(&length, count, sizeof(count), "GALAXY_FRAME_TIMELINE_EVENTS") == 0 && length > 1) {
+    if (::galaxy::run_option_read(&length, count, sizeof(count), ::galaxy::run_options().frame_timeline_events) == 0 && length > 1) {
         const unsigned long long parsed = std::strtoull(count, nullptr, 10);
         if (parsed >= 1000u && parsed <= 50'000'000u) capacity = parsed;
     }
@@ -128,7 +130,11 @@ inline void dump() noexcept {
     if (!g_state.enabled) return;
     g_state.enabled = false;
     wchar_t path[MAX_PATH]{};
-    DWORD length = GetEnvironmentVariableW(L"GALAXY_FRAME_TIMELINE_PATH", path, MAX_PATH);
+    const wchar_t* const named = ::galaxy::run_options().frame_timeline_path_w;
+    DWORD length = named != nullptr ? static_cast<DWORD>(std::wcslen(named)) : 0u;
+    if (length != 0u && length < MAX_PATH) {
+        std::wmemcpy(path, named, length + 1u);
+    }
     if (length == 0u || length >= MAX_PATH) {
         wchar_t base[MAX_PATH]{};
         const DWORD base_length = GetEnvironmentVariableW(L"LOCALAPPDATA", base, MAX_PATH);

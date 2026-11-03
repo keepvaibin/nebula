@@ -31,7 +31,7 @@ void CaptureScreenDirector::captureIfAllow(const char* pName) {
 }
 
 void CaptureScreenDirector::capture() {
-    mTexture->frameColor(false);
+    mTexture->frameColor();
 }
 
 void CaptureScreenDirector::requestCaptureTiming(const char* pName) {

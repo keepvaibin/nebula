@@ -35,7 +35,7 @@ namespace J3DNativeView {
 
 extern "C" {
 #endif
-// The same for the C sources (RVLFaceLib).
+// The same for the C sources (MiiLib).
 void J3DNativeViewSetPerspective(const f32 (*pMtx)[4]);
 void J3DNativeViewSetOrthographic(const f32 (*pMtx)[4]);
 void J3DNativeViewSetViewport(f32 left, f32 top, f32 width, f32 height, f32 nearZ, f32 farZ);

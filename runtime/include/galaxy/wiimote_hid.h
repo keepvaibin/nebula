@@ -158,7 +158,7 @@ private:
 // Starts the worker on first use. It reads a remote while the input mode is Auto or Wii Remote, never in hidden test
 // runs (a test never takes the player's remote).
 void ensure_real_wiimote_started() noexcept;
-// The host's WPAD thread plays with the remote: in Auto mode from its first button press until another input device
+// The host's input thread plays with the remote: in Auto mode from its first button press until another input device
 // is used; in Wii Remote mode while it is connected.
 void real_wiimote_set_active(bool active) noexcept;
 // What the game asks of the remote: its data report (0x30, 0x31, 0x33, 0x37), the IR camera and the motor.

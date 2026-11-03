@@ -172,24 +172,24 @@ LiveControlsResult LiveControlsEngine::sample(const LiveControlsFrame& frame, Li
     const float pad_pointer_y = pad_logic_all.pointer_y;
     const float keyboard_pointer_x = keyboard_logic.pointer_x;
     const float keyboard_pointer_y = keyboard_logic.pointer_y;
-    const auto held = [&logic](galaxy::input::WiiTarget target) {
+    const auto held = [&logic](galaxy::input::GameInput target) {
         return logic.held(target);
     };
-    using galaxy::input::WiiTarget;
-    snapshot.buttons.left = held(WiiTarget::DpadLeft) || script.buttons.left;
-    snapshot.buttons.right = held(WiiTarget::DpadRight) || script.buttons.right;
-    snapshot.buttons.down = held(WiiTarget::DpadDown) || script.buttons.down;
-    snapshot.buttons.up = held(WiiTarget::DpadUp) || script.buttons.up;
-    snapshot.buttons.plus = held(WiiTarget::Plus) || script.buttons.plus;
-    snapshot.buttons.minus = held(WiiTarget::Minus) || script.buttons.minus;
-    snapshot.buttons.one = held(WiiTarget::One) || script.buttons.one;
-    snapshot.buttons.two = held(WiiTarget::Two) || script.buttons.two;
-    snapshot.buttons.home = held(WiiTarget::Home) || script.buttons.home;
+    using galaxy::input::GameInput;
+    snapshot.buttons.left = held(GameInput::DpadLeft) || script.buttons.left;
+    snapshot.buttons.right = held(GameInput::DpadRight) || script.buttons.right;
+    snapshot.buttons.down = held(GameInput::DpadDown) || script.buttons.down;
+    snapshot.buttons.up = held(GameInput::DpadUp) || script.buttons.up;
+    snapshot.buttons.plus = held(GameInput::Plus) || script.buttons.plus;
+    snapshot.buttons.minus = held(GameInput::Minus) || script.buttons.minus;
+    snapshot.buttons.one = held(GameInput::One) || script.buttons.one;
+    snapshot.buttons.two = held(GameInput::Two) || script.buttons.two;
+    snapshot.buttons.home = held(GameInput::Home) || script.buttons.home;
     // B on the controllers: jump while Mario is under control, back in menus.
     const galaxy::input::JumpBackLatch::Output jump_back =
-        s_jump_back.update(held(WiiTarget::JumpBack), play_context);
-    snapshot.buttons.a = held(WiiTarget::A) || jump_back.a || script.buttons.a;
-    snapshot.buttons.b = held(WiiTarget::B) || jump_back.b || script.buttons.b;
+        s_jump_back.update(held(GameInput::JumpBack), play_context);
+    snapshot.buttons.a = held(GameInput::A) || jump_back.a || script.buttons.a;
+    snapshot.buttons.b = held(GameInput::B) || jump_back.b || script.buttons.b;
 
     float stick_x = logic.stick_x;
     float stick_y = logic.stick_y;
@@ -200,8 +200,8 @@ LiveControlsResult LiveControlsEngine::sample(const LiveControlsFrame& frame, Li
     const galaxy::input::StickValue nunchuk_stick = galaxy::input::nunchuk_stick(stick_x, stick_y);
     snapshot.stick_x = nunchuk_stick.x;
     snapshot.stick_y = nunchuk_stick.y;
-    snapshot.buttons.c = held(WiiTarget::C) || script.buttons.c;
-    snapshot.buttons.z = held(WiiTarget::Z) || script.buttons.z;
+    snapshot.buttons.c = held(GameInput::C) || script.buttons.c;
+    snapshot.buttons.z = held(GameInput::Z) || script.buttons.z;
 
     const std::uint64_t live_mouse_script_grace_ms =
         frame.script_pointer_grace_ms;
@@ -233,22 +233,22 @@ LiveControlsResult LiveControlsEngine::sample(const LiveControlsFrame& frame, Li
                         keyboard_table,
                         static_cast<std::uint8_t>((host_pointer.left_button ? 1u : 0u) |
                                                   (host_pointer.right_button ? 2u : 0u)));
-                    const auto mouse = [mouse_targets](WiiTarget target) {
-                        return (mouse_targets & galaxy::input::wii_target_bit(target)) != 0u;
+                    const auto mouse = [mouse_targets](GameInput target) {
+                        return (mouse_targets & galaxy::input::game_input_bit(target)) != 0u;
                     };
-                    snapshot.buttons.a = snapshot.buttons.a || mouse(WiiTarget::A);
-                    snapshot.buttons.b = snapshot.buttons.b || mouse(WiiTarget::B);
-                    snapshot.buttons.one = snapshot.buttons.one || mouse(WiiTarget::One);
-                    snapshot.buttons.two = snapshot.buttons.two || mouse(WiiTarget::Two);
-                    snapshot.buttons.plus = snapshot.buttons.plus || mouse(WiiTarget::Plus);
-                    snapshot.buttons.minus = snapshot.buttons.minus || mouse(WiiTarget::Minus);
-                    snapshot.buttons.home = snapshot.buttons.home || mouse(WiiTarget::Home);
-                    snapshot.buttons.up = snapshot.buttons.up || mouse(WiiTarget::DpadUp);
-                    snapshot.buttons.down = snapshot.buttons.down || mouse(WiiTarget::DpadDown);
-                    snapshot.buttons.left = snapshot.buttons.left || mouse(WiiTarget::DpadLeft);
-                    snapshot.buttons.right = snapshot.buttons.right || mouse(WiiTarget::DpadRight);
-                    snapshot.buttons.c = snapshot.buttons.c || mouse(WiiTarget::C);
-                    snapshot.buttons.z = snapshot.buttons.z || mouse(WiiTarget::Z);
+                    snapshot.buttons.a = snapshot.buttons.a || mouse(GameInput::A);
+                    snapshot.buttons.b = snapshot.buttons.b || mouse(GameInput::B);
+                    snapshot.buttons.one = snapshot.buttons.one || mouse(GameInput::One);
+                    snapshot.buttons.two = snapshot.buttons.two || mouse(GameInput::Two);
+                    snapshot.buttons.plus = snapshot.buttons.plus || mouse(GameInput::Plus);
+                    snapshot.buttons.minus = snapshot.buttons.minus || mouse(GameInput::Minus);
+                    snapshot.buttons.home = snapshot.buttons.home || mouse(GameInput::Home);
+                    snapshot.buttons.up = snapshot.buttons.up || mouse(GameInput::DpadUp);
+                    snapshot.buttons.down = snapshot.buttons.down || mouse(GameInput::DpadDown);
+                    snapshot.buttons.left = snapshot.buttons.left || mouse(GameInput::DpadLeft);
+                    snapshot.buttons.right = snapshot.buttons.right || mouse(GameInput::DpadRight);
+                    snapshot.buttons.c = snapshot.buttons.c || mouse(GameInput::C);
+                    snapshot.buttons.z = snapshot.buttons.z || mouse(GameInput::Z);
                     logic.pressed |= mouse_targets;
                 }
             }
@@ -343,10 +343,10 @@ LiveControlsResult LiveControlsEngine::sample(const LiveControlsFrame& frame, Li
     activity.touch = pad_touch_pointing && std::fabs(touch_x) + std::fabs(touch_y) > 0.0f;
     // Recenter (pointer_control.h RecenterHold): the press gives the pointer to the recentering device
     // at the picture centre. While the button is held, the pointer stays there and that device keeps it.
-    const bool recenter_held = held(WiiTarget::PointerRecenter);
+    const bool recenter_held = held(GameInput::PointerRecenter);
     const galaxy::input::RecenterHold::Output recenter = s_recenter.update(recenter_held);
     if (recenter.pressed) {
-        const bool pad_recenter = pad_logic_all.held(WiiTarget::PointerRecenter);
+        const bool pad_recenter = pad_logic_all.held(GameInput::PointerRecenter);
         s_pointer_owner.owner = pad_recenter
             ? (pad_gyro_pointing    ? galaxy::input::PointerSource::Gyro
                : pad_touch_pointing ? galaxy::input::PointerSource::Touch
@@ -452,15 +452,15 @@ LiveControlsResult LiveControlsEngine::sample(const LiveControlsFrame& frame, Li
     apply_tilt_accel(snapshot, s_tilt, tilt_section, tilt_up, stick_x, stick_y, recenter.pressed);
 
     const bool shake_pressed =
-        script.shake || held(WiiTarget::Shake) || motion_shake_remote;
+        script.shake || held(GameInput::Shake) || motion_shake_remote;
     if (shake_pressed && !s_previous_shake) {
         std::cerr << "[input-shake] vi=" << current_vi << " source="
-                  << (motion_shake_remote ? "motion" : held(WiiTarget::Shake) ? "binding" : "script")
+                  << (motion_shake_remote ? "motion" : held(GameInput::Shake) ? "binding" : "script")
                   << " tilt-section=" << galaxy::input::tilt::section_name(tilt_section) << '\n';
     }
     s_previous_shake = shake_pressed;
     snapshot.shake = shake_pressed;
-    snapshot.nunchuk_shake = held(WiiTarget::NunchukShake) || motion_shake_nunchuk;
+    snapshot.nunchuk_shake = held(GameInput::NunchukShake) || motion_shake_nunchuk;
     return result;
 }
 }  // namespace galaxy::host::controls

@@ -100,12 +100,16 @@ target_link_libraries(galaxy_disc_files PUBLIC galaxy_runtime_abi)
 add_library(galaxy_save_files STATIC runtime/src/save_files.cpp)
 target_link_libraries(galaxy_save_files PUBLIC galaxy_runtime_abi galaxy_atomic_file)
 
+add_library(galaxy_run_options STATIC tools/test_driver/run_options.cpp)
+target_include_directories(galaxy_run_options PUBLIC runtime/include)
+galaxy_host_options(galaxy_run_options)
+
 add_library(galaxy_runtime_settings STATIC
     runtime/src/runtime_settings.cpp
     runtime/src/input_bindings.cpp
     runtime/src/achievements.cpp
     runtime/src/stats.cpp)
-target_link_libraries(galaxy_runtime_settings PUBLIC galaxy_runtime_abi galaxy_atomic_file)
+target_link_libraries(galaxy_runtime_settings PUBLIC galaxy_runtime_abi galaxy_atomic_file galaxy_run_options)
 galaxy_host_options(galaxy_runtime_settings)
 
 add_library(galaxy_frame_cadence_diagnostics STATIC runtime/src/frame_cadence_diagnostics.cpp)
@@ -146,6 +150,7 @@ add_library(galaxy_native_host STATIC
     runtime/src/input/host_input.cpp
     runtime/src/input/controls_engine.cpp
     tools/test_driver/scripted_input.cpp
+    tools/test_driver/data_guard.cpp
     runtime/src/input/live_controls_engine.cpp
     runtime/src/input/key_positions_win32.cpp
     runtime/src/input/raw_mouse_win32.cpp
@@ -334,7 +339,8 @@ add_library(galaxy_render STATIC
     "${galaxy_utility_shader_dir}/utility_shaders_dxbc.h"
     runtime/src/render/render_api.cpp
     runtime/src/render/render_config.cpp
-    runtime/src/render/host_window_win32.cpp
+runtime/src/render/host_window_win32.cpp
+    runtime/src/ui/native_settings.cpp
     runtime/src/ui/settings_model.cpp
     runtime/src/ui/settings_system_page.cpp
     runtime/src/ui/settings_advanced_page.cpp
@@ -360,7 +366,7 @@ add_library(galaxy_render STATIC
     runtime/src/render/drawing_state.cpp
     runtime/src/render/draw_matrices.cpp
     runtime/src/render/render_state_key.cpp
-    runtime/src/render/capture.cpp
+    runtime/src/render/frame_pass.cpp
     runtime/src/render/line_point_params.cpp
     runtime/src/render/pipeline_cache.cpp
     runtime/src/render/pipeline_seed.cpp
@@ -520,7 +526,7 @@ galaxy_test(galaxy_mods_tests SOURCES ${rt}/mods_tests.cpp ${rt}/mod_xml.cpp ${r
     ${rt}/mod_import.cpp LIBS galaxy_atomic_file nebula_archive)
 galaxy_test(galaxy_crash_report_tests SOURCES ${rt}/crash_report_tests.cpp ${rt}/crash_report.cpp)
 
-galaxy_test(galaxy_test_data_paths_tests SOURCES ${rt}/test_data_paths_tests.cpp ${rt}/host_env.cpp LIBS shell32)
+galaxy_test(galaxy_test_data_paths_tests SOURCES ${rt}/test_data_paths_tests.cpp ${rt}/host_env.cpp tools/test_driver/data_guard.cpp LIBS galaxy_run_options shell32)
 
 galaxy_test(galaxy_home_menu_model_tests SOURCES ${rt}/home_menu_model_tests.cpp)
 
@@ -557,12 +563,12 @@ set_tests_properties(galaxy_window_owner_tests PROPERTIES TIMEOUT 20)
 # Tests of the renderer library.
 foreach(name curved_surfaces native_shapes draw_constants_fill render_config
         gpu_sampler rt_materials texture_pack movie_replacement
-        capture line_point_params post_process
+        frame_pass line_point_params post_process
         warp_capture_store native_material)
     galaxy_test(galaxy_${name}_tests SOURCES ${render_src}/${name}_tests.cpp LIBS galaxy_render)
 endforeach()
 # The tests compile their own small shaders; the program itself never compiles any.
-target_link_libraries(galaxy_capture_tests PRIVATE d3dcompiler)
+target_link_libraries(galaxy_frame_pass_tests PRIVATE d3dcompiler)
 target_link_libraries(galaxy_warp_capture_store_tests PRIVATE d3dcompiler)
 add_test(NAME galaxy_post_process_tests_held_no_deband COMMAND galaxy_post_process_tests --held-no-deband)
 # Texture records (nebula_cooked_texture.h) in the texture cache's suite.
@@ -610,7 +616,8 @@ if(NEBULA_VULKAN)
     add_library(galaxy_render_vk STATIC
         runtime/src/render/render_api.cpp
             runtime/src/render/render_config.cpp
-        runtime/src/render/host_window_win32.cpp
+runtime/src/render/host_window_win32.cpp
+    runtime/src/ui/native_settings.cpp
     runtime/src/ui/settings_model.cpp
     runtime/src/ui/settings_system_page.cpp
     runtime/src/ui/settings_advanced_page.cpp
@@ -632,7 +639,7 @@ if(NEBULA_VULKAN)
         runtime/src/render/drawing_state.cpp
         runtime/src/render/draw_matrices.cpp
         runtime/src/render/render_state_key.cpp
-        runtime/src/render/capture.cpp
+        runtime/src/render/frame_pass.cpp
         runtime/src/render/line_point_params.cpp
         runtime/src/render/post_process_settings.cpp
         runtime/src/render/transform_history.cpp

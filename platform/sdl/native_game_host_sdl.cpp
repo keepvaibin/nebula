@@ -54,22 +54,22 @@ const in::ControlsConfig& live_controls() {
 // The on-screen controls as the bindings' output.
 in::LogicalInput touch_logic(const sdl::InputState& state) {
     in::LogicalInput logic{};
-    const auto press = [&logic](in::WiiTarget target) { logic.pressed |= in::wii_target_bit(target); };
+    const auto press = [&logic](in::GameInput target) { logic.pressed |= in::game_input_bit(target); };
     const std::uint32_t b = state.touch_buttons;
-    if (b & sdl::kTouchA) press(in::WiiTarget::A);
-    if (b & sdl::kTouchB) press(in::WiiTarget::B);
-    if (b & sdl::kTouchZ) press(in::WiiTarget::Z);
-    if (b & sdl::kTouchC) press(in::WiiTarget::C);
-    if (b & sdl::kTouchShake) press(in::WiiTarget::Shake);
-    if (b & sdl::kTouchMinus) press(in::WiiTarget::Minus);
-    if (b & sdl::kTouchPlus) press(in::WiiTarget::Plus);
-    if (b & sdl::kTouchHome) press(in::WiiTarget::Home);
-    if (b & sdl::kTouchOne) press(in::WiiTarget::One);
-    if (b & sdl::kTouchTwo) press(in::WiiTarget::Two);
-    if (b & sdl::kTouchUp) press(in::WiiTarget::DpadUp);
-    if (b & sdl::kTouchDown) press(in::WiiTarget::DpadDown);
-    if (b & sdl::kTouchLeft) press(in::WiiTarget::DpadLeft);
-    if (b & sdl::kTouchRight) press(in::WiiTarget::DpadRight);
+    if (b & sdl::kTouchA) press(in::GameInput::A);
+    if (b & sdl::kTouchB) press(in::GameInput::B);
+    if (b & sdl::kTouchZ) press(in::GameInput::Z);
+    if (b & sdl::kTouchC) press(in::GameInput::C);
+    if (b & sdl::kTouchShake) press(in::GameInput::Shake);
+    if (b & sdl::kTouchMinus) press(in::GameInput::Minus);
+    if (b & sdl::kTouchPlus) press(in::GameInput::Plus);
+    if (b & sdl::kTouchHome) press(in::GameInput::Home);
+    if (b & sdl::kTouchOne) press(in::GameInput::One);
+    if (b & sdl::kTouchTwo) press(in::GameInput::Two);
+    if (b & sdl::kTouchUp) press(in::GameInput::DpadUp);
+    if (b & sdl::kTouchDown) press(in::GameInput::DpadDown);
+    if (b & sdl::kTouchLeft) press(in::GameInput::DpadLeft);
+    if (b & sdl::kTouchRight) press(in::GameInput::DpadRight);
     logic.stick_x = state.touch_stick_x;
     logic.stick_y = state.touch_stick_y;
     return logic;
@@ -147,27 +147,27 @@ in::PlayerInput native_game_input(std::uint64_t, std::int32_t star_pointer_mode,
         keys.pointer_y = -keys.pointer_y;
     }
     const in::LogicalInput logic = in::merge_logical_input(in::merge_logical_input(pads, keys), touch_logic(state));
-    const auto held = [&logic](in::WiiTarget target) { return logic.held(target); };
+    const auto held = [&logic](in::GameInput target) { return logic.held(target); };
 
-    snapshot.buttons.left = held(in::WiiTarget::DpadLeft);
-    snapshot.buttons.right = held(in::WiiTarget::DpadRight);
-    snapshot.buttons.down = held(in::WiiTarget::DpadDown);
-    snapshot.buttons.up = held(in::WiiTarget::DpadUp);
-    snapshot.buttons.plus = held(in::WiiTarget::Plus);
-    snapshot.buttons.minus = held(in::WiiTarget::Minus);
-    snapshot.buttons.one = held(in::WiiTarget::One);
-    snapshot.buttons.two = held(in::WiiTarget::Two);
-    snapshot.buttons.home = held(in::WiiTarget::Home);
+    snapshot.buttons.left = held(in::GameInput::DpadLeft);
+    snapshot.buttons.right = held(in::GameInput::DpadRight);
+    snapshot.buttons.down = held(in::GameInput::DpadDown);
+    snapshot.buttons.up = held(in::GameInput::DpadUp);
+    snapshot.buttons.plus = held(in::GameInput::Plus);
+    snapshot.buttons.minus = held(in::GameInput::Minus);
+    snapshot.buttons.one = held(in::GameInput::One);
+    snapshot.buttons.two = held(in::GameInput::Two);
+    snapshot.buttons.home = held(in::GameInput::Home);
     // A controller's B: jump while Mario is under control, back in menus.
     static in::JumpBackLatch s_jump_back{};
-    const in::JumpBackLatch::Output jump_back = s_jump_back.update(held(in::WiiTarget::JumpBack), context);
-    snapshot.buttons.a = held(in::WiiTarget::A) || jump_back.a;
-    snapshot.buttons.b = held(in::WiiTarget::B) || jump_back.b;
+    const in::JumpBackLatch::Output jump_back = s_jump_back.update(held(in::GameInput::JumpBack), context);
+    snapshot.buttons.a = held(in::GameInput::A) || jump_back.a;
+    snapshot.buttons.b = held(in::GameInput::B) || jump_back.b;
     const in::StickValue stick = in::nunchuk_stick(logic.stick_x, logic.stick_y);
     snapshot.stick_x = stick.x;
     snapshot.stick_y = stick.y;
-    snapshot.buttons.c = held(in::WiiTarget::C);
-    snapshot.buttons.z = held(in::WiiTarget::Z);
+    snapshot.buttons.c = held(in::GameInput::C);
+    snapshot.buttons.z = held(in::GameInput::Z);
 
     // The pointer: the finger (or mouse) on the picture where it is; a stick or keys move it at their speed.
     static float s_pointer_x = 0.0f;
@@ -230,8 +230,8 @@ in::PlayerInput native_game_input(std::uint64_t, std::int32_t star_pointer_mode,
         snapshot.gravity = tilt.game;
     }
     snapshot.pointer_on = snapshot.pointer_on && in::remote_faces_screen(snapshot.gravity);
-    snapshot.shake = held(in::WiiTarget::Shake);
-    snapshot.nunchuk_shake = held(in::WiiTarget::NunchukShake);
+    snapshot.shake = held(in::GameInput::Shake);
+    snapshot.nunchuk_shake = held(in::GameInput::NunchukShake);
     return snapshot;
 }
 

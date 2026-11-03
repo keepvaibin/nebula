@@ -104,6 +104,28 @@ void ImageEffectLocalUtil::drawTexture(JUTTexture* pTexture, s32 divisions, s32 
     sendTextureVertex(divisions, tile);
 }
 
+JUTTexture* ImageEffectLocalUtil::createFrameKey() {
+    JUTTexture* pKey = new JUTTexture(4, 4);
+    pKey->mWrapS = NEBULA_WRAP_CLAMP;
+    pKey->mWrapT = NEBULA_WRAP_CLAMP;
+    pKey->mMinType = NEBULA_FILTER_LINEAR;
+    pKey->mMagType = NEBULA_FILTER_LINEAR;
+    return pKey;
+}
+
+void ImageEffectLocalUtil::drawFrameDepth(JUTTexture* pTarget, JUTTexture* pDepthKey) {
+    setupDrawTexture();
+    J3DNativeTarget::beginOverFrame(pTarget->mImage, pTarget->getWidth(), pTarget->getHeight(), 0, nullptr, NEBULA_TARGET_RGBA,
+                                    pDepthKey->mImage);
+    NebulaNativeMaterial material;
+    NativeShader::init(material, NEBULA_SHADER_FRAME_DEPTH, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
+                       NEBULA_CULL_NONE);
+    NativeShader::setTexture(material, 0, pDepthKey);
+    NativeShader::send(material);
+    sendTextureVertex(2, 0);
+    J3DNativeTarget::end(pTarget->mImage, NEBULA_TARGET_RED);
+}
+
 void ImageEffectLocalUtil::sendTextureVertex(s32 divisions, s32 tile) {
     s32 row = tile / divisions;
     s32 column = tile % divisions;

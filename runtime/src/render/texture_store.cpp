@@ -9,7 +9,7 @@
 #endif
 
 #include "galaxy/render/texture_store.h"
-#include "galaxy/test_hooks.h"
+#include "galaxy/run_options.h"
 #include "galaxy/path_text.h"
 #include "galaxy/loss_report.h"
 #include "galaxy/render/rt_materials.h"
@@ -939,16 +939,6 @@ std::size_t TextureCache::retire_key(std::uint64_t key) {
     return evicted;
 }
 
-namespace {
-
-// GALAXY_TEXTURE_PACK_TRACE=1: each replacement bound or swapped in, with its address and file.
-bool trace_texture_packs_enabled() {
-    static const bool enabled = read_env_u64(nebula_switch::texture_pack_trace_name(), 0u) != 0u;
-    return enabled;
-}
-
-}  // namespace
-
 TextureCache::Entry TextureCache::make_replacement_entry(const TextureReplacement& replacement, std::uint32_t slot,
                                                          std::uint16_t width, std::uint16_t height,
                                                          bool generated_mips, std::uint32_t source_bytes) {
@@ -1074,13 +1064,6 @@ void TextureCache::apply_texture_packs() {
             replacement = {};
         }
         const std::filesystem::path file = packs_.file(slot);
-        if (trace_texture_packs_enabled()) {
-            std::cerr << "[texture-pack] upload " << pixels.width << 'x' << pixels.height << " levels=" << replacement.levels
-                      << (replacement.texture && pixels.levels.empty() ? " staged" : "")
-                      << " ms=" << std::chrono::duration<double, std::milli>(
-                                       std::chrono::steady_clock::now() - upload_start).count()
-                      << ' ' << galaxy::path_text(file.filename()) << '\n';
-        }
         pixels = {};
         packs_.make_resident(slot, std::move(replacement));
         const auto waiting = pack_waiters_.find(slot);
@@ -1102,10 +1085,6 @@ void TextureCache::apply_texture_packs() {
             it->second = std::move(next);
             decoded_lru_track(key);
             ++pack_swapped_;
-            if (trace_texture_packs_enabled()) {
-                std::cerr << "[texture-pack] swap addr=" << std::hex << key.address << std::dec << ' '
-                          << galaxy::path_text(file.filename()) << '\n';
-            }
         }
         pack_waiters_.erase(waiting);
     }
@@ -1341,10 +1320,6 @@ TextureHandle TextureCache::get(std::uint64_t texture, const TextureSampler& mod
                 entries_.emplace(key, std::move(entry));
                 decoded_lru_track(key);
                 ++pack_bound_;
-                if (trace_texture_packs_enabled()) {
-                    std::cerr << "[texture-pack] bind addr=" << std::hex << image.key << std::dec << ' '
-                              << galaxy::path_text(packs_.file(pack_slot).filename()) << '\n';
-                }
                 return handle;
             }
         }

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// Mii files of every console as the Wii's own Mii records (RFLiCharData): the Wii's (.mii, .rcd, .mae, .miigx, .rsd,
+// Mii files of every console as the Wii's own Mii records (MiiCharData): the Wii's (.mii, .rcd, .mae, .miigx, .rsd,
 // its RFL_DB.dat, a Wii Remote's Mii block), the DS's (.ncd, .nsd), the 3DS's and Wii U's (.cfcd, .cfsd, .ffcd, .ffsd,
 // their CFL_DB.dat and FFL_ODB.dat), the Switch's (.charinfo, .nfsd, .nfcd), Mii Studio's (its data and the obfuscated
 // code, as bytes, hex text or a studio.mii.nintendo.com link) and Mii Creator's (.miic). A newer console's Mii takes

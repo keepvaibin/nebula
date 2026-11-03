@@ -459,7 +459,8 @@ namespace {
         NativeShader::init(material, NEBULA_SHADER_FRAME_RIPPLE, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
                            NEBULA_CULL_NONE);
         J3DNativeTexture::init(&texture, const_cast< void* >(pFrame), width, height, NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP);
-        J3DNativeTarget::read(pFrame, NEBULA_TARGET_RGB);
+        J3DNativeTarget::take(pFrame);
+        material.alpha_write = 1;
         NativeShader::setTexObj(material, 0, &texture);
         material.constants[0] = amplitude;
         material.constants[1] = height;
@@ -477,6 +478,7 @@ namespace {
         J3DNativeDraw::texCoord(1.0f, 1.0f);
         J3DNativeDraw::position(MR::getScreenWidth(), 0.0f, 0.0f);
         J3DNativeDraw::texCoord(1.0f, 0.0f);
+        J3DPass::writeAlpha(false);
     }
 }  // namespace
 

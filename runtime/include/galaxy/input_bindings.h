@@ -29,7 +29,7 @@ enum class ControlScheme : std::uint8_t {
 };
 inline constexpr std::size_t kControlSchemeCount = 7;
 
-enum class WiiTarget : std::uint8_t {
+enum class GameInput : std::uint8_t {
     A,
     B,
     One,
@@ -57,17 +57,17 @@ enum class WiiTarget : std::uint8_t {
     // The game's A while the player controls Mario, its B in menus (pointer_control.h).
     JumpBack,
 };
-inline constexpr std::size_t kWiiTargetCount = 25;
+inline constexpr std::size_t kGameInputCount = 25;
 
-[[nodiscard]] constexpr std::uint32_t wii_target_bit(WiiTarget target) noexcept {
+[[nodiscard]] constexpr std::uint32_t game_input_bit(GameInput target) noexcept {
     return 1u << static_cast<unsigned>(target);
 }
 
 // Stick and pointer directions take an analog magnitude; every other target
 // is a level.
-[[nodiscard]] constexpr bool wii_target_is_analog(WiiTarget target) noexcept {
-    return (target >= WiiTarget::StickUp && target <= WiiTarget::StickRight) ||
-           (target >= WiiTarget::PointerUp && target <= WiiTarget::PointerRight);
+[[nodiscard]] constexpr bool game_input_is_analog(GameInput target) noexcept {
+    return (target >= GameInput::StickUp && target <= GameInput::StickRight) ||
+           (target >= GameInput::PointerUp && target <= GameInput::PointerRight);
 }
 
 enum class SourceKind : std::uint8_t {
@@ -96,11 +96,11 @@ inline constexpr std::size_t kBindingSlots = 4;
 using TargetBindings = std::array<InputSource, kBindingSlots>;
 
 struct BindingTable {
-    std::array<TargetBindings, kWiiTargetCount> targets{};
-    [[nodiscard]] TargetBindings& operator[](WiiTarget t) noexcept {
+    std::array<TargetBindings, kGameInputCount> targets{};
+    [[nodiscard]] TargetBindings& operator[](GameInput t) noexcept {
         return targets[static_cast<std::size_t>(t)];
     }
-    [[nodiscard]] const TargetBindings& operator[](WiiTarget t) const noexcept {
+    [[nodiscard]] const TargetBindings& operator[](GameInput t) const noexcept {
         return targets[static_cast<std::size_t>(t)];
     }
     friend bool operator==(const BindingTable&, const BindingTable&) = default;
@@ -294,10 +294,10 @@ unsigned migrate_legacy_controls(ControlsConfig& config, unsigned version) noexc
 // Stable ini identifiers and overlay labels.
 [[nodiscard]] const char* control_scheme_id(ControlScheme scheme) noexcept;
 [[nodiscard]] const char* control_scheme_label(ControlScheme scheme) noexcept;
-[[nodiscard]] const char* wii_target_id(WiiTarget target) noexcept;
-[[nodiscard]] const char* wii_target_label(WiiTarget target) noexcept;
+[[nodiscard]] const char* game_input_id(GameInput target) noexcept;
+[[nodiscard]] const char* game_input_label(GameInput target) noexcept;
 [[nodiscard]] std::optional<ControlScheme> parse_control_scheme(std::string_view id) noexcept;
-[[nodiscard]] std::optional<WiiTarget> parse_wii_target(std::string_view id) noexcept;
+[[nodiscard]] std::optional<GameInput> parse_wii_target(std::string_view id) noexcept;
 
 // Textual source names are per scheme: "A" on a Switch scheme is the east
 // face button, on Xbox the south one. Keyboard names are key names
@@ -316,7 +316,7 @@ unsigned migrate_legacy_controls(ControlsConfig& config, unsigned version) noexc
 // targets refuse mouse buttons, Xbox has no readable Guide/Share, only the
 // Pro Controller 2 has GL/GR/C).
 [[nodiscard]] bool binding_source_allowed(
-    ControlScheme scheme, WiiTarget target, InputSource source) noexcept;
+    ControlScheme scheme, GameInput target, InputSource source) noexcept;
 // Appends `source` unless already present; a full list drops its last slot.
 void add_binding(TargetBindings& bindings, InputSource source) noexcept;
 
@@ -330,13 +330,13 @@ bool apply_controls_setting(ControlsConfig& config, std::string_view key, std::s
 
 // What a scheme's physical inputs ask of the Wii Remote + Nunchuk this report.
 struct LogicalInput {
-    std::uint32_t pressed = 0;  // wii_target_bit per active target
+    std::uint32_t pressed = 0;  // game_input_bit per active target
     float stick_x = 0.0f;
     float stick_y = 0.0f;       // up positive
     float pointer_x = 0.0f;
     float pointer_y = 0.0f;     // up positive
-    [[nodiscard]] bool held(WiiTarget target) const noexcept {
-        return (pressed & wii_target_bit(target)) != 0u;
+    [[nodiscard]] bool held(GameInput target) const noexcept {
+        return (pressed & game_input_bit(target)) != 0u;
     }
 };
 
@@ -371,7 +371,7 @@ inline constexpr float kStickDirectionRelease = 0.35f;
 
 // Distinct virtual keys a keyboard table reads, in ascending order.
 struct KeyList {
-    std::array<std::uint8_t, kWiiTargetCount * kBindingSlots> keys{};
+    std::array<std::uint8_t, kGameInputCount * kBindingSlots> keys{};
     std::size_t count = 0;
 };
 [[nodiscard]] KeyList referenced_keys(const BindingTable& table) noexcept;

@@ -1,7 +1,7 @@
 // RendererD3D12: device and swap chain, scene target targets and copies, draws, presentation, and the
 // replayed sub-frames of frame interpolation.
 #include "galaxy/render/utility_shaders.h"
-#include "galaxy/test_hooks.h"
+#include "galaxy/run_options.h"
 #include "galaxy/render/renderer_d3d12.h"
 #include "galaxy/render/interp_eval.h"
 #include "galaxy/render/host_window_win32.h"
@@ -138,7 +138,7 @@ void copy_adapter_description(
 DXGI_GPU_PREFERENCE adapter_preference() {
     char value[16]{};
     std::size_t length = 0;
-    if (getenv_s(&length, value, sizeof(value), nebula_switch::gpu_preference_name()) == 0 &&
+    if (::galaxy::run_option_read(&length, value, sizeof(value), ::galaxy::run_options().gpu_preference) == 0 &&
         length > 1 && (value[0] == 'l' || value[0] == 'L' || value[0] == 'm' || value[0] == 'M')) {
         return DXGI_GPU_PREFERENCE_MINIMUM_POWER;
     }
@@ -149,9 +149,7 @@ bool trace_present_stats_enabled() {
     static const bool enabled = [] {
         char value[16]{};
         std::size_t length = 0;
-        return getenv_s(
-                   &length, value, sizeof(value),
-                   nebula_switch::trace_present_stats_name()) == 0 &&
+        return ::galaxy::run_option_read(&length, value, sizeof(value), ::galaxy::run_options().trace_present_stats) == 0 &&
                length > 1 && value[0] != '0';
     }();
     return enabled;
@@ -446,10 +444,6 @@ bool g_selected_adapter_valid = false;
 
 }  // namespace
 
-std::uint64_t RendererD3D12::scene_copy_dest_budget_bytes() {
-    return galaxy::render::scene_copy_dest_budget_bytes();
-}
-
 // The upload rings' first buffers. A segmentation gives each frame an equal share and keeps one more share as
 // spill, so a frame may take twice its budget; a ring whose frames take over half of it grows at the next frame
 // boundary. The most a frame took over the 102-stop tour (mem_f2): vertex 2.2 MB, index 1.2, constant 1.4, matrix 0.7.
@@ -461,7 +455,7 @@ static constexpr unsigned    kSrvPerFrame = 32768u;
 // The descriptor ring's persistent prefix, outside the rewound frame segments: the scene target
 // conversion sources (the scene target's views, the output scene target's, the MSAA depth's, then the HDR scene
 // EFBs', live and sub-frame: 10). TextureCache's own SRV indices are independent of this prefix.
-static constexpr unsigned    kPersistentSrvDescriptors = 10u;
+static constexpr unsigned    kPersistentSrvDescriptors = 128u;
 
 void RendererD3D12::trace_rings() const {
     const auto line = [](const char* name, const UploadRing& ring) {
@@ -842,8 +836,8 @@ void RendererD3D12::carry_over_scene_contents() {
             command_list_->ClearDepthStencilView(scene_dsv_, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL,
                                                  far_values.reversed_depth, 0u, 0u, nullptr);
             scene_msaa_.color_dirty = scene_msaa_.depth_dirty = true;
-            retired_scene_copy_textures_[frame_slot_].push_back(std::move(scene_carry_color_));
-            retired_scene_copy_textures_[frame_slot_].push_back(std::move(scene_carry_depth_));
+            retired_frame_pass_targets_[frame_slot_].push_back(std::move(scene_carry_color_));
+            retired_frame_pass_targets_[frame_slot_].push_back(std::move(scene_carry_depth_));
         }
         scene_carry_color_.Reset();
         scene_carry_depth_.Reset();
@@ -931,8 +925,8 @@ void RendererD3D12::carry_over_scene_contents() {
             far_values.reversed_depth, 0u, 0u, nullptr);
     }
     // The old targets are read by this frame's command list.
-    retired_scene_copy_textures_[frame_slot_].push_back(std::move(scene_carry_color_));
-    retired_scene_copy_textures_[frame_slot_].push_back(std::move(scene_carry_depth_));
+    retired_frame_pass_targets_[frame_slot_].push_back(std::move(scene_carry_color_));
+    retired_frame_pass_targets_[frame_slot_].push_back(std::move(scene_carry_depth_));
     command_list_->SetGraphicsRootSignature(root_signature_.Get());
     invalidate_draw_bindings();
 }
@@ -1272,9 +1266,7 @@ bool RendererD3D12::create_conversion_pipeline() {
         pd.SampleDesc.Count      = 1;
         d3d_check(device_->CreateGraphicsPipelineState(
             &pd, IID_PPV_ARGS(&conv_pipeline_)), "CreateConvPSO");
-        pd.RTVFormats[0] = DXGI_FORMAT_R8_UNORM;
-        d3d_check(device_->CreateGraphicsPipelineState(
-            &pd, IID_PPV_ARGS(&conv_pipeline_r8_)), "CreateConvPSO R8");
+        pd.RTVFormats[0] = kSceneColorFormat;
         const UtilityShaderBytes filter = utility_shader(UtilityShader::DisplayFilterPs);
         pd.PS = {filter->GetBufferPointer(), filter->GetBufferSize()};
         pd.RTVFormats[0] = kSceneColorFormat;
@@ -1327,16 +1319,90 @@ void RendererD3D12::write_scene_conversion_views(const DescriptorRing::Table& ta
     conv_scene_depth_srv_ = depth_gpu;
 }
 
-bool RendererD3D12::can_hand_over_display_copy(const CaptureRequest& params, const DisplayTexture& dest) const {
+bool RendererD3D12::can_hand_over_display_copy(const FramePassRequest&, const DisplayTexture& dest) const {
     if (!scene_color_ || scene_owed_ ||
         scene_carry_color_ || replay_recording_ || replay_playing_ || ring_mode_ == RingMode::Interp ||
         frame_generation_running() || output_scene_active_ || scene_msaa_.samples > 1u || scene_hdr_ || scene_temporal_ ||
         !post_process_.ready() || !post_process_.reads_held_pictures()) {
         return false;
     }
-    const FrameExtent extent = capture_extent(false, frame_);
+    const FrameExtent extent = frame_pass_extent(frame_);
     // The display's vertical filter is applied when the frame is presented (present: filter_display_picture).
-    return !params.half_scale && dest.width == extent.width && dest.height == extent.height;
+    return dest.width == extent.width && dest.height == extent.height;
+}
+
+bool RendererD3D12::can_take_scene() const noexcept {
+    return scene_color_ && !scene_carry_color_ && !replay_recording_ && !replay_playing_ && ring_mode_ != RingMode::Interp &&
+           !frame_generation_running() && !output_scene_active_ && !target_pass_active_ && scene_msaa_.samples <= 1u &&
+           !scene_hdr_;
+}
+
+bool RendererD3D12::take_scene(std::uint64_t key, gpu::TextureRef fresh, TextureCache& textures, gpu::TextureRef& released) {
+    settle_owed_scene();
+    if (const auto it = pictures_.find(key); it != pictures_.end()) {
+        released = it->second.viewed;
+    }
+    gpu::TextureRef picture = hand_over_scene_color(std::move(fresh));
+    scene_owed_.Reset();
+    const FrameExtent size = frame_pass_extent(frame_);
+    return publish_picture(key, size.width, size.height, std::move(picture), 0u, 0u, textures);
+}
+
+void RendererD3D12::open_frame_for_pass(std::uint64_t color_key, std::uint8_t channels, std::uint64_t depth_key,
+                                        TextureCache& textures) {
+    resolve_scene(depth_key != 0u);
+    D3D12_RESOURCE_BARRIER barriers[2]{};
+    UINT count = 0u;
+    for (const auto& [resource, before, wanted] :
+         {std::tuple{scene_color_.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, color_key != 0u},
+          std::tuple{scene_depth_.Get(), D3D12_RESOURCE_STATE_DEPTH_WRITE, depth_key != 0u}}) {
+        if (wanted) {
+            D3D12_RESOURCE_BARRIER& b = barriers[count++];
+            b.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+            b.Transition.pResource = resource;
+            b.Transition.StateBefore = before;
+            b.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+            b.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        }
+    }
+    command_list_->ResourceBarrier(count, barriers);
+    const FrameExtent size = frame_pass_extent(frame_);
+    if (color_key != 0u) {
+        (void)publish_picture(color_key, size.width, size.height, scene_color_, channels, 0u, textures);
+    }
+    if (depth_key != 0u) {
+        (void)publish_picture(depth_key, size.width, size.height, scene_depth_, 0u, 0u, textures);
+    }
+    frame_pass_color_key_ = color_key;
+    frame_pass_depth_key_ = depth_key;
+}
+
+void RendererD3D12::close_frame_for_pass(TextureCache& textures) {
+    D3D12_RESOURCE_BARRIER barriers[2]{};
+    UINT count = 0u;
+    for (const auto& [resource, after, key] :
+         {std::tuple{scene_color_.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, frame_pass_color_key_},
+          std::tuple{scene_depth_.Get(), D3D12_RESOURCE_STATE_DEPTH_WRITE, frame_pass_depth_key_}}) {
+        if (key == 0u) {
+            continue;
+        }
+        D3D12_RESOURCE_BARRIER& b = barriers[count++];
+        b.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        b.Transition.pResource = resource;
+        b.Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        b.Transition.StateAfter = after;
+        b.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        if (const auto it = pictures_.find(key); it != pictures_.end()) {
+            textures.retire_view(it->second.view, std::move(it->second.viewed));
+            pictures_.erase(it);
+        }
+    }
+    if (count != 0u) {
+        command_list_->ResourceBarrier(count, barriers);
+    }
+    frame_pass_color_key_ = 0u;
+    frame_pass_depth_key_ = 0u;
+    invalidate_draw_bindings();
 }
 
 gpu::TextureRef RendererD3D12::hand_over_scene_color(gpu::TextureRef fresh) {
@@ -1381,12 +1447,18 @@ gpu::TextureRef RendererD3D12::hand_over_scene_color(gpu::TextureRef fresh) {
     // RTVs are copied when recorded: the scene target's slot takes the new target now. Its conversion views, which the GPU reads
     // when it runs, go to the next table in turn (a frame in flight still reads the one before).
     device_->CreateRenderTargetView(scene_color_.Get(), nullptr, scene_rtv_);
-    std::optional<DescriptorRing::Table>& table = conv_scene_tables_[conv_scene_table_next_];
-    conv_scene_table_next_ = (conv_scene_table_next_ + 1u) % static_cast<unsigned>(conv_scene_tables_.size());
-    if (!table) {
-        table = srv_ring_.allocate_persistent(2u);
+    if (conv_scene_table_ < conv_scene_tables_.size()) {
+        conv_scene_tables_[conv_scene_table_].free_from = frame_index_ + kFramesInFlight + 1u;
     }
-    write_scene_conversion_views(*table);
+    std::size_t table = 0u;
+    while (table < conv_scene_tables_.size() && (table == conv_scene_table_ || frame_index_ < conv_scene_tables_[table].free_from)) {
+        ++table;
+    }
+    if (table == conv_scene_tables_.size()) {
+        conv_scene_tables_.push_back({srv_ring_.allocate_persistent(2u)});
+    }
+    conv_scene_table_ = table;
+    write_scene_conversion_views(conv_scene_tables_[table].table);
     scene_owed_ = picture;
     ++scene_handovers_;
     bind_scene();
@@ -1508,10 +1580,8 @@ void RendererD3D12::apply_window_size() {
     // Between frames with nothing recording; the GPU must be done with the
     // old targets and every scaled copy destination before they go away.
     wait_for_gpu();
-    scene_copy_dests_.clear();
-    scene_copy_dests_bytes_ = 0u;
-    scene_copy_dests_tick_ = 0u;
-    for (auto& retired : retired_scene_copy_textures_) {
+    frame_pass_targets_.clear();
+    for (auto& retired : retired_frame_pass_targets_) {
         retired.clear();
     }
     for (auto& retired : retired_segment_textures_) {
@@ -1654,7 +1724,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
     {
         char buf[16]{};
         std::size_t len = 0;
-        if (getenv_s(&len, buf, sizeof(buf), nebula_switch::d3d_debug_name()) == 0 &&
+        if (::galaxy::run_option_read(&len, buf, sizeof(buf), ::galaxy::run_options().d3d_debug) == 0 &&
             len > 0) {
             d3d_debug_level =
                 static_cast<unsigned>(std::strtoul(buf, nullptr, 10));
@@ -1669,24 +1739,6 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
                     ComPtr<ID3D12Debug1> d1;
                     if (SUCCEEDED(d.As(&d1))) {
                         d1->SetEnableGPUBasedValidation(TRUE);
-                    }
-                }
-            }
-        }
-        // GALAXY_D3D_DRED=1: device-removed extended data (auto breadcrumbs, page faults) for dump_device_removal.
-        {
-            char dred_env[8]{};
-            std::size_t dred_len = 0;
-            if (getenv_s(&dred_len, dred_env, sizeof(dred_env), nebula_switch::d3d_dred_name()) == 0 && dred_len > 0 &&
-                dred_env[0] != '0') {
-                ComPtr<ID3D12DeviceRemovedExtendedDataSettings> dred;
-                if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&dred)))) {
-                    dred->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
-                    dred->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
-                    // The passes' markers (SceneRayTracer::dred_marker) as breadcrumb contexts.
-                    ComPtr<ID3D12DeviceRemovedExtendedDataSettings1> dred1;
-                    if (SUCCEEDED(dred.As(&dred1))) {
-                        dred1->SetBreadcrumbContextEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
                     }
                 }
             }
@@ -2041,7 +2093,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
             const bool passes = [] {
                 char value[8]{};
                 std::size_t length = 0u;
-                return getenv_s(&length, value, sizeof(value), nebula_switch::gpu_passes_name()) == 0 && length > 1u &&
+                return ::galaxy::run_option_read(&length, value, sizeof(value), ::galaxy::run_options().gpu_passes) == 0 && length > 1u &&
                        value[0] == '1';
             }();
             if (passes) {
@@ -2066,7 +2118,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
             const bool draws = [] {
                 char value[8]{};
                 std::size_t length = 0u;
-                return getenv_s(&length, value, sizeof(value), nebula_switch::gpu_draws_name()) == 0 && length > 1u &&
+                return ::galaxy::run_option_read(&length, value, sizeof(value), ::galaxy::run_options().gpu_draws) == 0 && length > 1u &&
                        value[0] == '1';
             }();
             if (draws) {
@@ -2195,7 +2247,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
             d3d_check(device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&blit_pipeline_)), "CreateBlitPSO");
         }
 
-        scene_copy_heap_.initialize(device_.Get());
+        frame_pass_heap_.initialize(device_.Get());
         boot_step("targets, root signature, blit");
 
         // Presentation post-processing (SMAA, FSR 1, RCAS, box resample).
@@ -2376,16 +2428,15 @@ void RendererD3D12::shutdown() {
     ambient_occlusion_.shutdown();
     game_bloom_.shutdown();
     {
-        const PlacedTextureAllocator::Stats heap = scene_copy_heap_.stats();
+        const PlacedTextureAllocator::Stats heap = frame_pass_heap_.stats();
         std::cerr << "[frame-read-heap] heaps=" << heap.heaps << " heap-bytes=" << heap.heap_bytes
                   << " used-bytes=" << heap.used_bytes << " placed=" << heap.placed
                   << " committed-fallbacks=" << heap.committed_fallbacks << '\n';
     }
-    scene_copy_heap_.shutdown();
+    frame_pass_heap_.shutdown();
     blit_pipeline_.Reset();
     s_conv_root_sig.Reset();
     conv_pipeline_.Reset();
-    conv_pipeline_r8_.Reset();
     display_filter_pipeline_.Reset();
     conv_scratch_rtv_slot_.reset();
     conv_rtv_heap_.Reset();
@@ -2393,6 +2444,8 @@ void RendererD3D12::shutdown() {
     conv_scene_color_srv_ = {};
     conv_scene_depth_srv_ = {};
     conv_scene_source_table_.reset();
+    conv_scene_tables_.clear();
+    conv_scene_table_ = ~std::size_t{0};
     next_fence_value_ = 0;
     probe_target_.Reset();
     probe_rtv_heap_.Reset();
@@ -2425,16 +2478,14 @@ void RendererD3D12::shutdown() {
     selected_display_readback_width_ = selected_display_readback_height_ =
         selected_display_readback_pitch_ = 0;
     selected_display_readback_path_.clear();
-    if (scene_copy_requests_ != 0u) {
-        std::cerr << "[frame-read-work] requests=" << scene_copy_requests_
-                  << " passes=" << scene_shader_copies_ << '\n';
+    if (frame_pass_requests_ != 0u) {
+        std::cerr << "[frame-pass-work] requests=" << frame_pass_requests_
+                  << " passes=" << frame_passes_drawn_ << '\n';
     }
-    scene_copy_requests_ = 0u;
-    scene_shader_copies_ = 0u;
-    scene_copy_dests_.clear();
-    scene_copy_dests_bytes_ = 0u;
-    scene_copy_dests_tick_ = 0u;
-    for (auto& retired : retired_scene_copy_textures_) {
+    frame_pass_requests_ = 0u;
+    frame_passes_drawn_ = 0u;
+    frame_pass_targets_.clear();
+    for (auto& retired : retired_frame_pass_targets_) {
         retired.clear();
     }
     for (auto& retired : retired_segment_textures_) {
@@ -3707,11 +3758,11 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
         // A logged frame's sub-frames may still name these copy textures:
         // they live until the current game-frame segment comes round again.
         auto& keep = retired_segment_textures_[ring_segment_];
-        for (auto& texture : retired_scene_copy_textures_[frame_slot_]) {
+        for (auto& texture : retired_frame_pass_targets_[frame_slot_]) {
             keep.push_back(std::move(texture));
         }
     }
-    retired_scene_copy_textures_[frame_slot_].clear();
+    retired_frame_pass_targets_[frame_slot_].clear();
 
     ensure_frame_values();
     // Bind both heaps for the entire frame.
@@ -4326,10 +4377,10 @@ bool RendererD3D12::ensure_motion_target() {
     if (motion_target_) {
         // A render-scale change inside a scene: this frame's command list
         // may still name them.
-        retired_scene_copy_textures_[frame_slot_].push_back(std::move(motion_target_));
-        retired_scene_copy_textures_[frame_slot_].push_back(std::move(reactive_target_));
-        retired_scene_copy_textures_[frame_slot_].push_back(std::move(layer_color_));
-        retired_scene_copy_textures_[frame_slot_].push_back(std::move(layer_trans_));
+        retired_frame_pass_targets_[frame_slot_].push_back(std::move(motion_target_));
+        retired_frame_pass_targets_[frame_slot_].push_back(std::move(reactive_target_));
+        retired_frame_pass_targets_[frame_slot_].push_back(std::move(layer_color_));
+        retired_frame_pass_targets_[frame_slot_].push_back(std::move(layer_trans_));
     }
     motion_target_.Reset();
     reactive_target_.Reset();
@@ -5089,7 +5140,7 @@ bool RendererD3D12::ensure_subframe_resources(unsigned display_picture_width, un
 void RendererD3D12::execute_replay_copy(const ReplayCopy& copy, ID3D12Resource* target) {
     settle_owed_scene();
     if (copy.mode == 2u) {
-        record_conversion_blit(alt_scene_.color.Get(), copy.width, copy.height, {}, false, kCopyLayoutDisplay, copy.geometry[0], copy.geometry[1], copy.geometry[2], copy.geometry[3]);
+        record_conversion_blit(alt_scene_.color.Get(), copy.width, copy.height, {}, kCopyLayoutDisplay, copy.geometry[0], copy.geometry[1], copy.geometry[2], copy.geometry[3]);
         return;
     }
     ID3D12Resource* const dest = copy.mode == 1u ? subframe_display_.texture.Get()
@@ -5101,7 +5152,7 @@ void RendererD3D12::execute_replay_copy(const ReplayCopy& copy, ID3D12Resource* 
     b.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
     b.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
     command_list_->ResourceBarrier(1, &b);
-    record_conversion_blit(dest, copy.width, copy.height, allocate_conversion_rtv(dest), copy.depth, copy.format, copy.geometry[0], copy.geometry[1], copy.geometry[2], copy.geometry[3]);
+    record_conversion_blit(dest, copy.width, copy.height, allocate_conversion_rtv(dest), copy.format, copy.geometry[0], copy.geometry[1], copy.geometry[2], copy.geometry[3]);
     std::swap(b.Transition.StateBefore, b.Transition.StateAfter);
     command_list_->ResourceBarrier(1, &b);
 }
@@ -6636,8 +6687,8 @@ bool RendererD3D12::ensure_output_scene(const FrameMap& map) {
     if (alt_scene_.color) {
         // A new output scale (window resize or internal resolution): frames in
         // flight and this frame's command list may still name the old targets.
-        retired_scene_copy_textures_[frame_slot_].push_back(std::move(alt_scene_.color));
-        retired_scene_copy_textures_[frame_slot_].push_back(std::move(alt_scene_.depth));
+        retired_frame_pass_targets_[frame_slot_].push_back(std::move(alt_scene_.color));
+        retired_frame_pass_targets_[frame_slot_].push_back(std::move(alt_scene_.depth));
     }
     alt_scene_.color.Reset();
     alt_scene_.depth.Reset();
@@ -6905,6 +6956,9 @@ void RendererD3D12::end_target_pass(std::uint8_t channels, TextureCache& texture
         return;
     }
     swap_target_set();
+    if (frame_pass_color_key_ != 0u || frame_pass_depth_key_ != 0u) {
+        close_frame_for_pass(textures);
+    }
     replay_recording_ = target_recording_;
     // The picture is sampled until the key's next pass.
     D3D12_RESOURCE_BARRIER barrier{};
@@ -6978,7 +7032,7 @@ bool RendererD3D12::publish_picture(std::uint64_t key, std::uint32_t width, std:
     const std::array<std::uint8_t, 4> swizzle = target_channel_swizzle(channels);
     // D3D12's component mapping: 0-3 the texture's R, G, B, A, 5 one.
     D3D12_SHADER_RESOURCE_VIEW_DESC desc{};
-    desc.Format = picture.viewed->GetDesc().Format;
+    desc.Format = picture.viewed.Get() == scene_depth_.Get() ? kSceneDepthSrvFormat : picture.viewed->GetDesc().Format;
     desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
     desc.Shader4ComponentMapping = D3D12_ENCODE_SHADER_4_COMPONENT_MAPPING(
         swizzle[0] == 4u ? 5u : swizzle[0], swizzle[1] == 4u ? 5u : swizzle[1], swizzle[2] == 4u ? 5u : swizzle[2],
@@ -6990,13 +7044,9 @@ bool RendererD3D12::publish_picture(std::uint64_t key, std::uint32_t width, std:
     return true;
 }
 
-bool RendererD3D12::publish_capture(const CaptureRequest& params, gpu::TextureRef texture, bool is_depth_copy,
-                          TextureCache& textures) {
-    const FrameExtent size = capture_extent(params.half_scale, frame_);
-    // A one-channel conversion is read in every channel (NEBULA_TARGET_RED).
-    const std::uint8_t channels = scene_copy_single_channel(params.channels, is_depth_copy) ? 3u : 0u;
-    return publish_picture(params.key, size.width, size.height, std::move(texture),
-                           channels, 0u, textures);
+bool RendererD3D12::publish_frame_pass(const FramePassRequest& params, gpu::TextureRef texture, TextureCache& textures) {
+    const FrameExtent size = frame_pass_extent(frame_);
+    return publish_picture(params.key, size.width, size.height, std::move(texture), 0u, 0u, textures);
 }
 
 // DLSS Frame Generation's HUD-less picture (fg_hudless_*): the output scene target right after the
@@ -7037,7 +7087,7 @@ void RendererD3D12::take_fg_hudless_scene() {
 }
 
 // The display copy of the taken scene: the same copy into the HUD-less display picture.
-void RendererD3D12::copy_fg_hudless_display(const CaptureRequest& /*params*/, const DisplayTexture& dest) {
+void RendererD3D12::copy_fg_hudless_display(const FramePassRequest& /*params*/, const DisplayTexture& dest) {
     const bool taken = fg_hudless_scene_;
     fg_hudless_scene_ = false;
     if (!taken || replay_recording_ || fg_hudless_scene_target_.map != frame_ || !dest.texture) {
@@ -7069,10 +7119,10 @@ void RendererD3D12::copy_fg_hudless_display(const CaptureRequest& /*params*/, co
     b.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
     b.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
     command_list_->ResourceBarrier(1, &b);
-    const SceneCopySamplingGeometry sampling =
-        capture_sampling_geometry(dest.width, dest.height, frame_);
+    const FramePassGeometry sampling =
+        frame_pass_geometry(dest.width, dest.height, frame_);
     swap_scene_with(fg_hudless_scene_target_);
-    record_conversion_blit(fg_hudless_display_.texture.Get(), dest.width, dest.height, fg_hudless_display_.rtv, false, kCopyLayoutDisplay, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y);
+    record_conversion_blit(fg_hudless_display_.texture.Get(), dest.width, dest.height, fg_hudless_display_.rtv, kCopyLayoutDisplay, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y);
     swap_scene_with(fg_hudless_scene_target_);
     std::swap(b.Transition.StateBefore, b.Transition.StateAfter);
     command_list_->ResourceBarrier(1, &b);
@@ -7343,10 +7393,10 @@ bool RendererD3D12::begin_output_scene() {
     }
     // The whole scene scene target, resampled into the output target with the display
     // copy's identity settings (no filter, gamma 1.0, alpha kept).
-    CaptureRequest params{};
+    FramePassRequest params{};
     const unsigned w = output.width;
     const unsigned h = output.height;
-    const SceneCopySamplingGeometry sampling = capture_sampling_geometry(w, h, frame_);
+    const FramePassGeometry sampling = frame_pass_geometry(w, h, frame_);
     if (replay_recording_) [[unlikely]] {
         ReplayCopy copy{};
         copy.width = w;
@@ -7362,12 +7412,12 @@ bool RendererD3D12::begin_output_scene() {
         replay_copies_.push_back(copy);
         const bool recording = replay_recording_;
         replay_recording_ = false;  // the blit's own scene target rebinding is part of the copy
-        record_conversion_blit(alt_scene_.color.Get(), w, h, {}, false, kCopyLayoutDisplay, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y);
+        record_conversion_blit(alt_scene_.color.Get(), w, h, {}, kCopyLayoutDisplay, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y);
         replay_recording_ = recording;
         swap_scene_sets();
         replay_ops_.push_back({ReplayKind::ClearDepth, 0u});
     } else {
-        record_conversion_blit(alt_scene_.color.Get(), w, h, {}, false, kCopyLayoutDisplay, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y);
+        record_conversion_blit(alt_scene_.color.Get(), w, h, {}, kCopyLayoutDisplay, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y);
         swap_scene_sets();
     }
     const auto far_values = make_scene_clear_values(0u, 0u);
@@ -7383,12 +7433,12 @@ void RendererD3D12::end_output_scene() {
     }
 }
 
-bool RendererD3D12::copy_output_scene_to_texture(const CaptureRequest& params, TextureCache& textures) {
+bool RendererD3D12::draw_frame_pass_from_output(const FramePassRequest& params, TextureCache& textures) {
     if (output_scene_active_ || !alt_scene_.color) {
-        return copy_scene_to_texture(params, textures, false);
+        return draw_frame_pass(params, textures);
     }
     swap_scene_sets();
-    const bool updated = copy_scene_to_texture(params, textures, false);
+    const bool updated = draw_frame_pass(params, textures);
     swap_scene_sets();
     return updated;
 }
@@ -7747,32 +7797,25 @@ void RendererD3D12::record_conversion_blit(
     unsigned dest_w,
     unsigned dest_h,
     D3D12_CPU_DESCRIPTOR_HANDLE dest_rtv,
-    bool is_depth_copy,
     std::uint8_t copy_format,
     float src_x,
     float src_y,
     float step_x,
     float step_y) {
     settle_owed_scene();
-    resolve_scene(is_depth_copy);
-    ID3D12Resource* src =
-        is_depth_copy ? scene_depth_.Get() : scene_color_.Get();
+    resolve_scene(false);
+    ID3D12Resource* src = scene_color_.Get();
 
     // scene target -> shader resource.
     D3D12_RESOURCE_BARRIER b{};
     b.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     b.Transition.pResource   = src;
-    b.Transition.StateBefore = is_depth_copy
-        ? D3D12_RESOURCE_STATE_DEPTH_WRITE
-        : D3D12_RESOURCE_STATE_RENDER_TARGET;
+    b.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
     b.Transition.StateAfter  = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
     b.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
     command_list_->ResourceBarrier(1, &b);
 
-    // Both immutable scene target views already live in the bound heap. Depth reads
-    // retain the R24/X8 view of the typeless depth resource.
-    const D3D12_GPU_DESCRIPTOR_HANDLE src_srv =
-        is_depth_copy ? conv_scene_depth_srv_ : conv_scene_color_srv_;
+    const D3D12_GPU_DESCRIPTOR_HANDLE src_srv = conv_scene_color_srv_;
 
     // CPU RTVs are consumed at recording time. Empty-handle callers use the
     // same shared slot writer, keeping its cached resource identity coherent.
@@ -7793,15 +7836,13 @@ void RendererD3D12::record_conversion_blit(
     command_list_->RSSetScissorRects(1, &sci);
     command_list_->SetGraphicsRootSignature(s_conv_root_sig.Get());
     // A display copy one scene target pixel to one display picture pixel without gamma: its filter alone (display_filter_shader_source).
-    const bool display_filter = copy_format == kCopyLayoutDisplay && !is_depth_copy && step_x == 1.0f &&
+    const bool display_filter = copy_format == kCopyLayoutDisplay && step_x == 1.0f &&
                                 step_y == 1.0f &&
                                 display_filter_pipeline_ != nullptr && dest->GetDesc().Format == kSceneColorFormat;
-    command_list_->SetPipelineState(display_filter ? display_filter_pipeline_.Get()
-                                    : dest->GetDesc().Format == DXGI_FORMAT_R8_UNORM ? conv_pipeline_r8_.Get()
-                                                                                     : conv_pipeline_.Get());
+    command_list_->SetPipelineState(display_filter ? display_filter_pipeline_.Get() : conv_pipeline_.Get());
 
     const SceneConversionShaderConstants constants =
-        make_scene_conversion_constants(is_depth_copy, copy_format, src_x, src_y, step_x, step_y);
+        make_scene_conversion_constants(false, copy_format, src_x, src_y, step_x, step_y);
     command_list_->SetGraphicsRoot32BitConstants(
         0, 16, constants.values.data(), 0);
     command_list_->SetGraphicsRootDescriptorTable(1, src_srv);
@@ -7809,7 +7850,7 @@ void RendererD3D12::record_conversion_blit(
     command_list_->DrawInstanced(3, 1, 0, 0);
 
     // scene target back to its steady state.
-    ++scene_shader_copies_;
+    ++frame_passes_drawn_;
     std::swap(b.Transition.StateBefore, b.Transition.StateAfter);
     command_list_->ResourceBarrier(1, &b);
 
@@ -7820,7 +7861,7 @@ void RendererD3D12::record_conversion_blit(
     bind_scene();
 }
 
-void RendererD3D12::copy_scene_to_display(const CaptureRequest& params, DisplayTexture& dest) {
+void RendererD3D12::copy_scene_to_display(const FramePassRequest& params, DisplayTexture& dest) {
     settle_owed_scene();
     const GpuPassScope pass{*this, GpuPass::DisplayCopy};
     // The caller publishes a new display picture serial after this returns, so a missing
@@ -7828,7 +7869,7 @@ void RendererD3D12::copy_scene_to_display(const CaptureRequest& params, DisplayT
     if (!dest.texture) {
         throw std::runtime_error("display picture copy has no destination texture");
     }
-    ++scene_copy_requests_;
+    ++frame_pass_requests_;
     // Another display picture or texture copy can overwrite the shared CPU RTV slot.
     // Check its current resource, even when this destination has copied before.
     dest.rtv = allocate_conversion_rtv(dest.texture.Get());
@@ -7843,8 +7884,8 @@ void RendererD3D12::copy_scene_to_display(const CaptureRequest& params, DisplayT
     b.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
     command_list_->ResourceBarrier(1, &b);
 
-    const SceneCopySamplingGeometry sampling =
-        capture_sampling_geometry(dest.width, dest.height, frame_);
+    const FramePassGeometry sampling =
+        frame_pass_geometry(dest.width, dest.height, frame_);
     const bool recording = replay_recording_;
     if (recording) [[unlikely]] {
         ReplayCopy copy{};
@@ -7862,7 +7903,7 @@ void RendererD3D12::copy_scene_to_display(const CaptureRequest& params, DisplayT
         replay_recording_ = false;
     }
 
-    record_conversion_blit(dest.texture.Get(), dest.width, dest.height, dest.rtv, false, kCopyLayoutDisplay, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y);
+    record_conversion_blit(dest.texture.Get(), dest.width, dest.height, dest.rtv, kCopyLayoutDisplay, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y);
     replay_recording_ = recording;
 
     std::swap(b.Transition.StateBefore, b.Transition.StateAfter);
@@ -7894,50 +7935,35 @@ void RendererD3D12::copy_scene_to_display(const CaptureRequest& params, DisplayT
     }
 }
 
-bool RendererD3D12::copy_scene_to_texture(
-    const CaptureRequest& params, TextureCache& textures, bool is_depth_copy) {
+bool RendererD3D12::draw_frame_pass(
+    const FramePassRequest& params, TextureCache& textures) {
     settle_owed_scene();
-    const GpuPassScope pass{*this, GpuPass::SceneCopy};
-    // half_scale halves both dimensions; the 2x step through the linear-filtered source is the box filter.
-        const FrameExtent extent = capture_extent(params.half_scale, frame_);
+    const GpuPassScope pass{*this, GpuPass::FramePass};
+    const FrameExtent extent = frame_pass_extent(frame_);
     const UINT w = extent.width;
     const UINT h = extent.height;
     if (w == 0 || h == 0) {
         return false;
     }
-    ++scene_copy_requests_;
+    ++frame_pass_requests_;
 
-    // Keyed by the texture, its channels and whether it reads depth.
+    // Keyed by the texture and its channels.
     const std::uint64_t dest_key =
         static_cast<std::uint64_t>(params.key) |
         (static_cast<std::uint64_t>(params.channels) << 48) |  // addresses stay below 2^48
-        (is_depth_copy ? (1ull << 56) : 0ull) |
         // Interpolation: consecutive game frames copy into different
         // textures, so a sub-frame replaying one frame's copies never
         // overwrites what the next frame's chunks already copied.
         (ring_mode_ == RingMode::Interp ? (replay_serial_ & 1ull) << 58 : 0ull);
 
-    // The destination map is bounded in bytes (scene_copy_dests_): the 192 MiB default holds about ten
-    // full-extent copies at 4x, and most copies are much smaller masks and bloom workspaces. Least
-    // recently used entries are evicted until the budget is met. A destination is a pure function of its
-    // key, so an eviction costs at most a later re-creation (the `created` path below). `last_used` is
-    // stamped first, so the entry this call uses is never a victim.
-    static const std::uint64_t kSceneCopyDestBudgetBytes =
-        scene_copy_dest_budget_bytes();
-    SceneCopyDest& dest = scene_copy_dests_[dest_key];
-    dest.last_used = ++scene_copy_dests_tick_;
+    FramePassTarget& dest = frame_pass_targets_[dest_key];
     const bool created =
         !dest.texture || dest.width != w || dest.height != h;
     if (created) {
         if (dest.texture) {
-            retired_scene_copy_textures_[frame_slot_].push_back(
+            retired_frame_pass_targets_[frame_slot_].push_back(
                 std::move(dest.texture));
-            // The replaced texture leaves the budget now; the retirement list
-            // releases it after kFramesInFlight frames.
-            scene_copy_dests_bytes_ -= std::min(
-                scene_copy_dests_bytes_, dest.bytes);
         }
-        dest.bytes = 0u;
         dest.rtv = {};
         dest.rtv_valid = false;
         D3D12_RESOURCE_DESC rd{};
@@ -7946,13 +7972,12 @@ bool RendererD3D12::copy_scene_to_texture(
         rd.Height           = h;
         rd.DepthOrArraySize = 1;
         rd.MipLevels        = 1;
-        rd.Format           = scene_copy_single_channel(params.channels, is_depth_copy) ? DXGI_FORMAT_R8_UNORM
-                                                                                            : kSceneColorFormat;
+        rd.Format           = kSceneColorFormat;
         rd.SampleDesc.Count = 1;
         rd.Layout           = D3D12_TEXTURE_LAYOUT_UNKNOWN;
         rd.Flags            = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
         std::uint64_t allocation_bytes = 0u;
-        const HRESULT create_hr = scene_copy_heap_.create(
+        const HRESULT create_hr = frame_pass_heap_.create(
             rd, D3D12_RESOURCE_STATE_RENDER_TARGET, nullptr, dest.texture,
             allocation_bytes);
         if (SUCCEEDED(create_hr)) {
@@ -7972,19 +7997,16 @@ bool RendererD3D12::copy_scene_to_texture(
             dump_device_removal(device_.Get());
             if (device_->GetDeviceRemovedReason() != S_OK) {
                 std::ostringstream message;
-                message << "[frame-read] device removed while allocating a "
+                message << "[frame-pass] device removed while allocating a "
                         << w << 'x' << h << " copy destination";
                 throw std::runtime_error(message.str());
             }
             // Out of memory: skip this copy (its texture keeps its previous
             // contents) rather than ending the game.
-            scene_copy_dests_bytes_ -= std::min(
-                scene_copy_dests_bytes_, dest.bytes);
-            dest.bytes = 0u;
-            scene_copy_dests_.erase(dest_key);
+            frame_pass_targets_.erase(dest_key);
             static std::atomic<unsigned> reported{0u};
             if (reported.fetch_add(1u, std::memory_order_relaxed) < 8u) {
-                std::cerr << "[frame-read] dest texture allocation failed hr=0x"
+                std::cerr << "[frame-pass] dest texture allocation failed hr=0x"
                           << std::hex << static_cast<unsigned long>(create_hr)
                           << " addr=0x" << params.key << std::dec
                           << " size=" << w << 'x' << h << "; copy skipped\n";
@@ -7993,42 +8015,6 @@ bool RendererD3D12::copy_scene_to_texture(
         }
         dest.width  = w;
         dest.height = h;
-        // Charged at the resource's own allocation size, not w*h*bpp.
-        dest.bytes = allocation_bytes;
-        scene_copy_dests_bytes_ += dest.bytes;
-    }
-    // Trim against the updated allocation, not the destination's old extent.
-    // Shrinking must not evict reusable neighbors; check growth in this call.
-    if (kSceneCopyDestBudgetBytes != 0u &&
-        scene_copy_dests_bytes_ > kSceneCopyDestBudgetBytes) {
-        for (;;) {
-            auto victim = scene_copy_dests_.end();
-            for (auto it = scene_copy_dests_.begin(); it != scene_copy_dests_.end();
-                 ++it) {
-                if (it->first == dest_key) {
-                    continue;
-                }
-                if (victim == scene_copy_dests_.end() ||
-                    it->second.last_used < victim->second.last_used) {
-                    victim = it;
-                }
-            }
-            if (victim == scene_copy_dests_.end()) {
-                break;  // only the entry in use remains
-            }
-            // Retired, not released: the slot's list is cleared at its next
-            // begin_frame(), after the GPU work that may still read the victim.
-            if (victim->second.texture) {
-                retired_scene_copy_textures_[frame_slot_].push_back(
-                    std::move(victim->second.texture));
-            }
-            scene_copy_dests_bytes_ -= std::min(
-                scene_copy_dests_bytes_, victim->second.bytes);
-            scene_copy_dests_.erase(victim);
-            if (scene_copy_dests_bytes_ <= kSceneCopyDestBudgetBytes) {
-                break;
-            }
-        }
     }
     // This descriptor shares its slot with display picture and other texture copies;
     // destination-local validity cannot prove its current contents.
@@ -8042,8 +8028,8 @@ bool RendererD3D12::copy_scene_to_texture(
     b.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
     command_list_->ResourceBarrier(1, &b);
 
-    const SceneCopySamplingGeometry sampling =
-        capture_sampling_geometry(w, h, frame_);
+    const FramePassGeometry sampling =
+        frame_pass_geometry(w, h, frame_);
 
 
     const bool recording = replay_recording_;
@@ -8053,7 +8039,6 @@ bool RendererD3D12::copy_scene_to_texture(
         copy.width = w;
         copy.height = h;
         copy.params = params;
-        copy.depth = is_depth_copy;
         copy.format = params.channels;
         copy.geometry[0] = sampling.src_x;
         copy.geometry[1] = sampling.src_y;
@@ -8063,7 +8048,7 @@ bool RendererD3D12::copy_scene_to_texture(
         replay_copies_.push_back(copy);
         replay_recording_ = false;
     }
-    record_conversion_blit(dest.texture.Get(), w, h, dest.rtv, is_depth_copy, params.channels, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y);
+    record_conversion_blit(dest.texture.Get(), w, h, dest.rtv, params.channels, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y);
     replay_recording_ = recording;
     if (ring_mode_ == RingMode::Interp) note_copy_write(dest.texture.Get());
 
@@ -8071,7 +8056,7 @@ bool RendererD3D12::copy_scene_to_texture(
     command_list_->ResourceBarrier(1, &b);
 
     // The key's picture is the latest copy: format-keyed destinations alternate at one address.
-    return publish_capture(params, dest.texture, is_depth_copy, textures);
+    return publish_frame_pass(params, dest.texture, textures);
 }
 
 void RendererD3D12::create_first_use_resources() {

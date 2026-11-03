@@ -70,10 +70,8 @@ public:
 
     void initTexObj();
     // The frame as drawn so far as this texture: its colour, alpha or depth; half: each texel averages 2x2.
-    void frameColor(bool half);
+    void frameColor();
     void frameColorAlpha();
-    void frameAlpha(bool half);
-    void frameDepth(bool half);
 
     const ResTIMG* getTexInfo() const {
         return mTIMG;

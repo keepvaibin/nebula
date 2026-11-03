@@ -8,7 +8,7 @@
 
 #include "renderer_vk_internal.h"
 
-#include "galaxy/render/capture.h"
+#include "galaxy/render/frame_pass.h"
 #include "galaxy/render/interp_eval.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/texture_store.h"
@@ -154,7 +154,7 @@ void RendererVk::note_feedback_reads(const std::array<VkImageView, kMaxTextureMa
             known->serial = replay_serial_ + 1u;
             continue;
         }
-        for (const auto& [key, dest] : scene_copy_dests_) {
+        for (const auto& [key, dest] : frame_pass_targets_) {
             if (dest.texture && dest.texture->view == view) {
                 feedback_.push_back({view, dest.texture, replay_serial_ + 1u});
                 break;
@@ -1031,10 +1031,10 @@ std::uint64_t RendererVk::patched_table(ReplayList& list, std::uint64_t table) {
 // A logged copy again, from the private scene target into `target` (a stand-in or the sub-frame's display picture).
 void RendererVk::replay_copy(const ReplayCopy& copy, vk::Texture& target) {
     if (copy.display) {
-        record_conversion_blit(target, copy.width, copy.height, false, kCopyLayoutDisplay, copy.geometry[0], copy.geometry[1], copy.geometry[2], copy.geometry[3]);
+        record_conversion_blit(target, copy.width, copy.height, kCopyLayoutDisplay, copy.geometry[0], copy.geometry[1], copy.geometry[2], copy.geometry[3]);
         return;
     }
-    record_conversion_blit(target, copy.width, copy.height, copy.depth, copy.params.channels, copy.geometry[0], copy.geometry[1], copy.geometry[2], copy.geometry[3]);
+    record_conversion_blit(target, copy.width, copy.height, copy.params.channels, copy.geometry[0], copy.geometry[1], copy.geometry[2], copy.geometry[3]);
 }
 
 // The playing log into `list`'s command buffer, with the sequence's constants: draws read the evaluated blocks, copies

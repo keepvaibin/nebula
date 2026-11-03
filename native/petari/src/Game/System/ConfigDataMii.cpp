@@ -2,7 +2,7 @@
 #include "Game/Util/MemoryUtil.hpp"
 #include <JSystem/JSupport/JSUMemoryInputStream.hpp>
 #include <JSystem/JSupport/JSUMemoryOutputStream.hpp>
-#include <RFL_Types.h>
+#include <MiiTypes.h>
 
 #define FLAG_UNK1 0x1
 #define FLAG_UNK2 0x2

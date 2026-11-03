@@ -30,7 +30,7 @@ namespace J3DNativeDraw {
 
 extern "C" {
 #endif
-// The same for the C sources (RVLFaceLib).
+// The same for the C sources (MiiLib).
 void J3DNativeDrawBegin(NebulaPrimitive primitive, u16 count, u32 attributes);
 void J3DNativeDrawPosition(f32 x, f32 y, f32 z);
 void J3DNativeDrawNormal(f32 x, f32 y, f32 z);
