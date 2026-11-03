@@ -50,7 +50,7 @@ game's icons still show with the Wii style, and Nebula's show as drawn unless a 
 Icons pack has them at eight times their size; `GALAXY_EXPORT_ART=<folder>` writes it again (`pack/`, with previews in
 `native/` and `hd/`).
 
-A tap of Plus or Minus pauses (the console waited for the button to be held 12 frames and for the remote to be still);
+A tap of Plus or Minus pauses;
 a press made while A or B is held pauses once they are let go.
 
 B (controllers) never shoots Star Bits: it is Wii B (back) only while a
@@ -327,7 +327,7 @@ mod's options, open the mods folder and read it again. Changes wait for Apply, w
 at the start); removing a mod is in Nebula Settings. Texture packs, texture dumps and the movies folder are on the
 Graphics page.
 
-On Switch controllers the menu uses the console's meaning: A changes, B closes. PlayStation: Cross changes, Circle
+On Switch controllers: A changes, B closes. PlayStation: Cross changes, Circle
 closes, Square clears, Triangle applies. Pages: Display, Graphics, Controls, Audio, General (text speed, button
 icons, language, Discord, Miis), Mods and System. Every change waits for Apply, the mix and text speed included;
 closing the menu or Undo drops what was not applied. A new language applies when Nebula next starts, as the game
@@ -338,10 +338,10 @@ close or at shutdown.
 ## HOME Menu
 
 Home (`H`; Home on Switch, PS on PlayStation, Steam on Steam controllers) opens the HOME Menu over the paused game:
-Return to game, Reset and Quit to desktop (the console's Wii Menu); Reset and Quit ask first, as the console does. Up
+Return to game, Reset and Quit to desktop; Reset and Quit ask first. Up
 and Down (or Left and Right) select, `Enter`/`Space`/A chooses, `Esc`/`Backspace`/B goes back (from the list: closes
 it); the pointer selects what it is over and a click chooses it. The game draws it in its own style, in
-the played language, with the console HOME Menu's sounds.
+the played language, with its own sounds.
 
 Diagnostic environment variables for input and audio are listed in
 [DIAGNOSTICS.md](DIAGNOSTICS.md).

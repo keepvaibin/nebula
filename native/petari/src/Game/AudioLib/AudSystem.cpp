@@ -163,7 +163,7 @@ AudSystem::AudSystem(JAUSectionHeap* pSectionHeap, AssetFolder* pChordArchive, A
     : mIsResetReady(), mIsReset(), mStopThreads(), _828(), mIsPaused(), _82A(), _82B(), _82C(), _830(-1), mSoundInfo(), mSectionHeap(pSectionHeap),
       mAudible(), mSystemSeObject(), mSystemMeObject(), mSceneMgr(), mRhythmMeSystem(), mRemixMgr(), mAudEffector(),
       mSeStrategyMgr(), mVolumeController(), mHomeButtonMenuState(), mHomeButtonToggleTime(-1), mPauseMenuState(), mPauseMenuToggleTime(-1),
-      mIsDvdError(), mLimitedSoundInfo(), mSpkSystem() {
+      mIsErrorWindowOpen(), mLimitedSoundInfo(), mSpkSystem() {
     msBasic = this;
     mLimitedSoundInfo = new (mSectionHeap->getHeap(), 0) AudLimitedSoundInfo[2];
     clearAllLimitedSound();
@@ -511,7 +511,7 @@ void AudSystem::exitHomeButtonMenu() {
 
     recoverSeVolumeSet(20);
 
-    if (!isPauseMenuActive() && !mIsDvdError) {
+    if (!isPauseMenuActive() && !mIsErrorWindowOpen) {
         unpause();
     }
 }
@@ -671,19 +671,19 @@ bool AudSystem::isEnableStartSound(JAISoundID soundID) {
     return true;
 }
 
-void AudSystem::doDvdErrorProcess() {
-    mIsDvdError = true;
+void AudSystem::pauseForErrorWindow() {
+    mIsErrorWindowOpen = true;
     setVolumeZeroForce(MenuType_Error);
     mSeMgr.stop(10);
     pause();
 }
 
-void AudSystem::exitDvdErrorProcess() {
+void AudSystem::resumeFromErrorWindow() {
     if (!isPauseMenuActive() && !isHomeButtonMenuActive()) {
         unpause();
     }
 
-    mIsDvdError = false;
+    mIsErrorWindowOpen = false;
 }
 
 s32 AudSystem::getNumOfPlaying(JAISoundID soundID) {

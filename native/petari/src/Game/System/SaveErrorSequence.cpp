@@ -64,7 +64,7 @@ bool SaveErrorSequence::isPermitToReset() const {
 
 void SaveErrorSequence::prepareReset() {
     if (isNerve(GET_NERVE_ANON(SaveErrorSequenceError))) {
-        GameSystemFunction::setResetOperationReturnToMenu();
+        GameSystemFunction::setResetOperationQuit();
     }
 }
 
@@ -95,7 +95,7 @@ void SaveErrorSequence::exeIdle() {
 void SaveErrorSequence::exeError() {
     if (MR::isFirstStep(this)) {
         mSysInfoWindow->appear(mSystemMessageId, SysInfoWindow::Type_Key, SysInfoWindow::TextPos_Center, SysInfoWindow::MessageType_System);
-        GameSystemFunction::setResetOperationReturnToMenu();
+        GameSystemFunction::setResetOperationQuit();
     }
 
     if (MR::isDead(mSysInfoWindow)) {
