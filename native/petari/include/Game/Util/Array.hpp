@@ -130,6 +130,56 @@ namespace MR {
         s32 mMaxSize;
     };
 
+    /// @brief A table filled by index, its size set by the level's data: room for N in itself, and at() moves it to twice
+    /// the room in the arena it lies in when an index passes the end. Entries start zero. Pointers taken into it last until
+    /// the next at().
+    template < class T, int N >
+    class GrowTable {
+    public:
+        GrowTable() : mMoved(nullptr), mSize(N) {
+            for (s32 i = 0; i < N; i++) {
+                mArr[i] = T();
+            }
+        }
+
+        T& at(s32 idx) {
+            while (idx >= mSize) {
+                T* const pNew = new (NebulaArena::findFromRoot(this), 0) T[mSize * 2];
+                for (s32 i = 0; i < mSize; i++) {
+                    pNew[i] = begin()[i];
+                }
+                for (s32 i = mSize; i < mSize * 2; i++) {
+                    pNew[i] = T();
+                }
+                delete[] mMoved;
+                mMoved = pNew;
+                mSize *= 2;
+            }
+            return begin()[idx];
+        }
+
+        T* begin() {
+            return mMoved != nullptr ? mMoved : mArr;
+        }
+
+        const T* begin() const {
+            return mMoved != nullptr ? mMoved : mArr;
+        }
+
+        operator T*() {
+            return begin();
+        }
+
+        operator const T*() const {
+            return begin();
+        }
+
+    private:
+        T mArr[N];
+        T* mMoved;
+        s32 mSize;
+    };
+
     /// @brief A contiguous array with room for N in itself; a Vector over it past that moves to the arena it lies in.
     template < class T, int N >
     class FixedArray {

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Game/Util/Array.hpp"
+
 
 class StageFileLoader {
 public:
@@ -10,6 +12,6 @@ public:
     void makeStageArchiveNameList();
     static void makeStageArchiveName(char*, u32, const char*);
 
-    char* mStageFiles[0x18];
+    MR::GrowTable< char*, 0x18 > mStageFiles;
     s32 mZoneCount;
 };
