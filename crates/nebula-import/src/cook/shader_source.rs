@@ -537,6 +537,16 @@ pub const HEADERS: [(&str, &str); 2] = [
     ("native_material.hlsli", include_str!("../../../../runtime/src/render/materials/native_material.hlsli")),
 ];
 
+/// What a mod's compiled shaders must match: the SHA-1 of the headers, line endings aside, in hexadecimal.
+pub fn interface_id() -> String {
+    use sha1::{Digest, Sha1};
+    let mut hash = Sha1::new();
+    for (_, text) in HEADERS {
+        hash.update(text.replace('\r', "").as_bytes());
+    }
+    hash.finalize().iter().map(|b| format!("{b:02x}")).collect()
+}
+
 /// A program record's shader, from after its comment line: `#include` on. An effect it can't express is an error naming it.
 pub fn material_source(record: &[u8]) -> Result<String> {
     if record.len() != 756 {
@@ -588,6 +598,13 @@ mod tests {
         assert!(text.contains("void j3d_channels(float3 eye"));
         assert!(text.contains("enh_add_light(0u, true, 2u, true, false, eye"));
         assert!(text.contains("j3d_pixel_channels(i);"));
+    }
+
+    #[test]
+    fn the_interface_is_a_hash_of_the_headers() {
+        let id = interface_id();
+        assert_eq!(id.len(), 40);
+        assert!(id.bytes().all(|b| b.is_ascii_hexdigit()));
     }
 
     #[test]

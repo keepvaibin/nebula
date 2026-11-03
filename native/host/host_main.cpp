@@ -3679,8 +3679,13 @@ void prepare_mod_files(const fs::path& settings_folder, const std::string& game_
         log_line("mods:", text.c_str());
         std::error_code shaders_error;
         const fs::path shaders = store.parent_path() / "shaders" / galaxy::render::native_shader_file_name();
-        if (fs::is_regular_file(shaders, shaders_error) && !galaxy::render::load_mod_shaders(shaders)) {
-            log_line("mods:", "its shaders could not be read: models that need them are not drawn");
+        if (fs::is_regular_file(shaders, shaders_error)) {
+            const galaxy::render::ModShadersResult loaded = galaxy::render::load_mod_shaders(shaders);
+            if (loaded == galaxy::render::ModShadersResult::OtherInterface) {
+                log_line("mods:", "CONVERT THIS MOD AGAIN WITH LUMALINK");
+            } else if (loaded == galaxy::render::ModShadersResult::Unreadable) {
+                log_line("mods:", "its shaders could not be read: models that need them are not drawn");
+            }
         }
     }
 }
