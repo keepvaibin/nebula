@@ -829,11 +829,6 @@ void JPADrawRotYBillboard(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle)
 void JAU_JASInitializer::initJASystem(NebulaArena* pHeap) {
     if (JASLoad::getThreadPointer() == nullptr) {
         JASKernel::setupRootHeap(pHeap, heapSize_);
-        if (audioMemSize_ == 0) {
-            audioMemSize_ = AudParams::soundMemorySize;
-        }
-
-        JASKernel::setupSoundHeap(audioMemory_, audioMemSize_);
         JASTrack::newMemPool(field_0x1c);
         if (field_0x20 > 0) {
             JASTrack::TChannelMgr::newMemPool(field_0x20);

@@ -8,40 +8,27 @@
 class NebulaArena;
 class NebulaArena;
 
-struct JASDisposer {
-    JASDisposer() {
-    }
-    virtual ~JASDisposer() {
-    }
-    virtual void onDispose() {
-    }
-};
-
 #define DIR_MAX 64
 
 struct JASWaveArcLoader {
-    static JASHeap* getRootHeap();
     static void setCurrentDir(char const*);
     static char* getCurrentDir();
 
     static char sCurrentDir[DIR_MAX];
-    static JASHeap* sSoundHeap;
 };
 
-struct JASWaveArc : JASDisposer {
+struct JASWaveArc {
     JASWaveArc();
     bool loadSetup(u32);
     bool eraseSetup();
     static void loadCallback(void*);
     bool sendLoadCmd();
-    static const u32 cAllocSize = 32;
-    bool load(JASHeap*); /* overwritten in OverwriteJAudio */
+    bool load(); /* overwritten in OverwriteJAudio */
     bool erase();
     void setEntryNum(s32);
     void setFileName(char const*); /* overwritten in OverwriteJAudio */
 
     virtual ~JASWaveArc();
-    virtual void onDispose();
     virtual void onLoadDone() {
     }
     virtual void onEraseDone() {
@@ -53,12 +40,9 @@ struct JASWaveArc : JASDisposer {
     u32 getFileSize() const {
         return mFileLength;
     }
-    JASHeap* getHeap() {
-        return &mHeap;
-    }
     // The archive's waves, in the mapped store; null unless it is loaded.
     const u8* getData() const {
-        return mHeap.getBase() != nullptr ? mData : nullptr;
+        return mStatus != 0 ? mData : nullptr;
     }
 
     struct loadCallbackParams {
@@ -68,7 +52,6 @@ struct JASWaveArc : JASDisposer {
         u32 _C;
     };
 
-    mutable JASHeap mHeap;  // no bytes to speak of (cAllocSize): an archive's place in its section, which goes with it
     u32 _48;
     NebulaAtomic< s32 > mStatus;
     int mEntryNum;

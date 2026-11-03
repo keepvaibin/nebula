@@ -151,7 +151,7 @@ void JASWaveArc::setFileName(const char* pName) {
     setEntryNum(entryNum);
 }
 
-bool JASWaveArc::load(JASHeap* pHeap) {
+bool JASWaveArc::load() {
     if (mEntryNum < 0) {
         return false;
     }
@@ -161,13 +161,6 @@ bool JASWaveArc::load(JASHeap* pHeap) {
         return false;
     }
 
-    if (pHeap == nullptr) {
-        pHeap = JASWaveArcLoader::getRootHeap();
-    }
-
-    if (mHeap.alloc(pHeap, cAllocSize) == false) {
-        return false;
-    }
     return sendLoadCmd();
 }
 

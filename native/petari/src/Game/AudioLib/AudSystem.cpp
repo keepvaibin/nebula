@@ -58,8 +58,6 @@ AudSystem* AudNewAudSystem_(JAUSectionHeap* pHeap, AssetFolder* pChordArchive, A
 namespace {
     int init_JAS_JAI_(NebulaArena* pHeap) {
         JAU_JASInitializer initJAS;
-        initJAS.audioMemory_ = AudParams::aramAddr;
-        initJAS.audioMemSize_ = AudParams::soundMemorySize;
         initJAS.heapSize_ = AudParams::workAreaSize;
         initJAS.field_0x1c = AudParams::numFreeTracks;
         initJAS.field_0x20 = AudParams::numFreeTrackChannels;
