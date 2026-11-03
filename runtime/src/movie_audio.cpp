@@ -21,6 +21,12 @@ void MovieAudio::open(bool mono) {
     mono_ = mono;
     queue_.clear();
     started_ = false;
+    ends_.clear();
+    queued_end_ = 0;
+    pulled_ = 0;
+    unplayed_ = 0u;
+    heard_ = 0;
+    heard_end_ = 0;
     volume_ = target_ = 127.0f;
     ramp_ = 0;
     resuming_ = false;
@@ -34,12 +40,24 @@ void MovieAudio::close() {
     open_ = false;
     queue_.clear();
     started_ = false;
+    ends_.clear();
+    queued_end_ = 0;
+    pulled_ = 0;
+    unplayed_ = 0u;
+    heard_ = 0;
+    heard_end_ = 0;
 }
 
 void MovieAudio::reset() {
     std::lock_guard<std::mutex> lock(mutex_);
     queue_.clear();
     started_ = false;
+    ends_.clear();
+    queued_end_ = 0;
+    pulled_ = 0;
+    unplayed_ = 0u;
+    heard_ = 0;
+    heard_end_ = 0;
     volume_ = target_;
     ramp_ = 0;
 }
@@ -81,8 +99,29 @@ bool MovieAudio::push(const std::uint8_t* record, std::size_t size) {
     Frame frame;
     frame.samples.resize(static_cast<std::size_t>(samples) * 2u);
     std::memcpy(frame.samples.data(), record + sizeof(samples), frame.samples.size() * sizeof(std::int16_t));
+    queued_end_ += samples;
+    ends_.push_back(queued_end_);
     queue_.push_back(std::move(frame));
     return true;
+}
+
+void MovieAudio::set_unplayed(std::size_t samples) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    unplayed_ = samples;
+}
+
+double MovieAudio::position() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    const std::int64_t reached = pulled_ - static_cast<std::int64_t>(unplayed_);
+    while (!ends_.empty() && ends_.front() <= reached) {
+        heard_end_ = ends_.front();
+        ends_.pop_front();
+        ++heard_;
+    }
+    if (ends_.empty() || reached <= heard_end_) {
+        return heard_;
+    }
+    return heard_ + static_cast<double>(reached - heard_end_) / static_cast<double>(ends_.front() - heard_end_);
 }
 
 std::size_t MovieAudio::room() const {
@@ -146,13 +185,11 @@ void MovieAudio::pull(float* out, std::size_t count) {
             out += 2;
             frame.read += 2u;
         }
+        pulled_ += static_cast<std::int64_t>(n);
         count -= n;
         if (frame.read >= frame.samples.size()) {
             queue_.pop_front();
         }
-    }
-    if (queue_.empty()) {
-        started_ = false;
     }
 }
 

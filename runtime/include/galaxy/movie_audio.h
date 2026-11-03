@@ -1,8 +1,7 @@
 // The movie player's sound (nebula_game_api.h movie_audio*): each movie frame's audio record (its stereo sample count, then
 // its PCM16 samples, cook/thp.rs) queued, up to 20 frames ahead; the mixer takes it at 32 kHz each audio frame with the
 // player's volume (a square law over 0-127, ramped per sample), its fade-in after a pause and, in mono output, the
-// mean of the two sides at -3 dB. Playback starts once the frame after the current one is decoded too, and stops when
-// the queue runs dry until that holds again. The player paces its pictures by this queue (MoviePlayerSimple::exePlaying).
+// mean of the two sides at -3 dB. Playback starts once two frames wait. The player shows the frame at this queue's front (MoviePlayerSimple::exePlaying).
 #pragma once
 
 #include <array>
@@ -18,6 +17,7 @@ namespace galaxy::audio {
 class MovieAudio {
 public:
     static constexpr std::size_t kQueueFrames = 20u;
+    static constexpr std::uint32_t kRate = 32000u;
 
     void open(bool mono);
     void close();
@@ -35,6 +35,10 @@ public:
     [[nodiscard]] bool active() const;
     // The frames that could still be queued.
     [[nodiscard]] std::size_t room() const;
+    // How much of what pull gave (samples at kRate) has not been played yet, as the output takes it.
+    void set_unplayed(std::size_t samples);
+    // Where playing has reached: the frames played in full and the fraction of the next.
+    [[nodiscard]] double position();
 
 private:
     struct Frame {
@@ -46,6 +50,13 @@ private:
     std::deque<Frame> queue_;
     bool open_{};
     bool started_{};
+    // Where each frame given to pull ends, in samples pulled, up to where the output has reached.
+    std::deque<std::int64_t> ends_;
+    std::int64_t queued_end_{};
+    std::int64_t pulled_{};
+    std::size_t unplayed_{};
+    std::int32_t heard_{};
+    std::int64_t heard_end_{};
     bool mono_{};
     float volume_{127.0f};
     float target_{127.0f};
