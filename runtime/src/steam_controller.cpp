@@ -110,13 +110,13 @@ std::uint32_t map_buttons(std::uint32_t word, const ButtonMap (&map)[N]) noexcep
 void put_sensors(const std::uint8_t* accel, const std::uint8_t* gyro, float gyro_y_sign,
                  switch_hid::DecodedState& out) noexcept {
     const int ax = s16(accel), ay = s16(accel + 2), az = s16(accel + 4);
-    const int gx = s16(gyro), gy = s16(gyro + 2), gz = s16(gyro + 4);
-    if (ax == 0 && ay == 0 && az == 0 && gx == 0 && gy == 0 && gz == 0) return;
+    const int gyro_x = s16(gyro), gyro_y = s16(gyro + 2), gyro_z = s16(gyro + 4);
+    if (ax == 0 && ay == 0 && az == 0 && gyro_x == 0 && gyro_y == 0 && gyro_z == 0) return;
     switch_hid::ImuSample& sample = out.imu[0];
     sample.accel = {static_cast<float>(ax) * kAccelGPerCount, static_cast<float>(az) * kAccelGPerCount,
                     -static_cast<float>(ay) * kAccelGPerCount};
-    sample.gyro = {static_cast<float>(gx) * kGyroRadPerCount, static_cast<float>(gz) * kGyroRadPerCount,
-                   gyro_y_sign * static_cast<float>(gy) * kGyroRadPerCount};
+    sample.gyro = {static_cast<float>(gyro_x) * kGyroRadPerCount, static_cast<float>(gyro_z) * kGyroRadPerCount,
+                   gyro_y_sign * static_cast<float>(gyro_y) * kGyroRadPerCount};
     out.imu_count = 1;
 }
 

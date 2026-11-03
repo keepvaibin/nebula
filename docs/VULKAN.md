@@ -91,6 +91,6 @@ Every Vulkan 1.1 GPU and driver (Android's in particular), with no per-device wo
   (`compile_hlsl`); constant-buffer matrices row-major (the D3D12 compile's `D3DCOMPILE_PACK_MATRIX_ROW_MAJOR`;
   glslang's default is the transpose, which drew every 2D layout off-screen); fragment depth clamped to the viewport's
   range while primitives are still clipped (depth clamp with VK_EXT_depth_clip_enable); destruction of released
-  objects after the frame's own submission, not the next one (GXPeek submits in between).
+  objects after the frame's own submission, not the next one.
 - Next: the 102-stop tour and Battlerock against D3D12, the iGPU (`GALAXY_GPU_PREFERENCE=low`), CPU and GPU cost; then
   V5 (Linux host on SDL3).

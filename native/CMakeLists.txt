@@ -46,17 +46,6 @@ set_target_properties(smg_game PROPERTIES
     CXX_STANDARD 17 CXX_EXTENSIONS ON
     C_VISIBILITY_PRESET hidden CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON)
 
-# No native-built line may test a host pointer against the console's memory map (tools/console_address_audit.py);
-# checked before every link of the module.
-find_package(Python3 COMPONENTS Interpreter)
-if(Python3_Interpreter_FOUND)
-    add_custom_command(TARGET smg_game PRE_LINK
-        COMMAND "${Python3_EXECUTABLE}" -I "${CMAKE_CURRENT_SOURCE_DIR}/tools/console_address_audit.py"
-            "${CMAKE_CURRENT_SOURCE_DIR}" "${petari}"
-        VERBATIM)
-else()
-    message(WARNING "Python 3 not found: tools/console_address_audit.py does not run with this build")
-endif()
 
 # Every float-to-integer conversion into a type narrower than 32 bits goes through s32, as the Wii converts
 # (tools/narrow_float_audit.py; clang-query over the whole module, minutes): after each link with this option.

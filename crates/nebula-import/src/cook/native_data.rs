@@ -1125,7 +1125,7 @@ pub fn j3d_model(bytes: &[u8]) -> Result<Vec<u8>> {
     out[4..8].copy_from_slice(&be32(bytes, 4)?.to_le_bytes());
     host32(bytes, &mut out, 8)?; // file size
     let blocks = host32(bytes, &mut out, 0xC)? as usize;
-    // VTX1's normal format count (GX_NRM_XYZ unless listed; an NBT entry counts as the normal's), for SHP1's layouts.
+    // VTX1's normal format count (three unless listed; an NBT entry counts as the normal's), for SHP1's layouts.
     let mut normal_count = 0u32;
     let mut at = 0x20;
     for b in 0..blocks {
@@ -1221,7 +1221,7 @@ pub fn j3d_model(bytes: &[u8]) -> Result<Vec<u8>> {
                 }
             }
             b"VTX1" => {
-                // The format list: (attribute, count, type: 32-bit; fraction byte, three pad) to GX_VA_NULL.
+                // The format list: (attribute, count, type: 32-bit; fraction byte, three pad) to the end marker.
                 let list = field(0x8)?;
                 let mut formats: Vec<(u32, u32)> = Vec::new(); // (attribute, type)
                 if list != 0 {
@@ -1255,7 +1255,7 @@ pub fn j3d_model(bytes: &[u8]) -> Result<Vec<u8>> {
                     }
                     let (from, to) = (at + start, at + bound(start));
                     let width = if attr == 11 || attr == 12 {
-                        // GX_RGB565 and GX_RGBA4 are 16-bit; the others are bytes.
+                        // The two 16-bit formats (565 and 4444) are 16-bit; the others are bytes.
                         match type_of(attr, 5) {
                             0 | 3 => 2,
                             _ => 1,

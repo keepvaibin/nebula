@@ -176,9 +176,8 @@ named here are gone ([GRAPHICS_ARCHITECTURE.md](GRAPHICS_ARCHITECTURE.md)); the 
   (`NebulaNativeShapes::registerModel` from ResourceHolder, after ModelUtil's edits: texture-matrix indices added to
   lists, new vertex descriptions, position arrays halved) with its vertex description, the arrays J3DShape sets before
   each draw and its current matrix; a list registered nowhere is built from its first draw. Drawn by handle while the
-  list and vertex state match; the array bytes it was built from are compared with memory once per batch of guest
-  writes, as the decoded cache does; a changed list or state is built again once; arrays the game rewrites keep the GX
-  path. Shapes not drawn for 3,600 render chunks are dropped (the game frees models with their heaps, no destructors).
+  list and vertex state match; the array bytes it was built from are compared with memory once per batch of game
+  writes, as the decoded cache does; a changed list or state is built again once; arrays the game rewrites are built each frame. Shapes not drawn for 3,600 render chunks are dropped (the game frees models with their heaps, no destructors).
   Battlerock, stand-in at 1x, every render chunk counted: 1,008,899 shape draws native and 3 drawn the old way while built
   (first-draw building alone: 999,672 of 1,000,000); the parser's commands a frame 77 KB -> 28 KB; render thread
   84.0 / 84.2 / 84.4 -> 80.1 / 78.6 / 77.2 ms/s, GPU 4.96 / 4.99 / 5.03 -> 4.92 / 4.83 / 4.80 ms; boot's two frames over

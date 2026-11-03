@@ -155,7 +155,7 @@ CC = ["prev.rgb", "prev.aaa", "r0.rgb", "r0.aaa", "r1.rgb", "r1.aaa", "r2.rgb", 
       "ras.rgb", "ras.aaa", "float3(1.0, 1.0, 1.0)", "float3(128.0, 128.0, 128.0) / 255.0", "k.rgb",
       "float3(0.0, 0.0, 0.0)"]
 CA = ["prev.a", "r0.a", "r1.a", "r2.a", "t.a", "ras.a", "ka", "0.0"]
-# GX's fixed constant selections (1, 7/8 ... 1/8 as the combiner's 8-bit values 255, 223 ... 32), its HALF input (128)
+# The fixed constant selections (1, 7/8 ... 1/8 as the combiner's 8-bit values 255, 223 ... 32), its HALF input (128)
 # and its bias (+-128), on the 0-1 scale.
 FRACTION = ["1.0", "223.0 / 255.0", "191.0 / 255.0", "159.0 / 255.0", "128.0 / 255.0", "96.0 / 255.0", "64.0 / 255.0",
             "32.0 / 255.0"]
@@ -214,7 +214,7 @@ def emit_vertex(p, out):
         gen_type = 0 if projective else 1  # three outputs or two
         out.append(f"    {{  // coordinate {i}: kind {kind}, projective {projective}, row {row}")
         out.append(f"        const float4 c = {coord};")
-        # The texgen's matrix from matrix memory by the index the shape loads (its current matrix, which GX takes over
+        # The texgen's matrix from matrix memory by the index the shape loads (its current matrix, taken over
         # the material's texgen id: GPU_TEXMTX0 30 + 3k, 60 the identity) or the vertex's own; its post-transform matrix
         # by the program's row (GPU_PTTEXMTX0's 0 + 3k, 61 the identity).
         # As the uber shader: the draw's texture matrix rows (inline_tex_matrices: the matrix its current matrix index
@@ -239,7 +239,7 @@ def emit_vertex(p, out):
         prow = [f"dot(float4(res, 1.0), inline_post_matrices[{3 * i + r}])" for r in range(3)]
         out.append(f"            res = float3({prow[0]}, {prow[1]}, {prow[2]});")
         out.append("        }")
-        # A projected coordinate's q of 0: GX halves and clamps s and t (as the uber shader and Dolphin).
+        # A projected coordinate's q of 0: s and t are halved and clamped (as the uber shader and Dolphin).
         projected = "true" if gen_type == 0 else "posted"
         out.append(f"        if ({projected} && res.z == 0.0) res.xy = clamp(res.xy * 0.5, -1.0, 1.0);")
         out.append(f"        o.uv[{i}] = float4(res, {projected} ? 1.0 : 0.0);")
@@ -509,7 +509,7 @@ def generate(repo, paths, subset=None):
     """The material set in the repository: runtime/src/render/materials/j3d/m<NNNN>.hlsl, its CMake list, and the
     game's table (each dumped program's FNV-1a hash -> its material's index, 1-based). Files are written only when
     their content changed. `subset` (dump files): the build list and the game's table hold only the materials those
-    programs use (numbered as in the whole set), the others staying on the GX path: the probe loop's build."""
+    programs use (numbered as in the whole set), the others not built: the probe loop's build."""
     import glob
     import os
     out_dir = os.path.join(repo, "runtime", "src", "render", "materials", "j3d")

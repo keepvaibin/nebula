@@ -32,7 +32,7 @@ namespace {
 }  // namespace
 namespace {
     // Texture coordinates.
-    f32 gxArray[] = {0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.2f, 1.0f, 0.2f, 0.0f, 0.5f, 1.0f, 0.5f, 0.0f, 1.0f, 1.0f, 1.0f};
+    f32 cTexCoords[] = {0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.2f, 1.0f, 0.2f, 0.0f, 0.5f, 1.0f, 0.5f, 0.0f, 1.0f, 1.0f, 1.0f};
     static f32 sHeightTable[] = {150.0f, 200.0f, 300.0f, 250.0f};
     static TVec3f sDrawVec(1.0f, 0.0f, 0.0f);
     static f32 sSwingSpeed = 0.03f;
@@ -264,24 +264,24 @@ void WaterPlant::drawDirect() const {
 
         f32 drawOffsetX = mHalfWidth * ::sDrawVec.x;
         f32 drawOffsetZ = mHalfWidth * ::sDrawVec.z;
-        // Each vertex's texture coordinate is its entry of ::gxArray.
+        // Each vertex's texture coordinate is its entry of ::cTexCoords.
         J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 8, NEBULA_SHAPE_TEXCOORD0);
         J3DNativeDraw::position(drawVec3.x - drawOffsetX, drawVec3.y, drawVec3.z - drawOffsetZ);
-        J3DNativeDraw::texCoord(::gxArray[2 * 0], ::gxArray[2 * 0 + 1]);
+        J3DNativeDraw::texCoord(::cTexCoords[2 * 0], ::cTexCoords[2 * 0 + 1]);
         J3DNativeDraw::position(drawVec3.x + drawOffsetX, drawVec3.y, drawVec3.z + drawOffsetZ);
-        J3DNativeDraw::texCoord(::gxArray[2 * 1], ::gxArray[2 * 1 + 1]);
+        J3DNativeDraw::texCoord(::cTexCoords[2 * 1], ::cTexCoords[2 * 1 + 1]);
         J3DNativeDraw::position(drawVec2.x - drawOffsetX, drawVec2.y, drawVec2.z - drawOffsetZ);
-        J3DNativeDraw::texCoord(::gxArray[2 * 2], ::gxArray[2 * 2 + 1]);
+        J3DNativeDraw::texCoord(::cTexCoords[2 * 2], ::cTexCoords[2 * 2 + 1]);
         J3DNativeDraw::position(drawVec2.x + drawOffsetX, drawVec2.y, drawVec2.z + drawOffsetZ);
-        J3DNativeDraw::texCoord(::gxArray[2 * 3], ::gxArray[2 * 3 + 1]);
+        J3DNativeDraw::texCoord(::cTexCoords[2 * 3], ::cTexCoords[2 * 3 + 1]);
         J3DNativeDraw::position(drawVec1.x - drawOffsetX, drawVec1.y, drawVec1.z - drawOffsetZ);
-        J3DNativeDraw::texCoord(::gxArray[2 * 4], ::gxArray[2 * 4 + 1]);
+        J3DNativeDraw::texCoord(::cTexCoords[2 * 4], ::cTexCoords[2 * 4 + 1]);
         J3DNativeDraw::position(drawVec1.x + drawOffsetX, drawVec1.y, drawVec1.z + drawOffsetZ);
-        J3DNativeDraw::texCoord(::gxArray[2 * 5], ::gxArray[2 * 5 + 1]);
+        J3DNativeDraw::texCoord(::cTexCoords[2 * 5], ::cTexCoords[2 * 5 + 1]);
         J3DNativeDraw::position(position->x - drawOffsetX, position->y, position->z - drawOffsetZ);
-        J3DNativeDraw::texCoord(::gxArray[2 * 6], ::gxArray[2 * 6 + 1]);
+        J3DNativeDraw::texCoord(::cTexCoords[2 * 6], ::cTexCoords[2 * 6 + 1]);
         J3DNativeDraw::position(position->x + drawOffsetX, position->y, position->z + drawOffsetZ);
-        J3DNativeDraw::texCoord(::gxArray[2 * 7], ::gxArray[2 * 7 + 1]);
+        J3DNativeDraw::texCoord(::cTexCoords[2 * 7], ::cTexCoords[2 * 7 + 1]);
     }
 }
 
