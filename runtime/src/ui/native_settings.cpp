@@ -211,7 +211,7 @@ constexpr const char* kNativeSettingsTabNames[] = {"DISPLAY", "GRAPHICS", "CONTR
                                                    "ADVANCED"};
 // The pages shown. MODS comes back with its feature.
 #if defined(__ANDROID__)
-constexpr unsigned kShownTabs[] = {0u, 1u, 2u, 3u, 4u, 7u};  // nothing on SYSTEM there: diagnostics are the launcher's
+constexpr unsigned kShownTabs[] = {0u, 1u, 2u, 3u, 4u, 5u, 7u};  // nothing on SYSTEM there: diagnostics are the launcher's
 #else
 constexpr unsigned kShownTabs[] = {0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u};
 #endif
@@ -2332,9 +2332,17 @@ SettingsRow mods_buttons_row() {
     if (s_mod_dialog_open.load(std::memory_order_acquire)) help = "CHOOSING";
     const auto focus = std::find_if(s_mods.begin(), s_mods.end(), [](const galaxy::mods::ModInfo& m) { return m.id == s_mod_focus; });
     const bool options = focus != s_mods.end() && mod_has_options(*focus, next_start_language_folder());
+#if defined(__ANDROID__)
+    // A phone imports from the launcher, where its file picker is.
+    SettingsRow row = button_row(
+        {}, {options ? "OPTIONS" : "-OPTIONS", "RESCAN"},
+        [](RenderConfig&, unsigned shown) {
+            const unsigned button = shown == 0u ? 2u : 4u;
+#else
     SettingsRow row = button_row(
         {}, {"IMPORT FILE", "IMPORT FOLDER", options ? "OPTIONS" : "-OPTIONS", "OPEN FOLDER", "RESCAN"},
         [](RenderConfig&, unsigned button) {
+#endif
             switch (button) {
             case 0u:
             case 1u:

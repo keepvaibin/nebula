@@ -7,6 +7,7 @@
 #include "galaxy/path_text.h"
 
 #include "galaxy/atomic_file.h"
+#include "galaxy/disc_files.h"
 #include "galaxy/mod_xml.h"
 
 #include <algorithm>
@@ -81,12 +82,17 @@ struct SavePatch {
     std::string external;
     bool clone = true;
 };
+struct MemoryPatch {
+    std::uint32_t offset = 0;
+    std::vector<std::uint8_t> value;
+    bool ocarina = false, search = false;
+};
 struct Patch {
     std::string id, root;
     std::vector<FilePatch> files;
     std::vector<FolderPatch> folders;
     std::vector<SavePatch> saves;
-    unsigned memory = 0;  // patches over the game's original code: not supported
+    std::vector<MemoryPatch> memory;  // patches written for the console's code
 };
 struct PatchRef {
     std::string id;
@@ -139,6 +145,56 @@ std::vector<std::uint8_t> hex_bytes(std::string_view s) {
         out.push_back(static_cast<std::uint8_t>(hi << 4 | lo));
     }
     return out;
+}
+
+// Native equivalents of known patches to the console's code, told by the mod's own bytes for a release: each sets the
+// game's NEBULA_PATCH_* switch (nebula_game_api.h); id 0 has no counterpart because Nebula does the job itself. Covers
+// Kaizo Mario Galaxy Rebalanced 2.1 and Super Lillie Galaxy's crash debugger.
+struct NativeCodePatch {
+    char region;
+    std::uint32_t address;
+    const char* value;
+    std::uint32_t id;
+    std::uint32_t parameter;
+    const char* what;
+};
+
+constexpr NativeCodePatch kNativeCodePatches[] = {
+    {'E', 0x801DD690, "38C00080", kPatchFlipPanelObserverGroup, 0x80, "flip panel observer groups of 128"},
+    {'E', 0x801DCE48, "38C00080", kPatchFlipPanelGroup, 0x80, "flip panel groups of 128"},
+    {'E', 0x80153D84, "39000001", kPatchWaterBazookaShotFlag, 1, "water bazooka shots' flag"},
+    {'E', 0x80001800, "C4BB8000C03E00103C608000C0031800EC00082AD01E0010809E008C4E800020", kPatchKameckBarrierOffsetY,
+     0xC4BB8000u, "Kamek's barrier 1500 lower"},
+    {'E', 0x800382B8, "4BFC954D", kPatchKameckBarrierOffsetY, 0xC4BB8000u, "Kamek's barrier 1500 lower"},
+    {'E', 0x8007679C, "60000000", kPatchSkeletalFishBabyNoBubble, 1, "no air bubble from hit skeletal fish"},
+    {'E', 0x80054490, "4836F0A9", kPatchDodoryuShellOnly, 1, "Dodoryu hurt by shells only"},
+    {'E', 0x800564C4, "4836D075", kPatchDodoryuShellOnly, 1, "Dodoryu hurt by shells only"},
+    {'E', 0x803F82D8, "4BC0A058", kPatchMissStarPieces, 0xFFFFFC19u, "every star bit lost after a miss"},
+    {'E', 0x80002330, "3860FC19483ADFB980010034483F5FA0", kPatchMissStarPieces, 0xFFFFFC19u,
+     "every star bit lost after a miss"},
+    {'E', 0x803F6298, "38600000", kPatchNoHiddenStarTable, 1, "hidden stars without their table"},
+    {'E', 0x803F5D40, "386000004E800020", kPatchNoSuddenDeathDodoryu, 1, "no sudden-death Dodoryu"},
+    {'E', 0x800D02C0, "38600000", kPatchBegomanFireProof, 1, "Begomans survive fire ground"},
+    {'E', 0x800D5DD8, "38600000", kPatchBegomanFireProof, 1, "Begomans survive fire ground"},
+    {'E', 0x800D7D50, "38600000", kPatchBegomanFireProof, 1, "Begomans survive fire ground"},
+    {'E', 0x80275440, "60000000", kPatchMessengerAlwaysEx, 1, "the 1-up messenger's larger supply"},
+    {'E', 0x80275458, "38800063", kPatchMessengerExOneUps, 99, "99 1-ups from the messenger"},
+    {'E', 0x802750F0, "2C1F0063", kPatchMessengerExOneUps, 99, "99 1-ups from the messenger"},
+    {'E', 0x802750FC, "38800063", kPatchMessengerExOneUps, 99, "99 1-ups from the messenger"},
+    {'E', 0x8039AA2C, "60000000", 0, 0, "the console's crash debugger (Nebula reports crashes itself)"},
+    {'E', 0x8039AAF0, "60000000", 0, 0, "the console's crash debugger (Nebula reports crashes itself)"},
+    {'E', 0x804A432C, "60000000", 0, 0, "the console's crash debugger (Nebula reports crashes itself)"},
+};
+
+const NativeCodePatch* native_code_patch(const std::string& game_id, std::uint32_t address,
+                                         std::span<const std::uint8_t> value) {
+    if (game_id.size() < 4u) return nullptr;
+    for (const NativeCodePatch& patch : kNativeCodePatches) {
+        if (patch.region != game_id[3] || patch.address != (address | 0x80000000u)) continue;
+        const std::vector<std::uint8_t> bytes = hex_bytes(patch.value);
+        if (bytes.size() == value.size() && std::equal(bytes.begin(), bytes.end(), value.begin())) return &patch;
+    }
+    return nullptr;
 }
 
 std::optional<RiivDisc> parse_riivolution(const fs::path& xml, std::string* error) {
@@ -233,7 +289,11 @@ std::optional<RiivDisc> parse_riivolution(const fs::path& xml, std::string* erro
             } else if (n.name == "savegame") {
                 patch.saves.push_back({n.attribute("external"), n.attribute_bool("clone", true)});
             } else if (n.name == "memory") {
-                ++patch.memory;
+                MemoryPatch& m = patch.memory.emplace_back();
+                m.offset = static_cast<std::uint32_t>(n.attribute_uint("offset", 0));
+                m.value = hex_bytes(n.attribute("value"));
+                m.ocarina = n.attribute_bool("ocarina", false);
+                m.search = n.attribute_bool("search", false);
             }
         }
     }
@@ -413,6 +473,18 @@ bool mod_note(const fs::path& file) {
     for (const char* known : {".txt", ".md", ".pdf", ".url", ".htm", ".html", ".rtf", ".png", ".jpg", ".jpeg",
                               ".webp", ".gif", ".nfo", ".xml", ".ini", ".db", ".zip", ".7z", ".rar"}) {
         if (extension == known) return true;
+    }
+    return false;
+}
+
+// A folder the game has at its root, or one language's.
+bool is_disc_folder(std::string_view name) {
+    const std::string wanted = lower(name);
+    for (const char* folder : kDiscFolders) {
+        if (lower(folder) == wanted) return true;
+    }
+    for (const char* folder : kLanguageFolders) {
+        if (lower(folder) == wanted) return true;
     }
     return false;
 }
@@ -915,7 +987,14 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
                             }
                         }
                     }
-                    mod.code_patches += p.memory;
+                    for (const MemoryPatch& m : p.memory) {
+                        if (!m.ocarina && !m.search && !m.value.empty() &&
+                            native_code_patch(region_id, m.offset | 0x80000000u, m.value) != nullptr) {
+                            ++mod.native_patches;
+                        } else {
+                            ++mod.code_patches;
+                        }
+                    }
                 }
             }
         }
@@ -926,8 +1005,8 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
         mod.changed_files = static_cast<unsigned>(changed_paths[mod.id].size());
         mod.changed_textures = static_cast<unsigned>(changed_textures[mod.id].size());
         if (mod.code_patches != 0u) {
-            mod.enabled = false;
-            mod.problem = "CHANGES THE GAME'S CODE: NOT SUPPORTED";
+            // Its files apply; the game cannot run patches written for the console's code.
+            mod.problem = std::to_string(mod.code_patches) + " CODE PATCHES HAVE NO NATIVE VERSION: THE REST OF THE MOD APPLIES";
         }
         if (!mod.riivolution && !mod.files && !mod.textures && !mod.movies && !mod.loose) {
             mod.problem = "NOTHING NEBULA CAN USE (NO RIIVOLUTION, GAME FILES, TEXTURES OR MOVIES)";
@@ -980,7 +1059,7 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
 }
 
 void set_mod_enabled(std::vector<ModInfo>& mods, std::size_t index, bool enabled) {
-    if (index >= mods.size() || mods[index].enabled == enabled || mods[index].code_patches != 0u) return;
+    if (index >= mods.size() || mods[index].enabled == enabled) return;
     ModInfo mod = std::move(mods[index]);
     mods.erase(mods.begin() + static_cast<std::ptrdiff_t>(index));
     mod.enabled = enabled;
@@ -1096,6 +1175,229 @@ std::string language_folder(const std::string& game_id, unsigned language) {
     case 'K': return "KrKorean";
     default: return {};  // no other release's folders are known
     }
+}
+
+namespace {
+
+// A store's files of a name, archives as files, by path from the root.
+void find_names(const galaxy::disc::AssetStore& store, std::int32_t folder, const std::string& path,
+                const std::string& name, std::vector<std::string>& out) {
+    const std::optional<galaxy::disc::Entry> self = store.entry(folder);
+    if (!self) return;
+    for (std::uint32_t c = 0; c < self->children; ++c) {
+        const std::optional<galaxy::disc::Entry> child = store.child(folder, c);
+        if (!child || child->name == nullptr) continue;
+        const std::string child_name(child->name);
+        const std::string child_path = path + "/" + child_name;
+        if (lower(child_name) == name) out.push_back(child_path);
+        if (child->folder && child_name.find('.') == std::string::npos) {
+            find_names(store, child->index, child_path, name, out);
+        }
+    }
+}
+
+}  // namespace
+
+DiscPlan plan_disc_changes(const galaxy::disc::AssetStore& store, const std::string& game_id,
+                           const std::string& language) {
+    std::vector<ModInfo> mods = scan_mods(game_id);
+    DiscPlan plan;
+    std::vector<std::string> active;
+    std::map<std::string, DiscPlan::File> chosen;  // by the lower-case path, the last set winning
+    struct Placed {
+        std::string disc;
+        fs::path host;
+    };
+    // From the bottom of the list up: the mod on top sets a file last and wins it.
+    for (auto it = mods.rbegin(); it != mods.rend(); ++it) {
+        const ModInfo& mod = *it;
+        if (!mod.enabled) continue;
+        active.push_back(mod.id);
+        plan.code_patches += mod.code_patches;
+        if (!changes_disc(mod)) continue;
+        const ModLayout layout = layout_of(mod.path);
+        std::vector<Placed> placed;
+        const auto note = [&plan, &mod](const std::string& text) { plan.notes.push_back(mod.id + ": " + text); };
+        const auto set_file = [&placed](std::string disc, const fs::path& host) {
+            if (!disc.starts_with('/')) disc.insert(disc.begin(), '/');
+            placed.push_back({std::move(disc), host});
+        };
+        const auto patch_file = [&](const Loader& loader, const FilePatch& f) {
+            const std::optional<fs::path> host = loader.resolve(f.external);
+            std::error_code ec;
+            if (!host || !fs::is_regular_file(*host, ec)) {
+                note(f.external + ": not in the mod");
+                return;
+            }
+            if ((f.offset & ~std::uint64_t{3}) != 0u || f.file_offset != 0u || f.length != 0u || !f.resize) {
+                // The game's files are cooked: the disc file's offsets are not theirs.
+                note(f.disc + ": patched in part by the disc file's offsets, which the game's files do not have");
+                return;
+            }
+            if (same_name(f.disc, "main.dol") || f.disc == "/main.dol") {
+                note("main.dol: the native game has no such file");
+                return;
+            }
+            if (!f.disc.empty() && f.disc[0] == '/') {
+                if (!f.create && !store.find(f.disc)) {
+                    note(f.disc + ": the game has no such file and the patch does not create it");
+                    return;
+                }
+                set_file(f.disc, *host);
+                return;
+            }
+            std::vector<std::string> paths;
+            find_names(store, 0, {}, lower(f.disc), paths);
+            if (paths.empty()) note(f.disc + ": no file of that name in the game");
+            for (const std::string& path : paths) set_file(path, *host);
+        };
+        const auto join = [](std::string a, std::string_view b) {
+            if (a.empty()) return std::string(b);
+            if (b.empty()) return a;
+            if (a.back() == '/') a.pop_back();
+            while (b.starts_with('/')) b.remove_prefix(1);
+            return a + "/" + std::string(b);
+        };
+        const auto patch_folder = [&](auto&& self, const Loader& loader, const FolderPatch& folder,
+                                      const std::string& disc, const std::string& external) -> void {
+            const std::optional<fs::path> dir = loader.resolve(external);
+            std::error_code ec;
+            if (!dir || !fs::is_directory(*dir, ec)) {
+                note(external + ": no such folder in the mod");
+                return;
+            }
+            std::vector<fs::directory_entry> entries;
+            for (const auto& entry : fs::directory_iterator(*dir, ec)) entries.push_back(entry);
+            std::sort(entries.begin(), entries.end(), [](const auto& a, const auto& b) { return a.path() < b.path(); });
+            for (const auto& entry : entries) {
+                const std::string name = utf8_name(entry.path());
+                if (entry.is_directory(ec)) {
+                    if (folder.recursive) self(self, loader, folder, join(disc, name), join(external, name));
+                    continue;
+                }
+                FilePatch f;
+                f.disc = join(disc, name);
+                f.external = join(external, name);
+                f.resize = folder.resize;
+                f.create = true;  // a folder's files add to the game's
+                f.length = folder.length;
+                patch_file(loader, f);
+            }
+        };
+        if (!layout.xmls.empty()) {
+            const std::map<std::string, SavedMod> saved = read_saved(settings().file);
+            const auto saved_it = saved.find(mod.id);
+            for (const RiivDisc& d : mod_discs(layout, saved_it != saved.end() ? &saved_it->second : nullptr, game_id,
+                                               nullptr)) {
+                for (const Patch& p : generate_patches(d, game_id)) {
+                    const Loader loader = make_loader(layout.sd_root, d.xml, p.root);
+                    for (const FilePatch& f : p.files) patch_file(loader, f);
+                    for (const FolderPatch& f : p.folders) {
+                        patch_folder(patch_folder, loader, f, f.disc.empty() ? std::string("/") : f.disc, f.external);
+                    }
+                    for (const MemoryPatch& m : p.memory) {
+                        const NativeCodePatch* native =
+                            m.ocarina || m.search || m.value.empty()
+                                ? nullptr
+                                : native_code_patch(game_id, m.offset | 0x80000000u, m.value);
+                        if (native != nullptr && native->id != 0u) {
+                            plan.native_patches[native->id] = native->parameter;
+                        }
+                    }
+                    for (const SavePatch& save : p.saves) {
+                        // One save folder for the game: the mod higher in the list has it.
+                        if (const std::optional<fs::path> folder = loader.resolve(save.external)) {
+                            plan.save_folder = *folder;
+                            plan.save_clone = save.clone;
+                        }
+                    }
+                }
+            }
+        }
+        if (!layout.files_root.empty()) {
+            const Loader loader{layout.files_root, layout.files_root};
+            const FolderPatch whole{"/", "/", true, true, true, 0};
+            std::error_code ec;
+            for (const auto& entry : fs::directory_iterator(layout.files_root, ec)) {
+                const std::string name = utf8_name(entry.path());
+                if (entry.is_directory(ec)) {
+                    // Beside the game's folders a mod keeps its notes and pictures: only what the game has counts.
+                    if (layout.files_root != mod.path || is_disc_folder(name)) {
+                        patch_folder(patch_folder, loader, whole, "/" + name, "/" + name);
+                    }
+                } else if (!mod_note(entry.path())) {
+                    FilePatch f;
+                    f.disc = "/" + name;
+                    f.external = "/" + name;
+                    f.create = true;
+                    patch_file(loader, f);
+                }
+            }
+        }
+        for (const fs::path& file : layout.loose) {
+            std::vector<std::string> paths;
+            find_names(store, 0, {}, lower(utf8_name(file)), paths);
+            if (paths.empty()) note(utf8_name(file) + ": no file of that name in the game");
+            for (const std::string& path : paths) set_file(path, file);
+        }
+        // Text in the language played: a mod with text for other languages only shows its own (the same language of
+        // another region first, else English, else what it has) unless its TEXT choice keeps the game's.
+        if (!language.empty() && mod.own_text) {
+            std::set<std::string> covered;
+            for (const Placed& p : placed) {
+                if (const std::string l = language_of(p.disc); !l.empty()) covered.insert(l);
+            }
+            if (!covered.empty() && covered.count(language) == 0u) {
+                const std::string twin = language.starts_with("Us")   ? "Eu" + language.substr(2)
+                                         : language.starts_with("Eu") ? "Us" + language.substr(2)
+                                                                      : std::string();
+                std::string source;
+                for (const std::string& candidate : {twin, std::string("UsEnglish"), std::string("EuEnglish")}) {
+                    if (!candidate.empty() && covered.count(candidate) != 0u) {
+                        source = candidate;
+                        break;
+                    }
+                }
+                if (source.empty()) source = *covered.begin();
+                for (const Placed& p : std::vector<Placed>(placed)) {
+                    if (language_of(p.disc) == source) {
+                        set_file("/" + language + p.disc.substr(source.size() + 1u), p.host);
+                    }
+                }
+            }
+        }
+        for (const Placed& p : placed) {
+            if (lower(p.disc).starts_with("/nebuladata/")) continue;  // the game's own tables
+            chosen[lower(p.disc)] = {p.disc, p.host};
+        }
+    }
+    for (auto& [key, file] : chosen) plan.files.push_back(std::move(file));
+    {
+        Session& s = session();
+        const std::lock_guard<std::mutex> lock(s.mutex);
+        s.mods = SessionMods{mods, active, static_cast<unsigned>(plan.files.size()), plan.code_patches};
+    }
+    return plan;
+}
+
+std::string plan_text(const DiscPlan& plan, const std::string& game_id) {
+    std::string text = game_id + "\n";
+    for (const DiscPlan::File& file : plan.files) {
+        text += file.disc + "\t" + galaxy::path_text(file.host) + "\n";
+    }
+    return text;
+}
+
+std::string plan_signature(const DiscPlan& plan, const std::string& game_id) {
+    std::string text = "1 " + game_id + "\n";
+    for (const DiscPlan::File& file : plan.files) {
+        std::error_code ec;
+        const auto size = fs::file_size(file.host, ec);
+        const auto time = fs::last_write_time(file.host, ec).time_since_epoch().count();
+        text += file.disc + "\t" + galaxy::path_text(file.host) + "\t" + std::to_string(size) + "\t" +
+                std::to_string(time) + "\n";
+    }
+    return text;
 }
 
 SessionMods session_mods() {

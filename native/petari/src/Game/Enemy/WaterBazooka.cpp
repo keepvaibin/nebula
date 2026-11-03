@@ -938,7 +938,7 @@ bool WaterBazooka::tryShotBullet() {
         static_cast< ElectricPressureBullet* >(bullet)->shotElectricBullet(this, posMtx, ::sElectricBulletSpeed);
     } else {
         static_cast< WaterPressureBullet* >(bullet)->shotWaterBullet(
-            this, posMtx, 40.0f, true, true, false,
+            this, posMtx, 40.0f, true, true, NebulaHost::codePatch(NEBULA_PATCH_WATER_BAZOOKA_SHOT_FLAG, nullptr) != 0,
             &mCameraInfo);
     }
 

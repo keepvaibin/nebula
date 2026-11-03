@@ -8,6 +8,30 @@ use jni_sys::{jboolean, jclass, jint, jlong, jobject, jstring, jvalue, JNIEnv, J
 use std::ffi::{CStr, CString};
 use std::path::PathBuf;
 
+/// The game's process on Android: a plan of mods' files into their store (cook/overlay.rs). 0 when it is made; what
+/// was left out or went wrong goes to the log.
+#[no_mangle]
+pub unsafe extern "C" fn nebula_cook_overlay(plan: *const std::ffi::c_char, output: *const std::ffi::c_char) -> i32 {
+    if plan.is_null() || output.is_null() {
+        return 1;
+    }
+    let plan = PathBuf::from(CStr::from_ptr(plan).to_string_lossy().into_owned());
+    let output = PathBuf::from(CStr::from_ptr(output).to_string_lossy().into_owned());
+    match std::panic::catch_unwind(|| crate::cook::overlay::cook_plan(&plan, &output)) {
+        Ok(Ok((_, failed))) => {
+            for (path, reason) in &failed {
+                eprintln!("mods: left out {path}: {reason}");
+            }
+            0
+        }
+        Ok(Err(error)) => {
+            eprintln!("mods: {error:#}");
+            1
+        }
+        Err(_) => 1,
+    }
+}
+
 /// A duplicate of the picker's descriptor: Java closes the original.
 fn disc_from_fd(fd: jint) -> Result<DiscFile, String> {
     #[cfg(unix)]

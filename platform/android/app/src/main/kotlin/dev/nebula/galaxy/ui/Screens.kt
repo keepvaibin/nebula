@@ -45,6 +45,7 @@ import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.SportsEsports
 import androidx.compose.material.icons.rounded.TouchApp
@@ -463,6 +464,18 @@ private fun SettingsScreen(model: LauncherModel, onChoose: () -> Unit, onShareLo
                             "${formatBytes(install.bytes)} · your saves (${formatBytes(model.saveBytes)}) are kept",
                         ) { confirmRemove = true }
                     }
+                }
+
+                SectionTitle("Mods")
+                GlassCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp), padding = androidx.compose.foundation.layout.PaddingValues(vertical = 4.dp)) {
+                    val pickMod = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+                        if (uri != null) model.importMod(uri)
+                    }
+                    NavigationRow(
+                        Icons.Rounded.Add,
+                        "Import a mod or texture pack",
+                        model.modMessage ?: "A .zip file. Turn it on under Mods in the game's settings",
+                    ) { pickMod.launch(arrayOf("application/zip", "application/x-zip-compressed", "*/*")) }
                 }
 
                 SectionTitle("Help")

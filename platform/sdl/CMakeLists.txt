@@ -122,6 +122,7 @@ add_library(galaxy_render_vk STATIC
     ${rt}/mii_formats.cpp
     ${rt}/mod_xml.cpp
     ${rt}/mods.cpp
+    ${rt}/texture_categories.cpp
     ${rt}/crash_report.cpp
     ${rt}/discord_presence.cpp
     ${rt}/controller_roster.cpp

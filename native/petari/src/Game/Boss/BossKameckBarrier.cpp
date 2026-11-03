@@ -15,6 +15,11 @@ BossKameckBarrier::BossKameckBarrier(const char* pName, const char* pModelName) 
 
 void BossKameckBarrier::init(const JMapInfoIter& rIter) {
     MR::initDefaultPos(this, rIter);
+    if (u32 bits = 0; NebulaHost::codePatch(NEBULA_PATCH_KAMECK_BARRIER_OFFSET_Y, &bits)) {
+        f32 offset;
+        memcpy(&offset, &bits, sizeof(offset));
+        mPosition.y += offset;
+    }
     initModelManagerWithAnm(mModelName, nullptr, false);
     MR::connectToSceneEnemy(this);
     initHitSensor(1);
