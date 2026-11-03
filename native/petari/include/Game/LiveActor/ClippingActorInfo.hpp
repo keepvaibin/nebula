@@ -14,6 +14,7 @@ public:
     void judgeClipping();
     bool isJudgedToClip() const;
     bool isDrawnWhileClipped() const;
+    bool isGroundShown();
     void startClipped();
     void endClipped();
     void updateDrawnClipped();
@@ -32,6 +33,8 @@ public:
     s16 mFarClipLevel;
     s16 _12;
     ViewGroupCtrlDataEntry* _14;
+    const ClippingActorInfo* mGround;  // the planet it stands on; null: none
+    bool mGroundFound;
 };
 
 class ClippingActorInfoList {

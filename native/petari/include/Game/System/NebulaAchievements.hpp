@@ -70,6 +70,8 @@ namespace NebulaAchievements {
     bool isShownLocked(s32 index);
     // GameScene: a Grand Star touched (Cosmic Immortal: the rematch with Bowser).
     void onGrandStarGet();
+    // Rosalina's talk in the Observatory after the first Grand Star has ended.
+    void onRosalinaWelcome();
     const NebulaAchievementIcon* getIcon(s32 index);
 
     // The textures the icons use, each once (the pop-up loads them when its scene starts).

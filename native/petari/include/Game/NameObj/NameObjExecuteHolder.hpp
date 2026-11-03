@@ -80,6 +80,7 @@ namespace MR {
     void disconnectToDrawTemporarily(NameObj*);
     bool isConnectToDrawTemporarily(const NameObj*);
     bool isDrawnFarWhenClipped(const NameObj*, bool hasRun);
+    bool isMovementPlanet(const NameObj*);
     void executeRequirementConnectMovement();
     void executeRequirementDisconnectMovement();
     void executeRequirementConnectDraw();

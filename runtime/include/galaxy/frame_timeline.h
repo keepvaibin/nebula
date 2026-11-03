@@ -105,8 +105,9 @@ inline void record(Event event, std::uint64_t a = 0u, std::uint64_t b = 0u) noex
 inline void initialize_from_environment() noexcept {
     char flag[8]{};
     std::size_t length = 0;
-    if (::galaxy::run_option_read(&length, flag, sizeof(flag), ::galaxy::run_options().frame_timeline) != 0 || length < 2 ||
-        flag[0] == '0') {
+    if (!::galaxy::diagnostics_recording() &&
+        (::galaxy::run_option_read(&length, flag, sizeof(flag), ::galaxy::run_options().frame_timeline) != 0 || length < 2 ||
+         flag[0] == '0')) {
         return;
     }
     std::uint64_t capacity = 2'000'000u;  // 64 MB, about 25 minutes at 60 frames/s

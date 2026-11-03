@@ -210,7 +210,11 @@ bool restart_asking() {
 constexpr const char* kNativeSettingsTabNames[] = {"DISPLAY", "GRAPHICS", "CONTROLS", "AUDIO", "GENERAL", "MODS", "SYSTEM",
                                                    "ADVANCED"};
 // The pages shown. MODS comes back with its feature.
+#if defined(__ANDROID__)
+constexpr unsigned kShownTabs[] = {0u, 1u, 2u, 3u, 4u, 7u};  // nothing on SYSTEM there: diagnostics are the launcher's
+#else
 constexpr unsigned kShownTabs[] = {0u, 1u, 2u, 3u, 4u, 6u, 7u};
+#endif
 constexpr unsigned kShownTabCount = static_cast<unsigned>(std::size(kShownTabs));
 
 unsigned shown_position(unsigned tab) {
@@ -236,7 +240,7 @@ bool graphics_row_hidden(const char* label) {
 // Rows of the shown pages for what is not there yet or not on this platform.
 bool row_hidden(const char* label) {
     static constexpr const char* kHidden[] = {
-        "INTERFACE", "HUD RESOLUTION", "RAY TRACING HARDWARE", "NVIDIA STREAMLINE", "NVIDIA REFLEX", "DLSS", "DLSS FRAME GENERATION",
+        "POST-PROCESS", "INTERFACE", "HUD RESOLUTION", "RAY TRACING HARDWARE", "NVIDIA STREAMLINE", "NVIDIA REFLEX", "DLSS", "DLSS FRAME GENERATION",
 #if defined(__ANDROID__)
         "MONITOR", "DISPLAY MODE", "RESOLUTION", "REFRESH RATE", "VSYNC", "DISCORD STATUS", "MIIS", "IMPORT MIIS", "YOUR MIIS", "MIIS FOLDER",
         "GRAPHICS CARD", "DIAGNOSTICS",
@@ -770,6 +774,18 @@ void refresh_controls_devices(bool force) {
         }
         s_controls_devices.count = kept;
     }
+#if defined(__ANDROID__)
+    // A phone's own controls are its screen: the keyboard's row only for a keyboard that is there.
+    if (!galaxy::host::physical_keyboard_attached()) {
+        std::size_t kept = 0;
+        for (std::size_t i = 0; i < s_controls_devices.count; ++i) {
+            if (s_controls_devices.entries[i].key.scheme != galaxy::input::ControlScheme::Keyboard) {
+                s_controls_devices.entries[kept++] = s_controls_devices.entries[i];
+            }
+        }
+        s_controls_devices.count = kept;
+    }
+#endif
     if (s_controls_devices.count == 0u) {
         end_controls_capture();
         return;
@@ -2585,6 +2601,9 @@ std::string native_settings_row_text(
             default: return "INPUT: AUTO";
             }
         case ControlsRow::Device: {
+#if defined(__ANDROID__)
+            if (s_controls_devices.count == 0u) return "EDIT: TOUCH SCREEN";
+#endif
             if (s_controls_devices.count == 0u) return "EDIT: NONE";
             const galaxy::input::DeviceEntry& entry = s_controls_devices.entries[
                 galaxy::input::resolve_device(s_controls_devices, s_controls_device)];
@@ -3252,6 +3271,12 @@ NativeSettingsView build_native_settings_view() {
     // The hints show the buttons the icons do: a chosen style whatever is in hand (the keyboard's: its keys), else what
     // the player last used.
     const ButtonIcons icons = get_runtime_settings().button_icons;
+#if defined(__ANDROID__)
+    // Touch: no keys or buttons to name.
+    if (icons == ButtonIcons::Auto && !galaxy::host::last_input_device()) {
+        view.input = 4u;  // NEBULA_SETTINGS_INPUT_TOUCH
+    }
+#endif
     if (icons == ButtonIcons::Xbox || icons == ButtonIcons::Nintendo || icons == ButtonIcons::PlayStation) {
         view.input = icons == ButtonIcons::Xbox ? 1u : icons == ButtonIcons::Nintendo ? 2u : 3u;
     } else if (const auto device = galaxy::host::last_input_device(); device && icons != ButtonIcons::Keyboard) {

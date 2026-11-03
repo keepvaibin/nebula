@@ -3,6 +3,10 @@ package dev.nebula.galaxy;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.hardware.input.InputManager;
 import android.os.Bundle;
 import android.os.Process;
@@ -13,6 +17,7 @@ import android.view.Display;
 import android.view.InputDevice;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
+import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.ViewGroup;
 import android.view.WindowInsets;
@@ -35,16 +40,20 @@ import org.libsdl.app.SDLSurface;
  * The game: SDL's activity running libmain.so (native/host/host_main.cpp built by platform/sdl), with the touch
  * controls and the HOME Menu over the picture. It has its own process, which ends with the game.
  */
-public class GameActivity extends SDLActivity {
+public class GameActivity extends SDLActivity implements SensorEventListener {
     private static final String TAG = "Nebula";
+    private SensorManager sensors;
+    private final float[] phoneGyro = new float[3];
 
     // libmain.so (platform/sdl/host_window_sdl.cpp).
     static native void nativeTouchControls(int buttons, float stickX, float stickY);
     static native void nativePointer(int action, int id, float x, float y);
     static native boolean nativeMenuContext();
+    static native boolean nativeTitleScreen();
     static native void nativeSetVisible(boolean visible);
     static native void nativeSurfaceWithdrawn();
     static native void nativeSurfaceReturned();
+    static native void nativePhoneMotion(float ax, float ay, float az, float gx, float gy, float gz, long timeNs);
 
     private TouchControlsView controls;
     private boolean menuOpen;
@@ -68,10 +77,17 @@ public class GameActivity extends SDLActivity {
     @Override
     protected String[] getArguments() {
         passLocale();
+        // The launcher's Record diagnostics: this run only.
+        final SharedPreferences prefs = GameFiles.controls(this);
+        final boolean record = prefs.getBoolean(GameFiles.RECORD_NEXT_RUN, false);
+        if (record) {
+            prefs.edit().remove(GameFiles.RECORD_NEXT_RUN).commit();
+        }
         return new String[] {
             "--pak", GameFiles.pak(this).getPath(),
             "--saves", GameFiles.nand(this).getPath(),
             "--module", getApplicationInfo().nativeLibraryDir + "/libsmg_game.so",
+            "--diagnostics", record ? "1" : "0",
         };
     }
 
@@ -179,6 +195,11 @@ public class GameActivity extends SDLActivity {
             }
 
             @Override
+            public boolean titleScreen() {
+                return nativeTitleScreen();
+            }
+
+            @Override
             public boolean menuContext() {
                 return nativeMenuContext();
             }
@@ -230,12 +251,59 @@ public class GameActivity extends SDLActivity {
         super.onStart();
         if (!mBrokenLibraries) {
             nativeSetVisible(true);
+            listenToPhoneMotion(true);
         }
+    }
+
+    // The phone's own sensors: tilt for the sections the game steers by tilting, a shake for the spin.
+    private void listenToPhoneMotion(boolean listen) {
+        if (sensors == null) {
+            sensors = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+        }
+        if (sensors == null) {
+            return;
+        }
+        if (!listen) {
+            sensors.unregisterListener(this);
+            return;
+        }
+        final Sensor accelerometer = sensors.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        final Sensor gyroscope = sensors.getDefaultSensor(Sensor.TYPE_GYROSCOPE);
+        if (accelerometer != null) {
+            sensors.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME);
+        }
+        if (gyroscope != null) {
+            sensors.registerListener(this, gyroscope, SensorManager.SENSOR_DELAY_GAME);
+        }
+    }
+
+    @Override
+    public void onSensorChanged(SensorEvent event) {
+        // From the phone's axes to the screen's as it is turned: x right, y up, z out of the glass.
+        final Display display = getDisplay();
+        final int rotation = display != null ? display.getRotation() : Surface.ROTATION_0;
+        final float dx = event.values[0];
+        final float dy = event.values[1];
+        final float x = rotation == Surface.ROTATION_90 ? -dy : rotation == Surface.ROTATION_180 ? -dx : rotation == Surface.ROTATION_270 ? dy : dx;
+        final float y = rotation == Surface.ROTATION_90 ? dx : rotation == Surface.ROTATION_180 ? -dy : rotation == Surface.ROTATION_270 ? -dx : dy;
+        final float z = event.values[2];
+        if (event.sensor.getType() == Sensor.TYPE_GYROSCOPE) {
+            phoneGyro[0] = x;
+            phoneGyro[1] = y;
+            phoneGyro[2] = z;
+        } else {
+            nativePhoneMotion(x, y, z, phoneGyro[0], phoneGyro[1], phoneGyro[2], event.timestamp);
+        }
+    }
+
+    @Override
+    public void onAccuracyChanged(Sensor sensor, int accuracy) {
     }
 
     @Override
     protected void onStop() {
         if (!mBrokenLibraries) {
+            listenToPhoneMotion(false);
             nativeSetVisible(false);
         }
         super.onStop();
