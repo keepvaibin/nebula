@@ -6,6 +6,16 @@ import android.os.StatFs
 import java.io.File
 import java.util.Properties
 
+private const val STORE_MAGIC = "NBSTORE"
+
+/** False only when the file was read and is something else: a read that fails removes nothing. */
+private fun isGameStore(file: File): Boolean = runCatching {
+    file.inputStream().use { input ->
+        val head = ByteArray(STORE_MAGIC.length)
+        input.read(head) == head.size && String(head, Charsets.US_ASCII) == STORE_MAGIC
+    }
+}.getOrDefault(true)
+
 /** What setup installed: written after game.pak is complete, so its presence means a playable game. */
 data class Install(
     val gameId: String,
@@ -18,6 +28,12 @@ data class Install(
     companion object {
         fun read(context: Context): Install? {
             if (!GameFiles.installed(context)) return null
+            // A game file from before the native store cannot run: it goes, the saves stay, and setup makes a new one.
+            if (!isGameStore(GameFiles.pak(context))) {
+                GameFiles.pak(context).delete()
+                GameFiles.install(context).delete()
+                return null
+            }
             val properties = Properties()
             return runCatching {
                 GameFiles.install(context).inputStream().use { properties.load(it) }
@@ -50,7 +66,7 @@ data class Install(
 
 object Storage {
     /** game.pak of the North American release (crates/nebula-import), and room to spare beside it. */
-    const val GAME_BYTES = 3_391_676_376L
+    const val GAME_BYTES = 3_913_558_602L
     const val MARGIN_BYTES = 256L * 1024 * 1024
 
     fun freeBytes(context: Context): Long = StatFs(GameFiles.data(context).path).availableBytes

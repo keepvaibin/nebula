@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The shared Vulkan device, its submissions and deferred destruction (vk_context.h).
+#include "galaxy/run_options.h"
 #include "galaxy/render/vk/vk_context.h"
 
 #include "galaxy/render/gpu_types.h"
@@ -269,9 +270,23 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
     quirks_ = quirks_for(identity_);
     VkPhysicalDeviceFeatures available{};
     vkGetPhysicalDeviceFeatures(physical_, &available);
+    // GALAXY_VK_TEST_NO_FEATURE=<names, comma-separated>: this GPU acts without those features, as a phone's may, so
+    // the paths for it run on any GPU.
+    if (const char* const names = ::galaxy::run_options().vk_test_no_feature) {
+        const std::string list = std::string(",") + names + ",";
+        const auto off = [&list](const char* name) { return list.find(std::string(",") + name + ",") != std::string::npos; };
+        if (off("dual-source")) available.dualSrcBlend = VK_FALSE;
+        if (off("logic-op")) available.logicOp = VK_FALSE;
+        if (off("bc")) available.textureCompressionBC = VK_FALSE;
+        if (off("geometry")) available.geometryShader = VK_FALSE;
+        if (off("anisotropy")) available.samplerAnisotropy = VK_FALSE;
+        if (off("tessellation")) available.tessellationShader = VK_FALSE;
+        if (off("gather")) available.shaderImageGatherExtended = VK_FALSE;
+    }
     VkPhysicalDeviceFeatures enabled{};
     enabled.dualSrcBlend = available.dualSrcBlend;
     enabled.logicOp = available.logicOp;
+    enabled.sampleRateShading = available.sampleRateShading;
     // Curved surfaces: the vertex stage's 19 interpolant locations into the hull stage, 16 segments an edge.
     const VkPhysicalDeviceLimits& limits = properties_.limits;
     tessellation_shader_ = !quirks_.no_tessellation && available.tessellationShader == VK_TRUE &&

@@ -133,7 +133,7 @@ $properties = @("-Pnebula.sdlDir=$Deps\SDL3-3.4.18", "-Pnebula.jniDir=$jni", "-P
 if ($Signing -ne "") { $properties += "-Pnebula.signing=$Signing" }
 Push-Location $android
 try {
-    Invoke-Logged "$Work\gradle.log" { & .\gradlew.bat --no-daemon assembleRelease @properties }
+    Invoke-Logged "$Work\gradle.log" { & .\gradlew.bat --no-daemon assembleRelease "-PnebulaAbis=$Abis" @properties }
 } finally { Pop-Location }
 $apk = Join-Path $android "app\build\outputs\apk\release\app-release.apk"
 Copy-Item $apk (Join-Path $Work "Nebula.apk") -Force

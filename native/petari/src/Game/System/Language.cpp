@@ -72,11 +72,7 @@ namespace MR {
         } else {
             s32 size = ARRAY_SIZE(::cLanguageByRegion[regionRow()]);
 
-            if (language <= size) {
-                i = language;
-            } else {
-                i = size;
-            }
+            i = language < size ? language : size - 1;
         }
 
         return ::cLanguageByRegion[regionRow()][i];

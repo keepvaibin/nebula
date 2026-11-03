@@ -62,6 +62,7 @@ struct RunOptions {
     const char* trace_present_stats = nullptr;
     const char* trace_thread_cpu = nullptr;
     const char* vk_simulate_driver = nullptr;
+    const char* vk_test_no_feature = nullptr;
     const char* vk_test_refuse = nullptr;
     const char* vulkan_validation = nullptr;
     const char* xinput_require_focus = nullptr;

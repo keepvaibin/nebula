@@ -54,7 +54,11 @@ inline constexpr GameLanguage kGameLanguages[] = {GameLanguage::English, GameLan
                                                   GameLanguage::Japanese};
 
 struct RuntimeSettings {
+#if defined(__ANDROID__)
+    RuntimeInputMode input_mode = RuntimeInputMode::Auto;  // the touch controls, and a pad when one is in hand
+#else
     RuntimeInputMode input_mode = RuntimeInputMode::KeyboardMouse;
+#endif
     RuntimeAudioSettings audio{};
     // Steps of dialogue text revealed per frame: 1 the game's pace, 2 or 3; 4 each page at once (instant).
     unsigned text_speed = 1u;

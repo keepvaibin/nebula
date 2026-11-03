@@ -15,7 +15,7 @@ namespace Nebula.Setup
         private InstallLayout layout;
         private InstalledInfo installed;
         private readonly Panel choose = new Panel(), work = new Panel();
-        private readonly TextBox input = new TextBox(), discKey = new TextBox(), root = new TextBox(), log = new TextBox();
+        private readonly TextBox input = new TextBox(), root = new TextBox(), log = new TextBox();
         private readonly CheckBox desktop = new CheckBox(), dlss = new CheckBox(), dlssLicense = new CheckBox(),
             prepareRayTracing = new CheckBox();
         private readonly RadioButton modeRepair = new RadioButton(), modeRestore = new RadioButton(), modeUninstall = new RadioButton(), modeInstall = new RadioButton();
@@ -134,19 +134,6 @@ namespace Nebula.Setup
                 };
                 choose.Controls.Add(file);
                 choose.Controls.Add(folder);
-                y += 38;
-                AddLabel(choose, NebulaText.Of("A disc image also needs the Wii common key (a file, or its 32 hexadecimal digits). An extracted folder does not."), 20, y, 720, 22);
-                y += 24;
-                discKey.Location = new Point(20, y);
-                discKey.Size = new Size(594, 26);
-                choose.Controls.Add(discKey);
-                var keyFile = new Button { Text = NebulaText.Of("Key file…"), Location = new Point(620, y - 1), Size = new Size(116, 28) };
-                keyFile.Click += delegate
-                {
-                    using (var dialog = new OpenFileDialog { Title = NebulaText.Of("Choose the file holding the Wii common key") })
-                        if (dialog.ShowDialog(this) == DialogResult.OK) discKey.Text = dialog.FileName;
-                };
-                choose.Controls.Add(keyFile);
                 y += 38;
             }
 
@@ -311,8 +298,6 @@ namespace Nebula.Setup
             if (game.Length == 0) game = null;
             if (mode == InstallMode.Install && game == null) { Fail(NebulaText.Of("Choose your Super Mario Galaxy ISO, RVZ or extracted folder.")); return; }
             if (game != null && !File.Exists(game) && !Directory.Exists(game)) { Fail(NebulaText.Of("The selected game was not found: {0}", game)); return; }
-            string key = discKey.Text.Trim();
-            if (game != null && File.Exists(game) && key.Length == 0) { Fail(NebulaText.Of("A disc image needs the Wii common key. Choose its file or type its 32 hexadecimal digits, or choose an extracted game folder.")); return; }
             if (dlss.Checked && !dlssLicense.Checked)
             {
                 dlssLicense.ForeColor = Color.Firebrick;
@@ -324,7 +309,7 @@ namespace Nebula.Setup
 
             var request = new InstallRequest
             {
-                Mode = mode, GameInput = game, DiscKey = key.Length != 0 ? key : null, InstallRoot = layout.Root, DesktopShortcut = desktop.Checked, InstallDlss = dlss.Checked
+                Mode = mode, GameInput = game, InstallRoot = layout.Root, DesktopShortcut = desktop.Checked, InstallDlss = dlss.Checked
             };
             choose.Visible = false;
             work.Visible = true;

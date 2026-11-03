@@ -102,7 +102,7 @@ $env:GALAXY_AUDIO_WAV_DUMP_ONLY = '1'; $env:GALAXY_AUDIO_WAV_DUMP = Join-Path $b
 $env:GALAXY_RENDER_CONFIG_PATH = Join-Path $base 'config.ini'; $env:GALAXY_RUNTIME_SETTINGS_PATH = Join-Path $base 'runtime_settings.ini'
 $env:GALAXY_CRASH_DUMP_DIR = $base
 $log = Join-Path $base 'boot.log'
-$p = Start-Process -FilePath (Join-Path $bin 'NebulaNative.exe') -ArgumentList @('--pak', "`"$(Join-Path $root 'content\game.pak')`"", '--nand', "`"$(Join-Path $base 'nand')`"", '--seconds', '6') -PassThru -WindowStyle Hidden -RedirectStandardOutput $log -RedirectStandardError (Join-Path $base 'boot-err.log')
+$p = Start-Process -FilePath (Join-Path $bin 'NebulaNative.exe') -ArgumentList @('--pak', "`"$(Join-Path $root 'content\game.pak')`"", '--saves', "`"$(Join-Path $base 'nand')`"", '--seconds', '6') -PassThru -WindowStyle Hidden -RedirectStandardOutput $log -RedirectStandardError (Join-Path $base 'boot-err.log')
 $p.WaitForExit()
 Check ((Select-String -LiteralPath $log -Pattern 'boot: title screen' -Quiet)) "the installed $New starts and reaches the title"
 
