@@ -22,7 +22,7 @@ cargo build --release --locked -p nebula-import
 .\target\release\nebula-import.exe --key common.key import D:\Games\SMG.rvz --output D:\nebula\content
 ```
 
-Nebula holds no Wii key: a disc image needs the common key (`--key`, a file or its 32 hexadecimal digits). An extracted folder works in place of the disc image and needs none; `--features folders-only` builds an importer that takes folders only. The content folder holds `game.pak`.
+An extracted folder works in place of the disc image; `--features folders-only` builds an importer that takes folders only. The content folder holds `game.pak`.
 
 ## 2. Host
 

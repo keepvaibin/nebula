@@ -4107,7 +4107,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         texture_bindings_dirty_ || texture_binding_changed;
 
     if (rs_dirty) {
-        render_state_key_ = build_render_state_key(draw_state_);
+        render_state_key_ = for_device_blending(build_render_state_key(draw_state_));
     }
     // The scene target's variant (its samples per pixel, MSAA, the output scene target has one; the HDR scene scene target) decides the
     // pipeline's too.
@@ -4151,7 +4151,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         const bool reactive = candidate && (bb & 1u) != 0u;
         // Dual-source and constant alpha as the key builders made them, but for a reactive draw drawn single-source.
         if (single_source) {
-            const bool dual = !reactive;
+            const bool dual = !reactive && dual_source_blending();
             const auto set_bit = [&motion_key_changed](auto& word, auto mask, bool on) {
                 if (((word & mask) != 0u) != on) {
                     word ^= mask;
@@ -4318,7 +4318,8 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     // frame, as the old path's keys (build_pixel_shader_key: no six-bit colour or ordered pattern).
     const BlendMode& pe_blend = draw_state_.blend;
     const bool frame_alpha = draw_state_.frame_alpha;
-    const std::uint32_t native_pe = frame_alpha && pe_blend.const_alpha_enable && pe_blend.alpha_update
+    const std::uint32_t native_pe = frame_alpha && pe_blend.const_alpha_enable && pe_blend.alpha_update &&
+                                            (render_state_key_.blend_bits & kRenderStateZeroAlpha) == 0u
                                         ? 0x100u | static_cast<std::uint32_t>(pe_blend.const_alpha) << 9u
                                         : 0u;
     const std::uint32_t header_texmtx = native_texmtx | native_pe << 8u;

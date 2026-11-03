@@ -10,6 +10,7 @@ never had can bring its own.
 | Element | Text ids | Layout and art (from the game files) |
 |---|---|---|
 | Quit to desktop button (file select) | `QuitToDesktop` | `LayoutData/FileSelect.arc`, its Start button |
+| The same button on Android | `Quit` | `LayoutData/FileSelect.arc`, its Start button |
 | Quit question | `QuitQuestion` | the game's question window (`LayoutData/SysInfoWindow.arc`), its own Yes and No |
 | Cutscene question | `SkipCutsceneQuestion` | the same window |
 | Achievement pop-up | `AchievementGet`, `Achievement.<id>` (`Achievement.<id>.Luigi` instead on a Luigi file, when there is one), `AchievementsUnlocked` (three or more at once, `{n}` their number) | `LayoutData/InformationWindow.arc` (window `InfoWinC`, text `ConfirmC`, glyph icons `ConfirmU`); icons below |

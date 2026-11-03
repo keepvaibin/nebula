@@ -58,4 +58,12 @@ static_assert(std::has_unique_object_representations_v<RenderStateKey>);
 
 [[nodiscard]] RenderStateKey build_render_state_key(const NativeDrawState& state);
 
+// Whether the device has a second blend source (a Vulkan device's dualSrcBlend; every D3D12 device). Without one a
+// draw blends at its one output's alpha, which is then the material's, and a constant destination alpha (0, every one the
+// game sets) comes from the alpha channel's own blend (kRenderStateZeroAlpha).
+void set_dual_source_blending(bool available) noexcept;
+[[nodiscard]] bool dual_source_blending() noexcept;
+// `key` as this device draws it.
+[[nodiscard]] RenderStateKey for_device_blending(RenderStateKey key) noexcept;
+
 }  // namespace galaxy::render
