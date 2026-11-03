@@ -643,8 +643,29 @@ void close_joycon_pairing() {
     galaxy::host::set_joycon_pairing(false);
 }
 
+// What the controller being set up has: its family's sensors, less what this one lacks.
+struct ControlsSensors {
+    bool sensors = false;
+    bool gyro = false;
+    bool touch = false;
+};
+ControlsSensors controls_sensors() {
+    ControlsSensors have;
+    have.sensors = have.gyro = galaxy::input::scheme_has_motion(s_controls_scheme);
+    have.touch = galaxy::input::scheme_has_touch(s_controls_scheme);
+    std::array<galaxy::input::ControllerInfo, galaxy::input::kMaxControllers> connected{};
+    const std::size_t count = galaxy::host::connected_controllers(connected);
+    for (std::size_t i = 0; i < count; ++i) {
+        if (connected[i].scheme == s_controls_device.scheme && connected[i].slot == s_controls_device.slot) {
+            have.sensors = have.sensors && connected[i].sensors;
+            have.gyro = have.gyro && connected[i].gyro;
+            have.touch = have.touch && connected[i].touch;
+        }
+    }
+    return have;
+}
+
 std::vector<ControlsRow> controls_tail_rows() {
-    using galaxy::input::scheme_has_motion;
     using galaxy::input::scheme_is_gamepad;
     std::vector<ControlsRow> rows{ControlsRow::PointerSpeed, ControlsRow::InvertPointerY};
     if (scheme_is_gamepad(s_controls_scheme)) {
@@ -659,12 +680,13 @@ std::vector<ControlsRow> controls_tail_rows() {
     }
     // The pointer's source where the controller has more than its stick, each source's sensitivity while it points.
     const galaxy::input::SchemeTuning& tuning = s_controls_draft.tune(s_controls_scheme);
-    if (scheme_has_motion(s_controls_scheme) || galaxy::input::scheme_has_touch(s_controls_scheme)) {
+    const ControlsSensors have = controls_sensors();
+    if (have.gyro || have.touch) {
         rows.push_back(ControlsRow::Pointer);
-        if (tuning.gyro_pointer) rows.push_back(ControlsRow::GyroSensitivity);
-        if (tuning.touch_pointer) rows.push_back(ControlsRow::TouchSensitivity);
+        if (tuning.gyro_pointer && have.gyro) rows.push_back(ControlsRow::GyroSensitivity);
+        if (tuning.touch_pointer && have.touch) rows.push_back(ControlsRow::TouchSensitivity);
     }
-    if (scheme_has_motion(s_controls_scheme)) {
+    if (have.sensors) {
         rows.push_back(ControlsRow::MotionShake);
         rows.push_back(ControlsRow::ShakeSensitivity);
     }
@@ -1163,11 +1185,12 @@ void adjust_native_setting_unlogged(int delta) {
             return;
         case ControlsRow::Pointer: {
             // Its sources by the controller's sensors: bit 0 motion, bit 1 the touchpad.
+            const ControlsSensors have = controls_sensors();
             std::vector<unsigned> choices{0u};
-            if (galaxy::input::scheme_has_motion(s_controls_scheme)) choices.push_back(1u);
-            if (galaxy::input::scheme_has_touch(s_controls_scheme)) choices.push_back(2u);
+            if (have.gyro) choices.push_back(1u);
+            if (have.touch) choices.push_back(2u);
             if (choices.size() == 3u) choices.push_back(3u);
-            const unsigned current = (tuning.gyro_pointer ? 1u : 0u) | (tuning.touch_pointer ? 2u : 0u);
+            const unsigned current = (tuning.gyro_pointer && have.gyro ? 1u : 0u) | (tuning.touch_pointer && have.touch ? 2u : 0u);
             unsigned index = 0u;
             for (unsigned i = 0; i < choices.size(); ++i) {
                 if (choices[i] == current) index = i;
@@ -3026,8 +3049,9 @@ std::string native_settings_row_text(
             return text;
         case ControlsRow::Pointer: {
             static constexpr const char* kSources[] = {"STICK", "MOTION", "TOUCHPAD", "MOTION + TOUCHPAD"};
+            const ControlsSensors have = controls_sensors();
             return std::string("POINTER: ") +
-                   kSources[(tuning.gyro_pointer ? 1u : 0u) | (tuning.touch_pointer ? 2u : 0u)];
+                   kSources[(tuning.gyro_pointer && have.gyro ? 1u : 0u) | (tuning.touch_pointer && have.touch ? 2u : 0u)];
         }
         case ControlsRow::TouchSensitivity:
             std::snprintf(text, sizeof(text), "TOUCHPAD SENSITIVITY: %.1f",
