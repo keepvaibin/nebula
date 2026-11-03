@@ -120,10 +120,8 @@ void MarioActor::captureScreenBox() const {
         return;
     }
 
-    J3DNativeTarget::read(_B44, NEBULA_TARGET_RGB);
-    // The box's alpha becomes the model's mask; its depth follows the depth writes in force.
-    J3DNativeTarget::clearFrame((s32)(_B34), (s32)(_B38), (s32)(_B3C), (s32)(_B40), 0,
-                                NEBULA_CLEAR_ALPHA | (J3DNativeState::pass()->depth_write != 0 ? NEBULA_CLEAR_DEPTH : 0));
+    // The model's own target, the frame's size: its alpha is what the box composites by.
+    J3DNativeTarget::begin(_B44, MR::getScreenUnitsAcross(), MR::getScreenHeight(), 0);
     J3DPass::writeColor(true);
     J3DPass::writeAlpha(false);
     J3DPass::constantAlpha(false, 0);
@@ -137,6 +135,8 @@ void MarioActor::writeBackScreenBox() const {
     if (_B3C < 1.0f || _B40 < 1.0f) {
         return;
     }
+
+    J3DNativeTarget::end(_B44, NEBULA_TARGET_RGBA);
 
     J3DNativeTexObj texture;
     TVec2f minimum;
@@ -152,7 +152,7 @@ void MarioActor::writeBackScreenBox() const {
     MR::convertCanvasPosToScreenPos(&maximum, mScreenBoxPos + mScreenBoxSize + TVec2f(0.99f, 0.99f));
     NebulaNativeMaterial material;
     TDDraw::setupNative(&material, 1, 0, 2);
-    NativeShader::setBlend(material, NEBULA_FACTOR_INV_DST_ALPHA, NEBULA_FACTOR_DST_ALPHA);
+    NativeShader::setBlend(material, NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_INV_SRC_ALPHA);
     NativeShader::setDepth(material, true, NEBULA_COMPARE_ALWAYS, true);
     material.alpha_write = 1;
     NativeShader::setTexObj(material, 0, &texture);

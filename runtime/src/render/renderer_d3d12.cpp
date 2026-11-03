@@ -2427,14 +2427,10 @@ void RendererD3D12::shutdown() {
     selected_display_readback_path_.clear();
     if (scene_copy_requests_ != 0u) {
         std::cerr << "[frame-read-work] requests=" << scene_copy_requests_
-                  << " shader-copies=" << scene_shader_copies_
-                  << " identity-copies=" << scene_identity_copies_
-                  << " identity-payload-bytes=" << scene_identity_payload_bytes_ << '\n';
+                  << " passes=" << scene_shader_copies_ << '\n';
     }
     scene_copy_requests_ = 0u;
     scene_shader_copies_ = 0u;
-    scene_identity_copies_ = 0u;
-    scene_identity_payload_bytes_ = 0u;
     scene_copy_dests_.clear();
     scene_copy_dests_bytes_ = 0u;
     scene_copy_dests_tick_ = 0u;
@@ -5092,12 +5088,6 @@ bool RendererD3D12::ensure_subframe_resources(unsigned display_picture_width, un
 
 void RendererD3D12::execute_replay_copy(const ReplayCopy& copy, ID3D12Resource* target) {
     settle_owed_scene();
-    if (copy.identity) {
-        resolve_scene(false);
-        detail::record_scene_identity_copy(command_list_.Get(), scene_color_.Get(),
-                                         target != nullptr ? target : copy.dest, copy.box);
-        return;
-    }
     if (copy.mode == 2u) {
         record_conversion_blit(alt_scene_.color.Get(), copy.width, copy.height, {}, false, kCopyLayoutDisplay, copy.geometry[0], copy.geometry[1], copy.geometry[2], copy.geometry[3]);
         return;
@@ -7736,44 +7726,6 @@ void RendererD3D12::draw(const DrawCall& call) {
     }
 }
 
-std::optional<D3D12_BOX> detail::scene_identity_copy_box(
-    const CaptureRequest& params, bool is_depth_copy, const FrameMap& map,
-    unsigned dest_width, unsigned dest_height) noexcept {
-    const std::optional<SceneCopyRect> rect =
-        scene_identity_copy_rect(params, is_depth_copy, map, dest_width, dest_height);
-    if (!rect) {
-        return std::nullopt;
-    }
-    return D3D12_BOX{rect->left, rect->top, 0u, rect->right, rect->bottom, 1u};
-}
-
-void detail::record_scene_identity_copy(
-    ID3D12GraphicsCommandList* commands, ID3D12Resource* source,
-    ID3D12Resource* destination, const D3D12_BOX& source_box) {
-    D3D12_RESOURCE_BARRIER barriers[2]{};
-    for (auto& barrier : barriers) {
-        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    }
-    barriers[0].Transition.pResource = source;
-    barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-    barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
-    barriers[1].Transition.pResource = destination;
-    barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-    barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
-    commands->ResourceBarrier(2u, barriers);
-    D3D12_TEXTURE_COPY_LOCATION src{}, dst{};
-    src.pResource = source;
-    src.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-    dst.pResource = destination;
-    dst.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-    commands->CopyTextureRegion(&dst, 0u, 0u, 0u, &src, &source_box);
-    for (auto& barrier : barriers) {
-        std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
-    }
-    commands->ResourceBarrier(2u, barriers);
-}
-
 D3D12_CPU_DESCRIPTOR_HANDLE RendererD3D12::allocate_conversion_rtv(
     ID3D12Resource* resource) {
     if (resource == nullptr || conv_rtv_heap_ == nullptr || conv_scratch_rtv_.ptr == 0u) {
@@ -8078,28 +8030,6 @@ bool RendererD3D12::copy_scene_to_texture(
             }
         }
     }
-    // The HDR scene scene target's copies go through the conversion blit (clamped to the texture's range).
-    if (const auto source_box = scene_hdr_ ? std::optional<D3D12_BOX>{} : detail::scene_identity_copy_box(
-            params, is_depth_copy, frame_, w, h)) {
-        if (replay_recording_) [[unlikely]] {
-            ReplayCopy copy{};
-            copy.dest = dest.texture.Get();
-            copy.width = w;
-            copy.height = h;
-            copy.identity = true;
-            copy.box = *source_box;
-            replay_ops_.push_back({ReplayKind::Copy, static_cast<std::uint32_t>(replay_copies_.size())});
-            replay_copies_.push_back(copy);
-        }
-        resolve_scene(false);
-        detail::record_scene_identity_copy(command_list_.Get(), scene_color_.Get(),
-            dest.texture.Get(), *source_box);
-        if (ring_mode_ == RingMode::Interp) note_copy_write(dest.texture.Get());
-        ++scene_identity_copies_;
-        scene_identity_payload_bytes_ += static_cast<std::uint64_t>(w) * h * 4u;
-        return publish_capture(params, dest.texture, is_depth_copy, textures);
-    }
-
     // This descriptor shares its slot with display picture and other texture copies;
     // destination-local validity cannot prove its current contents.
     dest.rtv = allocate_conversion_rtv(dest.texture.Get());

@@ -720,8 +720,6 @@ private:
         std::uint64_t dest_key = 0;      // a texture copy's destination (scene_copy_dests_)
         unsigned width = 0, height = 0;  // the destination's size
         float geometry[4]{};  // sampling: src x, y, step x, y
-        bool exact = false;              // an identity copy (vkCmdCopyImage)
-        unsigned box_left = 0, box_top = 0;
         VkImageView dest_view = VK_NULL_HANDLE;  // the destination's view as the log's tables name it
     };
     // The game's bloom marker (its phase and values).

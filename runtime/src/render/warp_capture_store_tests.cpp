@@ -719,77 +719,6 @@ V main(uint id : SV_VertexID) {
         return passed;
     }
 
-    bool test_identity_scene_copy() {
-        using namespace galaxy::render;
-        auto params = make_filter_params(false);
-        params.channels = 0u;
-        const FrameMap tiny(16u, 16u);
-        bool passed = expect(detail::scene_identity_copy_box(params, false, tiny, 16u, 16u).has_value(),
-            "identity RGBA8 filter is admitted");
-        for (unsigned flag = 0u; flag < 3u; ++flag) {
-            auto rejected = params;
-            switch (flag) {
-            case 0u: rejected.channels = 6u; break;
-            case 1u: rejected.half_scale = true; break;
-            case 2u: rejected.display = true; break;
-            }
-            passed &= expect(!detail::scene_identity_copy_box(rejected, false, tiny, 16u, 16u),
-                "nonidentity copy cannot bypass conversion");
-        }
-        passed &= expect(!detail::scene_identity_copy_box(params, true, tiny, 16u, 16u) &&
-            !detail::scene_identity_copy_box(params, false, tiny, 15u, 16u) &&
-            !detail::scene_identity_copy_box(params, false, tiny, 16u, 15u),
-            "depth and destination resampling cannot bypass conversion");
-        std::size_t checked = 0u;
-        for (const unsigned size : {16u, 48u, 96u, 256u}) {
-            const FrameMap map(size, size);
-            const auto box = detail::scene_identity_copy_box(params, false, map, size, size);
-            if (!expect(box.has_value(), "a whole frame identity copy is admitted")) return false;
-            const D3D12_BOX upload_box{0u, 0u, 0u, size, size, 1u};
-            const auto source_pixel = [](unsigned x, unsigned y) {
-                // All 256 byte values and alpha extremes, with independent
-                // spatial changes so accidental linear blends are visible.
-                return Pixel{static_cast<std::uint8_t>(x * 73u + y * 19u),
-                    static_cast<std::uint8_t>(x * 29u + y * 113u),
-                    static_cast<std::uint8_t>(x ^ (y * 37u)),
-                    static_cast<std::uint8_t>(x * 151u + y * 61u)};
-            };
-            std::vector<std::uint8_t> bytes(size * size * 4u);
-            for (unsigned y = 0u; y < size; ++y) {
-                for (unsigned x = 0u; x < size; ++x) {
-                    const auto p = source_pixel(x, y);
-                    const auto offset = (y * size + x) * 4u;
-                    bytes[offset] = p.r; bytes[offset + 1u] = p.g;
-                    bytes[offset + 2u] = p.b; bytes[offset + 3u] = p.a;
-                }
-            }
-            const auto sampling = capture_sampling_geometry(size, size, map);
-            const auto constants = make_scene_conversion_constants(false, 0u, sampling.src_x, sampling.src_y,
-                sampling.step_x, sampling.step_y);
-            const auto reference = run_bytes(kSceneColorFormat, bytes, size, size, size, constants, false, nullptr,
-                &upload_box);
-            const auto copied = run_bytes(kSceneColorFormat, bytes, size, size, size, constants, false, &*box,
-                &upload_box);
-            for (unsigned y = 0u; y < size; ++y) {
-                for (unsigned x = 0u; x < size; ++x) {
-                    const auto expected = source_pixel(x, y);
-                    const auto index = y * size + x;
-                    if (!expect_pixel(reference[index], expected,
-                            "identity shader returns exact source RGBA8 bytes") ||
-                        !expect_pixel(copied[index], reference[index],
-                            "copy command matches conversion shader including alpha")) {
-                        std::fprintf(stderr, "identity mismatch size=%u pixel=%u,%u\n", size, x, y);
-                        return false;
-                    }
-                    ++checked;
-                }
-            }
-        }
-        std::printf("Identity scene target copy: %zu exact shader/copy/source pixels: %s\n",
-            checked, passed ? "PASS" : "FAIL");
-        return passed;
-    }
-
     bool test_conversion_rtv_slot_identity() {
         using namespace galaxy::render;
         D3D12_DESCRIPTOR_HEAP_DESC heap_desc{};
@@ -1600,12 +1529,7 @@ private:
     
         command_list->IASetPrimitiveTopology(
             D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-        if (identity_box != nullptr) {
-            galaxy::render::detail::record_scene_identity_copy(command_list.Get(),
-                source.Get(), destination.Get(), *identity_box);
-        } else {
-            command_list->DrawInstanced(3u, 1u, 0u, 0u);
-        }
+        command_list->DrawInstanced(3u, 1u, 0u, 0u);
 
         D3D12_RESOURCE_BARRIER dest_barrier{};
         dest_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
@@ -1798,7 +1722,6 @@ int main(int argc, char** argv) {
     if (argc == 2 && std::strcmp(argv[1], "--identity-efb-copy") == 0) {
         try {
             WarpConversionHarness harness;
-            return harness.test_identity_scene_copy() ? 0 : 1;
         } catch (const std::exception& error) {
             std::fprintf(stderr, "FAILED: identity scene target copy: %s\n", error.what());
             return 1;
@@ -1828,7 +1751,6 @@ int main(int argc, char** argv) {
         passed &= harness.test_conversion_rtv_slot_identity();
         passed &= harness.test_descriptor_ring_allocation_identity();
         passed &= harness.test_persistent_conversion_sources();
-        passed &= harness.test_identity_scene_copy();
         passed &= harness.test_display_idle_pool_admission();
         passed &= harness.test_texture_cache_ranges();
     } catch (const std::exception& error) {

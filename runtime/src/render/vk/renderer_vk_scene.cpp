@@ -1951,7 +1951,6 @@ bool RendererVk::copy_scene_to_texture(const CaptureRequest& params, TextureCach
     }
     SceneCopyDest& current = scene_copy_dests_[dest_key];
     vk::Texture& texture = *current.texture;
-    const auto identity = scene_identity_copy_rect(params, is_depth_copy, scene_map_, w, h);
     const SceneCopySamplingGeometry sampling = capture_sampling_geometry(w, h, scene_map_);
     if (logging()) {
         ReplayCopy copy{};
@@ -1964,11 +1963,6 @@ bool RendererVk::copy_scene_to_texture(const CaptureRequest& params, TextureCach
         copy.geometry[1] = sampling.src_y;
         copy.geometry[2] = sampling.step_x;
         copy.geometry[3] = sampling.step_y;
-        copy.exact = identity.has_value();
-        if (identity) {
-            copy.box_left = identity->left;
-            copy.box_top = identity->top;
-        }
         copy.dest_view = texture.view;
         recording_log_.ops.push_back({ReplayKind::Copy, static_cast<std::uint32_t>(recording_log_.copies.size())});
         recording_log_.copies.push_back(copy);
@@ -1976,38 +1970,6 @@ bool RendererVk::copy_scene_to_texture(const CaptureRequest& params, TextureCach
     }
     const LogPause pause{*this};
 
-    if (const auto& box = identity) {
-        // An exact colour copy: the scene target's texels as they are.
-        end_scene_pass();
-        settle_owed_scene();
-        const VkCommandBuffer commands = commands_;
-        image_barrier(commands, scene_.color->image, VK_IMAGE_ASPECT_COLOR_BIT,
-                      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                      VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                      VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_READ_BIT);
-        image_barrier(commands, texture.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-                      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
-                      VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT);
-        VkImageCopy region{};
-        region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-        region.srcOffset = {static_cast<std::int32_t>(box->left), static_cast<std::int32_t>(box->top), 0};
-        region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-        region.extent = {w, h, 1};
-        vkCmdCopyImage(commands, scene_.color->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, texture.image,
-                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-        image_barrier(commands, texture.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                      VK_ACCESS_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                      VK_ACCESS_SHADER_READ_BIT);
-        image_barrier(commands, scene_.color->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
-                      VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                      VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
-        texture.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        reset_draw_bindings();
-        bind_scene();
-        return publish_capture(params, current.texture, is_depth_copy, textures);
-    }
     record_conversion_blit(texture, w, h, is_depth_copy, params.channels, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y);
     return publish_capture(params, current.texture, is_depth_copy, textures);
 }

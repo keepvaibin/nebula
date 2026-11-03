@@ -123,12 +123,6 @@ struct SceneCopySamplingGeometry {
     const FrameMap& map) noexcept;
 
 // A capture that is an exact colour/alpha identity of the frame at `map`. Rejects filtering, conversion and resampling.
-struct SceneCopyRect {
-    std::uint32_t left = 0;
-    std::uint32_t top = 0;
-    std::uint32_t right = 0;
-    std::uint32_t bottom = 0;
-};
 // A colour copy whose texture is one channel (I4, or I8 from R, G, B or A): the conversion writes (i, i, i, i), so
 // its destination holds the one byte (R8, viewed as R in every channel, as decoded I8 textures are).
 // A read's picture layout: the game's NebulaTargetChannels (0 RGBA, 2 alpha, 3 red, 6 colour with alpha one);
@@ -140,10 +134,6 @@ inline constexpr std::uint8_t kCopyLayoutDisplay = 7u;
 [[nodiscard]] constexpr bool scene_copy_single_channel(std::uint8_t channels, bool is_depth_copy) noexcept {
     return !is_depth_copy && channels >= 2u && channels <= 5u;
 }
-
-[[nodiscard]] std::optional<SceneCopyRect> scene_identity_copy_rect(
-    const CaptureRequest& params, bool is_depth_copy, const FrameMap& map,
-    unsigned dest_width, unsigned dest_height) noexcept;
 
 struct ScaledSceneRect {
     std::int32_t left = 0;

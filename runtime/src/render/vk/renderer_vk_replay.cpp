@@ -1030,36 +1030,6 @@ std::uint64_t RendererVk::patched_table(ReplayList& list, std::uint64_t table) {
 
 // A logged copy again, from the private scene target into `target` (a stand-in or the sub-frame's display picture).
 void RendererVk::replay_copy(const ReplayCopy& copy, vk::Texture& target) {
-    if (copy.exact) {
-        end_scene_pass();
-        const VkCommandBuffer commands = commands_;
-        image_barrier(commands, scene_.color->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                      VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                      VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                      VK_ACCESS_TRANSFER_READ_BIT);
-        image_barrier(commands, target.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-                      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
-                      VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT);
-        VkImageCopy region{};
-        region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-        region.srcOffset = {static_cast<std::int32_t>(copy.box_left), static_cast<std::int32_t>(copy.box_top), 0};
-        region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-        region.extent = {copy.width, copy.height, 1};
-        vkCmdCopyImage(commands, scene_.color->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, target.image,
-                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-        image_barrier(commands, target.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                      VK_ACCESS_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                      VK_ACCESS_SHADER_READ_BIT);
-        image_barrier(commands, scene_.color->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
-                      VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                      VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
-        target.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        reset_draw_bindings();
-        bind_scene();
-        return;
-    }
     if (copy.display) {
         record_conversion_blit(target, copy.width, copy.height, false, kCopyLayoutDisplay, copy.geometry[0], copy.geometry[1], copy.geometry[2], copy.geometry[3]);
         return;
