@@ -14,6 +14,14 @@ enum J3DLightFalloff {
 
 // What the draws that follow do to the target, in the host's values (nebula_game_api.h).
 #ifdef __cplusplus
+// The four colour registers a material's stages read and write (J3DMaterialValues order).
+enum J3DRegister {
+    J3D_REGISTER_OUTPUT = 0,
+    J3D_REGISTER_0 = 1,
+    J3D_REGISTER_1 = 2,
+    J3D_REGISTER_2 = 3,
+};
+
 namespace J3DPass {
     void depth(bool test, u8 compare, bool write);  // NEBULA_COMPARE_*
     void blend(u8 source, u8 destination);          // source * source + target * destination, NEBULA_FACTOR_*
@@ -36,8 +44,8 @@ namespace J3DPass {
     // Pixels across; `spreadTexture`: texture coordinates 0-2 run 0 to 1 across the width of the line or the point.
     void lineWidth(f32 pixels, bool spreadTexture = false);
     void pointSize(f32 pixels, bool spreadTexture = false);
-    void materialColor(u8 index, NebulaColor8 color);
-    void materialColorWide(u8 index, const NebulaColor16& rColor);
+    void registerColor(J3DRegister reg, NebulaColor8 color);
+    void registerColorWide(J3DRegister reg, const NebulaColor16& rColor);
     void constantColor(u8 index, NebulaColor8 color);
     void lightMaterial(u8 channel, NebulaColor8 color);
     void lightAmbient(u8 channel, NebulaColor8 color);
