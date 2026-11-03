@@ -1475,7 +1475,56 @@ void test_touch() {
            "2015 Steam Controller right pad: the right edge");
 }
 
+void test_report_mode_watch() {
+    namespace sw = galaxy::input::switch_hid;
+    using Watch = sw::ReportModeWatch;
+    const std::uint64_t ms = 1000u;
+    {
+        // Steam's start: simple reports, then full reports without motion; asked again each second until motion returns.
+        Watch w;
+        expect(!w.update(sw::kReportFullState, 3u, true, 1000 * ms), "motion arriving: nothing to ask");
+        expect(!w.update(sw::kReportSimpleState, 0u, true, 1100 * ms), "lost just now: not yet");
+        expect(!w.update(sw::kReportSubcommandReply, 0u, true, 1400 * ms), "a subcommand reply says nothing");
+        expect(w.update(sw::kReportSimpleState, 0u, true, 1400 * ms), "lost past the limit: ask");
+        expect(!w.update(sw::kReportFullState, 0u, true, 1500 * ms), "asked a moment ago");
+        expect(w.update(sw::kReportFullState, 0u, true, 2400 * ms), "full reports without motion: ask again");
+        expect(!w.update(sw::kReportFullState, 3u, true, 2500 * ms), "motion back");
+        expect(w.lost_since_us == 0u, "the loss is over");
+        expect(!w.update(sw::kReportFullState, 0u, true, 2600 * ms), "a new loss waits again");
+        expect(w.update(sw::kReportFullState, 0u, true, 3500 * ms), "a later loss is asked about too");
+    }
+    {
+        // A pad with no sensors, known in advance: full reports are all that is wanted.
+        Watch w;
+        for (std::uint64_t t = 1; t < 100; ++t) {
+            expect(!w.update(sw::kReportFullState, 0u, false, t * 1000 * ms), "no sensors wanted: never asked");
+        }
+        expect(w.update(sw::kReportSimpleState, 0u, false, 100'000 * ms) == false, "lost just now");
+        expect(w.update(sw::kReportSimpleState, 0u, false, 100'300 * ms), "its mode lost: asked");
+    }
+    {
+        // A pad that never answers: asked a few times, then left alone.
+        Watch w;
+        std::size_t asks = 0u;
+        for (std::uint64_t t = 1; t < 200; ++t) {
+            asks += w.update(sw::kReportSimpleState, 0u, true, t * 500 * ms) ? 1u : 0u;
+        }
+        expect(asks == Watch::kMostUnanswered, "a pad that never answers is asked a few times");
+    }
+    {
+        // One that has answered is asked for as long as it takes.
+        Watch w;
+        (void)w.update(sw::kReportFullState, 3u, true, 1000 * ms);
+        std::size_t asks = 0u;
+        for (std::uint64_t t = 1; t < 100; ++t) {
+            asks += w.update(sw::kReportFullState, 0u, true, 1000 * ms + t * 1000 * ms) ? 1u : 0u;
+        }
+        expect(asks >= 90u, "one that answered before is asked every second");
+    }
+}
+
 int main() {
+    test_report_mode_watch();
     test_crc();
     test_dualshock4_usb();
     test_dualshock4_motion();
