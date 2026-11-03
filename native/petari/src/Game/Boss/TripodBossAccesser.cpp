@@ -30,7 +30,7 @@ void TripodBossAccesser::setTriPodBoss(TripodBoss* pBoss) {
 }
 
 void TripodBossAccesser::addTripodBossParts(LiveActor* pActor) {
-    mParts[mPartsNum] = pActor;
+    mParts.at(mPartsNum) = pActor;
     mPartsNum++;
 }
 

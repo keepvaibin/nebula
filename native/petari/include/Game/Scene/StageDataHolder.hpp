@@ -75,7 +75,7 @@ public:
     MR::AssignableArray< JMapInfo > mPathObjs;
     JMapInfo* mObjNameTbl;
     s32 mStageDataHolderCount;
-    StageDataHolder* mStageDataArray[0x18];
+    MR::GrowTable< StageDataHolder*, 0x18 > mStageDataArray;
     AssetFolder* mArchive;
     const char* _A8;
     TPos3f mPlacementMtx;

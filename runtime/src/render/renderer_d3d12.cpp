@@ -3538,18 +3538,6 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
     // How long the frames a started tracer took over lasted (the hitch a tracer's first frames could cause).
     {
         const auto now = std::chrono::steady_clock::now();
-        // GALAXY_TEST_HITCHES=1: every frame of 50 ms or more, with whether the ray tracer runs (a stall's place).
-        static const bool hitches = [] {
-            char value[8]{};
-            std::size_t length = 0u;
-            return getenv_s(&length, value, sizeof(value), NEBULA_TEST_ENV("GALAXY_TEST_HITCHES")) == 0 && length > 1u && value[0] == '1';
-        }();
-        if (hitches && frame_begun_.time_since_epoch().count() != 0) {
-            const double ms = std::chrono::duration<double, std::milli>(now - frame_begun_).count();
-            if (ms >= 50.0) {
-                std::cerr << "[hitch] " << ms << " ms\n";
-            }
-        }
         frame_begun_ = now;
     }
     // Display and size changes apply here, between command-list recordings.

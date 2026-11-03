@@ -948,13 +948,7 @@ void PostProcessor::record(ID3D12GraphicsCommandList* list,
     // supersampled scene) in the window after the box filter, where it has a third or less of the pixels, its taps
     // stay in the texture cache and its grain is at the size it is seen.
     const bool deband = deband_ && deband_wanted();
-    // GALAXY_TEST_DEBAND_AB=1: a reduced picture debanded at its own size in every other frame (same-run pictures).
-    static const bool deband_ab = [] {
-        char value[8]{};
-        std::size_t length = 0u;
-        return getenv_s(&length, value, sizeof(value), NEBULA_TEST_ENV("GALAXY_TEST_DEBAND_AB")) == 0 && length > 1u && value[0] == '1';
-    }();
-    const bool deband_in_window = deband && !(deband_ab && (frame_index & 1u) != 0u) &&
+    const bool deband_in_window = deband &&
         target_width < source_width && target_height < source_height &&
         plan.resample && !plan.rcas &&
         ensure_target(scaled_, target_width, target_height, kColorFormat, 3u, frame_index, frames_in_flight);

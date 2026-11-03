@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Game/Util/Array.hpp"
+
 #include "Game/Boss/TripodBoss.hpp"
 
 class TripodBossAccesser : public NameObj {
@@ -20,7 +22,7 @@ public:
 
 private:
     TripodBoss* mBoss;
-    LiveActor* mParts[256];
+    MR::GrowTable< LiveActor*, 256 > mParts;
     s32 mPartsNum;
 };
 

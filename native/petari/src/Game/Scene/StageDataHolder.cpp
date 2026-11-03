@@ -79,7 +79,6 @@ namespace {
 StageDataHolder::StageDataHolder(const char* pStageName, int zoneID, bool loadCommon)
     : NameObj("StageDataHolder"), mObjNameTbl(), mStageDataHolderCount(), mArchive(MR::getStageArchive(pStageName)), _A8(pStageName), mZoneID(zoneID),
       _E0(loadCommon), _E4(), _E8(), _FC(), _100(), _104(), _108(), _10C() {
-    MR::zeroMemory(mStageDataArray, sizeof(mStageDataArray));
     mPlacementMtx.identity();
 }
 
@@ -634,7 +633,7 @@ void StageDataHolder::createLocalStageDataHolder(const MR::AssignableArray< JMap
                 const char* pStageName = "";
                 MR::getObjectName(&pStageName, iter);
                 s32 zoneID = MR::makeCurrentGalaxyStatusAccessor().getZoneId(pStageName);
-                mStageDataArray[mStageDataHolderCount] = new StageDataHolder(pStageName, zoneID, loadCommon);
+                mStageDataArray.at(mStageDataHolderCount) = new StageDataHolder(pStageName, zoneID, loadCommon);
                 mStageDataArray[mStageDataHolderCount]->initWithoutIter();
                 mStageDataArray[mStageDataHolderCount]->calcPlacementMtx(iter);
                 mStageDataHolderCount++;
