@@ -20,6 +20,7 @@ void MovieAudio::open(bool mono) {
     open_ = true;
     mono_ = mono;
     queue_.clear();
+    started_ = false;
     volume_ = target_ = 127.0f;
     ramp_ = 0;
     resuming_ = false;
@@ -32,11 +33,13 @@ void MovieAudio::close() {
     std::lock_guard<std::mutex> lock(mutex_);
     open_ = false;
     queue_.clear();
+    started_ = false;
 }
 
 void MovieAudio::reset() {
     std::lock_guard<std::mutex> lock(mutex_);
     queue_.clear();
+    started_ = false;
     volume_ = target_;
     ramp_ = 0;
 }
@@ -82,6 +85,11 @@ bool MovieAudio::push(const std::uint8_t* record, std::size_t size) {
     return true;
 }
 
+std::size_t MovieAudio::room() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return queue_.size() < kQueueFrames ? kQueueFrames - queue_.size() : 0u;
+}
+
 bool MovieAudio::active() const {
     std::lock_guard<std::mutex> lock(mutex_);
     return open_;
@@ -100,9 +108,10 @@ void MovieAudio::pull(float* out, std::size_t count) {
         if (queue_.size() < 3u) {
             return;
         }
-    } else if (queue_.size() < 2u) {
+    } else if (!started_ && queue_.size() < 2u) {
         return;
     }
+    started_ = true;
     while (count != 0u && !queue_.empty()) {
         Frame& frame = queue_.front();
         const std::size_t available = (frame.samples.size() - frame.read) / 2u;
@@ -141,6 +150,9 @@ void MovieAudio::pull(float* out, std::size_t count) {
         if (frame.read >= frame.samples.size()) {
             queue_.pop_front();
         }
+    }
+    if (queue_.empty()) {
+        started_ = false;
     }
 }
 

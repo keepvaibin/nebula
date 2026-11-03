@@ -174,6 +174,15 @@ s32 MovieStream::decode(s32 track) {
     return 0;
 }
 
+bool MovieStream::hasSound() const {
+    return mOpen && mHeader.mAudioTracks != 0;
+}
+
+s32 MovieStream::getSoundFramesWaiting() const {
+    const NebulaHostServices* const host = nebula_host();
+    return NEBULA_MOVIE_AUDIO_QUEUE_FRAMES - host->movie_audio(host->user, nullptr, 0);
+}
+
 s32 MovieStream::drawCurrentFrame(u32 x, u32 y, u32 polyW, u32 polyH) {
     if (mPlanesFrame < 0) {
         return -1;

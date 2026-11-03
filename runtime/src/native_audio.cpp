@@ -414,11 +414,15 @@ void NativeGameAudio::frame() {
     }
 }
 
-bool NativeGameAudio::movie_audio(const void* record, std::uint32_t size) {
+int NativeGameAudio::movie_audio(const void* record, std::uint32_t size) {
     if (state_->mixer == nullptr) {
-        return false;
+        return 0;
     }
-    return state_->mixer->movie().push(static_cast<const std::uint8_t*>(record), size);
+    galaxy::audio::MovieAudio& movie = state_->mixer->movie();
+    if (record == nullptr) {
+        return static_cast<int>(movie.room());
+    }
+    return movie.push(static_cast<const std::uint8_t*>(record), size) ? 1 : 0;
 }
 
 void NativeGameAudio::movie_audio_control(std::uint32_t what, std::int32_t value, std::int32_t milliseconds) {

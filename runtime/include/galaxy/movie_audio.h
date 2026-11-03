@@ -1,8 +1,8 @@
 // The movie player's sound (nebula_game_api.h movie_audio*): each movie frame's audio record (its stereo sample count, then
 // its PCM16 samples, cook/thp.rs) queued, up to 20 frames ahead; the mixer takes it at 32 kHz each audio frame with the
 // player's volume (a square law over 0-127, ramped per sample), its fade-in after a pause and, in mono output, the
-// mean of the two sides at -3 dB. Playback starts once the frame after the current one is decoded too, and falls
-// silent when the queue runs dry, as the game's player did.
+// mean of the two sides at -3 dB. Playback starts once the frame after the current one is decoded too, and stops when
+// the queue runs dry until that holds again. The player paces its pictures by this queue (MoviePlayerSimple::exePlaying).
 #pragma once
 
 #include <array>
@@ -33,6 +33,8 @@ public:
     // `count` stereo samples at 32 kHz, interleaved (left, right), added to `out`.
     void pull(float* out, std::size_t count);
     [[nodiscard]] bool active() const;
+    // The frames that could still be queued.
+    [[nodiscard]] std::size_t room() const;
 
 private:
     struct Frame {
@@ -43,6 +45,7 @@ private:
     mutable std::mutex mutex_;
     std::deque<Frame> queue_;
     bool open_{};
+    bool started_{};
     bool mono_{};
     float volume_{127.0f};
     float target_{127.0f};

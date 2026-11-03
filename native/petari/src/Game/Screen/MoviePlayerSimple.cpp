@@ -187,6 +187,25 @@ void MoviePlayerSimple::exePlaying() {
         }
     }
 
+    // The sound keeps the time: a frame is decoded when its sound is next due, whatever the game's frame rate or the
+    // screen's. A game that fell behind catches up with several in one update.
+    if (mStream->hasSound()) {
+        const s32 soundAhead = 3;
+        const s32 mostInOneUpdate = 4;
+
+        for (s32 i = 0; i < mostInOneUpdate && mStream->getSoundFramesWaiting() < soundAhead; i++) {
+            const s32 result = mStream->decode(0);
+
+            if (result == 2) {
+                mMovie->_24++;
+            }
+            if (result != 0) {
+                break;
+            }
+        }
+        return;
+    }
+
     if (!mMovie->_19) {
         s32 result = mStream->decode(0);
 

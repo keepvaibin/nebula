@@ -41,6 +41,9 @@ public:
     void start(bool);
     void stop();
     s32 decode(s32);
+    // Whether the movie has sound, and how many of its frames wait in the mixer's queue.
+    bool hasSound() const;
+    s32 getSoundFramesWaiting() const;
     s32 drawCurrentFrame(u32, u32, u32, u32);
     const MovieVideoInfo& getVideoInfo() const {
         return mVideoInfo;
