@@ -97,7 +97,22 @@
                     MR::isEqualStringCase(MR::getModelResName(pActor), action.stage)) {
                     JUTNativeLog("test: appear %s %.0f %.0f %.0f\n", action.stage, pActor->mPosition.x, pActor->mPosition.y,
                              pActor->mPosition.z);
-                    pActor->appear();
+                    // An actor a stage switch holds back follows that switch.
+                    if (MR::isValidSwitchAppear(pActor)) {
+                        StageSwitchFunction::onSwitchBySwitchIdInfo(*pActor->mStageSwitchCtrl->mSwitchAppear);
+                    } else {
+                        pActor->appear();
+                    }
+                }
+            }
+        } else if (action.kind == NEBULA_TEST_KOOPA_HIT) {
+            AllLiveActorGroup* pGroup = MR::getAllLiveActorGroup();
+            for (s32 i = 0; pGroup != nullptr && i < pGroup->getObjNum(); ++i) {
+                LiveActor* pActor = pGroup->getActor(i);
+                if (pActor != nullptr && pActor->mModelManager != nullptr && !MR::isDead(pActor) &&
+                    MR::isEqualStringCase(MR::getModelResName(pActor), "koopa")) {
+                    MR::incPlayerLife(8);
+                    static_cast< Koopa* >(pActor)->mSequencer->testHit(MarioAccess::getPlayerActor()->getSensor("body"));
                 }
             }
         } else if (action.kind == NEBULA_TEST_KILL_ACTOR) {
