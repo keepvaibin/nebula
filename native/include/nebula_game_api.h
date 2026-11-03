@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 110u
+#define NEBULA_GAME_API_VERSION 111u
 
 /* Viewports, scissors, clears, target sizes and picture points count this many units across a frame on each axis. */
 #define NEBULA_FRAME_UNITS 65536.0f
@@ -32,6 +32,8 @@ extern "C" {
 #define NEBULA_RGBA(r, g, b, a) (((uint32_t)(r) << 24) | ((uint32_t)(g) << 16) | ((uint32_t)(b) << 8) | (uint32_t)(a))
 
 typedef struct NebulaHostThread NebulaHostThread;
+
+#define NEBULA_THREAD_SLOTS 4
 
 /* Audio (the host's mixer): the game's voices mix at the output device's rate, one subframe (1/400 s: 80 samples
    of the game's 32 kHz sound clock) per voices_mix call. A voice plays one source (PCM16 or an oscillator) through
@@ -542,6 +544,8 @@ enum {
                                           going back */
     NEBULA_OPTION_TEST_NATIVE_J3D,     /* tests (GALAXY_TEST_NATIVE_J3D=lo-hi): first << 16 | last J3D material number
                                           (from 1) drawn by its native shader, the others by their GX programs; 0 all */
+    NEBULA_OPTION_TEST_ARENA_FILL,     /* tests (GALAXY_TEST_ARENA_FILL=<hex byte>): 0x100 | the byte every arena block starts as; 0 without it */
+    NEBULA_OPTION_TEST_TRACE_LOADS,    /* tests (GALAXY_TRACE_LOADS): 1 logs what each scene change loads */
     NEBULA_OPTION_TEST_DUMP_DRAW_INPUTS, /* tests (GALAXY_DUMP_DRAW_INPUTS=<shader id>): the native shader id whose
                                             material's draws the game tags on both paths (0 none) */
 };
@@ -887,6 +891,12 @@ typedef struct NebulaHostServices {
     /* The game cannot go on (an OSPanic, a JUTException panic, a native-layer error): the host reports `text` with
        its own diagnostics and ends the process. Does not return. */
     void (*fatal)(void* user, const char* text);
+    /* The module's own bookkeeping memory, outside its arenas. */
+    void* (*heap_alloc)(void* user, size_t size);
+    void* (*heap_realloc)(void* user, void* data, size_t size);
+    void (*heap_free)(void* user, void* data);
+    /* This thread's slots (NEBULA_THREAD_SLOTS of them, null at first) for the module's per-thread values. */
+    void** (*thread_slots)(void* user);
 
     /* A scene bound (NEBULA_SCENE_*) after the records so far; the 3D scene's begin carries 16 floats: the
        camera's world-to-eye matrix (row-major 3x4), then the player's up in the world (against its gravity) and 1, or

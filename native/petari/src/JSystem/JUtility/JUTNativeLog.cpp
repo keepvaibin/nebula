@@ -1,6 +1,5 @@
 #include "JSystem/JUtility/JUTNativeLog.hpp"
 #include <nebula_game_api.h>
-#include <stdio.h>
 
 extern "C" const NebulaHostServices* nebula_host(void);
 
@@ -14,9 +13,6 @@ namespace {
         sLine[sLength] = '\0';
         if (pHost != nullptr && pHost->log != nullptr) {
             pHost->log(pHost->user, sLine);
-        } else {
-            fputs(sLine, stderr);
-            fputc('\n', stderr);
         }
         sLength = 0;
     }

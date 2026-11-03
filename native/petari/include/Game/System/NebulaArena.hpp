@@ -58,7 +58,7 @@ public:
     }
 
     static NebulaArena* getCurrentHeap() {
-        return sCurrentHeap;
+        return currentSlot();
     }
 
     static void setSystemHeap(NebulaArena* pArena) {
@@ -66,11 +66,13 @@ public:
     }
 
     static void setCurrentHeap(NebulaArena* pArena) {
-        sCurrentHeap = pArena;
+        setCurrentSlot(pArena);
     }
 
     // Each thread's own; a new thread and an async function start with their starter's.
-    static __thread NebulaArena* sCurrentHeap;
+    // This thread's current arena: the host keeps it (slot 0).
+    static NebulaArena* currentSlot();
+    static void setCurrentSlot(NebulaArena* pArena);
     static NebulaArena* sRootHeap;
     static NebulaArena* sSystemHeap;
 

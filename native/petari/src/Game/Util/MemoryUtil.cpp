@@ -10,7 +10,7 @@
 
 namespace MR {
     CurrentHeapRestorer::CurrentHeapRestorer(NebulaArena* pHeap) {
-        _0 = NebulaArena::sCurrentHeap;
+        _0 = NebulaArena::currentSlot();
         MR::becomeCurrentHeap(pHeap);
     }
 
@@ -19,7 +19,7 @@ namespace MR {
     }
 
     NebulaArena* getCurrentHeap() {
-        return NebulaArena::sCurrentHeap;
+        return NebulaArena::currentSlot();
     }
 
     NebulaArena* getAproposHeapForSceneArchive(f32 maxFreeSizeRate) {
@@ -40,7 +40,7 @@ namespace MR {
     }
 
     bool isEqualCurrentHeap(NebulaArena* pHeap) {
-        return NebulaArena::sCurrentHeap == pHeap;
+        return NebulaArena::currentSlot() == pHeap;
     }
 
     void copyMemory(void* pDst, const void* pSrc, u32 size) {

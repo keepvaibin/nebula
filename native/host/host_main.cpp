@@ -2950,6 +2950,12 @@ uint32_t svc_option(void*, uint32_t what) {
         }();
         return shader;
     }
+    case NEBULA_OPTION_TEST_ARENA_FILL: {
+        const char* value = NEBULA_TEST_GETENV("GALAXY_TEST_ARENA_FILL");
+        return value != nullptr ? 0x100u | (static_cast<uint32_t>(std::strtoul(value, nullptr, 16)) & 0xFFu) : 0u;
+    }
+    case NEBULA_OPTION_TEST_TRACE_LOADS:
+        return NEBULA_TEST_GETENV("GALAXY_TRACE_LOADS") != nullptr ? 1u : 0u;
     case NEBULA_OPTION_TEST_NATIVE_J3D: {
         static const uint32_t range = [] {
             const char* value = NEBULA_TEST_GETENV("GALAXY_TEST_NATIVE_J3D");
@@ -4255,6 +4261,13 @@ int main(int argc, char** argv) {
     services.size = sizeof(services);
     services.log = svc_log;
     services.fatal = svc_fatal;
+    services.heap_alloc = [](void*, size_t size) -> void* { return std::malloc(size); };
+    services.heap_realloc = [](void*, void* data, size_t size) -> void* { return std::realloc(data, size); };
+    services.heap_free = [](void*, void* data) { std::free(data); };
+    services.thread_slots = [](void*) -> void** {
+        static thread_local void* slots[NEBULA_THREAD_SLOTS];
+        return slots;
+    };
     services.scene_marker = svc_scene_marker;
     services.movie_frame = svc_movie_frame;
     services.presence = svc_presence;
