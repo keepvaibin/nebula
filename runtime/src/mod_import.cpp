@@ -199,8 +199,7 @@ bool extract_archive(const fs::path& source, Writer& writer, ImportResult& resul
         const int next = archive_read_next_header(reader, &entry);
         if (next == ARCHIVE_EOF) break;
         if (next == ARCHIVE_FATAL || next == ARCHIVE_FAILED) {
-            const char* why = archive_error_string(reader);
-            result.message = std::string("THE ARCHIVE IS DAMAGED OR UNSUPPORTED: ") + (why ? why : "");
+            result.message = "THIS DOWNLOAD IS DAMAGED. DOWNLOAD IT AGAIN";
             return false;
         }
         if (++entries > kImportEntryLimit) {
@@ -212,7 +211,7 @@ bool extract_archive(const fs::path& source, Writer& writer, ImportResult& resul
             return false;
         }
         if (archive_entry_is_encrypted(entry)) {
-            result.message = "THE ARCHIVE IS PASSWORD-PROTECTED: EXTRACT IT YOURSELF AND IMPORT THE FOLDER";
+            result.message = "THIS ARCHIVE HAS A PASSWORD. UNPACK IT FIRST, THEN ADD THE FOLDER";
             return false;
         }
         std::string name;

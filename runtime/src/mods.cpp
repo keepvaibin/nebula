@@ -4,6 +4,9 @@
 // defaults and patch order are Riivolution's as Dolphin reproduces them.
 
 #include "galaxy/mods.h"
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
 #include "galaxy/path_text.h"
 
 #include "galaxy/atomic_file.h"
@@ -818,6 +821,7 @@ std::vector<RiivDisc> mod_discs(const ModLayout& layout, const SavedMod* saved, 
                                 std::string* problem) {
     std::vector<RiivDisc> discs;
     unsigned other_game = 0;
+    std::string other_game_id;
     for (const fs::path& xml : layout.xmls) {
         std::string error;
         std::optional<RiivDisc> d = parse_riivolution(xml, &error);
@@ -827,6 +831,7 @@ std::vector<RiivDisc> mod_discs(const ModLayout& layout, const SavedMod* saved, 
         }
         if (!game_id.empty() && !valid_for_game(*d, game_id, -1, -1)) {
             ++other_game;
+            if (d->game) other_game_id = *d->game;
             continue;
         }
         apply_config(*d, layout.riivolution_dir, game_id.empty() ? std::string("RMGE01") : game_id);
@@ -851,7 +856,11 @@ std::vector<RiivDisc> mod_discs(const ModLayout& layout, const SavedMod* saved, 
         }
         discs.push_back(std::move(*d));
     }
-    if (discs.empty() && other_game != 0u && problem != nullptr && problem->empty()) *problem = "FOR ANOTHER GAME";
+    if (discs.empty() && other_game != 0u && problem != nullptr && problem->empty()) {
+        *problem = other_game_id.starts_with("SB4")   ? "THIS MOD IS FOR SUPER MARIO GALAXY 2"
+                   : other_game_id.starts_with("RMG") ? "THIS MOD IS FOR ANOTHER VERSION OF THE GAME"
+                                                      : "THIS MOD IS FOR ANOTHER GAME";
+    }
     return discs;
 }
 
@@ -1014,7 +1023,7 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
             if (json_number(manifest, "format", 1) > kPackageFormat) {
                 mod.problem = "UPDATE NEBULA TO USE THIS MOD";
             } else if (!game_id.empty() && !for_game.empty() && for_game != game_id) {
-                mod.problem = "THIS MOD IS FOR ANOTHER VERSION OF THE GAME";
+                mod.problem = for_game.starts_with("RMG") ? "THIS MOD IS FOR ANOTHER VERSION OF THE GAME" : "THIS MOD IS FOR ANOTHER GAME";
             }
         }
         mod.languages.assign(languages.begin(), languages.end());
@@ -1025,11 +1034,16 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
         mod.changed_textures = static_cast<unsigned>(changed_textures[mod.id].size());
         if (mod.code_patches != 0u) {
             // Its files apply. LumaLink finds the native versions of known patches when it converts a mod.
-            mod.problem = std::to_string(mod.code_patches) + " CODE PATCHES NEED LUMALINK: THE REST OF THE MOD APPLIES";
+            mod.problem = "MOST OF THIS MOD WORKS. " + std::to_string(mod.code_patches) + " CODE CHANGES NEED A NEBULA UPDATE OR A PLUGIN";
         }
         if (!mod.package && !mod.riivolution && !mod.files && !mod.textures && !mod.movies && !mod.loose) {
-            mod.problem = "NOTHING NEBULA CAN USE (NO RIIVOLUTION, GAME FILES, TEXTURES OR MOVIES)";
+            mod.problem = "THIS DOESN'T LOOK LIKE A MOD";
         }
+#if defined(__ANDROID__) || defined(__APPLE__) && TARGET_OS_IPHONE
+        if (!mod.package && (mod.riivolution || mod.files || mod.loose)) {
+            mod.problem = "CONVERT THIS MOD WITH LUMALINK ON A COMPUTER, THEN OPEN THE FILE HERE";
+        }
+#endif
         mods.push_back(std::move(mod));
     }
     // Disabled mods have no place: they follow the enabled ones by name.
@@ -1249,6 +1263,10 @@ DiscPlan plan_disc_changes(const galaxy::disc::AssetStore& store, const std::str
             continue;
         }
         if (!changes_disc(mod)) continue;
+#if defined(__ANDROID__) || defined(__APPLE__) && TARGET_OS_IPHONE
+        // The converter runs on computers: the page has told the player.
+        continue;
+#endif
         const ModLayout layout = layout_of(mod.path);
         std::vector<Placed> placed;
         const auto note = [&plan, &mod](const std::string& text) { plan.notes.push_back(mod.id + ": " + text); };

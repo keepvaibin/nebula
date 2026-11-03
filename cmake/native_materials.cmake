@@ -180,6 +180,12 @@ function(galaxy_native_material_sources out_var backend)
         endforeach()
         string(APPEND curved_rows "    {${entries}},\n")
     endforeach()
+    # What a mod's compiled shaders must match (LumaLink: nebula_import::cook::shader_source::interface_id).
+    file(READ "${galaxy_native_material_dir}/j3d_material.hlsli" interface_text)
+    file(READ "${galaxy_native_material_dir}/native_material.hlsli" interface_more)
+    string(APPEND interface_text "${interface_more}")
+    string(REPLACE "\r" "" interface_text "${interface_text}")
+    string(SHA1 shader_interface "${interface_text}")
     set(table "${dir}/native_shader_table.cpp")
     # Identical read-only shader blobs can share one linker COMDAT.
     if(MSVC)
@@ -209,6 +215,10 @@ ${curved_rows}};
 
 const char* native_shader_file_name() noexcept {
     return \"${backend}.shaders\";
+}
+
+const char* native_shader_interface() noexcept {
+    return \"${shader_interface}\";
 }
 
 NativeShaderBytes native_curved_bytes(unsigned variant, bool domain) noexcept {

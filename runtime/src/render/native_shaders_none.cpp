@@ -18,6 +18,10 @@ const char* native_shader_file_name() noexcept {
     return "none.shaders";
 }
 
+const char* native_shader_interface() noexcept {
+    return "";
+}
+
 NativeShaderBytes native_curved_bytes(unsigned, bool) noexcept {
     return {};
 }
