@@ -284,7 +284,7 @@ void apply_env(RuntimeSettings& settings, const char* env, const char* key) {
 }
 
 void apply_env_overrides(RuntimeSettings& settings) {
-    apply_env(settings, NEBULA_TEST_ENV("GALAXY_INPUT_MODE"), "input_mode");
+    apply_env(settings, nebula_switch::input_mode_name(), "input_mode");
     apply_env(settings, "GALAXY_AUDIO_MASTER_GAIN", "audio_master_gain");
     apply_env(settings, "GALAXY_AUDIO_MUSIC_GAIN", "audio_music_gain");
     apply_env(settings, "GALAXY_AUDIO_EFFECTS_GAIN", "audio_sfx_gain");

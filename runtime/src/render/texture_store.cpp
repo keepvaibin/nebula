@@ -55,7 +55,7 @@ bool trace_stalls_enabled() {
                    &length,
                    value,
                    sizeof(value),
-                   NEBULA_TEST_ENV("GALAXY_TRACE_GX_STALLS")) == 0 &&
+                   nebula_switch::trace_gx_stalls_name()) == 0 &&
                length > 1 && value[0] != '0';
     }();
     return enabled;
@@ -80,7 +80,7 @@ std::uint64_t read_env_u64(const char* name, std::uint64_t fallback) {
 
 std::uint64_t trace_stall_threshold_us() {
     static const std::uint64_t threshold =
-        read_env_u64(NEBULA_TEST_ENV("GALAXY_TRACE_RENDER_STALL_US"), 1000u);
+        read_env_u64(nebula_switch::trace_render_stall_us_name(), 1000u);
     return threshold;
 }
 

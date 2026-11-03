@@ -164,7 +164,7 @@ void set_reason(std::array<char, N>& out, const char* text) noexcept {
 bool test_fault(const char* name) noexcept {
     char value[64]{};
     std::size_t length = 0;
-    if (getenv_s(&length, value, sizeof(value), NEBULA_TEST_ENV("GALAXY_TEST_POST_FAULT")) != 0 || length <= 1u) {
+    if (getenv_s(&length, value, sizeof(value), nebula_switch::test_post_fault_name()) != 0 || length <= 1u) {
         return false;
     }
     const std::size_t n = std::strlen(name);

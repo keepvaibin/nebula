@@ -977,7 +977,7 @@ RumbleTarget test_rumble_target() noexcept {
     static const RumbleTarget target = [] {
         RumbleTarget parsed{};
         char value[32]{};
-        const DWORD length = GetEnvironmentVariableA(NEBULA_TEST_ENV("GALAXY_TEST_RUMBLE_TARGET"), value, sizeof(value));
+        const DWORD length = GetEnvironmentVariableA(nebula_switch::test_rumble_target_name(), value, sizeof(value));
         if (length == 0 || length >= sizeof(value) || !rumble_output_disabled()) return parsed;
         const std::string_view text(value, length);
         const std::size_t colon = text.find(':');
@@ -2172,7 +2172,7 @@ std::uint64_t controller_hid_now_us() noexcept {
 }
 
 bool hidden_test_session() noexcept {
-    static const bool hidden = env_flag(NEBULA_TEST_ENV("GALAXY_HIDE_WINDOW"));
+    static const bool hidden = env_flag(nebula_switch::hide_window_name());
     return hidden;
 }
 
