@@ -73,7 +73,8 @@ constexpr const char* kReportIt =
 
 ScopedActivity::ScopedActivity(Activity activity, const std::filesystem::path& file) noexcept : previous_(t_activity) {
     try {
-        const std::u8string name = file.u8string();
+        // The name alone: a report goes to the team, and the folder can hold the player's user name.
+        const std::u8string name = file.filename().u8string();
         copy(t_activity_file, sizeof(t_activity_file),
              std::string_view(reinterpret_cast<const char*>(name.data()), name.size()));
     } catch (...) {
