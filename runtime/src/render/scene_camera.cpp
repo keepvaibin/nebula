@@ -45,7 +45,7 @@ bool SceneCamera::initialize(ID3D12Device* device) {
     }
     D3D12_DESCRIPTOR_RANGE ranges[2]{};
     ranges[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-    ranges[0].NumDescriptors = 2;
+    ranges[0].NumDescriptors = 3;
     ranges[1].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
     ranges[1].NumDescriptors = 1;
     D3D12_ROOT_PARAMETER params[3]{};
@@ -162,7 +162,7 @@ ID3D12PipelineState* SceneCamera::widen_pipeline(unsigned samples) {
 }
 
 bool SceneCamera::record(ID3D12GraphicsCommandList* list, DescriptorRing& ring, const Inputs& in) {
-    if (!ready_ || in.wide == nullptr || in.width == 0u || in.height == 0u) {
+    if (!ready_ || in.wide == nullptr || in.depth == nullptr || in.width == 0u || in.height == 0u) {
         return false;
     }
     const bool samples = in.samples > 1u && in.wide_ms != nullptr;
@@ -177,7 +177,7 @@ bool SceneCamera::record(ID3D12GraphicsCommandList* list, DescriptorRing& ring, 
 
     // Two tables: the meter's (the resolved picture, the exposure, its storage view) and the camera's (the picture it
     // writes from, the exposure).
-    const DescriptorRing::Table table = ring.allocate(5u);
+    const DescriptorRing::Table table = ring.allocate(7u);
     const UINT stride = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     const auto cpu = [&](unsigned i) {
         D3D12_CPU_DESCRIPTOR_HANDLE handle = table.cpu;
@@ -198,20 +198,24 @@ bool SceneCamera::record(ID3D12GraphicsCommandList* list, DescriptorRing& ring, 
     exposure_view.Format = kExposureFormat;
     device_->CreateShaderResourceView(in.wide, &view, cpu(0));
     device_->CreateShaderResourceView(exposure_.Get(), &exposure_view, cpu(1));
+    D3D12_SHADER_RESOURCE_VIEW_DESC depth_view = view;
+    depth_view.Format = kSceneDepthSrvFormat;
+    device_->CreateShaderResourceView(in.depth, &depth_view, cpu(2));
     D3D12_UNORDERED_ACCESS_VIEW_DESC storage{};
     storage.Format = kExposureFormat;
     storage.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
-    device_->CreateUnorderedAccessView(exposure_.Get(), nullptr, &storage, cpu(2));
+    device_->CreateUnorderedAccessView(exposure_.Get(), nullptr, &storage, cpu(3));
     if (samples) {
         D3D12_SHADER_RESOURCE_VIEW_DESC many{};
         many.Format = kSceneHdrColorFormat;
         many.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DMS;
         many.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-        device_->CreateShaderResourceView(in.wide_ms, &many, cpu(3));
+        device_->CreateShaderResourceView(in.wide_ms, &many, cpu(4));
     } else {
-        device_->CreateShaderResourceView(in.wide, &view, cpu(3));
+        device_->CreateShaderResourceView(in.wide, &view, cpu(4));
     }
-    device_->CreateShaderResourceView(exposure_.Get(), &exposure_view, cpu(4));
+    device_->CreateShaderResourceView(exposure_.Get(), &exposure_view, cpu(5));
+    device_->CreateShaderResourceView(in.depth, &depth_view, cpu(6));
 
     constexpr D3D12_RESOURCE_STATES kRead =
         D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
@@ -225,15 +229,17 @@ bool SceneCamera::record(ID3D12GraphicsCommandList* list, DescriptorRing& ring, 
     list->SetPipelineState(meter_.Get());
     list->SetComputeRoot32BitConstants(0, sizeof(constants) / 4u, &constants, 0);
     list->SetComputeRootDescriptorTable(1, gpu(0));
-    list->SetComputeRootDescriptorTable(2, gpu(2));
+    list->SetComputeRootDescriptorTable(2, gpu(3));
+    transition(list, in.depth, D3D12_RESOURCE_STATE_DEPTH_WRITE, kRead);
     list->Dispatch(1, 1, 1);
+    transition(list, in.depth, kRead, D3D12_RESOURCE_STATE_DEPTH_WRITE);
     transition(list, exposure_.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, kRead);
 
     list->SetGraphicsRootSignature(root_signature_.Get());
     list->SetPipelineState(pipeline);
     list->SetGraphicsRoot32BitConstants(0, sizeof(constants) / 4u, &constants, 0);
-    list->SetGraphicsRootDescriptorTable(1, gpu(3));
-    list->SetGraphicsRootDescriptorTable(2, gpu(2));
+    list->SetGraphicsRootDescriptorTable(1, gpu(4));
+    list->SetGraphicsRootDescriptorTable(2, gpu(3));
     const D3D12_VIEWPORT viewport{0.0f, 0.0f, static_cast<float>(in.width), static_cast<float>(in.height), 0.0f, 1.0f};
     const D3D12_RECT scissor{0, 0, static_cast<LONG>(in.width), static_cast<LONG>(in.height)};
     list->RSSetViewports(1, &viewport);
