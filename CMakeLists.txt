@@ -274,7 +274,7 @@ endforeach()
 # Ambient occlusion (runtime/src/render/ambient_occlusion.hlsl), compiled by fxc like the post passes.
 set(galaxy_ao_hlsl "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/render/ambient_occlusion.hlsl")
 set(galaxy_ao_headers "")
-foreach(galaxy_ao_pass distance_cs:DepthCS:cs_5_0 occlusion_cs:AoCS:cs_5_0 denoise_cs:DenoiseCS:cs_5_0
+foreach(galaxy_ao_pass distance_cs:DepthCS:cs_5_0 occlusion_cs:AoCS:cs_5_0 ssao_cs:SsaoCS:cs_5_0 denoise_cs:DenoiseCS:cs_5_0
         upsample_cs:UpsampleCS:cs_5_0 apply_vs:ApplyVS:vs_5_0 apply_ps:ApplyPS:ps_5_0)
     string(REPLACE ":" ";" galaxy_ao_pair "${galaxy_ao_pass}")
     list(GET galaxy_ao_pair 0 galaxy_ao_name)

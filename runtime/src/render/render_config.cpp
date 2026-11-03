@@ -147,6 +147,7 @@ static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
     else if (std::strcmp(key, "curved_surfaces") == 0) cfg.curved_surfaces = parse_bool(val, cfg.curved_surfaces);
     else if (std::strcmp(key, "enhanced_lighting") == 0) cfg.enhanced_lighting = parse_bool(val, cfg.enhanced_lighting);
     else if (std::strcmp(key, "ambient_occlusion") == 0) cfg.ambient_occlusion = parse_bool(val, cfg.ambient_occlusion);
+    else if (std::strcmp(key, "ambient_occlusion_ssao") == 0) cfg.ambient_occlusion_ssao = parse_bool(val, cfg.ambient_occlusion_ssao);
     else if (std::strcmp(key, "wide_scene") == 0) cfg.wide_scene = parse_bool(val, cfg.wide_scene);
     else if (std::strcmp(key, "bloom") == 0) cfg.bloom = std::min(parse_uint(val, cfg.bloom), kMaxBloom);
     else if (std::strcmp(key, "post_process") == 0) cfg.post_process = parse_bool(val, cfg.post_process);
@@ -580,6 +581,7 @@ bool save_render_config_to_file() {
              << (cfg.ambient_occlusion ? 1u : 0u) << '\n'
              << "bloom=" << std::min(cfg.bloom, kMaxBloom) << '\n'
              << "wide_scene=" << (cfg.wide_scene ? 1u : 0u) << '\n'
+             << "ambient_occlusion_ssao=" << (cfg.ambient_occlusion_ssao ? 1u : 0u) << '\n'
              << "aa=" << cfg.aa_mode << '\n'
              << "smaa_quality=" << cfg.smaa_quality << '\n'
              << "msaa_samples=" << cfg.msaa_samples << '\n'

@@ -5,6 +5,7 @@
 #include "galaxy/render/vk/utility_spirv.h"
 
 #include <algorithm>
+#include <cstring>
 #include <iostream>
 #include <span>
 
@@ -47,7 +48,8 @@ void to_general(VkCommandBuffer commands, Texture& target) {
 VkShaderModule AmbientOcclusionVk::module(unsigned index) const {
     static constexpr UtilitySpirv kShaders[] = {UtilitySpirv::AoDistanceCs, UtilitySpirv::AoOcclusionCs,
                                                 UtilitySpirv::AoDenoiseCs,  UtilitySpirv::AoUpsampleCs,
-                                                UtilitySpirv::AoApplyVs,    UtilitySpirv::AoApplyPs};
+                                                UtilitySpirv::AoSsaoCs,     UtilitySpirv::AoApplyVs,
+                                                UtilitySpirv::AoApplyPs};
     const std::span<const std::uint32_t> code = utility_spirv(kShaders[index]);
     VkShaderModuleCreateInfo info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
     info.codeSize = code.size_bytes();
@@ -60,13 +62,13 @@ VkShaderModule AmbientOcclusionVk::module(unsigned index) const {
 bool AmbientOcclusionVk::initialize() {
     shutdown();
     const VkDevice device = Context::get().device();
-    VkDescriptorSetLayoutBinding bindings[4]{};
-    for (std::uint32_t i = 0; i < 4u; ++i) {
-        bindings[i] = {i, i < 3u ? VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE : VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, kStages,
-                       nullptr};
+    VkDescriptorSetLayoutBinding bindings[6]{};
+    for (std::uint32_t i = 0; i < 6u; ++i) {
+        bindings[i] = {i, i < 3u ? VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE : i == 3u ? VK_DESCRIPTOR_TYPE_STORAGE_IMAGE : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                       1, kStages, nullptr};
     }
     VkDescriptorSetLayoutCreateInfo set_info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-    set_info.bindingCount = 4;
+    set_info.bindingCount = 6;
     set_info.pBindings = bindings;
     const VkPushConstantRange push{kStages, 0, sizeof(ao::Constants)};
     VkPipelineLayoutCreateInfo layout_info{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
@@ -79,7 +81,7 @@ bool AmbientOcclusionVk::initialize() {
         shutdown();
         return false;
     }
-    static constexpr const char* kEntries[kPassCount] = {"DepthCS", "AoCS", "DenoiseCS", "UpsampleCS"};
+    static constexpr const char* kEntries[kPassCount] = {"DepthCS", "AoCS", "DenoiseCS", "UpsampleCS", "SsaoCS"};
     for (unsigned i = 0; i < kPassCount; ++i) {
         const VkShaderModule shader = module(i);
         if (shader == VK_NULL_HANDLE) {
@@ -143,8 +145,8 @@ VkPipeline AmbientOcclusionVk::apply_pipeline(VkRenderPass pass, unsigned sample
         Context::get().defer([device, old] { vkDestroyPipeline(device, old, nullptr); });
         apply_[samples_log2] = VK_NULL_HANDLE;
     }
-    const VkShaderModule vs = module(4u);
-    const VkShaderModule ps = module(5u);
+    const VkShaderModule vs = module(5u);
+    const VkShaderModule ps = module(6u);
     VkPipeline pipeline = VK_NULL_HANDLE;
     if (vs != VK_NULL_HANDLE && ps != VK_NULL_HANDLE) {
         VkPipelineShaderStageCreateInfo stages[2]{};
@@ -223,16 +225,21 @@ VkDescriptorSet AmbientOcclusionVk::set_of(const SetAllocator& allocate, VkImage
                                             {VK_NULL_HANDLE, sampled1.view, VK_IMAGE_LAYOUT_GENERAL},
                                             {VK_NULL_HANDLE, sampled2.view, VK_IMAGE_LAYOUT_GENERAL},
                                             {VK_NULL_HANDLE, storage.view, VK_IMAGE_LAYOUT_GENERAL}};
-    VkWriteDescriptorSet writes[4]{};
-    for (std::uint32_t i = 0; i < 4u; ++i) {
+    VkWriteDescriptorSet writes[6]{};
+    for (std::uint32_t i = 0; i < 6u; ++i) {
         writes[i] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
         writes[i].dstSet = set;
         writes[i].dstBinding = i;
         writes[i].descriptorCount = 1;
-        writes[i].descriptorType = i < 3u ? VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE : VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-        writes[i].pImageInfo = &infos[i];
+        if (i < 4u) {
+            writes[i].descriptorType = i < 3u ? VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE : VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            writes[i].pImageInfo = &infos[i];
+        } else {
+            writes[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+            writes[i].pBufferInfo = i == 4u ? &objects_ : &tiles_;
+        }
     }
-    vkUpdateDescriptorSets(Context::get().device(), 4, writes, 0, nullptr);
+    vkUpdateDescriptorSets(Context::get().device(), 6, writes, 0, nullptr);
     return set;
 }
 
@@ -246,14 +253,15 @@ void AmbientOcclusionVk::dispatch(VkCommandBuffer commands, Pass pass, VkDescrip
 }
 
 bool AmbientOcclusionVk::prepare(VkCommandBuffer commands, const Texture& depth, VkImageLayout depth_layout,
-                                 const RtView& view, const SetAllocator& allocate) {
+                                 const RtView& view, bool ssao, std::span<const ao::ObjectOccluder> objects, UploadRing& ring,
+                                 const SetAllocator& allocate) {
     if (!ready_) {
         return false;
     }
     const unsigned divisor = ao::occlusion_divisor(depth.height);
     const unsigned width = (depth.width + divisor - 1u) / divisor;
     const unsigned height = (depth.height + divisor - 1u) / divisor;
-    if (!ao::make_constants(view, width, height, divisor, constants_) ||
+    if (!ao::make_constants(view, width, height, divisor, ssao, constants_) ||
         !ensure(distance_, width, height, kDistanceFormat, "occlusion distance") ||
         !ensure(raw_, width, height, kOcclusionFormat, "occlusion") ||
         !ensure(denoised_, width, height, kOcclusionFormat, "occlusion denoised") ||
@@ -263,8 +271,19 @@ bool AmbientOcclusionVk::prepare(VkCommandBuffer commands, const Texture& depth,
     for (Texture* target : {distance_.get(), raw_.get(), denoised_.get(), scale_.get()}) {
         to_general(commands, *target);
     }
+    ao::bin_objects(objects, constants_, object_values_, object_tiles_);
+    const VkDeviceSize alignment = Context::get().properties().limits.minStorageBufferOffsetAlignment;
+    const std::size_t object_bytes = object_values_.size() * sizeof(float);
+    const std::size_t tile_bytes = object_tiles_.size() * sizeof(std::uint32_t);
+    const UploadRing::Allocation objects_at = ring.allocate(object_bytes, static_cast<std::size_t>(alignment));
+    const UploadRing::Allocation tiles_at = ring.allocate(tile_bytes, static_cast<std::size_t>(alignment));
+    std::memcpy(objects_at.cpu, object_values_.data(), object_bytes);
+    std::memcpy(tiles_at.cpu, object_tiles_.data(), tile_bytes);
+    const auto buffer = reinterpret_cast<VkBuffer>(ring.resource());
+    objects_ = {buffer, objects_at.offset, object_bytes};
+    tiles_ = {buffer, tiles_at.offset, tile_bytes};
     dispatch(commands, kDistance, set_of(allocate, depth.view, depth_layout, *denoised_, *distance_, *distance_), kDistance == 0u ? width : width, height);
-    dispatch(commands, kOcclusion, set_of(allocate, depth.view, depth_layout, *denoised_, *distance_, *raw_), width, height);
+    dispatch(commands, ssao ? kSsao : kOcclusion, set_of(allocate, depth.view, depth_layout, *denoised_, *distance_, *raw_), width, height);
     dispatch(commands, kDenoise, set_of(allocate, depth.view, depth_layout, *raw_, *distance_, *denoised_), width, height);
     dispatch(commands, kUpsample, set_of(allocate, depth.view, depth_layout, *denoised_, *distance_, *scale_), depth.width, depth.height);
     return true;

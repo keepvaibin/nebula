@@ -940,7 +940,8 @@ void RendererVk::record_scene_ao() {
                   VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                   VK_ACCESS_SHADER_READ_BIT);
     const auto allocate = [this](VkDescriptorSetLayout layout) { return allocate_post_set(layout); };
-    const bool made = ao_.prepare(commands_, *scene_.depth, kDepthSampleLayout, scene_ao_view_, allocate);
+    const bool made = ao_.prepare(commands_, *scene_.depth, kDepthSampleLayout, scene_ao_view_, get_render_config().ambient_occlusion_ssao,
+                                  scene_ao_objects_, matrix_ring_, allocate);
     image_barrier(commands_, scene_.depth->image, aspects, kDepthSampleLayout,
                   VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0,
                   VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
