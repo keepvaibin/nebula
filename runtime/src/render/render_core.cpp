@@ -172,13 +172,6 @@ std::uint64_t read_env_u64(const char* name, std::uint64_t fallback) {
     return end == value ? fallback : parsed;
 }
 
-// A present snapshot waits for the last one's readback instead of being skipped (a run of snapshots holds every
-// present); GALAXY_TEST_CAPTURE_NO_WAIT=1 skips instead.
-bool snapshot_waits() {
-    static const bool waits = read_env_u64(NEBULA_TEST_ENV("GALAXY_TEST_CAPTURE_NO_WAIT"), 0u) == 0u;
-    return waits;
-}
-
 // GALAXY_TRACE_LIGHTS=1: the actor-light aim every 600 scenes, the first moved draws and the CPU
 // cycles ([rt-actor-light]); =2: the aim of every scene.
 std::uint64_t actor_light_trace_level() {
@@ -197,35 +190,6 @@ std::uint64_t trace_cycles() noexcept {
 #else
     return static_cast<std::uint64_t>(galaxy::qpc_now());
 #endif
-}
-
-// Test hook: GALAXY_TEST_RENDER_STALL_MS=<ms>,<every N render chunks> makes
-// the render thread sleep, to reproduce a slow GPU/driver on any machine.
-struct RenderStallInjection {
-    std::uint32_t ms = 0u;
-    std::uint32_t every = 0u;
-};
-
-const RenderStallInjection& render_stall_injection() {
-    static const RenderStallInjection injection = [] {
-        RenderStallInjection result{};
-        char value[32]{};
-        std::size_t length = 0;
-        if (getenv_s(&length, value, sizeof(value), NEBULA_TEST_ENV("GALAXY_TEST_RENDER_STALL_MS")) != 0 || length <= 1) {
-            return result;
-        }
-        const char* end = value + length - 1;
-        const char* comma = std::find(static_cast<const char*>(value), end, ',');
-        std::from_chars(value, comma, result.ms);
-        if (comma != end) {
-            std::from_chars(comma + 1, end, result.every);
-        }
-        if (result.every == 0u) {
-            result.ms = 0u;
-        }
-        return result;
-    }();
-    return injection;
 }
 
 bool trace_stalls_enabled() {
@@ -2166,16 +2130,6 @@ unsigned RenderCore::interp_gpu_governor(double& rate) {
     if (configured == 0u) {
         return configured;
     }
-    // GALAXY_TEST_INTERP_SUBFRAMES=<k>: every sequence takes k sub-frames (at most the configured count), whatever the
-    // GPU's and the cadence's governors would allow: what a capped rate shows, held for a test.
-    static const std::uint64_t forced = read_env_u64(NEBULA_TEST_ENV("GALAXY_TEST_INTERP_SUBFRAMES"), 0u);
-    if (forced != 0u) [[unlikely]] {
-        const auto subframes = static_cast<unsigned>(std::min<std::uint64_t>(forced, configured));
-        if (subframes < configured) {
-            rate = 60.0 * static_cast<double>(subframes + 1u);
-        }
-        return subframes;
-    }
     const unsigned allowed = std::min(configured, interp_cadence_cap_);
     const std::uint64_t serial = interp_sequence_serial_;
     if (serial - interp_gpu_checked_ >= 30u && serial >= interp_gpu_warm_until_) {
@@ -3447,12 +3401,6 @@ void RenderCore::render_thread_main() {
                     if (interp_sequence_.active && interp_sequence_.flush_requested) {
                         advance_interp_sequence(true);
                     }
-                    if (const RenderStallInjection& stall = render_stall_injection(); stall.ms != 0u) {
-                        static std::uint32_t chunks = 0u;
-                        if (++chunks % stall.every == 0u) {
-                            std::this_thread::sleep_for(std::chrono::milliseconds(stall.ms));
-                        }
-                    }
                     render_frame_on_thread(chunk);
                     run_pending_interp_start();
                     {
@@ -3642,7 +3590,7 @@ void RenderCore::present_cached_display_on_thread(
         : !count_game_display_present ? std::string{} : present_snapshot_path();
     if (!snapshot_path.empty()) {
         renderer_.set_debug_capture_paths({}, snapshot_path);
-        renderer_.set_capture_waits(snapshot_waits());
+        renderer_.set_capture_waits(true);
     }
     const bool game_frame_only =
         interp_recording_ && count_game_display_present && !interp_presenting_real_ && !duplicate_stamp;
@@ -3775,13 +3723,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
             const RenderConfig render = get_render_config();
             const bool enhanced = render.enhanced_lighting;
             const bool per_pixel = render.per_pixel_lighting;
-            // GALAXY_TEST_CURVED_AB=1: curved surfaces off in frames that end in an odd present (same-run pictures).
-            static const bool curved_ab = read_env_u64(NEBULA_TEST_ENV("GALAXY_TEST_CURVED_AB"), 0u) != 0u;
-            curved_surfaces_ = render.curved_surfaces && curved_surfaces_offered() &&
-                               !(curved_ab && ((g_snapshot_presents + 1u) & 1u) != 0u);
-            // GALAXY_TEST_CURVED_SPLIT_AB=1: a curved draw's flat triangles stay patches in those frames.
-            static const bool split_ab = read_env_u64(NEBULA_TEST_ENV("GALAXY_TEST_CURVED_SPLIT_AB"), 0u) != 0u;
-            curved_split_ = !(split_ab && ((g_snapshot_presents + 1u) & 1u) != 0u);
+            curved_surfaces_ = render.curved_surfaces && curved_surfaces_offered();
             ambient_occlusion_ =
                 render.ambient_occlusion && renderer_.ambient_occlusion_ready();
             // A lighting-mode change re-keys every lit draw's pipeline.
@@ -4095,7 +4037,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
         const std::string snapshot_path = present_snapshot_path();
         if (!snapshot_path.empty()) {
             renderer_.set_debug_capture_paths({}, snapshot_path);
-            renderer_.set_capture_waits(snapshot_waits());
+            renderer_.set_capture_waits(true);
         }
         renderer_.present(selected_display, !snapshot_path.empty());
         if (!snapshot_path.empty()) {
@@ -5714,7 +5656,7 @@ void RenderCore::draw_record_shape(const shapes::Record& record) {
     flush_pending_draw_batch();
     cached_draw_run_batch_compatible_known_ = false;
 
-    const bool curved = current_curved_ && curved_split_ && current_flat_pipeline_ != nullptr;
+    const bool curved = current_curved_ && current_flat_pipeline_ != nullptr;
     if (curved && !shape.split_built) {
         shape.split_built = true;
         (void)shapes::expand(geometry, arrays, position_matrix, shape.curved.get(), expand_scratch_);

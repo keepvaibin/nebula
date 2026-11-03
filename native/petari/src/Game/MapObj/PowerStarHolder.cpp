@@ -6,7 +6,6 @@
 
 PowerStarHolder::PowerStarHolder(const char* pName) : NameObj(pName) {
     mNumInfos = 0;
-    MR::zeroMemory(mInfos, sizeof(mInfos));
 }
 
 void PowerStarHolder::init(const JMapInfoIter&) {
@@ -17,7 +16,7 @@ void PowerStarHolder::registerPowerStar(PowerStar* pStar, int starNum) {
     info->mStar = pStar;
     info->mStarNum = starNum;
     info->mIsAppear = false;
-    mInfos[mNumInfos] = info;
+    mInfos.at(mNumInfos) = info;
     mNumInfos++;
 }
 

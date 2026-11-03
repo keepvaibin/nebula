@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Game/Util/Array.hpp"
+
 
 class AutoEffectGroup;
 class EffectKeeper;
@@ -15,7 +17,7 @@ public:
     AutoEffectGroup* find(const char* pName) const;
     bool isExist(const char* pName) const;
 
-    AutoEffectGroup* mGroups[0x100];
+    MR::GrowTable< AutoEffectGroup*, 0x100 > mGroups;
     s32 mCount;
 };
 

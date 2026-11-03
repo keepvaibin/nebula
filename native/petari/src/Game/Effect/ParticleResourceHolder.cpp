@@ -89,7 +89,7 @@ void ParticleResourceHolder::countAutoEffectNum() {
             if (!found) {
                 EffectNum* pParticle = new EffectNum(pGroupName);
                 const int index = mNumEffectNums++;
-                mEffectNums[index] = pParticle;
+                mEffectNums.at(index) = pParticle;
             }
         }
     }

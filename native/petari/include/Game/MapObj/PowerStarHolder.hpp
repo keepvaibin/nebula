@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Game/Util/Array.hpp"
+
 #include "Game/MapObj/PowerStar.hpp"
 
 struct PowerStarRequestInfo {
@@ -21,7 +23,7 @@ public:
     PowerStar* getAppearedPowerStar(int) const;
     PowerStarRequestInfo* findPowerStarRequestInfo(int) const;
 
-    PowerStarRequestInfo* mInfos[0x10];
+    MR::GrowTable< PowerStarRequestInfo*, 0x10 > mInfos;
     s32 mNumInfos;
 };
 

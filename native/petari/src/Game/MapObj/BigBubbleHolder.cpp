@@ -52,7 +52,7 @@ void BigBubbleHolder::addMoveLimitter(BigBubbleMoveLimitter* pLimitter) {
             return;
         }
     }
-    mLimitters[mNumLimitters++] = pLimitter;
+    mLimitters.at(mNumLimitters++) = pLimitter;
 }
 
 BigBubble* BigBubbleHolder::generateBigBubble(LiveActor* pHost, const TVec3f& rPos, const TVec3f& rUp, f32 volume, bool isObstruct, s32 actionType,

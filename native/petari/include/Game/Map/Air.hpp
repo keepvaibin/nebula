@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Game/Util/Array.hpp"
+
 #include "Game/LiveActor/LiveActor.hpp"
 
 class Air : public LiveActor {
@@ -49,7 +51,7 @@ public:
     void add(PriorDrawAir*);
     bool isExistValidDrawAir() const;
 
-    PriorDrawAir* mAirs[8];
+    MR::GrowTable< PriorDrawAir*, 8 > mAirs;
     s32 mAirCount;
 };
 
