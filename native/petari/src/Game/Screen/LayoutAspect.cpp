@@ -1,3 +1,4 @@
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Screen/LayoutAspect.hpp"
 #include <JSystem/JUtility/JUTNativeLog.hpp>
 #include "Game/Screen/LayoutManager.hpp"
@@ -80,8 +81,8 @@ namespace {
         {"MiiSelect", "Text", FitSlide, 660.0f},
         {"MiiSelect", "MiiPosition", FitSlide, 660.0f},
         {"MiiSelect", "Arrow", FitSlide, 660.0f},
-        {"MiiSelect", "MiiGroupA", FitSlide, 608.0f},
-        {"MiiSelect", "MiiGroupB", FitSlide, 608.0f},
+        {"MiiSelect", "MiiGroupA", FitSlide, NebulaFrameClock::cLayoutWidth},
+        {"MiiSelect", "MiiGroupB", FitSlide, NebulaFrameClock::cLayoutWidth},
         // Nebula's achievement pop-up (NebulaAchievementToast) in the bottom-right corner.
         {"NebulaAchievementToast", "InfoWindowCenter", FitRight | FitBottom},
         // The file select's Quit to desktop (NebulaQuitButton): its Start button in the top-left corner, sliding in
@@ -129,18 +130,18 @@ namespace {
     struct Extent {
         f32 mWidth;
         f32 mHeight;
-        f32 mHorizontalDelta;  // how much further each side edge lies than at 608
+        f32 mHorizontalDelta;  // how much further each side edge lies than at the authored width
         f32 mVerticalDelta;
     };
 
     // The canvas setupDrawForNW4RLayout projects; 608x456 when nothing changes.
     Extent getExtent() {
-        Extent extent = {608.0f, 456.0f, 0.0f, 0.0f};
+        Extent extent = {NebulaFrameClock::cLayoutWidth, NebulaFrameClock::cScreenHeight, 0.0f, 0.0f};
         if (MR::isScreen16Per9() && MR::getDisplay().wide) {
             extent.mWidth = MR::getDisplay().layout_width;
-            extent.mHeight = 456.0f * MR::getDisplay().vertical_fit;
-            extent.mHorizontalDelta = (extent.mWidth - 608.0f) * 0.5f;
-            extent.mVerticalDelta = (extent.mHeight - 456.0f) * 0.5f;
+            extent.mHeight = NebulaFrameClock::cScreenHeight * MR::getDisplay().vertical_fit;
+            extent.mHorizontalDelta = (extent.mWidth - NebulaFrameClock::cLayoutWidth) * 0.5f;
+            extent.mVerticalDelta = (extent.mHeight - NebulaFrameClock::cScreenHeight) * 0.5f;
         }
         return extent;
     }
@@ -221,8 +222,8 @@ namespace {
 
     // True when the branch moved, so the copied matrices need copying again.
     bool applyFit(nw4r::lyt::Pane* pPane, const FitRule& rRule, const Extent& rExtent) {
-        const f32 wide = rExtent.mWidth / 608.0f;
-        const f32 tall = rExtent.mHeight / 456.0f;
+        const f32 wide = rExtent.mWidth / NebulaFrameClock::cLayoutWidth;
+        const f32 tall = rExtent.mHeight / NebulaFrameClock::cScreenHeight;
         if (rRule.mFit & FitCover) {
             const f32 k = wide > tall ? wide : tall;
             scaleRow(pPane, 0, k);
@@ -385,7 +386,7 @@ namespace LayoutAspect {
                                                                                      : pManager->findPaneByName(pManager->mPaneInfoList[i].mName);
             NebulaMtxCopy(pPane->mGlbMtx, pManager->mPaneInfoList[i].mMtxRef);
             if (MR::isScreen16Per9()) {
-                pManager->mPaneInfoList[i].mMtxRef[0][3] *= MR::getScreenWidth() / 608.0f;
+                pManager->mPaneInfoList[i].mMtxRef[0][3] *= MR::getScreenWidth() / NebulaFrameClock::cLayoutWidth;
             }
         }
     }

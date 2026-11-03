@@ -1,3 +1,4 @@
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Screen/MoviePlayerSimple.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/MovieDraw.hpp"
@@ -80,7 +81,7 @@ void MoviePlayerSimple::draw() const {
         if (MR::isScreen16Per9()) {
             frameBufferWidth = MR::getScreenUnitsAcross();
         } else {
-            frameBufferWidth = 832;
+            frameBufferWidth = NebulaFrameClock::cWideScreenWidth;
         }
 
         u32 ySize = mMovie->mVideoInfo.mHeight;

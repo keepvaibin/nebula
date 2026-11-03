@@ -1,3 +1,4 @@
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Scene/GameSceneFunction.hpp"
 #include "Game/Scene/PlayTimerScene.hpp"
@@ -116,7 +117,7 @@ namespace MR {
         if (isScreen16Per9() && getDisplay().wide && !sDesignScreenWidth) {
             return getDisplay().screen_width;
         }
-        return isScreen16Per9() ? 832 : 608;
+        return isScreen16Per9() ? NebulaFrameClock::cWideScreenWidth : static_cast< s32 >(NebulaFrameClock::cLayoutWidth);
     }
 
     s32 getSafetyFrameWidth() {

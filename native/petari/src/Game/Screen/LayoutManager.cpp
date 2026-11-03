@@ -1,3 +1,4 @@
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Screen/LayoutManager.hpp"
 #include "Game/Screen/LayoutAspect.hpp"
 #include "Game/Screen/LayoutCoreUtil.hpp"
@@ -482,7 +483,7 @@ void LayoutManager::calcAnimWithoutLocationAdjust(const nw4r::lyt::DrawInfo& rDr
                 mPaneInfoList[i].mPaneCtrl != nullptr ? mPaneInfoList[i].mPaneCtrl->mPane : findPaneByName(mPaneInfoList[i].mName);
             NebulaMtxCopy(pPane->mGlbMtx, mPaneInfoList[i].mMtxRef);
             if (MR::isScreen16Per9()) {
-                mPaneInfoList[i].mMtxRef[0][3] *= MR::getScreenWidth() / 608.0f;
+                mPaneInfoList[i].mMtxRef[0][3] *= MR::getScreenWidth() / NebulaFrameClock::cLayoutWidth;
             }
         }
     }
