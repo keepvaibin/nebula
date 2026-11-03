@@ -22,6 +22,6 @@ namespace NebulaFrameClock {
 
 
     // The picture's shape the game draws for, latched at each frame from the host's output shape: the screen width,
-    // the camera's aspect and the layout canvas follow it (wide == 0: the Wii's 16:9).
+    // the camera's aspect and the layout canvas follow it (wide == 0: 16:9).
     const NebulaDisplay& display();
 }  // namespace NebulaFrameClock

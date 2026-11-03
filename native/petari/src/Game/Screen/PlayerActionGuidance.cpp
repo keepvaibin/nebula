@@ -54,7 +54,7 @@ void PlayerActionGuidance::control() {
 
     _37 = _36;
     _36 = false;
-    // Pictures of a Wii Remote (shaking it, tilting it) only with one in hand.
+    // Pictures of the remote (shaking it, tilting it) only with one in hand.
     if (!NebulaIcons::wiiRemoteInUse()) {
         _35 = false;
     }

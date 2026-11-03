@@ -15,8 +15,8 @@
 #include "Game/Util/ByteView.hpp"
 
 namespace {
-    // A material's ID (mDiffFlag): packets with the same ID share their material state (J3DMatPacket::isSame). The
-    // console derived it from the material's address; here each material table takes a fresh range, so IDs are unique
+    // A material's ID (mDiffFlag): packets with the same ID share their material state (J3DMatPacket::isSame). Each
+    // material table takes a fresh range, so IDs are unique
     // across models, never 0 (a material no loader named), and below bit 30 (J3DDiffFlag_Unk40000000,
     // J3DDiffFlag_Changed).
     u32 sNextMaterialID = 1;
@@ -476,7 +476,7 @@ void J3DModelLoader_v26::readMaterialTable(J3DMaterialBlock const* i_block, u32 
         mpMaterialTable->mMaterialNodePointer[i] = factory.create(NULL, J3DMaterialFactory::MATERIAL_TYPE_NORMAL, i, i_flags);
     }
     for (u16 i = 0; i < mpMaterialTable->mMaterialNum; i++) {
-        // The console's unshifted address set bit 31: these materials never share a packet.
+        // Bit 31: these materials never share a packet.
         mpMaterialTable->mMaterialNodePointer[i]->mDiffFlag = J3DDiffFlag_Changed | (materialIDs + factory.getMaterialID(i));
     }
 }

@@ -75,8 +75,7 @@ LogoScene::~LogoScene() {
 }
 
 void LogoScene::init() {
-        // The console's strap screen covers the system archive's load and asks for a button press. Natively the load
-        // runs behind black (the fader starts blank) and the title follows as soon as it and the save data are ready.
+        // The system archive's load runs behind black (the fader starts blank) and the title follows as soon as it and the save data are ready.
         initNerve(GET_NERVE_ANON(LogoSceneWaitReadDoneSystemArchive));
 
     SceneFunction::createHioBasicNode(this);

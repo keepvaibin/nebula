@@ -22,7 +22,7 @@ enum TalkMessageCtrl_Type {
     TalkMessageCtrl_Type9,
     TalkMessageCtrl_TypeA,
     // After 0xA the branch types are the galaxy result (TypeE), the time-keep demo (TypeB), then a message read before
-    // (TypeC): TalkMessageCtrl::rootNodePre's jump table in RMGE01 (0x805A2434). Numbered B, C, E the nodes of those
+    // (TypeC), the order TalkMessageCtrl::rootNodePre branches on. Numbered B, C, E the nodes of those
     // types asked the wrong question, and a character's line after a galaxy took the wrong branch.
     TalkMessageCtrl_TypeE,
     TalkMessageCtrl_TypeB,

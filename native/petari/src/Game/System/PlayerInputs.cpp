@@ -66,7 +66,7 @@ void PlayerInputReader::resetState() {
     mSubHandResetRequested = true;
 }
 
-// A connection or a move stick change, told to PlayerInput as the console's connect and extension callbacks told it.
+// A connection or a move stick change, told to PlayerInput.
 void PlayerInputReader::updateConnection(s32 chan, const NebulaInputDevice& rDevice) {
     const bool wasConnected = mDevice.connected != 0;
     const bool hadSubPad = wasConnected && mDevice.nunchuk != 0;

@@ -160,7 +160,7 @@ void KinopioAstro::init(const JMapInfoIter& rIter) {
     }
 
     if (MR::isEqualStageName("PeachCastleFinalGalaxy")) {
-        // The staff's letter went to the Wii Message Board: no message board (B-31, Q5), no letter.
+        // No message board (B-31, Q5), no letter from the staff.
         return;
     }
 

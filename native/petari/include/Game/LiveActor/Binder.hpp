@@ -66,7 +66,7 @@ public:
     f32 _1E8;
     struct {
         // MR:: utilities mask this as a byte (0x80 is _0): fields from the least significant bit up, so each has the
-        // console's bit.
+        // bit those masks name.
         u8 : 2;
         u8 _5 : 1;
         u8 _4 : 1;

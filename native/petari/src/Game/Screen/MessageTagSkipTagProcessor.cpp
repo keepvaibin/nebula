@@ -2,7 +2,7 @@
 #include <string.h>
 
 namespace {
-    // A string argument's slot in the text has the console pointer's 4 bytes: it holds a token naming the string in
+    // A string argument's slot in the text has 4 bytes: it holds a token naming the string in
     // this table (0: none). Each distinct string keeps its entry; a full table reuses the oldest, and a token to a
     // reused entry reads as no string. The game's arguments are long-lived (messages, galaxy names, a few buffers).
     const u32 kParamStringCount = 1024;

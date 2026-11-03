@@ -1805,8 +1805,7 @@ void MarioActor::calcAnimInMovement() {
             MR::releaseAnimFrame(this);
             _3DE = 1;
 
-            // The first transformation's explanation, by the mode (the game's jump table, RMGE01 0x805A386C; the
-            // decomp had listed its bodies in code order as cases 1-7, so Ice showed the Spring explanation).
+            // The first transformation's explanation, by the mode.
             switch (mPlayerMode) {
             case PlayerMode_Invincible:
                 MR::explainInvincibleMarioIfAtFirst();

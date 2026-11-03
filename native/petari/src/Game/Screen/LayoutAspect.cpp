@@ -133,7 +133,7 @@ namespace {
         f32 mVerticalDelta;
     };
 
-    // The canvas setupDrawForNW4RLayout projects; the Wii's 608x456 when nothing changes.
+    // The canvas setupDrawForNW4RLayout projects; 608x456 when nothing changes.
     Extent getExtent() {
         Extent extent = {608.0f, 456.0f, 0.0f, 0.0f};
         if (MR::isScreen16Per9() && MR::getDisplay().wide) {

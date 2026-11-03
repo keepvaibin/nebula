@@ -141,7 +141,7 @@ namespace {
 };  // namespace
 
 namespace {
-    // The projection is a 4x4 copy; the console read the 3x4 identity and the 16 bytes after it (a vtable).
+    // The projection is a 4x4 copy.
     static f32 proj_identity[4][4] = {
         {1.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 0.0f, 1.0f}};
 };  // namespace
@@ -184,7 +184,7 @@ void StarPointerPeekZ::setDrawSyncToken() {
 }
 
 namespace StarPointerFunction {
-    // No source in the decompilation; written from the RMGE01 assembly (0x80385C1C). Moves rPos along rDir to the
+    // Moves rPos along rDir to the
     // first screen edge (inset by the margins) that stays in the screen.
     bool forceOutsideScreenEdge(TVec2f* pOut, const TVec2f& rPos, const TVec2f& rDir, f32 marginX, f32 marginY) {
         if (!isInScreen(rPos, marginX, marginY)) {
