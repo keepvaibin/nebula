@@ -761,6 +761,18 @@ void refresh_controls_devices(bool force) {
         }
         s_controls_devices.count = kept;
     }
+#if defined(__ANDROID__)
+    // A phone's own controls are its screen: the keyboard's row only for a keyboard that is there.
+    if (!galaxy::host::physical_keyboard_attached()) {
+        std::size_t kept = 0;
+        for (std::size_t i = 0; i < s_controls_devices.count; ++i) {
+            if (s_controls_devices.entries[i].key.scheme != galaxy::input::ControlScheme::Keyboard) {
+                s_controls_devices.entries[kept++] = s_controls_devices.entries[i];
+            }
+        }
+        s_controls_devices.count = kept;
+    }
+#endif
     if (s_controls_devices.count == 0u) {
         end_controls_capture();
         return;
@@ -2573,6 +2585,9 @@ std::string native_settings_row_text(
             default: return "INPUT: AUTO";
             }
         case ControlsRow::Device: {
+#if defined(__ANDROID__)
+            if (s_controls_devices.count == 0u) return "EDIT: TOUCH SCREEN";
+#endif
             if (s_controls_devices.count == 0u) return "EDIT: NONE";
             const galaxy::input::DeviceEntry& entry = s_controls_devices.entries[
                 galaxy::input::resolve_device(s_controls_devices, s_controls_device)];

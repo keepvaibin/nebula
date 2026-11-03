@@ -5,6 +5,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/NPC/Rosetta.hpp"
 #include "Game/NPC/TalkMessageFunc.hpp"
+#include "Game/System/NebulaAchievements.hpp"
 #include "Game/NameObj/NameObjArchiveListCollector.hpp"
 #include "Game/Screen/IconAButton.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
@@ -173,6 +174,7 @@ void RosettaDemoAstroDomeExplain::exeDemo() {
     }
 
     if (MR::isDemoLastStep()) {
+        NebulaAchievements::onRosalinaWelcome();
         mRosetta->endDemo();
     }
 }

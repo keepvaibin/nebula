@@ -3,6 +3,7 @@
 #include "Game/LiveActor/ClippingGroupHolder.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/ViewGroupCtrl.hpp"
+#include "Game/NameObj/NameObjExecuteHolder.hpp"
 #include "Game/Util/JMapUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 
@@ -10,7 +11,7 @@ namespace {
     static int sActorNumMax = 2560;
 };  // namespace
 
-ClippingActorHolder::ClippingActorHolder() : NameObj("\203\116\203\212\203\142\203\163\203\223\203\117\203\101\203\116\203\136\201\133\225\333\216\235" /* クリッピングアクター保持 */), mActorNum(), _10(), _14(), _18(), _1C(), mViewGroupCtrl() {
+ClippingActorHolder::ClippingActorHolder() : NameObj("\203\116\203\212\203\142\203\163\203\223\203\117\203\101\203\116\203\136\201\133\225\333\216\235" /* クリッピングアクター保持 */), mActorNum(), _10(), _14(), _18(), _1C(), mViewGroupCtrl(), mPlanets(), mPlanetNum() {
     _10 = new ClippingActorInfoList(::sActorNumMax);
     _14 = new ClippingActorInfoList(::sActorNumMax);
     _18 = new ClippingActorInfoList(::sActorNumMax);
@@ -47,6 +48,40 @@ void ClippingActorHolder::initViewGroupTable() {
     mViewGroupCtrl->initViewGroup(_1C);
     mViewGroupCtrl->initViewGroup(_14);
     mViewGroupCtrl->endInitViewGroupTable();
+
+    ClippingActorInfoList* lists[] = {_10, _14, _18, _1C};
+    s32 total = 0;
+    for (s32 l = 0; l < 4; l++) {
+        total += lists[l]->_4;
+    }
+    mPlanets = new ClippingActorInfo*[total > 0 ? total : 1];
+    for (s32 l = 0; l < 4; l++) {
+        for (s32 i = 0; i < lists[l]->_4; i++) {
+            if (MR::isMovementPlanet(lists[l]->mClippingActorList[i]->mActor)) {
+                mPlanets[mPlanetNum++] = lists[l]->mClippingActorList[i];
+            }
+        }
+    }
+}
+
+// The smallest planet whose clipping sphere (it holds the model) has the actor in or just above it.
+const ClippingActorInfo* ClippingActorHolder::findGround(const ClippingActorInfo* pInfo) const {
+    const ClippingActorInfo* ground = nullptr;
+    const TVec3f& pos = pInfo->mActor->mPosition;
+    for (s32 i = 0; i < mPlanetNum; i++) {
+        const ClippingActorInfo* planet = mPlanets[i];
+        if (planet == pInfo) {
+            return nullptr;
+        }
+        const f32 reach = planet->_8 * 1.25f;
+        const f32 x = pos.x - planet->_4->x;
+        const f32 y = pos.y - planet->_4->y;
+        const f32 z = pos.z - planet->_4->z;
+        if (x * x + y * y + z * z <= reach * reach && (ground == nullptr || planet->_8 < ground->_8)) {
+            ground = planet;
+        }
+    }
+    return ground;
 }
 
 void ClippingActorHolder::entryLodCtrl(LodCtrl* pLodCtrl, const JMapInfoIter& rIter) {
