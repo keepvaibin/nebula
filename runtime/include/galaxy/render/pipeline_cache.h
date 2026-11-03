@@ -73,7 +73,7 @@ private:
     std::atomic<bool> prepare_ready_{false};
     std::mutex prepared_lock_;
     std::vector<Prepared> prepared_;
-    std::unordered_map<std::uint64_t, std::vector<std::pair<std::pair<std::uint32_t, RenderStateKey>,
+    std::unordered_map<std::uint64_t, std::vector<std::pair<std::pair<std::uint64_t, RenderStateKey>,
                                                          Microsoft::WRL::ComPtr<ID3D12PipelineState>>>> native_psos_;
 };
 

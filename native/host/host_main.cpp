@@ -33,6 +33,7 @@
 #include "galaxy/mii_formats.h"
 #include "galaxy/mii_import.h"
 #include "galaxy/mods.h"
+#include "galaxy/render/mod_shaders.h"
 #if defined(NEBULA_HOST_RENDERER)
 #include "galaxy/experimental_ultrawide_aspect.h"
 #include "galaxy/frame_timeline.h"
@@ -3676,6 +3677,11 @@ void prepare_mod_files(const fs::path& settings_folder, const std::string& game_
     for (const fs::path& store : plan.stores) {
         const std::string text = "package " + utf8_of(store.parent_path().filename()) + (gPak.store.attach_overlay(store) ? " applied" : " could not be read");
         log_line("mods:", text.c_str());
+        std::error_code shaders_error;
+        const fs::path shaders = store.parent_path() / "shaders" / galaxy::render::native_shader_file_name();
+        if (fs::is_regular_file(shaders, shaders_error) && !galaxy::render::load_mod_shaders(shaders)) {
+            log_line("mods:", "its shaders could not be read: models that need them are not drawn");
+        }
     }
 }
 

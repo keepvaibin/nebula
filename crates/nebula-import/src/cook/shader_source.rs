@@ -531,6 +531,12 @@ fn pixel_lit(mut text: String) -> String {
     text
 }
 
+/// The headers every material includes, by the name it includes them under.
+pub const HEADERS: [(&str, &str); 2] = [
+    ("j3d_material.hlsli", include_str!("../../../../runtime/src/render/materials/j3d_material.hlsli")),
+    ("native_material.hlsli", include_str!("../../../../runtime/src/render/materials/native_material.hlsli")),
+];
+
 /// A program record's shader, from after its comment line: `#include` on. An effect it can't express is an error naming it.
 pub fn material_source(record: &[u8]) -> Result<String> {
     if record.len() != 756 {
