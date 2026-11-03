@@ -1148,6 +1148,52 @@ LONG WINAPI unhandled_filter(EXCEPTION_POINTERS* info) {
 #if defined(NEBULA_HOST_RENDERER)
 // NebulaNative --crash-report <file>: the report of an instance that stopped (report_crash_facts), shown by this new
 // process. The technical details stay in the file, which the dialog offers to show.
+// The language folder whose words the crash dialog uses: the player's setting, for Auto (or settings that do not load,
+// the reason for some reports) the system's.
+const char* crash_dialog_language() {
+    galaxy::GameLanguage language = galaxy::GameLanguage::Auto;
+    try {
+        galaxy::load_runtime_settings_from_file();
+        language = galaxy::get_runtime_settings().language;
+    } catch (const std::exception&) {
+    }
+    const LANGID system = GetUserDefaultUILanguage();
+    const auto region = [system](WORD sublanguage) { return SUBLANGID(system) == sublanguage; };
+    const bool spain = PRIMARYLANGID(system) == LANG_SPANISH && region(SUBLANG_SPANISH_MODERN);
+    const bool canada = PRIMARYLANGID(system) == LANG_FRENCH && region(SUBLANG_FRENCH_CANADIAN);
+    switch (language) {
+    case galaxy::GameLanguage::Japanese: return "JpJapanese";
+    case galaxy::GameLanguage::English: return "UsEnglish";
+    case galaxy::GameLanguage::German: return "EuGerman";
+    case galaxy::GameLanguage::French: return canada ? "UsFrench" : "EuFrench";
+    case galaxy::GameLanguage::Spanish: return spain ? "EuSpanish" : "UsSpanish";
+    case galaxy::GameLanguage::Italian: return "EuItalian";
+    case galaxy::GameLanguage::Dutch: return "EuDutch";
+    case galaxy::GameLanguage::Auto: break;
+    }
+    switch (PRIMARYLANGID(system)) {
+    case LANG_JAPANESE: return "JpJapanese";
+    case LANG_GERMAN: return "EuGerman";
+    case LANG_FRENCH: return canada ? "UsFrench" : "EuFrench";
+    case LANG_SPANISH: return spain ? "EuSpanish" : "UsSpanish";
+    case LANG_ITALIAN: return "EuItalian";
+    case LANG_DUTCH: return "EuDutch";
+    case LANG_PORTUGUESE: return "UsPortuguese";
+    case LANG_KOREAN: return "KrKorean";
+    case LANG_CHINESE:
+        return region(SUBLANG_CHINESE_SIMPLIFIED) || region(SUBLANG_CHINESE_SINGAPORE) ? "CnSimpChinese" : "TwTradChinese";
+    default: return "UsEnglish";
+    }
+}
+
+std::wstring wide_of(std::string_view text) {
+    std::wstring wide(static_cast<std::size_t>(
+                          MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), nullptr, 0)),
+                      L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), wide.data(), static_cast<int>(wide.size()));
+    return wide;
+}
+
 int show_crash_report_dialog() {
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     int count = 0;
@@ -1167,12 +1213,13 @@ int show_crash_report_dialog() {
         text.resize(technical);
     }
     while (!text.empty() && (text.back() == '\n' || text.back() == '\r')) text.pop_back();
-    text += "\n\nOpen the folder with the report?";
-    std::wstring wide(static_cast<std::size_t>(
-                          MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), nullptr, 0)),
-                      L'\0');
-    MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), wide.data(), static_cast<int>(wide.size()));
-    if (MessageBoxW(nullptr, wide.c_str(), L"Nebula stopped", MB_ICONERROR | MB_YESNO | MB_SETFOREGROUND | MB_TOPMOST) ==
+    const char* language = crash_dialog_language();
+    text = galaxy::crash::translated_report(text, language);
+    text += "\n\n";
+    text += galaxy::crash::translated("Open the folder with the report?", language);
+    const std::wstring wide = wide_of(text);
+    const std::wstring caption = wide_of(galaxy::crash::translated("Nebula stopped", language));
+    if (MessageBoxW(nullptr, wide.c_str(), caption.c_str(), MB_ICONERROR | MB_YESNO | MB_SETFOREGROUND | MB_TOPMOST) ==
         IDYES) {
         const std::wstring select = L"/select,\"" + file.wstring() + L"\"";
         ShellExecuteW(nullptr, L"open", L"explorer.exe", select.c_str(), nullptr, SW_SHOWNORMAL);
@@ -1633,6 +1680,8 @@ void svc_button_icons(void*, NebulaButtonIcons* icons) {
     static_assert(galaxy::input::kButtonIconCount == NEBULA_BUTTON_ICONS &&
                   static_cast<int>(galaxy::input::ButtonIconStyle::Keyboard) == NEBULA_ICON_STYLE_KEYBOARD &&
                   static_cast<int>(galaxy::input::ButtonGlyph::Key) == NEBULA_ICON_KEY &&
+                  static_cast<int>(galaxy::input::ButtonGlyph::StickAxis) == NEBULA_ICON_STICK_AXIS &&
+                  static_cast<int>(galaxy::input::ButtonIconModel::GameCube) == NEBULA_ICON_MODEL_GAMECUBE &&
                   galaxy::input::kKeyIconLayoutFirst == NEBULA_KEY_LAYOUT_FIRST &&
                   galaxy::input::kKeyIconLayoutCount == NEBULA_KEY_LAYOUT_KEYS &&
                   galaxy::input::kKeyIconMouseLeft == NEBULA_KEY_MOUSE_LEFT &&
@@ -1644,6 +1693,7 @@ void svc_button_icons(void*, NebulaButtonIcons* icons) {
                           galaxy::input::PlayContext::Play;
     const galaxy::input::ButtonIconSpec spec = galaxy::host::button_icons(menu);
     icons->style = static_cast<uint8_t>(spec.style);
+    icons->model = static_cast<uint8_t>(spec.model);
     for (size_t i = 0; i < NEBULA_BUTTON_ICONS; ++i) {
         icons->glyphs[i] = static_cast<uint8_t>(spec.glyphs[i]);
         icons->places[i] = spec.places[i];
@@ -1961,6 +2011,26 @@ void svc_texture_image(void*, const NebulaTextureImage* image) {
     queue_shape_record(std::move(record));
 #else
     (void)image;
+#endif
+}
+
+void svc_texture_hd(void*, const void* image, const void* hd) {
+#if defined(NEBULA_HOST_RENDERER)
+    namespace shapes = galaxy::render::shapes;
+    if (image == nullptr) {
+        return;
+    }
+    shapes::Record record;
+    record.kind = shapes::Record::Kind::TextureHd;
+    record.key = reinterpret_cast<uint64_t>(image);
+    if (const NebulaTexture* picture = nebula_texture_record(hd)) {
+        const auto* first = static_cast<const std::byte*>(hd);
+        record.image = std::make_shared<const std::vector<std::byte>>(first, first + picture->size);
+    }
+    queue_shape_record(std::move(record));
+#else
+    (void)image;
+    (void)hd;
 #endif
 }
 
@@ -3917,6 +3987,7 @@ int main(int argc, char** argv) {
     services.target_clear = svc_target_clear;
     services.frame_read = svc_frame_read;
     services.texture_image = svc_texture_image;
+    services.texture_hd = svc_texture_hd;
     services.mii_record = svc_mii_record;
     services.screen_probe = svc_screen_probe;
     services.screen_probe_results = svc_screen_probe_results;
@@ -4069,7 +4140,7 @@ int main(int argc, char** argv) {
     const char* trace_env = nebula_switch::trace_thread_cpu();
     const bool trace_thread_cpu = trace_env != nullptr && trace_env[0] == '1';
     // Thread cycles count at the time-stamp counter's rate, measured here against the performance counter.
-    const double tsc_hz = [] {
+    const double tsc_hz = !trace_thread_cpu ? 0.0 : [] {
         LARGE_INTEGER f, a, b;
         QueryPerformanceFrequency(&f);
         QueryPerformanceCounter(&a);
@@ -4103,6 +4174,16 @@ int main(int argc, char** argv) {
         }
 #else
         MsgWaitForMultipleObjects(0, nullptr, FALSE, 4, QS_ALLINPUT);
+        // Minimised, the game and its sound stop, as on the platforms that suspend.
+        if (const bool away = galaxy::render::host_window::is_minimized(); away != gSuspended) {
+            {
+                std::lock_guard<std::mutex> lock(gSuspendLock);
+                gSuspended = away;
+            }
+            gSuspendWake.notify_all();
+            gAudio->set_paused(away);
+            log_line("host:", away ? "suspended (minimised)" : "resumed");
+        }
 #endif
         galaxy::render::pump_messages();
         if (galaxy::render::quit_requested()) {

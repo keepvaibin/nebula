@@ -417,12 +417,32 @@ void set_controls_config(const ControlsConfig& config);
 // The game's button icons (its picture font's A, B, C, Z, 1, 2, Plus, Minus, HOME and Control Pad): the style they are
 // drawn in and, for each, the controller's button its game button is bound to.
 enum class ButtonIconStyle : std::uint8_t { Game, Xbox, Nintendo, PlayStation, Keyboard };
+// The style of a controller family's icons: a generic controller (Stadia, Luna and any other) has Xbox's by place.
+[[nodiscard]] constexpr ButtonIconStyle button_icon_style(ControlScheme scheme) noexcept {
+    switch (scheme) {
+    case ControlScheme::Xbox:
+    case ControlScheme::Steam:
+    case ControlScheme::Generic: return ButtonIconStyle::Xbox;
+    case ControlScheme::SwitchPro:
+    case ControlScheme::SwitchPro2: return ButtonIconStyle::Nintendo;
+    case ControlScheme::PlayStation: return ButtonIconStyle::PlayStation;
+    case ControlScheme::Keyboard: break;
+    }
+    return ButtonIconStyle::Game;
+}
+// A model whose buttons are not its family's (ControllerInfo::icons): the DualShock 3's Select and Start, the GameCube
+// pad's analog L and R, its ZL and Z shoulders and its Start.
+enum class ButtonIconModel : std::uint8_t { Standard, Sixaxis, GameCube };
 enum class ButtonIcon : std::uint8_t { A, B, C, Z, One, Two, Plus, Minus, Home, Pad };
 inline constexpr std::size_t kButtonIconCount = 10;
 // What an icon shows: the game's own (Keep); a face button by place (0 south, 1 east, 2 west, 3 north); a shoulder, a
 // trigger or a stick's click (0 left, 1 right); Start (Xbox Menu, Plus, Options), Back (View, Minus, Share or Create),
-// Home; the D-pad (on a keyboard its four keys, ButtonIconSpec::pad_keys); a key or mouse button by its key icon.
-enum class ButtonGlyph : std::uint8_t { Keep, Face, Shoulder, Trigger, Stick, Start, Back, Home, Dpad, Key };
+// Home; the D-pad (on a keyboard its four keys, ButtonIconSpec::pad_keys); a key or mouse button by its key icon;
+// Capture (Share, the touchpad's click, Steam's quick access); Chat (Pro Controller 2 C, DualSense mute); a grip (0 left,
+// 1 right, 2 and 3 the Steam Controller's second pair); a trackpad's click (0 left, 1 right); a stick's direction (0 up,
+// 1 down, 2 left, 3 right; 4 on the right stick's).
+enum class ButtonGlyph : std::uint8_t {
+    Keep, Face, Shoulder, Trigger, Stick, Start, Back, Home, Dpad, Key, Capture, Chat, Grip, Trackpad, StickAxis };
 // The keyboard's icons: one for each key and mouse button (the game API's NEBULA_KEY_*, which these mirror), the keys
 // from kKeyIconLayoutFirst printing what the keyboard's layout puts on them, kKeyIconOther any key without its own.
 inline constexpr std::uint8_t kKeyIconLayoutFirst = 107;
@@ -440,6 +460,7 @@ inline constexpr std::uint8_t kKeyIconNone = 0xFF;  // a D-pad direction with no
 [[nodiscard]] std::uint8_t key_icon_layout_key(std::size_t index) noexcept;
 struct ButtonIconSpec {
     ButtonIconStyle style = ButtonIconStyle::Game;
+    ButtonIconModel model = ButtonIconModel::Standard;
     std::array<ButtonGlyph, kButtonIconCount> glyphs{};
     std::array<std::uint8_t, kButtonIconCount> places{};
     // Keyboard: the D-pad's up, down, left and right keys (kKeyIconNone: none), and what the layout keys print (UCS-2
@@ -452,7 +473,9 @@ struct ButtonIconSpec {
 };
 // The icons in `style` for a controller's `table`: each game button's first controller input (the keyboard's: its first
 // key or mouse button). In menus B is the button that goes back there (JumpBack's), in play the game's B. HOME and the
-// Control Pad keep the game's own on a controller; the keyboard shows HOME's key and the Control Pad's four.
-[[nodiscard]] ButtonIconSpec button_icon_spec(ButtonIconStyle style, const BindingTable& table, bool menu) noexcept;
+// Control Pad keep the game's own on a controller; the keyboard shows HOME's key and the Control Pad's four. `model`
+// counts only in its family's style.
+[[nodiscard]] ButtonIconSpec button_icon_spec(ButtonIconStyle style, const BindingTable& table, bool menu,
+                                              ButtonIconModel model = ButtonIconModel::Standard) noexcept;
 
 }  // namespace galaxy::input

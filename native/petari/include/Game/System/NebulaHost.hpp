@@ -72,6 +72,10 @@ namespace NebulaHost {
         nebula_host()->button_icons(nebula_host()->user, pIcons);
     }
 
+    inline void textureHd(const void* pImage, const void* pHd) {
+        nebula_host()->texture_hd(nebula_host()->user, pImage, pHd);
+    }
+
     inline u32 artExport(const NebulaArtExport* pArt) {
         return nebula_host()->art_export(nebula_host()->user, pArt);
     }

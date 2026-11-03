@@ -1,5 +1,6 @@
 #include "nw4r/ut/CharWriter.h"
 #include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
+#include "Game/Screen/NebulaIcons.hpp"
 #include "Game/Util/NativeShader.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
@@ -47,6 +48,7 @@ namespace nw4r {
             if (loadInfo != mLoadingTexture) {
                 J3DNativeTexObj tobj;
 
+                NebulaIcons::noteDrawn(glyph.pTexture);
                 J3DNativeTexture::init(&tobj, const_cast< void* >(glyph.pTexture), glyph.texWidth, glyph.texHeight, NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP);
                 J3DNativeTexture::setFilter(&tobj, mFilter.atSmall, mFilter.atLarge, 0, 0, 0, false, 0);
                 NativeShader::setTexObj(sMaterial, slot - 0, &tobj);

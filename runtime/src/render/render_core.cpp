@@ -3075,13 +3075,7 @@ void RenderCore::render_thread_main() {
             // 1 ms timer granularity: otherwise sleeps, condition-variable timeouts and
             // waitable timers round to the 15.6 ms scheduler tick, delaying fence
             // polling and every sub-frame wait.
-            if (HMODULE winmm = LoadLibraryW(L"winmm.dll")) {
-                using TimeBeginPeriodFn = UINT(WINAPI*)(UINT);
-                if (auto begin = reinterpret_cast<TimeBeginPeriodFn>(
-                        GetProcAddress(winmm, "timeBeginPeriod"))) {
-                    (void)begin(1);
-                }
-            }
+            galaxy::host::hold_high_resolution_timer(true);
 #endif
         });
     }
@@ -4764,6 +4758,13 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
         if (record.image != nullptr) {
             invalidate_texture_binding_cache_key(record.key);
         }
+        texture_bindings_dirty_ = true;
+        current_texture_binding_key_valid_ = false;
+        return;
+    case shapes::Record::Kind::TextureHd:
+        flush_pending_draw_batch();
+        texture_cache_.register_replacement(record.key, record.image);
+        invalidate_texture_binding_cache_key(record.key);
         texture_bindings_dirty_ = true;
         current_texture_binding_key_valid_ = false;
         return;
