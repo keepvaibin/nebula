@@ -50,6 +50,11 @@ static const uint kSlices = 2u;
 static const uint kSteps = 3u;
 // XeGTAO's falloff: full weight to 38.5% of the radius, then linearly to none at the radius.
 static const float kFalloffRange = 0.615f;
+// XeGTAO's thin occluder compensation: a surface far in front along the view (a leaf, an ear's other sheet) weighs less
+// than one beside the point: depth alone cannot tell a sheet from a wall.
+static const float kThinOccluder = 1.5f;
+// The game's worlds are lit for a stylised picture: a deep crease darkens, it does not turn black.
+static const float kLeastVisibility = 0.2f;
 
 float depth_to_eye_z(float depth) {
     const float ndc = (depth - g_depth.z) / max(g_depth.w - g_depth.z, 1e-7f);
@@ -193,13 +198,15 @@ void AoCS(uint3 id : SV_DispatchThreadID) {
             if (point_at(o + offset, sp)) {
                 const float3 delta = sp - p;
                 const float distance = length(delta);
-                const float weight = saturate(distance * falloff_mul + falloff_add);
+                const float reach = length(float3(delta.xy, delta.z * (1.0f + kThinOccluder)));
+                const float weight = saturate(reach * falloff_mul + falloff_add);
                 horizon0 = max(horizon0, lerp(low0, dot(delta, v) / distance, weight));
             }
             if (point_at(o - offset, sp)) {
                 const float3 delta = sp - p;
                 const float distance = length(delta);
-                const float weight = saturate(distance * falloff_mul + falloff_add);
+                const float reach = length(float3(delta.xy, delta.z * (1.0f + kThinOccluder)));
+                const float weight = saturate(reach * falloff_mul + falloff_add);
                 horizon1 = max(horizon1, lerp(low1, dot(delta, v) / distance, weight));
             }
         }
@@ -212,7 +219,7 @@ void AoCS(uint3 id : SV_DispatchThreadID) {
         visibility += projected_length * (arc0 + arc1);
         direction = float2(direction.x * turn.x - direction.y * turn.y, direction.x * turn.y + direction.y * turn.x);
     }
-    visibility = pow(saturate(visibility / float(kSlices)), g_params.y);
+    visibility = max(pow(saturate(visibility / float(kSlices)), g_params.y), kLeastVisibility);
     u_occlusion[id.xy] = float4(visibility, -p.z, 0.0f, 0.0f);
 }
 #endif
