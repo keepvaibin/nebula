@@ -195,7 +195,7 @@ namespace {
 // runs show the menus' buttons for each controller); -1 without it.
 int test_last_input_scheme() noexcept {
     static const int s_test_scheme = [] {
-        const std::optional<std::string> scheme = read_env_string_uncached(NEBULA_TEST_ENV("GALAXY_TEST_LAST_INPUT"));
+        const std::optional<std::string> scheme = read_env_string_uncached(nebula_switch::test_last_input_name());
         const int value = scheme.has_value() ? std::atoi(scheme->c_str()) : -1;
         return value >= 0 && value < static_cast<int>(input::kControlSchemeCount) ? value : -1;
     }();
@@ -242,7 +242,7 @@ std::array<std::uint16_t, input::kKeyIconLayoutCount> keyboard_layout_labels() n
     static std::array<std::uint16_t, input::kKeyIconLayoutCount> s_labels{};
     static std::uint64_t s_checked_ms = 0u;
     static const std::optional<std::array<std::uint16_t, input::kKeyIconLayoutCount>> s_test = [] {
-        const std::optional<std::string> value = read_env_string_uncached(NEBULA_TEST_ENV("GALAXY_TEST_KEY_LAYOUT"));
+        const std::optional<std::string> value = read_env_string_uncached(nebula_switch::test_key_layout_name());
         if (!value.has_value()) return std::optional<std::array<std::uint16_t, input::kKeyIconLayoutCount>>{};
         std::array<std::uint16_t, input::kKeyIconLayoutCount> labels{};
         const char* p = value->c_str();
@@ -949,7 +949,7 @@ galaxy::input::NativeMousePointerProjection project_client_mouse_pointer(
 // (diagnostic_stick_lease.h), read at most every 100 ms.
 void apply_diagnostic_stick_command_file(NativeInputScriptOverlay& overlay) {
     static const std::optional<std::string> path =
-        read_env_string(NEBULA_TEST_ENV("GALAXY_INPUT_STICK_COMMAND_FILE"));
+        read_env_string(nebula_switch::input_stick_command_file_name());
     if (!path.has_value()) return;
 
     static galaxy::input::DiagnosticStickLease lease;
@@ -1151,7 +1151,7 @@ galaxy::input::PlayerInput build_live_input(
     // A hidden test window (GALAXY_HIDE_WINDOW) is no keyboard or mouse source: no focus, key or cursor calls are
     // made, while controllers, replay and scripts still work.
     static const bool host_window_input_enabled =
-        !read_env_flag(NEBULA_TEST_ENV("GALAXY_HIDE_WINDOW"));
+        !read_env_flag(nebula_switch::hide_window_name());
     HWND focused_window = nullptr;
     const bool window_focused =
         host_window_input_enabled &&
@@ -1295,7 +1295,7 @@ galaxy::input::PlayerInput build_live_input(
 
 bool native_game_co_star(galaxy::input::PlayerInput* input) noexcept {
     // GALAXY_TEST_P2=x,y[,buttons]: a player 2 who holds still there.
-    static const std::optional<std::string> test = read_env_string_uncached(NEBULA_TEST_ENV("GALAXY_TEST_P2"));
+    static const std::optional<std::string> test = read_env_string_uncached(nebula_switch::test_p2_name());
     if (test.has_value()) {
         char* end = nullptr;
         const float x = std::strtof(test->c_str(), &end);
