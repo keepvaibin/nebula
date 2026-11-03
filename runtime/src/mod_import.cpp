@@ -12,6 +12,7 @@
 
 #include "galaxy/mod_import.h"
 
+#include "galaxy/luma.h"
 #include "galaxy/mods.h"
 
 #include <archive.h>
@@ -384,6 +385,9 @@ ImportResult import_mod(const fs::path& source, const fs::path& mods_folder,
         return result;
     }
     if (!folder) lift_top_folder(writer.staging);
+    if (const std::optional<galaxy::luma::Manifest> manifest = galaxy::luma::read_manifest(writer.staging); manifest && !manifest->id.empty()) {
+        result.id = folder_name(manifest->id);
+    }
     // In place: an existing mod of that name is replaced (its settings, kept by name, stay).
     const fs::path final_folder = mods_folder / from_utf8(result.id);
     fs::path previous;

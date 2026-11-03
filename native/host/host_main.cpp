@@ -33,6 +33,7 @@
 #include "galaxy/mii_formats.h"
 #include "galaxy/mii_import.h"
 #include "galaxy/mods.h"
+#include "galaxy/render/host_window.h"
 #include "galaxy/render/mod_shaders.h"
 #if defined(NEBULA_HOST_RENDERER)
 #include "galaxy/experimental_ultrawide_aspect.h"
@@ -2951,11 +2952,30 @@ uint32_t svc_option(void*, uint32_t what) {
         switch (galaxy::get_runtime_input_mode_state().mode) {
         case galaxy::RuntimeInputMode::Controller: return NEBULA_INPUT_MODE_CONTROLLER;
         case galaxy::RuntimeInputMode::RealWiimote: return NEBULA_INPUT_MODE_WII_REMOTE;
+        case galaxy::RuntimeInputMode::Phone:
         case galaxy::RuntimeInputMode::Auto: return NEBULA_INPUT_MODE_AUTO;
         case galaxy::RuntimeInputMode::KeyboardMouse: break;
         }
 #endif
         return NEBULA_INPUT_MODE_KEYBOARD_MOUSE;
+    case NEBULA_OPTION_MENU_TEXT_SIZE:
+#if defined(NEBULA_HOST_RENDERER)
+        return galaxy::get_runtime_settings().menu_text_size;
+#else
+        return 0;
+#endif
+    case NEBULA_OPTION_MODS_CHANGED:
+#if defined(NEBULA_HOST_RENDERER)
+        return galaxy::render::native_settings_mods_changed() ? 1u : 0u;
+#else
+        return 0;
+#endif
+    case NEBULA_OPTION_WINDOW_WIDTH_DP:
+#if defined(NEBULA_HOST_RENDERER)
+        return galaxy::host::window_width_dp();
+#else
+        return 0;
+#endif
     case NEBULA_OPTION_BLOOM:
 #if defined(NEBULA_HOST_RENDERER)
         return galaxy::render::bloom_route();
@@ -3139,8 +3159,14 @@ bool input_device_missing(bool wii_remote) {
     }
     std::array<galaxy::input::ControllerInfo, galaxy::input::kMaxControllers> connected{};
     const bool controller = galaxy::host::connected_controllers(connected) != 0u;
-    missing = galaxy::input_missing(galaxy::get_runtime_input_mode_state().mode, controller, wii_remote,
-                                    galaxy::host::keyboard_or_mouse_attached());
+#if defined(__ANDROID__)
+    // Its screen is always in hand.
+    const bool own_controls = galaxy::get_runtime_input_mode_state().mode == galaxy::RuntimeInputMode::Auto;
+#else
+    const bool own_controls = false;
+#endif
+    missing = !own_controls && galaxy::input_missing(galaxy::get_runtime_input_mode_state().mode, controller, wii_remote,
+                                                     galaxy::host::keyboard_or_mouse_attached());
     return missing;
 }
 
@@ -3574,6 +3600,11 @@ bool one_game_at_a_time() {
             }
         }
     }
+#elif defined(__ANDROID__) && defined(NEBULA_HOST_RENDERER)
+    if (restart && galaxy::render::host_window::restart_game(false)) {
+        // The activity ends this process once the new one is on its way.
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+    }
 #else
     (void)restart;
 #endif
@@ -3583,6 +3614,9 @@ bool one_game_at_a_time() {
 void svc_app_exit(void*) {
     finish_and_exit(false);
 }
+
+static_assert(NEBULA_PATCH_FLIP_PANEL_GROUP == 1 && NEBULA_PATCH_MISS_STAR_PIECES == 7 && NEBULA_PATCH_MESSENGER_EX_ONE_UPS == 12 && NEBULA_PATCH_COUNT == 13,
+              "galaxy::luma::switch_number numbers the switches as these do");
 
 void svc_app_restart(void*) {
     finish_and_exit(true);
@@ -3651,6 +3685,7 @@ std::string json_text(std::string_view text) {
 void cook_mod_files(const galaxy::mods::DiscPlan& plan, const fs::path& settings_folder, const std::string& game_id);
 
 void prepare_mod_files(const fs::path& settings_folder, const std::string& game_id) {
+    galaxy::mods::set_played_language(static_cast<unsigned>(galaxy::game_language_resolved(galaxy::get_runtime_settings().language)));
     const std::string language = galaxy::mods::language_folder(
         game_id, static_cast<unsigned>(galaxy::game_language_resolved(galaxy::get_runtime_settings().language)));
     const galaxy::mods::DiscPlan plan = galaxy::mods::plan_disc_changes(gPak.store, game_id, language);
@@ -3673,16 +3708,14 @@ void prepare_mod_files(const fs::path& settings_folder, const std::string& game_
         log_line("mods:", note.c_str());
     }
     cook_mod_files(plan, settings_folder, game_id);
-    // Converted mods over the rest, the top of the list last.
-    for (const fs::path& store : plan.stores) {
-        const std::string text = "package " + utf8_of(store.parent_path().filename()) + (gPak.store.attach_overlay(store) ? " applied" : " could not be read");
-        log_line("mods:", text.c_str());
+    // What the .luma mods' materials need; Nebula builds what isn't there.
+    for (const fs::path& folder : plan.luma_folders) {
         std::error_code shaders_error;
-        const fs::path shaders = store.parent_path() / "shaders" / galaxy::render::native_shader_file_name();
+        const fs::path shaders = folder / "shaders" / galaxy::render::native_shader_file_name();
         if (fs::is_regular_file(shaders, shaders_error)) {
             const galaxy::render::ModShadersResult loaded = galaxy::render::load_mod_shaders(shaders);
             if (loaded == galaxy::render::ModShadersResult::OtherInterface) {
-                log_line("mods:", "CONVERT THIS MOD AGAIN WITH LUMALINK");
+                log_line("mods:", "its shaders are for another build of Nebula");
             } else if (loaded == galaxy::render::ModShadersResult::Unreadable) {
                 log_line("mods:", "its shaders could not be read: models that need them are not drawn");
             }

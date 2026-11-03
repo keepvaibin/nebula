@@ -140,6 +140,24 @@ in::PlayerInput native_game_input(std::uint64_t frame, std::int32_t star_pointer
             state.motion[i] = {};
         }
     }
+    // The input mode's own devices. Auto takes them all.
+    const galaxy::RuntimeInputMode input_mode = galaxy::get_runtime_input_mode_state().mode;
+    if (input_mode != galaxy::RuntimeInputMode::Auto && input_mode != galaxy::RuntimeInputMode::KeyboardMouse) {
+        const auto mouse = state.keys.mouse;
+        state.keys = {};
+        state.keys.mouse = mouse;
+    }
+    if (input_mode != galaxy::RuntimeInputMode::Auto && input_mode != galaxy::RuntimeInputMode::Phone) {
+        state.touch_buttons = 0u;
+        state.touch_stick_x = 0.0f;
+        state.touch_stick_y = 0.0f;
+    }
+    if (input_mode != galaxy::RuntimeInputMode::Auto && input_mode != galaxy::RuntimeInputMode::Controller) {
+        for (std::size_t i = 0; i < sdl::kMaxPads; ++i) {
+            state.pads[i] = {};
+            state.motion[i] = {};
+        }
+    }
     const in::ControlsConfig& config = live_controls();
     in::PlayerInput snapshot{};
 

@@ -110,6 +110,23 @@ void note_keyboard_input() noexcept;
 #endif
 // The system lists a keyboard or a mouse.
 [[nodiscard]] bool keyboard_or_mouse_attached() noexcept;
+// The phone's on-screen controls: the editor where they are arranged, and what the input mode says of them.
+void arrange_touch_controls() noexcept;
+void input_mode_changed() noexcept;
+// The on-screen controls' settings for the screen as it is now (each size and turn of a screen has its own size). size: in
+// percent, 0: what the game gives this screen.
+struct TouchControlsSettings {
+    unsigned size = 0;
+    unsigned opacity = 60;
+    bool vibration = true;
+};
+[[nodiscard]] bool touch_controls_present() noexcept;
+[[nodiscard]] TouchControlsSettings touch_controls_settings() noexcept;
+void set_touch_controls_settings(const TouchControlsSettings& settings) noexcept;
+void reset_touch_controls_places() noexcept;
+// The window's width in density-independent units (96 to the inch on a desktop, 160 on a phone), for what must stay
+// readable by its real size.
+[[nodiscard]] unsigned window_width_dp() noexcept;
 // The chosen input mode has nothing to play with (input_missing): the game shows its message, and Enter opens the
 // settings menu as F1 does.
 void set_input_missing_shown(bool shown) noexcept;

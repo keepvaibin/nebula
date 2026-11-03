@@ -1407,3 +1407,18 @@ bool restart_game(bool record) {
 }  // namespace host_window
 
 }  // namespace galaxy::render
+
+namespace galaxy::host {
+
+unsigned window_width_dp() noexcept {
+    const HWND window = reinterpret_cast<HWND>(render::host_window::pointer_hwnd.load(std::memory_order_relaxed));
+    RECT area{};
+    if (window == nullptr || !GetClientRect(window, &area)) {
+        return 0u;
+    }
+    const UINT dpi = GetDpiForWindow(window);
+    const int width = area.right - area.left;
+    return static_cast<unsigned>(dpi != 0u ? MulDiv(width, 96, static_cast<int>(dpi)) : width);
+}
+
+}  // namespace galaxy::host

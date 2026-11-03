@@ -31,7 +31,11 @@ object ModImport {
             val parts = staging.listFiles().orEmpty()
             val folders = parts.filter { it.isDirectory }
             val root = if (folders.size == 1 && parts.count { it.isFile && !isNote(it) } == 0) folders[0] else staging
-            val target = File(mods, name)
+            // A .luma says which mod it is: the same id is an update of it, whatever the file is called.
+            val manifest = File(root, "luma.json")
+            val id = if (manifest.isFile) runCatching { org.json.JSONObject(manifest.readText()).optString("id") }.getOrDefault("") else ""
+            val folderName = if (id.matches(Regex("[a-z0-9-]+"))) id else name
+            val target = File(mods, folderName)
             if (target.exists() && !target.deleteRecursively()) throw IOException("The old $name could not be replaced")
             if (!root.renameTo(target)) throw IOException("$name could not be put in the mods folder")
             return name

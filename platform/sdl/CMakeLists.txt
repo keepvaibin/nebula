@@ -3,6 +3,10 @@
 # the cache paths below; the game module is native/CMakeLists.txt.
 cmake_minimum_required(VERSION 3.22)
 project(NebulaSDL LANGUAGES C CXX)
+# The game's version, from the main project's file.
+file(STRINGS "${CMAKE_CURRENT_LIST_DIR}/../../CMakeLists.txt" nebula_project_line REGEX "^project\\(Nebula VERSION ")
+string(REGEX MATCH "[0-9]+\\.[0-9]+\\.[0-9]+" nebula_version "${nebula_project_line}")
+add_compile_definitions(NEBULA_VERSION="${nebula_version}")
 
 option(NEBULA_RELEASE "Leave the test hooks out" OFF)
 if(NEBULA_RELEASE)
@@ -95,6 +99,8 @@ add_library(galaxy_render_vk STATIC
     ${rt}/render/pipeline_seed.cpp
     ${rt}/render/vk/compile_journal.cpp
     ${rt}/render/vk/renderer_vk.cpp
+    ${rt}/render/vk/ambient_occlusion_vk.cpp
+    ${rt}/render/vk/scene_camera_vk.cpp
     ${rt}/render/vk/renderer_vk_scene.cpp
     ${rt}/render/vk/renderer_vk_replay.cpp
     ${rt}/render/vk/post_process_vk.cpp
@@ -122,6 +128,7 @@ add_library(galaxy_render_vk STATIC
     ${rt}/mii_import.cpp
     ${rt}/mii_formats.cpp
     ${rt}/mod_xml.cpp
+    ${rt}/luma.cpp
     ${rt}/mods.cpp
     ${rt}/texture_categories.cpp
     ${rt}/crash_report.cpp

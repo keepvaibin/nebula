@@ -38,12 +38,20 @@ void write_label(DeviceEntry& entry, const char* model, unsigned ordinal, const 
 }  // namespace
 
 void build_device_list(std::span<const ControllerInfo> connected, std::optional<DeviceKey> active,
-                       DeviceList& out) noexcept {
+                       DeviceList& out, bool keyboard, bool phone) noexcept {
     out = DeviceList{};
-    DeviceEntry& keyboard = out.entries[out.count++];
-    keyboard.key = DeviceKey{ControlScheme::Keyboard, kKeyboardSlot};
-    write_label(keyboard, "Keyboard and mouse", 0u, nullptr, nullptr);
-    keyboard.active = active && *active == keyboard.key;
+    if (phone) {
+        DeviceEntry& entry = out.entries[out.count++];
+        entry.key = DeviceKey{ControlScheme::Keyboard, kPhoneSlot};
+        write_label(entry, "Phone", 0u, nullptr, nullptr);
+        entry.active = !active.has_value() || is_phone(*active);
+    }
+    if (keyboard) {
+        DeviceEntry& entry = out.entries[out.count++];
+        entry.key = DeviceKey{ControlScheme::Keyboard, kKeyboardSlot};
+        write_label(entry, "Keyboard and mouse", 0u, nullptr, nullptr);
+        entry.active = active && *active == entry.key;
+    }
 
     std::array<const ControllerInfo*, kMaxControllers * 2> sorted{};
     std::size_t sorted_count = 0;
