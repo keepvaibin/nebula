@@ -2,6 +2,13 @@
 #include "j3d_material.hlsli"
 
 void material_vertex(NativeVertex v, inout NativeVaryings o) {
+#if NATIVE_PIXEL_LIT
+    const uint nq = v.pn_row & 31u;
+    const float3 nt = float3(dot(native_normal_row(nq).xyz, v.nrm), dot(native_normal_row(nq + 1u).xyz, v.nrm), dot(native_normal_row(nq + 2u).xyz, v.nrm));
+    const float3 nrm = dot(nt, nt) > 0.0 ? normalize(nt) : nt;
+    o.lit_eye = v.eye;
+    o.lit_nrm = nrm;
+#endif
     o.color.rgb = v.color0.rgb;
     o.color.a = material.mat_color[0].a;
     o.color1 = v.color1;
@@ -62,8 +69,12 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
     j3d_vertex_override(v, o);
 }
 float4 material_color(NativeVaryings i) {
+#if NATIVE_PIXEL_LIT
+    j3d_pixel_begin(i);
+    if (j3d_enhanced()) enh_key_highlight(g_enh, i.lit_eye);
+#endif
     [branch] if (material.ovr.x != 0.0) {
-        const float4 t = tex[0].Sample(samp[0], j3d_texel(i.uv[0], 0u) / material.tex_scale[0].zw);
+        const float4 t = J3D_ENV(tex[0].Sample(samp[0], j3d_texel(i.uv[0], 0u) / material.tex_scale[0].zw));
         const float4 ras = float4(0.0, 0.0, 0.0, 0.0);
         const float4 prev = material.reg[0];
         const float4 r0 = material.reg[1];
@@ -79,7 +90,7 @@ float4 material_color(NativeVaryings i) {
     float2 tevcoord = float2(0.0, 0.0);
     const float3 ind0 = round(tex[1].Sample(samp[1], j3d_texel(i.uv[1], 1u) / float2(1.0, 1.0) / material.tex_scale[1].zw).abg * 255.0);
     {  // stage 0
-        const float4 t = tex[0].Sample(samp[0], j3d_texel(i.uv[0], 0u) / material.tex_scale[0].zw).rgba;
+        const float4 t = J3D_ENV(tex[0].Sample(samp[0], j3d_texel(i.uv[0], 0u) / material.tex_scale[0].zw).rgba);
         const float4 ras = i.color.rgba;
         const float3 rc = saturate((t.rgb + lerp(j3d_in(r1.rgb), j3d_in(r0.rgb), ras.rgb)) * 0.5);
         const float ra = saturate((0.0 + lerp(0.0, t.a, ras.a)));
@@ -103,6 +114,9 @@ float4 material_color(NativeVaryings i) {
         prev.a = ra;
     }
     prev = j3d_out(float4(prev.rgb, prev.a));
+#if NATIVE_PIXEL_LIT
+    if (j3d_enhanced()) prev.rgb = enh_finish(prev.rgb, g_enh);
+#endif
     prev.rgb = j3d_fog(prev.rgb, i.pos);
     return prev;
 }

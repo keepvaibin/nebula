@@ -7,9 +7,16 @@ channels, alpha test, fog type; not blend, depth, culling or values) and reports
     python -I tools/dev/gen_j3d_materials.py emit <out dir> <dump.bin>...   (a trial set)
     python -I tools/dev/gen_j3d_materials.py generate <repo> <dump.bin>...  (the repository's set and tables)
 """
+import importlib.util
+import os
 import struct
 import sys
 from collections import Counter
+
+_spec = importlib.util.spec_from_file_location("j3d_pixel_lit", os.path.join(os.path.dirname(os.path.abspath(__file__)), "j3d_pixel_lit.py"))
+_module = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_module)
+pixel_lit = _module.pixel_lit
 
 RECORD = 756
 
@@ -427,6 +434,8 @@ def write_if_changed(path, text):
                 return False
     except FileNotFoundError:
         pass
+    if os.path.basename(path).startswith("m") and path.endswith(".hlsl"):
+        text = pixel_lit(text)
     with open(path, "w", encoding="utf-8", newline="\n") as f:
         f.write(text)
     return True
