@@ -15,7 +15,7 @@ namespace MR {
     inline const NebulaDisplay& getDisplay() {
         return NebulaFrameClock::display();
     }
-    // Between these, getScreenWidth keeps the design's 832: CollisionShadow sizes its softening circle in screen units but
+    // Between these, getScreenWidth keeps cWideScreenWidth: CollisionShadow sizes its softening circle in screen units but
     // draws it into a fixed 160x160 region.
     void beginDesignScreenWidth();
     void endDesignScreenWidth();

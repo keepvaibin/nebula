@@ -79,25 +79,25 @@ def shader_key(p):
     )
 
 
-def native_tex_gen(gx_type, gx_source):
-    """GX's texgen type and source as the records' encoding (J3DNativeTexGen.hpp kind/source): kind bits 0-1 (0 a
+def native_tex_gen(file_type, file_source):
+    """The file's texgen type and source as the records' encoding (J3DNativeTexGen.hpp kind/source): kind bits 0-1 (0 a
     matrix, 1 emboss, 2/3 colour 0/1), bit 2 projective, bit 3 implicit w, bits 4-6 emboss light; source bits 0-3 the
     row (0 position, 1 normal, 2 colour, 3 binormal, 4 tangent, 5 + n coordinate n), bits 4-6 emboss coordinate."""
     row, emboss, kind, light = 5, 5, 0, 0
-    if gx_source <= 3:
-        row = (0, 1, 3, 4)[gx_source]
-    elif 4 <= gx_source <= 11:
-        row = 5 + gx_source - 4
-    elif 12 <= gx_source <= 18:
-        emboss = gx_source - 12
-    elif gx_source in (19, 20):
+    if file_source <= 3:
+        row = (0, 1, 3, 4)[file_source]
+    elif 4 <= file_source <= 11:
+        row = 5 + file_source - 4
+    elif 12 <= file_source <= 18:
+        emboss = file_source - 12
+    elif file_source in (19, 20):
         row = 2
-    if 2 <= gx_type <= 9:
-        kind, light = 1, gx_type - 2
-    elif gx_type == 10:
-        kind = 2 if gx_source == 19 else 3
-    projective = 1 if gx_type == 0 else 0
-    form = 1 if gx_source <= 3 else 0
+    if 2 <= file_type <= 9:
+        kind, light = 1, file_type - 2
+    elif file_type == 10:
+        kind = 2 if file_source == 19 else 3
+    projective = 1 if file_type == 0 else 0
+    form = 1 if file_source <= 3 else 0
     return kind | projective << 2 | form << 3 | light << 4, row | (emboss & 7) << 4
 
 

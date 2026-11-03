@@ -144,7 +144,7 @@ namespace MR {
 
     void setupDrawForNW4RLayout(f32 scale, bool) {
         f32 height = MR::getScreenHeight();
-        f32 width = 608.0f;
+        f32 width = NebulaFrameClock::cLayoutWidth;
         // The layout canvas widens with the picture; under 16:9 the layouts keep their width and gain height.
         if (MR::isScreen16Per9() && MR::getDisplay().wide) {
             height *= MR::getDisplay().vertical_fit;

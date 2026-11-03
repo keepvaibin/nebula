@@ -41,7 +41,7 @@ namespace {
 namespace J3DNativeView {
     void probeScreen(u32 channel, NebulaScreenProbeKind what, const NebulaScreenProbe* pProbes, u32 count) {
         J3DNativeDraw::flush();
-        NebulaScreenProbe probes[NEBULA_SCREEN_PROBES_MAX];
+        static NebulaScreenProbe probes[NEBULA_SCREEN_PROBES_MAX];
         const u32 sent = count < NEBULA_SCREEN_PROBES_MAX ? count : NEBULA_SCREEN_PROBES_MAX;
         for (u32 i = 0; i < sent; i++) {
             probes[i] = pProbes[i];

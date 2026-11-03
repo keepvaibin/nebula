@@ -1,3 +1,4 @@
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Screen/LayoutCoreUtil.hpp"
 #include "Game/Screen/CustomTagProcessor.hpp"
 #include "Game/Screen/ReplaceTagProcessor.hpp"
@@ -77,7 +78,7 @@ namespace MR {
                             display.vertical_fit;
             return;
         }
-        pLayoutPos->x = rScreenPos.x * 608.0f / MR::getScreenWidth() - 304.0f;
+        pLayoutPos->x = rScreenPos.x * NebulaFrameClock::cLayoutWidth / MR::getScreenWidth() - 304.0f;
         pLayoutPos->y = -(rScreenPos.y * MR::getScreenHeight() / MR::getScreenHeight() - (MR::getScreenHeight() * 0.5f));
     }
 
@@ -89,7 +90,7 @@ namespace MR {
                             -(rLayoutPos.y / display.vertical_fit) * MR::getScreenHeight() / MR::getScreenHeight();
             return;
         }
-        pScreenPos->x = rLayoutPos.x * MR::getScreenWidth() / 608.0f + MR::getScreenWidth() * 0.5f;
+        pScreenPos->x = rLayoutPos.x * MR::getScreenWidth() / NebulaFrameClock::cLayoutWidth + MR::getScreenWidth() * 0.5f;
         pScreenPos->y = MR::getScreenHeight() * 0.5f + -rLayoutPos.y * MR::getScreenHeight() / MR::getScreenHeight();
     }
 
