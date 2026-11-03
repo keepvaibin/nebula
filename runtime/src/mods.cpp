@@ -147,56 +147,6 @@ std::vector<std::uint8_t> hex_bytes(std::string_view s) {
     return out;
 }
 
-// Native equivalents of known patches to the console's code, told by the mod's own bytes for a release: each sets the
-// game's NEBULA_PATCH_* switch (nebula_game_api.h); id 0 has no counterpart because Nebula does the job itself. Covers
-// Kaizo Mario Galaxy Rebalanced 2.1 and Super Lillie Galaxy's crash debugger.
-struct NativeCodePatch {
-    char region;
-    std::uint32_t address;
-    const char* value;
-    std::uint32_t id;
-    std::uint32_t parameter;
-    const char* what;
-};
-
-constexpr NativeCodePatch kNativeCodePatches[] = {
-    {'E', 0x801DD690, "38C00080", kPatchFlipPanelObserverGroup, 0x80, "flip panel observer groups of 128"},
-    {'E', 0x801DCE48, "38C00080", kPatchFlipPanelGroup, 0x80, "flip panel groups of 128"},
-    {'E', 0x80153D84, "39000001", kPatchWaterBazookaShotFlag, 1, "water bazooka shots' flag"},
-    {'E', 0x80001800, "C4BB8000C03E00103C608000C0031800EC00082AD01E0010809E008C4E800020", kPatchKameckBarrierOffsetY,
-     0xC4BB8000u, "Kamek's barrier 1500 lower"},
-    {'E', 0x800382B8, "4BFC954D", kPatchKameckBarrierOffsetY, 0xC4BB8000u, "Kamek's barrier 1500 lower"},
-    {'E', 0x8007679C, "60000000", kPatchSkeletalFishBabyNoBubble, 1, "no air bubble from hit skeletal fish"},
-    {'E', 0x80054490, "4836F0A9", kPatchDodoryuShellOnly, 1, "Dodoryu hurt by shells only"},
-    {'E', 0x800564C4, "4836D075", kPatchDodoryuShellOnly, 1, "Dodoryu hurt by shells only"},
-    {'E', 0x803F82D8, "4BC0A058", kPatchMissStarPieces, 0xFFFFFC19u, "every star bit lost after a miss"},
-    {'E', 0x80002330, "3860FC19483ADFB980010034483F5FA0", kPatchMissStarPieces, 0xFFFFFC19u,
-     "every star bit lost after a miss"},
-    {'E', 0x803F6298, "38600000", kPatchNoHiddenStarTable, 1, "hidden stars without their table"},
-    {'E', 0x803F5D40, "386000004E800020", kPatchNoSuddenDeathDodoryu, 1, "no sudden-death Dodoryu"},
-    {'E', 0x800D02C0, "38600000", kPatchBegomanFireProof, 1, "Begomans survive fire ground"},
-    {'E', 0x800D5DD8, "38600000", kPatchBegomanFireProof, 1, "Begomans survive fire ground"},
-    {'E', 0x800D7D50, "38600000", kPatchBegomanFireProof, 1, "Begomans survive fire ground"},
-    {'E', 0x80275440, "60000000", kPatchMessengerAlwaysEx, 1, "the 1-up messenger's larger supply"},
-    {'E', 0x80275458, "38800063", kPatchMessengerExOneUps, 99, "99 1-ups from the messenger"},
-    {'E', 0x802750F0, "2C1F0063", kPatchMessengerExOneUps, 99, "99 1-ups from the messenger"},
-    {'E', 0x802750FC, "38800063", kPatchMessengerExOneUps, 99, "99 1-ups from the messenger"},
-    {'E', 0x8039AA2C, "60000000", 0, 0, "the console's crash debugger (Nebula reports crashes itself)"},
-    {'E', 0x8039AAF0, "60000000", 0, 0, "the console's crash debugger (Nebula reports crashes itself)"},
-    {'E', 0x804A432C, "60000000", 0, 0, "the console's crash debugger (Nebula reports crashes itself)"},
-};
-
-const NativeCodePatch* native_code_patch(const std::string& game_id, std::uint32_t address,
-                                         std::span<const std::uint8_t> value) {
-    if (game_id.size() < 4u) return nullptr;
-    for (const NativeCodePatch& patch : kNativeCodePatches) {
-        if (patch.region != game_id[3] || patch.address != (address | 0x80000000u)) continue;
-        const std::vector<std::uint8_t> bytes = hex_bytes(patch.value);
-        if (bytes.size() == value.size() && std::equal(bytes.begin(), bytes.end(), value.begin())) return &patch;
-    }
-    return nullptr;
-}
-
 std::optional<RiivDisc> parse_riivolution(const fs::path& xml, std::string* error) {
     std::optional<XmlNode> doc = parse_xml(read_text(xml), error);
     if (!doc) return std::nullopt;
@@ -447,7 +397,7 @@ constexpr const char* kDiscFolders[] = {"AudioRes", "LayoutData", "MapPartsData"
 constexpr long long kPackageFormat = 1;
 
 struct ModLayout {
-    fs::path package;  // nebula-mod.json of a converted mod
+    fs::path package;  // luma.json of a converted mod
     fs::path sd_root;           // Riivolution: where riivolution/ is
     fs::path riivolution_dir;
     std::vector<fs::path> xmls;
@@ -650,7 +600,7 @@ std::map<std::uint32_t, std::uint32_t> package_patches(const std::string& text) 
 ModLayout layout_of(const fs::path& mod) {
     ModLayout layout;
     std::error_code error;
-    if (std::optional<fs::path> manifest = child_any_case(mod, "nebula-mod.json", false)) {
+    if (std::optional<fs::path> manifest = child_any_case(mod, "luma.json", false)) {
         // A converted mod: everything is where the package put it.
         layout.package = *manifest;
         if (std::optional<fs::path> textures = child_any_case(mod, "textures", true)) layout.textures = *textures;
@@ -1050,14 +1000,7 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
                             }
                         }
                     }
-                    for (const MemoryPatch& m : p.memory) {
-                        if (!m.ocarina && !m.search && !m.value.empty() &&
-                            native_code_patch(region_id, m.offset | 0x80000000u, m.value) != nullptr) {
-                            ++mod.native_patches;
-                        } else {
-                            ++mod.code_patches;
-                        }
-                    }
+                    mod.code_patches += static_cast<unsigned>(p.memory.size());
                 }
             }
         }
@@ -1081,8 +1024,8 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
         if (!mod.package) mod.changed_files = static_cast<unsigned>(changed_paths[mod.id].size());
         mod.changed_textures = static_cast<unsigned>(changed_textures[mod.id].size());
         if (mod.code_patches != 0u) {
-            // Its files apply; the game cannot run patches written for the console's code.
-            mod.problem = std::to_string(mod.code_patches) + " CODE PATCHES HAVE NO NATIVE VERSION: THE REST OF THE MOD APPLIES";
+            // Its files apply. LumaLink finds the native versions of known patches when it converts a mod.
+            mod.problem = std::to_string(mod.code_patches) + " CODE PATCHES NEED LUMALINK: THE REST OF THE MOD APPLIES";
         }
         if (!mod.package && !mod.riivolution && !mod.files && !mod.textures && !mod.movies && !mod.loose) {
             mod.problem = "NOTHING NEBULA CAN USE (NO RIIVOLUTION, GAME FILES, TEXTURES OR MOVIES)";
@@ -1295,7 +1238,7 @@ DiscPlan plan_disc_changes(const galaxy::disc::AssetStore& store, const std::str
                 plan.notes.push_back(mod.id + ": " + mod.problem);
                 continue;
             }
-            const std::string manifest = read_text(mod.path / "nebula-mod.json");
+            const std::string manifest = read_text(mod.path / "luma.json");
             std::error_code ec;
             if (fs::is_regular_file(mod.path / "files.pak", ec)) plan.stores.push_back(mod.path / "files.pak");
             for (const auto& [id, value] : package_patches(manifest)) plan.native_patches[id] = value;
@@ -1325,8 +1268,8 @@ DiscPlan plan_disc_changes(const galaxy::disc::AssetStore& store, const std::str
                 note(f.disc + ": patched in part by the disc file's offsets, which the game's files do not have");
                 return;
             }
-            if (same_name(f.disc, "main.dol") || f.disc == "/main.dol") {
-                note("main.dol: the native game has no such file");
+            if (lower(f.disc).ends_with(".dol")) {
+                note(f.disc + ": the native game has no such file");
                 return;
             }
             if (!f.disc.empty() && f.disc[0] == '/') {
@@ -1385,15 +1328,6 @@ DiscPlan plan_disc_changes(const galaxy::disc::AssetStore& store, const std::str
                     for (const FilePatch& f : p.files) patch_file(loader, f);
                     for (const FolderPatch& f : p.folders) {
                         patch_folder(patch_folder, loader, f, f.disc.empty() ? std::string("/") : f.disc, f.external);
-                    }
-                    for (const MemoryPatch& m : p.memory) {
-                        const NativeCodePatch* native =
-                            m.ocarina || m.search || m.value.empty()
-                                ? nullptr
-                                : native_code_patch(game_id, m.offset | 0x80000000u, m.value);
-                        if (native != nullptr && native->id != 0u) {
-                            plan.native_patches[native->id] = native->parameter;
-                        }
                     }
                     for (const SavePatch& save : p.saves) {
                         // One save folder for the game: the mod higher in the list has it.

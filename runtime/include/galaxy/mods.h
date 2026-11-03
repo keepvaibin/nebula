@@ -88,7 +88,7 @@ struct ModInfo {
     bool textures = false;
     bool movies = false;
     bool loose = false;
-    bool package = false;  // converted by LumaLink: nebula-mod.json, files.pak                       // loose files placed by name
+    bool package = false;  // converted by LumaLink: luma.json, files.pak                       // loose files placed by name
     std::vector<std::string> languages;       // the language folders it changes (UsEnglish, EuFrench, ...)
     bool own_text = true;                     // its text stands in for a language it lacks
     unsigned native_patches = 0;              // patches over the game's code that the game has natively
