@@ -56,7 +56,7 @@ float4 material_color(NativeVaryings i) {
     const uint flags = uint(material.params.w);
     float2 coord1 = i.uv[0].zw;
     if ((flags & 2u) != 0u) {
-        // the console's indirect lookup: the indirect texture's alpha and blue less 128, by the shell's scale, in texels.
+        // The offset lookup: the indirect texture's alpha and blue less 128, by the shell's scale, in texels.
         const float3 ind = round(tex[2].Sample(samp[2], i.uv[1].xy).abg * 255.0) - 128.0;
         coord1 = (coord1 * material.params2.zw + material.params2.x * ind.xy) / material.params2.zw;
     }

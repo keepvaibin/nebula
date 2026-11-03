@@ -21,8 +21,8 @@
 
 namespace galaxy::render {
 
-bool texture_format_palettized(TexFormat format) noexcept {
-    return format == TexFormat::C4 || format == TexFormat::C8 || format == TexFormat::C14X2;
+bool texture_format_palettized(TexturePackFormat format) noexcept {
+    return format == TexturePackFormat::Palette4 || format == TexturePackFormat::Palette8 || format == TexturePackFormat::Palette14;
 }
 
 namespace {
@@ -92,10 +92,10 @@ std::optional<TexturePackName> parse_texture_pack_name(std::string_view stem) no
     }
     if (at >= count || !parse_hex64(parts[at++], name.hash)) return std::nullopt;
     if (at < count && parts[at] == "$") {
-        name.any_tlut = true;
+        name.any_palette = true;
         ++at;
     } else if (at < count && parts[at].size() == 16u) {
-        if (!parse_hex64(parts[at++], name.tlut)) return std::nullopt;
+        if (!parse_hex64(parts[at++], name.palette)) return std::nullopt;
     }
     std::uint32_t format = 0;
     if (at >= count) return std::nullopt;
@@ -113,7 +113,7 @@ std::optional<TexturePackName> parse_texture_pack_name(std::string_view stem) no
     }
     if (!known_format(format)) return std::nullopt;
     name.format = static_cast<std::uint8_t>(format);
-    if (!texture_format_palettized(static_cast<TexFormat>(format)) && (name.any_tlut || name.tlut != 0u)) {
+    if (!texture_format_palettized(static_cast<TexturePackFormat>(format)) && (name.any_palette || name.palette != 0u)) {
         return std::nullopt;
     }
     if (at < count && parts[at] == "arb") {
@@ -138,10 +138,10 @@ std::string texture_pack_name(const TexturePackName& name) {
     char text[96]{};
     int length = std::snprintf(text, sizeof(text), "tex1_%ux%u%s_%016llx", name.width, name.height,
                                name.mipmapped ? "_m" : "", static_cast<unsigned long long>(name.hash));
-    if (texture_format_palettized(static_cast<TexFormat>(name.format))) {
-        length += name.any_tlut ? std::snprintf(text + length, sizeof(text) - static_cast<std::size_t>(length), "_$")
+    if (texture_format_palettized(static_cast<TexturePackFormat>(name.format))) {
+        length += name.any_palette ? std::snprintf(text + length, sizeof(text) - static_cast<std::size_t>(length), "_$")
                                 : std::snprintf(text + length, sizeof(text) - static_cast<std::size_t>(length),
-                                                "_%016llx", static_cast<unsigned long long>(name.tlut));
+                                                "_%016llx", static_cast<unsigned long long>(name.palette));
     }
     length += std::snprintf(text + length, sizeof(text) - static_cast<std::size_t>(length), "_%u", name.format);
     if (name.arbitrary) {
@@ -304,11 +304,11 @@ std::uint64_t TexturePacks::size_key(std::uint32_t width, std::uint32_t height, 
     return (static_cast<std::uint64_t>(width) << 32u) | (static_cast<std::uint64_t>(height) << 8u) | format;
 }
 
-std::uint64_t TexturePacks::name_key(std::uint64_t size, std::uint64_t hash, std::uint64_t tlut, bool mipmapped) noexcept {
+std::uint64_t TexturePacks::name_key(std::uint64_t size, std::uint64_t hash, std::uint64_t palette, bool mipmapped) noexcept {
     // _m (the game samples the texture with its own mipmaps) names another file than the same texture without.
     size |= static_cast<std::uint64_t>(mipmapped) << 63u;
     std::uint64_t key = hash;
-    key ^= (tlut + 0x9E3779B97F4A7C15ull + (key << 6u) + (key >> 2u));
+    key ^= (palette + 0x9E3779B97F4A7C15ull + (key << 6u) + (key >> 2u));
     key ^= (size + 0x9E3779B97F4A7C15ull + (key << 6u) + (key >> 2u));
     return key;
 }
@@ -490,8 +490,8 @@ std::shared_ptr<TexturePacks::Index> TexturePacks::build_index(std::span<const s
     for (const Found& f : found) {
         if (f.name.level != 0u) continue;
         const std::uint64_t size = size_key(f.name.width, f.name.height, f.name.format);
-        auto& map = f.name.any_tlut ? index->any_tlut : index->exact;
-        const std::uint64_t key = name_key(size, f.name.hash, f.name.any_tlut ? 0u : f.name.tlut, f.name.mipmapped);
+        auto& map = f.name.any_palette ? index->any_palette : index->exact;
+        const std::uint64_t key = name_key(size, f.name.hash, f.name.any_palette ? 0u : f.name.palette, f.name.mipmapped);
         if (map.find(key) != map.end()) {
             ++index->shadowed;
             continue;
@@ -508,8 +508,8 @@ std::shared_ptr<TexturePacks::Index> TexturePacks::build_index(std::span<const s
     for (const Found& f : found) {
         if (f.name.level == 0u || f.dds) continue;
         const std::uint64_t size = size_key(f.name.width, f.name.height, f.name.format);
-        auto& map = f.name.any_tlut ? index->any_tlut : index->exact;
-        const auto it = map.find(name_key(size, f.name.hash, f.name.any_tlut ? 0u : f.name.tlut, f.name.mipmapped));
+        auto& map = f.name.any_palette ? index->any_palette : index->exact;
+        const auto it = map.find(name_key(size, f.name.hash, f.name.any_palette ? 0u : f.name.palette, f.name.mipmapped));
         if (it == map.end()) continue;
         Record& record = index->records[it->second];
         if (record.dds || record.file.parent_path() != f.path.parent_path()) continue;
@@ -523,30 +523,30 @@ std::shared_ptr<TexturePacks::Index> TexturePacks::build_index(std::span<const s
     return index;
 }
 
-bool TexturePacks::may_match(std::uint32_t width, std::uint32_t height, TexFormat format) const noexcept {
+bool TexturePacks::may_match(std::uint32_t width, std::uint32_t height, TexturePackFormat format) const noexcept {
     return index_ != nullptr && settings_.enabled &&
            index_->sizes.count(size_key(width, height, static_cast<std::uint32_t>(format))) != 0u;
 }
 
-std::uint32_t TexturePacks::find(std::uint32_t width, std::uint32_t height, TexFormat format, std::uint64_t hash,
-                                 std::uint64_t tlut, bool mipmapped) const {
+std::uint32_t TexturePacks::find(std::uint32_t width, std::uint32_t height, TexturePackFormat format, std::uint64_t hash,
+                                 std::uint64_t palette, bool mipmapped) const {
     if (!may_match(width, height, format)) return kNone;
     const std::uint64_t size = size_key(width, height, static_cast<std::uint32_t>(format));
     const auto matches = [&](std::uint32_t slot, bool any, bool mip) {
         const TexturePackName& name = index_->records[slot].name;
         return name.width == width && name.height == height && name.format == static_cast<std::uint8_t>(format) &&
-               name.hash == hash && name.mipmapped == mip && (any || name.tlut == tlut);
+               name.hash == hash && name.mipmapped == mip && (any || name.palette == palette);
     };
     // The name as the game uses the texture (with or without its mipmaps) first, then the other: a pack made where
     // the texture was used the other way still replaces it.
     for (const bool mip : {mipmapped, !mipmapped}) {
-        if (const auto it = index_->exact.find(name_key(size, hash, tlut, mip));
+        if (const auto it = index_->exact.find(name_key(size, hash, palette, mip));
             it != index_->exact.end() && matches(it->second, false, mip)) {
             return it->second;
         }
         if (texture_format_palettized(format)) {
-            if (const auto it = index_->any_tlut.find(name_key(size, hash, 0u, mip));
-                it != index_->any_tlut.end() && matches(it->second, true, mip)) {
+            if (const auto it = index_->any_palette.find(name_key(size, hash, 0u, mip));
+                it != index_->any_palette.end() && matches(it->second, true, mip)) {
                 return it->second;
             }
         }

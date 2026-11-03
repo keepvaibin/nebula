@@ -323,7 +323,7 @@ enum {
     NEBULA_COMPARE_NEVER = 0, NEBULA_COMPARE_LESS, NEBULA_COMPARE_EQUAL, NEBULA_COMPARE_LEQUAL,
     NEBULA_COMPARE_GREATER, NEBULA_COMPARE_NEQUAL, NEBULA_COMPARE_GEQUAL, NEBULA_COMPARE_ALWAYS,
 };
-/* Culling of the game's back or front faces, in its own winding (GX's: GX_CULL_BACK is NEBULA_CULL_BACK). */
+/* Culling of the game's back or front faces, in its own winding. */
 enum { NEBULA_CULL_NONE = 0, NEBULA_CULL_BACK = 1, NEBULA_CULL_FRONT = 2, NEBULA_CULL_ALL = 3 /* draw nothing */ };
 /* blend_op, depth_test or cull: the drawing state's blending, depth or culling as it is (a material that replaces only
    the shader of the draws after the state the game set: J3DModelX's override passes). */
@@ -523,7 +523,7 @@ enum {
 /* The picture's shape as the game draws it (NebulaFrameClock::display), from the output's shape the host latches at
    each frame (display_extent): the camera, the 2D screen and the layouts widen with it. */
 typedef struct NebulaDisplay {
-    int32_t wide;          /* 0: the Wii's 16:9, nothing changes */
+    int32_t wide;          /* 0: 16:9, nothing changes */
     float content_aspect;  /* width / height, 4:3 to 32:9 */
     int32_t screen_width;  /* MR::getScreenWidth in the 16:9 mode (832 at 16:9) */
     float layout_width;    /* the NW4R layout canvas (608 at 16:9 and narrower) */
@@ -543,7 +543,7 @@ enum {
     NEBULA_OPTION_RT_PREPARE_PROGRESS, /* while NEBULA_OPTION_RT_PREPARATION is 2: its progress, 0 to 10000, never
                                           going back */
     NEBULA_OPTION_TEST_NATIVE_J3D,     /* tests (GALAXY_TEST_NATIVE_J3D=lo-hi): first << 16 | last J3D material number
-                                          (from 1) drawn by its native shader, the others by their GX programs; 0 all */
+                                          (from 1) drawn, the others not; 0 all */
     NEBULA_OPTION_TEST_ARENA_FILL,     /* tests (GALAXY_TEST_ARENA_FILL=<hex byte>): 0x100 | the byte every arena block starts as; 0 without it */
     NEBULA_OPTION_TEST_TRACE_LOADS,    /* tests (GALAXY_TRACE_LOADS): 1 logs what each scene change loads */
     NEBULA_OPTION_TEST_DUMP_DRAW_INPUTS, /* tests (GALAXY_DUMP_DRAW_INPUTS=<shader id>): the native shader id whose
@@ -645,7 +645,7 @@ enum {
     NEBULA_ICON_STYLE_KEYBOARD, /* the keyboard and mouse: each icon a key (NEBULA_ICON_KEY) */
 };
 enum {
-    NEBULA_ICON_KEEP = 0, /* the Wii's own icon */
+    NEBULA_ICON_KEEP = 0, /* the game's own icon */
     NEBULA_ICON_FACE,     /* place: 0 south, 1 east, 2 west, 3 north */
     NEBULA_ICON_SHOULDER, /* place: 0 left, 1 right */
     NEBULA_ICON_TRIGGER,
@@ -775,7 +775,7 @@ enum {
 };
 
 /* The hints name the keys or the buttons of what the player last used. A controller's buttons change, close, undo and
-   apply as an Xbox controller's A, B, X and Y; a Switch controller's by their labels, as on the console. */
+   apply as an Xbox controller's A, B, X and Y; a Switch controller's by their labels. */
 enum {
     NEBULA_SETTINGS_INPUT_KEYBOARD = 0,
     NEBULA_SETTINGS_INPUT_XBOX,        /* Xbox, Steam and other controllers: A B X Y, LB RB */
@@ -828,7 +828,7 @@ enum {
 };
 
 /* A Mii as the game draws it (the Mii library's character info): every part, colour, scale and position as a number,
-   names UTF-16 (host byte order, 10 characters, unused ones 0), the create ID as the console stores it. */
+   names UTF-16 (host byte order, 10 characters, unused ones 0), the create ID as a Mii file stores it. */
 typedef struct NebulaMii {
     uint8_t sex, birth_month, birth_day, favorite_color, favorite, local_only, height, build;
     uint8_t face_type, face_color, face_texture;
@@ -1004,7 +1004,7 @@ typedef struct NebulaHostServices {
     int (*test_scene_frame)(void* user, NebulaTestAction* action);
 
     /* The output's shape latched at this frame, after frame_begun: width << 16 | height (only the ratio counts), or 0
-       for the Wii's 16:9. */
+       for 16:9. */
     uint32_t (*display_extent)(void* user);
     /* The borders around a fitted picture take this grey (0 black to 1 white) for the scene being drawn: the Wii Remote
        strap screen's white backing, as it fades. */
@@ -1113,7 +1113,7 @@ typedef struct NebulaHostServices {
     /* An image's bytes as the game has them (NebulaTextureImage): the renderer takes a copy and draws the image from
        it from here on. Sent when the image is loaded or rewritten. */
     void (*texture_image)(void* user, const NebulaTextureImage* image);
-    /* The Mii in a slot of the console's Mii database (0-99): 1 when there is one (`mii` filled when not NULL), 0 for
+    /* The Mii in a slot of the Mii database (0-99): 1 when there is one (`mii` filled when not NULL), 0 for
        an empty slot. */
     int32_t (*mii_record)(void* user, uint32_t slot, NebulaMii* mii);
     /* What the picture holds at `count` points where the drawing has reached (at most NEBULA_SCREEN_PROBES_MAX; `what` a
@@ -1136,7 +1136,7 @@ typedef struct NebulaHostServices {
     void (*marker)(void* user, uint32_t kind, uint32_t aux, uint64_t a, uint64_t b);
     /* Nanoseconds on a steady clock from an arbitrary start (never 0): the game's durations and pacing. */
     uint64_t (*clock_ns)(void* user);
-    /* The local date and time now: nanoseconds from 2000-01-01 00:00 local time (the console's clock counted from
+    /* The local date and time now: nanoseconds from 2000-01-01 00:00 local time (the game's clock counts from
        there; the game's saves store times in its unit). */
     int64_t (*calendar_ns)(void* user);
     /* A native material for the draws that follow (NebulaNativeMaterial), through state changes (which set its
@@ -1170,7 +1170,7 @@ NEBULA_GAME_API void nebula_game_run(void);
 /* A file read finished: `result` is the bytes read, or -1 on a read error. */
 /* The audio clock, while started (NEBULA_AUDIO_START): the game mixes its next frame (voices_mix, voices_frame). */
 NEBULA_GAME_API void nebula_game_sound_frame(void);
-/* Mii import. prepare: makes a Mii (a 74-byte record as the console stores it) acceptable where the console would
+/* Mii import. prepare: makes a Mii (a 74-byte record as a Mii file stores it) acceptable where the game would
    refuse a detail (birthday, special Mii not kept local, favourite colour, no name), then 1 when the game takes it as
    its database's; pure, any thread. install: places it in slot `slot` (0-99) of the loaded database, free or holding
    the same Mii (its create ID); 0 when the database is not loaded or another Mii holds the slot. On the game thread

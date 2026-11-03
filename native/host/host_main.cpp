@@ -664,7 +664,7 @@ void audio_frame_tick() {
     }
 }
 
-// The display's frame at 60 Hz: the console's NTSC 59.94 would repeat a frame every 17 s on a 60 Hz display. A late
+// The display's frame at 60 Hz: 59.94 would repeat a frame every 17 s on a 60 Hz display. A late
 // wake-up skips the fields it missed, as a display does, rather than delivering them back to back. On Android the
 // frame follows the display's own vsync (every second one at 120 Hz), so frames never drift against it and each
 // stays on screen for the same time; the host's clock takes over where the display gives none.
@@ -1992,7 +1992,7 @@ void svc_texture_image(void*, const NebulaTextureImage* image) {
 }
 
 
-// The Mii library's file (mii_import.h) in the data folder; a NAND's console database (or an earlier Nebula's) is
+// The Mii library's file (mii_import.h) in the data folder; a save folder's database (or an earlier Nebula's) is
 // where it starts the first time, so the Miis it holds stay in their slots. The game reads the slots as typed records.
 fs::path mii_library_path() {
     return gNandRoot / "nebula-miis.txt";
@@ -2450,9 +2450,9 @@ uint32_t svc_art_export(void*, const NebulaArtExport* art) {
         }
     };
     std::string line = art->name != nullptr ? art->name : "";
-    constexpr uint32_t kRgb5a3 = static_cast<uint32_t>(galaxy::render::TexFormat::RGB5A3);
+    constexpr uint32_t kPackedColor = static_cast<uint32_t>(galaxy::render::TexturePackFormat::Packed16);
     const bool linear = art->format >= NEBULA_TEXTURE_LINEAR_L8 && art->format <= NEBULA_TEXTURE_LINEAR_RGBA8;
-    if (art->texels != nullptr && (linear || (art->format == kRgb5a3 && art->width % 4u == 0u && art->height % 4u == 0u))) {
+    if (art->texels != nullptr && (linear || (art->format == kPackedColor && art->width % 4u == 0u && art->height % 4u == 0u))) {
         galaxy::render::TexturePackName name{};
         name.width = static_cast<uint16_t>(art->width);
         name.height = static_cast<uint16_t>(art->height);
@@ -2851,7 +2851,7 @@ void svc_frame_begun(void*, int black, uint32_t frame) {
 }
 
 // The shape the game draws for (display_native.c turns it into the game's screen width and camera aspect): the
-// latched output shape; headless, the Wii's 16:9.
+// latched output shape; headless, 16:9.
 uint32_t svc_display_extent(void*) {
 #if defined(NEBULA_HOST_RENDERER)
     return static_cast<uint32_t>(galaxy::g_experimental_dynamic_aspect_word.load(std::memory_order_acquire));
@@ -3765,7 +3765,7 @@ int svc_test_scene_frame(void*, NebulaTestAction* action) {
 #endif
 }
 
-// A restart starts this executable again with the same arguments (the game's boot, as the console's reset); the
+// A restart starts this executable again with the same arguments (the game's boot); the
 // other power events close the game.
 // Every way out of the game: pending saves written (bounded: a dead drive does not hold the game), counters flushed.
 #if defined(_WIN32) && defined(NEBULA_HOST_RENDERER)
@@ -4086,7 +4086,7 @@ int main(int argc, char** argv) {
     apply_shipped_renderer_defaults();
 #endif
 #if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
-    // A player's start has nowhere to print (a launcher's hidden console, or none): the log goes to logs/latest.log beside the
+    // A player's start has nowhere to print (a launcher with no terminal, or none): the log goes to logs/latest.log beside the
     // settings, the last start's to previous.log. A test or a shell capturing the output to a pipe or a file keeps it.
     {
         const DWORD output = GetFileType(GetStdHandle(STD_OUTPUT_HANDLE));
@@ -4182,7 +4182,7 @@ int main(int argc, char** argv) {
 #if defined(NEBULA_HOST_RENDERER)
     galaxy::render::set_texture_pack_game_id(gPak.id);  // packs' and dumps' game folders: the disc's release
     {
-        // Mii import: the files in the import folder (next to the settings: any console's Mii files, mii_formats.h)
+        // Mii import: the files in the import folder (next to the settings: any Mii files, mii_formats.h)
         // join the library before the game reads it; the settings import more while it runs.
         const fs::path settings_folder = galaxy::runtime_settings_folder();
         const fs::path import_folder = settings_folder.empty() ? fs::path{} : settings_folder / "miis";

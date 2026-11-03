@@ -542,7 +542,7 @@ namespace {
 
 // The light gradient as LA8 rows (NEBULA_TEXTURE_LINEAR_LA8): intensity by column (the ambient-to-material ramp),
 // alpha by row (the same ramp down the rows, none when _138 & 1), laid out as the picture the game has always shown.
-// The game wrote both ramps as big-endian IA8 texels in rows and ran its tile conversion on them, which leaves the
+// The game wrote both ramps as two-channel texels in rows and ran its tile conversion on them, which leaves the
 // first 2 KB as each 4-row band's first eight intensities (two to a texel: alpha, then intensity) and the rest as the
 // rows' bytes read as 4x4 tiles: texel (x, y) here is what those tiles showed there.
 void NormalMapBase::createGradTexture() {

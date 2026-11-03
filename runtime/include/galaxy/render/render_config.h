@@ -70,7 +70,7 @@ struct RenderConfig {
     bool     enhanced_lighting   = false;
     // Ambient occlusion of the 3D scene (ambient_occlusion.h); ray-traced lighting has its own.
     bool     ambient_occlusion   = false;
-    // The game's bloom: kBloomNative its own chain at the console's size, kBloomEnhanced the renderer's at the internal
+    // The game's bloom: kBloomNative its own chain at 456 lines, kBloomEnhanced the renderer's at the internal
     // resolution (game_bloom.h) at `bloom` percent of its strength (0 off, up to kMaxBloom).
     unsigned bloom_mode          = kBloomEnhanced;
     unsigned bloom               = 100;

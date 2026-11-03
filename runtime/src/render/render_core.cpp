@@ -1,4 +1,4 @@
-// RenderCore: decodes the game's console command stream and drives the renderer.
+// RenderCore: takes the game's records and drives the renderer.
 // render_api.cpp exposes it through the galaxy::render API in render_api.h.
 
 #if defined(_WIN32)
@@ -1228,7 +1228,7 @@ void RenderCore::apply_scene_jitter(const VertexConstants& cpu, VertexConstants&
     }
     if (!scene_camera_captured_) {
         scene_camera_captured_ = true;
-        // console perspective: clip z = E z + F, w = -z; NDC z -1 at near, 0 at far.
+        // game perspective: clip z = E z + F, w = -z; NDC z -1 at near, 0 at far.
         const float c = draw_state_.projection[2];
         const float e = draw_state_.projection[4];
         const float f = draw_state_.projection[5];
@@ -2215,7 +2215,7 @@ unsigned RenderCore::interp_gpu_governor(double& rate) {
     return subframes;
 }
 
-// Sub-frames must never cost the game its own frames. Each game frame shown is timed against the VI period: an
+// Sub-frames must never cost the game its own frames. Each game frame shown is timed against the frame period: an
 // interval above 1.5 periods missed VIs. A miss is the sub-frames' when the interval would not have missed without
 // their render-thread time: the game waited on the render thread, and would have waited that much less (at most what
 // it waited). The rest are the game's own, as a scene's first frames, whose decoding, uploads and pipelines keep the
@@ -3591,7 +3591,7 @@ void RenderCore::present_vi_black(bool in_frame) {
         renderer_.end_frame();
     }
     vi_black_shown_ = true;
-    // The frame the VI shows next is new to the display, even when it repeats the last display picture.
+    // The frame shown next is new to the display, even when it repeats the last display picture.
     last_presented_display_serial_.store(~std::uint64_t{0}, std::memory_order_relaxed);
 }
 
@@ -3670,7 +3670,7 @@ void RenderCore::present_cached_display_on_thread(
     if (!replayed) {
         renderer_.begin_frame(true);
         // Present-only frames acquire no display picture textures, so SceneCopyManager retirement advances with
-        // render frames only; otherwise render-then-present would age XFBs twice per VI.
+        // render frames only; otherwise render-then-present would age pictures twice per frame.
         (void)renderer_.present(selected, !snapshot_path.empty());
     }
     if (!snapshot_path.empty()) {
@@ -3953,7 +3953,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
     // will provide the actual values once processed from the FIFO.
     renderer_.bind_scene();
 
-    // console keeps the scene target across frames; only an scene target copy with the clear bit set clears it (on_scene_copy,
+    // game keeps the scene target across frames; only an scene target copy with the clear bit set clears it (on_scene_copy,
     // with the latched copy-clear registers). One initial clear (depth = far) seeds the targets.
     if (!scene_seeded_) {
         scene_seeded_ = true;
@@ -4062,9 +4062,9 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
         note_interp_log_completion();
         // The ready frame's own present: its sub-frames come first, the real
         // frame after them (started by the render loop after this chunk).
-        // As on the VI-present path, a present while a completed log waits
+        // As on the present path, a present while a completed log waits
         // starts that log's sequence, even one the duplicate or rate checks
-        // would drop: the VI may still name the previous display picture (the game flips
+        // would drop: the frame clock may still name the previous display picture (the game flips
         // at the next retrace), and the waiting frame would be skipped when
         // the next one closes first.
         if (interp_log_waiting_ && chunk.present_swap_chain && selected_display != nullptr &&
@@ -4111,7 +4111,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
     } else if (present_black) {
         present_vi_black(true);
     }
-    // A VI naming the frame its copy already presented skipped nothing.
+    // A present naming the frame its copy already presented skipped nothing.
     if (skip_duplicate_present && selected_display->copy_serial != copy_presented_serial_) {
         record_skipped_duplicate_display_present(*selected_display);
     }
@@ -4667,7 +4667,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     // (blending, logic ops and dual-source alpha cannot share a second
     // target). Keys only change while a motion scene is (or was) active.
     // Blended triangles (no dual-source alpha) write the reactive mask.
-    // The game's scene runs on an RGBA6 scene target (MainLoopFramework::preGX), where every blend that reads the source alpha
+    // The game's scene runs on an 8-bit scene target (MainLoopFramework::preGX), where every blend that reads the source alpha
     // is dual-source (needs_dual_src_alpha): it blends at the material's 8-bit alpha, not the scene target's 6-bit one, and under
     // constant destination alpha (the state: the translucent lists, Mario, shadows) writes the constant instead.
     // Dual-source blending binds no second target, so none of those effects wrote the reactive mask (DLSS's, and the
@@ -4885,7 +4885,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     // native_tex_matrix reads the vertex's index for those texgens).
     const std::uint32_t native_texmtx = (matrix_bits >> 1u) & 0xFFu;
     // The header word as the last upload wrote it (a draw's from its key): any change uploads again, or a native
-    // draw after a console one would read that draw's mask.
+    // draw after a game one would read that draw's mask.
     // A native draw's pixel engine word (native_material.hlsli native_ps): bit 8 constant destination alpha with the
     // alpha at bits 9-16, on a frame with alpha (as the uber shader's dst-alpha flag). Colour keeps 8 bits on every
     // frame, as the old path's keys (build_pixel_shader_key: no six-bit colour or ordered pattern).
@@ -5813,7 +5813,7 @@ void RenderCore::draw_record_immediate(const shapes::Record& record) {
         return;
     }
     const DrawCall& state_call = cached_draw_run_state_call_;
-    // Consecutive draws with the same state share one GPU draw (as the console's direct draws batch): the vertices and indices
+    // Consecutive draws with the same state share one GPU draw : the vertices and indices
     // follow the batch's in the rings, the indices counted from its first vertex.
     bool append = pending_draw_batch_.active && !pending_draw_batch_.resident && pending_draw_batch_.indexed &&
                   pending_draw_batch_.vertex_count + count <= 0x10000u &&
@@ -5933,7 +5933,7 @@ void RenderCore::on_scene_copy(const CaptureRequest& params) {
         const bool decoded_evicted = texture_cache_.forget(params.key) != 0u;
         const bool is_depth_copy = params.depth;
         // A colour copy right after a display copy takes the picture it showed (with the 2D layer), as the
-        // console's single scene target holds it, not the scene the output-resolution 2D layer was drawn over.
+        // game's single scene target holds it, not the scene the output-resolution 2D layer was drawn over.
         const bool from_display = display_copy_on_output_ && !is_depth_copy;
         const bool alias_updated = from_display
             ? renderer_.copy_output_scene_to_texture(params, texture_cache_)

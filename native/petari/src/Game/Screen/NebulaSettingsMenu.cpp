@@ -1611,7 +1611,7 @@ void NebulaSettingsScreen::readPointer(const NebulaSettingsView& rView) {
         mPointerRow = mHoverRow;
         NebulaHost::settingsInput(NEBULA_SETTINGS_SELECT_ROW, mHoverRow);
     }
-    // The list held down: moved, it is dragged (as the Wii's lists, by pointing and holding A); let go where it was
+    // The list held down: moved, it is dragged (by pointing and holding A); let go where it was
     // pressed, the row there is clicked.
     if (mPressing) {
         if (MR::isHeldJump(PLAYER_1)) {

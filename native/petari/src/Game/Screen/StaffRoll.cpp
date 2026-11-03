@@ -277,7 +277,7 @@ void StaffRoll::init(const JMapInfoIter& rIter) {
 }
 
 void StaffRoll::appear() {
-    GameSystemFunction::setPermissionToCheckInputAndScreenDimming(false);
+    GameSystemFunction::setPermissionToCheckInput(false);
     MR::deactivateGameSceneDraw3D();
     LayoutActor::appear();
     setNerve(GET_NERVE(StaffRoll, StaffRollNrvPrepareDemo));

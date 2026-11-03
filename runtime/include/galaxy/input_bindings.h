@@ -4,7 +4,7 @@
 // XInput, Switch Pro Controller, Switch 2 Pro Controller, PlayStation
 // controllers, Steam Controller, generic HID game controllers). A scheme is a
 // controller family: DualShock 4, DualSense and DualSense Edge share
-// `playstation`; every generic HID controller shares `generic`. Each Wii input (target)
+// `playstation`; every generic HID controller shares `generic`. Each game input (target)
 // holds up to kBindingSlots physical inputs (sources). Persisted in
 // runtime_settings.ini as one `bind.<scheme>.<target>=<source>, ...` line per
 // target and `tune.<scheme>.<name>=<value>` lines for stick/motion tuning.
@@ -54,7 +54,7 @@ enum class WiiTarget : std::uint8_t {
     PointerLeft,
     PointerRight,
     PointerRecenter,
-    // Wii A while the player controls Mario, Wii B in menus (pointer_control.h).
+    // The game's A while the player controls Mario, its B in menus (pointer_control.h).
     JumpBack,
 };
 inline constexpr std::size_t kWiiTargetCount = 25;
@@ -364,7 +364,7 @@ inline constexpr float kStickDirectionRelease = 0.35f;
 [[nodiscard]] std::uint32_t shared_binding_targets(const BindingTable& table) noexcept;
 // Buttons OR; each analog axis keeps the larger magnitude.
 [[nodiscard]] LogicalInput merge_logical_input(const LogicalInput& a, const LogicalInput& b) noexcept;
-// Wii targets driven only by mouse buttons in `levels` (for the gated
+// Game targets driven only by mouse buttons in `levels` (for the gated
 // mouse-button path).
 [[nodiscard]] std::uint32_t mouse_bound_targets(
     const BindingTable& table, std::uint8_t mouse_buttons) noexcept;
@@ -415,11 +415,11 @@ void set_controls_config(const ControlsConfig& config);
 [[nodiscard]] std::uint64_t controls_config_generation() noexcept;
 
 // The game's button icons (its picture font's A, B, C, Z, 1, 2, Plus, Minus, HOME and Control Pad): the style they are
-// drawn in and, for each, the controller's button its Wii button is bound to.
-enum class ButtonIconStyle : std::uint8_t { Wii, Xbox, Nintendo, PlayStation, Keyboard };
+// drawn in and, for each, the controller's button its game button is bound to.
+enum class ButtonIconStyle : std::uint8_t { Game, Xbox, Nintendo, PlayStation, Keyboard };
 enum class ButtonIcon : std::uint8_t { A, B, C, Z, One, Two, Plus, Minus, Home, Pad };
 inline constexpr std::size_t kButtonIconCount = 10;
-// What an icon shows: the Wii's own (Keep); a face button by place (0 south, 1 east, 2 west, 3 north); a shoulder, a
+// What an icon shows: the game's own (Keep); a face button by place (0 south, 1 east, 2 west, 3 north); a shoulder, a
 // trigger or a stick's click (0 left, 1 right); Start (Xbox Menu, Plus, Options), Back (View, Minus, Share or Create),
 // Home; the D-pad (on a keyboard its four keys, ButtonIconSpec::pad_keys); a key or mouse button by its key icon.
 enum class ButtonGlyph : std::uint8_t { Keep, Face, Shoulder, Trigger, Stick, Start, Back, Home, Dpad, Key };
@@ -439,7 +439,7 @@ inline constexpr std::uint8_t kKeyIconNone = 0xFF;  // a D-pad direction with no
 // The virtual key of layout key icon `index` (0 .. kKeyIconLayoutCount - 1).
 [[nodiscard]] std::uint8_t key_icon_layout_key(std::size_t index) noexcept;
 struct ButtonIconSpec {
-    ButtonIconStyle style = ButtonIconStyle::Wii;
+    ButtonIconStyle style = ButtonIconStyle::Game;
     std::array<ButtonGlyph, kButtonIconCount> glyphs{};
     std::array<std::uint8_t, kButtonIconCount> places{};
     // Keyboard: the D-pad's up, down, left and right keys (kKeyIconNone: none), and what the layout keys print (UCS-2
@@ -450,9 +450,9 @@ struct ButtonIconSpec {
     std::array<std::array<char, 8>, kButtonIconCount> other{};
     friend bool operator==(const ButtonIconSpec&, const ButtonIconSpec&) = default;
 };
-// The icons in `style` for a controller's `table`: each Wii button's first controller input (the keyboard's: its first
-// key or mouse button). In menus B is the button that goes back there (JumpBack's), in play Wii B's own. HOME and the
-// Control Pad keep the Wii's own on a controller; the keyboard shows HOME's key and the Control Pad's four.
+// The icons in `style` for a controller's `table`: each game button's first controller input (the keyboard's: its first
+// key or mouse button). In menus B is the button that goes back there (JumpBack's), in play the game's B. HOME and the
+// Control Pad keep the game's own on a controller; the keyboard shows HOME's key and the Control Pad's four.
 [[nodiscard]] ButtonIconSpec button_icon_spec(ButtonIconStyle style, const BindingTable& table, bool menu) noexcept;
 
 }  // namespace galaxy::input

@@ -409,7 +409,7 @@ fn identify_folder(data: &Path) -> Result<InputIdentity> {
     ))
 }
 
-/// The partition folder of an extracted game (Dolphin's "Extract Entire Disc" layout): `input/DATA` or `input`.
+/// The partition folder of an extracted game (an emulator's whole-disc extraction layout): `input/DATA` or `input`.
 fn data_root(input: &Path) -> Result<PathBuf> {
     let nested = input.join("DATA");
     if nested.join("sys").join("main.dol").is_file() {
@@ -629,7 +629,7 @@ pub struct Partition {
 }
 
 impl Partition {
-    /// The game partition of a disc image, or of an extracted folder (Dolphin's "Extract Entire Disc" layout).
+    /// The game partition of a disc image, or of an extracted folder (an emulator's whole-disc extraction layout).
     pub fn open(input: &Path) -> Result<Partition> {
         if input.is_dir() {
             return Partition::from_folder(&data_root(input)?);

@@ -192,7 +192,7 @@ bool RendererVk::initialize(int window_width, int window_height, const FrameMap&
                 }
             }
         }
-        // The rings are Vulkan buffers with console addresses; their sizes follow the D3D12 renderer's. Every segmentation
+        // The rings are Vulkan buffers with GPU addresses; their sizes follow the D3D12 renderer's. Every segmentation
         // shares one buffer per ring.
         const auto ring = [&](UploadRing& target, const char* name, std::size_t bytes) {
             return target.initialize(device, name, UploadRing::budget(bytes, kFramesInFlight), kFramesInFlight,
@@ -315,7 +315,7 @@ bool RendererVk::create_layouts() {
         info.pSetLayouts = draw_layout_.sets.data();
         info.pushConstantRangeCount = 1;
         info.pPushConstantRanges = &blend;
-        vk::check(vkCreatePipelineLayout(device, &info, nullptr, &draw_layout_.layout), "GX pipeline layout");
+        vk::check(vkCreatePipelineLayout(device, &info, nullptr, &draw_layout_.layout), "draw pipeline layout");
     }
     linear_clamp_ = create_sampler(device, VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_NEAREST);
     point_clamp_ = create_sampler(device, VK_FILTER_NEAREST, VK_SAMPLER_MIPMAP_MODE_NEAREST);

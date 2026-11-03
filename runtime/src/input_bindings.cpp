@@ -1226,7 +1226,7 @@ std::uint8_t key_icon_layout_key(std::size_t index) noexcept {
 
 namespace {
 
-// The keyboard's icons: each Wii button's input as the player reaches for it there (B's in menus JumpBack's first),
+// The keyboard's icons: each game button's input as the player reaches for it there (B's in menus JumpBack's first),
 // HOME's, and the Control Pad's four keys. A in menus and B everywhere show their first mouse button where they have one
 // (the pointer chooses in menus; B shoots Star Bits where the pointer aims: Space and the left click are both A, Shift
 // and the right click both B); every other icon, and A in play, its first key, else its first mouse button.
@@ -1275,8 +1275,8 @@ ButtonIconSpec button_icon_spec(ButtonIconStyle style, const BindingTable& table
     if (style == ButtonIconStyle::Keyboard) return keyboard_icon_spec(table, menu);
     ButtonIconSpec spec;
     spec.style = style;
-    if (style == ButtonIconStyle::Wii) return spec;
-    // HOME and the Control Pad look alike on every controller: the Wii's own stay (Keep).
+    if (style == ButtonIconStyle::Game) return spec;
+    // HOME and the Control Pad look alike on every controller: the game's own stay (Keep).
     static constexpr WiiTarget kTargets[static_cast<std::size_t>(ButtonIcon::Home)] = {
         WiiTarget::A, WiiTarget::B, WiiTarget::C, WiiTarget::Z, WiiTarget::One, WiiTarget::Two, WiiTarget::Plus,
         WiiTarget::Minus};

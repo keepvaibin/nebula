@@ -106,8 +106,8 @@ namespace GameSystemFunction {
         SingletonHolder< GameSystemResetAndPowerProcess >::get()->setResetOperationApplicationReset();
     }
 
-    void setResetOperationReturnToMenu() {
-        SingletonHolder< GameSystemResetAndPowerProcess >::get()->setResetOperationReturnToMenu();
+    void setResetOperationQuit() {
+        SingletonHolder< GameSystemResetAndPowerProcess >::get()->setResetOperationQuit();
     }
 
     void requestResetGameSystem(bool param1) {
@@ -189,7 +189,7 @@ namespace GameSystemFunction {
         MR::setInputSleepTime(isLongAutoSleep);
     }
 
-    bool setPermissionToCheckInputAndScreenDimming(bool permission) {
+    bool setPermissionToCheckInput(bool permission) {
         return SingletonHolder< GameSystem >::get()->mErrorWatcher->setPermissionUpdateInputStatus(permission);
     }
 

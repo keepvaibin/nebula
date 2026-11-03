@@ -26,14 +26,14 @@ Every Vulkan 1.1 GPU and driver (Android's in particular), with no per-device wo
 
 - **Identity.** `device_quirks_vk.cpp` names the driver from `VK_KHR_driver_properties` (else the vendor ID) and
   decodes its version; the log's first lines give the device, driver build, workarounds and features.
-- **Known driver bugs** (the GX-relevant entries of Dolphin's DriverDetails, ANGLE's vk_renderer features and Dawn's
-  Vulkan toggles; each entry cites its source): Qualcomm 512.700+ takes TEV zero colour inputs from a constant;
+- **Known driver bugs** (relevant entries of public driver bug lists, ANGLE's vk_renderer features and Dawn's
+  Vulkan toggles; each entry cites its source): Qualcomm 512.700+ takes stage zero colour inputs from a constant;
   Qualcomm before 512.762.12 draws its clears; Mali and Adreno read back from coherent memory; Qualcomm reads back
   through a linear image (its optimal image-to-buffer copies make a temporary image each); PowerVR clears render
   passes by command (its load-op clears do nothing); one PSO thread on Android (parallel precompiles crash Android
   drivers); no curved surfaces on NVIDIA's driver (610.88's compiler crashes in `vkCreateGraphicsPipelines` on their
   pipelines, which validate). On every device:
-  SPIR-V 1.3 (Qualcomm and ARM drivers mishandle 1.4), no maximal-reconvergence mode (Dusklight issue 2563), TEV byte
+  SPIR-V 1.3 (Qualcomm and ARM drivers mishandle 1.4), no maximal-reconvergence mode (Dusklight issue 2563), stage byte
   masks per component (Mali's vector AND), D24S8 depth where present (Adreno's D32F clears), no reversed depth ranges.
 - **Capabilities.** Only what the device reports is enabled; without it: single-source blending, plain writes for
   logic ops, one-pixel lines and points (no geometry shaders; the vertex shader then writes the point size), depth
@@ -42,13 +42,13 @@ Every Vulkan 1.1 GPU and driver (Android's in particular), with no per-device wo
   and alpha modes the surface lists. A Vulkan 1.0 driver gets a clear message instead of a start (1.1 is required;
   every Android 12 device has it).
 - **Refusals** (`pipeline_cache_vk.h`): a refused pipeline is built again without each optional feature it uses,
-  then with the other TEV zero form; a feature whose removal fixed two pipelines is left out of all of them. A key
+  then with the other stage zero form; a feature whose removal fixed two pipelines is left out of all of them. A key
   no form of which is accepted draws with its uber pipeline, else is skipped; the game never stops for a pipeline
   (`GALAXY_STRICT_PIPELINES=1` makes it). A new driver build's first launch tests the uber pipelines of every
   variant and feature in the background. Results stay in `vk_compat.txt`, per driver build.
 - **Uber shaders a driver cannot compile** (Adreno 840, 512.842: the uber vertex shader's texture coordinates by
   dynamic array index; the self-test's half diagnosis and cut-down probes found it): the uber vertex shader reads and
-  writes them by switch, as Dolphin's does. A variant a driver still refuses is never tried again on it, and its keys
+  writes them by switch. A variant a driver still refuses is never tried again on it, and its keys
   are built specialised at their first draw instead of skipped.
 - **Shipped pipelines.** The Android app ships the keys the whole game uses (`platform/android/vk_seed_keys.bin`, the
   PC's 102-galaxy tour), which the workers build from the first launch in the order the game needs them, then delete.
@@ -81,7 +81,7 @@ Every Vulkan 1.1 GPU and driver (Android's in particular), with no per-device wo
 - The renderer core is API-neutral; the window, input and settings UI are shared (host_window_win32.cpp, UiCanvas).
 - Shader path (M): every shader the Vulkan backend uses compiles through glslang to SPIR-V that passes the validator,
   each descriptor at its layout's binding (`galaxy_vk_shader_tests`): the uber shaders' variants, line/point geometry,
-  EFB conversion, and the game's own 229 vertex and 719 pixel shaders captured over the 102-stop tour.
+  frame conversion, and the game's own 229 vertex and 719 pixel shaders captured over the 102-stop tour.
 - V1-V4 on Windows (M): RendererVk (renderer_vk.cpp, renderer_vk_scene.cpp), PipelineCacheVk (uber stand-ins while
   workers build specialised pipelines; SPIR-V, keys and the driver cache on disk; GALAXY_GX_UBER as on D3D12) and the
   texture backend build into `NebulaNativeVk`. The title over 40 s matches D3D12 within 1/255 at presents 600, 1200,

@@ -109,7 +109,7 @@ LiveActorGroup* LiveActorGroupArray::entry(LiveActor* pActor, const JMapInfoIter
     s32 groupID = -1;
     MR::getJMapInfoGroupID(rIter, &groupID);
 
-    // Function scope: pName points here past the if block (CodeWarrior keeps a block's locals for the whole frame).
+    // Function scope: pName points here past the if block .
     char defaultName[32];
     if (pName == nullptr) {
         nebula_snprintf(defaultName, sizeof(defaultName), "group%02d", groupID);

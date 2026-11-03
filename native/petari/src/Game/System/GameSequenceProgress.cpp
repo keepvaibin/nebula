@@ -101,7 +101,7 @@ void GameSequenceProgress::startScene() {
         MR::startStarPointerModeGame(this);
     }
 
-    GameSystemFunction::setPermissionToCheckInputAndScreenDimming(isScenePermittedUpdateInputStatus());
+    GameSystemFunction::setPermissionToCheckInput(isScenePermittedUpdateInputStatus());
     GameSystemFunction::setInputSleepTime(isSceneLongInputSleep());
 
     if (MR::isEqualSceneName("Game")) {

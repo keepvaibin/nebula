@@ -1,7 +1,6 @@
 # Graphics architecture
 
-The game makes typed records; the renderer (`galaxy::render`, `runtime/src/render`, Direct3D 12 or Vulkan) draws them. No
-command stream, no register state, no console texture formats. One shader source, compiled at build to DXIL and SPIR-V.
+The game makes typed records; the renderer (`galaxy::render`, `runtime/src/render`, Direct3D 12 or Vulkan) draws them. One shader source, compiled at build to DXIL and SPIR-V.
 
 ## A frame
 

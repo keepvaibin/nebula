@@ -192,7 +192,7 @@ void note_keyboard_input() noexcept {
 }
 
 // The style Auto shows now (button_icons sets it, the settings menu reads it).
-std::atomic<input::ButtonIconStyle> g_auto_icon_style{input::ButtonIconStyle::Wii};
+std::atomic<input::ButtonIconStyle> g_auto_icon_style{input::ButtonIconStyle::Game};
 
 input::ButtonIconStyle button_icons_auto_style() noexcept {
     return g_auto_icon_style.load(std::memory_order_relaxed);
@@ -279,12 +279,12 @@ input::ButtonIconSpec button_icons(bool menu) noexcept {
     // Auto's: a real Wii Remote's own while one is in use; the keyboard's while it is (a key or a mouse button pressed
     // since a controller's last input; with no controller attached and none used, from the start), and always in the
     // keyboard and mouse input mode, never in the controller one; else the controller's family (one of no known
-    // family shows the Wii's). Moving the mouse alone leaves them (a controller's player may aim with it).
+    // family shows the game's). Moving the mouse alone leaves them (a controller's player may aim with it).
     const RuntimeInputMode mode = get_runtime_settings().input_mode;
     const bool keyboard_last = device.has_value() ? device->scheme == ControlScheme::Keyboard : !pad.has_value();
     const bool keyboard = mode == RuntimeInputMode::KeyboardMouse ||
                           (mode != RuntimeInputMode::Controller && keyboard_last);
-    ButtonIconStyle auto_style = ButtonIconStyle::Wii;
+    ButtonIconStyle auto_style = ButtonIconStyle::Game;
     if (real_wiimote_in_use()) {
     } else if (keyboard) {
         auto_style = ButtonIconStyle::Keyboard;
@@ -303,7 +303,7 @@ input::ButtonIconSpec button_icons(bool menu) noexcept {
     ButtonIconStyle style = auto_style;
     switch (get_runtime_settings().button_icons) {
     case ButtonIcons::Auto: break;
-    case ButtonIcons::Wii: style = ButtonIconStyle::Wii; break;
+    case ButtonIcons::Game: style = ButtonIconStyle::Game; break;
     case ButtonIcons::Xbox: style = ButtonIconStyle::Xbox; break;
     case ButtonIcons::Nintendo: style = ButtonIconStyle::Nintendo; break;
     case ButtonIcons::PlayStation: style = ButtonIconStyle::PlayStation; break;
@@ -318,7 +318,7 @@ input::ButtonIconSpec button_icons(bool menu) noexcept {
                                                                          : ControlScheme::Xbox;
     // Worked out again only when the bindings, the style, the controller or the context change.
     static std::uint64_t s_generation = ~std::uint64_t{0};
-    static ButtonIconStyle s_style = ButtonIconStyle::Wii;
+    static ButtonIconStyle s_style = ButtonIconStyle::Game;
     static ControlScheme s_scheme = ControlScheme::Keyboard;
     static bool s_menu = false;
     static HKL s_key_layout = nullptr;

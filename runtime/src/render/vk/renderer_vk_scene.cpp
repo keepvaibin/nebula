@@ -471,10 +471,10 @@ void RendererVk::bind_scene() {
     }
 }
 
-void RendererVk::clear_scene(std::uint32_t clear_rgba, std::uint32_t clear_z24,
+void RendererVk::clear_scene(std::uint32_t clear_rgba, std::uint32_t clear_depth,
                            bool color_enable, bool alpha_enable, bool depth_enable, unsigned rect_x, unsigned rect_y,
                            unsigned rect_w, unsigned rect_h, std::uint8_t pixel_format) {
-    const ReplayClear logged{clear_rgba, clear_z24, color_enable, alpha_enable, depth_enable,
+    const ReplayClear logged{clear_rgba, clear_depth, color_enable, alpha_enable, depth_enable,
                              rect_x, rect_y, rect_w, rect_h, pixel_format};
     if (logging()) {
         recording_log_.ops.push_back({ReplayKind::Clear, static_cast<std::uint32_t>(recording_log_.clears.size())});
@@ -500,7 +500,7 @@ void RendererVk::clear_scene(std::uint32_t clear_rgba, std::uint32_t clear_z24,
                         {static_cast<std::uint32_t>(scaled.right - scaled.left),
                          static_cast<std::uint32_t>(scaled.bottom - scaled.top)}};
     }
-    const SceneClearValues clear = make_scene_clear_values(clear_rgba, clear_z24, pixel_format);
+    const SceneClearValues clear = make_scene_clear_values(clear_rgba, clear_depth, pixel_format);
     // The whole scene target, every channel, while the pass is closed (a copy-clear): the pass begins cleared.
     const bool has_alpha = pixel_format == 1u;
     if (scene_owed_ && !replaying_) [[unlikely]] {
@@ -566,7 +566,7 @@ void RendererVk::clear_scene(std::uint32_t clear_rgba, std::uint32_t clear_z24,
         reset_draw_bindings();
         bind_scene();
     } else if (depth_enable) {
-        // Reversed-Z: the console's farthest (0xFFFFFF) clears to about 0.
+        // Reversed-Z: the game's farthest (0xFFFFFF) clears to about 0.
         VkClearAttachment attachment{};
         attachment.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
         attachment.clearValue.depthStencil = {clear.reversed_depth, 0u};
@@ -947,7 +947,7 @@ void RendererVk::record_game_bloom(const ReplayBloom& bloom) {
     in.frame_height = std::min(scene_map_.height, scene_.color->height);
     const auto allocate = [this](VkDescriptorSetLayout layout) { return allocate_post_set(layout); };
     end_scene_pass();
-    if (bloom.phase == motion::kBloomKeep) {
+    if (bloom.phase == motion::kBloomHold) {
         if (bloom_.ready() && scene_.samples <= 1u && !logging() && !replaying_ && ring_mode_ != RingMode::Interp) {
             // The scene and the bloom's image trade places instead of the scene being copied. The game draws the
             // bloom's objects on black into the new target, over the same depth.
@@ -1477,7 +1477,7 @@ void RendererVk::draw(const DrawCall& call) {
         bound_.sampler_table = call.sampler_table.ptr;
     }
 
-    // The console scissor, scaled and clamped; an empty one rasterises nothing (also CullMode::All).
+    // The game scissor, scaled and clamped; an empty one rasterises nothing (also CullMode::All).
     if (!bound_.scissor_input_valid || call.scissor.left != bound_.scissor_input.left ||
         call.scissor.top != bound_.scissor_input.top || call.scissor.right != bound_.scissor_input.right ||
         call.scissor.bottom != bound_.scissor_input.bottom) {

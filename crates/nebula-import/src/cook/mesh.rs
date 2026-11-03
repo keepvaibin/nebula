@@ -120,7 +120,7 @@ fn pad32(out: &mut Vec<u8>) {
     }
 }
 
-/// VTX1 as values: J3D's strides for each array, GX's dequantisation (a position or texture coordinate by its fraction,
+/// VTX1 as values: J3D's strides for each array, the file's dequantisation (a position or texture coordinate by its fraction,
 /// a normal by its type).
 fn vertices(b: &[u8]) -> Result<Vertices> {
     let size = r32(b, 4)? as usize;
@@ -316,7 +316,7 @@ fn corner_bytes(v: &[u8], l: &Layout) -> [u8; CORNER_BYTES] {
     c
 }
 
-/// A group's display list as a mesh: GX's quads, strips and fans as the renderer has always made them (a strip's odd
+/// A group's display list as a mesh: its quads, strips and fans as the renderer has always made them (a strip's odd
 /// triangles turned to keep its winding), each distinct corner once in the order first met.
 fn mesh(list: &[u8], l: &Layout) -> Result<Vec<u8>> {
     let mut corners: Vec<[u8; CORNER_BYTES]> = Vec::new();

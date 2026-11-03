@@ -946,7 +946,7 @@ void PostProcessor::record(ID3D12GraphicsCommandList* list,
 
     // The picture's 8-bit steps smoothed (PASS_DEBAND): at its own size before any enlarging; a reduced one (a
     // supersampled scene) in the window after the box filter, where it has a third or less of the pixels, its taps
-    // stay in the texture cache and its dither is at the size it is seen.
+    // stay in the texture cache and its grain is at the size it is seen.
     const bool deband = deband_ && deband_wanted();
     // GALAXY_TEST_DEBAND_AB=1: a reduced picture debanded at its own size in every other frame (same-run pictures).
     static const bool deband_ab = [] {

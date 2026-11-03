@@ -13,6 +13,7 @@ public:
     enum MessageType {
         MessageType_System,
         MessageType_Game,
+        MessageType_Nebula,
     };
 
     /// @brief Creates a new `ErrorMessageWindow`.

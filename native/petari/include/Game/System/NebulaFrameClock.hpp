@@ -11,6 +11,11 @@ namespace NebulaFrameClock {
     // the frame.
     const u16 cScreenUnitsAcross = 640;
     const u16 cScreenUnitsDown = 456;
+    // The same height as a float, and the width the layout files are authored for.
+    const f32 cScreenHeight = 456.0f;
+    const f32 cLayoutWidth = 608.0f;
+    // getScreenWidth at 16:9.
+    const s32 cWideScreenWidth = 832;
 
     // The game has its frame: two frames on, and two black ones, the picture shows.
     void startPicture();

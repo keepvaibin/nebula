@@ -47,7 +47,7 @@ game threads hold the world while they run. The picture is black at each long fr
 |---|---|---|---|
 | Timer resolution | `timeBeginPeriod(1)` at boot: raises the whole system's timer rate (power on laptops) | not used; high-resolution waitable timers | D |
 | `sqrtf` and other math calls | math-errno on: compare, branch and library call on the error path | `-fno-math-errno`; the game never reads `errno` | D (assembly) |
-| Square roots | the console's estimate and a Newton step | `sqrtss`, 13 cycles, exact | M |
+| Square roots | an estimate and a Newton step | `sqrtss`, 13 cycles, exact | M |
 | `NO_INLINE` (Petari's matching hint) | 499 functions forced out of line, `TUtil::sqrt` and `clamp` among them | the compiler decides | D |
 
 The game thread waits 92 % of the time at four heavy stops (real time, 900 frames each, RTX 5090, `threadprof`), and no math function takes above 0.2 % of it. `nebula_math.h` has SSE paths for the 3x4 multiply and the column scale; more would save nothing measurable.
@@ -68,7 +68,7 @@ Vulkan, whose log also lists the device's memory heaps and types (`[vulkan] memo
 
 | internal resolution 1x | GPU ms/frame | evidence |
 |---|---|---|
-| 2.0.13-beta.1 | 11.6: the scene 10.5, presentation (post-processing, UI) 0.68, EFB copies 0.35 | M |
+| 2.0.13-beta.1 | 11.6: the scene 10.5, presentation (post-processing, UI) 0.68, Frame reads 0.35 | M |
 | Curved surfaces off | 5.15 | M |
 | Every curved patch held to one segment (diagnostic build) | 11.37: the cost is the patch stages, not the triangles they add | M |
 | A curved draw's flat triangles drawn as triangles | 9.04 against 11.88 in the run before it; render thread 80.1 against 77.6 ms/s | M |
@@ -84,7 +84,7 @@ pixel-bound there (24 million pixel shader invocations against 4.1 million at 1x
   flat ones first: those draw as a triangle list with the same shaders less the patch stages, the rest as patches
   (`DrawCall::flat_index_count`). An edge shared with a curved neighbour has flat corners, so it stays one straight
   segment there too. Only draws whose triangle order cannot show are split: no blending or logic op, depth tested by
-  nearness and written; or sums (both blend factors one, added or subtracted, into the fixed-point EFB, depth not
+  nearness and written; or sums (both blend factors one, added or subtracted, into the fixed-point frame, depth not
   written), whose clamped results do not depend on the order. The plain pipeline compiles on a worker; until it is
   ready the draw stays whole.
 - Of the remaining patches, 79 % at 1x and 65 % at 3x get one segment on every edge from the hull shader (domain
@@ -110,13 +110,13 @@ pixel-bound there (24 million pixel shader invocations against 4.1 million at 1x
   debanded there (a third of the pixels, the radius the same share of the height, the dither at the size it is
   seen); an enlarged one as before. Same run (`GALAXY_TEST_DEBAND_AB=1` alternates the two): the paused Battlerock
   frame differs by at most 4 of 255 everywhere; the title's sky, contrast stretched, is smooth in both.
-- The game clears the EFB by drawing a quad (`MainLoopFramework::clearEfb`, colour and depth; `MR::clearZBuffer`, depth
+- The game clears the frame by drawing a quad (`MainLoopFramework::clearFrame`, colour and depth; `MR::clearZBuffer`, depth
   only) whose pixel shader writes the depth of a Z texture with the compare always: every pixel exports its depth,
   which keeps the early depth test and fast clears off (at 3x: 0.81 and 0.76 ms). The game now marks the quad
   (`__NebulaGXClearQuadMarker`, the texture's depth); the renderer clears the depth (the shader's formula,
   1 - z/2^24) and draws the colour, where written, with the same quad less the Z texture and the depth compare, so the
   colour is the shader's own (0.33 ms). A quad that is not the expected one (another compare, blending, a 16-bit
-  depth EFB, a viewport short of the scissor) draws as written. Same run (`GALAXY_TEST_CLEAR_QUAD_AB=1`, paused):
+  depth frame, a viewport short of the scissor) draws as written. Same run (`GALAXY_TEST_CLEAR_QUAD_AB=1`, paused):
   identical at 1x and at 3x with 4x MSAA.
 - Pictures (same run, `GALAXY_TEST_CURVED_SPLIT_AB=1` draws curved surfaces whole every other frame; the pause menu
   holds the scene, which is still drawn each frame), with the sort: identical at 1x, at 3x, and at 1x with 4x MSAA.
@@ -167,7 +167,7 @@ pixel-bound there (24 million pixel shader invocations against 4.1 million at 1x
 
 ### Native draws
 
-How the game's GX calls became native draws, and what each step measured. The command stream, its parser and the markers
+How the game became native draws, and what each step measured. The command stream, its parser and the markers
 named here are gone ([GRAPHICS_ARCHITECTURE.md](GRAPHICS_ARCHITECTURE.md)); the numbers stand as the record of each step.
 
 - Model shapes: J3DShapeDraw draws its list by a handle (`__NebulaGXCallShapeDisplayList`, the shape-list marker).
@@ -179,22 +179,22 @@ named here are gone ([GRAPHICS_ARCHITECTURE.md](GRAPHICS_ARCHITECTURE.md)); the 
   list and vertex state match; the array bytes it was built from are compared with memory once per batch of guest
   writes, as the decoded cache does; a changed list or state is built again once; arrays the game rewrites keep the GX
   path. Shapes not drawn for 3,600 render chunks are dropped (the game frees models with their heaps, no destructors).
-  Battlerock, stand-in at 1x, every render chunk counted: 1,008,899 shape draws native and 3 drawn as GX while built
+  Battlerock, stand-in at 1x, every render chunk counted: 1,008,899 shape draws native and 3 drawn the old way while built
   (first-draw building alone: 999,672 of 1,000,000); the parser's commands a frame 77 KB -> 28 KB; render thread
   84.0 / 84.2 / 84.4 -> 80.1 / 78.6 / 77.2 ms/s, GPU 4.96 / 4.99 / 5.03 -> 4.92 / 4.83 / 4.80 ms; boot's two frames over
   50 ms unchanged (76 + 87 against 75 + 88 ms; the builder at normal priority made one of 218 ms). Same run
   (`GALAXY_TEST_NATIVE_SHAPES_AB`, native every other presented frame, paused): identical; with ray tracing High the
-  native and GX frames differ no more than two GX frames do.
+  native and old-path frames differ no more than two old-path frames do.
 - Matrix palette snapshots copy 3,584 of their 6,656 bytes: XF memory has nothing at 0x100-0x3FF, which no reader
   addresses (98 snapshots a frame at Battlerock: 652,288 -> 351,232 bytes copied).
-- Display copies. SMG's copy to the XFB filters every frame (weights 32, 32, 0: each row averaged with the one above,
+- Display copies. SMG's copy to the picture filters every frame (weights 32, 32, 0: each row averaged with the one above,
   the Wii's deflicker), so it is a pass of its own: `display_filter_shader_source`, the general conversion's integer
   arithmetic for a 1:1 copy without gamma (rows loaded, not filtered by the sampler; truncated to 8 bits, weighted,
   shifted down by six). Same run (`GALAXY_TEST_DISPLAY_FILTER_AB`, paused): identical pictures and XFBs. Stand-in at
-  1x: XFB copy 0.14 -> 0.10 ms; 4K at 5x: 3.65 -> 2.61 ms. Vulkan has the same pass.
-- A copy that changes nothing (the identity filter at boot, no gamma, the whole picture, one EFB pixel to one XFB
-  pixel) is not copied: the EFB's colour target becomes the XFB (`can_hand_over_display_copy`), and the EFB takes an
-  idle texture. Its old picture is owed until the EFB is next read or partly drawn; a clear of all of it pays nothing,
+  1x: Display copy 0.14 -> 0.10 ms; 4K at 5x: 3.65 -> 2.61 ms. Vulkan has the same pass.
+- A copy that changes nothing (the identity filter at boot, no gamma, the whole picture, one frame pixel to one picture
+  pixel) is not copied: the frame's colour target becomes the picture (`can_hand_over_display_copy`), and the frame takes an
+  idle texture. Its old picture is owed until the frame is next read or partly drawn; a clear of all of it pays nothing,
   a clear of part restores the bands around it. Presentation reads the picture from the top left of the taller
   texture with its own passes (`SOURCE_BOX`: resampling, debanding, EASU, RCAS at window size); a runtime branch in
   the shared passes cost 0.13 ms at 1x and 0.36 ms at 4K, so they are compiled apart. WARP test (`held_picture_on_warp`,
@@ -214,8 +214,8 @@ D3D12, GPU ms a game frame:
 | presentation | 16.1 (debanding 13.8) | 8.8 (debanding 6.0, scaling to the window 2.4) | M |
 | SMAA (scene) | 6.9 | 6.2 | M |
 | ambient occlusion | 4.3 (its apply 3.5) | apply 2.3 | M |
-| EFB copies | 5.0 | 4.9 | M |
-| XFB copy | 3.8 | 3.6 | M |
+| Frame reads | 5.0 | 4.9 | M |
+| Display copy | 3.8 | 3.6 | M |
 | scene | 22-28, by run | the clear quad's colour draw (1.1) gone | M |
 
 - Debanding at the picture's size was 13.8 ms: for every pixel, the rings' random taps (up to 200 pixels away at
@@ -227,22 +227,22 @@ D3D12, GPU ms a game frame:
   3x: the frame 33.6 -> 23.8 ms. Below 1080 lines it is the one pass as before. Same run (the one pass and the
   three on alternate frames, paused): at most 4 of 255 apart with the 2x2 box, 3 with 4x4 and on the source-size
   path, the size of the dither; the smooth regions alike when contrast stretched.
-- The game's clear quad (`MainLoopFramework::clearEfb`) draws one colour, C0 and A0 of a one-stage TEV. Its marker
+- The game's clear quad (`MainLoopFramework::clearFrame`) draws one colour, C0 and A0 of a one-stage material. Its marker
   now carries the colour, and the renderer clears it as it clears the depth, with the values the quad's pixel shader
-  stores (8-bit colour; on an EFB with alpha the 6-bit alpha: the TEV's, where one writes zero, or the destination
-  alpha constant; `kEfbClearExact`). Fog, the temporal upscalers' targets or a lit translucent keep the quad. Same run
+  stores (8-bit colour; on a frame with alpha the 6-bit alpha: the material's, where one writes zero, or the destination
+  alpha constant; `kFrameClearExact`). Fog, the temporal upscalers' targets or a lit translucent keep the quad. Same run
   (`GALAXY_TEST_CLEAR_QUAD_AB`): identical at 1x and 3x on D3D12 and Vulkan.
 - Ambient occlusion's apply read the depth and four occlusion pixels with five loads a pixel. It now gathers the four
   (two gathers) and, before reading the depth, skips a pixel whose least occlusion leaves its colour within a half
   level: the visibility is a weighted mean of the four and the colour's multiplier rises with it, so those pixels
   were left unwritten before too. The same values and arithmetic: the picture is unchanged by construction.
-- SMAA's blend into the EFB wrote every pixel, a pixel without blending weights writing back the copy's own colour;
+- SMAA's blend into the frame wrote every pixel, a pixel without blending weights writing back the copy's own colour;
   it now leaves those unwritten (`PASS_SMAA_BLEND_KEEP`): 2.7 -> 1.9 ms. Same run: identical at 1x and 3x.
-- One-channel EFB copies (I4, and I8 from R, G, B or A, such as the A8 screen capture) are R8 textures viewed as R in
+- One-channel Frame reads (I4, and I8 from R, G, B or A, such as the A8 screen capture) are R8 textures viewed as R in
   every channel, as decoded I8 textures are: a quarter of the memory (the 5x capture 30 -> 7.5 MB); the copy's time
   did not change (it reads more than it writes). Same run: identical at 1x; at 3x one pixel differs by 1 of 255.
 - Left: the planet's per-pixel-lit pipelines (about 10 ms; curved surfaces off barely change them, per-pixel and
-  enhanced lighting off halves them), the game's full-screen effects (about 5 ms), SMAA's copy and passes, the XFB
+  enhanced lighting off halves them), the game's full-screen effects (about 5 ms), SMAA's copy and passes, the picture
   copy, debanding's apply and the scaling. Vulkan (same settings): 54.2 ms, presentation 10.5.
 
 ### High end: 240 fps with ray tracing

@@ -82,8 +82,8 @@ public:
     void updatePauseMenu();
     bool isPauseMenuActive() const;
     bool isEnableStartSound(JAISoundID);
-    void doDvdErrorProcess();
-    void exitDvdErrorProcess();
+    void pauseForErrorWindow();
+    void resumeFromErrorWindow();
     s32 getNumOfPlaying(JAISoundID);
     u32 getPlayCountMin(JAISoundID);
     void setMicMtx(MtxPtr, s32);
@@ -146,7 +146,7 @@ public:
     s32 mHomeButtonToggleTime;
     s32 mPauseMenuState;
     s32 mPauseMenuToggleTime;
-    bool mIsDvdError;
+    bool mIsErrorWindowOpen;
     AudLimitedSoundInfo* mLimitedSoundInfo;
     SpkSystem* mSpkSystem;
 };

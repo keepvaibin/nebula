@@ -11,7 +11,7 @@ public:
     enum ResetOperation {
         ResetOperation_ApplicationReset,
         ResetOperation_Restart,
-        ResetOperation_ReturnToMenu,
+        ResetOperation_Quit,
     };
 
     /// @brief Creates a new `GameSystemResetAndPowerProcess`.
@@ -25,11 +25,10 @@ public:
 
     bool isActive() const;
     void setResetOperationApplicationReset();
-    void setResetOperationReturnToMenu();
+    void setResetOperationQuit();
     void requestReset(bool);
     void requestQuitGame(bool);
-    void notifyCheckDiskResult(bool);
-    void exePolling();
+    void exeIdle();
     void exeWaitResetPermitted();
     void exePrepareReset();
     void exeReset();
