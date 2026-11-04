@@ -406,6 +406,15 @@ inline constexpr const char* test_event_flags_name() noexcept { return "GALAXY_T
 inline constexpr const wchar_t* test_event_flags_wide_name() noexcept { return L"GALAXY_TEST_EVENT_FLAGS"; }
 #endif
 #if defined(NEBULA_RELEASE)
+inline const char* present_snapshot_by_stop() noexcept { return nullptr; }
+inline constexpr const char* present_snapshot_by_stop_name() noexcept { return ""; }
+inline constexpr const wchar_t* present_snapshot_by_stop_wide_name() noexcept { return L""; }
+#else
+inline const char* present_snapshot_by_stop() noexcept { return std::getenv("GALAXY_PRESENT_SNAPSHOT_BY_STOP"); }
+inline constexpr const char* present_snapshot_by_stop_name() noexcept { return "GALAXY_PRESENT_SNAPSHOT_BY_STOP"; }
+inline constexpr const wchar_t* present_snapshot_by_stop_wide_name() noexcept { return L"GALAXY_PRESENT_SNAPSHOT_BY_STOP"; }
+#endif
+#if defined(NEBULA_RELEASE)
 inline const char* test_galaxy_tour() noexcept { return nullptr; }
 inline constexpr const char* test_galaxy_tour_name() noexcept { return ""; }
 inline constexpr const wchar_t* test_galaxy_tour_wide_name() noexcept { return L""; }

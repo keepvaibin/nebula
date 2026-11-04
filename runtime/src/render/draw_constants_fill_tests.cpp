@@ -66,8 +66,8 @@ int main() {
         case 11: frame=true;break;
         }
         const std::uint32_t dirty=(state.consume_any_change()?kStateDirtyMatrices:0u)|(typed?kStateDirtyVertexConstants:0u);
-        VertexConstants reference{};fill_vs_constants(state,draw,scale,reference);
-        const auto& got=cache.update(state,draw,dirty,scale,frame);
+        VertexConstants reference{};fill_vs_constants(draw,scale,reference);
+        const auto& got=cache.update(draw,dirty,scale,frame);
         ok &= std::memcmp(&got,&reference,sizeof(got))==0;
         if(kind==5u)ok &= ((got.flags&2u)!=0u)==draw.channel[0].lighting_enable;
         if(!ok){std::printf("FAILED VS image at %u kind %u dirty %x\n",i,kind,dirty);return 1;}
@@ -112,7 +112,7 @@ int main() {
         cache = {};
         cache.sky_up = 0x12345678u;
         cache.sky_up_known = 1u;
-        const auto& got = cache.update(state, draw, ~0u, scale, true);
+        const auto& got = cache.update(draw, ~0u, scale, true);
         if (worst > 2e-4 || got.sky_up != 0x12345678u || got.sky_up_known != 1u) {
             std::printf("FAILED sky up: worst %.6f rad, word %08X known %u\n", worst, got.sky_up, got.sky_up_known);
             return 1;

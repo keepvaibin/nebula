@@ -181,15 +181,15 @@ fn emit_vertex(p: &Program, out: &mut Vec<String>) -> Result<()> {
         out.push(format!("            res = float3(dot(c, native_matrix_row(tm + 0u)), dot(c, native_matrix_row(tm + 1u)), {third});"));
         out.push("        } else {".into());
         let (a, b, c) = (3 * i, 3 * i + 1, 3 * i + 2);
-        let third = if three { format!("dot(c, inline_tex_matrices[{c}])") } else { "1.0".to_string() };
-        out.push(format!("            res = float3(dot(c, inline_tex_matrices[{a}]), dot(c, inline_tex_matrices[{b}]), {third});"));
+        let third = if three { format!("dot(c, native_tex_row({c}))") } else { "1.0".to_string() };
+        out.push(format!("            res = float3(dot(c, native_tex_row({a})), dot(c, native_tex_row({b})), {third});"));
         out.push("        }".into());
         out.push(format!("        const uint pt = native_post({i}u);"));
         out.push("        const bool posted = (pt & 0x3Fu) != 61u;".into());
         out.push("        if (posted) {".into());
         out.push("            if ((pt & 0x100u) != 0u) res = dot(res, res) > 0.0 ? normalize(res) : res;".into());
         out.push(format!(
-            "            res = float3(dot(float4(res, 1.0), inline_post_matrices[{a}]), dot(float4(res, 1.0), inline_post_matrices[{b}]), dot(float4(res, 1.0), inline_post_matrices[{c}]));"
+            "            res = float3(dot(float4(res, 1.0), native_coord_post_row({a})), dot(float4(res, 1.0), native_coord_post_row({b})), dot(float4(res, 1.0), native_coord_post_row({c})));"
         ));
         out.push("        }".into());
         let projected = if three { "true" } else { "posted" };
