@@ -47,6 +47,13 @@ function(nebula_fidelityfx_android headers portable names)
         endif()
     endif()
 
+    # The backend promises alignas(32) for its effect contexts, then places them at any offset of its scratch memory.
+    # Only MSVC's code gets away with that; nothing in them needs it.
+    file(READ "${sdk}/src/backends/vk/ffx_vk.cpp" backend_source)
+    string(REPLACE "typedef struct alignas(32) EffectContext" "typedef struct EffectContext" backend_source "${backend_source}")
+    set(backend_copy "${CMAKE_CURRENT_BINARY_DIR}/ffx_vk_unaligned.cpp")
+    file(WRITE "${backend_copy}.new" "${backend_source}")
+    configure_file("${backend_copy}.new" "${backend_copy}" COPYONLY)
     add_library(nebula_fidelityfx_vk STATIC
         "${sdk}/src/shared/ffx_assert.cpp"
         "${sdk}/src/shared/ffx_message.cpp"
@@ -55,7 +62,7 @@ function(nebula_fidelityfx_android headers portable names)
         "${sdk}/src/backends/shared/ffx_shader_blobs.cpp"
         "${sdk}/src/backends/shared/blob_accessors/ffx_fsr3upscaler_shaderblobs.cpp"
         "${sdk}/src/components/fsr3upscaler/ffx_fsr3upscaler.cpp"
-        "${sdk}/src/backends/vk/ffx_vk.cpp"
+        "${backend_copy}"
         "${CMAKE_SOURCE_DIR}/../../runtime/src/render/vk/ffx_no_swapchain.cpp")
     target_include_directories(nebula_fidelityfx_vk SYSTEM PUBLIC "${sdk}/include")
     target_include_directories(nebula_fidelityfx_vk SYSTEM PRIVATE

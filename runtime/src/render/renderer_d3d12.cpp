@@ -1412,12 +1412,16 @@ gpu::TextureRef RendererD3D12::hand_over_scene_color(gpu::TextureRef fresh) {
     const D3D12_RESOURCE_DESC desc = scene_color_->GetDesc();
     D3D12_RESOURCE_BARRIER barriers[2]{};
     UINT barrier_count = 0;
+    std::erase_if(old_scene_targets_, [this](const OldSceneTarget& old) { return frame_index_ >= old.free_from; });
     if (fresh) {
         const D3D12_RESOURCE_DESC got = fresh->GetDesc();
         if (got.Width != desc.Width || got.Height != desc.Height || got.Format != desc.Format ||
             got.Flags != desc.Flags || got.SampleDesc.Count != 1u) {
-            throw std::runtime_error("handed-over scene target replacement has another description");
+            old_scene_targets_.push_back({std::move(fresh), frame_index_ + kFramesInFlight + 1u});
+            fresh = nullptr;
         }
+    }
+    if (fresh) {
         // Released pictures are kept as shader resources.
         D3D12_RESOURCE_BARRIER& b = barriers[barrier_count++];
         b.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
