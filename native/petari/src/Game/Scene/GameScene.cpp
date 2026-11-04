@@ -265,7 +265,7 @@ void GameScene::update() {
     updateNerve();
     NebulaLoadTrace::gameScene();
     NebulaAchievements::update();
-    if (sTestBoard && MR::isExistSceneObj(SceneObj_GameSceneLayoutHolder) && MR::getGameSceneLayoutHolder()->mAchievementBoard != nullptr) {
+    if (sTestBoard && MR::isStageAstroLocation() && MR::isExistSceneObj(SceneObj_GameSceneLayoutHolder) && MR::getGameSceneLayoutHolder()->mAchievementBoard != nullptr) {
         sTestBoard = false;
         requestShowNebulaBoard();
     }
