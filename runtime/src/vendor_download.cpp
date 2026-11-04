@@ -262,10 +262,16 @@ std::atomic<State> s_state{State::Idle};
 std::atomic<std::uint64_t> s_done{0u};
 std::atomic<std::uint64_t> s_total{0u};
 std::atomic<bool> s_cancel{false};
-std::thread s_thread;
-std::mutex s_license_mutex;
-License s_license;
-std::thread s_license_thread;
+// Outlives the process's static destructors: a detached thread may still be reading when the game exits.
+struct LicenseStore {
+    std::mutex mutex;
+    License license;
+    unsigned fetch = 0u;
+};
+LicenseStore& license_store() {
+    static LicenseStore* const store = new LicenseStore;
+    return *store;
+}
 
 // Exactly `bytes` from `offset`, a dropped connection tried again.
 bool read_range(Remote& remote, std::uint64_t offset, std::size_t bytes, std::vector<unsigned char>& out) {
@@ -468,13 +474,8 @@ void run(const Release& release, const std::filesystem::path& directory) {
 
 }  // namespace
 
-std::filesystem::path folder(Package package, const std::filesystem::path& data_directory) {
-    return data_directory / L"vendor" / release_of(package).folder;
-}
-
-bool installed(Package package, const std::filesystem::path& data_directory) {
+bool installed(Package package, const std::filesystem::path& directory) {
     const Release& release = release_of(package);
-    const std::filesystem::path directory = folder(package, data_directory);
     for (std::size_t i = 0u; i < release.part_count; ++i) {
         std::error_code error;
         if (std::filesystem::file_size(directory / release.parts[i].file, error) != release.parts[i].size || error) {
@@ -493,18 +494,15 @@ unsigned download_megabytes(Package package) {
     return static_cast<unsigned>((bytes + 500'000u) / 1'000'000u);
 }
 
-bool start(Package package, const std::filesystem::path& data_directory) {
+bool start(Package package, const std::filesystem::path& directory) {
     State expected = State::Idle;
     if (!s_state.compare_exchange_strong(expected, State::Running, std::memory_order_acq_rel)) {
         return false;
     }
-    if (s_thread.joinable()) {
-        s_thread.join();
-    }
     s_cancel.store(false, std::memory_order_relaxed);
     s_done.store(0u, std::memory_order_relaxed);
     s_total.store(0u, std::memory_order_relaxed);
-    s_thread = std::thread(run, std::cref(release_of(package)), folder(package, data_directory));
+    std::thread(run, std::cref(release_of(package)), directory).detach();
     return true;
 }
 
@@ -521,22 +519,19 @@ Progress progress() {
 void acknowledge() {
     const State state = s_state.load(std::memory_order_acquire);
     if (state == State::Done || state == State::Failed || state == State::Canceled) {
-        if (s_thread.joinable()) {
-            s_thread.join();
-        }
         s_state.store(State::Idle, std::memory_order_release);
     }
 }
 
 void fetch_license(Package package) {
+    LicenseStore& store = license_store();
+    unsigned fetch = 0u;
     {
-        const std::lock_guard<std::mutex> lock(s_license_mutex);
-        s_license = License{};
+        const std::lock_guard<std::mutex> lock(store.mutex);
+        store.license = License{};
+        fetch = ++store.fetch;
     }
-    if (s_license_thread.joinable()) {
-        s_license_thread.join();
-    }
-    s_license_thread = std::thread([&release = release_of(package)] {
+    std::thread([&release = release_of(package), &store, fetch] {
         std::string text;
         bool good = false;
         try {
@@ -554,16 +549,19 @@ void fetch_license(Package package) {
         } catch (const std::exception& error) {
             std::cerr << "[download] " << error.what() << '\n';
         }
-        const std::lock_guard<std::mutex> lock(s_license_mutex);
-        s_license.ready = good;
-        s_license.failed = !good;
-        s_license.text = std::move(text);
-    });
+        const std::lock_guard<std::mutex> lock(store.mutex);
+        if (store.fetch == fetch) {
+            store.license.ready = good;
+            store.license.failed = !good;
+            store.license.text = std::move(text);
+        }
+    }).detach();
 }
 
 License license() {
-    const std::lock_guard<std::mutex> lock(s_license_mutex);
-    return s_license;
+    LicenseStore& store = license_store();
+    const std::lock_guard<std::mutex> lock(store.mutex);
+    return store.license;
 }
 
 }  // namespace galaxy::vendor_download

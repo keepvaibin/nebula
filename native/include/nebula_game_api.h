@@ -749,8 +749,9 @@ enum {
     NEBULA_SETTINGS_STATUS_CAPTURE_KEY,      /* a binding waits for a key or mouse button */
     NEBULA_SETTINGS_STATUS_CAPTURE_PAD,      /* a binding waits for a button, stick or trigger */
     NEBULA_SETTINGS_STATUS_MESSAGE,          /* a message for a moment (`status_text`) */
-    NEBULA_SETTINGS_STATUS_DLSS_ASK,         /* download DLSS? yes: NEBULA_SETTINGS_APPLY, no: NEBULA_SETTINGS_CLOSE */
-    NEBULA_SETTINGS_STATUS_DLSS_INSTALLING,  /* DLSS downloads and installs */
+    NEBULA_SETTINGS_STATUS_DLSS_ASK,         /* download DLSS? yes: NEBULA_SETTINGS_APPLY, its license: NEBULA_SETTINGS_REVERT,
+                                                no: NEBULA_SETTINGS_CLOSE */
+    NEBULA_SETTINGS_STATUS_DLSS_INSTALLING,  /* DLSS downloads (`status_number` percent); NEBULA_SETTINGS_CLOSE stops it */
     NEBULA_SETTINGS_STATUS_DLSS_RESTART,     /* DLSS installed: restart now? yes: APPLY, later: CLOSE */
     NEBULA_SETTINGS_STATUS_DLSS_FAILED,      /* DLSS was not installed */
     NEBULA_SETTINGS_STATUS_KEEP_DISPLAY,     /* keep the new display? (`status_number` seconds before it reverts) */
@@ -768,6 +769,12 @@ enum {
     NEBULA_SETTINGS_STATUS_DIAGNOSTICS_ASK,  /* restart and record a diagnostics run (the launcher's recording)? yes:
                                                 APPLY, no: CLOSE */
     NEBULA_SETTINGS_STATUS_MODS_CODE_ASK,    /* a mod turned on brings code: allow it? yes: APPLY, no: CLOSE */
+    NEBULA_SETTINGS_STATUS_XESS_ASK,         /* download XeSS? yes: APPLY, its license: REVERT, no: CLOSE */
+    NEBULA_SETTINGS_STATUS_XESS_INSTALLING,  /* XeSS downloads (`status_number` percent); CLOSE stops it */
+    NEBULA_SETTINGS_STATUS_XESS_RESTART,     /* XeSS installed: restart now? yes: APPLY, later: CLOSE */
+    NEBULA_SETTINGS_STATUS_XESS_FAILED,      /* XeSS was not installed */
+    NEBULA_SETTINGS_STATUS_LICENSE,          /* the maker's license: `long_text` one page, `status_number` its number from 1
+                                                (-1 loading, -2 not reachable); next: APPLY, before: REVERT, back: CLOSE */
 };
 /* The Pair Joy-Con screen's halves (NEBULA_SETTINGS_STATUS_JOYCON). */
 enum {
@@ -818,6 +825,7 @@ typedef struct NebulaSettingsView {
     uint32_t status; /* NEBULA_SETTINGS_STATUS_* */
     int32_t status_number;
     char status_text[160];
+    char long_text[1536]; /* a license's page */
 } NebulaSettingsView;
 
 /* The player's input to the settings menu (settings_input); the keyboard and controllers reach it through the host. */

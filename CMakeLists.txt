@@ -176,6 +176,7 @@ add_library(galaxy_native_host STATIC
     runtime/src/mods.cpp
     runtime/src/texture_categories.cpp
     runtime/src/mod_import.cpp
+    runtime/src/vendor_download.cpp
     runtime/src/crash_report.cpp
     runtime/src/discord_presence.cpp
     runtime/src/controller_hid.cpp

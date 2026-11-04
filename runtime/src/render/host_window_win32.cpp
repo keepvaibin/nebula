@@ -2,6 +2,7 @@
 // The game's Win32 window on both renderers (host_window_win32.h): the window procedure, the pointer, and what the
 // settings menu asks of its platform (host_window.h).
 
+#include "galaxy/vendor_download.h"
 #include "galaxy/render/host_window_win32.h"
 #include "galaxy/render/xess_library.h"
 #include "galaxy/windows_power.h"
@@ -378,7 +379,6 @@ void hold_display_on(bool hold) noexcept {
 
 
 
-HANDLE s_dlss_download = nullptr;
 std::wstring launcher_path() {
     wchar_t path[MAX_PATH]{};
     const DWORD length = GetModuleFileNameW(nullptr, path, MAX_PATH);
@@ -1378,22 +1378,63 @@ bool frame_generation_files_present() {
     return true;
 }
 
-bool start_dlss_install() {
-    return start_launcher(L"--install-dlss", &s_dlss_download);
+bool xess_files_present() {
+    return vendor_download::installed(vendor_download::Package::Xess, xess_library::directory());
 }
 
-DlssInstall poll_dlss_install() {
-    if (s_dlss_download == nullptr || WaitForSingleObject(s_dlss_download, 0u) != WAIT_OBJECT_0) {
-        return DlssInstall::Running;
+namespace {
+
+vendor_download::Package vendor_package(unsigned upscaler) {
+    return upscaler == 4u ? vendor_download::Package::Xess : vendor_download::Package::Dlss;
+}
+
+}  // namespace
+
+unsigned vendor_megabytes(unsigned upscaler) {
+    return vendor_download::download_megabytes(vendor_package(upscaler));
+}
+
+bool start_vendor_install(unsigned upscaler) {
+    const std::wstring directory = upscaler == 4u ? xess_library::directory() : streamline::default_directory();
+    return !directory.empty() && vendor_download::start(vendor_package(upscaler), directory);
+}
+
+void cancel_vendor_install() {
+    vendor_download::cancel();
+}
+
+VendorInstall poll_vendor_install(unsigned& percent) {
+    const vendor_download::Progress progress = vendor_download::progress();
+    percent = progress.total_bytes != 0u ? static_cast<unsigned>(progress.done_bytes * 100u / progress.total_bytes) : 0u;
+    switch (progress.state) {
+    case vendor_download::State::Done:
+        vendor_download::acknowledge();
+        return VendorInstall::Done;
+    case vendor_download::State::Canceled:
+        vendor_download::acknowledge();
+        return VendorInstall::Canceled;
+    case vendor_download::State::Failed:
+        vendor_download::acknowledge();
+        return VendorInstall::Failed;
+    default:
+        return VendorInstall::Running;
     }
-    DWORD code = 1u;
-    GetExitCodeProcess(s_dlss_download, &code);
-    CloseHandle(s_dlss_download);
-    s_dlss_download = nullptr;
-    if (code == 1u) {
-        return DlssInstall::Closed;
+}
+
+void fetch_vendor_license(unsigned upscaler) {
+    vendor_download::fetch_license(vendor_package(upscaler));
+}
+
+VendorLicense vendor_license(std::string& text) {
+    vendor_download::License license = vendor_download::license();
+    if (license.failed) {
+        return VendorLicense::Failed;
     }
-    return code == 0u && dlss_files_present() ? DlssInstall::Succeeded : DlssInstall::Failed;
+    if (!license.ready) {
+        return VendorLicense::Loading;
+    }
+    text = std::move(license.text);
+    return VendorLicense::Ready;
 }
 
 // The launcher starts the game again once this process has exited (`record`: a diagnostics run); this one closes.

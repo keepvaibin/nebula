@@ -4,12 +4,14 @@
 #include "galaxy/render/vk/vk_context.h"
 
 #include "galaxy/render/vk/temporal_upscaler_vk.h"
-#include "galaxy/render/xess_library.h"
 #if defined(_WIN32)
+#include "galaxy/render/xess_library.h"
 #include "galaxy/render/vk/streamline_vk.h"
 #endif
 
+#if defined(_WIN32)
 #include <xess/xess_vk.h>
+#endif
 
 #include "galaxy/render/gpu_types.h"
 
@@ -192,6 +194,7 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
         app.apiVersion = VK_API_VERSION_1_2;
     }
 #endif
+#if defined(_WIN32)
     // XeSS's instance needs, where its library is here.
     if (const auto required = xess_library::get<decltype(xessVKGetRequiredInstanceExtensions)>("xessVKGetRequiredInstanceExtensions")) {
         std::uint32_t count = 0u;
@@ -208,6 +211,7 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
             xess_instance_ready_ = true;
         }
     }
+#endif
     VkInstanceCreateInfo instance_info{VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
     instance_info.pApplicationInfo = &app;
     instance_info.enabledExtensionCount = static_cast<std::uint32_t>(instance_extensions.size());
@@ -470,6 +474,7 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
         separate.pNext = const_cast<void*>(device_info.pNext);
         device_info.pNext = &float16;
     }
+#if defined(_WIN32)
     // XeSS's device needs, where its library is here: its features through the chain (its function adds to it).
     VkPhysicalDeviceFeatures2 enabled_chain{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
     const auto xess_extensions = xess_library::get<decltype(xessVKGetRequiredDeviceExtensions)>("xessVKGetRequiredDeviceExtensions");
@@ -498,6 +503,7 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
             }
         }
     }
+#endif
     device_info.queueCreateInfoCount = 1;
     device_info.pQueueCreateInfos = &queue_info;
     device_info.enabledExtensionCount = static_cast<std::uint32_t>(device_extensions.size());

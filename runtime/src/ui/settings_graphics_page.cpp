@@ -28,6 +28,9 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
         if (offered && render.upscaler == 3u && !state.dlss_supported) {
             value += state.dlss_installed ? " (AFTER RESTART)" : " (DOWNLOAD)";
         }
+        if (offered && render.upscaler == 4u && !state.xess_supported) {
+            value += state.xess_installed ? " (AFTER RESTART)" : " (DOWNLOAD)";
+        }
         rows.push_back({"UPSCALING", value,
                         [&host](RenderConfig& draft, int delta) {
                             const std::vector<unsigned> options = host.query(draft).upscalers;

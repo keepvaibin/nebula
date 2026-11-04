@@ -72,7 +72,7 @@ using host_window::hidden_window_mode_enabled;
 
 namespace {
 
-#if defined(GALAXY_WITH_STREAMLINE)
+#if defined(GALAXY_WITH_STREAMLINE) || defined(GALAXY_STREAMLINE_VK)
 constexpr bool kStreamlineBuilt = true;
 #else
 constexpr bool kStreamlineBuilt = false;
@@ -81,6 +81,9 @@ constexpr bool kStreamlineBuilt = false;
 // DLSS offered before it is installed (defined below).
 bool dlss_offered();
 bool dlss_installed_now();
+bool xess_offered();
+bool xess_installed_now();
+bool vendor_prompting();
 bool frame_generation_offered();
 bool dlss_hold_back(RenderConfig& applied, const RenderConfig& live);
 bool dlss_prompt_key(std::uintptr_t key, bool was_down);
@@ -93,7 +96,6 @@ void dlss_dismiss_prompt();
 void poll_dlss_download();
 std::string dlss_footer(std::uint64_t now_ms, bool& error);
 NativeSettingsStatus dlss_status(std::uint64_t now_ms);
-constexpr int kDlssDownloadMegabytes = 31;  // NVIDIA's DLSS files, as downloaded
 
 // Settings pages built from rows (DISPLAY, GRAPHICS, GAME, MODS, SYSTEM: settings_page): a label, the
 // value for the draft, how left/right change the draft (none: the row is fixed) and a help line; a
@@ -117,7 +119,7 @@ std::vector<unsigned> available_upscalers() {
     std::vector<unsigned> choices{0u, 1u};
     if (fsr3_available()) choices.push_back(2u);
     if (host_window::upscaler_caps().dlss || dlss_offered()) choices.push_back(3u);
-    if (host_window::upscaler_caps().xess) choices.push_back(4u);
+    if (host_window::upscaler_caps().xess || xess_offered()) choices.push_back(4u);
     return choices;
 }
 
@@ -1516,8 +1518,8 @@ bool handle_native_settings_key(std::uintptr_t key, bool was_down, bool from_pad
             // A new display waits to be kept, DLSS to be downloaded and new mods to be restarted for, on the page;
             // anything else closes.
             const NativeSettingsStatus dlss = dlss_status(galaxy::steady_ms());
-            if (!settings_display_confirming() && dlss != NativeSettingsStatus::DlssAsk &&
-                dlss != NativeSettingsStatus::DlssRestart && !restart_asking()) {
+            if (!settings_display_confirming() && dlss != NativeSettingsStatus::DlssAsk && dlss != NativeSettingsStatus::XessAsk &&
+                dlss != NativeSettingsStatus::DlssRestart && dlss != NativeSettingsStatus::XessRestart && !restart_asking()) {
                 set_native_settings_visible(false);
             }
         } else if (key == VK_BACK) {
@@ -1853,6 +1855,8 @@ public:
         state.render_percent = static_cast<unsigned>(std::lround(settings_render_fraction(render) * 100.0f));
         state.dlss_supported = host_window::upscaler_caps().dlss;
         state.dlss_installed = dlss_installed_now();
+        state.xess_supported = host_window::upscaler_caps().xess;
+        state.xess_installed = xess_installed_now();
         state.ray_tracing_offered = host_window::ray_tracing_offered.load(std::memory_order_relaxed);
         state.temporal_upscaling = temporal_upscaler(render) != 0u;
         state.spatial_upscaling = spatial_quality_mode(render);
@@ -2812,11 +2816,16 @@ std::string native_settings_row_text(
     }
 }
 
-enum class DlssOffer : std::uint8_t { None, Ask, Downloading, Ready, Failed };
-DlssOffer s_dlss_offer = DlssOffer::None;
-std::atomic<bool> s_dlss_downloading{false};
+enum class VendorOffer : std::uint8_t { None, Ask, License, Downloading, Ready, Failed };
+VendorOffer s_vendor_offer = VendorOffer::None;
+unsigned s_vendor_upscaler = 3u;  // what it is about: 3 DLSS, 4 XeSS
+std::atomic<bool> s_vendor_downloading{false};
+std::atomic<unsigned> s_vendor_percent{0u};
 bool s_dlss_installed_now = false;
-std::uint64_t s_dlss_failed_until_ms = 0u;
+bool s_xess_installed_now = false;
+std::uint64_t s_vendor_failed_until_ms = 0u;
+std::vector<std::string> s_license_pages;
+unsigned s_license_page = 0u;
 
 bool dlss_offered() {
     if (!kStreamlineBuilt || host_window::upscaler_caps().dlss) {
@@ -2825,13 +2834,34 @@ bool dlss_offered() {
     if (s_dlss_installed_now) {
         return true;
     }
-    static const bool offered = host_window::rtx_adapter.load(std::memory_order_relaxed) &&
-                                !host_window::dlss_files_present() && host_window::launcher_available();
+    static const bool offered = host_window::rtx_adapter.load(std::memory_order_relaxed) && !host_window::dlss_files_present();
     return offered;
 }
 
 bool dlss_installed_now() {
     return s_dlss_installed_now && !host_window::upscaler_caps().dlss;
+}
+
+// Where the machine has a download for it (host_window::vendor_megabytes); it runs on any GPU that takes its shaders.
+bool xess_offered() {
+    if (host_window::upscaler_caps().xess || host_window::vendor_megabytes(4u) == 0u) {
+        return false;
+    }
+    if (s_xess_installed_now) {
+        return true;
+    }
+    static const bool offered = !host_window::xess_files_present();
+    return offered;
+}
+
+bool xess_installed_now() {
+    return s_xess_installed_now && !host_window::upscaler_caps().xess;
+}
+
+// A question of its own is up: the page and its rows wait.
+bool vendor_prompting() {
+    return s_vendor_offer == VendorOffer::Ask || s_vendor_offer == VendorOffer::License || s_vendor_offer == VendorOffer::Downloading ||
+           s_vendor_offer == VendorOffer::Ready;
 }
 
 // DLSS Frame Generation (GRAPHICS > INTERPOLATION): offered while it runs, or with DLSS once its plugins are
@@ -2844,63 +2874,128 @@ bool frame_generation_offered() {
     return installed && host_window::upscaler_caps().dlss;
 }
 
-// DLSS chosen before it is installed is not applied: the menu asks to download it. Once downloaded this session it
+// DLSS or XeSS chosen before it is installed is not applied: the menu asks to download it. Once downloaded this session it
 // applies and runs after a restart (FSR 1 until then).
 bool dlss_hold_back(RenderConfig& applied, const RenderConfig& live) {
-    if (applied.upscaler != 3u || live.upscaler == 3u || !dlss_offered() || s_dlss_installed_now) {
+    const unsigned wanted = applied.upscaler;
+    if ((wanted != 3u && wanted != 4u) || live.upscaler == wanted) {
+        return false;
+    }
+    if (wanted == 3u ? !dlss_offered() || s_dlss_installed_now : !xess_offered() || s_xess_installed_now) {
         return false;
     }
     applied.upscaler = live.upscaler;
-    if (s_dlss_offer != DlssOffer::Downloading) {
-        s_dlss_offer = DlssOffer::Ask;
+    if (s_vendor_offer != VendorOffer::Downloading) {
+        s_vendor_offer = VendorOffer::Ask;
+        s_vendor_upscaler = wanted;
     }
     return true;
 }
 
 void dlss_dismiss_prompt() {
-    if (s_dlss_offer == DlssOffer::Ask || s_dlss_offer == DlssOffer::Ready) {
-        s_dlss_offer = DlssOffer::None;
+    if (s_vendor_offer == VendorOffer::Ask || s_vendor_offer == VendorOffer::License || s_vendor_offer == VendorOffer::Ready) {
+        s_vendor_offer = VendorOffer::None;
     }
 }
 
-void dlss_fail(const char* why) {
-    if (s_settings_draft.upscaler == 3u && !s_dlss_installed_now) {
+void vendor_revert_draft() {
+    if (s_settings_draft.upscaler == s_vendor_upscaler &&
+        !(s_vendor_upscaler == 3u ? s_dlss_installed_now : s_xess_installed_now)) {
         s_settings_draft.upscaler = get_render_config().upscaler;
     }
-    s_dlss_offer = DlssOffer::Failed;
-    s_dlss_failed_until_ms = galaxy::steady_ms() + 4000u;
-    std::cerr << "[dlss] not installed: " << why << '\n';
 }
 
-// Enter/Y and Esc/B answer the DLSS questions; other keys wait for an answer.
+void vendor_fail(const char* why) {
+    vendor_revert_draft();
+    s_vendor_offer = VendorOffer::Failed;
+    s_vendor_failed_until_ms = galaxy::steady_ms() + 4000u;
+    std::cerr << "[download] not installed: " << why << '\n';
+}
+
+// The license in pages the menu's window holds, broken between words.
+std::vector<std::string> license_pages(const std::string& text) {
+    constexpr std::size_t kPageBytes = 1100u;
+    std::string clean;
+    clean.reserve(text.size());
+    for (const char c : text) {
+        if (c != '\r') {
+            clean.push_back(c == '\t' || c == '\f' ? ' ' : c);
+        }
+    }
+    std::vector<std::string> pages;
+    std::size_t at = 0u;
+    while (at < clean.size()) {
+        std::size_t end = std::min(at + kPageBytes, clean.size());
+        if (end < clean.size()) {
+            const std::size_t paragraph = clean.rfind("\n\n", end);
+            const std::size_t space = clean.rfind(' ', end);
+            if (paragraph != std::string::npos && paragraph > at + kPageBytes / 2u) {
+                end = paragraph + 2u;
+            } else if (space != std::string::npos && space > at) {
+                end = space + 1u;
+            }
+        }
+        pages.push_back(clean.substr(at, end - at));
+        at = end;
+    }
+    return pages;
+}
+
+// The vendor questions' keys: Enter/Y, Backspace/X and Esc/B; other keys wait for an answer.
 bool dlss_prompt_key(std::uintptr_t key, bool was_down) {
-    if (s_dlss_offer != DlssOffer::Ask && s_dlss_offer != DlssOffer::Ready) {
+    if (!vendor_prompting()) {
         return false;
     }
-    if (was_down || (key != VK_RETURN && key != VK_ESCAPE)) {
+    if (was_down) {
         return true;
     }
-    if (key == VK_ESCAPE) {
-        if (s_dlss_offer == DlssOffer::Ask) {
-            s_settings_draft.upscaler = get_render_config().upscaler;
+    switch (s_vendor_offer) {
+    case VendorOffer::Ask:
+        if (key == VK_ESCAPE) {
+            vendor_revert_draft();
+            s_vendor_offer = VendorOffer::None;
+        } else if (key == VK_BACK) {
+            host_window::fetch_vendor_license(s_vendor_upscaler);
+            s_license_pages.clear();
+            s_license_page = 0u;
+            s_vendor_offer = VendorOffer::License;
+        } else if (key == VK_RETURN) {
+            if (host_window::start_vendor_install(s_vendor_upscaler)) {
+                s_vendor_percent.store(0u, std::memory_order_relaxed);
+                s_vendor_downloading.store(true, std::memory_order_release);
+                s_vendor_offer = VendorOffer::Downloading;
+                std::cerr << "[download] started\n";
+            } else {
+                vendor_fail("could not start");
+            }
         }
-        s_dlss_offer = DlssOffer::None;
-        return true;
-    }
-    if (s_dlss_offer == DlssOffer::Ask) {
-        if (host_window::start_dlss_install()) {
-            s_dlss_downloading.store(true, std::memory_order_release);
-            s_dlss_offer = DlssOffer::Downloading;
-            std::cerr << "[dlss] download started\n";
-        } else {
-            dlss_fail("no launcher");
+        break;
+    case VendorOffer::License:
+        if (key == VK_ESCAPE) {
+            s_vendor_offer = VendorOffer::Ask;
+        } else if (key == VK_BACK && s_license_page > 0u) {
+            --s_license_page;
+        } else if (key == VK_RETURN && s_license_page + 1u < s_license_pages.size()) {
+            ++s_license_page;
         }
-        return true;
-    }
-    // Ready: the game starts again.
-    s_dlss_offer = DlssOffer::None;
-    if (host_window::restart_game(false)) {
-        std::cerr << "[dlss] restarting\n";
+        break;
+    case VendorOffer::Downloading:
+        if (key == VK_ESCAPE) {
+            host_window::cancel_vendor_install();
+        }
+        break;
+    case VendorOffer::Ready:
+        if (key == VK_ESCAPE) {
+            s_vendor_offer = VendorOffer::None;
+        } else if (key == VK_RETURN) {
+            s_vendor_offer = VendorOffer::None;
+            if (host_window::restart_game(false)) {
+                std::cerr << "[download] restarting\n";
+            }
+        }
+        break;
+    default:
+        break;
     }
     return true;
 }
@@ -2936,64 +3031,107 @@ bool restart_ask_key(std::uintptr_t key, bool was_down) {
     return true;
 }
 
-// Render thread, every frame: notices when the download window closes.
+// Render thread, every frame: follows the download, and takes the license when it arrives.
 void poll_dlss_download() {
-    if (!s_dlss_downloading.load(std::memory_order_acquire)) {
+    if (s_vendor_offer == VendorOffer::License && s_license_pages.empty()) {
+        const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
+        std::string text;
+        if (host_window::vendor_license(text) == host_window::VendorLicense::Ready) {
+            s_license_pages = license_pages(text);
+        }
+    }
+    if (!s_vendor_downloading.load(std::memory_order_acquire)) {
         return;
     }
     const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
-    const host_window::DlssInstall install = host_window::poll_dlss_install();
-    if (install == host_window::DlssInstall::Running) {
+    unsigned percent = 0u;
+    const host_window::VendorInstall install = host_window::poll_vendor_install(percent);
+    s_vendor_percent.store(percent, std::memory_order_relaxed);
+    if (install == host_window::VendorInstall::Running) {
         return;
     }
-    s_dlss_downloading.store(false, std::memory_order_release);
-    if (install != host_window::DlssInstall::Succeeded) {
-        dlss_fail(install == host_window::DlssInstall::Closed ? "closed" : "download failed");
+    s_vendor_downloading.store(false, std::memory_order_release);
+    if (install == host_window::VendorInstall::Canceled) {
+        vendor_revert_draft();
+        s_vendor_offer = VendorOffer::None;
+        std::cerr << "[download] stopped\n";
         return;
     }
-    s_dlss_installed_now = true;
+    if (install != host_window::VendorInstall::Done) {
+        vendor_fail("download failed");
+        return;
+    }
+    (s_vendor_upscaler == 3u ? s_dlss_installed_now : s_xess_installed_now) = true;
     RenderConfig render = get_render_config();
-    render.upscaler = 3u;
+    render.upscaler = s_vendor_upscaler;
     set_render_config(render);
-    s_settings_draft.upscaler = 3u;
+    s_settings_draft.upscaler = s_vendor_upscaler;
     s_settings_save.dirty.store(true, std::memory_order_release);
     flush_native_settings_if_dirty();
-    s_dlss_offer = DlssOffer::Ready;
-    std::cerr << "[dlss] installed; it starts with the next launch\n";
+    s_vendor_offer = VendorOffer::Ready;
+    std::cerr << "[download] installed; it starts with the next launch\n";
 }
 
+// The overlay's line for these questions.
 std::string dlss_footer(std::uint64_t now_ms, bool& error) {
-    switch (s_dlss_offer) {
-    case DlssOffer::Ask:
-        return "DOWNLOAD NVIDIA DLSS (" + std::to_string(kDlssDownloadMegabytes) + " MB)? ENTER/Y YES  ESC/B NO";
-    case DlssOffer::Downloading:
-        return "INSTALLING NVIDIA DLSS...";
-    case DlssOffer::Ready:
-        return "DLSS READY. RESTART NOW? ENTER/Y YES  ESC/B LATER";
-    case DlssOffer::Failed:
-        if (now_ms < s_dlss_failed_until_ms) {
+    const std::string name = s_vendor_upscaler == 3u ? "NVIDIA DLSS" : "INTEL XESS";
+    switch (s_vendor_offer) {
+    case VendorOffer::Ask:
+        return "DOWNLOAD " + name + " (" + std::to_string(host_window::vendor_megabytes(s_vendor_upscaler)) + " MB)? ENTER/Y YES  ESC/B NO";
+    case VendorOffer::License:
+        return name + " LICENSE";
+    case VendorOffer::Downloading:
+        return "DOWNLOADING " + name + " " + std::to_string(s_vendor_percent.load(std::memory_order_relaxed)) + "%";
+    case VendorOffer::Ready:
+        return name + " READY. RESTART NOW? ENTER/Y YES  ESC/B LATER";
+    case VendorOffer::Failed:
+        if (now_ms < s_vendor_failed_until_ms) {
             error = true;
-            return "DLSS WAS NOT INSTALLED";
+            return name + " WAS NOT INSTALLED";
         }
-        s_dlss_offer = DlssOffer::None;
+        s_vendor_offer = VendorOffer::None;
         return {};
     default:
         return {};
     }
 }
 
-// The DLSS offer as the menu's status: its two questions, the install, a failure for a moment; Help when there is
-// none.
+// The offer as the menu's status: its questions, the download, a failure for a moment; Help when there is none.
 NativeSettingsStatus dlss_status(std::uint64_t now_ms) {
     bool error = false;
     if (dlss_footer(now_ms, error).empty()) {
         return NativeSettingsStatus::Help;
     }
-    switch (s_dlss_offer) {
-    case DlssOffer::Ask: return NativeSettingsStatus::DlssAsk;
-    case DlssOffer::Downloading: return NativeSettingsStatus::DlssInstalling;
-    case DlssOffer::Ready: return NativeSettingsStatus::DlssRestart;
-    default: return NativeSettingsStatus::DlssFailed;
+    const bool dlss = s_vendor_upscaler == 3u;
+    switch (s_vendor_offer) {
+    case VendorOffer::Ask: return dlss ? NativeSettingsStatus::DlssAsk : NativeSettingsStatus::XessAsk;
+    case VendorOffer::License: return NativeSettingsStatus::License;
+    case VendorOffer::Downloading: return dlss ? NativeSettingsStatus::DlssInstalling : NativeSettingsStatus::XessInstalling;
+    case VendorOffer::Ready: return dlss ? NativeSettingsStatus::DlssRestart : NativeSettingsStatus::XessRestart;
+    default: return dlss ? NativeSettingsStatus::DlssFailed : NativeSettingsStatus::XessFailed;
+    }
+}
+
+// What the question says with it.
+void fill_vendor_view(NativeSettingsView& view) {
+    switch (s_vendor_offer) {
+    case VendorOffer::Ask:
+        view.status_number = static_cast<int>(host_window::vendor_megabytes(s_vendor_upscaler));
+        break;
+    case VendorOffer::Downloading:
+        view.status_number = static_cast<int>(s_vendor_percent.load(std::memory_order_relaxed));
+        break;
+    case VendorOffer::License:
+        if (s_license_page < s_license_pages.size()) {
+            view.status_number = static_cast<int>(s_license_page) + 1;
+            view.long_text = s_license_pages[s_license_page];
+        } else {
+            std::string unused;
+            view.status_number = host_window::vendor_license(unused) == host_window::VendorLicense::Failed ? -2 : -1;
+        }
+        break;
+    default:
+        break;
     }
 }
 
@@ -3314,7 +3452,12 @@ void draw_native_settings_overlay(UiCanvas& renderer) {
     case NativeSettingsStatus::DlssAsk:
     case NativeSettingsStatus::DlssInstalling:
     case NativeSettingsStatus::DlssRestart:
-    case NativeSettingsStatus::DlssFailed: {
+    case NativeSettingsStatus::DlssFailed:
+    case NativeSettingsStatus::XessAsk:
+    case NativeSettingsStatus::XessInstalling:
+    case NativeSettingsStatus::XessRestart:
+    case NativeSettingsStatus::XessFailed:
+    case NativeSettingsStatus::License: {
         bool dlss_error = false;
         status = dlss_footer(galaxy::steady_ms(), dlss_error);
         status_color = dlss_error ? error : accent;
@@ -3547,7 +3690,7 @@ NativeSettingsView build_native_settings_view() {
         view.status_text = s_controls_message;
     } else if (const NativeSettingsStatus dlss = dlss_status(now_ms); dlss != NativeSettingsStatus::Help) {
         view.status = dlss;
-        view.status_number = kDlssDownloadMegabytes;
+        fill_vendor_view(view);
     } else if (settings_display_confirming()) {
         const std::uint64_t left_ms = s_display_confirm_deadline_ms > now_ms ? s_display_confirm_deadline_ms - now_ms : 0u;
         view.status = NativeSettingsStatus::KeepDisplay;
@@ -3844,7 +3987,7 @@ void native_settings_input(NativeSettingsInput input, int arg) {
         break;
     }
     // The page and its rows wait while a question is up (keep the display? leave without applying?).
-    if (!visible || s_settings_leave_asking || s_joycon_pairing || settings_display_confirming() || restart_asking()) {
+    if (!visible || s_settings_leave_asking || s_joycon_pairing || settings_display_confirming() || restart_asking() || vendor_prompting()) {
         return;
     }
     switch (input) {
