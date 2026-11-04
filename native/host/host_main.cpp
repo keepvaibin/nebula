@@ -1545,6 +1545,8 @@ static_assert(static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::Leave)
               static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::DiagnosticsAsk) ==
                   NEBULA_SETTINGS_STATUS_DIAGNOSTICS_ASK &&
               static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::ModsCodeAsk) == NEBULA_SETTINGS_STATUS_MODS_CODE_ASK &&
+              static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::XessAsk) == NEBULA_SETTINGS_STATUS_XESS_ASK &&
+              static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::License) == NEBULA_SETTINGS_STATUS_LICENSE &&
               galaxy::render::kJoyConLeftBit == NEBULA_JOYCON_LEFT && galaxy::render::kJoyConRightBit == NEBULA_JOYCON_RIGHT &&
               galaxy::render::kJoyConLeftHeldBit == NEBULA_JOYCON_LEFT_HELD &&
               galaxy::render::kJoyConRightHeldBit == NEBULA_JOYCON_RIGHT_HELD &&
@@ -1612,6 +1614,7 @@ void svc_settings_view(void*, NebulaSettingsView* view) {
     view->status = static_cast<uint32_t>(source.status);
     view->status_number = source.status_number;
     copy_settings_text(view->status_text, source.status_text);
+    copy_settings_text(view->long_text, source.long_text);
 #endif
 }
 

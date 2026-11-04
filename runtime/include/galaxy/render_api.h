@@ -313,8 +313,8 @@ enum class NativeSettingsStatus : unsigned {
     CaptureKey,       // a binding waits for a key or mouse button
     CapturePad,       // a binding waits for a button, stick or trigger
     Message,          // a message for a moment (status_text)
-    DlssAsk,          // download DLSS? (yes: Apply, no: Close)
-    DlssInstalling,   // DLSS downloads and installs
+    DlssAsk,          // download DLSS? (yes: Apply, its license: Revert, no: Close)
+    DlssInstalling,   // DLSS downloads (status_number percent; Close stops it)
     DlssRestart,      // DLSS installed: restart now? (yes: Apply, later: Close)
     DlssFailed,       // DLSS was not installed
     KeepDisplay,      // keep the new display? (status_number seconds left)
@@ -330,6 +330,11 @@ enum class NativeSettingsStatus : unsigned {
     RtRestartAsk,     // ray tracing turned on before its shaders are prepared: restart now? (yes: Apply, later: Close)
     DiagnosticsAsk,   // restart and record a diagnostics run? (yes: Apply, no: Close)
     ModsCodeAsk,      // a mod turned on brings code: allow it? (yes: Apply, no: Close)
+    XessAsk,          // download XeSS? (yes: Apply, its license: Revert, no: Close)
+    XessInstalling,   // XeSS downloads (status_number percent; Close stops it)
+    XessRestart,      // XeSS installed: restart now? (yes: Apply, later: Close)
+    XessFailed,       // XeSS was not installed
+    License,          // the maker's license: long_text a page (next: Apply, before: Revert, back: Close)
 };
 // The Pair Joy-Con screen's status_number (nebula_game_api.h's NEBULA_JOYCON_*, checked alike in host_main.cpp).
 inline constexpr int kJoyConLeftBit = 1;       // a left half is connected
@@ -352,6 +357,7 @@ struct NativeSettingsView {
     NativeSettingsStatus status = NativeSettingsStatus::Help;
     int status_number = 0;
     std::string status_text;
+    std::string long_text;
 };
 // The menu as it stands. The first call hands the drawing to the game: the overlay draws nothing of its own after.
 [[nodiscard]] NativeSettingsView native_settings_view();

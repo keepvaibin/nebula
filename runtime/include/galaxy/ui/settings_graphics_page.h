@@ -16,6 +16,8 @@ struct GraphicsPageState {
     unsigned render_percent = 100;
     bool dlss_supported = false;
     bool dlss_installed = false;
+    bool xess_supported = false;
+    bool xess_installed = false;
     bool ray_tracing_offered = false;
     bool temporal_upscaling = false;
     bool spatial_upscaling = false;

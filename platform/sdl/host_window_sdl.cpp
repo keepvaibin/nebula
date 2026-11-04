@@ -986,12 +986,29 @@ bool frame_generation_files_present() {
     return false;
 }
 
-bool start_dlss_install() {
+bool xess_files_present() {
     return false;
 }
 
-DlssInstall poll_dlss_install() {
-    return DlssInstall::Failed;
+unsigned vendor_megabytes(unsigned) {
+    return 0u;
+}
+
+bool start_vendor_install(unsigned) {
+    return false;
+}
+
+void cancel_vendor_install() {}
+
+VendorInstall poll_vendor_install(unsigned& percent) {
+    percent = 0u;
+    return VendorInstall::Failed;
+}
+
+void fetch_vendor_license(unsigned) {}
+
+VendorLicense vendor_license(std::string&) {
+    return VendorLicense::Failed;
 }
 
 bool restart_game(bool) {

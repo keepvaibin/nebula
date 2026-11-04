@@ -268,10 +268,6 @@ static void clamp_unimplemented_features(RenderConfig& cfg) {
 #if defined(NEBULA_RELEASE)
     // What is not built natively yet stays off whatever an older settings file says. Each line goes with its feature.
     cfg.ray_tracing_enabled = false;
-    cfg.upscaler = 0u;
-    cfg.spatial_quality = 0u;
-    cfg.temporal_quality = 0u;
-    cfg.sharpness = 0u;
     cfg.frame_generation = 0u;
     cfg.hud_output_resolution = false;
     if (cfg.max_fps <= 0.0f || cfg.max_fps > 60.0f) {

@@ -2,9 +2,11 @@
 // FSR 3.1 on Vulkan (temporal_upscaler_vk.h).
 #include "galaxy/render/vk/temporal_upscaler_vk.h"
 
+#if defined(_WIN32)
 #include "galaxy/render/xess_library.h"
 
 #include <xess/xess_vk.h>
+#endif
 
 #include <algorithm>
 #include <array>
@@ -46,6 +48,7 @@ float halton(unsigned index, unsigned base) {
     return r;
 }
 
+#if defined(_WIN32)
 class XessUpscaler final : public TemporalUpscaler {
 public:
     ~XessUpscaler() override {
@@ -136,6 +139,7 @@ private:
     decltype(xessDestroyContext)* destroy_ = nullptr;
     bool reported_ = false;
 };
+#endif
 
 }  // namespace
 
@@ -155,6 +159,7 @@ void temporal_barriers(const TemporalUpscaleInputs& in, bool back) {
                      VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT, back);
 }
 
+#if defined(_WIN32)
 std::unique_ptr<TemporalUpscaler> create_xess_upscaler(VkInstance instance, VkPhysicalDevice physical, VkDevice device,
                                                        unsigned output_width, unsigned output_height, unsigned quality) {
     auto upscaler = std::make_unique<XessUpscaler>();
@@ -163,6 +168,11 @@ std::unique_ptr<TemporalUpscaler> create_xess_upscaler(VkInstance instance, VkPh
     }
     return upscaler;
 }
+#else
+std::unique_ptr<TemporalUpscaler> create_xess_upscaler(VkInstance, VkPhysicalDevice, VkDevice, unsigned, unsigned, unsigned) {
+    return nullptr;
+}
+#endif
 
 #if defined(GALAXY_WITH_FSR3_VK)
 
