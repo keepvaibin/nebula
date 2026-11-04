@@ -30,7 +30,7 @@ public:
     bool _4;
     u32 _8;
     s16 mPowerStarId;
-    char mStageName[48];
+    char mStageName[128];
     int mStarPieceNum;
     int mLast1upStarPieceNum;
     int mCoinNum;
