@@ -28,6 +28,23 @@ set(NEBULA_VMA_DIR "${NEBULA_DEPS}/VulkanMemoryAllocator-v3.4.0" CACHE PATH "Vul
 set(NEBULA_GLSLANG_SOURCE_DIR "${NEBULA_DEPS}/glslang-src" CACHE PATH "glslang source (External/spirv-tools inside)")
 set(NEBULA_SDL_DIR "${NEBULA_DEPS}/SDL3-3.4.18" CACHE PATH "SDL3 source")
 
+# The shader compiler, for mods' materials: glslang's HLSL front end and the SPIR-V optimizer.
+set(ENABLE_GLSLANG_BINARIES OFF CACHE BOOL "" FORCE)
+set(ENABLE_HLSL ON CACHE BOOL "" FORCE)
+set(ENABLE_OPT ON CACHE BOOL "" FORCE)
+set(GLSLANG_TESTS OFF CACHE BOOL "" FORCE)
+set(GLSLANG_ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
+set(SPIRV_SKIP_TESTS ON CACHE BOOL "" FORCE)
+set(SPIRV_SKIP_EXECUTABLES ON CACHE BOOL "" FORCE)
+set(SPIRV_TOOLS_BUILD_STATIC ON CACHE BOOL "" FORCE)
+add_subdirectory("${NEBULA_GLSLANG_SOURCE_DIR}" "${CMAKE_BINARY_DIR}/glslang" EXCLUDE_FROM_ALL)
+file(GLOB nebula_glslang_spirv_headers "${NEBULA_GLSLANG_SOURCE_DIR}/SPIRV/*.h" "${NEBULA_GLSLANG_SOURCE_DIR}/SPIRV/*.hpp")
+file(COPY ${nebula_glslang_spirv_headers} DESTINATION "${CMAKE_BINARY_DIR}/glslang-include/glslang/SPIRV")
+add_library(nebula_shader_compiler INTERFACE)
+target_include_directories(nebula_shader_compiler SYSTEM INTERFACE
+    "${CMAKE_BINARY_DIR}/glslang-include" "${NEBULA_GLSLANG_SOURCE_DIR}" "${NEBULA_GLSLANG_SOURCE_DIR}/External/spirv-tools/include")
+target_link_libraries(nebula_shader_compiler INTERFACE glslang SPIRV glslang-default-resource-limits SPIRV-Tools-opt SPIRV-Tools-static)
+
 add_library(nebula_vulkan_deps INTERFACE)
 target_include_directories(nebula_vulkan_deps INTERFACE
     "${NEBULA_VULKAN_HEADERS_DIR}/include" "${NEBULA_VOLK_DIR}" "${NEBULA_VMA_DIR}/include")
@@ -96,6 +113,9 @@ add_library(galaxy_render_vk STATIC
     ${rt}/render/vk/texture_backend_vk.cpp
     ${rt}/render/vk/pipeline_cache_vk.cpp
     ${rt}/render/mod_shaders.cpp
+    ${rt}/render/mod_shader_build.cpp
+    ${rt}/render/vk/mod_shader_compile_vk.cpp
+    ${rt}/render/vk/shader_compile_vk.cpp
     ${rt}/render/pipeline_seed.cpp
     ${rt}/render/vk/compile_journal.cpp
     ${rt}/render/vk/renderer_vk.cpp
@@ -129,6 +149,7 @@ add_library(galaxy_render_vk STATIC
     ${rt}/mii_formats.cpp
     ${rt}/mod_xml.cpp
     ${rt}/luma.cpp
+    ${rt}/mod_plugins.cpp
     ${rt}/mods.cpp
     ${rt}/texture_categories.cpp
     ${rt}/crash_report.cpp
@@ -147,6 +168,7 @@ target_include_directories(galaxy_render_vk PRIVATE "${nebula_root}/third_party/
 # vk_mem_alloc.h leaves pointer nullability unannotated.
 target_compile_options(galaxy_render_vk PRIVATE -Wno-nullability-completeness)
 target_link_libraries(galaxy_render_vk PUBLIC nebula_vulkan_deps)
+target_link_libraries(galaxy_render_vk PRIVATE nebula_shader_compiler)
 
 # SDL3: the window, Vulkan surface, audio, gamepads and touch. Android loads libSDL3.so from SDL's Java activity.
 set(SDL_SHARED ON CACHE BOOL "" FORCE)

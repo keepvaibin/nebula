@@ -278,6 +278,8 @@ public:
 
     // A temporal upscaler (FSR 3 or DLSS) is selected and available.
     [[nodiscard]] bool temporal_mode() const;
+    // Curved surfaces are refined once (shapes::refine_curved), not tessellated.
+    [[nodiscard]] bool tessellates() const noexcept { return false; }
     // At the start of the game's 3D scene: whether the temporal path runs for
     // it and, if so, the scene's sub-pixel jitter in render pixels (applied to
     // perspective projections).

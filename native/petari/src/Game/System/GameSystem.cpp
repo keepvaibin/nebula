@@ -1,4 +1,6 @@
 #include "Game/System/GameSystem.hpp"
+#include "Game/System/NebulaHost.hpp"
+#include "Game/System/NebulaMods.hpp"
 #include "Game/System/NebulaLoadTrace.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include "Game/System/GameThreads.hpp"
@@ -78,6 +80,7 @@ GameSystem::GameSystem()
 }
 
 void GameSystem::init() {
+    nebula_host()->mods_start(nebula_host()->user);
     mObjHolder = new GameSystemObjHolder();
     mFontHolder = new GameSystemFontHolder();
     mFontHolder->createFontFromEmbeddedData();
@@ -228,6 +231,7 @@ void GameSystem::update() {
     mObjHolder->update();
     NebulaMenuFocus::update();
     NebulaRtPrepare::update();
+    NebulaMods::fire(NEBULA_MOD_EVENT_FRAME);
     NebulaSettingsMenu::update();
     NebulaIcons::update();
     // The skip's question waits under the settings menu.

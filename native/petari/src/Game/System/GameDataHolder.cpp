@@ -32,7 +32,7 @@ GameDataHolder::GameDataHolder(const UserFile* pUserFile)
     mMapInfo = new JMapInfo();
     mMapInfo->attach(NebulaDataTables::getStoryProgressTable());
 
-    mChunkHolder = new BinaryDataChunkHolder(4096, 6);
+    mChunkHolder = new BinaryDataChunkHolder(4096 + 1024 * NebulaDataTables::addedGalaxyCount(), 6);
     mChunkHolder->addChunk(mPlayerStatus);
     mChunkHolder->addChunk(mEventFlagChecker->getChunk());
     mChunkHolder->addChunk(mStarPieceAlmsStorage);

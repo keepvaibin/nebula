@@ -490,6 +490,11 @@ void GalaxyMap::initPaneCtrlPointing() {
             continue;
         }
 
+        // A mod's galaxy names a pane its map layout may not have.
+        if (getLayoutManager()->findPaneByName(pPaneName) == nullptr) {
+            continue;
+        }
+
         const char* pGalaxyName = nullptr;
         galaxyInfo.getValue(i, "name", &pGalaxyName);
         GalaxyStatusAccessor accessor = MR::makeGalaxyStatusAccessor(pGalaxyName);
@@ -567,7 +572,12 @@ void GalaxyMap::initTicoIcon() {
     mTicoIcon.init(exclamationGalaxyNum);
 
     for (s32 i = 0; i < exclamationGalaxyNum; i++) {
-        nebula_snprintf(exclamationGalaxyName, sizeof(exclamationGalaxyName), "Tico%1d", i + 1);
+        nebula_snprintf(exclamationGalaxyName, sizeof(exclamationGalaxyName), "Tico%d", i + 1);
+
+        // A slot no Luma uses, or a Luma a mod added with no place on its map.
+        if (GameEventFlagTable::getExclamationGalaxyNameFromIndex(i) == nullptr || getLayoutManager()->findPaneByName(exclamationGalaxyName) == nullptr) {
+            continue;
+        }
 
         ticoIcon = new GalaxyMapTicoIcon(i, GameEventFlagTable::getExclamationGalaxyNameFromIndex(i), this, exclamationGalaxyName);
         ticoIcon->initWithoutIter();

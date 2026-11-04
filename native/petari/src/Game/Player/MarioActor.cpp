@@ -1,5 +1,6 @@
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Player/MarioActor.hpp"
+#include "Game/System/NebulaMods.hpp"
 #include "Game/Animation/XanimeCore.hpp"
 #include "Game/Camera/CameraTargetArg.hpp"
 #include "Game/Enemy/KarikariDirector.hpp"
@@ -1447,6 +1448,11 @@ void MarioActor::decLife(u16 amt) {
 
     if (amt) {
         _388 = amt;
+        return;
+    }
+
+    if (NebulaMods::fire(NEBULA_MOD_EVENT_PLAYER_DAMAGE, 1) == 0) {
+        _388 = 0;
         return;
     }
 
