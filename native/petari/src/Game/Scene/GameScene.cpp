@@ -179,14 +179,12 @@ void GameScene::init() {
         MR::createMoviePlayingSequence();
     }
 
-    SceneFunction::waitDoneStageFileLoad();
+    SceneFunction::createStageDataHolder();
     MR::waitEndChangeArchivePlayer();
     SceneFunction::startActorFileLoadCommon();
     MR::waitSceneInitializeResume();
 
-    if (!MR::isScenarioDecided()) {
-        MR::receiveAllRequestedFile();
-    } else {
+    if (MR::isScenarioDecided()) {
         SceneFunction::initAfterScenarioSelected();
         NPCFunction::createNPCData();
         SceneFunction::startActorFileLoadScenario();

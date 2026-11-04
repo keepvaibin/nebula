@@ -93,12 +93,11 @@ void MarioActor::initDrawAndModel() {
         static const char* const cMario[] = {"BeeMario", "HopperMario", "IceMario", "InvincibleMario", "TeresaMario", "MarioTornado"};
         static const char* const cLuigi[] = {"BeeLuigi", "HopperLuigi", "IceLuigi", "InvincibleLuigi", "TeresaLuigi", "LuigiTornado"};
         for (u32 i = 0; i < sizeof(cPowerUpArchives) / sizeof(cPowerUpArchives[0]); i++) {
-            MR::mountAsyncArchiveByObjectOrLayoutName(cPowerUpArchives[i], nullptr);
+            MR::mountArchiveByObjectOrLayoutName(cPowerUpArchives[i], nullptr);
         }
         for (u32 i = 0; i < sizeof(cMario) / sizeof(cMario[0]); i++) {
-            MR::mountAsyncArchiveByObjectOrLayoutName(gIsLuigi ? cLuigi[i] : cMario[i], nullptr);
+            MR::mountArchiveByObjectOrLayoutName(gIsLuigi ? cLuigi[i] : cMario[i], nullptr);
         }
-        MR::receiveAllRequestedFile();
     }
 
     initBeeMario();
@@ -366,8 +365,7 @@ void MarioActor::initModPowerUpModels() {
         if (pName == nullptr) {
             continue;
         }
-        MR::mountAsyncArchiveByObjectOrLayoutName(pName, nullptr);
-        MR::receiveAllRequestedFile();
+        MR::mountArchiveByObjectOrLayoutName(pName, nullptr);
         if (!MR::isLoadedObjectOrLayoutArchive(pName)) {
             continue;
         }

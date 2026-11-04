@@ -2,7 +2,6 @@
 #include "Game/NameObj/NameObjFactory.hpp"
 #include "Game/Scene/PlacementInfoOrdered.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
-#include "Game/Scene/StageResourceLoader.hpp"
 #include "Game/System/GalaxyStatusAccessor.hpp"
 #include "Game/System/ScenarioDataParser.hpp"
 #include "Game/Util/FileUtil.hpp"
@@ -134,18 +133,14 @@ void StageDataHolder::initAfterScenarioSelected() {
 }
 
 void StageDataHolder::requestFileLoadCommon() {
-    if (!MR::tryRequestLoadStageResource()) {
-        _FC->requestFileLoad();
-        _100->requestFileLoad();
-    }
+    _FC->requestFileLoad();
+    _100->requestFileLoad();
 }
 
 void StageDataHolder::requestFileLoadScenario() {
-    if (MR::isLoadStageScenarioResource()) {
-        _104->requestFileLoad();
-        _108->requestFileLoad();
-        _10C->requestFileLoad();
-    }
+    _104->requestFileLoad();
+    _108->requestFileLoad();
+    _10C->requestFileLoad();
 }
 
 void StageDataHolder::initPlacement() {
@@ -510,7 +505,7 @@ JMapInfo* StageDataHolder::attachJmpInfoToArray(JMapInfo* pInfo, const char* pDi
 }
 
 void StageDataHolder::initTableData() {
-    void* tableFile = MR::receiveArchive("/StageData/ObjNameTable.arc")->getResource("ObjNameTable.tbl");
+    void* tableFile = MR::getMountedArchive("/StageData/ObjNameTable.arc")->getResource("ObjNameTable.tbl");
 
     mObjNameTbl = new JMapInfo();
     mObjNameTbl->attach(tableFile);

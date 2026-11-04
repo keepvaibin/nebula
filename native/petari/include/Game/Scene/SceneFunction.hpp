@@ -251,7 +251,7 @@ public:
     static void executeDrawList2DNormal();
     static void executeDrawList2DMovie();
     static void startStageFileLoad();
-    static void waitDoneStageFileLoad();
+    static void createStageDataHolder();
     static void startActorFileLoadCommon();
     static void startActorFileLoadScenario();
     static void startActorPlacement();

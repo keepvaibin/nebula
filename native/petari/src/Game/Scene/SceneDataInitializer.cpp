@@ -15,10 +15,10 @@ SceneDataInitializer::SceneDataInitializer() : NameObj("SceneDataInitializer") {
 
 void SceneDataInitializer::startStageFileLoad() {
     mFileLoader = new StageFileLoader(MR::getCurrentStageName());
-    mFileLoader->startLoadingStageFile();
+    mFileLoader->loadStageFiles();
 
     if (!MR::isStageDisablePauseMenu()) {
-        MR::mountAsyncArchive("/LayoutData/PauseMenu.arc", MR::getAproposHeapForSceneArchive(0.03f));
+        MR::mountArchive("/LayoutData/PauseMenu.arc", MR::getSceneArchiveHeap());
     }
 }
 
@@ -28,12 +28,11 @@ void SceneDataInitializer::startStageFileLoadAfterScenarioSelected() {
     LuigiLetter::makeArchiveListForMenu(&collector, JMapInfoIter());
 
     for (int i = 0; i < collector.getArchiveNum(); i++) {
-        MR::mountAsyncArchiveByObjectOrLayoutName(collector.getArchive(i), nullptr);
+        MR::mountArchiveByObjectOrLayoutName(collector.getArchive(i), nullptr);
     }
 }
 
-void SceneDataInitializer::waitDoneStageFileLoad() {
-    mFileLoader->waitLoadedStageFile();
+void SceneDataInitializer::createStageDataHolder() {
     mDataHolder = static_cast< StageDataHolder* >(MR::createSceneObj(SceneObj_StageDataHolder));
 }
 

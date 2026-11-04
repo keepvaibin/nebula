@@ -28,16 +28,8 @@ namespace MR {
     /// @param[in] pFilePath A pointer to the null-terminated absolute path of the file.
     /// @param[out] pDst A pointer to the target memory address, or `nullptr` to allocate.
     /// @param[in,out] pHeap An optional pointer to the target heap.
-    /// @param[in] allocDir The direction for the allocation.
     /// @return A pointer to the loaded file data.
-    void* loadToMainRAM(const char* pFilePath, u8* pDst, NebulaArena* pHeap, GameAssets::AllocDirection allocDir);
-
-    /// @brief Requests asynchronous loading of a file into main memory.
-    /// @param[in] pFilePath A pointer to the null-terminated absolute path of the file.
-    /// @param[out] pDst A pointer to the target memory address, or `nullptr` to allocate.
-    /// @param[in,out] pHeap An optional pointer to the target heap.
-    /// @param[in] allocDir The direction for the allocation.
-    void loadAsyncToMainRAM(const char* pFilePath, u8* pDst, NebulaArena* pHeap, GameAssets::AllocDirection allocDir);
+    void* loadFile(const char* pFilePath, u8* pDst, NebulaArena* pHeap);
 
     /// @brief Mounts an archive file synchronously.
     /// @param[in] pFilePath A pointer to the null-terminated absolute path of the archive file.
@@ -45,28 +37,20 @@ namespace MR {
     /// @return A pointer to the mounted archive.
     AssetFolder* mountArchive(const char* pFilePath, NebulaArena* pHeap);
 
-    /// @brief Requests asynchronous mounting of an archive file.
-    /// @param[in] pFilePath A pointer to the null-terminated absolute path of the archive file.
-    /// @param[in,out] pHeap An optional pointer to the target heap.
-    void mountAsyncArchive(const char* pFilePath, NebulaArena* pHeap);
-
     /// @brief Requests asynchronous mounting of an object or layout archive file.
     /// @param[in] pFilePrefix A pointer to the null-terminated name of the archive file, without the extension.
     /// @param[in,out] pHeap An optional pointer to the target heap.
-    void mountAsyncArchiveByObjectOrLayoutName(const char* pFilePrefix, NebulaArena* pHeap);
+    void mountArchiveByObjectOrLayoutName(const char* pFilePrefix, NebulaArena* pHeap);
 
     /// @brief Returns the data of a file after it has been asynchronously loaded.
     /// @param[in] pFilePath A pointer to the null-terminated absolute path of the file.
     /// @return A pointer to the loaded file data.
-    void* receiveFile(const char* pFilePath);
+    void* getLoadedFile(const char* pFilePath);
 
     /// @brief Returns the archive after it has been asynchronously mounted.
     /// @param[in] pFilePath A pointer to the null-terminated absolute path of the archive file.
     /// @return A pointer to the mounted archive.
-    AssetFolder* receiveArchive(const char* pFilePath);
-
-    /// @brief Receives all files that have been requested for loading.
-    void receiveAllRequestedFile();
+    AssetFolder* getMountedArchive(const char* pFilePath);
 
     /// @brief Creates an archive from existing memory data.
     /// @param[in] pArcData A pointer to the archive file data.

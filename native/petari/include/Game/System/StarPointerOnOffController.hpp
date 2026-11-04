@@ -7,7 +7,7 @@ enum StarPointerModeEnum {
     StarPointerMode_HomeButton = 0,
     StarPointerMode_ErrorWindow = 1,
     StarPointerMode_SaveLoad = 2,
-    StarPointerMode_Logo = 3,
+    StarPointerMode_Boot = 3,
     StarPointerMode_Title = 4,
     StarPointerMode_FileSelect = 5,
     StarPointerMode_ScenarioSelectScene = 6,
@@ -53,7 +53,7 @@ public:
     void requestMode(void*, StarPointerModeEnum);
     void setupHomeButton();
     void setupErrorWindow();
-    void setupLogo();
+    void setupBoot();
     void setupTitle();
     void setupFileSelect();
     void setupPictureBook();

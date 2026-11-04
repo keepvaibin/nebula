@@ -43,7 +43,7 @@ AssetFolder* AssetFolder::mount(const char* pPath, NebulaArena* pHeap) {
         nebula_fatal("%s is missing: the game content was not cooked by this version", pPath);
     }
 
-    void* const pBytes = GameAssets::load(entry, nullptr, 0, pHeap, GameAssets::ALLOC_DIRECTION_FORWARD, nullptr);
+    void* const pBytes = GameAssets::load(entry, nullptr, 0, pHeap, nullptr);
     return new (pHeap, 0) AssetFolder(entry, pBytes);
 }
 

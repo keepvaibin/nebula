@@ -7,8 +7,7 @@ class StageFileLoader {
 public:
     StageFileLoader(const char*);
 
-    void startLoadingStageFile();
-    void waitLoadedStageFile();
+    void loadStageFiles();
     void makeStageArchiveNameList();
     static void makeStageArchiveName(char*, u32, const char*);
 

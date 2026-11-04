@@ -7,5 +7,5 @@ namespace NebulaRtPrepare {
     void init();       // GameSystem, once the stationed layouts are loaded
     void update();     // GameSystem::update, once a frame
     void draw();       // GameSystem::draw, over the scene
-    bool isHolding();  // LogoScene: the title waits (the preparation runs, or its screen is still going away)
+    bool isHolding();  // BootScene: the title waits (the preparation runs, or its screen is still going away)
 };  // namespace NebulaRtPrepare

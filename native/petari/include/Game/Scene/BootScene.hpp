@@ -2,15 +2,13 @@
 
 #include "Game/Scene/Scene.hpp"
 
-class LogoFader;
-
-class LogoScene : public Scene {
+class BootScene : public Scene {
 public:
-    /// @brief Creates a new `LogoScene`.
-    LogoScene();
+    /// @brief Creates a new `BootScene`.
+    BootScene();
 
-    /// @brief Destroys the `LogoScene`.
-    virtual ~LogoScene();
+    /// @brief Destroys the `BootScene`.
+    virtual ~BootScene();
 
     virtual void init();
     virtual void update();
@@ -23,8 +21,5 @@ public:
     void exeWaitRayTracing();
     void exeWaitReadDoneSystemArchive();
     void exeDeactive();
-    void initLayout();
 
-private:
-    LogoFader* mLogoFader;
 };

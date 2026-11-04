@@ -142,7 +142,6 @@ void GameSystemSceneController::initializeScene() {
     mScene->init();
 
     SceneFunction::allocateDrawBufferActorList();
-    MR::clearFileLoaderRequestFileInfo(mIsResetProcessing);
 }
 
 void GameSystemSceneController::destroyScene() {

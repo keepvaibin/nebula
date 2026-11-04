@@ -937,8 +937,7 @@ namespace {
         } inZone;
         if (pEntry != nullptr) {
             if (pEntry->mArchive != nullptr && !MR::isLoadedObjectOrLayoutArchive(pEntry->mArchive)) {
-                MR::mountAsyncArchiveByObjectOrLayoutName(pEntry->mArchive, nullptr);
-                MR::receiveAllRequestedFile();
+                MR::mountArchiveByObjectOrLayoutName(pEntry->mArchive, nullptr);
                 if (!MR::isLoadedObjectOrLayoutArchive(pEntry->mArchive)) {
                     return nullptr;
                 }
@@ -951,7 +950,6 @@ namespace {
             }
             const JMapInfoIter noPlacement;
             NameObjFactory::requestMountObjectArchives(pName, noPlacement);
-            MR::receiveAllRequestedFile();
             pObject = pCreator(copyText(pName));
         }
         if (pObject == nullptr) {
@@ -1709,8 +1707,7 @@ namespace {
         if (pName == nullptr || sStageFrames <= 0) {
             return nullptr;
         }
-        MR::mountAsyncArchiveByObjectOrLayoutName(pName, nullptr);
-        MR::receiveAllRequestedFile();
+        MR::mountArchiveByObjectOrLayoutName(pName, nullptr);
         if (!MR::isLoadedObjectOrLayoutArchive(pName)) {
             return nullptr;
         }

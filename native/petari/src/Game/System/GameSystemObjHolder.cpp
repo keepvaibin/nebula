@@ -86,10 +86,6 @@ void GameSystemObjHolder::updateAudioSystem() {
     }
 }
 
-void GameSystemObjHolder::clearRequestFileInfo(bool unk) {
-    SingletonHolder< FileLoader >::get()->clearRequestFileInfo(unk);
-}
-
 void GameSystemObjHolder::drawStarPointer() {
     mStarPointerDirector->draw();
 }

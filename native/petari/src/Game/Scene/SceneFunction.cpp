@@ -21,8 +21,8 @@ void SceneFunction::startStageFileLoad() {
     ::getSceneDataInitializer()->startStageFileLoad();
 }
 
-void SceneFunction::waitDoneStageFileLoad() {
-    ::getSceneDataInitializer()->waitDoneStageFileLoad();
+void SceneFunction::createStageDataHolder() {
+    ::getSceneDataInitializer()->createStageDataHolder();
 }
 
 void SceneFunction::startActorFileLoadCommon() {

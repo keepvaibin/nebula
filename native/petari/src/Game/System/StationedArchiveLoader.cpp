@@ -14,17 +14,6 @@ NebulaArena* StationedArchiveLoader::Condition::getProperHeap(const MR::Statione
     return nullptr;
 }
 
-NebulaArena* StationedArchiveLoader::getProperHeap(const MR::StationedFileInfo* pInfo) {
-    switch (pInfo->mHeapType) {
-    case MR::StationedFileInfo::HEAP_TYPE_NAPA:
-        return MR::getStationedHeap();
-    case MR::StationedFileInfo::HEAP_TYPE_GDDR:
-        return MR::getStationedHeap();
-    default:
-        return nullptr;
-    }
-}
-
 void StationedArchiveLoader::loadResourcesFromTable(const StationedArchiveLoader::Condition& rCondition) {
     for (const MR::StationedFileInfo* pInfo = MR::getStationedFileInfoTable(); pInfo->mArchive != nullptr; pInfo++) {
         if (!rCondition.isExecute(pInfo)) {
@@ -34,12 +23,12 @@ void StationedArchiveLoader::loadResourcesFromTable(const StationedArchiveLoader
         NebulaArena* pHeap = rCondition.getProperHeap(pInfo);
 
         if (pHeap == nullptr) {
-            pHeap = StationedArchiveLoader::getProperHeap(pInfo);
+            pHeap = MR::getStationedHeap();
         }
 
         switch (pInfo->mLoadType) {
         case MR::StationedFileInfo::LOAD_TYPE_FILE:
-            MR::loadToMainRAM(pInfo->mArchive, nullptr, pHeap, GameAssets::ALLOC_DIRECTION_FORWARD);
+            MR::loadFile(pInfo->mArchive, nullptr, pHeap);
             break;
         case MR::StationedFileInfo::LOAD_TYPE_MOUNT:
         case MR::StationedFileInfo::LOAD_TYPE_MOUNT_RESOURCE_MARIO:

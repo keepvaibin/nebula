@@ -84,7 +84,7 @@ void StarPointerOnOffController::setupErrorWindow() {
     ::getStarPointerLayout(PLAYER_2)->validate();
 }
 
-void StarPointerOnOffController::setupLogo() {
+void StarPointerOnOffController::setupBoot() {
     ::getStarPointerLayout(PLAYER_1)->hide();
     ::getStarPointerLayout(PLAYER_2)->hide();
     ::getStarPointerDirector()->startStarPointer();
@@ -339,8 +339,8 @@ void StarPointerOnOffController::updateMode() {
                 case StarPointerMode_SaveLoad:
                     setupPauseMenu();
                     break;
-                case StarPointerMode_Logo:
-                    setupLogo();
+                case StarPointerMode_Boot:
+                    setupBoot();
                     break;
                 case StarPointerMode_Title:
                     setupTitle();

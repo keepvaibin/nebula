@@ -114,7 +114,7 @@ namespace MR {
         char objectName[256];
 
         MR::getMapPartsObjectName(objectName, sizeof(objectName), pName, a2);
-        MR::mountAsyncArchiveByObjectOrLayoutName(objectName, nullptr);
+        MR::mountArchiveByObjectOrLayoutName(objectName, nullptr);
     }
 
     bool isReadResourceFromStoreAtModelChangableObj(const char* pName, s32 a2) {

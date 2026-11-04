@@ -30,39 +30,27 @@ namespace MR {
         return GameAssets::find(filePath);
     }
 
-    void* loadToMainRAM(const char* pFilePath, u8* pDst, NebulaArena* pHeap, GameAssets::AllocDirection allocDir) {
-        loadAsyncToMainRAM(pFilePath, pDst, pHeap, allocDir);
-
-        return receiveFile(pFilePath);
-    }
-
-    void loadAsyncToMainRAM(const char* pFilePath, u8* pDst, NebulaArena* pHeap, GameAssets::AllocDirection allocDir) {
+    void* loadFile(const char* pFilePath, u8* pDst, NebulaArena* pHeap) {
         char filePath[256];
         makeFileNameConsideringLanguage(filePath, sizeof(filePath), pFilePath);
 
-        SingletonHolder< FileLoader >::get()->requestLoadToMainRAM(filePath, pDst, pHeap, allocDir, false);
+        return SingletonHolder< FileLoader >::get()->loadFile(filePath, pDst, pHeap);
     }
 
     AssetFolder* mountArchive(const char* pFilePath, NebulaArena* pHeap) {
-        mountAsyncArchive(pFilePath, pHeap);
-
-        return receiveArchive(pFilePath);
-    }
-
-    void mountAsyncArchive(const char* pFilePath, NebulaArena* pHeap) {
         char filePath[256];
         makeFileNameConsideringLanguage(filePath, sizeof(filePath), pFilePath);
 
-        SingletonHolder< FileLoader >::get()->requestMountArchive(filePath, pHeap, false);
+        return SingletonHolder< FileLoader >::get()->mountArchive(filePath, pHeap);
     }
 
-    void mountAsyncArchiveByObjectOrLayoutName(const char* pFilePrefix, NebulaArena* pHeap) {
+    void mountArchiveByObjectOrLayoutName(const char* pFilePrefix, NebulaArena* pHeap) {
         NebulaArena* pLocalHeap;
 
         if (pHeap != nullptr) {
             pLocalHeap = pHeap;
         } else {
-            pLocalHeap = getAproposHeapForSceneArchive(0.03f);
+            pLocalHeap = getSceneArchiveHeap();
         }
 
         char objArcPath[256];
@@ -72,28 +60,24 @@ namespace MR {
         bool isExistLayoutArc = makeLayoutArchiveFileNameFromPrefix(layoutArcPath, sizeof(layoutArcPath), pFilePrefix, false);
 
         if (isExistObjArc) {
-            mountAsyncArchive(objArcPath, pLocalHeap);
+            mountArchive(objArcPath, pLocalHeap);
         } else if (isExistLayoutArc) {
-            mountAsyncArchive(layoutArcPath, pLocalHeap);
+            mountArchive(layoutArcPath, pLocalHeap);
         }
     }
 
-    void* receiveFile(const char* pFilePath) {
+    void* getLoadedFile(const char* pFilePath) {
         char filePath[256];
         makeFileNameConsideringLanguage(filePath, sizeof(filePath), pFilePath);
 
-        return SingletonHolder< FileLoader >::get()->receiveFile(filePath);
+        return SingletonHolder< FileLoader >::get()->getLoadedFile(filePath);
     }
 
-    AssetFolder* receiveArchive(const char* pFilePath) {
+    AssetFolder* getMountedArchive(const char* pFilePath) {
         char filePath[256];
         makeFileNameConsideringLanguage(filePath, sizeof(filePath), pFilePath);
 
-        return SingletonHolder< FileLoader >::get()->receiveArchive(filePath);
-    }
-
-    void receiveAllRequestedFile() {
-        SingletonHolder< FileLoader >::get()->receiveAllRequestedFile();
+        return SingletonHolder< FileLoader >::get()->getMountedArchive(filePath);
     }
 
     void createAndAddArchive(AssetFolder* pFolder, NebulaArena* pHeap, const char* pFilePath) {
