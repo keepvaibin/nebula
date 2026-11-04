@@ -138,8 +138,12 @@ namespace MR {
         J3DNativeDraw::texCoord(0.0f, 1.0f);
     }
 
+    // Across the game's screen units, wider than the canvas: the star pointer's trail and the cursor it follows.
     void loadProjectionMtxFor2D() {
         MR::setupScreen2D();
+        Mtx44 projection;
+        NebulaMtxOrtho(projection, 0.0f, ::getScreenHeightInline(), 0.0f, MR::getScreenWidth(), -30000.0f, 30000.0f);
+        J3DNativeView::setOrthographic(projection);
     }
 
     void setupDrawForNW4RLayout(f32 scale, bool) {

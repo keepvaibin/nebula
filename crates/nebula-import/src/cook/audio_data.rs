@@ -10,6 +10,7 @@ const AST_HEADER: usize = 0x40;
 const AST_BLOCK_HEADER: usize = 0x20;
 const STREAM_HEADER: usize = 32;
 const FORMAT_PCM16: u8 = 1;
+const FORMAT_AFC: u8 = 0;
 /// A wave's format in a wave system, on the disc.
 const WAVE_ADPCM4: u8 = 0;
 const WAVE_ADPCM2: u8 = 1;
@@ -51,6 +52,50 @@ fn turn_samples(samples: &mut [u8]) {
     }
 }
 
+/// The prediction pairs of the 4-bit ADPCM streams (11 fractional bits).
+const AFC_COEFFICIENTS: [(i32, i32); 16] = [
+    (0, 0),
+    (2048, 0),
+    (0, 2048),
+    (1024, 1024),
+    (4096, -2048),
+    (3584, -1536),
+    (3072, -1024),
+    (4608, -2560),
+    (4200, -2248),
+    (4800, -2300),
+    (5120, -3072),
+    (2048, -2048),
+    (1024, -1024),
+    (-1024, 1024),
+    (-1024, 0),
+    (-2048, 0),
+];
+const AFC_FRAME_BYTES: usize = 9;
+const AFC_FRAME_SAMPLES: usize = 16;
+
+/// A channel's 4-bit ADPCM frames as little-endian PCM16, up to `room` bytes; `history` carries over between blocks.
+fn decode_afc(frames: &[u8], history: &mut (i32, i32), out: &mut [u8]) {
+    let mut at = 0usize;
+    for frame in frames.chunks_exact(AFC_FRAME_BYTES) {
+        let scale = 1i32 << (frame[0] >> 4);
+        let (first, second) = AFC_COEFFICIENTS[(frame[0] & 15) as usize];
+        for i in 0..AFC_FRAME_SAMPLES {
+            let byte = frame[1 + i / 2];
+            let nibble = if i & 1 == 0 { byte >> 4 } else { byte & 15 };
+            let code = i32::from((nibble as i8) << 4 >> 4);
+            let sample = (((code * scale) << 11) + first * history.0 + second * history.1) >> 11;
+            let sample = sample.clamp(-32768, 32767);
+            history.1 = history.0;
+            history.0 = sample;
+            if let Some(target) = out.get_mut(at..at + 2) {
+                target.copy_from_slice(&(sample as i16).to_le_bytes());
+            }
+            at += 2;
+        }
+    }
+}
+
 /// A stream as the game plays it (JASStream.hpp): the numbers it needs as host numbers, then each channel's PCM16 samples in
 /// turn. The disc's blocks and their hold-over samples are gone: the whole file is in memory while it plays.
 pub fn ast(bytes: &[u8]) -> Result<Vec<u8>> {
@@ -58,7 +103,7 @@ pub fn ast(bytes: &[u8]) -> Result<Vec<u8>> {
         bail!("not an AST stream");
     }
     let format = bytes[9];
-    if format != FORMAT_PCM16 {
+    if format != FORMAT_PCM16 && format != FORMAT_AFC {
         bail!("stream format {format}");
     }
     let channels = u16::from_be_bytes([bytes[0xC], bytes[0xD]]) as usize;
@@ -84,7 +129,8 @@ pub fn ast(bytes: &[u8]) -> Result<Vec<u8>> {
         bytes[0x28] as u32,
     ];
     // The blocks hold the samples: a count past twice the file is the header's alone, not worth its allocation.
-    if samples as u64 * 2 * channels as u64 > bytes.len() as u64 * 2 {
+    let bytes_per_16_samples = if format == FORMAT_AFC { AFC_FRAME_BYTES as u64 } else { 32 };
+    if samples as u64 / 16 * bytes_per_16_samples * channels as u64 > bytes.len() as u64 * 2 {
         bail!("{samples} samples in a stream of {} bytes", bytes.len());
     }
     let mut out = vec![0u8; STREAM_HEADER + samples * 2 * channels];
@@ -92,6 +138,7 @@ pub fn ast(bytes: &[u8]) -> Result<Vec<u8>> {
         out[i * 4..i * 4 + 4].copy_from_slice(&value.to_le_bytes());
     }
     let mut written = 0usize; // bytes of each channel so far
+    let mut histories = vec![(0i32, 0i32); channels];
     let mut at = AST_HEADER;
     while at < bytes.len() {
         if bytes.get(at..at + 4) != Some(b"BLCK".as_slice()) {
@@ -109,12 +156,18 @@ pub fn ast(bytes: &[u8]) -> Result<Vec<u8>> {
         }
         for channel in 0..channels {
             let source = bytes.get(data + size * channel..data + size * channel + per_channel).with_context(|| format!("a block at {at:#x} past the stream's end"))?;
-            let take = per_channel.min((samples * 2).saturating_sub(written));
+            let produced = if format == FORMAT_AFC { per_channel / AFC_FRAME_BYTES * AFC_FRAME_SAMPLES * 2 } else { per_channel };
+            let take = produced.min((samples * 2).saturating_sub(written));
             let target = STREAM_HEADER + samples * 2 * channel + written;
-            out[target..target + take].copy_from_slice(&source[..take]);
-            turn_samples(&mut out[target..target + take]);
+            if format == FORMAT_AFC {
+                decode_afc(source, &mut histories[channel], &mut out[target..target + take]);
+            } else {
+                out[target..target + take].copy_from_slice(&source[..take]);
+                turn_samples(&mut out[target..target + take]);
+            }
         }
-        written = (written + per_channel).min(samples * 2);
+        let produced = if format == FORMAT_AFC { per_channel / AFC_FRAME_BYTES * AFC_FRAME_SAMPLES * 2 } else { per_channel };
+        written = (written + produced).min(samples * 2);
         at = data + size * (channels - 1) + per_channel;
     }
     Ok(out)
@@ -269,6 +322,41 @@ pub fn wave_archive(bytes: &[u8], places: &[WavePlace]) -> Result<Vec<u8>> {
     Ok(out)
 }
 
+/// A layout as the store keeps it (NebulaData/WaveLayout.txt): a cooked archive no longer says where the disc's waves
+/// lie, and a mod's wave archive is laid out as the disc's. One wave a line: file, then its numbers.
+pub fn layout_text(layout: &BTreeMap<String, Vec<WavePlace>>) -> String {
+    let mut text = String::new();
+    for (name, waves) in layout {
+        for w in waves {
+            text.push_str(&format!(
+                "{name}\t{} {} {} {} {} {}\n",
+                w.offset, w.length, w.format, w.samples, w.new_offset, w.new_length
+            ));
+        }
+    }
+    text
+}
+
+pub fn parse_layout_text(text: &str) -> Result<BTreeMap<String, Vec<WavePlace>>> {
+    let mut layout: BTreeMap<String, Vec<WavePlace>> = BTreeMap::new();
+    for line in text.lines().filter(|line| !line.is_empty()) {
+        let (name, numbers) = line.split_once('\t').with_context(|| format!("a wave layout line {line:?}"))?;
+        let n: Vec<usize> = numbers.split(' ').map(str::parse).collect::<std::result::Result<_, _>>().with_context(|| format!("a wave layout line {line:?}"))?;
+        let [offset, length, format, samples, new_offset, new_length] = n[..] else {
+            bail!("a wave layout line {line:?}");
+        };
+        layout.entry(name.to_string()).or_default().push(WavePlace {
+            offset,
+            length,
+            format: format as u8,
+            samples,
+            new_offset,
+            new_length,
+        });
+    }
+    Ok(layout)
+}
+
 /// The file name a wave system uses for a path.
 pub fn wave_archive_key(path: &str) -> String {
     path.rsplit('/').next().unwrap_or(path).to_ascii_lowercase()
@@ -277,6 +365,17 @@ pub fn wave_archive_key(path: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_layout_survives_its_text() {
+        let mut layout = BTreeMap::new();
+        layout.insert(
+            "a.aw".to_string(),
+            vec![WavePlace { offset: 16, length: 90, format: 0, samples: 160, new_offset: 0, new_length: 320 }],
+        );
+        assert_eq!(parse_layout_text(&layout_text(&layout)).unwrap(), layout);
+        assert!(parse_layout_text("a.aw\t1 2\n").is_err());
+    }
 
     #[test]
     fn a_stream_cooked() {
@@ -299,6 +398,44 @@ mod tests {
         assert_eq!(cooked.len(), STREAM_HEADER + 8);
         assert_eq!(i16::from_le_bytes([cooked[STREAM_HEADER], cooked[STREAM_HEADER + 1]]), 0x1234);
         assert_eq!(i16::from_le_bytes([cooked[STREAM_HEADER + 4], cooked[STREAM_HEADER + 5]]), 0x5678);
+    }
+
+    #[test]
+    fn a_4_bit_stream_decodes_across_blocks() {
+        // Hand-worked: scale 2, row 1 (first coefficient 1.0). Code +1 then -1, then zeros carry the history.
+        let mut frame = [0u8; AFC_FRAME_BYTES];
+        frame[0] = 0x11;
+        frame[1] = 0x1F;
+        let mut out = vec![0u8; 32];
+        let mut history = (0, 0);
+        decode_afc(&frame, &mut history, &mut out);
+        let at = |i: usize| i16::from_le_bytes([out[i * 2], out[i * 2 + 1]]);
+        assert_eq!((at(0), at(1), at(2), at(15)), (2, 0, 0, 0));
+
+        let mut s = vec![0u8; AST_HEADER + (AST_BLOCK_HEADER + 18) * 2];
+        s[..4].copy_from_slice(b"STRM");
+        s[9] = FORMAT_AFC;
+        s[0xC..0xE].copy_from_slice(&2u16.to_be_bytes());
+        s[0x10..0x14].copy_from_slice(&32000u32.to_be_bytes());
+        s[0x14..0x18].copy_from_slice(&32u32.to_be_bytes());
+        s[0x1C..0x20].copy_from_slice(&32u32.to_be_bytes());
+        let first = AST_HEADER;
+        let second = first + AST_BLOCK_HEADER + 18;
+        for block in [first, second] {
+            s[block..block + 4].copy_from_slice(b"BLCK");
+            s[block + 4..block + 8].copy_from_slice(&9u32.to_be_bytes());
+        }
+        // The left channel's first frame sets 2; the second block's row 1 and zero codes hold it: its history carried.
+        s[first + AST_BLOCK_HEADER] = 0x11;
+        s[first + AST_BLOCK_HEADER + 1] = 0x10;
+        s[second + AST_BLOCK_HEADER] = 0x01;
+        let cooked = ast(&s).unwrap();
+        assert_eq!(cooked.len(), STREAM_HEADER + 32 * 2 * 2);
+        let left = |i: usize| i16::from_le_bytes([cooked[STREAM_HEADER + i * 2], cooked[STREAM_HEADER + i * 2 + 1]]);
+        assert_eq!(left(0), 2);
+        assert_eq!(left(15), 2);
+        assert_eq!(left(16), 2);
+        assert_eq!(left(31), 2);
     }
 
     #[test]

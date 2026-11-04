@@ -160,6 +160,7 @@ bool RendererVk::initialize(int window_width, int window_height, const FrameMap&
             frame.commands = buffers[1];
             frame.descriptors =
                 create_pool(device, kFrameSets, {.images = kFrameSets * 8u + 64u, .samplers = kFrameUtilitySamplers,
+                                                 .storage = vk_detail::kPassStorageBuffers,
                                                  .storage_images = vk_detail::kPassStorageImages});
             VkSemaphoreCreateInfo semaphore_info{VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
             vk::check(vkCreateSemaphore(device, &semaphore_info, nullptr, &frame.acquired), "vkCreateSemaphore");

@@ -76,7 +76,7 @@ private:
     // A vertex module's input locations (bit i: location i), for the vertex input state.
     std::unordered_map<VkShaderModule, std::uint32_t> input_masks_;
     // Native materials' pipelines by shader, output variant and render state.
-    std::unordered_map<std::uint64_t, std::vector<std::pair<std::pair<std::uint32_t, RenderStateKey>, VkPipeline>>>
+    std::unordered_map<std::uint64_t, std::vector<std::pair<std::pair<std::uint64_t, RenderStateKey>, VkPipeline>>>
         native_pipelines_;
     std::uint32_t created_ = 0;
     [[nodiscard]] VkPipeline create_native(std::uint32_t shader, const RenderStateKey& rs, unsigned variant);

@@ -49,7 +49,9 @@ void FlipPanel::init(const JMapInfoIter& rIter) {
     initialize(rIter, info);
     mIsReverse = isObjectName("FlipPanelReverse");
     mDelegator = MR::createJointDelegatorWithNullChildFunc(this, &FlipPanel::calcJointMove, "Panel");
-    mFlipPanelGroup = MR::joinToGroupArray(this, rIter, 0, 0x20);
+    u32 groupSize = 0x20;
+    NebulaHost::codePatch(NEBULA_PATCH_FLIP_PANEL_GROUP, &groupSize);
+    mFlipPanelGroup = MR::joinToGroupArray(this, rIter, 0, groupSize);
     MR::invalidateClipping(this);
     MR::startBck(this, "PanelB");
     f32 frameMax = MR::getBckFrameMax(this);
@@ -275,7 +277,9 @@ void FlipPanelObserver::init(const JMapInfoIter& rIter) {
     initHitSensor(1);
     MR::addBodyMessageSensorMapObj(this);
     MR::invalidateClipping(this);
-    _8C = MR::joinToGroupArray(this, rIter, 0, 0x20);
+    u32 groupSize = 0x20;
+    NebulaHost::codePatch(NEBULA_PATCH_FLIP_PANEL_OBSERVER_GROUP, &groupSize);
+    _8C = MR::joinToGroupArray(this, rIter, 0, groupSize);
     MR::useStageSwitchWriteA(this, rIter);
     initSound(2, false);
     MR::getJMapInfoArg7NoInit(rIter, &mPowerStarId);

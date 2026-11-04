@@ -213,9 +213,9 @@ constexpr const char* kNativeSettingsTabNames[] = {"DISPLAY", "GRAPHICS", "CONTR
                                                    "ADVANCED"};
 // The pages shown. MODS comes back with its feature.
 #if defined(__ANDROID__)
-constexpr unsigned kShownTabs[] = {0u, 1u, 2u, 3u, 4u, 7u};  // nothing on SYSTEM there: diagnostics are the launcher's
+constexpr unsigned kShownTabs[] = {0u, 1u, 2u, 3u, 4u, 5u, 7u};  // nothing on SYSTEM there: diagnostics are the launcher's
 #else
-constexpr unsigned kShownTabs[] = {0u, 1u, 2u, 3u, 4u, 6u, 7u};
+constexpr unsigned kShownTabs[] = {0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u};
 #endif
 constexpr unsigned kShownTabCount = static_cast<unsigned>(std::size(kShownTabs));
 
@@ -462,7 +462,7 @@ unsigned runtime_draft_changes(RuntimeSettings* live) {
     const RuntimeSettings& d = s_runtime_draft;
     const RuntimeSettings& b = s_runtime_base;
     // A setting added to RuntimeSettings is drafted here too: these bindings stop compiling until it is.
-    [[maybe_unused]] const auto& [mode, audio, text_speed, language, discord_status, button_icons, co_star] = d;
+    [[maybe_unused]] const auto& [mode, audio, text_speed, language, discord_status, button_icons, co_star, menu_text_size] = d;
     [[maybe_unused]] const auto& [master, music, sfx, voice, ambience, cutscene, wiimote_speaker] = d.audio;
     RuntimeSettings scratch{};
     RuntimeSettings& out = live != nullptr ? *live : scratch;
@@ -485,6 +485,7 @@ unsigned runtime_draft_changes(RuntimeSettings* live) {
     take(d.discord_status, b.discord_status, out.discord_status);
     take(d.button_icons, b.button_icons, out.button_icons);
     take(d.co_star, b.co_star, out.co_star);
+    take(d.menu_text_size, b.menu_text_size, out.menu_text_size);
     return changes;
 }
 
@@ -512,6 +513,7 @@ unsigned pending_settings_changes() {
     changes += d.curved_surfaces != live.curved_surfaces;
     changes += lighting_mode(d) != lighting_mode(live);
     changes += d.ambient_occlusion != live.ambient_occlusion;
+    changes += d.ambient_occlusion_ssao != live.ambient_occlusion_ssao;
     changes += d.bloom != live.bloom;
     changes += d.hud_output_resolution != live.hud_output_resolution;
     changes += d.ray_tracing_enabled != live.ray_tracing_enabled;
@@ -546,6 +548,7 @@ enum class ControlsRow {
     GyroSensitivity,
     TouchSensitivity,
     PairJoyCon,
+    ArrangeTouch,
     Reset,
 };
 
@@ -646,8 +649,16 @@ std::vector<ControlsRowInfo> controls_rows() {
     if (s_input_mode_draft == RuntimeInputMode::RealWiimote) {
         return rows;
     }
-    rows.push_back({ControlsRow::Device});
     if (s_controls_devices.count == 0u) {
+        rows.push_back({ControlsRow::Device});
+        return rows;
+    }
+    if (s_controls_devices.count != 1u || !galaxy::input::is_phone(s_controls_devices.entries[0].key)) {
+        rows.push_back({ControlsRow::Device});
+    }
+    // The phone's own controls are arranged, not bound.
+    if (galaxy::input::is_phone(s_controls_device)) {
+        rows.push_back({ControlsRow::ArrangeTouch});
         return rows;
     }
     for (unsigned index = 0; index < galaxy::input::kGameInputCount; ++index) {
@@ -764,30 +775,28 @@ void refresh_controls_devices(bool force) {
     std::array<galaxy::input::ControllerInfo, galaxy::input::kMaxControllers> connected{};
     const std::size_t count = galaxy::host::connected_controllers(connected);
     const std::optional<galaxy::input::DeviceKey> active = galaxy::host::last_input_device();
-    galaxy::input::build_device_list(std::span<const galaxy::input::ControllerInfo>(connected.data(), count),
-                                     active, s_controls_devices);
-    // Only what the input mode reads: the keyboard and mouse alone, or the controllers alone.
-    if (s_input_mode_draft == RuntimeInputMode::KeyboardMouse || s_input_mode_draft == RuntimeInputMode::Controller) {
-        const bool keyboard = s_input_mode_draft == RuntimeInputMode::KeyboardMouse;
-        std::size_t kept = 0;
-        for (std::size_t i = 0; i < s_controls_devices.count; ++i) {
-            const bool is_keyboard = s_controls_devices.entries[i].key.scheme == galaxy::input::ControlScheme::Keyboard;
-            if (is_keyboard == keyboard) s_controls_devices.entries[kept++] = s_controls_devices.entries[i];
-        }
-        s_controls_devices.count = kept;
-    }
 #if defined(__ANDROID__)
-    // A phone's own controls are its screen: the keyboard's row only for a keyboard that is there.
-    if (!galaxy::host::physical_keyboard_attached()) {
+    constexpr bool kHasPhone = true;
+#else
+    constexpr bool kHasPhone = false;
+#endif
+    // Only what is attached, on every system.
+    galaxy::input::build_device_list(std::span<const galaxy::input::ControllerInfo>(connected.data(), count), active,
+                                     s_controls_devices, galaxy::host::keyboard_or_mouse_attached(), kHasPhone);
+    // Only what the input mode reads.
+    if (s_input_mode_draft != RuntimeInputMode::Auto) {
         std::size_t kept = 0;
         for (std::size_t i = 0; i < s_controls_devices.count; ++i) {
-            if (s_controls_devices.entries[i].key.scheme != galaxy::input::ControlScheme::Keyboard) {
-                s_controls_devices.entries[kept++] = s_controls_devices.entries[i];
-            }
+            const galaxy::input::DeviceKey key = s_controls_devices.entries[i].key;
+            const bool phone = galaxy::input::is_phone(key);
+            const bool keyboard = !phone && key.scheme == galaxy::input::ControlScheme::Keyboard;
+            const bool wanted = s_input_mode_draft == RuntimeInputMode::Phone          ? phone
+                                : s_input_mode_draft == RuntimeInputMode::KeyboardMouse ? keyboard
+                                                                                        : !phone && !keyboard;
+            if (wanted) s_controls_devices.entries[kept++] = s_controls_devices.entries[i];
         }
         s_controls_devices.count = kept;
     }
-#endif
     if (s_controls_devices.count == 0u) {
         end_controls_capture();
         return;
@@ -875,6 +884,7 @@ void apply_controls_draft() {
     if (s_input_mode_draft != runtime.input_mode) {
         runtime.input_mode = s_input_mode_draft;
         set_runtime_settings(runtime);
+        galaxy::host::input_mode_changed();
     }
 }
 
@@ -910,6 +920,7 @@ void apply_native_settings_draft() {
     applied.per_pixel_lighting = next.per_pixel_lighting;
     applied.enhanced_lighting = next.enhanced_lighting;
     applied.ambient_occlusion = next.ambient_occlusion;
+    applied.ambient_occlusion_ssao = next.ambient_occlusion_ssao;
     applied.bloom = next.bloom;
     applied.hud_output_resolution = next.hud_output_resolution;
     applied.ray_tracing_enabled = next.ray_tracing_enabled;
@@ -998,7 +1009,7 @@ void step_native_setting_round(int direction) {
     // A binding (on: wait for an input) and the reset (on: the defaults) are no lists: stepped as the keys step them.
     if (tab == kControlsTab &&
         (controls_row(row).kind == ControlsRow::Binding || controls_row(row).kind == ControlsRow::Reset ||
-         controls_row(row).kind == ControlsRow::PairJoyCon)) {
+         controls_row(row).kind == ControlsRow::PairJoyCon || controls_row(row).kind == ControlsRow::ArrangeTouch)) {
         adjust_native_setting(direction);
         return;
     }
@@ -1058,8 +1069,14 @@ void adjust_native_setting_unlogged(int delta) {
         };
         switch (info.kind) {
         case ControlsRow::InputMode: {
+#if defined(__ANDROID__)
+            static constexpr RuntimeInputMode kModes[] = {RuntimeInputMode::Auto, RuntimeInputMode::Phone,
+                                                          RuntimeInputMode::Controller, RuntimeInputMode::KeyboardMouse,
+                                                          RuntimeInputMode::RealWiimote};
+#else
             static constexpr RuntimeInputMode kModes[] = {RuntimeInputMode::Auto, RuntimeInputMode::KeyboardMouse,
                                                           RuntimeInputMode::Controller, RuntimeInputMode::RealWiimote};
+#endif
             unsigned index = 0u;
             for (unsigned i = 0; i < std::size(kModes); ++i) {
                 if (kModes[i] == s_input_mode_draft) index = i;
@@ -1138,6 +1155,9 @@ void adjust_native_setting_unlogged(int delta) {
             return;
         case ControlsRow::PairJoyCon:
             if (delta > 0) open_joycon_pairing();
+            return;
+        case ControlsRow::ArrangeTouch:
+            if (delta > 0) galaxy::host::arrange_touch_controls();
             return;
         case ControlsRow::Reset:
             if (delta > 0) {
@@ -1291,7 +1311,7 @@ bool handle_controls_key(std::uintptr_t key, bool was_down, bool from_pad) {
             start_controls_capture(info.target);
             return true;
         }
-        if (info.kind == ControlsRow::Reset || info.kind == ControlsRow::PairJoyCon) {
+        if (info.kind == ControlsRow::Reset || info.kind == ControlsRow::PairJoyCon || info.kind == ControlsRow::ArrangeTouch) {
             adjust_native_setting(1);
             return true;
         }
@@ -1317,7 +1337,7 @@ std::size_t selected_settings_buttons() {
     const unsigned row = s_native_settings_row.load(std::memory_order_relaxed);
     if (tab == kControlsTab) {
         const ControlsRow kind = controls_row(row).kind;
-        return kind == ControlsRow::Reset || kind == ControlsRow::PairJoyCon ? 1u : 0u;
+        return kind == ControlsRow::Reset || kind == ControlsRow::PairJoyCon || kind == ControlsRow::ArrangeTouch ? 1u : 0u;
     }
     if (!settings_page_tab(tab)) {
         return 0u;
@@ -1934,7 +1954,8 @@ std::vector<galaxy::mods::ModInfo>& mods_list() {
 // With s_mods_mutex held: the texture packs and movies of the mods mods.ini has on to the renderer now (disc changes
 // wait for the next start).
 void apply_live_mods() {
-    set_texture_pack_mod_folders(galaxy::mods::texture_folders(s_mods_saved));
+    set_texture_pack_mod_folders(galaxy::mods::texture_folders(s_mods_saved),
+                                 galaxy::mods::texture_folder_categories_off(s_mods_saved));
     set_movie_mod_folders(galaxy::mods::movie_folders(s_mods_saved));
 }
 
@@ -2191,7 +2212,7 @@ void select_mods_row(const RenderConfig& render, const std::string& key) {
 
 // What a mod changes, its conflicts by the draft's order, or why it does nothing: the line under the page.
 std::string mod_details(const galaxy::mods::ModInfo& mod) {
-    if (!mod.problem.empty() && (mod.code_patches != 0u || (!mod.files && !mod.textures && !mod.movies && !mod.loose))) {
+    if (!mod.problem.empty() && (mod.pack_textures != nullptr || mod.code_patches != 0u || (!mod.files && !mod.textures && !mod.movies && !mod.loose))) {
         return mods_ui_text(mod.problem, 120u);
     }
     std::string kinds;
@@ -2226,7 +2247,7 @@ void close_mod_options(const RenderConfig& render);
 // Whether a mod has options to show: its Riivolution choices, or the text it shows in a language it lacks.
 bool mod_has_options(const galaxy::mods::ModInfo& mod, const std::string& playing) {
     const bool covers = std::find(mod.languages.begin(), mod.languages.end(), playing) != mod.languages.end();
-    return !mod.options.empty() || (!mod.languages.empty() && !covers && !playing.empty());
+    return !mod.options.empty() || mod.textures || (!mod.languages.empty() && !covers && !playing.empty());
 }
 
 // A mod's options instead of the lists: its Riivolution choices and the text it shows, part of the draft. Done,
@@ -2252,9 +2273,13 @@ std::vector<SettingsRow> mod_options_page(std::size_t i) {
                                const std::lock_guard<std::mutex> change_lock(s_mods_mutex);
                                if (i >= s_mods.size() || o >= s_mods[i].options.size()) return;
                                galaxy::mods::ModOption& changed = s_mods[i].options[o];
-                               changed.selected = settings_step(
-                                   std::min<unsigned>(changed.selected, static_cast<unsigned>(changed.choices.size())),
-                                   static_cast<unsigned>(changed.choices.size() + 1u), delta);
+                               if (changed.must_choose) {
+                                   changed.selected = settings_step(std::max(changed.selected, 1u) - 1u, static_cast<unsigned>(changed.choices.size()), delta) + 1u;
+                               } else {
+                                   changed.selected = settings_step(
+                                       std::min<unsigned>(changed.selected, static_cast<unsigned>(changed.choices.size())),
+                                       static_cast<unsigned>(changed.choices.size() + 1u), delta);
+                               }
                            },
                            other_region ? std::string("MADE FOR ANOTHER REGION'S DISC: IT MAY NOT WORK WITH THIS ONE")
                                         : mods_ui_text(option.section, 30u)};
@@ -2276,6 +2301,36 @@ std::vector<SettingsRow> mod_options_page(std::size_t i) {
                             s_mods[i].own_text = !s_mods[i].own_text;
                         },
                         "THIS MOD HAS NO " + language_name(playing) + " TEXT. ITS OWN TEXT MATCHES ITS CHANGES"});
+    }
+    // A pack's textures by what they are: each kind on or off, applied with the rest of the page.
+    if (mod.textures) {
+        SettingsRow heading{"TEXTURE CATEGORIES", {}, nullptr, {}, true};
+        rows.push_back(std::move(heading));
+        if (!mod.categories_final) {
+            rows.push_back({"SORTING TEXTURES", {}, nullptr, "THE GAME'S TEXTURES ARE BEING SORTED. THIS HAPPENS ONCE"});
+        }
+        for (std::size_t c = 0; c < galaxy::textures::kCategoryCount; ++c) {
+            const unsigned count = mod.category_textures[c];
+            if (count == 0u) continue;
+            const auto category = static_cast<galaxy::textures::Category>(c);
+            const bool off = (mod.categories_off & galaxy::textures::category_bit(category)) != 0u;
+            rows.push_back({galaxy::textures::category_name(category),
+                            std::string(off ? "OFF" : "ON") + " (" + std::to_string(count) + ")",
+                            [i, category](RenderConfig&, int delta) {
+                                const std::lock_guard<std::mutex> change_lock(s_mods_mutex);
+                                if (i >= s_mods.size() || delta == 0) return;
+                                s_mods[i].categories_off ^= galaxy::textures::category_bit(category);
+                            },
+                            mods_ui_text(mod.pack_title.empty() ? mod.id : mod.pack_title, 40u)});
+        }
+        rows.push_back(button_row({}, {"ALL ON", "ALL OFF"},
+                                  [i](RenderConfig&, unsigned button) {
+                                      const std::lock_guard<std::mutex> change_lock(s_mods_mutex);
+                                      if (i < s_mods.size()) {
+                                          s_mods[i].categories_off = button == 0u ? 0u : 0xFFFFFFFFu;
+                                      }
+                                  },
+                                  {}));
     }
     rows.push_back(button_row({}, {"DONE"}, [](RenderConfig& draft, unsigned) { close_mod_options(draft); }, {}));
     return rows;
@@ -2303,9 +2358,17 @@ SettingsRow mods_buttons_row() {
     if (s_mod_dialog_open.load(std::memory_order_acquire)) help = "CHOOSING";
     const auto focus = std::find_if(s_mods.begin(), s_mods.end(), [](const galaxy::mods::ModInfo& m) { return m.id == s_mod_focus; });
     const bool options = focus != s_mods.end() && mod_has_options(*focus, next_start_language_folder());
+#if defined(__ANDROID__)
+    // A phone imports from the launcher, where its file picker is.
+    SettingsRow row = button_row(
+        {}, {options ? "OPTIONS" : "-OPTIONS", "RESCAN"},
+        [](RenderConfig&, unsigned shown) {
+            const unsigned button = shown == 0u ? 2u : 4u;
+#else
     SettingsRow row = button_row(
         {}, {"IMPORT FILE", "IMPORT FOLDER", options ? "OPTIONS" : "-OPTIONS", "OPEN FOLDER", "RESCAN"},
         [](RenderConfig&, unsigned button) {
+#endif
             switch (button) {
             case 0u:
             case 1u:
@@ -2342,6 +2405,10 @@ std::vector<SettingsRow> mods_page(const RenderConfig&) {
     std::vector<SettingsRow> rows;
     const std::lock_guard<std::mutex> lock(s_mods_mutex);
     std::vector<galaxy::mods::ModInfo>& mods = mods_list();
+    // The packs' categories, once the game's textures are sorted.
+    for (galaxy::mods::ModInfo& mod : mods) {
+        (void)galaxy::mods::update_pack_categories(mod);
+    }
     const auto open = std::find_if(mods.begin(), mods.end(), [](const galaxy::mods::ModInfo& m) { return m.id == s_mod_options; });
     if (open != mods.end()) {
         return mod_options_page(static_cast<std::size_t>(open - mods.begin()));
@@ -2532,11 +2599,22 @@ public:
             state.mii_count = static_cast<int>(galaxy::host::mii_library_count());
             s_mii_count.store(state.mii_count, std::memory_order_release);
         }
+        state.touch_controls = galaxy::host::touch_controls_present();
+        if (state.touch_controls) {
+            const galaxy::host::TouchControlsSettings touch = galaxy::host::touch_controls_settings();
+            state.touch_size = touch.size;
+            state.touch_opacity = touch.opacity;
+            state.touch_vibration = touch.vibration;
+        }
         return state;
     }
     void act(ui::GeneralPageAction action) const override {
         if (action == ui::GeneralPageAction::ImportMiis) start_mii_import_dialog();
-        else open_mii_folder();
+        else if (action == ui::GeneralPageAction::OpenMiiFolder) open_mii_folder();
+        else galaxy::host::reset_touch_controls_places();
+    }
+    void set_touch_controls(unsigned size, unsigned opacity, bool vibration) const override {
+        galaxy::host::set_touch_controls_settings({size, opacity, vibration});
     }
 };
 
@@ -2600,13 +2678,21 @@ std::string native_settings_row_text(
             case RuntimeInputMode::Controller: return "INPUT: CONTROLLER ONLY";
             case RuntimeInputMode::RealWiimote: return "INPUT: WII REMOTE";
             case RuntimeInputMode::KeyboardMouse: return "INPUT: KEYBOARD+MOUSE ONLY";
-            default: return "INPUT: AUTO";
+            case RuntimeInputMode::Phone: return "INPUT: PHONE";
+            default: {
+                // Auto names what it is using now.
+                for (std::size_t i = 0; i < s_controls_devices.count; ++i) {
+                    if (s_controls_devices.entries[i].active) {
+                        return "INPUT: AUTO (" + upper_ascii(s_controls_devices.entries[i].label.data()) + ")";
+                    }
+                }
+                return "INPUT: AUTO";
+            }
             }
         case ControlsRow::Device: {
-#if defined(__ANDROID__)
-            if (s_controls_devices.count == 0u) return "EDIT: TOUCH SCREEN";
-#endif
-            if (s_controls_devices.count == 0u) return "EDIT: NONE";
+            if (s_controls_devices.count == 0u) {
+                return s_input_mode_draft == RuntimeInputMode::KeyboardMouse ? "NO KEYBOARD OR MOUSE CONNECTED" : "NO CONTROLLER CONNECTED";
+            }
             const galaxy::input::DeviceEntry& entry = s_controls_devices.entries[
                 galaxy::input::resolve_device(s_controls_devices, s_controls_device)];
             // Bluetooth is abbreviated: the row has no room for the longest names.
@@ -2672,6 +2758,8 @@ std::string native_settings_row_text(
             return text;
         case ControlsRow::PairJoyCon:
             return "PAIR JOY-CON";
+        case ControlsRow::ArrangeTouch:
+            return "ON-SCREEN CONTROLS";
         case ControlsRow::Reset:
             return std::string("RESET ") + galaxy::input::control_scheme_label(s_controls_scheme) + " TO DEFAULTS";
         }
@@ -2872,6 +2960,10 @@ NativeSettingsStatus dlss_status(std::uint64_t now_ms) {
 
 
 }  // namespace
+
+bool native_settings_mods_changed() {
+    return mods_restart_pending();
+}
 
 namespace host_window {
 
@@ -3363,6 +3455,9 @@ NativeSettingsView build_native_settings_view() {
             } else if (info.kind == ControlsRow::PairJoyCon) {
                 shown.buttons = true;
                 shown.value = "PAIR";
+            } else if (info.kind == ControlsRow::ArrangeTouch) {
+                shown.buttons = true;
+                shown.value = "ARRANGE";
             }
         }
         view.rows.push_back(std::move(shown));

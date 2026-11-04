@@ -262,6 +262,7 @@ bool SkeletalFishBaby::damage(const TVec3f& rAirBubblePos, bool shakeCameraNorma
             MR::shakeCameraWeak();
         }
 
+        if (!NebulaHost::codePatch(NEBULA_PATCH_SKELETAL_FISH_BABY_NO_BUBBLE, nullptr))
         MR::appearAirBubble(rAirBubblePos, -1);
         setNerve(GET_NERVE_ANON(SkeletalFishBabyNrvBreak));
         return true;

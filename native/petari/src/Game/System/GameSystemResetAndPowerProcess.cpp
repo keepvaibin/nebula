@@ -1,4 +1,5 @@
 #include "Game/System/GameSystemResetAndPowerProcess.hpp"
+#include "Game/System/NebulaHost.hpp"
 #include "Game/System/NebulaAchievements.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/System/GameSequenceFunction.hpp"
@@ -124,7 +125,8 @@ void GameSystemResetAndPowerProcess::exePrepareReset() {
 void GameSystemResetAndPowerProcess::exeReset() {
     GameSystemFunction::setPermissionToCheckInput(false);
 
-    if (mResetOperation != ResetOperation_ApplicationReset) {
+    // New mods need a new run: the same fade and sound, then the game starts again with them.
+    if (mResetOperation != ResetOperation_ApplicationReset || NebulaHost::option(NEBULA_OPTION_MODS_CHANGED) != 0) {
         exitApplication();
     }
 

@@ -287,6 +287,10 @@ namespace StarPointerFunction {
         return getStarPointerDirector()->getStarPointerController(channel)->mPastPosition[index];
     }
 
+    const TVec2f& getNextPastPosition(s32 channel, s32 index) {
+        return getStarPointerDirector()->getStarPointerController(channel)->mNextPastPosition[index];
+    }
+
     s32 getNextPastPointNum(s32 channel) {
         return getStarPointerDirector()->getStarPointerController(channel)->mNextPastPointNum;
     }

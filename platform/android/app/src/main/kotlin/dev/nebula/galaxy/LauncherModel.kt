@@ -71,6 +71,19 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
     var recordNextRun by mutableStateOf(GameFiles.controls(application).getBoolean(GameFiles.RECORD_NEXT_RUN, false))
         private set
 
+    var modMessage by mutableStateOf<String?>(null)
+        private set
+
+    /** A mod or texture pack from a file the player picked, in the background; the game shows it under Mods. */
+    fun importMod(uri: Uri) {
+        modMessage = "Importing..."
+        Thread {
+            val message = runCatching { "${ModImport.import(app, uri)} is ready: turn it on under Mods in the game's settings" }
+                .getOrElse { it.message ?: "That file could not be imported" }
+            android.os.Handler(android.os.Looper.getMainLooper()).post { modMessage = message }
+        }.start()
+    }
+
     fun updateRecordNextRun(value: Boolean) {
         recordNextRun = value
         GameFiles.controls(app).edit().putBoolean(GameFiles.RECORD_NEXT_RUN, value).commit()

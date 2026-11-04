@@ -2,6 +2,7 @@
 package dev.nebula.galaxy;
 
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
@@ -47,6 +48,13 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
 
     // libmain.so (platform/sdl/host_window_sdl.cpp).
     static native void nativeTouchControls(int buttons, float stickX, float stickY);
+    static native void nativeTouchSettings(int sizePercent, int opacityPercent, boolean vibration);
+    static native int nativeTouchWanted(int which);
+    static native void nativeInputDevices(boolean keyboard, boolean mouse);
+    static native int nativeInputMode();
+    // As RuntimeInputMode.
+    private static final int INPUT_AUTO = 0;
+    private static final int INPUT_PHONE = 4;
     static native void nativePointer(int action, int id, float x, float y);
     static native boolean nativeMenuContext();
     static native boolean nativeTitleScreen();
@@ -179,7 +187,6 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
         requestDisplayRate();
 
         final SharedPreferences prefs = GameFiles.controls(this);
-        controlsMode = prefs.getString(GameFiles.CONTROLS_MODE, "auto");
         controls = new TouchControlsView(this, new TouchControlsView.Listener() {
             @Override
             public void onControls(int buttons, float stickX, float stickY) {
@@ -203,26 +210,39 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
             public boolean menuContext() {
                 return nativeMenuContext();
             }
+
+            @Override
+            public void arrangingDone() {
+                applyControlsVisibility();
+            }
+
+            @Override
+            public void touchSettings(int sizePercent, int opacityPercent, boolean haptics) {
+                GameFiles.controls(GameActivity.this).edit().putFloat(GameFiles.CONTROLS_OPACITY, opacityPercent / 100.0f)
+                        .putBoolean(GameFiles.CONTROLS_HAPTICS, haptics).apply();
+                nativeTouchSettings(sizePercent, opacityPercent, haptics);
+            }
         });
-        controls.configure(prefs.getFloat(GameFiles.CONTROLS_OPACITY, 0.6f),
-                prefs.getFloat(GameFiles.CONTROLS_SCALE, 1.0f), prefs.getBoolean(GameFiles.CONTROLS_HAPTICS, true));
+        controls.configure(prefs.getFloat(GameFiles.CONTROLS_OPACITY, 0.6f), prefs.getBoolean(GameFiles.CONTROLS_HAPTICS, true));
         mLayout.addView(controls, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT));
 
-        controlsWanted = !"never".equals(controlsMode) && !("auto".equals(controlsMode) && controllerConnected());
-        applyControlsVisibility();
+        reportInputDevices();
+        applyInputMode();
         final InputManager input = getSystemService(InputManager.class);
         input.registerInputDeviceListener(new InputManager.InputDeviceListener() {
             @Override
             public void onInputDeviceAdded(int deviceId) {
-                if ("auto".equals(controlsMode) && isController(InputDevice.getDevice(deviceId))) {
+                reportInputDevices();
+                if (nativeInputMode() == INPUT_AUTO && isController(InputDevice.getDevice(deviceId))) {
                     hideControlsForController();
                 }
             }
 
             @Override
             public void onInputDeviceRemoved(int deviceId) {
-                if ("auto".equals(controlsMode) && !controllerConnected()) {
+                reportInputDevices();
+                if (nativeInputMode() == INPUT_AUTO && !controllerConnected()) {
                     revealControls();
                 }
             }
@@ -326,6 +346,75 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
         });
     }
 
+    // Keyboards and mice that are really attached: not the phone's own buttons, not the screen's virtual keyboard.
+    private void reportInputDevices() {
+        boolean keyboard = false;
+        boolean mouse = false;
+        for (int id : InputDevice.getDeviceIds()) {
+            final InputDevice device = InputDevice.getDevice(id);
+            if (device == null || device.isVirtual() || !device.isExternal()) {
+                continue;
+            }
+            keyboard |= device.getKeyboardType() == InputDevice.KEYBOARD_TYPE_ALPHABETIC;
+            mouse |= (device.getSources() & InputDevice.SOURCE_MOUSE) == InputDevice.SOURCE_MOUSE;
+        }
+        nativeInputDevices(keyboard, mouse);
+    }
+
+    // What the input mode says of the on-screen controls: Phone always, Auto while no controller is in hand, others never.
+    private void applyInputMode() {
+        final int mode = nativeInputMode();
+        controlsWanted = mode == INPUT_PHONE || (mode == INPUT_AUTO && !controllerConnected());
+        applyControlsVisibility();
+    }
+
+    // Called by libmain.so when the player changes the input mode (on SDL's thread).
+    public void inputModeChanged() {
+        runOnUiThread(this::applyInputMode);
+    }
+
+    // Called by libmain.so: CONTROLS' Arrange (on SDL's thread).
+    public void arrangeControls() {
+        runOnUiThread(() -> {
+            if (controls != null) {
+                controls.startArranging();
+            }
+        });
+    }
+
+    // Called by libmain.so: GENERAL's on-screen control rows (on SDL's thread).
+    public void touchSettingsChanged() {
+        final int size = nativeTouchWanted(0);
+        final int opacity = nativeTouchWanted(1);
+        final boolean vibration = nativeTouchWanted(2) != 0;
+        runOnUiThread(() -> {
+            if (controls != null) {
+                controls.applySettings(size, opacity, vibration);
+            }
+        });
+    }
+
+    // Called by libmain.so: GENERAL's Reset (on SDL's thread).
+    public void resetControlPlaces() {
+        runOnUiThread(() -> {
+            if (controls != null) {
+                controls.resetPlaces();
+            }
+        });
+    }
+
+    // Called by libmain.so: the game starts again, straight back into the game (on SDL's thread). One game per process, so
+    // a new process takes over this one's task.
+    public void restartGame() {
+        runOnUiThread(() -> {
+            final Intent intent = new Intent(getIntent());
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+            startActivity(intent);
+            overridePendingTransition(0, 0);
+            Process.killProcess(Process.myPid());
+        });
+    }
+
     // Called by libmain.so (host_window_sdl.cpp, on SDL's thread).
     public void menuContextChanged() {
         runOnUiThread(() -> {
@@ -350,7 +439,7 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
     }
 
     private void revealControls() {
-        if ("auto".equals(controlsMode) && !controlsWanted) {
+        if (nativeInputMode() == INPUT_AUTO && !controlsWanted) {
             controlsWanted = true;
             applyControlsVisibility();
         }
@@ -389,6 +478,17 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
 
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
+        if (controls != null && controls.isArranging()) {
+            // Only the icons and OK answer. Back is the phone's own way of saying OK; the volume keys stay the phone's.
+            final int key = event.getKeyCode();
+            if (key == KeyEvent.KEYCODE_VOLUME_UP || key == KeyEvent.KEYCODE_VOLUME_DOWN) {
+                return super.dispatchKeyEvent(event);
+            }
+            if (key == KeyEvent.KEYCODE_BACK && event.getAction() == KeyEvent.ACTION_UP) {
+                controls.finishArranging();
+            }
+            return true;
+        }
         if (fromController(event.getSource()) && "auto".equals(controlsMode)) {
             hideControlsForController();
         }
@@ -397,6 +497,9 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
 
     @Override
     public boolean dispatchGenericMotionEvent(MotionEvent event) {
+        if (controls != null && controls.isArranging()) {
+            return true;
+        }
         if (fromController(event.getSource()) && "auto".equals(controlsMode)) {
             hideControlsForController();
         }

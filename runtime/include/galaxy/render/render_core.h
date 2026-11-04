@@ -16,6 +16,7 @@
 // render_frame() call rather than leaving a frozen display.
 
 #include "galaxy/render/actor_lights.h"
+#include "galaxy/render/ambient_occlusion_objects.h"
 #include "galaxy/render/frame_pass.h"
 #include "galaxy/frame_cadence_diagnostics.h"
 #include "galaxy/render/drawing_state.h"
@@ -946,8 +947,12 @@ private:
         std::uint32_t split_flat_indices = 0;
         bool split_built = false;
         ImmutableUploadToken split_upload_token;
+        std::vector<ao::ObjectSlot> object_slots;  // its bounds per position matrix (ambient_occlusion_objects.h)
+        bool object_slots_built = false;
     };
     std::unordered_map<std::uint64_t, RecordShape> record_shapes_;
+    ao::ObjectCollector ao_objects_;
+    bool collect_ao_objects_ = false;
     std::vector<RenderVertex> expand_scratch_;  // a group's vertices on their way to the resident buffer
     std::vector<shapes::Record> producer_shape_records_;
     shapes::RecordPool producer_record_pool_;
@@ -1237,6 +1242,7 @@ private:
     bool texture_pack_settings_applied_ = false;
     std::uint64_t texture_pack_mods_generation_ = ~0ull;
     std::vector<std::filesystem::path> texture_pack_mod_folders_;
+    std::vector<std::uint32_t> texture_pack_mod_categories_off_;
     std::unordered_map<
         TextureHandleKey,
         TextureHandle,

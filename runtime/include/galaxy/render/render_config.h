@@ -62,9 +62,11 @@ struct RenderConfig {
     // Fresnel on environment maps (enhanced_lighting.h). Takes precedence over per_pixel_lighting for those draws.
     bool     enhanced_lighting   = false;
     // The enhanced lighting's scene in a wide target with its camera (scene_camera.h). No row: its look is not accepted.
-    bool     wide_scene          = false;
+    bool     wide_scene          = true;
     // Ambient occlusion of the 3D scene (ambient_occlusion.h); ray-traced lighting has its own.
     bool     ambient_occlusion   = false;
+    // Which: SSAO instead of GTAO.
+    bool     ambient_occlusion_ssao = false;
     // The game's bloom (game_bloom.h) at `bloom` percent of its strength (0 off, up to kMaxBloom).
     unsigned bloom               = 100;
 
@@ -316,12 +318,14 @@ bool reload_render_config_if_changed();
 [[nodiscard]] std::filesystem::path texture_dump_directory();
 // The enabled mods' textures/ folders in load order (the host sets them at start); the generation changes with each
 // set.
-void set_texture_pack_mod_folders(std::vector<std::filesystem::path> folders);
+void set_texture_pack_mod_folders(std::vector<std::filesystem::path> folders, std::vector<std::uint32_t> categories_off = {});
 // The disc's game id (RMGE01, RMGP01, RMGJ01; the host sets it at start, TexturePacks::kGameId until then): the packs'
 // game folders and the dumps' are named by it.
 void set_texture_pack_game_id(std::string id);
 [[nodiscard]] std::string texture_pack_game_id();
 [[nodiscard]] std::vector<std::filesystem::path> texture_pack_mod_folders();
+// The categories (galaxy::textures::category_bit) off in each of them.
+[[nodiscard]] std::vector<std::uint32_t> texture_pack_mod_categories_off();
 [[nodiscard]] std::uint64_t texture_pack_mod_folders_generation() noexcept;
 // HD movie replacements (movie_replacement.h): the Movies folder beside config.ini (GALAXY_MOVIE_DIR replaces it), and
 // the enabled mods' movies/ folders in load order (the host sets them at start).

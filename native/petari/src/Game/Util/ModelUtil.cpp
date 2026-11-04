@@ -298,7 +298,11 @@ namespace MR {
                 if (texCoord->getTexGenSrc() == 1) {
                     shape->addTexMtxIndex(idx, 30);
                 } else if (texCoord->getTexGenSrc() == 0) {
-                    shape->addTexMtxIndex(idx, 0);
+                    // In a material with indirect stages: texture place 0, as v1 and the original draw it (the manta ray's body,
+                    // runs s4_rC against s4_g5 and v1). Otherwise the corner's position (Rosalina's fade, ros_rc1).
+                    const J3DIndBlock* pIndirect = material->getIndBlock();
+                    const bool isIndirect = pIndirect != nullptr && pIndirect->getIndTexStageNum() != 0;
+                    shape->addTexMtxIndex(idx, isIndirect ? J3DShape::cTexMtxBasePlaceZero : 0);
                 }
             }
         }

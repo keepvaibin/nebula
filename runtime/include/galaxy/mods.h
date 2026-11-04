@@ -16,6 +16,9 @@
 #pragma once
 
 
+#include "galaxy/luma.h"
+#include "galaxy/texture_categories.h"
+
 #include <cstdint>
 #include <filesystem>
 #include <map>
@@ -26,11 +29,31 @@
 #include <string_view>
 #include <vector>
 
+namespace galaxy::disc {
+class AssetStore;
+}
+
 namespace galaxy::mods {
 
 // Whether one part of a path a mod names stays one plain name inside its folder: no drive or stream (':'), separator,
 // name of only dots and spaces, or device name.
 [[nodiscard]] bool safe_path_part(std::string_view part);
+
+// nebula_game_api.h's NEBULA_PATCH_*: native equivalents of the code patches mods.cpp recognises.
+enum : std::uint32_t {
+    kPatchFlipPanelGroup = 1,
+    kPatchFlipPanelObserverGroup,
+    kPatchWaterBazookaShotFlag,
+    kPatchKameckBarrierOffsetY,
+    kPatchSkeletalFishBabyNoBubble,
+    kPatchDodoryuShellOnly,
+    kPatchMissStarPieces,
+    kPatchNoHiddenStarTable,
+    kPatchNoSuddenDeathDodoryu,
+    kPatchBegomanFireProof,
+    kPatchMessengerAlwaysEx,
+    kPatchMessengerExOneUps,
+};
 
 // A Riivolution option (its XML's options): its choices; `selected` 0 is off, else a choice (1-based).
 struct ModOption {
@@ -40,6 +63,9 @@ struct ModOption {
     std::vector<std::string> choices;
     std::vector<bool> other_region;  // by choice: named for another region than this disc's
     unsigned selected = 0;
+    // A .luma's option: its choices' ids, and whether it has no Off.
+    std::vector<std::string> choice_ids;
+    bool must_choose = false;
 };
 
 // Where two enabled mods change the same things: `files` disc files and `textures` textures.
@@ -48,6 +74,12 @@ struct ModOverlap {
     bool other_above = false;  // it is higher in the list (it wins these)
     unsigned files = 0;
     unsigned textures = 0;
+};
+
+// A texture of a pack: its hash and what its folder's words say (kCategoryCount: nothing).
+struct PackTexture {
+    std::uint64_t hash = 0;
+    std::uint8_t folder_category = galaxy::textures::kCategoryCount;
 };
 
 struct ModInfo {
@@ -59,14 +91,31 @@ struct ModInfo {
     bool files = false;
     bool textures = false;
     bool movies = false;
-    bool loose = false;                       // loose files placed by name
+    bool loose = false;
+    bool package = false;  // a .luma: luma.json, and layers of the mod's files
+    std::shared_ptr<const galaxy::luma::Manifest> luma;
+    bool luma_disc = false;  // its layers in use set files or switches
+    std::vector<std::filesystem::path> luma_textures;  // its layers' textures/ and movies/ in use, in order
+    std::vector<std::filesystem::path> luma_movies;
+    //                       // loose files placed by name
     std::vector<std::string> languages;       // the language folders it changes (UsEnglish, EuFrench, ...)
     bool own_text = true;                     // its text stands in for a language it lacks
+    unsigned native_patches = 0;              // patches over the game's code that the game has natively
     unsigned code_patches = 0;                // patches over the game's original code: the mod stays off (problem says so)
     unsigned changed_files = 0;               // disc files it changes (its choices as they stand)
     unsigned changed_textures = 0;            // textures its packs replace
     std::vector<ModOverlap> overlaps;         // enabled mods changing the same files or textures
     std::vector<ModOption> options;
+    // A texture pack, sorted: its textures, how many of each category and of this game's textures, and the categories
+    // turned off (category_bit). A pack's manifest.json (a resource pack's) names it.
+    std::shared_ptr<const std::vector<PackTexture>> pack_textures;
+    galaxy::textures::CategoryCounts category_textures{};
+    unsigned game_textures = 0;
+    bool categories_final = false;  // the game's textures were known when they were counted
+    std::uint32_t categories_off = 0;
+    std::string pack_title;
+    std::string pack_author;
+    std::string pack_description;
     std::string problem;  // why it does nothing for this game (for another game, unreadable XML)
 };
 
@@ -74,6 +123,12 @@ struct ModInfo {
 [[nodiscard]] bool changes_disc(const ModInfo& mod) noexcept;
 // The enabled mods' textures/ and movies/ folders, lowest in the list first (the last wins), for the live renderer.
 [[nodiscard]] std::vector<std::filesystem::path> texture_folders(std::span<const ModInfo> mods);
+// The categories off in each of texture_folders' folders, in its order.
+[[nodiscard]] std::vector<std::uint32_t> texture_folder_categories_off(std::span<const ModInfo> mods);
+// A pack's textures counted by category again, once the game's textures are sorted; true when anything changed.
+bool update_pack_categories(ModInfo& mod);
+// The store the game's textures are sorted from (game.pak); the sorting starts when a mod has a pack.
+void set_mods_store_file(const std::filesystem::path& store);
 [[nodiscard]] std::vector<std::filesystem::path> movie_folders(std::span<const ModInfo> mods);
 
 // The mods folder, the file of their choices and the game they are for (boot.bin's six characters).
@@ -103,6 +158,31 @@ struct SessionMods {
     unsigned unsupported = 0;
 };
 [[nodiscard]] SessionMods session_mods();
+// What the enabled mods change at this start, the one higher in the list winning a file: each disc path and the file
+// that holds it. Records the session. `language` is the folder of the language played, `store` the game's files.
+struct DiscPlan {
+    struct File {
+        std::string disc;
+        std::filesystem::path host;
+    };
+    std::vector<File> files;
+    // The .luma mods in use, bottom of the list first: their shaders.
+    std::vector<std::filesystem::path> luma_folders;
+    std::vector<std::string> notes;  // what could not apply, for the log
+    unsigned code_patches = 0;
+    std::map<std::uint32_t, std::uint32_t> native_patches;  // kPatch*: what each is set to
+    std::filesystem::path save_folder;
+    bool save_clone = true;
+    std::filesystem::path save_start;  // files its saves begin from
+};
+// The language played, for a .luma's translated text: as language_folder takes it.
+void set_played_language(unsigned language) noexcept;
+[[nodiscard]] DiscPlan plan_disc_changes(const galaxy::disc::AssetStore& store, const std::string& game_id,
+                                         const std::string& language);
+// The plan as the cooker reads it (its first line the game id), and what names this plan's result: the files' sizes
+// and times with it, so that a changed mod is cooked again.
+[[nodiscard]] std::string plan_text(const DiscPlan& plan, const std::string& game_id);
+[[nodiscard]] std::string plan_signature(const DiscPlan& plan, const std::string& game_id);
 // Whether `mods` (the settings' current choices) differ from what this session started with (a restart applies them).
 [[nodiscard]] bool mods_differ_from_session(std::span<const ModInfo> mods);
 

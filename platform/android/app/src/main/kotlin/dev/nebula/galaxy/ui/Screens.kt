@@ -45,6 +45,7 @@ import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.SportsEsports
 import androidx.compose.material.icons.rounded.TouchApp
@@ -426,27 +427,6 @@ private fun SettingsScreen(model: LauncherModel, onChoose: () -> Unit, onShareLo
         TopBar("Settings") { model.back() }
         Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), contentAlignment = Alignment.TopCenter) {
             Column(Modifier.widthIn(max = 680.dp).fillMaxWidth().padding(bottom = 32.dp)) {
-                SectionTitle("Touch controls")
-                GlassCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp), padding = androidx.compose.foundation.layout.PaddingValues(vertical = 8.dp)) {
-                    ChoiceRow("Automatic", "Hidden while a controller is used; touch the screen to bring them back", controls.mode == "auto") {
-                        model.updateControls(controls.copy(mode = "auto"))
-                    }
-                    ChoiceRow("Always", null, controls.mode == "always") { model.updateControls(controls.copy(mode = "always")) }
-                    ChoiceRow("Never", "The screen is only the pointer", controls.mode == "never") {
-                        model.updateControls(controls.copy(mode = "never"))
-                    }
-                    HorizontalDivider(color = Night.GlassEdge, modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp))
-                    SliderRow("Opacity", controls.opacity, 0.2f..1f, { "${(it * 100).roundToInt()}%" }) {
-                        model.updateControls(controls.copy(opacity = it))
-                    }
-                    SliderRow("Size", controls.scale, 0.75f..1.4f, { "${(it * 100).roundToInt()}%" }) {
-                        model.updateControls(controls.copy(scale = it))
-                    }
-                    SwitchRow("Vibration", "A tap you can feel on each press", controls.haptics) {
-                        model.updateControls(controls.copy(haptics = it))
-                    }
-                }
-
                 SectionTitle("Storage")
                 GlassCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp), padding = androidx.compose.foundation.layout.PaddingValues(vertical = 8.dp)) {
                     val install = model.install
@@ -463,6 +443,18 @@ private fun SettingsScreen(model: LauncherModel, onChoose: () -> Unit, onShareLo
                             "${formatBytes(install.bytes)} · your saves (${formatBytes(model.saveBytes)}) are kept",
                         ) { confirmRemove = true }
                     }
+                }
+
+                SectionTitle("Mods")
+                GlassCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp), padding = androidx.compose.foundation.layout.PaddingValues(vertical = 4.dp)) {
+                    val pickMod = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+                        if (uri != null) model.importMod(uri)
+                    }
+                    NavigationRow(
+                        Icons.Rounded.Add,
+                        "Import a mod or texture pack",
+                        model.modMessage ?: "A .zip file. Turn it on under Mods in the game's settings",
+                    ) { pickMod.launch(arrayOf("application/zip", "application/x-zip-compressed", "*/*")) }
                 }
 
                 SectionTitle("Help")
