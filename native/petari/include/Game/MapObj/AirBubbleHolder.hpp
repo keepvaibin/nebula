@@ -15,6 +15,7 @@ public:
     virtual void init(const JMapInfoIter&);
 
     void appearAirBubble(const TVec3f&, s32);
+    void createAirBubbles();
 };
 
 namespace MR {

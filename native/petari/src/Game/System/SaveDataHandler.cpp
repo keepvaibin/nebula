@@ -412,8 +412,8 @@ void SaveDataHandler::copySaveDataEachFile(u8* pFileDst, const u8* pFileSrc) {
 }
 
 void SaveDataHandler::createCommunicationBuffer() {
-    _14 = new (MR::getStationedHeap(), 32) u8[sBufferRoom];
-    _18 = new (MR::getStationedHeap(), 32) u8[sBufferRoom];
+    _14 = new (MR::getStationedHeap(), 0) u8[sBufferRoom];
+    _18 = new (MR::getStationedHeap(), 0) u8[sBufferRoom];
 }
 
 bool SaveDataHandler::tryRemoveFile(const char* pFileName, bool* pIsRemoved) {

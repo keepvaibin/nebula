@@ -4,7 +4,6 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/System/GameSequenceFunction.hpp"
 #include "Game/System/GameSystemFunction.hpp"
-#include "Game/System/MainLoopFramework.hpp"
 #include "Game/Util/Color.hpp"
 #include "Game/Util/DrawUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
@@ -163,7 +162,6 @@ void GameSystemResetAndPowerProcess::exeFadein() {
 void GameSystemResetAndPowerProcess::exitApplication() {
     // The counts Nebula's achievements hold for the host (jumps, coins, play time), before the game ends.
     NebulaAchievements::flushStats();
-    MainLoopFramework::prepareForExit();
     NebulaFrameClock::show(false);
     NebulaFrameClock::waitFrame();
 

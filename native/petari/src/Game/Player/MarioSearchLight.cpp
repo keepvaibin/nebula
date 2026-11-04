@@ -128,7 +128,7 @@ namespace {
 
     inline void initExtraMtxBuffer(J3DModelX* pModel, s32 num) {
         for (u32 i = 0; i < pModel->_DD; i++) {
-            pModel->mExtraMtxBuffer[i] = new (0x20) Mtx[num];
+            pModel->mExtraMtxBuffer[i] = new Mtx[num];
         }
     }
 };  // namespace

@@ -27,7 +27,7 @@ public:
 
             if (mVertexBuffer.mTransformedVtxPosArray[0] == nullptr || mVertexBuffer.mTransformedVtxPosArray[1] == nullptr) {
                 u32 size = (componentSize * (getVertexBuffer()->getVertexData()->getVtxNum() * 3) + 31) & ~31;
-                mVertexBuffer.mTransformedVtxPosArray[0] = new (32) u8[size];
+                mVertexBuffer.mTransformedVtxPosArray[0] = new u8[size];
 
                 if (mVertexBuffer.mTransformedVtxPosArray[0] != nullptr) {
                     mVertexBuffer.mTransformedVtxPosArray[1] = mVertexBuffer.mTransformedVtxPosArray[0];

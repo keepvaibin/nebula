@@ -22,19 +22,7 @@ StarPieceDirector* MR::getStarPieceDirector() {
 }
 
 void MR::createStarPiece() {
-    int max = 70;
-
-    if (MR::isEqualStageName("AstroGalaxy")) {
-        max = 70;
-    }
-
-    for (int i = 0; i < max; i++) {
-        StarPiece* starPiece = new StarPiece("\203\130\203\136\201\133\203\163\201\133\203\130\203\146\203\102\203\214\203\116\203\136\201\133\203\163\201\133\203\130" /* スターピースディレクターピース */);
-        starPiece->initWithoutIter();
-        starPiece->makeActorDead();
-        getStarPieceDirector()->registerActor(starPiece);
-        registerDemoSimpleCastAll(starPiece);
-    }
+    getStarPieceDirector()->createStarPieces();
 }
 
 StarPiece* MR::getDeadStarPiece() {
@@ -66,8 +54,8 @@ void MR::incNumStarPieceNewed() {
 }
 
 StarPieceDirector::StarPieceDirector(const char* pName)
-    : LiveActorGroup(pName, 128), mNumStarPieceNewed(), mNumStarPieceGettable(), mColorIndex(), mNumStarPiecesLaunched(), mNewHostInfoIndex(),
-      mNewReceiverInfoIndex(), mResetChasingStarPiece(), mSoundIndex(), mQueueNewGetSound() {
+    : LiveActorGroup(pName, 128), mNumStarPieceNewed(), mNumStarPieceGettable(), mColorIndex(), mNumStarPiecesLaunched(),
+      mResetChasingStarPiece(), mSoundIndex(), mQueueNewGetSound() {
     MR::connectToSceneMapObjMovement(this);
 
     for (int i = 0; i < ARRAY_SIZE(mStarPieceShooters); i++) {
@@ -75,13 +63,8 @@ StarPieceDirector::StarPieceDirector(const char* pName)
         mStarPieceShooters[i]->initWithoutIter();
     }
 
-    for (int i = 0; i < ARRAY_SIZE(mHostInfoArray); i++) {
-        mHostInfoArray[i] = new StarPieceHostInfo(nullptr, 0, 0, 0);
-    }
-
-    for (int i = 0; i < ARRAY_SIZE(mReceiverInfoArray); i++) {
-        mReceiverInfoArray[i] = new StarPieceReceiverInfo(nullptr, 0, 0, 0);
-    }
+    mHostInfos.init(128);
+    mReceiverInfos.init(16);
 
     initCSDelay();
 }
@@ -91,11 +74,8 @@ void StarPieceDirector::declare(const NameObj* pNameObj, s32 num) {
         StarPieceHostInfo* hostInfo = findHostInfo(pNameObj);
 
         if (hostInfo == nullptr) {
-            hostInfo = mHostInfoArray[mNewHostInfoIndex];
-            hostInfo->mObj = const_cast< NameObj* >(pNameObj);
-            hostInfo = mHostInfoArray[mNewHostInfoIndex];
-            hostInfo->mObj = const_cast< NameObj* >(pNameObj);
-            mNewHostInfoIndex++;
+            hostInfo = new StarPieceHostInfo(const_cast< NameObj* >(pNameObj), 0, 0, 0);
+            mHostInfos.push_back(hostInfo);
         }
 
         hostInfo->_4 += num;
@@ -108,11 +88,8 @@ void StarPieceDirector::declareReceiveNum(const NameObj* pNameObj, s32 num) {
         StarPieceReceiverInfo* receiverInfo = findReceiverInfo(pNameObj);
 
         if (receiverInfo == nullptr) {
-            receiverInfo = mReceiverInfoArray[mNewReceiverInfoIndex];
-            receiverInfo->mObj = const_cast< NameObj* >(pNameObj);
-            receiverInfo = mReceiverInfoArray[mNewReceiverInfoIndex];
-            receiverInfo->mObj = const_cast< NameObj* >(pNameObj);
-            mNewReceiverInfoIndex++;
+            receiverInfo = new StarPieceReceiverInfo(const_cast< NameObj* >(pNameObj), 0, 0, 0);
+            mReceiverInfos.push_back(receiverInfo);
         }
 
         receiverInfo->_4 += num;
@@ -288,7 +265,8 @@ StarPiece* StarPieceDirector::getDeadStarPiece() {
     LiveActor* deadActor = getDeadActor();
 
     if (deadActor == nullptr) {
-        return nullptr;
+        createStarPieces();
+        deadActor = getDeadActor();
     }
 
     StarPiece* deadStarPiece = static_cast< StarPiece* >(deadActor);
@@ -326,9 +304,9 @@ void StarPieceDirector::clearGotCountReceiver(const NameObj* pNameObj) {
 }
 
 StarPieceHostInfo* StarPieceDirector::findHostInfo(const NameObj* pNameObj) {
-    for (StarPieceHostInfo** current = mHostInfoArray; current < &mHostInfoArray[ARRAY_SIZE(mHostInfoArray)]; current++) {
-        if (pNameObj == (*current)->mObj) {
-            return *current;
+    for (s32 i = 0; i < mHostInfos.size(); i++) {
+        if (pNameObj == mHostInfos[i]->mObj) {
+            return mHostInfos[i];
         }
     }
 
@@ -336,13 +314,24 @@ StarPieceHostInfo* StarPieceDirector::findHostInfo(const NameObj* pNameObj) {
 }
 
 StarPieceReceiverInfo* StarPieceDirector::findReceiverInfo(const NameObj* pNameObj) {
-    for (StarPieceReceiverInfo** current = mReceiverInfoArray; current < &mReceiverInfoArray[ARRAY_SIZE(mReceiverInfoArray)]; current++) {
-        if (pNameObj == (*current)->mObj) {
-            return *current;
+    for (s32 i = 0; i < mReceiverInfos.size(); i++) {
+        if (pNameObj == mReceiverInfos[i]->mObj) {
+            return mReceiverInfos[i];
         }
     }
 
     return nullptr;
+}
+
+void StarPieceDirector::createStarPieces() {
+    MR::CurrentHeapRestorer heapRestorer(MR::getSceneHeap());
+    for (s32 i = 0; i < 70; i++) {
+        StarPiece* pStarPiece = new StarPiece("\203\130\203\136\201\133\203\163\201\133\203\130\203\146\203\102\203\214\203\116\203\136\201\133\203\163\201\133\203\130" /* スターピースディレクターピース */);
+        pStarPiece->initWithoutIter();
+        pStarPiece->makeActorDead();
+        registerActor(pStarPiece);
+        MR::registerDemoSimpleCastAll(pStarPiece);
+    }
 }
 
 StarPieceShooter::StarPieceShooter(s32 a1, const char* pName)

@@ -4146,7 +4146,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     // (blending, logic ops and dual-source alpha cannot share a second
     // target). Keys only change while a motion scene is (or was) active.
     // Blended triangles (no dual-source alpha) write the reactive mask.
-    // The game's scene runs on an 8-bit scene target (MainLoopFramework::preGX), where every blend that reads the source alpha
+    // The game's scene runs on an 8-bit scene target (GameFrame), where every blend that reads the source alpha
     // is dual-source (needs_dual_src_alpha): it blends at the material's 8-bit alpha, not the scene target's 6-bit one, and under
     // constant destination alpha (the state: the translucent lists, Mario, shadows) writes the constant instead.
     // Dual-source blending binds no second target, so none of those effects wrote the reactive mask (DLSS's, and the

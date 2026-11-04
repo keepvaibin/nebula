@@ -150,7 +150,7 @@ void SceneFunction::executeDrawBufferListNormalOpaBeforeVolumeShadow() {
     }
 
     if (MR::isDrawSpinDriverPathAtOpa()) {
-        MR::reinitGX();
+        MR::resetDrawState();
         CategoryList::execute(MR::DrawType_SpinDriverPathDrawer);
     }
 
@@ -216,7 +216,7 @@ void SceneFunction::executeDrawBufferListNormalXlu() {
 void SceneFunction::executeDrawListOpa() {
     MotionSignal::phase(MotionSignal::ScenePhase_ListOpa);
     CategoryList::execute(MR::DrawType_0x3);
-    MR::reinitGX();
+    MR::resetDrawState();
     CategoryList::execute(MR::DrawType_0x52);
     CategoryList::execute(MR::DrawType_WhirlPoolAccelerator);
     CategoryList::execute(MR::DrawType_OceanRingPipeOutside);
@@ -245,7 +245,7 @@ void SceneFunction::executeDrawListOpa() {
 
 void SceneFunction::executeDrawListXlu() {
     MotionSignal::phase(MotionSignal::ScenePhase_ListXlu);
-    MR::reinitGX();
+    MR::resetDrawState();
     CategoryList::execute(MR::DrawType_VolumeModel);
     CategoryList::execute(MR::DrawType_0x30);
     if (!MR::isDrawSpinDriverPathAtOpa()) {
@@ -287,7 +287,7 @@ void SceneFunction::executeDrawAfterIndirect() {
     CategoryList::drawXlu(MR::DrawBufferType_GlaringLight);
     CategoryList::drawXlu(MR::DrawBufferType_UNK_0x17);
     CategoryList::drawXlu(MR::DrawBufferType_CrystalBox);
-    MR::reinitGX();
+    MR::resetDrawState();
     CategoryList::execute(MR::DrawType_0x11);
     CategoryList::execute(MR::DrawType_GCapture);
     CategoryList::execute(MR::DrawType_WaterRoad);
@@ -305,7 +305,7 @@ void SceneFunction::executeDrawAfterIndirect() {
 void SceneFunction::executeDrawImageEffect() {
     MotionSignal::phase(MotionSignal::ScenePhase_ImageEffect);
     if (MR::isNormalBloomOn()) {
-        MR::reinitGX();
+        MR::resetDrawState();
         CategoryList::execute(MR::DrawType_BloomEffectPreDraw);
 
         if (MR::isNormalBloomForEachModel()) {

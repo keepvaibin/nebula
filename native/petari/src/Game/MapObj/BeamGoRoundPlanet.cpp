@@ -69,7 +69,6 @@ BeamGoRoundPlanet::BeamGoRoundPlanet(const char* pName) : MapObjActor(pName) {
 void BeamGoRoundPlanet::init(const JMapInfoIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;
-    info.setupHioNode("\230\146\220\257" /* 惑星 */);
     info.setupDefaultPos();
     info.setupConnectToScene();
     info.setupEffect(nullptr);

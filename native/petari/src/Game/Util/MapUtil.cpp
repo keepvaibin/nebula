@@ -254,7 +254,8 @@ namespace MR {
             return 0;
         }
 
-        const HitInfo* hits[32];
+        const HitInfo* hitRoom[64];
+        const HitInfo** const hits = count <= ARRAY_SIZEU(hitRoom) ? hitRoom : new const HitInfo*[count];
         u32 excluded = 0;
         for (u32 i = 0; i < count; i++) {
             hits[i] = getCollisionDirector()->getCategoryKeeper(0)->getStrikeInfo(i);
@@ -287,6 +288,10 @@ namespace MR {
 
             mSortBuffer[i] = *getCollisionDirector()->getCategoryKeeper(0)->getStrikeInfo(nearest);
             hits[nearest] = nullptr;
+        }
+
+        if (hits != hitRoom) {
+            delete[] hits;
         }
 
         return mSortCount;

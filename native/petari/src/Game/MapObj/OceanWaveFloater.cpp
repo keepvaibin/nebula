@@ -51,7 +51,6 @@ void OceanWaveFloater::init(const JMapInfoIter& rIter) {
     mForce = new WaveFloatingForce(this, ::getParam(mObjectName)->mStepCount, ::getParam(mObjectName)->mAmplitude, true);
 
     MapObjActorInitInfo info = MapObjActorInitInfo();
-    info.setupHioNode("\222\156\214\140\203\111\203\165\203\127\203\106" /* 地形オブジェ */);
     info.setupDefaultPos();
     info.setupConnectToScene();
     info.setupEffect(nullptr);

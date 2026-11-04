@@ -34,7 +34,7 @@ void GameThread::initMessageQueue(NebulaArena* pHeap, int messageCount) {
 void GameThread::initHeapSpecified(NebulaArena* pHeap, u32 stackSize) {
     mHeap = pHeap;
     mStackSize = stackSize & ~31;  // the host thread's own stack
-    mThread = new (mHeap, 32) GameThreadRecord();
+    mThread = new (mHeap, 0) GameThreadRecord();
 
     GameThreads::create(mThread, &GameThread::start, this, mStackSize);
 }

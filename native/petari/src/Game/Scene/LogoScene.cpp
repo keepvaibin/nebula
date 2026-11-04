@@ -5,7 +5,7 @@
 #include "Game/Screen/LogoFader.hpp"
 #include "Game/System/GameSequenceFunction.hpp"
 #include "Game/System/GameSystemFunction.hpp"
-#include "Game/System/MainLoopFramework.hpp"
+#include "Game/System/GameFrame.hpp"
 #include "Game/Util/DrawUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Screen/NebulaRtPrepare.hpp"
@@ -25,18 +25,17 @@ namespace {
 LogoScene::LogoScene()
     : Scene("LogoScene"),
       mLogoFader() {
-    MainLoopFramework::getManager()->mUseAlpha = false;
+    GameFrame::setKeepAlpha(false);
 }
 
 LogoScene::~LogoScene() {
-    MainLoopFramework::getManager()->mUseAlpha = true;
+    GameFrame::setKeepAlpha(true);
 }
 
 void LogoScene::init() {
         // The system archive's load runs behind black (the fader starts blank) and the title follows as soon as it and the save data are ready.
         initNerve(GET_NERVE_ANON(LogoSceneWaitReadDoneSystemArchive));
 
-    SceneFunction::createHioBasicNode(this);
     SceneFunction::initForNameObj();
     MR::createSceneObj(SceneObj_CameraContext);
     MR::createSceneObj(SceneObj_NameObjGroup);

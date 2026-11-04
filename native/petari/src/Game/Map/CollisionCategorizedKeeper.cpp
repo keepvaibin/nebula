@@ -9,7 +9,8 @@
 CollisionCategorizedKeeper::CollisionCategorizedKeeper(s32 category)
     : NameObj("\222\156\214\140\203\122\203\212\203\127\203\207\203\223\203\112\203\145\203\123\203\212\203\114\201\133\203\160\201\133" /* 地形コリジョンカテゴリキーパー */), mHitInfoArray(), _10(), mPartsCount(), mCategory(category), mZonesInitialized(),
       mUpdateZoneBounds(true) {
-    mHitInfoArray = new HitInfo[32];
+    mHitInfoRoom = 32;
+    mHitInfoArray = new HitInfo[mHitInfoRoom];
 }
 
 void CollisionCategorizedKeeper::movement() {
@@ -121,7 +122,7 @@ s32 CollisionCategorizedKeeper::checkStrikePoint(const TVec3f& rPosition, HitInf
     return _10;
 }
 
-s32 CollisionCategorizedKeeper::checkStrikeBall(const TVec3f& rPosition, f32 ballRadius, bool moving, const CollisionPartsFilterBase* pPartsFilter,
+s32 CollisionCategorizedKeeper::collectStrikeBall(const TVec3f& rPosition, f32 ballRadius, bool moving, const CollisionPartsFilterBase* pPartsFilter,
                                                 const TriangleFilterBase* pTriangleFilter) {
     MR::getCollisionDirector();
     _10 = 0;
@@ -180,9 +181,9 @@ s32 CollisionCategorizedKeeper::checkStrikeBall(const TVec3f& rPosition, f32 bal
                 continue;
             }
 
-            hitCount += pParts->checkStrikeBall(&mHitInfoArray[hitCount], 32 - hitCount, rPosition, ballRadius, moving, pTriangleFilter);
+            hitCount += pParts->checkStrikeBall(&mHitInfoArray[hitCount], mHitInfoRoom - hitCount, rPosition, ballRadius, moving, pTriangleFilter);
 
-            if (hitCount >= 32) {
+            if (hitCount >= mHitInfoRoom) {
                 _10 = hitCount;
                 return hitCount;
             }
@@ -193,7 +194,7 @@ s32 CollisionCategorizedKeeper::checkStrikeBall(const TVec3f& rPosition, f32 bal
     return hitCount;
 }
 
-s32 CollisionCategorizedKeeper::checkStrikeBallWithThickness(const TVec3f& rPosition, f32 ballRadius, f32 thickness,
+s32 CollisionCategorizedKeeper::collectStrikeBallWithThickness(const TVec3f& rPosition, f32 ballRadius, f32 thickness,
                                                              const CollisionPartsFilterBase* pPartsFilter,
                                                              const TriangleFilterBase* pTriangleFilter) {
     MR::getCollisionDirector();
@@ -254,9 +255,9 @@ s32 CollisionCategorizedKeeper::checkStrikeBallWithThickness(const TVec3f& rPosi
             }
 
             hitCount +=
-                pParts->checkStrikeBallWithThickness(&mHitInfoArray[hitCount], 32 - hitCount, rPosition, ballRadius, thickness, pTriangleFilter);
+                pParts->checkStrikeBallWithThickness(&mHitInfoArray[hitCount], mHitInfoRoom - hitCount, rPosition, ballRadius, thickness, pTriangleFilter);
 
-            if (hitCount >= 32) {
+            if (hitCount >= mHitInfoRoom) {
                 _10 = hitCount;
                 return hitCount;
             }
@@ -267,12 +268,12 @@ s32 CollisionCategorizedKeeper::checkStrikeBallWithThickness(const TVec3f& rPosi
     return hitCount;
 }
 
-s32 CollisionCategorizedKeeper::checkStrikeLine(const TVec3f& rStart, const TVec3f& rDirection, s32 maxHits,
+s32 CollisionCategorizedKeeper::collectStrikeLine(const TVec3f& rStart, const TVec3f& rDirection, s32 maxHits,
                                                 const CollisionPartsFilterBase* pPartsFilter, const TriangleFilterBase* pTriangleFilter) {
     MR::getCollisionDirector();
 
-    if (maxHits == 0) {
-        maxHits = 32;
+    if (maxHits == 0 || maxHits > mHitInfoRoom) {
+        maxHits = mHitInfoRoom;
     }
 
     _10 = 0;
@@ -484,6 +485,48 @@ bool CollisionCategorizedKeeper::searchSameHostParts(CollisionParts** pResult, C
     }
 
     return false;
+}
+
+void CollisionCategorizedKeeper::growHitInfo() {
+    delete[] mHitInfoArray;
+    mHitInfoRoom *= 2;
+    mHitInfoArray = new (NebulaArena::findFromRoot(this), 0) HitInfo[mHitInfoRoom];
+}
+
+s32 CollisionCategorizedKeeper::checkStrikeBall(const TVec3f& rPosition, f32 ballRadius, bool moving,
+                                                const CollisionPartsFilterBase* pPartsFilter,
+                                                const TriangleFilterBase* pTriangleFilter) {
+    s32 hitCount = collectStrikeBall(rPosition, ballRadius, moving, pPartsFilter, pTriangleFilter);
+    while (hitCount >= mHitInfoRoom) {
+        growHitInfo();
+        hitCount = collectStrikeBall(rPosition, ballRadius, moving, pPartsFilter, pTriangleFilter);
+    }
+
+    return hitCount;
+}
+
+s32 CollisionCategorizedKeeper::checkStrikeBallWithThickness(const TVec3f& rPosition, f32 ballRadius, f32 thickness,
+                                                             const CollisionPartsFilterBase* pPartsFilter,
+                                                             const TriangleFilterBase* pTriangleFilter) {
+    s32 hitCount = collectStrikeBallWithThickness(rPosition, ballRadius, thickness, pPartsFilter, pTriangleFilter);
+    while (hitCount >= mHitInfoRoom) {
+        growHitInfo();
+        hitCount = collectStrikeBallWithThickness(rPosition, ballRadius, thickness, pPartsFilter, pTriangleFilter);
+    }
+
+    return hitCount;
+}
+
+s32 CollisionCategorizedKeeper::checkStrikeLine(const TVec3f& rStart, const TVec3f& rDirection, s32 maxHits,
+                                                const CollisionPartsFilterBase* pPartsFilter,
+                                                const TriangleFilterBase* pTriangleFilter) {
+    s32 hitCount = collectStrikeLine(rStart, rDirection, maxHits, pPartsFilter, pTriangleFilter);
+    while (hitCount >= mHitInfoRoom && (maxHits == 0 || maxHits > hitCount)) {
+        growHitInfo();
+        hitCount = collectStrikeLine(rStart, rDirection, maxHits, pPartsFilter, pTriangleFilter);
+    }
+
+    return hitCount;
 }
 
 HitInfo* CollisionCategorizedKeeper::getStrikeInfo(u32 index) {

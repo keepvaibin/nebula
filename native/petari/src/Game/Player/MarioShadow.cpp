@@ -85,8 +85,8 @@ CollisionShadow::CollisionShadow(f32 radius, f32 length) : NameObj("\223\212\211
     initCaptureTex();
     _58 = 128;
     _5A = 3;
-    _60 = new (32) TVec3f[_58 * _5A];
-    _64 = new (32) TVec2f[_58 * _5A];
+    _60 = new TVec3f[_58 * _5A];
+    _64 = new TVec2f[_58 * _5A];
     _68 = new u16[_58 * _5A];
     _5C = new u8[_58];
     _6C = 0;

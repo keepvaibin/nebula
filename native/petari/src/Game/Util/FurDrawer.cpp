@@ -28,7 +28,7 @@ FurDrawer::FurDrawer(u32 numLayers, ResTIMG* pBody, ResTIMG* pIndirect)
     }
 
     u32 size = J3DNativeTexture::linearSize(NEBULA_TEXTURE_LINEAR_LA8, 32, 32, 1);
-    ResTIMG* pImage = reinterpret_cast< ResTIMG* >(new (32) u8[size + sizeof(ResTIMG)]);
+    ResTIMG* pImage = reinterpret_cast< ResTIMG* >(new u8[size + sizeof(ResTIMG)]);
     pImage->mWidth = 32;
     pImage->mHeight = 32;
     pImage->mWrapS = NEBULA_WRAP_REPEAT;

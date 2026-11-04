@@ -11,13 +11,8 @@ extern "C" const NebulaHostServices* nebula_host(void);
 
 namespace {
     u32 sFrames;
-    // Black for the first frames after the game asks for its frame (start).
-    u32 sBlackFrames = ~0u;
-    // show() sets the next state; it is what the screen shows from the next frame on.
-    bool sNextPicture;
+    // What the screen shows from the next frame on (show()).
     bool sPicture;
-
-    // VI_DM_DEFAULT: 5 minutes of NTSC fields.
 
     // The design's picture: 16:9 at NebulaFrameClock::cWideScreenWidth screen units.
     const f64 cDesignAspect = 16.0 / 9.0;
@@ -58,13 +53,6 @@ namespace {
 
     void onFrame() {
         sFrames++;
-        if (sBlackFrames != 0) {
-            sBlackFrames--;
-            sNextPicture = false;
-        } else {
-            sNextPicture = true;
-        }
-        sPicture = sNextPicture;
         nebula_host()->frame_begun(nebula_host()->user, sPicture ? 0 : 1, sFrames);
         refreshDisplay();
     }
@@ -72,12 +60,6 @@ namespace {
 }  // namespace
 
 namespace NebulaFrameClock {
-    void startPicture() {
-        waitFrame();
-        waitFrame();
-        sBlackFrames = 2;
-    }
-
     u32 count() {
         return sFrames;
     }
@@ -96,10 +78,7 @@ namespace NebulaFrameClock {
     }
 
     void show(bool picture) {
-        sNextPicture = picture;
-        if (!picture) {
-            sBlackFrames = ~0u;
-        }
+        sPicture = picture;
     }
 
     const NebulaDisplay& display() {

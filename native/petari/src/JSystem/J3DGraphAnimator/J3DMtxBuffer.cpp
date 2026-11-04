@@ -112,8 +112,8 @@ s32 J3DMtxBuffer::createDoubleDrawMtx(J3DModelData* pModelData, u32 mtxNum) {
     for (s32 i = 0; i < 2; i++) {
         for (u32 j = 0; j < mtxNum; j++) {
             if (pModelData->getDrawMtxNum() != 0) {
-                mpDrawMtxArr[i][j] = new (0x20) Mtx[pModelData->getDrawMtxNum()];
-                mpNrmMtxArr[i][j] = new (0x20) Mtx33[pModelData->getDrawMtxNum()];
+                mpDrawMtxArr[i][j] = new Mtx[pModelData->getDrawMtxNum()];
+                mpNrmMtxArr[i][j] = new Mtx33[pModelData->getDrawMtxNum()];
             }
         }
     }
@@ -160,7 +160,7 @@ s32 J3DMtxBuffer::createBumpMtxArray(J3DModelData* i_modelData, u32 mtxNum) {
                 J3DMaterial* material = i_modelData->getMaterialNodePointer((u16)j);
                 if (material->getNBTScale()->mbHasScale == true) {
                     for (int k = 0; k < mtxNum; k++) {
-                        mpBumpMtxArr[i][offset][k] = new (0x20) Mtx33[i_modelData->getDrawMtxNum()];
+                        mpBumpMtxArr[i][offset][k] = new Mtx33[i_modelData->getDrawMtxNum()];
                     }
                     offset++;
                 }

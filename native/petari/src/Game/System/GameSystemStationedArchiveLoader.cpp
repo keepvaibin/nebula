@@ -158,7 +158,6 @@ void GameSystemStationedArchiveLoader::exeLoadStationedArchiveOthers() {
 void GameSystemStationedArchiveLoader::exeInitializeGameData() {
     GameSystemFunction::initAfterStationedResourceLoaded();
     SingletonHolder< HeapMemoryWatcher >::get()->setCurrentHeapToGameHeap();
-    SingletonHolder< HeapMemoryWatcher >::get()->adjustStationedHeaps();
     GameSystemFunction::setSceneNameObjHolderToNameObjRegister();
     MR::clearFileLoaderRequestFileInfo(false);
     setNerve(GET_NERVE_ANON(GameSystemStationedArchiveLoaderEnd));

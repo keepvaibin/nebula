@@ -65,7 +65,7 @@ void NormalMapBase::setup(const char* pName) {
     MR::invalidateClipping(this);
     mHeight = 128;
     mWidth = 128;
-    _4B8 = new (0x20) JUTTexture(mHeight, mWidth, NEBULA_TEXTURE_LINEAR_LA8);
+    _4B8 = new JUTTexture(mHeight, mWidth, NEBULA_TEXTURE_LINEAR_LA8);
     appear();
 }
 
@@ -135,7 +135,7 @@ void NormalMapBase::setupTexture() {
         }
     }
 
-    mImagePtr = new (MR::getSceneHeap(), 0x20) u16[width * height];
+    mImagePtr = new (MR::getSceneHeap(), 0) u16[width * height];
     createGradTexture();
 }
 
@@ -592,7 +592,7 @@ void NormalMapBase::swapColorGB(JUTTexture* pTexture) {
         return;
     }
     // The file's own texels stay as they are.
-    u8* pCopy = new (32) u8[pRecord->size];
+    u8* pCopy = new u8[pRecord->size];
     memcpy(pCopy, pRecord, pRecord->size);
     u8* pTexel = pCopy + NEBULA_TEXTURE_HEADER;
     for (u32 level = 0; level < pRecord->levels; level++) {

@@ -104,7 +104,7 @@ void J3DSys::drawInit() {
 
 }
 
-void J3DSys::reinitGX() {
+void J3DSys::resetDrawState() {
     J3DPass::cull(NEBULA_CULL_BACK);
     reinitLighting();
     reinitTransform();

@@ -18,7 +18,7 @@ void J3DDrawBuffer::initialize() {
 }
 
 int J3DDrawBuffer::allocBuffer(u32 size) {
-    mpBuffer = new (0x20) J3DPacket*[size];
+    mpBuffer = new J3DPacket*[size];
     mEntryTableSize = size;
     frameInit();
     calcZRatio();

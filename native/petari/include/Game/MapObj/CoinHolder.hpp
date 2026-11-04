@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActorGroup.hpp"
+#include "Game/Util/Array.hpp"
 #include <JSystem/JGeometry/TVec.hpp>
 
 class NameObj;
@@ -27,8 +28,10 @@ public:
     CoinHostInfo* findHostInfo(const NameObj* pObj) const;
     bool appearCoin(const NameObj* pObj, const TVec3f& rPosition, const TVec3f& rVelocity, s32 count, s32 life, s32 cannotTime, f32 randomize);
 
-    CoinHostInfo* mHostInfoArr;
-    s32 mHostInfoCount;
+    Coin* takeDeadCoin();
+    void createCoins();
+
+    MR::Vector< MR::AssignableArray< CoinHostInfo* > > mHostInfos;
 };
 
 namespace MR {

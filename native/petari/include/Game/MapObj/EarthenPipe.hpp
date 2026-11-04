@@ -85,4 +85,5 @@ public:
 
     s32 mNumEntries;
     Entry* mPipeEntries;
+    s32 mPipeEntryRoom;
 };

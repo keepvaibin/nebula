@@ -24,7 +24,7 @@ namespace {
         s32 mText;  // into sText
     };
 
-    alignas(32) u8 sFile[cFileMax];
+    u8 sFile[cFileMax];
     char16_t sText[cTextMax];
     s32 sTextUsed = 0;
     Override sOverrides[cOverrideMax];

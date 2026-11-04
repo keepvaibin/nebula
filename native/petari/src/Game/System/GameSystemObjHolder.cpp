@@ -11,7 +11,6 @@
 #include "Game/System/FunctionAsyncExecutor.hpp"
 #include "Game/System/HeapMemoryWatcher.hpp"
 #include "Game/System/Language.hpp"
-#include "Game/System/MainLoopFramework.hpp"
 #include "Game/System/MessageHolder.hpp"
 #include "Game/System/RenderMode.hpp"
 #include "Game/System/ResourceHolderManager.hpp"
@@ -28,7 +27,6 @@ GameSystemObjHolder::GameSystemObjHolder()
     : mObjHolder(), mParticleResHolder(), mPictureSpan(), mCaptureScreenDirector(), mScreenPreserver(), mAudioSystem(), mPlayerInputs(),
       mFunctionAsyncExecutor(), mMessageHolder(), mStarPointerDirector(), mRandom(0), mLanguage(MR::getDecidedLanguageFromIPL()) {
     initStore();
-    initNAND();
     initNameObj();
     MR::createAndAddArchive(AssetFolder::mount("/NebulaData/ErrorMessageArchive.arc", MR::getStationedHeap()), MR::getStationedHeap(),
                             "ErrorMessageArchive.arc");
@@ -108,9 +106,6 @@ void GameSystemObjHolder::initStore() {
     SingletonHolder< FileLoader >::init();
 }
 
-void GameSystemObjHolder::initNAND() {
-}
-
 void GameSystemObjHolder::initAudio() {
     mAudioSystem = new AudSystemWrapper(SingletonHolder< HeapMemoryWatcher >::get()->getAudSystemHeap(), MR::getStationedHeap());
     mAudioSystem->requestResourceForInitialize();
@@ -119,7 +114,7 @@ void GameSystemObjHolder::initAudio() {
 void GameSystemObjHolder::initPicture() {
     // The share of the safe area's reference width the picture spans (getSafetyFrameWidth).
     mPictureSpan = MR::isAspectRatioFlag16Per9() ? 686 : 670;
-    NebulaFrameClock::startPicture();
+    NebulaFrameClock::show(true);
 }
 
 void GameSystemObjHolder::initNameObj() {
@@ -151,9 +146,6 @@ void GameSystemObjHolder::initStarPointerDirector() {
 }
 
 void GameSystemObjHolder::initDisplay() {
-    MainLoopFramework* pManager = MainLoopFramework::createManager(true);
-    pManager->setClearColor(Color8(30, 30, 200, 0));
-
     mCaptureScreenDirector = new CaptureScreenDirector();
     mScreenPreserver = new ScreenPreserver();
 

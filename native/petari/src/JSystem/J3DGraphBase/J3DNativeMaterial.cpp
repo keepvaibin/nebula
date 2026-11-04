@@ -524,7 +524,7 @@ namespace J3DNativeMaterial {
     }
 
     NebulaMaterialParts* create() {
-        return new (0x20) NebulaMaterialParts;
+        return new NebulaMaterialParts;
     }
 
     void capture(J3DMaterial* pMaterial, J3DTexture* pTexture, J3DMaterialSnapshot* pList, u32 diffFlags) {

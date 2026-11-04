@@ -107,7 +107,7 @@ u32 MovieStream::calcNeedMemory() const {
     }
 
     const u32 pixels = mVideoInfo.mWidth * mVideoInfo.mHeight;
-    return NebulaAlignUp32(pixels) + NebulaAlignUp32(pixels / 4) * 2;
+    return pixels + pixels / 4 * 2;
 }
 
 void MovieStream::setBuffer(u8* pBuffer) {
@@ -117,9 +117,9 @@ void MovieStream::setBuffer(u8* pBuffer) {
 
     const u32 pixels = mVideoInfo.mWidth * mVideoInfo.mHeight;
     mPlaneY = pBuffer;
-    pBuffer += NebulaAlignUp32(pixels);
+    pBuffer += pixels;
     mPlaneU = pBuffer;
-    pBuffer += NebulaAlignUp32(pixels / 4);
+    pBuffer += pixels / 4;
     mPlaneV = pBuffer;
 }
 

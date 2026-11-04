@@ -395,7 +395,7 @@ void J3DModelLoader_v26::readMaterial(J3DMaterialBlock const* i_block, u32 i_fla
     mpMaterialTable->mMaterialNodePointer = new J3DMaterial*[mpMaterialTable->mMaterialNum];
     const u32 materialIDs = allocMaterialIDs(mpMaterialTable->mMaterialNum);
     if (i_flags & 0x200000) {
-        mpMaterialTable->field_0x10 = new (0x20) J3DMaterial[mpMaterialTable->mUniqueMatNum];
+        mpMaterialTable->field_0x10 = new J3DMaterial[mpMaterialTable->mUniqueMatNum];
     } else {
         mpMaterialTable->field_0x10 = NULL;
     }

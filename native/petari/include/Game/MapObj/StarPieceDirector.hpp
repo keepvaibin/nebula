@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Game/Util/Array.hpp"
+
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/LiveActorGroup.hpp"
 
@@ -49,6 +51,7 @@ public:
     void initCSSound();
     bool giftToTarget(HitSensor*, u32);
     StarPiece* getDeadStarPiece();
+    void createStarPieces();
     TVec3f calcPosCameraShoot(s32);
     void clearGotCountReceiver(const NameObj*);
     StarPieceHostInfo* findHostInfo(const NameObj*);
@@ -60,12 +63,8 @@ public:
     s32 mColorIndex;
     s32 mNumStarPiecesLaunched;
 
-    StarPieceHostInfo* mHostInfoArray[0x200];
-
-    u32 mNewHostInfoIndex;
-
-    StarPieceReceiverInfo* mReceiverInfoArray[0x40];
-    u32 mNewReceiverInfoIndex;
+    MR::Vector< MR::AssignableArray< StarPieceHostInfo* > > mHostInfos;
+    MR::Vector< MR::AssignableArray< StarPieceReceiverInfo* > > mReceiverInfos;
     bool mResetChasingStarPiece;
     StarPieceShooter* mStarPieceShooters[2];
 

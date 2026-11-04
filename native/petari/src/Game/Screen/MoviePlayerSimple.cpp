@@ -172,7 +172,7 @@ void MoviePlayerSimple::exeOpen() {
     mMovie->_20 = 0;
     mMovie->_19 = false;
     setFrameRateDefault();
-    mMovie->mBuffer = new (mHeap, 32) u8[mStream->calcNeedMemory()];
+    mMovie->mBuffer = new (mHeap, 0) u8[mStream->calcNeedMemory()];
     mStream->setBuffer(mMovie->mBuffer);
     mStream->start(_44);
     setNerve(GET_NERVE_ANON(MoviePlayerSimplePlaying));

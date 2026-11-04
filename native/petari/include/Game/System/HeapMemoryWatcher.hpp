@@ -15,7 +15,6 @@ public:
 
     void createFileCacheHeapOnGameHeap();
     void createSceneHeapOnGameHeap();
-    void adjustStationedHeaps();
     void setCurrentHeapToStationedHeap();
     void setCurrentHeapToGameHeap();
     void setCurrentHeapToSceneHeap();
@@ -23,7 +22,6 @@ public:
     void destroyGameHeap();
     void createHeaps();
     void createGameHeap();
-    void checkRestMemory();
 
     // used in GameSystemObjHolder::initAudio()
     NebulaArena* getAudSystemHeap() {

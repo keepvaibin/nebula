@@ -218,7 +218,7 @@ u8* JAUSection::newStaticSeqDataBlock_(JAISoundID param_0, u32 size) {
             return nullptr;
         }
 
-        u8* r28 = new (0x20) u8[size];
+        u8* r28 = new u8[size];
 
         if (!r28) {
             return nullptr;
@@ -512,7 +512,7 @@ bool JAUSectionHeap::newDynamicSeqBlock(u32 size) {
             return false;
         }
 
-        u8* r25 = new (0x20) u8[size];
+        u8* r25 = new u8[size];
 
         if (!r25) {
             return false;
