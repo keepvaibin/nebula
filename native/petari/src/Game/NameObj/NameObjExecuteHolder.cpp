@@ -1,3 +1,4 @@
+#include "Game/Util/Array.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/NameObj/NameObjExecuteHolder.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
@@ -209,6 +210,12 @@ void NameObjExecuteInfo::disconnectToDraw() {
 }
 
 void NameObjExecuteHolder::registerActor(NameObj* pObj, int movementType, int calcAnimType, int drawBufferType, int drawType) {
+    // No fixed count of objects: 4096 was the console's.
+    if (mExecuteArraySize >= mExecuteArrayMaxSize) {
+        mExecuteArray = MR::growArray(mExecuteArray, mExecuteArrayMaxSize);
+        mExecuteArrayMaxSize *= 2;
+    }
+
     mExecuteArray[mExecuteArraySize].setConnectInfo(pObj, movementType, calcAnimType, drawBufferType, drawType);
     pObj->mExecutorIdx = mExecuteArraySize;
     mExecuteArraySize++;
