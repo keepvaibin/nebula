@@ -706,6 +706,7 @@ runtime/src/render/host_window_win32.cpp
         runtime/src/render/vk/game_bloom_vk.cpp
         runtime/src/render/vk/ambient_occlusion_vk.cpp
         runtime/src/render/vk/temporal_upscaler_vk.cpp
+        runtime/src/render/vk/streamline_vk.cpp
         runtime/src/render/vk/ffx_vk_forward.cpp
         runtime/src/render/xess_library.cpp
         runtime/src/render/vk/scene_camera_vk.cpp
@@ -718,6 +719,7 @@ runtime/src/render/host_window_win32.cpp
     target_compile_features(galaxy_render_vk PUBLIC cxx_std_20)
     target_link_libraries(galaxy_render_vk PUBLIC galaxy_disc_files)
     target_include_directories(galaxy_render_vk SYSTEM PRIVATE third_party/xess/include "${GALAXY_STREAMLINE_SDK}/include")
+    target_compile_definitions(galaxy_render_vk PRIVATE GALAXY_STREAMLINE_VK=1)
     if(NEBULA_FSR3)
         nebula_fidelityfx_vulkan("${vulkan_headers_SOURCE_DIR}/include")
         target_link_libraries(galaxy_render_vk PRIVATE nebula_fidelityfx_vk)

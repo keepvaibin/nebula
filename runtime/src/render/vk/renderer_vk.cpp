@@ -1123,6 +1123,7 @@ void RendererVk::begin_frame(bool) {
     follow_window_and_resize();
     apply_window_size();
     update_ring_mode();
+    temporal_interp_ = ring_mode_ == RingMode::Interp && temporal_mode();
     prepare_temporal_upscaler();
     sync_post_process();
     bloom_.poll_ready();

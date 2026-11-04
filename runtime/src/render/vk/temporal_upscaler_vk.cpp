@@ -22,6 +22,20 @@ namespace galaxy::render::vk {
 
 namespace {
 
+void image_to_compute(VkCommandBuffer commands, const TemporalImage& image, VkImageLayout from, VkImageLayout to, VkPipelineStageFlags stage,
+                      VkAccessFlags access, VkAccessFlags compute_access, bool back) {
+    VkImageMemoryBarrier barrier{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+    barrier.srcAccessMask = back ? compute_access : access;
+    barrier.dstAccessMask = back ? access : compute_access;
+    barrier.oldLayout = back ? to : from;
+    barrier.newLayout = back ? from : to;
+    barrier.srcQueueFamilyIndex = barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.image = image.image;
+    barrier.subresourceRange = {image.barrier_aspects, 0u, 1u, 0u, 1u};
+    vkCmdPipelineBarrier(commands, back ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT : stage, back ? stage : VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0,
+                         nullptr, 0, nullptr, 1, &barrier);
+}
+
 float halton(unsigned index, unsigned base) {
     float f = 1.0f;
     float r = 0.0f;
@@ -77,37 +91,7 @@ public:
             info.height = image.height;
             return info;
         };
-        const auto to_compute = [&](const TemporalImage& image, VkImageLayout from, VkImageLayout to, VkPipelineStageFlags stage,
-                                    VkAccessFlags access, VkAccessFlags compute_access, bool back) {
-            VkImageMemoryBarrier barrier{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
-            barrier.srcAccessMask = back ? compute_access : access;
-            barrier.dstAccessMask = back ? access : compute_access;
-            barrier.oldLayout = back ? to : from;
-            barrier.newLayout = back ? from : to;
-            barrier.srcQueueFamilyIndex = barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            barrier.image = image.image;
-            barrier.subresourceRange = {image.barrier_aspects, 0u, 1u, 0u, 1u};
-            vkCmdPipelineBarrier(in.commands, back ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT : stage,
-                                 back ? stage : VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
-        };
-        constexpr VkPipelineStageFlags kColor = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        constexpr VkPipelineStageFlags kDepth =
-            VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-        constexpr VkAccessFlags kColorAccess = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        constexpr VkAccessFlags kDepthAccess =
-            VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-        const auto barriers = [&](bool back) {
-            const VkImageLayout attachment = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-            const VkImageLayout read = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-            to_compute(in.color, attachment, read, kColor, kColorAccess, VK_ACCESS_SHADER_READ_BIT, back);
-            to_compute(in.motion, attachment, read, kColor, kColorAccess, VK_ACCESS_SHADER_READ_BIT, back);
-            to_compute(in.reactive, attachment, read, kColor, kColorAccess, VK_ACCESS_SHADER_READ_BIT, back);
-            to_compute(in.depth, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, read, kDepth, kDepthAccess,
-                       VK_ACCESS_SHADER_READ_BIT, back);
-            to_compute(in.output, attachment, VK_IMAGE_LAYOUT_GENERAL, kColor, kColorAccess,
-                       VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT, back);
-        };
-        barriers(false);
+        temporal_barriers(in, false);
         xess_vk_execute_params_t params{};
         params.colorTexture = view(in.color, VK_IMAGE_ASPECT_COLOR_BIT);
         params.velocityTexture = view(in.motion, VK_IMAGE_ASPECT_COLOR_BIT);
@@ -121,7 +105,7 @@ public:
         params.inputWidth = in.render_width;
         params.inputHeight = in.render_height;
         const xess_result_t result = execute_(context_, in.commands, &params);
-        barriers(true);
+        temporal_barriers(in, true);
         if (result != XESS_RESULT_SUCCESS) {
             if (!reported_) {
                 reported_ = true;
@@ -154,6 +138,22 @@ private:
 };
 
 }  // namespace
+
+void temporal_barriers(const TemporalUpscaleInputs& in, bool back) {
+    constexpr VkPipelineStageFlags kColor = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    constexpr VkPipelineStageFlags kDepth = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+    constexpr VkAccessFlags kColorAccess = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    constexpr VkAccessFlags kDepthAccess = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+    constexpr VkImageLayout attachment = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    constexpr VkImageLayout read = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    const VkCommandBuffer commands = in.commands;
+    image_to_compute(commands, in.color, attachment, read, kColor, kColorAccess, VK_ACCESS_SHADER_READ_BIT, back);
+    image_to_compute(commands, in.motion, attachment, read, kColor, kColorAccess, VK_ACCESS_SHADER_READ_BIT, back);
+    image_to_compute(commands, in.reactive, attachment, read, kColor, kColorAccess, VK_ACCESS_SHADER_READ_BIT, back);
+    image_to_compute(commands, in.depth, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, read, kDepth, kDepthAccess, VK_ACCESS_SHADER_READ_BIT, back);
+    image_to_compute(commands, in.output, attachment, VK_IMAGE_LAYOUT_GENERAL, kColor, kColorAccess,
+                     VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT, back);
+}
 
 std::unique_ptr<TemporalUpscaler> create_xess_upscaler(VkInstance instance, VkPhysicalDevice physical, VkDevice device,
                                                        unsigned output_width, unsigned output_height, unsigned quality) {

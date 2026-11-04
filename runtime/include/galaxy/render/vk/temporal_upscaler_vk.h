@@ -5,6 +5,7 @@
 
 #include <volk.h>
 
+#include <array>
 #include <cstdint>
 #include <memory>
 
@@ -40,6 +41,9 @@ struct TemporalUpscaleInputs {
     float fov_y = 1.0f;  // radians
     float frame_ms = 0.0f;
     bool reset = false;
+    // The scene camera (world to eye, rows 3x4; the eye looks down -z), when known.
+    std::array<float, 12> view{};
+    bool view_known = false;
 };
 
 class TemporalUpscaler {
@@ -52,6 +56,9 @@ public:
     virtual void jitter_offset(unsigned index, unsigned phase_count, float& x, float& y) const = 0;
     [[nodiscard]] virtual const char* name() const noexcept = 0;
 };
+
+// Every input to its compute read state and the output to general (back: to their steady layouts again).
+void temporal_barriers(const TemporalUpscaleInputs& in, bool back);
 
 // Intel XeSS Super Resolution (the library from xess_library.h); quality: the temporal_quality row. Null without the library
 // or when the device lacks what it asked for (Context::create).

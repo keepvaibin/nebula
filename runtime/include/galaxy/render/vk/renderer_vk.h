@@ -140,8 +140,8 @@ public:
     [[nodiscard]] unsigned replay_reject() const noexcept { return replay_reject_; }
     void reset_subframe_gpu_ema() noexcept { subframe_gpu_ema_ms_ = 0.0; }
     [[nodiscard]] double subframe_gpu_ema_ms() const noexcept { return subframe_gpu_ema_ms_; }
-    void suspend_temporal_interpolation(double) {}
-    [[nodiscard]] bool temporal_interpolation() const noexcept { return false; }
+    void suspend_temporal_interpolation(double ms_per_frame);
+    [[nodiscard]] bool temporal_interpolation() const noexcept { return temporal_interp_; }
     bool begin_replay_sequence(const ReplaySequence& sequence);
     bool present_replay_subframe(const SubframeTime& time, const Affine34& camera_t, const Affine34& camera_prev);
     void note_stripe_vertices(std::span<const StripeVertex> vertices);
@@ -170,7 +170,12 @@ public:
         resident_vertex_base_ = base;
         resident_vertex_bytes_ = bytes;
     }
-    void set_scene_view(const std::array<float, 12>*) noexcept {}
+    void set_scene_view(const std::array<float, 12>* view) noexcept {
+        scene_view_known_ = view != nullptr;
+        if (view != nullptr) {
+            scene_view_ = *view;
+        }
+    }
     [[nodiscard]] bool rt_active() const noexcept { return false; }
     [[nodiscard]] bool rt_scene_open() const noexcept { return false; }
     [[nodiscard]] bool rt_glow_open() const noexcept { return false; }
@@ -388,6 +393,7 @@ private:
         VkCommandPool pool = VK_NULL_HANDLE;
         VkCommandBuffer commands = VK_NULL_HANDLE;
         VkCommandBuffer uploads = VK_NULL_HANDLE;
+        VkCommandBuffer upscale = VK_NULL_HANDLE;  // a sub-frame's temporal upscale
         VkDescriptorPool descriptors = VK_NULL_HANDLE;
         std::vector<VkDescriptorPool> overflow_descriptors;  // when a frame outgrows its pool
         VkSemaphore acquired = VK_NULL_HANDLE;
@@ -639,7 +645,9 @@ private:
         FrameMap map{};
     };
     MotionTargets motion_;
+    MotionTargets replay_motion_;  // the sub-frames' (the game frame's are live meanwhile)
     [[nodiscard]] bool ensure_motion_targets();
+    void clear_motion_targets();
     void destroy_motion_framebuffers();
     [[nodiscard]] VkFramebuffer motion_framebuffer(unsigned aux);
     void prepare_temporal_upscaler();
@@ -658,6 +666,24 @@ private:
     bool temporal_history_valid_ = false;
     bool scene_temporal_ = false;
     bool scene_motion_ = false;
+    // The upscaler takes the sub-frames (and the frame at t = 1) instead of the game frames.
+    bool temporal_interp_ = false;
+    // suspend_temporal_interpolation, and the settings it was decided at.
+    struct TemporalInterpKey {
+        unsigned upscaler = 0u;
+        unsigned quality = 0u;
+        FrameMap scene_map{};
+        FrameMap output_map{};
+        float max_fps = 0.0f;
+        unsigned vsync = 0u;
+        double refresh_hz = 0.0;
+        friend bool operator==(const TemporalInterpKey&, const TemporalInterpKey&) = default;
+    };
+    [[nodiscard]] TemporalInterpKey temporal_interp_key() const;
+    bool temporal_interp_suspended_ = false;
+    TemporalInterpKey temporal_interp_key_{};
+    std::array<float, 12> scene_view_{};
+    bool scene_view_known_ = false;
     float scene_jitter_[2]{};
     float scene_lens_[3]{1.0f, 100000.0f, 1.0f};
     std::int64_t temporal_last_upscale_us_ = 0;
@@ -1012,8 +1038,21 @@ private:
         bool blend = false;          // its draws read the log before's vertices
         unsigned blend_segment = 0;  // that log's segment
         std::vector<gpu::TextureRef> held;  // the post-process targets its scene AA reads
+        // A temporal upscale splits it at the output switch: what follows is in `commands_after`, the upscale of each
+        // presented frame between the two.
+        VkCommandBuffer commands_after = VK_NULL_HANDLE;
+        bool split = false;
+        struct Upscale {
+            gpu::TextureRef color, depth, motion, reactive, output;
+            unsigned render_width = 0u, render_height = 0u;
+            unsigned output_width = 0u, output_height = 0u;
+        } upscale;
     };
     bool record_replay_list(ReplayList& list);
+    void record_subframe_upscale(const ReplayList& list, const SubframeTime& time);
+    [[nodiscard]] vk::TemporalUpscaleInputs temporal_inputs(const vk::Texture& color, const vk::Texture& depth,
+                                                            const vk::Texture& motion, const vk::Texture& reactive,
+                                                            const vk::Texture& output) const;
     // A log's texture table with the replay's stand-ins in place of the copy destinations it names.
     [[nodiscard]] std::uint64_t patched_table(ReplayList& list, std::uint64_t table);
     std::unordered_map<VkImageView, VkImageView> redirect_;  // copy destination -> stand-in (this replay)
@@ -1026,6 +1065,7 @@ private:
     FrameMap replay_scene_map_{};
     SceneSet replay_alt_scene_;  // the replay's output scene target
     FrameMap replay_alt_scale_{};
+    bool replay_alt_storage_ = false;
     bool create_scene_set(SceneSet& set, const FrameMap& map, unsigned samples = 1u, unsigned width = kFrameUnits,
                         unsigned height = kFrameUnits);
     void destroy_scene_set(SceneSet& set);
