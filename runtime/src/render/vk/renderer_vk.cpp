@@ -507,7 +507,7 @@ bool RendererVk::create_layouts() {
     }
     draw_layout_.depth_format = depth_format_;
     draw_layout_.tessellation = context.tessellation_shader();
-    set_curved_surfaces_offered(context.tessellation_shader());
+    set_curved_surfaces_offered(true);
     draw_layout_.dual_source_blend = context.dual_source_blend();
     set_dual_source_blending(context.dual_source_blend());
     draw_layout_.logic_op = context.logic_op();
