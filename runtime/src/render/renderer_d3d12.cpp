@@ -2134,35 +2134,8 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
             }
         }
 
-        DXGI_SWAP_CHAIN_DESC1 scd{};
-        scd.BufferCount  = kSwapChainBuffers;
-        scd.Width        = host_window::backbuffer_width;
-        scd.Height       = host_window::backbuffer_height;
-        scd.Format       = kBackbufferFormat;
-        scd.BufferUsage  = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-        scd.SwapEffect   = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-        scd.SampleDesc.Count = 1;
-        scd.Scaling      = DXGI_SCALING_STRETCH;
-        scd.AlphaMode    = DXGI_ALPHA_MODE_IGNORE;
-        scd.Flags = DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
-        ComPtr<IDXGISwapChain1> sc1;
-        // Through Streamline's factory when it runs: its presents go through it.
-        d3d_check(streamline::swap_chain_factory(factory.Get())
-                      ->CreateSwapChainForHwnd(queue_.Get(), window_, &scd, nullptr, nullptr, &sc1),
-                  "CreateSwapChain");
-        d3d_check(sc1.As(&swap_chain_), "SwapChain As");
-        {
-            ComPtr<IDXGISwapChain2> swap_chain2;
-            d3d_check(swap_chain_.As(&swap_chain2), "SwapChain2 As");
-            d3d_check(swap_chain2->SetMaximumFrameLatency(1u),
-                      "SetMaximumFrameLatency");
-            frame_latency_waitable_ =
-                swap_chain2->GetFrameLatencyWaitableObject();
-            if (frame_latency_waitable_ == nullptr) {
-                throw std::runtime_error(
-                    "GetFrameLatencyWaitableObject failed");
-            }
-        }
+        dxgi_factory_ = factory;
+        create_swap_chain(fsr_generation_wanted());
         factory->MakeWindowAssociation(window_, DXGI_MWA_NO_ALT_ENTER);
         // Exclusive fullscreen is entered by the first frame's display check
         // (reconcile_display_state), once the swap chain's buffers exist.
@@ -2180,6 +2153,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
                 device_->CreateRenderTargetView(backbuffers_[i].Get(), nullptr, h);
                 h.ptr += stride;
             }
+            (void)stride;
         }
 
         for (unsigned i = 0; i < kFramesInFlight; ++i)
@@ -2366,6 +2340,10 @@ gpu::Table RendererD3D12::texture_table_for(const TextureHandle* handles, unsign
 }
 
 void RendererD3D12::shutdown() {
+    if (fsr_swap_chain_ && swap_chain_) {
+        wait_for_gpu();
+        fsr_generation_.destroy(swap_chain_.Get());
+    }
     std::exception_ptr shutdown_failure;
     const auto retain_shutdown_failure =
         [&](const char* stage, auto&& action) {
@@ -2538,6 +2516,84 @@ void RendererD3D12::shutdown() {
     }
 }
 
+// FSR 3 frame generation: chosen, with an upscaler that gives it depth and motion, and not DLSS, whose presents are Streamline's.
+bool RendererD3D12::fsr_generation_wanted() const {
+    const RenderConfig cfg = get_render_config();
+    return fsr_frame_generation_compiled() && cfg.frame_generation == 2u && (cfg.upscaler == 2u || cfg.upscaler == 4u);
+}
+
+bool RendererD3D12::create_swap_chain(bool fsr) {
+    DXGI_SWAP_CHAIN_DESC1 scd{};
+    scd.BufferCount  = kSwapChainBuffers;
+    scd.Width        = host_window::backbuffer_width;
+    scd.Height       = host_window::backbuffer_height;
+    scd.Format       = kBackbufferFormat;
+    scd.BufferUsage  = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    scd.SwapEffect   = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+    scd.SampleDesc.Count = 1;
+    scd.Scaling      = DXGI_SCALING_STRETCH;
+    scd.AlphaMode    = DXGI_ALPHA_MODE_IGNORE;
+    scd.Flags = DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
+    ComPtr<IDXGISwapChain1> sc1;
+    ID3D12CommandQueue* const native = fsr ? streamline::native_queue(queue_.Get()) : queue_.Get();
+    // Through Streamline's factory when it runs and the swap chain is not AMD's: its presents go through it.
+    d3d_check((fsr ? dxgi_factory_ : streamline::swap_chain_factory(dxgi_factory_.Get()))
+                  ->CreateSwapChainForHwnd(native, window_, &scd, nullptr, nullptr, &sc1),
+              "CreateSwapChain");
+    d3d_check(sc1.As(&swap_chain_), "SwapChain As");
+    sc1.Reset();
+    fsr_swap_chain_ = false;
+    if (fsr) {
+        if (FsrFrameGeneration::replace_swap_chain(native, swap_chain_)) {
+            fsr_swap_chain_ = true;
+        } else {
+            swap_chain_.Reset();
+            d3d_check(streamline::swap_chain_factory(dxgi_factory_.Get())
+                          ->CreateSwapChainForHwnd(queue_.Get(), window_, &scd, nullptr, nullptr, &sc1),
+                      "CreateSwapChain");
+            d3d_check(sc1.As(&swap_chain_), "SwapChain As");
+        }
+    }
+    ComPtr<IDXGISwapChain2> swap_chain2;
+    d3d_check(swap_chain_.As(&swap_chain2), "SwapChain2 As");
+    d3d_check(swap_chain2->SetMaximumFrameLatency(1u), "SetMaximumFrameLatency");
+    frame_latency_waitable_ = swap_chain2->GetFrameLatencyWaitableObject();
+    if (frame_latency_waitable_ == nullptr && !fsr_swap_chain_) {
+        throw std::runtime_error("GetFrameLatencyWaitableObject failed");
+    }
+    return true;
+}
+
+// The swap chain made again when frame generation changes it (RenderConfig::frame_generation, applied between frames).
+void RendererD3D12::recreate_swap_chain(bool fsr) {
+    wait_for_gpu();
+    if (fsr_swap_chain_) {
+        fsr_generation_.destroy(swap_chain_.Get());
+    }
+    BOOL fullscreen = FALSE;
+    if (SUCCEEDED(swap_chain_->GetFullscreenState(&fullscreen, nullptr)) && fullscreen) {
+        (void)swap_chain_->SetFullscreenState(FALSE, nullptr);
+        applied_display_.valid = false;
+    }
+    for (auto& buffer : backbuffers_) {
+        buffer.Reset();
+    }
+    if (frame_latency_waitable_) {
+        CloseHandle(frame_latency_waitable_);
+        frame_latency_waitable_ = nullptr;
+    }
+    swap_chain_.Reset();
+    create_swap_chain(fsr);
+    const UINT stride = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+    D3D12_CPU_DESCRIPTOR_HANDLE h = rtv_heap_->GetCPUDescriptorHandleForHeapStart();
+    for (unsigned i = 0; i < kSwapChainBuffers; ++i) {
+        d3d_check(swap_chain_->GetBuffer(i, IID_PPV_ARGS(&backbuffers_[i])), "GetBuffer");
+        device_->CreateRenderTargetView(backbuffers_[i].Get(), nullptr, h);
+        h.ptr += stride;
+    }
+    has_presented_swap_chain_ = false;
+}
+
 void RendererD3D12::apply_pending_resize() {
     const auto extent = host_window::pending_resize_extent.exchange(0u, std::memory_order_acq_rel);
     if (extent == 0u) return;
@@ -2563,6 +2619,9 @@ void RendererD3D12::resize_swap_chain(UINT new_width, UINT new_height, bool forc
     // with them. Only the swap chain's resources change: present() blits into
     // whatever backbuffer size is current.
     wait_for_gpu();
+    if (fsr_swap_chain_) {
+        fsr_generation_.destroy(swap_chain_.Get());
+    }
     for (auto& buffer : backbuffers_) {
         buffer.Reset();
     }
@@ -3197,11 +3256,14 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
     host_window::poll_render_config_file();
     reconcile_display_state();
     apply_pending_resize();
+    if (const bool fsr = fsr_generation_wanted(); fsr != fsr_swap_chain_ && !streamline_frame_open_) {
+        recreate_swap_chain(fsr);
+    }
     if (!streamline_frame_open_) {
-        // Frame generation runs with DLSS on a GPU that runs it, while it is chosen.
+        // Frame generation runs with DLSS on a GPU that runs it, or with AMD's swap chain, while it is chosen.
         const RenderConfig fg_cfg = get_render_config();
-        set_frame_generation_running(streamline::frame_generation_supported() && fg_cfg.frame_generation != 0u &&
-                                     fg_cfg.upscaler == 3u && streamline::dlss_supported());
+        set_frame_generation_running(fsr_swap_chain_ || (streamline::frame_generation_supported() && fg_cfg.frame_generation == 1u &&
+                                                         fg_cfg.upscaler == 3u && streamline::dlss_supported()));
         if (frame_generation_running()) {
             streamline::reflex_sleep();
         }
@@ -3698,6 +3760,11 @@ void RendererD3D12::present_to_swap_chain() {
         }
         streamline::set_frame_generation(generated, streamline::frame_generation_dynamic(),
                                          cfg.max_fps > 0.0f ? cfg.max_fps : 0.0f);
+    }
+    if (fsr_swap_chain_) {
+        fsr_generation_.configure(swap_chain_.Get(), generating && frame_generation_allowed(), fg_hudless_ready_ ? fg_hudless_target_.Get() : nullptr,
+                                  fsr_rect_[0], fsr_rect_[1], fsr_rect_[2], fsr_rect_[3]);
+        fg_hudless_ready_ = false;
     }
     streamline::marker(streamline::Marker::kPresentStart);
     const HRESULT present_hr = swap_chain_->Present(vsync, present_flags);
@@ -6529,7 +6596,31 @@ bool RendererD3D12::record_temporal_upscale(const FrameMap& output) {
     in.view = scene_view_;
     in.view_known = scene_view_known_;
     const bool recorded = temporal_inputs_match(in) && temporal_->evaluate(in);
-    if (recorded && frame_generation_running()) {
+    if (recorded && fsr_swap_chain_) {
+        const unsigned display_width = host_window::backbuffer_width;
+        const unsigned display_height = host_window::backbuffer_height;
+        bool ready = fsr_generation_.matches(in.render_width, in.render_height, display_width, display_height);
+        if (!ready) {
+            wait_for_gpu();
+            fsr_generation_.destroy(swap_chain_.Get());
+            ready = fsr_generation_.create(device_.Get(), in.render_width, in.render_height, display_width, display_height, kBackbufferFormat);
+        }
+        if (ready) {
+            FsrFrameGeneration::Prepare prepare{};
+            prepare.list = command_list_.Get();
+            prepare.depth = in.depth;
+            prepare.motion = in.motion;
+            prepare.jitter_x = in.jitter_x;
+            prepare.jitter_y = in.jitter_y;
+            prepare.render_width = in.render_width;
+            prepare.render_height = in.render_height;
+            prepare.frame_ms = in.frame_ms;
+            prepare.camera_near = in.camera_near;
+            prepare.camera_far = in.camera_far;
+            prepare.fov_y = in.fov_y;
+            (void)fsr_generation_.prepare(prepare);
+        }
+    } else if (recorded && frame_generation_running()) {
         streamline::FrameGenerationInputs fg{};
         fg.list = command_list_.Get();
         fg.depth = in.depth;
@@ -7098,6 +7189,7 @@ void RendererD3D12::present_fg_hudless(const DisplayTexture& source, const D3D12
     }
     invalidate_draw_bindings();
     streamline::tag_hudless(command_list_.Get(), fg_hudless_target_.Get(), host_window::backbuffer_width, host_window::backbuffer_height);
+    fg_hudless_ready_ = true;
     // Back to the backbuffer for the overlays.
     const UINT buf_idx = swap_chain_->GetCurrentBackBufferIndex();
     D3D12_CPU_DESCRIPTOR_HANDLE back_rtv = rtv_heap_->GetCPUDescriptorHandleForHeapStart();
@@ -7736,10 +7828,9 @@ void RendererD3D12::draw(const DrawCall& call) {
             }
         }
     }
-    const gpu::Topology first_topology = split ? gpu::kTopologyTriangleList : call.topology;
-    if (first_topology != bound_topology_) {
-        command_list_->IASetPrimitiveTopology(first_topology);
-        bound_topology_ = first_topology;
+    if (call.topology != bound_topology_) {
+        command_list_->IASetPrimitiveTopology(call.topology);
+        bound_topology_ = call.topology;
     }
     // A run of shapes rebinds the same vertex-ring allocation for
     // thousands of consecutive draws, so the view is compared before binding.
@@ -8532,6 +8623,10 @@ bool RendererD3D12::present(
         static_cast<int>(host_window::backbuffer_width),static_cast<int>(host_window::backbuffer_height),
         content_viewport);
     if (frame_generation_running()) {
+        fsr_rect_[0] = static_cast<unsigned>(content_viewport.left);
+        fsr_rect_[1] = static_cast<unsigned>(content_viewport.top);
+        fsr_rect_[2] = static_cast<unsigned>(content_viewport.width);
+        fsr_rect_[3] = static_cast<unsigned>(content_viewport.height);
         streamline::tag_backbuffer_region(command_list_.Get(), static_cast<unsigned>(content_viewport.left),
                                           static_cast<unsigned>(content_viewport.top),
                                           static_cast<unsigned>(content_viewport.width),

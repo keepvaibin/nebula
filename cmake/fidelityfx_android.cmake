@@ -55,7 +55,8 @@ function(nebula_fidelityfx_android headers portable names)
         "${sdk}/src/backends/shared/ffx_shader_blobs.cpp"
         "${sdk}/src/backends/shared/blob_accessors/ffx_fsr3upscaler_shaderblobs.cpp"
         "${sdk}/src/components/fsr3upscaler/ffx_fsr3upscaler.cpp"
-        "${sdk}/src/backends/vk/ffx_vk.cpp")
+        "${sdk}/src/backends/vk/ffx_vk.cpp"
+        "${CMAKE_SOURCE_DIR}/../../runtime/src/render/vk/ffx_no_swapchain.cpp")
     target_include_directories(nebula_fidelityfx_vk SYSTEM PUBLIC "${sdk}/include")
     target_include_directories(nebula_fidelityfx_vk SYSTEM PRIVATE
         "${sdk}/src/shared" "${sdk}/src/backends/shared" "${sdk}/src/backends/shared/blob_accessors"

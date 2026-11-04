@@ -268,8 +268,6 @@ static void clamp_unimplemented_features(RenderConfig& cfg) {
 #if defined(NEBULA_RELEASE)
     // What is not built natively yet stays off whatever an older settings file says. Each line goes with its feature.
     cfg.ray_tracing_enabled = false;
-    cfg.frame_generation = 0u;
-    cfg.hud_output_resolution = false;
 #endif
 }
 

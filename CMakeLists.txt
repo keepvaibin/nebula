@@ -422,6 +422,7 @@ runtime/src/render/host_window_win32.cpp
     runtime/src/render/game_lights.cpp
     runtime/src/render/rt_materials.cpp
     runtime/src/render/streamline_bridge.cpp
+    runtime/src/render/fsr_frame_generation.cpp
     runtime/src/render/transform_history.cpp
     runtime/src/render/frame_interpolation.cpp
     runtime/src/render/interp_gpu.cpp
@@ -725,6 +726,7 @@ runtime/src/render/host_window_win32.cpp
         runtime/src/render/vk/temporal_upscaler_vk.cpp
         runtime/src/render/vk/streamline_vk.cpp
         runtime/src/render/vk/ffx_vk_forward.cpp
+        runtime/src/render/vk/fsr_frame_generation_vk.cpp
         runtime/src/render/xess_library.cpp
         runtime/src/render/vk/scene_camera_vk.cpp
         ${galaxy_native_spirv_sources}

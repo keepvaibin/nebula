@@ -42,13 +42,14 @@ std::string percent_text(float value);
 std::string mods_ui_text(std::string_view text, std::size_t width);
 std::string upper_ascii(std::string text);
 unsigned settings_step(unsigned value, unsigned count, int delta);
-enum class Interpolation : unsigned { kOff, kNative, kFrameGeneration };
+enum class Interpolation : unsigned { kOff, kNative, kFrameGeneration, kFsrGeneration };
 struct FrameRateCaps {
     unsigned refresh_hz = 0;
     bool generated_offered = false;
     bool generated_supported = false;
     bool generated_dynamic = false;
     unsigned generated_max = 0;
+    bool fsr_generation_offered = false;
 };
 Interpolation interpolation_of(const RenderConfig& render);
 std::vector<unsigned> interpolation_targets(Interpolation mode, const FrameRateCaps& caps);

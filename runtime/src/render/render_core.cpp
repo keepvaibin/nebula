@@ -4042,7 +4042,7 @@ void RenderCore::prune_dirty_texture_binding_tables() {
 }
 
 gpu::Pipeline* RenderCore::flush_draw_state(
-    gpu::TopologyType primitive_topology_type, std::uint8_t vtxfmt) {
+    gpu::TopologyType primitive_topology_type) {
     // Always counted: the denominator of every *_us field.
     if (screen_run_ && !frame_scene_seen_ && !screen_frame_open_ && interp_recording_ && !history_scene_) [[unlikely]] {
         begin_screen_frame();
@@ -4597,7 +4597,7 @@ bool RenderCore::begin_cached_draw_run(
 
     gpu::Pipeline* pso = nullptr;
     {
-        pso = flush_draw_state(topology_type, vtxfmt);
+        pso = flush_draw_state(topology_type);
     }
     if (pso == nullptr) {
         flush_pending_draw_batch();
