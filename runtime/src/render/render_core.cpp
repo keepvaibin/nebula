@@ -610,19 +610,17 @@ void RenderCore::trace_memory() {
     }
     std::uint64_t geometry = 0u;
     std::uint64_t vertices = 0u;
-    std::uint64_t split = 0u;
     for (const auto& [key, shape] : record_shapes_) {
         if (shape.geometry != nullptr) {
             geometry += shape.geometry->corners.capacity() * sizeof(shapes::Corner) + shape.geometry->indices.capacity() * sizeof(std::uint16_t);
         }
         vertices += shape.resident_vertices * sizeof(RenderVertex);
-        split += shape.split_indices.capacity() * sizeof(std::uint16_t);
     }
     const auto mb = [](std::uint64_t bytes) { return static_cast<double>(bytes) / (1024.0 * 1024.0); };
     std::fprintf(stderr,
-                 "[memory] shape arrays %.1f (%zu), groups %.1f, expanded vertices %.1f, split indices %.1f (%zu shapes), images %.1f, decoded %.1f, "
+                 "[memory] shape arrays %.1f (%zu), groups %.1f, expanded vertices %.1f (%zu shapes), images %.1f, decoded %.1f, "
                  "upload arenas %.1f, texture pool %.1f, curved %.1f, record pool %.1f\n",
-                 mb(arrays), shape_arrays_.size(), mb(geometry), mb(vertices), mb(split), record_shapes_.size(), mb(texture_cache_.image_bytes()),
+                 mb(arrays), shape_arrays_.size(), mb(geometry), mb(vertices), record_shapes_.size(), mb(texture_cache_.image_bytes()),
                  mb(texture_cache_.decoded_map_stats().resident_bytes), mb(texture_cache_.upload_arena_bytes()), mb(texture_cache_.pool_bytes()),
                  mb(curved::memory_bytes()),
                  mb(producer_record_pool_.vertices.capacity() * sizeof(RenderVertex) + producer_record_pool_.matrices.capacity() * sizeof(shapes::Matrix)));
@@ -3541,8 +3539,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
             const RenderConfig render = get_render_config();
             const bool enhanced = render.enhanced_lighting;
             const bool per_pixel = render.per_pixel_lighting;
-            curved_surfaces_ = render.curved_surfaces && curved_surfaces_offered() && renderer_.tessellates();
-            curved_refine_ = render.curved_surfaces && curved_surfaces_offered() && !renderer_.tessellates();
+            curved_refine_ = render.curved_surfaces && curved_surfaces_offered();
             ambient_occlusion_ =
                 render.ambient_occlusion && renderer_.ambient_occlusion_ready();
             // A lighting-mode change re-keys every lit draw's pipeline.
@@ -4044,59 +4041,6 @@ void RenderCore::prune_dirty_texture_binding_tables() {
     dirty_texture_aliases_.clear();
 }
 
-bool RenderCore::curved_draw(std::uint8_t vtxfmt) const {
-    if (!curved_surfaces_ || !scene_phase_ || side_layer_ != kSceneLayer ||
-        draw_state_.projection_type != 0u) {
-        return false;
-    }
-    (void)vtxfmt;
-    // A native shape record whose model the analysis rounds (curved_surfaces.h; a model kept only for its flat
-    // corners draws plainly).
-    return record_inputs_ != nullptr && record_inputs_->curved != nullptr && record_inputs_->curved->bends;
-}
-
-namespace {
-
-
-}  // namespace
-
-std::uint32_t RenderCore::split_curved_triangles(std::span<const RenderVertex> vertices,
-                                                std::span<const std::uint16_t> triangles,
-                                                std::vector<std::uint16_t>& split) {
-    // A triangle is flat when no corner has a displacement or crease normal: every edge then keeps one segment and
-    // moves nothing, in this triangle and in its neighbours.
-    const auto flat = [&](std::size_t t) {
-        for (std::size_t k = 0; k < 3u; ++k) {
-            const RenderVertex& v = vertices[triangles[t + k]];
-            if ((v.curve[0] | v.curve[1]) != 0u) {
-                return false;
-            }
-        }
-        return true;
-    };
-    split.clear();
-    const std::size_t count = triangles.size() / 3u * 3u;
-    if (count == 0u || !std::all_of(triangles.begin(), triangles.begin() + static_cast<std::ptrdiff_t>(count),
-                                    [&](std::uint16_t i) { return i < vertices.size(); })) {
-        return 0u;
-    }
-    std::size_t flat_indices = 0;
-    for (std::size_t t = 0; t < count; t += 3u) {
-        flat_indices += flat(t) ? 3u : 0u;
-    }
-    split.resize(count);
-    std::size_t f = 0;
-    std::size_t c = flat_indices;
-    for (std::size_t t = 0; t < count; t += 3u) {
-        std::size_t& out = flat(t) ? f : c;
-        split[out] = triangles[t];
-        split[out + 1u] = triangles[t + 1u];
-        split[out + 2u] = triangles[t + 2u];
-        out += 3u;
-    }
-    return static_cast<std::uint32_t>(flat_indices);
-}
-
 gpu::Pipeline* RenderCore::flush_draw_state(
     gpu::TopologyType primitive_topology_type, std::uint8_t vtxfmt) {
     // Always counted: the denominator of every *_us field.
@@ -4111,7 +4055,6 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         galaxy::loss::note(galaxy::loss::Kind::DrawNoMaterial);
         return nullptr;
     }
-    const bool curved = primitive_topology_type == gpu::kTopologyTypeTriangle && curved_draw(vtxfmt);
     // Consume once, propagating upload invalidation before considering reuse.
     // What changed: the typed state's flags, the register file's for matrix memory (until the matrix arena).
     const std::uint32_t dirty =
@@ -4150,7 +4093,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         current_ps_constants_ != 0 &&
         (current_texture_map_mask_ == 0u ||
          current_texture_table_.ptr != 0) &&
-        curved == current_curved_ && (curved || render_state_key_.primitive_topology == topology_key)) {
+        render_state_key_.primitive_topology == topology_key) {
         return current_pipeline_;
     }
 
@@ -4197,12 +4140,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     // The scene target's variant (its samples per pixel, MSAA, the output scene target has one; the HDR scene scene target) decides the
     // pipeline's too.
     const std::uint8_t samples_log2 = renderer_.scene_variant();
-    // A curved draw after another keeps its patch topology (its variant is settled below).
-    const bool keep_patch =
-        curved && (render_state_key_.primitive_topology & kTopologyTypeMask) == kTopologyPatch;
-    if (!keep_patch) {
-        render_state_key_.primitive_topology = topology_key;
-    }
+    render_state_key_.primitive_topology = topology_key;
     render_state_key_.samples_log2 = samples_log2;
     // Motion writers: opaque triangles with color writes in a temporal scene
     // (blending, logic ops and dual-source alpha cannot share a second
@@ -4272,19 +4210,12 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         motion_bits_set_ = writer || reactive;
     }
 
-    // Curved surfaces: the vertex stage's curve outputs and the patches of its output variant's hull and domain shaders.
-    current_curved_ = curved;
-    if (curved) {
-        render_state_key_.primitive_topology = static_cast<std::uint8_t>(kTopologyPatch);
-    }
     {
         // The native material's pipeline: its build-compiled shaders under the draw's render state.
         current_pipeline_ = pipeline_cache_.get_native(native_material_->shader, render_state_key_,
                                                        per_pixel_lighting_ || enhanced_lighting_);
         // GALAXY_LOG_NATIVE_MATERIALS=1: each native shader's pipelines as draws first take them.
         current_pso_key_valid_ = false;
-        // A curved native draw goes whole through its patch stages (native_curved.hlsl).
-        current_flat_pipeline_ = nullptr;
     }
     if (current_pipeline_ == nullptr) {
         // The driver refused the pipeline in every form and no uber stand-in exists (the pipeline cache logged
@@ -4596,8 +4527,7 @@ bool RenderCore::draw_calls_batch_compatible(
         lhs.sampler_table.ptr != rhs.sampler_table.ptr ||
         lhs.matrix_palette != rhs.matrix_palette ||
         lhs.topology != rhs.topology ||
-        lhs.has_viewport != rhs.has_viewport ||
-        lhs.flat_pipeline != nullptr || rhs.flat_pipeline != nullptr) {
+        lhs.has_viewport != rhs.has_viewport) {
         return false;
     }
     if (lhs.scissor.left != rhs.scissor.left ||
@@ -4626,8 +4556,6 @@ void RenderCore::flush_pending_draw_batch() {
     }
     if (!pending_draw_batch_.hidden) {
         const DrawCall& call = pending_draw_batch_.call;
-        if (call.topology == gpu::kTopologyTrianglePatches) {
-        }
         renderer_.draw(call);
     }
     pending_draw_batch_ = {};
@@ -4693,7 +4621,7 @@ bool RenderCore::begin_cached_draw_run(
     cached_draw_run_state_call_.aux_target     = current_pipeline_aux_;
     cached_draw_run_state_call_.replay_record  = current_replay_record_;
     cached_draw_run_state_call_.ps_record      = current_ps_record_;
-    cached_draw_run_state_call_.topology       = draw_topology(topology);
+    cached_draw_run_state_call_.topology       = topology;
     cached_draw_run_state_call_.scissor        = scissor_rect;
     for (unsigned i = 0; i < 6; ++i) {
         cached_draw_run_state_call_.viewport[i] = draw_state_.viewport[i];
@@ -5119,8 +5047,6 @@ void RenderCore::draw_record_shape(const shapes::Record& record) {
             shape.expanded = true;
             shape.versions = versions;
             shape.position_matrix = position_matrix;
-            shape.split_built = false;
-            shape.split_indices.clear();
             shape.object_slots_built = false;
         }
         // No patch stages: the bending triangles refined here, once, for every draw of the shape.
@@ -5240,22 +5166,7 @@ void RenderCore::draw_record_shape(const shapes::Record& record) {
     flush_pending_draw_batch();
     cached_draw_run_batch_compatible_known_ = false;
 
-    const bool curved = current_curved_ && current_flat_pipeline_ != nullptr;
-    if (curved && !shape.split_built) {
-        shape.split_built = true;
-        (void)shapes::expand(geometry, arrays, position_matrix, shape.curved.get(), expand_scratch_);
-        shape.split_flat_indices = split_curved_triangles(expand_scratch_, geometry.indices, shape.split_indices);
-    }
-    const bool split = curved && !shape.split_indices.empty();
-    const std::vector<std::uint16_t>& indices = split              ? shape.split_indices
-                                                : !shape.refined_indices.empty() ? shape.refined_indices
-                                                                                 : geometry.indices;
-    // A split curved surface's indices are their own, a feature's; every other draw reads the shape's block.
-    const UploadRing::Allocation ib = split ? renderer_.index_ring().upload_immutable(
-                                                  indices.data(), indices.size() * sizeof(std::uint16_t),
-                                                  sizeof(std::uint16_t), shape.split_upload_token)
-                                            : UploadRing::Allocation{};
-    const auto first_index = static_cast<std::uint32_t>(ib.offset / sizeof(std::uint16_t));
+    const std::vector<std::uint16_t>& indices = !shape.refined_indices.empty() ? shape.refined_indices : geometry.indices;
     const auto index_count = static_cast<std::uint32_t>(indices.size());
     const std::size_t vertex_byte_offset = static_cast<std::size_t>(shape.resident_offset) * sizeof(RenderVertex);
     ++stat_draws_issued_;
@@ -5264,24 +5175,12 @@ void RenderCore::draw_record_shape(const shapes::Record& record) {
                                                  units * static_cast<std::uint32_t>(sizeof(RenderVertex)),
                                                  static_cast<std::uint32_t>(sizeof(RenderVertex)));
     const gpu::IndexView ibv = gpu::index_view(
-        split ? renderer_.index_ring().gpu_base() + static_cast<std::size_t>(first_index) * sizeof(std::uint16_t)
-              : resident_vertex_gpu_ + vertex_byte_offset + static_cast<std::size_t>(units) * sizeof(RenderVertex),
+        resident_vertex_gpu_ + vertex_byte_offset + static_cast<std::size_t>(units) * sizeof(RenderVertex),
         index_count * static_cast<std::uint32_t>(sizeof(std::uint16_t)));
     DrawCall call = cached_draw_run_state_call_;
     call.vertex_view = vbv;
     call.index_view = ibv;
     call.index_count = index_count;
-    if (split) {
-        call.flat_pipeline = current_flat_pipeline_;
-        call.flat_index_count = shape.split_flat_indices;
-        // The sort's view of this frame: of the triangles after the flat ones, those the hull shader would leave
-        // whole draw after the flat ones.
-        call.curve_sort = renderer_.sort_curved(
-            vbv.BufferLocation, ibv.BufferLocation + shape.split_flat_indices * sizeof(std::uint16_t),
-            (index_count - shape.split_flat_indices) / 3u, call.vs_constants, call.matrix_palette,
-            cpu_vs_constants_.per_vertex != 0u);
-        call.curve_sort_list = renderer_.curve_sort_list();
-    }
     pending_draw_batch_.active = true;
     pending_draw_batch_.call = call;
     pending_draw_batch_.rt = false;
@@ -5291,7 +5190,7 @@ void RenderCore::draw_record_shape(const shapes::Record& record) {
     pending_draw_batch_.base_vertex = shape.resident_offset;
     pending_draw_batch_.vertex_count = units;
     pending_draw_batch_.vertex_byte_end = vertex_byte_offset + static_cast<std::size_t>(units) * sizeof(RenderVertex);
-    pending_draw_batch_.first_index = first_index;
+    pending_draw_batch_.first_index = 0u;
     pending_draw_batch_.index_count = index_count;
     pending_draw_batch_.draw_count = 1u;
     pending_draw_batch_.resident = true;

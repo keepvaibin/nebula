@@ -326,7 +326,6 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
         if (off("bc")) available.textureCompressionBC = VK_FALSE;
         if (off("geometry")) available.geometryShader = VK_FALSE;
         if (off("anisotropy")) available.samplerAnisotropy = VK_FALSE;
-        if (off("tessellation")) available.tessellationShader = VK_FALSE;
         if (off("gather")) available.shaderImageGatherExtended = VK_FALSE;
     }
     VkPhysicalDeviceFeatures enabled{};
@@ -334,16 +333,6 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
     enabled.logicOp = available.logicOp;
     enabled.sampleRateShading = available.sampleRateShading;
     sample_rate_shading_ = available.sampleRateShading == VK_TRUE;
-    // Curved surfaces: the vertex stage's 19 interpolant locations into the hull stage, 16 segments an edge.
-    const VkPhysicalDeviceLimits& limits = properties_.limits;
-    tessellation_shader_ = available.tessellationShader == VK_TRUE &&
-                           limits.maxTessellationGenerationLevel >= 16u &&
-                           limits.maxVertexOutputComponents >= 76u &&
-                           limits.maxTessellationControlPerVertexInputComponents >= 76u &&
-                           limits.maxTessellationEvaluationOutputComponents >= 64u;
-    // Curved surfaces are refined once (shapes::refine_curved): patch stages cost more per frame everywhere they were measured.
-    tessellation_shader_ = false;
-    enabled.tessellationShader = tessellation_shader_ ? VK_TRUE : VK_FALSE;
     enabled.samplerAnisotropy = available.samplerAnisotropy;
     enabled.textureCompressionBC = available.textureCompressionBC;
     enabled.depthClamp = available.depthClamp;

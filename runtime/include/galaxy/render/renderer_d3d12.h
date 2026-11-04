@@ -278,8 +278,6 @@ public:
 
     // A temporal upscaler (FSR 3 or DLSS) is selected and available.
     [[nodiscard]] bool temporal_mode() const;
-    // Curved surfaces are refined once (shapes::refine_curved), not tessellated.
-    [[nodiscard]] bool tessellates() const noexcept { return false; }
     // At the start of the game's 3D scene: whether the temporal path runs for
     // it and, if so, the scene's sub-pixel jitter in render pixels (applied to
     // perspective projections).
@@ -515,17 +513,6 @@ public:
         std::uint8_t pixel_format = 0);
 
     void draw(const DrawCall& call);
-
-    // Curved surfaces sorted on the GPU before the command list runs (curve_sort_source): of a split
-    // draw's triangles after its flat ones, those the hull shader would leave whole this frame draw after the flat
-    // ones as a triangle list. The vertices are resident, the indices (those triangles') in the index ring, the
-    // constants and palette the draw's. Returns the draw's DrawCall::curve_sort, -1 where it cannot be sorted (no
-    // sort pipeline, no room).
-    [[nodiscard]] std::int32_t sort_curved(D3D12_GPU_VIRTUAL_ADDRESS vertices, D3D12_GPU_VIRTUAL_ADDRESS indices,
-                                           std::uint32_t triangles, D3D12_GPU_VIRTUAL_ADDRESS constants,
-                                           D3D12_GPU_VIRTUAL_ADDRESS palette, bool palette_rows);
-    // The command list being recorded (DrawCall::curve_sort_list).
-    [[nodiscard]] std::uint32_t curve_sort_list() const noexcept { return curve_sort_list_; }
 
     // Passes over the frame into a picture, recorded into the current command list.
     void copy_scene_to_display(const FramePassRequest& params, DisplayTexture& dest);
@@ -807,7 +794,7 @@ private:
     // GALAXY_GPU_PASSES=1: GPU time by pass for present-stats' gpu-pass-ms. A mark starts a pass on the open command
     // list; the time to the next mark (or the list's end) is that pass's.
     enum class GpuPass : std::uint8_t {
-        Scene, Resolve, FramePass, DisplayCopy, Bloom, SceneAa, SceneAo, Upscale, RayTracing, Present, CurveSort, Camera, Count
+        Scene, Resolve, FramePass, DisplayCopy, Bloom, SceneAa, SceneAo, Upscale, RayTracing, Present, Camera, Count
     };
     static constexpr unsigned kGpuPassSlots = 512;
     void gpu_pass(GpuPass pass);
@@ -853,21 +840,7 @@ private:
     std::array<bool, kFramesInFlight> stats_pending_{};
     D3D12_QUERY_DATA_PIPELINE_STATISTICS telemetry_stats_{};
 
-    // Curved surfaces' sort (sort_curved): three dispatches in the pre-list of the command list whose draws it sorts.
-    // Each frame slot's output: per draw two DrawIndexedArguments and its two index lists.
-    struct CurveSortDraw {
-        std::uint32_t vertices;
-        std::uint32_t indices;
-        std::uint32_t triangles;
-        std::uint32_t constants;
-        std::uint32_t palette;
-        std::uint32_t flags;
-        std::uint32_t output;
-        std::uint32_t scratch;
-    };
-    static constexpr std::uint64_t kCurveSortBytes = 8u << 20u;
-    bool ensure_curve_sort();
-    // The command list run before each main one when it has work: resident vertex copies, then the curve sort.
+    // The command list run before each main one when it has work: resident vertex copies.
     bool ensure_pre_list();
     void record_pre_list();
     struct ResidentCopy {
@@ -895,24 +868,9 @@ private:
     ID3D12Resource* resident_local_ = nullptr;
     std::vector<ResidentCopy> resident_copies_;
     bool pre_list_failed_ = false;
-    Microsoft::WRL::ComPtr<ID3D12RootSignature> curve_sort_root_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> curve_sort_pso_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> curve_offsets_pso_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> curve_scatter_pso_;
-    std::vector<std::array<std::uint32_t, 2>> curve_sort_blocks_;
-    Microsoft::WRL::ComPtr<ID3D12CommandSignature> curve_draw_signature_;
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> pre_list_;
     std::array<Microsoft::WRL::ComPtr<ID3D12CommandAllocator>, kFramesInFlight> pre_allocators_;
-    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, kFramesInFlight> curve_sorted_;
-    std::array<std::vector<CurveSortDraw>, kFramesInFlight> curve_sort_draws_;
-    std::array<std::uint64_t, kFramesInFlight> curve_sorted_bytes_{};
-    std::array<D3D12_GPU_VIRTUAL_ADDRESS, kFramesInFlight> curve_sort_vertices_{};
     std::array<bool, kFramesInFlight> pre_list_used_{};
-    // The sort's GPU time (two timestamps a slot), counted in the frame's.
-    Microsoft::WRL::ComPtr<ID3D12QueryHeap> curve_sort_queries_;
-    Microsoft::WRL::ComPtr<ID3D12Resource> curve_sort_readback_;
-    std::uint32_t curve_sort_list_ = 0;
-    bool curve_sort_failed_ = false;
     bool pre_list_recorded_ = false;
 
     // scene target.

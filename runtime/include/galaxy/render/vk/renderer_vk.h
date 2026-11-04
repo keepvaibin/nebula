@@ -94,7 +94,6 @@ struct RenderLayout {
         return clear ? ms_passes_clear[samples_log2] : ms_passes[samples_log2];
     }
     VkFormat depth_format = VK_FORMAT_UNDEFINED;
-    bool tessellation = false;  // curved surfaces' hull and domain stages
     bool dual_source_blend = false;
     bool logic_op = false;
     bool depth_clamp = false;
@@ -231,8 +230,6 @@ public:
     void request_eval_readback() noexcept { eval_readback_requested_ = true; }
     [[nodiscard]] bool take_eval_readback(std::vector<std::uint32_t>& words, float& t);
     [[nodiscard]] bool temporal_mode() const;
-    // Whether curved surfaces take patch stages; else each group is refined once (shapes::refine_curved).
-    [[nodiscard]] bool tessellates() const noexcept { return draw_layout_.tessellation; }
     // A copy right after the display copy, from the output scene target the 2D layer drew in (the scene target itself without one).
     [[nodiscard]] bool draw_frame_pass_from_output(const FramePassRequest& params, TextureCache& textures);
 
@@ -258,12 +255,6 @@ public:
                    bool alpha_enable, bool depth_enable, unsigned rect_x = 0, unsigned rect_y = 0, unsigned rect_w = 0,
                    unsigned rect_h = 0, std::uint8_t pixel_format = 0);
     void draw(const DrawCall& call);
-    // Curved surfaces sorted on the GPU (RendererD3D12::sort_curved): the dispatches at the end of the frame's uploads,
-    // which run before its draws. Returns the draw's DrawCall::curve_sort, -1 where it cannot be sorted.
-    [[nodiscard]] std::int32_t sort_curved(gpu::Address vertices, gpu::Address indices, std::uint32_t triangles,
-                                           gpu::Address constants, gpu::Address palette, bool palette_rows);
-    // The frame being recorded (DrawCall::curve_sort_list).
-    [[nodiscard]] std::uint32_t curve_sort_list() const noexcept { return curve_sort_list_; }
     // The resident decoded vertices (RendererD3D12::create_resident_vertices): written once, read every frame, so in
     // device memory where the device maps it (vk::BufferPlace::DeviceMapped).
     [[nodiscard]] UploadBuffer create_resident_vertices(std::size_t bytes, const char* name);
@@ -934,42 +925,6 @@ private:
     VkDescriptorPool blend_pool_ = VK_NULL_HANDLE;
     bool blend_failed_ = false;
 
-    // Curved surfaces' sort (sort_curved, ShaderGenerator::curve_sort_source): per frame slot its draws, the buffers the
-    // shaders read (draws, the vertex, index, constant and matrix buffers, blocks) and write (the sorted lists).
-    struct CurveSortDraw {
-        std::uint32_t vertices;
-        std::uint32_t indices;
-        std::uint32_t triangles;
-        std::uint32_t constants;
-        std::uint32_t palette;
-        std::uint32_t flags;
-        std::uint32_t output;
-        std::uint32_t scratch;
-    };
-    struct CurveSortFrame {
-        std::vector<CurveSortDraw> draws;
-        std::array<VkBuffer, 4> sources{};  // vertices, indices, constants, palettes
-        std::uint64_t bytes = 0;
-        std::shared_ptr<vk::Buffer> records;
-        std::shared_ptr<vk::Buffer> blocks;
-        std::shared_ptr<vk::Buffer> sorted;
-        VkDescriptorSet set = VK_NULL_HANDLE;
-        std::array<VkBuffer, 7> bound{};
-    };
-    static constexpr std::uint64_t kCurveSortBytes = 8u << 20u;
-    bool ensure_curve_sort();
-    void record_curve_sort(VkCommandBuffer commands);
-    std::array<CurveSortFrame, kFramesInFlight> curve_sort_{};
-    std::vector<std::array<std::uint32_t, 2>> curve_sort_blocks_;
-    VkDescriptorSetLayout curve_set_layout_ = VK_NULL_HANDLE;
-    VkPipelineLayout curve_layout_ = VK_NULL_HANDLE;
-    VkDescriptorPool curve_pool_ = VK_NULL_HANDLE;
-    VkPipeline curve_classify_ = VK_NULL_HANDLE;
-    VkPipeline curve_offsets_ = VK_NULL_HANDLE;
-    VkPipeline curve_scatter_ = VK_NULL_HANDLE;
-    std::uint32_t curve_sort_list_ = 0;
-    bool curve_sort_failed_ = false;
-
     // A sequence: the playing log's sub-frames between two game frames.
     struct SequenceState {
         bool ready = false;
@@ -1155,7 +1110,7 @@ private:
     // the frame's commands; the time to the next mark (or the frame's end) is that pass's. The curved surfaces' sort,
     // in the upload commands, takes the two queries after the frame's marks.
     enum class GpuPass : std::uint8_t {
-        Scene, Resolve, FramePass, DisplayCopy, Bloom, SceneAa, SceneAo, Upscale, RayTracing, Present, CurveSort, Camera, Count
+        Scene, Resolve, FramePass, DisplayCopy, Bloom, SceneAa, SceneAo, Upscale, RayTracing, Present, Camera, Count
     };
     static constexpr unsigned kGpuPassSlots = 512;
     void gpu_pass(GpuPass pass);
@@ -1173,7 +1128,7 @@ private:
         GpuPass outer_;
     };
     VkQueryPool pass_queries_ = VK_NULL_HANDLE;
-    // The frame's shader invocations (gpu-stats): vertex, tessellation control patches and evaluation, clipped
+    // The frame's shader invocations (gpu-stats): vertex, clipped
     // primitives, fragment and compute, in VkQueryPipelineStatisticFlagBits' order.
     VkQueryPool stats_queries_ = VK_NULL_HANDLE;
     // GALAXY_GPU_DRAWS=1: each draw between two timestamps, its time summed by pipeline for present-stats'
@@ -1192,10 +1147,9 @@ private:
     std::array<std::vector<GpuDrawMark>, kFramesInFlight> draw_marks_{};
     std::unordered_map<gpu::Pipeline*, GpuDrawCost> draw_cost_;
     std::array<bool, kFramesInFlight> stats_pending_{};
-    std::array<double, 6> stats_sum_{};
+    std::array<double, 4> stats_sum_{};
     std::array<std::array<GpuPass, kGpuPassSlots>, kFramesInFlight> pass_marks_{};
     std::array<unsigned, kFramesInFlight> pass_mark_count_{};
-    std::array<bool, kFramesInFlight> pass_sort_timed_{};
     GpuPass current_pass_ = GpuPass::Scene;
     bool pass_recording_ = false;  // between begin_frame and end_frame
     std::array<double, static_cast<std::size_t>(GpuPass::Count)> pass_ms_{};

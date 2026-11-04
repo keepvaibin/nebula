@@ -61,8 +61,6 @@ int main(int argc, char** argv) {
     namespace vk = galaxy::render::vk;
     const std::string stage_name = argv[3];
     const vk::ShaderStage stage = stage_name == "ps"   ? vk::ShaderStage::Fragment
-                                  : stage_name == "hs" ? vk::ShaderStage::Hull
-                                  : stage_name == "ds" ? vk::ShaderStage::Domain
                                                        : vk::ShaderStage::Vertex;
     // The renderer names every stage's entry point "main" (PipelineCacheVk::create_pipeline): the stage's function
     // takes that name.
