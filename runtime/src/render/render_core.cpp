@@ -3519,7 +3519,8 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
             const RenderConfig render = get_render_config();
             const bool enhanced = render.enhanced_lighting;
             const bool per_pixel = render.per_pixel_lighting;
-            curved_surfaces_ = render.curved_surfaces && curved_surfaces_offered();
+            curved_surfaces_ = render.curved_surfaces && curved_surfaces_offered() && renderer_.tessellates();
+            curved_refine_ = render.curved_surfaces && curved_surfaces_offered() && !renderer_.tessellates();
             ambient_occlusion_ =
                 render.ambient_occlusion && renderer_.ambient_occlusion_ready();
             // A lighting-mode change re-keys every lit draw's pipeline.
@@ -5072,7 +5073,8 @@ void RenderCore::draw_record_shape(const shapes::Record& record) {
     if (!ensure_resident_vertex_buffer()) {
         return;
     }
-    const bool stale = !shape.expanded || shape.versions != versions || shape.position_matrix != position_matrix;
+    const bool stale = !shape.expanded || shape.versions != versions || shape.position_matrix != position_matrix ||
+                       shape.refined != curved_refine_;
     if (stale || shape.resident_epoch != resident_vertices_.epoch()) {
         // The model's analysis for its curved surfaces (its first draw waits for it).
         shape.curved = curved::find_model(keys[0]);
@@ -5096,14 +5098,41 @@ void RenderCore::draw_record_shape(const shapes::Record& record) {
             shape.split_indices.clear();
             shape.object_slots_built = false;
         }
+        // No patch stages: the bending triangles refined here, once, for every draw of the shape.
+        shape.refined = curved_refine_;
+        shape.refined_indices.clear();
+        const bool refine = curved_refine_ && !shape.refine_failed && shape.curved != nullptr && shape.curved->bends &&
+                            (geometry.attributes & shapes::kOwnPositions) == 0u;
+        if (refine) {
+            std::vector<RenderVertex> refined;
+            std::vector<std::uint16_t> refined_indices;
+            if (shapes::refine_curved(expand_scratch_, geometry.indices, kCurveRefineTolerance, refined, refined_indices)) {
+                expand_scratch_ = std::move(refined);
+                shape.refined_indices = std::move(refined_indices);
+            }
+        }
         // The block holds the vertices and, behind them, the indices: both written once, for every draw of the shape.
-        const auto expanded_units = static_cast<std::uint32_t>(expand_scratch_.size());
-        const auto index_bytes = static_cast<std::uint32_t>(geometry.indices.size() * sizeof(std::uint16_t));
-        const std::uint32_t index_units =
-            (index_bytes + static_cast<std::uint32_t>(sizeof(RenderVertex)) - 1u) / static_cast<std::uint32_t>(sizeof(RenderVertex));
-        const std::uint32_t block_units = expanded_units + index_units;
         shape.resident_epoch = 0u;
-        const std::optional<std::uint32_t> offset = resident_vertices_.allocate(block_units);
+        auto block_size = [&](std::uint32_t& vertices_units, std::uint32_t& bytes) {
+            vertices_units = static_cast<std::uint32_t>(expand_scratch_.size());
+            const std::size_t index_count = !shape.refined_indices.empty() ? shape.refined_indices.size() : geometry.indices.size();
+            bytes = static_cast<std::uint32_t>(index_count * sizeof(std::uint16_t));
+            return vertices_units + (bytes + static_cast<std::uint32_t>(sizeof(RenderVertex)) - 1u) / static_cast<std::uint32_t>(sizeof(RenderVertex));
+        };
+        std::uint32_t expanded_units = 0u;
+        std::uint32_t index_bytes = 0u;
+        std::uint32_t block_units = block_size(expanded_units, index_bytes);
+        std::optional<std::uint32_t> offset = resident_vertices_.allocate(block_units);
+        if (!offset.has_value() && !shape.refined_indices.empty()) {
+            // No room for the refined group: the model's own triangles, not no model, and no second try for it.
+            shape.refined_indices.clear();
+            shape.refine_failed = true;
+            if (!shapes::expand(geometry, arrays, position_matrix, shape.curved.get(), expand_scratch_)) {
+                return;
+            }
+            block_units = block_size(expanded_units, index_bytes);
+            offset = resident_vertices_.allocate(block_units);
+        }
         if (!offset.has_value()) {
             return;
         }
@@ -5112,7 +5141,8 @@ void RenderCore::draw_record_shape(const shapes::Record& record) {
             static_cast<std::uint64_t>(*offset) * sizeof(RenderVertex),
             static_cast<std::uint64_t>(block_units) * sizeof(RenderVertex));
         std::memcpy(staged, expand_scratch_.data(), static_cast<std::size_t>(expanded_units) * sizeof(RenderVertex));
-        std::memcpy(staged + static_cast<std::size_t>(expanded_units) * sizeof(RenderVertex), geometry.indices.data(),
+        std::memcpy(staged + static_cast<std::size_t>(expanded_units) * sizeof(RenderVertex),
+                    !shape.refined_indices.empty() ? shape.refined_indices.data() : geometry.indices.data(),
                     index_bytes);
         shape.resident_epoch = resident_vertices_.epoch();
         shape.resident_offset = *offset;
@@ -5192,7 +5222,9 @@ void RenderCore::draw_record_shape(const shapes::Record& record) {
         shape.split_flat_indices = split_curved_triangles(expand_scratch_, geometry.indices, shape.split_indices);
     }
     const bool split = curved && !shape.split_indices.empty();
-    const std::vector<std::uint16_t>& indices = split ? shape.split_indices : geometry.indices;
+    const std::vector<std::uint16_t>& indices = split              ? shape.split_indices
+                                                : !shape.refined_indices.empty() ? shape.refined_indices
+                                                                                 : geometry.indices;
     // A split curved surface's indices are their own, a feature's; every other draw reads the shape's block.
     const UploadRing::Allocation ib = split ? renderer_.index_ring().upload_immutable(
                                                   indices.data(), indices.size() * sizeof(std::uint16_t),

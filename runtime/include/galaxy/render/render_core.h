@@ -943,6 +943,9 @@ private:
         std::uint32_t resident_offset = 0;
         std::uint32_t resident_units = 0;     // the block: its vertices, then its indices
         std::uint32_t resident_vertices = 0;  // the vertices alone
+        std::vector<std::uint16_t> refined_indices;  // shapes::refine_curved's, behind its vertices in the block
+        bool refined = false;
+        bool refine_failed = false;
         std::vector<std::uint16_t> split_indices;
         std::uint32_t split_flat_indices = 0;
         bool split_built = false;
@@ -1025,6 +1028,9 @@ private:
     // RenderConfig::curved_surfaces where the renderer tessellates, sampled at each frame start; whether the last
     // flushed draw is a curved surface (its keys carry kVsKeyCurved and the patch topology).
     bool curved_surfaces_ = false;
+    bool curved_refine_ = false;  // the same without patch stages: each group refined once (shapes::refine_curved)
+    // Model units an edge's arc may stand off its chords: Mario stands about 160 tall.
+    static constexpr float kCurveRefineTolerance = 0.4f;
     bool current_curved_ = false;
     // The last curved draw's pipeline without the patch stages, for its flat triangles (DrawCall::flat_pipeline);
     // null where the order of a draw's triangles could show (blending, a logic op, no depth test or write) or while

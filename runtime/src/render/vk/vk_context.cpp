@@ -295,6 +295,8 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
                            limits.maxVertexOutputComponents >= 76u &&
                            limits.maxTessellationControlPerVertexInputComponents >= 76u &&
                            limits.maxTessellationEvaluationOutputComponents >= 64u;
+    // Curved surfaces are refined once (shapes::refine_curved): patch stages cost more per frame everywhere they were measured.
+    tessellation_shader_ = false;
     enabled.tessellationShader = tessellation_shader_ ? VK_TRUE : VK_FALSE;
     enabled.samplerAnisotropy = available.samplerAnisotropy;
     enabled.textureCompressionBC = available.textureCompressionBC;

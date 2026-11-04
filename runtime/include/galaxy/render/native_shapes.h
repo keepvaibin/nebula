@@ -13,6 +13,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <span>
 #include <type_traits>
 #include <vector>
 
@@ -67,6 +68,15 @@ struct Geometry {
     std::vector<Corner> corners;
     std::vector<std::uint16_t> indices;
 };
+
+// Curved surfaces where no patch stages run: `vertices` (expanded with their model's curve data) and `indices` refined once.
+// Each edge splits in two as many times as keep its arc within `tolerance` model units of its chords (or a fraction of the
+// group's extent, if more), by what its two ends and that say, so the triangles sharing it in the group split it alike and
+// share its new points; every new point moves as
+// native_curved.hlsl's domain stage moves it. An edge between two position matrices stays whole (its new points would have
+// no one matrix), and so does the inside of a triangle across them. False when the result passes 16-bit indices.
+[[nodiscard]] bool refine_curved(std::span<const RenderVertex> vertices, std::span<const std::uint16_t> indices, float tolerance,
+                                 std::vector<RenderVertex>& out_vertices, std::vector<std::uint16_t>& out_indices);
 
 // The arrays one draw of a group reads, by its slots (Geometry::arrays's order); null where it reads none.
 using DrawArrays = std::array<const Array*, 12>;
