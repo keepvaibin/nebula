@@ -196,7 +196,7 @@ namespace MR {
     }
 
     bool makeLayoutArchiveFileNameFromPrefix(char* pDst, u32 size, const char* pFilePrefix, bool fallback) {
-        char fileName[64];
+        char fileName[256];
         nebula_snprintf(fileName, sizeof(fileName), "%s.arc", pFilePrefix);
         bool isExistArc = makeLayoutArchiveFileName(pDst, size, fileName);
 

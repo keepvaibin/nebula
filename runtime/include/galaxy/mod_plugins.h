@@ -75,6 +75,31 @@ struct CometLimitToSet {
     int seconds = 0;
 };
 
+struct StageRuleToSet {
+    std::string mod_id;
+    std::string stage;
+    int scenario = 0;
+    std::vector<std::string> acts_as;
+    bool own_rules = true;
+};
+struct PlayerConstantToSet {
+    std::string mod_id;
+    int character = 0;
+    std::string name;
+    int index = 0;
+    float value = 0.0f;
+};
+struct SoundEffectToAdd {
+    std::string mod_id;
+    std::string name;
+    std::string file;
+};
+struct ObjectClassToSet {
+    std::string mod_id;
+    std::string name;
+    std::string like;
+};
+
 // What .luma files say in their luma.json, for the game before it starts.
 struct ModRows {
     std::vector<GalaxyToAdd> galaxies;
@@ -84,8 +109,12 @@ struct ModRows {
     std::vector<CometsToSet> comets;
     std::vector<ObjectChangeToSet> object_changes;
     std::vector<CometLimitToSet> comet_limits;
+    std::vector<StageRuleToSet> stage_rules;
+    std::vector<PlayerConstantToSet> player_constants;
+    std::vector<ObjectClassToSet> object_classes;
+    std::vector<SoundEffectToAdd> sound_effects;
 
-    [[nodiscard]] bool empty() const noexcept { return object_changes.empty() && comet_limits.empty() && galaxies.empty() && music.empty() && texts.empty() && event_flags.empty() && comets.empty(); }
+    [[nodiscard]] bool empty() const noexcept { return sound_effects.empty() && stage_rules.empty() && player_constants.empty() && object_classes.empty() && object_changes.empty() && comet_limits.empty() && galaxies.empty() && music.empty() && texts.empty() && event_flags.empty() && comets.empty(); }
 };
 
 // `game_api`: the game module's nebula_game_mod_api(); `find_symbol`: a name in the game module, or null. Each plugin that

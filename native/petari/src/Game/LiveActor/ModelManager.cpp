@@ -402,14 +402,14 @@ void ModelManager::changeBckSetting(const char* pBckName, const char* pActorAnim
 }
 
 void ModelManager::init(const char* pModelName, const char* pAnimationName, bool deferMaterials) {
-    char modelArchive[64];
+    char modelArchive[256];
     nebula_snprintf(modelArchive, sizeof(modelArchive), "%s.arc", pModelName);
     ResourceHolder* modelHolder = MR::createAndAddResourceHolder(modelArchive);
     ResourceHolder* animationHolder;
     if (pAnimationName == nullptr) {
         animationHolder = modelHolder;
     } else {
-        char animationArchive[64];
+        char animationArchive[256];
         nebula_snprintf(animationArchive, sizeof(animationArchive), "%s.arc", pAnimationName);
         animationHolder = MR::createAndAddResourceHolder(animationArchive);
     }

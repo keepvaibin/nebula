@@ -1,3 +1,4 @@
+#include "Game/System/NebulaHost.hpp"
 #include "Game/System/NebulaCalendar.hpp"
 #include "Game/System/GameDataFunction.hpp"
 #include "Game/System/NebulaMods.hpp"
@@ -322,7 +323,7 @@ namespace GameDataFunction {
     }
 
     bool isOnGameEventFlagNormalComet(const char* pGalaxyName) {
-        char eventFlagName[64];
+        char eventFlagName[256];
 
         nebula_snprintf(eventFlagName, sizeof(eventFlagName), "NormalComet%s", pGalaxyName);
 
@@ -330,7 +331,7 @@ namespace GameDataFunction {
     }
 
     bool isOnGameEventFlagCoin100Comet(const char* pGalaxyName) {
-        char eventFlagName[64];
+        char eventFlagName[256];
 
         nebula_snprintf(eventFlagName, sizeof(eventFlagName), "Coin100Comet%s", pGalaxyName);
 
@@ -348,7 +349,7 @@ namespace GameDataFunction {
     void addStockedStarPiece(int num) {
         getCurrentGameDataHolder()->addStockedStarPiece(num);
 
-        if (getCurrentGameDataHolder()->getStockedStarPieceNum() != 9999) {
+        if (getCurrentGameDataHolder()->getStockedStarPieceNum() != NebulaHost::setting(NEBULA_PATCH_MAX_STAR_BITS, 9999)) {
             return;
         }
 
@@ -395,7 +396,7 @@ namespace GameDataFunction {
 
     s32 calcGreenStarNum(const GameDataHolder* pGameDataHolder) {
         s32 greenStarNum = 0;
-        char eventFlagName[32];
+        char eventFlagName[256];
 
         for (int i = 1; i <= 3; i++) {
             nebula_snprintf(eventFlagName, sizeof(eventFlagName), "SpecialStarGreen%1d", i);

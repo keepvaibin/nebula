@@ -18,6 +18,14 @@ fn le32(bytes: &[u8], at: usize) -> Result<u32> {
     Ok(u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
 }
 
+/// Words as tables keep them: the game's Japanese names are Shift-JIS.
+pub fn table_text(text: &str) -> Vec<u8> {
+    if text.is_ascii() {
+        return text.as_bytes().to_vec();
+    }
+    encoding_rs::SHIFT_JIS.encode(text).0.into_owned()
+}
+
 /// A column's hash, as the game's tables have it.
 pub fn column_hash(name: &str) -> u32 {
     name.bytes().fold(0u32, |hash, byte| hash.wrapping_mul(31).wrapping_add(u32::from(byte)))
@@ -62,7 +70,7 @@ pub fn add_rows(table: &[u8], rows: &[Value]) -> Result<Vec<u8>> {
     let mut pool = table.get(rows_end..).context("a table past the file's end")?.to_vec();
     let mut word = |text: &str| -> u32 {
         let at = pool.len() as u32;
-        pool.extend_from_slice(text.as_bytes());
+        pool.extend_from_slice(&table_text(text));
         pool.push(0);
         at
     };
@@ -81,7 +89,10 @@ pub fn add_rows(table: &[u8], rows: &[Value]) -> Result<Vec<u8>> {
                 Some(hex) => u32::from_str_radix(hex, 16).with_context(|| format!("column {key}"))?,
                 None => column_hash(key),
             };
-            let column = columns.iter().find(|c| c.hash == hash).with_context(|| format!("this table has no column {key}"))?;
+            // A column this table doesn't have is set to nothing: another table of the same name in another layer may have it, and the row still counts.
+            let Some(column) = columns.iter().find(|c| c.hash == hash) else {
+                continue;
+            };
             let place = at + column.offset;
             match column.kind {
                 6 => {
@@ -195,7 +206,7 @@ pub fn table_from_json(text: &[u8]) -> Result<Vec<u8>> {
                     Some("") | None => 0,
                     Some(text) => {
                         let at = pool.len() as u32;
-                        pool.extend_from_slice(text.as_bytes());
+                        pool.extend_from_slice(&table_text(text));
                         pool.push(0);
                         at
                     }
@@ -216,7 +227,119 @@ pub fn table_from_json(text: &[u8]) -> Result<Vec<u8>> {
 /// A mod's rows for a table.
 pub fn read_rows(text: &[u8]) -> Result<Vec<Value>> {
     let root: Value = serde_json::from_slice(text).context("not JSON")?;
+    if root.get("rows").is_none() && (root.get("change").is_some() || root.get("remove").is_some()) {
+        return Ok(Vec::new());
+    }
     root.get("rows").and_then(Value::as_array).cloned().context("it has no rows")
+}
+
+fn column_of<'a>(columns: &'a [Column], key: &str) -> Result<&'a Column> {
+    let hash = match key.strip_prefix("0x") {
+        Some(hex) => u32::from_str_radix(hex, 16).with_context(|| format!("column {key}"))?,
+        None => column_hash(key),
+    };
+    columns.iter().find(|c| c.hash == hash).with_context(|| format!("this table has no column {key}"))
+}
+
+fn cell_is(column: &Column, row: &[u8], pool: &[u8], wanted: &Value) -> bool {
+    let place = column.offset;
+    match column.kind {
+        6 => {
+            let at = u32::from_le_bytes(row[place..place + 4].try_into().unwrap()) as usize;
+            let end = pool.get(at..).and_then(|t| t.iter().position(|b| *b == 0)).map_or(at, |e| at + e);
+            pool.get(at..end).is_some_and(|text| wanted.as_str().is_some_and(|w| table_text(w) == text))
+        }
+        2 => {
+            let held = f32::from_le_bytes(row[place..place + 4].try_into().unwrap());
+            wanted.as_f64().is_some_and(|w| (w as f32 - held).abs() < 0.0001)
+        }
+        4 => wanted.as_i64().is_some_and(|w| i64::from(u16::from_le_bytes(row[place..place + 2].try_into().unwrap())) & i64::from(column.mask) == w & i64::from(column.mask)),
+        5 => wanted.as_i64().is_some_and(|w| i64::from(row[place]) == w),
+        _ => {
+            let held = (u32::from_le_bytes(row[place..place + 4].try_into().unwrap()) & column.mask) >> column.shift;
+            wanted.as_i64().is_some_and(|w| (((w as u32) << column.shift) & column.mask) >> column.shift == held)
+        }
+    }
+}
+
+/// A file in `merge/` can do more than add: `remove` drops the rows matching any of its sets of columns, and `change` is a list
+/// of `{ "where": { columns }, "set": { columns } }`. These run before its `rows` are added. Every row matching is changed: a
+/// row that matches nothing is not an error, since another mod may have taken it.
+pub fn edit_rows(table: &[u8], text: &[u8]) -> Result<Vec<u8>> {
+    let root: Value = serde_json::from_slice(text).context("not JSON")?;
+    if root.get("remove").is_none() && root.get("change").is_none() {
+        return Ok(table.to_vec());
+    }
+    let entries = le32(table, 0)? as usize;
+    let data = le32(table, 8)? as usize;
+    let size = le32(table, 12)? as usize;
+    let columns = columns(table)?;
+    let rows_end = data + entries * size;
+    let mut pool = table.get(rows_end..).context("a table past the file's end")?.to_vec();
+    let mut rows: Vec<Vec<u8>> = table[data..rows_end].chunks_exact(size.max(1)).map(<[u8]>::to_vec).collect();
+    let matches = |row: &[u8], pool: &[u8], wanted: &serde_json::Map<String, Value>| -> Result<bool> {
+        for (key, value) in wanted {
+            if !cell_is(column_of(&columns, key)?, row, pool, value) {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    };
+    if let Some(remove) = root.get("remove").and_then(Value::as_array) {
+        for wanted in remove {
+            let wanted = wanted.as_object().context("each row of remove is a set of columns")?;
+            let mut kept = Vec::with_capacity(rows.len());
+            for row in rows {
+                if !matches(&row, &pool, wanted)? {
+                    kept.push(row);
+                }
+            }
+            rows = kept;
+        }
+    }
+    if let Some(changes) = root.get("change").and_then(Value::as_array) {
+        for change in changes {
+            let wanted = change.get("where").and_then(Value::as_object).context("each change has a where")?;
+            let set = change.get("set").and_then(Value::as_object).context("each change has a set")?;
+            for row in &mut rows {
+                if !matches(row, &pool, wanted)? {
+                    continue;
+                }
+                for (key, value) in set {
+                    let column = column_of(&columns, key)?;
+                    let place = column.offset;
+                    match column.kind {
+                        6 => {
+                            let text = value.as_str().with_context(|| format!("{key} is a word"))?;
+                            let at = pool.len() as u32;
+                            pool.extend_from_slice(&table_text(text));
+                            pool.push(0);
+                            row[place..place + 4].copy_from_slice(&at.to_le_bytes());
+                        }
+                        2 => row[place..place + 4].copy_from_slice(&(value.as_f64().with_context(|| format!("{key} is a number"))? as f32).to_le_bytes()),
+                        4 => row[place..place + 2].copy_from_slice(&(value.as_i64().with_context(|| format!("{key} is a whole number"))? as u16).to_le_bytes()),
+                        5 => row[place] = value.as_i64().with_context(|| format!("{key} is a whole number"))? as u8,
+                        _ => {
+                            let number = value.as_i64().with_context(|| format!("{key} is a whole number"))? as u32;
+                            let old = u32::from_le_bytes(row[place..place + 4].try_into().unwrap());
+                            let new = (old & !column.mask) | ((number << column.shift) & column.mask);
+                            row[place..place + 4].copy_from_slice(&new.to_le_bytes());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    let mut out = table[..data].to_vec();
+    for row in &rows {
+        out.extend_from_slice(row);
+    }
+    out.extend_from_slice(&pool);
+    while out.len() % 32 != 0 {
+        out.push(0);
+    }
+    out[0..4].copy_from_slice(&(rows.len() as u32).to_le_bytes());
+    Ok(out)
 }
 
 /// The end of a cooked particle file's resources, walking them; `visit` sees each one's place.

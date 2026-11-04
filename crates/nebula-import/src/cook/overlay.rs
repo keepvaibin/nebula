@@ -48,6 +48,12 @@ fn modern_files(change: &Change, bytes: &[u8]) -> Result<Vec<(String, Vec<u8>)>>
         let dot = change.path.rfind('.').unwrap_or(change.path.len());
         format!("{}{ending}", &change.path[..dot])
     };
+    // Name.kcl.glb: solid ground, not something to see.
+    if lower.ends_with(".kcl.glb") || lower.ends_with(".kcl.gltf") {
+        let (collision, attributes) = super::gltf::to_collision(bytes, change.source.parent())?;
+        let stem = &change.path[..lower.find(".kcl.").unwrap_or(change.path.len())];
+        return Ok(vec![(format!("{stem}.kcl"), collision), (format!("{stem}.pa"), attributes)]);
+    }
     if lower.ends_with(".gltf") || lower.ends_with(".glb") {
         let (model, animations) = super::gltf::to_files(bytes, change.source.parent())?;
         let folder = change.path.rfind('/').map_or("", |at| &change.path[..at + 1]);
@@ -116,7 +122,7 @@ pub fn write_overlay(game_id: &str, changes: &[Change], base: Option<&Path>, out
             let _ = fs::write(file, format!("{done} {}\n", changes.len()));
         }
         let lower = change.path.to_ascii_lowercase();
-        super::material::MOD_FILE_NEEDS_PASSES.set(lower.contains("mario") || lower.contains("luigi"));
+        super::material::MOD_FILE_NEEDS_PASSES.set(lower.contains("mario") || lower.contains("luigi") || lower.contains("flexible"));
         let result = fs::read(&change.source)
             .with_context(|| format!("{} cannot be read", change.source.display()))
             .and_then(|bytes| {
@@ -206,6 +212,7 @@ fn apply_merges(changes: &[Change], base: Option<&Path>, pak: &mut File, tempora
                         }
                     }
                 }
+                let current = super::merge::edit_rows(&current, &bytes)?;
                 merged.insert(table_key, super::merge::add_rows(&current, &rows)?);
             } else if lower(&change.path).ends_with(".jpc") {
                 let folder = change.source.parent().map(Path::to_path_buf).unwrap_or_default();
@@ -285,7 +292,18 @@ fn complete_archives(changes: &[Change], base: Option<&Path>, pak: &mut File, at
 static PROGRESS: std::sync::Mutex<Option<std::path::PathBuf>> = std::sync::Mutex::new(None);
 
 /// A plan file into a store: the C entry of Android and the command of the desktop program.
+/// As `cook_plan_inner`, and what couldn't be cooked goes in a file beside the store: the game logs each.
 pub fn cook_plan(plan: &Path, output: &Path) -> Result<(Stats, Vec<(String, String)>)> {
+    let (stats, failed) = cook_plan_inner(plan, output)?;
+    let mut words = String::new();
+    for (path, reason) in &failed {
+        words.push_str(&format!("{path}: {reason}\n"));
+    }
+    fs::write(output.with_extension("left_out"), words).ok();
+    Ok((stats, failed))
+}
+
+fn cook_plan_inner(plan: &Path, output: &Path) -> Result<(Stats, Vec<(String, String)>)> {
     let text = fs::read_to_string(plan).with_context(|| format!("{} cannot be read", plan.display()))?;
     let (game_id, changes) = read_plan(&text)?;
     let mut stats = Stats::default();

@@ -38,9 +38,9 @@ namespace {
     CollisionParts* createCollisionParts(ResourceHolder* pResHolder, const char* pName, HitSensor* pSensor, const TPos3f& rMtx,
                                          MR::CollisionScaleType scaleType, s32 unk) {
         CollisionParts* parts = new CollisionParts();
-        char kcl[0x80];
+        char kcl[256];
         nebula_snprintf(kcl, sizeof(kcl), "%s.kcl", pName);
-        char pa[0x80];
+        char pa[256];
         nebula_snprintf(pa, sizeof(pa), "%s.pa", pName);
         void* kclRes;
         void* paRes = nullptr;
@@ -243,7 +243,7 @@ namespace MR {
     }
 
     CollisionParts* tryCreateCollisionMoveLimit(LiveActor* pActor, HitSensor* pSensor) {
-        char kcl[0x80];
+        char kcl[256];
         {
             const char* pKclName = "MoveLimit";
             nebula_snprintf(kcl, sizeof(kcl), "%s.kcl", pKclName);
@@ -266,7 +266,7 @@ namespace MR {
     }
 
     CollisionParts* tryCreateCollisionWaterSurface(LiveActor* pActor, HitSensor* pSensor) {
-        char kcl[0x80];
+        char kcl[256];
         {
             const char* pKclName = "WaterSurface";
             nebula_snprintf(kcl, sizeof(kcl), "%s.kcl", pKclName);
@@ -289,7 +289,7 @@ namespace MR {
     }
 
     CollisionParts* tryCreateCollisionSunshade(LiveActor* pActor, HitSensor* pSensor) {
-        char kcl[0x80];
+        char kcl[256];
         {
             const char* pKclName = "Sunshade";
             nebula_snprintf(kcl, sizeof(kcl), "%s.kcl", pKclName);
@@ -2237,7 +2237,7 @@ namespace MR {
     }
 
     CollisionParts* tryCreateCollisionMoveLimit(LiveActor* pActor, MtxPtr pMtx, HitSensor* pSensor) {
-        char kcl[0x80];
+        char kcl[256];
         {
             const char* pKclName = "MoveLimit";
             nebula_snprintf(kcl, sizeof(kcl), "%s.kcl", pKclName);
@@ -2261,7 +2261,7 @@ namespace MR {
     }
 
     CollisionParts* tryCreateCollisionWaterSurface(LiveActor* pActor, MtxPtr pMtx, HitSensor* pSensor) {
-        char kcl[0x80];
+        char kcl[256];
         {
             const char* pKclName = "WaterSurface";
             nebula_snprintf(kcl, sizeof(kcl), "%s.kcl", pKclName);
@@ -2285,7 +2285,7 @@ namespace MR {
     }
 
     CollisionParts* tryCreateCollisionSunshade(LiveActor* pActor, MtxPtr pMtx, HitSensor* pSensor) {
-        char kcl[0x80];
+        char kcl[256];
         {
             const char* pKclName = "Sunshade";
             nebula_snprintf(kcl, sizeof(kcl), "%s.kcl", pKclName);
@@ -2351,7 +2351,7 @@ namespace MR {
     }
 
     bool isExistKcl(LiveActor* pActor, const char* pName) {
-        char kclName[0x80];
+        char kclName[256];
         nebula_snprintf(kclName, sizeof(kclName), "%s.kcl", pName);
         return getResourceHolder(pActor)->mFileInfoTable->isExistRes(kclName);
     }

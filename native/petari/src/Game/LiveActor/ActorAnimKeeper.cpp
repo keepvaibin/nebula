@@ -101,7 +101,7 @@ bool ActorAnimKeeper::isPlaying(const char* pName) const {
 
 namespace {
     void getCsvDataAnimData(ActorAnimDataInfo* pDataInfo, const char* pAnimType, JMapInfo* pInfo, s32 index) {
-        char pOut[0x80];
+        char pOut[256];
         nebula_snprintf(pOut, sizeof(pOut), "%sName", pAnimType);
         MR::getCsvDataStrOrNULL(&pDataInfo->mName, pInfo, pOut, index);
 

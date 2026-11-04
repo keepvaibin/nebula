@@ -114,7 +114,7 @@ void NormalMapBase::setupTexture() {
         const ResTIMG* pImage = MR::getResTIMG(this, i);
         const char* pName = MR::getTextureName(this, i);
         if (strstr(pName, "Nswap_")) {
-            char fileName[64];
+            char fileName[256];
             nebula_snprintf(fileName, sizeof(fileName), "%s.bti", pName + 6);
             pImage = MR::getTexFromArc(fileName, this);
             mNormalTex = new JUTTexture(pImage);

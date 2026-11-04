@@ -425,7 +425,7 @@ void Dodoryu::endPlayerCenterCamera() {
 }
 
 void Dodoryu::getPlayerResetMtx(TPos3f* pMtx, u32 param2) const {
-    char buf[64];
+    char buf[256];
     nebula_snprintf(buf, sizeof(buf), "\203\175\203\212\203\111\215\304\203\132\203\142\203\147%d" /* マリオ再セット%d */, param2 + 1);
 
     MR::tryFindNamePos(buf, (MtxPtr)pMtx);
@@ -1106,7 +1106,7 @@ void DodoryuLeadHill::calcAndSetBaseMtx() {
 
 void DodoryuLeadHill::initJoint() {
     for (int i = 0; i < ARRAY_SIZE(_94); i++) {
-        char buf[64];
+        char buf[256];
         nebula_snprintf(buf, sizeof(buf), "DodoryuLeadHill%d", i + 1);
 
         _94[i] = MR::createJointDelegatorWithNullChildFunc(this, &DodoryuLeadHill::calcJoint, buf);

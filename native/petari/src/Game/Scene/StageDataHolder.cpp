@@ -21,8 +21,7 @@ template JMapInfoIter JMapInfo::findElement< const char* >(const char*, const ch
 // for some reason these two strings only emit here
 // shrug
 namespace {
-    static const char* cLayerDirName[0x11] = {"Common", "LayerA", "LayerB", "LayerC", "LayerD", "LayerE", "LayerF", "LayerG", "LayerH",
-                                              "LayerI", "LayerJ", "LayerK", "LayerL", "LayerM", "LayerN", "LayerO", "LayerP"};
+    static const char* cLayerDirName[33] = {"Common", "LayerA", "LayerB", "LayerC", "LayerD", "LayerE", "LayerF", "LayerG", "LayerH", "LayerI", "LayerJ", "LayerK", "LayerL", "LayerM", "LayerN", "LayerO", "LayerP", "LayerQ", "LayerR", "LayerS", "LayerT", "LayerU", "LayerV", "LayerW", "LayerX", "LayerY", "LayerZ", "LayerAA", "LayerAB", "LayerAC", "LayerAD", "LayerAE", "LayerAF"};
 
     static bool isPrioPlacementObjInfo(const char* pName) {
         return MR::isEqualStringCase(pName, "AreaObjInfo") || MR::isEqualStringCase(pName, "PlanetObjInfo") ||
@@ -169,7 +168,7 @@ JMapInfoIter StageDataHolder::getCommonPathPointInfo(const JMapInfo** ppOut, int
 
 JMapInfoIter StageDataHolder::getCommonPathPointInfoFromRailDataIndex(const JMapInfo** ppInfo, int idx) const {
     const JMapInfo* pInfo = findJmpInfoFromArray(&mPathObjs, "CommonPathInfo");
-    char buf[128];
+    char buf[256];
     nebula_snprintf(buf, sizeof(buf), "CommonPathPointInfo.%d", idx);
     *ppInfo = findJmpInfoFromArray(&mPathObjs, buf);
     return JMapInfoIter(pInfo, idx);
@@ -434,9 +433,9 @@ void StageDataHolder::initJmpInfo(MR::AssignableArray< JMapInfo >* pInfo, const 
 void StageDataHolder::initAllLayerJmpInfo(MR::AssignableArray< JMapInfo >* pInfo, const char* pName) {
     s32 count = 0;
     u32 mask = ::getAllLayers(_A8, MR::getCurrentScenarioNo());
-    char buf[64];
+    char buf[256];
 
-    for (u32 i = 0; i < 0x11; i++) {
+    for (u32 i = 0; i < 33; i++) {
         if ((mask & (1 << i)) != 0) {
             nebula_snprintf(buf, sizeof(buf), "%s/%s", pName, ::cLayerDirName[i]);
             count += mArchive->countFile(buf);
@@ -448,7 +447,7 @@ void StageDataHolder::initAllLayerJmpInfo(MR::AssignableArray< JMapInfo >* pInfo
         pInfo->mMaxSize = count;
         pInfo->mArr = pInfoArray;
 
-        for (u32 i = 0; i < 0x11; i++) {
+        for (u32 i = 0; i < 33; i++) {
             if ((mask & (1 << i)) != 0) {
                 nebula_snprintf(buf, sizeof(buf), "%s/%s", pName, ::cLayerDirName[i]);
                 pInfoArray = attachJmpInfoToArray(pInfoArray, buf);
@@ -464,9 +463,9 @@ void StageDataHolder::initAllLayerJmpInfo(MR::AssignableArray< JMapInfo >* pInfo
 
 void StageDataHolder::initLayerJmpInfo(MR::AssignableArray< JMapInfo >* pInfo, const char* pPlacementDir, const char* pMapPartsDir, u32 layerMask) {
     s32 count = 0;
-    char path[64];
+    char path[256];
 
-    for (u32 i = 0; i < 0x11; i++) {
+    for (u32 i = 0; i < 33; i++) {
         if (layerMask & (1 << i)) {
             nebula_snprintf(path, sizeof(path), "%s/%s", pPlacementDir, ::cLayerDirName[i]);
             count += mArchive->countFile(path);
@@ -479,7 +478,7 @@ void StageDataHolder::initLayerJmpInfo(MR::AssignableArray< JMapInfo >* pInfo, c
         JMapInfo* pCurrent = new JMapInfo[count];
         pInfo->mMaxSize = count;
         pInfo->mArr = pCurrent;
-        for (u32 i = 0; i < 0x11; i++) {
+        for (u32 i = 0; i < 33; i++) {
             if (layerMask & (1 << i)) {
                 nebula_snprintf(path, sizeof(path), "%s/%s", pPlacementDir, ::cLayerDirName[i]);
                 pCurrent = attachJmpInfoToArray(pCurrent, path);

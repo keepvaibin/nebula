@@ -1,3 +1,4 @@
+#include "Game/System/NebulaHost.hpp"
 #include "Game/System/GameDataPlayerStatus.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include <JSystem/JSupport/JSUMemoryInputStream.hpp>
@@ -42,13 +43,13 @@ s32 GameDataPlayerStatus::deserialize(const u8* pBuffer, u32 size) {
         stream.read(&mPlayerLeftSupply, sizeof(mPlayerLeftSupply));
     }
 
-    mPlayerLeft = 4;
+    mPlayerLeft = NebulaHost::setting(NEBULA_PATCH_STARTING_LIVES, 4);
 
     return 0;
 }
 
 void GameDataPlayerStatus::initializeData() {
-    mPlayerLeft = 4;
+    mPlayerLeft = NebulaHost::setting(NEBULA_PATCH_STARTING_LIVES, 4);
     mPlayerLeftSupply = 4;
     mStockedStarPiece = 0;
     mStoryProgress = 0;
@@ -57,13 +58,13 @@ void GameDataPlayerStatus::initializeData() {
 s32 GameDataPlayerStatus::getPlayerLeft() const {
     s32 playerLeft = mPlayerLeft;
 
-    return MR::clamp(playerLeft, 0, 99);
+    return MR::clamp(playerLeft, 0, NebulaHost::setting(NEBULA_PATCH_MAX_LIVES, 99));
 }
 
 void GameDataPlayerStatus::addPlayerLeft(int num) {
     s32 playerLeft = mPlayerLeft + num;
 
-    mPlayerLeft = MR::clamp(playerLeft, 0, 99);
+    mPlayerLeft = MR::clamp(playerLeft, 0, NebulaHost::setting(NEBULA_PATCH_MAX_LIVES, 99));
 }
 
 bool GameDataPlayerStatus::isPlayerLeftSupply() const {
@@ -77,5 +78,5 @@ void GameDataPlayerStatus::offPlayerLeftSupply() {
 void GameDataPlayerStatus::addStockedStarPiece(int num) {
     s32 stockedStarPiece = mStockedStarPiece + num;
 
-    mStockedStarPiece = MR::clamp(stockedStarPiece, 0, 9999);
+    mStockedStarPiece = MR::clamp(stockedStarPiece, 0, NebulaHost::setting(NEBULA_PATCH_MAX_STAR_BITS, 9999));
 }

@@ -23,7 +23,7 @@ namespace {
 namespace {
     s32 countMessage(const char* pName) {
         s32 count = 0;
-        char messageID[0x80];
+        char messageID[256];
 
         do {
             nebula_snprintf(messageID, sizeof(messageID), "%s%03d", pName, count + 1);
@@ -234,7 +234,7 @@ void Manual2P::reflectPageIndex() {
 
     MR::setAnimFrameAndStop(this, mPageIndex, 1);
 
-    char messageID[0x80];
+    char messageID[256];
     nebula_snprintf(messageID, sizeof(messageID), "2PGuidance%03d", mPageIndex + 1);
 
     if (MR::isExistGameMessage(messageID)) {

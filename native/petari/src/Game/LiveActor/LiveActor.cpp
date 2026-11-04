@@ -360,6 +360,11 @@ void LiveActor::prepareDrawClipped() {
 
 void LiveActor::initModelManagerWithAnm(const char* pModelName, const char* pAnimName, bool a3) {
     mModelManager = new ModelManager();
+    // A class of the mod's: its files in place of those the object it is made as asks for.
+    pModelName = NebulaMods::modelFor(mName, pModelName);
+    if (pAnimName != nullptr) {
+        pAnimName = NebulaMods::modelFor(mName, pAnimName);
+    }
     mModelManager->init(pModelName, pAnimName, a3);
 
     MR::getJ3DModel(this)->setBaseScale(mScale);
@@ -419,6 +424,7 @@ void LiveActor::initShadowControllerList(u32 shadowNum) {
 }
 
 void LiveActor::initActorCollisionParts(const char* pParam1, HitSensor* pParam2, ResourceHolder* pParam3, MtxPtr pParam4, bool param5, bool param6) {
+    pParam1 = NebulaMods::modelFor(mName, pParam1);
     MR::CollisionScaleType scaleType;
 
     if (param6) {

@@ -75,7 +75,7 @@ namespace {
         char posBuf[256];
         nebula_snprintf(posBuf, sizeof(posBuf), "%sPos", pName);
         MR::getCsvDataVec(&pLightInfo->mPos, pInfo, posBuf, id);
-        char camBuf[128];
+        char camBuf[256];
         nebula_snprintf(camBuf, sizeof(camBuf), "%sFollowCamera", pName);
         MR::getCsvDataBool(&pLightInfo->mIsFollowCamera, pInfo, camBuf, id);
     }

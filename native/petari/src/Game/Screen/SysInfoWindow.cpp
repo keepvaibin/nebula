@@ -170,8 +170,8 @@ void SysInfoWindow::appear(const char* pMessageId, SysInfoType type, SysInfoText
     pMessageChangeFunc(this, mTextParentPaneName, pMessageId);
 
     if (type == Type_YesNo) {
-        char yesMessageId[48];
-        char noMessageId[48];
+        char yesMessageId[256];
+        char noMessageId[256];
         nebula_snprintf(yesMessageId, sizeof(yesMessageId), "%s_Yes", pMessageId);
         nebula_snprintf(noMessageId, sizeof(noMessageId), "%s_No", pMessageId);
         pMessageChangeFunc(this, "Right", yesMessageId);

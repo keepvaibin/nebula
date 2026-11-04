@@ -1,3 +1,4 @@
+#include "Game/System/NebulaMods.hpp"
 #include "Game/MapObj/PowerStarHolder.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/NPC/EventDirector.hpp"
@@ -21,6 +22,7 @@ void PowerStarHolder::registerPowerStar(PowerStar* pStar, int starNum) {
 }
 
 void PowerStarHolder::requestAppearPowerStar(int starNum, const TVec3f* pPos, bool forceAppear) {
+    NebulaMods::fire(NEBULA_MOD_EVENT_POWER_STAR_APPEAR, starNum);
     PowerStarRequestInfo* info = findPowerStarRequestInfo(starNum);
     info->mIsAppear = true;
     PowerStar* star = info->mStar;

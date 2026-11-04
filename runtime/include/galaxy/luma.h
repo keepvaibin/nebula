@@ -39,6 +39,9 @@ struct When {
     std::vector<std::string> languages;  // the game's folders: UsEnglish
     std::vector<std::string> platforms;  // windows, android, linux, macos, ios
     std::map<std::string, std::vector<std::string>> options;
+    std::vector<std::string> mods;  // each of these mods is on
+    std::vector<When> not_any;  // none of these holds
+    std::vector<When> any_of;  // one of these holds, if there are any
     bool unknown = false;  // has a condition this game doesn't know: the layer is not used
 };
 
@@ -56,25 +59,33 @@ struct CometLimit {
     int seconds = 0;
 };
 
-struct Layer {
-    std::string path;
-    std::map<std::string, std::uint32_t> switches;
-    std::map<std::string, std::string> materials;  // a material's name: the shader written for it
-    std::vector<ObjectChange> object_changes;
-    std::vector<CometLimit> comet_time_limits;
-    When when;
+// A stage playing by another's rules.
+struct StageRule {
+    std::string stage;
+    int scenario = 0;
+    std::vector<std::string> acts_as;
+    bool own_rules = true;
 };
 
-struct Dependency {
-    std::string id;
-    std::string version;  // needs: the oldest that will do; conflicts: only those below this
+// A number of the player's table.
+struct PlayerConstant {
+    int character = 0;  // 0 Mario, 1 Luigi
+    std::string name;
+    int index = 0;
+    float value = 0.0f;
+    std::string option;  // when set: the number is this option's choice
 };
 
-// A mod's code: one native library per device.
-struct Plugin {
-    std::map<std::string, std::string> binaries;  // by plugin_target()
-    std::uint32_t api = 0;
-    When when;
+// A new object, made as one of the game's.
+struct ObjectClass {
+    std::string name;
+    std::string like;
+};
+
+// A sound by its name, from a file.
+struct SoundEffect {
+    std::string name;
+    std::string file;
 };
 
 // A galaxy beside the game's, and the hungry Luma that opens it.
@@ -119,13 +130,49 @@ struct CometSchedule {
     std::vector<std::pair<std::string, int>> comets;  // a galaxy, and 1 for the hundred purple coins
 };
 
+// What a whole mod, or one of its layers, adds beside files.
+struct Rows {
+    std::vector<Galaxy> galaxies;
+    std::vector<Music> music;
+    std::vector<EventFlag> event_flags;
+    std::vector<CometSchedule> comet_schedule;
+    std::map<std::string, Text> text;  // a message's id: its words
+};
+
+struct Layer {
+    std::string path;
+    Rows rows;
+    std::map<std::string, std::uint32_t> switches;
+    std::map<std::string, std::string> switch_options;  // a setting whose number is the choice of an option
+    std::map<std::string, std::string> materials;  // a material's name: the shader written for it
+    std::vector<ObjectChange> object_changes;
+    std::vector<CometLimit> comet_time_limits;
+    std::vector<StageRule> stages;
+    std::vector<PlayerConstant> player_constants;
+    std::vector<ObjectClass> object_classes;
+    std::vector<SoundEffect> sound_effects;
+    When when;
+};
+
+struct Dependency {
+    std::string id;
+    std::string version;  // needs: the oldest that will do; conflicts: only those below this
+};
+
+// A mod's code: one native library per device.
+struct Plugin {
+    std::map<std::string, std::string> binaries;  // by plugin_target()
+    std::uint32_t api = 0;
+    When when;
+};
+
 enum class SaveMode {
     Shared,  // the player's normal saves
     Own,     // saves of its own, from nothing or from its starting files
     Copy,    // saves of its own, from a copy of the player's
 };
 
-struct Manifest {
+struct Manifest : Rows {
     std::uint32_t format = 0;
     std::string id;
     Text name;
@@ -150,11 +197,6 @@ struct Manifest {
     std::string save_path;  // starting files in the mod
     bool save_player_can_change = false;
     std::vector<Plugin> plugins;
-    std::vector<Galaxy> galaxies;
-    std::vector<Music> music;
-    std::vector<EventFlag> event_flags;
-    std::vector<CometSchedule> comet_schedule;
-    std::map<std::string, Text> text;  // a message's id: its words
 };
 
 // What this game reads.
@@ -178,6 +220,7 @@ struct Situation {
     std::string language;  // the folder of the language played
     std::string platform;
     std::map<std::string, std::string> options;  // each option's choice
+    std::vector<std::string> mods;  // the mods on
 };
 [[nodiscard]] bool layer_used(const Layer& layer, const Situation& situation);
 [[nodiscard]] bool when_holds(const When& when, const Situation& situation);

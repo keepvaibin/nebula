@@ -503,6 +503,9 @@ struct MarioConstTable {
     u16 mRushInBlendTimer;
 };
 
+bool setMarioConstant(s32 character, const char* pName, s32 index, f32 value);
+f32 getMarioConstant(s32 character, const char* pName, s32 index);
+
 /// @brief The accessor for player character constants.
 class MarioConst {
     friend class Mario;

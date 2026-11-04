@@ -61,7 +61,7 @@ MarioActor::MarioActor(const char* pName) : LiveActor(pName), _1B0(0xFFFFFFFF) {
     NebulaHost::codePatch(NEBULA_PATCH_PLAYER_HEALTH, &startingHealth);
     mMaxHealth = startingHealth;
     mHealth = startingHealth;
-    mWaterLife = 8;
+    mWaterLife = NebulaHost::setting(NEBULA_PATCH_WATER_AIR, 8);
 
     if (MR::isPlayerLuigi()) {
         mMaxHealth = startingHealth;
@@ -1130,7 +1130,7 @@ bool MarioActor::doRush() {
                 }
 
                 if (initial == 2) {
-                    mWaterLife = 8;
+                    mWaterLife = NebulaHost::setting(NEBULA_PATCH_WATER_AIR, 8);
                     MR::getGameSceneLayoutHolder()->changeLifeMeterModeGround();
                     mMario->forceExitSwim();
                 } else if (initial == 0) {
@@ -1468,28 +1468,13 @@ void MarioActor::decLife(u16 amt) {
     }
 
     _388 = 0;
-    if (gIsLuigi) {
-        if (mMaxHealth == 3) {
-            return;
-        }
-
-        if (mHealth > 3) {
-            return;
-        }
-
-        mMaxHealth = 3;
+    // A Life Up's extra health gone, the most falls back to what the player starts with.
+    const u32 startingHealth = NebulaHost::setting(NEBULA_PATCH_PLAYER_HEALTH, 3);
+    if (mMaxHealth <= startingHealth || mHealth > startingHealth) {
         return;
     }
 
-    if (mMaxHealth == 3) {
-        return;
-    }
-
-    if (mHealth > 3) {
-        return;
-    }
-
-    mMaxHealth = 3;
+    mMaxHealth = startingHealth;
 }
 
 void MarioActor::decLifeLarge() {
@@ -1505,7 +1490,7 @@ void MarioActor::decLifeSmall() {
 }
 
 void MarioActor::resetWaterLife() {
-    mWaterLife = 8;
+    mWaterLife = NebulaHost::setting(NEBULA_PATCH_WATER_AIR, 8);
 }
 
 void MarioActor::updateLife() {

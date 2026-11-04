@@ -212,6 +212,57 @@ impl Document {
     }
 }
 
+/// A model as solid ground: its triangles in the game's units, and a table of attributes with one row per material.
+/// A material's `extras` are the row's columns: `Floor_code`, `Wall_code`, `Sound_code`, `Camera_id`, `Camera_through`.
+pub fn to_collision(bytes: &[u8], folder: Option<&Path>) -> Result<(Vec<u8>, Vec<u8>)> {
+    let document = Document::parse(bytes, folder)?;
+    let root = &document.root;
+    let scene = &root["scenes"][root["scene"].as_u64().unwrap_or(0) as usize];
+    let nodes = root["nodes"].as_array().map(Vec::as_slice).unwrap_or_default();
+    let materials = root["materials"].as_array().map(Vec::as_slice).unwrap_or_default();
+    let mut triangles = Vec::new();
+    let mut stack: Vec<(usize, Matrix)> = scene["nodes"].as_array().map(Vec::as_slice).unwrap_or_default().iter().filter_map(|n| n.as_u64()).map(|n| (n as usize, IDENTITY)).collect();
+    while let Some((node, parent)) = stack.pop() {
+        let matrix = multiply(&parent, &node_matrix(nodes.get(node).context("a scene naming a node it doesn't have")?));
+        for child in nodes[node]["children"].as_array().map(Vec::as_slice).unwrap_or_default().iter().filter_map(|c| c.as_u64()) {
+            stack.push((child as usize, matrix));
+        }
+        let Some(mesh) = nodes[node]["mesh"].as_u64() else {
+            continue;
+        };
+        for primitive in root["meshes"][mesh as usize]["primitives"].as_array().map(Vec::as_slice).unwrap_or_default() {
+            if primitive["mode"].as_u64().unwrap_or(4) != 4 {
+                continue;
+            }
+            let positions = document.floats(primitive["attributes"]["POSITION"].as_u64().context("a mesh with no positions")? as usize, 3)?;
+            let indices = document.indices(primitive, positions.len() / 3)?;
+            let attribute = primitive["material"].as_u64().unwrap_or(0) as u16;
+            let corner = |index: u32| -> [f32; 3] {
+                let at = index as usize * 3;
+                let p = transform(&matrix, [positions[at], positions[at + 1], positions[at + 2]], 1.0);
+                [p[0] * 100.0, p[1] * 100.0, p[2] * 100.0]
+            };
+            for triple in indices.chunks_exact(3) {
+                triangles.push(super::kcl::Triangle { corners: [corner(triple[0]), corner(triple[1]), corner(triple[2])], attribute });
+            }
+        }
+    }
+    let mut rows = Vec::new();
+    for index in 0..materials.len().max(1) {
+        let extras = materials.get(index).map(|m| &m["extras"]);
+        let number = |name: &str| extras.and_then(|e| e[name].as_i64()).unwrap_or(0);
+        rows.push(serde_json::json!({
+            "Camera_id": number("Camera_id"),
+            "Sound_code": number("Sound_code"),
+            "Floor_code": number("Floor_code"),
+            "Wall_code": number("Wall_code"),
+            "Camera_through": number("Camera_through"),
+        }));
+    }
+    let table = super::merge::table_from_json(serde_json::json!({ "rows": rows }).to_string().as_bytes())?;
+    Ok((super::kcl::from_triangles(&triangles)?, table))
+}
+
 /// A PNG as RGBA, top row first.
 pub fn decode_image(bytes: &[u8]) -> Result<(u32, u32, Vec<u8>)> {
     if !bytes.starts_with(&[0x89, b'P', b'N', b'G']) {

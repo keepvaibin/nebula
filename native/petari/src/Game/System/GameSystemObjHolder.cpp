@@ -46,7 +46,7 @@ void GameSystemObjHolder::initMessageResource() {
     NebulaArena* pHeap = nullptr;
     MR::getMountedArchiveAndHeap("ErrorMessageArchive.arc", &pArchive, &pHeap);
 
-    char systemMessagePath[128];
+    char systemMessagePath[256];
     const char* languagePrefix = MR::getCurrentLanguagePrefix();
     nebula_snprintf(systemMessagePath, sizeof(systemMessagePath), "/%s/MessageData/System.arc", languagePrefix);
 

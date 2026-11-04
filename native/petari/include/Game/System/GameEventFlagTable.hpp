@@ -39,7 +39,7 @@ namespace GameEventFlagTable {
     s32 calcExclamationGalaxyNum();
     // Rows a mod adds: only before the table is first read. false: its name can't be told from a row already there.
     bool addGalaxy(const char* pGalaxyName);
-    void setFlag(const char*, u8, u8, u8, const char*, const char*);
+    void setFlag(const char*, u8, u16, u16, const char*, const char*);
     bool addHungryLuma(const char* pGalaxyName, s32 slot, s32 starBits);
     const char* getExclamationGalaxyNameFromIndex(int);
     bool isExist(const char*);

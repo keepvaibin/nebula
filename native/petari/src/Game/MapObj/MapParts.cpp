@@ -44,7 +44,7 @@ void MapParts::connectToScene() {
 }
 
 void MapParts::initModelAndCollision(const JMapInfoIter& rIter) {
-    char name[0x30];
+    char name[256];
     MR::getMapPartsObjectName(name, sizeof(name), rIter);
     initModelManagerWithAnm(name, nullptr, false);
     initHitSensor(2);

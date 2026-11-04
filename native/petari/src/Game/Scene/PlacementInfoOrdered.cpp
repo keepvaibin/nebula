@@ -1,3 +1,4 @@
+#include "Game/System/NebulaMods.hpp"
 #include "Game/Scene/PlacementInfoOrdered.hpp"
 #include "Game/LiveActor/AllLiveActorGroup.hpp"
 #include "Game/Map/PlanetMapCreator.hpp"
@@ -89,7 +90,7 @@ void PlacementInfoOrdered::initPlacement() {
     for (s32 i = 0; i < count; i++) {
         pSet = mOrderedSetArray[i];
         CreationFuncPtr creator = ::getCreator(*pSet);
-        if (creator != nullptr) {
+        if (creator != nullptr && !NebulaMods::isMissingFiles(pSet->mName)) {
             const char* pName = MR::getJapaneseObjectName(pSet->mName);
             for (link = pSet->mList.mHead; link != nullptr; link = link->mNextLink) {
                 const JMapInfoIter& rIter = static_cast< Index* >(link->mValue)->getInfoIter();

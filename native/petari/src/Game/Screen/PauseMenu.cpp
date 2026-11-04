@@ -226,7 +226,7 @@ void PauseMenu::updateStarPane() {
             if (MR::hasPowerStarInCurrentStage(i + 1)) {
                 if (i < accessor.getNormalScenarioNum()) {
                     MR::showPaneRecursive(this, starPaneNames[i]);
-                } else {
+                } else if (accessor.getNormalScenarioNum() + extraStarCount < static_cast< s32 >(ARRAY_SIZEU(starPaneNames))) {
                     MR::showPaneRecursive(this, starPaneNames[accessor.getNormalScenarioNum() + extraStarCount]);
                     extraStarCount++;
                 }

@@ -136,6 +136,7 @@ GameScene::GameScene()
 }
 
 GameScene::~GameScene() {
+    NebulaMods::fire(NEBULA_MOD_EVENT_STAGE_END, 0, nullptr, MR::getCurrentStageName());
     MR::destroySceneMessage();
     NPCFunction::deleteNPCData();
     MR::onStarPointerSceneOut();
@@ -305,7 +306,7 @@ void GameScene::draw() const {
 #endif
     // The settings' galaxy select (its ADVANCED page) names its galaxies and stars in the game's own words, asked once.
     if (NebulaHost::galaxySelectNamesWanted() != 0) {
-        char id[64];
+        char id[256];
         u32 stars = 0;
         for (u32 i = 0; NebulaHost::galaxySelectStage(i, id, sizeof(id), &stars) != 0; ++i) {
             NebulaHost::galaxySelectName(i, 0, reinterpret_cast< const u16* >(MR::getGalaxyNameOnCurrentLanguage(id)));

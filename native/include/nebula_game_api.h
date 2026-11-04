@@ -1202,6 +1202,15 @@ enum {
     NEBULA_PATCH_LIFE_UP_HEALTH,             /* value: the most health a Life Up gives (6); 0: it gives none */
     NEBULA_PATCH_NO_LOW_HEALTH_WARNING,      /* no warning sound at low health */
     NEBULA_PATCH_NO_DARK_COMET_RULES,        /* a Daredevil comet is a comet like any other */
+    NEBULA_PATCH_MAX_LIVES,                  /* value: the most lives (99) */
+    NEBULA_PATCH_MAX_STAR_BITS,              /* value: the most star bits kept in the save (9999) */
+    NEBULA_PATCH_MAX_CARRIED_STAR_BITS,      /* value: the most star bits carried in a stage (999) */
+    NEBULA_PATCH_MAX_COINS,                  /* value: the most coins in a stage (999) */
+    NEBULA_PATCH_COINS_PER_ONE_UP,           /* value: coins for a 1-up (50); 0: none */
+    NEBULA_PATCH_STAR_BITS_PER_ONE_UP,       /* value: star bits for a 1-up (50); 0: none */
+    NEBULA_PATCH_STARTING_LIVES,             /* value: the lives a file starts or loads with (4) */
+    NEBULA_PATCH_PURPLE_COINS_FOR_STAR,      /* value: purple coins that bring the star (100) */
+    NEBULA_PATCH_WATER_AIR,                  /* value: the air the player has under water (8) */
     NEBULA_PATCH_COUNT
 };
 

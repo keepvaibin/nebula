@@ -517,7 +517,7 @@ namespace MiiSelectSub {
         }
 
         for (s32 i = 0; i < ARRAY_SIZE(mIconArray); i++) {
-            char paneName[128];
+            char paneName[256];
 
             nebula_snprintf(paneName, sizeof(paneName), "Mii%02d", v + i);
             MR::setLayoutPosAtPaneTrans(mIconArray[i], mHost, paneName);

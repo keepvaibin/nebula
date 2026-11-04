@@ -12,7 +12,7 @@ extern "C" const NebulaHostServices* nebula_host(void);
 
 namespace {
     // The open movie's disc path, for the host's replacement videos (one movie plays at a time).
-    char sMovieName[64];
+    char sMovieName[256];
 
     void movieFrame(const char* pName, s32 frame, f32 frameRate, const void* pY, const void* pU, const void* pV, u32 width, u32 height) {
         const NebulaHostServices* const host = nebula_host();

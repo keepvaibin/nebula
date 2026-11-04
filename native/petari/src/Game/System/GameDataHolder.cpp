@@ -32,7 +32,7 @@ GameDataHolder::GameDataHolder(const UserFile* pUserFile)
     mMapInfo = new JMapInfo();
     mMapInfo->attach(NebulaDataTables::getStoryProgressTable());
 
-    mChunkHolder = new BinaryDataChunkHolder(4096 + 1024 * NebulaDataTables::addedGalaxyCount(), 6);
+    mChunkHolder = new BinaryDataChunkHolder(4096 + 1024 * NebulaDataTables::addedGalaxyCount() + mAllGalaxyStorage->getExtraBytes(), 6);
     mChunkHolder->addChunk(mPlayerStatus);
     mChunkHolder->addChunk(mEventFlagChecker->getChunk());
     mChunkHolder->addChunk(mStarPieceAlmsStorage);
@@ -108,7 +108,7 @@ s32 GameDataHolder::getPictureBookChapterCanRead() const {
     s32 canRead = 0;
 
     for (u32 idx = 0; idx < sizeof(::cPictureBookChapterSuffix) - 1; idx++) {
-        char name[32];
+        char name[256];
         nebula_snprintf(name, sizeof(name), "PictureBook%c", ::cPictureBookChapterSuffix[idx]);
 
         if (!isOnGameEventFlag(name)) {
@@ -130,21 +130,21 @@ void GameDataHolder::setPictureBookChapterAlreadyRead(int value) {
 }
 
 void GameDataHolder::setRaceBestTime(const char* pName, u32 value) {
-    char hiName[48];
+    char hiName[256];
     nebula_snprintf(hiName, sizeof(hiName), "%s/hi", pName);
     setGameEventValue(hiName, value >> 16);
 
-    char loName[48];
+    char loName[256];
     nebula_snprintf(loName, sizeof(loName), "%s/lo", pName);
     setGameEventValue(loName, value);
 }
 
 u32 GameDataHolder::getRaceBestTime(const char* pName) const {
-    char hiName[48];
+    char hiName[256];
     nebula_snprintf(hiName, sizeof(hiName), "%s/hi", pName);
     u32 hiValue = mEventValueChecker->getValue(hiName);
 
-    char loName[48];
+    char loName[256];
     nebula_snprintf(loName, sizeof(loName), "%s/lo", pName);
     u32 loValue = mEventValueChecker->getValue(loName);
 
@@ -181,7 +181,7 @@ bool GameDataHolder::hasPowerStar(const char* pGalaxyName, s32 scenarioNum) cons
 }
 
 bool GameDataHolder::hasGrandStar(int index) const {
-    char name[32];
+    char name[256];
     nebula_snprintf(name, sizeof(name), "SpecialStarGrand%1d", index);
 
     return isOnGameEventFlag(name);
@@ -224,7 +224,7 @@ void GameDataHolder::onGalaxyScenarioFlagAlreadyVisited(const char* pGalaxyName,
 }
 
 bool GameDataHolder::isAppearGalaxy(const char* pGalaxyName) const {
-    char name[64];
+    char name[256];
     nebula_snprintf(name, sizeof(name), "Appear%s", pGalaxyName);
 
     if (!GameEventFlagTable::isExist(name)) {

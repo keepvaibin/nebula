@@ -535,7 +535,7 @@ namespace MR {
     }
 
     bool isExistCollisionResource(const LiveActor* pActor, const char* pName) {
-        char buff[0x80];
+        char buff[256];
         nebula_snprintf(buff, sizeof(buff), "%s.kcl", pName);
         return getResourceHolder(pActor)->mFileInfoTable->findFileInfo(buff) != nullptr;
     }

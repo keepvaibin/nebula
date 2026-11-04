@@ -77,7 +77,7 @@ void ResourceHolder::newMaterialAnmBuffer(J3DModelData* pModelData) {
 void ResourceHolder::newBckCtrl() {
     MR::CurrentHeapRestorer heap(mHeap);
     // Its table has the archive's name.
-    char name[128];
+    char name[256];
     MR::copyString(name, mArchive->getName(), sizeof(name));
     if (char* pDot = strrchr(name, '.')) {
         *pDot = '\0';

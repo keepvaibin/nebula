@@ -61,6 +61,17 @@ typedef enum NebulaModEvent {
     NEBULA_MOD_EVENT_ACTOR_KILL,
     /* The player's spin starts. */
     NEBULA_MOD_EVENT_PLAYER_SPIN,
+    /* The player leaves the ground in a jump; lands. */
+    NEBULA_MOD_EVENT_PLAYER_JUMP,
+    NEBULA_MOD_EVENT_PLAYER_LAND,
+    /* The pause menu opens or closes. value: 1 open, 0 closed. */
+    NEBULA_MOD_EVENT_PAUSE,
+    /* The stage is ending: every actor and layout of it goes after this. name: the stage. */
+    NEBULA_MOD_EVENT_STAGE_END,
+    /* The game is about to write the save. */
+    NEBULA_MOD_EVENT_GAME_SAVE,
+    /* A power star comes into the stage. value: its number. */
+    NEBULA_MOD_EVENT_POWER_STAR_APPEAR,
     NEBULA_MOD_EVENT_COUNT
 } NebulaModEvent;
 
@@ -152,7 +163,26 @@ typedef struct NebulaObjectClass {
     int32_t (*attacked)(NebulaActor* actor, void* user);
     /* The same, saying how: NEBULA_ATTACK_*. If set, it's called in place of `attacked`. */
     int32_t (*attacked_by)(NebulaActor* actor, int32_t how, void* user);
+    /* What follows may be left out of an older plugin's class: `size` says. */
+    int32_t kind;         /* NEBULA_OBJECT_*: how it touches things and where it's drawn */
+    int32_t collision;    /* 1: its archive's collision model is solid, and moves with it */
+    float shadow_radius;  /* a round shadow under it; 0: none */
+    float clip_radius;    /* not run or drawn when off screen past this; 0: always */
+    void (*appeared)(NebulaActor* actor, void* user);
+    void (*killed)(NebulaActor* actor, void* user);
 } NebulaObjectClass;
+
+/* What kind of thing an object of a plugin's is. */
+typedef enum NebulaObjectKind {
+    NEBULA_OBJECT_ENEMY = 0,
+    NEBULA_OBJECT_MAP,      /* a platform, a wall: the player stands on it */
+    NEBULA_OBJECT_NPC,
+    NEBULA_OBJECT_RIDE,
+    NEBULA_OBJECT_DECORATION  /* nothing touches it */
+} NebulaObjectKind;
+
+/* A screen layout: LayoutData/<name>.arc. */
+typedef struct NebulaLayout NebulaLayout;
 
 /* How the player attacked. */
 typedef enum NebulaAttack {
@@ -394,6 +424,78 @@ typedef struct NebulaModApi {
     /* A number kept for this mod across plays. */
     int32_t (*store_get)(const NebulaPlugin* self, const char* key, int32_t missing);
     void (*store_set)(const NebulaPlugin* self, const char* key, int32_t value);
+
+    /* Only in nebula_plugin_start. A stage plays by another's rules: the game's rules that go by a stage's name (a Bowser arena's
+       star, a hub's counters, an ocean's swimming) then count it as `acts_as`. own_rules 0: it no longer counts as itself. `scenario`:
+       one mission, 0 for all. 0: done. */
+    int32_t (*set_stage_rules)(const char* stage, int32_t scenario, const char* acts_as, int32_t own_rules);
+    /* A number of the player's table by its name (mJumpHeight, mFireModeTime). `character`: 0 Mario, 1 Luigi. `index`: its place in a list, else 0.
+       Any time. 0: done; -1: no such number. */
+    int32_t (*set_player_constant)(int32_t character, const char* name, int32_t index, float value);
+    float (*player_constant)(int32_t character, const char* name, int32_t index);
+    /* Only in nebula_plugin_start. A new name levels can place, made as the game's object `like`, with its files from ObjectData/<name>.arc.
+       No code needed. 0: done. */
+    int32_t (*set_object_class)(const char* name, const char* like);
+    /* Only in nebula_plugin_start. A sound by its name, played from a file (AudioRes/Stream/Boom.wav, .ogg, .ast): a new name, or one of
+       the game's (SE_OJ_COIN_GET) to replace it wherever it plays. 0: done. */
+    int32_t (*add_sound_effect)(const char* name, const char* file);
+
+    /* Finding things. An actor by the name levels place it under; `after` null starts, a found one goes on from it. `name` null: every actor. */
+    NebulaActor* (*find_actor)(const char* name, NebulaActor* after);
+    /* Living actors within `radius`. Their count; up to `max` go in `out`. */
+    int32_t (*actors_near)(const float* xyz, float radius, NebulaActor** out, int32_t max);
+    /* As the player's attack `how`, on any actor. 1 if it took it. `by`: where it comes from, null for the player. */
+    int32_t (*attack_actor)(NebulaActor* target, NebulaActor* by, NebulaAttack how);
+    /* A pointer of your own on any of register_object's objects. */
+    void* (*actor_data)(NebulaActor* actor);
+    void (*set_actor_data)(NebulaActor* actor, void* data);
+    /* The name levels place it under. */
+    const char* (*actor_placed_name)(NebulaActor* actor);
+    /* Run again at `frames` frames, or not at all with 0: a plain hit-stop: the whole scene holds still. */
+    void (*stop_scene)(int32_t frames);
+
+    /* The world. */
+    void (*gravity_at)(const float* xyz, float* out);
+    int32_t (*is_in_area)(const char* area, const float* xyz);
+    void (*camera_position)(float* xyz);
+    void (*camera_target)(float* xyz);
+    /* Where a point is on the screen; 0 if behind the camera. */
+    int32_t (*screen_position)(const float* xyz, float* xy);
+    /* A sound in no place; an effect's named sound at a point. */
+    void (*play_system_sound)(const char* name);
+
+    /* The pointer on the screen, in the screen's own coordinates. 0: off it. */
+    int32_t (*pointer)(float* xy);
+
+    /* Save data. An event value (a named number the game keeps), by its name. */
+    int32_t (*event_value)(const char* name);
+    void (*set_event_value)(const char* name, int32_t value);
+    /* A star as if won, or taken away. */
+    void (*set_star)(const char* galaxy, int32_t star, int32_t have);
+    int32_t (*stars_in_galaxy)(const char* galaxy);
+    int32_t (*stars_won_in_galaxy)(const char* galaxy);
+    /* A game setting by its name (the names of a layer's `switches`). `missing`: no mod set it. */
+    int32_t (*setting)(const char* name, int32_t missing);
+
+    /* A layout on the screen, for this stage. Null if it has no such archive. */
+    NebulaLayout* (*layout_open)(const char* name);
+    void (*layout_show)(NebulaLayout* layout, int32_t show);
+    void (*layout_set_text)(NebulaLayout* layout, const char* pane, const char* utf8);
+    void (*layout_set_number)(NebulaLayout* layout, const char* pane, int32_t number);
+    void (*layout_show_pane)(NebulaLayout* layout, const char* pane, int32_t show);
+    void (*layout_move_pane)(NebulaLayout* layout, const char* pane, float x, float y);
+    /* Its animation by name. */
+    void (*layout_play)(NebulaLayout* layout, const char* animation);
+    int32_t (*layout_is_playing)(NebulaLayout* layout);
+    void (*layout_set_alpha)(NebulaLayout* layout, float alpha);
+
+    /* Text kept for this mod across plays, in place of store_get's numbers: how much was read. */
+    int32_t (*store_get_text)(const NebulaPlugin* self, const char* key, char* out, int32_t size);
+    void (*store_set_text)(const NebulaPlugin* self, const char* key, const char* text);
+    /* The game's answer behind setting(), by the setting's number. Plugins use setting(). */
+    int32_t (*setting_by_number)(uint32_t number, int32_t missing);
+    /* The star-choosing screen of a galaxy, as a launch star opens it. */
+    void (*open_scenario_select)(const char* galaxy);
 } NebulaModApi;
 
 /* Where an object change applies. */
@@ -410,7 +512,13 @@ typedef enum NebulaButton {
     NEBULA_BUTTON_SPIN = 1u << 1, /* the player's spin: held while it lasts, pressed on the frame it starts */
     NEBULA_BUTTON_CROUCH = 1u << 2,
     NEBULA_BUTTON_CAMERA = 1u << 3,
-    NEBULA_BUTTON_FIRE = 1u << 4 /* the star-bit shot */
+    NEBULA_BUTTON_FIRE = 1u << 4, /* the star-bit shot */
+    NEBULA_BUTTON_DPAD_UP = 1u << 5,
+    NEBULA_BUTTON_DPAD_DOWN = 1u << 6,
+    NEBULA_BUTTON_DPAD_LEFT = 1u << 7,
+    NEBULA_BUTTON_DPAD_RIGHT = 1u << 8,
+    NEBULA_BUTTON_PAUSE = 1u << 9,
+    NEBULA_BUTTON_MAP = 1u << 10
 } NebulaButton;
 
 #if defined(_WIN32) && defined(__cplusplus)
