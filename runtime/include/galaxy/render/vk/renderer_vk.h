@@ -325,9 +325,9 @@ public:
         samples = std::exchange(subframe_gpu_samples_, 0u);
     }
     void set_scene_camera(float near_plane, float far_plane, float fov_y) noexcept {
-        scene_camera_[0] = near_plane;
-        scene_camera_[1] = far_plane;
-        scene_camera_[2] = fov_y;
+        scene_lens_[0] = near_plane;
+        scene_lens_[1] = far_plane;
+        scene_lens_[2] = fov_y;
     }
 
     [[nodiscard]] double measured_present_hz() const noexcept {
@@ -656,7 +656,7 @@ private:
     bool scene_temporal_ = false;
     bool scene_motion_ = false;
     float scene_jitter_[2]{};
-    float scene_camera_[3]{1.0f, 100000.0f, 1.0f};
+    float scene_lens_[3]{1.0f, 100000.0f, 1.0f};
     std::int64_t temporal_last_upscale_us_ = 0;
     bool scene_set_storage_ = false;  // create_scene_set: its colour takes the upscaler's output
     bool alt_scene_storage_ = false;

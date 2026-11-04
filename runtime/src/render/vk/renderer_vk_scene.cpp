@@ -1043,9 +1043,9 @@ bool RendererVk::record_temporal_upscale(const FrameMap& output) {
     in.output_height = output.height;
     in.jitter_x = scene_jitter_[0];
     in.jitter_y = scene_jitter_[1];
-    in.camera_near = scene_camera_[0];
-    in.camera_far = scene_camera_[1];
-    in.fov_y = scene_camera_[2];
+    in.camera_near = scene_lens_[0];
+    in.camera_far = scene_lens_[1];
+    in.fov_y = scene_lens_[2];
     // The time since the last upscale, as measured.
     const std::int64_t now_us = std::chrono::duration_cast<std::chrono::microseconds>(
         std::chrono::steady_clock::now().time_since_epoch()).count();
