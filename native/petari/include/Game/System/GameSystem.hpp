@@ -25,7 +25,6 @@ public:
     void exeInitializeAudio();
     void exeInitializeBootScene();
     void exeLoadStationedArchive();
-    void exeWaitForReboot();
     void exeNormal();
     void initAfterStationedResourceLoaded();
     void prepareReset();

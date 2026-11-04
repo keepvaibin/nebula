@@ -46,7 +46,6 @@ namespace NrvGameSystem {
     NEW_NERVE(GameSystemInitializeAudio, GameSystem, InitializeAudio);
     NEW_NERVE(GameSystemInitializeBootScene, GameSystem, InitializeBootScene);
     NEW_NERVE(GameSystemLoadStationedArchive, GameSystem, LoadStationedArchive);
-    NEW_NERVE(GameSystemWaitForReboot, GameSystem, WaitForReboot);
     NEW_NERVE(GameSystemNormal, GameSystem, Normal);
 };  // namespace NrvGameSystem
 
@@ -124,15 +123,11 @@ void GameSystem::exeInitializeAudio() {
 }
 
 void GameSystem::exeInitializeBootScene() {
-    if (GameSystemFunction::isResetProcessing()) {
-        setNerve(GET_NERVE(GameSystem, GameSystemWaitForReboot));
-    } else {
-        if (MR::isFirstStep(this)) {
-            MR::requestChangeScene("Boot");
-        }
-
-        updateSceneController();
+    if (MR::isFirstStep(this)) {
+        MR::requestChangeScene("Boot");
     }
+
+    updateSceneController();
 }
 
 void GameSystem::exeLoadStationedArchive() {
@@ -142,9 +137,6 @@ void GameSystem::exeLoadStationedArchive() {
     if (mStationedArchiveLoader->isDone()) {
         setNerve(GET_NERVE(GameSystem, GameSystemNormal));
     }
-}
-
-void GameSystem::exeWaitForReboot() {
 }
 
 void GameSystem::exeNormal() {
@@ -210,7 +202,6 @@ void GameSystem::draw() {
         NebulaSettingsMenu::draw();
         mObjHolder->drawStarPointer();
     }
-    mHomeButtonLayout->draw();
     SingletonHolder< GameSystemResetAndPowerProcess >::get()->draw();
 }
 
