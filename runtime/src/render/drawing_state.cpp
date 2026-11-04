@@ -15,14 +15,12 @@ namespace {
 // NEBULA_CULL_* (the game's winding) as the renderer's flipped one: the game's back faces are the renderer's front.
 constexpr CullMode kCull[4] = {CullMode::None, CullMode::Front, CullMode::Back, CullMode::All};
 
-// `op` NEBULA_BLEND_*: replace 0, add 1, subtract 2, logic 3.
-void set_blend(BlendMode& b, std::uint8_t op, std::uint8_t source, std::uint8_t destination, std::uint8_t logic) {
+// `op` NEBULA_BLEND_*: replace 0, add 1, subtract 2.
+void set_blend(BlendMode& b, std::uint8_t op, std::uint8_t source, std::uint8_t destination) {
     b.blend_enable = op == 1u || op == 2u;
-    b.logic_op_enable = op == 3u;
     b.subtract = op == 2u;
     b.src_factor = static_cast<BlendFactor>(source <= 9u ? source : 0u);  // NEBULA_FACTOR_*
     b.dst_factor = static_cast<BlendFactor>(destination <= 9u ? destination : 0u);
-    b.logic_mode = static_cast<std::uint8_t>(logic & 15u);
 }
 
 void set_z(ZMode& z, std::uint8_t enable, std::uint8_t func, std::uint8_t update) {
@@ -133,7 +131,7 @@ void NativeDrawState::apply_pass(const shapes::PassState& pass) {
             coord[t].line_offset = ((pass.line_offsets >> t) & 1u) != 0u;
             coord[t].point_offset = ((pass.point_offsets >> t) & 1u) != 0u;
         }
-        set_blend(blend, pass.blend_op, pass.blend_src, pass.blend_dst, pass.logic_op);
+        set_blend(blend, pass.blend_op, pass.blend_src, pass.blend_dst);
         blend.color_update = pass.color_write != 0u;
         blend.alpha_update = pass.alpha_write != 0u;
         set_z(z, pass.depth_test, pass.depth_func, pass.depth_write);

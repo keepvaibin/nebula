@@ -167,10 +167,6 @@ struct J3DBlend : public J3DBlendInfo {
         return (u8)mDstFactor;
     }
 
-    u8 getLogicOp() const {
-        return (u8)mOp;
-    }
-
     void setBlendInfo(const J3DBlendInfo& i_blendInfo) {
         *static_cast< J3DBlendInfo* >(this) = i_blendInfo;
     }

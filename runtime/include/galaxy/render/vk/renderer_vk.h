@@ -102,7 +102,6 @@ struct RenderLayout {
         return clear ? ms_passes_clear[samples_log2] : ms_passes[samples_log2];
     }
     VkFormat depth_format = VK_FORMAT_UNDEFINED;
-    bool logic_op = false;
     bool depth_clamp = false;
     bool depth_clip_enable = false;  // VK_EXT_depth_clip_enable
 };
@@ -949,8 +948,6 @@ private:
         std::uint64_t fence = 0;
         VkDescriptorSet set = VK_NULL_HANDLE;
         std::array<VkBuffer, 4> bound{};  // what `set` names: program, constant ring, matrix ring, output
-        std::array<VkBuffer, 4> validate_bound{};
-        std::array<VkBuffer, 4> gather_bound{};
     };
     std::array<ProgramBuffer, 3> program_buffers_{};
     unsigned program_index_ = 0;

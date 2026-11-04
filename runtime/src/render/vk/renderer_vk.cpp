@@ -565,7 +565,6 @@ bool RendererVk::create_layouts() {
     host_window::rtx_adapter.store(vk::Context::get().properties().vendorID == 0x10DEu &&
                                        std::strstr(vk::Context::get().properties().deviceName, "RTX") != nullptr,
                                    std::memory_order_relaxed);
-    draw_layout_.logic_op = context.logic_op();
     draw_layout_.depth_clamp = context.depth_clamp();
     draw_layout_.depth_clip_enable = context.depth_clip_enable();
     persistent_pool_ = create_pool(device, kPersistentSets, kPersistentPool);

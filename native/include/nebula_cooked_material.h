@@ -18,7 +18,7 @@ enum NebulaMaterialPass {
 typedef struct NebulaCookedMaterial {
     uint32_t shader;
     uint32_t material_index;
-    uint8_t blend_op, blend_src, blend_dst, logic_op;
+    uint8_t blend_op, blend_src, blend_dst, reserved_blend;
     uint8_t depth_test, depth_func, depth_write, reserved_depth;
     uint8_t cull, early_depth, reserved_state[2];
     uint8_t coord_map[8]; /* the texture each coordinate samples, for its scale (255 none) */

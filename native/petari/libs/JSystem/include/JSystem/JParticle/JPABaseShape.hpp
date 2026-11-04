@@ -41,7 +41,6 @@ public:
     void setPass(JPAEmitterWorkData*) const;
 
     static const u8 st_bm[4];
-    static const u8 st_lo[16];
     static const u8 st_c[8];
     static u8 blendFactor(u32 code, bool source);
 
@@ -53,9 +52,6 @@ public:
     }
     u8 getBlendDst() const {
         return blendFactor((mpData->mBlendModeCfg >> 6) & 0x0F, false);
-    }
-    u8 getLogicOp() const {
-        return st_lo[(mpData->mBlendModeCfg >> 10) & 0x0F];
     }
     bool getZCompLoc() const {
         return ((mpData->mZModeCfg >> 5) & 0x01) != 0;

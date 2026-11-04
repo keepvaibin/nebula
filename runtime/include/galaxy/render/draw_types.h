@@ -54,21 +54,16 @@ struct ZMode {
 
 struct BlendMode {
     bool blend_enable;
-    bool logic_op_enable;
     bool color_update;
     bool alpha_update;
     BlendFactor dst_factor;
     BlendFactor src_factor;
     bool subtract;
-    std::uint8_t logic_mode;        // VkLogicOp's order (clear, and, reverse and, copy, ..., set)
 };
 
-// Logic op 3 (copy): the source unchanged.
-inline constexpr std::uint8_t kLogicCopy = 3u;
-
-// The blend the pixel engine performs, as the draw's result shows it: a blend that writes the fragment's colour unchanged
-// is no blend. The draw blends (or subtracts) where blending is on, else applies the logic op where that is on. A blend of ONE and ZERO, and the logic op COPY, write the source exactly as an unblended draw
-// does; so does DSTALPHA and INVDSTALPHA where the scene target has no alpha (`scene_has_alpha` false: its alpha reads as one). The
+// The blend as the draw's result shows it: a blend that writes the fragment's colour unchanged is no blend. A blend of ONE
+// and ZERO writes the source exactly as an unblended draw does; so does DSTALPHA and INVDSTALPHA where the scene target has
+// no alpha (`scene_has_alpha` false: its alpha reads as one). The
 // game draws opaque surfaces with such states (the far side of Bonefin's ocean sphere: BLEND ONE ZERO, depth written),
 // and whatever tells translucent draws from opaque ones (the pipeline's blend key, the motion target, the ray tracer's
 // geometry and its translucent lighting) must take them for the opaque draws they are.
@@ -82,16 +77,10 @@ inline constexpr std::uint8_t kLogicCopy = 3u;
         }
         return f;
     };
-    const bool replaces = b.blend_enable ? !b.subtract && factor(b.src_factor) == BlendFactor::One &&
-                                               factor(b.dst_factor) == BlendFactor::Zero
-                                         : b.logic_op_enable && b.logic_mode == kLogicCopy;
-    if (replaces) {
+    if (b.blend_enable && !b.subtract && factor(b.src_factor) == BlendFactor::One && factor(b.dst_factor) == BlendFactor::Zero) {
         b.blend_enable = false;
-        b.logic_op_enable = false;
-        b.subtract = false;
         b.src_factor = BlendFactor::One;
         b.dst_factor = BlendFactor::Zero;
-        b.logic_mode = kLogicCopy;
     }
     return b;
 }
@@ -145,30 +134,24 @@ struct ChannelControl {
 // Compile-time checks of the helpers above.
 namespace bitfield_checks {
 
-// Blends as typed values: enable, logic op, colour and alpha update, destination and source factors, subtract,
-// logic mode, constant alpha.
-constexpr BlendMode blend_of(bool blend, bool logic, BlendFactor dst, BlendFactor src, bool subtract, std::uint8_t mode) {
-    return BlendMode{blend, logic, true, false, dst, src, subtract, mode};
+// Blends as typed values: enable, colour and alpha update, destination and source factors, subtract.
+constexpr BlendMode blend_of(bool blend, BlendFactor dst, BlendFactor src, bool subtract) {
+    return BlendMode{blend, true, false, dst, src, subtract};
 }
-constexpr auto kBlend = blend_of(true, false, BlendFactor::InvSrcAlpha, BlendFactor::SrcAlpha, false, 0u);
+constexpr auto kBlend = blend_of(true, BlendFactor::InvSrcAlpha, BlendFactor::SrcAlpha, false);
 
-// effective_blend: an alpha blend stays a blend; BLEND ONE ZERO and logic COPY write the source (no blend, no logic op);
+// effective_blend: an alpha blend stays a blend; BLEND ONE ZERO writes the source (no blend);
 // DSTALPHA / INVDSTALPHA write the source only where the scene target has no alpha; a subtract of ONE ZERO still subtracts.
 static_assert(effective_blend(kBlend, true).blend_enable);
 static_assert(effective_blend(kBlend, false).blend_enable);
-constexpr auto kBlendOneZero = blend_of(true, false, BlendFactor::Zero, BlendFactor::One, false, 0u);
+constexpr auto kBlendOneZero = blend_of(true, BlendFactor::Zero, BlendFactor::One, false);
 static_assert(kBlendOneZero.blend_enable && !effective_blend(kBlendOneZero, true).blend_enable);
-static_assert(!effective_blend(kBlendOneZero, false).logic_op_enable);
 static_assert(effective_blend(kBlendOneZero, true).color_update);
-constexpr auto kBlendDstAlpha = blend_of(true, false, BlendFactor::InvDstAlpha, BlendFactor::DstAlpha, false, 0u);
+constexpr auto kBlendDstAlpha = blend_of(true, BlendFactor::InvDstAlpha, BlendFactor::DstAlpha, false);
 static_assert(!effective_blend(kBlendDstAlpha, false).blend_enable);
 static_assert(effective_blend(kBlendDstAlpha, true).blend_enable);
-constexpr auto kSubtractOneZero = blend_of(true, false, BlendFactor::Zero, BlendFactor::One, true, 0u);
+constexpr auto kSubtractOneZero = blend_of(true, BlendFactor::Zero, BlendFactor::One, true);
 static_assert(effective_blend(kSubtractOneZero, true).blend_enable && effective_blend(kSubtractOneZero, true).subtract);
-constexpr auto kLogicCopyMode = blend_of(false, true, BlendFactor::Zero, BlendFactor::Zero, false, 3u);
-static_assert(!effective_blend(kLogicCopyMode, true).logic_op_enable);
-constexpr auto kLogicXor = blend_of(false, true, BlendFactor::Zero, BlendFactor::Zero, false, 6u);
-static_assert(effective_blend(kLogicXor, true).logic_op_enable);
 
 }  // namespace bitfield_checks
 

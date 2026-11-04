@@ -31,8 +31,7 @@ namespace {
 const char* compat_name(std::uint32_t bit) {
     switch (bit) {
     case 1u << 0u: return "depth-clip control";
-    case 1u << 1u: return "logic ops";
-    case 1u << 3u: return "depth clamp";
+    case 1u << 1u: return "depth clamp";
     default: return "several features";
     }
 }
@@ -45,12 +44,11 @@ std::string describe_render_state(const RenderStateKey& rs) {
 }
 
 // GALAXY_VK_TEST_REFUSE=<names, comma-separated>: pipelines using those features (depth-clip,
-// depth-clamp, logic-op), or every native pipeline (native), are refused as a driver would, so the
+// depth-clamp), or every native pipeline (native), are refused as a driver would, so the
 // fallbacks run on any GPU.
 struct TestRefusals {
     bool depth_clip = false;
     bool depth_clamp = false;
-    bool logic_op = false;
     bool native = false;
 };
 
@@ -62,7 +60,6 @@ const TestRefusals& test_refusals() {
         const auto has = [&](const char* name) { return list.find(std::string(",") + name + ",") != std::string::npos; };
         r.depth_clip = has("depth-clip");
         r.depth_clamp = has("depth-clamp");
-        r.logic_op = has("logic-op");
         r.native = has("native");
         return r;
     }();
@@ -106,17 +103,6 @@ VkBlendFactor to_alpha_blend(VkBlendFactor factor) {
     case VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR: return VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
     default: return factor;
     }
-}
-
-// game LogicOp 0-15.
-VkLogicOp logic_op_mode(std::uint32_t op) {
-    static constexpr VkLogicOp kOps[16] = {
-        VK_LOGIC_OP_CLEAR,        VK_LOGIC_OP_AND,          VK_LOGIC_OP_AND_REVERSE, VK_LOGIC_OP_COPY,
-        VK_LOGIC_OP_AND_INVERTED, VK_LOGIC_OP_NO_OP,        VK_LOGIC_OP_XOR,         VK_LOGIC_OP_OR,
-        VK_LOGIC_OP_NOR,          VK_LOGIC_OP_EQUIVALENT,   VK_LOGIC_OP_INVERT,      VK_LOGIC_OP_OR_REVERSE,
-        VK_LOGIC_OP_COPY_INVERTED, VK_LOGIC_OP_OR_INVERTED, VK_LOGIC_OP_NAND,        VK_LOGIC_OP_SET,
-    };
-    return kOps[op & 0xfu];
 }
 
 // The locations of a module's stage inputs, as a mask.
@@ -458,9 +444,6 @@ VkPipeline PipelineCacheVk::create_pipeline(const RenderStateKey& rs, VkShaderMo
         target.srcAlphaBlendFactor = to_alpha_blend(target.srcColorBlendFactor);
         target.dstAlphaBlendFactor = to_alpha_blend(target.dstColorBlendFactor);
         target.alphaBlendOp = target.colorBlendOp;
-    } else if ((bb & (1u << 8u)) != 0u && layout_->logic_op && (compat & kCompatNoLogicOp) == 0u) {
-        blend.logicOpEnable = VK_TRUE;
-        blend.logicOp = logic_op_mode((bb >> 9u) & 0xfu);
     }
     // A temporal scene's second target: a writer's motion vectors, a blended draw's reactive mask (its largest).
     VkPipelineColorBlendAttachmentState targets[2]{target, {}};
@@ -500,8 +483,7 @@ VkPipeline PipelineCacheVk::create_pipeline(const RenderStateKey& rs, VkShaderMo
     info.renderPass = aux != 0u ? layout_->aux_pass_for(rs.samples_log2, aux) : layout_->pass_for(rs.samples_log2, false);
     const TestRefusals& refuse = test_refusals();
     if ((refuse.depth_clip && raster.pNext) ||
-        (refuse.depth_clamp && raster.depthClampEnable) || (refuse.logic_op && blend.logicOpEnable) ||
-        refuse.native) {
+        (refuse.depth_clamp && raster.depthClampEnable) || refuse.native) {
         result = VK_ERROR_INITIALIZATION_FAILED;
         return VK_NULL_HANDLE;
     }
@@ -517,9 +499,6 @@ std::uint32_t PipelineCacheVk::applicable_compat(const RenderStateKey& rs, bool 
     }
     if (layout_->depth_clamp && (layout_->depth_clip_enable || export_depth)) {
         bits |= kCompatNoDepthClamp;
-    }
-    if ((rs.blend_bits & 1u) == 0u && (rs.blend_bits & (1u << 8u)) != 0u && layout_->logic_op) {
-        bits |= kCompatNoLogicOp;
     }
     return bits;
 }
