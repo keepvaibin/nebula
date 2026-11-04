@@ -1,4 +1,3 @@
-#define _CRT_SECURE_NO_WARNINGS  // getenv
 // The game's sound on every host (native_audio.h): the native mixer's frames at the master volume with the remote speaker
 // added, pulled by the output device (audio_device.h), and the WAV dump the tests record.
 #include "galaxy/native_audio.h"
@@ -28,12 +27,6 @@
 
 namespace galaxy::host {
 namespace {
-
-bool read_env_flag(const char* name) {
-    const char* const value = std::getenv(name);
-    return value != nullptr && value[0] != '\0' && value[0] != '0' && value[0] != 'f' && value[0] != 'F' &&
-           value[0] != 'n' && value[0] != 'N';
-}
 
 // GALAXY_AUDIO_WAV_DUMP=<path>: the output as a 16-bit stereo WAV file, at most 15 seconds. A sample rate change
 // starts a new file beside it (<name>.rate-<hz>.part-<n>.wav).
@@ -242,21 +235,61 @@ private:
     bool open_attempted_{};
 };
 
+// A test's devices, one after another (GALAXY_AUDIO_TEST_DEVICE_CYCLE=<seconds each>): other rates, more speakers.
+struct TestDevice {
+    std::uint32_t rate;
+    std::span<const Speaker> speakers;
+};
+constexpr Speaker kTestStereo[] = {Speaker::Left, Speaker::Right};
+constexpr Speaker kTestQuad[] = {Speaker::Left, Speaker::Right, Speaker::BackLeft, Speaker::BackRight};
+constexpr Speaker kTest51[] = {Speaker::Left, Speaker::Right, Speaker::Center, Speaker::Other, Speaker::BackLeft, Speaker::BackRight};
+constexpr Speaker kTest71[] = {Speaker::Left, Speaker::Right, Speaker::Center, Speaker::Other, Speaker::BackLeft, Speaker::BackRight,
+                               Speaker::SideLeft, Speaker::SideRight};
+constexpr TestDevice kTestDevices[] = {{48000u, kTestStereo}, {44100u, kTestStereo}, {96000u, kTest51},
+                                       {48000u, kTest71},     {32000u, kTestQuad},   {192000u, kTest51}};
+
 // No output: pulled by the clock, as a device would.
 class NullAudioDevice final : public AudioDevice {
 public:
     explicit NullAudioDevice(std::uint32_t rate) : rate_(rate) {}
 
-    [[nodiscard]] std::uint32_t rate() const override { return rate_; }
+    [[nodiscard]] std::uint32_t rate() const override { return rate_.load(std::memory_order_relaxed); }
+
+    [[nodiscard]] std::span<const Speaker> speakers() const noexcept override {
+        return surround_.load(std::memory_order_relaxed) ? speakers_ : AudioDevice::speakers();
+    }
+
+    void set_surround(bool on) override { surround_.store(on, std::memory_order_relaxed); }
 
     void start(Render render) override {
         std::thread([this, render = std::move(render)] {
             set_audio_thread_name();
             constexpr std::uint32_t kStepsPerSecond = 200u;
-            const std::uint32_t frames = rate_ / kStepsPerSecond;
-            std::vector<float> out(frames * 2u);
+            std::vector<float> out;
+            const char* const cycle = ::galaxy::run_options().audio_test_device_cycle;
+            const unsigned steps_each = cycle != nullptr ? static_cast<unsigned>(std::strtoul(cycle, nullptr, 10)) * kStepsPerSecond : 0u;
+            unsigned steps = 0u;
+            unsigned device = 0u;
+            std::vector<double> power;
             auto next = std::chrono::steady_clock::now();
             for (;;) {
+                if (steps_each != 0u && ++steps >= steps_each) {
+                    std::ostringstream line;
+                    line << "[audio] test device " << rate() << " Hz, levels";
+                    for (const double value : power) {
+                        line << ' ' << std::sqrt(value / steps);
+                    }
+                    std::cout << line.str() << std::endl;
+                    power.clear();
+                    steps = 0u;
+                    device = (device + 1u) % static_cast<unsigned>(std::size(kTestDevices));
+                    rate_.store(kTestDevices[device].rate, std::memory_order_relaxed);
+                    speakers_ = kTestDevices[device].speakers;
+                }
+                const std::uint32_t rate_now = rate();
+                const std::uint32_t frames = rate_now / kStepsPerSecond;
+                const std::size_t channels = speakers().size();
+                out.resize(frames * channels);
                 next += std::chrono::nanoseconds(1000000000ll / kStepsPerSecond);
                 std::this_thread::sleep_until(next);
                 // A stall past 100 ms (a debugger, a hitch) starts the schedule again rather than catching up in a burst.
@@ -265,7 +298,13 @@ public:
                     next = now;
                 }
                 if (!paused_.load(std::memory_order_relaxed)) {
-                    render(out.data(), frames, rate_);
+                    render(out.data(), frames, rate_now);
+                    if (steps_each != 0u) {
+                        power.resize(channels);
+                        for (std::size_t i = 0; i < out.size(); ++i) {
+                            power[i % channels] += static_cast<double>(out[i]) * out[i] / frames;
+                        }
+                    }
                 }
             }
         }).detach();
@@ -274,8 +313,10 @@ public:
     void set_paused(bool paused) override { paused_.store(paused, std::memory_order_relaxed); }
 
 private:
-    std::uint32_t rate_;
+    std::atomic<std::uint32_t> rate_;
     std::atomic<bool> paused_{false};
+    std::atomic<bool> surround_{false};
+    std::span<const Speaker> speakers_{kTestStereo};
 };
 
 }  // namespace
@@ -290,23 +331,64 @@ struct NativeGameAudio::State {
     AudioWavDump wav;
     float master{1.0f};
     bool master_started{};
+    galaxy::SoundOutput sound_output{galaxy::SoundOutput::Stereo};
     std::vector<std::byte> wav_block;
-    // The frames made and not yet pulled, interleaved; the device's thread only.
+    // The frames made and not yet pulled, interleaved; the device's thread only. Center, surround left and right apart
+    // from them while the device has rear speakers.
     std::vector<float> pending;
+    std::vector<float> pending_surround;
     std::size_t pending_read{};
     std::function<void()> tick;
     std::atomic<bool> running{false};
     bool started{};
 
+    // `count` frames from `at` onto the device's speakers. A surround split between sides and backs; a center with no
+    // speaker of its own goes to left and right.
+    void place(float* out, std::span<const Speaker> speakers, std::size_t at, std::size_t count) const {
+        constexpr float kHalfPower = 0.70710678f;
+        const auto has = [speakers](Speaker wanted) { return std::find(speakers.begin(), speakers.end(), wanted) != speakers.end(); };
+        const float center_side = has(Speaker::Center) ? 0.0f : kHalfPower;
+        const float rear = has(Speaker::SideLeft) && has(Speaker::BackLeft) ? kHalfPower : 1.0f;
+        const float* front = pending.data() + at * 2u;
+        const float* apart = pending_surround.data() + at * 3u;
+        for (std::size_t i = 0; i < count; ++i, front += 2, apart += 3) {
+            for (const Speaker speaker : speakers) {
+                float value = 0.0f;
+                switch (speaker) {
+                case Speaker::Left: value = front[0] + center_side * apart[0]; break;
+                case Speaker::Right: value = front[1] + center_side * apart[0]; break;
+                case Speaker::Center: value = apart[0]; break;
+                case Speaker::SideLeft:
+                case Speaker::BackLeft: value = rear * apart[1]; break;
+                case Speaker::SideRight:
+                case Speaker::BackRight: value = rear * apart[2]; break;
+                default: break;
+                }
+                *out++ = std::clamp(value, -1.0f, 1.0f);
+            }
+        }
+    }
+
     void render(float* out, std::uint32_t frames, std::uint32_t rate) {
-        if (mixer->rate() != rate) {
-            mixer->set_rate(rate);
+        const std::span<const Speaker> speakers = device->speakers();
+        const std::size_t channels = speakers.size();
+        const bool discrete = channels > 2u;
+        // What waits was made for the last device.
+        if (mixer->rate() != rate || mixer->discrete() != discrete) {
+            if (mixer->rate() != rate) {
+                mixer->set_rate(rate);
+            }
+            mixer->set_discrete(discrete);
+            pending.clear();
+            pending_surround.clear();
+            pending_read = 0u;
         }
         std::size_t filled = 0u;
         while (filled < frames) {
             const std::size_t have = pending.size() / 2u - pending_read;
             if (have == 0u) {
                 pending.clear();
+                pending_surround.clear();
                 pending_read = 0u;
                 if (running.load(std::memory_order_acquire)) {
                     tick();
@@ -317,11 +399,15 @@ struct NativeGameAudio::State {
                 continue;
             }
             const std::size_t take = std::min<std::size_t>(have, frames - filled);
-            std::copy_n(pending.data() + pending_read * 2u, take * 2u, out + filled * 2u);
+            if (discrete) {
+                place(out + filled * channels, speakers, pending_read, take);
+            } else {
+                std::copy_n(pending.data() + pending_read * 2u, take * 2u, out + filled * 2u);
+            }
             pending_read += take;
             filled += take;
         }
-        std::fill(out + filled * 2u, out + static_cast<std::size_t>(frames) * 2u, 0.0f);
+        std::fill(out + filled * channels, out + static_cast<std::size_t>(frames) * channels, 0.0f);
         // What the mixer made and has not been played: what waits here, what just went out and what the device holds. A
         // movie's picture follows this.
         const std::uint64_t unplayed = pending.size() / 2u - pending_read + frames + device->queued_frames();
@@ -340,6 +426,10 @@ void NativeGameAudio::setup(NebulaVoice* voices, std::uint32_t count, const Nebu
         // GALAXY_AUDIO_WAV_DUMP_ONLY: the clock pulls, nothing reaches a device.
         s.device = ::galaxy::run_option_flag(::galaxy::run_options().audio_wav_dump_only, false) ? open_null_audio_device(rate) : open_audio_device();
         rate = s.device->rate();
+    }
+    s.sound_output = galaxy::get_runtime_settings().audio.sound_output;
+    if (s.device != nullptr) {
+        s.device->set_surround(s.sound_output == galaxy::SoundOutput::Surround);
     }
     s.mixer = std::make_unique<galaxy::audio::AudioMixer>(rate);
     s.mixer->setup(voices, count, effects);
@@ -374,8 +464,15 @@ void NativeGameAudio::frame() {
     }
     State& s = *state_;
     const std::span<const float> samples = s.mixer->end_frame();
+    const std::span<const float> apart = s.mixer->surround();
     const galaxy::RuntimeAudioSettings audio = galaxy::get_runtime_settings().audio;
     s.mixer->set_category_gains({1.0f, audio.music, audio.voice, audio.sfx, audio.ambience, audio.cutscene});
+    if (audio.sound_output != s.sound_output) {
+        s.sound_output = audio.sound_output;
+        if (s.device != nullptr) {
+            s.device->set_surround(s.sound_output == galaxy::SoundOutput::Surround);
+        }
+    }
     const float target = audio.master >= 0.0f ? std::min(audio.master, 4.0f) : 0.0f;
     const float start = s.master_started ? s.master : target;
     s.master_started = true;
@@ -392,7 +489,24 @@ void NativeGameAudio::frame() {
         out[i * 2u] = samples[i * 2u] * gain;
         out[i * 2u + 1u] = samples[i * 2u + 1u] * gain;
     }
+    if (!apart.empty()) {
+        const std::size_t apart_at = s.pending_surround.size();
+        s.pending_surround.resize(apart_at + frames * 3u);
+        for (std::size_t i = 0; i < frames; ++i) {
+            const float gain = start + (target - start) * static_cast<float>(i + 1u) / static_cast<float>(frames);
+            for (std::size_t k = 0; k < 3u; ++k) {
+                s.pending_surround[apart_at + i * 3u + k] = apart[i * 3u + k] * gain;
+            }
+        }
+    }
     galaxy::input::speaker::game_speaker().mix(out, s.mixer->rate(), audio.wiimote_speaker);
+    if (audio.sound_output == galaxy::SoundOutput::Mono) {
+        for (std::size_t i = 0; i < frames; ++i) {
+            const float both = 0.5f * (out[i * 2u] + out[i * 2u + 1u]);
+            out[i * 2u] = both;
+            out[i * 2u + 1u] = both;
+        }
+    }
     static const bool trace_first = ::galaxy::run_options().trace_file_reads != nullptr;
     static bool first_sound = false;
     if (trace_first && !first_sound && std::any_of(out.begin(), out.end(), [](float value) { return value != 0.0f; })) {

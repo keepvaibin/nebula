@@ -55,6 +55,8 @@ RunOptions read_options() {
     o.audio_wav_dump = nebula_switch::audio_wav_dump();
     o.audio_wav_dump_only = nebula_switch::audio_wav_dump_only();
     o.audio_wav_dump_seconds = nebula_switch::audio_wav_dump_seconds();
+    o.audio_test_device_cycle = nebula_switch::audio_test_device_cycle();
+    o.audio_test_reopen = nebula_switch::audio_test_reopen();
     o.boot_fast = nebula_switch::boot_fast();
     o.crash_dump_dir = nebula_switch::crash_dump_dir();
     o.d3d_debug = nebula_switch::d3d_debug();

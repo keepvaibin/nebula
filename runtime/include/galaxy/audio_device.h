@@ -1,21 +1,34 @@
-// The platform's sound output: it pulls stereo float samples on its own thread, as the device needs them.
+// The platform's sound output: it pulls float samples on its own thread, as the device needs them.
 #pragma once
 
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <span>
 
 namespace galaxy::host {
 
+// What each of a device's channels is. Others: silent.
+enum class Speaker : std::uint8_t { Left, Right, Center, SideLeft, SideRight, BackLeft, BackRight, Other };
+
 class AudioDevice {
 public:
-    // `frames` frames (left, right) into `out` at `rate` Hz, which changes when the device does. On the device's thread.
+    // `frames` frames of speakers() channels into `out` at `rate` Hz; both change when the device does. On the device's
+    // thread.
     using Render = std::function<void(float* out, std::uint32_t frames, std::uint32_t rate)>;
 
     virtual ~AudioDevice() = default;
     [[nodiscard]] virtual std::uint32_t rate() const = 0;
     virtual void start(Render render) = 0;
     virtual void set_paused(bool paused) = 0;
+    // The channels as of this render call (on the device's thread). Left and right unless surround was asked for and the
+    // device has rear speakers.
+    [[nodiscard]] virtual std::span<const Speaker> speakers() const noexcept {
+        static constexpr Speaker kStereo[] = {Speaker::Left, Speaker::Right};
+        return kStereo;
+    }
+    // Rear speakers are wanted, where the device has them.
+    virtual void set_surround(bool) {}
     // The frames given to the device that it has not played yet, as of the last call of the render function.
     [[nodiscard]] virtual std::uint32_t queued_frames() const { return 0u; }
 };

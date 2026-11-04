@@ -161,6 +161,7 @@ void AudioMixer::set_rate(std::uint32_t rate) {
     panner_send_right_.reset(subframe / 2u);
     subframe_counter_ = 0u;
     frame_.clear();
+    frame_surround_.clear();
     stream_history_.clear();
     stream_running_ = false;
     for (VoiceState& state : voice_states_) {
@@ -199,6 +200,12 @@ float* AudioMixer::bus(std::uint32_t index) noexcept {
     return index != NEBULA_AUDIO_BUS_NONE && index < kBusCount ? buses_[index].data() : nullptr;
 }
 
+void AudioMixer::set_discrete(bool on) noexcept {
+    discrete_ = on;
+    frame_.clear();
+    frame_surround_.clear();
+}
+
 void AudioMixer::mix(float gain) {
     if (!configured()) {
         return;
@@ -222,7 +229,7 @@ void AudioMixer::mix(float gain) {
         }
     }
 
-    // The surround buses one subframe late, matrix-encoded into left and right.
+    // The surround buses one subframe late, matrix-encoded into left and right unless they have their own speakers.
     std::array<float, kMaxSubframe> late_left{};
     std::array<float, kMaxSubframe> late_right{};
     fold_left_.process(buses_[kSurroundLeft].data(), late_left.data(), n);
@@ -231,7 +238,15 @@ void AudioMixer::mix(float gain) {
     float* right = buses_[kRight].data();
     const float* center = buses_[kCenter].data();
     const float* inverted = buses_[kRightInverted].data();
-    for (std::size_t i = 0; i < n; ++i) {
+    for (std::size_t i = 0; discrete_ && i < n; ++i) {
+        right[i] -= inverted[i];
+        frame_.push_back(left[i] * gain);
+        frame_.push_back(right[i] * gain);
+        frame_surround_.push_back(center[i] * gain);
+        frame_surround_.push_back(late_left[i] * gain);
+        frame_surround_.push_back(late_right[i] * gain);
+    }
+    for (std::size_t i = 0; !discrete_ && i < n; ++i) {
         left[i] += kFold * (kUnit * late_left[i] + kMatrix * late_right[i]) + kCenterGain * center[i];
         right[i] += kFold * (-kMatrix * late_left[i] - kUnit * late_right[i]) + kCenterGain * center[i] - inverted[i];
         frame_.push_back(left[i] * gain);
@@ -247,6 +262,8 @@ std::span<const float> AudioMixer::end_frame() {
     static thread_local std::vector<float> out;
     out.swap(frame_);
     frame_.clear();
+    surround_out_.swap(frame_surround_);
+    frame_surround_.clear();
     const std::size_t outputs = out.size() / 2u;
     const std::uint32_t stream_frames = frame_subframes_ * kGameSubframeSamples;
     frame_subframes_ = 0u;

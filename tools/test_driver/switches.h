@@ -75,6 +75,24 @@ inline constexpr const char* audio_wav_dump_only_name() noexcept { return "GALAX
 inline constexpr const wchar_t* audio_wav_dump_only_wide_name() noexcept { return L"GALAXY_AUDIO_WAV_DUMP_ONLY"; }
 #endif
 #if defined(NEBULA_RELEASE)
+inline const char* audio_test_device_cycle() noexcept { return nullptr; }
+inline constexpr const char* audio_test_device_cycle_name() noexcept { return ""; }
+inline constexpr const wchar_t* audio_test_device_cycle_wide_name() noexcept { return L""; }
+#else
+inline const char* audio_test_device_cycle() noexcept { return std::getenv("GALAXY_AUDIO_TEST_DEVICE_CYCLE"); }
+inline constexpr const char* audio_test_device_cycle_name() noexcept { return "GALAXY_AUDIO_TEST_DEVICE_CYCLE"; }
+inline constexpr const wchar_t* audio_test_device_cycle_wide_name() noexcept { return L"GALAXY_AUDIO_TEST_DEVICE_CYCLE"; }
+#endif
+#if defined(NEBULA_RELEASE)
+inline const char* audio_test_reopen() noexcept { return nullptr; }
+inline constexpr const char* audio_test_reopen_name() noexcept { return ""; }
+inline constexpr const wchar_t* audio_test_reopen_wide_name() noexcept { return L""; }
+#else
+inline const char* audio_test_reopen() noexcept { return std::getenv("GALAXY_AUDIO_TEST_REOPEN"); }
+inline constexpr const char* audio_test_reopen_name() noexcept { return "GALAXY_AUDIO_TEST_REOPEN"; }
+inline constexpr const wchar_t* audio_test_reopen_wide_name() noexcept { return L"GALAXY_AUDIO_TEST_REOPEN"; }
+#endif
+#if defined(NEBULA_RELEASE)
 inline const char* audio_wav_dump_seconds() noexcept { return nullptr; }
 inline constexpr const char* audio_wav_dump_seconds_name() noexcept { return ""; }
 inline constexpr const wchar_t* audio_wav_dump_seconds_wide_name() noexcept { return L""; }

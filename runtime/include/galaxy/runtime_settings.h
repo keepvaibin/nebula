@@ -18,6 +18,9 @@ enum class RuntimeInputMode : std::uint32_t {
     Phone = 4,  // the on-screen controls alone (phones and tablets)
 };
 
+// The game's sound modes. Surround is matrix-encoded on two speakers and has its own speakers where the output has them.
+enum class SoundOutput : std::uint8_t { Mono, Stereo, Surround };
+
 struct RuntimeAudioSettings {
     float master = 1.0f;
     float music = 1.0f;
@@ -28,6 +31,7 @@ struct RuntimeAudioSettings {
     float cutscene = 1.0f;
     // What the game plays on the Wii Remote speaker, mixed into the output; off unless chosen.
     float wiimote_speaker = 0.0f;
+    SoundOutput sound_output = SoundOutput::Stereo;
 
     friend bool operator==(const RuntimeAudioSettings&, const RuntimeAudioSettings&) = default;
 };
@@ -90,6 +94,7 @@ void set_disc_languages(std::span<const std::string> folders) noexcept;
 [[nodiscard]] const char* game_language_key(GameLanguage language) noexcept;
 // "auto", "wii", "xbox", "nintendo" or "playstation" (runtime_settings.ini).
 [[nodiscard]] const char* button_icons_key(ButtonIcons icons) noexcept;
+[[nodiscard]] const char* sound_output_key(SoundOutput output) noexcept;
 
 // The generation changes only when the input mode changes, so device queues can reject reports acquired
 // under an older source.

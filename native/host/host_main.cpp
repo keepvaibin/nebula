@@ -3122,7 +3122,11 @@ uint32_t svc_system_setting(void*, uint32_t item) {
         return 1;  // English
 #endif
     case NEBULA_SETTING_SOUND_MODE:
+#if defined(NEBULA_HOST_RENDERER)
+        return static_cast<uint32_t>(galaxy::get_runtime_settings().audio.sound_output);
+#else
         return 1;  // stereo
+#endif
     case NEBULA_SETTING_WIDESCREEN:
         return 1;
     default:
