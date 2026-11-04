@@ -13,7 +13,7 @@ namespace AudParams {
         {1.2f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.5f, 1.0f, 1.0f},
     };
 
-    const int numFreeSe = 120;
+    const int numFreeSe = 512;
     const int numFreeSeq = 3;
     const int numFreeStream = 3;
     const int numFreeSoundChild = 160;
@@ -27,19 +27,19 @@ namespace AudParams {
     const f32 masterVolBgm = 1.2f;
     const f32 masterVolSe = 1.2f;
     const f32 masterVolStream = 2.6f;
-    const JAISeCategoryArrangementItem arrangeSE_SY = {8, 16};
+    const JAISeCategoryArrangementItem arrangeSE_SY = {32, 64};
     const JAISeCategoryArrangementItem arrangeSE_PV = {2, 4};
-    const JAISeCategoryArrangementItem arrangeSE_PM = {10, 18};
+    const JAISeCategoryArrangementItem arrangeSE_PM = {40, 72};
     const JAISeCategoryArrangementItem arrangeSE_BV = {8, 12};
-    const JAISeCategoryArrangementItem arrangeSE_BM = {20, 24};
+    const JAISeCategoryArrangementItem arrangeSE_BM = {80, 96};
     const JAISeCategoryArrangementItem arrangeSE_EV = {10, 18};
-    const JAISeCategoryArrangementItem arrangeSE_EM = {24, 28};
+    const JAISeCategoryArrangementItem arrangeSE_EM = {96, 112};
     const JAISeCategoryArrangementItem arrangeSE_SV = {10, 20};
-    const JAISeCategoryArrangementItem arrangeSE_SM = {24, 32};
-    const JAISeCategoryArrangementItem arrangeSE_OJ = {32, 36};
-    const JAISeCategoryArrangementItem arrangeSE_AT = {16, 20};
-    const JAISeCategoryArrangementItem arrangeSE_DM = {8, 12};
-    const JAISeCategoryArrangementItem arrangeSE_RS = {16, 20};
+    const JAISeCategoryArrangementItem arrangeSE_SM = {96, 128};
+    const JAISeCategoryArrangementItem arrangeSE_OJ = {128, 144};
+    const JAISeCategoryArrangementItem arrangeSE_AT = {64, 80};
+    const JAISeCategoryArrangementItem arrangeSE_DM = {32, 48};
+    const JAISeCategoryArrangementItem arrangeSE_RS = {64, 80};
     const JAISeCategoryArrangementItem arrangeHOMESE = {8, 16};
     const f32 streamSampleRate = 32000.0f;
     const f32 faderVolZeroVolume = 0.0f;

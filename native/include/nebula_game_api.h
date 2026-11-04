@@ -577,7 +577,7 @@ enum {
 
 /* The sound clock (sound_clock). */
 enum {
-    NEBULA_AUDIO_START = 1, /* value: a frame's length in 32 kHz samples; the host calls nebula_game_sound_frame once
+    NEBULA_AUDIO_START = 1, /* value: a block's length in 32 kHz samples; the host calls nebula_game_sound_frame once
                                a frame's length */
     NEBULA_AUDIO_STOP,
 };

@@ -64,12 +64,12 @@ bool AudRhythmSeqParser::execNoteOnMidi(JASTrack* pTrack, u32 channel, u32 pitch
 
     if (rhythmType >= 0) {
         if (rhythmType == RhythmType_0) {
-            f32 rate = mTempoAdjuster.beatProc(mTempo);
             JASTrack* mainTrack = pTrack;
             while (mainTrack->mParent != nullptr) {
                 mainTrack = mainTrack->mParent;
             }
-            mainTrack->setTempo((s32)(mTempo * rate));
+            mainTrack->setSampleClock(AudBgmTempoAdjuster::samplesAdvanced, &mTempoAdjuster);
+            mainTrack->movePlaytimeBySamples(mTempoAdjuster.beatProc(mTempo));
             mModifiedTempo = mainTrack->mTempo;
         }
     }

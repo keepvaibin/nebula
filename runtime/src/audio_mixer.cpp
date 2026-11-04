@@ -276,15 +276,17 @@ std::span<const float> AudioMixer::end_frame() {
     movie_.pull(stream.data(), stream_frames);
     // History: taps - 1 earlier samples' room, then the new ones; outputs from position taps/2 - 1.
     const std::size_t taps = stream_kernel_.taps();
-    const std::size_t keep = taps;
+    const std::size_t keep = taps + 1u;
     if (!stream_running_ || stream_history_.size() != keep * 2u) {
         stream_history_.assign(keep * 2u, 0.0f);
         stream_running_ = true;
+        stream_place_ = 0.0;
     }
     std::vector<float> x(stream_history_);
     x.insert(x.end(), stream.begin(), stream.end());
-    const double step = static_cast<double>(stream_frames) / static_cast<double>(outputs);
-    const double origin = static_cast<double>(taps / 2u - 1u);
+    // The output's rate exactly: a block's whole outputs do not fall on whole 32 kHz samples, the remainder carries over.
+    const double step = 1.0 / game_ratio_;
+    const double origin = static_cast<double>(taps / 2u) + stream_place_;
     for (std::size_t j = 0; j < outputs; ++j) {
         const double at = origin + static_cast<double>(j) * step;
         const auto whole = static_cast<std::size_t>(at);
@@ -299,6 +301,7 @@ std::span<const float> AudioMixer::end_frame() {
         out[j * 2u] += l;
         out[j * 2u + 1u] += r;
     }
+    stream_place_ += static_cast<double>(outputs) * step - static_cast<double>(stream_frames);
     std::copy(x.end() - static_cast<std::ptrdiff_t>(keep * 2u), x.end(), stream_history_.begin());
     return out;
 }

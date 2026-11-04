@@ -688,6 +688,7 @@ void ai_thread() {
         return;  // the audio ticks come with each frame (svc_test_frame_step)
     }
     name_thread(L"Nebula Host Audio");
+    auto next = std::chrono::steady_clock::now();
     for (;;) {
         uint32_t frame_samples = 0;
         {
@@ -697,7 +698,8 @@ void ai_thread() {
         }
         gSoundBlocks.fetch_add(1, std::memory_order_relaxed);
         gModule.audio_tick();
-        std::this_thread::sleep_for(std::chrono::nanoseconds(static_cast<int64_t>(frame_samples * 1e9 / 32000.0)));
+        next += std::chrono::nanoseconds(static_cast<int64_t>(frame_samples * 1e9 / 32000.0));
+        std::this_thread::sleep_until(next);
     }
 }
 #endif

@@ -19,7 +19,6 @@ namespace JASDriver {
     bool registerSubFrameCallback(DriverCallback, void*);
     void subframeCallback();
     void syncCallback();
-    void updateFrameCallback();
 
     extern JASCallbackMgr sSyncCallback;
     extern JASCallbackMgr sSubFrameCallback;

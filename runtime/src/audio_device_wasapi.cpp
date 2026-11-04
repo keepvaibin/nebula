@@ -31,10 +31,12 @@ namespace {
 
 using Microsoft::WRL::ComPtr;
 
-// The fill the thread keeps in the device's buffer, as multiples of the device's period (10 ms in shared mode); the game's own
-// frames (17.5 ms) add to it only while one is half used.
-constexpr std::uint32_t kFillPeriods = 2u;
+// The buffer when the system offers no low-latency stream.
 constexpr REFERENCE_TIME kBufferDuration = 400000;  // 40 ms
+// The fill starts at one engine period, the least there is. A wake or a render that took too long of it raises the fill a
+// period at a time, up to this many; ten quiet seconds lower it a period.
+constexpr std::uint32_t kMostFillPeriods = 4u;
+constexpr LONGLONG kQuietSecondsToLower = 10;
 
 void set_mmcss() {
     using SetFn = HANDLE(WINAPI*)(LPCWSTR, LPDWORD);
@@ -159,7 +161,23 @@ private:
                                           reinterpret_cast<void**>(client_.ReleaseAndGetAddressOf())));
     }
 
-    bool initialize(DWORD rate, DWORD mask) {
+    // The shortest period the audio engine offers for this format (IAudioClient3), where the system and driver have it. Only
+    // the mix format's own rate and channels qualify; otherwise the plain stream.
+    bool initialize_low_latency(IMMDevice* device, WAVEFORMATEX* format) {
+        ComPtr<IAudioClient3> client;
+        if (FAILED(device->Activate(__uuidof(IAudioClient3), CLSCTX_ALL, nullptr, reinterpret_cast<void**>(client.GetAddressOf())))) {
+            return false;
+        }
+        UINT32 standard = 0u, fundamental = 0u, least = 0u, most = 0u;
+        if (FAILED(client->GetSharedModeEnginePeriod(format, &standard, &fundamental, &least, &most)) || least == 0u ||
+            FAILED(client->InitializeSharedAudioStream(AUDCLNT_STREAMFLAGS_EVENTCALLBACK, least, format, nullptr))) {
+            return false;
+        }
+        client_ = client;
+        return true;
+    }
+
+    bool initialize(IMMDevice* device, DWORD rate, DWORD mask) {
         const WORD channels = static_cast<WORD>(std::popcount(mask));
         WAVEFORMATEXTENSIBLE format{};
         format.Format.wFormatTag = WAVE_FORMAT_EXTENSIBLE;
@@ -172,6 +190,13 @@ private:
         format.Samples.wValidBitsPerSample = 32;
         format.dwChannelMask = mask;
         format.SubFormat = GUID{0x00000003, 0x0000, 0x0010, {0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71}};  // IEEE float
+        if (initialize_low_latency(device, &format.Format)) {
+            set_speakers(mask);
+            return true;
+        }
+        if (!activate(device)) {
+            return false;
+        }
         const DWORD flags = AUDCLNT_STREAMFLAGS_EVENTCALLBACK | AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM |
                             AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY;
         if (FAILED(client_->Initialize(AUDCLNT_SHAREMODE_SHARED, flags, kBufferDuration, 0, &format.Format, nullptr))) {
@@ -189,6 +214,7 @@ private:
         if (FAILED(endpoints->GetDefaultAudioEndpoint(eRender, eConsole, &device)) || !activate(device.Get())) {
             return false;
         }
+        // The mix format is asked of a plain client; initialize() chooses the stream.
         WAVEFORMATEX* mix = nullptr;
         if (FAILED(client_->GetMixFormat(&mix)) || mix == nullptr) {
             return false;
@@ -210,8 +236,8 @@ private:
         if (reopen != nullptr && surround_.load(std::memory_order_relaxed)) {
             mask = KSAUDIO_SPEAKER_5POINT1;
         }
-        if (!initialize(rate, mask)) {
-            if (mask == kStereo || !activate(device.Get()) || !initialize(rate, kStereo)) {
+        if (!initialize(device.Get(), rate, mask)) {
+            if (mask == kStereo || !activate(device.Get()) || !initialize(device.Get(), rate, kStereo)) {
                 return false;
             }
         }
@@ -227,12 +253,29 @@ private:
             FAILED(client_->GetService(__uuidof(IAudioRenderClient), reinterpret_cast<void**>(renderer_.ReleaseAndGetAddressOf())))) {
             return false;
         }
-        const std::uint32_t period_frames = static_cast<std::uint32_t>(period * rate / 10000000);
-        fill_frames_ = std::min<std::uint32_t>(period_frames * kFillPeriods, buffer_frames_);
+        std::uint32_t period_frames = static_cast<std::uint32_t>(period * rate / 10000000);
+        ComPtr<IAudioClient3> client3;
+        UINT32 engine_format_period = 0u;
+        WAVEFORMATEX* current = nullptr;
+        if (SUCCEEDED(client_.As(&client3)) && SUCCEEDED(client3->GetCurrentSharedModeEnginePeriod(&current, &engine_format_period)) &&
+            engine_format_period != 0u) {
+            period_frames = engine_format_period;
+        }
+        CoTaskMemFree(current);
+        period_frames_ = std::max(period_frames, 1u);
+        fill_frames_ = std::min(period_frames_, buffer_frames_);
         rate_.store(rate, std::memory_order_relaxed);
         std::cout << "[audio] output " << rate << " Hz, " << speaker_count_ << " channels, buffer " << buffer_frames_
                   << ", fill " << fill_frames_ << ", period " << period_frames << " frames\n";
         return true;
+    }
+
+    void raise_fill() {
+        const std::uint32_t raised = std::min({fill_frames_ + period_frames_, period_frames_ * kMostFillPeriods, buffer_frames_});
+        if (raised != fill_frames_) {
+            fill_frames_ = raised;
+            std::cout << "[audio] fill raised to " << fill_frames_ << " frames\n";
+        }
     }
 
     void close_endpoint() {
@@ -258,6 +301,12 @@ private:
             return;
         }
         const HANDLE waits[2] = {samples_, changed_};
+        LARGE_INTEGER frequency{};
+        QueryPerformanceFrequency(&frequency);
+        const LONGLONG period_ticks = static_cast<LONGLONG>(period_frames_) * frequency.QuadPart / rate_.load(std::memory_order_relaxed);
+        LARGE_INTEGER last_wake{};
+        QueryPerformanceCounter(&last_wake);
+        LARGE_INTEGER last_trouble = last_wake;
         const char* const reopen = ::galaxy::run_options().audio_test_reopen;
         const ULONGLONG reopen_at = reopen != nullptr ? GetTickCount64() + std::strtoull(reopen, nullptr, 10) * 1000u : 0u;
         for (;;) {
@@ -269,6 +318,17 @@ private:
             if (FAILED(client_->GetCurrentPadding(&padding))) {
                 return;
             }
+            // This machine cannot keep to the fill: a little more of it, not a gap in the sound.
+            LARGE_INTEGER wake{};
+            QueryPerformanceCounter(&wake);
+            if (wake.QuadPart - last_wake.QuadPart > period_ticks * 3 / 2) {
+                raise_fill();
+                last_trouble = wake;
+            } else if (fill_frames_ > period_frames_ && wake.QuadPart - last_trouble.QuadPart > frequency.QuadPart * kQuietSecondsToLower) {
+                fill_frames_ -= period_frames_;
+                last_trouble = wake;
+            }
+            last_wake = wake;
             if (padding >= fill_frames_) {
                 continue;
             }
@@ -287,6 +347,12 @@ private:
             render_(reinterpret_cast<float*>(data), frames, rate_.load(std::memory_order_relaxed));
             if (FAILED(renderer_->ReleaseBuffer(frames, 0))) {
                 return;
+            }
+            LARGE_INTEGER rendered{};
+            QueryPerformanceCounter(&rendered);
+            if (rendered.QuadPart - wake.QuadPart > period_ticks * 3 / 4) {
+                raise_fill();
+                last_trouble = rendered;
             }
         }
     }
@@ -349,6 +415,7 @@ private:
     ComPtr<IAudioRenderClient> renderer_;
     UINT32 buffer_frames_{};
     std::uint32_t fill_frames_{};
+    std::uint32_t period_frames_{1u};
 };
 
 }  // namespace

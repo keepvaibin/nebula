@@ -251,8 +251,6 @@ void GameSystem::updateSceneController() {
     bool isSceneUpdate = true;
     bool isResetProcessing = SingletonHolder< GameSystemResetAndPowerProcess >::get()->isActive();
 
-    mObjHolder->updateAudioSystem();
-
     if (isResetProcessing) {
         isSceneUpdate = false;
     }
@@ -294,6 +292,9 @@ void GameSystem::updateSceneController() {
     if (isResetProcessing) {
         mSceneController->updateSceneDuringResetProcessing();
     }
+
+    // After the scene: what it asked for this frame starts now, not a frame later.
+    mObjHolder->updateAudioSystem();
 }
 
 void GameSystem::calcAnim() {
