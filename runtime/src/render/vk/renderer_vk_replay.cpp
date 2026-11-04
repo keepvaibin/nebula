@@ -1348,6 +1348,7 @@ bool RendererVk::record_replay_list(ReplayList& list) {
 void RendererVk::record_subframe_upscale(const ReplayList& list, const SubframeTime& time) {
     const ReplayList::Upscale& up = list.upscale;
     const GpuPassScope pass{*this, GpuPass::Upscale};
+    dump_temporal_inputs(*up.color, *up.motion, temporal_frame_);
     bool upscaled = false;
     if (temporal_ && up.render_width == temporal_render_w_ && up.render_height == temporal_render_h_ &&
         up.output_width == temporal_output_w_ && up.output_height == temporal_output_h_) {

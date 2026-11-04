@@ -56,6 +56,7 @@ struct RunOptions {
     const char* test_post_fault = nullptr;
     const char* test_script_clock = nullptr;
     const char* test_settings_keys = nullptr;
+    const char* test_motion_dump = nullptr;
     const char* test_settings_open = nullptr;
     const char* test_window_sizes = nullptr;
     const char* texture_dump_dir = nullptr;

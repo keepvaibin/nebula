@@ -270,9 +270,6 @@ static void clamp_unimplemented_features(RenderConfig& cfg) {
     cfg.ray_tracing_enabled = false;
     cfg.frame_generation = 0u;
     cfg.hud_output_resolution = false;
-    if (cfg.max_fps <= 0.0f || cfg.max_fps > 60.0f) {
-        cfg.max_fps = 60.0f;  // no interpolated frames
-    }
 #endif
 }
 

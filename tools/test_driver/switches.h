@@ -489,6 +489,15 @@ inline constexpr const char* test_settings_keys_name() noexcept { return "GALAXY
 inline constexpr const wchar_t* test_settings_keys_wide_name() noexcept { return L"GALAXY_TEST_SETTINGS_KEYS"; }
 #endif
 #if defined(NEBULA_RELEASE)
+inline const char* test_motion_dump() noexcept { return nullptr; }
+inline constexpr const char* test_motion_dump_name() noexcept { return ""; }
+inline constexpr const wchar_t* test_motion_dump_wide_name() noexcept { return L""; }
+#else
+inline const char* test_motion_dump() noexcept { return std::getenv("GALAXY_TEST_MOTION_DUMP"); }
+inline constexpr const char* test_motion_dump_name() noexcept { return "GALAXY_TEST_MOTION_DUMP"; }
+inline constexpr const wchar_t* test_motion_dump_wide_name() noexcept { return L"GALAXY_TEST_MOTION_DUMP"; }
+#endif
+#if defined(NEBULA_RELEASE)
 inline const char* test_settings_open() noexcept { return nullptr; }
 inline constexpr const char* test_settings_open_name() noexcept { return ""; }
 inline constexpr const wchar_t* test_settings_open_wide_name() noexcept { return L""; }
