@@ -82,6 +82,10 @@ void show_window(NativeWindow window) noexcept;
 [[nodiscard]] double display_refresh_hz(NativeWindow window) noexcept;
 // The display's vblanks: the latest and the interval between them, on galaxy::qpc_now()'s clock (Windows: timed on
 // the window's monitor; Android: Choreographer's); false while not known.
+// An event set when the window is minimised or restored and when it closes (the main thread sleeps on it).
+void set_state_wake(void* event) noexcept;
+// The grid as last timed, without starting the timing.
+[[nodiscard]] bool vblank_grid_known(std::int64_t& vblank, std::int64_t& period) noexcept;
 [[nodiscard]] bool vblank_grid(NativeWindow window, std::int64_t& vblank, std::int64_t& period) noexcept;
 // Where the game's retrace follows the display's vsync (Android): the latest retrace, the retrace period, the
 // display's vsync interval and now (CLOCK_MONOTONIC nanoseconds), for presents timed to it; else false.

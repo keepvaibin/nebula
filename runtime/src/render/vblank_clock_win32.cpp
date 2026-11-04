@@ -12,6 +12,8 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
+#include <condition_variable>
 #include <cstdlib>
 #include <mutex>
 #include <thread>
@@ -25,6 +27,8 @@ namespace {
 using Microsoft::WRL::ComPtr;
 
 std::mutex g_mutex;
+std::condition_variable g_asked;
+std::int64_t g_last_asked = 0;  // nobody for two seconds: the thread sleeps until someone asks
 std::int64_t g_vblank = 0;  // the latest vblank (its smoothed wake time)
 std::int64_t g_period = 0;  // the interval between vblanks, smoothed; 0 while not known
 std::atomic<HMONITOR> g_monitor{nullptr};
@@ -57,6 +61,10 @@ void vblank_thread() {
     std::int64_t last = 0;
     unsigned off_grid = 0;
     for (;;) {
+        {
+            std::unique_lock<std::mutex> lock(g_mutex);
+            g_asked.wait(lock, [frequency] { return galaxy::qpc_now() - g_last_asked < frequency * 2; });
+        }
         if (const HMONITOR wanted = g_monitor.load(std::memory_order_relaxed); wanted != monitor || !output) {
             monitor = wanted;
             output = find_output(monitor);
@@ -110,6 +118,18 @@ bool vblank_grid(NativeWindow window, std::int64_t& vblank, std::int64_t& period
     } catch (...) {
         return false;
     }
+    const std::lock_guard<std::mutex> lock(g_mutex);
+    const std::int64_t now = galaxy::qpc_now();
+    if (now - g_last_asked >= galaxy::qpc_frequency()) {
+        g_last_asked = now;
+        g_asked.notify_one();
+    }
+    vblank = g_vblank;
+    period = g_period;
+    return period != 0;
+}
+
+bool vblank_grid_known(std::int64_t& vblank, std::int64_t& period) noexcept {
     const std::lock_guard<std::mutex> lock(g_mutex);
     vblank = g_vblank;
     period = g_period;

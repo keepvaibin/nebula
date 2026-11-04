@@ -936,6 +936,12 @@ double display_refresh_hz(NativeWindow window) noexcept {
     return mode != nullptr && mode->refresh_rate > 1.0f ? static_cast<double>(mode->refresh_rate) : 0.0;
 }
 
+void set_state_wake(void*) noexcept {}
+
+bool vblank_grid_known(std::int64_t& vblank, std::int64_t& period) noexcept {
+    return vblank_grid(nullptr, vblank, period);
+}
+
 bool vblank_grid(NativeWindow, std::int64_t& vblank, std::int64_t& period) noexcept {
     return galaxy::sdl::vsync_grid(vblank, period);  // qpc_now() is CLOCK_MONOTONIC nanoseconds off Windows
 }
