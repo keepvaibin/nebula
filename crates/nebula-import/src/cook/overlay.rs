@@ -124,13 +124,17 @@ pub fn cook_plan(plan: &Path, output: &Path) -> Result<(Stats, Vec<(String, Stri
     let _ = fs::remove_file(output.with_extension("progress"));
     let failed = result?;
     // What those materials need, for shaders the mod didn't bring or brought for another build.
-    let list = output.with_extension("materials");
-    let mut bytes = Vec::new();
-    for (id, record) in &materials {
-        bytes.extend_from_slice(&id.to_le_bytes());
-        bytes.extend_from_slice(record);
+    let sources = output.with_extension("sources");
+    let _ = fs::remove_dir_all(&sources);
+    fs::create_dir_all(&sources).with_context(|| format!("{} cannot be created", sources.display()))?;
+    for (name, text) in super::shader_source::HEADERS {
+        fs::write(sources.join(name), text)?;
     }
-    fs::write(&list, bytes).with_context(|| format!("{} cannot be written", list.display()))?;
+    for (id, record) in &materials {
+        if let Ok(source) = super::shader_source::material_source(record) {
+            fs::write(sources.join(format!("m{id:08x}.hlsl")), source)?;
+        }
+    }
     Ok((stats, failed))
 }
 

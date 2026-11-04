@@ -391,6 +391,8 @@ runtime/src/render/host_window_win32.cpp
     runtime/src/render/frame_pass.cpp
     runtime/src/render/line_point_params.cpp
     runtime/src/render/mod_shaders.cpp
+    runtime/src/render/mod_shader_build.cpp
+    runtime/src/render/mod_shader_compile_d3d12.cpp
     runtime/src/render/pipeline_cache.cpp
     runtime/src/render/pipeline_seed.cpp
     runtime/src/render/post_process.cpp
@@ -693,6 +695,9 @@ runtime/src/render/host_window_win32.cpp
         runtime/src/render/vk/texture_backend_vk.cpp
         runtime/src/render/vk/pipeline_cache_vk.cpp
         runtime/src/render/mod_shaders.cpp
+        runtime/src/render/mod_shader_build.cpp
+        runtime/src/render/vk/mod_shader_compile_vk.cpp
+        runtime/src/render/vk/shader_compile_vk.cpp
         runtime/src/render/pipeline_seed.cpp
         runtime/src/render/vk/compile_journal.cpp
         runtime/src/render/vk/renderer_vk.cpp
@@ -710,6 +715,7 @@ runtime/src/render/host_window_win32.cpp
         "${CMAKE_CURRENT_SOURCE_DIR}/native/include")
     target_compile_features(galaxy_render_vk PUBLIC cxx_std_20)
     target_link_libraries(galaxy_render_vk PUBLIC galaxy_disc_files)
+    target_link_libraries(galaxy_render_vk PRIVATE nebula_shader_compiler)
     target_link_libraries(galaxy_render_vk
         PUBLIC
             nebula_vulkan_deps
