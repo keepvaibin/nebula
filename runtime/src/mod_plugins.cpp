@@ -140,7 +140,9 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const std::vec
         row.size = sizeof(row);
         row.name = galaxy.name.c_str();
         row.map_pane = galaxy.map_pane.empty() ? nullptr : galaxy.map_pane.c_str();
-        for (std::size_t i = 0; i < galaxy.open_conditions.size() && i < 3u; ++i) row.open_condition[i] = galaxy.open_conditions[i].c_str();
+        std::vector<std::string> conditions = galaxy.open_conditions;
+        if (galaxy.hungry_slot >= 0 && conditions.size() < 3u) conditions.push_back("StarPiece" + galaxy.name);
+        for (std::size_t i = 0; i < conditions.size(); ++i) row.open_condition[i] = conditions[i].c_str();
         row.stars_to_open = galaxy.stars_to_open;
         row.dome = galaxy.dome;
         if (g_api.add_galaxy(&row) != 0) say(galaxy.mod_id + ": the galaxy " + galaxy.name + " can't be added: its name clashes with one the game has");
