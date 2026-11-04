@@ -90,6 +90,8 @@ RunOptions read_options() {
         return wide.back().c_str();
     };
     o.frame_timeline_path_w = read_wide(nebula_switch::frame_timeline_path_wide_name());
+    o.xess_dir_w = read_wide(nebula_switch::xess_dir_wide_name());
+    o.streamline_dir_w = read_wide(nebula_switch::streamline_dir_wide_name());
     o.render_config_path_w = read_wide(nebula_switch::render_config_path_wide_name());
     o.runtime_settings_path_w = read_wide(nebula_switch::runtime_settings_path_wide_name());
     o.crash_dump_dir_w = read_wide(nebula_switch::crash_dump_dir_wide_name());

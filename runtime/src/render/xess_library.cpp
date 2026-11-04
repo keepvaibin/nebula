@@ -2,6 +2,9 @@
 // xess_library.h.
 #include "galaxy/render/xess_library.h"
 
+#include "galaxy/platform_paths.h"
+#include "galaxy/run_options.h"
+
 #include <SoftPub.h>
 #include <WinTrust.h>
 
@@ -37,14 +40,11 @@ bool signature_trusted(const wchar_t* path) {
 }  // namespace
 
 std::wstring directory() {
-    wchar_t buffer[MAX_PATH]{};
-    if (GetEnvironmentVariableW(L"GALAXY_XESS_DIR", buffer, MAX_PATH) != 0u) {
-        return buffer;
+    if (const wchar_t* const test = ::galaxy::run_options().xess_dir_w; test != nullptr && test[0] != L'\0') {
+        return test;
     }
-    if (GetEnvironmentVariableW(L"LOCALAPPDATA", buffer, MAX_PATH) != 0u) {
-        return std::wstring(buffer) + L"\\Nebula\\vendor\\xess-3.0.2";
-    }
-    return {};
+    const std::filesystem::path data = galaxy::nebula_data_directory();
+    return data.empty() ? std::wstring{} : (data / L"vendor" / L"xess-3.0.2").wstring();
 }
 
 HMODULE module() noexcept {
