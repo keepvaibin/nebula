@@ -27,8 +27,8 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
                      material.channel.x * saturate((material.channel.y * 255.0 + lit) / 255.0));
     const float4 c0 = float4(v.uv[0], 1.0, 1.0);
     const float4 n = float4(v.nrm, 1.0);
-    o.uv[0] = float4(dot(c0, inline_tex_matrices[0]), dot(c0, inline_tex_matrices[1]),
-                     dot(n, inline_tex_matrices[3]), dot(n, inline_tex_matrices[4]));
+    o.uv[0] = float4(dot(c0, native_tex_row(0)), dot(c0, native_tex_row(1)),
+                     dot(n, native_tex_row(3)), dot(n, native_tex_row(4)));
 }
 
 float4 material_color(NativeVaryings i) {

@@ -530,7 +530,6 @@ private:
         std::vector<std::uint8_t> per_vertex;   // per-vertex palette draw
         // Per record, from its drawing state: texgen i's bit when it maps position or normal (its matrices lerp
         // whole), and the lights its colour channels and emboss texgens evaluate.
-        std::vector<std::uint8_t> spatial_texgens;
         std::vector<std::uint8_t> light_masks;
         // The palettes (shadows) as rows: per shadow a table of draw_rows::kRows indices into `palette_rows` (4
         // words a row). A shadow appends only the kinds that changed since the one before it; the rest it shares.
@@ -573,7 +572,7 @@ private:
         }
         void clear() noexcept {
             constants.clear(); prev_index.clear();
-            palette.clear(); per_vertex.clear(); spatial_texgens.clear(); light_masks.clear(); palette_tables.clear(); palette_rows.clear(); palette_count = 0;
+            palette.clear(); per_vertex.clear(); light_masks.clear(); palette_tables.clear(); palette_rows.clear(); palette_count = 0;
             valid = false; serial = 0;
             category.clear(); camera_epoch_known = false;
             rt_projection_known = false;
@@ -627,9 +626,6 @@ private:
         std::uint32_t record = 0;
         std::int32_t prev = -1;           // matched record of the scene before
         std::int32_t palette = -1;        // interp_palette_motions_ index
-        EyeMotion position{};             // inline position matrix
-        bool position_moves = false;
-        bool tex_moves = false;           // inline texture or post matrices
         bool projection_moves = false;
     };
     std::vector<InterpRecordMotion> interp_moving_;

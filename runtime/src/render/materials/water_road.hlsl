@@ -24,12 +24,12 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
     const float4 n = float4(v.nrm, 1.0);
     const uint proj = high ? 9u : 6u;
     const uint env = high ? 12u : 9u;
-    o.uv[0] = float4(dot(c0, inline_tex_matrices[0]), dot(c0, inline_tex_matrices[1]),
-                     dot(c1, inline_tex_matrices[3]), dot(c1, inline_tex_matrices[4]));
-    o.uv[1] = float4(dot(c2, inline_tex_matrices[6]), dot(c2, inline_tex_matrices[7]),
-                     dot(n, inline_tex_matrices[env]), dot(n, inline_tex_matrices[env + 1u]));
-    o.uv[2] = float4(dot(p, inline_tex_matrices[proj]), dot(p, inline_tex_matrices[proj + 1u]),
-                     dot(p, inline_tex_matrices[proj + 2u]), 1.0);
+    o.uv[0] = float4(dot(c0, native_tex_row(0)), dot(c0, native_tex_row(1)),
+                     dot(c1, native_tex_row(3)), dot(c1, native_tex_row(4)));
+    o.uv[1] = float4(dot(c2, native_tex_row(6)), dot(c2, native_tex_row(7)),
+                     dot(n, native_tex_row(env)), dot(n, native_tex_row(env + 1u)));
+    o.uv[2] = float4(dot(p, native_tex_row(proj)), dot(p, native_tex_row(proj + 1u)),
+                     dot(p, native_tex_row(proj + 2u)), 1.0);
 }
 
 float4 material_color(NativeVaryings i) {

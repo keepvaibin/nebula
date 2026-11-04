@@ -101,9 +101,6 @@ static_assert(kPaletteBytes % 256u == 0u && kVsBytes % 256u == 0u &&
 inline constexpr std::uint32_t kVsProjection = offsetof(VertexConstants, projection) / 4u;
 inline constexpr std::uint32_t kVsPosBase = offsetof(VertexConstants, pos_base) / 4u;
 inline constexpr std::uint32_t kVsRowBases = offsetof(VertexConstants, row_bases) / 4u;
-inline constexpr std::uint32_t kVsPosition = offsetof(VertexConstants, inline_pos_matrix) / 4u;
-inline constexpr std::uint32_t kVsTex = offsetof(VertexConstants, inline_tex_matrices) / 4u;
-inline constexpr std::uint32_t kVsPost = offsetof(VertexConstants, inline_post_matrices) / 4u;
 inline constexpr std::uint32_t kVsMotionPrevProj = offsetof(VertexConstants, motion_prev_proj) / 4u;
 inline constexpr std::uint32_t kVsMotionPrevPos = offsetof(VertexConstants, motion_prev_pos) / 4u;
 inline constexpr std::uint32_t kVsMotionCtrl = offsetof(VertexConstants, motion_ctrl) / 4u;

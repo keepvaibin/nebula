@@ -53,38 +53,8 @@ inline void fill_vs_projection(const NativeDrawState& draw, float out[4][4]) {
     }
 }
 
-inline void refresh_vs_inline_matrices(const DrawMatrices& state, const NativeDrawState& draw, VertexConstants& out) {
-    const auto copy_matrix = [&state](
-                                 unsigned row,
-                                 float destination[3][4]) {
-        row = std::min(row, 61u);
-        for (unsigned r = 0; r < 3; ++r) {
-            for (unsigned c = 0; c < 4; ++c) {
-                destination[r][c] = state.matrix_value(row + r, c);
-            }
-        }
-    };
-
-    copy_matrix(out.draw_rows[0][0], out.inline_pos_matrix);
-    for (unsigned i = 0; i < kMaxTexGens; ++i) {
-        copy_matrix(out.draw_rows[(i + 1u) / 4u][(i + 1u) % 4u], out.inline_tex_matrices[i]);
-
-        const PostTexGen post = draw.post_texgen[i];
-        const unsigned post_row = post.matrix_index & 0x3Fu;
-        for (unsigned r = 0; r < 3; ++r) {
-            for (unsigned c = 0; c < 4; ++c) {
-                out.inline_post_matrices[i][r][c] =
-                    std::bit_cast<float>(state.row(draw_rows::kPost + ((post_row + r) & 0x3Fu))[c]);
-            }
-        }
-    }
-
-}
-
-// Fills VertexConstants for the current drawing state (inline matrices from the draw's matrices; the blocks' bases
-// RenderCore sets).
+// Fills VertexConstants for the current drawing state (the blocks' bases RenderCore sets).
 inline void fill_vs_constants(
-    const DrawMatrices& state,
     const NativeDrawState& draw,
     RasterScale scale,
     VertexConstants& out) {
@@ -117,8 +87,6 @@ inline void fill_vs_constants(
     for (unsigned i = 0; i < kMaxTexGens; ++i) {
         out.draw_rows[(i + 1u) / 4u][(i + 1u) % 4u] = 3u * draw.texture_matrix[i];
     }
-
-    refresh_vs_inline_matrices(state, draw, out);
 
     LinePointValues values{draw.line_point.line_width, draw.line_point.point_size, draw.line_point.line_divisor,
                            draw.line_point.point_divisor, 0u, 0u};
@@ -188,15 +156,13 @@ struct VsConstantsCpuCache {
     // source of VertexShaderKey::flags bit 0), RenderCore's.
     std::uint32_t per_vertex = 0u;
 
-    const VertexConstants& update(const DrawMatrices& state, const NativeDrawState& draw, std::uint32_t dirty,
+    const VertexConstants& update(const NativeDrawState& draw, std::uint32_t dirty,
         RasterScale current_scale, bool frame_bindings_dirty) {
-        // When only the matrices changed, refresh the inline matrices and keep the rest of the last full fill;
+        // When only the matrices changed the rest of the last full fill stands (their rows are in their blocks);
         // any other change, dirty frame bindings or a new scale refill everything.
-        if (valid && !frame_bindings_dirty && raster_scale.x == current_scale.x && raster_scale.y == current_scale.y &&
-            dirty == kStateDirtyMatrices) {
-            refresh_vs_inline_matrices(state, draw, constants);
-        } else {
-            fill_vs_constants(state, draw, current_scale, constants);
+        if (!valid || frame_bindings_dirty || raster_scale.x != current_scale.x || raster_scale.y != current_scale.y ||
+            dirty != kStateDirtyMatrices) {
+            fill_vs_constants(draw, current_scale, constants);
             raster_scale = current_scale;
             valid = true;
         }

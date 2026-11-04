@@ -139,6 +139,9 @@ std::atomic<unsigned> s_layer_2d_lines{0u};
 // back and written to GALAXY_PRESENT_SNAPSHOT_DIR\present_<n>.ppm, limited to
 // presents GALAXY_PRESENT_SNAPSHOT_FIRST..GALAXY_PRESENT_SNAPSHOT_LAST.
 std::uint64_t g_snapshot_presents = 0u;
+// number_present_snapshots: the next present's number comes from the tour; none while it waits for a stop.
+bool g_snapshot_numbered = false;
+bool g_snapshot_hold = false;
 
 std::string present_snapshot_path() {
     static const std::uint64_t every = ::galaxy::run_option_u64(::galaxy::run_options().present_snapshot_every, 0u);
@@ -152,7 +155,7 @@ std::string present_snapshot_path() {
     }();
     const std::uint64_t presents = ++g_snapshot_presents;
     if (every == 0u || directory.empty() || presents < first || presents > last ||
-        presents % every != 0u) {
+        presents % every != 0u || (g_snapshot_numbered && (g_snapshot_hold || presents % 1000u == 0u))) {
         return {};
     }
     // Its time, for latency measurements against the input's (GALAXY_INPUT_POINTER_PATH's jumps).
@@ -1143,7 +1146,8 @@ void RenderCore::write_scene_vs_constants(const VertexConstants& cpu, VertexCons
         for (unsigned i = 0; i < 12u; ++i) record.position[i] = matrices_.matrix_value(i / 4u, i % 4u);
         record.palette_offset = palette_offset;
     } else {
-        std::memcpy(record.position.data(), cpu.inline_pos_matrix, sizeof(record.position));
+        const std::uint32_t row = std::min(cpu.draw_rows[0][0], 61u);
+        for (unsigned i = 0; i < 12u; ++i) record.position[i] = matrices_.matrix_value(row + i / 4u, i % 4u);
     }
     record.translation[0] = record.position[3];
     record.translation[1] = record.position[7];
@@ -1166,12 +1170,9 @@ void RenderCore::write_scene_vs_constants(const VertexConstants& cpu, VertexCons
         scene.constants.push_back(cpu);
         const std::int32_t m = history.current_matches().back();
         scene.prev_index.push_back(m);
-        // Inline draws read normals, lights and indexed texture matrices from
-        // the palette too: their snapshot is interpolated like a skinned one.
-        scene.palette.push_back(record.palette || current_palette_required_ ? current_palette_shadow_ : -1);
+        scene.palette.push_back(current_palette_shadow_);
         scene.per_vertex.push_back(record.palette ? 1u : 0u);
-        const auto [spatial, lights] = interp_draw_facts(draw_state_);
-        scene.spatial_texgens.push_back(spatial);
+        const std::uint8_t lights = interp_draw_facts(draw_state_).second;
         scene.light_masks.push_back(lights);
         scene.category.push_back(record.category);
     }
@@ -1188,9 +1189,7 @@ void RenderCore::write_scene_vs_constants(const VertexConstants& cpu, VertexCons
     std::uint32_t previous_palette = 0u;
     Affine34 prev_pos = replays_upscaled ? affine_identity() : camera;
     if (replays_upscaled) {
-        if (!record.palette) {
-            prev_pos = record.position;
-        } else if (palette_offset != kNoPaletteOffset) {
+        if (palette_offset != kNoPaletteOffset) {
             mode = 0u;
             previous_palette = palette_offset;
         }
@@ -2742,8 +2741,6 @@ bool RenderCore::render_interp_subframe(float t) {
         interp_mirror_camera_ = CameraMotion{};
         interp_mirror_camera_.known = interp_camera_.known && interp_camera_.cut;
         interp_mirror_camera_.cut = interp_mirror_camera_.known;
-        const bool camera_moves = interp_camera_.known && !interp_camera_.cut &&
-            std::memcmp(interp_camera_.a.data(), interp_camera_.b.data(), sizeof(Affine34)) != 0;
         const auto records_start = std::chrono::steady_clock::now();
         for (std::size_t r = 0; r < count; ++r) {
             const std::int32_t m = prev_index[r];
@@ -2761,24 +2758,7 @@ bool RenderCore::render_interp_subframe(float t) {
             InterpRecordMotion motion{};
             motion.record = static_cast<std::uint32_t>(r);
             motion.prev = prev_data ? m : -1;
-            if (scene.per_vertex[r] == 0u) {
-                Affine34 b{};
-                std::memcpy(b.data(), now.inline_pos_matrix, sizeof(Affine34));
-                Affine34 a{};
-                if (before != nullptr) {
-                    std::memcpy(a.data(), before->inline_pos_matrix, sizeof(Affine34));
-                }
-                eye_motion(before != nullptr ? &a : nullptr, b, camera, orthographic, motion.position);
-                motion.position_moves =
-                    !motion.position.still || (motion.position.split && camera_moves);
-                interp_snapped_ += motion.position.snapped ? 1u : 0u;
-            }
             if (before != nullptr && !(camera.known && camera.cut)) {
-                motion.tex_moves =
-                    std::memcmp(before->inline_tex_matrices, now.inline_tex_matrices,
-                                sizeof(now.inline_tex_matrices)) != 0 ||
-                    std::memcmp(before->inline_post_matrices, now.inline_post_matrices,
-                                sizeof(now.inline_post_matrices)) != 0;
                 motion.projection_moves =
                     before->projection[3][3] == now.projection[3][3] &&
                     std::memcmp(before->projection, now.projection, sizeof(now.projection)) != 0;
@@ -2803,23 +2783,24 @@ bool RenderCore::render_interp_subframe(float t) {
                     entry.layer = static_cast<std::uint8_t>(layer);
                     interp_palette_first_[static_cast<std::size_t>(shadow)] = index;
                 }
-                // The slots this record reads: every one for per-vertex
-                // matrices; for an inline draw, the normal matrix of its
-                // matrix index when it is lit; the lights its channels and
-                // emboss texgens evaluate (texture rows are taken whole).
+                // The slots this record reads: every one for per-vertex matrices; else its position matrix and,
+                // when it is lit, its normal matrix; the lights its channels and emboss texgens evaluate (texture rows
+                // are taken whole).
                 InterpPaletteMotion& entry = interp_palette_motions_[static_cast<std::size_t>(index)];
                 entry.light_mask |= scene.light_masks[r];
                 if (scene.per_vertex[r] != 0u) {
                     entry.position_mask = kAllPaletteSlots;
                     entry.normal_mask = kAllPaletteSlots;
-                } else if ((now.flags & 0x02u) != 0u) {
+                } else {
                     const std::uint32_t slot = (now.draw_rows[0][0] & 0x3Fu) / 3u;
-                    if (slot < 10u) entry.normal_mask |= static_cast<std::uint16_t>(1u << slot);
+                    if (slot < 10u) {
+                        entry.position_mask |= static_cast<std::uint16_t>(1u << slot);
+                        if ((now.flags & 0x02u) != 0u) entry.normal_mask |= static_cast<std::uint16_t>(1u << slot);
+                    }
                 }
                 motion.palette = index;
             }
-            if (motion.position_moves || motion.tex_moves || motion.projection_moves ||
-                motion.palette >= 0) {
+            if (motion.projection_moves || motion.palette >= 0) {
                 interp_pending_.push_back(motion);
             }
         }
@@ -2838,8 +2819,7 @@ bool RenderCore::render_interp_subframe(float t) {
                 !interp_palette_motions_[static_cast<std::size_t>(motion.palette)].motion.any_changed) {
                 motion.palette = -1;
             }
-            if (motion.position_moves || motion.tex_moves || motion.projection_moves ||
-                motion.palette >= 0) {
+            if (motion.projection_moves || motion.palette >= 0) {
                 interp_moving_.push_back(motion);
             }
         }
@@ -2964,24 +2944,6 @@ bool RenderCore::prepare_interp_sequence(const InterpScene& scene, const InterpS
         const VertexConstants& recorded = scene.constants[moving.record];
         const VertexConstants* before = moving.prev >= 0
             ? &before_scene.constants[static_cast<std::size_t>(moving.prev)] : nullptr;
-        // The inline matrix's ends: the frame before's and this one's.
-        const float* const position_a = before != nullptr ? &before->inline_pos_matrix[0][0] : nullptr;
-        const float* const position_b = &recorded.inline_pos_matrix[0][0];
-        if (moving.position_moves) {
-            interp_program_.eye(base + interp_gpu::kVsPosition, moving.position, position_a, position_b);
-        }
-        if (moving.tex_moves && before != nullptr) {
-            // Per texgen: projection and environment maps lerp whole; texture
-            // coordinate matrices scroll (wrap-aware) or step.
-            for (unsigned i = 0; i < kMaxTexGens; ++i) {
-                const bool spatial = ((scene.spatial_texgens[moving.record] >> i) & 1u) != 0u;
-                interp_program_.tex_matrix(base + interp_gpu::kVsTex + 12u * i, &before->inline_tex_matrices[i][0][0],
-                                           &recorded.inline_tex_matrices[i][0][0], spatial);
-                interp_program_.tex_matrix(base + interp_gpu::kVsPost + 12u * i,
-                                           &before->inline_post_matrices[i][0][0],
-                                           &recorded.inline_post_matrices[i][0][0], spatial);
-            }
-        }
         if (moving.projection_moves && before != nullptr) {
             interp_program_.projection(base, *before, recorded);
         }
@@ -3003,9 +2965,6 @@ bool RenderCore::prepare_interp_sequence(const InterpScene& scene, const InterpS
         }
         if (motion) {
             interp_program_.at_previous(true);
-            if (moving.position_moves) {
-                interp_program_.eye(base + interp_gpu::kVsMotionPrevPos, moving.position, position_a, position_b);
-            }
             if (moving.projection_moves && before != nullptr) {
                 interp_program_.projection_params(base, *before, recorded);
             }
@@ -4302,8 +4261,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         xf_dirty || vcd_dirty || inline_matrices_stale_ ||
         frame_bindings_dirty_ || dirty == ~0u || std::exchange(matrix_bases_changed_, false) ||
         (history_scene_ && current_matrix_palette_ != temporal_vs_palette_va_)) {
-        const VertexConstants& vs_c = cpu_vs_constants_.update(
-            matrices_, draw_state_, dirty, RasterScale{renderer_.frame_map().sx, renderer_.frame_map().sy}, frame_bindings_dirty_);
+        const VertexConstants& vs_c = cpu_vs_constants_.update(draw_state_, dirty, RasterScale{renderer_.frame_map().sx, renderer_.frame_map().sy}, frame_bindings_dirty_);
         UploadRing::Allocation vs_alloc =
             renderer_.constant_ring().allocate(sizeof(VertexConstants), 256u);
         std::memcpy(vs_alloc.cpu, &vs_c, sizeof(vs_c));
@@ -5349,5 +5307,13 @@ unsigned layer_2d_lines() noexcept {
     return s_layer_2d_lines.load(std::memory_order_relaxed);
 }
 
+
+void number_present_snapshots(std::uint64_t number) noexcept {
+    g_snapshot_numbered = true;
+    g_snapshot_hold = number == 0u;
+    if (number != 0u) {
+        g_snapshot_presents = number - 1u;
+    }
+}
 
 }  // namespace galaxy::render

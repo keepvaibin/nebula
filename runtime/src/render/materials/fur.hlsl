@@ -21,7 +21,7 @@ struct MaterialConstants {
 
 float2 fur_coord(NativeVertex v, uint i) {
     const float4 c = float4(v.uv[0], 1.0, 1.0);
-    return float2(dot(c, inline_tex_matrices[3u * i]), dot(c, inline_tex_matrices[3u * i + 1u]));
+    return float2(dot(c, native_tex_row(3u * i)), dot(c, native_tex_row(3u * i + 1u)));
 }
 
 void material_vertex(NativeVertex v, inout NativeVaryings o) {

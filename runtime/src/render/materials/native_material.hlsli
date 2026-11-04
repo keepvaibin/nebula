@@ -13,23 +13,20 @@
 
 cbuffer NativeDraw : register(b0) {
     row_major float4x4 projection : packoffset(c0);  // row-major, as every draw constant (VertexConstants)
-    uint4 draw_counts : packoffset(c12);      // num_texgens, num_chans, flags, pos_base
     uint4 draw_rows[3] : packoffset(c4);      // the draw's matrix rows: [0].x position, then coordinate i's at 1 + i
-    uint4 draw_indices : packoffset(c13);     // zw: sky_up, sky_up_known
-    float4 inline_pos_matrix[3] : packoffset(c14);
-    float4 inline_tex_matrices[24] : packoffset(c17);   // texture coordinate i's matrix rows at 3i (the draw's places)
-    float4 inline_post_matrices[24] : packoffset(c41);  // and its post-transform rows
-    float4 line_point_raster : packoffset(c65);  // the viewport's width and height in pixels (xy), the half line
+    uint4 draw_counts : packoffset(c7);       // num_texgens, num_chans, flags, pos_base
+    uint4 draw_indices : packoffset(c8);      // zw: sky_up, sky_up_known
+    float4 line_point_raster : packoffset(c9);   // the viewport's width and height in pixels (xy), the half line
                                                  // width and half point size (zw, native_lines.hlsl)
-    uint4 line_point_tex_offsets : packoffset(c66);  // lines' and points' texture coordinate offsets (native_lines.hlsl)
-    uint4 vs_header : packoffset(c67);           // y: the frame scale; z: the PE word (native_ps); w: the shape's
-                                                 // per-vertex texture matrix indices (texgen n's bit)
-    uint4 vs_post[2] : packoffset(c70);          // texgen i's post-transform row (61 the identity), | 0x100 normalize
-    float4 motion_prev_proj[2] : packoffset(c73);
-    float4 motion_prev_pos[3] : packoffset(c75);
-    float4 motion_params : packoffset(c78);
-    uint4 motion_ctrl : packoffset(c79);
-    uint4 row_bases : packoffset(c88);
+    uint4 line_point_tex_offsets : packoffset(c10);  // lines' and points' texture coordinate offsets (native_lines.hlsl)
+    uint4 vs_header : packoffset(c11);           // y: the frame scale; w: the shape's per-vertex texture matrix indices
+                                                 // (texgen n's bit)
+    uint4 vs_post[2] : packoffset(c12);          // texgen i's post-transform row (61 the identity), | 0x100 normalize
+    uint4 row_bases : packoffset(c14);
+    float4 motion_prev_proj[2] : packoffset(c15);
+    float4 motion_prev_pos[3] : packoffset(c17);
+    float4 motion_params : packoffset(c20);
+    uint4 motion_ctrl : packoffset(c21);
 };
 
 cbuffer MaterialBlock : register(b1) {
@@ -108,6 +105,14 @@ float3 native_fog(float3 c, float4 pos, float4 fog, float4 fog_color) {
 }
 float4 native_post_row(uint q) { return mtx_rows[row_bases.z + q]; }
 uint native_post(uint i) { return vs_post[i >> 2u][i & 3u]; }
+// Texture coordinate i's own matrix row r, and its post-transform matrix row r, named 3i + r.
+float4 native_tex_row(uint k) {
+    const uint i = k / 3u + 1u;
+    return native_matrix_row(min(draw_rows[i >> 2u][i & 3u], 61u) + k % 3u);
+}
+float4 native_coord_post_row(uint k) {
+    return native_post_row(((native_post(k / 3u) & 0x3Fu) + k % 3u) & 0x3Fu);
+}
 
 struct NativeVertexIn {
     float3 pos : POSITION;
@@ -170,7 +175,7 @@ void material_vertex(NativeVertex v, inout NativeVaryings o);
 
 // Texture coordinate i's matrix: the vertex's own index where the shape carries one (vs_header.w bit i: skinned
 // shapes' per-vertex texture matrices), else the draw's (draw_rows: the rows the shape loads, as
-// refresh_vs_inline_matrices reads them); its rows through native_matrix_row (60: the identity).
+// the draw names); its rows through native_matrix_row (60: the identity).
 uint native_tex_matrix(NativeVertex v, uint i) {
     if (((vs_header.w >> i) & 1u) == 0u) {
         return draw_rows[(i + 1u) >> 2u][(i + 1u) & 3u];
@@ -203,20 +208,12 @@ NativeVaryings native_vs(NativeVertexIn input) {
     v.binormal = input.binormal;
     v.mtx_idx = input.mtx_idx;
     // The position matrix: the vertex's place where it carries one (flags bit 0, skinned and multi-matrix models),
-    // else the draw's (inline).
+    // else the draw's.
     const float4 p = float4(input.pos, 1.0);
-    float4 m0, m1, m2;
-    if ((draw_counts.z & 1u) != 0u) {
-        v.pn_row = min(input.mtx_idx.x & 0x3Fu, 61u);
-        m0 = native_matrix_row(v.pn_row);
-        m1 = native_matrix_row(v.pn_row + 1u);
-        m2 = native_matrix_row(v.pn_row + 2u);
-    } else {
-        v.pn_row = min(draw_rows[0].x, 61u);
-        m0 = inline_pos_matrix[0];
-        m1 = inline_pos_matrix[1];
-        m2 = inline_pos_matrix[2];
-    }
+    v.pn_row = min((draw_counts.z & 1u) != 0u ? input.mtx_idx.x & 0x3Fu : draw_rows[0].x, 61u);
+    const float4 m0 = native_matrix_row(v.pn_row);
+    const float4 m1 = native_matrix_row(v.pn_row + 1u);
+    const float4 m2 = native_matrix_row(v.pn_row + 2u);
     v.eye = float3(dot(m0, p), dot(m1, p), dot(m2, p));
     const float3 n = float3(dot(m0.xyz, input.nrm), dot(m1.xyz, input.nrm), dot(m2.xyz, input.nrm));
     v.eye_nrm = dot(n, n) > 0.0 ? normalize(n) : n;
@@ -231,8 +228,8 @@ NativeVaryings native_vs(NativeVertexIn input) {
     // Motion vectors (temporal scenes): this frame's clip position without the jitter, and the previous frame's (the
     // camera delta applied to the eye position).
     float3 prev_eye;
-    if ((draw_counts.z & 1u) != 0u && motion_ctrl.x == 0u) {
-        // The vertex's position rows of the previous frame (motion_ctrl.y: their base, or kMotionOwnRows).
+    if (motion_ctrl.x == 0u) {
+        // The position rows of the previous frame (motion_ctrl.y: their base, or kMotionOwnRows).
         const uint base = motion_ctrl.y;
         const uint r = v.pn_row;
         prev_eye = float3(dot(base == 0xFFFFFFFFu ? native_matrix_row(r) : mtx_rows[base + r], p),

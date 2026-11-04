@@ -11,8 +11,8 @@ struct MaterialConstants {
 void material_vertex(NativeVertex v, inout NativeVaryings o) {
     const float4 c = float4(v.uv[0], 1.0, 1.0);
     o.color = float4(1.0, 1.0, 1.0, 1.0);
-    o.uv[0] = float4(dot(c, inline_tex_matrices[0]), dot(c, inline_tex_matrices[1]),
-                     dot(c, inline_tex_matrices[3]), dot(c, inline_tex_matrices[4]));
+    o.uv[0] = float4(dot(c, native_tex_row(0)), dot(c, native_tex_row(1)),
+                     dot(c, native_tex_row(3)), dot(c, native_tex_row(4)));
 }
 
 float4 material_color(NativeVaryings i) {
