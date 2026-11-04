@@ -10,7 +10,6 @@ namespace nw4r {
 };  // namespace nw4r
 
 class BatteryLayout;
-class TriggerChecker;
 
 class GameSystemErrorWatcher : public NerveExecutor {
 public:
@@ -40,10 +39,7 @@ private:
     const Message* mMessage;
     const nw4r::lyt::TexMap* mUnplaggedTexMap;
     BatteryLayout* mBatteryLayout;
-    TriggerChecker* _1C;
     s32 mInputStatus;
-    s32 mCounterIgnoreCheckMoveStick;
-    s32 mCounterDecideDisconnect;
     s32 mInputBattery;
     bool mPermissionUpdateInputStatus;
 };

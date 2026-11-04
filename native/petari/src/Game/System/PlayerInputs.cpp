@@ -163,7 +163,7 @@ void PlayerInputs::update() {
 // A scene change: each controller's motor stops, and its next read starts from rest.
 void PlayerInputs::resetPad() {
     for (s32 chan = PLAYER_MAX - 1; chan >= 0; chan--) {
-        MR::setInputRumble(chan, false);
+        MR::setInputRumble(chan, 0);
         mReadDataInfoArray[chan].requestReset();
     }
 
@@ -220,8 +220,8 @@ namespace MR {
         (void)isLongAutoSleep;
     }
 
-    void setInputRumble(s32 channel, bool on) {
+    void setInputRumble(s32 channel, u8 strength) {
         const NebulaHostServices* host = nebula_host();
-        host->input_control(host->user, static_cast< u32 >(channel), NEBULA_INPUT_RUMBLE, on ? 1u : 0u);
+        host->input_control(host->user, static_cast< u32 >(channel), NEBULA_INPUT_RUMBLE, strength);
     }
 };  // namespace MR

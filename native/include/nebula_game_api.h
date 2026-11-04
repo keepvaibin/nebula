@@ -475,7 +475,7 @@ typedef struct NebulaInputDevice {
 } NebulaInputDevice;
 /* What the game asks of a player's controller (input_control). */
 enum {
-    NEBULA_INPUT_RUMBLE = 1, /* value: 0 off, 1 on */
+    NEBULA_INPUT_RUMBLE = 1, /* value: how strongly, 0 off to 255 */
     NEBULA_INPUT_RELEASE,    /* the game lets the controller go (players 3 and 4 in play) */
     NEBULA_INPUT_RESET,      /* a scene change: from rest */
 };

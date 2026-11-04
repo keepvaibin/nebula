@@ -9,7 +9,6 @@
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include "Game/Util/TriggerChecker.hpp"
 #include "Game/System/NebulaHost.hpp"
 #include "Game/System/NebulaInput.hpp"
 #include <nebula_game_api.h>
@@ -41,8 +40,6 @@ namespace {
         ErrorMessageWindow::MessageType_Nebula,
     };
 
-    static const s32 sCounterMaxIgnoreCheckMoveStick = 90;
-    static const s32 sCounterMaxDecideDisconnect = 120;
 };  // namespace
 
 namespace {
@@ -54,13 +51,9 @@ namespace {
 
 GameSystemErrorWatcher::GameSystemErrorWatcher()
     : NerveExecutor("ErrorWatcher"), mWindow(nullptr), mMessage(nullptr), mUnplaggedTexMap(nullptr), mBatteryLayout(nullptr),
-      _1C(nullptr), mInputStatus(INPUT_STATUS_OK), mCounterIgnoreCheckMoveStick(0),
-      mCounterDecideDisconnect(::sCounterMaxDecideDisconnect), mInputBattery(INPUT_BATTERY_MAX), mPermissionUpdateInputStatus(false) {
+      mInputStatus(INPUT_STATUS_OK), mInputBattery(INPUT_BATTERY_MAX), mPermissionUpdateInputStatus(false) {
     mWindow = new ErrorMessageWindow();
     mWindow->initWithoutIter();
-
-    _1C = new TriggerChecker();
-    _1C->setInput(false);
 
     initNerve(GET_NERVE_ANON(GameSystemErrorWatcherNoError));
 }
@@ -103,8 +96,6 @@ bool GameSystemErrorWatcher::setPermissionUpdateInputStatus(bool permission) {
     mPermissionUpdateInputStatus = permission;
 
     if (permission) {
-        mCounterDecideDisconnect = 0;
-
         if (mBatteryLayout != nullptr && MR::isDead(mBatteryLayout)) {
             mBatteryLayout->appear();
         }
@@ -185,56 +176,17 @@ void GameSystemErrorWatcher::exeErrorWindowOut() {
 }
 
 void GameSystemErrorWatcher::updateInputStatus() {
-    bool isWaitDecideDisconnect;
-    bool isOk;
-
     if (!mPermissionUpdateInputStatus) {
         mInputStatus = INPUT_STATUS_OK;
+        return;
+    }
+
+    const PlayerInput* const pInput = MR::getPlayerInput(PLAYER_1);
+    if (pInput->mIsConnected) {
+        mInputBattery = pInput->getBattery();
+        mInputStatus = pInput->mHasMoveStick ? INPUT_STATUS_OK : INPUT_STATUS_NO_MOVE_STICK;
     } else {
-        isOk = true;
-
-        _1C->update(MR::getPlayerInput(PLAYER_1)->mIsConnected);
-
-        if (MR::getPlayerInput(PLAYER_1)->mIsConnected) {
-            mInputBattery = MR::getPlayerInput(PLAYER_1)->getBattery();
-        }
-
-        if (_1C->getLevel()) {
-            mCounterDecideDisconnect = ::sCounterMaxDecideDisconnect;
-        } else if (mCounterDecideDisconnect != 0) {
-            mCounterDecideDisconnect--;
-        }
-
-        isWaitDecideDisconnect = mCounterDecideDisconnect != 0;
-
-        if (_1C->getOnTrigger()) {
-            mCounterIgnoreCheckMoveStick = ::sCounterMaxIgnoreCheckMoveStick;
-        }
-
-        if (mCounterIgnoreCheckMoveStick != 0) {
-            mCounterIgnoreCheckMoveStick--;
-        }
-
-        if (mCounterIgnoreCheckMoveStick == 0) {
-            if (_1C->getLevel() && !MR::getPlayerInput(PLAYER_1)->mHasMoveStick) {
-                mInputStatus = INPUT_STATUS_NO_MOVE_STICK;
-                isOk = false;
-            }
-
-            if (!isWaitDecideDisconnect) {
-                if (mInputBattery <= INPUT_BATTERY_LOW) {
-                    mInputStatus = INPUT_STATUS_NO_BATTERY;
-                } else {
-                    mInputStatus = INPUT_STATUS_DISCONNECT;
-                }
-
-                isOk = false;
-            }
-
-            if (isOk) {
-                mInputStatus = INPUT_STATUS_OK;
-            }
-        }
+        mInputStatus = mInputBattery <= INPUT_BATTERY_LOW ? INPUT_STATUS_NO_BATTERY : INPUT_STATUS_DISCONNECT;
     }
 }
 

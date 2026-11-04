@@ -671,7 +671,7 @@ struct RumbleHost {
     bool focused = false;
 };
 RumbleHost g_rumble_host{};
-void publish_rumble_for_mode(bool motor_on, std::optional<std::uint32_t> star_pointer_mode) noexcept;
+void publish_rumble_for_mode(std::uint8_t strength, std::optional<std::uint32_t> star_pointer_mode) noexcept;
 
 // `right_deadzone` is radial (pointer_control.h); the right stick must arrive
 // without a per-axis dead zone.
@@ -1267,20 +1267,18 @@ galaxy::input::PlayerInput native_game_input(
     return build_live_input(current_vi, galaxy::get_runtime_input_mode_state(), context, section);
 }
 
-void native_game_rumble(bool motor_on, std::int32_t star_pointer_mode) noexcept {
+void native_game_rumble(std::uint8_t strength, std::int32_t star_pointer_mode) noexcept {
     publish_rumble_for_mode(
-        motor_on, star_pointer_mode >= 0 ? std::optional<std::uint32_t>(static_cast<std::uint32_t>(star_pointer_mode))
+        strength, star_pointer_mode >= 0 ? std::optional<std::uint32_t>(static_cast<std::uint32_t>(star_pointer_mode))
                                          : std::nullopt);
 }
 
 namespace {
 
-void publish_rumble_for_mode(bool motor_on, std::optional<std::uint32_t> star_pointer_mode) noexcept {
-    static galaxy::input::rumble::MotorEnvelope s_motor{};
+void publish_rumble_for_mode(std::uint8_t strength, std::optional<std::uint32_t> star_pointer_mode) noexcept {
     RumbleRequest request{};
-    request.motor_on = motor_on;
-    request.level = galaxy::input::rumble::quantize_level(
-        s_motor.update(motor_on, galaxy::host::controller_hid_now_us()));
+    request.motor_on = strength != 0u;
+    request.level = galaxy::input::rumble::quantize_level(static_cast<float>(strength) / 255.0f);
     request.target = g_rumble_host.target;
     request.strength = g_rumble_host.strength;
     request.focused = g_rumble_host.focused;

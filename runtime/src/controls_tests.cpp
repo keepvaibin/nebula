@@ -1059,34 +1059,9 @@ void test_rumble_encoding() {
                rb::snap_strength(66.0f) == 70u && rb::snap_strength(110.0f) == 100u &&
                rb::snap_strength(-5.0f) == 10u && rb::snap_strength(std::nanf("")) == rb::kDefaultStrength,
            "strength snaps to 10..100 in steps of 10");
-    // Motor model: rises over ~30 ms, falls over ~60 ms.
-    rb::MotorEnvelope motor{};
-    expect(motor.update(true, 1'000'000) == 0.0f, "no time has passed: still stopped");
-    const float risen = motor.update(true, 1'030'000);
-    expect(risen > 0.62f && risen < 0.64f, "one rise time: 63%");
-    const float fallen = motor.update(false, 1'090'000);
-    expect(fallen > 0.22f && fallen < 0.24f, "one fall time: 37% of that");
-    for (std::uint64_t t = 1'100'000; t < 1'400'000; t += 10'000) (void)motor.update(false, t);
-    expect(motor.level == 0.0f, "the motor stops below 5%");
     expect(rb::quantize_level(0.0f) == 0u && rb::quantize_level(0.001f) == 1u &&
                rb::quantize_level(1.0f) == rb::kLevelSteps && rb::quantize_level(0.5f) == rb::kLevelSteps / 2u,
            "levels quantize to 0..32, any motion to at least 1");
-    // A Star Bit shot: four 30 ms pulses 30 ms apart, sampled every 10 ms,
-    // feel like one buzz: the motor never stops between pulses and never
-    // reaches full speed.
-    rb::MotorEnvelope shot{};
-    float low = 1.0f, high = 0.0f;
-    std::uint64_t now = 2'000'000;
-    (void)shot.update(false, now);
-    for (int pulse = 0; pulse < 4; ++pulse) {
-        for (int i = 0; i < 6; ++i) {
-            now += 10'000;
-            const float level = shot.update(i < 3, now);
-            if (pulse > 0 || i >= 3) low = std::min(low, level);
-            high = std::max(high, level);
-        }
-    }
-    expect(low > 0.2f && high < 0.9f, "a Star Bit shot is one continuous, soft buzz");
 }
 
 void test_rumble_gate() {

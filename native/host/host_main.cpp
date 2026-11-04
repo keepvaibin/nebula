@@ -2569,7 +2569,7 @@ uint32_t svc_art_export(void*, const NebulaArtExport*) {
     return 0u;
 }
 std::atomic<uint32_t> gTiltSection{0};
-std::atomic<bool> gMotor{false};
+std::atomic<uint8_t> gMotor{0};
 
 void svc_game_context(void*, uint32_t what, int32_t value) {
     char text[64];
@@ -3305,6 +3305,16 @@ uint32_t svc_input_read(void*, uint32_t player, NebulaInputDevice* device, Nebul
         }
         sample->spin_presses = frame.spin_presses;
         sample->sub_spin_presses = frame.sub_spin_presses;
+#if defined(NEBULA_REAL_WIIMOTE)
+        // Its motor is on or off: a strength is how often it is on.
+        static uint32_t motor_share = 0;
+        motor_share += gMotor.load(std::memory_order_relaxed);
+        const bool motor_on = motor_share >= 255u;
+        if (motor_on) {
+            motor_share -= 255u;
+        }
+        galaxy::host::real_wiimote_set_rumble(motor_on);
+#endif
     }
     return 1;
 #else
@@ -3325,14 +3335,13 @@ void svc_input_control(void*, uint32_t player, uint32_t what, uint32_t value) {
     if (player != 0 || what != NEBULA_INPUT_RUMBLE) {
         return;  // player 1's controller is never let go; there are no others
     }
-    gMotor.store(value != 0, std::memory_order_relaxed);
+    gMotor.store(static_cast<uint8_t>(value), std::memory_order_relaxed);
 #if defined(NEBULA_REAL_WIIMOTE)
     if (!galaxy::host::real_wiimote_in_use()) {
-        galaxy::host::native_game_rumble(value != 0, gStarPointerMode.load(std::memory_order_relaxed));
+        galaxy::host::native_game_rumble(static_cast<uint8_t>(value), gStarPointerMode.load(std::memory_order_relaxed));
     }
-    galaxy::host::real_wiimote_set_rumble(value != 0);
 #elif defined(NEBULA_HOST_RENDERER)
-    galaxy::host::native_game_rumble(value != 0, gStarPointerMode.load(std::memory_order_relaxed));
+    galaxy::host::native_game_rumble(static_cast<uint8_t>(value), gStarPointerMode.load(std::memory_order_relaxed));
 #endif
 }
 
