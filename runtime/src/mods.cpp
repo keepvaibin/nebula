@@ -1444,6 +1444,9 @@ void find_names(const galaxy::disc::AssetStore& store, std::int32_t folder, cons
 }  // namespace
 
 void add_layer_rows(DiscPlan& plan, const ModInfo& mod, const std::string& language, const luma::Rows& rows) {
+            for (const auto& [key, value] : rows.story) {
+                plan.rows.story[key] = value;
+            }
             for (const auto& [id, words] : rows.text) {
                 plan.rows.texts.emplace_back(id, words.in(luma::language_code(language)));
             }
@@ -1495,6 +1498,9 @@ DiscPlan plan_disc_changes(const galaxy::disc::AssetStore& store, const std::str
         if (mod.package) plan.luma_folders.push_back(mod.path);
         if (mod.package && mod.luma) {
             const auto add_rows = [&](const luma::Rows& rows) {
+            for (const auto& [key, value] : rows.story) {
+                plan.rows.story[key] = value;
+            }
             for (const auto& [id, words] : rows.text) {
                 plan.rows.texts.emplace_back(id, words.in(luma::language_code(language)));
             }

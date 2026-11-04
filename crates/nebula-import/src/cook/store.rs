@@ -193,6 +193,13 @@ pub fn read_file(pak_path: &std::path::Path, path: &str) -> Result<Vec<u8>> {
 
 /// Every file under a folder of a store on disk, by its path from the folder.
 pub fn read_folder(pak_path: &std::path::Path, path: &str) -> Result<Vec<(String, Vec<u8>)>> {
+    let mut out = Vec::new();
+    visit_folder(pak_path, path, &mut |relative, bytes| out.push((relative.to_string(), bytes)))?;
+    Ok(out)
+}
+
+/// The same, one file at a time, for folders larger than memory.
+pub fn visit_folder(pak_path: &std::path::Path, path: &str, visit: &mut dyn FnMut(&str, Vec<u8>)) -> Result<()> {
     use anyhow::Context;
     use std::io::Read;
     let mut pak = File::open(pak_path).with_context(|| format!("{} cannot be read", pak_path.display()))?;
@@ -214,7 +221,6 @@ pub fn read_folder(pak_path: &std::path::Path, path: &str) -> Result<Vec<(String
         .find(|e| u64::from_le_bytes(e[..8].try_into().unwrap()) == wanted)
         .with_context(|| format!("the store has no {path}"))?;
     let top = u64::from(u32::from_le_bytes(entry[8..12].try_into().unwrap()));
-    let mut out = Vec::new();
     let mut folders = vec![(top, String::new())];
     while let Some((node, prefix)) = folders.pop() {
         let mut record = [0u8; 40];
@@ -243,11 +249,11 @@ pub fn read_folder(pak_path: &std::path::Path, path: &str) -> Result<Vec<(String
                 let mut bytes = vec![0u8; size as usize];
                 pak.seek(SeekFrom::Start(position))?;
                 pak.read_exact(&mut bytes)?;
-                out.push((relative, bytes));
+                visit(&relative, bytes);
             }
         }
     }
-    Ok(out)
+    Ok(())
 }
 
 #[cfg(test)]

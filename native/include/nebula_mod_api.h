@@ -253,6 +253,9 @@ typedef struct NebulaPowerUpClass {
     void (*start)(void* user);
     void (*update)(void* user); /* every frame it lasts */
     void (*end)(void* user);
+    /* What follows may be left out of an older plugin's class: `size` says. */
+    const char* model;    /* a whole-body model, ObjectData/<model>.arc, on the player's skeleton. Null: the game's */
+    int32_t looks_like;   /* with no model: the look of one of the game's (NEBULA_POWER_UP_*) */
 } NebulaPowerUpClass;
 
 typedef struct NebulaModApi {
@@ -496,6 +499,11 @@ typedef struct NebulaModApi {
     int32_t (*setting_by_number)(uint32_t number, int32_t missing);
     /* The star-choosing screen of a galaxy, as a launch star opens it. */
     void (*open_scenario_select)(const char* galaxy);
+    /* Only in nebula_plugin_start. The game's journey: "first_stage" (and "first_mission", a number as text) is where a new file begins, in place of
+       the prologue; "hub" is where the player goes after a galaxy, in place of the Comet Observatory; "story_scenes" "off" leaves out the game's own story scenes. 0: done. */
+    int32_t (*set_story)(const char* key, const char* value);
+    /* The game writes the save, as it does after a star. */
+    void (*save_game)(void);
 } NebulaModApi;
 
 /* Where an object change applies. */

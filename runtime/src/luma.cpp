@@ -348,6 +348,17 @@ bool contains(const std::vector<std::string>& list, std::string_view wanted) {
 }
 
 bool read_rows(const Value& from, Rows& out) {
+    if (const Value* story = from.get("story"); story != nullptr && story->object() != nullptr) {
+        for (const auto& [key, value] : *story->object()) {
+            if (const std::string* words = value.string()) {
+                out.story[key] = *words;
+            } else if (const double* number = value.number()) {
+                out.story[key] = std::to_string(static_cast<int>(*number));
+            } else if (const bool* flag = std::get_if<bool>(&value.data)) {
+                out.story[key] = *flag ? "on" : "off";
+            }
+        }
+    }
     if (const Value* messages = from.get("text"); messages != nullptr && messages->object() != nullptr) {
         for (const auto& [id, words] : *messages->object()) {
             out.text[id] = read_text(&words);
@@ -424,7 +435,7 @@ bool read_rows(const Value& from, Rows& out) {
         for (const Value& entry : *schedule->array()) {
             CometSchedule dome;
             if (const Value* number = entry.get("dome"); number != nullptr && number->number() != nullptr) dome.dome = static_cast<int>(*number->number());
-            if (dome.dome < 1 || dome.dome > 6) return false;
+            if (dome.dome < 1 || dome.dome > 16) return false;
             if (const Value* comets = entry.get("comets"); comets != nullptr && comets->array() != nullptr) {
                 for (const Value& comet : *comets->array()) {
                     std::string galaxy = text_field(comet, "galaxy");

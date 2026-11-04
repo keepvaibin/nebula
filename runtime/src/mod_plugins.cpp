@@ -336,6 +336,9 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
             say(constant.mod_id + ": the player has no number " + constant.name);
         }
     }
+    for (const auto& [key, value] : rows.story) {
+        if (g_api.set_story(key.c_str(), value.c_str()) != 0) say("the story has no " + key);
+    }
     for (const SoundEffectToAdd& sound : rows.sound_effects) {
         if (g_api.add_sound_effect(sound.name.c_str(), sound.file.c_str()) != 0) {
             say(sound.mod_id + ": the sound " + sound.name + " can't be added");

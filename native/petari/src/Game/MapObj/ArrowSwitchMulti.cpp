@@ -71,7 +71,10 @@ ArrowSwitchMulti::ArrowSwitchMulti(const char* pName)
 }
 
 void ArrowSwitchMulti::registerTarget(ArrowSwitchTarget* pTarget) {
-    mTargetArray[pTarget->mTargetIndex] = pTarget;
+    // A level's own number: past the four it has room for is no target of it.
+    if (pTarget->mTargetIndex >= 0 && pTarget->mTargetIndex < static_cast< s32 >(ARRAY_SIZE(mTargetArray))) {
+        mTargetArray[pTarget->mTargetIndex] = pTarget;
+    }
 }
 
 void ArrowSwitchMulti::init(const JMapInfoIter& rIter) {

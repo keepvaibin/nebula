@@ -38,8 +38,6 @@ SaveDataHandleSequence::SaveDataHandleSequence()
       ,
       mWindowFollows(false)
 {
-    mTempBuffer = new (32) u8[SaveDataHandler::getEnoughtTempBufferSize()];
-
     initNerve(GET_NERVE_ANON(SaveDataHandleSequenceNoOperation));
 }
 
@@ -47,6 +45,8 @@ void SaveDataHandleSequence::initAfterResourceLoaded() {
     mCurrentUserFile = new UserFile();
     mBackupUserFile = new UserFile();
     mSaveDataHandler = new SaveDataHandler(mCurrentUserFile);
+    // Its size follows what the handler found a game file takes.
+    mTempBuffer = new (32) u8[SaveDataHandler::getEnoughtTempBufferSize()];
 
     mSysInfoWindowConfirm = MR::createSysInfoWindowExecuteWithChildren();
     mSysInfoWindowConfirm->kill();

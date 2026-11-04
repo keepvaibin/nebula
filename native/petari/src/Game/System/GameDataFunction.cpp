@@ -137,6 +137,11 @@ namespace GameDataFunction {
     }
 
     void restoreGalaxyCometStatus(int cometId, u16* pCometStatus, u16* pPastSecond) {
+        if (cometId > 6) {
+            *pCometStatus = 0;
+            *pPastSecond = 0;
+            return;
+        }
         char eventValueName[20];
 
         nebula_snprintf(eventValueName, sizeof(eventValueName), "Comet%1dStatus", cometId);
@@ -339,6 +344,10 @@ namespace GameDataFunction {
     }
 
     void updateGalaxyCometStatus(int cometId, u16 cometStatus, u16 pastSecond) {
+        // The save keeps the game's six domes' comets: a mod's further ones start over each play.
+        if (cometId > 6) {
+            return;
+        }
         char eventValueName[20];
 
         nebula_snprintf(eventValueName, sizeof(eventValueName), "Comet%1dStatus", cometId);

@@ -1,3 +1,4 @@
+#include "Game/System/NebulaMods.hpp"
 #include "Game/System/StorySequenceExecutor.hpp"
 #include "Game/Demo/DemoFunction.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
@@ -1034,6 +1035,16 @@ void StorySequenceExecutor::decideNextStageForGalaxyOut(GalaxyMoveArgument* pMov
 }
 
 void StorySequenceExecutor::overwriteGalaxyNameAfterLoading(GalaxyMoveArgument* pMoveArgument) {
+    // A mod's journey: a new file starts where it says, a file with a star at its hub.
+    if (NebulaMods::firstStage() != nullptr) {
+        if (MR::getPowerStarNum() == 0 || NebulaMods::hubStage() == nullptr) {
+            pMoveArgument->mStageName = NebulaMods::firstStage();
+            pMoveArgument->mScenarioNo = NebulaMods::firstMission();
+        } else {
+            setNextStageToAstroGalaxy(pMoveArgument);
+        }
+        return;
+    }
     if (GameDataFunction::hasGrandStar(1)) {
         setNextStageToAstroGalaxy(pMoveArgument);
     } else if (GameDataFunction::isPassedStoryEvent("\203\163\201\133\203\140\217\351\225\202\217\343\214\343" /* ピーチ城浮上後 */) || !GameDataFunction::isDataMario()) {
@@ -1054,7 +1065,9 @@ void StorySequenceExecutor::overwriteGalaxyNameAfterLoading(GalaxyMoveArgument* 
 void StorySequenceExecutor::setNextStageToAstroGalaxyOrDome(GalaxyMoveArgument* pMoveArgument) {
     s32 scenarioNo = calcAproposScenarioNoOnAstroDome();
 
-    if (scenarioNo >= 1 && scenarioNo <= 6) {
+    if (NebulaMods::hubStage() != nullptr) {
+        setNextStageToAstroGalaxy(pMoveArgument);
+    } else if (scenarioNo >= 1) {
         setNextStageToAstroDome(pMoveArgument);
     } else if (scenarioNo == 0) {
         setNextStageToAstroGalaxy(pMoveArgument);
@@ -1062,6 +1075,11 @@ void StorySequenceExecutor::setNextStageToAstroGalaxyOrDome(GalaxyMoveArgument* 
 }
 
 void StorySequenceExecutor::setNextStageToAstroGalaxy(GalaxyMoveArgument* pMoveArgument) {
+    if (NebulaMods::hubStage() != nullptr) {
+        pMoveArgument->mStageName = NebulaMods::hubStage();
+        pMoveArgument->mScenarioNo = 1;
+        return;
+    }
     pMoveArgument->mStageName = "AstroGalaxy";
     pMoveArgument->mScenarioNo = calcAproposScenarioNoOnAstroGalaxy();
 }
@@ -1109,6 +1127,10 @@ bool StorySequenceExecutor::isEqualStageStopCometScheduler(const char* pStageNam
 }
 
 void StorySequenceExecutor::prepareDemoSequence(const StorySequenceExecutorType::DemoSequenceInfo* pDemoInfo) {
+    if (NebulaMods::noStoryScenes()) {
+        return;
+    }
+
     _48.push_back(pDemoInfo);
 
     mNextNerve = GET_NERVE_ANON(StorySequenceExecutorPlayDemoSequence);

@@ -90,10 +90,13 @@ void PlacementInfoOrdered::initPlacement() {
     for (s32 i = 0; i < count; i++) {
         pSet = mOrderedSetArray[i];
         CreationFuncPtr creator = ::getCreator(*pSet);
-        if (creator != nullptr && !NebulaMods::isMissingFiles(pSet->mName)) {
+        if (creator != nullptr) {
             const char* pName = MR::getJapaneseObjectName(pSet->mName);
             for (link = pSet->mList.mHead; link != nullptr; link = link->mNextLink) {
                 const JMapInfoIter& rIter = static_cast< Index* >(link->mValue)->getInfoIter();
+                if (NebulaMods::isMissingFiles(pSet->mName, rIter)) {
+                    continue;
+                }
                 MR::setCurrentPlacementZoneId(MR::getPlacedZoneId(rIter));
                 pObj = creator(pName);
                 MR::initLiveActorSystemInfo(rIter);
