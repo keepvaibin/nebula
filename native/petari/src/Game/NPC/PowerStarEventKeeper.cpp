@@ -135,12 +135,17 @@ void PowerStarEventKeeper::initStarInfoTableAfterPlacement() {
 }
 
 void PowerStarEventKeeper::requestAppearPowerStar(const char* pName, s32 starNum, const TVec3f* pPos, bool forceAppear, bool a2) {
-    StageStateKeeper* pStateKeeper = EventFunction::getStageStateKeeper();
-    pStateKeeper->mIsPowerStarAppeared = true;
-
     if (starNum < 0) {
         starNum = findStarID(pName);
     }
+
+    // An object no mission's table names has no star to give.
+    if (starNum <= 0) {
+        return;
+    }
+
+    StageStateKeeper* pStateKeeper = EventFunction::getStageStateKeeper();
+    pStateKeeper->mIsPowerStarAppeared = true;
 
     getStarInfo(starNum - 1)->_3 = true;
 

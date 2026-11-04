@@ -1467,10 +1467,21 @@ DiscPlan plan_disc_changes(const galaxy::disc::AssetStore& store, const std::str
         if (mod.package) plan.luma_folders.push_back(mod.path);
         if (mod.package && mod.luma) {
             for (const auto& [id, words] : mod.luma->text) {
-                plan.texts.emplace_back(id, words.in(luma::language_code(language)));
+                plan.rows.texts.emplace_back(id, words.in(luma::language_code(language)));
             }
             for (const luma::Galaxy& galaxy : mod.luma->galaxies) {
-                plan.galaxies.push_back({mod.id, galaxy.name, galaxy.map_pane, galaxy.open_conditions, galaxy.stars_to_open, galaxy.dome, galaxy.hungry_slot, galaxy.hungry_star_bits});
+                plan.rows.galaxies.push_back({mod.id, galaxy.name, galaxy.map_pane, galaxy.open_conditions, galaxy.stars_to_open, galaxy.dome, galaxy.hungry_slot, galaxy.hungry_star_bits, galaxy.has_map_position, galaxy.map_x, galaxy.map_y});
+            }
+            for (const luma::Music& track : mod.luma->music) {
+                MusicToAdd row{mod.id, track.name, track.file, {}};
+                for (const luma::MusicPlace& place : track.places) row.places.push_back({place.stage, place.scenario, place.change_area});
+                plan.rows.music.push_back(std::move(row));
+            }
+            for (const luma::EventFlag& flag : mod.luma->event_flags) {
+                plan.rows.event_flags.push_back({mod.id, flag.name, flag.kind, flag.a, flag.b, flag.first, flag.second});
+            }
+            for (const luma::CometSchedule& dome : mod.luma->comet_schedule) {
+                plan.rows.comets.push_back({mod.id, dome.dome, dome.comets});
             }
             const luma::Situation situation = situation_of(mod, game_id, language);
             for (const luma::Plugin& plugin : mod.luma->plugins) {
@@ -1677,7 +1688,8 @@ DiscPlan plan_disc_changes(const galaxy::disc::AssetStore& store, const std::str
             }
         }
         for (const Placed& p : placed) {
-            if (lower(p.disc).starts_with("/nebuladata/")) continue;  // the game's own tables
+            // The game's own tables, but for the one that says where each galaxy is and what opens it.
+            if (lower(p.disc).starts_with("/nebuladata/") && lower(p.disc) != "/nebuladata/galaxyinfotable.bcsv") continue;
             // A save's shape follows the galaxy list: a mod that adds a galaxy never plays on normal saves.
             if (plan.save_folder.empty() && lower(p.disc).starts_with("/stagedata/") && lower(p.disc).ends_with("scenario.arc") && !store.find(p.disc)) {
                 plan.save_folder = saves_of(mod.luma ? mod.luma->save_tag : mod.id);

@@ -99,6 +99,12 @@ used under the MIT alternative: `third_party/stb/LICENSE`.
 `third_party/bcdec/bcdec.h` (v0.98) from <https://github.com/iOrange/bcdec> decodes texture packs' BC1-BC5 and BC7
 DDS files. Copyright (c) 2022 Sergii Kudlai, used under the MIT alternative: `third_party/bcdec/LICENSE`.
 
+## DirectX Shader Compiler (NCSA and MIT; dxil.dll under Microsoft's terms)
+
+Windows installs carry `dxc\dxc.exe`, `dxc\dxcompiler.dll` and `dxc\dxil.dll` from Microsoft's release v1.9.2609,
+<https://github.com/microsoft/DirectXShaderCompiler>, unchanged, with their license files beside them. The game starts them to
+build a mod's shaders on the player's PC.
+
 ## MinHook (BSD 2-clause)
 
 `third_party/minhook` (1.3.4) from <https://github.com/TsudaKageyu/minhook>, unchanged, is how a mod's plugin replaces a

@@ -1,7 +1,11 @@
 #include "Game/System/NebulaMods.hpp"
+#include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/System/GalaxyInfoTable.hpp"
+#include "Game/System/GameAssets.hpp"
+#include "Game/System/GalaxyCometScheduler.hpp"
 #include "Game/System/GameEventFlagTable.hpp"
 
+#include "Game/AudioLib/AudSoundNameConverter.hpp"
 #include "Game/LiveActor/EffectKeeper.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/NameObj/NameObjArchiveListCollector.hpp"
@@ -9,8 +13,10 @@
 #include "Game/Player/MarioActor.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/PlayerInputUtil.hpp"
+#include <nebula_format.h>
 #include <nebula_game_api.h>
 #include <cstring>
+#include <initializer_list>
 
 namespace NebulaMods {
     bool sWanted[NEBULA_MOD_EVENT_COUNT];
@@ -59,6 +65,25 @@ namespace {
         s32 mPrice;
     };
     List< HungryLuma > sHungryLumas;
+    struct Track {
+        const char* mName;
+        const char* mFile;
+    };
+    List< Track > sTracks;
+    struct MapSpot {
+        const char* mGalaxy;
+        f32 mX;
+        f32 mY;
+        s32 mDome;
+    };
+    List< MapSpot > sMapSpots;
+    struct StageTrack {
+        const char* mStage;
+        s32 mScenario;  // -1: this row is for an area
+        s32 mArea;
+        u32 mId;
+    };
+    List< StageTrack > sStageTracks;
     struct ModText {
         const char* mId;
         const char16_t* mWords;
@@ -193,6 +218,16 @@ namespace {
         NebulaDataTables::AddedGalaxy added = {};
         added.mName = copyText(pGalaxy->name);
         added.mPane = copyText(pGalaxy->map_pane);
+        if (pGalaxy->has_map_position != 0) {
+            MapSpot spot = {added.mName, pGalaxy->map_position[0], pGalaxy->map_position[1], pGalaxy->dome};
+            sMapSpots.add(spot);
+            // A layout's pane names are short: this one is only ever looked for by the game.
+            if (added.mPane == nullptr) {
+                char paneName[16];
+                nebula_snprintf(paneName, sizeof(paneName), "NebMap%d", sMapSpots.mCount);
+                added.mPane = copyText(paneName);
+            }
+        }
         for (int i = 0; i < 3; i++) {
             added.mConditions[i] = copyText(pGalaxy->open_condition[i]);
         }
@@ -215,6 +250,128 @@ namespace {
         HungryLuma luma = {slot, starBits};
         sHungryLumas.add(luma);
         return 0;
+    }
+
+    bool isGameSoundName(const char* pName) {
+        for (const char* pPrefix : {"SE_", "BGM_", "MBGM_", "STM_", "ME_"}) {
+            if (strncmp(pName, pPrefix, strlen(pPrefix)) == 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    int32_t apiAddMusic(const char* pName, const char* pFile) {
+        if (pName == nullptr || pFile == nullptr || pName[0] == '\0' || pFile[0] == '\0' || isGameSoundName(pName)) {
+            return -1;
+        }
+        // The file as the game has it: each of these ends up a stream of this name.
+        const char* pEnd = strrchr(pFile, '.');
+        const size_t stem = pEnd != nullptr ? static_cast< size_t >(pEnd - pFile) : strlen(pFile);
+        const bool rooted = pFile[0] == '/';
+        char* pPath = new char[stem + 6];
+        pPath[0] = '/';
+        memcpy(pPath + 1, pFile + (rooted ? 1 : 0), stem - (rooted ? 1 : 0));
+        memcpy(pPath + 1 + stem - (rooted ? 1 : 0), ".ast", 5);
+        for (int i = 0; i < sTracks.mCount; i++) {
+            if (strcmp(sTracks.mItems[i].mName, pName) == 0) {
+                sTracks.mItems[i].mFile = pPath;
+                return 0;
+            }
+        }
+        if (sTracks.mCount >= 0x10000 - static_cast< int >(NebulaMods::cFirstTrackWave)) {
+            return -1;
+        }
+        Track track = {copyText(pName), pPath};
+        sTracks.add(track);
+        return 0;
+    }
+
+    int32_t apiAddStageTrack(const char* pStage, s32 scenario, s32 area, const char* pName) {
+        if (pStage == nullptr || pName == nullptr) {
+            return -1;
+        }
+        const u32 id = NebulaMods::trackId(pName);
+        if (id == static_cast< u32 >(-1)) {
+            return -1;
+        }
+        StageTrack row = {copyText(pStage), scenario, area, id};
+        sStageTracks.add(row);
+        return 0;
+    }
+
+    int32_t apiSetStageMusic(const char* pStage, int32_t scenario, const char* pName) {
+        return scenario >= 0 ? apiAddStageTrack(pStage, scenario, -1, pName) : -1;
+    }
+
+    int32_t apiSetAreaMusic(const char* pStage, int32_t area, const char* pName) {
+        return area >= 0 ? apiAddStageTrack(pStage, -1, area, pName) : -1;
+    }
+
+    int32_t apiPlayMusic(const char* pName) {
+        if (pName == nullptr || sStageFrames <= 0) {
+            return 0;
+        }
+        if (AudSingletonHolder< AudSoundNameConverter >::get()->getSoundID(pName).isAnonymous()) {
+            return 0;
+        }
+        return MR::startStageBGM(pName, false) != nullptr ? 1 : 0;
+    }
+
+    int32_t apiSetEventFlag(const char* pName, int32_t kind, int32_t a, int32_t b, const char* pFirst, const char* pSecond) {
+        if (pName == nullptr || pName[0] == '\0' || kind < 0 || kind > 255 || a < 0 || a > 255 || b < 0 || b > 255) {
+            return -1;
+        }
+        GameEventFlagTable::setFlag(copyText(pName), static_cast< u8 >(kind), static_cast< u8 >(a), static_cast< u8 >(b), copyText(pFirst), copyText(pSecond));
+        return 0;
+    }
+
+    int32_t apiSetCometSchedule(int32_t dome, const char* const* ppGalaxies, const int32_t* pCoins, int32_t count) {
+        if (dome < 1 || dome > 6 || ppGalaxies == nullptr || pCoins == nullptr || count <= 0) {
+            return -1;
+        }
+        GalaxyCometTimePaper* pPaper = new GalaxyCometTimePaper[count + 1];
+        for (s32 i = 0; i < count; i++) {
+            pPaper[i].mGalaxyName = copyText(ppGalaxies[i]);
+            pPaper[i].mCategory = pCoins[i];
+        }
+        pPaper[count].mGalaxyName = nullptr;
+        pPaper[count].mCategory = 0;
+        GalaxyCometScheduler::setTimePaper(dome - 1, pPaper);
+        return 0;
+    }
+
+    int32_t apiPlayMovie(const char* pFile) {
+        if (pFile == nullptr || pFile[0] == '\0' || sStageFrames <= 0) {
+            return 0;
+        }
+        // The player holds on to the name.
+        char path[256];
+        nebula_snprintf(path, sizeof(path), pFile[0] == '/' ? "%s" : "/%s", pFile);
+        if (GameAssets::find(path) < 0) {
+            return 0;
+        }
+        if (!MR::isExistSceneObj(SceneObj_MoviePlayerSimple)) {
+            return 0;
+        }
+        MR::startMoviePlayer(copyText(path));
+        return 1;
+    }
+
+    void apiStopMovie() {
+        if (sStageFrames > 0 && MR::isActiveMoviePlayer()) {
+            MR::stopMoviePlayer();
+        }
+    }
+
+    int32_t apiIsMoviePlaying() {
+        return sStageFrames > 0 && MR::isActiveMoviePlayer() && MR::isMoviePlayerPlaying() ? 1 : 0;
+    }
+
+    void apiStopMusic(int32_t frames) {
+        if (sStageFrames > 0 && frames >= 0) {
+            MR::stopStageBGM(frames);
+        }
     }
 
     int32_t apiAddText(const char* pId, const char* pUtf8) {
@@ -483,6 +640,16 @@ namespace {
         apiAddText,
         apiAddPowerUp,
         apiGetGravity,
+        apiAddMusic,
+        apiSetStageMusic,
+        apiSetAreaMusic,
+        apiPlayMusic,
+        apiStopMusic,
+        apiPlayMovie,
+        apiStopMovie,
+        apiIsMoviePlaying,
+        apiSetEventFlag,
+        apiSetCometSchedule,
     };
 }  // namespace
 
@@ -491,6 +658,15 @@ extern "C" NEBULA_GAME_API const NebulaModApi* nebula_game_mod_api(void) {
 }
 
 namespace NebulaMods {
+    bool hasCode() {
+        for (int i = 0; i < NEBULA_MOD_EVENT_COUNT; i++) {
+            if (sWanted[i]) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     s32 dispatch(NebulaModEvent event, s32 value, void* pActor, const char* pName) {
         const List< Subscriber >& rSubscribers = sSubscribers[event];
         NebulaModEventData data = {value, static_cast< NebulaActor* >(pActor), pName};
@@ -558,6 +734,59 @@ namespace NebulaMods {
             }
         }
         return nullptr;
+    }
+
+    u32 trackId(const char* pName) {
+        for (int i = 0; i < sTracks.mCount; i++) {
+            if (strcmp(sTracks.mItems[i].mName, pName) == 0) {
+                return 0x02000000u | (cFirstTrackWave + static_cast< u32 >(i));
+            }
+        }
+        return static_cast< u32 >(-1);
+    }
+
+    s32 trackFile(u32 wave) {
+        const u32 index = wave - cFirstTrackWave;
+        return index < static_cast< u32 >(sTracks.mCount) ? GameAssets::find(sTracks.mItems[index].mFile) : -1;
+    }
+
+    u32 stageTrack(const char* pStage, s32 scenario) {
+        u32 forAll = static_cast< u32 >(-1);
+        for (int i = sStageTracks.mCount - 1; i >= 0; i--) {
+            const StageTrack& rRow = sStageTracks.mItems[i];
+            if (rRow.mScenario < 0 || strcmp(rRow.mStage, pStage) != 0) {
+                continue;
+            }
+            if (rRow.mScenario == scenario) {
+                return rRow.mId;
+            }
+            if (rRow.mScenario == 0 && forAll == static_cast< u32 >(-1)) {
+                forAll = rRow.mId;
+            }
+        }
+        return forAll;
+    }
+
+    u32 areaTrack(const char* pStage, s32 area) {
+        for (int i = sStageTracks.mCount - 1; i >= 0; i--) {
+            const StageTrack& rRow = sStageTracks.mItems[i];
+            if (rRow.mArea == area && strcmp(rRow.mStage, pStage) == 0) {
+                return rRow.mId;
+            }
+        }
+        return static_cast< u32 >(-1);
+    }
+
+    bool mapSpot(const char* pGalaxy, f32* pX, f32* pY, s32* pDome) {
+        for (int i = sMapSpots.mCount - 1; i >= 0; i--) {
+            if (strcmp(sMapSpots.mItems[i].mGalaxy, pGalaxy) == 0) {
+                *pX = sMapSpots.mItems[i].mX;
+                *pY = sMapSpots.mItems[i].mY;
+                *pDome = sMapSpots.mItems[i].mDome;
+                return true;
+            }
+        }
+        return false;
     }
 
     s32 hungryLumaPrice(s32 slot) {
