@@ -91,6 +91,7 @@ VkDescriptorPool vk_detail::create_pool(VkDevice device, std::uint32_t sets, con
 }
 
 using vk_detail::create_pool;
+using vk_detail::image_barrier;
 using vk_detail::kFrameSets;
 using vk_detail::kFrameUtilitySamplers;
 using vk_detail::kPersistentPool;

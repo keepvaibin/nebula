@@ -3678,8 +3678,7 @@ void RendererD3D12::refresh_display_rate() {
     }
     Microsoft::WRL::ComPtr<IDXGIOutput> output;
     DXGI_OUTPUT_DESC desc{};
-    if (FAILED(swap_chain_->GetContainingOutput(&output)) ||
-        FAILED(output->GetDesc(&desc))) {
+    if (FAILED(swap_chain_->GetContainingOutput(&output)) || output == nullptr || FAILED(output->GetDesc(&desc))) {
         return;
     }
     DEVMODEW mode{};
@@ -3768,6 +3767,19 @@ void RendererD3D12::present_to_swap_chain() {
     }
     streamline::marker(streamline::Marker::kPresentStart);
     const HRESULT present_hr = swap_chain_->Present(vsync, present_flags);
+    if (generating && collect_present_telemetry) {
+        // What frame generation sends to the display per frame here.
+        static UINT last_count = 0u;
+        static unsigned frames = 0u;
+        if (++frames == 600u) {
+            UINT count = 0u;
+            if (SUCCEEDED(swap_chain_->GetLastPresentCount(&count))) {
+                std::cerr << "[frame-generation] swap chain presents per frame " << static_cast<double>(count - last_count) / 600.0 << '\n';
+                last_count = count;
+            }
+            frames = 0u;
+        }
+    }
     streamline::marker(streamline::Marker::kPresentEnd);
     streamline_frame_open_ = false;
     if (timeline_present) {

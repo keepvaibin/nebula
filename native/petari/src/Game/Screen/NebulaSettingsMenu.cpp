@@ -1481,6 +1481,7 @@ __attribute__((noinline)) void NebulaSettingsScreen::fillTexts(const NebulaSetti
     const Question& rQuestion = cQuestions[question];
     if (rView.status == NEBULA_SETTINGS_STATUS_LICENSE) {
         static char16_t page[1536];
+        static char16_t shown[1536];
         if (rView.status_number > 0) {
             // Its number, then the page.
             s32 used = 0;
@@ -1500,8 +1501,40 @@ __attribute__((noinline)) void NebulaSettingsScreen::fillTexts(const NebulaSetti
         while (pageLength < 1535 && page[pageLength] != 0) {
             pageLength++;
         }
-        mQuestionText->SetString(page, 0, pageLength);
-        measure(mQuestionText, mPanelWidth - cLicenseInset * 2.0f - cQuestionMargin * 2.0f, &width, &height);
+        const f32 pageRoom = mPanelWidth - cLicenseInset * 2.0f - cQuestionMargin * 2.0f;
+        // Lines broken at the last space that fits, measured once for a page: the box alone would break inside a word.
+        static u16 shownLength = 0;
+        bool samePage = shownLength == pageLength;
+        for (u16 i = 0; samePage && i < pageLength; i++) {
+            samePage = page[i] == shown[i] || (page[i] == u' ' && shown[i] == u'\n');
+        }
+        if (!samePage) {
+            memcpy(shown, page, pageLength * sizeof(char16_t));
+            shown[pageLength] = 0;
+            shownLength = pageLength;
+            u16 lineStart = 0;
+            u16 lastSpace = 0;
+            for (u16 i = 0; i <= pageLength; i++) {
+                if (i != pageLength && shown[i] != u' ' && shown[i] != u'\n') {
+                    continue;
+                }
+                mQuestionText->SetString(shown + lineStart, 0, static_cast< u16 >(i - lineStart));
+                measure(mQuestionText, 4000.0f, &width, &height);
+                if (width > pageRoom && lastSpace > lineStart) {
+                    shown[lastSpace] = u'\n';
+                    lineStart = static_cast< u16 >(lastSpace + 1);
+                }
+                if (i != pageLength) {
+                    if (shown[i] == u'\n') {
+                        lineStart = static_cast< u16 >(i + 1);
+                    } else {
+                        lastSpace = i;
+                    }
+                }
+            }
+        }
+        mQuestionText->SetString(shown, 0, shownLength);
+        measure(mQuestionText, pageRoom, &width, &height);
         mQuestionInk = height;
         for (s32 i = 0; i < mChoiceCount; i++) {
             fillKeyCap(mChoices[i].mKey, rQuestion.mKeys[i], rView.input, false);

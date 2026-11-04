@@ -5,6 +5,13 @@
 // place of the window's. It reads the scene's depth and motion after the upscale, and the frame without its 2D layer at the
 // present. Render thread only.
 
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <Windows.h>
 #include <d3d12.h>
 #include <dxgi1_6.h>
 #include <wrl/client.h>

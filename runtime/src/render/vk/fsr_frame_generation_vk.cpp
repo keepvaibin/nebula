@@ -12,6 +12,8 @@
 #if defined(GALAXY_WITH_FSR3_FG)
 #include <FidelityFX/host/backends/vk/ffx_vk.h>
 #include <FidelityFX/host/ffx_fsr3.h>
+
+#include "../fsr_frame_generation_core.inl"
 #endif
 
 namespace galaxy::render {
@@ -63,20 +65,8 @@ FfxDevice ffx_device() {
 }  // namespace
 
 struct FsrFrameGenerationVk::Impl {
-    FfxFsr3Context context{};
-    FfxInterface shared{};
-    FfxInterface generation{};
-    std::vector<unsigned char> shared_scratch;
-    std::vector<unsigned char> generation_scratch;
-    bool created = false;
-    bool enabled = false;
-    bool prepared = false;
-    bool reported = false;
-    std::uint64_t frame_id = 0u;
-    unsigned render_width = 0u;
-    unsigned render_height = 0u;
-    unsigned display_width = 0u;
-    unsigned display_height = 0u;
+    FsrGenerationCore core;
+    bool unavailable = false;
 };
 
 FsrFrameGenerationVk::FsrFrameGenerationVk() : impl_(std::make_unique<Impl>()) {}
@@ -116,121 +106,62 @@ bool FsrFrameGenerationVk::create_swap_chain(const VkSwapchainCreateInfoKHR& inf
 }
 
 bool FsrFrameGenerationVk::matches(unsigned render_width, unsigned render_height, unsigned display_width, unsigned display_height) const noexcept {
-    return impl_->created && impl_->render_width == render_width && impl_->render_height == render_height &&
-           impl_->display_width == display_width && impl_->display_height == display_height;
+    return impl_->core.matches(render_width, render_height, display_width, display_height);
 }
 
 bool FsrFrameGenerationVk::create(unsigned render_width, unsigned render_height, unsigned display_width, unsigned display_height,
                                   VkFormat backbuffer_format) noexcept {
     Impl& s = *impl_;
+    if (s.unavailable) {
+        return false;
+    }
+    FsrGenerationCore& core = s.core;
     const VkPhysicalDevice physical = Context::get().physical_device();
     try {
         const std::size_t size = ffxGetScratchMemorySizeVK(physical, FFX_FSR3_CONTEXT_COUNT);
-        s.shared_scratch.assign(size, 0u);
-        s.generation_scratch.assign(size, 0u);
+        core.shared_scratch.assign(size, 0u);
+        core.generation_scratch.assign(size, 0u);
     } catch (...) {
         return false;
     }
     const FfxDevice device = ffx_device();
-    if (ffxGetInterfaceVK(&s.shared, device, s.shared_scratch.data(), s.shared_scratch.size(), FFX_FSR3_CONTEXT_COUNT) != FFX_OK ||
-        ffxGetInterfaceVK(&s.generation, device, s.generation_scratch.data(), s.generation_scratch.size(), FFX_FSR3_CONTEXT_COUNT) != FFX_OK) {
-        return false;
-    }
-    FfxFsr3ContextDescription description{};
-    description.flags = FFX_FSR3_ENABLE_INTERPOLATION_ONLY | FFX_FSR3_ENABLE_DEPTH_INVERTED;
-    description.maxRenderSize = {render_width, render_height};
-    description.maxUpscaleSize = {display_width, display_height};
-    description.displaySize = {display_width, display_height};
-    description.backendInterfaceSharedResources = s.shared;
-    description.backendInterfaceFrameInterpolation = s.generation;
-    description.backBufferFormat = ffxGetSurfaceFormatVK(backbuffer_format);
-    const FfxErrorCode result = ffxFsr3ContextCreate(&s.context, &description);
-    if (result != FFX_OK) {
-        std::cerr << "[fsr3-fg] context: " << result << '\n';
-        return false;
-    }
-    s.created = true;
-    s.render_width = render_width;
-    s.render_height = render_height;
-    s.display_width = display_width;
-    s.display_height = display_height;
-    std::cerr << "[fsr3-fg] " << render_width << 'x' << render_height << " -> " << display_width << 'x' << display_height << '\n';
-    return true;
+    s.unavailable = ffxGetInterfaceVK(&core.shared, device, core.shared_scratch.data(), core.shared_scratch.size(), FFX_FSR3_CONTEXT_COUNT) != FFX_OK ||
+                    ffxGetInterfaceVK(&core.generation, device, core.generation_scratch.data(), core.generation_scratch.size(), FFX_FSR3_CONTEXT_COUNT) != FFX_OK ||
+                    !core.create(render_width, render_height, display_width, display_height, ffxGetSurfaceFormatVK(backbuffer_format));
+    return !s.unavailable;
 }
 
 void FsrFrameGenerationVk::destroy(VkSwapchainKHR swap_chain) noexcept {
-    Impl& s = *impl_;
-    if (!s.created) {
+    FsrGenerationCore& core = impl_->core;
+    if (!core.created()) {
         return;
     }
     if (swap_chain != VK_NULL_HANDLE) {
-        configure(swap_chain, false, nullptr, 0u, 0u, 0u, 0u);
+        core.configure(ffxGetSwapchainVK(swap_chain), false, FfxResource{}, 0u, 0u, 0u, 0u);
         (void)ffxWaitForPresents(ffxGetSwapchainVK(swap_chain));
     }
-    (void)ffxFsr3ContextDestroy(&s.context);
-    s.created = false;
-    s.enabled = false;
-    s.prepared = false;
+    core.destroy();
 }
 
 bool FsrFrameGenerationVk::prepare(VkCommandBuffer commands, const TemporalUpscaleInputs& in) noexcept {
-    Impl& s = *impl_;
-    if (!s.created || commands == VK_NULL_HANDLE) {
+    if (commands == VK_NULL_HANDLE) {
         return false;
     }
-    ++s.frame_id;
-    FfxFsr3DispatchFrameGenerationPrepareDescription d{};
-    d.commandList = ffxGetCommandListVK(commands);
-    d.depth = ffx_image(in.depth, L"Nebula scene depth", FFX_RESOURCE_STATE_DEPTH_ATTACHEMENT);
-    d.motionVectors = ffx_image(in.motion, L"Nebula motion vectors", FFX_RESOURCE_STATE_RENDER_TARGET);
-    d.jitterOffset = {in.jitter_x, in.jitter_y};
-    d.motionVectorScale = {1.0f, 1.0f};
-    d.renderSize = {in.render_width, in.render_height};
-    d.frameTimeDelta = in.frame_ms;
-    d.cameraNear = in.camera_near;
-    d.cameraFar = in.camera_far;
-    d.viewSpaceToMetersFactor = 1.0f;
-    d.cameraFovAngleVertical = in.fov_y;
-    d.frameID = s.frame_id;
-    const FfxErrorCode result = ffxFsr3ContextDispatchFrameGenerationPrepare(&s.context, &d);
-    if (result != FFX_OK) {
-        if (!s.reported) {
-            s.reported = true;
-            std::cerr << "[fsr3-fg] prepare: " << result << '\n';
-        }
-        return false;
-    }
-    s.prepared = true;
-    return true;
+    return impl_->core.prepare(ffxGetCommandListVK(commands), ffx_image(in.depth, L"Nebula scene depth", FFX_RESOURCE_STATE_DEPTH_ATTACHEMENT),
+                               ffx_image(in.motion, L"Nebula motion vectors", FFX_RESOURCE_STATE_RENDER_TARGET), in.jitter_x, in.jitter_y, in.render_width,
+                               in.render_height, in.frame_ms, in.camera_near, in.camera_far, in.fov_y);
 }
 
 void FsrFrameGenerationVk::configure(VkSwapchainKHR swap_chain, bool enabled, const TemporalImage* hudless, unsigned left, unsigned top,
                                      unsigned width, unsigned height) noexcept {
-    Impl& s = *impl_;
-    if (!s.created || swap_chain == VK_NULL_HANDLE) {
+    if (swap_chain == VK_NULL_HANDLE) {
         return;
     }
-    const bool on = enabled && s.prepared;
-    s.prepared = false;
-    FfxFrameGenerationConfig config{};
-    config.swapChain = ffxGetSwapchainVK(swap_chain);
-    config.frameGenerationEnabled = on;
-    config.frameGenerationCallback = ffxFsr3DispatchFrameGeneration;
-    config.frameGenerationCallbackContext = &s.context;
-    if (on && hudless != nullptr) {
-        config.HUDLessColor = ffx_image(*hudless, L"Nebula HUD-less", FFX_RESOURCE_STATE_PIXEL_COMPUTE_READ);
+    FfxResource picture{};
+    if (hudless != nullptr) {
+        picture = ffx_image(*hudless, L"Nebula HUD-less", FFX_RESOURCE_STATE_PIXEL_COMPUTE_READ);
     }
-    config.interpolationRect = {static_cast<int32_t>(left), static_cast<int32_t>(top), static_cast<int32_t>(width), static_cast<int32_t>(height)};
-    config.frameID = s.frame_id;
-    const FfxErrorCode result = ffxFsr3ConfigureFrameGeneration(&s.context, &config);
-    if (result != FFX_OK && !s.reported) {
-        s.reported = true;
-        std::cerr << "[fsr3-fg] configure: " << result << '\n';
-    }
-    if (on != s.enabled) {
-        s.enabled = on;
-        std::cerr << "[fsr3-fg] " << (on ? "on" : "off") << '\n';
-    }
+    impl_->core.configure(ffxGetSwapchainVK(swap_chain), enabled, picture, left, top, width, height);
 }
 
 }  // namespace vk
