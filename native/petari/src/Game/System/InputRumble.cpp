@@ -12,7 +12,7 @@ void RumbleChannel::clear() {
     _0 = nullptr;
     _8 = 0;
     _C = 0;
-    _E = false;
+    mStrength = 0;
     _4 = false;
     _10 = nullptr;
 }
@@ -23,16 +23,31 @@ void RumbleChannel::update() {
     }
 
     if (_C >= _0->mFrame) {
-        if (_4 == true) {
-            _E = _0->mPattern[0];
-            _C = 1;
-        } else {
+        if (!_4) {
             clear();
+            return;
         }
-    } else {
-        _E = _0->mPattern[_C];
-        _C++;
+
+        _C = 0;
     }
+
+    // How much of the frames around this one the pattern fills: its pulses are one soft buzz.
+    const s32 cReach = 2;
+    s32 on = 0;
+    for (s32 frame = _C - cReach; frame <= _C + cReach; frame++) {
+        s32 place = frame;
+        if (place < 0 || place >= _0->mFrame) {
+            if (!_4) {
+                continue;
+            }
+            place = (place + _0->mFrame) % _0->mFrame;
+        }
+
+        on += _0->mPattern[place];
+    }
+
+    mStrength = static_cast< u8 >(_0->mPattern[_C] != 0 ? 255 * (on + 1) / (2 * cReach + 2) : 255 * on / (2 * cReach + 2));
+    _C++;
 }
 
 void RumbleChannel::setPattern(const void* pParam1, const RumblePattern& rParam2, u32 param3, bool param4) {
@@ -43,7 +58,7 @@ void RumbleChannel::setPattern(const void* pParam1, const RumblePattern& rParam2
     _4 = param4;
 }
 
-InputRumble::InputRumble(PlayerInput* pPad) : mPad(pPad), _8(), _C(1), _B0(), _B4(), _B8(), _BC() {
+InputRumble::InputRumble(PlayerInput* pPad) : mPad(pPad), mStrength(), _C(1), _BC() {
     if (sInstanceForCallback == nullptr) {
         sInstanceForCallback = new InputRumble*[MR::getPlayerMaxCount()];
 
@@ -63,10 +78,10 @@ InputRumble::InputRumble(PlayerInput* pPad) : mPad(pPad), _8(), _C(1), _B0(), _B
 InputRumble::~InputRumble() {
     s32 chan = mPad->mChannel;
 
-    if (_8) {
-        _8 = false;
+    if (mStrength != 0) {
+        mStrength = 0;
 
-        MR::setInputRumble(chan, false);
+        MR::setInputRumble(chan, 0);
     }
 
     sInstanceForCallback[chan] = nullptr;
@@ -77,17 +92,17 @@ void InputRumble::registInstance() {
 
     sInstanceForCallback[chan] = this;
 
-    if (_8) {
-        MR::setInputRumble(chan, true);
+    if (mStrength != 0) {
+        MR::setInputRumble(chan, mStrength);
     }
 }
 
 void InputRumble::pause() {
-    MR::setInputRumble(mPad->mChannel, false);
+    MR::setInputRumble(mPad->mChannel, 0);
 }
 
 void InputRumble::stop() {
-    _8 = false;
+    mStrength = 0;
 
     pause();
 
@@ -99,7 +114,7 @@ void InputRumble::stop() {
 void InputRumble::update() {
     // A cutscene running unseen (NebulaCutsceneSkip) does not rumble.
     if (NebulaCutsceneSkip::isSkipping()) {
-        bool isActive = _8;
+        bool isActive = mStrength != 0;
         for (u8 i = 0; i < ARRAY_SIZE(mChannel); i++) {
             isActive |= mChannel[i]._0 != nullptr;
         }
@@ -123,53 +138,19 @@ void InputRumble::update() {
 }
 
 void InputRumble::updateRumble() {
-    bool b = false;
+    u8 strength = 0;
 
     for (u8 i = 0; i < ARRAY_SIZE(mChannel); i++) {
         mChannel[i].update();
 
-        b |= mChannel[i]._E;
+        if (strength < mChannel[i].mStrength) {
+            strength = mChannel[i].mStrength;
+        }
     }
 
-    if (_B8) {
-        _B4--;
-
-        if (_B4 <= 0) {
-            _B8 = 0;
-            _B4 = 0;
-        }
-
-        pause();
-    } else {
-        if (b) {
-            if (!_8) {
-                _8 = true;
-
-                MR::setInputRumble(mPad->mChannel, true);
-            }
-        } else if (_8) {
-            _8 = false;
-
-            pause();
-        }
-
-        if (b) {
-            _B0 = 5;
-        } else {
-            _B0 = MR::clamp(_B0 - 1, -9, 5);
-
-            if (_B0 < 0) {
-                _B4 = 0;
-                return;
-            }
-        }
-
-        _B4++;
-
-        if (_B4 > 1800) {
-            _B8 = true;
-            _B4 = 1800;
-        }
+    if (strength != mStrength) {
+        mStrength = strength;
+        MR::setInputRumble(mPad->mChannel, strength);
     }
 }
 

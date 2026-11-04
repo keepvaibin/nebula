@@ -65,6 +65,6 @@ namespace MR {
     void setPlayerInputsModeHome();
     void setPlayerInputsModeGame();
     void setInputSleepTime(bool);
-    // The controller's rumble motor.
-    void setInputRumble(s32, bool);
+    // How strongly the controller rumbles, 0 to 255.
+    void setInputRumble(s32, u8);
 };  // namespace MR

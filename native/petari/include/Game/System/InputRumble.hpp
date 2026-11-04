@@ -14,7 +14,7 @@ public:
     bool _4;
     u32 _8;
     s16 _C;
-    bool _E;
+    u8 mStrength;
     const void* _10;
 };
 
@@ -35,12 +35,9 @@ public:
     bool findRubmlePattern(const void*, s32*, s32*, s32*, const RumblePattern&);
 
     PlayerInput* mPad;
-    bool _8;
+    u8 mStrength;
     u32 _C;
     RumbleChannel mChannel[8];
-    s32 _B0;
-    s32 _B4;
-    bool _B8;
     s32 _BC;
 
 private:

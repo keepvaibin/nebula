@@ -32,18 +32,6 @@ float level_fraction(std::uint8_t level) noexcept {
 
 }  // namespace
 
-float MotorEnvelope::update(bool on, std::uint64_t now_us) noexcept {
-    const float dt = last_us == 0u || now_us < last_us
-        ? 0.0f
-        : std::min(static_cast<float>(now_us - last_us) * 1e-6f, 1.0f);
-    last_us = now_us;
-    const float target = on ? 1.0f : 0.0f;
-    const float seconds = on ? kMotorRiseSeconds : kMotorFallSeconds;
-    level += (target - level) * (1.0f - std::exp(-dt / seconds));
-    if (!on && level < kMotorStopLevel) level = 0.0f;
-    return level;
-}
-
 std::uint8_t quantize_level(float level) noexcept {
     if (!std::isfinite(level) || level <= 0.0f) return 0;
     return static_cast<std::uint8_t>(std::clamp<long>(std::lround(level * kLevelSteps), 1, kLevelSteps));

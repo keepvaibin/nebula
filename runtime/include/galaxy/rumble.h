@@ -34,20 +34,8 @@ inline constexpr std::uint8_t kDefaultStrength = 50;
     return static_cast<std::uint8_t>(kMinStrength + kStrengthStep * whole);
 }
 
-// The Wii Remote's motor takes tens of milliseconds to spin up and down, so
-// the game's short pulses (a Star Bit shot is four within about 170 ms) feel
-// like one soft buzz. Controllers with instant actuators get the same curve:
-// the level rises toward 1 while the game's bit is on and falls toward 0
-// while it is off. Published levels are quantized to kLevelSteps.
-inline constexpr float kMotorRiseSeconds = 0.03f;
-inline constexpr float kMotorFallSeconds = 0.06f;
-inline constexpr float kMotorStopLevel = 0.05f;
+// Published levels are quantized to kLevelSteps.
 inline constexpr std::uint8_t kLevelSteps = 32;
-struct MotorEnvelope {
-    float level = 0.0f;
-    std::uint64_t last_us = 0;
-    float update(bool on, std::uint64_t now_us) noexcept;
-};
 [[nodiscard]] std::uint8_t quantize_level(float level) noexcept;
 
 // Output strength for a quantized level (0..kLevelSteps) at `strength`
