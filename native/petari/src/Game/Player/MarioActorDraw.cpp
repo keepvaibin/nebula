@@ -49,7 +49,7 @@ public:
 namespace {
     inline void initExtraMtxBuffer(J3DModelX* pModel) {
         for (u32 i = 0; i < pModel->_DD; i++) {
-            pModel->mExtraMtxBuffer[i] = new (0x20) Mtx[0xC00 / sizeof(Mtx)];
+            pModel->mExtraMtxBuffer[i] = new Mtx[0xC00 / sizeof(Mtx)];
         }
     }
 };  // namespace
@@ -732,7 +732,7 @@ void MarioActor::initBlur() {
 
     for (u32 i = 0; i < 2; i++) {
         for (u32 j = 0; j < 8; j++) {
-            mBlurMatrices[i][j] = new (0x20) Mtx[_B14];
+            mBlurMatrices[i][j] = new Mtx[_B14];
 
             for (u32 k = 0; k < _B14; k++) {
                 NebulaMtxIdentity(mBlurMatrices[i][j][k]);

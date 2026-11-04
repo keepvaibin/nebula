@@ -37,7 +37,6 @@ Halo::Halo(const char* pName) : MapObjActor(pName), mDistance(70.0f) {
 void Halo::init(const JMapInfoIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;
-    info.setupHioNode("\212\302\213\253" /* 環境 */);
     info.setupDefaultPos();
     info.setupConnectToScene();
     info.setupNerve(GET_NERVE(Halo, HostTypeAppear));

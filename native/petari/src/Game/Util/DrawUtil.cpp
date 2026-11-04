@@ -42,8 +42,8 @@ namespace MR {
         j3dSys.drawInit();
     }
 
-    void reinitGX() {
-        j3dSys.reinitGX();
+    void resetDrawState() {
+        j3dSys.resetDrawState();
         J3DPass::writeAlpha(false);
     }
 
@@ -54,7 +54,7 @@ namespace MR {
     }
 
     void drawInitFor2DModel() {
-        MR::reinitGX();
+        MR::resetDrawState();
         J3DPass::depth(false, NEBULA_COMPARE_ALWAYS, false);
 
         Mtx44 projMtx;

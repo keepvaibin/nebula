@@ -143,7 +143,6 @@ GameScene::~GameScene() {
 }
 
 void GameScene::init() {
-    SceneFunction::createHioBasicNode(this);
     SceneFunction::startStageFileLoad();
     MR::requestChangeArchivePlayer(MR::isPlayerLuigi() == false);
     initNerve(GET_NERVE(GameScene, GameSceneScenarioOpeningCamera));
@@ -326,7 +325,7 @@ void GameScene::draw() const {
     drawMirror();
     draw3D();
     draw2D();
-    MR::reinitGX();
+    MR::resetDrawState();
 }
 
 void GameScene::calcAnim() {

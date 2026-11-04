@@ -174,7 +174,6 @@ void SimpleEnvironmentObj::init(const JMapInfoIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;
     MapObjActorUtil::setupInitInfoSimpleMapObj(&info);
-    info.setupHioNode("\212\302\213\253" /* 環境 */);
     initialize(rIter, info);
 }
 
@@ -191,7 +190,6 @@ void SimpleMirrorObj::init(const JMapInfoIter& rIter) {
     if (mMtx == nullptr) {
         MapObjActorUtil::setupInitInfoSimpleMapObj(&info);
     } else {
-        info.setupHioNode("\222\156\214\140\203\111\203\165\203\127\203\106" /* 地形オブジェ */);
         info.setupConnectToScene();
         info.setupEffect(nullptr);
         info.setupSound(4);

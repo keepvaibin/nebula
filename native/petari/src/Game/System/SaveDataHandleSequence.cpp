@@ -46,7 +46,7 @@ void SaveDataHandleSequence::initAfterResourceLoaded() {
     mBackupUserFile = new UserFile();
     mSaveDataHandler = new SaveDataHandler(mCurrentUserFile);
     // Its size follows what the handler found a game file takes.
-    mTempBuffer = new (32) u8[SaveDataHandler::getEnoughtTempBufferSize()];
+    mTempBuffer = new u8[SaveDataHandler::getEnoughtTempBufferSize()];
 
     mSysInfoWindowConfirm = MR::createSysInfoWindowExecuteWithChildren();
     mSysInfoWindowConfirm->kill();

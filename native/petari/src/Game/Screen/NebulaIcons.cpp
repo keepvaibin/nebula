@@ -1764,7 +1764,7 @@ namespace {
     // The A button over people and signs: IconAButton's two pictures (the button up, 48 pixels square, and pressed, 40;
     // small) give way to ours (records), drawn as the font's A is, while it draws.
     struct Picture {
-        alignas(32) u8 mRecord[NEBULA_TEXTURE_HEADER + cCellMax * cCellMax * 4];
+        u8 mRecord[NEBULA_TEXTURE_HEADER + cCellMax * cCellMax * 4];
     };
     const s32 cPictureSizes[2] = {48, 40};
     const s32 cPictureLooks[2] = {LookUp, LookPressed};
@@ -1981,7 +1981,7 @@ namespace {
     f32 sJoyConPixelsX = 0.0f;
     f32 sJoyConPixelsY = 0.0f;
     s32 sJoyConAsked = 0;  // the frames running it has been asked for
-    alignas(32) u8 sJoyConTexels[2][cJcPictures * (NEBULA_TEXTURE_HEADER + cJcMaxTexels * 4)];
+    u8 sJoyConTexels[2][cJcPictures * (NEBULA_TEXTURE_HEADER + cJcMaxTexels * 4)];
     Rgba sJoyConBand[cJcMaxSide * cJcBand];
 
     // Where a band of a half's picture is painted: pixels per unit on each axis, the pixels per unit an edge is smoothed

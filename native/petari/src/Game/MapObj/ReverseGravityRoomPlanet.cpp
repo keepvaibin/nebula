@@ -16,7 +16,6 @@ ReverseGravityRoomPlanet::ReverseGravityRoomPlanet(const char* pName) : MapObjAc
 void ReverseGravityRoomPlanet::init(const JMapInfoIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;
-    info.setupHioNode("\230\146\220\257" /* 惑星 */);
     info.setupDefaultPos();
     info.setupConnectToScene();
     info.setupEffect(0);

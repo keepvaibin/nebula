@@ -514,13 +514,8 @@ void EarthenPipe::processBgmPlayerOut() {
 EarthenPipeMediator::EarthenPipeMediator() : NameObj("\223\171\212\307\222\207\211\356\216\322" /* 土管仲介者 */) {
     mNumEntries = 0;
     mPipeEntries = nullptr;
-    mPipeEntries = new Entry[0x20];
-
-    for (s32 i = 0; i < 32; i++) {
-        mPipeEntries[i]._0 = nullptr;
-        mPipeEntries[i]._4 = nullptr;
-        mPipeEntries[i].mPipeID = -1;
-    }
+    mPipeEntryRoom = 32;
+    mPipeEntries = new Entry[mPipeEntryRoom];
 }
 
 void EarthenPipeMediator::entry(EarthenPipe* pPipe, const JMapInfoIter& rIter) {
@@ -538,8 +533,14 @@ void EarthenPipeMediator::entry(EarthenPipe* pPipe, const JMapInfoIter& rIter) {
         }
     }
 
+    if (mNumEntries == mPipeEntryRoom) {
+        mPipeEntries = MR::growArray(mPipeEntries, mPipeEntryRoom);
+        mPipeEntryRoom *= 2;
+    }
+
     EarthenPipeMediator::Entry* entry = &mPipeEntries[mNumEntries];
     entry->_0 = pPipe;
+    entry->_4 = nullptr;
     entry->mPipeID = pipeID;
     mNumEntries++;
 }

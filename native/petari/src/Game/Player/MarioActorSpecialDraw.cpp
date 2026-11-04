@@ -20,7 +20,7 @@
 #include <new>
 
 void MarioActor::initScreenBox() {
-    _B44 = new (32) u8[32];  // the frame read's key
+    _B44 = new u8[32];  // the frame read's key
     _B28 = 0.0f;
     _B24 = 0.0f;
     _B30 = 0.0f;

@@ -27,6 +27,10 @@ public:
     s32 checkStrikeBall(const TVec3f&, f32, bool, const CollisionPartsFilterBase*, const TriangleFilterBase*);
     s32 checkStrikeBallWithThickness(const TVec3f&, f32, f32, const CollisionPartsFilterBase*, const TriangleFilterBase*);
     s32 checkStrikeLine(const TVec3f&, const TVec3f&, s32, const CollisionPartsFilterBase*, const TriangleFilterBase*);
+    s32 collectStrikeBall(const TVec3f&, f32, bool, const CollisionPartsFilterBase*, const TriangleFilterBase*);
+    s32 collectStrikeBallWithThickness(const TVec3f&, f32, f32, const CollisionPartsFilterBase*, const TriangleFilterBase*);
+    s32 collectStrikeLine(const TVec3f&, const TVec3f&, s32, const CollisionPartsFilterBase*, const TriangleFilterBase*);
+    void growHitInfo();
     u32 createAreaPolygonList(Triangle*, u32, const TVec3f&, const TVec3f&);
     u32 createAreaPolygonListArray(Triangle*, u32, TVec3f*, u32);
     bool isSphereOverlappingWithBox(const TVec3f&, const TVec3f&, const TVec3f&, f32);
@@ -35,6 +39,7 @@ public:
     CollisionZone* getZone(int);
 
     HitInfo* mHitInfoArray;
+    s32 mHitInfoRoom;
     s32 _10;
     s32 mPartsCount;
     MR::Vector< MR::FixedArray< CollisionZone*, 32 > > mZones;

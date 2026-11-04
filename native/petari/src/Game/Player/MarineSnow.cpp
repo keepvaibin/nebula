@@ -11,7 +11,7 @@
 #include "Game/System/NebulaArena.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
 
-MarineSnow::MarineSnow() : mParticleCount(16), mParticlePositions(new (32) TVec3f[mParticleCount]), mCellSize(1000.0f) {
+MarineSnow::MarineSnow() : mParticleCount(16), mParticlePositions(new TVec3f[mParticleCount]), mCellSize(1000.0f) {
     for (s32 idx = 0; idx < mParticleCount; idx++) {
         TVec3f randVec;
         randVec.set(MR::getRandom() * mCellSize, MR::getRandom() * mCellSize, MR::getRandom() * mCellSize);

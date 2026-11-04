@@ -143,7 +143,6 @@ void GameSystemSceneController::initializeScene() {
 
     SceneFunction::allocateDrawBufferActorList();
     MR::clearFileLoaderRequestFileInfo(mIsResetProcessing);
-    SingletonHolder< HeapMemoryWatcher >::get()->checkRestMemory();
 }
 
 void GameSystemSceneController::destroyScene() {

@@ -5,7 +5,6 @@
 #include "Game/Util.hpp"
 
 namespace {
-    static const s32 sCoinNumMax = 512;
     static const s32 sCreateCoinNum = 32;
     const f32 sRandomizeVel = 4.0f;
     // sRandomizeVelSplash
@@ -16,8 +15,8 @@ namespace {
     const f32 sCircleVelLength = 30.0f;
 };  // namespace
 
-CoinHolder::CoinHolder(const char* pName) : DeriveActorGroup< Coin >(pName, ::sCoinNumMax), mHostInfoArr(), mHostInfoCount() {
-    mHostInfoArr = new CoinHostInfo[::sCoinNumMax];
+CoinHolder::CoinHolder(const char* pName) : DeriveActorGroup< Coin >(pName, ::sCreateCoinNum) {
+    mHostInfos.init(::sCreateCoinNum);
 }
 
 bool CoinHolder::hopCoin(const NameObj* pObj, const TVec3f& rPosition, const TVec3f& rDirection) {
@@ -27,7 +26,7 @@ bool CoinHolder::hopCoin(const NameObj* pObj, const TVec3f& rPosition, const TVe
         return false;
     }
 
-    Coin* coin = getDeadMember();
+    Coin* coin = takeDeadCoin();
 
     if (coin != nullptr) {
         coin->setHostInfo(hostInfo);
@@ -96,9 +95,9 @@ CoinHostInfo* CoinHolder::declare(const NameObj* pObj, s32 count) {
 
     CoinHostInfo* hostInfo = findHostInfo(pObj);
     if (hostInfo == nullptr) {
-        hostInfo = &mHostInfoArr[mHostInfoCount];
+        hostInfo = new CoinHostInfo();
         hostInfo->mHostActor = pObj;
-        mHostInfoCount++;
+        mHostInfos.push_back(hostInfo);
     }
 
     hostInfo->_4 += count;
@@ -116,9 +115,9 @@ s32 CoinHolder::getDeclareRemnantCoinCount(const NameObj* pObj) const {
 }
 
 CoinHostInfo* CoinHolder::findHostInfo(const NameObj* pObj) const {
-    for (s32 i = 0; i < mHostInfoCount; i++) {
-        if (mHostInfoArr[i].mHostActor == pObj) {
-            return &mHostInfoArr[i];
+    for (s32 i = 0; i < mHostInfos.size(); i++) {
+        if (mHostInfos[i]->mHostActor == pObj) {
+            return mHostInfos[i];
         }
     }
 
@@ -126,10 +125,27 @@ CoinHostInfo* CoinHolder::findHostInfo(const NameObj* pObj) const {
 }
 
 void CoinHolder::init(const JMapInfoIter& rIter) {
-    Coin* pCoin;
+    createCoins();
+}
 
+Coin* CoinHolder::takeDeadCoin() {
+    Coin* pCoin = getDeadMember();
+    if (pCoin == nullptr) {
+        const s32 first = getObjNum();
+        createCoins();
+        for (s32 i = first; i < getObjNum(); i++) {
+            getMember(i)->initAfterPlacement();
+        }
+        pCoin = getDeadMember();
+    }
+
+    return pCoin;
+}
+
+void CoinHolder::createCoins() {
+    MR::CurrentHeapRestorer heapRestorer(MR::getSceneHeap());
     for (int i = 0; i < ::sCreateCoinNum; i++) {
-        pCoin = new Coin("\203\122\203\103\203\223(\213\244\227\160)" /* コイン(共用) */);
+        Coin* pCoin = new Coin("\203\122\203\103\203\223(\213\244\227\160)" /* コイン(共用) */);
         pCoin->initWithoutIter();
         registerActor(pCoin);
     }
@@ -164,7 +180,7 @@ bool CoinHolder::appearCoin(const NameObj* pObj, const TVec3f& rPosition, const 
             break;
         }
 
-        Coin* pCoin = getDeadMember();
+        Coin* pCoin = takeDeadCoin();
         if (pCoin == nullptr) {
             break;
         }

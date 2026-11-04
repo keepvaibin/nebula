@@ -17,8 +17,6 @@ namespace NebulaFrameClock {
     // getScreenWidth at 16:9.
     const s32 cWideScreenWidth = 832;
 
-    // The game has its frame: two frames on, and two black ones, the picture shows.
-    void startPicture();
     // Frames shown since start.
     u32 count();
     // The main thread sleeps until the next frame and begins it.

@@ -38,7 +38,6 @@ public:
         return mPictureSpan;
     }
     void initStore();
-    void initNAND();
     void initAudio();
     void initPicture();
     void initNameObj();

@@ -8,7 +8,6 @@ class MapObjActorInitInfo {
 public:
     MapObjActorInitInfo();
 
-    void setupHioNode(const char*);
     void setupDefaultPos();
     void setupModelName(const char*);
     void setupConnectToScene();
@@ -59,7 +58,6 @@ public:
     bool _12;
     bool _13;
     const char* mModelName;
-    const char* mHioNode;
     u16 _1C;
     f32 mSensorRadius;
     TVec3f mSensorPosition;

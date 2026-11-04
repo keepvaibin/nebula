@@ -110,7 +110,7 @@ pixel-bound there (24 million pixel shader invocations against 4.1 million at 1x
   debanded there (a third of the pixels, the radius the same share of the height, the dither at the size it is
   seen); an enlarged one as before. Same run (`GALAXY_TEST_DEBAND_AB=1` alternates the two): the paused Battlerock
   frame differs by at most 4 of 255 everywhere; the title's sky, contrast stretched, is smooth in both.
-- The game clears the frame by drawing a quad (`MainLoopFramework::clearFrame`, colour and depth; `MR::clearZBuffer`, depth
+- The game clears the frame by drawing a quad (`GameFrame clearFrame`, colour and depth; `MR::clearZBuffer`, depth
   only) whose pixel shader writes the depth of a Z texture with the compare always: every pixel exports its depth,
   which keeps the early depth test and fast clears off (at 3x: 0.81 and 0.76 ms). The game now marks the quad
   (`__NebulaGXClearQuadMarker`, the texture's depth); the renderer clears the depth (the shader's formula,
@@ -226,7 +226,7 @@ D3D12, GPU ms a game frame:
   3x: the frame 33.6 -> 23.8 ms. Below 1080 lines it is the one pass as before. Same run (the one pass and the
   three on alternate frames, paused): at most 4 of 255 apart with the 2x2 box, 3 with 4x4 and on the source-size
   path, the size of the dither; the smooth regions alike when contrast stretched.
-- The game's clear quad (`MainLoopFramework::clearFrame`) draws one colour, C0 and A0 of a one-stage material. Its marker
+- The game's clear quad (`GameFrame clearFrame`) draws one colour, C0 and A0 of a one-stage material. Its marker
   now carries the colour, and the renderer clears it as it clears the depth, with the values the quad's pixel shader
   stores (8-bit colour; on a frame with alpha the 6-bit alpha: the material's, where one writes zero, or the destination
   alpha constant; `kFrameClearExact`). Fog, the temporal upscalers' targets or a lit translucent keep the quad. Same run

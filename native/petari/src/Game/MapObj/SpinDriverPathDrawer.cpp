@@ -136,9 +136,9 @@ s32 SpinDriverPathDrawer::calcPositionCount(f32 f1, f32 f2) const {
 
 void SpinDriverPathDrawer::initPositionList(f32 f1, f32 f2) {
     mPositionCount = calcPositionCount(f1, f2);
-    _90 = new (32) TVec3f[mPositionCount];
-    _94 = new (32) TVec3f[mPositionCount];
-    _98 = new (32) TVec3f[mPositionCount];
+    _90 = new TVec3f[mPositionCount];
+    _94 = new TVec3f[mPositionCount];
+    _98 = new TVec3f[mPositionCount];
     _9C = new f32[mPositionCount];
 
     s32 totalSteps = mShootPath->getTotalLength() / f1;

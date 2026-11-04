@@ -15,7 +15,7 @@ namespace MR {
     void drawScreenColor(const NebulaColor8& rColor);
     void drawScreenPicture(const JUTTexture& rTexture);
     void drawInit();
-    void reinitGX();
+    void resetDrawState();
     void loadViewMtxFor2DModel();
     void drawInitFor2DModel();
     void setDefaultViewportAndScissor();

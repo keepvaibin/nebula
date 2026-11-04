@@ -8,14 +8,10 @@
 MapObjActorInitInfo::MapObjActorInitInfo()
     : mSetDefaultPosition(), mConnectToScene(), mInitBinder(), mHasEffect(), mHasSensors(), mHasShadows(), mCalcGravity(), mUseProjectMapMtx(),
       mInitFur(), mHasRailMover(), mHasRotator(), mHasRailRotator(), _C(), _D(), mUseRailPosture(), mUseBaseMtxFollowTarget(), mIsAffectedByScale(),
-      mUseMirrorReflection(), mModelName(), mHioNode(), _1C(), mSensorRadius(), mSensorPosition(gZeroVec), mHasHitSensorCB(), mBinderRadius(),
+      mUseMirrorReflection(), mModelName(), _1C(), mSensorRadius(), mSensorPosition(gZeroVec), mHasHitSensorCB(), mBinderRadius(),
       mBinderCenterY(), mEffectName(), mSound(), mSoundPos(), _48(), mNerve(), mGroupClipping(), mClippingRadius(), mFarClipping(), _5C(-1),
       mColorChangeArg(-1), mTextureChangeArg(-1), mIsAppearRiddleSE(), mSeesaw1AxisRotatorName(), mSeesaw1AxisRotatorRadius(), _74(), mShadowName(),
       mShadowLength(-1.0f), _80(), mDummyChangeTexture(), _8C(), mNoUseLOD() {
-}
-
-void MapObjActorInitInfo::setupHioNode(const char* pName) {
-    mHioNode = pName;
 }
 
 void MapObjActorInitInfo::setupDefaultPos() {
@@ -230,7 +226,6 @@ void MapObjActorUtil::setupInitInfoSeesaw(MapObjActorInitInfo* pInitInfo, const 
 }
 
 void MapObjActorUtil::setupInitInfoSimpleMapObj(MapObjActorInitInfo* pInitInfo) {
-    pInitInfo->setupHioNode("\222\156\214\140\203\111\203\165\203\127\203\106" /* 地形オブジェ */);
     pInitInfo->setupDefaultPos();
     pInitInfo->setupConnectToScene();
     pInitInfo->setupEffect();
@@ -241,7 +236,6 @@ void MapObjActorUtil::setupInitInfoSimpleMapObj(MapObjActorInitInfo* pInitInfo) 
 }
 
 void MapObjActorUtil::setupInitInfoPlanet(MapObjActorInitInfo* pInitInfo) {
-    pInitInfo->setupHioNode("\230\146\220\257" /* 惑星 */);
     pInitInfo->setupDefaultPos();
     pInitInfo->setupConnectToScene();
     pInitInfo->setupEffect();

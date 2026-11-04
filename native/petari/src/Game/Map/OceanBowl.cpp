@@ -191,10 +191,10 @@ void OceanBowl::initPoints() {
         }
     }
 
-    mVtxTex0Array = new (0x20) f32[24 * 25 * 4];
-    mVtxTex1Array = new (0x20) f32[24 * 25 * 4];
-    mVtxTex2Array = new (0x20) f32[24 * 25 * 4];
-    mVtxTex3Array = new (0x20) f32[24 * 25 * 4];
+    mVtxTex0Array = new f32[24 * 25 * 4];
+    mVtxTex1Array = new f32[24 * 25 * 4];
+    mVtxTex2Array = new f32[24 * 25 * 4];
+    mVtxTex3Array = new f32[24 * 25 * 4];
 
     s32 index = 0;
 

@@ -27,7 +27,6 @@ TypicalDoor::TypicalDoor(const char* pName) : MapObjActor(pName), mCloseCollisio
 void TypicalDoor::init(const JMapInfoIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;
-    info.setupHioNode("\222\156\214\140\203\111\203\165\203\127\203\106" /* 地形オブジェ */);
     info.setupDefaultPos();
     info.setupConnectToScene();
     info.setupSound(4);

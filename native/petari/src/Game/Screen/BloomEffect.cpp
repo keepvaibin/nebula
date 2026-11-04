@@ -79,7 +79,7 @@ bool BloomEffect::isForEachModel() const {
 }
 
 void BloomEffect::initDraw() const {
-    MR::reinitGX();
+    MR::resetDrawState();
     J3DPass::depth(false, NEBULA_COMPARE_ALWAYS, false);
 
     Mtx44 projectionMtx;

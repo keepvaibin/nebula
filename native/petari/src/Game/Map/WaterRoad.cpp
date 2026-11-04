@@ -124,8 +124,8 @@ void WaterRoadModelInfo::initPoints(WaterRoad* pRoad) {
     TVec3f up = pRoad->mBaseUp;
     f32 loopInterval = MR::toRadian(360.0f / mNumLoopPoints);
 
-    mPoints = new (0x20) TVec3f[mNumPoints];
-    mNormals = new (0x20) TVec3s[mNumPoints];
+    mPoints = new TVec3f[mNumPoints];
+    mNormals = new TVec3s[mNumPoints];
     mRailCoords = new f32[mNumPoints];
 
     MR::moveCoordToStartPos(pRoad);

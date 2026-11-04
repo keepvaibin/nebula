@@ -486,7 +486,7 @@ void TrampleStar::draw() const {
     if (!MR::isDead(this)) {
         drawSelf();
         J3DPass::depth(true, NEBULA_COMPARE_LEQUAL, true);
-        MR::reinitGX();
+        MR::resetDrawState();
         J3DPass::writeAlpha(true);
         J3DPass::constantAlpha(true, 0);
     }

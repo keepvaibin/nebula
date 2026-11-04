@@ -133,7 +133,7 @@ u32 MiiGetModelBufferSize(MiiResolution res, u32 exprFlags) {
     const u32 exprNum = Mii_GetExpressionNum(exprFlags);
     const s32 texSize = Mii_GetMaskBufSize(res);
 
-    return ROUND_UP(exprNum * sizeof(J3DNativeTexObj), 32) + ROUND_UP(sizeof(Mii_CharModelRes), 32) + ROUND_UP(texSize * exprNum, 32);
+    return ROUND_UP(exprNum * sizeof(J3DNativeTexObj), 16) + ROUND_UP(sizeof(Mii_CharModelRes), 16) + ROUND_UP(texSize * exprNum, 16);
 }
 
 MiiErrcode MiiInitCharModel(MiiCharModel* model, MiiDataSource src, MiiMiddleDB* db, u16 id, void* work, MiiResolution res, u32 exprFlags) {
@@ -167,7 +167,7 @@ void Mii_InitCharModel(MiiCharModel* model, Mii_CharInfo* info, void* work, MiiR
     imodel->res = work;
 
     // Expression texobjs
-    exprTexObj = (J3DNativeTexObj*)ROUND_UP_PTR((u8*)work + sizeof(Mii_CharModelRes), 32);
+    exprTexObj = (J3DNativeTexObj*)ROUND_UP_PTR((u8*)work + sizeof(Mii_CharModelRes), 16);
     for (i = 0; i < MiiExp_Max; i++) {
         if (exprFlags & (1 << i)) {
             imodel->maskTexObj[i] = exprTexObj;
@@ -178,7 +178,7 @@ void Mii_InitCharModel(MiiCharModel* model, Mii_CharInfo* info, void* work, MiiR
     }
 
     // Expression images
-    image = (u8*)ROUND_UP_PTR(exprTexObj, 32);
+    image = (u8*)ROUND_UP_PTR(exprTexObj, 16);
     for (i = 0; i < MiiExp_Max; i++) {
         if (exprFlags & (1 << i)) {
             maskImages[i] = image;
@@ -431,7 +431,7 @@ void Mii_InitCharModelRes(Mii_CharModelRes* res, const Mii_CharInfo* info) {
         res->hairVtxPos = (s16*)((u8*)res->capVtxPos + (arg.numVtxPos * 4 - arg.numVtxPos) * 2);
         res->hairVtxNrm = (s16*)((u8*)res->capVtxNrm + (arg.numVtxNrm * 4 - arg.numVtxNrm) * 2);
 
-        res->hairDl = res->noseDl + ROUND_UP(arg.dlSize, 32) + offsetof(Mii_CharModelRes, capDl);
+        res->hairDl = res->noseDl + ROUND_UP(arg.dlSize, 16) + offsetof(Mii_CharModelRes, capDl);
     }
 
     /**
@@ -467,7 +467,7 @@ void Mii_InitCharModelRes(Mii_CharModelRes* res, const Mii_CharInfo* info) {
 
         res->foreheadVtxNrm = (s16*)((u8*)res->hairVtxNrm + (arg.numVtxNrm * temp - arg.numVtxNrm) * 2);
 
-        res->foreheadDl = res->hairDl + ROUND_UP(arg.dlSize, 32);
+        res->foreheadDl = res->hairDl + ROUND_UP(arg.dlSize, 16);
 
         res->flipHair = info->hair.flip;
     }

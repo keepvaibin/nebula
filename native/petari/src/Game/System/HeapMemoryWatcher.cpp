@@ -36,9 +36,6 @@ void HeapMemoryWatcher::createSceneHeapOnGameHeap() {
     mSceneHeap = ::createArena(mGameHeap);
 }
 
-void HeapMemoryWatcher::adjustStationedHeaps() {
-}
-
 void HeapMemoryWatcher::setCurrentHeapToStationedHeap() {
     MR::becomeCurrentHeap(mStationedHeap);
 }
@@ -83,7 +80,4 @@ void HeapMemoryWatcher::createGameHeap() {
 HeapMemoryWatcher::HeapMemoryWatcher()
     : mStationedHeap(nullptr), mGameHeap(nullptr), mFileCacheHeap(nullptr), mSceneHeap(nullptr), mAudSystemHeap(nullptr) {
     createHeaps();
-}
-
-void HeapMemoryWatcher::checkRestMemory() {
 }

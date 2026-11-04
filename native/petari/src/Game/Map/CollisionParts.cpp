@@ -297,11 +297,39 @@ bool CollisionParts::checkStrikePoint(HitInfo* pHitInfo, const TVec3f& rPos) {
     return true;
 }
 
+namespace {
+    // A query's working lists: room for the common case on the stack, more when more hits were asked for.
+    struct StrikeLists {
+        explicit StrikeLists(u32 maxHits) {
+            const bool fits = maxHits <= ARRAY_SIZEU(mPrismRoom);
+            mPrisms = fits ? mPrismRoom : new KC_PrismData*[maxHits];
+            mDistances = fits ? mDistanceRoom : new f32[maxHits];
+            mClassifications = fits ? mClassificationRoom : new u8[maxHits];
+        }
+
+        ~StrikeLists() {
+            if (mPrisms != mPrismRoom) {
+                delete[] mPrisms;
+                delete[] mDistances;
+                delete[] mClassifications;
+            }
+        }
+
+        KC_PrismData* mPrismRoom[64];
+        f32 mDistanceRoom[64];
+        u8 mClassificationRoom[64];
+        KC_PrismData** mPrisms;
+        f32* mDistances;
+        u8* mClassifications;
+    };
+}  // namespace
+
 u32 CollisionParts::checkStrikeBall(HitInfo* pHitInfo, u32 maxHits, const TVec3f& rPos, f32 radius, bool checkMovement,
                                     const TriangleFilterBase* pFilter) {
-    KC_PrismData* prisms[64];
-    f32 distances[64];
-    u8 classifications[64];
+    StrikeLists lists(maxHits);
+    KC_PrismData** const prisms = lists.mPrisms;
+    f32* const distances = lists.mDistances;
+    u8* const classifications = lists.mClassifications;
     TPos3f inversePrev;
     TVec3f localPos;
     mInvBaseMatrix.mult(rPos, localPos);
@@ -386,9 +414,10 @@ u32 CollisionParts::checkStrikeBallCore(HitInfo* pHitInfo, u32 maxHits, const TV
 
 u32 CollisionParts::checkStrikeBallWithThickness(HitInfo* pHitInfo, u32 maxHits, const TVec3f& rPos, f32 radius, f32 thickness,
                                                  const TriangleFilterBase* pFilter) {
-    KC_PrismData* prisms[64];
-    f32 distances[64];
-    u8 classifications[64];
+    StrikeLists lists(maxHits);
+    KC_PrismData** const prisms = lists.mPrisms;
+    f32* const distances = lists.mDistances;
+    u8* const classifications = lists.mClassifications;
     TVec3f localPos;
     mInvBaseMatrix.mult(rPos, localPos);
     TVec3f scale;
@@ -480,9 +509,10 @@ void CollisionParts::projectToPlane(TVec3f* pProjected, const TVec3f& rPos, cons
 }
 
 u32 CollisionParts::checkStrikeLine(HitInfo* pHitInfo, u32 maxHits, const TVec3f& rPos, const TVec3f& rDirection, const TriangleFilterBase* pFilter) {
-    f32 distances[64];
-    KC_PrismData* prisms[64];
-    u8 classifications[64];
+    StrikeLists lists(maxHits);
+    KC_PrismData** const prisms = lists.mPrisms;
+    f32* const distances = lists.mDistances;
+    u8* const classifications = lists.mClassifications;
     f32 length = rDirection.length();
     TVec3f localPos;
     TVec3f localDirection;

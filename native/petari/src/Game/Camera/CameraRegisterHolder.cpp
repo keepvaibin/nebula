@@ -2,9 +2,6 @@
 #include <cstring>
 
 namespace {
-    // static const char* sMtxRegHioName =
-    // static const char* sVecRegHioName =
-    // static const char* sFltRegHioName =
     static const char* sDummyMtxRegName = "\203\137\203\176\201\133\203\175\203\147\203\212\203\116\203\130" /* ダミーマトリクス */;
     static const char* sDummyVecRegName = "\203\137\203\176\201\133\203\170\203\116\203\147\203\213" /* ダミーベクトル */;
     static const char* sDummyFloatRegName = "\203\137\203\176\201\133\225\202\223\256\217\254\220\224" /* ダミー浮動小数 */;

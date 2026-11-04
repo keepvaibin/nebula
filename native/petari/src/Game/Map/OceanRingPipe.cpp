@@ -74,8 +74,8 @@ void OceanRingPipe::initPoints() {
     f32 length = MR::getRailTotalLength(this) / (_98 - 1);
     f32 angle = getAngle();
 
-    _A0 = new (32) TVec3f[_94];
-    _A4 = new (32) TVec3s[_94];
+    _A0 = new TVec3f[_94];
+    _A4 = new TVec3s[_94];
 
     s32 idx = 0;
 

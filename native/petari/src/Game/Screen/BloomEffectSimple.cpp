@@ -30,7 +30,7 @@ void BloomEffectSimple::draw() const {
     NebulaRender::bloomMarker(NebulaRender::kBloomSimple,
                           mThreshold | static_cast< u32 >(mMaskFilter & 0xFF) << 8 | tap << 16 | static_cast< u32 >(alpha) << 24,
                           verticalBits);
-    MR::reinitGX();
+    MR::resetDrawState();
     ImageEffectLocalUtil::setupDrawTexture();
     J3DPass::blend(NEBULA_FACTOR_ONE, NEBULA_FACTOR_ONE);
 }

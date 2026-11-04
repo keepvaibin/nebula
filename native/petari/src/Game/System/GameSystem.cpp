@@ -14,7 +14,6 @@
 #include "Game/System/GameSequenceFunction.hpp"
 #include "Game/System/GameSystemErrorWatcher.hpp"
 #include "Game/System/GameSystemFontHolder.hpp"
-#include "Game/System/GameSystemFrameControl.hpp"
 #include "Game/System/GameSystemFunction.hpp"
 #include "Game/System/GameSystemObjHolder.hpp"
 #include "Game/System/GameSystemResetAndPowerProcess.hpp"
@@ -22,7 +21,7 @@
 #include "Game/System/GameSystemStationedArchiveLoader.hpp"
 #include "Game/System/HeapMemoryWatcher.hpp"
 #include "Game/System/HomeButtonStateNotifier.hpp"
-#include "Game/System/MainLoopFramework.hpp"
+#include "Game/System/GameFrame.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/MutexHolder.hpp"
@@ -75,7 +74,7 @@ extern "C" void nebula_game_main(void) {
 
 GameSystem::GameSystem()
     : NerveExecutor("GameSystem"), mSequenceDirector(nullptr), mErrorWatcher(nullptr), mFontHolder(nullptr),
-      mFrameControl(nullptr), mObjHolder(nullptr), mSceneController(nullptr), mStationedArchiveLoader(nullptr), mHomeButtonLayout(nullptr),
+      mObjHolder(nullptr), mSceneController(nullptr), mStationedArchiveLoader(nullptr), mHomeButtonLayout(nullptr),
       mSystemWipeHolder(nullptr), mHomeButtonStateNotifier(nullptr), mIsExecuteLoadSystemArchive(false) {
 }
 
@@ -86,11 +85,10 @@ void GameSystem::init() {
     mFontHolder->createFontFromEmbeddedData();
     initNerve(GET_NERVE(GameSystem, GameSystemInitializeAudio));
     mSequenceDirector = new GameSequenceDirector();
-    initGX();
+    J3DNativeState::initDefaults();
     mSceneController = new GameSystemSceneController();
     mObjHolder->init();
     mErrorWatcher = new GameSystemErrorWatcher();
-    mFrameControl = new GameSystemFrameControl();
     SingletonHolder< GameSystemResetAndPowerProcess >::init();
     SingletonHolder< GameSystemResetAndPowerProcess >::get()->initWithoutIter();
     mStationedArchiveLoader = new GameSystemStationedArchiveLoader();
@@ -157,11 +155,6 @@ void GameSystem::exeNormal() {
     mStationedArchiveLoader->update();
 }
 
-void GameSystem::initGX() {
-    // The drawing state the game starts from, before anything is drawn.
-    J3DNativeState::initDefaults();
-}
-
 void GameSystem::initAfterStationedResourceLoaded() {
     mFontHolder->createFontFromFile();
     mObjHolder->initAfterStationedResourceLoaded();
@@ -193,10 +186,9 @@ void GameSystem::frameLoop() {
 }
 
 void GameSystem::drawFrame() {
-    MainLoopFramework::sManager->beginRender();
+    GameFrame::begin();
     draw();
-    MainLoopFramework::sManager->endRender();
-    MainLoopFramework::sManager->endFrame();
+    GameFrame::end();
 }
 
 void GameSystem::draw() {
