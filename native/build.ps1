@@ -21,7 +21,7 @@ $Petari = $Petari.Replace("\", "/")
 $Build = $Build.Replace("\", "/")
 $configure = "`"$cmake`" -S `"$src`" -B `"$Build`" -G Ninja -DCMAKE_MAKE_PROGRAM=`"$($ninja.Replace("\", "/"))`" " +
     "-DCMAKE_BUILD_TYPE=$Config -DCMAKE_C_COMPILER=`"$llvm/clang.exe`" -DCMAKE_CXX_COMPILER=`"$llvm/clang++.exe`" " +
-    "-DCMAKE_RC_COMPILER=`"$llvm/llvm-rc.exe`" -DNEBULA_PETARI_DIR=`"$Petari`" -DNEBULA_PGO=$(if ($Pgo) { 'ON' } else { 'OFF' }) -DCMAKE_C_FLAGS=$ProfileFlags -DCMAKE_CXX_FLAGS=$ProfileFlags -DCMAKE_SHARED_LINKER_FLAGS=$ProfileFlags""
+    "-DCMAKE_RC_COMPILER=`"$llvm/llvm-rc.exe`" -DNEBULA_PETARI_DIR=`"$Petari`" -DNEBULA_PGO=$(if ($Pgo) { 'ON' } else { 'OFF' }) -DCMAKE_C_FLAGS=$ProfileFlags -DCMAKE_CXX_FLAGS=$ProfileFlags -DCMAKE_SHARED_LINKER_FLAGS=$ProfileFlags"
 $compile = "`"$cmake`" --build `"$Build`" --target $Target"
 # vcvars64.bat runs vswhere.exe from PATH.
 $env:PATH = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer;$env:PATH"

@@ -74,9 +74,9 @@ set_target_properties(smg_game PROPERTIES
     C_VISIBILITY_PRESET hidden CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON
     # A plugin built with the game's headers calls the game's functions as the game itself does.
     WINDOWS_EXPORT_ALL_SYMBOLS ON)
-# Only to measure what those exports cost: plugins built with the game's headers can't load in this build.
+# Only to measure what those exports cost, or to train the profile (its counters cannot be exported): plugins built with the game's headers cannot load in such a build.
 option(NEBULA_NO_PLUGIN_EXPORTS "Leave the game's functions unexported" OFF)
-if(NEBULA_NO_PLUGIN_EXPORTS)
+if(NEBULA_NO_PLUGIN_EXPORTS OR CMAKE_CXX_FLAGS MATCHES "fprofile-instr-generate")
     set_target_properties(smg_game PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS OFF)
 elseif(NOT WIN32)
     # The same on Linux and Mac: what Windows does with its export list, these do with visibility.
@@ -142,8 +142,8 @@ target_compile_options(smg_game PRIVATE
 
 set_source_files_properties(math/src/nebula_libm.c math/src/nebula_libc.c math/src/nebula_runtime_win.c PROPERTIES COMPILE_OPTIONS -fno-builtin)
 target_compile_definitions(smg_game PRIVATE _USE_STD_VECTOR_ALGORITHMS=0 _ACRTIMP=)
-# No system library: everything the module uses it defines or asks the host for. A sanitizer's runtime needs the C runtime.
-if(WIN32 AND NOT NEBULA_SANITIZE)
+# No system library: everything the module uses it defines or asks the host for. A sanitizer's runtime and the profile counters' need the C runtime.
+if(WIN32 AND NOT NEBULA_SANITIZE AND NOT CMAKE_CXX_FLAGS MATCHES "fprofile-instr-generate")
     target_link_options(smg_game PRIVATE -nostdlib "LINKER:/NOENTRY" "LINKER:/NODEFAULTLIB")
 endif()
 

@@ -64,7 +64,7 @@ foreach ($RelativePath in $TrackedFiles) {
     if ($File.Extension.ToLowerInvariant() -in $ForbiddenBuildExtensions) {
         $Failures.Add("Forbidden tracked build/binary output: $($File.FullName)")
     }
-    if ($File.Length -gt 5MB) {
+    if ($File.Length -gt 5MB -and $RelativePath -ne "native/pgo/game.profdata") {
         $Failures.Add("Unexpected tracked file larger than 5 MiB: $($File.FullName)")
     }
 
