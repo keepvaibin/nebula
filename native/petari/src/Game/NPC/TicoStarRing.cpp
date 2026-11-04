@@ -73,7 +73,7 @@ void TicoStarRing::initialize(LiveActor* pTicoGalaxy, LiveActor* a2, const char*
     _194 = a2;
     mGalaxyName = pGalaxyName;
     setBaseMtx(pTicoGalaxy->getBaseMtx());
-    mPosition.set(a2->mPosition);
+    mPosition.set(a2 != nullptr ? a2->mPosition : pTicoGalaxy->mPosition);
     makeActorDead();
     MR::setMessageArgToCurrentGalaxyName(mMsgCtrl, pGalaxyName);
 }

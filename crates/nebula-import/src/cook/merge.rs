@@ -118,6 +118,101 @@ pub fn add_rows(table: &[u8], rows: &[Value]) -> Result<Vec<u8>> {
     Ok(out)
 }
 
+/// A whole table from JSON, in the form the disc's are: `{ "rows": [ { "column": value } ], "columns": { "column": "float" } }`.
+/// A column's kind comes from its values: text, whole numbers, or numbers with a fraction. `columns` says it for one that
+/// has no value yet, or a float whose values all happen to be whole.
+pub fn table_from_json(text: &[u8]) -> Result<Vec<u8>> {
+    #[derive(Clone, Copy, PartialEq)]
+    enum Kind {
+        Int,
+        Float,
+        Text,
+    }
+    let root: Value = serde_json::from_slice(text).context("not JSON")?;
+    let rows = root.get("rows").and_then(Value::as_array).context("it has no rows")?;
+    let mut names: Vec<String> = Vec::new();
+    let mut kinds: std::collections::BTreeMap<String, Kind> = std::collections::BTreeMap::new();
+    if let Some(columns) = root.get("columns").and_then(Value::as_object) {
+        for (name, kind) in columns {
+            let kind = match kind.as_str() {
+                Some("int") => Kind::Int,
+                Some("float") => Kind::Float,
+                Some("string") => Kind::Text,
+                _ => bail!("column {name} is int, float or string"),
+            };
+            names.push(name.clone());
+            kinds.insert(name.clone(), kind);
+        }
+    }
+    for (r, row) in rows.iter().enumerate() {
+        let fields = row.as_object().with_context(|| format!("row {} isn't a set of columns", r + 1))?;
+        for (name, value) in fields {
+            let kind = match value {
+                Value::String(_) => Kind::Text,
+                Value::Number(n) if n.is_f64() => Kind::Float,
+                Value::Number(_) => Kind::Int,
+                _ => bail!("row {}: {name} is text or a number", r + 1),
+            };
+            match kinds.get(name) {
+                None => {
+                    names.push(name.clone());
+                    kinds.insert(name.clone(), kind);
+                }
+                // Whole numbers fit a column with fractions; nothing else mixes.
+                Some(Kind::Int) if kind == Kind::Float => {
+                    kinds.insert(name.clone(), Kind::Float);
+                }
+                Some(Kind::Float) if kind == Kind::Int => {}
+                Some(known) if *known == kind => {}
+                Some(_) => bail!("row {}: {name} has been another kind of value", r + 1),
+            }
+        }
+    }
+    let size = names.len() * 4;
+    let header = 16 + names.len() * 12;
+    let mut out = Vec::new();
+    out.extend_from_slice(&(rows.len() as u32).to_be_bytes());
+    out.extend_from_slice(&(names.len() as u32).to_be_bytes());
+    out.extend_from_slice(&(header as u32).to_be_bytes());
+    out.extend_from_slice(&(size as u32).to_be_bytes());
+    for (i, name) in names.iter().enumerate() {
+        out.extend_from_slice(&column_hash(name).to_be_bytes());
+        out.extend_from_slice(&u32::MAX.to_be_bytes());
+        out.extend_from_slice(&((i * 4) as u16).to_be_bytes());
+        out.push(0);
+        out.push(match kinds[name] {
+            Kind::Int => 0,
+            Kind::Float => 2,
+            Kind::Text => 6,
+        });
+    }
+    let mut pool = vec![0u8];
+    for row in rows {
+        for name in &names {
+            let value = row.get(name);
+            let word: u32 = match kinds[name] {
+                Kind::Text => match value.and_then(Value::as_str) {
+                    Some("") | None => 0,
+                    Some(text) => {
+                        let at = pool.len() as u32;
+                        pool.extend_from_slice(text.as_bytes());
+                        pool.push(0);
+                        at
+                    }
+                },
+                Kind::Float => (value.and_then(Value::as_f64).unwrap_or(0.0) as f32).to_bits(),
+                Kind::Int => value.and_then(Value::as_i64).unwrap_or(0) as u32,
+            };
+            out.extend_from_slice(&word.to_be_bytes());
+        }
+    }
+    out.extend_from_slice(&pool);
+    while out.len() % 32 != 0 {
+        out.push(0x40);
+    }
+    Ok(out)
+}
+
 /// A mod's rows for a table.
 pub fn read_rows(text: &[u8]) -> Result<Vec<Value>> {
     let root: Value = serde_json::from_slice(text).context("not JSON")?;
@@ -239,6 +334,28 @@ mod tests {
         assert_eq!(word(&out, 1), "new");
         assert_eq!(le32(&out, 56).unwrap(), 10);
         assert_eq!(word(&out, 2), "");
+    }
+
+    #[test]
+    fn a_new_table_comes_from_json() {
+        let text = br#"{ "columns": { "Empty": "string", "Size": "float" }, "rows": [ { "PartName": "A", "TotalStep": 240, "Size": 1 }, { "PartName": "B", "Size": 0.5 } ] }"#;
+        let table = table_from_json(text).unwrap();
+        let be = |at: usize| u32::from_be_bytes(table[at..at + 4].try_into().unwrap());
+        assert_eq!(be(0), 2);
+        assert_eq!(be(4), 4);
+        assert_eq!(be(8), 16 + 48);
+        assert_eq!(be(12), 16);
+        assert_eq!(table.len() % 32, 0);
+        // Empty, Size, then the rows' own in the order they came.
+        assert_eq!(be(16), column_hash("Empty"));
+        assert_eq!(table[16 + 11], 6);
+        assert_eq!(table[28 + 11], 2);
+        let data = 64;
+        assert_eq!(f32::from_bits(be(data + 4)), 1.0);
+        assert_eq!(be(data + 12), 240);
+        assert_eq!(f32::from_bits(be(data + 16 + 4)), 0.5);
+        assert!(table_from_json(br#"{ "rows": [ { "A": 1 }, { "A": "x" } ] }"#).is_err());
+        assert!(table_from_json(br#"{ "rows": [ { "A": [] } ] }"#).is_err());
     }
 
     #[test]

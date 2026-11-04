@@ -1184,7 +1184,15 @@ namespace MR {
     }
 
     LiveActor* getPairedGroupMember(const LiveActor* pActor) {
+        // Placed with no group, or in a level with none: no partner.
+        if (!isExistSceneObj(SceneObj_LiveActorGroupArray)) {
+            return nullptr;
+        }
+
         LiveActorGroup* pGroup = getGroupFromArray(pActor);
+        if (pGroup == nullptr) {
+            return nullptr;
+        }
 
         for (s32 i = 0; i < pGroup->getObjNum(); i++) {
             if (pGroup->getActor(i) != pActor) {

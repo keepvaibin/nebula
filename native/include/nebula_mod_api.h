@@ -138,6 +138,8 @@ typedef struct NebulaGalaxy {
     const char* open_condition[3];  /* the event flags that open it, or null */
     int32_t stars_to_open;          /* power stars it takes to open */
     int32_t dome;                   /* the dome it belongs to: 1 to 6, 0 for none */
+    int32_t has_map_position;       /* 1: the game makes its icon's pane, at map_position */
+    float map_position[2];          /* from the middle of its dome's page, or of the grand map with no dome: right and up, 608 wide by 456 high */
 } NebulaGalaxy;
 
 /* A power-up the game doesn't have. A plugin gives it to the player with set_value(NEBULA_SET_POWER_UP, its number). */
@@ -214,6 +216,28 @@ typedef struct NebulaModApi {
     int32_t (*add_power_up)(const NebulaPowerUpClass* power_up);
     /* Which way is down for it, a unit length: on a planet that is no one axis. */
     void (*get_gravity)(NebulaActor* actor, float* xyz);
+    /* Only in nebula_plugin_start. A music track: `file` is its place in the game, AudioRes/Stream/MyTrack.wav (.ogg, .ast).
+       `name` is yours to choose, not starting SE_, BGM_, MBGM_, STM_ or ME_, which are the game's. 0: done. */
+    int32_t (*add_music)(const char* name, const char* file);
+    /* Only in nebula_plugin_start. What a stage plays: `scenario` is a mission, 0 for all it has no row for. */
+    int32_t (*set_stage_music)(const char* stage, int32_t scenario, const char* name);
+    /* Only in nebula_plugin_start. What a ChangeBgmCube in the stage starts, with its Obj_arg1 at `area`. */
+    int32_t (*set_area_music)(const char* stage, int32_t area, const char* name);
+    /* In a stage: this track, a mod's or the game's by its name, in place of what's playing. 1: it started. */
+    int32_t (*play_music)(const char* name);
+    /* In a stage: what's playing fades out over this many frames. */
+    void (*stop_music)(int32_t frames);
+    /* In a stage: a movie over the game, by its place in the game: MovieData/MyMovie.thp. The game waits while it plays. 1: it started. */
+    int32_t (*play_movie)(const char* file);
+    void (*stop_movie)(void);
+    int32_t (*is_movie_playing)(void);
+    /* Only in nebula_plugin_start. A row of the game's progression, by its name: what opens what, and what each hungry Luma costs.
+       A name the game has is changed, a new one added. `kind`: 1 stars, 2 a galaxy's stars, 3 a special star, 4 two flags, 5 story,
+       6 a galaxy, 7 a comet, 8 a hungry Luma. `a` and `b` follow the kind: the star's number, or the Luma's slot and its price. 0: done. */
+    int32_t (*set_event_flag)(const char* name, int32_t kind, int32_t a, int32_t b, const char* first, const char* second);
+    /* Only in nebula_plugin_start. A dome's comets, 1 to 6, in the order they come, for the whole of its schedule: `galaxies[i]` with
+       `coins[i]` at 1 for the hundred purple coins. */
+    int32_t (*set_comet_schedule)(int32_t dome, const char* const* galaxies, const int32_t* coins, int32_t count);
 } NebulaModApi;
 
 /* The player's controls, whatever device they're on. */

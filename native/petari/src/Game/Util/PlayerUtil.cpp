@@ -345,6 +345,12 @@ namespace MR {
         TPos3f mtx;
         mtx.identity();
 
+        // A name the stage has no position of, from a mod's cutscene: the player stays where they are.
+        TPos3f found;
+        if (!MR::tryFindNamePos(pParam1, found.toMtxPtr())) {
+            return;
+        }
+
         MR::findNamePosOnGround(pParam1, mtx.toMtxPtr());
         MarioAccess::setBaseMtx(mtx.toMtxPtr());
         MarioAccess::getPlayerActor()->resetCondition();

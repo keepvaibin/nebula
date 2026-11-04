@@ -75,7 +75,7 @@ namespace DemoExecutorFunction {
     }
 
     bool isRegisteredDemoActionNerve(const DemoExecutor* pExecutor, const LiveActor* pActor) {
-        return pExecutor->mActionKeeper->isRegisteredDemoActionNerve(pActor);
+        return pExecutor != nullptr && pExecutor->mActionKeeper->isRegisteredDemoActionNerve(pActor);
     }
 
     bool tryCreateDemoTalkAnimCtrlForActor(DemoExecutor* pExecutor, LiveActor* pActor, const char* a3, const char* a4) {

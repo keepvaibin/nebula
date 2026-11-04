@@ -72,6 +72,9 @@ public:
 
 class GalaxyCometScheduler {
 public:
+    /// @brief A mod's schedule for a dome, 0 to 5, before the scheduler is made.
+    static void setTimePaper(s32 dome, const GalaxyCometTimePaper* pPaper);
+
     /// @brief Constructs the scheduler with the predefined dome time tables.
     GalaxyCometScheduler();
 
