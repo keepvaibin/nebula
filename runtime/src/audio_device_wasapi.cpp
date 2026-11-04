@@ -5,6 +5,8 @@
 #include "galaxy/run_options.h"
 
 #include <algorithm>
+#include <array>
+#include <bit>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
@@ -119,13 +121,72 @@ public:
 
     void set_paused(bool paused) override { paused_.store(paused, std::memory_order_relaxed); }
 
+    [[nodiscard]] std::span<const Speaker> speakers() const noexcept override {
+        return std::span<const Speaker>(speakers_.data(), speaker_count_);
+    }
+
+    void set_surround(bool on) override {
+        if (surround_.exchange(on, std::memory_order_relaxed) != on) {
+            SetEvent(changed_);
+        }
+    }
+
 private:
-    bool open_endpoint(IMMDeviceEnumerator* endpoints) {
-        ComPtr<IMMDevice> device;
-        if (FAILED(endpoints->GetDefaultAudioEndpoint(eRender, eConsole, &device))) {
+    // The channels of a channel mask, in the order the device takes them.
+    void set_speakers(DWORD mask) {
+        speaker_count_ = 0u;
+        for (DWORD bit = 1u; bit != 0u && speaker_count_ < speakers_.size(); bit <<= 1u) {
+            if ((mask & bit) == 0u) {
+                continue;
+            }
+            Speaker speaker = Speaker::Other;
+            switch (bit) {
+            case SPEAKER_FRONT_LEFT: speaker = Speaker::Left; break;
+            case SPEAKER_FRONT_RIGHT: speaker = Speaker::Right; break;
+            case SPEAKER_FRONT_CENTER: speaker = Speaker::Center; break;
+            case SPEAKER_SIDE_LEFT: speaker = Speaker::SideLeft; break;
+            case SPEAKER_SIDE_RIGHT: speaker = Speaker::SideRight; break;
+            case SPEAKER_BACK_LEFT: speaker = Speaker::BackLeft; break;
+            case SPEAKER_BACK_RIGHT: speaker = Speaker::BackRight; break;
+            default: break;
+            }
+            speakers_[speaker_count_++] = speaker;
+        }
+    }
+
+    bool activate(IMMDevice* device) {
+        return SUCCEEDED(device->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr,
+                                          reinterpret_cast<void**>(client_.ReleaseAndGetAddressOf())));
+    }
+
+    bool initialize(DWORD rate, DWORD mask) {
+        const WORD channels = static_cast<WORD>(std::popcount(mask));
+        WAVEFORMATEXTENSIBLE format{};
+        format.Format.wFormatTag = WAVE_FORMAT_EXTENSIBLE;
+        format.Format.nChannels = channels;
+        format.Format.nSamplesPerSec = rate;
+        format.Format.wBitsPerSample = 32;
+        format.Format.nBlockAlign = static_cast<WORD>(channels * 4u);
+        format.Format.nAvgBytesPerSec = rate * channels * 4u;
+        format.Format.cbSize = sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX);
+        format.Samples.wValidBitsPerSample = 32;
+        format.dwChannelMask = mask;
+        format.SubFormat = GUID{0x00000003, 0x0000, 0x0010, {0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71}};  // IEEE float
+        const DWORD flags = AUDCLNT_STREAMFLAGS_EVENTCALLBACK | AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM |
+                            AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY;
+        if (FAILED(client_->Initialize(AUDCLNT_SHAREMODE_SHARED, flags, kBufferDuration, 0, &format.Format, nullptr))) {
             return false;
         }
-        if (FAILED(device->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr, reinterpret_cast<void**>(client_.ReleaseAndGetAddressOf())))) {
+        set_speakers(mask);
+        return true;
+    }
+
+    bool open_endpoint(IMMDeviceEnumerator* endpoints) {
+        constexpr DWORD kStereo = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT;
+        constexpr DWORD kRear = SPEAKER_SIDE_LEFT | SPEAKER_SIDE_RIGHT | SPEAKER_BACK_LEFT | SPEAKER_BACK_RIGHT;
+        set_speakers(kStereo);
+        ComPtr<IMMDevice> device;
+        if (FAILED(endpoints->GetDefaultAudioEndpoint(eRender, eConsole, &device)) || !activate(device.Get())) {
             return false;
         }
         WAVEFORMATEX* mix = nullptr;
@@ -133,25 +194,32 @@ private:
             return false;
         }
         const DWORD rate = mix->nSamplesPerSec;
+        DWORD mask = kStereo;
+        if (surround_.load(std::memory_order_relaxed) && mix->wFormatTag == WAVE_FORMAT_EXTENSIBLE) {
+            const DWORD device_mask = reinterpret_cast<const WAVEFORMATEXTENSIBLE*>(mix)->dwChannelMask;
+            if ((device_mask & kRear) != 0u && (device_mask & kStereo) == kStereo) {
+                mask = device_mask;
+            }
+        }
         CoTaskMemFree(mix);
         if (rate < 8000u || rate > 192000u) {
             return false;
         }
-        WAVEFORMATEXTENSIBLE format{};
-        format.Format.wFormatTag = WAVE_FORMAT_EXTENSIBLE;
-        format.Format.nChannels = 2;
-        format.Format.nSamplesPerSec = rate;
-        format.Format.wBitsPerSample = 32;
-        format.Format.nBlockAlign = 8;
-        format.Format.nAvgBytesPerSec = rate * 8u;
-        format.Format.cbSize = sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX);
-        format.Samples.wValidBitsPerSample = 32;
-        format.dwChannelMask = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT;
-        format.SubFormat = GUID{0x00000003, 0x0000, 0x0010, {0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71}};  // IEEE float
-        const DWORD flags = AUDCLNT_STREAMFLAGS_EVENTCALLBACK | AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM |
-                            AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY;
-        if (FAILED(client_->Initialize(AUDCLNT_SHAREMODE_SHARED, flags, kBufferDuration, 0, &format.Format, nullptr))) {
-            return false;
+        // A test's reopening: the session silent, and six channels asked of whatever the device is.
+        const char* const reopen = ::galaxy::run_options().audio_test_reopen;
+        if (reopen != nullptr && surround_.load(std::memory_order_relaxed)) {
+            mask = KSAUDIO_SPEAKER_5POINT1;
+        }
+        if (!initialize(rate, mask)) {
+            if (mask == kStereo || !activate(device.Get()) || !initialize(rate, kStereo)) {
+                return false;
+            }
+        }
+        if (reopen != nullptr) {
+            ComPtr<ISimpleAudioVolume> volume;
+            if (SUCCEEDED(client_->GetService(__uuidof(ISimpleAudioVolume), reinterpret_cast<void**>(volume.GetAddressOf())))) {
+                volume->SetMasterVolume(0.0f, nullptr);
+            }
         }
         REFERENCE_TIME period = 0;
         if (FAILED(client_->GetBufferSize(&buffer_frames_)) || FAILED(client_->GetDevicePeriod(&period, nullptr)) ||
@@ -162,8 +230,8 @@ private:
         const std::uint32_t period_frames = static_cast<std::uint32_t>(period * rate / 10000000);
         fill_frames_ = std::min<std::uint32_t>(period_frames * kFillPeriods, buffer_frames_);
         rate_.store(rate, std::memory_order_relaxed);
-        std::cout << "[audio] output " << rate << " Hz, buffer " << buffer_frames_ << ", fill " << fill_frames_ << ", period "
-                  << period_frames << " frames\n";
+        std::cout << "[audio] output " << rate << " Hz, " << speaker_count_ << " channels, buffer " << buffer_frames_
+                  << ", fill " << fill_frames_ << ", period " << period_frames << " frames\n";
         return true;
     }
 
@@ -173,12 +241,13 @@ private:
         }
         renderer_.Reset();
         client_.Reset();
+        set_speakers(SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT);
     }
 
     // Until the endpoint fails or the default changes. True when the device gave up (it is reopened); the fill never blocks on
     // the device: only the render callback's own locks can hold this thread.
     void play() {
-        std::vector<float> first(static_cast<std::size_t>(fill_frames_) * 2u);
+        std::vector<float> first(static_cast<std::size_t>(fill_frames_) * speaker_count_);
         render_(first.data(), fill_frames_, rate_.load(std::memory_order_relaxed));
         BYTE* data = nullptr;
         if (FAILED(renderer_->GetBuffer(fill_frames_, &data))) {
@@ -189,9 +258,11 @@ private:
             return;
         }
         const HANDLE waits[2] = {samples_, changed_};
+        const char* const reopen = ::galaxy::run_options().audio_test_reopen;
+        const ULONGLONG reopen_at = reopen != nullptr ? GetTickCount64() + std::strtoull(reopen, nullptr, 10) * 1000u : 0u;
         for (;;) {
             const DWORD woke = WaitForMultipleObjects(2, waits, FALSE, 500);
-            if (woke == WAIT_OBJECT_0 + 1u) {
+            if (woke == WAIT_OBJECT_0 + 1u || (reopen != nullptr && GetTickCount64() >= reopen_at)) {
                 return;
             }
             UINT32 padding = 0;
@@ -270,7 +341,10 @@ private:
     Render render_;
     std::atomic<std::uint32_t> queued_{0u};
     std::atomic<bool> paused_{false};
+    std::atomic<bool> surround_{false};
     std::atomic<std::uint32_t> rate_{48000u};
+    std::array<Speaker, 18> speakers_{Speaker::Left, Speaker::Right};
+    std::uint32_t speaker_count_{2u};
     ComPtr<IAudioClient> client_;
     ComPtr<IAudioRenderClient> renderer_;
     UINT32 buffer_frames_{};

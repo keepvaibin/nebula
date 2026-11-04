@@ -466,7 +466,7 @@ unsigned runtime_draft_changes(RuntimeSettings* live) {
     const RuntimeSettings& b = s_runtime_base;
     // A setting added to RuntimeSettings is drafted here too: these bindings stop compiling until it is.
     [[maybe_unused]] const auto& [mode, audio, text_speed, language, discord_status, button_icons, co_star, menu_text_size] = d;
-    [[maybe_unused]] const auto& [master, music, sfx, voice, ambience, cutscene, wiimote_speaker] = d.audio;
+    [[maybe_unused]] const auto& [master, music, sfx, voice, ambience, cutscene, wiimote_speaker, sound_output] = d.audio;
     RuntimeSettings scratch{};
     RuntimeSettings& out = live != nullptr ? *live : scratch;
     unsigned changes = 0u;
@@ -483,6 +483,7 @@ unsigned runtime_draft_changes(RuntimeSettings* live) {
     take(d.audio.ambience, b.audio.ambience, out.audio.ambience);
     take(d.audio.cutscene, b.audio.cutscene, out.audio.cutscene);
     take(d.audio.wiimote_speaker, b.audio.wiimote_speaker, out.audio.wiimote_speaker);
+    take(d.audio.sound_output, b.audio.sound_output, out.audio.sound_output);
     take(d.text_speed, b.text_speed, out.text_speed);
     take(d.language, b.language, out.language);
     take(d.discord_status, b.discord_status, out.discord_status);
@@ -825,7 +826,7 @@ unsigned native_settings_row_count(unsigned tab) {
         return static_cast<unsigned>(
             settings_page(tab, s_settings_draft, s_runtime_draft, get_render_feature_caps()).size());
     }
-    return tab == 2u ? controls_row_count() : 7u;
+    return tab == 2u ? controls_row_count() : 8u;
 }
 
 // A heading row (never selected).
@@ -1178,6 +1179,11 @@ void adjust_native_setting_unlogged(int delta) {
                                 &settings.audio.sfx, &settings.audio.voice,
                                 &settings.audio.ambience, &settings.audio.cutscene,
                                 &settings.audio.wiimote_speaker};
+        if (row == std::size(gains)) {
+            const int next = (static_cast<int>(settings.audio.sound_output) + (delta < 0 ? 2 : 1)) % 3;
+            settings.audio.sound_output = static_cast<SoundOutput>(next);
+            return;
+        }
         if (row >= std::size(gains)) return;
         *gains[row] = step_gain(*gains[row], delta);
     }
@@ -2808,6 +2814,12 @@ std::string native_settings_row_text(
         case 4: return std::string("AMBIENCE: ") + percent_text(runtime.audio.ambience);
         case 5: return std::string("CUTSCENE: ") + percent_text(runtime.audio.cutscene);
         case 6: return std::string("WIIMOTE SOUNDS: ") + percent_text(runtime.audio.wiimote_speaker);
+        case 7:
+            switch (runtime.audio.sound_output) {
+            case SoundOutput::Mono: return "SOUND OUTPUT: MONO";
+            case SoundOutput::Surround: return "SOUND OUTPUT: SURROUND";
+            default: return "SOUND OUTPUT: STEREO";
+            }
         default: return {};
         }
     default:

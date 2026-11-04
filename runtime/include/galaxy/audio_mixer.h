@@ -86,6 +86,12 @@ public:
     // Ends the frame: the movie's sound for the subframes mixed since the last call is added; returns that output,
     // interleaved (left, right), valid until the next call.
     std::span<const float> end_frame();
+    // The surround buses and center on speakers of their own instead of matrix-encoded into left and right. The frame
+    // being built starts over.
+    void set_discrete(bool on) noexcept;
+    [[nodiscard]] bool discrete() const noexcept { return discrete_; }
+    // With set_discrete: the frame end_frame returned, its center, surround left and surround right, interleaved.
+    [[nodiscard]] std::span<const float> surround() const noexcept { return surround_out_; }
     [[nodiscard]] MovieAudio& movie() noexcept { return movie_; }
 
     // Volume categories: `master` unused (the output applies it). A voice's category follows the sound the game names
@@ -197,6 +203,8 @@ private:
     SampleDelay fold_left_, fold_right_;           // the surround buses, one subframe late
     SampleDelay panner_send_left_, panner_send_right_;  // the panner's rear sends: one subframe, half a subframe
     std::vector<float> frame_;                     // the frame's output so far, interleaved (left, right)
+    std::vector<float> frame_surround_, surround_out_;
+    bool discrete_ = false;
 
     // The movie player's sound and its last 32 kHz samples, interleaved (left, right).
     MovieAudio movie_;

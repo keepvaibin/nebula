@@ -271,6 +271,8 @@ void AudSystem::calc() {
         return;
     }
 
+    updateOutputMode();
+
     JAUSoundMgr::calc();
 }
 

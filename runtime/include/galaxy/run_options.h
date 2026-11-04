@@ -27,6 +27,8 @@ struct RunOptions {
     const char* audio_wav_dump = nullptr;
     const char* audio_wav_dump_only = nullptr;
     const char* audio_wav_dump_seconds = nullptr;
+    const char* audio_test_device_cycle = nullptr;
+    const char* audio_test_reopen = nullptr;
     const char* boot_fast = nullptr;
     const char* crash_dump_dir = nullptr;
     const char* d3d_debug = nullptr;

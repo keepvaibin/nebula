@@ -232,6 +232,40 @@ void test_panner() {
            out[2u * 300u + 1u]);
 }
 
+// Its own speakers: a rear voice leaves left and right silent and comes out of surround left, one subframe late.
+void test_discrete_surround() {
+    Game game;
+    for (std::uint32_t i = 0; i < 4096u; ++i) {
+        game.put16(i * 2u, 16384);
+    }
+    NebulaVoice& v = game.pcm16(0u, 0u, 4096u, NEBULA_AUDIO_BUS_NONE, 0);
+    v.panner = 1u;
+    v.pan = 0.0f;
+    v.rear = 1.0f;
+    v.panner_volume = 0.25f;
+    v.panner_target = 0.25f;
+    AudioMixer mixer(48000u);
+    game.attach(mixer);
+    mixer.set_discrete(true);
+    for (int i = 0; i < 3; ++i) {
+        mixer.mix(1.0f);
+    }
+    const std::span<const float> front = mixer.end_frame();
+    const std::span<const float> rear = mixer.surround();
+    expect(rear.size() == front.size() / 2u * 3u, "three more channels a frame", static_cast<double>(rear.size()));
+    const double gain = std::sin(kPi * 127.0 / 256.0) * std::sin(kPi * 127.0 / 256.0);
+    const double level = 0.5 * gain * 16384.0 / 65536.0;
+    expect(near(front[2u * 300u], 0.0, 1e-6), "rear voice: left silent", front[2u * 300u]);
+    expect(near(front[2u * 300u + 1u], 0.0, 1e-6), "rear voice: right silent", front[2u * 300u + 1u]);
+    expect(near(rear[3u * 300u], 0.0, 1e-6), "rear voice: center silent", rear[3u * 300u]);
+    expect(near(rear[3u * 300u + 1u], level, 2e-4), "rear voice: surround left", rear[3u * 300u + 1u]);
+    expect(near(rear[3u * 300u + 2u], 0.0, 1e-6), "rear voice: surround right silent", rear[3u * 300u + 2u]);
+    mixer.set_discrete(false);
+    mixer.mix(1.0f);
+    (void)mixer.end_frame();
+    expect(mixer.surround().empty(), "matrix again: nothing apart", static_cast<double>(mixer.surround().size()));
+}
+
 // FIR {1 at 8 samples back}: a delay of 8 samples at 32 kHz, 12 at 48 kHz.
 void test_fir_delay() {
     Game game;
@@ -452,6 +486,7 @@ int main() {
     test_pcm_loop();
     test_effect_delay();
     test_panner();
+    test_discrete_surround();
     test_fir_delay();
     test_iir();
     test_square();
