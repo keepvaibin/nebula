@@ -463,7 +463,7 @@ void JASChannel::initBankDisposeMsgQueue() {
 
 void JASChannel::receiveBankDisposeMsg() {
     void* msg;
-    for (sBankDisposeListSize = 0; sBankDisposeMsgQ.receive(&msg, false); sBankDisposeListSize++) {
+    for (sBankDisposeListSize = 0; sBankDisposeMsgQ.receive(&msg); sBankDisposeListSize++) {
         sBankDisposeList[sBankDisposeListSize] = msg;
     }
 }

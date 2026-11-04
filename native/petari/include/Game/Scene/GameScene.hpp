@@ -13,6 +13,7 @@ public:
 
     virtual ~GameScene();
     virtual void init();
+    virtual void initAfterScenarioChosen();
     virtual void start();
     virtual void update();
     virtual void draw() const;

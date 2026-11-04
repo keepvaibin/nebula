@@ -180,8 +180,11 @@ void GameScene::init() {
     SceneFunction::createStageDataHolder();
     MR::waitEndChangeArchivePlayer();
     SceneFunction::startActorFileLoadCommon();
-    MR::waitSceneInitializeResume();
+    MR::holdSceneInitialize();
+}
 
+// What needs the scenario: the star the player chose (MR::tryResumeSceneInitialize).
+void GameScene::initAfterScenarioChosen() {
     if (MR::isScenarioDecided()) {
         SceneFunction::initAfterScenarioSelected();
         NPCFunction::createNPCData();
@@ -213,10 +216,6 @@ void GameScene::init() {
         MR::setInitializeStateAfterPlacement();
         MR::callMethodAllSceneNameObj(&NameObj::initAfterPlacement);
         SleepControlFunc::initSyncSleepController();
-
-        while (!GameSceneFunction::isLoadDoneScenarioWaveData()) {
-            JASWaveArc::waitLoadDone();
-        }
     }
 }
 

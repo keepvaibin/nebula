@@ -5,17 +5,12 @@
 #include "Game/System/GameThreads.hpp"
 #include "JSystem/JAudio2/JASVoice.hpp"
 #include "JSystem/JAudio2/JASDriverIF.hpp"
-#include "JSystem/JAudio2/JASLoadThread.hpp"
 
 #include "Game/System/NebulaArena.hpp"
 #include "JSystem/JSupport/JSupport.hpp"
 
 #include <cstdlib>
 #include <cstring>
-
-namespace {
-    JASTaskThread* sLoadThread;
-}
 
 JASStream::JASStream() : mPosition(), mLoopCount(), mLoaded(), mCanceled() {
     mUpdateChannel = nullptr;
@@ -60,9 +55,6 @@ void JASStream::init(StreamCallback i_callback, void* i_callbackData) {
     mCallback = i_callback;
     mCallbackData = i_callbackData;
     mCommands.init(mCommandSlots, ARRAY_SIZE(mCommandSlots));
-    if (sLoadThread == nullptr) {
-        sLoadThread = JASLoad::getThreadPointer();
-    }
 }
 
 bool JASStream::prepare(s32 entry) {
@@ -70,47 +62,35 @@ bool JASStream::prepare(s32 entry) {
         return false;
     }
 
-    if (!JASDriver::registerSubFrameCallback(channelProcCallback, this)) {
-        return false;
-    }
-
-    if (!sLoadThread->sendCmdMsg(loadTask, this)) {
-        JASDriver::rejectCallback(channelProcCallback, this);
-        return false;
-    }
-
-    return true;
+    load();
+    return JASDriver::registerSubFrameCallback(channelProcCallback, this);
 }
 
 bool JASStream::start() {
-    return mCommands.send((void*)0, false);
+    return mCommands.send((void*)0);
 }
 
 bool JASStream::stop(u16 param_0) {
-    return mCommands.send((void*)(uintptr_t)(param_0 << 0x10 | 1), false);
+    return mCommands.send((void*)(uintptr_t)(param_0 << 0x10 | 1));
 }
 
 bool JASStream::pause(bool param_0) {
-    return mCommands.send(param_0 ? (void*)2 : (void*)3, false);
+    return mCommands.send(param_0 ? (void*)2 : (void*)3);
 }
 
 bool JASStream::cancel() {
     mCanceled = true;
-    return sLoadThread->sendCmdMsg(finishTask, this);
+    finish();
+    return true;
 }
 
-void JASStream::loadTask(void* i_this) {
-    static_cast< JASStream* >(i_this)->load();
-}
-
-void JASStream::finishTask(void* i_this) {
-    JASStream* _this = static_cast< JASStream* >(i_this);
-    JASDriver::rejectCallback(channelProcCallback, _this);
+void JASStream::finish() {
+    JASDriver::rejectCallback(channelProcCallback, this);
     // Cleared first: the callback tells the game thread it may free this stream.
-    const StreamCallback callback = _this->mCallback;
+    const StreamCallback callback = mCallback;
     if (callback != nullptr) {
-        _this->mCallback = nullptr;
-        callback(CB_START, _this, _this->mCallbackData);
+        mCallback = nullptr;
+        callback(CB_START, this, mCallbackData);
     }
 }
 
@@ -177,7 +157,7 @@ void JASStream::updateChannel(u32 i_callbackType, JASChannel* i_channel, JASVoic
 
         if (!open_channel) {
             mCanceled = true;
-            sLoadThread->sendCmdMsg(finishTask, this);
+            finish();
         }
         break;
     }
@@ -192,7 +172,7 @@ s32 JASStream::channelProc() {
     }
 
     void* msg;
-    while (mCommands.receive(&msg, false)) {
+    while (mCommands.receive(&msg)) {
         switch ((u32)(uintptr_t)msg & 0xff) {
         case 0:
             channelStart();

@@ -17,7 +17,6 @@ namespace JASResArcLoader {
         u32 mBufferSize;
         LoadCallback mCallback;
         uintptr_t mCallbackArg;
-        GameMessageQueue* mMsgQueue;
     };
 
     u32 getResSize(AssetFolder const*, u16);

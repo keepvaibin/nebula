@@ -21,7 +21,6 @@ struct JASWaveArc {
     JASWaveArc();
     bool loadSetup(u32);
     bool eraseSetup();
-    static void loadCallback(void*);
     bool sendLoadCmd();
     bool load(); /* overwritten in OverwriteJAudio */
     bool erase();
@@ -61,6 +60,4 @@ struct JASWaveArc {
     GameMutex mMutex;
 
     // Until an archive has finished loading since the last wait.
-    static void waitLoadDone();
-    static GameEvent sLoadDone;
 };

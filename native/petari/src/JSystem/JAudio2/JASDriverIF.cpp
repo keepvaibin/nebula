@@ -26,12 +26,6 @@ u32 JASDriver::getOutputMode() {
     return JASDriver::JAS_SYSTEM_OUTPUT_MODE;
 }
 
-GameEvent JASDriver::sSubFrameDone;
-
-void JASDriver::waitSubFrame() {
-    sSubFrameDone.wait();
-}
-
 JASCallbackMgr JASDriver::sSyncCallback;
 
 JASCallbackMgr JASDriver::sSubFrameCallback;

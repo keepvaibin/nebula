@@ -10,7 +10,6 @@ namespace JMath {
 
 class AudSystemWrapper;
 class CaptureScreenDirector;
-class FunctionAsyncExecutor;
 class MessageHolder;
 class NameObjHolder;
 class ParticleResourceHolder;
@@ -40,7 +39,6 @@ public:
     void initAudio();
     void initPicture();
     void initNameObj();
-    void initFunctionAsyncExecutor();
     void initResourceHolderManager();
     void initGameController();
     void initPlayerInput();
@@ -54,7 +52,6 @@ public:
     ScreenPreserver* mScreenPreserver;
     AudSystemWrapper* mAudioSystem;
     PlayerInputs* mPlayerInputs;
-    FunctionAsyncExecutor* mFunctionAsyncExecutor;
     MessageHolder* mMessageHolder;
     StarPointerDirector* mStarPointerDirector;
     JMath::TRandom_fast_ mRandom;

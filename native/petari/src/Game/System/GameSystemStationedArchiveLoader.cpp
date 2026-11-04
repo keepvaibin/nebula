@@ -65,7 +65,6 @@ void PlayerHeapHolder::setIsDataMario(bool isDataMario) {
 }
 
 GameSystemStationedArchiveLoader::GameSystemStationedArchiveLoader() : NerveExecutor("\217\355\222\223\203\146\201\133\203\136\217\211\212\372\211\273" /* 常駐データ初期化 */), mHeapHolder() {
-    mDone.init();
     initNerve(GET_NERVE_ANON(GameSystemStationedArchiveLoaderLoadAudio1stWaveData));
 }
 
@@ -79,7 +78,7 @@ bool GameSystemStationedArchiveLoader::isDone() const {
 
 void GameSystemStationedArchiveLoader::waitDone() {
     while (!isDone()) {
-        mDone.wait();
+        update();
     }
 }
 
@@ -114,11 +113,7 @@ void GameSystemStationedArchiveLoader::exeLoadStationedArchivePlayer() {
     if (MR::isFirstStep(this)) {
         mHeapHolder = new PlayerHeapHolder();
 
-        MR::startFunctionAsyncExecute(MR::Functor(this, &GameSystemStationedArchiveLoader::startToLoadStationedArchivePlayer, true),
-                                      "\217\355\222\223\203\212\203\134\201\133\203\130\223\307\202\335\215\236\202\335" /* 常駐リソース読み込み */);
-    }
-
-    if (MR::tryEndFunctionAsyncExecute("\217\355\222\223\203\212\203\134\201\133\203\130\223\307\202\335\215\236\202\335" /* 常駐リソース読み込み */)) {
+        startToLoadStationedArchivePlayer(true);
         createAndAddPlayerArchives(mHeapHolder->mIsDataMario);
 
         if (mHeapHolder != nullptr) {
@@ -130,11 +125,7 @@ void GameSystemStationedArchiveLoader::exeLoadStationedArchivePlayer() {
 
 void GameSystemStationedArchiveLoader::exeLoadStationedArchiveOthers() {
     if (MR::isFirstStep(this)) {
-        MR::startFunctionAsyncExecute(MR::Functor(this, &GameSystemStationedArchiveLoader::startToLoadStationedArchiveOthers),
-                                      "\217\355\222\223\203\212\203\134\201\133\203\130\223\307\202\335\215\236\202\335" /* 常駐リソース読み込み */);
-    }
-
-    if (MR::tryEndFunctionAsyncExecute("\217\355\222\223\203\212\203\134\201\133\203\130\223\307\202\335\215\236\202\335" /* 常駐リソース読み込み */)) {
+        startToLoadStationedArchiveOthers();
         createAndAddOtherArchives();
         setNerve(GET_NERVE_ANON(GameSystemStationedArchiveLoaderLoadStationedArchivePlayer));
     }
@@ -145,7 +136,6 @@ void GameSystemStationedArchiveLoader::exeInitializeGameData() {
     SingletonHolder< HeapMemoryWatcher >::get()->setCurrentHeapToGameHeap();
     GameSystemFunction::setSceneNameObjHolderToNameObjRegister();
     setNerve(GET_NERVE_ANON(GameSystemStationedArchiveLoaderEnd));
-    mDone.signal();
 }
 
 void GameSystemStationedArchiveLoader::exeEnd() {
@@ -155,14 +145,9 @@ void GameSystemStationedArchiveLoader::exeChangeArchivePlayer() {
     if (MR::isFirstStep(this)) {
         mHeapHolder->dispose();
         bool isMario = mHeapHolder->mIsDataMario;
-        MR::startFunctionAsyncExecute(MR::Functor(this, &GameSystemStationedArchiveLoader::startToLoadStationedArchivePlayer, isMario),
-                                      "\203\166\203\214\203\103\203\204\201\133\203\212\203\134\201\133\203\130\223\307\202\335\215\236\202\335" /* プレイヤーリソース読み込み */);
-    }
-
-    if (MR::tryEndFunctionAsyncExecute("\203\166\203\214\203\103\203\204\201\133\203\212\203\134\201\133\203\130\223\307\202\335\215\236\202\335" /* プレイヤーリソース読み込み */)) {
+        startToLoadStationedArchivePlayer(isMario);
         createAndAddPlayerArchives(mHeapHolder->mIsDataMario);
         setNerve(GET_NERVE_ANON(GameSystemStationedArchiveLoaderEnd));
-        mDone.signal();
     }
 }
 

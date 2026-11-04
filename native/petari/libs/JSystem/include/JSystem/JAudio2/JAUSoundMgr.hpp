@@ -19,7 +19,6 @@ public:
     void calc();
     void mixOut();
     void stopSoundID(JAISoundID);
-    void stopSync();
     void stop(u32 fadeTime);
     void initParams();
 

@@ -41,6 +41,8 @@ enum SceneInitializeState {
 
 class GameSystemSceneController {
 public:
+    void holdSceneInitialize();
+    bool resumeSceneInitialize();
     /// @brief Creates a new `GameSystemSceneController`.
     GameSystemSceneController();
 
@@ -105,6 +107,8 @@ public:
     NameObjHolder* mObjHolder;
     Scene* mScene;
     SceneInitializeState mSceneInitializeState;
+    bool mSceneInitializeHeld = false;
+    bool mSceneInitializeDone = false;
     IntermissionScene* mIntermissionScene;
     PlayTimerScene* mPlayTimerScene;
     ScenarioSelectScene* mScenarioSelectScene;

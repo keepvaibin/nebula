@@ -119,6 +119,7 @@ void GameSystemSceneController::checkRequestAndChangeScene() {
 }
 
 void GameSystemSceneController::initializeScene() {
+    MR::CurrentHeapRestorer restorer(NebulaArena::currentSlot());
     mSceneInitializeState = SceneInitializeState_Init;
 
     if (SingletonHolder< HeapMemoryWatcher >::get()->mFileCacheHeap == nullptr || !isSameAtNextSceneAndStage()) {
@@ -141,10 +142,32 @@ void GameSystemSceneController::initializeScene() {
     mScene->initSceneObjHolder();
     mScene->init();
 
+    if (!mSceneInitializeHeld) {
+        SceneFunction::allocateDrawBufferActorList();
+        mSceneInitializeDone = true;
+    }
+}
+
+// The scene's load goes no further until a scenario is chosen (GameScene::init).
+void GameSystemSceneController::holdSceneInitialize() {
+    mSceneInitializeHeld = true;
+}
+
+bool GameSystemSceneController::resumeSceneInitialize() {
+    if (!mSceneInitializeHeld) {
+        return false;
+    }
+    MR::CurrentHeapRestorer restorer(NebulaArena::currentSlot());
+    SingletonHolder< HeapMemoryWatcher >::get()->setCurrentHeapToSceneHeap();
+    mSceneInitializeHeld = false;
+    mScene->initAfterScenarioChosen();
     SceneFunction::allocateDrawBufferActorList();
+    mSceneInitializeDone = true;
+    return true;
 }
 
 void GameSystemSceneController::destroyScene() {
+    MR::CurrentHeapRestorer restorer(NebulaArena::currentSlot());
     bool stopSound = isStopSound();
 
     delete mScene;
@@ -349,10 +372,8 @@ void GameSystemSceneController::exeWaitDrawDoneScene() {
 void GameSystemSceneController::exeDestroyScene() {
     if (mSpine->mStep == 0) {
         mIntermissionScene->setCurrentSceneControllerState("[destroy Scene: %s]", mCurrSceneControlInfo.mScene);
-        MR::startFunctionAsyncExecute(MR::Functor(this, &GameSystemSceneController::destroyScene), "\203\126\201\133\203\223\224\152\212\374" /* シーン破棄 */);
-    }
+        destroyScene();
 
-    if (MR::tryEndFunctionAsyncExecute("\203\126\201\133\203\223\224\152\212\374" /* シーン破棄 */)) {
         const Nerve* pNerve = GET_NERVE(GameSystemSceneController, GameSystemSceneControllerChangeWaveBank);
 
         if (isCurrentNerve(GET_NERVE(GameSystemSceneController, GameSystemSceneControllerDestroySceneForDestroy))) {
@@ -380,10 +401,11 @@ void GameSystemSceneController::exeChangeWaveBank() {
 void GameSystemSceneController::exeInitializeScene() {
     if (mSpine->mStep == 0) {
         mIntermissionScene->setCurrentSceneControllerState("[initialize Scene: %s]", mNextSceneControlInfo.mScene);
-        MR::startFunctionAsyncExecute(MR::Functor(this, &GameSystemSceneController::initializeScene), "\203\126\201\133\203\223\217\211\212\372\211\273" /* シーン初期化 */);
+        mSceneInitializeDone = false;
+        initializeScene();
     }
 
-    if (MR::tryEndFunctionAsyncExecute("\203\126\201\133\203\223\217\211\212\372\211\273" /* シーン初期化 */)) {
+    if (mSceneInitializeDone) {
         mSceneInitializeState = SceneInitializeState_End;
         mIntermissionScene->setCurrentSceneControllerState("[scene ready]");
 

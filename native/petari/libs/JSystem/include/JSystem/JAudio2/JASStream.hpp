@@ -4,7 +4,6 @@
 
 #include "Game/System/GameAssets.hpp"
 #include "Game/System/GameThreads.hpp"
-#include "JSystem/JAudio2/JASTaskThread.hpp"
 
 class JASChannel;
 class JAISound;
@@ -43,8 +42,7 @@ public:
     bool stop(u16);
     bool pause(bool);
     bool cancel();
-    static void loadTask(void*);
-    static void finishTask(void*);
+    void finish();
     void load();
     static s32 channelProcCallback(void*);
     static void channelCallback(u32, JASChannel*, JASVoice*, void*);

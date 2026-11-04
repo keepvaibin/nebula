@@ -1,8 +1,6 @@
 #include "JSystem/JAudio2/JASWaveArcLoader.hpp"
 #include "Game/System/GameThreads.hpp"
-#include "JSystem/JAudio2/JASLoadThread.hpp"
 #include "JSystem/JAudio2/JASMutex.hpp"
-#include "JSystem/JAudio2/JASTaskThread.hpp"
 
 #include <cstring>
 #include <stdint.h>
@@ -22,12 +20,6 @@ void JASWaveArcLoader::setCurrentDir(char const* dir) {
 
 char* JASWaveArcLoader::getCurrentDir() {
     return sCurrentDir;
-}
-
-GameEvent JASWaveArc::sLoadDone;
-
-void JASWaveArc::waitLoadDone() {
-    sLoadDone.wait();
 }
 
 JASWaveArc::JASWaveArc() {
@@ -70,35 +62,19 @@ bool JASWaveArc::eraseSetup() {
     return true;
 }
 
-void JASWaveArc::loadCallback(void* this_) {
-    loadCallbackParams* tmp = (loadCallbackParams*)this_;
-    JASWaveArc* wavArc = tmp->mWavArc;
-    const u8* const pData = static_cast< const u8* >(GameAssets::map(tmp->mEntryNum));
-    if (pData == nullptr) {
-        return;
-    }
-    {
-        JASMutexLock mutexLock(&wavArc->mMutex);
-        wavArc->mData = pData;
-    }
-    if (wavArc->loadSetup(tmp->_C)) {
-        wavArc->onLoadDone();
-        sLoadDone.signal();
-    }
-}
-
 bool JASWaveArc::sendLoadCmd() {
     JASMutexLock mutexLock(&mMutex);
     _48 = 0;
     mStatus = 1;
-    loadCallbackParams commandInfo;
-    commandInfo.mWavArc = this;
-    commandInfo.mEntryNum = mEntryNum;
-    commandInfo._C = ++_58;
-
-    if (JASLoad::getThreadPointer()->sendCmdMsg(loadCallback, &commandInfo, sizeof(commandInfo)) == 0) {
+    const u32 serial = ++_58;
+    const u8* const pData = static_cast< const u8* >(GameAssets::map(mEntryNum));
+    if (pData == nullptr) {
         eraseSetup();
         return false;
+    }
+    mData = pData;
+    if (loadSetup(serial)) {
+        onLoadDone();
     }
     return true;
 }

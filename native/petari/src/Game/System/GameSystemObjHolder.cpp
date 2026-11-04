@@ -8,7 +8,6 @@
 #include "Game/System/AssetFolder.hpp"
 #include "Game/System/ErrorMessageArchive.hpp"
 #include "Game/System/FileLoader.hpp"
-#include "Game/System/FunctionAsyncExecutor.hpp"
 #include "Game/System/HeapMemoryWatcher.hpp"
 #include "Game/System/Language.hpp"
 #include "Game/System/MessageHolder.hpp"
@@ -24,8 +23,7 @@
 #include "Game/System/NebulaFrameClock.hpp"
 
 GameSystemObjHolder::GameSystemObjHolder()
-    : mObjHolder(), mParticleResHolder(), mPictureSpan(), mCaptureScreenDirector(), mScreenPreserver(), mAudioSystem(), mPlayerInputs(),
-      mFunctionAsyncExecutor(), mMessageHolder(), mStarPointerDirector(), mRandom(0), mLanguage(MR::getDecidedLanguageFromIPL()) {
+    : mObjHolder(), mParticleResHolder(), mPictureSpan(), mCaptureScreenDirector(), mScreenPreserver(), mAudioSystem(), mPlayerInputs(), mMessageHolder(), mStarPointerDirector(), mRandom(0), mLanguage(MR::getDecidedLanguageFromIPL()) {
     initStore();
     initNameObj();
     MR::createAndAddArchive(AssetFolder::mount("/NebulaData/ErrorMessageArchive.arc", MR::getStationedHeap()), MR::getStationedHeap(),
@@ -62,7 +60,6 @@ void GameSystemObjHolder::init() {
     initPicture();
     initResourceHolderManager();
     initMessageResource();
-    initFunctionAsyncExecutor();
     initGameController();
     initDisplay();
 }
@@ -76,7 +73,6 @@ void GameSystemObjHolder::createAudioSystem() {
 void GameSystemObjHolder::update() {
     mAudioSystem->updateRhythm();
     mPlayerInputs->update();
-    mFunctionAsyncExecutor->update();
     mStarPointerDirector->update();
 }
 
@@ -118,10 +114,6 @@ void GameSystemObjHolder::initNameObj() {
 
     SingletonHolder< NameObjRegister >::init();
     SingletonHolder< NameObjRegister >::get()->setCurrentHolder(mObjHolder);
-}
-
-void GameSystemObjHolder::initFunctionAsyncExecutor() {
-    mFunctionAsyncExecutor = new FunctionAsyncExecutor();
 }
 
 void GameSystemObjHolder::initResourceHolderManager() {
