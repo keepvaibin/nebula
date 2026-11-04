@@ -6,6 +6,11 @@
 
 #include "galaxy/render/curved_surfaces.h"
 
+#include <utility>
+#include <map>
+#include <iostream>
+#include <cmath>
+#include <algorithm>
 #include <cstring>
 #include <cstdio>
 #include <memory>
@@ -33,7 +38,120 @@ Array floats(ArrayKind kind, std::uint32_t per, std::uint32_t count) {
 
 }  // namespace
 
+namespace {
+
+// Two triangles of a cylinder's side sharing an edge, as separate vertices of the same place (a texture seam): the edge's new
+// points stand in the same place from both, the curve bulges, and a flat pair stays as it is.
+int test_refine_curved() {
+    using galaxy::render::RenderVertex;
+    const auto corner = [](float x, float y, float z, float nx, float ny, float nz, std::uint32_t place) {
+        RenderVertex v;
+        std::memset(&v, 0, sizeof(v));
+        v.position[0] = x;
+        v.position[1] = y;
+        v.position[2] = z;
+        v.normal[0] = nx;
+        v.normal[1] = ny;
+        v.normal[2] = nz;
+        v.curve[0] = galaxy::render::curved::pack_normal({nx, ny, nz});
+        v.curve[2] = place | 0xFFFFu << 16u;
+        v.mtx_indices[2] = 0xFFFFu << 16u;
+        return v;
+    };
+    const float root = std::sqrt(0.5f);
+    // A quarter turn of radius 100, in two triangles; the second has its own copies of the shared edge's ends.
+    const std::vector<RenderVertex> bent = {corner(100.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0u), corner(100.0f * root, 0.0f, 100.0f * root, root, 0.0f, root, 1u),
+                                            corner(100.0f, 50.0f, 0.0f, 1.0f, 0.0f, 0.0f, 2u), corner(100.0f * root, 0.0f, 100.0f * root, root, 0.0f, root, 1u),
+                                            corner(100.0f * root, 50.0f, 100.0f * root, root, 0.0f, root, 3u), corner(100.0f, 50.0f, 0.0f, 1.0f, 0.0f, 0.0f, 2u)};
+    const std::vector<std::uint16_t> indices = {0u, 1u, 2u, 3u, 4u, 5u};
+    std::vector<RenderVertex> out;
+    std::vector<std::uint16_t> out_indices;
+    if (!galaxy::render::shapes::refine_curved(bent, indices, 0.4f, out, out_indices) || out.size() <= bent.size() ||
+        out_indices.size() % 3u != 0u) {
+        std::cerr << "refine: nothing refined\n";
+        return 1;
+    }
+    // Every point on the shared edge's line (from corners 1 and 2, and from their copies 3 and 5) exists from both sides.
+    float bulge = 0.0f;
+    for (const RenderVertex& v : out) {
+        const float radius = std::sqrt(v.position[0] * v.position[0] + v.position[2] * v.position[2]);
+        bulge = std::max(bulge, radius);
+    }
+    const float chord_middle = 100.0f * std::cos(3.14159265f / 8.0f);
+    if (!(bulge > chord_middle)) {
+        std::cerr << "refine: no bulge\n";
+        return 1;
+    }
+    std::vector<RenderVertex> flat = bent;
+    for (RenderVertex& v : flat) {
+        v.curve[0] = 0u;
+        v.curve[1] = 0u;
+    }
+    if (!galaxy::render::shapes::refine_curved(flat, indices, 0.4f, out, out_indices) || out.size() != flat.size() ||
+        out_indices.size() != indices.size()) {
+        std::cerr << "refine: a flat group changed\n";
+        return 1;
+    }
+    // Two triangles sharing an edge by index: the same new points, one set.
+    const std::vector<RenderVertex> shared = {bent[0], bent[1], bent[2], bent[4]};
+    const std::vector<std::uint16_t> shared_indices = {0u, 1u, 2u, 1u, 3u, 2u};
+    if (!galaxy::render::shapes::refine_curved(shared, shared_indices, 0.4f, out, out_indices)) {
+        return 1;
+    }
+    std::vector<std::uint32_t> uses(out.size(), 0u);
+    for (const std::uint16_t i : out_indices) {
+        if (i >= out.size()) {
+            std::cerr << "refine: index out of range\n";
+            return 1;
+        }
+        ++uses[i];
+    }
+    for (std::size_t i = 0u; i < out.size(); ++i) {
+        if (uses[i] == 0u) {
+            std::cerr << "refine: a point no triangle uses\n";
+            return 1;
+        }
+    }
+    // No open edge: every edge is used twice, or lies on the outline of the pair (the four outer sides).
+    std::map<std::pair<std::uint32_t, std::uint32_t>, int> edges;
+    for (std::size_t n = 0u; n + 2u < out_indices.size(); n += 3u) {
+        for (unsigned k = 0u; k < 3u; ++k) {
+            const std::uint32_t a = out_indices[n + k];
+            const std::uint32_t b = out_indices[n + (k + 1u) % 3u];
+            ++edges[{std::min(a, b), std::max(a, b)}];
+        }
+    }
+    const auto on_outline = [&](const RenderVertex& a, const RenderVertex& b) {
+        const auto outer = [](const RenderVertex& v) {
+            const float radius_flat = std::sqrt(v.position[0] * v.position[0] + v.position[2] * v.position[2]);
+            return v.position[1] == 0.0f || v.position[1] == 50.0f || radius_flat == 0.0f;
+        };
+        return outer(a) && outer(b);
+    };
+    for (const auto& [edge, count] : edges) {
+        if (count == 1 && !on_outline(out[edge.first], out[edge.second])) {
+            // Sides of constant x-z at the pair's two ends are the outline as well.
+            const float dx = out[edge.first].position[0] - out[edge.second].position[0];
+            const float dz = out[edge.first].position[2] - out[edge.second].position[2];
+            if (std::abs(dx) > 1e-3f || std::abs(dz) > 1e-3f) {
+                std::cerr << "refine: an open edge inside the pair\n";
+                return 1;
+            }
+        }
+        if (count > 2) {
+            std::cerr << "refine: an edge used " << count << " times\n";
+            return 1;
+        }
+    }
+    return 0;
+}
+
+}  // namespace
+
 int main() {
+    if (test_refine_curved() != 0) {
+        return 1;
+    }
     bool passed = true;
     const Array positions = floats(ArrayKind::Position, 3u, 4u);
     const Array normals = floats(ArrayKind::Normal, 3u, 4u);
