@@ -120,6 +120,7 @@ add_library(galaxy_render_vk STATIC
     ${rt}/render/vk/compile_journal.cpp
     ${rt}/render/vk/renderer_vk.cpp
     ${rt}/render/vk/ambient_occlusion_vk.cpp
+    ${rt}/render/vk/temporal_upscaler_vk.cpp
     ${rt}/render/vk/scene_camera_vk.cpp
     ${rt}/render/vk/renderer_vk_scene.cpp
     ${rt}/render/vk/renderer_vk_replay.cpp

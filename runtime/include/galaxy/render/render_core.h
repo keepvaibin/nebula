@@ -80,7 +80,8 @@ namespace galaxy::render {
     std::uint8_t mip_levels,
     std::uint8_t lod_shift_x16 = 0u,
     bool arbitrary = false,
-    std::uint8_t mip_lines_log2_x32 = 0u) noexcept;
+    std::uint8_t mip_lines_log2_x32 = 0u,
+    int scene_bias_x32 = 0) noexcept;
 
 // FNV-1a step over a whole 64-bit word (seed with kMix64OffsetBasis). Only bucket selection:
 // each key's operator== decides identity.
@@ -1028,6 +1029,8 @@ private:
     // RenderConfig::curved_surfaces where the renderer tessellates, sampled at each frame start; whether the last
     // flushed draw is a curved surface (its keys carry kVsKeyCurved and the patch topology).
     bool curved_surfaces_ = false;
+    // A temporal scene's texture level shift in 32nds, from its render scale to the output's (0 outside one).
+    int scene_mip_bias_x32_ = 0;
     bool curved_refine_ = false;  // the same without patch stages: each group refined once (shapes::refine_curved)
     // Model units an edge's arc may stand off its chords: Mario stands about 160 tall.
     static constexpr float kCurveRefineTolerance = 0.4f;
@@ -1097,6 +1100,7 @@ private:
         std::array<TextureMap, kMaxTextureMaps> maps{};
         std::uint32_t lit_translucent = 0;
         std::uint8_t map_mask = 0;
+        int scene_bias_x32 = 0;
 
         [[nodiscard]] bool operator==(const TextureBindingKey& other) const noexcept = default;
     };
@@ -1207,6 +1211,7 @@ private:
             const TextureBindingKey& key) const noexcept {
             std::uint64_t hash = mix64(kMix64OffsetBasis, key.map_mask);
             hash = mix64(hash, key.lit_translucent);
+            hash = mix64(hash, static_cast<std::uint64_t>(static_cast<std::int64_t>(key.scene_bias_x32)));
             for (const TextureMap& t : key.maps) {
                 const TextureSampler& m = t.mode;
                 hash = mix64(hash, t.texture);

@@ -22,13 +22,13 @@ int main() {
         FrameRateCaps sixty{60};
         check(interpolation_modes(sixty) == std::vector{Interpolation::kOff}, "60 Hz has no interpolation target");
         FrameRateCaps high{144};
-        check(interpolation_targets(Interpolation::kNative, high) == std::vector<unsigned>{120, 0}, "144 Hz target choices");
+        check(interpolation_targets(Interpolation::kNative, high) == std::vector<unsigned>{75, 90, 100, 120, 0}, "144 Hz target choices");
         config.max_fps = 165;
         normalize_interpolation(config, high);
         check(config.max_fps == 0, "target clamps to display rate");
-        config.max_fps = 90;
+        config.max_fps = 70;
         normalize_interpolation(config, high);
-        check(config.max_fps == 120, "target uses lowest available rate");
+        check(config.max_fps == 75, "target uses lowest available rate");
         config.max_fps = 50;
         normalize_interpolation(config, high);
         check(config.max_fps == 60, "base frame rate snaps to 60");

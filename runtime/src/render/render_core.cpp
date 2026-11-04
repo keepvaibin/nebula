@@ -76,7 +76,8 @@ std::uint32_t pack_sampler_key(
     std::uint8_t mip_levels,
     std::uint8_t lod_shift_x16,
     bool arbitrary,
-    std::uint8_t mip_lines_log2_x32) noexcept {
+    std::uint8_t mip_lines_log2_x32,
+    int scene_bias_x32) noexcept {
     std::uint32_t min_filter =
         min_filter_code(mode) & 0x7u;
     std::uint32_t min_lod =
@@ -95,10 +96,13 @@ std::uint32_t pack_sampler_key(
             static_cast<std::uint32_t>(mip_levels - 1u) * 16u);
         full_chain = true;
     }
-    std::uint32_t lod_bias =
-        static_cast<std::uint32_t>(static_cast<std::uint8_t>(lod_bias_x32(mode.lod_bias))) & 0xFFu;
+    // The levels only a texture with levels has: a scene rendered under the output reads them for the output's pixels.
+    const int authored_bias_x32 = static_cast<int>(static_cast<std::int8_t>(lod_bias_x32(mode.lod_bias))) +
+                                  (source_mips || full_chain ? scene_bias_x32 : 0);
+    std::uint32_t lod_bias = static_cast<std::uint32_t>(static_cast<std::uint8_t>(
+        static_cast<std::int8_t>(std::clamp(authored_bias_x32, -128, 127))));
     if (arbitrary && source_mips) {
-        const int bias = static_cast<int>(static_cast<std::int8_t>(lod_bias_x32(mode.lod_bias))) +
+        const int bias = authored_bias_x32 +
                          static_cast<int>(mip_lines_log2_x32) - 2 * static_cast<int>(lod_shift_x16);
         lod_bias = static_cast<std::uint32_t>(static_cast<std::uint8_t>(
             static_cast<std::int8_t>(std::clamp(bias, -128, 127))));
@@ -1716,6 +1720,20 @@ void RenderCore::on_scene_marker(SceneMarker marker, const std::array<float, 12>
         }
         temporal_scene_ = renderer_.scene_temporal_begin(
             scene_jitter_px_[0], scene_jitter_px_[1]);
+        {
+            // Rendered under the output, the scene's textures keep the output's detail: the upscaler takes it from the
+            // jittered samples of many frames.
+            const unsigned output_width = renderer_.temporal_output_width();
+            const unsigned render_width = renderer_.frame_map().width;
+            int bias = 0;
+            if (temporal_scene_ && output_width > render_width && render_width != 0u) {
+                bias = static_cast<int>(std::lround(32.0 * std::log2(static_cast<double>(render_width) / output_width)));
+            }
+            if (bias != scene_mip_bias_x32_) {
+                scene_mip_bias_x32_ = bias;
+                texture_bindings_dirty_ = true;
+            }
+        }
         // A temporal scene writes the motion, and so does one the ray tracing engine lights (its histories follow
         // moving surfaces by it) without a temporal upscaler: unjittered, the transform history behind it.
         motion_scene_ = renderer_.begin_motion_scene();
@@ -1782,6 +1800,10 @@ void RenderCore::on_scene_marker(SceneMarker marker, const std::array<float, 12>
         temporal_scene_ = false;
         motion_scene_ = false;
         history_scene_ = false;
+        if (scene_mip_bias_x32_ != 0) {
+            scene_mip_bias_x32_ = 0;
+            texture_bindings_dirty_ = true;
+        }
         current_replay_record_ = -1;
         current_ps_record_ = -1;
         matrices_.set_load_tracking(false);
@@ -3863,6 +3885,7 @@ RenderCore::TextureBindingKey RenderCore::capture_texture_binding_key(
     std::uint8_t map_mask) const {
     TextureBindingKey key{};
     key.map_mask = map_mask;
+    key.scene_bias_x32 = scene_mip_bias_x32_;
     for (unsigned m = 0; m < kMaxTextureMaps; ++m) {
         if ((map_mask & (1u << m)) == 0u) {
             continue;
@@ -3910,7 +3933,7 @@ std::array<std::uint32_t, kMaxTextureMaps> RenderCore::capture_sampler_keys(
         const TextureHandle& handle = handles[map];
         keys[map] = pack_sampler_key(
             draw_state_.texture[map].mode, handle.generated_mips, handle.mip_levels,
-            handle.lod_shift_x16, handle.lod_arbitrary, mip_lines_log2_x32);
+            handle.lod_shift_x16, handle.lod_arbitrary, mip_lines_log2_x32, scene_mip_bias_x32_);
     }
     // Unused slots still get valid zero-key descriptors, but cannot fragment
     // the table cache. map_mask includes both direct and indirect sampling.
@@ -4209,7 +4232,9 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         const bool candidate = motion_scene_ &&
             topology_key == static_cast<std::uint8_t>(gpu::kTopologyTypeTriangle) &&
             (bb & ((1u << 8) | dual_bit)) == 0u && (bb & (1u << 25)) != 0u;
-        const bool writer = candidate && (bb & 1u) == 0u;
+        // A pass over the screen (no depth test: the fill between the scene's opaque models and its shadows) is no surface:
+        // it leaves the motion the surfaces wrote.
+        const bool writer = candidate && (bb & 1u) == 0u && (render_state_key_.zmode_bits & 1u) != 0u;
         const bool reactive = candidate && (bb & 1u) != 0u;
         // Dual-source and constant alpha as the key builders made them, but for a reactive draw drawn single-source.
         if (single_source) {

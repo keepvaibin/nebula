@@ -21,12 +21,15 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
     char text[96]{};
     rows.push_back({"RESOLUTION", {}, nullptr, {}, true});
     {
-        static constexpr const char* kUpscalers[] = {"OFF", "FSR 1", "FSR 3", "DLSS"};
+        static constexpr const char* kUpscalers[] = {"OFF", "FSR 1", "FSR 3", "DLSS", "XESS"};
         const std::vector<unsigned>& choices = state.upscalers;
         const bool offered = std::find(choices.begin(), choices.end(), render.upscaler) != choices.end();
-        std::string value = kUpscalers[offered ? std::min(render.upscaler, 3u) : 1u];
+        std::string value = kUpscalers[offered ? std::min(render.upscaler, 4u) : 1u];
         if (offered && render.upscaler == 3u && !state.dlss_supported) {
             value += state.dlss_installed ? " (AFTER RESTART)" : " (DOWNLOAD)";
+        }
+        if (offered && render.upscaler == 4u && !state.xess_supported) {
+            value += state.xess_installed ? " (AFTER RESTART)" : " (DOWNLOAD)";
         }
         rows.push_back({"UPSCALING", value,
                         [&host](RenderConfig& draft, int delta) {
@@ -39,7 +42,7 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
                                                                    static_cast<unsigned>(options.size()), delta)];
                             normalize_interpolation(draft, host.query(draft).frame_rates);
                         },
-                        "DLSS AND FSR 3 RENDER FEWER PIXELS AND REBUILD A SHARP IMAGE"});
+                        "DLSS, FSR 3 AND XESS RENDER FEWER PIXELS AND REBUILD A SHARP IMAGE"});
     }
     const unsigned render_percent = state.render_percent;
     // Ray tracing replaces MSAA, ambient occlusion and the lighting modes: their rows are hidden while it is on.
@@ -51,11 +54,11 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
         static constexpr const char* kSpatial[] = {"NATIVE", "QUALITY", "BALANCED", "PERFORMANCE", "ULTRA PERFORMANCE"};
         const bool temporal = render.upscaler >= 2u;
         const unsigned quality = temporal ? std::min(render.temporal_quality, 4u) : std::min(render.spatial_quality, 4u);
-        const unsigned upscaler = std::min(render.upscaler, 3u);
+        const unsigned upscaler = std::min(render.upscaler, 4u);
         std::snprintf(text, sizeof(text), "%s (%u%%)",
-                      upscaler == 3u ? kDlss[quality] : upscaler == 2u ? kTemporal[quality] : kSpatial[quality],
+                      upscaler == 3u ? kDlss[quality] : upscaler >= 2u ? kTemporal[quality] : kSpatial[quality],
                       render_percent);
-        rows.push_back({upscaler == 3u ? "DLSS MODE" : upscaler == 2u ? "FSR 3 MODE" : "QUALITY MODE", text,
+        rows.push_back({upscaler == 4u ? "XESS MODE" : upscaler == 3u ? "DLSS MODE" : upscaler == 2u ? "FSR 3 MODE" : "QUALITY MODE", text,
                         [&host](RenderConfig& draft, int delta) {
                             if (draft.upscaler >= 2u) {
                                 draft.temporal_quality = settings_step(std::min(draft.temporal_quality, 4u), 5u, delta);
@@ -92,7 +95,7 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
     if (!rt_on) {
         const unsigned samples = std::bit_floor(std::clamp(render.msaa_samples, 1u, 8u));
         std::string value = samples <= 1u ? "OFF" : std::to_string(samples) + "X";
-        if (samples > 1u && (render.upscaler == 2u || render.upscaler == 3u)) value += " (OFF WITH DLSS / FSR 3)";
+        if (samples > 1u && render.upscaler >= 2u) value += " (OFF WITH TEMPORAL UPSCALING)";
         rows.push_back({"MSAA", value,
                         [&host](RenderConfig& draft, int delta) {
                             const unsigned index = static_cast<unsigned>(

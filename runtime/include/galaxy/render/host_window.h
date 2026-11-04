@@ -107,17 +107,26 @@ enum class FilePick { Miis, ModArchives, ModFolders };
 void pick_files(FilePick kind, std::function<void(std::vector<std::filesystem::path>)> done);
 void open_folder(const std::filesystem::path& folder);
 struct UpscalerCaps {
-    bool dlss = false, frame_generation = false, frame_generation_dynamic = false;
+    bool dlss = false, xess = false, frame_generation = false, frame_generation_dynamic = false;
     unsigned frame_generation_max = 0, frames_presented = 1;
 };
 [[nodiscard]] UpscalerCaps upscaler_caps() noexcept;
 [[nodiscard]] unsigned dlss_min_width(unsigned quality, unsigned width, unsigned height) noexcept;
 [[nodiscard]] bool launcher_available();
 [[nodiscard]] bool dlss_files_present();
+[[nodiscard]] bool xess_files_present();
 [[nodiscard]] bool frame_generation_files_present();
-[[nodiscard]] bool start_dlss_install();
-enum class DlssInstall { Running, Succeeded, Closed, Failed };
-[[nodiscard]] DlssInstall poll_dlss_install();
+// DLSS (upscaler 3) or XeSS (upscaler 4) from its maker's release, on a thread of its own.
+[[nodiscard]] unsigned vendor_megabytes(unsigned upscaler);
+[[nodiscard]] bool start_vendor_install(unsigned upscaler);
+void cancel_vendor_install();
+enum class VendorInstall { Running, Done, Canceled, Failed };
+// `percent`: of what it has to read.
+[[nodiscard]] VendorInstall poll_vendor_install(unsigned& percent);
+// The maker's license, read from the release.
+void fetch_vendor_license(unsigned upscaler);
+enum class VendorLicense { Loading, Ready, Failed };
+[[nodiscard]] VendorLicense vendor_license(std::string& text);
 [[nodiscard]] bool restart_game(bool record);
 
 extern std::atomic<bool> ray_tracing_offered;  // the RAY TRACING row is offered

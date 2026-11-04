@@ -70,5 +70,9 @@ public:
     unsigned max_render_width, unsigned max_render_height,
     unsigned max_output_width, unsigned max_output_height);
 
+// Intel XeSS Super Resolution (xess_upscaler.cpp, the library from xess_library.h). quality: the temporal_quality row. Null
+// without the library or when the device refuses.
+[[nodiscard]] std::unique_ptr<TemporalUpscaler> create_xess_upscaler(ID3D12Device* device, unsigned output_width,
+                                                                     unsigned output_height, unsigned quality);
 
 }  // namespace galaxy::render
