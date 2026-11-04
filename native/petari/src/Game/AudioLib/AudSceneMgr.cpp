@@ -5,6 +5,7 @@
 #include "Game/AudioLib/AudWrap.hpp"
 #include "Game/RhythmLib/AudRhythmWrap.hpp"
 #include "Game/Speaker/SpkSystem.hpp"
+#include "Game/System/NebulaMods.hpp"
 #include <JSystem/JAudio2/JAUSectionHeap.hpp>
 
 namespace {
@@ -246,6 +247,16 @@ void AudSceneMgr::loadStageResource(const AudSceneSoundInfo* pSoundInfo) {
         return;
     }
 
+    // With mods on, any object can be anywhere, so each stage has every object's sounds. A bank comes once and stays.
+    if (NebulaMods::hasCode()) {
+        for (u32 set = 0; set < sizeof(::cSeWaveSet) / sizeof(::cSeWaveSet[0]); set++) {
+            loadWaveSetOnce(::cSeWaveSet[set], 4);
+        }
+        for (u32 set = 0; set < sizeof(::cSeScenarioWaveSet) / sizeof(::cSeScenarioWaveSet[0]); set++) {
+            loadWaveSetOnce(::cSeScenarioWaveSet[set], 4);
+        }
+    }
+
     s32 bgmWaveSetId = ::cWaveSetInfo[pSoundInfo->mStageId][0];
     s32 seWaveSetId = ::cWaveSetInfo[pSoundInfo->mStageId][1];
     const s8* bgmWaveSet = ::cBgmWaveSet[bgmWaveSetId];
@@ -391,13 +402,17 @@ void AudSceneMgr::eraseLastBgmWaveSet() {
     const s8* bgmWaveSet = ::cBgmWaveSet[mBgmWaveSetId];
 
     for (s32 i = 2 - 1; i >= 0; i--) {
-        if (bgmWaveSet[i] >= 0) {
+        if (bgmWaveSet[i] >= 0 && !isKeptWave(bgmWaveSet[i])) {
             mSectionHeap->eraseWaveArc(bgmWaveSet[i]);
         }
     }
 }
 
 void AudSceneMgr::eraseLastSeWaveSet() {
+    if (NebulaMods::hasCode()) {
+        return;
+    }
+
     const s8* seWaveSet = ::cSeWaveSet[mSeWaveSetId];
 
     for (s32 i = 4 - 1; i >= 0; i--) {
@@ -412,6 +427,10 @@ void AudSceneMgr::eraseLastSeScenarioWaveSet() {
         return;
     }
 
+    if (NebulaMods::hasCode()) {
+        return;
+    }
+
     const s8* seWaveSet = ::cSeScenarioWaveSet[mSeScenarioWaveSetId];
 
     for (s32 i = 4 - 1; i >= 0; i--) {
@@ -423,10 +442,28 @@ void AudSceneMgr::eraseLastSeScenarioWaveSet() {
 
 void AudSceneMgr::loadWaveSet(const s8* pWaveSet, s32 numItems) {
     for (s32 i = 0; i < numItems; i++) {
-        if (pWaveSet[i] >= 0) {
+        if (pWaveSet[i] >= 0 && !mSectionHeap->isWaveLoaded(pWaveSet[i], 0)) {
             mSectionHeap->loadWaveArc(pWaveSet[i]);
         }
     }
+}
+
+void AudSceneMgr::loadWaveSetOnce(const s8* pWaveSet, s32 numItems) {
+    loadWaveSet(pWaveSet, numItems);
+}
+
+bool AudSceneMgr::isKeptWave(s32 wave) const {
+    if (!NebulaMods::hasCode()) {
+        return false;
+    }
+    for (u32 set = 0; set < sizeof(::cSeWaveSet) / sizeof(::cSeWaveSet[0]); set++) {
+        for (s32 i = 0; i < 4; i++) {
+            if (::cSeWaveSet[set][i] == wave) {
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 void AudSceneMgr::setPlayerModeMario() {

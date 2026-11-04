@@ -8,6 +8,7 @@
 #include "Game/MapObj/Coin.hpp"
 #include "Game/MapObj/YellowChip.hpp"
 #include "Game/Util.hpp"
+#include "Game/System/NebulaMods.hpp"
 
 namespace NrvTreasureBoxCracked {
     NEW_NERVE(TreasureBoxCrackedNrvWait, TreasureBoxCracked, Wait);
@@ -316,6 +317,18 @@ void TreasureBoxCracked::initItem(const JMapInfoIter& rIter) {
         }
 
         return;
+    }
+
+    // A mod may have a box hold something else of the kinds a box holds.
+    static const char* const cItemTypeNames[] = {nullptr, "Coin", "YellowChip", "BlueChip", "KinokoOneUp", "KinokoLifeUp", "AirBubble"};
+    if (mItemType >= 1 && mItemType <= 6) {
+        const char* pHeld = NebulaMods::objectBecomes(NEBULA_OBJECTS_TREASURE_BOX, cItemTypeNames[mItemType]);
+        for (s32 i = 1; i <= 6; i++) {
+            if (pHeld != nullptr && MR::isEqualString(pHeld, cItemTypeNames[i])) {
+                mItemType = i;
+                break;
+            }
+        }
     }
 
     if (mItemType == 1) {

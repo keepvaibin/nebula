@@ -32,6 +32,7 @@
 #include <JSystem/J3DGraphBase/J3DMaterial.hpp>
 #include <JSystem/J3DGraphBase/J3DTexture.hpp>
 #include "Game/System/NebulaArena.hpp"
+#include "Game/System/NebulaMods.hpp"
 #include <JSystem/JUtility/JUTNameTab.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <cstring>
@@ -85,6 +86,20 @@ void MarioActor::initDrawAndModel() {
     initFireBall();
 
     _3D2 |= 0x4;
+
+    // With mods on, any power-up can be given anywhere, not only where a level placed its item.
+    if (NebulaMods::hasCode()) {
+        static const char* const cPowerUpArchives[] = {"BeeMarioWing", "IceMarioHandL", "IceMarioHandR", "InvincibleMarioHandL", "InvincibleMarioHandR"};
+        static const char* const cMario[] = {"BeeMario", "HopperMario", "IceMario", "InvincibleMario", "TeresaMario", "MarioTornado"};
+        static const char* const cLuigi[] = {"BeeLuigi", "HopperLuigi", "IceLuigi", "InvincibleLuigi", "TeresaLuigi", "LuigiTornado"};
+        for (u32 i = 0; i < sizeof(cPowerUpArchives) / sizeof(cPowerUpArchives[0]); i++) {
+            MR::mountAsyncArchiveByObjectOrLayoutName(cPowerUpArchives[i], nullptr);
+        }
+        for (u32 i = 0; i < sizeof(cMario) / sizeof(cMario[0]); i++) {
+            MR::mountAsyncArchiveByObjectOrLayoutName(gIsLuigi ? cLuigi[i] : cMario[i], nullptr);
+        }
+        MR::receiveAllRequestedFile();
+    }
 
     initBeeMario();
     initIceMario();

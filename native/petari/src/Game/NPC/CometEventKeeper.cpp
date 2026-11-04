@@ -6,6 +6,7 @@
 #include "Game/Util/EventUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/System/NebulaMods.hpp"
 
 struct GalaxyTimeLimitInfo {
     const char* mGalaxyName;
@@ -28,7 +29,8 @@ void CometEventKeeper::init() {
     initCometStatus();
 
     if (isStartEvent("Red") || isStartEvent("Black")) {
-        mExecutorTimeLimit = new CometEventExecutorTimeLimit(getTimeLimitFromTable(::sTimeLimitInfoTable, ARRAY_SIZE(::sTimeLimitInfoTable)) / 60);
+        const u32 modLimit = NebulaMods::cometTimeLimit(MR::getCurrentStageName(), MR::getCurrentScenarioNo());
+        mExecutorTimeLimit = new CometEventExecutorTimeLimit((modLimit != 0 ? modLimit : getTimeLimitFromTable(::sTimeLimitInfoTable, ARRAY_SIZE(::sTimeLimitInfoTable))) / 60);
         mExecutorTimeLimit->initWithoutIter();
         mExecutorTimeLimit->kill();
     }

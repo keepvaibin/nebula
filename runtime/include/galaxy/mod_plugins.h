@@ -62,6 +62,18 @@ struct CometsToSet {
     int dome = 0;
     std::vector<std::pair<std::string, int>> comets;
 };
+struct ObjectChangeToSet {
+    std::string mod_id;
+    int where = 0;
+    std::string object;
+    std::string becomes;  // empty: gone
+};
+struct CometLimitToSet {
+    std::string mod_id;
+    std::string galaxy;
+    int mission = 0;
+    int seconds = 0;
+};
 
 // What .luma files say in their luma.json, for the game before it starts.
 struct ModRows {
@@ -70,8 +82,10 @@ struct ModRows {
     std::vector<std::pair<std::string, std::string>> texts;  // a message's id: its words in the language play
     std::vector<EventFlagToSet> event_flags;
     std::vector<CometsToSet> comets;
+    std::vector<ObjectChangeToSet> object_changes;
+    std::vector<CometLimitToSet> comet_limits;
 
-    [[nodiscard]] bool empty() const noexcept { return galaxies.empty() && music.empty() && texts.empty() && event_flags.empty() && comets.empty(); }
+    [[nodiscard]] bool empty() const noexcept { return object_changes.empty() && comet_limits.empty() && galaxies.empty() && music.empty() && texts.empty() && event_flags.empty() && comets.empty(); }
 };
 
 // `game_api`: the game module's nebula_game_mod_api(); `find_symbol`: a name in the game module, or null. Each plugin that

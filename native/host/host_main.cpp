@@ -448,6 +448,7 @@ void run(HANDLE thread, double seconds) {
 // The mods' code, started once the game is attached.
 std::vector<galaxy::mods::PluginFile> gPlugins;
 galaxy::mods::ModRows gModRows;
+bool gModsChangeGame = false;
 
 void load_module(const fs::path& path) {
 #if defined(_WIN32)
@@ -3003,6 +3004,12 @@ uint32_t svc_option(void*, uint32_t what) {
         return 0;
 #endif
     case NEBULA_OPTION_MODS_CHANGED:
+#if !defined(NEBULA_RELEASE)
+        // A test: only the settings page can change mods otherwise.
+        if (std::getenv("GALAXY_TEST_MODS_CHANGED") != nullptr) {
+            return 1u;
+        }
+#endif
 #if defined(NEBULA_HOST_RENDERER)
         return galaxy::render::native_settings_mods_changed() ? 1u : 0u;
 #else
@@ -3664,7 +3671,7 @@ void svc_app_exit(void*) {
     finish_and_exit(false);
 }
 
-static_assert(NEBULA_PATCH_FLIP_PANEL_GROUP == 1 && NEBULA_PATCH_MISS_STAR_PIECES == 7 && NEBULA_PATCH_MESSENGER_EX_ONE_UPS == 12 && NEBULA_PATCH_COUNT == 13,
+static_assert(NEBULA_PATCH_FLIP_PANEL_GROUP == 1 && NEBULA_PATCH_MISS_STAR_PIECES == 7 && NEBULA_PATCH_MESSENGER_EX_ONE_UPS == 12 && NEBULA_PATCH_NO_DARK_COMET_RULES == 18 && NEBULA_PATCH_COUNT == 19,
               "galaxy::luma::switch_number numbers the switches as these do");
 
 void svc_mods_start(void*) {
@@ -3678,7 +3685,8 @@ void svc_mods_start(void*) {
             galaxy::mods::set_code_off_after_crash();
         }
     }
-    if (gPlugins.empty() && gModRows.empty()) {
+    // Any mod at all tells the game: a stage then holds more than its level asks for.
+    if (!gModsChangeGame) {
         return;
     }
     if (!gPlugins.empty()) {
@@ -3769,6 +3777,7 @@ void prepare_mod_files(const fs::path& settings_folder, const std::string& game_
     gModPatches = plan.native_patches;
     gPlugins = plan.plugins;
     gModRows = plan.rows;
+    gModsChangeGame = !plan.files.empty() || !plan.merges.empty() || !plan.materials.empty() || !plan.plugins.empty() || !plan.rows.empty() || !plan.native_patches.empty();
     if (!plan.save_folder.empty() && !gSaveDataPath.empty()) {
         // A clone starts from the player's save the first time, the rest starts new; the player's stays as it is.
         const fs::path mine = gSaveRoot / gSaveDataPath.substr(1);

@@ -840,7 +840,7 @@ namespace Nebula.Launcher
         }
 
         // Imports on a worker thread (a large archive takes seconds); imported mods are enabled at the top.
-        private void Import(string[] paths)
+        internal void Import(string[] paths)
         {
             if (busy || paths == null || paths.Length == 0) return;
             SetBusy(true);

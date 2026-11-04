@@ -18,6 +18,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/System/NebulaHost.hpp"
 #include <JSystem/JParticle/JPAEmitter.hpp>
 #include <JSystem/JParticle/JPAMath.hpp>
 #include <cstdio>
@@ -1140,7 +1141,7 @@ void MarioActor::updateEffect() {
     mEffectFlags.mSlopeSlip = effectA;
 
     if ((mHealth <= 1 || mWaterLife <= 1) && !MR::isDemoActive() && !MR::isPowerStarGetDemoActive() && !MR::isGalaxyDarkCometAppearInCurrentStage() &&
-        MR::isPermitSE() && isEnableNerveChange()) {
+        MR::isPermitSE() && isEnableNerveChange() && !NebulaHost::codePatch(NEBULA_PATCH_NO_LOW_HEALTH_WARNING, nullptr)) {
         playSound("\203\211\203\103\203\164\214\170\215\220" /* ライフ警告 */, -1);
     }
 

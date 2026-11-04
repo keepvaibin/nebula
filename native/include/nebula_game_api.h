@@ -1188,6 +1188,12 @@ enum {
     NEBULA_PATCH_BEGOMAN_FIRE_PROOF,         /* Begoman Baby, Spike and Spring survive fire ground */
     NEBULA_PATCH_MESSENGER_ALWAYS_EX,        /* KinopioAstro (the 1-up messenger) gives its larger supply */
     NEBULA_PATCH_MESSENGER_EX_ONE_UPS,       /* value: that supply's 1-ups (20) */
+    NEBULA_PATCH_PLAYER_HEALTH,              /* value: the health and most health a player starts with (3) */
+    NEBULA_PATCH_PLAYER_HEALTH_FIXED,        /* the Daredevil comet doesn't change the player's health */
+    NEBULA_PATCH_HIT_TAKES_ALL,              /* a hit takes all the player's health */
+    NEBULA_PATCH_LIFE_UP_HEALTH,             /* value: the most health a Life Up gives (6); 0: it gives none */
+    NEBULA_PATCH_NO_LOW_HEALTH_WARNING,      /* no warning sound at low health */
+    NEBULA_PATCH_NO_DARK_COMET_RULES,        /* a Daredevil comet is a comet like any other */
     NEBULA_PATCH_COUNT
 };
 

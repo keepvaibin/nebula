@@ -1130,7 +1130,7 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
                 for (const luma::Layer& layer : manifest->layers) {
                     if (!luma::layer_used(layer, situation)) continue;
                     mod.native_patches += static_cast<unsigned>(layer.switches.size());
-                    mod.luma_disc = mod.luma_disc || !layer.switches.empty() || !layer.materials.empty();
+                    mod.luma_disc = mod.luma_disc || !layer.switches.empty() || !layer.materials.empty() || !layer.object_changes.empty() || !layer.comet_time_limits.empty();
                     if (layer.path.empty()) continue;
                     const fs::path place = dir / fs::path(from_utf8(layer.path));
                     std::error_code place_error;
@@ -1573,6 +1573,12 @@ DiscPlan plan_disc_changes(const galaxy::disc::AssetStore& store, const std::str
             const luma::Situation situation = situation_of(mod, game_id, language);
             for (const luma::Layer& layer : mod.luma->layers) {
                 if (!luma::layer_used(layer, situation)) continue;
+                for (const luma::ObjectChange& change : layer.object_changes) {
+                    plan.rows.object_changes.push_back({mod.id, change.where, change.object, change.becomes});
+                }
+                for (const luma::CometLimit& limit : layer.comet_time_limits) {
+                    plan.rows.comet_limits.push_back({mod.id, limit.galaxy, limit.mission, limit.seconds});
+                }
                 for (const auto& [name, value] : layer.switches) {
                     if (const std::uint32_t number = luma::switch_number(name); number != 0u) {
                         plan.native_patches[number] = value;

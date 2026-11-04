@@ -164,6 +164,8 @@ namespace Nebula.Setup
         /// Mono has no late-bound COM for WScript.Shell) is returned as a failure, not thrown: Nebula runs without it,
         /// and the registry entries still follow.
         /// </summary>
+        private const string LumaFileType = "Nebula.LumaMod";
+
         public static IList<string> Register(InstallLayout layout, string version, bool desktop)
         {
             string app = layout.VersionDir(version);
@@ -185,6 +187,15 @@ namespace Nebula.Setup
                 link(desktopLink, Path.Combine(app, "Nebula.exe"), "", app, "Play Nebula");
 
             using (var key = Registry.CurrentUser.CreateSubKey(@"Software\Nebula")) key.SetValue("InstallRoot", layout.Root);
+            // Double-clicking a mod's file adds it. Per user, like everything else here.
+            using (var key = Registry.CurrentUser.CreateSubKey(@"Software\Classes\.luma")) key.SetValue("", LumaFileType);
+            using (var key = Registry.CurrentUser.CreateSubKey(@"Software\Classes\" + LumaFileType))
+            {
+                key.SetValue("", "Nebula mod");
+                using (var icon = key.CreateSubKey("DefaultIcon")) icon.SetValue("", Path.Combine(app, "Nebula.exe") + ",0");
+                using (var open = key.CreateSubKey(@"shell\open\command"))
+                    open.SetValue("", "\"" + Path.Combine(app, "Nebula.exe") + "\" --open-mod \"%1\"");
+            }
             using (var key = Registry.CurrentUser.CreateSubKey(UninstallKey))
             {
                 key.SetValue("DisplayName", "Nebula");
@@ -297,6 +308,8 @@ namespace Nebula.Setup
             if (File.Exists(desktopLink)) File.Delete(desktopLink);
             Registry.CurrentUser.DeleteSubKeyTree(UninstallKey, false);
             Registry.CurrentUser.DeleteSubKeyTree(@"Software\Nebula", false);
+            Registry.CurrentUser.DeleteSubKeyTree(@"Software\Classes\" + LumaFileType, false);
+            Registry.CurrentUser.DeleteSubKeyTree(@"Software\Classes\.luma", false);
             if (removeUserData && Directory.Exists(NebulaPaths.DataRoot)) FileUtil.DeleteTree(NebulaPaths.DataRoot);
             // The running setup copy deletes itself and the folder after exit.
             if (self.StartsWith(Path.GetFullPath(layout.Root), StringComparison.OrdinalIgnoreCase))
