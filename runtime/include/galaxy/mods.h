@@ -138,6 +138,8 @@ void set_mods_store_file(const std::filesystem::path& store);
 void set_mods_folder(const std::filesystem::path& folder, const std::filesystem::path& settings_file,
                      const std::string& game_id);
 [[nodiscard]] std::filesystem::path mods_folder();
+// This run left mods' code off after a crash: the Mods page says so.
+void set_code_off_after_crash() noexcept;
 // The game set_mods_folder named (boot.bin's six characters; empty before).
 [[nodiscard]] std::string mods_game_id();
 // The mods found and their saved choices (Riivolution defaults where none is saved): the enabled ones in load order

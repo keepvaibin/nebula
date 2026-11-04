@@ -57,6 +57,25 @@ static void object_touch(NebulaActor* actor, void* user) {
     }
 }
 
+static int new_power;
+static int power_frames;
+
+static void power_start(void* user) {
+    (void)user;
+    power_frames = 0;
+    game->log(me, "power-up start");
+}
+
+static void power_update(void* user) {
+    (void)user;
+    ++power_frames;
+}
+
+static void power_end(void* user) {
+    (void)user;
+    say("power-up end, frames", power_frames, game->value(NEBULA_VALUE_POWER_UP), 0);
+}
+
 static int32_t stage_frame(const NebulaModEventData* data, void* user) {
     NebulaActor* player = game->player();
     float at[3] = {0, 0, 0}, velocity[3] = {0, 0, 0}, x = 0, y = 0;
@@ -147,6 +166,10 @@ static int32_t stage_frame(const NebulaModEventData* data, void* user) {
             game->play(with_model, NEBULA_PLAY_ANIMATION, "Wait");
         }
     }
+    if (frames == 475) {
+        game->set_value(NEBULA_SET_POWER_UP, new_power);
+        say("the new power-up", game->value(NEBULA_VALUE_POWER_UP), new_power, 0);
+    }
     if (frames == 480) {
         game->play(player, NEBULA_PLAY_PLAYER_ANIMATION, "Wait");
         game->log(me, "done");
@@ -166,6 +189,10 @@ NEBULA_PLUGIN_ENTRY(api, self) {
         }
     }
     game->subscribe(NEBULA_MOD_EVENT_STAGE_FRAME, stage_frame, 0);
+    {
+        static const NebulaPowerUpClass power = {sizeof(NebulaPowerUpClass), "NebulaTestPower", 60, "BGM_FIRE_A", 1, 0, power_start, power_update, power_end};
+        new_power = game->add_power_up(&power);
+    }
     if (game->register_object(&object) != 0 || game->register_object(&with_model) != 0) {
         game->log(me, "register_object failed");
     }

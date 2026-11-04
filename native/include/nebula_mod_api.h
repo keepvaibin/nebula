@@ -140,6 +140,19 @@ typedef struct NebulaGalaxy {
     int32_t dome;                   /* the dome it belongs to: 1 to 6, 0 for none */
 } NebulaGalaxy;
 
+/* A power-up the game doesn't have. A plugin gives it to the player with set_value(NEBULA_SET_POWER_UP, its number). */
+typedef struct NebulaPowerUpClass {
+    uint32_t size;
+    const char* name;
+    int32_t frames;       /* how long it lasts, at 60 a second. 0: until something ends it */
+    const char* music;    /* the music while it lasts: a BGM_ name, or null */
+    int32_t color_frame;  /* the player's colours: a frame of Mario.arc's ColorChange (0 his own, 1 Fire's). A mod's Mario.arc can add more. */
+    void* user;
+    void (*start)(void* user);
+    void (*update)(void* user); /* every frame it lasts */
+    void (*end)(void* user);
+} NebulaPowerUpClass;
+
 typedef struct NebulaModApi {
     uint32_t size;
     uint32_t version;
@@ -197,6 +210,10 @@ typedef struct NebulaModApi {
     int32_t (*add_hungry_luma)(const char* galaxy, int32_t slot, int32_t star_bits);
     /* A message of the game by its id, in place of its own or new: GalaxyName_<galaxy>, ScenarioName_<galaxy><n>, a talk's id. */
     int32_t (*add_text)(const char* id, const char* utf8);
+    /* Its number, for set_value. Below 0: it can't be added. */
+    int32_t (*add_power_up)(const NebulaPowerUpClass* power_up);
+    /* Which way is down for it, a unit length: on a planet that is no one axis. */
+    void (*get_gravity)(NebulaActor* actor, float* xyz);
 } NebulaModApi;
 
 /* The player's controls, whatever device they're on. */
@@ -207,10 +224,26 @@ typedef enum NebulaButton {
     NEBULA_BUTTON_CAMERA = 1u << 3
 } NebulaButton;
 
+#if defined(_WIN32) && defined(__cplusplus)
+/* Built with no C library, a plugin using floats needs the one symbol the compiler asks of it. */
+#define NEBULA_PLUGIN_FLOATS extern "C" __declspec(selectany) int _fltused = 0;
+#elif defined(_WIN32)
+#define NEBULA_PLUGIN_FLOATS __declspec(selectany) int _fltused = 0;
+#else
+#define NEBULA_PLUGIN_FLOATS
+#endif
+
+#ifdef __cplusplus
+#define NEBULA_PLUGIN_C extern "C"
+#else
+#define NEBULA_PLUGIN_C
+#endif
+
 /* What a plugin exports: the interface it was built against, then the game's call to it once, before the game starts. */
-#define NEBULA_PLUGIN_ENTRY(api, self)                                                         \
-    NEBULA_PLUGIN_EXPORT uint32_t nebula_plugin_api(void) { return NEBULA_MOD_API_VERSION; }   \
-    NEBULA_PLUGIN_EXPORT void nebula_plugin_start(const NebulaModApi* api, const NebulaPlugin* self)
+#define NEBULA_PLUGIN_ENTRY(api, self)                                                                         \
+    NEBULA_PLUGIN_FLOATS                                                                                       \
+    NEBULA_PLUGIN_C NEBULA_PLUGIN_EXPORT uint32_t nebula_plugin_api(void) { return NEBULA_MOD_API_VERSION; }   \
+    NEBULA_PLUGIN_C NEBULA_PLUGIN_EXPORT void nebula_plugin_start(const NebulaModApi* api, const NebulaPlugin* self)
 
 #ifdef __cplusplus
 }

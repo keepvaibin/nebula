@@ -191,9 +191,87 @@ pub fn read_file(pak_path: &std::path::Path, path: &str) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 
+/// Every file under a folder of a store on disk, by its path from the folder.
+pub fn read_folder(pak_path: &std::path::Path, path: &str) -> Result<Vec<(String, Vec<u8>)>> {
+    use anyhow::Context;
+    use std::io::Read;
+    let mut pak = File::open(pak_path).with_context(|| format!("{} cannot be read", pak_path.display()))?;
+    let mut header = [0u8; HEADER as usize];
+    pak.read_exact(&mut header)?;
+    if &header[..8] != MAGIC {
+        bail!("{} is not an asset store", pak_path.display());
+    }
+    let word = |at: usize| u64::from_le_bytes(header[at..at + 8].try_into().unwrap());
+    let count = u64::from(u32::from_le_bytes(header[12..16].try_into().unwrap()));
+    let (nodes_at, hashes_at) = (word(16), word(24));
+    let names_at = hashes_at + count * 16;
+    let wanted = path_hash(path);
+    let mut hashes = vec![0u8; (count * 16) as usize];
+    pak.seek(SeekFrom::Start(hashes_at))?;
+    pak.read_exact(&mut hashes)?;
+    let entry = hashes
+        .chunks_exact(16)
+        .find(|e| u64::from_le_bytes(e[..8].try_into().unwrap()) == wanted)
+        .with_context(|| format!("the store has no {path}"))?;
+    let top = u64::from(u32::from_le_bytes(entry[8..12].try_into().unwrap()));
+    let mut out = Vec::new();
+    let mut folders = vec![(top, String::new())];
+    while let Some((node, prefix)) = folders.pop() {
+        let mut record = [0u8; 40];
+        pak.seek(SeekFrom::Start(nodes_at + node * 40))?;
+        pak.read_exact(&mut record)?;
+        let first = u64::from(u32::from_le_bytes(record[28..32].try_into().unwrap()));
+        let children = u64::from(u32::from_le_bytes(record[32..36].try_into().unwrap()));
+        for child in first..first + children {
+            let mut item = [0u8; 40];
+            pak.seek(SeekFrom::Start(nodes_at + child * 40))?;
+            pak.read_exact(&mut item)?;
+            let position = u64::from_le_bytes(item[..8].try_into().unwrap());
+            let size = u64::from_le_bytes(item[8..16].try_into().unwrap());
+            let name_at = u64::from(u32::from_le_bytes(item[16..20].try_into().unwrap()));
+            let folder = u32::from_le_bytes(item[24..28].try_into().unwrap()) & 1 != 0;
+            pak.seek(SeekFrom::Start(names_at + name_at))?;
+            let mut name = Vec::new();
+            let mut byte = [0u8; 1];
+            while pak.read_exact(&mut byte).is_ok() && byte[0] != 0 {
+                name.push(byte[0]);
+            }
+            let relative = format!("{prefix}{}", String::from_utf8_lossy(&name));
+            if folder {
+                folders.push((child, format!("{relative}/")));
+            } else {
+                let mut bytes = vec![0u8; size as usize];
+                pak.seek(SeekFrom::Start(position))?;
+                pak.read_exact(&mut bytes)?;
+                out.push((relative, bytes));
+            }
+        }
+    }
+    Ok(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_folder_is_read_with_its_files() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("store");
+        let mut pak = File::create(&path).unwrap();
+        pak.write_all(&vec![0u8; 0x200]).unwrap();
+        pak.seek(SeekFrom::Start(0x100)).unwrap();
+        pak.write_all(b"sub").unwrap();
+        pak.seek(SeekFrom::Start(0x140)).unwrap();
+        pak.write_all(b"aa").unwrap();
+        let file = |path: &str, position, size| Placed { path: path.to_string(), position, size, folder: false };
+        write_index(&mut pak, 0x200, &[file("x.arc/a.bin", 0x140, 2), file("x.arc/sub/b.bin", 0x100, 3), file("y.bin", 0x100, 1)], b"RMGE01\0\0").unwrap();
+        drop(pak);
+        let mut found = read_folder(&path, "X.arc").unwrap();
+        found.sort();
+        assert_eq!(found, [("a.bin".to_string(), b"aa".to_vec()), ("sub/b.bin".to_string(), b"sub".to_vec())]);
+        assert!(read_folder(&path, "none").is_err());
+    }
 
     #[test]
     fn a_folder_holds_its_files_range_and_an_empty_one_stays() {

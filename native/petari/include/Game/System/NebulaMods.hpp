@@ -5,6 +5,7 @@
 
 class NameObj;
 class NameObjArchiveListCollector;
+class LiveActor;
 
 // The game's side of plugins (nebula_mod_api.h). An event no plugin wants is one load and one branch.
 namespace NebulaMods {
@@ -22,6 +23,12 @@ namespace NebulaMods {
         ~StageFrame();
     };
 
+    // Power-ups plugins add. Numbers from here on are theirs; a mode below is the game's and these do nothing.
+    const u16 cFirstPowerUp = 32;
+    // How long it lasts, once started on the player.
+    s32 powerUpStart(u16 mode, LiveActor* pPlayer);
+    void powerUpUpdate(u16 mode);
+    void powerUpEnd(u16 mode, LiveActor* pPlayer);
     // A mod's words for a message: nullptr if none has any.
     const char16_t* text(const char* pId);
     // What a hungry Luma of this slot costs, if a mod says: -1 otherwise.
