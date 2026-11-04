@@ -392,6 +392,12 @@ std::optional<Manifest> parse_manifest(std::string_view text) {
                 if (const double* number = value.number()) layer.switches[name] = static_cast<std::uint32_t>(*number);
             }
         }
+        if (const Value* materials = entry.get("materials"); materials != nullptr && materials->object() != nullptr) {
+            for (const auto& [name, file] : *materials->object()) {
+                if (file.string() == nullptr || !path_stays_inside(*file.string())) return std::nullopt;
+                layer.materials[name] = *file.string();
+            }
+        }
         layer.when = read_when(entry.get("when"));
         out.layers.push_back(std::move(layer));
     }
@@ -406,8 +412,48 @@ std::optional<Manifest> parse_manifest(std::string_view text) {
         out.save_player_can_change = can != nullptr && *can;
     }
     if (out.save_tag.empty()) out.save_tag = out.id;
+    if (const Value* messages = root->get("text"); messages != nullptr && messages->object() != nullptr) {
+        for (const auto& [id, words] : *messages->object()) {
+            out.text[id] = read_text(&words);
+        }
+    }
+    if (const Value* galaxies = root->get("galaxies"); galaxies != nullptr && galaxies->array() != nullptr) {
+        for (const Value& entry : *galaxies->array()) {
+            Galaxy galaxy;
+            galaxy.name = text_field(entry, "name");
+            galaxy.map_pane = text_field(entry, "map_pane");
+            if (galaxy.name.empty()) return std::nullopt;
+            if (const Value* conditions = entry.get("open_conditions"); conditions != nullptr && conditions->array() != nullptr) {
+                for (const Value& condition : *conditions->array()) {
+                    if (condition.string() != nullptr && galaxy.open_conditions.size() < 3u) galaxy.open_conditions.push_back(*condition.string());
+                }
+            }
+            if (const Value* stars = entry.get("stars_to_open"); stars != nullptr && stars->number() != nullptr) galaxy.stars_to_open = static_cast<int>(*stars->number());
+            if (const Value* dome = entry.get("dome"); dome != nullptr && dome->number() != nullptr) galaxy.dome = static_cast<int>(*dome->number());
+            if (const Value* hungry = entry.get("hungry_luma"); hungry != nullptr && hungry->object() != nullptr) {
+                const Value* slot = hungry->get("slot");
+                const Value* bits = hungry->get("star_bits");
+                if (slot == nullptr || slot->number() == nullptr || bits == nullptr || bits->number() == nullptr) return std::nullopt;
+                galaxy.hungry_slot = static_cast<int>(*slot->number());
+                galaxy.hungry_star_bits = static_cast<int>(*bits->number());
+            }
+            out.galaxies.push_back(std::move(galaxy));
+        }
+    }
     if (const Value* plugins = root->get("plugins"); plugins != nullptr && plugins->array() != nullptr) {
-        out.has_plugins = !plugins->array()->empty();
+        for (const Value& entry : *plugins->array()) {
+            Plugin plugin;
+            if (const Value* binaries = entry.get("binaries"); binaries != nullptr && binaries->object() != nullptr) {
+                for (const auto& [target, file] : *binaries->object()) {
+                    if (file.string() == nullptr || !path_stays_inside(*file.string())) return std::nullopt;
+                    plugin.binaries[target] = *file.string();
+                }
+            }
+            const Value* api = entry.get("api");
+            plugin.api = api != nullptr && api->number() != nullptr ? static_cast<std::uint32_t>(*api->number()) : 0u;
+            plugin.when = read_when(entry.get("when"));
+            out.plugins.push_back(std::move(plugin));
+        }
     }
     return out;
 }
@@ -439,19 +485,23 @@ int compare_versions(std::string_view a, std::string_view b) {
 std::string refusal(const Manifest& manifest, const std::string& game_id, std::string_view nebula_version, std::string_view) {
     if (manifest.format > kFormat) return "THIS MOD NEEDS A NEWER NEBULA";
     // No feature names exist yet beyond the format itself: any is one this game lacks.
-    if (!manifest.requires_features.empty()) return "THIS MOD NEEDS A NEWER NEBULA";
+    for (const std::string& feature : manifest.requires_features) {
+        if (feature != "custom-shaders") return "THIS MOD NEEDS A NEWER NEBULA";
+    }
     if (!manifest.nebula.empty() && compare_versions(nebula_version, manifest.nebula) < 0) return "THIS MOD NEEDS A NEWER NEBULA";
     if (manifest.game.starts_with("SB4") || manifest.game.starts_with("SB5")) return "THIS MOD IS FOR SUPER MARIO GALAXY 2";
     if (!manifest.game.starts_with("RMG")) return "THIS MOD IS FOR ANOTHER GAME";
     if (!manifest.versions.empty() && game_id.size() >= 4u && !contains(manifest.versions, game_id.substr(3, 1))) {
         return "THIS MOD DOESN'T WORK ON THIS VERSION OF THE GAME";
     }
-    if (manifest.has_plugins) return "THIS MOD HAS NO VERSION FOR THIS DEVICE";
+    for (const Plugin& plugin : manifest.plugins) {
+        if (plugin.api > kPluginApi) return "THIS MOD NEEDS A NEWER NEBULA";
+        if (plugin.binaries.find(std::string(plugin_target())) == plugin.binaries.end()) return "THIS MOD HAS NO VERSION FOR THIS DEVICE";
+    }
     return {};
 }
 
-bool layer_used(const Layer& layer, const Situation& situation) {
-    const When& when = layer.when;
+bool when_holds(const When& when, const Situation& situation) {
     if (when.unknown) return false;
     if (!when.versions.empty() && !contains(when.versions, situation.version)) return false;
     if (!when.languages.empty() && !contains(when.languages, situation.language)) return false;
@@ -461,6 +511,28 @@ bool layer_used(const Layer& layer, const Situation& situation) {
         if (it == situation.options.end() || !contains(choices, it->second)) return false;
     }
     return true;
+}
+
+bool layer_used(const Layer& layer, const Situation& situation) {
+    return when_holds(layer.when, situation);
+}
+
+std::string_view plugin_target() noexcept {
+#if defined(_M_ARM64) || defined(__aarch64__)
+#define NEBULA_PLUGIN_ARCH "arm64"
+#else
+#define NEBULA_PLUGIN_ARCH "x64"
+#endif
+#if defined(_WIN32)
+    return "windows-" NEBULA_PLUGIN_ARCH;
+#elif defined(__ANDROID__)
+    return "android-" NEBULA_PLUGIN_ARCH;
+#elif defined(__APPLE__)
+    return "macos-" NEBULA_PLUGIN_ARCH;
+#else
+    return "linux-" NEBULA_PLUGIN_ARCH;
+#endif
+#undef NEBULA_PLUGIN_ARCH
 }
 
 std::string language_code(std::string_view folder) {

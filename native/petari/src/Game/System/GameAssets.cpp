@@ -45,8 +45,12 @@ namespace GameAssets {
         const NebulaHostServices* const host = nebula_host();
         NebulaAssetEntry folder;
         NebulaAssetEntry child;
-        if (host->asset_find(host->user, pPath, &folder) == 0 || folder.folder == 0 ||
-            host->asset_child(host->user, folder.index, index, &child) == 0) {
+        if (host->asset_find(host->user, pPath, &folder) == 0 || folder.folder == 0) {
+            return false;
+        }
+        // The folder's own, then what mods add to it.
+        if (host->asset_child(host->user, folder.index, index, &child) == 0 &&
+            (index < folder.children || host->asset_added_child(host->user, pPath, index - folder.children, &child) == 0)) {
             return false;
         }
 

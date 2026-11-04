@@ -112,11 +112,17 @@ namespace MR {
 
         void initEffectSyncBck(EffectKeeper* pKeeper, const ModelManager* pModelManager, const char* pEffectName, const char* pAnimName,
                                s32 animCount, f32 startFrame, f32 endFrame, bool deleteOnEnd) {
+            // A mod's model with no animations: the effect is played by name.
+            if (pModelManager->mXanimePlayer == nullptr) {
+                return;
+            }
             pKeeper->registerSyncBckEffect(pModelManager->mXanimePlayer, pEffectName, pAnimName, animCount, startFrame, endFrame, deleteOnEnd);
         }
 
         void addEffectSyncBck(MultiEmitter* pEmitter, const ModelManager* pModelManager, const char* pAnimName) {
-            pEmitter->addSyncBck(pModelManager->mXanimePlayer, pAnimName);
+            if (pModelManager->mXanimePlayer != nullptr) {
+                pEmitter->addSyncBck(pModelManager->mXanimePlayer, pAnimName);
+            }
         }
 
         int getAutoEffectNum(const char* pName) {

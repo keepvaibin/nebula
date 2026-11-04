@@ -198,6 +198,8 @@ std::atomic<bool> s_settings_drawn_by_game{false};
 bool s_settings_leave_asking = false;
 // Apply saved mod changes this session did not start with: the menu asks whether to restart now.
 std::atomic<bool> s_mods_restart_ask{false};
+// A mod turned on brings code the player hasn't allowed: the menu asks first, one mod at a time.
+std::atomic<bool> s_mods_code_ask{false};
 // RAY TRACING turned on (applied) before its shaders are prepared: the menu asks to restart, which prepares them.
 std::atomic<bool> s_rt_restart_ask{false};
 // SYSTEM > DIAGNOSTICS > RECORD: the menu asks to restart into a recorded session (the launcher's recording).
@@ -205,7 +207,7 @@ std::atomic<bool> s_diagnostics_ask{false};
 
 // A restart question is up (the mods', ray tracing's, the diagnostics run's).
 bool restart_asking() {
-    return s_mods_restart_ask.load(std::memory_order_acquire) || s_rt_restart_ask.load(std::memory_order_acquire) ||
+    return s_mods_code_ask.load(std::memory_order_acquire) || s_mods_restart_ask.load(std::memory_order_acquire) || s_rt_restart_ask.load(std::memory_order_acquire) ||
            s_diagnostics_ask.load(std::memory_order_acquire);
 }
 // The pages, in order.
@@ -2043,11 +2045,40 @@ unsigned mods_draft_changes() {
     return mods_draft_changes_locked();
 }
 
+// With s_mods_mutex held: the first mod on with code the player hasn't answered for.
+galaxy::mods::ModInfo* first_code_to_allow_locked() {
+    for (galaxy::mods::ModInfo& mod : s_mods) {
+        if (mod.enabled && mod.problem.empty() && !mod.code_token.empty() && !mod.code_allowed) return &mod;
+    }
+    return nullptr;
+}
+
+// The player's answer about the mod's code: yes keeps it on, allowed; no turns it off. Then the next one, or the restart.
+void answer_mod_code(bool allow) {
+    const std::lock_guard<std::mutex> lock(s_mods_mutex);
+    if (galaxy::mods::ModInfo* mod = first_code_to_allow_locked()) {
+        mod->code_allowed = allow;
+        mod->enabled = allow;
+        save_mods();
+    }
+    if (first_code_to_allow_locked() != nullptr) return;
+    s_mods_code_ask.store(false, std::memory_order_release);
+    if (galaxy::mods::mods_differ_from_session(s_mods)) {
+        s_mods_restart_ask.store(true, std::memory_order_release);
+    }
+    s_mods_scanned = false;
+}
+
 // With s_mods_mutex held: the draft to mods.ini; `ask`: the menu asks to restart when this session started otherwise.
 // The overlaps follow the saved order at the next read.
 void commit_mods_locked(bool ask) {
     if (mods_draft_changes_locked() == 0u) return;
     save_mods();
+    if (ask && first_code_to_allow_locked() != nullptr) {
+        s_mods_code_ask.store(true, std::memory_order_release);
+        s_mods_scanned = false;
+        return;
+    }
     s_mod_held.clear();
     if (ask && galaxy::mods::mods_differ_from_session(s_mods)) {
         s_mods_restart_ask.store(true, std::memory_order_release);
@@ -2880,6 +2911,14 @@ bool dlss_prompt_key(std::uintptr_t key, bool was_down) {
 bool restart_ask_key(std::uintptr_t key, bool was_down) {
     if (!restart_asking()) return false;
     if (was_down) return true;
+    if (s_mods_code_ask.load(std::memory_order_acquire)) {
+        if (key == VK_RETURN || key == VK_SPACE) {
+            answer_mod_code(true);
+        } else if (key == VK_ESCAPE || key == VK_BACK || key == VK_F1) {
+            answer_mod_code(false);
+        }
+        return true;
+    }
     if (key == VK_RETURN || key == VK_SPACE) {
         s_mods_restart_ask.store(false, std::memory_order_release);
         s_rt_restart_ask.store(false, std::memory_order_release);
@@ -3313,6 +3352,9 @@ void draw_native_settings_overlay(UiCanvas& renderer) {
     case NativeSettingsStatus::GpuRestart:
         status = "THE NEW GRAPHICS CARD APPLIES WHEN NEBULA RESTARTS";
         break;
+    case NativeSettingsStatus::ModsCodeAsk:
+        status = pad_hints("THIS MOD RUNS ITS OWN CODE AND CAN DO ANYTHING ON THIS DEVICE. ALLOW IT?  ENTER/Y YES  ESC/B NO");
+        break;
     case NativeSettingsStatus::ModsRestartAsk:
     case NativeSettingsStatus::RtRestartAsk:
     case NativeSettingsStatus::DiagnosticsAsk:
@@ -3489,6 +3531,8 @@ NativeSettingsView build_native_settings_view() {
     } else if (s_settings_leave_asking) {
         view.status = NativeSettingsStatus::Leave;
         view.status_number = static_cast<int>(pending_settings_changes());
+    } else if (s_mods_code_ask.load(std::memory_order_acquire)) {
+        view.status = NativeSettingsStatus::ModsCodeAsk;
     } else if (s_mods_restart_ask.load(std::memory_order_acquire)) {
         view.status = NativeSettingsStatus::ModsRestartAsk;
     } else if (s_rt_restart_ask.load(std::memory_order_acquire)) {

@@ -1,4 +1,5 @@
 #include "Game/NameObj/NameObjFactory.hpp"
+#include "Game/System/NebulaMods.hpp"
 #include "Game/AreaObj.hpp"
 #include "Game/Boss.hpp"
 #include "Game/Demo.hpp"
@@ -8097,6 +8098,11 @@ namespace {
 
 namespace NameObjFactory {
     CreatorFuncPtr getCreator(const char* pName) {
+        // First: a plugin may also take the place of one of the game's own.
+        if (const CreatorFuncPtr pPlugin = NebulaMods::findCreator(pName)) {
+            return pPlugin;
+        }
+
         if (PlanetMapCreatorFunction::isRegisteredObj(pName)) {
             return PlanetMapCreatorFunction::getPlanetMapCreator(pName);
         }
@@ -8163,6 +8169,7 @@ namespace NameObjFactory {
     }
 
     void getMountObjectArchiveList(NameObjArchiveListCollector* pCollector, const char* pName, const JMapInfoIter& rIter) {
+        NebulaMods::addArchives(pCollector, pName);
         if (PlanetMapCreatorFunction::isRegisteredObj(pName)) {
             PlanetMapCreatorFunction::makeArchiveList(pCollector, rIter, pName);
         } else {

@@ -230,6 +230,8 @@ public:
     void request_eval_readback() noexcept { eval_readback_requested_ = true; }
     [[nodiscard]] bool take_eval_readback(std::vector<std::uint32_t>& words, float& t);
     [[nodiscard]] bool temporal_mode() const;
+    // Whether curved surfaces take patch stages; else each group is refined once (shapes::refine_curved).
+    [[nodiscard]] bool tessellates() const noexcept { return draw_layout_.tessellation; }
     // A copy right after the display copy, from the output scene target the 2D layer drew in (the scene target itself without one).
     [[nodiscard]] bool draw_frame_pass_from_output(const FramePassRequest& params, TextureCache& textures);
 

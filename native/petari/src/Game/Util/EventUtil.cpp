@@ -1,3 +1,4 @@
+#include "Game/System/NebulaMods.hpp"
 #include "Game/Map/RaceManager.hpp"
 #include "Game/NPC/EventDirector.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
@@ -86,6 +87,7 @@ namespace MR {
     }
 
     void addStarPiece(int num) {
+        num = NebulaMods::fire(NEBULA_MOD_EVENT_STAR_BIT, num);
         if (MR::isStageAstroLocation()) {
             GameDataFunction::addStockedStarPiece(num);
         } else {
