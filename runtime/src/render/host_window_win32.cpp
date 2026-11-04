@@ -71,6 +71,18 @@ std::atomic<bool> display_changed{false};
 namespace {
 std::atomic<bool> s_minimized{false};
 }
+std::atomic<HANDLE> s_state_wake{nullptr};
+
+void wake_main_thread() noexcept {
+    if (const HANDLE event = s_state_wake.load(std::memory_order_acquire); event != nullptr) {
+        SetEvent(event);
+    }
+}
+
+void set_state_wake(void* event) noexcept {
+    s_state_wake.store(static_cast<HANDLE>(event), std::memory_order_release);
+}
+
 bool is_minimized() noexcept {
     return s_minimized.load(std::memory_order_relaxed);
 }
@@ -582,7 +594,8 @@ bool present_grid(std::int64_t&, std::int64_t&, std::int64_t&, std::int64_t&) no
 double display_refresh_hz(NativeWindow window) noexcept {
     std::int64_t vblank = 0;
     std::int64_t period = 0;
-    if (vblank_grid(window, vblank, period)) {
+    (void)window;
+    if (vblank_grid_known(vblank, period)) {
         return std::round(static_cast<double>(galaxy::qpc_frequency()) / static_cast<double>(period) * 100.0) / 100.0;
     }
     const HMONITOR monitor = MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST);
@@ -838,6 +851,7 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     }
     if (msg == WM_SIZE) {
         s_minimized.store(wp == SIZE_MINIMIZED, std::memory_order_relaxed);
+        wake_main_thread();
         seed_pointer_from_client(hwnd, false);
         // Minimizing reports a 0x0 (or near-0) client, which ResizeBuffers would refuse.
         if (wp != SIZE_MINIMIZED) {
@@ -906,6 +920,7 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     if (msg == WM_DESTROY) {
         save_native_settings_now();
         host_window::quit_request.store(true, std::memory_order_release);
+        wake_main_thread();
         hold_display_on(false);
         invalidate_pointer_focus_once();
         clear_pointer_buttons();

@@ -3215,7 +3215,7 @@ private:
 InputSamples gInputSamples;
 // One sample is taken at a time: on the input thread every 10 ms and on the game's thread when it reads.
 std::mutex gInputSampleLock;
-std::atomic<int64_t> gInputReadNs{std::numeric_limits<int64_t>::min() / 2};  // the game's last read, steady clock
+std::atomic<bool> gRemoteConnected{false};  // a real remote is connected
 std::atomic<bool> gInputRead{false};  // the game has read its input (the 10 ms samples start then)
 std::atomic<bool> gControlsInput{true};  // player 1 is the controls (not a real remote)
 std::atomic<uint8_t> gInputNunchuk{1};
@@ -3296,8 +3296,9 @@ uint32_t svc_input_read(void*, uint32_t player, NebulaInputDevice* device, Nebul
     if (gControlsInput.load(std::memory_order_acquire)) {
         const std::lock_guard<std::mutex> lock(gInputSampleLock);
         gInputSamples.push(controls_sample());
-        gInputReadNs.store(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now().time_since_epoch()).count(),
-                           std::memory_order_release);
+        const bool missing = input_device_missing(gRemoteConnected.load(std::memory_order_relaxed));
+        galaxy::host::set_input_missing_shown(missing);
+        gInputConnected.store(missing ? 0u : 1u, std::memory_order_relaxed);
     }
     return gInputSamples.take(samples, max);
 #else
@@ -3326,11 +3327,13 @@ void input_thread() {
     if (deterministic_mode()) {
         return;  // one sample per read, taken by the read (svc_input_read)
     }
+#if !defined(NEBULA_REAL_WIIMOTE)
+    return;
+#else
     name_thread(L"Nebula Host Input");
     gInputRead.wait(false, std::memory_order_acquire);
     const auto period = std::chrono::milliseconds(10);
     auto next = Clock::now() + period;
-#if defined(NEBULA_REAL_WIIMOTE)
     galaxy::host::ensure_real_wiimote_started();
     // The remote's data reports, IR camera on: with its Nunchuk, buttons, accelerometer, IR and extension; without.
     galaxy::host::real_wiimote_set_report(0x37);
@@ -3355,11 +3358,7 @@ void input_thread() {
         next = Clock::now() + period;
         log_line("[wiimote]", on ? "in use" : "keyboard, mouse and controllers in use");
     };
-#else
-    constexpr bool real = false;
-#endif
     for (;;) {
-#if defined(NEBULA_REAL_WIIMOTE)
         // A real Wii Remote's reports become samples as they arrive: in the Wii Remote input mode while it is
         // connected, in Auto from its first button press until a key, a mouse button or a controller is used. The
         // keyboard, mouse and controllers are read every 10 ms meanwhile (for that, and the settings menu).
@@ -3368,13 +3367,15 @@ void input_thread() {
         galaxy::host::RealWiimoteConnection real_connection{};
         const auto until_tick =
             std::chrono::duration_cast<std::chrono::milliseconds>(next - Clock::now()).count();
+        // Not playing with it: nothing to do until a report or a connection arrives.
         const galaxy::host::RealWiimoteEvent event = galaxy::host::real_wiimote_wait(
-            real ? static_cast<uint32_t>(std::clamp<long long>(until_tick, 0, 10)) : 0u, real_report, real_size,
+            real ? static_cast<uint32_t>(std::clamp<long long>(until_tick, 0, 10)) : 3600000u, real_report, real_size,
             real_connection);
         const bool wii_remote_mode =
             galaxy::get_runtime_input_mode_state().mode == galaxy::RuntimeInputMode::RealWiimote;
         if (event == galaxy::host::RealWiimoteEvent::Connected) {
             remote = real_connection;
+            gRemoteConnected.store(true, std::memory_order_relaxed);
             reader.connect(real_connection.eeprom, real_connection.extension_calibration, real_connection.nunchuk);
             galaxy::host::real_wiimote_set_report(real_connection.nunchuk ? 0x37 : 0x33);
             if (real) {
@@ -3388,6 +3389,7 @@ void input_thread() {
         if (event == galaxy::host::RealWiimoteEvent::Disconnected) {
             use_remote(false);
             remote.reset();
+            gRemoteConnected.store(false, std::memory_order_relaxed);
             continue;
         }
         if (event == galaxy::host::RealWiimoteEvent::Battery) {
@@ -3402,38 +3404,20 @@ void input_thread() {
             if (real && reader.read(bytes, input)) gInputSamples.push(input_sample(input));
             continue;
         }
-        if (real && Clock::now() < next) {
-            continue;
-        }
-#endif
-        sleep_until_precise(next);
-        // The game read within the last 10 ms: the next sample 10 ms after its.
-        const Clock::time_point read{std::chrono::nanoseconds(gInputReadNs.load(std::memory_order_acquire))};
-        if (!real && read + period > next) {
-            next = read + period;
+        if (!real || Clock::now() < next) {
             continue;
         }
         next += period;
         const std::lock_guard<std::mutex> lock(gInputSampleLock);
         const NebulaInputSample sample = controls_sample();
-#if defined(NEBULA_REAL_WIIMOTE)
-        if (real) {
-            // Another device used (in Auto): back to the keyboard, mouse and controllers, with this sample.
-            if (galaxy::get_runtime_input_mode_state().mode == galaxy::RuntimeInputMode::RealWiimote ||
-                galaxy::host::last_input_device() == device_when_real) {
-                continue;
-            }
+        // Another device used (in Auto): back to the keyboard, mouse and controllers, with this sample.
+        if (galaxy::get_runtime_input_mode_state().mode != galaxy::RuntimeInputMode::RealWiimote &&
+            galaxy::host::last_input_device() != device_when_real) {
             use_remote(false);
+            gInputSamples.push(sample);
         }
-        const bool wii_remote = remote.has_value();
-#else
-        constexpr bool wii_remote = false;
-#endif
-        const bool missing = input_device_missing(wii_remote);
-        galaxy::host::set_input_missing_shown(missing);
-        gInputConnected.store(missing ? 0u : 1u, std::memory_order_relaxed);
-        gInputSamples.push(sample);
     }
+#endif
 }
 #endif
 
@@ -3600,6 +3584,9 @@ int svc_hbm(void*, uint32_t what, uint32_t value) {
 //   GALAXY_TEST_SCRIPT_CLOCK=frames: the scripted input (GALAXY_INPUT_*) counts scene frames instead of frames, so a
 //     run's game frames take the same input whatever its renderer's speed (builds compared frame for frame).
 std::atomic<bool> gTourDone{false};
+#if defined(_WIN32) && defined(NEBULA_HOST_RENDERER) && !defined(NEBULA_HOST_SDL)
+HANDLE gHostWake = nullptr;
+#endif
 
 int svc_test_scene_frame(void*, NebulaTestAction* action) {
 #if defined(NEBULA_RELEASE)
@@ -4509,6 +4496,10 @@ int main(int argc, char** argv) {
     bool first_frame = false;
     uint32_t reported = 0;
     auto next_report = Clock::now() + std::chrono::seconds(1);
+#if defined(_WIN32) && defined(NEBULA_HOST_RENDERER) && !defined(NEBULA_HOST_SDL)
+    gHostWake = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+    galaxy::render::host_window::set_state_wake(gHostWake);
+#endif
     while (Clock::now() < end && !gTourDone.load(std::memory_order_relaxed)) {
 #if defined(NEBULA_HOST_RENDERER)
         // The window's messages, on the thread that created it.
@@ -4524,7 +4515,12 @@ int main(int argc, char** argv) {
             log_line("host:", away ? "suspended (out of sight)" : "resumed");
         }
 #else
-        MsgWaitForMultipleObjects(0, nullptr, FALSE, 4, QS_ALLINPUT);
+        // Until a message, a change of the window or the game's end (gHostWake), or the once-a-second report.
+        {
+            const auto until = std::chrono::duration_cast<std::chrono::milliseconds>(next_report - Clock::now()).count();
+            const DWORD wait = first_frame ? static_cast<DWORD>(std::clamp<long long>(until + 1, 0, 1000)) : 5u;
+            MsgWaitForMultipleObjects(1, &gHostWake, FALSE, wait, QS_ALLINPUT);
+        }
         // Minimised, the game and its sound stop, as on the platforms that suspend.
         if (const bool away = galaxy::render::host_window::is_minimized(); away != gSuspended) {
             {

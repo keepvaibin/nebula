@@ -175,6 +175,9 @@
     if (touring && next == stops.size() && !gTourDone.load(std::memory_order_relaxed) &&
         ++since_stop >= std::max(tour_frames, last_frame)) {
         gTourDone.store(true, std::memory_order_relaxed);  // the run ends once the last stop has had its frames
+#if defined(_WIN32) && defined(NEBULA_HOST_RENDERER) && !defined(NEBULA_HOST_SDL)
+        SetEvent(gHostWake);
+#endif
         log_line("tour:", "done");
     }
     if (touring && next < stops.size() && ++since_stop >= tour_frames) {
