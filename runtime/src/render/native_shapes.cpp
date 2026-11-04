@@ -110,7 +110,7 @@ std::uint32_t matrix_of(const RenderVertex& v) {
     return v.mtx_indices[0] & 0xFFu;
 }
 
-// The normal corner `a` bends the edge to corner `b` by (native_curved.hlsl curve_edge_normal).
+// The normal corner `a` bends the edge to corner `b` by (Phong tessellation's edge).
 curved::Vec3 refine_edge_normal(const RenderVertex& a, const RenderVertex& b) {
     const std::uint32_t place = b.curve[2] & 0xFFFFu;
     const bool crease = place != 0xFFFFu && (place == (a.curve[2] >> 16u) || place == (a.mtx_indices[2] >> 16u));

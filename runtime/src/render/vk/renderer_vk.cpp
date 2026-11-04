@@ -186,8 +186,6 @@ bool RendererVk::initialize(int window_width, int window_height, const FrameMap&
                         VK_QUERY_PIPELINE_STATISTIC_VERTEX_SHADER_INVOCATIONS_BIT |
                         VK_QUERY_PIPELINE_STATISTIC_CLIPPING_PRIMITIVES_BIT |
                         VK_QUERY_PIPELINE_STATISTIC_FRAGMENT_SHADER_INVOCATIONS_BIT |
-                        VK_QUERY_PIPELINE_STATISTIC_TESSELLATION_CONTROL_SHADER_PATCHES_BIT |
-                        VK_QUERY_PIPELINE_STATISTIC_TESSELLATION_EVALUATION_SHADER_INVOCATIONS_BIT |
                         VK_QUERY_PIPELINE_STATISTIC_COMPUTE_SHADER_INVOCATIONS_BIT;
                     vk::check(vkCreateQueryPool(device, &stats_info, nullptr, &stats_queries_), "vkCreateQueryPool");
                 }
@@ -281,10 +279,7 @@ bool RendererVk::create_layouts() {
         depth_linear_ = (depth_properties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT) != 0u;
     }
 
-    // Curved surfaces' patch stages read the draw constants too.
-    const VkShaderStageFlags stage_passes =
-        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT |
-        (context.tessellation_shader() ? VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT | VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT : 0u);
+    const VkShaderStageFlags stage_passes = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
     {
         // Set 0: b0, b1, the matrix palette, vertex blending's earlier vertices and verdicts.
         const VkDescriptorSetLayoutBinding bindings[] = {
@@ -567,7 +562,6 @@ bool RendererVk::create_layouts() {
         vk::check(vkCreateRenderPass(device, &info, nullptr, &color_pass_), "copy render pass");
     }
     draw_layout_.depth_format = depth_format_;
-    draw_layout_.tessellation = context.tessellation_shader();
     set_curved_surfaces_offered(true);
     host_window::rtx_adapter.store(vk::Context::get().properties().vendorID == 0x10DEu &&
                                        std::strstr(vk::Context::get().properties().deviceName, "RTX") != nullptr,
@@ -1177,10 +1171,6 @@ void RendererVk::begin_frame(bool) {
     vk::check(vkBeginCommandBuffer(frame.uploads, &begin), "vkBeginCommandBuffer");
     vk::check(vkBeginCommandBuffer(frame.commands, &begin), "vkBeginCommandBuffer");
     commands_ = frame.commands;
-    ++curve_sort_list_;
-    curve_sort_[frame_slot_].draws.clear();
-    curve_sort_[frame_slot_].bytes = 0u;
-    curve_sort_[frame_slot_].sources = {};
     if (timestamps_ != VK_NULL_HANDLE) {
         vkCmdResetQueryPool(frame.commands, timestamps_, frame_slot_ * 2u, 2u);
         vkCmdWriteTimestamp(frame.commands, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, timestamps_, frame_slot_ * 2u);
@@ -1257,17 +1247,6 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
     if (stats_queries_ != VK_NULL_HANDLE) {
         vkCmdEndQuery(frame.commands, stats_queries_, frame_slot_);
         stats_pending_[frame_slot_] = true;
-    }
-    if (!curve_sort_[frame_slot_].draws.empty()) {
-        const std::uint32_t sort_query = kFramesInFlight * kGpuPassSlots + frame_slot_ * 2u;
-        if (pass_queries_ != VK_NULL_HANDLE) {
-            vkCmdWriteTimestamp(frame.uploads, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, pass_queries_, sort_query);
-        }
-        record_curve_sort(frame.uploads);
-        if (pass_queries_ != VK_NULL_HANDLE) {
-            vkCmdWriteTimestamp(frame.uploads, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, pass_queries_, sort_query + 1u);
-            pass_sort_timed_[frame_slot_] = true;
-        }
     }
     vk::check(vkEndCommandBuffer(frame.uploads), "vkEndCommandBuffer");
     vk::check(vkEndCommandBuffer(frame.commands), "vkEndCommandBuffer");
@@ -1522,17 +1501,17 @@ void RendererVk::report_present_stats() {
     message << " gpu-samples=" << stats_.gpu_samples << " gpu-total-ms=" << stats_.gpu_ms;
     if (pass_queries_ != VK_NULL_HANDLE) {
         static constexpr const char* kPassNames[] = {"scene", "resolve", "frame-read", "display-copy", "bloom", "scene-aa",
-                                                     "scene-ao", "upscale", "rt", "present", "curve-sort", "camera"};
+                                                     "scene-ao", "upscale", "rt", "present", "camera"};
         static_assert(std::size(kPassNames) == static_cast<std::size_t>(GpuPass::Count));
         message << " gpu-pass-ms=";
         for (std::size_t pass = 0; pass < std::size(kPassNames); ++pass) {
             message << (pass == 0 ? "" : ",") << kPassNames[pass] << ':' << pass_ms_[pass] / presents;
         }
         pass_ms_.fill(0.0);
-        // Flag bits in order: vertex, clipped primitives, fragment, control patches, evaluation, compute.
-        const std::array<double, 6>& st = stats_sum_;
-        message << " gpu-stats=vs:" << st[0] / presents << ",hs:" << st[3] / presents << ",ds:" << st[4] / presents
-                << ",prims:" << st[1] / presents << ",ps:" << st[2] / presents << ",cs:" << st[5] / presents;
+        // Flag bits in order: vertex, clipped primitives, fragment, compute.
+        const std::array<double, 4>& st = stats_sum_;
+        message << " gpu-stats=vs:" << st[0] / presents << ",prims:" << st[1] / presents << ",ps:" << st[2] / presents
+                << ",cs:" << st[3] / presents;
         stats_sum_.fill(0.0);
     }
     message << " api=vulkan\n";
@@ -1611,16 +1590,8 @@ void RendererVk::read_gpu_passes() {
             }
         }
     }
-    if (pass_sort_timed_[frame_slot_] &&
-        vkGetQueryPoolResults(device, pass_queries_, kFramesInFlight * kGpuPassSlots + frame_slot_ * 2u, 2u,
-                              2u * sizeof(std::uint64_t), ticks.data(), sizeof(std::uint64_t),
-                              VK_QUERY_RESULT_64_BIT) == VK_SUCCESS &&
-        ticks[1] >= ticks[0]) {
-        pass_ms_[static_cast<std::size_t>(GpuPass::CurveSort)] += static_cast<double>(ticks[1] - ticks[0]) * ms_per_tick;
-    }
     pass_mark_count_[frame_slot_] = 0u;
-    pass_sort_timed_[frame_slot_] = false;
-    std::array<std::uint64_t, 6> counts{};
+    std::array<std::uint64_t, 4> counts{};
     if (stats_pending_[frame_slot_] &&
         vkGetQueryPoolResults(device, stats_queries_, frame_slot_, 1u, sizeof(counts), counts.data(), sizeof(counts),
                               VK_QUERY_RESULT_64_BIT) == VK_SUCCESS) {

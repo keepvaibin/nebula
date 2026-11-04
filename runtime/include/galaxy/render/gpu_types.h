@@ -56,7 +56,6 @@ inline constexpr Topology kTopologyTriangleList = VK_PRIMITIVE_TOPOLOGY_TRIANGLE
 inline constexpr Topology kTopologyLineList = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
 inline constexpr Topology kTopologyPointList = VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
 // Curved surfaces' triangles as three-point patches (the pipeline's patch control points: 3).
-inline constexpr Topology kTopologyTrianglePatches = VK_PRIMITIVE_TOPOLOGY_PATCH_LIST;
 
 [[nodiscard]] inline VertexView vertex_view(Address address, std::uint32_t size, std::uint32_t stride) noexcept {
     return VertexView{address, size, stride};
@@ -154,7 +153,6 @@ inline constexpr Topology kTopologyTriangleList = D3D_PRIMITIVE_TOPOLOGY_TRIANGL
 inline constexpr Topology kTopologyLineList = D3D_PRIMITIVE_TOPOLOGY_LINELIST;
 inline constexpr Topology kTopologyPointList = D3D_PRIMITIVE_TOPOLOGY_POINTLIST;
 // Curved surfaces' triangles as three-point patches.
-inline constexpr Topology kTopologyTrianglePatches = D3D_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST;
 
 [[nodiscard]] inline VertexView vertex_view(Address address, std::uint32_t size, std::uint32_t stride) noexcept {
     VertexView view{};

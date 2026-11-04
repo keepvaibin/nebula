@@ -215,21 +215,12 @@ VkPipeline PipelineCacheVk::create_native(std::uint32_t shader, const RenderStat
     const VkShaderModule vs = native_module(vs_bytes.data, vs_bytes.size, vk::ShaderStage::Vertex);
     const VkShaderModule ps = native_module(ps_bytes.data, ps_bytes.size, vk::ShaderStage::Fragment);
     VkPipeline pipeline = VK_NULL_HANDLE;
-    // A curved surface's patches: the native patch stages for the output layout.
-    VkShaderModule hs = VK_NULL_HANDLE;
-    VkShaderModule ds = VK_NULL_HANDLE;
-    if ((rs.primitive_topology & kTopologyTypeMask) == kTopologyPatch) {
-        const NativeShaderBytes hull = native_curved_bytes(variant, false);
-        const NativeShaderBytes domain = native_curved_bytes(variant, true);
-        hs = native_module(hull.data, hull.size, vk::ShaderStage::Hull);
-        ds = native_module(domain.data, domain.size, vk::ShaderStage::Domain);
-    }
     if (vs != VK_NULL_HANDLE && ps != VK_NULL_HANDLE) {
         // The dual variant's second output is the 8-bit combiner alpha the colour blends against (render state bit 27),
         // as the old path's dual-source pipelines.
         const bool dual = native_variant_dual(variant);
         const auto make = [&](std::uint32_t compat, VkResult& result) {
-            return create_pipeline(rs, vs, ps, dual, false, compat, result, hs, ds);
+            return create_pipeline(rs, vs, ps, dual, false, compat, result);
         };
         pipeline = with_fallbacks(make, applicable_compat(rs, dual, false), "a native pipeline",
                                   describe_render_state(rs), nullptr);
@@ -337,7 +328,7 @@ void PipelineCacheVk::merge_prepared() {
 
 VkPipeline PipelineCacheVk::create_pipeline(const RenderStateKey& rs, VkShaderModule vs, VkShaderModule ps,
                                             bool dual_source, bool export_depth, std::uint32_t compat,
-                                            VkResult& result, VkShaderModule hs, VkShaderModule ds) const {
+                                            VkResult& result) const {
     result = VK_ERROR_INITIALIZATION_FAILED;
     if (vs == VK_NULL_HANDLE || ps == VK_NULL_HANDLE) {
         return VK_NULL_HANDLE;
@@ -353,23 +344,6 @@ VkPipeline PipelineCacheVk::create_pipeline(const RenderStateKey& rs, VkShaderMo
     };
     add_stage(VK_SHADER_STAGE_VERTEX_BIT, vs);
     VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    // A curved surface's patches (kVsKeyCurved): its vertex output variant's hull and domain stages. In the default
-    // domain origin (upper left) the hull stage's triangle_cw, VertexOrderCw as glslang writes it, winds each patch's
-    // triangles as the patch is wound, as on D3D12, so they cull as the triangles they replace.
-    VkPipelineTessellationStateCreateInfo tessellation{VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO};
-    tessellation.patchControlPoints = 3u;
-    const bool curved = (rs.primitive_topology & kTopologyTypeMask) == kTopologyPatch;
-    if (curved) {
-        const unsigned variant = curved_variant(rs.primitive_topology);
-        const VkShaderModule hull = hs;
-        const VkShaderModule domain = ds;
-        if (hull == VK_NULL_HANDLE || domain == VK_NULL_HANDLE) {
-            return VK_NULL_HANDLE;
-        }
-        topology = VK_PRIMITIVE_TOPOLOGY_PATCH_LIST;
-        add_stage(VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT, hull);
-        add_stage(VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT, domain);
-    }
     add_stage(VK_SHADER_STAGE_FRAGMENT_BIT, ps);
 
     VkVertexInputBindingDescription binding{0, static_cast<std::uint32_t>(sizeof(RenderVertex)),
@@ -524,7 +498,6 @@ VkPipeline PipelineCacheVk::create_pipeline(const RenderStateKey& rs, VkShaderMo
     info.pStages = stages;
     info.pVertexInputState = &vertex_input;
     info.pInputAssemblyState = &input_assembly;
-    info.pTessellationState = curved ? &tessellation : nullptr;
     info.pViewportState = &viewport;
     info.pRasterizationState = &raster;
     info.pMultisampleState = &multisample;

@@ -51,7 +51,7 @@ struct RenderConfig {
     // Generates mip chains for color textures the game samples with linear filtering but without authored mips.
     // Authored mips are decoded unchanged.
     bool     enhanced_mipmaps    = false;
-    // Curved models rounded on the GPU where the renderer tessellates (curved_surfaces.h).
+    // Curved models rounded once when loaded (shapes::refine_curved, curved_surfaces.h).
     bool     curved_surfaces     = true;
 
     // Lit color channels evaluated per pixel instead of per vertex (the light formulas on the interpolated
@@ -271,7 +271,7 @@ void set_render_config(const RenderConfig& cfg);
 // pictures of one run differ by the effect alone.
 enum class RtEffect : std::uint8_t { Reflections, Water, SunRays, LensBloom };
 [[nodiscard]] bool rt_effect_on(const RenderConfig& cfg, RtEffect effect) noexcept;
-// Whether the renderer tessellates (its curved surfaces' stages compiled): the CURVED SURFACES row is offered and
+// Whether the renderer refines curved surfaces: the CURVED SURFACES row is offered and
 // RenderConfig::curved_surfaces takes effect.
 void set_curved_surfaces_offered(bool offered) noexcept;
 [[nodiscard]] bool curved_surfaces_offered() noexcept;

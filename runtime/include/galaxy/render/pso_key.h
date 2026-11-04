@@ -75,12 +75,6 @@ inline constexpr std::uint32_t kRenderStateLayerTarget = 1u << 23u;
 // zero), the colour blends at the shader's alpha.
 inline constexpr std::uint32_t kRenderStateZeroAlpha = 1u << 24u;
 
-// A curved surface's patch topology carries its vertex output's variant in bits 4-5 (RenderStateKey::
-// primitive_topology), which picks the hull and domain shaders.
-[[nodiscard]] constexpr unsigned curved_variant(std::uint8_t primitive_topology) noexcept {
-    return (primitive_topology >> 4u) & 3u;
-}
-
 struct PsoKey {
     std::uint64_t vs_hash;
     std::uint64_t ps_hash;

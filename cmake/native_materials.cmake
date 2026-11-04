@@ -150,51 +150,6 @@ function(galaxy_native_material_sources out_var backend)
     if(rows STREQUAL "")
         set(rows "    {},\n")
     endif()
-    # The curved surfaces' patch stages (native_curved.hlsl), once per output layout: 0 plain, 1 with motion vectors, 2 lit
-    # at the pixel, 3 both.
-    set(curved_rows "")
-    foreach(layout IN ITEMS 0 1 2 3)
-        set(entries "")
-        foreach(stage hs ds)
-            set(name "g_native_curved_${layout}_${stage}")
-            set(header "${dir}/curved_${layout}_${stage}.h")
-            set(source "${galaxy_native_material_dir}/native_curved.hlsl")
-            if(backend STREQUAL "dxil")
-                set(defines "")
-                if(layout STREQUAL "1")
-                    set(defines "-DNATIVE_MOTION=1")
-                elseif(layout STREQUAL "2")
-                    set(defines "-DNATIVE_PIXEL_LIT=1")
-                elseif(layout STREQUAL "3")
-                    set(defines "-DNATIVE_MOTION=1" "-DNATIVE_PIXEL_LIT=1")
-                endif()
-                add_custom_command(OUTPUT "${header}"
-                    COMMAND "${GALAXY_DXC}" -nologo -T ${stage}_6_0 -E native_${stage} -O3 -WX -Qstrip_debug
-                        -Qstrip_reflect ${defines} -I "${galaxy_native_material_dir}" -Vn ${name} -Fh "${header}"
-                        "${source}"
-                    DEPENDS "${source}" ${frameworks}
-                    VERBATIM)
-            else()
-                set(defines "")
-                if(layout STREQUAL "1")
-                    set(defines "NATIVE_MOTION")
-                elseif(layout STREQUAL "2")
-                    set(defines "NATIVE_PIXEL_LIT")
-                elseif(layout STREQUAL "3")
-                    set(defines "NATIVE_MOTION" "NATIVE_PIXEL_LIT")
-                endif()
-                add_custom_command(OUTPUT "${header}"
-                    COMMAND galaxy_native_spirv "${source}" "${galaxy_native_material_dir}" ${stage} ${name} "${header}"
-                        ${defines}
-                    DEPENDS "${source}" ${frameworks} galaxy_native_spirv
-                    VERBATIM)
-            endif()
-            list(APPEND outputs "${header}")
-            string(APPEND includes "#include \"curved_${layout}_${stage}.h\"\n")
-            string(APPEND entries "${name}, sizeof(${name}), ")
-        endforeach()
-        string(APPEND curved_rows "    {${entries}},\n")
-    endforeach()
     # What a mod's compiled shaders must match (LumaLink: nebula_import::cook::shader_source::interface_id).
     file(READ "${galaxy_native_material_dir}/j3d_material.hlsli" interface_text)
     file(READ "${galaxy_native_material_dir}/native_material.hlsli" interface_more)
@@ -224,8 +179,6 @@ ${hand_rows}};
 const Pair kJ3DShaders[][kNativeVariants] = {
 ${rows}};
 constexpr std::uint32_t kJ3DCount = ${j3d_count}u;
-const Pair kCurved[4] = {
-${curved_rows}};
 }  // namespace
 
 const char* native_shader_file_name() noexcept {
@@ -234,14 +187,6 @@ const char* native_shader_file_name() noexcept {
 
 const char* native_shader_interface() noexcept {
     return \"${shader_interface}\";
-}
-
-NativeShaderBytes native_curved_bytes(unsigned variant, bool domain) noexcept {
-    const Pair& p = kCurved[variant == kNativeVariantPixelMotion ? 3
-                            : variant == kNativeVariantMotion    ? 1
-                            : variant >= kNativeVariantPixel     ? 2
-                                                                 : 0];
-    return domain ? NativeShaderBytes{p.ps, p.ps_size} : NativeShaderBytes{p.vs, p.vs_size};
 }
 
 unsigned native_draw_variant(std::uint32_t shader, unsigned variant, unsigned samples_log2, bool per_sample, bool pixel_lit) noexcept {
