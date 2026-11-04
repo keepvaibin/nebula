@@ -2353,6 +2353,23 @@ void svc_target_begin(void*, uint64_t key, uint32_t width, uint32_t height, uint
 #endif
 }
 
+void svc_target_begin_pixels(void*, uint64_t key, uint32_t width, uint32_t height, uint32_t clear_rgba) {
+#if defined(NEBULA_HOST_RENDERER)
+    namespace shapes = galaxy::render::shapes;
+    shapes::Record record;
+    record.kind = shapes::Record::Kind::TargetBegin;
+    record.key = key;
+    record.target_width = width;
+    record.target_height = height;
+    record.target_clear_rgba = clear_rgba;
+    record.target_pixels = true;
+    attach_pending_records();
+    galaxy::render::attach_shape_record(std::move(record));
+#else
+    (void)key, (void)width, (void)height, (void)clear_rgba;
+#endif
+}
+
 void svc_target_end(void*, uint64_t key, uint32_t channels) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::render::shapes;
@@ -2381,17 +2398,17 @@ void svc_target_clear(void*, uint32_t clear_rgba, uint32_t channels) {
 #endif
 }
 
-void svc_frame_pass(void*, uint64_t key, uint32_t channels) {
+void svc_frame_pass(void*, uint64_t key) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::render::shapes;
     shapes::Record record;
     record.kind = shapes::Record::Kind::FramePass;
     record.key = key;
-    record.target_channels = static_cast<std::uint8_t>(channels);
+    record.target_channels = NEBULA_TARGET_RGB;
     attach_pending_records();
     galaxy::render::attach_shape_record(std::move(record));
 #else
-    (void)key, (void)channels;
+    (void)key;
 #endif
 }
 
@@ -2409,22 +2426,17 @@ void svc_frame_take(void*, uint64_t key) {
 }
 
 // A clear of the frame's rectangle.
-void svc_frame_clear(void*, uint32_t left, uint32_t top, uint32_t width, uint32_t height, uint32_t clear_rgba,
-                     uint32_t channels) {
+void svc_frame_clear(void*, uint32_t clear_rgba, uint32_t channels) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::render::shapes;
     shapes::Record record;
     record.kind = shapes::Record::Kind::FrameClear;
-    record.target_x = left;
-    record.target_y = top;
-    record.target_width = width;
-    record.target_height = height;
     record.target_clear_rgba = clear_rgba;
     record.target_channels = static_cast<std::uint8_t>(channels & 7u);
     attach_pending_records();
     galaxy::render::attach_shape_record(std::move(record));
 #else
-    (void)left, (void)top, (void)width, (void)height, (void)clear_rgba, (void)channels;
+    (void)clear_rgba, (void)channels;
 #endif
 }
 
@@ -4332,6 +4344,7 @@ int main(int argc, char** argv) {
     services.texture_coordinate = svc_texture_coordinate;
     services.immediate = svc_immediate;
     services.target_begin = svc_target_begin;
+    services.target_begin_pixels = svc_target_begin_pixels;
     services.target_begin_over_frame = svc_target_begin_over_frame;
     services.target_end = svc_target_end;
     services.target_clear = svc_target_clear;

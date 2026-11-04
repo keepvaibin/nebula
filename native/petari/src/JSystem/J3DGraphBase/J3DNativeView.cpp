@@ -19,12 +19,12 @@ namespace {
     f32 sDepthOffset = 0.0f;
     // The scissor box: left, top, width, height.
     bool sScissorSet = false;
-    u32 sScissor[4] = {};
+    f32 sScissor[4] = {};
 
     // The rectangle in frame pixels and the depth range (0 near .. 1 far) the near and far values make.
     void hostViewport(const f32* pViewport, f32* pOut) {
-        const f32 viewport[6] = {pViewport[0] * J3DNativeView::cUnitsAcross, pViewport[1] * J3DNativeView::cUnitsDown,
-                                 pViewport[2] * J3DNativeView::cUnitsAcross, pViewport[3] * J3DNativeView::cUnitsDown, pViewport[4] * sDepthScale + sDepthOffset,
+        const f32 viewport[6] = {pViewport[0] * NEBULA_FRAME_UNITS, pViewport[1] * NEBULA_FRAME_UNITS,
+                                 pViewport[2] * NEBULA_FRAME_UNITS, pViewport[3] * NEBULA_FRAME_UNITS, pViewport[4] * sDepthScale + sDepthOffset,
                                  pViewport[5] * sDepthScale + sDepthOffset};
         for (u32 i = 0; i < 6; i++) {
             pOut[i] = viewport[i];
@@ -54,8 +54,8 @@ namespace J3DNativeView {
         for (u32 i = 0; i < sent; i++) {
             probes[i] = pProbes[i];
             if (probes[i].x >= 0.0f) {
-                probes[i].x *= cUnitsAcross;
-                probes[i].y *= cUnitsDown;
+                probes[i].x *= NEBULA_FRAME_UNITS;
+                probes[i].y *= NEBULA_FRAME_UNITS;
             }
         }
         const NebulaHostServices* pHost = nebula_host();
@@ -115,10 +115,7 @@ namespace J3DNativeView {
         }
     }
 
-    void setViewportJitter(f32 left, f32 top, f32 width, f32 height, f32 nearZ, f32 farZ, u32 field) {
-        if (field == 0) {
-            top -= 0.5f;
-        }
+    void setViewport(f32 left, f32 top, f32 width, f32 height, f32 nearZ, f32 farZ) {
         sViewport[0] = left;
         sViewport[1] = top;
         sViewport[2] = width;
@@ -127,10 +124,6 @@ namespace J3DNativeView {
         sViewport[5] = farZ;
         sViewportSet = true;
         sendViewport();
-    }
-
-    void setViewport(f32 left, f32 top, f32 width, f32 height, f32 nearZ, f32 farZ) {
-        setViewportJitter(left, top, width, height, nearZ, farZ, 1);
     }
 
     void getViewportv(f32* pValues) {
@@ -150,7 +143,7 @@ namespace J3DNativeView {
         }
     }
 
-    void setScissor(u32 left, u32 top, u32 width, u32 height) {
+    void setScissor(f32 left, f32 top, f32 width, f32 height) {
         sScissor[0] = left;
         sScissor[1] = top;
         sScissor[2] = width;
@@ -158,10 +151,11 @@ namespace J3DNativeView {
         sScissorSet = true;
         J3DNativeDraw::flush();
         const NebulaHostServices* pHost = nebula_host();
-        pHost->view_scissor(pHost->user, left * cUnitsAcross, top * cUnitsDown, width * cUnitsAcross, height * cUnitsDown);
+        pHost->view_scissor(pHost->user, left * NEBULA_FRAME_UNITS, top * NEBULA_FRAME_UNITS, width * NEBULA_FRAME_UNITS,
+                            height * NEBULA_FRAME_UNITS);
     }
 
-    void getScissor(u32* pLeft, u32* pTop, u32* pWidth, u32* pHeight) {
+    void getScissor(f32* pLeft, f32* pTop, f32* pWidth, f32* pHeight) {
         if (!sScissorSet) {
             NEBULA_PANIC("J3DNativeView: the scissor read before the game set one");
         }
@@ -193,11 +187,11 @@ void J3DNativeViewSetZScaleOffset(f32 scale, f32 offset) {
     J3DNativeView::setZScaleOffset(scale, offset);
 }
 
-void J3DNativeViewSetScissor(u32 left, u32 top, u32 width, u32 height) {
+void J3DNativeViewSetScissor(f32 left, f32 top, f32 width, f32 height) {
     J3DNativeView::setScissor(left, top, width, height);
 }
 
-void J3DNativeViewGetScissor(u32* pLeft, u32* pTop, u32* pWidth, u32* pHeight) {
+void J3DNativeViewGetScissor(f32* pLeft, f32* pTop, f32* pWidth, f32* pHeight) {
     J3DNativeView::getScissor(pLeft, pTop, pWidth, pHeight);
 }
 }

@@ -78,7 +78,7 @@ void ImageEffectLocalUtil::setMode(EMode mode, const NebulaColor8& rEdge) {
 
 void ImageEffectLocalUtil::setupDrawTexture() {
     Mtx44 projectionMtx;
-    NebulaMtxOrtho(projectionMtx, 0.0f, MR::getScreenUnitsDown(), 0.0f, MR::getScreenUnitsAcross(), -10000.0f, 10000.0f);
+    NebulaMtxOrtho(projectionMtx, 0.0f, 1.0f, 0.0f, 1.0f, -10000.0f, 10000.0f);
     J3DNativeView::setOrthographic(projectionMtx);
 
     MR::loadViewMtxFor2DModel();
@@ -96,9 +96,9 @@ void ImageEffectLocalUtil::setupDrawTexture() {
     sMode = 0;
 }
 
-void ImageEffectLocalUtil::drawTexture(JUTTexture* pTexture, s32 divisions, s32 tile, u8 intensity, ETexDrawType texDrawType) {
+void ImageEffectLocalUtil::drawTexture(JUTTexture* pTexture, u8 intensity, ETexDrawType texDrawType) {
     sendDrawMaterial(pTexture, intensity, static_cast< u32 >(texDrawType) & 3u);
-    sendTextureVertex(divisions, tile);
+    sendTextureVertex();
 }
 
 JUTTexture* ImageEffectLocalUtil::createFrameKey() {
@@ -112,38 +112,29 @@ JUTTexture* ImageEffectLocalUtil::createFrameKey() {
 
 void ImageEffectLocalUtil::drawFrameDepth(JUTTexture* pTarget, JUTTexture* pDepthKey) {
     setupDrawTexture();
-    J3DNativeTarget::beginOverFrame(pTarget->mImage, pTarget->getWidth(), pTarget->getHeight(), 0, nullptr, NEBULA_TARGET_RGBA,
+    J3DNativeTarget::beginOverFrame(pTarget->mImage, pTarget->mShareAcross, pTarget->mShareDown, 0, nullptr, NEBULA_TARGET_RGBA,
                                     pDepthKey->mImage);
     NebulaNativeMaterial material;
     NativeShader::init(material, NEBULA_SHADER_FRAME_DEPTH, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
                        NEBULA_CULL_NONE);
     NativeShader::setTexture(material, 0, pDepthKey);
     NativeShader::send(material);
-    sendTextureVertex(2, 0);
+    sendTextureVertex();
     J3DNativeTarget::end(pTarget->mImage, NEBULA_TARGET_RED);
 }
 
-void ImageEffectLocalUtil::sendTextureVertex(s32 divisions, s32 tile) {
-    s32 row = tile / divisions;
-    s32 column = tile % divisions;
-    f32 width = static_cast< f32 >(MR::getScreenUnitsAcross()) / divisions;
-    f32 height = static_cast< f32 >(MR::getScreenUnitsDown()) / divisions;
-    f32 left = column * width;
-    f32 right = (column + 1) * width;
-    f32 bottom = (row + 1) * height;
-    f32 top = row * height;
-
+void ImageEffectLocalUtil::sendTextureVertex() {
     J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 4, NEBULA_SHAPE_TEXCOORD0);
-    J3DNativeDraw::position(left, bottom, 0.0f);
+    J3DNativeDraw::position(0.0f, 1.0f, 0.0f);
     J3DNativeDraw::texCoord(0.0f, 1.0f);
 
-    J3DNativeDraw::position(left, top, 0.0f);
+    J3DNativeDraw::position(0.0f, 0.0f, 0.0f);
     J3DNativeDraw::texCoord(0.0f, 0.0f);
 
-    J3DNativeDraw::position(right, bottom, 0.0f);
+    J3DNativeDraw::position(1.0f, 1.0f, 0.0f);
     J3DNativeDraw::texCoord(1.0f, 1.0f);
 
-    J3DNativeDraw::position(right, top, 0.0f);
+    J3DNativeDraw::position(1.0f, 0.0f, 0.0f);
     J3DNativeDraw::texCoord(1.0f, 0.0f);
 }
 
@@ -157,13 +148,13 @@ void ImageEffectLocalUtil::blurTexture(JUTTexture* pSource, JUTTexture* pScratch
     const f32 widthX = __builtin_sqrtf(radius * radius / 2.0f + texelX * texelX / 6.0f);
     const f32 widthY = __builtin_sqrtf(verticalRadius * verticalRadius / 2.0f + texelY * texelY / 6.0f);
     const bool alphaAlone = channels == NEBULA_TARGET_ALPHA;
-    J3DNativeTarget::begin(pScratch->mImage, pScratch->getWidth(), pScratch->getHeight(), 0);
+    J3DNativeTarget::begin(pScratch->mImage, pScratch->mShareAcross, pScratch->mShareDown, 0);
     sendGaussianMaterial(pSource, 1.0f, 0.0f, widthX, alphaAlone ? 1.0f : 0.0f);
-    sendTextureVertex(4, 0);
+    sendTextureVertex();
     J3DNativeTarget::end(pScratch->mImage, channels);
-    J3DNativeTarget::begin(pTarget->mImage, pTarget->getWidth(), pTarget->getHeight(), 0);
+    J3DNativeTarget::begin(pTarget->mImage, pTarget->mShareAcross, pTarget->mShareDown, 0);
     sendGaussianMaterial(pScratch, 0.0f, 1.0f, widthY, alphaAlone ? alphaGain : 0.0f);
-    sendTextureVertex(4, 0);
+    sendTextureVertex();
     J3DNativeTarget::end(pTarget->mImage, channels);
 }
 

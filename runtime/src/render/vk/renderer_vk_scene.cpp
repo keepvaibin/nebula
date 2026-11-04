@@ -668,13 +668,14 @@ bool RendererVk::begin_target_pass(std::uint64_t key, std::uint32_t width, std::
         slot.set.depth_source = target_free_sources_.back().second;
         target_free_sources_.pop_back();
     }
-    const bool kept = slot.set.color && slot.map == scene_map_ && slot.width == width && slot.height == height;
+    const FrameMap map(width, height);
+    const bool kept = slot.set.color && slot.map == map;
     if (!kept) {
         if (slot.set.color || slot.set.depth) {
             destroy_scene_set(slot.set);
         }
         // A new set enters its attachment layouts (create_scene_set); the pass's first clear (RenderCore) fills it.
-        if (!create_scene_set(slot.set, scene_map_, 1u, width, height, true)) {
+        if (!create_scene_set(slot.set, map, 1u, kFrameUnits, kFrameUnits, true)) {
             if (slot.set.color_source != VK_NULL_HANDLE) {
                 target_free_sources_.push_back({slot.set.color_source, slot.set.depth_source});
             }
@@ -682,7 +683,7 @@ bool RendererVk::begin_target_pass(std::uint64_t key, std::uint32_t width, std::
             return false;
         }
         slot.set.color->layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        slot.map = scene_map_;
+        slot.map = map;
         slot.width = width;
         slot.height = height;
     }

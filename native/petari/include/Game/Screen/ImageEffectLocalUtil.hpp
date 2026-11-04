@@ -32,8 +32,8 @@ namespace ImageEffectLocalUtil {
     };
     void setMode(EMode mode, const NebulaColor8& rEdge);
     void setupDrawTexture();
-    void drawTexture(JUTTexture* pTexture, s32 divisions, s32 tile, u8 intensity, ETexDrawType texDrawType);
-    void sendTextureVertex(s32 divisions, s32 tile);
+    void drawTexture(JUTTexture* pTexture, u8 intensity, ETexDrawType texDrawType);
+    void sendTextureVertex();
     // A small texture whose key stands for the frame or its depth in a pass that samples them.
     JUTTexture* createFrameKey();
     // The frame's depth into `pTarget`, half the screen; `pDepthKey` from createFrameKey. Leaves setupDrawTexture's state.

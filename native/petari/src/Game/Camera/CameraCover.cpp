@@ -43,7 +43,7 @@ void CameraCover::draw() const {
         JUTTexture texture(MR::getScreenResTIMG());
 
         ImageEffectLocalUtil::setupDrawTexture();
-        ImageEffectLocalUtil::drawTexture(&texture, 1, 0, 255, (ImageEffectLocalUtil::ETexDrawType)0);
+        ImageEffectLocalUtil::drawTexture(&texture, 255, (ImageEffectLocalUtil::ETexDrawType)0);
     }
 }
 

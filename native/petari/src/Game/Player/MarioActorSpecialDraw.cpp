@@ -52,8 +52,6 @@ void MarioActor::calcScreenBoxRange() {
     TVec2f z;
     TVec2f minimum;
     TVec2f maximum;
-    TVec2f frameMin;
-    TVec2f frameMax;
     MR::calcScreenPosition(&center, position);
     MR::calcScreenPosition(&x, position + TVec3f(80.0f, 0.0f, 0.0f));
     MR::calcScreenPosition(&y, position + TVec3f(0.0f, 80.0f, 0.0f));
@@ -66,22 +64,10 @@ void MarioActor::calcScreenBoxRange() {
     _B2C = minimum.x > maximum.x ? minimum.x : maximum.x;
     _B28 = minimum.y < maximum.y ? minimum.y : maximum.y;
     _B30 = minimum.y > maximum.y ? minimum.y : maximum.y;
-    MR::convertScreenPosToCanvasPos(&frameMin, mScreenBoxMin);
-    MR::convertScreenPosToCanvasPos(&frameMax, mScreenBoxMax);
-    s16 left = static_cast< s32 >(frameMin.x) & ~1;
-    s16 top = static_cast< s32 >(frameMin.y) & ~1;
-    s16 width = static_cast< s32 >(frameMax.x) - left;
-    s16 height = static_cast< s32 >(frameMax.y) - top;
-    width = (width + 1) & ~1;
-    height = (height + 1) & ~1;
-
-    if (width > 256) {
-        width = 256;
-    }
-
-    if (height > 256) {
-        height = 256;
-    }
+    s16 left = static_cast< s32 >(mScreenBoxMin.x);
+    s16 top = static_cast< s32 >(mScreenBoxMin.y);
+    s16 width = static_cast< s32 >(mScreenBoxMax.x) - left + 1;
+    s16 height = static_cast< s32 >(mScreenBoxMax.y) - top + 1;
 
     if (!width) {
         width = 2;
@@ -97,7 +83,7 @@ void MarioActor::calcScreenBoxRange() {
     _B40 = height;
     TBox2f capture(_B34, _B38, _B34 + _B3C, _B38 + _B40);
     s32 screenHeight = MR::getScreenHeight();
-    TBox2f screen(0.0f, 0.0f, MR::getScreenUnitsAcross(), screenHeight);
+    TBox2f screen(0.0f, 0.0f, MR::getScreenWidth(), screenHeight);
     TBox2f clipped(capture);
 
     if (!clipped.intersect(screen)) {
@@ -121,7 +107,7 @@ void MarioActor::captureScreenBox() const {
     }
 
     // The model's own target, the frame's size: its alpha is what the box composites by.
-    J3DNativeTarget::begin(_B44, MR::getScreenUnitsAcross(), MR::getScreenHeight(), 0);
+    J3DNativeTarget::begin(_B44, 1.0f, 1.0f, 0);
     J3DPass::writeColor(true);
     J3DPass::writeAlpha(false);
 }
@@ -140,22 +126,21 @@ void MarioActor::writeBackScreenBox() const {
     J3DNativeTexObj texture;
     TVec2f minimum;
     TVec2f maximum;
-    const f32 canvasWidth = MR::getScreenUnitsAcross();
-    const f32 canvasHeight = MR::getScreenHeight();
-    const f32 u0 = static_cast< s32 >(_B34) / canvasWidth;
-    const f32 v0 = static_cast< s32 >(_B38) / canvasHeight;
-    const f32 u1 = (static_cast< s32 >(_B34) + static_cast< s32 >(_B3C)) / canvasWidth;
-    const f32 v1 = (static_cast< s32 >(_B38) + static_cast< s32 >(_B40)) / canvasHeight;
-    J3DNativeTexture::init(&texture, _B44, canvasWidth, canvasHeight, NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP);
-    MR::convertCanvasPosToScreenPos(&minimum, mScreenBoxPos);
-    MR::convertCanvasPosToScreenPos(&maximum, mScreenBoxPos + mScreenBoxSize + TVec2f(0.99f, 0.99f));
+    const f32 screenWidth = MR::getScreenWidth();
+    const f32 screenHeight = MR::getScreenHeight();
+    const f32 u0 = static_cast< s32 >(_B34) / screenWidth;
+    const f32 v0 = static_cast< s32 >(_B38) / screenHeight;
+    const f32 u1 = (static_cast< s32 >(_B34) + static_cast< s32 >(_B3C)) / screenWidth;
+    const f32 v1 = (static_cast< s32 >(_B38) + static_cast< s32 >(_B40)) / screenHeight;
+    J3DNativeTexture::init(&texture, _B44, JUTTexture::cAuthoredAcross, JUTTexture::cAuthoredDown, NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP);
+    minimum = mScreenBoxPos;
+    maximum = mScreenBoxPos + mScreenBoxSize;
     NebulaNativeMaterial material;
     TDDraw::setupNative(&material, 1, 0, 2);
     NativeShader::setBlend(material, NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_INV_SRC_ALPHA);
     NativeShader::setDepth(material, true, NEBULA_COMPARE_ALWAYS, true);
     NativeShader::setTexObj(material, 0, &texture);
     NativeShader::send(material);
-    maximum.x = static_cast< s16 >(static_cast< s16 >(static_cast< s32 >(maximum.x) + 1) & ~1);
     J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
     J3DNativeDraw::position(minimum.x, minimum.y, 0.9999f);
     J3DNativeDraw::texCoord(u0, v0);
@@ -449,13 +434,13 @@ namespace {
     // runtime/src/render/materials/frame_ripple.hlsl over the whole screen: the frame's rows moved by the wave.
     void drawFrameRipple(const void* pFrame, f32 amplitude, f32 phase, f32 perRow, f32 kind) {
         J3DNativeTexObj texture;
-        const u16 width = MR::getScreenUnitsAcross();
         const u16 height = MR::getScreenHeight();
         NebulaNativeMaterial material;
         TDDraw::setupNative(&material, 1, 0, 2);
         NativeShader::init(material, NEBULA_SHADER_FRAME_RIPPLE, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
                            NEBULA_CULL_NONE);
-        J3DNativeTexture::init(&texture, const_cast< void* >(pFrame), width, height, NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP);
+        J3DNativeTexture::init(&texture, const_cast< void* >(pFrame), JUTTexture::cAuthoredAcross, JUTTexture::cAuthoredDown, NEBULA_WRAP_CLAMP,
+                               NEBULA_WRAP_CLAMP);
         J3DNativeTarget::take(pFrame);
         material.alpha_write = 1;
         NativeShader::setTexObj(material, 0, &texture);
@@ -693,7 +678,6 @@ bool MarioActor::drawDarkMask() const {
     TVec2f screenX;
     TVec2f screenY;
     TVec2f origin;
-    TVec2f frameOrigin;
     TVec2f minimum;
     TVec2f maximum;
     getRealPos("Spine1", &spine);
@@ -712,13 +696,8 @@ bool MarioActor::drawDarkMask() const {
     TDDraw::project2D(&origin, position);
     origin.x -= width / 2;
     origin.y -= width / 2;
-    MR::convertScreenPosToCanvasPos(&frameOrigin, origin);
-    u32 left = static_cast< u32 >(frameOrigin.x);
-    u32 top = static_cast< u32 >(frameOrigin.y);
-    top &= ~1;
-    left &= ~1;
-    MR::convertCanvasPosToScreenPos(&minimum, TVec2f(left, top));
-    MR::convertCanvasPosToScreenPos(&maximum, TVec2f(left + width, top + height));
+    minimum = origin;
+    maximum = origin + TVec2f(width, height);
     J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
     J3DNativeDraw::position(minimum.x, minimum.y, 0.0f);
     J3DNativeDraw::texCoord(0.0f, 0.0f);

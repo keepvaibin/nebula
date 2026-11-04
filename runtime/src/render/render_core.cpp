@@ -4705,9 +4705,7 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
         // The values as the game gave them (alpha 255 on a frame without alpha).
         flush_pending_draw_batch();
         renderer_.clear_scene(record.target_clear_rgba, (record.target_channels & 1u) != 0u,
-                            (record.target_channels & 2u) != 0u, (record.target_channels & 4u) != 0u, record.target_x,
-                            record.target_y, record.target_width, record.target_height,
-                            frame_format());
+                            (record.target_channels & 2u) != 0u, (record.target_channels & 4u) != 0u, 0u, 0u, kFrameUnits, kFrameUnits, frame_format());
         return;
     }
     case shapes::Record::Kind::TargetClear:
@@ -4715,7 +4713,7 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
             flush_pending_draw_batch();
             renderer_.clear_scene(record.target_clear_rgba, (record.target_channels & 1u) != 0u,
                                 (record.target_channels & 2u) != 0u, (record.target_channels & 4u) != 0u, 0u, 0u,
-                                target_pass_size_[0], target_pass_size_[1], frame_format());
+                                kFrameUnits, kFrameUnits, frame_format());
         }
         return;
     }
@@ -4746,7 +4744,12 @@ void RenderCore::begin_target_pass(const shapes::Record& record) {
         renderer_.open_frame_for_pass(record.target_frame_key, record.target_channels, record.target_depth_key, texture_cache_);
         texture_bindings_dirty_ = true;
     }
-    if (!renderer_.begin_target_pass(record.key, record.target_width, record.target_height)) {
+    // The target's own pixels: inside the pass, rectangles are fractions of it.
+    const FrameMap& frame = renderer_.frame_map();
+    const auto pixels = [&](std::uint32_t size, float scale) {
+        return record.target_pixels ? size : std::max<std::uint32_t>(1u, static_cast<std::uint32_t>(std::lround(size * static_cast<double>(scale))));
+    };
+    if (!renderer_.begin_target_pass(record.key, pixels(record.target_width, frame.sx), pixels(record.target_height, frame.sy))) {
         if (over_frame) {
             renderer_.close_frame_for_pass(texture_cache_);
         }
@@ -4758,11 +4761,9 @@ void RenderCore::begin_target_pass(const shapes::Record& record) {
         }
         return;
     }
-    target_pass_size_ = {record.target_width, record.target_height};
     frame_bindings_dirty_ = true;
     set_target_alpha(true);
-    renderer_.clear_scene(record.target_clear_rgba, true, true, true, 0u, 0u,
-                        record.target_width, record.target_height, frame_format());
+    renderer_.clear_scene(record.target_clear_rgba, true, true, true, 0u, 0u, kFrameUnits, kFrameUnits, frame_format());
 }
 
 // The pass's end: its picture, at full precision, becomes the texture at its key, then the frame's targets come

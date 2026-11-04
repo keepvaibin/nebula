@@ -68,13 +68,6 @@ GalaxyMapController::GalaxyMapController()
       mWipeFrame(::sMapFadeinoutFrame) {
 }
 
-namespace {
-    u16 getFbWidth() {
-        const u16& rWidth = NebulaFrameClock::cScreenUnitsAcross;
-        return rWidth;
-    }
-};  // namespace
-
 void GalaxyMapController::init(const JMapInfoIter& rIter) {
     MR::connectToSceneLayoutOnPause(this);
 
@@ -102,7 +95,7 @@ void GalaxyMapController::init(const JMapInfoIter& rIter) {
     {
         MR::CurrentHeapRestorer heapRestorer(MR::getSceneHeap());
 
-        _38 = new JUTTexture(getFbWidth() / 2, MR::getScreenHeight() / 2);
+        _38 = JUTTexture::createTarget(0.5f, 0.5f);
     }
 
     capture();
@@ -627,9 +620,8 @@ void GalaxyMapController::capture() {
     Mtx44 projectionMtx;
     f32 halfHeight = MR::getScreenHeight() * 0.5f;
     f32 halfWidth = 304.0f;
-    // A pass keeps the screen's scale and its target is half the screen: this projection puts the whole map in that half.
-    NebulaMtxOrtho(projectionMtx, halfHeight, -3.0f * halfHeight, -halfWidth, 3.0f * halfWidth, -1000.0f, 1000.0f);
-    J3DNativeTarget::begin(_38->mImage, _38->getWidth(), _38->getHeight(), 0);
+    NebulaMtxOrtho(projectionMtx, halfHeight, -halfHeight, -halfWidth, halfWidth, -1000.0f, 1000.0f);
+    J3DNativeTarget::begin(_38->mImage, _38->mShareAcross, _38->mShareDown, 0);
     J3DNativeView::setOrthographic(projectionMtx);
     drawForCapture();
     J3DNativeTarget::end(_38->mImage, NEBULA_TARGET_RGB);

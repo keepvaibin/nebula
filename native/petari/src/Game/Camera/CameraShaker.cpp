@@ -149,7 +149,7 @@ void CameraShaker::addInfinityTaskOffset(TVec2f* pOffset) {
 }
 
 void CameraShaker::adjustOffsetToScreen(TVec2f* pOffset) {
-    pOffset->y *= 30.0f / (s32)NebulaFrameClock::cScreenUnitsDown;
+    pOffset->y *= 30.0f / (s32)NebulaFrameClock::cScreenLines;
     pOffset->x *= 30.0f / MR::getScreenWidth();
 }
 

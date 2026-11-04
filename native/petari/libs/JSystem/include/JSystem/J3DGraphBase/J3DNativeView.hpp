@@ -9,10 +9,7 @@
 // 0 for perspective, then the six terms).
 #ifdef __cplusplus
 namespace J3DNativeView {
-    // Frame units per unit of the game's screen.
-    const f32 cUnitsAcross = NEBULA_FRAME_UNITS / 640.0f;
-    const f32 cUnitsDown = NEBULA_FRAME_UNITS / 456.0f;
-
+    // Rectangles are fractions of the pass's target (the frame, or a texture target): 0, 0, 1, 1 is all of it.
     void setPerspective(const f32 (*pMtx)[4]);
     // What setPerspective and setViewport would hand the host for these values, the state left as it is: the six
     // projection terms, then the viewport's six values.
@@ -20,15 +17,13 @@ namespace J3DNativeView {
     void setOrthographic(const f32 (*pMtx)[4]);
     void setProjectionv(const f32* pValues);
     void getProjectionv(f32* pValues);
-    // The viewport (field 0 of an interlaced pair moves it up half a line), and the depth
-    // range's scale and offset that the viewport's z terms take.
+    // The viewport, and the depth range's scale and offset that the viewport's z terms take.
     void setViewport(f32 left, f32 top, f32 width, f32 height, f32 nearZ, f32 farZ);
-    void setViewportJitter(f32 left, f32 top, f32 width, f32 height, f32 nearZ, f32 farZ, u32 field);
     void getViewportv(f32* pValues);
     void setZScaleOffset(f32 scale, f32 offset);
-    // The scissor box (the viewport's units).
-    void setScissor(u32 left, u32 top, u32 width, u32 height);
-    void getScissor(u32* pLeft, u32* pTop, u32* pWidth, u32* pHeight);
+    // The scissor box.
+    void setScissor(f32 left, f32 top, f32 width, f32 height);
+    void getScissor(f32* pLeft, f32* pTop, f32* pWidth, f32* pHeight);
     // The picture's colour and depth where the drawing has reached, kept as `channel`'s; reads take the latest finished
     // capture (a frame or so old) and never wait. Frame-buffer coordinates.
     // What the picture holds at the game's points where the drawing has reached; the answers come back a frame or two later.
@@ -44,8 +39,8 @@ void J3DNativeViewSetOrthographic(const f32 (*pMtx)[4]);
 void J3DNativeViewSetViewport(f32 left, f32 top, f32 width, f32 height, f32 nearZ, f32 farZ);
 void J3DNativeViewGetViewportv(f32* pValues);
 void J3DNativeViewSetZScaleOffset(f32 scale, f32 offset);
-void J3DNativeViewSetScissor(u32 left, u32 top, u32 width, u32 height);
-void J3DNativeViewGetScissor(u32* pLeft, u32* pTop, u32* pWidth, u32* pHeight);
+void J3DNativeViewSetScissor(f32 left, f32 top, f32 width, f32 height);
+void J3DNativeViewGetScissor(f32* pLeft, f32* pTop, f32* pWidth, f32* pHeight);
 #ifdef __cplusplus
 }
 #endif

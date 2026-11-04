@@ -7,10 +7,8 @@
 #include <nebula_game_api.h>
 
 namespace NebulaFrameClock {
-    // The game's screen units: viewports, 2D and effect passes count in them; J3DNativeView turns them into fractions of
-    // the frame.
-    const u16 cScreenUnitsAcross = 640;
-    const u16 cScreenUnitsDown = 456;
+    // The game's 2D coordinates are this tall, and MR::getScreenWidth wide; nothing renders at this size. J3DNativeView's rectangles are fractions.ractions of
+    const u16 cScreenLines = 456;
     // The same height as a float, and the width the layout files are authored for.
     const f32 cScreenHeight = 456.0f;
     const f32 cLayoutWidth = 608.0f;

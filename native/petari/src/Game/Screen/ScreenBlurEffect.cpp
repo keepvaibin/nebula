@@ -101,7 +101,7 @@ void ScreenBlurEffect::drawBlur() const {
 }
 
 void ScreenBlurEffect::captureBlur() const {
-    _14->frameColorAlpha();
+    _14->frameColor();
     ImageEffectLocalUtil::drawFrameDepth(_18, mFrameDepthKey);
     MR::loadProjectionMtx();
     MR::loadViewMtx();

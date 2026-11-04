@@ -79,14 +79,14 @@ void MoviePlayerSimple::draw() const {
         u32 frameBufferWidth;
 
         if (MR::isScreen16Per9()) {
-            frameBufferWidth = MR::getScreenUnitsAcross();
+            frameBufferWidth = MR::getScreenWidth();
         } else {
-            frameBufferWidth = NebulaFrameClock::cWideScreenWidth;
+            frameBufferWidth = MR::getScreenWidth() * 4 / 3;  // 16:9 on a 4:3 picture
         }
 
         u32 ySize = mMovie->mVideoInfo.mHeight;
-        u32 v4 = (MR::getScreenUnitsAcross() - frameBufferWidth) / 2;
-        u32 v5 = (MR::getScreenUnitsDown() - ySize) / 2;
+        u32 v4 = (MR::getScreenWidth() - static_cast< s32 >(frameBufferWidth)) / 2;
+        u32 v5 = (MR::getScreenHeight() - ySize) / 2;
         MovieDraw::setLinearFilter(true);
         if (mStream->hasSound() && isNerve(GET_NERVE_ANON(MoviePlayerSimplePlaying))) {
             mStream->decodeHeardFrame();
@@ -247,11 +247,11 @@ void MoviePlayerSimple::stop() {
 void MoviePlayerSimple::drawCinemaFrame() const {
     MR::fillScreenSetup(::sCinemaFrameColor);
 
-    s16 width = MR::getScreenUnitsAcross();
+    s16 width = MR::getScreenWidth();
     TBox2s top(0, 0, width, ::sCinemaFrameHeightTop);
     MR::fillScreenArea(top.i, top.f);
 
-    s16 height = MR::getScreenUnitsDown();
+    s16 height = MR::getScreenHeight();
     TBox2s bottom(0, ::sCinemaFrameHeightBottom, width, height);
     MR::fillScreenArea(bottom.i, bottom.f);
 }

@@ -48,6 +48,12 @@ public:
     /// @param layout How the game writes it (NEBULA_TEXTURE_LINEAR_*); a capture's buffer is only its key.
     JUTTexture(int width, int height, u8 layout = NEBULA_TEXTURE_LINEAR_L8);
 
+    /// @brief A texture a target pass draws: `across` x `down` of the frame. It holds no pixels of its own; its size says
+    /// what effects' texel offsets were authored for, a whole frame being this many texels.
+    static constexpr f32 cAuthoredAcross = 640.0f;
+    static constexpr f32 cAuthoredDown = 456.0f;
+    static JUTTexture* createTarget(f32 across, f32 down);
+
     /// @brief Creates a new `JUTTexture`.
     /// @param pTIMG The image.
     explicit JUTTexture(const ResTIMG* pTIMG) {
@@ -71,7 +77,6 @@ public:
     void initTexObj();
     // The frame as drawn so far as this texture: its colour, alpha or depth; half: each texel averages 2x2.
     void frameColor();
-    void frameColorAlpha();
 
     const ResTIMG* getTexInfo() const {
         return mTIMG;
@@ -93,6 +98,8 @@ public:
     }
 
     J3DNativeTexObj mObj;
+    f32 mShareAcross = 1.0f;
+    f32 mShareDown = 1.0f;
     const ResTIMG* mTIMG;
     u8* mImage;
     u8 mWrapS;

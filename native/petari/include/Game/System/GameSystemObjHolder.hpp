@@ -32,9 +32,6 @@ public:
     void drawBeforeEndRender();
     void captureIfAllowForScreenPreserver();
     // The picture's width on a television's 720-pixel line, as chosen at boot: the safety frame scales from it.
-    u16 getPictureSpan() const {
-        return mPictureSpan;
-    }
     void initStore();
     void initAudio();
     void initPicture();
@@ -47,7 +44,6 @@ public:
 
     NameObjHolder* mObjHolder;
     ParticleResourceHolder* mParticleResHolder;
-    u16 mPictureSpan;
     CaptureScreenDirector* mCaptureScreenDirector;
     ScreenPreserver* mScreenPreserver;
     AudSystemWrapper* mAudioSystem;

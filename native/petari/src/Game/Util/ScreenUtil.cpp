@@ -91,62 +91,19 @@ namespace {
 };  // namespace
 
 namespace MR {
-    u32 getPictureSpan() {
-        return SingletonHolder< GameSystem >::get()->mObjHolder->getPictureSpan();
-    }
-
-    f32 getSafetyVIScreenWidthRatio() {
-        if (isScreen16Per9()) {
-            return 0.87f;
-        } else {
-            return 0.844f;
-        }
-    }
-
-    static bool sDesignScreenWidth;
-
-    void beginDesignScreenWidth() {
-        sDesignScreenWidth = true;
-    }
-
-    void endDesignScreenWidth() {
-        sDesignScreenWidth = false;
-    }
-
     s32 getScreenWidth() {
-        if (isScreen16Per9() && getDisplay().wide && !sDesignScreenWidth) {
+        if (isScreen16Per9() && getDisplay().wide) {
             return getDisplay().screen_width;
         }
         return isScreen16Per9() ? NebulaFrameClock::cWideScreenWidth : static_cast< s32 >(NebulaFrameClock::cLayoutWidth);
     }
 
-    s32 getSafetyFrameWidth() {
-        const s32 viWidthMax = 720;  // a television line
-        f32 safetyFrameWidthRatio = viWidthMax * getSafetyVIScreenWidthRatio();
-        s32 screenWidth = getScreenWidth();
-        f32 spanRatio = static_cast< f32 >(screenWidth) / static_cast< s32 >(getPictureSpan());
-
-        return safetyFrameWidthRatio * spanRatio + 0.5f;
+    s32 getScreenMargin() {
+        return getScreenWidth() * 0.045f;
     }
 
-    s32 getSafetyFrameLeft() {
-        return (getScreenWidth() - getSafetyFrameWidth()) / 2;
-    }
-
-    s32 getSafetyFrameRight() {
-        return (getScreenWidth() + getSafetyFrameWidth()) / 2;
-    }
-
-    void convertCanvasPosToScreenPos(TVec2f* pScreenPos, const TVec2f& rCanvasPos) {
-        f32 posRatio = rCanvasPos.x / getScreenUnitsAcross();
-
-        pScreenPos->set(posRatio * getScreenWidth(), rCanvasPos.y);
-    }
-
-    void convertScreenPosToCanvasPos(TVec2f* pCanvasPos, const TVec2f& rScreenPos) {
-        f32 posRatio = rScreenPos.x / getScreenWidth();
-
-        pCanvasPos->set(posRatio * getScreenUnitsAcross(), rScreenPos.y);
+    void convertScreenPosToFrame(TVec2f* pFrame, const TVec2f& rScreenPos) {
+        pFrame->set(rScreenPos.x / getScreenWidth(), rScreenPos.y / getScreenHeight());
     }
 
     void startToCaptureScreen(const char* pParam1) {

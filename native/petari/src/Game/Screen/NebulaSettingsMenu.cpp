@@ -1679,7 +1679,7 @@ void NebulaSettingsScreen::readPointer(const NebulaSettingsView& rView) {
         edge.x = 0.0f;
         edge.y = 0.0f;
         MR::convertScreenPosToLayoutPos(&top, edge);
-        edge.y = static_cast< s32 >(NebulaFrameClock::cScreenUnitsDown);
+        edge.y = static_cast< s32 >(NebulaFrameClock::cScreenLines);
         MR::convertScreenPosToLayoutPos(&bottom, edge);
         mScrollTarget -= static_cast< f32 >(swipe) * __builtin_fabsf(bottom.y - top.y) / 1200.0f;
         mDraggedAt = static_cast< s32 >(rView.selected);
@@ -1700,7 +1700,7 @@ void NebulaSettingsScreen::readPointer(const NebulaSettingsView& rView) {
     TVec2f screen;
     MR::getPointerPastPos(&screen, 0, PLAYER_1);
     screen.x = (screen.x + 1.0f) * MR::getScreenWidth() * 0.5f;
-    screen.y = (screen.y + 1.0f) * static_cast< s32 >(NebulaFrameClock::cScreenUnitsDown) * 0.5f;
+    screen.y = (screen.y + 1.0f) * static_cast< s32 >(NebulaFrameClock::cScreenLines) * 0.5f;
     TVec2f layout;
     MR::convertScreenPosToLayoutPos(&layout, screen);
     const f32 x = layout.x / (mScaleX * mZoom);

@@ -953,7 +953,6 @@ private:
     void begin_target_pass(const shapes::Record& record);
     void end_target_pass(const shapes::Record& record);
     // The open target pass's size (game units), for its closing copy.
-    std::array<std::uint32_t, 2> target_pass_size_{};
     // A draw record's matrices and current matrices, into the matrix state its draw reads.
     void apply_record_matrices(const shapes::Record& record);
     // Gives back a group's resident block.

@@ -76,12 +76,12 @@ DepthOfFieldBlur::DepthOfFieldBlur(const char* pName)
     _28->mWrapT = NEBULA_WRAP_CLAMP;
     _28->mMinType = NEBULA_FILTER_LINEAR;
     _28->mMagType = NEBULA_FILTER_LINEAR;
-    mQuarter = new JUTTexture(_24->getWidth(), _24->getHeight());
+    mQuarter = JUTTexture::createTarget(_24->mShareAcross, _24->mShareDown);
     mQuarter->mWrapS = NEBULA_WRAP_CLAMP;
     mQuarter->mWrapT = NEBULA_WRAP_CLAMP;
     mQuarter->mMinType = NEBULA_FILTER_LINEAR;
     mQuarter->mMagType = NEBULA_FILTER_LINEAR;
-    mBlurScratch = new JUTTexture(_24->getWidth(), _24->getHeight());
+    mBlurScratch = JUTTexture::createTarget(_24->mShareAcross, _24->mShareDown);
     mBlurScratch->mWrapS = NEBULA_WRAP_CLAMP;
     mBlurScratch->mWrapT = NEBULA_WRAP_CLAMP;
     mBlurScratch->mMinType = NEBULA_FILTER_LINEAR;
@@ -93,7 +93,7 @@ void DepthOfFieldBlur::draw() const {
         return;
     }
 
-    J3DNativeTarget::begin(_28->mImage, _28->getWidth(), _28->getHeight(), 0);
+    J3DNativeTarget::beginPixels(_28->mImage, _28->getWidth(), _28->getHeight(), 0);
     drawZAlphaTex();
     J3DNativeTarget::end(_28->mImage, NEBULA_TARGET_RED);
     ImageEffectLocalUtil::setupDrawTexture();
@@ -106,8 +106,7 @@ void DepthOfFieldBlur::draw() const {
 
 void DepthOfFieldBlur::drawZAlphaTex() const {
     Mtx44 projectionMtx;
-    NebulaMtxOrtho(projectionMtx, 0.0f, static_cast< s32 >(NebulaFrameClock::cScreenUnitsDown), 0.0f,
-               static_cast< s32 >(NebulaFrameClock::cScreenUnitsAcross), -::sViewDistance, ::sViewDistance);
+    NebulaMtxOrtho(projectionMtx, 0.0f, 2.0f, 0.0f, 128.0f, -::sViewDistance, ::sViewDistance);
     J3DNativeView::setOrthographic(projectionMtx);
     MR::loadViewMtxFor2DModel();
 
@@ -117,10 +116,10 @@ void DepthOfFieldBlur::drawZAlphaTex() const {
     J3DPass::positionMatrix(0);
     J3DPass::writeColor(true);
     J3DPass::writeAlpha(false);
-    J3DPass::lineWidth(2.0f);
     sendZAlphaMaterial();
 
-    J3DNativeDraw::begin(NEBULA_PRIMITIVE_LINE_STRIP, 4, NEBULA_SHAPE_COLOR0);
+    // The ramp's stops along the whole texture.
+    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 8, NEBULA_SHAPE_COLOR0);
     {
         u8 blurMinDist;
         u8 blurMaxDist = 248;
@@ -136,33 +135,33 @@ void DepthOfFieldBlur::drawZAlphaTex() const {
         }
 
         if (blurMaxDist >= blurMinDist) {
-            J3DNativeDraw::position(0.0f, 1.0f, 0.0f);
-            J3DNativeDraw::color(0, 0, 0, 0xFF);
-            J3DNativeDraw::position(blurMinDist * 0.5f, 1.0f, 0.0f);
-            J3DNativeDraw::color(0, 0, 0, 0xFF);
-            J3DNativeDraw::position(blurMaxDist * 0.5f, 1.0f, 0.0f);
-            J3DNativeDraw::color(255, 255, 255, 0xFF);
-            J3DNativeDraw::position(128.0f, 1.0f, 0.0f);
-            J3DNativeDraw::color(255, 255, 255, 0xFF);
+            const u8 c[4] = {0, 0, 255, 255};
+            const f32 at[4] = {0.0f, blurMinDist * 0.5f, blurMaxDist * 0.5f, 128.0f};
+            for (u32 i = 0; i < 4; i++) {
+                J3DNativeDraw::position(at[i], 0.0f, 0.0f);
+                J3DNativeDraw::color(c[i], c[i], c[i], 0xFF);
+                J3DNativeDraw::position(at[i], 2.0f, 0.0f);
+                J3DNativeDraw::color(c[i], c[i], c[i], 0xFF);
+            }
         } else {
-            J3DNativeDraw::position(128.0f, 1.0f, 0.0f);
-            J3DNativeDraw::color(0, 0, 0, 0xFF);
-            J3DNativeDraw::position(blurMinDist * 0.5f, 1.0f, 0.0f);
-            J3DNativeDraw::color(0, 0, 0, 0xFF);
-            J3DNativeDraw::position(blurMaxDist * 0.5f, 1.0f, 0.0f);
-            J3DNativeDraw::color(255, 255, 255, 0xFF);
-            J3DNativeDraw::position(0.0f, 1.0f, 0.0f);
-            J3DNativeDraw::color(255, 255, 255, 0xFF);
+            const u8 c[4] = {0, 0, 255, 255};
+            const f32 at[4] = {128.0f, blurMinDist * 0.5f, blurMaxDist * 0.5f, 0.0f};
+            for (u32 i = 0; i < 4; i++) {
+                J3DNativeDraw::position(at[i], 0.0f, 0.0f);
+                J3DNativeDraw::color(c[i], c[i], c[i], 0xFF);
+                J3DNativeDraw::position(at[i], 2.0f, 0.0f);
+                J3DNativeDraw::color(c[i], c[i], c[i], 0xFF);
+            }
         }
     }
 }
 
 void DepthOfFieldBlur::createBlurTexture() const {
-    J3DNativeTarget::beginOverFrame(mQuarter->mImage, mQuarter->getWidth(), mQuarter->getHeight(), 0, mFrameKey->mImage, NEBULA_TARGET_RGB,
+    J3DNativeTarget::beginOverFrame(mQuarter->mImage, mQuarter->mShareAcross, mQuarter->mShareDown, 0, mFrameKey->mImage, NEBULA_TARGET_RGB,
                                     nullptr);
     const NebulaColor8 none = {0, 0, 0, 0};
     ImageEffectLocalUtil::setMode(ImageEffectLocalUtil::Mode_QuarterBox, none);
-    ImageEffectLocalUtil::drawTexture(mFrameKey, 4, 0, 255, ImageEffectLocalUtil::TexDrawType_0);
+    ImageEffectLocalUtil::drawTexture(mFrameKey, 255, ImageEffectLocalUtil::TexDrawType_0);
     ImageEffectLocalUtil::setupDrawTexture();
     J3DNativeTarget::end(mQuarter->mImage, NEBULA_TARGET_RGB);
     ImageEffectLocalUtil::blurTexture(mQuarter, mBlurScratch, _24, mIntensity * get_10() * 0.005f, NEBULA_TARGET_RGB);
@@ -170,6 +169,6 @@ void DepthOfFieldBlur::createBlurTexture() const {
 
 void DepthOfFieldBlur::drawFinal() const {
     sendFinalMaterial(_24, _28, _20, static_cast< u8 >((s32)(mIntensity * get_10() * 255.0f)));
-    ImageEffectLocalUtil::sendTextureVertex(1, 0);
+    ImageEffectLocalUtil::sendTextureVertex();
     ImageEffectLocalUtil::setupDrawTexture();
 }

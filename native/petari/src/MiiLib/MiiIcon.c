@@ -27,10 +27,10 @@ void Mii_MakeIcon(void* buf, Mii_CharInfo* info, MiiExpression expression, const
     void* modelBuf;                    // sp+84
     f32 vp[6];                         // sp+150
     Mtx viewMtx;                       // sp+1e8
-    u32 scissorOffsetX;                // sp+7C
-    u32 scissorOffsetY;                // sp+78
-    u32 scissorWidth;                  // sp+74
-    u32 scissorHeight;                 // sp+70
+    f32 scissorOffsetX;                // sp+7C
+    f32 scissorOffsetY;                // sp+78
+    f32 scissorWidth;                  // sp+74
+    f32 scissorHeight;                 // sp+70
     Mii_CoordinateData iconCoordData;  // sp+118
     Mii_CoordinateData coordData;      // sp+128
     u32 bufSize;                       // sp+6C
@@ -78,13 +78,13 @@ void Mii_MakeIcon(void* buf, Mii_CharInfo* info, MiiExpression expression, const
     backColor.a = 0;
 
     J3DNativeViewGetScissor(&scissorOffsetX, &scissorOffsetY, &scissorWidth, &scissorHeight);
-    J3DNativeViewSetScissor(0, 0, setting->width, setting->height);
+    J3DNativeViewSetScissor(0.0f, 0.0f, 1.0f, 1.0f);
 
     Mii_BeginTexture(buf, setting->width, setting->height,
                      ((u32)backColor.r << 24) | ((u32)backColor.g << 16) | ((u32)backColor.b << 8) | backColor.a);
 
     J3DNativeViewGetViewportv(vp);
-    J3DNativeViewSetViewport(0.0f, 0.0f, setting->width, setting->height, 0.0f, 1.0f);
+    J3DNativeViewSetViewport(0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f);
 
     aspect = (f32)setting->width / (f32)setting->height;
     if (setting->width < setting->height) {

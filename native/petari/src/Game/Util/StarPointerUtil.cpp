@@ -640,7 +640,7 @@ namespace MR {
     f32 calcPointRadius2D(const TVec3f& rPosition, f32 radius) {
         f32 fovyRad = MR::toRadian(MR::getRenderFovy());
         f32 tan = MR::tan(fovyRad * 0.5f);
-        f32 focalDist = (static_cast< s32 >(NebulaFrameClock::cScreenUnitsDown) * 0.5f) / tan;
+        f32 focalDist = (static_cast< s32 >(NebulaFrameClock::cScreenLines) * 0.5f) / tan;
 
         TVec3f viewPos;
         MR::getCameraViewMtx().mult(rPosition, viewPos);
