@@ -526,6 +526,12 @@ public:
     // the scene target on `fresh` (a released texture of the scene target's description, or null for a new one). The picture is owed to
     // the scene target until a clear covers it (settle_owed_scene).
     [[nodiscard]] gpu::TextureRef hand_over_scene_color(gpu::TextureRef fresh);
+    // Pictures offered for a hand-over from before a settings change, until the GPU is past them.
+    struct OldSceneTarget {
+        gpu::TextureRef texture;
+        std::uint64_t free_from = 0u;
+    };
+    std::vector<OldSceneTarget> old_scene_targets_;
     // The frame so far becomes picture `key`; the frame goes on in `fresh`, not owed its contents. `released` is the
     // picture `key` had.
     [[nodiscard]] bool can_take_scene() const noexcept;
