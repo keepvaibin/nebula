@@ -1055,9 +1055,9 @@ vk::TemporalUpscaleInputs RendererVk::temporal_inputs(const vk::Texture& color, 
     constexpr VkImageUsageFlags kColor = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
     vk::TemporalUpscaleInputs in{};
     in.color = image(color, VK_FORMAT_R8G8B8A8_UNORM, kColor);
-    in.depth = image(depth, depth_format_, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+    in.depth = image(depth, depth_format_, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
     in.depth.barrier_aspects = depth_aspects(depth_format_);
-    in.motion = image(motion, VK_FORMAT_R16G16_SFLOAT, kColor);
+    in.motion = image(motion, VK_FORMAT_R16G16_SFLOAT, kColor | VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
     in.reactive = image(reactive, VK_FORMAT_R8_UNORM, kColor);
     in.output = image(output, VK_FORMAT_R8G8B8A8_UNORM, kColor | VK_IMAGE_USAGE_STORAGE_BIT);
     in.output.view = output.target_view;
@@ -1163,6 +1163,10 @@ bool RendererVk::record_temporal_upscale(const FrameMap& output) {
     temporal_history_valid_ = recorded;
     return recorded;
 }
+
+namespace {
+void write_conversion_input(VkDescriptorSet set, VkImageView view, VkSampler sampler);
+}  // namespace
 
 // DLSS Frame Generation's HUD-less picture: the output scene right after the upscale, before the 2D layer draws into it.
 void RendererVk::take_fg_hudless_scene() {

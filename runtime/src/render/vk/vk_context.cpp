@@ -2,6 +2,7 @@
 // The shared Vulkan device, its submissions and deferred destruction (vk_context.h).
 #include "galaxy/run_options.h"
 #include "galaxy/render/vk/vk_context.h"
+#include "galaxy/render/render_config.h"
 
 #include "galaxy/render/vk/temporal_upscaler_vk.h"
 #if defined(_WIN32)

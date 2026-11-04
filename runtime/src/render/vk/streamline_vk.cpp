@@ -222,7 +222,7 @@ bool start() noexcept {
             sl::FeatureRequirements reflex{};
             if (api.get_feature_requirements(sl::kFeatureDLSS_G, own) == sl::Result::eOk &&
                 api.get_feature_requirements(sl::kFeatureReflex, reflex) == sl::Result::eOk &&
-                sl::hasFlag(own.flags, sl::FeatureRequirementFlags::eVulkanSupported)) {
+                (static_cast<std::uint32_t>(own.flags) & static_cast<std::uint32_t>(sl::FeatureRequirementFlags::eVulkanSupported)) != 0u) {
                 g_needs.frame_generation = true;
                 add_names(g_needs.instance_extensions, own.vkInstanceExtensions, own.vkNumInstanceExtensions);
                 add_names(g_needs.generation_extensions, own.vkDeviceExtensions, own.vkNumDeviceExtensions);

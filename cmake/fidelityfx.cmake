@@ -31,7 +31,7 @@ if(NOT EXISTS "${nebula_ffx_stamp}")
     endif()
     execute_process(
         COMMAND "${CMAKE_COMMAND}" --build "${build}" --config Release
-                --target ffx_fsr3_x64 ffx_fsr3upscaler_x64 ffx_frameinterpolation_x64 ffx_opticalflow_x64 ffx_backend_dx12_x64
+                --target ffx_fsr3upscaler_x64 ffx_frameinterpolation_x64 ffx_opticalflow_x64 ffx_backend_dx12_x64
         RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE errors)
     if(NOT result EQUAL 0)
         message(FATAL_ERROR "Building the FidelityFX SDK failed:\n${output}\n${errors}")
@@ -41,7 +41,7 @@ endif()
 
 target_include_directories(nebula_fidelityfx SYSTEM INTERFACE "${nebula_ffx_sdk}/include")
 target_link_libraries(nebula_fidelityfx INTERFACE
-    "${nebula_ffx_libs}/ffx_fsr3_x64.lib" "${nebula_ffx_libs}/ffx_fsr3upscaler_x64.lib" "${nebula_ffx_libs}/ffx_frameinterpolation_x64.lib"
+    "${nebula_ffx_libs}/ffx_fsr3upscaler_x64.lib" "${nebula_ffx_libs}/ffx_frameinterpolation_x64.lib"
     "${nebula_ffx_libs}/ffx_opticalflow_x64.lib" "${nebula_ffx_libs}/ffx_backend_dx12_x64.lib")
 target_compile_definitions(nebula_fidelityfx INTERFACE GALAXY_WITH_FSR3=1 GALAXY_WITH_FSR3_FG=1)
 
@@ -75,7 +75,7 @@ function(nebula_fidelityfx_vulkan headers)
     add_library(nebula_fidelityfx_vk INTERFACE)
     target_include_directories(nebula_fidelityfx_vk SYSTEM INTERFACE "${nebula_ffx_sdk}/include")
     target_link_libraries(nebula_fidelityfx_vk INTERFACE
-        "${nebula_ffx_libs}/ffx_fsr3_x64.lib" "${nebula_ffx_libs}/ffx_fsr3upscaler_x64.lib" "${nebula_ffx_libs}/ffx_frameinterpolation_x64.lib"
+        "${nebula_ffx_libs}/ffx_fsr3upscaler_x64.lib" "${nebula_ffx_libs}/ffx_frameinterpolation_x64.lib"
         "${nebula_ffx_libs}/ffx_opticalflow_x64.lib" "${nebula_ffx_libs}/ffx_backend_vk_x64.lib")
     target_compile_definitions(nebula_fidelityfx_vk INTERFACE GALAXY_WITH_FSR3_VK=1 GALAXY_WITH_FSR3=1 GALAXY_WITH_FSR3_FG=1)
 endfunction()
