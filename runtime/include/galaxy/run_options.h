@@ -76,6 +76,8 @@ struct RunOptions {
     const char* xinput_require_focus = nullptr;
 #if defined(_WIN32)
     const wchar_t* frame_timeline_path_w = nullptr;
+    const wchar_t* xess_dir_w = nullptr;
+    const wchar_t* streamline_dir_w = nullptr;
     const wchar_t* render_config_path_w = nullptr;
     const wchar_t* runtime_settings_path_w = nullptr;
     const wchar_t* crash_dump_dir_w = nullptr;

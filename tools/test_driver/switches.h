@@ -102,6 +102,13 @@ inline constexpr const char* crash_dump_dir_name() noexcept { return "GALAXY_CRA
 inline constexpr const wchar_t* crash_dump_dir_wide_name() noexcept { return L"GALAXY_CRASH_DUMP_DIR"; }
 #endif
 #if defined(NEBULA_RELEASE)
+inline constexpr const wchar_t* xess_dir_wide_name() noexcept { return L""; }
+inline constexpr const wchar_t* streamline_dir_wide_name() noexcept { return L""; }
+#else
+inline constexpr const wchar_t* xess_dir_wide_name() noexcept { return L"GALAXY_XESS_DIR"; }
+inline constexpr const wchar_t* streamline_dir_wide_name() noexcept { return L"GALAXY_STREAMLINE_DIR"; }
+#endif
+#if defined(NEBULA_RELEASE)
 inline const char* hide_window() noexcept { return nullptr; }
 inline constexpr const char* hide_window_name() noexcept { return ""; }
 inline constexpr const wchar_t* hide_window_wide_name() noexcept { return L""; }
