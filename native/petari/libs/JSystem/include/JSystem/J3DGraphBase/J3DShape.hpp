@@ -200,6 +200,9 @@ public:
     u16 getIndex() const {
         return mIndex;
     }
+    bool sTexMtxLoadTypeIsPlain() const {
+        return getTexMtxLoadType() != 0x2000;
+    }
     u32 getTexMtxLoadType() const {
         return mFlags & 0xF000;
     }
@@ -231,6 +234,7 @@ public:
     Vec mMin;
     Vec mMax;
     bool mNebulaRegistered;
+    bool mNebulaWhole;  // its groups registered as one geometry (J3DNativeShape::registerWhole)
     bool mHasNBT;
     J3DShapeMtx** mShapeMtx;
     J3DShapeDraw** mShapeDraw;

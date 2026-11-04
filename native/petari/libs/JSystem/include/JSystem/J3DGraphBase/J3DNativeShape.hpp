@@ -56,6 +56,9 @@ namespace J3DNativeShape {
     void setPalette(u32 palette, u16 matrix);
     // Writes the matrices corners name, once a shape's table is known.
     void useModelMatrices(J3DShape* pShape);
+    void registerWhole(J3DShape* pShape);
+    // A skinned shape's groups as one draw.
+    void drawWhole(const J3DShape* pShape);
 
     void flushState();
     // An immediate's position and normal matrices: those at the places `mask` names (bit k: place k; 0: the current

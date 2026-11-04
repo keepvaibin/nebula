@@ -1,4 +1,6 @@
 #include "JSystem/J3DGraphBase/J3DShape.hpp"
+#include "JSystem/J3DGraphBase/J3DNativeShape.hpp"
+#include "JSystem/J3DGraphBase/J3DShapeMtx.hpp"
 #include "JSystem/J3DGraphBase/J3DPacket.hpp"
 #include "JSystem/J3DGraphBase/J3DShapeDraw.hpp"
 #include "JSystem/J3DGraphBase/J3DSys.hpp"
@@ -28,6 +30,7 @@ void J3DShape::initialize() {
     mHasNBT = false;
     mHasPNMTXIdx = false;
     mNebulaRegistered = false;
+    mNebulaWhole = false;
 }
 
 void J3DShape::addTexMtxIndex(u32 coord, u32 valueBase) {
@@ -87,7 +90,11 @@ void J3DShape::drawFast() const {
         mCurrentMtx.load();
 
     setArrayAndBindPipeline();
-    if (!checkFlag(J3DShpFlag_NoMtx)) {
+    if (mNebulaWhole && !checkFlag(J3DShpFlag_NoMtx) && J3DDifferedTexMtx::sTexGenBlock == nullptr &&
+        sTexMtxLoadTypeIsPlain()) {
+        mShapeMtx[0]->load();
+        J3DNativeShape::drawWhole(this);
+    } else if (!checkFlag(J3DShpFlag_NoMtx)) {
         for (u16 n = mMtxGroupNum, i = 0; i < n; i++) {
             if (mShapeMtx[i] != nullptr)
                 mShapeMtx[i]->load();
