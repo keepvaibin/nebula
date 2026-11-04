@@ -89,6 +89,15 @@ function(galaxy_host_options target)
     endif()
 endfunction()
 
+# How a plugin replaces a game function on Windows.
+set(nebula_minhook_sources)
+if(WIN32)
+    set(nebula_minhook_dir "${CMAKE_CURRENT_LIST_DIR}/third_party/minhook")
+    set(nebula_minhook_sources "${nebula_minhook_dir}/src/buffer.c" "${nebula_minhook_dir}/src/hook.c" "${nebula_minhook_dir}/src/trampoline.c" "${nebula_minhook_dir}/src/hde/hde64.c")
+    set_source_files_properties(${nebula_minhook_sources} PROPERTIES COMPILE_OPTIONS "/W0;/WX-;/wd4310;/wd4244;/wd4267;/wd4100;/wd4701;/wd4706")
+endif()
+include_directories("${CMAKE_CURRENT_LIST_DIR}/third_party/minhook/include" "${CMAKE_CURRENT_LIST_DIR}/native/include")
+
 add_library(galaxy_runtime_abi INTERFACE)
 target_include_directories(galaxy_runtime_abi INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/runtime/include")
 
@@ -162,6 +171,8 @@ add_library(galaxy_native_host STATIC
     runtime/src/mii_formats.cpp
     runtime/src/mod_xml.cpp
     runtime/src/luma.cpp
+    runtime/src/mod_plugins.cpp
+    ${nebula_minhook_sources}
     runtime/src/mods.cpp
     runtime/src/texture_categories.cpp
     runtime/src/mod_import.cpp

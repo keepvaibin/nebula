@@ -194,15 +194,21 @@ void MultiEmitter::initSyncBck(XanimePlayer* pPlayer, const char* pName, s32 cap
 }
 
 void MultiEmitter::onDeleteSyncBck(bool deleteOnEnd, f32 endFrame) {
-    _24->mEndFrame = endFrame;
+    if (_24 != nullptr) {
+        _24->mEndFrame = endFrame;
+    }
 }
 
 void MultiEmitter::addSyncBck(const XanimePlayer* pPlayer, const char* pName) {
-    _24->addBck(pPlayer, pName);
+    if (_24 != nullptr) {
+        _24->addBck(pPlayer, pName);
+    }
 }
 
 void MultiEmitter::setContinueBckEnd(bool continueAnimEnd) {
-    _24->mContinueAnimEnd = continueAnimEnd;
+    if (_24 != nullptr) {
+        _24->mContinueAnimEnd = continueAnimEnd;
+    }
 }
 
 void MultiEmitter::onCreateSyncClipping() {

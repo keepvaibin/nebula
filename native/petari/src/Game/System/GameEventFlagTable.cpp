@@ -10,6 +10,10 @@
 #include <cstdio>
 
 namespace {
+    GameEventFlag* sAddedFlags = nullptr;
+    s32 sAddedFlagCount = 0;
+    GameEventFlag* sMergedFlags = nullptr;
+
     static const GameEventFlag sGameEventFlagStatic[] = {
         {"AppearFlipPanelExGalaxy", GameEventFlag::Type_GalaxyOpenStar, 1, {0}, {0}, 0, {"FlipPanelExGalaxy"}, {0}},
         {"AppearSurfingLv1Galaxy", GameEventFlag::Type_GalaxyOpenStar, 1, {0}, {0}, 0, {"SurfingLv1Galaxy"}, {0}},
@@ -289,11 +293,88 @@ namespace GameEventFlagTable {
     }
 
     const GameEventFlag* flags() {
-        return ::sGameEventFlagStatic;
+        if (::sAddedFlagCount == 0) {
+            return ::sGameEventFlagStatic;
+        }
+        if (::sMergedFlags == nullptr) {
+            const s32 size = ARRAY_SIZE(::sGameEventFlagStatic);
+            ::sMergedFlags = new GameEventFlag[size + ::sAddedFlagCount];
+            for (s32 i = 0; i < size; i++) {
+                ::sMergedFlags[i] = ::sGameEventFlagStatic[i];
+                // A hungry Luma a mod puts in this one's place.
+                if (::sMergedFlags[i].mType == GameEventFlag::Type_StarPiece) {
+                    for (s32 a = 0; a < ::sAddedFlagCount; a++) {
+                        if (::sAddedFlags[a].mType == GameEventFlag::Type_StarPiece &&
+                            ::sAddedFlags[a].mStarPieceIndex == ::sMergedFlags[i].mStarPieceIndex) {
+                            ::sMergedFlags[i].mType = GameEventFlag::Type_None;
+                        }
+                    }
+                }
+            }
+            for (s32 a = 0; a < ::sAddedFlagCount; a++) {
+                ::sMergedFlags[size + a] = ::sAddedFlags[a];
+            }
+        }
+        return ::sMergedFlags;
     }
 
     s32 getTableSize() {
-        return ARRAY_SIZE(::sGameEventFlagStatic);
+        return ARRAY_SIZE(::sGameEventFlagStatic) + ::sAddedFlagCount;
+    }
+
+    static bool nameIsFree(const char* pName) {
+        const u16 hash = MR::getHashCode(pName);
+        for (u32 i = 0; i < ARRAY_SIZE(::sGameEventFlagStatic); i++) {
+            if (MR::getHashCode(::sGameEventFlagStatic[i].mName) == hash) {
+                return false;
+            }
+        }
+        for (s32 i = 0; i < ::sAddedFlagCount; i++) {
+            if (MR::getHashCode(::sAddedFlags[i].mName) == hash) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    static void addFlag(const GameEventFlag& rFlag) {
+        GameEventFlag* pFlags = new GameEventFlag[::sAddedFlagCount + 1];
+        for (s32 i = 0; i < ::sAddedFlagCount; i++) {
+            pFlags[i] = ::sAddedFlags[i];
+        }
+        pFlags[::sAddedFlagCount] = rFlag;
+        delete[] ::sAddedFlags;
+        ::sAddedFlags = pFlags;
+        ::sAddedFlagCount++;
+    }
+
+    bool addGalaxy(const char* pGalaxyName) {
+        if (!nameIsFree(pGalaxyName)) {
+            return false;
+        }
+        GameEventFlag flag = {};
+        flag.mName = pGalaxyName;
+        flag.mType = GameEventFlag::Type_Galaxy;
+        addFlag(flag);
+        return true;
+    }
+
+    bool addHungryLuma(const char* pGalaxyName, s32 slot, s32 starBits) {
+        const size_t length = strlen(pGalaxyName) + sizeof("StarPiece");
+        char* pName = new char[length];
+        nebula_snprintf(pName, length, "StarPiece%s", pGalaxyName);
+        if (!nameIsFree(pName)) {
+            return false;
+        }
+        GameEventFlag flag = {};
+        flag.mName = pName;
+        flag.mType = GameEventFlag::Type_StarPiece;
+        flag.mSaveFlag = 1;
+        flag.mStarPieceIndex = static_cast< u8 >(slot);
+        flag._8 = static_cast< u32 >(starBits);
+        flag.mGalaxyName = pGalaxyName;
+        addFlag(flag);
+        return true;
     }
 
     const GameEventFlag* getFlag(int index) {

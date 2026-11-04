@@ -1,3 +1,4 @@
+#include "Game/System/NebulaMods.hpp"
 #include "Game/System/MessageHolder.hpp"
 #include "Game/NPC/TalkMessageInfo.hpp"
 #include "Game/NPC/TalkNodeCtrl.hpp"
@@ -38,6 +39,11 @@ namespace {
 };  // namespace
 
 bool MessageData::getMessageDirect(TalkMessageInfo* pMessageInfo, const char* pMessage) const {
+    if (const char16_t* pWords = NebulaMods::text(pMessage)) {
+        pMessageInfo->_0 = reinterpret_cast< u8* >(const_cast< char16_t* >(pWords));
+        return true;
+    }
+
     // Nebula's own talk (Nebula_<id>: the Achievement Luma's): an Observatory Luma's talk settings (a normal talk in
     // its balloon, with its voice and camera) and Nebula's words in the played language.
     static const char cNebula[] = "Nebula_";

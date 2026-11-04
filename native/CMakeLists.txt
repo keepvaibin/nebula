@@ -26,6 +26,23 @@ file(GLOB_RECURSE game_sources CONFIGURE_DEPENDS
     "${petari}/src/nw4r/*.cpp" "${petari}/src/nw4r/*.c"
     "${petari}/src/MiiLib/*.c" "${petari}/src/MiiLib/*.cpp")
 
+# What a plugin built with the game's headers must match: any change to them may move a field or a virtual function.
+file(GLOB_RECURSE nebula_game_headers "${petari}/include/*" "${petari}/libs/*.h" "${petari}/libs/*.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/math/include/*" "${CMAKE_CURRENT_SOURCE_DIR}/include/nebula_prelude.h")
+list(SORT nebula_game_headers)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${nebula_game_headers})
+set(nebula_abi_text "${NEBULA_GAME_VERSION}")
+foreach(header IN LISTS nebula_game_headers)
+    file(SHA256 "${header}" header_hash)
+    string(APPEND nebula_abi_text "${header_hash}")
+endforeach()
+string(SHA256 nebula_abi_hash "${nebula_abi_text}")
+string(SUBSTRING "${nebula_abi_hash}" 0 16 nebula_abi_hash)
+set(NEBULA_GAME_ABI "0x${nebula_abi_hash}ull")
+# For the plugin kit: what a plugin built with these headers says it is.
+file(CONFIGURE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/sdk/nebula_game_abi.h" CONTENT "#define NEBULA_GAME_ABI ${NEBULA_GAME_ABI}\n" @ONLY)
+set_source_files_properties("${petari}/src/Game/System/NebulaMods.cpp" PROPERTIES COMPILE_DEFINITIONS "NEBULA_GAME_ABI=${NEBULA_GAME_ABI}")
+
 add_library(smg_game SHARED
     ${game_sources}
     math/src/nebula_math.c
@@ -54,7 +71,9 @@ target_compile_definitions(smg_game PRIVATE VERSION=${CMAKE_MATCH_1} ${version_i
 set_target_properties(smg_game PROPERTIES
     C_STANDARD 11 C_EXTENSIONS ON
     CXX_STANDARD 17 CXX_EXTENSIONS ON
-    C_VISIBILITY_PRESET hidden CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON)
+    C_VISIBILITY_PRESET hidden CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON
+    # A plugin built with the game's headers calls the game's functions as the game itself does.
+    WINDOWS_EXPORT_ALL_SYMBOLS ON)
 
 
 # Every float-to-integer conversion into a type narrower than 32 bits goes through s32, as the Wii converts
@@ -161,11 +180,18 @@ endif()
 
 # The native game's host (host/host_main.cpp): loads the module and serves it. Built with the host's own C++ library.
 # The mods' virtual disc (galaxy::mods) serves this host's disc reads as the windowed host's.
+# How a plugin replaces a game function on Windows.
+set(nebula_minhook_sources)
+if(WIN32)
+    set(nebula_minhook_dir "${CMAKE_CURRENT_LIST_DIR}/../third_party/minhook")
+    set(nebula_minhook_sources "${nebula_minhook_dir}/src/buffer.c" "${nebula_minhook_dir}/src/hook.c" "${nebula_minhook_dir}/src/trampoline.c" "${nebula_minhook_dir}/src/hde/hde64.c")
+endif()
 add_executable(nebula_native_host host/host_main.cpp ../tools/test_driver/run_options.cpp
+    ../runtime/src/mod_plugins.cpp ${nebula_minhook_sources}
     ../runtime/src/luma.cpp ../runtime/src/mods.cpp ../runtime/src/texture_categories.cpp ../runtime/src/mod_xml.cpp ../runtime/src/atomic_file.cpp ../runtime/src/save_files.cpp ../runtime/src/disc_files.cpp
     ../runtime/src/crash_report.cpp ../runtime/src/discord_presence.cpp ../runtime/src/mii_import.cpp
     ../runtime/src/mii_formats.cpp)
-target_include_directories(nebula_native_host PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include"
+target_include_directories(nebula_native_host PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include" "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/minhook/include"
     "${CMAKE_CURRENT_SOURCE_DIR}/../runtime/include")
 target_compile_features(nebula_native_host PRIVATE cxx_std_20)
 target_compile_definitions(nebula_native_host PRIVATE _CRT_SECURE_NO_WARNINGS)

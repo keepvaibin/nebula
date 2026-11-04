@@ -34,6 +34,7 @@
 #include "galaxy/mii_import.h"
 #include "galaxy/mods.h"
 #include "galaxy/render/host_window.h"
+#include "galaxy/mod_plugins.h"
 #include "galaxy/render/mod_shaders.h"
 #if defined(NEBULA_HOST_RENDERER)
 #include "galaxy/experimental_ultrawide_aspect.h"
@@ -319,6 +320,7 @@ void report_crash_facts(const fs::path& dump) {
 struct Module {
     decltype(&nebula_game_attach) attach;
     decltype(&nebula_game_run) run;
+    void* module;
     decltype(&nebula_game_sound_frame) audio_tick;
     decltype(&nebula_game_mii_valid) mii_valid;
     decltype(&nebula_game_mii_changed) mii_changed;
@@ -427,6 +429,11 @@ void run(HANDLE thread, double seconds) {
 }  // namespace game_profile
 #endif
 
+// The mods' code, started once the game is attached.
+std::vector<galaxy::mods::PluginFile> gPlugins;
+std::vector<galaxy::mods::GalaxyToAdd> gModGalaxies;
+std::vector<std::pair<std::string, std::string>> gModTexts;
+
 void load_module(const fs::path& path) {
 #if defined(_WIN32)
     void* module = LoadLibraryW(path.wstring().c_str());
@@ -438,6 +445,7 @@ void load_module(const fs::path& path) {
     }
     gModule.attach = reinterpret_cast<decltype(gModule.attach)>(find_symbol(module, "nebula_game_attach"));
     gModule.run = reinterpret_cast<decltype(gModule.run)>(find_symbol(module, "nebula_game_run"));
+    gModule.module = module;
     gModule.audio_tick = reinterpret_cast<decltype(gModule.audio_tick)>(find_symbol(module, "nebula_game_sound_frame"));
     gModule.mii_valid = reinterpret_cast<decltype(gModule.mii_valid)>(find_symbol(module, "nebula_game_mii_valid"));
     gModule.mii_changed =
@@ -1099,11 +1107,16 @@ LONG CALLBACK crash_handler(EXCEPTION_POINTERS* info) {
     HMODULE owner = nullptr;
     if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
                             static_cast<LPCWSTR>(info->ExceptionRecord->ExceptionAddress), &owner) ||
-        (owner != GetModuleHandleW(nullptr) && owner != GetModuleHandleW(L"smg_game.dll"))) {
+        (owner != GetModuleHandleW(nullptr) && owner != GetModuleHandleW(L"smg_game.dll") &&
+         galaxy::mods::plugin_at(info->ExceptionRecord->ExceptionAddress) == nullptr)) {
         return EXCEPTION_CONTINUE_SEARCH;
     }
     if (gCrashing.exchange(1) != 0) {
         return EXCEPTION_CONTINUE_SEARCH;
+    }
+    if (const char* plugin = galaxy::mods::plugin_at(info->ExceptionRecord->ExceptionAddress)) {
+        std::string line = std::string("in the code of the mod ") + plugin;
+        log_line("crash:", line.c_str());
     }
     report_fatal_exception(info, owner);
 }
@@ -1531,6 +1544,7 @@ static_assert(static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::Leave)
                   NEBULA_SETTINGS_STATUS_RT_RESTART_ASK &&
               static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::DiagnosticsAsk) ==
                   NEBULA_SETTINGS_STATUS_DIAGNOSTICS_ASK &&
+              static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::ModsCodeAsk) == NEBULA_SETTINGS_STATUS_MODS_CODE_ASK &&
               galaxy::render::kJoyConLeftBit == NEBULA_JOYCON_LEFT && galaxy::render::kJoyConRightBit == NEBULA_JOYCON_RIGHT &&
               galaxy::render::kJoyConLeftHeldBit == NEBULA_JOYCON_LEFT_HELD &&
               galaxy::render::kJoyConRightHeldBit == NEBULA_JOYCON_RIGHT_HELD &&
@@ -2590,6 +2604,10 @@ int svc_asset_entry(void*, int32_t index, NebulaAssetEntry* out) {
     return disc_entry_out(disc_table().entry(index), out);
 }
 
+int svc_asset_added_child(void*, const char* path, uint32_t child, NebulaAssetEntry* out) {
+    return path != nullptr ? disc_entry_out(disc_table().added_child(path, child), out) : 0;
+}
+
 int svc_asset_child(void*, int32_t folder, uint32_t child, NebulaAssetEntry* out) {
     return disc_entry_out(disc_table().child(folder, child), out);
 }
@@ -3633,6 +3651,22 @@ void svc_app_exit(void*) {
 static_assert(NEBULA_PATCH_FLIP_PANEL_GROUP == 1 && NEBULA_PATCH_MISS_STAR_PIECES == 7 && NEBULA_PATCH_MESSENGER_EX_ONE_UPS == 12 && NEBULA_PATCH_COUNT == 13,
               "galaxy::luma::switch_number numbers the switches as these do");
 
+void svc_mods_start(void*) {
+    if (gPlugins.empty() && gModGalaxies.empty() && gModTexts.empty()) {
+        return;
+    }
+    const auto game_api = reinterpret_cast<const NebulaModApi* (*)()>(find_symbol(gModule.module, "nebula_game_mod_api"));
+    galaxy::mods::start_plugins(gPlugins, gModGalaxies, gModTexts, game_api(),
+                                [](const char* name) -> void* {
+#if defined(_WIN32)
+                                    return reinterpret_cast<void*>(GetProcAddress(static_cast<HMODULE>(gModule.module), name));
+#else
+                                    return dlsym(gModule.module, name);
+#endif
+                                },
+                                [](const char* text) { log_line("mods:", text); });
+}
+
 void svc_app_restart(void*) {
     finish_and_exit(true);
 }
@@ -3698,13 +3732,15 @@ std::string json_text(std::string_view text) {
 // The mods' disc files, cooked once into a store the game reads over its own (cook/overlay.rs): by the cooker beside
 // this program, again when what they change has changed. A failure leaves the game as it is and says why in the log.
 void cook_mod_files(const galaxy::mods::DiscPlan& plan, const fs::path& settings_folder, const std::string& game_id);
-
 void prepare_mod_files(const fs::path& settings_folder, const std::string& game_id) {
     galaxy::mods::set_played_language(static_cast<unsigned>(galaxy::game_language_resolved(galaxy::get_runtime_settings().language)));
     const std::string language = galaxy::mods::language_folder(
         game_id, static_cast<unsigned>(galaxy::game_language_resolved(galaxy::get_runtime_settings().language)));
     const galaxy::mods::DiscPlan plan = galaxy::mods::plan_disc_changes(gPak.store, game_id, language);
     gModPatches = plan.native_patches;
+    gPlugins = plan.plugins;
+    gModGalaxies = plan.galaxies;
+    gModTexts = plan.texts;
     if (!plan.save_folder.empty() && !gSaveDataPath.empty()) {
         // A clone starts from the player's save the first time, the rest starts new; the player's stays as it is.
         const fs::path mine = gSaveRoot / gSaveDataPath.substr(1);
@@ -3748,7 +3784,7 @@ void prepare_mod_files(const fs::path& settings_folder, const std::string& game_
 }
 
 void cook_mod_files(const galaxy::mods::DiscPlan& plan, const fs::path& settings_folder, const std::string& game_id) {
-    if (plan.files.empty()) {
+    if (plan.files.empty() && plan.merges.empty()) {
         return;
     }
     const fs::path folder = settings_folder / "mods" / ".cooked";
@@ -4252,6 +4288,7 @@ int main(int argc, char** argv) {
     services.asset_find = svc_asset_find;
     services.asset_entry = svc_asset_entry;
     services.asset_child = svc_asset_child;
+    services.asset_added_child = svc_asset_added_child;
     services.asset_read = svc_asset_read;
     services.memory_reserve = svc_memory_reserve;
     services.memory_commit = svc_memory_commit;
@@ -4290,6 +4327,7 @@ int main(int argc, char** argv) {
     services.game_context = svc_game_context;
     services.app_exit = svc_app_exit;
     services.app_restart = svc_app_restart;
+    services.mods_start = svc_mods_start;
     services.test_scene_frame = svc_test_scene_frame;
     services.display_extent = svc_display_extent;
     services.option = svc_option;

@@ -40,7 +40,8 @@ const char* GameEventFlagAccessor::getGalaxyNameWithStarPiece() const {
 }
 
 s32 GameEventFlagAccessor::getNeedStarPieceNum() const {
-    return mFlag->mNeedStarPieceNum * 10;
+    // A mod's hungry Luma says its price exactly.
+    return mFlag->_8 != 0 ? static_cast< s32 >(mFlag->_8) : mFlag->mNeedStarPieceNum * 10;
 }
 
 const char* GameEventFlagAccessor::getEventValueName() const {

@@ -48,6 +48,11 @@ namespace ReplaceTagProcessor {
 
     u32 Replace(char16_t* pDst, const char16_t* pSrc) {
         char16_t* pStart = pDst;
+        // A mod's galaxy that names no text for itself.
+        if (pSrc == nullptr) {
+            *pDst = 0;
+            return 0;
+        }
         while (*pSrc != 0) {
             if (MR::isMessageEditorNextTag(pSrc)) {
                 *pDst = 0;
