@@ -2,10 +2,12 @@
 #include "Game/Util/MotionSignal.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/LayoutCoreUtil.hpp"
+#include "Game/Screen/NebulaUi.hpp"
 #include "Game/Screen/StarPointerBlur.hpp"
 #include "Game/Screen/StarPointerCommandStream.hpp"
 #include "Game/Screen/StarPointerController.hpp"
 #include "Game/Screen/StarPointerDirector.hpp"
+#include "Game/System/NebulaHost.hpp"
 #include "Game/System/PlayerInputs.hpp"
 #include "Game/System/InputPointer.hpp"
 #include "Game/Util/CameraUtil.hpp"
@@ -535,6 +537,15 @@ void StarPointerLayout::draw() const {
     if (mPadChannel == PLAYER_1 && MR::isStarPointer1PInvalid2PValidMode()) {
         mBlur->hideAll();
         return;
+    }
+
+    if (mPadChannel == PLAYER_1) {
+        // A finger on a menu is its own pointer. Everything the pointer does still happens.
+        const u32 touch = NebulaHost::option(NEBULA_OPTION_TOUCH_POINTER);
+        if (touch == 3 || (touch == 2 && NebulaUi::isSharpScreenShown())) {
+            mBlur->hideAll();
+            return;
+        }
     }
 
     MotionSignal::starPointerLayout(this);

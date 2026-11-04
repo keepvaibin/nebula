@@ -464,6 +464,7 @@ bool SpaceCocoon::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pRecei
 
 bool SpaceCocoon::updateBindWait() {
     if (MR::getPlayerPos()->distance(mPosition) < ::sDistanceBindCancel && (!isKinopioAttached() || MR::isOnGroundPlayer())) {
+        MR::reportStarPointerGrabTarget(this);
         if (MR::isStarPointerPointing(this, PLAYER_1, true, "\216\343" /* 弱 */)) {
             MR::requestStarPointerModeBlueStarReady(this);
         }

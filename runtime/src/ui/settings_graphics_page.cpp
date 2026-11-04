@@ -140,7 +140,11 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
     {
         std::string value = mode == Interpolation::kOff      ? "OFF"
                             : mode == Interpolation::kNative ? "NATIVE"
+                            : mode == Interpolation::kFsrGeneration ? "FSR FRAME GENERATION"
                                                              : "DLSS FRAME GENERATION";
+        if (mode == Interpolation::kFsrGeneration && render.upscaler != 2u && render.upscaler != 4u) {
+            value += " (NEEDS FSR 3 OR XESS)";
+        }
         if (mode == Interpolation::kFrameGeneration) {
             if (!state.frame_rates.generated_supported) value += " (AFTER RESTART)";
             else if (render.upscaler != 3u) value += " (NEEDS DLSS)";
@@ -156,17 +160,21 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
                             const Interpolation next = modes[settings_step(static_cast<unsigned>(index),
                                                                            static_cast<unsigned>(modes.size()), delta)];
                             if (next == current) return;
-                            draft.frame_generation = next == Interpolation::kFrameGeneration ? 1u : 0u;
+                            draft.frame_generation = next == Interpolation::kFrameGeneration ? 1u : next == Interpolation::kFsrGeneration ? 2u : 0u;
                             // Interpolation starts at the display's own rate.
                             draft.max_fps = next == Interpolation::kOff ? 60.0f : 0.0f;
                             if (next == Interpolation::kFrameGeneration && draft.upscaler != 3u) {
                                 draft.upscaler = 3u;  // frame generation runs with DLSS
+                            }
+                            if (next == Interpolation::kFsrGeneration && draft.upscaler != 2u && draft.upscaler != 4u) {
+                                draft.upscaler = 2u;  // AMD's reads an upscaler's depth and motion
                             }
                             normalize_interpolation(draft, host.query(draft).frame_rates);
                         },
                         mode == Interpolation::kOff ? "THE GAME RUNS AT 60. NATIVE OR DLSS ADD FRAMES BETWEEN"
                         : mode == Interpolation::kNative
                             ? "NEBULA DRAWS EXTRA FRAMES FROM THE GAME MOTION"
+                        : mode == Interpolation::kFsrGeneration ? "AMD GENERATES ONE FRAME BETWEEN EACH OF THE GAME'S 60"
                             : "NVIDIA GENERATES THE FRAMES BETWEEN THE GAME'S 60"});
     }
     const double measured = state.measured_fps;

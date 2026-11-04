@@ -2586,6 +2586,10 @@ void svc_game_context(void*, uint32_t what, int32_t value) {
 #if defined(NEBULA_HOST_RENDERER)
         galaxy::render::note_camera_water(value > 0 ? static_cast<float>(value - 1) : -1.0f);
 #endif
+    } else if (what == NEBULA_CONTEXT_TOUCH_TARGET) {
+#if defined(NEBULA_HOST_RENDERER)
+        galaxy::host::note_touch_target(static_cast<std::uint32_t>(value));
+#endif
     }
 }
 
@@ -3051,6 +3055,12 @@ uint32_t svc_option(void*, uint32_t what) {
     }
     case NEBULA_OPTION_TEST_TRACE_LOADS:
         return ::galaxy::run_options().trace_loads != nullptr ? 1u : 0u;
+    case NEBULA_OPTION_TOUCH_POINTER:
+#if defined(NEBULA_HOST_RENDERER)
+        return galaxy::host::touch_pointer_state();
+#else
+        return 0;
+#endif
     default:
         return 0;
     }

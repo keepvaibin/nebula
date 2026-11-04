@@ -34,6 +34,7 @@ struct RunOptions {
     const char* gpu_passes = nullptr;
     const char* gpu_preference = nullptr;
     const char* hide_window = nullptr;
+    const char* test_window_off_desktop = nullptr;
     const char* log_to_console = nullptr;
     const char* movie_dir = nullptr;
     const char* pipeline_seed_out = nullptr;

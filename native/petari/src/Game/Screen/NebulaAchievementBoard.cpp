@@ -1607,7 +1607,7 @@ void NebulaAchievementBoard::drawOnTop() const {
     if (!listShown || getLayoutManager()->mIsScreenHidden) {
         return;
     }
-    drawClipped(p->mList, getLayoutManager()->mDrawInfo, p->mBoard->mTranslate.y, p->mListLeft - 16.0f, p->mListRight + 10.0f,
+    drawClipped(p->mList, getLayoutManager()->mDrawInfo, p->mListLeft - 16.0f, p->mListRight + 10.0f,
                 p->mListTop + 2.0f, p->mListBottom - 6.0f);
 }
 

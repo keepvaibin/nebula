@@ -83,6 +83,17 @@ f32 StarPointerTarget::calcRadius2d(f32 radius3d, f32 margin, f32 z) const {
     return radius2d + margin;
 }
 
+bool StarPointerTarget::calcScreenCircle(TVec2f* pScreenPos, f32* pRadius) const {
+    TVec3f worldPos, viewPos;
+    calcPosition(&worldPos);
+    NebulaMtxMultVec(MR::getStarPointerViewMtx(), &worldPos, &viewPos);
+    if (-viewPos.z <= 0.0f || !calcScreenPositionFromView(pScreenPos, viewPos)) {
+        return false;
+    }
+    *pRadius = calcRadius2d(mRadius3d, 0.0f, -viewPos.z);
+    return true;
+}
+
 bool StarPointerTarget::calcScreenPositionFromView(TVec2f* pScreenPos, const TVec3f& rViewPos) const {
     TProj3f mtx;
     mtx.setInline(MR::getStarPointerProjMtx());

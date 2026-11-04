@@ -91,6 +91,10 @@ struct InputState {
     float tap_y = 0.0f;
     // When the finger last touched or moved (steady milliseconds; 0: never).
     std::uint64_t finger_ms = 0;
+    // Where the pointer's finger last came down, and when.
+    std::uint64_t finger_land_ms = 0;
+    float finger_land_x = 0.0f;
+    float finger_land_y = 0.0f;
     int window_width = 0;
     int window_height = 0;
     bool window_focused = true;

@@ -102,6 +102,15 @@ inline constexpr const char* crash_dump_dir_name() noexcept { return "GALAXY_CRA
 inline constexpr const wchar_t* crash_dump_dir_wide_name() noexcept { return L"GALAXY_CRASH_DUMP_DIR"; }
 #endif
 #if defined(NEBULA_RELEASE)
+inline const char* test_window_off_desktop() noexcept { return nullptr; }
+inline constexpr const char* test_window_off_desktop_name() noexcept { return ""; }
+inline constexpr const wchar_t* test_window_off_desktop_wide_name() noexcept { return L""; }
+#else
+inline const char* test_window_off_desktop() noexcept { return std::getenv("GALAXY_TEST_WINDOW_OFF_DESKTOP"); }
+inline constexpr const char* test_window_off_desktop_name() noexcept { return "GALAXY_TEST_WINDOW_OFF_DESKTOP"; }
+inline constexpr const wchar_t* test_window_off_desktop_wide_name() noexcept { return L"GALAXY_TEST_WINDOW_OFF_DESKTOP"; }
+#endif
+#if defined(NEBULA_RELEASE)
 inline constexpr const wchar_t* xess_dir_wide_name() noexcept { return L""; }
 inline constexpr const wchar_t* streamline_dir_wide_name() noexcept { return L""; }
 #else

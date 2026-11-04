@@ -540,6 +540,8 @@ enum {
                                           going back */
     NEBULA_OPTION_TEST_ARENA_FILL,     /* tests (GALAXY_TEST_ARENA_FILL=<hex byte>): 0x100 | the byte every arena block starts as; 0 without it */
     NEBULA_OPTION_TEST_TRACE_LOADS,    /* tests (GALAXY_TRACE_LOADS): 1 logs what each scene change loads */
+    NEBULA_OPTION_TOUCH_POINTER,       /* 0 no touch screen, 1 one, 2 the finger has the pointer, 3 and the game is on a
+                                          menu: no pointer shows under a finger there */
 };
 
 /* game_light: the game's lights, from the objects that own them; `values` per kind. */
@@ -1221,6 +1223,9 @@ enum {
                                              page): DLSS Frame Generation may add frames (NebulaFrameGen) */
     NEBULA_CONTEXT_CAMERA_WATER,          /* each frame: the camera's depth under water in units, at least 1 (0: out
                                              of water; MR::isCameraInWater): ray tracing's water medium */
+    NEBULA_CONTEXT_TOUCH_TARGET,          /* each frame, on a touch screen, for each thing in reach the pointer grabs (a pull
+                                             star): its circle on the screen, bits 0-11 x and 12-23 y (0..4095 across), bits
+                                             24-31 the radius (255: the screen's height) */
 };
 
 #define NEBULA_MOVIE_AUDIO_QUEUE_FRAMES 20

@@ -35,6 +35,7 @@ namespace {
     // Screen units (NebulaUi::readScreen): 456 high, 810 wide at 16:9.
     const f32 cMargin = 16.0f;     // the window from the screen's edges
     const f32 cMaxWidth = 900.0f;  // a wide screen keeps a window that reads as one
+    const f32 cMinWindowWidth = 480.0f;  // the tabs and the footer keep their shape down to this
     const f32 cReadableTextDp = 14.0f;  // a row's text on the screen, at the least, unless the player chooses otherwise
     const f32 cZoomMax = 1.8f;
     const f32 cPad = 26.0f;        // the window's inside
@@ -1231,6 +1232,16 @@ void NebulaSettingsScreen::arrange() {
         mZoom = textDp < cReadableTextDp ? cReadableTextDp / textDp : 1.0f;
         mZoom = mZoom > cZoomMax ? cZoomMax : mZoom;
     }
+    // What is not rows, in the menu's units: the margins, the window's inside, the tabs and the footer. The title goes
+    // first on a short screen; whatever size is asked for, rows stay: three for the size the screen chose, two for the player's.
+    const f32 titleRoom = cTitleSize + 14.0f;
+    const f32 around = cMargin * 2.0f + cPad * 1.8f + cTabHeight + 8.0f + cButtonHeight * 0.5f + cFooterLine * 0.5f + 3.0f + cFooterSize * 0.5f + 8.0f;
+    const f32 largest = mHeight / (around + cRowHeight * (chosen != 0 ? 2.0f : 3.0f) + 1.0f);
+    const f32 widest = mWidth / (cMinWindowWidth + cMargin * 2.0f);
+    mZoom = mZoom > largest ? largest : mZoom;
+    mZoom = mZoom > widest ? widest : mZoom;
+    const bool titled = mHeight / mZoom >= around + titleRoom + cRowHeight * 3.0f;
+    mTitle->SetVisible(titled);
     mWidth /= mZoom;
     mHeight /= mZoom;
     mRoot->mScale = nw4r::math::VEC2(mScaleX * mZoom, mZoom);
@@ -1241,7 +1252,7 @@ void NebulaSettingsScreen::arrange() {
     mLeft = -mPanelWidth * 0.5f + cPad;
     mRight = mPanelWidth * 0.5f - cPad;
     mTitleY = top - cTitleSize * 0.5f;
-    mTabY = mTitleY - cTitleSize * 0.5f - 14.0f - cTabHeight * 0.5f;
+    mTabY = top - (titled ? titleRoom : 0.0f) - cTabHeight * 0.5f;
     mListTop = mTabY - cTabHeight * 0.5f - 8.0f;
     mFooterY = -mPanelHeight * 0.5f + cPad * 0.8f + cButtonHeight * 0.5f;
     mHintsY = mFooterY - cFooterLine * 0.5f + 3.0f;
@@ -1481,6 +1492,7 @@ __attribute__((noinline)) void NebulaSettingsScreen::fillTexts(const NebulaSetti
     const Question& rQuestion = cQuestions[question];
     if (rView.status == NEBULA_SETTINGS_STATUS_LICENSE) {
         static char16_t page[1536];
+        static char16_t shown[1536];
         if (rView.status_number > 0) {
             // Its number, then the page.
             s32 used = 0;
@@ -1500,8 +1512,40 @@ __attribute__((noinline)) void NebulaSettingsScreen::fillTexts(const NebulaSetti
         while (pageLength < 1535 && page[pageLength] != 0) {
             pageLength++;
         }
-        mQuestionText->SetString(page, 0, pageLength);
-        measure(mQuestionText, mPanelWidth - cLicenseInset * 2.0f - cQuestionMargin * 2.0f, &width, &height);
+        const f32 pageRoom = mPanelWidth - cLicenseInset * 2.0f - cQuestionMargin * 2.0f;
+        // Lines broken at the last space that fits, measured once for a page: the box alone would break inside a word.
+        static u16 shownLength = 0;
+        bool samePage = shownLength == pageLength;
+        for (u16 i = 0; samePage && i < pageLength; i++) {
+            samePage = page[i] == shown[i] || (page[i] == u' ' && shown[i] == u'\n');
+        }
+        if (!samePage) {
+            memcpy(shown, page, pageLength * sizeof(char16_t));
+            shown[pageLength] = 0;
+            shownLength = pageLength;
+            u16 lineStart = 0;
+            u16 lastSpace = 0;
+            for (u16 i = 0; i <= pageLength; i++) {
+                if (i != pageLength && shown[i] != u' ' && shown[i] != u'\n') {
+                    continue;
+                }
+                mQuestionText->SetString(shown + lineStart, 0, static_cast< u16 >(i - lineStart));
+                measure(mQuestionText, 4000.0f, &width, &height);
+                if (width > pageRoom && lastSpace > lineStart) {
+                    shown[lastSpace] = u'\n';
+                    lineStart = static_cast< u16 >(lastSpace + 1);
+                }
+                if (i != pageLength) {
+                    if (shown[i] == u'\n') {
+                        lineStart = static_cast< u16 >(i + 1);
+                    } else {
+                        lastSpace = i;
+                    }
+                }
+            }
+        }
+        mQuestionText->SetString(shown, 0, shownLength);
+        measure(mQuestionText, pageRoom, &width, &height);
         mQuestionInk = height;
         for (s32 i = 0; i < mChoiceCount; i++) {
             fillKeyCap(mChoices[i].mKey, rQuestion.mKeys[i], rView.input, false);
@@ -2284,7 +2328,8 @@ void NebulaSettingsScreen::placeRows(const NebulaSettingsView& rView) {
     const f32 content = rView.total_rows * cRowHeight;
     const f32 maxScroll = content > listHeight ? content - listHeight : 0.0f;
     const f32 selectedTop = rView.selected * cRowHeight;
-    const f32 room = mPointerMode ? 0.0f : cRowHeight;
+    // A row kept on each side of the selection, when the list has room for all three.
+    const f32 room = mPointerMode || listHeight < cRowHeight * 3.0f ? 0.0f : cRowHeight;
     if (!mScrollDrag && static_cast< s32 >(rView.selected) != mDraggedAt) {
         mDraggedAt = -1;
         if (selectedTop - room < mScrollTarget) {
@@ -2766,7 +2811,7 @@ void NebulaSettingsScreen::drawMenu() const {
     draw();
     mList->SetVisible(true);
     if (!mHome) {
-        drawClipped(mList, getLayoutManager()->mDrawInfo, mMenu->mTranslate.y, mLeft - 4.0f, mRight + 18.0f, mClipTop, mClipBottom);
+        drawClipped(mList, getLayoutManager()->mDrawInfo, mLeft - 4.0f, mRight + 18.0f, mClipTop, mClipBottom);
     }
     if (asking) {
         mQuestion->SetVisible(true);

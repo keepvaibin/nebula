@@ -7,13 +7,16 @@
 #
 #   build_apk.ps1 -Deps <folder of SDL3-3.4.18, glslang-src, Vulkan-Headers, volk, VMA> -Work <build folder>
 #                 [-SeedTool <vk_shader_seed.exe>] [-Signing <signing.properties>] [-Abis arm64-v8a,x86_64]
+#                 [-FfxShaders <FidelityFX's Vulkan shader headers, made already>]
 param(
     [Parameter(Mandatory = $true)][string]$Deps,
     [Parameter(Mandatory = $true)][string]$Work,
     [Parameter(Mandatory = $true)][string]$HostTools,
     [string]$SeedTool = "",
     [string]$Signing = "",
-    [string]$Abis = "arm64-v8a,x86_64"
+    [string]$Abis = "arm64-v8a,x86_64",
+    [string]$FfxShaders = "",
+    [switch]$TestHooks
 )
 $ErrorActionPreference = "Stop"
 $root = (Resolve-Path "$PSScriptRoot\..\..").Path
@@ -28,6 +31,10 @@ $cmakeDir = Join-Path $vs "Common7\IDE\CommonExtensions\Microsoft\CMake"
 $env:PATH = "$cmakeDir\CMake\bin;$cmakeDir\Ninja;$env:PATH"
 $depsSlash = $Deps -replace '\\', '/'
 $hostToolsSlash = $HostTools -replace '\\', '/'
+# FidelityFX's source when it is here already (downloaded and checked otherwise), its shaders likewise.
+$ffxArgs = @()
+if (Test-Path "$Deps\ffx-src\FidelityFX-SDK-1.1.4\sdk") { $ffxArgs += "-DFETCHCONTENT_SOURCE_DIR_FIDELITYFX_SDK=$depsSlash/ffx-src/FidelityFX-SDK-1.1.4" }
+if ($FfxShaders) { $ffxArgs += "-DNEBULA_FFX_VK_SHADERS=$($FfxShaders -replace '\\', '/')" }
 New-Item -ItemType Directory -Force $Work | Out-Null
 
 # A step's output to a UTF-8 log; its errors shown and the build stopped when it fails. Tools write progress to
@@ -46,6 +53,7 @@ function Invoke-Logged([string]$Log, [scriptblock]$Command) {
 }
 
 $jni = Join-Path $android "jniLibs"
+$releaseFlag = if ($TestHooks) { "-DNEBULA_RELEASE=OFF" } else { "-DNEBULA_RELEASE=ON" }
 foreach ($abi in $Abis -split ",") {
     $triple = @{ "arm64-v8a" = "aarch64-linux-android"; "x86_64" = "x86_64-linux-android" }[$abi]
     if (-not $triple) { throw "unknown ABI $abi" }
@@ -53,13 +61,13 @@ foreach ($abi in $Abis -split ",") {
     $module = "$Work/module-$abi" -replace '\\', '/'
     Invoke-Logged "$Work\module-$abi.log" {
         cmake -G Ninja -S "$root/native" -B $module "-DCMAKE_TOOLCHAIN_FILE=$toolchain" "-DANDROID_ABI=$abi" `
-            "-DANDROID_PLATFORM=android-31" -DCMAKE_BUILD_TYPE=Release "-DNEBULA_PETARI_DIR=$root/native/petari" -DNEBULA_RELEASE=ON
+            "-DANDROID_PLATFORM=android-31" -DCMAKE_BUILD_TYPE=Release "-DNEBULA_PETARI_DIR=$root/native/petari" $releaseFlag
         if ($LASTEXITCODE -eq 0) { cmake --build $module --target smg_game }
     }
     $hostBuild = "$Work/host-$abi" -replace '\\', '/'
     Invoke-Logged "$Work\host-$abi.log" {
         cmake -G Ninja -S "$root/platform/sdl" -B $hostBuild "-DCMAKE_TOOLCHAIN_FILE=$toolchain" "-DANDROID_ABI=$abi" `
-            "-DANDROID_PLATFORM=android-31" -DCMAKE_BUILD_TYPE=Release "-DNEBULA_DEPS=$depsSlash" "-DNEBULA_HOST_TOOLS=$hostToolsSlash" -DNEBULA_RELEASE=ON
+            "-DANDROID_PLATFORM=android-31" -DCMAKE_BUILD_TYPE=Release "-DNEBULA_DEPS=$depsSlash" "-DNEBULA_HOST_TOOLS=$hostToolsSlash" $releaseFlag @ffxArgs
         if ($LASTEXITCODE -eq 0) { cmake --build $hostBuild --target main }
     }
     $upper = ($triple -replace '-', '_').ToUpper()
@@ -131,6 +139,7 @@ if (-not $env:JAVA_HOME) { $env:JAVA_HOME = "${env:ProgramFiles}\Android\Android
 $env:ANDROID_HOME = $sdk
 $properties = @("-Pnebula.sdlDir=$Deps\SDL3-3.4.18", "-Pnebula.jniDir=$jni", "-Pnebula.assetsDir=$Work\assets")
 if ($Signing -ne "") { $properties += "-Pnebula.signing=$Signing" }
+if ($TestHooks) { $properties += "-Pnebula.testHooks=true" }
 Push-Location $android
 try {
     Invoke-Logged "$Work\gradle.log" { & .\gradlew.bat --no-daemon assembleRelease "-PnebulaAbis=$Abis" @properties }

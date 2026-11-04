@@ -96,6 +96,8 @@ namespace MR {
     void requestStarPointerModePictureBook(void*);
     void requestStarPointerModePauseMenu(void*);
     void requestStarPointerModeBlueStarReady(void*);
+    // Each frame `pActor` can be grabbed: a finger landing on it grabs it (NEBULA_CONTEXT_TOUCH_TARGET).
+    void reportStarPointerGrabTarget(const LiveActor* pActor);
     void requestStarPointerModeBigBubble(void*, const TVec3f&);
     bool isStarPointerModeBlueStarReady();
     bool isStarPointerModeStarPieceTarget();

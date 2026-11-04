@@ -353,6 +353,12 @@ public:
         return true;
     }
 
+    // How many of the game's frames one of the file's lasts.
+    [[nodiscard]] std::int32_t frame_step() const {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return file_rate_ > 0.0 && rate_ > file_rate_ ? std::max<std::int32_t>(1, static_cast<std::int32_t>(std::llround(rate_ / file_rate_))) : 1;
+    }
+
     void set_rate(double rate) {
         if (!(rate > 0.0)) return;
         std::lock_guard<std::mutex> lock(mutex_);
@@ -778,7 +784,7 @@ const MovieReplacementFrame* MovieReplacements::frame(const MovieFrameMark& mark
     if (decoder_->take(mark.frame, shown_.frame, next)) {
         shown_ = std::move(next);
     }
-    if (shown_.frame < mark.frame) {
+    if (shown_.frame + decoder_->frame_step() <= mark.frame) {
         ++late_;  // the game's frame is not decoded yet: an older one shows (or the THP's, before the first)
     }
     if (shown_.frame < 0 || !shown_.staging) return nullptr;

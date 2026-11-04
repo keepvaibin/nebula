@@ -121,6 +121,8 @@ add_library(galaxy_render_vk STATIC
     ${rt}/render/vk/renderer_vk.cpp
     ${rt}/render/vk/ambient_occlusion_vk.cpp
     ${rt}/render/vk/temporal_upscaler_vk.cpp
+    ${rt}/render/vk/ffx_vk_forward.cpp
+    ${rt}/render/vk/fsr_frame_generation_vk.cpp
     ${rt}/render/vk/scene_camera_vk.cpp
     ${rt}/render/vk/renderer_vk_scene.cpp
     ${rt}/render/vk/renderer_vk_replay.cpp
@@ -164,6 +166,7 @@ if(NOT WIN32)
         set(nebula_hde "${CMAKE_CURRENT_LIST_DIR}/../../third_party/minhook/src/hde/hde64.c")
         target_sources(galaxy_render_vk PRIVATE "${nebula_hde}")
         set_source_files_properties("${nebula_hde}" PROPERTIES INCLUDE_DIRECTORIES "${CMAKE_CURRENT_LIST_DIR}/../../runtime/include/galaxy/hde_shim")
+        set_source_files_properties(${rt}/mod_hook_posix.cpp PROPERTIES INCLUDE_DIRECTORIES "${CMAKE_CURRENT_LIST_DIR}/../../runtime/include/galaxy/hde_shim")
     endif()
 endif()
 # Mod import (archives) on the desktop systems; Android and iOS take no mods.
@@ -179,6 +182,15 @@ target_include_directories(galaxy_render_vk PRIVATE "${nebula_root}/third_party/
 target_compile_options(galaxy_render_vk PRIVATE -Wno-nullability-completeness)
 target_link_libraries(galaxy_render_vk PUBLIC nebula_vulkan_deps)
 target_link_libraries(galaxy_render_vk PRIVATE nebula_shader_compiler)
+
+# AMD FSR 3 (cmake/fidelityfx_android.cmake).
+include("${nebula_root}/cmake/fidelityfx_android.cmake")
+nebula_fidelityfx_android("${NEBULA_VULKAN_HEADERS_DIR}/include" "${rt}/render/vk/ffx_portable.h" "${rt}/render/vk/ffx_vk_names.h")
+if(TARGET nebula_fidelityfx_vk)
+    target_link_libraries(galaxy_render_vk PRIVATE nebula_fidelityfx_vk)
+    set_source_files_properties(${rt}/render/vk/temporal_upscaler_vk.cpp PROPERTIES
+        COMPILE_OPTIONS "-include;${rt}/render/vk/ffx_portable.h")
+endif()
 
 # SDL3: the window, Vulkan surface, audio, gamepads and touch. Android loads libSDL3.so from SDL's Java activity.
 set(SDL_SHARED ON CACHE BOOL "" FORCE)

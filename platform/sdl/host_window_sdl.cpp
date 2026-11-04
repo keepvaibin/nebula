@@ -421,6 +421,9 @@ void finger_event(std::uint64_t id, float x, float y, bool down, bool up) {
         g_finger_down_x = x;
         g_finger_down_y = y;
         g_finger_travel = 0.0f;
+        g_input.finger_land_ms = now;
+        g_input.finger_land_x = x;
+        g_input.finger_land_y = y;
     }
     if (!g_pointer_finger_valid || id != g_pointer_finger) {
         return;
@@ -827,6 +830,11 @@ extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativePoin
 
 extern "C" JNIEXPORT jboolean JNICALL Java_dev_nebula_galaxy_GameActivity_nativeTitleScreen(JNIEnv*, jclass) {
     return galaxy::sdl::g_title_screen.load(std::memory_order_relaxed) ? JNI_TRUE : JNI_FALSE;
+}
+
+// A finger there grabs something: it is the pointer, not the stick.
+extern "C" JNIEXPORT jboolean JNICALL Java_dev_nebula_galaxy_GameActivity_nativeTouchTargetAt(JNIEnv*, jclass, jfloat x, jfloat y) {
+    return galaxy::host::touch_target_at(x, y) ? JNI_TRUE : JNI_FALSE;
 }
 
 // Whether the game is on a pointer screen (set_menu_context), for the controls deciding what a touch is.

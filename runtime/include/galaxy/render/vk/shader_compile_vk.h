@@ -13,7 +13,7 @@
 
 namespace galaxy::render::vk {
 
-enum class ShaderStage { Vertex, Geometry, Fragment, Compute, Hull, Domain };
+enum class ShaderStage { Vertex, Geometry, Fragment, Compute };
 
 // One D3D12 register's Vulkan binding: `reg` as written in the source ("b0", "t0, space1", "s0"); a push-constant
 // block when `push_constant` is set.

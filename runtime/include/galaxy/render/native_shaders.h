@@ -59,11 +59,6 @@ enum NativeShaderVariant : unsigned {
 
 [[nodiscard]] NativeShaderBytes native_shader_bytes(std::uint32_t shader, unsigned variant, bool pixel) noexcept;
 
-// The curved surfaces' hull (domain false) or domain stage for every native material (native_curved.hlsl), by
-// whether the output layout carries motion vectors (kNativeVariantMotion).
-[[nodiscard]] NativeShaderBytes native_curved_bytes(unsigned variant, bool domain) noexcept;
-
-
 // A native pipeline's render state: the draw's (its dual-source and constant-alpha bits the shader's dual variant
 // and PE word serve).
 [[nodiscard]] inline RenderStateKey native_render_state(RenderStateKey rs) noexcept {

@@ -157,44 +157,10 @@ struct NativeVertex {
     float4 pos : SV_Position; NATIVE_PER_SAMPLE float4 color : COLOR0; NATIVE_PER_SAMPLE float4 color1 : COLOR1; NATIVE_PER_SAMPLE float4 uv[8] : TEXCOORD; \
     NATIVE_MOTION_MEMBERS
 
-// What the pixel stage reads (and the curved surfaces' domain stage writes).
+// What the vertex stage writes and the pixel stage reads.
 struct NativeVaryings {
     NATIVE_VARYING_MEMBERS
 };
-
-// The vertex stage's output: the same, and the curved surfaces' data for their patch stages (native_curved.hlsl): the
-// eye position and the displacement normal (w: the jitter, zero here), the crease normal packed and its places.
-struct NativeVsOut {
-    NATIVE_VARYING_MEMBERS
-    float4 curve_pos : TEXCOORD14;
-    float4 curve_nrm : TEXCOORD15;
-    uint4 curve_data : TEXCOORD16;
-};
-
-// Curved surfaces' packed normals (curved_surfaces.h pack_normal): octahedral, two 16-bit halves, zero for none.
-float3 curve_unpack(uint packed) {
-    if (packed == 0u) {
-        return float3(0.0, 0.0, 0.0);
-    }
-    const float2 q = (float2(float(packed >> 16u), float(packed & 0xFFFFu)) - 32768.0) / 32767.0;
-    float3 n = float3(q, 1.0 - abs(q.x) - abs(q.y));
-    if (n.z < 0.0) {
-        n.xy = (1.0 - abs(q.yx)) * float2(q.x >= 0.0 ? 1.0 : -1.0, q.y >= 0.0 ? 1.0 : -1.0);
-    }
-    return normalize(n);
-}
-uint curve_pack(float3 n) {
-    const float sum = abs(n.x) + abs(n.y) + abs(n.z);
-    if (!(sum > 0.0)) {
-        return 0u;
-    }
-    float2 q = n.xy / sum;
-    if (n.z < 0.0) {
-        q = (1.0 - abs(q.yx)) * float2(q.x >= 0.0 ? 1.0 : -1.0, q.y >= 0.0 ? 1.0 : -1.0);
-    }
-    const uint2 h = uint2(round(clamp(q, -1.0, 1.0) * 32767.0) + 32768.0);
-    return (h.x << 16u) | h.y;
-}
 
 float4 native_unpack_color(uint c) {
     return float4((c >> 24u) & 0xFFu, (c >> 16u) & 0xFFu, (c >> 8u) & 0xFFu, c & 0xFFu) / 255.0;
@@ -229,7 +195,7 @@ void native_texcoord_offset(inout NativeVaryings v, uint mask, uint divisor, boo
     }
 }
 
-NativeVsOut native_vs(NativeVertexIn input) {
+NativeVaryings native_vs(NativeVertexIn input) {
     NativeVertex v;
     v.pos = input.pos;
     v.nrm = input.nrm;
@@ -314,31 +280,7 @@ NativeVsOut native_vs(NativeVertexIn input) {
             native_texcoord_offset(o, line_point_tex_offsets.x, line_point_tex_offsets.z, right, false);
         }
     }
-    NativeVsOut out_ = (NativeVsOut)0;
-    out_.pos = o.pos;
-    out_.color = o.color;
-    out_.color1 = o.color1;
-#if NATIVE_PIXEL_LIT
-    out_.lit_eye = o.lit_eye;
-    out_.lit_nrm = o.lit_nrm;
-#endif
-    [unroll] for (uint k = 0u; k < 8u; ++k) {
-        out_.uv[k] = o.uv[k];
-    }
-#if NATIVE_MOTION
-    out_.mv_cur = o.mv_cur;
-    out_.mv_prev = o.mv_prev;
-#endif
-    // Curved surfaces: the normals turned as normals are, by the position matrix's cofactors.
-    const float3x3 cofactor = float3x3(cross(m1.xyz, m2.xyz), cross(m2.xyz, m0.xyz), cross(m0.xyz, m1.xyz));
-    float3 cn = mul(cofactor, curve_unpack(input.curve.x));
-    float3 cc = mul(cofactor, curve_unpack(input.curve.y));
-    cn = dot(cn, cn) > 0.0 ? normalize(cn) : cn;
-    cc = dot(cc, cc) > 0.0 ? normalize(cc) : cc;
-    out_.curve_pos = float4(v.eye, 0.0);
-    out_.curve_nrm = float4(cn, 0.0);
-    out_.curve_data = uint4(curve_pack(cc), input.curve.z, input.mtx_idx.z >> 16u, 0u);
-    return out_;
+    return o;
 }
 
 #if NATIVE_LAYER

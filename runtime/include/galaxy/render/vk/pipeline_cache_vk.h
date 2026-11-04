@@ -53,8 +53,7 @@ private:
     [[nodiscard]] VkShaderModule native_module(const void* words, std::size_t bytes, vk::ShaderStage stage);
     [[nodiscard]] VkPipeline create_pipeline(const RenderStateKey& render_state, VkShaderModule vs, VkShaderModule ps,
                                              bool dual_source, bool export_depth, std::uint32_t compat,
-                                             VkResult& result, VkShaderModule hs = VK_NULL_HANDLE,
-                                             VkShaderModule ds = VK_NULL_HANDLE) const;
+                                             VkResult& result) const;
     [[nodiscard]] std::uint32_t applicable_compat(const RenderStateKey& render_state, bool dual_source,
                                                   bool export_depth) const;
     template <typename Make>
