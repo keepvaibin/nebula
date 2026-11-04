@@ -8,7 +8,11 @@
 
 #include "galaxy/render/native_shaders.h"
 
+#include <cstdint>
 #include <filesystem>
+#include <functional>
+#include <string>
+#include <vector>
 
 namespace galaxy::render {
 
@@ -17,6 +21,20 @@ enum class ModShadersResult { Loaded, Unreadable, OtherInterface };
 // interface differs (the headers changed since): the mod must be converted again.
 ModShadersResult load_mod_shaders(const std::filesystem::path& file);
 [[nodiscard]] NativeShaderBytes mod_shader_bytes(std::uint32_t shader, unsigned variant, bool pixel) noexcept;
+// What building a mod's missing shaders came to.
+struct ModShaderBuild {
+    unsigned wanted = 0;  // materials none of `brought` holds for this build
+    unsigned built = 0;
+    std::string problem;  // the first thing that went wrong
+};
+// Every material in `sources` (the cooker's m<number>.hlsl and the headers they include) that no file of `brought` holds for this
+// build's interface, built into `output` in this format.
+ModShaderBuild build_missing_mod_shaders(const std::filesystem::path& sources, const std::vector<std::filesystem::path>& brought,
+                                         const std::filesystem::path& output, const std::function<void(unsigned, unsigned)>& progress);
+// One stage of a material for this build's graphics interface; empty, with the reason, when it can't be.
+std::vector<std::uint8_t> compile_mod_shader_stage(const std::string& source, const std::filesystem::path& includes, bool pixel,
+                                                   const std::vector<const char*>& defines, std::string& problem);
+
 // The file of this build's graphics interface in a mod's shaders/ folder: "dxil.shaders" or "spirv.shaders".
 [[nodiscard]] const char* native_shader_file_name() noexcept;
 // SHA-1 of this build's material headers.

@@ -3725,7 +3725,14 @@ void prepare_mod_files(const fs::path& settings_folder, const std::string& game_
         log_line("mods:", note.c_str());
     }
     cook_mod_files(plan, settings_folder, game_id);
-    // What the .luma mods' materials need; Nebula builds what isn't there.
+    // What the .luma mods' materials need: what they brought, then what the game built for them.
+    {
+        std::error_code built_error;
+        const fs::path built = settings_folder / "mods" / ".cooked" / "built.shaders";
+        if (fs::is_regular_file(built, built_error)) {
+            galaxy::render::load_mod_shaders(built);
+        }
+    }
     for (const fs::path& folder : plan.luma_folders) {
         std::error_code shaders_error;
         const fs::path shaders = folder / "shaders" / galaxy::render::native_shader_file_name();
@@ -3747,7 +3754,8 @@ void cook_mod_files(const galaxy::mods::DiscPlan& plan, const fs::path& settings
     const fs::path folder = settings_folder / "mods" / ".cooked";
     const fs::path overlay = folder / "mods.pak";
     const fs::path signature_file = folder / "mods.signature";
-    const std::string signature = galaxy::mods::plan_signature(plan, game_id);
+    // Another build's shader interface means their shaders are built again.
+    const std::string signature = galaxy::mods::plan_signature(plan, game_id) + galaxy::render::native_shader_interface() + "\n";
     std::error_code error;
     fs::create_directories(folder, error);
     std::string kept;
@@ -3797,6 +3805,32 @@ void cook_mod_files(const galaxy::mods::DiscPlan& plan, const fs::path& settings
             return false;
         }
 #endif
+        {
+            // What their materials need and they didn't bring.
+            std::vector<fs::path> brought;
+            for (const fs::path& mod : plan.luma_folders) {
+                brought.push_back(mod / "shaders" / galaxy::render::native_shader_file_name());
+            }
+            fs::path sources = overlay;
+            sources.replace_extension("sources");
+            fs::path progress = overlay;
+            progress.replace_extension("progress");
+            const galaxy::render::ModShaderBuild built = galaxy::render::build_missing_mod_shaders(
+                sources, brought, folder / "built.shaders", [progress](unsigned done, unsigned total) {
+                    std::ofstream out(progress);
+                    out << done << ' ' << total << '\n';
+                });
+            std::error_code progress_error;
+            fs::remove(progress, progress_error);
+            if (built.wanted != 0u) {
+                char text[96];
+                std::snprintf(text, sizeof(text), "%u of %u shaders built here", built.built, built.wanted);
+                log_line("mods:", text);
+                if (!built.problem.empty()) {
+                    log_line("mods:", built.problem.c_str());
+                }
+            }
+        }
         if (!galaxy::io::write_file_atomically(signature_file, signature)) {
             log_line("mods:", "the signature could not be written");
         }
