@@ -697,7 +697,7 @@ V main(uint id : SV_VertexID) {
     bool test_persistent_conversion_sources() {
         using namespace galaxy::render;
         const std::vector<std::uint8_t> color{18u, 52u, 86u, 120u};
-        bool passed = expect_pixel(run_bytes(kSceneColorFormat, color, 1u, 1u,
+        bool passed = expect_pixel(run_bytes(kTargetColorFormat, color, 1u, 1u,
             1u, make_screen_probe_constants(0.0f, 0.0f, FrameMap(1u, 1u), false),
             true).front(), {18u, 52u, 86u, 120u},
             "persistent color source survives frame descriptor overwrite/rewind");
@@ -1405,7 +1405,7 @@ private:
                 throw std::runtime_error("Create persistent source test ring");
             }
             const auto companion_desc = texture_desc(native_depth
-                ? galaxy::render::kSceneColorFormat : galaxy::render::kSceneDepthResourceFormat,
+                ? galaxy::render::kTargetColorFormat : galaxy::render::kSceneDepthResourceFormat,
                 1u, 1u, native_depth ? D3D12_RESOURCE_FLAG_NONE
                                      : D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL);
             check_hr(device_->CreateCommittedResource(&default_heap,

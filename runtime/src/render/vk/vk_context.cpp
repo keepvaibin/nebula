@@ -1081,7 +1081,7 @@ UploadMemory create_upload_memory(Device*, std::size_t bytes, const char* name) 
 
 TextureRef create_render_texture(Device*, std::uint32_t width, std::uint32_t height) {
     return vk::Context::get().create_texture(
-        width, height, 1u, VK_FORMAT_R8G8B8A8_UNORM,
+        width, height, 1u, vk::kSceneColorFormat,
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
             VK_IMAGE_USAGE_TRANSFER_DST_BIT,
         true, "display picture copy");

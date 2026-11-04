@@ -19,7 +19,10 @@
 namespace galaxy::render::vk {
 namespace {
 
-constexpr VkFormat kColorFormat = VK_FORMAT_R8G8B8A8_UNORM;
+// Pictures between passes, as the scene.
+constexpr VkFormat kColorFormat = kSceneColorFormat;
+// SMAA's blending weights: one in each channel, the alpha's as fine as the rest.
+constexpr VkFormat kWeightsFormat = VK_FORMAT_R8G8B8A8_UNORM;
 constexpr VkFormat kEdgesFormat = VK_FORMAT_R8G8_UNORM;
 constexpr VkColorComponentFlags kRgb = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT;
 constexpr VkColorComponentFlags kRgba = kRgb | VK_COLOR_COMPONENT_A_BIT;
@@ -139,7 +142,7 @@ void set_reason(std::array<char, N>& out, const char* text) noexcept {
 }  // namespace
 
 void PostProcessorVk::initialize(const PostProcessSettings& settings, VkRenderPass scene_pass,
-                                 VkRenderPass color_pass) {
+                                 VkRenderPass color_pass, VkRenderPass window_pass) {
     shutdown();
     settings_ = settings;
     settings_.smaa_quality = std::min<std::uint8_t>(settings_.smaa_quality, 3u);
@@ -150,6 +153,7 @@ void PostProcessorVk::initialize(const PostProcessSettings& settings, VkRenderPa
     set_reason(status_.fxaa_reason, "STARTING");
     scene_pass_ = scene_pass;
     color_pass_ = color_pass;
+    window_pass_ = window_pass;
     stencil_format_ = stencil_format();
     spirv_quality_ = settings_.smaa_quality;
     to_build_ = true;
@@ -161,8 +165,7 @@ void PostProcessorVk::set_present_pass(VkRenderPass pass) {
     }
     const VkDevice device = Context::get().device();
     for (VkPipeline pipeline :
-         {to_present_.easu, to_present_.rcas, to_present_.rcas_scaled, to_present_.resample, to_present_.deband,
-          to_present_.deband_apply}) {
+         {to_present_.easu, to_present_.rcas, to_present_.rcas_scaled, to_present_.resample}) {
         if (pipeline != VK_NULL_HANDLE) {
             Context::get().defer([device, pipeline] { vkDestroyPipeline(device, pipeline, nullptr); });
         }
@@ -176,8 +179,6 @@ void PostProcessorVk::set_present_pass(VkRenderPass pass) {
         to_present_.rcas = create_pipeline(kFullscreenVs, kRcasPs, present_pass_, kRgba, 0);
         to_present_.rcas_scaled = create_pipeline(kFullscreenVs, kRcasScaledPs, present_pass_, kRgba, 0);
         to_present_.resample = create_pipeline(kFullscreenVs, kResamplePs, present_pass_, kRgba, 0);
-        to_present_.deband = create_pipeline(kFullscreenVs, kDebandPs, present_pass_, kRgba, 0);
-        to_present_.deband_apply = create_pipeline(kFullscreenVs, kDebandApplyPs, present_pass_, kRgba, 0);
     }
 }
 
@@ -312,24 +313,23 @@ bool PostProcessorVk::build_pipelines() {
     easu_ = Context::get().gather_extended();
     if (easu_) {
         to_color_.easu = create_pipeline(kFullscreenVs, kEasuPs, color_pass_, kRgba, 0);
+        to_window_.easu = create_pipeline(kFullscreenVs, kEasuPs, window_pass_, kRgba, 0);
     }
-    to_color_.rcas = create_pipeline(kFullscreenVs, kRcasPs, color_pass_, kRgba, 0);
-    to_color_.rcas_scaled = create_pipeline(kFullscreenVs, kRcasScaledPs, color_pass_, kRgba, 0);
     to_color_.resample = create_pipeline(kFullscreenVs, kResamplePs, color_pass_, kRgba, 0);
-    deband_ = create_pipeline(kFullscreenVs, kDebandPs, color_pass_, kRgba, 0);
-    deband_reduce_ = create_pipeline(kFullscreenVs, kDebandReducePs, color_pass_, kRgba, 0);
-    deband_smooth_ = create_pipeline(kFullscreenVs, kDebandSmoothPs, color_pass_, kRgba, 0);
-    to_color_.deband_apply = create_pipeline(kFullscreenVs, kDebandApplyPs, color_pass_, kRgba, 0);
+    to_window_.rcas = create_pipeline(kFullscreenVs, kRcasPs, window_pass_, kRgba, 0);
+    to_window_.rcas_scaled = create_pipeline(kFullscreenVs, kRcasScaledPs, window_pass_, kRgba, 0);
+    to_window_.resample = create_pipeline(kFullscreenVs, kResamplePs, window_pass_, kRgba, 0);
     built_ = true;
     const VkRenderPass present = std::exchange(present_pass_, VK_NULL_HANDLE);
     set_present_pass(present);
-    if ((easu_ && to_color_.easu == VK_NULL_HANDLE) || to_color_.rcas == VK_NULL_HANDLE ||
-        to_color_.rcas_scaled == VK_NULL_HANDLE || to_color_.resample == VK_NULL_HANDLE) {
+    if ((easu_ && (to_color_.easu == VK_NULL_HANDLE || to_window_.easu == VK_NULL_HANDLE)) ||
+        to_color_.resample == VK_NULL_HANDLE || to_window_.rcas == VK_NULL_HANDLE ||
+        to_window_.rcas_scaled == VK_NULL_HANDLE || to_window_.resample == VK_NULL_HANDLE) {
         return false;
     }
     if (stencil_format_ != VK_FORMAT_UNDEFINED) {
         edges_pass_ = create_smaa_pass(device, kEdgesFormat, stencil_format_, true);
-        weights_pass_ = create_smaa_pass(device, kColorFormat, stencil_format_, false);
+        weights_pass_ = create_smaa_pass(device, kWeightsFormat, stencil_format_, false);
         smaa_edges_ = create_pipeline(kSmaaEdgesVs, kSmaaEdgesPs, edges_pass_, kRgba, 1);
         smaa_weights_ = create_pipeline(kSmaaWeightsVs, kSmaaWeightsPs, weights_pass_, kRgba, 2);
     }
@@ -359,16 +359,15 @@ void PostProcessorVk::destroy_pipelines() noexcept {
             pipeline = VK_NULL_HANDLE;
         }
     }
-    for (VkPipeline pipeline : {smaa_edges_, smaa_weights_, smaa_blend_, smaa_blend_rgb_, fxaa_, fxaa_rgb_, deband_,
-                                deband_reduce_, deband_smooth_, to_color_.easu, to_color_.rcas, to_color_.rcas_scaled,
-                                to_color_.resample, to_color_.deband_apply, to_present_.easu, to_present_.rcas,
-                                to_present_.rcas_scaled, to_present_.resample, to_present_.deband,
-                                to_present_.deband_apply}) {
+    for (VkPipeline pipeline : {smaa_edges_, smaa_weights_, smaa_blend_, smaa_blend_rgb_, fxaa_, fxaa_rgb_,
+                                to_color_.easu, to_color_.resample, to_window_.easu, to_window_.rcas,
+                                to_window_.rcas_scaled, to_window_.resample, to_present_.easu, to_present_.rcas,
+                                to_present_.rcas_scaled, to_present_.resample}) {
         if (pipeline != VK_NULL_HANDLE) vkDestroyPipeline(device, pipeline, nullptr);
     }
-    smaa_edges_ = smaa_weights_ = smaa_blend_ = smaa_blend_rgb_ = fxaa_ = fxaa_rgb_ = deband_ = deband_reduce_ =
-        deband_smooth_ = VK_NULL_HANDLE;
+    smaa_edges_ = smaa_weights_ = smaa_blend_ = smaa_blend_rgb_ = fxaa_ = fxaa_rgb_ = VK_NULL_HANDLE;
     to_color_ = {};
+    to_window_ = {};
     to_present_ = {};
     for (VkRenderPass pass : {edges_pass_, weights_pass_}) {
         if (pass != VK_NULL_HANDLE) vkDestroyRenderPass(device, pass, nullptr);
@@ -400,7 +399,7 @@ void PostProcessorVk::shutdown() noexcept {
     destroy_pipelines();
     area_texture_.reset();
     search_texture_.reset();
-    edges_ = weights_ = stencil_ = antialiased_ = scaled_ = debanded_ = deband_reduced_ = deband_smoothed_ = {};
+    edges_ = weights_ = stencil_ = antialiased_ = scaled_ = {};
 }
 
 bool PostProcessorVk::poll_ready() {
@@ -500,7 +499,7 @@ bool PostProcessorVk::ensure_smaa_targets(unsigned width, unsigned height) {
     edges_ = weights_ = stencil_ = {};
     return ensure_target(stencil_, width, height, stencil_format_, VK_NULL_HANDLE, false) &&
            ensure_target(edges_, width, height, kEdgesFormat, edges_pass_, true) &&
-           ensure_target(weights_, width, height, kColorFormat, weights_pass_, true);
+           ensure_target(weights_, width, height, kWeightsFormat, weights_pass_, true);
 }
 
 void PostProcessorVk::begin_pass(VkCommandBuffer commands, VkRenderPass pass, const Target& target,
@@ -665,38 +664,11 @@ void PostProcessorVk::hold_scene_targets(std::vector<std::shared_ptr<Texture>>& 
     }
 }
 
-VkImageView PostProcessorVk::deband_smoothed(VkCommandBuffer commands, VkImageView source, unsigned width,
-                                             unsigned height, unsigned& reduction, const SetAllocator& allocate) {
-    reduction = deband_reduction(height);
-    const unsigned reduced_width = deband_reduced_size(width, reduction);
-    const unsigned reduced_height = deband_reduced_size(height, reduction);
-    if (reduction == 1u || deband_reduce_ == VK_NULL_HANDLE || deband_smooth_ == VK_NULL_HANDLE ||
-        !ensure_target(deband_reduced_, reduced_width, reduced_height, kColorFormat, color_pass_, false) ||
-        !ensure_target(deband_smoothed_, reduced_width, reduced_height, kColorFormat, color_pass_, false)) {
-        reduction = 1u;
-        return VK_NULL_HANDLE;
-    }
-    const VkRect2D reduced{{0, 0}, {reduced_width, reduced_height}};
-    PostConstants r{};
-    set_post_input_size(r, width, height);
-    r.params[0] = static_cast<float>(reduction);
-    begin_pass(commands, color_pass_, deband_reduced_, false);
-    draw(commands, deband_reduce_, {source}, reduced, r, allocate);
-    vkCmdEndRenderPass(commands);
-    PostConstants s{};
-    set_post_input_size(s, reduced_width, reduced_height);
-    set_deband_constants(s, width, height, reduction);
-    begin_pass(commands, color_pass_, deband_smoothed_, false);
-    draw(commands, deband_smooth_, {deband_reduced_.texture->view}, reduced, s, allocate);
-    vkCmdEndRenderPass(commands);
-    return deband_smoothed_.texture->view;
-}
-
 PostProcessorVk::PresentStep PostProcessorVk::prepare_present(VkCommandBuffer commands, const Texture& source,
                                                               unsigned source_width, unsigned source_height,
                                                               unsigned target_width, unsigned target_height,
                                                               bool present, const SetAllocator& allocate) {
-    const PassPipelines& last = present ? to_present_ : to_color_;
+    const PassPipelines& last = present ? to_present_ : to_window_;
     // The scene was antialiased before the 2D layer (prepare_scene_aa).
     PostProcessSettings scaling = settings_;
     scaling.aa = PostProcessSettings::Aa::kOff;
@@ -707,32 +679,7 @@ PostProcessorVk::PresentStep PostProcessorVk::prepare_present(VkCommandBuffer co
                                              status_.smaa_ok, status_.fxaa_ok);
     PresentStep step{};
     set_post_input_size(step.constants, source_width, source_height);
-    // The picture's 8-bit steps smoothed (PASS_DEBAND): at its own size before any enlarging; a reduced one in the
-    // window after the box filter (PostProcessor::record).
-    VkImageView input = source.view;
-    const bool deband = deband_ != VK_NULL_HANDLE;
-    const VkPipeline deband_last = present ? to_present_.deband : deband_;
-    const bool deband_in_window = deband && deband_last != VK_NULL_HANDLE && target_width < source_width &&
-        target_height < source_height && plan.resample && !plan.rcas &&
-        ensure_target(scaled_, target_width, target_height, kColorFormat, color_pass_, false);
-    if (deband && !deband_in_window &&
-        ensure_target(debanded_, source_width, source_height, kColorFormat, color_pass_, false)) {
-        unsigned reduction = 1u;
-        const VkImageView smoothed =
-            deband_smoothed(commands, input, source_width, source_height, reduction, allocate);
-        PostConstants d = step.constants;
-        set_deband_constants(d, source_width, source_height, reduction);
-        const VkRect2D source_rect{{0, 0}, {source_width, source_height}};
-        begin_pass(commands, color_pass_, debanded_, false);
-        if (smoothed != VK_NULL_HANDLE && to_color_.deband_apply != VK_NULL_HANDLE) {
-            draw(commands, to_color_.deband_apply, {input, smoothed}, source_rect, d, allocate);
-        } else {
-            set_deband_constants(d, source_width, source_height, 1u);
-            draw(commands, deband_, {input}, source_rect, d, allocate);
-        }
-        vkCmdEndRenderPass(commands);
-        input = debanded_.texture->view;
-    }
+    const VkImageView input = source.view;
     step.input = input;
     // Enlarging on both axes with sharpening: one pass straight into the target.
     if (plan.resample && plan.rcas && last.rcas_scaled != VK_NULL_HANDLE && target_width >= source_width &&
@@ -768,27 +715,13 @@ PostProcessorVk::PresentStep PostProcessorVk::prepare_present(VkCommandBuffer co
         step.constants.params[1] = static_cast<float>(source_height);
         step.constants.params[2] = static_cast<float>(target_width);
         step.constants.params[3] = static_cast<float>(target_height);
-        if (plan.resample_to_target && !deband_in_window) {
+        if (plan.resample_to_target) {
             step.pipeline = last.resample;
             return step;
         }
         begin_pass(commands, color_pass_, scaled_, false);
         draw(commands, to_color_.resample, {input}, window, step.constants, allocate);
         vkCmdEndRenderPass(commands);
-        if (deband_in_window) {
-            unsigned reduction = 1u;
-            step.input = scaled_.texture->view;
-            step.second = deband_smoothed(commands, step.input, target_width, target_height, reduction, allocate);
-            if (step.second != VK_NULL_HANDLE && last.deband_apply == VK_NULL_HANDLE) {
-                step.second = VK_NULL_HANDLE;
-                reduction = 1u;
-            }
-            step.constants = {};
-            set_post_input_size(step.constants, target_width, target_height);
-            set_deband_constants(step.constants, target_width, target_height, reduction);
-            step.pipeline = step.second != VK_NULL_HANDLE ? last.deband_apply : deband_last;
-            return step;
-        }
     }
     // RCAS of the scaled picture (or of the source at its own size).
     if (plan.easu || plan.resample) {
@@ -808,11 +741,8 @@ void PostProcessorVk::finish_present(VkCommandBuffer commands, const PresentStep
     PostConstants constants = step.constants;
     constants.origin[0] = viewport.offset.x;
     constants.origin[1] = viewport.offset.y;
-    if (step.second != VK_NULL_HANDLE) {
-        draw(commands, step.pipeline, {step.input, step.second}, viewport, constants, allocate);
-    } else {
-        draw(commands, step.pipeline, {step.input}, viewport, constants, allocate);
-    }
+    constants.origin[2] = 1;
+    draw(commands, step.pipeline, {step.input}, viewport, constants, allocate);
 }
 
 void PostProcessorVk::self_test() {
@@ -887,7 +817,7 @@ void PostProcessorVk::self_test() {
         fail(AaRun::kNone, "TEST SETUP");
         return;
     }
-    std::memcpy(upload->mapped, pattern.data(), pattern.size());
+    rgba8_to_ten_bit(pattern.data(), reinterpret_cast<std::uint8_t*>(upload->mapped), kSize, kSize, kPitch);
     layout_barrier(commands, source->image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                    VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, VK_PIPELINE_STAGE_TRANSFER_BIT,
                    VK_ACCESS_TRANSFER_WRITE_BIT);
@@ -946,8 +876,11 @@ void PostProcessorVk::self_test() {
     context.invalidate(*readback);
     for (unsigned i = 0; i < 2u; ++i) {
         if (!recorded[i]) continue;
+        std::array<std::uint8_t, kPitch * kSize> result_rgba{};
+        ten_bit_to_rgba8(reinterpret_cast<const std::uint8_t*>(readback->mapped) + i * pattern.size(), result_rgba.data(),
+                         kSize, kSize, kPitch, kPitch);
         const PostSelfTestResult result = check_post_self_test(
-            pattern.data(), reinterpret_cast<const std::uint8_t*>(readback->mapped) + i * pattern.size(), kPitch);
+            pattern.data(), result_rgba.data(), kPitch);
         std::cerr << "[post-process] self-test " << (passes[i] == AaRun::kSmaa ? "smaa" : "fxaa")
                   << " changed=" << result.changed << " stray=" << result.stray << '\n';
         if (!result.passed) fail(passes[i], "SELF-TEST");

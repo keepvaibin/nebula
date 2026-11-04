@@ -31,7 +31,8 @@ public:
 
     // Starts compiling every pass, for the renderer's scene target pass (RGBA8 and depth) and its RGBA8 colour pass (one
     // attachment, ending shader-readable). The present pass comes with set_present_pass.
-    void initialize(const PostProcessSettings& settings, VkRenderPass scene_pass, VkRenderPass color_pass);
+    void initialize(const PostProcessSettings& settings, VkRenderPass scene_pass, VkRenderPass color_pass,
+                    VkRenderPass window_pass);
     // The swap chain's render pass (made again when its format changes): the chain's last pass draws in it.
     void set_present_pass(VkRenderPass pass);
     void shutdown() noexcept;
@@ -59,13 +60,12 @@ public:
 
     // The scaling chain from `source` (shader-readable) to a `target_width` x `target_height` picture: prepare
     // records the passes outside the target's render pass (into the window-sized intermediate); finish draws the
-    // last one in the target's pass (the present pass when `present`, else the colour pass) at `viewport`, whose
+    // last one in the target's pass (the present pass when `present`, else the RGBA8 pass, dithered either way) at `viewport`, whose
     // origin is the picture's in the target. A step without a pipeline (no present pass yet) is the renderer's to
     // draw with its blit.
     struct PresentStep {
         VkPipeline pipeline = VK_NULL_HANDLE;
         VkImageView input = VK_NULL_HANDLE;
-        VkImageView second = VK_NULL_HANDLE;  // the deband's smoothed picture
         PostConstants constants{};
     };
     PresentStep prepare_present(VkCommandBuffer commands, const Texture& source, unsigned source_width,
@@ -93,8 +93,6 @@ private:
         VkPipeline rcas = VK_NULL_HANDLE;
         VkPipeline rcas_scaled = VK_NULL_HANDLE;
         VkPipeline resample = VK_NULL_HANDLE;
-        VkPipeline deband = VK_NULL_HANDLE;
-        VkPipeline deband_apply = VK_NULL_HANDLE;
     };
 
     VkShaderModule module(Program program) const;
@@ -116,10 +114,6 @@ private:
               const VkRect2D& viewport, const PostConstants& constants, const SetAllocator& allocate,
               const VkRect2D* scissor = nullptr) const;
     void self_test();
-    // From 1080 lines `source` (width x height) reduced and smoothed (PASS_DEBAND_REDUCE, PASS_DEBAND_SMOOTH) for the
-    // deband's last pass, PASS_DEBAND_APPLY: the smoothed picture, or none (`reduction` 1: the one-pass deband).
-    VkImageView deband_smoothed(VkCommandBuffer commands, VkImageView source, unsigned width, unsigned height,
-                                unsigned& reduction, const SetAllocator& allocate);
 
     PostProcessSettings settings_{};
     PostProcessStatus status_{};
@@ -130,6 +124,7 @@ private:
     bool easu_ = false;  // the device has EASU's single-channel gathers
     VkRenderPass scene_pass_ = VK_NULL_HANDLE;
     VkRenderPass color_pass_ = VK_NULL_HANDLE;
+    VkRenderPass window_pass_ = VK_NULL_HANDLE;
     VkRenderPass present_pass_ = VK_NULL_HANDLE;
     VkFormat stencil_format_ = VK_FORMAT_UNDEFINED;
 
@@ -152,6 +147,7 @@ private:
     // FXAA's, SMAA's last pass over MSAA: per sample count (log2).
     VkPipeline scene_pass_ms_[2][4]{};
     PassPipelines to_color_{};
+    PassPipelines to_window_{};
     PassPipelines to_present_{};
 
     std::shared_ptr<Texture> area_texture_;
@@ -161,14 +157,6 @@ private:
     Target stencil_;  // shared by edges and weights
     Target antialiased_;
     Target scaled_;
-    // The debanded picture, source-sized, and its passes (optional); from 1080 lines the reduced picture and its
-    // smoothing.
-    Target debanded_;
-    Target deband_reduced_;
-    Target deband_smoothed_;
-    VkPipeline deband_ = VK_NULL_HANDLE;
-    VkPipeline deband_reduce_ = VK_NULL_HANDLE;
-    VkPipeline deband_smooth_ = VK_NULL_HANDLE;
 };
 
 }  // namespace galaxy::render::vk

@@ -7,6 +7,7 @@
 #include "galaxy/run_options.h"
 #include "galaxy/render/render_config.h"
 
+#include <cstring>
 #include <algorithm>
 #include <bit>
 #include <cmath>
@@ -44,19 +45,38 @@ void set_post_source(PostConstants& constants, unsigned width, unsigned height, 
     constants.source[3] = (static_cast<float>(height) - 0.5f) / static_cast<float>(texture_height);
 }
 
-void set_deband_constants(PostConstants& constants, unsigned width, unsigned height, unsigned reduction) noexcept {
-    constants.params[0] = std::max(8.0f, 48.0f * static_cast<float>(height) / 1080.0f) / static_cast<float>(reduction);
-    constants.params[1] = 1.5f / 255.0f;
-    constants.params[2] = 1.0f / static_cast<float>(deband_reduced_size(width, reduction) * reduction);
-    constants.params[3] = 1.0f / static_cast<float>(deband_reduced_size(height, reduction) * reduction);
+void rgba8_to_ten_bit(const std::uint8_t* rgba, std::uint8_t* words, unsigned width, unsigned height,
+                      unsigned pitch) noexcept {
+    for (unsigned y = 0u; y < height; ++y) {
+        const std::uint8_t* from = rgba + static_cast<std::size_t>(y) * pitch;
+        std::uint8_t* to = words + static_cast<std::size_t>(y) * pitch;
+        for (unsigned x = 0u; x < width; ++x) {
+            const auto wide = [](std::uint8_t v) { return (static_cast<std::uint32_t>(v) * 1023u + 127u) / 255u; };
+            const std::uint32_t word = wide(from[x * 4u]) | wide(from[x * 4u + 1u]) << 10u |
+                                       wide(from[x * 4u + 2u]) << 20u |
+                                       static_cast<std::uint32_t>(from[x * 4u + 3u] >> 6u) << 30u;
+            std::memcpy(to + x * 4u, &word, 4u);
+        }
+    }
 }
 
-unsigned deband_reduction(unsigned height) noexcept {
-    return height < 1080u ? 1u : height < 2160u ? 2u : height < 4320u ? 4u : 8u;
-}
-
-unsigned deband_reduced_size(unsigned size, unsigned reduction) noexcept {
-    return (size + reduction - 1u) / reduction;
+void ten_bit_to_rgba8(const std::uint8_t* words, std::uint8_t* rgba, unsigned width, unsigned height,
+                      unsigned word_pitch, unsigned rgba_pitch) noexcept {
+    for (unsigned y = 0u; y < height; ++y) {
+        const std::uint8_t* from = words + static_cast<std::size_t>(y) * word_pitch;
+        std::uint8_t* to = rgba + static_cast<std::size_t>(y) * rgba_pitch;
+        for (unsigned x = 0u; x < width; ++x) {
+            std::uint32_t word = 0u;
+            std::memcpy(&word, from + x * 4u, 4u);
+            const auto narrow = [](std::uint32_t v) {
+                return static_cast<std::uint8_t>(((v & 1023u) * 255u + 511u) / 1023u);
+            };
+            to[x * 4u] = narrow(word);
+            to[x * 4u + 1u] = narrow(word >> 10u);
+            to[x * 4u + 2u] = narrow(word >> 20u);
+            to[x * 4u + 3u] = static_cast<std::uint8_t>((word >> 30u) * 85u);
+        }
+    }
 }
 
 void set_fsr_easu_constants(PostConstants& c, float in_w, float in_h, float out_w, float out_h) noexcept {

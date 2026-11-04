@@ -32,7 +32,7 @@ void note_pipeline_for_seed(std::uint32_t shader, const RenderStateKey& rs) noex
         }
         return out;
     }();
-    if (file == nullptr || (rs.samples_log2 != 0u)) {
+    if (file == nullptr || (rs.samples_log2 & ~kSceneVariantTarget) != 0u) {
         return;
     }
     static std::set<std::tuple<std::uint32_t, std::uint32_t, std::uint32_t>> seen;

@@ -91,7 +91,10 @@ private:
 
 }  // namespace detail
 
-inline constexpr DXGI_FORMAT kSceneColorFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
+// The scene: the art's own blending, in gamma, at 10 bits a channel. No shader reads its alpha.
+inline constexpr DXGI_FORMAT kSceneColorFormat = DXGI_FORMAT_R10G10B10A2_UNORM;
+// A texture target's colour: the game keeps masks in its alpha.
+inline constexpr DXGI_FORMAT kTargetColorFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 // The wide 3D scene's target (RendererD3D12::begin_wide_scene): light past white stays, display-encoded above 1 as below,
 // until the camera at the scene's end brings it into the RGBA8 scene target.
 inline constexpr DXGI_FORMAT kSceneHdrColorFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
@@ -580,7 +583,8 @@ public:
     // The live scene target's variant, which its draws' pipelines share (render_state_key.h RenderStateKey::samples_log2): its
     // samples, and kSceneVariantHdr while the HDR scene scene target stands in.
     [[nodiscard]] std::uint8_t scene_variant() const noexcept {
-        return static_cast<std::uint8_t>(scene_samples_log2() | (scene_hdr_ ? kSceneVariantHdr : 0u));
+        return static_cast<std::uint8_t>(scene_samples_log2() | (scene_hdr_ ? kSceneVariantHdr : 0u) |
+                                         (target_pass_active_ ? kSceneVariantTarget : 0u));
     }
     [[nodiscard]] ID3D12RootSignature* root_signature() const {
         return root_signature_.Get();
@@ -671,7 +675,8 @@ private:
         const std::uint8_t* source,
         unsigned width,
         unsigned height,
-        unsigned row_pitch);
+        unsigned row_pitch,
+        bool ten_bit = false);
     bool create_scene_targets(const FrameMap& map);
     void carry_over_scene_contents();
     // The MSAA sample count the settings ask for and the device has for the scene target's formats: 1 without MSAA, and
@@ -911,7 +916,7 @@ private:
         bool depth_dirty = false;
     };
     // The set's multisampled targets for `samples` (none for one), with `rtv` and `dsv` pointed at them.
-    bool create_scene_msaa(SceneMsaa& msaa, ID3D12Resource* depth, unsigned samples,
+    bool create_scene_msaa(SceneMsaa& msaa, ID3D12Resource* color, ID3D12Resource* depth, unsigned samples,
                          D3D12_CPU_DESCRIPTOR_HANDLE& rtv, D3D12_CPU_DESCRIPTOR_HANDLE& dsv);
     void write_msaa_depth_view(SceneMsaa& msaa);
     [[nodiscard]] ID3D12PipelineState* clear_pipeline(bool color);
@@ -923,7 +928,7 @@ private:
         Microsoft::WRL::ComPtr<ID3D12Resource> depth;
         SceneMsaa msaa;
         FrameMap map{};
-        bool hdr = false;   // colour kSceneHdrColorFormat (else kSceneColorFormat)
+        bool hdr = false;   // colour kSceneHdrColorFormat (else kSceneColorFormat, or kTargetColorFormat for a target's)
         D3D12_CPU_DESCRIPTOR_HANDLE rtv{};
         D3D12_CPU_DESCRIPTOR_HANDLE dsv{};
         std::optional<DescriptorRing::Table> conv_table;
@@ -1126,7 +1131,7 @@ private:
     bool create_scene_set(SceneTargetSet& set, Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& rtv_heap,
                         Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& dsv_heap, const FrameMap& map,
                         bool persistent_views = true, bool unordered_access = false, unsigned samples = 1u,
-                        bool hdr = false, unsigned width = kFrameUnits, unsigned height = kFrameUnits);
+                        bool hdr = false, unsigned width = kFrameUnits, unsigned height = kFrameUnits, bool target = false);
     void write_scene_set_views(SceneTargetSet& set, const DescriptorRing::Table& table);
     void swap_scene_with(SceneTargetSet& other);
     bool replay_playing_ = false;
@@ -1573,6 +1578,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> selected_display_readback_buf_;
     Microsoft::WRL::ComPtr<ID3D12Resource> selected_display_readback_source_;
     bool selected_display_readback_pending_ = false;
+    bool selected_display_readback_ten_bit_ = false;
     std::uint64_t selected_display_readback_fence_ = 0;
     UINT selected_display_readback_width_ = 0;
     UINT selected_display_readback_height_ = 0;
@@ -1663,6 +1669,7 @@ private:
     // CPU-only scratch slot. scene target source SRVs occupy an immutable prefix of the
     // active shader-visible heap.
     Microsoft::WRL::ComPtr<ID3D12PipelineState> conv_pipeline_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> probe_pipeline_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> display_filter_pipeline_;  // 1:1 display copies without gamma
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> conv_rtv_heap_;
     D3D12_CPU_DESCRIPTOR_HANDLE conv_scratch_rtv_{};

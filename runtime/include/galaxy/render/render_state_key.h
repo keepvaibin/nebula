@@ -17,6 +17,8 @@ inline constexpr std::uint8_t kTopologyTypeMask = 0x0Fu;
 // RenderStateKey::samples_log2 bit 2: the draw renders into the ray tracer's HDR scene scene target
 // (RGBA16F) instead of the RGBA8 scene target. Ray tracing runs without MSAA, so the bits never combine.
 inline constexpr std::uint8_t kSceneVariantHdr = 4u;
+// A texture target's pass: colour RGBA8, whose alpha the game writes and reads.
+inline constexpr std::uint8_t kSceneVariantTarget = 8u;
 inline constexpr std::uint8_t kSceneVariantSamplesMask = 3u;
 
 // Fixed-function pipeline state, kept apart from the shader keys so one compiled shader pair

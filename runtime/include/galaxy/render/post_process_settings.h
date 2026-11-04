@@ -73,15 +73,11 @@ void set_fsr_easu_constants(PostConstants& constants, float in_width, float in_h
                             float out_height) noexcept;
 // FsrRcasCon: sharpness 0-100 (100 strongest).
 void set_fsr_rcas_constants(PostConstants& constants, unsigned sharpness_percent) noexcept;
-// The deband passes (post_process.hlsl PASS_DEBAND*) on a picture `width` x `height` smoothed at 1/`reduction` of its
-// size: the reach (48 pixels at 1080 lines, in reduced pixels), the threshold (1.5 levels of 255) and the scale from a
-// pixel position to the smoothed picture's coordinates.
-void set_deband_constants(PostConstants& constants, unsigned width, unsigned height, unsigned reduction) noexcept;
-// The reduction the deband smooths at: 1 below 1080 lines (one pass), then 2, 4 and 8.
-[[nodiscard]] unsigned deband_reduction(unsigned height) noexcept;
-// The reduced picture's size along an axis of `size` pixels.
-[[nodiscard]] unsigned deband_reduced_size(unsigned size, unsigned reduction) noexcept;
-// The deband pass runs (GALAXY_DEBAND=0: off, for comparisons).
+// The scene's words (10 bits a channel, alpha 2) from and to RGBA8 rows.
+void rgba8_to_ten_bit(const std::uint8_t* rgba, std::uint8_t* words, unsigned width, unsigned height,
+                      unsigned pitch) noexcept;
+void ten_bit_to_rgba8(const std::uint8_t* words, std::uint8_t* rgba, unsigned width, unsigned height,
+                      unsigned word_pitch, unsigned rgba_pitch) noexcept;
 
 // The AA start-up self-test: a 32 x 32 white-over-black edge stepping down one row every four columns, the jagged
 // case both passes exist for. A working pass blends a few dozen pixels along the steps and leaves flat areas alone.

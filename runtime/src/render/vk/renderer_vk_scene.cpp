@@ -56,13 +56,13 @@ void write_ppm_async(std::string path, std::vector<std::uint8_t> rgb, unsigned w
 // An scene target set at `scale`: targets in their attachment layouts, the framebuffer, and the conversion inputs (allocated
 // once per set; rewriting them needs a GPU that no longer reads the old views, which callers ensure).
 bool RendererVk::create_scene_set(SceneSet& set, const FrameMap& map, unsigned samples, unsigned set_width,
-                                unsigned set_height) {
+                                unsigned set_height, bool target) {
     vk::Context& context = vk::Context::get();
     const VkDevice device = context.device();
     const std::uint32_t width = static_cast<std::uint32_t>(std::lround(static_cast<double>(set_width) * map.sx));
     const std::uint32_t height = static_cast<std::uint32_t>(std::lround(static_cast<double>(set_height) * map.sy));
     gpu::TextureRef color = context.create_texture(
-        width, height, 1u, VK_FORMAT_R8G8B8A8_UNORM,
+        width, height, 1u, target ? vk::kTargetColorFormat : vk::kSceneColorFormat,
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
             VK_IMAGE_USAGE_TRANSFER_DST_BIT | (scene_set_storage_ ? VK_IMAGE_USAGE_STORAGE_BIT : 0u),
         true, "scene target color");
@@ -78,7 +78,7 @@ bool RendererVk::create_scene_set(SceneSet& set, const FrameMap& map, unsigned s
     gpu::TextureRef ms_depth;
     if (samples > 1u) {
         const auto count = static_cast<VkSampleCountFlagBits>(samples);
-        ms_color = context.create_texture(width, height, 1u, VK_FORMAT_R8G8B8A8_UNORM,
+        ms_color = context.create_texture(width, height, 1u, vk::kSceneColorFormat,
                                           VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, true, "scene target color MSAA", count);
         ms_depth = context.create_texture(width, height, 1u, depth_format_,
                                           VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
@@ -111,7 +111,7 @@ bool RendererVk::create_scene_set(SceneSet& set, const FrameMap& map, unsigned s
                                        multi);
         resolve_framebuffer = make_framebuffer(draw_layout_.scene_pass, single);
     } else {
-        framebuffer = make_framebuffer(draw_layout_.scene_pass, single);
+        framebuffer = make_framebuffer(target ? draw_layout_.target_pass : draw_layout_.scene_pass, single);
     }
     // The new targets enter their attachment layouts now, so every later submission finds them so.
     run_one_time([&](VkCommandBuffer commands) {
@@ -674,7 +674,7 @@ bool RendererVk::begin_target_pass(std::uint64_t key, std::uint32_t width, std::
             destroy_scene_set(slot.set);
         }
         // A new set enters its attachment layouts (create_scene_set); the pass's first clear (RenderCore) fills it.
-        if (!create_scene_set(slot.set, scene_map_, 1u, width, height)) {
+        if (!create_scene_set(slot.set, scene_map_, 1u, width, height, true)) {
             if (slot.set.color_source != VK_NULL_HANDLE) {
                 target_free_sources_.push_back({slot.set.color_source, slot.set.depth_source});
             }
@@ -1054,12 +1054,12 @@ vk::TemporalUpscaleInputs RendererVk::temporal_inputs(const vk::Texture& color, 
     };
     constexpr VkImageUsageFlags kColor = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
     vk::TemporalUpscaleInputs in{};
-    in.color = image(color, VK_FORMAT_R8G8B8A8_UNORM, kColor);
+    in.color = image(color, color.format, kColor);
     in.depth = image(depth, depth_format_, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
     in.depth.barrier_aspects = depth_aspects(depth_format_);
     in.motion = image(motion, VK_FORMAT_R16G16_SFLOAT, kColor | VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
     in.reactive = image(reactive, VK_FORMAT_R8_UNORM, kColor);
-    in.output = image(output, VK_FORMAT_R8G8B8A8_UNORM, kColor | VK_IMAGE_USAGE_STORAGE_BIT);
+    in.output = image(output, output.format, kColor | VK_IMAGE_USAGE_STORAGE_BIT);
     in.output.view = output.target_view;
     in.camera_near = scene_lens_[0];
     in.camera_far = scene_lens_[1];
@@ -1178,7 +1178,7 @@ void RendererVk::take_fg_hudless_scene() {
     const vk::Texture& color = *scene_.color;
     if (!fg_hudless_scene_color_ || fg_hudless_scene_color_->width != color.width || fg_hudless_scene_color_->height != color.height) {
         vkDeviceWaitIdle(context.device());
-        fg_hudless_scene_color_ = context.create_texture(color.width, color.height, 1u, VK_FORMAT_R8G8B8A8_UNORM,
+        fg_hudless_scene_color_ = context.create_texture(color.width, color.height, 1u, color.format,
                                                          VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, true,
                                                          "frame generation scene");
         if (!fg_hudless_scene_color_) {
@@ -1217,7 +1217,7 @@ void RendererVk::copy_fg_hudless_display(const FramePassGeometry& sampling, cons
     vk::Context& context = vk::Context::get();
     if (!fg_hudless_display_ || fg_hudless_display_->width != dest.width || fg_hudless_display_->height != dest.height) {
         vkDeviceWaitIdle(context.device());
-        fg_hudless_display_ = context.create_texture(dest.width, dest.height, 1u, VK_FORMAT_R8G8B8A8_UNORM,
+        fg_hudless_display_ = context.create_texture(dest.width, dest.height, 1u, vk::kSceneColorFormat,
                                                      VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, true,
                                                      "frame generation display picture");
         if (!fg_hudless_display_) {
@@ -1285,7 +1285,7 @@ void RendererVk::present_fg_hudless(const DisplayTexture& source, const galaxy::
         return;
     }
     VkRenderPassBeginInfo begin{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
-    begin.renderPass = color_pass_;
+    begin.renderPass = rgba8_pass_;
     begin.framebuffer = framebuffer_for(*fg_hudless_target_);
     begin.renderArea = {{0, 0}, {width, height}};
     vkCmdBeginRenderPass(commands, &begin, VK_SUBPASS_CONTENTS_INLINE);
@@ -2114,7 +2114,7 @@ void RendererVk::draw(const DrawCall& call) {
 VkFramebuffer RendererVk::framebuffer_for(vk::Texture& texture) {
     if (texture.framebuffer == VK_NULL_HANDLE) {
         VkFramebufferCreateInfo info{VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
-        info.renderPass = color_pass_;
+        info.renderPass = texture.format == vk::kSceneColorFormat ? color_pass_ : rgba8_pass_;
         info.attachmentCount = 1;
         info.pAttachments = &texture.target_view;
         info.width = texture.width;
@@ -2507,7 +2507,7 @@ bool RendererVk::draw_frame_pass(const FramePassRequest& params, TextureCache& t
             retire(std::move(dest.texture));
         }
         dest.texture = vk::Context::get().create_texture(
-            w, h, 1u, VK_FORMAT_R8G8B8A8_UNORM,
+            w, h, 1u, vk::kSceneColorFormat,
             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
                 VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
             true, nullptr);
@@ -2572,11 +2572,11 @@ bool RendererVk::record_screen_probes(std::size_t slot, std::span<const ScreenPr
     vk::Texture& target = *probe_target_;
     transition_scene_for_sampling(commands, true);
     VkRenderPassBeginInfo begin{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
-    begin.renderPass = color_pass_;
+    begin.renderPass = rgba8_pass_;
     begin.framebuffer = framebuffer_for(target);
     begin.renderArea = {{0, 0}, {kScreenProbesMax, 1u}};
     vkCmdBeginRenderPass(commands, &begin, VK_SUBPASS_CONTENTS_INLINE);
-    vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, conversion_pipeline_);
+    vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, probe_pipeline_);
     const VkDescriptorSet source = scene_.depth_source;
     vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, conversion_layout_, 0, 1, &source, 0, nullptr);
     for (std::size_t i = 0; i < probes.size(); ++i) {
@@ -2697,7 +2697,9 @@ void RendererVk::debug_log_readback() {
         return;
     }
     vk::Context::get().invalidate(*scene_capture_.buffer);
-    const auto* rgba = reinterpret_cast<const std::uint8_t*>(scene_capture_.buffer->mapped);
+    std::vector<std::uint8_t> rgba(static_cast<std::size_t>(scene_capture_width_) * scene_capture_height_ * 4u);
+    ten_bit_to_rgba8(reinterpret_cast<const std::uint8_t*>(scene_capture_.buffer->mapped), rgba.data(),
+                     scene_capture_width_, scene_capture_height_, scene_capture_width_ * 4u, scene_capture_width_ * 4u);
     std::vector<std::uint8_t> rgb(static_cast<std::size_t>(scene_capture_width_) * scene_capture_height_ * 3u);
     for (std::size_t i = 0, n = rgb.size() / 3u; i < n; ++i) {
         rgb[i * 3u] = rgba[i * 4u];

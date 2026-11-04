@@ -590,7 +590,7 @@ bool RendererD3D12::create_scene_targets(const FrameMap& map) {
     }
     scene_dsv_ = dsv_heap_->GetCPUDescriptorHandleForHeapStart();
     // MSAA: draws and clears go to the multisampled targets; scene_color_ and scene_depth_ hold their resolves.
-    if (!create_scene_msaa(scene_msaa_, scene_depth_.Get(), wanted_msaa_samples(), scene_rtv_, scene_dsv_)) {
+    if (!create_scene_msaa(scene_msaa_, scene_color_.Get(), scene_depth_.Get(), wanted_msaa_samples(), scene_rtv_, scene_dsv_)) {
         std::cerr << "[Renderer] MSAA targets unavailable; the scene target draws without MSAA\n";
         scene_msaa_.samples = 1u;
         const UINT stride = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
@@ -628,7 +628,7 @@ unsigned RendererD3D12::msaa_max_samples() const {
     return msaa_max_samples_;
 }
 
-bool RendererD3D12::create_scene_msaa(SceneMsaa& msaa, ID3D12Resource* depth, unsigned samples,
+bool RendererD3D12::create_scene_msaa(SceneMsaa& msaa, ID3D12Resource* color, ID3D12Resource* depth, unsigned samples,
                                     D3D12_CPU_DESCRIPTOR_HANDLE& rtv, D3D12_CPU_DESCRIPTOR_HANDLE& dsv) {
     msaa.color.Reset();
     msaa.depth.Reset();
@@ -641,15 +641,16 @@ bool RendererD3D12::create_scene_msaa(SceneMsaa& msaa, ID3D12Resource* depth, un
     hp.Type = D3D12_HEAP_TYPE_DEFAULT;
     D3D12_RESOURCE_DESC rd{};
     rd.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    const DXGI_FORMAT color_format = color->GetDesc().Format;
     rd.Width = depth->GetDesc().Width;
     rd.Height = depth->GetDesc().Height;
     rd.DepthOrArraySize = 1;
     rd.MipLevels = 1;
-    rd.Format = kSceneColorFormat;
+    rd.Format = color_format;
     rd.SampleDesc.Count = samples;
     rd.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
     D3D12_CLEAR_VALUE cv{};
-    cv.Format = kSceneColorFormat;
+    cv.Format = color_format;
     cv.Color[3] = 1.0f;
     if (FAILED(device_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_RENDER_TARGET,
                                                 &cv, IID_PPV_ARGS(&msaa.color)))) {
@@ -676,7 +677,7 @@ bool RendererD3D12::create_scene_msaa(SceneMsaa& msaa, ID3D12Resource* depth, un
     }
     rtv = msaa.rtv_heap->GetCPUDescriptorHandleForHeapStart();
     D3D12_RENDER_TARGET_VIEW_DESC color_view{};
-    color_view.Format = kSceneColorFormat;
+    color_view.Format = color_format;
     color_view.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DMS;
     device_->CreateRenderTargetView(msaa.color.Get(), &color_view, rtv);
     const UINT dsv_stride = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
@@ -768,8 +769,7 @@ void RendererD3D12::record_scene_resolve(ID3D12GraphicsCommandList* list, bool c
         barriers[1].Transition.pResource = scene_color_.Get();
         barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_RESOLVE_DEST;
         list->ResourceBarrier(2u, barriers);
-        list->ResolveSubresource(scene_color_.Get(), 0u, msaa.color.Get(), 0u,
-                                 scene_hdr_ ? kSceneHdrColorFormat : kSceneColorFormat);
+        list->ResolveSubresource(scene_color_.Get(), 0u, msaa.color.Get(), 0u, scene_color_->GetDesc().Format);
         for (auto& barrier : barriers) {
             std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
         }
@@ -1268,6 +1268,9 @@ bool RendererD3D12::create_conversion_pipeline() {
         pd.SampleDesc.Count      = 1;
         d3d_check(device_->CreateGraphicsPipelineState(
             &pd, IID_PPV_ARGS(&conv_pipeline_)), "CreateConvPSO");
+        pd.RTVFormats[0] = kTargetColorFormat;
+        d3d_check(device_->CreateGraphicsPipelineState(
+            &pd, IID_PPV_ARGS(&probe_pipeline_)), "CreateProbePSO");
         pd.RTVFormats[0] = kSceneColorFormat;
         const UtilityShaderBytes filter = utility_shader(UtilityShader::DisplayFilterPs);
         pd.PS = {filter->GetBufferPointer(), filter->GetBufferSize()};
@@ -1309,7 +1312,7 @@ void RendererD3D12::write_scene_conversion_views(const DescriptorRing::Table& ta
     view.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
     view.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     view.Texture2D.MipLevels = 1u;
-    view.Format = kSceneColorFormat;
+    view.Format = scene_color_->GetDesc().Format;
     device_->CreateShaderResourceView(scene_color_.Get(), &view, table.cpu);
     auto depth_cpu = table.cpu;
     depth_cpu.ptr += stride;
@@ -1649,7 +1652,7 @@ detail::create_scene_conversion_source_views(
     view.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
     view.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     view.Texture2D.MipLevels = 1u;
-    view.Format = kSceneColorFormat;
+    view.Format = color->GetDesc().Format;
     device->CreateShaderResourceView(color, &view, table.cpu);
     view.Format = kSceneDepthSrvFormat;
     device->CreateShaderResourceView(depth, &view, depth_cpu);
@@ -1698,7 +1701,8 @@ ID3D12PipelineState* RendererD3D12::clear_pipeline(bool color) {
     pd.DepthStencilState.DepthEnable = FALSE;
     pd.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     pd.NumRenderTargets = 1;
-    pd.RTVFormats[0] = (variant & kSceneVariantHdr) != 0u ? kSceneHdrColorFormat : kSceneColorFormat;
+    pd.RTVFormats[0] = (variant & kSceneVariantTarget) != 0u ? kTargetColorFormat
+                       : (variant & kSceneVariantHdr) != 0u ? kSceneHdrColorFormat : kSceneColorFormat;
     pd.SampleDesc.Count = 1u << (variant & kSceneVariantSamplesMask);
     pd.BlendState.RenderTarget[0].RenderTargetWriteMask = color
         ? D3D12_COLOR_WRITE_ENABLE_RED | D3D12_COLOR_WRITE_ENABLE_GREEN | D3D12_COLOR_WRITE_ENABLE_BLUE
@@ -6765,7 +6769,7 @@ void RendererD3D12::write_scene_set_views(SceneTargetSet& set, const DescriptorR
     view.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
     view.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     view.Texture2D.MipLevels = 1u;
-    view.Format = set.hdr ? kSceneHdrColorFormat : kSceneColorFormat;
+    view.Format = set.color->GetDesc().Format;
     device_->CreateShaderResourceView(set.color.Get(), &view, table.cpu);
     auto depth_cpu = table.cpu;
     depth_cpu.ptr += stride;
@@ -6780,7 +6784,7 @@ void RendererD3D12::write_scene_set_views(SceneTargetSet& set, const DescriptorR
 bool RendererD3D12::create_scene_set(
     SceneTargetSet& set, ComPtr<ID3D12DescriptorHeap>& rtv_heap,
     ComPtr<ID3D12DescriptorHeap>& dsv_heap, const FrameMap& map, bool persistent_views,
-    bool unordered_access, unsigned samples, bool hdr, unsigned width, unsigned height) {
+    bool unordered_access, unsigned samples, bool hdr, unsigned width, unsigned height, bool target) {
     const UINT w = static_cast<UINT>(std::lround(static_cast<double>(width) * map.sx));
     const UINT h = static_cast<UINT>(std::lround(static_cast<double>(height) * map.sy));
     if (set.color) {
@@ -6807,7 +6811,7 @@ bool RendererD3D12::create_scene_set(
     rd.Height = h;
     rd.DepthOrArraySize = 1;
     rd.MipLevels = 1;
-    rd.Format = hdr ? kSceneHdrColorFormat : kSceneColorFormat;
+    rd.Format = target ? kTargetColorFormat : hdr ? kSceneHdrColorFormat : kSceneColorFormat;
     rd.SampleDesc.Count = 1;
     rd.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET |
                (unordered_access ? D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS : D3D12_RESOURCE_FLAG_NONE);
@@ -6836,7 +6840,7 @@ bool RendererD3D12::create_scene_set(
     dsv.Format = kSceneDepthFormat;
     dsv.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
     device_->CreateDepthStencilView(set.depth.Get(), &dsv, set.dsv);
-    if (!create_scene_msaa(set.msaa, set.depth.Get(), samples, set.rtv, set.dsv)) {
+    if (!create_scene_msaa(set.msaa, set.color.Get(), set.depth.Get(), samples, set.rtv, set.dsv)) {
         set.color.Reset();
         set.depth.Reset();
         return false;
@@ -6919,7 +6923,7 @@ bool RendererD3D12::begin_target_pass(std::uint64_t key, std::uint32_t width, st
     // per use (no persistent descriptors per key).
     if (!kept) {
         if (!create_scene_set(slot.set, slot.rtv_heap, slot.dsv_heap, frame_, false, false, 1u, false, width,
-                            height)) {
+                            height, true)) {
             target_slots_.erase(key);
             return false;
         }
@@ -7190,7 +7194,7 @@ void RendererD3D12::present_fg_hudless(const DisplayTexture& source, const D3D12
     } else {
         const DescriptorRing::Table tbl = srv_ring_.allocate(1);
         D3D12_SHADER_RESOURCE_VIEW_DESC sd{};
-        sd.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        sd.Format = fg_hudless_display_.texture->GetDesc().Format;
         sd.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
         sd.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
         sd.Texture2D.MipLevels = 1;
@@ -8191,7 +8195,7 @@ bool RendererD3D12::ensure_screen_probe_resources() {
     target_desc.Height = 1;
     target_desc.DepthOrArraySize = 1;
     target_desc.MipLevels = 1;
-    target_desc.Format = kSceneColorFormat;
+    target_desc.Format = kTargetColorFormat;
     target_desc.SampleDesc.Count = 1;
     target_desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
     target_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
@@ -8253,7 +8257,7 @@ bool RendererD3D12::record_screen_probes(std::size_t slot, std::span<const Scree
 
     list->OMSetRenderTargets(1, &probe_rtv_, FALSE, nullptr);
     list->SetGraphicsRootSignature(s_conv_root_sig.Get());
-    list->SetPipelineState(conv_pipeline_.Get());
+    list->SetPipelineState(probe_pipeline_.Get());
     list->SetGraphicsRootDescriptorTable(1, conv_scene_depth_srv_);
     list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     for (std::size_t i = 0; i < probes.size(); ++i) {
@@ -8279,7 +8283,7 @@ bool RendererD3D12::record_screen_probes(std::size_t slot, std::span<const Scree
     D3D12_TEXTURE_COPY_LOCATION dst_copy{};
     dst_copy.pResource = out.readback.Get();
     dst_copy.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-    dst_copy.PlacedFootprint.Footprint.Format = kSceneColorFormat;
+    dst_copy.PlacedFootprint.Footprint.Format = kTargetColorFormat;
     dst_copy.PlacedFootprint.Footprint.Width = kScreenProbesMax;
     dst_copy.PlacedFootprint.Footprint.Height = 1;
     dst_copy.PlacedFootprint.Footprint.Depth = 1;
@@ -8350,7 +8354,8 @@ void RendererD3D12::queue_debug_ppm_capture(
     const std::uint8_t* source,
     unsigned width,
     unsigned height,
-    unsigned row_pitch) {
+    unsigned row_pitch,
+    bool ten_bit) {
     constexpr std::size_t kMaximumPendingDebugCaptures = 8u;
     reap_debug_capture_writers(false);
     if (debug_ppm_writers_.size() >= kMaximumPendingDebugCaptures) {
@@ -8369,11 +8374,15 @@ void RendererD3D12::queue_debug_ppm_capture(
     }
     std::vector<std::uint8_t> rgba(
         source_row_bytes * static_cast<std::size_t>(height));
-    for (unsigned y = 0u; y < height; ++y) {
-        std::memcpy(
-            rgba.data() + static_cast<std::size_t>(y) * source_row_bytes,
-            source + static_cast<std::size_t>(y) * row_pitch,
-            source_row_bytes);
+    if (ten_bit) {
+        ten_bit_to_rgba8(source, rgba.data(), width, height, row_pitch, static_cast<unsigned>(source_row_bytes));
+    } else {
+        for (unsigned y = 0u; y < height; ++y) {
+            std::memcpy(
+                rgba.data() + static_cast<std::size_t>(y) * source_row_bytes,
+                source + static_cast<std::size_t>(y) * row_pitch,
+                source_row_bytes);
+        }
     }
 
     DebugPpmWriter writer{};
@@ -8530,10 +8539,12 @@ void RendererD3D12::debug_log_readback() {
     for (UINT y = 0; y < h; y += 4) {           // sample every 4th row/col
         const std::uint8_t* row = base + static_cast<std::size_t>(y) * row_pitch;
         for (UINT x = 0; x < w; x += 4) {
-            const std::uint8_t r = row[x * 4 + 0];
-            const std::uint8_t g = row[x * 4 + 1];
-            const std::uint8_t bl = row[x * 4 + 2];
-            const std::uint8_t a = row[x * 4 + 3];
+            std::uint32_t word = 0u;
+            std::memcpy(&word, row + x * 4u, 4u);
+            const auto r = static_cast<std::uint8_t>((word & 1023u) >> 2u);
+            const auto g = static_cast<std::uint8_t>((word >> 10u & 1023u) >> 2u);
+            const auto bl = static_cast<std::uint8_t>((word >> 20u & 1023u) >> 2u);
+            const auto a = static_cast<std::uint8_t>((word >> 30u) * 85u);
             rs += r; gs += g; bs += bl;
             rmax = std::max(rmax, r); gmax = std::max(gmax, g);
             bmax = std::max(bmax, bl); amax = std::max(amax, a);
@@ -8551,7 +8562,8 @@ void RendererD3D12::debug_log_readback() {
             base,
             w,
             h,
-            row_pitch);
+            row_pitch,
+            true);
     }
 
     readback_buf_->Unmap(0, &no_write);
@@ -8702,7 +8714,7 @@ bool RendererD3D12::present(
         // One-slot SRV in the frame's ring for the display picture texture.
         const DescriptorRing::Table tbl = srv_ring_.allocate(1);
         D3D12_SHADER_RESOURCE_VIEW_DESC sd{};
-        sd.Format                    = DXGI_FORMAT_R8G8B8A8_UNORM;
+        sd.Format                    = source->texture->GetDesc().Format;
         sd.ViewDimension             = D3D12_SRV_DIMENSION_TEXTURE2D;
         sd.Shader4ComponentMapping   = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
         sd.Texture2D.MipLevels       = 1;
@@ -8824,7 +8836,7 @@ bool RendererD3D12::debug_copy_selected_display_to_readback(const DisplayTexture
     }
     const auto desc = source.texture->GetDesc();
     if (desc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D ||
-        desc.Format != DXGI_FORMAT_R8G8B8A8_UNORM ||
+        (desc.Format != DXGI_FORMAT_R8G8B8A8_UNORM && desc.Format != DXGI_FORMAT_R10G10B10A2_UNORM) ||
         desc.Width != source.width || desc.Height < source.height ||
         source.width == 0u || source.height == 0u) {
         throw std::runtime_error("selected display picture capture has inconsistent extent/format");
@@ -8859,7 +8871,8 @@ bool RendererD3D12::debug_copy_selected_display_to_readback(const DisplayTexture
     src.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
     dst.pResource = selected_display_readback_buf_.Get();
     dst.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-    dst.PlacedFootprint.Footprint.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    dst.PlacedFootprint.Footprint.Format = desc.Format;
+    selected_display_readback_ten_bit_ = desc.Format == DXGI_FORMAT_R10G10B10A2_UNORM;
     dst.PlacedFootprint.Footprint.Width = source.width;
     dst.PlacedFootprint.Footprint.Height = source.height;
     dst.PlacedFootprint.Footprint.Depth = 1;
@@ -8895,7 +8908,8 @@ void RendererD3D12::debug_log_selected_display_readback() {
     try {
         queue_debug_ppm_capture("selected-display-dump", selected_display_readback_path_,
             static_cast<const std::uint8_t*>(mapped), selected_display_readback_width_,
-            selected_display_readback_height_, selected_display_readback_pitch_);
+            selected_display_readback_height_, selected_display_readback_pitch_,
+            selected_display_readback_ten_bit_);
     } catch (...) {
         const D3D12_RANGE no_write{0, 0};
         selected_display_readback_buf_->Unmap(0, &no_write);

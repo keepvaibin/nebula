@@ -4,6 +4,9 @@
 #include "galaxy/render/frame_pass.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/renderer_common.h"
+#if !defined(NEBULA_GPU_VULKAN)
+#include "galaxy/render/renderer_d3d12.h"
+#endif
 
 #include <algorithm>
 #include <cstddef>
@@ -276,7 +279,7 @@ TextureRef create_render_texture(Device* device, std::uint32_t width, std::uint3
     desc.Height             = height;
     desc.DepthOrArraySize   = 1;
     desc.MipLevels          = 1;
-    desc.Format             = DXGI_FORMAT_R8G8B8A8_UNORM;
+    desc.Format             = kSceneColorFormat;
     desc.SampleDesc.Count   = 1;
     desc.SampleDesc.Quality = 0;
     desc.Layout             = D3D12_TEXTURE_LAYOUT_UNKNOWN;
@@ -287,7 +290,7 @@ TextureRef create_render_texture(Device* device, std::uint32_t width, std::uint3
     const D3D12_RESOURCE_STATES initial_state = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
     // An optimized clear value avoids debug-layer warnings on the first RTV clear.
     D3D12_CLEAR_VALUE clear_val{};
-    clear_val.Format   = DXGI_FORMAT_R8G8B8A8_UNORM;
+    clear_val.Format   = kSceneColorFormat;
     clear_val.Color[0] = 0.0f;
     clear_val.Color[1] = 0.0f;
     clear_val.Color[2] = 0.0f;

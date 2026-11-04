@@ -26,6 +26,11 @@ struct VmaAllocation_T;
 
 namespace galaxy::render::vk {
 
+// The scene: the art's own blending, in gamma, at 10 bits a channel. No shader reads its alpha.
+inline constexpr VkFormat kSceneColorFormat = VK_FORMAT_A2B10G10R10_UNORM_PACK32;
+// A texture target's colour: the game keeps masks in its alpha.
+inline constexpr VkFormat kTargetColorFormat = VK_FORMAT_R8G8B8A8_UNORM;
+
 class Context;
 
 // An image with its views. The render thread tracks `layout`; the last reference hands the Vulkan objects to the

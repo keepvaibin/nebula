@@ -229,7 +229,8 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC make_pso_desc_impl(
         break;
     }
     pd.NumRenderTargets      = 1;
-    pd.RTVFormats[0]         = (rs.samples_log2 & kSceneVariantHdr) != 0u ? kSceneHdrColorFormat : kSceneColorFormat;
+    pd.RTVFormats[0]         = (rs.samples_log2 & kSceneVariantTarget) != 0u ? kTargetColorFormat
+                               : (rs.samples_log2 & kSceneVariantHdr) != 0u ? kSceneHdrColorFormat : kSceneColorFormat;
     if ((bb & kRenderStateMotionTarget) != 0u) {
         // Opaque motion writer: render target 1 takes the motion vectors
         // with render target 0's write mask (independent blend off).

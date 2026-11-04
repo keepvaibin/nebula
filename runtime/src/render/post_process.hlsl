@@ -61,6 +61,32 @@ float2 SourceUv(float2 uv) {
 #endif
 }
 
+// The last write to the window, 8 bits a channel from the scene's 10: a pixel between two levels takes one of them by a
+// triangular noise of a level either way, so a gradient has no steps. Pixels on a level stay. g_origin.z: this is that write.
+uint NoiseHash(uint v) {
+    const uint state = v * 747796405u + 2891336453u;
+    const uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
+    return (word >> 22u) ^ word;
+}
+float NoiseRandom(inout uint seed) {
+    seed = NoiseHash(seed);
+    return float(seed >> 8u) * (1.0 / 16777216.0);
+}
+float3 FinalWrite(float3 color, int2 p) {
+    if (g_origin.z == 0) {
+        return color;
+    }
+    const float3 level = color * 255.0;
+    const float3 between = step(0.02, abs(level - round(level)));
+    if (max(between.r, max(between.g, between.b)) == 0.0) {
+        return color;
+    }
+    uint seed = NoiseHash(uint(p.x) ^ NoiseHash(uint(p.y) + 0x9E3779B9u));
+    const float3 noise = float3(NoiseRandom(seed) + NoiseRandom(seed), NoiseRandom(seed) + NoiseRandom(seed),
+                                NoiseRandom(seed) + NoiseRandom(seed)) - 1.0;
+    return saturate((level + noise * between) / 255.0);
+}
+
 #if defined(PASS_SMAA_EDGES) || defined(PASS_SMAA_WEIGHTS) || defined(PASS_SMAA_BLEND) || defined(PASS_SMAA_BLEND_KEEP)
 #define SMAA_CUSTOM_SL 1
 #define SMAA_RT_METRICS g_rt_metrics
@@ -223,7 +249,7 @@ FullscreenOut VSMain(uint id : SV_VertexID) { return FullscreenTriangle(id); }
 float4 PSMain(FullscreenOut i) : SV_Target {
     AF3 color;
     FsrEasuF(color, AU2(ViewportPixel(i.pos)), g_con0, g_con1, g_con2, g_con3);
-    return float4(color, 1.0);
+    return float4(FinalWrite(color, ViewportPixel(i.pos)), 1.0);
 }
 #endif
 
@@ -232,7 +258,7 @@ FullscreenOut VSMain(uint id : SV_VertexID) { return FullscreenTriangle(id); }
 float4 PSMain(FullscreenOut i) : SV_Target {
     AF3 color;
     FsrRcasF(color.r, color.g, color.b, AU2(ViewportPixel(i.pos)), g_con0);
-    return float4(color, 1.0);
+    return float4(FinalWrite(color, ViewportPixel(i.pos)), 1.0);
 }
 #endif
 
@@ -314,143 +340,6 @@ float4 PSMain(FullscreenOut i) : SV_Target {
 }
 #endif
 
-#if defined(PASS_DEBAND) || defined(PASS_DEBAND_SMOOTH) || defined(PASS_DEBAND_APPLY)
-// Debanding (after libplacebo's deband by Niklas Haas, from flash3kyuu_deband). The picture is 8-bit: a smooth
-// gradient (a dark sky, fog, a glow, vertex lighting) is a staircase of one-level steps, wide at a raised resolution.
-// A pixel within the threshold (g_params.y) of the mean of four taps around it, at a random angle and distance up to
-// g_params.x pixels, lies on such a staircase and takes the mean; an edge or texture differs by more and stays. A
-// second ring twice as far with half the threshold, where the first one smoothed. A pixel more than two levels from
-// one of its four neighbours is an edge or texture already, and stays without the far taps. The four pixels of a 2x2
-// quad share their taps' angle and distance (their reads fall in the same cache lines). Where that leaves a value
-// between two levels, a triangular grain of one level (Wannamaker 1992) keeps the 8-bit target from stepping it
-// again; whole levels (flat colour, black, the HUD) stay exact.
-//
-// From 1080 lines the steps are wider than the reach needs to resolve, and the rings' arithmetic for every pixel is
-// most of the frame on a small GPU: the rings run on the picture reduced by a box (PASS_DEBAND_REDUCE, then
-// PASS_DEBAND_SMOOTH at the reduced size), and each pixel (PASS_DEBAND_APPLY) keeps its own edge test, takes the
-// smoothed picture where it lies within the threshold of it, and is grained. g_params.zw scale a pixel position to
-// the smoothed picture's coordinates.
-Texture2D inputTex : register(t0);
-FullscreenOut VSMain(uint id : SV_VertexID) { return FullscreenTriangle(id); }
-// PCG hash (Jarzynski and Olano 2020).
-uint DebandHash(uint v) {
-    const uint state = v * 747796405u + 2891336453u;
-    const uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
-    return (word >> 22u) ^ word;
-}
-float DebandRandom(inout uint seed) {
-    seed = DebandHash(seed);
-    return float(seed >> 8u) * (1.0 / 16777216.0);
-}
-// Whether the pixel at `uv` (colour `color`) is more than two levels from one of its four neighbours.
-bool DebandEdge(float2 uv, float3 color) {
-#if defined(SOURCE_BOX)
-    const float2 texel = g_rt_metrics.xy;
-    const float3 right = inputTex.SampleLevel(PointSampler, SourceUv(uv + float2(texel.x, 0.0)), 0).rgb;
-    const float3 left = inputTex.SampleLevel(PointSampler, SourceUv(uv - float2(texel.x, 0.0)), 0).rgb;
-    const float3 below = inputTex.SampleLevel(PointSampler, SourceUv(uv + float2(0.0, texel.y)), 0).rgb;
-    const float3 above = inputTex.SampleLevel(PointSampler, SourceUv(uv - float2(0.0, texel.y)), 0).rgb;
-#else
-    const float3 right = inputTex.SampleLevel(PointSampler, uv, 0, int2(1, 0)).rgb;
-    const float3 left = inputTex.SampleLevel(PointSampler, uv, 0, int2(-1, 0)).rgb;
-    const float3 below = inputTex.SampleLevel(PointSampler, uv, 0, int2(0, 1)).rgb;
-    const float3 above = inputTex.SampleLevel(PointSampler, uv, 0, int2(0, -1)).rgb;
-#endif
-    const float3 near = max(max(abs(right - color), abs(left - color)), max(abs(below - color), abs(above - color)));
-    return max(near.r, max(near.g, near.b)) > 2.5 / 255.0;
-}
-// The two rings about pixel `p` (at `uv`, one pixel `texel`) of the input.
-float3 DebandRings(int2 p, float2 uv, float2 texel, float3 color) {
-    uint seed = DebandHash(uint(p.x >> 1) ^ DebandHash(uint(p.y >> 1)));
-    [loop] for (uint ring = 1u; ring <= 2u; ++ring) {
-        const float distance = DebandRandom(seed) * g_params.x * float(ring);
-        const float angle = DebandRandom(seed) * 6.28318530718;
-        const float2 o = float2(cos(angle), sin(angle)) * distance * texel;
-        const float3 mean = 0.25 * (inputTex.SampleLevel(LinearSampler, SourceUv(uv + o), 0).rgb +
-                                    inputTex.SampleLevel(LinearSampler, SourceUv(uv - o), 0).rgb +
-                                    inputTex.SampleLevel(LinearSampler, SourceUv(uv + float2(-o.y, o.x)), 0).rgb +
-                                    inputTex.SampleLevel(LinearSampler, SourceUv(uv + float2(o.y, -o.x)), 0).rgb);
-        const float3 keep = step(g_params.y / float(ring), abs(color - mean));
-        color = lerp(mean, color, keep);
-        if (min(keep.r, min(keep.g, keep.b)) > 0.5) {
-            break;
-        }
-    }
-    return color;
-}
-float3 DebandDither(int2 p, float3 color) {
-    const float3 level = color * 255.0;
-    const float3 between = step(0.02, abs(level - round(level)));
-    if (max(between.r, max(between.g, between.b)) == 0.0) {
-        return color;
-    }
-    uint seed = DebandHash(uint(p.x) ^ DebandHash(uint(p.y) + 0x9E3779B9u));
-    const float3 noise = float3(DebandRandom(seed) + DebandRandom(seed), DebandRandom(seed) + DebandRandom(seed),
-                                DebandRandom(seed) + DebandRandom(seed)) - 1.0;
-    return saturate((level + noise * between) / 255.0);
-}
-#endif
-
-#if defined(PASS_DEBAND)
-float4 PSMain(FullscreenOut i) : SV_Target {
-    const int2 p = ViewportPixel(i.pos);
-    const float2 texel = g_rt_metrics.xy;
-    const float2 uv = (float2(p) + 0.5) * texel;
-    const float3 color = inputTex.SampleLevel(PointSampler, SourceUv(uv), 0).rgb;
-    if (DebandEdge(uv, color)) {
-        return float4(color, 1.0);
-    }
-    return float4(DebandDither(p, DebandRings(p, uv, texel, color)), 1.0);
-}
-#endif
-
-#if defined(PASS_DEBAND_SMOOTH)
-float4 PSMain(FullscreenOut i) : SV_Target {
-    const int2 p = ViewportPixel(i.pos);
-    const float2 texel = g_rt_metrics.xy;
-    const float2 uv = (float2(p) + 0.5) * texel;
-    const float3 color = inputTex.SampleLevel(PointSampler, uv, 0).rgb;
-    if (DebandEdge(uv, color)) {
-        return float4(color, 1.0);
-    }
-    return float4(DebandRings(p, uv, texel, color), 1.0);
-}
-#endif
-
-#if defined(PASS_DEBAND_APPLY)
-Texture2D smoothTex : register(t1);
-float4 PSMain(FullscreenOut i) : SV_Target {
-    const int2 p = ViewportPixel(i.pos);
-    const float2 uv = (float2(p) + 0.5) * g_rt_metrics.xy;
-    float3 color = inputTex.SampleLevel(PointSampler, SourceUv(uv), 0).rgb;
-    if (DebandEdge(uv, color)) {
-        return float4(color, 1.0);
-    }
-    const float3 smoothed = smoothTex.SampleLevel(LinearSampler, (float2(p) + 0.5) * g_params.zw, 0).rgb;
-    color = lerp(smoothed, color, step(g_params.y, abs(color - smoothed)));
-    return float4(DebandDither(p, color), 1.0);
-}
-#endif
-
-#if defined(PASS_DEBAND_REDUCE)
-// The picture reduced for the deband's rings: each pixel the mean of g_params.x x g_params.x picture pixels (2, 4 or
-// 8), one bilinear tap per 2x2 of them.
-Texture2D inputTex : register(t0);
-FullscreenOut VSMain(uint id : SV_VertexID) { return FullscreenTriangle(id); }
-float4 PSMain(FullscreenOut i) : SV_Target {
-    const uint reduction = uint(g_params.x);
-    const float2 origin = float2(ViewportPixel(i.pos)) * float(reduction);
-    float3 sum = 0.0;
-    [loop] for (uint y = 1u; y < reduction; y += 2u) {
-        [loop] for (uint x = 1u; x < reduction; x += 2u) {
-            sum += inputTex.SampleLevel(LinearSampler, SourceUv((origin + float2(x, y)) * g_rt_metrics.xy), 0).rgb;
-        }
-    }
-    const float taps = float((reduction / 2u) * (reduction / 2u));
-    return float4(sum / taps, 1.0);
-}
-#endif
-
 #if defined(PASS_RESAMPLE)
 // Box filter over each target pixel's source footprint: one bilinear tap per
 // axis when enlarging, up to eight evenly spaced bilinear taps per axis when
@@ -472,7 +361,7 @@ float4 PSMain(FullscreenOut i) : SV_Target {
             sum += inputTex.SampleLevel(LinearSampler, SourceUv(p / source), 0).rgb;
         }
     }
-    return float4(sum / float(taps.x * taps.y), 1.0);
+    return float4(FinalWrite(sum / float(taps.x * taps.y), ViewportPixel(i.pos)), 1.0);
 }
 #endif
 

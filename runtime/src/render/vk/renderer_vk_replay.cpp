@@ -222,7 +222,7 @@ void RendererVk::take_log_snapshots() {
             }
         }
         if (!snapshot) {
-            snapshot = vk::Context::get().create_texture(source.width, source.height, 1u, VK_FORMAT_R8G8B8A8_UNORM,
+            snapshot = vk::Context::get().create_texture(source.width, source.height, 1u, source.format,
                                                          VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
                                                          false, "sub-frame copy snapshot");
             if (!snapshot) {
@@ -1126,7 +1126,7 @@ bool RendererVk::record_replay_list(ReplayList& list) {
             retire(std::move(subframe_display_.texture));
         }
         subframe_display_.texture = context.create_texture(
-            display->width, display->height, 1u, VK_FORMAT_R8G8B8A8_UNORM,
+            display->width, display->height, 1u, vk::kSceneColorFormat,
             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
                 VK_IMAGE_USAGE_TRANSFER_DST_BIT,
             true, "sub-frame display picture");
@@ -1286,7 +1286,7 @@ bool RendererVk::record_replay_list(ReplayList& list) {
             }
             if (stand_in == nullptr) {
                 gpu::TextureRef texture = context.create_texture(
-                    copy.width, copy.height, 1u, VK_FORMAT_R8G8B8A8_UNORM,
+                    copy.width, copy.height, 1u, vk::kSceneColorFormat,
                     VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
                         VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
                     true, "sub-frame copy");
