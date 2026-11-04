@@ -265,7 +265,10 @@ void AudSystem::frameWork() {
 void AudSystem::calc() {
     if (mIsReset && mReseter.checkDone()) {
         if (!mStopThreads) {
-            stopSync();
+            // Everything stops; what is still ending ends over the next frames, which come back here.
+            JAUSoundMgr::stop(0);
+            JAUSoundMgr::calc();
+            mixOut();
         }
 
         return;

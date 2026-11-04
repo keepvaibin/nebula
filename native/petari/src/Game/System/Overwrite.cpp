@@ -29,7 +29,6 @@
 #include <JSystem/JAudio2/JASStream.hpp>
 #include <JSystem/JAudio2/JASAiCtrl.hpp>
 #include <JSystem/JAudio2/JASDriverIF.hpp>
-#include <JSystem/JAudio2/JASLoadThread.hpp>
 #include <JSystem/JAudio2/JASHeapCtrl.hpp>
 #include <JSystem/JAudio2/JASTrack.hpp>
 #include <JSystem/JAudio2/JASWaveArcLoader.hpp>
@@ -826,14 +825,15 @@ void JPADrawRotYBillboard(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle)
 }
 
 void JAU_JASInitializer::initJASystem(NebulaArena* pHeap) {
-    if (JASLoad::getThreadPointer() == nullptr) {
+    static bool sStarted = false;
+    if (!sStarted) {
+        sStarted = true;
         JASKernel::setupRootHeap(pHeap, heapSize_);
         JASTrack::newMemPool(field_0x1c);
         if (field_0x20 > 0) {
             JASTrack::TChannelMgr::newMemPool(field_0x20);
         }
 
-        JASLoad::createThread(0x100, 0x8000);
         JASDriver::startAudio();
         JASDriver::setOutputLevel(outputLevel_);
     }

@@ -33,7 +33,6 @@ public:
     void createAndAddOtherArchives();
 
     PlayerHeapHolder* mHeapHolder;
-    GameEvent mDone;
 };
 
 class ConditionIsEqualType : public StationedArchiveLoader::Condition {

@@ -41,7 +41,6 @@
 #include "Game/System/GameAssets.hpp"
 
 
-#define INIT_AUDIO_KEY "\203\111\201\133\203\146\203\102\203\111\217\211\212\372\211\273" /* オーディオ初期化 */  // "Audio Initialization"
 
 namespace NrvGameSystem {
     NEW_NERVE(GameSystemInitializeAudio, GameSystem, InitializeAudio);
@@ -114,13 +113,12 @@ void GameSystem::startToLoadSystemArchive() {
 
 void GameSystem::exeInitializeAudio() {
     if (MR::isFirstStep(this)) {
-        MR::startFunctionAsyncExecute(MR::Functor(mObjHolder, &GameSystemObjHolder::createAudioSystem), INIT_AUDIO_KEY);
+        mObjHolder->createAudioSystem();
     }
 
     updateSceneController();
 
-    if (MR::isEndFunctionAsyncExecute(INIT_AUDIO_KEY) && mObjHolder->mAudioSystem->isLoadDoneWaveDataAtSystemInit()) {
-        MR::waitForEndFunctionAsyncExecute(INIT_AUDIO_KEY);
+    if (mObjHolder->mAudioSystem->isLoadDoneWaveDataAtSystemInit()) {
         setNerve(GET_NERVE(GameSystem, GameSystemInitializeBootScene));
     }
 }

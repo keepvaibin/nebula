@@ -105,9 +105,7 @@ void GalaxyMapController::init(const JMapInfoIter& rIter) {
         _38 = new JUTTexture(getFbWidth() / 2, MR::getScreenHeight() / 2);
     }
 
-    if (MR::startFunctionAsyncExecuteOnMainThread(MR::Functor(this, &GalaxyMapController::capture), "GalaxyMapController::capture")) {
-        MR::waitForEndFunctionAsyncExecute("GalaxyMapController::capture");
-    }
+    capture();
 
     initNerve(GET_NERVE_ANON(GalaxyMapControllerDisplayAstroMap));
     kill();

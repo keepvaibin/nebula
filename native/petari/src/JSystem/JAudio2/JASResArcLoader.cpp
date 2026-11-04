@@ -1,7 +1,5 @@
 #include "JSystem/JAudio2/JASResArcLoader.hpp"
 #include "Game/System/GameThreads.hpp"
-#include "JSystem/JAudio2/JASLoadThread.hpp"
-#include "JSystem/JAudio2/JASTaskThread.hpp"
 #include "Game/System/AssetFolder.hpp"
 #include <cstring>
 
@@ -21,18 +19,10 @@ void JASResArcLoader::loadResourceCallback(void* args) {
     if (castedArgs->mCallback != nullptr) {
         castedArgs->mCallback(readResult, castedArgs->mCallbackArg);
     }
-
-    if (readResult == 0) {
-        if (castedArgs->mMsgQueue != nullptr) {
-            castedArgs->mMsgQueue->send((void*)RESARC_MESSAGE_ERROR, true);
-        }
-    } else if (castedArgs->mMsgQueue != nullptr) {
-        castedArgs->mMsgQueue->send((void*)RESARC_MESSAGE_SUCCESS, true);
-    }
 }
 
 JASResArcLoader::TLoadResInfo::TLoadResInfo(AssetFolder* archive, u16 id, void* buffer, u32 size)
-    : mArchive(archive), mResID(id), mBuffer(buffer), mBufferSize(size), mCallback(nullptr), mCallbackArg(0), mMsgQueue(nullptr) {
+    : mArchive(archive), mResID(id), mBuffer(buffer), mBufferSize(size), mCallback(nullptr), mCallbackArg(0) {
 }
 
 int JASResArcLoader::loadResourceAsync(AssetFolder* archive, u16 id, u8* buffer, u32 size, LoadCallback callback, uintptr_t callbackArg) {
@@ -40,5 +30,6 @@ int JASResArcLoader::loadResourceAsync(AssetFolder* archive, u16 id, u8* buffer,
     args.mCallback = callback;
     args.mCallbackArg = callbackArg;
 
-    return JASLoad::getThreadPointer()->sendCmdMsg(&loadResourceCallback, (void*)&args, sizeof(TLoadResInfo));
+    loadResourceCallback(&args);
+    return 1;
 }

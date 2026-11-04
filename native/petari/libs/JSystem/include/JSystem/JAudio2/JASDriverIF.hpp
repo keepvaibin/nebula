@@ -12,8 +12,6 @@ namespace JASDriver {
     f32 getOutputLevel();
     void setOutputMode(u32);
     u32 getOutputMode();
-    void waitSubFrame();
-    extern GameEvent sSubFrameDone;
     int rejectCallback(DriverCallback, void*);
     bool registerSyncCallback(DriverCallback, void*);
     bool registerSubFrameCallback(DriverCallback, void*);

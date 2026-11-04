@@ -3,7 +3,6 @@
 #include "Game/NameObj/NameObjHolder.hpp"
 #include "Game/NameObj/NameObj.hpp"  // complete for NameObjMethod's ABI size
 #include "Game/System/AudSystemWrapper.hpp"
-#include "Game/System/FunctionAsyncExecutor.hpp"
 #include "Game/System/GameDataFunction.hpp"
 #include "Game/System/GameDataTemporaryInGalaxy.hpp"
 #include "Game/System/GameSequenceDirector.hpp"
@@ -29,10 +28,6 @@ namespace MR {
 };  // namespace MR
 
 namespace {
-    FunctionAsyncExecutor* getFunctionAsyncExecutor() {
-        return MR::getGameSystemObjHolder()->mFunctionAsyncExecutor;
-    }
-
     GameDataTemporaryInGalaxy* getGameDataTemporaryInGalaxy() {
         return SingletonHolder< GameSystem >::get()->mSequenceDirector->mGameDataTemporaryInGalaxy;
     }
@@ -97,48 +92,12 @@ namespace MR {
         getGameSystemObjHolder()->mRandom.mSeed = seed;
     }
 
-    void startFunctionAsyncExecute(const MR::FunctorBase& rFunc, const char* pThreadName) {
-        ::getFunctionAsyncExecutor()->start(rFunc, pThreadName);
-    }
-
-    bool startFunctionAsyncExecuteOnMainThread(const MR::FunctorBase& rFunc, const char* pThreadName) {
-        return ::getFunctionAsyncExecutor()->startOnMainThread(rFunc, pThreadName);
-    }
-
-    void waitForEndFunctionAsyncExecute(const char* pThreadName) {
-        ::getFunctionAsyncExecutor()->waitForEnd(pThreadName);
-    }
-
-    bool isEndFunctionAsyncExecute(const char* pThreadName) {
-        return ::getFunctionAsyncExecutor()->isEnd(pThreadName);
-    }
-
-    bool tryEndFunctionAsyncExecute(const char* pThreadName) {
-        if (isEndFunctionAsyncExecute(pThreadName)) {
-            waitForEndFunctionAsyncExecute(pThreadName);
-
-            return true;
-        }
-
-        return false;
-    }
-
-    namespace {
-        GameEvent sSceneInitializeResume;
-    }
-
-    void waitSceneInitializeResume() {
-        sSceneInitializeResume.wait();
+    void holdSceneInitialize() {
+        SingletonHolder< GameSystem >::get()->mSceneController->holdSceneInitialize();
     }
 
     bool tryResumeSceneInitialize() {
-        if (!sSceneInitializeResume.isWaiting()) {
-            return false;
-        }
-
-        sSceneInitializeResume.signal();
-
-        return true;
+        return SingletonHolder< GameSystem >::get()->mSceneController->resumeSceneInitialize();
     }
 
     bool isScreen16Per9() {

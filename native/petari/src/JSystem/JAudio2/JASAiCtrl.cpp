@@ -108,9 +108,6 @@ void JASDriver::updateSubFrame() {
     f32 freeRun = 32028.5f / getSoundRate();
     JASLfo::updateFreeRun(freeRun);
     sSubFrameCounter++;
-    if (sSubFrameDone.isWaiting()) {
-        sSubFrameDone.signal();
-    }
 }
 
 f32 JASDriver::getSoundRate() {

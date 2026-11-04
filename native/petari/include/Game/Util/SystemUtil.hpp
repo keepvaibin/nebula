@@ -31,13 +31,8 @@ namespace MR {
     void resumeAllSceneNameObj();
     void syncWithFlagsAllSceneNameObj();
     void setRandomSeedFromStageName();
-    void startFunctionAsyncExecute(const MR::FunctorBase&, const char*);
-    bool startFunctionAsyncExecuteOnMainThread(const MR::FunctorBase&, const char*);
-    void waitForEndFunctionAsyncExecute(const char*);
-    bool isEndFunctionAsyncExecute(const char*);
-    bool tryEndFunctionAsyncExecute(const char*);
     // Scene init waits here for the scenario select; false while it has not got here.
-    void waitSceneInitializeResume();
+    void holdSceneInitialize();
     bool tryResumeSceneInitialize();
     bool isScreen16Per9();
     void initSceneMessage();

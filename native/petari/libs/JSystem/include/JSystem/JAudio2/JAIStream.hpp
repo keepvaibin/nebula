@@ -1,5 +1,6 @@
 #pragma once
 
+#include "JSystem/JAudio2/JASHeapCtrl.hpp"
 #include "Game/System/NebulaAtomic.hpp"
 
 #include "JSystem/JAudio2/JAISound.hpp"

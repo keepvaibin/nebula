@@ -53,21 +53,6 @@ void JAUSoundMgr::stopSoundID(JAISoundID soundID) {
     mStreamMgr.stopSoundID(soundID);
 }
 
-void JAUSoundMgr::stopSync() {
-    mSeMgr.stop();
-    mSeqMgr.stop();
-    mStreamMgr.stop();
-
-    while (getNumActiveSounds() > 0) {
-        calc();
-        if (getNumActiveSounds() == 0) {
-            break;
-        }
-        mixOut();
-        JASDriver::waitSubFrame();
-    }
-}
-
 void JAUSoundMgr::stop(u32 fadeTime) {
     mSeMgr.stop(fadeTime);
     mSeqMgr.stop(fadeTime);

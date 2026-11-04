@@ -116,9 +116,7 @@ MiiFaceParts* MiiFacePartsHolder::createPartsFromReceipe(const char* pName, cons
 
     MR::getSceneObj< MiiFacePartsHolder >(SceneObj_MiiFacePartsHolder)->registerActor(pParts);
 
-    if (MR::startFunctionAsyncExecuteOnMainThread(MR::Functor< NameObj >(pParts, &NameObj::initWithoutIter), "initNameObjOnMainThread")) {
-        MR::waitForEndFunctionAsyncExecute("initNameObjOnMainThread");
-    }
+    pParts->initWithoutIter();
 
     return pParts;
 }
