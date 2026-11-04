@@ -170,7 +170,8 @@ bool FsrFrameGeneration::create(ID3D12Device* device, unsigned render_width, uns
     const FfxDevice ffx_device = ffxGetDeviceDX12(device);
     s.unavailable = ffxGetInterfaceDX12(&core.shared, ffx_device, core.shared_scratch.data(), core.shared_scratch.size(), FFX_FSR3_CONTEXT_COUNT) != FFX_OK ||
                     ffxGetInterfaceDX12(&core.generation, ffx_device, core.generation_scratch.data(), core.generation_scratch.size(), FFX_FSR3_CONTEXT_COUNT) != FFX_OK ||
-                    !core.create(render_width, render_height, display_width, display_height, ffxGetSurfaceFormatDX12(backbuffer_format));
+                    !core.create(render_width, render_height, display_width, display_height, ffxGetSurfaceFormatDX12(backbuffer_format),
+                                 ffxGetSurfaceFormatDX12(backbuffer_format));
     return !s.unavailable;
 }
 

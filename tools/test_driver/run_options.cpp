@@ -11,13 +11,42 @@
 #endif
 
 #include <atomic>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <deque>
 #include <string>
 
 namespace galaxy {
 namespace {
 
+#if defined(__ANDROID__)
+// The activity's process has no environment a test can set: its switches are lines of test_env in the app's data.
+void load_test_environment() {
+    const char* const data = std::getenv("NEBULA_DATA_DIR");
+    if (data == nullptr) {
+        return;
+    }
+    std::FILE* const file = std::fopen((std::string(data) + "/test_env").c_str(), "r");
+    if (file == nullptr) {
+        return;
+    }
+    char line[1024];
+    while (std::fgets(line, sizeof(line), file) != nullptr) {
+        line[std::strcspn(line, "\r\n")] = 0;
+        if (char* const equals = std::strchr(line, '=')) {
+            *equals = 0;
+            setenv(line, equals + 1, 1);
+        }
+    }
+    std::fclose(file);
+}
+#endif
+
 RunOptions read_options() {
+#if defined(__ANDROID__)
+    load_test_environment();
+#endif
     RunOptions o;
     o.frame_timeline = nebula_switch::frame_timeline();
     o.frame_timeline_events = nebula_switch::frame_timeline_events();

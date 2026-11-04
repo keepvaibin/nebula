@@ -136,9 +136,10 @@ namespace NebulaUi {
     // HUD otherwise follows the internal scale, and small letters lose strokes): one bit each.
     enum { SharpBoard = 1, SharpSettings = 2, SharpPrepare = 4 };
     void setSharp(u32 screen, bool shown);
+    bool isSharpScreenShown();
     // The screen in screen units (LayoutAspect's canvas, its width made square) and the root's horizontal scale.
     void readScreen(f32* pScaleX, f32* pWidth, f32* pHeight);
-    // `pPane` drawn cut to the box `left`..`right`, `top`..`bottom` (screen units; its screen `rise` above its place),
+    // `pPane` drawn cut to the box `left`..`right`, `top`..`bottom` (in its parent's units),
     // so that a list scrolled past its window never covers what is around it. After its layout's own draw.
-    void drawClipped(Pane* pPane, const nw4r::lyt::DrawInfo& rDrawInfo, f32 rise, f32 left, f32 right, f32 top, f32 bottom);
+    void drawClipped(Pane* pPane, const nw4r::lyt::DrawInfo& rDrawInfo, f32 left, f32 right, f32 top, f32 bottom);
 };  // namespace NebulaUi

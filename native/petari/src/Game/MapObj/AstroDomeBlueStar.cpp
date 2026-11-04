@@ -301,6 +301,10 @@ void AstroDomeBlueStar::exeWait() {
         MR::tryShowTimeoutedStarPointerGuidance();
     }
 
+    if (isValidBindStart()) {
+        MR::reportStarPointerGrabTarget(this);
+    }
+
     if (isValidBindStart() && MR::isStarPointerPointing(this, PLAYER_1, true, "\216\343" /* 弱 */)) {
         setNerve(GET_NERVE(AstroDomeBlueStar, AstroDomeBlueStarNrvPointing));
     }
@@ -317,6 +321,7 @@ void AstroDomeBlueStar::exePointing() {
         MR::startCSSound("CS_STAR_POWER", nullptr, PLAYER_1);
     }
 
+    MR::reportStarPointerGrabTarget(this);
     MR::requestStarPointerModeBlueStarReady(this);
 
     MR::startLevelSound(this, "SE_OJ_LV_MAGIC_PNT_G_POINT");
@@ -349,6 +354,7 @@ void AstroDomeBlueStar::exeTryStartBind() {
         MR::emitEffect(mCaptureActor, "RibbonPoint");
     }
 
+    MR::reportStarPointerGrabTarget(this);
     MR::requestStarPointerModeBlueStarReady(this);
 
     TVec3f resultPoint;

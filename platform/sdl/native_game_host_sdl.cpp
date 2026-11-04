@@ -7,6 +7,7 @@
 #include "sdl_host.h"
 
 #include "galaxy/content_viewport.h"
+#include "galaxy/input/host_input.h"
 #include "galaxy/input_bindings.h"
 #include "galaxy/audio_mixer.h"
 #include "galaxy/native_audio.h"
@@ -21,8 +22,10 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cmath>
 #include <cstring>
+#include <mutex>
 #include <sstream>
 #include <vector>
 
@@ -42,6 +45,14 @@ constexpr std::uint64_t kTapHoverFrames = 8;
 constexpr std::uint64_t kTapPressFrames = 3;
 // An on-screen button's press reaches the game for at least this many of its frames, however quick the finger.
 constexpr std::uint64_t kTouchPressFrames = 3;
+// The game's star pointer mode while the pointer is on something A grabs (StarPointerMode_BlueStarReady).
+constexpr std::int32_t kStarPointerModeBlueStarReady = 21;
+// Targets the game stopped reporting are gone after this long; input comes more often than the game's frames.
+constexpr std::uint64_t kTouchTargetHoldMs = 100;
+// After a finger lands on a target the game has this long to say that the pointer is on it (InputPointer's five, a nerve or two).
+constexpr std::uint64_t kGrabArmFrames = 30;
+// Around a target a finger still lands on it, in density-independent units: a fingertip hides more than the target.
+constexpr float kTouchTargetPadDp = 24.0f;
 // The game's star pointer mode on the title (StarPointerMode_Title): its prompt asks for A and B, so the controls stay.
 constexpr std::int32_t kStarPointerModeTitle = 4;
 constexpr float kTriggerThreshold = 96.0f / 255.0f;  // the Windows host's XInput trigger threshold
@@ -81,6 +92,25 @@ in::LogicalInput touch_logic(const sdl::InputState& state) {
 }
 
 // A point in window pixels as the pointer (-1..1 across the picture, y down), through the rectangle the picture was last drawn in.
+// A circle on the picture: x, y as the pointer's (-1..1, down positive); the radius in the picture's heights.
+struct TouchTarget {
+    float x = 0.0f;
+    float y = 0.0f;
+    float radius = 0.0f;
+};
+
+struct TouchTargets {
+    std::array<TouchTarget, 32> list{};
+    std::uint32_t count = 0;
+};
+
+// Filled by the game during its frame; the next input after it hands it to `g_touch_targets`, for the UI thread too.
+TouchTargets g_touch_targets_coming;
+TouchTargets g_touch_targets;
+std::uint64_t g_touch_targets_ms = 0;
+std::mutex g_touch_targets_mutex;
+std::atomic<unsigned> g_touch_pointer_state{0u};
+
 bool project_window_point(const sdl::InputState& state, float x, float y, float& out_x, float& out_y) {
     const auto content = galaxy::g_presentation_content.read();
     if (!content || content->surface_width != state.window_width || content->surface_height != state.window_height) {
@@ -100,7 +130,53 @@ bool project_window_point(const sdl::InputState& state, float x, float y, float&
 std::uint32_t g_rumble_pad = 0;  // the gamepad the player used last (SDL id; 0: none)
 float g_rumble_strength = 1.0f;
 
+// The target a finger at window pixels x, y lands on, the closest of them.
+bool touch_target_under(const sdl::InputState& state, float x, float y, TouchTarget& out) {
+    float point_x = 0.0f;
+    float point_y = 0.0f;
+    const auto content = galaxy::g_presentation_content.read();
+    if (!content || !project_window_point(state, x, y, point_x, point_y)) {
+        return false;
+    }
+    const float half_width = static_cast<float>(content->viewport.width) * 0.5f;
+    const float half_height = static_cast<float>(content->viewport.height) * 0.5f;
+    const unsigned width_dp = window_width_dp();
+    const float pad = width_dp != 0u ? kTouchTargetPadDp * static_cast<float>(state.window_width) / static_cast<float>(width_dp)
+                                     : half_height * 0.1f;
+    float best = -1.0f;
+    std::lock_guard<std::mutex> lock(g_touch_targets_mutex);
+    for (std::uint32_t i = 0; i < g_touch_targets.count; ++i) {
+        const TouchTarget& target = g_touch_targets.list[i];
+        const float distance = std::hypot((point_x - target.x) * half_width, (point_y - target.y) * half_height);
+        const float reach = target.radius * half_height * 2.0f + pad;
+        if (distance <= reach && (best < 0.0f || distance < best)) {
+            best = distance;
+            out = target;
+        }
+    }
+    return best >= 0.0f;
+}
+
 }  // namespace
+
+unsigned touch_pointer_state() noexcept {
+    return g_touch_pointer_state.load(std::memory_order_relaxed);
+}
+
+void note_touch_target(std::uint32_t circle) noexcept {
+    std::lock_guard<std::mutex> lock(g_touch_targets_mutex);
+    if (g_touch_targets_coming.count < g_touch_targets_coming.list.size()) {
+        TouchTarget& target = g_touch_targets_coming.list[g_touch_targets_coming.count++];
+        target.x = static_cast<float>(circle & 0xfffu) / 4095.0f * 2.0f - 1.0f;
+        target.y = static_cast<float>((circle >> 12u) & 0xfffu) / 4095.0f * 2.0f - 1.0f;
+        target.radius = static_cast<float>(circle >> 24u) / 255.0f;
+    }
+}
+
+bool touch_target_at(float x, float y) noexcept {
+    TouchTarget target;
+    return touch_target_under(sdl::input_state(), x, y, target);
+}
 
 in::PlayerInput native_game_input(std::uint64_t frame, std::int32_t star_pointer_mode, std::uint8_t tilt_section) {
     // A menu that takes the screen takes the keys and pads on the window thread. The game draws it under its own
@@ -116,6 +192,17 @@ in::PlayerInput native_game_input(std::uint64_t frame, std::int32_t star_pointer
         : tilt_section == 2u ? in::tilt::Section::Ray
         : in::tilt::Section::None;
     sdl::InputState state = sdl::take_input_state();
+    {
+        std::lock_guard<std::mutex> lock(g_touch_targets_mutex);
+        const std::uint64_t now_ms = galaxy::steady_ms();
+        if (g_touch_targets_coming.count != 0u) {
+            g_touch_targets = g_touch_targets_coming;
+            g_touch_targets_coming.count = 0u;
+            g_touch_targets_ms = now_ms;
+        } else if (now_ms - g_touch_targets_ms > kTouchTargetHoldMs) {
+            g_touch_targets.count = 0u;
+        }
+    }
     static std::array<std::uint64_t, 32> s_touch_press_end{};
     for (std::uint32_t bit = 0; bit < s_touch_press_end.size(); ++bit) {
         if (captured) {
@@ -126,6 +213,52 @@ in::PlayerInput native_game_input(std::uint64_t frame, std::int32_t star_pointer
             }
         } else if (frame < s_touch_press_end[bit]) {
             state.touch_buttons |= 1u << bit;
+        }
+    }
+    // A finger landing on a target points at it, and once the game says the pointer is there it is A, for as long as the
+    // finger stays. A finger only passing over a target grabs nothing.
+    static std::uint64_t s_land_ms = 0;
+    static std::uint64_t s_grab_armed_end = 0;
+    static std::uint64_t s_grab_end = 0;
+    static bool s_grabbing = false;
+    static TouchTarget s_grab_target{};
+    if (state.finger_land_ms != s_land_ms) {
+        s_land_ms = state.finger_land_ms;
+        s_grabbing = false;
+        s_grab_armed_end = !captured && touch_target_under(state, state.finger_land_x, state.finger_land_y, s_grab_target)
+            ? frame + kGrabArmFrames : 0u;
+    }
+#if !defined(NEBULA_RELEASE)
+    {
+        static std::uint32_t s_logged_targets = 0xffffffffu;
+        std::lock_guard<std::mutex> lock(g_touch_targets_mutex);
+        if (g_touch_targets.count != s_logged_targets) {
+            s_logged_targets = g_touch_targets.count;
+            const TouchTarget target = g_touch_targets.list[0];
+            SDL_Log("[touch] targets %u, first x %.3f y %.3f radius %.3f mode %d", static_cast<unsigned>(s_logged_targets),
+                    static_cast<double>(target.x), static_cast<double>(target.y), static_cast<double>(target.radius),
+                    static_cast<int>(star_pointer_mode));
+        }
+    }
+    if (state.finger_land_ms == s_land_ms && frame + kGrabArmFrames == s_grab_armed_end) {
+        SDL_Log("[touch] armed on x %.3f y %.3f", static_cast<double>(s_grab_target.x), static_cast<double>(s_grab_target.y));
+    }
+    if (frame < s_grab_armed_end && star_pointer_mode == kStarPointerModeBlueStarReady) {
+        SDL_Log("[touch] grab %llu frames after landing", static_cast<unsigned long long>(frame + kGrabArmFrames - s_grab_armed_end));
+    }
+#endif
+    if (frame < s_grab_armed_end && star_pointer_mode == kStarPointerModeBlueStarReady) {
+        s_grab_armed_end = 0u;
+        s_grabbing = true;
+        s_grab_end = frame + kTouchPressFrames;
+    }
+    if (s_grabbing) {
+        if (state.finger_down && s_grab_end <= frame) {
+            s_grab_end = frame + 1u;
+        }
+        s_grabbing = !captured && frame < s_grab_end;
+        if (s_grabbing) {
+            state.touch_buttons |= sdl::kTouchA;
         }
     }
     if (captured) {
@@ -256,6 +389,7 @@ in::PlayerInput native_game_input(std::uint64_t frame, std::int32_t star_pointer
     static float s_pointer_y = 0.0f;
     static std::uint64_t s_pointer_ms = 0;
     static std::uint64_t s_hold_ms = 0;
+    static bool s_pointer_by_finger = false;
     static std::uint64_t s_last_ms = galaxy::steady_ms();
     const std::uint64_t now = galaxy::steady_ms();
     const float dt = std::min(0.1f, static_cast<float>(now - s_last_ms) / 1000.0f);
@@ -269,7 +403,13 @@ in::PlayerInput native_game_input(std::uint64_t frame, std::int32_t star_pointer
             s_pointer_y = y;
             s_pointer_ms = state.finger_ms;
             s_hold_ms = kTouchPointerHoldMs;
+            s_pointer_by_finger = true;
         }
+    }
+    // On the target itself, however far off it the fingertip landed: the game's own test decides, with a smaller circle.
+    if (frame < s_grab_armed_end || s_grabbing) {
+        s_pointer_x = s_grab_target.x;
+        s_pointer_y = s_grab_target.y;
     }
     const float axis_x = pads.pointer_x != 0.0f || pads.pointer_y != 0.0f ? pads.pointer_x : keys.pointer_x;
     const float axis_y = pads.pointer_x != 0.0f || pads.pointer_y != 0.0f ? pads.pointer_y : keys.pointer_y;
@@ -279,12 +419,14 @@ in::PlayerInput native_game_input(std::uint64_t frame, std::int32_t star_pointer
         s_pointer_y = std::clamp(s_pointer_y - axis_y * speed * dt, -1.0f, 1.0f);
         s_pointer_ms = now;
         s_hold_ms = kStickPointerHoldMs;
+        s_pointer_by_finger = false;
     }
     if (motion_x != 0.0f || motion_y != 0.0f) {
         s_pointer_x = std::clamp(s_pointer_x + motion_x, -1.0f, 1.0f);
         s_pointer_y = std::clamp(s_pointer_y + motion_y, -1.0f, 1.0f);
         s_pointer_ms = now;
         s_hold_ms = kStickPointerHoldMs;
+        s_pointer_by_finger = false;
     }
     // A tap in a menu points there and presses A.
     static std::uint64_t s_taps = state.taps;
@@ -300,6 +442,7 @@ in::PlayerInput native_game_input(std::uint64_t frame, std::int32_t star_pointer
             s_pointer_y = y;
             s_pointer_ms = now;
             s_hold_ms = kTouchPointerHoldMs;
+            s_pointer_by_finger = true;
             if (!s_pointer_shown) {
                 s_pointer_shown_frame = frame;
             }
@@ -325,6 +468,9 @@ in::PlayerInput native_game_input(std::uint64_t frame, std::int32_t star_pointer
     }
     s_pointer_shown = pointer_active;
     in::set_pointer(snapshot, s_pointer_x, s_pointer_y, pointer_active);
+#if defined(__ANDROID__)
+    g_touch_pointer_state.store(!s_pointer_by_finger ? 1u : context == in::PlayContext::Menu ? 3u : 2u, std::memory_order_relaxed);
+#endif
 
     // Tilt sections steer with the stick.
     static in::tilt::Tilt s_tilt{};

@@ -609,11 +609,14 @@ bool RendererVk::create_swapchain() {
     if (format.format == VK_FORMAT_UNDEFINED) {  // the surface takes any format
         format = {VK_FORMAT_R8G8B8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR};
     }
-    for (const VkSurfaceFormatKHR& candidate : formats) {
-        if ((candidate.format == VK_FORMAT_B8G8R8A8_UNORM || candidate.format == VK_FORMAT_R8G8B8A8_UNORM) &&
-            candidate.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
-            format = candidate;
-            break;
+    // RGBA8 first, the post chain's own: a raw copy between the two orders swaps red and blue.
+    bool chosen = false;
+    for (const VkFormat wanted : {VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_B8G8R8A8_UNORM}) {
+        for (const VkSurfaceFormatKHR& candidate : formats) {
+            if (!chosen && candidate.format == wanted && candidate.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+                format = candidate;
+                chosen = true;
+            }
         }
     }
 
@@ -1429,7 +1432,10 @@ void RendererVk::present_swapchain_image() {
             hudless = {fg_hudless_target_->image, fg_hudless_target_->view, VK_IMAGE_ASPECT_COLOR_BIT, VK_FORMAT_R8G8B8A8_UNORM, fg_hudless_target_->width,
                        fg_hudless_target_->height, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT};
         }
-        fsr_generation_.configure(swapchain_.handle, frame_generation_running() && frame_generation_allowed(), fg_hudless_ready_ ? &hudless : nullptr,
+        // Without a HUD-less picture the swap chain's is the source: on a BGRA8 surface that frame generates nothing.
+        fsr_generation_.configure(swapchain_.handle,
+                                  frame_generation_running() && frame_generation_allowed() && (fg_hudless_ready_ || swapchain_.format == VK_FORMAT_R8G8B8A8_UNORM),
+                                  fg_hudless_ready_ ? &hudless : nullptr,
                                   static_cast<unsigned>(fsr_rect_.left), static_cast<unsigned>(fsr_rect_.top), static_cast<unsigned>(fsr_rect_.width),
                                   static_cast<unsigned>(fsr_rect_.height));
         fg_hudless_ready_ = false;

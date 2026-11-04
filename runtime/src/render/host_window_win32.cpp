@@ -1466,6 +1466,16 @@ bool restart_game(bool record) {
 
 namespace galaxy::host {
 
+unsigned touch_pointer_state() noexcept {
+    return 0u;
+}
+
+void note_touch_target(std::uint32_t) noexcept {}
+
+bool touch_target_at(float, float) noexcept {
+    return false;
+}
+
 unsigned window_width_dp() noexcept {
     const HWND window = reinterpret_cast<HWND>(render::host_window::pointer_hwnd.load(std::memory_order_relaxed));
     RECT area{};

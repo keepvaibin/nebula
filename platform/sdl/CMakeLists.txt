@@ -166,6 +166,7 @@ if(NOT WIN32)
         set(nebula_hde "${CMAKE_CURRENT_LIST_DIR}/../../third_party/minhook/src/hde/hde64.c")
         target_sources(galaxy_render_vk PRIVATE "${nebula_hde}")
         set_source_files_properties("${nebula_hde}" PROPERTIES INCLUDE_DIRECTORIES "${CMAKE_CURRENT_LIST_DIR}/../../runtime/include/galaxy/hde_shim")
+        set_source_files_properties(${rt}/mod_hook_posix.cpp PROPERTIES INCLUDE_DIRECTORIES "${CMAKE_CURRENT_LIST_DIR}/../../runtime/include/galaxy/hde_shim")
     endif()
 endif()
 # Mod import (archives) on the desktop systems; Android and iOS take no mods.

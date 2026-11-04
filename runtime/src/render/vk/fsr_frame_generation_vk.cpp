@@ -14,6 +14,7 @@
 #include <FidelityFX/host/ffx_fsr3.h>
 
 #include "../fsr_frame_generation_core.inl"
+#include "galaxy/render/temporal_dump.h"
 #endif
 
 namespace galaxy::render {
@@ -61,6 +62,83 @@ FfxDevice ffx_device() {
     g_device_context.vkDeviceProcAddr = ffx_device_proc;
     return ffxGetDeviceVK(&g_device_context);
 }
+
+#if !defined(NEBULA_RELEASE)
+VkImageLayout vk_layout(FfxResourceStates state) {
+    switch (state) {
+    case FFX_RESOURCE_STATE_UNORDERED_ACCESS: return VK_IMAGE_LAYOUT_GENERAL;
+    case FFX_RESOURCE_STATE_COMPUTE_READ:
+    case FFX_RESOURCE_STATE_PIXEL_READ:
+    case FFX_RESOURCE_STATE_PIXEL_COMPUTE_READ: return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    case FFX_RESOURCE_STATE_COPY_SRC: return VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    case FFX_RESOURCE_STATE_COPY_DEST: return VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    case FFX_RESOURCE_STATE_RENDER_TARGET: return VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    case FFX_RESOURCE_STATE_PRESENT: return VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    default: return VK_IMAGE_LAYOUT_GENERAL;
+    }
+}
+
+struct PendingDump {
+    std::shared_ptr<Buffer> buffer;
+    const char* name;
+    std::uint64_t index;
+    unsigned width;
+    unsigned height;
+};
+
+void dump_generated_frame(FfxCommandList list, const FfxResource& real, const FfxResource& made, std::uint64_t index) {
+    static const temporal_dump::Plan plan = temporal_dump::read_plan();
+    static std::vector<PendingDump> pending;
+    static std::uint64_t written_after = 0u;
+    if (plan.every == 0u) {
+        return;
+    }
+    // Finished by now: frames in flight are far fewer.
+    if (!pending.empty() && index >= written_after) {
+        for (PendingDump& p : pending) {
+            Context::get().invalidate(*p.buffer);
+            temporal_dump::write(plan, p.name, p.index, p.width, p.height, 4u, p.buffer->mapped, p.width * 4u);
+        }
+        pending.clear();
+    }
+    if (!plan.wanted(index)) {
+        return;
+    }
+    auto* const commands = reinterpret_cast<VkCommandBuffer>(list);
+    const auto copy = [&](const FfxResource& picture, const char* name) {
+        const auto image = static_cast<VkImage>(picture.resource);
+        const unsigned width = picture.description.width;
+        const unsigned height = picture.description.height;
+        if (image == VK_NULL_HANDLE || width == 0u || height == 0u) {
+            return;
+        }
+        std::shared_ptr<Buffer> buffer = Context::get().create_readback_buffer(std::uint64_t{width} * height * 4u, "generated frame dump");
+        const VkImageLayout layout = vk_layout(picture.state);
+        VkImageMemoryBarrier barrier{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+        barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
+        barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        barrier.oldLayout = layout;
+        barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        barrier.srcQueueFamilyIndex = barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.image = image;
+        barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u};
+        vkCmdPipelineBarrier(commands, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0u, 0u, nullptr, 0u, nullptr, 1u, &barrier);
+        VkBufferImageCopy region{};
+        region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 0u, 1u};
+        region.imageExtent = {width, height, 1u};
+        vkCmdCopyImageToBuffer(commands, image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, buffer->buffer, 1u, &region);
+        barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+        barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        barrier.newLayout = layout;
+        vkCmdPipelineBarrier(commands, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0u, 0u, nullptr, 0u, nullptr, 1u, &barrier);
+        pending.push_back({std::move(buffer), name, index, width, height});
+    };
+    copy(real, "real");
+    copy(made, "made");
+    written_after = index + 8u;
+}
+#endif
 
 }  // namespace
 
@@ -116,6 +194,9 @@ bool FsrFrameGenerationVk::create(unsigned render_width, unsigned render_height,
         return false;
     }
     FsrGenerationCore& core = s.core;
+#if !defined(NEBULA_RELEASE)
+    core.dump_generated = dump_generated_frame;
+#endif
     const VkPhysicalDevice physical = Context::get().physical_device();
     try {
         const std::size_t size = ffxGetScratchMemorySizeVK(physical, FFX_FSR3_CONTEXT_COUNT);
@@ -127,7 +208,8 @@ bool FsrFrameGenerationVk::create(unsigned render_width, unsigned render_height,
     const FfxDevice device = ffx_device();
     s.unavailable = ffxGetInterfaceVK(&core.shared, device, core.shared_scratch.data(), core.shared_scratch.size(), FFX_FSR3_CONTEXT_COUNT) != FFX_OK ||
                     ffxGetInterfaceVK(&core.generation, device, core.generation_scratch.data(), core.generation_scratch.size(), FFX_FSR3_CONTEXT_COUNT) != FFX_OK ||
-                    !core.create(render_width, render_height, display_width, display_height, ffxGetSurfaceFormatVK(backbuffer_format));
+                    !core.create(render_width, render_height, display_width, display_height, ffxGetSurfaceFormatVK(backbuffer_format),
+                                 ffxGetSurfaceFormatVK(VK_FORMAT_R8G8B8A8_UNORM));
     return !s.unavailable;
 }
 
