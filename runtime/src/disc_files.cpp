@@ -332,6 +332,29 @@ std::optional<Entry> AssetStore::child(std::int32_t folder, std::uint32_t index)
     return entry(static_cast<std::int32_t>(nodes_[folder].first + index));
 }
 
+std::optional<Entry> AssetStore::added_child(std::string_view path, std::uint32_t index) const {
+    if (overlay_ == nullptr || !find_own(path)) {
+        return std::nullopt;
+    }
+    const std::optional<Entry> folder = overlay_->find_own(path);
+    if (!folder || !folder->folder) {
+        return std::nullopt;
+    }
+    std::string base(path);
+    if (base.empty() || base.back() != '/') base += '/';
+    std::uint32_t added = 0u;
+    for (std::uint32_t i = 0u; i < folder->children; ++i) {
+        std::optional<Entry> found = overlay_->child(folder->index, i);
+        if (!found || find_own(base + (found->name != nullptr ? found->name : ""))) continue;
+        if (added++ == index) {
+            found->index += static_cast<std::int32_t>(count_);
+            found->position += kOverlayPosition;
+            return found;
+        }
+    }
+    return std::nullopt;
+}
+
 std::optional<Entry> AssetStore::find(std::string_view path) const {
     if (overlay_ != nullptr) {
         // A file or an archive of the mods first. A plain folder of theirs only lists what they change: the game's

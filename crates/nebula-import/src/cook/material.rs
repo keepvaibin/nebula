@@ -51,7 +51,10 @@ pub fn cook_model(bytes: &[u8]) -> Result<Vec<u8>> {
             let table = Mat3::parse(&bounded)?;
             for i in 0..table.len() {
                 let p = table.compatibility_program(i, 0x11100000, false)?;
-                let shader = cooked_shader(&p)?;
+                let shader = match table.name(i).and_then(|name| written_shader(&name)) {
+                    Some(id) => id,
+                    None => cooked_shader(&p)?,
+                };
                 // Record: generated shader ID, material index, native pipeline
                 // state, then reserved space. No source combiner fields survive.
                 descriptors.extend_from_slice(&shader.to_le_bytes());
@@ -139,6 +142,20 @@ pub struct Mat3<'a> {
 }
 
 impl<'a> Mat3<'a> {
+    /// A material's name, from the block's name table.
+    pub fn name(&self, index: usize) -> Option<String> {
+        let table = *self.offsets.get(2).filter(|o| **o != 0)?;
+        let count = u16::from_be_bytes(self.bytes.get(table..table + 2)?.try_into().ok()?) as usize;
+        if index >= count {
+            return None;
+        }
+        let entry = table + 4 + index * 4;
+        let at = table + u16::from_be_bytes(self.bytes.get(entry + 2..entry + 4)?.try_into().ok()?) as usize;
+        let text = self.bytes.get(at..)?;
+        let end = text.iter().position(|b| *b == 0)?;
+        Some(String::from_utf8_lossy(&text[..end]).into_owned())
+    }
+
     pub fn parse(bytes: &'a [u8]) -> Result<Self> {
         if bytes.len() < 0x84 || &bytes[..4] != b"MAT3" {
             bail!("expected a complete MAT3 header");
@@ -643,6 +660,20 @@ fn mod_material(bytes: &[u8]) -> Result<Option<u32>> {
     let id = MOD_SHADER_FIRST | (key_hash(bytes)? as u32 & 0x3FFF_FFFF);
     materials.entry(id).or_insert(normalize_program(bytes)?);
     Ok(Some(id))
+}
+
+/// Shaders a mod wrote, by the material's name, while its conversion runs: their sources, by the numbers they take.
+pub static WRITTEN_SHADERS: std::sync::Mutex<Option<BTreeMap<String, (u32, String)>>> = std::sync::Mutex::new(None);
+
+/// The number of the shader written for this material; None if none was.
+fn written_shader(name: &str) -> Option<u32> {
+    WRITTEN_SHADERS.lock().unwrap_or_else(|e| e.into_inner()).as_ref()?.get(name).map(|(id, _)| *id)
+}
+
+/// A written shader's number: from its name and its words, so that an edit builds again.
+pub fn written_shader_id(name: &str, source: &str) -> u32 {
+    let hash = name.bytes().chain(source.bytes()).fold(0xcbf29ce484222325u64, |h, b| (h ^ u64::from(b)).wrapping_mul(0x100000001b3));
+    MOD_SHADER_FIRST | (hash as u32 & 0x3FFF_FFFF)
 }
 
 /// While set, a material this build has no shader for is noted here instead of refused: the tool that lists what mods

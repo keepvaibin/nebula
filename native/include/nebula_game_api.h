@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 121u
+#define NEBULA_GAME_API_VERSION 122u
 
 /* Viewports, scissors, clears, target sizes and picture points count this many units across a frame on each axis. */
 #define NEBULA_FRAME_UNITS 65536.0f
@@ -767,6 +767,7 @@ enum {
                                                 next start): restart now? yes: APPLY, later: CLOSE */
     NEBULA_SETTINGS_STATUS_DIAGNOSTICS_ASK,  /* restart and record a diagnostics run (the launcher's recording)? yes:
                                                 APPLY, no: CLOSE */
+    NEBULA_SETTINGS_STATUS_MODS_CODE_ASK,    /* a mod turned on brings code: allow it? yes: APPLY, no: CLOSE */
 };
 /* The Pair Joy-Con screen's halves (NEBULA_SETTINGS_STATUS_JOYCON). */
 enum {
@@ -1002,6 +1003,10 @@ typedef struct NebulaHostServices {
     /* The game closes, or starts again from its boot, with pending saves written. Do not return. */
     void (*app_exit)(void* user);
     void (*app_restart)(void* user);
+    /* The game's memory is ready, and nothing of it has run: the mods' code starts. */
+    void (*mods_start)(void* user);
+    /* What the mods add to a folder the game has: asset_child doesn't list these. */
+    int (*asset_added_child)(void* user, const char* path, uint32_t child, NebulaAssetEntry* out);
 
     /* Tests: once per game scene frame (before its 3D), what a hidden run asks of the game (GALAXY_TEST_*): returns 1
        with `action` filled, or 0. */
@@ -1201,6 +1206,8 @@ enum {
 NEBULA_GAME_API uint32_t nebula_game_attach(const NebulaHostServices* host);
 /* Runs the game on the calling thread, the simulation thread. Does not return. */
 NEBULA_GAME_API void nebula_game_run(void);
+/* The game's half of the plugin interface. */
+NEBULA_GAME_API const struct NebulaModApi* nebula_game_mod_api(void);
 /* A file read finished: `result` is the bytes read, or -1 on a read error. */
 /* The audio clock, while started (NEBULA_AUDIO_START): the game mixes its next frame (voices_mix, voices_frame). */
 NEBULA_GAME_API void nebula_game_sound_frame(void);

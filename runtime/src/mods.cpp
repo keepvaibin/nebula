@@ -588,6 +588,28 @@ std::string own_saves_tag(const ModInfo& mod) {
     return mod.luma->save_tag;
 }
 
+// A mod's libraries for this device as they are: changed files ask the player again.
+std::string plugin_token(const fs::path& mod, const luma::Manifest& manifest) {
+    std::uint64_t hash = 14695981039346656037ull;
+    bool any = false;
+    for (const luma::Plugin& plugin : manifest.plugins) {
+        const auto binary = plugin.binaries.find(std::string(luma::plugin_target()));
+        if (binary == plugin.binaries.end()) continue;
+        std::ifstream in(mod / fs::path(from_utf8(binary->second)), std::ios::binary);
+        char buffer[65536];
+        while (in.read(buffer, sizeof(buffer)) || in.gcount() > 0) {
+            for (std::streamsize i = 0; i < in.gcount(); ++i) {
+                hash = (hash ^ static_cast<unsigned char>(buffer[i])) * 1099511628211ull;
+            }
+        }
+        any = true;
+    }
+    if (!any) return {};
+    char text[17];
+    std::snprintf(text, sizeof(text), "%016llx", static_cast<unsigned long long>(hash));
+    return text;
+}
+
 // What a .luma's layers are used under, as things stand.
 luma::Situation situation_of(const ModInfo& mod, const std::string& game_id, const std::string& language) {
     luma::Situation situation;
@@ -664,6 +686,7 @@ struct SavedMod {
     bool own_text = true;
     std::map<std::string, unsigned> options;
     std::map<std::string, std::string> choice_ids;  // a .luma's choices, by option
+    std::string code_ok;  // the libraries the player allowed
 };
 
 std::string escape_key(std::string_view s) {
@@ -776,6 +799,8 @@ std::map<std::string, SavedMod> read_saved(const fs::path& file) {
             current->own_text = value != "game";
         } else if (key == "textures_off") {
             current->categories_off = static_cast<std::uint32_t>(std::strtoul(value.c_str(), nullptr, 10));
+        } else if (key == "code_ok") {
+            current->code_ok = value;
         } else if (key.starts_with("choice.")) {
             current->choice_ids[unescape_key(std::string_view(key).substr(7))] = value;
         } else if (key.starts_with("option.")) {
@@ -1044,6 +1069,8 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
                     mod.pack_author += (mod.pack_author.empty() ? "" : ", ") + author;
                 }
                 mod.problem = luma::refusal(*manifest, region_id, NEBULA_VERSION, luma::this_platform());
+                mod.code_token = plugin_token(dir, *manifest);
+                mod.code_allowed = !mod.code_token.empty() && s != nullptr && s->code_ok == mod.code_token;
                 for (const luma::Option& entry : manifest->options) {
                     ModOption option;
                     option.key = entry.id;
@@ -1092,7 +1119,7 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
                 for (const luma::Layer& layer : manifest->layers) {
                     if (!luma::layer_used(layer, situation)) continue;
                     mod.native_patches += static_cast<unsigned>(layer.switches.size());
-                    mod.luma_disc = mod.luma_disc || !layer.switches.empty();
+                    mod.luma_disc = mod.luma_disc || !layer.switches.empty() || !layer.materials.empty();
                     if (layer.path.empty()) continue;
                     const fs::path place = dir / fs::path(from_utf8(layer.path));
                     std::error_code place_error;
@@ -1100,6 +1127,7 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
                         mod.problem = "THIS FILE IS DAMAGED";
                         continue;
                     }
+                    if (child_any_case(place, "merge", true)) mod.luma_disc = true;
                     if (std::optional<fs::path> files = child_any_case(place, "files", true)) {
                         mod.luma_disc = true;
                         list_files(*files, std::string(), changed_paths[mod.id]);
@@ -1282,6 +1310,7 @@ bool save_mod_settings(std::span<const ModInfo> mods) {
         out << "order=" << mod.order << '\n';
         if (!mod.own_text) out << "text=game\n";
         if (mod.categories_off != 0u) out << "textures_off=" << mod.categories_off << '\n';
+        if (mod.code_allowed) out << "code_ok=" << mod.code_token << '\n';
         for (const ModOption& o : mod.options) {
             out << "option." << escape_key(o.key) << '=' << o.selected << '\n';
             if (!o.choice_ids.empty()) {
@@ -1425,6 +1454,25 @@ DiscPlan plan_disc_changes(const galaxy::disc::AssetStore& store, const std::str
             plan.save_start = mod.luma->save_path.empty() ? fs::path() : mod.path / fs::path(from_utf8(mod.luma->save_path));
         }
         if (mod.package) plan.luma_folders.push_back(mod.path);
+        if (mod.package && mod.luma) {
+            for (const auto& [id, words] : mod.luma->text) {
+                plan.texts.emplace_back(id, words.in(luma::language_code(language)));
+            }
+            for (const luma::Galaxy& galaxy : mod.luma->galaxies) {
+                plan.galaxies.push_back({mod.id, galaxy.name, galaxy.map_pane, galaxy.open_conditions, galaxy.stars_to_open, galaxy.dome, galaxy.hungry_slot, galaxy.hungry_star_bits});
+            }
+            const luma::Situation situation = situation_of(mod, game_id, language);
+            for (const luma::Plugin& plugin : mod.luma->plugins) {
+                if (!luma::when_holds(plugin.when, situation)) continue;
+                const auto binary = plugin.binaries.find(std::string(luma::plugin_target()));
+                if (binary == plugin.binaries.end()) continue;
+                if (!mod.code_allowed) {
+                    plan.notes.push_back(mod.id + ": its code isn't run: the player hasn't allowed it");
+                    break;
+                }
+                plan.plugins.push_back({mod.path / fs::path(from_utf8(binary->second)), mod.id, mod.luma->version, situation.options});
+            }
+        }
         if (!changes_disc(mod)) continue;
 #if defined(__ANDROID__) || defined(__APPLE__) && TARGET_OS_IPHONE
         // The converter runs on computers: the page has told the player.
@@ -1510,7 +1558,21 @@ DiscPlan plan_disc_changes(const galaxy::disc::AssetStore& store, const std::str
                         note(name + ": a switch this game doesn't know");
                     }
                 }
+                for (const auto& [material, file] : layer.materials) {
+                    plan.materials.push_back({material, mod.path / fs::path(from_utf8(file))});
+                }
                 if (layer.path.empty()) continue;
+                if (const std::optional<fs::path> merge = child_any_case(mod.path / fs::path(from_utf8(layer.path)), "merge", true)) {
+                    std::error_code walk_error;
+                    std::vector<fs::path> found;
+                    for (const auto& entry : fs::recursive_directory_iterator(*merge, walk_error)) {
+                        if (entry.is_regular_file(walk_error)) found.push_back(entry.path());
+                    }
+                    std::sort(found.begin(), found.end());
+                    for (const fs::path& file : found) {
+                        plan.merges.push_back({galaxy::path_text(file.lexically_relative(*merge).generic_string()), file});
+                    }
+                }
                 const std::optional<fs::path> files = child_any_case(mod.path / fs::path(from_utf8(layer.path)), "files", true);
                 if (!files) continue;
                 const Loader loader{*files, *files};
@@ -1633,6 +1695,12 @@ std::string plan_text(const DiscPlan& plan, const std::string& game_id) {
     for (const DiscPlan::File& file : plan.files) {
         text += file.disc + "\t" + galaxy::path_text(file.host) + "\n";
     }
+    for (const DiscPlan::File& file : plan.merges) {
+        text += "+" + file.disc + "\t" + galaxy::path_text(file.host) + "\n";
+    }
+    for (const DiscPlan::File& file : plan.materials) {
+        text += "=material\t" + file.disc + "\t" + galaxy::path_text(file.host) + "\n";
+    }
     return text;
 }
 
@@ -1643,6 +1711,20 @@ std::string plan_signature(const DiscPlan& plan, const std::string& game_id) {
         const auto size = fs::file_size(file.host, ec);
         const auto time = fs::last_write_time(file.host, ec).time_since_epoch().count();
         text += file.disc + "\t" + galaxy::path_text(file.host) + "\t" + std::to_string(size) + "\t" +
+                std::to_string(static_cast<long long>(time)) + "\n";
+    }
+    for (const DiscPlan::File& file : plan.materials) {
+        std::error_code ec;
+        const auto size = fs::file_size(file.host, ec);
+        const auto time = fs::last_write_time(file.host, ec).time_since_epoch().count();
+        text += "=material\t" + file.disc + "\t" + galaxy::path_text(file.host) + "\t" + std::to_string(size) + "\t" +
+                std::to_string(static_cast<long long>(time)) + "\n";
+    }
+    for (const DiscPlan::File& file : plan.merges) {
+        std::error_code ec;
+        const auto size = fs::file_size(file.host, ec);
+        const auto time = fs::last_write_time(file.host, ec).time_since_epoch().count();
+        text += "+" + file.disc + "\t" + galaxy::path_text(file.host) + "\t" + std::to_string(size) + "\t" +
                 std::to_string(static_cast<long long>(time)) + "\n";
     }
     return text;

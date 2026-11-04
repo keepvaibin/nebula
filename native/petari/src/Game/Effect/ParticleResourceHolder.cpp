@@ -67,6 +67,13 @@ u16 ParticleResourceHolder::getUserIndex(const char* pName) const {
         return first;
     }
 
+    // Mods' particles come after the game's sorted names.
+    for (int row = pInfo->getNumEntries() - 1; row >= 0; row--) {
+        if (pInfo->getValue(row, "name", &pEntryName) && strcmp(pEntryName, pName) == 0) {
+            return row;
+        }
+    }
+
     return 0xFFFF;
 }
 

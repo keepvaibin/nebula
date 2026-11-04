@@ -16,6 +16,7 @@
 #pragma once
 
 
+#include "galaxy/mod_plugins.h"
 #include "galaxy/luma.h"
 #include "galaxy/texture_categories.h"
 
@@ -106,6 +107,8 @@ struct ModInfo {
     unsigned changed_textures = 0;            // textures its packs replace
     std::vector<ModOverlap> overlaps;         // enabled mods changing the same files or textures
     std::vector<ModOption> options;
+    std::string code_token;    // a .luma's libraries for this device, as they are: empty if it has no code
+    bool code_allowed = false;  // the player has allowed them as they are
     // A texture pack, sorted: its textures, how many of each category and of this game's textures, and the categories
     // turned off (category_bit). A pack's manifest.json (a resource pack's) names it.
     std::shared_ptr<const std::vector<PackTexture>> pack_textures;
@@ -166,8 +169,16 @@ struct DiscPlan {
         std::filesystem::path host;
     };
     std::vector<File> files;
+    // What the mods add to files many share (a layer's merge/ folder), bottom of the list first: `disc` is the file's
+    // place in the store, with ".json" for a table's rows.
+    std::vector<File> merges;
+    // Materials with a shader written for them: `disc` is the material's name.
+    std::vector<File> materials;
     // The .luma mods in use, bottom of the list first: their shaders.
     std::vector<std::filesystem::path> luma_folders;
+    std::vector<PluginFile> plugins;  // the .luma mods' code, bottom of the list first
+    std::vector<GalaxyToAdd> galaxies;
+    std::vector<std::pair<std::string, std::string>> texts;  // a message's id: its words in the language played
     std::vector<std::string> notes;  // what could not apply, for the log
     unsigned code_patches = 0;
     std::map<std::uint32_t, std::uint32_t> native_patches;  // kPatch*: what each is set to

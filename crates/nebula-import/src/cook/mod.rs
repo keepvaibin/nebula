@@ -9,6 +9,7 @@ pub mod dol;
 pub mod ghost;
 pub mod formats;
 pub mod material;
+pub mod merge;
 pub mod mesh;
 pub mod native_data;
 pub mod overlay;

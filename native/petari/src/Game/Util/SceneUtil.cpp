@@ -1,3 +1,4 @@
+#include "Game/System/NebulaMods.hpp"
 #include <nebula_game_api.h>
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/NameObj/NameObjFinder.hpp"
@@ -357,6 +358,7 @@ namespace MR {
     }
 
     void incCoin(int term) {
+        term = NebulaMods::fire(NEBULA_MOD_EVENT_COIN, term);
         ::getScenePlayingResult()->incCoin(term);
         incPlayerLife(term);
     }

@@ -1,4 +1,5 @@
 #include "Game/Scene/GameScene.hpp"
+#include "Game/System/NebulaMods.hpp"
 #include "Game/System/NebulaLoadTrace.hpp"
 #include "JSystem/JAudio2/JASWaveArcLoader.hpp"
 #include "Game/System/GameThreads.hpp"
@@ -237,6 +238,7 @@ namespace {
 };  // namespace
 
 void GameScene::start() {
+    NebulaMods::fire(NEBULA_MOD_EVENT_STAGE_START, MR::getCurrentScenarioNo(), nullptr, MR::getCurrentStageName());
     AudWrap::getSceneMgr()->startScene();
     sBoardRequested = false;
     reportPresence();
@@ -252,6 +254,7 @@ void GameScene::start() {
 }
 
 void GameScene::update() {
+    NebulaMods::StageFrame stageFrame;
     mPauseCtrl->updateNerve();
     updateNerve();
     NebulaLoadTrace::gameScene();

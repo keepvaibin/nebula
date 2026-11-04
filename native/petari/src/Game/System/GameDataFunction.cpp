@@ -1,5 +1,6 @@
 #include "Game/System/NebulaCalendar.hpp"
 #include "Game/System/GameDataFunction.hpp"
+#include "Game/System/NebulaMods.hpp"
 #include "Game/System/GalaxyStatusAccessor.hpp"
 #include "Game/System/GameDataGalaxyStorage.hpp"
 #include "Game/System/GameDataHolder.hpp"
@@ -43,6 +44,9 @@ namespace GameDataFunction {
 
     void setGameFlagPowerStarSuccess(const char* pGalaxyName, s32 scenarioNo, bool isOwned) {
         getCurrentGameDataHolder()->setPowerStar(pGalaxyName, scenarioNo, isOwned);
+        if (isOwned) {
+            NebulaMods::fire(NEBULA_MOD_EVENT_STAR_GET, scenarioNo, nullptr, pGalaxyName);
+        }
     }
 
     GameDataSomeScenarioAccessor makeGalaxyScenarioAccessor(const char* pGalaxyName, s32 scenarioNo) {
@@ -267,7 +271,7 @@ namespace GameDataFunction {
         for (s32 i = 0; i < exclamationGalaxyNum; i++) {
             const char* pExclamationGalaxyName = GameEventFlagTable::getExclamationGalaxyNameFromIndex(i);
 
-            if (pGameDataHolder->isAppearGalaxy(pExclamationGalaxyName)) {
+            if (pExclamationGalaxyName != nullptr && pGameDataHolder->isAppearGalaxy(pExclamationGalaxyName)) {
                 ticoGalaxyNum++;
             }
         }
