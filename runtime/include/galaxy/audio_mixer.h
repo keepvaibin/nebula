@@ -204,6 +204,7 @@ private:
     SampleDelay panner_send_left_, panner_send_right_;  // the panner's rear sends: one subframe, half a subframe
     std::vector<float> frame_;                     // the frame's output so far, interleaved (left, right)
     std::vector<float> frame_surround_, surround_out_;
+    double stream_place_ = 0.0;
     bool discrete_ = false;
 
     // The movie player's sound and its last 32 kHz samples, interleaved (left, right).

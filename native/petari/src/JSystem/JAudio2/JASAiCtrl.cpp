@@ -17,16 +17,16 @@
 #include "Game/System/NebulaArena.hpp"
 #include "JSystem/JAudio2/JASDriverIF.hpp"
 
-// The host's audio clock asks for each frame (nebula_game_sound_frame, raised on the audio thread as its event): the
-// driver runs the frame's subframes - commands, the voices' updates and one mix each, then the sequencers - and ends
-// the frame (the host adds the movie's sound).
+// The host's audio clock asks for each subframe, 2.5 ms of sound (nebula_game_sound_frame, on the audio thread): commands, the
+// voices' updates and one mix, then the sequencers, then the block goes to the host (which adds the movie's sound). A sound
+// asked for starts in the next block.
 extern "C" const NebulaHostServices* nebula_host(void);
 
 namespace {
-    // Frames the clock has asked for and the driver has not mixed: the audio event only says that there are some, so
-    // a late audio thread catches up rather than losing the clock's time.
+    // Blocks the clock has asked for and the driver has not mixed: a late audio thread catches up rather than losing the
+    // clock's time.
     u32 sFramesAsked;
-    const u32 cMaxCatchUp = 4;
+    const u32 cMaxCatchUp = 28;
 }  // namespace
 
 // On the host's audio clock thread.
@@ -36,7 +36,6 @@ extern "C" NEBULA_GAME_API void nebula_game_sound_frame(void) {
     NebulaArena* const previous = NebulaArena::currentSlot();
     NebulaArena::setCurrentSlot(NebulaArena::sSystemHeap);
     JASDriver::updateFrame();
-    JASDriver::updateFrameCallback();
     NebulaArena::setCurrentSlot(previous);
     GameThreads::leaveAudio();
 }
@@ -48,6 +47,10 @@ f32 JASDriver::sSoundRate = 32000.0f;
 
 u32 JASDriver::sSubFrames = 0x00000007;
 
+namespace {
+    const u32 cSubFrameSamples = 0x50;
+}  // namespace
+
 NebulaAtomic< u32 > JASDriver::sSubFrameCounter;
 
 // The driver up and the host's audio clock running.
@@ -56,12 +59,12 @@ void JASDriver::startAudio() {
     JASChannel::initBankDisposeMsgQueue();
     JASVoice::initAll();
     JASVoiceSlot::initAll();
-    JASPoolAllocObject_MultiThreaded< JASChannel >::newMemPool(0x48);
+    JASPoolAllocObject_MultiThreaded< JASChannel >::newMemPool(JASVoice::cVoices);
     startClock();
 }
 
 void JASDriver::startClock() {
-    nebula_host()->sound_clock(nebula_host()->user, NEBULA_AUDIO_START, getFrameSamples());
+    nebula_host()->sound_clock(nebula_host()->user, NEBULA_AUDIO_START, cSubFrameSamples);
 }
 
 void JASDriver::stopClock() {
@@ -79,8 +82,7 @@ void JASDriver::setOutputRate(JASOutputRate rate) {
     }
 }
 
-// The frames the clock asked for (at most cMaxCatchUp; the rest are dropped): each one's subframes, then the frame to
-// the output.
+// The blocks the clock asked for (at most cMaxCatchUp; the rest are dropped), each to the output.
 void JASDriver::updateFrame() {
     u32 frames = __atomic_exchange_n(&sFramesAsked, 0u, __ATOMIC_RELAXED);
     if (frames > cMaxCatchUp) {
@@ -92,9 +94,7 @@ void JASDriver::updateFrame() {
 }
 
 void JASDriver::mixFrame() {
-    for (u32 i = 0; i < getSubFrames(); i++) {
-        updateSubFrame();
-    }
+    updateSubFrame();
     const NebulaHostServices* const host = nebula_host();
     host->voices_frame(host->user);
 }
@@ -121,7 +121,4 @@ u32 JASDriver::getSubFrames() {
     return sSubFrames;
 }
 
-u32 JASDriver::getFrameSamples() {
-    return sSubFrames * 0x50;
-}
 

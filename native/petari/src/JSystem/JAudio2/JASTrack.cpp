@@ -100,6 +100,8 @@ void JASTrack::init() {
     mTempo = 120;
     mTimebase = 48;
     mTempoRate = 1.0f;
+    mSampleClock = nullptr;
+    mSampleClockData = nullptr;
     updateTempo();
 
     mTranspose = 0;
@@ -656,6 +658,15 @@ void JASTrack::setTempo(u16 tempo) {
     updateTempo();
 }
 
+void JASTrack::setSampleClock(SampleClock clock, void* pData) {
+    mSampleClock = clock;
+    mSampleClockData = pData;
+}
+
+void JASTrack::movePlaytimeBySamples(f32 samples) {
+    mPlaytime += mSampleInterval * samples / 80.0f;
+}
+
 void JASTrack::setTempoRate(f32 rate) {
     mTempoRate = rate;
     mInvalidateSeq = true;
@@ -762,7 +773,15 @@ s32 JASTrack::seqMain() {
         }
     }
 
-    mPlaytime += mSampleInterval;
+    // Ticks a subframe (80 samples), or by the samples its clock moved.
+    f32 interval = mSampleInterval;
+    if (mSampleClock != nullptr) {
+        const f32 samples = mSampleClock(mSampleClockData);
+        if (samples >= 0.0f) {
+            interval = mSampleInterval * samples / 80.0f;
+        }
+    }
+    mPlaytime += interval;
     updateSeq(false, step);
     return 0;
 }

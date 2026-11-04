@@ -28,6 +28,7 @@ void AudBgmTempoAdjuster::setStream(JAIStream* pStream) {
     GameAudioExclusion crit;
     init();
     mStream = pStream;
+    mLastPosition = pStream != nullptr ? static_cast< u32 >(pStream->inner_.mStream.mPosition) : 0;
 }
 
 void AudBgmTempoAdjuster::reject() {
@@ -68,8 +69,6 @@ f32 AudBgmTempoAdjuster::beatProc(f32 tempo) {
     }
 
     f32 samples = currSample - beatSampleStart;  // how many samples out-of-sync
-    f32 rate = calcAdjustRate(samples, tempo);
-
     if (newBeatLoop) {
         mIsBeatNeedSync = true;
     }
@@ -84,27 +83,21 @@ f32 AudBgmTempoAdjuster::beatProc(f32 tempo) {
 
     mCurrentBeat++;
 
-    return rate;
+    return samples;
 }
 
-f32 AudBgmTempoAdjuster::calcAdjustRate(f32 syncSamples, f32 tempo) {
-    f32 rate = (syncSamples - 500.0f) / ((60.0f * AudParams::streamSampleRate / tempo) * mBeatMul);
-
-    bool early = false;
-    if (rate < 0.0f) {
-        early = true;
-        rate = -rate;
+f32 AudBgmTempoAdjuster::samplesAdvanced(void* pSelf) {
+    AudBgmTempoAdjuster* const self = static_cast< AudBgmTempoAdjuster* >(pSelf);
+    if (self->mStream == nullptr) {
+        return -1.0f;
     }
-
-    // In proportion to the difference: it closes within the next beat. A square left a small difference for good.
-    if (rate > 1.0f) {
-        rate = 1.0f;
+    const u32 position = self->mStream->inner_.mStream.mPosition;
+    const u32 last = self->mLastPosition;
+    self->mLastPosition = position;
+    if (position >= last) {
+        return static_cast< f32 >(position - last);
     }
-
-    if (!early) {
-        rate += 1.0f;
-        return rate;
-    }
-
-    return 1.0f / (1.0f + rate);
+    // Back at its loop's start, or a new stream from its first sample.
+    const f32 looped = static_cast< f32 >(position) + self->mLoopSamples - static_cast< f32 >(last);
+    return looped >= 0.0f ? looped : static_cast< f32 >(position);
 }

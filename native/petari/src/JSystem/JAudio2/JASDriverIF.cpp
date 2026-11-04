@@ -61,6 +61,3 @@ void JASDriver::syncCallback() {
     sSyncCallback.callback();
 }
 
-void JASDriver::updateFrameCallback() {
-    sUpdateDacCallback.callback();
-}

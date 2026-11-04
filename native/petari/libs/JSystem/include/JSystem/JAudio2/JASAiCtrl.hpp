@@ -17,7 +17,6 @@ namespace JASDriver {
     void updateSubFrame();
     f32 getSoundRate();
     u32 getSubFrames();
-    u32 getFrameSamples();
     u32 getSubFrameCounter();
     void subframeCallback();
     void syncCallback();
