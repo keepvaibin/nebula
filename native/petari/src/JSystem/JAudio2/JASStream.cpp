@@ -228,7 +228,7 @@ void JASStream::channelStart() {
             jc->setMixConfig(j, mMixConfig[j]);
         }
 
-        jc->setInitPitch(mHeader.rate / JASDriver::getSoundRate());
+        jc->setSourceRate(mHeader.rate);
         jc->setOscInit(0, &OSC_ENV);
         jc->mWaveInfo = wave_info;
         jc->mWavePtr = mData + sizeof(Header) + i * static_cast< size_t >(mHeader.samples) * sizeof(s16);

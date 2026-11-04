@@ -12,6 +12,11 @@ static const s32 MAX_DSP_CHANNELS = JASVoice::cVoices;
 
 JASVoiceSlot* JASVoiceSlot::sSlots;
 
+namespace {
+    // Slots past this have never been used: nothing walks them.
+    u32 sSlotsUsed = 0;
+}  // namespace
+
 JASVoiceSlot::JASVoiceSlot()
     : mStatus(STATUS_INACTIVE), mPriority(-1), mFlags(0), field_0xc(0), mCallback(NULL), mCallbackData(NULL), mChannel(NULL) {
 }
@@ -81,7 +86,7 @@ JASVoiceSlot* JASVoiceSlot::getLowestChannel(int i_priority) {
     s16 best_priority = 0xff;
     int best_index = -1;
     int best_unknown = 0;
-    for (int i = 0; i < MAX_DSP_CHANNELS; i++) {
+    for (u32 i = 0; i < sSlotsUsed; i++) {
         JASVoiceSlot* channel = &sSlots[i];
         s16 priority = channel->mPriority;
         if (priority < 0) {
@@ -94,6 +99,9 @@ JASVoiceSlot* JASVoiceSlot::getLowestChannel(int i_priority) {
                 best_priority = priority;
             }
         }
+    }
+    if (sSlotsUsed < MAX_DSP_CHANNELS) {
+        return &sSlots[sSlotsUsed++];
     }
     if (best_index < 0) {
         return NULL;
@@ -173,10 +181,10 @@ void JASVoiceSlot::updateProc() {
 
 // The voices' updates, then the host mixes the subframe.
 void JASVoiceSlot::updateAll() {
-    for (u32 i = 0; i < MAX_DSP_CHANNELS; i++) {
+    for (u32 i = 0; i < sSlotsUsed; i++) {
         sSlots[i].updateProc();
     }
-    JASVoice::mixSubframe();
+    JASVoice::mixSubframe(sSlotsUsed);
 }
 
 JASVoiceSlot* JASVoiceSlot::getHandle(u32 i_index) {

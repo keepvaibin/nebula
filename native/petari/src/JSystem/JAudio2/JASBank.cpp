@@ -20,7 +20,7 @@ JASChannel* JASBank::noteOnOsc(int progNo, u8 pitch, u8 velocity, u16 priority, 
     channel->setPriority(priority);
     channel->mProgNo = progNo;
     channel->mChannelType = JASChannel::CH_OSC;
-    channel->setInitPitch(16736.016f / JASDriver::getSoundRate());
+    channel->setSourceRate(523.0005f);
     channel->setKey(pitch - channel->mWaveInfo.mBaseKey);
     channel->setVelocity(velocity);
     channel->setOscInit(0, &OSC_ENV);

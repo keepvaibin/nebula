@@ -32,7 +32,6 @@ namespace AudParams {
     extern const JAISeCategoryArrangementItem arrangeSE_DM;
     extern const JAISeCategoryArrangementItem arrangeSE_RS;
     extern const JAISeCategoryArrangementItem arrangeHOMESE;
-    extern const f32 streamSampleRate;
     extern const f32 faderVolZeroVolume;
     extern const f32 faderVolDownVolume;
     extern const f32 faderInterruptedVolume;

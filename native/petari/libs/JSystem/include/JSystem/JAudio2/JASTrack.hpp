@@ -120,8 +120,8 @@ struct JASTrack : public JASPoolAllocObject_MultiThreaded< JASTrack > {
     void setTempoRate(f32);
     // Its place from elsewhere: how many samples of its own time it should have played, from this call on (its next tick is
     // the clock's zero); below 0 for its own tempo's time.
-    typedef f64 (*SampleClock)(void*);
-    void setSampleClock(SampleClock, void*);
+    typedef f64 (*SecondsClock)(void*);
+    void setSecondsClock(SecondsClock, void*);
     void setTimebase(u16);
     void updateChannel(JASChannel*, JASVoice*);
     JASTrack* getRootTrack();
@@ -362,8 +362,8 @@ struct JASTrack : public JASPoolAllocObject_MultiThreaded< JASTrack > {
     u8 mFilterMode;
     f32 mPanPower;
     f32 mTempoRate;
-    SampleClock mSampleClock;
-    void* mSampleClockData;
+    SecondsClock mSecondsClock;
+    void* mSecondsClockData;
     f64 mClockTicks;
     u32 mSkipSample;
     u16 mDirectRelease;

@@ -434,7 +434,7 @@ void AudSystem::preProcessToReset() {
 }
 
 void AudSystem::resetAudio(u32 time, bool stopThreads) {
-    mReseter.start(time * JASDriver::getSubFrames(), stopThreads);
+    mReseter.start(time * JASDriver::cTicksPerStep, stopThreads);
     mStopThreads = stopThreads;
     mIsReset = true;
 }

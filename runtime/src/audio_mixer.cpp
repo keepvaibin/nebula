@@ -137,11 +137,11 @@ const float* InterpolationKernel::weights(double fraction) const noexcept {
 
 AudioMixer::AudioMixer(std::uint32_t rate)
     : rate_(std::clamp<std::uint32_t>(rate, 8000u, 192000u)),
-      game_ratio_(static_cast<double>(rate_) / kGameRate),
+      authored_ratio_(static_cast<double>(rate_) / kAuthoredRate),
       voice_kernels_{InterpolationKernel(kVoiceTaps, 0.96, 8.0, 1024u), InterpolationKernel(kVoiceTaps, 0.72, 8.0, 1024u),
                      InterpolationKernel(kVoiceTaps, 0.48, 8.0, 1024u), InterpolationKernel(kVoiceTaps, 0.24, 8.0, 1024u)},
       // The movie's 32 kHz sound: 128 taps, cut off at 16 kHz (its third-octave band within 0.3 dB of a brick wall).
-      stream_kernel_(128u, std::min(1.0, game_ratio_), 7.0, 512u),
+      stream_kernel_(128u, std::min(1.0, authored_ratio_), 7.0, 512u),
       source_(kMaxSourceSamples, 0.0f) {
     const std::size_t subframe = (rate_ + kSubframesPerSecond - 1u) / kSubframesPerSecond;
     fold_left_.reset(subframe);
@@ -153,8 +153,8 @@ AudioMixer::AudioMixer(std::uint32_t rate)
 
 void AudioMixer::set_rate(std::uint32_t rate) {
     rate_ = std::clamp<std::uint32_t>(rate, 8000u, 192000u);
-    game_ratio_ = static_cast<double>(rate_) / kGameRate;
-    stream_kernel_ = InterpolationKernel(128u, std::min(1.0, game_ratio_), 7.0, 512u);
+    authored_ratio_ = static_cast<double>(rate_) / kAuthoredRate;
+    stream_kernel_ = InterpolationKernel(128u, std::min(1.0, authored_ratio_), 7.0, 512u);
     const std::size_t subframe = (rate_ + kSubframesPerSecond - 1u) / kSubframesPerSecond;
     fold_left_.reset(subframe);
     fold_right_.reset(subframe);
@@ -179,7 +179,8 @@ void AudioMixer::set_rate(std::uint32_t rate) {
 void AudioMixer::setup(NebulaVoice* voices, std::uint32_t count, const NebulaEffectLine* effects) {
     ++stats_.setups;
     voices_ = voices;
-    voice_count_ = std::min<std::uint32_t>(count, kVoices);
+    voice_count_ = count;
+    voice_states_.resize(count);
     effects_ = effects;
 }
 
@@ -190,8 +191,8 @@ void AudioMixer::set_category_gains(const NativeAudioBusGains& gains) noexcept {
     category_gains_set_ = true;
 }
 
-std::uint32_t AudioMixer::game_to_output_delay(double game_samples) const noexcept {
-    return static_cast<std::uint32_t>(std::lround(game_samples * game_ratio_));
+std::uint32_t AudioMixer::authored_to_output_delay(double authored_samples) const noexcept {
+    return static_cast<std::uint32_t>(std::lround(authored_samples * authored_ratio_));
 }
 
 float* AudioMixer::bus(std::uint32_t index) noexcept {
@@ -207,7 +208,7 @@ void AudioMixer::set_discrete(bool on) noexcept {
     frame_surround_.clear();
 }
 
-void AudioMixer::mix(float gain) {
+void AudioMixer::mix(float gain, std::uint32_t used) {
     if (!configured()) {
         return;
     }
@@ -223,7 +224,8 @@ void AudioMixer::mix(float gain) {
     }
     effects_begin();
 
-    for (std::uint32_t index = 0; index < voice_count_; ++index) {
+    const std::uint32_t mixed = std::min(used, voice_count_);
+    for (std::uint32_t index = 0; index < mixed; ++index) {
         NebulaVoice& voice = voices_[index];
         if (voice.active != 0u && voice.finished == 0u) {
             render_voice(index, voice);
@@ -266,7 +268,7 @@ std::span<const float> AudioMixer::end_frame() {
     surround_out_.swap(frame_surround_);
     frame_surround_.clear();
     const std::size_t outputs = out.size() / 2u;
-    const std::uint32_t stream_frames = frame_subframes_ * kGameSubframeSamples;
+    const std::uint32_t stream_frames = frame_subframes_ * kAuthoredTickSamples;
     frame_subframes_ = 0u;
     if (!movie_.active() || stream_frames == 0u || outputs == 0u) {
         stream_running_ = false;
@@ -286,7 +288,7 @@ std::span<const float> AudioMixer::end_frame() {
     std::vector<float> x(stream_history_);
     x.insert(x.end(), stream.begin(), stream.end());
     // The output's rate exactly: a block's whole outputs do not fall on whole 32 kHz samples, the remainder carries over.
-    const double step = 1.0 / game_ratio_;
+    const double step = 1.0 / authored_ratio_;
     const double origin = static_cast<double>(taps / 2u) + stream_place_;
     for (std::size_t j = 0; j < outputs; ++j) {
         const double at = origin + static_cast<double>(j) * step;
@@ -472,8 +474,8 @@ void AudioMixer::read_pcm(VoiceState& state, NebulaVoice& voice, float* out, std
 void AudioMixer::render_oscillator(VoiceState& state, const NebulaVoice& voice, float* out) {
     ++stats_.oscillator_renders;
     const std::uint32_t n = samples_;
-    const double per_game_sample = static_cast<double>(voice.rate) / kGameRate;
-    const double step = per_game_sample / game_ratio_;
+    const double per_authored_sample = static_cast<double>(voice.rate) / kAuthoredRate;
+    const double step = per_authored_sample / authored_ratio_;
     double cycle = state.cycle;
     const auto advance = [&](double by) {
         cycle += by;
@@ -499,7 +501,7 @@ void AudioMixer::render_oscillator(VoiceState& state, const NebulaVoice& voice, 
             out[i] = cycle < 0.5 ? 0.5f : -0.5f;
             const double m = std::clamp(modulator[i], -1.0f, 1.0f) * (32767.0 / 131072.0);
             modulator[i] = 0.0f;
-            advance(std::max(per_game_sample + m, 0.0) / game_ratio_);
+            advance(std::max(per_authored_sample + m, 0.0) / authored_ratio_);
         }
         break;
     }
@@ -562,7 +564,7 @@ void AudioMixer::apply_fir(VoiceState& state, const NebulaVoice& voice, float* s
             coefficients[k] = voice.fir[k];
             delays[k] = static_cast<double>(taps - k);
         }
-        state.fir = delays_to_weights(coefficients.data(), delays.data(), used, game_ratio_);
+        state.fir = delays_to_weights(coefficients.data(), delays.data(), used, authored_ratio_);
         state.fir_key_mode = static_cast<std::uint16_t>(taps);
         state.fir_key = key;
     }
@@ -587,7 +589,7 @@ void AudioMixer::apply_iir(VoiceState& state, const NebulaVoice& voice, float* s
         const double a1 = key[2];
         const double a2 = key[3];
         // z^-1 at 32 kHz = (A + B q) / (B + A q), q = z^-1 at the output rate.
-        const double r = static_cast<double>(rate_) / kGameRate;
+        const double r = static_cast<double>(rate_) / kAuthoredRate;
         const double A = 1.0 - r;
         const double B = 1.0 + r;
         const double lead = b0 * B + b1 * A;
@@ -625,9 +627,9 @@ void AudioMixer::ramp_mix(float* destination, const float* source, float start, 
         return;
     }
     // The volume reaches its target 65 samples of 32 kHz into the subframe.
-    const double game_per_output = static_cast<double>(kGameSubframeSamples) / samples_;
+    const double authored_per_output = static_cast<double>(kAuthoredTickSamples) / samples_;
     for (std::uint32_t i = 0; i < samples_; ++i) {
-        const double t = std::clamp((i * game_per_output - 1.0) / 64.0, 0.0, 1.0);
+        const double t = std::clamp((i * authored_per_output - 1.0) / 64.0, 0.0, 1.0);
         const float volume = start + delta * static_cast<float>(t);
         destination[i] += source[i] * volume;
     }
@@ -718,7 +720,7 @@ void AudioMixer::effects_begin() {
                 coefficients[k] = config.fir[k];
                 delays[k] = static_cast<double>(8u - k);
             }
-            e.fir = delays_to_weights(coefficients.data(), delays.data(), 8u, game_ratio_);
+            e.fir = delays_to_weights(coefficients.data(), delays.data(), 8u, authored_ratio_);
             e.fir_key = key;
         }
         float* delayed = sends[line].data();

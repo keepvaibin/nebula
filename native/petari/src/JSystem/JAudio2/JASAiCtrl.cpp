@@ -17,7 +17,7 @@
 #include "Game/System/NebulaArena.hpp"
 #include "JSystem/JAudio2/JASDriverIF.hpp"
 
-// The host's audio clock asks for each subframe, 2.5 ms of sound (nebula_game_sound_frame, on the audio thread): commands, the
+// The host's audio clock asks for each tick, 2.5 ms of sound (nebula_game_sound_frame, on the audio thread): commands, the
 // voices' updates and one mix, then the sequencers, then the block goes to the host (which adds the movie's sound). A sound
 // asked for starts in the next block.
 extern "C" const NebulaHostServices* nebula_host(void);
@@ -40,22 +40,8 @@ extern "C" NEBULA_GAME_API void nebula_game_sound_frame(void) {
     GameThreads::leaveAudio();
 }
 
-u32 JASDriver::sOutputRate;
-
-// The sound clock's rate, samples a second: pitches and tempos are worked out from it, so it is the host's clock exactly.
-f32 JASDriver::sSoundRate = 32000.0f;
-
-u32 JASDriver::sSubFrames = 0x00000007;
-
-namespace {
-    const u32 cSubFrameSamples = 0x50;
-}  // namespace
-
-NebulaAtomic< u32 > JASDriver::sSubFrameCounter;
-
 // The driver up and the host's audio clock running.
 void JASDriver::startAudio() {
-    setOutputRate(OUTPUT_RATE_0);
     JASChannel::initBankDisposeMsgQueue();
     JASVoice::initAll();
     JASVoiceSlot::initAll();
@@ -64,22 +50,11 @@ void JASDriver::startAudio() {
 }
 
 void JASDriver::startClock() {
-    nebula_host()->sound_clock(nebula_host()->user, NEBULA_AUDIO_START, cSubFrameSamples);
+    nebula_host()->sound_clock(nebula_host()->user, NEBULA_AUDIO_START, cTicksPerSecond);
 }
 
 void JASDriver::stopClock() {
     nebula_host()->sound_clock(nebula_host()->user, NEBULA_AUDIO_STOP, 0);
-}
-
-void JASDriver::setOutputRate(JASOutputRate rate) {
-    sOutputRate = rate;
-    if (rate == 0) {
-        sSubFrames = 7;
-        sSoundRate = 32000.0f;
-    } else {
-        sSubFrames = 10;
-        sSoundRate = 48000.0f;
-    }
 }
 
 // The blocks the clock asked for (at most cMaxCatchUp; the rest are dropped), each to the output.
@@ -105,17 +80,7 @@ void JASDriver::updateSubFrame() {
     JASVoiceSlot::updateAll();
 
     subframeCallback();
-    f32 freeRun = 32028.5f / getSoundRate();
-    JASLfo::updateFreeRun(freeRun);
-    sSubFrameCounter++;
-}
-
-f32 JASDriver::getSoundRate() {
-    return sSoundRate;
-}
-
-u32 JASDriver::getSubFrames() {
-    return sSubFrames;
+    JASLfo::updateFreeRun(cLfoStep);
 }
 
 

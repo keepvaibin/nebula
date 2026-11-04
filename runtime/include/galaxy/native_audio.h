@@ -25,7 +25,7 @@ public:
                bool device);
     void start(std::function<void()> tick);
     void stop();
-    void mix(float gain);
+    void mix(float gain, std::uint32_t used);
     void frame();
     // The movie player's sound (nebula_game_api.h movie_audio*).
     int movie_audio(const void* record, std::uint32_t size);

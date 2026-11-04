@@ -35,9 +35,9 @@ f32 JASVoice::sOutputLevel;
 
 u32 JASWaveInfo::one = 1;
 
-void JASVoice::mixSubframe() {
+void JASVoice::mixSubframe(u32 used) {
     const NebulaHostServices* const host = nebula_host();
-    host->voices_mix(host->user, sMixerGain);
+    host->voices_mix(host->user, sMixerGain, used);
 }
 
 void JASVoice::setOutputLevel(f32 dsp_level) {
@@ -173,15 +173,9 @@ void JASVoice::setAutoMixer(f32 volume, f32 pan_position, f32 rear_position, f32
     panner = 1;
 }
 
-// `ratio`: source samples per 32 kHz sample; an oscillator's frequency, in units of 1 kHz (a constant: eight times its value).
-void JASVoice::setPitch(f32 ratio) {
-    if (format != NEBULA_AUDIO_OSCILLATOR) {
-        rate = ratio * 32000.0f;
-    } else if (oscillator == NEBULA_AUDIO_CONSTANT) {
-        rate = ratio / 8.0f;
-    } else {
-        rate = ratio * 1000.0f;
-    }
+// `samples`: source samples a second; an oscillator's cycles a second (a constant's value: this over 8000).
+void JASVoice::setRate(f32 samples) {
+    rate = format == NEBULA_AUDIO_OSCILLATOR && oscillator == NEBULA_AUDIO_CONSTANT ? samples / 8000.0f : samples;
 }
 
 void JASVoice::setMixerInitVolume(u8 send, f32 volume) {
