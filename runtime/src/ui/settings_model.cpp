@@ -77,8 +77,8 @@ std::vector<unsigned> interpolation_targets(Interpolation mode, const FrameRateC
     // NVIDIA's fixed frame generation makes whole multiples of the game's 60.
     const bool sixties = generated && caps.generated_supported && !caps.generated_dynamic;
     const unsigned most = generated && caps.generated_supported
-        ? 60u * (caps.generated_max + 1u) : 1000u;
-    for (const unsigned rate : {120u, 144u, 165u, 180u, 240u, 360u}) {
+        ? 60u * (caps.generated_max + 1u) : 480u;
+    for (const unsigned rate : {75u, 90u, 100u, 120u, 144u, 165u, 180u, 200u, 240u, 280u, 300u, 360u, 480u}) {
         if (refresh != 0u && rate + 1u >= refresh) {
             break;
         }

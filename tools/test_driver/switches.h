@@ -102,6 +102,13 @@ inline constexpr const char* crash_dump_dir_name() noexcept { return "GALAXY_CRA
 inline constexpr const wchar_t* crash_dump_dir_wide_name() noexcept { return L"GALAXY_CRASH_DUMP_DIR"; }
 #endif
 #if defined(NEBULA_RELEASE)
+inline constexpr const wchar_t* xess_dir_wide_name() noexcept { return L""; }
+inline constexpr const wchar_t* streamline_dir_wide_name() noexcept { return L""; }
+#else
+inline constexpr const wchar_t* xess_dir_wide_name() noexcept { return L"GALAXY_XESS_DIR"; }
+inline constexpr const wchar_t* streamline_dir_wide_name() noexcept { return L"GALAXY_STREAMLINE_DIR"; }
+#endif
+#if defined(NEBULA_RELEASE)
 inline const char* hide_window() noexcept { return nullptr; }
 inline constexpr const char* hide_window_name() noexcept { return ""; }
 inline constexpr const wchar_t* hide_window_wide_name() noexcept { return L""; }
@@ -487,6 +494,15 @@ inline constexpr const wchar_t* test_settings_keys_wide_name() noexcept { return
 inline const char* test_settings_keys() noexcept { return std::getenv("GALAXY_TEST_SETTINGS_KEYS"); }
 inline constexpr const char* test_settings_keys_name() noexcept { return "GALAXY_TEST_SETTINGS_KEYS"; }
 inline constexpr const wchar_t* test_settings_keys_wide_name() noexcept { return L"GALAXY_TEST_SETTINGS_KEYS"; }
+#endif
+#if defined(NEBULA_RELEASE)
+inline const char* test_motion_dump() noexcept { return nullptr; }
+inline constexpr const char* test_motion_dump_name() noexcept { return ""; }
+inline constexpr const wchar_t* test_motion_dump_wide_name() noexcept { return L""; }
+#else
+inline const char* test_motion_dump() noexcept { return std::getenv("GALAXY_TEST_MOTION_DUMP"); }
+inline constexpr const char* test_motion_dump_name() noexcept { return "GALAXY_TEST_MOTION_DUMP"; }
+inline constexpr const wchar_t* test_motion_dump_wide_name() noexcept { return L"GALAXY_TEST_MOTION_DUMP"; }
 #endif
 #if defined(NEBULA_RELEASE)
 inline const char* test_settings_open() noexcept { return nullptr; }

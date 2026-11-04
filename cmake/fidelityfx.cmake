@@ -43,3 +43,37 @@ target_include_directories(nebula_fidelityfx SYSTEM INTERFACE "${nebula_ffx_sdk}
 target_link_libraries(nebula_fidelityfx INTERFACE
     "${nebula_ffx_libs}/ffx_fsr3upscaler_x64.lib" "${nebula_ffx_libs}/ffx_backend_dx12_x64.lib")
 target_compile_definitions(nebula_fidelityfx INTERFACE GALAXY_WITH_FSR3=1)
+
+# Its Vulkan backend, for the Vulkan renderer: the SDK's projects again over the Vulkan headers, with the backend's Vulkan
+# names prefixed (runtime/src/render/vk/ffx_vk_names.h: volk defines the plain names as data).
+function(nebula_fidelityfx_vulkan headers)
+    set(stamp "${CMAKE_BINARY_DIR}/fidelityfx-vk.built")
+    if(NOT EXISTS "${stamp}")
+        message(STATUS "Building the FidelityFX SDK's Vulkan backend")
+        set(build "${CMAKE_BINARY_DIR}/fidelityfx-vk-build")
+        set(names "${CMAKE_SOURCE_DIR}/runtime/src/render/vk/ffx_vk_names.h")
+        # Its project asks for a Vulkan library; a static library links none.
+        set(no_library "${CMAKE_BINARY_DIR}/fidelityfx-vk-no-library.lib")
+        file(TOUCH "${no_library}")
+        execute_process(
+            COMMAND "${CMAKE_COMMAND}" -S "${nebula_ffx_sdk}" -B "${build}" -G "Visual Studio 17 2022" -A x64
+                    -DFFX_API_BACKEND=VK_X64 -DFFX_FSR3UPSCALER=ON -DFFX_AUTO_COMPILE_SHADERS=ON
+                    "-DVulkan_INCLUDE_DIR=${headers}" "-DVulkan_LIBRARY=${no_library}" "-DCMAKE_CXX_FLAGS_INIT=/FI\"${names}\""
+            RESULT_VARIABLE result OUTPUT_QUIET ERROR_VARIABLE errors)
+        if(NOT result EQUAL 0)
+            message(FATAL_ERROR "Configuring the FidelityFX SDK for Vulkan failed:\n${errors}")
+        endif()
+        execute_process(
+            COMMAND "${CMAKE_COMMAND}" --build "${build}" --config Release --target ffx_backend_vk_x64
+            RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE errors)
+        if(NOT result EQUAL 0)
+            message(FATAL_ERROR "Building the FidelityFX SDK's Vulkan backend failed:\n${output}\n${errors}")
+        endif()
+        file(WRITE "${stamp}" "${nebula_ffx_sdk}\n")
+    endif()
+    add_library(nebula_fidelityfx_vk INTERFACE)
+    target_include_directories(nebula_fidelityfx_vk SYSTEM INTERFACE "${nebula_ffx_sdk}/include")
+    target_link_libraries(nebula_fidelityfx_vk INTERFACE
+        "${nebula_ffx_libs}/ffx_fsr3upscaler_x64.lib" "${nebula_ffx_libs}/ffx_backend_vk_x64.lib")
+    target_compile_definitions(nebula_fidelityfx_vk INTERFACE GALAXY_WITH_FSR3_VK=1 GALAXY_WITH_FSR3=1)
+endfunction()

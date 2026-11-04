@@ -466,6 +466,67 @@ bool RendererVk::create_layouts() {
                                                          : &draw_layout_.scene_pass_clear),
                   "scene target clearing render pass");
     }
+    // A temporal scene's passes: as the single-sample scene pass, with the motion vectors or the reactive mask next to the
+    // scene target (RendererD3D12 binds them as render target 1).
+    for (const bool wide : {false, true})
+    for (unsigned aux = 0u; aux < 2u; ++aux) {
+        VkAttachmentDescription attachments[3]{};
+        attachments[0].format = wide ? VK_FORMAT_R16G16B16A16_SFLOAT : VK_FORMAT_R8G8B8A8_UNORM;
+        attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
+        attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+        attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        attachments[0].initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        attachments[0].finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        attachments[1] = attachments[0];
+        attachments[1].format = depth_format_;
+        attachments[1].initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        attachments[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        attachments[2] = attachments[0];
+        attachments[2].format = aux == 0u ? VK_FORMAT_R16G16_SFLOAT : VK_FORMAT_R8_UNORM;
+        const VkAttachmentReference colors[2] = {{0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL},
+                                                 {2, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL}};
+        const VkAttachmentReference depth{1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL};
+        VkSubpassDescription subpass{};
+        subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        subpass.colorAttachmentCount = 2;
+        subpass.pColorAttachments = colors;
+        subpass.pDepthStencilAttachment = &depth;
+        VkSubpassDependency dependencies[2]{};
+        dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
+        dependencies[0].dstSubpass = 0;
+        dependencies[0].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+            VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
+            VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+        dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+            VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        dependencies[0].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
+            VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+        dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
+            VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT |
+            VK_ACCESS_SHADER_READ_BIT;
+        dependencies[1].srcSubpass = 0;
+        dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
+        dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+            VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+        dependencies[1].dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT |
+            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT |
+            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+        dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
+            VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        dependencies[1].dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_TRANSFER_READ_BIT |
+            VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+        VkRenderPassCreateInfo info{VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO};
+        info.attachmentCount = 3;
+        info.pAttachments = attachments;
+        info.subpassCount = 1;
+        info.pSubpasses = &subpass;
+        info.dependencyCount = 2;
+        info.pDependencies = dependencies;
+        vk::check(vkCreateRenderPass(device, &info, nullptr, &draw_layout_.aux_passes[wide ? 1u : 0u][aux]),
+                  "temporal scene render pass");
+    }
     // One RGBA8 target written whole (copies, screen probes): its old contents are dropped; it ends shader-readable.
     {
         VkAttachmentDescription attachment{};
@@ -508,6 +569,9 @@ bool RendererVk::create_layouts() {
     draw_layout_.depth_format = depth_format_;
     draw_layout_.tessellation = context.tessellation_shader();
     set_curved_surfaces_offered(true);
+    host_window::rtx_adapter.store(vk::Context::get().properties().vendorID == 0x10DEu &&
+                                       std::strstr(vk::Context::get().properties().deviceName, "RTX") != nullptr,
+                                   std::memory_order_relaxed);
     draw_layout_.dual_source_blend = context.dual_source_blend();
     set_dual_source_blending(context.dual_source_blend());
     draw_layout_.logic_op = context.logic_op();
@@ -967,6 +1031,16 @@ void RendererVk::shutdown() {
              {present_pass_, color_pass_, draw_layout_.scene_pass, draw_layout_.scene_pass_clear}) {
             if (pass != VK_NULL_HANDLE) vkDestroyRenderPass(device, pass, nullptr);
         }
+        for (auto& passes : draw_layout_.aux_passes) {
+            for (VkRenderPass& pass : passes) {
+                if (pass != VK_NULL_HANDLE) vkDestroyRenderPass(device, pass, nullptr);
+                pass = VK_NULL_HANDLE;
+            }
+        }
+        temporal_pending_ = {};
+        temporal_.reset();
+        destroy_motion_framebuffers();
+        motion_ = MotionTargets{};
         for (auto* passes : {&draw_layout_.ms_passes, &draw_layout_.ms_passes_clear}) {
             for (VkRenderPass& pass : *passes) {
                 if (pass != VK_NULL_HANDLE) vkDestroyRenderPass(device, pass, nullptr);
@@ -1052,6 +1126,8 @@ void RendererVk::begin_frame(bool) {
     follow_window_and_resize();
     apply_window_size();
     update_ring_mode();
+    temporal_interp_ = ring_mode_ == RingMode::Interp && temporal_mode();
+    prepare_temporal_upscaler();
     sync_post_process();
     bloom_.poll_ready();
 
@@ -1134,7 +1210,20 @@ void RendererVk::begin_frame(bool) {
         vertex_ring_.begin_frame(frame_slot_);
         index_ring_.begin_frame(frame_slot_);
         constant_ring_.begin_frame(frame_slot_);
-        matrix_ring_.begin_frame(frame_slot_);
+        if (matrix_segments_ == kFramesInFlight) {
+            matrix_ring_.begin_frame(frame_slot_);
+        } else {
+            // Temporal mode: a frame that wrote no palette keeps appending to the current segment, so the previous scene's
+            // palettes stay addressable across present and utility frames. The segment taken was written kFramesInFlight
+            // advances ago at least: its frame has finished (this slot's fence).
+            matrix_segment_used_ = matrix_segment_started_ && matrix_ring_.cursor() != matrix_begin_cursor_;
+            if (matrix_segment_used_ || !matrix_segment_started_) {
+                matrix_segment_ = (matrix_segment_ + 1u) % matrix_segments_;
+                matrix_ring_.begin_frame(matrix_segment_);
+                matrix_segment_started_ = true;
+            }
+            matrix_begin_cursor_ = matrix_ring_.cursor();
+        }
     }
     reset_draw_bindings();
     scene_pass_open_ = false;

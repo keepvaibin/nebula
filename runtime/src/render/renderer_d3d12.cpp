@@ -1,5 +1,6 @@
 // RendererD3D12: device and swap chain, scene target targets and copies, draws, presentation, and the
 // replayed sub-frames of frame interpolation.
+#include "galaxy/render/temporal_dump.h"
 #include "galaxy/render/utility_shaders.h"
 #include "galaxy/run_options.h"
 #include "galaxy/render/renderer_d3d12.h"
@@ -17,6 +18,7 @@
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/curved_surfaces.h"
 #include "galaxy/render/streamline_bridge.h"
+#include "galaxy/render/xess_library.h"
 #include "galaxy/render/texture_store.h"
 #include "galaxy/render/draw_constants.h"
 #include "galaxy/motion_signals.h"
@@ -4374,7 +4376,8 @@ void RendererD3D12::wait_for_fence_value(std::uint64_t fence_value) {
 
 bool RendererD3D12::temporal_mode() const {
     const unsigned upscaler = get_render_config().upscaler;
-    return (upscaler == 2u && fsr3_available()) || (upscaler == 3u && streamline::dlss_supported());
+    return (upscaler == 2u && fsr3_available()) || (upscaler == 3u && streamline::dlss_supported()) ||
+           (upscaler == 4u && xess_library::available());
 }
 
 bool RendererD3D12::ensure_motion_target() {
@@ -6400,6 +6403,7 @@ void RendererD3D12::record_subframe_upscale(const ReplayList& entry, const Subfr
     std::swap(alt_scene_, replay_output_scene_);
     bool upscaled = false;
     if (temporal_) {
+        dump_temporal_inputs(entry.upscale.color, entry.upscale.motion, temporal_frame_);
         TemporalUpscaleInputs in{};
         in.list = command_list_.Get();
         in.color = entry.upscale.color;
@@ -6518,7 +6522,7 @@ void RendererD3D12::prepare_temporal_upscaler() {
     const unsigned quality = std::min(cfg.temporal_quality, 4u);
     // A failed creation is not retried until its sizes or mode change.
     if (rw == temporal_render_w_ && rh == temporal_render_h_ && ow == temporal_output_w_ &&
-        oh == temporal_output_h_ && kind == temporal_kind_ && (kind != 3u || quality == temporal_quality_)) {
+        oh == temporal_output_h_ && kind == temporal_kind_ && (kind < 3u || quality == temporal_quality_)) {
         if (temporal_pending_.valid() &&
             temporal_pending_.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
             temporal_ = temporal_pending_.get();
@@ -6543,6 +6547,13 @@ void RendererD3D12::prepare_temporal_upscaler() {
     temporal_render_h_ = rh;
     temporal_output_w_ = ow;
     temporal_output_h_ = oh;
+    if (kind == 4u) {
+        // Until it is ready the scene renders at the render scale without the upscale.
+        temporal_pending_ = std::async(std::launch::async, [device = device_, ow, oh, quality] {
+            return create_xess_upscaler(device.Get(), ow, oh, quality);
+        });
+        return;
+    }
     if (kind != 3u) {
         // Until it is ready the scene renders at the render scale without the upscale.
         temporal_pending_ = std::async(std::launch::async, [device = device_, rw, rh, ow, oh] {
@@ -6628,12 +6639,87 @@ bool RendererD3D12::temporal_inputs_match(const TemporalUpscaleInputs& in) const
     return match;
 }
 
+// GALAXY_TEST_MOTION_DUMP (temporal_dump.h): this frame's inputs copied out; the frame before's written.
+void RendererD3D12::dump_temporal_inputs(ID3D12Resource* color, ID3D12Resource* motion, std::uint64_t index) {
+#if defined(NEBULA_RELEASE)
+    (void)color, (void)motion, (void)index;
+#else
+    struct Pending {
+        const char* name;
+        std::uint64_t frame;
+        unsigned width, height;
+        UINT row_pitch;
+        Microsoft::WRL::ComPtr<ID3D12Resource> buffer;
+    };
+    static const temporal_dump::Plan plan = temporal_dump::read_plan();
+    static std::vector<Pending> pending;
+    if (plan.every == 0u) {
+        return;
+    }
+    if (!pending.empty()) {
+        wait_for_gpu();
+        for (Pending& p : pending) {
+            void* mapped = nullptr;
+            if (SUCCEEDED(p.buffer->Map(0u, nullptr, &mapped))) {
+                temporal_dump::write(plan, p.name, p.frame, p.width, p.height, 4u, mapped, p.row_pitch);
+                p.buffer->Unmap(0u, nullptr);
+            }
+        }
+        pending.clear();
+    }
+    if (!plan.wanted(index)) {
+        return;
+    }
+    const auto copy = [&](ID3D12Resource* image, const char* name) {
+        const D3D12_RESOURCE_DESC desc = image->GetDesc();
+        D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};
+        UINT64 bytes = 0u;
+        device_->GetCopyableFootprints(&desc, 0u, 1u, 0u, &footprint, nullptr, nullptr, &bytes);
+        D3D12_HEAP_PROPERTIES heap{};
+        heap.Type = D3D12_HEAP_TYPE_READBACK;
+        D3D12_RESOURCE_DESC buffer_desc{};
+        buffer_desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+        buffer_desc.Width = bytes;
+        buffer_desc.Height = 1u;
+        buffer_desc.DepthOrArraySize = 1u;
+        buffer_desc.MipLevels = 1u;
+        buffer_desc.SampleDesc.Count = 1u;
+        buffer_desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+        Microsoft::WRL::ComPtr<ID3D12Resource> buffer;
+        if (FAILED(device_->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &buffer_desc, D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&buffer)))) {
+            return;
+        }
+        D3D12_RESOURCE_BARRIER barrier{};
+        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barrier.Transition.pResource = image;
+        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
+        command_list_->ResourceBarrier(1u, &barrier);
+        D3D12_TEXTURE_COPY_LOCATION to{};
+        to.pResource = buffer.Get();
+        to.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+        to.PlacedFootprint = footprint;
+        D3D12_TEXTURE_COPY_LOCATION from{};
+        from.pResource = image;
+        from.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+        command_list_->CopyTextureRegion(&to, 0u, 0u, 0u, &from, nullptr);
+        std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
+        command_list_->ResourceBarrier(1u, &barrier);
+        pending.push_back({name, index, static_cast<unsigned>(desc.Width), desc.Height, footprint.Footprint.RowPitch, std::move(buffer)});
+    };
+    copy(color, "color");
+    copy(motion, "motion");
+#endif
+}
+
 bool RendererD3D12::record_temporal_upscale(const FrameMap& output) {
     settle_owed_scene();
     const GpuPassScope pass{*this, GpuPass::Upscale};
     if (!scene_temporal_ || !temporal_ || !ensure_motion_target()) {
         return false;
     }
+    dump_temporal_inputs(scene_color_.Get(), motion_target_.Get(), frame_index_);
     TemporalUpscaleInputs in{};
     in.list = command_list_.Get();
     in.color = scene_color_.Get();
@@ -6650,7 +6736,11 @@ bool RendererD3D12::record_temporal_upscale(const FrameMap& output) {
     in.camera_near = scene_camera_[0];
     in.camera_far = scene_camera_[1];
     in.fov_y = scene_camera_[2];
-    in.frame_ms = 1000.0f / 60.0f;
+    // The time since the last upscale, as measured.
+    const std::int64_t now_us = std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
+    in.frame_ms = temporal_last_upscale_us_ != 0 ? static_cast<float>(now_us - temporal_last_upscale_us_) * 0.001f : 0.0f;
+    temporal_last_upscale_us_ = now_us;
     in.reset = !temporal_history_valid_;
     in.view = scene_view_;
     in.view_known = scene_view_known_;

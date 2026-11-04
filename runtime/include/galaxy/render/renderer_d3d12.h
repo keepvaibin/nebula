@@ -284,6 +284,7 @@ public:
     // it and, if so, the scene's sub-pixel jitter in render pixels (applied to
     // perspective projections).
     [[nodiscard]] bool scene_temporal_begin(float& jitter_x, float& jitter_y);
+    [[nodiscard]] unsigned temporal_output_width() const noexcept { return temporal_output_w_; }
     // After scene_temporal_begin, in a temporal scene or one the ray tracing
     // engine lights (its histories follow moving surfaces by the motion; no
     // jitter, no upscale): clears the motion target for the scene. False
@@ -696,6 +697,7 @@ private:
     [[nodiscard]] FrameMap output_frame_for_window() const;
     [[nodiscard]] bool ensure_motion_target();
     [[nodiscard]] bool record_temporal_upscale(const FrameMap& output);
+    void dump_temporal_inputs(ID3D12Resource* color, ID3D12Resource* motion, std::uint64_t index);
     [[nodiscard]] bool ensure_output_scene(const FrameMap& map);
     void swap_scene_sets();
     void swap_target_set();
@@ -996,6 +998,7 @@ private:
     std::future<std::unique_ptr<TemporalUpscaler>> temporal_pending_;
     unsigned temporal_kind_ = 0;       // upscaler setting it was made for (2 FSR 3, 3 DLSS)
     unsigned temporal_quality_ = 0;
+    std::int64_t temporal_last_upscale_us_ = 0;
     // A presented frame's Streamline markers have begun (begin_frame) and not yet ended (present).
     bool streamline_frame_open_ = false;
     // DLSS Frame Generation's HUD-less picture: the upscaled scene before the 2D layer (taken at

@@ -55,6 +55,7 @@ RunOptions read_options() {
     o.test_post_fault = nebula_switch::test_post_fault();
     o.test_script_clock = nebula_switch::test_script_clock();
     o.test_settings_keys = nebula_switch::test_settings_keys();
+    o.test_motion_dump = nebula_switch::test_motion_dump();
     o.test_settings_open = nebula_switch::test_settings_open();
     o.test_window_sizes = nebula_switch::test_window_sizes();
     o.texture_dump_dir = nebula_switch::texture_dump_dir();
@@ -88,6 +89,8 @@ RunOptions read_options() {
         return wide.back().c_str();
     };
     o.frame_timeline_path_w = read_wide(nebula_switch::frame_timeline_path_wide_name());
+    o.xess_dir_w = read_wide(nebula_switch::xess_dir_wide_name());
+    o.streamline_dir_w = read_wide(nebula_switch::streamline_dir_wide_name());
     o.render_config_path_w = read_wide(nebula_switch::render_config_path_wide_name());
     o.runtime_settings_path_w = read_wide(nebula_switch::runtime_settings_path_wide_name());
     o.crash_dump_dir_w = read_wide(nebula_switch::crash_dump_dir_wide_name());

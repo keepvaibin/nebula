@@ -29,20 +29,13 @@ namespace Nebula.Launcher
             Application.SetCompatibleTextRenderingDefault(false);
             try
             {
-                // The in-game menu runs these: the DLSS download, and a restart once the game has exited (--record: a
-                // diagnostics run).
-                if (args.Length > 0 && string.Equals(args[0], "--install-dlss", StringComparison.OrdinalIgnoreCase))
-                {
-                    if (GraphicsSettings.DlssInstalled()) return 0;
-                    using (var dialog = new DlssInstallDialog(false) { TopMost = true })
-                        return dialog.ShowDialog() == DialogResult.OK ? 0 : 1;
-                }
                 // A .luma opened from Explorer: the Mods page, with it being imported.
                 if (args.Length > 1 && string.Equals(args[0], "--open-mod", StringComparison.OrdinalIgnoreCase))
                 {
                     Application.Run(new SettingsForm(new LaunchSession(), args[1]));
                     return 0;
                 }
+                // The in-game menu runs this: a restart once the game has exited (--record: a diagnostics run).
                 int restartAfter;
                 if (args.Length > 1 && string.Equals(args[0], "--restart-after", StringComparison.OrdinalIgnoreCase) &&
                     int.TryParse(args[1], out restartAfter))

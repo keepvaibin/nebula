@@ -176,6 +176,7 @@ add_library(galaxy_native_host STATIC
     runtime/src/mods.cpp
     runtime/src/texture_categories.cpp
     runtime/src/mod_import.cpp
+    runtime/src/vendor_download.cpp
     runtime/src/crash_report.cpp
     runtime/src/discord_presence.cpp
     runtime/src/controller_hid.cpp
@@ -416,6 +417,8 @@ runtime/src/render/host_window_win32.cpp
     runtime/src/render/game_bloom.cpp
     ${galaxy_bloom_headers}
     runtime/src/render/temporal_upscaler.cpp
+    runtime/src/render/xess_library.cpp
+    runtime/src/render/xess_upscaler.cpp
     runtime/src/render/game_lights.cpp
     runtime/src/render/rt_materials.cpp
     runtime/src/render/streamline_bridge.cpp
@@ -435,6 +438,8 @@ target_include_directories(galaxy_render PRIVATE "${galaxy_utility_shader_dir}" 
 include(cmake/fidelityfx.cmake)
 target_link_libraries(galaxy_render PRIVATE nebula_fidelityfx)
 target_link_libraries(galaxy_render PUBLIC galaxy_disc_files)
+# Intel XeSS headers (MIT, third_party/xess): the runtime loads the signed library from a vendor folder at run time.
+target_include_directories(galaxy_render SYSTEM PRIVATE third_party/xess/include)
 # NVIDIA Streamline 2.14.1 headers (MIT, third_party/streamline) for DLSS: the
 # runtime loads the signed binaries from the user's vendor folder at run time.
 # Empty builds the runtime without DLSS.
@@ -717,6 +722,10 @@ runtime/src/render/host_window_win32.cpp
         runtime/src/render/vk/post_process_vk.cpp
         runtime/src/render/vk/game_bloom_vk.cpp
         runtime/src/render/vk/ambient_occlusion_vk.cpp
+        runtime/src/render/vk/temporal_upscaler_vk.cpp
+        runtime/src/render/vk/streamline_vk.cpp
+        runtime/src/render/vk/ffx_vk_forward.cpp
+        runtime/src/render/xess_library.cpp
         runtime/src/render/vk/scene_camera_vk.cpp
         ${galaxy_native_spirv_sources}
         runtime/src/render/vk/surface_win32.cpp)
@@ -726,6 +735,12 @@ runtime/src/render/host_window_win32.cpp
         "${CMAKE_CURRENT_SOURCE_DIR}/native/include")
     target_compile_features(galaxy_render_vk PUBLIC cxx_std_20)
     target_link_libraries(galaxy_render_vk PUBLIC galaxy_disc_files)
+    target_include_directories(galaxy_render_vk SYSTEM PRIVATE third_party/xess/include "${GALAXY_STREAMLINE_SDK}/include")
+    target_compile_definitions(galaxy_render_vk PRIVATE GALAXY_STREAMLINE_VK=1)
+    if(NEBULA_FSR3)
+        nebula_fidelityfx_vulkan("${vulkan_headers_SOURCE_DIR}/include")
+        target_link_libraries(galaxy_render_vk PRIVATE nebula_fidelityfx_vk)
+    endif()
     target_link_libraries(galaxy_render_vk PRIVATE nebula_shader_compiler)
     target_link_libraries(galaxy_render_vk
         PUBLIC
