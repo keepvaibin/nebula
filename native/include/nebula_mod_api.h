@@ -212,6 +212,8 @@ typedef struct NebulaModApi {
     int32_t (*add_text)(const char* id, const char* utf8);
     /* Its number, for set_value. Below 0: it can't be added. */
     int32_t (*add_power_up)(const NebulaPowerUpClass* power_up);
+    /* Which way is down for it, a unit length: on a planet that is no one axis. */
+    void (*get_gravity)(NebulaActor* actor, float* xyz);
 } NebulaModApi;
 
 /* The player's controls, whatever device they're on. */
@@ -222,10 +224,26 @@ typedef enum NebulaButton {
     NEBULA_BUTTON_CAMERA = 1u << 3
 } NebulaButton;
 
+#if defined(_WIN32) && defined(__cplusplus)
+/* Built with no C library, a plugin using floats needs the one symbol the compiler asks of it. */
+#define NEBULA_PLUGIN_FLOATS extern "C" __declspec(selectany) int _fltused = 0;
+#elif defined(_WIN32)
+#define NEBULA_PLUGIN_FLOATS __declspec(selectany) int _fltused = 0;
+#else
+#define NEBULA_PLUGIN_FLOATS
+#endif
+
+#ifdef __cplusplus
+#define NEBULA_PLUGIN_C extern "C"
+#else
+#define NEBULA_PLUGIN_C
+#endif
+
 /* What a plugin exports: the interface it was built against, then the game's call to it once, before the game starts. */
-#define NEBULA_PLUGIN_ENTRY(api, self)                                                         \
-    NEBULA_PLUGIN_EXPORT uint32_t nebula_plugin_api(void) { return NEBULA_MOD_API_VERSION; }   \
-    NEBULA_PLUGIN_EXPORT void nebula_plugin_start(const NebulaModApi* api, const NebulaPlugin* self)
+#define NEBULA_PLUGIN_ENTRY(api, self)                                                                         \
+    NEBULA_PLUGIN_FLOATS                                                                                       \
+    NEBULA_PLUGIN_C NEBULA_PLUGIN_EXPORT uint32_t nebula_plugin_api(void) { return NEBULA_MOD_API_VERSION; }   \
+    NEBULA_PLUGIN_C NEBULA_PLUGIN_EXPORT void nebula_plugin_start(const NebulaModApi* api, const NebulaPlugin* self)
 
 #ifdef __cplusplus
 }

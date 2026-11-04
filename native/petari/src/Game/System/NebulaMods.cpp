@@ -273,6 +273,13 @@ namespace {
         pOut[2] = rAt.z;
     }
 
+    void apiGetGravity(NebulaActor* pActor, f32* pOut) {
+        const TVec3f& rDown = asActor(pActor)->mGravity;
+        pOut[0] = rDown.x;
+        pOut[1] = rDown.y;
+        pOut[2] = rDown.z;
+    }
+
     void apiSetPosition(NebulaActor* pActor, const f32* pIn) {
         const TVec3f at(pIn[0], pIn[1], pIn[2]);
         if (pActor == apiPlayer()) {
@@ -475,6 +482,7 @@ namespace {
         apiAddHungryLuma,
         apiAddText,
         apiAddPowerUp,
+        apiGetGravity,
     };
 }  // namespace
 

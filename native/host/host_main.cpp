@@ -199,8 +199,24 @@ char gCrashText[1024];
 char gCrashActivityFile[512];
 char gCrashModRead[640];
 
+// While mods' code runs: the file a crash leaves, so that the next start leaves the code off once.
+std::filesystem::path gCodeCrashFile;
+
 void gather_crash_facts(galaxy::crash::Facts::Kind kind, const char* text, bool in_game = false,
                         bool stack_overflow = false) noexcept {
+    if (!gCodeCrashFile.empty()) {
+        std::filesystem::path file;
+        file.swap(gCodeCrashFile);
+#if defined(_WIN32)
+        if (FILE* out = _wfopen(file.c_str(), L"wb")) {
+            std::fclose(out);
+        }
+#else
+        if (FILE* out = std::fopen(file.c_str(), "wb")) {
+            std::fclose(out);
+        }
+#endif
+    }
     std::snprintf(gCrashText, sizeof(gCrashText), "%s", text != nullptr ? text : "");
     gCrashFacts.kind = kind;
     gCrashFacts.in_game = in_game;
@@ -3652,8 +3668,21 @@ static_assert(NEBULA_PATCH_FLIP_PANEL_GROUP == 1 && NEBULA_PATCH_MISS_STAR_PIECE
               "galaxy::luma::switch_number numbers the switches as these do");
 
 void svc_mods_start(void*) {
+    const fs::path crashed = galaxy::mods::mods_folder() / ".code_crashed";
+    std::error_code crash_error;
+    if (fs::exists(crashed, crash_error)) {
+        fs::remove(crashed, crash_error);
+        if (!gPlugins.empty()) {
+            log_line("mods:", "the last run crashed with mods' code on: it stays off for this run");
+            gPlugins.clear();
+            galaxy::mods::set_code_off_after_crash();
+        }
+    }
     if (gPlugins.empty() && gModGalaxies.empty() && gModTexts.empty()) {
         return;
+    }
+    if (!gPlugins.empty()) {
+        gCodeCrashFile = crashed;
     }
     const auto game_api = reinterpret_cast<const NebulaModApi* (*)()>(find_symbol(gModule.module, "nebula_game_mod_api"));
     galaxy::mods::start_plugins(gPlugins, gModGalaxies, gModTexts, game_api(),
