@@ -23,7 +23,6 @@ struct ReplaySequence {
     // The models' blocks: rows from the matrix ring into the output.
     std::span<const interp_gpu::Copy> model_copies;
     const interp_gpu::Program* program = nullptr;
-    bool vertex_blend = false;
 };
 
 // A presented frame of the sequence: t, the t of the frame presented before it (motion vectors) and its jitter in

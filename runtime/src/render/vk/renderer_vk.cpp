@@ -116,9 +116,7 @@ VkSampler create_sampler(VkDevice device, VkFilter filter, VkSamplerMipmapMode m
 std::size_t RendererVk::ConstantsSetKeyHash::operator()(const ConstantsSetKey& key) const noexcept {
     std::uint64_t hash = mix64(reinterpret_cast<std::uint64_t>(key.b0));
     hash = combine64(hash, reinterpret_cast<std::uint64_t>(key.b1));
-    hash = combine64(hash, reinterpret_cast<std::uint64_t>(key.earlier));
-    hash = combine64(hash, key.whole_palette ? 1u : 0u);
-    return static_cast<std::size_t>(combine64(hash, reinterpret_cast<std::uint64_t>(key.palette)));
+    return static_cast<std::size_t>(combine64(hash, reinterpret_cast<std::uint64_t>(key.rows)));
 }
 
 bool RendererVk::initialize(int window_width, int window_height, const FrameMap& frame) {
@@ -205,14 +203,6 @@ bool RendererVk::initialize(int window_width, int window_height, const FrameMap&
             shutdown();
             return false;
         }
-        // Vertex blending's verdicts and frame values: every draw reads them (game frames the zero element).
-        blend_verdicts_ = vk::Context::get().create_buffer((vk_detail::kZeroValuesElement + 1u) * 16u,
-                                                           VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, "blend verdicts");
-        if (!blend_verdicts_) {
-            shutdown();
-            return false;
-        }
-        std::memset(blend_verdicts_->mapped, 0, blend_verdicts_->size);
         refresh_default_sampler_table();
         // The game's bloom, compiled on a worker; the game draws its own chains until it is ready.
         bloom_.initialize();
@@ -283,18 +273,15 @@ bool RendererVk::create_layouts() {
 
     const VkShaderStageFlags stage_passes = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
     {
-        // Set 0: b0, b1, the matrix palette, vertex blending's earlier vertices and verdicts.
+        // Set 0: b0, b1, the matrix rows.
         const VkDescriptorSetLayoutBinding bindings[] = {
             {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1, stage_passes, nullptr},
             // b1: the pixel constants, or a native material's constants (both stages read those).
             {1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
-            {2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1, stage_passes, nullptr},
-            {3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
-            {4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
             {5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, stage_passes, nullptr},  // the rows the row table names
         };
         VkDescriptorSetLayoutCreateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-        info.bindingCount = 6;
+        info.bindingCount = 3;
         info.pBindings = bindings;
         vk::check(vkCreateDescriptorSetLayout(device, &info, nullptr, &draw_layout_.sets[0]), "set 0 layout");
     }
@@ -315,13 +302,9 @@ bool RendererVk::create_layouts() {
         vk::check(vkCreateDescriptorSetLayout(device, &info, nullptr, &draw_layout_.sets[2]), "set 2 layout");
     }
     {
-        // Vertex blending's per-draw values (b2): mode, frame element, verdict slot, last vertex, first vertex's byte.
-        const VkPushConstantRange blend{VK_SHADER_STAGE_VERTEX_BIT, 0, 5u * sizeof(std::uint32_t)};
         VkPipelineLayoutCreateInfo info{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
         info.setLayoutCount = 3;
         info.pSetLayouts = draw_layout_.sets.data();
-        info.pushConstantRangeCount = 1;
-        info.pPushConstantRanges = &blend;
         vk::check(vkCreatePipelineLayout(device, &info, nullptr, &draw_layout_.layout), "draw pipeline layout");
     }
     linear_clamp_ = create_sampler(device, VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_NEAREST);

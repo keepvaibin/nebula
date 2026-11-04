@@ -211,13 +211,6 @@ namespace MotionSignal {
                                  static_cast< u16 >(pParticle->mLifeTime));
     }
 
-    void stripeParticle(const JPABaseParticle* pParticle, u8 strip) {
-        NebulaRender::stripeParticle(id(pParticle),
-                                 static_cast< u32 >(static_cast< u16 >(pParticle->mAge)) << 16 |
-                                     static_cast< u16 >(pParticle->mLifeTime),
-                                 strip);
-    }
-
     void categoryImpl(u16 source, u32 type) {
         NebulaRender::hostMarker(Kind_Category, source, type, 0);
     }

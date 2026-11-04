@@ -163,18 +163,6 @@ public:
             producer_scene_sky_up_ = producer_scene_sky_up_known_ ? encode_octahedral(eye) : 0u;
         }
     }
-    // One particle of a JPA stripe at `stream_offset` of the live stream
-    // (its two strip vertices follow); carried by the next submission.
-    struct StripeParticleMark {
-        std::size_t offset = 0;
-        std::uint64_t particle = 0;
-        std::uint32_t age_lifetime = 0;   // mAge << 16 | mLifeTime
-        std::uint8_t strip = 0;           // 0 JPADrawStripe, 1-2 JPADrawStripeX
-    };
-    // Simulation thread.
-    void attach_stripe_particle(const StripeParticleMark& mark) {
-        if (producer_stripe_particles_.size() < 65536u) producer_stripe_particles_.push_back(mark);
-    }
     // Simulation thread: a native shape record (native_shapes.h) the next submission carries, run when its parser
     // reaches the record's offset.
     void attach_shape_record(shapes::Record&& record) {
@@ -318,7 +306,6 @@ private:
         bool present_swap_chain = true;
         bool present_only = false;
         // JPA stripe particles in this chunk (attach_stripe_particle).
-        std::vector<StripeParticleMark> stripe_particles;
         // The chunk's records, in the order the game made them (attach_shape_record).
         std::vector<shapes::Record> shape_records;
         shapes::RecordPool record_pool;
@@ -365,16 +352,10 @@ private:
     bool scene_stage_known_ = false;
     // Render thread: the scene's sky up changed; the next draw uploads its VS constants.
     bool sky_up_dirty_ = false;
-    std::vector<StripeParticleMark> producer_stripe_particles_;
     // Render thread: the chunk's stripe marks while its records run (log
     // recording), and the stripe vertices of the pending draw batch.
-    std::span<const StripeParticleMark> parse_stripes_{};
-    std::size_t parse_stripe_next_ = 0;
-    std::vector<StripeVertex> pending_stripe_vertices_;
     std::vector<StripeVertex> draw_stripe_vertices_;
-    void take_attached_stripe_particles(FrameChunk& chunk);
     // Render thread, after a chunk's parse: trace of the stripe-particle marks.
-    void note_stripe_particles(const FrameChunk& chunk);
     // Render thread: inside GameScene::draw3D (between the scene markers).
     bool scene_phase_ = false;
     // Render thread -> simulation thread: emit draw-identity markers.
@@ -426,7 +407,6 @@ private:
     std::uint64_t motion_scene_markers_ = 0;
     std::uint64_t motion_light_markers_ = 0;
     std::uint64_t motion_mirror_markers_ = 0;
-    std::uint64_t motion_stripe_marks_ = 0;
     // GameScene::draw2D began (SceneMarker::Scene2DBegin); 2D layers in the report window.
     void on_scene_2d_begin();
     std::uint64_t window_2d_scenes_ = 0;

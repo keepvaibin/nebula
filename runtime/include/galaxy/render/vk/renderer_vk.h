@@ -127,9 +127,7 @@ public:
     using ReplaySequence = render::ReplaySequence;
     using SubframeTime = render::SubframeTime;
     using CopyRedirectStats = render::CopyRedirectStats;
-    using StripeVertex = render::StripeVertex;
     [[nodiscard]] std::uint64_t playing_serial() const noexcept { return run_log_.serial; }
-    void prepare_vertex_blend(std::span<const std::int32_t> previous_record);
     [[nodiscard]] std::span<const std::int32_t> ps_record_pairs() const noexcept { return run_ps_previous_; }
     // SMAA or FXAA of the 3D scene in the scene target before the 2D layer draws (PostProcessorVk).
     void record_scene_aa();
@@ -151,11 +149,9 @@ public:
     [[nodiscard]] unsigned temporal_output_width() const noexcept { return temporal_output_w_; }
     bool begin_replay_sequence(const ReplaySequence& sequence);
     bool present_replay_subframe(const SubframeTime& time, const Affine34& camera_t, const Affine34& camera_prev);
-    void note_stripe_vertices(std::span<const StripeVertex> vertices);
     [[nodiscard]] CopyRedirectStats take_copy_redirect_stats() noexcept { return std::exchange(redirect_stats_, {}); }
     void set_subframe_copy_redirect(int) noexcept {}
     [[nodiscard]] std::uint64_t take_log_gap_ops() noexcept { return 0u; }
-    [[nodiscard]] std::uint64_t take_vertex_blend_draws() noexcept { return 0u; }
     void take_sequence_record_ms(double& total_ms, std::uint64_t& samples, std::uint64_t& replays) noexcept {
         total_ms = std::exchange(sequence_record_ms_, 0.0);
         samples = std::exchange(sequence_record_samples_, 0u);
@@ -503,9 +499,7 @@ private:
     void refresh_default_sampler_table();
     // Set 0 for b0, b1, a palette binding of `palette_range` bytes from `palette_offset` (VK_WHOLE_SIZE: to the
     // buffer's end; b0, b1 and the palette take the draw's dynamic offsets), vertex blending's earlier vertices
-    // (`earlier`, whole) and the verdicts.
-    [[nodiscard]] VkDescriptorSet constants_set(VkBuffer b0, VkBuffer b1, VkBuffer palette, VkDeviceSize palette_offset,
-                                                VkDeviceSize palette_range, VkBuffer earlier);
+    [[nodiscard]] VkDescriptorSet constants_set(VkBuffer b0, VkBuffer b1, VkBuffer rows, VkDeviceSize rows_offset);
     [[nodiscard]] VkSampler sampler_for(std::uint32_t key, const RenderConfig& cfg);
     void record_conversion_blit(vk::Texture& dest, unsigned dest_w, unsigned dest_h,
                                 std::uint8_t copy_format, float src_x, float src_y, float step_x, float step_y);
@@ -748,8 +742,7 @@ private:
     UploadRing constant_ring_;
     UploadRing matrix_ring_;
     struct ConstantsSetKey {
-        VkBuffer b0, b1, palette, earlier;
-        bool whole_palette;  // the palette binding reaches the buffer's end (palettes addressed from its base)
+        VkBuffer b0, b1, rows;
         bool operator==(const ConstantsSetKey&) const = default;
     };
     struct ConstantsSetKeyHash {
@@ -776,9 +769,7 @@ private:
         bool scissor_valid = false;
         gpu::Rect scissor_input{};
         bool scissor_input_valid = false;
-        VkBuffer earlier = VK_NULL_HANDLE;   // vertex blending's earlier vertices (set 0)
         std::array<std::uint32_t, 5> blend{};  // vertex blending's push constants
-        bool blend_valid = false;
     } bound_;
 
     // scene target copies.
@@ -880,12 +871,6 @@ private:
         // Copy textures this log read before rewriting them, as they were at its start (the replay reads these).
         std::vector<std::pair<VkImageView, gpu::TextureRef>> snapshots;
         std::vector<VkImageView> written;  // copy destinations its copies wrote
-        // JPA stripe particles (note_stripe_vertices): each stripe draw's vertices, by draw index.
-        struct StripeDraw {
-            std::uint32_t draw = 0, first = 0, count = 0;
-        };
-        std::vector<StripeDraw> stripe_draws;
-        std::vector<StripeVertex> stripe_vertices;
         void clear();
     };
     void begin_replay_record();
@@ -917,7 +902,6 @@ private:
     ReplayLog recording_log_;  // being recorded
     ReplayLog ready_log_;      // complete, waiting
     ReplayLog run_log_;        // playing
-    ReplayLog prev_log_;       // the one played before it (draw pairing)
     bool recording_log_valid_ = false;
     bool ready_valid_ = false;
     bool run_valid_ = false;
@@ -929,37 +913,13 @@ private:
     std::uint64_t replay_serial_ = 0;
     std::uint32_t replay_picture_slot_ = 0;
     std::vector<std::int32_t> run_ps_previous_;
-    // Vertex blending (prepare_vertex_blend): per playing draw its earlier vertices and verdict slot; the pairs the
-    // GPU checks (current offset, earlier offset, vertices, buffers); stripe vertices gathered from the log before.
-    struct BlendSource {
-        gpu::Address vertices = 0;
-        std::uint32_t slot = 0;
-    };
-    std::vector<BlendSource> run_blend_vertices_;
-    std::vector<std::array<std::uint32_t, 4>> blend_pairs_;
-    std::vector<std::array<std::uint32_t, 2>> stripe_gather_;  // per gathered vertex: byte offset, buffer
-    std::vector<std::pair<std::uint64_t, std::uint32_t>> stripe_keys_;
-    std::vector<std::int32_t> stripe_matched_;
-    std::vector<std::int32_t> stripe_of_draw_;
-    std::vector<std::int32_t> stripe_of_prev_draw_;
-    bool blend_validate_pending_ = false;
     gpu::Address resident_vertex_base_ = 0;
     std::uint64_t resident_vertex_bytes_ = 0;
-    std::shared_ptr<vk::Buffer> stripe_earlier_;  // the gathered earlier stripe vertices (144 bytes each)
-    bool ensure_blend_pipelines();
-    void record_blend_validation(VkCommandBuffer commands);
-    VkDescriptorSetLayout blend_set_layout_ = VK_NULL_HANDLE;
-    VkPipelineLayout blend_layout_ = VK_NULL_HANDLE;
-    VkPipeline blend_validate_pipeline_ = VK_NULL_HANDLE;
-    VkPipeline stripe_gather_pipeline_ = VK_NULL_HANDLE;
-    VkDescriptorPool blend_pool_ = VK_NULL_HANDLE;
-    bool blend_failed_ = false;
 
     // A sequence: the playing log's sub-frames between two game frames.
     struct SequenceState {
         bool ready = false;
         bool first = true;
-        bool validated = false;  // its blend pairs were checked (the first sub-frame of a blending replay)
         std::uint64_t serial = 0;
         ReplaySequence overrides{};
         gpu::Address program = 0;  // copies, ops and payload, in the constant ring
@@ -1007,7 +967,6 @@ private:
     [[nodiscard]] VkDescriptorSet eval_set(ProgramBuffer& program);
     std::shared_ptr<vk::Buffer> interp_output_;  // storage (written) and uniform (read by the replay's draws)
     gpu::Address interp_output_address_ = 0;
-    std::shared_ptr<vk::Buffer> blend_verdicts_;
     std::vector<std::pair<std::shared_ptr<vk::Buffer>, std::uint64_t>> interp_retired_;  // with their last fence
 
     // Replay lists: the playing log recorded once per sequence into a reusable command buffer, with its own
@@ -1025,7 +984,6 @@ private:
         std::uint64_t fence = 0;
         unsigned segment = 0;
         bool blend = false;          // its draws read the log before's vertices
-        unsigned blend_segment = 0;  // that log's segment
         std::vector<gpu::TextureRef> held;  // the post-process targets its scene AA reads
         // A temporal upscale splits it at the output switch: what follows is in `commands_after`, the upscale of each
         // presented frame between the two.

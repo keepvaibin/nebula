@@ -14,8 +14,6 @@ X(UiSolidVs, annotate(ui_solid_quad_vertex_shader_source(), kUtilityBindings), V
 X(UiSolidPs, annotate(ui_solid_quad_pixel_shader_source(), kUtilityBindings), Fragment, "main", {})
 X(UiTexturedVs, annotate(ui_textured_quad_vertex_shader_source(), kUtilityBindings), Vertex, "main", {})
 X(UiTexturedPs, annotate(ui_textured_quad_pixel_shader_source(), kUtilityBindings), Fragment, "main", {})
-X(BlendValidateCs, std::string(kBlendValidateCs), Compute, "main", {})
-X(StripeGatherCs, std::string(kStripeGatherCs), Compute, "main", {})
 X(InterpCopyCs, std::string(kInterpEvalCs), Compute, "copy_main", {})
 X(InterpEvalCs, std::string(kInterpEvalCs), Compute, "eval_main", {})
 X(AoDistanceCs, ao_source(), Compute, "DepthCS", {"AO_PASS_distance_cs=1"})

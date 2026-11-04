@@ -68,11 +68,6 @@ unsigned bloom_route() noexcept {
     return backend().bloom_route();
 }
 
-void attach_stripe_particle(std::size_t stream_offset, std::uint64_t particle, std::uint32_t age_lifetime,
-                            std::uint8_t strip) {
-    backend().attach_stripe_particle({stream_offset, particle, age_lifetime, strip});
-}
-
 void attach_shape_record(shapes::Record&& record) {
     backend().attach_shape_record(std::move(record));
 }
