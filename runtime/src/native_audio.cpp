@@ -451,9 +451,9 @@ void NativeGameAudio::stop() {
     state_->running.store(false, std::memory_order_release);
 }
 
-void NativeGameAudio::mix(float gain) {
+void NativeGameAudio::mix(float gain, std::uint32_t used) {
     if (state_->mixer != nullptr) {
-        state_->mixer->mix(gain);
+        state_->mixer->mix(gain, used);
     }
 }
 

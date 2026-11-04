@@ -41,7 +41,6 @@ namespace AudParams {
     const JAISeCategoryArrangementItem arrangeSE_DM = {32, 48};
     const JAISeCategoryArrangementItem arrangeSE_RS = {64, 80};
     const JAISeCategoryArrangementItem arrangeHOMESE = {8, 16};
-    const f32 streamSampleRate = 32000.0f;
     const f32 faderVolZeroVolume = 0.0f;
     const f32 faderVolDownVolume = 0.3333f;
     const f32 faderInterruptedVolume = 0.0f;

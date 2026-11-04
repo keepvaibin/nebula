@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 130u
+#define NEBULA_GAME_API_VERSION 131u
 
 /* Viewports, scissors, clears, target sizes and picture points count this many units across a frame on each axis. */
 #define NEBULA_FRAME_UNITS 65536.0f
@@ -35,8 +35,8 @@ typedef struct NebulaHostThread NebulaHostThread;
 
 #define NEBULA_THREAD_SLOTS 4
 
-/* Audio (the host's mixer): the game's voices mix at the output device's rate, one subframe (1/400 s: 80 samples
-   of the game's 32 kHz sound clock) per voices_mix call. A voice plays one source (PCM16 or an oscillator) through
+/* Audio (the host's mixer): the game's voices mix at the output device's rate, one tick's worth per voices_mix call
+   (the clock's rate, NEBULA_AUDIO_START). A voice plays one source (PCM16 or an oscillator) through
    its filters into mix buses or the surround panner; the game writes its settings, the mixer advances its playback.
    Volumes are gains (a send of 0.5 adds half the voice to its bus; voices_mix's gain scales the output). */
 enum {
@@ -601,8 +601,7 @@ enum {
 
 /* The sound clock (sound_clock). */
 enum {
-    NEBULA_AUDIO_START = 1, /* value: a block's length in 32 kHz samples; the host calls nebula_game_sound_frame once
-                               a frame's length */
+    NEBULA_AUDIO_START = 1, /* value: ticks a second; the host calls nebula_game_sound_frame once a tick */
     NEBULA_AUDIO_STOP,
 };
 
@@ -1000,7 +999,7 @@ typedef struct NebulaHostServices {
        voices_mix mixes one subframe at `gain`; voices_frame ends a frame: the subframes mixed since the last call, with
        the movie's sound for them, go to the output. */
     void (*voices_setup)(void* user, NebulaVoice* voices, uint32_t count, const NebulaEffectLine* effects);
-    void (*voices_mix)(void* user, float gain);
+    void (*voices_mix)(void* user, float gain, uint32_t used); /* `used`: voices past this have never played */
     void (*voices_frame)(void* user);
     /* The movie player's sound, on the game's threads: movie_audio queues one frame's audio record (its stereo sample count,
        u32, then the samples, PCM16, left and right in turn, of the track played) for the mixer; 0 when the queue is full (null asks only that).

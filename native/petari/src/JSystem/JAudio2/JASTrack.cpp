@@ -101,8 +101,8 @@ void JASTrack::init() {
     mTempo = 120;
     mTimebase = 48;
     mTempoRate = 1.0f;
-    mSampleClock = nullptr;
-    mSampleClockData = nullptr;
+    mSecondsClock = nullptr;
+    mSecondsClockData = nullptr;
     mClockTicks = 0.0;
     updateTempo();
 
@@ -460,8 +460,8 @@ void JASTrack::updateTrack(f32 num) {
 
 void JASTrack::updateTempo() {
     if (!mParent) {
-        f32 rate = JASDriver::getSoundRate();
-        mSampleInterval = mTempoRate * (1.33333337307f * (mTimebase * mTempo) / rate);
+        // Sequence ticks a driver tick: beats a minute by ticks a beat.
+        mSampleInterval = mTempoRate * ((mTimebase * mTempo) / (60.0f * JASDriver::cTicksPerSecond));
     } else {
         mTempo = mParent->mTempo;
         mTimebase = mParent->mTimebase;
@@ -493,7 +493,7 @@ u32 JASTrack::seqTimeToDspTime(f32 seqTime) {
         seqTime /= mSampleInterval;
     } else {
         seqTime *= 120.0f / mTimebase;
-        seqTime *= JASDriver::getSubFrames() / 10.0f;
+        seqTime *= JASDriver::cTicksPerStep / 10.0f;
     }
 
     return seqTime;
@@ -660,9 +660,9 @@ void JASTrack::setTempo(u16 tempo) {
     updateTempo();
 }
 
-void JASTrack::setSampleClock(SampleClock clock, void* pData) {
-    mSampleClock = clock;
-    mSampleClockData = pData;
+void JASTrack::setSecondsClock(SecondsClock clock, void* pData) {
+    mSecondsClock = clock;
+    mSecondsClockData = pData;
     mClockTicks = 0.0;
     mPlaytime = 0.0f;
 }
@@ -764,10 +764,10 @@ s32 JASTrack::seqMain() {
     }
 
     f32 step = 1.0f;
-    const f64 clockSamples = mSampleClock != nullptr ? mSampleClock(mSampleClockData) : -1.0;
-    if (clockSamples >= 0.0) {
+    const f64 clockSeconds = mSecondsClock != nullptr ? mSecondsClock(mSecondsClockData) : -1.0;
+    if (clockSeconds >= 0.0) {
         // Its place is the clock's: as many ticks as have come due.
-        const f64 due = clockSamples * mTimebase * mTempo / (60.0 * AudParams::streamSampleRate);
+        const f64 due = clockSeconds * mTimebase * mTempo / 60.0;
         // Paused, no tick comes due: it takes up what the clock moved when it plays again.
         while (!mPauseFlag && mClockTicks + 1.0 <= due) {
             mClockTicks += 1.0;

@@ -1,5 +1,5 @@
-// The game's sound mixed natively (nebula_game_api.h audio_*): the game's 64 voices and four effect lines, mixed in
-// float at the output device's rate. Each voices_mix call is one subframe (1/400 s); voices_frame ends a frame and
+// The game's sound mixed natively (nebula_game_api.h audio_*): the game's voices and four effect lines, mixed in
+// float at the output device's rate. Each voices_mix call is one tick (1/400 s); voices_frame ends a frame and
 // hands it to the output.
 //
 // Per voice: the source (PCM16 or an oscillator) is read at its own rate with the record's
@@ -72,8 +72,9 @@ private:
 class AudioMixer {
 public:
     static constexpr std::uint32_t kSubframesPerSecond = 400u;
-    static constexpr std::uint32_t kGameRate = 32000u;
-    static constexpr std::uint32_t kGameSubframeSamples = 80u;
+    // The rate the sound data's filters, effect delays and movie streams were made at.
+    static constexpr std::uint32_t kAuthoredRate = 32000u;
+    static constexpr std::uint32_t kAuthoredTickSamples = kAuthoredRate / kSubframesPerSecond;
 
     // `rate`: the output rate in Hz (8000..192000).
     explicit AudioMixer(std::uint32_t rate);
@@ -81,8 +82,8 @@ public:
     void setup(NebulaVoice* voices, std::uint32_t count, const NebulaEffectLine* effects);
     // The output's rate changed (another device): filters and delays start over at it, the voices play on.
     void set_rate(std::uint32_t rate);
-    // One subframe at `gain` into the frame being built.
-    void mix(float gain);
+    // One subframe of the first `used` voices at `gain` into the frame being built.
+    void mix(float gain, std::uint32_t used = 0xFFFFFFFFu);
     // Ends the frame: the movie's sound for the subframes mixed since the last call is added; returns that output,
     // interleaved (left, right), valid until the next call.
     std::span<const float> end_frame();
@@ -104,7 +105,6 @@ public:
 
 private:
     static constexpr std::size_t kMaxSubframe = 512u;  // output samples of one subframe at 192 kHz, rounded up
-    static constexpr std::size_t kVoices = 256u;
     static constexpr std::uint32_t kVoiceTaps = 16u;
     // At most 16 source samples per 32 kHz sample, the history before them and the last taps' reach.
     static constexpr std::uint32_t kMaxSourceSpan = 1280u;
@@ -183,10 +183,10 @@ private:
     void effects_end();
     [[nodiscard]] const std::byte* wave_bytes(const NebulaVoice& voice, std::uint32_t offset,
                                               std::uint32_t size) const;
-    [[nodiscard]] std::uint32_t game_to_output_delay(double game_samples) const noexcept;
+    [[nodiscard]] std::uint32_t authored_to_output_delay(double authored_samples) const noexcept;
 
     std::uint32_t rate_;
-    double game_ratio_;  // output samples per 32 kHz sample
+    double authored_ratio_;  // output samples per 32 kHz sample
     std::array<InterpolationKernel, 4> voice_kernels_;
     InterpolationKernel stream_kernel_;
 
@@ -199,7 +199,7 @@ private:
     std::array<std::array<float, kMaxSubframe>, kBusCount> buses_{};
     std::array<float, kMaxSubframe> voice_out_{};
     std::vector<float> source_;
-    std::array<VoiceState, kVoices> voice_states_{};
+    std::vector<VoiceState> voice_states_;
     std::array<EffectState, 4> effect_states_{};
     SampleDelay fold_left_, fold_right_;           // the surround buses, one subframe late
     SampleDelay panner_send_left_, panner_send_right_;  // the panner's rear sends: one subframe, half a subframe

@@ -34,7 +34,7 @@ bool AudBgmTempoAdjuster::takeNewStream() {
     return isNew;
 }
 
-f64 AudBgmTempoAdjuster::sequenceSamples(void* pSelf) {
+f64 AudBgmTempoAdjuster::sequenceSeconds(void* pSelf) {
     const AudBgmTempoAdjuster* const self = static_cast< const AudBgmTempoAdjuster* >(pSelf);
     if (self->mStream == nullptr) {
         return -1.0;
@@ -43,11 +43,12 @@ f64 AudBgmTempoAdjuster::sequenceSamples(void* pSelf) {
     const u32 loops = self->mStream->inner_.mStream.mLoopCount;
     const u32 loopSamples = self->mLoopEndSamples - self->mLoopStartSamples;
     if (self->mLoopBeats == 0 || loopSamples == 0) {
-        return position;
+        const u32 rate = self->mStream->inner_.mStream.mHeader.rate;
+        return rate != 0 ? static_cast< f64 >(position) / rate : -1.0;
     }
-    const f64 samplesPerBeat = 60.0 * AudParams::streamSampleRate / self->mTempo * self->mBeatMul;
-    const f64 intro = self->mIntroBeats * samplesPerBeat;
-    const f64 loop = self->mLoopBeats * samplesPerBeat;
+    const f64 secondsPerBeat = 60.0 / self->mTempo * self->mBeatMul;
+    const f64 intro = self->mIntroBeats * secondsPerBeat;
+    const f64 loop = self->mLoopBeats * secondsPerBeat;
     if (loops == 0 && position < self->mLoopStartSamples) {
         return position * intro / self->mLoopStartSamples;
     }

@@ -629,7 +629,7 @@ bool save_folder_path(const char* path, fs::path* out) {
 // The audio clock: started by the game with its frame's length (in 32 kHz samples).
 std::mutex gAiLock;
 std::condition_variable gAiWake;
-uint32_t gAudioFrameSamples = 0;
+uint32_t gSoundTicksPerSecond = 0;
 bool gAiRunning = false;
 
 #if defined(NEBULA_HOST_RENDERER)
@@ -693,15 +693,15 @@ void ai_thread() {
     name_thread(L"Nebula Host Audio");
     auto next = std::chrono::steady_clock::now();
     for (;;) {
-        uint32_t frame_samples = 0;
+        uint32_t ticks_per_second = 0;
         {
             std::unique_lock<std::mutex> lock(gAiLock);
-            gAiWake.wait(lock, [] { return gAiRunning && gAudioFrameSamples != 0; });
-            frame_samples = gAudioFrameSamples;
+            gAiWake.wait(lock, [] { return gAiRunning && gSoundTicksPerSecond != 0; });
+            ticks_per_second = gSoundTicksPerSecond;
         }
         gSoundBlocks.fetch_add(1, std::memory_order_relaxed);
         gModule.audio_tick();
-        next += std::chrono::nanoseconds(static_cast<int64_t>(frame_samples * 1e9 / 32000.0));
+        next += std::chrono::nanoseconds(static_cast<int64_t>(1e9 / ticks_per_second));
         std::this_thread::sleep_until(next);
     }
 }
@@ -817,14 +817,14 @@ void svc_frame_wait(void*) {
 // period, without the device's correction) and the clock.
 void svc_test_frame_step(void*) {
     static double due_ns = 0.0;
-    uint32_t frame_samples = 0;
+    uint32_t ticks_per_second = 0;
     {
         std::lock_guard<std::mutex> lock(gAiLock);
-        frame_samples = gAiRunning ? gAudioFrameSamples : 0u;
+        ticks_per_second = gAiRunning ? gSoundTicksPerSecond : 0u;
     }
-    if (frame_samples != 0u) {
+    if (ticks_per_second != 0u) {
         due_ns += 1e9 / 60.0;
-        const double period_ns = static_cast<double>(frame_samples) * 1e9 / 32000.0;
+        const double period_ns = 1e9 / ticks_per_second;
         while (due_ns >= period_ns) {
             due_ns -= period_ns;
             gSoundBlocks.fetch_add(1, std::memory_order_relaxed);
@@ -3480,11 +3480,12 @@ void svc_audio_setup(void*, NebulaVoice* voices, uint32_t count, const NebulaEff
 #endif
 }
 
-void svc_audio_mix(void*, float gain) {
+void svc_audio_mix(void*, float gain, uint32_t used) {
 #if defined(NEBULA_HOST_RENDERER)
-    gAudio->mix(gain);
+    gAudio->mix(gain, used);
 #else
     (void)gain;
+    (void)used;
 #endif
     gSoundSubframes.fetch_add(1, std::memory_order_relaxed);
 }
@@ -3534,7 +3535,7 @@ void svc_audio_control(void*, uint32_t what, uint32_t value) {
         std::lock_guard<std::mutex> lock(gAiLock);
         if (what == NEBULA_AUDIO_START) {
             gAiRunning = true;
-            gAudioFrameSamples = value;
+            gSoundTicksPerSecond = value;
         } else if (what == NEBULA_AUDIO_STOP) {
             gAiRunning = false;
         }

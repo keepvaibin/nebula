@@ -157,6 +157,11 @@ public:
         mSoundParams.mPitch = pitch;
     }
 
+    // Samples a second at pitch 1; an oscillator's cycles a second.
+    void setSourceRate(f32 rate) {
+        mSourceRate = rate;
+    }
+
     void setInitPan(f32 pan) {
         mSoundParams.mPan = pan;
     }
@@ -195,6 +200,7 @@ public:
     u16 mPriority;
     JASChannelParams mParams;
     JASSoundParams mSoundParams;
+    f32 mSourceRate = 0.0f;
     s16 mKey;
     u16 mVelocity;
     f32 mKeySweep;

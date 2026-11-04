@@ -3,26 +3,22 @@
 #include "Game/System/NebulaAtomic.hpp"
 
 
-enum JASOutputRate {
-    OUTPUT_RATE_0,
-};
-
 namespace JASDriver {
+    // The sound system runs this many ticks a second: one mix, one step of each sequence and envelope.
+    const u32 cTicksPerSecond = 400;
+    // The ticks in the unit of time the sequences and resets count in.
+    const u32 cTicksPerStep = 7;
+    // What one tick moves a vibrato or tremolo and an envelope, as the sound data was made for.
+    const f32 cLfoStep = 1.000890625f;
+    const f32 cEnvelopeStep = 1.5f;
+
     void startAudio();
     void startClock();
     void stopClock();
-    void setOutputRate(JASOutputRate);
     void updateFrame();
     void mixFrame();
     void updateSubFrame();
-    f32 getSoundRate();
-    u32 getSubFrames();
-    u32 getSubFrameCounter();
     void subframeCallback();
     void syncCallback();
 
-    extern f32 sSoundRate;
-    extern u32 sSubFrames;
-    extern u32 sOutputRate;
-    extern NebulaAtomic< u32 > sSubFrameCounter;
 };  // namespace JASDriver

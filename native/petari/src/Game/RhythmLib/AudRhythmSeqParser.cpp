@@ -70,7 +70,7 @@ bool AudRhythmSeqParser::execNoteOnMidi(JASTrack* pTrack, u32 channel, u32 pitch
             }
             mTempoAdjuster.setTempo(mTempo);
             if (mTempoAdjuster.takeNewStream()) {
-                mainTrack->setSampleClock(AudBgmTempoAdjuster::sequenceSamples, &mTempoAdjuster);
+                mainTrack->setSecondsClock(AudBgmTempoAdjuster::sequenceSeconds, &mTempoAdjuster);
             }
             mModifiedTempo = mainTrack->mTempo;
         }
