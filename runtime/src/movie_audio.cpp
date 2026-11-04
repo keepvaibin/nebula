@@ -30,7 +30,6 @@ void MovieAudio::open(bool mono) {
     volume_ = target_ = 127.0f;
     ramp_ = 0;
     resuming_ = false;
-    silence_ = 0;
     fade_ = 1.0f;
     fade_step_ = 0.0f;
 }
@@ -142,8 +141,7 @@ void MovieAudio::pull(float* out, std::size_t count) {
     if (resuming_) {
         resuming_ = false;
         fade_ = 0.0f;
-        fade_step_ = 0.001f;
-        silence_ = 4800;
+        fade_step_ = 1.0f / 160.0f;
         if (queue_.size() < 3u) {
             return;
         }
@@ -163,10 +161,7 @@ void MovieAudio::pull(float* out, std::size_t count) {
                 volume_ = target_;
             }
             float volume = volume_;
-            if (silence_ > 0) {
-                --silence_;
-                volume = 0.0f;
-            } else if (fade_ < 1.0f) {
+            if (fade_ < 1.0f) {
                 volume = volume_ * fade_;
                 fade_ += fade_step_;
                 if (fade_ >= 1.0f) {

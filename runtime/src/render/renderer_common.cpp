@@ -401,10 +401,6 @@ void PresentPacer::reset() noexcept {
     timer_tried_ = false;
 }
 
-// The pacer yields only for the last 0.2 ms before a target and sleeps before that: yielding through the
-// whole wait costs the render thread about twice the CPU time.
-constexpr double kPaceSpinMs = 0.2;
-
 #if defined(_WIN32)
 void PresentPacer::sleep_before(double remaining_ms) {
     if (!timer_tried_) {
@@ -412,34 +408,21 @@ void PresentPacer::sleep_before(double remaining_ms) {
         timer_ = CreateWaitableTimerExW(
             nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
     }
-    if (timer_ != nullptr && remaining_ms > kPaceSpinMs) {
-        // Sleep to kPaceSpinMs before the target (the timer wakes up to a few hundred microseconds late), then
-        // yield for the rest: the spin is at most kPaceSpinMs a frame. Due time in 100 ns units, relative.
-        LARGE_INTEGER due{};
-        due.QuadPart = -std::max<LONGLONG>(1, static_cast<LONGLONG>((remaining_ms - kPaceSpinMs) * 10000.0));
-        if (SetWaitableTimer(timer_, &due, 0, nullptr, nullptr, FALSE)) {
-            WaitForSingleObject(timer_, INFINITE);
-        } else {
-            SwitchToThread();
-        }
-    } else if (timer_ != nullptr) {
-        SwitchToThread();
-    } else if (remaining_ms >= 2.0) {
-        Sleep(static_cast<DWORD>(remaining_ms - 1.0));
+    // Due time in 100 ns units, relative. The next target counts from this one, so a late wake does not move the rate.
+    LARGE_INTEGER due{};
+    due.QuadPart = -std::max<LONGLONG>(1, static_cast<LONGLONG>(remaining_ms * 10000.0));
+    if (timer_ != nullptr && SetWaitableTimer(timer_, &due, 0, nullptr, nullptr, FALSE)) {
+        WaitForSingleObject(timer_, INFINITE);
     } else {
-        SwitchToThread();
+        Sleep(static_cast<DWORD>(std::ceil(remaining_ms)));
     }
 }
 #else
 void PresentPacer::sleep_before(double remaining_ms) {
-    if (remaining_ms > kPaceSpinMs) {
-        // CLOCK_MONOTONIC sleeps are high resolution on Linux and Android.
-        const auto ns = static_cast<long long>((remaining_ms - kPaceSpinMs) * 1e6);
-        timespec duration{static_cast<time_t>(ns / 1000000000), static_cast<long>(ns % 1000000000)};
-        clock_nanosleep(CLOCK_MONOTONIC, 0, &duration, nullptr);
-    } else {
-        sched_yield();
-    }
+    // CLOCK_MONOTONIC sleeps are high resolution on Linux and Android.
+    const auto ns = static_cast<long long>(remaining_ms * 1e6);
+    timespec duration{static_cast<time_t>(ns / 1000000000), static_cast<long>(ns % 1000000000)};
+    clock_nanosleep(CLOCK_MONOTONIC, 0, &duration, nullptr);
 }
 #endif
 
@@ -475,7 +458,7 @@ double PresentPacer::pace(unsigned vsync_interval, float max_fps) {
         now + static_cast<std::int64_t>(
                   (static_cast<double>(frequency_) * kSmoothPresentMaxWaitUs) /
                   1'000'000.0);
-    while (now < target && now < wait_limit) {
+    if (now < target && now < wait_limit) {
         const double remaining_ms =
             static_cast<double>(std::min<std::int64_t>(target, wait_limit) - now) * 1000.0 /
             static_cast<double>(frequency_);

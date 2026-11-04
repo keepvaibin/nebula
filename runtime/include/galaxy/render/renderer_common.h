@@ -182,11 +182,10 @@ public:
 private:
     std::int64_t frequency_ = 0;
     std::int64_t last_qpc_ = 0;
-    // A high-resolution waitable timer (Windows 10 1803+), so a wait sleeps instead of spinning on
-    // SwitchToThread. Null: Sleep and yield.
+    // A high-resolution waitable timer (Windows 10 1803+). Null: Sleep.
     void* timer_ = nullptr;
     bool timer_tried_ = false;
-    // Sleeps toward a target `remaining_ms` away, waking kPaceSpinMs early; yields when closer.
+    // Sleeps until a target `remaining_ms` away.
     void sleep_before(double remaining_ms);
 };
 

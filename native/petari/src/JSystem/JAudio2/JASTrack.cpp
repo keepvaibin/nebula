@@ -1,3 +1,4 @@
+#include "Game/AudioLib/AudParams.hpp"
 #include "JSystem/JAudio2/JASTrack.hpp"
 #include "JSystem/JAudio2/JASAiCtrl.hpp"
 #include "JSystem/JAudio2/JASBankTable.hpp"
@@ -102,6 +103,7 @@ void JASTrack::init() {
     mTempoRate = 1.0f;
     mSampleClock = nullptr;
     mSampleClockData = nullptr;
+    mClockTicks = 0.0;
     updateTempo();
 
     mTranspose = 0;
@@ -661,10 +663,8 @@ void JASTrack::setTempo(u16 tempo) {
 void JASTrack::setSampleClock(SampleClock clock, void* pData) {
     mSampleClock = clock;
     mSampleClockData = pData;
-}
-
-void JASTrack::movePlaytimeBySamples(f32 samples) {
-    mPlaytime += mSampleInterval * samples / 80.0f;
+    mClockTicks = 0.0;
+    mPlaytime = 0.0f;
 }
 
 void JASTrack::setTempoRate(f32 rate) {
@@ -764,8 +764,25 @@ s32 JASTrack::seqMain() {
     }
 
     f32 step = 1.0f;
+    const f64 clockSamples = mSampleClock != nullptr ? mSampleClock(mSampleClockData) : -1.0;
+    if (clockSamples >= 0.0) {
+        // Its place is the clock's: as many ticks as have come due.
+        const f64 due = clockSamples * mTimebase * mTempo / (60.0 * AudParams::streamSampleRate);
+        // Paused, no tick comes due: it takes up what the clock moved when it plays again.
+        while (!mPauseFlag && mClockTicks + 1.0 <= due) {
+            mClockTicks += 1.0;
+            if (tickProc() < 0) {
+                updateSeq(false, 1.0f);
+                close();
+                return -1;
+            }
+        }
+        updateSeq(false, step);
+        return 0;
+    }
     while (mPlaytime >= step) {
         mPlaytime -= step;
+        mClockTicks += 1.0;
         if (tickProc() < 0) {
             updateSeq(false, 1.0f);
             close();
@@ -773,15 +790,7 @@ s32 JASTrack::seqMain() {
         }
     }
 
-    // Ticks a subframe (80 samples), or by the samples its clock moved.
-    f32 interval = mSampleInterval;
-    if (mSampleClock != nullptr) {
-        const f32 samples = mSampleClock(mSampleClockData);
-        if (samples >= 0.0f) {
-            interval = mSampleInterval * samples / 80.0f;
-        }
-    }
-    mPlaytime += interval;
+    mPlaytime += mSampleInterval;
     updateSeq(false, step);
     return 0;
 }

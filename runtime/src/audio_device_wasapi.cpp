@@ -307,6 +307,13 @@ private:
         LARGE_INTEGER last_wake{};
         QueryPerformanceCounter(&last_wake);
         LARGE_INTEGER last_trouble = last_wake;
+        const bool report_gaps = ::galaxy::run_options().audio_test_gaps != nullptr;
+        const LARGE_INTEGER stream_start = last_wake;
+        std::uint64_t written = fill_frames_;
+        double least_behind = 0.0;
+        std::uint64_t gaps = 0u;
+        double gap_frames = 0.0;
+        LONGLONG last_report = last_wake.QuadPart;
         const char* const reopen = ::galaxy::run_options().audio_test_reopen;
         const ULONGLONG reopen_at = reopen != nullptr ? GetTickCount64() + std::strtoull(reopen, nullptr, 10) * 1000u : 0u;
         for (;;) {
@@ -329,6 +336,29 @@ private:
                 last_trouble = wake;
             }
             last_wake = wake;
+            if (report_gaps) {
+                // GALAXY_AUDIO_TEST_GAPS=2: one 50 ms stall of this thread, 20 s in: the counter must see it.
+                static bool stalled = false;
+                if (!stalled && ::galaxy::run_options().audio_test_gaps[0] == '2' && wake.QuadPart - stream_start.QuadPart > frequency.QuadPart * 20) {
+                    stalled = true;
+                    Sleep(50);
+                }
+                // Taken by the device so far against the time passed: more time than sound is silence it played.
+                const double rate_now = rate_.load(std::memory_order_relaxed);
+                const double behind = static_cast<double>(wake.QuadPart - stream_start.QuadPart) * rate_now / static_cast<double>(frequency.QuadPart) -
+                                      static_cast<double>(written - padding);
+                if (behind - least_behind > static_cast<double>(period_frames_) * 0.5) {
+                    ++gaps;
+                    gap_frames += behind - least_behind;
+                    least_behind = behind;
+                } else if (behind < least_behind) {
+                    least_behind = behind;
+                }
+                if (wake.QuadPart - last_report > frequency.QuadPart * 10) {
+                    last_report = wake.QuadPart;
+                    std::cout << "[audio] gaps " << gaps << ", " << gap_frames * 1000.0 / rate_now << " ms, fill " << fill_frames_ << std::endl;
+                }
+            }
             if (padding >= fill_frames_) {
                 continue;
             }
@@ -348,6 +378,7 @@ private:
             if (FAILED(renderer_->ReleaseBuffer(frames, 0))) {
                 return;
             }
+            written += frames;
             LARGE_INTEGER rendered{};
             QueryPerformanceCounter(&rendered);
             if (rendered.QuadPart - wake.QuadPart > period_ticks * 3 / 4) {

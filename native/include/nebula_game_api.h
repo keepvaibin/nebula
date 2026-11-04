@@ -572,7 +572,7 @@ enum {
     NEBULA_MOVIE_AUDIO_CLOSE,
     NEBULA_MOVIE_AUDIO_RESET,    /* the waiting frames dropped, the volume at its target */
     NEBULA_MOVIE_AUDIO_VOLUME,   /* value 0-127 (the gain is its square), reached over `milliseconds` */
-    NEBULA_MOVIE_AUDIO_RESUME,   /* after a pause: once two frames wait, 150 ms of silence, then a 31 ms fade in */
+    NEBULA_MOVIE_AUDIO_RESUME,   /* after a pause: once two frames wait, a 5 ms fade in */
 };
 
 /* The sound clock (sound_clock). */
