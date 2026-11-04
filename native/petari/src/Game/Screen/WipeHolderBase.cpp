@@ -7,12 +7,18 @@ WipeHolderBase::WipeHolderBase(u32 num, const char* pName)
 }
 
 void WipeHolderBase::setCurrent(const char* pWipeName) {
+    // A name there's no wipe of, from a mod's cutscene: the current one stays.
+    WipeLayoutBase* pWipe = findWipe(pWipeName);
+    if (pWipe == nullptr) {
+        return;
+    }
+
     if (mCurrentWipeLayout != nullptr) {
         mCurrentWipeLayout->forceOpen();
         mCurrentWipeLayout->kill();
     }
 
-    mCurrentWipeLayout = findWipe(pWipeName);
+    mCurrentWipeLayout = pWipe;
     mCurrentWipeLayout->appear();
     mCurrentWipeLayout->forceOpen();
 }

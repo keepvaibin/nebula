@@ -55,7 +55,14 @@ fn modern_files(change: &Change, bytes: &[u8]) -> Result<Vec<(String, Vec<u8>)>>
         out.extend(animations.into_iter().map(|(name, bck)| (format!("{folder}{name}.bck"), bck)));
         return Ok(out);
     }
+    if lower.ends_with(".bcsv.json") {
+        return Ok(vec![(change.path[..change.path.len() - ".json".len()].to_string(), super::merge::table_from_json(bytes)?)]);
+    }
     if lower.ends_with(".png") {
+        // The game's interface keeps its pictures in another form, in a folder of that name.
+        if lower.contains("/timg/") {
+            return Ok(vec![(renamed(".tpl"), super::gltf::png_to_tpl(bytes)?)]);
+        }
         return Ok(vec![(renamed(".bti"), super::gltf::png_to_bti(bytes)?)]);
     }
     if lower.ends_with(".wav") || lower.ends_with(".ogg") {
@@ -243,6 +250,10 @@ fn archive_of(path: &str) -> Option<&str> {
 /// A mod changing some files inside an archive: the rest come from the game's.
 fn complete_archives(changes: &[Change], base: Option<&Path>, pak: &mut File, at: &mut u64, placed: &mut Vec<store::Placed>,
                      failed: &mut Vec<(String, String)>, stats: &mut Stats) -> Result<()> {
+    // Checking a mod with no game at hand: the player's game completes it.
+    if base.is_none() {
+        return Ok(());
+    }
     let whole: std::collections::BTreeSet<String> =
         changes.iter().filter(|c| !c.merge && c.path.to_ascii_lowercase().ends_with(".arc")).map(|c| c.path.to_ascii_lowercase()).collect();
     let mut partial = BTreeMap::new();

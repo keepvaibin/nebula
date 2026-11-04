@@ -10,6 +10,8 @@ player's disc image with nebula-import. An update keeps the packed game, the sav
 version and removes the recompiled game of earlier installs, its compiler and its source (InstallEngine.Install).
 
   -Bin  NebulaNative.exe, smg_game.dll and tables\*.tsv, as tested
+  -Dxc  Microsoft's DirectX Shader Compiler release, unpacked (github.com/microsoft/DirectXShaderCompiler): a mod's shaders are
+        built with it on the player's PC
 
 Requires Git, Rust (stable, MSVC target) and Visual Studio 2022 with the C++ tools (nebula-import's compression
 libraries are C). Cargo builds into CARGO_TARGET_DIR when it is set, else target\ in this tree.
@@ -18,6 +20,7 @@ libraries are C). Cargo builds into CARGO_TARGET_DIR when it is set, else target
 param(
     [Parameter(Mandatory = $true)][string]$Version,
     [Parameter(Mandatory = $true)][string]$Bin,
+    [Parameter(Mandatory = $true)][string]$Dxc,
     [string]$OutputDirectory = '',
     [string]$SetupName = '',
     [string]$Repository = 'keepvaibin/nebula',
@@ -40,6 +43,9 @@ function Invoke-Checked([string]$File, [string[]]$Arguments) {
 
 try {
     $commit = (& git -C $repo rev-parse HEAD).Trim()
+    foreach ($name in 'bin\x64\dxc.exe', 'bin\x64\dxcompiler.dll', 'bin\x64\dxil.dll', 'LICENSE-MS.txt', 'LICENCE-MIT.txt', 'LICENSE-LLVM.txt') {
+        if (-not (Test-Path -LiteralPath (Join-Path $Dxc $name))) { throw "The compiler folder has no $name" }
+    }
     if ((& git -C $repo status --porcelain).Length -ne 0) { Write-Warning 'The tree has uncommitted changes; the package records HEAD.' }
     foreach ($name in 'NebulaNative.exe', 'smg_game.dll', 'tables\material-names.tsv', 'tables\rt-materials.tsv', 'tables\rt-suns.tsv') {
         if (-not (Test-Path -LiteralPath (Join-Path $Bin $name))) { throw "The bin folder has no $name" }
@@ -100,6 +106,8 @@ namespace Nebula
         'rt-suns.tsv' = (Join-Path $Bin 'tables\rt-suns.tsv')
         'Nebula.exe' = $launcher; 'NebulaSettings.exe' = $settingsApp; 'nebula-import.exe' = $importer
         'nebula_import.dll' = $cooker
+        'dxc\dxc.exe' = (Join-Path $Dxc 'bin\x64\dxc.exe'); 'dxc\dxcompiler.dll' = (Join-Path $Dxc 'bin\x64\dxcompiler.dll'); 'dxc\dxil.dll' = (Join-Path $Dxc 'bin\x64\dxil.dll')
+        'dxc\LICENSE-MS.txt' = (Join-Path $Dxc 'LICENSE-MS.txt'); 'dxc\LICENCE-MIT.txt' = (Join-Path $Dxc 'LICENCE-MIT.txt'); 'dxc\LICENSE-LLVM.txt' = (Join-Path $Dxc 'LICENSE-LLVM.txt')
         'LICENSE' = (Join-Path $repo 'LICENSE'); 'THIRD-PARTY-NOTICES.md' = (Join-Path $repo 'THIRD-PARTY-NOTICES.md'); 'README.md' = (Join-Path $repo 'README.md')
     }
     $resourceArgs = @($resources.GetEnumerator() | ForEach-Object { "/resource:$($_.Value),$($_.Key)" })

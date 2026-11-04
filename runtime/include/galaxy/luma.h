@@ -70,6 +70,37 @@ struct Galaxy {
     int dome = 0;
     int hungry_slot = -1;
     int hungry_star_bits = 0;
+    bool has_map_position = false;
+    float map_x = 0.0f;
+    float map_y = 0.0f;
+};
+
+// A track beside the game's, and where it plays.
+struct MusicPlace {
+    std::string stage;
+    int scenario = 0;  // a mission; 0: all it has no row for
+    int change_area = -1;  // when not -1: what a ChangeBgmCube with this Obj_arg1 starts, not the stage's own
+};
+struct Music {
+    std::string name;
+    std::string file;  // its place in the game
+    std::vector<MusicPlace> places;
+};
+
+// A row of the game's progression, by its name.
+struct EventFlag {
+    std::string name;
+    int kind = 0;
+    int a = 0;
+    int b = 0;
+    std::string first;
+    std::string second;
+};
+
+// A dome's comets, in the order they come.
+struct CometSchedule {
+    int dome = 0;
+    std::vector<std::pair<std::string, int>> comets;  // a galaxy, and 1 for the hundred purple coins
 };
 
 enum class SaveMode {
@@ -104,6 +135,9 @@ struct Manifest {
     bool save_player_can_change = false;
     std::vector<Plugin> plugins;
     std::vector<Galaxy> galaxies;
+    std::vector<Music> music;
+    std::vector<EventFlag> event_flags;
+    std::vector<CometSchedule> comet_schedule;
     std::map<std::string, Text> text;  // a message's id: its words
 };
 

@@ -179,8 +179,7 @@ struct DiscPlan {
     // The .luma mods in use, bottom of the list first: their shaders.
     std::vector<std::filesystem::path> luma_folders;
     std::vector<PluginFile> plugins;  // the .luma mods' code, bottom of the list first
-    std::vector<GalaxyToAdd> galaxies;
-    std::vector<std::pair<std::string, std::string>> texts;  // a message's id: its words in the language played
+    ModRows rows;
     std::vector<std::string> notes;  // what could not apply, for the log
     unsigned code_patches = 0;
     std::map<std::uint32_t, std::uint32_t> native_patches;  // kPatch*: what each is set to
