@@ -399,6 +399,32 @@ std::optional<Manifest> parse_manifest(std::string_view text) {
         Layer layer;
         layer.path = text_field(entry, "path");
         if (!layer.path.empty() && !path_stays_inside(layer.path)) return std::nullopt;
+        if (const Value* changes = entry.get("object_changes"); changes != nullptr && changes->array() != nullptr) {
+            for (const Value& row : *changes->array()) {
+                ObjectChange change;
+                change.object = text_field(row, "object");
+                if (change.object.empty()) return std::nullopt;
+                change.becomes = text_field(row, "becomes");
+                const std::string where = text_field(row, "in");
+                if (where == "display_models") change.where = 1;
+                else if (where == "treasure_boxes") change.where = 2;
+                else if (!where.empty() && where != "placed") return std::nullopt;
+                layer.object_changes.push_back(std::move(change));
+            }
+        }
+        if (const Value* limits = entry.get("comet_time_limits"); limits != nullptr && limits->array() != nullptr) {
+            for (const Value& row : *limits->array()) {
+                CometLimit limit;
+                limit.galaxy = text_field(row, "galaxy");
+                if (limit.galaxy.empty()) return std::nullopt;
+                const Value* mission = row.get("mission");
+                const Value* seconds = row.get("seconds");
+                if (mission == nullptr || mission->number() == nullptr || seconds == nullptr || seconds->number() == nullptr) return std::nullopt;
+                limit.mission = static_cast<int>(*mission->number());
+                limit.seconds = static_cast<int>(*seconds->number());
+                layer.comet_time_limits.push_back(std::move(limit));
+            }
+        }
         if (const Value* switches = entry.get("switches"); switches != nullptr && switches->object() != nullptr) {
             for (const auto& [name, value] : *switches->object()) {
                 if (const double* number = value.number()) layer.switches[name] = static_cast<std::uint32_t>(*number);
@@ -650,6 +676,12 @@ std::uint32_t switch_number(std::string_view name) noexcept {
         {"begoman_fire_proof", 10u},
         {"messenger_always_ex", 11u},
         {"messenger_ex_one_ups", 12u},
+        {"player_health", 13u},
+        {"player_health_fixed", 14u},
+        {"hit_takes_all", 15u},
+        {"life_up_health", 16u},
+        {"no_low_health_warning", 17u},
+        {"no_dark_comet_rules", 18u},
     };
     for (const auto& [known, number] : kSwitches) {
         if (known == name) return number;

@@ -34,6 +34,8 @@ public:
     void eraseLastSeWaveSet();
     void eraseLastSeScenarioWaveSet();
     void loadWaveSet(const s8*, s32);
+    void loadWaveSetOnce(const s8*, s32);
+    bool isKeptWave(s32) const;
     void setPlayerModeMario();
     void setPlayerModeLuigi();
     bool loadPlayerResource();

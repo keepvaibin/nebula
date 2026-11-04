@@ -15,6 +15,18 @@
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 
+bool MarioActor::canTakePowerUp(s32 playerMode) const {
+    switch (playerMode) {
+    case PlayerMode_Invincible: return mModels[4] != nullptr;
+    case PlayerMode_Ice: return mModels[3] != nullptr;
+    case PlayerMode_Bee: return mModels[2] != nullptr;
+    case PlayerMode_Hopper: return mModels[5] != nullptr;
+    case PlayerMode_Teresa: return _9A4 != nullptr;
+    case PlayerMode_Tornado: return mTornadoMario != nullptr;
+    default: return true;
+    }
+}
+
 void MarioActor::setPlayerMode(u16 playerMode, bool myBool) {
     playerMode = static_cast< u16 >(NebulaMods::fire(NEBULA_MOD_EVENT_POWER_UP, playerMode));
 

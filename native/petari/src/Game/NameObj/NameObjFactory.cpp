@@ -8103,6 +8103,11 @@ namespace NameObjFactory {
             return pPlugin;
         }
 
+        pName = NebulaMods::objectBecomes(NEBULA_OBJECTS_PLACED, pName);
+        if (pName == nullptr) {
+            return nullptr;
+        }
+
         if (PlanetMapCreatorFunction::isRegisteredObj(pName)) {
             return PlanetMapCreatorFunction::getPlanetMapCreator(pName);
         }
@@ -8170,6 +8175,10 @@ namespace NameObjFactory {
 
     void getMountObjectArchiveList(NameObjArchiveListCollector* pCollector, const char* pName, const JMapInfoIter& rIter) {
         NebulaMods::addArchives(pCollector, pName);
+        pName = NebulaMods::objectBecomes(NEBULA_OBJECTS_PLACED, pName);
+        if (pName == nullptr) {
+            return;
+        }
         if (PlanetMapCreatorFunction::isRegisteredObj(pName)) {
             PlanetMapCreatorFunction::makeArchiveList(pCollector, rIter, pName);
         } else {

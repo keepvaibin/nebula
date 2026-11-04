@@ -18,6 +18,7 @@
 #include "Game/Util/StringUtil.hpp"
 #include <cstdio>
 #include "Game/System/NebulaAchievements.hpp"
+#include "Game/System/NebulaHost.hpp"
 
 namespace {
     ScenePlayingResult* getScenePlayingResult() {
@@ -999,6 +1000,9 @@ namespace MR {
     }
 
     bool isGalaxyDarkCometAppearInCurrentStage() {
+        if (NebulaHost::codePatch(NEBULA_PATCH_NO_DARK_COMET_RULES, nullptr)) {
+            return false;
+        }
         return EventFunction::isStartCometEvent("Dark");
     }
 

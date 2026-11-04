@@ -42,10 +42,26 @@ struct When {
     bool unknown = false;  // has a condition this game doesn't know: the layer is not used
 };
 
+// One of the game's objects as another, or gone.
+struct ObjectChange {
+    int where = 0;  // NEBULA_OBJECTS_*
+    std::string object;
+    std::string becomes;  // empty: gone
+};
+
+// A comet mission's time limit.
+struct CometLimit {
+    std::string galaxy;
+    int mission = 0;
+    int seconds = 0;
+};
+
 struct Layer {
     std::string path;
     std::map<std::string, std::uint32_t> switches;
     std::map<std::string, std::string> materials;  // a material's name: the shader written for it
+    std::vector<ObjectChange> object_changes;
+    std::vector<CometLimit> comet_time_limits;
     When when;
 };
 

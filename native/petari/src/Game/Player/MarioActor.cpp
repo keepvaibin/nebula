@@ -46,6 +46,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include "Game/System/NebulaAchievements.hpp"
+#include "Game/System/NebulaHost.hpp"
 
 template void JGeometry::SMatrix34C< f32 >::set(const f32 (*)[4]);
 
@@ -56,16 +57,18 @@ MarioActor::MarioActor(const char* pName) : LiveActor(pName), _1B0(0xFFFFFFFF) {
     mMario = new Mario(this);
     _930 = 0;
     _468 = 0;
-    mMaxHealth = 3;
-    mHealth = 3;
+    u32 startingHealth = 3;
+    NebulaHost::codePatch(NEBULA_PATCH_PLAYER_HEALTH, &startingHealth);
+    mMaxHealth = startingHealth;
+    mHealth = startingHealth;
     mWaterLife = 8;
 
     if (MR::isPlayerLuigi()) {
-        mMaxHealth = 3;
-        mHealth = 3;
+        mMaxHealth = startingHealth;
+        mHealth = startingHealth;
     }
 
-    if (MR::isGalaxyDarkCometAppearInCurrentStage()) {
+    if (MR::isGalaxyDarkCometAppearInCurrentStage() && !NebulaHost::codePatch(NEBULA_PATCH_PLAYER_HEALTH_FIXED, nullptr)) {
         mMaxHealth = 1;
         mHealth = 1;
     }
@@ -871,7 +874,11 @@ void MarioActor::control() {
     if (mSuperKinokoCollected) {
         if (MR::tryStartDemoWithoutCinemaFrame(this, "\203\175\203\212\203\111\203\130\201\133\203\160\201\133\211\273" /* マリオスーパー化 */)) {  // 6-up camera
             mSuperKinokoCollected = false;
-            changeMaxLife(6);
+            u32 lifeUpHealth = 6;
+            NebulaHost::codePatch(NEBULA_PATCH_LIFE_UP_HEALTH, &lifeUpHealth);
+            if (lifeUpHealth != 0) {
+                changeMaxLife(static_cast< s32 >(lifeUpHealth));
+            }
             MR::stopAnimFrame(this);
             MR::requestPowerUpHPMeter();
             mMario->startPadVib("\203\175\203\212\203\111[\225\317\220\147]" /* マリオ[変身] */);
@@ -1457,7 +1464,7 @@ void MarioActor::decLife(u16 amt) {
     }
 
     if (mHealth) {
-        mHealth--;
+        mHealth = NebulaHost::codePatch(NEBULA_PATCH_HIT_TAKES_ALL, nullptr) ? 0 : mHealth - 1;
     }
 
     _388 = 0;
@@ -1514,7 +1521,7 @@ void MarioActor::updateLife() {
         return;
     }
 
-    mHealth--;
+    mHealth = NebulaHost::codePatch(NEBULA_PATCH_HIT_TAKES_ALL, nullptr) ? 0 : mHealth - 1;
 }
 
 void MarioActor::incLife(u32 amt) {

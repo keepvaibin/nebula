@@ -59,6 +59,8 @@ typedef enum NebulaModEvent {
     /* Any object appears or dies. actor: the object. name: its name. Subscribing to these costs a call per object. */
     NEBULA_MOD_EVENT_ACTOR_APPEAR,
     NEBULA_MOD_EVENT_ACTOR_KILL,
+    /* The player's spin starts. */
+    NEBULA_MOD_EVENT_PLAYER_SPIN,
     NEBULA_MOD_EVENT_COUNT
 } NebulaModEvent;
 
@@ -81,7 +83,20 @@ typedef enum NebulaModValue {
     NEBULA_VALUE_STAR_BITS,
     NEBULA_VALUE_COINS,
     NEBULA_VALUE_LIVES,
-    NEBULA_VALUE_MISSION
+    NEBULA_VALUE_MISSION,
+    NEBULA_VALUE_POWER_STARS,
+    NEBULA_VALUE_WATER_LIFE,
+    /* 0 or 1, what the player is doing. */
+    NEBULA_VALUE_SPINNING,
+    NEBULA_VALUE_JUMP_RISING,
+    NEBULA_VALUE_DAMAGED,
+    NEBULA_VALUE_DEAD,
+    NEBULA_VALUE_GROUND_POUNDING,
+    NEBULA_VALUE_SKATING,
+    NEBULA_VALUE_CROUCHING,
+    NEBULA_VALUE_FLYING,
+    NEBULA_VALUE_SWIMMING,
+    NEBULA_VALUE_LUIGI
 } NebulaModValue;
 
 /* Numbers that can be set. */
@@ -112,7 +127,14 @@ typedef enum NebulaModPlay {
     NEBULA_PLAY_ANIMATION = 0, /* its action: animations, effects and sounds together */
     NEBULA_PLAY_EFFECT,
     NEBULA_PLAY_SOUND,
-    NEBULA_PLAY_PLAYER_ANIMATION /* on the player, by the animation's name */
+    NEBULA_PLAY_PLAYER_ANIMATION, /* on the player, by the animation's name */
+    /* One part of a model's animation by its file's name, leaving the others playing. */
+    NEBULA_PLAY_SKELETON,        /* .bck */
+    NEBULA_PLAY_TEXTURE_MOVE,    /* .btk */
+    NEBULA_PLAY_COLOUR,          /* .brk */
+    NEBULA_PLAY_SHOWN_PARTS,     /* .bva */
+    NEBULA_PLAY_TEXTURE_FRAMES,  /* .btp */
+    NEBULA_PLAY_MATERIAL_COLOUR  /* .bpk */
 } NebulaModPlay;
 
 /* An object that a level places by `name`, or that spawn() makes. Everything it does is these calls; a plugin built with
@@ -128,7 +150,55 @@ typedef struct NebulaObjectClass {
     void (*touch_player)(NebulaActor* actor, void* user);
     /* The player attacked it. Return 1 if it took the attack. */
     int32_t (*attacked)(NebulaActor* actor, void* user);
+    /* The same, saying how: NEBULA_ATTACK_*. If set, it's called in place of `attacked`. */
+    int32_t (*attacked_by)(NebulaActor* actor, int32_t how, void* user);
 } NebulaObjectClass;
+
+/* How the player attacked. */
+typedef enum NebulaAttack {
+    NEBULA_ATTACK_OTHER = 0,
+    NEBULA_ATTACK_SPIN,
+    NEBULA_ATTACK_STOMP,
+    NEBULA_ATTACK_GROUND_POUND,
+    NEBULA_ATTACK_STAR_BIT,
+    NEBULA_ATTACK_FIRE,
+    NEBULA_ATTACK_INVINCIBLE,
+    NEBULA_ATTACK_SHELL
+} NebulaAttack;
+
+/* How an object hurts the player. */
+typedef enum NebulaHit {
+    NEBULA_HIT_NORMAL = 0,
+    NEBULA_HIT_STRONG,
+    NEBULA_HIT_FIRE,
+    NEBULA_HIT_ELECTRIC,
+    NEBULA_HIT_FREEZE,
+    NEBULA_HIT_FLIP
+} NebulaHit;
+
+/* A placed object's stage switches, set in the level's data. */
+typedef enum NebulaSwitch {
+    NEBULA_SWITCH_A = 0,
+    NEBULA_SWITCH_B,
+    NEBULA_SWITCH_APPEAR,
+    NEBULA_SWITCH_DEAD
+} NebulaSwitch;
+
+/* What an object promises to give, so the level counts it. */
+typedef enum NebulaItem {
+    NEBULA_ITEM_COINS = 0,
+    NEBULA_ITEM_STAR_BITS,
+    NEBULA_ITEM_POWER_STAR /* count: the star's number in the galaxy; -1: the next */
+} NebulaItem;
+
+/* The ground under the camera shake's size. */
+typedef enum NebulaShake {
+    NEBULA_SHAKE_WEAK = 0,
+    NEBULA_SHAKE_NORMAL,
+    NEBULA_SHAKE_NORMAL_STRONG,
+    NEBULA_SHAKE_STRONG,
+    NEBULA_SHAKE_VERY_STRONG
+} NebulaShake;
 
 /* A galaxy beside the game's. Its files are StageData/<name>/... as any galaxy's. */
 typedef struct NebulaGalaxy {
@@ -172,7 +242,7 @@ typedef struct NebulaModApi {
     int32_t (*register_creator)(const char* name, void* (*create)(const char* name), const char* archive);
     /* Run `replacement` in place of the game's function at `target`; `original` gets a call to what was there before it,
        which may be another plugin's. A function the compiler inlined everywhere can't be reached this way: use events.
-       Only where the device allows it: Windows x64 for now. */
+       Windows x64, and Linux and Mac on x64 and arm64. Elsewhere, or for a function whose first instructions can't be moved, it answers -1. */
     int32_t (*hook)(void* target, void* replacement, void** original);
     /* A game function by its symbol: on Windows, as dumpbin /exports names it. Null: no such function. */
     void* (*find_function)(const char* symbol);
@@ -238,14 +308,109 @@ typedef struct NebulaModApi {
     /* Only in nebula_plugin_start. A dome's comets, 1 to 6, in the order they come, for the whole of its schedule: `galaxies[i]` with
        `coins[i]` at 1 for the hundred purple coins. */
     int32_t (*set_comet_schedule)(int32_t dome, const char* const* galaxies, const int32_t* coins, int32_t count);
+
+    /* One of the game's objects becomes another, or (`becomes` null) is gone. Where: NEBULA_OBJECTS_*. Before stages load. */
+    int32_t (*set_object_change)(int32_t where, const char* object, const char* becomes);
+    /* A comet mission's time limit in seconds, for a galaxy and mission of the player's comets. */
+    int32_t (*set_comet_time_limit)(const char* galaxy, int32_t mission, int32_t seconds);
+
+    /* An object's animation: 1 while the last one started hasn't reached its end; its frame, its length, setting them. */
+    int32_t (*is_animation_done)(NebulaActor* actor);
+    float (*animation_frame)(NebulaActor* actor);
+    float (*animation_length)(NebulaActor* actor);
+    void (*set_animation_frame)(NebulaActor* actor, float frame);
+    void (*set_animation_rate)(NebulaActor* actor, float rate);
+    void (*stop_effect)(NebulaActor* actor, const char* name); /* null: all of them */
+    void (*stop_sound)(NebulaActor* actor, const char* name);
+
+    /* An object of register_object's own step in what it's doing. Starts at 0; state_frames counts from the set_state that began it. */
+    void (*set_state)(NebulaActor* actor, int32_t state);
+    int32_t (*state)(NebulaActor* actor);
+    int32_t (*state_frames)(NebulaActor* actor);
+
+    void (*get_rotation)(NebulaActor* actor, float* xyz);
+    void (*set_rotation)(NebulaActor* actor, const float* xyz);
+    void (*get_scale)(NebulaActor* actor, float* xyz);
+    void (*set_scale)(NebulaActor* actor, const float* xyz);
+    /* register_object's objects: the way it faces, standing against gravity. Its model then turns with this, not with its rotation. */
+    void (*set_front)(NebulaActor* actor, const float* xyz);
+    void (*get_front)(NebulaActor* actor, float* xyz);
+    void (*turn_to_player)(NebulaActor* actor, float degrees); /* at most this far this frame */
+
+    /* register_object's objects: whether anything can touch it, and hurting the player. */
+    void (*set_touchable)(NebulaActor* actor, int32_t touchable);
+    int32_t (*hit_player)(NebulaActor* actor, NebulaHit how);
+
+    /* A placed object's numbers from the level (Obj_arg0 to 7; -1: none). */
+    int32_t (*object_arg)(NebulaActor* actor, int32_t index);
+    /* Its switches. is_valid: the level set one. */
+    int32_t (*has_switch)(NebulaActor* actor, NebulaSwitch which);
+    int32_t (*is_switch_on)(NebulaActor* actor, NebulaSwitch which);
+    void (*set_switch)(NebulaActor* actor, NebulaSwitch which, int32_t on);
+
+    /* Its rail from the level. move_on_rail goes `speed` along and puts the object there. */
+    int32_t (*has_rail)(NebulaActor* actor);
+    void (*move_on_rail)(NebulaActor* actor, float speed);
+    int32_t (*rail_at_end)(NebulaActor* actor);
+    void (*rail_turn_back)(NebulaActor* actor);
+    float (*rail_coord)(NebulaActor* actor);
+    void (*set_rail_coord)(NebulaActor* actor, float coord);
+    float (*rail_length)(NebulaActor* actor);
+
+    /* The world. raycast: 1 and where if the line from `from` to `to` meets the map. */
+    int32_t (*raycast)(const float* from, const float* to, float* hit);
+    int32_t (*is_on_ground)(NebulaActor* actor);
+    int32_t (*is_touching_wall)(NebulaActor* actor);
+    int32_t (*is_in_water)(const float* xyz);
+    float (*distance_to_player)(NebulaActor* actor);
+    void (*get_joint_position)(NebulaActor* actor, const char* joint, float* xyz);
+
+    void (*player_front)(float* xyz);
+    void (*set_player_control)(int32_t on);
+
+    /* Items. declare_item in `start`; then appear_item at the moment it comes out. */
+    void (*declare_item)(NebulaActor* actor, NebulaItem what, int32_t count);
+    void (*appear_item)(NebulaActor* actor, NebulaItem what, const float* xyz, int32_t count);
+
+    /* Cutscenes and cameras. start_cutscene: 1 when it began (another may be playing: ask again next frame). */
+    int32_t (*start_cutscene)(NebulaActor* actor, const char* name);
+    void (*end_cutscene)(NebulaActor* actor, const char* name);
+    int32_t (*is_cutscene_playing)(void);
+    void (*shake_camera_by)(NebulaShake how);
+    void (*start_camera)(const char* name, int32_t frames);
+    void (*end_camera)(const char* name, int32_t frames);
+    void (*fade_out)(int32_t frames);
+    void (*fade_in)(int32_t frames);
+
+    /* The game's progress and text. */
+    void (*change_stage)(const char* galaxy, int32_t mission);
+    void (*back_to_dome)(void);
+    int32_t (*is_event_flag_on)(const char* name);
+    void (*set_event_flag_on)(const char* name);
+    int32_t (*has_star)(const char* galaxy, int32_t star);
+    void (*show_message)(const char* utf8_or_id, int32_t centre);
+    void (*hide_message)(void);
+
+    /* A number kept for this mod across plays. */
+    int32_t (*store_get)(const NebulaPlugin* self, const char* key, int32_t missing);
+    void (*store_set)(const NebulaPlugin* self, const char* key, int32_t value);
 } NebulaModApi;
+
+/* Where an object change applies. */
+typedef enum NebulaObjectsIn {
+    NEBULA_OBJECTS_PLACED = 0,       /* whatever the game creates by name: a level's objects, areas */
+    NEBULA_OBJECTS_DISPLAY_MODEL = 1, /* the still models things show before they're collected */
+    NEBULA_OBJECTS_TREASURE_BOX = 2, /* what a treasure box holds */
+    NEBULA_OBJECTS_IN_COUNT
+} NebulaObjectsIn;
 
 /* The player's controls, whatever device they're on. */
 typedef enum NebulaButton {
     NEBULA_BUTTON_JUMP = 1u << 0,
-    NEBULA_BUTTON_SPIN = 1u << 1,
+    NEBULA_BUTTON_SPIN = 1u << 1, /* the player's spin: held while it lasts, pressed on the frame it starts */
     NEBULA_BUTTON_CROUCH = 1u << 2,
-    NEBULA_BUTTON_CAMERA = 1u << 3
+    NEBULA_BUTTON_CAMERA = 1u << 3,
+    NEBULA_BUTTON_FIRE = 1u << 4 /* the star-bit shot */
 } NebulaButton;
 
 #if defined(_WIN32) && defined(__cplusplus)

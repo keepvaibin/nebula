@@ -13,6 +13,32 @@
 #include "Game/Player/MarioActor.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/PlayerInputUtil.hpp"
+#include "Game/Util/PlayerUtil.hpp"
+#include "Game/Util/SceneUtil.hpp"
+#include "Game/Player/Mario.hpp"
+#include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/SequenceUtil.hpp"
+#include "Game/Util/ScreenUtil.hpp"
+#include "Game/Util/RailUtil.hpp"
+#include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/MtxUtil.hpp"
+#include "Game/Util/MathUtil.hpp"
+#include "Game/Util/MapUtil.hpp"
+#include "Game/Util/LiveActorUtil.hpp"
+#include "Game/Util/JointUtil.hpp"
+#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/EventUtil.hpp"
+#include "Game/Util/EffectUtil.hpp"
+#include "Game/Util/DemoUtil.hpp"
+#include "Game/Util/CameraUtil.hpp"
+#include "Game/Util/ActorSwitchUtil.hpp"
+#include "Game/Util/ActorSensorUtil.hpp"
+#include "Game/Util/ActorMovementUtil.hpp"
+#include "Game/System/GameDataFunction.hpp"
+#include "Game/Map/HitInfo.hpp"
+#include "Game/NameObj/NameObjFactory.hpp"
+#include "Game/Util/FileUtil.hpp"
+#include "Game/Util/JMapInfo.hpp"
 #include <nebula_format.h>
 #include <nebula_game_api.h>
 #include <cstring>
@@ -119,13 +145,37 @@ namespace {
         return reinterpret_cast< LiveActor* >(pActor);
     }
 
+    // Set by the first object made: how to tell one of ours from any other actor a plugin holds.
+    void* sPluginActorTable = nullptr;
+
     class PluginActor : public LiveActor {
     public:
-        PluginActor(const char* pName, const NebulaObjectClass* pClass) : LiveActor(pName), mClass(pClass) {}
+        PluginActor(const char* pName, const NebulaObjectClass* pClass)
+            : LiveActor(pName), mClass(pClass), mState(0), mStateFrames(0), mUseFront(false), mFront(0.0f, 0.0f, 1.0f) {
+            for (int i = 0; i < 8; i++) {
+                mArgs[i] = -1;
+            }
+            sPluginActorTable = *reinterpret_cast< void** >(this);
+        }
 
         virtual void init(const JMapInfoIter& rIter) {
             if (rIter.isValid()) {
                 MR::initDefaultPos(this, rIter);
+                MR::getJMapInfoArg0NoInit(rIter, &mArgs[0]);
+                MR::getJMapInfoArg1NoInit(rIter, &mArgs[1]);
+                MR::getJMapInfoArg2NoInit(rIter, &mArgs[2]);
+                MR::getJMapInfoArg3NoInit(rIter, &mArgs[3]);
+                MR::getJMapInfoArg4NoInit(rIter, &mArgs[4]);
+                MR::getJMapInfoArg5NoInit(rIter, &mArgs[5]);
+                MR::getJMapInfoArg6NoInit(rIter, &mArgs[6]);
+                MR::getJMapInfoArg7NoInit(rIter, &mArgs[7]);
+                MR::useStageSwitchWriteA(this, rIter);
+                MR::useStageSwitchWriteB(this, rIter);
+                MR::useStageSwitchWriteDead(this, rIter);
+                MR::useStageSwitchReadAppear(this, rIter);
+                if (MR::isConnectedWithRail(rIter)) {
+                    initRailRider(rIter);
+                }
             }
             if (mClass->archive != nullptr) {
                 initModelManagerWithAnm(mClass->archive, nullptr, false);
@@ -151,9 +201,24 @@ namespace {
         }
 
         virtual void control() {
+            mStateFrames++;
             if (mClass->update != nullptr) {
                 mClass->update(asHandle(this), mClass->user);
             }
+        }
+
+        virtual void calcAndSetBaseMtx() {
+            if (!mUseFront) {
+                LiveActor::calcAndSetBaseMtx();
+                return;
+            }
+            TVec3f up(-mGravity.x, -mGravity.y, -mGravity.z);
+            if (MR::isNearZero(up)) {
+                up.set(0.0f, 1.0f, 0.0f);
+            }
+            TPos3f base;
+            MR::makeMtxUpFrontPos(&base, up, mFront, mPosition);
+            MR::setBaseTRMtx(this, base);
         }
 
         virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
@@ -163,11 +228,40 @@ namespace {
         }
 
         virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+            if (mClass->attacked_by != nullptr) {
+                s32 how = NEBULA_ATTACK_OTHER;
+                if (MR::isMsgPlayerSpinAttack(msg)) {
+                    how = NEBULA_ATTACK_SPIN;
+                } else if (MR::isMsgPlayerTrample(msg)) {
+                    how = NEBULA_ATTACK_STOMP;
+                } else if (MR::isMsgPlayerHipDrop(msg)) {
+                    how = NEBULA_ATTACK_GROUND_POUND;
+                } else if (MR::isMsgStarPieceAttack(msg)) {
+                    how = NEBULA_ATTACK_STAR_BIT;
+                } else if (MR::isMsgFireBallAttack(msg)) {
+                    how = NEBULA_ATTACK_FIRE;
+                } else if (MR::isMsgInvincibleAttack(msg)) {
+                    how = NEBULA_ATTACK_INVINCIBLE;
+                } else if (MR::isMsgJetTurtleAttack(msg)) {
+                    how = NEBULA_ATTACK_SHELL;
+                }
+                return mClass->attacked_by(asHandle(this), how, mClass->user) != 0;
+            }
             return mClass->attacked != nullptr && mClass->attacked(asHandle(this), mClass->user) != 0;
         }
 
         const NebulaObjectClass* mClass;
+        s32 mState;
+        s32 mStateFrames;
+        s32 mArgs[8];
+        bool mUseFront;
+        TVec3f mFront;
     };
+
+    PluginActor* asPluginActor(NebulaActor* pActor) {
+        LiveActor* pLive = asActor(pActor);
+        return pLive != nullptr && *reinterpret_cast< void** >(pLive) == sPluginActorTable ? static_cast< PluginActor* >(pLive) : nullptr;
+    }
 
     NameObj* createPluginActor(const char* pName) {
         const ObjectEntry* pEntry = findObject(pName);
@@ -326,6 +420,38 @@ namespace {
         return 0;
     }
 
+    struct ObjectChange {
+        s32 mWhere;
+        const char* mObject;
+        const char* mBecomes;
+    };
+    List< ObjectChange > sObjectChanges;
+
+    int32_t apiSetObjectChange(int32_t where, const char* pObject, const char* pBecomes) {
+        if (where < 0 || where >= NEBULA_OBJECTS_IN_COUNT || pObject == nullptr || pObject[0] == '\0') {
+            return -1;
+        }
+        const ObjectChange change = {where, copyText(pObject), pBecomes != nullptr ? copyText(pBecomes) : nullptr};
+        sObjectChanges.add(change);
+        return 0;
+    }
+
+    struct CometLimit {
+        const char* mGalaxy;
+        s32 mMission;
+        u32 mSeconds;
+    };
+    List< CometLimit > sCometLimits;
+
+    int32_t apiSetCometTimeLimit(const char* pGalaxy, int32_t mission, int32_t seconds) {
+        if (pGalaxy == nullptr || pGalaxy[0] == '\0' || mission <= 0 || seconds <= 0) {
+            return -1;
+        }
+        const CometLimit limit = {copyText(pGalaxy), mission, static_cast< u32 >(seconds)};
+        sCometLimits.add(limit);
+        return 0;
+    }
+
     int32_t apiSetCometSchedule(int32_t dome, const char* const* ppGalaxies, const int32_t* pCoins, int32_t count) {
         if (dome < 1 || dome > 6 || ppGalaxies == nullptr || pCoins == nullptr || count <= 0) {
             return -1;
@@ -419,8 +545,16 @@ namespace {
         return index >= 0 && index < sPowerUps.mCount ? &sPowerUps.mItems[index] : nullptr;
     }
 
+    // The player in a stage being played: none between scenes or on the file select screen, whose player has no power-up models.
+    MarioActor* playingPlayer() {
+        if (sStageFrames <= 0 || MR::isStageFileSelect() || !MR::isExistSceneObj(SceneObj_MarioHolder)) {
+            return nullptr;
+        }
+        return MarioAccess::getPlayerActor();
+    }
+
     NebulaActor* apiPlayer() {
-        return sStageFrames > 0 ? asHandle(MarioAccess::getPlayerActor()) : nullptr;
+        return asHandle(playingPlayer());
     }
 
     void apiGetPosition(NebulaActor* pActor, f32* pOut) {
@@ -459,7 +593,7 @@ namespace {
     }
 
     int32_t apiValue(NebulaModValue what) {
-        MarioActor* pPlayer = sStageFrames > 0 ? MarioAccess::getPlayerActor() : nullptr;
+        MarioActor* pPlayer = playingPlayer();
         switch (what) {
         case NEBULA_VALUE_LIFE: return pPlayer != nullptr ? static_cast< s32 >(pPlayer->mHealth) : 0;
         case NEBULA_VALUE_MAX_LIFE: return pPlayer != nullptr ? static_cast< s32 >(pPlayer->mMaxHealth) : 0;
@@ -468,22 +602,58 @@ namespace {
         case NEBULA_VALUE_STAR_BITS: return MR::getStarPieceNum();
         case NEBULA_VALUE_COINS: return sStageFrames > 0 ? MR::getCoinNum() : 0;
         case NEBULA_VALUE_LIVES: return MR::getPlayerLeft();
+        case NEBULA_VALUE_POWER_STARS: return MR::getPowerStarNum();
+        case NEBULA_VALUE_WATER_LIFE: return pPlayer != nullptr ? static_cast< s32 >(pPlayer->mWaterLife) : 0;
+        case NEBULA_VALUE_SPINNING: return pPlayer != nullptr && MR::isPlayerSwingAction() ? 1 : 0;
+        case NEBULA_VALUE_JUMP_RISING: return pPlayer != nullptr && MR::isPlayerJumpRising() ? 1 : 0;
+        case NEBULA_VALUE_DAMAGED: return pPlayer != nullptr && MR::isPlayerDamaging() ? 1 : 0;
+        case NEBULA_VALUE_DEAD: return pPlayer != nullptr && MR::isPlayerDead() ? 1 : 0;
+        case NEBULA_VALUE_GROUND_POUNDING: return pPlayer != nullptr && (MR::isPlayerHipDropFalling() || MR::isPlayerHipDropLand()) ? 1 : 0;
+        case NEBULA_VALUE_SKATING: return pPlayer != nullptr && MR::isPlayerSkating() ? 1 : 0;
+        case NEBULA_VALUE_CROUCHING: return pPlayer != nullptr && MR::isPlayerSquat() ? 1 : 0;
+        case NEBULA_VALUE_FLYING: return pPlayer != nullptr && MR::isPlayerFlying() ? 1 : 0;
+        case NEBULA_VALUE_SWIMMING: return pPlayer != nullptr && pPlayer->getMario()->isSwimming() ? 1 : 0;
+        case NEBULA_VALUE_LUIGI: return MR::isPlayerLuigi() ? 1 : 0;
         case NEBULA_VALUE_MISSION: return sStageFrames > 0 ? MR::getCurrentScenarioNo() : 0;
         default: return 0;
         }
     }
 
     void apiSetValue(NebulaModSet what, int32_t value) {
-        MarioActor* pPlayer = sStageFrames > 0 ? MarioAccess::getPlayerActor() : nullptr;
+        MarioActor* pPlayer = playingPlayer();
         if (pPlayer == nullptr) {
             return;
         }
         switch (what) {
-        case NEBULA_SET_LIFE: pPlayer->mHealth = static_cast< u32 >(value); break;
-        case NEBULA_SET_MAX_LIFE: pPlayer->mMaxHealth = static_cast< u32 >(value); break;
-        case NEBULA_SET_POWER_UP: pPlayer->setPlayerMode(static_cast< u16 >(value), false); break;
-        case NEBULA_SET_ADD_COINS: MR::incCoin(value); break;
-        case NEBULA_SET_ADD_STAR_BITS: MR::addStarPiece(value); break;
+        case NEBULA_SET_LIFE:
+            if (value <= 0) {
+                pPlayer->mHealth = 0;
+                MarioAccess::forceKill(0, 0);
+            } else {
+                pPlayer->mHealth = static_cast< u32 >(value > static_cast< s32 >(pPlayer->mMaxHealth) ? static_cast< s32 >(pPlayer->mMaxHealth) : value);
+            }
+            break;
+        case NEBULA_SET_MAX_LIFE:
+            if (value >= 1) {
+                pPlayer->mMaxHealth = static_cast< u32 >(value);
+            }
+            break;
+        case NEBULA_SET_POWER_UP:
+            // The game's own numbers, then what add_power_up gave out.
+            if (((value >= 0 && value <= 7) || value == 9 || (value >= NebulaMods::cFirstPowerUp && value < NebulaMods::cFirstPowerUp + sPowerUps.mCount)) && pPlayer->canTakePowerUp(value)) {
+                pPlayer->setPlayerMode(static_cast< u16 >(value), false);
+            }
+            break;
+        case NEBULA_SET_ADD_COINS:
+            if (value > 0) {
+                MR::incCoin(value);
+            }
+            break;
+        case NEBULA_SET_ADD_STAR_BITS:
+            if (value > 0) {
+                MR::addStarPiece(value);
+            }
+            break;
         case NEBULA_SET_ADD_LIVES:
             for (s32 i = 0; i < value; i++) {
                 MR::incPlayerLeft();
@@ -494,13 +664,13 @@ namespace {
     }
 
     void apiKillPlayer() {
-        if (sStageFrames > 0) {
+        if (playingPlayer() != nullptr) {
             MarioAccess::forceKill(0, 0);
         }
     }
 
     void apiJumpPlayer(const f32* pVelocity) {
-        if (sStageFrames > 0) {
+        if (playingPlayer() != nullptr) {
             MarioAccess::forceJump(TVec3f(pVelocity[0], pVelocity[1], pVelocity[2]), 0);
         }
     }
@@ -547,11 +717,47 @@ namespace {
                 return 0;
             }
             return MR::startSound(pLive, pName) != nullptr ? 1 : 0;
-        case NEBULA_PLAY_PLAYER_ANIMATION:
-            if (sStageFrames == 0) {
+        case NEBULA_PLAY_SKELETON:
+            if (pLive->mModelManager == nullptr || !MR::isExistBck(pLive, pName)) {
                 return 0;
             }
-            MarioAccess::getPlayerActor()->changeAnimationNonStop(pName);
+            MR::startBck(pLive, pName);
+            return 1;
+        case NEBULA_PLAY_TEXTURE_MOVE:
+            if (pLive->mModelManager == nullptr || !MR::isExistBtk(pLive, pName)) {
+                return 0;
+            }
+            MR::startBtk(pLive, pName);
+            return 1;
+        case NEBULA_PLAY_COLOUR:
+            if (pLive->mModelManager == nullptr || !MR::isExistBrk(pLive, pName)) {
+                return 0;
+            }
+            MR::startBrk(pLive, pName);
+            return 1;
+        case NEBULA_PLAY_SHOWN_PARTS:
+            if (pLive->mModelManager == nullptr || !MR::isExistBva(pLive, pName)) {
+                return 0;
+            }
+            MR::startBva(pLive, pName);
+            return 1;
+        case NEBULA_PLAY_TEXTURE_FRAMES:
+            if (pLive->mModelManager == nullptr || !MR::isExistBtp(pLive, pName)) {
+                return 0;
+            }
+            MR::startBtp(pLive, pName);
+            return 1;
+        case NEBULA_PLAY_MATERIAL_COLOUR:
+            if (pLive->mModelManager == nullptr || !MR::isExistBpk(pLive, pName)) {
+                return 0;
+            }
+            MR::startBpk(pLive, pName);
+            return 1;
+        case NEBULA_PLAY_PLAYER_ANIMATION:
+            if (playingPlayer() == nullptr) {
+                return 0;
+            }
+            playingPlayer()->changeAnimationNonStop(pName);
             return 1;
         default:
             return 0;
@@ -567,11 +773,31 @@ namespace {
     }
 
     NebulaActor* apiSpawn(const char* pName, const f32* pAt) {
-        const ObjectEntry* pEntry = findObject(pName);
-        if (pEntry == nullptr || (pEntry->mArchive != nullptr && !MR::isLoadedObjectOrLayoutArchive(pEntry->mArchive))) {
+        if (pName == nullptr || sStageFrames <= 0) {
             return nullptr;
         }
-        NameObj* pObject = pEntry->mCreator(pEntry->mName);
+        // Any object, a plugin's or the game's, on any stage: its files load now if the stage hasn't them.
+        const ObjectEntry* pEntry = findObject(pName);
+        NameObj* pObject = nullptr;
+        if (pEntry != nullptr) {
+            if (pEntry->mArchive != nullptr && !MR::isLoadedObjectOrLayoutArchive(pEntry->mArchive)) {
+                MR::mountAsyncArchiveByObjectOrLayoutName(pEntry->mArchive, nullptr);
+                MR::receiveAllRequestedFile();
+                if (!MR::isLoadedObjectOrLayoutArchive(pEntry->mArchive)) {
+                    return nullptr;
+                }
+            }
+            pObject = pEntry->mCreator(pEntry->mName);
+        } else {
+            const CreatorFuncPtr pCreator = NameObjFactory::getCreator(pName);
+            if (pCreator == nullptr) {
+                return nullptr;
+            }
+            const JMapInfoIter noPlacement;
+            NameObjFactory::requestMountObjectArchives(pName, noPlacement);
+            MR::receiveAllRequestedFile();
+            pObject = pCreator(copyText(pName));
+        }
         if (pObject == nullptr) {
             return nullptr;
         }
@@ -581,13 +807,17 @@ namespace {
         return asHandle(pActor);
     }
 
+    // The swing is the player's state, not a button: this frame's and the last one's, kept by the frame tick.
+    bool sSwingNow = false;
+    bool sSwingBefore = false;
+
     uint32_t apiButtonsHeld() {
-        return (MR::getPlayerHeldJump() ? NEBULA_BUTTON_JUMP : 0u) | (MR::getPlayerHeldFire() ? NEBULA_BUTTON_SPIN : 0u) |
+        return (MR::getPlayerHeldJump() ? NEBULA_BUTTON_JUMP : 0u) | (MR::getPlayerHeldFire() ? NEBULA_BUTTON_FIRE : 0u) | (sSwingNow ? NEBULA_BUTTON_SPIN : 0u) |
                (MR::getPlayerHeldCrouch() ? NEBULA_BUTTON_CROUCH : 0u) | (MR::getPlayerHeldCamera() ? NEBULA_BUTTON_CAMERA : 0u);
     }
 
     uint32_t apiButtonsPressed() {
-        return (MR::getPlayerPressedJump() ? NEBULA_BUTTON_JUMP : 0u) | (MR::getPlayerPressedFire() ? NEBULA_BUTTON_SPIN : 0u) |
+        return (MR::getPlayerPressedJump() ? NEBULA_BUTTON_JUMP : 0u) | (MR::getPlayerPressedFire() ? NEBULA_BUTTON_FIRE : 0u) | (sSwingNow && !sSwingBefore ? NEBULA_BUTTON_SPIN : 0u) |
                (MR::getPlayerPressedCrouch() ? NEBULA_BUTTON_CROUCH : 0u) | (MR::getPlayerPressedCamera() ? NEBULA_BUTTON_CAMERA : 0u);
     }
 
@@ -602,7 +832,449 @@ namespace {
         }
     }
 
-    // The fields the host fills are its own: log, option, hook, find_function.
+    int32_t apiIsAnimationDone(NebulaActor* pActor) {
+        const LiveActor* pLive = asActor(pActor);
+        return pLive->mModelManager == nullptr || MR::isBckStopped(pLive) ? 1 : 0;
+    }
+
+    float apiAnimationFrame(NebulaActor* pActor) {
+        const LiveActor* pLive = asActor(pActor);
+        return pLive->mModelManager != nullptr ? MR::getBckFrame(pLive) : 0.0f;
+    }
+
+    float apiAnimationLength(NebulaActor* pActor) {
+        const LiveActor* pLive = asActor(pActor);
+        return pLive->mModelManager != nullptr ? MR::getBckFrameMax(pLive) : 0.0f;
+    }
+
+    void apiSetAnimationFrame(NebulaActor* pActor, float frame) {
+        const LiveActor* pLive = asActor(pActor);
+        if (pLive->mModelManager != nullptr) {
+            MR::setBckFrame(pLive, frame);
+        }
+    }
+
+    void apiSetAnimationRate(NebulaActor* pActor, float rate) {
+        const LiveActor* pLive = asActor(pActor);
+        if (pLive->mModelManager != nullptr) {
+            MR::setBckRate(pLive, rate);
+        }
+    }
+
+    void apiStopEffect(NebulaActor* pActor, const char* pName) {
+        LiveActor* pLive = asActor(pActor);
+        if (pLive->mEffectKeeper == nullptr) {
+            return;
+        }
+        if (pName == nullptr) {
+            MR::deleteEffectAll(pLive);
+        } else {
+            MR::deleteEffect(pLive, pName);
+        }
+    }
+
+    void apiStopSound(NebulaActor* pActor, const char* pName) {
+        const LiveActor* pLive = asActor(pActor);
+        if (pName != nullptr && pLive->mSoundObject != nullptr) {
+            MR::stopSound(pLive, pName);
+        }
+    }
+
+    void apiSetState(NebulaActor* pActor, int32_t state) {
+        if (PluginActor* pPlugin = asPluginActor(pActor)) {
+            pPlugin->mState = state;
+            pPlugin->mStateFrames = -1;
+        }
+    }
+
+    int32_t apiState(NebulaActor* pActor) {
+        const PluginActor* pPlugin = asPluginActor(pActor);
+        return pPlugin != nullptr ? pPlugin->mState : 0;
+    }
+
+    int32_t apiStateFrames(NebulaActor* pActor) {
+        const PluginActor* pPlugin = asPluginActor(pActor);
+        return pPlugin != nullptr ? pPlugin->mStateFrames : 0;
+    }
+
+    void apiGetRotation(NebulaActor* pActor, float* pOut) {
+        const TVec3f& rIn = asActor(pActor)->mRotation;
+        pOut[0] = rIn.x;
+        pOut[1] = rIn.y;
+        pOut[2] = rIn.z;
+    }
+
+    void apiSetRotation(NebulaActor* pActor, const float* pIn) {
+        asActor(pActor)->mRotation.set(pIn[0], pIn[1], pIn[2]);
+    }
+
+    void apiGetScale(NebulaActor* pActor, float* pOut) {
+        const TVec3f& rIn = asActor(pActor)->mScale;
+        pOut[0] = rIn.x;
+        pOut[1] = rIn.y;
+        pOut[2] = rIn.z;
+    }
+
+    void apiSetScale(NebulaActor* pActor, const float* pIn) {
+        asActor(pActor)->mScale.set(pIn[0], pIn[1], pIn[2]);
+    }
+
+    void apiSetFront(NebulaActor* pActor, const float* pIn) {
+        PluginActor* pPlugin = asPluginActor(pActor);
+        TVec3f front(pIn[0], pIn[1], pIn[2]);
+        if (pPlugin != nullptr && !MR::isNearZero(front)) {
+            MR::normalize(&front);
+            pPlugin->mFront = front;
+            pPlugin->mUseFront = true;
+        }
+    }
+
+    void apiGetFront(NebulaActor* pActor, float* pOut) {
+        const PluginActor* pPlugin = asPluginActor(pActor);
+        pOut[0] = pPlugin != nullptr ? pPlugin->mFront.x : 0.0f;
+        pOut[1] = pPlugin != nullptr ? pPlugin->mFront.y : 0.0f;
+        pOut[2] = pPlugin != nullptr ? pPlugin->mFront.z : 1.0f;
+    }
+
+    void apiTurnToPlayer(NebulaActor* pActor, float degrees) {
+        PluginActor* pPlugin = asPluginActor(pActor);
+        if (pPlugin != nullptr && playingPlayer() != nullptr) {
+            MR::turnDirectionToPlayerDegree(pPlugin, &pPlugin->mFront, degrees);
+            pPlugin->mUseFront = true;
+        }
+    }
+
+    void apiSetTouchable(NebulaActor* pActor, int32_t touchable) {
+        if (PluginActor* pPlugin = asPluginActor(pActor)) {
+            if (touchable != 0) {
+                MR::validateHitSensors(pPlugin);
+            } else {
+                MR::invalidateHitSensors(pPlugin);
+            }
+        }
+    }
+
+    int32_t apiHitPlayer(NebulaActor* pActor, NebulaHit how) {
+        PluginActor* pPlugin = asPluginActor(pActor);
+        MarioActor* pPlayer = playingPlayer();
+        if (pPlugin == nullptr || pPlayer == nullptr) {
+            return 0;
+        }
+        HitSensor* pOwn = pPlugin->getSensor("body");
+        HitSensor* pThem = pPlayer->getSensor("body");
+        if (pOwn == nullptr || pThem == nullptr) {
+            return 0;
+        }
+        switch (how) {
+        case NEBULA_HIT_STRONG: return MR::sendMsgEnemyAttackStrong(pThem, pOwn) ? 1 : 0;
+        case NEBULA_HIT_FIRE: return MR::sendMsgEnemyAttackFire(pThem, pOwn) ? 1 : 0;
+        case NEBULA_HIT_ELECTRIC: return MR::sendMsgEnemyAttackElectric(pThem, pOwn) ? 1 : 0;
+        case NEBULA_HIT_FREEZE: return MR::sendMsgEnemyAttackFreeze(pThem, pOwn) ? 1 : 0;
+        case NEBULA_HIT_FLIP: return MR::sendMsgEnemyAttackFlip(pThem, pOwn) ? 1 : 0;
+        default: return MR::sendMsgEnemyAttack(pThem, pOwn) ? 1 : 0;
+        }
+    }
+
+    int32_t apiObjectArg(NebulaActor* pActor, int32_t index) {
+        const PluginActor* pPlugin = asPluginActor(pActor);
+        return pPlugin != nullptr && index >= 0 && index < 8 ? pPlugin->mArgs[index] : -1;
+    }
+
+    int32_t apiHasSwitch(NebulaActor* pActor, NebulaSwitch which) {
+        const LiveActor* pLive = asActor(pActor);
+        if (pLive->mStageSwitchCtrl == nullptr) {
+            return 0;
+        }
+        switch (which) {
+        case NEBULA_SWITCH_A: return MR::isValidSwitchA(pLive) ? 1 : 0;
+        case NEBULA_SWITCH_B: return MR::isValidSwitchB(pLive) ? 1 : 0;
+        case NEBULA_SWITCH_APPEAR: return MR::isValidSwitchAppear(pLive) ? 1 : 0;
+        case NEBULA_SWITCH_DEAD: return MR::isValidSwitchDead(pLive) ? 1 : 0;
+        default: return 0;
+        }
+    }
+
+    int32_t apiIsSwitchOn(NebulaActor* pActor, NebulaSwitch which) {
+        const LiveActor* pLive = asActor(pActor);
+        if (apiHasSwitch(pActor, which) == 0) {
+            return 0;
+        }
+        switch (which) {
+        case NEBULA_SWITCH_A: return MR::isOnSwitchA(pLive) ? 1 : 0;
+        case NEBULA_SWITCH_B: return MR::isOnSwitchB(pLive) ? 1 : 0;
+        case NEBULA_SWITCH_APPEAR: return MR::isOnSwitchAppear(pLive) ? 1 : 0;
+        default: return 0;
+        }
+    }
+
+    void apiSetSwitch(NebulaActor* pActor, NebulaSwitch which, int32_t on) {
+        LiveActor* pLive = asActor(pActor);
+        if (apiHasSwitch(pActor, which) == 0) {
+            return;
+        }
+        switch (which) {
+        case NEBULA_SWITCH_A:
+            if (on != 0) {
+                MR::onSwitchA(pLive);
+            } else {
+                MR::offSwitchA(pLive);
+            }
+            break;
+        case NEBULA_SWITCH_B:
+            if (on != 0) {
+                MR::onSwitchB(pLive);
+            } else {
+                MR::offSwitchB(pLive);
+            }
+            break;
+        case NEBULA_SWITCH_DEAD:
+            if (on != 0) {
+                MR::onSwitchDead(pLive);
+            }
+            break;
+        default: break;
+        }
+    }
+
+    int32_t apiHasRail(NebulaActor* pActor) {
+        return MR::isExistRail(asActor(pActor)) ? 1 : 0;
+    }
+
+    void apiMoveOnRail(NebulaActor* pActor, float speed) {
+        LiveActor* pLive = asActor(pActor);
+        if (MR::isExistRail(pLive)) {
+            MR::moveCoord(pLive, speed);
+            MR::moveTransToCurrentRailPos(pLive);
+        }
+    }
+
+    int32_t apiRailAtEnd(NebulaActor* pActor) {
+        const LiveActor* pLive = asActor(pActor);
+        return MR::isExistRail(pLive) && MR::isRailReachedGoal(pLive) ? 1 : 0;
+    }
+
+    void apiRailTurnBack(NebulaActor* pActor) {
+        LiveActor* pLive = asActor(pActor);
+        if (MR::isExistRail(pLive)) {
+            MR::reverseRailDirection(pLive);
+        }
+    }
+
+    float apiRailCoord(NebulaActor* pActor) {
+        const LiveActor* pLive = asActor(pActor);
+        return MR::isExistRail(pLive) ? MR::getRailCoord(pLive) : 0.0f;
+    }
+
+    void apiSetRailCoord(NebulaActor* pActor, float coord) {
+        LiveActor* pLive = asActor(pActor);
+        if (MR::isExistRail(pLive)) {
+            MR::setRailCoord(pLive, coord);
+        }
+    }
+
+    float apiRailLength(NebulaActor* pActor) {
+        const LiveActor* pLive = asActor(pActor);
+        return MR::isExistRail(pLive) ? MR::getRailTotalLength(pLive) : 0.0f;
+    }
+
+    int32_t apiRaycast(const float* pFrom, const float* pTo, float* pHit) {
+        if (sStageFrames <= 0) {
+            return 0;
+        }
+        const TVec3f from(pFrom[0], pFrom[1], pFrom[2]);
+        const TVec3f line(pTo[0] - pFrom[0], pTo[1] - pFrom[1], pTo[2] - pFrom[2]);
+        TVec3f hit(0.0f, 0.0f, 0.0f);
+        Triangle triangle;
+        if (!MR::getFirstPolyOnLineToMap(&hit, &triangle, from, line)) {
+            return 0;
+        }
+        pHit[0] = hit.x;
+        pHit[1] = hit.y;
+        pHit[2] = hit.z;
+        return 1;
+    }
+
+    int32_t apiIsOnGround(NebulaActor* pActor) {
+        const LiveActor* pLive = asActor(pActor);
+        return pLive->mBinder != nullptr && MR::isBindedGround(pLive) ? 1 : 0;
+    }
+
+    int32_t apiIsTouchingWall(NebulaActor* pActor) {
+        const LiveActor* pLive = asActor(pActor);
+        return pLive->mBinder != nullptr && MR::isBindedWall(pLive) ? 1 : 0;
+    }
+
+    int32_t apiIsInWater(const float* pAt) {
+        return sStageFrames > 0 && MR::isInWater(TVec3f(pAt[0], pAt[1], pAt[2])) ? 1 : 0;
+    }
+
+    float apiDistanceToPlayer(NebulaActor* pActor) {
+        return playingPlayer() != nullptr ? MR::calcDistanceToPlayer(asActor(pActor)) : 0.0f;
+    }
+
+    void apiGetJointPosition(NebulaActor* pActor, const char* pJoint, float* pOut) {
+        const LiveActor* pLive = asActor(pActor);
+        TVec3f at(pLive->mPosition);
+        if (pLive->mModelManager != nullptr && pJoint != nullptr) {
+            MR::copyJointPos(pLive, pJoint, &at);
+        }
+        pOut[0] = at.x;
+        pOut[1] = at.y;
+        pOut[2] = at.z;
+    }
+
+    void apiPlayerFront(float* pOut) {
+        TVec3f front(0.0f, 0.0f, 1.0f);
+        if (playingPlayer() != nullptr) {
+            MR::getPlayerFrontVec(&front);
+        }
+        pOut[0] = front.x;
+        pOut[1] = front.y;
+        pOut[2] = front.z;
+    }
+
+    void apiSetPlayerControl(int32_t on) {
+        if (playingPlayer() == nullptr) {
+            return;
+        }
+        if (on != 0) {
+            MR::onPlayerControl(true);
+        } else {
+            MR::offPlayerControl();
+        }
+    }
+
+    void apiDeclareItem(NebulaActor* pActor, NebulaItem what, int32_t count) {
+        const LiveActor* pLive = asActor(pActor);
+        switch (what) {
+        case NEBULA_ITEM_COINS: MR::declareCoin(pLive, count); break;
+        case NEBULA_ITEM_STAR_BITS: MR::declareStarPiece(pLive, count); break;
+        case NEBULA_ITEM_POWER_STAR:
+            if (count < 0) {
+                MR::declarePowerStar(pLive);
+            } else {
+                MR::declarePowerStar(pLive, count);
+            }
+            break;
+        default: break;
+        }
+    }
+
+    void apiAppearItem(NebulaActor* pActor, NebulaItem what, const float* pAt, int32_t count) {
+        const LiveActor* pLive = asActor(pActor);
+        const TVec3f at(pAt[0], pAt[1], pAt[2]);
+        switch (what) {
+        case NEBULA_ITEM_COINS: MR::appearCoinPop(pLive, at, count); break;
+        case NEBULA_ITEM_STAR_BITS: MR::appearStarPiece(pLive, at, count, 10.0f, 40.0f, false); break;
+        case NEBULA_ITEM_POWER_STAR:
+            if (count < 0) {
+                MR::requestAppearPowerStar(pLive, at);
+            } else {
+                MR::requestAppearPowerStar(pLive, count, at);
+            }
+            break;
+        default: break;
+        }
+    }
+
+    int32_t apiStartCutscene(NebulaActor* pActor, const char* pName) {
+        return pName != nullptr && sStageFrames > 0 && MR::tryStartDemo(asActor(pActor), pName) ? 1 : 0;
+    }
+
+    void apiEndCutscene(NebulaActor* pActor, const char* pName) {
+        if (pName != nullptr && sStageFrames > 0) {
+            MR::endDemo(asActor(pActor), pName);
+        }
+    }
+
+    int32_t apiIsCutscenePlaying() {
+        return sStageFrames > 0 && MR::isDemoActive() ? 1 : 0;
+    }
+
+    void apiShakeCameraBy(NebulaShake how) {
+        if (sStageFrames <= 0) {
+            return;
+        }
+        switch (how) {
+        case NEBULA_SHAKE_WEAK: MR::shakeCameraWeak(); break;
+        case NEBULA_SHAKE_NORMAL_STRONG: MR::shakeCameraNormalStrong(); break;
+        case NEBULA_SHAKE_STRONG: MR::shakeCameraStrong(); break;
+        case NEBULA_SHAKE_VERY_STRONG: MR::shakeCameraVeryStrong(); break;
+        default: MR::shakeCameraNormal(); break;
+        }
+    }
+
+    void apiStartCamera(const char* pName, int32_t frames) {
+        if (pName != nullptr && sStageFrames > 0) {
+            MR::startGlobalEventCameraNoTarget(pName, frames);
+        }
+    }
+
+    void apiEndCamera(const char* pName, int32_t frames) {
+        if (pName != nullptr && sStageFrames > 0) {
+            MR::endGlobalEventCamera(pName, frames, true);
+        }
+    }
+
+    void apiFadeOut(int32_t frames) {
+        if (sStageFrames > 0) {
+            MR::closeWipeFade(frames);
+        }
+    }
+
+    void apiFadeIn(int32_t frames) {
+        if (sStageFrames > 0) {
+            MR::openWipeFade(frames);
+        }
+    }
+
+    void apiChangeStage(const char* pGalaxy, int32_t mission) {
+        if (pGalaxy != nullptr && sStageFrames > 0) {
+            MR::requestChangeStageInGameMoving(copyText(pGalaxy), mission);
+        }
+    }
+
+    void apiBackToDome() {
+        if (sStageFrames > 0) {
+            MR::requestChangeStageGoBackAstroDome();
+        }
+    }
+
+    int32_t apiIsEventFlagOn(const char* pName) {
+        return pName != nullptr && GameEventFlagTable::isExist(pName) && GameDataFunction::isOnGameEventFlag(pName) ? 1 : 0;
+    }
+
+    void apiSetEventFlagOn(const char* pName) {
+        if (pName != nullptr && GameEventFlagTable::isExist(pName)) {
+            GameDataFunction::onGameEventFlag(pName);
+        }
+    }
+
+    int32_t apiHasStar(const char* pGalaxy, int32_t star) {
+        return pGalaxy != nullptr && star > 0 && MR::isOnGameEventFlagPowerStarSuccess(pGalaxy, star) ? 1 : 0;
+    }
+
+    void apiShowMessage(const char* pText, int32_t centre) {
+        if (pText == nullptr || sStageFrames <= 0) {
+            return;
+        }
+        if (centre != 0) {
+            MR::appearInformationMessageCenter(pText, false);
+        } else {
+            MR::appearInformationMessage(pText, false);
+        }
+    }
+
+    void apiHideMessage() {
+        if (sStageFrames > 0) {
+            MR::disappearInformationMessage();
+        }
+    }
+
+    // The fields the host fills are its own: log, option, hook, find_function, store_get, store_set.
+    // Set once any mod's rows or code have started.
+    bool sAskedForApi = false;
+
     const NebulaModApi sApi = {
         sizeof(NebulaModApi),
         NEBULA_MOD_API_VERSION,
@@ -650,21 +1322,76 @@ namespace {
         apiIsMoviePlaying,
         apiSetEventFlag,
         apiSetCometSchedule,
+        apiSetObjectChange,
+        apiSetCometTimeLimit,
+        apiIsAnimationDone,
+        apiAnimationFrame,
+        apiAnimationLength,
+        apiSetAnimationFrame,
+        apiSetAnimationRate,
+        apiStopEffect,
+        apiStopSound,
+        apiSetState,
+        apiState,
+        apiStateFrames,
+        apiGetRotation,
+        apiSetRotation,
+        apiGetScale,
+        apiSetScale,
+        apiSetFront,
+        apiGetFront,
+        apiTurnToPlayer,
+        apiSetTouchable,
+        apiHitPlayer,
+        apiObjectArg,
+        apiHasSwitch,
+        apiIsSwitchOn,
+        apiSetSwitch,
+        apiHasRail,
+        apiMoveOnRail,
+        apiRailAtEnd,
+        apiRailTurnBack,
+        apiRailCoord,
+        apiSetRailCoord,
+        apiRailLength,
+        apiRaycast,
+        apiIsOnGround,
+        apiIsTouchingWall,
+        apiIsInWater,
+        apiDistanceToPlayer,
+        apiGetJointPosition,
+        apiPlayerFront,
+        apiSetPlayerControl,
+        apiDeclareItem,
+        apiAppearItem,
+        apiStartCutscene,
+        apiEndCutscene,
+        apiIsCutscenePlaying,
+        apiShakeCameraBy,
+        apiStartCamera,
+        apiEndCamera,
+        apiFadeOut,
+        apiFadeIn,
+        apiChangeStage,
+        apiBackToDome,
+        apiIsEventFlagOn,
+        apiSetEventFlagOn,
+        apiHasStar,
+        apiShowMessage,
+        apiHideMessage,
+        nullptr,
+        nullptr,
     };
 }  // namespace
 
 extern "C" NEBULA_GAME_API const NebulaModApi* nebula_game_mod_api(void) {
+    sAskedForApi = true;
     return &sApi;
 }
 
 namespace NebulaMods {
     bool hasCode() {
-        for (int i = 0; i < NEBULA_MOD_EVENT_COUNT; i++) {
-            if (sWanted[i]) {
-                return true;
-            }
-        }
-        return false;
+        return sAskedForApi;
     }
 
     s32 dispatch(NebulaModEvent event, s32 value, void* pActor, const char* pName) {
@@ -676,8 +1403,36 @@ namespace NebulaMods {
         return data.value;
     }
 
+    const char* objectBecomes(s32 where, const char* pName) {
+        // The last said is the mod highest on the list's.
+        for (int i = sObjectChanges.mCount - 1; i >= 0; i--) {
+            const ObjectChange& rChange = sObjectChanges.mItems[i];
+            if (rChange.mWhere == where && MR::isEqualStringCase(rChange.mObject, pName)) {
+                return rChange.mBecomes;
+            }
+        }
+        return pName;
+    }
+
+    u32 cometTimeLimit(const char* pGalaxy, s32 mission) {
+        for (int i = sCometLimits.mCount - 1; i >= 0; i--) {
+            const CometLimit& rLimit = sCometLimits.mItems[i];
+            if (rLimit.mMission == mission && MR::isEqualString(rLimit.mGalaxy, pGalaxy)) {
+                return rLimit.mSeconds * 60;
+            }
+        }
+        return 0;
+    }
+
     StageFrame::StageFrame() {
         sStageFrames++;
+        if (sAskedForApi) {
+            sSwingBefore = sSwingNow;
+            sSwingNow = playingPlayer() != nullptr && MR::isPlayerSwingAction();
+            if (sSwingNow && !sSwingBefore) {
+                fire(NEBULA_MOD_EVENT_PLAYER_SPIN);
+            }
+        }
         fire(NEBULA_MOD_EVENT_STAGE_FRAME);
     }
 

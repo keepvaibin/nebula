@@ -557,6 +557,9 @@ public:
         return _482 || _481;
     }
 
+    /// @brief Whether this stage loaded what the player mode needs: a level brings a power-up's model with the item that gives it.
+    bool canTakePowerUp(s32 playerMode) const;
+
     inline Mario* getMario() const {
         return mMario;
     }

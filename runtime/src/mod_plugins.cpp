@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "galaxy/mod_plugins.h"
+#include "galaxy/mods.h"
 
+#include <string>
+#include <filesystem>
+#include <cstdlib>
+#include <fstream>
 #include <cstdio>
 #include <map>
 #include <memory>
@@ -96,6 +101,59 @@ const char* api_option(const NebulaPlugin* self, const char* id) {
     return nullptr;
 }
 
+// A number kept for a mod across plays: one small text file per mod, key=value, beside the mods.
+std::filesystem::path store_file(const NebulaPlugin* self) {
+    return mods_folder() / ".plugin-data" / (std::string(self->id) + ".txt");
+}
+
+std::map<std::string, std::int32_t> read_store(const NebulaPlugin* self) {
+    std::map<std::string, std::int32_t> values;
+    std::ifstream file(store_file(self));
+    std::string line;
+    while (std::getline(file, line)) {
+        const std::size_t equals = line.find('=');
+        if (equals == std::string::npos) continue;
+        char* end = nullptr;
+        const long value = std::strtol(line.c_str() + equals + 1, &end, 10);
+        if (end != nullptr && end != line.c_str() + equals + 1) values[line.substr(0, equals)] = static_cast<std::int32_t>(value);
+    }
+    return values;
+}
+
+// A key is one line's left side.
+bool store_key_ok(const char* key) {
+    if (key == nullptr || key[0] == '\0') return false;
+    for (const char* at = key; *at != '\0'; ++at) {
+        if (*at == '=' || *at == '\n' || *at == '\r') return false;
+    }
+    return true;
+}
+
+std::int32_t api_store_get(const NebulaPlugin* self, const char* key, std::int32_t missing) {
+    if (self == nullptr || self->id == nullptr || !store_key_ok(key)) return missing;
+    const std::map<std::string, std::int32_t> values = read_store(self);
+    const auto it = values.find(key);
+    return it != values.end() ? it->second : missing;
+}
+
+void api_store_set(const NebulaPlugin* self, const char* key, std::int32_t value) {
+    if (self == nullptr || self->id == nullptr || !store_key_ok(key)) return;
+    std::map<std::string, std::int32_t> values = read_store(self);
+    values[key] = value;
+    const std::filesystem::path path = store_file(self);
+    std::error_code error;
+    std::filesystem::create_directories(path.parent_path(), error);
+    // Written whole and moved over, so that a crash in the middle leaves the last good file.
+    std::filesystem::path temporary = path;
+    temporary += ".tmp";
+    {
+        std::ofstream file(temporary, std::ios::trunc);
+        for (const auto& [name, number] : values) file << name << '=' << number << '\n';
+        if (!file) return;
+    }
+    std::filesystem::rename(temporary, path, error);
+}
+
 int32_t api_hook(void* target, void* replacement, void** original) {
     if (!g_starting || target == nullptr || replacement == nullptr || original == nullptr) return -1;
 #if defined(NEBULA_HAS_FUNCTION_HOOKS)
@@ -139,6 +197,8 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
     g_api.option = api_option;
     g_api.hook = api_hook;
     g_api.find_function = api_find_function;
+    g_api.store_get = api_store_get;
+    g_api.store_set = api_store_set;
     for (const auto& [id, words] : rows.texts) {
         g_api.add_text(id.c_str(), words.c_str());
     }
@@ -174,6 +234,16 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
         }
         if (g_api.set_comet_schedule(dome.dome, galaxies.data(), coins.data(), static_cast<std::int32_t>(galaxies.size())) != 0) {
             say(dome.mod_id + ": the comets of dome " + std::to_string(dome.dome) + " can't be set");
+        }
+    }
+    for (const ObjectChangeToSet& change : rows.object_changes) {
+        if (g_api.set_object_change(change.where, change.object.c_str(), change.becomes.empty() ? nullptr : change.becomes.c_str()) != 0) {
+            say(change.mod_id + ": the object " + change.object + " can't be changed");
+        }
+    }
+    for (const CometLimitToSet& limit : rows.comet_limits) {
+        if (g_api.set_comet_time_limit(limit.galaxy.c_str(), limit.mission, limit.seconds) != 0) {
+            say(limit.mod_id + ": the time limit of " + limit.galaxy + " can't be set");
         }
     }
     for (const MusicToAdd& track : rows.music) {

@@ -10,7 +10,7 @@ class LiveActor;
 // The game's side of plugins (nebula_mod_api.h). An event no plugin wants is one load and one branch.
 namespace NebulaMods {
     extern bool sWanted[NEBULA_MOD_EVENT_COUNT];
-    // Whether any mod's code is running: it may ask for what a scene otherwise only makes when its story needs it.
+    // Whether any mod has started: its code may ask for what a scene otherwise only makes when its story needs it.
     bool hasCode();
 
     s32 dispatch(NebulaModEvent event, s32 value, void* pActor, const char* pName);
@@ -50,5 +50,9 @@ namespace NebulaMods {
     typedef NameObj* (*CreatorFuncPtr)(const char*);
     // A plugin's object by its placed name: how to make it. nullptr: not a plugin's.
     CreatorFuncPtr findCreator(const char* pName);
+    // What a mod has made of an object of the game's, where `where` (NEBULA_OBJECTS_*) is: its own name unchanged, another's, or null: gone.
+    const char* objectBecomes(s32 where, const char* pName);
+    // Frames, from what mods say of a comet mission; 0: they say nothing.
+    u32 cometTimeLimit(const char* pGalaxy, s32 mission);
     void addArchives(NameObjArchiveListCollector* pCollector, const char* pName);
 }  // namespace NebulaMods

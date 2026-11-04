@@ -12,6 +12,7 @@
 #include <JSystem/JMath/JMath.hpp>
 
 #include "Game/Util/StringUtil.hpp"
+#include "Game/System/NebulaMods.hpp"
 
 namespace {
     const DummyDisplayModelInfo cDummyDisplayModelInfoTable[15] = {
@@ -52,6 +53,18 @@ namespace {
 
         if (modelId == 0 && MR::isGalaxyDarkCometAppearInCurrentStage()) {
             return nullptr;
+        }
+
+        // A mod may show one row's model for another, or none.
+        const char* pShown = NebulaMods::objectBecomes(NEBULA_OBJECTS_DISPLAY_MODEL, ::cDummyDisplayModelInfoTable[modelId].mName);
+        if (pShown == nullptr) {
+            return nullptr;
+        }
+        for (s32 i = 0; i < static_cast< s32 >(sizeof(::cDummyDisplayModelInfoTable) / sizeof(::cDummyDisplayModelInfoTable[0])); i++) {
+            if (MR::isEqualString(::cDummyDisplayModelInfoTable[i].mName, pShown)) {
+                modelId = i;
+                break;
+            }
         }
 
         pInfo = &::cDummyDisplayModelInfoTable[modelId];
