@@ -7,15 +7,14 @@ extern "C" const NebulaHostServices* nebula_host(void);
 
 class PlayerInput;
 
-// One moment of a player's controller as the game's PlayerInput classes read it (PlayerInputReader::read): the buttons of the
-// read (every sample of one read has them), the filtered accelerations, the pointer and the Nunchuk stick.
+// A player's controller this frame, as the game's PlayerInput classes read it.
 struct PlayerInputSample {
     u32 mHold;      // NEBULA_BUTTON_*
     u32 mTrigger;
     u32 mRelease;
     bool mHasMoveStick;
     bool mIsPointerOn;
-    TVec3f mAccel;  // the main hand's, filtered (InputTilt's parameters), in g
+    TVec3f mAccel;  // the main hand's tilt, in g
     TVec3f mSubTilt;
     TVec2f mStick;
     TVec2f mPointerPos;
@@ -23,31 +22,25 @@ struct PlayerInputSample {
     f32 mDistance;
 };
 
-// A player's samples since the last read (input_read), newest first, and the state they are made from.
 class PlayerInputReader {
 public:
     PlayerInputReader();
 
     void read(s32 chan);
     void requestReset();
-    u32 takeShakePresses(s32 device);
-    PlayerInputSample* getSample(u32) const;
-    u32 getValidStatusCount() const;
+    u32 takeSpinPresses(s32 hand);
+    PlayerInputSample* getSample(u32);
 
-    /* 0x00 */ PlayerInputSample* mStatusArray;
-    /* 0x04 */ u32 mValidStatusCount;
     NebulaInputDevice mDevice;
 
 private:
     void resetState();
     void updateConnection(s32 chan, const NebulaInputDevice& rDevice);
 
-    PlayerInputSample mState;        // the newest sample's state, carried into the next read
+    PlayerInputSample mState;
+    bool mValid;
     bool mResetRequested;
-    bool mStateMoveStick;        // mState's move stick: a change restarts its filter and stick
-    bool mSubHandResetRequested;
-    u8 mShakeHeld;
-    u32 mShakePresses[2];     // the main hand's and the sub hand's, not yet taken (InputSwing)
+    u32 mSpinPresses[2];  // the main hand's and the sub hand's, not yet taken (InputSwing)
 };
 
 class PlayerInputs {

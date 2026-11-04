@@ -9,53 +9,26 @@
 #include <math.h>
 #include "Game/System/NebulaInput.hpp"
 
-#define INPUT_SAMPLE_MAX 120
-
-namespace {
-    // The largest acceleration the main hand's and the sub hand's sensors read, in g.
-    const f32 cAccelMax = 3.4f;
-    const f32 cTiltFollow = 0.15f;  // of the difference, each sample
-    const f32 cSubAccelMax = 2.1f;
-
-    NebulaInputSample sSamples[INPUT_SAMPLE_MAX];
-
-    f32 clampAccel(f32 value, f32 limit) {
-        return value < -limit ? -limit : value > limit ? limit : value;
-    }
-};  // namespace
-
-PlayerInputReader::PlayerInputReader()
-    : mStatusArray(), mValidStatusCount(), mDevice(), mState(), mResetRequested(true), mStateMoveStick(false),
-      mSubHandResetRequested(true), mShakeHeld(0) {
-    mStatusArray = new PlayerInputSample[INPUT_SAMPLE_MAX];
-    MR::zeroMemory(mStatusArray, sizeof(PlayerInputSample) * INPUT_SAMPLE_MAX);
-    mShakePresses[0] = mShakePresses[1] = 0;
+PlayerInputReader::PlayerInputReader() : mDevice(), mState(), mValid(false), mResetRequested(true) {
+    mSpinPresses[0] = mSpinPresses[1] = 0;
     resetState();
 }
 
-PlayerInputSample* PlayerInputReader::getSample(u32 index) const {
-    if (index >= mValidStatusCount) {
-        return nullptr;
-    }
-
-    return &mStatusArray[index];
-}
-
-u32 PlayerInputReader::getValidStatusCount() const {
-    return mValidStatusCount;
+PlayerInputSample* PlayerInputReader::getSample(u32 index) {
+    return index == 0 && mValid ? &mState : nullptr;
 }
 
 void PlayerInputReader::requestReset() {
     mResetRequested = true;
 }
 
-u32 PlayerInputReader::takeShakePresses(s32 device) {
-    const u32 presses = mShakePresses[device];
-    mShakePresses[device] = 0;
+u32 PlayerInputReader::takeSpinPresses(s32 hand) {
+    const u32 presses = mSpinPresses[hand];
+    mSpinPresses[hand] = 0;
     return presses;
 }
 
-// The state a reset leaves (a scene change): nothing held, at rest with 1 g down, the pointer off at distance 1.
+// The state a reset leaves (a scene change): nothing held, the controller at rest, the pointer off.
 void PlayerInputReader::resetState() {
     mState.mHold = mState.mTrigger = mState.mRelease = 0;
     mState.mIsPointerOn = false;
@@ -63,7 +36,8 @@ void PlayerInputReader::resetState() {
     mState.mHorizon.set(1.0f, 0.0f);
     mState.mDistance = 1.0f;
     mState.mAccel.set(0.0f, 0.0f, 1.0f);
-    mSubHandResetRequested = true;
+    mState.mSubTilt.set(0.0f, 0.0f, 1.0f);
+    mState.mStick.set(0.0f, 0.0f);
 }
 
 // A connection or a move stick change, told to PlayerInput.
@@ -95,91 +69,49 @@ void PlayerInputReader::updateConnection(s32 chan, const NebulaInputDevice& rDev
     PlayerInput::extensionCallback(chan, subPad ? INPUT_HAND_SUB : INPUT_HAND_MAIN);
 }
 
-// The samples since the last read as the game's own: the buttons of the newest with their edges and repeat; each
-// sample's accelerations through the filter (acc += sensitivity * (reading - acc), full weight past the play radius
-// and a fourth power of the distance inside it), its pointer (held through samples without one) and stick; shake
-// presses counted. The read after a reset request returns none.
 void PlayerInputReader::read(s32 chan) {
     const NebulaHostServices* host = nebula_host();
     NebulaInputDevice device = {};
-    const u32 count = host->input_read(host->user, static_cast< u32 >(chan), &device, sSamples, INPUT_SAMPLE_MAX);
+    NebulaInputSample sample;
+    const bool has = host->input_read(host->user, static_cast< u32 >(chan), &device, &sample) != 0;
     updateConnection(chan, device);
-
-    for (u32 i = 0; i < count; i++) {
-        const u8 shake = sSamples[i].shake;
-
-        for (s32 d = 0; d < 2; d++) {
-            if ((shake & ~mShakeHeld) & (1u << d)) {
-                mShakePresses[d]++;
-            }
-        }
-
-        mShakeHeld = shake;
+    if (has) {
+        mSpinPresses[0] += sample.spin_presses;
+        mSpinPresses[1] += sample.sub_spin_presses;
     }
 
     if (mResetRequested) {
         mResetRequested = false;
+        host->input_control(host->user, static_cast< u32 >(chan), NEBULA_INPUT_RESET, 0);
         resetState();
-        mValidStatusCount = 0;
+        mValid = false;
         return;
     }
 
-    mValidStatusCount = count;
-
-    if (count == 0) {
+    mValid = has;
+    if (!has) {
         return;
     }
 
     const bool subPad = device.nunchuk != 0;
     const u32 buttonMask = subPad ? 0xFFFFFFFFu : ~(NEBULA_BUTTON_C | NEBULA_BUTTON_Z);
     const u32 previous = mState.mHold;
-    const u32 hold = sSamples[count - 1].buttons & buttonMask;
+    const u32 hold = sample.buttons & buttonMask;
     const u32 change = hold ^ previous;
     mState.mHold = hold;
     mState.mTrigger = change & hold;
     mState.mRelease = change & previous;
-
-    if (subPad != mStateMoveStick) {
-        mStateMoveStick = subPad;
-        mSubHandResetRequested = true;
-    }
-
     mState.mHasMoveStick = subPad;
-
-    for (u32 i = 0; i < count; i++) {
-        const NebulaInputSample& rSample = sSamples[i];
-
-        if (subPad) {
-            if (mSubHandResetRequested) {
-                mSubHandResetRequested = false;
-                mState.mStick.set(0.0f, 0.0f);
-                mState.mSubTilt.set(0.0f, 0.0f, 1.0f);
-            }
-
-            mState.mStick.set(rSample.stick[0], rSample.stick[1]);
-        }
-
-        for (s32 axis = 0; axis < 3; axis++) {
-            f32* pAccel = &mState.mAccel.x + axis;
-            f32* pSubAccel = &mState.mSubTilt.x + axis;
-            const f32 accel = clampAccel(rSample.gravity[axis], cAccelMax);
-            const f32 subAccel = clampAccel(rSample.nunchuk_gravity[axis], cSubAccelMax);
-            const s32 filters = subPad ? 2 : 1;
-
-            for (s32 f = 0; f < filters; f++) {
-                f32* pValue = f == 0 ? pAccel : pSubAccel;
-                *pValue += cTiltFollow * ((f == 0 ? accel : subAccel) - *pValue);
-            }
-        }
-
-        if (rSample.pointer_on != 0) {
-            mState.mPointerPos.set(rSample.pointer[0], rSample.pointer[1]);
-            mState.mHorizon.set(rSample.roll[0], rSample.roll[1]);
-            mState.mDistance = rSample.distance;
-        }
-
-        mState.mIsPointerOn = rSample.pointer_on != 0;
-        mStatusArray[count - 1 - i] = mState;
+    mState.mStick.set(subPad ? sample.stick[0] : 0.0f, subPad ? sample.stick[1] : 0.0f);
+    mState.mAccel.set(sample.tilt[0], sample.tilt[1], sample.tilt[2]);
+    if (subPad) {
+        mState.mSubTilt.set(sample.sub_tilt[0], sample.sub_tilt[1], sample.sub_tilt[2]);
+    }
+    mState.mIsPointerOn = sample.pointer_on != 0;
+    if (mState.mIsPointerOn) {
+        mState.mPointerPos.set(sample.pointer[0], sample.pointer[1]);
+        mState.mHorizon.set(sample.roll[0], sample.roll[1]);
+        mState.mDistance = sample.distance;
     }
 }
 

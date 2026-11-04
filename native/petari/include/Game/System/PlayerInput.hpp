@@ -27,10 +27,6 @@ public:
     static void connectCallback(s32, s32);
     static void extensionCallback(s32, s32);
     PlayerInputSample* getSample(u32) const;
-    s32 getValidStatusCount() const;
-    s32 getEnableAccelPastCount(u32) const;
-    bool getAcceleration(TVec3f*, u32) const;
-    bool getPastAcceleration(TVec3f*, s32, u32) const;
 
     /* 0x00 */ s32 mChannel;
     /* 0x04 */ PlayerInputReader* mReadInfo;
