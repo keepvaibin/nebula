@@ -4,8 +4,6 @@
 
 #include "galaxy/render/pso_key.h"
 
-#include <atomic>
-
 #include "galaxy/render/drawing_state.h"
 
 #include <algorithm>
@@ -13,61 +11,12 @@
 
 namespace galaxy::render {
 
-namespace {
-
-// game blending uses the material-computed source alpha. The scene target alpha that is eventually stored may
-// be quantized to the target format or replaced by the state. Source-alpha blend factors
-// therefore need a separate export whenever they cannot safely read color0.a.
-[[nodiscard]] bool blend_reads_src_alpha(const BlendMode& bm) {
-    return bm.blend_enable && !bm.subtract &&
-        (static_cast<std::uint32_t>(bm.src_factor) == 4u ||
-         static_cast<std::uint32_t>(bm.src_factor) == 5u ||
-         static_cast<std::uint32_t>(bm.dst_factor) == 4u ||
-         static_cast<std::uint32_t>(bm.dst_factor) == 5u);
-}
-
-[[nodiscard]] bool needs_dual_src_alpha(
-    bool frame_alpha,
-    const BlendMode& bm) {
-    if (!blend_reads_src_alpha(bm)) {
-        return false;
-    }
-    const bool dst_alpha =
-        frame_alpha && bm.const_alpha_enable && bm.alpha_update;
-    return dst_alpha || frame_alpha;
-}
-
-}  // namespace
-
-namespace {
-std::atomic<bool> s_dual_source_blending{true};
-}  // namespace
-
-void set_dual_source_blending(bool available) noexcept {
-    s_dual_source_blending.store(available, std::memory_order_relaxed);
-}
-
-bool dual_source_blending() noexcept {
-    return s_dual_source_blending.load(std::memory_order_relaxed);
-}
-
-RenderStateKey for_device_blending(RenderStateKey key) noexcept {
-    if (!dual_source_blending() && (key.blend_bits & (1u << 27u)) != 0u) {
-        const bool constant_alpha = (key.blend_bits & (1u << 28u)) != 0u;
-        key.blend_bits &= ~((1u << 27u) | (1u << 28u));
-        if (constant_alpha) {
-            key.blend_bits |= kRenderStateZeroAlpha;
-        }
-    }
-    return key;
-}
-
 RenderStateKey build_render_state_key(const NativeDrawState& state) {
     RenderStateKey key{};
     std::memset(&key, 0, sizeof(key));
 
-    const bool frame_alpha = state.frame_alpha;
-    const BlendMode bm = effective_blend(state.blend, frame_alpha);
+    const bool target_alpha = state.target_alpha;
+    const BlendMode bm = effective_blend(state.blend, target_alpha);
 
     // An scene target without alpha reads destination alpha as one. These factors are normalized before
     // hashing, as Aurora does in populate_pipeline_config. pipeline_cache.cpp applies the same
@@ -81,7 +30,7 @@ RenderStateKey build_render_state_key(const NativeDrawState& state) {
         default: return factor;
         }
     };
-    const auto blend_factor = [has_alpha = frame_alpha, key_code](
+    const auto blend_factor = [has_alpha = target_alpha, key_code](
                                   BlendFactor factor) {
         factor = key_code(factor);
         if (!has_alpha) {
@@ -115,21 +64,8 @@ RenderStateKey build_render_state_key(const NativeDrawState& state) {
     if (bm.color_update) {
         key.blend_bits |= (1u << 25u);
     }
-    if (bm.alpha_update && frame_alpha) {
+    if (bm.alpha_update && target_alpha) {
         key.blend_bits |= (1u << 26u);
-    }
-    // bit27 = dual-source material alpha. The PSO uses
-    // SRC1_ALPHA/INV_SRC1_ALPHA in place of SrcAlpha/InvSrcAlpha, so the blender reads material alpha
-    // while color0.a stays the physical scene target alpha.
-    if (needs_dual_src_alpha(frame_alpha, bm)) {
-        key.blend_bits |= (1u << 27u);
-    }
-    // Constant scene target alpha replacement is independent of source-alpha routing.
-    // The pipeline reads this bit only inside its blend-enabled branch; the
-    // pixel shader applies constant destination alpha itself.
-    if (bm.blend_enable && frame_alpha && bm.const_alpha_enable &&
-        bm.alpha_update) {
-        key.blend_bits |= (1u << 28u);
     }
 
     // zmode_bits: test_enable(0) | func(3:1) | update_enable(4) | stencil test(6:5) | stencil op(8:7)
@@ -145,8 +81,8 @@ RenderStateKey build_render_state_key(const NativeDrawState& state) {
 
     key.cull = static_cast<std::uint8_t>(state.gen.cull);
 
-    // The frame keeps alpha (destination alpha) or not.
-    key.pixfmt = frame_alpha ? 1u : 0u;
+    // A texture target has alpha to read and write, the scene none.
+    key.pixfmt = target_alpha ? 1u : 0u;
     // The backend overwrites this per draw before the PSO lookup. Triangle is the safe default for
     // tests and callers that build only render-state keys.
     key.primitive_topology = 3u; // D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE

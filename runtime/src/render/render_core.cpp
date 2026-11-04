@@ -4132,62 +4132,29 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         texture_bindings_dirty_ || texture_binding_changed;
 
     if (rs_dirty) {
-        render_state_key_ = for_device_blending(build_render_state_key(draw_state_));
+        render_state_key_ = build_render_state_key(draw_state_);
     }
     // The scene target's variant (its samples per pixel, MSAA, the output scene target has one; the HDR scene scene target) decides the
     // pipeline's too.
     const std::uint8_t samples_log2 = renderer_.scene_variant();
     render_state_key_.primitive_topology = topology_key;
     render_state_key_.samples_log2 = samples_log2;
-    // Motion writers: opaque triangles with color writes in a temporal scene
-    // (blending, logic ops and dual-source alpha cannot share a second
-    // target). Keys only change while a motion scene is (or was) active.
-    // Blended triangles (no dual-source alpha) write the reactive mask.
-    // The game's scene runs on an 8-bit scene target (GameFrame), where every blend that reads the source alpha
-    // is dual-source (needs_dual_src_alpha): it blends at the material's 8-bit alpha, not the scene target's 6-bit one, and under
-    // constant destination alpha (the state: the translucent lists, Mario, shadows) writes the constant instead.
-    // Dual-source blending binds no second target, so none of those effects wrote the reactive mask (DLSS's, and the
-    // water's and clear surfaces' cover: a fall's spray was painted over). In a temporal scene such a draw blends
-    // single-source instead, at the same 8-bit alpha (ShaderGenerator's reactive variant), and writes the mask; a
-    // constant destination alpha of 0 (every one the game sets) its alpha channel's own blend writes
-    // (kRenderStateZeroAlpha). Another constant stays dual-source.
+    // Motion writers: opaque triangles with color writes in a temporal scene (blending and logic ops cannot share a
+    // second target). Blended triangles write the reactive mask. Keys only change while a motion scene is (or was) active.
     bool motion_key_changed = false;
     if (motion_scene_ || motion_bits_set_) [[unlikely]] {
         const BlendMode blend_mode = draw_blend();
-        const auto src_alpha_factor = [](BlendFactor f) {
-            return static_cast<std::uint32_t>(f) == 4u || static_cast<std::uint32_t>(f) == 5u;
-        };
-        const bool constant_alpha = blend_mode.const_alpha_enable && blend_mode.alpha_update;
-        const bool single_source =
-            blend_mode.blend_enable && !blend_mode.subtract &&
-            (src_alpha_factor(blend_mode.src_factor) || src_alpha_factor(blend_mode.dst_factor)) &&
-            draw_state_.frame_alpha && (!constant_alpha || blend_mode.const_alpha == 0u);
-        const std::uint32_t dual_bit = motion_scene_ && single_source ? 0u : (1u << 27);
         std::uint32_t bb = render_state_key_.blend_bits;
         const bool candidate = motion_scene_ &&
             topology_key == static_cast<std::uint8_t>(gpu::kTopologyTypeTriangle) &&
-            (bb & ((1u << 8) | dual_bit)) == 0u && (bb & (1u << 25)) != 0u;
+            (bb & (1u << 8)) == 0u && (bb & (1u << 25)) != 0u;
         // A pass over the screen (no depth test: the fill between the scene's opaque models and its shadows) is no surface:
         // it leaves the motion the surfaces wrote.
         const bool writer = candidate && (bb & 1u) == 0u && (render_state_key_.zmode_bits & 1u) != 0u;
         const bool reactive = candidate && (bb & 1u) != 0u;
-        // Dual-source and constant alpha as the key builders made them, but for a reactive draw drawn single-source.
-        if (single_source) {
-            const bool dual = !reactive && dual_source_blending();
-            const auto set_bit = [&motion_key_changed](auto& word, auto mask, bool on) {
-                if (((word & mask) != 0u) != on) {
-                    word ^= mask;
-                    motion_key_changed = true;
-                }
-            };
-            set_bit(bb, 1u << 27, dual);
-            set_bit(bb, 1u << 28, constant_alpha && dual);
-            set_bit(bb, kRenderStateZeroAlpha, constant_alpha && !dual);
-            render_state_key_.blend_bits = bb;
-        }
         // The effects layer (RendererD3D12::begin_layer_window): a reactive draw (single-source) whose factors never
         // read the scene target (its colour or, on an scene target with alpha, its alpha) blends the same into the layer's targets.
-        const auto reads_scene = [has_alpha = draw_state_.frame_alpha](BlendFactor f, bool source) {
+        const auto reads_scene = [has_alpha = draw_state_.target_alpha](BlendFactor f, bool source) {
             const auto v = static_cast<std::uint32_t>(f);
             (void)source;
             return v == 8u || v == 9u || (has_alpha && (v == 6u || v == 7u));  // the destination's colour or alpha
@@ -4329,17 +4296,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     const std::uint32_t native_texmtx = (matrix_bits >> 1u) & 0xFFu;
     // The header word as the last upload wrote it (a draw's from its key): any change uploads again, or a native
     // draw after a game one would read that draw's mask.
-    // A native draw's pixel engine word (native_material.hlsli native_ps): bit 8 constant destination alpha with the
-    // alpha at bits 9-16, on a frame with alpha (as the uber shader's dst-alpha flag). Colour keeps 8 bits on every
-    // frame, as the old path's keys (build_pixel_shader_key: no six-bit colour or ordered pattern).
-    const BlendMode& pe_blend = draw_state_.blend;
-    const bool frame_alpha = draw_state_.frame_alpha;
-    const std::uint32_t native_pe = frame_alpha && pe_blend.const_alpha_enable && pe_blend.alpha_update &&
-                                            (render_state_key_.blend_bits & kRenderStateZeroAlpha) == 0u
-                                        ? 0x100u | static_cast<std::uint32_t>(pe_blend.const_alpha) << 9u
-                                        : 0u;
-    const std::uint32_t header_texmtx = native_texmtx | native_pe << 8u;
-    const bool native_texmtx_changed = std::exchange(native_texmtx_, header_texmtx) != header_texmtx;
+    const bool native_texmtx_changed = std::exchange(native_texmtx_, native_texmtx) != native_texmtx;
     // Upload VS constants when scalar state, fixed inline matrices or the matrix blocks change.
     if (native_texmtx_changed || per_vertex_changed || std::exchange(sky_up_dirty_, false) || vs_c_dirty ||
         xf_dirty || vcd_dirty || inline_matrices_stale_ ||
@@ -4357,7 +4314,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
             // The per-vertex texture matrix bits and each texgen's post-transform row (| 0x100 normalize).
             auto* native_vs = reinterpret_cast<VertexConstants*>(vs_alloc.cpu);
             native_vs->draw_header[1] = renderer_.frame_map().height;
-            native_vs->draw_header[2] = native_pe;
+            native_vs->draw_header[2] = 0u;
             native_vs->draw_header[3] = native_texmtx;
             for (unsigned i = 0; i < 8u; ++i) {
                 native_vs->post_rows[i] = (draw_state_.post_texgen[i].matrix_index & 0x3Fu) |
@@ -4806,6 +4763,13 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
     }
 }
 
+void RenderCore::set_target_alpha(bool on) {
+    state::Op op{};
+    op.kind = state::kTargetAlpha;
+    op.a[0] = on ? 1u : 0u;
+    draw_state_.apply(op);
+}
+
 // A pass into a texture target (E-07): the draws until its end go to the target set, whose top left the pass clears
 // as the game asked.
 void RenderCore::begin_target_pass(const shapes::Record& record) {
@@ -4838,6 +4802,7 @@ void RenderCore::begin_target_pass(const shapes::Record& record) {
     }
     target_pass_size_ = {record.target_width, record.target_height};
     frame_bindings_dirty_ = true;
+    set_target_alpha(true);
     renderer_.clear_scene(record.target_clear_rgba, true, true, true, 0u, 0u,
                         record.target_width, record.target_height, frame_format());
 }
@@ -4850,6 +4815,7 @@ void RenderCore::end_target_pass(const shapes::Record& record) {
     }
     flush_pending_draw_batch();
     renderer_.end_target_pass(record.target_channels, texture_cache_);
+    set_target_alpha(false);
     frame_bindings_dirty_ = true;
     texture_bindings_dirty_ = true;
 }

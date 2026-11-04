@@ -143,12 +143,6 @@ namespace J3DNativeState {
         pHost->light(pHost->user, index, pLight);
     }
 
-    void setFrameAlpha(bool keepAlpha) {
-        J3DNativeShape::flushState();
-        const NebulaHostServices* pHost = nebula_host();
-        pHost->frame_alpha(pHost->user, keepAlpha);
-    }
-
     // The texture every map holds until the game loads its own: 4x4 opaque white, a texture record
     // (nebula_cooked_texture.h).
     static struct {
@@ -199,8 +193,6 @@ namespace J3DNativeState {
         J3DPass::writeColor(true);
         J3DPass::writeAlpha(true);
         J3DPass::depth(true, NEBULA_COMPARE_LEQUAL, true);
-        J3DPass::constantAlpha(false, 0);
-        setFrameAlpha(false);
     }
 
     void showFrame() {
@@ -288,12 +280,6 @@ namespace J3DPass {
     void writeAlpha(bool write) {
         J3DNativeShape::flushState();
         sPass.alpha_write = write;
-    }
-
-    void constantAlpha(bool on, u8 alpha) {
-        J3DNativeShape::flushState();
-        sPass.constant_alpha = on;
-        sPass.constant_alpha_value = alpha;
     }
 
     void positionMatrix(u8 index) {
@@ -402,9 +388,6 @@ void J3DPassWriteColor(int write) {
 }
 void J3DPassWriteAlpha(int write) {
     J3DPass::writeAlpha(write != 0);
-}
-void J3DPassConstantAlpha(int on, u8 alpha) {
-    J3DPass::constantAlpha(on != 0, alpha);
 }
 void J3DPassPositionMatrix(u8 index) {
     J3DPass::positionMatrix(index);

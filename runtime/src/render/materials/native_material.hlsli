@@ -290,15 +290,12 @@ struct NativeOut { float4 color : SV_Target0; float reactive : SV_Target1; float
 struct NativeOut { float4 color : SV_Target0; float reactive : SV_Target1; };
 #elif NATIVE_MOTION
 struct NativeOut { float4 color : SV_Target0; float2 motion : SV_Target1; };
-#elif NATIVE_DUAL
-struct NativeOut { float4 color : SV_Target0; float4 color1 : SV_Target1; };
 #else
 struct NativeOut { float4 color : SV_Target0; };
 #endif
 
 NativeOut native_ps(NativeVaryings i) {
-    // The material's colour as it is; the target rounds it once. A constant destination alpha replaces the alpha
-    // written; the blender reads the material's alpha (SV_Target1 for dual-source blending).
+    // The material's colour as it is; the target rounds it once.
 #if NATIVE_PIXEL_LIT
     // A wide scene target keeps what the enhanced lighting adds past white; an 8-bit one rounds it to white.
     const float4 lit_color = material_color(i);
@@ -306,19 +303,9 @@ NativeOut native_ps(NativeVaryings i) {
 #else
     const float4 c0 = saturate(material_color(i));
 #endif
-    const uint pe = vs_header.z;
-    const float stage_alpha = c0.a;
-    float4 c = c0;
-#if !NATIVE_REACTIVE
-    if ((pe & 0x100u) != 0u) {
-        c.a = float((pe >> 9u) & 0xFFu) / 255.0;
-    }
-#endif
+    const float4 c = c0;
     NativeOut o;
     o.color = c;
-#if NATIVE_DUAL
-    o.color1 = float4(0.0, 0.0, 0.0, stage_alpha);
-#endif
 #if NATIVE_REACTIVE
     o.reactive = min(saturate(c.a), 0.9);
 #endif

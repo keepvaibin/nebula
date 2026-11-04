@@ -602,7 +602,6 @@ void GhostPlayer::draw() const {
 
     J3DPass::writeAlpha(false);
     J3DPass::writeColor(true);
-    J3DPass::constantAlpha(false, 0);
 }
 
 u32 GhostPlayer::receiveGhostPacket(GhostPacket* pPacket) {

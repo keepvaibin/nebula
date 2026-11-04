@@ -53,10 +53,8 @@ int main(int argc, char** argv) {
         source.replace(at, close + 1u - at, text);
     }
     std::string defines;
-    bool dual_source = false;  // the dual variant: SV_Target1 is blend source 1 (location 0, index 1 in Vulkan)
     for (int i = 6; i < argc; ++i) {
         defines += "#define " + std::string(argv[i]) + " 1\n";
-        dual_source = dual_source || std::string(argv[i]) == "NATIVE_DUAL";
     }
     namespace vk = galaxy::render::vk;
     const std::string stage_name = argv[3];
@@ -68,8 +66,7 @@ int main(int argc, char** argv) {
     std::string error;
     const std::vector<std::uint32_t> spirv = vk::compile_hlsl(vk::annotate(defines + source, vk::draw_bindings()),
                                                               stage, "main", {}, error,
-                                                              {true, dual_source && stage == vk::ShaderStage::Fragment,
-                                                               false});
+                                                              {true, false});
     if (spirv.empty()) {
         std::fprintf(stderr, "galaxy_native_spirv: %s (%s): %s\n", argv[1], argv[3], error.c_str());
         return 1;

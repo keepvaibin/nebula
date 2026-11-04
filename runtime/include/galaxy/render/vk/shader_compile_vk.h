@@ -39,10 +39,6 @@ struct RegisterBinding {
 struct CompileOptions {
     // Run the SPIR-V validator and fail on any message (the tests; the runtime trusts its sources).
     bool validate = false;
-    // The pixel shader's SV_Target1 is the second source of dual-source blending: Vulkan reads it at location 0,
-    // index 1, while glslang places it at location 1 and ignores location attributes on output-struct members, so
-    // the module's decorations are rewritten.
-    bool dual_source = false;
     // Keep the debug names (the tests read constant-buffer member names); the runtime strips them (Adreno).
     bool keep_names = false;
 };

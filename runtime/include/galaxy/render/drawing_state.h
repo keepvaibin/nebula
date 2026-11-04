@@ -38,8 +38,8 @@ struct NativeDrawState {
     ZMode z{false, CompareFunc::Never, false};
     std::uint8_t stencil_test = 0;  // NEBULA_STENCIL_*
     std::uint8_t stencil_op = 0;
-    BlendMode blend{false, false, false, false, BlendFactor::Zero, BlendFactor::Zero, false, 0u, false, 0u};
-    bool frame_alpha = false;  // the frame keeps alpha
+    BlendMode blend{false, false, false, false, BlendFactor::Zero, BlendFactor::Zero, false, 0u};
+    bool target_alpha = false;  // drawing into a texture target, whose alpha is written and read
 
     // Vertex lighting: the channel controls (colour 0, colour 1, alpha 0, alpha 1) and the material and ambient
     // colours (RGBA) of channels 0 and 1.

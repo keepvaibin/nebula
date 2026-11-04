@@ -488,7 +488,6 @@ void TrampleStar::draw() const {
         J3DPass::depth(true, NEBULA_COMPARE_LEQUAL, true);
         MR::resetDrawState();
         J3DPass::writeAlpha(true);
-        J3DPass::constantAlpha(true, 0);
     }
 }
 

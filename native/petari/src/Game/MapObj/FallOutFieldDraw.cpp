@@ -117,7 +117,6 @@ void FallOutFieldDraw::draw() const {
     // blurred, each into its own texture, for the glow along the edge.
     J3DPass::writeColor(false);
     J3DPass::writeAlpha(true);
-    J3DPass::constantAlpha(false, 0);
     J3DNativeTarget::beginOverFrame(mMask->mImage, mMask->getWidth(), mMask->getHeight(), 0, nullptr, NEBULA_TARGET_RGBA, mDepthKey->mImage);
     NebulaNativeMaterial mask;
     NativeShader::init(mask, NEBULA_SHADER_FRAME_DEPTH, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false, NEBULA_CULL_NONE);
@@ -153,7 +152,6 @@ void FallOutFieldDraw::draw() const {
 
     J3DPass::writeColor(true);
     J3DPass::writeAlpha(true);
-    J3DPass::constantAlpha(true, 0);
 }
 
 namespace MR {

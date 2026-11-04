@@ -12,21 +12,17 @@ set(galaxy_native_materials whirlpool ocean_bowl screen_blur flat_color clip_fil
     vertex_color dd_texture dd_texture_color tex_vertex_alpha tex_alpha_lerp
     trample_star tex_const_alpha font_text j2d_picture fur particle ocean_bowl_bloom mii_face mii_texture image_effect gaussian_blur dof_final normal_map
     movie water_camera frame_ripple frame_depth)
-set(galaxy_native_variants base reactive layer motion dual sample sample_dual pixel pixel_dual pixel_sample pixel_sample_dual
+set(galaxy_native_variants base reactive layer motion sample pixel pixel_sample
     pixel_reactive pixel_layer pixel_motion)
 set(galaxy_native_defines_base "")
 set(galaxy_native_defines_reactive "NATIVE_REACTIVE")
 set(galaxy_native_defines_layer "NATIVE_REACTIVE;NATIVE_LAYER")
 set(galaxy_native_defines_motion "NATIVE_MOTION")
-set(galaxy_native_defines_dual "NATIVE_DUAL")
 # An alpha-tested material under MSAA: only the pixel stage differs (its inputs per sample), the vertex stage is base's.
 set(galaxy_native_defines_sample "NATIVE_SAMPLE")
-set(galaxy_native_defines_sample_dual "NATIVE_SAMPLE;NATIVE_DUAL")
 # Lit at the pixel, plainly or enhanced by a constant (j3d_material.hlsli): one variant for both modes.
 set(galaxy_native_defines_pixel "NATIVE_PIXEL_LIT")
-set(galaxy_native_defines_pixel_dual "NATIVE_PIXEL_LIT;NATIVE_DUAL")
 set(galaxy_native_defines_pixel_sample "NATIVE_PIXEL_LIT;NATIVE_SAMPLE")
-set(galaxy_native_defines_pixel_sample_dual "NATIVE_PIXEL_LIT;NATIVE_SAMPLE;NATIVE_DUAL")
 set(galaxy_native_defines_pixel_reactive "NATIVE_PIXEL_LIT;NATIVE_REACTIVE")
 set(galaxy_native_defines_pixel_layer "NATIVE_PIXEL_LIT;NATIVE_REACTIVE;NATIVE_LAYER")
 set(galaxy_native_defines_pixel_motion "NATIVE_PIXEL_LIT;NATIVE_MOTION")
@@ -70,18 +66,8 @@ macro(galaxy_native_material_rules material source)
                 string(APPEND entries "${base_vs}, sizeof(${base_vs}), ")
                 continue()
             endif()
-            if(stage STREQUAL "vs" AND variant STREQUAL "sample_dual")
-                set(base_vs "g_native_${material}_dual_vs")
-                string(APPEND entries "${base_vs}, sizeof(${base_vs}), ")
-                continue()
-            endif()
             if(stage STREQUAL "vs" AND variant STREQUAL "pixel_sample")
                 set(base_vs "g_native_${material}_pixel_vs")
-                string(APPEND entries "${base_vs}, sizeof(${base_vs}), ")
-                continue()
-            endif()
-            if(stage STREQUAL "vs" AND variant STREQUAL "pixel_sample_dual")
-                set(base_vs "g_native_${material}_pixel_dual_vs")
                 string(APPEND entries "${base_vs}, sizeof(${base_vs}), ")
                 continue()
             endif()
@@ -197,19 +183,15 @@ unsigned native_draw_variant(std::uint32_t shader, unsigned variant, unsigned sa
                                                                : kNativeVariantPixelMotion;
         return exists(lit) ? lit : variant;
     }
-    if (variant != kNativeVariantBase && variant != kNativeVariantDual) {
+    if (variant != kNativeVariantBase) {
         return variant;
     }
-    const bool dual = variant == kNativeVariantDual;
     const bool sampled = per_sample && samples_log2 != 0u;
     if (pixel_lit) {
-        const unsigned lit = dual ? kNativeVariantPixelDual : kNativeVariantPixel;
-        const unsigned lit_sample = dual ? kNativeVariantPixelSampleDual : kNativeVariantPixelSample;
-        if (sampled && exists(lit_sample)) return lit_sample;
-        if (exists(lit)) return lit;
+        if (sampled && exists(kNativeVariantPixelSample)) return kNativeVariantPixelSample;
+        if (exists(kNativeVariantPixel)) return kNativeVariantPixel;
     }
-    const unsigned sample = dual ? kNativeVariantSampleDual : kNativeVariantSample;
-    return sampled && exists(sample) ? sample : variant;
+    return sampled && exists(kNativeVariantSample) ? kNativeVariantSample : variant;
 }
 
 NativeShaderBytes native_shader_bytes(std::uint32_t shader, unsigned variant, bool pixel) noexcept {

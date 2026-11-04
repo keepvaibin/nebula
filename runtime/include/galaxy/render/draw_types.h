@@ -61,8 +61,6 @@ struct BlendMode {
     BlendFactor src_factor;
     bool subtract;
     std::uint8_t logic_mode;        // VkLogicOp's order (clear, and, reverse and, copy, ..., set)
-    bool const_alpha_enable;        // the frame's alpha written as const_alpha
-    std::uint8_t const_alpha;
 };
 
 // Logic op 3 (copy): the source unchanged.
@@ -150,7 +148,7 @@ namespace bitfield_checks {
 // Blends as typed values: enable, logic op, colour and alpha update, destination and source factors, subtract,
 // logic mode, constant alpha.
 constexpr BlendMode blend_of(bool blend, bool logic, BlendFactor dst, BlendFactor src, bool subtract, std::uint8_t mode) {
-    return BlendMode{blend, logic, true, false, dst, src, subtract, mode, false, 0u};
+    return BlendMode{blend, logic, true, false, dst, src, subtract, mode};
 }
 constexpr auto kBlend = blend_of(true, false, BlendFactor::InvSrcAlpha, BlendFactor::SrcAlpha, false, 0u);
 

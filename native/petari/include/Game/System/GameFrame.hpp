@@ -4,6 +4,4 @@
 namespace GameFrame {
     void begin();
     void end();
-    // Whether the frame's alpha holds anything this scene (the logo scene's does not).
-    void setKeepAlpha(bool keep);
 }  // namespace GameFrame
