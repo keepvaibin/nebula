@@ -902,7 +902,7 @@ namespace JGeometry {
                 f32 denominator = 1.0f - 2.0f * (this->x * this->x + this->y * this->y);
                 f32 m00 = 1.0f - 2.0f * (this->y * this->y + this->z * this->z);
                 rDest.x = JMAATan2(numerator, denominator);
-                rDest.y = JMath::sAsinAcosTable.asin_(-m20);
+                rDest.y = JMAAsinRadian(-m20);
                 rDest.z = JMAATan2(m10, m00);
             }
         }
@@ -1054,7 +1054,7 @@ namespace JGeometry {
             if (1.0f - product <= TUtil< f32 >::epsilon()) {
                 weight = 1.0f - ratio;
             } else {
-                f32 angle = JMath::sAsinAcosTable.acos_(product);
+                f32 angle = JMAAcosRadian(product);
                 f32 sinAngle = sin(angle);
                 weight = (f32)sin((1.0f - ratio) * angle) / sinAngle;
                 ratio = (f32)sin(ratio * angle) / sinAngle;

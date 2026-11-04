@@ -11,41 +11,9 @@
 
 const Vec gZeroVec = {0.0f, 0.0f, 0.0f};
 
-namespace {
-    static f32* gAcosTable;
-};  // namespace
-
 namespace MR {
-    void initAcosTable() {
-        ::gAcosTable = new f32[256];
-
-        for (u32 i = 0; i < 256; i++) {
-            f64 x = (i / 255.0) * (1.0 - 0.98) + 0.98;
-
-            if (x > 1.0f) {
-                x = 1.0f;
-            }
-
-            ::gAcosTable[i] = ::acos(x);
-        }
-    }
-
     f32 acosEx(f32 x) {
-        if (x != x) {
-            return 0.0f;
-        }
-        if (MR::abs(x) < 0.98f) {
-            return JMAAcosRadian(x);
-        } else if (x < 0.0f) {
-            u32 index = static_cast< u32 >((-x - 0.98f) * 50.0f * 255.0f);
-            f32 acos = ::gAcosTable[index];
-
-            return pi() - acos;
-        } else {
-            u32 index = static_cast< u32 >((x - 0.98f) * 50.0f * 255.0f);
-
-            return ::gAcosTable[index];
-        }
+        return JMAAcosRadian(x);
     }
 
     f32 getRandom() {

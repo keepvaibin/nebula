@@ -15,12 +15,10 @@ static Mtx tmpmtx_rz = {{1.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f, 0.0f}, {0.0
 
 namespace MR {
     void makeMtxRotate(MtxPtr pMtx, s16 rx, s16 ry, s16 rz) {
-        f32 sinX = JMASSin(rx);
-        f32 sinY = JMASSin(ry);
-        f32 sinZ = JMASSin(rz);
-        f32 cosX = JMASCos(rx);
-        f32 cosY = JMASCos(ry);
-        f32 cosZ = JMASCos(rz);
+        f32 sinX, sinY, sinZ, cosX, cosY, cosZ;
+        JMASSinCos(rx, &sinX, &cosX);
+        JMASSinCos(ry, &sinY, &cosY);
+        JMASSinCos(rz, &sinZ, &cosZ);
 
         pMtx[0][0] = cosZ * cosY;
         pMtx[1][0] = sinZ * cosY;
@@ -52,8 +50,8 @@ namespace MR {
 
     void makeMtxRotateY(MtxPtr pMtx, f32 ry) {
         s16 angle = (s16)(s32)((ry * DEGREE_TO_S16));
-        f32 sinY = JMASSin(angle);
-        f32 cosY = JMASCos(angle);
+        f32 sinY, cosY;
+        JMASSinCos(angle, &sinY, &cosY);
 
         pMtx[0][0] = cosY;
         pMtx[1][0] = 0.0f;

@@ -2,12 +2,10 @@
 #include "JSystem/JMath/JMATrigonometric.hpp"
 
 void JMAEulerToQuat(s16 x, s16 y, s16 z, Quaternion* quat) {
-    f32 cosX = JMASCos(x / 2);
-    f32 cosY = JMASCos(y / 2);
-    f32 cosZ = JMASCos(z / 2);
-    f32 sinX = JMASSin(x / 2);
-    f32 sinY = JMASSin(y / 2);
-    f32 sinZ = JMASSin(z / 2);
+    f32 cosX, cosY, cosZ, sinX, sinY, sinZ;
+    JMASSinCos(x / 2, &sinX, &cosX);
+    JMASSinCos(y / 2, &sinY, &cosY);
+    JMASSinCos(z / 2, &sinZ, &cosZ);
 
     f32 cyz = cosY * cosZ;
     f32 syz = sinY * sinZ;

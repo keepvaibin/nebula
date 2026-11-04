@@ -337,7 +337,7 @@ void MarioTeresa::addTeresaVerticalVelocity(f32 amount) {
     maximum = 20.0f * maximum;
     if (_58) {
         f32 angle = 3.1415927f * (static_cast< f32 >(getPlayer()->_418) / mActor->getConst().getTable()->mTeresaWallThroughTime);
-        maximum *= 1.0f + 0.5f * JMath::sSinCosTable.sinRadian(angle);
+        maximum *= 1.0f + 0.5f * JMASinRadian(angle);
     }
 
     if (getPlayer()->mDrawStates._1F && _28.dot(getAirGravityVec()) > 0.707f) {

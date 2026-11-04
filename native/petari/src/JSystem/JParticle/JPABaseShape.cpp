@@ -602,8 +602,8 @@ void JPADrawRotBillboard(JPAEmitterWorkData* work, JPABaseParticle* param_1) {
     if (param_1->checkStatus(8) == 0) {
         JGeometry::TVec3< f32 > local_48;
         NebulaMtxMultVec(work->mPosCamMtx, &param_1->mPosition, &local_48);
-        f32 sinRot = JMASSin(param_1->mRotateAngle);
-        f32 cosRot = JMath::sSinCosTable.cosShort(param_1->mRotateAngle);
+        f32 sinRot, cosRot;
+        JMASSinCos(param_1->mRotateAngle, &sinRot, &cosRot);
         f32 particleX = work->mGlobalPtclScl.x * param_1->mParticleScaleX;
         f32 particleY = work->mGlobalPtclScl.y * param_1->mParticleScaleY;
 
@@ -769,8 +769,8 @@ static planeFunc p_plane[3] = {
 
 void JPADrawRotation(JPAEmitterWorkData* param_0, JPABaseParticle* param_1) {
     if (param_1->checkStatus(8) == 0) {
-        f32 sinRot = JMASSin(param_1->mRotateAngle);
-        f32 cosRot = JMath::sSinCosTable.cosShort(param_1->mRotateAngle);
+        f32 sinRot, cosRot;
+        JMASSinCos(param_1->mRotateAngle, &sinRot, &cosRot);
         f32 particleX = param_0->mGlobalPtclScl.x * param_1->mParticleScaleX;
         f32 particleY = param_0->mGlobalPtclScl.y * param_1->mParticleScaleY;
         Mtx auStack_88;
