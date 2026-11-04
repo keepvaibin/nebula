@@ -21,8 +21,6 @@ namespace GameSystemFunction {
     void requestQuitGame(bool);
     void forceToDeactivateHomeButtonLayout();
     void resetCurrentScenarioNo();
-    bool isPermitToResetSaveDataHandleSequence();
-    void prepareResetSaveDataHandleSequence();
     bool isPrepareResetSaveDataHandleSequence();
     void restoreFromResetSaveDataHandleSequence();
     bool isPermitToResetAudioSystem();

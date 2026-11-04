@@ -79,7 +79,7 @@ void GameSystemResetAndPowerProcess::exeIdle() {
 }
 
 void GameSystemResetAndPowerProcess::exeWaitResetPermitted() {
-    if (GameSystemFunction::isPermitToResetAudioSystem() && GameSystemFunction::isPermitToResetSaveDataHandleSequence()) {
+    if (GameSystemFunction::isPermitToResetAudioSystem()) {
         if (_5E) {
             mFadeinoutControl->setZero();
         } else {
@@ -99,7 +99,6 @@ void GameSystemResetAndPowerProcess::exePrepareReset() {
         GameSystemFunction::prepareResetSystem();
         GameSystemFunction::resetAllControllerRumble();
         GameSystemFunction::forceToDeactivateHomeButtonLayout();
-        GameSystemFunction::prepareResetSaveDataHandleSequence();
     }
 
     if (MR::isStep(this, 2)) {

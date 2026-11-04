@@ -130,20 +130,6 @@ namespace GameSystemFunction {
         SingletonHolder< GameSystem >::get()->mSceneController->resetCurrentScenarioNo();
     }
 
-    bool isPermitToResetSaveDataHandleSequence() {
-        if (::getSaveDataHandleSequence() != nullptr) {
-            return ::getSaveDataHandleSequence()->isPermitToReset();
-        }
-
-        return true;
-    }
-
-    void prepareResetSaveDataHandleSequence() {
-        if (::getSaveDataHandleSequence() != nullptr) {
-            ::getSaveDataHandleSequence()->prepareReset();
-        }
-    }
-
     bool isPrepareResetSaveDataHandleSequence() {
         if (::getSaveDataHandleSequence() != nullptr) {
             return ::getSaveDataHandleSequence()->isPreparedReset();

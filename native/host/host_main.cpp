@@ -587,8 +587,10 @@ Worker gFs(L"Nebula Host Saves");
 // The save folder's root: the game's paths under it, each checked.
 fs::path gSaveRoot;
 
-// The game's save folder under it (title/00010000/<the game's four-character code in hex>/data, as an install has it).
+// The game's save folder under it (its four-character code); gOldSaveDataPath is where earlier versions kept the
+// save (title/00010000/<the code in hex>/data), read once; a mod's clone copies it too).
 std::string gSaveDataPath;
+std::string gOldSaveDataPath;
 // The native switches the enabled mods' code patches set (NEBULA_PATCH_*), for the session.
 std::map<std::uint32_t, std::uint32_t> gModPatches;
 
@@ -610,7 +612,7 @@ bool save_folder_path(const char* path, fs::path* out) {
     if (path == nullptr || path[0] != '/') {
         return false;
     }
-    fs::path result = !gModSaveRoot.empty() && !gSaveDataPath.empty() && std::string_view(path).starts_with(gSaveDataPath)
+    fs::path result = !gModSaveRoot.empty() && !gSaveDataPath.empty() && (std::string_view(path).starts_with(gSaveDataPath) || std::string_view(path).starts_with(gOldSaveDataPath))
                           ? gModSaveRoot
                           : gSaveRoot;
     for (const fs::path& part : fs::path(path + 1)) {
@@ -3084,7 +3086,7 @@ void svc_save_request(void*, const NebulaSaveRequest* request) {
     auto operation = [r, name] {
         fs::path folder;
         galaxy::saves::Result result = galaxy::saves::kFailed;
-        if (save_folder_path(gSaveDataPath.c_str(), &folder)) {
+        if (save_folder_path(name.starts_with("GameData.bin") ? gOldSaveDataPath.c_str() : gSaveDataPath.c_str(), &folder)) {
             switch (r.op) {
             case NEBULA_SAVE_READ:
                 result = galaxy::saves::read(folder, name, r.buffer, r.size, r.length);
@@ -3785,6 +3787,8 @@ void prepare_mod_files(const fs::path& settings_folder, const std::string& game_
         // A clone starts from the player's save the first time, the rest starts new; the player's stays as it is.
         const fs::path mine = gSaveRoot / gSaveDataPath.substr(1);
         const fs::path theirs = plan.save_folder / gSaveDataPath.substr(1);
+        const fs::path old_mine = gSaveRoot / gOldSaveDataPath.substr(1);
+        const fs::path old_theirs = plan.save_folder / gOldSaveDataPath.substr(1);
         std::error_code save_error;
         if (!fs::exists(theirs, save_error)) {
             fs::create_directories(theirs, save_error);
@@ -3792,6 +3796,10 @@ void prepare_mod_files(const fs::path& settings_folder, const std::string& game_
                 fs::copy(plan.save_start, plan.save_folder, fs::copy_options::recursive | fs::copy_options::skip_existing, save_error);
             } else if (plan.save_clone) {
                 fs::copy(mine, theirs, fs::copy_options::recursive | fs::copy_options::skip_existing, save_error);
+                if (fs::exists(old_mine, save_error)) {
+                    fs::create_directories(old_theirs, save_error);
+                    fs::copy(old_mine, old_theirs, fs::copy_options::recursive | fs::copy_options::skip_existing, save_error);
+                }
             }
         }
         gModSaveRoot = plan.save_folder;
@@ -4224,7 +4232,8 @@ int main(int argc, char** argv) {
         const std::string game_id(gPak.store.game_id());
         char title[9];
         std::snprintf(title, sizeof(title), "%02x%02x%02x%02x", (unsigned char)gPak.id[0], (unsigned char)gPak.id[1], (unsigned char)gPak.id[2], (unsigned char)gPak.id[3]);
-        gSaveDataPath = std::string("/title/00010000/") + title + "/data";
+        gOldSaveDataPath = std::string("/title/00010000/") + title + "/data";
+        gSaveDataPath = "/" + std::string(gPak.id, 4);
         fs::create_directories(gSaveRoot / gSaveDataPath.substr(1), error);  // the release's own save folder
         if (!settings_folder.empty()) {
             fs::create_directories(settings_folder / "mods", error);

@@ -85,8 +85,8 @@ const char* UserFile::getGameDataName() const {
     return mGameDataHolder->mName;
 }
 
-void UserFile::makeGameDataBinary(u8* pBuffer, u32 size) const {
-    mGameDataHolder->makeFileBinary(pBuffer, size);
+u32 UserFile::makeGameDataBinary(u8* pBuffer, u32 size) const {
+    return mGameDataHolder->makeFileBinary(pBuffer, size);
 }
 
 void UserFile::loadFromGameDataBinary(const char* pName, const u8* pBuffer, u32 size) {
@@ -97,8 +97,8 @@ const char* UserFile::getConfigDataName() const {
     return mConfigDataHolder->mName;
 }
 
-void UserFile::makeConfigDataBinary(u8* pBuffer, u32 size) const {
-    mConfigDataHolder->makeFileBinary(pBuffer, size);
+u32 UserFile::makeConfigDataBinary(u8* pBuffer, u32 size) const {
+    return mConfigDataHolder->makeFileBinary(pBuffer, size);
 }
 
 void UserFile::loadFromConfigDataBinary(const char* pName, const u8* pBuffer, u32 size) {

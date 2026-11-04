@@ -1,44 +1,48 @@
 #pragma once
 
-#include "Game/System/NerveExecutor.hpp"
 #include "Game/System/SaveRequest.hpp"
+#include <nebula_types.h>
 
 class UserFile;
 
-class SaveDataHandler : public NerveExecutor {
+// The save: each user's files in memory, read from and written to one file through the host (save_request).
+class SaveDataHandler {
 public:
     SaveDataHandler(const UserFile*);
 
-    void update();
-    void requestCheckEnableToCreate();
-    void requestLoadSaveData(int copy = 0);
-    bool requestVerifyAfterLoadGameDataFile();
+    // The save's file at `index`, the newest first, then its copies, then an old save's. False past the last.
+    bool requestLoadSaveData(int index);
+    // What the read found: taken into memory, or not usable.
+    bool acceptLoaded();
     void initializeUserFileMemory(int, const UserFile*);
     void copyUserFileMemory(int, int);
-    void restoreGameDataFile(const char*, void*, u32);
+    const u8* getFile(const char* pName, u32* pSize) const;
     void storeUserFile(const UserFile*);
     void requestSaveSaveData();
-    void requestRemoveSaveData();
-    static u32 getEnoughtTempBufferSize();
-    bool isDone() const;
+    // Room for any one file the game makes.
+    u32 getFileRoom() const { return mMakeRoom; }
+    bool isDone();
     SaveRequest::Result getLastResult() const;
-    void exeWait();
-    void exeProcessing();
-    void exeSaveProcessingGameData();
-    void exeRemoveProcessingGameData();
-    static void resetSaveData(u8*);
-    static void initializeAllFileInSaveData(u8*, const UserFile*);
-    static bool isCorrectFileHeader(const u8*);
-    static void copySaveDataEachFile(u8*, const u8*);
-    void convertFileHeader(u8*);
-    void convertUserFiles(u8*);
-    static const u32 cSaveFileVersion = 3;
-    void createCommunicationBuffer();
-    bool tryRemoveFile(const char*, bool*);
-    bool trySave(bool*, bool);
+
+private:
+    struct File {
+        char mName[16];
+        u8* mData;
+        u32 mSize;
+        u32 mRoom;
+    };
+
+    bool readNative();
+    bool readOld();
+    File* findFile(const char*) const;
+    void setFile(const char*, const u8*, u32);
 
     SaveRequest* mSaveRequest;
-    u32 _C;
-    u8* _14;
-    u8* _18;
+    int mReadIndex;
+    u32 mReadLength;
+    u8* mBuffer;
+    u32 mBufferRoom;
+    File* mFiles;
+    u8* mMake;
+    u32 mMakeRoom;
 };
