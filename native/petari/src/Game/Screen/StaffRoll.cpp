@@ -167,7 +167,7 @@ void StaffRollPicture::exeWork() {
 }
 
 void StaffRollPicture::initReplaceTexture() {
-    char replaceTextureName[64];
+    char replaceTextureName[256];
     const char* pReplaceTexturePrefix;
 
     mReplaceTexture = new nw4r::lyt::TexMap*[PICTURE_TEXTURE_NUM];

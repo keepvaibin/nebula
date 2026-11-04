@@ -22,15 +22,15 @@ struct GameEventFlag {
     u8 mSaveFlag;
 
     union {
-        u8 mCondition1;
-        u8 mStarID;
-        u8 mStarNum;
-        u8 mStarPieceIndex;
+        u16 mCondition1;
+        u16 mStarID;
+        u16 mStarNum;
+        u16 mStarPieceIndex;
     };
 
     union {
-        u8 mCondition2;
-        u8 mNeedStarPieceNum;
+        u16 mCondition2;
+        u16 mNeedStarPieceNum;
     };
 
     u32 _8; // Unused

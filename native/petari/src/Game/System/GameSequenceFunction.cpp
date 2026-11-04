@@ -1,3 +1,4 @@
+#include "Game/System/NebulaMods.hpp"
 #include "Game/System/GameSequenceFunction.hpp"
 #include "Game/System/FindingLuigiEventScheduler.hpp"
 #include "Game/System/GalaxyCometScheduler.hpp"
@@ -273,6 +274,7 @@ namespace GameSequenceFunction {
     }
 
     void startGameDataSaveSequence(bool isConfirmRemind, bool isSaveAndQuitMsg) {
+        NebulaMods::fire(NEBULA_MOD_EVENT_GAME_SAVE);
         ::getGameSequenceProgress()->getGalaxyCometScheduler()->updateStateToGameData();
 
         if (GameDataFunction::isPassedStoryEvent("\203\163\201\133\203\140\217\351\225\202\217\343\214\343" /* ピーチ城浮上後 */) && !GameDataFunction::hasGrandStar(1)) {

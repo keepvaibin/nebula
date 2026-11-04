@@ -1,3 +1,4 @@
+#include "Game/System/NebulaHost.hpp"
 #include "Game/System/GameDataTemporaryInGalaxy.hpp"
 #include "Game/System/AlreadyDoneFlagInGalaxy.hpp"
 #include "Game/Util/JMapIdInfo.hpp"
@@ -49,7 +50,7 @@ void GameDataTemporaryInGalaxy::resetStageResultCoinParam() {
 void GameDataTemporaryInGalaxy::addStarPiece(int num) {
     s32 starPiece = mStarPieceNum + num;
 
-    mStarPieceNum = MR::clamp(starPiece, 0, 999);
+    mStarPieceNum = MR::clamp(starPiece, 0, NebulaHost::setting(NEBULA_PATCH_MAX_CARRIED_STAR_BITS, 999));
 }
 
 void GameDataTemporaryInGalaxy::setLast1upStarPieceNum(int num) {
@@ -57,7 +58,7 @@ void GameDataTemporaryInGalaxy::setLast1upStarPieceNum(int num) {
 }
 
 s32 GameDataTemporaryInGalaxy::getStarPieceNum() const {
-    return MR::clamp(static_cast< s32 >(mStarPieceNum), 0, 999);
+    return MR::clamp(static_cast< s32 >(mStarPieceNum), 0, NebulaHost::setting(NEBULA_PATCH_MAX_CARRIED_STAR_BITS, 999));
 }
 
 void GameDataTemporaryInGalaxy::resetStageResultParam() {

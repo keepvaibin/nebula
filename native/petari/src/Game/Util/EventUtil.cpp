@@ -976,7 +976,7 @@ namespace MR {
     }
 
     bool isKoopaFortressAppearInGalaxy() {
-        char key[32];
+        char key[256];
 
         if (!MR::isEqualStageName("AstroDome")) {
             return false;

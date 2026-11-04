@@ -126,7 +126,7 @@ void BenefitItemInvincible::doEscape() {
 }
 
 void BenefitItemInvincible::runEfx(const char* pEffect) {
-    char str[0x40];
+    char str[256];
     if (!strcmp(pEffect, "Glow")) {
         nebula_snprintf(str, sizeof(str), "%sPowerUpInvincible", pEffect);
         MR::emitEffect(this, str);
@@ -134,7 +134,7 @@ void BenefitItemInvincible::runEfx(const char* pEffect) {
 }
 
 void BenefitItemInvincible::stopEfx(const char* pEffect) {
-    char str[0x40];
+    char str[256];
     if (!strcmp(pEffect, "Glow")) {
         nebula_snprintf(str, sizeof(str), "%sPowerUpInvincible", pEffect);
         MR::emitEffect(this, str);

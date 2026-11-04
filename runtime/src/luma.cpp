@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "galaxy/luma.h"
 
+#include <cstdio>
+
 #if defined(__APPLE__)
 #include <TargetConditionals.h>
 #endif
@@ -311,6 +313,16 @@ When read_when(const Value* value) {
             if (const Object* options = field.object()) {
                 for (const auto& [option, choices] : *options) when.options[option] = string_list(&choices);
             }
+        } else if (key == "mods") {
+            when.mods = string_list(&field);
+        } else if (key == "not" || key == "any") {
+            std::vector<When>& list = key == "not" ? when.not_any : when.any_of;
+            if (const Array* items = field.array()) {
+                for (const Value& item : *items) list.push_back(read_when(&item));
+            } else {
+                list.push_back(read_when(&field));
+            }
+            for (const When& one : list) when.unknown = when.unknown || one.unknown;
         } else {
             when.unknown = true;
         }
@@ -333,6 +345,99 @@ bool path_stays_inside(const std::string& path) {
 
 bool contains(const std::vector<std::string>& list, std::string_view wanted) {
     return std::find(list.begin(), list.end(), wanted) != list.end();
+}
+
+bool read_rows(const Value& from, Rows& out) {
+    if (const Value* messages = from.get("text"); messages != nullptr && messages->object() != nullptr) {
+        for (const auto& [id, words] : *messages->object()) {
+            out.text[id] = read_text(&words);
+        }
+    }
+    if (const Value* galaxies = from.get("galaxies"); galaxies != nullptr && galaxies->array() != nullptr) {
+        for (const Value& entry : *galaxies->array()) {
+            Galaxy galaxy;
+            galaxy.name = text_field(entry, "name");
+            galaxy.map_pane = text_field(entry, "map_pane");
+            if (galaxy.name.empty()) return false;
+            if (const Value* conditions = entry.get("open_conditions"); conditions != nullptr && conditions->array() != nullptr) {
+                for (const Value& condition : *conditions->array()) {
+                    if (condition.string() != nullptr && galaxy.open_conditions.size() < 3u) galaxy.open_conditions.push_back(*condition.string());
+                }
+            }
+            if (const Value* stars = entry.get("stars_to_open"); stars != nullptr && stars->number() != nullptr) galaxy.stars_to_open = static_cast<int>(*stars->number());
+            if (const Value* dome = entry.get("dome"); dome != nullptr && dome->number() != nullptr) galaxy.dome = static_cast<int>(*dome->number());
+            if (const Value* hungry = entry.get("hungry_luma"); hungry != nullptr && hungry->object() != nullptr) {
+                const Value* slot = hungry->get("slot");
+                const Value* bits = hungry->get("star_bits");
+                if (slot == nullptr || slot->number() == nullptr || bits == nullptr || bits->number() == nullptr) return false;
+                galaxy.hungry_slot = static_cast<int>(*slot->number());
+                galaxy.hungry_star_bits = static_cast<int>(*bits->number());
+            }
+            if (const Value* place = entry.get("map_position"); place != nullptr && place->array() != nullptr && place->array()->size() == 2u) {
+                const Value& x = (*place->array())[0];
+                const Value& y = (*place->array())[1];
+                if (x.number() == nullptr || y.number() == nullptr) return false;
+                galaxy.has_map_position = true;
+                galaxy.map_x = static_cast<float>(*x.number());
+                galaxy.map_y = static_cast<float>(*y.number());
+            }
+            out.galaxies.push_back(std::move(galaxy));
+        }
+    }
+    if (const Value* music = from.get("music"); music != nullptr && music->array() != nullptr) {
+        for (const Value& entry : *music->array()) {
+            Music track;
+            track.name = text_field(entry, "name");
+            track.file = text_field(entry, "file");
+            if (track.name.empty() || track.file.empty()) return false;
+            if (const Value* stages = entry.get("stages"); stages != nullptr && stages->array() != nullptr) {
+                for (const Value& row : *stages->array()) {
+                    MusicPlace place;
+                    place.stage = text_field(row, "stage");
+                    if (place.stage.empty()) return false;
+                    if (const Value* scenario = row.get("scenario"); scenario != nullptr && scenario->number() != nullptr) place.scenario = static_cast<int>(*scenario->number());
+                    if (const Value* area = row.get("change_area"); area != nullptr && area->number() != nullptr) place.change_area = static_cast<int>(*area->number());
+                    track.places.push_back(std::move(place));
+                }
+            }
+            out.music.push_back(std::move(track));
+        }
+    }
+    if (const Value* flags = from.get("event_flags"); flags != nullptr && flags->array() != nullptr) {
+        for (const Value& entry : *flags->array()) {
+            EventFlag flag;
+            flag.name = text_field(entry, "name");
+            if (flag.name.empty()) return false;
+            const auto whole = [&entry](const char* key) {
+                const Value* value = entry.get(key);
+                return value != nullptr && value->number() != nullptr ? static_cast<int>(*value->number()) : 0;
+            };
+            flag.kind = whole("kind");
+            flag.a = whole("a");
+            flag.b = whole("b");
+            flag.first = text_field(entry, "first");
+            flag.second = text_field(entry, "second");
+            out.event_flags.push_back(std::move(flag));
+        }
+    }
+    if (const Value* schedule = from.get("comet_schedule"); schedule != nullptr && schedule->array() != nullptr) {
+        for (const Value& entry : *schedule->array()) {
+            CometSchedule dome;
+            if (const Value* number = entry.get("dome"); number != nullptr && number->number() != nullptr) dome.dome = static_cast<int>(*number->number());
+            if (dome.dome < 1 || dome.dome > 6) return false;
+            if (const Value* comets = entry.get("comets"); comets != nullptr && comets->array() != nullptr) {
+                for (const Value& comet : *comets->array()) {
+                    std::string galaxy = text_field(comet, "galaxy");
+                    if (galaxy.empty()) return false;
+                    const Value* coins = comet.get("coins");
+                    dome.comets.emplace_back(std::move(galaxy), coins != nullptr && coins->number() != nullptr ? static_cast<int>(*coins->number()) : 0);
+                }
+            }
+            if (dome.comets.empty()) return false;
+            out.comet_schedule.push_back(std::move(dome));
+        }
+    }
+    return true;
 }
 
 }  // namespace
@@ -387,6 +492,31 @@ std::optional<Manifest> parse_manifest(std::string_view text) {
                     if (!read.id.empty()) option.choices.push_back(std::move(read));
                 }
             }
+            // A choice for each number of a range: { "from": 1, "to": 20, "step": 1 }. Its id is the number.
+            if (const Value* range = entry.get("range"); range != nullptr && range->object() != nullptr) {
+                const auto number = [range](const char* key, double missing) {
+                    const Value* value = range->get(key);
+                    return value != nullptr && value->number() != nullptr ? *value->number() : missing;
+                };
+                const double from = number("from", 0.0);
+                const double to = number("to", from);
+                const double step = number("step", 1.0);
+                if (step > 0.0 && (to - from) / step <= 10000.0) {
+                    for (double at = from; at <= to + step * 0.001; at += step) {
+                        char id[32];
+                        std::snprintf(id, sizeof(id), "%g", at);
+                        Choice choice;
+                        choice.id = id;
+                        choice.name.fallback = id;
+                        option.choices.push_back(std::move(choice));
+                    }
+                }
+                if (const Value* start = entry.get("default"); start != nullptr && start->number() != nullptr) {
+                    char id[32];
+                    std::snprintf(id, sizeof(id), "%g", *start->number());
+                    option.fallback = id;
+                }
+            }
             if (option.id.empty() || option.choices.empty()) continue;
             const bool known = std::any_of(option.choices.begin(), option.choices.end(), [&](const Choice& c) { return c.id == option.fallback; });
             if (!known) option.fallback = option.choices.front().id;
@@ -425,9 +555,60 @@ std::optional<Manifest> parse_manifest(std::string_view text) {
                 layer.comet_time_limits.push_back(std::move(limit));
             }
         }
+        if (const Value* stages = entry.get("stages"); stages != nullptr && stages->array() != nullptr) {
+            for (const Value& row : *stages->array()) {
+                StageRule rule;
+                rule.stage = text_field(row, "stage");
+                if (rule.stage.empty()) return std::nullopt;
+                if (const Value* scenario = row.get("scenario"); scenario != nullptr && scenario->number() != nullptr) rule.scenario = static_cast<int>(*scenario->number());
+                rule.acts_as = string_list(row.get("acts_as"));
+                if (const Value* own = row.get("own_rules"); own != nullptr) {
+                    if (const bool* flag = std::get_if<bool>(&own->data)) rule.own_rules = *flag;
+                }
+                layer.stages.push_back(std::move(rule));
+            }
+        }
+        if (const Value* constants = entry.get("player_constants"); constants != nullptr && constants->object() != nullptr) {
+            // { "mario": {...}, "luigi": {...}, "both": {...} }, each a name with a number or a list of numbers.
+            for (const auto& [who, fields] : *constants->object()) {
+                if (fields.object() == nullptr || (who != "mario" && who != "luigi" && who != "both")) return std::nullopt;
+                for (const auto& [name, value] : *fields.object()) {
+                    const auto add = [&, name = name](int index, double number) {
+                        if (who != "luigi") layer.player_constants.push_back({0, name, index, static_cast<float>(number), {}});
+                        if (who != "mario") layer.player_constants.push_back({1, name, index, static_cast<float>(number), {}});
+                    };
+                    if (const double* number = value.number()) {
+                        add(0, *number);
+                    } else if (const Value* option = value.get("option"); option != nullptr && option->string() != nullptr) {
+                        if (who != "luigi") layer.player_constants.push_back({0, name, 0, 0.0f, *option->string()});
+                        if (who != "mario") layer.player_constants.push_back({1, name, 0, 0.0f, *option->string()});
+                    } else if (const Array* list = value.array()) {
+                        for (std::size_t i = 0; i < list->size(); ++i) {
+                            // A null keeps the game's number at that place.
+                            if (const double* item = (*list)[i].number()) add(static_cast<int>(i), *item);
+                        }
+                    }
+                }
+            }
+        }
+        if (const Value* sounds = entry.get("sound_effects"); sounds != nullptr && sounds->array() != nullptr) {
+            for (const Value& row : *sounds->array()) {
+                SoundEffect sound{text_field(row, "name"), text_field(row, "file")};
+                if (sound.name.empty() || sound.file.empty()) return std::nullopt;
+                layer.sound_effects.push_back(std::move(sound));
+            }
+        }
+        if (const Value* classes = entry.get("object_classes"); classes != nullptr && classes->array() != nullptr) {
+            for (const Value& row : *classes->array()) {
+                ObjectClass object{text_field(row, "name"), text_field(row, "like")};
+                if (object.name.empty() || object.like.empty()) return std::nullopt;
+                layer.object_classes.push_back(std::move(object));
+            }
+        }
         if (const Value* switches = entry.get("switches"); switches != nullptr && switches->object() != nullptr) {
             for (const auto& [name, value] : *switches->object()) {
                 if (const double* number = value.number()) layer.switches[name] = static_cast<std::uint32_t>(*number);
+                else if (const Value* option = value.get("option"); option != nullptr && option->string() != nullptr) layer.switch_options[name] = *option->string();
             }
         }
         if (const Value* materials = entry.get("materials"); materials != nullptr && materials->object() != nullptr) {
@@ -436,6 +617,7 @@ std::optional<Manifest> parse_manifest(std::string_view text) {
                 layer.materials[name] = *file.string();
             }
         }
+        if (!read_rows(entry, layer.rows)) return std::nullopt;
         layer.when = read_when(entry.get("when"));
         out.layers.push_back(std::move(layer));
     }
@@ -450,95 +632,7 @@ std::optional<Manifest> parse_manifest(std::string_view text) {
         out.save_player_can_change = can != nullptr && *can;
     }
     if (out.save_tag.empty()) out.save_tag = out.id;
-    if (const Value* messages = root->get("text"); messages != nullptr && messages->object() != nullptr) {
-        for (const auto& [id, words] : *messages->object()) {
-            out.text[id] = read_text(&words);
-        }
-    }
-    if (const Value* galaxies = root->get("galaxies"); galaxies != nullptr && galaxies->array() != nullptr) {
-        for (const Value& entry : *galaxies->array()) {
-            Galaxy galaxy;
-            galaxy.name = text_field(entry, "name");
-            galaxy.map_pane = text_field(entry, "map_pane");
-            if (galaxy.name.empty()) return std::nullopt;
-            if (const Value* conditions = entry.get("open_conditions"); conditions != nullptr && conditions->array() != nullptr) {
-                for (const Value& condition : *conditions->array()) {
-                    if (condition.string() != nullptr && galaxy.open_conditions.size() < 3u) galaxy.open_conditions.push_back(*condition.string());
-                }
-            }
-            if (const Value* stars = entry.get("stars_to_open"); stars != nullptr && stars->number() != nullptr) galaxy.stars_to_open = static_cast<int>(*stars->number());
-            if (const Value* dome = entry.get("dome"); dome != nullptr && dome->number() != nullptr) galaxy.dome = static_cast<int>(*dome->number());
-            if (const Value* hungry = entry.get("hungry_luma"); hungry != nullptr && hungry->object() != nullptr) {
-                const Value* slot = hungry->get("slot");
-                const Value* bits = hungry->get("star_bits");
-                if (slot == nullptr || slot->number() == nullptr || bits == nullptr || bits->number() == nullptr) return std::nullopt;
-                galaxy.hungry_slot = static_cast<int>(*slot->number());
-                galaxy.hungry_star_bits = static_cast<int>(*bits->number());
-            }
-            if (const Value* place = entry.get("map_position"); place != nullptr && place->array() != nullptr && place->array()->size() == 2u) {
-                const Value& x = (*place->array())[0];
-                const Value& y = (*place->array())[1];
-                if (x.number() == nullptr || y.number() == nullptr) return std::nullopt;
-                galaxy.has_map_position = true;
-                galaxy.map_x = static_cast<float>(*x.number());
-                galaxy.map_y = static_cast<float>(*y.number());
-            }
-            out.galaxies.push_back(std::move(galaxy));
-        }
-    }
-    if (const Value* music = root->get("music"); music != nullptr && music->array() != nullptr) {
-        for (const Value& entry : *music->array()) {
-            Music track;
-            track.name = text_field(entry, "name");
-            track.file = text_field(entry, "file");
-            if (track.name.empty() || track.file.empty()) return std::nullopt;
-            if (const Value* stages = entry.get("stages"); stages != nullptr && stages->array() != nullptr) {
-                for (const Value& row : *stages->array()) {
-                    MusicPlace place;
-                    place.stage = text_field(row, "stage");
-                    if (place.stage.empty()) return std::nullopt;
-                    if (const Value* scenario = row.get("scenario"); scenario != nullptr && scenario->number() != nullptr) place.scenario = static_cast<int>(*scenario->number());
-                    if (const Value* area = row.get("change_area"); area != nullptr && area->number() != nullptr) place.change_area = static_cast<int>(*area->number());
-                    track.places.push_back(std::move(place));
-                }
-            }
-            out.music.push_back(std::move(track));
-        }
-    }
-    if (const Value* flags = root->get("event_flags"); flags != nullptr && flags->array() != nullptr) {
-        for (const Value& entry : *flags->array()) {
-            EventFlag flag;
-            flag.name = text_field(entry, "name");
-            if (flag.name.empty()) return std::nullopt;
-            const auto whole = [&entry](const char* key) {
-                const Value* value = entry.get(key);
-                return value != nullptr && value->number() != nullptr ? static_cast<int>(*value->number()) : 0;
-            };
-            flag.kind = whole("kind");
-            flag.a = whole("a");
-            flag.b = whole("b");
-            flag.first = text_field(entry, "first");
-            flag.second = text_field(entry, "second");
-            out.event_flags.push_back(std::move(flag));
-        }
-    }
-    if (const Value* schedule = root->get("comet_schedule"); schedule != nullptr && schedule->array() != nullptr) {
-        for (const Value& entry : *schedule->array()) {
-            CometSchedule dome;
-            if (const Value* number = entry.get("dome"); number != nullptr && number->number() != nullptr) dome.dome = static_cast<int>(*number->number());
-            if (dome.dome < 1 || dome.dome > 6) return std::nullopt;
-            if (const Value* comets = entry.get("comets"); comets != nullptr && comets->array() != nullptr) {
-                for (const Value& comet : *comets->array()) {
-                    std::string galaxy = text_field(comet, "galaxy");
-                    if (galaxy.empty()) return std::nullopt;
-                    const Value* coins = comet.get("coins");
-                    dome.comets.emplace_back(std::move(galaxy), coins != nullptr && coins->number() != nullptr ? static_cast<int>(*coins->number()) : 0);
-                }
-            }
-            if (dome.comets.empty()) return std::nullopt;
-            out.comet_schedule.push_back(std::move(dome));
-        }
-    }
+    if (!read_rows(*root, out)) return std::nullopt;
     if (const Value* plugins = root->get("plugins"); plugins != nullptr && plugins->array() != nullptr) {
         for (const Value& entry : *plugins->array()) {
             Plugin plugin;
@@ -609,6 +703,13 @@ bool when_holds(const When& when, const Situation& situation) {
         const auto it = situation.options.find(option);
         if (it == situation.options.end() || !contains(choices, it->second)) return false;
     }
+    for (const std::string& mod : when.mods) {
+        if (!contains(situation.mods, mod)) return false;
+    }
+    for (const When& one : when.not_any) {
+        if (when_holds(one, situation)) return false;
+    }
+    if (!when.any_of.empty() && std::none_of(when.any_of.begin(), when.any_of.end(), [&](const When& one) { return when_holds(one, situation); })) return false;
     return true;
 }
 
@@ -682,6 +783,15 @@ std::uint32_t switch_number(std::string_view name) noexcept {
         {"life_up_health", 16u},
         {"no_low_health_warning", 17u},
         {"no_dark_comet_rules", 18u},
+        {"max_lives", 19u},
+        {"max_star_bits", 20u},
+        {"max_carried_star_bits", 21u},
+        {"max_coins", 22u},
+        {"coins_per_one_up", 23u},
+        {"star_bits_per_one_up", 24u},
+        {"starting_lives", 25u},
+        {"purple_coins_for_star", 26u},
+        {"water_air", 27u},
     };
     for (const auto& [known, number] : kSwitches) {
         if (known == name) return number;

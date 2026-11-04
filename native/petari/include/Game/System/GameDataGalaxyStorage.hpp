@@ -17,28 +17,30 @@ public:
     void serialize(const BinaryDataContentAccessor&, u8*) const;
 
     bool hasPowerStar(int scenarioNo) const {
-        return (mPowerStarOwnedFlags & (1 << scenarioNo)) != 0;
+        return scenarioNo < mSlots && (mPowerStarOwnedFlags[scenarioNo >> 3] & (1 << (scenarioNo & 7))) != 0;
     }
 
     bool isAlreadyVisited(int scenarioNo) const {
-        return (mAlreadyVisitedFlags & (1 << scenarioNo)) != 0;
+        return scenarioNo < mSlots && (mAlreadyVisitedFlags[scenarioNo >> 3] & (1 << (scenarioNo & 7))) != 0;
     }
 
     u16 getMaxCoinNum(int scenarioNo) const {
-        return mMaxCoinNum[scenarioNo];
+        return scenarioNo < mSlots ? mMaxCoinNum[scenarioNo] : 0;
     }
 
     void setMaxCoinNum(s32 scenarioNo, u16 coinNum) {
-        mMaxCoinNum[scenarioNo] = coinNum;
+        if (scenarioNo < mSlots) {
+            mMaxCoinNum[scenarioNo] = coinNum;
+        }
     }
 
     const char* mGalaxyName;
     s32 mPowerStarNum;
-    u8 mPowerStarOwnedFlags;
-    u8 mAlreadyVisitedFlags;
-    u8 _A;
-    u8 _B;
-    u16 mMaxCoinNum[8];
+    // Missions it has room for: eight as the game's save has them, or as many as its data says.
+    s32 mSlots;
+    u8* mPowerStarOwnedFlags;
+    u8* mAlreadyVisitedFlags;
+    u16* mMaxCoinNum;
 };
 
 class GameDataSomeScenarioAccessor {
@@ -69,6 +71,9 @@ public:
 
 class GameDataAllGalaxyStorage : public Dummy1, public BinaryDataChunkBase {
 public:
+    // Missions past eight in the galaxy with the most, and what they add to the save.
+    s32 getExtraStars() const;
+    u32 getExtraBytes() const;
     GameDataAllGalaxyStorage();
 
     virtual u32 makeHeaderHashCode() const;

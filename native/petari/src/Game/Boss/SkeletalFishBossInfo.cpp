@@ -67,7 +67,7 @@ void SkeletalFishBossInfo::loadLevelStatus(const JMapInfoIter& rIter) {
     }
 
     for (s32 i = 0; i < levelNum; i++) {
-        char paramName[128];
+        char paramName[256];
 
         nebula_snprintf(paramName, sizeof(paramName), "%s%d", ::sParamNameEnergy, i);
         rIter.getValue< s32 >(paramName, &getLevelStatus(i)->mEnergyLevel);
@@ -92,7 +92,7 @@ void SkeletalFishBossInfo::loadGuardStatus(const JMapInfoIter& rIter, s32 levelI
     LevelStatus* pStatus = getLevelStatus(levelIdx);
 
     for (s32 i = 0; i < guardLevel; i++) {
-        char paramName[128];
+        char paramName[256];
 
         nebula_snprintf(paramName, sizeof(paramName), "%s%d%s%d", ::sParamNameGuardPos, levelIdx, ::sParamNameGuard, i);
         MR::getJMapInfoV3f(rIter, paramName, &pStatus->getGuardStatus(i)->mGuardPosLevel);

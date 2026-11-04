@@ -136,18 +136,18 @@ LayoutManager::LayoutManager(const char* pLayoutName, bool useArchiveNamePrefix,
     mFitRuleCount = -1;
     // pLayoutName points into fileNameWithoutExtension below, so it lives as long as the constructor (the original declared
     // it in the if block: a dangling pointer once the block ends).
-    char fileNameWithoutExtension[0x60];
+    char fileNameWithoutExtension[256];
     if (useArchiveNamePrefix) {
-        char fileNameFromPrefix[0x80];
+        char fileNameFromPrefix[256];
         MR::makeLayoutArchiveFileNameFromPrefix(fileNameFromPrefix, sizeof(fileNameFromPrefix), pLayoutName, true);
         MR::removeExtensionString(fileNameWithoutExtension, sizeof(fileNameWithoutExtension), fileNameFromPrefix);
         pLayoutName = MR::getBasename(fileNameWithoutExtension);
     }
 
-    char archiveName[0x40];
+    char archiveName[256];
     nebula_snprintf(archiveName, sizeof(archiveName), "%s.arc", pLayoutName);
 
-    char fileName[0x40];
+    char fileName[256];
     MR::copyString(fileName, pLayoutName, sizeof(fileName));
 
     for (u32 i = 0; i < ARRAY_SIZE(::cRemoveString); i++) {
@@ -400,7 +400,7 @@ bool LayoutManager::isPointing(const char* pName, const TVec2f& rPos) const {
 }
 
 nw4r::lyt::AnimTransform* LayoutManager::getAnimTransform(const char* pName) const {
-    char fileName[0x80];
+    char fileName[256];
     nebula_snprintf(fileName, sizeof(fileName), "%s.brlan", pName);
     u32 hash = MR::getHashCodeLower(fileName);
     for (u32 i = 0; i < mLayoutHolder->mAnimRes.mCount; i++) {
@@ -506,7 +506,7 @@ nw4r::lyt::Group* LayoutManager::getGroup(const char* pName) const {
 void LayoutManager::initArc(const char* pArchiveName, const char* pLayoutName) {
     mLayoutHolder = MR::createAndAddLayoutHolder(pArchiveName);
 
-    char layoutResName[0x80];
+    char layoutResName[256];
     nebula_snprintf(layoutResName, sizeof(layoutResName), "%s.brlyt", pLayoutName);
     void* pLayoutRes = mLayoutHolder->GetResource('blyt', layoutResName, nullptr);
 

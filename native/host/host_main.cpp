@@ -3674,7 +3674,7 @@ void svc_app_exit(void*) {
     finish_and_exit(false);
 }
 
-static_assert(NEBULA_PATCH_FLIP_PANEL_GROUP == 1 && NEBULA_PATCH_MISS_STAR_PIECES == 7 && NEBULA_PATCH_MESSENGER_EX_ONE_UPS == 12 && NEBULA_PATCH_NO_DARK_COMET_RULES == 18 && NEBULA_PATCH_COUNT == 19,
+static_assert(NEBULA_PATCH_FLIP_PANEL_GROUP == 1 && NEBULA_PATCH_MISS_STAR_PIECES == 7 && NEBULA_PATCH_MESSENGER_EX_ONE_UPS == 12 && NEBULA_PATCH_NO_DARK_COMET_RULES == 18 && NEBULA_PATCH_WATER_AIR == 27 && NEBULA_PATCH_COUNT == 28,
               "galaxy::luma::switch_number numbers the switches as these do");
 
 void svc_mods_start(void*) {
@@ -3881,6 +3881,16 @@ void cook_mod_files(const galaxy::mods::DiscPlan& plan, const fs::path& settings
             return false;
         }
 #endif
+        // What a mod holds that couldn't be used: the rest of it goes ahead.
+        {
+            fs::path left_out = overlay;
+            left_out.replace_extension("left_out");
+            std::ifstream lines(left_out);
+            std::string line;
+            while (std::getline(lines, line)) {
+                log_line("mods: left out:", line.c_str());
+            }
+        }
         {
             // What their materials need and they didn't bring.
             std::vector<fs::path> brought;

@@ -8103,7 +8103,7 @@ namespace NameObjFactory {
             return pPlugin;
         }
 
-        pName = NebulaMods::objectBecomes(NEBULA_OBJECTS_PLACED, pName);
+        pName = NebulaMods::objectBecomes(NEBULA_OBJECTS_PLACED, NebulaMods::objectLike(pName));
         if (pName == nullptr) {
             return nullptr;
         }
@@ -8175,7 +8175,7 @@ namespace NameObjFactory {
 
     void getMountObjectArchiveList(NameObjArchiveListCollector* pCollector, const char* pName, const JMapInfoIter& rIter) {
         NebulaMods::addArchives(pCollector, pName);
-        pName = NebulaMods::objectBecomes(NEBULA_OBJECTS_PLACED, pName);
+        pName = NebulaMods::objectBecomes(NEBULA_OBJECTS_PLACED, NebulaMods::objectLike(pName));
         if (pName == nullptr) {
             return;
         }

@@ -22,9 +22,7 @@
 #include <nw4r/lyt/pane.h>
 
 
-#define MAX_PAGES 5
 #define ITEMS_PER_PAGE 15
-#define MAX_ITEMS MAX_PAGES* ITEMS_PER_PAGE
 
 namespace {
     class ListItem {
@@ -133,8 +131,17 @@ namespace {
         }
     }
 
+    // Every galaxy, then a page's room of gaps, then the races.
+    s32 listRoom() {
+        s32 galaxies = 0;
+        for (ScenarioDataIter iter = MR::makeBeginScenarioDataIter(); !iter.isEnd(); iter.goNext()) {
+            galaxies++;
+        }
+        return galaxies + 2 * ITEMS_PER_PAGE + 5;
+    }
+
     s32 getSortedList(ListItem* pItems) {
-        GalaxyStatusAccessor galaxyAccessors[MAX_ITEMS];
+        GalaxyStatusAccessor* const galaxyAccessors = new GalaxyStatusAccessor[listRoom()];
         s32 availableGalaxies = 0;
 
         ScenarioDataIter iter = MR::makeBeginScenarioDataIter();
@@ -159,6 +166,7 @@ namespace {
             pItems[outCount].mGalaxyAccessor = galaxyAccessors[readIndex];
             outCount++;
         }
+        delete[] galaxyAccessors;
 
         if (getDisplayRaceBestTimeNum() > 0) {
             while (outCount % ITEMS_PER_PAGE != 0) {
@@ -225,8 +233,9 @@ void PowerStarList::init(const JMapInfoIter& rIter) {
     MR::connectToSceneLayoutOnPause(mSysInfoWindow);
     MR::setTextBoxGameMessageRecursive(this, "Title", "AllStarList_Title");
 
-    ListItem pItems[MAX_ITEMS];
+    ListItem* const pItems = new ListItem[::listRoom()];
     mPageNum = (::getSortedList(pItems) - 1) / ITEMS_PER_PAGE + 1;
+    delete[] pItems;
 
     MR::setTextBoxGameMessageRecursive(this, "PageNumber", "AllStarList_Page");
     MR::setTextBoxGameMessageRecursive(this, "Photo", "AllStarList_Page");
@@ -356,7 +365,7 @@ namespace {
 };  // namespace
 
 namespace {
-    ListItem sListItems[MAX_ITEMS];
+    ListItem* sListItems = nullptr;
 }  // namespace
 
 void PowerStarList::updateList(s32 pageNumber, bool isSinglePage) {
@@ -388,6 +397,9 @@ void PowerStarList::updateList(s32 pageNumber, bool isSinglePage) {
         MR::hidePaneRecursive(this, ::cSeparatorPaneTable[idx]);
     }
 
+    if (sListItems == nullptr) {
+        sListItems = new ListItem[::listRoom()];
+    }
     ListItem* const listItems = sListItems;
 
     s32 itemCount = ::getSortedList(listItems);

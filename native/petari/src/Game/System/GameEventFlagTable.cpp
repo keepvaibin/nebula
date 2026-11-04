@@ -368,7 +368,7 @@ namespace GameEventFlagTable {
         return true;
     }
 
-    void setFlag(const char* pName, u8 kind, u8 a, u8 b, const char* pFirst, const char* pSecond) {
+    void setFlag(const char* pName, u8 kind, u16 a, u16 b, const char* pFirst, const char* pSecond) {
         GameEventFlag flag = {};
         flag.mName = pName;
         flag.mType = kind;
@@ -564,7 +564,7 @@ namespace GameEventFlagTable {
     }
 
     s32 getStarPieceNumToOpenExclamationGalaxy(const char* pGalaxyName) {
-        char flagName[64];
+        char flagName[256];
         nebula_snprintf(flagName, sizeof(flagName), "StarPiece%s", pGalaxyName);
 
         GameEventFlagAccessor accessor = makeAccessor(flagName);

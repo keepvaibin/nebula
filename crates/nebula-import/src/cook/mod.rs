@@ -11,6 +11,7 @@ pub mod gltf;
 pub mod modern_audio;
 pub mod formats;
 pub mod material;
+pub mod kcl;
 pub mod merge;
 pub mod mesh;
 pub mod native_data;

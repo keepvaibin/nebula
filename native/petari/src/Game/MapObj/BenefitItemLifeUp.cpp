@@ -32,13 +32,13 @@ void BenefitItemLifeUp::initModelAndEfx() {
 }
 
 void BenefitItemLifeUp::runEfx(const char* pName) {
-    char str[0x40];
+    char str[256];
     nebula_snprintf(str, sizeof(str), "%sLifeUp", pName);
     MR::emitEffect(this, str);
 }
 
 void BenefitItemLifeUp::stopEfx(const char* pName) {
-    char str[0x40];
+    char str[256];
     nebula_snprintf(str, sizeof(str), "%sLifeUp", pName);
     MR::emitEffect(this, str);
 }

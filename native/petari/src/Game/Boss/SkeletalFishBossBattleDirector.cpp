@@ -62,7 +62,7 @@ void SkeletalFishBossBattleDirector::startPowerUpDemo2() {
 
 void SkeletalFishBossBattleDirector::playGuardAnim(const char* pAnimName, s32 numGuards) {
     for (s32 i = 0; i < numGuards; i++) {
-        char animName[0x80];
+        char animName[256];
         nebula_snprintf(animName, sizeof(animName), "%s%c", pAnimName, i + 'A');
         mGuardModels[i]->makeActorAppeared();
         MR::requestMovementOn(mGuardModels[i]);

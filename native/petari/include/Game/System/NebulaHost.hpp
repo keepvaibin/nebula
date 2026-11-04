@@ -13,6 +13,13 @@ namespace NebulaHost {
     // Whether code patch `id` (NEBULA_PATCH_*) is on, and its value: the host's answer is fixed for the session.
     bool codePatch(u32 id, u32* pValue);
 
+    // Its value, or what the game has without it.
+    inline s32 setting(u32 id, s32 fallback) {
+        u32 value = static_cast< u32 >(fallback);
+        codePatch(id, &value);
+        return static_cast< s32 >(value);
+    }
+
     inline u32 option(u32 what) {
         return nebula_host()->option(nebula_host()->user, what);
     }

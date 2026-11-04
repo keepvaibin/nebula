@@ -43,7 +43,7 @@ GalaxyInfoLayoutSetter::GalaxyInfoLayoutSetter(LayoutActor* pHost) : mHost(pHost
 }
 
 void GalaxyInfoLayoutSetter::replaceTexture(const char* pGalaxyName) {
-    char btiName[64];
+    char btiName[256];
     ResTable* fileInfoTable = MR::createAndAddResourceHolder(::cTextureArcName)->mFileInfoTable;
     nw4r::lyt::TexMap* texture = nullptr;
 

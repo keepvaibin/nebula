@@ -639,7 +639,11 @@ namespace J3DNativeMaterial {
             return;
         }
         sCurrentPass |= pass;
-        const u32 id = sCurrentCooked->passes[sCurrentPass];
+        u32 id = sCurrentCooked->passes[sCurrentPass];
+        // A model a mod made for one object used by another: drawn as it is, not lost.
+        if (id == 0 && (pass & NEBULA_PASS_FLEXIBLE_COORDINATES) != 0) {
+            id = sCurrentCooked->passes[sCurrentPass & ~NEBULA_PASS_FLEXIBLE_COORDINATES];
+        }
         if (id == 0) {
             nebula_log("cooked material %u has no pass %u\n", sCurrentCooked->material_index, sCurrentPass);
             notDrawn(0, keyOf(sCurrentCooked));

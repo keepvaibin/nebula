@@ -230,7 +230,7 @@ const char* AstroMapObjFunction::getModelName(const char* pObjName, s32 domeId) 
 }
 
 const JMapInfo* AstroMapObjFunction::createAstroNamePlateParser() {
-    char arcName[64];
+    char arcName[256];
     nebula_snprintf(arcName, sizeof(arcName), "%s.arc", ::cAstroNamePlateArcName);
 
     return MR::createCsvParser(arcName, ::cAstroNamePlateFileName);

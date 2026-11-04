@@ -1,4 +1,6 @@
 #include "Game/Player/MarioConst.hpp"
+#include <cstddef>
+#include <cstring>
 
 static MarioConstTable gMarioConstDefault = {
     /* mJumpHeight */ {22.0f, 26.0f, 36.0f, 24.0f, 32.0f, 15.0f, 32.0f, 22.0f, 1.0f},
@@ -989,6 +991,64 @@ static MarioConstTable gMarioConstDefault2 = {
     /* mLookMaxAngleVM */ 0.1f,
     /* mLookShoulderMoveMax */ 8.0f,
     /* mRushInBlendTimer */ 4};
+
+namespace {
+    struct ConstField {
+        const char* mName;
+        size_t mOffset;
+        char mKind;
+        s32 mCount;
+    };
+
+    const ConstField cConstFields[] = {
+#include "MarioConstFields.inc"
+    };
+
+    const ConstField* findConstField(const char* pName) {
+        for (const ConstField& rField : cConstFields) {
+            if (strcmp(rField.mName, pName) == 0) {
+                return &rField;
+            }
+        }
+        return nullptr;
+    }
+
+    MarioConstTable* constTable(s32 character) {
+        return character == 1 ? &gMarioConstDefault2 : &gMarioConstDefault;
+    }
+}  // namespace
+
+// `character`: 0 Mario, 1 Luigi. A number of the player's table by its name, as a mod names it. False: no such number.
+bool setMarioConstant(s32 character, const char* pName, s32 index, f32 value) {
+    const ConstField* pField = findConstField(pName);
+    if (pField == nullptr || index < 0 || index >= pField->mCount) {
+        return false;
+    }
+    u8* pPlace = reinterpret_cast< u8* >(constTable(character)) + pField->mOffset;
+    switch (pField->mKind) {
+    case 'f': reinterpret_cast< f32* >(pPlace)[index] = value; break;
+    case 'H': reinterpret_cast< u16* >(pPlace)[index] = static_cast< u16 >(value); break;
+    case 'h': reinterpret_cast< s16* >(pPlace)[index] = static_cast< s16 >(value); break;
+    case 'B': reinterpret_cast< u8* >(pPlace)[index] = static_cast< u8 >(value); break;
+    default: reinterpret_cast< s32* >(pPlace)[index] = static_cast< s32 >(value); break;
+    }
+    return true;
+}
+
+f32 getMarioConstant(s32 character, const char* pName, s32 index) {
+    const ConstField* pField = findConstField(pName);
+    if (pField == nullptr || index < 0 || index >= pField->mCount) {
+        return 0.0f;
+    }
+    const u8* pPlace = reinterpret_cast< const u8* >(constTable(character)) + pField->mOffset;
+    switch (pField->mKind) {
+    case 'f': return reinterpret_cast< const f32* >(pPlace)[index];
+    case 'H': return static_cast< f32 >(reinterpret_cast< const u16* >(pPlace)[index]);
+    case 'h': return static_cast< f32 >(reinterpret_cast< const s16* >(pPlace)[index]);
+    case 'B': return static_cast< f32 >(reinterpret_cast< const u8* >(pPlace)[index]);
+    default: return static_cast< f32 >(reinterpret_cast< const s32* >(pPlace)[index]);
+    }
+}
 
 MarioConst::MarioConst() {
     mTable[0] = &gMarioConstDefault;

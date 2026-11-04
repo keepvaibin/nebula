@@ -111,15 +111,15 @@ namespace MR {
     }
 
     void requestMountModelChangableObjArchives(const char* pName, s32 a2) {
-        char objectName[128];
+        char objectName[256];
 
         MR::getMapPartsObjectName(objectName, sizeof(objectName), pName, a2);
         MR::mountAsyncArchiveByObjectOrLayoutName(objectName, nullptr);
     }
 
     bool isReadResourceFromStoreAtModelChangableObj(const char* pName, s32 a2) {
-        char objectName[128];
-        char archiveName[128];
+        char objectName[256];
+        char archiveName[256];
 
         MR::getMapPartsObjectName(objectName, sizeof(objectName), pName, a2);
         MR::makeObjectArchiveFileNameFromPrefix(archiveName, sizeof(archiveName), objectName, true);

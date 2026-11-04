@@ -258,7 +258,12 @@ namespace nw4r {
             pWriter->SetLineSpace(mLineSpace);
             pWriter->SetCharSpace(mCharSpace);
 
-            pWriter->SetWidthLimit(mSize.width);
+            // A number stays on one line, however many digits a mod's counters reach.
+            bool isNumber = mTextLen > 0;
+            for (u16 i = 0; i < mTextLen && isNumber; i++) {
+                isNumber = mTextBuf[i] >= L'0' && mTextBuf[i] <= L'9';
+            }
+            pWriter->SetWidthLimit(isNumber ? math::F_MAX : mSize.width);
             pWriter->SetDrawFlag(MakeDrawFlag());
 
             if (mpTagProcessor != NULL) {

@@ -33,7 +33,7 @@ namespace {
 };  // namespace
 
 ScenarioData::ScenarioData(const char* pFilePath) : mScenarioData(), mGalaxyName(), mZoneList() {
-    char fileName[64];
+    char fileName[256];
     MR::removeExtensionString(fileName, sizeof(fileName), MR::getBasename(pFilePath));
 
     const char* pSuffix = "Scenario";

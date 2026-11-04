@@ -873,7 +873,7 @@ void SkeletalFishBoss::resetCamera() {
 }
 
 void SkeletalFishBoss::playDamageBrk() {
-    char buf[0x80];
+    char buf[256];
     nebula_snprintf(buf, sizeof(buf), "Damage%dColor", _118);
     MR::startBrk(this, buf);
     MR::startBrk(mBossHead, buf);

@@ -301,7 +301,7 @@ void SaveDataHandler::resetSaveData(u8* pBuffer) {
 
             MR::zeroMemory(pName, SaveDataFileAccessor::cNameSize);
 
-            char fileName[32];
+            char fileName[256];
             nebula_snprintf(fileName, sizeof(fileName), "%s%1d", ::cSaveFileSpecTable[j].mName, i + 1);
 
             nebula_snprintf(pName, SaveDataFileAccessor::cNameSize, "%s", fileName);

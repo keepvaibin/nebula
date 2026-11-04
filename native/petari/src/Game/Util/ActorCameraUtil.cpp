@@ -30,10 +30,10 @@ namespace {
 
 namespace MR {
     void initAnimCamera(const LiveActor* pActor, const ActorCameraInfo* pInfo, const char* pEventName) {
-        char actorEventName[128];
+        char actorEventName[256];
         nebula_snprintf(actorEventName, sizeof(actorEventName), "%s%s", pActor->getName(), pEventName);
 
-        char animName[64];
+        char animName[256];
         nebula_snprintf(animName, sizeof(animName), "%s.canm", pEventName);
 
         declareEventCameraAnim(pInfo, actorEventName, getResourceHolder(pActor)->mFileInfoTable->getRes(animName));
@@ -154,7 +154,7 @@ namespace MR {
         CameraTargetArg targetArg;
         setCameraTargetToPlayer(&targetArg);
 
-        char actorEventName[128];
+        char actorEventName[256];
         nebula_snprintf(actorEventName, sizeof(actorEventName), "%s%s", pActor->getName(), pEventName);
 
         startEventCameraAnim(pInfo, actorEventName, targetArg, frame, speed);
@@ -163,7 +163,7 @@ namespace MR {
     void startAnimCameraTargetSelf(const LiveActor* pActor, const ActorCameraInfo* pInfo, const char* pEventName, s32 frame, f32 speed) {
         CameraTargetArg targetArg(pActor);
 
-        char actorEventName[128];
+        char actorEventName[256];
         nebula_snprintf(actorEventName, sizeof(actorEventName), "%s%s", pActor->getName(), pEventName);
 
         startEventCameraAnim(pInfo, actorEventName, targetArg, frame, speed);
@@ -171,7 +171,7 @@ namespace MR {
 
     void startAnimCameraTargetOther(const LiveActor* pActor, const ActorCameraInfo* pInfo, const char* pEventName, const CameraTargetArg& rTargetArg,
                                     s32 frame, f32 speed) {
-        char actorEventName[128];
+        char actorEventName[256];
         nebula_snprintf(actorEventName, sizeof(actorEventName), "%s%s", pActor->getName(), pEventName);
 
         startEventCameraAnim(pInfo, actorEventName, rTargetArg, frame, speed);
@@ -258,17 +258,17 @@ namespace MR {
     }
 
     void initAnimCamera(const LiveActor* pActor, const ActorCameraInfo* pInfo, const char* pArcName, const char* pEventName) {
-        char actorEventName[128];
+        char actorEventName[256];
         nebula_snprintf(actorEventName, sizeof(actorEventName), "%s%s", pActor->getName(), pEventName);
 
-        char animName[64];
+        char animName[256];
         nebula_snprintf(animName, sizeof(animName), "%s.canm", pEventName);
 
         declareEventCameraAnim(pInfo, actorEventName, loadResourceFromArc(pArcName, animName));
     }
 
     void endAnimCamera(const LiveActor* pActor, const ActorCameraInfo* pInfo, const char* pEventName, s32 frame, bool resetView) {
-        char actorEventName[128];
+        char actorEventName[256];
         nebula_snprintf(actorEventName, sizeof(actorEventName), "%s%s", pActor->getName(), pEventName);
 
         endEventCamera(pInfo, actorEventName, resetView, frame);

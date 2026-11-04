@@ -55,4 +55,19 @@ namespace NebulaMods {
     // Frames, from what mods say of a comet mission; 0: they say nothing.
     u32 cometTimeLimit(const char* pGalaxy, s32 mission);
     void addArchives(NameObjArchiveListCollector* pCollector, const char* pName);
+    // A sound a mod plays from a file, by its name: -1 for none.
+    extern bool sHasSoundEffects;
+    u32 soundEffectSlow(const char* pName);
+    // A stage asked about by its name. 1: a mod says this stage plays by that one's rules. 0: it says it doesn't. -1: nothing said.
+    extern bool sHasStageRules;
+    s32 stageRuleSlow(const char* pStage, const char* pAskedName);
+    inline s32 stageRule(const char* pStage, const char* pAskedName) {
+        return sHasStageRules ? stageRuleSlow(pStage, pAskedName) : -1;
+    }
+    // With a mod on: an object a level places whose archive isn't anywhere. It's left out and the log says so, not a stop.
+    bool isMissingFiles(const char* pName);
+    // A name a level places that a mod has made as another of the game's objects: that object's name. The name itself otherwise.
+    const char* objectLike(const char* pName);
+    // What a model named by an object of that class comes from.
+    const char* modelFor(const char* pObjectName, const char* pModelName);
 }  // namespace NebulaMods

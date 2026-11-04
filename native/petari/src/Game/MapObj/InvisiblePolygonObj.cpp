@@ -42,7 +42,7 @@ void InvisiblePolygonObj::initCollision(const JMapInfoIter& rIter) {
     initBaseMtx();
 
     const char* pName = nullptr;
-    char fileName[0x40];
+    char fileName[256];
     MR::getObjectName(&pName, rIter);
     nebula_snprintf(fileName, sizeof(fileName), "%s.arc", pName);
 

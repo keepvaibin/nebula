@@ -611,8 +611,12 @@ std::string plugin_token(const fs::path& mod, const luma::Manifest& manifest) {
 }
 
 // What a .luma's layers are used under, as things stand.
+// The mods on, for a layer's `when`, as the plan goes through them.
+std::vector<std::string> g_mods_on;
+
 luma::Situation situation_of(const ModInfo& mod, const std::string& game_id, const std::string& language) {
     luma::Situation situation;
+    situation.mods = g_mods_on;
     situation.version = game_id.size() >= 4u ? game_id.substr(3, 1) : std::string("E");
     situation.language = language;
     situation.platform = std::string(luma::this_platform());
@@ -1439,9 +1443,33 @@ void find_names(const galaxy::disc::AssetStore& store, std::int32_t folder, cons
 
 }  // namespace
 
+void add_layer_rows(DiscPlan& plan, const ModInfo& mod, const std::string& language, const luma::Rows& rows) {
+            for (const auto& [id, words] : rows.text) {
+                plan.rows.texts.emplace_back(id, words.in(luma::language_code(language)));
+            }
+            for (const luma::Galaxy& galaxy : rows.galaxies) {
+                plan.rows.galaxies.push_back({mod.id, galaxy.name, galaxy.map_pane, galaxy.open_conditions, galaxy.stars_to_open, galaxy.dome, galaxy.hungry_slot, galaxy.hungry_star_bits, galaxy.has_map_position, galaxy.map_x, galaxy.map_y});
+            }
+            for (const luma::Music& track : rows.music) {
+                MusicToAdd row{mod.id, track.name, track.file, {}};
+                for (const luma::MusicPlace& place : track.places) row.places.push_back({place.stage, place.scenario, place.change_area});
+                plan.rows.music.push_back(std::move(row));
+            }
+            for (const luma::EventFlag& flag : rows.event_flags) {
+                plan.rows.event_flags.push_back({mod.id, flag.name, flag.kind, flag.a, flag.b, flag.first, flag.second});
+            }
+            for (const luma::CometSchedule& dome : rows.comet_schedule) {
+                plan.rows.comets.push_back({mod.id, dome.dome, dome.comets});
+            }
+}
+
 DiscPlan plan_disc_changes(const galaxy::disc::AssetStore& store, const std::string& game_id,
                            const std::string& language) {
     std::vector<ModInfo> mods = scan_mods(game_id);
+    g_mods_on.clear();
+    for (const ModInfo& mod : mods) {
+        if (mod.enabled) g_mods_on.push_back(mod.id);
+    }
     DiscPlan plan;
     std::vector<std::string> active;
     std::map<std::string, DiscPlan::File> chosen;  // by the lower-case path, the last set winning
@@ -1466,23 +1494,26 @@ DiscPlan plan_disc_changes(const galaxy::disc::AssetStore& store, const std::str
         }
         if (mod.package) plan.luma_folders.push_back(mod.path);
         if (mod.package && mod.luma) {
-            for (const auto& [id, words] : mod.luma->text) {
+            const auto add_rows = [&](const luma::Rows& rows) {
+            for (const auto& [id, words] : rows.text) {
                 plan.rows.texts.emplace_back(id, words.in(luma::language_code(language)));
             }
-            for (const luma::Galaxy& galaxy : mod.luma->galaxies) {
+            for (const luma::Galaxy& galaxy : rows.galaxies) {
                 plan.rows.galaxies.push_back({mod.id, galaxy.name, galaxy.map_pane, galaxy.open_conditions, galaxy.stars_to_open, galaxy.dome, galaxy.hungry_slot, galaxy.hungry_star_bits, galaxy.has_map_position, galaxy.map_x, galaxy.map_y});
             }
-            for (const luma::Music& track : mod.luma->music) {
+            for (const luma::Music& track : rows.music) {
                 MusicToAdd row{mod.id, track.name, track.file, {}};
                 for (const luma::MusicPlace& place : track.places) row.places.push_back({place.stage, place.scenario, place.change_area});
                 plan.rows.music.push_back(std::move(row));
             }
-            for (const luma::EventFlag& flag : mod.luma->event_flags) {
+            for (const luma::EventFlag& flag : rows.event_flags) {
                 plan.rows.event_flags.push_back({mod.id, flag.name, flag.kind, flag.a, flag.b, flag.first, flag.second});
             }
-            for (const luma::CometSchedule& dome : mod.luma->comet_schedule) {
+            for (const luma::CometSchedule& dome : rows.comet_schedule) {
                 plan.rows.comets.push_back({mod.id, dome.dome, dome.comets});
             }
+            };
+            add_rows(*mod.luma);
             const luma::Situation situation = situation_of(mod, game_id, language);
             for (const luma::Plugin& plugin : mod.luma->plugins) {
                 if (!luma::when_holds(plugin.when, situation)) continue;
@@ -1573,11 +1604,39 @@ DiscPlan plan_disc_changes(const galaxy::disc::AssetStore& store, const std::str
             const luma::Situation situation = situation_of(mod, game_id, language);
             for (const luma::Layer& layer : mod.luma->layers) {
                 if (!luma::layer_used(layer, situation)) continue;
+                if (mod.package && mod.luma) {
+                    add_layer_rows(plan, mod, language, layer.rows);
+                }
                 for (const luma::ObjectChange& change : layer.object_changes) {
                     plan.rows.object_changes.push_back({mod.id, change.where, change.object, change.becomes});
                 }
                 for (const luma::CometLimit& limit : layer.comet_time_limits) {
                     plan.rows.comet_limits.push_back({mod.id, limit.galaxy, limit.mission, limit.seconds});
+                }
+                for (const luma::StageRule& rule : layer.stages) {
+                    plan.rows.stage_rules.push_back({mod.id, rule.stage, rule.scenario, rule.acts_as, rule.own_rules});
+                }
+                for (const luma::PlayerConstant& constant : layer.player_constants) {
+                    float value = constant.value;
+                    if (!constant.option.empty()) {
+                        const auto choice = situation.options.find(constant.option);
+                        if (choice == situation.options.end()) continue;
+                        value = std::strtof(choice->second.c_str(), nullptr);
+                    }
+                    plan.rows.player_constants.push_back({mod.id, constant.character, constant.name, constant.index, value});
+                }
+                for (const auto& [name, option] : layer.switch_options) {
+                    const auto choice = situation.options.find(option);
+                    const std::uint32_t number = luma::switch_number(name);
+                    if (choice != situation.options.end() && number != 0u) {
+                        plan.native_patches[number] = static_cast<std::uint32_t>(std::strtol(choice->second.c_str(), nullptr, 10));
+                    }
+                }
+                for (const luma::SoundEffect& sound : layer.sound_effects) {
+                    plan.rows.sound_effects.push_back({mod.id, sound.name, sound.file});
+                }
+                for (const luma::ObjectClass& object : layer.object_classes) {
+                    plan.rows.object_classes.push_back({mod.id, object.name, object.like});
                 }
                 for (const auto& [name, value] : layer.switches) {
                     if (const std::uint32_t number = luma::switch_number(name); number != 0u) {

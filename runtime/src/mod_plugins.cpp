@@ -2,6 +2,10 @@
 #include "galaxy/mod_plugins.h"
 #include "galaxy/mods.h"
 
+#include "galaxy/luma.h"
+
+#include <algorithm>
+#include <cstring>
 #include <string>
 #include <filesystem>
 #include <cstdlib>
@@ -154,6 +158,79 @@ void api_store_set(const NebulaPlugin* self, const char* key, std::int32_t value
     std::filesystem::rename(temporary, path, error);
 }
 
+// Text beside numbers: each its own file line, "key:text", with what would break a line escaped.
+std::filesystem::path text_store_file(const NebulaPlugin* self) {
+    return mods_folder() / ".plugin-data" / (std::string(self->id) + ".text.txt");
+}
+
+std::map<std::string, std::string> read_text_store(const NebulaPlugin* self) {
+    std::map<std::string, std::string> values;
+    std::ifstream file(text_store_file(self));
+    std::string line;
+    while (std::getline(file, line)) {
+        const std::size_t equals = line.find('=');
+        if (equals == std::string::npos) continue;
+        std::string text;
+        for (std::size_t i = equals + 1u; i < line.size(); ++i) {
+            if (line[i] == '\\' && i + 1u < line.size()) {
+                ++i;
+                text += line[i] == 'n' ? '\n' : line[i] == 'r' ? '\r' : line[i];
+            } else {
+                text += line[i];
+            }
+        }
+        values[line.substr(0, equals)] = std::move(text);
+    }
+    return values;
+}
+
+std::int32_t api_store_get_text(const NebulaPlugin* self, const char* key, char* out, std::int32_t size) {
+    if (self == nullptr || self->id == nullptr || !store_key_ok(key) || out == nullptr || size <= 0) return 0;
+    out[0] = '\0';
+    const std::map<std::string, std::string> values = read_text_store(self);
+    const auto it = values.find(key);
+    if (it == values.end()) return 0;
+    const std::size_t count = std::min(it->second.size(), static_cast<std::size_t>(size - 1));
+    std::memcpy(out, it->second.data(), count);
+    out[count] = '\0';
+    return static_cast<std::int32_t>(count);
+}
+
+void api_store_set_text(const NebulaPlugin* self, const char* key, const char* text) {
+    if (self == nullptr || self->id == nullptr || !store_key_ok(key) || text == nullptr) return;
+    std::map<std::string, std::string> values = read_text_store(self);
+    values[key] = text;
+    const std::filesystem::path path = text_store_file(self);
+    std::error_code error;
+    std::filesystem::create_directories(path.parent_path(), error);
+    std::filesystem::path temporary = path;
+    temporary += ".tmp";
+    {
+        std::ofstream file(temporary, std::ios::trunc | std::ios::binary);
+        for (const auto& [name, words] : values) {
+            file << name << '=';
+            for (const char c : words) {
+                if (c == '\n') file << "\\n";
+                else if (c == '\r') file << "\\r";
+                else if (c == '\\') file << "\\\\";
+                else file << c;
+            }
+            file << '\n';
+        }
+        if (!file) return;
+    }
+    std::filesystem::rename(temporary, path, error);
+}
+
+// A setting by the name a layer's switches give it. The game answers by number.
+std::int32_t (*g_setting_by_number)(std::uint32_t, std::int32_t) = nullptr;
+
+std::int32_t api_setting(const char* name, std::int32_t missing) {
+    if (name == nullptr || g_setting_by_number == nullptr) return missing;
+    const std::uint32_t number = luma::switch_number(name);
+    return number != 0u ? g_setting_by_number(number, missing) : missing;
+}
+
 int32_t api_hook(void* target, void* replacement, void** original) {
     if (!g_starting || target == nullptr || replacement == nullptr || original == nullptr) return -1;
 #if defined(NEBULA_HAS_FUNCTION_HOOKS)
@@ -199,6 +276,10 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
     g_api.find_function = api_find_function;
     g_api.store_get = api_store_get;
     g_api.store_set = api_store_set;
+    g_api.store_get_text = api_store_get_text;
+    g_api.store_set_text = api_store_set_text;
+    g_setting_by_number = game_api->setting_by_number;
+    g_api.setting = api_setting;
     for (const auto& [id, words] : rows.texts) {
         g_api.add_text(id.c_str(), words.c_str());
     }
@@ -244,6 +325,25 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
     for (const CometLimitToSet& limit : rows.comet_limits) {
         if (g_api.set_comet_time_limit(limit.galaxy.c_str(), limit.mission, limit.seconds) != 0) {
             say(limit.mod_id + ": the time limit of " + limit.galaxy + " can't be set");
+        }
+    }
+    for (const StageRuleToSet& rule : rows.stage_rules) {
+        for (const std::string& name : rule.acts_as) g_api.set_stage_rules(rule.stage.c_str(), rule.scenario, name.c_str(), 1);
+        if (!rule.own_rules) g_api.set_stage_rules(rule.stage.c_str(), rule.scenario, nullptr, 0);
+    }
+    for (const PlayerConstantToSet& constant : rows.player_constants) {
+        if (g_api.set_player_constant(constant.character, constant.name.c_str(), constant.index, constant.value) != 0) {
+            say(constant.mod_id + ": the player has no number " + constant.name);
+        }
+    }
+    for (const SoundEffectToAdd& sound : rows.sound_effects) {
+        if (g_api.add_sound_effect(sound.name.c_str(), sound.file.c_str()) != 0) {
+            say(sound.mod_id + ": the sound " + sound.name + " can't be added");
+        }
+    }
+    for (const ObjectClassToSet& object : rows.object_classes) {
+        if (g_api.set_object_class(object.name.c_str(), object.like.c_str()) != 0) {
+            say(object.mod_id + ": the object " + object.name + " can't be added");
         }
     }
     for (const MusicToAdd& track : rows.music) {

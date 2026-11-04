@@ -1,4 +1,8 @@
 #include "Game/Screen/MeterLayout.hpp"
+#include "Game/Player/MarioAccess.hpp"
+#include "Game/Player/MarioActor.hpp"
+#include "Game/Scene/SceneObjHolder.hpp"
+#include "Game/System/NebulaHost.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/CountUpPaneRumbler.hpp"
 #include "Game/Util/CameraUtil.hpp"
@@ -36,6 +40,28 @@ namespace {
     static const s32 sBreakDelayTime = 40;
     static const s32 sPowerUpWaitTime = 60;
     static const s32 sRecoveryCountInterval = 5;
+};  // namespace
+
+namespace {
+    // The most the player can have now. The meter has six parts: a larger amount is shown in proportion, the number exact.
+    s32 mostHealth() {
+        if (!MR::isExistSceneObj(SceneObj_MarioHolder)) {
+            return 6;
+        }
+        const MarioActor* pPlayer = MarioAccess::getPlayerActor();
+        return pPlayer != nullptr ? static_cast< s32 >(pPlayer->mMaxHealth) : 6;
+    }
+
+    s32 meterPart(s32 count) {
+        const s32 most = mostHealth();
+        return most <= 6 || count <= 0 ? count : (count * 6 + most - 1) / most;
+    }
+
+    // The meter steps aside when the player has what they start with, unless that is the last.
+    bool isStartingHealth(s32 count) {
+        const s32 starting = NebulaHost::setting(NEBULA_PATCH_PLAYER_HEALTH, 3);
+        return count == starting && count != 1;
+    }
 };  // namespace
 
 namespace NrvMeterLayout {
@@ -102,7 +128,7 @@ void MeterLayout::requestActive() {
 
     mCountUpPaneRumbler->reset();
 
-    if (mCount == 3) {
+    if (::isStartingHealth(mCount)) {
         _4C = 0.0f;
         mFollowPos.x = MR::getEaseInOutValue(0.0f, 1.0f, 0.0f, 1.0f) * 50.0f;
     } else {
@@ -148,7 +174,7 @@ void MeterLayout::requestPlayerMoving() {
         return;
     }
 
-    if (mCount == 3) {
+    if (::isStartingHealth(mCount)) {
         _4C -= 0.05f;
 
         if (_4C < 0.0f) {
@@ -164,7 +190,7 @@ void MeterLayout::requestPlayerStopped() {
         return;
     }
 
-    if (mCount == 3) {
+    if (::isStartingHealth(mCount)) {
         _4C += 0.05f;
 
         if (_4C > 1.0f) {
@@ -187,7 +213,7 @@ void MeterLayout::setCount(s32 count) {
     if (count < prevCount) {
         if (count == 0) {
             setNerve(GET_NERVE(MeterLayout, MeterLayoutNrvZeroMeter));
-        } else if (prevCount >= 4 && count < 4) {
+        } else if (::meterPart(prevCount) >= 4 && ::meterPart(count) < 4) {
             setNerve(GET_NERVE(MeterLayout, MeterLayoutNrvBreakMeter));
         } else {
             setNerve(GET_NERVE(MeterLayout, MeterLayoutNrvDamage));
@@ -260,7 +286,7 @@ void MeterLayout::exePowerUp() {
         _4C = 1.0f;
     }
 
-    if (mCount < 6 && MR::isGreaterStep(this, 0) && MR::isIntervalStep(this, ::sRecoveryCountInterval)) {
+    if (mCount < ::mostHealth() && MR::isGreaterStep(this, 0) && MR::isIntervalStep(this, ::sRecoveryCountInterval)) {
         mCount++;
         setRecoveryCountAnimFrame();
 
@@ -298,16 +324,10 @@ void MeterLayout::exeCounterMove() {
         _4C = 1.0f;
     }
 
-    if (MR::isStep(this, ::sRecoveryCountInterval * 0)) {
-        MR::setTextBoxNumberRecursive(this, "HitPointNumber", 4);
-    }
-
-    if (MR::isStep(this, ::sRecoveryCountInterval * 1)) {
-        MR::setTextBoxNumberRecursive(this, "HitPointNumber", 5);
-    }
-
-    if (MR::isStep(this, ::sRecoveryCountInterval * 2)) {
-        MR::setTextBoxNumberRecursive(this, "HitPointNumber", 6);
+    for (s32 count = 4; count <= mCount; count++) {
+        if (MR::isStep(this, ::sRecoveryCountInterval * (count - 4))) {
+            MR::setTextBoxNumberRecursive(this, "HitPointNumber", count);
+        }
     }
 
     if (MR::isAnimStopped(this, 1)) {
@@ -334,7 +354,7 @@ void MeterLayout::exeRecover() {
 
 void MeterLayout::exeDamage() {
     if (MR::isFirstStep(this)) {
-        if (mCount < 3) {
+        if (::meterPart(mCount) < 3) {
             MR::startAnim(this, "Damage1", 1);
         } else {
             MR::startAnim(this, "Damage2", 1);
@@ -425,7 +445,7 @@ void MeterLayout::calcPowerUpMeterBasePosition(TVec2f* pBasePosition) const {
 void MeterLayout::setAnimBase() {
     setCountAnimFrame();
 
-    if (mCount <= 3) {
+    if (::meterPart(mCount) <= 3) {
         MR::startAnim(this, "Danger1", 1);
     } else {
         MR::startAnim(this, "Danger2", 1);
@@ -443,11 +463,11 @@ void MeterLayout::setAnimBase() {
 void MeterLayout::setCountAnimFrame() {
     MR::setTextBoxNumberRecursive(this, "HitPointNumber", mCount);
     MR::startPaneAnim(this, "HitPointMeter", "Count", 0);
-    MR::setPaneAnimFrameAndStop(this, "HitPointMeter", mCount, 0);
+    MR::setPaneAnimFrameAndStop(this, "HitPointMeter", ::meterPart(mCount), 0);
 }
 
 void MeterLayout::setRecoveryCountAnimFrame() {
     MR::setTextBoxNumberRecursive(this, "HitPointNumber", mCount);
     MR::startPaneAnim(this, "HitPointMeter", "RecoveryCount", 0);
-    MR::setPaneAnimFrameAndStop(this, "HitPointMeter", mCount, 0);
+    MR::setPaneAnimFrameAndStop(this, "HitPointMeter", ::meterPart(mCount), 0);
 }

@@ -6,16 +6,17 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/System/NebulaAchievements.hpp"
+#include "Game/System/NebulaHost.hpp"
 
 #define COIN_NUM_MIN 0
-#define COIN_NUM_MAX 999
-#define COIN_STEP_NUM 50
-#define PURPLE_COIN_POWER_STAR_APPEAR_NUM 100
-#define STAR_PIECE_STEP_NUM 50
+#define COIN_NUM_MAX NebulaHost::setting(NEBULA_PATCH_MAX_COINS, 999)
+#define COIN_STEP_NUM NebulaHost::setting(NEBULA_PATCH_COINS_PER_ONE_UP, 50)
+#define PURPLE_COIN_POWER_STAR_APPEAR_NUM NebulaHost::setting(NEBULA_PATCH_PURPLE_COINS_FOR_STAR, 100)
+#define STAR_PIECE_STEP_NUM NebulaHost::setting(NEBULA_PATCH_STAR_BITS_PER_ONE_UP, 50)
 
 namespace {
     void requestOneUpIfNeed(int prevNum, int currNum, int stepNum) {
-        if (prevNum / stepNum < currNum / stepNum) {
+        if (stepNum > 0 && prevNum / stepNum < currNum / stepNum) {
             MR::incPlayerLeft();
             MR::requestOneUp();
         }
@@ -49,7 +50,7 @@ void ScenePlayingResult::incStarPiece(int num) {
     s32 currNum = GameDataFunction::getStarPieceNum();
     s32 last1upNum = GameDataFunction::getLast1upStarPieceNum();
 
-    if (MR::isStageAstroLocation()) {
+    if (MR::isStageAstroLocation() || STAR_PIECE_STEP_NUM <= 0) {
         return;
     }
 

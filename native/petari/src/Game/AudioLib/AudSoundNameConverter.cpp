@@ -42,6 +42,13 @@ inline s32 AudSoundNameConverter::getOtherSoundCategory(const char* pName) const
 }
 
 JAISoundID AudSoundNameConverter::getSoundID(const char* pName, u32 hash) const {
+    if (NebulaMods::sHasSoundEffects) {
+        const u32 modded = NebulaMods::soundEffectSlow(pName);
+        if (modded != static_cast< u32 >(-1)) {
+            return modded;
+        }
+    }
+
     bool isSE;
     if (pName[0] == 'S' && pName[1] == 'E') {
         isSE = true;

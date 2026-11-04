@@ -73,7 +73,7 @@ void GrandStarReturnDemoStarter::init(const JMapInfoIter& rIter) {
     MR::initMultiActorCamera(this, rIter, &mActorCameraInfo, "\203\212\203\125\203\213\203\147" /* リザルト */);
 
     for (int i = 0; i < 6; i++) {
-        char buffer[32];
+        char buffer[256];
         nebula_snprintf(buffer, sizeof(buffer), "DemoAstroReturn%d", i + 1);
         MR::initAnimCamera(this, mActorCameraInfo, "DemoAstroReturn.arc", buffer);
     }
@@ -235,7 +235,7 @@ void GrandStarReturnDemoStarter::exeRushToCore() {
 }
 
 void GrandStarReturnDemoStarter::exeRevival() {
-    char buffer[32];
+    char buffer[256];
     int index = AstroDemoFunction::getActiveGrandStarReturnDemoIndex() + 1;
     nebula_snprintf(buffer, sizeof(buffer), "DemoAstroReturn%d", index);
 
