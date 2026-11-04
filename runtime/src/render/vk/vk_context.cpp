@@ -330,14 +330,12 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
     if (const char* const names = ::galaxy::run_options().vk_test_no_feature) {
         const std::string list = std::string(",") + names + ",";
         const auto off = [&list](const char* name) { return list.find(std::string(",") + name + ",") != std::string::npos; };
-        if (off("logic-op")) available.logicOp = VK_FALSE;
         if (off("bc")) available.textureCompressionBC = VK_FALSE;
         if (off("geometry")) available.geometryShader = VK_FALSE;
         if (off("anisotropy")) available.samplerAnisotropy = VK_FALSE;
         if (off("gather")) available.shaderImageGatherExtended = VK_FALSE;
     }
     VkPhysicalDeviceFeatures enabled{};
-    enabled.logicOp = available.logicOp;
     enabled.sampleRateShading = available.sampleRateShading;
     sample_rate_shading_ = available.sampleRateShading == VK_TRUE;
     enabled.samplerAnisotropy = available.samplerAnisotropy;
@@ -346,7 +344,6 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
     enabled.independentBlend = available.independentBlend;
     enabled.shaderImageGatherExtended = available.shaderImageGatherExtended;
     enabled.pipelineStatisticsQuery = available.pipelineStatisticsQuery;
-    logic_op_ = available.logicOp == VK_TRUE;
     geometry_shader_ = available.geometryShader == VK_TRUE;
     sampler_anisotropy_ = available.samplerAnisotropy == VK_TRUE;
     bc_textures_ = available.textureCompressionBC == VK_TRUE;
@@ -610,9 +607,9 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
     std::fprintf(stderr, "[vulkan] driver: %s; workarounds: %s\n", describe(identity_).c_str(),
                  describe(quirks_).c_str());
     std::fprintf(stderr,
-                 "[vulkan] features: logic-op=%d geometry=%d depth-clamp=%d depth-clip=%d bc=%d "
+                 "[vulkan] features: geometry=%d depth-clamp=%d depth-clip=%d bc=%d "
                  "anisotropy=%d display-timing=%d\n",
-                 logic_op_, geometry_shader_, depth_clamp_, depth_clip_enable_, bc_textures_,
+                 geometry_shader_, depth_clamp_, depth_clip_enable_, bc_textures_,
                  sampler_anisotropy_, display_timing_);
     // The memory BufferPlace chooses from: each heap's size (L: device-local), each type's heap and flags (L device
     // local, V host visible, C coherent, $ cached).

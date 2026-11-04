@@ -44,8 +44,7 @@ RenderStateKey build_render_state_key(const NativeDrawState& state) {
         return factor;
     };
 
-    // Canonicalize blend_bits: with blending and logic ops disabled, zero all blend fields so they
-    // do not fragment the cache.
+    // Canonicalize blend_bits: with blending off, zero all blend fields so they do not fragment the cache.
     if (bm.blend_enable) {
         // Encode: dst_factor(7:5) | src_factor(4:2) | subtract(1) | blend_enable(0)
         key.blend_bits =
@@ -53,11 +52,6 @@ RenderStateKey build_render_state_key(const NativeDrawState& state) {
             ((static_cast<std::uint32_t>(bm.subtract ? BlendFactor::One : blend_factor(bm.src_factor)) & 0x7u) << 2u) |
             ((static_cast<std::uint32_t>(bm.subtract ? BlendFactor::One : blend_factor(bm.dst_factor)) & 0x7u) << 5u) |
             (bm.subtract ? (1u << 1u) : 0u);
-    } else if (bm.logic_op_enable) {
-        // Encode logic op: bit8 = logic_op_enable, bits 12-9 = logic_mode
-        key.blend_bits =
-            (1u << 8u) |
-            ((static_cast<std::uint32_t>(bm.logic_mode) & 0xFu) << 9u);
     }
     // scene target write masks (cmode0 bits 3/4): bit25 = color_update, bit26 = alpha_update. Z-clear and
     // z-prepass draws write depth with the colour update off.

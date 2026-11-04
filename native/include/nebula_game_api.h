@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 128u
+#define NEBULA_GAME_API_VERSION 129u
 
 /* Viewports, scissors, clears, target sizes and picture points count this many units across a frame on each axis. */
 #define NEBULA_FRAME_UNITS 65536.0f
@@ -179,7 +179,7 @@ enum {
     NEBULA_STENCIL_ZERO,
 };
 typedef struct NebulaPassState {
-    uint8_t blend_op, blend_src, blend_dst, logic_op; /* NEBULA_BLEND_*, NEBULA_FACTOR_* */
+    uint8_t blend_op, blend_src, blend_dst;           /* NEBULA_BLEND_*, NEBULA_FACTOR_* */
     uint8_t depth_test, depth_func, depth_write;      /* depth_func NEBULA_COMPARE_* */
     uint8_t cull;                                     /* NEBULA_CULL_* */
     uint8_t color_write, alpha_write;
@@ -327,7 +327,6 @@ enum {
     NEBULA_BLEND_REPLACE = 0,  /* blend_op: the source replaces */
     NEBULA_BLEND_ADD = 1,      /* source * blend_src + destination * blend_dst */
     NEBULA_BLEND_SUBTRACT = 2, /* destination - source */
-    NEBULA_BLEND_LOGIC = 3,    /* logic_op (VkLogicOp's order: clear, and, reverse and, copy, ..., set) */
 };
 enum {
     NEBULA_FACTOR_ZERO = 0, NEBULA_FACTOR_ONE, NEBULA_FACTOR_SRC_COLOR, NEBULA_FACTOR_INV_SRC_COLOR,
@@ -347,7 +346,7 @@ enum { NEBULA_NATIVE_KEPT = 0xFF };
 
 typedef struct NebulaNativeMaterial {
     uint32_t shader;           /* NebulaShaderId */
-    uint8_t blend_op, blend_src, blend_dst, logic_op;
+    uint8_t blend_op, blend_src, blend_dst;
     uint8_t depth_test, depth_func, depth_write, early_depth; /* depth_func NEBULA_COMPARE_* */
     uint8_t cull, color_write, alpha_write; /* writes: 0 off, 1 on, 2 as they were */
     uint8_t light_mask;        /* the lights below the material sets (the others keep what was set before) */

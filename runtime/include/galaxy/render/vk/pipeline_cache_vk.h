@@ -43,9 +43,8 @@ public:
     // Optional features a pipeline can be built without.
     enum CompatBit : std::uint32_t {
         kCompatNoDepthClip = 1u << 0u,   // no VK_EXT_depth_clip_enable (depth clamped, primitives unclipped)
-        kCompatNoLogicOp = 1u << 1u,     // logic ops draw as plain writes
-        kCompatNoDepthClamp = 1u << 3u,
-        kCompatBits = 5u,
+        kCompatNoDepthClamp = 1u << 1u,
+        kCompatBits = 2u,
     };
 
 private:

@@ -137,7 +137,7 @@ struct RecordPool {
 // The game's records, in the order it made them (render_core.h attach_shape_record).
 // What a draw does to the target (nebula_game_api.h NebulaPassState).
 struct PassState {
-    std::uint8_t blend_op = 0, blend_src = 0, blend_dst = 0, logic_op = 0;
+    std::uint8_t blend_op = 0, blend_src = 0, blend_dst = 0;
     std::uint8_t depth_test = 0, depth_func = 0, depth_write = 0;
     std::uint8_t cull = 0;
     std::uint8_t color_write = 0, alpha_write = 0;

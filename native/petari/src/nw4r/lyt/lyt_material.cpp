@@ -686,8 +686,7 @@ namespace nw4r {
 
                 {
                     const u8 type = pBlendMode->GetType();
-                    rSetup.blend.type = type == J3D_BM_BLEND ? NEBULA_BLEND_ADD : type == J3D_BM_SUBTRACT ? NEBULA_BLEND_SUBTRACT
-                                          : type == J3D_BM_LOGIC ? NEBULA_BLEND_LOGIC : NEBULA_BLEND_REPLACE;
+                    rSetup.blend.type = type == J3D_BM_BLEND ? NEBULA_BLEND_ADD : type == J3D_BM_SUBTRACT ? NEBULA_BLEND_SUBTRACT : NEBULA_BLEND_REPLACE;
                 }
                 {
                     // NEBULA_FACTOR_*: source colour factors 2 and 3 are the destination's colour.
@@ -696,12 +695,10 @@ namespace nw4r {
                                             : src == J3D_BL_INVDSTCLR ? NEBULA_FACTOR_INV_DST_COLOR : src;
                 }
                 rSetup.blend.destination = pBlendMode->GetDstFactor();
-                rSetup.blend.logic_op = pBlendMode->GetOp();
             } else {
                 rSetup.blend.type = NEBULA_BLEND_ADD;
                 rSetup.blend.source = NEBULA_FACTOR_SRC_ALPHA;
                 rSetup.blend.destination = NEBULA_FACTOR_INV_SRC_ALPHA;
-                rSetup.blend.logic_op = J3D_LO_SET;
             }
 
             const bool remap = mRegisterColors[0] != DefaultBlackColor || !IsWhiteColor(mRegisterColors[1]);

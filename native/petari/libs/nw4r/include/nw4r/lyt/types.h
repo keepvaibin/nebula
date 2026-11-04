@@ -245,7 +245,7 @@ namespace nw4r {
 
         struct BlendMode {
             BlendMode() {
-                Set(J3D_BM_BLEND, J3D_BL_SRCALPHA, J3D_BL_INVSRCALPHA, J3D_LO_SET);
+                Set(J3D_BM_BLEND, J3D_BL_SRCALPHA, J3D_BL_INVSRCALPHA, 0);
             }
 
             BlendMode(u8 aType, u8 aSrcFactor, u8 aDstFactor, u8 aOp) {

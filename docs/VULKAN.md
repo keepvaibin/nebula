@@ -13,7 +13,6 @@ The renderer draws the game's typed records with Direct3D 12 or Vulkan ([GRAPHIC
   Windows keeps its Win32 host.
 - **Portability limits to design around:**
   - dual-source blending: optional on Android -> a single-source form for the blend states that read SRC1 alpha;
-  - logic-op blending: absent on Metal and most Android GPUs -> done in the shader where the game uses it;
   - BC1: absent on most Android GPUs -> RGBA8 there.
   Lines and points need no geometry stage: their vertices are four corners.
 - **macOS** runs the Vulkan backend on MoltenVK (Apache-2.0), with Android's limits.
@@ -35,8 +34,7 @@ Every Vulkan 1.1 GPU and driver (Android's in particular), with no per-device wo
   pipelines, which validate). On every device:
   SPIR-V 1.3 (Qualcomm and ARM drivers mishandle 1.4), no maximal-reconvergence mode (Dusklight issue 2563), stage byte
   masks per component (Mali's vector AND), D24S8 depth where present (Adreno's D32F clears), no reversed depth ranges.
-- **Capabilities.** Only what the device reports is enabled; without it: single-source blending, plain writes for
-  logic ops, one-pixel lines and points (no geometry shaders; the vertex shader then writes the point size), depth
+- **Capabilities.** Only what the device reports is enabled; without it: single-source blending, one-pixel lines and points (no geometry shaders; the vertex shader then writes the point size), depth
   clamp only (no depth-clip control), D32F depth, nearest sampling of a depth format the device cannot filter
   linearly (Xclipse, PowerVR), CMPR decoded to RGBA8 on every device. The swap chain takes only the usages, formats
   and alpha modes the surface lists. A Vulkan 1.0 driver gets a clear message instead of a start (1.1 is required;
@@ -63,7 +61,7 @@ Every Vulkan 1.1 GPU and driver (Android's in particular), with no per-device wo
   logcat) and the shaders' HLSL. `GALAXY_VK_SHADER_DUMP=<dir>` writes every module.
 - **Checks** (development scripts, outside the repository): `vk_compat_runs.sh` runs a simulated driver
   (`GALAXY_VK_SIMULATE_DRIVER=qualcomm:512.700.0`), forced refusals (`GALAXY_VK_TEST_REFUSE=dual-source,...`), device features switched off
-  (`GALAXY_VK_TEST_NO_FEATURE=dual-source,logic-op,bc,geometry,anisotropy,tessellation,gather`) and a
+  (`GALAXY_VK_TEST_NO_FEATURE=dual-source,bc,geometry,anisotropy,tessellation,gather`) and a
   forced crash (`GALAXY_VK_TEST_CRASH_AT=<n>`); `vk_profile_matrix.sh` runs the game under the validation layer with
   each Android GPU's gpuinfo.org profile (`fetch_device_profiles.py`: Adreno 610-840, Turnip, Mali-G52-G715,
   PowerVR, Xclipse, Maleoon; newest and oldest driver each); `galaxy_vk_shader_tests <keys.bin>` compiles every

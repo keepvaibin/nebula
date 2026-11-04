@@ -30,7 +30,7 @@ struct J3DMaterialSetup {
     u32 diff_flags;
     u8 tex_gen_post[8];  // each coordinate's post-transform row (61 the identity)
     struct { u8 comp0, op, comp1; } alpha_compare;
-    struct { u8 type, source, destination, logic_op; } blend;  // NEBULA_BLEND_*, NEBULA_FACTOR_*
+    struct { u8 type, source, destination; } blend;  // NEBULA_BLEND_*, NEBULA_FACTOR_*
     struct { u8 enable, func, update; } z_mode;
     // Coordinate i's texture matrix, when the material has one: `id` its place (a post-transform one from 64), `rows`
     // 2 or 3, `listed` whether the material's own list loads it (a differed list loads every one).

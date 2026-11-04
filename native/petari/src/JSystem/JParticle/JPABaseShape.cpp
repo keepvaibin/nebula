@@ -910,7 +910,7 @@ JPABaseShape::JPABaseShape(u8 const* pData, NebulaArena* pHeap) {
 }
 
 // The numbers particle shapes store, as the host's. A colour factor names the other side's colour.
-const u8 JPABaseShape::st_bm[4] = {NEBULA_BLEND_REPLACE, NEBULA_BLEND_ADD, NEBULA_BLEND_LOGIC, NEBULA_BLEND_REPLACE};
+const u8 JPABaseShape::st_bm[4] = {NEBULA_BLEND_REPLACE, NEBULA_BLEND_ADD, NEBULA_BLEND_REPLACE, NEBULA_BLEND_REPLACE};
 
 u8 JPABaseShape::blendFactor(u32 code, bool source) {
     switch (code) {
@@ -937,10 +937,6 @@ u8 JPABaseShape::blendFactor(u32 code, bool source) {
     }
 }
 
-// NEBULA_BLEND_LOGIC's order: clear, and, reverse and, copy, inverted and, no-op, xor, or, nor, equivalent, invert,
-// reverse or, inverted copy, inverted or, nand, set.
-const u8 JPABaseShape::st_lo[16] = {0, 15, 3, 12, 5, 10, 1, 14, 7, 8, 6, 9, 2, 4, 11, 13};
-
 const u8 JPABaseShape::st_c[8] = {
     NEBULA_COMPARE_NEVER,  NEBULA_COMPARE_LESS,   NEBULA_COMPARE_LEQUAL,  NEBULA_COMPARE_EQUAL,
     NEBULA_COMPARE_NEQUAL, NEBULA_COMPARE_GEQUAL, NEBULA_COMPARE_GREATER, NEBULA_COMPARE_ALWAYS,
@@ -950,7 +946,7 @@ const u8 JPABaseShape::st_c[8] = {
 // file the particle material reads); its colour and alpha modes and compares go into the particle material
 // (JPAResource::sendMaterial).
 void JPABaseShape::setPass(JPAEmitterWorkData* work) const {
-    J3DPass::blendState(getBlendMode(), getBlendSrc(), getBlendDst(), getLogicOp());
+    J3DPass::blendState(getBlendMode(), getBlendSrc(), getBlendDst());
     J3DPass::depth(getZEnable(), getZCmp(), getZUpd());
     J3DPass::alphaCompare(getAlphaCmp0(), getAlphaRef0(), getAlphaOp(), getAlphaCmp1(), getAlphaRef1());
 }

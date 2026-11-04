@@ -82,29 +82,6 @@ D3D12_BLEND to_alpha_blend(D3D12_BLEND b) {
     }
 }
 
-// game LogicOp 0-15 -> D3D12.
-D3D12_LOGIC_OP logic_op_mode(std::uint32_t m) {
-    switch (m) {
-    case 0:  return D3D12_LOGIC_OP_CLEAR;
-    case 1:  return D3D12_LOGIC_OP_AND;
-    case 2:  return D3D12_LOGIC_OP_AND_REVERSE;
-    case 3:  return D3D12_LOGIC_OP_COPY;
-    case 4:  return D3D12_LOGIC_OP_AND_INVERTED;
-    case 5:  return D3D12_LOGIC_OP_NOOP;
-    case 6:  return D3D12_LOGIC_OP_XOR;
-    case 7:  return D3D12_LOGIC_OP_OR;
-    case 8:  return D3D12_LOGIC_OP_NOR;
-    case 9:  return D3D12_LOGIC_OP_EQUIV;
-    case 10: return D3D12_LOGIC_OP_INVERT;
-    case 11: return D3D12_LOGIC_OP_OR_REVERSE;
-    case 12: return D3D12_LOGIC_OP_COPY_INVERTED;
-    case 13: return D3D12_LOGIC_OP_OR_INVERTED;
-    case 14: return D3D12_LOGIC_OP_NAND;
-    case 15: return D3D12_LOGIC_OP_SET;
-    default: return D3D12_LOGIC_OP_NOOP;
-    }
-}
-
 // Compile one HLSL source; logs the compiler error (capped) on failure.
 // `fast` skips FXC optimization: the first-use path publishes that pipeline
 // at once and a worker replaces it with the level-1 build (see get()).
@@ -155,9 +132,6 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC make_pso_desc_impl(
         rt.SrcBlendAlpha  = to_alpha_blend(rt.SrcBlend);
         rt.DestBlendAlpha = to_alpha_blend(rt.DestBlend);
         rt.BlendOpAlpha   = rt.BlendOp;
-    } else if (bb & (1u << 8)) {         // logic_op_enable
-        rt.LogicOpEnable = TRUE;
-        rt.LogicOp = logic_op_mode((bb >> 9) & 0xFu);
     }
 
     pd.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;

@@ -17,7 +17,7 @@ namespace galaxy::render::material {
 // and fixed-function state in the API's own enums.
 struct Native {
     std::uint32_t shader;
-    std::uint8_t blend_op, blend_src, blend_dst, logic_op;
+    std::uint8_t blend_op, blend_src, blend_dst;
     std::uint8_t depth_test, depth_func, depth_write, early_depth;
     std::uint8_t cull, color_write, alpha_write, light_mask;
     float constants[128];

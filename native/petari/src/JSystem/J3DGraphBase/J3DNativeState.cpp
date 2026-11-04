@@ -29,7 +29,6 @@ namespace J3DNativeState {
                 sPass.blend_op = pMaterial->blend_op;
                 sPass.blend_src = pMaterial->blend_src <= 9 ? pMaterial->blend_src : 0;
                 sPass.blend_dst = pMaterial->blend_dst <= 9 ? pMaterial->blend_dst : 0;
-                sPass.logic_op = pMaterial->logic_op & 15;
             }
             if (pMaterial->color_write != 2) {
                 sPass.color_write = pMaterial->color_write != 0;
@@ -245,24 +244,23 @@ namespace J3DPass {
         sPass.stencil_op = op;
     }
 
-    void blendState(u8 op, u8 source, u8 destination, u8 logicOp) {
+    void blendState(u8 op, u8 source, u8 destination) {
         J3DNativeShape::flushState();
         sPass.blend_op = op;
         sPass.blend_src = source <= 9 ? source : 0;
         sPass.blend_dst = destination <= 9 ? destination : 0;
-        sPass.logic_op = logicOp & 15;
     }
 
     void blend(u8 source, u8 destination) {
-        blendState(NEBULA_BLEND_ADD, source, destination, 0);
+        blendState(NEBULA_BLEND_ADD, source, destination);
     }
 
     void noBlend() {
-        blendState(NEBULA_BLEND_REPLACE, 0, 0, 0);
+        blendState(NEBULA_BLEND_REPLACE, 0, 0);
     }
 
     void subtractBlend() {
-        blendState(NEBULA_BLEND_SUBTRACT, 0, 0, 0);
+        blendState(NEBULA_BLEND_SUBTRACT, 0, 0);
     }
 
     void cull(u8 faces) {

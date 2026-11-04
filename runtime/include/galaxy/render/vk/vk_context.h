@@ -115,7 +115,6 @@ public:
     [[nodiscard]] const std::string& device_name() const noexcept { return device_name_; }
     [[nodiscard]] const DeviceIdentity& identity() const noexcept { return identity_; }
     [[nodiscard]] const DeviceQuirks& quirks() const noexcept { return quirks_; }
-    [[nodiscard]] bool logic_op() const noexcept { return logic_op_; }
     [[nodiscard]] bool geometry_shader() const noexcept { return geometry_shader_; }
     [[nodiscard]] bool sample_rate_shading() const noexcept { return sample_rate_shading_; }
     [[nodiscard]] bool sampler_anisotropy() const noexcept { return sampler_anisotropy_; }
@@ -220,7 +219,6 @@ private:
     std::string failure_;
     DeviceIdentity identity_;
     DeviceQuirks quirks_;
-    bool logic_op_ = false;
     bool geometry_shader_ = false;
     bool sample_rate_shading_ = false;
     bool sampler_anisotropy_ = false;

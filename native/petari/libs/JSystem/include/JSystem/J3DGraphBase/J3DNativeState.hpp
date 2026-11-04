@@ -26,7 +26,7 @@ namespace J3DPass {
     void depth(bool test, u8 compare, bool write);  // NEBULA_COMPARE_*
     void stencil(u8 test, u8 op);                   // NEBULA_STENCIL_*
     void blend(u8 source, u8 destination);          // source * source + target * destination, NEBULA_FACTOR_*
-    void blendState(u8 op, u8 source, u8 destination, u8 logicOp);  // NEBULA_BLEND_*, NEBULA_FACTOR_*
+    void blendState(u8 op, u8 source, u8 destination);  // NEBULA_BLEND_*, NEBULA_FACTOR_*
     void noBlend();
     void subtractBlend();
     void cull(u8 faces);  // NEBULA_CULL_*

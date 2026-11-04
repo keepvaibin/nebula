@@ -205,7 +205,6 @@ namespace {
         material.blend_op = rSetup.blend.type;  // NEBULA_BLEND_*
         material.blend_src = rSetup.blend.source;  // NEBULA_FACTOR_*
         material.blend_dst = rSetup.blend.destination;
-        material.logic_op = rSetup.blend.logic_op;
         material.depth_test = rSetup.z_mode.enable;
         material.depth_func = rSetup.z_mode.func;
         material.depth_write = rSetup.z_mode.update;
@@ -484,7 +483,6 @@ namespace J3DNativeMaterial {
             pOut->blend.type = xlu ? NEBULA_BLEND_ADD : NEBULA_BLEND_REPLACE;
             pOut->blend.source = xlu ? NEBULA_FACTOR_SRC_ALPHA : NEBULA_FACTOR_ONE;
             pOut->blend.destination = xlu ? NEBULA_FACTOR_INV_SRC_ALPHA : NEBULA_FACTOR_ZERO;
-            pOut->blend.logic_op = J3D_LO_COPY;
             pOut->z_mode.enable = 1;
             pOut->z_mode.func = NEBULA_COMPARE_LEQUAL;
             pOut->z_mode.update = xlu ? 0 : 1;
@@ -510,12 +508,10 @@ namespace J3DNativeMaterial {
         const J3DBlend& rBlend = *pPE->getBlend();
         {
             const u8 type = rBlend.mType;
-            pOut->blend.type = type == J3D_BM_BLEND ? NEBULA_BLEND_ADD : type == J3D_BM_SUBTRACT ? NEBULA_BLEND_SUBTRACT
-                               : type == J3D_BM_LOGIC ? NEBULA_BLEND_LOGIC : NEBULA_BLEND_REPLACE;
+            pOut->blend.type = type == J3D_BM_BLEND ? NEBULA_BLEND_ADD : type == J3D_BM_SUBTRACT ? NEBULA_BLEND_SUBTRACT : NEBULA_BLEND_REPLACE;
         }
         pOut->blend.source = nativeFactor(rBlend.mSrcFactor, true);
         pOut->blend.destination = nativeFactor(rBlend.mDstFactor, false);
-        pOut->blend.logic_op = rBlend.mOp;
         const J3DZMode& rZ = *pPE->getZMode();
         pOut->z_mode.enable = rZ.getCompareEnable();
         pOut->z_mode.func = rZ.getFunc();
