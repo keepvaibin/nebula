@@ -34,14 +34,44 @@ constexpr VkDeviceSize kEvalFrameBlock = 256u;
 bool RendererVk::interpolation_mode() const {
     const RenderConfig cfg = get_render_config();
     const double rate = present_frame_rate(presented_max_fps(cfg), cfg.vsync_interval, display_refresh_hz_);
-    // A temporal upscale of the sub-frames is not on Vulkan yet: the scene upscales at the game's rate.
-    return !temporal_mode() && interpolated_frames_per_game_frame(rate) != 0u;
+    // With a temporal upscaler every presented frame is upscaled, its motion from the frame presented before, unless
+    // the GPU could not afford it.
+    if (temporal_mode() && temporal_interp_suspended_) {
+        return false;
+    }
+    return interpolated_frames_per_game_frame(rate) != 0u;
+}
+
+RendererVk::TemporalInterpKey RendererVk::temporal_interp_key() const {
+    const RenderConfig cfg = get_render_config();
+    TemporalInterpKey key{};
+    key.upscaler = cfg.upscaler;
+    key.quality = cfg.temporal_quality;
+    key.scene_map = output_scene_active_ ? alt_scene_map_ : scene_map_;
+    key.output_map = upscale_output_;
+    key.max_fps = presented_max_fps(cfg);
+    key.vsync = cfg.vsync_interval;
+    key.refresh_hz = display_refresh_hz_;
+    return key;
+}
+
+void RendererVk::suspend_temporal_interpolation(double ms_per_frame) {
+    if (temporal_interp_suspended_) {
+        return;
+    }
+    temporal_interp_suspended_ = true;
+    temporal_interp_key_ = temporal_interp_key();
+    std::cerr << "[interp] temporal upscaling of the replays off: " << ms_per_frame << " ms GPU per presented frame\n";
 }
 
 // Interp: the upload rings, texture tables and retired textures are segmented per game frame, so a logged frame's
 // data lives until its segment comes round again; Normal: per frame slot. A change, or a ring whose frames took over
 // half their budget, waits for an idle GPU.
 void RendererVk::update_ring_mode() {
+    if (temporal_interp_suspended_ && temporal_interp_key() != temporal_interp_key_) {
+        // The settings changed: decided again.
+        temporal_interp_suspended_ = false;
+    }
     const RingMode mode = interpolation_mode() ? RingMode::Interp
         : temporal_mode() ? RingMode::Temporal : RingMode::Normal;
     const bool grow = !ring_growth_failed_ &&
@@ -1059,8 +1089,11 @@ bool RendererVk::record_replay_list(ReplayList& list) {
         VkCommandBufferAllocateInfo alloc{VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
         alloc.commandPool = list.pool;
         alloc.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        alloc.commandBufferCount = 1;
-        vk::check(vkAllocateCommandBuffers(device, &alloc, &list.commands), "replay command buffer");
+        alloc.commandBufferCount = 2;
+        VkCommandBuffer buffers[2]{};
+        vk::check(vkAllocateCommandBuffers(device, &alloc, buffers), "replay command buffer");
+        list.commands = buffers[0];
+        list.commands_after = buffers[1];
         // Patched texture tables and the replay's constants sets (constants_set).
         list.descriptors =
             create_pool(device, kFrameSets,
@@ -1124,8 +1157,28 @@ bool RendererVk::record_replay_list(ReplayList& list) {
     std::swap(scene_, replay_scene_);
     std::swap(alt_scene_, replay_alt_scene_);
     std::swap(alt_scene_map_, replay_alt_scale_);
+    std::swap(alt_scene_storage_, replay_alt_storage_);
     replaying_ = true;
     reset_draw_bindings();
+    list.split = false;
+    list.upscale = {};
+    // Sub-frames write their motion vectors and reactive mask to their own targets.
+    const bool temporal = temporal_interp_ && temporal_ != nullptr;
+    if (temporal) {
+        std::swap(motion_, replay_motion_);
+    }
+    const VkImage motion_before = motion_.motion ? motion_.motion->image : VK_NULL_HANDLE;
+    const bool motion_ready = temporal && ensure_motion_targets();
+    if (motion_ready) {
+        clear_motion_targets();
+        if (motion_.motion->image != motion_before) {
+            // Lists of this sequence recorded with the old targets are recorded again.
+            for (ReplayList& other : replay_lists_) {
+                other.sequence = 0u;
+            }
+        }
+    }
+    const FrameMap output_map = temporal ? FrameMap(temporal_output_w_, temporal_output_h_) : output_frame_for_window();
     redirect_.clear();
     patched_.clear();
     // Copy textures the frame read before rewriting them: its snapshots of them.
@@ -1193,7 +1246,22 @@ bool RendererVk::record_replay_list(ReplayList& list) {
             break;
         case ReplayKind::OutputSceneBegin:
             if (!output_scene_active_) {
-                (void)enter_output_scene(output_frame_for_window());
+                if (motion_ready && !list.split && ensure_output_set(output_map, true)) {
+                    // The output switch is the temporal upscale, recorded per presented frame (record_subframe_upscale);
+                    // the rest of the log goes to the second command buffer.
+                    end_scene_pass();
+                    list.split = true;
+                    list.upscale = {scene_.color, scene_.depth, motion_.motion, motion_.reactive, alt_scene_.color,
+                                    scene_map_.width, scene_map_.height, output_map.width, output_map.height};
+                    vk::check(vkEndCommandBuffer(commands_), "vkEndCommandBuffer");
+                    vk::check(vkBeginCommandBuffer(list.commands_after, &begin), "vkBeginCommandBuffer");
+                    commands_ = list.commands_after;
+                    swap_scene_sets();
+                    bind_scene();
+                    clear_scene(0u, false, false, true);
+                    break;
+                }
+                (void)enter_output_scene(output_map);
             }
             break;
         case ReplayKind::SwapSceneSets:
@@ -1243,6 +1311,10 @@ bool RendererVk::record_replay_list(ReplayList& list) {
     if (output_scene_active_) {
         swap_scene_sets();
     }
+    if (temporal) {
+        std::swap(motion_, replay_motion_);
+    }
+    std::swap(alt_scene_storage_, replay_alt_storage_);
     std::swap(alt_scene_, replay_alt_scene_);
     std::swap(alt_scene_map_, replay_alt_scale_);
     std::swap(scene_, replay_scene_);
@@ -1251,10 +1323,10 @@ bool RendererVk::record_replay_list(ReplayList& list) {
     }
     replaying_ = false;
     replay_list_ = nullptr;
+    vk::check(vkEndCommandBuffer(commands_), "vkEndCommandBuffer");
     commands_ = saved_commands;
     scene_pass_open_ = saved_pass;
     reset_draw_bindings();
-    vk::check(vkEndCommandBuffer(list.commands), "vkEndCommandBuffer");
     list.sequence = sequence_.serial;
     list.segment = run_log_.segment;
     list.blend = blend && blended != 0u;
@@ -1271,11 +1343,70 @@ bool RendererVk::record_replay_list(ReplayList& list) {
     return true;
 }
 
-bool RendererVk::present_replay_subframe(const SubframeTime& time, const Affine34& camera_t,
+// This presented frame's upscale of the replay's scene into its output target, the frame's jitter phase on the replay's
+// picture; when it cannot run, the resample in its place.
+void RendererVk::record_subframe_upscale(const ReplayList& list, const SubframeTime& time) {
+    const ReplayList::Upscale& up = list.upscale;
+    const GpuPassScope pass{*this, GpuPass::Upscale};
+    bool upscaled = false;
+    if (temporal_ && up.render_width == temporal_render_w_ && up.render_height == temporal_render_h_ &&
+        up.output_width == temporal_output_w_ && up.output_height == temporal_output_h_) {
+        vk::TemporalUpscaleInputs in = temporal_inputs(*up.color, *up.depth, *up.motion, *up.reactive, *up.output);
+        in.commands = commands_;
+        in.render_width = up.render_width;
+        in.render_height = up.render_height;
+        in.output_width = up.output_width;
+        in.output_height = up.output_height;
+        in.jitter_x = time.jitter_x;
+        in.jitter_y = time.jitter_y;
+        const RenderConfig cfg = get_render_config();
+        in.frame_ms = static_cast<float>(1000.0 / present_frame_rate(presented_max_fps(cfg), cfg.vsync_interval, display_refresh_hz_));
+        in.reset = time.reset || !temporal_history_valid_;
+        upscaled = temporal_->evaluate(in);
+        reset_draw_bindings();
+    }
+    temporal_history_valid_ = upscaled;
+    if (upscaled) {
+        return;
+    }
+    const LogPause pause(*this);
+    const bool live_output = output_scene_active_;
+    if (live_output) {
+        swap_scene_sets();
+    }
+    std::swap(scene_, replay_scene_);
+    std::swap(alt_scene_, replay_alt_scene_);
+    std::swap(alt_scene_map_, replay_alt_scale_);
+    const FramePassGeometry sampling = frame_pass_geometry(up.output_width, up.output_height, scene_map_);
+    record_conversion_blit(*alt_scene_.color, up.output_width, up.output_height, kCopyLayoutDisplay, sampling.src_x, sampling.src_y,
+                           sampling.step_x, sampling.step_y);
+    end_scene_pass();
+    image_barrier(commands_, alt_scene_.color->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                  VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                  VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+    alt_scene_.color->layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    std::swap(alt_scene_, replay_alt_scene_);
+    std::swap(alt_scene_map_, replay_alt_scale_);
+    std::swap(scene_, replay_scene_);
+    if (live_output) {
+        swap_scene_sets();
+    }
+    reset_draw_bindings();
+}
+
+bool RendererVk::present_replay_subframe(const SubframeTime& given, const Affine34& camera_t,
                                          const Affine34& camera_prev) {
     if (!sequence_.ready || !run_valid_) {
         replay_failure_ = sequence_.ready ? 2u : 10u;
         return false;
+    }
+    SubframeTime time = given;
+    if (temporal_interp_ && temporal_ && temporal_render_w_ != 0u) {
+        // Each presented frame takes the next jitter phase.
+        const unsigned phases = std::max(temporal_->jitter_phase_count(temporal_render_w_, temporal_output_w_), 1u);
+        temporal_->jitter_offset(temporal_frame_ % phases, phases, time.jitter_x, time.jitter_y);
+        ++temporal_frame_;
     }
     // A list of this sequence whose last submission completed; else the one completed longest ago, recorded now.
     const std::uint64_t completed = completed_fence_value();
@@ -1314,11 +1445,12 @@ bool RendererVk::present_replay_subframe(const SubframeTime& time, const Affine3
         VkCommandBufferAllocateInfo alloc{VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
         alloc.commandPool = slot.pool;
         alloc.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        alloc.commandBufferCount = 2;
-        VkCommandBuffer buffers[2]{};
+        alloc.commandBufferCount = 3;
+        VkCommandBuffer buffers[3]{};
         vk::check(vkAllocateCommandBuffers(device, &alloc, buffers), "vkAllocateCommandBuffers");
         slot.uploads = buffers[0];   // the evaluation
         slot.commands = buffers[1];  // the present
+        slot.upscale = buffers[2];
         slot.descriptors = create_pool(device, 16u, {.images = 16u, .samplers = kFrameUtilitySamplers});
         VkSemaphoreCreateInfo semaphore_info{VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
         vk::check(vkCreateSemaphore(device, &semaphore_info, nullptr, &slot.acquired), "vkCreateSemaphore");
@@ -1371,6 +1503,13 @@ bool RendererVk::present_replay_subframe(const SubframeTime& time, const Affine3
     }
     record_interp_eval(slot.uploads, time, camera_t, camera_prev);
     vk::check(vkEndCommandBuffer(slot.uploads), "vkEndCommandBuffer");
+    if (list->split) {
+        vk::check(vkBeginCommandBuffer(slot.upscale, &begin), "vkBeginCommandBuffer");
+        commands_ = slot.upscale;
+        scene_pass_open_ = false;
+        record_subframe_upscale(*list, time);
+        vk::check(vkEndCommandBuffer(slot.upscale), "vkEndCommandBuffer");
+    }
     vk::check(vkBeginCommandBuffer(slot.commands, &begin), "vkBeginCommandBuffer");
     commands_ = slot.commands;
     scene_pass_open_ = false;
@@ -1381,7 +1520,10 @@ bool RendererVk::present_replay_subframe(const SubframeTime& time, const Affine3
         subframe_timestamp_pending_[index] = true;
     }
     vk::check(vkEndCommandBuffer(slot.commands), "vkEndCommandBuffer");
-    const VkCommandBuffer buffers[] = {slot.uploads, list->commands, slot.commands};
+    const VkCommandBuffer split_buffers[] = {slot.uploads, list->commands, slot.upscale, list->commands_after, slot.commands};
+    const VkCommandBuffer whole_buffers[] = {slot.uploads, list->commands, slot.commands};
+    const std::span<const VkCommandBuffer> buffers = list->split ? std::span<const VkCommandBuffer>(split_buffers)
+                                                                 : std::span<const VkCommandBuffer>(whole_buffers);
     const bool presenting = swap_image_ != UINT32_MAX;
     const std::uint64_t fence = presenting
         ? context.submit_frame(buffers, slot.acquired, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
@@ -1497,6 +1639,11 @@ void RendererVk::release_replay_resources() noexcept {
         *set = SceneSet{};
     }
     replay_alt_scale_ = FrameMap{};
+    replay_alt_storage_ = false;
+    std::swap(motion_, replay_motion_);
+    destroy_motion_framebuffers();
+    motion_ = MotionTargets{};
+    std::swap(motion_, replay_motion_);
     subframe_display_ = DisplayTexture{};
 }
 

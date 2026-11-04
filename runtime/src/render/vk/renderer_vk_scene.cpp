@@ -10,6 +10,10 @@
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/curved_surfaces.h"
 #include "galaxy/motion_signals.h"
+#if defined(_WIN32)
+#include "galaxy/render/streamline_bridge.h"
+#include "galaxy/render/vk/streamline_vk.h"
+#endif
 #include "galaxy/platform_time.h"
 #include "galaxy/render/draw_matrices.h"
 #include "galaxy/render/texture_store.h"
@@ -822,6 +826,11 @@ bool RendererVk::publish_frame_pass(const FramePassRequest& params, gpu::Texture
 
 bool RendererVk::temporal_mode() const {
     const unsigned upscaler = get_render_config().upscaler;
+#if defined(_WIN32)
+    if (upscaler == 3u && streamline::dlss_supported()) {
+        return true;
+    }
+#endif
     return (upscaler == 2u && fsr3_available() && vk::Context::get().temporal_upscaling()) ||
            (upscaler == 4u && vk::Context::get().xess_upscaling());
 }
@@ -873,6 +882,15 @@ void RendererVk::prepare_temporal_upscaler() {
     temporal_output_h_ = oh;
     temporal_kind_ = kind;
     temporal_quality_ = quality;
+#if defined(_WIN32)
+    if (kind == 3u) {
+        temporal_ = vk::streamline_vk::create_dlss_upscaler(rw, rh, ow, oh, quality);
+        if (temporal_) {
+            std::cout << "[Renderer] " << temporal_->name() << " " << rw << "x" << rh << " -> " << ow << "x" << oh << "\n";
+        }
+        return;
+    }
+#endif
     const vk::Context& context = vk::Context::get();
     // Until it is ready the scene renders at the render scale without the upscale.
     temporal_pending_ = std::async(std::launch::async, [instance = context.instance(), device = context.device(),
@@ -894,6 +912,16 @@ bool RendererVk::scene_temporal_begin(float& jitter_x, float& jitter_y) {
         scene_map_.height != temporal_render_h_) {
         temporal_history_valid_ = false;
         return false;
+    }
+    temporal_interp_ = ring_mode_ == RingMode::Interp;
+    if (temporal_interp_) {
+        // Game frames feed the sub-frames: no jitter, and no upscale (begin_output_scene). Each presented frame takes
+        // the next phase.
+        scene_jitter_[0] = 0.0f;
+        scene_jitter_[1] = 0.0f;
+        scene_temporal_ = true;
+        scene_motion_ = true;
+        return true;
     }
     const unsigned phases = std::max(temporal_->jitter_phase_count(rw, ow), 1u);
     temporal_->jitter_offset(temporal_frame_ % phases, phases, jitter_x, jitter_y);
@@ -930,7 +958,7 @@ bool RendererVk::ensure_motion_targets() {
     const std::uint32_t width = scene_.color->width;
     const std::uint32_t height = scene_.color->height;
     const VkImageUsageFlags usage =
-        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     gpu::TextureRef motion = context.create_texture(width, height, 1u, VK_FORMAT_R16G16_SFLOAT, usage, true, "motion vectors");
     gpu::TextureRef reactive = context.create_texture(width, height, 1u, VK_FORMAT_R8_UNORM, usage, true, "reactive mask");
     if (!motion || !reactive) {
@@ -978,6 +1006,11 @@ bool RendererVk::begin_motion_scene() {
     if (!scene_motion_ || !ensure_motion_targets()) {
         return false;
     }
+    clear_motion_targets();
+    return true;
+}
+
+void RendererVk::clear_motion_targets() {
     end_scene_pass();
     const VkClearColorValue zero{};
     const VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u};
@@ -992,7 +1025,6 @@ bool RendererVk::begin_motion_scene() {
                       VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                       VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
     }
-    return true;
 }
 
 bool RendererVk::ensure_output_set(const FrameMap& output, bool storage) {
@@ -1014,38 +1046,46 @@ bool RendererVk::ensure_output_set(const FrameMap& output, bool storage) {
     return true;
 }
 
-bool RendererVk::record_temporal_upscale(const FrameMap& output) {
-    end_scene_pass();
-    settle_owed_scene();
-    const GpuPassScope pass{*this, GpuPass::Upscale};
+vk::TemporalUpscaleInputs RendererVk::temporal_inputs(const vk::Texture& color, const vk::Texture& depth, const vk::Texture& motion,
+                                                       const vk::Texture& reactive, const vk::Texture& output) const {
     const auto image = [](const vk::Texture& texture, VkFormat format, VkImageUsageFlags usage) {
         return vk::TemporalImage{texture.image, texture.view, VK_IMAGE_ASPECT_COLOR_BIT, format, texture.width, texture.height, usage};
     };
     constexpr VkImageUsageFlags kColor = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    vk::TemporalUpscaleInputs in{};
+    in.color = image(color, VK_FORMAT_R8G8B8A8_UNORM, kColor);
+    in.depth = image(depth, depth_format_, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+    in.depth.barrier_aspects = depth_aspects(depth_format_);
+    in.motion = image(motion, VK_FORMAT_R16G16_SFLOAT, kColor);
+    in.reactive = image(reactive, VK_FORMAT_R8_UNORM, kColor);
+    in.output = image(output, VK_FORMAT_R8G8B8A8_UNORM, kColor | VK_IMAGE_USAGE_STORAGE_BIT);
+    in.output.view = output.target_view;
+    in.camera_near = scene_lens_[0];
+    in.camera_far = scene_lens_[1];
+    in.fov_y = scene_lens_[2];
+    in.view = scene_view_;
+    in.view_known = scene_view_known_;
+    return in;
+}
+
+bool RendererVk::record_temporal_upscale(const FrameMap& output) {
+    end_scene_pass();
+    settle_owed_scene();
+    const GpuPassScope pass{*this, GpuPass::Upscale};
     if (!temporal_ || !motion_.motion || !scene_.color || !alt_scene_.color || scene_map_.width != temporal_render_w_ ||
         scene_map_.height != temporal_render_h_ || output.width != temporal_output_w_ || output.height != temporal_output_h_ ||
         scene_.wide) {
         temporal_history_valid_ = false;
         return false;
     }
-    vk::TemporalUpscaleInputs in{};
+    vk::TemporalUpscaleInputs in = temporal_inputs(*scene_.color, *scene_.depth, *motion_.motion, *motion_.reactive, *alt_scene_.color);
     in.commands = commands_;
-    in.color = image(*scene_.color, VK_FORMAT_R8G8B8A8_UNORM, kColor);
-    in.depth = image(*scene_.depth, depth_format_, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
-    in.depth.barrier_aspects = depth_aspects(depth_format_);
-    in.motion = image(*motion_.motion, VK_FORMAT_R16G16_SFLOAT, kColor);
-    in.reactive = image(*motion_.reactive, VK_FORMAT_R8_UNORM, kColor);
-    in.output = image(*alt_scene_.color, VK_FORMAT_R8G8B8A8_UNORM, kColor | VK_IMAGE_USAGE_STORAGE_BIT);
-    in.output.view = alt_scene_.color->target_view;
     in.render_width = scene_map_.width;
     in.render_height = scene_map_.height;
     in.output_width = output.width;
     in.output_height = output.height;
     in.jitter_x = scene_jitter_[0];
     in.jitter_y = scene_jitter_[1];
-    in.camera_near = scene_lens_[0];
-    in.camera_far = scene_lens_[1];
-    in.fov_y = scene_lens_[2];
     // The time since the last upscale, as measured.
     const std::int64_t now_us = std::chrono::duration_cast<std::chrono::microseconds>(
         std::chrono::steady_clock::now().time_since_epoch()).count();
@@ -1067,7 +1107,7 @@ bool RendererVk::begin_output_scene() {
     }
     if (temporal) {
         const FrameMap upscaled_map(temporal_output_w_, temporal_output_h_);
-        if (!upscaled_map.empty() && upscaled_map.width >= scene_map_.width && !logging() &&
+        if (!upscaled_map.empty() && upscaled_map.width >= scene_map_.width && !temporal_interp_ && !logging() &&
             ensure_output_set(upscaled_map, true) && record_temporal_upscale(upscaled_map)) {
             swap_scene_sets();
             bind_scene();
@@ -1077,7 +1117,8 @@ bool RendererVk::begin_output_scene() {
         temporal_history_valid_ = false;
     }
     const FrameMap output = temporal && !upscale_output_.empty() ? upscale_output_ : output_frame_for_window();
-    if ((!temporal && !get_render_config().hud_output_resolution) || output.empty() || output.width <= scene_map_.width) {
+    if ((!temporal && !get_render_config().hud_output_resolution) || output.empty() || output.width < scene_map_.width ||
+        (!temporal && output.width == scene_map_.width)) {
         return false;
     }
     if (logging()) {

@@ -5,6 +5,9 @@
 
 #include "galaxy/render/vk/temporal_upscaler_vk.h"
 #include "galaxy/render/xess_library.h"
+#if defined(_WIN32)
+#include "galaxy/render/vk/streamline_vk.h"
+#endif
 
 #include <xess/xess_vk.h>
 
@@ -171,6 +174,24 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
     app.pApplicationName = "Nebula";
     app.pEngineName = "Nebula";
     app.apiVersion = VK_API_VERSION_1_1;
+#if defined(_WIN32)
+    // DLSS: what Streamline needs of the instance, where its files and an RTX adapter are here.
+    bool streamline = streamline_vk::start();
+    if (streamline) {
+        for (const char* name : streamline_vk::needs().instance_extensions) {
+            streamline = streamline && has_instance_extension(name);
+        }
+    }
+    if (streamline) {
+        for (const char* name : streamline_vk::needs().instance_extensions) {
+            if (std::none_of(instance_extensions.begin(), instance_extensions.end(),
+                             [&](const char* have) { return std::strcmp(have, name) == 0; })) {
+                instance_extensions.push_back(name);
+            }
+        }
+        app.apiVersion = VK_API_VERSION_1_2;
+    }
+#endif
     // XeSS's instance needs, where its library is here.
     if (const auto required = xess_library::get<decltype(xessVKGetRequiredInstanceExtensions)>("xessVKGetRequiredInstanceExtensions")) {
         std::uint32_t count = 0u;
@@ -337,6 +358,32 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
     queue_info.queueCount = 1;
     queue_info.pQueuePriorities = &priority;
     std::vector<const char*> device_extensions{VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+    // On a Vulkan 1.2 instance and device one chain carries every promoted feature: the separate structures must not
+    // appear beside it.
+    const bool core_12 = app.apiVersion >= VK_API_VERSION_1_2 && properties_.apiVersion >= VK_API_VERSION_1_2;
+    VkPhysicalDeviceVulkan11Features features11{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES};
+    VkPhysicalDeviceVulkan12Features features12{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
+    std::vector<float> queue_priorities(1u, priority);
+#if defined(_WIN32)
+    const bool dlss_device = streamline && core_12 && streamline_vk::device_meets_needs(physical_);
+    if (dlss_device) {
+        const streamline_vk::Needs& needs = streamline_vk::needs();
+        for (const char* name : needs.device_extensions) {
+            device_extensions.push_back(name);
+        }
+        features12 = needs.features12;
+        std::uint32_t families = 0u;
+        vkGetPhysicalDeviceQueueFamilyProperties(physical_, &families, nullptr);
+        std::vector<VkQueueFamilyProperties> props(families);
+        vkGetPhysicalDeviceQueueFamilyProperties(physical_, &families, props.data());
+        const std::uint32_t extra = needs.graphics_queues + needs.compute_queues;
+        if (1u + extra <= props[queue_family_].queueCount) {
+            queue_priorities.assign(1u + extra, priority);
+            queue_info.queueCount = 1u + extra;
+            queue_info.pQueuePriorities = queue_priorities.data();
+        }
+    }
+#endif
     // A device that is a portability subset (MoltenVK) must have it enabled; Nebula uses nothing it leaves out.
     if (has_device_extension(physical_, "VK_KHR_portability_subset")) {
         device_extensions.push_back("VK_KHR_portability_subset");
@@ -401,7 +448,18 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
         depth_clip.depthClipEnable = VK_TRUE;
         device_info.pNext = &depth_clip;
     }
-    if (temporal_upscaling_) {
+    if (core_12) {
+        if (temporal_upscaling_) {
+            features11.storageBuffer16BitAccess = VK_TRUE;
+            features12.shaderFloat16 = VK_TRUE;
+            features12.separateDepthStencilLayouts = VK_TRUE;
+            subgroup.pNext = const_cast<void*>(device_info.pNext);
+            device_info.pNext = &subgroup;
+        }
+        features12.pNext = const_cast<void*>(device_info.pNext);
+        features11.pNext = &features12;
+        device_info.pNext = &features11;
+    } else if (temporal_upscaling_) {
         float16.shaderInt8 = VK_FALSE;
         storage16.storageBuffer16BitAccess = VK_TRUE;
         storage16.uniformAndStorageBuffer16BitAccess = VK_FALSE;
@@ -443,6 +501,12 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
     device_info.enabledExtensionCount = static_cast<std::uint32_t>(device_extensions.size());
     device_info.ppEnabledExtensionNames = device_extensions.data();
     device_info.pEnabledFeatures = xess_upscaling_ ? nullptr : &enabled;
+    std::sort(device_extensions.begin(), device_extensions.end(), [](const char* a, const char* b) { return std::strcmp(a, b) < 0; });
+    device_extensions.erase(std::unique(device_extensions.begin(), device_extensions.end(),
+                                        [](const char* a, const char* b) { return std::strcmp(a, b) == 0; }),
+                            device_extensions.end());
+    device_info.enabledExtensionCount = static_cast<std::uint32_t>(device_extensions.size());
+    device_info.ppEnabledExtensionNames = device_extensions.data();
     enabled_device_extensions_.assign(device_extensions.begin(), device_extensions.end());
     if (vkCreateDevice(physical_, &device_info, nullptr, &device_) != VK_SUCCESS) {
         device_ = VK_NULL_HANDLE;
@@ -450,6 +514,11 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
     }
     volkLoadDevice(device_);
     vkGetDeviceQueue(device_, queue_family_, 0, &queue_);
+#if defined(_WIN32)
+    if (dlss_device) {
+        (void)streamline_vk::attach(instance_, physical_, device_, queue_family_, 1u);
+    }
+#endif
 
     VmaVulkanFunctions functions{};
     functions.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
@@ -505,6 +574,9 @@ void Context::shutdown() noexcept {
     if (device_ != VK_NULL_HANDLE) {
         vkDeviceWaitIdle(device_);
     }
+#if defined(_WIN32)
+    streamline_vk::shutdown();
+#endif
     {
         std::lock_guard<std::mutex> lock(deferred_mutex_);
         for (Deferred& deferred : deferred_) {
