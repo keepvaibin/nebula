@@ -7736,10 +7736,9 @@ void RendererD3D12::draw(const DrawCall& call) {
             }
         }
     }
-    const gpu::Topology first_topology = split ? gpu::kTopologyTriangleList : call.topology;
-    if (first_topology != bound_topology_) {
-        command_list_->IASetPrimitiveTopology(first_topology);
-        bound_topology_ = first_topology;
+    if (call.topology != bound_topology_) {
+        command_list_->IASetPrimitiveTopology(call.topology);
+        bound_topology_ = call.topology;
     }
     // A run of shapes rebinds the same vertex-ring allocation for
     // thousands of consecutive draws, so the view is compared before binding.

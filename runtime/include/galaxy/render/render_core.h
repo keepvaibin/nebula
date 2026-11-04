@@ -266,7 +266,7 @@ private:
     // matrix ring and refreshes the texture tables of the sampled maps. Returns the draw's pipeline,
     // or nullptr when none is ready (the draw is skipped).
     gpu::Pipeline* flush_draw_state(
-        gpu::TopologyType primitive_topology_type, std::uint8_t vtxfmt);
+        gpu::TopologyType primitive_topology_type);
     struct PendingDrawBatch {
         bool active = false;
         DrawCall call{};
