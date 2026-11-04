@@ -3075,6 +3075,7 @@ void RendererD3D12::invalidate_draw_bindings() {
     bound_topology_ = D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
     bound_vertex_view_ = {};
     bound_vertex_view_valid_ = false;
+    bound_extra_view_valid_ = false;
     bound_index_view_ = {};
     bound_index_view_valid_ = false;
     bound_scissor_valid_ = false;
@@ -7310,6 +7311,35 @@ void RendererD3D12::draw(const DrawCall& call) {
         command_list_->IASetVertexBuffers(0, 1, &call.vertex_view);
         bound_vertex_view_ = call.vertex_view;
         bound_vertex_view_valid_ = true;
+    }
+    if (!bound_extra_view_valid_ || call.extra_view.BufferLocation != bound_extra_view_.BufferLocation ||
+        call.extra_view.SizeInBytes != bound_extra_view_.SizeInBytes) {
+        if (!zero_vertices_) {
+            D3D12_HEAP_PROPERTIES heap{};
+            heap.Type = D3D12_HEAP_TYPE_UPLOAD;
+            D3D12_RESOURCE_DESC desc{};
+            desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+            desc.Width = sizeof(RenderVertexExtra);
+            desc.Height = 1;
+            desc.DepthOrArraySize = 1;
+            desc.MipLevels = 1;
+            desc.SampleDesc.Count = 1;
+            desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+            d3d_check(device_->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_GENERIC_READ,
+                                                       nullptr, IID_PPV_ARGS(&zero_vertices_)),
+                      "zero vertices");
+            void* mapped = nullptr;
+            d3d_check(zero_vertices_->Map(0, nullptr, &mapped), "Map zero vertices");
+            std::memset(mapped, 0, sizeof(RenderVertexExtra));
+            zero_vertices_->Unmap(0, nullptr);
+        }
+        // Meshes without the second stream read one zero element for every vertex.
+        const D3D12_VERTEX_BUFFER_VIEW view = call.extra_view.BufferLocation != 0u
+            ? call.extra_view
+            : D3D12_VERTEX_BUFFER_VIEW{zero_vertices_->GetGPUVirtualAddress(), sizeof(RenderVertexExtra), 0u};
+        command_list_->IASetVertexBuffers(1, 1, &view);
+        bound_extra_view_ = call.extra_view;
+        bound_extra_view_valid_ = true;
     }
     const bool time_draw = draw_query_heap_ && pass_list_open_ && call.index_count > 0u &&
                            draw_marks_[frame_slot_].size() < kGpuDrawSlots / 2u;

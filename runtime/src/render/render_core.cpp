@@ -617,7 +617,7 @@ void RenderCore::trace_memory() {
         if (shape.geometry != nullptr) {
             geometry += shape.geometry->corners.capacity() * sizeof(shapes::Corner) + shape.geometry->indices.capacity() * sizeof(std::uint16_t);
         }
-        vertices += shape.resident_vertices * sizeof(RenderVertex);
+        vertices += shape.resident_units * kResidentUnit;
     }
     const auto mb = [](std::uint64_t bytes) { return static_cast<double>(bytes) / (1024.0 * 1024.0); };
     std::fprintf(stderr,
@@ -862,7 +862,7 @@ bool RenderCore::ensure_resident_vertex_buffer() {
     release_resident_vertex_buffer();
     resident_vertex_device_ = device;
     UploadBuffer buffer = renderer_.create_resident_vertices(
-        static_cast<std::size_t>(kResidentDecodedVertexCapacity) * sizeof(RenderVertex),
+        static_cast<std::size_t>(kResidentDecodedVertexCapacity) * kResidentUnit,
         "Resident decoded vertices");
     if (buffer.gpu == 0u) {
         // Not fatal: every hit keeps using the per-frame ring upload.
@@ -875,8 +875,7 @@ bool RenderCore::ensure_resident_vertex_buffer() {
     resident_vertex_buffer_ = std::move(buffer);
     resident_vertices_.reset(kResidentDecodedVertexCapacity, kFramesInFlight);
     renderer_.set_resident_vertices(resident_vertex_gpu_,
-                                    static_cast<std::uint64_t>(kResidentDecodedVertexCapacity) *
-                                        sizeof(RenderVertex));
+                                    static_cast<std::uint64_t>(kResidentDecodedVertexCapacity) * kResidentUnit);
     return true;
 }
 
@@ -5081,6 +5080,7 @@ void RenderCore::draw_record_shape(const shapes::Record& record) {
             versions[i] = a->second.version;
         }
     }
+    const bool uses_extras = (geometry.attributes & (shapes::kNbt | (shapes::kTexCoord0 * 0xFEu) | (shapes::kTextureMatrix0 * 0xFFu))) != 0u;
     // Corners without a position matrix of their own take the one J3DCurrentMtx::load set.
     const auto position_matrix = static_cast<std::uint8_t>(
         (geometry.attributes & shapes::kPositionMatrix) != 0u ? 0u : draw_state_.position_matrix);
@@ -5123,13 +5123,14 @@ void RenderCore::draw_record_shape(const shapes::Record& record) {
                 shape.refined_indices = std::move(refined_indices);
             }
         }
-        // The block holds the vertices and, behind them, the indices: both written once, for every draw of the shape.
+        // The block holds the vertices' streams and, behind them, the indices: written once, for every draw of the shape.
         shape.resident_epoch = 0u;
         auto block_size = [&](std::uint32_t& vertices_units, std::uint32_t& bytes) {
             vertices_units = static_cast<std::uint32_t>(expand_scratch_.size());
+            const std::size_t vertex_bytes = vertices_units * (sizeof(RenderVertexCore) + (uses_extras ? sizeof(RenderVertexExtra) : 0u));
             const std::size_t index_count = !shape.refined_indices.empty() ? shape.refined_indices.size() : geometry.indices.size();
             bytes = static_cast<std::uint32_t>(index_count * sizeof(std::uint16_t));
-            return vertices_units + (bytes + static_cast<std::uint32_t>(sizeof(RenderVertex)) - 1u) / static_cast<std::uint32_t>(sizeof(RenderVertex));
+            return static_cast<std::uint32_t>((vertex_bytes + bytes + kResidentUnit - 1u) / kResidentUnit);
         };
         std::uint32_t expanded_units = 0u;
         std::uint32_t index_bytes = 0u;
@@ -5150,10 +5151,23 @@ void RenderCore::draw_record_shape(const shapes::Record& record) {
         }
         // Written once while the block belongs to this group, so no in-flight frame sees a partial write.
         std::byte* const staged = renderer_.stage_resident_vertices(
-            static_cast<std::uint64_t>(*offset) * sizeof(RenderVertex),
-            static_cast<std::uint64_t>(block_units) * sizeof(RenderVertex));
-        std::memcpy(staged, expand_scratch_.data(), static_cast<std::size_t>(expanded_units) * sizeof(RenderVertex));
-        std::memcpy(staged + static_cast<std::size_t>(expanded_units) * sizeof(RenderVertex),
+            static_cast<std::uint64_t>(*offset) * kResidentUnit, static_cast<std::uint64_t>(block_units) * kResidentUnit);
+        std::byte* written = staged;
+        for (const RenderVertex& v : expand_scratch_) {
+            RenderVertexCore core;
+            write_core(v, core);
+            std::memcpy(written, &core, sizeof(core));
+            written += sizeof(core);
+        }
+        if (uses_extras) {
+            for (const RenderVertex& v : expand_scratch_) {
+                RenderVertexExtra extra;
+                write_extra(v, extra);
+                std::memcpy(written, &extra, sizeof(extra));
+                written += sizeof(extra);
+            }
+        }
+        std::memcpy(written,
                     !shape.refined_indices.empty() ? shape.refined_indices.data() : geometry.indices.data(),
                     index_bytes);
         shape.resident_epoch = resident_vertices_.epoch();
@@ -5229,17 +5243,21 @@ void RenderCore::draw_record_shape(const shapes::Record& record) {
 
     const std::vector<std::uint16_t>& indices = !shape.refined_indices.empty() ? shape.refined_indices : geometry.indices;
     const auto index_count = static_cast<std::uint32_t>(indices.size());
-    const std::size_t vertex_byte_offset = static_cast<std::size_t>(shape.resident_offset) * sizeof(RenderVertex);
+    const std::size_t vertex_byte_offset = static_cast<std::size_t>(shape.resident_offset) * kResidentUnit;
+    const std::size_t core_bytes = static_cast<std::size_t>(units) * sizeof(RenderVertexCore);
+    const std::size_t extra_bytes = uses_extras ? static_cast<std::size_t>(units) * sizeof(RenderVertexExtra) : 0u;
     ++stat_draws_issued_;
 
-    const gpu::VertexView vbv = gpu::vertex_view(resident_vertex_gpu_ + vertex_byte_offset,
-                                                 units * static_cast<std::uint32_t>(sizeof(RenderVertex)),
-                                                 static_cast<std::uint32_t>(sizeof(RenderVertex)));
+    const gpu::VertexView vbv = gpu::vertex_view(resident_vertex_gpu_ + vertex_byte_offset, static_cast<std::uint32_t>(core_bytes),
+                                                 static_cast<std::uint32_t>(sizeof(RenderVertexCore)));
     const gpu::IndexView ibv = gpu::index_view(
-        resident_vertex_gpu_ + vertex_byte_offset + static_cast<std::size_t>(units) * sizeof(RenderVertex),
+        resident_vertex_gpu_ + vertex_byte_offset + core_bytes + extra_bytes,
         index_count * static_cast<std::uint32_t>(sizeof(std::uint16_t)));
     DrawCall call = cached_draw_run_state_call_;
     call.vertex_view = vbv;
+    call.extra_view = uses_extras ? gpu::vertex_view(resident_vertex_gpu_ + vertex_byte_offset + core_bytes, static_cast<std::uint32_t>(extra_bytes),
+                                                     static_cast<std::uint32_t>(sizeof(RenderVertexExtra)))
+                                  : gpu::VertexView{};
     call.index_view = ibv;
     call.index_count = index_count;
     pending_draw_batch_.active = true;
@@ -5250,7 +5268,7 @@ void RenderCore::draw_record_shape(const shapes::Record& record) {
     pending_draw_batch_.indexed = true;
     pending_draw_batch_.base_vertex = shape.resident_offset;
     pending_draw_batch_.vertex_count = units;
-    pending_draw_batch_.vertex_byte_end = vertex_byte_offset + static_cast<std::size_t>(units) * sizeof(RenderVertex);
+    pending_draw_batch_.vertex_byte_end = vertex_byte_offset + core_bytes;
     pending_draw_batch_.first_index = 0u;
     pending_draw_batch_.index_count = index_count;
     pending_draw_batch_.draw_count = 1u;
@@ -5296,28 +5314,33 @@ void RenderCore::draw_record_immediate(const shapes::Record& record) {
     const DrawCall& state_call = cached_draw_run_state_call_;
     // Consecutive draws with the same state share one GPU draw : the vertices and indices
     // follow the batch's in the rings, the indices counted from its first vertex.
-    bool append = pending_draw_batch_.active && !pending_draw_batch_.resident && pending_draw_batch_.indexed &&
+    // Lines, points and further texture coordinates take the second stream: such a draw stands alone.
+    const bool uses_extras = record.primitive == shapes::kWideQuads || (record.attributes & (shapes::kTexCoord0 * 0xFEu)) != 0u;
+    bool append = !uses_extras && pending_draw_batch_.call.extra_view.BufferLocation == 0u &&
+                  pending_draw_batch_.active && !pending_draw_batch_.resident && pending_draw_batch_.indexed &&
                   pending_draw_batch_.vertex_count + count <= 0x10000u &&
                   draw_calls_batch_compatible(pending_draw_batch_.call, state_call, true, true);
     if (!append) {
         flush_pending_draw_batch();
     }
     cached_draw_run_batch_compatible_known_ = false;
-    const UploadRing::Allocation vb =
-        renderer_.vertex_ring().allocate(static_cast<std::size_t>(count) * sizeof(RenderVertex), 16u);
-    // The rings are write-combined: this copy is the only touch, never a read.
-    std::memcpy(vb.cpu, current_record_pool_->vertices.data() + record.vertex_first, static_cast<std::size_t>(count) * sizeof(RenderVertex));
+    const RenderVertex* const source = current_record_pool_->vertices.data() + record.vertex_first;
+    const UploadRing::Allocation vb = renderer_.vertex_ring().allocate(static_cast<std::size_t>(count) * sizeof(RenderVertexCore), 4u);
+    // The rings are write-combined: these writes are the only touch, never a read.
+    auto* const core_out = reinterpret_cast<RenderVertexCore*>(vb.cpu);
+    for (std::uint32_t i = 0; i < count; ++i) {
+        write_core(source[i], core_out[i]);
+    }
     const auto index_count = static_cast<std::uint32_t>(immediate_indices_.size());
     const UploadRing::Allocation ib = renderer_.index_ring().allocate(
         static_cast<std::size_t>(index_count) * sizeof(std::uint16_t), sizeof(std::uint16_t));
     const auto first_index = static_cast<std::uint32_t>(ib.offset / sizeof(std::uint16_t));
-    const auto base_vertex = static_cast<std::uint32_t>(vb.offset / sizeof(RenderVertex));
     if (append && (vb.offset != pending_draw_batch_.vertex_byte_end ||
                    first_index != pending_draw_batch_.first_index + pending_draw_batch_.index_count)) {
         flush_pending_draw_batch();
         append = false;
     }
-    const std::uint32_t bias = append ? base_vertex - pending_draw_batch_.base_vertex : 0u;
+    const std::uint32_t bias = append ? pending_draw_batch_.vertex_count : 0u;
     auto* indices = reinterpret_cast<std::uint16_t*>(ib.cpu);
     for (std::uint32_t i = 0; i < index_count; ++i) {
         indices[i] = static_cast<std::uint16_t>(immediate_indices_[i] + bias);
@@ -5325,23 +5348,35 @@ void RenderCore::draw_record_immediate(const shapes::Record& record) {
     ++stat_draws_issued_;
     if (append) {
         pending_draw_batch_.call.index_count += index_count;
-        pending_draw_batch_.call.vertex_view.SizeInBytes += count * static_cast<std::uint32_t>(sizeof(RenderVertex));
+        pending_draw_batch_.call.vertex_view.SizeInBytes += count * static_cast<std::uint32_t>(sizeof(RenderVertexCore));
         pending_draw_batch_.call.index_view.SizeInBytes += index_count * static_cast<std::uint32_t>(sizeof(std::uint16_t));
         pending_draw_batch_.vertex_count += count;
-        pending_draw_batch_.vertex_byte_end = vb.offset + static_cast<std::size_t>(count) * sizeof(RenderVertex);
+        pending_draw_batch_.vertex_byte_end = vb.offset + static_cast<std::size_t>(count) * sizeof(RenderVertexCore);
         pending_draw_batch_.index_count += index_count;
         ++pending_draw_batch_.draw_count;
         return;
     }
     const gpu::VertexView vbv =
         gpu::vertex_view(renderer_.vertex_ring().gpu_base() + vb.offset,
-                         count * static_cast<std::uint32_t>(sizeof(RenderVertex)),
-                         static_cast<std::uint32_t>(sizeof(RenderVertex)));
+                         count * static_cast<std::uint32_t>(sizeof(RenderVertexCore)),
+                         static_cast<std::uint32_t>(sizeof(RenderVertexCore)));
+    gpu::VertexView extra_view{};
+    if (uses_extras) {
+        const UploadRing::Allocation more = renderer_.vertex_ring().allocate(static_cast<std::size_t>(count) * sizeof(RenderVertexExtra), 4u);
+        auto* const extra_out = reinterpret_cast<RenderVertexExtra*>(more.cpu);
+        for (std::uint32_t i = 0; i < count; ++i) {
+            write_extra(source[i], extra_out[i]);
+        }
+        extra_view = gpu::vertex_view(renderer_.vertex_ring().gpu_base() + more.offset,
+                                      count * static_cast<std::uint32_t>(sizeof(RenderVertexExtra)),
+                                      static_cast<std::uint32_t>(sizeof(RenderVertexExtra)));
+    }
     const gpu::IndexView ibv = gpu::index_view(
         renderer_.index_ring().gpu_base() + static_cast<std::size_t>(first_index) * sizeof(std::uint16_t),
         index_count * static_cast<std::uint32_t>(sizeof(std::uint16_t)));
     DrawCall call = state_call;
     call.vertex_view = vbv;
+    call.extra_view = extra_view;
     call.index_view = ibv;
     call.index_count = index_count;
     pending_draw_batch_.active = true;
@@ -5350,9 +5385,9 @@ void RenderCore::draw_record_immediate(const shapes::Record& record) {
     pending_draw_batch_.hidden = false;
     pending_draw_batch_.traced = false;
     pending_draw_batch_.indexed = true;
-    pending_draw_batch_.base_vertex = base_vertex;
+    pending_draw_batch_.base_vertex = 0u;
     pending_draw_batch_.vertex_count = count;
-    pending_draw_batch_.vertex_byte_end = vb.offset + static_cast<std::size_t>(count) * sizeof(RenderVertex);
+    pending_draw_batch_.vertex_byte_end = vb.offset + static_cast<std::size_t>(count) * sizeof(RenderVertexCore);
     pending_draw_batch_.first_index = first_index;
     pending_draw_batch_.index_count = index_count;
     pending_draw_batch_.draw_count = 1u;

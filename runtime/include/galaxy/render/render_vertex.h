@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 
-// The renderer's vertex: what native shapes and immediate draws upload, one input layout for every pipeline.
+// The renderer's vertex as it is built. The GPU reads two streams, one input layout for every pipeline: RenderVertexCore,
+// what every vertex has, and RenderVertexExtra, only for meshes that use it (others read zeros).
 
 #include <cstddef>
 #include <cstdint>
@@ -25,7 +26,52 @@ struct RenderVertex {
     std::uint32_t mtx_indices[3];   // x: the position matrix's first row, y: each coordinate's matrix (a nibble), z: flags
     std::uint32_t curve[3];
 };
-static_assert(sizeof(RenderVertex) == 144, "fixed 144-byte vertex stride");
+static_assert(sizeof(RenderVertex) == 144);
+
+struct RenderVertexCore {
+    float position[3];
+    float normal[3];
+    std::uint32_t color0;
+    std::uint32_t color1;
+    float uv0[2];
+    std::uint32_t position_row;
+};
+static_assert(sizeof(RenderVertexCore) == 44);
+
+struct RenderVertexExtra {
+    float tangent[3];
+    float binormal[3];
+    float uv[7][2];
+    std::uint32_t mtx_more[2];  // RenderVertex::mtx_indices[1], [2]
+    std::uint32_t other_row;    // a widened line corner's other end's position row
+};
+static_assert(sizeof(RenderVertexExtra) == 92);
+
+inline void write_core(const RenderVertex& v, RenderVertexCore& out) noexcept {
+    for (unsigned i = 0; i < 3u; ++i) {
+        out.position[i] = v.position[i];
+        out.normal[i] = v.normal[i];
+    }
+    out.color0 = v.color0;
+    out.color1 = v.color1;
+    out.uv0[0] = v.uv[0][0];
+    out.uv0[1] = v.uv[0][1];
+    out.position_row = v.mtx_indices[0];
+}
+
+inline void write_extra(const RenderVertex& v, RenderVertexExtra& out) noexcept {
+    for (unsigned i = 0; i < 3u; ++i) {
+        out.tangent[i] = v.tangent[i];
+        out.binormal[i] = v.binormal[i];
+    }
+    for (unsigned i = 0; i < 7u; ++i) {
+        out.uv[i][0] = v.uv[i + 1u][0];
+        out.uv[i][1] = v.uv[i + 1u][1];
+    }
+    out.mtx_more[0] = v.mtx_indices[1];
+    out.mtx_more[1] = v.mtx_indices[2];
+    out.other_row = v.curve[0];
+}
 // mtx_indices[2] bit 15: the corner is a flat solid's normal shaded soft (curved_surfaces.h PlaceBend::flat); ray
 // tracing shades its face flat (ray_tracing.hlsl kVertexFlatCorner). Bits 0-7 hold texture matrix 7's index, bits
 // 16-31 the second crease neighbour.
@@ -36,9 +82,6 @@ inline constexpr std::uint32_t kVertexWidenPoint = 0x100u;
 inline constexpr std::uint32_t kVertexWidenLine = 0x200u;
 inline constexpr std::uint32_t kVertexWidenRight = 0x400u;
 inline constexpr std::uint32_t kVertexWidenBottom = 0x800u;
-static_assert(offsetof(RenderVertex, mtx_indices) + 8u == 128u, "ray_tracing.hlsl reads mtx_indices[2] at byte 128");
-static_assert(sizeof(RenderVertex) % 16u == 0u,
-              "vertex upload batching requires 16-byte stride alignment");
 
 // A point of the picture the game asks about (nebula_game_api.h NebulaScreenProbe): the frame's coordinates, negative
 // no point; the user values come back with the value.

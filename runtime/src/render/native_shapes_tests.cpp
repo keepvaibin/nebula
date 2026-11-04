@@ -186,7 +186,7 @@ int main() {
         passed &= expect(v.normal[0] == 1.5f && v.tangent[0] == 0.0f, "normals from theirs, no tangent");
         passed &= expect(v.color0 == 0xAABBCCDDu && v.color1 == 0u, "colour 0 from its entry, colour 1 absent");
         passed &= expect(v.uv[1][0] == 2.0f && v.uv[1][1] == 2.5f && v.uv[0][0] == 0.0f, "texture coordinates");
-        passed &= expect(v.mtx_indices[0] == (3u | 30u << 16u) && v.mtx_indices[1] == 0u && v.mtx_indices[2] == 0u,
+        passed &= expect(v.mtx_indices[0] == 3u && v.mtx_indices[1] == 0u && v.mtx_indices[2] == 0u,
                          "matrix slots as the shaders read them");
     }
 
@@ -196,7 +196,7 @@ int main() {
         from_position.corners[0].texture_matrix[1] = kCornerPositionMatrix;
         std::vector<RenderVertex> own;
         passed &= expect(expand(from_position, arrays, 0u, nullptr, own) && own.size() == 1u &&
-                             own[0].mtx_indices[0] == (3u | 3u << 16u),
+                             own[0].mtx_indices[0] == 3u && own[0].mtx_indices[1] == 15u << 4u,
                          "a coordinate from the position matrix takes the corner's rows");
     }
 

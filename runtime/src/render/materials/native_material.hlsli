@@ -128,8 +128,9 @@ struct NativeVertexIn {
     uint color0 : COLOR0;
     uint color1 : COLOR1;
     float2 uv[8] : TEXCOORD;
-    uint3 mtx_idx : BLENDINDICES;  // x: position place, then texture coordinates' (draw_matrices.h packing)
-    uint3 curve : BEND;            // curved surfaces: displacement and crease normals (packed), the crease place
+    uint mtx_row : BLENDINDICES0;  // the position matrix's first row
+    uint2 mtx_more : BLENDINDICES1; // each coordinate's matrix (a nibble); flags
+    uint other_row : BEND;         // a widened line corner's other end's position row
 };
 
 // What a material's vertex function sees: the vertex in the space its draw sent it (object), its position in the eye
@@ -211,11 +212,11 @@ NativeVaryings native_vs(NativeVertexIn input) {
     v.nrm = input.nrm;
     v.tangent = input.tangent;
     v.binormal = input.binormal;
-    v.mtx_idx = input.mtx_idx;
+    v.mtx_idx = uint3(input.mtx_row, input.mtx_more);
     // The position matrix: the vertex's place where it carries one (flags bit 0, skinned and multi-matrix models),
     // else the draw's.
     const float4 p = float4(input.pos, 1.0);
-    v.pn_row = (draw_counts.z & 1u) != 0u ? input.mtx_idx.x : draw_rows[0].x;
+    v.pn_row = (draw_counts.z & 1u) != 0u ? input.mtx_row : draw_rows[0].x;
     const float4 m0 = native_position_row(v.pn_row);
     const float4 m1 = native_position_row(v.pn_row + 1u);
     const float4 m2 = native_position_row(v.pn_row + 2u);
@@ -255,7 +256,7 @@ NativeVaryings native_vs(NativeVertexIn input) {
     material_vertex(v, o);
     // A corner of a widened point or line (render_vertex.h kVertexWiden*): moved out by the draw's size in pixels. A line
     // widens across its major axis (a steep one across x, a flat one across y); the second edge's coordinates move.
-    const uint widen = (input.mtx_idx.z >> 8u) & 15u;
+    const uint widen = (input.mtx_more.y >> 8u) & 15u;
     if (widen != 0u) {
         const bool right = (widen & 4u) != 0u;
         const bool bottom = (widen & 8u) != 0u;
@@ -267,7 +268,7 @@ NativeVaryings native_vs(NativeVertexIn input) {
             const float4 q = float4(input.tangent, 1.0);
             float4 other_eye;
             if ((draw_counts.z & 1u) != 0u) {
-                const uint r = input.curve.x;
+                const uint r = input.other_row;
                 other_eye = float4(dot(native_position_row(r), q), dot(native_position_row(r + 1u), q),
                                    dot(native_position_row(r + 2u), q), 1.0);
             } else {

@@ -191,6 +191,7 @@ struct DrawCall {
     gpu::Address matrix_palette = 0; // root SRV t0,space1: the draw's row table
     gpu::Address matrix_rows = 0;    // root SRV t3,space1: the rows its table names (the matrix ring, a replay's output)
     gpu::VertexView vertex_view{};
+    gpu::VertexView extra_view{};  // RenderVertexExtra; no address: zeros
     gpu::IndexView index_view{};
     std::uint32_t index_count = 0;
     gpu::Topology topology = gpu::kTopologyTriangleList;
