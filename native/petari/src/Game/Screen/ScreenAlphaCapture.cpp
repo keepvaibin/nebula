@@ -33,10 +33,6 @@ void ScreenAlphaCapture::createScreenAlpha(s32 textureIndex, f32 screenScale) {
     mTexture[textureIndex]->mMagType = NEBULA_FILTER_LINEAR;
 }
 
-void ScreenAlphaCapture::captureScreenAlpha(s32 textureIndex) {
-    J3DNativeTarget::take(mTexture[textureIndex]->mImage);
-}
-
 JUTTexture* ScreenAlphaCapture::getTexture(s32 index) {
     return mTexture[index];
 }
@@ -45,10 +41,6 @@ namespace MR {
     void createScreenAlphaSceneObj(s32 textureIndex, f32 screenScale) {
         MR::createSceneObj(SceneObj_ScreenAlphaCapture);
         ::getScreenAlphaCapture()->createScreenAlpha(textureIndex, screenScale);
-    }
-
-    void captureScreenAlpha(s32 textureIndex) {
-        ::getScreenAlphaCapture()->captureScreenAlpha(textureIndex);
     }
 
     JUTTexture* getScreenAlphaTexture(s32 index) {

@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 123u
+#define NEBULA_GAME_API_VERSION 124u
 
 /* Viewports, scissors, clears, target sizes and picture points count this many units across a frame on each axis. */
 #define NEBULA_FRAME_UNITS 65536.0f
@@ -164,6 +164,20 @@ typedef struct NebulaDrawMatrix {
 } NebulaDrawMatrix;
 
 /* What a draw does to the target (shape_draw, immediate): the game's current values, whichever way it came by them. */
+/* The stencil a pass tests and changes: every pixel it reaches (always), only where the value is zero, or only where it is
+   not. The operation runs where the test and the depth test pass; add and take stop at the ends. */
+enum {
+    NEBULA_STENCIL_OFF = 0,
+    NEBULA_STENCIL_ALWAYS,
+    NEBULA_STENCIL_IF_ZERO,
+    NEBULA_STENCIL_IF_SET,
+};
+enum {
+    NEBULA_STENCIL_KEEP = 0,
+    NEBULA_STENCIL_ADD,
+    NEBULA_STENCIL_TAKE,
+    NEBULA_STENCIL_ZERO,
+};
 typedef struct NebulaPassState {
     uint8_t blend_op, blend_src, blend_dst, logic_op; /* NEBULA_BLEND_*, NEBULA_FACTOR_* */
     uint8_t depth_test, depth_func, depth_write;      /* depth_func NEBULA_COMPARE_* */
@@ -172,8 +186,9 @@ typedef struct NebulaPassState {
     uint8_t constant_alpha, constant_alpha_value;     /* the picture's alpha written is this value */
     uint8_t position_matrix;                          /* the place (0-9) vertices without their own take */
     uint8_t line_divisor, point_divisor;              /* lines' and points' texture offset n (1/n texel; 0 none) */
+    uint8_t stencil_func, stencil_op;                 /* NEBULA_STENCIL_* */
     uint8_t line_offsets, point_offsets;              /* bit per texture coordinate those offsets move */
-    uint8_t reserved[3];
+    uint8_t reserved;
     float line_width, point_size;                     /* pixels */
 } NebulaPassState;
 

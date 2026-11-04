@@ -126,6 +126,16 @@ void FallOutFieldDraw::draw() const {
 
     J3DPass::writeColor(false);
     J3DPass::writeAlpha(true);
+    J3DPass::constantAlpha(true, 4);
+    NebulaNativeMaterial mark;
+    NativeShader::init(mark, NEBULA_SHADER_FLAT_COLOR, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false, NEBULA_CULL_NONE);
+    mark.color_write = 0;
+    mark.alpha_write = 1;
+    NativeShader::setColor(mark, 0, 0, 0, 0, 4);
+    NativeShader::send(mark);
+    J3DPass::stencil(NEBULA_STENCIL_IF_SET, NEBULA_STENCIL_ZERO);
+    ::drawFillScreen(::sFillColor);
+    J3DPass::stencil(NEBULA_STENCIL_OFF, NEBULA_STENCIL_KEEP);
     J3DPass::constantAlpha(false, 0);
     J3DNativeView::setZScaleOffset(0.0f, 0.0f);
     // The mask: alpha 255 where the screen's alpha is under (or, by arg 0, over) 1, a pass of its own at half size, then

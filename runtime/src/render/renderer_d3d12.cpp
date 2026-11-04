@@ -7699,7 +7699,7 @@ void RendererD3D12::clear_scene(
     if (depth_enable) {
         // Reversed depth: far is 0, which the flipped compares pass.
         command_list_->ClearDepthStencilView(
-            dsv, D3D12_CLEAR_FLAG_DEPTH, clear.reversed_depth, 0, num_rects, rects);
+            dsv, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, clear.reversed_depth, 0, num_rects, rects);
     }
 }
 

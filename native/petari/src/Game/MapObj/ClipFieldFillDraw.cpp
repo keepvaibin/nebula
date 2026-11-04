@@ -20,7 +20,6 @@ ClipFieldFillDraw::ClipFieldFillDraw(const char* pName)
     : NameObj(pName), mFillBlendOp(NEBULA_BLEND_ADD), mFillSrcFactor(NEBULA_FACTOR_SRC_ALPHA), mFillDstFactor(NEBULA_FACTOR_ONE),
       _1C(255, 230, 80, 200), _20(255, 255, 255, 255), _24(), _25() {
     MR::connectToScene(this, MR::MovementType_None, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_ClipFieldFillDraw);
-    MR::createScreenAlphaSceneObj(1, 1.0f);
 }
 
 void ClipFieldFillDraw::init(const JMapInfoIter& rIter) {
@@ -50,18 +49,16 @@ void ClipFieldFillDraw::setUpFillScreen() const {
 }
 
 void ClipFieldFillDraw::sendFillScreen(NebulaColor8 color) const {
-    // runtime/src/render/materials/clip_fill.hlsl: the colour where the screen alpha mask is set (_25: or clear),
-    // drawn where its alpha is above zero, depth neither tested nor written, back faces culled.
+    // The colour where the volumes left the stencil set (_25: or where they did not), depth neither tested nor written.
     NebulaNativeMaterial material;
-    NativeShader::init(material, NEBULA_SHADER_CLIP_FILL, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
+    NativeShader::init(material, NEBULA_SHADER_FLAT_COLOR, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
                        NEBULA_CULL_BACK);
     material.blend_op = mFillBlendOp;
     material.blend_src = mFillSrcFactor;
     material.blend_dst = mFillDstFactor;
     NativeShader::setColor(material, 0, color.r, color.g, color.b, color.a);
-    material.constants[4] = _25 ? 1.0f : 0.0f;
-    NativeShader::setTexture(material, 0, MR::getScreenAlphaTexture(1));
     NativeShader::send(material);
+    J3DPass::stencil(_25 ? NEBULA_STENCIL_IF_SET : NEBULA_STENCIL_IF_ZERO, NEBULA_STENCIL_KEEP);
     J3DNativeShape::setCurrentIdentity();
 
     J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 4, NEBULA_SHAPE_TEXCOORD0);
@@ -89,7 +86,7 @@ void ClipFieldFillDraw::draw() const {
     MR::loadViewMtx();
     MR::loadProjectionMtx();
     J3DNativeView::setZScaleOffset(1.0f, 0.0f);
-    MR::clearAlphaBuffer(0);
+    MR::clearStencil();
     MR::loadViewMtx();
     MR::loadProjectionMtx();
     J3DPass::writeAlpha(false);

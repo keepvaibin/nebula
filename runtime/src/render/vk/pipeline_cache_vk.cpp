@@ -414,6 +414,22 @@ VkPipeline PipelineCacheVk::create_pipeline(const RenderStateKey& rs, VkShaderMo
         depth.depthCompareOp = kDepthCompare[(zb >> 1u) & 0x7u];
         depth.depthWriteEnable = (zb & (1u << 4u)) != 0u ? VK_TRUE : VK_FALSE;
     }
+    if (const std::uint32_t test = (zb >> 5u) & 0x3u; test != 0u) {
+        static constexpr VkCompareOp kStencilTest[4] = {VK_COMPARE_OP_ALWAYS, VK_COMPARE_OP_ALWAYS, VK_COMPARE_OP_EQUAL,
+                                                        VK_COMPARE_OP_NOT_EQUAL};
+        static constexpr VkStencilOp kStencilOp[4] = {VK_STENCIL_OP_KEEP, VK_STENCIL_OP_INCREMENT_AND_CLAMP,
+                                                      VK_STENCIL_OP_DECREMENT_AND_CLAMP, VK_STENCIL_OP_ZERO};
+        depth.stencilTestEnable = VK_TRUE;
+        VkStencilOpState face{};
+        face.failOp = VK_STENCIL_OP_KEEP;
+        face.depthFailOp = VK_STENCIL_OP_KEEP;
+        face.passOp = kStencilOp[(zb >> 7u) & 0x3u];
+        face.compareOp = kStencilTest[test];
+        face.compareMask = 0xFFu;
+        face.writeMask = 0xFFu;
+        depth.front = face;
+        depth.back = face;
+    }
 
     const std::uint32_t bb = rs.blend_bits;
     VkPipelineColorBlendAttachmentState target{};

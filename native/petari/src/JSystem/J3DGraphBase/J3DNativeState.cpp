@@ -249,6 +249,12 @@ namespace J3DPass {
         sPass.depth_write = write;
     }
 
+    void stencil(u8 test, u8 op) {
+        J3DNativeShape::flushState();
+        sPass.stencil_func = test;
+        sPass.stencil_op = op;
+    }
+
     void blendState(u8 op, u8 source, u8 destination, u8 logicOp) {
         J3DNativeShape::flushState();
         sPass.blend_op = op;

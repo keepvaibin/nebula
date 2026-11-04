@@ -132,14 +132,16 @@ RenderStateKey build_render_state_key(const NativeDrawState& state) {
         key.blend_bits |= (1u << 28u);
     }
 
-    // zmode_bits: test_enable(0) | func(3:1) | update_enable(4)
+    // zmode_bits: test_enable(0) | func(3:1) | update_enable(4) | stencil test(6:5) | stencil op(8:7)
     const ZMode zm = state.z;
     // A disabled compare passes unconditionally, so the function field is leftover state then.
     key.zmode_bits = static_cast<std::uint16_t>(
         (zm.test_enable   ? 1u : 0u)                                            |
         (zm.test_enable
              ? ((static_cast<std::uint32_t>(zm.func) & 0x7u) << 1u) : 0u)       |
-        (zm.update_enable ? (1u << 4u) : 0u));
+        (zm.update_enable ? (1u << 4u) : 0u) |
+        ((state.stencil_test & 0x3u) << 5u) |
+        (state.stencil_test != 0u ? (state.stencil_op & 0x3u) << 7u : 0u));
 
     key.cull = static_cast<std::uint8_t>(state.gen.cull);
 

@@ -250,16 +250,6 @@ void MarioActor::drawSearchLight() const {
     screenPos1 = minimum + TVec2f(-10.0f, -10.0f);
     screenPos2 = maximum + TVec2f(10.0f, 10.0f);
 
-    // The light's screen box cleared in the alpha buffer (vertex_color, alpha only, a constant destination alpha of 0).
-    NebulaNativeMaterial box;
-    TDDraw::setupNative(&box, 0, 0, 2);
-    box.color_write = 0;
-    box.alpha_write = 1;
-    NativeShader::setBlend(box, NEBULA_FACTOR_DST_ALPHA, NEBULA_FACTOR_ONE);
-    J3DPass::constantAlpha(true, 0);
-    NativeShader::send(box);
-
-    TDDraw::drawFillBox(screenPos1, screenPos2, 0);
     // The light model with its own material and the passes over it (J3DNativeMaterial::override); setup's view only.
     NebulaNativeMaterial view;
     TDDraw::setupNative(&view, 0, 1, 1);
@@ -268,9 +258,8 @@ void MarioActor::drawSearchLight() const {
     J3DMaterial* const material = model->getModelData()->getMaterialNodePointer(0);
     if (model->simpleDrawSetup(material)) {
         J3DPass::depth(true, NEBULA_COMPARE_LEQUAL, false);
-        J3DPass::writeAlpha(true);
+        J3DPass::writeAlpha(false);
         J3DPass::writeColor(false);
-        J3DPass::constantAlpha(false, 0);
 
         // Gradually fade in the search light.
         f32 lightBrightness = 1.0f;
@@ -287,28 +276,27 @@ void MarioActor::drawSearchLight() const {
 
         // Render intersection of light cone with the scene by subtracting
         // visible back faces from front faces.
-        J3DPass::blend(NEBULA_FACTOR_ONE, NEBULA_FACTOR_ONE);
+        J3DPass::noBlend();
+        J3DPass::stencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ADD);
         J3DPass::cull(NEBULA_CULL_BACK);
         model->setDrawView(0);
         model->simpleDrawShape(material);
 
+        J3DPass::stencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_TAKE);
         J3DPass::cull(NEBULA_CULL_FRONT);
-        J3DPass::subtractBlend();
         model->simpleDrawShape(material);
 
-        // The light's colour added over the box by the destination alpha the volume left (vertex_color).
+        // The light's colour added over the box where the cone was marked, at its strength; the mark goes with it.
         NebulaNativeMaterial fill;
         TDDraw::setupNative(&fill, 0, 1, 2);
-        fill.alpha_write = 1;
-        NativeShader::setBlend(fill, NEBULA_FACTOR_DST_ALPHA, NEBULA_FACTOR_ONE);
-        J3DPass::constantAlpha(true, 0);
+        NativeShader::setBlend(fill, NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_ONE);
         NativeShader::send(fill);
+        J3DPass::stencil(NEBULA_STENCIL_IF_SET, NEBULA_STENCIL_ZERO);
 
         u8* col = mConst->getTable()->mSearchLightColor;
-        TDDraw::drawFillBox(screenPos1, screenPos2, col[0] << 24 | col[1] << 16 | col[2] << 8);
+        TDDraw::drawFillBox(screenPos1, screenPos2, col[0] << 24 | col[1] << 16 | col[2] << 8 | volumeAlpha);
 
-        J3DPass::constantAlpha(false, 0);
-        J3DPass::writeAlpha(false);
+        J3DPass::stencil(NEBULA_STENCIL_OFF, NEBULA_STENCIL_KEEP);
 
         TDDraw::setupNative(&view, 0, 1, 1);
         J3DPass::depth(true, NEBULA_COMPARE_LEQUAL, false);

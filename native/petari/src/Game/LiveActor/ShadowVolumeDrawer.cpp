@@ -85,16 +85,17 @@ void ShadowVolumeDrawer::draw() const {
         NebulaColor8 shapeColor = reinterpret_cast< NebulaColor8& >(::sShapeColor);
         MR::setShadowVolumeColor(shapeColor);
         J3DPass::writeColor(false);
-        J3DPass::constantAlpha(false, 0);
+        J3DPass::writeAlpha(false);
+        J3DPass::noBlend();
+        J3DPass::stencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ADD);
         J3DPass::cull(NEBULA_CULL_FRONT);
-        J3DPass::blend(NEBULA_FACTOR_ONE, NEBULA_FACTOR_ONE);
         drawShape();
+        J3DPass::stencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_TAKE);
         J3DPass::cull(NEBULA_CULL_BACK);
-        J3DPass::subtractBlend();
         drawShape();
+        J3DPass::stencil(NEBULA_STENCIL_OFF, NEBULA_STENCIL_KEEP);
         J3DPass::cull(NEBULA_CULL_NONE);
         J3DPass::writeColor(true);
-        J3DPass::constantAlpha(true, 0);
     }
 }
 

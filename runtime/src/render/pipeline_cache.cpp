@@ -226,6 +226,23 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC make_pso_desc_impl(
             ? D3D12_DEPTH_WRITE_MASK_ALL
             : D3D12_DEPTH_WRITE_MASK_ZERO;
     }
+    if (const std::uint32_t test = (zb >> 5u) & 0x3u; test != 0u) {
+        static constexpr D3D12_COMPARISON_FUNC kStencilTest[4] = {
+            D3D12_COMPARISON_FUNC_ALWAYS, D3D12_COMPARISON_FUNC_ALWAYS, D3D12_COMPARISON_FUNC_EQUAL,
+            D3D12_COMPARISON_FUNC_NOT_EQUAL};
+        static constexpr D3D12_STENCIL_OP kStencilOp[4] = {D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_INCR_SAT,
+                                                           D3D12_STENCIL_OP_DECR_SAT, D3D12_STENCIL_OP_ZERO};
+        pd.DepthStencilState.StencilEnable = TRUE;
+        pd.DepthStencilState.StencilReadMask = 0xFFu;
+        pd.DepthStencilState.StencilWriteMask = 0xFFu;
+        D3D12_DEPTH_STENCILOP_DESC face{};
+        face.StencilFailOp = D3D12_STENCIL_OP_KEEP;
+        face.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
+        face.StencilPassOp = kStencilOp[(zb >> 7u) & 0x3u];
+        face.StencilFunc = kStencilTest[test];
+        pd.DepthStencilState.FrontFace = face;
+        pd.DepthStencilState.BackFace = face;
+    }
 
     pd.SampleMask            = UINT_MAX;
     switch (static_cast<D3D12_PRIMITIVE_TOPOLOGY_TYPE>(
