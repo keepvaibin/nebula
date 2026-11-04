@@ -36,6 +36,23 @@ std::vector<SettingsRow> general_page(const RuntimeSettings& runtime, RuntimeSet
                         },
                         "THE BUTTONS THE GAME'S ICONS SHOW. AUTO: THE CONTROLLER IN USE"});
     }
+    {
+        // In steps the eye can tell apart; Auto: as large as this screen calls for.
+        static constexpr unsigned kSizes[] = {0u, 80u, 90u, 100u, 110u, 120u, 130u, 140u, 150u, 160u, 180u, 200u};
+        std::string size = "AUTO";
+        if (runtime.menu_text_size != 0u) {
+            size = std::to_string(runtime.menu_text_size) + "%";
+        }
+        rows.push_back({"MENU TEXT SIZE", size,
+                        [&draft_runtime](RenderConfig&, int delta) {
+                            unsigned index = 0u;
+                            for (unsigned i = 0u; i < std::size(kSizes); ++i) {
+                                if (kSizes[i] == draft_runtime.menu_text_size) index = i;
+                            }
+                            draft_runtime.menu_text_size = kSizes[settings_step(index, static_cast<unsigned>(std::size(kSizes)), delta)];
+                        },
+                        "HOW LARGE THE MENUS ARE DRAWN. AUTO: FOR THIS SCREEN'S SIZE"});
+    }
     rows.push_back({"LANGUAGE", game_language_name(state.display_language),
                     [&draft_runtime, &host](RenderConfig&, int delta) {
                         // Saved when applied; the game switches at the next start (game_language_for_boot).
@@ -66,6 +83,37 @@ std::vector<SettingsRow> general_page(const RuntimeSettings& runtime, RuntimeSet
                         draft_runtime.discord_status = !draft_runtime.discord_status;
                     },
                     "SHOWS YOUR CURRENT GALAXY AND MISSION IN DISCORD"});
+    if (state.touch_controls) {
+        // Kept for the screen as it is now: each size and turn of a screen has its own.
+        static constexpr unsigned kSizes[] = {0u, 40u, 50u, 60u, 70u, 80u, 90u, 100u, 110u, 120u, 130u, 140u, 150u, 160u, 180u, 200u};
+        rows.push_back({"ON-SCREEN CONTROLS", {}, nullptr, {}, true});
+        rows.push_back({"BUTTON SIZE", state.touch_size == 0u ? std::string("AUTO") : std::to_string(state.touch_size) + "%",
+                        [state, &host](RenderConfig&, int delta) {
+                            if (delta == 0) return;
+                            unsigned index = 0u;
+                            for (unsigned i = 0u; i < std::size(kSizes); ++i) {
+                                if (kSizes[i] == state.touch_size) index = i;
+                            }
+                            host.set_touch_controls(kSizes[settings_step(index, static_cast<unsigned>(std::size(kSizes)), delta)],
+                                                    state.touch_opacity, state.touch_vibration);
+                        },
+                        "REMEMBERED FOR EACH SIZE AND TURN OF THE SCREEN. AUTO: FOR THIS SCREEN'S SIZE"});
+        rows.push_back({"BUTTON OPACITY", std::to_string(state.touch_opacity) + "%",
+                        [state, &host](RenderConfig&, int delta) {
+                            if (delta == 0) return;
+                            const unsigned step = settings_step((std::clamp(state.touch_opacity, 20u, 100u) - 20u) / 10u, 9u, delta);
+                            host.set_touch_controls(state.touch_size, 20u + step * 10u, state.touch_vibration);
+                        },
+                        "HOW SOLID THE BUTTONS ARE DRAWN"});
+        rows.push_back({"VIBRATION", state.touch_vibration ? std::string("ON") : std::string("OFF"),
+                        [state, &host](RenderConfig&, int delta) {
+                            if (delta == 0) return;
+                            host.set_touch_controls(state.touch_size, state.touch_opacity, !state.touch_vibration);
+                        },
+                        "A SHORT BUZZ WHEN A BUTTON IS PRESSED"});
+        rows.push_back(button_row("BUTTON PLACES", {"RESET"}, [&host](RenderConfig&, unsigned) { host.act(GeneralPageAction::ResetTouchPlaces); },
+                                  "PUTS THE BUTTONS BACK WHERE THE GAME PLACES THEM ON THIS SCREEN"));
+    }
     {
         rows.push_back({"MIIS", {}, nullptr, {}, true});
         std::string status = state.choosing_miis ? "CHOOSING FILES" : state.mii_status;

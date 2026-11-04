@@ -152,7 +152,7 @@ private:
     // The title in the played language and the window's shape around it.
     void fill() {
         char16_t text[96];
-        NebulaText::get(text, 96, "RtPrepareTitle");
+        NebulaText::get(text, 96, NebulaHost::option(NEBULA_OPTION_MODS_PREPARING) != 0 ? "ModsPrepareTitle" : "RtPrepareTitle");
         setText(mTitle, text);
         f32 width = 0.0f;
         f32 titleHeight = 0.0f;

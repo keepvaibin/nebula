@@ -159,7 +159,6 @@ pub fn write_index(pak: &mut File, at: u64, files: &[Placed], game_id: &[u8; 8])
 }
 
 /// A file of a store on disk, by path.
-#[cfg(test)]
 pub fn read_file(pak_path: &std::path::Path, path: &str) -> Result<Vec<u8>> {
     use anyhow::Context;
     use std::io::Read;

@@ -3,6 +3,10 @@
 # native SDK layer, as a shared library apart from the host runtime.
 cmake_minimum_required(VERSION 3.24)
 project(NebulaGame LANGUAGES C CXX)
+# The game's version, from the main project's file.
+file(STRINGS "${CMAKE_CURRENT_LIST_DIR}/../CMakeLists.txt" nebula_project_line REGEX "^project\\(Nebula VERSION ")
+string(REGEX MATCH "[0-9]+\\.[0-9]+\\.[0-9]+" nebula_version "${nebula_project_line}")
+add_compile_definitions(NEBULA_VERSION="${nebula_version}")
 
 if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
     message(FATAL_ERROR "The game module is built with clang's GNU driver (clang++, not clang-cl).")
@@ -158,7 +162,7 @@ endif()
 # The native game's host (host/host_main.cpp): loads the module and serves it. Built with the host's own C++ library.
 # The mods' virtual disc (galaxy::mods) serves this host's disc reads as the windowed host's.
 add_executable(nebula_native_host host/host_main.cpp ../tools/test_driver/run_options.cpp
-    ../runtime/src/mods.cpp ../runtime/src/mod_xml.cpp ../runtime/src/atomic_file.cpp ../runtime/src/save_files.cpp ../runtime/src/disc_files.cpp
+    ../runtime/src/luma.cpp ../runtime/src/mods.cpp ../runtime/src/texture_categories.cpp ../runtime/src/mod_xml.cpp ../runtime/src/atomic_file.cpp ../runtime/src/save_files.cpp ../runtime/src/disc_files.cpp
     ../runtime/src/crash_report.cpp ../runtime/src/discord_presence.cpp ../runtime/src/mii_import.cpp
     ../runtime/src/mii_formats.cpp)
 target_include_directories(nebula_native_host PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include"

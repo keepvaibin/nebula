@@ -995,7 +995,12 @@ DlssInstall poll_dlss_install() {
 }
 
 bool restart_game(bool) {
+#if defined(__ANDROID__)
+    galaxy::sdl::call_activity("restartGame");
+    return true;
+#else
     return false;
+#endif
 }
 
 std::vector<const char*> vulkan_instance_extensions() {
@@ -1156,14 +1161,78 @@ bool input_missing_shown() noexcept {
 }
 
 #if defined(__ANDROID__)
+// As GameActivity.reportInputDevices sees them: real external devices. SDL's count takes a phone's own buttons for a
+// keyboard.
+namespace {
+std::atomic<bool> g_external_keyboard{false};
+std::atomic<bool> g_external_mouse{false};
+std::atomic<unsigned> g_touch_size{0};
+std::atomic<unsigned> g_touch_opacity{60};
+std::atomic<bool> g_touch_vibration{true};
+}  // namespace
+
 bool physical_keyboard_attached() noexcept {
-    return SDL_HasKeyboard();
+    return g_external_keyboard.load(std::memory_order_relaxed);
 }
+
+void arrange_touch_controls() noexcept {
+    galaxy::sdl::call_activity("arrangeControls");
+}
+
+void input_mode_changed() noexcept {
+    galaxy::sdl::call_activity("inputModeChanged");
+}
+
+bool touch_controls_present() noexcept {
+    return true;
+}
+
+TouchControlsSettings touch_controls_settings() noexcept {
+    return {g_touch_size.load(std::memory_order_relaxed), g_touch_opacity.load(std::memory_order_relaxed),
+            g_touch_vibration.load(std::memory_order_relaxed)};
+}
+
+void set_touch_controls_settings(const TouchControlsSettings& settings) noexcept {
+    g_touch_size.store(settings.size, std::memory_order_relaxed);
+    g_touch_opacity.store(settings.opacity, std::memory_order_relaxed);
+    g_touch_vibration.store(settings.vibration, std::memory_order_relaxed);
+    galaxy::sdl::call_activity("touchSettingsChanged");
+}
+
+void reset_touch_controls_places() noexcept {
+    galaxy::sdl::call_activity("resetControlPlaces");
+}
+#else
+void arrange_touch_controls() noexcept {}
+
+void input_mode_changed() noexcept {}
+
+bool touch_controls_present() noexcept {
+    return false;
+}
+
+TouchControlsSettings touch_controls_settings() noexcept {
+    return {};
+}
+
+void set_touch_controls_settings(const TouchControlsSettings&) noexcept {}
+
+void reset_touch_controls_places() noexcept {}
 #endif
+
+unsigned window_width_dp() noexcept {
+    int width = 0;
+    int height = 0;
+    if (galaxy::sdl::g_window == nullptr || !SDL_GetWindowSizeInPixels(galaxy::sdl::g_window, &width, &height)) {
+        return 0u;
+    }
+    const float density = SDL_GetWindowDisplayScale(galaxy::sdl::g_window);
+    return static_cast<unsigned>(static_cast<float>(width) / (density > 0.0f ? density : 1.0f));
+}
 
 bool keyboard_or_mouse_attached() noexcept {
 #if defined(__ANDROID__)
-    return true;  // the touch controls are always in hand
+    return g_external_keyboard.load(std::memory_order_relaxed) || g_external_mouse.load(std::memory_order_relaxed);
 #else
     return SDL_HasKeyboard() || SDL_HasMouse();
 #endif
@@ -1257,4 +1326,26 @@ ImportResult import_mod(const std::filesystem::path&, const std::filesystem::pat
 }
 
 }  // namespace galaxy::mods
+#endif
+
+#if defined(__ANDROID__)
+extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativeInputDevices(JNIEnv*, jclass, jboolean keyboard, jboolean mouse) {
+    galaxy::host::g_external_keyboard.store(keyboard != JNI_FALSE, std::memory_order_relaxed);
+    galaxy::host::g_external_mouse.store(mouse != JNI_FALSE, std::memory_order_relaxed);
+}
+
+extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativeTouchSettings(JNIEnv*, jclass, jint size, jint opacity, jboolean vibration) {
+    galaxy::host::g_touch_size.store(static_cast<unsigned>(size), std::memory_order_relaxed);
+    galaxy::host::g_touch_opacity.store(static_cast<unsigned>(opacity), std::memory_order_relaxed);
+    galaxy::host::g_touch_vibration.store(vibration != JNI_FALSE, std::memory_order_relaxed);
+}
+
+extern "C" JNIEXPORT jint JNICALL Java_dev_nebula_galaxy_GameActivity_nativeTouchWanted(JNIEnv*, jclass, jint which) {
+    const galaxy::host::TouchControlsSettings settings = galaxy::host::touch_controls_settings();
+    return which == 0 ? static_cast<jint>(settings.size) : which == 1 ? static_cast<jint>(settings.opacity) : (settings.vibration ? 1 : 0);
+}
+
+extern "C" JNIEXPORT jint JNICALL Java_dev_nebula_galaxy_GameActivity_nativeInputMode(JNIEnv*, jclass) {
+    return static_cast<jint>(galaxy::get_runtime_settings().input_mode);
+}
 #endif

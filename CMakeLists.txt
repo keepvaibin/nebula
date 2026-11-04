@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 project(Nebula VERSION 2.0.1 LANGUAGES C CXX)
+add_compile_definitions(NEBULA_VERSION="${PROJECT_VERSION}")
 
 # A build for players: the test switches' names are left out (galaxy/test_hooks.h).
 option(NEBULA_RELEASE "Leave the test hooks out" OFF)
@@ -160,7 +161,9 @@ add_library(galaxy_native_host STATIC
     runtime/src/mii_import.cpp
     runtime/src/mii_formats.cpp
     runtime/src/mod_xml.cpp
+    runtime/src/luma.cpp
     runtime/src/mods.cpp
+    runtime/src/texture_categories.cpp
     runtime/src/mod_import.cpp
     runtime/src/crash_report.cpp
     runtime/src/discord_presence.cpp
@@ -273,7 +276,7 @@ endforeach()
 # Ambient occlusion (runtime/src/render/ambient_occlusion.hlsl), compiled by fxc like the post passes.
 set(galaxy_ao_hlsl "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/render/ambient_occlusion.hlsl")
 set(galaxy_ao_headers "")
-foreach(galaxy_ao_pass distance_cs:DepthCS:cs_5_0 occlusion_cs:AoCS:cs_5_0 denoise_cs:DenoiseCS:cs_5_0
+foreach(galaxy_ao_pass distance_cs:DepthCS:cs_5_0 occlusion_cs:AoCS:cs_5_0 ssao_cs:SsaoCS:cs_5_0 denoise_cs:DenoiseCS:cs_5_0
         upsample_cs:UpsampleCS:cs_5_0 apply_vs:ApplyVS:vs_5_0 apply_ps:ApplyPS:ps_5_0)
     string(REPLACE ":" ";" galaxy_ao_pair "${galaxy_ao_pass}")
     list(GET galaxy_ao_pair 0 galaxy_ao_name)
@@ -387,6 +390,7 @@ runtime/src/render/host_window_win32.cpp
     runtime/src/render/render_state_key.cpp
     runtime/src/render/frame_pass.cpp
     runtime/src/render/line_point_params.cpp
+    runtime/src/render/mod_shaders.cpp
     runtime/src/render/pipeline_cache.cpp
     runtime/src/render/pipeline_seed.cpp
     runtime/src/render/post_process.cpp
@@ -552,8 +556,9 @@ galaxy_test(galaxy_frame_phase_tests SOURCES ${rt}/frame_phase_tests.cpp ${rt}/f
 galaxy_test(galaxy_frame_telemetry_tests SOURCES ${rt}/frame_telemetry_tests.cpp ${rt}/frame_telemetry.cpp)
 galaxy_test(galaxy_mii_import_tests SOURCES ${rt}/mii_import_tests.cpp ${rt}/mii_import.cpp ${rt}/mii_formats.cpp
     LIBS galaxy_atomic_file)
-galaxy_test(galaxy_mods_tests SOURCES ${rt}/mods_tests.cpp ${rt}/mod_xml.cpp ${rt}/mods.cpp
-    ${rt}/mod_import.cpp LIBS galaxy_atomic_file nebula_archive)
+galaxy_test(galaxy_luma_tests SOURCES ${rt}/luma_tests.cpp ${rt}/luma.cpp)
+galaxy_test(galaxy_mods_tests SOURCES ${rt}/mods_tests.cpp ${rt}/mod_xml.cpp ${rt}/mods.cpp ${rt}/luma.cpp
+    ${rt}/mod_import.cpp ${rt}/texture_categories.cpp ${rt}/disc_files.cpp LIBS galaxy_atomic_file nebula_archive)
 galaxy_test(galaxy_crash_report_tests SOURCES ${rt}/crash_report_tests.cpp ${rt}/crash_report.cpp)
 
 galaxy_test(galaxy_test_data_paths_tests SOURCES ${rt}/test_data_paths_tests.cpp ${rt}/host_env.cpp tools/test_driver/data_guard.cpp LIBS galaxy_run_options shell32)
@@ -691,6 +696,7 @@ runtime/src/render/host_window_win32.cpp
         "${galaxy_utility_spirv_dir}/utility_spirv_data.h"
         runtime/src/render/vk/texture_backend_vk.cpp
         runtime/src/render/vk/pipeline_cache_vk.cpp
+        runtime/src/render/mod_shaders.cpp
         runtime/src/render/pipeline_seed.cpp
         runtime/src/render/vk/compile_journal.cpp
         runtime/src/render/vk/renderer_vk.cpp

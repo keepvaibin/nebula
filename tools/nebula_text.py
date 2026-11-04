@@ -20,7 +20,7 @@ CRASH_OUTPUT = os.path.join(ROOT, 'runtime', 'src', 'crash_text_table.inc')
 HOST_TEXT = ['runtime/src/ui/settings_*_page.cpp', 'runtime/src/ui/settings_model.cpp', 'runtime/src/render/host_window_win32.cpp']
 INSTALLER_TEXT = 'installer/src/**/*.cs'
 # Capitals the menu does not show as text: pad names, a disc id, the home overlay and the DLSS footer the game replaces.
-HOST_NOT_SHOWN = {'(BLUETOOTH)', '(BT)', '-OPTIONS', 'AIS', 'OL', 'LB/RB', 'RMGE01', 'S ARE', 'SHARE+OPTIONS',
+HOST_NOT_SHOWN = {'SSAO', 'GTAO', '(BLUETOOTH)', '(BT)', '-OPTIONS', 'AIS', 'OL', 'LB/RB', 'RMGE01', 'S ARE', 'SHARE+OPTIONS',
                   'VIEW+MENU OR MINUS+PLUS', 'DLSS READY', 'DLSS WAS NOT INSTALLED', 'DOWNLOAD NVIDIA DLSS (',
                   'INSTALLING NVIDIA DLSS...', 'RESTART NOW? ENTER/Y YES  ESC/B LATER', 'HOME MENU', 'NO', 'YES',
                   'QUIT TO DESKTOP', 'QUIT TO DESKTOP?', 'RESET?', 'RETURN TO GAME'}

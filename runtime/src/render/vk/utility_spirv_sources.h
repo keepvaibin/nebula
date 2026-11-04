@@ -100,15 +100,16 @@ inline const char* smaa_preset(unsigned quality) {
 constexpr RegisterBinding kBloomBindings[] = {{"b0", 0, 0, true}, {"t0", 0, 0}, {"t1", 0, 1}, {"t2", 0, 2},
                                          {"u0", 0, 3},       {"u1", 0, 4}, {"u2", 0, 5}, {"s0", 1, 0}};
 
-// ambient_occlusion.hlsl's registers: t0-t2 sampled and u0 a storage image in set 0, the constants pushed.
-constexpr RegisterBinding kAoBindings[] = {{"b0", 0, 0, true}, {"t0", 0, 0}, {"t1", 0, 1}, {"t2", 0, 2}, {"u0", 0, 3}};
+// ambient_occlusion.hlsl's registers: t0-t2 sampled, u0 a storage image and t3-t4 storage buffers in set 0, the constants pushed.
+constexpr RegisterBinding kAoBindings[] = {{"b0", 0, 0, true}, {"t0", 0, 0}, {"t1", 0, 1}, {"t2", 0, 2},
+                                           {"u0", 0, 3},       {"t3", 0, 4}, {"t4", 0, 5}};
 
 inline std::string ao_source() {
     return "#define AO_STORAGE_FORMAT 1\n" + annotate(reinterpret_cast<const char*>(galaxy_post_ambient_occlusion_hlsl), kAoBindings);
 }
 
 // scene_camera.hlsl's registers: t0-t1 sampled and u0 a storage image in set 0, the constants pushed.
-constexpr RegisterBinding kCameraBindings[] = {{"b0", 0, 0, true}, {"t0", 0, 0}, {"t1", 0, 1}, {"u0", 0, 2}};
+constexpr RegisterBinding kCameraBindings[] = {{"b0", 0, 0, true}, {"t0", 0, 0}, {"t1", 0, 1}, {"u0", 0, 2}, {"t2", 0, 3}};
 
 inline std::string camera_source() {
     return "#define CAMERA_STORAGE_FORMAT 1\n" + annotate(reinterpret_cast<const char*>(galaxy_post_scene_camera_hlsl), kCameraBindings);

@@ -86,6 +86,7 @@ namespace {
         {"speedy", 1, &cIconComet},
         {"purplecoins", 1, &cIconPurpleCoin},
         {"hidden", 1, &cIconQuestion},
+        {"wayfarer", 1, &cIconPowerStar},
         {"greenstars", 1, &cIconGreenStar},
         {"trials", 1, &cIconSilverStar},
         {"lumas", 1, &cIconHungryLuma},
@@ -219,6 +220,7 @@ namespace {
         bool mSpeedy;
         bool mPurpleCoins;
         bool mHidden;
+        bool mWayfarer;
         s32 mCometsOwned, mCometsTotal;
         s32 mDaredevilOwned, mDaredevilTotal;
         s32 mCosmicOwned, mCosmicTotal;
@@ -230,8 +232,8 @@ namespace {
     // Every galaxy of the map (the game's galaxy table, as GalaxyMap lists them): its Prankster Comet by kind, its
     // purple coin star and its hidden stars. An "every" goal is met only when it found something to check.
     Galaxies checkGalaxies() {
-        Galaxies result = {false, true, true, true, true, true, true, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-        s32 comets = 0, daredevil = 0, cosmic = 0, speedy = 0, purpleCoins = 0, hidden = 0;
+        Galaxies result = {false, true, true, true, true, true, true, true, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+        s32 comets = 0, daredevil = 0, cosmic = 0, speedy = 0, purpleCoins = 0, hidden = 0, galaxyNum = 0;
         JMapInfo galaxies;
         galaxies.attach(NebulaDataTables::getGalaxyInfoTable());
         for (s32 i = 0; i < galaxies.getNumEntries(); i++) {
@@ -242,6 +244,13 @@ namespace {
                 continue;
             }
             const GalaxyStatusAccessor galaxy = MR::makeGalaxyStatusAccessor(pName);
+            // Galactic Wayfarer: a galaxy with stars has one of them in hand, the one being collected included.
+            bool anyStar = galaxy.getPowerStarNum() <= 0;
+            for (s32 scenario = 1; scenario <= galaxy.getPowerStarNum() && !anyStar; scenario++) {
+                anyStar = hasStar(pName, scenario);
+            }
+            result.mWayfarer = result.mWayfarer && anyStar;
+            galaxyNum++;
             const s32 comet = galaxy.getNormalCometScenarioNo();
             if (comet > 0) {
                 const bool owned = galaxy.hasPowerStar(comet);
@@ -288,6 +297,7 @@ namespace {
         result.mSpeedy = result.mSpeedy && speedy > 0;
         result.mPurpleCoins = result.mPurpleCoins && purpleCoins > 0;
         result.mHidden = result.mHidden && hidden > 0;
+        result.mWayfarer = result.mWayfarer && galaxyNum > 0;
         result.mCometsTotal = comets;
         result.mDaredevilTotal = daredevil;
         result.mCosmicTotal = cosmic;
@@ -392,6 +402,7 @@ namespace NebulaAchievements {
         tryUnlock(galaxies.mSpeedy, "speedy");
         tryUnlock(galaxies.mPurpleCoins, "purplecoins");
         tryUnlock(galaxies.mHidden, "hidden");
+        tryUnlock(galaxies.mWayfarer, "wayfarer");
         tryUnlock(GameDataFunction::isOnGameEventFlag("SpecialStarGreenAll"), "greenstars");
         tryUnlock(countTrials() == 3, "trials");
         tryUnlock(allFed && anyFed, "lumas");

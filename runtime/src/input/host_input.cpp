@@ -131,6 +131,22 @@ namespace {
 std::atomic<bool> g_input_missing_shown{false};
 }  // namespace
 
+void arrange_touch_controls() noexcept {}
+
+void input_mode_changed() noexcept {}
+
+bool touch_controls_present() noexcept {
+    return false;
+}
+
+TouchControlsSettings touch_controls_settings() noexcept {
+    return {};
+}
+
+void set_touch_controls_settings(const TouchControlsSettings&) noexcept {}
+
+void reset_touch_controls_places() noexcept {}
+
 bool keyboard_or_mouse_attached() noexcept {
     RAWINPUTDEVICELIST devices[32];
     UINT count = static_cast<UINT>(std::size(devices));

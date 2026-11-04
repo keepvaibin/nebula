@@ -11,11 +11,15 @@
 
 namespace galaxy::render::ao {
 
-// Occlusion's reach and look: XeGTAO's defaults (radius 0.5 m times its 1.457 multiplier, final power 2.2) in the
-// game's units (centimetres: Mario stands about 160 tall).
-inline constexpr float kRadius = 73.0f;
-inline constexpr float kPower = 2.2f;
-inline constexpr float kStrength = 1.0f;
+// The depth occlusion is for creases and contacts, in the game's units (Mario stands about 160 tall): a wider radius paints a
+// dark copy of raised shapes over flat faces, and what stands over a surface is the models' (ambient_occlusion_objects.h).
+inline constexpr float kRadius = 30.0f;
+// How dark a crease goes: powers of each method's visibility, which reach their depth differently.
+inline constexpr float kPower = 3.5f;
+inline constexpr float kSsaoPower = 6.0f;
+// The multiply on display values: the game's colours are authored for the display, so physically encoded occlusion (1 / 2.2)
+// leaves half the light blocked only 27 % darker.
+inline constexpr float kDisplayPower = 1.0f;
 // Occlusion is soft: past this many lines more of them add cost and no visible detail. Below it, one occlusion pixel
 // per scene pixel, so a small window keeps all it can show.
 inline constexpr unsigned kFullLines = 720u;
@@ -35,7 +39,7 @@ static_assert(sizeof(Constants) == 80u);
 }
 
 // The shaders' constants: false for a view with no picture.
-[[nodiscard]] inline bool make_constants(const RtView& view, unsigned width, unsigned height, unsigned divisor,
+[[nodiscard]] inline bool make_constants(const RtView& view, unsigned width, unsigned height, unsigned divisor, bool ssao,
                                          Constants& c) noexcept {
     // A scene target pixel centre's eye ray (z = -1): NDC from the viewport, then through the projection.
     const float a = view.projection[0];
@@ -61,8 +65,8 @@ static_assert(sizeof(Constants) == 80u);
     c.depth[2] = view.min_depth;
     c.depth[3] = view.max_depth;
     c.params[0] = kRadius;
-    c.params[1] = kPower;
-    c.params[2] = kStrength;
+    c.params[1] = ssao ? kSsaoPower : kPower;
+    c.params[2] = kDisplayPower;
     c.params[3] = std::max(8.0f, 0.12f * vh / static_cast<float>(divisor));
     c.size[0] = width;
     c.size[1] = height;

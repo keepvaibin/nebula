@@ -12,6 +12,8 @@
 #include <d3d12.h>
 #include <wrl/client.h>
 
+#include "galaxy/render/ambient_occlusion_objects.h"
+#include "galaxy/render/gpu_upload_ring.h"
 #include "galaxy/render/rt_types.h"
 
 #include <array>
@@ -46,6 +48,9 @@ public:
         D3D12_CPU_DESCRIPTOR_HANDLE color_rtv{};  // the scene target's colour (multisampled with MSAA)
         unsigned samples = 1;
         bool hdr = false;                 // the colour is the HDR scene scene target (kSceneHdrColorFormat)
+        bool ssao = false;                // SSAO instead of GTAO
+        const std::vector<ao::ObjectOccluder>* objects = nullptr;  // the scene's models
+        UploadRing* ring = nullptr;       // where their buffers go
         RtView view{};                    // the scene's projection, depth range and viewport (scene target pixels)
     };
     // Records the occlusion and multiplies it into `color_rtv`'s RGB. Leaves this pass's root signatures, pipeline
@@ -64,6 +69,8 @@ private:
         Microsoft::WRL::ComPtr<ID3D12Resource> resource;
         std::uint64_t release_after_frame = 0;
     };
+    std::vector<float> object_values_;
+    std::vector<std::uint32_t> object_tiles_;
     bool ensure_target(Target& target, DXGI_FORMAT format, unsigned width, unsigned height,
                        std::uint64_t frame_index, unsigned frames_in_flight);
     void transition(ID3D12GraphicsCommandList* list, Target& target, D3D12_RESOURCE_STATES state);
@@ -74,6 +81,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12RootSignature> root_signature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> distance_pass_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> occlusion_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> ssao_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> denoise_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> upsample_;
     // 1, 2, 4, 8 samples; then HDR; then the occlusion view's.

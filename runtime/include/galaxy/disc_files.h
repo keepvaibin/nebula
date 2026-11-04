@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -24,6 +25,9 @@ struct Entry {
 
 class AssetStore {
 public:
+    // Mods' cooked files over this store (cook/overlay.rs): found first, by the same paths. False when it cannot be read.
+    bool attach_overlay(const std::filesystem::path& path);
+    [[nodiscard]] bool has_overlay() const noexcept { return overlay_ != nullptr; }
     AssetStore() = default;
     AssetStore(const AssetStore&) = delete;
     AssetStore& operator=(const AssetStore&) = delete;
@@ -70,8 +74,12 @@ private:
     };
 
     void close();
+    [[nodiscard]] std::optional<Entry> find_own(std::string_view path) const;
     bool parse(const std::uint8_t* header, const std::uint8_t* index, std::uint64_t index_at, std::uint64_t size);
 
+    // Positions past this are the overlay's; indices past count_ are its nodes.
+    static constexpr std::uint64_t kOverlayPosition = std::uint64_t{1} << 50u;
+    std::unique_ptr<AssetStore> overlay_;
     std::vector<std::uint8_t> index_;
     const std::uint8_t* image_ = nullptr;
     const std::uint8_t* view_ = nullptr;

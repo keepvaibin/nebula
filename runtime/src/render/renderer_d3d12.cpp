@@ -7401,7 +7401,7 @@ void RendererD3D12::record_hdr_end() {
         return;
     }
     const GpuPassScope pass{*this, GpuPass::Camera};
-    resolve_scene(false, true);
+    resolve_scene(true, true);
     SceneTargetSet& set = replay_playing_ ? replay_hdr_scene_ : hdr_scene_scene_;
     swap_scene_with(set);
     scene_msaa_.depth_dirty = set.msaa.depth_dirty;
@@ -7412,6 +7412,7 @@ void RendererD3D12::record_hdr_end() {
     SceneCamera::Inputs in{};
     in.wide = set.color.Get();
     in.wide_ms = set.msaa.samples > 1u ? set.msaa.color.Get() : nullptr;
+    in.depth = scene_depth_.Get();
     in.rtv = scene_rtv_;
     in.width = static_cast<unsigned>(desc.Width);
     in.height = desc.Height;
@@ -7457,6 +7458,9 @@ void RendererD3D12::record_scene_ao() {
     in.samples = scene_msaa_.samples;
     in.hdr = scene_hdr_;
     in.view = scene_ao_view_;
+    in.ssao = get_render_config().ambient_occlusion_ssao;
+    in.objects = &scene_ao_objects_;
+    in.ring = &matrix_ring_;
     static_cast<void>(ambient_occlusion_.record(command_list_.Get(), srv_ring_, in, frame_index_, kFramesInFlight));
     std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
     command_list_->ResourceBarrier(1, &barrier);

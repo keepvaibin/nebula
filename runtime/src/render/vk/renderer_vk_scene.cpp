@@ -1204,7 +1204,8 @@ void RendererVk::record_scene_ao() {
                   VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                   VK_ACCESS_SHADER_READ_BIT);
     const auto allocate = [this](VkDescriptorSetLayout layout) { return allocate_post_set(layout); };
-    const bool made = ao_.prepare(commands_, *scene_.depth, kDepthSampleLayout, scene_ao_view_, allocate);
+    const bool made = ao_.prepare(commands_, *scene_.depth, kDepthSampleLayout, scene_ao_view_, get_render_config().ambient_occlusion_ssao,
+                                  scene_ao_objects_, matrix_ring_, allocate);
     image_barrier(commands_, scene_.depth->image, aspects, kDepthSampleLayout,
                   VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0,
                   VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
@@ -1386,8 +1387,18 @@ void RendererVk::record_wide_end() {
     const auto now = std::chrono::steady_clock::now();
     const float seconds = std::chrono::duration<float>(now - camera_metered_).count();
     camera_metered_ = now;
+    if (scene_.samples > 1u) {
+        resolve_scene_depth(commands_);
+    }
+    const VkImageAspectFlags aspects = depth_aspects(depth_format_);
+    image_barrier(commands_, scene_.depth->image, aspects, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, kDepthSampleLayout,
+                  VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                  VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT);
     // After a load or a long pause the eye starts open.
-    scene_camera_.meter(commands_, *wide, seconds > 1.0f ? -1.0f : seconds, allocate);
+    scene_camera_.meter(commands_, *wide, *scene_.depth, kDepthSampleLayout, seconds > 1.0f ? -1.0f : seconds, allocate);
+    image_barrier(commands_, scene_.depth->image, aspects, kDepthSampleLayout, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                  VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+                  VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
     const bool depth_dirty = scene_.depth_dirty;
     std::swap(scene_, set);
     set.wide_read = true;

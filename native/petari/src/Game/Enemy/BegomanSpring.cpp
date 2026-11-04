@@ -234,7 +234,7 @@ void BegomanSpring::control() {
         }
     }
 
-    if (MR::isBindedGroundDamageFire(this)) {
+    if (!NebulaHost::codePatch(NEBULA_PATCH_BEGOMAN_FIRE_PROOF, nullptr) && MR::isBindedGroundDamageFire(this)) {
         makeActorDead();
         MR::emitEffect(this, "Fall");
         return;

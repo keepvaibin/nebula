@@ -18,6 +18,8 @@ struct NativeShaderBytes {
 // Output variants (native_material.hlsli): the targets a pipeline's render state names.
 // The J3D material set's first NebulaShaderId (nebula_game_api.h NEBULA_SHADER_J3D_FIRST).
 inline constexpr std::uint32_t kNativeShaderJ3DFirst = 256u;
+// Numbers from here on are shaders a converted mod brings (mod_shaders.h).
+inline constexpr std::uint32_t kModShaderIdFirst = 0x40000000u;
 
 enum NativeShaderVariant : unsigned {
     kNativeVariantBase = 0u,

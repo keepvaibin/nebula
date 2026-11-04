@@ -33,7 +33,17 @@ AssetStore::~AssetStore() {
     close();
 }
 
+bool AssetStore::attach_overlay(const std::filesystem::path& path) {
+    // Over the last one attached: the newest wins.
+    if (overlay_ != nullptr) return overlay_->attach_overlay(path);
+    auto overlay = std::make_unique<AssetStore>();
+    if (!overlay->open(path)) return false;
+    overlay_ = std::move(overlay);
+    return true;
+}
+
 void AssetStore::close() {
+    overlay_.reset();
 #if defined(_WIN32)
     if (view_ != nullptr) {
         UnmapViewOfFile(view_);
@@ -162,6 +172,9 @@ bool AssetStore::open(const std::filesystem::path& path) {
 }
 
 const std::uint8_t* AssetStore::map(std::uint64_t position, std::size_t size) const {
+    if (position >= kOverlayPosition) {
+        return overlay_ != nullptr ? overlay_->map(position - kOverlayPosition, size) : nullptr;
+    }
     if (position > size_ || size_ - position < size) {
         return nullptr;
     }
@@ -195,6 +208,9 @@ static std::uint64_t view_granularity() noexcept {
 }
 
 std::uint8_t* AssetStore::map_private(std::uint64_t position, std::size_t size) const {
+    if (position >= kOverlayPosition) {
+        return overlay_ != nullptr ? overlay_->map_private(position - kOverlayPosition, size) : nullptr;
+    }
     const std::uint64_t granularity = view_granularity();
     if (view_ == nullptr || position > size_ || size_ - position < size) {
         return nullptr;
@@ -231,6 +247,9 @@ void AssetStore::unmap_private(void* data, std::size_t size) const {
 }
 
 bool AssetStore::read(std::uint64_t position, std::size_t size, void* dst) const {
+    if (position >= kOverlayPosition) {
+        return overlay_ != nullptr && overlay_->read(position - kOverlayPosition, size, dst);
+    }
     if (position > size_ || size_ - position < size) {
         return false;
     }
@@ -275,6 +294,14 @@ bool AssetStore::read(std::uint64_t position, std::size_t size, void* dst) const
 }
 
 std::optional<Entry> AssetStore::entry(std::int32_t index) const {
+    if (overlay_ != nullptr && index >= 0 && static_cast<std::uint32_t>(index) >= count_) {
+        std::optional<Entry> found = overlay_->entry(index - static_cast<std::int32_t>(count_));
+        if (found) {
+            found->index += static_cast<std::int32_t>(count_);
+            found->position += kOverlayPosition;
+        }
+        return found;
+    }
     if (index < 0 || static_cast<std::uint32_t>(index) >= count_) {
         return std::nullopt;
     }
@@ -290,6 +317,14 @@ std::optional<Entry> AssetStore::entry(std::int32_t index) const {
 }
 
 std::optional<Entry> AssetStore::child(std::int32_t folder, std::uint32_t index) const {
+    if (overlay_ != nullptr && folder >= 0 && static_cast<std::uint32_t>(folder) >= count_) {
+        std::optional<Entry> found = overlay_->child(folder - static_cast<std::int32_t>(count_), index);
+        if (found) {
+            found->index += static_cast<std::int32_t>(count_);
+            found->position += kOverlayPosition;
+        }
+        return found;
+    }
     if (folder < 0 || static_cast<std::uint32_t>(folder) >= count_ || (nodes_[folder].flags & 1u) == 0u ||
         index >= nodes_[folder].children) {
         return std::nullopt;
@@ -298,6 +333,24 @@ std::optional<Entry> AssetStore::child(std::int32_t folder, std::uint32_t index)
 }
 
 std::optional<Entry> AssetStore::find(std::string_view path) const {
+    if (overlay_ != nullptr) {
+        // A file or an archive of the mods first. A plain folder of theirs only lists what they change: the game's
+        // stands, unless the game has none of that name.
+        std::optional<Entry> found = overlay_->find(path);
+        if (found) {
+            const bool plain_folder =
+                found->folder && std::string_view(found->name != nullptr ? found->name : "").find('.') == std::string_view::npos;
+            if (!plain_folder || !find_own(path)) {
+                found->index += static_cast<std::int32_t>(count_);
+                found->position += kOverlayPosition;
+                return found;
+            }
+        }
+    }
+    return find_own(path);
+}
+
+std::optional<Entry> AssetStore::find_own(std::string_view path) const {
     if (count_ == 0u) {
         return std::nullopt;
     }

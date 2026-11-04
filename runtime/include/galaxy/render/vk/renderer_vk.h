@@ -130,6 +130,8 @@ public:
     // Ambient occlusion of the opaque scene (ambient_occlusion_vk.h).
     [[nodiscard]] bool ambient_occlusion_ready() const noexcept { return ao_.ready(); }
     void set_scene_ao_view(const RtView& view) noexcept { scene_ao_view_ = view; }
+    // The scene's models (ambient_occlusion_objects.h); a replay reads the last game frame's.
+    void set_scene_ao_objects(std::vector<ao::ObjectOccluder>& objects) noexcept { scene_ao_objects_.swap(objects); }
     void record_scene_ao();
     // The game's bloom through the renderer (galaxy/motion_signals.h kMarkerBloom; game_bloom_vk.h): until its
     // passes have compiled, the game draws its own chains.
@@ -464,6 +466,7 @@ private:
     vk::GameBloomVk bloom_;
     vk::AmbientOcclusionVk ao_;
     RtView scene_ao_view_{};
+    std::vector<ao::ObjectOccluder> scene_ao_objects_;
     void sync_post_process();
     // The picture through the post chain before a turned swap chain's blit (pre-rotated images).
     gpu::TextureRef oriented_;

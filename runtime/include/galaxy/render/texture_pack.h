@@ -98,6 +98,7 @@ struct TexturePackSettings {
     bool preload = false;
     bool dump = false;
     std::vector<std::filesystem::path> packs;  // pack folders, a later one winning a name
+    std::vector<std::uint32_t> pack_categories_off;  // by folder: the categories left out (galaxy::textures)
     std::filesystem::path dumps;               // dumps go to <dumps>/<GameID>
     std::uint64_t budget_bytes = 0;
     bool operator==(const TexturePackSettings&) const = default;
@@ -212,6 +213,7 @@ public:
         std::uint64_t generation = 0;
     };
     [[nodiscard]] static std::shared_ptr<Index> build_index(std::span<const std::filesystem::path> packs,
+                                                            std::span<const std::uint32_t> categories_off,
                                                             std::uint64_t generation);
 
 private:

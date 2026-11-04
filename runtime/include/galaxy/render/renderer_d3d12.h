@@ -264,6 +264,8 @@ public:
     // after the opaque phases, before the translucent ones; sub-frames replay it.
     [[nodiscard]] bool ambient_occlusion_ready() const noexcept { return ambient_occlusion_.ready(); }
     void set_scene_ao_view(const RtView& view) noexcept { scene_ao_view_ = view; }
+    // The scene's models (ambient_occlusion_objects.h); a replay reads the last game frame's.
+    void set_scene_ao_objects(std::vector<ao::ObjectOccluder>& objects) noexcept { scene_ao_objects_.swap(objects); }
     void record_scene_ao();
     // The game's bloom (game_bloom.h) at a kMarkerBloom marker (galaxy/motion_signals.h: `phase` its aux, `a` and `b`
     // its values); sub-frames replay it.
@@ -1490,6 +1492,7 @@ private:
     AmbientOcclusion ambient_occlusion_;
     GameBloom game_bloom_;
     RtView scene_ao_view_{};
+    std::vector<ao::ObjectOccluder> scene_ao_objects_;
     // scene target-copy destination textures (render targets) are placed in shared
     // heaps rather than committed one by one (gpu_placed_textures.h).
     PlacedTextureAllocator frame_pass_heap_{

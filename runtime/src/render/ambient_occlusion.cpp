@@ -5,6 +5,7 @@
 
 #include "galaxy/render/renderer_d3d12.h"
 
+#include <cstring>
 #include <algorithm>
 #include <bit>
 #include <iostream>
@@ -14,6 +15,7 @@
 #include "ao_denoise_cs.h"
 #include "ao_distance_cs.h"
 #include "ao_occlusion_cs.h"
+#include "ao_ssao_cs.h"
 #include "ao_upsample_cs.h"
 
 namespace galaxy::render {
@@ -41,7 +43,7 @@ bool AmbientOcclusion::initialize(ID3D12Device* device) {
     ranges[0].NumDescriptors = 3;
     ranges[1].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
     ranges[1].NumDescriptors = 1;
-    D3D12_ROOT_PARAMETER params[3]{};
+    D3D12_ROOT_PARAMETER params[5]{};
     params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
     params[0].Constants.Num32BitValues = sizeof(Constants) / 4u;
     params[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
@@ -51,8 +53,13 @@ bool AmbientOcclusion::initialize(ID3D12Device* device) {
         params[i].DescriptorTable.pDescriptorRanges = &ranges[i - 1u];
         params[i].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
     }
+    for (unsigned i = 3; i < 5u; ++i) {
+        params[i].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+        params[i].Descriptor.ShaderRegister = i;
+        params[i].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    }
     D3D12_ROOT_SIGNATURE_DESC rsd{};
-    rsd.NumParameters = 3;
+    rsd.NumParameters = 5;
     rsd.pParameters = params;
     Microsoft::WRL::ComPtr<ID3DBlob> blob;
     Microsoft::WRL::ComPtr<ID3DBlob> errors;
@@ -74,6 +81,11 @@ bool AmbientOcclusion::initialize(ID3D12Device* device) {
         std::cerr << "[ambient-occlusion] occlusion pipeline failed\n";
         return false;
     }
+    cd.CS = code(g_ao_ssao_cs, sizeof(g_ao_ssao_cs));
+    if (FAILED(device_->CreateComputePipelineState(&cd, IID_PPV_ARGS(&ssao_)))) {
+        std::cerr << "[ambient-occlusion] SSAO pipeline failed\n";
+        return false;
+    }
     cd.CS = code(g_ao_denoise_cs, sizeof(g_ao_denoise_cs));
     if (FAILED(device_->CreateComputePipelineState(&cd, IID_PPV_ARGS(&denoise_)))) {
         std::cerr << "[ambient-occlusion] denoise pipeline failed\n";
@@ -92,6 +104,7 @@ void AmbientOcclusion::shutdown() noexcept {
     ready_ = false;
     distance_pass_.Reset();
     occlusion_.Reset();
+    ssao_.Reset();
     denoise_.Reset();
     upsample_.Reset();
     for (auto& pipeline : apply_) pipeline.Reset();
@@ -202,7 +215,7 @@ bool AmbientOcclusion::record(ID3D12GraphicsCommandList* list, DescriptorRing& r
     const unsigned width = (in.width + divisor - 1u) / divisor;
     const unsigned height = (in.height + divisor - 1u) / divisor;
     Constants c{};
-    if (apply == nullptr || !ao::make_constants(in.view, width, height, divisor, c) ||
+    if (apply == nullptr || in.objects == nullptr || in.ring == nullptr || !ao::make_constants(in.view, width, height, divisor, in.ssao, c) ||
         !ensure_target(distance_, kDistanceFormat, width, height, frame_index, frames_in_flight) ||
         !ensure_target(raw_, kOcclusionFormat, width, height, frame_index, frames_in_flight) ||
         !ensure_target(denoised_, kOcclusionFormat, width, height, frame_index, frames_in_flight) ||
@@ -259,6 +272,13 @@ bool AmbientOcclusion::record(ID3D12GraphicsCommandList* list, DescriptorRing& r
 
     list->SetComputeRootSignature(root_signature_.Get());
     list->SetComputeRoot32BitConstants(0, sizeof(Constants) / 4u, &c, 0);
+    ao::bin_objects(*in.objects, c, object_values_, object_tiles_);
+    const UploadRing::Allocation objects = in.ring->allocate(object_values_.size() * sizeof(float), 16u);
+    const UploadRing::Allocation tiles = in.ring->allocate(object_tiles_.size() * sizeof(std::uint32_t), 16u);
+    std::memcpy(objects.cpu, object_values_.data(), object_values_.size() * sizeof(float));
+    std::memcpy(tiles.cpu, object_tiles_.data(), object_tiles_.size() * sizeof(std::uint32_t));
+    list->SetComputeRootShaderResourceView(3, objects.gpu);
+    list->SetComputeRootShaderResourceView(4, tiles.gpu);
     const UINT groups_x = (width + 7u) / 8u;
     const UINT groups_y = (height + 7u) / 8u;
     transition(list, distance_, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -268,7 +288,7 @@ bool AmbientOcclusion::record(ID3D12GraphicsCommandList* list, DescriptorRing& r
     list->Dispatch(groups_x, groups_y, 1);
     transition(list, distance_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     transition(list, raw_, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-    list->SetPipelineState(occlusion_.Get());
+    list->SetPipelineState(in.ssao ? ssao_.Get() : occlusion_.Get());
     list->SetComputeRootDescriptorTable(2, gpu(10));
     list->Dispatch(groups_x, groups_y, 1);
     transition(list, raw_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);

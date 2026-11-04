@@ -49,11 +49,13 @@ RuntimeSettings sanitize_settings(RuntimeSettings settings) {
     case RuntimeInputMode::KeyboardMouse:
     case RuntimeInputMode::Controller:
     case RuntimeInputMode::RealWiimote:
+    case RuntimeInputMode::Phone:
         break;
     default:
         settings.input_mode = RuntimeInputMode::KeyboardMouse;
         break;
     }
+    settings.menu_text_size = settings.menu_text_size == 0u ? 0u : std::clamp(settings.menu_text_size, 70u, 200u);
     const auto sanitize_gain = [](float gain) {
         return std::isfinite(gain) ? std::clamp(gain, 0.0f, 4.0f) : 1.0f;
     };
@@ -114,6 +116,9 @@ RuntimeInputMode parse_input_mode(
         text == "keyboard-mouse" || text == "kbm" || text == "mouse") {
         return RuntimeInputMode::KeyboardMouse;
     }
+    if (text == "phone") {
+        return RuntimeInputMode::Phone;
+    }
     if (text == "wiimote" || text == "wii_remote" || text == "wii-remote" ||
         text == "real_wiimote" || text == "real-wiimote") {
         return RuntimeInputMode::RealWiimote;
@@ -155,6 +160,8 @@ void apply_kv(RuntimeSettings& settings, const char* key, const char* value) {
         }
     } else if (std::strcmp(key, "discord_status") == 0) {
         settings.discord_status = value[0] != '0';
+    } else if (std::strcmp(key, "menu_text_size") == 0) {
+        settings.menu_text_size = static_cast<unsigned>(std::strtoul(value, nullptr, 10));
     } else if (std::strcmp(key, "button_icons") == 0) {
         for (unsigned i = 0; i <= static_cast<unsigned>(ButtonIcons::Keyboard); ++i) {
             if (::galaxy::text_iequal(value, button_icons_key(static_cast<ButtonIcons>(i)))) {
@@ -261,6 +268,11 @@ void parse_settings_file(RuntimeSettings& settings, input::ControlsConfig& contr
             apply_kv(settings, key_text.c_str(), value_text.c_str());
         }
     }
+#if defined(__ANDROID__)
+    if (controls_version < input::kControlsVersion && settings.input_mode == RuntimeInputMode::KeyboardMouse) {
+        settings.input_mode = RuntimeInputMode::Auto;
+    }
+#endif
     migrate_settings_file(controls, controls_version);
 }
 
@@ -492,6 +504,7 @@ bool save_runtime_settings_to_file() {
                  << "language=" << game_language_key(settings.language) << '\n'
                  << "discord_status=" << (settings.discord_status ? 1 : 0) << '\n'
                  << "button_icons=" << button_icons_key(settings.button_icons) << '\n'
+                 << "menu_text_size=" << settings.menu_text_size << '\n'
                  << input::format_controls_settings(input::get_controls_config());
         if (!contents) {
             return false;
@@ -514,6 +527,8 @@ const char* runtime_input_mode_name(RuntimeInputMode mode) {
         return "controller";
     case RuntimeInputMode::RealWiimote:
         return "real_wiimote";
+    case RuntimeInputMode::Phone:
+        return "phone";
     case RuntimeInputMode::Auto:
     default:
         return "auto";

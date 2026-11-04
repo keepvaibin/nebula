@@ -237,8 +237,16 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
                             : "PER PIXEL LIGHTS EVERY PIXEL INSTEAD OF EVERY CORNER"});
     }
     if (!rt_on) {
-        rows.push_back({"AMBIENT OCCLUSION", render.ambient_occlusion ? "ON" : "OFF",
-                        [&host](RenderConfig& draft, int) { draft.ambient_occlusion = !draft.ambient_occlusion; },
+        static constexpr const char* kOcclusion[] = {"OFF", "SSAO", "GTAO"};
+        const auto occlusion_mode = [](const RenderConfig& config) {
+            return !config.ambient_occlusion ? 0u : config.ambient_occlusion_ssao ? 1u : 2u;
+        };
+        rows.push_back({"AMBIENT OCCLUSION", kOcclusion[occlusion_mode(render)],
+                        [&host, occlusion_mode](RenderConfig& draft, int delta) {
+                            const unsigned mode = settings_step(occlusion_mode(draft), 3u, delta);
+                            draft.ambient_occlusion = mode != 0u;
+                            draft.ambient_occlusion_ssao = mode == 1u;
+                        },
                         "SOFT SHADOWS IN CORNERS, CREASES AND WHERE THINGS MEET THE GROUND"});
     }
     {
