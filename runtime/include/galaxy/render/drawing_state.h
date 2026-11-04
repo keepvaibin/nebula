@@ -36,6 +36,8 @@ struct NativeDrawState {
     // combines its own colours and applies its own fog (native materials).
     DrawCounts gen{0u, 0u, 1u, CullMode::None, 0u};
     ZMode z{false, CompareFunc::Never, false};
+    std::uint8_t stencil_test = 0;  // NEBULA_STENCIL_*
+    std::uint8_t stencil_op = 0;
     BlendMode blend{false, false, false, false, BlendFactor::Zero, BlendFactor::Zero, false, 0u, false, 0u};
     bool frame_alpha = false;  // the frame keeps alpha
 

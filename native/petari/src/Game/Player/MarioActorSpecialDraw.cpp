@@ -348,13 +348,14 @@ void MarioActor::drawScreenBlend() const {
 
         position = minimum + TVec2f(-10.0f, -10.0f);
         opposite = maximum + TVec2f(10.0f, 10.0f);
+        // Where the wall's shadow was marked: darkened, the mark going with it.
         NebulaNativeMaterial material;
         TDDraw::setupNative(&material, 0, 0, 2);
-        NativeShader::setBlend(material, NEBULA_FACTOR_ONE, NEBULA_FACTOR_INV_DST_ALPHA);
-        J3DPass::constantAlpha(true, 0);
+        NativeShader::setBlend(material, NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_INV_SRC_ALPHA);
         NativeShader::send(material);
-        TDDraw::drawFillBox(position, opposite, 0);
-        J3DPass::writeAlpha(false);
+        J3DPass::stencil(NEBULA_STENCIL_IF_SET, NEBULA_STENCIL_ZERO);
+        TDDraw::drawFillBox(position, opposite, 0x00000040);
+        J3DPass::stencil(NEBULA_STENCIL_OFF, NEBULA_STENCIL_KEEP);
         MR::loadProjectionMtx();
         MR::loadViewMtx();
     }
@@ -686,11 +687,11 @@ bool MarioActor::drawDarkMask() const {
     NebulaNativeMaterial material;
     TDDraw::setupNative(&material, 1, 0, 2);
     material.color_write = 0;
-    material.alpha_write = 1;
+    material.alpha_write = 0;
     material.constants[4] = 1.0f;
     NativeShader::setTexture(material, 0, mMaskTextures[_B88]);
-    J3DPass::constantAlpha(true, 255);
     NativeShader::send(material);
+    J3DPass::stencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ADD);
     TVec3f spine;
     TVec2f center;
     TVec2f screenX;
@@ -731,7 +732,7 @@ bool MarioActor::drawDarkMask() const {
     J3DNativeDraw::texCoord(4.0f, 4.0f);
     J3DNativeDraw::position(minimum.x, maximum.y, 0.0f);
     J3DNativeDraw::texCoord(0.0f, 4.0f);
-    J3DPass::constantAlpha(false, 0);
+    J3DPass::stencil(NEBULA_STENCIL_OFF, NEBULA_STENCIL_KEEP);
     J3DPass::writeColor(true);
     J3DPass::noAlphaTest();
     TDDraw::close();

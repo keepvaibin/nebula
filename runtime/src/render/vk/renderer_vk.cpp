@@ -274,7 +274,7 @@ bool RendererVk::create_layouts() {
                                                      VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT)) ==
             (VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT)
         ? VK_FORMAT_D24_UNORM_S8_UINT
-        : VK_FORMAT_D32_SFLOAT;
+        : VK_FORMAT_D32_SFLOAT_S8_UINT;
     {
         VkFormatProperties depth_properties{};
         vkGetPhysicalDeviceFormatProperties(context.physical_device(), depth_format_, &depth_properties);
@@ -403,6 +403,8 @@ bool RendererVk::create_layouts() {
         attachments[0].finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         attachments[1] = attachments[0];
         attachments[1].format = depth_format_;
+        attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+        attachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE;
         attachments[1].initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
         attachments[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
         attachments[2] = attachments[0];
@@ -478,6 +480,8 @@ bool RendererVk::create_layouts() {
         attachments[0].finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         attachments[1] = attachments[0];
         attachments[1].format = depth_format_;
+        attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+        attachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE;
         attachments[1].initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
         attachments[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
         attachments[2] = attachments[0];

@@ -593,7 +593,7 @@ void RendererVk::clear_scene(std::uint32_t clear_rgba,
     } else if (depth_enable) {
         // Reversed-Z: the game's farthest (0xFFFFFF) clears to about 0.
         VkClearAttachment attachment{};
-        attachment.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+        attachment.aspectMask = depth_aspects(depth_format_);
         attachment.clearValue.depthStencil = {clear.reversed_depth, 0u};
         vkCmdClearAttachments(commands, 1, &attachment, 1, &clear_rect);
     }

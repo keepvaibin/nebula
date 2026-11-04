@@ -13,7 +13,6 @@ public:
     virtual void init(const JMapInfoIter& rIter);
 
     void createScreenAlpha(s32, f32);
-    void captureScreenAlpha(s32);
     JUTTexture* getTexture(s32);
 
 private:
@@ -22,6 +21,5 @@ private:
 
 namespace MR {
     void createScreenAlphaSceneObj(s32, f32);
-    void captureScreenAlpha(s32);
     JUTTexture* getScreenAlphaTexture(s32);
 };  // namespace MR

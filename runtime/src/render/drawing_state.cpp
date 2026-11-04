@@ -139,6 +139,8 @@ void NativeDrawState::apply_pass(const shapes::PassState& pass) {
         blend.const_alpha_enable = pass.constant_alpha != 0u;
         blend.const_alpha = pass.constant_alpha_value;
         set_z(z, pass.depth_test, pass.depth_func, pass.depth_write);
+        stencil_test = pass.stencil_func;
+        stencil_op = pass.stencil_op;
         gen.cull = kCull[pass.cull & 3u];
     });
 }

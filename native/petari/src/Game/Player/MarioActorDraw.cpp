@@ -1,3 +1,4 @@
+#include "Game/Util/DrawUtil.hpp"
 #include "Game/LiveActor/MaterialUpdater.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
@@ -534,9 +535,9 @@ void MarioActor::drawMarioModel() const {
             }
         }
 
+        // Mario is in front of the wall's shadow: his pixels lose its mark.
         if (mBeeWallWalk != 0) {
-            J3DPass::writeAlpha(true);
-            J3DPass::constantAlpha(true, 0);
+            J3DPass::stencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ZERO);
         }
 
         model->setDrawView(0);
@@ -559,8 +560,15 @@ void MarioActor::drawMarioModel() const {
     }
 
     if (mBeeWallWalk != 0) {
-        J3DPass::writeAlpha(false);
-        J3DPass::constantAlpha(false, 0);
+        J3DPass::stencil(NEBULA_STENCIL_OFF, NEBULA_STENCIL_KEEP);
+    }
+
+    // The dark mask has done its work.
+    if (res) {
+        J3DPass::stencil(NEBULA_STENCIL_OFF, NEBULA_STENCIL_KEEP);
+        MR::clearStencil();
+        MR::loadViewMtx();
+        MR::loadProjectionMtx();
     }
 }
 

@@ -333,13 +333,14 @@ void J3DModelX::sendFlagState(u32 flag) {
         writeColor(true);
         writeAlpha(false);
         break;
+    // Where the model is behind a surface: marked, and the fill darkens it.
     case 3:
         depth(true, NEBULA_COMPARE_GEQUAL, false);
         cull(NEBULA_CULL_BACK);
         noBlend();
         writeColor(false);
-        writeAlpha(true);
-        constantAlpha(true, 0x90);
+        writeAlpha(false);
+        stencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ADD);
         break;
     case 4:
         depth(true, NEBULA_COMPARE_LEQUAL, false);
@@ -354,40 +355,6 @@ void J3DModelX::sendFlagState(u32 flag) {
         noBlend();
         writeColor(false);
         writeAlpha(false);
-        break;
-    case 7: {
-        const NebulaColor8 ambient = {0, 0, 0, 0};
-        const NebulaColor8 material = {0, 0, 0, 255};
-        J3DNativeShape::flushState();
-        J3DNativeMaterial::setLightAmbient(0, ambient);
-        J3DNativeMaterial::setLightMaterial(0, material);
-        J3DNativeMaterial::sendRegisters();
-        noBlend();
-        writeColor(false);
-        writeAlpha(true);
-        J3DNativeMaterial::applyPass(NEBULA_PASS_LIGHT_MASK);
-        break;
-    }
-    case 8:
-        cull(NEBULA_CULL_FRONT);
-        blend(NEBULA_FACTOR_ZERO, NEBULA_FACTOR_ZERO);
-        writeColor(false);
-        writeAlpha(true);
-        depth(true, NEBULA_COMPARE_LEQUAL, false);
-        break;
-    case 9:
-        cull(NEBULA_CULL_BACK);
-        blend(NEBULA_FACTOR_ONE, NEBULA_FACTOR_ONE);
-        writeColor(false);
-        writeAlpha(true);
-        depth(true, NEBULA_COMPARE_LEQUAL, false);
-        break;
-    case 10:
-        blend(NEBULA_FACTOR_DST_ALPHA, NEBULA_FACTOR_INV_DST_ALPHA);
-        writeColor(true);
-        writeAlpha(true);
-        depth(true, NEBULA_COMPARE_LEQUAL, false);
-        constantAlpha(true, 0);
         break;
     // The reflection model: its program (one stage: texture 0 halved, stage 0's alpha above 0x20, no channels) is
     // J3DNativeMaterial::override mode 5.
@@ -416,10 +383,12 @@ void J3DModelX::sendFlagState(u32 flag) {
     case 14:
         constantAlpha(true, 0x40);
         break;
+    // Only where the dark mask did not mark.
     case 15:
-        blend(NEBULA_FACTOR_INV_DST_ALPHA, NEBULA_FACTOR_DST_ALPHA);
+        noBlend();
         writeColor(true);
         writeAlpha(false);
+        stencil(NEBULA_STENCIL_IF_ZERO, NEBULA_STENCIL_KEEP);
         break;
     default:
         break;

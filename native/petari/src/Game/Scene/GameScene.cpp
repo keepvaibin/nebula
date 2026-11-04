@@ -161,7 +161,6 @@ void GameScene::init() {
     MR::createSceneObj(SceneObj_ScenePlayingResult);
     MR::createSceneObj(SceneObj_FurDrawManager);
     MR::createSceneObj(SceneObj_PlacementStateChecker);
-    MR::createScreenAlphaSceneObj(0, 1.0f);
     MR::createSceneObj(SceneObj_GroupCheckManager);
     MR::createSceneObj(SceneObj_CinemaFrame);
     MR::createSceneObj(SceneObj_PlanetMapCreator);
@@ -531,7 +530,10 @@ void GameScene::draw3D() const {
     CategoryList::execute(MR::DrawType_ShadowVolume);
     J3DPass::writeColor(true);
     J3DPass::constantAlpha(true, 0);
+    // What is drawn after the volumes is not in their shadow.
+    J3DPass::stencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ZERO);
     SceneFunction::executeDrawBufferListNormalOpaBeforeSilhouette();
+    J3DPass::stencil(NEBULA_STENCIL_OFF, NEBULA_STENCIL_KEEP);
     CategoryList::execute(MR::DrawType_0x28);
     SceneFunction::executeDrawSilhouetteAndFillShadow();
     SceneFunction::executeDrawAlphaShadow();
