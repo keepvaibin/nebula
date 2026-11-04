@@ -223,7 +223,7 @@ void LensFlareDirector::setDrawSyncToken() {
     for (u32 i = 0; i < mBrightObjCount; i++) {
         mBrightObjArray[i]->calcBrightInfo(&probes[i * BrightObjBase::cProbeCount]);
     }
-    J3DNativeView::probeScreen(BrightObjBase::cReadbackChannel, NEBULA_SCREEN_PROBE_ALPHA, probes, count);
+    J3DNativeView::probeScreen(BrightObjBase::cReadbackChannel, probes, count);
 }
 
 s32 LensFlareDirector::checkArea() {

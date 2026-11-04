@@ -23,57 +23,44 @@ VolumeModelDrawer::VolumeModelDrawer(const char* pName, const char* pFileName, M
     mModelData = (J3DModelData*)MR::createAndAddResourceHolder(buf)->mModelResTable->getRes(pFileName);
 }
 
-// A glow the model's shape adds: its full strength where the scene is behind all of it, its strength squared where a
-// surface stands inside it, nothing where a surface is in front. Each pixel once, whatever the shape's layers.
+// A glow on whatever stands inside the model's shape: its back faces behind a surface mark the pixel, its front faces
+// behind one unmark it, so what stays marked has the surface between them. The colour goes on at its alpha squared, each
+// pixel once.
 void VolumeModelDrawer::draw() const {
     MR::loadProjectionMtx();
     loadModelDrawMtx();
     J3DPass::positionMatrix(0);
+    J3DPass::writeColor(false);
     J3DPass::writeAlpha(false);
+    J3DPass::noBlend();
 
     const u32 strength = mColor.a;
-    const u8 squared = static_cast< u8 >(strength * strength / 255);
     NebulaColor8 color = mColor;
-    color.a = squared;
-
-    // Where a surface is in front, marked; what is not marked gets the squared part.
+    color.a = static_cast< u8 >(strength * strength / 255);
     MR::setShadowVolumeColor(color);
-    J3DPass::writeColor(false);
-    J3DPass::noBlend();
-    J3DPass::depth(true, NEBULA_COMPARE_GEQUAL, false);
-    J3DPass::cull(NEBULA_CULL_BACK);
-    J3DPass::stencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ADD);
-    MR::drawSimpleModel(mModelData);
-    fill();
 
-    // Where a surface stands inside too, marked; what is left gets the rest.
-    color.a = static_cast< u8 >(strength - squared);
-    MR::setShadowVolumeColor(color);
-    J3DPass::writeColor(false);
-    J3DPass::noBlend();
-    J3DPass::depth(true, NEBULA_COMPARE_GEQUAL, false);
     J3DPass::cull(NEBULA_CULL_NONE);
-    J3DPass::stencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ADD);
-    MR::drawSimpleModel(mModelData);
-    fill();
-
-    J3DPass::stencil(NEBULA_STENCIL_OFF, NEBULA_STENCIL_KEEP);
-    J3DPass::cull(NEBULA_CULL_NONE);
-    J3DPass::noBlend();
-}
-
-// The colour added over the shape where the stencil is clear, each pixel once, and the stencil cleared.
-void VolumeModelDrawer::fill() const {
     J3DPass::depth(false, NEBULA_COMPARE_ALWAYS, false);
-    J3DPass::cull(NEBULA_CULL_NONE);
-    J3DPass::writeColor(true);
-    J3DPass::blend(NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_ONE);
-    J3DPass::stencil(NEBULA_STENCIL_IF_ZERO, NEBULA_STENCIL_ADD);
-    MR::drawSimpleModel(mModelData);
-    J3DPass::writeColor(false);
-    J3DPass::noBlend();
     J3DPass::stencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ZERO);
     MR::drawSimpleModel(mModelData);
+
+    J3DPass::depth(true, NEBULA_COMPARE_GEQUAL, false);
+    J3DPass::cull(NEBULA_CULL_FRONT);
+    J3DPass::stencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ADD);
+    MR::drawSimpleModel(mModelData);
+    J3DPass::cull(NEBULA_CULL_BACK);
+    J3DPass::stencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ZERO);
+    MR::drawSimpleModel(mModelData);
+
+    J3DPass::cull(NEBULA_CULL_NONE);
+    J3DPass::depth(false, NEBULA_COMPARE_ALWAYS, false);
+    J3DPass::writeColor(true);
+    J3DPass::blend(NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_ONE);
+    J3DPass::stencil(NEBULA_STENCIL_IF_SET, NEBULA_STENCIL_ZERO);
+    MR::drawSimpleModel(mModelData);
+
+    J3DPass::stencil(NEBULA_STENCIL_OFF, NEBULA_STENCIL_KEEP);
+    J3DPass::noBlend();
 }
 
 void VolumeModelDrawer::loadModelDrawMtx() const {

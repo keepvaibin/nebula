@@ -5,7 +5,6 @@
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
-#include "Game/Screen/ScreenAlphaCapture.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DirectDraw.hpp"
 #include "Game/Util/DrawUtil.hpp"

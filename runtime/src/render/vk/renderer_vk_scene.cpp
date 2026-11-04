@@ -2562,26 +2562,22 @@ void RendererVk::create_first_use_resources() {
     }
 }
 
-bool RendererVk::record_screen_probes(std::size_t slot, ScreenProbeKind kind, std::span<const ScreenProbe> probes) {
+bool RendererVk::record_screen_probes(std::size_t slot, std::span<const ScreenProbe> probes) {
     Readback& out = probe_slots_[slot];
     if (out.fence != 0u || probes.size() > kScreenProbesMax) {
         return false;
     }
     end_scene_pass();
     const VkCommandBuffer commands = commands_;
-    const bool depth = kind == ScreenProbeKind::Depth;
-    if (!depth) {
-        settle_owed_scene();
-    }
     vk::Texture& target = *probe_target_;
-    transition_scene_for_sampling(commands, depth);
+    transition_scene_for_sampling(commands, true);
     VkRenderPassBeginInfo begin{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
     begin.renderPass = color_pass_;
     begin.framebuffer = framebuffer_for(target);
     begin.renderArea = {{0, 0}, {kScreenProbesMax, 1u}};
     vkCmdBeginRenderPass(commands, &begin, VK_SUBPASS_CONTENTS_INLINE);
     vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, conversion_pipeline_);
-    const VkDescriptorSet source = depth ? scene_.depth_source : scene_color_source();
+    const VkDescriptorSet source = scene_.depth_source;
     vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, conversion_layout_, 0, 1, &source, 0, nullptr);
     for (std::size_t i = 0; i < probes.size(); ++i) {
         if (probes[i].x < 0.0f || probes[i].y < 0.0f) {
@@ -2591,12 +2587,12 @@ bool RendererVk::record_screen_probes(std::size_t slot, ScreenProbeKind kind, st
         const VkRect2D scissor{{static_cast<std::int32_t>(i), 0}, {1u, 1u}};
         vkCmdSetViewport(commands, 0, 1, &viewport);
         vkCmdSetScissor(commands, 0, 1, &scissor);
-        const SceneConversionShaderConstants constants = make_screen_probe_constants(probes[i].x, probes[i].y, scene_map_, depth);
+        const SceneConversionShaderConstants constants = make_screen_probe_constants(probes[i].x, probes[i].y, scene_map_, true);
         vkCmdPushConstants(commands, conversion_layout_, kPushStages, 0, sizeof(constants.values), constants.values.data());
         vkCmdDraw(commands, 3, 1, 0, 0);
     }
     vkCmdEndRenderPass(commands);
-    transition_scene_to_attachment(commands, depth);
+    transition_scene_to_attachment(commands, true);
     image_barrier(commands, target.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
                   VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_READ_BIT);

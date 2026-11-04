@@ -107,7 +107,6 @@
 #include "Game/Screen/MoviePlayingSequence.hpp"
 #include "Game/Screen/PlayerActionGuidance.hpp"
 #include "Game/Screen/SceneWipeHolder.hpp"
-#include "Game/Screen/ScreenAlphaCapture.hpp"
 #include "Game/Screen/ScreenBlurEffect.hpp"
 #include "Game/Screen/StaffRoll.hpp"
 #include "Game/System/GameSystem.hpp"
@@ -309,8 +308,6 @@ NameObj* SceneObjHolder::newEachObj(int id) {
         return new FallOutFieldDraw("\203\116\203\212\203\142\203\166\203\107\203\212\203\101\225\140\211\346[\224\262\202\253]" /* クリップエリア描画[抜き] */);
     case SceneObj_ClipFieldFillDraw:
         return new ClipFieldFillDraw("\203\116\203\212\203\142\203\166\203\107\203\212\203\101\225\140\211\346[\223\150\202\350\202\302\202\324\202\265]" /* クリップエリア描画[塗りつぶし] */);
-    case SceneObj_ScreenAlphaCapture:
-        return new ScreenAlphaCapture("\203\101\203\213\203\164\203\100\203\145\203\116\203\130\203\140\203\203\216\346\202\350\215\236\202\335" /* アルファテクスチャ取り込み */);
     case SceneObj_MapPartsRailGuideHolder:
         return new MapPartsRailGuideHolder();
     case SceneObj_GCapture:

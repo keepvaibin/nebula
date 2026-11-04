@@ -91,7 +91,6 @@
 #include "Game/Screen/ScenarioSelectLayout.hpp"
 #include "Game/Screen/ScenarioTitle.hpp"
 #include "Game/Screen/SceneWipeHolder.hpp"
-#include "Game/Screen/ScreenAlphaCapture.hpp"
 #include "Game/Screen/ScreenBlurEffect.hpp"
 #include "Game/Screen/ScreenPreserver.hpp"
 #include "Game/Screen/SimpleLayout.hpp"

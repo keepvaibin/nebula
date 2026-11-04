@@ -47,7 +47,7 @@ namespace {
 }  // namespace
 
 namespace J3DNativeView {
-    void probeScreen(u32 channel, NebulaScreenProbeKind what, const NebulaScreenProbe* pProbes, u32 count) {
+    void probeScreen(u32 channel, const NebulaScreenProbe* pProbes, u32 count) {
         J3DNativeDraw::flush();
         static NebulaScreenProbe probes[NEBULA_SCREEN_PROBES_MAX];
         const u32 sent = count < NEBULA_SCREEN_PROBES_MAX ? count : NEBULA_SCREEN_PROBES_MAX;
@@ -59,7 +59,7 @@ namespace J3DNativeView {
             }
         }
         const NebulaHostServices* pHost = nebula_host();
-        pHost->screen_probe(pHost->user, channel, what, probes, sent);
+        pHost->screen_probe(pHost->user, channel, probes, sent);
     }
 
     u32 screenProbeResults(u32 channel, NebulaScreenProbe* pProbes, u32 capacity) {

@@ -60,7 +60,6 @@
 #include "Game/Screen/GameStageClearSequence.hpp"
 #include "Game/Screen/LensFlare.hpp"
 #include "Game/Screen/MoviePlayingSequence.hpp"
-#include "Game/Screen/ScreenAlphaCapture.hpp"
 #include "Game/System/GalaxyMapController.hpp"
 #include "Game/System/GameSequenceFunction.hpp"
 #include "Game/Util/CameraUtil.hpp"
@@ -537,7 +536,6 @@ void GameScene::draw3D() const {
     CategoryList::execute(MR::DrawType_0x28);
     SceneFunction::executeDrawSilhouetteAndFillShadow();
     SceneFunction::executeDrawAlphaShadow();
-    CategoryList::execute(MR::DrawType_BrightSun);
     MR::setLensFlareDrawSyncToken();
     J3DPass::writeAlpha(false);
     J3DPass::constantAlpha(false, 0);

@@ -161,7 +161,7 @@ void DepthOfFieldBlur::createBlurTexture() const {
     J3DNativeTarget::beginOverFrame(mQuarter->mImage, mQuarter->getWidth(), mQuarter->getHeight(), 0, mFrameKey->mImage, NEBULA_TARGET_RGB,
                                     nullptr);
     const NebulaColor8 none = {0, 0, 0, 0};
-    ImageEffectLocalUtil::setMode(ImageEffectLocalUtil::Mode_QuarterBox, none, none);
+    ImageEffectLocalUtil::setMode(ImageEffectLocalUtil::Mode_QuarterBox, none);
     ImageEffectLocalUtil::drawTexture(mFrameKey, 4, 0, 255, ImageEffectLocalUtil::TexDrawType_0);
     ImageEffectLocalUtil::setupDrawTexture();
     J3DNativeTarget::end(mQuarter->mImage, NEBULA_TARGET_RGB);

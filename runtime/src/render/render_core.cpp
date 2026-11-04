@@ -3361,9 +3361,8 @@ void RenderCore::record_screen_probes(const shapes::Record& record) {
     }
     ScreenProbeFlight& flight = probe_flights_[(probe_flight_first_ + probe_flights_active_) % probe_flights_.size()];
     const std::span<const ScreenProbe> probes(current_record_pool_->probes.data() + record.vertex_first, record.vertex_count);
-    flight.kind = record.marker_aux != 0u ? ScreenProbeKind::Depth : ScreenProbeKind::Alpha;
     flight.slot = (probe_flight_first_ + probe_flights_active_) % probe_flights_.size();
-    if (renderer_.record_screen_probes(flight.slot, flight.kind, probes)) {
+    if (renderer_.record_screen_probes(flight.slot, probes)) {
         flight.channel = channel;
         flight.count = record.vertex_count;
         std::copy(probes.begin(), probes.end(), flight.probes.begin());
@@ -3381,9 +3380,7 @@ void RenderCore::poll_screen_probes() {
         for (std::uint32_t i = 0; i < flight.count; ++i) {
             const std::uint8_t* const pixel = rgba + std::size_t{i} * 4u;
             flight.probes[i].value = flight.probes[i].x < 0.0f ? 0.0f
-                : flight.kind == ScreenProbeKind::Depth
-                    ? static_cast<float>((std::uint32_t{pixel[0]} << 16u) | (std::uint32_t{pixel[1]} << 8u) | pixel[2]) / 16777215.0f
-                    : static_cast<float>(pixel[3]) / 255.0f;
+                : static_cast<float>((std::uint32_t{pixel[0]} << 16u) | (std::uint32_t{pixel[1]} << 8u) | pixel[2]) / 16777215.0f;
         }
         {
             const std::lock_guard guard(probe_answers_lock_);
