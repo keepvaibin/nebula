@@ -681,18 +681,11 @@ bool RendererVk::create_swapchain() {
         vkDeviceWaitIdle(device);
         fsr_generation_.destroy(swapchain_.handle);
     }
-    if (fsr) {
-        // AMD's takes the place of one of its own; a change of kind starts again.
-        vkDeviceWaitIdle(device);
-        if (swapchain_fsr_) {
-            handle = swapchain_.handle;
-            swapchain_.handle = VK_NULL_HANDLE;
-        }
-        destroy_swapchain();
-        info.oldSwapchain = handle;
-    } else if (swapchain_fsr_) {
+    if (fsr || swapchain_fsr_) {
+        // AMD's is made anew: its handle is no swap chain Vulkan could take as the old one.
         vkDeviceWaitIdle(device);
         destroy_swapchain();
+        swapchain_fsr_ = false;
         info.oldSwapchain = VK_NULL_HANDLE;
     }
     bool amd = false;
@@ -701,7 +694,7 @@ bool RendererVk::create_swapchain() {
         amd = vk::FsrFrameGenerationVk::create_swap_chain(info, handle, calls);
         if (!amd) {
             calls = {vkDestroySwapchainKHR, vkGetSwapchainImagesKHR, vkAcquireNextImageKHR, vkQueuePresentKHR};
-            info.oldSwapchain = VK_NULL_HANDLE;
+            handle = VK_NULL_HANDLE;
         }
     }
     if (!amd) {
@@ -1723,7 +1716,9 @@ bool RendererVk::fsr_generation_wanted() const {
 }
 
 bool RendererVk::wants_vsync() const {
-    return get_render_config().vsync_interval != 0u && (!frame_generation_running() || vk::streamline_vk::generation_vsync());
+    // DLSS Frame Generation says whether it can vsync; AMD's paces whichever mode it is given.
+    return get_render_config().vsync_interval != 0u &&
+           (!frame_generation_running() || fsr_generation_wanted() || vk::streamline_vk::generation_vsync());
 }
 
 void RendererVk::follow_window_and_resize() {

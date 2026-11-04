@@ -109,6 +109,8 @@ inline constexpr const wchar_t* test_window_off_desktop_wide_name() noexcept { r
 inline const char* test_window_off_desktop() noexcept { return std::getenv("GALAXY_TEST_WINDOW_OFF_DESKTOP"); }
 inline constexpr const char* test_window_off_desktop_name() noexcept { return "GALAXY_TEST_WINDOW_OFF_DESKTOP"; }
 inline constexpr const wchar_t* test_window_off_desktop_wide_name() noexcept { return L"GALAXY_TEST_WINDOW_OFF_DESKTOP"; }
+#endif
+#if defined(NEBULA_RELEASE)
 inline constexpr const wchar_t* xess_dir_wide_name() noexcept { return L""; }
 inline constexpr const wchar_t* streamline_dir_wide_name() noexcept { return L""; }
 #else
