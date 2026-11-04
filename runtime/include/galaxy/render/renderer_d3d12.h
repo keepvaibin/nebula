@@ -25,6 +25,7 @@
 #include <dxgi1_4.h>
 #include <wrl/client.h>
 
+#include "galaxy/render/fsr_frame_generation.h"
 #include "galaxy/render/utility_shaders.h"
 #include "galaxy/render/frame_pass.h"
 #include "galaxy/render/temporal_upscaler.h"
@@ -769,7 +770,16 @@ private:
     // The selected adapter, for video-memory budget queries.
     Microsoft::WRL::ComPtr<IDXGIAdapter3> adapter3_;
     Microsoft::WRL::ComPtr<ID3D12CommandQueue> queue_;
-    Microsoft::WRL::ComPtr<IDXGISwapChain3> swap_chain_;
+    Microsoft::WRL::ComPtr<IDXGISwapChain4> swap_chain_;
+    Microsoft::WRL::ComPtr<IDXGIFactory4> dxgi_factory_;
+    // FSR 3 frame generation: its pacing swap chain while it is chosen.
+    FsrFrameGeneration fsr_generation_;
+    bool fsr_swap_chain_ = false;
+    bool fg_hudless_ready_ = false;
+    unsigned fsr_rect_[4]{};
+    [[nodiscard]] bool fsr_generation_wanted() const;
+    bool create_swap_chain(bool fsr);
+    void recreate_swap_chain(bool fsr);
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> command_list_;
     std::array<Microsoft::WRL::ComPtr<ID3D12CommandAllocator>,
         kFramesInFlight> allocators_;

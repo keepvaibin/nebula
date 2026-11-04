@@ -234,7 +234,7 @@ unsigned shown_position(unsigned tab) {
 // The GRAPHICS page's rows for what is not built natively yet. Each goes with its feature.
 bool graphics_row_hidden(const char* label) {
     static constexpr const char* kHidden[] = {
-        "RAY TRACING", "RAY TRACING QUALITY", "TEXTURE PACKS", "  REPLACEMENTS", "DUMP TEXTURES", "MOVIES",
+        "RAY TRACING", "RAY TRACING QUALITY", "TEXTURE PACKS", "  REPLACEMENTS", "DUMP TEXTURES",
     };
     for (const char* hidden : kHidden) {
         if (std::strcmp(label, hidden) == 0) return true;
@@ -245,7 +245,7 @@ bool graphics_row_hidden(const char* label) {
 // Rows of the shown pages for what is not there yet or not on this platform.
 bool row_hidden(const char* label) {
     static constexpr const char* kHidden[] = {
-        "POST-PROCESS", "INTERFACE", "HUD RESOLUTION", "RAY TRACING HARDWARE", "NVIDIA STREAMLINE", "NVIDIA REFLEX", "DLSS", "DLSS FRAME GENERATION",
+        "POST-PROCESS", "RAY TRACING HARDWARE", "NVIDIA STREAMLINE", "NVIDIA REFLEX", "DLSS", "DLSS FRAME GENERATION",
 #if defined(__ANDROID__)
         "MONITOR", "DISPLAY MODE", "RESOLUTION", "REFRESH RATE", "VSYNC", "DISCORD STATUS", "MIIS", "IMPORT MIIS", "YOUR MIIS", "MIIS FOLDER",
         "GRAPHICS CARD", "DIAGNOSTICS",
@@ -327,7 +327,7 @@ using ui::Interpolation;
 ui::FrameRateCaps settings_frame_rate_caps(const RenderConfig& render, bool offer = false) {
     return {settings_refresh_hz(render), offer && frame_generation_offered(),
             host_window::upscaler_caps().frame_generation, host_window::upscaler_caps().frame_generation_dynamic,
-            host_window::upscaler_caps().frame_generation_max};
+            host_window::upscaler_caps().frame_generation_max, host_window::upscaler_caps().fsr_frame_generation};
 }
 Interpolation interpolation_of(const RenderConfig& render) { return ui::interpolation_of(render); }
 std::vector<unsigned> interpolation_targets(const RenderConfig& render, Interpolation mode) {

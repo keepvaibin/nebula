@@ -551,6 +551,14 @@ OpenedWindow open_game_window(WindowOwner& owner, int window_width, int window_h
         // No pointer seed from this thread: the window thread publishes geometry and input through WM_SIZE and
         // WM_SETFOCUS, and the first real message or cursor poll places the pointer.
         opened.shown = !hidden_window;
+#if !defined(NEBULA_RELEASE)
+        // GALAXY_TEST_WINDOW_OFF_DESKTOP: shown, beyond every monitor: what runs only for a shown window runs, and nothing appears.
+        if (hidden_window && ::galaxy::run_options().test_window_off_desktop) {
+            SetWindowPos(opened.window, HWND_BOTTOM, GetSystemMetrics(SM_XVIRTUALSCREEN) - static_cast<int>(outer_width) - 4096,
+                         GetSystemMetrics(SM_YVIRTUALSCREEN), static_cast<int>(outer_width), static_cast<int>(outer_height),
+                         SWP_NOACTIVATE | SWP_SHOWWINDOW);
+        }
+#endif
     }
     return opened;
 }
@@ -1352,6 +1360,10 @@ UpscalerCaps upscaler_caps() noexcept {
     caps.frame_generation_dynamic = streamline::frame_generation_dynamic();
     caps.frame_generation_max = streamline::frame_generation_max();
     caps.frames_presented = streamline::frames_presented();
+    caps.fsr_frame_generation = fsr_frame_generation_compiled();
+    if (get_render_config().frame_generation == 2u) {
+        caps.frames_presented = frame_generation_running() && frame_generation_allowed() ? 2u : 1u;
+    }
     return caps;
 }
 

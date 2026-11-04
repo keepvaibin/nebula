@@ -15,6 +15,7 @@
 // unavailable.
 #pragma once
 
+#include "galaxy/content_viewport.h"
 #include "galaxy/render/frame_pass.h"
 #include "galaxy/render/gpu_types.h"
 #include "galaxy/render/interp_gpu.h"
@@ -30,6 +31,7 @@
 #include "galaxy/render/gpu_upload_ring.h"
 #include "galaxy/render/vk/ambient_occlusion_vk.h"
 #include "galaxy/render/vk/temporal_upscaler_vk.h"
+#include "galaxy/render/vk/fsr_frame_generation_vk.h"
 #include "galaxy/render/vk/scene_camera_vk.h"
 #include "galaxy/render/vk/game_bloom_vk.h"
 #include "galaxy/render/vk/post_process_vk.h"
@@ -470,6 +472,26 @@ private:
     void sync_post_process();
     // The picture through the post chain before a turned swap chain's blit (pre-rotated images).
     gpu::TextureRef oriented_;
+    // DLSS Frame Generation (RendererD3D12's fg_hudless_*): the frame without its 2D layer, and whether a frame's Streamline
+    // markers are open.
+    gpu::TextureRef fg_hudless_scene_color_;
+    gpu::TextureRef fg_hudless_display_;
+    gpu::TextureRef fg_hudless_target_;
+    bool fg_hudless_scene_ = false;       // this frame's scene was taken
+    bool fg_hudless_taken_ = false;       // a picture's HUD-less copy is waiting
+    std::uint32_t fg_hudless_slot_ = 0u;  // the picture it went with
+    bool streamline_frame_open_ = false;
+    // FSR 3 frame generation: its pacing swap chain while it is chosen, and the swap chain calls in use.
+    vk::FsrFrameGenerationVk fsr_generation_;
+    vk::SwapchainCalls swapchain_calls_{};
+    bool swapchain_fsr_ = false;
+    bool fg_hudless_ready_ = false;
+    galaxy::ContentViewport fsr_rect_{};
+    [[nodiscard]] bool fsr_generation_wanted() const;
+    void take_fg_hudless_scene();
+    void copy_fg_hudless_display(const FramePassGeometry& sampling, const DisplayTexture& dest);
+    void present_fg_hudless(const DisplayTexture& source, const galaxy::ContentViewport& content);
+    [[nodiscard]] bool wants_vsync() const;
     void retire(gpu::TextureRef texture);
     [[nodiscard]] VkDescriptorSet allocate_persistent_set(VkDescriptorSetLayout layout);
     void refresh_default_sampler_table();

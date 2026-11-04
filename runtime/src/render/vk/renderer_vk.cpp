@@ -4,6 +4,7 @@
 
 #include "renderer_vk_internal.h"
 #include "galaxy/run_options.h"
+#include "galaxy/render/vk/streamline_vk.h"
 #include "galaxy/render/vk/renderer_vk.h"
 #include "galaxy/platform_time.h"
 
@@ -623,7 +624,7 @@ bool RendererVk::create_swapchain() {
     };
     // VSYNC on: FIFO. Off: immediate (tearing allowed, as D3D12's ALLOW_TEARING), else mailbox.
     VkPresentModeKHR mode = VK_PRESENT_MODE_FIFO_KHR;
-    if (get_render_config().vsync_interval == 0u) {
+    if (!wants_vsync()) {
         mode = supported(VK_PRESENT_MODE_IMMEDIATE_KHR) ? VK_PRESENT_MODE_IMMEDIATE_KHR
             : supported(VK_PRESENT_MODE_MAILBOX_KHR) ? VK_PRESENT_MODE_MAILBOX_KHR : VK_PRESENT_MODE_FIFO_KHR;
     }
@@ -674,13 +675,45 @@ bool RendererVk::create_swapchain() {
     info.clipped = VK_TRUE;
     info.oldSwapchain = swapchain_.handle;
     VkSwapchainKHR handle = VK_NULL_HANDLE;
-    const VkResult created = vkCreateSwapchainKHR(device, &info, nullptr, &handle);
-    if (created == VK_ERROR_SURFACE_LOST_KHR || created == VK_ERROR_NATIVE_WINDOW_IN_USE_KHR) {
-        surface_lost_ = true;
-        return false;
+    const bool fsr = fsr_generation_wanted();
+    if (swapchain_fsr_) {
+        vkDeviceWaitIdle(device);
+        fsr_generation_.destroy(swapchain_.handle);
     }
-    vk::check(created, "vkCreateSwapchainKHR");
+    if (fsr) {
+        // AMD's takes the place of one of its own; a change of kind starts again.
+        vkDeviceWaitIdle(device);
+        if (swapchain_fsr_) {
+            handle = swapchain_.handle;
+            swapchain_.handle = VK_NULL_HANDLE;
+        }
+        destroy_swapchain();
+        info.oldSwapchain = handle;
+    } else if (swapchain_fsr_) {
+        vkDeviceWaitIdle(device);
+        destroy_swapchain();
+        info.oldSwapchain = VK_NULL_HANDLE;
+    }
+    bool amd = false;
+    vk::SwapchainCalls calls{vkDestroySwapchainKHR, vkGetSwapchainImagesKHR, vkAcquireNextImageKHR, vkQueuePresentKHR};
+    if (fsr) {
+        amd = vk::FsrFrameGenerationVk::create_swap_chain(info, handle, calls);
+        if (!amd) {
+            calls = {vkDestroySwapchainKHR, vkGetSwapchainImagesKHR, vkAcquireNextImageKHR, vkQueuePresentKHR};
+            info.oldSwapchain = VK_NULL_HANDLE;
+        }
+    }
+    if (!amd) {
+        const VkResult created = vkCreateSwapchainKHR(device, &info, nullptr, &handle);
+        if (created == VK_ERROR_SURFACE_LOST_KHR || created == VK_ERROR_NATIVE_WINDOW_IN_USE_KHR) {
+            surface_lost_ = true;
+            return false;
+        }
+        vk::check(created, "vkCreateSwapchainKHR");
+    }
     destroy_swapchain();
+    swapchain_calls_ = calls;
+    swapchain_fsr_ = amd;
     swapchain_.handle = handle;
     present_timing_.refresh_ns = 0;  // the new swapchain's, at the next report
     present_timing_.last_actual = 0;
@@ -690,9 +723,9 @@ bool RendererVk::create_swapchain() {
     swapchain_.transform = transform;
     swapchain_.copyable = (info.imageUsage & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) != 0u;
     swapchain_.mode = mode;
-    vkGetSwapchainImagesKHR(device, handle, &count, nullptr);
+    swapchain_calls_.get_images(device, handle, &count, nullptr);
     swapchain_.images.resize(count);
-    vkGetSwapchainImagesKHR(device, handle, &count, swapchain_.images.data());
+    swapchain_calls_.get_images(device, handle, &count, swapchain_.images.data());
     std::fprintf(stderr, "[vulkan] swapchain %ux%u transform=%u images=%u\n", extent.width, extent.height,
                  static_cast<unsigned>(transform), count);
 
@@ -772,7 +805,7 @@ void RendererVk::destroy_swapchain() noexcept {
     for (VkImageView view : swapchain_.views) vkDestroyImageView(device, view, nullptr);
     for (VkSemaphore semaphore : swapchain_.rendered) vkDestroySemaphore(device, semaphore, nullptr);
     if (swapchain_.handle != VK_NULL_HANDLE) {
-        vkDestroySwapchainKHR(device, swapchain_.handle, nullptr);
+        swapchain_calls_.destroy(device, swapchain_.handle, nullptr);
     }
     swapchain_.framebuffers.clear();
     swapchain_.views.clear();
@@ -976,9 +1009,15 @@ void RendererVk::shutdown() {
     const VkDevice device = context.device();
     if (device != VK_NULL_HANDLE) {
         vkDeviceWaitIdle(device);
+        if (swapchain_fsr_) {
+            fsr_generation_.destroy(swapchain_.handle);
+        }
         post_.shutdown();
         bloom_.shutdown();
         oriented_.reset();
+        fg_hudless_scene_color_.reset();
+        fg_hudless_display_.reset();
+        fg_hudless_target_.reset();
         scene_owed_.reset();
         scene_submitted_color_.reset();
         scene_shown_image_ = VK_NULL_HANDLE;
@@ -1117,6 +1156,10 @@ void RendererVk::wait_for_fence_value(std::uint64_t fence_value) {
 
 void RendererVk::begin_frame(bool) {
     host_window::poll_render_config_file();
+    if (!streamline_frame_open_) {
+        vk::streamline_vk::open_frame(swapchain_fsr_);
+        streamline_frame_open_ = true;
+    }
     follow_window_and_resize();
     apply_window_size();
     update_ring_mode();
@@ -1253,10 +1296,16 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
     const VkCommandBuffer buffers[] = {frame.uploads, frame.commands};
     const bool presenting = present_swap_chain && swap_image_ != UINT32_MAX;
     vk::Context& context = vk::Context::get();
+    if (presenting) {
+        vk::streamline_vk::mark_submit_start();
+    }
     const std::uint64_t fence = presenting
         ? context.submit_frame(buffers, frame.acquired, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                                swapchain_.rendered[swap_image_])
         : context.submit_frame(buffers);
+    if (presenting) {
+        vk::streamline_vk::mark_submit_end();
+    }
     frame.fence = fence;
     last_submitted_ = fence;
     if (ring_mode_ == RingMode::Interp) {
@@ -1324,8 +1373,20 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
 void RendererVk::present_swapchain_image() {
     vk::Context& context = vk::Context::get();
     const RenderConfig cfg = get_render_config();
-    const double pace_wait_ms = present_pacer_.pace(cfg.vsync_interval, cfg.max_fps);
+    const double pace_wait_ms = present_pacer_.pace(cfg.vsync_interval, presented_max_fps(cfg));
     const std::int64_t present_start = galaxy::qpc_now();
+    {
+        // The target rate: dynamic multi frame generation reaches it, a fixed multiplier is the largest multiple of 60 at or
+        // below it. Only while the game shows play (render_config.h); otherwise its own frames alone.
+        unsigned generated = 0u;
+        if (frame_generation_running() && frame_generation_allowed()) {
+            const double rate = present_frame_rate(cfg.max_fps, cfg.vsync_interval, display_refresh_hz_);
+            generated = static_cast<unsigned>(std::clamp<long>(static_cast<long>(rate / 60.0 + 1e-3) - 1, 1,
+                                                               static_cast<long>(host_window::upscaler_caps().frame_generation_max)));
+        }
+        vk::streamline_vk::set_generation(generated, host_window::upscaler_caps().frame_generation_dynamic,
+                                          cfg.max_fps > 0.0f ? cfg.max_fps : 0.0f);
+    }
     VkPresentInfoKHR info{VK_STRUCTURE_TYPE_PRESENT_INFO_KHR};
     info.waitSemaphoreCount = 1;
     info.pWaitSemaphores = &swapchain_.rendered[swap_image_];
@@ -1368,7 +1429,21 @@ void RendererVk::present_swapchain_image() {
         present_timing_.last_slot = 0;
     }
     const std::int64_t present_cpu = vk::thread_cpu_ns();
-    const VkResult result = vkQueuePresentKHR(context.queue(), &info);
+    if (swapchain_fsr_) {
+        vk::TemporalImage hudless{};
+        if (fg_hudless_ready_) {
+            hudless = {fg_hudless_target_->image, fg_hudless_target_->view, VK_IMAGE_ASPECT_COLOR_BIT, VK_FORMAT_R8G8B8A8_UNORM, fg_hudless_target_->width,
+                       fg_hudless_target_->height, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT};
+        }
+        fsr_generation_.configure(swapchain_.handle, frame_generation_running() && frame_generation_allowed(), fg_hudless_ready_ ? &hudless : nullptr,
+                                  static_cast<unsigned>(fsr_rect_.left), static_cast<unsigned>(fsr_rect_.top), static_cast<unsigned>(fsr_rect_.width),
+                                  static_cast<unsigned>(fsr_rect_.height));
+        fg_hudless_ready_ = false;
+    }
+    vk::streamline_vk::mark_present_start();
+    const VkResult result = swapchain_calls_.present(context.queue(), &info);
+    vk::streamline_vk::mark_present_end();
+    streamline_frame_open_ = false;
     vk::note_driver_cpu(vk::DriverCall::Present, vk::thread_cpu_ns() - present_cpu);
     surface_lock_ = {};
     if (result == VK_ERROR_OUT_OF_DATE_KHR || (result == VK_SUBOPTIMAL_KHR && surface_changed())) {
@@ -1638,6 +1713,18 @@ void RendererVk::refresh_display_rate() {
 }
 
 // Swapchain changes (window size, VSYNC) and Match Output's internal resolution, between frames.
+// FSR 3 frame generation: chosen, with an upscaler that gives it depth and motion, and not DLSS, whose presents are Streamline's.
+bool RendererVk::fsr_generation_wanted() const {
+    const RenderConfig cfg = get_render_config();
+    const vk::Context& context = vk::Context::get();
+    return fsr_frame_generation_compiled() && cfg.frame_generation == 2u && (cfg.upscaler == 2u || cfg.upscaler == 4u) &&
+           context.generation_present_queue() != VK_NULL_HANDLE && context.temporal_upscaling();
+}
+
+bool RendererVk::wants_vsync() const {
+    return get_render_config().vsync_interval != 0u && (!frame_generation_running() || vk::streamline_vk::generation_vsync());
+}
+
 void RendererVk::follow_window_and_resize() {
     // The window's surface: dropped while withdrawn or after the driver lost it, made again once it is back.
     if (surface_lost_ || host_window::surface_withdrawn.load(std::memory_order_acquire)) {
@@ -1656,11 +1743,11 @@ void RendererVk::follow_window_and_resize() {
             swapchain_dirty_ = true;
         }
     }
-    const bool vsync = get_render_config().vsync_interval != 0u;
-    if (vsync != (swapchain_.mode == VK_PRESENT_MODE_FIFO_KHR)) {
+    if (wants_vsync() != (swapchain_.mode == VK_PRESENT_MODE_FIFO_KHR) || fsr_generation_wanted() != swapchain_fsr_) {
         swapchain_dirty_ = true;
     }
     if (swapchain_dirty_) {
+        vk::streamline_vk::generation_off();
         vkDeviceWaitIdle(vk::Context::get().device());
         create_swapchain();
     }
@@ -1689,7 +1776,7 @@ bool RendererVk::present(const DisplayTexture* source, bool capture_backbuffer, 
     // A second at most: an image the presentation engine never returns (a surface going away) skips the frame.
     constexpr std::uint64_t kAcquireTimeoutNs = 1'000'000'000ull;
     const std::int64_t acquire_cpu = vk::thread_cpu_ns();
-    VkResult result = vkAcquireNextImageKHR(context.device(), swapchain_.handle, kAcquireTimeoutNs, frame.acquired,
+    VkResult result = swapchain_calls_.acquire(context.device(), swapchain_.handle, kAcquireTimeoutNs, frame.acquired,
                                             VK_NULL_HANDLE, &image);
     vk::note_driver_cpu(vk::DriverCall::Acquire, vk::thread_cpu_ns() - acquire_cpu);
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_ERROR_SURFACE_LOST_KHR || result == VK_TIMEOUT ||
@@ -1740,6 +1827,12 @@ bool RendererVk::present(const DisplayTexture* source, bool capture_backbuffer, 
         content = galaxy::ContentViewport{0, 0, bb_w, bb_h};
     }
     (void)galaxy::g_presentation_content.publish(bb_w, bb_h, content);
+    if (frame_generation_running()) {
+        fsr_rect_ = content;
+        vk::streamline_vk::tag_backbuffer_region(commands, static_cast<unsigned>(content.left), static_cast<unsigned>(content.top),
+                                                 static_cast<unsigned>(content.width), static_cast<unsigned>(content.height));
+        present_fg_hudless(*source, content);
+    }
 
     // The post chain's passes before the swap chain's: the picture scaled (and sharpened) to its size on screen. A
     // turned swap chain takes it through `oriented_` and the blit, which turns it.
@@ -1844,6 +1937,13 @@ bool RendererVk::present(const DisplayTexture* source, bool capture_backbuffer, 
     }
     vkCmdEndRenderPass(commands);
     reset_draw_bindings();
+    const auto hand_to_amd = [&] {
+        if (swapchain_fsr_) {
+            image_barrier(commands, swapchain_.images[image], VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT);
+        }
+    };
 
     if (capture_backbuffer && swapchain_.copyable && !backbuffer_capture_path_.empty() &&
         backbuffer_capture_pending_path_.empty()) {
@@ -1879,9 +1979,11 @@ bool RendererVk::present(const DisplayTexture* source, bool capture_backbuffer, 
             backbuffer_capture_width_ = swapchain_.image.width;
             backbuffer_capture_height_ = swapchain_.image.height;
             backbuffer_capture_bgra_ = swapchain_.format == VK_FORMAT_B8G8R8A8_UNORM;
+            hand_to_amd();
             return true;
         }
     }
+    hand_to_amd();
     return false;
 }
 

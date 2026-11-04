@@ -56,6 +56,9 @@ bool display_settings_differ(const RenderConfig& a, const RenderConfig& b) {
 }
 
 Interpolation interpolation_of(const RenderConfig& render) {
+    if (render.frame_generation == 2u) {
+        return Interpolation::kFsrGeneration;
+    }
     if (render.frame_generation != 0u) {
         return Interpolation::kFrameGeneration;
     }
@@ -70,6 +73,11 @@ Interpolation interpolation_of(const RenderConfig& render) {
 std::vector<unsigned> interpolation_targets(Interpolation mode, const FrameRateCaps& caps) {
     std::vector<unsigned> targets;
     if (mode == Interpolation::kOff) {
+        return targets;
+    }
+    // FSR 3 makes one frame between each two.
+    if (mode == Interpolation::kFsrGeneration) {
+        targets.push_back(120u);
         return targets;
     }
     const unsigned refresh = caps.refresh_hz;
@@ -104,6 +112,9 @@ std::vector<Interpolation> interpolation_modes(const FrameRateCaps& caps) {
     }
     if (caps.generated_offered && !interpolation_targets(Interpolation::kFrameGeneration, caps).empty()) {
         modes.push_back(Interpolation::kFrameGeneration);
+    }
+    if (caps.fsr_generation_offered) {
+        modes.push_back(Interpolation::kFsrGeneration);
     }
     return modes;
 }

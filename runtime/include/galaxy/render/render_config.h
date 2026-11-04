@@ -247,6 +247,8 @@ struct RenderFeatureCaps {
 // A copy taken under the lock, never a partial update.
 [[nodiscard]] RenderConfig get_render_config();
 
+// FSR 3 frame generation is built into this renderer (RenderConfig::frame_generation 2; 1 is DLSS).
+[[nodiscard]] bool fsr_frame_generation_compiled() noexcept;
 // While DLSS Frame Generation runs (set by the renderer) the game presents its own 60 frames; the generated ones
 // raise the rate.
 void set_frame_generation_running(bool running) noexcept;

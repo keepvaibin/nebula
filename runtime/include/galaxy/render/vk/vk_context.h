@@ -102,6 +102,8 @@ public:
     [[nodiscard]] VkPhysicalDevice physical_device() const noexcept { return physical_; }
     [[nodiscard]] VkDevice device() const noexcept { return device_; }
     [[nodiscard]] VkQueue queue() const noexcept { return queue_; }
+    [[nodiscard]] VkQueue generation_present_queue() const noexcept { return generation_present_queue_; }
+    [[nodiscard]] VkQueue generation_acquire_queue() const noexcept { return generation_acquire_queue_; }
     [[nodiscard]] std::uint32_t queue_family() const noexcept { return queue_family_; }
     [[nodiscard]] VmaAllocator_T* allocator() const noexcept { return allocator_; }
     [[nodiscard]] const VkPhysicalDeviceProperties& properties() const noexcept { return properties_; }
@@ -205,6 +207,8 @@ private:
     VkPhysicalDevice physical_ = VK_NULL_HANDLE;
     VkDevice device_ = VK_NULL_HANDLE;
     VkQueue queue_ = VK_NULL_HANDLE;
+    VkQueue generation_present_queue_ = VK_NULL_HANDLE;
+    VkQueue generation_acquire_queue_ = VK_NULL_HANDLE;
     std::uint32_t queue_family_ = 0;
     VmaAllocator_T* allocator_ = nullptr;
     VkPhysicalDeviceProperties properties_{};

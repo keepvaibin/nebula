@@ -33,6 +33,7 @@ RunOptions read_options() {
     o.gpu_passes = nebula_switch::gpu_passes();
     o.gpu_preference = nebula_switch::gpu_preference();
     o.hide_window = nebula_switch::hide_window();
+    o.test_window_off_desktop = nebula_switch::test_window_off_desktop();
     o.log_to_console = nebula_switch::log_to_console();
     o.movie_dir = nebula_switch::movie_dir();
     o.pipeline_seed_out = nebula_switch::pipeline_seed_out();

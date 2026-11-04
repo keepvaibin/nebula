@@ -46,6 +46,8 @@ bool attach_device(ID3D12Device* device, const LUID& adapter) noexcept;
 // Streamline's factory proxy for creating the swap chain (so its presents
 // run through Streamline), or `factory`.
 [[nodiscard]] Microsoft::WRL::ComPtr<IDXGIFactory4> swap_chain_factory(IDXGIFactory4* factory) noexcept;
+// The driver's queue behind Streamline's proxy, or `queue` (for a swap chain Streamline does not run).
+[[nodiscard]] ID3D12CommandQueue* native_queue(ID3D12CommandQueue* queue) noexcept;
 // Before the swap chain and device are released.
 void shutdown() noexcept;
 

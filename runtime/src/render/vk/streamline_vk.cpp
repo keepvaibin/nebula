@@ -2,8 +2,10 @@
 // streamline_vk.h.
 #include "galaxy/render/vk/streamline_vk.h"
 
+#include "galaxy/render/render_config.h"
 #include "galaxy/render/streamline_bridge.h"
 #include "../streamline_common.h"
+#include "../streamline_frame_generation.h"
 
 #include <dxgi1_4.h>
 
@@ -18,6 +20,7 @@
 #include <cstring>
 #include <iostream>
 #include <string>
+#include <type_traits>
 #include <wrl/client.h>
 
 namespace galaxy::render {
@@ -44,7 +47,17 @@ struct Api {
 Api g_api;
 vk::streamline_vk::Needs g_needs;
 std::wstring g_directory;
-std::uint32_t g_frame_index = 0u;
+streamline_common::FrameGeneration g_generation;
+HMODULE g_interposer = nullptr;
+
+// Each name once, in the order they came.
+void add_names(std::vector<const char*>& names, const char* const* more, std::uint32_t count) {
+    for (std::uint32_t i = 0u; i < count; ++i) {
+        if (std::none_of(names.begin(), names.end(), [&](const char* have) { return std::strcmp(have, more[i]) == 0; })) {
+            names.push_back(more[i]);
+        }
+    }
+}
 
 template <typename Function>
 bool resolve(HMODULE module, const char* name, Function*& out) {
@@ -93,6 +106,22 @@ bool rtx_adapter_present() {
 namespace streamline {
 
 bool dlss_supported() noexcept { return g_api.initialized && g_api.dlss; }
+
+bool frame_generation_supported() noexcept { return g_api.initialized && g_generation.supported(); }
+
+unsigned frame_generation_max() noexcept { return g_generation.max(); }
+
+bool frame_generation_dynamic() noexcept { return g_generation.dynamic(); }
+
+unsigned frame_index() noexcept { return g_generation.frame_index(); }
+
+void marker(Marker m) noexcept { g_generation.marker(m); }
+
+void reflex_sleep() noexcept { g_generation.sleep(); }
+
+void set_frame_generation(unsigned generated, bool dynamic, float target_fps) noexcept { g_generation.set(generated, dynamic, target_fps); }
+
+unsigned frames_presented() noexcept { return g_generation.presented(); }
 
 }  // namespace streamline
 
@@ -152,9 +181,15 @@ bool start() noexcept {
         preferences.logMessageCallback = &log_message;
         preferences.flags = sl::PreferenceFlags::eDisableCLStateTracking | sl::PreferenceFlags::eUseManualHooking |
                             sl::PreferenceFlags::eUseFrameBasedResourceTagging;
-        static const sl::Feature features[] = {sl::kFeatureDLSS};
+        // Frame generation needs Reflex (PCL loads with the core). Loaded whenever it is installed, whatever the setting.
+        const auto installed = [&](const wchar_t* name) {
+            return GetFileAttributesW((g_directory + L"\\" + name).c_str()) != INVALID_FILE_ATTRIBUTES;
+        };
+        const bool generation = installed(L"sl.dlss_g.dll") && installed(L"nvngx_dlssg.dll") && installed(L"sl.reflex.dll") &&
+                                installed(L"sl.pcl.dll");
+        static const sl::Feature features[] = {sl::kFeatureDLSS, sl::kFeatureDLSS_G, sl::kFeatureReflex, sl::kFeaturePCL};
         preferences.featuresToLoad = features;
-        preferences.numFeaturesToLoad = 1u;
+        preferences.numFeaturesToLoad = generation ? 4u : 1u;
         preferences.engine = sl::EngineType::eCustom;
         preferences.engineVersion = "Nebula";
         preferences.projectId = "7c3e2b1a-5d4f-4e8a-9b6c-1f2e3d4c5b6a";
@@ -182,8 +217,27 @@ bool start() noexcept {
         g_needs.features12 = sl::getVkPhysicalDeviceVulkan12Features(requirements.vkNumFeatures12, requirements.vkFeatures12);
         g_needs.graphics_queues = requirements.vkNumGraphicsQueuesRequired;
         g_needs.compute_queues = requirements.vkNumComputeQueuesRequired;
+        if (generation) {
+            sl::FeatureRequirements own{};
+            sl::FeatureRequirements reflex{};
+            if (api.get_feature_requirements(sl::kFeatureDLSS_G, own) == sl::Result::eOk &&
+                api.get_feature_requirements(sl::kFeatureReflex, reflex) == sl::Result::eOk &&
+                sl::hasFlag(own.flags, sl::FeatureRequirementFlags::eVulkanSupported)) {
+                g_needs.frame_generation = true;
+                add_names(g_needs.instance_extensions, own.vkInstanceExtensions, own.vkNumInstanceExtensions);
+                add_names(g_needs.generation_extensions, own.vkDeviceExtensions, own.vkNumDeviceExtensions);
+                add_names(g_needs.generation_extensions, reflex.vkDeviceExtensions, reflex.vkNumDeviceExtensions);
+                g_needs.generation_graphics_queues = own.vkNumGraphicsQueuesRequired;
+                g_needs.generation_compute_queues = own.vkNumComputeQueuesRequired;
+            }
+        }
         api.initialized = true;
         g_api = api;
+        g_interposer = module;
+        g_generation.is_feature_supported = api.is_feature_supported;
+        g_generation.get_feature_function = api.get_feature_function;
+        g_generation.get_new_frame_token = api.get_new_frame_token;
+        g_generation.set_tag_for_frame = api.set_tag_for_frame;
         return true;
     } catch (...) {
         return false;
@@ -224,8 +278,51 @@ bool device_meets_needs(VkPhysicalDevice physical) noexcept {
     return true;
 }
 
+bool device_meets_generation_needs(VkPhysicalDevice physical, std::uint32_t& optical_flow_family) noexcept {
+    optical_flow_family = UINT32_MAX;
+    VkPhysicalDeviceProperties properties{};
+    vkGetPhysicalDeviceProperties(physical, &properties);
+    if (!g_needs.frame_generation || properties.apiVersion < VK_API_VERSION_1_3) {
+        return false;
+    }
+    VkPhysicalDeviceOpticalFlowFeaturesNV optical{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_OPTICAL_FLOW_FEATURES_NV};
+    VkPhysicalDeviceVulkan13Features have{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES};
+    have.pNext = &optical;
+    VkPhysicalDeviceFeatures2 features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
+    features.pNext = &have;
+    vkGetPhysicalDeviceFeatures2(physical, &features);
+    if (have.synchronization2 != VK_TRUE) {
+        return false;
+    }
+    std::uint32_t count = 0u;
+    vkEnumerateDeviceExtensionProperties(physical, nullptr, &count, nullptr);
+    std::vector<VkExtensionProperties> extensions(count);
+    vkEnumerateDeviceExtensionProperties(physical, nullptr, &count, extensions.data());
+    for (const char* name : g_needs.generation_extensions) {
+        if (std::none_of(extensions.begin(), extensions.end(),
+                         [name](const VkExtensionProperties& e) { return std::strcmp(e.extensionName, name) == 0; })) {
+            std::cerr << "[streamline] frame generation needs " << name << '\n';
+            return false;
+        }
+    }
+    if (optical.opticalFlow == VK_TRUE) {
+        std::uint32_t families = 0u;
+        vkGetPhysicalDeviceQueueFamilyProperties(physical, &families, nullptr);
+        std::vector<VkQueueFamilyProperties> props(families);
+        vkGetPhysicalDeviceQueueFamilyProperties(physical, &families, props.data());
+        constexpr VkQueueFlags kOther = VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT;
+        for (std::uint32_t i = 0u; i < families; ++i) {
+            if ((props[i].queueFlags & VK_QUEUE_OPTICAL_FLOW_BIT_NV) != 0u && (props[i].queueFlags & kOther) == 0u) {
+                optical_flow_family = i;
+                break;
+            }
+        }
+    }
+    return true;
+}
+
 bool attach(VkInstance instance, VkPhysicalDevice physical, VkDevice device, std::uint32_t queue_family,
-            std::uint32_t first_extra_queue) noexcept {
+            std::uint32_t first_extra_queue, bool frame_generation, std::uint32_t optical_flow_family) noexcept {
     if (!g_api.initialized) {
         return false;
     }
@@ -236,7 +333,12 @@ bool attach(VkInstance instance, VkPhysicalDevice physical, VkDevice device, std
     info.graphicsQueueFamily = queue_family;
     info.graphicsQueueIndex = first_extra_queue;
     info.computeQueueFamily = queue_family;
-    info.computeQueueIndex = first_extra_queue + g_needs.graphics_queues;
+    info.computeQueueIndex = first_extra_queue + (frame_generation ? g_needs.generation_graphics_queues : g_needs.graphics_queues);
+    if (frame_generation && optical_flow_family != UINT32_MAX) {
+        info.opticalFlowQueueFamily = optical_flow_family;
+        info.opticalFlowQueueIndex = 0u;
+        info.useNativeOpticalFlowMode = true;
+    }
     sl::Result result = g_api.set_vulkan_info(info);
     if (result != sl::Result::eOk) {
         std::cerr << "[streamline] slSetVulkanInfo: " << static_cast<int>(result) << '\n';
@@ -261,7 +363,41 @@ bool attach(VkInstance instance, VkPhysicalDevice physical, VkDevice device, std
     g_api.dlss_set_options = reinterpret_cast<PFun_slDLSSSetOptions*>(options);
     g_api.dlss = true;
     std::cerr << "[streamline] DLSS ready\n";
+    if (frame_generation) {
+        g_generation.attach(adapter);
+    }
+    // Every present passes through it from here on: its guide asks that of manual hooking, whichever features run.
+    const auto proxy = reinterpret_cast<PFN_vkGetDeviceProcAddr>(GetProcAddress(g_interposer, "vkGetDeviceProcAddr"));
+    if (proxy != nullptr) {
+        const auto hook = [&](auto& function, const char* name) {
+            if (const PFN_vkVoidFunction found = proxy(device, name); found != nullptr) {
+                function = reinterpret_cast<std::remove_reference_t<decltype(function)>>(found);
+            }
+        };
+        hook(vkCreateSwapchainKHR, "vkCreateSwapchainKHR");
+        hook(vkDestroySwapchainKHR, "vkDestroySwapchainKHR");
+        hook(vkGetSwapchainImagesKHR, "vkGetSwapchainImagesKHR");
+        hook(vkAcquireNextImageKHR, "vkAcquireNextImageKHR");
+        hook(vkQueuePresentKHR, "vkQueuePresentKHR");
+        hook(vkDeviceWaitIdle, "vkDeviceWaitIdle");
+    }
     return true;
+}
+
+void hook_surface_calls(VkInstance instance) noexcept {
+    if (g_interposer == nullptr) {
+        return;
+    }
+    const auto proxy = reinterpret_cast<PFN_vkGetInstanceProcAddr>(GetProcAddress(g_interposer, "vkGetInstanceProcAddr"));
+    if (proxy == nullptr) {
+        return;
+    }
+    if (const PFN_vkVoidFunction create = proxy(instance, "vkCreateWin32SurfaceKHR"); create != nullptr) {
+        vkCreateWin32SurfaceKHR = reinterpret_cast<PFN_vkCreateWin32SurfaceKHR>(create);
+    }
+    if (const PFN_vkVoidFunction destroy = proxy(instance, "vkDestroySurfaceKHR"); destroy != nullptr) {
+        vkDestroySurfaceKHR = reinterpret_cast<PFN_vkDestroySurfaceKHR>(destroy);
+    }
 }
 
 void shutdown() noexcept {
@@ -274,6 +410,7 @@ void shutdown() noexcept {
     }
     g_api.initialized = false;
     g_api.dlss = false;
+    g_generation.shutdown();
 }
 
 namespace {
@@ -305,10 +442,15 @@ public:
         if (!streamline::dlss_supported() || in.commands == VK_NULL_HANDLE) {
             return false;
         }
-        // Each evaluation takes a new frame token: Streamline rejects different constants under one.
-        sl::FrameToken* token = nullptr;
-        const std::uint32_t index = g_frame_index++;
-        if (g_api.get_new_frame_token(token, &index) != sl::Result::eOk || token == nullptr) {
+        // A second evaluation before the present (an interpolated sub-frame, a second scene) takes a new frame
+        // token: Streamline rejects different constants under one.
+        if (evaluated_ && g_generation.frame_index() == evaluated_index_) {
+            g_generation.next_frame_index();
+        }
+        evaluated_ = true;
+        evaluated_index_ = g_generation.frame_index();
+        sl::FrameToken* const token = g_generation.token();
+        if (token == nullptr) {
             return failed("frame token");
         }
         sl::Constants constants{};
@@ -382,9 +524,95 @@ private:
     sl::DLSSMode mode_;
     sl::DLSSOptions options_{};
     bool reported_ = false;
+    bool evaluated_ = false;
+    std::uint32_t evaluated_index_ = 0u;
 };
 
 }  // namespace
+
+void open_frame(bool amd_generation) noexcept {
+    const RenderConfig cfg = get_render_config();
+    set_frame_generation_running(amd_generation || (streamline::frame_generation_supported() && cfg.frame_generation == 1u &&
+                                                    cfg.upscaler == 3u && streamline::dlss_supported()));
+    if (frame_generation_running()) {
+        g_generation.sleep();
+    }
+    g_generation.marker(streamline::Marker::kSimulationStart);
+}
+
+void mark_submit_start() noexcept {
+    g_generation.marker(streamline::Marker::kSimulationEnd);
+    g_generation.marker(streamline::Marker::kRenderSubmitStart);
+}
+
+void mark_submit_end() noexcept { g_generation.marker(streamline::Marker::kRenderSubmitEnd); }
+
+void mark_present_start() noexcept { g_generation.marker(streamline::Marker::kPresentStart); }
+
+void mark_present_end() noexcept { g_generation.marker(streamline::Marker::kPresentEnd); }
+
+bool generation_vsync() noexcept { return g_generation.vsync(); }
+
+void generation_off() noexcept { g_generation.set(0u, false, 0.0f); }
+
+void set_generation(unsigned generated, bool dynamic, float target_fps) noexcept { g_generation.set(generated, dynamic, target_fps); }
+
+void tag_generation_inputs(VkCommandBuffer commands, const TemporalImage& depth, const TemporalImage& motion, unsigned render_width,
+                           unsigned render_height, VkImageLayout depth_layout, VkImageLayout motion_layout) noexcept {
+    sl::FrameToken* const token = g_generation.supported() ? g_generation.token() : nullptr;
+    if (token == nullptr) {
+        return;
+    }
+    sl::Resource depth_resource = resource(depth, depth_layout);
+    sl::Resource motion_resource = resource(motion, motion_layout);
+    sl::Extent render{};
+    render.width = render_width;
+    render.height = render_height;
+    // The scene's targets are cleared and reused before the present: Streamline copies them now.
+    const sl::ResourceTag tags[] = {
+        sl::ResourceTag(&depth_resource, sl::kBufferTypeDepth, sl::ResourceLifecycle::eOnlyValidNow, &render),
+        sl::ResourceTag(&motion_resource, sl::kBufferTypeMotionVectors, sl::ResourceLifecycle::eOnlyValidNow, &render)};
+    if (g_api.set_tag_for_frame(*token, sl::ViewportHandle{0u}, tags, 2u, commands) == sl::Result::eOk) {
+        g_generation.note_tagged();
+    } else {
+        static bool reported = false;
+        if (!reported) {
+            reported = true;
+            std::cerr << "[dlss-g] tagging failed\n";
+        }
+    }
+}
+
+void tag_backbuffer_region(VkCommandBuffer commands, unsigned left, unsigned top, unsigned width, unsigned height) noexcept {
+    sl::FrameToken* const token = g_generation.tagged() && width != 0u && height != 0u ? g_generation.token() : nullptr;
+    if (token == nullptr) {
+        return;
+    }
+    sl::Extent region{};
+    region.left = left;
+    region.top = top;
+    region.width = width;
+    region.height = height;
+    const sl::ResourceTag tag(nullptr, sl::kBufferTypeBackbuffer, sl::ResourceLifecycle{}, &region);
+    (void)g_api.set_tag_for_frame(*token, sl::ViewportHandle{0u}, &tag, 1u, commands);
+}
+
+void tag_hudless(VkCommandBuffer commands, const TemporalImage* picture) noexcept {
+    sl::FrameToken* const token = g_generation.tagged() ? g_generation.token() : nullptr;
+    if (token == nullptr) {
+        return;
+    }
+    sl::Extent extent{};
+    sl::Resource image{};
+    if (picture != nullptr) {
+        image = resource(*picture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        extent.width = picture->width;
+        extent.height = picture->height;
+    }
+    const sl::ResourceTag tag(picture != nullptr ? &image : nullptr, sl::kBufferTypeHUDLessColor, sl::ResourceLifecycle::eValidUntilPresent,
+                              picture != nullptr ? &extent : nullptr);
+    (void)g_api.set_tag_for_frame(*token, sl::ViewportHandle{0u}, &tag, 1u, commands);
+}
 
 std::unique_ptr<TemporalUpscaler> create_dlss_upscaler(unsigned render_width, unsigned render_height, unsigned output_width,
                                                        unsigned output_height, unsigned quality) {
