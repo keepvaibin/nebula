@@ -336,7 +336,7 @@ int main() {
     passed &= expect(
         defaults.vsync_interval == 0 &&
             defaults.max_fps == 60.0f,
-        "default Release config keeps a 60 Hz cap for non-realtime-VI launches "
+        "default Release config keeps a 60 Hz cap for launches without a realtime clock "
         "and the flip-discard swap chain");
 
     const galaxy::render::RenderTimingConfig& timing = galaxy::render::get_frame_timing_config();
