@@ -49,5 +49,5 @@ s32 InputPointer::getEnablePastCount() const {
 
 void InputPointer::getPointingPosBasedOnScreen(TVec2f* pOut) const {
     pOut->x = (0.5f + (0.5f * mPos.x)) * static_cast< s32 >(MR::getScreenWidth());
-    pOut->y = (0.5f + (0.5f * mPos.y)) * static_cast< s32 >(NebulaFrameClock::cScreenUnitsDown);
+    pOut->y = (0.5f + (0.5f * mPos.y)) * static_cast< s32 >(NebulaFrameClock::cScreenLines);
 }

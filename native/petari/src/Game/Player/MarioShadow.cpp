@@ -1,3 +1,4 @@
+#include "Game/Screen/ImageEffectLocalUtil.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeTarget.hpp>
 #include "Game/Player/MarioShadow.hpp"
 #include "Game/Util/NativeShader.hpp"
@@ -53,8 +54,6 @@ void CollisionShadow::setMode(u32 mode) {
 
 CollisionShadow::CollisionShadow(f32 radius, f32 length) : NameObj("\223\212\211\145\203\126\203\203\203\150\203\105" /* 投影シャドウ */) {
     _2F0.zero();
-    _2FC = 0;
-    _2FE = 0;
     _300 = nullptr;
     _305 = false;
     _30C = 0.0f;
@@ -346,12 +345,9 @@ void CollisionShadow::sendZsortedVtx(bool offset) const {
 }
 
 void CollisionShadow::initCaptureTex() {
-    _2FC = 160;
-    _2FE = 160;
     {
         MR::CurrentHeapRestorer restorer(MR::getSceneHeap());
-        _300 = new JUTTexture(_2FC, _2FE);
-        MR::zeroMemory(_300->mImage, _2FC * _2FE);
+        _300 = JUTTexture::createTarget(0.25f, 0.35f);
         MR::setMarioShadowTex(_300);
     }
 
@@ -417,7 +413,9 @@ void CollisionShadow::drawAndCaptureTex(J3DModelX* pModel, const TVec3f& rPositi
     // Mario's silhouette, a pass into the shadow texture.
     const ResTIMG* image = _300->getTexInfo();
     const void* destination = image->image();
-    J3DNativeTarget::begin(destination, _2FC, _2FE, 0);
+    J3DNativeTarget::begin(destination, _300->mShareAcross, _300->mShareDown, 0);
+    // A pixel of the picture's edge stays clear for the texture's clamp.
+    const f32 cEdge = 1.0f / 160.0f;
 
     if (!(_308 & 2)) {
         setViewMtx(_24);
@@ -428,8 +426,8 @@ void CollisionShadow::drawAndCaptureTex(J3DModelX* pModel, const TVec3f& rPositi
         NebulaMtxOrtho(projection, -150.0f, 150.0f, 150.0f, -150.0f, 10.0f, 100000.0f);
         J3DNativeView::setOrthographic(projection);
         if (_307) {
-            J3DNativeView::setViewport(-32.0f, -32.0f, 64.0f + _2FC, 64.0f + _2FE, 0.0f, 1.0f);
-            J3DNativeView::setScissor(1, 1, _2FC - 2, _2FE - 2);
+            J3DNativeView::setViewport(-0.2f, -0.2f, 1.4f, 1.4f, 0.0f, 1.0f);
+            J3DNativeView::setScissor(cEdge, cEdge, 1.0f - 2.0f * cEdge, 1.0f - 2.0f * cEdge);
             pModel->setDrawView(2);
             pModel->mFlags.clear();
             pModel->mFlags._11 = true;
@@ -437,8 +435,8 @@ void CollisionShadow::drawAndCaptureTex(J3DModelX* pModel, const TVec3f& rPositi
             pModel->directDraw(nullptr);
         }
 
-        J3DNativeView::setViewport(0.0f, 0.0f, _2FC, _2FE, 0.0f, 1.0f);
-        J3DNativeView::setScissor(1, 1, _2FC - 2, _2FE - 2);
+        J3DNativeView::setViewport(0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f);
+        J3DNativeView::setScissor(cEdge, cEdge, 1.0f - 2.0f * cEdge, 1.0f - 2.0f * cEdge);
         pModel->setDrawView(2);
         pModel->mFlags.clear();
         pModel->mFlags._1E = true;
@@ -447,23 +445,22 @@ void CollisionShadow::drawAndCaptureTex(J3DModelX* pModel, const TVec3f& rPositi
     }
 
     if (!(_308 & 4)) {
-        MR::beginDesignScreenWidth();
-        // runtime/src/render/materials/vertex_color.hlsl into the alpha: the shadow faded to the edge of a circle (the
-        // alpha times the circle's).
+        // runtime/src/render/materials/vertex_color.hlsl into the alpha: the shadow faded to the edge (its alpha times the circle's).
         NebulaNativeMaterial circle;
         TDDraw::setupNative(&circle, 0, 1, 2);
-        MR::endDesignScreenWidth();
+        ImageEffectLocalUtil::setupDrawTexture();
         circle.color_write = 0;
         circle.alpha_write = 1;
         NativeShader::setBlend(circle, NEBULA_FACTOR_DST_ALPHA, NEBULA_FACTOR_ZERO);
         NativeShader::send(circle);
-        f32 y = _2FE / 2;
-        f32 x = _2FC / 2;
-        TVec3f center(x, y, 0.0f);
-        MR::beginDesignScreenWidth();
-        TDDraw::fix2Dpos(&center);
-        MR::endDesignScreenWidth();
-        TDDraw::drawFillCircle(center, _2FC / 2, 0xFFFFFFC0, 0, 16);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_FAN, 18, NEBULA_SHAPE_COLOR0);
+        J3DNativeDraw::position(0.5f, 0.5f, 0.0f);
+        J3DNativeDraw::color(0xFFFFFFC0u);
+        for (u32 i = 0; i <= 16; i++) {
+            const f32 angle = 2.0f * (static_cast< f32 >(i) / 16.0f) * PI;
+            J3DNativeDraw::position(0.5f - 0.385f * MR::cos(angle), 0.5f + 0.5f * MR::sin(angle), 0.0f);
+            J3DNativeDraw::color(0u);
+        }
     }
 
     J3DNativeTarget::end(destination, NEBULA_TARGET_ALPHA);

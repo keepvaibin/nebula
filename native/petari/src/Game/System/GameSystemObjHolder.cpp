@@ -23,7 +23,7 @@
 #include "Game/System/NebulaFrameClock.hpp"
 
 GameSystemObjHolder::GameSystemObjHolder()
-    : mObjHolder(), mParticleResHolder(), mPictureSpan(), mCaptureScreenDirector(), mScreenPreserver(), mAudioSystem(), mPlayerInputs(), mMessageHolder(), mStarPointerDirector(), mRandom(0), mLanguage(MR::getDecidedLanguageFromIPL()) {
+    : mObjHolder(), mParticleResHolder(), mCaptureScreenDirector(), mScreenPreserver(), mAudioSystem(), mPlayerInputs(), mMessageHolder(), mStarPointerDirector(), mRandom(0), mLanguage(MR::getDecidedLanguageFromIPL()) {
     initStore();
     initNameObj();
     MR::createAndAddArchive(AssetFolder::mount("/NebulaData/ErrorMessageArchive.arc", MR::getStationedHeap()), MR::getStationedHeap(),
@@ -104,8 +104,6 @@ void GameSystemObjHolder::initAudio() {
 }
 
 void GameSystemObjHolder::initPicture() {
-    // The share of the safe area's reference width the picture spans (getSafetyFrameWidth).
-    mPictureSpan = MR::isAspectRatioFlag16Per9() ? 686 : 670;
     NebulaFrameClock::show(true);
 }
 

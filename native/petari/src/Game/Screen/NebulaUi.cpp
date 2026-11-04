@@ -516,21 +516,19 @@ namespace NebulaUi {
         f32 canvasHeight;
         readScreen(&scaleX, &width, &canvasHeight);
         const f32 canvasWidth = width * scaleX;
-        const f32 frameWidth = static_cast< f32 >(MR::getScreenUnitsAcross());
-        const f32 frameHeight = static_cast< f32 >(MR::getScreenHeight());
-        const f32 x0f = ((rPlace._00 * left + rPlace._03) / canvasWidth + 0.5f) * frameWidth;
-        const f32 x1f = ((rPlace._00 * right + rPlace._03) / canvasWidth + 0.5f) * frameWidth;
-        const f32 y0f = (0.5f - (rPlace._11 * top + rPlace._13) / canvasHeight) * frameHeight;
-        const f32 y1f = (0.5f - (rPlace._11 * bottom + rPlace._13) / canvasHeight) * frameHeight;
-        const s32 x0 = x0f < 0.0f ? 0 : static_cast< s32 >(x0f);
-        const s32 y0 = y0f < 0.0f ? 0 : static_cast< s32 >(y0f);
-        const s32 x1 = static_cast< s32 >((x1f > frameWidth ? frameWidth : x1f) + 0.999f);
-        const s32 y1 = static_cast< s32 >((y1f > frameHeight ? frameHeight : y1f) + 0.999f);
+        const f32 x0f = (rPlace._00 * left + rPlace._03) / canvasWidth + 0.5f;
+        const f32 x1f = (rPlace._00 * right + rPlace._03) / canvasWidth + 0.5f;
+        const f32 y0f = 0.5f - (rPlace._11 * top + rPlace._13) / canvasHeight;
+        const f32 y1f = 0.5f - (rPlace._11 * bottom + rPlace._13) / canvasHeight;
+        const f32 x0 = x0f < 0.0f ? 0.0f : x0f;
+        const f32 y0 = y0f < 0.0f ? 0.0f : y0f;
+        const f32 x1 = x1f > 1.0f ? 1.0f : x1f;
+        const f32 y1 = y1f > 1.0f ? 1.0f : y1f;
         if (x1 <= x0 || y1 <= y0) {
             return;
         }
         J3DNativeView::setScissor(x0, y0, x1 - x0, y1 - y0);
         pPane->Draw(rDrawInfo);
-        J3DNativeView::setScissor(0, 0, static_cast< u32 >(frameWidth), static_cast< u32 >(frameHeight));
+        J3DNativeView::setScissor(0.0f, 0.0f, 1.0f, 1.0f);
     }
 };  // namespace NebulaUi

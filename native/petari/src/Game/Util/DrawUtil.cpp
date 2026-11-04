@@ -66,17 +66,15 @@ namespace MR {
     }
 
     void setDefaultViewportAndScissor() {
-        s32 width = MR::getScreenUnitsAcross();
-        s32 height = ::getScreenHeightInline();
-        J3DNativeView::setViewport(0.0f, 0.0f, width, height, 0.0f, 1.0f);
-        J3DNativeView::setScissor(0, 0, width, height);
+        J3DNativeView::setViewport(0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f);
+        J3DNativeView::setScissor(0.0f, 0.0f, 1.0f, 1.0f);
     }
 
-    // The whole screen in canvas units, for a fill or a picture over it.
+    // The whole screen, for a fill or a picture over it.
     void setupScreen2D() {
         setDefaultViewportAndScissor();
         Mtx44 projection;
-        NebulaMtxOrtho(projection, 0.0f, ::getScreenHeightInline(), 0.0f, getScreenUnitsAcross(), -30000.0f, 30000.0f);
+        NebulaMtxOrtho(projection, 0.0f, ::getScreenHeightInline(), 0.0f, getScreenWidth(), -30000.0f, 30000.0f);
         J3DNativeView::setOrthographic(projection);
         Mtx identity;
         NebulaMtxIdentity(identity);
@@ -95,7 +93,7 @@ namespace MR {
                            NEBULA_CULL_NONE);
         material.constants[4] = 0.0f;
         NativeShader::send(material);
-        const f32 width = getScreenUnitsAcross();
+        const f32 width = getScreenWidth();
         const f32 height = ::getScreenHeightInline();
         const u32 color = static_cast< u32 >(rColor.r) << 24 | static_cast< u32 >(rColor.g) << 16 |
                           static_cast< u32 >(rColor.b) << 8 | rColor.a;
@@ -120,7 +118,7 @@ namespace MR {
         material.constants[17] = rTexture.getTransparency() ? 1.0f : 0.0f;
         NativeShader::setTexture(material, 0, &rTexture);
         NativeShader::send(material);
-        const f32 width = getScreenUnitsAcross();
+        const f32 width = getScreenWidth();
         const f32 height = ::getScreenHeightInline();
         J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
         J3DNativeDraw::position(0.0f, 0.0f, 0.0f);
@@ -166,8 +164,8 @@ namespace MR {
 
     // The frame's depth cleared to far, with the view, matrix and pixel state the next draws start from.
     void clearZBuffer() {
-        u16 width = NebulaFrameClock::cScreenUnitsAcross;
-        u16 height = NebulaFrameClock::cScreenUnitsDown;
+        const f32 width = MR::getScreenWidth();
+        const f32 height = NebulaFrameClock::cScreenLines;
         Mtx44 projMtx;
         NebulaMtxOrtho(projMtx, 0.0f, height, 0.0f, width, 0.0f, 1.0f);
         J3DNativeView::setOrthographic(projMtx);
@@ -181,16 +179,16 @@ namespace MR {
         J3DPass::writeAlpha(false);
         J3DPass::depth(true, NEBULA_COMPARE_ALWAYS, true);
         J3DPass::cull(NEBULA_CULL_BACK);
-        J3DNativeTarget::clearFrame(0, 0, width, height, 0, NEBULA_CLEAR_DEPTH);
+        J3DNativeTarget::clearFrame(0, NEBULA_CLEAR_DEPTH);
         J3DPass::writeColor(true);
     }
 
     // The stencil zero over the whole screen.
     void clearStencil() {
-        const f32 width = NebulaFrameClock::cScreenUnitsAcross;
-        const f32 height = NebulaFrameClock::cScreenUnitsDown;
+        const f32 width = MR::getScreenWidth();
+        const f32 height = NebulaFrameClock::cScreenLines;
         Mtx44 projection;
-        NebulaMtxOrtho(projection, 0.0f, ::getScreenHeightInline(), 0.0f, getScreenUnitsAcross(), -1.0f, 1.0f);
+        NebulaMtxOrtho(projection, 0.0f, ::getScreenHeightInline(), 0.0f, getScreenWidth(), -1.0f, 1.0f);
         J3DNativeView::setOrthographic(projection);
         J3DPass::positionMatrix(0);
         Mtx matrix;
@@ -221,7 +219,7 @@ namespace MR {
         J3DNativeShape::setPosition(0, mtxImm);
         J3DPass::positionMatrix(0);
         Mtx44 projMtx;
-        NebulaMtxOrtho(projMtx, 0.0f, ::getScreenHeightInline(), 0.0f, MR::getScreenUnitsAcross(), -1.0f, 1.0f);
+        NebulaMtxOrtho(projMtx, 0.0f, ::getScreenHeightInline(), 0.0f, MR::getScreenWidth(), -1.0f, 1.0f);
         J3DNativeView::setOrthographic(projMtx);
         // runtime/src/render/materials/flat_color.hlsl in the colour, depth off, no culling; the blending and writes
         // the drawing state has (its callers set them).
@@ -251,7 +249,7 @@ namespace MR {
 
     void fillScreen(const NebulaColor8& color) {
         fillScreenSetup(color);
-        u16 width = getScreenUnitsAcross();
+        u16 width = getScreenWidth();
         u16 height = getScreenHeight();
         fillScreenArea(TVec2s(0, 0), TVec2s(width, height));
     }

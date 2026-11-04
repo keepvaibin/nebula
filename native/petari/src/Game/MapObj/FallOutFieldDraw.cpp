@@ -36,22 +36,22 @@ FallOutFieldDraw::FallOutFieldDraw(const char* pName) : NameObj(pName), _C() {
     MR::createClipAreaHolder();
     MR::connectToScene(this, MR::MovementType_None, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_FallOutFieldDraw);
     mDepthKey = ImageEffectLocalUtil::createFrameKey();
-    mMask = new JUTTexture(MR::getScreenUnitsAcross() / 2, MR::getScreenUnitsDown() / 2);
+    mMask = JUTTexture::createTarget(0.5f, 0.5f);
     mMask->mWrapS = NEBULA_WRAP_CLAMP;
     mMask->mWrapT = NEBULA_WRAP_CLAMP;
     mMask->mMinType = NEBULA_FILTER_LINEAR;
     mMask->mMagType = NEBULA_FILTER_LINEAR;
-    mBlurScratch = new JUTTexture(MR::getScreenUnitsAcross() / 4, MR::getScreenUnitsDown() / 4);
+    mBlurScratch = JUTTexture::createTarget(0.25f, 0.25f);
     mBlurScratch->mWrapS = NEBULA_WRAP_CLAMP;
     mBlurScratch->mWrapT = NEBULA_WRAP_CLAMP;
     mBlurScratch->mMinType = NEBULA_FILTER_LINEAR;
     mBlurScratch->mMagType = NEBULA_FILTER_LINEAR;
-    mEdge = new JUTTexture(MR::getScreenUnitsAcross() / 4, MR::getScreenUnitsDown() / 4);
+    mEdge = JUTTexture::createTarget(0.25f, 0.25f);
     mEdge->mWrapS = NEBULA_WRAP_CLAMP;
     mEdge->mWrapT = NEBULA_WRAP_CLAMP;
     mEdge->mMinType = NEBULA_FILTER_LINEAR;
     mEdge->mMagType = NEBULA_FILTER_LINEAR;
-    mEdgeBlurred = new JUTTexture(MR::getScreenUnitsAcross() / 4, MR::getScreenUnitsDown() / 4);
+    mEdgeBlurred = JUTTexture::createTarget(0.25f, 0.25f);
     mEdgeBlurred->mWrapS = NEBULA_WRAP_CLAMP;
     mEdgeBlurred->mWrapT = NEBULA_WRAP_CLAMP;
     mEdgeBlurred->mMinType = NEBULA_FILTER_LINEAR;
@@ -110,25 +110,25 @@ void FallOutFieldDraw::draw() const {
     sendFlat(::sFillColor, false);
     J3DNativeView::setZScaleOffset(0.0f, 0.0f);
     J3DPass::stencil(filled, NEBULA_STENCIL_KEEP);
-    ImageEffectLocalUtil::sendTextureVertex(1, 0);
+    ImageEffectLocalUtil::sendTextureVertex();
     J3DPass::stencil(NEBULA_STENCIL_OFF, NEBULA_STENCIL_KEEP);
 
     // The mark as a half-size mask (arg 0: a pixel with any mark under it, else one with all marked), halved again and
     // blurred, each into its own texture, for the glow along the edge.
     J3DPass::writeColor(false);
     J3DPass::writeAlpha(true);
-    J3DNativeTarget::beginOverFrame(mMask->mImage, mMask->getWidth(), mMask->getHeight(), 0, nullptr, NEBULA_TARGET_RGBA, mDepthKey->mImage);
+    J3DNativeTarget::beginOverFrame(mMask->mImage, mMask->mShareAcross, mMask->mShareDown, 0, nullptr, NEBULA_TARGET_RGBA, mDepthKey->mImage);
     NebulaNativeMaterial mask;
     NativeShader::init(mask, NEBULA_SHADER_FRAME_DEPTH, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false, NEBULA_CULL_NONE);
     mask.constants[0] = _C ? 1.0f : 2.0f;
     NativeShader::setTexture(mask, 0, mDepthKey);
     NativeShader::send(mask);
-    ImageEffectLocalUtil::sendTextureVertex(2, 0);
+    ImageEffectLocalUtil::sendTextureVertex();
     J3DNativeTarget::end(mMask->mImage, NEBULA_TARGET_ALPHA);
 
     ImageEffectLocalUtil::setMode(ImageEffectLocalUtil::Mode_Alpha, ::sEdgeColor);
-    J3DNativeTarget::begin(mEdge->mImage, mEdge->getWidth(), mEdge->getHeight(), 0);
-    ImageEffectLocalUtil::drawTexture(mMask, 4, 0, 255, ImageEffectLocalUtil::TexDrawType_0);
+    J3DNativeTarget::begin(mEdge->mImage, mEdge->mShareAcross, mEdge->mShareDown, 0);
+    ImageEffectLocalUtil::drawTexture(mMask, 255, ImageEffectLocalUtil::TexDrawType_0);
     J3DNativeTarget::end(mEdge->mImage, NEBULA_TARGET_ALPHA);
 
     ImageEffectLocalUtil::blurTexture(mEdge, mBlurScratch, mEdgeBlurred, 0.004f, NEBULA_TARGET_ALPHA, 5.0f);
@@ -137,12 +137,12 @@ void FallOutFieldDraw::draw() const {
     J3DPass::writeColor(true);
     J3DPass::writeAlpha(false);
     ImageEffectLocalUtil::setMode(ImageEffectLocalUtil::Mode_Edge, ::sEdgeColor);
-    ImageEffectLocalUtil::drawTexture(mEdgeBlurred, 1, 0, 255, ImageEffectLocalUtil::TexDrawType_2);
+    ImageEffectLocalUtil::drawTexture(mEdgeBlurred, 255, ImageEffectLocalUtil::TexDrawType_2);
 
     sendFlat(::sFillColor, true);
     J3DNativeView::setZScaleOffset(0.0f, 1.0f);
     J3DPass::stencil(filled, NEBULA_STENCIL_KEEP);
-    ImageEffectLocalUtil::sendTextureVertex(1, 0);
+    ImageEffectLocalUtil::sendTextureVertex();
     J3DPass::stencil(NEBULA_STENCIL_OFF, NEBULA_STENCIL_KEEP);
     J3DNativeView::setZScaleOffset(1.0f, 0.0f);
 

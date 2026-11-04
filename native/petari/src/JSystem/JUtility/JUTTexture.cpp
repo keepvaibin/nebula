@@ -74,14 +74,20 @@ void JUTTexture::initTexObj() {
 
 void JUTTexture::frameColor() {
     if (mFlag & 0x1) {
-        J3DNativeTarget::framePass(mImage, NEBULA_TARGET_RGB);
+        J3DNativeTarget::framePass(mImage);
     }
 }
 
-void JUTTexture::frameColorAlpha() {
-    if (mFlag & 0x1) {
-        J3DNativeTarget::framePass(mImage, NEBULA_TARGET_RGBA);
-    }
+JUTTexture* JUTTexture::createTarget(f32 across, f32 down) {
+    JUTTexture* pTexture = new JUTTexture(4, 4);
+    __builtin_memset(pTexture->mImage, 0, 16);
+    pTexture->mShareAcross = across;
+    pTexture->mShareDown = down;
+    ResTIMG* pInfo = const_cast< ResTIMG* >(pTexture->mTIMG);
+    pInfo->mWidth = static_cast< u16 >(across * cAuthoredAcross + 0.5f);
+    pInfo->mHeight = static_cast< u16 >(down * cAuthoredDown + 0.5f);
+    pTexture->initTexObj();
+    return pTexture;
 }
 
 

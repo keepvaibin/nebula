@@ -394,7 +394,7 @@ void MarioActor::init2(const TVec3f& rA, const TVec3f& rB, s32 initialAnimation)
     _1D1 = 0;
     _A24 = 0;
     _A25 = 0;
-    _1D8 = new FBO[MR::getScreenUnitsAcross()];
+    _1D8 = new FBO[4];  // the frame take's key
     _1E4 = 0.0f;
     _1E8 = 0;
     _1EC = 0.0f;
@@ -2854,12 +2854,6 @@ bool MarioActor::binderFilter(const Triangle* pTriangle) {
 
     return false;
 }
-
-namespace MR {
-    s32 getScreenUnitsAcross() {
-        return NebulaFrameClock::cScreenUnitsAcross;
-    }
-};  // namespace MR
 
 void MarioActor::setPunchHitTimer(u8 punchHitTime) {
     if (_944 == 0) {

@@ -182,6 +182,7 @@ struct Record {
     std::array<std::uint64_t, 2> marker{};
     // A target pass (TargetBegin and TargetEnd, the target at `key`): its size, clear colour (RGBA) and depth.
     std::uint32_t target_width = 0, target_height = 0;
+    bool target_pixels = false;  // TargetBegin: target_width x target_height are pixels, not a share of the frame
     std::uint32_t target_clear_rgba = 0;
     // TargetBegin: the textures that are the frame and its depth during the pass (0: not sampled), the frame carrying
     // target_channels.

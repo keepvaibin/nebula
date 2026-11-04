@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 125u
+#define NEBULA_GAME_API_VERSION 126u
 
 /* Viewports, scissors, clears, target sizes and picture points count this many units across a frame on each axis. */
 #define NEBULA_FRAME_UNITS 65536.0f
@@ -1110,7 +1110,7 @@ typedef struct NebulaHostServices {
                        const NebulaShapeCurrent* current, const NebulaShapeTexGen* texgens, uint32_t texgen_count, const NebulaPassState* pass);
     /* The projection the draws after this use: `terms` the six of a perspective or orthographic matrix. */
     void (*view_projection)(void* user, int orthographic, const float terms[6]);
-    /* The viewport: left, top, width, height (the game's units), near and far depth (0-1). */
+    /* The viewport: left, top, width, height (NEBULA_FRAME_UNITS is all of the pass's target), near and far depth (0-1). */
     void (*view_viewport)(void* user, const float viewport[6]);
     void (*view_scissor)(void* user, float left, float top, float width, float height);
     /* Light `index` (0-7). */
@@ -1121,9 +1121,11 @@ typedef struct NebulaHostServices {
     /* Vertices drawn as the game sends them (NebulaImmediate). */
     void (*immediate)(void* user, const NebulaImmediate* draw);
     /* A pass into a texture target the renderer owns (E-07): the records until target_end draw into it, not the
-       frame; its top left `width` x `height` (in NEBULA_FRAME_UNITS) cleared to `clear_rgba`
+       frame; `width` x `height` of the frame (NEBULA_FRAME_UNITS is all of it), cleared to `clear_rgba`
        (R << 24 | G << 16 | B << 8 | A) and depth to far. */
     void (*target_begin)(void* user, uint64_t key, uint32_t width, uint32_t height, uint32_t clear_rgba);
+    /* The same at `width` x `height` pixels of its own. */
+    void (*target_begin_pixels)(void* user, uint64_t key, uint32_t width, uint32_t height, uint32_t clear_rgba);
     /* As target_begin, and until target_end the pass samples the frame: texture `frame_key` is the frame carrying
        `frame_channels` (NebulaTargetChannels), texture `depth_key` its depth. A key of 0: not sampled. */
     void (*target_begin_over_frame)(void* user, uint64_t key, uint32_t width, uint32_t height, uint32_t clear_rgba,
@@ -1133,9 +1135,8 @@ typedef struct NebulaHostServices {
     void (*target_end)(void* user, uint64_t key, uint32_t channels);
     /* Clears channels of the open target pass (`channels`: 1 colour, 2 alpha, 4 depth) to `clear_rgba` and far. */
     void (*target_clear)(void* user, uint32_t clear_rgba, uint32_t channels);
-    /* The whole frame drawn so far becomes texture `key` as target_end's pictures do, carrying `channels`
-       (NebulaTargetChannels); `flags`: NebulaFramePassFlags. */
-    void (*frame_pass)(void* user, uint64_t key, uint32_t channels);
+    /* The whole frame drawn so far becomes texture `key` as target_end's pictures do. */
+    void (*frame_pass)(void* user, uint64_t key);
     /* The frame drawn so far becomes texture `key` itself, every channel; the frame goes on in another target, which
        the next draw must fill whole. */
     void (*frame_take)(void* user, uint64_t key);
@@ -1157,8 +1158,7 @@ typedef struct NebulaHostServices {
     uint32_t (*screen_probe_results)(void* user, uint32_t channel, NebulaScreenProbe* probes, uint32_t capacity);
     /* Clears channels (NebulaClearChannels) of the frame's rectangle at `left`, `top` (`width` x `height`, the
        viewport's units) to `clear_rgba` (R << 24 | G << 16 | B << 8 | A) and depth to far. */
-    void (*frame_clear)(void* user, uint32_t left, uint32_t top, uint32_t width, uint32_t height, uint32_t clear_rgba,
-                        uint32_t channels);
+    void (*frame_clear)(void* user, uint32_t clear_rgba, uint32_t channels);
     /* The frame drawn so far is the picture shown. */
     void (*frame_show)(void* user);
     /* The game's frame is complete (its picture was shown earlier): the renderer takes every record made before. */

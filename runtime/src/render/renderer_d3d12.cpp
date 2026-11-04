@@ -6918,12 +6918,13 @@ bool RendererD3D12::begin_target_pass(std::uint64_t key, std::uint32_t width, st
         return false;
     }
     TargetSlot& slot = target_slots_[key];
-    const bool kept = slot.set.color && slot.set.map == frame_ && slot.width == width && slot.height == height;
+    const FrameMap map(width, height);
+    const bool kept = slot.set.color && slot.set.map == map;
     // A new set starts as a render target; the pass's first clear (RenderCore) fills it. Its copy views are written
     // per use (no persistent descriptors per key).
     if (!kept) {
-        if (!create_scene_set(slot.set, slot.rtv_heap, slot.dsv_heap, frame_, false, false, 1u, false, width,
-                            height, true)) {
+        if (!create_scene_set(slot.set, slot.rtv_heap, slot.dsv_heap, map, false, false, 1u, false, kFrameUnits,
+                            kFrameUnits, true)) {
             target_slots_.erase(key);
             return false;
         }

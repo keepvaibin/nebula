@@ -172,7 +172,7 @@ void StarPointerPeekZ::setDrawSyncToken() {
             mInfos[channel]->mDrawReady = true;
 
             TVec2f pos;
-            MR::convertScreenPosToCanvasPos(&pos, mInfos[channel]->mPos);
+            MR::convertScreenPosToFrame(&pos, mInfos[channel]->mPos);
             probes[channel].x = pos.x;
             probes[channel].y = pos.y;
         } else {

@@ -452,14 +452,8 @@ namespace TDDraw {
         f32 w;
         f32 projectedZ = (depth * pProjection[6]) / (depth + pProjection[5] * (pViewport[5] - pViewport[4]));
         w = pProjection[5] / (pProjection[6] - projectedZ);
-        f32 x;
-        if (MR::isScreen16Per9()) {
-            x = ((rScreen.x * MR::getScreenUnitsAcross() / MR::getScreenWidth() - (pViewport[0] + pViewport[2] / 2.0f)) / w) / (pViewport[2] / 2.0f);
-        } else {
-            x = ((rScreen.x - (pViewport[0] + pViewport[2] / 2.0f)) / w) / (pViewport[2] / 2.0f);
-        }
-
-        f32 y = (-(rScreen.y - (pViewport[1] + pViewport[3] / 2.0f)) / w) / (pViewport[3] / 2.0f);
+        const f32 x = ((rScreen.x / MR::getScreenWidth() - (pViewport[0] + pViewport[2] / 2.0f)) / w) / (pViewport[2] / 2.0f);
+        const f32 y = (-(rScreen.y / MR::getScreenHeight() - (pViewport[1] + pViewport[3] / 2.0f)) / w) / (pViewport[3] / 2.0f);
         TVec3f viewPos;
         if (pProjection[0] == 0.0f) {
             viewPos.z = (projectedZ - pProjection[6]) / pProjection[5];
@@ -490,12 +484,9 @@ namespace TDDraw {
         const f32 clipY = eyeY * rProjection.mMtx[1][1] + eyeZ * rProjection.mMtx[1][2];
         const f32 clipZ = eyeZ * rProjection.mMtx[2][2] + rProjection.mMtx[2][3];
         const f32 invW = 1.0f / -eyeZ;
-        pDest->x = clipX * viewport[2] / 2 * invW + viewport[0] + viewport[2] / 2;
-        pDest->y = -clipY * viewport[3] / 2 * invW + viewport[1] + viewport[3] / 2;
+        pDest->x = (clipX * viewport[2] / 2 * invW + viewport[0] + viewport[2] / 2) * MR::getScreenWidth();
+        pDest->y = (-clipY * viewport[3] / 2 * invW + viewport[1] + viewport[3] / 2) * MR::getScreenHeight();
         pDest->z = clipZ * (viewport[5] - viewport[4]) * invW + viewport[5];
-        if (MR::isScreen16Per9()) {
-            pDest->x *= static_cast< f32 >(MR::getScreenWidth()) / MR::getScreenUnitsAcross();
-        }
     }
 
     void project2D(TVec2f* pDest, const TVec3f& rPosition) {
@@ -503,12 +494,6 @@ namespace TDDraw {
         project2D(&screen, rPosition);
         pDest->x = screen.x;
         pDest->y = screen.y;
-    }
-
-    void fix2Dpos(TVec3f* pPosition) {
-        if (MR::isScreen16Per9()) {
-            pPosition->x *= static_cast< f32 >(MR::getScreenWidth()) / MR::getScreenUnitsAcross();
-        }
     }
 
 };  // namespace TDDraw

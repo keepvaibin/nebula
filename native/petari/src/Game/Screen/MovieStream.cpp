@@ -1,3 +1,4 @@
+#include "Game/Util/ScreenUtil.hpp"
 #include "Game/Screen/MovieStream.hpp"
 #include "Game/Screen/MovieDraw.hpp"
 #include "Game/System/NebulaClock.hpp"
@@ -269,7 +270,7 @@ s32 MovieStream::drawCurrentFrame(u32 x, u32 y, u32 polyW, u32 polyH) {
 
     movieFrame(sMovieName, mHeader.mFrames > 0 ? mPlanesFrame % static_cast< s32 >(mHeader.mFrames) : mPlanesFrame, mHeader.mFrameRate, mPlaneY, mPlaneU,
                mPlaneV, mVideoInfo.mWidth, mVideoInfo.mHeight);
-    MovieDraw::drawFrame(NebulaFrameClock::cScreenUnitsAcross, NebulaFrameClock::cScreenUnitsDown, mPlaneY, mPlaneU, mPlaneV, x, y, mVideoInfo.mWidth,
+    MovieDraw::drawFrame(MR::getScreenWidth(), MR::getScreenHeight(), mPlaneY, mPlaneU, mPlaneV, x, y, mVideoInfo.mWidth,
                          mVideoInfo.mHeight, polyW, polyH);
 
     return mPlanesFrame;

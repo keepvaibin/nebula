@@ -37,7 +37,7 @@ JUTTexture* ImageEffectResource::createTexture(f32 scale) {
 
     MR::CurrentHeapRestorer heapRestorer(MR::getSceneHeap());
 
-    pTexture = new JUTTexture(scale * (s32)NebulaFrameClock::cScreenUnitsAcross, scale * (s32)NebulaFrameClock::cScreenUnitsDown);
+    pTexture = JUTTexture::createTarget(scale, scale);
     pTexture->mWrapS = NEBULA_WRAP_CLAMP;
     pTexture->mWrapT = NEBULA_WRAP_CLAMP;
     pTexture->mMinType = NEBULA_FILTER_LINEAR;

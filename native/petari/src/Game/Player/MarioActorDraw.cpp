@@ -126,7 +126,7 @@ void MarioActor::initDrawAndModel() {
 
     {
         MR::CurrentHeapRestorer restorer(static_cast< NebulaArena* >(MR::getSceneHeap()));
-        _B7C = new JUTTexture(0x80, 0x40);
+        _B7C = JUTTexture::createTarget(0.2f, 0.14f);
 
         for (u32 i = 0; i < 2; i++) {
             mMaskTextures[i] = new JUTTexture(8, 8, NEBULA_TEXTURE_LINEAR_LA8);

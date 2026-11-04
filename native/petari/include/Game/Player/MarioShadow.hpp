@@ -54,8 +54,6 @@ public:
     u8 _70[128];
     s32 _F0[128];
     TVec3f _2F0;
-    u16 _2FC;
-    u16 _2FE;
     JUTTexture* _300;
     u8 _304;
     bool _305;

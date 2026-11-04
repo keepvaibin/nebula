@@ -21,7 +21,8 @@ void Mii_SetupTextureDraw(void) {
 // the renderer's picture of the pass (J3DNativeTargetEnd), sampled where the game names `buffer`.
 void Mii_BeginTexture(void* buffer, u16 width, u16 height, u32 clearRgba) {
     Mii_SetupTextureDraw();
-    J3DNativeTargetBegin(buffer, width, height, clearRgba);
+    // Twice the texels the parts are laid out in, whatever the frame's size.
+    J3DNativeTargetBeginPixels(buffer, width * 2u, height * 2u, clearRgba);
 }
 
 void Mii_MakeTexture(const Mii_CharInfo* info, u8** buffers, MiiResolution resolution) {
@@ -66,10 +67,10 @@ void Mii_MakeTexture(const Mii_CharInfo* info, u8** buffers, MiiResolution resol
     Mii_Texture* eyeBlinkTex;
     Mii_Texture* mouthOpenTex;
 
-    u32 sx;
-    u32 sy;
-    u32 sw;
-    u32 sh;
+    f32 sx;
+    f32 sy;
+    f32 sw;
+    f32 sh;
 
     u8* ptr;
 
@@ -346,7 +347,7 @@ void Mii_MakeTexture(const Mii_CharInfo* info, u8** buffers, MiiResolution resol
         ptr = buffers[i];
 
         if (resolution & 256) {
-            J3DNativeViewSetScissor(0, 0, 256, 256);
+            J3DNativeViewSetScissor(0.0f, 0.0f, 1.0f, 1.0f);
             Mii_SetFaceParts(&infos[i], &parts[i], MII_I_MASKRSL_256);
             Mii_BeginTexture(ptr, 256, 256, 0x00000000);
             Mii_Capture(ptr, &infos[i], &parts[i], MII_I_MASKRSL_256);
@@ -355,7 +356,7 @@ void Mii_MakeTexture(const Mii_CharInfo* info, u8** buffers, MiiResolution resol
         }
 
         if (resolution & 128) {
-            J3DNativeViewSetScissor(0, 0, 128, 128);
+            J3DNativeViewSetScissor(0.0f, 0.0f, 1.0f, 1.0f);
             Mii_SetFaceParts(&infos[i], &parts[i], MII_I_MASKRSL_128);
             Mii_BeginTexture(ptr, 128, 128, 0x00000000);
             Mii_Capture(ptr, &infos[i], &parts[i], MII_I_MASKRSL_128);
@@ -364,7 +365,7 @@ void Mii_MakeTexture(const Mii_CharInfo* info, u8** buffers, MiiResolution resol
         }
 
         if (resolution & 64) {
-            J3DNativeViewSetScissor(0, 0, 64, 64);
+            J3DNativeViewSetScissor(0.0f, 0.0f, 1.0f, 1.0f);
             Mii_SetFaceParts(&infos[i], &parts[i], MII_I_MASKRSL_64);
             Mii_BeginTexture(ptr, 64, 64, 0x00000000);
             Mii_Capture(ptr, &infos[i], &parts[i], MII_I_MASKRSL_64);
@@ -373,7 +374,7 @@ void Mii_MakeTexture(const Mii_CharInfo* info, u8** buffers, MiiResolution resol
         }
 
         if (resolution & 32) {
-            J3DNativeViewSetScissor(0, 0, 32, 32);
+            J3DNativeViewSetScissor(0.0f, 0.0f, 1.0f, 1.0f);
             Mii_SetFaceParts(&infos[i], &parts[i], MII_I_MASKRSL_32);
             Mii_BeginTexture(ptr, 32, 32, 0x00000000);
             Mii_Capture(ptr, &infos[i], &parts[i], MII_I_MASKRSL_32);
@@ -443,12 +444,12 @@ void Mii_InitPartTexture(Mii_TexObj* tobj) {
     J3DNativeTextureSetFilter(&tobj->tobj, tex->minFilt, tex->magFilt, tex->minLOD, tex->maxLOD, tex->lodBias, tex->enableEdgeLOD, tex->enableMaxAniso);
 }
 
-void Mii_Setup2DCameraAndParam(void) {
+void Mii_Setup2DCameraAndParam(f32 size) {
     Mtx44 proj;
 
-    NebulaMtxOrtho(proj, 0.0f, 448.0f, 0.0f, 608.0f, 0.0f, 1.0f);
+    NebulaMtxOrtho(proj, 0.0f, size, 0.0f, size, 0.0f, 1.0f);
     J3DNativeViewSetOrthographic(proj);
-    J3DNativeViewSetViewport(0.0f, 0.0f, 608.0f, 448.0f, 0.0f, 1.0f);
+    J3DNativeViewSetViewport(0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f);
     J3DNativeViewSetZScaleOffset(1.0f, 0.0f);
     J3DPassCull(NEBULA_CULL_BACK);
     J3DPassDepth(0, NEBULA_COMPARE_LEQUAL, 0);
@@ -580,7 +581,7 @@ void Mii_Capture(u8* buffer, const Mii_CharInfo* info, Mii_FaceParts* face, MII_
     f32 vp[6];
 
     J3DNativeViewGetViewportv(vp);
-    Mii_Setup2DCameraAndParam();
+    Mii_Setup2DCameraAndParam((f32)resolution);
 
     J3DPassBlend(NEBULA_FACTOR_INV_DST_ALPHA, NEBULA_FACTOR_DST_ALPHA);
     J3DPassWriteColor(1);

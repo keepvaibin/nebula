@@ -77,7 +77,7 @@ void StarPointerController::calcPastPointingPosOnScreen(TVec2f* pPos, s32 idx) c
     pPos->x += 1.0f;
     pPos->y += 1.0f;
     pPos->x *= MR::getScreenWidth() * 0.5f;
-    pPos->y *= static_cast< s32 >(NebulaFrameClock::cScreenUnitsDown) * 0.5f;
+    pPos->y *= static_cast< s32 >(NebulaFrameClock::cScreenLines) * 0.5f;
 }
 
 void StarPointerController::updateDpdInfo() {

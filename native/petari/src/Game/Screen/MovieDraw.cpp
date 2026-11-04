@@ -32,8 +32,8 @@ namespace MovieDraw {
         Mtx44 projection;
         NebulaMtxOrtho(projection, 0.0f, screenHeight, 0.0f, screenWidth, 0.0f, -1.0f);
         J3DNativeView::setOrthographic(projection);
-        J3DNativeView::setViewport(0.0f, 0.0f, screenWidth, screenHeight, 0.0f, 1.0f);
-        J3DNativeView::setScissor(0, 0, screenWidth, screenHeight);
+        J3DNativeView::setViewport(0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f);
+        J3DNativeView::setScissor(0.0f, 0.0f, 1.0f, 1.0f);
         Mtx identity;
         NebulaMtxIdentity(identity);
         J3DNativeShape::setPosition(0, identity);

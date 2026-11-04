@@ -155,8 +155,6 @@ namespace J3DNativeState {
     // The projection before the game sets its own (orthographic, -1..1 depth).
     static const f32 sDefaultProjection[7] = {1.0f, 0.0f, 1.0f, 0.0f, -1.0f, -2.0f, 0.0f};
     // Until the game sets its own view.
-    const u16 cDefaultWidth = 640;
-    const u16 cDefaultHeight = 480;
 
     void initDefaults() {
         const NebulaColor8 black = {0, 0, 0, 0};
@@ -175,11 +173,11 @@ namespace J3DNativeState {
         J3DPass::positionMatrix(0);
         J3DNativeShape::setTexture(J3DNativeShape::kIdentityTexture, identity, 3);
         J3DNativeShape::setPostTexture(J3DNativeShape::kIdentityPost, identity);
-        J3DNativeView::setViewport(0.0f, 0.0f, cDefaultWidth, cDefaultHeight, 0.0f, 1.0f);
+        J3DNativeView::setViewport(0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f);
         J3DNativeView::setProjectionv(sDefaultProjection);
 
         J3DPass::cull(NEBULA_CULL_BACK);
-        J3DNativeView::setScissor(0, 0, cDefaultWidth, cDefaultHeight);
+        J3DNativeView::setScissor(0.0f, 0.0f, 1.0f, 1.0f);
         for (u8 channel = 0; channel < 2; channel++) {
             J3DPass::lightAmbient(channel, black);
             J3DPass::lightMaterial(channel, white);
@@ -316,14 +314,14 @@ namespace J3DPass {
 
     void lineWidth(f32 pixels, bool spreadTexture) {
         J3DNativeShape::flushState();
-        sPass.line_width = pixels * J3DNativeView::cUnitsDown;
+        sPass.line_width = pixels * (NEBULA_FRAME_UNITS / 456.0f);  // authored for a picture this many lines tall
         sPass.line_divisor = spreadTexture ? 1 : 0;
         sPass.line_offsets = spreadTexture ? 7 : 0;
     }
 
     void pointSize(f32 pixels, bool spreadTexture) {
         J3DNativeShape::flushState();
-        sPass.point_size = pixels * J3DNativeView::cUnitsDown;
+        sPass.point_size = pixels * (NEBULA_FRAME_UNITS / 456.0f);  // authored for a picture this many lines tall
         sPass.point_divisor = spreadTexture ? 1 : 0;
         sPass.point_offsets = spreadTexture ? 7 : 0;
     }

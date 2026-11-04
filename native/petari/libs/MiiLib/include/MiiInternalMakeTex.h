@@ -54,7 +54,7 @@ void Mii_BeginTexture(void* buffer, u16 width, u16 height, u32 clearRgba);
 void Mii_MakeTexture(const Mii_CharInfo* info, u8** buffer,
                      MiiResolution resolution);
 void Mii_InitPartTexture(Mii_TexObj* tobj);
-void Mii_Setup2DCameraAndParam(void);
+void Mii_Setup2DCameraAndParam(f32 size);
 void Mii_SetTev4Mole(void);
 void Mii_SetTev4Mouth(u32 color);
 void Mii_SetTev4Eye(u32 color, u32 type);

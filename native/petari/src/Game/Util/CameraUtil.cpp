@@ -123,8 +123,7 @@ namespace MR {
 
     void sceneOpaqueEnd() {
         f32 view[3][4];
-        J3DNativeView::hostView(::getCameraContext()->mProjection, 0.0f, 0.0f, MR::getScreenUnitsAcross(),
-                                MR::getScreenHeight(), 0.0f, 1.0f, &view[0][0]);
+        J3DNativeView::hostView(::getCameraContext()->mProjection, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f, &view[0][0]);
         NebulaRender::sceneMarker(NEBULA_SCENE_3D_OPAQUE_END, view);
     }
 

@@ -54,12 +54,12 @@ void GalaxyMapGalaxyPlain::adjustTransInScreen() {
 
     TVec2f plateTrans(paneTrans);
 
-    if (galaxyNameBox.i.x < MR::getSafetyFrameLeft()) {
-        plateTrans.x += -(galaxyNameBox.i.x - MR::getSafetyFrameLeft());
+    if (galaxyNameBox.i.x < MR::getScreenMargin()) {
+        plateTrans.x += -(galaxyNameBox.i.x - MR::getScreenMargin());
     }
 
-    if (MR::getSafetyFrameRight() < galaxyNameBox.f.x) {
-        plateTrans.x += MR::getSafetyFrameRight() - galaxyNameBox.f.x;
+    if ((MR::getScreenWidth() - MR::getScreenMargin()) < galaxyNameBox.f.x) {
+        plateTrans.x += (MR::getScreenWidth() - MR::getScreenMargin()) - galaxyNameBox.f.x;
     }
 
     mNamePlate->setTrans(plateTrans);

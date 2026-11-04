@@ -286,7 +286,7 @@ void LensFlareDirector::controlFlare(s32 area, bool hasBrightObj) {
     mGlow->mPosition.set(flarePos);
     mLine->mPosition.set(flarePos);
 
-    TVec2f screenCenter(MR::getScreenWidth() / 2.0f, static_cast< s32 >(NebulaFrameClock::cScreenUnitsDown) / 2.0f);
+    TVec2f screenCenter(MR::getScreenWidth() / 2.0f, static_cast< s32 >(NebulaFrameClock::cScreenLines) / 2.0f);
 
     f32 screenRadius = screenCenter.length();
     TVec2f offset(screenCenter - position);

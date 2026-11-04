@@ -7,30 +7,19 @@
 struct ResTIMG;
 
 namespace MR {
-    u32 getPictureSpan();
-    f32 getSafetyVIScreenWidthRatio();
     s32 getScreenWidth();
     // The picture's shape: the host latches the output's shape at each retrace, and the screen width, the camera's
     // aspect and the layout canvas follow it (wide == 0: 16:9).
     inline const NebulaDisplay& getDisplay() {
         return NebulaFrameClock::display();
     }
-    // Between these, getScreenWidth keeps cWideScreenWidth: CollisionShadow sizes its softening circle in screen units but
-    // draws it into a fixed 160x160 region.
-    void beginDesignScreenWidth();
-    void endDesignScreenWidth();
     inline s32 getScreenHeight() {
-        return NebulaFrameClock::cScreenUnitsDown;
+        return NebulaFrameClock::cScreenLines;
     }
-    s32 getSafetyFrameWidth();
-    s32 getSafetyFrameLeft();
-    s32 getSafetyFrameRight();
-    s32 getScreenUnitsAcross();
-    inline s32 getScreenUnitsDown() {
-        return NebulaFrameClock::cScreenUnitsDown;
-    }
-    void convertCanvasPosToScreenPos(TVec2f*, const TVec2f&);
-    void convertScreenPosToCanvasPos(TVec2f*, const TVec2f&);
+    // What a plate keeps from the screen's sides.
+    s32 getScreenMargin();
+    // A point of the screen as fractions of the frame.
+    void convertScreenPosToFrame(TVec2f*, const TVec2f&);
     void startToCaptureScreen(const char*);
     void endToCaptureScreen(const char*);
     void captureScreenIfAllow(const char*);
