@@ -36,12 +36,12 @@ AudSystemWrapper::AudSystemWrapper(NebulaArena* pSolidHeap, NebulaArena* pHeap) 
 }
 
 void AudSystemWrapper::requestResourceForInitialize() {
-    MR::loadAsyncToMainRAM(sAudioResFile, nullptr, mHeap, GameAssets::ALLOC_DIRECTION_BACKWARD);
-    MR::mountAsyncArchive(sJaiSeqArc, mSolidHeap);
-    MR::mountAsyncArchive(sJaiChordArc, mSolidHeap);
-    MR::mountAsyncArchive(sJaiMeArc, mSolidHeap);
-    MR::mountAsyncArchive(AudSpeakerWrap::getResName(), mSpkHeap);
-    MR::mountAsyncArchive(sJaiRemixArc, mSolidHeap);
+    MR::loadFile(sAudioResFile, nullptr, mHeap);
+    MR::mountArchive(sJaiSeqArc, mSolidHeap);
+    MR::mountArchive(sJaiChordArc, mSolidHeap);
+    MR::mountArchive(sJaiMeArc, mSolidHeap);
+    MR::mountArchive(AudSpeakerWrap::getResName(), mSpkHeap);
+    MR::mountArchive(sJaiRemixArc, mSolidHeap);
 }
 
 void AudSystemWrapper::createAudioSystem() {
@@ -225,10 +225,10 @@ void AudSystemWrapper::resumeReset() {
 }
 
 void AudSystemWrapper::receiveResourceForInitialize() {
-    mSmrRes = MR::receiveFile(sAudioResFile);
-    mJaiSeqRes = MR::receiveArchive(sJaiSeqArc);
-    mJaiChordRes = MR::receiveArchive(sJaiChordArc);
-    mJaiMeRes = MR::receiveArchive(sJaiMeArc);
-    mSpkRes = MR::receiveArchive(AudSpeakerWrap::getResName());
-    mJaiRemixSeqRes = MR::receiveArchive(sJaiRemixArc);
+    mSmrRes = MR::getLoadedFile(sAudioResFile);
+    mJaiSeqRes = MR::getMountedArchive(sJaiSeqArc);
+    mJaiChordRes = MR::getMountedArchive(sJaiChordArc);
+    mJaiMeRes = MR::getMountedArchive(sJaiMeArc);
+    mSpkRes = MR::getMountedArchive(AudSpeakerWrap::getResName());
+    mJaiRemixSeqRes = MR::getMountedArchive(sJaiRemixArc);
 }

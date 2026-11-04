@@ -10,16 +10,9 @@ StageFileLoader::StageFileLoader(const char* pName) {
     makeStageArchiveNameList();
 }
 
-void StageFileLoader::startLoadingStageFile() {
+void StageFileLoader::loadStageFiles() {
     for (int i = 0; i < mZoneCount; i++) {
-        MR::mountAsyncArchive(mStageFiles[i], MR::getAproposHeapForSceneArchive(0.03f));
-    }
-}
-
-void StageFileLoader::waitLoadedStageFile() {
-    for (int i = 0; i < mZoneCount; i++) {
-        const char* file = mStageFiles[i];
-        MR::receiveFile(file);
+        MR::mountArchive(mStageFiles[i], MR::getSceneArchiveHeap());
     }
 }
 

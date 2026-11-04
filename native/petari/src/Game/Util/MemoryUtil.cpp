@@ -22,8 +22,7 @@ namespace MR {
         return NebulaArena::currentSlot();
     }
 
-    NebulaArena* getAproposHeapForSceneArchive(f32 maxFreeSizeRate) {
-        (void)maxFreeSizeRate;
+    NebulaArena* getSceneArchiveHeap() {
         return SingletonHolder< HeapMemoryWatcher >::get()->mFileCacheHeap;
     }
 

@@ -40,7 +40,7 @@ namespace {
 };  // namespace
 
 void GameSystemFontHolder::createFontFromFile() {
-    AssetFolder* pArchive = MR::receiveArchive("/LayoutData/Font.arc");
+    AssetFolder* pArchive = MR::getMountedArchive("/LayoutData/Font.arc");
 
     mMessageFont = createFont(pArchive, "/MessageFont26.brfnt");
 

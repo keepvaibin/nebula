@@ -2831,10 +2831,10 @@ namespace NebulaSettingsMenu {
             return;
         }
         NebulaHost::settingsView(&sView);
-        // Not before a file is chosen (the logos, the title, the file select): asked for there, it closes at once, unless
+        // Not before a file is chosen (the boot, the title, the file select): asked for there, it closes at once, unless
         // the input mode has nothing to play with: the menu is how another is chosen.
         if (sView.open && !sScreen->isShown() && !GameSystemFunction::isOccurredSystemWarning() &&
-            (MR::isEqualSceneName("Logo") || MR::isEqualSceneName("Title") || MR::isStageFileSelect())) {
+            (MR::isEqualSceneName("Boot") || MR::isEqualSceneName("Title") || MR::isStageFileSelect())) {
             NebulaHost::settingsInput(NEBULA_SETTINGS_CLOSE, 0);
             sView.open = 0;
         }

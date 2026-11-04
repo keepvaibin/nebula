@@ -45,7 +45,7 @@
 
 namespace NrvGameSystem {
     NEW_NERVE(GameSystemInitializeAudio, GameSystem, InitializeAudio);
-    NEW_NERVE(GameSystemInitializeLogoScene, GameSystem, InitializeLogoScene);
+    NEW_NERVE(GameSystemInitializeBootScene, GameSystem, InitializeBootScene);
     NEW_NERVE(GameSystemLoadStationedArchive, GameSystem, LoadStationedArchive);
     NEW_NERVE(GameSystemWaitForReboot, GameSystem, WaitForReboot);
     NEW_NERVE(GameSystemNormal, GameSystem, Normal);
@@ -122,16 +122,16 @@ void GameSystem::exeInitializeAudio() {
 
     if (MR::isEndFunctionAsyncExecute(INIT_AUDIO_KEY) && mObjHolder->mAudioSystem->isLoadDoneWaveDataAtSystemInit()) {
         MR::waitForEndFunctionAsyncExecute(INIT_AUDIO_KEY);
-        setNerve(GET_NERVE(GameSystem, GameSystemInitializeLogoScene));
+        setNerve(GET_NERVE(GameSystem, GameSystemInitializeBootScene));
     }
 }
 
-void GameSystem::exeInitializeLogoScene() {
+void GameSystem::exeInitializeBootScene() {
     if (GameSystemFunction::isResetProcessing()) {
         setNerve(GET_NERVE(GameSystem, GameSystemWaitForReboot));
     } else {
         if (MR::isFirstStep(this)) {
-            MR::requestChangeScene("Logo");
+            MR::requestChangeScene("Boot");
         }
 
         updateSceneController();

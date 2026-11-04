@@ -18,12 +18,6 @@ namespace GameAssets {
         const char* mName;
     };
 
-    // Which end of its heap a loaded file goes to.
-    enum AllocDirection {
-        ALLOC_DIRECTION_FORWARD = 1,
-        ALLOC_DIRECTION_BACKWARD = 2,
-    };
-
     // The file or folder at pPath: its entry, or -1.
     s32 find(const char* pPath);
     bool open(const char* pPath, File* pFile);
@@ -39,7 +33,7 @@ namespace GameAssets {
     void unloadHeap(const NebulaArena* pHeap);
 
     // A whole file or folder (an archive: the bytes of its files, side by side), or its first `maxLength` bytes when that is not 0, read into pDst, or into a new block of pHeap (the
-    // current heap when null): null when there is no such file. A block ends at a 32-byte boundary, zeroed past the file.
-    void* load(const char* pPath, u8* pDst, u32 maxLength, NebulaArena* pHeap, AllocDirection direction, u32* pSize);
-    void* load(s32 entry, u8* pDst, u32 maxLength, NebulaArena* pHeap, AllocDirection direction, u32* pSize);
+    // current heap when null): null when there is no such file. A block has a zero past the file.
+    void* load(const char* pPath, u8* pDst, u32 maxLength, NebulaArena* pHeap, u32* pSize);
+    void* load(s32 entry, u8* pDst, u32 maxLength, NebulaArena* pHeap, u32* pSize);
 }  // namespace GameAssets

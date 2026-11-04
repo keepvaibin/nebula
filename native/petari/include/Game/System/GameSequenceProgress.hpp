@@ -26,7 +26,7 @@ public:
     GalaxyCometScheduler* getGalaxyCometScheduler();
 
     void exeBooting();
-    void exeLogo();
+    void exeBoot();
     void exeWaitGoToFirstScene();
     void exeNormal();
     void exeGalaxyMove();

@@ -29,7 +29,6 @@ public:
     void createAudioSystem();
     void update();
     void updateAudioSystem();
-    void clearRequestFileInfo(bool);
     void drawStarPointer();
     void drawBeforeEndRender();
     void captureIfAllowForScreenPreserver();

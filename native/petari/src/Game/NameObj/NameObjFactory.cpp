@@ -8126,7 +8126,7 @@ namespace NameObjFactory {
         getMountObjectArchiveList(&collector, pName, rIter);
 
         for (s32 i = 0; i < collector.getArchiveNum(); i++) {
-            MR::mountAsyncArchiveByObjectOrLayoutName(collector.getArchive(i), nullptr);
+            MR::mountArchiveByObjectOrLayoutName(collector.getArchive(i), nullptr);
         }
     }
 

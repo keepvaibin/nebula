@@ -97,10 +97,6 @@ namespace MR {
         getGameSystemObjHolder()->mRandom.mSeed = seed;
     }
 
-    void clearFileLoaderRequestFileInfo(bool param1) {
-        getGameSystemObjHolder()->clearRequestFileInfo(param1);
-    }
-
     void startFunctionAsyncExecute(const MR::FunctorBase& rFunc, const char* pThreadName) {
         ::getFunctionAsyncExecutor()->start(rFunc, pThreadName);
     }

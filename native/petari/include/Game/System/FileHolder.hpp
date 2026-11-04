@@ -1,8 +1,6 @@
 #pragma once
 
 #include "Game/Util/Array.hpp"
-#include "Game/System/GameThreads.hpp"
-#include "Game/System/GameThreads.hpp"
 
 class NebulaArena;
 
@@ -17,19 +15,9 @@ public:
     /// @brief Destroys the `FileHolderFileEntry`.
     ~FileHolderFileEntry();
 
-    /// @brief Waits until the file read is done.
-    void waitReadDone();
-
-    /// @brief Sets the context data for the file.
-    /// @param pContext The context data.
-    void setContext(void*);
-
     s32 mEntryNum;
     void* mContext;
     NebulaArena* mHeap;
-    bool mDone;
-    GameMessageQueue mQueue;
-    void* mMessage;
     bool mContextSet;
 };
 

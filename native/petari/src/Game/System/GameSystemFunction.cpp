@@ -1,6 +1,6 @@
 #include "Game/System/GameSystemFunction.hpp"
 #include "Game/NameObj/NameObjRegister.hpp"
-#include "Game/Scene/LogoScene.hpp"
+#include "Game/Scene/BootScene.hpp"
 #include "Game/Screen/HomeButtonLayout.hpp"
 #include "Game/Screen/ScreenPreserver.hpp"
 #include "Game/System/AudSystemWrapper.hpp"
@@ -20,14 +20,14 @@
 #include "Game/Util/SingletonHolder.hpp"
 
 namespace {
-    LogoScene* getLogoScene() {
-        LogoScene* pLogoScene = static_cast< LogoScene* >(SingletonHolder< GameSystem >::get()->mSceneController->mScene);
+    BootScene* getBootScene() {
+        BootScene* pBootScene = static_cast< BootScene* >(SingletonHolder< GameSystem >::get()->mSceneController->mScene);
 
-        if (pLogoScene == nullptr) {
+        if (pBootScene == nullptr) {
             return nullptr;
         }
 
-        return pLogoScene;
+        return pBootScene;
     }
 
     AudSystemWrapper* getAudSystemWrapper() {
@@ -250,6 +250,6 @@ namespace GameSystemFunction {
     }
 
     bool isBeforeTitle() {
-        return MR::isEqualSceneName("Logo") && ::getLogoScene() != nullptr && ::getLogoScene()->isBeforeTitle();
+        return MR::isEqualSceneName("Boot") && ::getBootScene() != nullptr && ::getBootScene()->isBeforeTitle();
     }
 };  // namespace GameSystemFunction

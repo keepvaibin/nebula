@@ -13,7 +13,7 @@ public:
 
     void startStageFileLoad();
     void startStageFileLoadAfterScenarioSelected();
-    void waitDoneStageFileLoad();
+    void createStageDataHolder();
     void startActorFileLoadCommon();
     void startActorFileLoadScenario();
     void startActorPlacement();

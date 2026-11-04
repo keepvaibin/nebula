@@ -31,7 +31,6 @@ namespace MR {
     void resumeAllSceneNameObj();
     void syncWithFlagsAllSceneNameObj();
     void setRandomSeedFromStageName();
-    void clearFileLoaderRequestFileInfo(bool);
     void startFunctionAsyncExecute(const MR::FunctorBase&, const char*);
     bool startFunctionAsyncExecuteOnMainThread(const MR::FunctorBase&, const char*);
     void waitForEndFunctionAsyncExecute(const char*);

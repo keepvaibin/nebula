@@ -23,7 +23,7 @@ public:
     bool isDoneLoadSystemArchive() const;
     void startToLoadSystemArchive();
     void exeInitializeAudio();
-    void exeInitializeLogoScene();
+    void exeInitializeBootScene();
     void exeLoadStationedArchive();
     void exeWaitForReboot();
     void exeNormal();

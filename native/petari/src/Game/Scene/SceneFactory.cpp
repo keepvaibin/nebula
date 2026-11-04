@@ -1,7 +1,7 @@
 #include "Game/Scene/SceneFactory.hpp"
 #include "Game/Scene/GameScene.hpp"
 #include "Game/Scene/IntermissionScene.hpp"
-#include "Game/Scene/LogoScene.hpp"
+#include "Game/Scene/BootScene.hpp"
 #include <algorithm>
 
 namespace {
@@ -22,7 +22,7 @@ namespace {
     const Name2CreateFunc cCreateTable[] = {
         {"Game", createScene< GameScene >},
         {"Intermission", createScene< IntermissionScene >},
-        {"Logo", createScene< LogoScene >},
+        {"Boot", createScene< BootScene >},
     };
 };  // namespace
 

@@ -28,7 +28,7 @@ bool ConditionIfIsNotPlayer::isExecute(const MR::StationedFileInfo* pInfo) const
            pInfo->mLoadType != MR::StationedFileInfo::LOAD_TYPE_MOUNT_RESOURCE_LUIGI;
 }
 
-ConditionUsePlayerHeap::ConditionUsePlayerHeap() : mNapaHeap(), mGDDRHeap(), mIsDataMario(true) {
+ConditionUsePlayerHeap::ConditionUsePlayerHeap() : mHeap(), mIsDataMario(true) {
 }
 
 bool ConditionUsePlayerHeap::isExecute(const MR::StationedFileInfo* pInfo) const {
@@ -42,36 +42,21 @@ bool ConditionUsePlayerHeap::isExecute(const MR::StationedFileInfo* pInfo) const
 }
 
 NebulaArena* ConditionUsePlayerHeap::getProperHeap(const MR::StationedFileInfo* pInfo) const {
-    switch (pInfo->mHeapType) {
-    case MR::StationedFileInfo::HEAP_TYPE_NAPA:
-        return mNapaHeap;
-    case MR::StationedFileInfo::HEAP_TYPE_GDDR:
-        return mGDDRHeap;
-    case MR::StationedFileInfo::HEAP_TYPE_NONE:
-        return nullptr;
-    default:
-        return nullptr;
-    }
+    return mHeap;
 }
 
-PlayerHeapHolder::PlayerHeapHolder() : mCondition(), mNapaHeap(), mGDDRHeap(), mIsDataMario(true) {
+PlayerHeapHolder::PlayerHeapHolder() : mCondition(), mHeap(), mIsDataMario(true) {
     ConditionUsePlayerHeap* condition = new ConditionUsePlayerHeap();
     // Room for either player's archives: a change of player loads the other's in the same heaps at any time. Pages not used cost nothing.
-    mNapaHeap = NebulaArena::create(MR::getStationedHeap());
-    NebulaArena* gddr = NebulaArena::create(MR::getStationedHeap());
-    mGDDRHeap = gddr;
-    condition->mNapaHeap = mNapaHeap;
-    condition->mGDDRHeap = gddr;
+    mHeap = NebulaArena::create(MR::getStationedHeap());
+    condition->mHeap = mHeap;
     mCondition = condition;
     condition->mIsDataMario = mIsDataMario;
 }
 
 void PlayerHeapHolder::dispose() {
-    MR::removeResourceAndFileHolderIfIsEqualHeap(mNapaHeap);
-    MR::removeResourceAndFileHolderIfIsEqualHeap(mGDDRHeap);
-
-    mNapaHeap->freeAll();
-    mGDDRHeap->freeAll();
+    MR::removeResourceAndFileHolderIfIsEqualHeap(mHeap);
+    mHeap->freeAll();
 }
 
 void PlayerHeapHolder::setIsDataMario(bool isDataMario) {
@@ -159,7 +144,6 @@ void GameSystemStationedArchiveLoader::exeInitializeGameData() {
     GameSystemFunction::initAfterStationedResourceLoaded();
     SingletonHolder< HeapMemoryWatcher >::get()->setCurrentHeapToGameHeap();
     GameSystemFunction::setSceneNameObjHolderToNameObjRegister();
-    MR::clearFileLoaderRequestFileInfo(false);
     setNerve(GET_NERVE_ANON(GameSystemStationedArchiveLoaderEnd));
     mDone.signal();
 }

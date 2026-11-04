@@ -129,7 +129,7 @@ namespace GameAssets {
         sMappedLock.unlock();
     }
 
-    void* load(s32 entry, u8* pDst, u32 maxLength, NebulaArena* pHeap, AllocDirection direction, u32* pSize) {
+    void* load(s32 entry, u8* pDst, u32 maxLength, NebulaArena* pHeap, u32* pSize) {
         File file;
         if (!open(entry, &file)) {
             return nullptr;
@@ -146,14 +146,13 @@ namespace GameAssets {
         }
 
         const u32 size = maxLength != 0 && maxLength < file.mLength ? maxLength : file.mLength;
-        const u32 blockSize = size != 0 ? (size + 31) & ~31u : 32;
         const bool allocated = pDst == nullptr;
         if (allocated) {
-            pDst = static_cast< u8* >(NebulaArena::alloc(blockSize, direction == ALLOC_DIRECTION_FORWARD ? 64 : -64, pHeap));
+            pDst = static_cast< u8* >(NebulaArena::alloc(size + 1, 16, pHeap));
             if (pDst == nullptr) {
                 return nullptr;
             }
-            memset(pDst + size, 0, blockSize - size);
+            pDst[size] = 0;
         }
 
         if (read(&file, pDst, static_cast< s32 >(size), 0) < 0) {
@@ -167,8 +166,8 @@ namespace GameAssets {
         return pDst;
     }
 
-    void* load(const char* pPath, u8* pDst, u32 maxLength, NebulaArena* pHeap, AllocDirection direction, u32* pSize) {
+    void* load(const char* pPath, u8* pDst, u32 maxLength, NebulaArena* pHeap, u32* pSize) {
         const s32 entry = find(pPath);
-        return entry >= 0 ? load(entry, pDst, maxLength, pHeap, direction, pSize) : nullptr;
+        return entry >= 0 ? load(entry, pDst, maxLength, pHeap, pSize) : nullptr;
     }
 }  // namespace GameAssets

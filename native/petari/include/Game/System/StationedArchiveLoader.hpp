@@ -16,7 +16,6 @@ public:
         virtual NebulaArena* getProperHeap(const MR::StationedFileInfo*) const;
     };
 
-    static NebulaArena* getProperHeap(const MR::StationedFileInfo*);
     static void loadResourcesFromTable(const StationedArchiveLoader::Condition&);
     static void createAndAddResourcesFromTable(const StationedArchiveLoader::Condition&);
     static void loadScenarioData(NebulaArena*);

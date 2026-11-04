@@ -58,7 +58,6 @@
 #include "Game/Screen/LayoutManager.hpp"
 #include "Game/Screen/LayoutPaneCtrl.hpp"
 #include "Game/Screen/LensFlare.hpp"
-#include "Game/Screen/LogoFader.hpp"
 #include "Game/Screen/LuigiLetter.hpp"
 #include "Game/Screen/Manual2P.hpp"
 #include "Game/Screen/MarioMeter.hpp"

@@ -48,7 +48,7 @@ ScenarioData::ScenarioData(const char* pFilePath) : mScenarioData(), mGalaxyName
     mGalaxyName = new char[galaxyNameSize];
     MR::copyString(mGalaxyName, fileName, galaxyNameSize);
 
-    AssetFolder* pArchive = static_cast< AssetFolder* >(MR::receiveArchive(pFilePath));
+    AssetFolder* pArchive = static_cast< AssetFolder* >(MR::getMountedArchive(pFilePath));
 
     mScenarioData = new JMapInfo();
     mScenarioData->attach(pArchive->getResource("/ScenarioData.bcsv"));

@@ -65,8 +65,7 @@ public:
     virtual bool isExecute(const MR::StationedFileInfo*) const;
     virtual NebulaArena* getProperHeap(const MR::StationedFileInfo*) const;
 
-    NebulaArena* mNapaHeap;
-    NebulaArena* mGDDRHeap;
+    NebulaArena* mHeap;
     bool mIsDataMario;
 };
 
@@ -79,7 +78,6 @@ public:
 
 
     ConditionUsePlayerHeap* mCondition;
-    NebulaArena* mNapaHeap;
-    NebulaArena* mGDDRHeap;
+    NebulaArena* mHeap;
     bool mIsDataMario;
 };
