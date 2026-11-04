@@ -26,8 +26,10 @@ public:
                display_height_ == display_height;
     }
 
-    // `shared` and `generation` are set. The format is the swap chain's.
-    bool create(unsigned render_width, unsigned render_height, unsigned display_width, unsigned display_height, FfxSurfaceFormat format) noexcept {
+    // `shared` and `generation` are set. `format` is the swap chain's; `source_format` the HUD-less picture's, which
+    // the context copies byte for byte between frames.
+    bool create(unsigned render_width, unsigned render_height, unsigned display_width, unsigned display_height, FfxSurfaceFormat format,
+                FfxSurfaceFormat source_format) noexcept {
         FfxErrorCode result = shared.fpCreateBackendContext(&shared, FFX_EFFECT_SHAREDRESOURCES, nullptr, &shared_context_);
         if (result != FFX_OK) {
             return failed("shared resources", result);
@@ -48,7 +50,7 @@ public:
         description.maxRenderSize = {render_width, render_height};
         description.displaySize = {display_width, display_height};
         description.backBufferFormat = format;
-        description.previousInterpolationSourceFormat = format;
+        description.previousInterpolationSourceFormat = source_format;
         result = ffxFrameInterpolationContextCreate(&interpolation_, &description);
         if (result != FFX_OK) {
             return failed("frame interpolation", result);

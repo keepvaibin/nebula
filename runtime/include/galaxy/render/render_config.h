@@ -86,7 +86,8 @@ struct RenderConfig {
     // DLSS (Streamline), both temporal: the jittered 3D scene is upscaled before the 2D layer and renders at the
     // window's scale divided by the temporal_quality ratio.
     unsigned upscaler            = 0;
-    // DLSS Frame Generation (GRAPHICS > INTERPOLATION): nonzero has its generated frames reach max_fps (0: the
+    // 2: FSR 3 frame generation (fsr_frame_generation.h), one frame between each two, with FSR 3 or XeSS. 1: DLSS Frame Generation
+    // (GRAPHICS > INTERPOLATION): nonzero has its generated frames reach max_fps (0: the
     // display's refresh rate) instead of Nebula's interpolated ones. It runs with DLSS (upscaler 3) and the Frame
     // Generation plugins, loaded when the game starts with it on; while it runs the game presents its own 60 frames.
     // Without it the target falls back to Nebula's interpolation.

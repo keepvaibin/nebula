@@ -21,8 +21,10 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
+#include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
+#include "Game/System/NebulaHost.hpp"
 #include "Game/System/NebulaInput.hpp"
 
 namespace {
@@ -843,6 +845,24 @@ namespace MR {
 
     void requestStarPointerModeBlueStarReady(void* pRequester) {
         ::getStarPointerOnOffController()->requestMode(pRequester, StarPointerMode_BlueStarReady);
+    }
+
+    void reportStarPointerGrabTarget(const LiveActor* pActor) {
+        const StarPointerTarget* pTarget = pActor->mStarPointerTarget;
+        if (pTarget == nullptr || NebulaHost::option(NEBULA_OPTION_TOUCH_POINTER) == 0) {
+            return;
+        }
+        TVec2f position;
+        f32 radius;
+        if (!pTarget->calcScreenCircle(&position, &radius)) {
+            return;
+        }
+        const f32 height = static_cast< f32 >(MR::getScreenHeight());
+        const f32 across = radius / height * 255.0f;
+        const u32 x = static_cast< u32 >(position.x / MR::getScreenWidth() * 4095.0f + 0.5f);
+        const u32 y = static_cast< u32 >(position.y / height * 4095.0f + 0.5f);
+        const u32 r = across >= 255.0f ? 255u : static_cast< u32 >(across + 0.5f);
+        NebulaHost::gameContext(NEBULA_CONTEXT_TOUCH_TARGET, static_cast< s32 >(x | (y << 12) | (r << 24)));
     }
 
     void requestStarPointerModeBigBubble(void* pRequester, const TVec3f& rPosition) {

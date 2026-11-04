@@ -40,6 +40,9 @@ final class TouchControlsView extends View {
 
         boolean titleScreen();
 
+        /** A finger at x, y (pixels) lands on something the pointer grabs: it points, whatever side of the screen it is on. */
+        boolean touchTarget(float x, float y);
+
         /** The player pressed OK. */
         void arrangingDone();
 
@@ -593,6 +596,8 @@ final class TouchControlsView extends View {
             if (button >= 0) {
                 target = button;
             } else if (pointerScreen) {
+                target = TARGET_POINTER;
+            } else if (listener.touchTarget(x, y)) {
                 target = TARGET_POINTER;
             } else if (dpadBits(x, y) != 0 || Math.hypot(x - dpadX, y - dpadY) <= dpadRadius * 1.2f) {
                 target = TARGET_DPAD;

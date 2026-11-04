@@ -208,6 +208,7 @@ void GCaptureTarget::exePointable() {
     }
     MR::setBckRate(this, mStarAnimSpeed);
 
+    MR::reportStarPointerGrabTarget(this);
     if (MR::isStarPointerPointing(this, 0, true, "\216\343" /* 弱 */) && MR::requestGCaptureTarget(this)) {
         MR::invalidateClipping(this);
         setNerve(GET_NERVE(GCaptureTarget, GCaptureTargetNrvHitPointer));
@@ -224,6 +225,7 @@ void GCaptureTarget::exeHitPointer() {
     if (!MR::isRequestedGCaptureTarget(this)) {
         setNerve(GET_NERVE(GCaptureTarget, GCaptureTargetNrvWait));
     } else {
+        MR::reportStarPointerGrabTarget(this);
         MR::requestStarPointerModeBlueStarReady(this);
         if (MR::isFirstStep(this)) {
             emitNerveEffect();

@@ -489,6 +489,7 @@ void SlingShooter::calcBaseMtx(TPos3f* pBaseMtx) {
 
 bool SlingShooter::updateWait() {
     mPosition.set(*mBasePos);
+    MR::reportStarPointerGrabTarget(this);
 
     if (MR::isStarPointerPointing(this, PLAYER_1, true, "\216\343" /* 弱 */)) {
         MR::requestStarPointerModeBlueStarReady(this);

@@ -13,6 +13,8 @@ public:
     void calcPosition(TVec3f*) const;
     f32 calcRadius2d(f32, f32, f32) const;
     bool calcScreenPositionFromView(TVec2f*, const TVec3f&) const;
+    // Where it shows and how big, as isPointing sees it.
+    bool calcScreenCircle(TVec2f*, f32*) const;
 
     f32 mRadius3d;
     TVec3f mOffset;
