@@ -42,6 +42,12 @@ void ViewGroupCtrl::initViewGroup(ClippingActorInfoList* pList) {
     }
 }
 
+void ViewGroupCtrl::initMadeDuringPlay(ClippingActorInfo* pInfo) {
+    if (mViewGroupData != nullptr) {
+        pInfo->_14 = &mViewGroupData[mMaxViewGroupId];
+    }
+}
+
 void ViewGroupCtrl::endInitViewGroupTable() {
 }
 

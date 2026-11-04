@@ -21,6 +21,8 @@ public:
 
     void initActorInfo(ClippingActorInfo*, s32);
     void initViewGroup(ClippingActorInfoList*);
+    // An actor made once the table stands (a plugin's spawn) is in no view group, as an actor without one.
+    void initMadeDuringPlay(ClippingActorInfo*);
     void endInitViewGroupTable();
     void entryLodCtrl(LodCtrl*, const JMapInfoIter&);
     void update();

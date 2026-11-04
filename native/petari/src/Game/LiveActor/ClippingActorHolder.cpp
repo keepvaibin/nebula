@@ -28,7 +28,9 @@ void ClippingActorHolder::movement() {
 }
 
 void ClippingActorHolder::registerActor(LiveActor* pActor) {
-    _18->add(new ClippingActorInfo(pActor));
+    ClippingActorInfo* pInfo = new ClippingActorInfo(pActor);
+    _18->add(pInfo);
+    mViewGroupCtrl->initMadeDuringPlay(pInfo);
 
     mActorNum++;
 }
