@@ -70,7 +70,7 @@ const Group kGroups[kGroupCount] = {
     NEBULA_GROUP(gen, kStateDirtyVertexShader | kStateDirtyRenderState | kStateDirtyVertexConstants),
     NEBULA_GROUP(z, kStateDirtyRenderState),
     NEBULA_GROUP(blend, kStateDirtyRenderState),
-    NEBULA_GROUP(frame_alpha, kStateDirtyRenderState),
+    NEBULA_GROUP(target_alpha, kStateDirtyRenderState),
     NEBULA_GROUP(channel, kStateDirtyVertexShader | kStateDirtyVertexConstants),
     NEBULA_GROUP(material_color, kStateDirtyVertexConstants),
     NEBULA_GROUP(ambient_color, kStateDirtyVertexConstants),
@@ -97,7 +97,7 @@ std::uint32_t op_groups(std::uint8_t kind) {
     case state::kTexCoordGen: return bit(kTexgen) | bit(kPostTexgen) | bit(kTextureMatrix);
     case state::kProjection: return bit(kProjection) | bit(kProjectionType);
     case state::kViewport: return bit(kViewport);
-    case state::kFrameAlpha: return bit(kFrame);
+    case state::kTargetAlpha: return bit(kFrame);
     default: return 0u;
     }
 }
@@ -136,8 +136,6 @@ void NativeDrawState::apply_pass(const shapes::PassState& pass) {
         set_blend(blend, pass.blend_op, pass.blend_src, pass.blend_dst, pass.logic_op);
         blend.color_update = pass.color_write != 0u;
         blend.alpha_update = pass.alpha_write != 0u;
-        blend.const_alpha_enable = pass.constant_alpha != 0u;
-        blend.const_alpha = pass.constant_alpha_value;
         set_z(z, pass.depth_test, pass.depth_func, pass.depth_write);
         stencil_test = pass.stencil_func;
         stencil_op = pass.stencil_op;
@@ -153,10 +151,8 @@ void NativeDrawState::apply(const state::Op& op) {
 void NativeDrawState::set_op(const state::Op& op) {
     const std::uint8_t* a = op.a;
     switch (op.kind) {
-    case state::kFrameAlpha:
-        if (a[0] != 0u) {
-            frame_alpha = a[1] != 0u;
-        }
+    case state::kTargetAlpha:
+        target_alpha = a[0] != 0u;
         break;
     case state::kTexCoordGen: {
         TexGen made = material::tex_gen(a[1], a[2]);

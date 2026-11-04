@@ -456,7 +456,6 @@ void CollisionShadow::drawAndCaptureTex(J3DModelX* pModel, const TVec3f& rPositi
         circle.color_write = 0;
         circle.alpha_write = 1;
         NativeShader::setBlend(circle, NEBULA_FACTOR_DST_ALPHA, NEBULA_FACTOR_ZERO);
-        J3DPass::constantAlpha(false, 0);
         NativeShader::send(circle);
         f32 y = _2FE / 2;
         f32 x = _2FC / 2;
@@ -473,7 +472,6 @@ void CollisionShadow::drawAndCaptureTex(J3DModelX* pModel, const TVec3f& rPositi
     J3DPass::writeColor(true);
     MR::setDefaultViewportAndScissor();
     TDDraw::cameraInit3D();
-    J3DPass::constantAlpha(false, 0);
 }
 
 void CollisionShadow::drawVolumeBox(const TVec3f& rPosition, const TVec3f& rDepth) const {

@@ -29,13 +29,9 @@ struct Variant {
 const std::vector<Variant>& variants() {
     static const std::vector<Variant> list = {
         {0, 0, {}},
-        {4, 4, {"NATIVE_DUAL"}},
-        {5, 0, {"NATIVE_SAMPLE"}},
-        {6, 4, {"NATIVE_SAMPLE", "NATIVE_DUAL"}},
-        {7, 7, {"NATIVE_PIXEL_LIT"}},
-        {8, 8, {"NATIVE_PIXEL_LIT", "NATIVE_DUAL"}},
-        {9, 7, {"NATIVE_PIXEL_LIT", "NATIVE_SAMPLE"}},
-        {10, 8, {"NATIVE_PIXEL_LIT", "NATIVE_SAMPLE", "NATIVE_DUAL"}},
+        {4, 0, {"NATIVE_SAMPLE"}},
+        {5, 5, {"NATIVE_PIXEL_LIT"}},
+        {6, 5, {"NATIVE_PIXEL_LIT", "NATIVE_SAMPLE"}},
     };
     return list;
 }

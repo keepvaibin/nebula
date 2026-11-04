@@ -579,5 +579,4 @@ void MarioActor::drawSilhouette() const {
     J3DPass::stencil(NEBULA_STENCIL_OFF, NEBULA_STENCIL_KEEP);
     J3DPass::writeAlpha(true);
     J3DPass::writeColor(true);
-    J3DPass::constantAlpha(true, 0);
 }

@@ -32,7 +32,6 @@ const char* compat_name(std::uint32_t bit) {
     switch (bit) {
     case 1u << 0u: return "depth-clip control";
     case 1u << 1u: return "logic ops";
-    case 1u << 2u: return "dual-source blending";
     case 1u << 3u: return "depth clamp";
     default: return "several features";
     }
@@ -45,11 +44,10 @@ std::string describe_render_state(const RenderStateKey& rs) {
     return text;
 }
 
-// GALAXY_VK_TEST_REFUSE=<names, comma-separated>: pipelines using those features (dual-source, depth-clip,
+// GALAXY_VK_TEST_REFUSE=<names, comma-separated>: pipelines using those features (depth-clip,
 // depth-clamp, logic-op), or every native pipeline (native), are refused as a driver would, so the
 // fallbacks run on any GPU.
 struct TestRefusals {
-    bool dual_source = false;
     bool depth_clip = false;
     bool depth_clamp = false;
     bool logic_op = false;
@@ -62,7 +60,6 @@ const TestRefusals& test_refusals() {
         const char* names = ::galaxy::run_options().vk_test_refuse;
         const std::string list = names != nullptr ? std::string(",") + names + "," : "";
         const auto has = [&](const char* name) { return list.find(std::string(",") + name + ",") != std::string::npos; };
-        r.dual_source = has("dual-source");
         r.depth_clip = has("depth-clip");
         r.depth_clamp = has("depth-clamp");
         r.logic_op = has("logic-op");
@@ -216,13 +213,10 @@ VkPipeline PipelineCacheVk::create_native(std::uint32_t shader, const RenderStat
     const VkShaderModule ps = native_module(ps_bytes.data, ps_bytes.size, vk::ShaderStage::Fragment);
     VkPipeline pipeline = VK_NULL_HANDLE;
     if (vs != VK_NULL_HANDLE && ps != VK_NULL_HANDLE) {
-        // The dual variant's second output is the 8-bit combiner alpha the colour blends against (render state bit 27),
-        // as the old path's dual-source pipelines.
-        const bool dual = native_variant_dual(variant);
         const auto make = [&](std::uint32_t compat, VkResult& result) {
-            return create_pipeline(rs, vs, ps, dual, false, compat, result);
+            return create_pipeline(rs, vs, ps, false, compat, result);
         };
-        pipeline = with_fallbacks(make, applicable_compat(rs, dual, false), "a native pipeline",
+        pipeline = with_fallbacks(make, applicable_compat(rs, false), "a native pipeline",
                                   describe_render_state(rs), nullptr);
     }
     return pipeline;
@@ -284,7 +278,7 @@ void PipelineCacheVk::start_prepare() {
                     }
                     return;
                 }
-                const RenderStateKey rs = for_device_blending(native_render_state(seed_render_state(seeds[i])));
+                const RenderStateKey rs = native_render_state(seed_render_state(seeds[i]));
                 const VkPipeline pipeline = create_native(seeds[i].shader, rs, native_shader_variant(rs.blend_bits));
                 const std::lock_guard guard(prepared_lock_);
                 prepared_.push_back({seeds[i].shader, rs, pipeline});
@@ -327,7 +321,7 @@ void PipelineCacheVk::merge_prepared() {
 }
 
 VkPipeline PipelineCacheVk::create_pipeline(const RenderStateKey& rs, VkShaderModule vs, VkShaderModule ps,
-                                            bool dual_source, bool export_depth, std::uint32_t compat,
+                                            bool export_depth, std::uint32_t compat,
                                             VkResult& result) const {
     result = VK_ERROR_INITIALIZATION_FAILED;
     if (vs == VK_NULL_HANDLE || ps == VK_NULL_HANDLE) {
@@ -462,26 +456,6 @@ VkPipeline PipelineCacheVk::create_pipeline(const RenderStateKey& rs, VkShaderMo
         target.srcAlphaBlendFactor = to_alpha_blend(target.srcColorBlendFactor);
         target.dstAlphaBlendFactor = to_alpha_blend(target.dstColorBlendFactor);
         target.alphaBlendOp = target.colorBlendOp;
-        if ((bb & (1u << 27u)) != 0u && dual_source && layout_->dual_source_blend &&
-            (compat & kCompatNoDualSource) == 0u) {
-            // The pixel shader's second output carries the material alpha the colour blends against.
-            const auto second_source = [](VkBlendFactor factor) {
-                return factor == VK_BLEND_FACTOR_SRC_ALPHA ? VK_BLEND_FACTOR_SRC1_ALPHA
-                    : factor == VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA ? VK_BLEND_FACTOR_ONE_MINUS_SRC1_ALPHA : factor;
-            };
-            target.srcColorBlendFactor = second_source(target.srcColorBlendFactor);
-            target.dstColorBlendFactor = second_source(target.dstColorBlendFactor);
-        }
-        if ((bb & (1u << 28u)) != 0u) {  // constant destination alpha is independent
-            target.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-            target.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
-            target.alphaBlendOp = VK_BLEND_OP_ADD;
-        }
-        if ((bb & kRenderStateZeroAlpha) != 0u) {  // constant destination alpha 0, drawn single-source
-            target.srcAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
-            target.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
-            target.alphaBlendOp = VK_BLEND_OP_ADD;
-        }
     } else if ((bb & (1u << 8u)) != 0u && layout_->logic_op && (compat & kCompatNoLogicOp) == 0u) {
         blend.logicOpEnable = VK_TRUE;
         blend.logicOp = logic_op_mode((bb >> 9u) & 0xfu);
@@ -523,7 +497,7 @@ VkPipeline PipelineCacheVk::create_pipeline(const RenderStateKey& rs, VkShaderMo
     info.layout = layout_->layout;
     info.renderPass = aux != 0u ? layout_->aux_pass_for(rs.samples_log2, aux) : layout_->pass_for(rs.samples_log2, false);
     const TestRefusals& refuse = test_refusals();
-    if ((refuse.dual_source && dual_source && layout_->dual_source_blend) || (refuse.depth_clip && raster.pNext) ||
+    if ((refuse.depth_clip && raster.pNext) ||
         (refuse.depth_clamp && raster.depthClampEnable) || (refuse.logic_op && blend.logicOpEnable) ||
         refuse.native) {
         result = VK_ERROR_INITIALIZATION_FAILED;
@@ -534,7 +508,7 @@ VkPipeline PipelineCacheVk::create_pipeline(const RenderStateKey& rs, VkShaderMo
     return result == VK_SUCCESS ? pipeline : VK_NULL_HANDLE;
 }
 
-std::uint32_t PipelineCacheVk::applicable_compat(const RenderStateKey& rs, bool dual_source, bool export_depth) const {
+std::uint32_t PipelineCacheVk::applicable_compat(const RenderStateKey& rs, bool export_depth) const {
     std::uint32_t bits = 0;
     if (layout_->depth_clamp && layout_->depth_clip_enable) {
         bits |= kCompatNoDepthClip;
@@ -544,9 +518,6 @@ std::uint32_t PipelineCacheVk::applicable_compat(const RenderStateKey& rs, bool 
     }
     if ((rs.blend_bits & 1u) == 0u && (rs.blend_bits & (1u << 8u)) != 0u && layout_->logic_op) {
         bits |= kCompatNoLogicOp;
-    }
-    if (dual_source && layout_->dual_source_blend) {
-        bits |= kCompatNoDualSource;
     }
     return bits;
 }

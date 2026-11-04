@@ -39,7 +39,7 @@ void initialize_glslang() {
     std::call_once(once, [] { glslang::InitializeProcess(); });
 }
 
-// SPIR-V's words for the location and dual-source rewrites.
+// SPIR-V's words for the location rewrites.
 constexpr std::uint32_t kOpName = 5;
 constexpr std::uint32_t kOpExtension = 10;
 constexpr std::uint32_t kOpVariable = 59;
@@ -207,42 +207,6 @@ void strip_debug_names(std::vector<std::uint32_t>& spirv) {
     spirv = std::move(out);
 }
 
-// The output at location 1 moves to location 0, index 1. False when the module has none.
-bool make_dual_source_output(std::vector<std::uint32_t>& spirv) {
-    std::vector<std::uint32_t> outputs;
-    for (std::size_t at = 5; at < spirv.size();) {
-        const std::uint32_t count = spirv[at] >> 16u;
-        if (count == 0u || at + count > spirv.size()) {
-            return false;
-        }
-        if ((spirv[at] & 0xffffu) == kOpVariable && count >= 4u && spirv[at + 3] == kStorageOutput) {
-            outputs.push_back(spirv[at + 2]);
-        }
-        at += count;
-    }
-    std::vector<std::uint32_t> out(spirv.begin(), spirv.begin() + 5);
-    out.reserve(spirv.size() + 4u);
-    bool moved = false;
-    for (std::size_t at = 5; at < spirv.size();) {
-        const std::uint32_t count = spirv[at] >> 16u;
-        const bool second_target = (spirv[at] & 0xffffu) == kOpDecorate && count == 4u &&
-            spirv[at + 2] == kDecorationLocation && spirv[at + 3] == 1u &&
-            std::find(outputs.begin(), outputs.end(), spirv[at + 1]) != outputs.end();
-        out.insert(out.end(), spirv.begin() + static_cast<std::ptrdiff_t>(at),
-                   spirv.begin() + static_cast<std::ptrdiff_t>(at + count));
-        if (second_target) {
-            out[out.size() - 1u] = 0u;
-            out.insert(out.end(), {(4u << 16u) | kOpDecorate, spirv[at + 1], kDecorationIndex, 1u});
-            moved = true;
-        }
-        at += count;
-    }
-    if (moved) {
-        spirv = std::move(out);
-    }
-    return moved;
-}
-
 EShLanguage language(ShaderStage stage) {
     switch (stage) {
     case ShaderStage::Vertex: return EShLangVertex;
@@ -391,16 +355,12 @@ std::vector<std::uint32_t> compile_hlsl(std::string_view hlsl, ShaderStage stage
     if (stage != ShaderStage::Compute && !assign_semantic_locations(spirv, stage, error)) {
         return {};
     }
-    if (compile_options.dual_source && !make_dual_source_output(spirv)) {
-        error = "dual-source pixel shader without SV_Target1";
-        return {};
-    }
     if (!compile_options.keep_names) {
         strip_debug_names(spirv);
     }
     std::string messages_out = logger.getAllMessages();
     if (compile_options.validate) {
-        // The module as it is used (after the dual-source rewrite), for a Vulkan 1.1 device.
+        // The module as it is used for a Vulkan 1.1 device.
         spv_context context = spvContextCreate(SPV_ENV_VULKAN_1_1);
         spv_diagnostic diagnostic = nullptr;
         if (spvValidateBinary(context, spirv.data(), spirv.size(), &diagnostic) != SPV_SUCCESS) {

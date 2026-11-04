@@ -96,7 +96,6 @@ struct RenderLayout {
         return clear ? ms_passes_clear[samples_log2] : ms_passes[samples_log2];
     }
     VkFormat depth_format = VK_FORMAT_UNDEFINED;
-    bool dual_source_blend = false;
     bool logic_op = false;
     bool depth_clamp = false;
     bool depth_clip_enable = false;  // VK_EXT_depth_clip_enable

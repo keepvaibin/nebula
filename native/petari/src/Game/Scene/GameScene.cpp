@@ -520,7 +520,6 @@ void GameScene::draw3D() const {
     MR::setDefaultViewportAndScissor();
     J3DPass::writeColor(true);
     J3DPass::writeAlpha(true);
-    J3DPass::constantAlpha(true, 0);
     CategoryList::drawOpa(MR::DrawBufferType_ClippedMapParts);
     CategoryList::execute(MR::DrawType_ClipArea);
     CategoryList::execute(MR::DrawType_FallOutFieldDraw);
@@ -528,7 +527,6 @@ void GameScene::draw3D() const {
     J3DPass::writeAlpha(true);
     CategoryList::execute(MR::DrawType_ShadowVolume);
     J3DPass::writeColor(true);
-    J3DPass::constantAlpha(true, 0);
     // What is drawn after the volumes is not in their shadow.
     J3DPass::stencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ZERO);
     SceneFunction::executeDrawBufferListNormalOpaBeforeSilhouette();
@@ -538,7 +536,6 @@ void GameScene::draw3D() const {
     SceneFunction::executeDrawAlphaShadow();
     MR::setLensFlareDrawSyncToken();
     J3DPass::writeAlpha(false);
-    J3DPass::constantAlpha(false, 0);
     SceneFunction::executeDrawBufferListNormalOpa();
     SceneFunction::executeDrawListOpa();
     CategoryList::drawOpa(MR::DrawBufferType_UNK_0x18);

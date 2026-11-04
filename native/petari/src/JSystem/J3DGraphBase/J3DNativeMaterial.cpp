@@ -595,6 +595,16 @@ namespace J3DNativeMaterial {
         return true;
     }
 
+    void overrideAlpha(f32 alpha) {
+        f32* pOverride = sCurrent.constants + 84 + 32;
+        if (sCurrentKind != CURRENT_J3D || pOverride[0] != 5.0f) {
+            return;
+        }
+        pOverride[1] = alpha;
+        sCurrent.constants_only = 1;
+        J3DNativeState::sendMaterial(&sCurrent);
+    }
+
     void swapImage(u32 map, const void* pImage) {
         if (sCurrentKind != CURRENT_J3D) {
             return;

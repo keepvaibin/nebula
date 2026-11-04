@@ -101,4 +101,6 @@ namespace J3DNativeMaterial {
     // 1-4, alphas A0 and A1, drawn above `ref`, -1 always): whether the material draws natively and took it (else the
     // caller loads its program). Mode 0 ends it.
     bool override(u32 mode, f32 a0, f32 a1, f32 ref);
+    // The alpha written over the reflection pass (override mode 5).
+    void overrideAlpha(f32 alpha);
 };  // namespace J3DNativeMaterial

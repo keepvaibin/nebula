@@ -15,7 +15,7 @@ enum Kind : std::uint8_t {
     kScissor,
     kLightAttenuation,
     kLightPosition,
-    kFrameAlpha,
+    kTargetAlpha,
 };
 
 struct Op {

@@ -162,13 +162,13 @@ void J3DModelX::directDraw(J3DModel* model) {
 
 namespace {
     // The flat passes' colours by list: `a` marks a flat pass (2: register 0's
-    // colour as the draw's lists left it), `alpha` its
-    // alpha (list 1 and 3: (0 + 1/2) / 2; their destination alpha is the list's constant); list 5 writes depth only.
+    // colour as the draw's lists left it), `alpha` its alpha (list 1 is the shadow texture's: list 14 with it, the soft
+    // edge around it, at a quarter); list 5 writes depth only.
     struct OverrideColor {
         u8 r, g, b, alpha, a;
     };
     const OverrideColor kOverrideColors[16] = {
-        {0, 0, 0, 0, 0},     {0, 0, 0, 64, 1},   {0, 0, 0, 0, 0},  {0, 0, 0, 64, 1},
+        {0, 0, 0, 0, 0},     {0, 0, 0, 255, 1},  {0, 0, 0, 0, 0},  {0, 0, 0, 64, 1},
         {255, 255, 0, 255, 1}, {0, 0, 0, 0, 1},  {0, 0, 0, 0, 0},  {0, 0, 0, 0, 0},
         {0, 0, 0, 252, 1},   {0, 0, 0, 4, 1},    {0, 0, 0, 0, 0},  {0, 0, 0, 0, 0},
         {0, 0, 0, 0, 2},     {35, 25, 25, 5, 1}, {0, 0, 0, 0, 0},  {0, 0, 0, 0, 0},
@@ -259,7 +259,7 @@ void J3DModelX::drawIn(J3DMaterial* material, bool fog, MtxPtr base, J3DModel* m
             material.constants[0] = rColor.r / 255.0f;
             material.constants[1] = rColor.g / 255.0f;
             material.constants[2] = rColor.b / 255.0f;
-            material.constants[3] = rColor.alpha / 255.0f;
+            material.constants[3] = (override == 1 && (mFlags.word() & (1 << 14)) != 0 ? 64 : rColor.alpha) / 255.0f;
         }
         NativeShader::send(material);
     }
@@ -323,7 +323,6 @@ void J3DModelX::sendFlagState(u32 flag) {
         noBlend();
         writeColor(false);
         writeAlpha(true);
-        constantAlpha(true, 0xFF);
         break;
     // Texture 0 at alpha 1/4 added (J3DNativeMaterial::override mode 1).
     case 2:
@@ -380,9 +379,6 @@ void J3DModelX::sendFlagState(u32 flag) {
         writeColor(true);
         writeAlpha(false);
         break;
-    case 14:
-        constantAlpha(true, 0x40);
-        break;
     // Only where the dark mask did not mark.
     case 15:
         noBlend();
@@ -406,7 +402,7 @@ void MarioModelTint::send() const {
         J3DNativeMaterial::applyPass(NEBULA_PASS_PLAYER_OPACITY);
         break;
     case Kind_ConstantAlpha:
-        J3DPass::constantAlpha(true, alpha);
+        J3DNativeMaterial::overrideAlpha(alpha / 255.0f);
         break;
     case Kind_ReflectAlpha:
         J3DNativeMaterial::setColorRegister(3, color0);

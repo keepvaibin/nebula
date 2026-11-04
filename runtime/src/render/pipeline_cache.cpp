@@ -154,32 +154,6 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC make_pso_desc_impl(
         rt.SrcBlendAlpha  = to_alpha_blend(rt.SrcBlend);
         rt.DestBlendAlpha = to_alpha_blend(rt.DestBlend);
         rt.BlendOpAlpha   = rt.BlendOp;
-        if (bb & (1u << 27)) {           // dual-source dst-alpha
-            // The PS exports the material alpha on SV_Target1 (the matching
-            // PixelShaderKey flags bit7 is derived from the same register
-            // snapshot): RGB blends against SRC1_ALPHA while the alpha
-            // channel keeps its independently selected alpha equation.
-            rt.SrcBlend = (rt.SrcBlend == D3D12_BLEND_SRC_ALPHA)
-                ? D3D12_BLEND_SRC1_ALPHA
-                : (rt.SrcBlend == D3D12_BLEND_INV_SRC_ALPHA)
-                    ? D3D12_BLEND_INV_SRC1_ALPHA
-                    : rt.SrcBlend;
-            rt.DestBlend = (rt.DestBlend == D3D12_BLEND_SRC_ALPHA)
-                ? D3D12_BLEND_SRC1_ALPHA
-                : (rt.DestBlend == D3D12_BLEND_INV_SRC_ALPHA)
-                    ? D3D12_BLEND_INV_SRC1_ALPHA
-                    : rt.DestBlend;
-        }
-        if (bb & (1u << 28)) { // Constant destination alpha is independent.
-            rt.SrcBlendAlpha = D3D12_BLEND_ONE;
-            rt.DestBlendAlpha = D3D12_BLEND_ZERO;
-            rt.BlendOpAlpha = D3D12_BLEND_OP_ADD;
-        }
-        if (bb & kRenderStateZeroAlpha) { // Constant destination alpha 0, drawn single-source.
-            rt.SrcBlendAlpha = D3D12_BLEND_ZERO;
-            rt.DestBlendAlpha = D3D12_BLEND_ZERO;
-            rt.BlendOpAlpha = D3D12_BLEND_OP_ADD;
-        }
     } else if (bb & (1u << 8)) {         // logic_op_enable
         rt.LogicOpEnable = TRUE;
         rt.LogicOp = logic_op_mode((bb >> 9) & 0xFu);

@@ -73,7 +73,6 @@ inline constexpr std::uint32_t kRenderStateReactiveTarget = 1u << 30u;
 inline constexpr std::uint32_t kRenderStateLayerTarget = 1u << 23u;
 // A blend under constant destination alpha 0 drawn single-source: the alpha channel's own blend writes the 0 (factors
 // zero), the colour blends at the shader's alpha.
-inline constexpr std::uint32_t kRenderStateZeroAlpha = 1u << 24u;
 
 struct PsoKey {
     std::uint64_t vs_hash;

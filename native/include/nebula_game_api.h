@@ -183,12 +183,11 @@ typedef struct NebulaPassState {
     uint8_t depth_test, depth_func, depth_write;      /* depth_func NEBULA_COMPARE_* */
     uint8_t cull;                                     /* NEBULA_CULL_* */
     uint8_t color_write, alpha_write;
-    uint8_t constant_alpha, constant_alpha_value;     /* the picture's alpha written is this value */
     uint8_t position_matrix;                          /* the place (0-9) vertices without their own take */
     uint8_t line_divisor, point_divisor;              /* lines' and points' texture offset n (1/n texel; 0 none) */
     uint8_t stencil_func, stencil_op;                 /* NEBULA_STENCIL_* */
     uint8_t line_offsets, point_offsets;              /* bit per texture coordinate those offsets move */
-    uint8_t reserved;
+    uint8_t reserved[3];
     float line_width, point_size;                     /* pixels */
 } NebulaPassState;
 
@@ -1116,8 +1115,6 @@ typedef struct NebulaHostServices {
     void (*view_scissor)(void* user, float left, float top, float width, float height);
     /* Light `index` (0-7). */
     void (*light)(void* user, uint32_t index, const NebulaLight* light);
-    /* Whether the frame keeps alpha. */
-    void (*frame_alpha)(void* user, int keep);
     /* Coordinate `coord` of the draws after this is texture coordinate `from`, through matrix slot `matrix_slot` (0-9
        position matrices, 10-19 texture matrices, 20 identity). */
     void (*texture_coordinate)(void* user, uint32_t coord, uint32_t from, uint32_t matrix_slot);

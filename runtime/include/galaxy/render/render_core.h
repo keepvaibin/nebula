@@ -254,7 +254,7 @@ private:
     // A copy (scene target to texture or display) with the pixel format it reads.
     void on_frame_output(const FramePassRequest& params);
     // The frame clears' format byte (make_scene_clear_values): 1 a frame keeping alpha, 0 one without.
-    [[nodiscard]] std::uint8_t frame_format() const noexcept { return draw_state_.frame_alpha ? 1u : 0u; }
+    [[nodiscard]] std::uint8_t frame_format() const noexcept { return draw_state_.target_alpha ? 1u : 0u; }
     // A light op's words (the state), into matrix memory.
     void load_light(const state::Op& op);
     void on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint64_t a, std::uint64_t b);
@@ -833,7 +833,7 @@ private:
     NativeDrawState draw_state_;
     // The blend the pixel engine performs (effective_blend: one that writes the source unchanged is none).
     [[nodiscard]] BlendMode draw_blend() const {
-        return effective_blend(draw_state_.blend, draw_state_.frame_alpha);
+        return effective_blend(draw_state_.blend, draw_state_.target_alpha);
     }
     PipelineCache pipeline_cache_;
     TextureCache texture_cache_;
@@ -885,6 +885,7 @@ private:
     std::array<ScreenProbeFlight, Renderer::kScreenProbeSlots> probe_flights_{};
     std::size_t probe_flight_first_ = 0, probe_flights_active_ = 0;
     void record_screen_probes(const shapes::Record& record);
+    void set_target_alpha(bool on);
     static constexpr std::uint32_t kScreenProbeChannels = 8u;
     struct ScreenProbeAnswers {
         std::uint32_t count = 0;

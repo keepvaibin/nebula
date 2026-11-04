@@ -35,16 +35,14 @@ std::vector<std::uint8_t> compile_mod_shader_stage(const std::string& source, co
         text.replace(at, close + 1u - at, body);
     }
     std::string head;
-    bool dual = false;
     for (const char* define : defines) {
         head += std::string("#define ") + define + " 1\n";
-        dual = dual || std::strcmp(define, "NATIVE_DUAL") == 0;
     }
     namespace vk = galaxy::render::vk;
     head += pixel ? "#define native_ps main\n" : "#define native_vs main\n";
     const std::vector<std::uint32_t> spirv =
         vk::compile_hlsl(vk::annotate(head + text, vk::draw_bindings()), pixel ? vk::ShaderStage::Fragment : vk::ShaderStage::Vertex, "main", {}, problem,
-                         {false, dual && pixel, false});
+                         {false, false});
     std::vector<std::uint8_t> out(spirv.size() * sizeof(std::uint32_t));
     if (!out.empty()) {
         std::memcpy(out.data(), spirv.data(), out.size());

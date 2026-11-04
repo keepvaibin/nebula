@@ -23,11 +23,9 @@ namespace {
 
 BootScene::BootScene()
     : Scene("BootScene") {
-    GameFrame::setKeepAlpha(false);
 }
 
 BootScene::~BootScene() {
-    GameFrame::setKeepAlpha(true);
 }
 
 void BootScene::init() {

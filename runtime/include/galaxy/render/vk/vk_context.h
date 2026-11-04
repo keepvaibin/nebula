@@ -110,7 +110,6 @@ public:
     [[nodiscard]] const std::string& device_name() const noexcept { return device_name_; }
     [[nodiscard]] const DeviceIdentity& identity() const noexcept { return identity_; }
     [[nodiscard]] const DeviceQuirks& quirks() const noexcept { return quirks_; }
-    [[nodiscard]] bool dual_source_blend() const noexcept { return dual_source_blend_; }
     [[nodiscard]] bool logic_op() const noexcept { return logic_op_; }
     [[nodiscard]] bool geometry_shader() const noexcept { return geometry_shader_; }
     [[nodiscard]] bool sample_rate_shading() const noexcept { return sample_rate_shading_; }
@@ -216,7 +215,6 @@ private:
     std::string failure_;
     DeviceIdentity identity_;
     DeviceQuirks quirks_;
-    bool dual_source_blend_ = false;
     bool logic_op_ = false;
     bool geometry_shader_ = false;
     bool sample_rate_shading_ = false;

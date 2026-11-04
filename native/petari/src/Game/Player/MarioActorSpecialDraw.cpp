@@ -124,7 +124,6 @@ void MarioActor::captureScreenBox() const {
     J3DNativeTarget::begin(_B44, MR::getScreenUnitsAcross(), MR::getScreenHeight(), 0);
     J3DPass::writeColor(true);
     J3DPass::writeAlpha(false);
-    J3DPass::constantAlpha(false, 0);
 }
 
 void MarioActor::writeBackScreenBox() const {
@@ -154,9 +153,7 @@ void MarioActor::writeBackScreenBox() const {
     TDDraw::setupNative(&material, 1, 0, 2);
     NativeShader::setBlend(material, NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_INV_SRC_ALPHA);
     NativeShader::setDepth(material, true, NEBULA_COMPARE_ALWAYS, true);
-    material.alpha_write = 1;
     NativeShader::setTexObj(material, 0, &texture);
-    J3DPass::constantAlpha(true, 0);
     NativeShader::send(material);
     maximum.x = static_cast< s16 >(static_cast< s16 >(static_cast< s32 >(maximum.x) + 1) & ~1);
     J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
@@ -168,7 +165,6 @@ void MarioActor::writeBackScreenBox() const {
     J3DNativeDraw::texCoord(u1, v1);
     J3DNativeDraw::position(minimum.x, maximum.y, 0.9999f);
     J3DNativeDraw::texCoord(u0, v1);
-    J3DPass::constantAlpha(false, 0);
     TDDraw::close();
 }
 

@@ -2507,18 +2507,6 @@ void svc_light(void*, uint32_t index, const NebulaLight* light) {
 #endif
 }
 
-void svc_frame_alpha(void*, int keep) {
-#if defined(NEBULA_HOST_RENDERER)
-    galaxy::render::state::Op op{};
-    op.kind = galaxy::render::state::kFrameAlpha;
-    op.a[0] = 1u;
-    op.a[1] = keep != 0 ? 1u : 0u;
-    attach_state_ops(&op, 1u);
-#else
-    (void)keep;
-#endif
-}
-
 void svc_texture_coordinate(void*, uint32_t coord, uint32_t from, uint32_t matrix_slot) {
 #if defined(NEBULA_HOST_RENDERER)
     galaxy::render::state::Op op{};
@@ -4341,7 +4329,6 @@ int main(int argc, char** argv) {
     services.view_viewport = svc_view_viewport;
     services.view_scissor = svc_view_scissor;
     services.light = svc_light;
-    services.frame_alpha = svc_frame_alpha;
     services.texture_coordinate = svc_texture_coordinate;
     services.immediate = svc_immediate;
     services.target_begin = svc_target_begin;

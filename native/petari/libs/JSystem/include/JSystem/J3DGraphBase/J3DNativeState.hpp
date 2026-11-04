@@ -32,7 +32,6 @@ namespace J3DPass {
     void cull(u8 faces);  // NEBULA_CULL_*
     void writeColor(bool write);
     void writeAlpha(bool write);
-    void constantAlpha(bool on, u8 alpha);  // the picture's alpha takes this value
     void positionMatrix(u8 index);          // the place vertices without one of their own use
     // A pixel is kept when the two comparisons with their references, joined by `op` (cAlpha*), pass.
     const u8 cAlphaAnd = 0;
@@ -62,7 +61,6 @@ void J3DPassBlend(u8 source, u8 destination);
 void J3DPassCull(u8 faces);
 void J3DPassWriteColor(int write);
 void J3DPassWriteAlpha(int write);
-void J3DPassConstantAlpha(int on, u8 alpha);
 void J3DPassPositionMatrix(u8 index);
 void J3DPassAlphaTest(u8 compare, u8 reference);
 void J3DPassNoFog(void);
@@ -92,7 +90,6 @@ namespace J3DNativeState {
     void initLightDistAttn(J3DNativeLight* pObj, f32 refDistance, f32 refBrightness, J3DLightFalloff falloff);
     void sendLight(const J3DNativeLight* pLight, u8 index);  // light 0-7
     // Whether the frame keeps alpha (the last value kept here: the host changes only when it differs).
-    void setFrameAlpha(bool keepAlpha);
     // The drawing state the game starts from , sent before anything is drawn.
     void initDefaults();
     // The frame's picture is drawn: its top left `width` x `height` becomes the one shown, through the display's

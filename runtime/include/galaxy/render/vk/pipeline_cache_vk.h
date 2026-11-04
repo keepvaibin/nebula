@@ -44,7 +44,6 @@ public:
     enum CompatBit : std::uint32_t {
         kCompatNoDepthClip = 1u << 0u,   // no VK_EXT_depth_clip_enable (depth clamped, primitives unclipped)
         kCompatNoLogicOp = 1u << 1u,     // logic ops draw as plain writes
-        kCompatNoDualSource = 1u << 2u,  // single-source blend factors, no second pixel-shader output
         kCompatNoDepthClamp = 1u << 3u,
         kCompatBits = 5u,
     };
@@ -52,10 +51,9 @@ public:
 private:
     [[nodiscard]] VkShaderModule native_module(const void* words, std::size_t bytes, vk::ShaderStage stage);
     [[nodiscard]] VkPipeline create_pipeline(const RenderStateKey& render_state, VkShaderModule vs, VkShaderModule ps,
-                                             bool dual_source, bool export_depth, std::uint32_t compat,
+                                             bool export_depth, std::uint32_t compat,
                                              VkResult& result) const;
-    [[nodiscard]] std::uint32_t applicable_compat(const RenderStateKey& render_state, bool dual_source,
-                                                  bool export_depth) const;
+    [[nodiscard]] std::uint32_t applicable_compat(const RenderStateKey& render_state, bool export_depth) const;
     template <typename Make>
     VkPipeline with_fallbacks(Make&& make, std::uint32_t applicable, const char* what, const std::string& detail,
                               bool* transient = nullptr);

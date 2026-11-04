@@ -26,24 +26,19 @@ enum NativeShaderVariant : unsigned {
     kNativeVariantReactive = 1u,  // + the reactive mask
     kNativeVariantLayer = 2u,     // + the reactive mask and the effects layer's targets
     kNativeVariantMotion = 3u,    // + the motion vector
-    kNativeVariantDual = 4u,      // + the material alpha for dual-source blending (render state bit 27)
-    kNativeVariantSample = 5u,      // an alpha-tested material under MSAA: base, per sample
-    kNativeVariantSampleDual = 6u,  // dual, per sample
-    kNativeVariantPixel = 7u,            // lit at the pixel (j3d_material.hlsli), plainly or enhanced
-    kNativeVariantPixelDual = 8u,
-    kNativeVariantPixelSample = 9u,
-    kNativeVariantPixelSampleDual = 10u,
-    kNativeVariantPixelReactive = 11u,
-    kNativeVariantPixelLayer = 12u,
-    kNativeVariantPixelMotion = 13u,
-    kNativeVariants = 14u,
+    kNativeVariantSample = 4u,  // an alpha-tested material under MSAA: base, per sample
+    kNativeVariantPixel = 5u,   // lit at the pixel (j3d_material.hlsli), plainly or enhanced
+    kNativeVariantPixelSample = 6u,
+    kNativeVariantPixelReactive = 7u,
+    kNativeVariantPixelLayer = 8u,
+    kNativeVariantPixelMotion = 9u,
+    kNativeVariants = 10u,
 };
 
 [[nodiscard]] constexpr unsigned native_shader_variant(std::uint32_t blend_bits) noexcept {
     return (blend_bits & kRenderStateLayerTarget) != 0u      ? kNativeVariantLayer
            : (blend_bits & kRenderStateMotionTarget) != 0u   ? kNativeVariantMotion
            : (blend_bits & kRenderStateReactiveTarget) != 0u ? kNativeVariantReactive
-           : (blend_bits & (1u << 27u)) != 0u                ? kNativeVariantDual
                                                              : kNativeVariantBase;
 }
 
@@ -52,15 +47,9 @@ enum NativeShaderVariant : unsigned {
 // that variant and the device can (per_sample); lit at the pixel where the material lights and the setting asks.
 [[nodiscard]] unsigned native_draw_variant(std::uint32_t shader, unsigned variant, unsigned samples_log2, bool per_sample,
                                            bool pixel_lit) noexcept;
-[[nodiscard]] constexpr bool native_variant_dual(unsigned variant) noexcept {
-    return variant == kNativeVariantDual || variant == kNativeVariantSampleDual || variant == kNativeVariantPixelDual ||
-           variant == kNativeVariantPixelSampleDual;
-}
-
 [[nodiscard]] NativeShaderBytes native_shader_bytes(std::uint32_t shader, unsigned variant, bool pixel) noexcept;
 
-// A native pipeline's render state: the draw's (its dual-source and constant-alpha bits the shader's dual variant
-// and PE word serve).
+// A native pipeline's render state: the draw's.
 [[nodiscard]] inline RenderStateKey native_render_state(RenderStateKey rs) noexcept {
     std::memset(rs.reserved, 0, sizeof(rs.reserved));
     return rs;

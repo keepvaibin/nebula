@@ -14,7 +14,6 @@ void Mii_SetupTextureDraw(void) {
     J3DPassNoFog();
     J3DPassWriteColor(1);
     J3DPassWriteAlpha(1);
-    J3DPassConstantAlpha(0, 0);
     J3DPassDepth(1, NEBULA_COMPARE_LEQUAL, 1);
 }
 
