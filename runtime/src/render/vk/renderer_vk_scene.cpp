@@ -2039,6 +2039,21 @@ void RendererVk::draw(const DrawCall& call) {
         vkCmdBindVertexBuffers(commands, 0, 1, &vertices.buffer, &vertices.offset);
         bound_.vertex_address = call.vertex_view.BufferLocation;
     }
+    if (call.extra_view.BufferLocation != bound_.extra_address) {
+        if (call.extra_view.BufferLocation != 0u) {
+            const vk::Context::BufferOffset extra = context.resolve(call.extra_view.BufferLocation);
+            vkCmdBindVertexBuffers(commands, 1, 1, &extra.buffer, &extra.offset);
+        } else {
+            // Meshes without the second stream read zeros: room for a shape's largest count.
+            if (!zero_vertices_) {
+                zero_vertices_ = vk::Context::get().create_buffer(0x10000u * sizeof(RenderVertexExtra), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, "zero vertices");
+                std::memset(zero_vertices_->mapped, 0, zero_vertices_->size);
+            }
+            const VkDeviceSize zero = 0u;
+            vkCmdBindVertexBuffers(commands, 1, 1, &zero_vertices_->buffer, &zero);
+        }
+        bound_.extra_address = call.extra_view.BufferLocation;
+    }
     if (call.index_count == 0u) {
         return;
     }

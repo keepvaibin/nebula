@@ -1161,11 +1161,6 @@ private:
     [[nodiscard]] bool temporal_inputs_match(const TemporalUpscaleInputs& in) const;
     D3D12_GPU_VIRTUAL_ADDRESS resident_vertex_base_ = 0;
     std::uint64_t resident_vertex_bytes_ = 0;
-    // Never a pair's verdict (stays zero, which passes): stripe draws, paired
-    // per particle, blend without the geometry check.
-    // The playing sequence's stripe draws: per output vertex the source of its
-    // earlier position (byte offset, buffer: 0 ring, 1 resident), gathered
-    // into stripe_earlier_ before the first sub-frame (kStripeGatherCs).
     // Sequence replay (begin_replay_sequence) and its evaluation pass. The
     // replay list is recorded once per sequence and executed by every
     // sub-frame between a small evaluation list and a small present list.
@@ -1476,6 +1471,9 @@ private:
         D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
     D3D12_VERTEX_BUFFER_VIEW bound_vertex_view_{};
     bool bound_vertex_view_valid_ = false;
+    D3D12_VERTEX_BUFFER_VIEW bound_extra_view_{};
+    bool bound_extra_view_valid_ = false;
+    Microsoft::WRL::ComPtr<ID3D12Resource> zero_vertices_;
     // The index view is a CPU-side 20-byte descriptor whose BufferLocation comes
     // from the per-frame index ring, so like the vertex view it must be re-armed
     // by invalidate_draw_bindings() after the ring for the new slot is rewound.

@@ -762,6 +762,7 @@ private:
         std::uint64_t texture_table = 0;
         std::uint64_t sampler_table = 0;
         gpu::Address vertex_address = ~gpu::Address{0};
+        gpu::Address extra_address = ~gpu::Address{0};
         gpu::Address index_address = ~gpu::Address{0};
         VkViewport viewport{};
         bool viewport_valid = false;
@@ -947,12 +948,7 @@ private:
         std::shared_ptr<vk::Buffer> buffer;
         std::uint64_t fence = 0;
         VkDescriptorSet set = VK_NULL_HANDLE;
-        std::array<VkBuffer, 5> bound{};  // what `set` names: program, constant ring, matrix ring, output, verdicts
-        // The sequence's blend pairs and stripe sources, and the sets of the passes that read them.
-        std::shared_ptr<vk::Buffer> pairs;
-        std::shared_ptr<vk::Buffer> sources;
-        VkDescriptorSet validate_set = VK_NULL_HANDLE;
-        VkDescriptorSet gather_set = VK_NULL_HANDLE;
+        std::array<VkBuffer, 4> bound{};  // what `set` names: program, constant ring, matrix ring, output
         std::array<VkBuffer, 4> validate_bound{};
         std::array<VkBuffer, 4> gather_bound{};
     };
@@ -1013,6 +1009,7 @@ private:
     SceneSet replay_alt_scene_;  // the replay's output scene target
     FrameMap replay_alt_scale_{};
     bool replay_alt_storage_ = false;
+    std::shared_ptr<vk::Buffer> zero_vertices_;
     bool create_scene_set(SceneSet& set, const FrameMap& map, unsigned samples = 1u, unsigned width = kFrameUnits,
                         unsigned height = kFrameUnits, bool target = false);
     void destroy_scene_set(SceneSet& set);

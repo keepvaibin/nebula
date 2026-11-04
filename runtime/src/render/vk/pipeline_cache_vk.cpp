@@ -148,13 +148,14 @@ std::uint32_t input_location_mask(const std::vector<std::uint32_t>& spirv) {
 // coordinates one each.
 constexpr VkVertexInputAttributeDescription kVertexAttributes[] = {
     {0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0},    {1, 0, VK_FORMAT_R32G32B32_SFLOAT, 12},
-    {2, 0, VK_FORMAT_R32G32B32_SFLOAT, 24},   {3, 0, VK_FORMAT_R32G32B32_SFLOAT, 36},
-    {4, 0, VK_FORMAT_R32_UINT, 48},           {5, 0, VK_FORMAT_R32_UINT, 52},
-    {6, 0, VK_FORMAT_R32G32_SFLOAT, 56},      {7, 0, VK_FORMAT_R32G32_SFLOAT, 64},
-    {8, 0, VK_FORMAT_R32G32_SFLOAT, 72},      {9, 0, VK_FORMAT_R32G32_SFLOAT, 80},
-    {10, 0, VK_FORMAT_R32G32_SFLOAT, 88},     {11, 0, VK_FORMAT_R32G32_SFLOAT, 96},
-    {12, 0, VK_FORMAT_R32G32_SFLOAT, 104},    {13, 0, VK_FORMAT_R32G32_SFLOAT, 112},
-    {14, 0, VK_FORMAT_R32G32B32_UINT, 120},    {15, 0, VK_FORMAT_R32G32B32_UINT, 132},
+    {4, 0, VK_FORMAT_R32_UINT, 24},           {5, 0, VK_FORMAT_R32_UINT, 28},
+    {6, 0, VK_FORMAT_R32G32_SFLOAT, 32},      {14, 0, VK_FORMAT_R32_UINT, 40},
+    {2, 1, VK_FORMAT_R32G32B32_SFLOAT, 0},    {3, 1, VK_FORMAT_R32G32B32_SFLOAT, 12},
+    {7, 1, VK_FORMAT_R32G32_SFLOAT, 24},      {8, 1, VK_FORMAT_R32G32_SFLOAT, 32},
+    {9, 1, VK_FORMAT_R32G32_SFLOAT, 40},      {10, 1, VK_FORMAT_R32G32_SFLOAT, 48},
+    {11, 1, VK_FORMAT_R32G32_SFLOAT, 56},     {12, 1, VK_FORMAT_R32G32_SFLOAT, 64},
+    {13, 1, VK_FORMAT_R32G32_SFLOAT, 72},     {16, 1, VK_FORMAT_R32G32_UINT, 80},
+    {15, 1, VK_FORMAT_R32_UINT, 88},
 };
 // Written beside the target and renamed, so a reader never sees a partial file.
 template <typename Write>
@@ -340,11 +341,12 @@ VkPipeline PipelineCacheVk::create_pipeline(const RenderStateKey& rs, VkShaderMo
     VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     add_stage(VK_SHADER_STAGE_FRAGMENT_BIT, ps);
 
-    VkVertexInputBindingDescription binding{0, static_cast<std::uint32_t>(sizeof(RenderVertex)),
-                                            VK_VERTEX_INPUT_RATE_VERTEX};
+    const VkVertexInputBindingDescription bindings[2]{
+        {0, static_cast<std::uint32_t>(sizeof(RenderVertexCore)), VK_VERTEX_INPUT_RATE_VERTEX},
+        {1, static_cast<std::uint32_t>(sizeof(RenderVertexExtra)), VK_VERTEX_INPUT_RATE_VERTEX}};
     VkPipelineVertexInputStateCreateInfo vertex_input{VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
-    vertex_input.vertexBindingDescriptionCount = 1;
-    vertex_input.pVertexBindingDescriptions = &binding;
+    vertex_input.vertexBindingDescriptionCount = 2;
+    vertex_input.pVertexBindingDescriptions = bindings;
     // Only the attributes the vertex shader reads (the others would be fetched for nothing).
     std::uint32_t inputs = ~0u;
     {

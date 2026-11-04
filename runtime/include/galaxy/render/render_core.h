@@ -305,7 +305,6 @@ private:
         bool black = false;  // the output shows black (no picture)
         bool present_swap_chain = true;
         bool present_only = false;
-        // JPA stripe particles in this chunk (attach_stripe_particle).
         // The chunk's records, in the order the game made them (attach_shape_record).
         std::vector<shapes::Record> shape_records;
         shapes::RecordPool record_pool;
@@ -352,10 +351,6 @@ private:
     bool scene_stage_known_ = false;
     // Render thread: the scene's sky up changed; the next draw uploads its VS constants.
     bool sky_up_dirty_ = false;
-    // Render thread: the chunk's stripe marks while its records run (log
-    // recording), and the stripe vertices of the pending draw batch.
-    std::vector<StripeVertex> draw_stripe_vertices_;
-    // Render thread, after a chunk's parse: trace of the stripe-particle marks.
     // Render thread: inside GameScene::draw3D (between the scene markers).
     bool scene_phase_ = false;
     // Render thread -> simulation thread: emit draw-identity markers.
@@ -907,9 +902,8 @@ private:
     // GPU-resident decoded vertices (render thread only). One persistently
     // mapped UPLOAD buffer, created lazily per device; see
     // resident_vertex_arena.h for the block retirement rule.
-    static constexpr std::uint32_t kResidentDecodedVertexCapacity =
-        static_cast<std::uint32_t>(
-            64u * 1024u * 1024u / sizeof(RenderVertex));
+    static constexpr std::uint32_t kResidentUnit = 16u;
+    static constexpr std::uint32_t kResidentDecodedVertexCapacity = 64u * 1024u * 1024u / kResidentUnit;
     ResidentVertexArena resident_vertices_;
     UploadBuffer resident_vertex_buffer_;
     gpu::Address resident_vertex_gpu_ = 0;

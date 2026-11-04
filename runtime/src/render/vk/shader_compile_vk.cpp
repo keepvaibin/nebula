@@ -69,8 +69,8 @@ std::string spirv_string(const std::vector<std::uint32_t>& spirv, std::size_t fi
     return text;
 }
 
-// A semantic's location, as D3D12 matches stages by semantic: vertex attributes in RenderVertex's order
-// (POSITION 0, NORMAL 1, TANGENT 2, BINORMAL 3, COLOR0-1 4-5, TEXCOORD0-7 6-13, BLENDINDICES 14, BEND 15);
+// A semantic's location, as D3D12 matches stages by semantic: vertex attributes
+// (POSITION 0, NORMAL 1, TANGENT 2, BINORMAL 3, COLOR0-1 4-5, TEXCOORD0-7 6-13, BLENDINDICES0 14, BEND 15, BLENDINDICES1 16);
 // between stages COLOR0-1 at 0-1 and TEXCOORD0-16 at 2-18 (16: the curved stages' curve data); pixel outputs
 // SV_TARGETn at n. `element`: the variable's element of an
 // array declared with this semantic, which takes the following indices.
@@ -97,6 +97,7 @@ std::optional<std::uint32_t> semantic_location(std::string semantic, std::uint32
         if (name == "COLOR" && index < 2u) return 4u + index;
         if (name == "TEXCOORD" && index < 8u) return 6u + index;
         if (name == "BLENDINDICES" && index == 0u) return 14u;
+        if (name == "BLENDINDICES" && index == 1u) return 16u;
         if (name == "BEND" && index == 0u) return 15u;
         return std::nullopt;
     }
