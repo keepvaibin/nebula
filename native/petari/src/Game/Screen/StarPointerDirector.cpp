@@ -180,7 +180,7 @@ void StarPointerPeekZ::setDrawSyncToken() {
             probes[channel].y = -1.0f;
         }
     }
-    J3DNativeView::probeScreen(cReadbackChannel, NEBULA_SCREEN_PROBE_DEPTH, probes, count);
+    J3DNativeView::probeScreen(cReadbackChannel, probes, count);
 }
 
 namespace StarPointerFunction {

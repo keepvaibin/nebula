@@ -23,16 +23,14 @@ namespace ImageEffectLocalUtil {
     };
 
     void setStage(EStage stage);
-    // The fall-out field's passes (runtime/src/render/materials/image_effect.hlsl modes 2-5): its mask by the texture's
-    // alpha under or over the constant's, the alpha alone (its blur), the edge colour at the texture's alpha.
+    // The fall-out field's passes (runtime/src/render/materials/image_effect.hlsl modes 4, 5): the alpha alone (its blur),
+    // the edge colour at the texture's alpha.
     enum EMode {
-        Mode_MaskBelow = 2,
-        Mode_MaskAbove = 3,
         Mode_Alpha = 4,
         Mode_Edge = 5,
         Mode_QuarterBox = 7,
     };
-    void setMode(EMode mode, const NebulaColor8& rKonst, const NebulaColor8& rEdge);
+    void setMode(EMode mode, const NebulaColor8& rEdge);
     void setupDrawTexture();
     void drawTexture(JUTTexture* pTexture, s32 divisions, s32 tile, u8 intensity, ETexDrawType texDrawType);
     void sendTextureVertex(s32 divisions, s32 tile);

@@ -41,14 +41,10 @@ static_assert(sizeof(RenderVertex) % 16u == 0u,
               "vertex upload batching requires 16-byte stride alignment");
 
 // A point of the picture the game asks about (nebula_game_api.h NebulaScreenProbe): the frame's coordinates, negative
-// no point; user_x and user_y come back with the value.
+// no point; the user values come back with the value.
 struct ScreenProbe {
-    float x, y, user_x, user_y, value;
+    float x, y, user_x, user_y, user_z, value;
 };
 inline constexpr std::uint32_t kScreenProbesMax = 256u;
-enum class ScreenProbeKind : std::uint8_t {
-    Alpha,
-    Depth,
-};
 
 }  // namespace galaxy::render

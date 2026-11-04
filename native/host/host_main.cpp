@@ -2268,7 +2268,7 @@ void svc_immediate(void*, const NebulaImmediate* draw) {
 #endif
 }
 
-void svc_screen_probe(void*, uint32_t channel, uint32_t what, const NebulaScreenProbe* probes, uint32_t count) {
+void svc_screen_probe(void*, uint32_t channel, const NebulaScreenProbe* probes, uint32_t count) {
 #if defined(NEBULA_HOST_RENDERER)
     static_assert(sizeof(NebulaScreenProbe) == sizeof(galaxy::render::ScreenProbe) &&
                   NEBULA_SCREEN_PROBES_MAX == galaxy::render::kScreenProbesMax);
@@ -2277,12 +2277,11 @@ void svc_screen_probe(void*, uint32_t channel, uint32_t what, const NebulaScreen
     record.kind = shapes::Record::Kind::Readback;
     attach_pending_records();
     record.key = channel;
-    record.marker_aux = what;
     std::memcpy(galaxy::render::reserve_record_probes(record, std::min(count, NEBULA_SCREEN_PROBES_MAX)), probes,
                 std::min(count, NEBULA_SCREEN_PROBES_MAX) * sizeof(NebulaScreenProbe));
     galaxy::render::attach_shape_record(std::move(record));
 #else
-    (void)channel, (void)what, (void)probes, (void)count;
+    (void)channel, (void)probes, (void)count;
 #endif
 }
 

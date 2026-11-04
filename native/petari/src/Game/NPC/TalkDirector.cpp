@@ -71,7 +71,7 @@ void TalkPeekZ::setDrawSyncToken() {
         probe.x = pos.x;
         probe.y = pos.y;
     }
-    J3DNativeView::probeScreen(cReadbackChannel, NEBULA_SCREEN_PROBE_DEPTH, &probe, 1);
+    J3DNativeView::probeScreen(cReadbackChannel, &probe, 1);
 }
 
 TalkDirector::TalkDirector(const char* pName)

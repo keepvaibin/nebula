@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 124u
+#define NEBULA_GAME_API_VERSION 125u
 
 /* Viewports, scissors, clears, target sizes and picture points count this many units across a frame on each axis. */
 #define NEBULA_FRAME_UNITS 65536.0f
@@ -896,14 +896,10 @@ typedef enum NebulaClearChannels {
 
 /* A point of the picture the game asks about (NebulaHostServices::screen_probe). */
 #define NEBULA_SCREEN_PROBES_MAX 256u
-typedef enum NebulaScreenProbeKind {
-    NEBULA_SCREEN_PROBE_ALPHA = 0, /* value: the picture's alpha, 0-1 */
-    NEBULA_SCREEN_PROBE_DEPTH = 1  /* value: the depth, 0 near to 1 far */
-} NebulaScreenProbeKind;
 typedef struct NebulaScreenProbe {
     float x, y;
-    float user_x, user_y;
-    float value;
+    float user_x, user_y, user_z;
+    float value; /* the depth, 0 near to 1 far */
 } NebulaScreenProbe;
 
 typedef struct NebulaHostServices {
@@ -1156,10 +1152,9 @@ typedef struct NebulaHostServices {
     /* The Mii in a slot of the Mii database (0-99): 1 when there is one (`mii` filled when not NULL), 0 for
        an empty slot. */
     int32_t (*mii_record)(void* user, uint32_t slot, NebulaMii* mii);
-    /* What the picture holds at `count` points where the drawing has reached (at most NEBULA_SCREEN_PROBES_MAX; `what` a
-       NebulaScreenProbeKind). x and y the frame's coordinates, negative: no point, its value 0; user_x and user_y come
-       back with the answer. */
-    void (*screen_probe)(void* user, uint32_t channel, uint32_t what, const NebulaScreenProbe* probes, uint32_t count);
+    /* The depth at `count` points where the drawing has reached (at most NEBULA_SCREEN_PROBES_MAX). x and y the frame's
+       coordinates, negative: no point, its value 0; the user values come back with the answer. */
+    void (*screen_probe)(void* user, uint32_t channel, const NebulaScreenProbe* probes, uint32_t count);
     /* `channel`'s latest finished probes with their values, at most `capacity`; how many (0 before any has finished).
        Never waits for the GPU. */
     uint32_t (*screen_probe_results)(void* user, uint32_t channel, NebulaScreenProbe* probes, uint32_t capacity);

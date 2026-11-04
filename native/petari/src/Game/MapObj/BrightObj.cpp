@@ -1,8 +1,6 @@
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/MapObj/BrightObj.hpp"
-#include "Game/Util/NativeShader.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include "Game/Util/GameLightSignal.hpp"
 #include "Game/MapObj/Sun.hpp"
 #include "Game/Scene/SceneFunction.hpp"
@@ -10,7 +8,6 @@
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
-#include "Game/Util/DirectDraw.hpp"
 #include "Game/Util/JMapUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -21,6 +18,13 @@
 namespace {
     const static f32 sSunRadius = 3000.0f;
     const static f32 sSunModelScale = 100.0f;
+
+    // The depth of a point, 0 near to 1 far.
+    f32 calcDepth(const TVec3f& rTrans, const TPos3f& rViewMtx, const TProj3f& rProjMtx) {
+        TVec3f vec;
+        rViewMtx.mult(rTrans, vec);
+        return (vec.z * rProjMtx[2][2] + rProjMtx[2][3]) / -vec.z + 1.0f;
+    }
 
     bool calcScreenPosition(TVec2f* pDst, const TVec3f& rTrans, const TPos3f& rViewMtx, const TProj3f& rProjMtx) {
         TVec3f newPos;
@@ -121,6 +125,7 @@ void BrightObjBase::checkVisibilityOfSphere(NebulaScreenProbe* pProbes) {
         pProbes[idx].y = -1.0f;
         pProbes[idx].user_x = 0.0f;
         pProbes[idx].user_y = 0.0f;
+        pProbes[idx].user_z = 0.0f;
     }
 
     if (MR::isNearZero(drawDir)) {
@@ -142,6 +147,8 @@ void BrightObjBase::checkVisibilityOfSphere(NebulaScreenProbe* pProbes) {
     checkVisible(&pProbes[0], drawPos, rView, rProj);
     pProbes[0].user_x = center.x;
     pProbes[0].user_y = center.y;
+    // Each point's depth is the sphere's near surface in front of it.
+    pProbes[0].user_z = ::calcDepth(drawPos + drawDir * mDrawRadius, rView, rProj);
 
     for (u32 idx = 0; idx < 8; idx++) {
         f32 angle = idx * MR::pi() / 4.0f;
@@ -151,6 +158,7 @@ void BrightObjBase::checkVisibilityOfSphere(NebulaScreenProbe* pProbes) {
         mtx.mult(vec11C, vec11C);
 
         checkVisible(&pProbes[1 + idx], vec11C, rView, rProj);
+        pProbes[1 + idx].user_z = ::calcDepth(vec11C + drawDir * (mDrawRadius * 0.9165f), rView, rProj);
     }
 
     for (u32 idx = 0; idx < 8; idx++) {
@@ -161,6 +169,7 @@ void BrightObjBase::checkVisibilityOfSphere(NebulaScreenProbe* pProbes) {
         mtx.mult(vec128, vec128);
 
         checkVisible(&pProbes[9 + idx], vec128, rView, rProj);
+        pProbes[9 + idx].user_z = ::calcDepth(vec128 + drawDir * (mDrawRadius * 0.7141f), rView, rProj);
     }
 }
 
@@ -177,13 +186,13 @@ void BrightObjBase::checkVisible(NebulaScreenProbe* pProbe, const TVec3f& rTrans
     }
 }
 
-// The points' answers: how much of the sphere passed its depth test (its alpha is set where it did).
+// The points' answers: how many of the sphere's points nothing drawn so far stands in front of.
 void BrightObjBase::setResult(const NebulaScreenProbe* pProbes) {
     u32 bright = 0;
     TVec2f objCenter(0.0f, 0.0f);
 
     for (u32 idx = 0; idx < cProbeCount; idx++) {
-        if (pProbes[idx].x >= 0.0f && pProbes[idx].value >= (0xF0 / 255.0f)) {
+        if (pProbes[idx].x >= 0.0f && pProbes[idx].value >= pProbes[idx].user_z) {
             bright++;
             objCenter += TVec2f(pProbes[idx].user_x, pProbes[idx].user_y);
         }
@@ -205,37 +214,6 @@ void BrightObjBase::setResult(const NebulaScreenProbe* pProbes) {
     mInfo.write(mBrightCenter, center, mBrightness);
 }
 
-void BrightObjBase::drawSphere(const TVec3f& rPos, float radius) const {
-    TPos3f viewMtx(MR::getCameraViewMtx());
-
-    TPos3f mtx;
-    mtx.identity33();
-    mtx.setTrans(rPos);
-    mtx.concat(viewMtx, mtx);
-
-    // The sun's visibility in the alpha buffer: cleared by a larger sphere over everything, then set where the sun
-    // itself passes the depth test (alpha only).
-    NebulaNativeMaterial material;
-    TDDraw::setupNative(&material, 0, 0, 1);
-    TDDraw::loadViewMtx(mtx);
-
-    J3DPass::constantAlpha(false, 0);
-    material.color_write = 0;
-    material.alpha_write = 1;
-    NativeShader::setDepth(material, true, NEBULA_COMPARE_ALWAYS, false);
-    NativeShader::send(material);
-
-    TDDraw::drawSphere(TVec3f(0, 0, 0), radius * 1.1f, 0xFF000000, 0x10);
-
-    NativeShader::setDepth(material, true, NEBULA_COMPARE_LEQUAL, false);
-    NativeShader::send(material);
-
-    TDDraw::drawSphere(TVec3f(0, 0, 0), radius, 0x00FF00FF, 0x10);
-
-    J3DPass::writeColor(true);
-    J3DPass::writeAlpha(false);
-}
-
 BrightObj::BrightObj(const char* pName) : LiveActor(pName), BrightObjBase(), mRadius(::sSunModelScale) {
 }
 
@@ -246,7 +224,7 @@ void BrightObj::init(const JMapInfoIter& rIter) {
 
     MR::invalidateClipping(this);
 
-    MR::connectToScene(this, MR::MovementType_Environment, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_BrightSun);
+    MR::connectToScene(this, MR::MovementType_Environment, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_None);
 
     makeActorAppeared();
 }
@@ -254,14 +232,6 @@ void BrightObj::init(const JMapInfoIter& rIter) {
 void BrightObj::control() {
     mDrawPos.set(mPosition);
     mDrawRadius = mRadius;
-}
-
-void BrightObj::draw() const {
-    if (MR::isDead(this) || MR::isHiddenModel(this) || MR::isClipped(this)) {
-        return;
-    }
-
-    drawSphere(mPosition, mRadius);
 }
 
 void BrightObj::calcBrightInfo(NebulaScreenProbe* pProbes) {
@@ -293,14 +263,6 @@ void BrightSun::control() {
 
     mDrawPos.set(mPosition);
     mDrawRadius = ::sSunRadius;
-}
-
-void BrightSun::draw() const {
-    if (MR::isDead(this) || MR::isHiddenModel(this) || MR::isClipped(this)) {
-        return;
-    }
-
-    drawSphere(mPosition, ::sSunRadius);
 }
 
 void BrightSun::calcBrightInfo(NebulaScreenProbe* pProbes) {
@@ -374,7 +336,7 @@ void BrightSun::init(const JMapInfoIter& rIter) {
 
     MR::invalidateClipping(this);
 
-    MR::connectToScene(this, MR::MovementType_Environment, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_BrightSun);
+    MR::connectToScene(this, MR::MovementType_Environment, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_None);
 
     mSun = new Sun("\221\276\227\172" /* 太陽 */);
     mSun->initWithoutIter();

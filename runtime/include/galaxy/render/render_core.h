@@ -880,7 +880,6 @@ private:
     struct ScreenProbeFlight {
         std::uint32_t channel = 0, count = 0;
         std::size_t slot = 0;
-        ScreenProbeKind kind = ScreenProbeKind::Alpha;
         std::array<ScreenProbe, kScreenProbesMax> probes{};
     };
     std::array<ScreenProbeFlight, Renderer::kScreenProbeSlots> probe_flights_{};

@@ -32,7 +32,6 @@ void MR::connectToSceneImageEffectMovement(NameObj* pObj) {
 namespace {
     // The draws' mode (runtime/src/render/materials/image_effect.hlsl params.x) and the colours the fall-out passes give.
     u32 sMode = 0;
-    NebulaColor8 sKonst = {0, 0, 0, 0};
     NebulaColor8 sEdge = {0, 0, 0, 0};
 
     // runtime/src/render/materials/image_effect.hlsl for a screen tile: texture 0 at its own coordinates (moved by the
@@ -53,9 +52,8 @@ namespace {
         } else {
             NativeShader::setColor(material, 0, intensity, intensity, intensity, 255);
         }
-        NativeShader::setColor(material, 4, sKonst.r, sKonst.g, sKonst.b, sKonst.a);
-        NativeShader::setColor(material, 8, sEdge.r, sEdge.g, sEdge.b, sEdge.a);
-        material.constants[12] = static_cast< f32 >(sMode);
+        NativeShader::setColor(material, 4, sEdge.r, sEdge.g, sEdge.b, sEdge.a);
+        material.constants[8] = static_cast< f32 >(sMode);
         NativeShader::setTexture(material, 0, pTexture);
         NativeShader::send(material);
     }
@@ -73,9 +71,8 @@ namespace {
     }
 }  // namespace
 
-void ImageEffectLocalUtil::setMode(EMode mode, const NebulaColor8& rKonst, const NebulaColor8& rEdge) {
+void ImageEffectLocalUtil::setMode(EMode mode, const NebulaColor8& rEdge) {
     sMode = static_cast< u32 >(mode);
-    sKonst = rKonst;
     sEdge = rEdge;
 }
 

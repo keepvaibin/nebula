@@ -89,7 +89,6 @@ enum SceneObj {
     SceneObj_52 = 0x52,
     SceneObj_ClipAreaHolder = 0x53,
     SceneObj_ArrowSwitchMultiHolder = 0x54,
-    SceneObj_ScreenAlphaCapture = 0x55,
     SceneObj_MapPartsRailGuideHolder = 0x56,
     SceneObj_GCapture = 0x57,
     SceneObj_NameObjExecuteHolder = 0x58,

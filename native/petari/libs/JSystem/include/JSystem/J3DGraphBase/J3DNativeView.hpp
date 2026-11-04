@@ -32,7 +32,7 @@ namespace J3DNativeView {
     // The picture's colour and depth where the drawing has reached, kept as `channel`'s; reads take the latest finished
     // capture (a frame or so old) and never wait. Frame-buffer coordinates.
     // What the picture holds at the game's points where the drawing has reached; the answers come back a frame or two later.
-    void probeScreen(u32 channel, NebulaScreenProbeKind what, const NebulaScreenProbe* pProbes, u32 count);
+    void probeScreen(u32 channel, const NebulaScreenProbe* pProbes, u32 count);
     u32 screenProbeResults(u32 channel, NebulaScreenProbe* pProbes, u32 capacity);
 };  // namespace J3DNativeView
 

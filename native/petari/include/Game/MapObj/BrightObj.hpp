@@ -43,7 +43,6 @@ public:
     void checkVisibilityOfSphere(NebulaScreenProbe*);
     void checkVisible(NebulaScreenProbe*, const TVec3f&, const TPos3f&, const TProj3f&);
     void setResult(const NebulaScreenProbe*);
-    void drawSphere(const TVec3f&, float) const;
 
     BrightInfo mInfo;
     TVec2f mBrightCenter;
@@ -60,7 +59,6 @@ public:
 
     virtual ~BrightObj();
     virtual void init(const JMapInfoIter&);
-    virtual void draw() const;
     virtual void control();
 
     virtual void calcBrightInfo(NebulaScreenProbe*);
@@ -75,7 +73,6 @@ public:
 
     virtual ~BrightSun();
     virtual void init(const JMapInfoIter&);
-    virtual void draw() const;
     virtual void control();
 
     virtual void calcBrightInfo(NebulaScreenProbe*);

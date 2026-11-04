@@ -17,18 +17,12 @@ extern "C" const NebulaHostServices* nebula_host(void);
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Screen/ImageEffectLocalUtil.hpp"
-#include "Game/Screen/ScreenAlphaCapture.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/Color.hpp"
+#include "Game/Util/DrawUtil.hpp"
 #include "Game/Util/JMapUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
-
-namespace {
-    inline void drawFillScreen(NebulaColor8 color) {
-        ImageEffectLocalUtil::sendTextureVertex(1, 0);
-    }
-};  // namespace
 
 namespace {
     // static const s32 sBlurCount = _;
@@ -41,9 +35,7 @@ namespace {
 FallOutFieldDraw::FallOutFieldDraw(const char* pName) : NameObj(pName), _C() {
     MR::createClipAreaHolder();
     MR::connectToScene(this, MR::MovementType_None, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_FallOutFieldDraw);
-    MR::createScreenAlphaSceneObj(3, 0.25f);
-    MR::createScreenAlphaSceneObj(4, 0.25f);
-    mFrameKey = ImageEffectLocalUtil::createFrameKey();
+    mDepthKey = ImageEffectLocalUtil::createFrameKey();
     mMask = new JUTTexture(MR::getScreenUnitsAcross() / 2, MR::getScreenUnitsDown() / 2);
     mMask->mWrapS = NEBULA_WRAP_CLAMP;
     mMask->mWrapT = NEBULA_WRAP_CLAMP;
@@ -54,39 +46,30 @@ FallOutFieldDraw::FallOutFieldDraw(const char* pName) : NameObj(pName), _C() {
     mBlurScratch->mWrapT = NEBULA_WRAP_CLAMP;
     mBlurScratch->mMinType = NEBULA_FILTER_LINEAR;
     mBlurScratch->mMagType = NEBULA_FILTER_LINEAR;
+    mEdge = new JUTTexture(MR::getScreenUnitsAcross() / 4, MR::getScreenUnitsDown() / 4);
+    mEdge->mWrapS = NEBULA_WRAP_CLAMP;
+    mEdge->mWrapT = NEBULA_WRAP_CLAMP;
+    mEdge->mMinType = NEBULA_FILTER_LINEAR;
+    mEdge->mMagType = NEBULA_FILTER_LINEAR;
+    mEdgeBlurred = new JUTTexture(MR::getScreenUnitsAcross() / 4, MR::getScreenUnitsDown() / 4);
+    mEdgeBlurred->mWrapS = NEBULA_WRAP_CLAMP;
+    mEdgeBlurred->mWrapT = NEBULA_WRAP_CLAMP;
+    mEdgeBlurred->mMinType = NEBULA_FILTER_LINEAR;
+    mEdgeBlurred->mMagType = NEBULA_FILTER_LINEAR;
 }
 
 namespace {
-    // The fill (runtime/src/render/materials/image_effect.hlsl mode 3): the fill colour where the half-size mask (texture 0,
-    // 255 where the mask's test passed) is set, nothing elsewhere. Linear filtering spreads the mask: a test for under 1
-    // counts where all four texels passed, a test for over 1 where any did. Blended by its alpha, depth always passing and
-    // written, no culling.
-    void sendFillMaterial(bool textureFirst, JUTTexture* pMask) {
+    // A flat colour over the screen where the stencil says, depth always passing and written.
+    void sendFlat(const Color8& rColor, bool writeColor) {
         NebulaNativeMaterial material;
-        NativeShader::init(material, NEBULA_SHADER_IMAGE_EFFECT, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_ALWAYS, true,
+        NativeShader::init(material, NEBULA_SHADER_FLAT_COLOR, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, true,
                            NEBULA_CULL_NONE);
-        NativeShader::setColor(material, 4, 0, 0, 0, textureFirst ? 1 : 254);
-        NativeShader::setColor(material, 8, ::sFillColor.r, ::sFillColor.g, ::sFillColor.b, ::sFillColor.a);
-        material.constants[12] = 3.0f;
-        material.constants[13] = 1.0f;
-        NativeShader::setTexture(material, 0, pMask);
+        material.color_write = writeColor ? 1 : 0;
+        material.alpha_write = 0;
+        NativeShader::setColor(material, 0, rColor.r, rColor.g, rColor.b, rColor.a);
         NativeShader::send(material);
     }
 }  // namespace
-
-void FallOutFieldDraw::setUpFillScreen() const {
-    J3DPass::writeColor(true);
-    J3DPass::writeAlpha(false);
-    J3DNativeView::setZScaleOffset(0.0f, 1.0f);
-    sendFillMaterial(_C, mMask);
-}
-
-
-void FallOutFieldDraw::setUpEdgeAndClearAlpha() const {
-    J3DPass::writeColor(true);
-    J3DPass::writeAlpha(true);
-    J3DPass::constantAlpha(true, 0);
-}
 
 void FallOutFieldDraw::init(const JMapInfoIter& rIter) {
     if (!MR::isValidInfo(rIter)) {
@@ -121,54 +104,56 @@ void FallOutFieldDraw::draw() const {
 
     ImageEffectLocalUtil::setupDrawTexture();
 
-    JUTTexture* pScreenAlphaTexture3 = MR::getScreenAlphaTexture(3);
-    JUTTexture* pScreenAlphaTexture4 = MR::getScreenAlphaTexture(4);
+    // What the field fills, by the volumes' stencil (arg 0: inside them, else outside), marked in the depth with the
+    // nearest value there is, which nothing in the map reaches. The fill below writes the depth again.
+    const u8 filled = _C ? NEBULA_STENCIL_IF_SET : NEBULA_STENCIL_IF_ZERO;
+    sendFlat(::sFillColor, false);
+    J3DNativeView::setZScaleOffset(0.0f, 0.0f);
+    J3DPass::stencil(filled, NEBULA_STENCIL_KEEP);
+    ImageEffectLocalUtil::sendTextureVertex(1, 0);
+    J3DPass::stencil(NEBULA_STENCIL_OFF, NEBULA_STENCIL_KEEP);
 
+    // The mark as a half-size mask (arg 0: a pixel with any mark under it, else one with all marked), halved again and
+    // blurred, each into its own texture, for the glow along the edge.
     J3DPass::writeColor(false);
     J3DPass::writeAlpha(true);
-    J3DPass::constantAlpha(true, 4);
-    NebulaNativeMaterial mark;
-    NativeShader::init(mark, NEBULA_SHADER_FLAT_COLOR, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false, NEBULA_CULL_NONE);
-    mark.color_write = 0;
-    mark.alpha_write = 1;
-    NativeShader::setColor(mark, 0, 0, 0, 0, 4);
-    NativeShader::send(mark);
-    J3DPass::stencil(NEBULA_STENCIL_IF_SET, NEBULA_STENCIL_ZERO);
-    ::drawFillScreen(::sFillColor);
-    J3DPass::stencil(NEBULA_STENCIL_OFF, NEBULA_STENCIL_KEEP);
     J3DPass::constantAlpha(false, 0);
-    J3DNativeView::setZScaleOffset(0.0f, 0.0f);
-    // The mask: alpha 255 where the screen's alpha is under (or, by arg 0, over) 1, a pass of its own at half size, then
-    // halved again and blurred, each into its own texture.
-    const NebulaColor8 constantAlpha = {0, 0, 0, 1};
-    const NebulaColor8 white = {255, 255, 255, 255};
-    ImageEffectLocalUtil::setMode(_C ? ImageEffectLocalUtil::Mode_MaskAbove : ImageEffectLocalUtil::Mode_MaskBelow, constantAlpha,
-                                  white);
-    J3DNativeTarget::beginOverFrame(mMask->mImage, mMask->getWidth(), mMask->getHeight(), 0, mFrameKey->mImage, NEBULA_TARGET_ALPHA, nullptr);
-    ImageEffectLocalUtil::drawTexture(mFrameKey, 2, 0, 255, ImageEffectLocalUtil::TexDrawType_0);
+    J3DNativeTarget::beginOverFrame(mMask->mImage, mMask->getWidth(), mMask->getHeight(), 0, nullptr, NEBULA_TARGET_RGBA, mDepthKey->mImage);
+    NebulaNativeMaterial mask;
+    NativeShader::init(mask, NEBULA_SHADER_FRAME_DEPTH, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false, NEBULA_CULL_NONE);
+    mask.constants[0] = _C ? 1.0f : 2.0f;
+    NativeShader::setTexture(mask, 0, mDepthKey);
+    NativeShader::send(mask);
+    ImageEffectLocalUtil::sendTextureVertex(2, 0);
     J3DNativeTarget::end(mMask->mImage, NEBULA_TARGET_ALPHA);
 
-    ImageEffectLocalUtil::setMode(ImageEffectLocalUtil::Mode_Alpha, constantAlpha, ::sEdgeColor);
-    J3DNativeTarget::begin(pScreenAlphaTexture3->mImage, pScreenAlphaTexture3->getWidth(), pScreenAlphaTexture3->getHeight(), 0);
+    ImageEffectLocalUtil::setMode(ImageEffectLocalUtil::Mode_Alpha, ::sEdgeColor);
+    J3DNativeTarget::begin(mEdge->mImage, mEdge->getWidth(), mEdge->getHeight(), 0);
     ImageEffectLocalUtil::drawTexture(mMask, 4, 0, 255, ImageEffectLocalUtil::TexDrawType_0);
-    J3DNativeTarget::end(pScreenAlphaTexture3->mImage, NEBULA_TARGET_ALPHA);
+    J3DNativeTarget::end(mEdge->mImage, NEBULA_TARGET_ALPHA);
 
-    ImageEffectLocalUtil::blurTexture(pScreenAlphaTexture3, mBlurScratch, pScreenAlphaTexture4, 0.004f, NEBULA_TARGET_ALPHA, 5.0f);
+    ImageEffectLocalUtil::blurTexture(mEdge, mBlurScratch, mEdgeBlurred, 0.004f, NEBULA_TARGET_ALPHA, 5.0f);
 
-    setUpEdgeAndClearAlpha();
-    ImageEffectLocalUtil::setMode(ImageEffectLocalUtil::Mode_Edge, constantAlpha, ::sEdgeColor);
-    ImageEffectLocalUtil::drawTexture(pScreenAlphaTexture4, 1, 0, 255, ImageEffectLocalUtil::TexDrawType_2);
-    setUpFillScreen();
+    // The glow, then the fill over it and the depth behind everything.
+    J3DPass::writeColor(true);
+    J3DPass::writeAlpha(false);
+    ImageEffectLocalUtil::setMode(ImageEffectLocalUtil::Mode_Edge, ::sEdgeColor);
+    ImageEffectLocalUtil::drawTexture(mEdgeBlurred, 1, 0, 255, ImageEffectLocalUtil::TexDrawType_2);
 
-    ::drawFillScreen(::sFillColor);
+    sendFlat(::sFillColor, true);
+    J3DNativeView::setZScaleOffset(0.0f, 1.0f);
+    J3DPass::stencil(filled, NEBULA_STENCIL_KEEP);
+    ImageEffectLocalUtil::sendTextureVertex(1, 0);
+    J3DPass::stencil(NEBULA_STENCIL_OFF, NEBULA_STENCIL_KEEP);
+    J3DNativeView::setZScaleOffset(1.0f, 0.0f);
 
+    MR::clearStencil();
     MR::loadViewMtx();
     MR::loadProjectionMtx();
 
     J3DPass::writeColor(true);
     J3DPass::writeAlpha(true);
     J3DPass::constantAlpha(true, 0);
-    J3DNativeView::setZScaleOffset(1.0f, 0.0f);
 }
 
 namespace MR {

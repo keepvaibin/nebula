@@ -8228,21 +8228,20 @@ bool RendererD3D12::ensure_screen_probe_resources() {
     return true;
 }
 
-bool RendererD3D12::record_screen_probes(std::size_t slot, ScreenProbeKind kind, std::span<const ScreenProbe> probes) {
+bool RendererD3D12::record_screen_probes(std::size_t slot, std::span<const ScreenProbe> probes) {
     ScreenProbeSlot& out = probe_slots_[slot];
     if (out.fence != 0u || probes.size() > kScreenProbesMax || !ensure_screen_probe_resources()) {
         return false;
     }
     ID3D12GraphicsCommandList* const list = command_list_.Get();
     settle_owed_scene();
-    const bool is_depth = kind == ScreenProbeKind::Depth;
-    resolve_scene_on(list, !is_depth, is_depth);
-    ID3D12Resource* const src = is_depth ? scene_depth_.Get() : scene_color_.Get();
+    resolve_scene_on(list, false, true);
+    ID3D12Resource* const src = scene_depth_.Get();
 
     D3D12_RESOURCE_BARRIER barriers[2]{};
     barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barriers[0].Transition.pResource = src;
-    barriers[0].Transition.StateBefore = is_depth ? D3D12_RESOURCE_STATE_DEPTH_WRITE : D3D12_RESOURCE_STATE_RENDER_TARGET;
+    barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
     barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
     barriers[0].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
     barriers[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
@@ -8255,7 +8254,7 @@ bool RendererD3D12::record_screen_probes(std::size_t slot, ScreenProbeKind kind,
     list->OMSetRenderTargets(1, &probe_rtv_, FALSE, nullptr);
     list->SetGraphicsRootSignature(s_conv_root_sig.Get());
     list->SetPipelineState(conv_pipeline_.Get());
-    list->SetGraphicsRootDescriptorTable(1, is_depth ? conv_scene_depth_srv_ : conv_scene_color_srv_);
+    list->SetGraphicsRootDescriptorTable(1, conv_scene_depth_srv_);
     list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     for (std::size_t i = 0; i < probes.size(); ++i) {
         if (probes[i].x < 0.0f || probes[i].y < 0.0f) {
@@ -8265,7 +8264,7 @@ bool RendererD3D12::record_screen_probes(std::size_t slot, ScreenProbeKind kind,
         const D3D12_RECT scissor{static_cast<LONG>(i), 0, static_cast<LONG>(i) + 1, 1};
         list->RSSetViewports(1, &viewport);
         list->RSSetScissorRects(1, &scissor);
-        const SceneConversionShaderConstants constants = make_screen_probe_constants(probes[i].x, probes[i].y, frame_, is_depth);
+        const SceneConversionShaderConstants constants = make_screen_probe_constants(probes[i].x, probes[i].y, frame_, true);
         list->SetGraphicsRoot32BitConstants(0, 16, constants.values.data(), 0);
         list->DrawInstanced(3, 1, 0, 0);
     }

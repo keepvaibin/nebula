@@ -8,7 +8,6 @@
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "JSystem/J3DGraphBase/J3DNativeMaterial.hpp"
 #include "Game/Scene/GameSceneFunction.hpp"
-#include "Game/Screen/ScreenAlphaCapture.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/Color.hpp"
 #include "Game/Util/MtxUtil.hpp"

@@ -13,7 +13,6 @@ public:
     virtual void draw() const;
 
     void loadModelDrawMtx() const;
-    void fill() const;
 
     MtxPtr mMtx;
     J3DModelData* mModelData;

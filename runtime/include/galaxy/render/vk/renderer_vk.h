@@ -341,7 +341,7 @@ public:
     // The picture's value at each point into slot `slot`'s readback, in the open frame where the stream is now;
     // screen_probes_finished names its bytes (RGBA8 per point) once that frame's fence has passed.
     static constexpr std::size_t kScreenProbeSlots = 12u;
-    [[nodiscard]] bool record_screen_probes(std::size_t slot, ScreenProbeKind kind, std::span<const ScreenProbe> probes);
+    [[nodiscard]] bool record_screen_probes(std::size_t slot, std::span<const ScreenProbe> probes);
     [[nodiscard]] const std::uint8_t* screen_probes_finished(std::size_t slot);
 
     // Test captures: the scene target and the presented backbuffer as PPM files (paths from set_debug_capture_paths).

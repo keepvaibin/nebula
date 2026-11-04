@@ -13,14 +13,14 @@ public:
     virtual void init(const JMapInfoIter&);
     virtual void draw() const;
 
-    void setUpFillScreen() const;
-    void setUpEdgeAndClearAlpha() const;
     void activate();
     void deactivate();
 
     bool _C;
-    JUTTexture* mMask;  // the screen mask at half size
-    JUTTexture* mFrameKey;  // the frame, in the mask's pass
+    JUTTexture* mMask;      // the screen mask at half size
+    JUTTexture* mDepthKey;  // the frame's depth, in the mask's pass
+    JUTTexture* mEdge;
+    JUTTexture* mEdgeBlurred;
     JUTTexture* mBlurScratch;
 };
 
