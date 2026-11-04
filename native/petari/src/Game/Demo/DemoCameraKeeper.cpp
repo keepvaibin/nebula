@@ -67,6 +67,11 @@ void DemoCameraKeeper::initActorCamera(DemoCameraInfo* pInfo, const JMapInfoIter
 }
 
 void DemoCameraKeeper::executeType(const DemoCameraInfo* pInfo) {
+    // A row naming a cast nobody plays: it never got a camera.
+    if (pInfo->_20 == nullptr) {
+        return;
+    }
+
     if (MR::isDemoPartFirstStep(pInfo->mPartName)) {
         endCurrentCamera();
         _10 = pInfo;

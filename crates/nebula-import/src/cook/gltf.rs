@@ -283,6 +283,33 @@ pub fn png_to_bti(bytes: &[u8]) -> Result<Vec<u8>> {
     Ok(out)
 }
 
+/// A PNG as a TPL, the game's form for its interface: one image, RGBA8, big-endian as the disc's are.
+pub fn png_to_tpl(bytes: &[u8]) -> Result<Vec<u8>> {
+    let (width, height, rgba) = decode_image(bytes)?;
+    const TABLE_AT: u32 = 12;
+    const HEADER_AT: u32 = TABLE_AT + 8;
+    const DATA_AT: u32 = 64;
+    let mut out = Vec::new();
+    out.extend_from_slice(&0x0020_AF30u32.to_be_bytes());
+    out.extend_from_slice(&1u32.to_be_bytes());
+    out.extend_from_slice(&TABLE_AT.to_be_bytes());
+    out.extend_from_slice(&HEADER_AT.to_be_bytes());
+    out.extend_from_slice(&0u32.to_be_bytes());
+    out.extend_from_slice(&(height as u16).to_be_bytes());
+    out.extend_from_slice(&(width as u16).to_be_bytes());
+    out.extend_from_slice(&6u32.to_be_bytes());
+    out.extend_from_slice(&DATA_AT.to_be_bytes());
+    // Clamp both ways, linear both ways, no bias, one level.
+    for value in [0u32, 0, 1, 1] {
+        out.extend_from_slice(&value.to_be_bytes());
+    }
+    out.extend_from_slice(&0f32.to_be_bytes());
+    out.extend_from_slice(&[0, 0, 0, 0]);
+    out.resize(DATA_AT as usize, 0);
+    out.extend_from_slice(&rgba8_tiled(width, height, &rgba));
+    Ok(out)
+}
+
 type Matrix = [f32; 16];
 
 const IDENTITY: Matrix = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0];

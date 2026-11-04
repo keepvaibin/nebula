@@ -6,6 +6,7 @@
 #include "JSystem/JAudio2/JASGlobal.hpp"
 #include "JSystem/JAudio2/JAUSoundTable.hpp"
 #include "Game/System/GameAssets.hpp"
+#include "Game/System/NebulaMods.hpp"
 
 u16 JAUStdSoundInfo::getBgmSeqResourceID(JAISoundID soundID) const {
     void* data = JASGlobalInstance< JAUSoundTable >::getInstance()->getData(soundID);
@@ -135,6 +136,10 @@ const char* JAUStdSoundInfo::getStreamFilePath(JAISoundID soundID) {
 }
 
 s32 JAUStdSoundInfo::getStreamFileEntry(JAISoundID soundID) {
+    if (soundID.getWaveID() >= NebulaMods::cFirstTrackWave) {
+        return NebulaMods::trackFile(soundID.getWaveID());
+    }
+
     const char* path = getStreamFilePath(soundID);
     if (path == nullptr) {
         return -1;

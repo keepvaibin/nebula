@@ -16,6 +16,8 @@
 #endif
 #else
 #include <dlfcn.h>
+#include "galaxy/mod_hook.h"
+#define NEBULA_HAS_POSIX_HOOKS 1
 #endif
 
 namespace galaxy::mods {
@@ -105,6 +107,12 @@ int32_t api_hook(void* target, void* replacement, void** original) {
     if (MH_CreateHook(place, replacement, original) != MH_OK || MH_EnableHook(place) != MH_OK) return -1;
     g_hook_tops[target] = replacement;
     return 0;
+#elif defined(NEBULA_HAS_POSIX_HOOKS)
+    const auto top = g_hook_tops.find(target);
+    void* const place = top != g_hook_tops.end() ? top->second : target;
+    if (!hook_function(place, replacement, original)) return -1;
+    g_hook_tops[target] = replacement;
+    return 0;
 #else
     return -1;
 #endif
@@ -116,13 +124,12 @@ void* api_find_function(const char* symbol) {
 
 }  // namespace
 
-std::size_t start_plugins(const std::vector<PluginFile>& plugins, const std::vector<GalaxyToAdd>& galaxies,
-                          const std::vector<std::pair<std::string, std::string>>& texts, const NebulaModApi* game_api,
+std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows& rows, const NebulaModApi* game_api,
                           void* (*find_symbol)(const char*),
                           void (*log)(const char*)) {
     g_log = log;
     g_find_symbol = find_symbol;
-    if (plugins.empty() && galaxies.empty() && texts.empty()) return 0;
+    if (plugins.empty() && rows.empty()) return 0;
     if (game_api == nullptr || game_api->size < sizeof(NebulaModApi)) {
         say("the game module has no plugin interface");
         return 0;
@@ -132,10 +139,10 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const std::vec
     g_api.option = api_option;
     g_api.hook = api_hook;
     g_api.find_function = api_find_function;
-    for (const auto& [id, words] : texts) {
+    for (const auto& [id, words] : rows.texts) {
         g_api.add_text(id.c_str(), words.c_str());
     }
-    for (const GalaxyToAdd& galaxy : galaxies) {
+    for (const GalaxyToAdd& galaxy : rows.galaxies) {
         NebulaGalaxy row{};
         row.size = sizeof(row);
         row.name = galaxy.name.c_str();
@@ -145,9 +152,41 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const std::vec
         for (std::size_t i = 0; i < conditions.size(); ++i) row.open_condition[i] = conditions[i].c_str();
         row.stars_to_open = galaxy.stars_to_open;
         row.dome = galaxy.dome;
+        row.has_map_position = galaxy.has_map_position ? 1 : 0;
+        row.map_position[0] = galaxy.map_x;
+        row.map_position[1] = galaxy.map_y;
         if (g_api.add_galaxy(&row) != 0) say(galaxy.mod_id + ": the galaxy " + galaxy.name + " can't be added: its name clashes with one the game has");
         if (galaxy.hungry_slot >= 0 && g_api.add_hungry_luma(galaxy.name.c_str(), galaxy.hungry_slot, galaxy.hungry_star_bits) != 0) {
             say(galaxy.mod_id + ": the hungry Luma for " + galaxy.name + " can't be added");
+        }
+    }
+    for (const EventFlagToSet& flag : rows.event_flags) {
+        if (g_api.set_event_flag(flag.name.c_str(), flag.kind, flag.a, flag.b, flag.first.empty() ? nullptr : flag.first.c_str(), flag.second.empty() ? nullptr : flag.second.c_str()) != 0) {
+            say(flag.mod_id + ": the row " + flag.name + " can't be set");
+        }
+    }
+    for (const CometsToSet& dome : rows.comets) {
+        std::vector<const char*> galaxies;
+        std::vector<std::int32_t> coins;
+        for (const auto& [galaxy, coin] : dome.comets) {
+            galaxies.push_back(galaxy.c_str());
+            coins.push_back(coin);
+        }
+        if (g_api.set_comet_schedule(dome.dome, galaxies.data(), coins.data(), static_cast<std::int32_t>(galaxies.size())) != 0) {
+            say(dome.mod_id + ": the comets of dome " + std::to_string(dome.dome) + " can't be set");
+        }
+    }
+    for (const MusicToAdd& track : rows.music) {
+        if (g_api.add_music(track.name.c_str(), track.file.c_str()) != 0) {
+            say(track.mod_id + ": the music " + track.name + " can't be added: its name is the game's");
+            continue;
+        }
+        for (const MusicToAdd::Place& place : track.places) {
+            if (place.change_area >= 0) {
+                g_api.set_area_music(place.stage.c_str(), place.change_area, track.name.c_str());
+            } else {
+                g_api.set_stage_music(place.stage.c_str(), place.scenario, track.name.c_str());
+            }
         }
     }
     g_starting = true;

@@ -1,6 +1,7 @@
 #include "Game/GameAudio/AudStageBgmTable.hpp"
 #include "Game/AudioLib/AudSoundId.hpp"
 #include "Game/GameAudio/AudStageBgmWrap.hpp"
+#include "Game/System/NebulaMods.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <JSystem/JAudio2/JAISound.hpp>
 
@@ -123,6 +124,11 @@ namespace {
 };  // namespace
 
 u32 AudStageBgmTable::getBgmId(const char* pStageName, s32 bgmNo) {
+    const u32 modTrack = NebulaMods::areaTrack(pStageName, bgmNo);
+    if (modTrack != static_cast< u32 >(-1)) {
+        return modTrack;
+    }
+
     JAISoundID cometBgm = AudStageBgmWrap::getCometEventBgm(pStageName);
     if (cometBgm != -1) {
         return cometBgm;

@@ -246,6 +246,17 @@ std::string text_field(const Value& value, std::string_view key) {
     return text != nullptr ? *text : std::string();
 }
 
+// Lower-case letters, digits and dashes, and none of the names Windows keeps for itself: it names a folder on every device.
+bool valid_id(std::string_view id) {
+    if (id.empty() || id.size() > 64u || id.front() == '-' || id.back() == '-') return false;
+    for (const char c : id) {
+        if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-')) return false;
+    }
+    if (id == "con" || id == "prn" || id == "aux" || id == "nul") return false;
+    if (id.size() == 4u && (id.starts_with("com") || id.starts_with("lpt")) && id[3] >= '0' && id[3] <= '9') return false;
+    return true;
+}
+
 Text read_text(const Value* value) {
     Text out;
     if (value == nullptr) return out;
@@ -345,6 +356,7 @@ std::optional<Manifest> parse_manifest(std::string_view text) {
     // A newer format's other fields may mean anything: the number is all a reader can say of it.
     if (out.format > kFormat) return out;
     out.id = text_field(*root, "id");
+    if (!valid_id(out.id)) return std::nullopt;
     out.name = read_text(root->get("name"));
     out.version = text_field(*root, "version");
     out.game = text_field(*root, "game");
@@ -437,7 +449,68 @@ std::optional<Manifest> parse_manifest(std::string_view text) {
                 galaxy.hungry_slot = static_cast<int>(*slot->number());
                 galaxy.hungry_star_bits = static_cast<int>(*bits->number());
             }
+            if (const Value* place = entry.get("map_position"); place != nullptr && place->array() != nullptr && place->array()->size() == 2u) {
+                const Value& x = (*place->array())[0];
+                const Value& y = (*place->array())[1];
+                if (x.number() == nullptr || y.number() == nullptr) return std::nullopt;
+                galaxy.has_map_position = true;
+                galaxy.map_x = static_cast<float>(*x.number());
+                galaxy.map_y = static_cast<float>(*y.number());
+            }
             out.galaxies.push_back(std::move(galaxy));
+        }
+    }
+    if (const Value* music = root->get("music"); music != nullptr && music->array() != nullptr) {
+        for (const Value& entry : *music->array()) {
+            Music track;
+            track.name = text_field(entry, "name");
+            track.file = text_field(entry, "file");
+            if (track.name.empty() || track.file.empty()) return std::nullopt;
+            if (const Value* stages = entry.get("stages"); stages != nullptr && stages->array() != nullptr) {
+                for (const Value& row : *stages->array()) {
+                    MusicPlace place;
+                    place.stage = text_field(row, "stage");
+                    if (place.stage.empty()) return std::nullopt;
+                    if (const Value* scenario = row.get("scenario"); scenario != nullptr && scenario->number() != nullptr) place.scenario = static_cast<int>(*scenario->number());
+                    if (const Value* area = row.get("change_area"); area != nullptr && area->number() != nullptr) place.change_area = static_cast<int>(*area->number());
+                    track.places.push_back(std::move(place));
+                }
+            }
+            out.music.push_back(std::move(track));
+        }
+    }
+    if (const Value* flags = root->get("event_flags"); flags != nullptr && flags->array() != nullptr) {
+        for (const Value& entry : *flags->array()) {
+            EventFlag flag;
+            flag.name = text_field(entry, "name");
+            if (flag.name.empty()) return std::nullopt;
+            const auto whole = [&entry](const char* key) {
+                const Value* value = entry.get(key);
+                return value != nullptr && value->number() != nullptr ? static_cast<int>(*value->number()) : 0;
+            };
+            flag.kind = whole("kind");
+            flag.a = whole("a");
+            flag.b = whole("b");
+            flag.first = text_field(entry, "first");
+            flag.second = text_field(entry, "second");
+            out.event_flags.push_back(std::move(flag));
+        }
+    }
+    if (const Value* schedule = root->get("comet_schedule"); schedule != nullptr && schedule->array() != nullptr) {
+        for (const Value& entry : *schedule->array()) {
+            CometSchedule dome;
+            if (const Value* number = entry.get("dome"); number != nullptr && number->number() != nullptr) dome.dome = static_cast<int>(*number->number());
+            if (dome.dome < 1 || dome.dome > 6) return std::nullopt;
+            if (const Value* comets = entry.get("comets"); comets != nullptr && comets->array() != nullptr) {
+                for (const Value& comet : *comets->array()) {
+                    std::string galaxy = text_field(comet, "galaxy");
+                    if (galaxy.empty()) return std::nullopt;
+                    const Value* coins = comet.get("coins");
+                    dome.comets.emplace_back(std::move(galaxy), coins != nullptr && coins->number() != nullptr ? static_cast<int>(*coins->number()) : 0);
+                }
+            }
+            if (dome.comets.empty()) return std::nullopt;
+            out.comet_schedule.push_back(std::move(dome));
         }
     }
     if (const Value* plugins = root->get("plugins"); plugins != nullptr && plugins->array() != nullptr) {

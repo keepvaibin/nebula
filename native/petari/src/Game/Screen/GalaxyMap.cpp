@@ -11,6 +11,9 @@
 #include "Game/Screen/IconAButton.hpp"
 #include "Game/Screen/LayoutManager.hpp"
 #include "Game/System/GalaxyInfoTable.hpp"
+#include "Game/System/NebulaMods.hpp"
+#include <nebula_format.h>
+#include <nw4r/lyt/pane.h>
 #include "Game/System/GalaxyStatusAccessor.hpp"
 #include "Game/System/GameDataConst.hpp"
 #include "Game/System/GameEventFlagTable.hpp"
@@ -490,13 +493,30 @@ void GalaxyMap::initPaneCtrlPointing() {
             continue;
         }
 
-        // A mod's galaxy names a pane its map layout may not have.
-        if (getLayoutManager()->findPaneByName(pPaneName) == nullptr) {
-            continue;
-        }
-
         const char* pGalaxyName = nullptr;
         galaxyInfo.getValue(i, "name", &pGalaxyName);
+
+        // A mod's galaxy names a pane its map layout may not have. One that says where it goes gets it made.
+        if (getLayoutManager()->findPaneByName(pPaneName) == nullptr) {
+            f32 x = 0.0f;
+            f32 y = 0.0f;
+            s32 dome = 0;
+            if (!NebulaMods::mapSpot(pGalaxyName, &x, &y, &dome)) {
+                continue;
+            }
+            char parentName[16];
+            nebula_snprintf(parentName, sizeof(parentName), dome > 0 ? "Galaxy%d" : "Tico", dome);
+            nw4r::lyt::Pane* pParent = getLayoutManager()->findPaneByName(parentName);
+            if (pParent == nullptr) {
+                continue;
+            }
+            nw4r::lyt::Pane* pPane = new nw4r::lyt::Pane();
+            pPane->SetName(pPaneName);
+            pPane->SetSRTElement(0, x);
+            pPane->SetSRTElement(1, y);
+            pParent->AppendChild(pPane);
+        }
+
         GalaxyStatusAccessor accessor = MR::makeGalaxyStatusAccessor(pGalaxyName);
         MR::createAndAddPaneCtrl(this, pPaneName, 1);
         MR::addStarPointerTargetCircle(this, pPaneName, ::sPointingRange, TVec2f(0.0f, 0.0f), nullptr);
