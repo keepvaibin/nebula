@@ -29,12 +29,54 @@ struct GalaxyToAdd {
     int dome = 0;
     int hungry_slot = -1;
     int hungry_star_bits = 0;
+    bool has_map_position = false;
+    float map_x = 0.0f;
+    float map_y = 0.0f;
+};
+
+// A .luma's tracks, from its luma.json.
+struct MusicToAdd {
+    struct Place {
+        std::string stage;
+        int scenario = 0;
+        int change_area = -1;
+    };
+    std::string mod_id;
+    std::string name;
+    std::string file;
+    std::vector<Place> places;
+};
+
+// A row of the game's progression, and a dome's comets.
+struct EventFlagToSet {
+    std::string mod_id;
+    std::string name;
+    int kind = 0;
+    int a = 0;
+    int b = 0;
+    std::string first;
+    std::string second;
+};
+struct CometsToSet {
+    std::string mod_id;
+    int dome = 0;
+    std::vector<std::pair<std::string, int>> comets;
+};
+
+// What .luma files say in their luma.json, for the game before it starts.
+struct ModRows {
+    std::vector<GalaxyToAdd> galaxies;
+    std::vector<MusicToAdd> music;
+    std::vector<std::pair<std::string, std::string>> texts;  // a message's id: its words in the language play
+    std::vector<EventFlagToSet> event_flags;
+    std::vector<CometsToSet> comets;
+
+    [[nodiscard]] bool empty() const noexcept { return galaxies.empty() && music.empty() && texts.empty() && event_flags.empty() && comets.empty(); }
 };
 
 // `game_api`: the game module's nebula_game_mod_api(); `find_symbol`: a name in the game module, or null. Each plugin that
 // can't start is named in the log and left out; the game carries on without it. What's returned: their count.
-std::size_t start_plugins(const std::vector<PluginFile>& plugins, const std::vector<GalaxyToAdd>& galaxies,
-                          const std::vector<std::pair<std::string, std::string>>& texts, const NebulaModApi* game_api,
+std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows& rows, const NebulaModApi* game_api,
                           void* (*find_symbol)(const char*),
                           void (*log)(const char*));
 // The plugin an address is in: its mod's id, or null.

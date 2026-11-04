@@ -170,6 +170,11 @@ void GameScene::init() {
         MR::createSceneObj(SceneObj_StaffRoll);
     }
 
+    // A plugin can start a movie in any scene.
+    if (NebulaMods::hasCode()) {
+        MR::createSceneObj(SceneObj_MoviePlayerSimple);
+    }
+
     if (MR::isStageEpilogueDemo() || GameSequenceFunction::isNeedMoviePlayerForStorySequenceEvent()) {
         MR::createMoviePlayingSequence();
     }
