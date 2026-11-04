@@ -76,9 +76,8 @@ namespace {
     const s32 cGlyphPad = 'C';  // the picture font's +Control Pad
     const f32 cHintGap = 18.0f;
     const f32 cQuestionWidth = 470.0f;
-    const f32 cLicenseWidth = 860.0f;
-    const f32 cLicenseTextSize = 13.0f;
-    const f32 cLicensePageHeight = 330.0f;
+    const f32 cLicenseTextSize = 12.0f;
+    const f32 cLicenseInset = 12.0f;  // the license's window inside the menu's
     const f32 cQuestionHeight = 180.0f;
     const f32 cQuestionMargin = 22.0f;  // the answers from the window's sides and foot
     const f32 cQuestionRing = 6.4f;     // the window's white ring (measured), inside its edges
@@ -1483,14 +1482,26 @@ __attribute__((noinline)) void NebulaSettingsScreen::fillTexts(const NebulaSetti
     if (rView.status == NEBULA_SETTINGS_STATUS_LICENSE) {
         static char16_t page[1536];
         if (rView.status_number > 0) {
-            fromUtf8(page, 1536, rView.long_text);
+            // Its number, then the page.
+            s32 used = 0;
+            getNumbered(page, 64, "SettingsLicensePage", rView.status_number);
+            while (page[used] != 0) {
+                used++;
+            }
+            page[used++] = u'\n';
+            page[used++] = u'\n';
+            fromUtf8(page + used, 1536 - used, rView.long_text);
         } else {
             NebulaText::get(page, 1536, rView.status_number == -2 ? "SettingsLicenseFailed" : "SettingsLicenseLoading");
         }
         setAnchor(mQuestionText, 3);
         setTextSize(mQuestionText, cLicenseTextSize);
-        setText(mQuestionText, page);
-        measure(mQuestionText, cLicenseWidth - cQuestionMargin * 2.0f, &width, &height);
+        u16 pageLength = 0;
+        while (pageLength < 1535 && page[pageLength] != 0) {
+            pageLength++;
+        }
+        mQuestionText->SetString(page, 0, pageLength);
+        measure(mQuestionText, mPanelWidth - cLicenseInset * 2.0f - cQuestionMargin * 2.0f, &width, &height);
         mQuestionInk = height;
         for (s32 i = 0; i < mChoiceCount; i++) {
             fillKeyCap(mChoices[i].mKey, rQuestion.mKeys[i], rView.input, false);
@@ -2469,9 +2480,9 @@ void NebulaSettingsScreen::place(const NebulaSettingsView& rView) {
         const f32 gap = cQuestionMargin - cQuestionRing;
         const bool license = rView.status == NEBULA_SETTINGS_STATUS_LICENSE;
         const bool bar = rView.status == NEBULA_SETTINGS_STATUS_DLSS_INSTALLING || rView.status == NEBULA_SETTINGS_STATUS_XESS_INSTALLING;
-        const f32 panelWidth = license ? cLicenseWidth : cQuestionWidth;
+        const f32 panelWidth = license ? mPanelWidth - cLicenseInset * 2.0f : cQuestionWidth;
         const f32 height = joycon    ? cQuestionMargin * 2.0f + gap * 2.0f + picture + mQuestionInk + cButtonHeight
-                           : license ? cQuestionMargin * 2.0f + gap * 2.0f + cLicensePageHeight + cButtonHeight
+                           : license ? mPanelHeight - cLicenseInset * 2.0f
                                      : cQuestionHeight;
         mQuestionPanel->mSize = nw4r::lyt::Size(panelWidth, height);
         mQuestionShadow->mSize = nw4r::lyt::Size(panelWidth, height);

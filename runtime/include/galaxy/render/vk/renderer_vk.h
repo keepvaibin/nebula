@@ -142,6 +142,7 @@ public:
     [[nodiscard]] double subframe_gpu_ema_ms() const noexcept { return subframe_gpu_ema_ms_; }
     void suspend_temporal_interpolation(double ms_per_frame);
     [[nodiscard]] bool temporal_interpolation() const noexcept { return temporal_interp_; }
+    [[nodiscard]] unsigned temporal_output_width() const noexcept { return temporal_output_w_; }
     bool begin_replay_sequence(const ReplaySequence& sequence);
     bool present_replay_subframe(const SubframeTime& time, const Affine34& camera_t, const Affine34& camera_prev);
     void note_stripe_vertices(std::span<const StripeVertex> vertices);
@@ -654,6 +655,7 @@ private:
     [[nodiscard]] VkFramebuffer motion_framebuffer(unsigned aux);
     void prepare_temporal_upscaler();
     [[nodiscard]] bool record_temporal_upscale(const FrameMap& output);
+    void dump_temporal_inputs(const vk::Texture& color, const vk::Texture& motion, std::uint64_t index);
     [[nodiscard]] bool ensure_output_set(const FrameMap& output, bool storage);
     std::unique_ptr<vk::TemporalUpscaler> temporal_;
     std::future<std::unique_ptr<vk::TemporalUpscaler>> temporal_pending_;

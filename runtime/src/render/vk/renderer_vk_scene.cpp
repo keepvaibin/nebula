@@ -10,6 +10,7 @@
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/curved_surfaces.h"
 #include "galaxy/motion_signals.h"
+#include "galaxy/render/temporal_dump.h"
 #if defined(_WIN32)
 #include "galaxy/render/streamline_bridge.h"
 #include "galaxy/render/vk/streamline_vk.h"
@@ -1068,6 +1069,52 @@ vk::TemporalUpscaleInputs RendererVk::temporal_inputs(const vk::Texture& color, 
     return in;
 }
 
+// GALAXY_TEST_MOTION_DUMP (temporal_dump.h): this frame's inputs copied out; the frame before's written.
+void RendererVk::dump_temporal_inputs(const vk::Texture& color, const vk::Texture& motion, std::uint64_t index) {
+#if defined(NEBULA_RELEASE)
+    (void)color, (void)motion, (void)index;
+#else
+    struct Pending {
+        const char* name;
+        std::uint64_t frame;
+        unsigned width, height;
+        gpu::BufferRef buffer;
+    };
+    static const temporal_dump::Plan plan = temporal_dump::read_plan();
+    static std::vector<Pending> pending;
+    if (plan.every == 0u) {
+        return;
+    }
+    if (!pending.empty()) {
+        vkQueueWaitIdle(vk::Context::get().queue());
+        for (Pending& p : pending) {
+            vk::Context::get().invalidate(*p.buffer);
+            temporal_dump::write(plan, p.name, p.frame, p.width, p.height, 4u, p.buffer->mapped, p.width * 4u);
+        }
+        pending.clear();
+    }
+    if (!plan.wanted(index)) {
+        return;
+    }
+    const auto copy = [&](const vk::Texture& image, const char* name) {
+        gpu::BufferRef buffer = vk::Context::get().create_readback_buffer(image.width * image.height * 4u, "motion dump");
+        image_barrier(commands_, image.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                      VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                      VK_ACCESS_TRANSFER_READ_BIT);
+        VkBufferImageCopy region{};
+        region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 0u, 1u};
+        region.imageExtent = {image.width, image.height, 1u};
+        vkCmdCopyImageToBuffer(commands_, image.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, buffer->buffer, 1u, &region);
+        image_barrier(commands_, image.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                      VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                      VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+        pending.push_back({name, index, image.width, image.height, std::move(buffer)});
+    };
+    copy(color, "color");
+    copy(motion, "motion");
+#endif
+}
+
 bool RendererVk::record_temporal_upscale(const FrameMap& output) {
     end_scene_pass();
     settle_owed_scene();
@@ -1078,6 +1125,7 @@ bool RendererVk::record_temporal_upscale(const FrameMap& output) {
         temporal_history_valid_ = false;
         return false;
     }
+    dump_temporal_inputs(*scene_.color, *motion_.motion, frame_index_);
     vk::TemporalUpscaleInputs in = temporal_inputs(*scene_.color, *scene_.depth, *motion_.motion, *motion_.reactive, *alt_scene_.color);
     in.commands = commands_;
     in.render_width = scene_map_.width;

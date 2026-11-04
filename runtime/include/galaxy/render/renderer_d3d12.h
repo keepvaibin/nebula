@@ -284,6 +284,7 @@ public:
     // it and, if so, the scene's sub-pixel jitter in render pixels (applied to
     // perspective projections).
     [[nodiscard]] bool scene_temporal_begin(float& jitter_x, float& jitter_y);
+    [[nodiscard]] unsigned temporal_output_width() const noexcept { return temporal_output_w_; }
     // After scene_temporal_begin, in a temporal scene or one the ray tracing
     // engine lights (its histories follow moving surfaces by the motion; no
     // jitter, no upscale): clears the motion target for the scene. False
@@ -696,6 +697,7 @@ private:
     [[nodiscard]] FrameMap output_frame_for_window() const;
     [[nodiscard]] bool ensure_motion_target();
     [[nodiscard]] bool record_temporal_upscale(const FrameMap& output);
+    void dump_temporal_inputs(ID3D12Resource* color, ID3D12Resource* motion, std::uint64_t index);
     [[nodiscard]] bool ensure_output_scene(const FrameMap& map);
     void swap_scene_sets();
     void swap_target_set();

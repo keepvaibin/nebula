@@ -84,6 +84,7 @@ bool dlss_installed_now();
 bool xess_offered();
 bool xess_installed_now();
 bool vendor_prompting();
+unsigned vendor_upscaler();
 bool frame_generation_offered();
 bool dlss_hold_back(RenderConfig& applied, const RenderConfig& live);
 bool dlss_prompt_key(std::uintptr_t key, bool was_down);
@@ -233,9 +234,7 @@ unsigned shown_position(unsigned tab) {
 // The GRAPHICS page's rows for what is not built natively yet. Each goes with its feature.
 bool graphics_row_hidden(const char* label) {
     static constexpr const char* kHidden[] = {
-        "RESOLUTION", "UPSCALING", "QUALITY MODE", "DLSS MODE", "FSR 3 MODE", "SHARPENING", "RAY TRACING", "RAY TRACING QUALITY",
-        "FRAME RATE", "INTERPOLATION", "FRAME RATE LIMIT", "TARGET FRAME RATE",
-        "TEXTURE PACKS", "  REPLACEMENTS", "DUMP TEXTURES", "MOVIES",
+        "RAY TRACING", "RAY TRACING QUALITY", "TEXTURE PACKS", "  REPLACEMENTS", "DUMP TEXTURES", "MOVIES",
     };
     for (const char* hidden : kHidden) {
         if (std::strcmp(label, hidden) == 0) return true;
@@ -948,7 +947,7 @@ void apply_native_settings_draft() {
     s_settings_draft = get_render_config();
     reset_runtime_draft();
     if (dlss_asked) {
-        s_settings_draft.upscaler = 3u;  // the row shows what the question is about
+        s_settings_draft.upscaler = vendor_upscaler();  // the row shows what the question is about
     }
     if (display_changed) {
         if (!settings_display_confirming()) {
@@ -2857,6 +2856,8 @@ bool xess_offered() {
 bool xess_installed_now() {
     return s_xess_installed_now && !host_window::upscaler_caps().xess;
 }
+
+unsigned vendor_upscaler() { return s_vendor_upscaler; }
 
 // A question of its own is up: the page and its rows wait.
 bool vendor_prompting() {
