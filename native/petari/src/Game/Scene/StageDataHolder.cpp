@@ -305,6 +305,11 @@ JMapInfoIter StageDataHolder::getChildObjInfoFromDataIndex(const JMapInfoIter& r
 }
 
 const StageDataHolder* StageDataHolder::findPlacedStageDataHolder(const JMapInfoIter& rIter) const {
+    // Made without a placement: it stands in the main stage.
+    if (rIter.mInfo == nullptr) {
+        return this;
+    }
+
     uintptr_t data = (uintptr_t)rIter.mInfo->mData + rIter.mInfo->mData->mDataOffset + rIter.mInfo->mData->mEntrySize * rIter.mIndex;
 
     if (_E4 <= data && data < _E8) {

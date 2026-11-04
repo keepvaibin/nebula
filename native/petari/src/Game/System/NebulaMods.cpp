@@ -38,6 +38,7 @@
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/System/GameDataFunction.hpp"
+#include "Game/Camera/CameraDirector.hpp"
 #include "Game/Map/HitInfo.hpp"
 #include "Game/NameObj/NameObjFactory.hpp"
 #include "Game/Util/FileUtil.hpp"
@@ -897,8 +898,30 @@ namespace {
         return sStageFrames > 0 ? MR::getCurrentStageName() : nullptr;
     }
 
+    // Objects a plugin can't make: not actors, or they need what only their level holds (a rail, a talk table, a file
+    // of that stage).
+    const char* const cNotActors[] = {
+#include "Game/System/NebulaNotActors.inc"
+    };
+    const char* const cNeedTheirLevel[] = {
+#include "Game/System/NebulaNeedTheirLevel.inc"
+    };
+
+    template < int N >
+    bool isListed(const char* const (&rList)[N], const char* pName) {
+        for (int i = 0; i < N; i++) {
+            if (MR::isEqualString(rList[i], pName)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     NebulaActor* apiSpawn(const char* pName, const f32* pAt) {
         if (pName == nullptr || sStageFrames <= 0) {
+            return nullptr;
+        }
+        if (findObject(pName) == nullptr && (isListed(cNotActors, pName) || isListed(cNeedTheirLevel, pName))) {
             return nullptr;
         }
         // Any object, a plugin's or the game's, on any stage: its files load now if the stage hasn't them.
@@ -1233,6 +1256,9 @@ namespace {
 
     int32_t apiIsOnGround(NebulaActor* pActor) {
         const LiveActor* pLive = asActor(pActor);
+        if (pLive == playingPlayer()) {
+            return MR::isOnGroundPlayer() ? 1 : 0;
+        }
         return pLive->mBinder != nullptr && MR::isBindedGround(pLive) ? 1 : 0;
     }
 
@@ -1342,13 +1368,13 @@ namespace {
     }
 
     void apiStartCamera(const char* pName, int32_t frames) {
-        if (pName != nullptr && sStageFrames > 0) {
+        if (pName != nullptr && sStageFrames > 0 && MR::getCameraDirector()->getEventParameter(0, pName) != nullptr) {
             MR::startGlobalEventCameraNoTarget(pName, frames);
         }
     }
 
     void apiEndCamera(const char* pName, int32_t frames) {
-        if (pName != nullptr && sStageFrames > 0) {
+        if (pName != nullptr && sStageFrames > 0 && MR::getCameraDirector()->getEventParameter(0, pName) != nullptr) {
             MR::endGlobalEventCamera(pName, frames, true);
         }
     }
