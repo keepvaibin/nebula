@@ -71,11 +71,7 @@ None of these are in 1.0.2. They are in this branch and change until 2.0 is rele
 - Mii import for the file icons from a Wii, DS, 3DS, Wii U, Switch, Mii Studio or Mii Creator. Settings > GENERAL
   > IMPORT MIIS, or put the files in the `miis` folder next to the settings; imported files are kept there and read
   at every start.
-- Mods, texture packs and HD movies, each in its own folder in the `mods` folder next to the settings: Riivolution
-  mods (`riivolution/*.xml` and their files), disc files in the disc's layout (`files/`), texture packs in
-  Dolphin's format (`textures/`, `tex1_` PNG or DDS) and movies (`movies/<THP name>.mp4`, `.webm` or `.mkv`, played
-  in place of the game's THP video). Import a zip, 7z, rar or folder from the launcher's Mods tab or Settings >
-  MODS, or drop it on the game window. Among enabled mods the higher one wins a file or texture.
+- Mods: one `.luma` file for a mod, on every version of the game. [LumaLink](https://github.com/keepvaibin/lumalink) converts Riivolution mods and texture packs to it, and its guide shows how to make one: models, textures, levels, music, cutscenes, galaxies, and native plugins with hooks. Import from Settings > MODS or drop a file on the game window. Among enabled mods the higher one wins a file or texture. Raw mods, disc files and texture packs in the `mods` folder still work.
 - Nebula's own text (its buttons, questions and achievements) in all 14 of the game's languages, changeable or
   translatable by a mod: [docs/MODDING_NEBULA_TEXT.md](docs/MODDING_NEBULA_TEXT.md).
 - When Nebula stops, an error code ([docs/ERROR_CODES.md](docs/ERROR_CODES.md)) naming the cause and a report in

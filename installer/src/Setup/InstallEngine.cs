@@ -63,7 +63,7 @@ namespace Nebula.Setup
         /// <summary>What a version folder holds (each from the package, by its published name).</summary>
         private static readonly string[] NativeFiles =
         {
-            "NebulaNative.exe", "smg_game.dll", "nebula_import.dll", "material-names.tsv", "rt-materials.tsv", "rt-suns.tsv",
+            "NebulaNative.exe", "smg_game.dll", "nebula_import.dll", "nebula-import.exe", @"dxc\dxc.exe", @"dxc\dxcompiler.dll", @"dxc\dxil.dll", @"dxc\LICENSE-MS.txt", @"dxc\LICENCE-MIT.txt", @"dxc\LICENSE-LLVM.txt", "material-names.tsv", "rt-materials.tsv", "rt-suns.tsv",
             "Nebula.exe", "NebulaSettings.exe", "LICENSE", "THIRD-PARTY-NOTICES.md", "README.md"
         };
 
@@ -211,7 +211,8 @@ namespace Nebula.Setup
             foreach (var name in NativeFiles) Payload.Extract(name, Path.Combine(app, name));
             File.WriteAllText(Path.Combine(app, "runtime-isa.txt"), NativeIsa);
             var files = new Dictionary<string, object>();
-            foreach (var path in Directory.GetFiles(app)) files[Path.GetFileName(path)] = FileUtil.Sha256File(path);
+            foreach (var path in Directory.GetFiles(app, "*", SearchOption.AllDirectories))
+                files[path.Substring(app.Length).TrimStart(Path.DirectorySeparatorChar)] = FileUtil.Sha256File(path);
             Json.Save(Path.Combine(app, "install.json"), new Dictionary<string, object>
             {
                 { "schema", "nebula.install.v1" },

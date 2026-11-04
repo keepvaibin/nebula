@@ -10,6 +10,8 @@ class LiveActor;
 // The game's side of plugins (nebula_mod_api.h). An event no plugin wants is one load and one branch.
 namespace NebulaMods {
     extern bool sWanted[NEBULA_MOD_EVENT_COUNT];
+    // Whether any mod's code is running: it may ask for what a scene otherwise only makes when its story needs it.
+    bool hasCode();
 
     s32 dispatch(NebulaModEvent event, s32 value, void* pActor, const char* pName);
 
@@ -34,6 +36,16 @@ namespace NebulaMods {
     // What a hungry Luma of this slot costs, if a mod says: -1 otherwise.
     s32 hungryLumaPrice(s32 slot);
     s32 hungryLumaSlots();
+
+    // Tracks mods add: sound ids from here on have no row in the game's tables. -1 where there's no such track.
+    const u32 cFirstTrackWave = 0x4000;
+    u32 trackId(const char* pName);
+    s32 trackFile(u32 wave);
+    u32 stageTrack(const char* pStage, s32 scenario);
+    u32 areaTrack(const char* pStage, s32 area);
+
+    // A galaxy whose icon has no pane in the map's layout: the pane to make, under `pParent`.
+    bool mapSpot(const char* pGalaxy, f32* pX, f32* pY, s32* pDome);
 
     typedef NameObj* (*CreatorFuncPtr)(const char*);
     // A plugin's object by its placed name: how to make it. nullptr: not a plugin's.

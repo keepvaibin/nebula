@@ -45,6 +45,11 @@ constexpr const char* kGood = R"({
 
 int main() {
     using namespace galaxy::luma;
+    for (const char* bad : {"../up", "a/b", "a\\b", "UPPER", "with space", "", "con", "nul", "com1", "lpt9", "-a", "a-"}) {
+        const std::string text = std::string(R"({"format":1,"id":")") + (std::string(bad) == "a\\b" ? "a\\\\b" : bad) + R"(","name":"n","version":"1.0.0","game":"RMG","layers":[]})";
+        check(!parse_manifest(text).has_value(), bad);
+    }
+    check(parse_manifest(R"({"format":1,"id":"a-1","name":"n","version":"1.0.0","game":"RMG","layers":[]})").has_value(), "a good id");
     const std::optional<Manifest> read = parse_manifest(kGood);
     check(read.has_value(), "a good file reads");
     if (!read) return 1;

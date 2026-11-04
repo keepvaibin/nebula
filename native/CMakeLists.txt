@@ -74,6 +74,14 @@ set_target_properties(smg_game PROPERTIES
     C_VISIBILITY_PRESET hidden CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON
     # A plugin built with the game's headers calls the game's functions as the game itself does.
     WINDOWS_EXPORT_ALL_SYMBOLS ON)
+# Only to measure what those exports cost: plugins built with the game's headers can't load in this build.
+option(NEBULA_NO_PLUGIN_EXPORTS "Leave the game's functions unexported" OFF)
+if(NEBULA_NO_PLUGIN_EXPORTS)
+    set_target_properties(smg_game PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS OFF)
+elseif(NOT WIN32)
+    # The same on Linux and Mac: what Windows does with its export list, these do with visibility.
+    set_target_properties(smg_game PROPERTIES C_VISIBILITY_PRESET default CXX_VISIBILITY_PRESET default VISIBILITY_INLINES_HIDDEN OFF)
+endif()
 
 
 # Every float-to-integer conversion into a type narrower than 32 bits goes through s32, as the Wii converts
@@ -182,6 +190,13 @@ endif()
 # The mods' virtual disc (galaxy::mods) serves this host's disc reads as the windowed host's.
 # How a plugin replaces a game function on Windows.
 set(nebula_minhook_sources)
+if(NOT WIN32)
+    set(nebula_minhook_sources ../runtime/src/mod_hook_posix.cpp)
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
+        list(APPEND nebula_minhook_sources ../third_party/minhook/src/hde/hde64.c)
+        set_source_files_properties(../third_party/minhook/src/hde/hde64.c PROPERTIES INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/../runtime/include/galaxy/hde_shim")
+    endif()
+endif()
 if(WIN32)
     set(nebula_minhook_dir "${CMAKE_CURRENT_LIST_DIR}/../third_party/minhook")
     set(nebula_minhook_sources "${nebula_minhook_dir}/src/buffer.c" "${nebula_minhook_dir}/src/hook.c" "${nebula_minhook_dir}/src/trampoline.c" "${nebula_minhook_dir}/src/hde/hde64.c")

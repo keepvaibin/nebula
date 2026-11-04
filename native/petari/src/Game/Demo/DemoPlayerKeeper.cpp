@@ -1,4 +1,7 @@
 #include "Game/Demo/DemoPlayerKeeper.hpp"
+#include "Game/Player/MarioAccess.hpp"
+#include "Game/Util/LiveActorUtil.hpp"
+#include "Game/Player/MarioActor.hpp"
 #include "Game/Demo/DemoFunction.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/JMapInfo.hpp"
@@ -32,7 +35,9 @@ void DemoPlayerKeeper::update() {
 
 bool DemoPlayerKeeper::isExistPosName() const {
     for (int i = 0; i < mNumPlayerInfos; i++) {
-        if (mPlayerInfos[i].mPosName != nullptr) {
+        // A mod's cutscene may name a position the stage doesn't have.
+        TPos3f found;
+        if (mPlayerInfos[i].mPosName != nullptr && MR::tryFindNamePos(mPlayerInfos[i].mPosName, found.toMtxPtr())) {
             return true;
         }
     }
@@ -43,7 +48,8 @@ void DemoPlayerKeeper::executePlayer(const DemoPlayerInfo* pPlayerInfo) const {
     if (pPlayerInfo->mPosName != nullptr) {
         MR::setPlayerPosOnGroundAndWait(pPlayerInfo->mPosName);
     }
-    if (pPlayerInfo->mBckName != nullptr) {
+    // A mod's cutscene may name an animation the player doesn't have.
+    if (pPlayerInfo->mBckName != nullptr && MR::isExistBck(MarioAccess::getPlayerActor(), pPlayerInfo->mBckName)) {
         MR::startBckPlayer(pPlayerInfo->mBckName);
     }
 }

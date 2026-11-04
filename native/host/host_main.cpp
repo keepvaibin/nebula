@@ -447,14 +447,14 @@ void run(HANDLE thread, double seconds) {
 
 // The mods' code, started once the game is attached.
 std::vector<galaxy::mods::PluginFile> gPlugins;
-std::vector<galaxy::mods::GalaxyToAdd> gModGalaxies;
-std::vector<std::pair<std::string, std::string>> gModTexts;
+galaxy::mods::ModRows gModRows;
 
 void load_module(const fs::path& path) {
 #if defined(_WIN32)
     void* module = LoadLibraryW(path.wstring().c_str());
 #else
-    void* module = dlopen(path.string().c_str(), RTLD_NOW | RTLD_LOCAL);
+    // Global: a plugin built with the game's headers finds the game's functions here.
+    void* module = dlopen(path.string().c_str(), RTLD_NOW | RTLD_GLOBAL);
 #endif
     if (module == nullptr) {
         die("cannot load the game module %s", utf8_of(path.filename()).c_str());
@@ -3681,14 +3681,14 @@ void svc_mods_start(void*) {
             galaxy::mods::set_code_off_after_crash();
         }
     }
-    if (gPlugins.empty() && gModGalaxies.empty() && gModTexts.empty()) {
+    if (gPlugins.empty() && gModRows.empty()) {
         return;
     }
     if (!gPlugins.empty()) {
         gCodeCrashFile = crashed;
     }
     const auto game_api = reinterpret_cast<const NebulaModApi* (*)()>(find_symbol(gModule.module, "nebula_game_mod_api"));
-    galaxy::mods::start_plugins(gPlugins, gModGalaxies, gModTexts, game_api(),
+    galaxy::mods::start_plugins(gPlugins, gModRows, game_api(),
                                 [](const char* name) -> void* {
 #if defined(_WIN32)
                                     return reinterpret_cast<void*>(GetProcAddress(static_cast<HMODULE>(gModule.module), name));
@@ -3771,8 +3771,7 @@ void prepare_mod_files(const fs::path& settings_folder, const std::string& game_
     const galaxy::mods::DiscPlan plan = galaxy::mods::plan_disc_changes(gPak.store, game_id, language);
     gModPatches = plan.native_patches;
     gPlugins = plan.plugins;
-    gModGalaxies = plan.galaxies;
-    gModTexts = plan.texts;
+    gModRows = plan.rows;
     if (!plan.save_folder.empty() && !gSaveDataPath.empty()) {
         // A clone starts from the player's save the first time, the rest starts new; the player's stays as it is.
         const fs::path mine = gSaveRoot / gSaveDataPath.substr(1);

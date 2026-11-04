@@ -64,7 +64,7 @@ sh native/tests/run_tests.sh
 ## Setup
 
 ```powershell
-.\installer\build-native-setup.ps1 -Version <version> -Bin <folder with NebulaNative.exe and smg_game.dll>
+.\installer\build-native-setup.ps1 -Version <version> -Dxc <unpacked DirectX Shader Compiler release> -Bin <folder with NebulaNative.exe and smg_game.dll>
 ```
 
 Builds the disc import tool, the launcher and Setup, and writes `Nebula-Setup.exe` with the host and game module
