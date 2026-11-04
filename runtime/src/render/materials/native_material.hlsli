@@ -45,7 +45,13 @@ float level_line(float value, float level) {
 // The draw's matrix rows (draw_matrices.h): position rows from pos_base (place k at 3k), texture rows from
 // row_bases.y (rows 30-63), normal rows from row_bases.x, light n's four rows at row_bases.w + 4n.
 StructuredBuffer<float4> mtx_rows : register(t3, space1);
-float4 native_matrix_row(uint r) { return mtx_rows[r < 30u ? draw_counts.w + r : row_bases.y + (r - 30u)]; }
+float4 native_position_row(uint r) { return mtx_rows[draw_counts.w + r]; }
+// A texture coordinate's matrix row: a texture place's, or (native_tex_matrix) the vertex's position or normal matrix's.
+float4 native_matrix_row(uint r) {
+    if (r >= 0x40000u) return mtx_rows[row_bases.x + (r - 0x40000u)];
+    if (r >= 0x20000u) return mtx_rows[draw_counts.w + (r - 0x20000u)];
+    return mtx_rows[r < 30u ? draw_counts.w + r : row_bases.y + (r - 30u)];
+}
 float4 native_normal_row(uint q) { return mtx_rows[row_bases.x + q]; }
 float4 native_light_row(uint n, uint w) { return mtx_rows[row_bases.w + 4u * n + w]; }
 
@@ -180,9 +186,8 @@ uint native_tex_matrix(NativeVertex v, uint i) {
     if (((vs_header.w >> i) & 1u) == 0u) {
         return draw_rows[(i + 1u) >> 2u][(i + 1u) & 3u];
     }
-    const uint packed = i < 3u ? v.mtx_idx.x : i < 7u ? v.mtx_idx.y : v.mtx_idx.z;
-    const uint shift = i < 3u ? 8u + 8u * i : i < 7u ? 8u * (i - 3u) : 0u;
-    return min((packed >> shift) & 0xFFu, 61u);
+    const uint code = (v.mtx_idx.y >> (4u * i)) & 15u;
+    return code == 15u ? 0x20000u + v.pn_row : code == 14u ? 0x40000u + v.pn_row : 30u + 3u * code;
 }
 float4 material_color(NativeVaryings i);
 
@@ -210,10 +215,10 @@ NativeVaryings native_vs(NativeVertexIn input) {
     // The position matrix: the vertex's place where it carries one (flags bit 0, skinned and multi-matrix models),
     // else the draw's.
     const float4 p = float4(input.pos, 1.0);
-    v.pn_row = min((draw_counts.z & 1u) != 0u ? input.mtx_idx.x & 0x3Fu : draw_rows[0].x, 61u);
-    const float4 m0 = native_matrix_row(v.pn_row);
-    const float4 m1 = native_matrix_row(v.pn_row + 1u);
-    const float4 m2 = native_matrix_row(v.pn_row + 2u);
+    v.pn_row = (draw_counts.z & 1u) != 0u ? input.mtx_idx.x : draw_rows[0].x;
+    const float4 m0 = native_position_row(v.pn_row);
+    const float4 m1 = native_position_row(v.pn_row + 1u);
+    const float4 m2 = native_position_row(v.pn_row + 2u);
     v.eye = float3(dot(m0, p), dot(m1, p), dot(m2, p));
     const float3 n = float3(dot(m0.xyz, input.nrm), dot(m1.xyz, input.nrm), dot(m2.xyz, input.nrm));
     v.eye_nrm = dot(n, n) > 0.0 ? normalize(n) : n;
@@ -232,9 +237,9 @@ NativeVaryings native_vs(NativeVertexIn input) {
         // The position rows of the previous frame (motion_ctrl.y: their base, or kMotionOwnRows).
         const uint base = motion_ctrl.y;
         const uint r = v.pn_row;
-        prev_eye = float3(dot(base == 0xFFFFFFFFu ? native_matrix_row(r) : mtx_rows[base + r], p),
-                          dot(base == 0xFFFFFFFFu ? native_matrix_row(r + 1u) : mtx_rows[base + r + 1u], p),
-                          dot(base == 0xFFFFFFFFu ? native_matrix_row(r + 2u) : mtx_rows[base + r + 2u], p));
+        prev_eye = float3(dot(base == 0xFFFFFFFFu ? native_position_row(r) : mtx_rows[base + r], p),
+                          dot(base == 0xFFFFFFFFu ? native_position_row(r + 1u) : mtx_rows[base + r + 1u], p),
+                          dot(base == 0xFFFFFFFFu ? native_position_row(r + 2u) : mtx_rows[base + r + 2u], p));
     } else {
         // The camera's move applied to the eye position (palette draws), or the previous position matrix (inline).
         const float4 q = (draw_counts.z & 1u) != 0u ? float4(v.eye, 1.0) : p;
@@ -262,9 +267,9 @@ NativeVaryings native_vs(NativeVertexIn input) {
             const float4 q = float4(input.tangent, 1.0);
             float4 other_eye;
             if ((draw_counts.z & 1u) != 0u) {
-                const uint r = min(input.curve.x & 0x3Fu, 61u);
-                other_eye = float4(dot(native_matrix_row(r), q), dot(native_matrix_row(r + 1u), q),
-                                   dot(native_matrix_row(r + 2u), q), 1.0);
+                const uint r = input.curve.x;
+                other_eye = float4(dot(native_position_row(r), q), dot(native_position_row(r + 1u), q),
+                                   dot(native_position_row(r + 2u), q), 1.0);
             } else {
                 other_eye = float4(dot(m0, q), dot(m1, q), dot(m2, q), 1.0);
             }

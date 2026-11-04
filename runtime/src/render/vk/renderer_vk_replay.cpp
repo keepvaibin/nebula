@@ -982,6 +982,7 @@ bool RendererVk::begin_replay_sequence(const ReplaySequence& sequence) {
 
     // The program (16 bytes of tail room for Load4), in a buffer no sub-frame in flight reads.
     const interp_gpu::Program& program = *sequence.program;
+    interp_copies_.insert(interp_copies_.end(), sequence.model_copies.begin(), sequence.model_copies.end());
     const std::size_t copies_bytes = interp_copies_.size() * sizeof(interp_gpu::Copy);
     const std::size_t ops_bytes = program.ops.size() * sizeof(interp_gpu::Op);
     const std::size_t payload_bytes = program.payload.size() * sizeof(std::uint32_t);

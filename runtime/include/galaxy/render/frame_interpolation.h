@@ -21,6 +21,7 @@
 #include "galaxy/render/transform_history.h"
 #include "galaxy/render/draw_constants.h"
 
+#include <vector>
 #include <array>
 #include <cstdint>
 
@@ -144,6 +145,18 @@ void palette_motion(RowView a, RowView b, const CameraMotion& camera,
 void palette_at(const PaletteMotion& m, RowView a, RowView b,
                 const CameraMotion& camera, const Affine34& camera_t, float t,
                 std::uint32_t* out) noexcept;
+
+// A model's block of `count` draw matrices: position rows then normal rows, four words a row. Each matrix moves once,
+// however many draws read it. A null `a`: no block before.
+struct ModelMotion {
+    std::vector<EyeMotion> position;
+    std::vector<NormalMotion> normal;
+    std::vector<std::uint8_t> position_changed;
+    std::vector<std::uint8_t> normal_changed;
+    std::uint32_t snapped = 0;
+};
+void model_motion(const std::uint32_t* a, const std::uint32_t* b, std::uint32_t count, const CameraMotion& camera,
+                  bool orthographic, ModelMotion& out);
 
 // One light (16 words) at t: color and attenuation lerped; position and
 // direction interpolated in world space when `split` (else in eye space). A

@@ -6,6 +6,7 @@
 #include "JSystem/J3DGraphAnimator/J3DModelData.hpp"
 #include "JSystem/J3DGraphBase/J3DShape.hpp"
 #include "JSystem/J3DGraphBase/J3DShapeDraw.hpp"
+#include "JSystem/J3DGraphBase/J3DShapeMtx.hpp"
 #include "JSystem/J3DGraphBase/J3DSys.hpp"
 #include "JSystem/J3DGraphBase/J3DVertex.hpp"
 #include <nebula_game_api.h>
@@ -99,6 +100,10 @@ namespace {
     u32 sTexGenCount = 0;
     // A record's matrices: its position and normal matrices, then the texture matrices.
     NebulaDrawMatrix sRecord[2 * J3DNativeShape::kPositions + 64];
+    // The next draw's block: a shape of one matrix takes it once; a skinned shape keeps the last one.
+    u32 sNextPalette = 0;
+    u16 sNextPaletteMatrix = 0;
+    u32 sLastPalette = 0;
 
     NebulaDrawMatrix* nextTexture(u32 kind, u32 place) {
         J3DNativeDraw::flush();
@@ -278,8 +283,48 @@ namespace J3DNativeShape {
         }
     }
 
+    void setPalette(u32 palette, u16 matrix) {
+        sNextPalette = palette;
+        sNextPaletteMatrix = matrix;
+        sLastPalette = palette;
+    }
+
+    void useModelMatrices(J3DShape* pShape) {
+        // A group's table leaves a place empty (0xFFFF) where it keeps the group before's matrix.
+        u16 places[J3DNativeShape::kPositions];
+        for (u32 k = 0; k < J3DNativeShape::kPositions; k++) {
+            places[k] = 0;
+        }
+        for (u16 g = 0; g < pShape->mMtxGroupNum; g++) {
+            const J3DShapeDraw* pDraw = pShape->mShapeDraw[g];
+            const J3DShapeMtx* pMtx = pShape->mShapeMtx[g];
+            if (pDraw == nullptr || pMtx == nullptr || pMtx->getType() != 'SMMC') {
+                continue;
+            }
+            const u32 used = pMtx->getUseMtxNum();
+            for (u32 k = 0; k < used && k < J3DNativeShape::kPositions; k++) {
+                if (pMtx->getUseMtxIndex(k) != 0xFFFF) {
+                    places[k] = pMtx->getUseMtxIndex(k);
+                }
+            }
+            J3DShapeMesh* pMesh = pDraw->getMesh();
+            if ((pMesh->mAttributes & NEBULA_SHAPE_MODEL_MATRICES) != 0) {
+                continue;
+            }
+            // Corners without a place of their own take the shape's current one.
+            const bool ownPlaces = (pMesh->mAttributes & NEBULA_SHAPE_POSITION_MATRIX) != 0;
+            const u32 current = pShape->mCurrentMtx.mPosition / 3;
+            pMesh->mAttributes |= NEBULA_SHAPE_MODEL_MATRICES | NEBULA_SHAPE_POSITION_MATRIX;
+            NebulaShapeCorner* pCorners = pMesh->corners();
+            for (u32 c = 0; c < pMesh->mCornerCount; c++) {
+                pCorners[c].model_matrix = places[(ownPlaces ? pCorners[c].position_matrix : current) % J3DNativeShape::kPositions];
+            }
+        }
+    }
+
     void registerShape(J3DShape* pShape) {
         pShape->mNebulaRegistered = true;
+        useModelMatrices(pShape);
         J3DVertexData* pData = pShape->mVertexData;
         if (pData == nullptr) {
             fail("it has no vertex data", pShape);
@@ -311,13 +356,17 @@ namespace J3DNativeShape {
 
     void draw(const J3DShapeDraw* pDraw) {
         J3DNativeDraw::flush();
+        const bool skinned = (pDraw->getMesh()->mAttributes & NEBULA_SHAPE_MODEL_MATRICES) != 0;
+        const u32 palette = skinned ? sLastPalette : sNextPalette;
         const u32 places = pDraw->getMesh()->mPlaces;
-        const u32 mask = places != 0 ? places : 1u << sCurrentPosition;
+        const u32 mask = palette != 0 ? 0u : places != 0 ? places : 1u << sCurrentPosition;
         const u32 count = gather(mask, true);
         const NebulaHostServices* pHost = nebula_host();
         pHost->shape_draw(pHost->user, keyOf(pDraw), keyOf(j3dSys.getVtxPos()),
                           keyOf(j3dSys.getVtxNrm()), keyOf(j3dSys.getVtxCol()), sRecord, count,
-                          sCurrentSet ? &sCurrent : nullptr, sTexGens, sTexGenCount, J3DNativeState::pass());
+                          sCurrentSet ? &sCurrent : nullptr, sTexGens, sTexGenCount, J3DNativeState::pass(), palette,
+                          sNextPaletteMatrix);
+        sNextPalette = 0;
         sCurrentSet = false;
         sTexGenCount = 0;
     }
@@ -327,7 +376,7 @@ namespace J3DNativeShape {
         const u32 count = gather(places != 0 ? places : 1u << sCurrentPosition, true);
         const NebulaHostServices* pHost = nebula_host();
         pHost->shape_draw(pHost->user, key, position, normal, color, sRecord, count, sCurrentSet ? &sCurrent : nullptr,
-                          sTexGens, sTexGenCount, J3DNativeState::pass());
+                          sTexGens, sTexGenCount, J3DNativeState::pass(), 0, 0);
         sCurrentSet = false;
         sTexGenCount = 0;
     }
@@ -340,7 +389,7 @@ namespace J3DNativeShape {
         const u32 count = gather(0, true);
         const NebulaHostServices* pHost = nebula_host();
         pHost->shape_draw(pHost->user, 0, 0, 0, 0, sRecord, count, sCurrentSet ? &sCurrent : nullptr, sTexGens,
-                          sTexGenCount, J3DNativeState::pass());
+                          sTexGenCount, J3DNativeState::pass(), 0, 0);
         sCurrentSet = false;
         sTexGenCount = 0;
     }

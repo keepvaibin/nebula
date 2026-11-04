@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 126u
+#define NEBULA_GAME_API_VERSION 127u
 
 /* Viewports, scissors, clears, target sizes and picture points count this many units across a frame on each axis. */
 #define NEBULA_FRAME_UNITS 65536.0f
@@ -401,10 +401,12 @@ typedef struct NebulaShapeCorner {
     uint16_t color[2];
     uint16_t texcoord[8];
     uint8_t position_matrix;
-    uint8_t texture_matrix[8]; /* the coordinate's texture place, or NEBULA_CORNER_POSITION_MATRIX */
-    uint8_t reserved[3];
+    uint8_t texture_matrix[8]; /* the coordinate's texture place, or one of the two below */
+    uint8_t reserved;
+    uint16_t model_matrix;     /* NEBULA_SHAPE_MODEL_MATRICES: its matrix in the model's block (shape_palette) */
 } NebulaShapeCorner;
-#define NEBULA_CORNER_POSITION_MATRIX 0xFFu /* the coordinate starts from the corner's own position matrix */
+#define NEBULA_CORNER_POSITION_MATRIX 0xFFu /* the coordinate's matrix is the corner's own position matrix */
+#define NEBULA_CORNER_NORMAL_MATRIX 0xFEu   /* ... the corner's own normal matrix */
 
 /* Which arrays a shape group's corners read and which matrix places they carry (NebulaShapeGeometry::attributes). */
 enum {
@@ -418,6 +420,7 @@ enum {
     NEBULA_SHAPE_TEXTURE_MATRIX0 = 1u << 14,  /* to 1u << 21: corners carry texture coordinate 0-7's matrix place */
     NEBULA_SHAPE_OWN_POSITIONS = 1u << 22,    /* positions (and colours) are the group's own values, not an array a
                                                  model or the game keeps: geometry the game builds */
+    NEBULA_SHAPE_MODEL_MATRICES = 1u << 23,   /* corners name their matrix in the model's block */
 };
 
 /* A shape group (shape_geometry): its corners, each distinct one once, and its triangles (three corner indices each,
@@ -1105,9 +1108,15 @@ typedef struct NebulaHostServices {
        state, immediates, images, captures, markers) run in the order the game makes them. Shape 0 draws nothing:
        only the texture matrices, current matrices and texgens take effect (state the game set before a material
        record, kept in order with it). */
+    /* A model's draw matrices as one block (one a view): `count` matrices, the position matrices' 12 floats each, then
+       the normal matrices' 12 (rows of four, the fourth of each 0), written by the caller into `*rows`, valid until
+       its next call. `key` and the order within the frame name it from frame to frame. Returns its id, which
+       shape_draw names for the rest of `frame` (a game frame's count). */
+    uint32_t (*shape_palette)(void* user, uint64_t key, uint32_t count, uint32_t frame, float** rows);
     void (*shape_draw)(void* user, uint64_t shape, uint64_t position, uint64_t normal,
                        uint64_t color, const NebulaDrawMatrix* matrices, uint32_t matrix_count,
-                       const NebulaShapeCurrent* current, const NebulaShapeTexGen* texgens, uint32_t texgen_count, const NebulaPassState* pass);
+                       const NebulaShapeCurrent* current, const NebulaShapeTexGen* texgens, uint32_t texgen_count, const NebulaPassState* pass,
+                       uint32_t palette, uint32_t palette_matrix);
     /* The projection the draws after this use: `terms` the six of a perspective or orthographic matrix. */
     void (*view_projection)(void* user, int orthographic, const float terms[6]);
     /* The viewport: left, top, width, height (NEBULA_FRAME_UNITS is all of the pass's target), near and far depth (0-1). */

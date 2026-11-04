@@ -164,6 +164,7 @@ void attach_stripe_particle(std::size_t stream_offset, std::uint64_t particle, s
 // Simulation thread: a native shape record (native_shapes.h) at its offset into the next submitted frame.
 void attach_shape_record(shapes::Record&& record);
 [[nodiscard]] shapes::Matrix* reserve_record_matrices(shapes::Record& record, std::uint32_t count);
+[[nodiscard]] float* reserve_palette_rows(shapes::Record& record, std::uint32_t count);
 [[nodiscard]] state::Op* reserve_record_ops(shapes::Record& record, std::uint32_t count);
 [[nodiscard]] const shapes::Matrix* producer_record_matrices(const shapes::Record& record);
 [[nodiscard]] std::uint32_t reserve_record_native(const void* native, std::size_t bytes);

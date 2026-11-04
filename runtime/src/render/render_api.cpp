@@ -81,6 +81,10 @@ shapes::Matrix* reserve_record_matrices(shapes::Record& record, std::uint32_t co
     return backend().reserve_record_matrices(record, count);
 }
 
+float* reserve_palette_rows(shapes::Record& record, std::uint32_t count) {
+    return backend().reserve_palette_rows(record, count);
+}
+
 state::Op* reserve_record_ops(shapes::Record& record, std::uint32_t count) {
     return backend().reserve_record_ops(record, count);
 }

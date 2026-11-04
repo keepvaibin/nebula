@@ -187,6 +187,12 @@ public:
         producer_record_pool_.matrices.resize(producer_record_pool_.matrices.size() + count);
         return producer_record_pool_.matrices.data() + record.matrix_first;
     }
+    [[nodiscard]] float* reserve_palette_rows(shapes::Record& record, std::uint32_t count) {
+        record.palette_first = static_cast<std::uint32_t>(producer_record_pool_.palette_rows.size());
+        record.palette_count = count;
+        producer_record_pool_.palette_rows.resize(producer_record_pool_.palette_rows.size() + count * 24u);
+        return producer_record_pool_.palette_rows.data() + record.palette_first;
+    }
     [[nodiscard]] state::Op* reserve_record_ops(shapes::Record& record, std::uint32_t count) {
         record.op_first = static_cast<std::uint32_t>(producer_record_pool_.ops.size());
         record.op_count = count;
@@ -527,6 +533,18 @@ private:
         std::vector<VertexConstants> constants;   // per record, as uploaded
         std::vector<std::int32_t> prev_index;   // matched record of the previous scene
         std::vector<std::int32_t> palette;      // per record: shadow index or -1
+        // Per record: its model's block in `models`, or -1. A block's rows are kept here for the next scene's pairing;
+        // `order` tells a model's blocks of one frame apart (a view each).
+        std::vector<std::int32_t> model;
+        struct Model {
+            std::uint64_t key = 0;
+            std::uint32_t order = 0;
+            std::uint32_t count = 0;
+            std::uint32_t first_word = 0;
+            std::uint32_t ring_row = 0;
+        };
+        std::vector<Model> models;
+        std::vector<std::uint32_t> model_words;
         std::vector<std::uint8_t> per_vertex;   // per-vertex palette draw
         // Per record, from its drawing state: texgen i's bit when it maps position or normal (its matrices lerp
         // whole), and the lights its colour channels and emboss texgens evaluate.
@@ -572,6 +590,7 @@ private:
         }
         void clear() noexcept {
             constants.clear(); prev_index.clear();
+            model.clear(); models.clear(); model_words.clear();
             palette.clear(); per_vertex.clear(); light_masks.clear(); palette_tables.clear(); palette_rows.clear(); palette_count = 0;
             valid = false; serial = 0;
             category.clear(); camera_epoch_known = false;
@@ -626,6 +645,7 @@ private:
         std::uint32_t record = 0;
         std::int32_t prev = -1;           // matched record of the scene before
         std::int32_t palette = -1;        // interp_palette_motions_ index
+        std::int32_t model = -1;          // interp_model_motions_ index
         bool projection_moves = false;
     };
     std::vector<InterpRecordMotion> interp_moving_;
@@ -649,6 +669,17 @@ private:
         return layer == kScreenLayer ? kScreenCamera : layer == kMirrorLayer ? interp_mirror_camera_ : interp_camera_;
     }
     std::vector<InterpPaletteMotion> interp_palette_motions_;
+    // A model's block moving in the playing scene: its pair before, its motion, its rows in the output.
+    struct InterpModelMotion {
+        std::int32_t model = -1;
+        std::int32_t before = -1;
+        std::uint32_t output_row = 0;
+        std::uint32_t prev_row = 0;
+        ModelMotion motion{};
+    };
+    std::vector<InterpModelMotion> interp_model_motions_;
+    std::vector<std::int32_t> interp_model_index_;  // per scene block: its entry, or -1
+    std::vector<interp_gpu::Copy> interp_model_copies_;
     std::vector<std::int32_t> interp_palette_first_;  // per shadow: first entry
     std::uint64_t interp_moving_records_ = 0;        // summed per sub-frame
     std::uint64_t interp_palette_decompositions_ = 0;
@@ -969,6 +1000,26 @@ private:
         const curved::Model* curved = nullptr;
     };
     const RecordVertexInputs* record_inputs_ = nullptr;
+    // Models' blocks of the game frame, by id (Record::Kind::Palette): the rows kept, and where the ring has them.
+    struct ModelPalette {
+        std::uint64_t key = 0;
+        std::uint32_t count = 0;
+        std::uint32_t first = 0;      // in model_palette_rows_
+        std::uint32_t order = 0;      // among this frame's blocks of the key
+        std::uint32_t ring_row = 0;
+        std::uint64_t ring_epoch = 0;
+        bool in_ring = false;
+        std::int32_t scene_model = -1;
+        std::uint32_t scene_stamp = 0;
+    };
+    std::vector<ModelPalette> model_palettes_;
+    std::vector<float> model_palette_rows_;
+    std::uint32_t model_palette_first_id_ = 0;
+    std::uint32_t model_palette_frame_ = ~0u;
+    std::uint32_t interp_scene_stamp_ = 1u;
+    ModelPalette* draw_palette_ = nullptr;
+    std::uint32_t draw_palette_row_ = 0;
+    void note_model_palette(const shapes::Record& record);
     // draw_record_immediate's vertices and indices before they go to the rings.
     std::vector<std::uint16_t> immediate_indices_;
     // The vertex inputs the last keys were built with.

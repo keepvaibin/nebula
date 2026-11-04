@@ -155,6 +155,9 @@ struct VsConstantsCpuCache {
     // VertexConstants::flags bit 0: the draw's vertices carry position matrix indices (the shape's attributes, the
     // source of VertexShaderKey::flags bit 0), RenderCore's.
     std::uint32_t per_vertex = 0u;
+    // The draw's position matrix's first row in a model's block, or kOwnPlace: its place's.
+    static constexpr std::uint32_t kOwnPlace = 0xFFFFFFFFu;
+    std::uint32_t position_row = kOwnPlace;
 
     const VertexConstants& update(const NativeDrawState& draw, std::uint32_t dirty,
         RasterScale current_scale, bool frame_bindings_dirty) {
@@ -169,6 +172,11 @@ struct VsConstantsCpuCache {
         constants.sky_up = sky_up;
         constants.sky_up_known = sky_up_known;
         constants.flags = (constants.flags & 0x2u) | (per_vertex & 1u);
+        if (position_row != kOwnPlace) {
+            constants.draw_rows[0][0] = position_row;
+        } else {
+            constants.draw_rows[0][0] = 3u * draw.position_matrix;
+        }
         constants.pos_base = pos_base;
         std::memcpy(constants.row_bases, row_bases, sizeof(row_bases));
         return constants;

@@ -88,6 +88,12 @@ public:
     virtual void loadNrmMtx(int, u16, f32 (*)[4]) const;
 
     void loadMtxConcatView_PNGP(int, u16) const;
+    // The model's block for this view (its matrices through the packet's base matrix, sent the first time they are
+    // read after they changed); its id.
+    static u32 loadPalette();
+    // What a coordinate's own matrix needs from draw matrix `index` (J3DDifferedTexMtx, a normal matrix as a texture
+    // matrix), for shapes whose material asks.
+    void loadTextureInputs(int slot, u16 index) const;
 
     static MtxPtr sMtxPtrTbl[2];
 };

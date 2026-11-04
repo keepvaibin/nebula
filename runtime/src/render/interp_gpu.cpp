@@ -407,6 +407,30 @@ void Program::palette(std::uint32_t dst, const PaletteMotion& m, RowView a, RowV
     }
 }
 
+void Program::model(std::uint32_t dst, const ModelMotion& m, const std::uint32_t* a, const std::uint32_t* b,
+                    std::uint32_t count, bool positions_only) {
+    for (std::uint32_t k = 0; k < count; ++k) {
+        if (m.position_changed[k] != 0u) {
+            float end_a[12], end_b[12];
+            for (unsigned i = 0; i < 12u; ++i) {
+                end_a[i] = a != nullptr ? word_float(a[12u * k + i]) : 0.0f;
+                end_b[i] = word_float(b[12u * k + i]);
+            }
+            eye(dst + k * 12u, m.position[k], a != nullptr ? end_a : nullptr, end_b);
+        }
+        if (!positions_only && m.normal_changed[k] != 0u) {
+            // Nine values, x y z of three rows (the eval writes value i to row i / 3, column i % 3).
+            float end_a[9], end_b[9];
+            for (unsigned i = 0; i < 9u; ++i) {
+                const unsigned word = 12u * count + 12u * k + (i / 3u) * 4u + i % 3u;
+                end_a[i] = a != nullptr ? word_float(a[word]) : 0.0f;
+                end_b[i] = word_float(b[word]);
+            }
+            normal(dst + 12u * count + k * 12u, m.normal[k], a != nullptr ? end_a : nullptr, end_b);
+        }
+    }
+}
+
 void Program::palette_positions(std::uint32_t dst, const PaletteMotion& m, RowView a, RowView b) {
     std::uint32_t wa[12], wb[12];
     for (unsigned k = 0; k < 10u; ++k) {
