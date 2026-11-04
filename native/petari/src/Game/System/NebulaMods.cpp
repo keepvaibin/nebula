@@ -64,6 +64,7 @@ namespace {
         const char16_t* mWords;
     };
     List< ModText > sTexts;
+    List< NebulaPowerUpClass > sPowerUps;
     int sStageFrames = 0;
 
     const char* copyText(const char* pText) {
@@ -243,6 +244,22 @@ namespace {
         ModText text = {copyText(pId), pWords};
         sTexts.add(text);
         return 0;
+    }
+
+    int32_t apiAddPowerUp(const NebulaPowerUpClass* pClass) {
+        if (pClass == nullptr || pClass->size < sizeof(NebulaPowerUpClass)) {
+            return -1;
+        }
+        NebulaPowerUpClass power = *pClass;
+        power.name = copyText(pClass->name);
+        power.music = copyText(pClass->music);
+        sPowerUps.add(power);
+        return NebulaMods::cFirstPowerUp + sPowerUps.mCount - 1;
+    }
+
+    const NebulaPowerUpClass* powerUpOf(u16 mode) {
+        const int index = static_cast< int >(mode) - NebulaMods::cFirstPowerUp;
+        return index >= 0 && index < sPowerUps.mCount ? &sPowerUps.mItems[index] : nullptr;
     }
 
     NebulaActor* apiPlayer() {
@@ -457,6 +474,7 @@ namespace {
         apiAddGalaxy,
         apiAddHungryLuma,
         apiAddText,
+        apiAddPowerUp,
     };
 }  // namespace
 
@@ -481,6 +499,48 @@ namespace NebulaMods {
 
     StageFrame::~StageFrame() {
         sStageFrames--;
+    }
+
+    s32 powerUpStart(u16 mode, LiveActor* pPlayer) {
+        const NebulaPowerUpClass* pPower = powerUpOf(mode);
+        if (pPower == nullptr) {
+            return 0;
+        }
+        if (pPower->music != nullptr) {
+            MR::startSubBGM(pPower->music, false);
+        }
+        if (pPower->color_frame > 0) {
+            MR::startBtp(pPlayer, "ColorChange");
+            MR::setBtpFrameAndStop(pPlayer, static_cast< f32 >(pPower->color_frame));
+        }
+        if (pPower->start != nullptr) {
+            pPower->start(pPower->user);
+        }
+        return pPower->frames;
+    }
+
+    void powerUpUpdate(u16 mode) {
+        const NebulaPowerUpClass* pPower = powerUpOf(mode);
+        if (pPower != nullptr && pPower->update != nullptr) {
+            pPower->update(pPower->user);
+        }
+    }
+
+    void powerUpEnd(u16 mode, LiveActor* pPlayer) {
+        const NebulaPowerUpClass* pPower = powerUpOf(mode);
+        if (pPower == nullptr) {
+            return;
+        }
+        if (pPower->music != nullptr) {
+            MR::stopSubBGM(30);
+        }
+        if (pPower->color_frame > 0) {
+            MR::startBtp(pPlayer, "ColorChange");
+            MR::setBtpFrameAndStop(pPlayer, 0.0f);
+        }
+        if (pPower->end != nullptr) {
+            pPower->end(pPower->user);
+        }
     }
 
     const char16_t* text(const char* pId) {

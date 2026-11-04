@@ -98,6 +98,7 @@ pub fn write_overlay(game_id: &str, changes: &[Change], base: Option<&Path>, out
         }
     }
     apply_merges(changes, base, &mut pak, &temporary, &mut at, &mut placed, &mut failed, stats)?;
+    complete_archives(changes, base, &mut pak, &mut at, &mut placed, &mut failed, stats)?;
     if placed.is_empty() {
         let _ = fs::remove_file(&temporary);
         bail!("no file of the mods could be used");
@@ -186,6 +187,43 @@ fn apply_merges(changes: &[Change], base: Option<&Path>, pak: &mut File, tempora
             .unwrap_or(key);
         placed.retain(|p| !p.path.eq_ignore_ascii_case(&path));
         placed.extend(place(pak, at, &path, vec![StoreItem { path: String::new(), order: 0, bytes: Some(bytes) }], stats)?);
+    }
+    Ok(())
+}
+
+/// The archive a path inside one is in: the part of the path up to the first `.arc/`. Archives are read as whole
+/// folders, so one a mod changes part of needs the rest of it in this store too.
+fn archive_of(path: &str) -> Option<&str> {
+    let lower = path.to_ascii_lowercase();
+    lower.find(".arc/").map(|at| &path[..at + 4])
+}
+
+/// A mod changing some files inside an archive: the rest come from the game's.
+fn complete_archives(changes: &[Change], base: Option<&Path>, pak: &mut File, at: &mut u64, placed: &mut Vec<store::Placed>,
+                     failed: &mut Vec<(String, String)>, stats: &mut Stats) -> Result<()> {
+    let whole: std::collections::BTreeSet<String> =
+        changes.iter().filter(|c| !c.merge && c.path.to_ascii_lowercase().ends_with(".arc")).map(|c| c.path.to_ascii_lowercase()).collect();
+    let mut partial = BTreeMap::new();
+    for item in placed.iter() {
+        if let Some(archive) = archive_of(&item.path) {
+            if !whole.contains(&archive.to_ascii_lowercase()) {
+                partial.entry(archive.to_ascii_lowercase()).or_insert_with(|| archive.to_string());
+            }
+        }
+    }
+    for archive in partial.into_values() {
+        let Some(base) = base else {
+            failed.push((archive, "the mod changes part of an archive, and the game isn't known".to_string()));
+            continue;
+        };
+        // A new archive of the mod's own has nothing to come from.
+        let Ok(members) = store::read_folder(base, &archive) else { continue };
+        for (relative, bytes) in members {
+            let path = format!("{archive}/{relative}");
+            if !placed.iter().any(|p| p.path.eq_ignore_ascii_case(&path)) {
+                placed.extend(place(pak, at, &path, vec![StoreItem { path: String::new(), order: 0, bytes: Some(bytes) }], stats)?);
+            }
+        }
     }
     Ok(())
 }
