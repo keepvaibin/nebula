@@ -7,12 +7,8 @@
 #include <nebula_mod_api.h>
 #include <nebula_game_abi.h>
 
-#if defined(_WIN32)
-/* Built as the game is, with no C library: the one symbol the compiler asks of it when floats are used. */
-extern "C" __declspec(selectany) int _fltused = 0;
-#endif
-
 #define NEBULA_GAME_PLUGIN_ENTRY(api, self)                                                             \
+    NEBULA_PLUGIN_FLOATS                                                                                \
     extern "C" NEBULA_PLUGIN_EXPORT uint64_t nebula_plugin_game_abi(void) { return NEBULA_GAME_ABI; }   \
     extern "C" NEBULA_PLUGIN_EXPORT uint32_t nebula_plugin_api(void) { return NEBULA_MOD_API_VERSION; } \
     extern "C" NEBULA_PLUGIN_EXPORT void nebula_plugin_start(const NebulaModApi* api, const NebulaPlugin* self)
