@@ -1719,7 +1719,7 @@ bool test_warp_against_oracle() {
 }  // namespace
 
 int main(int argc, char** argv) {
-    if (argc == 2 && std::strcmp(argv[1], "--identity-efb-copy") == 0) {
+    if (argc == 2 && std::strcmp(argv[1], "--identity-frame-copy") == 0) {
         try {
             WarpConversionHarness harness;
         } catch (const std::exception& error) {

@@ -605,7 +605,7 @@ int svc_code_patch(void*, uint32_t id, uint32_t* value) {
 // A mod's own save folder (Riivolution's savegame): the game's save files go there instead.
 fs::path gModSaveRoot;
 
-bool nand_path(const char* path, fs::path* out) {
+bool save_folder_path(const char* path, fs::path* out) {
     if (path == nullptr || path[0] != '/') {
         return false;
     }
@@ -3077,7 +3077,7 @@ void svc_save_request(void*, const NebulaSaveRequest* request) {
     auto operation = [r, name] {
         fs::path folder;
         galaxy::saves::Result result = galaxy::saves::kFailed;
-        if (nand_path(gSaveDataPath.c_str(), &folder)) {
+        if (save_folder_path(gSaveDataPath.c_str(), &folder)) {
             switch (r.op) {
             case NEBULA_SAVE_READ:
                 result = galaxy::saves::read(folder, name, r.buffer, r.size, r.length);
