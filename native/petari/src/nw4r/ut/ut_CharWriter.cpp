@@ -11,7 +11,7 @@ namespace {
     // LoadTexture binds sends it. Blended by alpha; depth, culling and writes as the drawing state has them.
     NebulaNativeMaterial sMaterial;
 
-    void SetupMaterial(nw4r::ut::Color min, nw4r::ut::Color max, bool intensity) {
+    void SetupMaterial(nw4r::ut::Color min, nw4r::ut::Color max, bool intensity, bool letters = true) {
         const nw4r::ut::Color fog = 0;
         J3DPass::noFog();
         NativeShader::init(sMaterial, NEBULA_SHADER_FONT_TEXT, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_ALWAYS, false,
@@ -21,6 +21,7 @@ namespace {
         NativeShader::setColor(sMaterial, 0, min.r, min.g, min.b, min.a);
         NativeShader::setColor(sMaterial, 4, max.r, max.g, max.b, max.a);
         sMaterial.constants[8] = intensity ? 1.0f : 0.0f;
+        sMaterial.constants[9] = letters ? 1.0f : 0.0f;
     }
 };  // namespace
 
@@ -111,7 +112,8 @@ namespace nw4r {
         }
 
         void CharWriter::SetupForColor() {
-            SetupDefault();
+            SetupMaterial(0x00000000u, 0xFFFFFFFFu, false, false);
+            SetupVertexFormat();
         }
 
         void CharWriter::SetFontSize(f32 width, f32 height) {
