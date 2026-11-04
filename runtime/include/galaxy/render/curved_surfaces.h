@@ -128,7 +128,5 @@ void clear_models();
 // Models keyed from `start` up to `end` go.
 void forget_models(std::uint64_t start, std::uint64_t end);
 
-// The HLSL of the curved surfaces' GPU triangle sort (RendererD3D12's curve sort pass).
-[[nodiscard]] std::string curve_sort_source();
 
 }  // namespace galaxy::render::curved

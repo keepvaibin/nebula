@@ -494,8 +494,13 @@ namespace NebulaUi {
         *pHeight = canvasHeight;
     }
 
+    static u32 sShown = 0;
+
+    bool isSharpScreenShown() {
+        return sShown != 0;
+    }
+
     void setSharp(u32 screen, bool shown) {
-        static u32 sShown = 0;
         const u32 next = shown ? (sShown | screen) : (sShown & ~screen);
         if ((next != 0) != (sShown != 0)) {
             NebulaHost::sharp2D(next != 0 ? 1 : 0);
@@ -504,7 +509,8 @@ namespace NebulaUi {
     }
 
     // the scissor is in the frame's units: the layout's canvas spans the default viewport.
-    void drawClipped(Pane* pPane, const nw4r::lyt::DrawInfo& rDrawInfo, f32 rise, f32 left, f32 right, f32 top, f32 bottom) {
+    void drawClipped(Pane* pPane, const nw4r::lyt::DrawInfo& rDrawInfo, f32 left, f32 right, f32 top, f32 bottom) {
+        const nw4r::math::MTX34& rPlace = pPane->mpParent->mGlbMtx;
         f32 scaleX;
         f32 width;
         f32 canvasHeight;
@@ -512,10 +518,10 @@ namespace NebulaUi {
         const f32 canvasWidth = width * scaleX;
         const f32 frameWidth = static_cast< f32 >(MR::getScreenUnitsAcross());
         const f32 frameHeight = static_cast< f32 >(MR::getScreenHeight());
-        const f32 x0f = (left * scaleX / canvasWidth + 0.5f) * frameWidth;
-        const f32 x1f = (right * scaleX / canvasWidth + 0.5f) * frameWidth;
-        const f32 y0f = (0.5f - (top + rise) / canvasHeight) * frameHeight;
-        const f32 y1f = (0.5f - (bottom + rise) / canvasHeight) * frameHeight;
+        const f32 x0f = ((rPlace._00 * left + rPlace._03) / canvasWidth + 0.5f) * frameWidth;
+        const f32 x1f = ((rPlace._00 * right + rPlace._03) / canvasWidth + 0.5f) * frameWidth;
+        const f32 y0f = (0.5f - (rPlace._11 * top + rPlace._13) / canvasHeight) * frameHeight;
+        const f32 y1f = (0.5f - (rPlace._11 * bottom + rPlace._13) / canvasHeight) * frameHeight;
         const s32 x0 = x0f < 0.0f ? 0 : static_cast< s32 >(x0f);
         const s32 y0 = y0f < 0.0f ? 0 : static_cast< s32 >(y0f);
         const s32 x1 = static_cast< s32 >((x1f > frameWidth ? frameWidth : x1f) + 0.999f);

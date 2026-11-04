@@ -127,6 +127,11 @@ void reset_touch_controls_places() noexcept;
 // The window's width in density-independent units (96 to the inch on a desktop, 160 on a phone), for what must stay
 // readable by its real size.
 [[nodiscard]] unsigned window_width_dp() noexcept;
+// NEBULA_OPTION_TOUCH_POINTER and NEBULA_CONTEXT_TOUCH_TARGET.
+[[nodiscard]] unsigned touch_pointer_state() noexcept;
+void note_touch_target(std::uint32_t circle) noexcept;
+// A finger landing at x, y (window pixels) lands on something the pointer grabs.
+[[nodiscard]] bool touch_target_at(float x, float y) noexcept;
 // The chosen input mode has nothing to play with (input_missing): the game shows its message, and Enter opens the
 // settings menu as F1 does.
 void set_input_missing_shown(bool shown) noexcept;

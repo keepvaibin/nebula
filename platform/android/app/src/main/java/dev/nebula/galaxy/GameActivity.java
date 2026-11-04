@@ -58,6 +58,7 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
     static native void nativePointer(int action, int id, float x, float y);
     static native boolean nativeMenuContext();
     static native boolean nativeTitleScreen();
+    static native boolean nativeTouchTargetAt(float x, float y);
     static native void nativeSetVisible(boolean visible);
     static native void nativeSurfaceWithdrawn();
     static native void nativeSurfaceReturned();
@@ -204,6 +205,11 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
             @Override
             public boolean titleScreen() {
                 return nativeTitleScreen();
+            }
+
+            @Override
+            public boolean touchTarget(float x, float y) {
+                return nativeTouchTargetAt(x, y);
             }
 
             @Override

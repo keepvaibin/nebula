@@ -58,8 +58,8 @@ attribution; this entry records the source and credits its authors.
 
 ## AMD FidelityFX SDK 1.1.4 (MIT)
 
-The FSR 3 upscaler and its DX12 backend, built from <https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK>
-(tag `v1.1.4`, downloaded and checked by SHA-256 at configure time) and linked into `NebulaNative.exe`. Copyright (c)
+The FSR 3 upscaler and its DX12 and Vulkan backends, built from <https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK>
+(tag `v1.1.4`, downloaded and checked by SHA-256 at configure time) and linked into the game. Copyright (c)
 2023-2024 Advanced Micro Devices, Inc. License: MIT, the SDK's `LICENSE.txt`.
 
 ## libarchive 3.8.1, xz 5.8.1, zlib 1.3.1

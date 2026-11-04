@@ -77,7 +77,8 @@ void LayoutPaneCtrl::reflectFollowPos() {
         TVec2f offset(screenOrigin + *mFollowPos);
         MR::convertScreenPosToLayoutPos(&offset, offset);
         global._03 += offset.x;
-        global._13 += offset.y;
+        // A distance, in the layout's own units on any canvas: only places stretch with a taller one.
+        global._13 -= mFollowPos->y;
         break;
     }
     case 2: {

@@ -47,9 +47,6 @@ constexpr std::uint32_t kOpDecorate = 71;
 constexpr std::uint32_t kOpDecorateId = 332;
 constexpr std::uint32_t kOpDecorateString = 5632;
 constexpr std::uint32_t kOpMemberDecorateString = 5633;
-constexpr std::uint32_t kDecorationBuiltIn = 11;
-constexpr std::uint32_t kDecorationPatch = 15;
-constexpr std::uint32_t kBuiltInTessCoord = 13;
 constexpr std::uint32_t kDecorationLocation = 30;
 constexpr std::uint32_t kDecorationIndex = 32;
 constexpr std::uint32_t kDecorationHlslCounterBuffer = 5634;
@@ -140,15 +137,6 @@ bool assign_semantic_locations(std::vector<std::uint32_t>& spirv, ShaderStage st
     }
     std::vector<std::uint32_t> out(spirv.begin(), spirv.begin() + 5);
     out.reserve(spirv.size());
-    // glslang decorates HLSL's SV_DomainLocation Patch as well as TessCoord, which is no patch variable; NVIDIA's compiler
-    // (nvgpucomp64.dll, driver 610) crashes inside vkCreateGraphicsPipelines on it.
-    std::set<std::uint32_t> tess_coords;
-    for (std::size_t at = 5; at < spirv.size(); at += spirv[at] >> 16u) {
-        if ((spirv[at] & 0xffffu) == kOpDecorate && (spirv[at] >> 16u) == 4u && spirv[at + 2] == kDecorationBuiltIn &&
-            spirv[at + 3] == kBuiltInTessCoord) {
-            tess_coords.insert(spirv[at + 1]);
-        }
-    }
     for (std::size_t at = 5; at < spirv.size();) {
         const std::uint32_t count = spirv[at] >> 16u;
         const std::uint32_t op = spirv[at] & 0xffffu;
@@ -162,8 +150,6 @@ bool assign_semantic_locations(std::vector<std::uint32_t>& spirv, ShaderStage st
                    (spirv[at + 2u + (op == kOpMemberDecorateString ? 1u : 0u)] == kDecorationUserSemantic ||
                     spirv[at + 2u + (op == kOpMemberDecorateString ? 1u : 0u)] == kDecorationUserType)) {
         } else if (op == kOpDecorateId && count >= 3u && spirv[at + 2] == kDecorationHlslCounterBuffer) {
-        } else if (op == kOpDecorate && count == 3u && spirv[at + 2] == kDecorationPatch &&
-                   tess_coords.contains(spirv[at + 1])) {
         } else if (op == kOpDecorate && count == 4u && spirv[at + 2] == kDecorationLocation &&
                    storage.contains(spirv[at + 1])) {
             const std::uint32_t variable = spirv[at + 1];
@@ -263,8 +249,6 @@ EShLanguage language(ShaderStage stage) {
     case ShaderStage::Geometry: return EShLangGeometry;
     case ShaderStage::Fragment: return EShLangFragment;
     case ShaderStage::Compute: return EShLangCompute;
-    case ShaderStage::Hull: return EShLangTessControl;
-    case ShaderStage::Domain: return EShLangTessEvaluation;
     }
     return EShLangVertex;
 }

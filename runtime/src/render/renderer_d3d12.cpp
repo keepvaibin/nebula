@@ -1019,7 +1019,6 @@ HRESULT create_draw_root_signature(
     D3D12_ROOT_SIGNATURE_DESC rsd{};
     rsd.NumParameters = 9;
     rsd.pParameters   = params;
-    // Curved surfaces' hull and domain shaders read the vertex constants (b0).
     rsd.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
     ComPtr<ID3DBlob> blob, err;
@@ -1413,12 +1412,16 @@ gpu::TextureRef RendererD3D12::hand_over_scene_color(gpu::TextureRef fresh) {
     const D3D12_RESOURCE_DESC desc = scene_color_->GetDesc();
     D3D12_RESOURCE_BARRIER barriers[2]{};
     UINT barrier_count = 0;
+    std::erase_if(old_scene_targets_, [this](const OldSceneTarget& old) { return frame_index_ >= old.free_from; });
     if (fresh) {
         const D3D12_RESOURCE_DESC got = fresh->GetDesc();
         if (got.Width != desc.Width || got.Height != desc.Height || got.Format != desc.Format ||
             got.Flags != desc.Flags || got.SampleDesc.Count != 1u) {
-            throw std::runtime_error("handed-over scene target replacement has another description");
+            old_scene_targets_.push_back({std::move(fresh), frame_index_ + kFramesInFlight + 1u});
+            fresh = nullptr;
         }
+    }
+    if (fresh) {
         // Released pictures are kept as shader resources.
         D3D12_RESOURCE_BARRIER& b = barriers[barrier_count++];
         b.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
@@ -2135,35 +2138,8 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
             }
         }
 
-        DXGI_SWAP_CHAIN_DESC1 scd{};
-        scd.BufferCount  = kSwapChainBuffers;
-        scd.Width        = host_window::backbuffer_width;
-        scd.Height       = host_window::backbuffer_height;
-        scd.Format       = kBackbufferFormat;
-        scd.BufferUsage  = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-        scd.SwapEffect   = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-        scd.SampleDesc.Count = 1;
-        scd.Scaling      = DXGI_SCALING_STRETCH;
-        scd.AlphaMode    = DXGI_ALPHA_MODE_IGNORE;
-        scd.Flags = DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
-        ComPtr<IDXGISwapChain1> sc1;
-        // Through Streamline's factory when it runs: its presents go through it.
-        d3d_check(streamline::swap_chain_factory(factory.Get())
-                      ->CreateSwapChainForHwnd(queue_.Get(), window_, &scd, nullptr, nullptr, &sc1),
-                  "CreateSwapChain");
-        d3d_check(sc1.As(&swap_chain_), "SwapChain As");
-        {
-            ComPtr<IDXGISwapChain2> swap_chain2;
-            d3d_check(swap_chain_.As(&swap_chain2), "SwapChain2 As");
-            d3d_check(swap_chain2->SetMaximumFrameLatency(1u),
-                      "SetMaximumFrameLatency");
-            frame_latency_waitable_ =
-                swap_chain2->GetFrameLatencyWaitableObject();
-            if (frame_latency_waitable_ == nullptr) {
-                throw std::runtime_error(
-                    "GetFrameLatencyWaitableObject failed");
-            }
-        }
+        dxgi_factory_ = factory;
+        create_swap_chain(fsr_generation_wanted());
         factory->MakeWindowAssociation(window_, DXGI_MWA_NO_ALT_ENTER);
         // Exclusive fullscreen is entered by the first frame's display check
         // (reconcile_display_state), once the swap chain's buffers exist.
@@ -2181,6 +2157,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
                 device_->CreateRenderTargetView(backbuffers_[i].Get(), nullptr, h);
                 h.ptr += stride;
             }
+            (void)stride;
         }
 
         for (unsigned i = 0; i < kFramesInFlight; ++i)
@@ -2367,6 +2344,10 @@ gpu::Table RendererD3D12::texture_table_for(const TextureHandle* handles, unsign
 }
 
 void RendererD3D12::shutdown() {
+    if (fsr_swap_chain_ && swap_chain_) {
+        wait_for_gpu();
+        fsr_generation_.destroy(swap_chain_.Get());
+    }
     std::exception_ptr shutdown_failure;
     const auto retain_shutdown_failure =
         [&](const char* stage, auto&& action) {
@@ -2539,6 +2520,84 @@ void RendererD3D12::shutdown() {
     }
 }
 
+// FSR 3 frame generation: chosen, with an upscaler that gives it depth and motion, and not DLSS, whose presents are Streamline's.
+bool RendererD3D12::fsr_generation_wanted() const {
+    const RenderConfig cfg = get_render_config();
+    return fsr_frame_generation_compiled() && cfg.frame_generation == 2u && (cfg.upscaler == 2u || cfg.upscaler == 4u);
+}
+
+bool RendererD3D12::create_swap_chain(bool fsr) {
+    DXGI_SWAP_CHAIN_DESC1 scd{};
+    scd.BufferCount  = kSwapChainBuffers;
+    scd.Width        = host_window::backbuffer_width;
+    scd.Height       = host_window::backbuffer_height;
+    scd.Format       = kBackbufferFormat;
+    scd.BufferUsage  = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    scd.SwapEffect   = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+    scd.SampleDesc.Count = 1;
+    scd.Scaling      = DXGI_SCALING_STRETCH;
+    scd.AlphaMode    = DXGI_ALPHA_MODE_IGNORE;
+    scd.Flags = DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
+    ComPtr<IDXGISwapChain1> sc1;
+    ID3D12CommandQueue* const native = fsr ? streamline::native_queue(queue_.Get()) : queue_.Get();
+    // Through Streamline's factory when it runs and the swap chain is not AMD's: its presents go through it.
+    d3d_check((fsr ? dxgi_factory_ : streamline::swap_chain_factory(dxgi_factory_.Get()))
+                  ->CreateSwapChainForHwnd(native, window_, &scd, nullptr, nullptr, &sc1),
+              "CreateSwapChain");
+    d3d_check(sc1.As(&swap_chain_), "SwapChain As");
+    sc1.Reset();
+    fsr_swap_chain_ = false;
+    if (fsr) {
+        if (FsrFrameGeneration::replace_swap_chain(native, swap_chain_)) {
+            fsr_swap_chain_ = true;
+        } else {
+            swap_chain_.Reset();
+            d3d_check(streamline::swap_chain_factory(dxgi_factory_.Get())
+                          ->CreateSwapChainForHwnd(queue_.Get(), window_, &scd, nullptr, nullptr, &sc1),
+                      "CreateSwapChain");
+            d3d_check(sc1.As(&swap_chain_), "SwapChain As");
+        }
+    }
+    ComPtr<IDXGISwapChain2> swap_chain2;
+    d3d_check(swap_chain_.As(&swap_chain2), "SwapChain2 As");
+    d3d_check(swap_chain2->SetMaximumFrameLatency(1u), "SetMaximumFrameLatency");
+    frame_latency_waitable_ = swap_chain2->GetFrameLatencyWaitableObject();
+    if (frame_latency_waitable_ == nullptr && !fsr_swap_chain_) {
+        throw std::runtime_error("GetFrameLatencyWaitableObject failed");
+    }
+    return true;
+}
+
+// The swap chain made again when frame generation changes it (RenderConfig::frame_generation, applied between frames).
+void RendererD3D12::recreate_swap_chain(bool fsr) {
+    wait_for_gpu();
+    if (fsr_swap_chain_) {
+        fsr_generation_.destroy(swap_chain_.Get());
+    }
+    BOOL fullscreen = FALSE;
+    if (SUCCEEDED(swap_chain_->GetFullscreenState(&fullscreen, nullptr)) && fullscreen) {
+        (void)swap_chain_->SetFullscreenState(FALSE, nullptr);
+        applied_display_.valid = false;
+    }
+    for (auto& buffer : backbuffers_) {
+        buffer.Reset();
+    }
+    if (frame_latency_waitable_) {
+        CloseHandle(frame_latency_waitable_);
+        frame_latency_waitable_ = nullptr;
+    }
+    swap_chain_.Reset();
+    create_swap_chain(fsr);
+    const UINT stride = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+    D3D12_CPU_DESCRIPTOR_HANDLE h = rtv_heap_->GetCPUDescriptorHandleForHeapStart();
+    for (unsigned i = 0; i < kSwapChainBuffers; ++i) {
+        d3d_check(swap_chain_->GetBuffer(i, IID_PPV_ARGS(&backbuffers_[i])), "GetBuffer");
+        device_->CreateRenderTargetView(backbuffers_[i].Get(), nullptr, h);
+        h.ptr += stride;
+    }
+    has_presented_swap_chain_ = false;
+}
+
 void RendererD3D12::apply_pending_resize() {
     const auto extent = host_window::pending_resize_extent.exchange(0u, std::memory_order_acq_rel);
     if (extent == 0u) return;
@@ -2564,6 +2623,9 @@ void RendererD3D12::resize_swap_chain(UINT new_width, UINT new_height, bool forc
     // with them. Only the swap chain's resources change: present() blits into
     // whatever backbuffer size is current.
     wait_for_gpu();
+    if (fsr_swap_chain_) {
+        fsr_generation_.destroy(swap_chain_.Get());
+    }
     for (auto& buffer : backbuffers_) {
         buffer.Reset();
     }
@@ -3143,144 +3205,7 @@ std::byte* RendererD3D12::stage_resident_vertices(std::uint64_t offset, std::uin
     return out;
 }
 
-bool RendererD3D12::ensure_curve_sort() {
-    if (curve_sort_pso_) {
-        return true;
-    }
-    if (curve_sort_failed_ || !device_) {
-        return false;
-    }
-    curve_sort_failed_ = true;
-    D3D12_ROOT_PARAMETER params[7]{};
-    for (unsigned i = 0; i < 6u; ++i) {
-        params[i].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
-        params[i].Descriptor.ShaderRegister = i;
-        params[i].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-    }
-    params[6].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
-    params[6].Descriptor.ShaderRegister = 0;
-    params[6].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-    D3D12_ROOT_SIGNATURE_DESC rsd{};
-    rsd.NumParameters = 7;
-    rsd.pParameters = params;
-    ComPtr<ID3DBlob> blob, err;
-    if (FAILED(D3D12SerializeRootSignature(&rsd, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &err)) ||
-        FAILED(device_->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(),
-                                            IID_PPV_ARGS(&curve_sort_root_)))) {
-        return false;
-    }
-    try {
-        const UtilityShaderBytes classify = utility_shader(UtilityShader::CurveClassifyCs);
-        const UtilityShaderBytes offsets = utility_shader(UtilityShader::CurveOffsetsCs);
-        const UtilityShaderBytes scatter = utility_shader(UtilityShader::CurveScatterCs);
-        D3D12_COMPUTE_PIPELINE_STATE_DESC pso{};
-        pso.pRootSignature = curve_sort_root_.Get();
-        pso.CS = {offsets->GetBufferPointer(), offsets->GetBufferSize()};
-        if (FAILED(device_->CreateComputePipelineState(&pso, IID_PPV_ARGS(&curve_offsets_pso_)))) {
-            return false;
-        }
-        pso.CS = {scatter->GetBufferPointer(), scatter->GetBufferSize()};
-        if (FAILED(device_->CreateComputePipelineState(&pso, IID_PPV_ARGS(&curve_scatter_pso_)))) {
-            return false;
-        }
-        pso.CS = {classify->GetBufferPointer(), classify->GetBufferSize()};
-        if (FAILED(device_->CreateComputePipelineState(&pso, IID_PPV_ARGS(&curve_sort_pso_)))) {
-            return false;
-        }
-    } catch (const std::exception& error) {
-        std::cerr << "[curve-sort] shader: " << error.what() << '\n';
-        return false;
-    }
-    D3D12_INDIRECT_ARGUMENT_DESC argument{};
-    argument.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED;
-    D3D12_COMMAND_SIGNATURE_DESC signature{};
-    signature.ByteStride = sizeof(D3D12_DRAW_INDEXED_ARGUMENTS);
-    signature.NumArgumentDescs = 1;
-    signature.pArgumentDescs = &argument;
-    if (FAILED(device_->CreateCommandSignature(&signature, nullptr, IID_PPV_ARGS(&curve_draw_signature_)))) {
-        curve_sort_pso_.Reset();
-        return false;
-    }
-    D3D12_HEAP_PROPERTIES heap{};
-    heap.Type = D3D12_HEAP_TYPE_DEFAULT;
-    D3D12_RESOURCE_DESC desc{};
-    desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-    desc.Width = kCurveSortBytes;
-    desc.Height = 1;
-    desc.DepthOrArraySize = 1;
-    desc.MipLevels = 1;
-    desc.SampleDesc.Count = 1;
-    desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-    desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-    for (unsigned slot = 0; slot < kFramesInFlight; ++slot) {
-        if (FAILED(device_->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_COMMON,
-                                                   nullptr, IID_PPV_ARGS(&curve_sorted_[slot])))) {
-            curve_sort_pso_.Reset();
-            return false;
-        }
-    }
-    if (!ensure_pre_list()) {
-        curve_sort_pso_.Reset();
-        return false;
-    }
-    if (timestamp_query_heap_) {
-        D3D12_QUERY_HEAP_DESC qhd{};
-        qhd.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
-        qhd.Count = kFramesInFlight * 2u;
-        D3D12_HEAP_PROPERTIES readback{};
-        readback.Type = D3D12_HEAP_TYPE_READBACK;
-        D3D12_RESOURCE_DESC rd = desc;
-        rd.Width = kFramesInFlight * 2u * sizeof(std::uint64_t);
-        rd.Flags = D3D12_RESOURCE_FLAG_NONE;
-        if (FAILED(device_->CreateQueryHeap(&qhd, IID_PPV_ARGS(&curve_sort_queries_))) ||
-            FAILED(device_->CreateCommittedResource(&readback, D3D12_HEAP_FLAG_NONE, &rd,
-                                                   D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
-                                                   IID_PPV_ARGS(&curve_sort_readback_)))) {
-            curve_sort_queries_.Reset();
-            curve_sort_readback_.Reset();
-        }
-    }
-    curve_sort_failed_ = false;
-    return true;
-}
-
-std::int32_t RendererD3D12::sort_curved(D3D12_GPU_VIRTUAL_ADDRESS vertices, D3D12_GPU_VIRTUAL_ADDRESS indices,
-                                        std::uint32_t triangles, D3D12_GPU_VIRTUAL_ADDRESS constants,
-                                        D3D12_GPU_VIRTUAL_ADDRESS palette, bool palette_rows) {
-    const auto inside = [](D3D12_GPU_VIRTUAL_ADDRESS address, D3D12_GPU_VIRTUAL_ADDRESS base, std::uint64_t bytes) {
-        return address >= base && address - base < bytes && address - base <= 0xFFFFFFFFu;
-    };
-    if (!pass_list_open_ || triangles == 0u || !ensure_curve_sort() ||
-        !inside(vertices, resident_vertex_base_, resident_vertex_bytes_) ||
-        !inside(indices, index_ring_.gpu_base(), index_ring_.total_bytes()) ||
-        !inside(constants, constant_ring_.gpu_base(), constant_ring_.total_bytes()) ||
-        (palette_rows && !inside(palette, matrix_ring_.gpu_base(), matrix_ring_.total_bytes()))) {
-        return -1;
-    }
-    std::vector<CurveSortDraw>& draws = curve_sort_draws_[frame_slot_];
-    if (curve_sort_vertices_[frame_slot_] != 0u && curve_sort_vertices_[frame_slot_] != resident_vertex_base_) {
-        return -1;
-    }
-    // Its output (arguments, two lists), then its blocks' masks and offsets.
-    const std::uint64_t blocks = (triangles + 63u) / 64u;
-    const std::uint64_t output = 40u + std::uint64_t{24} * triangles;
-    const std::uint64_t bytes = output + 12u * blocks;
-    if (blocks > 1024u || curve_sorted_bytes_[frame_slot_] + bytes > kCurveSortBytes || draws.size() >= 65535u) {
-        return -1;
-    }
-    curve_sort_vertices_[frame_slot_] = resident_vertex_base_;
-    draws.push_back({static_cast<std::uint32_t>(vertices - resident_vertex_base_),
-                     static_cast<std::uint32_t>(indices - index_ring_.gpu_base()), triangles,
-                     static_cast<std::uint32_t>(constants - constant_ring_.gpu_base()),
-                     palette_rows ? static_cast<std::uint32_t>(palette - matrix_ring_.gpu_base()) : 0u,
-                     palette_rows ? 1u : 0u, static_cast<std::uint32_t>(curve_sorted_bytes_[frame_slot_]),
-                     static_cast<std::uint32_t>(curve_sorted_bytes_[frame_slot_] + output)});
-    curve_sorted_bytes_[frame_slot_] += bytes;
-    return static_cast<std::int32_t>(draws.size() - 1u);
-}
-
 void RendererD3D12::record_pre_list() {
-    const std::vector<CurveSortDraw>& draws = curve_sort_draws_[frame_slot_];
     d3d_check(pre_list_->Reset(pre_allocators_[frame_slot_].Get(), nullptr), "Pre-list Reset");
     pre_list_used_[frame_slot_] = true;
     if (!resident_copies_.empty()) {
@@ -3298,63 +3223,6 @@ void RendererD3D12::record_pre_list() {
         std::swap(to_copy.Transition.StateBefore, to_copy.Transition.StateAfter);
         pre_list_->ResourceBarrier(1, &to_copy);
         resident_copies_.clear();
-    }
-    if (draws.empty()) {
-        d3d_check(pre_list_->Close(), "Pre-list Close");
-        pre_list_recorded_ = true;
-        return;
-    }
-    pre_list_->SetPipelineState(curve_sort_pso_.Get());
-    const UploadRing::Allocation records =
-        constant_ring_.allocate(draws.size() * sizeof(CurveSortDraw), 256u);
-    std::memcpy(records.cpu, draws.data(), draws.size() * sizeof(CurveSortDraw));
-    curve_sort_blocks_.clear();
-    for (std::uint32_t draw = 0; draw < draws.size(); ++draw) {
-        for (std::uint32_t first = 0; first < draws[draw].triangles; first += 64u) {
-            curve_sort_blocks_.push_back({draw, first});
-        }
-    }
-    const UploadRing::Allocation blocks =
-        constant_ring_.allocate(curve_sort_blocks_.size() * sizeof(curve_sort_blocks_[0]), 256u);
-    std::memcpy(blocks.cpu, curve_sort_blocks_.data(), curve_sort_blocks_.size() * sizeof(curve_sort_blocks_[0]));
-    ID3D12Resource* const sorted = curve_sorted_[frame_slot_].Get();
-    D3D12_RESOURCE_BARRIER barrier{};
-    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    barrier.Transition.pResource = sorted;
-    barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COMMON;
-    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-    pre_list_->ResourceBarrier(1, &barrier);
-    // Timed from here: the barrier waits for the list before to finish.
-    if (curve_sort_queries_) {
-        pre_list_->EndQuery(curve_sort_queries_.Get(), D3D12_QUERY_TYPE_TIMESTAMP, frame_slot_ * 2u);
-    }
-    pre_list_->SetComputeRootSignature(curve_sort_root_.Get());
-    pre_list_->SetComputeRootShaderResourceView(0, records.gpu);
-    pre_list_->SetComputeRootShaderResourceView(1, curve_sort_vertices_[frame_slot_]);
-    pre_list_->SetComputeRootShaderResourceView(2, index_ring_.gpu_base());
-    pre_list_->SetComputeRootShaderResourceView(3, constant_ring_.gpu_base());
-    pre_list_->SetComputeRootShaderResourceView(4, matrix_ring_.gpu_base());
-    pre_list_->SetComputeRootShaderResourceView(5, blocks.gpu);
-    pre_list_->SetComputeRootUnorderedAccessView(6, sorted->GetGPUVirtualAddress());
-    pre_list_->Dispatch(static_cast<UINT>(curve_sort_blocks_.size()), 1u, 1u);
-    D3D12_RESOURCE_BARRIER uav{};
-    uav.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
-    uav.UAV.pResource = sorted;
-    pre_list_->ResourceBarrier(1, &uav);
-    pre_list_->SetPipelineState(curve_offsets_pso_.Get());
-    pre_list_->Dispatch(static_cast<UINT>(draws.size()), 1u, 1u);
-    pre_list_->ResourceBarrier(1, &uav);
-    pre_list_->SetPipelineState(curve_scatter_pso_.Get());
-    pre_list_->Dispatch(static_cast<UINT>(curve_sort_blocks_.size()), 1u, 1u);
-    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_INDEX_BUFFER | D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT;
-    pre_list_->ResourceBarrier(1, &barrier);
-    if (curve_sort_queries_) {
-        pre_list_->EndQuery(curve_sort_queries_.Get(), D3D12_QUERY_TYPE_TIMESTAMP, frame_slot_ * 2u + 1u);
-        pre_list_->ResolveQueryData(curve_sort_queries_.Get(), D3D12_QUERY_TYPE_TIMESTAMP, frame_slot_ * 2u, 2u,
-                                      curve_sort_readback_.Get(),
-                                      static_cast<UINT64>(frame_slot_) * 2u * sizeof(std::uint64_t));
     }
     d3d_check(pre_list_->Close(), "Pre-list Close");
     pre_list_recorded_ = true;
@@ -3392,11 +3260,14 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
     host_window::poll_render_config_file();
     reconcile_display_state();
     apply_pending_resize();
+    if (const bool fsr = fsr_generation_wanted(); fsr != fsr_swap_chain_ && !streamline_frame_open_) {
+        recreate_swap_chain(fsr);
+    }
     if (!streamline_frame_open_) {
-        // Frame generation runs with DLSS on a GPU that runs it, while it is chosen.
+        // Frame generation runs with DLSS on a GPU that runs it, or with AMD's swap chain, while it is chosen.
         const RenderConfig fg_cfg = get_render_config();
-        set_frame_generation_running(streamline::frame_generation_supported() && fg_cfg.frame_generation != 0u &&
-                                     fg_cfg.upscaler == 3u && streamline::dlss_supported());
+        set_frame_generation_running(fsr_swap_chain_ || (streamline::frame_generation_supported() && fg_cfg.frame_generation == 1u &&
+                                                         fg_cfg.upscaler == 3u && streamline::dlss_supported()));
         if (frame_generation_running()) {
             streamline::reflex_sleep();
         }
@@ -3600,29 +3471,9 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
     }
     pass_mark_count_[frame_slot_] = 0u;
     if (pre_list_used_[frame_slot_]) {
-        if (curve_sort_readback_ && timestamp_frequency_ != 0u) {
-            const SIZE_T offset = static_cast<SIZE_T>(frame_slot_) * 2u * sizeof(std::uint64_t);
-            const D3D12_RANGE read_range{offset, offset + 2u * sizeof(std::uint64_t)};
-            void* mapped = nullptr;
-            if (SUCCEEDED(curve_sort_readback_->Map(0, &read_range, &mapped))) {
-                const auto* ticks =
-                    reinterpret_cast<const std::uint64_t*>(static_cast<const std::byte*>(mapped) + offset);
-                if (ticks[1] >= ticks[0]) {
-                    const double ms =
-                        static_cast<double>(ticks[1] - ticks[0]) * 1000.0 / static_cast<double>(timestamp_frequency_);
-                    telemetry_gpu_ms_ += ms;
-                    telemetry_pass_ms_[static_cast<std::size_t>(GpuPass::CurveSort)] += ms;
-                }
-                const D3D12_RANGE no_write{0, 0};
-                curve_sort_readback_->Unmap(0, &no_write);
-            }
-        }
-        d3d_check(pre_allocators_[frame_slot_]->Reset(), "Curve sort allocator Reset");
+        d3d_check(pre_allocators_[frame_slot_]->Reset(), "Pre-list allocator Reset");
         pre_list_used_[frame_slot_] = false;
     }
-    curve_sort_draws_[frame_slot_].clear();
-    curve_sorted_bytes_[frame_slot_] = 0u;
-    curve_sort_vertices_[frame_slot_] = 0u;
     {
         ResidentStaging& staging = resident_staging_[frame_slot_];
         if (!staging.staged) {
@@ -3696,7 +3547,6 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
             frame_slot_ * 2u);
     }
     pass_list_open_ = true;
-    ++curve_sort_list_;
     if (stats_query_heap_) {
         command_list_->BeginQuery(stats_query_heap_.Get(), D3D12_QUERY_TYPE_PIPELINE_STATISTICS, frame_slot_);
     }
@@ -3832,8 +3682,7 @@ void RendererD3D12::refresh_display_rate() {
     }
     Microsoft::WRL::ComPtr<IDXGIOutput> output;
     DXGI_OUTPUT_DESC desc{};
-    if (FAILED(swap_chain_->GetContainingOutput(&output)) ||
-        FAILED(output->GetDesc(&desc))) {
+    if (FAILED(swap_chain_->GetContainingOutput(&output)) || output == nullptr || FAILED(output->GetDesc(&desc))) {
         return;
     }
     DEVMODEW mode{};
@@ -3915,8 +3764,26 @@ void RendererD3D12::present_to_swap_chain() {
         streamline::set_frame_generation(generated, streamline::frame_generation_dynamic(),
                                          cfg.max_fps > 0.0f ? cfg.max_fps : 0.0f);
     }
+    if (fsr_swap_chain_) {
+        fsr_generation_.configure(swap_chain_.Get(), generating && frame_generation_allowed(), fg_hudless_ready_ ? fg_hudless_target_.Get() : nullptr,
+                                  fsr_rect_[0], fsr_rect_[1], fsr_rect_[2], fsr_rect_[3]);
+        fg_hudless_ready_ = false;
+    }
     streamline::marker(streamline::Marker::kPresentStart);
     const HRESULT present_hr = swap_chain_->Present(vsync, present_flags);
+    if (generating && collect_present_telemetry) {
+        // What frame generation sends to the display per frame here.
+        static UINT last_count = 0u;
+        static unsigned frames = 0u;
+        if (++frames == 600u) {
+            UINT count = 0u;
+            if (SUCCEEDED(swap_chain_->GetLastPresentCount(&count))) {
+                std::cerr << "[frame-generation] swap chain presents per frame " << static_cast<double>(count - last_count) / 600.0 << '\n';
+                last_count = count;
+            }
+            frames = 0u;
+        }
+    }
     streamline::marker(streamline::Marker::kPresentEnd);
     streamline_frame_open_ = false;
     if (timeline_present) {
@@ -4110,7 +3977,7 @@ void RendererD3D12::present_to_swap_chain() {
             if (pass_query_heap_) {
                 static constexpr const char* kPassNames[] = {"scene", "resolve", "frame-read", "display-copy", "bloom",
                                                              "scene-aa", "scene-ao", "upscale", "rt", "present",
-                                                             "curve-sort", "camera"};
+                                                             "camera"};
                 static_assert(std::size(kPassNames) == static_cast<std::size_t>(GpuPass::Count));
                 message << " gpu-pass-ms=";
                 const double presents = static_cast<double>(std::max<std::uint64_t>(telemetry_present_count_, 1u));
@@ -4244,7 +4111,7 @@ std::uint64_t RendererD3D12::end_frame(
         d3d_check(close_hr, "CommandList Close");
     }
     pre_list_recorded_ = false;
-    if (!resident_copies_.empty() || !curve_sort_draws_[frame_slot_].empty()) {
+    if (!resident_copies_.empty()) {
         record_pre_list();
     }
     ID3D12CommandList* lists[] = {pre_list_.Get(), command_list_.Get()};
@@ -6745,7 +6612,31 @@ bool RendererD3D12::record_temporal_upscale(const FrameMap& output) {
     in.view = scene_view_;
     in.view_known = scene_view_known_;
     const bool recorded = temporal_inputs_match(in) && temporal_->evaluate(in);
-    if (recorded && frame_generation_running()) {
+    if (recorded && fsr_swap_chain_) {
+        const unsigned display_width = host_window::backbuffer_width;
+        const unsigned display_height = host_window::backbuffer_height;
+        bool ready = fsr_generation_.matches(in.render_width, in.render_height, display_width, display_height);
+        if (!ready) {
+            wait_for_gpu();
+            fsr_generation_.destroy(swap_chain_.Get());
+            ready = fsr_generation_.create(device_.Get(), in.render_width, in.render_height, display_width, display_height, kBackbufferFormat);
+        }
+        if (ready) {
+            FsrFrameGeneration::Prepare prepare{};
+            prepare.list = command_list_.Get();
+            prepare.depth = in.depth;
+            prepare.motion = in.motion;
+            prepare.jitter_x = in.jitter_x;
+            prepare.jitter_y = in.jitter_y;
+            prepare.render_width = in.render_width;
+            prepare.render_height = in.render_height;
+            prepare.frame_ms = in.frame_ms;
+            prepare.camera_near = in.camera_near;
+            prepare.camera_far = in.camera_far;
+            prepare.fov_y = in.fov_y;
+            (void)fsr_generation_.prepare(prepare);
+        }
+    } else if (recorded && frame_generation_running()) {
         streamline::FrameGenerationInputs fg{};
         fg.list = command_list_.Get();
         fg.depth = in.depth;
@@ -7314,6 +7205,7 @@ void RendererD3D12::present_fg_hudless(const DisplayTexture& source, const D3D12
     }
     invalidate_draw_bindings();
     streamline::tag_hudless(command_list_.Get(), fg_hudless_target_.Get(), host_window::backbuffer_width, host_window::backbuffer_height);
+    fg_hudless_ready_ = true;
     // Back to the backbuffer for the overlays.
     const UINT buf_idx = swap_chain_->GetCurrentBackBufferIndex();
     D3D12_CPU_DESCRIPTOR_HANDLE back_rtv = rtv_heap_->GetCPUDescriptorHandleForHeapStart();
@@ -7825,11 +7717,9 @@ void RendererD3D12::draw(const DrawCall& call) {
     } else if (ring_mode_ == RingMode::Interp && ring_advance_pending_ && !replay_playing_) [[unlikely]] {
         ++log_gap_ops_;
     }
-    const bool split = call.flat_pipeline != nullptr;
-    gpu::Pipeline* const first_pipeline = split ? call.flat_pipeline : call.pipeline;
-    if (first_pipeline != bound_pipeline_) {
-        command_list_->SetPipelineState(first_pipeline);
-        bound_pipeline_ = first_pipeline;
+    if (call.pipeline != bound_pipeline_) {
+        command_list_->SetPipelineState(call.pipeline);
+        bound_pipeline_ = call.pipeline;
     }
     if (call.vs_constants &&
         call.vs_constants != bound_vs_constants_) {
@@ -7954,10 +7844,9 @@ void RendererD3D12::draw(const DrawCall& call) {
             }
         }
     }
-    const gpu::Topology first_topology = split ? gpu::kTopologyTriangleList : call.topology;
-    if (first_topology != bound_topology_) {
-        command_list_->IASetPrimitiveTopology(first_topology);
-        bound_topology_ = first_topology;
+    if (call.topology != bound_topology_) {
+        command_list_->IASetPrimitiveTopology(call.topology);
+        bound_topology_ = call.topology;
     }
     // A run of shapes rebinds the same vertex-ring allocation for
     // thousands of consecutive draws, so the view is compared before binding.
@@ -7990,44 +7879,7 @@ void RendererD3D12::draw(const DrawCall& call) {
                 bound_index_view_ = call.index_view;
                 bound_index_view_valid_ = true;
             }
-            if (split && call.curve_sort >= 0 && call.curve_sort_list == curve_sort_list_ && !replay_playing_ &&
-                static_cast<std::size_t>(call.curve_sort) < curve_sort_draws_[frame_slot_].size()) {
-                // The flat triangles, then the sort's lists: the whole triangles, then the patches, each drawn by
-                // its arguments.
-                if (call.flat_index_count != 0u) {
-                    command_list_->DrawIndexedInstanced(call.flat_index_count, 1, 0, 0, 0);
-                }
-                const CurveSortDraw& sorted = curve_sort_draws_[frame_slot_][static_cast<std::size_t>(call.curve_sort)];
-                ID3D12Resource* const buffer = curve_sorted_[frame_slot_].Get();
-                const D3D12_GPU_VIRTUAL_ADDRESS lists = buffer->GetGPUVirtualAddress() + sorted.output + 40u;
-                const UINT list_bytes = sorted.triangles * 12u;
-                D3D12_INDEX_BUFFER_VIEW view{lists, list_bytes, DXGI_FORMAT_R32_UINT};
-                command_list_->IASetIndexBuffer(&view);
-                command_list_->ExecuteIndirect(curve_draw_signature_.Get(), 1u, buffer, sorted.output, nullptr, 0u);
-                command_list_->SetPipelineState(call.pipeline);
-                command_list_->IASetPrimitiveTopology(call.topology);
-                view.BufferLocation = lists + list_bytes;
-                command_list_->IASetIndexBuffer(&view);
-                command_list_->ExecuteIndirect(curve_draw_signature_.Get(), 1u, buffer, sorted.output + 20u, nullptr,
-                                               0u);
-                bound_pipeline_ = call.pipeline;
-                bound_topology_ = call.topology;
-                bound_index_view_valid_ = false;
-            } else if (split) {
-                if (call.flat_index_count != 0u) {
-                    command_list_->DrawIndexedInstanced(call.flat_index_count, 1, 0, 0, 0);
-                }
-                if (call.index_count > call.flat_index_count) {
-                    command_list_->SetPipelineState(call.pipeline);
-                    command_list_->IASetPrimitiveTopology(call.topology);
-                    bound_pipeline_ = call.pipeline;
-                    bound_topology_ = call.topology;
-                    command_list_->DrawIndexedInstanced(call.index_count - call.flat_index_count, 1,
-                                                        call.flat_index_count, 0, 0);
-                }
-            } else {
-                command_list_->DrawIndexedInstanced(call.index_count, 1, 0, 0, 0);
-            }
+            command_list_->DrawIndexedInstanced(call.index_count, 1, 0, 0, 0);
         } else {
             command_list_->DrawInstanced(call.index_count, 1, 0, 0);
         }
@@ -8787,6 +8639,10 @@ bool RendererD3D12::present(
         static_cast<int>(host_window::backbuffer_width),static_cast<int>(host_window::backbuffer_height),
         content_viewport);
     if (frame_generation_running()) {
+        fsr_rect_[0] = static_cast<unsigned>(content_viewport.left);
+        fsr_rect_[1] = static_cast<unsigned>(content_viewport.top);
+        fsr_rect_[2] = static_cast<unsigned>(content_viewport.width);
+        fsr_rect_[3] = static_cast<unsigned>(content_viewport.height);
         streamline::tag_backbuffer_region(command_list_.Get(), static_cast<unsigned>(content_viewport.left),
                                           static_cast<unsigned>(content_viewport.top),
                                           static_cast<unsigned>(content_viewport.width),

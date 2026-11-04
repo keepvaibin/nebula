@@ -266,15 +266,7 @@ private:
     // matrix ring and refreshes the texture tables of the sampled maps. Returns the draw's pipeline,
     // or nullptr when none is ready (the draw is skipped).
     gpu::Pipeline* flush_draw_state(
-        gpu::TopologyType primitive_topology_type, std::uint8_t vtxfmt);
-    // Whether a triangle draw with vertex format `vtxfmt` is a curved surface (curved_surfaces.h): a perspective scene
-    // draw of a model the game registered, its positions indexed, not bump mapped, while the setting is on.
-    [[nodiscard]] bool curved_draw(std::uint8_t vtxfmt) const;
-    // The topology a draw records: a curved surface's patches while its specialized pipeline draws it.
-    [[nodiscard]] gpu::Topology draw_topology(gpu::Topology topology) const noexcept {
-        return current_curved_ ? gpu::kTopologyTrianglePatches : topology;
-    }
-
+        gpu::TopologyType primitive_topology_type);
     struct PendingDrawBatch {
         bool active = false;
         DrawCall call{};
@@ -919,12 +911,6 @@ private:
     // Curved surface triangles drawn plain (no corner bends) and as patches, and the draws split between them.
     [[nodiscard]] bool ensure_resident_vertex_buffer();
     void release_resident_vertex_buffer() noexcept;
-    // `triangles` (indices into `vertices`) with those no corner bends first, into `split`; how many indices those
-    // are. Empty `split` when an index is out of range.
-    static std::uint32_t split_curved_triangles(std::span<const RenderVertex> vertices,
-                                                std::span<const std::uint16_t> triangles,
-                                                std::vector<std::uint16_t>& split);
-
     // Native shapes (native_shapes.h): the game's arrays and groups by key as its records registered them (a key
     // registered again is replaced: the game made something new at that address), and per group the vertices last
     // expanded for it, resident while the arrays they came from are the same.
@@ -947,10 +933,6 @@ private:
         std::vector<std::uint16_t> refined_indices;  // shapes::refine_curved's, behind its vertices in the block
         bool refined = false;
         bool refine_failed = false;
-        std::vector<std::uint16_t> split_indices;
-        std::uint32_t split_flat_indices = 0;
-        bool split_built = false;
-        ImmutableUploadToken split_upload_token;
         std::vector<ao::ObjectSlot> object_slots;  // its bounds per position matrix (ambient_occlusion_objects.h)
         bool object_slots_built = false;
     };
@@ -1026,19 +1008,12 @@ private:
     bool shader_key_hashes_valid_ = false;
     // RenderConfig::per_pixel_lighting, sampled at each frame start.
     bool per_pixel_lighting_ = false;
-    // RenderConfig::curved_surfaces where the renderer tessellates, sampled at each frame start; whether the last
-    // flushed draw is a curved surface (its keys carry kVsKeyCurved and the patch topology).
-    bool curved_surfaces_ = false;
     // A temporal scene's texture level shift in 32nds, from its render scale to the output's (0 outside one).
     int scene_mip_bias_x32_ = 0;
-    bool curved_refine_ = false;  // the same without patch stages: each group refined once (shapes::refine_curved)
+    // RenderConfig::curved_surfaces, sampled at each frame start: each bending group refined once (shapes::refine_curved).
+    bool curved_refine_ = false;
     // Model units an edge's arc may stand off its chords: Mario stands about 160 tall.
     static constexpr float kCurveRefineTolerance = 0.4f;
-    bool current_curved_ = false;
-    // The last curved draw's pipeline without the patch stages, for its flat triangles (DrawCall::flat_pipeline);
-    // null where the order of a draw's triangles could show (blending, a logic op, no depth test or write) or while
-    // it compiles.
-    gpu::Pipeline* current_flat_pipeline_ = nullptr;
     // RenderConfig::enhanced_lighting, sampled at each frame start; the last draw's eligibility and
     // material word (enhanced_lighting.h), kept until its keys or eligibility change.
     bool enhanced_lighting_ = false;

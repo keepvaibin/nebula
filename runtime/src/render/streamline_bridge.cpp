@@ -23,6 +23,7 @@
 #include <sl_reflex.h>
 #include <sl_security.h>
 #include "streamline_common.h"
+#include "streamline_frame_generation.h"
 #endif
 
 namespace galaxy::render {
@@ -49,6 +50,7 @@ struct Api {
     PFun_slIsFeatureSupported* is_feature_supported{};
     PFun_slSetD3DDevice* set_d3d_device{};
     PFun_slUpgradeInterface* upgrade_interface{};
+    PFun_slGetNativeInterface* get_native_interface{};
     PFun_slGetFeatureFunction* get_feature_function{};
     PFun_slGetNewFrameToken* get_new_frame_token{};
     PFun_slSetConstants* set_constants{};
@@ -57,28 +59,12 @@ struct Api {
     PFun_slFreeResources* free_resources{};
     PFun_slDLSSGetOptimalSettings* dlss_get_optimal_settings{};
     PFun_slDLSSSetOptions* dlss_set_options{};
-    PFun_slDLSSGSetOptions* dlssg_set_options{};
-    PFun_slDLSSGGetState* dlssg_get_state{};
-    PFun_slReflexSetOptions* reflex_set_options{};
-    PFun_slReflexSleep* reflex_sleep{};
-    PFun_slPCLSetMarker* pcl_set_marker{};
     bool initialized = false;
     bool dlss = false;
     bool dlssg_loaded = false;      // requested at startup and its plugins installed
-    bool dlssg = false;             // runs on the adapter
-    bool markers = false;           // PCL latency markers
 };
 Api g_api;
-// The presented frame's index (Streamline frame tokens) and frame generation's
-// applied setting and last reported state.
-std::uint32_t g_frame_index = 0u;
-unsigned g_dlssg_max = 0u;
-bool g_dlssg_dynamic = false;
-float g_dlssg_applied_target = -1.0f;
-unsigned g_dlssg_applied = ~0u;
-unsigned g_dlssg_presented = 1u;
-unsigned g_dlssg_status = 0u;
-bool g_dlssg_tagged = false;
+streamline_common::FrameGeneration g_generation;
 std::wstring g_directory;
 // Streamline's proxies live until it shuts down: a released device proxy
 // clears Streamline's device, and its command queue proxy points at it.
@@ -102,66 +88,7 @@ void log_message(sl::LogType type, const char* message) {
     }
 }
 
-const char* result_name(sl::Result result) {
-    switch (result) {
-    case sl::Result::eOk: return "ok";
-    case sl::Result::eErrorOSOutOfDate: return "Windows is too old";
-    case sl::Result::eErrorDriverOutOfDate: return "the NVIDIA driver is too old";
-    case sl::Result::eErrorNoSupportedAdapterFound: return "no supported NVIDIA adapter";
-    case sl::Result::eErrorAdapterNotSupported: return "the adapter is not supported";
-    case sl::Result::eErrorFeatureMissing: return "the DLSS plugin is missing";
-    case sl::Result::eErrorFeatureNotSupported: return "DLSS is not supported";
-    default: return "error";
-    }
-}
-
-// Frame generation on the attached adapter: its functions, Reflex low latency
-// (DLSS-G requires it), the most frames it generates.
-void attach_frame_generation(const sl::AdapterInfo& info) {
-    sl::Result result = g_api.is_feature_supported(sl::kFeatureDLSS_G, info);
-    if (result != sl::Result::eOk) {
-        std::cerr << "[streamline] DLSS Frame Generation unavailable: " << result_name(result) << '\n';
-        return;
-    }
-    void* set_options = nullptr;
-    void* get_state = nullptr;
-    void* reflex_options = nullptr;
-    void* reflex_sleep = nullptr;
-    void* pcl_marker = nullptr;
-    if (g_api.get_feature_function(sl::kFeatureDLSS_G, "slDLSSGSetOptions", set_options) != sl::Result::eOk ||
-        g_api.get_feature_function(sl::kFeatureDLSS_G, "slDLSSGGetState", get_state) != sl::Result::eOk ||
-        g_api.get_feature_function(sl::kFeatureReflex, "slReflexSetOptions", reflex_options) != sl::Result::eOk ||
-        g_api.get_feature_function(sl::kFeatureReflex, "slReflexSleep", reflex_sleep) != sl::Result::eOk ||
-        g_api.get_feature_function(sl::kFeaturePCL, "slPCLSetMarker", pcl_marker) != sl::Result::eOk ||
-        set_options == nullptr || get_state == nullptr || reflex_options == nullptr || reflex_sleep == nullptr ||
-        pcl_marker == nullptr) {
-        std::cerr << "[streamline] DLSS Frame Generation plugin functions missing\n";
-        return;
-    }
-    g_api.dlssg_set_options = reinterpret_cast<PFun_slDLSSGSetOptions*>(set_options);
-    g_api.dlssg_get_state = reinterpret_cast<PFun_slDLSSGGetState*>(get_state);
-    g_api.reflex_set_options = reinterpret_cast<PFun_slReflexSetOptions*>(reflex_options);
-    g_api.reflex_sleep = reinterpret_cast<PFun_slReflexSleep*>(reflex_sleep);
-    g_api.pcl_set_marker = reinterpret_cast<PFun_slPCLSetMarker*>(pcl_marker);
-    sl::ReflexOptions reflex{};
-    reflex.mode = sl::ReflexMode::eLowLatency;
-    result = g_api.reflex_set_options(reflex);
-    if (result != sl::Result::eOk) {
-        std::cerr << "[streamline] Reflex: " << result_name(result) << '\n';
-        return;
-    }
-    sl::DLSSGState state{};
-    if (g_api.dlssg_get_state(sl::ViewportHandle{0u}, state, nullptr) == sl::Result::eOk) {
-        g_dlssg_max = std::max(state.numFramesToGenerateMax, 1u);
-        g_dlssg_dynamic = state.bIsDynamicMFGSupported == sl::Boolean::eTrue;
-    } else {
-        g_dlssg_max = 1u;
-    }
-    g_api.markers = true;
-    g_api.dlssg = true;
-    std::cerr << "[streamline] DLSS Frame Generation ready (up to " << g_dlssg_max + 1u << "x"
-              << (g_dlssg_dynamic ? ", dynamic" : "") << ")\n";
-}
+using streamline_common::result_name;
 
 }  // namespace
 
@@ -197,6 +124,7 @@ bool startup(const std::wstring& directory, bool frame_generation) noexcept {
             !resolve(module, "slIsFeatureSupported", api.is_feature_supported) ||
             !resolve(module, "slSetD3DDevice", api.set_d3d_device) ||
             !resolve(module, "slUpgradeInterface", api.upgrade_interface) ||
+            !resolve(module, "slGetNativeInterface", api.get_native_interface) ||
             !resolve(module, "slGetFeatureFunction", api.get_feature_function) ||
             !resolve(module, "slGetNewFrameToken", api.get_new_frame_token) ||
             !resolve(module, "slSetConstants", api.set_constants) ||
@@ -246,6 +174,10 @@ bool startup(const std::wstring& directory, bool frame_generation) noexcept {
         api.initialized = true;
         api.dlssg_loaded = dlssg;
         g_api = api;
+        g_generation.is_feature_supported = api.is_feature_supported;
+        g_generation.get_feature_function = api.get_feature_function;
+        g_generation.get_new_frame_token = api.get_new_frame_token;
+        g_generation.set_tag_for_frame = api.set_tag_for_frame;
         return true;
     } catch (...) {
         return false;
@@ -287,7 +219,7 @@ bool attach_device(ID3D12Device* device, const LUID& adapter) noexcept {
     std::cerr << "[streamline] DLSS ready\n";
     boot_step("streamline: dlss");
     if (g_api.dlssg_loaded) {
-        attach_frame_generation(info);
+        g_generation.attach(info);
         boot_step("streamline: frame generation");
     }
     return true;
@@ -295,50 +227,24 @@ bool attach_device(ID3D12Device* device, const LUID& adapter) noexcept {
 
 bool dlss_supported() noexcept { return g_api.initialized && g_api.dlss; }
 
-bool frame_generation_supported() noexcept { return g_api.initialized && g_api.dlssg; }
+bool frame_generation_supported() noexcept { return g_api.initialized && g_generation.supported(); }
 
-unsigned frame_generation_max() noexcept { return frame_generation_supported() ? g_dlssg_max : 0u; }
+unsigned frame_generation_max() noexcept { return g_generation.max(); }
 
-bool frame_generation_dynamic() noexcept { return frame_generation_supported() && g_dlssg_dynamic; }
+bool frame_generation_dynamic() noexcept { return g_generation.dynamic(); }
 
-unsigned frame_index() noexcept { return g_frame_index; }
+unsigned frame_index() noexcept { return g_generation.frame_index(); }
 
-void marker(Marker m) noexcept {
-    if (!g_api.initialized || !g_api.markers) {
-        if (m == Marker::kPresentEnd) {
-            ++g_frame_index;
-        }
-        return;
-    }
-    sl::FrameToken* token = nullptr;
-    const std::uint32_t index = g_frame_index;
-    if (g_api.get_new_frame_token(token, &index) == sl::Result::eOk && token != nullptr) {
-        (void)g_api.pcl_set_marker(static_cast<sl::PCLMarker>(static_cast<unsigned>(m)), *token);
-    }
-    if (m == Marker::kPresentEnd) {
-        ++g_frame_index;
-        g_dlssg_tagged = false;
-    }
-}
+void marker(Marker m) noexcept { g_generation.marker(m); }
 
-void reflex_sleep() noexcept {
-    if (!frame_generation_supported() || g_api.reflex_sleep == nullptr) {
-        return;
-    }
-    sl::FrameToken* token = nullptr;
-    const std::uint32_t index = g_frame_index;
-    if (g_api.get_new_frame_token(token, &index) == sl::Result::eOk && token != nullptr) {
-        (void)g_api.reflex_sleep(*token);
-    }
-}
+void reflex_sleep() noexcept { g_generation.sleep(); }
 
 bool tag_frame_generation(const FrameGenerationInputs& in) noexcept {
     if (!frame_generation_supported() || in.list == nullptr || in.depth == nullptr || in.motion == nullptr) {
         return false;
     }
-    sl::FrameToken* token = nullptr;
-    const std::uint32_t index = g_frame_index;
-    if (g_api.get_new_frame_token(token, &index) != sl::Result::eOk || token == nullptr) {
+    sl::FrameToken* const token = g_generation.token();
+    if (token == nullptr) {
         return false;
     }
     sl::Resource depth(sl::ResourceType::eTex2d, in.depth, D3D12_RESOURCE_STATE_DEPTH_WRITE);
@@ -359,18 +265,17 @@ bool tag_frame_generation(const FrameGenerationInputs& in) noexcept {
         }
         return false;
     }
-    g_dlssg_tagged = true;
+    g_generation.note_tagged();
     return true;
 }
 
 void tag_backbuffer_region(ID3D12GraphicsCommandList* list, unsigned left, unsigned top, unsigned width,
                            unsigned height) noexcept {
-    if (!frame_generation_supported() || !g_dlssg_tagged) {
+    if (!frame_generation_supported() || !g_generation.tagged() || width == 0u || height == 0u) {
         return;
     }
-    sl::FrameToken* token = nullptr;
-    const std::uint32_t index = g_frame_index;
-    if (g_api.get_new_frame_token(token, &index) != sl::Result::eOk || token == nullptr) {
+    sl::FrameToken* const token = g_generation.token();
+    if (token == nullptr) {
         return;
     }
     sl::Extent region{};
@@ -384,12 +289,11 @@ void tag_backbuffer_region(ID3D12GraphicsCommandList* list, unsigned left, unsig
 
 void tag_hudless(ID3D12GraphicsCommandList* list, ID3D12Resource* hudless, unsigned width,
                  unsigned height) noexcept {
-    if (!frame_generation_supported() || !g_dlssg_tagged) {
+    if (!frame_generation_supported() || !g_generation.tagged()) {
         return;
     }
-    sl::FrameToken* token = nullptr;
-    const std::uint32_t index = g_frame_index;
-    if (g_api.get_new_frame_token(token, &index) != sl::Result::eOk || token == nullptr) {
+    sl::FrameToken* const token = g_generation.token();
+    if (token == nullptr) {
         return;
     }
     sl::Resource resource(sl::ResourceType::eTex2d, hudless, D3D12_RESOURCE_STATE_RENDER_TARGET);
@@ -402,48 +306,10 @@ void tag_hudless(ID3D12GraphicsCommandList* list, ID3D12Resource* hudless, unsig
 }
 
 void set_frame_generation(unsigned generated, bool dynamic, float target_fps) noexcept {
-    if (!frame_generation_supported()) {
-        return;
-    }
-    // Only frames whose scene was tagged are generated from.
-    dynamic = dynamic && g_dlssg_dynamic && generated != 0u;
-    const unsigned wanted = g_dlssg_tagged ? std::min(generated, g_dlssg_max) : 0u;
-    const float target = dynamic && wanted != 0u ? target_fps : -1.0f;
-    if (wanted != g_dlssg_applied || target != g_dlssg_applied_target) {
-        g_dlssg_applied_target = target;
-        sl::DLSSGOptions options{};
-        options.mode = wanted == 0u ? sl::DLSSGMode::eOff : dynamic ? sl::DLSSGMode::eDynamic : sl::DLSSGMode::eOn;
-        options.numFramesToGenerate = std::max(wanted, 1u);
-        options.dynamicTargetFrameRate = dynamic ? target_fps : 0.0f;
-        // Off between scenes (menus, loading) keeps its resources: no stutter coming back.
-        options.flags = sl::DLSSGFlags::eRetainResourcesWhenOff;
-        const sl::Result result = g_api.dlssg_set_options(sl::ViewportHandle{0u}, options);
-        if (result != sl::Result::eOk) {
-            std::cerr << "[dlss-g] options failed: " << result_name(result) << '\n';
-        } else if (g_dlssg_applied == ~0u || (g_dlssg_applied == 0u) != (wanted == 0u)) {
-            std::cerr << "[dlss-g] " << (wanted != 0u ? "on, generated frames " : "off")
-                      << (wanted != 0u ? std::to_string(wanted) : std::string()) << '\n';
-        }
-        g_dlssg_applied = wanted;
-    }
-    sl::DLSSGState state{};
-    if (g_dlssg_applied != 0u && g_api.dlssg_get_state(sl::ViewportHandle{0u}, state, nullptr) == sl::Result::eOk) {
-        g_dlssg_presented = std::max(state.numFramesActuallyPresented, 1u);
-        const unsigned status = static_cast<unsigned>(state.status);
-        static std::uint32_t reported_index = 0u;
-        if (status != g_dlssg_status || g_frame_index - reported_index >= 600u) {
-            reported_index = g_frame_index;
-            std::cerr << "[dlss-g] frame " << g_frame_index << " status " << status << " presented "
-                      << state.numFramesActuallyPresented << " max " << state.numFramesToGenerateMax
-                      << " min-size " << state.minWidthOrHeight << '\n';
-            g_dlssg_status = status;
-        }
-    } else if (g_dlssg_applied == 0u) {
-        g_dlssg_presented = 1u;
-    }
+    g_generation.set(generated, dynamic, target_fps);
 }
 
-unsigned frames_presented() noexcept { return g_dlssg_presented; }
+unsigned frames_presented() noexcept { return g_generation.presented(); }
 
 Microsoft::WRL::ComPtr<ID3D12Device> queue_device(ID3D12Device* device) noexcept {
     if (!g_api.initialized || device == nullptr) {
@@ -458,6 +324,14 @@ Microsoft::WRL::ComPtr<ID3D12Device> queue_device(ID3D12Device* device) noexcept
         g_device_proxy.Attach(static_cast<ID3D12Device*>(proxy));
     }
     return g_device_proxy;
+}
+
+ID3D12CommandQueue* native_queue(ID3D12CommandQueue* queue) noexcept {
+    void* native = nullptr;
+    if (g_api.initialized && queue != nullptr && g_api.get_native_interface(queue, &native) == sl::Result::eOk && native != nullptr) {
+        return static_cast<ID3D12CommandQueue*>(native);
+    }
+    return queue;
 }
 
 Microsoft::WRL::ComPtr<IDXGIFactory4> swap_chain_factory(IDXGIFactory4* factory) noexcept {
@@ -487,8 +361,7 @@ void shutdown() noexcept {
     g_device_proxy.Reset();
     g_api.initialized = false;
     g_api.dlss = false;
-    g_api.dlssg = false;
-    g_api.markers = false;
+    g_generation.shutdown();
 }
 
 }  // namespace streamline
@@ -517,7 +390,7 @@ public:
         // token: Streamline rejects different common constants under one token and fails the evaluation.
         static std::uint32_t evaluated = 0xFFFFFFFFu;
         if (streamline::frame_index() == evaluated) {
-            ++g_frame_index;
+            g_generation.next_frame_index();
         }
         sl::FrameToken* token = nullptr;
         const std::uint32_t index = streamline::frame_index();
@@ -646,22 +519,27 @@ unsigned dlss_min_render_width(unsigned quality, unsigned output_width, unsigned
 
 namespace streamline {
 bool startup(const std::wstring&, bool) noexcept { return false; }
+#if !defined(GALAXY_STREAMLINE_VK)
 bool frame_generation_supported() noexcept { return false; }
 unsigned frame_generation_max() noexcept { return 0u; }
 unsigned frame_index() noexcept { return 0u; }
 void marker(Marker) noexcept {}
 void reflex_sleep() noexcept {}
+#endif
 bool tag_frame_generation(const FrameGenerationInputs&) noexcept { return false; }
 void tag_hudless(ID3D12GraphicsCommandList*, ID3D12Resource*, unsigned, unsigned) noexcept {}
 void tag_backbuffer_region(ID3D12GraphicsCommandList*, unsigned, unsigned, unsigned, unsigned) noexcept {}
+#if !defined(GALAXY_STREAMLINE_VK)
 void set_frame_generation(unsigned, bool, float) noexcept {}
 bool frame_generation_dynamic() noexcept { return false; }
 unsigned frames_presented() noexcept { return 1u; }
+#endif
 bool active() noexcept { return false; }
 bool attach_device(ID3D12Device*, const LUID&) noexcept { return false; }
 #if !defined(GALAXY_STREAMLINE_VK)
 bool dlss_supported() noexcept { return false; }
 #endif
+ID3D12CommandQueue* native_queue(ID3D12CommandQueue* queue) noexcept { return queue; }
 Microsoft::WRL::ComPtr<ID3D12Device> queue_device(ID3D12Device* device) noexcept { return device; }
 Microsoft::WRL::ComPtr<IDXGIFactory4> swap_chain_factory(IDXGIFactory4* factory) noexcept { return factory; }
 void shutdown() noexcept {}

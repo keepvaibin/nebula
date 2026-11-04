@@ -51,7 +51,7 @@ struct RenderConfig {
     // Generates mip chains for color textures the game samples with linear filtering but without authored mips.
     // Authored mips are decoded unchanged.
     bool     enhanced_mipmaps    = false;
-    // Curved models rounded on the GPU where the renderer tessellates (curved_surfaces.h).
+    // Curved models rounded once when loaded (shapes::refine_curved, curved_surfaces.h).
     bool     curved_surfaces     = true;
 
     // Lit color channels evaluated per pixel instead of per vertex (the light formulas on the interpolated
@@ -86,7 +86,8 @@ struct RenderConfig {
     // DLSS (Streamline), both temporal: the jittered 3D scene is upscaled before the 2D layer and renders at the
     // window's scale divided by the temporal_quality ratio.
     unsigned upscaler            = 0;
-    // DLSS Frame Generation (GRAPHICS > INTERPOLATION): nonzero has its generated frames reach max_fps (0: the
+    // 2: FSR 3 frame generation (fsr_frame_generation.h), one frame between each two, with FSR 3 or XeSS. 1: DLSS Frame Generation
+    // (GRAPHICS > INTERPOLATION): nonzero has its generated frames reach max_fps (0: the
     // display's refresh rate) instead of Nebula's interpolated ones. It runs with DLSS (upscaler 3) and the Frame
     // Generation plugins, loaded when the game starts with it on; while it runs the game presents its own 60 frames.
     // Without it the target falls back to Nebula's interpolation.
@@ -247,6 +248,8 @@ struct RenderFeatureCaps {
 // A copy taken under the lock, never a partial update.
 [[nodiscard]] RenderConfig get_render_config();
 
+// FSR 3 frame generation is built into this renderer (RenderConfig::frame_generation 2; 1 is DLSS).
+[[nodiscard]] bool fsr_frame_generation_compiled() noexcept;
 // While DLSS Frame Generation runs (set by the renderer) the game presents its own 60 frames; the generated ones
 // raise the rate.
 void set_frame_generation_running(bool running) noexcept;
@@ -271,7 +274,7 @@ void set_render_config(const RenderConfig& cfg);
 // pictures of one run differ by the effect alone.
 enum class RtEffect : std::uint8_t { Reflections, Water, SunRays, LensBloom };
 [[nodiscard]] bool rt_effect_on(const RenderConfig& cfg, RtEffect effect) noexcept;
-// Whether the renderer tessellates (its curved surfaces' stages compiled): the CURVED SURFACES row is offered and
+// Whether the renderer refines curved surfaces: the CURVED SURFACES row is offered and
 // RenderConfig::curved_surfaces takes effect.
 void set_curved_surfaces_offered(bool offered) noexcept;
 [[nodiscard]] bool curved_surfaces_offered() noexcept;
