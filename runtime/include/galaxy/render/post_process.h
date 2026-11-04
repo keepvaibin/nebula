@@ -135,14 +135,9 @@ private:
     void draw(ID3D12GraphicsCommandList* list, DescriptorRing& srv_ring,
               ID3D12PipelineState* pipeline,
               std::initializer_list<ID3D12Resource*> inputs,
-              std::initializer_list<DXGI_FORMAT> formats,
               const D3D12_VIEWPORT& viewport,
               const Constants& constants);
     void note_aa_run(const PostProcessPlan& plan, AaRun ran);
-    // The deband pass of `image` (width x height) into the render target bound after `bind`, at `viewport`.
-    void record_deband(ID3D12GraphicsCommandList* list, DescriptorRing& srv_ring, ID3D12Resource* image,
-                       unsigned width, unsigned height, const std::function<void(D3D12_VIEWPORT&, Constants&)>& bind,
-                       std::uint64_t frame_index, unsigned frames_in_flight);
     void release_retired(std::uint64_t frame_index) noexcept;
 
     ID3D12Device* device_ = nullptr;
@@ -163,8 +158,11 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> scene_pass_ms_[2][4];
     [[nodiscard]] ID3D12PipelineState* scene_pass_pipeline(bool smaa, unsigned samples);
     Microsoft::WRL::ComPtr<ID3D12PipelineState> easu_;
-    // RCAS and the resample run into intermediates and into the back buffer;
-    // both use RGBA8, so one pipeline each serves every target.
+    // Into the window (8 bits, dithered), and into a picture for a pass after it (the scene's format).
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> easu_window_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> easu_box_window_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> resample_window_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> resample_box_window_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> rcas_;
     // Bilinear enlargement and RCAS in one pass (no window-sized intermediate).
     Microsoft::WRL::ComPtr<ID3D12PipelineState> rcas_scaled_;
@@ -173,13 +171,6 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> easu_box_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> rcas_scaled_box_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> resample_box_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> deband_box_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> deband_reduce_box_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> deband_apply_box_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> deband_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> deband_reduce_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> deband_smooth_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> deband_apply_;
     Microsoft::WRL::ComPtr<ID3D12Resource> area_texture_;
     Microsoft::WRL::ComPtr<ID3D12Resource> search_texture_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> rtv_heap_;
@@ -189,10 +180,6 @@ private:
     Target weights_;
     Target antialiased_;
     Target scaled_;
-    // The debanded picture, source-sized, and from 1080 lines the reduced picture and its smoothing.
-    Target debanded_;
-    Target deband_reduced_;
-    Target deband_smoothed_;
     // SMAA's edge mask: the weight pass runs only where edge detection kept a
     // pixel. `rtv` holds its DSV.
     Target stencil_;

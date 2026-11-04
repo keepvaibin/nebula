@@ -26,6 +26,8 @@ struct PipelineSeed {
     rs.cull = seed.cull;
     rs.pixfmt = seed.pixfmt;
     rs.primitive_topology = seed.primitive_topology;
+    // Only a texture target's pass keeps alpha.
+    rs.samples_log2 = seed.pixfmt == 1u ? kSceneVariantTarget : std::uint8_t{0u};
     return rs;
 }
 // GALAXY_PIPELINE_SEED_OUT=<file>: each new pipeline a draw takes, appended as a seed row (the generator's input).

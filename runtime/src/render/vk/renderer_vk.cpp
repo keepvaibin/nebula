@@ -219,7 +219,7 @@ bool RendererVk::initialize(int window_width, int window_height, const FrameMap&
         // Presentation post-processing, compiled on a worker; the plain blit presents until it is ready.
         const RenderConfig cfg = get_render_config();
         if (cfg.post_process) {
-            post_.initialize(post_process_settings_from(cfg), draw_layout_.scene_pass, color_pass_);
+            post_.initialize(post_process_settings_from(cfg), draw_layout_.scene_pass, color_pass_, rgba8_pass_);
             if (!ao_.initialize()) {
                 std::cerr << "[ambient-occlusion] off on this device" << std::endl;
             }
@@ -361,13 +361,13 @@ bool RendererVk::create_layouts() {
         vk::check(vkCreatePipelineLayout(device, &info, nullptr, &conversion_layout_), "conversion pipeline layout");
     }
 
-    // MSAA: the counts the device renders RGBA8 and the depth format with and samples the depth with.
+    // MSAA: the counts the device renders the scene's format and the depth format with and samples the depth with.
     {
         const VkPhysicalDeviceLimits& limits = context.properties().limits;
         VkSampleCountFlags counts = limits.framebufferColorSampleCounts & limits.framebufferDepthSampleCounts &
             limits.sampledImageDepthSampleCounts;
         VkImageFormatProperties image{};
-        if (vkGetPhysicalDeviceImageFormatProperties(context.physical_device(), VK_FORMAT_R8G8B8A8_UNORM,
+        if (vkGetPhysicalDeviceImageFormatProperties(context.physical_device(), vk::kSceneColorFormat,
                                                      VK_IMAGE_TYPE_2D, VK_IMAGE_TILING_OPTIMAL,
                                                      VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 0, &image) == VK_SUCCESS) {
             counts &= image.sampleCounts;
@@ -390,10 +390,16 @@ bool RendererVk::create_layouts() {
     }
     // The scene target pass keeps both targets in their attachment layouts; whoever samples them transitions and returns them.
     // With MSAA its targets are multisampled and a third attachment, the single-sample colour, takes their resolve.
-    for (const bool wide : {false, true})
+    for (const unsigned kind : {0u, 1u, 2u})
     for (unsigned samples_log2 = 0u; (1u << samples_log2) <= msaa_max_samples_; ++samples_log2) {
+        const bool wide = kind == 1u;
+        const bool target = kind == 2u;
+        if (target && samples_log2 != 0u) {
+            continue;
+        }
         VkAttachmentDescription attachments[3]{};
-        attachments[0].format = wide ? VK_FORMAT_R16G16B16A16_SFLOAT : VK_FORMAT_R8G8B8A8_UNORM;
+        attachments[0].format = wide ? VK_FORMAT_R16G16B16A16_SFLOAT
+                                : target ? vk::kTargetColorFormat : vk::kSceneColorFormat;
         attachments[0].samples = static_cast<VkSampleCountFlagBits>(1u << samples_log2);
         attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
         attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -453,6 +459,7 @@ bool RendererVk::create_layouts() {
         info.pDependencies = dependencies;
         vk::check(vkCreateRenderPass(device, &info, nullptr,
                                      wide                ? &draw_layout_.wide_passes[samples_log2]
+                                     : target            ? &draw_layout_.target_pass
                                      : samples_log2 != 0u ? &draw_layout_.ms_passes[samples_log2]
                                                          : &draw_layout_.scene_pass),
                   "scene target render pass");
@@ -461,6 +468,7 @@ bool RendererVk::create_layouts() {
         attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
         vk::check(vkCreateRenderPass(device, &info, nullptr,
                                      wide                ? &draw_layout_.wide_passes_clear[samples_log2]
+                                     : target            ? &draw_layout_.target_pass_clear
                                      : samples_log2 != 0u ? &draw_layout_.ms_passes_clear[samples_log2]
                                                          : &draw_layout_.scene_pass_clear),
                   "scene target clearing render pass");
@@ -470,7 +478,7 @@ bool RendererVk::create_layouts() {
     for (const bool wide : {false, true})
     for (unsigned aux = 0u; aux < 2u; ++aux) {
         VkAttachmentDescription attachments[3]{};
-        attachments[0].format = wide ? VK_FORMAT_R16G16B16A16_SFLOAT : VK_FORMAT_R8G8B8A8_UNORM;
+        attachments[0].format = wide ? VK_FORMAT_R16G16B16A16_SFLOAT : vk::kSceneColorFormat;
         attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
         attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
         attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -528,10 +536,10 @@ bool RendererVk::create_layouts() {
         vk::check(vkCreateRenderPass(device, &info, nullptr, &draw_layout_.aux_passes[wide ? 1u : 0u][aux]),
                   "temporal scene render pass");
     }
-    // One RGBA8 target written whole (copies, screen probes): its old contents are dropped; it ends shader-readable.
+    // One target written whole (copies; RGBA8: screen probes): its old contents are dropped; it ends shader-readable.
     {
         VkAttachmentDescription attachment{};
-        attachment.format = VK_FORMAT_R8G8B8A8_UNORM;
+        attachment.format = vk::kSceneColorFormat;
         attachment.samples = VK_SAMPLE_COUNT_1_BIT;
         attachment.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -566,6 +574,8 @@ bool RendererVk::create_layouts() {
         info.dependencyCount = 2;
         info.pDependencies = dependencies;
         vk::check(vkCreateRenderPass(device, &info, nullptr, &color_pass_), "copy render pass");
+        attachment.format = VK_FORMAT_R8G8B8A8_UNORM;
+        vk::check(vkCreateRenderPass(device, &info, nullptr, &rgba8_pass_), "RGBA8 render pass");
     }
     draw_layout_.depth_format = depth_format_;
     set_curved_surfaces_offered(true);
@@ -943,6 +953,8 @@ bool RendererVk::create_utility_pipelines() {
         VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
     conversion_pipeline_ = create_utility_pipeline(color_pass_, conversion_layout_, vk::UtilitySpirv::BlitVs,
                                                    vk::UtilitySpirv::SceneConversionPs, kAll, false, false, false);
+    probe_pipeline_ = create_utility_pipeline(rgba8_pass_, conversion_layout_, vk::UtilitySpirv::BlitVs,
+                                              vk::UtilitySpirv::SceneConversionPs, kAll, false, false, false);
     display_filter_pipeline_ = create_utility_pipeline(color_pass_, conversion_layout_, vk::UtilitySpirv::BlitVs,
                                                        vk::UtilitySpirv::DisplayFilterPs, kAll, false, false, false);
     for (unsigned kind = 0u; kind < static_cast<unsigned>(SceneUtility::Count); ++kind) {
@@ -1060,7 +1072,8 @@ void RendererVk::shutdown() {
         draw_queries_ = VK_NULL_HANDLE;
         destroy_swapchain();
         for (VkRenderPass pass :
-             {present_pass_, color_pass_, draw_layout_.scene_pass, draw_layout_.scene_pass_clear}) {
+             {present_pass_, color_pass_, rgba8_pass_, draw_layout_.scene_pass, draw_layout_.scene_pass_clear,
+              draw_layout_.target_pass, draw_layout_.target_pass_clear}) {
             if (pass != VK_NULL_HANDLE) vkDestroyRenderPass(device, pass, nullptr);
         }
         for (auto& passes : draw_layout_.aux_passes) {
@@ -1079,7 +1092,8 @@ void RendererVk::shutdown() {
                 pass = VK_NULL_HANDLE;
             }
         }
-        present_pass_ = color_pass_ = draw_layout_.scene_pass = draw_layout_.scene_pass_clear = VK_NULL_HANDLE;
+        present_pass_ = color_pass_ = rgba8_pass_ = draw_layout_.target_pass = draw_layout_.target_pass_clear =
+            draw_layout_.scene_pass = draw_layout_.scene_pass_clear = VK_NULL_HANDLE;
         for (VkPipelineLayout layout : {draw_layout_.layout, utility_layout_, conversion_layout_}) {
             if (layout != VK_NULL_HANDLE) vkDestroyPipelineLayout(device, layout, nullptr);
         }
@@ -1855,7 +1869,7 @@ bool RendererVk::present(const DisplayTexture* source, bool capture_backbuffer, 
                                                    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
                                                    true, "post-process picture");
                 VkFramebufferCreateInfo info{VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
-                info.renderPass = color_pass_;
+                info.renderPass = rgba8_pass_;
                 info.attachmentCount = 1;
                 info.width = width;
                 info.height = height;
@@ -1869,7 +1883,7 @@ bool RendererVk::present(const DisplayTexture* source, bool capture_backbuffer, 
             }
             if (oriented_) {
                 VkRenderPassBeginInfo begin{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
-                begin.renderPass = color_pass_;
+                begin.renderPass = rgba8_pass_;
                 begin.framebuffer = oriented_->framebuffer;
                 begin.renderArea = {{0, 0}, {width, height}};
                 vkCmdBeginRenderPass(commands, &begin, VK_SUBPASS_CONTENTS_INLINE);

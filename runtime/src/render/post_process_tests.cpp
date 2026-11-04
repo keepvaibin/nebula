@@ -200,10 +200,10 @@ void scene_aa_on_warp() {
     std::array<unsigned char, kPitch * kSize> pattern{};
     for (unsigned y = 0; y < kSize; ++y) {
         for (unsigned x = 0; x < kSize; ++x) {
-            unsigned char* px = &pattern[y * kPitch + x * 4u];
-            const unsigned char v = y < 20u + x / 4u ? 255u : 0u;
-            px[0] = px[1] = px[2] = v;
-            px[3] = static_cast<unsigned char>(x * 4u);
+            // The scene's format: ten bits a colour, two of alpha.
+            const std::uint32_t v = y < 20u + x / 4u ? 1023u : 0u;
+            const std::uint32_t texel = v | v << 10u | v << 20u | (x * 4u / 64u) << 30u;
+            std::memcpy(&pattern[y * kPitch + x * 4u], &texel, sizeof(texel));
         }
     }
     const auto run = [&](Aa aa, unsigned display, AaRun& ran) {
@@ -230,7 +230,7 @@ void scene_aa_on_warp() {
         td.Height = kSize;
         td.DepthOrArraySize = 1;
         td.MipLevels = 1;
-        td.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        td.Format = DXGI_FORMAT_R10G10B10A2_UNORM;
         td.SampleDesc.Count = 1;
         td.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
         D3D12_RESOURCE_DESC bd{};
@@ -269,7 +269,7 @@ void scene_aa_on_warp() {
         D3D12_TEXTURE_COPY_LOCATION buffer{};
         buffer.pResource = upload.Get();
         buffer.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-        buffer.PlacedFootprint.Footprint = {DXGI_FORMAT_R8G8B8A8_UNORM, kSize, kSize, 1, kPitch};
+        buffer.PlacedFootprint.Footprint = {DXGI_FORMAT_R10G10B10A2_UNORM, kSize, kSize, 1, kPitch};
         D3D12_TEXTURE_COPY_LOCATION texture{};
         texture.pResource = target.Get();
         texture.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
@@ -311,10 +311,12 @@ void scene_aa_on_warp() {
         for (unsigned y = 0; y < kSize; ++y) {
             for (unsigned x = 0; x < kSize; ++x) {
                 const unsigned i = y * kPitch + x * 4u;
-                alpha_kept = alpha_kept && out[i + 3u] == pattern[i + 3u];
-                const bool same = out[i] == pattern[i] && out[i + 1u] == pattern[i + 1u] &&
-                                  out[i + 2u] == pattern[i + 2u];
-                if (!same) {
+                std::uint32_t got = 0u;
+                std::uint32_t was = 0u;
+                std::memcpy(&got, &out[i], sizeof(got));
+                std::memcpy(&was, &pattern[i], sizeof(was));
+                alpha_kept = alpha_kept && got >> 30u == was >> 30u;
+                if ((got & 0x3FFFFFFFu) != (was & 0x3FFFFFFFu)) {
                     ++changed;
                 }
             }
@@ -335,8 +337,7 @@ void scene_aa_on_warp() {
 }
 
 // A picture held from the top left of a taller texture (a handed-over scene target) presents bit for bit as the same picture
-// in a texture its own size, through every scaling path and window size. Run once debanded and once without
-// (--held-no-deband), since debanding reads the picture first and the passes after it read its own-sized output.
+// in a texture its own size, through every scaling path and window size.
 void held_picture_on_warp() {
     using Microsoft::WRL::ComPtr;
     ComPtr<IDXGIFactory4> factory;
@@ -356,7 +357,7 @@ void held_picture_on_warp() {
     constexpr unsigned kHeight = 40u;
     constexpr unsigned kHeldHeight = 52u;
     constexpr unsigned kPitch = kWidth * 4u;
-    // Gradients with a little noise (debanding and EASU both act on them), different rows below the picture.
+    // Gradients with a little noise (the dither and EASU both act on them), different rows below the picture.
     std::vector<unsigned char> held(kPitch * kHeldHeight);
     std::uint32_t seed = 0x2545f491u;
     for (unsigned y = 0; y < kHeldHeight; ++y) {
@@ -577,17 +578,7 @@ void held_picture_on_warp() {
 
 }  // namespace
 
-int main(int argc, char** argv) {
-    if (argc > 1 && std::strcmp(argv[1], "--held-no-deband") == 0) {
-        _putenv_s("GALAXY_DEBAND", "0");
-        held_picture_on_warp();
-        if (failures != 0) {
-            std::cerr << failures << " held picture checks failed\n";
-            return 1;
-        }
-        std::cout << "held picture checks passed\n";
-        return 0;
-    }
+int main() {
     plans();
     texts();
     self_test_on_warp();

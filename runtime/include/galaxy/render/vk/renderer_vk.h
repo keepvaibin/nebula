@@ -79,6 +79,9 @@ struct RenderLayout {
     // The same passes over the wide scene's colour format (kSceneVariantHdr), by samples.
     std::array<VkRenderPass, 4> wide_passes{};
     std::array<VkRenderPass, 4> wide_passes_clear{};
+    // A texture target's pass (kSceneVariantTarget): RGBA8, one sample.
+    VkRenderPass target_pass = VK_NULL_HANDLE;
+    VkRenderPass target_pass_clear = VK_NULL_HANDLE;
     // A temporal scene's passes: the scene target and depth with one more target, single-sample (DrawCall::aux_target: 1 the
     // motion vectors, 2 the reactive mask), over the 8-bit or the wide scene's colour.
     std::array<std::array<VkRenderPass, 2>, 2> aux_passes{};
@@ -86,6 +89,9 @@ struct RenderLayout {
         return aux_passes[(samples_log2 & kSceneVariantHdr) != 0u ? 1u : 0u][aux - 1u];
     }
     [[nodiscard]] VkRenderPass pass_for(unsigned samples_log2, bool clear) const noexcept {
+        if ((samples_log2 & kSceneVariantTarget) != 0u) {
+            return clear ? target_pass_clear : target_pass;
+        }
         if ((samples_log2 & kSceneVariantHdr) != 0u) {
             const unsigned samples = samples_log2 & kSceneVariantSamplesMask;
             return clear ? wide_passes_clear[samples] : wide_passes[samples];
@@ -358,7 +364,8 @@ public:
     }
     // The pipelines' scene target variant (render_state_key.h RenderStateKey::samples_log2): no HDR scene scene target here.
     [[nodiscard]] std::uint8_t scene_variant() const noexcept {
-        return static_cast<std::uint8_t>(scene_samples_log2() | (scene_.wide ? kSceneVariantHdr : 0u));
+        return static_cast<std::uint8_t>(scene_samples_log2() | (scene_.wide ? kSceneVariantHdr : 0u) |
+                                         (target_pass_active_ ? kSceneVariantTarget : 0u));
     }
     [[nodiscard]] const vk::RenderLayout* root_signature() const noexcept { return &draw_layout_; }
     [[nodiscard]] double display_refresh_hz() const noexcept { return display_refresh_hz_; }
@@ -548,7 +555,8 @@ private:
     VkDescriptorSetLayout conversion_set_layout_ = VK_NULL_HANDLE;  // t0, s0 (linear), s1 (point)
     VkPipelineLayout utility_layout_ = VK_NULL_HANDLE;      // utility set + 64 bytes of push constants
     VkPipelineLayout conversion_layout_ = VK_NULL_HANDLE;   // conversion set + 64 bytes of push constants
-    VkRenderPass color_pass_ = VK_NULL_HANDLE;    // one RGBA8 target, ends shader-readable
+    VkRenderPass color_pass_ = VK_NULL_HANDLE;    // one target at the scene's format, ends shader-readable
+    VkRenderPass rgba8_pass_ = VK_NULL_HANDLE;    // the same at RGBA8: screen probes, a window-format picture
     VkRenderPass present_pass_ = VK_NULL_HANDLE;  // the swapchain image, cleared, ends presentable
     VkSampler linear_clamp_ = VK_NULL_HANDLE;
     VkSampler point_clamp_ = VK_NULL_HANDLE;
@@ -715,11 +723,12 @@ private:
 
     // Pipelines the renderer owns.
     VkPipeline conversion_pipeline_ = VK_NULL_HANDLE;
+    VkPipeline probe_pipeline_ = VK_NULL_HANDLE;
     VkPipeline display_filter_pipeline_ = VK_NULL_HANDLE;   // 1:1 display copies without gamma
     // The renderer's own draws into the scene target pass, per scene target sample count (log2), made at first use: masked clears,
     // and whole-colour and depth clears as draws (DeviceQuirks::clear_with_draw only; null otherwise).
     enum class SceneUtility : unsigned { ClearRgb, ClearAlpha, ClearRgba, ClearDepth, Count };
-    std::array<std::array<VkPipeline, 8>, static_cast<std::size_t>(SceneUtility::Count)> scene_utility_pipelines_{};
+    std::array<std::array<VkPipeline, 9>, static_cast<std::size_t>(SceneUtility::Count)> scene_utility_pipelines_{};
     [[nodiscard]] VkPipeline scene_utility_pipeline(SceneUtility kind);
     unsigned msaa_max_samples_ = 1u;  // create_layouts: the most the scene target's formats render and sample
     VkPipeline depth_resolve_pipeline_ = VK_NULL_HANDLE;
@@ -1047,7 +1056,7 @@ private:
     FrameMap replay_alt_scale_{};
     bool replay_alt_storage_ = false;
     bool create_scene_set(SceneSet& set, const FrameMap& map, unsigned samples = 1u, unsigned width = kFrameUnits,
-                        unsigned height = kFrameUnits);
+                        unsigned height = kFrameUnits, bool target = false);
     void destroy_scene_set(SceneSet& set);
     DisplayTexture subframe_display_;
     bool replaying_ = false;
