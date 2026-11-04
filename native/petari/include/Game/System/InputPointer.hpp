@@ -3,11 +3,11 @@
 #include "Game/System/PlayerInput.hpp"
 #include <JSystem/JGeometry.hpp>
 
+// Where the player points, this frame.
 class InputPointer {
 public:
     InputPointer(const PlayerInput*);
 
-    void reset();
     void update();
     void getPointingPos(TVec2f*) const;
     void getHorizonVec(TVec2f*) const;
@@ -16,21 +16,8 @@ public:
     void getPointingPosBasedOnScreen(TVec2f*) const;
 
     const PlayerInput* mPad;
-    TVec2f* mPointingPosArray;
-    TVec2f* mHorizonArray;
-    s32 mMaxPastCount;
-    u32 _10;
-    f32 mPosPlayRadius;
-    f32 mPosSensitivity;
-    f32 mHoriPlayRadius;
-    f32 mHoriSensitivity;
-    f32 mDistPlayRadius;
-    f32 mDistSensitivity;
-    s32 mLostSensorTime;
+    TVec2f mPos;
+    TVec2f mHorizon;
     f32 mDistDisplay;
-    s8 mDpdValidFg;
-    s32 mValidInScreenTime;
-    s32 mInValidOutScreenTime;
-    s32 mEnablePastCount;
     bool mIsPointInScreen;
 };

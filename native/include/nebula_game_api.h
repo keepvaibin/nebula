@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 122u
+#define NEBULA_GAME_API_VERSION 123u
 
 /* Viewports, scissors, clears, target sizes and picture points count this many units across a frame on each axis. */
 #define NEBULA_FRAME_UNITS 65536.0f
@@ -438,7 +438,7 @@ enum {
     NEBULA_SETTING_WIDESCREEN,
 };
 
-/* A player's controller as the game reads it (input_read): one sample per moment, oldest first. */
+/* A player's controller this frame, whatever the device (input_read). */
 enum {
     NEBULA_BUTTON_A = 1u << 0,
     NEBULA_BUTTON_B = 1u << 1,
@@ -454,22 +454,18 @@ enum {
     NEBULA_BUTTON_C = 1u << 11, /* the Nunchuk's */
     NEBULA_BUTTON_Z = 1u << 12,
 };
-enum {
-    NEBULA_SHAKE_REMOTE = 1u << 0,  /* held while the remote (or the controller standing in for it) is shaken */
-    NEBULA_SHAKE_NUNCHUK = 1u << 1,
-};
 typedef struct NebulaInputSample {
     uint32_t buttons;       /* NEBULA_BUTTON_* held */
-    float stick[2];         /* the Nunchuk stick, -1..1: right, up */
-    float pointer[2];       /* where the remote points, -1..1 across the picture: right, down (pointer_on) */
-    float roll[2];          /* the remote's roll as the screen sees it, a unit vector: (1, 0) level */
-    float distance;         /* from the screen, in the sensor bar's units (pointer_on) */
-    float gravity[3];       /* the remote's acceleration in g (1 at rest): x out of its left side, y toward the
-                               expansion port, z out of the A face */
-    float nunchuk_gravity[3]; /* the Nunchuk's, the same axes */
-    uint8_t pointer_on;     /* 1: the remote points at the picture */
-    uint8_t shake;          /* NEBULA_SHAKE_* */
-    uint8_t reserved[2];
+    float stick[2];         /* the move stick, -1..1: right, up */
+    float pointer[2];       /* where the player points, -1..1 across the picture: right, down (pointer_on) */
+    float roll[2];          /* the pointer's roll as the screen sees it, a unit vector: (1, 0) level */
+    float distance;         /* from the screen (pointer_on) */
+    float tilt[3];          /* the main hand's tilt in g (1 at rest): x out of its left side, y toward its far end, z up */
+    float sub_tilt[3];      /* the sub hand's, the same axes */
+    uint8_t pointer_on;     /* 1: the player points at the picture */
+    uint8_t spin_presses;   /* spins since the last read: the main hand's, then the sub hand's */
+    uint8_t sub_spin_presses;
+    uint8_t reserved;
 } NebulaInputSample;
 typedef struct NebulaInputDevice {
     uint8_t connected;
@@ -481,6 +477,7 @@ typedef struct NebulaInputDevice {
 enum {
     NEBULA_INPUT_RUMBLE = 1, /* value: 0 off, 1 on */
     NEBULA_INPUT_RELEASE,    /* the game lets the controller go (players 3 and 4 in play) */
+    NEBULA_INPUT_RESET,      /* a scene change: from rest */
 };
 
 /* The HOME Menu (hbm). NEBULA_HBM_POLL returns the choice so far: -1 none yet, 0 close, 1 leave the game, 2 reset.
@@ -973,8 +970,7 @@ typedef struct NebulaHostServices {
 
     /* Input. `device` gets player `player`'s controller; with `max` > 0 `samples` gets its samples since the last
        read, oldest first, one taken now and one every 10 ms before it (at most `max`, the newest kept): the count. */
-    uint32_t (*input_read)(void* user, uint32_t player, NebulaInputDevice* device, NebulaInputSample* samples,
-                           uint32_t max);
+    uint32_t (*input_read)(void* user, uint32_t player, NebulaInputDevice* device, NebulaInputSample* sample);
     void (*input_control)(void* user, uint32_t player, uint32_t what, uint32_t value);
     /* Player `player`'s remote speaker: `count` 16-bit samples at 6 kHz, as the game mixes them. */
     void (*speaker_samples)(void* user, uint32_t player, const int16_t* samples, uint32_t count);

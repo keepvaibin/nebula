@@ -57,6 +57,7 @@
 // A real Wii Remote over Windows HID (wiimote_hid.h).
 #define NEBULA_REAL_WIIMOTE 1
 #include "galaxy/input/wiimote_input.h"
+#include "galaxy/input/wiimote_motion.h"
 #include "galaxy/wiimote_hid.h"
 #endif
 #include "galaxy/runtime_settings.h"
@@ -3138,18 +3139,15 @@ uint32_t svc_system_setting(void*, uint32_t item) {
     }
 }
 
-// Player 1: Nebula's controls (the bindings, keyboard and mouse, controllers; a real Wii Remote while it is in use)
-// as a remote with a Nunchuk, connected from the start. The host takes a sample every 10 ms and one each time the
-// game reads (svc_input_read), when it starts its 10 ms anew; the game gets every sample since its last read.
-// Headless, the remote lies still: one sample per read, nothing pressed.
-constexpr uint32_t kInputSamples = 120;  // a read takes at most the newest 1.2 s
-
+// Player 1: Nebula's controls (the bindings, keyboard and mouse, controllers; a real Wii Remote while it is in use, its
+// sensors translated by wiimote::Motion), as a controller with a move stick, connected from the start. The game's read
+// takes the sample. Headless, the controller lies still.
 NebulaInputSample rest_input_sample() {
     NebulaInputSample sample{};
     sample.roll[0] = 1.0f;
     sample.distance = (0.2f / 0.383864f) / 0.3125f;
-    sample.gravity[2] = 1.0f;
-    sample.nunchuk_gravity[2] = 1.0f;
+    sample.tilt[2] = 1.0f;
+    sample.sub_tilt[2] = 1.0f;
     return sample;
 }
 
@@ -3175,50 +3173,44 @@ NebulaInputSample input_sample(const galaxy::input::PlayerInput& input) {
     sample.roll[1] = input.roll_y;
     sample.distance = input.distance;
     for (int i = 0; i < 3; ++i) {
-        sample.gravity[i] = input.gravity[i];
-        sample.nunchuk_gravity[i] = input.nunchuk_gravity[i];
+        sample.tilt[i] = input.gravity[i];
+        sample.sub_tilt[i] = input.nunchuk_gravity[i];
     }
-    sample.shake = static_cast<uint8_t>((input.shake ? NEBULA_SHAKE_REMOTE : 0u) |
-                                        (input.nunchuk_shake ? NEBULA_SHAKE_NUNCHUK : 0u));
     return sample;
 }
 
-// Player 1's samples not yet read, oldest first; past kInputSamples the oldest go.
-class InputSamples {
+// A device's tilt eased, and its spin held as presses: what a player does, one frame at a time.
+class ControlsMotion {
 public:
-    void push(const NebulaInputSample& sample) {
-        const std::lock_guard<std::mutex> lock(lock_);
-        ring_[(head_ + count_) % kInputSamples] = sample;
-        if (count_ < kInputSamples) {
-            ++count_;
-        } else {
-            head_ = (head_ + 1) % kInputSamples;
-        }
+    void reset() {
+        tilt_ = sub_tilt_ = {0.0f, 0.0f, 1.0f};
     }
-    uint32_t take(NebulaInputSample* out, uint32_t max) {
-        const std::lock_guard<std::mutex> lock(lock_);
-        const uint32_t count = std::min(count_, max);
-        const uint32_t skip = count_ - count;
-        for (uint32_t i = 0; i < count; ++i) {
-            out[i] = ring_[(head_ + skip + i) % kInputSamples];
+    void apply(const galaxy::input::PlayerInput& input, NebulaInputSample& sample) {
+        constexpr float kFollow = 0.15f;  // of the difference, each frame
+        for (int i = 0; i < 3; ++i) {
+            tilt_[i] += kFollow * (input.gravity[i] - tilt_[i]);
+            sub_tilt_[i] += kFollow * (input.nunchuk_gravity[i] - sub_tilt_[i]);
+            sample.tilt[i] = tilt_[i];
+            sample.sub_tilt[i] = sub_tilt_[i];
         }
-        head_ = (head_ + count_) % kInputSamples;
-        count_ = 0;
-        return count;
+        sample.spin_presses = input.shake && !held_ ? 1u : 0u;
+        sample.sub_spin_presses = input.nunchuk_shake && !sub_held_ ? 1u : 0u;
+        held_ = input.shake;
+        sub_held_ = input.nunchuk_shake;
     }
 
 private:
-    std::mutex lock_;
-    std::array<NebulaInputSample, kInputSamples> ring_{};
-    uint32_t head_ = 0;
-    uint32_t count_ = 0;
+    std::array<float, 3> tilt_{0.0f, 0.0f, 1.0f};
+    std::array<float, 3> sub_tilt_{0.0f, 0.0f, 1.0f};
+    bool held_ = false;
+    bool sub_held_ = false;
 };
-
-InputSamples gInputSamples;
-// One sample is taken at a time: on the input thread every 10 ms and on the game's thread when it reads.
+ControlsMotion gControlsMotion;
+galaxy::input::wiimote::Motion gRemoteMotion;
+// One sample is taken at a time: on the game's thread when it reads, and on the input thread while a real remote is in use.
 std::mutex gInputSampleLock;
 std::atomic<bool> gRemoteConnected{false};  // a real remote is connected
-std::atomic<bool> gInputRead{false};  // the game has read its input (the 10 ms samples start then)
+std::atomic<bool> gInputRead{false};  // the game has read its input
 std::atomic<bool> gControlsInput{true};  // player 1 is the controls (not a real remote)
 std::atomic<uint8_t> gInputNunchuk{1};
 std::atomic<uint8_t> gInputBattery{4};
@@ -3245,32 +3237,32 @@ bool input_device_missing(bool wii_remote) {
     return missing;
 }
 
-// The controls now (under gInputSampleLock). Each sample renews the motor's state (a stale one stops).
-NebulaInputSample controls_sample() {
+// The controls now (under gInputSampleLock). Each read renews the motor's state (a stale one stops).
+galaxy::input::PlayerInput controls_input() {
     static const bool frame_clock = [] {
         const char* value = ::galaxy::run_options().test_script_clock;
         return value != nullptr && std::strcmp(value, "frames") == 0;
     }();
     const int32_t mode = gStarPointerMode.load(std::memory_order_relaxed);
     galaxy::host::native_game_rumble(gMotor.load(std::memory_order_relaxed), mode);
-    return input_sample(galaxy::host::native_game_input(
+    return galaxy::host::native_game_input(
         frame_clock ? gSceneFrames.load(std::memory_order_relaxed) : gGameFrames.load(std::memory_order_relaxed), mode,
-        static_cast<uint8_t>(gTiltSection.load(std::memory_order_relaxed))));
+        static_cast<uint8_t>(gTiltSection.load(std::memory_order_relaxed)));
 }
 #endif
 
-uint32_t svc_input_read(void*, uint32_t player, NebulaInputDevice* device, NebulaInputSample* samples, uint32_t max) {
+uint32_t svc_input_read(void*, uint32_t player, NebulaInputDevice* device, NebulaInputSample* sample) {
     if (device != nullptr) {
         *device = {};
 #if defined(NEBULA_HOST_RENDERER)
-        // Player 2, when someone plays it (co-star mode): the pointer and its buttons, no Nunchuk.
+        // Player 2, when someone plays it (co-star mode): the pointer and its buttons, no move stick.
         if (player == 1) {
             galaxy::input::PlayerInput co_star{};
             if (galaxy::host::native_game_co_star(&co_star)) {
                 device->connected = 1;
                 device->battery = 4;
-                if (samples != nullptr && max != 0) {
-                    samples[0] = input_sample(co_star);
+                if (sample != nullptr) {
+                    *sample = input_sample(co_star);
                     return 1;
                 }
             }
@@ -3289,7 +3281,7 @@ uint32_t svc_input_read(void*, uint32_t player, NebulaInputDevice* device, Nebul
 #endif
         }
     }
-    if (player != 0 || samples == nullptr || max == 0) {
+    if (player != 0 || sample == nullptr) {
         return 0;
     }
 #if defined(NEBULA_HOST_RENDERER)
@@ -3297,19 +3289,39 @@ uint32_t svc_input_read(void*, uint32_t player, NebulaInputDevice* device, Nebul
     gInputRead.notify_one();
     if (gControlsInput.load(std::memory_order_acquire)) {
         const std::lock_guard<std::mutex> lock(gInputSampleLock);
-        gInputSamples.push(controls_sample());
+        const galaxy::input::PlayerInput input = controls_input();
+        *sample = input_sample(input);
+        gControlsMotion.apply(input, *sample);
         const bool missing = input_device_missing(gRemoteConnected.load(std::memory_order_relaxed));
         galaxy::host::set_input_missing_shown(missing);
         gInputConnected.store(missing ? 0u : 1u, std::memory_order_relaxed);
+    } else {
+        galaxy::input::wiimote::MotionFrame frame;
+        const galaxy::input::PlayerInput input = gRemoteMotion.read(frame);
+        *sample = input_sample(input);
+        for (int i = 0; i < 3; ++i) {
+            sample->tilt[i] = frame.tilt[i];
+            sample->sub_tilt[i] = frame.sub_tilt[i];
+        }
+        sample->spin_presses = frame.spin_presses;
+        sample->sub_spin_presses = frame.sub_spin_presses;
     }
-    return gInputSamples.take(samples, max);
+    return 1;
 #else
-    samples[0] = rest_input_sample();
+    *sample = rest_input_sample();
     return 1;
 #endif
 }
 
 void svc_input_control(void*, uint32_t player, uint32_t what, uint32_t value) {
+#if defined(NEBULA_HOST_RENDERER)
+    if (player == 0 && what == NEBULA_INPUT_RESET) {
+        const std::lock_guard<std::mutex> lock(gInputSampleLock);
+        gControlsMotion.reset();
+        gRemoteMotion.reset();
+        return;
+    }
+#endif
     if (player != 0 || what != NEBULA_INPUT_RUMBLE) {
         return;  // player 1's controller is never let go; there are no others
     }
@@ -3327,7 +3339,7 @@ void svc_input_control(void*, uint32_t player, uint32_t what, uint32_t value) {
 #if defined(NEBULA_HOST_RENDERER)
 void input_thread() {
     if (deterministic_mode()) {
-        return;  // one sample per read, taken by the read (svc_input_read)
+        return;  // the read takes the sample (svc_input_read)
     }
 #if !defined(NEBULA_REAL_WIIMOTE)
     return;
@@ -3403,7 +3415,7 @@ void input_thread() {
             const std::span<const uint8_t> bytes(real_report.data(), real_size);
             if (!real && (wii_remote_mode || galaxy::host::real_wiimote_buttons_held(bytes))) use_remote(true);
             galaxy::input::PlayerInput input{};
-            if (real && reader.read(bytes, input)) gInputSamples.push(input_sample(input));
+            if (real && reader.read(bytes, input)) gRemoteMotion.add(input);
             continue;
         }
         if (!real || Clock::now() < next) {
@@ -3411,12 +3423,11 @@ void input_thread() {
         }
         next += period;
         const std::lock_guard<std::mutex> lock(gInputSampleLock);
-        const NebulaInputSample sample = controls_sample();
+        (void)controls_input();  // for the device last used, and the settings menu
         // Another device used (in Auto): back to the keyboard, mouse and controllers, with this sample.
         if (galaxy::get_runtime_input_mode_state().mode != galaxy::RuntimeInputMode::RealWiimote &&
             galaxy::host::last_input_device() != device_when_real) {
             use_remote(false);
-            gInputSamples.push(sample);
         }
     }
 #endif

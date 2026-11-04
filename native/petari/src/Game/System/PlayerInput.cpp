@@ -23,7 +23,6 @@ PlayerInput::PlayerInput(s32 channel, PlayerInputReader* pReadInfo)
     mSubSwing = new InputSwing(this, INPUT_HAND_SUB);
     mStick = new InputStick(this);
     mInfoChecker = new InputInfoChecker(this);
-    mSubSwing->mDistanceSwingThreshold = 2.0f;
 }
 
 void PlayerInput::update() {
@@ -116,44 +115,4 @@ bool MR::hasMoveStick(const PlayerInputSample* pSample) {
 
 PlayerInputSample* PlayerInput::getSample(u32 index) const {
     return mReadInfo->getSample(index);
-}
-
-s32 PlayerInput::getValidStatusCount() const {
-    return mReadInfo->getValidStatusCount();
-}
-
-s32 PlayerInput::getEnableAccelPastCount(u32 deviceType) const {
-    InputTilt* pAcceleration;
-
-    if (deviceType == INPUT_HAND_MAIN) {
-        pAcceleration = mMainTilt;
-    } else {
-        pAcceleration = mSubTilt;
-    }
-
-    return pAcceleration->_628;
-}
-
-bool PlayerInput::getAcceleration(TVec3f* pAccel, u32 deviceType) const {
-    InputTilt* pAcceleration;
-
-    if (deviceType == INPUT_HAND_MAIN) {
-        pAcceleration = mMainTilt;
-    } else {
-        pAcceleration = mSubTilt;
-    }
-
-    return pAcceleration->getAcceleration(pAccel);
-}
-
-bool PlayerInput::getPastAcceleration(TVec3f* pAccel, s32 param2, u32 deviceType) const {
-    InputTilt* pAcceleration;
-
-    if (deviceType == INPUT_HAND_MAIN) {
-        pAcceleration = mMainTilt;
-    } else {
-        pAcceleration = mSubTilt;
-    }
-
-    return pAcceleration->getPastAcceleration(pAccel, param2);
 }
