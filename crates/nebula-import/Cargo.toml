@@ -17,6 +17,8 @@ folders-only = []
 anyhow.workspace = true
 jni-sys = "0.4"
 nod = "=1.4.4"
+lewton = "0.10"
+png = "0.17"
 serde_json = "1"
 sha1.workspace = true
 

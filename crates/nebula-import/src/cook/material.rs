@@ -51,7 +51,8 @@ pub fn cook_model(bytes: &[u8]) -> Result<Vec<u8>> {
             let table = Mat3::parse(&bounded)?;
             for i in 0..table.len() {
                 let p = table.compatibility_program(i, 0x11100000, false)?;
-                let shader = match table.name(i).and_then(|name| written_shader(&name)) {
+                let written = table.name(i).and_then(|name| written_shader(&name));
+                let shader = match written {
                     Some(id) => id,
                     None => cooked_shader(&p)?,
                 };
@@ -65,7 +66,7 @@ pub fn cook_model(bytes: &[u8]) -> Result<Vec<u8>> {
                 let (used_maps, used_coords) = used_masks(&p);
                 descriptors.extend_from_slice(&[used_maps, used_coords, 0, 0]);
                 for pass in 0..64 {
-                    let id = pass_shader(&pass_program(&p, pass), pass);
+                    let id = written.unwrap_or_else(|| pass_shader(&pass_program(&p, pass), pass));
                     descriptors.extend_from_slice(&id.to_le_bytes());
                 }
             }
@@ -89,6 +90,32 @@ pub fn cook_model(bytes: &[u8]) -> Result<Vec<u8>> {
     let size = u32::try_from(result.len())?;
     result[8..12].copy_from_slice(&size.to_le_bytes());
     super::mesh::native(result)
+}
+
+/// The materials a source model has, by name: each one's shader as Nebula would generate it, a starting point for one
+/// written by hand.
+pub fn generated_shaders(bytes: &[u8]) -> Result<Vec<(String, String)>> {
+    if bytes.len() < 32 {
+        bail!("not a model");
+    }
+    let blocks = u32::from_be_bytes(bytes[12..16].try_into()?) as usize;
+    let mut at = 32usize;
+    for _ in 0..blocks {
+        let header = bytes.get(at..at + 8).context("a model block past the file's end")?;
+        let size = u32::from_be_bytes(header[4..8].try_into()?) as usize;
+        if &header[..4] == b"MAT3" {
+            let table = Mat3::parse(bytes.get(at..at + size).context("a model block past the file's end")?)?;
+            let mut out = Vec::new();
+            for i in 0..table.len() {
+                let program = table.compatibility_program(i, 0x11100000, false)?;
+                let name = table.name(i).unwrap_or_else(|| format!("material{i}"));
+                out.push((name, super::shader_source::material_source(&normalize_program(&program)?)?));
+            }
+            return Ok(out);
+        }
+        at += size;
+    }
+    bail!("the model has no materials")
 }
 
 /// Which texture each coordinate samples, for its scale: the last stage order or

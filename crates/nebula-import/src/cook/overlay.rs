@@ -40,6 +40,30 @@ pub fn read_plan(text: &str) -> Result<(String, Vec<Change>)> {
     Ok((game_id, changes))
 }
 
+/// What a modern file of a mod becomes: each file's place in the game, with the game's ending, and bytes the cooker reads.
+/// Empty: it isn't one. A model's animations go beside it.
+fn modern_files(change: &Change, bytes: &[u8]) -> Result<Vec<(String, Vec<u8>)>> {
+    let lower = change.path.to_ascii_lowercase();
+    let renamed = |ending: &str| {
+        let dot = change.path.rfind('.').unwrap_or(change.path.len());
+        format!("{}{ending}", &change.path[..dot])
+    };
+    if lower.ends_with(".gltf") || lower.ends_with(".glb") {
+        let (model, animations) = super::gltf::to_files(bytes, change.source.parent())?;
+        let folder = change.path.rfind('/').map_or("", |at| &change.path[..at + 1]);
+        let mut out = vec![(renamed(".bmd"), model)];
+        out.extend(animations.into_iter().map(|(name, bck)| (format!("{folder}{name}.bck"), bck)));
+        return Ok(out);
+    }
+    if lower.ends_with(".png") {
+        return Ok(vec![(renamed(".bti"), super::gltf::png_to_bti(bytes)?)]);
+    }
+    if lower.ends_with(".wav") || lower.ends_with(".ogg") {
+        return Ok(vec![(renamed(".ast"), super::modern_audio::to_stream(&change.path, bytes)?)]);
+    }
+    Ok(Vec::new())
+}
+
 /// One file of a mod as store items. A wave archive needs the sound archive that lays it out.
 fn cook_change(change: &Change, bytes: Vec<u8>, waves: &BTreeMap<String, Vec<audio_data::WavePlace>>, stats: &mut Stats) -> Result<Vec<StoreItem>> {
     if cooks(&change.path) || archive::is_compressed(&bytes) {
@@ -90,14 +114,33 @@ pub fn write_overlay(game_id: &str, changes: &[Change], base: Option<&Path>, out
             .with_context(|| format!("{} cannot be read", change.source.display()))
             .and_then(|bytes| {
                 stats.bytes_in += bytes.len() as u64;
-                cook_change(change, bytes, &waves, stats)
+                let modern = modern_files(change, &bytes)?;
+                if modern.is_empty() {
+                    return Ok(vec![(change.path.clone(), cook_change(change, bytes, &waves, stats)?)]);
+                }
+                let mut cooked = Vec::with_capacity(modern.len());
+                for (path, converted) in modern {
+                    // A stream is in the game's form already.
+                    let items = if path.ends_with(".ast") {
+                        vec![StoreItem { path: String::new(), order: 0, bytes: Some(converted) }]
+                    } else {
+                        cook_entry(&path, converted, stats)?
+                    };
+                    cooked.push((path, items));
+                }
+                Ok(cooked)
             });
         match result {
-            Ok(items) => placed.extend(place(&mut pak, &mut at, &change.path, items, stats)?),
+            Ok(files) => {
+                for (path, items) in files {
+                    placed.extend(place(&mut pak, &mut at, &path, items, stats)?);
+                }
+            }
             Err(error) => failed.push((change.path.clone(), format!("{error:#}"))),
         }
     }
     apply_merges(changes, base, &mut pak, &temporary, &mut at, &mut placed, &mut failed, stats)?;
+    complete_archives(changes, base, &mut pak, &mut at, &mut placed, &mut failed, stats)?;
     if placed.is_empty() {
         let _ = fs::remove_file(&temporary);
         bail!("no file of the mods could be used");
@@ -186,6 +229,43 @@ fn apply_merges(changes: &[Change], base: Option<&Path>, pak: &mut File, tempora
             .unwrap_or(key);
         placed.retain(|p| !p.path.eq_ignore_ascii_case(&path));
         placed.extend(place(pak, at, &path, vec![StoreItem { path: String::new(), order: 0, bytes: Some(bytes) }], stats)?);
+    }
+    Ok(())
+}
+
+/// The archive a path inside one is in: the part of the path up to the first `.arc/`. Archives are read as whole
+/// folders, so one a mod changes part of needs the rest of it in this store too.
+fn archive_of(path: &str) -> Option<&str> {
+    let lower = path.to_ascii_lowercase();
+    lower.find(".arc/").map(|at| &path[..at + 4])
+}
+
+/// A mod changing some files inside an archive: the rest come from the game's.
+fn complete_archives(changes: &[Change], base: Option<&Path>, pak: &mut File, at: &mut u64, placed: &mut Vec<store::Placed>,
+                     failed: &mut Vec<(String, String)>, stats: &mut Stats) -> Result<()> {
+    let whole: std::collections::BTreeSet<String> =
+        changes.iter().filter(|c| !c.merge && c.path.to_ascii_lowercase().ends_with(".arc")).map(|c| c.path.to_ascii_lowercase()).collect();
+    let mut partial = BTreeMap::new();
+    for item in placed.iter() {
+        if let Some(archive) = archive_of(&item.path) {
+            if !whole.contains(&archive.to_ascii_lowercase()) {
+                partial.entry(archive.to_ascii_lowercase()).or_insert_with(|| archive.to_string());
+            }
+        }
+    }
+    for archive in partial.into_values() {
+        let Some(base) = base else {
+            failed.push((archive, "the mod changes part of an archive, and the game isn't known".to_string()));
+            continue;
+        };
+        // A new archive of the mod's own has nothing to come from.
+        let Ok(members) = store::read_folder(base, &archive) else { continue };
+        for (relative, bytes) in members {
+            let path = format!("{archive}/{relative}");
+            if !placed.iter().any(|p| p.path.eq_ignore_ascii_case(&path)) {
+                placed.extend(place(pak, at, &path, vec![StoreItem { path: String::new(), order: 0, bytes: Some(bytes) }], stats)?);
+            }
+        }
     }
     Ok(())
 }

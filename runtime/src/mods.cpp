@@ -931,6 +931,14 @@ std::string mods_game_id() {
     return s.game_id;
 }
 
+namespace {
+std::atomic<bool> s_code_off_after_crash{false};
+}
+
+void set_code_off_after_crash() noexcept {
+    s_code_off_after_crash.store(true, std::memory_order_relaxed);
+}
+
 std::filesystem::path mods_folder() {
     Settings& s = settings();
     const std::lock_guard<std::mutex> lock(s.mutex);
@@ -1071,6 +1079,9 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
                 mod.problem = luma::refusal(*manifest, region_id, NEBULA_VERSION, luma::this_platform());
                 mod.code_token = plugin_token(dir, *manifest);
                 mod.code_allowed = !mod.code_token.empty() && s != nullptr && s->code_ok == mod.code_token;
+                if (mod.problem.empty() && !mod.code_token.empty() && s_code_off_after_crash.load(std::memory_order_relaxed)) {
+                    mod.problem = "THIS MOD'S CODE IS OFF AFTER A CRASH. RESTART TO TRY IT AGAIN";
+                }
                 for (const luma::Option& entry : manifest->options) {
                     ModOption option;
                     option.key = entry.id;
