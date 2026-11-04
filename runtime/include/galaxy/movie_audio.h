@@ -63,7 +63,6 @@ private:
     float step_{};
     std::int32_t ramp_{};
     bool resuming_{};
-    std::int32_t silence_{};
     float fade_{1.0f};
     float fade_step_{};
 };

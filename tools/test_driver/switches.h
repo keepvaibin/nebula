@@ -93,6 +93,15 @@ inline constexpr const char* audio_test_reopen_name() noexcept { return "GALAXY_
 inline constexpr const wchar_t* audio_test_reopen_wide_name() noexcept { return L"GALAXY_AUDIO_TEST_REOPEN"; }
 #endif
 #if defined(NEBULA_RELEASE)
+inline const char* audio_test_gaps() noexcept { return nullptr; }
+inline constexpr const char* audio_test_gaps_name() noexcept { return ""; }
+inline constexpr const wchar_t* audio_test_gaps_wide_name() noexcept { return L""; }
+#else
+inline const char* audio_test_gaps() noexcept { return std::getenv("GALAXY_AUDIO_TEST_GAPS"); }
+inline constexpr const char* audio_test_gaps_name() noexcept { return "GALAXY_AUDIO_TEST_GAPS"; }
+inline constexpr const wchar_t* audio_test_gaps_wide_name() noexcept { return L"GALAXY_AUDIO_TEST_GAPS"; }
+#endif
+#if defined(NEBULA_RELEASE)
 inline const char* audio_wav_dump_seconds() noexcept { return nullptr; }
 inline constexpr const char* audio_wav_dump_seconds_name() noexcept { return ""; }
 inline constexpr const wchar_t* audio_wav_dump_seconds_wide_name() noexcept { return L""; }

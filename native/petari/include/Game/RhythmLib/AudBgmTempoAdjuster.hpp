@@ -5,30 +5,28 @@
 
 class JAIStream;
 
-// The music's beat sequence runs on its stream's samples (JASTrack::setSampleClock), one clock with no drift to correct.
+// A music's beat sequence and its stream are one clock: the sequence's place is worked out from the stream's sample
+// (JASTrack::setSampleClock). The sequence's first beat note is the stream's first sample; a loop in the stream is that
+// many beats in the sequence.
 class AudBgmTempoAdjuster {
 public:
     AudBgmTempoAdjuster();
 
-    void init();
-    void setInfo(f32, u32, u32, u32, u32);
+    void setInfo(f32 beatMul, u32 introBeats, u32 loopBeats, u32 loopStartSamples, u32 loopEndSamples);
     void setStream(JAIStream*);
     void reject();
-    // At a beat's note: how many stream samples the sequence is behind the stream (ahead: below 0).
-    f32 beatProc(f32);
-    // The stream's samples since the last call, across its loop; below 0 with no stream.
-    static f32 samplesAdvanced(void* pSelf);
+    void setTempo(f32 tempo) { mTempo = tempo; }
+    // True once after setStream: the next beat note is the stream's start.
+    bool takeNewStream();
+    // Where the sequence should be, in samples of its own time; below 0 with no stream.
+    static f64 sequenceSamples(void* pSelf);
 
     JAIStream* mStream;
+    f32 mTempo;
     f32 mBeatMul;
     u32 mIntroBeats;
     u32 mLoopBeats;
     u32 mLoopStartSamples;
     u32 mLoopEndSamples;
-    f32 mLoopSamples;
-    u32 mLoopCount;
-    u32 mCurrentBeat;
-    bool mIsBeatNeedSync;
-    bool mIsStreamNeedSync;
-    u32 mLastPosition;
+    bool mIsNewStream;
 };

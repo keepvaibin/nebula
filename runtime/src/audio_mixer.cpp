@@ -138,7 +138,8 @@ const float* InterpolationKernel::weights(double fraction) const noexcept {
 AudioMixer::AudioMixer(std::uint32_t rate)
     : rate_(std::clamp<std::uint32_t>(rate, 8000u, 192000u)),
       game_ratio_(static_cast<double>(rate_) / kGameRate),
-      voice_kernel_(4u, 0.753, 7.05, 1024u),
+      voice_kernels_{InterpolationKernel(kVoiceTaps, 0.96, 8.0, 1024u), InterpolationKernel(kVoiceTaps, 0.72, 8.0, 1024u),
+                     InterpolationKernel(kVoiceTaps, 0.48, 8.0, 1024u), InterpolationKernel(kVoiceTaps, 0.24, 8.0, 1024u)},
       // The movie's 32 kHz sound: 128 taps, cut off at 16 kHz (its third-octave band within 0.3 dB of a brick wall).
       stream_kernel_(128u, std::min(1.0, game_ratio_), 7.0, 512u),
       source_(kMaxSourceSamples, 0.0f) {
@@ -374,34 +375,36 @@ void AudioMixer::render_source(VoiceState& state, NebulaVoice& voice, float* out
         std::fill_n(out, n, 0.0f);
         return;
     }
-    // The source samples this subframe covers, after the previous subframe's last four.
+    // The source samples this subframe covers, after the previous subframe's last taps.
     const double span = std::min(static_cast<double>(voice.rate) / kSubframesPerSecond, static_cast<double>(kMaxSourceSpan));
     const double end_position = state.phase + span;
     const auto needed = static_cast<std::uint32_t>(end_position);
     float* x = source_.data();
     std::copy(state.history.begin(), state.history.end(), x);
     ++stats_.pcm_renders;
-    read_pcm(state, voice, x + 4, needed);
-    // Output i reads at source position phase + i * span / n; four taps around it (position + 1 between the second
-    // and third). Steps of four source samples or more pick samples directly.
+    read_pcm(state, voice, x + kVoiceTaps, needed);
+    // Output i reads at source position phase + i * span / n, the taps around it. The whole source band passes; a step of
+    // more than one source sample an output takes a lower cutoff, so a raised pitch does not fold back.
     const double start = state.phase;
     const double step = span / n;
-    if (voice.rate >= 4.0f * kGameRate) {
-        for (std::uint32_t i = 0; i < n; ++i) {
-            out[i] = x[static_cast<std::uint32_t>(start + i * step)];
+    const InterpolationKernel& kernel = voice_kernels_[step <= 1.04 ? 0u : step <= 1.39 ? 1u : step <= 2.08 ? 2u : 3u];
+    for (std::uint32_t i = 0; i < n; ++i) {
+        const double at = start + i * step;
+        const auto whole = static_cast<std::uint32_t>(at);
+        const float* w = kernel.weights(at - whole);
+        const float* s = x + whole;
+        float sum[4] = {};
+        for (std::uint32_t k = 0; k < kVoiceTaps; k += 4u) {
+            sum[0] += s[k] * w[k];
+            sum[1] += s[k + 1u] * w[k + 1u];
+            sum[2] += s[k + 2u] * w[k + 2u];
+            sum[3] += s[k + 3u] * w[k + 3u];
         }
-    } else {
-        for (std::uint32_t i = 0; i < n; ++i) {
-            const double at = start + i * step;
-            const auto whole = static_cast<std::uint32_t>(at);
-            const float* w = voice_kernel_.weights(at - whole);
-            const float* s = x + whole;
-            out[i] = s[0] * w[0] + s[1] * w[1] + s[2] * w[2] + s[3] * w[3];
-        }
+        out[i] = sum[0] + sum[1] + sum[2] + sum[3];
     }
     state.last = out[n - 1u];
     state.phase = end_position - needed;
-    std::copy_n(x + needed, 4u, state.history.begin());
+    std::copy_n(x + needed, kVoiceTaps, state.history.begin());
 }
 
 // PCM: `restart` the sample it starts (or loops) at, `address` the next byte, `left` the samples before the end.

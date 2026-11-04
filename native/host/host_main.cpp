@@ -3292,6 +3292,7 @@ uint32_t svc_input_read(void*, uint32_t player, NebulaInputDevice* device, Nebul
     }
 #if defined(NEBULA_HOST_RENDERER)
     gInputRead.store(true, std::memory_order_release);
+    gInputRead.notify_one();
     if (gControlsInput.load(std::memory_order_acquire)) {
         const std::lock_guard<std::mutex> lock(gInputSampleLock);
         gInputSamples.push(controls_sample());
@@ -3326,9 +3327,7 @@ void input_thread() {
         return;  // one sample per read, taken by the read (svc_input_read)
     }
     name_thread(L"Nebula Host Input");
-    while (!gInputRead.load(std::memory_order_acquire)) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    }
+    gInputRead.wait(false, std::memory_order_acquire);
     const auto period = std::chrono::milliseconds(10);
     auto next = Clock::now() + period;
 #if defined(NEBULA_REAL_WIIMOTE)

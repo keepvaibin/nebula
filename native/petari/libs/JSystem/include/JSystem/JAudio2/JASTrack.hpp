@@ -118,10 +118,10 @@ struct JASTrack : public JASPoolAllocObject_MultiThreaded< JASTrack > {
     bool isMute() const;
     void setTempo(u16);
     void setTempoRate(f32);
-    // Its time from elsewhere: the samples moved since the last call, below 0 for its own tempo's time.
-    typedef f32 (*SampleClock)(void*);
+    // Its place from elsewhere: how many samples of its own time it should have played, from this call on (its next tick is
+    // the clock's zero); below 0 for its own tempo's time.
+    typedef f64 (*SampleClock)(void*);
     void setSampleClock(SampleClock, void*);
-    void movePlaytimeBySamples(f32);
     void setTimebase(u16);
     void updateChannel(JASChannel*, JASVoice*);
     JASTrack* getRootTrack();
@@ -364,6 +364,7 @@ struct JASTrack : public JASPoolAllocObject_MultiThreaded< JASTrack > {
     f32 mTempoRate;
     SampleClock mSampleClock;
     void* mSampleClockData;
+    f64 mClockTicks;
     u32 mSkipSample;
     u16 mDirectRelease;
     u16 mTempo;

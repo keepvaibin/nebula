@@ -4,15 +4,8 @@
 #include "Game/System/GameThreads.hpp"
 
 AudBgmTempoAdjuster::AudBgmTempoAdjuster()
-    : mStream(), mBeatMul(1.0f), mIntroBeats(), mLoopBeats(), mLoopStartSamples(), mLoopEndSamples(), mLoopSamples() {
-    init();
-}
-
-void AudBgmTempoAdjuster::init() {
-    mLoopCount = 0;
-    mCurrentBeat = 0;
-    mIsBeatNeedSync = false;
-    mIsStreamNeedSync = false;
+    : mStream(nullptr), mTempo(120.0f), mBeatMul(1.0f), mIntroBeats(0), mLoopBeats(0), mLoopStartSamples(0), mLoopEndSamples(0),
+      mIsNewStream(false) {
 }
 
 void AudBgmTempoAdjuster::setInfo(f32 beatMul, u32 introBeats, u32 loopBeats, u32 loopStartSamples, u32 loopEndSamples) {
@@ -21,83 +14,42 @@ void AudBgmTempoAdjuster::setInfo(f32 beatMul, u32 introBeats, u32 loopBeats, u3
     mLoopBeats = loopBeats;
     mLoopStartSamples = loopStartSamples;
     mLoopEndSamples = loopEndSamples;
-    mLoopSamples = loopEndSamples - loopStartSamples;
 }
 
 void AudBgmTempoAdjuster::setStream(JAIStream* pStream) {
     GameAudioExclusion crit;
-    init();
     mStream = pStream;
-    mLastPosition = pStream != nullptr ? static_cast< u32 >(pStream->inner_.mStream.mPosition) : 0;
+    mIsNewStream = pStream != nullptr;
 }
 
 void AudBgmTempoAdjuster::reject() {
     GameAudioExclusion crit;
     mStream = nullptr;
-    init();
+    mIsNewStream = false;
 }
 
-f32 AudBgmTempoAdjuster::beatProc(f32 tempo) {
-    if (mStream == nullptr) {
-        return 1.0f;
-    }
-
-    f32 currSample = mStream->inner_.mStream.mPosition;
-    u32 loopCount = mStream->inner_.mStream.mLoopCount;
-
-    bool newStreamLoop = false;
-    if (loopCount != mLoopCount) {
-        newStreamLoop = true;
-        mLoopCount = loopCount;
-    }
-
-    bool newBeatLoop = false;
-    if (mLoopBeats != 0 && mCurrentBeat >= mIntroBeats + mLoopBeats) {
-        mCurrentBeat = mIntroBeats;
-        newBeatLoop = true;
-    }
-
-    // (samples/beat) * mBeatMul * mCurrentBeat
-    f32 beatSampleStart = (60.0f * AudParams::streamSampleRate / tempo) * mBeatMul * mCurrentBeat;
-
-    if (mLoopSamples != 0.0f) {
-        if (newBeatLoop && !newStreamLoop && !mIsStreamNeedSync) {
-            currSample -= mLoopSamples;
-        } else if (!newBeatLoop && newStreamLoop && !mIsBeatNeedSync) {
-            currSample += mLoopSamples;
-        }
-    }
-
-    f32 samples = currSample - beatSampleStart;  // how many samples out-of-sync
-    if (newBeatLoop) {
-        mIsBeatNeedSync = true;
-    }
-    if (newStreamLoop) {
-        mIsStreamNeedSync = true;
-    }
-
-    if (mIsBeatNeedSync && mIsStreamNeedSync) {
-        mIsBeatNeedSync = false;
-        mIsStreamNeedSync = false;
-    }
-
-    mCurrentBeat++;
-
-    return samples;
+bool AudBgmTempoAdjuster::takeNewStream() {
+    const bool isNew = mIsNewStream;
+    mIsNewStream = false;
+    return isNew;
 }
 
-f32 AudBgmTempoAdjuster::samplesAdvanced(void* pSelf) {
-    AudBgmTempoAdjuster* const self = static_cast< AudBgmTempoAdjuster* >(pSelf);
+f64 AudBgmTempoAdjuster::sequenceSamples(void* pSelf) {
+    const AudBgmTempoAdjuster* const self = static_cast< const AudBgmTempoAdjuster* >(pSelf);
     if (self->mStream == nullptr) {
-        return -1.0f;
+        return -1.0;
     }
     const u32 position = self->mStream->inner_.mStream.mPosition;
-    const u32 last = self->mLastPosition;
-    self->mLastPosition = position;
-    if (position >= last) {
-        return static_cast< f32 >(position - last);
+    const u32 loops = self->mStream->inner_.mStream.mLoopCount;
+    const u32 loopSamples = self->mLoopEndSamples - self->mLoopStartSamples;
+    if (self->mLoopBeats == 0 || loopSamples == 0) {
+        return position;
     }
-    // Back at its loop's start, or a new stream from its first sample.
-    const f32 looped = static_cast< f32 >(position) + self->mLoopSamples - static_cast< f32 >(last);
-    return looped >= 0.0f ? looped : static_cast< f32 >(position);
+    const f64 samplesPerBeat = 60.0 * AudParams::streamSampleRate / self->mTempo * self->mBeatMul;
+    const f64 intro = self->mIntroBeats * samplesPerBeat;
+    const f64 loop = self->mLoopBeats * samplesPerBeat;
+    if (loops == 0 && position < self->mLoopStartSamples) {
+        return position * intro / self->mLoopStartSamples;
+    }
+    return intro + loops * loop + (static_cast< f64 >(position) - self->mLoopStartSamples) * loop / loopSamples;
 }

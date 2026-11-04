@@ -105,9 +105,10 @@ public:
 private:
     static constexpr std::size_t kMaxSubframe = 512u;  // output samples of one subframe at 192 kHz, rounded up
     static constexpr std::size_t kVoices = 256u;
+    static constexpr std::uint32_t kVoiceTaps = 16u;
     // At most 16 source samples per 32 kHz sample, the history before them and the last taps' reach.
     static constexpr std::uint32_t kMaxSourceSpan = 1280u;
-    static constexpr std::uint32_t kMaxSourceSamples = 4u + kMaxSourceSpan + 4u;
+    static constexpr std::uint32_t kMaxSourceSamples = kVoiceTaps + kMaxSourceSpan + kVoiceTaps;
 
     struct Biquad {
         float b0{1.0f}, b1{}, b2{}, a1{}, a2{};
@@ -116,7 +117,7 @@ private:
 
     struct VoiceState {
         double phase{};                   // the position between source samples
-        std::array<float, 4> history{};   // the previous subframe's last source samples
+        std::array<float, kVoiceTaps> history{};   // the previous subframe's last source samples
             bool loop_pending{};              // PCM: the end was reached exactly; loop or finish at the next read
         float last{};                     // the last resampled sample, held while paused
         double cycle{};                   // oscillators: position in the waveform's cycle
@@ -186,7 +187,7 @@ private:
 
     std::uint32_t rate_;
     double game_ratio_;  // output samples per 32 kHz sample
-    InterpolationKernel voice_kernel_;
+    std::array<InterpolationKernel, 4> voice_kernels_;
     InterpolationKernel stream_kernel_;
 
     NebulaVoice* voices_{};
