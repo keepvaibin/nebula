@@ -605,6 +605,22 @@ namespace Nebula.Launcher
 
         // A saves tree as the runtime keeps it, each folder and file with a metadata stream, plus files the game
         // never reads.
+        static byte[] NativeSave(int seed)
+        {
+            byte[] bytes = new byte[16 + 64];
+            Array.Copy(Noise(64, seed), 0, bytes, 16, 64);
+            Array.Copy(BitConverter.GetBytes(0x5653424Eu), 0, bytes, 0, 4);
+            Array.Copy(BitConverter.GetBytes(4u), 0, bytes, 4, 4);
+            uint crc = 0xFFFFFFFFu;
+            for (int i = 16; i < bytes.Length; i++)
+            {
+                crc ^= bytes[i];
+                for (int bit = 0; bit < 8; bit++) crc = (crc & 1) != 0 ? 0xEDB88320u ^ (crc >> 1) : crc >> 1;
+            }
+            Array.Copy(BitConverter.GetBytes(crc ^ 0xFFFFFFFFu), 0, bytes, 8, 4);
+            return bytes;
+        }
+
         static void BuildSaves(string root, int seed)
         {
             int stream = 0;
@@ -618,6 +634,7 @@ namespace Nebula.Launcher
             {
                 { SaveArchive.GameDataPath, GameData(seed) }, { SaveArchive.BannerPath, Banner(seed) },
                 { SaveArchive.GameDataPathOf("524d4750"), GameData(seed + 7) },
+                { SaveArchive.NativeSavePathOf("524d4745"), NativeSave(seed + 8) },
                 { SaveArchive.MiiDatabasePath, MiiDatabase(seed) }, { "shared2/sys/SYSCONF", Noise(0x4000, seed + 1) },
                 { "title/00000001/00000002/data/setting.txt", Noise(0x100, seed + 2) },
                 { "title/00000001/00000002/data/play_rec.dat", Noise(0x80, seed + 3) },
@@ -804,13 +821,13 @@ namespace Nebula.Launcher
 
             BuildSaves(saves, 1);
             List<SaveItem> first = SaveArchive.ReadTree(saves);
-            Check(first.Count == 23 && first.All(i => i.Streams.Count == 1),
-                  "save fixture: 16 folders (every release's save folders) and 7 files (North America's and Europe's saves), each with a metadata stream");
+            Check(first.Count == 27 && first.All(i => i.Streams.Count == 1),
+                  "save fixture: 19 folders (every release's save folders) and 8 files (North America's and Europe's saves, a native one), each with a metadata stream");
             string zip = SaveArchive.Export(work);
             Check(Regex.IsMatch(Path.GetFileName(zip), @"^Nebula-Saves-\d{8}-\d{6}\.zip$"), "export writes Nebula-Saves-<yyyyMMdd-HHmmss>.zip: " + Path.GetFileName(zip));
             using (ZipArchive archive = ZipFile.OpenRead(zip))
                 Check(archive.Entries.All(e => !e.FullName.Contains("tmp/") && !e.FullName.EndsWith("desktop.ini", StringComparison.Ordinal)) &&
-                      archive.Entries.Count(e => e.FullName.StartsWith("streams/", StringComparison.Ordinal)) == 23,
+                      archive.Entries.Count(e => e.FullName.StartsWith("streams/", StringComparison.Ordinal)) == 27,
                       "export holds one stream entry per folder and file, and leaves out /tmp and files the game does not read");
             Check(SaveArchive.Same(first, SaveArchive.ReadArchive(zip)), "the archive reads back as the exported tree");
 
@@ -889,10 +906,10 @@ namespace Nebula.Launcher
             ZipFile.CreateFromDirectory(folder, plain, CompressionLevel.Optimal, true);
             SaveArchive.Import(plain, null);
             List<SaveItem> imported = SaveArchive.ReadWholeTree(saves);
-            Check(imported.Count(i => !i.IsFolder) == 7 && imported.All(i => i.Streams.Count == 0) &&
+            Check(imported.Count(i => !i.IsFolder) == 8 && imported.All(i => i.Streams.Count == 0) &&
                   imported.First(i => i.Path == SaveArchive.GameDataPath).Data.SequenceEqual(GameData(2)) &&
                   imported.First(i => i.Path == SaveArchive.GameDataPathOf("524d4750")).Data.SequenceEqual(GameData(2 + 7)),
-                  "a plain zip of a saves folder imports the seven files (both releases' saves) without streams");
+                  "a plain zip of a saves folder imports the eight files (both releases' saves, the native one) without streams");
 
             string invalidBanner = Path.Combine(work, "invalid-banner");
             Directory.CreateDirectory(invalidBanner);

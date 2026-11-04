@@ -139,7 +139,7 @@ namespace Nebula.Launcher
     internal static class SaveArchive
     {
         /// <summary>The releases' save titles, as their game ids in hex: North America's (RMGE), Europe's (RMGP), Japan's
-        /// (RMGJ). Each keeps its own save, as on the Wii.</summary>
+        /// (RMGJ). Each keeps its own save.</summary>
         internal static readonly string[] Titles = { "524d4745", "524d4750", "524d474a" };
 
         public const string GameDataPath = "title/00010000/524d4745/data/GameData.bin";
