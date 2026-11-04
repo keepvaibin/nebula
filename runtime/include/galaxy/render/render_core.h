@@ -205,6 +205,13 @@ public:
         producer_record_pool_.vertices.resize(producer_record_pool_.vertices.size() + count);
         return producer_record_pool_.vertices.data() + record.vertex_first;
     }
+    [[nodiscard]] RenderVertexCore* reserve_record_corners(shapes::Record& record, std::uint32_t count) {
+        record.vertex_first = static_cast<std::uint32_t>(producer_record_pool_.corners.size());
+        record.vertex_count = count;
+        record.attributes |= shapes::kReadyCorners;
+        producer_record_pool_.corners.resize(producer_record_pool_.corners.size() + count);
+        return producer_record_pool_.corners.data() + record.vertex_first;
+    }
     // Simulation thread: a record's matrices while the pool is still being filled.
     [[nodiscard]] const shapes::Matrix* producer_record_matrices(const shapes::Record& record) const noexcept {
         return producer_record_pool_.matrices.data() + record.matrix_first;
@@ -395,6 +402,7 @@ private:
     // part of the key).
     std::uint32_t identity_continuity_ = 0;
     bool identity_continuity_particle_ = false;
+    bool identity_emitter_ = false;  // the draws that follow are an emitter's
     // Category in force (draw phase and the latest CategoryList call).
     std::uint32_t identity_category_ = 0x00FF0000u;
     std::uint64_t motion_category_markers_ = 0;
@@ -521,6 +529,7 @@ private:
         std::vector<Model> models;
         std::vector<std::uint32_t> model_words;
         std::vector<std::uint8_t> per_vertex;   // per-vertex palette draw
+        std::vector<std::uint8_t> particle;     // its corners place themselves by the presented frame's time
         // Per record, from its drawing state: texgen i's bit when it maps position or normal (its matrices lerp
         // whole), and the lights its colour channels and emboss texgens evaluate.
         std::vector<std::uint8_t> light_masks;
@@ -566,7 +575,7 @@ private:
         void clear() noexcept {
             constants.clear(); prev_index.clear();
             model.clear(); models.clear(); model_words.clear();
-            palette.clear(); per_vertex.clear(); light_masks.clear(); palette_tables.clear(); palette_rows.clear(); palette_count = 0;
+            palette.clear(); per_vertex.clear(); particle.clear(); light_masks.clear(); palette_tables.clear(); palette_rows.clear(); palette_count = 0;
             valid = false; serial = 0;
             category.clear(); camera_epoch_known = false;
             rt_projection_known = false;
@@ -622,6 +631,7 @@ private:
         std::int32_t palette = -1;        // interp_palette_motions_ index
         std::int32_t model = -1;          // interp_model_motions_ index
         bool projection_moves = false;
+        bool particle = false;
     };
     std::vector<InterpRecordMotion> interp_moving_;
     std::vector<InterpRecordMotion> interp_pending_;  // classification scratch

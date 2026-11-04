@@ -18,6 +18,7 @@ struct MaterialConstants {
     float4 test;          // x, y: the alpha test's compares 0 and 1, z: its logic (and, or, xor, xnor)
 };
 
+#define NATIVE_PARTICLE 1
 #include "native_material.hlsli"
 
 void material_vertex(NativeVertex v, inout NativeVaryings o) {

@@ -9,6 +9,7 @@ JPAParticleCallBack::~JPAParticleCallBack() {
 }
 
 void JPABaseParticle::init_p(JPAEmitterWorkData* pWork) {
+    mDrawnFrame = cNeverDrawn;
     JPABaseEmitter* emtr = pWork->mpEmtr;
     JPAExtraShape* esp = pWork->mpRes->mpExtraShape;
     JPABaseShape* bsp = pWork->mpRes->mpBaseShape;
@@ -120,6 +121,7 @@ void JPABaseParticle::init_p(JPAEmitterWorkData* pWork) {
 }
 
 void JPABaseParticle::init_c(JPAEmitterWorkData* pWork, JPABaseParticle* pParent) {
+    mDrawnFrame = cNeverDrawn;
     JPABaseEmitter* emtr = pWork->mpEmtr;
     JPAChildShape* csp = pWork->mpRes->getCsp();
 

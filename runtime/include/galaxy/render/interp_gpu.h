@@ -100,6 +100,7 @@ static_assert(kPaletteBytes % 256u == 0u && kVsBytes % 256u == 0u &&
 // Word offsets inside the blocks.
 inline constexpr std::uint32_t kVsProjection = offsetof(VertexConstants, projection) / 4u;
 inline constexpr std::uint32_t kVsPosBase = offsetof(VertexConstants, pos_base) / 4u;
+inline constexpr std::uint32_t kVsParticleTime = offsetof(VertexConstants, draw_rows) / 4u + 9u;
 inline constexpr std::uint32_t kVsRowBases = offsetof(VertexConstants, row_bases) / 4u;
 inline constexpr std::uint32_t kVsMotionPrevProj = offsetof(VertexConstants, motion_prev_proj) / 4u;
 inline constexpr std::uint32_t kVsMotionPrevPos = offsetof(VertexConstants, motion_prev_pos) / 4u;

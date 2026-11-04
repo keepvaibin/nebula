@@ -14,6 +14,9 @@ struct JPAEmitterWorkData;
 
 class JPABaseParticle {
 public:
+    // Its frame number plus one is no frame.
+    static const u32 cNeverDrawn = 0xFFFFFFFEu;
+
     ~JPABaseParticle() {
     }
 
@@ -143,6 +146,11 @@ public:
     u8 mTexAnmIdx;
     u8 mAnmRandom;
     u8 mPrmColorAlphaAnm;
+    // Where it was drawn (JPAParticleBatch): its matrix, or up to four corners; this game frame and the one before.
+    f32 mDrawnNow[12];
+    f32 mDrawnBefore[12];
+    u32 mDrawnFrame;
+    bool mDrawnContinues;
 };
 
 class JPAParticleCallBack {

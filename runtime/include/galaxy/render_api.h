@@ -165,6 +165,7 @@ void attach_shape_record(shapes::Record&& record);
 [[nodiscard]] const shapes::Matrix* producer_record_matrices(const shapes::Record& record);
 [[nodiscard]] std::uint32_t reserve_record_native(const void* native, std::size_t bytes);
 [[nodiscard]] RenderVertex* reserve_record_vertices(shapes::Record& record, std::uint32_t count);
+[[nodiscard]] RenderVertexCore* reserve_record_corners(shapes::Record& record, std::uint32_t count);
 [[nodiscard]] ScreenProbe* reserve_record_probes(shapes::Record& record, std::uint32_t count);
 // Simulation thread: the THP movie frame the game draws (movie_replacement.h); every later submission carries it
 // until the movie closes (frame -1).

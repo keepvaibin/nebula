@@ -102,6 +102,9 @@ struct Matrix {
     std::array<float, 12> values{};
 };
 
+// An immediate's vertices are whole in RecordPool::corners (`vertex_first` counts there).
+inline constexpr std::uint32_t kReadyCorners = 1u << 24u;
+
 // How immediate vertices group: nebula_game_api.h NebulaPrimitive's values.
 enum PrimitiveKind : std::uint8_t { kQuads = 0, kTriangles, kTriangleStrip, kTriangleFan, kLines, kLineStrip, kPoints, kWideQuads };
 
@@ -130,6 +133,7 @@ struct RecordPool {
     std::vector<state::Op> ops;
     std::vector<material::Native> natives;
     std::vector<RenderVertex> vertices;
+    std::vector<RenderVertexCore> corners;  // Immediate with kReadyCorners
     std::vector<ScreenProbe> probes;
     std::vector<float> palette_rows;
 };

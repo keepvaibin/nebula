@@ -92,6 +92,10 @@ RenderVertex* reserve_record_vertices(shapes::Record& record, std::uint32_t coun
     return backend().reserve_record_vertices(record, count);
 }
 
+RenderVertexCore* reserve_record_corners(shapes::Record& record, std::uint32_t count) {
+    return backend().reserve_record_corners(record, count);
+}
+
 std::uint32_t reserve_record_native(const void* native, std::size_t bytes) {
     return backend().reserve_record_native(native, bytes);
 }
