@@ -91,9 +91,6 @@ namespace MotionSignal {
         }
     }
 
-    // A particle of a stripe: its two vertices are written next, inside the stripe's one u8 (strip 0 JPADrawStripe,
-    // 1 and 2 the passes of JPADrawStripeX).
-    void stripeParticle(const JPABaseParticle* pParticle, u8 strip);
 
     // CategoryList::execute(MR::DrawType), drawOpa and drawXlu(MR::DrawBufferType).
     inline void drawType(u32 type) {

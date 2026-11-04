@@ -1696,16 +1696,6 @@ void svc_scene_marker(void*, uint32_t marker, const float* view) {
 #endif
 }
 
-void svc_stripe_particle(void*, uint64_t particle, uint32_t age_lifetime, uint8_t strip) {
-#if defined(NEBULA_HOST_RENDERER)
-    galaxy::render::attach_stripe_particle(0, particle, age_lifetime, strip);
-#else
-    (void)particle;
-    (void)age_lifetime;
-    (void)strip;
-#endif
-}
-
 // The game's steady clock: nanoseconds since the process's first read, plus one (0 means "never" to its users).
 uint64_t svc_clock_ns(void*) {
     if (deterministic_mode()) {
@@ -4375,7 +4365,6 @@ int main(int argc, char** argv) {
     services.marker = svc_marker;
     services.clock_ns = svc_clock_ns;
     services.calendar_ns = svc_calendar_ns;
-    services.stripe_particle = svc_stripe_particle;
     services.code_patch = svc_code_patch;
     services.asset_find = svc_asset_find;
     services.asset_entry = svc_asset_entry;

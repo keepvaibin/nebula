@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 127u
+#define NEBULA_GAME_API_VERSION 128u
 
 /* Viewports, scissors, clears, target sizes and picture points count this many units across a frame on each axis. */
 #define NEBULA_FRAME_UNITS 65536.0f
@@ -925,9 +925,6 @@ typedef struct NebulaHostServices {
        camera's world-to-eye matrix (row-major 3x4), then the player's up in the world (against its gravity) and 1, or
        four zeros without a player. The others NULL. */
     void (*scene_marker)(void* user, uint32_t marker, const float* view);
-    /* A JPA stripe particle whose two strip vertices are drawn next (galaxy/motion_signals.h): age << 16 |
-       lifetime, strip 0 JPADrawStripe, 1-2 the passes of JPADrawStripeX. */
-    void (*stripe_particle)(void* user, uint64_t particle, uint32_t age_lifetime, uint8_t strip);
 
     /* The game's files: the file or folder at `path` ("/StageData/EggStarGalaxy.arc": from the root, '/' at a name's start
        returning to it, "." and ".." steps, letters in either case, a name followed by '/' a folder): 0 when there is

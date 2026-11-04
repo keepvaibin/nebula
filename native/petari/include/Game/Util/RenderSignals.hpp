@@ -55,7 +55,4 @@ namespace NebulaRender {
     // A scene bound (NEBULA_SCENE_*); the 3D scene's begin carries the camera (world to eye, 3x4) and the player's up.
     void sceneMarker(uint32_t marker, const float (*view)[4]);
 
-    // A JPA stripe particle whose two strip vertices are drawn next: age << 16 | lifetime, strip 0 JPADrawStripe,
-    // 1-2 the passes of JPADrawStripeX.
-    void stripeParticle(uint64_t particle, uint32_t ageLifetime, uint8_t strip);
 }  // namespace NebulaRender

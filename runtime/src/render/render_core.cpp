@@ -903,7 +903,7 @@ void RenderCore::render_frame(
     }
 
     // Nothing to render: nothing attached (records, scene markers, captures).
-    const bool empty = producer_shape_records_.empty() && producer_stripe_particles_.empty();
+    const bool empty = producer_shape_records_.empty();
     if (empty) {
         if (present_swap_chain) {
             present_cached_display(black, true);
@@ -922,7 +922,6 @@ void RenderCore::render_frame(
     // for queue space), so a measured frame never subtracts a default time_point.
     FrameChunk chunk;
     chunk.pointer_response=producer_pointer_response_;
-    take_attached_stripe_particles(chunk);
     take_attached_shape_records(chunk);
     chunk.prerecorded_movie=producer_movie_content_;
     chunk.movie_frame=producer_movie_frame_;
@@ -1453,15 +1452,6 @@ void RenderCore::on_scene_2d_begin() {
     ++window_2d_scenes_;
 }
 
-void RenderCore::take_attached_stripe_particles(FrameChunk& chunk) {
-    if (producer_stripe_particles_.empty()) {
-        return;
-    }
-    chunk.stripe_particles.insert(chunk.stripe_particles.end(), producer_stripe_particles_.begin(),
-                                  producer_stripe_particles_.end());
-    producer_stripe_particles_.clear();
-}
-
 void RenderCore::take_attached_shape_records(FrameChunk& chunk) {
     if (producer_shape_records_.empty()) {
         return;
@@ -1517,10 +1507,6 @@ void RenderCore::take_attached_shape_records(FrameChunk& chunk) {
         chunk.shape_records.push_back(std::move(record));
     }
     producer_shape_records_.clear();
-}
-
-void RenderCore::note_stripe_particles(const FrameChunk& chunk) {
-    motion_stripe_marks_ += chunk.stripe_particles.size();
 }
 
 // A fresh InterpScene for the frame being recorded (its mirror pass or its 3D
@@ -2002,8 +1988,7 @@ void RenderCore::start_interp_sequence(std::uint32_t picture_slot) {
 // When the scene before the starting one was never on screen (its log was
 // replaced before a present started it, or its sequence ended before showing
 // anything), the sub-frames start from the scene shown last, records matched
-// through the skipped scenes. Vertex blending needs consecutive logs
-// (prepare_vertex_blend) and stays off for such a sequence.
+// through the skipped scenes.
 void RenderCore::select_interp_before() {
     const unsigned scene = interp_sequence_.scene;
     interp_sequence_.before = (scene + 3u) % 4u;
@@ -2597,9 +2582,9 @@ void RenderCore::report_interp_stats() {
             << identity_continuity_rejected_
             << " particle-age-steps(<0/0/1/2/>2)=" << particle_age_steps_[0] << '/' << particle_age_steps_[1]
             << '/' << particle_age_steps_[2] << '/' << particle_age_steps_[3] << '/' << particle_age_steps_[4]
-            << " signal-markers(category/image-effect/scene/pass/light/stripe-marks)=" << motion_category_markers_
+            << " signal-markers(category/image-effect/scene/pass/light)=" << motion_category_markers_
             << '/' << motion_image_effect_markers_ << '/' << motion_scene_markers_ << '/' << motion_mirror_markers_
-            << '/' << motion_light_markers_ << '/' << motion_stripe_marks_
+            << '/' << motion_light_markers_
             << " layout-markers(2d-scenes/pane/actor/star-pointer)=" << window_2d_scenes_ << '/'
             << identity_markers_by_kind_[motion::kMarkerLayoutPane] << '/'
             << identity_markers_by_kind_[motion::kMarkerLayoutActor] << '/'
@@ -2624,9 +2609,6 @@ void RenderCore::report_interp_stats() {
             << " gpu-phase-ms(eval/replay/present)=" << gpu_phase[0] / gpu_divisor << '/'
             << gpu_phase[1] / gpu_divisor << '/' << gpu_phase[2] / gpu_divisor
             << " chunk-continued-records=" << std::exchange(interp_chunk_continues_, 0u)
-            << " vertex-blend-draws-per-subframe="
-            << (interp_presented_ != 0u
-                    ? static_cast<double>(renderer_.take_vertex_blend_draws()) / presented : 0.0)
             << " guarded-copies=" << renderer_.take_subframe_guarded()
             << " redirected-copies=" << redirect.redirected
             << " patched-tables=" << redirect.patched_tables
@@ -2697,7 +2679,6 @@ void RenderCore::report_interp_stats() {
     motion_mirror_markers_ = 0u;
     motion_light_markers_ = 0u;
     window_2d_scenes_ = 0u;
-    motion_stripe_marks_ = 0u;
     interp_stats_qpc_ = now;
 }
 
@@ -2886,12 +2867,6 @@ bool RenderCore::render_interp_subframe(float t) {
                 interp_moving_.push_back(motion);
             }
         }
-        const auto blend_start = std::chrono::steady_clock::now();
-        // Vertex blending pairs draws with the log run before: not for a
-        // sequence chained past a skipped scene (select_interp_before).
-        renderer_.prepare_vertex_blend(before_valid && !interp_sequence_.chained
-                                           ? std::span<const std::int32_t>(prev_index)
-                                           : std::span<const std::int32_t>{});
         const auto colours_start = std::chrono::steady_clock::now();
         const auto program_start = std::chrono::steady_clock::now();
         interp_sequence_.ready = prepare_interp_sequence(scene, before_scene, before_valid);
@@ -2899,8 +2874,7 @@ bool RenderCore::render_interp_subframe(float t) {
         const auto ms = [](auto from, auto to) { return std::chrono::duration<double, std::milli>(to - from).count(); };
         interp_prepare_phase_ms_[0] += ms(build_start, records_start);
         interp_prepare_phase_ms_[1] += ms(records_start, palettes_start);
-        interp_prepare_phase_ms_[2] += ms(palettes_start, blend_start);
-        interp_prepare_phase_ms_[3] += ms(blend_start, colours_start);
+        interp_prepare_phase_ms_[2] += ms(palettes_start, colours_start);
         interp_prepare_phase_ms_[4] += ms(colours_start, program_start);
         interp_prepare_phase_ms_[5] += ms(program_start, prepare_end);
         interp_prepare_ms_ += ms(build_start, prepare_end);
@@ -3005,11 +2979,11 @@ bool RenderCore::prepare_interp_sequence(const InterpScene& scene, const InterpS
         if (moving.model < 0 || moving.palette < 0) continue;
         InterpModelMotion& entry = interp_model_motions_[static_cast<std::size_t>(moving.model)];
         if (entry.output_row == ~0u) {
-            const std::uint32_t count = scene.models[static_cast<std::size_t>(entry.model)].count;
+            const std::uint32_t matrices = scene.models[static_cast<std::size_t>(entry.model)].count;
             entry.output_row = model_rows;
-            model_rows += 6u * count;
+            model_rows += 6u * matrices;
             entry.prev_row = model_rows;
-            model_rows += motion ? 3u * count : 0u;
+            model_rows += motion ? 3u * matrices : 0u;
         }
     }
     interp_layout_ = {static_cast<std::uint32_t>(interp_moving_.size()),
@@ -3115,7 +3089,6 @@ bool RenderCore::prepare_interp_sequence(const InterpScene& scene, const InterpS
     sequence.palette_source = interp_palette_source_;
     sequence.model_copies = interp_model_copies_;
     sequence.program = &interp_program_;
-    sequence.vertex_blend = true;
     return renderer_.begin_replay_sequence(sequence);
 }
 
@@ -3789,22 +3762,15 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
 
     const std::uint64_t diagnostic_parse_start_ns =
         cadence::steady_now_ns_if_enabled(cadence_diagnostics_);
-    if (!chunk.shape_records.empty() || !chunk.stripe_particles.empty()) {
+    if (!chunk.shape_records.empty()) {
         frame_services_ = services;
         // The images are the game's handed-over copies, unchanged while they are read: first-use decodes may run
         // on workers.
         texture_cache_.set_async_decode_allowed(true);
         try {
-            parse_stripes_ = interp_recording_ ? std::span<const StripeParticleMark>(chunk.stripe_particles)
-                                               : std::span<const StripeParticleMark>{};
-            parse_stripe_next_ = 0u;
             current_record_pool_ = &chunk.record_pool;
             for (const shapes::Record& record : chunk.shape_records) {
                 on_shape_record(record);
-            }
-            parse_stripes_ = {};
-            if (!chunk.stripe_particles.empty()) [[unlikely]] {
-                note_stripe_particles(chunk);
             }
         } catch (...) {
             texture_cache_.set_async_decode_allowed(false);
@@ -4599,10 +4565,6 @@ void RenderCore::flush_pending_draw_batch() {
         return;
     }
 
-    if (!pending_stripe_vertices_.empty()) [[unlikely]] {
-        renderer_.note_stripe_vertices(pending_stripe_vertices_);
-        pending_stripe_vertices_.clear();
-    }
     if (!pending_draw_batch_.hidden) {
         const DrawCall& call = pending_draw_batch_.call;
         renderer_.draw(call);

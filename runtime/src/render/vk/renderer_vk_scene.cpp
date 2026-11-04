@@ -1896,11 +1896,9 @@ void RendererVk::refresh_default_sampler_table() {
     default_sampler_config_ = config;
 }
 
-VkDescriptorSet RendererVk::constants_set(VkBuffer b0, VkBuffer b1, VkBuffer palette, VkDeviceSize palette_offset,
-                                          VkDeviceSize palette_range, VkBuffer earlier) {
-    const bool whole = palette_range == VK_WHOLE_SIZE;
-    const bool cached = palette_offset == 0u;
-    const ConstantsSetKey key{b0, b1, palette, earlier, whole};
+VkDescriptorSet RendererVk::constants_set(VkBuffer b0, VkBuffer b1, VkBuffer rows, VkDeviceSize rows_offset) {
+    const bool cached = rows_offset == 0u;
+    const ConstantsSetKey key{b0, b1, rows};
     if (cached) {
         if (const auto it = constants_sets_.find(key); it != constants_sets_.end()) {
             return it->second;
@@ -1912,7 +1910,7 @@ VkDescriptorSet RendererVk::constants_set(VkBuffer b0, VkBuffer b1, VkBuffer pal
     } else {
         // A replay's evaluated palettes (their base moves with each sequence's layout): a set of the replay list's.
         for (const auto& [buffers, existing] : replay_constant_sets_) {
-            if (buffers[0] == b0 && buffers[1] == b1 && buffers[2] == earlier) {
+            if (buffers[0] == b0 && buffers[1] == b1 && buffers[2] == rows) {
                 return existing;
             }
         }
@@ -1921,29 +1919,23 @@ VkDescriptorSet RendererVk::constants_set(VkBuffer b0, VkBuffer b1, VkBuffer pal
         info.descriptorSetCount = 1;
         info.pSetLayouts = &draw_layout_.sets[0];
         vk::check(vkAllocateDescriptorSets(vk::Context::get().device(), &info, &set), "replay constants set");
-        replay_constant_sets_.push_back({{b0, b1, earlier}, set});
+        replay_constant_sets_.push_back({{b0, b1, rows}, set});
     }
-    // The rows (binding 5) are in the palette's buffer from the same offset: the ring's start, or a replay's palettes.
-    const VkDescriptorBufferInfo infos[6] = {
+    const VkDescriptorBufferInfo infos[3] = {
         {b0, 0, sizeof(VertexConstants)},
         {b1, 0, 128u * sizeof(float)},  // a native material's constants (MaterialBlock)
-        {palette, palette_offset, palette_range},
-        {earlier, 0, VK_WHOLE_SIZE},
-        {blend_verdicts_->buffer, 0, VK_WHOLE_SIZE},
-        {palette, palette_offset, VK_WHOLE_SIZE},
+        {rows, rows_offset, VK_WHOLE_SIZE},
     };
-    VkWriteDescriptorSet writes[6]{};
-    for (unsigned i = 0; i < 6u; ++i) {
+    VkWriteDescriptorSet writes[3]{};
+    for (unsigned i = 0; i < 3u; ++i) {
         writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         writes[i].dstSet = set;
-        writes[i].dstBinding = i;
+        writes[i].dstBinding = i < 2u ? i : 5u;
         writes[i].descriptorCount = 1;
-        writes[i].descriptorType = i < 2u ? VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC
-            : i == 2u                     ? VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC
-                                          : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        writes[i].descriptorType = i < 2u ? VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         writes[i].pBufferInfo = &infos[i];
     }
-    vkUpdateDescriptorSets(vk::Context::get().device(), 6, writes, 0, nullptr);
+    vkUpdateDescriptorSets(vk::Context::get().device(), 3, writes, 0, nullptr);
     if (cached) {
         constants_sets_.emplace(key, set);
     }
@@ -1984,51 +1976,14 @@ void RendererVk::draw(const DrawCall& call) {
     std::array<std::uint32_t, 3> offsets = bound_.offsets;
     resolve(call.vs_constants, buffers[0], offsets[0]);
     resolve(call.ps_constants, buffers[1], offsets[1]);
-    resolve(call.matrix_palette, buffers[2], offsets[2]);
-    // Vertex blending (a sub-frame's paired draws): the earlier draw's vertices from their first byte; unblended draws
-    // name the vertex ring, which their shaders never read.
-    VkBuffer earlier = reinterpret_cast<VkBuffer>(vertex_ring_.resource());
-    std::uint32_t earlier_base = 0u;
-    if (call.blend_vertices != 0u) {
-        const vk::Context::BufferOffset resolved = context.resolve(call.blend_vertices);
-        earlier = resolved.buffer;
-        earlier_base = static_cast<std::uint32_t>(resolved.offset);
-    }
-    const std::uint32_t vertices =
-        call.vertex_view.StrideInBytes != 0u ? call.vertex_view.SizeInBytes / call.vertex_view.StrideInBytes : 0u;
-    const std::array<std::uint32_t, 5> blend{call.blend_vertices != 0u ? 1u : 0u,
-                                             replaying_ ? kFrameValuesElement : kZeroValuesElement,
-                                             std::min(call.blend_slot, kMaxBlendPairs - 1u),
-                                             call.blend_vertices != 0u && vertices != 0u ? vertices - 1u : 0u,
-                                             earlier_base};
-    if (!bound_.blend_valid || blend != bound_.blend) {
-        vkCmdPushConstants(commands, draw_layout_.layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(blend), blend.data());
-        bound_.blend = blend;
-        bound_.blend_valid = true;
-    }
-    if (constants_changed || buffers != bound_.buffers || offsets != bound_.offsets || earlier != bound_.earlier) {
-        // The palette's range follows its addressing: palettes indexed from the buffer's base (an interpolating or
-        // temporal frame's: its blocks count from the ring's start) reach the buffer's end; a replay's
-        // evaluated palettes, from their base in the output; otherwise the draw's own palette.
-        constexpr VkDeviceSize kPaletteBytes = draw_rows::kRows * 16u;
-        std::array<std::uint32_t, 3> dynamic = offsets;
-        VkDescriptorSet set = VK_NULL_HANDLE;
-        if (replaying_ && interp_output_ && buffers[2] == interp_output_->buffer) {
-            // The table at the draw's slot, after the rows' base (call.matrix_rows: the output's palettes).
-            VkBuffer rows = buffers[2];
-            std::uint32_t rows_offset = offsets[2];
-            resolve(call.matrix_rows, rows, rows_offset);
-            set = constants_set(buffers[0], buffers[1], buffers[2], rows_offset, VK_WHOLE_SIZE, earlier);
-            dynamic[2] = offsets[2] - rows_offset;
-        } else {
-            set = constants_set(buffers[0], buffers[1], buffers[2], 0u, offsets[2] == 0u ? VK_WHOLE_SIZE : kPaletteBytes,
-                                earlier);
-        }
-        vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, draw_layout_.layout, 0, 1, &set, 3,
+    resolve(call.matrix_rows != 0u ? call.matrix_rows : call.matrix_palette, buffers[2], offsets[2]);
+    if (constants_changed || buffers != bound_.buffers || offsets != bound_.offsets || !bound_.constants_valid) {
+        const std::array<std::uint32_t, 2> dynamic{offsets[0], offsets[1]};
+        const VkDescriptorSet set = constants_set(buffers[0], buffers[1], buffers[2], offsets[2]);
+        vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, draw_layout_.layout, 0, 1, &set, 2,
                                 dynamic.data());
         bound_.buffers = buffers;
         bound_.offsets = offsets;
-        bound_.earlier = earlier;
         bound_.constants_valid = true;
     }
     if (call.texture_table.ptr != 0u && call.texture_table.ptr != bound_.texture_table) {

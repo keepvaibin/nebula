@@ -376,10 +376,7 @@ public:
     // no display copy (the sequence then shows its real frame only).
     using ReplaySequence = render::ReplaySequence;  // interp_types.h
     bool begin_replay_sequence(const ReplaySequence& sequence);
-    // A stripe particle's vertex in the draw logged next (JPA stripes, two
     // vertices per particle): interpolated per particle between game frames.
-    using StripeVertex = render::StripeVertex;  // renderer_common.h
-    void note_stripe_vertices(std::span<const StripeVertex> vertices);
     // A presented frame of the sequence: t, the t of the frame presented before
     // it (motion vectors) and its jitter in render pixels (temporal upscaling).
     using SubframeTime = render::SubframeTime;  // interp_types.h
@@ -402,7 +399,6 @@ public:
     // (`previous_record[i]`: the record of the scene before matched to record
     // i, or -1) and as many vertices in a different buffer, so CPU-written
     // geometry (shadow volumes, particle strips, trails) moves per sub-frame.
-    void prepare_vertex_blend(std::span<const std::int32_t> previous_record);
     // After prepare_vertex_blend: per pixel-constant record of the playing
     // log, the record of the log before that its paired draws used (-1 none,
     // -2 paired draws disagree).
@@ -492,9 +488,6 @@ public:
         return std::exchange(log_gap_ops_, 0u);
     }
     // Sub-frame draws drawn with blended vertices since the last call.
-    [[nodiscard]] std::uint64_t take_vertex_blend_draws() noexcept {
-        return std::exchange(vertex_blend_draws_, 0u);
-    }
     // The scene camera's clip planes and vertical field of view (radians).
     void set_scene_camera(float near_plane, float far_plane, float fov_y) noexcept;
     // Render thread, at each scene's start: its camera (world to eye), or null when unknown.
@@ -1149,27 +1142,11 @@ private:
     // The log played before run_* (its vertices stay in its ring segment
     // until the segment comes round again) and, per run_* draw, its matched
     // draw's vertices (prepare_vertex_blend; 0 for none).
-    std::vector<DrawCall> prev_run_draws_;
-    unsigned prev_run_segment_ = 0;
-    std::uint64_t prev_run_serial_ = 0;
-    bool prev_run_valid_ = false;
-    struct BlendSource {
-        D3D12_GPU_VIRTUAL_ADDRESS vertices = 0;
-        std::uint32_t slot = 0;
-    };
-    std::vector<BlendSource> run_blend_vertices_;
     std::vector<std::int32_t> run_ps_previous_;
     // Candidate pairs of the playing log (current offset, previous offset,
     // vertices, flags: bit 0 current / bit 1 previous in the resident buffer),
     // checked on the GPU before the sequence's first sub-frame draws: a
     // verdict per pair (vertices, positions unchanged, largest move, extent).
-    std::vector<std::array<std::uint32_t, 4>> blend_pairs_;
-    bool blend_validate_pending_ = false;
-    bool blend_validate_failed_ = false;
-    Microsoft::WRL::ComPtr<ID3D12Resource> blend_verdicts_;
-    D3D12_RESOURCE_STATES blend_verdicts_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-    Microsoft::WRL::ComPtr<ID3D12RootSignature> blend_validate_root_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> blend_validate_pso_;
     // The last frame's start (the hitch log's intervals, begin to begin).
     std::chrono::steady_clock::time_point frame_begun_{};
     // The effects layer: its colour (what the effects added, as they blended into the scene target) and transmittance (what of
@@ -1184,50 +1161,11 @@ private:
     [[nodiscard]] bool temporal_inputs_match(const TemporalUpscaleInputs& in) const;
     D3D12_GPU_VIRTUAL_ADDRESS resident_vertex_base_ = 0;
     std::uint64_t resident_vertex_bytes_ = 0;
-    static constexpr std::uint32_t kMaxBlendPairs = 8192u;
     // Never a pair's verdict (stays zero, which passes): stripe draws, paired
     // per particle, blend without the geometry check.
-    static constexpr std::uint32_t kStripeVerdict = kMaxBlendPairs - 1u;
-    struct StripeDraw {
-        std::uint32_t draw = 0;   // index in its log's draws
-        std::uint32_t first = 0;  // in its log's stripe vertices
-        std::uint32_t count = 0;
-    };
-    struct StripeLog {
-        std::vector<StripeDraw> draws;
-        std::vector<StripeVertex> vertices;
-        void clear() noexcept {
-            draws.clear();
-            vertices.clear();
-        }
-    };
-    StripeLog replay_stripes_;
-    StripeLog play_stripes_;
-    StripeLog run_stripes_;
-    StripeLog prev_run_stripes_;
     // The playing sequence's stripe draws: per output vertex the source of its
     // earlier position (byte offset, buffer: 0 ring, 1 resident), gathered
     // into stripe_earlier_ before the first sub-frame (kStripeGatherCs).
-    std::vector<std::array<std::uint32_t, 2>> stripe_gather_;
-    std::vector<std::int32_t> stripe_of_draw_;
-    std::vector<std::int32_t> stripe_of_prev_draw_;
-    std::vector<std::pair<std::pair<std::uint64_t, std::uint32_t>, std::uint32_t>> stripe_keys_;
-    std::vector<std::int32_t> stripe_matched_;  // per vertex of a stripe draw: its earlier vertex, or -1
-    Microsoft::WRL::ComPtr<ID3D12Resource> stripe_earlier_;
-    std::uint64_t stripe_earlier_bytes_ = 0;
-    D3D12_RESOURCE_STATES stripe_earlier_state_ = D3D12_RESOURCE_STATE_COMMON;
-    Microsoft::WRL::ComPtr<ID3D12RootSignature> stripe_gather_root_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> stripe_gather_pso_;
-    bool stripe_gather_failed_ = false;
-    bool ensure_stripe_gather(std::uint64_t bytes);
-    void record_stripe_gather();
-    static constexpr std::uint32_t kFrameValuesElement = kMaxBlendPairs;
-    static constexpr std::uint32_t kZeroValuesElement = kMaxBlendPairs + 1u;
-    void ensure_frame_values();
-    bool ensure_blend_validation();
-    void record_blend_validation();
-    std::vector<std::uint32_t> blend_scratch_;
-    std::uint64_t vertex_blend_draws_ = 0;
     // Sequence replay (begin_replay_sequence) and its evaluation pass. The
     // replay list is recorded once per sequence and executed by every
     // sub-frame between a small evaluation list and a small present list.
@@ -1235,7 +1173,6 @@ private:
     bool ensure_interp_output(std::uint64_t bytes);
     void record_interp_eval(const SubframeTime& time, const Affine34& camera_t, const Affine34& camera_prev);
     void transition_interp_output(D3D12_RESOURCE_STATES state);
-    void transition_blend_verdicts(D3D12_RESOURCE_STATES state);
     Microsoft::WRL::ComPtr<ID3D12RootSignature> interp_eval_root_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> interp_copy_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> interp_eval_pso_;
@@ -1271,12 +1208,9 @@ private:
         ReplayUpscale upscale{};
         std::uint64_t fence = 0;        // the last submission that executed it
         std::uint64_t sequence = 0;     // SequenceState::serial it replays, 0 none
-        bool blend = false;
         bool redirect = false;
-        std::uint64_t blended_draws = 0;
         std::uint64_t guarded = 0;
         unsigned alloc_segment = 0;     // ring segment of its descriptor tables
-        unsigned blend_segment = 0;     // ring segment of the log before's vertices
     };
     static constexpr unsigned kReplayLists = 4;
     std::array<ReplayList, kReplayLists> replay_lists_{};
@@ -1322,7 +1256,6 @@ private:
     struct SequenceState {
         bool ready = false;
         bool first = false;             // the next sub-frame copies the base blocks
-        bool validated = false;         // the blend pairs were checked on the GPU
         std::uint64_t serial = 0;
         FrameMap output_map{};
         ReplaySequence overrides{};
@@ -1538,11 +1471,7 @@ private:
     D3D12_GPU_VIRTUAL_ADDRESS bound_ps_constants_ = 0;
     D3D12_GPU_DESCRIPTOR_HANDLE bound_texture_table_{};
     D3D12_GPU_DESCRIPTOR_HANDLE bound_sampler_table_{};
-    D3D12_GPU_VIRTUAL_ADDRESS bound_matrix_palette_ = 0;
     D3D12_GPU_VIRTUAL_ADDRESS bound_matrix_rows_ = 0;
-    D3D12_GPU_VIRTUAL_ADDRESS bound_blend_vertices_ = 0;
-    std::uint32_t bound_blend_slot_ = 0;
-    bool bound_vertex_blend_valid_ = false;
     D3D12_PRIMITIVE_TOPOLOGY bound_topology_ =
         D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
     D3D12_VERTEX_BUFFER_VIEW bound_vertex_view_{};

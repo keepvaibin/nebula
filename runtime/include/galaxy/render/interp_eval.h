@@ -5,9 +5,7 @@
 // to its buffer.
 // - kInterpEvalCs (interp_gpu.h, evaluate()): copy_main fills a sequence's blocks from the rings before its first
 //   sub-frame, eval_main writes each op at t. Vulkan set 0: 0 program, 1 constant ring, 2 matrix ring, 3 output,
-//   4 blend verdicts, 5 the frame constants.
-// - kBlendValidateCs and kStripeGatherCs (vertex blending): Vulkan set 0: 0 vertex ring, 1 resident vertices, 2 the
-//   sequence's table, 3 the output; the limits are push constants.
+//   5 the frame constants.
 
 #include <cstdint>
 
@@ -23,7 +21,6 @@ VK_BINDING(0) ByteAddressBuffer program : register(t0);
 VK_BINDING(1) ByteAddressBuffer constant_ring : register(t1);
 VK_BINDING(2) ByteAddressBuffer matrix_ring : register(t2);
 VK_BINDING(3) RWByteAddressBuffer output : register(u0);
-VK_BINDING(4) RWStructuredBuffer<uint4> verdicts : register(u1);
 VK_BINDING(5) cbuffer Frame : register(b0) {
     float4 camera0;
     float4 camera1;
@@ -187,9 +184,6 @@ void copy_main(uint3 group : SV_GroupID, uint lane : SV_GroupIndex) {
 }
 [numthreads(64, 1, 1)]
 void eval_main(uint3 id : SV_DispatchThreadID) {
-    if (id.x == 0u) {
-        verdicts[min(frame_slot, 8192u)] = uint4(asuint(t), asuint(t_prev), asuint(jitter));
-    }
     if (id.x >= count) {
         return;
     }
@@ -297,124 +291,5 @@ struct InterpEvalFrame {
 };
 static_assert(sizeof(InterpEvalFrame) == 37u * 4u);
 
-// Blend-pair check: one group per pair compares the positions of the two
-// draws vertex by vertex (RenderVertex, 144-byte stride; position first).
-inline constexpr char kBlendValidateCs[] = R"HLSL(
-#ifndef NEBULA_VULKAN
-#define VK_BINDING(n)
-#define PUSH_CONSTANTS(name, reg) cbuffer name : register(reg)
-#else
-#define VK_BINDING(n) [[vk::binding(n, 0)]]
-// A push-constant block takes no register (glslang would decorate a binding on it).
-#define PUSH_CONSTANTS(name, reg) [[vk::push_constant]] cbuffer name
-#endif
-VK_BINDING(0) ByteAddressBuffer ring : register(t0);
-VK_BINDING(1) ByteAddressBuffer resident : register(t1);
-VK_BINDING(2) StructuredBuffer<uint4> pairs : register(t2);
-VK_BINDING(3) RWStructuredBuffer<uint4> verdicts : register(u0);
-// Last valid Load3 offset of each buffer. Root views have no bounds, and
-// compilers may run both loads of a select: both stay inside their buffers.
-PUSH_CONSTANTS(Limits, b0) {
-    uint ring_last;
-    uint resident_last;
-};
-groupshared uint g_same;
-groupshared uint g_worst;
-groupshared uint g_lo[3];
-groupshared uint g_hi[3];
-// Float bits ordered like the floats, for integer min/max.
-uint ordered(float f) {
-    const uint u = asuint(f);
-    return (u & 0x80000000u) != 0u ? ~u : (u | 0x80000000u);
-}
-float unordered(uint u) {
-    return asfloat((u & 0x80000000u) != 0u ? (u & 0x7FFFFFFFu) : ~u);
-}
-float3 position(uint in_resident, uint offset) {
-    const float3 r = asfloat(resident.Load3(min(offset, resident_last)));
-    const float3 g = asfloat(ring.Load3(min(offset, ring_last)));
-    return in_resident != 0u ? r : g;
-}
-[numthreads(64, 1, 1)]
-void main(uint3 group : SV_GroupID, uint lane : SV_GroupIndex) {
-    const uint4 pair = pairs[group.x];
-    if (lane == 0u) {
-        g_same = 0u;
-        g_worst = 0u;
-        [unroll] for (uint k = 0u; k < 3u; ++k) {
-            g_lo[k] = 0xFFFFFFFFu;
-            g_hi[k] = 0u;
-        }
-    }
-    GroupMemoryBarrierWithGroupSync();
-    uint same = 0u, worst = 0u;
-    uint lo[3] = {0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu};
-    uint hi[3] = {0u, 0u, 0u};
-    for (uint i = lane; i < pair.z; i += 64u) {
-        const float3 c = position(pair.w & 1u, pair.x + i * 144u);
-        const float3 p = position((pair.w >> 1u) & 1u, pair.y + i * 144u);
-        same += all(c == p) ? 1u : 0u;
-        const float3 d = c - p;
-        const float dist = sqrt(dot(d, d));
-        worst = max(worst, isfinite(dist) ? asuint(dist) : 0x7F800000u);
-        [unroll] for (uint k = 0u; k < 3u; ++k) {
-            lo[k] = min(lo[k], min(ordered(c[k]), ordered(p[k])));
-            hi[k] = max(hi[k], max(ordered(c[k]), ordered(p[k])));
-        }
-    }
-    InterlockedAdd(g_same, same);
-    InterlockedMax(g_worst, worst);
-    [unroll] for (uint k = 0u; k < 3u; ++k) {
-        InterlockedMin(g_lo[k], lo[k]);
-        InterlockedMax(g_hi[k], hi[k]);
-    }
-    GroupMemoryBarrierWithGroupSync();
-    if (lane == 0u) {
-        float3 extent;
-        [unroll] for (uint k = 0u; k < 3u; ++k) {
-            extent[k] = unordered(g_hi[k]) - unordered(g_lo[k]);
-        }
-        const float size = sqrt(dot(extent, extent));
-        verdicts[group.x] = uint4(pair.z, g_same, g_worst, asuint(isfinite(size) ? size : 0.0));
-    }
-}
-)HLSL";
-
-// Earlier stripe vertices, one 144-byte RenderVertex per output vertex, from the
-// ring or the resident buffer at the source's byte offset; dispatched at the
-// start of a sequence's first sub-frame, before its draws.
-inline constexpr char kStripeGatherCs[] = R"HLSL(
-#ifndef NEBULA_VULKAN
-#define VK_BINDING(n)
-#define PUSH_CONSTANTS(name, reg) cbuffer name : register(reg)
-#else
-#define VK_BINDING(n) [[vk::binding(n, 0)]]
-// A push-constant block takes no register (glslang would decorate a binding on it).
-#define PUSH_CONSTANTS(name, reg) [[vk::push_constant]] cbuffer name
-#endif
-VK_BINDING(0) ByteAddressBuffer ring : register(t0);
-VK_BINDING(1) ByteAddressBuffer resident : register(t1);
-VK_BINDING(2) StructuredBuffer<uint2> sources : register(t2);
-VK_BINDING(3) RWByteAddressBuffer earlier : register(u0);
-PUSH_CONSTANTS(Limits, b0) {
-    uint ring_last;
-    uint resident_last;
-    uint vertices;
-};
-[numthreads(64, 1, 1)]
-void main(uint3 id : SV_DispatchThreadID) {
-    const uint k = id.x / 36u;
-    if (k >= vertices) {
-        return;
-    }
-    const uint word = id.x - k * 36u;
-    const uint2 source = sources[k];
-    const uint at = source.x + word * 4u;
-    // Both loads stay inside their buffers (compilers may run both).
-    const uint a = ring.Load(min(at, ring_last));
-    const uint b = resident.Load(min(at, resident_last));
-    earlier.Store(k * 144u + word * 4u, source.y != 0u ? b : a);
-}
-)HLSL";
 
 }  // namespace galaxy::render
