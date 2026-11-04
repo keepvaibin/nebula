@@ -99,6 +99,11 @@ used under the MIT alternative: `third_party/stb/LICENSE`.
 `third_party/bcdec/bcdec.h` (v0.98) from <https://github.com/iOrange/bcdec> decodes texture packs' BC1-BC5 and BC7
 DDS files. Copyright (c) 2022 Sergii Kudlai, used under the MIT alternative: `third_party/bcdec/LICENSE`.
 
+## MinHook (BSD 2-clause)
+
+`third_party/minhook` (1.3.4) from <https://github.com/TsudaKageyu/minhook>, unchanged, is how a mod's plugin replaces a
+game function on Windows. Copyright (C) 2009-2017 Tsuda Kageyu: `third_party/minhook/LICENSE.txt`.
+
 ## MiiPort (ISC)
 
 `runtime/src/mii_formats.cpp` adapts the Switch's colour and glasses downgrade tables and the 3DS/Wii U and Switch Mii
