@@ -1,4 +1,5 @@
 #include "Game/LiveActor/LiveActor.hpp"
+#include "Game/System/NebulaMods.hpp"
 #include "Game/Util/MotionSignal.hpp"
 #include "Game/AudioLib/AudAnmSoundObject.hpp"
 #include "Game/LiveActor/ActorAnimKeeper.hpp"
@@ -41,6 +42,7 @@ void LiveActor::appear() {
 }
 
 void LiveActor::makeActorAppeared() {
+    NebulaMods::fire(NEBULA_MOD_EVENT_ACTOR_APPEAR, 0, this, mName);
     if (mSensorKeeper != nullptr) {
         mSensorKeeper->validateBySystem();
     }
@@ -75,6 +77,7 @@ void LiveActor::kill() {
 }
 
 void LiveActor::makeActorDead() {
+    NebulaMods::fire(NEBULA_MOD_EVENT_ACTOR_KILL, 0, this, mName);
     MotionSignal::died(this);
     mVelocity.zero();
 

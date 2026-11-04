@@ -18,7 +18,7 @@ public:
     const ScenarioData* getScenarioData(s32) const;
     GalaxyStatusAccessor makeAccessor(const char*) const;
 
-    MR::Vector< MR::FixedArray< ScenarioData*, 64 > > mScenarioData;
+    MR::Vector< MR::FixedArray< ScenarioData*, 1024 > > mScenarioData;
 };
 
 class ScenarioDataIter {

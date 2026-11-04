@@ -51,6 +51,8 @@ public:
     [[nodiscard]] std::optional<Entry> find(std::string_view path) const;
     // The index-th entry of a folder.
     [[nodiscard]] std::optional<Entry> child(std::int32_t folder, std::uint32_t index) const;
+    // What the mods add to a folder of the game: `find` has the game's folder, so its children don't list these.
+    [[nodiscard]] std::optional<Entry> added_child(std::string_view path, std::uint32_t index) const;
     [[nodiscard]] std::string_view game_id() const noexcept { return game_id_; }
     [[nodiscard]] unsigned revision() const noexcept { return revision_; }
     // The game's language folders at the root ("UsEnglish", ...), in the store's order.

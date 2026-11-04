@@ -426,6 +426,7 @@ dependencies = [
  "anyhow",
  "jni-sys",
  "nod",
+ "serde_json",
  "sha1",
  "tempfile",
  "windows-sys",

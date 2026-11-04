@@ -99,8 +99,12 @@ int main() {
     check(refusal(later, "RMGE01", "2.1.0", "windows") == "THIS MOD DOESN'T WORK ON THIS VERSION OF THE GAME", "a version left out");
     check(refusal(later, "RMGP01", "2.1.0", "windows").empty(), "the version it names");
     later = m;
-    later.has_plugins = true;
-    check(refusal(later, "RMGE01", "2.1.0", "windows") == "THIS MOD HAS NO VERSION FOR THIS DEVICE", "plugins");
+    later.plugins.push_back({{{"somewhere-else", "plugins/a.so"}}, kPluginApi, {}});
+    check(refusal(later, "RMGE01", "2.1.0", "windows") == "THIS MOD HAS NO VERSION FOR THIS DEVICE", "a plugin with no build for this device");
+    later.plugins[0].binaries[std::string(plugin_target())] = "plugins/a.dll";
+    check(refusal(later, "RMGE01", "2.1.0", "windows").empty(), "a plugin with a build for this device");
+    later.plugins[0].api = kPluginApi + 1u;
+    check(refusal(later, "RMGE01", "2.1.0", "windows") == "THIS MOD NEEDS A NEWER NEBULA", "a plugin for a later game");
 
     const std::optional<Manifest> newer = parse_manifest(R"({"format":2,"everything":"different"})");
     check(newer && refusal(*newer, "RMGE01", "2.1.0", "windows") == "THIS MOD NEEDS A NEWER NEBULA", "a newer format is named, not damaged");
