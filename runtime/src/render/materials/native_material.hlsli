@@ -9,7 +9,8 @@
 // Output variants (defines): NATIVE_REACTIVE (SV_Target1: the reactive mask), NATIVE_LAYER (with NATIVE_REACTIVE: the
 // effects layer's colour and transmission at SV_Target2-3), NATIVE_MOTION (SV_Target1: the motion vector), NATIVE_SAMPLE
 // (inputs per sample: an alpha test decides each sample of a multisampled target), NATIVE_PIXEL_LIT (the eye position and
-// normal reach the pixel stage, which lights: j3d_material.hlsli).
+// normal reach the pixel stage, which lights: j3d_material.hlsli). NATIVE_PARTICLE: the material's corners place themselves
+// by the presented frame's time (NebulaParticleCorner).
 
 cbuffer NativeDraw : register(b0) {
     row_major float4x4 projection : packoffset(c0);  // row-major, as every draw constant (VertexConstants)
@@ -215,7 +216,14 @@ NativeVaryings native_vs(NativeVertexIn input) {
     v.mtx_idx = uint3(input.mtx_row, input.mtx_more);
     // The position matrix: the vertex's place where it carries one (flags bit 0, skinned and multi-matrix models),
     // else the draw's.
+#if NATIVE_PARTICLE
+    // A particle's corner: where it was a game frame ago (in the normal's place) and where it is, at this frame's time.
+    const float4 p = float4(lerp(input.nrm, input.pos, asfloat(draw_rows[2].y)), 1.0);
+    const float4 p_prev = float4(lerp(input.nrm, input.pos, asfloat(draw_rows[2].z)), 1.0);
+#else
     const float4 p = float4(input.pos, 1.0);
+    const float4 p_prev = p;
+#endif
     v.pn_row = (draw_counts.z & 1u) != 0u ? input.mtx_row : draw_rows[0].x;
     const float4 m0 = native_position_row(v.pn_row);
     const float4 m1 = native_position_row(v.pn_row + 1u);
@@ -238,12 +246,12 @@ NativeVaryings native_vs(NativeVertexIn input) {
         // The position rows of the previous frame (motion_ctrl.y: their base, or kMotionOwnRows).
         const uint base = motion_ctrl.y;
         const uint r = v.pn_row;
-        prev_eye = float3(dot(base == 0xFFFFFFFFu ? native_position_row(r) : mtx_rows[base + r], p),
-                          dot(base == 0xFFFFFFFFu ? native_position_row(r + 1u) : mtx_rows[base + r + 1u], p),
-                          dot(base == 0xFFFFFFFFu ? native_position_row(r + 2u) : mtx_rows[base + r + 2u], p));
+        prev_eye = float3(dot(base == 0xFFFFFFFFu ? native_position_row(r) : mtx_rows[base + r], p_prev),
+                          dot(base == 0xFFFFFFFFu ? native_position_row(r + 1u) : mtx_rows[base + r + 1u], p_prev),
+                          dot(base == 0xFFFFFFFFu ? native_position_row(r + 2u) : mtx_rows[base + r + 2u], p_prev));
     } else {
         // The camera's move applied to the eye position (palette draws), or the previous position matrix (inline).
-        const float4 q = (draw_counts.z & 1u) != 0u ? float4(v.eye, 1.0) : p;
+        const float4 q = (draw_counts.z & 1u) != 0u ? float4(v.eye, 1.0) : p_prev;
         prev_eye = float3(dot(motion_prev_pos[0], q), dot(motion_prev_pos[1], q), dot(motion_prev_pos[2], q));
     }
     const float4 pp0 = motion_prev_proj[0];

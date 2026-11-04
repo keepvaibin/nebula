@@ -455,8 +455,8 @@ void JPADrawLine(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle) {
     end.setLength(pWork->mGlobalPtclScl.y * (25.0f * pParticle->mParticleScaleY));
     end.sub(position, end);
     JPAParticleBatch::primitive(NEBULA_PRIMITIVE_LINES);
-    JPAParticleBatch::vertex(position.x, position.y, position.z, 0.0f, 0.0f);
-    JPAParticleBatch::vertex(end.x, end.y, end.z, 0.0f, 1.0f);
+    JPAParticleBatch::corner(0, position.x, position.y, position.z, 0.0f, 0.0f);
+    JPAParticleBatch::corner(1, end.x, end.y, end.z, 0.0f, 1.0f);
 }
 
 void JPADrawStripe(JPAEmitterWorkData* pWork) {
@@ -493,6 +493,7 @@ void JPADrawStripe(JPAEmitterWorkData* pWork) {
     for (JPANode< JPABaseParticle >* pNode = pFirst; pNode != pWork->mpAlivePtcl->getEnd();) {
         JPABaseParticle* pParticle = pNode->getObject();
         pWork->mpCurNode = pNode;
+        JPAParticleBatch::particle(pParticle);
         position.set(pParticle->mPosition);
         f32 sin = JMASSin(pParticle->mRotateAngle);
         f32 cos = JMASCos(pParticle->mRotateAngle);
@@ -529,8 +530,8 @@ void JPADrawStripe(JPAEmitterWorkData* pWork) {
         matrix[2][2] = pParticle->mBaseAxis.z;
         matrix[2][3] = 0.0f;
         NebulaMtxMultVecArraySR(matrix, vertices, vertices, 2);
-        JPAParticleBatch::vertex(vertices[0].x + position.x, vertices[0].y + position.y, vertices[0].z + position.z, 0.0f, texCoord);
-        JPAParticleBatch::vertex(vertices[1].x + position.x, vertices[1].y + position.y, vertices[1].z + position.z, 1.0f, texCoord);
+        JPAParticleBatch::corner(0, vertices[0].x + position.x, vertices[0].y + position.y, vertices[0].z + position.z, 0.0f, texCoord);
+        JPAParticleBatch::corner(1, vertices[1].x + position.x, vertices[1].y + position.y, vertices[1].z + position.z, 1.0f, texCoord);
         pNode = pNext(pNode);
         texCoord += texStep;
     }
@@ -575,6 +576,7 @@ void JPADrawStripeX(JPAEmitterWorkData* pWork) {
     for (JPANode< JPABaseParticle >* pNode = pFirst; pNode != pWork->mpAlivePtcl->getEnd();) {
         JPABaseParticle* pParticle = pNode->getObject();
         pWork->mpCurNode = pNode;
+        JPAParticleBatch::particle(pParticle);
         position.set(pParticle->mPosition);
         f32 sin = JMASSin(pParticle->mRotateAngle);
         f32 cos = JMASCos(pParticle->mRotateAngle);
@@ -615,8 +617,8 @@ void JPADrawStripeX(JPAEmitterWorkData* pWork) {
         matrix[2][2] = pParticle->mBaseAxis.z;
         matrix[2][3] = 0.0f;
         NebulaMtxMultVecArraySR(matrix, vertices, vertices, 2);
-        JPAParticleBatch::vertex(vertices[0].x + position.x, vertices[0].y + position.y, vertices[0].z + position.z, 0.0f, texCoord);
-        JPAParticleBatch::vertex(vertices[1].x + position.x, vertices[1].y + position.y, vertices[1].z + position.z, 1.0f, texCoord);
+        JPAParticleBatch::corner(0, vertices[0].x + position.x, vertices[0].y + position.y, vertices[0].z + position.z, 0.0f, texCoord);
+        JPAParticleBatch::corner(1, vertices[1].x + position.x, vertices[1].y + position.y, vertices[1].z + position.z, 1.0f, texCoord);
         pNode = pNext(pNode);
         texCoord += texStep;
     }
@@ -626,6 +628,7 @@ void JPADrawStripeX(JPAEmitterWorkData* pWork) {
     for (JPANode< JPABaseParticle >* pNode = pFirst; pNode != pWork->mpAlivePtcl->getEnd();) {
         JPABaseParticle* pParticle = pNode->getObject();
         pWork->mpCurNode = pNode;
+        JPAParticleBatch::particle(pParticle);
         position.set(pParticle->mPosition);
         f32 sin = -JMASSin(pParticle->mRotateAngle);
         f32 cos = JMASCos(pParticle->mRotateAngle);
@@ -666,8 +669,8 @@ void JPADrawStripeX(JPAEmitterWorkData* pWork) {
         matrix[2][2] = pParticle->mBaseAxis.z;
         matrix[2][3] = 0.0f;
         NebulaMtxMultVecArraySR(matrix, vertices, vertices, 2);
-        JPAParticleBatch::vertex(vertices[0].x + position.x, vertices[0].y + position.y, vertices[0].z + position.z, 0.0f, texCoord);
-        JPAParticleBatch::vertex(vertices[1].x + position.x, vertices[1].y + position.y, vertices[1].z + position.z, 1.0f, texCoord);
+        JPAParticleBatch::corner(2, vertices[0].x + position.x, vertices[0].y + position.y, vertices[0].z + position.z, 0.0f, texCoord);
+        JPAParticleBatch::corner(3, vertices[1].x + position.x, vertices[1].y + position.y, vertices[1].z + position.z, 1.0f, texCoord);
         pNode = pNext(pNode);
         texCoord += texStep;
     }

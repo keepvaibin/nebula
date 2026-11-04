@@ -2193,10 +2193,14 @@ int32_t svc_mii_record(void*, uint32_t slot, NebulaMii* mii) {
 void svc_immediate(void*, const NebulaImmediate* draw) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::render::shapes;
-    if (draw == nullptr || draw->count == 0u || draw->position == nullptr) {
+    if (draw == nullptr || draw->count == 0u || (draw->position == nullptr && draw->corners == nullptr)) {
         return;
     }
     const uint32_t n = draw->count;
+    static_assert(sizeof(NebulaParticleCorner) == sizeof(galaxy::render::RenderVertexCore) &&
+                  offsetof(NebulaParticleCorner, before) == offsetof(galaxy::render::RenderVertexCore, normal) &&
+                  offsetof(NebulaParticleCorner, prm) == offsetof(galaxy::render::RenderVertexCore, color0) &&
+                  offsetof(NebulaParticleCorner, s) == offsetof(galaxy::render::RenderVertexCore, uv0));
     static_assert(shapes::kQuads == NEBULA_PRIMITIVE_QUADS && shapes::kPoints == NEBULA_PRIMITIVE_POINTS &&
                   shapes::kTriangleFan == NEBULA_PRIMITIVE_TRIANGLE_FAN && shapes::kLineStrip == NEBULA_PRIMITIVE_LINE_STRIP);
     shapes::Record record;
@@ -2206,6 +2210,13 @@ void svc_immediate(void*, const NebulaImmediate* draw) {
     record.primitive = draw->primitive;
     copy_draw_matrices(draw->matrices, draw->matrix_count, record);
     attach_pending_records();
+    if (draw->corners != nullptr) {
+        record.attributes = static_cast<uint32_t>(NEBULA_SHAPE_NORMAL | NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_COLOR1 |
+                                                  NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_OWN_POSITIONS);
+        std::memcpy(galaxy::render::reserve_record_corners(record, n), draw->corners, n * sizeof(NebulaParticleCorner));
+        galaxy::render::attach_shape_record(std::move(record));
+        return;
+    }
     // Its values are its own: geometry the game builds as it draws.
     const bool has_normal = (draw->attributes & NEBULA_SHAPE_NORMAL) != 0u && draw->normal != nullptr;
     const bool has_color[2] = {(draw->attributes & NEBULA_SHAPE_COLOR0) != 0u && draw->color[0] != nullptr,

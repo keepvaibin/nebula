@@ -88,6 +88,10 @@ inline void fill_vs_constants(
         out.draw_rows[(i + 1u) / 4u][(i + 1u) % 4u] = 3u * draw.texture_matrix[i];
     }
 
+    // A particle corner's time (native_material.hlsli NATIVE_PARTICLE): now, and a game frame ago for its motion vector.
+    out.draw_rows[2][1] = std::bit_cast<std::uint32_t>(1.0f);
+    out.draw_rows[2][2] = 0u;
+
     LinePointValues values{draw.line_point.line_width, draw.line_point.point_size, draw.line_point.line_divisor,
                            draw.line_point.point_divisor, 0u, 0u};
     for (unsigned i = 0; i < kMaxTexGens; ++i) {

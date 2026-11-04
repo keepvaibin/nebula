@@ -812,6 +812,7 @@ void JPAResource::drawP(JPAEmitterWorkData* work) {
         JPANode< JPABaseParticle >* node = work->mpEmtr->mAlivePtclBase.getLast();
         for (; node != work->mpEmtr->mAlivePtclBase.getEnd(); node = node->getPrev()) {
             work->mpCurNode = node;
+            JPAParticleBatch::particle(node->getObject());
             if (mpDrawParticleFuncList != NULL) {
                 for (int i = mpDrawParticleFuncListNum - 1; i >= 0; i--) {
                     (*mpDrawParticleFuncList[i])(work, node->getObject());
@@ -822,6 +823,7 @@ void JPAResource::drawP(JPAEmitterWorkData* work) {
         JPANode< JPABaseParticle >* node = work->mpEmtr->mAlivePtclBase.getFirst();
         for (; node != work->mpEmtr->mAlivePtclBase.getEnd(); node = node->getNext()) {
             work->mpCurNode = node;
+            JPAParticleBatch::particle(node->getObject());
             if (mpDrawParticleFuncList != NULL) {
                 for (int i = mpDrawParticleFuncListNum - 1; i >= 0; i--) {
                     (*mpDrawParticleFuncList[i])(work, node->getObject());
@@ -876,6 +878,7 @@ void JPAResource::drawC(JPAEmitterWorkData* work) {
         JPANode< JPABaseParticle >* node = work->mpEmtr->mAlivePtclChld.getLast();
         for (; node != work->mpEmtr->mAlivePtclChld.getEnd(); node = node->getPrev()) {
             work->mpCurNode = node;
+            JPAParticleBatch::particle(node->getObject());
             if (mpDrawParticleChildFuncList != NULL) {
                 for (int i = mpDrawParticleChildFuncListNum - 1; i >= 0; i--) {
                     (*mpDrawParticleChildFuncList[i])(work, node->getObject());
@@ -886,6 +889,7 @@ void JPAResource::drawC(JPAEmitterWorkData* work) {
         JPANode< JPABaseParticle >* node = work->mpEmtr->mAlivePtclChld.getFirst();
         for (; node != work->mpEmtr->mAlivePtclChld.getEnd(); node = node->getNext()) {
             work->mpCurNode = node;
+            JPAParticleBatch::particle(node->getObject());
             if (mpDrawParticleChildFuncList != NULL) {
                 for (int i = mpDrawParticleChildFuncListNum - 1; i >= 0; i--) {
                     (*mpDrawParticleChildFuncList[i])(work, node->getObject());
@@ -948,7 +952,7 @@ namespace {
     // textures as the emitter's functions load them (the drawing state's maps), the blending, depth and culling the
     // shape and the manager set; its colours from JPANativeColor.
     void sendParticleMaterial(const JPABaseShape* pShape, u32 flags) {
-        JPAParticleBatch::begin();
+        JPAParticleBatch::begin((flags & 7) != 0);
         NebulaNativeMaterial& material = sParticle;
         NativeShader::init(material, NEBULA_SHADER_PARTICLE, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
                            NEBULA_CULL_NONE);

@@ -1177,6 +1177,7 @@ void RenderCore::write_scene_vs_constants(const VertexConstants& cpu, VertexCons
         scene.prev_index.push_back(m);
         scene.palette.push_back(current_palette_shadow_);
         scene.per_vertex.push_back(record.palette ? 1u : 0u);
+        scene.particle.push_back(identity_emitter_ ? 1u : 0u);
         std::int32_t scene_model = -1;
         if (draw_palette_ != nullptr) {
             ModelPalette& block = *draw_palette_;
@@ -1350,10 +1351,7 @@ void RenderCore::on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint6
         on_motion_marker(kind, aux, a, b);
         return;
     }
-    if (kind == motion::kMarkerNameObj) {
-    } else if (kind == motion::kMarkerShapePacket) {
-    } else if (kind == motion::kMarkerEmitter || kind == motion::kMarkerParticle) {
-    }
+    identity_emitter_ = kind == motion::kMarkerEmitter;
     if (!history_scene_) {
         return;
     }
@@ -1465,9 +1463,12 @@ void RenderCore::take_attached_shape_records(FrameChunk& chunk) {
         const std::size_t ops = producer_record_pool_.ops.size();
         const std::size_t natives = producer_record_pool_.natives.size();
         const std::size_t vertices = producer_record_pool_.vertices.size();
+        const std::size_t corners = producer_record_pool_.corners.size();
         chunk.record_pool.scenes.swap(producer_record_pool_.scenes);
         chunk.record_pool.vertices.swap(producer_record_pool_.vertices);
         producer_record_pool_.vertices.reserve(vertices);
+        chunk.record_pool.corners.swap(producer_record_pool_.corners);
+        producer_record_pool_.corners.reserve(corners);
         chunk.record_pool.probes.swap(producer_record_pool_.probes);
         producer_record_pool_.probes.clear();
         chunk.record_pool.matrices.swap(producer_record_pool_.matrices);
@@ -1490,6 +1491,10 @@ void RenderCore::take_attached_shape_records(FrameChunk& chunk) {
     producer_record_pool_.scenes.clear();
     chunk.record_pool.vertices.insert(chunk.record_pool.vertices.end(), producer_record_pool_.vertices.begin(), producer_record_pool_.vertices.end());
     producer_record_pool_.vertices.clear();
+    const auto first_corner = static_cast<std::uint32_t>(chunk.record_pool.corners.size());
+    chunk.record_pool.corners.insert(chunk.record_pool.corners.end(), producer_record_pool_.corners.begin(),
+                                     producer_record_pool_.corners.end());
+    producer_record_pool_.corners.clear();
     const auto first_probe = static_cast<std::uint32_t>(chunk.record_pool.probes.size());
     chunk.record_pool.probes.insert(chunk.record_pool.probes.end(), producer_record_pool_.probes.begin(), producer_record_pool_.probes.end());
     producer_record_pool_.probes.clear();
@@ -1501,7 +1506,9 @@ void RenderCore::take_attached_shape_records(FrameChunk& chunk) {
     for (shapes::Record& record : producer_shape_records_) {
         record.matrix_first += first_matrix;
         record.op_first += first_op;
-        record.vertex_first += record.kind == shapes::Record::Kind::Readback ? first_probe : first_vertex;
+        record.vertex_first += record.kind == shapes::Record::Kind::Readback ? first_probe
+                               : (record.attributes & shapes::kReadyCorners) != 0u ? first_corner
+                                                                                   : first_vertex;
         record.native_index += record.native_index == shapes::kNoNative ? 0u : record.kind == shapes::Record::Kind::Scene ? first_scene : first_native;
         chunk.shape_records.push_back(std::move(record));
     }
@@ -2764,6 +2771,7 @@ bool RenderCore::render_interp_subframe(float t) {
             InterpRecordMotion motion{};
             motion.record = static_cast<std::uint32_t>(r);
             motion.prev = prev_data ? m : -1;
+            motion.particle = scene.particle[r] != 0u;
             if (before != nullptr && !(camera.known && camera.cut)) {
                 motion.projection_moves =
                     before->projection[3][3] == now.projection[3][3] &&
@@ -2835,7 +2843,7 @@ bool RenderCore::render_interp_subframe(float t) {
                 }
                 motion.model = entry;
             }
-            if (motion.projection_moves || motion.palette >= 0 || motion.model >= 0) {
+            if (motion.projection_moves || motion.palette >= 0 || motion.model >= 0 || motion.particle) {
                 interp_pending_.push_back(motion);
             }
         }
@@ -2862,7 +2870,7 @@ bool RenderCore::render_interp_subframe(float t) {
                 !interp_palette_motions_[static_cast<std::size_t>(motion.palette)].motion.any_changed) {
                 motion.palette = -1;
             }
-            if (motion.projection_moves || motion.palette >= 0) {
+            if (motion.projection_moves || motion.palette >= 0 || motion.particle) {
                 interp_moving_.push_back(motion);
             }
         }
@@ -2998,6 +3006,17 @@ bool RenderCore::prepare_interp_sequence(const InterpScene& scene, const InterpS
             ? &before_scene.constants[static_cast<std::size_t>(moving.prev)] : nullptr;
         if (moving.projection_moves && before != nullptr) {
             interp_program_.projection(base, *before, recorded);
+        }
+        if (moving.particle) {
+            // The corners' time, this frame's and (motion vectors) the frame presented before's.
+            const float zero = 0.0f;
+            const float one = 1.0f;
+            interp_program_.lerp(base + interp_gpu::kVsParticleTime, &zero, &one, 1u);
+            if (motion) {
+                interp_program_.at_previous(true);
+                interp_program_.lerp(base + interp_gpu::kVsParticleTime + 1u, &zero, &one, 1u);
+                interp_program_.at_previous(false);
+            }
         }
         std::int32_t palette_slot = -1;
         if (moving.palette >= 0) {
@@ -5324,12 +5343,17 @@ void RenderCore::draw_record_immediate(const shapes::Record& record) {
         flush_pending_draw_batch();
     }
     cached_draw_run_batch_compatible_known_ = false;
-    const RenderVertex* const source = current_record_pool_->vertices.data() + record.vertex_first;
+    const bool ready = (record.attributes & shapes::kReadyCorners) != 0u;
+    const RenderVertex* const source = ready ? nullptr : current_record_pool_->vertices.data() + record.vertex_first;
     const UploadRing::Allocation vb = renderer_.vertex_ring().allocate(static_cast<std::size_t>(count) * sizeof(RenderVertexCore), 4u);
     // The rings are write-combined: these writes are the only touch, never a read.
     auto* const core_out = reinterpret_cast<RenderVertexCore*>(vb.cpu);
-    for (std::uint32_t i = 0; i < count; ++i) {
-        write_core(source[i], core_out[i]);
+    if (ready) {
+        std::memcpy(core_out, current_record_pool_->corners.data() + record.vertex_first, count * sizeof(RenderVertexCore));
+    } else {
+        for (std::uint32_t i = 0; i < count; ++i) {
+            write_core(source[i], core_out[i]);
+        }
     }
     const auto index_count = static_cast<std::uint32_t>(immediate_indices_.size());
     const UploadRing::Allocation ib = renderer_.index_ring().allocate(

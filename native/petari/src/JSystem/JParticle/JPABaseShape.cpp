@@ -9,32 +9,63 @@
 #include "JSystem/JParticle/JPAParticle.hpp"
 #include "JSystem/JParticle/JPAResourceManager.hpp"
 #include <nebula_math.h>
+#include "Game/System/NebulaFrameClock.hpp"
 #include <string.h>
 
-// The vertices of the particles being drawn: eye-space positions, the coordinates after the particle's texture matrix
-// (coordinate 0: s, t; 2: their projection's q), the corners' own (coordinate 1), its colours (env in coordinate 3's place
-// by way of colour 1). Everything a particle changes is here; only a new image or size ends the draw.
+// The corners of the particles being drawn, in the world, each with where it was a game frame ago; the vertex stage places
+// them at the presented frame's time, through the camera at that time. Everything a particle changes is here; only a new
+// image or size ends the draw.
 namespace {
     const u32 cBatchVertices = 16384;
-    f32 sBatchPos[cBatchVertices * 3];
-    f32 sBatchUv0[cBatchVertices * 2];
+    NebulaParticleCorner sBatch[cBatchVertices];
+    // For shapes that read them: coordinate 1 (the corner's own) and 2 (its projection's q).
     f32 sBatchUv1[cBatchVertices * 2];
     f32 sBatchQ[cBatchVertices * 2];
-    u32 sBatchPrm[cBatchVertices];
-    u32 sBatchEnv[cBatchVertices];
+    bool sBatchExtras = false;
     u32 sBatchCount = 0;
     u8 sBatchPrimitive = NEBULA_PRIMITIVE_QUADS;
 
-    // The particle's matrix, and its coordinates': none, two rows, or a projection (three rows).
-    Mtx sParticleMtx;
+    // A move beyond this in one game frame is a jump, not motion: nothing draws the way between.
+    const f32 cJumpSquared = 2000.0f * 2000.0f;
+
+    Mtx sCamera;
+    Mtx sEyeToWorld;
+    // The particle being drawn; whether this is its first draw of the game frame.
+    JPABaseParticle* sParticle = nullptr;
+    bool sFresh = false;
+    // Its matrix in the world, now and a frame ago, and its coordinates': none, two rows, or a projection (three rows).
+    Mtx sWorld;
+    Mtx sWorldBefore;
     enum { TexMtx_None, TexMtx_Rows, TexMtx_Projection };
     u32 sTexMtxMode = TexMtx_None;
     f32 sTexMtx[3][4];
     // The image in place 0 (a particle's animation changes it; repeats do not end the draw).
     s32 sBatchImage = -1;
 
-    void setParticleMtx(const Mtx mtx) {
-        memcpy(sParticleMtx, mtx, sizeof(Mtx));
+    bool jumped(const f32* pFrom, f32 x, f32 y, f32 z) {
+        const f32 dx = x - pFrom[0];
+        const f32 dy = y - pFrom[1];
+        const f32 dz = z - pFrom[2];
+        return dx * dx + dy * dy + dz * dz > cJumpSquared;
+    }
+
+    // `pMtx`: the particle's matrix to eye space. Its first draw of a game frame keeps it in the world.
+    void setParticleMtx(const Mtx pMtx) {
+        NebulaMtxConcat(sEyeToWorld, pMtx, sWorld);
+        JPABaseParticle* const pParticle = sParticle;
+        if (pParticle == nullptr) {
+            memcpy(sWorldBefore, sWorld, sizeof(Mtx));
+            return;
+        }
+        if (sFresh) {
+            sFresh = false;
+            memcpy(pParticle->mDrawnNow, sWorld, sizeof(Mtx));
+            const f32 before[3] = {pParticle->mDrawnBefore[3], pParticle->mDrawnBefore[7], pParticle->mDrawnBefore[11]};
+            if (!pParticle->mDrawnContinues || jumped(before, sWorld[0][3], sWorld[1][3], sWorld[2][3])) {
+                memcpy(pParticle->mDrawnBefore, sWorld, sizeof(Mtx));
+            }
+        }
+        memcpy(sWorldBefore, pParticle->mDrawnBefore, sizeof(Mtx));
     }
 
     void setTexMtx(const Mtx mtx, u32 mode) {
@@ -42,17 +73,22 @@ namespace {
         sTexMtxMode = mode;
     }
 
-    void addVertex(f32 x, f32 y, f32 z, f32 s, f32 t) {
+    // A corner: `pNow` and `pBefore` in the world; x, y, z its place in the particle (a projection reads them).
+    void addCorner(const f32* pNow, const f32* pBefore, f32 x, f32 y, f32 z, f32 s, f32 t) {
         if (sBatchCount == cBatchVertices) {
             JPAParticleBatch::flush();
         }
         const u32 v = sBatchCount++;
-        f32* pPos = &sBatchPos[v * 3];
-        pPos[0] = sParticleMtx[0][0] * x + sParticleMtx[0][1] * y + sParticleMtx[0][2] * z + sParticleMtx[0][3];
-        pPos[1] = sParticleMtx[1][0] * x + sParticleMtx[1][1] * y + sParticleMtx[1][2] * z + sParticleMtx[1][3];
-        pPos[2] = sParticleMtx[2][0] * x + sParticleMtx[2][1] * y + sParticleMtx[2][2] * z + sParticleMtx[2][3];
-        sBatchUv1[v * 2] = s;
-        sBatchUv1[v * 2 + 1] = t;
+        NebulaParticleCorner& rCorner = sBatch[v];
+        rCorner.position[0] = pNow[0];
+        rCorner.position[1] = pNow[1];
+        rCorner.position[2] = pNow[2];
+        rCorner.before[0] = pBefore[0];
+        rCorner.before[1] = pBefore[1];
+        rCorner.before[2] = pBefore[2];
+        rCorner.prm = JPANativeColor::prmWord();
+        rCorner.env = JPANativeColor::envWord();
+        rCorner.reserved = 0;
         f32 u = s;
         f32 w = t;
         f32 q = 1.0f;
@@ -64,16 +100,44 @@ namespace {
             w = sTexMtx[1][0] * x + sTexMtx[1][1] * y + sTexMtx[1][2] * z + sTexMtx[1][3];
             q = sTexMtx[2][0] * x + sTexMtx[2][1] * y + sTexMtx[2][2] * z + sTexMtx[2][3];
         }
-        sBatchUv0[v * 2] = u;
-        sBatchUv0[v * 2 + 1] = w;
-        sBatchQ[v * 2] = q;
-        sBatchQ[v * 2 + 1] = 0.0f;
-        sBatchPrm[v] = JPANativeColor::prmWord();
-        sBatchEnv[v] = JPANativeColor::envWord();
+        rCorner.s = u;
+        rCorner.t = w;
+        if (sBatchExtras) {
+            sBatchUv1[v * 2] = s;
+            sBatchUv1[v * 2 + 1] = t;
+            sBatchQ[v * 2] = q;
+            sBatchQ[v * 2 + 1] = 0.0f;
+        }
     }
+
+    void addVertex(f32 x, f32 y, f32 z, f32 s, f32 t) {
+        const f32 now[3] = {
+            sWorld[0][0] * x + sWorld[0][1] * y + sWorld[0][2] * z + sWorld[0][3],
+            sWorld[1][0] * x + sWorld[1][1] * y + sWorld[1][2] * z + sWorld[1][3],
+            sWorld[2][0] * x + sWorld[2][1] * y + sWorld[2][2] * z + sWorld[2][3],
+        };
+        const f32 before[3] = {
+            sWorldBefore[0][0] * x + sWorldBefore[0][1] * y + sWorldBefore[0][2] * z + sWorldBefore[0][3],
+            sWorldBefore[1][0] * x + sWorldBefore[1][1] * y + sWorldBefore[1][2] * z + sWorldBefore[1][3],
+            sWorldBefore[2][0] * x + sWorldBefore[2][1] * y + sWorldBefore[2][2] * z + sWorldBefore[2][3],
+        };
+        addCorner(now, before, x, y, z, s, t);
+    }
+
+    // Lines, points and shapes that read further coordinates go as arrays.
+    f32 sArrayPos[cBatchVertices * 3];
+    f32 sArrayBefore[cBatchVertices * 3];
+    f32 sArrayUv0[cBatchVertices * 2];
+    u32 sArrayPrm[cBatchVertices];
+    u32 sArrayEnv[cBatchVertices];
 }  // namespace
 
 namespace JPAParticleBatch {
+    void camera(const f32 (*pMtx)[4]) {
+        memcpy(sCamera, pMtx, sizeof(Mtx));
+        NebulaMtxInverse(pMtx, sEyeToWorld);
+    }
+
     void primitive(u8 primitive) {
         if (sBatchPrimitive != primitive || primitive == NEBULA_PRIMITIVE_TRIANGLE_STRIP) {
             flush();
@@ -81,20 +145,45 @@ namespace JPAParticleBatch {
         }
     }
 
-    void vertex(f32 x, f32 y, f32 z, f32 s, f32 t) {
-        addVertex(x, y, z, s, t);
+    void particle(JPABaseParticle* pParticle) {
+        sParticle = pParticle;
+        const u32 frame = NebulaFrameClock::count();
+        sFresh = pParticle->mDrawnFrame != frame;
+        if (sFresh) {
+            pParticle->mDrawnContinues = pParticle->mDrawnFrame + 1 == frame;
+            pParticle->mDrawnFrame = frame;
+            if (pParticle->mDrawnContinues) {
+                memcpy(pParticle->mDrawnBefore, pParticle->mDrawnNow, sizeof(pParticle->mDrawnBefore));
+            }
+        }
+    }
+
+    void corner(u32 index, f32 x, f32 y, f32 z, f32 s, f32 t) {
+        f32* const pNow = sParticle->mDrawnNow + index * 3;
+        f32* const pBefore = sParticle->mDrawnBefore + index * 3;
+        pNow[0] = x;
+        pNow[1] = y;
+        pNow[2] = z;
+        if (!sParticle->mDrawnContinues || jumped(pBefore, x, y, z)) {
+            pBefore[0] = x;
+            pBefore[1] = y;
+            pBefore[2] = z;
+        }
+        addCorner(pNow, pBefore, x, y, z, s, t);
     }
 
     void setMatrix(const f32 (*pMtx)[4]) {
-        memcpy(sParticleMtx, pMtx, sizeof(Mtx));
+        setParticleMtx(pMtx);
     }
 
     void setProjection(const f32 (*pMtx)[4]) {
         setTexMtx(pMtx, TexMtx_Projection);
     }
 
-    void begin() {
+    void begin(bool extras) {
         flush();
+        sBatchExtras = extras;
+        sParticle = nullptr;
         sTexMtxMode = TexMtx_None;
         sBatchImage = -1;
     }
@@ -103,16 +192,33 @@ namespace JPAParticleBatch {
         if (sBatchCount == 0) {
             return;
         }
-        // The positions are in eye space already, the coordinates final.
-        Mtx identity;
-        NebulaMtxIdentity(identity);
-        J3DNativeShape::setPosition(0, identity);
+        J3DNativeShape::setPosition(0, sCamera);
         J3DNativeShape::setCurrentIdentity();
-        const u32* const pColors[2] = {sBatchPrm, sBatchEnv};
-        const f32* const pTexCoords[8] = {sBatchUv0, sBatchUv1, sBatchQ, nullptr, nullptr, nullptr, nullptr, nullptr};
-        J3DNativeDraw::drawArrays(sBatchPrimitive, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_COLOR1 | NEBULA_SHAPE_TEXCOORD0 |
+        if (!sBatchExtras && (sBatchPrimitive == NEBULA_PRIMITIVE_QUADS || sBatchPrimitive == NEBULA_PRIMITIVE_TRIANGLE_STRIP)) {
+            J3DNativeDraw::drawCorners(sBatchPrimitive, sBatchCount, sBatch);
+            sBatchCount = 0;
+            return;
+        }
+        for (u32 v = 0; v < sBatchCount; v++) {
+            const NebulaParticleCorner& rCorner = sBatch[v];
+            memcpy(&sArrayPos[v * 3], rCorner.position, sizeof(rCorner.position));
+            memcpy(&sArrayBefore[v * 3], rCorner.before, sizeof(rCorner.before));
+            sArrayUv0[v * 2] = rCorner.s;
+            sArrayUv0[v * 2 + 1] = rCorner.t;
+            sArrayPrm[v] = rCorner.prm;
+            sArrayEnv[v] = rCorner.env;
+            if (!sBatchExtras) {
+                sBatchUv1[v * 2] = 0.0f;
+                sBatchUv1[v * 2 + 1] = 0.0f;
+                sBatchQ[v * 2] = 1.0f;
+                sBatchQ[v * 2 + 1] = 0.0f;
+            }
+        }
+        const u32* const pColors[2] = {sArrayPrm, sArrayEnv};
+        const f32* const pTexCoords[8] = {sArrayUv0, sBatchUv1, sBatchQ, nullptr, nullptr, nullptr, nullptr, nullptr};
+        J3DNativeDraw::drawArrays(sBatchPrimitive, NEBULA_SHAPE_NORMAL | NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_COLOR1 | NEBULA_SHAPE_TEXCOORD0 |
                                                        (NEBULA_SHAPE_TEXCOORD0 << 1) | (NEBULA_SHAPE_TEXCOORD0 << 2),
-                                  sBatchCount, sBatchPos, pColors, pTexCoords);
+                                  sBatchCount, sArrayPos, pColors, pTexCoords, sArrayBefore);
         sBatchCount = 0;
     }
 }  // namespace JPAParticleBatch
@@ -795,7 +901,7 @@ void JPADrawPoint(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
         JPAParticleBatch::flush();
         sBatchPrimitive = NEBULA_PRIMITIVE_POINTS;
     }
-    addVertex(ptcl->mPosition.x, ptcl->mPosition.y, ptcl->mPosition.z, 0.0f, 0.0f);
+    JPAParticleBatch::corner(0, ptcl->mPosition.x, ptcl->mPosition.y, ptcl->mPosition.z, 0.0f, 0.0f);
 }
 
 

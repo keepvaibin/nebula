@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 129u
+#define NEBULA_GAME_API_VERSION 130u
 
 /* Viewports, scissors, clears, target sizes and picture points count this many units across a frame on each axis. */
 #define NEBULA_FRAME_UNITS 65536.0f
@@ -225,12 +225,23 @@ typedef enum NebulaPrimitive {
    B << 8 | A word per colour, 2 floats per texture coordinate, a position matrix place (0-9) per position matrix.
    Without a position matrix the vertices take the current one. `matrices` (`matrix_count`): the position and normal
    matrices they read and texture matrices given since the last record (NebulaDrawMatrix). */
+/* A particle's corner as the renderer draws it: where it is now and where it was a game frame ago, in the space of the
+   draw's position matrix; the vertex stage places it at each presented frame's time. */
+typedef struct NebulaParticleCorner {
+    float position[3];
+    float before[3];
+    uint32_t prm, env; /* R << 24 | G << 16 | B << 8 | A */
+    float s, t;
+    uint32_t reserved;
+} NebulaParticleCorner;
+
 typedef struct NebulaImmediate {
     uint8_t primitive;
     uint8_t reserved[3];
     uint32_t attributes;
     uint32_t count;
     uint32_t reserved2;
+    const NebulaParticleCorner* corners; /* whole corners, quads or strips: then no arrays below */
     const float* position;
     const float* normal;
     const uint32_t* color[2];

@@ -25,7 +25,7 @@ inline constexpr unsigned kMaxColorChannels = 2;
 struct alignas(256) VertexConstants {
     float projection[4][4];
     // c4-c6 (native_material.hlsli draw_rows): the draw's matrix rows, entry k of the flat twelve: 0 the position
-    // matrix, 1 + i texture coordinate i's (60: the identity).
+    // matrix, 1 + i texture coordinate i's (60: the identity); 9 and 10 a particle corner's times (floats).
     std::uint32_t draw_rows[3][4];
     std::uint32_t num_texgens;
     std::uint32_t num_chans;
