@@ -31,7 +31,7 @@ namespace {
 
 namespace {
     NEW_NERVE(GameSequenceProgressBooting, GameSequenceProgress, Booting);
-    NEW_NERVE(GameSequenceProgressBoot, GameSequenceProgress, Logo);
+    NEW_NERVE(GameSequenceProgressBoot, GameSequenceProgress, Boot);
     NEW_NERVE(GameSequenceProgressWaitGoToFirstScene, GameSequenceProgress, WaitGoToFirstScene);
     NEW_NERVE(GameSequenceProgressNormal, GameSequenceProgress, Normal);
     NEW_NERVE(GameSequenceProgressGalaxyMove, GameSequenceProgress, GalaxyMove);

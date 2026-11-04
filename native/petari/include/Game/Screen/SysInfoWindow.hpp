@@ -56,6 +56,7 @@ public:
 
     void appear(const char*, SysInfoType, SysInfoTextPos, SysInfoMessageType);
     void appearYesNoWithText(const char16_t* pText);
+    void appearKeyWithText(const char16_t* pText);
     void decideNo();
     // B answers No (a question the player opened from a menu, as Back closes Nebula's menus). Off by default.
     void setBackAnswersNo(bool on);

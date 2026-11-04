@@ -40,8 +40,6 @@ public:
     void storeCopyUserFile(int, int);
     bool tryUnrecoverableError(SaveRequest::Result);
     bool isActive() const;
-    bool isPermitToReset() const;
-    void prepareReset();
     bool isPreparedReset() const;
     void restoreFromReset();
     bool isInitializedGameDataHolder() const;
@@ -49,7 +47,6 @@ public:
     void restoreUserFile(UserFile*, int, bool);
     void backupCurrentUserFile();
     void exeNoOperation();
-    void exeCheckEnableToCreate();
     void exeSaveConfirm();
     void exeSave();
     void exeSaveWindowDisappear();
@@ -88,7 +85,6 @@ public:
     bool mIsSaveAndQuitMsg;
     bool _2A;
     bool _2B;
-    bool _2C;
     UserFile* mWorkUserFile;
     const Nerve* mNerveForError;
     u8* mTempBuffer;
@@ -97,4 +93,5 @@ public:
     SaveIcon* mSaveIcon;
     bool mWindowFollows;
     int mSaveCopyLoading = 0;
+    bool mSaveDamaged = false;
 };

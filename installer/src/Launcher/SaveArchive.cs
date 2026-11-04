@@ -73,6 +73,19 @@ namespace Nebula.Launcher
             return word(bytes, 0) == GameDataChecksum(bytes, big);
         }
 
+        /// <summary>Nebula.sav: "NBSV", version 4, the CRC-32 of what follows the 16-byte header.</summary>
+        public static bool IsNativeSave(byte[] bytes)
+        {
+            if (bytes == null || bytes.Length < 16 || Le32(bytes, 0) != 0x5653424E || Le32(bytes, 4) != 4) return false;
+            uint crc = 0xFFFFFFFFu;
+            for (int i = 16; i < bytes.Length; i++)
+            {
+                crc ^= bytes[i];
+                for (int bit = 0; bit < 8; bit++) crc = (crc & 1) != 0 ? 0xEDB88320u ^ (crc >> 1) : crc >> 1;
+            }
+            return (crc ^ 0xFFFFFFFFu) == Le32(bytes, 8);
+        }
+
         public static bool IsBanner(byte[] bytes)
         {
             if (bytes == null || bytes.Length != BannerSize || bytes[0] != 'W' || bytes[1] != 'I' || bytes[2] != 'B' ||
@@ -135,6 +148,14 @@ namespace Nebula.Launcher
 
         internal static string GameDataPathOf(string title) { return "title/00010000/" + title + "/data/GameData.bin"; }
         internal static string BannerPathOf(string title) { return "title/00010000/" + title + "/data/banner.bin"; }
+        /// <summary>The game's four-character code of a title in hex ("524d4745": RMGE): its save's folder.</summary>
+        internal static string CodeOf(string title)
+        {
+            var code = new StringBuilder();
+            for (int i = 0; i + 1 < title.Length; i += 2) code.Append((char)Convert.ToInt32(title.Substring(i, 2), 16));
+            return code.ToString();
+        }
+        internal static string NativeSavePathOf(string title) { return CodeOf(title) + "/Nebula.sav"; }
 
         /// <summary>The save title of a game id ("RMGP01": 524d4750); North America's for any other.</summary>
         internal static string TitleOf(string gameId)
@@ -149,8 +170,8 @@ namespace Nebula.Launcher
         {
             "", "shared2", "shared2/menu", "shared2/menu/FaceLib", "shared2/sys", "title", "title/00000001",
             "title/00000001/00000002", "title/00000001/00000002/data", "title/00010000",
-        }.Concat(Titles.SelectMany(t => new[] { "title/00010000/" + t, "title/00010000/" + t + "/data" })).ToArray();
-        internal static readonly string[] Files = Titles.SelectMany(t => new[] { GameDataPathOf(t), BannerPathOf(t) })
+        }.Concat(Titles.SelectMany(t => new[] { "title/00010000/" + t, "title/00010000/" + t + "/data", CodeOf(t) })).ToArray();
+        internal static readonly string[] Files = Titles.SelectMany(t => new[] { GameDataPathOf(t), BannerPathOf(t), NativeSavePathOf(t) })
             .Concat(new[]
             {
                 MiiDatabasePath, "shared2/sys/SYSCONF", "title/00000001/00000002/data/setting.txt",
@@ -181,7 +202,7 @@ namespace Nebula.Launcher
             List<SaveItem> items = Directory.Exists(root) ? ReadTree(FileUtil.FinalPath(root)) : new List<SaveItem>();
             List<SaveItem> games = GameSaves(items);
             if (games.Count == 0) throw new InvalidOperationException(NebulaText.Of("There are no saves to export yet."));
-            if (games.Any(save => !SaveFormat.IsGameData(save.Data)))
+            if (games.Any(save => !SaveFormat.IsGameData(save.Data) && !SaveFormat.IsNativeSave(save.Data)))
                 throw new InvalidDataException("GameData.bin is not a valid Super Mario Galaxy save.");
             if (items.Any(i => i.Streams.Keys.Any(s => s != "galaxy.isfs.meta" && s.StartsWith("galaxy.", StringComparison.Ordinal))) ||
                 Directory.EnumerateFileSystemEntries(FileUtil.FinalPath(root), "*", SearchOption.AllDirectories)
@@ -265,7 +286,7 @@ namespace Nebula.Launcher
             var notes = new List<string>();
             List<SaveItem> games = GameSaves(items);
             if (games.Count == 0) throw new InvalidDataException("No Super Mario Galaxy save (GameData.bin) was found.");
-            if (games.Any(save => !SaveFormat.IsGameData(save.Data)))
+            if (games.Any(save => !SaveFormat.IsGameData(save.Data) && !SaveFormat.IsNativeSave(save.Data)))
                 throw new InvalidDataException("GameData.bin is not a valid Super Mario Galaxy save.");
             foreach (string title in Titles)
                 LeaveOutInvalid(items, BannerPathOf(title), SaveFormat.IsBanner, "The save banner (banner.bin) is not valid and was left out.", notes);
@@ -282,7 +303,7 @@ namespace Nebula.Launcher
                 Stage(staging, items);
                 if (!Same(items, ReadWholeTree(staging)))
                     throw new IOException(NebulaText.Of("The staged saves do not match the source; nothing was changed."));
-                if (confirmReplace != null && Titles.Any(t => File.Exists(HostPath(target, GameDataPathOf(t)))) && !confirmReplace()) return null;
+                if (confirmReplace != null && Titles.Any(t => File.Exists(HostPath(target, GameDataPathOf(t))) || File.Exists(HostPath(target, NativeSavePathOf(t)))) && !confirmReplace()) return null;
                 if (GameIsRunning()) throw new InvalidOperationException(NebulaText.Of("Close the game before importing saves."));
                 backup = Replace(target, staging);
             }
@@ -301,7 +322,7 @@ namespace Nebula.Launcher
         /// <summary>The releases' saves (GameData.bin) among <paramref name="items"/>.</summary>
         private static List<SaveItem> GameSaves(List<SaveItem> items)
         {
-            return items.Where(i => !i.IsFolder && Titles.Any(t => i.Path == GameDataPathOf(t))).ToList();
+            return items.Where(i => !i.IsFolder && Titles.Any(t => i.Path == GameDataPathOf(t) || i.Path == NativeSavePathOf(t))).ToList();
         }
 
         private static void LeaveOutInvalid(List<SaveItem> items, string path, Func<byte[], bool> valid, string note, List<string> notes)
@@ -441,7 +462,7 @@ namespace Nebula.Launcher
         {
             foreach (string candidate in new[] { root, Path.Combine(root, "saves"), Path.Combine(root, "save-data"), Path.Combine(root, "nand") })
             {
-                if (Titles.Any(t => File.Exists(HostPath(candidate, GameDataPathOf(t))))) return ReadTree(FileUtil.FinalPath(candidate));
+                if (Titles.Any(t => File.Exists(HostPath(candidate, GameDataPathOf(t))) || File.Exists(HostPath(candidate, NativeSavePathOf(t))))) return ReadTree(FileUtil.FinalPath(candidate));
             }
             string save = Path.Combine(root, "GameData.bin");
             if (!File.Exists(save)) throw new InvalidDataException(NebulaText.Of("This folder does not contain a Super Mario Galaxy save."));

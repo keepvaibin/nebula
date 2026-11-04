@@ -254,6 +254,19 @@ void SysInfoWindow::appearYesNoWithText(const char16_t* pText) {
     mYesNoSelector->appear();
 }
 
+// A message of Nebula's own, closed with a press.
+void SysInfoWindow::appearKeyWithText(const char16_t* pText) {
+    mType = Type_Key;
+    if (mWindowType != WindowType_Mini) {
+        MR::hidePaneRecursive(this, "Left");
+        MR::hidePaneRecursive(this, "Right");
+    }
+    MR::executeTextBoxRecursive(this, mTextParentPaneName, TextBoxRecursiveCenter());
+    MR::setTextBoxMessageRecursive(this, mTextParentPaneName, pText);
+    appear();
+    mIconAButton->openWithoutMessage();
+}
+
 void SysInfoWindow::setBackAnswersNo(bool on) {
     mIsBackAnswersNo = on;
 }
