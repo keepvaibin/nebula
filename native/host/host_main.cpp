@@ -3011,12 +3011,10 @@ uint32_t svc_option(void*, uint32_t what) {
         return 0;
 #endif
     case NEBULA_OPTION_MODS_CHANGED:
-#if !defined(NEBULA_RELEASE)
         // A test: only the settings page can change mods otherwise.
-        if (std::getenv("GALAXY_TEST_MODS_CHANGED") != nullptr) {
+        if (::galaxy::run_options().test_mods_changed != nullptr) {
             return 1u;
         }
-#endif
 #if defined(NEBULA_HOST_RENDERER)
         return galaxy::render::native_settings_mods_changed() ? 1u : 0u;
 #else

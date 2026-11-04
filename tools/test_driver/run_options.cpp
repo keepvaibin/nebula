@@ -94,6 +94,7 @@ RunOptions read_options() {
     o.trace_frame_times = nebula_switch::trace_frame_times();
     o.trace_loads = nebula_switch::trace_loads();
     o.test_mods_screen = nebula_switch::test_mods_screen();
+    o.test_mods_changed = nebula_switch::test_mods_changed();
     o.trace_memory = nebula_switch::trace_memory();
     o.trace_present_stats = nebula_switch::trace_present_stats();
     o.trace_thread_cpu = nebula_switch::trace_thread_cpu();
