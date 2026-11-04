@@ -351,7 +351,76 @@ namespace J3DNativeShape {
             geometry.indices = pMesh->indices();
             pHost->shape_geometry(pHost->user, &geometry);
         }
+        registerWhole(pShape);
         sendArrays(pData);
+    }
+
+    // A skinned shape's groups as one geometry, under the shape's own key: its corners name the model's matrices, so a
+    // group is only a list of triangles in a shape's order.
+    void registerWhole(J3DShape* pShape) {
+        pShape->mNebulaWhole = false;
+        if (pShape->mMtxGroupNum < 2 || pShape->mShapeDraw[0] == nullptr) {
+            return;
+        }
+        u32 corners = 0;
+        u32 indices = 0;
+        const u32 attributes = pShape->mShapeDraw[0]->getMesh()->mAttributes;
+        for (u16 g = 0; g < pShape->mMtxGroupNum; g++) {
+            const J3DShapeDraw* pDraw = pShape->mShapeDraw[g];
+            if (pDraw == nullptr || pDraw->getMesh()->mAttributes != attributes ||
+                (attributes & NEBULA_SHAPE_MODEL_MATRICES) == 0) {
+                return;
+            }
+            corners += pDraw->getMesh()->mCornerCount;
+            indices += pDraw->getMesh()->mIndexCount;
+        }
+        if (corners > 0xFFFF) {
+            return;
+        }
+        NebulaShapeCorner* pCorners = new NebulaShapeCorner[corners];
+        u16* pIndices = new u16[indices];
+        u32 cornerAt = 0;
+        u32 indexAt = 0;
+        for (u16 g = 0; g < pShape->mMtxGroupNum; g++) {
+            J3DShapeMesh* pMesh = pShape->mShapeDraw[g]->getMesh();
+            memcpy(pCorners + cornerAt, pMesh->corners(), pMesh->mCornerCount * sizeof(NebulaShapeCorner));
+            const u16* pIn = pMesh->indices();
+            for (u32 i = 0; i < pMesh->mIndexCount; i++) {
+                pIndices[indexAt++] = static_cast< u16 >(pIn[i] + cornerAt);
+            }
+            cornerAt += pMesh->mCornerCount;
+        }
+        J3DVertexData* pData = pShape->mVertexData;
+        NebulaShapeGeometry geometry;
+        memset(&geometry, 0, sizeof(geometry));
+        geometry.key = keyOf(pShape);
+        geometry.attributes = attributes;
+        for (u32 a = 0; a < 12; a++) {
+            const u32 array = a == 0 ? kPosition : a == 1 ? ((attributes & NEBULA_SHAPE_NBT) != 0 ? kNbt : kNormal) :
+                              a == 2 ? kColor0 : a == 3 ? kColor1 : kTexCoord0 + (a - 4);
+            geometry.arrays[a] = keyOf(arrayOf(pData, array));
+        }
+        geometry.corner_count = corners;
+        geometry.index_count = indices;
+        geometry.corners = pCorners;
+        geometry.indices = pIndices;
+        const NebulaHostServices* pHost = nebula_host();
+        pHost->shape_geometry(pHost->user, &geometry);
+        delete[] pIndices;
+        delete[] pCorners;
+        pShape->mNebulaWhole = true;
+    }
+
+    void drawWhole(const J3DShape* pShape) {
+        J3DNativeDraw::flush();
+        const u32 count = gather(0, true);
+        const NebulaHostServices* pHost = nebula_host();
+        pHost->shape_draw(pHost->user, keyOf(pShape), keyOf(j3dSys.getVtxPos()), keyOf(j3dSys.getVtxNrm()),
+                          keyOf(j3dSys.getVtxCol()), sRecord, count, sCurrentSet ? &sCurrent : nullptr, sTexGens,
+                          sTexGenCount, J3DNativeState::pass(), sLastPalette, 0);
+        sNextPalette = 0;
+        sCurrentSet = false;
+        sTexGenCount = 0;
     }
 
     void draw(const J3DShapeDraw* pDraw) {
