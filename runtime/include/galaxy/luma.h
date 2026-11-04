@@ -45,12 +45,31 @@ struct When {
 struct Layer {
     std::string path;
     std::map<std::string, std::uint32_t> switches;
+    std::map<std::string, std::string> materials;  // a material's name: the shader written for it
     When when;
 };
 
 struct Dependency {
     std::string id;
     std::string version;  // needs: the oldest that will do; conflicts: only those below this
+};
+
+// A mod's code: one native library per device.
+struct Plugin {
+    std::map<std::string, std::string> binaries;  // by plugin_target()
+    std::uint32_t api = 0;
+    When when;
+};
+
+// A galaxy beside the game's, and the hungry Luma that opens it.
+struct Galaxy {
+    std::string name;
+    std::string map_pane;
+    std::vector<std::string> open_conditions;
+    int stars_to_open = 0;
+    int dome = 0;
+    int hungry_slot = -1;
+    int hungry_star_bits = 0;
 };
 
 enum class SaveMode {
@@ -83,11 +102,15 @@ struct Manifest {
     std::string save_tag;   // the family of saves; the mod's id when it names none
     std::string save_path;  // starting files in the mod
     bool save_player_can_change = false;
-    bool has_plugins = false;
+    std::vector<Plugin> plugins;
+    std::vector<Galaxy> galaxies;
+    std::map<std::string, Text> text;  // a message's id: its words
 };
 
 // What this game reads.
 inline constexpr std::uint32_t kFormat = 1;
+// The plugin interface this game has: NEBULA_MOD_API_VERSION.
+inline constexpr std::uint32_t kPluginApi = 1;
 
 [[nodiscard]] std::optional<Manifest> parse_manifest(std::string_view text);
 [[nodiscard]] std::optional<Manifest> read_manifest(const std::filesystem::path& folder);
@@ -107,6 +130,10 @@ struct Situation {
     std::map<std::string, std::string> options;  // each option's choice
 };
 [[nodiscard]] bool layer_used(const Layer& layer, const Situation& situation);
+[[nodiscard]] bool when_holds(const When& when, const Situation& situation);
+// This device, as a plugin's `binaries` key: windows-x64, windows-arm64, linux-x64, linux-arm64, macos-x64, macos-arm64,
+// android-arm64, android-x64.
+[[nodiscard]] std::string_view plugin_target() noexcept;
 
 // The language code of a game language folder, for a Text.
 [[nodiscard]] std::string language_code(std::string_view folder);

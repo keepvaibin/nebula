@@ -1,6 +1,7 @@
 #include "Game/Enemy/KarikariDirector.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/Player/MarioActor.hpp"
+#include "Game/System/NebulaMods.hpp"
 #include "Game/Player/MarioConst.hpp"
 #include "Game/Player/MarioParts.hpp"
 #include "Game/Player/MarioState.hpp"
@@ -15,6 +16,8 @@
 #include "Game/Util/SoundUtil.hpp"
 
 void MarioActor::setPlayerMode(u16 playerMode, bool myBool) {
+    playerMode = static_cast< u16 >(NebulaMods::fire(NEBULA_MOD_EVENT_POWER_UP, playerMode));
+
     if (mPlayerMode == playerMode) {
         if (playerMode == 1) {
             _3DC = mConst->getTable()->mMetalHoldTime;

@@ -1,5 +1,6 @@
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/Player/MarioActor.hpp"
+#include "Game/System/NebulaMods.hpp"
 #include "Game/Player/MarioAnimator.hpp"
 #include "Game/Player/MarioFpView.hpp"
 #include "Game/Player/MarioState.hpp"
@@ -21,6 +22,8 @@ void MarioActor::forceKill(u32 type) {
     if (!isEnableNerveChange()) {
         return;
     }
+
+    NebulaMods::fire(NEBULA_MOD_EVENT_PLAYER_MISS, static_cast< s32 >(type));
 
     _A6E = 0;
 

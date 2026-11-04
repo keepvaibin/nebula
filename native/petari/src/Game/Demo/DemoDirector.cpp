@@ -1,4 +1,5 @@
 #include "Game/Demo/DemoDirector.hpp"
+#include "Game/System/NebulaMods.hpp"
 #include "Game/Demo/DemoCastGroupHolder.hpp"
 #include "Game/Demo/DemoExecutor.hpp"
 #include "Game/Demo/DemoFunction.hpp"
@@ -55,10 +56,12 @@ void DemoDirector::movement() {
 }
 
 void DemoDirector::startDemoProgrammable(NameObj* pParam1, const char* pParam2, bool param3, s32 param4) {
+    NebulaMods::fire(NEBULA_MOD_EVENT_CUTSCENE_START, 0, nullptr, pParam2);
     startDemo(pParam1, pParam2, param3, param4);
 }
 
 void DemoDirector::startDemoTimeKeep(NameObj* pParam1, const char* pParam2, s32 param3, bool param4, const char* pParam5) {
+    NebulaMods::fire(NEBULA_MOD_EVENT_CUTSCENE_START, 0, nullptr, pParam2);
     startDemo(pParam1, pParam2, param4, param3);
     startDemoExecutor(pParam1, pParam2, param3, pParam5);
 }
@@ -82,6 +85,7 @@ const char* DemoDirector::getCurrentDemoName() const {
 }
 
 void DemoDirector::endDemo(NameObj* pParam1, const char* pParam2, bool param3) {
+    NebulaMods::fire(NEBULA_MOD_EVENT_CUTSCENE_END, 0, nullptr, pParam2);
     if (DemoStartRequestUtil::isExistStartDemoRequest(mStartRequestHolder)) {
         MR::sendMsgToAllLiveActor(ACTMES_END_DEMO, nullptr);
 

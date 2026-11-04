@@ -37,6 +37,9 @@ namespace GameEventFlagTable {
     const char* getEventFlagNameSpecialPowerStar(const char*, s32);
     bool isPowerStarType(const char*, s32, const char*);
     s32 calcExclamationGalaxyNum();
+    // Rows a mod adds: only before the table is first read. false: its name can't be told from a row already there.
+    bool addGalaxy(const char* pGalaxyName);
+    bool addHungryLuma(const char* pGalaxyName, s32 slot, s32 starBits);
     const char* getExclamationGalaxyNameFromIndex(int);
     bool isExist(const char*);
     int getIndex(const GameEventFlag*);
