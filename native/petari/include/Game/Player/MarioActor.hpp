@@ -192,6 +192,7 @@ public:
     void swapTextureInit();
     void initBlur();
     void changeDisplayMode(u8);
+    void initModPowerUpModels();
     bool isAllHidden() const;
     void calcViewMainModel();
     void initFace();
@@ -806,7 +807,8 @@ public:
     TVec3f _A18;
     u8 _A24;
     u8 _A25;
-    J3DModelX* mModels[6];
+    J3DModelX* mModels[64];  // the game's six, then a mod's power-ups' whole-body models
+    ModelHolder* mModPowerUpModels[58];
     ModelHolder* _A40;
     ModelHolder* _A44;
     ModelHolder* _A48;

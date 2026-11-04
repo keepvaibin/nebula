@@ -1,4 +1,5 @@
 #include "Game/System/SaveDataHandler.hpp"
+#include "Game/System/GameDataHolder.hpp"
 #include "Game/System/SaveFileFormat.hpp"
 #include <JSystem/JUtility/JUTNativeLog.hpp>
 #include "Game/LiveActor/Nerve.hpp"
@@ -18,7 +19,16 @@ namespace {
     };
 
     const char cSaveFileName[] = "GameData.bin";
-    const SaveFileSpec cSaveFileSpecTable[] = {{"mario", 0xF80}, {"luigi", 0xF80}, {"config", 0x60}};
+    // A game file's room: the console's, or what this game's data needs, with mods adding galaxies and stars.
+    u32 sGameDataRoom = 0xF80;
+    // The buffers: past the file a save can be, even one made with a mod whose data was larger.
+    u32 sBufferRoom = 0x10000;
+    const u32 cConfigRoom = 0x60;
+    const u32 cSaveFiles = 3;
+    u32 roomOf(u32 file) {
+        return file < 2 ? sGameDataRoom : cConfigRoom;
+    }
+    const char* const cSaveFileNames[] = {"mario", "luigi", "config"};
     const SaveFileSpec cSaveFileSpecSystem = {"sysconf", 0x80};
 };  // namespace
 
@@ -39,6 +49,20 @@ namespace {
 SaveDataHandler::SaveDataHandler(const UserFile* pUserFile)
     : NerveExecutor("SaveDataHandler"), mSaveRequest(), _C(), _14(), _18() {
     mSaveRequest = new SaveRequest();
+
+    // What a game file takes now, and room for what grows as it's played.
+    u8* pProbe = new u8[0x100000];
+    const u32 needed = pUserFile->mGameDataHolder->makeFileBinary(pProbe, 0x100000);
+    delete[] pProbe;
+    if (needed + 1024 > sGameDataRoom) {
+        sGameDataRoom = (needed + 1024 + 31) & ~31u;
+    }
+    sBufferRoom = 0x10000;
+    if ((sGameDataRoom * 2 + cConfigRoom) * 6 + 0x1000 > sBufferRoom) {
+        sBufferRoom = (sGameDataRoom * 2 + cConfigRoom) * 6 + 0x1000;
+    }
+    // A save from a mod with more data may be larger than this game needs: it's read, and comes down to what this game keeps.
+    sBufferRoom *= 2;
 
     createCommunicationBuffer();
     resetSaveData(_18);
@@ -62,8 +86,8 @@ void SaveDataHandler::requestCheckEnableToCreate() {
 // `copy` 0 is the save; 1 and 2 are the host's copies of the last two (save_files.cpp).
 void SaveDataHandler::requestLoadSaveData(int copy) {
     static const char* const cNames[] = {"GameData.bin", "GameData.bin.1", "GameData.bin.2"};
-    MR::zeroMemory(_14, 0x10000);
-    mSaveRequest->setReadSeq(cNames[copy], _14, 0x10000, &_C);
+    MR::zeroMemory(_14, sBufferRoom);
+    mSaveRequest->setReadSeq(cNames[copy], _14, sBufferRoom, &_C);
     mSaveRequest->start();
 
     setNerve(GET_NERVE_ANON(SaveDataHandlerProcessing));
@@ -165,9 +189,9 @@ void SaveDataHandler::convertUserFiles(u8* pBuffer) {
 void SaveDataHandler::initializeUserFileMemory(int index, const UserFile* pUserFile) {
     SaveDataFileAccessor fileAccessor = SaveDataFileAccessor(_18);
 
-    for (u32 i = 0; i < sizeof(::cSaveFileSpecTable) / sizeof(*::cSaveFileSpecTable); i++) {
+    for (u32 i = 0; i < ::cSaveFiles; i++) {
         char fileName[16];
-        nebula_snprintf(fileName, sizeof(fileName), "%s%1d", ::cSaveFileSpecTable[i].mName, index);
+        nebula_snprintf(fileName, sizeof(fileName), "%s%1d", ::cSaveFileNames[i], index);
 
         SaveDataUserFileInfo userFileInfo;
         fileAccessor.makeUserFileInfo(&userFileInfo, fileName);
@@ -183,15 +207,15 @@ void SaveDataHandler::initializeUserFileMemory(int index, const UserFile* pUserF
 void SaveDataHandler::copyUserFileMemory(int indexDst, int indexSrc) {
     SaveDataFileAccessor fileAccessor = SaveDataFileAccessor(_18);
 
-    for (u32 i = 0; i < sizeof(::cSaveFileSpecTable) / sizeof(*::cSaveFileSpecTable); i++) {
+    for (u32 i = 0; i < ::cSaveFiles; i++) {
         char srcFileName[16];
-        nebula_snprintf(srcFileName, sizeof(srcFileName), "%s%1d", ::cSaveFileSpecTable[i].mName, indexSrc);
+        nebula_snprintf(srcFileName, sizeof(srcFileName), "%s%1d", ::cSaveFileNames[i], indexSrc);
 
         SaveDataUserFileInfo srcUserFileInfo;
         fileAccessor.makeUserFileInfo(&srcUserFileInfo, srcFileName);
 
         char dstFileName[16];
-        nebula_snprintf(dstFileName, sizeof(dstFileName), "%s%1d", ::cSaveFileSpecTable[i].mName, indexDst);
+        nebula_snprintf(dstFileName, sizeof(dstFileName), "%s%1d", ::cSaveFileNames[i], indexDst);
 
         SaveDataUserFileInfo dstUserFileInfo;
         fileAccessor.makeUserFileInfo(&dstUserFileInfo, dstFileName);
@@ -241,7 +265,7 @@ void SaveDataHandler::requestRemoveSaveData() {
 }
 
 u32 SaveDataHandler::getEnoughtTempBufferSize() {
-    return 0xF80;
+    return sGameDataRoom;
 }
 
 bool SaveDataHandler::isDone() const {
@@ -296,19 +320,19 @@ void SaveDataHandler::resetSaveData(u8* pBuffer) {
     int fileIndex = 0;
 
     for (int i = 0; i < 6; i++) {
-        for (u32 j = 0; j < sizeof(::cSaveFileSpecTable) / sizeof(*::cSaveFileSpecTable); j++) {
+        for (u32 j = 0; j < ::cSaveFiles; j++) {
             char* pName = file.getFileName(fileIndex);
 
             MR::zeroMemory(pName, SaveDataFileAccessor::cNameSize);
 
             char fileName[256];
-            nebula_snprintf(fileName, sizeof(fileName), "%s%1d", ::cSaveFileSpecTable[j].mName, i + 1);
+            nebula_snprintf(fileName, sizeof(fileName), "%s%1d", ::cSaveFileNames[j], i + 1);
 
             nebula_snprintf(pName, SaveDataFileAccessor::cNameSize, "%s", fileName);
             file.setFileOffset(fileIndex, offset);
 
-            MR::zeroMemory(pBuffer + offset, ::cSaveFileSpecTable[j].mBufferSize);
-            offset += ::cSaveFileSpecTable[j].mBufferSize;
+            MR::zeroMemory(pBuffer + offset, ::roomOf(j));
+            offset += ::roomOf(j);
             fileIndex++;
         }
     }
@@ -353,7 +377,7 @@ void SaveDataHandler::initializeAllFileInSaveData(u8* pBuffer, const UserFile* p
 bool SaveDataHandler::isCorrectFileHeader(const u8* pBuffer) {
     const SaveDataFileAccessor file(const_cast< u8* >(pBuffer));
 
-    if (file.getFileSize() >= 0x10000) {
+    if (file.getFileSize() >= sBufferRoom) {
         return false;
     }
 
@@ -388,8 +412,8 @@ void SaveDataHandler::copySaveDataEachFile(u8* pFileDst, const u8* pFileSrc) {
 }
 
 void SaveDataHandler::createCommunicationBuffer() {
-    _14 = new (MR::getStationedHeap(), 32) u8[0x10000];
-    _18 = new (MR::getStationedHeap(), 32) u8[0x10000];
+    _14 = new (MR::getStationedHeap(), 32) u8[sBufferRoom];
+    _18 = new (MR::getStationedHeap(), 32) u8[sBufferRoom];
 }
 
 bool SaveDataHandler::tryRemoveFile(const char* pFileName, bool* pIsRemoved) {

@@ -161,8 +161,11 @@ MarioActor::MarioActor(const char* pName) : LiveActor(pName), _1B0(0xFFFFFFFF) {
     mBlackHoleRotateAxis.zero();
     mPosRelativeToBlackHole.zero();
 
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < 64; i++) {
         mModels[i] = nullptr;
+    }
+    for (int i = 0; i < 58; i++) {
+        mModPowerUpModels[i] = nullptr;
     }
 
     _A61 = false;
@@ -1895,7 +1898,12 @@ void MarioActor::calcAnim() {
             }
         }
 
-        switch (val) {
+        // A mod's power-up: a body of its own, or the look of one of the game's.
+        const s32 modSlot = static_cast< s32 >(val) - NebulaMods::cFirstPowerUp;
+        const bool ownModel = modSlot >= 0 && modSlot < 58 && mModels[6 + modSlot] != nullptr;
+        if (ownModel) {
+            changeDisplayMode(6 + modSlot);
+        } else switch (NebulaMods::powerUpLook(val)) {
         case 1:
             changeDisplayMode(4);
             _9C8->calcAnim();
@@ -1985,7 +1993,10 @@ void MarioActor::calcAnim() {
             MR::updateModelDiffMaterials(_A00);
             break;
         default:
-            if (mCurrModel != 1) {
+            if (mCurrModel >= 6 && mModPowerUpModels[mCurrModel - 6] != nullptr) {
+                mModPowerUpModels[mCurrModel - 6]->mPosition.set(mPosition);
+                MR::updateModelDiffMaterials(mModPowerUpModels[mCurrModel - 6]);
+            } else if (mCurrModel != 1) {
                 MR::updateModelDiffMaterials(this);
             }
 

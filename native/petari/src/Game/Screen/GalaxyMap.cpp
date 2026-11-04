@@ -575,6 +575,10 @@ void GalaxyMap::initMarioIcon() {
     if (MR::isEqualStageName("AstroDome")) {
         scenarioNo = MR::getCurrentScenarioNo();
     }
+    // A dome past the game's six has no places on the map's own layout.
+    if (scenarioNo > 6) {
+        scenarioNo = 0;
+    }
 
     mMarioIcon1 = ::createMarioIcon(this, ::cMarioIconPositions[scenarioNo]);
     const char* pDomePosition = ::cMarioIconPositionsInDome[scenarioNo];

@@ -54,6 +54,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/AreaObjUtil.hpp"
 #include "Game/System/NebulaHost.hpp"
+#include "Game/System/GameSequenceFunction.hpp"
 #include <nebula_format.h>
 #include <nebula_module.h>
 #include <nebula_game_api.h>
@@ -526,7 +527,7 @@ namespace {
     }
 
     int32_t apiSetCometSchedule(int32_t dome, const char* const* ppGalaxies, const int32_t* pCoins, int32_t count) {
-        if (dome < 1 || dome > 6 || ppGalaxies == nullptr || pCoins == nullptr || count <= 0) {
+        if (dome < 1 || dome > 16 || ppGalaxies == nullptr || pCoins == nullptr || count <= 0) {
             return -1;
         }
         GalaxyCometTimePaper* pPaper = new GalaxyCometTimePaper[count + 1];
@@ -606,6 +607,39 @@ namespace {
         return 0;
     }
 
+    const char* sFirstStage = nullptr;
+    s32 sFirstMission = 1;
+    const char* sHubStage = nullptr;
+    bool sNoStoryScenes = false;
+
+    int32_t apiSetStory(const char* pKey, const char* pValue) {
+        if (pKey == nullptr || pValue == nullptr) {
+            return -1;
+        }
+        if (strcmp(pKey, "first_stage") == 0) {
+            sFirstStage = copyText(pValue);
+        } else if (strcmp(pKey, "first_mission") == 0) {
+            s32 mission = 0;
+            for (const char* pAt = pValue; *pAt >= '0' && *pAt <= '9'; pAt++) {
+                mission = mission * 10 + (*pAt - '0');
+            }
+            sFirstMission = mission > 0 ? mission : 1;
+        } else if (strcmp(pKey, "hub") == 0) {
+            sHubStage = copyText(pValue);
+        } else if (strcmp(pKey, "story_scenes") == 0) {
+            sNoStoryScenes = strcmp(pValue, "off") == 0;
+        } else {
+            return -1;
+        }
+        return 0;
+    }
+
+    void apiSaveGame() {
+        if (sStageFrames > 0) {
+            GameSequenceFunction::startGameDataSaveSequence(false, false);
+        }
+    }
+
     void apiOpenScenarioSelect(const char* pGalaxy) {
         if (pGalaxy != nullptr && sStageFrames > 0) {
             MR::requestStartScenarioSelect(copyText(pGalaxy));
@@ -619,12 +653,14 @@ namespace {
     }
 
     int32_t apiAddPowerUp(const NebulaPowerUpClass* pClass) {
-        if (pClass == nullptr || pClass->size < sizeof(NebulaPowerUpClass)) {
+        if (pClass == nullptr || pClass->size < offsetof(NebulaPowerUpClass, model)) {
             return -1;
         }
-        NebulaPowerUpClass power = *pClass;
+        NebulaPowerUpClass power = NebulaPowerUpClass();
+        memcpy(&power, pClass, pClass->size < sizeof(NebulaPowerUpClass) ? pClass->size : sizeof(NebulaPowerUpClass));
         power.name = copyText(pClass->name);
         power.music = copyText(pClass->music);
+        power.model = copyText(power.model);
         sPowerUps.add(power);
         return NebulaMods::cFirstPowerUp + sPowerUps.mCount - 1;
     }
@@ -1872,6 +1908,8 @@ namespace {
         nullptr,
         apiSettingByNumber,
         apiOpenScenarioSelect,
+        apiSetStory,
+        apiSaveGame,
     };
 }  // namespace
 
@@ -1987,6 +2025,19 @@ namespace NebulaMods {
         }
     }
 
+    s32 powerUpCount() {
+        return sPowerUps.mCount;
+    }
+
+    const char* powerUpModel(s32 index) {
+        return index >= 0 && index < sPowerUps.mCount ? sPowerUps.mItems[index].model : nullptr;
+    }
+
+    u16 powerUpLook(u16 mode) {
+        const NebulaPowerUpClass* pPower = powerUpOf(mode);
+        return pPower != nullptr ? static_cast< u16 >(pPower->looks_like) : mode;
+    }
+
     const char16_t* text(const char* pId) {
         for (int i = sTexts.mCount - 1; i >= 0; i--) {
             if (strcmp(sTexts.mItems[i].mId, pId) == 0) {
@@ -2068,6 +2119,22 @@ namespace NebulaMods {
         return slots;
     }
 
+    const char* firstStage() {
+        return sFirstStage;
+    }
+
+    s32 firstMission() {
+        return sFirstMission;
+    }
+
+    const char* hubStage() {
+        return sHubStage;
+    }
+
+    bool noStoryScenes() {
+        return sNoStoryScenes;
+    }
+
     u32 soundEffectSlow(const char* pName) {
         for (int i = sSoundEffects.mCount - 1; i >= 0; i--) {
             if (strcmp(sSoundEffects.mItems[i].mName, pName) == 0) {
@@ -2101,13 +2168,12 @@ namespace NebulaMods {
         return notOwn && MR::isEqualStringCase(pStage, pAskedName) ? 0 : -1;
     }
 
-    bool isMissingFiles(const char* pName) {
+    bool isMissingFiles(const char* pName, const JMapInfoIter& rIter) {
         if (!sAskedForApi) {
             return false;
         }
-        const JMapInfoIter noPlacement;
         NameObjArchiveListCollector collector;
-        NameObjFactory::getMountObjectArchiveList(&collector, pName, noPlacement);
+        NameObjFactory::getMountObjectArchiveList(&collector, pName, rIter);
         for (s32 i = 0; i < collector.getArchiveNum(); i++) {
             char path[256];
             char layout[256];

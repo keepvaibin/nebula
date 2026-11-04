@@ -6,6 +6,7 @@
 class NameObj;
 class NameObjArchiveListCollector;
 class LiveActor;
+class JMapInfoIter;
 
 // The game's side of plugins (nebula_mod_api.h). An event no plugin wants is one load and one branch.
 namespace NebulaMods {
@@ -31,6 +32,10 @@ namespace NebulaMods {
     s32 powerUpStart(u16 mode, LiveActor* pPlayer);
     void powerUpUpdate(u16 mode);
     void powerUpEnd(u16 mode, LiveActor* pPlayer);
+    s32 powerUpCount();
+    const char* powerUpModel(s32 index);
+    // The game's power-up a mode looks like: itself, if it's the game's.
+    u16 powerUpLook(u16 mode);
     // A mod's words for a message: nullptr if none has any.
     const char16_t* text(const char* pId);
     // What a hungry Luma of this slot costs, if a mod says: -1 otherwise.
@@ -55,6 +60,11 @@ namespace NebulaMods {
     // Frames, from what mods say of a comet mission; 0: they say nothing.
     u32 cometTimeLimit(const char* pGalaxy, s32 mission);
     void addArchives(NameObjArchiveListCollector* pCollector, const char* pName);
+    // The journey, if a mod says: the stage named, or the game's own.
+    const char* firstStage();
+    s32 firstMission();
+    const char* hubStage();
+    bool noStoryScenes();
     // A sound a mod plays from a file, by its name: -1 for none.
     extern bool sHasSoundEffects;
     u32 soundEffectSlow(const char* pName);
@@ -65,7 +75,7 @@ namespace NebulaMods {
         return sHasStageRules ? stageRuleSlow(pStage, pAskedName) : -1;
     }
     // With a mod on: an object a level places whose archive isn't anywhere. It's left out and the log says so, not a stop.
-    bool isMissingFiles(const char* pName);
+    bool isMissingFiles(const char* pName, const JMapInfoIter& rIter);
     // A name a level places that a mod has made as another of the game's objects: that object's name. The name itself otherwise.
     const char* objectLike(const char* pName);
     // What a model named by an object of that class comes from.

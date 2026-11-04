@@ -109,6 +109,7 @@ void MarioActor::initDrawAndModel() {
     _3D2 |= 0x80;
     initBoneMario();
     initTornadoMario();
+    initModPowerUpModels();
     initBlur();
 
     mCurrModel = 0;
@@ -357,6 +358,34 @@ void MarioActor::initBoneMario() {
     _A04->kill();
     MR::hideModel(_A04);
     _3D2 |= 0x100;
+}
+
+void MarioActor::initModPowerUpModels() {
+    for (s32 i = 0; i < NebulaMods::powerUpCount() && i < 58; i++) {
+        const char* pName = NebulaMods::powerUpModel(i);
+        if (pName == nullptr) {
+            continue;
+        }
+        MR::mountAsyncArchiveByObjectOrLayoutName(pName, nullptr);
+        MR::receiveAllRequestedFile();
+        if (!MR::isLoadedObjectOrLayoutArchive(pName)) {
+            continue;
+        }
+        char archive[256];
+        nebula_snprintf(archive, sizeof(archive), "%s.arc", pName);
+        MR::createAndAddResourceHolder(archive);
+        ModelHolder* pHolder = new ModelHolder(pName, true);
+        pHolder->initWithoutIter();
+        J3DModelX* pModel = static_cast< J3DModelX* >(MR::getJ3DModel(pHolder));
+        pModel->copyExtraMtxBuffer(mModels[0]);
+        pModel->copyAnmMtxBuffer(mModels[0]);
+        MR::initMaterialFog(pHolder, true);
+        MR::newDifferedMaterials(pHolder);
+        mModels[6 + i] = pModel;
+        mModPowerUpModels[i] = pHolder;
+        pHolder->kill();
+        MR::hideModel(pHolder);
+    }
 }
 
 void MarioActor::changeDisplayMode(u8 mode) {
@@ -692,7 +721,7 @@ void MarioActor::updateFace() {
 
 void MarioActor::initBlur() {
     _B14 = 0;
-    for (u32 i = 0; i < 6; i++) {
+    for (u32 i = 0; i < 64; i++) {
         if (mModels[i] != nullptr) {
             const u16 jointNum = mModels[i]->mModelData->getDrawMtxNum();
             if (jointNum > _B14) {

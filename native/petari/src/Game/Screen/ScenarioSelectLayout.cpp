@@ -566,14 +566,23 @@ void ScenarioSelectLayout::appearPage(s32 page) {
     }
     mListPage = page;
     mSelectedScenarioNo = -1;
-    for (s32 i = 0; i < 7 && page * 7 + i < mListNum; i++) {
-        appearStar(i, mListScenario[page * 7 + i], mListState[page * 7 + i]);
+    // Six on a page: the screen's seventh place lies over the second.
+    for (s32 i = 0; i < 6 && page * 6 + i < mListNum; i++) {
+        appearStar(i, mListScenario[page * 6 + i], mListState[page * 6 + i]);
     }
 
-    char16_t text[32];
-    const s32 pages = (mListNum + 6) / 7;
-    const s32 number = page + 1;
+    // The page, after the galaxy's name.
+    char16_t text[256];
+    const char16_t* pName = MR::getGalaxyNameOnCurrentLanguage(MR::getCurrentStageName());
     s32 at = 0;
+    while (pName != nullptr && pName[at] != 0 && at < 200) {
+        text[at] = pName[at];
+        at++;
+    }
+    const s32 pages = (mListNum + 5) / 6;
+    const s32 number = page + 1;
+    text[at++] = u' ';
+    text[at++] = u' ';
     text[at++] = u'<';
     text[at++] = u' ';
     if (number >= 10) {
@@ -588,16 +597,14 @@ void ScenarioSelectLayout::appearPage(s32 page) {
     text[at++] = u' ';
     text[at++] = u'>';
     text[at] = 0;
-    MR::setTextBoxMessageRecursive(this, "TextComet", text);
-    MR::showPaneRecursive(this, "CometAppear");
-    MR::startPaneAnim(this, "CometAppear", "CometWait", 0);
+    MR::setTextBoxMessageRecursive(this, "Galaxy", text);
 }
 
 void ScenarioSelectLayout::tryChangePage() {
     if (mListNum <= 7) {
         return;
     }
-    const s32 pages = (mListNum + 6) / 7;
+    const s32 pages = (mListNum + 5) / 6;
     // A pointer: pressing with it at either side of the screen, on no star.
     const f32 pointerX = MR::isStarPointerInScreen(0) && MR::testDPDMenuPadDecideTrigger() && mSelectedScenarioNo <= 0 ? MR::getStarPointerScreenPosition(0)->x : MR::getScreenWidth() * 0.5f;
     const bool left = MR::isHeldLeft(0) || MR::isMoveStickPressedLeft(0) || pointerX < MR::getScreenWidth() * 0.15f;
