@@ -901,10 +901,10 @@ namespace {
     // Objects a plugin can't make: not actors, or they need what only their level holds (a rail, a talk table, a file
     // of that stage).
     const char* const cNotActors[] = {
-#include "Game/System/NebulaNotActors.inc"
+#include "NebulaNotActors.inc"
     };
     const char* const cNeedTheirLevel[] = {
-#include "Game/System/NebulaNeedTheirLevel.inc"
+#include "NebulaNeedTheirLevel.inc"
     };
 
     template < int N >
