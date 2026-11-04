@@ -443,6 +443,7 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
     device_info.enabledExtensionCount = static_cast<std::uint32_t>(device_extensions.size());
     device_info.ppEnabledExtensionNames = device_extensions.data();
     device_info.pEnabledFeatures = xess_upscaling_ ? nullptr : &enabled;
+    enabled_device_extensions_.assign(device_extensions.begin(), device_extensions.end());
     if (vkCreateDevice(physical_, &device_info, nullptr, &device_) != VK_SUCCESS) {
         device_ = VK_NULL_HANDLE;
         return fail("vkCreateDevice failed");

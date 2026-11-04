@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The Vulkan names FidelityFX's backend calls, through volk (ffx_vk_names.h).
+#include "galaxy/render/vk/vk_context.h"
+
 #include <volk.h>
+
+#include <vector>
 
 extern "C" {
 
@@ -133,8 +137,32 @@ VKAPI_ATTR VkResult VKAPI_CALL nebula_ffx_vkDeviceWaitIdle(VkDevice device) {
 VKAPI_ATTR VkResult VKAPI_CALL nebula_ffx_vkEndCommandBuffer(VkCommandBuffer commandBuffer) {
     return vkEndCommandBuffer(commandBuffer);
 }
+// What this device enabled, not all it could: the backend calls whatever the names it reads promise.
 VKAPI_ATTR VkResult VKAPI_CALL nebula_ffx_vkEnumerateDeviceExtensionProperties(VkPhysicalDevice physicalDevice, const char* pLayerName, uint32_t* pPropertyCount, VkExtensionProperties* pProperties) {
-    return vkEnumerateDeviceExtensionProperties(physicalDevice, pLayerName, pPropertyCount, pProperties);
+    uint32_t available = 0u;
+    VkResult result = vkEnumerateDeviceExtensionProperties(physicalDevice, pLayerName, &available, nullptr);
+    if (result != VK_SUCCESS) {
+        return result;
+    }
+    std::vector<VkExtensionProperties> all(available);
+    result = vkEnumerateDeviceExtensionProperties(physicalDevice, pLayerName, &available, all.data());
+    if (result != VK_SUCCESS) {
+        return result;
+    }
+    uint32_t written = 0u;
+    for (uint32_t i = 0u; i < available; ++i) {
+        if (galaxy::render::vk::Context::get().device_extension_enabled(all[i].extensionName)) {
+            if (pProperties != nullptr) {
+                if (written == *pPropertyCount) {
+                    return VK_INCOMPLETE;
+                }
+                pProperties[written] = all[i];
+            }
+            ++written;
+        }
+    }
+    *pPropertyCount = written;
+    return VK_SUCCESS;
 }
 VKAPI_ATTR void VKAPI_CALL nebula_ffx_vkFreeCommandBuffers(VkDevice device, VkCommandPool commandPool, uint32_t commandBufferCount, const VkCommandBuffer* pCommandBuffers) {
     vkFreeCommandBuffers(device, commandPool, commandBufferCount, pCommandBuffers);

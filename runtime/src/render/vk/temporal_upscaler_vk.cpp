@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstring>
 #include <iostream>
 #include <vector>
 
@@ -180,6 +181,20 @@ FfxResource ffx_image(const TemporalImage& image, const wchar_t* name, FfxResour
     return ffxGetResourceVK(image.image, ffxGetImageResourceDescriptionVK(image.image, info, extra), name, state);
 }
 
+// Its debug labels are called unguarded, and exist only with the debug extension: here they do nothing.
+VKAPI_ATTR void VKAPI_CALL no_label_begin(VkCommandBuffer, const VkDebugUtilsLabelEXT*) {}
+VKAPI_ATTR void VKAPI_CALL no_label_end(VkCommandBuffer) {}
+
+VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL ffx_device_proc(VkDevice device, const char* name) {
+    if (std::strcmp(name, "vkCmdBeginDebugUtilsLabelEXT") == 0) {
+        return reinterpret_cast<PFN_vkVoidFunction>(no_label_begin);
+    }
+    if (std::strcmp(name, "vkCmdEndDebugUtilsLabelEXT") == 0) {
+        return reinterpret_cast<PFN_vkVoidFunction>(no_label_end);
+    }
+    return vkGetDeviceProcAddr(device, name);
+}
+
 class Fsr3Upscaler final : public TemporalUpscaler {
 public:
     ~Fsr3Upscaler() override {
@@ -204,7 +219,7 @@ public:
         scratch_.resize(ffxGetScratchMemorySizeVK(physical, kContexts));
         device_context_.vkDevice = device;
         device_context_.vkPhysicalDevice = physical;
-        device_context_.vkDeviceProcAddr = vkGetDeviceProcAddr;
+        device_context_.vkDeviceProcAddr = ffx_device_proc;
         if (ffxGetInterfaceVK(&backend_, ffxGetDeviceVK(&device_context_), scratch_.data(), scratch_.size(), kContexts) !=
             FFX_OK) {
             return false;

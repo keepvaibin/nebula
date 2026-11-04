@@ -5,6 +5,7 @@
 // Objects released while the GPU may still use them are destroyed once it passes the last submitted value.
 #pragma once
 
+#include <algorithm>
 #include <volk.h>
 
 #include "galaxy/render/vk/device_quirks_vk.h"
@@ -122,6 +123,9 @@ public:
     [[nodiscard]] bool depth_clip_enable() const noexcept { return depth_clip_enable_; }
     // What FSR 3's compute passes need, enabled (temporal_upscaler_vk.cpp).
     [[nodiscard]] bool temporal_upscaling() const noexcept { return temporal_upscaling_; }
+    [[nodiscard]] bool device_extension_enabled(const char* name) const noexcept {
+        return std::find(enabled_device_extensions_.begin(), enabled_device_extensions_.end(), name) != enabled_device_extensions_.end();
+    }
     // What XeSS asked for, enabled (Context::create).
     [[nodiscard]] bool xess_upscaling() const noexcept { return xess_upscaling_; }
     [[nodiscard]] bool display_timing() const noexcept { return display_timing_; }
@@ -223,6 +227,7 @@ private:
     bool depth_clamp_ = false;
     bool depth_clip_enable_ = false;
     bool temporal_upscaling_ = false;
+    std::vector<std::string> enabled_device_extensions_;
     bool xess_upscaling_ = false;
     bool xess_instance_ready_ = false;
     bool debug_names_ = false;
