@@ -319,6 +319,92 @@ static inline f32 NebulaSqrt(f32 value) {
     return value > 0.0f ? __builtin_sqrtf(value) : value;
 }
 
+/* Sine and cosine of an angle in radians, within two units in the last place: the quarter turn nearest taken off in two
+   parts, polynomials on what is left. The same results on every platform, whatever its C library. An angle that is not
+   a number or is too large to mean anything counts as zero. */
+static inline void NebulaSinCos(f32 radians, f32* sine, f32* cosine) {
+    if (!(radians > -8.0e8f && radians < 8.0e8f)) {
+        *sine = 0.0f;
+        *cosine = 1.0f;
+        return;
+    }
+    const f32 quarters = radians * 0.63661977f;
+    const s32 n = (s32)(quarters + (quarters >= 0.0f ? 0.5f : -0.5f));
+    const f32 r = ((radians - (f32)n * 1.5703125f) - (f32)n * 0.00048375130f) - (f32)n * 7.5497901e-8f;
+    const f32 r2 = r * r;
+    const f32 s = r + r * r2 * (-0.16666654f + r2 * (0.0083321608f + r2 * -0.00019515296f));
+    const f32 c = 1.0f + r2 * (-0.5f + r2 * (0.041666418f + r2 * (-0.0013888397f + r2 * 0.000024760495f)));
+    switch (n & 3) {
+    case 0:
+        *sine = s;
+        *cosine = c;
+        break;
+    case 1:
+        *sine = c;
+        *cosine = -s;
+        break;
+    case 2:
+        *sine = -s;
+        *cosine = -c;
+        break;
+    default:
+        *sine = -c;
+        *cosine = s;
+        break;
+    }
+}
+
+static inline f32 NebulaSin(f32 radians) {
+    f32 s, c;
+    NebulaSinCos(radians, &s, &c);
+    return s;
+}
+
+static inline f32 NebulaCos(f32 radians) {
+    f32 s, c;
+    NebulaSinCos(radians, &s, &c);
+    return c;
+}
+
+/* The angle of (x, y) from the x axis, -pi to pi; 0 for (0, 0). */
+static inline f32 NebulaAtan2(f32 y, f32 x) {
+    const f32 ax = x < 0.0f ? -x : x;
+    const f32 ay = y < 0.0f ? -y : y;
+    if (!(ax > 0.0f || ay > 0.0f)) {
+        return 0.0f;
+    }
+    const f32 z = ax >= ay ? ay / ax : ax / ay;
+    const f32 z2 = z * z;
+    f32 a = z * (0.99997726f + z2 * (-0.33262347f + z2 * (0.19354346f + z2 * (-0.11643287f + z2 * (0.05265332f + z2 * -0.01172120f)))));
+    if (ax < ay) {
+        a = 1.5707964f - a;
+    }
+    if (x < 0.0f) {
+        a = 3.1415927f - a;
+    }
+    return y < 0.0f ? -a : a;
+}
+
+static inline f32 NebulaAsin(f32 value) {
+    if (!(value > -1.0f)) {
+        return value <= -1.0f ? -1.5707964f : 0.0f;
+    }
+    if (value >= 1.0f) {
+        return 1.5707964f;
+    }
+    return NebulaAtan2(value, __builtin_sqrtf(1.0f - value * value));
+}
+
+static inline f32 NebulaAcos(f32 value) {
+    if (!(value > -1.0f)) {
+        return value <= -1.0f ? 3.1415927f : 0.0f;
+    }
+    if (value >= 1.0f) {
+        return 0.0f;
+    }
+    return NebulaAtan2(__builtin_sqrtf(1.0f - value * value), value);
+}
+
 /* Along the shorter way round: q is flipped when the two lie on opposite sides. */
 static inline void NebulaQuatLerp(const Quaternion* p, const Quaternion* q, f32 t, Quaternion* dst) {
     const f32 dot = (p->z * q->z + p->x * q->x) + (p->w * q->w + p->y * q->y);

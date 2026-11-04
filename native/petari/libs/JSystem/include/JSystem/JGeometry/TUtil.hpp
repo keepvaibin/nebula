@@ -41,15 +41,11 @@ namespace JGeometry {
                 return -1.5707964f;
             }
 
-            if (val < 0.0f) {
-                return -JMath::sAsinAcosTable.mTable[(u32)(1023.5f * -val)];
-            }
-
-            return JMath::sAsinAcosTable.mTable[(u32)(1023.5f * val)];
+            return JMAAsinRadian(val);
         }
 
         static f32 acos(f32 val) {
-            return JMath::sAsinAcosTable.acos_(val);
+            return JMAAcosRadian(val);
         }
 
         static f32 PI() {

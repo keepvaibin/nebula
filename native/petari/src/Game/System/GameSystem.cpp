@@ -59,7 +59,6 @@ extern "C" void nebula_game_main(void) {
     nw4r::lyt::LytInit();
     SingletonHolder< HeapMemoryWatcher >::init();
     SingletonHolder< HeapMemoryWatcher >::get()->setCurrentHeapToStationedHeap();
-    MR::initAcosTable();
     SingletonHolder< GameSystem >::init();
     SingletonHolder< GameSystem >::get()->init();
 

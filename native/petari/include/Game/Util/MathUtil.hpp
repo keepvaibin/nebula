@@ -9,7 +9,6 @@
 
 namespace MR {
     /// @brief Initializes the precomputed arccosine table.
-    void initAcosTable();
 
     /// @brief Returns the arccosine of a number from the precomputed arccosine table.
     /// @param x The trigonometric ratio to evaluate.

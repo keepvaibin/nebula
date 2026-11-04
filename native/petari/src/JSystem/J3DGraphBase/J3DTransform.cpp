@@ -104,9 +104,12 @@ void J3DGetTranslateRotateMtx(const J3DTransformInfo& tx, Mtx dst) {
     f32 cxsz;
     f32 sxcz;
 
-    f32 sx = JMASSin(tx.mRotation.x), cx = JMath::sSinCosTable.cosShort(tx.mRotation.x);
-    f32 sy = JMASSin(tx.mRotation.y), cy = JMath::sSinCosTable.cosShort(tx.mRotation.y);
-    f32 sz = JMASSin(tx.mRotation.z), cz = JMath::sSinCosTable.cosShort(tx.mRotation.z);
+    f32 sx, cx;
+    JMASSinCos(tx.mRotation.x, &sx, &cx);
+    f32 sy, cy;
+    JMASSinCos(tx.mRotation.y, &sy, &cy);
+    f32 sz, cz;
+    JMASSinCos(tx.mRotation.z, &sz, &cz);
 
     dst[2][0] = -sy;
     dst[0][0] = cz * cy;
@@ -133,9 +136,12 @@ void J3DGetTranslateRotateMtx(s16 rx, s16 ry, s16 rz, f32 tx, f32 ty, f32 tz, Mt
     f32 cxsz;
     f32 sxcz;
 
-    f32 sx = JMASSin(rx), cx = JMath::sSinCosTable.cosShort(rx);
-    f32 sy = JMASSin(ry), cy = JMath::sSinCosTable.cosShort(ry);
-    f32 sz = JMASSin(rz), cz = JMath::sSinCosTable.cosShort(rz);
+    f32 sx, cx;
+    JMASSinCos(rx, &sx, &cx);
+    f32 sy, cy;
+    JMASSinCos(ry, &sy, &cy);
+    f32 sz, cz;
+    JMASSinCos(rz, &sz, &cz);
 
     dst[2][0] = -sy;
     dst[0][0] = cz * cy;
@@ -159,7 +165,8 @@ void J3DGetTranslateRotateMtx(s16 rx, s16 ry, s16 rz, f32 tx, f32 ty, f32 tz, Mt
 }
 
 void J3DGetTextureMtx(const J3DTextureSRTInfo& srt, const Vec& center, Mtx dst) {
-    f32 sr = JMASSin(srt.mRotation), cr = JMath::sSinCosTable.cosShort(srt.mRotation);
+    f32 sr, cr;
+    JMASSinCos(srt.mRotation, &sr, &cr);
 
     f32 cx = srt.mScaleX * cr;
     f32 sx = srt.mScaleX * sr;
@@ -179,7 +186,8 @@ void J3DGetTextureMtx(const J3DTextureSRTInfo& srt, const Vec& center, Mtx dst) 
 }
 
 void J3DGetTextureMtxOld(const J3DTextureSRTInfo& srt, const Vec& center, Mtx dst) {
-    f32 sr = JMASSin(srt.mRotation), cr = JMath::sSinCosTable.cosShort(srt.mRotation);
+    f32 sr, cr;
+    JMASSinCos(srt.mRotation, &sr, &cr);
 
     f32 cx = srt.mScaleX * cr;
     f32 sx = srt.mScaleX * sr;
@@ -199,7 +207,8 @@ void J3DGetTextureMtxOld(const J3DTextureSRTInfo& srt, const Vec& center, Mtx ds
 }
 
 void J3DGetTextureMtxMaya(const J3DTextureSRTInfo& srt, Mtx dst) {
-    f32 sr = JMASSin(srt.mRotation), cr = JMath::sSinCosTable.cosShort(srt.mRotation);
+    f32 sr, cr;
+    JMASSinCos(srt.mRotation, &sr, &cr);
     f32 tx = srt.mTranslationX - 0.5f;
     f32 ty = srt.mTranslationY - 0.5f;
 
@@ -216,7 +225,8 @@ void J3DGetTextureMtxMaya(const J3DTextureSRTInfo& srt, Mtx dst) {
 }
 
 void J3DGetTextureMtxMayaOld(const J3DTextureSRTInfo& srt, Mtx dst) {
-    f32 sr = JMASSin(srt.mRotation), cr = JMath::sSinCosTable.cosShort(srt.mRotation);
+    f32 sr, cr;
+    JMASSinCos(srt.mRotation, &sr, &cr);
     f32 tx = srt.mTranslationX - 0.5f;
     f32 ty = srt.mTranslationY - 0.5f;
 

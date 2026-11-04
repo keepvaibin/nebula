@@ -218,7 +218,6 @@ void SkeletalFishBoss::calcAnim() {
 
     if (!MR::isNoCalcAnim(this)) {
         for (u32 i = 0; i < ARRAY_SIZE(::sShadowInfo); i++) {
-            JMath::TSinCosTable< 14, f32 >* pTable = &JMath::sSinCosTable;
             const JointToShadow* pShadow = &::sShadowInfo[i];
             TPos3f jointMtx(MR::getJointMtx(this, pShadow->mJointName));
             TVec3f position;
@@ -226,7 +225,7 @@ void SkeletalFishBoss::calcAnim() {
             TVec3f gravity;
             MR::calcGravityVector(this, position, &gravity, nullptr, 0);
 
-            if (cameraDir.dot(gravity) < pTable->cosRadian(1.8325958f)) {
+            if (cameraDir.dot(gravity) < JMACosRadian(1.8325958f)) {
                 MR::invalidateShadow(this, pShadow->mName);
             } else {
                 MR::validateShadow(this, pShadow->mName);
