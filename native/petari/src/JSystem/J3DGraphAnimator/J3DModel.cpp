@@ -235,6 +235,7 @@ void J3DModel::update() {
 
 void J3DModel::calc() {
     j3dSys.setModel(this);
+    mNebulaGeneration++;
 
     mModelData->syncJ3DSysFlags();
     mVertexBuffer.setCurrentVtxPos(mVertexBuffer.mVtxPosArray[0]);
@@ -268,6 +269,7 @@ void J3DModel::entry() {
 }
 
 void J3DModel::viewCalc() {
+    mNebulaGeneration++;
     mMtxBuffer->swapDrawMtx();
     mMtxBuffer->swapNrmMtx();
 

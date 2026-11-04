@@ -36,7 +36,7 @@ void widen_lines_points(std::uint8_t primitive, std::uint32_t count, const Rende
         out->mtx_indices[2] |= flags;
         if (other != nullptr) {
             std::memcpy(out->tangent, other->position, sizeof(out->tangent));
-            out->curve[0] = other->mtx_indices[0] & 0xFFu;
+            out->curve[0] = other->mtx_indices[0];
         }
         ++out;
     };
@@ -107,7 +107,7 @@ constexpr unsigned kRefineMostLevels = 3u;  // eight segments an edge
 constexpr float kRefineOfExtent = 1.0f / 800.0f;
 
 std::uint32_t matrix_of(const RenderVertex& v) {
-    return v.mtx_indices[0] & 0xFFu;
+    return v.mtx_indices[0];
 }
 
 // The normal corner `a` bends the edge to corner `b` by (Phong tessellation's edge).
@@ -316,20 +316,18 @@ bool expand(const Geometry& geometry, const DrawArrays& arrays, std::uint8_t pos
         const Corner& c = geometry.corners[i];
         RenderVertex v;
         std::memset(&v, 0, sizeof(v));
-        // Places as matrix rows (three a matrix, texture matrices from row 30).
-        const std::uint8_t pn =
-            static_cast<std::uint8_t>(3u * ((a & kPositionMatrix) != 0u ? c.position_matrix : position_matrix));
-        std::uint8_t tex[8]{};
+        // The position matrix's first row in the draw's block (three rows a matrix); a coordinate's own matrix as a
+        // nibble: its texture place, 14 the corner's normal matrix, 15 its position matrix.
+        v.mtx_indices[0] = 3u * ((a & kModelMatrices) != 0u ? std::uint32_t{c.model_matrix}
+                                 : (a & kPositionMatrix) != 0u ? std::uint32_t{c.position_matrix} : std::uint32_t{position_matrix});
         for (unsigned t = 0; t < 8u; ++t) {
             if ((a & (kTextureMatrix0 << t)) != 0u) {
-                tex[t] = c.texture_matrix[t] == kCornerPositionMatrix ? pn : static_cast<std::uint8_t>(30u + 3u * c.texture_matrix[t]);
+                const std::uint32_t code = c.texture_matrix[t] == kCornerPositionMatrix ? 15u
+                                           : c.texture_matrix[t] == kCornerNormalMatrix ? 14u
+                                                                                        : std::min<std::uint32_t>(c.texture_matrix[t], 10u);
+                v.mtx_indices[1] |= code << (4u * t);
             }
         }
-        v.mtx_indices[0] = pn | static_cast<std::uint32_t>(tex[0]) << 8u | static_cast<std::uint32_t>(tex[1]) << 16u |
-                           static_cast<std::uint32_t>(tex[2]) << 24u;
-        v.mtx_indices[1] = tex[3] | static_cast<std::uint32_t>(tex[4]) << 8u |
-                           static_cast<std::uint32_t>(tex[5]) << 16u | static_cast<std::uint32_t>(tex[6]) << 24u;
-        v.mtx_indices[2] = tex[7];
 
         const float* p = entry(arrays[0], ArrayKind::Position, c.position, 3u, 0u);
         if (p == nullptr) return false;

@@ -108,6 +108,13 @@ public:
     void set_load_tracking(bool on) noexcept { track_loads_ = on; }
     void reset_load_signature() noexcept { load_signature_ = kLoadSignatureSeed; }
     [[nodiscard]] std::uint64_t load_signature() const noexcept { return load_signature_; }
+    // A draw reading a model's block counts as a load: the same draws read the same matrices every frame.
+    void note_block_load(std::uint32_t matrix) noexcept {
+        ++writes_;
+        if (track_loads_) {
+            load_signature_ = (load_signature_ ^ matrix) * 0x100000001B3ull;
+        }
+    }
 
 private:
     // Writes `count` rows from `first` (a kind's rows); `values` 4 floats a row (`width` of them given, the rest 0).

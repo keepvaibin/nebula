@@ -22,7 +22,7 @@ struct RenderVertex {
     std::uint32_t color0;           // RGBA8
     std::uint32_t color1;           // RGBA8
     float uv[8][2];
-    std::uint32_t mtx_indices[3];   // x: pn/tex0-2, y: tex3-6, z: tex7
+    std::uint32_t mtx_indices[3];   // x: the position matrix's first row, y: each coordinate's matrix (a nibble), z: flags
     std::uint32_t curve[3];
 };
 static_assert(sizeof(RenderVertex) == 144, "fixed 144-byte vertex stride");

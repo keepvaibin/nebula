@@ -552,6 +552,53 @@ void palette_motion(RowView a, RowView b, const CameraMotion& camera,
     }
 }
 
+void model_motion(const std::uint32_t* a, const std::uint32_t* b, std::uint32_t count, const CameraMotion& camera,
+                  bool orthographic, ModelMotion& out) {
+    out.position.resize(count);
+    out.normal.resize(count);
+    out.position_changed.assign(count, 0u);
+    out.normal_changed.assign(count, 0u);
+    out.snapped = 0u;
+    const bool camera_moves = camera.known && !camera.cut && !equal_words(camera.a, camera.b) && !orthographic;
+    const CameraMotion screen{};
+    const CameraMotion& normal_camera = orthographic ? screen : camera;
+    for (std::uint32_t k = 0; k < count; ++k) {
+        const std::uint32_t* wb = b + 12u * k;
+        const std::uint32_t* wa = a != nullptr ? a + 12u * k : nullptr;
+        if (camera_moves || (wa != nullptr && std::memcmp(wa, wb, 48u) != 0)) {
+            const Affine34 mb = load_matrix(wb);
+            if (finite(mb)) {
+                Affine34 ma{};
+                const Affine34* pa = nullptr;
+                if (wa != nullptr) {
+                    ma = load_matrix(wa);
+                    if (finite(ma)) pa = &ma;
+                }
+                eye_motion(pa, mb, camera, orthographic, out.position[k]);
+                out.position_changed[k] = 1u;
+                out.snapped += out.position[k].snapped ? 1u : 0u;
+            }
+        }
+        // A position matrix snapped to b or taking b's rotation (a flip) takes b's normals with it.
+        if (out.position_changed[k] != 0u && (out.position[k].snapped || out.position[k].flipped)) continue;
+        const std::uint32_t* nb = b + 12u * count + 12u * k;
+        const std::uint32_t* na = a != nullptr ? a + 12u * count + 12u * k : nullptr;
+        if (camera_moves || (na != nullptr && std::memcmp(na, nb, 48u) != 0)) {
+            const Affine34 mb = load_normal(nb);
+            if (finite(mb)) {
+                Affine34 ma{};
+                const Affine34* pa = nullptr;
+                if (na != nullptr) {
+                    ma = load_normal(na);
+                    if (finite(ma)) pa = &ma;
+                }
+                normal_motion(pa, mb, normal_camera, out.normal[k]);
+                out.normal_changed[k] = 1u;
+            }
+        }
+    }
+}
+
 void palette_at(const PaletteMotion& m, RowView a, RowView b,
                 const CameraMotion& camera, const Affine34& camera_t, float t,
                 std::uint32_t* out) noexcept {

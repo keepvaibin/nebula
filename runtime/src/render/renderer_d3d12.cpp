@@ -5622,6 +5622,7 @@ bool RendererD3D12::begin_replay_sequence(const ReplaySequence& sequence) {
         }
     }
 
+    interp_copies_.insert(interp_copies_.end(), sequence.model_copies.begin(), sequence.model_copies.end());
     // The program: copies, ops, payload (16 bytes of tail room for Load4).
     const interp_gpu::Program& program = *sequence.program;
     const std::size_t copies_bytes = interp_copies_.size() * sizeof(interp_gpu::Copy);

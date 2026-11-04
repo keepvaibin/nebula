@@ -51,6 +51,12 @@ namespace J3DNativeShape {
     void setTexGen(u8 coord, u8 type, u8 source, bool normalize, u8 postMatrix);
     // Texture matrices, current matrices and texgens set since the last draw, as a record now (before a material
     // record, which must not overtake them).
+    // The draw matrices of the model drawn (J3DShapeMtxConcatView::loadPalette): the next shape draw reads block
+    // `palette`, a shape of one matrix its `matrix`.
+    void setPalette(u32 palette, u16 matrix);
+    // Writes the matrices corners name, once a shape's table is known.
+    void useModelMatrices(J3DShape* pShape);
+
     void flushState();
     // An immediate's position and normal matrices: those at the places `mask` names (bit k: place k; 0: the current
     // place), in a buffer valid until the next record.

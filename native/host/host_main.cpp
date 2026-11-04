@@ -1922,6 +1922,7 @@ void svc_shape_geometry(void*, const NebulaShapeGeometry* geometry) {
             out.texture_matrix[k] = in.texture_matrix[k];
         }
         out.position_matrix = in.position_matrix;
+        out.model_matrix = in.model_matrix;
     }
     g->indices.assign(geometry->indices, geometry->indices + geometry->index_count);
     for (const uint16_t index : g->indices) {
@@ -1986,12 +1987,15 @@ void copy_draw_matrices(const NebulaDrawMatrix* matrices, uint32_t count, galaxy
 
 void svc_shape_draw(void*, uint64_t shape, uint64_t position, uint64_t normal, uint64_t color,
                     const NebulaDrawMatrix* matrices, uint32_t matrix_count, const NebulaShapeCurrent* current,
-                    const NebulaShapeTexGen* texgens, uint32_t texgen_count, const NebulaPassState* pass) {
+                    const NebulaShapeTexGen* texgens, uint32_t texgen_count, const NebulaPassState* pass,
+                    uint32_t palette, uint32_t palette_matrix) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::render::shapes;
     attach_pending_records();
     shapes::Record record;
     record.kind = shapes::Record::Kind::Draw;
+    record.palette = palette;
+    record.palette_matrix = palette_matrix;
     std::memcpy(&record.pass, pass, sizeof(record.pass));
     record.key = shape;
     record.position = position;
@@ -2012,7 +2016,29 @@ void svc_shape_draw(void*, uint64_t shape, uint64_t position, uint64_t normal, u
     galaxy::render::attach_shape_record(std::move(record));
 #else
     (void)shape, (void)position, (void)normal, (void)color, (void)matrices, (void)matrix_count,
-        (void)current, (void)texgens, (void)texgen_count, (void)pass;
+        (void)current, (void)texgens, (void)texgen_count, (void)pass, (void)palette, (void)palette_matrix;
+#endif
+}
+
+// A model's draw matrices for a view: a record in draw order and the rows, written by the game, in the frame's pool.
+uint32_t svc_shape_palette(void*, uint64_t key, uint32_t count, uint32_t frame, float** rows) {
+#if defined(NEBULA_HOST_RENDERER)
+    namespace shapes = galaxy::render::shapes;
+    static uint32_t next_id = 0u;
+    attach_pending_records();
+    shapes::Record record;
+    record.kind = shapes::Record::Kind::Palette;
+    record.key = key;
+    record.palette = ++next_id;
+    record.palette_matrix = frame;
+    *rows = galaxy::render::reserve_palette_rows(record, count);
+    galaxy::render::attach_shape_record(std::move(record));
+    return next_id;
+#else
+    static float scratch[24u * 4096u];
+    (void)key, (void)count, (void)frame;
+    *rows = scratch;
+    return 1u;
 #endif
 }
 
@@ -2243,19 +2269,6 @@ void svc_immediate(void*, const NebulaImmediate* draw) {
         }
         // Vertices without a place of their own take the draw's.
         v.mtx_indices[0] = 3u * (draw->position_matrix != nullptr ? draw->position_matrix[i] : draw->pass.position_matrix % 10u) & 0xFFu;
-        // Texture matrices named by the attributes: place 0's row.
-        for (unsigned t = 0; t < 8u; ++t) {
-            if ((attributes & (shapes::kTextureMatrix0 << t)) != 0u) {
-                const uint32_t row = 30u;
-                if (t < 3u) {
-                    v.mtx_indices[0] |= row << (8u * (t + 1u));
-                } else if (t < 7u) {
-                    v.mtx_indices[1] |= row << (8u * (t - 3u));
-                } else {
-                    v.mtx_indices[2] |= row;
-                }
-            }
-        }
     }
     if (widened != 0u) {
         shapes::widen_lines_points(draw->primitive, n, out, galaxy::render::reserve_record_vertices(record, widened));
@@ -4335,6 +4348,7 @@ int main(int argc, char** argv) {
     services.shape_geometry = svc_shape_geometry;
     services.shape_forget = svc_shape_forget;
     services.shape_draw = svc_shape_draw;
+    services.shape_palette = svc_shape_palette;
     services.native_material = svc_native_material;
     services.test_frame_step = deterministic_mode() ? svc_test_frame_step : nullptr;
     services.view_projection = svc_view_projection;

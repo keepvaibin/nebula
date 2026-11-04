@@ -1088,7 +1088,8 @@ void RenderCore::write_scene_vs_constants(const VertexConstants& cpu, VertexCons
         apply_scene_jitter(cpu, upload, jitter_ndc);
     }
     // The draw's position rows (motion vectors of the frame after read them as its previous ones).
-    const std::uint32_t palette_offset = current_matrix_palette_ != 0u ? matrix_block_base_[0] : kNoPaletteOffset;
+    const std::uint32_t palette_offset = draw_palette_ != nullptr ? draw_palette_->ring_row
+                                         : current_matrix_palette_ != 0u ? matrix_block_base_[0] : kNoPaletteOffset;
     temporal_vs_palette_va_ = current_matrix_palette_;
     if (std::exchange(scene_chunk_restart_, false) && interp_recording_ && !motion_scene_ &&
         current_replay_record_ >= 0) [[unlikely]] {
@@ -1141,7 +1142,13 @@ void RenderCore::write_scene_vs_constants(const VertexConstants& cpu, VertexCons
     record.continuity = identity_continuity_;
     record.particle = identity_continuity_particle_;
     record.palette = cpu_vs_constants_.per_vertex != 0u;
-    if (record.palette) {
+    if (draw_palette_ != nullptr) {
+        // The draw's matrix (a skinned shape's first stands for its object).
+        const float* rows = model_palette_rows_.data() + draw_palette_->first + (record.palette ? 0u : 4u * draw_palette_row_);
+        std::memcpy(record.position.data(), rows, 12u * sizeof(float));
+        record.palette = true;
+        record.palette_offset = palette_offset;
+    } else if (record.palette) {
         // Position matrix 0 (rows 0-2) stands for the per-vertex palette's object.
         for (unsigned i = 0; i < 12u; ++i) record.position[i] = matrices_.matrix_value(i / 4u, i % 4u);
         record.palette_offset = palette_offset;
@@ -1172,6 +1179,22 @@ void RenderCore::write_scene_vs_constants(const VertexConstants& cpu, VertexCons
         scene.prev_index.push_back(m);
         scene.palette.push_back(current_palette_shadow_);
         scene.per_vertex.push_back(record.palette ? 1u : 0u);
+        std::int32_t scene_model = -1;
+        if (draw_palette_ != nullptr) {
+            ModelPalette& block = *draw_palette_;
+            if (block.scene_stamp != interp_scene_stamp_) {
+                block.scene_stamp = interp_scene_stamp_;
+                block.scene_model = static_cast<std::int32_t>(scene.models.size());
+                const std::uint32_t words = block.count * 24u;
+                scene.models.push_back({block.key, block.order, block.count, static_cast<std::uint32_t>(scene.model_words.size()),
+                                        block.ring_row});
+                const std::size_t at = scene.model_words.size();
+                scene.model_words.resize(at + words);
+                std::memcpy(scene.model_words.data() + at, model_palette_rows_.data() + block.first, words * 4u);
+            }
+            scene_model = block.scene_model;
+        }
+        scene.model.push_back(scene_model);
         const std::uint8_t lights = interp_draw_facts(draw_state_).second;
         scene.light_masks.push_back(lights);
         scene.category.push_back(record.category);
@@ -1503,6 +1526,7 @@ void RenderCore::note_stripe_particles(const FrameChunk& chunk) {
 // A fresh InterpScene for the frame being recorded (its mirror pass or its 3D
 // scene, whichever comes first).
 void RenderCore::open_interp_scene() {
+    ++interp_scene_stamp_;
     note_interp_log_completion();
     interp_scene_ = (interp_scene_ + 1u) % 4u;
     if (interp_shown_scene_ == static_cast<std::int32_t>(interp_scene_)) {
@@ -2718,6 +2742,8 @@ bool RenderCore::render_interp_subframe(float t) {
         interp_pending_.clear();
         interp_palette_motions_.clear();
         interp_palette_first_.assign(scene.palette_count, -1);
+        interp_model_index_.assign(scene.models.size(), -1);
+        std::size_t model_motions = 0u;
         static const CameraCutLimits cut_limits{};
         camera_motion(before_valid && before_scene.view_known ? &before_scene.view : nullptr,
                       scene.view_known ? &scene.view : nullptr, interp_camera_move_, cut_limits,
@@ -2788,7 +2814,9 @@ bool RenderCore::render_interp_subframe(float t) {
                 // are taken whole).
                 InterpPaletteMotion& entry = interp_palette_motions_[static_cast<std::size_t>(index)];
                 entry.light_mask |= scene.light_masks[r];
-                if (scene.per_vertex[r] != 0u) {
+                if (scene.model[r] >= 0) {
+                    // Its position and normal matrices are in its model's block.
+                } else if (scene.per_vertex[r] != 0u) {
                     entry.position_mask = kAllPaletteSlots;
                     entry.normal_mask = kAllPaletteSlots;
                 } else {
@@ -2800,7 +2828,34 @@ bool RenderCore::render_interp_subframe(float t) {
                 }
                 motion.palette = index;
             }
-            if (motion.projection_moves || motion.palette >= 0) {
+            const std::int32_t model = scene.model[r];
+            if (model >= 0) {
+                std::int32_t& entry = interp_model_index_[static_cast<std::size_t>(model)];
+                if (entry < 0) {
+                    if (interp_model_motions_.size() <= model_motions) interp_model_motions_.emplace_back();
+                    entry = static_cast<std::int32_t>(model_motions++);
+                    InterpModelMotion& moving_model = interp_model_motions_[static_cast<std::size_t>(entry)];
+                    moving_model.model = model;
+                    moving_model.before = -1;
+                    const InterpScene::Model& block = scene.models[static_cast<std::size_t>(model)];
+                    if (before_valid) {
+                        for (std::size_t b = 0; b < before_scene.models.size(); ++b) {
+                            const InterpScene::Model& other = before_scene.models[b];
+                            if (other.key == block.key && other.order == block.order && other.count == block.count) {
+                                moving_model.before = static_cast<std::int32_t>(b);
+                                break;
+                            }
+                        }
+                    }
+                    model_motion(moving_model.before >= 0 ? before_scene.model_words.data() +
+                                     before_scene.models[static_cast<std::size_t>(moving_model.before)].first_word : nullptr,
+                                 scene.model_words.data() + block.first_word, block.count, camera, orthographic,
+                                 moving_model.motion);
+                    interp_snapped_ += moving_model.motion.snapped;
+                }
+                motion.model = entry;
+            }
+            if (motion.projection_moves || motion.palette >= 0 || motion.model >= 0) {
                 interp_pending_.push_back(motion);
             }
         }
@@ -2814,8 +2869,16 @@ bool RenderCore::render_interp_subframe(float t) {
             interp_snapped_ += entry.motion.snapped;
             ++interp_palette_decompositions_;
         }
+        interp_model_motions_.resize(model_motions);
         for (InterpRecordMotion& motion : interp_pending_) {
-            if (motion.palette >= 0 &&
+            bool model_moves = false;
+            if (motion.model >= 0) {
+                const ModelMotion& m = interp_model_motions_[static_cast<std::size_t>(motion.model)].motion;
+                for (std::size_t k = 0; k < m.position_changed.size() && !model_moves; ++k) {
+                    model_moves = m.position_changed[k] != 0u || m.normal_changed[k] != 0u;
+                }
+            }
+            if (motion.palette >= 0 && !model_moves &&
                 !interp_palette_motions_[static_cast<std::size_t>(motion.palette)].motion.any_changed) {
                 motion.palette = -1;
             }
@@ -2933,9 +2996,25 @@ bool RenderCore::prepare_interp_sequence(const InterpScene& scene, const InterpS
     // moving block at the frame presented before (blocks the program leaves
     // alone carry their own transform there: no motion).
     const bool motion = renderer_.temporal_interpolation();
+    // The blocks the moving records read (a record in the output reads all its rows there).
+    std::uint32_t model_rows = 0u;
+    for (InterpModelMotion& entry : interp_model_motions_) {
+        entry.output_row = ~0u;
+    }
+    for (const InterpRecordMotion& moving : interp_moving_) {
+        if (moving.model < 0 || moving.palette < 0) continue;
+        InterpModelMotion& entry = interp_model_motions_[static_cast<std::size_t>(moving.model)];
+        if (entry.output_row == ~0u) {
+            const std::uint32_t count = scene.models[static_cast<std::size_t>(entry.model)].count;
+            entry.output_row = model_rows;
+            model_rows += 6u * count;
+            entry.prev_row = model_rows;
+            model_rows += motion ? 3u * count : 0u;
+        }
+    }
     interp_layout_ = {static_cast<std::uint32_t>(interp_moving_.size()),
                       static_cast<std::uint32_t>(interp_palette_source_.size()),
-                      motion ? static_cast<std::uint32_t>(interp_palette_source_.size()) : 0u};
+                      motion ? static_cast<std::uint32_t>(interp_palette_source_.size()) : 0u, model_rows};
     const interp_gpu::Layout& layout = interp_layout_;
     for (std::size_t s = 0; s < interp_moving_.size(); ++s) {
         const InterpRecordMotion& moving = interp_moving_[s];
@@ -2959,8 +3038,16 @@ bool RenderCore::prepare_interp_sequence(const InterpScene& scene, const InterpS
                     interp_gpu::kPaletteRows / 4u;
                 const std::uint32_t row_bases[4]{rows + draw_rows::kNormal, rows + draw_rows::kTexture,
                                                  rows + draw_rows::kPost, rows + draw_rows::kLight};
-                interp_program_.store(base + interp_gpu::kVsPosBase, &rows, 1u);
-                interp_program_.store(base + interp_gpu::kVsRowBases, row_bases, 4u);
+                std::uint32_t pos_rows = rows;
+                std::uint32_t kept_row_bases[4]{row_bases[0], row_bases[1], row_bases[2], row_bases[3]};
+                if (moving.model >= 0) {
+                    // Its position and normal matrices from its model's block.
+                    const InterpModelMotion& entry = interp_model_motions_[static_cast<std::size_t>(moving.model)];
+                    pos_rows = layout.model_row(entry.output_row);
+                    kept_row_bases[0] = pos_rows + 3u * scene.models[static_cast<std::size_t>(entry.model)].count;
+                }
+                interp_program_.store(base + interp_gpu::kVsPosBase, &pos_rows, 1u);
+                interp_program_.store(base + interp_gpu::kVsRowBases, kept_row_bases, 4u);
             }
         }
         if (motion) {
@@ -2971,7 +3058,9 @@ bool RenderCore::prepare_interp_sequence(const InterpScene& scene, const InterpS
             if (palette_slot >= 0) {
                 // Mode 0: the palette's rows at the frame before.
                 const std::uint32_t ctrl[2]{
-                    0u, (layout.prev_palette_offset(static_cast<std::uint32_t>(palette_slot)) - layout.palette_base()) /
+                    0u, moving.model >= 0
+                            ? layout.model_row(interp_model_motions_[static_cast<std::size_t>(moving.model)].prev_row)
+                            : (layout.prev_palette_offset(static_cast<std::uint32_t>(palette_slot)) - layout.palette_base()) /
                                 16u + interp_gpu::kPrevPaletteRows / 4u};
                 interp_program_.store(base + interp_gpu::kVsMotionCtrl, ctrl, 2u);
             }
@@ -2997,6 +3086,26 @@ bool RenderCore::prepare_interp_sequence(const InterpScene& scene, const InterpS
             interp_program_.at_previous(false);
         }
     }
+    interp_model_copies_.clear();
+    for (const InterpModelMotion& entry : interp_model_motions_) {
+        if (entry.output_row == ~0u) continue;
+        const InterpScene::Model& block = scene.models[static_cast<std::size_t>(entry.model)];
+        const std::uint32_t* now_words = scene.model_words.data() + block.first_word;
+        const std::uint32_t* before_words = entry.before >= 0
+            ? before_scene.model_words.data() + before_scene.models[static_cast<std::size_t>(entry.before)].first_word : nullptr;
+        const std::uint32_t output_word = (layout.models_base() + entry.output_row * 16u) / 4u;
+        interp_model_copies_.push_back({static_cast<std::uint32_t>(interp_gpu::Source::Matrices), block.ring_row * 16u,
+                                        layout.models_base() + entry.output_row * 16u, block.count * 24u});
+        interp_program_.model(output_word, entry.motion, before_words, now_words, block.count, false);
+        if (motion) {
+            const std::uint32_t prev_word = (layout.models_base() + entry.prev_row * 16u) / 4u;
+            interp_model_copies_.push_back({static_cast<std::uint32_t>(interp_gpu::Source::Matrices), block.ring_row * 16u,
+                                            layout.models_base() + entry.prev_row * 16u, block.count * 12u});
+            interp_program_.at_previous(true);
+            interp_program_.model(prev_word, entry.motion, before_words, now_words, block.count, true);
+            interp_program_.at_previous(false);
+        }
+    }
     interp_program_ops_ += interp_program_.ops.size();
     interp_program_words_ += interp_program_.payload.size();
     Renderer::ReplaySequence sequence{};
@@ -3004,6 +3113,7 @@ bool RenderCore::prepare_interp_sequence(const InterpScene& scene, const InterpS
     sequence.record_vs_slot = interp_vs_slot_;
     sequence.record_palette_slot = interp_record_palette_slot_;
     sequence.palette_source = interp_palette_source_;
+    sequence.model_copies = interp_model_copies_;
     sequence.program = &interp_program_;
     sequence.vertex_blend = true;
     return renderer_.begin_replay_sequence(sequence);
@@ -4240,8 +4350,35 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     }
     // The rows' binding: the ring from its start (draws name their blocks' rows from it).
     draw_matrix_palette_ = current_matrix_palette_ != 0u ? renderer_.matrix_ring().gpu_base() : 0u;
+    const std::uint32_t pos_base_before = cpu_vs_constants_.pos_base;
+    const std::uint32_t normal_base_before = cpu_vs_constants_.row_bases[0];
+    const std::uint32_t position_row_before = cpu_vs_constants_.position_row;
     cpu_vs_constants_.pos_base = matrix_block_base_[0];
     cpu_vs_constants_.row_bases[0] = matrix_block_base_[2];
+    cpu_vs_constants_.position_row = VsConstantsCpuCache::kOwnPlace;
+    if (draw_palette_ != nullptr) {
+        ModelPalette& block = *draw_palette_;
+        if (!block.in_ring || block.ring_epoch != renderer_.matrix_ring().epoch()) {
+            const std::size_t bytes = static_cast<std::size_t>(block.count) * 96u;
+            UploadRing::Allocation alloc = renderer_.matrix_ring().allocate(bytes, 256u);
+            std::memcpy(alloc.cpu, model_palette_rows_.data() + block.first, bytes);
+            block.ring_row = static_cast<std::uint32_t>((alloc.gpu - renderer_.matrix_ring().gpu_base()) / 16u);
+            block.ring_epoch = renderer_.matrix_ring().epoch();
+            block.in_ring = true;
+            if (current_matrix_palette_ == 0u) {
+                current_matrix_palette_ = alloc.gpu;
+                draw_matrix_palette_ = renderer_.matrix_ring().gpu_base();
+            }
+        }
+        cpu_vs_constants_.pos_base = block.ring_row;
+        cpu_vs_constants_.row_bases[0] = block.ring_row + 3u * block.count;
+        if ((matrix_bits & 1u) == 0u) {
+            cpu_vs_constants_.position_row = draw_palette_row_;
+        }
+    }
+    matrix_bases_changed_ = matrix_bases_changed_ || pos_base_before != cpu_vs_constants_.pos_base ||
+                            normal_base_before != cpu_vs_constants_.row_bases[0] ||
+                            position_row_before != cpu_vs_constants_.position_row;
     cpu_vs_constants_.row_bases[1] = matrix_block_base_[1];
     cpu_vs_constants_.row_bases[2] = matrix_block_base_[3];
     cpu_vs_constants_.row_bases[3] = draw_light_base_;
@@ -4594,9 +4731,13 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
         texture_bindings_dirty_ = true;
         current_texture_binding_key_valid_ = false;
         return;
+    case shapes::Record::Kind::Palette:
+        note_model_palette(record);
+        return;
     case shapes::Record::Kind::Draw:
         draw_state_.apply_pass(record.pass);
         draw_record_shape(record);
+        draw_palette_ = nullptr;
         return;
     case shapes::Record::Kind::NativeMaterial:
         apply_native_material(record.native_index != shapes::kNoNative ? &current_record_pool_->natives[record.native_index] : nullptr);
@@ -4906,10 +5047,46 @@ void RenderCore::apply_record_matrices(const shapes::Record& record) {
     }
 }
 
+void RenderCore::note_model_palette(const shapes::Record& record) {
+    // A game frame's blocks stay for its draws.
+    if (record.palette_matrix != model_palette_frame_) {
+        model_palette_frame_ = record.palette_matrix;
+        model_palettes_.clear();
+        model_palette_rows_.clear();
+        model_palette_first_id_ = record.palette;
+        draw_palette_ = nullptr;
+    }
+    ModelPalette block;
+    block.key = record.key;
+    block.count = record.palette_count;
+    block.first = static_cast<std::uint32_t>(model_palette_rows_.size());
+    for (auto it = model_palettes_.rbegin(); it != model_palettes_.rend(); ++it) {
+        if (it->key == record.key) {
+            block.order = it->order + 1u;
+            break;
+        }
+    }
+    const float* rows = current_record_pool_->palette_rows.data() + record.palette_first;
+    model_palette_rows_.insert(model_palette_rows_.end(), rows, rows + record.palette_count * 24u);
+    draw_palette_ = nullptr;  // the vector may have moved
+    model_palettes_.push_back(block);
+}
+
 void RenderCore::draw_record_shape(const shapes::Record& record) {
     apply_record_matrices(record);
     if (record.key == 0u) {
         return;  // state only (the matrices, current matrices and texgens set before a material record)
+    }
+    // The model's block the draw reads, or its places.
+    draw_palette_ = nullptr;
+    if (record.palette != 0u) {
+        const std::uint32_t index = record.palette - model_palette_first_id_;
+        if (record.palette < model_palette_first_id_ || index >= model_palettes_.size()) {
+            return;  // a skinned shape drawn with no block of its model this frame
+        }
+        draw_palette_ = &model_palettes_[index];
+        draw_palette_row_ = 3u * record.palette_matrix;
+        matrices_.note_block_load(record.palette_matrix);
     }
     const auto found = record_shapes_.find(record.key);
     if (found == record_shapes_.end() || found->second.geometry == nullptr) {

@@ -143,6 +143,19 @@ public:
     MtxPtr getAnmMtx(int jointNo) {
         return mMtxBuffer->getAnmMtx(jointNo);
     }
+    // The blocks of draw matrices last sent (J3DShapeMtxConcatView::loadPalette), a view each, and a count of the
+    // changes to the matrices since.
+    struct NebulaPalette {
+        u32 mId;
+        u32 mFrame;
+        u32 mGeneration;
+        f32 mBase[12];
+        Vec mScale;
+    };
+    NebulaPalette mNebulaPalette[2] = {};
+    u32 mNebulaGeneration = 0;
+    u8 mNebulaPaletteNext = 0;
+
 
     MtxPtr getWeightAnmMtx(int i) {
         return mMtxBuffer->getWeightAnmMtx(i);
