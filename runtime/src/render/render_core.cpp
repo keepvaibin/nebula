@@ -1332,6 +1332,14 @@ std::uint64_t RenderCore::record_identity() noexcept {
 }
 
 void RenderCore::on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint64_t a, std::uint64_t b) {
+    if (kind == motion::kMarkerSnapshotNumber) {
+        g_snapshot_numbered = true;
+        g_snapshot_hold = a == 0u;
+        if (a != 0u) {
+            g_snapshot_presents = a - 1u;
+        }
+        return;
+    }
     // The game's bloom, drawn by the renderer at this point of the stream (game_bloom.h).
     if (kind == motion::kMarkerBloom) {
         flush_pending_draw_batch();
@@ -5507,12 +5515,13 @@ unsigned layer_2d_lines() noexcept {
 }
 
 
+// With the frame's records, so that a picture's number is its frame's whatever the render thread is doing.
 void number_present_snapshots(std::uint64_t number) noexcept {
-    g_snapshot_numbered = true;
-    g_snapshot_hold = number == 0u;
-    if (number != 0u) {
-        g_snapshot_presents = number - 1u;
-    }
+    shapes::Record record;
+    record.kind = shapes::Record::Kind::Marker;
+    record.key = motion::kMarkerSnapshotNumber;
+    record.marker[0] = number;
+    attach_shape_record(std::move(record));
 }
 
 }  // namespace galaxy::render
