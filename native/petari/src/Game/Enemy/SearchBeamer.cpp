@@ -26,8 +26,8 @@ namespace NrvSearchBeamer {
 };  // namespace NrvSearchBeamer
 
 namespace {
-    inline void calcPlayerAimPos(TVec3f* pPos) {
-        TVec3f up;
+    inline void calcPlayerAimPos(Vec3f* pPos) {
+        Vec3f up;
         MR::getPlayerUpVec(&up);
         pPos->scaleAdd(-20.0f, up, *MR::getPlayerCenterPos());
     }
@@ -57,21 +57,21 @@ void SearchBeamer::init(const JMapInfoIter& rIter) {
     MR::connectToSceneCollisionMapObjStrongLight(this);
     MR::initLightCtrl(this);
     initHitSensor(2);
-    MR::addHitSensorEnemy(this, "body", 8, 60.0f, TVec3f(0.0f, -80.0f, 0.0f));
+    MR::addHitSensorEnemy(this, "body", 8, 60.0f, Vec3f(0.0f, -80.0f, 0.0f));
     MR::addHitSensorCallbackEnemyAttack(this, "beam", 8, 15.0f);
     MR::invalidateHitSensor(this, "beam");
     _B8.setInline(getBaseMtx());
     MR::initCollisionParts(this, "Face", getSensor("body"), _B8);
     initEffectKeeper(1, nullptr, false);
     initSound(4, false);
-    MR::initStarPointerTarget(this, 80.0f, TVec3f(0, 0, 0));
+    MR::initStarPointerTarget(this, 80.0f, Vec3f(0, 0, 0));
     mScaleController = new AnimScaleController(nullptr);
     mScaleController->setParamTight();
     mBindStarPointer = new WalkerStateBindStarPointer(this, mScaleController);
 
     MR::initShadowController(this, 2);
     MR::addShadowVolumeCylinder(this, "body", 80.0f);
-    MR::addShadowVolumeBox(this, "beam", TVec3f(10.0f, 10.0f, 100.0f), MR::getJointMtx(this, "BeamStart"));
+    MR::addShadowVolumeBox(this, "beam", Vec3f(10.0f, 10.0f, 100.0f), MR::getJointMtx(this, "BeamStart"));
     MR::setShadowVolumeStartDropOffset(this, "body", 100.0f);
     MR::invalidateShadow(this, "beam");
     MR::setShadowDropLength(this, "body", 200.0f);
@@ -189,9 +189,9 @@ void SearchBeamer::exeBeamStart() {
 
     MR::startLevelSound(this, "SE_EM_LV_SEARCHBEAMER_BEAM");
     bowToPlayer();
-    TVec3f v7;
-    checkBeamDistiny(&v7, TVec3f(_94));
-    TVec3f corePos;
+    Vec3f v7;
+    checkBeamDistiny(&v7, Vec3f(_94));
+    Vec3f corePos;
     MR::copyJointPos(this, "Core", &corePos);
     MR::vecBlend(corePos, v7, &mBeamEnd, MR::calcNerveRate(this, 15));
     updateBeamEffect(MR::isGreaterStep(this, 15));
@@ -206,25 +206,25 @@ void SearchBeamer::exeBeamAim() {
     MR::startLevelSound(this, "SE_EM_LV_SEARCHBEAMER_BEAM");
     MR::copyJointPos(this, "Core", &mBeamStart);
 
-    TVec3f v14;
+    Vec3f v14;
     ::calcPlayerAimPos(&v14);
 
-    TVec3f v13;
+    Vec3f v13;
     v13.sub(v14, mPosition);
     MR::normalize(&v13);
-    TVec3f v12;
-    checkBeamDistiny(&v12, TVec3f(v13));
-    TVec3f v11;
+    Vec3f v12;
+    checkBeamDistiny(&v12, Vec3f(v13));
+    Vec3f v11;
     v11.sub(v12, mBeamEnd);
     MR::normalizeOrZero(&v11);
-    TVec3f v10;
+    Vec3f v10;
     v10.scaleAdd(_138, v11, mBeamEnd);
     _94.sub(v10, mPosition);
     MR::normalize(&_94);
-    TVec3f v9;
+    Vec3f v9;
     MR::turnVecToPlane(&v9, _94, _A0);
     MR::clampVecAngleDeg(&_94, v9, 35.0f);
-    updateBeamEffect(checkBeamDistiny(&mBeamEnd, TVec3f(_94)));
+    updateBeamEffect(checkBeamDistiny(&mBeamEnd, Vec3f(_94)));
     updateBeamShadow();
 
     if (!isPlayerInTerritory()) {
@@ -243,7 +243,7 @@ void SearchBeamer::exeCloseMouth() {
     reformDirection(false);
 
     if (MR::isLessStep(this, 5)) {
-        TVec3f corePos;
+        Vec3f corePos;
         MR::copyJointPos(this, "Core", &corePos);
         MR::vecBlend(corePos, mBeamEnd, &mBeamStart, MR::calcNerveRate(this, 5));
     }
@@ -308,10 +308,10 @@ void SearchBeamer::exeDPDSwoon() {
 }
 
 void SearchBeamer::calcAndSetBaseMtx() {
-    TPos3f mtx;
+    Pos3f mtx;
     MR::makeMtxFrontUpPos(&mtx, _94, _A0, mPosition);
     MR::setBaseTRMtx(this, mtx);
-    TVec3f scale = mScaleController->_C * mScale;
+    Vec3f scale = mScaleController->_C * mScale;
     MR::setBaseScale(this, scale);
     mPropellerJointCtrl->registerCallBack();
     mBeanStartJointCtrl->registerCallBack();
@@ -385,24 +385,24 @@ void SearchBeamer::updateHitSensor(HitSensor* pSensor) {
         return;
     }
 
-    TVec3f v7;
-    TVec3f up;
+    Vec3f v7;
+    Vec3f up;
     MR::getPlayerUpVec(&up);
     v7.scaleAdd(-20.0f, up, *MR::getPlayerCenterPos());
     MR::calcPerpendicFootToLineInside(&pSensor->mPosition, v7, mPosition, mBeamEnd);
 }
 
-bool SearchBeamer::calcJointPropeller(TPos3f* pPos, const JointControllerInfo& rInfo) {
+bool SearchBeamer::calcJointPropeller(Pos3f* pPos, const JointControllerInfo& rInfo) {
     MR::rotateMtxLocalYDegree(*pPos, _AC);
     return true;
 }
 
-bool SearchBeamer::calcJointBeamStart(TPos3f* pPos, const JointControllerInfo& rInfo) {
+bool SearchBeamer::calcJointBeamStart(Pos3f* pPos, const JointControllerInfo& rInfo) {
     pPos->setTrans(mBeamStart);
     return true;
 }
 
-bool SearchBeamer::calcJointBeamEnd(TPos3f* pPos, const JointControllerInfo& rInfo) {
+bool SearchBeamer::calcJointBeamEnd(Pos3f* pPos, const JointControllerInfo& rInfo) {
     pPos->setTrans(mBeamEnd);
     return true;
 }
@@ -444,12 +444,12 @@ void SearchBeamer::updateBeamEffect(bool a1) {
 
 void SearchBeamer::updateBeamShadow() {
     f32 dist = mPosition.distance(mBeamEnd);
-    TVec3f v5;
+    Vec3f v5;
     v5.z = dist;
     v5.x = 15.0f;
     v5.y = 15.0f;
     MR::setShadowVolumeBoxSize(this, "beam", v5);
-    TVec3f v4;
+    Vec3f v4;
     v4.x = 0.0f;
     v4.y = 0.0f;
     v4.z = dist / 2.0f;
@@ -464,33 +464,33 @@ void SearchBeamer::initBeamPos() {
 
 void SearchBeamer::reformDirection(bool a1) {
     if (_94.dot(_A0) != 0.0f) {
-        TVec3f v8;
+        Vec3f v8;
         v8.killElement2(_94, _A0);
         MR::normalize(&v8);
         f32 deg = a1 ? 15.0f : 3.0f;
-        MR::turnVecToVecDegree(&_94, _94, v8, deg, TVec3f(0, 1, 0));
+        MR::turnVecToVecDegree(&_94, _94, v8, deg, Vec3f(0, 1, 0));
     }
 }
 
 void SearchBeamer::bowToPlayer() {
-    TVec3f v12;
+    Vec3f v12;
     ::calcPlayerAimPos(&v12);
-    TVec3f v11;
+    Vec3f v11;
     v11.sub(v12, mPosition);
     v11.orthogonalize2(_A0);
     MR::normalize(&v11);
 
-    TVec3f down;
+    Vec3f down;
     down.negate(_A0);
-    MR::turnVecToVecDegree(&v11, v11, down, 35.0f, TVec3f(0, 1, 0));
-    MR::turnVecToVecDegree(&_94, _94, v11, 3.0f, TVec3f(0, 1, 0));
-    TVec3f v9;
+    MR::turnVecToVecDegree(&v11, v11, down, 35.0f, Vec3f(0, 1, 0));
+    MR::turnVecToVecDegree(&_94, _94, v11, 3.0f, Vec3f(0, 1, 0));
+    Vec3f v9;
     MR::turnVecToPlane(&v9, _94, _A0);
     MR::clampVecAngleDeg(&_94, v9, 35.0f);
 }
 
-bool SearchBeamer::checkBeamDistiny(TVec3f* pPosition, TVec3f a2) const {
-    TVec3f v12;
+bool SearchBeamer::checkBeamDistiny(Vec3f* pPosition, Vec3f a2) const {
+    Vec3f v12;
     v12.scale(_140, a2);
 
     if (!MR::getFirstPolyOnLineToMap(pPosition, nullptr, mPosition, v12)) {

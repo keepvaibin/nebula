@@ -112,9 +112,9 @@ void Dossun::initShadow() {
 }
 
 void Dossun::calcParameters() {
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.set(getBaseMtx());
-    TVec3f offset(0.0f, mMovementDist, 0.0f);
+    Vec3f offset(0.0f, mMovementDist, 0.0f);
     mtx.mult33(offset);
     _8C.add(_98, offset);
 

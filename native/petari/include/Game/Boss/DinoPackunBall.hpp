@@ -14,7 +14,7 @@ public:
     virtual bool receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
     virtual void requestLockPosition();
     virtual void requestUnLockPosition();
-    virtual void addNodeVelocity(const TVec3f&);
+    virtual void addNodeVelocity(const Vec3f&);
     virtual JointController* createJointControllerOwn(LiveActor*, const char*);
 
     void setWeakSensor(HitSensor*);
@@ -31,10 +31,10 @@ public:
     void exeRebound();
     void exeLock();
 
-    TPos3f _D4;
-    TQuat4f _104;
+    Pos3f _D4;
+    Quat4f _104;
     HitSensor* mWeakSensor;
-    TVec3f _118;
+    Vec3f _118;
     u8 _124;
     u8 _125;
     u8 _126;

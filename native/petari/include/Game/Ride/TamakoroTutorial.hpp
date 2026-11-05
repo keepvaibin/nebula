@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class TalkMessageCtrl;
 class Tamakoro;
@@ -39,7 +39,7 @@ public:
     Tamakoro* mHost;
     TalkMessageCtrl* mTalkCtrl;
     TalkMessageCtrl* mTalkCtrlAutomatic;
-    TVec3f mPadAccel;
+    Vec3f mPadAccel;
     bool _A4;
     bool _A5;
 };

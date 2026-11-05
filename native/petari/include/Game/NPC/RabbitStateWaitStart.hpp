@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/ActorStateBase.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class HitSensor;
 class LiveActor;
@@ -9,7 +9,7 @@ class TalkMessageCtrl;
 
 class RabbitStateWaitStart : public ActorStateBase< LiveActor > {
 public:
-    RabbitStateWaitStart(LiveActor* pHost, TVec3f* pHostFrontVec, TalkMessageCtrl* pTalkCtrl);
+    RabbitStateWaitStart(LiveActor* pHost, Vec3f* pHostFrontVec, TalkMessageCtrl* pTalkCtrl);
 
     virtual void init();
     virtual void appear();
@@ -34,7 +34,7 @@ public:
     void exeTalk();
 
     const char* mTalkActionName;
-    TVec3f* mHostFrontVec;
+    Vec3f* mHostFrontVec;
     TalkMessageCtrl* mTalkCtrl;
     bool _1C;
     bool _1D;

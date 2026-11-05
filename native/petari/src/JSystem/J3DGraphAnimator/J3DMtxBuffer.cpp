@@ -229,7 +229,7 @@ void J3DMtxBuffer::calcDrawMtx(u32 mdlFlag, Vec const& param_1, Mtx const& param
             NebulaMtxConcat(viewMtx, getAnmMtx(mJointTree->getDrawMtxIndex(i)), *getDrawMtx(i));
         }
         if (mJointTree->getDrawMtxNum() > fullWgtNum) {
-            J3DPSMtxArrayConcat(viewMtx, *mpWeightEvlpMtx, *getDrawMtx(fullWgtNum), mJointTree->getWEvlpMtxNum());
+            NebulaMtxArrayConcat(viewMtx, *mpWeightEvlpMtx, *getDrawMtx(fullWgtNum), mJointTree->getWEvlpMtxNum());
         }
         return;
     case 1:
@@ -249,7 +249,7 @@ void J3DMtxBuffer::calcDrawMtx(u32 mdlFlag, Vec const& param_1, Mtx const& param
             NebulaMtxConcat(viewBaseMtx, getAnmMtx(mJointTree->getDrawMtxIndex(i)), *getDrawMtx(i));
         }
         if (mJointTree->getDrawMtxNum() > mJointTree->getDrawFullWgtMtxNum()) {
-            J3DPSMtxArrayConcat(viewBaseMtx, *mpWeightEvlpMtx, *getDrawMtx(mJointTree->getDrawFullWgtMtxNum()), mJointTree->getWEvlpMtxNum());
+            NebulaMtxArrayConcat(viewBaseMtx, *mpWeightEvlpMtx, *getDrawMtx(mJointTree->getDrawFullWgtMtxNum()), mJointTree->getWEvlpMtxNum());
         }
         return;
     default:

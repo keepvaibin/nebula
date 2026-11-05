@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/NameObj/NameObj.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class J3DModelData;
 
@@ -14,20 +14,20 @@ public:
     virtual void init(const JMapInfoIter&) override;
     virtual void movement() override;
 
-    void setMirrorMapInfo(const TVec3f&, const TVec3f&);
+    void setMirrorMapInfo(const Vec3f&, const Vec3f&);
     void setMirrorMapInfo(J3DModelData*);
     void updateViewMtx();
     void updateModelTexMtx();
-    f32 getDistance(const TVec3f&) const;
+    f32 getDistance(const Vec3f&) const;
 
-    TVec3f _C;
-    TVec3f _18;
+    Vec3f _C;
+    Vec3f _18;
     f32 _24;
-    TPos3f mViewMtx;
-    TPos3f mModelTexMtx;
+    Pos3f mViewMtx;
+    Pos3f mModelTexMtx;
 };
 
 namespace MR {
     MirrorCamera* getMirrorCamera();
-    f32 getDistanceToMirror(const TVec3f&);
+    f32 getDistanceToMirror(const Vec3f&);
 };  // namespace MR

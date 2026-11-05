@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class InvisiblePolygonObj : public LiveActor {
 public:
@@ -16,5 +16,5 @@ public:
     void initBaseMtx();
     void initCollision(const JMapInfoIter&);
 
-    TMtx34f mBaseMtx;
+    Mtx34f mBaseMtx;
 };

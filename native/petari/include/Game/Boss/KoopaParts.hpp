@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class Koopa;
 class JMapInfoIter;
@@ -23,12 +23,12 @@ class KoopaParts {
 public:
     KoopaParts(Koopa* pKoopa, const JMapInfoIter& rIter);
 
-    KoopaFireStairs* emitFireStairsToPos(const KoopaBattleMapStair* pMapStair, const TVec3f& rPosition, bool useFront);
+    KoopaFireStairs* emitFireStairsToPos(const KoopaBattleMapStair* pMapStair, const Vec3f& rPosition, bool useFront);
     void killFireStairsAll();
     void emitFireShort(bool isFast, bool isCurve);
     void emitFireLongTime();
     void emitShockWave();
-    TVec3f& getPlanetPos() const;
+    Vec3f& getPlanetPos() const;
     f32 getPlanetRadius() const;
     void appearHoleSunPlanetInside();
     void appearHoleSunPlanetOutside();

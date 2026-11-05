@@ -11,7 +11,7 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 #include <nebula_math.h>
 
 namespace {
@@ -49,7 +49,7 @@ void SpiderCoin::init(const JMapInfoIter& rIter) {
 
     initEffectKeeper(8, nullptr, false);
     initNerve(GET_NERVE(SpiderCoin, SpiderCoinNrvWait));
-    MR::initStarPointerTarget(this, 150.0f, TVec3f(0.0f, 80.0f, 0.0f));
+    MR::initStarPointerTarget(this, 150.0f, Vec3f(0.0f, 80.0f, 0.0f));
 
     MR::declareCoin(this, 1);
     mCocoonModel = new PartsModel(this, "\202\334\202\344" /* まゆ */, "SpaceCocoon", mBaseMtx, MR::DrawBufferType_NoSilhouettedMapObj, false);
@@ -76,10 +76,10 @@ void SpiderCoin::initAfterPlacement() {
 
 void SpiderCoin::kill() {
     LiveActor::kill();
-    TVec3f vel(-mUp->x, -mUp->y, 0.0f);
+    Vec3f vel(-mUp->x, -mUp->y, 0.0f);
     MR::normalizeOrZero(&vel);
     vel *= ::sCoinSpeed;
-    TVec3f pos(mPosition.x, mPosition.y, mThreadZ);
+    Vec3f pos(mPosition.x, mPosition.y, mThreadZ);
 
     MR::appearCoinToVelocity(this, pos, vel, 1);
     MR::emitEffect(mCocoonModel, "Stick");
@@ -88,7 +88,7 @@ void SpiderCoin::kill() {
 void SpiderCoin::exeWait() {
     if (MR::isFirstStep(this)) {
         if (mPointPos == nullptr) {
-            MR::startActorBindToSpiderThread(this, &mPointPos, &mNeutralPos, &mUp, mPosition, TVec3f(0.0f, 0.0f, 0.0f));
+            MR::startActorBindToSpiderThread(this, &mPointPos, &mNeutralPos, &mUp, mPosition, Vec3f(0.0f, 0.0f, 0.0f));
         }
         mRotation.y = 0.0f;
     }
@@ -140,25 +140,25 @@ void SpiderCoin::exeTouchAndApart() {
 
 void SpiderCoin::calcAndSetBaseMtx() {
     if (mUp != nullptr) {
-        TVec3f up(*mUp * -1.0f);
+        Vec3f up(*mUp * -1.0f);
         MR::normalize(&up);
 
-        TVec3f front(0.0f, 0.0f, 1.0f);
-        TVec3f side = up.cross(front);
+        Vec3f front(0.0f, 0.0f, 1.0f);
+        Vec3f side = up.cross(front);
         MR::normalize(&side);
         front.cross(side, up);
         MR::normalize(&front);
 
-        TPos3f mtx;
+        Pos3f mtx;
         mtx.identity();
         mtx.setXYZDir(side, up, front);
 
-        TRot3f rotMtx;
+        Rot3f rotMtx;
         rotMtx.identity();
         MR::makeMtxRotateY(rotMtx, mRotation.y);
         MR::multMtx(mtx, rotMtx, mtx);
 
-        TVec3f pos(up);
+        Vec3f pos(up);
         pos.scale(-::sModelOffset);
         pos.add(mPosition);
         mtx.setTrans(pos);
@@ -173,18 +173,18 @@ void SpiderCoin::calcAndSetBaseMtx() {
     }
 }
 
-bool SpiderCoin::tryRub(s32 padChannel, TVec2f* pVel) {
+bool SpiderCoin::tryRub(s32 padChannel, Vec2f* pVel) {
     if (!MR::isStarPointerPointing(this, padChannel, true, "\216\343" /* 弱 */) || MR::getStarPointerScreenSpeed(padChannel) < ::sPointerSpeedMin) {
         return false;
     }
 
-    TVec2f* vel = MR::getStarPointerScreenVelocity(padChannel);
+    Vec2f* vel = MR::getStarPointerScreenVelocity(padChannel);
     if (vel->x * pVel->x + vel->y * pVel->y < ::sPointerSpeedDotToKill) {
         kill();
         return true;
     }
 
-    TVec2f* vel2 = MR::getStarPointerScreenVelocity(padChannel);
+    Vec2f* vel2 = MR::getStarPointerScreenVelocity(padChannel);
     pVel->x = vel2->x;
     pVel->y = vel2->y;
     return false;

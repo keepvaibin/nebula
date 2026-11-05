@@ -20,8 +20,8 @@ public:
     void calcAxis();
     void calcSubAxis();
 
-    TVec3f mAxis;
-    TVec3f mSubAxis;
+    Vec3f mAxis;
+    Vec3f mSubAxis;
     u16 mActiveTime;
     u16 mRevivalTime;
     s32 mBoostTime;
@@ -29,5 +29,5 @@ public:
     f32 mSpeedScale;
     bool mDoLoop;
     bool mDoTurn;
-    TVec3f mInitialPosition;
+    Vec3f mInitialPosition;
 };

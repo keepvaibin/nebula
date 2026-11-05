@@ -10,7 +10,7 @@ public:
     virtual CameraTargetObj* calc();
     virtual CamTranslatorBase* createTranslator();
 
-    void setParam(const TVec3f& wPoint, const TVec3f& axis, f32 dist, f32 angleX, f32 angleY, f32 dotMax) {
+    void setParam(const Vec3f& wPoint, const Vec3f& axis, f32 dist, f32 angleX, f32 angleY, f32 dotMax) {
         mWPoint.set(wPoint);
         mAxis.set(axis);
         mDist = dist;
@@ -19,8 +19,8 @@ public:
         mDotMax = dotMax;
     }
 
-    TVec3f mWPoint;
-    TVec3f mAxis;
+    Vec3f mWPoint;
+    Vec3f mAxis;
     f32 mDist;
     f32 mAngleX;
     f32 mAngleY;

@@ -34,7 +34,7 @@ void CameraShakeTask::movement() {
     }
 }
 
-void CameraShakeTask::getOffset(TVec2f* pOffset) const {
+void CameraShakeTask::getOffset(Vec2f* pOffset) const {
     if (mHasEnded || mPattern->isEnd()) {
         pOffset->set(0.0f, 0.0f);
     } else {

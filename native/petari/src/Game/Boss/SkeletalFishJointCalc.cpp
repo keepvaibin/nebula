@@ -2,17 +2,17 @@
 #include "Game/Boss/SkeletalFishRailControl.hpp"
 #include "Game/Util/JointController.hpp"
 
-void SkeletalFishJointCalc::calcJoint(TPos3f* pDst, const TPos3f* pSrc, SkeletalFishRailControl* pRailCtrl, const JointControllerInfo&) {
+void SkeletalFishJointCalc::calcJoint(Pos3f* pDst, const Pos3f* pSrc, SkeletalFishRailControl* pRailCtrl, const JointControllerInfo&) {
     pDst->concat(*pSrc, *pDst);
 
-    TVec3f trans;
+    Vec3f trans;
     pDst->getTrans(trans);
 
-    TPos3f offsetMtx;
+    Pos3f offsetMtx;
     offsetMtx.makeTrans(0.0f, 0.0f, -trans.z);
     pDst->concat(offsetMtx, *pDst);
 
-    TPos3f fishRailControlMtx;
+    Pos3f fishRailControlMtx;
     pRailCtrl->getMtx(&fishRailControlMtx, -trans.z);
     pDst->concat(fishRailControlMtx, *pDst);
 }

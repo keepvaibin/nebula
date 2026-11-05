@@ -44,7 +44,7 @@ void KoopaJrShipCannonMainShell::init(const JMapInfoIter& rIter) {
     initEffectKeeper(0, "KoopaJrShipCannonShell", false);
     initHitSensor(1);
 
-    MR::addHitSensorEnemyAttack(this, "attack", 8, ::sAttackSensorRadius * getBaseScale(), TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemyAttack(this, "attack", 8, ::sAttackSensorRadius * getBaseScale(), Vec3f(0.0f, 0.0f, 0.0f));
 
     initBinder(::sBinderRadius * getBaseScale(), 0.0f, 0);
     initNerve(GET_NERVE(KoopaJrShipCannonMainShell, HostTypeFly));
@@ -101,15 +101,15 @@ bool KoopaJrShipCannonMainShell::receiveMsgPlayerAttack(u32 msg, HitSensor* pSen
     return MR::isMsgStarPieceReflect(msg);
 }
 
-void KoopaJrShipCannonMainShell::launch(const TVec3f& rStartPos, const TVec3f& rVelocity) {
+void KoopaJrShipCannonMainShell::launch(const Vec3f& rStartPos, const Vec3f& rVelocity) {
     appear();
 
     mPosition.set(rStartPos);
-    TVec3f dir;
+    Vec3f dir;
     dir = rVelocity;
     MR::normalize(&dir);
 
-    TPos3f mtx;
+    Pos3f mtx;
     MR::makeMtxFrontUp(&mtx, dir, -mGravity);
     mtx.getQuat(_8C);
     mVelocity.set(rVelocity);

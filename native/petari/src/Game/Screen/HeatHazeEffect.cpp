@@ -15,8 +15,8 @@ void HeatHazeEffect::appear() {
 }
 
 void HeatHazeEffect::control() {
-    const TPos3f& rCameraMtx = MR::getCameraInvViewMtx();
-    TVec3f direction;
+    const Pos3f& rCameraMtx = MR::getCameraInvViewMtx();
+    Vec3f direction;
     rCameraMtx.getZDir(direction);
     direction.negate();
     direction.mult(_8C);

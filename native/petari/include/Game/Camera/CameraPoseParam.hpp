@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class CameraPoseParam {
 public:
@@ -19,17 +19,17 @@ public:
         mRoll = rParam.mRoll;
     }
 
-    const TVec3f& getWatchPos() const {
+    const Vec3f& getWatchPos() const {
         return mWatchPos;
     }
 
-    TVec3f mWatchUpVec;
-    TVec3f mWatchPos;
-    TVec3f mUpVec;
-    TVec3f mPos;
+    Vec3f mWatchUpVec;
+    Vec3f mWatchPos;
+    Vec3f mUpVec;
+    Vec3f mPos;
     f32 mFovy;
-    TVec3f mGlobalOffset;
-    TVec3f mLocalOffset;
+    Vec3f mGlobalOffset;
+    Vec3f mLocalOffset;
     f32 mFrontOffset;
     f32 mUpperOffset;
     f32 mRoll;

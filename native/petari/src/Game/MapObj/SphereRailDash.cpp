@@ -25,7 +25,7 @@ void SphereRailDash::init(const JMapInfoIter& rIter) {
     initNerve(GET_NERVE(SphereRailDash, SphereRailDashNrvWait));
     initRailRider(rIter);
     MR::moveCoordToStartPos(this);
-    TVec3f railPosition(MR::getRailPos(this));
+    Vec3f railPosition(MR::getRailPos(this));
     initHitSensor(1);
     MR::addHitSensor(this, "body", ATYPE_SPHERE_DASH, 5, 200.0f, railPosition);
     MR::connectToSceneMapObjMovement(this);
@@ -47,10 +47,10 @@ bool SphereRailDash::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pRe
 void SphereRailDash::exeWait() {
     if (_8C != nullptr) {
         MR::moveCoordToStartPos(this);
-        const TVec3f& rPosition = _8C->mHost->mPosition;
+        const Vec3f& rPosition = _8C->mHost->mPosition;
         _90 = rPosition - MR::getRailPos(this);
-        TVec3f direction(MR::getRailDirection(this));
-        TVec3f velocity(_8C->mHost->mVelocity);
+        Vec3f direction(MR::getRailDirection(this));
+        Vec3f velocity(_8C->mHost->mVelocity);
         f32 speed = direction.dot(velocity);
 
         if (speed < 0.0f) {
@@ -91,9 +91,9 @@ void SphereRailDash::exeRailMove() {
     f32 progress = MR::getRailCoord(this) / MR::getRailTotalLength(this);
     _90 += _A4;
     _A4.mult(0.85f);
-    TVec3f previousPosition(_8C->mHost->mPosition);
-    TVec3f position = MR::getRailPos(this) + _90.multInLine2(1.0f - progress);
-    TVec3f& rVelocity = _8C->mHost->mVelocity;
+    Vec3f previousPosition(_8C->mHost->mPosition);
+    Vec3f position = MR::getRailPos(this) + _90.multInLine2(1.0f - progress);
+    Vec3f& rVelocity = _8C->mHost->mVelocity;
     rVelocity.set(position - previousPosition);
 
     if (MR::isRailReachedGoal(this)) {

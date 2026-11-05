@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class ActorCameraInfo;
 class ActorJointCtrl;
@@ -41,7 +41,7 @@ public:
     void reuestMovementOnParts();
     LiveActor* getWingModel();
     LiveActor* getBombLauncher();
-    void calcUpVec(TVec3f*) const;
+    void calcUpVec(Vec3f*) const;
     void updateAction();
     void updatePose();
     void setPose(MtxPtr);
@@ -65,14 +65,14 @@ public:
     GroundChecker** _90;
     BossStinkBugBombHolder* _94;
     ActorJointCtrl* _98;
-    TPos3f _9C;
+    Pos3f _9C;
     ActorCameraInfo* _CC;
     BossStinkBugActionSequencer* mActionSequencer;
     PartsModel* _D4;
     PartsModel* mBombLauncher;
-    TQuat4f _DC;
-    TVec3f _EC;
-    TVec3f _F8;
+    Quat4f _DC;
+    Vec3f _EC;
+    Vec3f _F8;
     s32 _104;
     f32 _108;
     f32 _10C;

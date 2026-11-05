@@ -22,12 +22,12 @@ void TreasureSpot::init(const JMapInfoIter& rIter) {
     MapObjActorInitInfo info;
     MapObjActorUtil::setupInitInfoSimpleMapObj(&info);
     info.setupHitSensor();
-    info.setupHitSensorParam(4, 80.0f, TVec3f(0.0f, 30.0f, 0.0f));
+    info.setupHitSensorParam(4, 80.0f, Vec3f(0.0f, 30.0f, 0.0f));
     info.setupNerve(GET_NERVE(TreasureSpot, TreasureSpotNrvWait));
     info.setupSound(4);
     MapObjActor::initialize(rIter, info);
     mIsCoinFlower = isObjectName("CoinFlower");
-    MR::initStarPointerTarget(this, 100.0f, TVec3f(0.0f, 50.0f, 0.0f));
+    MR::initStarPointerTarget(this, 100.0f, Vec3f(0.0f, 50.0f, 0.0f));
     MR::declareCoin(this, ::sNumCoin);
 }
 
@@ -40,7 +40,7 @@ void TreasureSpot::exeEnd() {
 void TreasureSpot::exeSpout() {
     if (MR::isFirstStep(this)) {
         MR::forceDeleteEffectAll(this);
-        TVec3f upVec;
+        Vec3f upVec;
         MR::calcUpVec(&upVec, this);
         MR::appearCoinPopToDirection(this, mPosition, upVec, ::sNumCoin);
 

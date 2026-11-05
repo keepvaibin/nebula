@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/NameObj/NameObj.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class BigBubbleMoveLimitter : public NameObj {
 public:
@@ -20,8 +20,8 @@ public:
 
     virtual void init(const JMapInfoIter&);
 
-    bool limitPosition(TVec3f*, f32) const;
-    bool limitVelocity(TVec3f*, const TVec3f&, f32) const;
+    bool limitPosition(Vec3f*, f32) const;
+    bool limitVelocity(Vec3f*, const Vec3f&, f32) const;
 
     s32 getLimitterID() const {
         return mID;
@@ -39,11 +39,11 @@ public:
     }
 
     s32 mID;
-    TVec3f mPosition;
-    TVec3f mAxis;
-    TVec3f mSide;
-    TVec3f mUp;
-    TVec3f mFront;
+    Vec3f mPosition;
+    Vec3f mAxis;
+    Vec3f mSide;
+    Vec3f mUp;
+    Vec3f mFront;
     f32 mCylinderRadius;
     f32 mCylinderHeight;
     f32 mPlaneWidth;

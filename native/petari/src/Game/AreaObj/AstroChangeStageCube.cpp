@@ -38,7 +38,7 @@ void AstroChangeStageCube::init(const JMapInfoIter& rIter) {
     }
 }
 
-bool AstroChangeStageCube::isInVolume(const TVec3f& rPos) const {
+bool AstroChangeStageCube::isInVolume(const Vec3f& rPos) const {
     if (MR::isPlayerInBind() || MR::isDemoActive()) {
         return false;
     }
@@ -73,7 +73,7 @@ AstroChangeStageCube::~AstroChangeStageCube() {
 
 void AstroChangeStageCube::movement() {
     if (isValid()) {
-        TVec3f* playerPos = MR::getPlayerPos();
+        Vec3f* playerPos = MR::getPlayerPos();
 
         if (!isInVolume(*playerPos)) {
             return;

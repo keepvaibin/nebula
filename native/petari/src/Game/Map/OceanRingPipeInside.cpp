@@ -70,7 +70,7 @@ void OceanRingPipeInside::loadMaterial() const {
     J3DNativeShape::setNormal(0, MR::getCameraViewMtx());
     J3DPass::positionMatrix(0);
 
-    TMtx34f mtx;
+    Mtx34f mtx;
     mtx.identity();
     mtx.mMtx[0][2] = mTexU0;
     mtx.mMtx[1][2] = mTexV0;

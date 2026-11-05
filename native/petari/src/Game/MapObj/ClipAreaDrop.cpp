@@ -43,7 +43,7 @@ void ClipAreaDrop::appear() {
 }
 
 void ClipAreaDrop::control() {
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.identity();
     mtx.setTrans(mPosition);
 

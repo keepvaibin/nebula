@@ -21,29 +21,29 @@ void ShadowVolumeLine::loadModelDrawMtx() const {
 void ShadowVolumeLine::drawShape() const {
     const ShadowController* fromController = mFromShadowController;
     const ShadowController* toController = mToShadowController;
-    TVec3f points[8];
-    TVec3f from;
-    TVec3f to;
+    Vec3f points[8];
+    Vec3f from;
+    Vec3f to;
     calcBaseDropPosition(&from, fromController);
     calcBaseDropPosition(&to, toController);
-    TVec3f direction;
+    Vec3f direction;
     MR::normalizeOrZero(to - from, &direction);
     if (MR::isNearZero(direction)) {
         return;
     }
 
-    TVec3f fromDrop;
-    TVec3f toDrop;
+    Vec3f fromDrop;
+    Vec3f toDrop;
     fromController->getDropDir(&fromDrop);
     toController->getDropDir(&toDrop);
-    TVec3f fromSide;
+    Vec3f fromSide;
     fromSide.cross(fromDrop, direction);
     if (MR::isNearZero(fromSide)) {
         return;
     }
 
     MR::normalize(&fromSide);
-    TVec3f toSide;
+    Vec3f toSide;
     toSide.cross(toDrop, direction);
     if (MR::isNearZero(toSide)) {
         return;

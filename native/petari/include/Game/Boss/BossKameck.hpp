@@ -41,8 +41,8 @@ public:
     void hitBeam(s32);
 
     const char* mModelName;
-    TQuat4f _90;
-    TVec3f _A0;
+    Quat4f _90;
+    Vec3f _A0;
     BossKameckSequencer* mSequencer;
     KameckHolder* mKameckHolder;
     ActorJointCtrl* mJointCtrl;
@@ -50,7 +50,7 @@ public:
     BossKameckBeamEventListener* mBeamEventListener;
     BossKameckMoveRail** mMoveRail;
     s32 mMoveRailNum;
-    TVec3f _C8;
+    Vec3f _C8;
     s32 mObjArg7;
 };
 

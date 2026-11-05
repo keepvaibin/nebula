@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 #include <nebula_game_api.h>
 
 extern "C" const NebulaHostServices* nebula_host(void);
@@ -14,11 +14,11 @@ struct PlayerInputSample {
     u32 mRelease;
     bool mHasMoveStick;
     bool mIsPointerOn;
-    TVec3f mAccel;  // the main hand's tilt, in g
-    TVec3f mSubTilt;
-    TVec2f mStick;
-    TVec2f mPointerPos;
-    TVec2f mHorizon;
+    Vec3f mAccel;  // the main hand's tilt, in g
+    Vec3f mSubTilt;
+    Vec2f mStick;
+    Vec2f mPointerPos;
+    Vec2f mHorizon;
     f32 mDistance;
 };
 

@@ -2,7 +2,7 @@
 
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/Array.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class CannonShellHolder;
 class HomingKiller;
@@ -30,8 +30,8 @@ public:
     s32 getNumShootShells() const;
     f32 getPropellerRotSpeed() const;
     void updateCoordSpeed();
-    void calcLauncherInfo(TVec3f*, TVec3f*, s32) const;
-    void calcLauncherInfoKiller(TVec3f*, TVec3f*, s32) const;
+    void calcLauncherInfo(Vec3f*, Vec3f*, s32) const;
+    void calcLauncherInfoKiller(Vec3f*, Vec3f*, s32) const;
     void shootShell(s32);
     bool tryShootAllKillers();
     void shootKiller(s32);
@@ -79,17 +79,17 @@ public:
     MR::Vector< MR::FixedArray< Kameck*, 2 > > _AC;
     MR::FixedArray< HomingKiller*, 6 > mKillers;
     s32 _D0;
-    TVec3f _D4;
-    TVec3f _E0;
+    Vec3f _D4;
+    Vec3f _E0;
     f32 _EC;
     f32 mPropRotateSpeed;
-    TPos3f mScrew00Mtx;
-    TPos3f mScrew01Mtx;
-    TRot3f mPropellerMtx;
+    Pos3f mScrew00Mtx;
+    Pos3f mScrew01Mtx;
+    Rot3f mPropellerMtx;
     f32 _184;
     s32 _188;
-    TMtx34f mShipMtx;
-    TMtx34f mPodMtx;
-    TVec3f _1EC;
-    TVec3f _1F8;
+    Mtx34f mShipMtx;
+    Mtx34f mPodMtx;
+    Vec3f _1EC;
+    Vec3f _1F8;
 };

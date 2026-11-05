@@ -40,7 +40,7 @@ public:
     void exeCrushed();
     void exeCrushedEnd();
 
-    bool ballMtxCallBack(TPos3f*, const JointControllerInfo&);
+    bool ballMtxCallBack(Pos3f*, const JointControllerInfo&);
 
     bool isEnablePunched() const;
     bool isEnableHitPlayer() const;
@@ -57,8 +57,8 @@ private:
     AnimScaleController* mScaleController;
     JointControlDelegator< PunchingKinoko >* mDelegator;
     s32 _98;
-    TVec3f _9C;
-    TVec3f _A8;
+    Vec3f _9C;
+    Vec3f _A8;
     s32 mStarPointerHitCoolDown;
     bool _B8;
     s32 mInvincibleHitCoolDown;

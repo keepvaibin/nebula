@@ -11,7 +11,7 @@ namespace {
     const f32 hOverlapAddValue = 1.2f;
 };  // namespace
 
-Binder::Binder(MtxPtr pMtx, const TVec3f* pPosition, const TVec3f* pGravity, f32 radius, f32 offsetY, u32 planeNum)
+Binder::Binder(MtxPtr pMtx, const Vec3f* pPosition, const Vec3f* pGravity, f32 radius, f32 offsetY, u32 planeNum)
     : mTriangleFilter(), mCollisionPartsFilter(), mExCollisionParts(), _C(pMtx), _10(pPosition), _14(pGravity), mRadius(radius), mOffsetY(offsetY),
       mOffsetVec(), _24(planeNum), mPlaneNum(), mPlane(), mFixReactionVector(0, 0, 0), mGroundInfo(), _C8(), mWallInfo(), _158(), mRoofInfo(),
       _1E8() {
@@ -90,14 +90,14 @@ namespace {
     HitInfo sLocalPlanes[32];
 }  // namespace
 
-const TVec3f Binder::bind(const TVec3f& rVelocity) {
+const Vec3f Binder::bind(const Vec3f& rVelocity) {
     const bool stopAtFirstHit = _1EC._5 != 0;
     _1EC._5 = false;
     clear();
 
-    TVec3f position(*_10);
-    TVec3f movement(rVelocity);
-    TVec3f result;
+    Vec3f position(*_10);
+    Vec3f movement(rVelocity);
+    Vec3f result;
 
     if (_1EC._2 && mExCollisionParts) {
         MR::getCollisionDirector()->getCategoryKeeper(0)->addToGlobal(mExCollisionParts);
@@ -127,7 +127,7 @@ const TVec3f Binder::bind(const TVec3f& rVelocity) {
         position.y += mOffsetY;
     }
 
-    TVec3f startPosition(position);
+    Vec3f startPosition(position);
     u32 capacity = _24;
     HitInfo* planes;
     if (capacity == 0) {
@@ -142,15 +142,15 @@ const TVec3f Binder::bind(const TVec3f& rVelocity) {
     if (firstHitCount == 0) {
         result = movement;
     } else {
-        TVec3f firstReaction(0, 0, 0);
-        TVec3f reaction(0, 0, 0);
-        TVec3f slideReaction(0, 0, 0);
+        Vec3f firstReaction(0, 0, 0);
+        Vec3f reaction(0, 0, 0);
+        Vec3f slideReaction(0, 0, 0);
         obtainMomentFixReaction(planes, capacity, &firstReaction, 0);
         position.add(firstReaction);
-        TVec3f previousReaction(firstReaction);
+        Vec3f previousReaction(firstReaction);
 
         while (!stopAtFirstHit && hasRemainingMovement == true) {
-            TVec3f remaining(rVelocity - movement);
+            Vec3f remaining(rVelocity - movement);
             moveAlongHittedPlanes(&movement, &position, &remaining, rVelocity, previousReaction, planes, capacity, &hasRemainingMovement);
             obtainMomentFixReaction(planes, capacity, &reaction, firstHitCount);
             position.add(reaction);
@@ -175,9 +175,9 @@ const TVec3f Binder::bind(const TVec3f& rVelocity) {
     return result;
 }
 
-void Binder::moveAlongHittedPlanes(TVec3f* pMovement, TVec3f* pPosition, TVec3f* pRemaining, const TVec3f& rVelocity, const TVec3f& rReaction,
+void Binder::moveAlongHittedPlanes(Vec3f* pMovement, Vec3f* pPosition, Vec3f* pRemaining, const Vec3f& rVelocity, const Vec3f& rReaction,
                                    HitInfo* pPlanes, u32 capacity, bool* pHasRemainingMovement) {
-    TVec3f normal(rReaction);
+    Vec3f normal(rReaction);
     MR::normalizeOrZero(&normal);
     f32 dot = pRemaining->dot(normal);
     if (dot < 0.0f) {
@@ -192,10 +192,10 @@ void Binder::moveAlongHittedPlanes(TVec3f* pMovement, TVec3f* pPosition, TVec3f*
     }
 }
 
-u32 Binder::findBindedPos(TVec3f* pPosition, TVec3f* pMovement, bool* pHasRemainingMovement, HitInfo* pPlanes, u32 capacity, bool skipInitial,
+u32 Binder::findBindedPos(Vec3f* pPosition, Vec3f* pMovement, bool* pHasRemainingMovement, HitInfo* pPlanes, u32 capacity, bool skipInitial,
                           bool stopAtFirstHit) {
     s32 steps = static_cast< s32 >((1.0f / 35.0f) * pMovement->length()) + 1;
-    TVec3f step(*pMovement);
+    Vec3f step(*pMovement);
     if (steps > 1) {
         step /= steps;
     }
@@ -231,7 +231,7 @@ u32 Binder::findBindedPos(TVec3f* pPosition, TVec3f* pMovement, bool* pHasRemain
     return 0;
 }
 
-bool Binder::moveWithCollisionParts(TVec3f* pPosition, TVec3f* pMovement) {
+bool Binder::moveWithCollisionParts(Vec3f* pPosition, Vec3f* pMovement) {
     if (_C8 < 0.0f) {
         return false;
     }
@@ -240,7 +240,7 @@ bool Binder::moveWithCollisionParts(TVec3f* pPosition, TVec3f* pMovement) {
         return false;
     }
 
-    TVec3f force;
+    Vec3f force;
     mGroundInfo.mParentTriangle.calcForceMovePower(&force, *pPosition);
     pMovement->add(force);
     pPosition->add(force);
@@ -269,12 +269,12 @@ u32 Binder::storeCurrentHitInfo(HitInfo* pPlanes, u32 capacity, bool stopAtFirst
     return count;
 }
 
-void Binder::obtainMomentFixReaction(HitInfo* pPlanes, u32 capacity, TVec3f* pReaction, u32 start) {
-    TVec3f positive(0, 0, 0);
-    TVec3f negative(0, 0, 0);
+void Binder::obtainMomentFixReaction(HitInfo* pPlanes, u32 capacity, Vec3f* pReaction, u32 start) {
+    Vec3f positive(0, 0, 0);
+    Vec3f negative(0, 0, 0);
     for (u32 i = start; i < mPlaneNum; i++) {
         HitInfo& plane = pPlanes[i];
-        TVec3f normal(*plane.mParentTriangle.getNormal(0));
+        Vec3f normal(*plane.mParentTriangle.getNormal(0));
         f32 x = normal.x * plane._60;
         if (positive.x < x) {
             positive.x = x;
@@ -326,7 +326,7 @@ void Binder::obtainMomentFixReaction(HitInfo* pPlanes, u32 capacity, TVec3f* pRe
 
 void Binder::storeContactPlane(HitInfo* pPlanes, u32 capacity) {
     for (u32 i = 0; i < mPlaneNum; i++) {
-        const TVec3f& normal = *pPlanes[i].mParentTriangle.getNormal(0);
+        const Vec3f& normal = *pPlanes[i].mParentTriangle.getNormal(0);
         if (MR::isFloorPolygon(normal, *_14)) {
             if (_C8 < pPlanes[i]._60) {
                 mGroundInfo = pPlanes[i];

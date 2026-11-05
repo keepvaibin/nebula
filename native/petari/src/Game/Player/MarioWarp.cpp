@@ -33,8 +33,8 @@ bool Mario::doObjWarp(LiveActor* pActor) {
 
         mActor->setBlendMtxTimer(16);
 
-        TVec3f axisY;
-        TVec3f pairAxisY;
+        Vec3f axisY;
+        Vec3f pairAxisY;
 
         MR::calcActorAxisY(&axisY, pActor);
         MR::calcActorAxisY(&pairAxisY, pPod);
@@ -60,7 +60,7 @@ bool Mario::doObjWarp(LiveActor* pActor) {
     return false;
 }
 
-bool Mario::doPointWarp(const TVec3f& rVec1, const TVec3f& rVec2, s32 myInt) {
+bool Mario::doPointWarp(const Vec3f& rVec1, const Vec3f& rVec2, s32 myInt) {
     if (getPlayer()->getMovementStates().debugMode) {
         return false;
     }
@@ -133,13 +133,13 @@ MarioWarp::MarioWarp(MarioActor* pActor) : MarioState(pActor, MarioStatus_Warp),
 }
 
 void MarioWarp::calcAxis() {
-    TVec3f axis;
-    TVec3f normal;
-    TVec3f displacement = _14 - getTrans();
+    Vec3f axis;
+    Vec3f normal;
+    Vec3f displacement = _14 - getTrans();
     f32 distance = displacement.length();
     axis.cross(displacement, getGravityVec());
     MR::normalizeOrZero(&axis);
-    TVec3f midpoint = getTrans() + displacement * 0.5f;
+    Vec3f midpoint = getTrans() + displacement * 0.5f;
     normal.cross(axis, displacement);
     MR::normalizeOrZero(&normal);
     f32 angle = PI / 4.0f;
@@ -198,7 +198,7 @@ void Mario::doCubeWarp() {
 
         pWarpCubeMgr->startEventCamera(pWarpCube);
 
-        TVec3f cubePos;
+        Vec3f cubePos;
         MR::calcCubePos(pPairCube, &cubePos);
 
         mVelocity.zero();
@@ -231,7 +231,7 @@ void Mario::doCubeWarp() {
     _56C = nullptr;
 }
 
-bool Mario::doPointWarpRecovery(const TVec3f& rVec1, const TVec3f& rVec2) {
+bool Mario::doPointWarpRecovery(const Vec3f& rVec1, const Vec3f& rVec2) {
     if (getPlayer()->getMovementStates().debugMode) {
         return false;
     }
@@ -279,10 +279,10 @@ void MarioWarp::updateJump() {
     }
 
     Mtx rotation;
-    TVec3f offset;
+    Vec3f offset;
     NebulaMtxRotAxisRad(rotation, &_5C, _80 * (1.0f - progress) + _84 * progress);
     NebulaMtxMultVecSR(rotation, &_74, &offset);
-    TVec3f position = _68 + offset;
+    Vec3f position = _68 + offset;
     f32 followRate = 0.5f;
     if (_45 == 2) {
         followRate = 1.0f;
@@ -347,7 +347,7 @@ bool MarioWarp::start() {
     }
 
     mActor->_F44 = 0;
-    const TVec3f& position = mActor->mPosition;
+    const Vec3f& position = mActor->mPosition;
     addTrans(position - getTrans(), "Module");
     update();
     if (_45 == 3 && getPlayerMode() != 1) {
@@ -378,7 +378,7 @@ bool MarioWarp::update() {
         }
 
         _54--;
-        TVec3f displacement = _20 - getTrans();
+        Vec3f displacement = _20 - getTrans();
         addTrans(displacement * (1.0f - static_cast< f32 >(_54) / _56), "Module");
         if (_54 == 0) {
             calcAxis();
@@ -399,8 +399,8 @@ bool MarioWarp::update() {
 
     updateJump();
     if (_45 == 0) {
-        TVec3f offset = getTrans() - _20;
-        TVec3f direction = _14 - _20;
+        Vec3f offset = getTrans() - _20;
+        Vec3f direction = _14 - _20;
         MR::normalize(&direction);
         f32 distance = MR::vecKillElement(offset, direction, &offset);
         addTrans((_20 + direction * distance) - getTrans(), "Module");
@@ -540,7 +540,7 @@ bool MarioWarp::close() {
         getPlayer()->mMovementStates.jumping = true;
         getPlayer()->mMovementStates._2B = true;
         getPlayer()->_402 = 0;
-        getPlayer()->mJumpVec = TVec3f(0.0f, 0.0f, 0.0f);
+        getPlayer()->mJumpVec = Vec3f(0.0f, 0.0f, 0.0f);
         changeAnimation("\227\216\211\272" /* 落下 */);
         Mario* player = getPlayer();
         player->_42A = 0;

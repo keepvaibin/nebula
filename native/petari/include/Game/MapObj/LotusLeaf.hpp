@@ -16,7 +16,7 @@ public:
     void exeWaitPlayerOn();
     void exeShake();
 
-    TVec3f mInitPos;
+    Vec3f mInitPos;
     f32 mShakeSpeed;
     f32 mShakePeriod;
 };

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "JSystem/JAudio2/JAISoundHandles.hpp"
-#include "JSystem/JGeometry/TVec.hpp"
+#include <nebula_geometry.hpp>
 
 class JAISoundHandle;
 class JAISoundID;
@@ -11,7 +11,7 @@ class JAUSoundObject : public JAISoundHandles {
 public:
     JAUSoundObject();
 
-    JAUSoundObject(TVec3f*, u8, NebulaArena*);
+    JAUSoundObject(Vec3f*, u8, NebulaArena*);
     ~JAUSoundObject();
 
     virtual void process();
@@ -26,11 +26,11 @@ public:
     JAISoundHandle* getLowPrioSound(JAISoundID);
     JAISoundHandle* getFreeHandleNotReserved();
 
-    const TVec3f* getPos() const {
+    const Vec3f* getPos() const {
         return mPos;
     }
 
     bool mIsAllocated;
     u32 _10;
-    TVec3f* mPos;
+    Vec3f* mPos;
 };

@@ -11,12 +11,12 @@ void OnimasuPivot::initFromRailPoint() {
 }
 
 void OnimasuPivot::startMoveInner() {
-    TVec3f pivot = getPivotPointPos();
-    TVec3f toLastPoint = getLastPointPos() - pivot;
-    TVec3f toNextPoint = getNextPointPos() - pivot;
+    Vec3f pivot = getPivotPointPos();
+    Vec3f toLastPoint = getLastPointPos() - pivot;
+    Vec3f toNextPoint = getNextPointPos() - pivot;
 
     if (MR::isSameDirection(toLastPoint, toNextPoint)) {
-        TPos3f mtx;
+        Pos3f mtx;
         mtx.identity();
         mtx.setRotate(_BC, PI * 0.001f);
         mtx.mult(toLastPoint, toLastPoint);
@@ -26,22 +26,22 @@ void OnimasuPivot::startMoveInner() {
     MR::makeQuatFromVec(&_120, toNextPoint, _BC);
 }
 
-const TVec3f OnimasuPivot::getLastPointPos() const {
-    TVec3f railPointPos;
+const Vec3f OnimasuPivot::getLastPointPos() const {
+    Vec3f railPointPos;
     MR::calcRailPointPos(&railPointPos, this, getLastPointNo() * 2);
 
     return railPointPos;
 }
 
-const TVec3f OnimasuPivot::getPivotPointPos() const {
-    TVec3f railPointPos;
+const Vec3f OnimasuPivot::getPivotPointPos() const {
+    Vec3f railPointPos;
     MR::calcRailPointPos(&railPointPos, this, (getLastPointNo() * 2) + 1);
 
     return railPointPos;
 }
 
-const TVec3f OnimasuPivot::getNextPointPos() const {
-    TVec3f railPointPos;
+const Vec3f OnimasuPivot::getNextPointPos() const {
+    Vec3f railPointPos;
     MR::calcRailPointPos(&railPointPos, this, mCurNormal * 2);
 
     return railPointPos;
@@ -54,11 +54,11 @@ void OnimasuPivot::updatePoseInner() {
         slerpFactor = 1.0f;
     }
 
-    TQuat4f quat;
+    Quat4f quat;
     quat.set(_110);
     quat.slerp(_120, slerpFactor);
 
-    TVec3f fromPivotPoint(gZeroVec);
+    Vec3f fromPivotPoint(gZeroVec);
 
     quat.getZDir(fromPivotPoint);
 
@@ -85,11 +85,11 @@ s32 OnimasuPivot::getLastPointNo() const {
     return n;
 }
 
-const TVec3f& OnimasuPivot::getLastPointNormal() const {
+const Vec3f& OnimasuPivot::getLastPointNormal() const {
     return mNormals[getLastPointNo()];
 }
 
-const TVec3f& OnimasuPivot::getNextPointNormal() const {
+const Vec3f& OnimasuPivot::getNextPointNormal() const {
     return mNormals[mCurNormal];
 }
 
@@ -103,8 +103,8 @@ void OnimasuPivot::incrementNextPoint() {
 
 void OnimasuPivot::collectRailPointInfo() {
     for (s32 i = 0; i < mNormals.size(); i++) {
-        TVec3f v5(gZeroVec);
-        TVec3f v4(gZeroVec);
+        Vec3f v5(gZeroVec);
+        Vec3f v4(gZeroVec);
         OnimasuFunction::getPolygonOnRailPoint(&v4, &v5, this, i * 2);
         mNormals[i].set(v5);
     }

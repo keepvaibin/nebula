@@ -14,7 +14,7 @@ public:
     virtual void control();
 
     void goToFarPoint();
-    void goToNearPoint(const TVec3f&);
+    void goToNearPoint(const Vec3f&);
     bool isAtFarPoint() const;
     bool isAtNearPoint() const;
     bool isToOrAtFarPoint() const;
@@ -27,11 +27,11 @@ public:
     void exeNearPoint();
 
 private:
-    TVec3f mNearTarget;
-    TVec3f mPrevNearTarget;
-    TVec3f mWPoint;
-    TVec3f mPrevWPoint;
+    Vec3f mNearTarget;
+    Vec3f mPrevNearTarget;
+    Vec3f mWPoint;
+    Vec3f mPrevWPoint;
     f32 mFovy;
     f32 mPrevFovy;
-    TVec3f mUpVec;
+    Vec3f mUpVec;
 };

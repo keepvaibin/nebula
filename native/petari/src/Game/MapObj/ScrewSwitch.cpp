@@ -44,7 +44,7 @@ void ScrewSwitch::init(const JMapInfoIter& rIter) {
     MR::initLightCtrl(this);
     initHitSensor(2);
     MR::addBodyMessageSensorMapObj(this);
-    TVec3f offset;
+    Vec3f offset;
     offset.scale(-150.0f, mGravity);
     MR::addHitSensorAtJoint(this, "binder", "Screw", ATYPE_BINDER, 8, 150.0f, offset);
     MtxPtr jointMtx = MR::getJointMtx(this, "Screw");
@@ -140,7 +140,7 @@ bool ScrewSwitch::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pRecei
 }
 
 void ScrewSwitch::updateBindActorMtx() {
-    TPos3f pos;
+    Pos3f pos;
     pos.set(_90->getBaseMtx());
     pos.setTrans(getSensor("binder")->mPosition);
     MR::setBaseTRMtx(_90, pos);

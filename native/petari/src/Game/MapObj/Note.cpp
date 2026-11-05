@@ -17,7 +17,7 @@ namespace NrvNote {
     NEW_NERVE(NoteNrvFlyUp, Note, FlyUp);
 };  // namespace NrvNote
 
-Note::Note(const char* pName, const TVec3f& rRailDirection, NoteFairy* pParent) : LiveActor(pName) {
+Note::Note(const char* pName, const Vec3f& rRailDirection, NoteFairy* pParent) : LiveActor(pName) {
     mParentFairy = pParent;
     _90.set(0.0f);
     mRailDirection = rRailDirection;
@@ -33,7 +33,7 @@ void Note::init(const JMapInfoIter& rIter) {
     initModelManagerWithAnm("Note", nullptr, false);
     MR::connectToSceneNoSilhouettedMapObjStrongLight(this);
     initHitSensor(1);
-    MR::addHitSensorMapObj(this, "body", 8, 80.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorMapObj(this, "body", 8, 80.0f, Vec3f(0.0f, 0.0f, 0.0f));
     initEffectKeeper(0, nullptr, false);
     initSound(4, false);
     initNerve(GET_NERVE(Note, NoteNrvWait));
@@ -97,7 +97,7 @@ void Note::control() {
 }
 
 void Note::calcAndSetBaseMtx() {
-    TPos3f stack_44;
+    Pos3f stack_44;
     MR::makeMtxUpFront(&stack_44, -mGravity, mRailDirection);
     Mtx mtxRotateY;
     f32 val = MR::getSceneObj< NoteGroup >(SceneObj_NoteGroup)->mRotation;

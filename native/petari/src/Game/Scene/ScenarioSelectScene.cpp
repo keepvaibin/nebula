@@ -57,9 +57,9 @@ void ScenarioSelectScene::init() {
     mEffectSystem->entry(MR::getParticleResourceHolder(), 0x300, 0x20);
     mCameraContext = new CameraContext();
 
-    TPos3f view;
-    view.setPositionFromLookAt(TVec3f(0.0f, 0.0f, 1000.0f), TVec3f(0.0f, 1.0f, 0.0f), TVec3f(0.0f, 0.0f, 0.0f));
-    mCameraContext->setViewMtx(view, false, false, TVec3f(0.0f, 0.0f, 0.0f));
+    Pos3f view;
+    view.setPositionFromLookAt(Vec3f(0.0f, 0.0f, 1000.0f), Vec3f(0.0f, 1.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
+    mCameraContext->setViewMtx(view, false, false, Vec3f(0.0f, 0.0f, 0.0f));
 
     mScenarioLayout = new ScenarioSelectLayout(mEffectSystem, mCameraContext);
     mScenarioLayout->initWithoutIter();

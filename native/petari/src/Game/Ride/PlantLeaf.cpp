@@ -8,7 +8,7 @@
 #include <JSystem/J3DGraphBase/J3DMaterial.hpp>
 #include <JSystem/J3DGraphBase/J3DShape.hpp>
 #include <JSystem/J3DGraphBase/J3DSys.hpp>
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 namespace {
     static const f32 sScaleMin = 0.0001f;
@@ -22,7 +22,7 @@ namespace {
     static const f32 sSpringSpeedToStop = 0.001f;
 };  // namespace
 
-PlantLeaf::PlantLeaf(f32 leafCoord, const TVec3f& rPosition, const TVec3f& rGrowDirection, f32 leafSize)
+PlantLeaf::PlantLeaf(f32 leafCoord, const Vec3f& rPosition, const Vec3f& rGrowDirection, f32 leafSize)
     : LiveActor("\227\164\201\151\220\114\202\321\220\101\225\250\201\152" /* 葉（伸び植物） */), mSpringCoord(), mSpringSpeed(), mLeafCoord(leafCoord), mLeafSize(leafSize), mSide(1.0f, 0.0f, 0.0f),
       mUp(0.0f, 1.0f, 0.0f), mFront(rGrowDirection) {
     mPosition.set(rPosition);
@@ -48,7 +48,7 @@ void PlantLeaf::init(const JMapInfoIter&) {
     makeActorAppeared();
 }
 
-void PlantLeaf::updateGrowUp(const TVec3f& rStalkPos, const TVec3f& rAxisY, f32 growthPercent, f32 offset) {
+void PlantLeaf::updateGrowUp(const Vec3f& rStalkPos, const Vec3f& rAxisY, f32 growthPercent, f32 offset) {
     mPosition.set(mFront);
     mPosition *= offset;
     mPosition.add(rStalkPos);
@@ -64,7 +64,7 @@ void PlantLeaf::updateGrowUp(const TVec3f& rStalkPos, const TVec3f& rAxisY, f32 
     mBaseMtx.setTrans(mPosition);
 }
 
-bool PlantLeaf::updateSpring(const TVec3f& rPos, f32 springPower, f32 growthPercent) {
+bool PlantLeaf::updateSpring(const Vec3f& rPos, f32 springPower, f32 growthPercent) {
     if (mPosition.squared(rPos) < ::sDistancePush * ::sDistancePush) {
         if (mSpringCoord == 0.0f && mSpringSpeed == 0.0f) {
             MR::tryRumblePadWeak(this, PLAYER_1);
@@ -94,9 +94,9 @@ bool PlantLeaf::updateSpring(f32 growthPercent) {
         mBaseMtx.setTrans(mPosition);
         return true;
     } else {
-        TVec3f side = mFront;
-        TVec3f front;
-        TVec3f up;
+        Vec3f side = mFront;
+        Vec3f front;
+        Vec3f up;
         side.y += mSpringCoord;
         MR::normalize(&side);
         MR::makeAxisFrontUp(&front, &up, side, mUp);

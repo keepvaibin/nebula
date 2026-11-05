@@ -2,7 +2,7 @@
 
 #include "JSystem/JAudio2/JAISound.hpp"
 #include "JSystem/JAudio2/JAISoundHandles.hpp"
-#include "JSystem/JGeometry.hpp"
+#include <nebula_geometry.hpp>
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 
@@ -153,8 +153,8 @@ public:
     JAUSoundAnimator(JAISoundHandles*);
 
     virtual JAISoundHandle* getFreeHandle(const JAUSoundAnimationSound* pAnimation);
-    virtual u32 getSoundID(const JAUSoundAnimationSound* pAnimation, const TVec3f& rPos, f32);
-    virtual bool playsSound(const JAUSoundAnimationSound* pAnimation, const TVec3f& rPos, f32);
+    virtual u32 getSoundID(const JAUSoundAnimationSound* pAnimation, const Vec3f& rPos, f32);
+    virtual bool playsSound(const JAUSoundAnimationSound* pAnimation, const Vec3f& rPos, f32);
     virtual void modifySoundParams(JASSoundParams* pParams, const JAUSoundAnimationSound* pAnimation, f32 time);
 
     void ageSounds_();

@@ -3,7 +3,7 @@
 #include "Game/Util/Array.hpp"
 #include "Game/Map/WaterInfo.hpp"
 #include "Game/NameObj/NameObj.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class OceanBowl;
 class OceanRing;
@@ -47,8 +47,8 @@ namespace WaterAreaFunction {
     void entryWhirlPool(WhirlPool*);
     void entryWhirlPoolAccelerator(WhirlPoolAccelerator*);
     void createWaterAreaHolder();
-    bool tryInOceanArea(const TVec3f&, WaterInfo*);
-    bool tryInWhirlPoolAccelerator(const TVec3f&, TVec3f*);
+    bool tryInOceanArea(const Vec3f&, WaterInfo*);
+    bool tryInWhirlPoolAccelerator(const Vec3f&, Vec3f*);
     bool isCameraInWaterForCameraUtil();
     f32 getCameraWaterDepth();
     WaterInfo* getCameraWaterInfo();

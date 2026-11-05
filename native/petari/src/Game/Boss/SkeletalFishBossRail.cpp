@@ -58,7 +58,7 @@ void SkeletalFishBossRail::createFillUpNamePosID() {
 
 void SkeletalFishBossRail::linkFillUpNamePosID() {
     for (s32 i = 0; i < MR::getRailPointNum(this); i++) {
-        TVec3f railPos;
+        Vec3f railPos;
         MR::calcRailPointPos(&railPos, this, i);
         mNamePosIDs[i] = SkeletalFishBossFunc::getNearestGuardPosID(railPos);
     }

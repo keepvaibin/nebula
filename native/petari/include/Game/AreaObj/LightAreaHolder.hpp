@@ -10,6 +10,6 @@ public:
 
     virtual void initAfterPlacement();
 
-    bool tryFindLightID(const TVec3f& rArea, ZoneLightID* pLightID) const;
+    bool tryFindLightID(const Vec3f& rArea, ZoneLightID* pLightID) const;
     void sort();
 };

@@ -2,7 +2,7 @@
 
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/LiveActorGroup.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class ActorCameraInfo;
 class BombTeresa;
@@ -45,10 +45,10 @@ public:
     void initSensor();
     void initBombTeresaHolder();
     void initCamera(const JMapInfoIter&);
-    void appearBreakModel(const TVec3f&, const char*);
-    void appearBreakModelFirst(const TVec3f&);
-    void appearBreakModelMiddle(const TVec3f&);
-    void appearBreakModelLast(const TVec3f&);
+    void appearBreakModel(const Vec3f&, const char*);
+    void appearBreakModelFirst(const Vec3f&);
+    void appearBreakModelMiddle(const Vec3f&);
+    void appearBreakModelLast(const Vec3f&);
     void appearStarPiece(s32);
     bool isEndBreakModel() const;
     void killBreakModel();
@@ -69,9 +69,9 @@ public:
     ActorCameraInfo* mCameraInfo;
     ModelObj* mBreakModel;
     ModelObj* mFormationModel;
-    TQuat4f _B4;
-    TVec3f _C4;
-    TQuat4f _D0;
-    TVec3f _E0;
+    Quat4f _B4;
+    Vec3f _C4;
+    Quat4f _D0;
+    Vec3f _E0;
     f32 _EC;
 };

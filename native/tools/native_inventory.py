@@ -157,7 +157,7 @@ AREAS = [
     (r"^native/petari/src/JSystem/JUtility|^native/petari/libs/JSystem/include/JSystem/JUtility", "jutility", "CONVERT",
      "JUtility: video/XFB go, fonts/textures/palettes become native resources, debug consoles out of release."),
     (r"^native/petari/src/JSystem/|^native/petari/libs/JSystem/", "jsystem-support", "CONVERT",
-     "JSystem support (JMath, JGeometry, JSupport, JGadget, JFramework): native math/SIMD, cooked data."),
+     "JSystem support (JSupport, JGadget, JFramework): native math/SIMD, cooked data."),
     (r"^native/petari/src/nw4r/lyt|^native/petari/libs/nw4r/include/nw4r/lyt", "nw4r-lyt", "CONVERT",
      "Layouts: native 2D records; cooked BRLYT/BRLAN."),
     (r"^native/petari/src/nw4r/ut|^native/petari/libs/nw4r/include/nw4r/ut", "nw4r-ut", "CONVERT",

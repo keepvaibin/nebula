@@ -7,7 +7,7 @@ SpotMarkLight::SpotMarkLight(LiveActor* pActor, f32 a3, f32 a4, MtxPtr mtx) : Pa
     _9B = false;
 
     if (!mtx) {
-        initFixedPosition(pActor->getBaseMtx(), TVec3f(0.0f, 0.0f, 0.0f), TVec3f(0.0f, 0.0f, 0.0f));
+        initFixedPosition(pActor->getBaseMtx(), Vec3f(0.0f, 0.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
     }
 
     mScale.z = a3 / 50.0f;

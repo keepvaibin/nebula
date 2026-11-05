@@ -35,8 +35,8 @@ public:
 
 private:
     f32 mRailCoordSpeed;
-    TVec3f mRailVec;
-    TVec3f mFront;
+    Vec3f mRailVec;
+    Vec3f mFront;
     f32 _A8;
     bool mIsRail;
     bool mIsForceDetonated;

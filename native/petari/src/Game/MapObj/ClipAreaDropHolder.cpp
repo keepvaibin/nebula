@@ -25,7 +25,7 @@ namespace MR {
         return MR::getSceneObj< ClipAreaDropHolder >(SceneObj_ClipAreaDropHolder)->getDeadMember();
     }
 
-    bool appearClipAreaDrop(const TVec3f& rPos, f32 baseSize) {
+    bool appearClipAreaDrop(const Vec3f& rPos, f32 baseSize) {
         ClipAreaDrop* pClipAreaDrop = getDeadClipAreaDrop();
 
         if (pClipAreaDrop == nullptr) {

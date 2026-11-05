@@ -35,21 +35,21 @@ void DynamicCollisionObj::updateTriangle() {
     s32 normalidx = 0;
 
     for (u16 i = 0; i < _94; i++) {
-        TVec3f Vertex1(mPositions[mIndices[i].mIndex[0]]);
-        TVec3f Vertex2(mPositions[mIndices[i].mIndex[1]]);
-        TVec3f Vertex3(mPositions[mIndices[i].mIndex[2]]);
+        Vec3f Vertex1(mPositions[mIndices[i].mIndex[0]]);
+        Vec3f Vertex2(mPositions[mIndices[i].mIndex[1]]);
+        Vec3f Vertex3(mPositions[mIndices[i].mIndex[2]]);
 
-        TVec3f a(Vertex3);
+        Vec3f a(Vertex3);
         a -= Vertex1;
-        TVec3f SaveForLater(a);
-        TVec3f b(Vertex2);
+        Vec3f SaveForLater(a);
+        Vec3f b(Vertex2);
         b -= Vertex1;
-        TVec3f c(Vertex3);
+        Vec3f c(Vertex3);
         c -= Vertex2;
         MR::normalizeOrZero(&a);
         MR::normalizeOrZero(&b);
         MR::normalizeOrZero(&c);
-        TVec3f cross = b.cross(a);
+        Vec3f cross = b.cross(a);
         MR::normalizeOrZero(&cross);
         _9C[i] = cross;
 
@@ -57,9 +57,9 @@ void DynamicCollisionObj::updateTriangle() {
             continue;
         }
 
-        TVec3f cross2 = (-a).cross(cross);
-        TVec3f cross3 = b.cross(cross);
-        TVec3f cross4 = c.cross(cross);
+        Vec3f cross2 = (-a).cross(cross);
+        Vec3f cross3 = b.cross(cross);
+        Vec3f cross4 = c.cross(cross);
 
         MR::normalizeOrZero(&cross2);
         MR::normalizeOrZero(&cross3);
@@ -93,9 +93,9 @@ void DynamicCollisionObj::updateTriangle() {
 
 void DynamicCollisionObj::updateCollisionHeader() {
     // Compute bounding box and extent
-    TVec3f min, max;
+    Vec3f min, max;
     MR::createBoundingBox(this->mPositions, this->mPositionNum, &min, &max);
-    TVec3f extent(max);
+    Vec3f extent(max);
     extent -= min;
 
     // Initialize masks with extent
@@ -153,8 +153,8 @@ void DynamicCollisionObj::updateCollisionHeader() {
 void DynamicCollisionObj::createCollision() {
     s32 v = _94;
     mKCLFile = new KCLFile();
-    mKCLFile->mPos = new TVec3f[v];
-    mKCLFile->mNorms = new TVec3f[v * 4];
+    mKCLFile->mPos = new Vec3f[v];
+    mKCLFile->mNorms = new Vec3f[v * 4];
     mKCLFile->mPrisms = new KC_PrismData[(v + 1) * 1];
     u16* u16array = new (4) u16[v + 3];
     mKCLFile->mOctree = u16array;
@@ -176,10 +176,10 @@ void DynamicCollisionObj::createCollision() {
     updateTriangle();
 
     mParts = new CollisionParts();
-    TPos3f posmtx;
+    Pos3f posmtx;
     NebulaMtxTrans(posmtx, mPosition.x, mPosition.y, mPosition.z);
     mParts->init(posmtx, getSensor("body"), mKCLFile, nullptr, 0, true);
     MR::validateCollisionParts(mParts);
     mParts->mServer->calcFarthestVertexDistance();
-    mParts->updateBoundingSphereRange(TVec3f(mScale));
+    mParts->updateBoundingSphereRange(Vec3f(mScale));
 }

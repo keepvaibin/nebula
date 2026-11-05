@@ -17,7 +17,7 @@ public:
 
     AudSoundObject* mSoundObj;
     J3DJoint* mJoint;
-    TVec3f mPos;
+    Vec3f mPos;
     u16 mHash;
 };
 

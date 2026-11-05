@@ -47,7 +47,7 @@ namespace MR {
         pActor->mActorLightCtrl->_8 = pDrawBuffer;
     }
 
-    void requestPointLight(const LiveActor* pActor, TVec3f pos, Color8 color, f32 intensity, s32 duration) {
+    void requestPointLight(const LiveActor* pActor, Vec3f pos, Color8 color, f32 intensity, s32 duration) {
         GameLightSignal::pointRequest(pActor, pos, color, intensity);
         return MR::getSceneObj< LightDirector >(SceneObj_LightDirector)->mPointCtrl->requestPointLight(pActor, pos, color, intensity, duration);
     }

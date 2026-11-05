@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/System/NerveExecutor.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class JMapInfoIter;
 class LiveActor;
@@ -40,7 +40,7 @@ public:
 
     LiveActor* mHost;
     bool mIsTutorialPass;
-    TVec3f mPadAccel;
+    Vec3f mPadAccel;
     TalkMessageCtrl* mTalkCtrl;
     SurfingGuidance* mSurfingGuidance;
     s32 mChangeStep;

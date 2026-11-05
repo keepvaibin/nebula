@@ -16,7 +16,7 @@ namespace {
     extern const f32 sAlphaPointNum;
 };  // namespace
 
-WhirlPoolPoint::WhirlPoolPoint(const TVec3f& rPosition, const TVec3f& rDirection, const TVec3f& rNormal, f32 radius, f32 texCoord, u8 alpha)
+WhirlPoolPoint::WhirlPoolPoint(const Vec3f& rPosition, const Vec3f& rDirection, const Vec3f& rNormal, f32 radius, f32 texCoord, u8 alpha)
     : mPosition(rPosition), mSide(1.0f, 0.0f, 0.0f), mNormal(rNormal), mDirection(0.0f, 0.0f, 1.0f), mRadius(radius), mTexCoord(texCoord),
       mAlpha(alpha), _39() {
     mDirection.set(rDirection);
@@ -48,9 +48,9 @@ void WhirlPoolAccelerator::init(const JMapInfoIter& rIter) {
     makeActorAppeared();
 }
 
-bool WhirlPoolAccelerator::calcInfo(const TVec3f& rPosition, TVec3f* pAcceleration) const {
+bool WhirlPoolAccelerator::calcInfo(const Vec3f& rPosition, Vec3f* pAcceleration) const {
     pAcceleration->zero();
-    TVec3f relative(rPosition);
+    Vec3f relative(rPosition);
     relative.sub(mPosition);
     f32 height = mAxis.dot(relative);
     if (height < 0.0f || height > mHeight) {
@@ -78,15 +78,15 @@ void WhirlPoolAccelerator::movement() {
 void WhirlPoolAccelerator::initPoints() {
     mPointCount = static_cast< s32 >(mHeight / 50.0f) + 1;
     mPoints = new WhirlPoolPoint*[mPointCount];
-    TPos3f rotation;
+    Pos3f rotation;
     rotation.identity();
     MR::makeMtxRotate(rotation, 0.0f, -10.0f, 0.0f);
-    TVec3f normal(0.0f, 0.0f, 1.0f);
+    Vec3f normal(0.0f, 0.0f, 1.0f);
 
     f32 angle = 360.0f;
 
     for (s32 i = 0; i < mPointCount; i++) {
-        TVec3f position(mAxis);
+        Vec3f position(mAxis);
         position.scale(mHeight - 50.0f * i);
         position.add(mPosition);
 
@@ -138,8 +138,8 @@ void WhirlPoolAccelerator::draw() const {
 void WhirlPoolAccelerator::drawPlane(f32 x0, f32 y0, f32 x1, f32 y1, f32 u0, f32 u1) const {
     f32 v0 = mTexOffsetV0;
 
-    TVec3f offset(0.0f, 0.0f, 30.0f);
-    TPos3f rotation;
+    Vec3f offset(0.0f, 0.0f, 30.0f);
+    Pos3f rotation;
     rotation.identity();
     MR::makeMtxRotate(rotation, 0.0f, mRotation, 0.0f);
     rotation.mult(offset, offset);
@@ -149,11 +149,11 @@ void WhirlPoolAccelerator::drawPlane(f32 x0, f32 y0, f32 x1, f32 y1, f32 u0, f32
 
     for (s32 i = 0; i < mPointCount; i++) {
         pPoint = mPoints[i];
-        TVec3f side(pPoint->mSide);
-        TVec3f normal(pPoint->mNormal);
+        Vec3f side(pPoint->mSide);
+        Vec3f normal(pPoint->mNormal);
         side.scale(pPoint->mRadius);
         normal.scale(pPoint->mRadius);
-        TVec3f position(pPoint->mPosition);
+        Vec3f position(pPoint->mPosition);
         position.add(offset);
         rotation.mult(offset, offset);
 

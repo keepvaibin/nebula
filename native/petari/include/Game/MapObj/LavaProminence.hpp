@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class PartsModel;
 
@@ -38,17 +38,17 @@ public:
     f32 mMoveSpeed;
     f32 mMoveRailCoord;
     f32 mMoveRailEndOffset;
-    TVec3f mRailStartDir;
-    TVec3f mRailEndDir;
-    TVec3f mRailStartPos;
-    TVec3f mRailEndPos;
-    TPos3f mEffectStartMtx;
-    TPos3f mEffectEndMtx;
-    TVec3f _12C;
+    Vec3f mRailStartDir;
+    Vec3f mRailEndDir;
+    Vec3f mRailStartPos;
+    Vec3f mRailEndPos;
+    Pos3f mEffectStartMtx;
+    Pos3f mEffectEndMtx;
+    Vec3f _12C;
     PartsModel* mBloomModel;
-    TPos3f mBloomModelMtx;
-    TQuat4f _16C;
-    TVec3f mRailDir;
+    Pos3f mBloomModelMtx;
+    Quat4f _16C;
+    Vec3f mRailDir;
     bool mEmitDropEffect;
-    TPos3f _18C;
+    Pos3f _18C;
 };

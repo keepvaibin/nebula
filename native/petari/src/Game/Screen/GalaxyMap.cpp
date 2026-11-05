@@ -519,7 +519,7 @@ void GalaxyMap::initPaneCtrlPointing() {
 
         GalaxyStatusAccessor accessor = MR::makeGalaxyStatusAccessor(pGalaxyName);
         MR::createAndAddPaneCtrl(this, pPaneName, 1);
-        MR::addStarPointerTargetCircle(this, pPaneName, ::sPointingRange, TVec2f(0.0f, 0.0f), nullptr);
+        MR::addStarPointerTargetCircle(this, pPaneName, ::sPointingRange, Vec2f(0.0f, 0.0f), nullptr);
 
         GalaxyMapIcon* pIcon = new GalaxyMapIcon(pGalaxyName, this, pPaneName);
         pIcon->initWithoutIter();

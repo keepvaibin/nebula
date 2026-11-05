@@ -1,8 +1,8 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
+
 
 class FixedPosition;
 class MiiFaceRecipe;
@@ -20,7 +20,7 @@ public:
 
     void drawOpa(const MiiDrawCoreSetting* pSetting) const;
     void drawXlu(const MiiDrawCoreSetting* pSetting) const;
-    void initFixedPosition(MtxPtr, const TVec3f&, const TVec3f&);
+    void initFixedPosition(MtxPtr, const Vec3f&, const Vec3f&);
     void changeExpressionNormal();
     void changeExpressionBlink();
     void changeFaceModel(const MiiFaceRecipe& rRecipe);
@@ -30,7 +30,7 @@ public:
     MiiCharModel* mCharModel;
     void* _90;
     MiiFaceRecipe* mRecipe;
-    TPos3f _98;
+    Pos3f _98;
     MtxPtr _C8;
     FixedPosition* _CC;
     bool _D0;

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 #include <nw4r/lyt/pane.h>
 #include <nw4r/lyt/textBox.h>
 
@@ -12,7 +12,7 @@ namespace LayoutCoreUtil {
 };  // namespace LayoutCoreUtil
 
 namespace MR {
-    void convertScreenPosToLayoutPos(TVec2f*, const TVec2f&);
-    void convertLayoutPosToScreenPos(TVec2f*, const TVec2f&);
-    void convertPaneLocalPosToScreenPos(TVec2f*, const nw4r::lyt::Pane*, const TVec2f&);
+    void convertScreenPosToLayoutPos(Vec2f*, const Vec2f&);
+    void convertLayoutPosToScreenPos(Vec2f*, const Vec2f&);
+    void convertPaneLocalPosToScreenPos(Vec2f*, const nw4r::lyt::Pane*, const Vec2f&);
 };  // namespace MR

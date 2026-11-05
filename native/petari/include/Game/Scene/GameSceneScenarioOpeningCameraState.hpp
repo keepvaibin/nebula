@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/System/NerveExecutor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class ScenarioTitle;
 
@@ -17,6 +17,6 @@ public:
     void exePlay();
     bool trySkipTrigger() const;
 
-    TPos3f mBaseMtx;
+    Pos3f mBaseMtx;
     ScenarioTitle* mScenarioTitle;
 };

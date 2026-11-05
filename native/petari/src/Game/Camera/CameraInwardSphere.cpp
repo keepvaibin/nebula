@@ -23,7 +23,7 @@ void CameraInwardSphere::reset() {
     CameraLocalUtil::setPos(this, CameraLocalUtil::getPos(mCameraMan));
     calcGravityCenter();
     f32 dist = CameraLocalUtil::getTarget(this)->getPosition().distance(mGravityCenter);
-    TVec3f offset = CameraLocalUtil::getPos(this) - mGravityCenter;
+    Vec3f offset = CameraLocalUtil::getPos(this) - mGravityCenter;
     offset.setLength(dist - mDistBase);
     CameraLocalUtil::setPos(this, mGravityCenter + offset);
     mVelocity.zero();
@@ -31,11 +31,11 @@ void CameraInwardSphere::reset() {
 }
 
 CameraTargetObj* CameraInwardSphere::calc() {
-    TVec3f watchPoint;
+    Vec3f watchPoint;
     CameraLocalUtil::makeWatchPoint(&watchPoint, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
     CameraLocalUtil::setWatchPos(this, watchPoint);
 
-    TVec3f camOffset = mPos - CameraLocalUtil::getWatchPos(this);
+    Vec3f camOffset = mPos - CameraLocalUtil::getWatchPos(this);
     f32 camDist = camOffset.length();
     f32 dist;
     if (camDist < 1.0f) {
@@ -52,16 +52,16 @@ CameraTargetObj* CameraInwardSphere::calc() {
     }
     camOffset.scale(dist);
 
-    TVec3f camOffsetPos = camOffset + CameraLocalUtil::getWatchPos(this);
+    Vec3f camOffsetPos = camOffset + CameraLocalUtil::getWatchPos(this);
 
-    TVec3f grav;
+    Vec3f grav;
     MR::calcGravityVector(this, camOffsetPos, &grav, nullptr, 0);
 
     Triangle tri;
     TriangleFilterFunc filterFunc(&MR::isCameraCodeThrough);
 
-    TVec3f newPos;
-    TVec3f mapPos;
+    Vec3f newPos;
+    Vec3f mapPos;
     if (MR::getFirstPolyOnLineToMap(&mapPos, &tri, camOffsetPos - grav * 1000.0f, grav * 2000.0f, nullptr, &filterFunc)) {
         newPos = mapPos - grav * mDistBase;
     } else {
@@ -90,14 +90,14 @@ CameraTargetObj* CameraInwardSphere::calc() {
 
     mPos.set(newPos);
 
-    TVec3f upPos = newPos - grav * 1000.0f;
+    Vec3f upPos = newPos - grav * 1000.0f;
     f32 oldDist = (CameraLocalUtil::getPos(this) - upPos).length();
     f32 newDist = (newPos - upPos).length();
 
     newDist = oldDist * 0.9f + newDist * 0.1f;
     CameraLocalUtil::setPos(this, upPos + grav * newDist);
 
-    TVec3f up = CameraLocalUtil::getUpVec(this) * 0.9f - grav * 0.1f;
+    Vec3f up = CameraLocalUtil::getUpVec(this) * 0.9f - grav * 0.1f;
     MR::normalize(&up);
     CameraLocalUtil::setUpVec(this, up);
     CameraLocalUtil::setWatchUpVec(this, CameraLocalUtil::getTarget(this)->getUpVec());
@@ -112,12 +112,12 @@ CamTranslatorBase* CameraInwardSphere::createTranslator() {
 void CameraInwardSphere::calcGravityCenter() {
     // Sample two (close) points along the gravity field, and the intersections
     // of the two gravity vectors will produce the center of gravity
-    TVec3f up1;
-    TVec3f pos1 = CameraLocalUtil::getTarget(this)->getPosition();
+    Vec3f up1;
+    Vec3f pos1 = CameraLocalUtil::getTarget(this)->getPosition();
     MR::calcGravityVector(this, pos1, &up1, nullptr, 0);
     up1.negate();
 
-    TVec3f pos2 = CameraLocalUtil::getTarget(this)->getFrontVec();
+    Vec3f pos2 = CameraLocalUtil::getTarget(this)->getFrontVec();
     pos2.orthogonalize(up1);
 
     if (MR::isNearZero(pos2)) {
@@ -127,7 +127,7 @@ void CameraInwardSphere::calcGravityCenter() {
     pos2.setLength(1000.0f);
     pos2.add(CameraLocalUtil::getTarget(this)->getPosition());
 
-    TVec3f up2;
+    Vec3f up2;
     MR::calcGravityVector(this, pos2, &up2, nullptr, 0);
     up2.negate();
 
@@ -135,8 +135,8 @@ void CameraInwardSphere::calcGravityCenter() {
     f32 sq2 = up2.squared();
     f32 dot = up1.dot(up2);
     f32 dotSq = dot * dot;
-    TVec3f front1 = pos1 - pos2;
-    TVec3f front2 = pos2 - pos1;
+    Vec3f front1 = pos1 - pos2;
+    Vec3f front2 = pos2 - pos1;
     f32 proj1 = front1.dot(up2);
     f32 proj2 = front2.dot(up1);
     f32 cosDiff = sq1 * sq2 - dotSq;

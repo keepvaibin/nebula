@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/NameObj/NameObj.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class SkeletalFishBoss;
 
@@ -11,7 +11,7 @@ public:
     public:
         GuardStatus();
 
-        TVec3f mGuardPosLevel;
+        Vec3f mGuardPosLevel;
         s32 mGuardWaitLevelID;
     };
 

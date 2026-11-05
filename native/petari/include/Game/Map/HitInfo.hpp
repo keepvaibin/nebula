@@ -1,8 +1,8 @@
 #pragma once
 
 #include "Game/Util/JMapInfo.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
+
 
 class CollisionParts;
 class HitSensor;
@@ -16,18 +16,18 @@ public:
     s32 getHostPlacementZoneID() const;
     bool isHostMoved() const;
     bool isValid() const;
-    const TVec3f* getNormal(int) const;
-    const TVec3f* getFaceNormal() const;
-    const TVec3f* getEdgeNormal(int) const;
-    const TVec3f* getPos(int) const;
-    const TVec3f* calcAndGetNormal(int);
-    const TVec3f* calcAndGetEdgeNormal(int);
-    const TVec3f* calcAndGetPos(int);
-    void calcForceMovePower(TVec3f*, const TVec3f&) const;
+    const Vec3f* getNormal(int) const;
+    const Vec3f* getFaceNormal() const;
+    const Vec3f* getEdgeNormal(int) const;
+    const Vec3f* getPos(int) const;
+    const Vec3f* calcAndGetNormal(int);
+    const Vec3f* calcAndGetEdgeNormal(int);
+    const Vec3f* calcAndGetPos(int);
+    void calcForceMovePower(Vec3f*, const Vec3f&) const;
     JMapInfoIter getAttributes() const;
-    TPos3f* getBaseMtx() const;
-    TPos3f* getBaseInvMtx() const;
-    TPos3f* getPrevBaseMtx() const;
+    Pos3f* getBaseMtx() const;
+    Pos3f* getBaseInvMtx() const;
+    Pos3f* getPrevBaseMtx() const;
 
     HitSensor* getSensor() const {
         return mSensor;
@@ -36,8 +36,8 @@ public:
     CollisionParts* mParts;
     u32 mIdx;
     HitSensor* mSensor;
-    TVec3f mNormals[4];
-    TVec3f mPos[3];
+    Vec3f mNormals[4];
+    Vec3f mPos[3];
 };
 
 class HitInfo {
@@ -50,8 +50,8 @@ public:
 
     Triangle mParentTriangle;
     f32 _60;
-    TVec3f mHitPos;
-    TVec3f _70;
-    TVec3f _7C;
+    Vec3f mHitPos;
+    Vec3f _70;
+    Vec3f _7C;
     u8 _88;
 };

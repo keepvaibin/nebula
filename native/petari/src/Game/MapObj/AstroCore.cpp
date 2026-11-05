@@ -31,7 +31,7 @@ void AstroCore::init(const JMapInfoIter& rIter) {
     MapObjActorUtil::setupInitInfoSimpleMapObj(&info);
     info.setupNerve(GET_NERVE(AstroCore, AstroCoreNrvWait));
     info.setupHitSensor();
-    info.setupHitSensorParam(8, ::sSensorSizeTable[0], TVec3f(0.0f, 0.0f, 0.0f));
+    info.setupHitSensorParam(8, ::sSensorSizeTable[0], Vec3f(0.0f, 0.0f, 0.0f));
     info.setupFarClipping(-1.0f);
     info.setupSound(4);
     info.setupNoAppearRiddleSE();

@@ -45,7 +45,7 @@ TripodBossBreakMovement::TripodBossBreakMovement(const char* pName)
     setBreakDownLevel(1);
 }
 
-void TripodBossBreakMovement::start(const TPos3f& a1, s32 a2) {
+void TripodBossBreakMovement::start(const Pos3f& a1, s32 a2) {
     _8C.set(a1);
     _8C.getTrans(_C0);
 
@@ -62,11 +62,11 @@ void TripodBossBreakMovement::start(const TPos3f& a1, s32 a2) {
     _100 = a2;
     _FC = 0;
 
-    TPos3f jointMtx;
+    Pos3f jointMtx;
     MR::getTripodBossJointMatrix(&jointMtx, _100);
     jointMtx.getYDir(_E4);
 
-    TVec3f v25;
+    Vec3f v25;
     v25.set< f32 >(MR::getRandom(-::sBreakRandamaize, ::sBreakRandamaize), MR::getRandom(-::sBreakRandamaize, ::sBreakRandamaize),
                    MR::getRandom(-::sBreakRandamaize, ::sBreakRandamaize));
     _E4 += v25 * _F0;
@@ -108,7 +108,7 @@ void TripodBossBreakMovement::exeWait() {
 }
 
 void TripodBossBreakMovement::exeStartBreak() {
-    TVec3f yDir;
+    Vec3f yDir;
     _8C.getYDir(yDir);
     _8C.setTrans(_C0 + yDir * mSpring->mSpringValue);
 
@@ -130,7 +130,7 @@ void TripodBossBreakMovement::exeBreak() {
     _C0 += _D8;
     _8C.setTrans(_C0);
 
-    TVec3f gravity;
+    Vec3f gravity;
     MR::calcGravityVector(this, _C0, &gravity, nullptr, MR::getTripodBossGravityHostID());
 
     _D8 += gravity * ::sGravityAccel;

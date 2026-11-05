@@ -6,7 +6,7 @@ class CoconutTreeLeafGroup;
 
 class CoconutTreeLeaf : public LiveActor {
 public:
-    CoconutTreeLeaf(const CoconutTreeLeafGroup* pGroup, MtxPtr pJointMtx, const TVec3f* pWindDirection);
+    CoconutTreeLeaf(const CoconutTreeLeafGroup* pGroup, MtxPtr pJointMtx, const Vec3f* pWindDirection);
 
     virtual ~CoconutTreeLeaf();
     virtual void init(const JMapInfoIter& rIter);
@@ -16,17 +16,17 @@ public:
     void update(f32 windAccel, f32 windRandomAccel);
 
     const CoconutTreeLeafGroup* mGroup;
-    TVec3f mTipPosition;
-    TVec3f mRestTipPosition;
-    TVec3f mRestUp;
-    TVec3f mAxisX;
-    TVec3f mAxisY;
-    TVec3f mAxisZ;
+    Vec3f mTipPosition;
+    Vec3f mRestTipPosition;
+    Vec3f mRestUp;
+    Vec3f mAxisX;
+    Vec3f mAxisY;
+    Vec3f mAxisZ;
     MtxPtr mJointMtx;
     s32 mWindStep;
     s32 mWindStartStep;
-    TVec3f mWindAccel;
-    const TVec3f* mWindDirection;
+    Vec3f mWindAccel;
+    const Vec3f* mWindDirection;
 };
 
 class CoconutTreeLeafGroup : public LiveActor {
@@ -41,6 +41,6 @@ public:
 
     s32 mNumLeaves;
     CoconutTreeLeaf** mLeaves;
-    TVec3f mWindDirection;
+    Vec3f mWindDirection;
     f32 mDistanceToPlayer;
 };

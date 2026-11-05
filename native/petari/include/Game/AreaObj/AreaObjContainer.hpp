@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/NameObj/NameObj.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class AreaObj;
 class AreaObjMgr;
@@ -25,7 +25,7 @@ public:
     virtual void init(const JMapInfoIter& rIter);
 
     AreaObjMgr* getManager(const char*) const;
-    AreaObj* getAreaObj(const char*, const TVec3f&) const;
+    AreaObj* getAreaObj(const char*, const Vec3f&) const;
 
 private:
     AreaObjMgr* mManagerArray[0x50];
@@ -36,7 +36,7 @@ namespace MR {
     AreaObjContainer* getAreaObjContainer();
 
     template < typename T >
-    T* getAreaObj(const char* pName, const TVec3f& rVec) {
+    T* getAreaObj(const char* pName, const Vec3f& rVec) {
         return static_cast< T* >(getAreaObjContainer()->getAreaObj(pName, rVec));
     }
 };  // namespace MR

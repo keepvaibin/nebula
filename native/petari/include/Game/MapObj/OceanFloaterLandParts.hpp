@@ -25,7 +25,7 @@ public:
 
     MapPartsRailMover* mRailMover;
     LodCtrl* mLodCtrl;
-    TVec3f mRailEndPos;
+    Vec3f mRailEndPos;
     const char* mObjectName;
     bool mIsMoving;
     bool mIsRegisteredDemo;

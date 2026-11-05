@@ -48,12 +48,12 @@ public:
 private:
     AnimScaleController* mScaleController;
     WalkerStateBindStarPointer* mStateBindStarPointer;
-    TVec3f _94;
-    TVec3f _A0;
-    TVec3f _AC;
-    TVec3f _B8;
+    Vec3f _94;
+    Vec3f _A0;
+    Vec3f _AC;
+    Vec3f _B8;
     s32 _C4;
-    TVec3f _C8;
+    Vec3f _C8;
     bool mIsMarioLeft;
     bool mIsHighSpeedMode;
 };

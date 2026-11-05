@@ -43,7 +43,7 @@ SpiderThreadPart::SpiderThreadPart(SpiderThreadMainPoint* pPointA, SpiderThreadM
       mPointerPosPad0(0.0f, 0.0f, 0.0f), mPointerPosPad1(0.0f, 0.0f, 0.0f), mPointB(pPointB), mNumPoints(0), mPoints(nullptr),
       mSide(1.0f, 0.0f, 0.0f), mUp(0.0f, 1.0f, 0.0f), mFront(0.0f, 0.0f, 1.0f), mDistBetweenMainPoints(0.0f), mDistBetweenPoints(0.0f),
       mTextureOffset(0.0f) {
-    TVec3f forward(mPointB->mPosition);
+    Vec3f forward(mPointB->mPosition);
     forward.sub(mPointA->mPosition);
     mDistBetweenMainPoints = forward.length();
     mNumPoints = mDistBetweenMainPoints / ::sPointInterval;
@@ -53,7 +53,7 @@ SpiderThreadPart::SpiderThreadPart(SpiderThreadMainPoint* pPointA, SpiderThreadM
     mPoints = new SpiderThreadPoint*[mNumPoints];
 
     for (s32 idx = 0; idx < mNumPoints; idx++) {
-        TVec3f pos(forward);
+        Vec3f pos(forward);
         pos.scale(mDistBetweenPoints * (idx + 1));
         pos.add(mPointA->mPosition);
 
@@ -90,10 +90,10 @@ SpiderThreadPart::SpiderThreadPart(SpiderThreadMainPoint* pPointA, SpiderThreadM
     padBox(boundBoxPadding);
 
     f32 minZ = mPointA->mPosition.z >= mPointB->mPosition.z ? mPointB->mPosition.z : mPointA->mPosition.z;
-    TVec3f far(mBoundBox.i.x, mBoundBox.i.y, minZ - 1000.0f);
+    Vec3f far(mBoundBox.i.x, mBoundBox.i.y, minZ - 1000.0f);
 
     f32 maxZ = mPointA->mPosition.z >= mPointB->mPosition.z ? mPointA->mPosition.z : mPointB->mPosition.z;
-    TVec3f near(mBoundBox.f.x, mBoundBox.f.y, maxZ + 100.0f);
+    Vec3f near(mBoundBox.f.x, mBoundBox.f.y, maxZ + 100.0f);
     mBoundBox.extend(far);
     mBoundBox.extend(near);
 }
@@ -119,16 +119,16 @@ void SpiderThreadPart::updatePointerPos() {
         return;
     }
 
-    TVec3f center(mPointA->mPosition);
+    Vec3f center(mPointA->mPosition);
     center.add(mPointB->mPosition);
     center.scale(0.5f);
 
     if (MR::isStarPointerInScreen(PLAYER_1)) {
-        MR::calcStarPointerPosOnPlane(&mPointerPosPad0, center, TVec3f(0.0f, 0.0f, 1.0f), PLAYER_1, false);
+        MR::calcStarPointerPosOnPlane(&mPointerPosPad0, center, Vec3f(0.0f, 0.0f, 1.0f), PLAYER_1, false);
     }
 
     if (MR::isStarPointerInScreen(PLAYER_2)) {
-        MR::calcStarPointerPosOnPlane(&mPointerPosPad1, center, TVec3f(0.0f, 0.0f, 1.0f), PLAYER_2, false);
+        MR::calcStarPointerPosOnPlane(&mPointerPosPad1, center, Vec3f(0.0f, 0.0f, 1.0f), PLAYER_2, false);
     }
 }
 
@@ -205,13 +205,13 @@ void SpiderThreadPart::startHang(s32 index) {
     updatePointPosHanging(index);
 }
 
-void SpiderThreadPart::updateHang(const TVec3f& rPos, s32 index) {
+void SpiderThreadPart::updateHang(const Vec3f& rPos, s32 index) {
     getPoint(index)->updateHang(rPos);
     updatePointPosHanging(index);
 }
 
 void SpiderThreadPart::endHang(s32 cutIndex) {
-    TVec3f front(mPointB->mPosition);
+    Vec3f front(mPointB->mPosition);
     front.sub(mPointA->mPosition);
     MR::normalize(&front);
 
@@ -220,12 +220,12 @@ void SpiderThreadPart::endHang(s32 cutIndex) {
     for (s32 idx = 0; idx < cutIndex; idx++) {
         f32 t = MR::getEaseOutValue(static_cast< f32 >(idx + 1) / static_cast< f32 >(cutIndex + 1), 0.0f, 1.0f, 1.0f);
 
-        TVec3f v1;
+        Vec3f v1;
         v1.x = point->mPosition.x * t + (1.0f - t) * mPointA->mPosition.x;
         v1.y = point->mPosition.y * t + (1.0f - t) * mPointA->mPosition.y;
         v1.z = point->mPosition.z * t + (1.0f - t) * mPointA->mPosition.z;
 
-        TVec3f v2(v1);
+        Vec3f v2(v1);
         v2.sub(getPoint(idx)->mPosition);
         MR::vecKillElement(v2, front, &v1);
         v1.add(getPoint(idx)->mPosition);
@@ -236,12 +236,12 @@ void SpiderThreadPart::endHang(s32 cutIndex) {
     for (s32 idx = cutIndex + 1; idx < mNumPoints; idx++) {
         f32 t = MR::getEaseOutValue(static_cast< f32 >(mNumPoints - idx) / static_cast< f32 >(mNumPoints - cutIndex), 0.0f, 1.0f, 1.0f);
 
-        TVec3f v1;
+        Vec3f v1;
         v1.x = point->mPosition.x * t + (1.0f - t) * mPointB->mPosition.x;
         v1.y = point->mPosition.y * t + (1.0f - t) * mPointB->mPosition.y;
         v1.z = point->mPosition.z * t + (1.0f - t) * mPointB->mPosition.z;
 
-        TVec3f v2(v1);
+        Vec3f v2(v1);
         v2.sub(getPoint(idx)->mPosition);
         MR::vecKillElement(v2, front, &v1);
         v1.add(getPoint(idx)->mPosition);
@@ -266,7 +266,7 @@ void SpiderThreadPart::stopAllPoints() {
     mStopTime = ::sForceAttachTime;
 }
 
-f32 SpiderThreadPart::calcNearestPointInfo(const TVec3f** pPos, const TVec3f** pNeutralPos, s32* pPointNum, const TVec3f& rPos) {
+f32 SpiderThreadPart::calcNearestPointInfo(const Vec3f** pPos, const Vec3f** pNeutralPos, s32* pPointNum, const Vec3f& rPos) {
     if (mIsStill) {
         updatePointPosToLine();
     }
@@ -277,7 +277,7 @@ f32 SpiderThreadPart::calcNearestPointInfo(const TVec3f** pPos, const TVec3f** p
 }
 
 void SpiderThreadPart::updatePointPosToLine() {
-    TVec3f front(mPointB->mPosition);
+    Vec3f front(mPointB->mPosition);
     front.sub(mPointA->mPosition);
 
     f32 delta = front.length() / (mNumPoints + 1);
@@ -285,7 +285,7 @@ void SpiderThreadPart::updatePointPosToLine() {
 
     SpiderThreadPoint* point;
     for (s32 idx = 0; idx < mNumPoints; idx++) {
-        TVec3f pos(front);
+        Vec3f pos(front);
         pos.scale(delta * (idx + 1));
         pos.add(mPointA->mPosition);
 
@@ -301,7 +301,7 @@ void SpiderThreadPart::updatePointPosAndBasePosToLine() {
     }
 }
 
-bool SpiderThreadPart::touchActor(s32 index, const TVec3f& rVel) {
+bool SpiderThreadPart::touchActor(s32 index, const Vec3f& rVel) {
     if (mTouchTimeout > 0) {
         return false;
     }
@@ -309,11 +309,11 @@ bool SpiderThreadPart::touchActor(s32 index, const TVec3f& rVel) {
     // TODO: this really screams vector arithmetic inline
     f32 projUp = mUp.dot(rVel);
     f32 projFront = mFront.dot(rVel);
-    TVec3f scaleUp(mUp);
-    TVec3f scaleFront(mFront);
+    Vec3f scaleUp(mUp);
+    Vec3f scaleFront(mFront);
     scaleUp.scale(projUp);
     scaleFront.scale(projFront);
-    TVec3f vel(scaleUp);
+    Vec3f vel(scaleUp);
     vel.add(scaleFront);
 
     getPoint(index)->mVelocity.add(vel);
@@ -324,7 +324,7 @@ bool SpiderThreadPart::touchActor(s32 index, const TVec3f& rVel) {
     return true;
 }
 
-void SpiderThreadPart::tryTouch(f32 radius, const TVec3f& rVel, s32 padChannel) {
+void SpiderThreadPart::tryTouch(f32 radius, const Vec3f& rVel, s32 padChannel) {
     if (mIsCut || mIsFree) {
         return;
     }
@@ -333,7 +333,7 @@ void SpiderThreadPart::tryTouch(f32 radius, const TVec3f& rVel, s32 padChannel) 
         return;
     }
 
-    TVec3f* pointerPos = &mPointerPosPad0;
+    Vec3f* pointerPos = &mPointerPosPad0;
     if (padChannel == PLAYER_2) {
         pointerPos = &mPointerPosPad1;
     }
@@ -354,7 +354,7 @@ void SpiderThreadPart::tryTouch(f32 radius, const TVec3f& rVel, s32 padChannel) 
     }
 }
 
-s32 SpiderThreadPart::findTouchPoint(f32 radius, const TVec3f& rVel, s32 padChannel) {
+s32 SpiderThreadPart::findTouchPoint(f32 radius, const Vec3f& rVel, s32 padChannel) {
     for (s32 idx = 0; idx < mNumPoints; idx++) {
         if (getPoint(idx)->tryTouch(radius, rVel, padChannel)) {
             mTouchTimeout = ::sTouchTimerMax;
@@ -365,7 +365,7 @@ s32 SpiderThreadPart::findTouchPoint(f32 radius, const TVec3f& rVel, s32 padChan
     return -1;
 }
 
-f32 SpiderThreadPart::findNearestPointNo(s32* pPointNum, const TVec3f& rPos) const {
+f32 SpiderThreadPart::findNearestPointNo(s32* pPointNum, const Vec3f& rPos) const {
     *pPointNum = 0;
     f32 minDistance = MR::calcDistanceXY(getPoint(0)->mPosition, rPos);
 
@@ -387,7 +387,7 @@ void SpiderThreadPart::updatePointPosHanging(s32 hangIndex) {
     for (s32 idx = 0; idx < hangIndex; idx++) {
         f32 t = static_cast< f32 >(idx + 1) / static_cast< f32 >(hangIndex + 1);
 
-        TVec3f v1;
+        Vec3f v1;
         v1.x = point->mPosition.x * t + (1.0f - t) * mPointA->mPosition.x;
         v1.y = point->mPosition.y * t + (1.0f - t) * mPointA->mPosition.y;
         v1.z = point->mPosition.z * t + (1.0f - t) * mPointA->mPosition.z;
@@ -398,7 +398,7 @@ void SpiderThreadPart::updatePointPosHanging(s32 hangIndex) {
     for (s32 idx = hangIndex + 1; idx < mNumPoints; idx++) {
         f32 t = static_cast< f32 >(mNumPoints - idx) / static_cast< f32 >(mNumPoints - hangIndex);
 
-        TVec3f v1;
+        Vec3f v1;
         v1.x = point->mPosition.x * t + (1.0f - t) * mPointB->mPosition.x;
         v1.y = point->mPosition.y * t + (1.0f - t) * mPointB->mPosition.y;
         v1.z = point->mPosition.z * t + (1.0f - t) * mPointB->mPosition.z;
@@ -407,7 +407,7 @@ void SpiderThreadPart::updatePointPosHanging(s32 hangIndex) {
     }
 }
 
-void SpiderThreadPart::updatePointVelocityTouch(s32 hangIndex, const TVec3f& rVel) {
+void SpiderThreadPart::updatePointVelocityTouch(s32 hangIndex, const Vec3f& rVel) {
 
     for (s32 idx = 0; idx < hangIndex; idx++) {
         f32 t = MR::getEaseOutValue(static_cast< f32 >(idx + 1) / static_cast< f32 >(hangIndex + 1), 0.0f, 1.0f, 1.0f);
@@ -423,7 +423,7 @@ void SpiderThreadPart::updatePointVelocityTouch(s32 hangIndex, const TVec3f& rVe
 }
 
 void SpiderThreadPart::updateBasePos() {
-    TVec3f front(mPointB->mPosition);
+    Vec3f front(mPointB->mPosition);
     front.sub(mPointA->mPosition);
 
     if (MR::isNearZero(front)) {
@@ -434,7 +434,7 @@ void SpiderThreadPart::updateBasePos() {
     MR::normalize(&front);
 
     for (s32 idx = 0; idx < mNumPoints; idx++) {
-        TVec3f pos(front);
+        Vec3f pos(front);
         pos.scale((idx + 1) * delta);
         pos.add(mPointA->mPosition);
         getPoint(idx)->mBasePos.set(pos);
@@ -449,7 +449,7 @@ void SpiderThreadPart::updateForceAttach() {
 
     f32 t = mStopTime / static_cast< f32 >(::sForceAttachTime);
     for (s32 idx = 0; idx < mNumPoints; idx++) {
-        TVec3f vel(getPoint(idx)->mVelocity);
+        Vec3f vel(getPoint(idx)->mVelocity);
         getPoint(idx)->updateSpring();
 
         getPoint(idx)->setPos(getPoint(idx)->mPosition * t + getPoint(idx)->mBasePos * (1.0f - t));
@@ -462,7 +462,7 @@ void SpiderThreadPart::updateCutPoints() {
         getPoint(idx)->updateWind(::sWindFrictionRate);
     }
 
-    TVec3f* pos = &mPointA->mPosition;
+    Vec3f* pos = &mPointA->mPosition;
     for (s32 idx = 0; idx < mNumPoints; idx++) {
         getPoint(idx)->restrict(pos, ::sPointInterval);
         pos = &getPoint(idx)->mPosition;
@@ -472,7 +472,7 @@ void SpiderThreadPart::updateCutPoints() {
         getPoint(idx)->updatePos();
     }
 
-    TVec3f direction(getPoint(mNumPoints - 2)->mPosition);
+    Vec3f direction(getPoint(mNumPoints - 2)->mPosition);
     direction.sub(getPoint(mNumPoints - 1)->mPosition);
 
     if (!MR::isNearZero(direction)) {
@@ -484,7 +484,7 @@ void SpiderThreadPart::updateCutPoints() {
 }
 
 void SpiderThreadPart::updateDrawVec() {
-    TVec3f* pos = &mPointA->mPosition;
+    Vec3f* pos = &mPointA->mPosition;
     for (s32 idx = 0; idx < mNumPoints - 1; idx++) {
         getPoint(idx)->updateDrawVec(pos, &getPoint(idx + 1)->mPosition);
         pos = &getPoint(idx)->mPosition;
@@ -495,28 +495,28 @@ void SpiderThreadPart::updateDrawVec() {
 
 namespace {
     // this is extremely hacky, and I'm not sure I like this. However, this matches.
-    inline void upperPoint1(const TVec3f& rPos, const TVec3f& rSide, const TVec3f& rFront, f32 x, f32 y) {
+    inline void upperPoint1(const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 x, f32 y) {
         J3DNativeDraw::position(rPos.x - x * rSide.x + y * rFront.x, rPos.y - x * rSide.y + y * rFront.y, rPos.z - x * rSide.z + y * rFront.z);
     }
-    inline void upperPoint2(const TVec3f& rPos, const TVec3f& rSide, const TVec3f& rFront, f32 x, f32 y) {
+    inline void upperPoint2(const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 x, f32 y) {
         J3DNativeDraw::position(rPos.x + x * rSide.x + y * rFront.x, rPos.y + x * rSide.y + y * rFront.y, rPos.z + x * rSide.z + y * rFront.z);
     }
 
-    inline void rightLowerPoint1(const TVec3f& rPos, const TVec3f& rSide, const TVec3f& rFront, f32 x, f32 y) {
+    inline void rightLowerPoint1(const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 x, f32 y) {
         J3DNativeDraw::position(rPos.x + x * rSide.x + y * rFront.x, rPos.y + x * rSide.y + y * rFront.y, rPos.z + x * rSide.z + y * rFront.z);
     }
-    inline void rightLowerPoint2(const TVec3f& rPos, const TVec3f& rSide, const TVec3f& rFront, f32 x, f32 y) {
+    inline void rightLowerPoint2(const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 x, f32 y) {
         J3DNativeDraw::position(rPos.x - x * rSide.x - y * rFront.x, rPos.y - x * rSide.y - y * rFront.y, rPos.z - x * rSide.z - y * rFront.z);
     }
 
-    inline void leftLowerPoint1(const TVec3f& rPos, const TVec3f& rSide, const TVec3f& rFront, f32 x, f32 y) {
+    inline void leftLowerPoint1(const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 x, f32 y) {
         J3DNativeDraw::position(rPos.x + x * rSide.x - y * rFront.x, rPos.y + x * rSide.y - y * rFront.y, rPos.z + x * rSide.z - y * rFront.z);
     }
-    inline void leftLowerPoint2(const TVec3f& rPos, const TVec3f& rSide, const TVec3f& rFront, f32 x, f32 y) {
+    inline void leftLowerPoint2(const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 x, f32 y) {
         J3DNativeDraw::position(rPos.x - x * rSide.x + y * rFront.x, rPos.y - x * rSide.y + y * rFront.y, rPos.z - x * rSide.z + y * rFront.z);
     }
 
-    void sendPointsUpper(const TVec3f& rPos, const TVec3f& rSide, const TVec3f& rFront, f32 texY1, f32 texY2) {
+    void sendPointsUpper(const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 texY1, f32 texY2) {
         upperPoint1(rPos, rSide, rFront, 18.0f, 3.0f);
         J3DNativeDraw::color(sColorMinusX);
         J3DNativeDraw::texCoord(0.0f, texY1);
@@ -528,7 +528,7 @@ namespace {
         J3DNativeDraw::texCoord(1.0f, texY2);
     }
 
-    void sendPointsRightLower(const TVec3f& rPos, const TVec3f& rSide, const TVec3f& rFront, f32 texY1, f32 texY2) {
+    void sendPointsRightLower(const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 texY1, f32 texY2) {
         rightLowerPoint1(rPos, rSide, rFront, 18.0f, 18.0f);
         J3DNativeDraw::color(sColorPlusX);
         J3DNativeDraw::texCoord(0.0f, texY1);
@@ -540,7 +540,7 @@ namespace {
         J3DNativeDraw::texCoord(1.0f, texY2);
     }
 
-    void sendPointsLeftLower(const TVec3f& rPos, const TVec3f& rSide, const TVec3f& rFront, f32 texY1, f32 texY2) {
+    void sendPointsLeftLower(const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 texY1, f32 texY2) {
         leftLowerPoint1(rPos, rSide, rFront, 15.0f, 18.0f);
         J3DNativeDraw::color(sColorMinusY);
         J3DNativeDraw::texCoord(0.0f, texY1);

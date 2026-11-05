@@ -6,7 +6,7 @@
 #include "JSystem/JAudio2/JASGlobal.hpp"
 #include "Game/System/NebulaArena.hpp"
 
-JAUSoundObject::JAUSoundObject(TVec3f* pPos, u8 numHandles, NebulaArena* pHeap)
+JAUSoundObject::JAUSoundObject(Vec3f* pPos, u8 numHandles, NebulaArena* pHeap)
     : JAISoundHandles(new(pHeap, 0) JAISoundHandle[numHandles], numHandles), _10(0), mPos(pPos) {
     mIsAllocated = true;
 }

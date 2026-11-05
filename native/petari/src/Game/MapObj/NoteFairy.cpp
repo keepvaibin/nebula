@@ -146,7 +146,7 @@ void NoteFairy::init(const JMapInfoIter& rIter) {
     mNoteArray = new Note*[mMelodyNoteNum];
 
     for (s32 i = 0; i < mMelodyNoteNum; i++) {
-        TVec3f stack_24;
+        Vec3f stack_24;
 
         if (_D1) {
             MR::calcRailPointPos(&stack_24, this, i);
@@ -163,7 +163,7 @@ void NoteFairy::init(const JMapInfoIter& rIter) {
 
     MR::moveCoordToStartPos(this);
     MR::setRailCoord(this, 0.0f);
-    TVec3f stack_18(MR::getRailDirection(this));
+    Vec3f stack_18(MR::getRailDirection(this));
     stack_18.y = 0.0f;
     MR::normalizeOrZero(&stack_18);
     stack_18.x *= -800.0f;
@@ -244,8 +244,8 @@ void NoteFairy::exeStartAppearDemo() {
     }
 
     if (MR::isStep(this, 30)) {
-        TVec3f* pos = MR::getPlayerPos();
-        TVec3f stack_8(_8C);
+        Vec3f* pos = MR::getPlayerPos();
+        Vec3f stack_8(_8C);
         stack_8.sub(*pos);
         MR::setPlayerFrontVec(stack_8, 1);
         enterDemoAppear(GET_NERVE(NoteFairy, NoteFairyNrvDemoAppear), true);

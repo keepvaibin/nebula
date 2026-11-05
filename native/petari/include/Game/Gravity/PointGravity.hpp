@@ -6,13 +6,13 @@ class PointGravity : public PlanetGravity {
 public:
     PointGravity();
 
-    virtual void updateMtx(const TPos3f& rMtx);
-    virtual bool calcOwnGravityVector(TVec3f* pDest, f32* pScalar, const TVec3f& rPosition) const;
+    virtual void updateMtx(const Pos3f& rMtx);
+    virtual bool calcOwnGravityVector(Vec3f* pDest, f32* pScalar, const Vec3f& rPosition) const;
 
-    void setOrig(const TVec3f& rOrig) {
+    void setOrig(const Vec3f& rOrig) {
         mOrigPosition = rOrig;
     }
 
-    TVec3f mOrigPosition;
-    TVec3f mTranslation;
+    Vec3f mOrigPosition;
+    Vec3f mTranslation;
 };

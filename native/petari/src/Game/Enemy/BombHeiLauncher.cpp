@@ -87,7 +87,7 @@ void BombHeiLauncher::init(const JMapInfoIter& rIter) {
 }
 
 void BombHeiLauncher::initAfterPlacement() {
-    TVec3f up;
+    Vec3f up;
     MR::calcUpVec(&up, this);
     MR::resetPosition(mBomb, mPosition + up * 30.0f);
     mBomb->mGravity.set(-up);
@@ -140,7 +140,7 @@ void BombHeiLauncher::exeLauncherWait() {
         mBomb->appear();
         MR::resetPosition(mBomb, mPosition);
 
-        TVec3f up, front;
+        Vec3f up, front;
         MR::calcUpVec(&up, this);
         MR::calcFrontVec(&front, this);
         getBombVelocity()->set(up * ::hThrowVel);

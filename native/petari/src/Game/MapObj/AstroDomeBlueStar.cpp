@@ -53,10 +53,10 @@ void AstroDomeBlueStar::CaptureActor::kill() {
     MR::emitEffect(this, "LightBreak");
 }
 
-void AstroDomeBlueStar::CaptureActor::updateTransTraction(const TVec3f& rBasePos, const TVec3f& rTarget, s32 step) {
+void AstroDomeBlueStar::CaptureActor::updateTransTraction(const Vec3f& rBasePos, const Vec3f& rTarget, s32 step) {
     mPosition.lerp(rBasePos, rTarget, MR::getEaseInOutValue(static_cast< f32 >(step) / ::cBindTractionFrame, 0.0f, 1.0f, 1.0f));
 
-    TVec3f dir;
+    Vec3f dir;
     dir.sub(rTarget, rBasePos);
 
     if (MR::normalizeOrZero(&dir)) {
@@ -65,7 +65,7 @@ void AstroDomeBlueStar::CaptureActor::updateTransTraction(const TVec3f& rBasePos
     }
 
     f32 dist = MR::getLinerValue(step < ::cBubbleGrowFrame ? step : ::cBubbleGrowFrame, 0.0f, ::cBubbleMaxRadius, ::cBubbleGrowFrame);
-    TVec3f pos;
+    Vec3f pos;
 
     if (mPosition.distance(rTarget) < dist) {
         pos.set(rTarget);
@@ -108,8 +108,8 @@ void AstroDomeBlueStar::init(const JMapInfoIter& rIter) {
 
     initHitSensor(1);
 
-    TVec3f& vec = mCaptureActor->mPosition;
-    MR::addHitSensorPosBinder(this, "bind", 16, 80.0f, &vec, TVec3f(0.0f, 0.0f, 0.0f));
+    Vec3f& vec = mCaptureActor->mPosition;
+    MR::addHitSensorPosBinder(this, "bind", 16, 80.0f, &vec, Vec3f(0.0f, 0.0f, 0.0f));
     getSensor("bind")->invalidate();
 
     initEffectKeeper(0, nullptr, false);
@@ -186,7 +186,7 @@ void AstroDomeBlueStar::control() {
         return;
     }
 
-    TVec2f screenPos;
+    Vec2f screenPos;
 
     if (!MR::calcScreenPosition(&screenPos, mPosition)) {
         return;
@@ -250,12 +250,12 @@ bool AstroDomeBlueStar::isValidBindStart() const {
     return !isNerve(GET_NERVE(AstroDomeBlueStar, AstroDomeBlueStarNrvAppear)) && !isActiveBind() && !MR::isDemoActive();
 }
 
-void AstroDomeBlueStar::calcZoomInPos(TVec3f* pZoomVec) const {
-    TVec3f cameraRelative;
-    TPos3f rotateMtx;
-    SphereSelectorFunction::calcHandledRotateMtx(TVec3f(0.0f, 0.0f, 0.0f), &rotateMtx);
+void AstroDomeBlueStar::calcZoomInPos(Vec3f* pZoomVec) const {
+    Vec3f cameraRelative;
+    Pos3f rotateMtx;
+    SphereSelectorFunction::calcHandledRotateMtx(Vec3f(0.0f, 0.0f, 0.0f), &rotateMtx);
 
-    TVec3f yDir;
+    Vec3f yDir;
     rotateMtx.getYDir(yDir);
     cameraRelative.sub(SphereSelectorFunction::getSelectedActorTrans(), MR::getCamPos());
 
@@ -357,7 +357,7 @@ void AstroDomeBlueStar::exeTryStartBind() {
     MR::reportStarPointerGrabTarget(this);
     MR::requestStarPointerModeBlueStarReady(this);
 
-    TVec3f resultPoint;
+    Vec3f resultPoint;
     resultPoint.lerp(mCaptureActor->mPosition, *MR::getPlayerCenterPos(), MR::calcNerveRate(this, ::cTryStartBindFrame));
     mCaptureActor->setPosAll(resultPoint);
     mCaptureRibbon->lengthen(mPosition, resultPoint);
@@ -386,13 +386,13 @@ void AstroDomeBlueStar::exeBindTraction() {
         MR::startActorCameraTargetPlayer(this, mCameraInfo);
     }
 
-    TVec3f trans;
+    Vec3f trans;
     mBindStartMtx.getTrans(trans);
     mCaptureActor->updateTransTraction(trans, mPosition, getNerveStep());
 
     mHostMtx.setTrans(mCaptureActor->mPosition);
 
-    TVec3f trans2;
+    Vec3f trans2;
     mCaptureActor->mHostMtx.getTrans(trans2);
     mCaptureRibbon->shorten(mPosition, trans2);
 
@@ -427,7 +427,7 @@ void AstroDomeBlueStar::exeBindHold() {
         SphereSelectorFunction::selectStart();
     }
 
-    TPos3f frontMtx;
+    Pos3f frontMtx;
     MR::makeMtxUpFront(&frontMtx, MR::getCamYdir(), MR::getCamZdir());
     MR::blendMtxRotateSlerp(mBindStartMtx, frontMtx, MR::calcNerveRate(this, cancelFrame), mHostMtx);
 
@@ -441,7 +441,7 @@ void AstroDomeBlueStar::exeBindEnd() {
         MR::forceDeleteEffect(mCaptureActor, "Light");
         MR::emitEffect(mCaptureActor, "LightBreak");
 
-        MR::endBindAndPlayerWeakGravityLimitJump(this, TVec3f(0.0f, 0.0f, 0.0f));
+        MR::endBindAndPlayerWeakGravityLimitJump(this, Vec3f(0.0f, 0.0f, 0.0f));
     }
 
     setNerve(GET_NERVE(AstroDomeBlueStar, AstroDomeBlueStarNrvWait));

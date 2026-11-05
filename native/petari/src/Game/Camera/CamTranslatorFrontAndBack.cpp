@@ -5,7 +5,7 @@
 void CamTranslatorFrontAndBack::setParam(const CameraParamChunk* pChunk) {
     CameraGeneralParam* general = pChunk->mGeneralParam;
 
-    TVec3f axis = general->mAxis;
+    Vec3f axis = general->mAxis;
 
     if (MR::isNearZero(axis)) {
         axis.set< f32 >(1.0f, 0.0f, 0.0f);

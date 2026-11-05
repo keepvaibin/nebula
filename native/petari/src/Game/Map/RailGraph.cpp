@@ -18,7 +18,7 @@ RailGraph::RailGraph() {
     mEdgeCount = 0x100;
 }
 
-s32 RailGraph::addNode(const TVec3f& rVec) {
+s32 RailGraph::addNode(const Vec3f& rVec) {
     RailGraphNode node;
     node._0.x = rVec.x;
     node._0.y = rVec.y;

@@ -6,25 +6,25 @@
 #include <JSystem/JAudio2/JASSoundParams.hpp>
 #include <JSystem/JAudio2/JAUAudible.hpp>
 #include <JSystem/JAudio2/JAUSoundInfo.hpp>
-#include <JSystem/JGeometry/TUtil.hpp>
+#include <nebula_geometry.hpp>
 #include <JSystem/JAudio2/JAIAudience.hpp>
 #include <JSystem/JAudio2/JAUAudience.hpp>
 #include <JSystem/JAudio2/JAUDoppler.hpp>
-#include <JSystem/JGeometry/TMatrix.hpp>
+
 
 class JAUDopplerAudibleRelPos;
 
 class AudDopplerAudienceState {
 public:
     AudDopplerAudienceState() {
-        // TPos3f mtx;
+        // Pos3f mtx;
         // mtx.identity();
         // resetMtx(mtx);
     }
 
     void resetMtx(const Mtx pMtx) {
         mMtx.set(pMtx);
-        TPos3f lookAt;
+        Pos3f lookAt;
         lookAt.setPositionFromLookAt(mMtx);
         lookAt.getTrans(mPos);
         mPrevPos.set(mPos);
@@ -34,18 +34,18 @@ public:
     void setMtx(const MtxPtr pMtx) {
         mPrevPos.set(mPos);
         mMtx.set(pMtx);
-        TPos3f lookAt;
+        Pos3f lookAt;
         lookAt.setPositionFromLookAt(mMtx);
         lookAt.getTrans(mPos);
         mVelocity.sub(mPos, mPrevPos);
     }
 
-    const TVec3f& getPos() const {
+    const Vec3f& getPos() const {
         return mPos;
     }
 
-    void convertAbsToRel(const TVec3f& rPos, JAUDopplerAudibleRelPos* pRel) {
-        TVec3f diff;
+    void convertAbsToRel(const Vec3f& rPos, JAUDopplerAudibleRelPos* pRel) {
+        Vec3f diff;
         diff.sub(rPos, mPos);
 
         if (diff.x > -0.002f && diff.x < 0.002f) {
@@ -77,14 +77,14 @@ public:
         pRel->mDist = pRel->mDir.normalize();
     }
 
-    const TVec3f& getVelocity() {
+    const Vec3f& getVelocity() {
         return mVelocity;
     }
 
-    TPos3f mMtx;
-    TVec3f mVelocity;
-    TVec3f mPos;
-    TVec3f mPrevPos;
+    Pos3f mMtx;
+    Vec3f mVelocity;
+    Vec3f mPos;
+    Vec3f mPrevPos;
 };
 
 class AudAudience_withSetting : public JAIAudience {
@@ -136,7 +136,7 @@ public:
         return MR::clamp(volumeRate * (dist - mSetting.mNearDistance) + 1.0f, 0.0f, 1.0f);
     }
 
-    f32 calcDolby_(const TVec3f& rPos, s32 distVolBit) {
+    f32 calcDolby_(const Vec3f& rPos, s32 distVolBit) {
         f32 z = rPos.z;
         if (z > mSetting.mBehindDolbyZ) {
             return mSetting.mMaxDolby;
@@ -153,13 +153,13 @@ public:
         }
     }
 
-    f32 calcPan_(f32 dist, const TVec3f& rPos) {
+    f32 calcPan_(f32 dist, const Vec3f& rPos) {
         f32 panRate = dist <= MR::epsilon() ? 0.0f : rPos.x / dist;
 
         return panRate * mSetting.mPanAmplitude + 0.5f;
     }
 
-    f32 calcDopplerPitch_(const TVec3f& rDir, const TVec3f& rVel1, const TVec3f& rVel2, f32 doppler) {
+    f32 calcDopplerPitch_(const Vec3f& rDir, const Vec3f& rVel1, const Vec3f& rVel2, f32 doppler) {
         f32 vel1 = doppler * rDir.dot(rVel1);
         f32 vel2 = doppler * rDir.dot(rVel2);
 
@@ -224,7 +224,7 @@ class AudAudience_ : public Audience {
 public:
     AudAudience_() : Audience(), mMaxChannels(MAX_CHANNELS) {
         for (int i = 0; i < MAX_CHANNELS; i++) {
-            TPos3f mtx;
+            Pos3f mtx;
             mtx.identity();
             mStates[i].resetMtx(mtx);
         }
@@ -234,7 +234,7 @@ public:
         return mMaxChannels;
     }
 
-    virtual JAIAudible* newAudible(const TVec3f& rPos, JAISoundID soundID, const TVec3f* pPos, u32 mask) {
+    virtual JAIAudible* newAudible(const Vec3f& rPos, JAISoundID soundID, const Vec3f* pPos, u32 mask) {
         mask |= ~((1 << mMaxChannels) - 1);
         if (mask == 0xFFFFFFFF) {
             return nullptr;

@@ -2,7 +2,7 @@
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
-#include <JSystem/JMath/JMath.hpp>
+#include <nebula_geometry.hpp>
 #include "math_types.hpp"
 
 namespace {
@@ -10,7 +10,7 @@ namespace {
 };  // namespace
 
 MapParts::MapParts(const char* pName) : LiveActor(pName) {
-    _8C.setPSZeroVec();
+    _8C.setZeroVec();
 }
 
 void MapParts::init(const JMapInfoIter& rIter) {
@@ -48,9 +48,9 @@ void MapParts::initModelAndCollision(const JMapInfoIter& rIter) {
     MR::getMapPartsObjectName(name, sizeof(name), rIter);
     initModelManagerWithAnm(name, nullptr, false);
     initHitSensor(2);
-    TVec3f dist;
-    TVec3f lerpVec;
-    TVec3f sensor_offs(0.0f, 0.0f, 0.0f);
+    Vec3f dist;
+    Vec3f lerpVec;
+    Vec3f sensor_offs(0.0f, 0.0f, 0.0f);
     u32 sensorNum = getSensorNumMax();
     HitSensor* sensor = MR::addHitSensorMapObj(this, "body", sensorNum, 100.0f, sensor_offs);
     if (MR::isExistJoint(this, ::cFollowJointName)) {
@@ -64,7 +64,7 @@ void MapParts::initModelAndCollision(const JMapInfoIter& rIter) {
 
     f32 sensorRange;
     if (MR::getJ3DModel(this)) {
-        TBox3f box;
+        Box3f box;
         MR::calcModelBoundingBox(&box, this);
         dist.sub(box.f, box.i);
         sensorRange = 0.5f * dist.length();

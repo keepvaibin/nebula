@@ -32,7 +32,7 @@ void CollapsePlane::init(const JMapInfoIter& rIter) {
     info.setupNerve(GET_NERVE(CollapsePlane, CollapsePlaneNrvWait));
     initialize(rIter, info);
     initEffectKeeper(1, nullptr, false);
-    MR::initStarPointerTarget(this, mScale.x * 200.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::initStarPointerTarget(this, mScale.x * 200.0f, Vec3f(0.0f, 0.0f, 0.0f));
 
     mScaleController = new AnimScaleController(nullptr);
     mScaleController->setParamTight();
@@ -104,10 +104,10 @@ void CollapsePlane::control() {
     tryDPDStop();
 }
 
-bool CollapsePlane::calcJointPlane(TPos3f* pMtx, const JointControllerInfo&) {
+bool CollapsePlane::calcJointPlane(Pos3f* pMtx, const JointControllerInfo&) {
     f32 xzScale = 1.0f - (::sScaleMin * mCollapseStep) / mCollapseTime;
 
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.identity();
     MR::preScaleMtx(mtx, xzScale, 1.0f, xzScale);
     pMtx->concat(mtx);

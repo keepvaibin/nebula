@@ -70,7 +70,7 @@ namespace {
         s32 numTestPoints = static_cast< s32 >(MR::getRailTotalLength(pRoad) / ::sPointIntervalLine) + 1;
         f32 testDelta = MR::getRailTotalLength(pRoad) / (numTestPoints - 1);
 
-        TVec3f testRailDir = MR::getRailDirection(pRoad);
+        Vec3f testRailDir = MR::getRailDirection(pRoad);
 
         s32 numPoints = 1;
         for (s32 idx = 1; idx < numTestPoints; idx++) {
@@ -121,15 +121,15 @@ void WaterRoadModelInfo::initPoints(WaterRoad* pRoad) {
 
     f32 lineDelta = MR::getRailTotalLength(pRoad) / static_cast< s32 >(MR::getRailTotalLength(pRoad) / ::sPointIntervalLine);
 
-    TVec3f up = pRoad->mBaseUp;
+    Vec3f up = pRoad->mBaseUp;
     f32 loopInterval = MR::toRadian(360.0f / mNumLoopPoints);
 
-    mPoints = new TVec3f[mNumPoints];
-    mNormals = new TVec3s[mNumPoints];
+    mPoints = new Vec3f[mNumPoints];
+    mNormals = new Vec3s[mNumPoints];
     mRailCoords = new f32[mNumPoints];
 
     MR::moveCoordToStartPos(pRoad);
-    TVec3f front = MR::getRailDirection(pRoad);
+    Vec3f front = MR::getRailDirection(pRoad);
 
     s32 pointIdx = 0;
     for (s32 lineIdx = 0; lineIdx < mNumLinePoints; lineIdx++) {
@@ -137,12 +137,12 @@ void WaterRoadModelInfo::initPoints(WaterRoad* pRoad) {
             MR::moveCoordToEndPos(pRoad);
         }
 
-        TVec3f side = MR::getRailDirection(pRoad).cross(up);
+        Vec3f side = MR::getRailDirection(pRoad).cross(up);
         MR::normalize(&side);
 
-        TPos3f loopRot;
+        Pos3f loopRot;
         loopRot.identity();
-        TVec3f rotAxis = MR::getRailDirection(pRoad) * -1.0f;
+        Vec3f rotAxis = MR::getRailDirection(pRoad) * -1.0f;
         loopRot.setRotate(rotAxis, loopInterval);
 
         up.cross(side, MR::getRailDirection(pRoad));
@@ -150,7 +150,7 @@ void WaterRoadModelInfo::initPoints(WaterRoad* pRoad) {
         mRailCoords[lineIdx] = MR::getRailCoord(pRoad);
 
         for (s32 loopIdx = 0; loopIdx < mNumLoopPoints; loopIdx++) {
-            TVec3f pos = side;
+            Vec3f pos = side;
             pos.scale(pRoad->mRadius);
             pos.add(MR::getRailPos(pRoad));
             mPoints[pointIdx].set(pos);
@@ -282,11 +282,11 @@ void WaterRoadModelInfo::drawDirect(const WaterRoad* pRoad) const {
             f32 texV1 = mRailCoords[lineIdx] * ::sTexRateV1;
             f32 texV2 = mRailCoords[lineIdx] * ::sTexRateV2;
 
-            const TVec3f& pointA = mPoints[calcPointIndex(lineIdx, loopIdx)];
-            const TVec3f& pointB = mPoints[calcPointIndex(lineIdx, nextLoopIdx)];
+            const Vec3f& pointA = mPoints[calcPointIndex(lineIdx, loopIdx)];
+            const Vec3f& pointB = mPoints[calcPointIndex(lineIdx, nextLoopIdx)];
 
-            const TVec3s& normA = mNormals[calcPointIndex(lineIdx, loopIdx)];
-            const TVec3s& normB = mNormals[calcPointIndex(lineIdx, nextLoopIdx)];
+            const Vec3s& normA = mNormals[calcPointIndex(lineIdx, loopIdx)];
+            const Vec3s& normB = mNormals[calcPointIndex(lineIdx, nextLoopIdx)];
 
             J3DNativeDraw::position(pointA.x, pointA.y, pointA.z);
             J3DNativeDraw::normal(normA.x / 16384.0f, normA.y / 16384.0f, normA.z / 16384.0f);
@@ -304,26 +304,26 @@ void WaterRoadModelInfo::drawDirect(const WaterRoad* pRoad) const {
         if (pointNum < mNumLinePoints) {
             f32 t = (MR::getRailCoord(pRoad) - mRailCoords[pointNum - 1]) / (mRailCoords[pointNum] - mRailCoords[pointNum - 1]);
 
-            const TVec3f& v1 = mPoints[calcPointIndex(pointNum - 1, loopIdx)];
+            const Vec3f& v1 = mPoints[calcPointIndex(pointNum - 1, loopIdx)];
             s32 idx2 = calcPointIndex(pointNum, loopIdx);
-            const TVec3f& v2 = mPoints[idx2];
-            const TVec3f& v3 = mPoints[calcPointIndex(pointNum - 1, nextLoopIdx)];
-            const TVec3f& v4 = mPoints[calcPointIndex(pointNum, nextLoopIdx)];
+            const Vec3f& v2 = mPoints[idx2];
+            const Vec3f& v3 = mPoints[calcPointIndex(pointNum - 1, nextLoopIdx)];
+            const Vec3f& v4 = mPoints[calcPointIndex(pointNum, nextLoopIdx)];
 
-            const TVec3s& n1 = mNormals[calcPointIndex(pointNum - 1, loopIdx)];
-            const TVec3s& n2 = mNormals[idx2];
-            const TVec3s& n3 = mNormals[calcPointIndex(pointNum - 1, nextLoopIdx)];
-            const TVec3s& n4 = mNormals[calcPointIndex(pointNum, nextLoopIdx)];
+            const Vec3s& n1 = mNormals[calcPointIndex(pointNum - 1, loopIdx)];
+            const Vec3s& n2 = mNormals[idx2];
+            const Vec3s& n3 = mNormals[calcPointIndex(pointNum - 1, nextLoopIdx)];
+            const Vec3s& n4 = mNormals[calcPointIndex(pointNum, nextLoopIdx)];
 
-            TVec3f vA = v1 * (1.0f - t) + v2 * t;
-            TVec3f vB = v3 * (1.0f - t) + v4 * t;
+            Vec3f vA = v1 * (1.0f - t) + v2 * t;
+            Vec3f vB = v3 * (1.0f - t) + v4 * t;
 
-            TVec3s nA;
+            Vec3s nA;
             nA.x = (s32)(n1.x * (1.0f - t) + n2.x * t);
             nA.y = (s32)(n1.y * (1.0f - t) + n2.y * t);
             nA.z = (s32)(n1.z * (1.0f - t) + n2.z * t);
 
-            TVec3s nB;
+            Vec3s nB;
             nB.x = (s32)(n3.x * (1.0f - t) + n4.x * t);
             nB.y = (s32)(n3.y * (1.0f - t) + n4.y * t);
             nB.z = (s32)(n3.z * (1.0f - t) + n4.z * t);
@@ -367,7 +367,7 @@ s32 WaterRoadModelInfo::calcDemoDrawPointNum(const WaterRoad* pRoad) const {
 namespace {
     // The environment map's matrix: the camera's rotation then the map's half scale and centre.
     void setEnvMatrix(u32 place) {
-        TPos3f pos;
+        Pos3f pos;
         pos.identity();
         pos.set(MR::getCameraViewMtx());
         pos.zeroTrans();
@@ -653,7 +653,7 @@ bool WaterRoad::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceive
     }
 
     if (MR::isMsgUpdateBaseMtx(msg)) {
-        TVec3f front;
+        Vec3f front;
         mRiderMtx.getZDir(front);
         MR::makeMtxUpFrontPos(&mRiderMtx, MR::getRailDirection(this), front, MR::getRailPos(this));
         MR::setBaseTRMtx(mRider, mRiderMtx);
@@ -675,7 +675,7 @@ bool WaterRoad::updateRide() {
     if (MR::isRailReachedGoal(this)) {
         MR::startSound(mRider, "SE_OJ_WATER_ROAD_BIND_END");
         MR::startSound(mRider, "SE_PV_JUMP_M");
-        MR::endBindAndPlayerJump(this, TVec3f(0.0f, 0.0f, 0.0f), 0);
+        MR::endBindAndPlayerJump(this, Vec3f(0.0f, 0.0f, 0.0f), 0);
         MR::endMultiActorCamera(this, mCameraInfo, "\203\157\203\103\203\223\203\150\222\206" /* バインド中 */, true);
         mRider = nullptr;
         setNerve(GET_NERVE(WaterRoad, WaterRoadNrvDisappear));
@@ -689,7 +689,7 @@ void WaterRoad::updateDemo(f32 demoRate) {
     MR::setRailCoord(this, MR::getEaseOutValue(demoRate, 0.0f, 1.0f, 1.0f) * MR::getRailTotalLength(this));
 
     mPosition.set(MR::getRailPos(this));
-    TVec3f front;
+    Vec3f front;
     mBaseMtx.getZDir(front);
     MR::makeMtxUpFront(&mBaseMtx, MR::getRailDirection(this), front);
     mBaseMtx.setTrans(mPosition);
@@ -704,7 +704,7 @@ void WaterRoad::draw() const {
         return;
     }
 
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.identity();
     mtx[0][2] = mTexUV0.x;
     mtx[1][2] = mTexUV0.y;
@@ -722,7 +722,7 @@ void WaterRoad::draw() const {
         return;
     }
 
-    TVec3f boundedPos;
+    Vec3f boundedPos;
     boundedPos.x = MR::clamp(MR::getPlayerPos()->x, mBoundingBox.i.x, mBoundingBox.f.x);
     boundedPos.y = MR::clamp(MR::getPlayerPos()->y, mBoundingBox.i.y, mBoundingBox.f.y);
     boundedPos.z = MR::clamp(MR::getPlayerPos()->z, mBoundingBox.i.z, mBoundingBox.f.z);

@@ -10,7 +10,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 namespace {
     static const f32 sRotYTargetList[] = {0.0f, 90.0f, 180.0f, -90.0f};
@@ -36,7 +36,7 @@ void ArrowSwitch::init(const JMapInfoIter& rIter) {
     initModelManagerWithAnm("ArrowSwitch", nullptr, false);
     MR::connectToSceneNoSilhouettedMapObjStrongLight(this);
 
-    TVec3f up;
+    Vec3f up;
     MR::calcUpVec(&up, this);
     mGravity.set(-up);
 
@@ -46,11 +46,11 @@ void ArrowSwitch::init(const JMapInfoIter& rIter) {
 
     if (MR::isInAreaObj("PlaneModeCube", mPosition)) {
         initHitSensor(1);
-        MR::addHitSensorMapObj(this, "body", 8, 100.0f, TVec3f(0.0f, 50.0f, 250.0f));
+        MR::addHitSensorMapObj(this, "body", 8, 100.0f, Vec3f(0.0f, 50.0f, 250.0f));
     } else {
         initHitSensor(2);
-        MR::addHitSensorMapObj(this, "body", 8, 100.0f, TVec3f(0.0f, 50.0f, 250.0f));
-        MR::addHitSensorMapObjMoveCollision(this, "collision", 8, 0.0f, TVec3f(0.0f, 0.0f, 0.0f));
+        MR::addHitSensorMapObj(this, "body", 8, 100.0f, Vec3f(0.0f, 50.0f, 250.0f));
+        MR::addHitSensorMapObjMoveCollision(this, "collision", 8, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
         MR::initCollisionParts(this, "ArrowSwitch", getSensor("collision"), nullptr);
     }
 
@@ -80,9 +80,9 @@ void ArrowSwitch::control() {
 
 void ArrowSwitch::calcAndSetBaseMtx() {
     LiveActor::calcAndSetBaseMtx();
-    TPos3f pos;
+    Pos3f pos;
     pos.set(getBaseMtx());
-    TPos3f rot;
+    Pos3f rot;
     rot.identity();
     rot.setEulerY(MR::toRadian(mRotAngle));
     pos.concat(pos, rot);
@@ -116,10 +116,10 @@ bool ArrowSwitch::requestPunch(HitSensor* pSender, HitSensor* pReceiver) {
         return false;
     }
 
-    TVec3f side;
+    Vec3f side;
     MR::calcSideVec(&side, this);
 
-    TVec3f sensorDir;
+    Vec3f sensorDir;
     MR::calcSensorDirection(&sensorDir, pSender, pReceiver);
 
     if (isPlusLimit()) {

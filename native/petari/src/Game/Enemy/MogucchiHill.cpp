@@ -43,7 +43,7 @@ void MogucchiHillPiece::init(const JMapInfoIter& rIter) {
     initModelManagerWithAnm(mModelName, nullptr, false);
     MR::connectToSceneMapObjDecorationStrongLight(this);
     initHitSensor(1);
-    MR::addHitSensorAtJointMapObj(this, "body", mJointName, 8, mScale.x * ::sPieceSensorRadius, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointMapObj(this, "body", mJointName, 8, mScale.x * ::sPieceSensorRadius, Vec3f(0.0f, 0.0f, 0.0f));
 
     if (mAutoEffectName != nullptr) {
         initEffectKeeper(0, mAutoEffectName, false);
@@ -264,7 +264,7 @@ bool MogucchiHillPiece::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSe
 }
 
 bool MogucchiHillPiece::isTargetGoingAway(HitSensor* pSender, HitSensor* pReceiver) const {
-    TVec3f toReceiver = pReceiver->mPosition - pSender->mPosition;
+    Vec3f toReceiver = pReceiver->mPosition - pSender->mPosition;
 
     return toReceiver.dot(pReceiver->mHost->mVelocity) >= 0.0f;
 }
@@ -451,7 +451,7 @@ void MogucchiHill::killPieceIfAlive() {
 }
 
 f32 MogucchiHill::getDistanceFromReserveMtx() const {
-    TVec3f trans;
+    Vec3f trans;
     mReserveMtx.getTrans(trans);
 
     return mHost->mPosition.distance(trans);

@@ -9,7 +9,7 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 namespace NrvPoltaGroundRock {
     NEW_NERVE(PoltaGroundRockNrvSign, PoltaGroundRock, Sign);
@@ -28,8 +28,8 @@ void PoltaGroundRock::init(const JMapInfoIter& rIter) {
     MR::connectToSceneCollisionMapObjWeakLight(this);
     MR::initLightCtrl(this);
     initHitSensor(2);
-    MR::addHitSensorMapObj(this, "collision", 0, 0.0f, TVec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorEnemy(this, "body", 16, 170.0f, TVec3f(0.0f, 260.0f, 0.0f));
+    MR::addHitSensorMapObj(this, "collision", 0, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemy(this, "body", 16, 170.0f, Vec3f(0.0f, 260.0f, 0.0f));
     MR::initCollisionParts(this, "PoltaGroundRock", getSensor("collision"), nullptr);
     initEffectKeeper(0, nullptr, false);
     MR::setEffectHostSRT(this, "Shadow", &_A4, nullptr, nullptr);
@@ -56,13 +56,13 @@ void PoltaGroundRock::calcAndSetBaseMtx() {
     MR::setBaseScale(this, mScale);
 }
 
-void PoltaGroundRock::start(LiveActor* pOwner, const TVec3f& rVec1) {
+void PoltaGroundRock::start(LiveActor* pOwner, const Vec3f& rVec1) {
     mOwner = pOwner;
     setNerve(GET_NERVE(PoltaGroundRock, PoltaGroundRockNrvSign));
     _A4.set(rVec1);
     MR::calcGravity(this, rVec1);
     mPosition.scaleAdd(500.0f, mGravity, _A4);
-    TPos3f v9;
+    Pos3f v9;
     MR::makeMtxUpNoSupportPos(&v9, -mGravity, mPosition);
     MR::rotateMtxLocalY(v9, MR::getRandom(0.0f, TWO_PI));
     v9.getQuat(_94);

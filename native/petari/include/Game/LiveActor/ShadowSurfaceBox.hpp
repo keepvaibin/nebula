@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/ShadowSurfaceDrawer.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class ShadowSurfaceBox : public ShadowSurfaceDrawer {
 public:
@@ -11,7 +11,7 @@ public:
 
     virtual void draw() const override;
 
-    void setSize(const TVec3f&);
+    void setSize(const Vec3f&);
 
-    TVec3f mSize;
+    Vec3f mSize;
 };

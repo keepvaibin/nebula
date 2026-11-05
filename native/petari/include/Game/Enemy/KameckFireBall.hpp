@@ -20,13 +20,13 @@ public:
     virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
 
-    void appearDirection(const TVec3f&);
+    void appearDirection(const Vec3f&);
     void setEventListener(KameckBeamEventListener*);
 
     void exeWait();
     void exeSweep();
 
-    TQuat4f mRotateQuat;
+    Quat4f mRotateQuat;
     KameckBeamEventListener* mEventListener;
     u8 _A0[4];
 };

@@ -12,10 +12,10 @@ public:
     virtual void calcAndSetBaseMtx();
 
     void setPosAndDirection(LiveActor*);
-    void calcBodyDir(LiveActor*, TVec3f*);
+    void calcBodyDir(LiveActor*, Vec3f*);
 
     LiveActor* mCaterpillar;
-    TVec3f mFrontVec;
+    Vec3f mFrontVec;
     LodCtrl* mPlanetLOD;
 };
 

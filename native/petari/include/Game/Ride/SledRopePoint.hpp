@@ -6,7 +6,7 @@ class Binder;
 
 class SledRopePoint : public SwingRopePoint {
 public:
-    SledRopePoint(const TVec3f&, f32);
+    SledRopePoint(const Vec3f&, f32);
 
     virtual void updatePos(f32);
 

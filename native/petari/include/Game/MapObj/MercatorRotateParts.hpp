@@ -17,6 +17,6 @@ public:
 
     MapPartsRotator* mRotator;
     MapPartsAppearController* mAppearController;
-    TVec3f mLocalTrans;
-    TVec3f mLocalRotate;
+    Vec3f mLocalTrans;
+    Vec3f mLocalRotate;
 };

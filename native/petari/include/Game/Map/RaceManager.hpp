@@ -3,7 +3,7 @@
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/Array.hpp"
 #include "Game/Screen/LayoutActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class PlayerRacer;
 class RaceManager;
@@ -69,8 +69,8 @@ public:
 
     f32 mRailCoord;
     f32 _8;
-    TVec3f mCurrPosition;
-    TVec3f mPrevPosition;
+    Vec3f mCurrPosition;
+    Vec3f mPrevPosition;
 };
 
 class AbstractAudience {
@@ -129,7 +129,7 @@ public:
     u32 mBestTime;
     u32 mTime;
     PlayerRacer* mPlayerRacer;
-    TPos3f _FC;
+    Pos3f _FC;
 };
 
 namespace RaceManagerFunction {

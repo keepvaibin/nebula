@@ -48,7 +48,7 @@ bool Mario::isUseSimpleGroundCheck() const {
 }
 
 bool Mario::checkGroundOnSlope() {
-    TVec3f normal;
+    Vec3f normal;
     if (isAnimationRun("\212\122\202\323\202\361\202\316\202\350" /* 崖ふんばり */)) {
         normal = -*getGravityVec();
     } else {
@@ -57,7 +57,7 @@ bool Mario::checkGroundOnSlope() {
     if (MR::isNearZero(normal)) {
         return false;
     }
-    TVec3f front;
+    Vec3f front;
     MR::vecKillElement(mFrontVec, normal, &front);
     if (MR::isNearZero(front)) {
         return false;
@@ -88,11 +88,11 @@ bool Mario::checkGroundOnSlope() {
         distance = 100.0f;
     }
     s32 groundCount = 0;
-    TVec3f hitPosition;
-    TVec3f positionSum;
+    Vec3f hitPosition;
+    Vec3f positionSum;
     positionSum.zero();
-    TVec3f groundPosition;
-    TVec3f origin(mPosition - *getGravityVec() * 30.0f);
+    Vec3f groundPosition;
+    Vec3f origin(mPosition - *getGravityVec() * 30.0f);
     hit = MR::getFirstPolyOnLineBFast(origin, *getGravityVec() * distance, &hitPosition, &ground);
     if (hit) {
         if (calcAngleD(*ground.getNormal(0)) >= 80.0f) {
@@ -117,7 +117,7 @@ bool Mario::checkGroundOnSlope() {
     }
     if (mMovementStates._D) {
         mMovementStates._D = false;
-        TVec3f offset(mGroundPos - mPosition);
+        Vec3f offset(mGroundPos - mPosition);
         f32 vertical = MR::vecKillElement(offset, *getGravityVec(), &offset);
         addTrans(*getGravityVec() * vertical, "force Trans");
         return true;
@@ -130,18 +130,18 @@ bool Mario::checkGroundOnSlope() {
         return false;
     }
     mMovementStates._14 = false;
-    TVec3f down(-_368);
-    TVec3f position(mGroundPos);
+    Vec3f down(-_368);
+    Vec3f position(mGroundPos);
     if (_10._22) {
         _10._22 = false;
         _1C._C = true;
     } else if ((mMovementStates._23 || mTargetWalkSpeedIndex) && getPlayerMode() != PlayerMode_Teresa) {
         if (MR::abs((position - mPosition).dot(down)) < distance) {
-            TVec3f offset(position - mPosition);
+            Vec3f offset(position - mPosition);
             f32 vertical = MR::vecKillElement(offset, down, &offset);
             if (!MR::isNearZero(vertical, 1.0f)) {
                 mDrawStates._0 = false;
-                TVec3f displacement(down * vertical);
+                Vec3f displacement(down * vertical);
                 f32 ratio = MR::clamp(mWalkSpeed, 0.0f, 1.0f);
                 if (!mMovementStates._23) {
                     displacement *= ratio;

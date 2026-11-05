@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class AutoEffectInfo;
 class EffectKeeper;
@@ -24,7 +24,7 @@ namespace MR {
         void requestMovementOffAllLoopEmitters();
         void checkEffectSceneUpdate(const EffectSystem* pSystem);
         void movementEffectNormal(const EffectSystem* pSystem);
-        void drawEffect3D(const EffectSystem* pSystem, const TPos3f& rViewMtx);
+        void drawEffect3D(const EffectSystem* pSystem, const Pos3f& rViewMtx);
         void drawEffect2D(const EffectSystem* pSystem);
         void forceDeleteAllEmitters(const EffectSystem* pSystem);
         bool isExistInResource(u16* pIndex, const char* pName);
@@ -49,7 +49,7 @@ namespace MR {
         void setLinkSingleEmitter(ParticleEmitter* pEmitter, SingleEmitter* pSingleEmitter);
         SingleEmitter* getLinkSingleEmitter(const JPABaseEmitter* pEmitter);
         void forceDeleteAllOneTimeEmitter();
-        void createParticleEmitter(ParticleEmitter* pEmitter, JPAEmitterManager* pManager, const TVec3f& rPosition, u16 resourceId, u8 groupId,
+        void createParticleEmitter(ParticleEmitter* pEmitter, JPAEmitterManager* pManager, const Vec3f& rPosition, u16 resourceId, u8 groupId,
                                    u8 resourceManagerId);
         bool isExistInResource(u16* pIndex, const char* pName, s32 number);
         const char* getEffectAttributeName(s32 floorCode);

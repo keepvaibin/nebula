@@ -26,6 +26,6 @@ public:
     bool _90;
     // needed to get _98 at correct offset
     u8 _94[4]; // unused?
-    TMtx34f _98;
+    Mtx34f _98;
     */
 };

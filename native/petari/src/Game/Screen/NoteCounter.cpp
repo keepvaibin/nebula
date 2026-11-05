@@ -85,7 +85,7 @@ void NoteCounter::exeShowWait() {
 
 void NoteCounter::exeShowToHide() {
     f32 y = MR::getEaseOutValue(getNerveStep() / 10.0f, ::sTransMaxY, ::sTransMinY, 1.0f);
-    setTrans(TVec2f(getTrans().x, y));
+    setTrans(Vec2f(getTrans().x, y));
 
     if (MR::isStep(this, ::sStepMove)) {
         setNerve(GET_NERVE(NoteCounter, NoteCounterNrvHide));
@@ -98,7 +98,7 @@ void NoteCounter::exeHideToShow() {
     }
 
     f32 y = MR::getEaseOutValue(getNerveStep() / 10.0f, ::sTransMinY, ::sTransMaxY, 1.0f);
-    setTrans(TVec2f(getTrans().x, y));
+    setTrans(Vec2f(getTrans().x, y));
 
     if (MR::isStep(this, ::sStepMove)) {
         setNerve(GET_NERVE(NoteCounter, NoteCounterNrvShow));

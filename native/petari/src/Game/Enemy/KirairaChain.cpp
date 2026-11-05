@@ -30,15 +30,15 @@ KirairaChain::KirairaChain(const LiveActor* pHost)
     f32 railLength;
 
     if (MR::isExistRail(mHost)) {
-        TVec3f startDir;
-        TVec3f endDir;
+        Vec3f startDir;
+        Vec3f endDir;
         MR::calcRailStartPointPosAndDirection(&mRailStart, &startDir, mHost);
         MR::calcRailEndPointPosAndDirection(&mRailEnd, &endDir, mHost);
         mPosition.set(mRailEnd);
 
         railLength = MR::getRailTotalLength(mHost);
 
-        TVec3f up(0.0f, 0.0f, 1.0f);
+        Vec3f up(0.0f, 0.0f, 1.0f);
         MR::makeMtxUpFront(&mFixPointTopMtx, startDir, up);
         endDir.scale(-1.0f);
         MR::makeMtxUpFront(&mFixPointBottomMtx, endDir, up);
@@ -73,7 +73,7 @@ void KirairaChain::initPoints() {
 
     for (s32 i = 0; i < mPointCount; i++) {
         f32 t = static_cast< f32 >(i) / (mPointCount - 1);
-        TVec3f point;
+        Vec3f point;
 
         if (MR::isExistRail(mHost)) {
             point = mRailStart * (1.0f - t) + mRailEnd * t;
@@ -88,7 +88,7 @@ void KirairaChain::initPoints() {
 void KirairaChain::draw() const {
     mModelDrawer->initDraw();
 
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.identity();
 
     for (s32 i = 0; i < mPointCount; i++) {
@@ -106,7 +106,7 @@ void KirairaChain::draw() const {
 }
 
 void KirairaChain::updatePoints() {
-    TVec3f accel(mGravity);
+    Vec3f accel(mGravity);
 
     if (MR::isExistRail(mHost)) {
         accel.scale(0.05f);
@@ -127,9 +127,9 @@ void KirairaChain::updatePoints() {
         s32 lowIdx = MR::clamp(static_cast< s32 >((MR::getRailCoord(mHost) - offset) / 40.0f), 0, mPointCount - 1);
         s32 highIdx = MR::clamp(static_cast< s32 >((offset + MR::getRailCoord(mHost)) / 40.0f), 0, mPointCount - 1);
 
-        TVec3f posA;
+        Vec3f posA;
         MR::calcRailPosAtCoord(&posA, mHost, 40.0f * (lowIdx + 1));
-        TVec3f posB;
+        Vec3f posB;
         MR::calcRailPosAtCoord(&posB, mHost, 40.0f * highIdx);
 
         if (lowIdx + 1 < highIdx - 1) {
@@ -183,7 +183,7 @@ void KirairaChain::updatePoints() {
         }
     } else {
         MtxPtr baseMtx = mHost->getBaseMtx();
-        TVec3f dir(baseMtx[1][0], baseMtx[1][1], baseMtx[1][2]);
+        Vec3f dir(baseMtx[1][0], baseMtx[1][1], baseMtx[1][2]);
         dir.scale(-100.0f);
         dir.add(mHost->mPosition);
         restrictPointFromTopAndCalcAxis(0, mPointCount - 1, dir, 0.9f);
@@ -222,7 +222,7 @@ void KirairaChain::init(const JMapInfoIter& rIter) {
     makeActorAppeared();
 }
 
-void KirairaChain::restrictPointFromTop(s32 startIdx, s32 endIdx, const TVec3f& rPos, f32 radius) {
+void KirairaChain::restrictPointFromTop(s32 startIdx, s32 endIdx, const Vec3f& rPos, f32 radius) {
     mPoints[startIdx]->restrict(rPos, 40.0f, nullptr);
     mPoints[startIdx]->updatePos(radius);
 
@@ -236,7 +236,7 @@ void KirairaChain::restrictPointFromTop(s32 startIdx, s32 endIdx, const TVec3f& 
     }
 }
 
-void KirairaChain::restrictPointFromBottom(s32 startIdx, s32 endIdx, const TVec3f& rPos, f32 radius) {
+void KirairaChain::restrictPointFromBottom(s32 startIdx, s32 endIdx, const Vec3f& rPos, f32 radius) {
     mPoints[endIdx]->restrict(rPos, 40.0f, nullptr);
     mPoints[endIdx]->updatePos(radius);
 
@@ -250,7 +250,7 @@ void KirairaChain::restrictPointFromBottom(s32 startIdx, s32 endIdx, const TVec3
     }
 }
 
-void KirairaChain::restrictPointFromTopAndCalcAxis(s32 startIdx, s32 endIdx, const TVec3f& rPos, f32 radius) {
+void KirairaChain::restrictPointFromTopAndCalcAxis(s32 startIdx, s32 endIdx, const Vec3f& rPos, f32 radius) {
     mPoints[startIdx]->restrict(rPos, 40.0f, nullptr);
     mPoints[startIdx]->updatePosAndAxis(mFixPointTopDir, radius);
 
@@ -260,7 +260,7 @@ void KirairaChain::restrictPointFromTopAndCalcAxis(s32 startIdx, s32 endIdx, con
     }
 }
 
-void KirairaChain::restrictPointFromBottomAndCalcAxis(s32 startIdx, s32 endIdx, const TVec3f& rPos, f32 radius) {
+void KirairaChain::restrictPointFromBottomAndCalcAxis(s32 startIdx, s32 endIdx, const Vec3f& rPos, f32 radius) {
     mPoints[endIdx]->restrict(rPos, 40.0f, nullptr);
     mPoints[endIdx]->updatePosAndAxis(mFixPointBottomDir, radius);
 

@@ -275,12 +275,12 @@ void MogucchiShooter::calcAndSetBaseMtx() {
         return;
     }
 
-    TPos3f posMtx;
-    TPos3f copyMtx;
+    Pos3f posMtx;
+    Pos3f copyMtx;
     posMtx.identity();
     copyMtx.setInline(mFixedPosition->mMtx);
 
-    TVec3f up;
+    Vec3f up;
     copyMtx.getYDir(up);
 
     mFixedPosition->mMtx.getTrans(mPosition);
@@ -289,7 +289,7 @@ void MogucchiShooter::calcAndSetBaseMtx() {
 }
 
 void MogucchiShooter::resetDirection() {
-    TPos3f mtx(MR::getJointMtx(mHost, "Cockpit"));
+    Pos3f mtx(MR::getJointMtx(mHost, "Cockpit"));
     mtx.getZDir(mFront);
 }
 
@@ -306,10 +306,10 @@ void MogucchiShooter::faceToMario() {
         return;
     }
 
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.setInline(mFixedPosition->mMtx);
     MR::turnDirectionToTargetDegree(this, &mFront, *MR::getPlayerPos(), ::sTurnRate);
-    TVec3f front;
+    Vec3f front;
     mtx.getZDir(front);
     MR::clampVecAngleDeg(&mFront, front, ::sLimitAngleOfTurn);
 }

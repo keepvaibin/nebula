@@ -15,7 +15,7 @@ public:
     void fadeIn();
     void updateStopVelocity();
     void updateNormalVelocity();
-    void updateRun(const TVec3f&, bool);
+    void updateRun(const Vec3f&, bool);
     void updateJump();
     bool tryGuide();
     bool tryWait();
@@ -31,6 +31,6 @@ public:
     void exeChange();
     void exeStartBGM();
 
-    TVec3f mFrontVec;
+    Vec3f mFrontVec;
     s32 mAirTimer;
 };

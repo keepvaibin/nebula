@@ -31,8 +31,8 @@ public:
     CollisionParts* mParts;
     u16 _94;
     u16 mPositionNum;
-    TVec3f* mPositions;
-    TVec3f* _9C;
+    Vec3f* mPositions;
+    Vec3f* _9C;
     TriangleIndexing* mIndices;
     u32 _A4;
     u32 _A8;

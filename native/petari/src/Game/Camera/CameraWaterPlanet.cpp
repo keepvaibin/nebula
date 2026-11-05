@@ -9,28 +9,28 @@ CameraWaterPlanet::CameraWaterPlanet(const char* pName) : Camera(pName), mDistMi
 }
 
 void CameraWaterPlanet::reset() {
-    TVec3f watchPos = CameraLocalUtil::getWatchPos(mCameraMan);
-    TVec3f pos = CameraLocalUtil::getPos(mCameraMan);
-    TVec3f up = CameraLocalUtil::getUpVec(mCameraMan);
+    Vec3f watchPos = CameraLocalUtil::getWatchPos(mCameraMan);
+    Vec3f pos = CameraLocalUtil::getPos(mCameraMan);
+    Vec3f up = CameraLocalUtil::getUpVec(mCameraMan);
 
-    TVec3f watchPoint;
+    Vec3f watchPoint;
     CameraLocalUtil::makeWatchPoint(&watchPoint, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
 
-    TVec3f front = watchPos - pos;
+    Vec3f front = watchPos - pos;
     if (MR::isNearZero(front)) {
         return;
     }
     MR::normalize(&front);
 
-    TVec3f watchFront = watchPoint - pos;
+    Vec3f watchFront = watchPoint - pos;
     if (MR::isNearZero(watchFront)) {
         return;
     }
     MR::normalize(&watchFront);
 
-    TQuat4f frontRot;
+    Quat4f frontRot;
     frontRot.setRotate(front, watchFront);
-    TQuat4f rotRoll;
+    Quat4f rotRoll;
     rotRoll.setRotate(front, CameraLocalUtil::getRoll(mCameraMan));
     rotRoll.transform(up);
     frontRot.transform(up);
@@ -42,56 +42,56 @@ void CameraWaterPlanet::reset() {
 }
 
 CameraTargetObj* CameraWaterPlanet::calc() {
-    TVec3f currWatchPos = CameraLocalUtil::getWatchPos(this);
-    TVec3f pos = CameraLocalUtil::getPos(this);
-    TVec3f up = CameraLocalUtil::getUpVec(this);
+    Vec3f currWatchPos = CameraLocalUtil::getWatchPos(this);
+    Vec3f pos = CameraLocalUtil::getPos(this);
+    Vec3f up = CameraLocalUtil::getUpVec(this);
 
-    TVec3f watchPos;
+    Vec3f watchPos;
     CameraLocalUtil::makeWatchPoint(&watchPos, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
 
-    TVec3f front = currWatchPos - pos;
+    Vec3f front = currWatchPos - pos;
     if (MR::isNearZero(front)) {
         return CameraLocalUtil::getTarget(this);
     }
     MR::normalize(&front);
 
-    TVec3f targetFront = CameraLocalUtil::getTarget(this)->getSideVec().cross(-CameraLocalUtil::getTarget(this)->getGravityVector());
+    Vec3f targetFront = CameraLocalUtil::getTarget(this)->getSideVec().cross(-CameraLocalUtil::getTarget(this)->getGravityVector());
     if (MR::isNearZero(targetFront)) {
         return CameraLocalUtil::getTarget(this);
     }
     MR::normalize(&targetFront);
 
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.setXDir(CameraLocalUtil::getTarget(this)->getSideVec());
     mtx.setYDir(-CameraLocalUtil::getTarget(this)->getGravityVector());
     mtx.setZDir(targetFront);
     mtx.setTrans(watchPos);
 
-    TPos3f inv = mtx;
+    Pos3f inv = mtx;
     inv.invert(inv);
     inv.mult(pos, pos);
 
     f32 length, angleX, angleY;
-    MR::crossToPolar(TVec3f(0.0f, 0.0f, 0.0f), pos, &length, &angleX, &angleY);
+    MR::crossToPolar(Vec3f(0.0f, 0.0f, 0.0f), pos, &length, &angleX, &angleY);
 
     if (angleX < mAngleX) {
         angleX += (mAngleX - angleX) * 0.05f;
-        MR::polarToCross(TVec3f(0.0f, 0.0f, 0.0f), &pos, length, angleX, angleY);
+        MR::polarToCross(Vec3f(0.0f, 0.0f, 0.0f), &pos, length, angleX, angleY);
     }
 
     mtx.mult(pos, pos);
 
-    TVec3f watchFront = watchPos - pos;
+    Vec3f watchFront = watchPos - pos;
     if (MR::isNearZero(watchFront)) {
         return CameraLocalUtil::getTarget(this);
     }
     MR::normalize(&watchFront);
 
-    TQuat4f frontRot;
+    Quat4f frontRot;
     frontRot.setRotate(front, watchFront);
     frontRot.transform(up);
 
-    TVec3f offset = pos - watchPos;
+    Vec3f offset = pos - watchPos;
     f32 dist = offset.length();
 
     if (dist < mDistMin) {

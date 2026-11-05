@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class MapPartsRailMover;
 class ModelObj;
@@ -37,21 +37,21 @@ public:
     void exeTurn();
     void exeGotoPatrol();
     void exePatrol();
-    bool isInBeamRange(const TVec3f& rVec) const;
+    bool isInBeamRange(const Vec3f& rVec) const;
     bool isOnBeam() const;
 
     MapPartsRailMover* mRailMover;
     ModelObj* mBeamBloom;
     ModelObj* mBeamMdl;
     VolumeModelDrawer* mBeamVolumeDrawer;
-    TPos3f _9C;
-    TQuat4f _CC;
-    TQuat4f _DC;
-    TVec3f _EC;
-    TVec3f _F8;
-    TVec3f _104;
-    TPos3f mWaterSurfaceMtx;
-    TVec3f _140;
+    Pos3f _9C;
+    Quat4f _CC;
+    Quat4f _DC;
+    Vec3f _EC;
+    Vec3f _F8;
+    Vec3f _104;
+    Pos3f mWaterSurfaceMtx;
+    Vec3f _140;
     u32 _14C;
     u32 _150;
     u32 _154;

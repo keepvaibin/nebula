@@ -1,7 +1,7 @@
 #pragma once
 
-#include <JSystem/JGeometry/TMatrix.hpp>
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
+
 
 class AssetFolder;
 class JMapIdInfo;
@@ -43,12 +43,12 @@ namespace MR {
     const JMapIdInfo& getCurrentMarioStartIdInfo();
     s32 getStartPosNum();
     // A start of the main zone (its MarioNo): where Mario arrives and the way he faces (degrees); false if it has none.
-    bool getMarioStartPose(s32 marioNo, TVec3f* pTrans, TVec3f* pRotate);
+    bool getMarioStartPose(s32 marioNo, Vec3f* pTrans, Vec3f* pRotate);
     s32 getCurrentStartZoneId();
     const JMapIdInfo& getInitializeStartIdInfo();
     AssetFolder* getStageArchive(const char*);
     s32 getGeneralPosNum();
-    void getGeneralPosData(const char**, TVec3f*, TVec3f*, JMapLinkInfo**, int);
+    void getGeneralPosData(const char**, Vec3f*, Vec3f*, JMapLinkInfo**, int);
     s32 getChildObjNum(const JMapInfoIter&);
     void getChildObjName(const char**, const JMapInfoIter&, int);
     void initChildObj(NameObj*, const JMapInfoIter&, int);
@@ -74,8 +74,8 @@ namespace MR {
     s32 getPowerStarNum();
     bool isPlacementLocalStage();
     s32 getPlacedZoneId(const JMapInfoIter&);
-    const TPos3f* getZonePlacementMtx(const JMapInfoIter&);
-    const TPos3f* getZonePlacementMtx(s32);
+    const Pos3f* getZonePlacementMtx(const JMapInfoIter&);
+    const Pos3f* getZonePlacementMtx(s32);
     const char* getJapaneseObjectName(const char*);
     void setCurrentPlacementZoneId(s32);
     void clearCurrentPlacementZoneId();

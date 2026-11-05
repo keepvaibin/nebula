@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class LiveActor;
 class RumbleCalculatorCosMultLinear;
@@ -22,7 +22,7 @@ public:
     void reset();
     bool isRumbling() const;
     void updateModelScale(f32 scale);
-    void updateScale(TVec3f* pVec, f32 scale);
+    void updateScale(Vec3f* pVec, f32 scale);
 
     inline bool testFlag(Flag flag) const {
         return static_cast< u32 >(mFlags & flag) == flag;

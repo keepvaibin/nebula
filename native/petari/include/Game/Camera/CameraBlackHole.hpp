@@ -10,13 +10,13 @@ public:
     virtual CameraTargetObj* calc();
     virtual CamTranslatorBase* createTranslator();
 
-    void setParam(const TVec3f rWPoint, const TVec3f rBasePos) {
+    void setParam(const Vec3f rWPoint, const Vec3f rBasePos) {
         mWPoint.set(rWPoint);
         mBasePos.set(rBasePos);
     }
 
     f32 mFovy;
     f32 mRoll;
-    TVec3f mWPoint;
-    TVec3f mBasePos;
+    Vec3f mWPoint;
+    Vec3f mBasePos;
 };

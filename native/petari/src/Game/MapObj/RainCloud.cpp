@@ -93,7 +93,7 @@ void RainCloud::init(const JMapInfoIter& rIter) {
         MR::invalidateShadow(this, nullptr);
     }
 
-    TVec3f clippingCenter;
+    Vec3f clippingCenter;
     clippingCenter = mPosition;
     f32 boundRadius;
     MR::calcModelBoundingRadius(&boundRadius, this);
@@ -286,9 +286,9 @@ bool RainCloud::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceive
 
 void RainCloud::updateHitSensor(HitSensor* pSensor) {
     f32 radius = pSensor->mRadius;
-    TVec3f start;
+    Vec3f start;
     start.scaleAdd(radius, mGravity, mPosition);
-    TVec3f end;
+    Vec3f end;
     end.scaleAdd(mRainLength - radius, mGravity, mPosition);
 
     MR::calcPerpendicFootToLineInside(&pSensor->mPosition, *MR::getPlayerPos(), start, end);
@@ -335,9 +335,9 @@ void RainCloud::switchEffect() {
         bool isLongRain;
         if (MR::isShadowProjected(this, nullptr)) {
             isLongRain = mRainLength > ::sSwitchEffectBorder;
-            TVec3f projectionPos;
+            Vec3f projectionPos;
             MR::getShadowProjectionPos(this, nullptr, &projectionPos);
-            TVec3f projectionNormal;
+            Vec3f projectionNormal;
             MR::getShadowProjectionNormal(this, nullptr, &projectionNormal);
             MR::makeMtxUpNoSupportPos(&mSplashMtx, projectionNormal, projectionPos);
 
@@ -377,7 +377,7 @@ void RainCloud::updateRainCylinder() {
         widthScale = MR::clamp(widthScale, 0.1f, 1.0f);
     }
 
-    MR::preScaleMtx(mRainCylinderMtx, TVec3f(widthScale, lengthScale, widthScale));
+    MR::preScaleMtx(mRainCylinderMtx, Vec3f(widthScale, lengthScale, widthScale));
     MR::startLevelSound(this, "SE_OJ_LV_FOREST_RAIN");
 }
 

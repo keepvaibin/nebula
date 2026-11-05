@@ -42,8 +42,8 @@ public:
     FixedPosition* _90;
     MoguStone* mStone;
     ModelObj* mHole;
-    TVec3f mSight;
-    TVec3f _A8;
+    Vec3f mSight;
+    Vec3f _A8;
     bool _B4;
     bool mIsCannonFleet;
 };

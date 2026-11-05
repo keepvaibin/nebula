@@ -36,7 +36,7 @@ void ClipFieldSwitch::init(const JMapInfoIter& rIter) {
     MR::useStageSwitchWriteA(this, rIter);
     MR::useStageSwitchWriteB(this, rIter);
     initHitSensor(1);
-    MR::addHitSensorEye(this, "body", 8, 1000.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEye(this, "body", 8, 1000.0f, Vec3f(0.0f, 0.0f, 0.0f));
     MR::invalidateClipping(this);
     appear();
 }

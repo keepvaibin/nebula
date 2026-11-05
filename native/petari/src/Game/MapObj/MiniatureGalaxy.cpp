@@ -54,7 +54,7 @@ namespace {
         return new ModelObj(pName, pModelName, pMtx, MR::DrawBufferType_NoShadowedMapObj, -2, -2, a1);
     }
 
-    inline void setInitialRotation(TVec3f& rRotation, const f32& rAngle) {
+    inline void setInitialRotation(Vec3f& rRotation, const f32& rAngle) {
         rRotation.set< f32 >(0.0f, rAngle, 0.0f);
     }
 
@@ -97,7 +97,7 @@ void MiniatureGalaxy::init(const JMapInfoIter& rIter) {
     initEffectKeeper(0, nullptr, false);
     MR::connectToSceneNoShadowedMapObj(this);
 
-    MR::initStarPointerTarget(this, ::cPointingRadius, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::initStarPointerTarget(this, ::cPointingRadius, Vec3f(0.0f, 0.0f, 0.0f));
     MR::invalidateClipping(this);
 
     initPartsModel();
@@ -264,34 +264,34 @@ void MiniatureGalaxy::control() {
 }
 
 void MiniatureGalaxy::calcAndSetBaseMtx() {
-    TPos3f rotMtx;
-    SphereSelectorFunction::calcHandledRotateMtx(TVec3f(0.0f), &rotMtx);
+    Pos3f rotMtx;
+    SphereSelectorFunction::calcHandledRotateMtx(Vec3f(0.0f), &rotMtx);
 
-    TPos3f baseMtx = rotMtx;
+    Pos3f baseMtx = rotMtx;
     baseMtx.set(rotMtx);
     MR::rotateMtxLocalYDegree(baseMtx, mRotation.y);
     baseMtx.setTrans(mPosition);
     MR::setBaseTRMtx(this, baseMtx);
 
-    TVec3f frontVec;
+    Vec3f frontVec;
     frontVec.sub(MR::getCamPos(), mPosition);
 
-    TVec3f upVec;
+    Vec3f upVec;
     upVec.set(MR::getCamYdir());
 
     if (!MR::normalizeOrZero(&frontVec) && !MR::isSameDirection(frontVec, upVec)) {
         MR::makeMtxFrontUpPos(&mPosMtx, frontVec, upVec, mPosition);
     }
 
-    TVec3f vec44;
+    Vec3f vec44;
     rotMtx.getYDir(vec44);
 
-    TVec3f vec38;
+    Vec3f vec38;
     vec38.scale(-7000.0f, vec44);
 
     vec38 += mPosition;
 
-    TVec3f vec2C;
+    Vec3f vec2C;
     vec2C.scale(vec44.dot(mPosition), vec44);
 
     vec38 -= vec2C;
@@ -474,7 +474,7 @@ void MiniatureGalaxy::updateNamePlate() {
         return;
     }
 
-    TVec3f newPosition;
+    Vec3f newPosition;
     newPosition.add(mPosition, ::cNamePlateOffset);
     mNamePlate->setPos3D(newPosition);
 }

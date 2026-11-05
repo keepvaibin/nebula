@@ -38,7 +38,7 @@ void PenguinRacerLeader::init(const JMapInfoIter& rIter) {
     initColor(rIter);
     initEtc(rIter);
 
-    mMsgCtrl = MR::createTalkCtrl(this, rIter, "PenguinRacerLeader", TVec3f(0.0f, 130.0f, 0.0f), nullptr);
+    mMsgCtrl = MR::createTalkCtrl(this, rIter, "PenguinRacerLeader", Vec3f(0.0f, 130.0f, 0.0f), nullptr);
     MR::onRootNodeAutomatic(mMsgCtrl);
 
     MR::registerBranchFunc(mMsgCtrl, TalkMessageFunc(this, &PenguinRacerLeader::branchFunc));

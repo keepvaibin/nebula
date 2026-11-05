@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class ActorCameraInfo;
 class SpinDriverShootPath;
@@ -27,8 +27,8 @@ public:
 
     SpinDriverShootPath* _8C;
     SpinDriverPathDrawer* _90;
-    TPos3f _94;
-    TPos3f _C4;
+    Pos3f _94;
+    Pos3f _C4;
 
     ActorCameraInfo* _F4;
 };

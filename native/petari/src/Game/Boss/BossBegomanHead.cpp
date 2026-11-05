@@ -129,9 +129,9 @@ void BossBegomanHead::calcAndSetBaseMtx() {
     mJointDelegator->registerCallBack();
 }
 
-bool BossBegomanHead::calcJointEdge(TPos3f* pMtx, const JointControllerInfo&) {
-    TPos3f v9;
-    v9.makeRotate(TVec3f(0.0f, 1.0f, 0.0f), mAngle);
+bool BossBegomanHead::calcJointEdge(Pos3f* pMtx, const JointControllerInfo&) {
+    Pos3f v9;
+    v9.makeRotate(Vec3f(0.0f, 1.0f, 0.0f), mAngle);
     pMtx->concat(*pMtx, v9);
 
     return true;

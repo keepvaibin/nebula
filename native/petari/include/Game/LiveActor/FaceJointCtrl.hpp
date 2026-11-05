@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry.hpp>
+#include <nebula_geometry.hpp>
 
 class JointController;
 struct JointControllerInfo;
@@ -17,12 +17,12 @@ public:
     void update();
     void setCallBackFunction();
 
-    bool updateJointMtxCallBack(TPos3f* pMtx, const JointControllerInfo& rInfo);
+    bool updateJointMtxCallBack(Pos3f* pMtx, const JointControllerInfo& rInfo);
 
     LiveActor* mHostActor;
     f32 mDegreeMax;
-    TVec3f _8;
-    TVec3f _14;
+    Vec3f _8;
+    Vec3f _14;
     JointController* mJointController;
     JointCtrlRate* mJointCtrlRate;
 };

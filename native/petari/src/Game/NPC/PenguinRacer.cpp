@@ -33,7 +33,7 @@ namespace {
     static const f32 sSwimSoundPlayDistance = 500.0f;
 
     // TODO: this is an exact copy of MR::isInWater, except it needs to be inlined.
-    inline bool isInWater(const TVec3f& rPos) {
+    inline bool isInWater(const Vec3f& rPos) {
         WaterInfo waterInfo;
         return MR::getWaterAreaObj(&waterInfo, rPos);
     }
@@ -72,12 +72,12 @@ void PenguinRacer::init(const JMapInfoIter& rIter) {
 
     initColor(rIter);
 
-    TVec3f target;
+    Vec3f target;
     target.set(0.0f);
     MR::initStarPointerTarget(this, 100.0f, target);
     initEtc(rIter);
 
-    mMsgCtrl = MR::createTalkCtrl(this, rIter, "PenguinRacer", TVec3f(0.0f, 130.0f, 0.0f), nullptr);
+    mMsgCtrl = MR::createTalkCtrl(this, rIter, "PenguinRacer", Vec3f(0.0f, 130.0f, 0.0f), nullptr);
     MR::onRootNodeAutomatic(mMsgCtrl);
 
     initNerve(GET_NERVE(PenguinRacer, PenguinRacerNrvWait));
@@ -102,7 +102,7 @@ void PenguinRacer::initModel() {
 
 void PenguinRacer::initSensor() {
     initHitSensor(1);
-    MR::addHitSensorPush(this, "push", 8, ::sSensorRadius, TVec3f(0.0f, ::sSensorRadius, 0.0f));
+    MR::addHitSensorPush(this, "push", 8, ::sSensorRadius, Vec3f(0.0f, ::sSensorRadius, 0.0f));
 }
 
 void PenguinRacer::initShadow() {
@@ -360,23 +360,23 @@ void PenguinRacer::updateMove() {
 
 void PenguinRacer::updateVelocity() {
     MR::moveCoordToNearestPos(this, mPosition);
-    TVec3f nextPointPos;
+    Vec3f nextPointPos;
     MR::calcRailPointPos(&nextPointPos, this, MR::getNextRailPointNo(this));
 
-    TVec3f toTarget = nextPointPos - mPosition;
+    Vec3f toTarget = nextPointPos - mPosition;
     MR::normalizeOrZero(&toTarget);
 
     mVelocity.add(toTarget * mSpeed);
 
-    TVec3f velV, velH;
-    TVec3f grav = mGravity;
+    Vec3f velV, velH;
+    Vec3f grav = mGravity;
 
     velV.zero();
     velH.zero();
 
     if (getMoveNerve() != GET_NERVE(PenguinRacer, PenguinRacerNrvRaceSwim)) {
         MR::normalizeOrZero(&grav);
-        const TVec3f& v = mVelocity;
+        const Vec3f& v = mVelocity;
         velV.scale(grav.dot(v), grav);
         velH.sub(v, velV);
     } else {
@@ -473,7 +473,7 @@ void PenguinRacer::prepRacer(const RaceManager* pRaceManager) {
     if (::isInWater(mPosition)) {
         MR::startAction(this, "RacerSwimSurfaceSoon");
     } else {
-        TVec3f pos;
+        Vec3f pos;
         Triangle triangle;
         if (MR::getFirstPolyOnLineToMap(&pos, &triangle, mPosition, mGravity * 1000.0f)) {
             mPosition.set(pos);

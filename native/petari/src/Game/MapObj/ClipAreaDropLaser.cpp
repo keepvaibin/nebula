@@ -94,7 +94,7 @@ void ClipAreaDropLaser::exeMove() {
     }
     mPoints[mDrawCount].set(mPosition);
     if (railPoint != -1) {
-        TVec3f pos;
+        Vec3f pos;
         MR::calcRailPointPos(&pos, this, railPoint);
         f32 arg = -1.0;
         MR::getRailPointArg0NoInit(this, railPoint, &arg);

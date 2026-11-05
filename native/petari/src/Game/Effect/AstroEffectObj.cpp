@@ -2,7 +2,7 @@
 #include "Game/Effect/SimpleEffectObj.hpp"
 #include "Game/MapObj/AstroMapObjFunction.hpp"
 #include "Game/Util/DemoUtil.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 #include <nebula_math.h>
 
 AstroEffectObj::AstroEffectObj(const char* pName) : SimpleEffectObj(pName) {

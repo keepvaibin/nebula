@@ -8,7 +8,7 @@ public:
 
     virtual void init(const JMapInfoIter&);
 
-    void calcMovePosition(TVec3f*, s32) const;
+    void calcMovePosition(Vec3f*, s32) const;
     s32 calcRandomIndex(s32) const;
     s32 calcRandomStoppableIndex(s32) const;
 

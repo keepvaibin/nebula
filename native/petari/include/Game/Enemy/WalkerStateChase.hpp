@@ -18,7 +18,7 @@ public:
 
 class WalkerStateChase : public ActorStateBase< LiveActor > {
 public:
-    WalkerStateChase(LiveActor* pHost, TVec3f* pDirection, WalkerStateParam* pStateParam, WalkerStateChaseParam* pChaseParam);
+    WalkerStateChase(LiveActor* pHost, Vec3f* pDirection, WalkerStateParam* pStateParam, WalkerStateChaseParam* pChaseParam);
 
     virtual void appear();
 
@@ -28,5 +28,5 @@ public:
 
     WalkerStateParam* mStateParam;
     WalkerStateChaseParam* mChaseParam;
-    TVec3f* mDirection;
+    Vec3f* mDirection;
 };

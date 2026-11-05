@@ -9,7 +9,7 @@ TripodBossStepPoint::TripodBossStepPoint(const char* pName)
 
 void TripodBossStepPoint::init(const JMapInfoIter& rIter) {
     if (MR::isValidInfo(rIter)) {
-        TPos3f mtx;
+        Pos3f mtx;
         MR::getJMapInfoMatrixFromRT(rIter, &mtx);
 
         mtx.getTrans(mStepPosition);
@@ -31,17 +31,17 @@ void TripodBossStepPoint::initAfterPlacement() {
     }
 }
 
-void TripodBossStepPoint::setStepPosition(const TVec3f& rPos) {
+void TripodBossStepPoint::setStepPosition(const Vec3f& rPos) {
     mStepPosition = rPos;
 }
 
-void TripodBossStepPoint::setStepNormal(const TVec3f& rNormal) {
+void TripodBossStepPoint::setStepNormal(const Vec3f& rNormal) {
     mStepNormal = rNormal;
 
     MR::normalizeOrZero(&mStepNormal);
 }
 
-void TripodBossStepPoint::setStepFront(const TVec3f& rFront) {
+void TripodBossStepPoint::setStepFront(const Vec3f& rFront) {
     mStepFront = rFront;
 
     MR::normalizeOrZero(&mStepFront);

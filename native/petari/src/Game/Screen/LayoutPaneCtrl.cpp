@@ -65,16 +65,16 @@ void LayoutPaneCtrl::reflectFollowPos() {
 
     switch (mFollowType) {
     case 0: {
-        TVec2f position;
+        Vec2f position;
         MR::convertScreenPosToLayoutPos(&position, *mFollowPos);
         global._03 = position.x;
         global._13 = position.y;
         break;
     }
     case 1: {
-        TVec2f screenOrigin;
-        MR::convertLayoutPosToScreenPos(&screenOrigin, TVec2f(0.0f, 0.0f));
-        TVec2f offset(screenOrigin + *mFollowPos);
+        Vec2f screenOrigin;
+        MR::convertLayoutPosToScreenPos(&screenOrigin, Vec2f(0.0f, 0.0f));
+        Vec2f offset(screenOrigin + *mFollowPos);
         MR::convertScreenPosToLayoutPos(&offset, offset);
         global._03 += offset.x;
         // A distance, in the layout's own units on any canvas: only places stretch with a taller one.

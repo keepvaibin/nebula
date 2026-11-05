@@ -3,7 +3,7 @@
 #include "Game/Effect/MultiEmitterCallBack.hpp"
 #include "Game/Player/MarioModule.hpp"
 #include "Game/Util/Color.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class MarioActor;
 class JPABaseEmitter;
@@ -18,8 +18,8 @@ struct MovingFollowMtx {
     }
 
     u32 _0;
-    TMtx34f _4;
-    TMtx34f _34;
+    Mtx34f _4;
+    Mtx34f _34;
     MtxPtr _64;
     JPABaseEmitter* _68;
 };
@@ -43,6 +43,6 @@ public:
     u8 _18;
     Color8 _1C;
     Color8 _20;
-    TMtx34f _24;
+    Mtx34f _24;
     MovingFollowMtx _54[0x100];
 };

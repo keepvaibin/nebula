@@ -4,7 +4,7 @@
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Screen/LayoutActor.hpp"
 #include "Game/Screen/SimpleLayout.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class MarioLauncherShell;
 class MarioLauncherLayout;
@@ -53,12 +53,12 @@ public:
     LiveActor* mHost;
     bool mIsInAttractor;
     s32 mLauncherType;  // arg0
-    TPos3f mEffectMtxSmoke;
-    TPos3f mEffectMtxGravity;
+    Pos3f mEffectMtxSmoke;
+    Pos3f mEffectMtxGravity;
     CameraTargetMtx mCameraTargetMtx;
-    TPos3f mPlayerMtx;
-    TPos3f mPlayerBaseMtx;
-    TPos3f mLauncherBaseMtx;
+    Pos3f mPlayerMtx;
+    Pos3f mPlayerBaseMtx;
+    Pos3f mLauncherBaseMtx;
 };
 
 class MarioLauncherLayout : public LayoutActor {
@@ -69,7 +69,7 @@ public:
     virtual void init(const JMapInfoIter& rIter);
     virtual void kill();
 
-    void appearAt(const TVec2f& pos) {
+    void appearAt(const Vec2f& pos) {
         mLayout->appear();
         mLayout->setTrans(pos);
     }
@@ -95,12 +95,12 @@ public:
     virtual void calcAndSetBaseMtx();
     virtual void calcBaseMtx();
 
-    TVec3f& getPosition() {
+    Vec3f& getPosition() {
         return mPosition;
     }
 
-    TPos3f mBaseMtx;
-    TQuat4f mRotQuat;
-    TVec3f _CC;
-    TVec3f mReboundDir;
+    Pos3f mBaseMtx;
+    Quat4f mRotQuat;
+    Vec3f _CC;
+    Vec3f mReboundDir;
 };

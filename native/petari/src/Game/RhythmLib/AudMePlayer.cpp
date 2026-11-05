@@ -244,7 +244,7 @@ void AudMeMgr::setMeTable(void* pData) {
     mParams.setResource(pData);
 }
 
-bool AudMeMgr::startMe(u32 meId, AudMeHandle* pHandle, const TVec3f* pPos) {
+bool AudMeMgr::startMe(u32 meId, AudMeHandle* pHandle, const Vec3f* pPos) {
     if (meId == -1) {
         return false;
     }

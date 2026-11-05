@@ -183,7 +183,7 @@ bool BossKameckStateBattle::tryChargeBram() {
         return false;
     }
 
-    mBeam = MR::startFollowKameckBeam(mBattlePattarn->goNextPattarn(), MR::getJointMtx(mHost, "PowerStarC"), 1.0f, TVec3f(0.0f, 0.0f, 0.0f),
+    mBeam = MR::startFollowKameckBeam(mBattlePattarn->goNextPattarn(), MR::getJointMtx(mHost, "PowerStarC"), 1.0f, Vec3f(0.0f, 0.0f, 0.0f),
                                       mBeamEventListener);
 
     if (mBeam != nullptr) {

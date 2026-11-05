@@ -72,13 +72,13 @@ void StarPointerBlur::movement() {
     }
 
     for (s32 idx = pastPointNum - 1; idx >= 0; idx--) {
-        TVec2f pastPos = StarPointerFunction::getNextPastPosition(mPadChannel, idx);
+        Vec2f pastPos = StarPointerFunction::getNextPastPosition(mPadChannel, idx);
         StarPointerFunction::forceInsideScreenEdge(&pastPos);
         updatePoint(pastPos, false, nullptr);
     }
 }
 
-void StarPointerBlur::updatePoint(const TVec2f& rPos, bool hide, TVec2f* pDir) {
+void StarPointerBlur::updatePoint(const Vec2f& rPos, bool hide, Vec2f* pDir) {
     if (hide == true) {
         mNumHiddenPoints++;
     } else {
@@ -155,7 +155,7 @@ void StarPointerBlur::draw1() const {
 void StarPointerBlur::draw2() const {
     u16 start, end;
 
-    TVec2f dir(0.0f, 1.0f);
+    Vec2f dir(0.0f, 1.0f);
     start = 0;
     end = 0;
     while (start < BLUR_POINT_NUM) {
@@ -167,8 +167,8 @@ void StarPointerBlur::draw2() const {
 
         J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, range * 2, NEBULA_SHAPE_TEXCOORD0);
         for (s32 point = start; point < end; point++) {
-            const TVec2f& pos = mBlurPoints[point].mPos;
-            const TVec2f& offset = dir * mBlurThicks[point];
+            const Vec2f& pos = mBlurPoints[point].mPos;
+            const Vec2f& offset = dir * mBlurThicks[point];
             J3DNativeDraw::position(pos.x - offset.x, pos.y - offset.y, 0.0f);
             J3DNativeDraw::texCoord(0.0f, mBlurTexCoords[point]);
             J3DNativeDraw::position(pos.x + offset.x, pos.y + offset.y, 0.0f);
@@ -190,8 +190,8 @@ void StarPointerBlur::draw2() const {
 
         J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, range * 2, NEBULA_SHAPE_TEXCOORD0);
         for (s32 point = start; point < end; point++) {
-            const TVec2f& pos = mBlurPoints[point].mPos;
-            const TVec2f& offset = dir * mBlurThicks[point];
+            const Vec2f& pos = mBlurPoints[point].mPos;
+            const Vec2f& offset = dir * mBlurThicks[point];
             J3DNativeDraw::position(pos.x - offset.x, pos.y - offset.y, 0.0f);
             J3DNativeDraw::texCoord(0.0f, mBlurTexCoords[point]);
             J3DNativeDraw::position(pos.x + offset.x, pos.y + offset.y, 0.0f);
@@ -203,7 +203,7 @@ void StarPointerBlur::draw2() const {
 }
 
 void StarPointerBlur::initDraw() const {
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.identity();
     J3DNativeShape::setPosition(0, mtx);
     J3DNativeShape::setCurrentIdentity();

@@ -13,7 +13,7 @@ public:
     virtual ~TripodBossRotateParts();
     virtual void init(const JMapInfoIter&);
     virtual void makeActorDead();
-    virtual void calcTripodLocalMatrix(TPos3f*);
+    virtual void calcTripodLocalMatrix(Pos3f*);
     virtual void activateTripodBoss();
     virtual void exeWaitOwn();
 

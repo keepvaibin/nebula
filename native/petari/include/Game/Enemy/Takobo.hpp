@@ -40,14 +40,14 @@ public:
     void exeDpdPointed();
 
     u32 _8C;
-    TVec3f _90;
+    Vec3f _90;
     s32 _9C;
     u8 _A0;
     u8 _A1;
     u8 _A2;
     u8 _A3;
-    TVec3f _A4;
-    TVec3f _B0;
+    Vec3f _A4;
+    Vec3f _B0;
     bool _BC;
     f32 _C0;
     f32 _C4;

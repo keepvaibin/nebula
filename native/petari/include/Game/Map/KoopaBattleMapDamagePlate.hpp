@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry.hpp>
+#include <nebula_geometry.hpp>
 
 class KoopaBattleMapDamagePlate : public LiveActor {
 public:
@@ -17,5 +17,5 @@ public:
     void exeBreak();
     void exeRecover();
 
-    TPos3f mBaseMtx;
+    Pos3f mBaseMtx;
 };

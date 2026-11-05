@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class TriangleFilterFunc;
 
@@ -28,7 +28,7 @@ public:
 private:
     f32 _8C;
     f32 _90;
-    TVec3f _94;
-    TPos3f _A0;
+    Vec3f _94;
+    Pos3f _A0;
     TriangleFilterFunc* _D0;
 };

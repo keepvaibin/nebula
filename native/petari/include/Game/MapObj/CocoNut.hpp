@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class NameObjArchiveListCollector;
 
@@ -33,16 +33,16 @@ public:
     void processMove();
     bool isOnGround() const;
     f32 calcMoveSpeed() const;
-    void setFrontVec(const TVec3f&);
-    bool getWallNormal(TVec3f*) const;
+    void setFrontVec(const Vec3f&);
+    bool getWallNormal(Vec3f*) const;
 
     bool sendMsgToBindedSensor();
     bool sendMsgEnemyAttackToBindedSensor(HitSensor*);
 
     bool tryHit(HitSensor*, HitSensor*);
-    bool isPossibleToHit(const TVec3f&, const TVec3f&, const TVec3f&) const;
-    void calcHitSpeedAndFrontVec(f32*, f32*, TVec3f*, TVec3f*, const TVec3f&, const TVec3f&) const;
-    void hit(const TVec3f&, f32);
+    bool isPossibleToHit(const Vec3f&, const Vec3f&, const Vec3f&) const;
+    void calcHitSpeedAndFrontVec(f32*, f32*, Vec3f*, Vec3f*, const Vec3f&, const Vec3f&) const;
+    void hit(const Vec3f&, f32);
     bool tryPushedFromActor(HitSensor*, HitSensor*);
 
     void reviseFrontVec();
@@ -60,7 +60,7 @@ public:
 
     bool isValidPushedFromPlayer(const HitSensor*, const HitSensor*) const;
 
-    void calcHitSpeedAndFrontVec(f32*, f32*, TVec3f*, TVec3f*, TVec3f*, TVec3f*) const;
+    void calcHitSpeedAndFrontVec(f32*, f32*, Vec3f*, Vec3f*, Vec3f*, Vec3f*) const;
 
     static const char* getModelName();
     static const char* getBreakEffectName();
@@ -79,17 +79,17 @@ public:
 private:
     f32 _8C;
     f32 _90;
-    TVec3f _94;
-    TPos3f _A0;
+    Vec3f _94;
+    Pos3f _A0;
     f32 _D0;
     bool _D4;
-    TPos3f _D8;
-    TPos3f _108;
+    Pos3f _D8;
+    Pos3f _108;
     s32 _138;
     bool _13C;
-    TVec3f mSpawnPosition;
+    Vec3f mSpawnPosition;
     bool _14C;
-    TVec3f _150;
+    Vec3f _150;
     bool mSphericalShadow;  // also affects some other properties besides shadow
     bool mRespawnWhenOutOfView;
     bool _15E;  // something about clipping

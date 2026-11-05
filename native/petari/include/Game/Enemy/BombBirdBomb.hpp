@@ -16,13 +16,13 @@ public:
     virtual bool receiveMsgPush(HitSensor*, HitSensor*);
     virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
 
-    void hold(const TVec3f&);
-    void start(const TVec3f&, const TVec3f&);
+    void hold(const Vec3f&);
+    void start(const Vec3f&, const Vec3f&);
 
     void exeHold();
     void exeWait();
     void exeExplosion();
 
-    TQuat4f _8C;
-    TVec3f _9C;
+    Quat4f _8C;
+    Vec3f _9C;
 };

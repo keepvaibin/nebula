@@ -11,8 +11,8 @@ PlanetGravityManager::PlanetGravityManager(const char* pName) : NameObj(pName) {
 void PlanetGravityManager::init(const JMapInfoIter& rIter) {
 }
 
-bool PlanetGravityManager::calcTotalGravityVector(TVec3f* pGravity, GravityInfo* pInfo, const TVec3f& rPosition, u32 gravityType, uintptr_t host) const {
-    TVec3f totalGravity;
+bool PlanetGravityManager::calcTotalGravityVector(Vec3f* pGravity, GravityInfo* pInfo, const Vec3f& rPosition, u32 gravityType, uintptr_t host) const {
+    Vec3f totalGravity;
     totalGravity.zero();
 
     PlanetGravity** pGravities = mGravities;
@@ -43,7 +43,7 @@ bool PlanetGravityManager::calcTotalGravityVector(TVec3f* pGravity, GravityInfo*
             }
 
             // Calculate gravity
-            TVec3f gravityVec;
+            Vec3f gravityVec;
 
             if ((*pGravities)->calcGravity(&gravityVec, rPosition)) {
                 bool storeInfo = false;

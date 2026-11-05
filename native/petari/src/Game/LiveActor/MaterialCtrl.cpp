@@ -83,7 +83,7 @@ ViewProjmapEffectMtxSetter::ViewProjmapEffectMtxSetter(J3DModel* pModel) : Mater
 }
 
 void ViewProjmapEffectMtxSetter::update() {
-    TMtx44f projection = MR::getCameraProjectionMtx();
+    Mtx44f projection = MR::getCameraProjectionMtx();
     projection[2][0] = 0.0f;
     projection[2][1] = 0.0f;
     projection[2][2] = -1.0f;
@@ -129,26 +129,26 @@ ProjmapEffectMtxSetter::ProjmapEffectMtxSetter(J3DModel* pModel, const ResourceH
 void ProjmapEffectMtxSetter::update() {
     for (s32 i = 0; i < mNumUpdatingMtx; i++) {
         UpdateEffectMtxInfo* info = &mUpdatingMtxInfo[i];
-        TPos3f effectMtx;
+        Pos3f effectMtx;
         effectMtx.concat(info->mInitEffectMtx, mEffectMtx);
         info->mTexMtx->setEffectMtx(effectMtx);
     }
 }
 
-void ProjmapEffectMtxSetter::getBaseTrans(TVec3f* pTrans) const {
+void ProjmapEffectMtxSetter::getBaseTrans(Vec3f* pTrans) const {
     pTrans->set< f32 >(mModel->getBaseTRMtx()[0][3], mModel->getBaseTRMtx()[1][3], mModel->getBaseTRMtx()[2][3]);
 }
 
 void ProjmapEffectMtxSetter::updateMtxUseBaseMtx() {
-    TPos3f baseMtx;
+    Pos3f baseMtx;
     baseMtx.set(mModel->getBaseTRMtx());
     mEffectMtx.invert(baseMtx);
 }
 
-void ProjmapEffectMtxSetter::updateMtxUseBaseMtxWithLocalOffset(const TVec3f& rOffset) {
-    TPos3f baseMtx;
+void ProjmapEffectMtxSetter::updateMtxUseBaseMtxWithLocalOffset(const Vec3f& rOffset) {
+    Pos3f baseMtx;
     baseMtx.set(mModel->getBaseTRMtx());
-    TPos3f offsetMtx;
+    Pos3f offsetMtx;
     offsetMtx.identity33();
     offsetMtx.setTrans(rOffset);
     baseMtx.concat(offsetMtx);
@@ -200,26 +200,26 @@ MarioShadowProjmapMtxSetter::MarioShadowProjmapMtxSetter(J3DModel* pModel, const
 }
 
 void MarioShadowProjmapMtxSetter::update() {
-    TVec3f playerPos(*MR::getPlayerPos());
-    TVec3f baseTrans;
+    Vec3f playerPos(*MR::getPlayerPos());
+    Vec3f baseTrans;
     mProjmapMtxSetter->getBaseTrans(&baseTrans);
-    TVec3f offset(baseTrans);
+    Vec3f offset(baseTrans);
     offset.sub(playerPos);
-    TVec3f shadowVec(MR::getMarioShadowVec());
+    Vec3f shadowVec(MR::getMarioShadowVec());
     f32 height = -1.0f;
     if (MR::isNearZero(shadowVec.length() - 1.0f)) {
         height = MR::vecKillElement(offset, shadowVec, &offset);
     }
 
-    TPos3f effectMtx;
-    TPos3f translationMtx;
+    Pos3f effectMtx;
+    Pos3f translationMtx;
     if (height > 0.0f) {
         NebulaMtxTrans(translationMtx, -playerPos.x, -playerPos.y, -playerPos.z);
     } else {
         NebulaMtxTrans(translationMtx, 1000000.0f, 1000000.0f, 1000000.0f);
     }
 
-    TPos3f rotationMtx;
+    Pos3f rotationMtx;
     MR::makeMtxRotate(rotationMtx, -*MR::getPlayerShadowRotate());
     NebulaMtxConcat(rotationMtx, translationMtx, effectMtx);
     mProjmapMtxSetter->mEffectMtx.set(effectMtx);

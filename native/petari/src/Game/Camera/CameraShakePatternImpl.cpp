@@ -13,7 +13,7 @@ bool CameraShakePatternSingly::isEnd() const {
     return mFrame >= ::sSinglyMaxFrame;
 }
 
-void CameraShakePatternSingly::getOffset(TVec2f* pOffset) const {
+void CameraShakePatternSingly::getOffset(Vec2f* pOffset) const {
     pOffset->set(mOffset);
 }
 
@@ -34,7 +34,7 @@ void CameraShakePatternSingly::update() {
     mOffset.set(mDirection * amount);
 }
 
-void CameraShakePatternSingly::setDirection(const TVec2f& rDir) {
+void CameraShakePatternSingly::setDirection(const Vec2f& rDir) {
     mDirection.set(rDir);
     MR::normalize(&mDirection);
 }
@@ -46,7 +46,7 @@ bool CameraShakePatternVerticalSin::isEnd() const {
     return mFrame >= mSpeed;
 }
 
-void CameraShakePatternVerticalSin::getOffset(TVec2f* pOffset) const {
+void CameraShakePatternVerticalSin::getOffset(Vec2f* pOffset) const {
     pOffset->set(mOffset);
 }
 

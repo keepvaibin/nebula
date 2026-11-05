@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/Screen/LayoutActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class LiveActor;
 class StarPointerCommandStream;
@@ -40,7 +40,7 @@ public:
     virtual void control();
 
     void initWithPort(s32);
-    bool startCommandStream(const LiveActor*, const TVec3f*, bool);
+    bool startCommandStream(const LiveActor*, const Vec3f*, bool);
     void endCommandStream(const LiveActor*);
     void forceEndCommandStream();
     bool isCommandStream(const LiveActor*);
@@ -66,7 +66,7 @@ public:
     void drawDecoration() const;
     void setPosition();
     void rotateTest();
-    void calcPoseNozzle(const TVec2f&, const TVec2f&);
+    void calcPoseNozzle(const Vec2f&, const Vec2f&);
     void changeLayout(StarPointerKind);
     bool isChanceToRumble() const;
     void hideBlur();
@@ -114,7 +114,7 @@ public:
         return mRadius;
     }
 
-    TVec2f mPosition;
+    Vec2f mPosition;
     StarPointerKind mPointerKind;
     AnimType mAnimType;
     s32 mTouchTimer;

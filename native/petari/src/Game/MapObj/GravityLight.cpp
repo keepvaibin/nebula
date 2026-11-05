@@ -80,7 +80,7 @@ void GravityLight::init(const JMapInfoIter& rIter) {
 
     boundingRadius += 0.5f * mRadius;
 
-    TVec3f center(mPosition);
+    Vec3f center(mPosition);
     if (isRailConnected) {
         f32 radius;
         MR::calcRailClippingInfo(&center, &radius, this, 100.0f, 500.0f);
@@ -88,7 +88,7 @@ void GravityLight::init(const JMapInfoIter& rIter) {
         boundingRadius += radius;
     }
 
-    TVec3f upVec;
+    Vec3f upVec;
     MR::calcUpVec(&upVec, this);
     upVec.negate();
 
@@ -106,7 +106,7 @@ void GravityLight::control() {
     if (mMapPartsRailMover != nullptr) {
         mMapPartsRailMover->movement();
 
-        TVec3f& rPosition = mPosition;
+        Vec3f& rPosition = mPosition;
         rPosition.set(mMapPartsRailMover->_28);
 
         MR::makeMtxTR(mBaseMtx, rPosition, mRotation);
@@ -115,7 +115,7 @@ void GravityLight::control() {
     if (mMapPartsRotator != nullptr) {
         mMapPartsRotator->movement();
 
-        TPos3f baseMtx;
+        Pos3f baseMtx;
         baseMtx.identity();
         baseMtx.concat(mMapPartsRotator->getRotateMtx());
 

@@ -14,8 +14,8 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
-#include <JSystem/JMath/JMath.hpp>
+#include <nebula_geometry.hpp>
+
 #include "Game/System/NebulaFrameClock.hpp"
 
 namespace NrvTalkBalloonShort {
@@ -87,11 +87,11 @@ inline f32 larger(f32 a, f32 b) {
 void TalkBalloon::updateBalloon() {
     mMessageCtrl->updateBalloonPos();
     if (_28) {
-        TVec2f paneTrans;
+        Vec2f paneTrans;
         MR::copyPaneTrans(&paneTrans, this, "PicBeak");
 
-        TVec2f v2(mMessageCtrl->_1C.x - paneTrans.x, mMessageCtrl->_1C.y - paneTrans.y);
-        TVec2f v3(0.0f, 1.0f);
+        Vec2f v2(mMessageCtrl->_1C.x - paneTrans.x, mMessageCtrl->_1C.y - paneTrans.y);
+        Vec2f v3(0.0f, 1.0f);
 
         MR::normalizeOrZero(&v2);
 
@@ -212,7 +212,7 @@ void TalkBalloonShort::updateBalloon() {
         MR::showScreen(this);
     }
 
-    setTrans(TVec2f(mMessageCtrl->_1C.x, mMessageCtrl->_1C.y));
+    setTrans(Vec2f(mMessageCtrl->_1C.x, mMessageCtrl->_1C.y));
 }
 
 void TalkBalloonShort::initInterval() {
@@ -289,7 +289,7 @@ void TalkBalloonEvent::updateBeak() {
 
     mMessageCtrl->updateBalloonPos();
     TalkMessageCtrl* messageCtrl = mMessageCtrl;
-    TVec2f v1(messageCtrl->_1C.x, messageCtrl->_1C.y);
+    Vec2f v1(messageCtrl->_1C.x, messageCtrl->_1C.y);
 
     if (0.0f <= v1.x && v1.x < MR::getScreenWidth() && 120.0f <= v1.y &&
         v1.y < static_cast< s32 >(NebulaFrameClock::cScreenLines)) {

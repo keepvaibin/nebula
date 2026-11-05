@@ -446,7 +446,7 @@ void PowerStarList::updateList(s32 pageNumber, bool isSinglePage) {
                     tryShowSeparator(prevSeparator, ::cSeparatorOffset * separatorRows);
                 }
 
-                TVec2f& rOffset = mSeparatorArray[separator]._4;
+                Vec2f& rOffset = mSeparatorArray[separator]._4;
                 rOffset.x = 0.0f;
                 rOffset.y = ::cSeparatorOffset * row;
                 prevSeparator = separator;
@@ -465,7 +465,7 @@ void PowerStarList::updateList(s32 pageNumber, bool isSinglePage) {
             crownBuffer.addNewLine(row);
 
             if (tryShowSeparator(3, ::cTimePaneDefaultHeight + ::cSeparatorOffset * (bestTimeNum - 1))) {
-                TVec2f& rOffset = mSeparatorArray[3]._4;
+                Vec2f& rOffset = mSeparatorArray[3]._4;
                 rOffset.x = 0.0f;
                 rOffset.y = ::cSeparatorOffset * row;
             }

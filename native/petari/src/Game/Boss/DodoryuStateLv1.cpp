@@ -231,8 +231,8 @@ void DodoryuStateLv1::exeSpinOut() {
         mHost->invalidateEyeSensor();
     }
 
-    TPos3f mtx = mHost->mBaseMtx;
-    TVec3f trans;
+    Pos3f mtx = mHost->mBaseMtx;
+    Vec3f trans;
     mtx.getTrans(trans);
     trans.add(_98 * ::sKnockSpeed);
     mtx.setTrans(trans);
@@ -278,7 +278,7 @@ void DodoryuStateLv1::catchAttackSensor(HitSensor* pSender, HitSensor* pReceiver
         return;
     }
 
-    TVec3f dir;
+    Vec3f dir;
     calcAttackDir(&dir, pSender->mPosition, pReceiver->mPosition);
 
     if (MR::sendMsgEnemyAttackStrongToDir(pReceiver, pSender, dir)) {
@@ -392,8 +392,8 @@ void DodoryuStateLv1::updatePop() {
         return;
     }
 
-    TPos3f mtx = mHost->mBaseMtx;
-    TVec3f trans;
+    Pos3f mtx = mHost->mBaseMtx;
+    Vec3f trans;
     mtx.getTrans(trans);
     trans.add(-mHost->mGravity * mPopAccel);
 

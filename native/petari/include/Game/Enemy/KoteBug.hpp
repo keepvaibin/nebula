@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry.hpp>
+#include <nebula_geometry.hpp>
 
 class AnimScaleController;
 class AnimStampController;
@@ -45,13 +45,13 @@ public:
     void exeBindStarPointer();
     void endBindStarPointer();
     void setOverturnFall(HitSensor* pSender, HitSensor* pReceiver);
-    bool calcJoint(TPos3f* pMtx, const JointControllerInfo& rInfo);
+    bool calcJoint(Pos3f* pMtx, const JointControllerInfo& rInfo);
 
     AnimScaleController* mScaleController;
     AnimStampController* mStampController;
     SpinHitController* mSpinHitController;
     WalkerStateBindStarPointer* mStarPointer;
-    TVec3f mFront;
-    TQuat4f mPosture;
+    Vec3f mFront;
+    Quat4f mPosture;
     JointController* mJointController;
 };

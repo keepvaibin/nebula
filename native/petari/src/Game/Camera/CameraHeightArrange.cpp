@@ -47,10 +47,10 @@ void CameraHeightArrange::calcWatchPos(CameraTargetObj* pTarget) {
         pTarget = CameraLocalUtil::getTarget(mCamera);
     }
 
-    TVec3f watchPoint;
+    Vec3f watchPoint;
     CameraLocalUtil::makeWatchPoint(&watchPoint, mCamera, pTarget, mOffsetScale / mOffsetScaleMax);
 
-    TVec3f globalAxis = getGlobalAxis();
+    Vec3f globalAxis = getGlobalAxis();
     if (!(mVPanUse && mIsJumping)) {
         mCameraWatchPosBaseHeight = globalAxis.dot(watchPoint);
     }
@@ -83,7 +83,7 @@ void CameraHeightArrange::resetJump() {
 }
 
 void CameraHeightArrange::reset() {
-    TVec3f globalAxis = getGlobalAxis();
+    Vec3f globalAxis = getGlobalAxis();
     mCameraWatchPosBaseHeight = globalAxis.dot(CameraLocalUtil::getWatchPos(mCamera));
     mCameraTargetPosHeight = globalAxis.dot(CameraLocalUtil::getTarget(mCamera)->getPosition());
     mCameraPosHeight = globalAxis.dot(CameraLocalUtil::getPos(mCamera));
@@ -128,7 +128,7 @@ void CameraHeightArrange::resetParameter() {
 }
 
 void CameraHeightArrange::checkState() {
-    TVec3f globalAxis = getGlobalAxis();
+    Vec3f globalAxis = getGlobalAxis();
 
     switch (mJumpState) {
     case JumpState_NoMove: {
@@ -171,18 +171,18 @@ void CameraHeightArrange::arrangeHeight() {
     mNextParam->mWatchPos.set(CameraLocalUtil::getWatchPos(mCamera));
     mNextParam->mPos.set(CameraLocalUtil::getPos(mCamera));
 
-    TVec3f watchUp = mNextParam->mWatchUpVec;
+    Vec3f watchUp = mNextParam->mWatchUpVec;
     watchUp += (CameraLocalUtil::getWatchUpVec(mCamera) - watchUp) * blendRate;
     MR::normalizeOrZero(&watchUp);
     mNextParam->mWatchUpVec.set(watchUp);
 
-    TVec3f up = mNextParam->mUpVec;
+    Vec3f up = mNextParam->mUpVec;
     up += (CameraLocalUtil::getUpVec(mCamera) - up) * blendRate;
     mNextParam->mUpVec.set(up);
 }
 
 void CameraHeightArrange::arrangeVPan() {
-    TVec3f globalAxis = getGlobalAxis();
+    Vec3f globalAxis = getGlobalAxis();
 
     switch (mJumpState) {
     case JumpState_NoMove: {
@@ -213,15 +213,15 @@ void CameraHeightArrange::arrangeVPan() {
 }
 
 void CameraHeightArrange::calcPose() {
-    TVec3f globalAxis = getGlobalAxis();
+    Vec3f globalAxis = getGlobalAxis();
     mCurrParam->copyFrom(*mNextParam);
 
-    TVec3f watchPos = mCurrParam->mWatchPos;
+    Vec3f watchPos = mCurrParam->mWatchPos;
     watchPos -= globalAxis * globalAxis.dot(watchPos);
     watchPos += globalAxis * (mCameraWatchPosHeight + mCameraWatchPosOffset);
     mCurrParam->mWatchPos.set(watchPos);
 
-    TVec3f pos = mCurrParam->mPos;
+    Vec3f pos = mCurrParam->mPos;
     pos -= globalAxis * globalAxis.dot(pos);
     pos += globalAxis * (mCameraPosHeight + mCameraPosOffset);
     mCurrParam->mPos.set(pos);
@@ -286,7 +286,7 @@ void CameraHeightArrange::updateUpper() {
 }
 
 void CameraHeightArrange::updateLower() {
-    TVec3f globalAxis = getGlobalAxis();
+    Vec3f globalAxis = getGlobalAxis();
 
     f32 offset = calcOffset(-mFocalScaleLower);
     if (offset < 0.0f) {
@@ -324,20 +324,20 @@ void CameraHeightArrange::updateLower() {
 }
 
 f32 CameraHeightArrange::calcOffset(f32 focalScale) {
-    TVec3f globalAxis = getGlobalAxis();
+    Vec3f globalAxis = getGlobalAxis();
 
     f32 fovAngle = MR::atan2(MR::tan(((CameraLocalUtil::getFovy(mCamera) * MR::pi()) * 0.5f) / 180.0f) * focalScale, 1.0f);
 
-    TVec3f front = mCurrParam->mWatchPos - mCurrParam->mPos;
+    Vec3f front = mCurrParam->mWatchPos - mCurrParam->mPos;
     if (MR::isNearZero(front)) {
         return 0.0f;
     }
     MR::normalize(&front);
 
-    TVec3f up = globalAxis;
+    Vec3f up = globalAxis;
     MR::normalize(&up);
 
-    TVec3f side = up.cross(front);
+    Vec3f side = up.cross(front);
     if (MR::isNearZero(side)) {
         return 0.0f;
     }
@@ -349,12 +349,12 @@ f32 CameraHeightArrange::calcOffset(f32 focalScale) {
         return 0.0f;
     }
 
-    TVec3f toTarget = CameraLocalUtil::getTarget(mCamera)->getPosition() - mCurrParam->mPos;
+    Vec3f toTarget = CameraLocalUtil::getTarget(mCamera)->getPosition() - mCurrParam->mPos;
     return (up.dot(toTarget) - front.dot(toTarget) * MR::tan(fovAngle)) / cosBetween;
 }
 
 void CameraHeightArrange::chase() {
-    TVec3f globalAxis = getGlobalAxis();
+    Vec3f globalAxis = getGlobalAxis();
 
     f32 t = (f32)mChaseTime / mGndInt;
 
@@ -370,7 +370,7 @@ void CameraHeightArrange::chase() {
 }
 
 void CameraHeightArrange::updateHeightAndOffset() {
-    TVec3f globalAxis = getGlobalAxis();
+    Vec3f globalAxis = getGlobalAxis();
     f32 rate = mVPanUse ? ::sLocalOffsetRateScale : 1.0f;
 
     mCameraWatchPosOffset += -mCameraWatchPosOffset * rate;
@@ -380,7 +380,7 @@ void CameraHeightArrange::updateHeightAndOffset() {
     mCameraPosHeight += rate * (globalAxis.dot(mNextParam->mPos) - mCameraPosHeight);
 }
 
-const TVec3f& CameraHeightArrange::getGlobalAxis() {
+const Vec3f& CameraHeightArrange::getGlobalAxis() {
     if (mUpdateGlobalAxis) {
         mUpdateGlobalAxis = false;
 

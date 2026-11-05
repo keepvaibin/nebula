@@ -62,8 +62,8 @@ void PressureBase::init(const JMapInfoIter& rIter) {
     MR::calcFrontVec(&mFront, this);
     MR::connectToSceneNoShadowedMapObjStrongLight(this);
     initHitSensor(2);
-    MR::addHitSensorMapObj(this, "body", 8, 70.0f, TVec3f(0.0f, 30.0f, 0.0f));
-    MR::addHitSensorAtJointMapObjSimple(this, "cannon", "Cannon1", 8, 70.0f, TVec3f(40.0f, 0.0f, 0.0f));
+    MR::addHitSensorMapObj(this, "body", 8, 70.0f, Vec3f(0.0f, 30.0f, 0.0f));
+    MR::addHitSensorAtJointMapObjSimple(this, "cannon", "Cannon1", 8, 70.0f, Vec3f(40.0f, 0.0f, 0.0f));
     initEffectKeeper(0, nullptr, false);
     initSound(6, false);
     MR::initShadowVolumeSphere(this, 75.0f);
@@ -276,14 +276,14 @@ bool PressureBase::shotBullet(f32) {
     return false;
 }
 
-bool PressureBase::calcJointCannonV(TPos3f* pMtx, const JointControllerInfo& rInfo) {
-    TVec3f front(0.0f, 0.0f, 1.0f);
+bool PressureBase::calcJointCannonV(Pos3f* pMtx, const JointControllerInfo& rInfo) {
+    Vec3f front(0.0f, 0.0f, 1.0f);
     bool isRelax = isNerve(GET_NERVE(PressureBase, PressureBaseNrvRelaxStart)) || isNerve(GET_NERVE(PressureBase, PressureBaseNrvRelax)) ||
                    isNerve(GET_NERVE(PressureBase, PressureBaseNrvWaitStart));
 
     f32 angle = isRelax ? mRelaxAngle : mBaseAngle;
 
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.makeRotate(front, MR::toRadian(angle));
     pMtx->concat(*pMtx, mtx);
     return true;

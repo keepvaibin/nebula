@@ -37,11 +37,11 @@ public:
 };
 
 namespace MR {
-    DummyDisplayModel* createDummyDisplayModel(LiveActor*, const JMapInfoIter&, s32, const TVec3f&, const TVec3f&);
+    DummyDisplayModel* createDummyDisplayModel(LiveActor*, const JMapInfoIter&, s32, const Vec3f&, const Vec3f&);
     DummyDisplayModel* createDummyDisplayModel(LiveActor*, const JMapInfoIter&, const char*, s32);
-    DummyDisplayModel* createDummyDisplayModel(LiveActor*, const JMapInfoIter&, MtxPtr, s32, const TVec3f&, const TVec3f&);
-    DummyDisplayModel* createDummyDisplayModelCrystalItem(LiveActor*, const JMapInfoIter&, const TVec3f&, const TVec3f&);
-    DummyDisplayModel* createDummyDisplayModelCrystalItem(LiveActor*, s32, const TVec3f&, const TVec3f&);
+    DummyDisplayModel* createDummyDisplayModel(LiveActor*, const JMapInfoIter&, MtxPtr, s32, const Vec3f&, const Vec3f&);
+    DummyDisplayModel* createDummyDisplayModelCrystalItem(LiveActor*, const JMapInfoIter&, const Vec3f&, const Vec3f&);
+    DummyDisplayModel* createDummyDisplayModelCrystalItem(LiveActor*, s32, const Vec3f&, const Vec3f&);
     s32 getDummyDisplayModelId(const JMapInfoIter&, s32);
     s32 getDummyDisplayModelId(const LiveActor*);
     void makeArchiveListDummyDisplayModel(NameObjArchiveListCollector*, const JMapInfoIter&);

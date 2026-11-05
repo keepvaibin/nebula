@@ -20,7 +20,7 @@ void FirePressureBullet::init(const JMapInfoIter& rIter) {
     initModelManagerWithAnm("FireBullet", nullptr, false);
     MR::connectToSceneMapObj(this);
     initHitSensor(1);
-    MR::addHitSensorEnemyAttack(this, "body", 8, 100.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemyAttack(this, "body", 8, 100.0f, Vec3f(0.0f, 0.0f, 0.0f));
     initBinder(100.0f, 0.0f, 0);
     MR::onCalcGravity(this);
     initEffectKeeper(0, nullptr, false);
@@ -36,12 +36,12 @@ void FirePressureBullet::kill() {
 }
 
 void FirePressureBullet::calcAndSetBaseMtx() {
-    TPos3f mtx;
+    Pos3f mtx;
     MR::calcMtxFromGravityAndZAxis(&mtx, this, mGravity, _8C);
     MR::setBaseTRMtx(this, mtx);
 }
 
-void FirePressureBullet::shotFireBullet(LiveActor* pActor, const TPos3f& rPos, const f32& a3, bool a4, bool a5) {
+void FirePressureBullet::shotFireBullet(LiveActor* pActor, const Pos3f& rPos, const f32& a3, bool a4, bool a5) {
     mFirePressure = pActor;
     _9C = a3;
     _A0 = a4;

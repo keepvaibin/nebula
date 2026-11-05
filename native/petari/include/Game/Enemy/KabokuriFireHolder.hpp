@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActorGroup.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class KabokuriFire;
 
@@ -14,6 +14,6 @@ public:
 namespace KabokuriFireHolderFunc {
     void createHolder();
     KabokuriFire* getDeadMember();
-    bool generateFire(const TVec3f&, const TVec3f&);
-    bool generateFire(const TVec3f&, const TVec3f&, bool);
+    bool generateFire(const Vec3f&, const Vec3f&);
+    bool generateFire(const Vec3f&, const Vec3f&, bool);
 };  // namespace KabokuriFireHolderFunc

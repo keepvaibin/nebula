@@ -2,7 +2,7 @@
 
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/LayoutActor.hpp"
-#include <JSystem/JGeometry.hpp>
+#include <nebula_geometry.hpp>
 
 class CollectCounter : public LayoutActor {
 public:
@@ -19,5 +19,5 @@ public:
     bool tryEndShow();
     void setPosition();
 
-    TVec2f mFollowPosition;
+    Vec2f mFollowPosition;
 };

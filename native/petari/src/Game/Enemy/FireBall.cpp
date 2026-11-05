@@ -40,7 +40,7 @@ FireBall::FireBall(const char* pName) : LiveActor(pName), mHost(), mUp(0.0f, 1.0
 
 inline void FireBall::initHitSensors(const char* const hitSensor) {
     initHitSensor(1);
-    MR::addHitSensorEnemy(this, hitSensor, 8, ::cSensorRadius, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemy(this, hitSensor, 8, ::cSensorRadius, Vec3f(0.0f, 0.0f, 0.0f));
 }
 
 void FireBall::init(const JMapInfoIter& rIter) {
@@ -54,7 +54,7 @@ void FireBall::init(const JMapInfoIter& rIter) {
 
     initEffectKeeper(4, "FireBall", false);
 
-    MR::initStarPointerTarget(this, ::cStarWandRadius3d, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::initStarPointerTarget(this, ::cStarWandRadius3d, Vec3f(0.0f, 0.0f, 0.0f));
 
     initSound(6, false);
 
@@ -82,7 +82,7 @@ void FireBall::kill() {
     LiveActor::kill();
 }
 
-void FireBall::appearAndThrow(const TVec3f& rAppearPos, f32 speed, f32 angle) {
+void FireBall::appearAndThrow(const Vec3f& rAppearPos, f32 speed, f32 angle) {
     mPosition.set(rAppearPos);
 
     MR::calcGravity(this);
@@ -91,7 +91,7 @@ void FireBall::appearAndThrow(const TVec3f& rAppearPos, f32 speed, f32 angle) {
 
     setVelocityToPlayer(speed);
 
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.makeRotate(mUp, MR::toRadian(angle));
     mtx.mult33(mVelocity, mVelocity);
 
@@ -104,8 +104,8 @@ void FireBall::control() {
 
 void FireBall::calcAndSetBaseMtx() {
     if (!MR::isNearZero(mVelocity)) {
-        TVec3f frontVec;
-        TPos3f baseMtx;
+        Vec3f frontVec;
+        Pos3f baseMtx;
         MR::normalize(mVelocity, &frontVec);
         MR::makeMtxFrontUpPos(&baseMtx, frontVec, mUp, mPosition);
         MR::setBaseTRMtx(this, baseMtx);
@@ -177,11 +177,11 @@ bool FireBall::tryToKill() {
 }
 
 void FireBall::setVelocityToPlayer(f32 magnitude) {
-    TVec3f target;
+    Vec3f target;
     target.scale(::cThrowOffsetY, mUp);
     target.add(*MR::getPlayerPos());
 
-    TVec3f dir;
+    Vec3f dir;
     dir.sub(target, mPosition);
     MR::normalize(&dir);
     mVelocity.scale(magnitude, dir);
@@ -195,7 +195,7 @@ void FireBall::calcReflectVelocity() {
     } else {
         MR::vecKillElement(mVelocity, mUp, &mVelocity);
 
-        TVec3f accel;
+        Vec3f accel;
         accel.scale(MR::getRandom(0.0f, ::cReflectRandomVelocityY), mUp);
         mVelocity.add(accel);
 
@@ -221,7 +221,7 @@ void FireBall::exeThrow() {
     }
 
     if (MR::isGreaterStep(this, ::cReflectFrame) && MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false)) {
-        TVec2f screenVelocity(*MR::getStarPointerScreenVelocity(*MR::getStarPointerLastPointedPort(this)));
+        Vec2f screenVelocity(*MR::getStarPointerScreenVelocity(*MR::getStarPointerLastPointedPort(this)));
         if (::cReflectCursorSpeed < screenVelocity.length()) {
             calcReflectVelocity();
 

@@ -13,8 +13,8 @@ public:
 
     void setParam(s32, s32, f32, f32);
     void initStartPos();
-    f32 calcNearestCoord(const TVec3f&) const;
-    f32 calcNearestCoordBetweenTwoRailCoord(f32, f32, const TVec3f&) const;
+    f32 calcNearestCoord(const Vec3f&) const;
+    f32 calcNearestCoordBetweenTwoRailCoord(f32, f32, const Vec3f&) const;
 
     RailRider* mRailRider;
     f32 mDistMin;

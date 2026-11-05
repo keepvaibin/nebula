@@ -56,7 +56,7 @@ void TalkPeekZ::setDrawSyncToken() {
     _8 = 0.0f;
     if (J3DNativeView::screenProbeResults(cReadbackChannel, &probe, 1) == 1 && probe.x >= 0.0f) {
         _8 = probe.value;
-        TDDraw::invProject(&_14, TVec3f(probe.user_x, probe.user_y, _8), const_cast< MtxPtr >(MR::getCameraViewMtx().mMtx), &_20,
+        TDDraw::invProject(&_14, Vec3f(probe.user_x, probe.user_y, _8), const_cast< MtxPtr >(MR::getCameraViewMtx().mMtx), &_20,
                            &_3C, true);
     }
 
@@ -66,7 +66,7 @@ void TalkPeekZ::setDrawSyncToken() {
     probe.user_y = mScreenPos.y;
     if (MR::isInRange(mScreenPos.x, 0.0f, MR::getScreenWidth() - 1) &&
         MR::isInRange(mScreenPos.y, 0.0f, NebulaFrameClock::cScreenLines - 1)) {
-        TVec2f pos;
+        Vec2f pos;
         MR::convertScreenPosToFrame(&pos, mScreenPos);
         probe.x = pos.x;
         probe.y = pos.y;
@@ -244,7 +244,7 @@ void TalkDirector::updateMessage() {
         _3C->updateBalloonPos();
 
         TalkPeekZ* peek = mPeekZ;
-        TVec2f v1(_3C->_1C.x, _3C->_1C.y);
+        Vec2f v1(_3C->_1C.x, _3C->_1C.y);
         peek->mScreenPos.set(v1.x, v1.y);
     }
 

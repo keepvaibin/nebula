@@ -32,7 +32,7 @@ void SubmarineSteam::init(const JMapInfoIter& rIter) {
     initEffectKeeper(0, objName, false);
 
     initHitSensor(1);
-    HitSensor* sensor = MR::addHitSensorMapObj(this, "body", 8, ::sSensorRadius, TVec3f(0.0f, ::sSensorOffsetY, 0.0f));
+    HitSensor* sensor = MR::addHitSensorMapObj(this, "body", 8, ::sSensorRadius, Vec3f(0.0f, ::sSensorOffsetY, 0.0f));
 
     MR::setClippingTypeSphere(this, 800.0f, &sensor->mPosition);
     MR::setGroupClipping(this, rIter, ::sMaxNumGroupClipping);
@@ -52,7 +52,7 @@ void SubmarineSteam::init(const JMapInfoIter& rIter) {
 }
 
 void SubmarineSteam::initAfterPlacement() {
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.identity();
     mtx.setRotateDegree(mRotation);
     mtx.getYDir(mUp);

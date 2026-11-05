@@ -110,13 +110,13 @@ bool PlantStalk::updateGrowUp() {
     (void)static_cast< f32 >(mGrownPlantPoints);
     mGrownPlantPoints = MR::clamp(mGrownPlantPoints, 2, mNumPlantPoints);
 
-    TVec3f stalkPos;
-    TVec3f axisY;
+    Vec3f stalkPos;
+    Vec3f axisY;
     f32 posAlongStalk = mStalkLength;
     mRailInfo->calcPosAndAxisY(&stalkPos, &axisY, posAlongStalk);
 
-    TVec3f side(1.0f, 0.0f, 0.0f);
-    TVec3f up;
+    Vec3f side(1.0f, 0.0f, 0.0f);
+    Vec3f up;
     MR::makeAxisUpSide(&up, &side, axisY, side);
     mPlantPoints[0]->setAxisAndPos(side, axisY, up, stalkPos);
 
@@ -129,16 +129,16 @@ bool PlantStalk::updateGrowUp() {
     return false;
 }
 
-void PlantStalk::calcPosAndAxisY(TVec3f* pPos, TVec3f* pAxisY, f32 lengthAlongRail) const {
+void PlantStalk::calcPosAndAxisY(Vec3f* pPos, Vec3f* pAxisY, f32 lengthAlongRail) const {
     mRailInfo->calcPosAndAxisY(pPos, pAxisY, lengthAlongRail);
 }
 
-void PlantStalk::calcNearestPos(TVec3f* pRailPos, const TVec3f& rSrcPos) const {
+void PlantStalk::calcNearestPos(Vec3f* pRailPos, const Vec3f& rSrcPos) const {
     mRailInfo->calcNearestPointPos(pRailPos, rSrcPos, ::sOffsetPointNum);
 }
 
 f32 PlantStalk::calcPlayerCoord() const {
-    TVec3f playerPos = *MR::getPlayerCenterPos();
+    Vec3f playerPos = *MR::getPlayerCenterPos();
     f32 closestMag = 100000000.0;
     s32 closestPoint = 0;
 
@@ -163,8 +163,8 @@ void PlantStalk::drawGrowUp() const {
     J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, mGrownPlantPoints * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
     for (s32 idx = 0; idx < mGrownPlantPoints; idx++) {
         PlantPoint* point = mPlantPoints[idx];
-        TVec3f side(mPlantPoints[idx]->mSide);
-        TVec3f front(mPlantPoints[idx]->mFront);
+        Vec3f side(mPlantPoints[idx]->mSide);
+        Vec3f front(mPlantPoints[idx]->mFront);
         side.scale(mPlantPoints[idx]->mThickness);
         front.scale(mPlantPoints[idx]->mThickness);
 
@@ -184,8 +184,8 @@ void PlantStalk::drawGrowUp() const {
     J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, mGrownPlantPoints * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
     for (s32 idx = 0; idx < mGrownPlantPoints; idx++) {
         PlantPoint* point = mPlantPoints[idx];
-        TVec3f side(mPlantPoints[idx]->mSide);
-        TVec3f front(mPlantPoints[idx]->mFront);
+        Vec3f side(mPlantPoints[idx]->mSide);
+        Vec3f front(mPlantPoints[idx]->mFront);
         side.scale(mPlantPoints[idx]->mThickness);
         front.scale(mPlantPoints[idx]->mThickness);
 
@@ -205,8 +205,8 @@ void PlantStalk::drawGrowUp() const {
     J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, mGrownPlantPoints * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
     for (s32 idx = 0; idx < mGrownPlantPoints; idx++) {
         PlantPoint* point = mPlantPoints[idx];
-        TVec3f side(mPlantPoints[idx]->mSide);
-        TVec3f front(mPlantPoints[idx]->mFront);
+        Vec3f side(mPlantPoints[idx]->mSide);
+        Vec3f front(mPlantPoints[idx]->mFront);
         side.scale(mPlantPoints[idx]->mThickness);
         front.scale(mPlantPoints[idx]->mThickness);
 

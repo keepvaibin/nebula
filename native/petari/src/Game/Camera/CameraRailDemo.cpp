@@ -60,7 +60,7 @@ void CameraRailDemo::calcLinear() {
 
     mRailRider->setCoord((t * mRailRider->getTotalLength()) + 1000.0f);
     CameraLocalUtil::setWatchPos(this, mRailRider->mCurPos);
-    CameraLocalUtil::setUpVecAndWatchUpVec(this, TVec3f(0.0f, 1.0f, 0.0f));
+    CameraLocalUtil::setUpVecAndWatchUpVec(this, Vec3f(0.0f, 1.0f, 0.0f));
 }
 
 void CameraRailDemo::calcEaseInOut() {
@@ -86,7 +86,7 @@ void CameraRailDemo::calcEaseInOut() {
 
     mRailRider->setCoord(mCoord + 1000.0f);
     CameraLocalUtil::setWatchPos(this, mRailRider->mCurPos);
-    CameraLocalUtil::setUpVecAndWatchUpVec(this, TVec3f(0.0f, 1.0f, 0.0f));
+    CameraLocalUtil::setUpVecAndWatchUpVec(this, Vec3f(0.0f, 1.0f, 0.0f));
 }
 
 void CameraRailDemo::calcDamp() {
@@ -101,5 +101,5 @@ void CameraRailDemo::calcDamp() {
 
     mRailRider->setCoord(mCoord + 1000.0f);
     CameraLocalUtil::setWatchPos(this, mRailRider->mCurPos);
-    CameraLocalUtil::setUpVecAndWatchUpVec(this, TVec3f(0.0f, 1.0f, 0.0f));
+    CameraLocalUtil::setUpVecAndWatchUpVec(this, Vec3f(0.0f, 1.0f, 0.0f));
 }

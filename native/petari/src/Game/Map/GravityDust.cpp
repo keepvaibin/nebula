@@ -12,8 +12,8 @@ GravityDustParticleCallBack::GravityDustParticleCallBack(const LiveActor* pActor
 }
 
 void GravityDustParticleCallBack::execute(JPABaseEmitter* pEmitter, JPABaseParticle* pParticle) {
-    TVec3f offsetPosition;
-    TVec3f baseAxis;
+    Vec3f offsetPosition;
+    Vec3f baseAxis;
 
     if (pParticle->checkStatus(4)) {
         return;
@@ -24,8 +24,8 @@ void GravityDustParticleCallBack::execute(JPABaseEmitter* pEmitter, JPABaseParti
     f32 speed = reinterpret_cast< f32& >(userWork);
     baseAxis.set(pParticle->mBaseAxis);
     baseAxis.scale(speed);
-    TVec3f gravityVector(0.0f, 0.0f, 0.0f);
-    TVec3f currentPosition;
+    Vec3f gravityVector(0.0f, 0.0f, 0.0f);
+    Vec3f currentPosition;
     currentPosition.set< f32 >(pParticle->getCalcCurrentPositionX(pEmitter), pParticle->getCalcCurrentPositionY(pEmitter),
                                pParticle->getCalcCurrentPositionZ(pEmitter));
     MR::calcGravityVectorOrZero(mActor, currentPosition, &gravityVector, nullptr, 0);

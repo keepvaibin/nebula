@@ -103,7 +103,7 @@ void PlanetMap::initClipping(const JMapInfoIter& rIter) {
 
     if (pInfo != nullptr) {
         radius = pInfo->mRadius;
-        _90.set(mPosition + TVec3f(pInfo->mOffset));
+        _90.set(mPosition + Vec3f(pInfo->mOffset));
         MR::setClippingTypeSphere(this, pInfo->mRadius, &_90);
     } else {
         if (radius <= 0.0f) {

@@ -132,9 +132,9 @@ void BigBubbleGenerator::exeActive() {
     }
 
     if (spawn) {
-        TVec3f up;
+        Vec3f up;
         MR::calcActorAxisY(&up, this);
-        TVec3f pos = mPosition + up * ::sGenerateOffsetY;
+        Vec3f pos = mPosition + up * ::sGenerateOffsetY;
         MR::startBck(this, "Generate");
         BigBubble* bubble = MR::generateBigBubble(this, pos, up, MR::getRandom(mMinSize, mMaxSize), attach, mIsObstruct, mShape, mLimitterID);
 

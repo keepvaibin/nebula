@@ -76,10 +76,10 @@ void EarthenPipe::init(const JMapInfoIter& rIter) {
     mBottomJointMtx = MR::getJointMtx(this, "Bottom");
     MR::startBrk(this, "EarthenPipe");
     MR::setBrkFrameAndStop(this, arg7);
-    TPos3f v25;
+    Pos3f v25;
     v25.identity();
     MR::makeMtxTR(v25, this);
-    TVec3f v23;
+    Vec3f v23;
     v25.getZDir(v23);
 
     if (mIsIgnoreGravity) {
@@ -97,13 +97,13 @@ void EarthenPipe::init(const JMapInfoIter& rIter) {
         _98.z = z;
     }
 
-    TPos3f v24;
+    Pos3f v24;
     v24.identity();
     MR::makeMtxUpFrontPos(&v24, _98, v23, _8C);
     NebulaMtxCopy(v24, mTopJointMtx);
     _BC.setInline(v24);
-    TVec3f v22(_8C);
-    TVec3f v21(_98);
+    Vec3f v22(_8C);
+    Vec3f v21(_98);
     v21.scale(50.0f);
     v22.sub(v21);
     v24.setTrans(v22);
@@ -117,11 +117,11 @@ void EarthenPipe::init(const JMapInfoIter& rIter) {
         initHitSensor(1);
     }
 
-    MR::addHitSensorBinder(this, "binder", 8, 70.0f, TVec3f(0.0f, -50.0f, 0.0f));
+    MR::addHitSensorBinder(this, "binder", 8, 70.0f, Vec3f(0.0f, -50.0f, 0.0f));
 
     if (isWaterPipe) {
-        MR::addHitSensorBinder(this, "BinderWaterUpper", 8, 200.0f, TVec3f(0.0f, 180.0f, 0.0f));
-        MR::addHitSensorBinder(this, "BinderWaterLower", 8, 80.0f, TVec3f(0.0f, 50.0f, 0.0f));
+        MR::addHitSensorBinder(this, "BinderWaterUpper", 8, 200.0f, Vec3f(0.0f, 180.0f, 0.0f));
+        MR::addHitSensorBinder(this, "BinderWaterLower", 8, 80.0f, Vec3f(0.0f, 50.0f, 0.0f));
     }
 
     if (mPipeMode == 3) {
@@ -295,11 +295,11 @@ void EarthenPipe::exePlayerOut() {
 
     if (MR::isBckStopped(mHostActor)) {
         MtxPtr baseMtx = _B0->getBaseMtx();
-        TVec3f v6((baseMtx)[0][2], (baseMtx)[1][2], (baseMtx)[2][2]);
-        TVec3f v5((baseMtx)[0][1], (baseMtx)[1][1], (baseMtx)[2][1]);
+        Vec3f v6((baseMtx)[0][2], (baseMtx)[1][2], (baseMtx)[2][2]);
+        Vec3f v5((baseMtx)[0][1], (baseMtx)[1][1], (baseMtx)[2][1]);
         v6 *= (_B0->mHorizExitForce);
         v5 *= (_B0->mVertExitForce);
-        TVec3f v4(v5);
+        Vec3f v4(v5);
 
         if (!MR::isInWater(_B0->mPosition)) {
             v4.add(v6);
@@ -409,8 +409,8 @@ bool EarthenPipe::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pRecei
             return false;
         }
 
-        TVec3f diff = *MR::getPlayerPos() - TVec3f(mTopJointMtx[0][3], mTopJointMtx[1][3], mTopJointMtx[2][3]);
-        TVec3f delta = diff;
+        Vec3f diff = *MR::getPlayerPos() - Vec3f(mTopJointMtx[0][3], mTopJointMtx[1][3], mTopJointMtx[2][3]);
+        Vec3f delta = diff;
         MR::vecKillElement(delta, mGravity, &delta);
         if (!MR::isPlayerSwimming() && delta.length() > 50.0f && diff.dot(_98) < -5.0f) {
             return false;
@@ -419,7 +419,7 @@ bool EarthenPipe::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pRecei
         MR::invalidateClipping(this);
         _120.set(MR::getPlayerBaseMtx());
         _F0.set(_120);
-        TVec3f camPos = MR::getCamPos();
+        Vec3f camPos = MR::getCamPos();
         camPos.sub(mPosition);
         MR::normalize(&camPos);
         MR::makeMtxUpFrontPos(&_150, _98, camPos, mPosition);

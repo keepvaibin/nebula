@@ -23,8 +23,8 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
+
 #include <nebula_math.h>
 
 namespace {
@@ -138,8 +138,8 @@ void StringSpider::init(const JMapInfoIter& rIter) {
         arg = -1;
         MR::getJMapInfoArg1NoInit(rIter, &arg);
         if (arg == 2) {
-            _C0 = new TVec3f();
-            _C4 = new TVec3f();
+            _C0 = new Vec3f();
+            _C4 = new Vec3f();
         }
 
         if (MR::useStageSwitchWriteDead(this, rIter)) {
@@ -161,12 +161,12 @@ void StringSpider::init(const JMapInfoIter& rIter) {
     f32 yScale = mScale.y;
     initBinder(80.0f * mScale.y, 0.0f, 0);
     initHitSensor(1);
-    MR::addHitSensorEnemy(this, "body", 32, yScale * 80.0f, TVec3f(0.0f, -13.0f, 13.0f));
+    MR::addHitSensorEnemy(this, "body", 32, yScale * 80.0f, Vec3f(0.0f, -13.0f, 13.0f));
     initEffectKeeper(1, nullptr, false);
     MR::addEffectHitNormal(this, nullptr);
     initSound(4, false);
     initNerve(GET_NERVE(StringSpider, HostTypeNrvWait));
-    MR::initStarPointerTarget(this, 80.0f, TVec3f(0, 0, 0));
+    MR::initStarPointerTarget(this, 80.0f, Vec3f(0, 0, 0));
     MR::declareStarPiece(this, 6);
     MR::declareStarPiece(this, 3);
     MR::declareCoin(this, 1);
@@ -184,7 +184,7 @@ void StringSpider::init(const JMapInfoIter& rIter) {
         MR::initShadowVolumeSphere(this, mScale.y * 80.0f);
     }
 
-    mFixedPos = new FixedPosition((MtxPtr) nullptr, TVec3f(0.0f, 0.0f, 0.0f), TVec3f(0.0f, 0.0f, 0.0f));
+    mFixedPos = new FixedPosition((MtxPtr) nullptr, Vec3f(0.0f, 0.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
     MR::setGroupClipping(this, rIter, 16);
     mString = new StringSpiderString("\203\130\203\147\203\212\203\223\203\117\203\130\203\160\203\103\203\137\201\133\202\314\216\205" /* ストリングスパイダーの糸 */);
     MR::resetPosition(mString, mPosition);
@@ -195,7 +195,7 @@ void StringSpider::init(const JMapInfoIter& rIter) {
 
 void StringSpider::initAfterPlacement() {
     Triangle triangle = Triangle();
-    TVec3f v1, upVec, v2;
+    Vec3f v1, upVec, v2;
     MR::calcUpVec(&upVec, this);
     upVec.setLength(200.0f);
 
@@ -233,8 +233,8 @@ void StringSpider::endClipped() {
 }
 
 void StringSpider::doSwingAction(f32 a1, bool a2) {
-    TVec3f stringPos(mString->mPosition);
-    TVec3f v1, v3;
+    Vec3f stringPos(mString->mPosition);
+    Vec3f v1, v3;
     stringPos.sub(mPosition);
     MR::normalizeOrZero(&stringPos);
     if (!MR::isOppositeDirection(mGravity, stringPos, 1.0f)) {
@@ -292,17 +292,17 @@ void StringSpider::reactDPD() {
 
     if (MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false)) {
         if (!_B8 && _BC == 0) {
-            TVec2f screenVel = *MR::getStarPointerScreenVelocity(1);
+            Vec2f screenVel = *MR::getStarPointerScreenVelocity(1);
             if (screenVel.length() < 20.0f) {
                 return;
             }
 
-            TVec3f a1;
+            Vec3f a1;
             MR::getStarPointerWorldVelocityDirection(&a1, 1);
             a1.setLength(15.0f);
             mVelocity.add(a1);
             _B8 = true;
-            TVec3f a2(mPosition);
+            Vec3f a2(mPosition);
             f32 radius = getSensor("body")->mRadius;
             a1.setLength(radius);
             a2.add(a1);
@@ -319,7 +319,7 @@ void StringSpider::reactDPD() {
 
 void StringSpider::reactStringForce() {
     f32 v1;
-    TVec3f v2;
+    Vec3f v2;
     if (isOverStringLength(&v2, &v1)) {
         if ((1000.0f + _B4) < v1) {
             kill();
@@ -335,8 +335,8 @@ void StringSpider::reactStringForce() {
     }
 }
 
-bool StringSpider::isOverStringLength(TVec3f* a1, f32* a2) {
-    TVec3f rootVec = calcToRootVector();
+bool StringSpider::isOverStringLength(Vec3f* a1, f32* a2) {
+    Vec3f rootVec = calcToRootVector();
     f32 rootLen = rootVec.length();
     if (a1 != nullptr) {
         a1->set(rootVec);
@@ -361,11 +361,11 @@ void StringSpider::control() {
 
     if (!isNerve(GET_NERVE(StringSpider, HostTypeNrvDpdGripped))) {
         if (MR::isBindedWallOfMap(this)) {
-            TVec3f v9(*MR::getWallNormal(this));
-            TVec3f v8(*MR::getWallHitPos(this));
+            Vec3f v9(*MR::getWallNormal(this));
+            Vec3f v8(*MR::getWallHitPos(this));
         } else if (MR::isBindedRoof(this)) {
-            TVec3f v7(*MR::getRoofNormal(this));
-            TVec3f v6(*MR::getRoofHitPos(this));
+            Vec3f v7(*MR::getRoofNormal(this));
+            Vec3f v6(*MR::getRoofHitPos(this));
         }
     }
 
@@ -383,14 +383,14 @@ void StringSpider::control() {
     }
 }
 
-TVec3f StringSpider::calcToRootVector() {
+Vec3f StringSpider::calcToRootVector() {
     return mString->mPosition - mPosition;
 }
 
 void StringSpider::calcPosture(f32 a1, bool a2) {
-    TVec3f v1;
-    TVec3f rootVec = calcToRootVector();
-    TVec3f v3, v9;
+    Vec3f v1;
+    Vec3f rootVec = calcToRootVector();
+    Vec3f v3, v9;
     _A0.getYDir(v1);
     MR::normalizeOrZero(&rootVec);
     if (!MR::isNearZero(rootVec)) {
@@ -567,8 +567,8 @@ void StringSpider::exeSpinned() {
     f32 nerveRate = MR::calcNerveRate(this, 480);
     f32 nerveRateMinus = 1.0f - nerveRate;
     if (_C4 == nullptr) {
-        TVec3f rootVec = calcToRootVector();
-        TVec3f v15;
+        Vec3f rootVec = calcToRootVector();
+        Vec3f v15;
         v15.cross(mGravity, rootVec);
         if (v15.dot(mVelocity) < 0.0f) {
             v15 = -v15;
@@ -583,8 +583,8 @@ void StringSpider::exeSpinned() {
         MR::startLevelSound(this, "SE_EM_LV_STRSPIDER_SPIN", liner1, liner2, -1);
     }
 
-    TQuat4f v14;
-    v14.setRotate(TVec3f(0, 1, 0), (-0.6f * nerveRateMinus));
+    Quat4f v14;
+    v14.setRotate(Vec3f(0, 1, 0), (-0.6f * nerveRateMinus));
     NebulaQuatMultiply(_A0, v14, _A0);
     calcPosture(0.25f, false);
 
@@ -643,9 +643,9 @@ void StringSpider::exeDpdGripped() {
         setNerve(GET_NERVE(StringSpider, HostTypeNrvSearch));
     } else {
         calcPosture(0.25f, false);
-        TVec3f v8;
+        Vec3f v8;
         MR::calcStarPointerWorldPointingPosInsideEdge(&v8, mPosition, channel);
-        TVec3f v7(v8);
+        Vec3f v7(v8);
         v7.sub(mPosition);
         v7.setLength(MR::clamp(0.125f * v7.length(), 0.0f, 25.0f));
         mVelocity.set(v7);
@@ -682,9 +682,9 @@ void StringSpider::shortenString(f32 a1) {
 }
 
 void StringSpider::calcAndSetBaseMtx() {
-    TPos3f v14;
+    Pos3f v14;
     v14.makeQuat(_A0);
-    TPos3f v13(mStampController->_14);
+    Pos3f v13(mStampController->_14);
     v14.concat(v13, v14);
     v14.setTrans(mPosition);
     MR::setBaseTRMtx(this, v14);
@@ -704,7 +704,7 @@ void StringSpider::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
         return;
     }
 
-    TVec3f v10(pSender->mPosition);
+    Vec3f v10(pSender->mPosition);
     v10.sub(pReceiver->mPosition);
     MR::normalizeOrZero(&v10);
     if (MR::isSensorPlayer(pReceiver)) {
@@ -728,14 +728,14 @@ void StringSpider::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
         }
 
         MR::calcReflectionVector(&mVelocity, v10, 0.25f, 1.0f);
-        TVec3f v9(pSender->mPosition);
+        Vec3f v9(pSender->mPosition);
         v9.sub(pReceiver->mPosition);
         MR::vecKillElement(v9, mGravity, &v9);
         MR::normalizeOrZero(&v9);
 
         if (!MR::isNearZero(v9)) {
             v9.scale(10.0f);
-            TVec3f v8(mGravity);
+            Vec3f v8(mGravity);
             v8.scale(13.0f);
             v9.sub(v8);
             mVelocity.add(v9);
@@ -753,17 +753,17 @@ void StringSpider::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
 }
 
 bool StringSpider::reactSpinHit(HitSensor* pSender, HitSensor* pReceiver) {
-    TVec3f v10(pReceiver->mPosition);
+    Vec3f v10(pReceiver->mPosition);
     v10.sub(pSender->mPosition);
     MR::vecKillElement(v10, mGravity, &v10);
     MR::normalizeOrZero(&v10);
 
     if (!MR::isNearZero(v10)) {
-        TVec3f v9;
+        Vec3f v9;
         v9.cross(mGravity, v10);
         v9.setLength(-0.0f);
         v10.scale(30.0f);
-        TVec3f v8(mGravity);
+        Vec3f v8(mGravity);
         v8.scale(0.0f);
         v10.sub(v8);
 
@@ -791,7 +791,7 @@ bool StringSpider::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor*
     }
 
     if (MR::isMsgToEnemyAttackBlow(msg)) {
-        TVec3f v11(pReceiver->mPosition);
+        Vec3f v11(pReceiver->mPosition);
         v11.sub(pSender->mPosition);
         v11.setLength(pSender->mHost->mVelocity.length());
 
@@ -821,7 +821,7 @@ bool StringSpider::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
     if (MR::isSensorPlayer(pSender)) {
         return false;
     } else {
-        TVec3f v14(pReceiver->mPosition);
+        Vec3f v14(pReceiver->mPosition);
         v14.sub(pSender->mPosition);
         f32 rad2 = pSender->mRadius;
         f32 rad1 = pReceiver->mRadius;
@@ -861,7 +861,7 @@ bool StringSpider::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor
     }
 
     if (MR::isMsgPlayerHipDrop(msg) || MR::isMsgPlayerTrample(msg)) {
-        TVec3f v16(pSender->mPosition - pReceiver->mPosition);
+        Vec3f v16(pSender->mPosition - pReceiver->mPosition);
         MR::vecKillElement(v16, mGravity, &v16);
         MR::normalizeOrZero(&v16);
 
@@ -877,7 +877,7 @@ bool StringSpider::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor
 
     if (MR::isMsgInvincibleAttack(msg)) {
         if (_C4 != nullptr) {
-            TVec3f v15(pSender->mPosition - pReceiver->mPosition);
+            Vec3f v15(pSender->mPosition - pReceiver->mPosition);
             MR::vecKillElement(v15, *_C4, &v15);
             mSpinHitController->start(this, pReceiver->mPosition + v15, pReceiver->mPosition);
         } else {
@@ -891,7 +891,7 @@ bool StringSpider::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor
     if (MR::isMsgPlayerSpinAttack(msg)) {
         if (isNerve(GET_NERVE(StringSpider, HostTypeNrvSpinned))) {
             if (_C4 != nullptr) {
-                TVec3f v14(pSender->mPosition - pReceiver->mPosition);
+                Vec3f v14(pSender->mPosition - pReceiver->mPosition);
                 MR::vecKillElement(v14, *_C4, &v14);
                 mSpinHitController->start(this, pReceiver->mPosition + v14, pReceiver->mPosition);
             } else {
@@ -931,19 +931,19 @@ StringSpiderString::StringSpiderString(const char* pName) : LiveActor(pName), _8
 }
 
 void StringSpiderString::calcAndSetBaseMtx() {
-    TVec3f v10(mScale);
-    TVec3f v9(mPosition);
+    Vec3f v10(mScale);
+    Vec3f v9(mPosition);
     v9.sub(_9C);
     MR::separateScalarAndDirection(&v10.y, &v9, v9);
     v10.y *= 0.063f;
 
-    if (MR::isOppositeDirection(TVec3f(0, 1, 0), v9)) {
-        _8C.setRotate(TVec3f(1, 0, 0), MR::pi());
+    if (MR::isOppositeDirection(Vec3f(0, 1, 0), v9)) {
+        _8C.setRotate(Vec3f(1, 0, 0), MR::pi());
     } else {
-        _8C.setRotate(TVec3f(0, 1, 0), v9);
+        _8C.setRotate(Vec3f(0, 1, 0), v9);
     }
 
-    TPos3f v12;
+    Pos3f v12;
     v12.makeQuat(_8C);
     v12.setTrans(mPosition);
     MR::setBaseTRMtx(this, v12);

@@ -114,12 +114,12 @@ void JumpEmitter::endEventCamera() {
 void JumpEmitter::updateRotate() {
     PartsModel* head = mHeadModel;
 
-    TRot3f mtx;
+    Rot3f mtx;
     mtx.identity();
     mtx.set(getBaseMtx());
     mtx.invert(mtx);
 
-    TVec3f playerPos(*MR::getPlayerPos());
+    Vec3f playerPos(*MR::getPlayerPos());
     mtx.mult(playerPos, playerPos);
 
     playerPos.y = 0.0f;
@@ -157,7 +157,7 @@ void JumpEmitter::updateRotate() {
 bool JumpGuarder::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
     if (MR::isMsgPlayerTrample(msg)) {
         if (pReceiver->isType(ATYPE_PLAYER_AUTO_JUMP)) {
-            TVec3f upVec;
+            Vec3f upVec;
             MR::calcUpVec(&upVec, this);
             MR::setPlayerJumpVec(upVec);
             startEventCamera();
@@ -202,14 +202,14 @@ bool JumpGuarder::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pRecei
 
 void JumpGuarder::control() {
     PartsModel* head = mHeadModel;
-    TMtx34f mtx;
+    Mtx34f mtx;
     mtx.identity();
 
-    MR::makeMtxTRS(mtx.mMtx, TVec3f(0.0f, 44.0f, 0.0f), head->mRotation, head->mScale);
+    MR::makeMtxTRS(mtx.mMtx, Vec3f(0.0f, 44.0f, 0.0f), head->mRotation, head->mScale);
 
     _90.set(mBodyJointMtx);
 
-    TMtx34f mtx2;
+    Mtx34f mtx2;
     mtx2.concat(_90, mtx);
     _90.set(mtx2);
 
@@ -369,9 +369,9 @@ void JumpGuarder::exeOpen() {
             }
         }
 
-        TVec3f yDir;
+        Vec3f yDir;
         MR::extractMtxYDir(mHeadModel->getBaseMtx(), &yDir);
-        TVec3f zDir;
+        Vec3f zDir;
         MR::extractMtxZDir(mHeadModel->getBaseMtx(), &zDir);
 
         for (u32 i = 0; i < mNumActiveBabies; i++) {
@@ -379,7 +379,7 @@ void JumpGuarder::exeOpen() {
             MR::rotateVecDegree(&zDir, yDir, 360.0f / mNumActiveBabies);
 
             baby->mPosition.set(mPosition + zDir * ::sBabyOffset);
-            baby->mVelocity.set(TVec3f(0.0f, 0.0f, 0.0f));
+            baby->mVelocity.set(Vec3f(0.0f, 0.0f, 0.0f));
 
             if (mNumCoins > 0) {
                 mNumCoins -= 1;
@@ -391,9 +391,9 @@ void JumpGuarder::exeOpen() {
     }
 
     if (MR::isLessStep(this, ::sOpen)) {
-        TVec3f yDir;
+        Vec3f yDir;
         MR::extractMtxYDir(mHeadModel->getBaseMtx(), &yDir);
-        TVec3f zDir;
+        Vec3f zDir;
         MR::extractMtxZDir(mHeadModel->getBaseMtx(), &zDir);
 
         for (u32 i = 0; i < mNumActiveBabies; i++) {
@@ -401,14 +401,14 @@ void JumpGuarder::exeOpen() {
             MR::rotateVecDegree(&zDir, yDir, 360.0f / mNumActiveBabies);
 
             baby->mPosition.set(mPosition + zDir * ::sBabyOffset);
-            baby->mVelocity.set(TVec3f(0.0f, 0.0f, 0.0f));
+            baby->mVelocity.set(Vec3f(0.0f, 0.0f, 0.0f));
         }
     }
 
     if (MR::isStep(this, ::sOpen)) {
-        TVec3f yDir;
+        Vec3f yDir;
         MR::extractMtxYDir(mHeadModel->getBaseMtx(), &yDir);
-        TVec3f zDir;
+        Vec3f zDir;
         MR::extractMtxZDir(mHeadModel->getBaseMtx(), &zDir);
 
         for (u32 i = 0; i < mNumActiveBabies; i++) {
@@ -469,9 +469,9 @@ void JumpGuarder::init(const JMapInfoIter& rIter) {
     initHitSensor(2);
 
     MR::addHitSensorMtx(this, "Jump", ATYPE_PLAYER_AUTO_JUMP, 8, 145.0f, MR::getJointMtx(mHeadModel, "SpringJoint3"),
-                        TVec3f(0.0f, ::sHeadOffset, 0.0f));
+                        Vec3f(0.0f, ::sHeadOffset, 0.0f));
 
-    MR::addHitSensorMtxEnemy(this, "Body", 8, 145.0f, MR::getJointMtx(this, "Body"), TVec3f(0.0f, 35.0f, 0.0f));
+    MR::addHitSensorMtxEnemy(this, "Body", 8, 145.0f, MR::getJointMtx(this, "Body"), Vec3f(0.0f, 35.0f, 0.0f));
     getSensor("Body")->setType(29);
     getSensor("Body")->validate();
     getSensor("Jump")->invalidate();

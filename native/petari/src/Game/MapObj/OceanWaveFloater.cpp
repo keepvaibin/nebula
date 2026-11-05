@@ -97,8 +97,8 @@ void OceanWaveFloater::initAfterPlacement() {
     }
 
     if (mMatrixSetter != nullptr) {
-        TVec3f offset(0.0f, mOffset, 0.0f);
-        mMatrixSetter->updateMtxUseBaseMtxWithLocalOffset(TVec3f(0.0f, mOffset, 0.0f));
+        Vec3f offset(0.0f, mOffset, 0.0f);
+        mMatrixSetter->updateMtxUseBaseMtxWithLocalOffset(Vec3f(0.0f, mOffset, 0.0f));
     }
 }
 
@@ -128,7 +128,7 @@ void OceanWaveFloater::control() {
 }
 
 void OceanWaveFloater::calcAndSetBaseMtx() {
-    TPos3f baseMtx;
+    Pos3f baseMtx;
     baseMtx.identity();
     baseMtx.setEuler(mRotation * (PI / 180.0f));
     baseMtx.setTrans(mPosition - mGravity * mForce->getCurrentValue());
@@ -136,12 +136,12 @@ void OceanWaveFloater::calcAndSetBaseMtx() {
 }
 
 f32 OceanWaveFloater::getCurrentSinkDepth() const {
-    TPos3f baseMtx = getBaseMtx();
+    Pos3f baseMtx = getBaseMtx();
 
-    TVec3f trans;
+    Vec3f trans;
     baseMtx.getTrans(trans);
 
-    TVec3f yDir;
+    Vec3f yDir;
     baseMtx.getYDir(yDir);
 
     f32 sign = MR::sign(yDir.dot(mRipplePos - trans));

@@ -44,9 +44,9 @@ void MarioActor::initShadow() {
 
 void MarioActor::calcViewReflectionModel() {
     J3DModelX* pModel = getJ3DModel();
-    TPos3f matrix;
+    Pos3f matrix;
     NebulaMtxCopy(getJ3DModel()->getBaseTRMtx(), matrix.toMtxPtr());
-    TPos3f offset;
+    Pos3f offset;
     NebulaMtxIdentity(offset.toMtxPtr());
     f32 factor;
     f32 distance = 10.0f;
@@ -62,28 +62,28 @@ void MarioActor::calcViewReflectionModel() {
         _A25 = 0;
     }
 
-    TVec3f position;
+    Vec3f position;
     switch (_A08) {
     case 2: {
         matrix.mMtx[0][1] = -matrix.mMtx[0][1];
         matrix.mMtx[1][1] = -matrix.mMtx[1][1];
         matrix.mMtx[2][1] = -matrix.mMtx[2][1];
         position = mMario->mShadowPos - *mMario->_45C->getNormal(0) * distance;
-        TVec3f root;
+        Vec3f root;
         getRealPos("All_Root", &root);
-        TVec3f translation(mPosition - root);
+        Vec3f translation(mPosition - root);
         NebulaMtxTrans(offset.toMtxPtr(), translation.x, translation.y, translation.z);
         updateReflectAlphaList(_A09);
         break;
     }
     case 3: {
-        TVec3f x;
+        Vec3f x;
         x.set< f32 >(matrix.mMtx[0][0], matrix.mMtx[1][0], matrix.mMtx[2][0]);
-        TVec3f y;
+        Vec3f y;
         y.set< f32 >(matrix.mMtx[0][1], matrix.mMtx[1][1], matrix.mMtx[2][1]);
-        TVec3f z;
+        Vec3f z;
         z.set< f32 >(matrix.mMtx[0][2], matrix.mMtx[1][2], matrix.mMtx[2][2]);
-        const TVec3f& rNormal = mMario->mSwim->mSurfacePos;
+        const Vec3f& rNormal = mMario->mSwim->mSurfacePos;
         f32 dx = MR::vecKillElement(x, rNormal, &x);
         f32 dy = MR::vecKillElement(y, rNormal, &y);
         f32 dz = MR::vecKillElement(z, rNormal, &z);
@@ -127,13 +127,13 @@ void MarioActor::calcViewReflectionModel() {
     }
     case 6:
     case 7: {
-        TVec3f x;
+        Vec3f x;
         x.set< f32 >(matrix.mMtx[0][0], matrix.mMtx[1][0], matrix.mMtx[2][0]);
-        TVec3f y;
+        Vec3f y;
         y.set< f32 >(matrix.mMtx[0][1], matrix.mMtx[1][1], matrix.mMtx[2][1]);
-        TVec3f z;
+        Vec3f z;
         z.set< f32 >(matrix.mMtx[0][2], matrix.mMtx[1][2], matrix.mMtx[2][2]);
-        TVec3f normal(mMario->mSwim->_178 - mPosition);
+        Vec3f normal(mMario->mSwim->_178 - mPosition);
         MR::normalize(&normal);
         f32 dx = MR::vecKillElement(x, normal, &x);
         f32 dy = MR::vecKillElement(y, normal, &y);
@@ -181,7 +181,7 @@ void MarioActor::calcViewReflectionModel() {
     matrix.setTrans(position);
     NebulaMtxCopy(matrix.toMtxPtr(), _E0C.toMtxPtr());
     if (getCarrySensor() != nullptr) {
-        TPos3f carry;
+        Pos3f carry;
         NebulaMtxConcat(_BC8.mMtx, MR::getJointMtx(getCarrySensor()->mHost, 0), carry.toMtxPtr());
         NebulaMtxConcat(_E0C.toMtxPtr(), carry.toMtxPtr(), _E0C.toMtxPtr());
         _9A0->calcType0(_E0C.toMtxPtr());
@@ -204,7 +204,7 @@ void MarioActor::calcViewWallShadowModel() {
         return;
     }
 
-    TVec3f direction;
+    Vec3f direction;
     s32 length = 0;
     const AreaObj* pArea = MR::getAreaObj("ExtraWallCheckArea", _2A0);
     if (pArea != nullptr) {
@@ -246,7 +246,7 @@ void MarioActor::calcViewWallShadowModel() {
     }
 
     Triangle triangle;
-    TVec3f position;
+    Vec3f position;
     if (!MR::getFirstPolyOnLineToMap(&position, &triangle, _2A0, direction * static_cast< f32 >(length))) {
         return;
     }
@@ -258,27 +258,27 @@ void MarioActor::calcViewWallShadowModel() {
     }
 
     updateRandomTexture(_208);
-    TVec3f normal(direction);
+    Vec3f normal(direction);
     MR::normalizeOrZero(&normal);
     J3DModelX* pModel = getJ3DModel();
     J3DModelX* pSimple = getSimpleModel();
     NebulaMtxCopy(pModel->getBaseTRMtx(), pSimple->getBaseTRMtx());
-    TPos3f& matrix = *reinterpret_cast< TPos3f* >(pSimple->getBaseTRMtx());
-    TVec3f x;
+    Pos3f& matrix = *reinterpret_cast< Pos3f* >(pSimple->getBaseTRMtx());
+    Vec3f x;
     matrix.getXDir(x);
     MR::vecKillElement(x, normal, &x);
-    TVec3f y;
+    Vec3f y;
     matrix.getYDir(y);
     MR::vecKillElement(y, normal, &y);
-    TVec3f z;
+    Vec3f z;
     matrix.getZDir(z);
     MR::vecKillElement(z, normal, &z);
     matrix.setXDir(x);
     matrix.setYDir(y);
     matrix.setZDir(z);
-    TVec3f horizontal;
+    Vec3f horizontal;
     MR::vecKillElement(mPosition - position, getGravityVec(), &horizontal);
-    TVec3f translation = mPosition + normal * (10.0f + horizontal.length());
+    Vec3f translation = mPosition + normal * (10.0f + horizontal.length());
     MR::setMtxTrans(matrix.toMtxPtr(), translation.x, translation.y, translation.z);
     NebulaMtxConcat(matrix.toMtxPtr(), _BC8.mMtx, matrix.toMtxPtr());
     pSimple->viewCalcRef(3, pModel);
@@ -316,7 +316,7 @@ void MarioActor::drawShadow() const {
     }
 
     J3DModelX* pSimple = getSimpleModel();
-    TPos3f matrix;
+    Pos3f matrix;
     NebulaMtxScale(matrix.toMtxPtr(), mScale.x, mScale.y, mScale.z);
     NebulaMtxConcat(matrix.toMtxPtr(), _BC8.mMtx, matrix.toMtxPtr());
     NebulaMtxConcat(getJ3DModel()->getBaseTRMtx(), matrix.toMtxPtr(), pSimple->getBaseTRMtx());
@@ -408,24 +408,24 @@ void MarioActor::decideShadowMode() {
 void MarioActor::calcViewSilhouetteModel() {
     J3DModelX* pModel = getJ3DModel();
     J3DModelX* pSimple = getSimpleModel();
-    TVec3f direction(mPosition - mCamPos);
+    Vec3f direction(mPosition - mCamPos);
     MR::normalizeOrZero(&direction);
     NebulaMtxCopy(pModel->getBaseTRMtx(), pSimple->getBaseTRMtx());
-    TPos3f& matrix = *reinterpret_cast< TPos3f* >(pSimple->getBaseTRMtx());
-    TVec3f x;
+    Pos3f& matrix = *reinterpret_cast< Pos3f* >(pSimple->getBaseTRMtx());
+    Vec3f x;
     matrix.getXDir(x);
     MR::vecKillElement(x, direction, &x);
-    TVec3f y;
+    Vec3f y;
     matrix.getYDir(y);
     MR::vecKillElement(y, direction, &y);
-    TVec3f z;
+    Vec3f z;
     matrix.getZDir(z);
     MR::vecKillElement(z, direction, &z);
     matrix.setXDir(x);
     matrix.setYDir(y);
     matrix.setZDir(z);
-    TVec3f root;
-    TVec3f translation;
+    Vec3f root;
+    Vec3f translation;
     if (_EA4) {
         getRealPos("All_Root", &root);
         translation = root - direction * getConst().getTable()->mSilhouetteZoffset;
@@ -438,11 +438,11 @@ void MarioActor::calcViewSilhouetteModel() {
     pSimple->viewCalcRef(1, pModel);
 }
 
-f32 MarioActor::calcCylinderToCenter(const AreaObj* pAreaObj, TVec3f* pVec) {
-    TVec3f upVec;
+f32 MarioActor::calcCylinderToCenter(const AreaObj* pAreaObj, Vec3f* pVec) {
+    Vec3f upVec;
     MR::calcCylinderUpVec(&upVec, pAreaObj);
 
-    TVec3f centerPos;
+    Vec3f centerPos;
     MR::calcCylinderCenterPos(&centerPos, pAreaObj);
 
     MR::vecKillElement(centerPos - _2A0, upVec, pVec);

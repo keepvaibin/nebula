@@ -30,7 +30,7 @@ void Mario::startTeresaMode() {
 void MarioTeresa::updateDropFlag() {
     _58 = 0;
     if (_34.dot(getAirGravityVec()) > 1.0f) {
-        TVec3f horizontal;
+        Vec3f horizontal;
         f32 vertical = MR::vecKillElement(_34, getAirGravityVec(), &horizontal);
         if (MR::isNearZero(getStickP()) && horizontal.length() < vertical) {
             _58 = 1;
@@ -38,7 +38,7 @@ void MarioTeresa::updateDropFlag() {
     }
 }
 
-bool Mario::getHitWallNorm(TVec3f* pNormal) {
+bool Mario::getHitWallNorm(Vec3f* pNormal) {
     if (getPlayer()->mMovementStates._8) {
         if (!isThroughWall(mFrontWallTriangle)) {
             *pNormal = *mFrontWallTriangle->getNormal(0);
@@ -146,14 +146,14 @@ f32 MarioTeresa::checkHeight() {
     f32 height = getPlayer()->mVerticalSpeed;
     MarioActor* actor;
     while (offset < 2.0f * (actor = mActor)->getConst().getTable()->mTeresaWaitHeight) {
-        const TVec3f& position = actor->_2A0;
+        const Vec3f& position = actor->_2A0;
         bool found = false;
         f32 radius = 120.0f;
         s32 count = Collision::checkStrikeBallToMapWithThickness(position + getGravityVec() * offset, radius, radius, nullptr, nullptr);
         for (u32 i = 0; i < count; i++) {
             const HitInfo* hit = Collision::getStrikeInfoMap(i);
-            TVec3f normal(*hit->mParentTriangle.getNormal(0));
-            TVec3f direction(hit->mHitPos);
+            Vec3f normal(*hit->mParentTriangle.getNormal(0));
+            Vec3f direction(hit->mHitPos);
             direction.sub(direction, position);
             f32 distance = direction.length() - 110.0f;
             if (distance < 0.0f) {
@@ -243,12 +243,12 @@ void MarioTeresa::procNearGroundControl() {
         }
 
         f32 speed = _34.length();
-        TVec3f direction(_34);
+        Vec3f direction(_34);
         if (MR::normalizeOrZero(&direction)) {
             return;
         }
 
-        TVec3f side;
+        Vec3f side;
         side.cross(direction, getPlayer()->getShadowNorm());
         direction.cross(getPlayer()->getShadowNorm(), side);
         direction.setLength(speed);
@@ -309,7 +309,7 @@ void MarioTeresa::procDrop() {
     }
 
     if (_20 > 10.0f + _24) {
-        TVec3f horizontal;
+        Vec3f horizontal;
         MarioActor* actor = mActor;
         f32 vertical = MR::vecKillElement(actor->getLastMove(), getGravityVec(), &horizontal);
         f32 brake;
@@ -329,7 +329,7 @@ void MarioTeresa::procDrop() {
 
 void MarioTeresa::addTeresaVerticalVelocity(f32 amount) {
     _34 += getAirGravityVec() * amount;
-    TVec3f horizontal;
+    Vec3f horizontal;
     f32 vertical = MR::vecKillElement(_34, getAirGravityVec(), &horizontal);
     f32 minimum = -mActor->getConst().getTable()->mTeresaRiseSpeedMax;
     f32 maximum = mActor->getConst().getTable()->mTeresaDropSpeedMax;
@@ -337,7 +337,7 @@ void MarioTeresa::addTeresaVerticalVelocity(f32 amount) {
     maximum = 20.0f * maximum;
     if (_58) {
         f32 angle = 3.1415927f * (static_cast< f32 >(getPlayer()->_418) / mActor->getConst().getTable()->mTeresaWallThroughTime);
-        maximum *= 1.0f + 0.5f * JMASinRadian(angle);
+        maximum *= 1.0f + 0.5f * Angle::sinRadian(angle);
     }
 
     if (getPlayer()->mDrawStates._1F && _28.dot(getAirGravityVec()) > 0.707f) {
@@ -349,11 +349,11 @@ void MarioTeresa::addTeresaVerticalVelocity(f32 amount) {
     _50 += amount;
 }
 
-void MarioTeresa::addTeresaHorizontalVelocity(const TVec3f& rVelocity) {
-    TVec3f addition;
+void MarioTeresa::addTeresaHorizontalVelocity(const Vec3f& rVelocity) {
+    Vec3f addition;
     MR::vecKillElement(rVelocity, getAirGravityVec(), &addition);
     _34 += addition;
-    TVec3f horizontal;
+    Vec3f horizontal;
     f32 vertical = MR::vecKillElement(_34, getAirGravityVec(), &horizontal);
     f32 maximum = mActor->getConst().getTable()->mTeresaHorizontalSpeedMax;
     if (getPlayer()->mDrawStates._1F && _28.dot(horizontal) > 0.707f) {
@@ -367,7 +367,7 @@ void MarioTeresa::addTeresaHorizontalVelocity(const TVec3f& rVelocity) {
     _34 = horizontal + getAirGravityVec() * vertical;
 }
 
-void Mario::doTeresaReflection(const TVec3f& rNormal, bool effect) {
+void Mario::doTeresaReflection(const Vec3f& rNormal, bool effect) {
     mTeresa->doTeresaReflection(rNormal, effect);
 }
 
@@ -385,7 +385,7 @@ void Mario::startTeresaDisappear() {
 
 bool MarioTeresa::start() {
     if (getPlayer()->_430 == 4) {
-        TVec3f direction(-getPlayer()->_220);
+        Vec3f direction(-getPlayer()->_220);
         getPlayer()->setFrontVecKeepUp(direction);
     }
 
@@ -398,7 +398,7 @@ bool MarioTeresa::start() {
 }
 
 void MarioTeresa::checkWind() {
-    TVec3f wind;
+    Vec3f wind;
     f32 strength;
     BigFanFunction::calcWindInfo(&wind, mActor->_2A0, &strength);
     strength = MR::clamp(strength, 0.0f, 10.0f);
@@ -423,8 +423,8 @@ void MarioTeresa::checkWind() {
 
 void MarioTeresa::checkWallCeilReflect() {
     MarioParts* actor;
-    TVec3f normal;
-    TVec3f wallNormal;
+    Vec3f normal;
+    Vec3f wallNormal;
     bool hit = false;
     if (getPlayer()->calcDistToCeil(false) < 200.0f) {
         normal = getPlayer()->_3B0;
@@ -501,7 +501,7 @@ void MarioTeresa::procControl() {
             getAnimator()->setSpeed(1.5f);
         }
 
-        TVec3f velocity(_14);
+        Vec3f velocity(_14);
         f32 alignment = 1.0f;
         if (!MR::isNearZero(getStickP())) {
             velocity.dot(getWorldPadDir());
@@ -659,22 +659,22 @@ void MarioActor::updateTeresaAnimation() {
     }
 }
 
-void MarioTeresa::doTeresaReflection(const TVec3f& rNormal, bool effect) {
-    TVec3f direction(rNormal);
+void MarioTeresa::doTeresaReflection(const Vec3f& rNormal, bool effect) {
+    Vec3f direction(rNormal);
     MR::normalizeOrZero(&direction);
-    TVec3f tangent;
+    Vec3f tangent;
     f32 speed = MR::vecKillElement(_34, direction, &tangent);
     if (speed < 0.0f) {
         if (speed > -10.0f) {
             speed = -10.0f;
         }
 
-        TVec3f horizontal;
+        Vec3f horizontal;
         f32 vertical = MR::vecKillElement(direction * -speed, getAirGravityVec(), &horizontal);
         addTeresaHorizontalVelocity(horizontal * 2.0f);
         addTeresaVerticalVelocity(2.0f * vertical);
     } else {
-        TVec3f horizontal;
+        Vec3f horizontal;
         f32 vertical = MR::vecKillElement(direction, getAirGravityVec(), &horizontal);
         addTeresaHorizontalVelocity(horizontal);
         addTeresaVerticalVelocity(vertical);

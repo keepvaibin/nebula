@@ -55,10 +55,10 @@ public:
     void exeGiveUp();
 
 private:
-    TQuat4f mFinishQuat;
-    TVec3f mFinishPos;
-    TQuat4f mRotateQuat;
-    TVec3f mFrontVec;
+    Quat4f mFinishQuat;
+    Vec3f mFinishPos;
+    Quat4f mRotateQuat;
+    Vec3f mFrontVec;
     RabbitStateWaitStart* mStateWaitStart;
     WalkerStateRunaway* mStateRunaway;
     WalkerStateBlowDamage* mStateBlowDamage;

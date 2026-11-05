@@ -147,11 +147,11 @@ JAISoundHandle* JAUSoundAnimator::getFreeHandle(const JAUSoundAnimationSound* pA
     return nullptr;
 }
 
-u32 JAUSoundAnimator::getSoundID(const JAUSoundAnimationSound* pAnimation, const TVec3f& rPos, f32 f1) {
+u32 JAUSoundAnimator::getSoundID(const JAUSoundAnimationSound* pAnimation, const Vec3f& rPos, f32 f1) {
     return pAnimation->getSoundID();
 }
 
-bool JAUSoundAnimator::playsSound(const JAUSoundAnimationSound* pAnimation, const TVec3f& rPos, f32 f1) {
+bool JAUSoundAnimator::playsSound(const JAUSoundAnimationSound* pAnimation, const Vec3f& rPos, f32 f1) {
     if (pAnimation->playsOnlyOnce()) {
         if (mTime != pAnimation->mPlayTime) {
             return false;

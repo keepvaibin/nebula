@@ -223,7 +223,7 @@ namespace {
                 MR::connectToSceneMapObjMovement(this);
             }
             initHitSensor(1);
-            const TVec3f offset(0.0f, 0.0f, 0.0f);
+            const Vec3f offset(0.0f, 0.0f, 0.0f);
             HitSensor* pSensor = nullptr;
             switch (mClass->kind) {
             case NEBULA_OBJECT_MAP: pSensor = MR::addHitSensorMapObj(this, "body", 8, mClass->radius, offset); break;
@@ -284,11 +284,11 @@ namespace {
                 LiveActor::calcAndSetBaseMtx();
                 return;
             }
-            TVec3f up(-mGravity.x, -mGravity.y, -mGravity.z);
+            Vec3f up(-mGravity.x, -mGravity.y, -mGravity.z);
             if (MR::isNearZero(up)) {
                 up.set(0.0f, 1.0f, 0.0f);
             }
-            TPos3f base;
+            Pos3f base;
             MR::makeMtxUpFrontPos(&base, up, mFront, mPosition);
             MR::setBaseTRMtx(this, base);
         }
@@ -327,7 +327,7 @@ namespace {
         s32 mStateFrames;
         s32 mArgs[8];
         bool mUseFront;
-        TVec3f mFront;
+        Vec3f mFront;
         void* mData = nullptr;
     };
 
@@ -684,21 +684,21 @@ namespace {
     }
 
     void apiGetPosition(NebulaActor* pActor, f32* pOut) {
-        const TVec3f& rAt = asActor(pActor)->mPosition;
+        const Vec3f& rAt = asActor(pActor)->mPosition;
         pOut[0] = rAt.x;
         pOut[1] = rAt.y;
         pOut[2] = rAt.z;
     }
 
     void apiGetGravity(NebulaActor* pActor, f32* pOut) {
-        const TVec3f& rDown = asActor(pActor)->mGravity;
+        const Vec3f& rDown = asActor(pActor)->mGravity;
         pOut[0] = rDown.x;
         pOut[1] = rDown.y;
         pOut[2] = rDown.z;
     }
 
     void apiSetPosition(NebulaActor* pActor, const f32* pIn) {
-        const TVec3f at(pIn[0], pIn[1], pIn[2]);
+        const Vec3f at(pIn[0], pIn[1], pIn[2]);
         if (pActor == apiPlayer()) {
             MR::setPlayerPos(at);
         } else {
@@ -707,14 +707,14 @@ namespace {
     }
 
     void apiGetVelocity(NebulaActor* pActor, f32* pOut) {
-        const TVec3f* pVelocity = pActor == apiPlayer() ? MarioAccess::getVelocity() : &asActor(pActor)->mVelocity;
+        const Vec3f* pVelocity = pActor == apiPlayer() ? MarioAccess::getVelocity() : &asActor(pActor)->mVelocity;
         pOut[0] = pVelocity->x;
         pOut[1] = pVelocity->y;
         pOut[2] = pVelocity->z;
     }
 
     void apiSetVelocity(NebulaActor* pActor, const f32* pIn) {
-        TVec3f* pVelocity = pActor == apiPlayer() ? MarioAccess::getVelocity() : &asActor(pActor)->mVelocity;
+        Vec3f* pVelocity = pActor == apiPlayer() ? MarioAccess::getVelocity() : &asActor(pActor)->mVelocity;
         pVelocity->set(pIn[0], pIn[1], pIn[2]);
     }
 
@@ -797,7 +797,7 @@ namespace {
 
     void apiJumpPlayer(const f32* pVelocity) {
         if (playingPlayer() != nullptr) {
-            MarioAccess::forceJump(TVec3f(pVelocity[0], pVelocity[1], pVelocity[2]), 0);
+            MarioAccess::forceJump(Vec3f(pVelocity[0], pVelocity[1], pVelocity[2]), 0);
         }
     }
 
@@ -1056,7 +1056,7 @@ namespace {
     }
 
     void apiGetRotation(NebulaActor* pActor, float* pOut) {
-        const TVec3f& rIn = asActor(pActor)->mRotation;
+        const Vec3f& rIn = asActor(pActor)->mRotation;
         pOut[0] = rIn.x;
         pOut[1] = rIn.y;
         pOut[2] = rIn.z;
@@ -1067,7 +1067,7 @@ namespace {
     }
 
     void apiGetScale(NebulaActor* pActor, float* pOut) {
-        const TVec3f& rIn = asActor(pActor)->mScale;
+        const Vec3f& rIn = asActor(pActor)->mScale;
         pOut[0] = rIn.x;
         pOut[1] = rIn.y;
         pOut[2] = rIn.z;
@@ -1079,7 +1079,7 @@ namespace {
 
     void apiSetFront(NebulaActor* pActor, const float* pIn) {
         PluginActor* pPlugin = asPluginActor(pActor);
-        TVec3f front(pIn[0], pIn[1], pIn[2]);
+        Vec3f front(pIn[0], pIn[1], pIn[2]);
         if (pPlugin != nullptr && !MR::isNearZero(front)) {
             MR::normalize(&front);
             pPlugin->mFront = front;
@@ -1239,9 +1239,9 @@ namespace {
         if (sStageFrames <= 0) {
             return 0;
         }
-        const TVec3f from(pFrom[0], pFrom[1], pFrom[2]);
-        const TVec3f line(pTo[0] - pFrom[0], pTo[1] - pFrom[1], pTo[2] - pFrom[2]);
-        TVec3f hit(0.0f, 0.0f, 0.0f);
+        const Vec3f from(pFrom[0], pFrom[1], pFrom[2]);
+        const Vec3f line(pTo[0] - pFrom[0], pTo[1] - pFrom[1], pTo[2] - pFrom[2]);
+        Vec3f hit(0.0f, 0.0f, 0.0f);
         Triangle triangle;
         if (!MR::getFirstPolyOnLineToMap(&hit, &triangle, from, line)) {
             return 0;
@@ -1266,7 +1266,7 @@ namespace {
     }
 
     int32_t apiIsInWater(const float* pAt) {
-        return sStageFrames > 0 && MR::isInWater(TVec3f(pAt[0], pAt[1], pAt[2])) ? 1 : 0;
+        return sStageFrames > 0 && MR::isInWater(Vec3f(pAt[0], pAt[1], pAt[2])) ? 1 : 0;
     }
 
     float apiDistanceToPlayer(NebulaActor* pActor) {
@@ -1275,7 +1275,7 @@ namespace {
 
     void apiGetJointPosition(NebulaActor* pActor, const char* pJoint, float* pOut) {
         const LiveActor* pLive = asActor(pActor);
-        TVec3f at(pLive->mPosition);
+        Vec3f at(pLive->mPosition);
         if (pLive->mModelManager != nullptr && pJoint != nullptr) {
             MR::copyJointPos(pLive, pJoint, &at);
         }
@@ -1285,7 +1285,7 @@ namespace {
     }
 
     void apiPlayerFront(float* pOut) {
-        TVec3f front(0.0f, 0.0f, 1.0f);
+        Vec3f front(0.0f, 0.0f, 1.0f);
         if (playingPlayer() != nullptr) {
             MR::getPlayerFrontVec(&front);
         }
@@ -1323,7 +1323,7 @@ namespace {
 
     void apiAppearItem(NebulaActor* pActor, NebulaItem what, const float* pAt, int32_t count) {
         const LiveActor* pLive = asActor(pActor);
-        const TVec3f at(pAt[0], pAt[1], pAt[2]);
+        const Vec3f at(pAt[0], pAt[1], pAt[2]);
         switch (what) {
         case NEBULA_ITEM_COINS: MR::appearCoinPop(pLive, at, count); break;
         case NEBULA_ITEM_STAR_BITS: MR::appearStarPiece(pLive, at, count, 10.0f, 40.0f, false); break;
@@ -1535,7 +1535,7 @@ namespace {
         if (sStageFrames <= 0 || pAt == nullptr) {
             return 0;
         }
-        const TVec3f at(pAt[0], pAt[1], pAt[2]);
+        const Vec3f at(pAt[0], pAt[1], pAt[2]);
         AllLiveActorGroup* pGroup = MR::getAllLiveActorGroup();
         s32 count = 0;
         for (s32 i = 0; i < pGroup->getObjNum(); i++) {
@@ -1597,9 +1597,9 @@ namespace {
     }
 
     void apiGravityAt(const float* pAt, float* pOut) {
-        TVec3f down(0.0f, -1.0f, 0.0f);
+        Vec3f down(0.0f, -1.0f, 0.0f);
         if (sStageFrames > 0) {
-            MR::calcGravityVector(MR::getAllLiveActorGroup(), TVec3f(pAt[0], pAt[1], pAt[2]), &down, nullptr, 0);
+            MR::calcGravityVector(MR::getAllLiveActorGroup(), Vec3f(pAt[0], pAt[1], pAt[2]), &down, nullptr, 0);
         }
         pOut[0] = down.x;
         pOut[1] = down.y;
@@ -1607,21 +1607,21 @@ namespace {
     }
 
     int32_t apiIsInArea(const char* pArea, const float* pAt) {
-        return sStageFrames > 0 && pArea != nullptr && MR::getAreaObj(pArea, TVec3f(pAt[0], pAt[1], pAt[2])) != nullptr ? 1 : 0;
+        return sStageFrames > 0 && pArea != nullptr && MR::getAreaObj(pArea, Vec3f(pAt[0], pAt[1], pAt[2])) != nullptr ? 1 : 0;
     }
 
     void apiCameraPosition(float* pOut) {
-        const TVec3f at = sStageFrames > 0 ? MR::getCamPos() : TVec3f(0.0f, 0.0f, 0.0f);
+        const Vec3f at = sStageFrames > 0 ? MR::getCamPos() : Vec3f(0.0f, 0.0f, 0.0f);
         pOut[0] = at.x;
         pOut[1] = at.y;
         pOut[2] = at.z;
     }
 
     void apiCameraTarget(float* pOut) {
-        TVec3f at(0.0f, 0.0f, 0.0f);
+        Vec3f at(0.0f, 0.0f, 0.0f);
         if (sStageFrames > 0) {
-            const TVec3f from = MR::getCamPos();
-            const TVec3f way = MR::getCamZdir();
+            const Vec3f from = MR::getCamPos();
+            const Vec3f way = MR::getCamZdir();
             at.set(from.x + way.x * 1000.0f, from.y + way.y * 1000.0f, from.z + way.z * 1000.0f);
         }
         pOut[0] = at.x;
@@ -1633,8 +1633,8 @@ namespace {
         if (sStageFrames <= 0) {
             return 0;
         }
-        TVec2f screen;
-        const bool front = MR::calcScreenPosition(&screen, TVec3f(pAt[0], pAt[1], pAt[2]));
+        Vec2f screen;
+        const bool front = MR::calcScreenPosition(&screen, Vec3f(pAt[0], pAt[1], pAt[2]));
         pOut[0] = screen.x;
         pOut[1] = screen.y;
         return front ? 1 : 0;
@@ -1650,7 +1650,7 @@ namespace {
         if (!MR::isStarPointerInScreen(0)) {
             return 0;
         }
-        const TVec2f* pAt = MR::getStarPointerScreenPosition(0);
+        const Vec2f* pAt = MR::getStarPointerScreenPosition(0);
         pOut[0] = pAt->x;
         pOut[1] = pAt->y;
         return 1;
@@ -1694,7 +1694,7 @@ namespace {
         const char* mArchive;
         struct Moved {
             const char* mPane;
-            TVec2f mAt;
+            Vec2f mAt;
         };
         List< Moved* > mMoved;
     };

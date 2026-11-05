@@ -36,7 +36,7 @@ CameraManGame::CameraManGame(CameraHolder* pHolder, CameraParamChunkHolder* pChu
       mHeli(new CamHeliEffector()), mTypeState(), mIsStartPosActive(), mInterpolateOffCounter(), mZoomedIn() {
     mCamera = mHolder->getDefaultCamera();
     mChunk = nullptr;
-    CameraLocalUtil::setWatchPos(this, TVec3f(0.0f, 0.0f, ::sMinDistance));
+    CameraLocalUtil::setWatchPos(this, Vec3f(0.0f, 0.0f, ::sMinDistance));
 }
 
 void CameraManGame::init(const JMapInfoIter& rIter) {
@@ -82,8 +82,8 @@ void CameraManGame::zoomIn() {
 
     CameraParamChunk* chunk = mChunkHolder->getChunk(chunkID);
 
-    const TVec3f& pos = CameraLocalUtil::getPos(this);
-    const TVec3f& watchPos = CameraLocalUtil::getWatchPos(this);
+    const Vec3f& pos = CameraLocalUtil::getPos(this);
+    const Vec3f& watchPos = CameraLocalUtil::getWatchPos(this);
 
     f32 angle = MR::asin(::sZoomRadius / watchPos.distance(pos));
     angle *= 1.5f;
@@ -213,8 +213,8 @@ void CameraManGame::setNullCamera() {
     CameraLocalUtil::setFovy(this, mDirector->getDefaultFovy());
     CameraLocalUtil::setRoll(this, 0.0f);
 
-    CameraLocalUtil::setGlobalOffset(this, TVec3f(0.0f, 0.0f, 0.0f));
-    CameraLocalUtil::setLocalOffset(this, TVec3f(0.0f, 0.0f, 0.0f));
+    CameraLocalUtil::setGlobalOffset(this, Vec3f(0.0f, 0.0f, 0.0f));
+    CameraLocalUtil::setLocalOffset(this, Vec3f(0.0f, 0.0f, 0.0f));
     CameraLocalUtil::setFrontOffset(this, 0.0f);
     CameraLocalUtil::setUpperOffset(this, 0.0f);
 
@@ -342,7 +342,7 @@ void CameraManGame::applyParameter() {
         vPan->mMaxRiseEaseTime = mChunk->mExParam.mUDown;
         vPan->mVPanUse = mChunk->mExParam.mVPanUse != 0;
 
-        TVec3f axis;
+        Vec3f axis;
         mChunk->getVPanAxis(&axis);
 
         vPan->mVPanAxis.set(axis);
@@ -362,9 +362,9 @@ void CameraManGame::checkReset() {
 }
 
 void CameraManGame::setSafePose() {
-    TVec3f pos = TVec3f(CameraLocalUtil::getPos(mCamera));
-    TVec3f watchPos = TVec3f(CameraLocalUtil::getWatchPos(mCamera));
-    TVec3f up = TVec3f(CameraLocalUtil::getUpVec(mCamera));
+    Vec3f pos = Vec3f(CameraLocalUtil::getPos(mCamera));
+    Vec3f watchPos = Vec3f(CameraLocalUtil::getWatchPos(mCamera));
+    Vec3f up = Vec3f(CameraLocalUtil::getUpVec(mCamera));
 
     if (MR::isNan(pos) || MR::isNan(watchPos) || MR::isNan(up)) {
         return;
@@ -383,8 +383,8 @@ void CameraManGame::setSafePose() {
     CameraLocalUtil::setRoll(this, CameraLocalUtil::getRoll(mCamera));
 }
 
-void CameraManGame::keepAwayWatchPos(TVec3f* watchPos, const TVec3f& pos) {
-    TVec3f dir = *watchPos - pos;
+void CameraManGame::keepAwayWatchPos(Vec3f* watchPos, const Vec3f& pos) {
+    Vec3f dir = *watchPos - pos;
     f32 length = dir.length();
 
     if (length < ::sMinDistance) {
@@ -397,18 +397,18 @@ void CameraManGame::keepAwayWatchPos(TVec3f* watchPos, const TVec3f& pos) {
     }
 }
 
-void CameraManGame::calcSafeUpVec(TVec3f* up, const TVec3f& pos, const TVec3f& watchPos) {
-    TVec3f camWatchDir = watchPos - pos;
+void CameraManGame::calcSafeUpVec(Vec3f* up, const Vec3f& pos, const Vec3f& watchPos) {
+    Vec3f camWatchDir = watchPos - pos;
     MR::normalize(&camWatchDir);
     MR::normalizeOrZero(up);
 
     if (MR::isNearZero(*up) || MR::abs(camWatchDir.dot(*up)) > 0.98f) {
-        TVec3f watchDir = CameraLocalUtil::getWatchPos(this) - CameraLocalUtil::getPos(this);
+        Vec3f watchDir = CameraLocalUtil::getWatchPos(this) - CameraLocalUtil::getPos(this);
         MR::normalize(&watchDir);
         if (MR::abs(camWatchDir.dot(watchDir)) > 0.98f) {
             up->set(CameraLocalUtil::getUpVec(this));
         } else {
-            TQuat4f rot;
+            Quat4f rot;
             rot.setRotate(watchDir, camWatchDir);
             rot.transform(CameraLocalUtil::getUpVec(this), *up);
         }
@@ -429,7 +429,7 @@ void CameraManGame::createDefaultWaterCamera() {
 
     chunk->setCameraType("CAM_TYPE_WATER_FOLLOW", mHolder);
 
-    chunk->mExParam.setWOffset(TVec3f(0.0f, 170.0f, 0.0f));
+    chunk->mExParam.setWOffset(Vec3f(0.0f, 170.0f, 0.0f));
     chunk->mExParam.mLOffset = 100.0f;
     chunk->mExParam.mFovy = 45.0f;
     chunk->mExParam.mCamInt = 120;
@@ -445,7 +445,7 @@ void CameraManGame::createDefaultWaterSurfaceCamera() {
 
     chunk->setCameraType("CAM_TYPE_FOLLOW", mHolder);
 
-    chunk->mExParam.setWOffset(TVec3f(0.0f, 170.0f, 0.0f));
+    chunk->mExParam.setWOffset(Vec3f(0.0f, 170.0f, 0.0f));
     chunk->mExParam.mLOffset = 100.0f;
     chunk->mExParam.mFovy = 45.0f;
     chunk->mExParam.mCamInt = 120;
@@ -464,7 +464,7 @@ void CameraManGame::createDefaultFooFighterCamera() {
 
     chunk->setCameraType("CAM_TYPE_FOO_FIGHTER", mHolder);
 
-    chunk->mExParam.setWOffset(TVec3f(0.0f, 170.0f, 0.0f));
+    chunk->mExParam.setWOffset(Vec3f(0.0f, 170.0f, 0.0f));
     chunk->mExParam.mLOffset = 100.0f;
     chunk->mExParam.mFovy = 45.0f;
     chunk->mExParam.mCamInt = 120;
@@ -499,7 +499,7 @@ void CameraManGame::createZoomCamera() {
     CameraDirector* director = CameraLocalUtil::getCameraDirector();
     chunk->setCameraType("CAM_TYPE_EYEPOS_FIX_THERE", director->mHolder);
 
-    chunk->mExParam.setWOffset(TVec3f(0.0f, 0.0f, 0.0f));
+    chunk->mExParam.setWOffset(Vec3f(0.0f, 0.0f, 0.0f));
     chunk->mExParam.mLOffset = 0.0f;
     chunk->mExParam.mLOffsetV = 100.0f;
 

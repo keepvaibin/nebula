@@ -16,8 +16,8 @@ public:
     virtual CameraTargetObj* calc();
     virtual CamTranslatorBase* createTranslator();
 
-    void setParam(const TVec3f&, u32);
+    void setParam(const Vec3f&, u32);
 
-    TVec3f mPos;
+    Vec3f mPos;
     u32 mCameraType;
 };

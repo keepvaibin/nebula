@@ -11,15 +11,15 @@
 #include "Game/Util/VectorUtil.hpp"
 
 namespace MR {
-    void getPointerPosOnScreen(TVec2f* pPos, s32 channel) {
+    void getPointerPosOnScreen(Vec2f* pPos, s32 channel) {
         MR::getPlayerInput(channel)->mPointer->getPointingPosBasedOnScreen(pPos);
     }
 
-    void getPointerPos(TVec2f* pPos, s32 channel) {
+    void getPointerPos(Vec2f* pPos, s32 channel) {
         MR::getPlayerInput(channel)->mPointer->getPointingPos(pPos);
     }
 
-    void getPointerPastPos(TVec2f* pPos, s32 idx, s32 channel) {
+    void getPointerPastPos(Vec2f* pPos, s32 idx, s32 channel) {
         MR::getPlayerInput(channel)->mPointer->getPastPointingPos(pPos, idx);
     }
 
@@ -35,7 +35,7 @@ namespace MR {
         return MR::getPlayerInput(channel)->mPointer->mDistDisplay;
     }
 
-    void getMainTilt(TVec3f* pAccel, s32 channel) {
+    void getMainTilt(Vec3f* pAccel, s32 channel) {
         MR::getPlayerInput(channel)->mMainTilt->getAcceleration(pAccel);
     }
 
@@ -187,7 +187,7 @@ namespace MR {
         return (MR::getPlayerInput(channel)->mStick->mTrigger & 4) != 0;
     }
 
-    void getSubTilt(TVec3f* pAccel, s32 channel) {
+    void getSubTilt(Vec3f* pAccel, s32 channel) {
         MR::getPlayerInput(channel)->mSubTilt->getAcceleration(pAccel);
     }
 
@@ -293,13 +293,13 @@ namespace MR {
     }
 
     void calcWorldStickDirectionXZ(f32* pDirX, f32* pDirZ, s32 channel) {
-        TPos3f mtx;
+        Pos3f mtx;
         mtx.set(getCameraInvViewMtx());
-        TVec3f side;
+        Vec3f side;
         mtx.getXDir(side);
         side.y = 0.0f;
         normalizeOrZero(&side);
-        TVec3f front;
+        Vec3f front;
         mtx.getZDir(front);
         front.y = 0.0f;
         normalizeOrZero(&front);
@@ -309,13 +309,13 @@ namespace MR {
         f32 y = getMoveStickY(channel);
         side.scale(x);
         front.scale(y);
-        TVec3f direction = side + front;
+        Vec3f direction = side + front;
         normalizeOrZero(&direction);
         *pDirX = direction.x;
         *pDirZ = direction.z;
     }
 
-    void calcWorldStickDirectionXZ(TVec3f* pDir, s32 channel) {
+    void calcWorldStickDirectionXZ(Vec3f* pDir, s32 channel) {
         pDir->y = 0.0f;
 
         calcWorldStickDirectionXZ(&pDir->x, &pDir->z, channel);

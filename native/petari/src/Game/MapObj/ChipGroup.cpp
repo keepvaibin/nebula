@@ -26,14 +26,14 @@ ChipGroup::ChipGroup(const char* pName, s32 chipType) : NameObj(pName) {
 
 void ChipGroup::updateUIRange() {
     if (mUIRangeFixed < 0.0f) {
-        TBox3f range;
+        Box3f range;
 
         for (s32 i = 0; i < mTotalCount; i++) {
-            TBox3f currBound;
-            TVec3f pos = mChips[i].mChip->mPosition;
+            Box3f currBound;
+            Vec3f pos = mChips[i].mChip->mPosition;
 
-            TVec3f center = pos;
-            TVec3f pad(2000.0f);
+            Vec3f center = pos;
+            Vec3f pad(2000.0f);
             currBound.set(center - pad, center + pad);
 
             if (i == 0) {
@@ -46,7 +46,7 @@ void ChipGroup::updateUIRange() {
 
         range.getCenter(&mUIPos);
 
-        TVec3f diff;
+        Vec3f diff;
         diff.sub(range.f, range.i);
         mUIRange = diff.length() / 2.0f;
     } else {

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/ModelObj.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class PoltaArm : public ModelObj {
 public:
@@ -35,7 +35,7 @@ public:
 
     ModelObj* mFormationModel;
     ModelObj* mBreakModel;
-    TPos3f _98;
+    Pos3f _98;
     s32 _C8;
     s32 _CC;
     s32 mBrokenCounter;

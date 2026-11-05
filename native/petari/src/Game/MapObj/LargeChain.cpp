@@ -102,8 +102,8 @@ void LargeChain::createChainParts() {
     mChainArray = ::createChainArray(mChainCount);
 
     for (u32 i = 0; i < mChainCount; i++) {
-        TVec3f pos(mPosition);
-        TVec3f trans(0.0f, static_cast< f32 >(i), 0.0f);
+        Vec3f pos(mPosition);
+        Vec3f trans(0.0f, static_cast< f32 >(i), 0.0f);
         trans.y *= ::sPartsLength;
         pos.add(trans);
 
@@ -112,7 +112,7 @@ void LargeChain::createChainParts() {
         if (i == 0) {
             _8C->initChainParts(&pos, &mRotation, &mScale, true);
         } else if (i == mChainCount - 1) {
-            TVec3f rot(mRotation);
+            Vec3f rot(mRotation);
             rot.y += 90.0f;
             rot.x += 180.0f;
             pos.y += 200.0f;

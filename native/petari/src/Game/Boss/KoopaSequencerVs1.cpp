@@ -135,7 +135,7 @@ void KoopaSequencerVs1::exeDemoBattleEnd() {
     if (MR::isDemoLastStep()) {
         MR::overlayWithPreviousScreen(3);
 
-        TVec3f namePos;
+        Vec3f namePos;
         MR::findNamePos("\203\146\203\202\222\206\220\123" /* デモ中心 */, &namePos, nullptr);
 
         MR::startAfterBossBGM();

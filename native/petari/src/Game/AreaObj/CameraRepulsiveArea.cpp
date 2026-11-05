@@ -15,21 +15,21 @@ CameraRepulsiveSphere::~CameraRepulsiveSphere() {
 CameraRepulsiveCylinder::~CameraRepulsiveCylinder() {
 }
 
-TVec3f CameraRepulsiveSphere::getRepulsion(const TVec3f& rRep) {
-    return TVec3f(0.0f, 0.0f, 0.0f);
+Vec3f CameraRepulsiveSphere::getRepulsion(const Vec3f& rRep) {
+    return Vec3f(0.0f, 0.0f, 0.0f);
 }
 
-TVec3f CameraRepulsiveCylinder::getRepulsion(const TVec3f& rRep) {
-    TVec3f position;
+Vec3f CameraRepulsiveCylinder::getRepulsion(const Vec3f& rRep) {
+    Vec3f position;
     MR::calcCylinderPos(&position, this);
-    TVec3f upVec;
+    Vec3f upVec;
     MR::calcCylinderUpVec(&upVec, this);
 
-    TVec3f ret(rRep);
+    Vec3f ret(rRep);
     ret -= position;
     f32 dot = upVec.dot(ret);
-    TVec3f _14;
-    TVec3f _8(upVec);
+    Vec3f _14;
+    Vec3f _8(upVec);
     _8 *= dot;
     ret -= _8;
 

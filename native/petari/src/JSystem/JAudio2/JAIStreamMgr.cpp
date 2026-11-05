@@ -11,7 +11,7 @@ JAIStreamMgr::JAIStreamMgr(bool setInstance) : JASGlobalInstance< JAIStreamMgr >
     mActivity.init();
 }
 
-bool JAIStreamMgr::startSound(JAISoundID id, JAISoundHandle* handle, const JGeometry::TVec3< f32 >* posPtr) {
+bool JAIStreamMgr::startSound(JAISoundID id, JAISoundHandle* handle, const Vec3f* posPtr) {
     if (handle != nullptr && handle->isSoundAttached()) {
         (*handle)->stop();
     }

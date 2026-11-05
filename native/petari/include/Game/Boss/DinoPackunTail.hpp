@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class DinoPackunTailNode;
 
@@ -22,8 +22,8 @@ public:
     void addAccelKeepBend();
     void addAccelKeepDistance();
     void addAccelToBck();
-    void getTailNodePosition(TVec3f*, s32) const;
-    void getEndTailPosition(TVec3f*) const;
+    void getTailNodePosition(Vec3f*, s32) const;
+    void getEndTailPosition(Vec3f*) const;
     DinoPackunTailNode* getNode(u32) const;
     DinoPackunTailNode*& getNodeRef(const u32& rIndex) const {
         return mNodes[rIndex];

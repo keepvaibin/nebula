@@ -47,7 +47,7 @@ void SoundEmitterSphere::movement() {
     }
 
     if (!isInVolume(_40)) {
-        TVec3f center;
+        Vec3f center;
         MR::calcSpherePos(&center, this);
         f32 radius = MR::getSphereRadius(this);
         f32 rate = radius / (_40 - center).length();

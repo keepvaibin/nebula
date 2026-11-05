@@ -1,7 +1,7 @@
 #include "JSystem/J3DGraphBase/J3DTransform.hpp"
 #include "JSystem/J3DGraphBase/J3DStruct.hpp"
-#include "JSystem/JMath.hpp"
-#include "JSystem/JMath/JMATrigonometric.hpp"
+#include <nebula_geometry.hpp>
+
 #include <cmath>
 #include <nebula_math.h>
 
@@ -53,11 +53,11 @@ void J3DCalcYBBoardMtx(Mtx mtx) {
     f32 z = (mtx[0][2] * mtx[0][2]) + (mtx[1][2] * mtx[1][2]) + (mtx[2][2] * mtx[2][2]);
 
     if (x > 0.0f) {
-        x = JMath::fastSqrt(x);
+        x = fastSqrt(x);
     }
 
     if (z > 0.0f) {
-        z = JMath::fastSqrt(z);
+        z = fastSqrt(z);
     }
 
     Vec vec = {0.0f, -mtx[2][1], mtx[1][1]};
@@ -105,11 +105,11 @@ void J3DGetTranslateRotateMtx(const J3DTransformInfo& tx, Mtx dst) {
     f32 sxcz;
 
     f32 sx, cx;
-    JMASSinCos(tx.mRotation.x, &sx, &cx);
+    Angle::sinCosShort(tx.mRotation.x, &sx, &cx);
     f32 sy, cy;
-    JMASSinCos(tx.mRotation.y, &sy, &cy);
+    Angle::sinCosShort(tx.mRotation.y, &sy, &cy);
     f32 sz, cz;
-    JMASSinCos(tx.mRotation.z, &sz, &cz);
+    Angle::sinCosShort(tx.mRotation.z, &sz, &cz);
 
     dst[2][0] = -sy;
     dst[0][0] = cz * cy;
@@ -137,11 +137,11 @@ void J3DGetTranslateRotateMtx(s16 rx, s16 ry, s16 rz, f32 tx, f32 ty, f32 tz, Mt
     f32 sxcz;
 
     f32 sx, cx;
-    JMASSinCos(rx, &sx, &cx);
+    Angle::sinCosShort(rx, &sx, &cx);
     f32 sy, cy;
-    JMASSinCos(ry, &sy, &cy);
+    Angle::sinCosShort(ry, &sy, &cy);
     f32 sz, cz;
-    JMASSinCos(rz, &sz, &cz);
+    Angle::sinCosShort(rz, &sz, &cz);
 
     dst[2][0] = -sy;
     dst[0][0] = cz * cy;
@@ -166,7 +166,7 @@ void J3DGetTranslateRotateMtx(s16 rx, s16 ry, s16 rz, f32 tx, f32 ty, f32 tz, Mt
 
 void J3DGetTextureMtx(const J3DTextureSRTInfo& srt, const Vec& center, Mtx dst) {
     f32 sr, cr;
-    JMASSinCos(srt.mRotation, &sr, &cr);
+    Angle::sinCosShort(srt.mRotation, &sr, &cr);
 
     f32 cx = srt.mScaleX * cr;
     f32 sx = srt.mScaleX * sr;
@@ -187,7 +187,7 @@ void J3DGetTextureMtx(const J3DTextureSRTInfo& srt, const Vec& center, Mtx dst) 
 
 void J3DGetTextureMtxOld(const J3DTextureSRTInfo& srt, const Vec& center, Mtx dst) {
     f32 sr, cr;
-    JMASSinCos(srt.mRotation, &sr, &cr);
+    Angle::sinCosShort(srt.mRotation, &sr, &cr);
 
     f32 cx = srt.mScaleX * cr;
     f32 sx = srt.mScaleX * sr;
@@ -208,7 +208,7 @@ void J3DGetTextureMtxOld(const J3DTextureSRTInfo& srt, const Vec& center, Mtx ds
 
 void J3DGetTextureMtxMaya(const J3DTextureSRTInfo& srt, Mtx dst) {
     f32 sr, cr;
-    JMASSinCos(srt.mRotation, &sr, &cr);
+    Angle::sinCosShort(srt.mRotation, &sr, &cr);
     f32 tx = srt.mTranslationX - 0.5f;
     f32 ty = srt.mTranslationY - 0.5f;
 
@@ -226,7 +226,7 @@ void J3DGetTextureMtxMaya(const J3DTextureSRTInfo& srt, Mtx dst) {
 
 void J3DGetTextureMtxMayaOld(const J3DTextureSRTInfo& srt, Mtx dst) {
     f32 sr, cr;
-    JMASSinCos(srt.mRotation, &sr, &cr);
+    Angle::sinCosShort(srt.mRotation, &sr, &cr);
     f32 tx = srt.mTranslationX - 0.5f;
     f32 ty = srt.mTranslationY - 0.5f;
 
@@ -271,24 +271,4 @@ void J3DMtxProjConcat(Mtx mtx1, Mtx mtx2, Mtx dst) {
 }
 
 
-// mAB[i] = mA * mB[i] for consecutive 3x4 matrices with the implied (0, 0, 0, 1) row. Each product is complete
-// before it is stored, so mAB may be mB.
-void J3DPSMtxArrayConcat(Mtx mA, Mtx mB, Mtx mAB, u32 count) {
-    for (u32 n = 0; n < count; n++) {
-        const f32(*b)[4] = mB + 3 * n;
-        Mtx out;
-        for (int i = 0; i < 3; i++) {
-            const f32 a0 = mA[i][0], a1 = mA[i][1], a2 = mA[i][2];
-            out[i][0] = a0 * b[0][0] + a1 * b[1][0] + a2 * b[2][0];
-            out[i][1] = a0 * b[0][1] + a1 * b[1][1] + a2 * b[2][1];
-            out[i][2] = a0 * b[0][2] + a1 * b[1][2] + a2 * b[2][2];
-            out[i][3] = a0 * b[0][3] + a1 * b[1][3] + a2 * b[2][3] + mA[i][3];
-        }
-        for (int i = 0; i < 3; i++) {
-            for (int j = 0; j < 4; j++) {
-                mAB[3 * n + i][j] = out[i][j];
-            }
-        }
-    }
-}
 

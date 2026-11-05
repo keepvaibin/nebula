@@ -64,7 +64,7 @@ Kinopio::Kinopio(const char* pName)
 void Kinopio::init(const JMapInfoIter& rIter) {
     MR::initDefaultPosAndQuat(this, rIter);
 
-    TVec3f rotation(mRotation);
+    Vec3f rotation(mRotation);
     rotation.scale(MR::toRadian(1.0f));
     _A0.setEuler(rotation);
 
@@ -79,8 +79,8 @@ void Kinopio::init(const JMapInfoIter& rIter) {
     MR::initLightCtrl(this);
     initSound(4, false);
     initHitSensor(2);
-    MR::addHitSensorNpc(this, "body", 8, 50.0f * ::sDefaultScale, TVec3f(0.0f, 50.0f * ::sDefaultScale, 0.0f));
-    MR::addHitSensorNpc(this, "Pickel", 8, 50.0f * ::sDefaultScale, TVec3f(0.0f, 50.0f * ::sDefaultScale, 40.0f * ::sDefaultScale));
+    MR::addHitSensorNpc(this, "body", 8, 50.0f * ::sDefaultScale, Vec3f(0.0f, 50.0f * ::sDefaultScale, 0.0f));
+    MR::addHitSensorNpc(this, "Pickel", 8, 50.0f * ::sDefaultScale, Vec3f(0.0f, 50.0f * ::sDefaultScale, 40.0f * ::sDefaultScale));
     MR::invalidateHitSensor(this, "Pickel");
     s32 isInvalidateSensor = -1;
     MR::getJMapInfoArg6NoInit(rIter, &isInvalidateSensor);
@@ -94,7 +94,7 @@ void Kinopio::init(const JMapInfoIter& rIter) {
     MR::onCalcShadowOneTime(this, nullptr);
     initEffectKeeper(0, nullptr, false);
     initNerve(GET_NERVE(Kinopio, KinopioNrvWait));
-    mMsgCtrl = MR::createTalkCtrl(this, rIter, "Kinopio", TVec3f(0.0f, 122.0f * ::sDefaultScale, 0.0f), nullptr);
+    mMsgCtrl = MR::createTalkCtrl(this, rIter, "Kinopio", Vec3f(0.0f, 122.0f * ::sDefaultScale, 0.0f), nullptr);
     MR::setDistanceToTalk(mMsgCtrl, ::sDistancePlayerIsNear);
     MR::onRootNodeAutomatic(mMsgCtrl);
     MR::registerEventFunc(mMsgCtrl, TalkMessageFuncM< Kinopio*, bool (Kinopio::*)(u32) >(this, &Kinopio::eventFunc));
@@ -104,7 +104,7 @@ void Kinopio::init(const JMapInfoIter& rIter) {
         MR::onCalcShadow(this, nullptr);
     }
 
-    MR::initStarPointerTarget(this, 100.0f, TVec3f(0.0f));
+    MR::initStarPointerTarget(this, 100.0f, Vec3f(0.0f));
     MR::addToAttributeGroupSearchTurtle(this);
     mLodCtrl = MR::createLodCtrlNPC(this, rIter);
 
@@ -392,7 +392,7 @@ void Kinopio::exeAppear() {
 
     MR::calcGravity(this);
 
-    TVec3f fallSpeed(mGravity);
+    Vec3f fallSpeed(mGravity);
     fallSpeed.scale(::sFallGravity);
     mVelocity.add(fallSpeed);
     mVelocity.mult(::sFallFrictionRate);
@@ -468,7 +468,7 @@ void Kinopio::exeEventFall() {
 
     MR::calcGravity(this);
 
-    TVec3f fallSpeed(mGravity);
+    Vec3f fallSpeed(mGravity);
     fallSpeed.scale(::sFallGravity);
     mVelocity.add(fallSpeed);
     mVelocity.mult(::sFallFrictionRate);
@@ -499,10 +499,10 @@ void Kinopio::calcAndSetBaseMtx() {
 
     if (_17C != nullptr) {
         _17C->connect();
-        TPos3f mtx(getBaseMtx());
+        Pos3f mtx(getBaseMtx());
         mtx.getQuat(_16C);
 
-        TQuat4f rotation;
+        Quat4f rotation;
         rotation.mult(_16C, _A0);
         rotation.normalize();
         MR::setBaseTRMtx(this, rotation);
@@ -558,15 +558,15 @@ bool Kinopio::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver)
     return false;
 }
 
-void Kinopio::faceToVector(const TVec3f& rDirection, f32 turnLimit) {
-    TVec3f direction(rDirection);
-    TVec3f up(-mGravity);
-    TVec3f currentUp;
-    TVec3f currentFront;
-    TQuat4f inverse;
+void Kinopio::faceToVector(const Vec3f& rDirection, f32 turnLimit) {
+    Vec3f direction(rDirection);
+    Vec3f up(-mGravity);
+    Vec3f currentUp;
+    Vec3f currentFront;
+    Quat4f inverse;
     f32 length = _16C.squared();
 
-    if (length <= JGeometry::TUtil< f32 >::epsilon()) {
+    if (length <= FloatUtil::epsilon()) {
         inverse.set< f32 >(0.0f, 0.0f, 0.0f, 1.0f);
     } else {
         inverse.x = -_16C.x / length;
@@ -585,15 +585,15 @@ void Kinopio::faceToVector(const TVec3f& rDirection, f32 turnLimit) {
 }
 
 void Kinopio::faceToPlayer(f32 turnLimit) {
-    TVec3f direction(*MR::getPlayerPos());
+    Vec3f direction(*MR::getPlayerPos());
     direction.sub(mPosition);
     faceToVector(direction, turnLimit);
 }
 
 void Kinopio::faceToDefault(f32 turnLimit) {
-    TVec3f defaultUp;
-    TVec3f defaultFront;
-    TVec3f front;
+    Vec3f defaultUp;
+    Vec3f defaultFront;
+    Vec3f front;
     _B0.getYDir(defaultUp);
     _B0.getZDir(defaultFront);
     _A0.getZDir(front);

@@ -4,7 +4,7 @@
 #include "Game/MapObj/FirePressureBulletHolder.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util.hpp"
-#include <JSystem/JMath/JMath.hpp>
+#include <nebula_geometry.hpp>
 
 FirePressure::~FirePressure() {
 }
@@ -30,24 +30,24 @@ bool FirePressure::shotBullet(f32 a1) {
     if (bullet == nullptr) {
         return false;
     } else {
-        TPos3f gunPoint;
+        Pos3f gunPoint;
         calcGunPointFromCannon(&gunPoint);
         bullet->shotFireBullet(this, gunPoint, a1, isShotTypeFollow(), mDisableCollsion);
         return true;
     }
 }
 
-void FirePressure::calcGunPointFromCannon(TPos3f* pOutPoint) {
-    TPos3f jointMtx(MR::getJointMtx(this, "Cannon1"));
-    TVec3f stack_2C;
+void FirePressure::calcGunPointFromCannon(Pos3f* pOutPoint) {
+    Pos3f jointMtx(MR::getJointMtx(this, "Cannon1"));
+    Vec3f stack_2C;
     jointMtx.getXDir(stack_2C);
-    TVec3f stack_20;
+    Vec3f stack_20;
     jointMtx.getTrans(stack_20);
     stack_20.scaleAdd(200.0f, stack_2C, stack_20);
     pOutPoint->setInline(jointMtx);
-    TVec3f stack_14;
+    Vec3f stack_14;
     jointMtx.getYDir(stack_14);
-    TVec3f stack_8;
+    Vec3f stack_8;
     jointMtx.getZDir(stack_8);
     MR::makeMtxFrontUpPos(pOutPoint, stack_2C, stack_14, stack_20);
 }

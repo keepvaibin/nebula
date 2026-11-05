@@ -6,7 +6,7 @@
 #include "Game/System/ResourceHolder.hpp"
 #include "Game/Util/HashUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 #include <algorithm>
 
 MultiSceneEffectKeeper::MultiSceneEffectKeeper(const char*, ModelManager* pModelManager, int a3, const char* pResName)
@@ -27,14 +27,14 @@ void MultiSceneEffectKeeper::init(const MultiSceneActor* pActor, const EffectSys
     MR::Effect::registerAutoEffectInfoGroup(this, pSystem, pActor, mResName);
 }
 
-void MultiSceneEffectKeeper::add(const char* pName, const TVec3f* pScale, const TVec3f* pRotation, const TVec3f* pTranslation,
+void MultiSceneEffectKeeper::add(const char* pName, const Vec3f* pScale, const Vec3f* pRotation, const Vec3f* pTranslation,
                                  const char* pEmitterName) {
-    MultiEmitter* pEmitter = new MultiEmitter(pName, pScale, pRotation, pTranslation, TVec3f(0.0f, 0.0f, 0.0f));
+    MultiEmitter* pEmitter = new MultiEmitter(pName, pScale, pRotation, pTranslation, Vec3f(0.0f, 0.0f, 0.0f));
     registerEmitter(pEmitter, pEmitterName);
 }
 
 void MultiSceneEffectKeeper::add(const char* pName, MtxPtr pMtx, const char* pEmitterName) {
-    MultiEmitter* pEmitter = new MultiEmitter(pName, pMtx, TVec3f(0.0f, 0.0f, 0.0f));
+    MultiEmitter* pEmitter = new MultiEmitter(pName, pMtx, Vec3f(0.0f, 0.0f, 0.0f));
     registerEmitter(pEmitter, pEmitterName);
 }
 

@@ -72,7 +72,7 @@ void FileSelectEffect::exeDisappear() {
 }
 
 void FileSelectEffect::calcAndSetBaseMtx() {
-    TVec3f dirZ = MR::getCamPos() - mPosition;
+    Vec3f dirZ = MR::getCamPos() - mPosition;
 
     if (MR::isNearZero(dirZ)) {
         return;
@@ -80,9 +80,9 @@ void FileSelectEffect::calcAndSetBaseMtx() {
 
     MR::normalize(&dirZ);
 
-    TVec3f dirY = MR::getCamYdir();
+    Vec3f dirY = MR::getCamYdir();
 
-    TVec3f dirX;
+    Vec3f dirX;
     dirX.cross(dirY, dirZ);
 
     if (MR::isNearZero(dirX)) {
@@ -92,7 +92,7 @@ void FileSelectEffect::calcAndSetBaseMtx() {
     MR::normalize(&dirX);
     dirY.cross(dirZ, dirX);
 
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.setXYZDir(dirX, dirY, dirZ);
     mtx.setTrans(mPosition);
 

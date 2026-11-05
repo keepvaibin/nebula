@@ -12,58 +12,58 @@ void CameraTripodPlanet::reset() {
 }
 
 CameraTargetObj* CameraTripodPlanet::calc() {
-    TVec3f watchPos;
+    Vec3f watchPos;
     CameraLocalUtil::makeWatchPoint(&watchPos, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
 
-    TPos3f mtx = mZoneMatrix;
-    TPos3f inv = mtx;
+    Pos3f mtx = mZoneMatrix;
+    Pos3f inv = mtx;
     inv.invert(inv);
 
-    TVec3f localWatchPos = watchPos;
+    Vec3f localWatchPos = watchPos;
     inv.mult(localWatchPos, localWatchPos);
 
-    TVec3f localPos = CameraLocalUtil::getTarget(this)->getPosition();
+    Vec3f localPos = CameraLocalUtil::getTarget(this)->getPosition();
     inv.mult(localPos, localPos);
 
-    TVec3f rotUp = localPos - mWPoint;
+    Vec3f rotUp = localPos - mWPoint;
     if (MR::isNearZero(rotUp)) {
         return nullptr;
     }
     MR::normalize(&rotUp);
 
-    TVec3f rotFront = mAxis;
+    Vec3f rotFront = mAxis;
     MR::normalize(&rotFront);
     rotFront.negate();
 
-    TVec3f rotSide = rotUp.cross(rotFront);
+    Vec3f rotSide = rotUp.cross(rotFront);
     MR::normalize(&rotSide);
 
     rotFront.cross(rotSide, rotUp);
 
-    TPos3f baseMtx;
+    Pos3f baseMtx;
     baseMtx.identity();
     baseMtx.setXDir(rotSide);
     baseMtx.setYDir(rotUp);
     baseMtx.setZDir(rotFront);
     baseMtx.setTrans(localWatchPos);
 
-    TPos3f rotX;
-    rotX.makeRotate(TVec3f(1.0f, 0.0f, 0.0f), -mAngleX);
+    Pos3f rotX;
+    rotX.makeRotate(Vec3f(1.0f, 0.0f, 0.0f), -mAngleX);
 
-    TPos3f rotY;
-    rotY.makeRotate(TVec3f(0.0f, 1.0f, 0.0f), mAngleY);
+    Pos3f rotY;
+    rotY.makeRotate(Vec3f(0.0f, 1.0f, 0.0f), mAngleY);
 
-    TPos3f transMtx;
+    Pos3f transMtx;
     transMtx.makeTrans(0.0f, 0.0f, mDist);
 
-    TPos3f dstMtx;
+    Pos3f dstMtx;
     dstMtx.concat(rotX, transMtx);
     dstMtx.concat(rotY, dstMtx);
     dstMtx.concat(baseMtx, dstMtx);
 
-    TVec3f pos;
+    Vec3f pos;
     dstMtx.getTrans(pos);
-    TVec3f up;
+    Vec3f up;
     dstMtx.getYDir(up);
 
     mtx.mult(pos, pos);

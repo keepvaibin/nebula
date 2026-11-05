@@ -25,7 +25,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <JSystem/JMath/JMATrigonometric.hpp>
+#include <nebula_geometry.hpp>
 #include "Game/System/NebulaHost.hpp"
 
 namespace NrvBegomanSpring {
@@ -152,7 +152,7 @@ void BegomanSpring::init(const JMapInfoIter& rIter) {
     mHead->initWithoutIter();
     initSensor(1, 70.0f, 140.0f, "Center");
     MR::addHitSensorMtx(this, "trample", ATYPE_PLAYER_AUTO_JUMP, 8, 130.0f * mScale.y, MR::getJointMtx(mHead, "SpringJoint5"),
-                        TVec3f(0.0f, 0.0f, 0.0f));
+                        Vec3f(0.0f, 0.0f, 0.0f));
     initSound(8, false);
     initShadow(70.0f, "Locator1");
     if (MR::tryRegisterDemoCast(this, rIter)) {
@@ -240,7 +240,7 @@ void BegomanSpring::control() {
         return;
     }
 
-    if (MR::isInDeath(this, TVec3f(0.0f, 0.0f, 0.0f))) {
+    if (MR::isInDeath(this, Vec3f(0.0f, 0.0f, 0.0f))) {
         kill();
         return;
     }
@@ -265,7 +265,7 @@ void BegomanSpring::control() {
     }
 }
 
-bool BegomanSpring::onTouchElectric(const TVec3f& rPos, const TVec3f& rDirection) {
+bool BegomanSpring::onTouchElectric(const Vec3f& rPos, const Vec3f& rDirection) {
     if (isNerve(GET_NERVE(BegomanSpring, HostTypeNrvElectricDeath)) || isNerve(GET_NERVE(BegomanSpring, HostTypeNrvHide)) ||
         isNerve(GET_NERVE(BegomanSpring, HostTypeNrvHop)) || isNerve(GET_NERVE(BegomanSpring, HostTypeNrvInWater))) {
         return false;
@@ -389,9 +389,9 @@ void BegomanSpring::exeShake() {
 
         if (mType == 1 && MR::isDead(mBaby)) {
             mBaby->mPosition.set(mPosition);
-            TVec3f side(mFaceVec);
+            Vec3f side(mFaceVec);
             side.cross(mGravity, side);
-            TVec3f& rVelocity = mBaby->mVelocity;
+            Vec3f& rVelocity = mBaby->mVelocity;
             rVelocity.set(-mGravity * ::sBabyLaunchVelV - side * ::sBabyLaunchVelH);
             mBaby->appear();
             MR::startSound(this, "SE_EM_BEGOMAN_LAUNCH_BABY");
@@ -403,7 +403,7 @@ void BegomanSpring::exeShake() {
     MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, ::hWaitParam._0, ::hWaitParam._4, ::hWaitParam._8, ::hWaitParam._C);
     reboundWallAndGround(&mFaceVec, false);
 
-    const TVec3f& rGravity = mGravity;
+    const Vec3f& rGravity = mGravity;
     mVelocity.scale(rGravity.dot(mVelocity), rGravity);
 
     if (MR::isStep(this, ::sShakeTime - mHead->getHopEndBckFrameMax())) {
@@ -427,7 +427,7 @@ void BegomanSpring::exeTrample() {
     MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, ::hStopParam._0, ::hStopParam._4, ::hStopParam._8, ::hStopParam._C);
     reboundWallAndGround(&mFaceVec, false);
 
-    const TVec3f& rGravity = mGravity;
+    const Vec3f& rGravity = mGravity;
     mVelocity.scale(rGravity.dot(mVelocity), rGravity);
 
     if (MR::isStep(this, ::sTrampleTime - mHead->getHopEndBckFrameMax())) {
@@ -511,7 +511,7 @@ void BegomanSpring::exeHide() {
 
     updateRotateY(0.0f, 1.0f);
     mVelocity.zero();
-    TVec3f toPlayer(*MR::getPlayerPos());
+    Vec3f toPlayer(*MR::getPlayerPos());
     toPlayer.sub(mPosition);
     toPlayer.squared();
     if (MR::getPlayerCenterPos()->squared(mPosition) < 1000.0f * 1000.0f) {
@@ -622,7 +622,7 @@ void BegomanSpring::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 
     if (msgResult) {
-        TVec3f dirFromSenderToReceiver(pSender->mPosition);
+        Vec3f dirFromSenderToReceiver(pSender->mPosition);
 
         dirFromSenderToReceiver -= pReceiver->mPosition;
         MR::normalizeOrZero(&dirFromSenderToReceiver);
@@ -650,7 +650,7 @@ bool BegomanSpring::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor
     }
 
     if (MR::isMsgEnemyAttackElectric(msg)) {
-        TVec3f direction(pSender->mHost->mVelocity);
+        Vec3f direction(pSender->mHost->mVelocity);
         MR::vecKillElement(direction, mGravity, &direction);
         MR::normalizeOrZero(&direction);
         return onTouchElectric(pSender->mPosition, direction);
@@ -667,7 +667,7 @@ bool BegomanSpring::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor
     }
 
     if (MR::isSensorEnemy(pSender)) {
-        TVec3f direction(pReceiver->mPosition - pSender->mPosition);
+        Vec3f direction(pReceiver->mPosition - pSender->mPosition);
         MR::normalizeOrZero(&direction);
         if (MR::isNearZero(direction)) {
             return false;
@@ -742,9 +742,9 @@ bool BegomanSpring::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSenso
     }
 
     if (pReceiver == getSensor("body") && (MR::isMsgPlayerHitAll(msg) || MR::isMsgStarPieceAttack(msg))) {
-        TVec3f direction(pReceiver->mPosition);
+        Vec3f direction(pReceiver->mPosition);
         direction.sub(pSender->mPosition);
-        TVec3f hitPos(-direction);
+        Vec3f hitPos(-direction);
         f32 radius = getSensor("body")->mRadius;
         hitPos.setLength(radius);
         hitPos.add(getSensor("body")->mPosition);

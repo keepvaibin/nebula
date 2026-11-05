@@ -80,7 +80,7 @@ namespace NrvNokonokoLand {
 
 NokonokoLand::NokonokoLand(const char* pName)
     : LiveActor(pName), mJetTurtle(new JetTurtle("\227\244\203\155\203\122\227\160\203\127\203\106\203\142\203\147\213\124" /* 陸ノコ用ジェット亀 */)), mRailPointPassChecker(new MapPartsRailPointPassChecker(this)),
-      mAnimScaleController(nullptr), mBindStarPointerState(nullptr), mTurtleType(0), mAppearPos(gZeroVec), mTurnAxis(TVec3f(0.0f, 1.0f, 0.0f)) {
+      mAnimScaleController(nullptr), mBindStarPointerState(nullptr), mTurtleType(0), mAppearPos(gZeroVec), mTurnAxis(Vec3f(0.0f, 1.0f, 0.0f)) {
     mTargetQuat.set(0.0f, 0.0f, 0.0f, 1.0f);
 }
 
@@ -98,9 +98,9 @@ void NokonokoLand::init(const JMapInfoIter& rIter) {
     MR::setEffectHostSRT(this, "Appear", &mAppearPos, nullptr, nullptr);
     initSound(4, false);
     initHitSensor(3);
-    MR::addHitSensorMtxEnemy(this, "body", 8, ::sSensorRadiusNormal, MR::getJointMtx(this, "Center"), TVec3f(::sSensorOffsetNormal));
-    MR::addHitSensorMtxEnemyAttack(this, "attack", 8, ::sSensorRadiusAttack, MR::getJointMtx(this, "Center"), TVec3f(::sSensorOffsetNormal));
-    MR::addHitSensorMtx(this, "shell", 0x22, 8, ::sSensorRadiusShell, MR::getJointMtx(this, "Turtle"), TVec3f(0.0f, 50.0f, 0.0f));
+    MR::addHitSensorMtxEnemy(this, "body", 8, ::sSensorRadiusNormal, MR::getJointMtx(this, "Center"), Vec3f(::sSensorOffsetNormal));
+    MR::addHitSensorMtxEnemyAttack(this, "attack", 8, ::sSensorRadiusAttack, MR::getJointMtx(this, "Center"), Vec3f(::sSensorOffsetNormal));
+    MR::addHitSensorMtx(this, "shell", 0x22, 8, ::sSensorRadiusShell, MR::getJointMtx(this, "Turtle"), Vec3f(0.0f, 50.0f, 0.0f));
     MR::invalidateHitSensor(this, "shell");
 
     initRailRider(rIter);
@@ -113,7 +113,7 @@ void NokonokoLand::init(const JMapInfoIter& rIter) {
     MR::joinToGroupArray(this, rIter, nullptr, 32);
     MR::initShadowVolumeSphere(this, ::sShadowRadius);
     MR::onCalcShadow(this, nullptr);
-    MR::initStarPointerTarget(this, 100.0f, TVec3f(0.0f));
+    MR::initStarPointerTarget(this, 100.0f, Vec3f(0.0f));
     initNerve(GET_NERVE(NokonokoLand, HostTypeWalk));
     mAnimScaleController = new AnimScaleController(nullptr);
     mAnimScaleController->setParamTight();
@@ -154,13 +154,13 @@ void NokonokoLand::control() {
 }
 
 void NokonokoLand::calcAndSetBaseMtx() {
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.set(getBaseMtx());
-    TQuat4f quat;
+    Quat4f quat;
     mtx.getQuat(quat);
     quat.slerp(mTargetQuat, ::sPoseLerpRate);
     MR::setBaseTRMtx(this, quat);
-    TVec3f scale;
+    Vec3f scale;
     scale.mul(mAnimScaleController->_C, mScale);
     MR::setBaseScale(this, scale);
 }
@@ -232,7 +232,7 @@ bool NokonokoLand::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor*
                 return false;
             }
 
-            TVec3f velocity(pSender->mHost->mVelocity);
+            Vec3f velocity(pSender->mHost->mVelocity);
             if (!MR::isNearZero(velocity)) {
                 mVelocity.set(velocity);
             } else {
@@ -292,9 +292,9 @@ bool NokonokoLand::isStateWalk() const {
 }
 
 bool NokonokoLand::isLookDirRailDirection() const {
-    TVec3f front;
+    Vec3f front;
     mTargetQuat.getZDir(front);
-    TVec3f railDirection(MR::getRailDirection(this));
+    Vec3f railDirection(MR::getRailDirection(this));
     if (!MR::isSameDirection(front, railDirection, 0.01f)) {
         return false;
     }
@@ -398,7 +398,7 @@ bool NokonokoLand::receivePunch(HitSensor* pSender, HitSensor* pReceiver) {
         return false;
     }
     if (isStateWalk() || isStateRattle()) {
-        TVec3f hitPos;
+        Vec3f hitPos;
         MR::calcPosBetweenSensors(&hitPos, pSender, pReceiver, 0.0f);
         MR::emitEffectHit(this, hitPos, nullptr);
         setNerve(GET_NERVE(NokonokoLand, HostTypeShellStartPunch));
@@ -424,7 +424,7 @@ bool NokonokoLand::receiveHipDrop(HitSensor* pSender, HitSensor* pReceiver) {
 
 bool NokonokoLand::receiveTurtleAttack(HitSensor* pSender, HitSensor* pReceiver) {
     if (pReceiver == getSensor("body") && isStateWalk()) {
-        TVec3f velocity(pSender->mHost->mVelocity);
+        Vec3f velocity(pSender->mHost->mVelocity);
         if (!MR::isNearZero(velocity)) {
             mVelocity.set(velocity);
         } else {
@@ -518,10 +518,10 @@ void NokonokoLand::exeFlyAway() {
         MR::startSound(this, "SE_EM_TURTLE_HIT");
         MR::startSound(this, "SE_EV_NOKONOKO_DAMAGE");
 
-        TVec3f direction;
+        Vec3f direction;
         MR::vecKillElement(mVelocity, -mGravity, &direction);
         MR::normalize(&direction);
-        TVec3f up(-mGravity);
+        Vec3f up(-mGravity);
         mVelocity.set(direction * 15.0f + up.multInLine(35.0f));
         MR::makeQuatFromVec(&mTargetQuat, -direction, -mGravity);
     }
@@ -594,7 +594,7 @@ void NokonokoLand::exeTurnStart() {
 void NokonokoLand::exeTurnLoop() {
     if (MR::isFirstStep(this)) {
         ::startBckBtp(this, "TurnLoopStart", "WalkWait");
-        TPos3f mtx;
+        Pos3f mtx;
         mtx.set(getBaseMtx());
         mtx.getYDir(mTurnAxis);
         MR::normalize(&mTurnAxis);
@@ -603,7 +603,7 @@ void NokonokoLand::exeTurnLoop() {
         ::startBckBtp(this, "TurnLoop", "WalkWait");
     }
 
-    TQuat4f rotation;
+    Quat4f rotation;
     rotation.setRotate(mTurnAxis, -PI / 139.0f);
     mTargetQuat.mult(rotation);
     if (isLookDirRailDirection()) {
@@ -696,10 +696,10 @@ void NokonokoLand::exeShellStartPunch() {
         MR::stopScene(::sSceneStopTimePunch);
 
         if (!MR::isNearZero(::sPushPower)) {
-            TVec3f direction(*MR::getPlayerCenterPos() - getSensor("shell")->mPosition);
+            Vec3f direction(*MR::getPlayerCenterPos() - getSensor("shell")->mPosition);
             MR::vecKillElement(direction, mGravity, &direction);
             MR::normalize(&direction);
-            TVec3f pushVelocity(direction);
+            Vec3f pushVelocity(direction);
             pushVelocity.scale(::sPushPower);
             MR::pushPlayer(pushVelocity);
         }
@@ -741,9 +741,9 @@ void NokonokoLand::exeBecomeJetTurtle() {
     if (MR::isFirstStep(this)) {
         MR::hideModel(this);
         MR::deleteEffectAll(this);
-        TPos3f mtx;
+        Pos3f mtx;
         mtx.set(MR::getJointMtx(this, "Center"));
-        TVec3f position;
+        Vec3f position;
         mtx.getTrans(position);
         mPosition.set(position);
         mJetTurtle->mPosition.set(position);

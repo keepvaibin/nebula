@@ -6,31 +6,31 @@ class DiskGravity : public PlanetGravity {
 public:
     DiskGravity();
 
-    virtual void updateMtx(const TPos3f& rMtx);
-    virtual bool calcOwnGravityVector(TVec3f* pDest, f32* pScalar, const TVec3f& rPosition) const;
+    virtual void updateMtx(const Pos3f& rMtx);
+    virtual bool calcOwnGravityVector(Vec3f* pDest, f32* pScalar, const Vec3f& rPosition) const;
 
     void updateLocalParam();
 
-    void setLocalPosition(const TVec3f& rLocalPos);
-    void setLocalDirection(const TVec3f& rLocalDir);
-    void setSideDirection(const TVec3f& rSideDir);
+    void setLocalPosition(const Vec3f& rLocalPos);
+    void setLocalDirection(const Vec3f& rLocalDir);
+    void setSideDirection(const Vec3f& rSideDir);
     void setRadius(f32 val);
     void setValidDegee(f32 val);
     void setBothSide(bool val);
     void setEnableEdgeGravity(bool val);
 
     // Position
-    TVec3f mLocalPosition;
-    TVec3f mWorldPosition;
+    Vec3f mLocalPosition;
+    Vec3f mWorldPosition;
 
     // Unit normal vector to the circular surface of the disk
-    TVec3f mLocalNormal;
-    TVec3f mWorldNormal;
+    Vec3f mLocalNormal;
+    Vec3f mWorldNormal;
 
-    TVec3f mSideDirection;
+    Vec3f mSideDirection;
 
-    TVec3f mOppositeSideVecOrtho;
-    TVec3f mWorldOppositeSideVecOrtho;
+    Vec3f mOppositeSideVecOrtho;
+    Vec3f mWorldOppositeSideVecOrtho;
 
     // Radius of the circular face of the disk
     f32 mLocalRadius;

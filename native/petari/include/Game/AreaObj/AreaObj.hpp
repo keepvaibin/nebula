@@ -2,7 +2,7 @@
 
 #include "Game/NameObj/NameObj.hpp"
 #include "Game/Util/Array.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class AreaForm;
 class StageSwitchCtrl;
@@ -13,7 +13,7 @@ public:
 
     virtual void init(const JMapInfoIter&);
 
-    virtual bool isInVolume(const TVec3f&) const;
+    virtual bool isInVolume(const Vec3f&) const;
 
     virtual const char* getManagerName() const {
         return mName;
@@ -25,8 +25,8 @@ public:
     bool isOnSwitchB() const;
     bool isValidSwitchA() const;
     bool isValidSwitchB() const;
-    void setFollowMtx(const TPos3f*);
-    TPos3f* getFollowMtx() const;
+    void setFollowMtx(const Pos3f*);
+    Pos3f* getFollowMtx() const;
 
     void validate() {
         mIsValid = true;
@@ -74,7 +74,7 @@ public:
     AreaObjMgr(s32, const char*);
 
     void entry(AreaObj*);
-    AreaObj* find_in(const TVec3f&) const;
+    AreaObj* find_in(const Vec3f&) const;
 
     AreaObj* getAreaObj(int index) {
         return mArray[index];

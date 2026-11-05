@@ -90,19 +90,19 @@ void AstroDomeOrbit::moveCoord() {
     mAngle = calcRepeatedRotateCoord(::cGalaxyRotateSpeed + mAngle);
 }
 
-void AstroDomeOrbit::calcGalaxyPos(TVec3f* pPos) const {
+void AstroDomeOrbit::calcGalaxyPos(Vec3f* pPos) const {
     f32 angle = calcRepeatedRotateCoord(mAngle) * TWO_PI / 360.0f;
     pPos->set< f32 >(MR::cos(angle), 0.0f, MR::sin(angle));
     pPos->mult(mOrbitRadius);
     pPos->add(*pPos, SphereSelectorFunction::getHandleTrans());
 
-    TPos3f rotateMtx;
+    Pos3f rotateMtx;
     SphereSelectorFunction::calcHandledRotateMtx(mRotation, &rotateMtx);
     rotateMtx.mult(*pPos, *pPos);
 }
 
 void AstroDomeOrbit::initDraw(const Color8& rColor) const {
-    TPos3f rotateMtx;
+    Pos3f rotateMtx;
     SphereSelectorFunction::calcHandledRotateMtx(mRotation, &rotateMtx);
     rotateMtx.concat(MR::getCameraViewMtx(), rotateMtx);
     J3DNativeShape::setPosition(0, rotateMtx);
@@ -117,7 +117,7 @@ void AstroDomeOrbit::initDraw(const Color8& rColor) const {
 }
 
 void AstroDomeOrbit::drawCelling(f32 width, bool isAddHeight, f32 height) const {
-    TVec3f handleTrans;
+    Vec3f handleTrans;
     handleTrans.set(SphereSelectorFunction::getHandleTrans());
 
     if (isAddHeight) {
@@ -131,14 +131,14 @@ void AstroDomeOrbit::drawCelling(f32 width, bool isAddHeight, f32 height) const 
     for (s32 i = 0; i < ::cDevideNum + 1; i++) {
         f32 angle = TWO_PI * i / ::cDevideNum;
 
-        TVec3f rotateVec;
+        Vec3f rotateVec;
         rotateVec.set< f32 >(MR::cos(angle), 0.0f, MR::sin(angle));
 
-        TVec3f negVec;
+        Vec3f negVec;
         negVec.scale(mOrbitRadius - (0.5f * width), rotateVec);
         negVec.add(handleTrans);
 
-        TVec3f posVec;
+        Vec3f posVec;
         posVec.scale(mOrbitRadius + (0.5f * width), rotateVec);
         posVec.add(handleTrans);
 
@@ -153,7 +153,7 @@ void AstroDomeOrbit::drawCelling(f32 width, bool isAddHeight, f32 height) const 
 }
 
 void AstroDomeOrbit::drawSide(f32 width, bool isAddWidth, f32 height) const {
-    TVec3f handleTrans;
+    Vec3f handleTrans;
     handleTrans.set(SphereSelectorFunction::getHandleTrans());
     handleTrans.y += 0.5f * height;
 
@@ -169,14 +169,14 @@ void AstroDomeOrbit::drawSide(f32 width, bool isAddWidth, f32 height) const {
     for (s32 i = 0; i < ::cDevideNum + 1; i++) {
         f32 angle = TWO_PI * i / ::cDevideNum;
 
-        TVec3f rotateVec;
+        Vec3f rotateVec;
         rotateVec.set< f32 >(MR::cos(angle), 0.0f, MR::sin(angle));
 
-        TVec3f v16;
+        Vec3f v16;
         v16.scale(scale, rotateVec);
         v16.add(handleTrans);
 
-        TVec3f v15;
+        Vec3f v15;
         v15.set(v16);
         v15.y -= height;
 

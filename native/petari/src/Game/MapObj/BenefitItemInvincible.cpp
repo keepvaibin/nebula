@@ -45,7 +45,7 @@ void BenefitItemInvincible::init(const JMapInfoIter& rIter) {
 
     _13A = 0;
 
-    TVec3f axisY, axisZ;
+    Vec3f axisY, axisZ;
     MR::getRotatedAxisZ(&axisZ, mRotation);
     mFwdAxis.set(axisZ);
 
@@ -59,7 +59,7 @@ void BenefitItemInvincible::initModelAndEfx() {
 
     initBinder(60.0f, 60.0f, 0);
     initHitSensor(1);
-    MR::addHitSensorMapObj(this, "body", 4, 60.0f, TVec3f(0.0f, 60.0f, 0.0f));
+    MR::addHitSensorMapObj(this, "body", 4, 60.0f, Vec3f(0.0f, 60.0f, 0.0f));
 
     MR::startBrk(this, "PowerupInvincible");
 }

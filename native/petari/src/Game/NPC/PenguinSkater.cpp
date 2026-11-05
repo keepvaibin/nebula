@@ -131,7 +131,7 @@ void PenguinSkater::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
 }
 
 f32 PenguinSkater::calcLead() const {
-    TVec3f playerRailPos;
+    Vec3f playerRailPos;
     f32 playerRailCoord = MR::calcRailPosNearestPlayer(&playerRailPos, mRail);
     f32 coord = MR::getRailCoord(mRail);
     f32 length = MR::getRailTotalLength(mRail);
@@ -183,11 +183,11 @@ bool PenguinSkater::inSwitchRange(f32 dist) const {
 }
 
 bool PenguinSkater::trySwitchRail() {
-    TVec3f crossPos;
-    TVec3f pos, dir;
+    Vec3f crossPos;
+    Vec3f pos, dir;
 
     f32 speed = MR::getRailCoordSpeed(mRail);
-    TVec3f railDir = MR::getRailDirection(mRail);
+    Vec3f railDir = MR::getRailDirection(mRail);
 
     MR::calcRailPointPos(&crossPos, mRail, mCrossPoint);
 
@@ -231,14 +231,14 @@ void PenguinSkater::endSwitchRail() {
 }
 
 void PenguinSkater::setCaughtStartMarioPose() {
-    TPos3f baseMtx;
+    Pos3f baseMtx;
     baseMtx.set(MR::getPlayerDemoActor()->getBaseMtx());
     baseMtx.getQuat(mMarioQuat);
     baseMtx.getTrans(mMarioPos);
 }
 
 void PenguinSkater::blendBaseMatrixToMario(f32 blendRate) const {
-    TMtx34f baseMtx;
+    Mtx34f baseMtx;
     if (blendRate >= 1.0f) {
         baseMtx.set(getBaseMtx());
         MR::setPlayerBaseMtx(baseMtx);
@@ -277,7 +277,7 @@ void PenguinSkater::exeWait() {
         MR::tryStartDemo(this, "\203\171\203\223\203\115\203\223\203\130\203\120\201\133\203\147\212\112\216\156" /* ペンギンスケート開始 */);
         MR::startMultiActorCameraTargetSelf(this, mCameraInfo, "\212\112\216\156" /* 開始 */);
         MR::forwardNode(mMsgCtrl);
-        TVec3f pos;
+        Vec3f pos;
         MR::calcRailStartPointDirection(&pos, mRail);
         if ((*MR::getPlayerPos() - mPosition).dot(pos) > 0.0f) {
             MR::reverseRailDirection(mCurrentRail);
@@ -393,7 +393,7 @@ void PenguinSkater::exeCaught() {
 
 void PenguinSkater::exeFadeOut() {
     if (MR::isFirstStep(this)) {
-        TPos3f pos;
+        Pos3f pos;
         pos.set(getBaseMtx());
         MR::setPlayerBaseMtx(pos);
         MR::startAction(this, "CaughtWait");
@@ -406,7 +406,7 @@ void PenguinSkater::exeFadeOut() {
 
 void PenguinSkater::exeFadeIn() {
     if (MR::isFirstStep(this)) {
-        TPos3f pos;
+        Pos3f pos;
         MR::findNamePos("\203\175\203\212\203\111\210\332\223\256\214\343" /* マリオ移動後 */, pos);
         MR::setNPCActorPos(this, "\203\171\203\223\203\115\203\223\210\332\223\256\214\343" /* ペンギン移動後 */);
         MR::setPlayerPosOnGroundAndWait("\203\175\203\212\203\111\210\332\223\256\214\343" /* マリオ移動後 */);

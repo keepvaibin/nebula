@@ -48,7 +48,6 @@
 #include "Game/System/NebulaAchievements.hpp"
 #include "Game/System/NebulaHost.hpp"
 
-template void JGeometry::SMatrix34C< f32 >::set(const f32 (*)[4]);
 
 bool gIsLuigi;
 
@@ -253,7 +252,7 @@ void MarioActor::init(const JMapInfoIter& rInfo) {
         return;
     }
 
-    TVec3f position, rotation, scale;
+    Vec3f position, rotation, scale;
 
     MR::getJMapInfoTrans(rInfo, &position);
     MR::getJMapInfoRotate(rInfo, &rotation);
@@ -274,7 +273,7 @@ struct DUMMY {
     u8 _0[0x30];
 };
 
-void MarioActor::init2(const TVec3f& rA, const TVec3f& rB, s32 initialAnimation) {
+void MarioActor::init2(const Vec3f& rA, const Vec3f& rB, s32 initialAnimation) {
     _8C = 1;
     gIsLuigi = false;
     if (MR::isPlayerLuigi()) {
@@ -283,7 +282,7 @@ void MarioActor::init2(const TVec3f& rA, const TVec3f& rB, s32 initialAnimation)
 
     mPosition.set(rA);
     mRotation.set(rB);
-    mScale.set(TVec3f(1.0f, 1.0f, 1.0f));
+    mScale.set(Vec3f(1.0f, 1.0f, 1.0f));
     mMario->setHeadAndFrontVecFromRotate(mRotation);
     mMario->_290 = mMario->mSideVec;
     updateBaseScaleMtx();
@@ -377,8 +376,8 @@ void MarioActor::init2(const TVec3f& rA, const TVec3f& rB, s32 initialAnimation)
     _978.zero();
     _27C.zero();
     _288.zero();
-    _498 = new FixedPosition(this, "HandR", TVec3f(0.0f, 0.0f, 0.0f), TVec3f(0.0f, 0.0f, 0.0f));
-    _49C = new FixedPosition(this, "HandR", TVec3f(1.8f, 52.51f, 39.58f), TVec3f(76.33f, 15.69f, 88.99f));
+    _498 = new FixedPosition(this, "HandR", Vec3f(0.0f, 0.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
+    _49C = new FixedPosition(this, "HandR", Vec3f(1.8f, 52.51f, 39.58f), Vec3f(76.33f, 15.69f, 88.99f));
     _494 = 0;
     _4B0 = 35.0f;
     _4B4 = 60.0f;
@@ -398,7 +397,7 @@ void MarioActor::init2(const TVec3f& rA, const TVec3f& rB, s32 initialAnimation)
     _1E4 = 0.0f;
     _1E8 = 0;
     _1EC = 0.0f;
-    _F3CVec = new TVec3f[30];
+    _F3CVec = new Vec3f[30];
     _F40 = 0;
     _F42 = 1;
     for (int i = 0; i < 30; i++) {
@@ -430,15 +429,15 @@ void MarioActor::initAfterOpeningDemo() {
     _37C = 0;
 }
 
-void MarioActor::calcBaseFrontVec(const TVec3f& rVec) {
-    TVec3f cross, j(0.0f, 1.0f, 0.0f);
+void MarioActor::calcBaseFrontVec(const Vec3f& rVec) {
+    Vec3f cross, j(0.0f, 1.0f, 0.0f);
     f32 y = j.dot(rVec);
     if (y < -0.99f) {
         _258.set(0.0f, 0.0f, 1.0f);
     } else {
         f32 cosine;
         if (MR::makeAxisAndCosignVecToVec(&cross, &cosine, rVec, j)) {
-            TVec3f k(0.0f, 0.0f, 1.0f);
+            Vec3f k(0.0f, 0.0f, 1.0f);
             Mtx transformation;
             NebulaMtxRotAxisRad(transformation, &cross, -MR::acos(cosine));
             NebulaMtxMultVecSR(transformation, &k, &_258);
@@ -651,7 +650,7 @@ XjointTransform* MarioActor::getJointCtrl(const char* pName) const {
 }
 
 void MarioActor::updateRotationInfo() {
-    TRot3f stack_44;
+    Rot3f stack_44;
     MR::multMtx(stack_44, _E3C, getBaseMtx());
     MR::makeRTFromMtxPtr(nullptr, &mRotation, stack_44, true);
     if (mRotation.z > 90.0f && mRotation.x > 90.0f) {
@@ -668,8 +667,8 @@ void MarioActor::updateRotationInfo() {
     if (MR::isSameDirection(_240, mMario->mFrontVec)) {
         _A18 = mRotation;
     } else {
-        TPos3f stack_14;
-        TVec3f stack_8 = -_240;
+        Pos3f stack_14;
+        Vec3f stack_8 = -_240;
         MR::makeMtxUpFront(&stack_14, stack_8, mMario->mFrontVec);
         MR::makeRTFromMtxPtr(nullptr, &_A18, stack_14, true);
         if (_A18.z > 90.0f && _A18.x > 90.0f) {
@@ -701,10 +700,10 @@ void MarioActor::movement() {
     _4A8 = 0;
     _4AC = HALF_PI / 2.0f;
     LiveActor::movement();
-    TVec3f stack_134(mPosition - _294);
-    TVec3f stack_128(stack_134 - mVelocity);
+    Vec3f stack_134(mPosition - _294);
+    Vec3f stack_128(stack_134 - mVelocity);
     _27C = stack_134;
-    TVec3f stack_11C(_288);
+    Vec3f stack_11C(_288);
     _288 = stack_128;
     if (MR::isOppositeDirection(_288, stack_11C)) {
         f32 mag_288 = _288.length();
@@ -727,7 +726,7 @@ void MarioActor::movement() {
 
         if (getMovementStates()._23 && mVelocity.length() < stack_134.length()) {
             if (stack_134.dot(getGravityVec()) < -0.0f) {
-                TVec3f stack_110;
+                Vec3f stack_110;
                 MR::vecKillElement(mVelocity, getGravityVec(), &stack_110);
                 if (MR::isNearZero(stack_110)) {
                     MR::vecKillElement(stack_134, getGravityVec(), &stack_110);
@@ -745,9 +744,9 @@ void MarioActor::movement() {
                 }
             }
         } else if (getMovementStates()._23) {
-            TVec3f stack_104(mMario->_8F8);
+            Vec3f stack_104(mMario->_8F8);
             MR::normalizeOrZero(&stack_104);
-            TVec3f stack_F8;
+            Vec3f stack_F8;
             f32 elementA = MR::vecKillElement(stack_134, stack_104, &stack_F8);
             f32 elementB = MR::vecKillElement(mVelocity, stack_104, &stack_F8);
             if (mVelocity.length() > 20.0f && elementA < elementB * 0.5f) {
@@ -763,12 +762,12 @@ void MarioActor::movement() {
 
         if (getMovementStates().jumping && mBeeWallWalk == 0) {
             if (stack_128.dot(getGravityVec()) < -40.0f) {
-                TVec3f stack_EC(mPosition - getGravityVec() * 100.0f);
-                TVec3f stack_E0;
+                Vec3f stack_EC(mPosition - getGravityVec() * 100.0f);
+                Vec3f stack_E0;
                 Triangle* pTmp = mMario->getTmpPolygon();
 
                 if (MR::getFirstPolyOnLineToMap(&stack_E0, pTmp, stack_EC, getGravityVec() * 200.f)) {
-                    TVec3f stack_D4;
+                    Vec3f stack_D4;
                     if (MR::vecKillElement(stack_E0 - (mPosition), getGravityVec(), &stack_D4) < -5.0f && pTmp->mParts && !pTmp->mParts->_D4 &&
                         getMovementStates()._3E != 1) {
                         mPosition = stack_E0;
@@ -796,7 +795,7 @@ void MarioActor::movement() {
                     bool eject = true;
                     CollisionParts* parts = mMario->_45C->mParts;
                     if (parts && !mMario->_45C->mParts->_D4) {
-                        TVec3f stack_C8, stack_BC, stack_B0;
+                        Vec3f stack_C8, stack_BC, stack_B0;
                         NebulaMtxMultVec(parts->mInvBaseMatrix.toMtxPtr(), &mMario->mShadowPos, &stack_C8);
                         NebulaMtxMultVec(parts->mPrevBaseMatrix.toMtxPtr(), &stack_C8, &stack_BC);
                         stack_B0 = mMario->mShadowPos - stack_BC;
@@ -810,7 +809,7 @@ void MarioActor::movement() {
                         mMario->mJumpVec.zero();
                         mMario->_148.zero();
                         if (!mMario->_5FC && (getDrawStates()._1E || getPrevDrawStates()._1E)) {
-                            TVec3f stack_A4(stack_128);
+                            Vec3f stack_A4(stack_128);
                             MR::normalizeOrZero(&stack_A4);
                             _3B4 = stack_A4;
                             setPress(0, 0);
@@ -852,7 +851,7 @@ void MarioActor::movement() {
             }
 
             if (eject) {
-                TVec3f stack_98;
+                Vec3f stack_98;
                 f32 element = MR::vecKillElement(stack_134, mMario->_368, &stack_98);
                 mPosition -= mMario->_368 * element;
             }
@@ -997,7 +996,7 @@ void MarioActor::updateBehavior() {
         _3AC--;
     }
 
-    TVec3f vec = mPosition;
+    Vec3f vec = mPosition;
     vec -= _270;
     mLastMove = vec;
     _270 = mPosition;
@@ -1145,7 +1144,7 @@ bool MarioActor::doRush() {
         if (_934 && mMario->isForceStopRush()) {
             bool received = _924->receiveMessage(ACTMES_RUSH_DAMAGE_CANCEL, getSensor("body"));
             if (_934 && received) {
-                RushEndInfo stack_20(nullptr, 4, TVec3f(0.0f, 0.0f, 0.0f), false, 0);
+                RushEndInfo stack_20(nullptr, 4, Vec3f(0.0f, 0.0f, 0.0f), false, 0);
                 endRush(&stack_20);
             }
         }
@@ -1407,7 +1406,7 @@ void MarioActor::updateRealMtx() {
     getRealMtx(_D7C.toMtxPtr(), "CapPosition");
     getRealMtx(_DAC.toMtxPtr(), "Hip");
     getRealMtx(_DDC.toMtxPtr(), "Spine2");
-    TVec3f stack_50;
+    Vec3f stack_50;
     MR::extractMtxTrans(_DDC.toMtxPtr(), &stack_50);
     if (MR::isNan(stack_50)) {
         MR::getJointMtx(this, "Spine2");
@@ -1423,7 +1422,7 @@ void MarioActor::updateRealMtx() {
         return;
     }
 
-    TVec3f stack_44, stack_38;
+    Vec3f stack_44, stack_38;
     MR::extractMtxTrans(_D7C.toMtxPtr(), &stack_44);
     MR::extractMtxTrans(_DAC.toMtxPtr(), &stack_38);
     _4B8 = stack_44 - stack_38;
@@ -1648,8 +1647,8 @@ bool MarioActor::doStun() {
 }
 
 void MarioActor::scaleMtx(MtxPtr pRawMtx) {
-    TVec3f i, j, k;
-    const TRot3f* pMtx = (TRot3f*)pRawMtx;
+    Vec3f i, j, k;
+    const Rot3f* pMtx = (Rot3f*)pRawMtx;
     f32 scalar = 0.35f * (1.0f - _3B0) + 1.0f;
     pMtx->getXDir(i);
     pMtx->getYDir(j);
@@ -1687,11 +1686,11 @@ void MarioActor::updateBaseScaleMtx() {
 
 void MarioActor::getRealMtx(MtxPtr pMtx, const char* pName) const {
     MR::multMtx(pMtx, (MtxPtr)&_BF8, MR::getJointMtx(this, pName));
-    TVec3f stack_8(mMario->_13C);
+    Vec3f stack_8(mMario->_13C);
     MR::addTransMtx(pMtx, stack_8);
 }
 
-void MarioActor::getRealPos(const char* pName, TVec3f* pVec) const {
+void MarioActor::getRealPos(const char* pName, Vec3f* pVec) const {
     Mtx mtx;
     getRealMtx(mtx, pName);
     MR::extractMtxTrans(mtx, pVec);
@@ -1770,7 +1769,7 @@ void MarioActor::calcAnimInMovement() {
 
         if (val == false) {
             // Mario faces the item that gave the form, when one did (a morph can end it first).
-            TVec3f frontVec;
+            Vec3f frontVec;
             if (_4A4 != nullptr) {
                 MR::calcFrontVec(&frontVec, _4A4->mHost);
                 mMario->setFrontVecKeepUp(frontVec);
@@ -1783,7 +1782,7 @@ void MarioActor::calcAnimInMovement() {
                 CameraTargetArg camera(nullptr, nullptr, nullptr, this);
                 MR::startGlobalEventCamera("\225\317\220\147\217\211\217\157\203\112\203\201\203\211" /* 変身初出カメラ */, camera, 60);
 
-                TVec3f vec(_2A0);
+                Vec3f vec(_2A0);
 
                 f32 scale = 500.0f;
                 if (mPlayerMode == 6) {
@@ -1861,9 +1860,9 @@ void MarioActor::forceSetBaseMtx(MtxPtr pMtx) {
         MR::extractMtxTrans(pMtx, &mPosition);
     }
 
-    ((TRot3f*)pMtx)->getZDir(_2DC);
-    ((TRot3f*)pMtx)->getYDir(mUpVec);
-    ((TRot3f*)pMtx)->getXDir(_2E8);
+    ((Rot3f*)pMtx)->getZDir(_2DC);
+    ((Rot3f*)pMtx)->getYDir(mUpVec);
+    ((Rot3f*)pMtx)->getXDir(_2E8);
     MR::updateHitSensorsAll(this);
     mMario->invalidateRelativePosition();
     mMario->_8F8.zero();
@@ -2022,18 +2021,18 @@ void MarioActor::calcAnim() {
         _214->_20 = 40.0f + (mMario->mShadowPos - mPosition).dot(_240);
         _214->_48 = mMario->mShadowPos;
 
-        TVec3f leftVec;
+        Vec3f leftVec;
         getRealPos("HandL", &leftVec);
 
-        TVec3f rightVec;
+        Vec3f rightVec;
         getRealPos("HandR", &rightVec);
 
-        TVec3f stack114(rightVec - leftVec);
+        Vec3f stack114(rightVec - leftVec);
 
         f32 length = stack114.length();
         MR::normalizeOrZero(&stack114);
 
-        TVec3f cross;
+        Vec3f cross;
         cross.cross(stack114, _240);
         MR::normalizeOrZero(&cross);
 
@@ -2055,7 +2054,7 @@ void MarioActor::calcAnim() {
             pShadow->_1C = 70.0f;
         }
 
-        TVec3f vec;
+        Vec3f vec;
         if (mMario->isStatusActive(MarioStatus_Hang)) {
             getRealPos("Center", &vec);
         } else {
@@ -2106,20 +2105,20 @@ void MarioActor::calcAndSetBaseMtx() {
     _1C1 = false;
     _1C0 = false;
 
-    TMtx34f mtx;
+    Mtx34f mtx;
     mtx.set(getJ3DModel()->getBaseTRMtx());
 
     bool b1 = false;
     if (_934) {
         b1 = _924->receiveMessage(ACTMES_UPDATE_BASEMTX, getSensor("body"));
         if (b1) {
-            TVec3f frontVec;
-            TVec3f headVec;
-            reinterpret_cast< TRot3f* >(getBaseMtx())->getYDir(headVec);
+            Vec3f frontVec;
+            Vec3f headVec;
+            reinterpret_cast< Rot3f* >(getBaseMtx())->getYDir(headVec);
             MR::normalizeOrZero(&headVec);
             mMario->setHeadVec(headVec);
 
-            reinterpret_cast< TRot3f* >(getBaseMtx())->getZDir(frontVec);
+            reinterpret_cast< Rot3f* >(getBaseMtx())->getZDir(frontVec);
             MR::normalizeOrZero(&frontVec);
             mMario->setFrontVecKeepUp(frontVec);
             mMario->_334 = frontVec;
@@ -2130,12 +2129,12 @@ void MarioActor::calcAndSetBaseMtx() {
         if (_EA5) {
             NebulaMtxCopy(_EA8.mMtx, getBaseMtx());
 
-            TVec3f frontVec;
-            TVec3f headVec;
-            reinterpret_cast< TRot3f* >(getBaseMtx())->getYDir(headVec);
+            Vec3f frontVec;
+            Vec3f headVec;
+            reinterpret_cast< Rot3f* >(getBaseMtx())->getYDir(headVec);
             mMario->setHeadVec(headVec);
 
-            reinterpret_cast< TRot3f* >(getBaseMtx())->getZDir(frontVec);
+            reinterpret_cast< Rot3f* >(getBaseMtx())->getZDir(frontVec);
             mMario->setFrontVecKeepUp(frontVec);
 
             mMario->mWalkSpeed = 0.0f;
@@ -2158,8 +2157,8 @@ void MarioActor::calcAndSetBaseMtx() {
 
     Mtx receivedMtx;
     if (b1) {
-        TVec3f vec(*getPosition());
-        TVec3f* pPosition = &mPosition;
+        Vec3f vec(*getPosition());
+        Vec3f* pPosition = &mPosition;
         MR::extractMtxTrans(getBaseMtx(), pPosition);
         mMario->invalidateRelativePosition();
 
@@ -2175,12 +2174,12 @@ void MarioActor::calcAndSetBaseMtx() {
     }
 
     if (_934 && !b1) {
-        TVec3f vec;
+        Vec3f vec;
         MR::extractMtxTrans(getBaseMtx(), &vec);
         _938 = *getPosition() - vec;
     }
 
-    TPos3f mtx2;
+    Pos3f mtx2;
     NebulaMtxIdentity(mtx2);
 
     mMario->createAngleMtx(mtx2, b1);
@@ -2205,10 +2204,10 @@ void MarioActor::calcAndSetBaseMtx() {
         !mMario->isStatusActive(MarioStatus_Bury) && !getMovementStates()._23 && !getMovementStates()._A &&
         ((isAir = getMario()->getMovementStates()._B && getMario()->getMovementStates().jumping), !isAir)) {
         _9F4 = mMario->mAirGravityVec;
-        TVec3f vec(-getGravityVector() * getConst().getTable()->mBeePoseHeadToFootLength);
+        Vec3f vec(-getGravityVector() * getConst().getTable()->mBeePoseHeadToFootLength);
         MtxPtr pTranslation = MR::tmpMtxTrans(-vec);
-        TVec3f vec4(_33C - (mPosition - _9F4 * getConst().getTable()->mBeePoseHeadToFootLength));
-        TVec3f vec5;
+        Vec3f vec4(_33C - (mPosition - _9F4 * getConst().getTable()->mBeePoseHeadToFootLength));
+        Vec3f vec5;
         f32 dot = 0.0f;
         if (!MR::normalizeOrZero(&vec4)) {
             NebulaVecCrossProduct(&mMario->mFrontVec, &vec4, &vec5);
@@ -2229,13 +2228,13 @@ void MarioActor::calcAndSetBaseMtx() {
         NebulaMtxConcat(pTranslation, mtx2, mtx2);
         NebulaMtxConcat(rotation, mtx2, mtx2);
         NebulaMtxConcat(MR::tmpMtxTrans(vec), mtx2, mtx2);
-        TVec3f vec240(_9F4 * getConst().getTable()->mBeePoseDelayAccel);
+        Vec3f vec240(_9F4 * getConst().getTable()->mBeePoseDelayAccel);
         MR::vecKillElement(vec240, _360, &vec240);
         _354 = _354 + vec240;
         _33C = _33C + _354;
         _360 = _33C - (mPosition - _9F4 * getConst().getTable()->mBeePoseHeadToFootLength);
-        TVec3f vec24C(_360);
-        TVec3f vec258(_360);
+        Vec3f vec24C(_360);
+        Vec3f vec258(_360);
         MR::normalizeOrZero(&vec258);
         f32 dot2 = MR::acosEx(_9F4.dot(vec258));
         f32 val = getConst().getTable()->mBeePoseLimitAngleAir;
@@ -2244,7 +2243,7 @@ void MarioActor::calcAndSetBaseMtx() {
         }
 
         if (dot2 > val) {
-            TVec3f vec264;
+            Vec3f vec264;
             NebulaVecCrossProduct(&_9F4, &vec258, &vec264);
             if (MR::normalizeOrZero(&vec264)) {
                 _360 = _9F4;
@@ -2307,7 +2306,7 @@ void MarioActor::calcAndSetBaseMtx() {
         pJoint->_64 = _E3C.mMtx;
     } else {
         Mtx correction;
-        TVec3f offset;
+        Vec3f offset;
         mMario->createCorrectionMtx(correction, &offset);
         mMarioAnim->getXanimePlayer()->getCore()->getJointTransform(1)->_2C = offset;
         NebulaMtxCopy(correction, _E3C.mMtx);
@@ -2368,7 +2367,7 @@ void MarioActor::calcAndSetBaseMtx() {
 
             break;
         case 4:
-            f32 height = 160.0f * (1.0f - MR::cos(0.5f * ((_390 / 120.0f) * JGeometry::TUtil< f32 >::PI())));
+            f32 height = 160.0f * (1.0f - MR::cos(0.5f * ((_390 / 120.0f) * FloatUtil::PI())));
             _3B0 = height / 160.0f;
             break;
         }
@@ -2377,11 +2376,11 @@ void MarioActor::calcAndSetBaseMtx() {
         switch (_39C) {
         case 0:
         case 2:
-            _3B0 = 1.0f + (0.15f * _394 / 30.0f) * MR::sin(2.0f * (_394 * JGeometry::TUtil< f32 >::PI()) / 15.0f);
+            _3B0 = 1.0f + (0.15f * _394 / 30.0f) * MR::sin(2.0f * (_394 * FloatUtil::PI()) / 15.0f);
             break;
         case 1:
         case 3:
-            _3B0 = 1.0f + (0.15f * _394 / 30.0f) * MR::sin(2.0f * (_394 * JGeometry::TUtil< f32 >::PI()) / 15.0f);
+            _3B0 = 1.0f + (0.15f * _394 / 30.0f) * MR::sin(2.0f * (_394 * FloatUtil::PI()) / 15.0f);
             break;
         }
     } else if (!getMovementStates()._3C) {
@@ -2424,11 +2423,11 @@ void MarioActor::setBlendMtxTimer(u16 a1) {
     mBlendMtxTimer = a1;
 }
 
-void MarioActor::getGroundPos(TVec3f* pDst) const {
+void MarioActor::getGroundPos(Vec3f* pDst) const {
     *pDst = mMario->mGroundPos;
 }
 
-TVec3f* MarioActor::getShadowPos() const {
+Vec3f* MarioActor::getShadowPos() const {
     return &mMario->mShadowPos;
 }
 
@@ -2630,7 +2629,7 @@ void MarioActor::calcCenterPos() {
         return;
     }
 
-    TVec3f vec24;
+    Vec3f vec24;
     if (mMario->isStatusActive(MarioStatus_Wall)) {
         vec24 = mMario->_75C;
     } else {
@@ -2672,7 +2671,7 @@ void MarioActor::calcCenterPos() {
 }
 
 void MarioActor::calcHeadPos() {
-    TMtx34f mtx;
+    Mtx34f mtx;
     const char* pName = "CapPosition";
     getRealMtx(mtx, pName);
     MR::extractMtxTrans(mtx, &_2AC);

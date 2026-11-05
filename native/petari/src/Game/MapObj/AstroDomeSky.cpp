@@ -72,11 +72,11 @@ void AstroDomeSky::draw() const {
 }
 
 void AstroDomeSky::calcAndSetBaseMtx() {
-    TPos3f rotateMtx;
+    Pos3f rotateMtx;
     if (isNerve(GET_NERVE(AstroDomeSky, AstroDomeSkyNrvJumpOutDemo))) {
         MR::makeMtxRotate(rotateMtx, ::cJumpOutDemoRotate);
     } else {
-        SphereSelectorFunction::calcHandledRotateMtx(TVec3f(0.0f, 0.0f, 0.0f), &rotateMtx);
+        SphereSelectorFunction::calcHandledRotateMtx(Vec3f(0.0f, 0.0f, 0.0f), &rotateMtx);
     }
 
     rotateMtx.setTrans(MR::getCamPos());

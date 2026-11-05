@@ -54,7 +54,7 @@ void SandCapsulePressGround::init(const JMapInfoIter& rIter) {
     }
 
     _C4.set(mPosition);
-    TVec3f up;
+    Vec3f up;
     MR::calcUpVec(&up, this);
     _D0.scaleAdd(3600.0f, up, _C4);
 }
@@ -139,7 +139,7 @@ void SandCapsulePressGround::exeDisappearDemo() {
         MR::overlayWithPreviousScreen(5);
         MR::offSwitchA(this);
 
-        TVec3f v8;
+        Vec3f v8;
         v8.add(_C4, _D0);
         v8.x /= 2.0f;
         v8.y /= 2.0f;
@@ -171,7 +171,7 @@ void SandCapsulePressGround::exeStop() {
 }
 
 void SandCapsulePressGround::calcMoveVelocity() {
-    TVec3f up;
+    Vec3f up;
     MR::calcUpVec(&up, this);
 
     if (isNerve(GET_NERVE(SandCapsulePressGround, SandCapsulePressGroundNrvMoveDown))) {

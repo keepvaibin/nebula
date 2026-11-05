@@ -32,12 +32,12 @@ void DinoPackunTrackFire::init(const JMapInfoIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::connectToSceneEnemyMovement(this);
     initHitSensor(1);
-    TVec3f sensorOffs;
+    Vec3f sensorOffs;
     sensorOffs.x = 0.0f;
     sensorOffs.y = 0.0f;
     sensorOffs.z = 0.0f;
     MR::addHitSensorEnemyAttack(this, "attack", 8, 60.0f, sensorOffs);
-    TVec3f spOffs;
+    Vec3f spOffs;
     spOffs.x = 0.0f;
     spOffs.y = 0.0f;
     spOffs.z = 0.0f;
@@ -70,7 +70,7 @@ bool DinoPackunTrackFire::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, Hi
     return false;
 }
 
-void DinoPackunTrackFire::appearAndSetPos(const TVec3f& rPos) {
+void DinoPackunTrackFire::appearAndSetPos(const Vec3f& rPos) {
     mPosition.set(rPos);
     MR::zeroVelocity(this);
     MR::startSound(this, "SE_BM_D_PAKKUN_FIREBALL_S_ON");

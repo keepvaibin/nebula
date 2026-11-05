@@ -10,29 +10,29 @@ public:
 
     ParallelGravity();
 
-    virtual void updateMtx(const TPos3f& rMtx);
-    virtual bool calcOwnGravityVector(TVec3f* pDest, f32* pScalar, const TVec3f& rPosition) const;
+    virtual void updateMtx(const Pos3f& rMtx);
+    virtual bool calcOwnGravityVector(Vec3f* pDest, f32* pScalar, const Vec3f& rPosition) const;
 
-    void setPlane(const TVec3f& rPlaneUp, const TVec3f& rPlanePos);
-    void setRangeBox(const TPos3f& rMtx);
+    void setPlane(const Vec3f& rPlaneUp, const Vec3f& rPlanePos);
+    void setRangeBox(const Pos3f& rMtx);
     void setRangeCylinder(f32 radius, f32 height);
     void setRangeType(RANGE_TYPE rangeType);
     void setBaseDistance(f32 val);
     void setDistanceCalcType(DISTANCE_CALC_TYPE distanceCalcType);
-    bool isInSphereRange(const TVec3f& rPosition, f32* pScalar) const;
-    bool isInBoxRange(const TVec3f& rPosition, f32* pScalar) const;
-    bool isInCylinderRange(const TVec3f& rPosition, f32* pScalar) const;
-    bool isInRange(const TVec3f& rPosition, f32* pScalar) const;
+    bool isInSphereRange(const Vec3f& rPosition, f32* pScalar) const;
+    bool isInBoxRange(const Vec3f& rPosition, f32* pScalar) const;
+    bool isInCylinderRange(const Vec3f& rPosition, f32* pScalar) const;
+    bool isInRange(const Vec3f& rPosition, f32* pScalar) const;
 
-    TPos3f mLocalMtx;
-    TPos3f mWorldMtx;
+    Pos3f mLocalMtx;
+    Pos3f mWorldMtx;
     f32 mExtentX;
     f32 mExtentY;
     f32 mExtentZ;
-    TVec3f mPlanePosition;
-    TVec3f mPlaneUpVec;
-    TVec3f mWorldPlanePosition;
-    TVec3f mWorldPlaneUpVec;
+    Vec3f mPlanePosition;
+    Vec3f mPlaneUpVec;
+    Vec3f mWorldPlanePosition;
+    Vec3f mWorldPlaneUpVec;
     f32 mCylinderHeight;
     f32 mCylinderRadius;
     f32 mBaseDistance;

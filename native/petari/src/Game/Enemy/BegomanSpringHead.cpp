@@ -15,7 +15,7 @@ namespace NrvBegomanSpringHead {
 
 void BegomanHead::calcAndSetBaseMtx() {
     PartsModel::calcAndSetBaseMtx();
-    TVec3f scale = *_9C * mScale;
+    Vec3f scale = *_9C * mScale;
     MR::setBaseScale(this, scale);
 }
 
@@ -29,7 +29,7 @@ void BegomanSpringHead::init(const JMapInfoIter& rIter) {
     initNerve(GET_NERVE(BegomanSpringHead, HostTypeNrvWait));
     MR::initLightCtrl(this);
     initHitSensor(1);
-    MR::addHitSensorAtJoint(this, "head", "SpringJoint5", ATYPE_MAP_OBJ_SIMPLE, 8, 100.0f, TVec3f(0.0f, 100.0f, 0.0f));
+    MR::addHitSensorAtJoint(this, "head", "SpringJoint5", ATYPE_MAP_OBJ_SIMPLE, 8, 100.0f, Vec3f(0.0f, 100.0f, 0.0f));
     PartsModel::init(rIter);
 }
 

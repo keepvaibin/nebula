@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class ActorCameraInfo;
 class DummyDisplayModel;
@@ -17,10 +17,10 @@ public:
         _0.identity();
     }
 
-    void setAttachBaseMatrix(const TPos3f&);
+    void setAttachBaseMatrix(const Pos3f&);
 
-    TMtx34f _0;
-    const TPos3f* _30;
+    Mtx34f _0;
+    const Pos3f* _30;
 };
 
 /// @brief Megaleg
@@ -56,7 +56,7 @@ public:
     void initEventCamera(const JMapInfoIter&);
     void initLeg(const JMapInfoIter&);
     void initLegIKPlacement();
-    void initMovableArea(const TPos3f&);
+    void initMovableArea(const Pos3f&);
     void initBodyPosition();
     void initBoneInfo();
     void initPose();
@@ -87,15 +87,15 @@ public:
     bool isBroken() const;
     bool isRideMario() const;
     bool isLeaveMarioNow() const;
-    void setJointAttachBaseMatrix(const TPos3f&, s32);
+    void setJointAttachBaseMatrix(const Pos3f&, s32);
     void addStepPoint(TripodBossStepPoint*);
-    void getBodyMatrix(TPos3f*) const;
-    void getJointMatrix(TPos3f*, s32) const;
-    void getJointAttachMatrix(TPos3f*, s32) const;
+    void getBodyMatrix(Pos3f*) const;
+    void getJointMatrix(Pos3f*, s32) const;
+    void getJointAttachMatrix(Pos3f*, s32) const;
     void requestStartStepSequence(s32);
     TripodBossStepSequence* getCurrentStepSequence();
     TripodBossStepSequence* getNextStepSequence();
-    void calcLegUpVector(TVec3f*, const TVec3f&);
+    void calcLegUpVector(Vec3f*, const Vec3f&);
     void calcDemoMovement();
     void calcBodyMovement();
     void calcLegMovement();
@@ -105,10 +105,10 @@ public:
     void startDemo();
     void endDemo(const char*);
     void checkRideMario();
-    const TPos3f* getLegMatrixPtr(PART_ID, SUB_PART_ID) const;
+    const Pos3f* getLegMatrixPtr(PART_ID, SUB_PART_ID) const;
     void changeBgmState();
     static s32 getPartIDFromBoneID(s32);
-    void setAttachBaseMatrix(const TPos3f&);
+    void setAttachBaseMatrix(const Pos3f&);
 
     void exeTryStartDemo();
     void exeNonActive();
@@ -136,9 +136,9 @@ public:
         return (_634 == 0) || (_634 == 1);
     }
 
-    TPos3f mBodyMtx;
-    TPos3f _BC;
-    TPos3f _EC;
+    Pos3f mBodyMtx;
+    Pos3f _BC;
+    Pos3f _EC;
     ModelObj* mLowModel;
     TripodBossBone mBossBones[22];
     TripodBossLeg* mLegs[3];
@@ -146,11 +146,11 @@ public:
     TripodBossMovableArea* mMovableArea;
     TripodBossStepSequence* mStepSequence;
     DummyDisplayModel* mDummyModel;
-    TVec3f _5BC;
-    TVec3f _5C8;
-    TVec3f _5D4;
-    TVec3f _5E0;
-    TVec3f _5EC;
+    Vec3f _5BC;
+    Vec3f _5C8;
+    Vec3f _5D4;
+    Vec3f _5E0;
+    Vec3f _5EC;
     f32 _5F8;
     f32 _5FC;
     f32 _600;

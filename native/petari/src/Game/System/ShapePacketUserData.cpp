@@ -53,7 +53,7 @@ void ShapePacketUserData::load() const {
 }
 
 void ShapePacketUserData::loadTexMtx(J3DMaterial* pMaterial, int slot, u16 index) const {
-    TPos3f mtx;
+    Pos3f mtx;
     for (u32 i = 0; i < mTexGenNum; i++) {
         if (mTexMtxInfo[i].mType != 0) {
             if (mTexMtxInfo[i].mType == 2) {

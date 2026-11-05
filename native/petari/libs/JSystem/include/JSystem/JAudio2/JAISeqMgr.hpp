@@ -13,7 +13,7 @@ public:
     };
     JAISeqMgr(bool setInstance);
     void freeDeadSeq_();
-    bool startSound(JAISoundID id, JAISoundHandle* handle, const TVec3f* posPtr);
+    bool startSound(JAISoundID id, JAISoundHandle* handle, const Vec3f* posPtr);
     void calc();
     void stop();
     void stop(u32 fadeTime);

@@ -22,11 +22,11 @@ CameraDPD::CameraDPD(const char* pName)
 void CameraDPD::reset() {
     if (mCameraType == CameraType_FixedPos) {
         CameraLocalUtil::setPos(this, CameraLocalUtil::getPos(mCameraMan));
-        TVec3f pos = (CameraLocalUtil::getTarget(this)->getPosition() + TVec3f(0.0f, 100.0f, 0.0f));
-        TVec3f front = pos - CameraLocalUtil::getPos(this);
+        Vec3f pos = (CameraLocalUtil::getTarget(this)->getPosition() + Vec3f(0.0f, 100.0f, 0.0f));
+        Vec3f front = pos - CameraLocalUtil::getPos(this);
         MR::normalize(&front);
-        TVec3f up = CameraLocalUtil::getTarget(this)->getUpVec();
-        TVec3f side = up.cross(front);
+        Vec3f up = CameraLocalUtil::getTarget(this)->getUpVec();
+        Vec3f side = up.cross(front);
         MR::normalize(&side);
         up.cross(front, side);
         mMtx.identity();
@@ -34,22 +34,22 @@ void CameraDPD::reset() {
         mMtx.setYDir(up);
         mMtx.setZDir(front);
     } else if (mCameraType == CameraType_FollowWorldPos) {
-        TVec3f worldPos;
+        Vec3f worldPos;
         worldPos.set(*MR::getStarPointerWorldPosUsingDepth(PLAYER_1));
-        TVec3f basePos = CameraLocalUtil::getTarget(this)->getPosition() + CameraLocalUtil::getTarget(this)->getUpVec() * mDist;
-        TVec3f front = worldPos - basePos;
+        Vec3f basePos = CameraLocalUtil::getTarget(this)->getPosition() + CameraLocalUtil::getTarget(this)->getUpVec() * mDist;
+        Vec3f front = worldPos - basePos;
         if (MR::isNearZero(front)) {
             front.set(CameraLocalUtil::getTarget(this)->getFrontVec());
         } else {
             MR::normalize(&front);
         }
 
-        TVec3f up = CameraLocalUtil::getTarget(this)->getUpVec();
-        TVec3f side = up.cross(front);
+        Vec3f up = CameraLocalUtil::getTarget(this)->getUpVec();
+        Vec3f side = up.cross(front);
         if (MR::isNearZero(side)) {
             CameraMan* camMan = mCameraMan;
-            TVec3f diff = CameraLocalUtil::getWatchPos(camMan) - CameraLocalUtil::getPos(camMan);
-            TQuat4f rot;
+            Vec3f diff = CameraLocalUtil::getWatchPos(camMan) - CameraLocalUtil::getPos(camMan);
+            Quat4f rot;
             rot.setRotate(diff, front);
             side.cross(CameraLocalUtil::getUpVec(mCameraMan), diff);
             rot.transform(side);
@@ -80,7 +80,7 @@ CameraTargetObj* CameraDPD::calc() {
         CameraLocalUtil::setPos(this, CameraLocalUtil::getTarget(this)->getPosition() + CameraLocalUtil::getTarget(this)->getUpVec() * mDist);
     }
 
-    TVec2f pointPos;
+    Vec2f pointPos;
     MR::getPointerPos(&pointPos, PLAYER_1);
 
     if (mResetPointingPos) {
@@ -120,26 +120,26 @@ CameraTargetObj* CameraDPD::calc() {
         CameraLocalUtil::setFovy(this, mFovy);
     }
 
-    TPos3f panYMtx;
+    Pos3f panYMtx;
     panYMtx.identity();
-    panYMtx.makeRotate(TVec3f(1.0f, 0.0f, 0.0f), mBlendPointPos.y * mAngleYRange);
+    panYMtx.makeRotate(Vec3f(1.0f, 0.0f, 0.0f), mBlendPointPos.y * mAngleYRange);
 
-    TPos3f panXMtx;
+    Pos3f panXMtx;
     panXMtx.identity();
-    panXMtx.makeRotate(TVec3f(0.0f, 1.0f, 0.0f), -mBlendPointPos.x * mAngleXRange);
+    panXMtx.makeRotate(Vec3f(0.0f, 1.0f, 0.0f), -mBlendPointPos.x * mAngleXRange);
 
-    TPos3f mtx3;
+    Pos3f mtx3;
     mtx3.identity();
-    mtx3.makeRotate(TVec3f(1.0f, 0.0f, 0.0f), -mAngleX);
+    mtx3.makeRotate(Vec3f(1.0f, 0.0f, 0.0f), -mAngleX);
 
-    TPos3f rotMtx;
+    Pos3f rotMtx;
     rotMtx.concat(panXMtx, panYMtx);
     rotMtx.concat(mtx3, rotMtx);
     rotMtx.concat(mMtx, rotMtx);
-    TVec3f front;
+    Vec3f front;
     rotMtx.getZDir(front);
     CameraLocalUtil::setWatchPos(this, CameraLocalUtil::getPos(this) + front * 1000.0f);
-    TVec3f up;
+    Vec3f up;
     rotMtx.getYDir(up);
     CameraLocalUtil::setUpVecAndWatchUpVec(this, up);
 

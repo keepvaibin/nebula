@@ -41,7 +41,7 @@ void SpinDriverOperateRing::reset() {
     resetVelocityAndTrans();
 }
 
-void SpinDriverOperateRing::update(const TVec3f& a1, const TVec3f& a2) {
+void SpinDriverOperateRing::update(const Vec3f& a1, const Vec3f& a2) {
     _8C.set(a1);
     _98.set(a2);
 
@@ -54,7 +54,7 @@ void SpinDriverOperateRing::update(const TVec3f& a1, const TVec3f& a2) {
 
     addAccelToOperatePlane(a2);
 
-    TVec3f direction;
+    Vec3f direction;
     addAccelOperate(&direction, a2);
 
     addAccelToCenter();
@@ -69,7 +69,7 @@ void SpinDriverOperateRing::updatePosition() {
     _D8 = _A4.length();
     _DC = _D8 / (mRadiusRate * 500.0f);
 
-    TVec3f vec24(0.0f, 0.0f, 0.0f);
+    Vec3f vec24(0.0f, 0.0f, 0.0f);
     if (!MR::isNearZero(_D8)) {
         vec24 = _A4 * (1.0f / _D8);
     }
@@ -85,7 +85,7 @@ void SpinDriverOperateRing::updatePosition() {
     }
 }
 
-void SpinDriverOperateRing::updateControlPoint(const TVec3f& rVec) {
+void SpinDriverOperateRing::updateControlPoint(const Vec3f& rVec) {
     if (MR::isStarPointerInScreen(PLAYER_1) && MR::calcStarPointerPosOnPlane(&_C8, _8C, rVec, PLAYER_1, false)) {
         _E0 = 1;
 
@@ -97,7 +97,7 @@ void SpinDriverOperateRing::updateControlPoint(const TVec3f& rVec) {
     }
 }
 
-void SpinDriverOperateRing::updateDirection(const TVec3f& rNewDir) {
+void SpinDriverOperateRing::updateDirection(const Vec3f& rNewDir) {
     mDirection = rNewDir * ::sDirectionRate + mDirection * (1.0f - ::sDirectionRate);
 }
 
@@ -109,18 +109,18 @@ void SpinDriverOperateRing::resetVelocityAndTrans() {
     _DC = 0.0f;
 }
 
-void SpinDriverOperateRing::addAccelToOperatePlane(const TVec3f& rVec) {
+void SpinDriverOperateRing::addAccelToOperatePlane(const Vec3f& rVec) {
     f32 dot = -rVec.dot(_A4);
     mAccelerate += rVec.scaleInline(::sToPlaneRate * dot);
 }
 
-void SpinDriverOperateRing::addAccelOperate(TVec3f* pVec, const TVec3f& rVec) {
-    TVec3f dpdVec;
+void SpinDriverOperateRing::addAccelOperate(Vec3f* pVec, const Vec3f& rVec) {
+    Vec3f dpdVec;
     calcOperatePowerByDPD(&dpdVec);
     dpdVec.scale(2.0f);
 
     if (_DC > 0.5f) {
-        TVec3f vec44(-_A4 / _D8);
+        Vec3f vec44(-_A4 / _D8);
         f32 dot = vec44.dot(dpdVec);
         f32 norm = MR::normalize(_DC, 0.5f, 1.0f);
 
@@ -148,11 +148,11 @@ void SpinDriverOperateRing::attenuateVelocity() {
     mAccelerate.z *= 0.94f;
 }
 
-void SpinDriverOperateRing::calcOperatePowerByDPD(TVec3f* pVec) const {
+void SpinDriverOperateRing::calcOperatePowerByDPD(Vec3f* pVec) const {
     if (_E0 == 2) {
         pVec->set(_C8 - _8C - _A4);
 
-        TVec3f vec(_C8 - _8C - _A4);
+        Vec3f vec(_C8 - _8C - _A4);
         f32 scalar;
         MR::separateScalarAndDirection(&scalar, &vec, vec);
 

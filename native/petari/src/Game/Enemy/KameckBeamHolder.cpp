@@ -55,7 +55,7 @@ namespace MR {
         MR::createSceneObj(SceneObj_KameckBeamTurtleHolder);
     }
 
-    KameckBeam* startFollowKameckBeam(s32 beamKind, MtxPtr pMtx, f32 scale, const TVec3f& rWandLocalPos, KameckBeamEventListener* pEventListener) {
+    KameckBeam* startFollowKameckBeam(s32 beamKind, MtxPtr pMtx, f32 scale, const Vec3f& rWandLocalPos, KameckBeamEventListener* pEventListener) {
         KameckBeam* pBeam = getKameckBeam();
 
         if (pBeam == nullptr) {

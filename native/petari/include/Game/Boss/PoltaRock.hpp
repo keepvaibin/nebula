@@ -18,7 +18,7 @@ public:
     virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
     virtual bool receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 
-    void start(Polta*, const TVec3f&, const TVec3f&);
+    void start(Polta*, const Vec3f&, const Vec3f&);
     void setColorWhite();
     void setColorBlack();
     void setColorYellow();
@@ -34,8 +34,8 @@ public:
     }
 
     Polta* mOwner;
-    TQuat4f _90;
-    TVec3f _A0;
-    TVec3f _AC;
+    Quat4f _90;
+    Vec3f _A0;
+    Vec3f _AC;
     s32 mType;
 };

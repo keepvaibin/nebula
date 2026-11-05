@@ -31,15 +31,15 @@ void RailRider::move() {
     syncPosDir();
 }
 
-void RailRider::moveToNearestPos(const TVec3f& rPos) {
+void RailRider::moveToNearestPos(const Vec3f& rPos) {
     mCoord = mBezierRail->getNearestRailPosCoord(rPos);
     syncPosDir();
 }
 
-void RailRider::moveToNearestPoint(const TVec3f& rPos) {
+void RailRider::moveToNearestPoint(const Vec3f& rPos) {
     f32 nearestDistance = FLOAT_MAX;
     int nearestPoint = 0;
-    TVec3f pointPos;
+    Vec3f pointPos;
     for (int i = 0; i < getPointNum(); i++) {
         copyPointPos(&pointPos, i);
         f32 distance = rPos.squared(pointPos);
@@ -68,15 +68,15 @@ void RailRider::reverse() {
     syncPosDir();
 }
 
-void RailRider::calcPosAtCoord(TVec3f* pOutVec, f32 a2) const {
+void RailRider::calcPosAtCoord(Vec3f* pOutVec, f32 a2) const {
     mBezierRail->calcPos(pOutVec, a2);
 }
 
-void RailRider::calcDirectionAtCoord(TVec3f* pOutVec, f32 a2) const {
+void RailRider::calcDirectionAtCoord(Vec3f* pOutVec, f32 a2) const {
     mBezierRail->calcDirection(pOutVec, a2);
 }
 
-f32 RailRider::calcNearestPos(const TVec3f& rPos) const {
+f32 RailRider::calcNearestPos(const Vec3f& rPos) const {
     return mBezierRail->getNearestRailPosCoord(rPos);
 }
 
@@ -186,7 +186,7 @@ s32 RailRider::getPointNum() const {
     return mBezierRail->mPointNum;
 }
 
-void RailRider::copyPointPos(TVec3f* pOut, s32 pointNum) const {
+void RailRider::copyPointPos(Vec3f* pOut, s32 pointNum) const {
     JMapInfoIter iter;
     mBezierRail->calcRailCtrlPointIter(&iter, pointNum);
     MR::getRailPointPos0(iter, pOut);

@@ -51,7 +51,7 @@ void StrayTico::init(const JMapInfoIter& rIter) {
     MR::offBind(this);
 
     mItemBubbleModel = MR::createPartsModelMapObj(this, "\203\101\203\217" /* アワ */, "ItemBubble", nullptr);
-    mItemBubbleModel->initFixedPosition(TVec3f(0.0f, 0.0f, 0.0f), TVec3f(0.0f, 0.0f, 0.0f), nullptr);
+    mItemBubbleModel->initFixedPosition(Vec3f(0.0f, 0.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f), nullptr);
 
     MR::registerDemoSimpleCastAll(mItemBubbleModel);
     MR::startAction(mItemBubbleModel, "Move");
@@ -70,19 +70,19 @@ void StrayTico::init(const JMapInfoIter& rIter) {
 
 void StrayTico::initSensor() {
     initHitSensor(2);
-    MR::addHitSensorNpc(this, "Bubble", 8, 80.0f, TVec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorNpc(this, "Body", 8, 45.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorNpc(this, "Bubble", 8, 80.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorNpc(this, "Body", 8, 45.0f, Vec3f(0.0f, 0.0f, 0.0f));
     MR::validateHitSensor(this, "Bubble");
     MR::invalidateHitSensor(this, "Body");
 }
 
 inline void StrayTico::setShadowDrop(const char* const pos) {
-    const TVec3f offset(0.0f, 0.0f, 0.0f);
+    const Vec3f offset(0.0f, 0.0f, 0.0f);
     MR::setShadowDropPositionAtJoint(this, nullptr, pos, offset);
 }
 
 void StrayTico::initShadow() {
-    MR::initShadowVolumeOval(this, TVec3f(40.0f, 40.0f, 20.0f));
+    MR::initShadowVolumeOval(this, Vec3f(40.0f, 40.0f, 20.0f));
     setShadowDrop("PowerStarC");
     MR::onCalcShadow(this, nullptr);
 }
@@ -143,7 +143,7 @@ bool StrayTico::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* p
 
     if (MR::isMsgStarPieceReflect(msg) && !isNerve(GET_NERVE(StrayTico, StrayTicoNrvWait))) {
         if (isNerve(GET_NERVE(StrayTico, StrayTicoNrvChase))) {
-            TVec3f sensorDir;
+            Vec3f sensorDir;
             MR::calcSensorDirectionNormalize(&sensorDir, pSender, pReceiver);
             MR::setVelocity(this, sensorDir * 10.0f);
         }
@@ -175,7 +175,7 @@ bool StrayTico::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceive
     return false;
 }
 
-bool StrayTico::requestCompleteDemo(const TVec3f& rParam1, const TVec3f& rParam2, f32 param3) {
+bool StrayTico::requestCompleteDemo(const Vec3f& rParam1, const Vec3f& rParam2, f32 param3) {
     _E0 = mPosition;
     _BC = rParam1;
     _C8 = rParam2;
@@ -184,7 +184,7 @@ bool StrayTico::requestCompleteDemo(const TVec3f& rParam1, const TVec3f& rParam2
     MR::normalize(&_C8);
     MR::makeAxisVerticalZX(&_D4, _C8);
 
-    TVec3f vec;
+    Vec3f vec;
     vec.killElement2(rParam1 - mPosition, _C8);
 
     if (MR::normalizeOrZero(&vec)) {
@@ -255,7 +255,7 @@ void StrayTico::exeLauncherCamera() {
         MR::offBind(this);
     }
 
-    TVec3f vec;
+    Vec3f vec;
     vec.scaleAdd(-400.0f, MR::getCamZdir(), *MR::getPlayerPos());
 
     MR::addVelocityMoveToTarget(this, vec, 0.5f);
@@ -304,7 +304,7 @@ void StrayTico::updateChase() {
         MR::tryStartBck(this, "Wait");
     }
 
-    TVec3f playerFrontVec;
+    Vec3f playerFrontVec;
     MR::getPlayerFrontVec(&playerFrontVec);
 
     MR::turnDirectionDegree(this, &mFrontVec, playerFrontVec, ::sChaseTurnDegree);
@@ -322,7 +322,7 @@ void StrayTico::exeCompleteDemo() {
     }
 
     if (MR::isLessStep(this, ::sCompletePlacementTime)) {
-        TVec3f vec;
+        Vec3f vec;
         MR::rotateVecDegree(&vec, _D4 * ::sCompleteStartRadius, _C8, _EC);
         vec.add(_BC);
         MR::vecBlend(_E0, vec, &mPosition, MR::calcNerveEaseInOutRate(this, ::sCompletePlacementTime));
@@ -333,7 +333,7 @@ void StrayTico::exeCompleteDemo() {
         mPosition.add(_BC);
     }
 
-    TVec3f vec;
+    Vec3f vec;
     MR::getPlayerFrontVec(&vec);
     MR::turnDirectionDegree(this, &mFrontVec, vec, ::sCompleteDemoRotate);
 }

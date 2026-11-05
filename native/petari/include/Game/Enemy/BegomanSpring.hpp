@@ -25,7 +25,7 @@ public:
     virtual u32 getKind() const {
         return 2;
     }
-    virtual bool onTouchElectric(const TVec3f& rPos, const TVec3f& rDirection);
+    virtual bool onTouchElectric(const Vec3f& rPos, const Vec3f& rDirection);
     virtual bool setNerveReturn();
     virtual const Nerve* getNerveWait();
 
@@ -62,12 +62,12 @@ public:
 
     MultiEventCamera* mEventCamera;
     BegomanSpringHead* mHead;
-    TPos3f mHeadMatrix;
-    TPos3f mWaterColumnMatrix;
-    TVec3f mCameraStartPos;
+    Pos3f mHeadMatrix;
+    Pos3f mWaterColumnMatrix;
+    Vec3f mCameraStartPos;
     bool mIsCameraActive;
     ActorCameraInfo* mCameraInfo;
     s32 mType;
     BegomanBaby* mBaby;
-    TVec3f mHidePos;
+    Vec3f mHidePos;
 };

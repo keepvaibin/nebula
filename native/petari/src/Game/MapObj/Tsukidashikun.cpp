@@ -82,7 +82,7 @@ void Tsukidashikun::exeSign() {
         }
     }
 
-    TVec3f pos;
+    Vec3f pos;
     MR::calcPerpendicFootToLineInside(&pos, *MR::getPlayerPos(), MR::getRailPointPosStart(this), MR::getRailPointPosEnd(this));
 
     if (MR::isNearPlayer(pos, ::sRumblePadLength)) {

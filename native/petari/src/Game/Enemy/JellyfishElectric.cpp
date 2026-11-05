@@ -54,7 +54,7 @@ void JellyfishElectric::init(const JMapInfoIter& rIter) {
     MR::connectToSceneEnemy(this);
     MR::addToAttributeGroupSearchTurtle(this);
     initHitSensor(1);
-    TVec3f sensorOffs;
+    Vec3f sensorOffs;
     sensorOffs.set(0.0f, -60.0f, 0.0f);
     MR::addHitSensorEnemy(this, "body", 8, 350.0f, sensorOffs);
     initBinder(400.0f, 0.0f, 0);
@@ -64,7 +64,7 @@ void JellyfishElectric::init(const JMapInfoIter& rIter) {
     initEffectKeeper(2, nullptr, false);
     MR::addEffectHitNormal(this, nullptr);
     initSound(4, false);
-    MR::initStarPointerTarget(this, 400.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::initStarPointerTarget(this, 400.0f, Vec3f(0.0f, 0.0f, 0.0f));
     mController = new AnimScaleController(nullptr);
     mBindStarPtr = new WalkerStateBindStarPointer(this, mController);
     MR::initShadowVolumeSphere(this, 230.0f);
@@ -94,7 +94,7 @@ void JellyfishElectric::kill() {
 }
 
 void JellyfishElectric::control() {
-    MR::requestPointLight(this, TVec3f(mPosition), ::sPointLightColor, 0.9999f, -1);
+    MR::requestPointLight(this, Vec3f(mPosition), ::sPointLightColor, 0.9999f, -1);
     MR::changeShowModelFlagSyncNearClipping(this, 700.0f);
     mController->updateNerve();
 
@@ -110,17 +110,17 @@ void JellyfishElectric::control() {
         }
 
         f32 wave = MR::sinDegree(_94 + 45);
-        const TVec3f& rGravity = mGravity;
+        const Vec3f& rGravity = mGravity;
         mVelocity.scale(wave, rGravity);
         _94++;
     }
 }
 
 void JellyfishElectric::calcAndSetBaseMtx() {
-    TPos3f pos;
+    Pos3f pos;
     MR::makeMtxFrontUpPos(&pos, _98, -mGravity, mPosition);
     MR::setBaseTRMtx(this, pos);
-    TVec3f scale = mController->_C * mScale;
+    Vec3f scale = mController->_C * mScale;
     MR::setBaseScale(this, scale);
 }
 
@@ -184,7 +184,7 @@ void JellyfishElectric::exeRailGoal() {
     if (MR::isStep(this, _AC)) {
         if (_B0) {
             MR::moveCoordAndTransToRailPoint(this, 0);
-            const TVec3f& dir = MR::getRailDirection(this);
+            const Vec3f& dir = MR::getRailDirection(this);
             _98.x = dir.x;
             _98.y = dir.y;
             _98.z = dir.z;

@@ -96,13 +96,13 @@ void Snakehead::init(const JMapInfoIter& rIter) {
 
     if (isSmall()) {
         initHitSensor(2);
-        MR::addHitSensorAtJointEnemy(this, "head", "Head", 8, 100.0f, TVec3f(140.0f, -70.0f, 0.0f));
-        MR::addHitSensorAtJointEnemy(this, "body", "Body03", 8, 300.0f, TVec3f(0.0f, 0.0f, 0.0f));
+        MR::addHitSensorAtJointEnemy(this, "head", "Head", 8, 100.0f, Vec3f(140.0f, -70.0f, 0.0f));
+        MR::addHitSensorAtJointEnemy(this, "body", "Body03", 8, 300.0f, Vec3f(0.0f, 0.0f, 0.0f));
     } else {
         initHitSensor(3);
-        MR::addHitSensorAtJointEnemy(this, "upper_jaw", "UpperJaw", 8, 250.0f, TVec3f(100.0f, 0.0f, 0.0f));
-        MR::addHitSensorAtJointEnemy(this, "lower_jaw", "LowerJaw", 8, 200.0f, TVec3f(250.0f, 0.0f, 0.0f));
-        MR::addHitSensorAtJointEnemy(this, "body", "Body03", 8, 600.0f, TVec3f(0.0f, 0.0f, 0.0f));
+        MR::addHitSensorAtJointEnemy(this, "upper_jaw", "UpperJaw", 8, 250.0f, Vec3f(100.0f, 0.0f, 0.0f));
+        MR::addHitSensorAtJointEnemy(this, "lower_jaw", "LowerJaw", 8, 200.0f, Vec3f(250.0f, 0.0f, 0.0f));
+        MR::addHitSensorAtJointEnemy(this, "body", "Body03", 8, 600.0f, Vec3f(0.0f, 0.0f, 0.0f));
     }
 
     initEffectKeeper(1, nullptr, false);
@@ -116,9 +116,9 @@ void Snakehead::init(const JMapInfoIter& rIter) {
     initSound(4, false);
 
     if (isSmall()) {
-        MR::initStarPointerTarget(this, 250.0f, TVec3f(0.0f, 0.0f, 150.0f));
+        MR::initStarPointerTarget(this, 250.0f, Vec3f(0.0f, 0.0f, 150.0f));
     } else {
-        MR::initStarPointerTarget(this, 500.0f, TVec3f(0.0f, 0.0f, 200.0f));
+        MR::initStarPointerTarget(this, 500.0f, Vec3f(0.0f, 0.0f, 200.0f));
     }
 
     mController = new AnimScaleController(nullptr);
@@ -131,7 +131,7 @@ void Snakehead::init(const JMapInfoIter& rIter) {
     if (MR::isEqualString(objectName, "Snakehead")) {
         MR::initShadowController(this, 2);
         MR::addShadowVolumeFlatModel(this, "Head", "SnakeheadShadow", mBodyMtx);
-        MR::addShadowVolumeBox(this, "Body", TVec3f(480.0f, 300.0f, 680.0f));
+        MR::addShadowVolumeBox(this, "Body", Vec3f(480.0f, 300.0f, 680.0f));
     } else {
         MR::initShadowVolumeFlatModel(this, "SnakeheadSmallShadow", mBodyMtx);
         MR::setShadowDropLength(this, "SnakeheadSmallShadow", 500.0f);
@@ -166,13 +166,13 @@ void Snakehead::init(const JMapInfoIter& rIter) {
 }
 
 void Snakehead::initAfterPlacement() {
-    TVec3f headPos;
+    Vec3f headPos;
     MR::copyJointPos(this, "Head", &headPos);
 
     headPos -= MR::getRailPointPosStart(this);
     headPos += (MR::getRailPointPosEnd(this));
 
-    TVec3f v7;
+    Vec3f v7;
     v7.scaleAdd(-50.0f, mGravity, headPos);
     MR::getFirstPolyOnLineToMapExceptSensor(&_C4, nullptr, v7, mGravity * 1000.0f, getSensor("body"));
 
@@ -185,16 +185,16 @@ void Snakehead::kill() {
     MR::emitEffect(this, "Death");
 
     if (isSmall()) {
-        TVec3f headPos;
+        Vec3f headPos;
         MR::copyJointPos(this, "Head", &headPos);
         MR::appearStarPiece(this, headPos, 9, 10.0f, 40.0f, 0);
 
         MR::startSound(this, "SE_OJ_STAR_PIECE_BURST_W");
     } else {
-        TVec3f attPos;
+        Vec3f attPos;
         MR::copyJointPos(this, "Antenna", &attPos);
 
-        TPos3f itemMtx;
+        Pos3f itemMtx;
         itemMtx.set(getBaseMtx());
         itemMtx.setTrans(attPos);
         MR::appearKinokoOneUpPop(reinterpret_cast< BenefitItemObj* >(mItem), itemMtx, 15.0f);
@@ -208,33 +208,33 @@ void Snakehead::control() {
 
     tryDPDSwoon();
 
-    TVec3f jointPos;
+    Vec3f jointPos;
     MR::copyJointPos(this, "Body04", &jointPos);
     mBodyMtx.setTrans(jointPos);
 
     if (!isSmall()) {
-        TVec3f body01Pos;
+        Vec3f body01Pos;
         MR::copyJointPos(this, "Body01", &body01Pos);
 
-        TVec3f v6;
+        Vec3f v6;
         f32 dist = jointPos.distance(body01Pos);
 
         v6.add(jointPos, body01Pos);
         v6.scale(0.5f);
         MR::setShadowDropPosition(this, "Body", v6);
-        MR::setShadowVolumeBoxSize(this, "Body", TVec3f(480.0f, 300.0f, dist));
+        MR::setShadowVolumeBoxSize(this, "Body", Vec3f(480.0f, 300.0f, dist));
     }
 }
 
 void Snakehead::calcAndSetBaseMtx() {
-    TVec3f endPntDir;
+    Vec3f endPntDir;
     MR::calcRailEndPointDirection(&endPntDir, this);
 
-    TPos3f frontUp;
+    Pos3f frontUp;
     MR::makeMtxFrontUpPos(&frontUp, endPntDir, -mGravity, mPosition);
     MR::setBaseTRMtx(this, frontUp);
 
-    TVec3f scale = mController->_C * mScale;
+    Vec3f scale = mController->_C * mScale;
     MR::setBaseScale(this, scale);
 }
 
@@ -364,10 +364,10 @@ void Snakehead::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
         return;
     }
 
-    TVec3f vec40;
+    Vec3f vec40;
     MR::calcPerpendicFootToLineInside(&vec40, pReceiver->mPosition, MR::getRailPointPosStart(this), MR::getRailPointPosEnd(this));
 
-    TVec3f vec4C;
+    Vec3f vec4C;
     vec4C.sub(pReceiver->mPosition, vec40);
 
     f32 pushRadius = isSmall() ? 100.0f : ::sStartCoord;
@@ -379,7 +379,7 @@ void Snakehead::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
         return;
     }
 
-    TVec3f pos(getSensor("body")->mPosition);
+    Vec3f pos(getSensor("body")->mPosition);
     f32 radius = getSensor("body")->mRadius;
 
     getSensor("body")->mPosition.set(vec40);
@@ -463,7 +463,7 @@ bool Snakehead::tryDPDSwoon() {
 }
 
 bool Snakehead::isNearPlayerFromRail() const {
-    TVec3f nearestPos;
+    Vec3f nearestPos;
     MR::calcNearestRailPos(&nearestPos, this, *MR::getPlayerPos());
 
     return nearestPos.distance(*MR::getPlayerPos()) <= mActivationRadius;

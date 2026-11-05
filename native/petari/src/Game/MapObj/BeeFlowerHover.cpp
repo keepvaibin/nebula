@@ -145,8 +145,8 @@ void BeeFlowerHover::control() {
         mLodCtrlPlanet->update();
     }
 
-    TPos3f mtx;
-    mtx.makeRotate(TVec3f(0.0f, 1.0f, 0.0f), MR::toRadian(_BC));
+    Pos3f mtx;
+    mtx.makeRotate(Vec3f(0.0f, 1.0f, 0.0f), MR::toRadian(_BC));
     _8C.concat(mtx);
 
     if (mRailMover != nullptr) {
@@ -157,7 +157,7 @@ void BeeFlowerHover::control() {
 }
 
 void BeeFlowerHover::calcAndSetBaseMtx() {
-    TPos3f stack_8;
+    Pos3f stack_8;
     stack_8.identity();
 
     if (mRailPosture) {

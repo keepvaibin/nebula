@@ -1,6 +1,6 @@
 #pragma once
 
-#include "JSystem/JGeometry/TVec.hpp"
+#include <nebula_geometry.hpp>
 
 class NebulaArena;
 struct JPAEmitterWorkData;
@@ -20,7 +20,7 @@ public:
     virtual void prepare(JPAEmitterWorkData*, JPAFieldBlock*);
     virtual void calc(JPAEmitterWorkData*, JPAFieldBlock*, JPABaseParticle*) = 0;
 
-    JGeometry::TVec3< f32 > mAccel;
+    Vec3f mAccel;
 };
 
 class JPAFieldSpin : public JPAFieldBase {
@@ -31,9 +31,9 @@ public:
     void prepare(JPAEmitterWorkData*, JPAFieldBlock*);
     void calc(JPAEmitterWorkData*, JPAFieldBlock*, JPABaseParticle*);
 
-    JGeometry::TVec3< f32 > field_0x10;
-    JGeometry::TVec3< f32 > field_0x1c;
-    JGeometry::TVec3< f32 > field_0x28;
+    Vec3f field_0x10;
+    Vec3f field_0x1c;
+    Vec3f field_0x28;
 };
 
 class JPAFieldRandom : public JPAFieldBase {
@@ -52,7 +52,7 @@ public:
     void prepare(JPAEmitterWorkData*, JPAFieldBlock*);
     void calc(JPAEmitterWorkData*, JPAFieldBlock*, JPABaseParticle*);
 
-    JGeometry::TVec3< f32 > mDir;
+    Vec3f mDir;
     f32 mCutoff;
 };
 
@@ -64,7 +64,7 @@ public:
     void prepare(JPAEmitterWorkData*, JPAFieldBlock*);
     void calc(JPAEmitterWorkData*, JPAFieldBlock*, JPABaseParticle*);
 
-    JGeometry::TVec3< f32 > mDir;
+    Vec3f mDir;
 };
 
 class JPAFieldGravity : public JPAFieldBase {
@@ -92,9 +92,9 @@ public:
     void prepare(JPAEmitterWorkData*, JPAFieldBlock*);
     void calc(JPAEmitterWorkData*, JPAFieldBlock*, JPABaseParticle*);
 
-    JGeometry::TVec3< f32 > field_0x10;
-    JGeometry::TVec3< f32 > field_0x1c;
-    JGeometry::TVec3< f32 > field_0x28;
+    Vec3f field_0x10;
+    Vec3f field_0x1c;
+    Vec3f field_0x28;
 };
 
 class JPAFieldVortex : public JPAFieldBase {
@@ -105,7 +105,7 @@ public:
     void prepare(JPAEmitterWorkData*, JPAFieldBlock*);
     void calc(JPAEmitterWorkData*, JPAFieldBlock*, JPABaseParticle*);
 
-    JGeometry::TVec3< f32 > field_0x10;
+    Vec3f field_0x10;
     f32 field_0x1c;
     f32 field_0x20;
 };
@@ -124,8 +124,8 @@ public:
     u8 mMagic[4];
     u32 mSize;
     u32 mFlags;
-    JGeometry::TVec3< f32 > mPos;
-    JGeometry::TVec3< f32 > mDir;
+    Vec3f mPos;
+    Vec3f mDir;
     f32 mMag;
     f32 mMagRndm;
     f32 mVal1;
@@ -180,19 +180,19 @@ public:
     f32 getFadeOutRate() {
         return mFadeOutRate;
     }
-    JGeometry::TVec3< f32 >& getPos() {
+    Vec3f& getPos() {
         return mPos;
     }
-    JGeometry::TVec3< f32 >& getDir() {
+    Vec3f& getDir() {
         return mDir;
     }
     f32 getMag() const {
         return mMag;
     }
-    void getPosOrig(JGeometry::TVec3< f32 >* pos) {
+    void getPosOrig(Vec3f* pos) {
         pos->set(mpData->mPos);
     }
-    void getDirOrig(JGeometry::TVec3< f32 >* dir) {
+    void getDirOrig(Vec3f* dir) {
         dir->set(mpData->mDir);
     }
     f32 getMagOrig() {
@@ -215,8 +215,8 @@ private:
     JPAFieldBase* mpField;
     f32 mFadeInRate;
     f32 mFadeOutRate;
-    JGeometry::TVec3< f32 > mPos;
-    JGeometry::TVec3< f32 > mDir;
+    Vec3f mPos;
+    Vec3f mDir;
     f32 mMag;
 
     enum Type {

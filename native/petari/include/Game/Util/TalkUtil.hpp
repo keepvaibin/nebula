@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/Util/MessageUtil.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class JMapInfoIter;
 class LiveActor;
@@ -71,9 +71,9 @@ namespace MR {
     void registerKillFunc(TalkMessageCtrl*, const TalkMessageFuncBase&);
     void setMessageArg(TalkMessageCtrl*, int);
     void setMessageArg(TalkMessageCtrl*, const char16_t*);
-    TalkMessageCtrl* createTalkCtrl(LiveActor*, const JMapInfoIter&, const char*, const TVec3f&, MtxPtr);
-    TalkMessageCtrl* createTalkCtrlDirect(LiveActor*, const JMapInfoIter&, const char*, const TVec3f&, MtxPtr);
-    TalkMessageCtrl* createTalkCtrlDirectOnRootNodeAutomatic(LiveActor*, const JMapInfoIter&, const char*, const TVec3f&, MtxPtr);
+    TalkMessageCtrl* createTalkCtrl(LiveActor*, const JMapInfoIter&, const char*, const Vec3f&, MtxPtr);
+    TalkMessageCtrl* createTalkCtrlDirect(LiveActor*, const JMapInfoIter&, const char*, const Vec3f&, MtxPtr);
+    TalkMessageCtrl* createTalkCtrlDirectOnRootNodeAutomatic(LiveActor*, const JMapInfoIter&, const char*, const Vec3f&, MtxPtr);
     bool tryTalkNearPlayer(TalkMessageCtrl*);
     bool tryTalkNearPlayerAtEnd(TalkMessageCtrl*);
     bool tryTalkForce(TalkMessageCtrl*);
@@ -89,8 +89,8 @@ namespace MR {
     bool tryTalkSelectLeft(TalkMessageCtrl*);
     bool tryTalkSelectRight(TalkMessageCtrl*);
     const MtxPtr getMessageBalloonFollowMatrix(const TalkMessageCtrl*);
-    const TVec3f& getMessageBalloonFollowOffset(const TalkMessageCtrl*);
-    void setMessageBalloonFollowOffset(TalkMessageCtrl*, const TVec3f&);
+    const Vec3f& getMessageBalloonFollowOffset(const TalkMessageCtrl*);
+    void setMessageBalloonFollowOffset(TalkMessageCtrl*, const Vec3f&);
     bool isNearPlayer(const TalkMessageCtrl*, f32);
     bool inMessageArea(const TalkMessageCtrl*);
     bool isTalkNone(const TalkMessageCtrl*);

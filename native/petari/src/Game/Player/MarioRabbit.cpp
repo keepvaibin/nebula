@@ -253,7 +253,7 @@ bool MarioRabbit::update() {
         if (_2A) {
             _2A--;
         } else {
-            const TVec3f& direction = getWorldPadDir();
+            const Vec3f& direction = getWorldPadDir();
             if (_28) {
                 getPlayer()->setFrontVecKeepUp(direction, mActor->getConst().getTable()->mRabbitTurnRatio2);
                 if (_14 < 0.0f) {
@@ -276,7 +276,7 @@ bool MarioRabbit::update() {
 
     addVelocity(_18);
     f32 angle = MR::diffAngleAbsHorizontal(getFrontVec(), _5C, getAirGravityVec());
-    TVec3f cross = getFrontVec().cross(_5C);
+    Vec3f cross = getFrontVec().cross(_5C);
     if (cross.dot(getAirGravityVec()) < 0.0f) {
         angle = -angle;
     }

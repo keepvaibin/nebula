@@ -376,8 +376,8 @@ void Butler::initForAstroGalaxy(const JMapInfoIter& rIter) {
 }
 
 TalkMessageCtrl* Butler::createTalkCtrl(const JMapInfoIter& rIter, const char* pTalk) {
-    TVec3f vec;
-    vec.setPSZeroVec();
+    Vec3f vec;
+    vec.setZeroVec();
 
     return MR::createTalkCtrlDirectOnRootNodeAutomatic(this, rIter, pTalk, vec, MR::getJointMtx(this, "Body"));
 }

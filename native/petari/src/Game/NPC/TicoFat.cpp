@@ -197,11 +197,11 @@ void TicoFat::init(const JMapInfoIter& rIter) {
     MR::getJMapInfoArg1NoInit(rIter, &numItem);
     _1E0 = _1E4 = numItem;
     mCurrentFed = 0;
-    MR::addHitSensorAtJointEye(this, "Mouth", "Mouth", 8, 30.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointEye(this, "Mouth", "Mouth", 8, 30.0f, Vec3f(0.0f, 0.0f, 0.0f));
     initStarPieceSaveData(rIter);
     MR::declareStarPieceReceiver(this, _1E0);
-    mMsgCtrl = MR::createTalkCtrlDirect(this, rIter, "Common_TicoFat001", TVec3f(0.0f, 220.0f, 0.0f), nullptr);
-    _16C = MR::createTalkCtrlDirect(this, rIter, "Common_TicoFat000", TVec3f(0.0f, 220.0f, 0.0f), nullptr);
+    mMsgCtrl = MR::createTalkCtrlDirect(this, rIter, "Common_TicoFat001", Vec3f(0.0f, 220.0f, 0.0f), nullptr);
+    _16C = MR::createTalkCtrlDirect(this, rIter, "Common_TicoFat000", Vec3f(0.0f, 220.0f, 0.0f), nullptr);
     MR::registerEventFunc(mMsgCtrl, TalkMessageFunc_Inline(this, &TicoFat::eventFunc));
     MR::setMessageArg(mMsgCtrl, _1E0);
     MR::setMessageArg(_16C, _1E0);
@@ -278,7 +278,7 @@ void TicoFat::kill() {
 }
 
 void TicoFat::setCameraParam() {
-    TVec3f yDir, zDir, xDir, trans;
+    Vec3f yDir, zDir, xDir, trans;
     MR::extractMtxXYZDir(getBaseMtx(), &xDir, &yDir, &zDir);
     MR::extractMtxTrans(getBaseMtx(), &trans);
     _B0.getXDir(xDir);
@@ -286,7 +286,7 @@ void TicoFat::setCameraParam() {
     _B0.getZDir(zDir);
 
     trans = _C0;
-    TVec3f* ptr = &trans;
+    Vec3f* ptr = &trans;
     MR::setProgrammableCameraParam(
         "\203\146\203\165\203\140\203\122\203\112\203\201\203\211" /* デブチコカメラ */, (*ptr + (xDir * 0.0f) + (yDir * 0.0f)) + (zDir * 0.0f),
         (*ptr + (xDir * 0.0f)) + ((yDir * 100.0f)) + (zDir * MR::getLinerValueFromMinMax(calcScale(), 1.0f, 1.9f, 1300.0f, 1680.0f)), yDir, false);
@@ -294,9 +294,9 @@ void TicoFat::setCameraParam() {
 
 void TicoFat::control() {
     NPCActor::control();
-    TVec3f trans;
+    Vec3f trans;
     MR::extractMtxTrans(MR::getJointMtx(this, "Center"), &trans);
-    MR::requestPointLight(this, TVec3f(trans), ::hPointLight, 0.99864602f, -1);
+    MR::requestPointLight(this, Vec3f(trans), ::hPointLight, 0.99864602f, -1);
     if (isNerve(GET_NERVE(TicoFat, TicoFatNrvPrep)) || isNerve(GET_NERVE(TicoFat, TicoFatNrvWait)) || isNerve(GET_NERVE(TicoFat, TicoFatNrvPoint)) ||
         isNerve(GET_NERVE(TicoFat, TicoFatNrvEat)) || isNerve(GET_NERVE(TicoFat, TicoFatNrvChem)) ||
         isNerve(GET_NERVE(TicoFat, TicoFatNrvFullness)) || isNerve(GET_NERVE(TicoFat, TicoFatNrvDemo))) {
@@ -425,8 +425,8 @@ void TicoFat::setScale(f32 scale) {
         v8 = scale;
     }
     MR::setDistanceToTalk(_16C, (280.0f * v8));
-    MR::setMessageBalloonFollowOffset(mMsgCtrl, TVec3f(0.0f, 220.0f * scale, 0.0f));
-    MR::setMessageBalloonFollowOffset(_16C, TVec3f(0.0f, 220.0f * scale, 0.0f));
+    MR::setMessageBalloonFollowOffset(mMsgCtrl, Vec3f(0.0f, 220.0f * scale, 0.0f));
+    MR::setMessageBalloonFollowOffset(_16C, Vec3f(0.0f, 220.0f * scale, 0.0f));
 }
 
 void TicoFat::setMessage(s32 msg) {
@@ -521,9 +521,9 @@ void TicoFat::appearInformation() const {
 
 void TicoFat::disappear(bool a1) {
     if (mItem != nullptr) {
-        TPos3f pos;
+        Pos3f pos;
         pos.setInline(getBaseMtx());
-        TVec3f trans;
+        Vec3f trans;
         MR::extractMtxTrans(MR::getJointMtx(this, "Spine1"), &trans);
         pos.mMtx[0][3] = trans.x;
         pos.mMtx[1][3] = trans.y;
@@ -564,7 +564,7 @@ void TicoFat::emitScreenEffect() {
 }
 
 void TicoFat::updateScreenEffect() {
-    TVec3f v19 = mPosition - MR::getCamPos();
+    Vec3f v19 = mPosition - MR::getCamPos();
     MR::normalizeOrZero(&v19);
     MR::makeMtxFrontUpPos(&_17C, -MR::getCamZdir(), MR::getCamYdir(), MR::getCamPos() + (v19 * 500.0f));
     MR::makeMtxFrontUpPos(&_1AC, -MR::getCamZdir(), MR::getCamYdir(), mPosition);
@@ -599,7 +599,7 @@ void TicoFat::updateGuidance() {
         MR::requestCounterLayoutAppearanceForTicoEat(false);
     }
 
-    TVec3f screenPos;
+    Vec3f screenPos;
     if (MR::calcScreenPosition(&screenPos, mPosition)) {
         bool req = MR::requestTicoSeedGuidance(_1F4);
         isNear = (isNear | req) != 0;
@@ -870,10 +870,10 @@ void TicoFat::exeFly() {
         easeIn = (1.0f - MR::getEaseInValue((v6 * v6), 0.0f, 0.5f, 1.0f));
     }
 
-    TVec3f shootPos, direction;
+    Vec3f shootPos, direction;
     mShootPath->calcPosition(&shootPos, easeIn);
     mShootPath->calcDirection(&direction, easeIn, 0.01f);
-    TVec3f up;
+    Vec3f up;
     MR::calcUpVec(&up, this);
     MR::blendQuatFrontUp(&_A0, _A0, direction, up, 0.1f, 0.0f);
     MR::setNPCActorPos(this, shootPos);

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class NameObjArchiveListCollector;
 class ReturnDemoRailMove;
@@ -39,8 +39,8 @@ public:
 private:
     ReturnDemoRailMove* mReturnDemoRailMove;
     StageResultInformer* mStageResultInformer;
-    TPos3f mTransform;
-    TVec3f mPosition;
+    Pos3f mTransform;
+    Vec3f mPosition;
     LiveActor* mPowerStar;
     LiveActor* mLuma;
     LiveActor* mHair;

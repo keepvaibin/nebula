@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class RosettaChair : public LiveActor {
 public:
@@ -12,7 +12,7 @@ public:
     void setDefaultPose();
     void startDemo();
 
-    TVec3f mDefaultPosition;
-    TVec3f mDefaultRotation;
-    TMtx34f mScaleMtx;
+    Vec3f mDefaultPosition;
+    Vec3f mDefaultRotation;
+    Mtx34f mScaleMtx;
 };

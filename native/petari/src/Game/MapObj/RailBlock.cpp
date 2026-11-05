@@ -26,7 +26,7 @@ void RailBlock::init(const JMapInfoIter& rIter) {
     initModelManagerWithAnm(objName, nullptr, false);
     MR::connectToSceneMapObj(this);
     initHitSensor(1);
-    MR::addHitSensorMapObjPress(this, "body", 16, 0.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorMapObjPress(this, "body", 16, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
     MR::initCollisionParts(this, objName, getSensor("body"), nullptr);
     MR::setClippingTypeSphere(this, MR::getCollisionBoundingSphereRange(this));
     initSound(4, false);

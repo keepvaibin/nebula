@@ -17,7 +17,7 @@ void GraviryFollower::update() {
     if (MR::isDead(pFollowTarget) || MR::isClipped(pFollowTarget) || !isValid()) {
         mGravity->mValidFollower = false;
     } else {
-        TPos3f followMtx;
+        Pos3f followMtx;
         calcFollowMatrix(&followMtx);
 
         mGravity->updateMtx(followMtx);

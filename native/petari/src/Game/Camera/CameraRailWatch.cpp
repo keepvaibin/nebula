@@ -33,7 +33,7 @@ CameraTargetObj* CameraRailWatch::calc() {
         return nullptr;
     }
 
-    TVec3f watchPoint;
+    Vec3f watchPoint;
     CameraLocalUtil::makeWatchPoint(&watchPoint, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
 
     if (mSetDirection != 0) {
@@ -43,30 +43,30 @@ CameraTargetObj* CameraRailWatch::calc() {
     f32 watchCoord = mRailRider->calcNearestPos(watchPoint);
     mRailRider->setCoord(watchCoord);
 
-    TVec3f up = -CameraLocalUtil::getTarget(this)->getGravityVector();
-    TVec3f front = mRailRider->mCurDirection * mDirection;
-    TVec3f side = up.cross(front);
+    Vec3f up = -CameraLocalUtil::getTarget(this)->getGravityVector();
+    Vec3f front = mRailRider->mCurDirection * mDirection;
+    Vec3f side = up.cross(front);
     up.cross(front, side);
 
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.setXDir(side);
     mtx.setYDir(up);
     mtx.setZDir(front);
-    mtx.setTrans(TVec3f(0.0f, 0.0f, 0.0f));
+    mtx.setTrans(Vec3f(0.0f, 0.0f, 0.0f));
 
     mRailRider->setCoord(watchCoord + mDirection * mRailCoordOffset);
 
-    TVec3f watchFront = mRailRider->mCurPos - watchPoint;
+    Vec3f watchFront = mRailRider->mCurPos - watchPoint;
     if (MR::isNearZero(watchFront)) {
         return nullptr;
     }
     MR::normalize(&watchFront);
 
-    TPos3f rotMtx;
+    Pos3f rotMtx;
     rotMtx.setRotate(front, watchFront);
 
-    TPos3f rotX;
-    rotX.makeRotate(TVec3f(1.0f, 0.0f, 0.0f), mAngleX);
+    Pos3f rotX;
+    rotX.makeRotate(Vec3f(1.0f, 0.0f, 0.0f), mAngleX);
 
     mtx.concat(mtx, rotX);
     mtx.concat(rotMtx, mtx);

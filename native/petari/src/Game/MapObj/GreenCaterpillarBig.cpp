@@ -30,7 +30,7 @@ void GreenCaterpillarBigBody::init(const JMapInfoIter& rIter) {
 }
 
 void GreenCaterpillarBigBody::setPosAndDirection(LiveActor* pActor) {
-    TVec3f jointPos;
+    Vec3f jointPos;
     MR::copyJointPos(mCaterpillar, "FollowPoint", &jointPos);
     mPosition.set(jointPos);
     calcBodyDir(pActor, &mFrontVec);
@@ -49,21 +49,21 @@ void GreenCaterpillarBigBody::calcAndSetBaseMtx() {
         LiveActor::calcAndSetBaseMtx();
     } else {
         MtxPtr jointMtx = MR::getJointMtx(mCaterpillar, "FollowPoint");
-        TVec3f pos;
+        Vec3f pos;
         pos.set< f32 >(jointMtx[0][1], jointMtx[1][1], jointMtx[2][1]);
-        TPos3f frontUpPos;
+        Pos3f frontUpPos;
         MR::makeMtxFrontUpPos(&frontUpPos, mFrontVec, pos, mPosition);
         MR::setBaseTRMtx(this, frontUpPos);
     }
 }
 
-void GreenCaterpillarBigBody::calcBodyDir(LiveActor* pActor, TVec3f* pOutDir) {
+void GreenCaterpillarBigBody::calcBodyDir(LiveActor* pActor, Vec3f* pOutDir) {
     f32 nearRailCoord = MR::calcNearestRailCoord(pActor, mPosition);
     f32 coord = nearRailCoord - 300.0f;
     if (coord <= 0.0f) {
         MR::calcRailDirectionAtCoord(pOutDir, pActor, nearRailCoord);
     } else {
-        TVec3f railPos, endVec;
+        Vec3f railPos, endVec;
         MR::calcRailPosAtCoord(&railPos, pActor, coord);
         endVec.sub(mPosition, railPos);
         MR::normalize(&endVec);
@@ -204,7 +204,7 @@ void GreenCaterpillarBig::control() {
 }
 
 void GreenCaterpillarBig::calcAndSetBaseMtx() {
-    TPos3f mtx;
+    Pos3f mtx;
     MR::calcMtxFromGravityAndZAxis(&mtx, this, mGravity, MR::getRailDirection(this));
     MR::setBaseTRMtx(this, mtx);
 }

@@ -10,6 +10,6 @@ public:
     virtual void makeActorAppeared();
     virtual void control();
 
-    TVec3f mEffectPos;
+    Vec3f mEffectPos;
     bool mIsPillarFallen;
 };

@@ -4,7 +4,7 @@
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class ParabolicPath;
 class ValueControl;
@@ -48,7 +48,7 @@ public:
 
     void updatePoseByRailIgnoreUpScale();
     void rotatePoseByLocalZ();
-    void calcGroundHitMtx(TPos3f* pMtx) const;
+    void calcGroundHitMtx(Pos3f* pMtx) const;
     bool isReadyToJumpFromLand() const;
     bool isDamaged() const;
     void exeWait();
@@ -69,11 +69,11 @@ public:
         MR::startBtp(this, pBtp);
     }
 
-    inline void getCurrentRailPointPos(TVec3f* pOut) {
+    inline void getCurrentRailPointPos(Vec3f* pOut) {
         MR::calcRailPointPos(pOut, this, MR::getCurrentRailPointNo(this));
     }
 
-    inline void getNextRailPointPos(TVec3f* pOut) {
+    inline void getNextRailPointPos(Vec3f* pOut) {
         MR::calcRailPointPos(pOut, this, MR::getNextRailPointNo(this));
     }
 
@@ -82,9 +82,9 @@ public:
     }
 
     PukupukuStateLanding* mStateLanding;
-    TVec3f _90;
-    TVec3f _9C;
-    TQuat4f _A8;
+    Vec3f _90;
+    Vec3f _9C;
+    Quat4f _A8;
     AnimScaleController* mScaleCtrl;
     WalkerStateBindStarPointer* mStarPointer;
     const char* _C0;

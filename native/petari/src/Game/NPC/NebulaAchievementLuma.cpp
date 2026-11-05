@@ -45,17 +45,17 @@ void NebulaAchievementLuma::tryCreate() {
 
 void NebulaAchievementLuma::init(const JMapInfoIter& rIter) {
     // Its place, before the actor is set up (with no placement entry it keeps the position it has).
-    TVec3f start(0.0f, 0.0f, 0.0f);
-    TVec3f startRotate(0.0f, 0.0f, 0.0f);
+    Vec3f start(0.0f, 0.0f, 0.0f);
+    Vec3f startRotate(0.0f, 0.0f, 0.0f);
     MR::getMarioStartPose(cStartNo, &start, &startRotate);
     const f32 yaw = startRotate.y * (3.14159265f / 180.0f);
-    const TVec3f ahead(static_cast< f32 >(sin(yaw)), 0.0f, static_cast< f32 >(cos(yaw)));
-    const TVec3f left(ahead.z, 0.0f, -ahead.x);
-    TVec3f place(start.x + ahead.x * cAhead + left.x * cLeft, start.y, start.z + ahead.z * cAhead + left.z * cLeft);
+    const Vec3f ahead(static_cast< f32 >(sin(yaw)), 0.0f, static_cast< f32 >(cos(yaw)));
+    const Vec3f left(ahead.z, 0.0f, -ahead.x);
+    Vec3f place(start.x + ahead.x * cAhead + left.x * cLeft, start.y, start.z + ahead.z * cAhead + left.z * cLeft);
     // On the walkway's floor: the first ground below, looking down from above the start's height.
-    TVec3f floor;
-    const TVec3f from(place.x, start.y + 600.0f, place.z);
-    if (MR::getFirstPolyOnLineToMap(&floor, nullptr, from, TVec3f(0.0f, -2000.0f, 0.0f))) {
+    Vec3f floor;
+    const Vec3f from(place.x, start.y + 600.0f, place.z);
+    if (MR::getFirstPolyOnLineToMap(&floor, nullptr, from, Vec3f(0.0f, -2000.0f, 0.0f))) {
         place.y = floor.y;
     }
     place.y += cAboveFloor;

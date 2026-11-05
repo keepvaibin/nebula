@@ -7,8 +7,8 @@
 #include "Game/Util/DrawUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
+
 
 ShadowSurfaceOval::~ShadowSurfaceOval() {
 }
@@ -25,7 +25,7 @@ void ShadowSurfaceOval::setAlpha(u8 alpha) {
     mColor.a = alpha;
 }
 
-void ShadowSurfaceOval::setSize(const TVec3f& pSize) {
+void ShadowSurfaceOval::setSize(const Vec3f& pSize) {
     mSize = pSize;
 }
 
@@ -38,16 +38,16 @@ void ShadowSurfaceOval::draw() const {
         return;
     }
 
-    TVec3f size(mSize / 100.0f);
+    Vec3f size(mSize / 100.0f);
     if (controller->isFollowHostScale()) {
         size *= controller->getHost()->mScale;
     }
 
-    TVec3f pos, normal;
+    Vec3f pos, normal;
     controller->getProjectionPos(&pos);
     controller->getProjectionNormal(&normal);
     ShadowSurfaceDrawInit::sendColor(mColor);
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.setInline(baseMtx);
     MR::preScaleMtx(mtx, size);
     MR::flattenMtx(mtx, normal);

@@ -23,7 +23,7 @@ void MarioActor::setupSensors() {
     MR::addHitSensorCallback(this, "ex-eye", ATYPE_PUSH, 32, 100.0f);
     MR::addHitSensorCallback(this, "eye", ATYPE_EYE, 64, 2000.0f);
 
-    MR::addHitSensor(this, "dummy", ATYPE_PLAYER, 1, 0.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensor(this, "dummy", ATYPE_PLAYER, 1, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
 
     getSensor("dummy")->invalidate();
 
@@ -45,7 +45,7 @@ void MarioActor::setupSensors() {
     _3E5 = false;
     _3E8 = false;
 
-    MR::initStarPointerTarget(this, 80.0f, TVec3f(0.0f, 80.0f, 0.0f));
+    MR::initStarPointerTarget(this, 80.0f, Vec3f(0.0f, 80.0f, 0.0f));
 }
 
 void MarioActor::updateHitSensor(HitSensor* pSensor) {
@@ -254,7 +254,7 @@ void MarioActor::trampleJump(f32 normal, f32 extra) {
         return;
     }
 
-    TVec3f velocity(mMario->mJumpVec);
+    Vec3f velocity(mMario->mJumpVec);
     MR::vecKillElement(velocity, getGravityVec(), &velocity);
     velocity.add(-getGravityVec() * normal);
     switch (_988) {
@@ -406,7 +406,7 @@ void MarioActor::updateScouter() {
         _9D0 = 60.0f;
     }
 
-    TVec3f position;
+    Vec3f position;
     if (mMario->isSwimming()) {
         position = _2A0 + mUpVec * _9D0;
     } else {

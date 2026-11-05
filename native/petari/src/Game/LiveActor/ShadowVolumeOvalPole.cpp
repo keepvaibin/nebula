@@ -23,16 +23,16 @@ ShadowVolumeOvalPole::ShadowVolumeOvalPole() : ShadowVolumeModel("\211\145\225\1
 void ShadowVolumeOvalPole::loadModelDrawMtx() const {
     ShadowController* controller = getController();
     MtxPtr dropMtx = controller->_18;
-    TPos3f scaledMtx;
-    TPos3f inverseMtx;
-    TPos3f mtx;
-    TVec3f position;
+    Pos3f scaledMtx;
+    Pos3f inverseMtx;
+    Pos3f mtx;
+    Vec3f position;
     calcBaseDropPosition(&position);
-    TVec3f direction;
+    Vec3f direction;
     controller->getDropDir(&direction);
     direction.negate();
     f32 modelScale = ::sModelScale;
-    TVec3f size(mSize / modelScale);
+    Vec3f size(mSize / modelScale);
     if (size.x <= 0.01f) {
         size.x = 0.01f;
     }
@@ -50,19 +50,19 @@ void ShadowVolumeOvalPole::loadModelDrawMtx() const {
     }
 
     scaledMtx.set(dropMtx);
-    scaledMtx.setTrans(TVec3f(0.0f, 0.0f, 0.0f));
+    scaledMtx.setTrans(Vec3f(0.0f, 0.0f, 0.0f));
     MR::preScaleMtx(scaledMtx, size);
     inverseMtx.invert(scaledMtx);
-    TVec3f localDirection;
+    Vec3f localDirection;
     inverseMtx.mult(direction, localDirection);
     mtx.identity();
     MR::makeMtxUpNoSupport(&mtx, localDirection);
     mtx.concat(scaledMtx, mtx);
     mtx.setTrans(position);
 
-    TVec3f side;
-    TVec3f up;
-    TVec3f front;
+    Vec3f side;
+    Vec3f up;
+    Vec3f front;
     mtx.getXDir(side);
     mtx.getYDir(up);
     mtx.getZDir(front);
@@ -79,6 +79,6 @@ void ShadowVolumeOvalPole::loadModelDrawMtx() const {
     J3DNativeShape::setPosition(0, mtx);
 }
 
-void ShadowVolumeOvalPole::setSize(const TVec3f& rSize) {
+void ShadowVolumeOvalPole::setSize(const Vec3f& rSize) {
     mSize = rSize;
 }

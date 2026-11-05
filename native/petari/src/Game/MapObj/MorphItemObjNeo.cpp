@@ -119,9 +119,9 @@ void MorphItemObjNeo::init(const JMapInfoIter& rIter) {
     initModelManagerWithAnm(::cxNameList[mMorphType], nullptr, false);
 
     initHitSensor(1);
-    MR::addHitSensor(this, "body", ATYPE_MORPH_ITEM, 4, 80.0f, TVec3f(0.0f, 60.0f, 0.0f));
+    MR::addHitSensor(this, "body", ATYPE_MORPH_ITEM, 4, 80.0f, Vec3f(0.0f, 60.0f, 0.0f));
 
-    MR::initStarPointerTargetAtPos(this, 80.0f, &mPosition, TVec3f(0.0f, 60.0f, 0.0f));
+    MR::initStarPointerTargetAtPos(this, 80.0f, &mPosition, Vec3f(0.0f, 60.0f, 0.0f));
 
     initBinder(70.0f, 60.0f, 0);
     MR::offBind(this);
@@ -399,7 +399,7 @@ void MorphItemObjNeo::control() {
     if (_92 && MR::tryStartDemoWithoutCinemaFrame(this, "\217\157\214\273" /* 出現 */)) {
         _92 = false;
 
-        TPos3f* pMtx = &mCameraTargetMtx->mMatrix;
+        Pos3f* pMtx = &mCameraTargetMtx->mMatrix;
         pMtx->set(getBaseMtx());
         MR::startMultiActorCameraTargetSelf(this, mActorCameraInfo, "\217\157\214\2731" /* 出現1 */);
         mAppearFrames = MR::getMultiActorCameraFrames(this, mActorCameraInfo, "\217\157\214\2731" /* 出現1 */);
@@ -436,8 +436,8 @@ void MorphItemObjNeo::calcAndSetBaseMtx() {
             MtxPtr pMtx = MR::getJointMtx(mContainerModel, "CrystalBox");
             NebulaMtxCopy(pMtx, getBaseMtx());
 
-            TVec3f yDir;
-            reinterpret_cast< TPos3f* >(getBaseMtx())->getYDir(yDir);
+            Vec3f yDir;
+            reinterpret_cast< Pos3f* >(getBaseMtx())->getYDir(yDir);
             MR::addTransMtx(getBaseMtx(), yDir * -60.0f);
 
             pMtx = MR::tmpMtxScale(0.8f, 0.8f, 0.8f);
@@ -446,8 +446,8 @@ void MorphItemObjNeo::calcAndSetBaseMtx() {
             MtxPtr pMtx = mContainerModel->getBaseMtx();
             NebulaMtxCopy(pMtx, getBaseMtx());
 
-            TVec3f yDir;
-            reinterpret_cast< TPos3f* >(getBaseMtx())->getYDir(yDir);
+            Vec3f yDir;
+            reinterpret_cast< Pos3f* >(getBaseMtx())->getYDir(yDir);
             MR::addTransMtx(getBaseMtx(), yDir * -50.0f);
 
             pMtx = MR::tmpMtxScale(0.8f, 0.8f, 0.8f);
@@ -463,10 +463,10 @@ void MorphItemObjNeo::calcAndSetBaseMtx() {
         NebulaMtxConcat(getBaseMtx(), MR::tmpMtxRotYDeg(mAngle), getBaseMtx());
 
         if (mAppearMode != 0) {
-            TPos3f rotMtx;
+            Pos3f rotMtx;
             NebulaMtxRotAxisRad(rotMtx, mVelocity, mAppearMode * (TWO_PI / ::sUnknown2));
 
-            TVec3f rotVec;
+            Vec3f rotVec;
             NebulaMtxMultVec(rotMtx, mZRotation, rotVec);
 
             rotVec.setLength(mAppearMode * ::cRotateRadiusPower + ::cRotateRadiusMini);
@@ -717,16 +717,16 @@ void MorphItemObjNeo::exeWait() {
     if (isNerve(GET_NERVE(MorphItemObjNeo, MorphItemObjNeoNrvWait))) {
         if (mContainerType == 2) {
             ::getBodySensor(this)->mRadius = 130.0f;
-            MR::setSensorOffset(this, "body", TVec3f(0.0f, 190.0f, 0.0f));
+            MR::setSensorOffset(this, "body", Vec3f(0.0f, 190.0f, 0.0f));
         } else if (mContainerType == 1) {
             ::getBodySensor(this)->mRadius = 110.0f;
-            MR::setSensorOffset(this, "body", TVec3f(0.0f, 0.0f, 0.0f));
+            MR::setSensorOffset(this, "body", Vec3f(0.0f, 0.0f, 0.0f));
         } else {
             glowEffect();
         }
     } else {
         ::getBodySensor(this)->mRadius = 80.0f;
-        MR::setSensorOffset(this, "body", TVec3f(0.0f, 60.0f, 0.0f));
+        MR::setSensorOffset(this, "body", Vec3f(0.0f, 60.0f, 0.0f));
 
         glowEffect();
     }
@@ -842,7 +842,7 @@ void MorphItemObjNeo::exeSwitchAppear() {
             MR::endDemo(this, "\217\157\214\273" /* 出現 */);
             MR::validateClipping(this);
         } else {
-            TPos3f* pMtx = &mCameraTargetMtx->mMatrix;
+            Pos3f* pMtx = &mCameraTargetMtx->mMatrix;
             pMtx->set(getBaseMtx());
 
             MR::startMultiActorCameraTargetOther(this, mActorCameraInfo, "\217\157\214\2732" /* 出現2 */, CameraTargetArg(nullptr, mCameraTargetMtx, nullptr, nullptr));

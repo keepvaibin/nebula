@@ -18,7 +18,7 @@ public:
     virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 
     void initBreakModel();
-    void start(LiveActor*, const TVec3f&);
+    void start(LiveActor*, const Vec3f&);
     void requestBreak();
     bool isEnableAttack() const;
     bool isEnableBreak() const;
@@ -30,6 +30,6 @@ public:
 
     LiveActor* mOwner;
     ModelObj* mBreakModel;
-    TQuat4f _94;
-    TVec3f _A4;
+    Quat4f _94;
+    Vec3f _A4;
 };

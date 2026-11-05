@@ -28,7 +28,7 @@ bool MR::getJMapInfoShapeIdWithInit(const JMapInfoIter& rIter, s32* pShapeID) {
     return rIter.getValue< s32 >("ShapeModelNo", pShapeID);
 }
 
-bool MR::getJMapInfoTransLocal(const JMapInfoIter& rIter, TVec3f* pOut) {
+bool MR::getJMapInfoTransLocal(const JMapInfoIter& rIter, Vec3f* pOut) {
     if (!MR::getValue< f32 >(rIter, "pos_x", &pOut->x)) {
         return false;
     }
@@ -40,7 +40,7 @@ bool MR::getJMapInfoTransLocal(const JMapInfoIter& rIter, TVec3f* pOut) {
     return MR::getValue< f32 >(rIter, "pos_z", &pOut->z);
 }
 
-bool MR::getJMapInfoRotateLocal(const JMapInfoIter& rIter, TVec3f* pOut) {
+bool MR::getJMapInfoRotateLocal(const JMapInfoIter& rIter, Vec3f* pOut) {
     if (!MR::getValue< f32 >(rIter, "dir_x", &pOut->x)) {
         return false;
     }
@@ -52,7 +52,7 @@ bool MR::getJMapInfoRotateLocal(const JMapInfoIter& rIter, TVec3f* pOut) {
     return MR::getValue< f32 >(rIter, "dir_z", &pOut->z);
 }
 
-bool MR::getJMapInfoScale(const JMapInfoIter& rIter, TVec3f* pOut) {
+bool MR::getJMapInfoScale(const JMapInfoIter& rIter, Vec3f* pOut) {
     if (!MR::getValue< f32 >(rIter, "scale_x", &pOut->x)) {
         return false;
     }
@@ -142,7 +142,7 @@ namespace {
     }
 };  // namespace
 
-bool MR::getJMapInfoTrans(const JMapInfoIter& rIter, TVec3f* pOut) {
+bool MR::getJMapInfoTrans(const JMapInfoIter& rIter, Vec3f* pOut) {
     if (!getJMapInfoTransLocal(rIter, pOut)) {
         return false;
     }
@@ -154,13 +154,13 @@ bool MR::getJMapInfoTrans(const JMapInfoIter& rIter, TVec3f* pOut) {
     return true;
 }
 
-bool MR::getJMapInfoRotate(const JMapInfoIter& rIter, TVec3f* pOut) {
+bool MR::getJMapInfoRotate(const JMapInfoIter& rIter, Vec3f* pOut) {
     if (!getJMapInfoRotateLocal(rIter, pOut)) {
         return false;
     }
 
     if (isPlacementLocalStage()) {
-        TMtx34f rotateMtx;
+        Mtx34f rotateMtx;
         makeMtxRotate(rotateMtx.toMtxPtr(), *pOut);
         rotateMtx.concat(*getZonePlacementMtx(rIter), rotateMtx);
 
@@ -185,13 +185,13 @@ bool MR::getJMapInfoRotate(const JMapInfoIter& rIter, TVec3f* pOut) {
     return true;
 }
 
-bool MR::getJMapInfoMatrixFromRT(const JMapInfoIter& rIter, TPos3f* pOut) {
-    TVec3f trans;
+bool MR::getJMapInfoMatrixFromRT(const JMapInfoIter& rIter, Pos3f* pOut) {
+    Vec3f trans;
     if (!getJMapInfoTrans(rIter, &trans)) {
         return false;
     }
 
-    TVec3f rotate;
+    Vec3f rotate;
     if (!getJMapInfoRotate(rIter, &rotate)) {
         return false;
     }
@@ -387,7 +387,7 @@ bool MR::getRailId(const JMapInfoIter& rIter, s32* pOut) {
     return ::getJMapInfoArgWithInit(rIter, "CommonPath_ID", pOut);
 }
 
-bool MR::getJMapInfoV3f(const JMapInfoIter& rIter, const char* pName, TVec3f* pOut) {
+bool MR::getJMapInfoV3f(const JMapInfoIter& rIter, const char* pName, Vec3f* pOut) {
     char str[32];
     nebula_sprintf(str, "%sX", pName);
 
@@ -588,7 +588,7 @@ bool MR::isEqualRailUsage(const JMapInfoIter& rIter, const char* pUsage) {
     return isEqualStringCase(usage, pUsage);
 }
 
-void MR::getRailPointPos0(const JMapInfoIter& rIter, TVec3f* pOut) {
+void MR::getRailPointPos0(const JMapInfoIter& rIter, Vec3f* pOut) {
     rIter.getValue< f32 >("pnt0_x", &pOut->x);
     rIter.getValue< f32 >("pnt0_y", &pOut->y);
     rIter.getValue< f32 >("pnt0_z", &pOut->z);
@@ -598,7 +598,7 @@ void MR::getRailPointPos0(const JMapInfoIter& rIter, TVec3f* pOut) {
     }
 }
 
-void MR::getRailPointPos1(const JMapInfoIter& rIter, TVec3f* pOut) {
+void MR::getRailPointPos1(const JMapInfoIter& rIter, Vec3f* pOut) {
     rIter.getValue< f32 >("pnt1_x", &pOut->x);
     rIter.getValue< f32 >("pnt1_y", &pOut->y);
     rIter.getValue< f32 >("pnt1_z", &pOut->z);
@@ -608,7 +608,7 @@ void MR::getRailPointPos1(const JMapInfoIter& rIter, TVec3f* pOut) {
     }
 }
 
-void MR::getRailPointPos2(const JMapInfoIter& rIter, TVec3f* pOut) {
+void MR::getRailPointPos2(const JMapInfoIter& rIter, Vec3f* pOut) {
     rIter.getValue< f32 >("pnt2_x", &pOut->x);
     rIter.getValue< f32 >("pnt2_y", &pOut->y);
     rIter.getValue< f32 >("pnt2_z", &pOut->z);

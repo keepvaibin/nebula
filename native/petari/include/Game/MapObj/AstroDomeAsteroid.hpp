@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class AstroDomeAsteroid : public LiveActor {
 public:
@@ -15,5 +15,5 @@ public:
 
     void exeWait();
 
-    TPos3f mBaseMtx;
+    Pos3f mBaseMtx;
 };

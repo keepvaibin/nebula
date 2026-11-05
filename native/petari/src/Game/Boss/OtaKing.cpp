@@ -37,7 +37,7 @@ namespace NrvOtaKing {
 };  // namespace NrvOtaKing
 
 namespace {
-    inline void makeTranslationMatrix(TPos3f* pMtx, const TVec3f& rTrans) {
+    inline void makeTranslationMatrix(Pos3f* pMtx, const Vec3f& rTrans) {
         pMtx->mMtx[0][0] = 1.0f;
         pMtx->mMtx[1][0] = 0.0f;
         pMtx->mMtx[2][0] = 0.0f;
@@ -214,7 +214,7 @@ void OtaKing::control() {
 
 void OtaKing::calcAndSetBaseMtx() {
     LiveActor::calcAndSetBaseMtx();
-    TVec3f scale = mScaleController->_C * mScale;
+    Vec3f scale = mScaleController->_C * mScale;
     MR::setBaseScale(this, scale);
 }
 
@@ -329,8 +329,8 @@ void OtaKing::initModel(const JMapInfoIter& rIter) {
         MR::initLightCtrl(mFeet[i]);
     }
 
-    mFeet[0]->initFixedPosition(TVec3f(0.0f, 0.0f, 0.0f), TVec3f(0.0f, 0.0f, 0.0f), nullptr);
-    mFeet[1]->initFixedPosition(TVec3f(0.0f, 0.0f, 0.0f), TVec3f(0.0f, 0.0f, 0.0f), nullptr);
+    mFeet[0]->initFixedPosition(Vec3f(0.0f, 0.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f), nullptr);
+    mFeet[1]->initFixedPosition(Vec3f(0.0f, 0.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f), nullptr);
 
     initLongFoot(rIter);
 
@@ -364,8 +364,8 @@ void OtaKing::initModel(const JMapInfoIter& rIter) {
         mFireBubbleArray[i].initWithoutIter();
     }
 
-    mThrowPos = new FixedPosition(this, "Lip", TVec3f(-50.0f, 0.0f, 0.0f), TVec3f(0.0f, 0.0f, 0.0f));
-    mBubbleAppearPos = new FixedPosition(this, TVec3f(0.0f, 10.0f, 500.0f), TVec3f(0.0f, 0.0f, 0.0f));
+    mThrowPos = new FixedPosition(this, "Lip", Vec3f(-50.0f, 0.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
+    mBubbleAppearPos = new FixedPosition(this, Vec3f(0.0f, 10.0f, 500.0f), Vec3f(0.0f, 0.0f, 0.0f));
 
     mMagma = new OtaKingMagma(this, -1);
     mMagma->initWithoutIter();
@@ -377,12 +377,12 @@ void OtaKing::initModel(const JMapInfoIter& rIter) {
 void OtaKing::initSensor() {
     initHitSensor(3);
     MR::addHitSensorEnemy(this, "body", 16, ::cBodySensorRadius, ::cSensorOffset);
-    MR::addHitSensorAtJointEnemy(this, "face", "Face", 16, ::cBodySensorRadius, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointEnemy(this, "face", "Face", 16, ::cBodySensorRadius, Vec3f(0.0f, 0.0f, 0.0f));
     MR::addHitSensorEnemy(this, "search", 16, ::cEyeSensorRadius, ::cSensorOffset);
 }
 
 void OtaKing::dirToPlayer() {
-    TVec3f vec;
+    Vec3f vec;
     vec.sub(*MR::getPlayerPos(), mPosition);
 
     f32 angle = MR::repeat(MR::toDegree(MR::atan2(vec.x, vec.z)), mRotation.y - 180.0f, 360.0f);
@@ -557,10 +557,10 @@ void OtaKing::throwCocoNut() {
     CocoNutBall* cocoNut = getDisappearedCocoNut();
 
     mThrowPos->calc();
-    TVec3f trans;
+    Vec3f trans;
     mThrowPos->copyTrans(&trans);
 
-    TVec3f vec;
+    Vec3f vec;
     vec.sub(*MR::getPlayerPos(), mPosition);
 
     f32 angle = mRotation.y - MR::repeat(MR::toDegree(MR::atan2(vec.x, vec.z)), mRotation.y - 180.0f, 360.0f);
@@ -573,10 +573,10 @@ void OtaKing::throwCocoNut() {
 void OtaKing::throwFireBall() {
     mThrowPos->calc();
 
-    TVec3f trans;
+    Vec3f trans;
     mThrowPos->copyTrans(&trans);
 
-    TVec3f vec;
+    Vec3f vec;
     vec.sub(*MR::getPlayerPos(), mPosition);
 
     f32 angle = mRotation.y - MR::repeat(MR::toDegree(MR::atan2(vec.x, vec.z)), mRotation.y - 180.0f, 360.0f);
@@ -625,7 +625,7 @@ bool OtaKing::isNerveValidNearAttack() const {
 void OtaKing::appearBubble() {
     mBubbleAppearPos->calc();
 
-    TVec3f trans;
+    Vec3f trans;
 
     mBubbleAppearPos->copyTrans(&trans);
 
@@ -633,16 +633,16 @@ void OtaKing::appearBubble() {
         FireBubble* currentBubble = getDisappearedBubble();
 
         if (currentBubble != nullptr) {
-            TVec3f vec1;
+            Vec3f vec1;
             vec1.sub(trans, mPosition);
 
             if (MR::normalizeOrZero(&vec1)) {
                 vec1.set< f32 >(0.0f, 0.0f, 1.0f);
             }
 
-            TPos3f rotate;
+            Pos3f rotate;
 
-            rotate.makeRotate(TVec3f(0.0f, 1.0f, 0.0f),
+            rotate.makeRotate(Vec3f(0.0f, 1.0f, 0.0f),
                               MR::toRadian(((i + 0.5f) * 60.0f) + MR::getRandom(-::cBubbleAppearRandomAngle, ::cBubbleAppearRandomAngle)));
 
             rotate.mult33(vec1, vec1);
@@ -667,7 +667,7 @@ void OtaKing::startDemo() {
 }
 
 void OtaKing::appearStarPiece() {
-    TVec3f appearPos(mPosition);
+    Vec3f appearPos(mPosition);
     appearPos.y += ::cStarPieceAppearOffsetY;
     MR::appearStarPiece(this, appearPos, mHits * ::cStarPieceAppearNum, ::cStarPieceAppearRange, ::cStarPieceAppearVelocity, false);
     MR::startSoundObject(mSoundObj, "SE_OJ_STAR_PIECE_BURST");
@@ -682,10 +682,10 @@ void OtaKing::initLongFoot(const JMapInfoIter& rIter) {
         }
 
         makeTranslationMatrix(&mLongFootMtx, mPosition);
-        mLongFeet[0]->initFixedPosition(mLongFootMtx, TVec3f(735.0f, 80.0f, -55.0f), TVec3f(-9.0f, 266.0f, 0.0f));
-        mLongFeet[1]->initFixedPosition(mLongFootMtx, TVec3f(-959.0f, 130.0f, 0.0f), TVec3f(0.0f, 107.0f, 14.0f));
-        mLongFeet[2]->initFixedPosition(mLongFootMtx, TVec3f(0.0f, 43.0f, 884.0f), TVec3f(-8.0f, 159.0f, 0.0f));
-        mLongFeet[3]->initFixedPosition(mLongFootMtx, TVec3f(55.0f, 55.0f, -896.0f), TVec3f(-9.0f, -14.0f, 0.0f));
+        mLongFeet[0]->initFixedPosition(mLongFootMtx, Vec3f(735.0f, 80.0f, -55.0f), Vec3f(-9.0f, 266.0f, 0.0f));
+        mLongFeet[1]->initFixedPosition(mLongFootMtx, Vec3f(-959.0f, 130.0f, 0.0f), Vec3f(0.0f, 107.0f, 14.0f));
+        mLongFeet[2]->initFixedPosition(mLongFootMtx, Vec3f(0.0f, 43.0f, 884.0f), Vec3f(-8.0f, 159.0f, 0.0f));
+        mLongFeet[3]->initFixedPosition(mLongFootMtx, Vec3f(55.0f, 55.0f, -896.0f), Vec3f(-9.0f, -14.0f, 0.0f));
     }
 }
 
@@ -820,7 +820,7 @@ void OtaKing::exeAppearDemo() {
             }
         }
 
-        TVec3f vec;
+        Vec3f vec;
         vec.sub(*MR::getPlayerPos(), mPosition);
 
         mRotation.y = MR::repeatDegree(MR::toDegree(MR::atan2(vec.x, vec.z)));
@@ -1084,8 +1084,8 @@ void OtaKing::exeDown() {
 }
 
 void OtaKing::exeDownDemo() {
-    TPos3f rotate;
-    rotate.makeRotate(TVec3f(0.0f, 1.0f, 0.0f), MR::toRadian(::cDownDemoRotate.y));
+    Pos3f rotate;
+    rotate.makeRotate(Vec3f(0.0f, 1.0f, 0.0f), MR::toRadian(::cDownDemoRotate.y));
     rotate.setTrans(mPosition);
 
     if (MR::isFirstStep(this)) {
@@ -1094,11 +1094,11 @@ void OtaKing::exeDownDemo() {
         MR::startAnimCameraTargetSelf(this, mAnimCamera, "Down", 0, 1.0f);
         mRotation.set(::cDownDemoRotate);
         mMagma->damage();
-        TVec3f demoBreakVec;
+        Vec3f demoBreakVec;
         rotate.mult(::cDownDemoCocoNutPos, demoBreakVec);
         mDownCocoNut->mScale.set(::cDownDemoCocoNutScale);
         mDownCocoNut->demoBreak(demoBreakVec);
-        TVec3f starAppearPos(mPosition);
+        Vec3f starAppearPos(mPosition);
         starAppearPos.y += ::cPowerStarAppearOffsetY;
         MR::requestAppearPowerStar(this, starAppearPos);
     }

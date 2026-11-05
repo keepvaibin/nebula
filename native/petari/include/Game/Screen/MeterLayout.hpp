@@ -34,17 +34,17 @@ public:
     void exeBreakMeter();
     void exeZeroMeter();
     void exeZeroMeterBreak();
-    void calcMarioHeadPosition(TVec2f*) const;
-    void calcPowerUpMeterBasePosition(TVec2f*) const;
+    void calcMarioHeadPosition(Vec2f*) const;
+    void calcPowerUpMeterBasePosition(Vec2f*) const;
     void setAnimBase();
     void setCountAnimFrame();
     void setRecoveryCountAnimFrame();
 
     CountUpPaneRumbler* mCountUpPaneRumbler;
     u8 _24[8];
-    TVec2f mFollowPos;
-    TVec2f mFollowPosW;
-    TVec2f _3C;
+    Vec2f mFollowPos;
+    Vec2f mFollowPosW;
+    Vec2f _3C;
     s32 mCount;
     f32 mAlpha;
     f32 _4C;

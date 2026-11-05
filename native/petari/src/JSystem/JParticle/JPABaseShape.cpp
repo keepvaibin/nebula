@@ -4,7 +4,7 @@
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/System/NebulaArena.hpp"
-#include "JSystem/JMath/JMATrigonometric.hpp"
+#include <nebula_geometry.hpp>
 #include "JSystem/JParticle/JPAEmitter.hpp"
 #include "JSystem/JParticle/JPAParticle.hpp"
 #include "JSystem/JParticle/JPAResourceManager.hpp"
@@ -459,8 +459,8 @@ void JPAGenCalcTexCrdMtxAnm(JPAEmitterWorkData* work) {
     f32 dVar13 = (dVar16 * shape->getIncScaleX()) + shape->getInitScaleX();
     f32 dVar12 = (dVar16 * shape->getIncScaleY()) + shape->getInitScaleY();
     s32 local_c0 = (dVar16 * shape->getIncRot()) + shape->getInitRot();
-    f32 dVar8 = JMASSin(local_c0);
-    f32 dVar9 = JMASCos(local_c0);
+    f32 dVar8 = Angle::sinShort(local_c0);
+    f32 dVar9 = Angle::cosShort(local_c0);
     Mtx local_108;
     local_108[0][0] = dVar13 * dVar9;
     local_108[0][1] = -dVar13 * dVar8;
@@ -487,8 +487,8 @@ void JPALoadCalcTexCrdMtxAnm(JPAEmitterWorkData* work, JPABaseParticle* param_1)
     f32 dVar13 = (dVar16 * shape->getIncScaleX()) + shape->getInitScaleX();
     f32 dVar12 = (dVar16 * shape->getIncScaleY()) + shape->getInitScaleY();
     s32 local_c0 = (dVar16 * shape->getIncRot()) + shape->getInitRot();
-    f32 dVar8 = JMASSin(local_c0);
-    f32 dVar9 = JMASCos(local_c0);
+    f32 dVar8 = Angle::sinShort(local_c0);
+    f32 dVar9 = Angle::cosShort(local_c0);
     Mtx local_108;
     local_108[0][0] = dVar13 * dVar9;
     local_108[0][1] = -dVar13 * dVar8;
@@ -617,8 +617,8 @@ static void loadPrjAnm(JPAEmitterWorkData const* work, const Mtx srt) {
     f32 dVar13 = (dVar16 * shape->getIncScaleX()) + shape->getInitScaleX();
     f32 dVar12 = (dVar16 * shape->getIncScaleY()) + shape->getInitScaleY();
     s32 local_c0 = (dVar16 * shape->getIncRot()) + shape->getInitRot();
-    f32 dVar8 = JMASSin(local_c0);
-    f32 dVar9 = JMASCos(local_c0);
+    f32 dVar8 = Angle::sinShort(local_c0);
+    f32 dVar9 = Angle::cosShort(local_c0);
     Mtx local_108;
     local_108[0][0] = dVar13 * dVar9;
     local_108[0][1] = -dVar13 * dVar8;
@@ -683,7 +683,7 @@ static projectionFunc p_prj[3] = {
 
 void JPADrawBillboard(JPAEmitterWorkData* work, JPABaseParticle* param_1) {
     if (param_1->checkStatus(8) == 0) {
-        JGeometry::TVec3< f32 > local_48;
+        Vec3f local_48;
         NebulaMtxMultVec(work->mPosCamMtx, &param_1->mPosition, &local_48);
         Mtx local_38;
         local_38[0][0] = work->mGlobalPtclScl.x * param_1->mParticleScaleX;
@@ -706,10 +706,10 @@ void JPADrawBillboard(JPAEmitterWorkData* work, JPABaseParticle* param_1) {
 
 void JPADrawRotBillboard(JPAEmitterWorkData* work, JPABaseParticle* param_1) {
     if (param_1->checkStatus(8) == 0) {
-        JGeometry::TVec3< f32 > local_48;
+        Vec3f local_48;
         NebulaMtxMultVec(work->mPosCamMtx, &param_1->mPosition, &local_48);
         f32 sinRot, cosRot;
-        JMASSinCos(param_1->mRotateAngle, &sinRot, &cosRot);
+        Angle::sinCosShort(param_1->mRotateAngle, &sinRot, &cosRot);
         f32 particleX = work->mGlobalPtclScl.x * param_1->mParticleScaleX;
         f32 particleY = work->mGlobalPtclScl.y * param_1->mParticleScaleY;
 
@@ -732,25 +732,25 @@ void JPADrawRotBillboard(JPAEmitterWorkData* work, JPABaseParticle* param_1) {
     }
 }
 
-void dirTypeVel(JPAEmitterWorkData const* work, JPABaseParticle const* param_1, JGeometry::TVec3< f32 >* param_2) {
+void dirTypeVel(JPAEmitterWorkData const* work, JPABaseParticle const* param_1, Vec3f* param_2) {
     param_1->getVelVec(*param_2);
 }
 
-void dirTypePos(JPAEmitterWorkData const* work, JPABaseParticle const* param_1, JGeometry::TVec3< f32 >* param_2) {
+void dirTypePos(JPAEmitterWorkData const* work, JPABaseParticle const* param_1, Vec3f* param_2) {
     param_1->getLocalPosition(*param_2);
 }
 
-void dirTypePosInv(JPAEmitterWorkData const* work, JPABaseParticle const* param_1, JGeometry::TVec3< f32 >* param_2) {
+void dirTypePosInv(JPAEmitterWorkData const* work, JPABaseParticle const* param_1, Vec3f* param_2) {
     param_1->getLocalPosition(*param_2);
     param_2->negate();
 }
 
-void dirTypeEmtrDir(JPAEmitterWorkData const* work, JPABaseParticle const* param_1, JGeometry::TVec3< f32 >* param_2) {
+void dirTypeEmtrDir(JPAEmitterWorkData const* work, JPABaseParticle const* param_1, Vec3f* param_2) {
     param_2->set(work->mGlobalEmtrDir);
 }
 
-void dirTypePrevPtcl(JPAEmitterWorkData const* work, JPABaseParticle const* param_1, JGeometry::TVec3< f32 >* param_2) {
-    JGeometry::TVec3< f32 > aTStack_24;
+void dirTypePrevPtcl(JPAEmitterWorkData const* work, JPABaseParticle const* param_1, Vec3f* param_2) {
+    Vec3f aTStack_24;
     param_1->getGlobalPosition(aTStack_24);
     JPANode< JPABaseParticle >* end = work->mpAlivePtcl->getEnd();
     JPANode< JPABaseParticle >* prev = work->mpCurNode->getPrev();
@@ -858,7 +858,7 @@ static void basePlaneTypeX(MtxPtr param_0, f32 param_1, f32 param_2) {
     param_0[2][2] *= param_1;
 }
 
-typedef void (*dirTypeFunc)(JPAEmitterWorkData const*, JPABaseParticle const*, JGeometry::TVec3< f32 >*);
+typedef void (*dirTypeFunc)(JPAEmitterWorkData const*, JPABaseParticle const*, Vec3f*);
 
 typedef void (*rotTypeFunc)(f32, f32, Mtx&);
 static rotTypeFunc p_rot[5] = {
@@ -876,7 +876,7 @@ static planeFunc p_plane[3] = {
 void JPADrawRotation(JPAEmitterWorkData* param_0, JPABaseParticle* param_1) {
     if (param_1->checkStatus(8) == 0) {
         f32 sinRot, cosRot;
-        JMASSinCos(param_1->mRotateAngle, &sinRot, &cosRot);
+        Angle::sinCosShort(param_1->mRotateAngle, &sinRot, &cosRot);
         f32 particleX = param_0->mGlobalPtclScl.x * param_1->mParticleScaleX;
         f32 particleY = param_0->mGlobalPtclScl.y * param_1->mParticleScaleY;
         Mtx auStack_88;

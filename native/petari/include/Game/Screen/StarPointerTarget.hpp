@@ -1,25 +1,25 @@
 #pragma once
 
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class LayoutActor;
 
 class StarPointerTarget {
 public:
-    StarPointerTarget(f32, const TVec3f*, MtxPtr, TVec3f);
+    StarPointerTarget(f32, const Vec3f*, MtxPtr, Vec3f);
 
-    bool calcScreenPosition(TVec2f*) const;
-    bool isPointing(const TVec2f&, f32, f32) const;
-    void calcPosition(TVec3f*) const;
+    bool calcScreenPosition(Vec2f*) const;
+    bool isPointing(const Vec2f&, f32, f32) const;
+    void calcPosition(Vec3f*) const;
     f32 calcRadius2d(f32, f32, f32) const;
-    bool calcScreenPositionFromView(TVec2f*, const TVec3f&) const;
+    bool calcScreenPositionFromView(Vec2f*, const Vec3f&) const;
     // Where it shows and how big, as isPointing sees it.
-    bool calcScreenCircle(TVec2f*, f32*) const;
+    bool calcScreenCircle(Vec2f*, f32*) const;
 
     f32 mRadius3d;
-    TVec3f mOffset;
+    Vec3f mOffset;
     s32 mLastPointedChannel;
-    const TVec3f* mPosition;
+    const Vec3f* mPosition;
     MtxPtr mMtx;
 };
 
@@ -28,16 +28,16 @@ public:
     enum TargetType { TargetType_Circle = 0, TargetType_Rectangle = 1 };
     StarPointerLayoutTarget(LayoutActor*, const char*, const char*);
 
-    bool isPointing(const TVec2f&) const;
-    bool isPointingCircle(const TVec2f&) const;
-    bool isPointingRectangle(const TVec2f&) const;
-    void calcBasePos(TVec2f*) const;
+    bool isPointing(const Vec2f&) const;
+    bool isPointingCircle(const Vec2f&) const;
+    bool isPointingRectangle(const Vec2f&) const;
+    void calcBasePos(Vec2f*) const;
 
     LayoutActor* mLayout;
     const char* mLayoutName;
     const char* mPaneName;
     s32 mType;
-    TVec2f mPosition;
+    Vec2f mPosition;
     f32 mRadius;
     f32 mWidth;
     f32 mHeight;
@@ -47,7 +47,7 @@ class StarPointerLayoutTargetKeeper {
 public:
     StarPointerLayoutTargetKeeper(int);
 
-    void addTargetCircle(LayoutActor*, const char*, f32, const TVec2f&, const char*);
+    void addTargetCircle(LayoutActor*, const char*, f32, const Vec2f&, const char*);
     StarPointerLayoutTarget* getTarget(const char*) const;
     void registerTarget(StarPointerLayoutTarget*);
 

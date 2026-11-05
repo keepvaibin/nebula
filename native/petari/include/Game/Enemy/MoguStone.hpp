@@ -22,11 +22,11 @@ public:
     void exeThrow();
     void exeFall();
     bool isTaken();
-    void emit(bool, const TVec3f&, const TVec3f&, f32);
+    void emit(bool, const Vec3f&, const Vec3f&, f32);
 
-    TQuat4f _90;
-    TQuat4f _A0;
-    TVec3f _B0;
+    Quat4f _90;
+    Quat4f _A0;
+    Vec3f _B0;
     f32 _BC;
     bool _C0;
 };
@@ -42,7 +42,7 @@ public:
     virtual void startBreakSound();
     virtual void startThrowLevelSound();
 
-    void emitIce(const TVec3f&, const TVec3f&, f32, const TVec3f&);
+    void emitIce(const Vec3f&, const Vec3f&, f32, const Vec3f&);
 
     ParabolicPath* mPath;
 };

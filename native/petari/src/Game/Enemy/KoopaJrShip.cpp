@@ -39,9 +39,9 @@ namespace {
     static const char* const cJointNameCannon[] = {"FirePoint0", "FirePoint1", "FirePoint2", "FirePoint4", "FirePoint5", "FirePoint6"};
     static const char* const cEffectNameShoot[] = {"ShootJ0", "ShootJ1", "ShootJ2", "ShootJ4", "ShootJ5", "ShootJ6"};
 
-    inline void setRotateY(TRot3f& rMtx, f32 angle) {
-        f32 s = SIN(angle);
-        f32 c = COS(angle);
+    inline void setRotateY(Rot3f& rMtx, f32 angle) {
+        f32 s = Angle::libSin(angle);
+        f32 c = Angle::libCos(angle);
 
         rMtx.mMtx[0][0] = c;
         rMtx.mMtx[1][1] = 1.0f;
@@ -177,7 +177,7 @@ void KoopaJrShip::initShells() {
 
 void KoopaJrShip::initKoopaJr(const JMapInfoIter& rIter) {
     mJr = new KoopaJr("\203\116\203\142\203\160Jr" /* クッパJr */);
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.set(getBaseMtx());
     mtx.setTrans(mPosition);
     mtx.mult(_1EC, mJr->mPosition);
@@ -294,18 +294,18 @@ void KoopaJrShip::updateCoordSpeed() {
     }
 }
 
-void KoopaJrShip::calcLauncherInfo(TVec3f* a1, TVec3f* a2, s32 idx) const {
-    TPos3f mtx;
+void KoopaJrShip::calcLauncherInfo(Vec3f* a1, Vec3f* a2, s32 idx) const {
+    Pos3f mtx;
     mtx.set(MR::getJointMtx(this, ::cJointNameCannon[idx]));
     mtx.getTrans(*a1);
     mtx.getXDir(*a2);
     MR::normalize(a2);
 }
 
-void KoopaJrShip::calcLauncherInfoKiller(TVec3f* a1, TVec3f* a2, s32 idx) const {
-    TPos3f mtx;
-    TVec3f v16;
-    TVec3f v15;
+void KoopaJrShip::calcLauncherInfoKiller(Vec3f* a1, Vec3f* a2, s32 idx) const {
+    Pos3f mtx;
+    Vec3f v16;
+    Vec3f v15;
 
     mtx.set(MR::getJointMtx(this, ::cJointNameCannon[idx]));
     mtx.getTrans(*a1);
@@ -325,7 +325,7 @@ void KoopaJrShip::shootShell(s32 idx) {
     CannonShellBase* shell = mShellHolder->getValidShell();
 
     if (shell != nullptr) {
-        TVec3f v8, v7;
+        Vec3f v8, v7;
         calcLauncherInfo(&v8, &v7, idx);
         shell->launch(v8, v7 * 15.0f);
     }
@@ -343,7 +343,7 @@ bool KoopaJrShip::tryShootAllKillers() {
     }
 
     for (HomingKiller** pActor = mKillers.begin(); pActor != mKillers.end(); pActor++) {
-        TVec3f v6, v5;
+        Vec3f v6, v5;
         s32 idx = mKillers.indexOf(pActor);
         calcLauncherInfoKiller(&v6, &v5, idx);
         (*pActor)->appear(v6, v5);
@@ -356,7 +356,7 @@ bool KoopaJrShip::tryShootAllKillers() {
 void KoopaJrShip::shootKiller(s32 idx) {
     HomingKiller* killer = mKillers[idx];
     if (MR::isDead(killer)) {
-        TVec3f v6, v5;
+        Vec3f v6, v5;
         calcLauncherInfoKiller(&v6, &v5, idx);
         killer->appear(v6, v5);
         MR::emitEffect(this, ::cEffectNameShoot[idx]);
@@ -382,15 +382,15 @@ bool KoopaJrShip::isExistActiveKameck() const {
 }
 
 void KoopaJrShip::shootMainShells() {
-    TPos3f m;
+    Pos3f m;
     m.set(MR::getJointMtx(this, ::cJointNameCannonMain));
 
-    TVec3f pos;
+    Vec3f pos;
     m.getTrans(pos);
 
     // Straight ahead
     {
-        TVec3f forward;
+        Vec3f forward;
         m.getZDir(forward);
         MR::normalize(&forward);
         CannonShellBase* p = mMainShellHolder->getValidShell();
@@ -401,7 +401,7 @@ void KoopaJrShip::shootMainShells() {
 
     // Side
     {
-        TVec3f forward;
+        Vec3f forward;
         m.getZDir(forward);
         MR::normalize(&forward);
         CannonShellBase* p = mMainShellHolder->getValidShell();
@@ -412,7 +412,7 @@ void KoopaJrShip::shootMainShells() {
 
     // Other side
     {
-        TVec3f forward;
+        Vec3f forward;
         m.getZDir(forward);
         MR::normalize(&forward);
         CannonShellBase* p = mMainShellHolder->getValidShell();
@@ -429,9 +429,9 @@ void KoopaJrShip::emitDamageSmokeEffect() {
 }
 
 void KoopaJrShip::emitDamageHitEffect() {
-    TPos3f v7;
+    Pos3f v7;
     v7.identity();
-    TVec3f up;
+    Vec3f up;
     MR::calcUpVec(&up, this);
     MR::makeMtxSideUpPos(&v7, -_E0, up, _D4);
     MR::emitEffectHit(this, v7, "DamageFire");
@@ -440,11 +440,11 @@ void KoopaJrShip::emitDamageHitEffect() {
 
 void KoopaJrShip::updateKoopaJrPos() {
     if (isNerve(GET_NERVE(KoopaJrShip, HostTypeBreak))) {
-        TPos3f v8;
+        Pos3f v8;
         v8.set(MR::getJointMtx(mPodModel, ::cJointNamePodPos));
         v8.mult(_1EC, mJr->mPosition);
     } else {
-        TPos3f v7;
+        Pos3f v7;
         v7.set(MR::getJointMtx(this, ::cJointNameKoopaJrPos));
         MR::faceToPoint(v7, *MR::getPlayerPos(), 5.0f);
         v7.mult(_1EC, mJr->mPosition);
@@ -457,8 +457,8 @@ void KoopaJrShip::updateKillerPos() {
             continue;
         }
 
-        TVec3f v7;
-        TVec3f v6;
+        Vec3f v7;
+        Vec3f v6;
         calcLauncherInfoKiller(&v7, &v6, mKillers.indexOf(pActor));
         (*pActor)->setBasePosAndFront(v7, v6);
     }

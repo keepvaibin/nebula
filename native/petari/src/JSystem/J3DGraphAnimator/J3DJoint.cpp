@@ -9,13 +9,13 @@ void J3DMtxCalcJ3DSysInitBasic::init(Vec const& scale, Mtx const& mtx) {
     Vec unitScale = {1.0f, 1.0f, 1.0f};
     J3DSys::mCurrentS = scale;
     J3DSys::mParentS = unitScale;
-    JMAMTXApplyScale(mtx, J3DSys::mCurrentMtx, scale.x, scale.y, scale.z);
+    NebulaMtxApplyScale(mtx, J3DSys::mCurrentMtx, scale.x, scale.y, scale.z);
 }
 
 void J3DMtxCalcJ3DSysInitMaya::init(Vec const& scale, Mtx const& mtx) {
     J3DSys::mParentS = (Vec){1.0f, 1.0f, 1.0f};
     J3DSys::mCurrentS = scale;
-    JMAMTXApplyScale(mtx, J3DSys::mCurrentMtx, scale.x, scale.y, scale.z);
+    NebulaMtxApplyScale(mtx, J3DSys::mCurrentMtx, scale.x, scale.y, scale.z);
 }
 
 J3DMtxBuffer* J3DMtxCalc::mMtxBuffer;
@@ -37,7 +37,7 @@ void J3DMtxCalcCalcTransformBasic::calcTransform(J3DTransformInfo const& transIn
 
     if (!checkScaleOne(J3DSys::mCurrentS)) {
         mtxBuf->setScaleFlag(jntNo, 0);
-        JMAMTXApplyScale(anmMtx, anmMtx, transInfo.mScale.x, transInfo.mScale.y, transInfo.mScale.z);
+        NebulaMtxApplyScale(anmMtx, anmMtx, transInfo.mScale.x, transInfo.mScale.y, transInfo.mScale.z);
     } else {
         mtxBuf->setScaleFlag(jntNo, 1);
     }
@@ -62,7 +62,7 @@ void J3DMtxCalcCalcTransformSoftimage::calcTransform(J3DTransformInfo const& tra
 
     if (!checkScaleOne(J3DSys::mCurrentS)) {
         mtxBuf->setScaleFlag(jntNo, 0);
-        JMAMTXApplyScale(J3DSys::mCurrentMtx, anmMtx, J3DSys::mCurrentS.x, J3DSys::mCurrentS.y, J3DSys::mCurrentS.z);
+        NebulaMtxApplyScale(J3DSys::mCurrentMtx, anmMtx, J3DSys::mCurrentS.x, J3DSys::mCurrentS.y, J3DSys::mCurrentS.z);
         anmMtx[0][3] = J3DSys::mCurrentMtx[0][3];
         anmMtx[1][3] = J3DSys::mCurrentMtx[1][3];
         anmMtx[2][3] = J3DSys::mCurrentMtx[2][3];
@@ -86,14 +86,14 @@ void J3DMtxCalcCalcTransformMaya::calcTransform(J3DTransformInfo const& transInf
         mtxBuf->setScaleFlag(jntNo, 1);
     } else {
         mtxBuf->setScaleFlag(jntNo, 0);
-        JMAMTXApplyScale(anmMtx, anmMtx, transInfo.mScale.x, transInfo.mScale.y, transInfo.mScale.z);
+        NebulaMtxApplyScale(anmMtx, anmMtx, transInfo.mScale.x, transInfo.mScale.y, transInfo.mScale.z);
     }
 
     if (joint->getScaleCompensate() == 1) {
         Vec inverseScale;
-        inverseScale.x = JMath::fastReciprocal(J3DSys::mParentS.x);
-        inverseScale.y = JMath::fastReciprocal(J3DSys::mParentS.y);
-        inverseScale.z = JMath::fastReciprocal(J3DSys::mParentS.z);
+        inverseScale.x = fastReciprocal(J3DSys::mParentS.x);
+        inverseScale.y = fastReciprocal(J3DSys::mParentS.y);
+        inverseScale.z = fastReciprocal(J3DSys::mParentS.z);
 
         anmMtx[0][0] *= inverseScale.x;
         anmMtx[0][1] *= inverseScale.x;

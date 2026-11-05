@@ -118,7 +118,7 @@ void ScenarioSelectLayout::init(const JMapInfoIter& rIter) {
         mStar[i] = new ScenarioSelectStar(mEffectSystem);
         mStar[i]->initWithoutIter();
 
-        MR::addStarPointerTargetCircle(this, ::cStarPaneName[i], ::cPointingTargetRadius, TVec2f(0.0f, 0.0f), nullptr);
+        MR::addStarPointerTargetCircle(this, ::cStarPaneName[i], ::cPointingTargetRadius, Vec2f(0.0f, 0.0f), nullptr);
     }
 
     mScenarioSky = new MultiSceneActor("\203\126\203\151\203\212\203\111\221\111\221\360\202\314\213\363" /* シナリオ選択の空 */, "ScenarioSelectSky", false);
@@ -449,7 +449,7 @@ ScenarioSelectStar* ScenarioSelectLayout::getSelectedStar() const {
     return nullptr;
 }
 
-void ScenarioSelectLayout::calcWorldPositionFromScreenPos(TVec3f* pWorldPos, const TVec2f& rScreenPos, f32 depth) const {
+void ScenarioSelectLayout::calcWorldPositionFromScreenPos(Vec3f* pWorldPos, const Vec2f& rScreenPos, f32 depth) const {
     f32 fovy = mCameraContext->getFovy() * (PI / 180.0f);
     f32 height = static_cast< s32 >(NebulaFrameClock::cScreenLines);
     f32 focalLength = (height * 0.5f) / MR::tan(fovy * 0.5f);
@@ -463,8 +463,8 @@ void ScenarioSelectLayout::calcWorldPositionFromScreenPos(TVec3f* pWorldPos, con
     }
 
     f32 scale = distance / focalLength;
-    TVec3f pos(scale * (rScreenPos.x - MR::getScreenWidth() * 0.5f), scale * -(rScreenPos.y - height * 0.5f), -distance);
-    TPos3f invView(mCameraContext->getInvViewMtx());
+    Vec3f pos(scale * (rScreenPos.x - MR::getScreenWidth() * 0.5f), scale * -(rScreenPos.y - height * 0.5f), -distance);
+    Pos3f invView(mCameraContext->getInvViewMtx());
     invView.mult(pos, *pWorldPos);
 }
 
@@ -624,10 +624,10 @@ void ScenarioSelectLayout::tryChangePage() {
 void ScenarioSelectLayout::appearStar(s32 starId, s32 scenarioNo, int a3) {
     ScenarioSelectStar* pStar = mStar[starId];
 
-    TVec2f starPaneTrans;
+    Vec2f starPaneTrans;
     MR::copyPaneTrans(&starPaneTrans, this, ::cStarPaneName[starId]);
 
-    TVec3f worldPos;
+    Vec3f worldPos;
     calcWorldPositionFromScreenPos(&worldPos, starPaneTrans, 1000.0f);
 
     pStar->setup(scenarioNo, a3, worldPos, starId);

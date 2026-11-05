@@ -2,7 +2,7 @@
 
 #include "Game/NameObj/NameObj.hpp"
 #include "Game/Util/Color.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class JUTTexture;
 
@@ -12,8 +12,8 @@ public:
     public:
         BlurPoint();
 
-        TVec2f mPos;
-        TVec2f mDir;
+        Vec2f mPos;
+        Vec2f mDir;
         bool mIsHidden;
     };
 
@@ -27,7 +27,7 @@ public:
     void show();
     void hide();
     void hideAll();
-    void updatePoint(const TVec2f&, bool, TVec2f*);
+    void updatePoint(const Vec2f&, bool, Vec2f*);
     u16 findDrawPointRange(u16*, u16*) const;
     void draw0(NebulaColor8) const;
     void draw1() const;

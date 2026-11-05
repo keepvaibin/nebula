@@ -146,7 +146,7 @@ void BossBegoman::init(const JMapInfoIter& rIter) {
 
     f32 scaleY = mScale.y;
     initSensor(1, 190.0f, 250.0f, "Center");
-    MR::addHitSensorAtJoint(this, "trample", "Center", ATYPE_BEGOMAN, 8, 180.0f * scaleY, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJoint(this, "trample", "Center", ATYPE_BEGOMAN, 8, 180.0f * scaleY, Vec3f(0.0f, 0.0f, 0.0f));
 
     initEffect(0);
     MR::setEffectHostSRT(this, "EdgeSpark", nullptr, nullptr, nullptr);
@@ -228,7 +228,7 @@ void BossBegoman::kill() {
 }
 
 void BossBegoman::control() {
-    TVec3f headEdgeScale;
+    Vec3f headEdgeScale;
     MR::copyJointScale(mHead, "Edge", &headEdgeScale);
     MR::setShadowVolumeSphereRadius(this, nullptr, 200.0f * (1.0f - 0.35f * (1 - headEdgeScale.x)));
 
@@ -284,7 +284,7 @@ void BossBegoman::setStepBackNerve() {
     }
 }
 
-bool BossBegoman::onTouchElectric(const TVec3f& a1, const TVec3f& a2) {
+bool BossBegoman::onTouchElectric(const Vec3f& a1, const Vec3f& a2) {
     if (isNerve(GET_NERVE(BossBegoman, HostTypeNrvElectricDeath)) || isNerve(GET_NERVE(BossBegoman, HostTypeNrvElectricReturn)) ||
         isNerve(GET_NERVE(BossBegoman, HostTypeNrvJumpToInitPos))) {
         return false;
@@ -319,8 +319,8 @@ const Nerve* BossBegoman::getNerveWait() {
     return GET_NERVE(BossBegoman, HostTypeNrvWait);
 }
 
-void BossBegoman::addVelocityOnPushedFromElectricRail(const TVec3f& a1, const TVec3f& a2) {
-    TVec3f railPushVelH(mInitPos);
+void BossBegoman::addVelocityOnPushedFromElectricRail(const Vec3f& a1, const Vec3f& a2) {
+    Vec3f railPushVelH(mInitPos);
     railPushVelH.sub(getSensor("body")->mPosition);
     MR::vecKillElement(railPushVelH, mGravity, &railPushVelH);
     railPushVelH.setLength(getRailPushVelHBoss());
@@ -597,7 +597,7 @@ void BossBegoman::exeElectricDeath() {
     }
 
     if (MR::isStep(this, 30)) {
-        TVec3f vec(mInitPos);
+        Vec3f vec(mInitPos);
         vec.sub(mPosition);
         MR::vecKillElement(vec, mGravity, &vec);
         MR::normalizeOrZero(&vec);
@@ -648,17 +648,17 @@ void BossBegoman::edgeRecoverCore() {
 }
 
 void BossBegoman::exeElectricReturn() {
-    TVec3f vec1;
-    TVec3f vec2;
+    Vec3f vec1;
+    Vec3f vec2;
 
     if (MR::isFirstStep(this)) {
         if (ElectricRailFunction::isTouchRail(getSensor("check"), &vec1, &vec2)) {
             vec1.sub(mPosition);
 
-            TVec3f vec3 = vec1;
+            Vec3f vec3 = vec1;
             vec3.cross(vec2, vec3);
 
-            TVec3f vec4 = vec3;
+            Vec3f vec4 = vec3;
             vec4.cross(vec2, vec4);
 
             if (0.0f < vec1.dot(vec4)) {
@@ -684,11 +684,11 @@ void BossBegoman::exeJumpToInitPos() {
         MR::startAction(this, "Shake");
         MR::startSound(this, "SE_BM_BBEGO_BIG_JUMP");
         // vec1 goes completely unused
-        TVec3f vec1(mInitPos);
+        Vec3f vec1(mInitPos);
         vec1 -= mPosition;
         vec1 *= 0.5f;
 
-        TVec3f vec2(mGravity);
+        Vec3f vec2(mGravity);
         vec2 = -vec2;
 
         mPath->initFromUpVector(mPosition, mInitPos - mGravity * 10.0f, vec2, 700.0f);
@@ -715,7 +715,7 @@ void BossBegoman::exeKeepDistance() {
 
 void BossBegoman::tryLaunchFollower() {
     if (isDeadAllFollower()) {
-        TVec3f vec(*MR::getPlayerCenterPos());
+        Vec3f vec(*MR::getPlayerCenterPos());
         vec.sub(mPosition);
         MR::vecKillElement(vec, mGravity, &vec);
         MR::normalizeOrZero(&vec);
@@ -812,7 +812,7 @@ void BossBegoman::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 
     if (attackPlayerEdge) {
-        TVec3f dirReceiverToSender(pSender->mPosition);
+        Vec3f dirReceiverToSender(pSender->mPosition);
         dirReceiverToSender.sub(pReceiver->mPosition);
         MR::normalizeOrZero(&dirReceiverToSender);
 
@@ -844,7 +844,7 @@ bool BossBegoman::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* 
     }
 
     if (MR::isMsgEnemyAttackElectric(msg)) {
-        TVec3f vec1(pSender->mHost->mVelocity);
+        Vec3f vec1(pSender->mHost->mVelocity);
         MR::vecKillElement(vec1, mGravity, &vec1);
         MR::normalizeOrZero(&vec1);
 
@@ -857,7 +857,7 @@ bool BossBegoman::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* 
     }
 
     if (MR::isSensorEnemy(pSender)) {
-        TVec3f vec2(pReceiver->mPosition);
+        Vec3f vec2(pReceiver->mPosition);
         vec2.sub(pSender->mPosition);
         MR::normalizeOrZero(&vec2);
 
@@ -943,23 +943,23 @@ bool BossBegoman::receiveMsgTrample(HitSensor* pSender, HitSensor* pReceiver) {
     if (pReceiver == getSensor("trample")) {
         setNerve(GET_NERVE(BossBegoman, HostTypeNrvTrampleReaction));
 
-        TVec3f vec1(pReceiver->mPosition);
+        Vec3f vec1(pReceiver->mPosition);
         vec1.sub(pSender->mPosition);
 
         MR::vecKillElement(vec1, mGravity, &vec1);
         MR::normalize(&vec1);
         mFaceVec.set(vec1);
 
-        TVec3f vec2(*MR::getPlayerVelocity());
+        Vec3f vec2(*MR::getPlayerVelocity());
         MR::vecKillElement(vec2, mGravity, &vec2);
 
         if (!MR::isNearZero(vec2)) {
-            TVec3f vec3 = vec2;
+            Vec3f vec3 = vec2;
             vec3.cross(mGravity, vec3);
             vec3.setLength(25.0f);
             mVelocity = vec3;
         } else {
-            TVec3f vec4;
+            Vec3f vec4;
             MR::getPlayerFrontVec(&vec4);
             vec4.cross(mGravity, vec4);
             vec4.setLength(25.0f);
@@ -983,7 +983,7 @@ void BossBegoman::calcAnim() {
     LiveActor::calcAnim();
     mHeadMtx.setInline(MR::getJointMtx(this, "Center"));
 
-    TVec3f vec;
+    Vec3f vec;
     mHeadMtx.getYDir(vec);
 
     if (!MR::isSameDirection(vec, mTargetVec)) {

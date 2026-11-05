@@ -5,24 +5,24 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
-#include <JSystem/JMath/JMath.hpp>
+#include <nebula_geometry.hpp>
 
-void BossStinkBugFunction::addHeightOffset(TVec3f* pOut, const BossStinkBug* pStinkBug, f32 scale) {
+
+void BossStinkBugFunction::addHeightOffset(Vec3f* pOut, const BossStinkBug* pStinkBug, f32 scale) {
     pOut->add(pStinkBug->mGravity * -scale);
 }
 
-void BossStinkBugFunction::addLocalHeightOffset(TVec3f* pOut, BossStinkBug* pStinkBug, f32 scale) {
+void BossStinkBugFunction::addLocalHeightOffset(Vec3f* pOut, BossStinkBug* pStinkBug, f32 scale) {
     if (!MR::isNearZero(scale)) {
         pStinkBug->updatePose();
-        TVec3f upVec;
+        Vec3f upVec;
         pStinkBug->calcUpVec(&upVec);
         pOut->scaleAdd(scale, upVec, *pOut);
     }
 }
 
-void BossStinkBugFunction::calcDiffCurrentRailPosition(TVec3f* pOut, BossStinkBug* pStinkBug, f32 scale1, f32 scale2) {
-    TVec3f railPosition;
+void BossStinkBugFunction::calcDiffCurrentRailPosition(Vec3f* pOut, BossStinkBug* pStinkBug, f32 scale1, f32 scale2) {
+    Vec3f railPosition;
     railPosition.set(MR::getRailPos(pStinkBug));
     addHeightOffset(&railPosition, pStinkBug, scale1);
     addLocalHeightOffset(&railPosition, pStinkBug, scale2);
@@ -31,21 +31,21 @@ void BossStinkBugFunction::calcDiffCurrentRailPosition(TVec3f* pOut, BossStinkBu
 
 void BossStinkBugFunction::moveRail(BossStinkBug* pStinkBug, f32 f1, f32 f2, f32 f3) {
     MR::moveCoord(pStinkBug, f1);
-    TVec3f railPos(MR::getRailPos(pStinkBug));
+    Vec3f railPos(MR::getRailPos(pStinkBug));
     addHeightOffset(&railPos, pStinkBug, f2);
     MR::turnDirectionDegree(pStinkBug, &pStinkBug->_EC, MR::getRailDirection(pStinkBug), 10.0f);
     addLocalHeightOffset(&railPos, pStinkBug, f3);
     pStinkBug->mPosition.set(railPos);
 }
 
-void BossStinkBugFunction::turnRailGround(BossStinkBug* pStinkBug, const TVec3f& rVec, f32 f1, bool a1) {
+void BossStinkBugFunction::turnRailGround(BossStinkBug* pStinkBug, const Vec3f& rVec, f32 f1, bool a1) {
     if (MR::isRailGoingToEnd(pStinkBug) == a1) {
         MR::reverseRailDirection(pStinkBug);
     }
     MR::rotateVecDegree(&pStinkBug->_EC, rVec, pStinkBug->mGravity, MR::getEaseInOutValue(f1, 0.0f, 1.0f, 1.0f) * 180.0f * -(a1 ? 1.0f : -1.0f));
 }
 
-void BossStinkBugFunction::turnRail(BossStinkBug* pStinkBug, const TVec3f& rVec1, f32 f1, f32 f2, f32 f3, f32 f4, f32 f5, bool a1) {
+void BossStinkBugFunction::turnRail(BossStinkBug* pStinkBug, const Vec3f& rVec1, f32 f1, f32 f2, f32 f3, f32 f4, f32 f5, bool a1) {
     f32 moveCoordParameter;
 
     if (f2 <= 0.5f) {
@@ -58,7 +58,7 @@ void BossStinkBugFunction::turnRail(BossStinkBug* pStinkBug, const TVec3f& rVec1
     }
 
     MR::moveCoord(pStinkBug, moveCoordParameter);
-    TVec3f railPos(MR::getRailPos(pStinkBug));
+    Vec3f railPos(MR::getRailPos(pStinkBug));
     addHeightOffset(&railPos, pStinkBug, f4);
 
     f32 flt1 = (a1 ? 1.0f : -1.0f);
@@ -72,13 +72,13 @@ void BossStinkBugFunction::turnRail(BossStinkBug* pStinkBug, const TVec3f& rVec1
     pStinkBug->mPosition.set(railPos);
 }
 
-void BossStinkBugFunction::regainToRail(BossStinkBug* pStinkBug, const TVec3f& rVec, f32 f1, f32 f2, f32 f3, f32 f4) {
+void BossStinkBugFunction::regainToRail(BossStinkBug* pStinkBug, const Vec3f& rVec, f32 f1, f32 f2, f32 f3, f32 f4) {
     pStinkBug->mRotation.z *= 0.9f;
     MR::moveCoord(pStinkBug, f2);
-    TVec3f railPos(MR::getRailPos(pStinkBug));
+    Vec3f railPos(MR::getRailPos(pStinkBug));
     addHeightOffset(&railPos, pStinkBug, f3);
     addLocalHeightOffset(&railPos, pStinkBug, f4);
-    TVec3f dif = railPos - pStinkBug->mPosition;
+    Vec3f dif = railPos - pStinkBug->mPosition;
     if (MR::isNearZero(dif)) {
         MR::turnDirectionDegree(pStinkBug, &pStinkBug->_EC, dif, 2.0f);
     } else {
@@ -87,7 +87,7 @@ void BossStinkBugFunction::regainToRail(BossStinkBug* pStinkBug, const TVec3f& r
     pStinkBug->mPosition.scaleAdd(1.0f - f1, rVec, railPos);
 }
 
-void BossStinkBugFunction::setFallVelocity(BossStinkBug* pStinkBug, const TVec3f& rVec, f32 f1, f32 f2, f32 f3) {
+void BossStinkBugFunction::setFallVelocity(BossStinkBug* pStinkBug, const Vec3f& rVec, f32 f1, f32 f2, f32 f3) {
     f32 scaleAddFactor;
 
     if (f1 < f2) {
@@ -99,10 +99,10 @@ void BossStinkBugFunction::setFallVelocity(BossStinkBug* pStinkBug, const TVec3f
         scaleAddFactor = 1.0f - MR::getEaseInOutValue(1.0f / (1.0f - f2) * (f1 - f2), 0.0f, 1.0f, 1.0f);
     }
 
-    TVec3f temp;
+    Vec3f temp;
     temp.set(pStinkBug->mGravity);
 
-    TVec3f scaleAdd;
+    Vec3f scaleAdd;
 
     scaleAdd.scaleAdd(scaleAddFactor * f3, temp, rVec);
 

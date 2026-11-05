@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/NPC/NPCActor.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class LodCtrl;
 class TalkMessageCtrl;
@@ -29,8 +29,8 @@ public:
     virtual void control();
     virtual void calcAndSetBaseMtx();
 
-    void calcRailPos(TVec3f*);
-    bool isNeedTurn(const TVec3f&);
+    void calcRailPos(Vec3f*);
+    bool isNeedTurn(const Vec3f&);
     void updateJump();
 
     void exeAppear();
@@ -56,6 +56,6 @@ public:
     f32 _168;
     f32 _16C;
     f32 _170;
-    TVec3f _174;
+    Vec3f _174;
     f32 _180;
 };

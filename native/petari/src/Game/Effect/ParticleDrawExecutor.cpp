@@ -37,7 +37,7 @@ void ParticleDrawExecutor::draw3D() const {
 
 void ParticleDrawExecutor::draw2D() const {
     if (_20) {
-        TPos3f cameraMtx;
+        Pos3f cameraMtx;
         cameraMtx.identity();
         JPADrawInfo drawInfo(cameraMtx.toMtxPtr());
 
@@ -84,7 +84,7 @@ void ParticleDrawExecutor::drawAfterImageEffect() const {
     drawWithViewMtxAfterImageEffect(MR::getCameraViewMtx());
 }
 
-void ParticleDrawExecutor::drawWithViewMtx3D(const TPos3f& rViewMtx) const {
+void ParticleDrawExecutor::drawWithViewMtx3D(const Pos3f& rViewMtx) const {
     if (_20) {
         JPADrawInfo drawInfo(rViewMtx);
         mHost->mEmitterManager->draw(&drawInfo, 0);
@@ -92,21 +92,21 @@ void ParticleDrawExecutor::drawWithViewMtx3D(const TPos3f& rViewMtx) const {
     }
 }
 
-void ParticleDrawExecutor::drawWithViewMtxAfterIndirect(const TPos3f& rViewMtx) const {
+void ParticleDrawExecutor::drawWithViewMtxAfterIndirect(const Pos3f& rViewMtx) const {
     if (_20) {
         JPADrawInfo drawInfo(rViewMtx);
         mHost->mEmitterManager->draw(&drawInfo, 3);
     }
 }
 
-void ParticleDrawExecutor::drawWithViewMtxForBloomEffect(const TPos3f& rViewMtx) const {
+void ParticleDrawExecutor::drawWithViewMtxForBloomEffect(const Pos3f& rViewMtx) const {
     if (_20) {
         JPADrawInfo drawInfo(rViewMtx);
         mHost->mEmitterManager->draw(&drawInfo, 4);
     }
 }
 
-void ParticleDrawExecutor::drawWithViewMtxAfterImageEffect(const TPos3f& rViewMtx) const {
+void ParticleDrawExecutor::drawWithViewMtxAfterImageEffect(const Pos3f& rViewMtx) const {
     if (_20) {
         JPADrawInfo drawInfo(rViewMtx);
         mHost->mEmitterManager->draw(&drawInfo, 5);

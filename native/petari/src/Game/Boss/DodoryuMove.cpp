@@ -120,11 +120,11 @@ namespace DodoryuSub {
         }
 
         MR::moveCoord(mHost, _14);
-        TPos3f baseMtx = mHost->mBaseMtx;
-        TVec3f front;
+        Pos3f baseMtx = mHost->mBaseMtx;
+        Vec3f front;
         baseMtx.getZDir(front);
 
-        TRot3f rotation;
+        Rot3f rotation;
         rotation.setRotate(front, MR::getRailDirection(mHost));
         baseMtx.concat(rotation, baseMtx);
         baseMtx.setTrans(MR::getRailPos(mHost));
@@ -134,12 +134,12 @@ namespace DodoryuSub {
     }
 
     void MoveStateChase::execute() {
-        TVec3f toPlayer = *MR::getPlayerPos() - mHost->mPosition;
+        Vec3f toPlayer = *MR::getPlayerPos() - mHost->mPosition;
 
         if (DodoryuUtil::calcVerticalizedDir(mHost, &toPlayer, toPlayer)) {
             DodoryuUtil::turnToward(mHost, toPlayer, _1C);
 
-            TVec3f accelDir;
+            Vec3f accelDir;
             mHost->mBaseMtx.getZDir(accelDir);
 
             DodoryuUtil::accelerate(mHost, accelDir, _10, _14, _18);
@@ -158,13 +158,13 @@ namespace DodoryuSub {
     }
 
     void MoveStateDetour::execute() {
-        TVec3f accelDir = mHost->mVelocity;
+        Vec3f accelDir = mHost->mVelocity;
 
         if (!MR::isNearZero(accelDir)) {
             MR::normalize(&accelDir);
             DodoryuUtil::turnToward(mHost, accelDir, 1.8f);
         } else {
-            TVec3f yDir;
+            Vec3f yDir;
             mHost->mBaseMtx.getYDir(yDir);
 
             accelDir.cross(yDir, mHost->_134);
@@ -187,7 +187,7 @@ namespace DodoryuSub {
     }
 
     bool MoveStateDetour::isPlayerOppositeFromWall() const {
-        TVec3f toPlayer = *MR::getPlayerPos() - mHost->mPosition;
+        Vec3f toPlayer = *MR::getPlayerPos() - mHost->mPosition;
 
         return mHost->_134.dot(toPlayer) > 0.0f;
     }
@@ -211,7 +211,7 @@ namespace DodoryuSub {
 
         DodoryuUtil::turnToward(mHost, _2C, _20);
 
-        TVec3f newVelocity;
+        Vec3f newVelocity;
         mHost->mBaseMtx.getZDir(newVelocity);
         newVelocity.setLength(_28);
 
@@ -235,8 +235,8 @@ namespace DodoryuSub {
     }
 
     void MoveStateJumpOut::execute() {
-        const TVec3f& rPosition = mHost->mPosition;
-        TVec3f awayFromPlayer = rPosition - *MR::getPlayerPos();
+        const Vec3f& rPosition = mHost->mPosition;
+        Vec3f awayFromPlayer = rPosition - *MR::getPlayerPos();
 
         DodoryuUtil::calcVerticalizedDir(mHost, &awayFromPlayer, awayFromPlayer);
         DodoryuUtil::turnToward(mHost, awayFromPlayer, _10);

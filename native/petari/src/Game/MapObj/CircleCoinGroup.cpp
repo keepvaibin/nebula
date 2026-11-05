@@ -1,7 +1,7 @@
 #include "Game/MapObj/CircleCoinGroup.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
-#include <JSystem/JMath/JMATrigonometric.hpp>
+#include <nebula_geometry.hpp>
 
 CircleCoinGroup::CircleCoinGroup(const char* pName) : CoinGroup(pName) {
     mCoinRadius = 200.0f;
@@ -13,14 +13,14 @@ void CircleCoinGroup::initCoinArray(const JMapInfoIter& rIter) {
 }
 
 void CircleCoinGroup::placementCoin() {
-    TPos3f mtx;
+    Pos3f mtx;
     MR::makeMtxTR(mtx, this);
 
-    TVec3f front, side;
+    Vec3f front, side;
     mtx.getXDir(side);
     mtx.getZDir(front);
 
-    const TVec3f center(*getPosition());
+    const Vec3f center(*getPosition());
     f32 angle = 0.0f;
     f32 interval = (TWO_PI / mCoinCount);
 

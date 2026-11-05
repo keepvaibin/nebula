@@ -51,7 +51,7 @@ void DotCamReaderInBin::init(const void* pData) {
     mMapIter = mMapInfo.begin();
 }
 
-bool DotCamReaderInBin::getValueVec(const char* pName, TVec3f* pOut) {
+bool DotCamReaderInBin::getValueVec(const char* pName, Vec3f* pOut) {
     char buffer[0x100];
     char* pBuffer = &buffer[0];
 

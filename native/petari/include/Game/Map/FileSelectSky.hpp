@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class ProjmapEffectMtxSetter;
 
@@ -24,6 +24,6 @@ public:
 private:
     f32 mAngleX;
     f32 mAngleY;
-    TPos3f mBaseMtx;
+    Pos3f mBaseMtx;
     ProjmapEffectMtxSetter* mProjmapEffectMtxSetter;
 };

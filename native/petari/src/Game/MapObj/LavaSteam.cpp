@@ -38,7 +38,7 @@ void LavaSteam::init(const JMapInfoIter& rIter) {
     MR::setEffectHostSRT(this, "Sign", &mPosition, &mRotation, &mEffectScale);
 
     initHitSensor(1);
-    HitSensor* pSensor = MR::addHitSensorMapObj(this, "body", 8, ::sSensorRadius, TVec3f(0.0f, ::sSensorOffsetY, 0.0f));
+    HitSensor* pSensor = MR::addHitSensorMapObj(this, "body", 8, ::sSensorRadius, Vec3f(0.0f, ::sSensorOffsetY, 0.0f));
     MR::setClippingTypeSphere(this, ::sSensorRadius, &pSensor->mPosition);
 
     MR::setGroupClipping(this, rIter, ::sMaxNumGroupClipping);
@@ -61,7 +61,7 @@ void LavaSteam::init(const JMapInfoIter& rIter) {
 }
 
 void LavaSteam::initAfterPlacement() {
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.identity();
     mtx.setRotateDegree(mRotation);
     mtx.getYDir(mUp);

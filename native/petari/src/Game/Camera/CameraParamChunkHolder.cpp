@@ -197,7 +197,7 @@ void CameraParamChunkHolder::arrangeChunk(CameraParamChunk* pChunk) {
     }
 
     if (mCameraVersion < 0x30008) {
-        pChunk->mExParam.mVPanAxis.set(TVec3f(0.0f, 1.0f, 0.0f));
+        pChunk->mExParam.mVPanAxis.set(Vec3f(0.0f, 1.0f, 0.0f));
     }
 
     if (mCameraVersion < 0x3000A) {

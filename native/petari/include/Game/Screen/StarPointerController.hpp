@@ -1,12 +1,12 @@
 #pragma once
 
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class DpdInfo {
 public:
     DpdInfo();
 
-    TVec2f mPos;
+    Vec2f mPos;
     bool mInScreen;
     bool mDrawReady;
     f32 mZDepth;  // 0 near to 1 far
@@ -22,13 +22,13 @@ public:
     void movement(const f32*, const f32*);
     void storeDataFromCallback(const f32*, const f32*);
     void storePastPointingData();
-    void calcPastPointingPosOnScreen(TVec2f*, s32) const;
+    void calcPastPointingPosOnScreen(Vec2f*, s32) const;
     void updateDpdInfo();
     void updateAdditionalInfo();
 
     void forcePointerOut();
 
-    f32 calcViewDistanceZ(const TVec3f&, MtxPtr);
+    f32 calcViewDistanceZ(const Vec3f&, MtxPtr);
 
     bool isInScreen() const {
         return mPastInfo.mInScreen;
@@ -38,23 +38,23 @@ public:
         return mPastInfo.mViewDistZ;
     }
 
-    const TVec2f& getPastPos() const {
+    const Vec2f& getPastPos() const {
         return mPastInfo.mPos;
     }
 
     s32 mPadChannel;
     DpdInfo mPastInfo;
     DpdInfo mInfo;
-    TVec2f mScreenPos;
+    Vec2f mScreenPos;
     s32 mOutScreenTime;
-    TVec2f* mPastPosition;
+    Vec2f* mPastPosition;
     s32 mPastPointNum;
-    TVec2f* mNextPastPosition;
+    Vec2f* mNextPastPosition;
     s32 mNextPastPointNum;
     f32 mScreenDist;
     f32 mScreenSpeed;
-    TVec2f mScreenVel;
-    TVec3f mWorldVel;
-    TVec3f mWorldPos;
+    Vec2f mScreenVel;
+    Vec3f mWorldVel;
+    Vec3f mWorldPos;
     bool mNotInScreen;
 };

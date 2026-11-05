@@ -38,7 +38,7 @@ void Mario::stick2DadjustGround(f32& rX, f32& rY) {
         set2Dmode(dot >= 0.0f);
     }
 
-    TVec3f stickDir2D(rX, rY, 0.0f);
+    Vec3f stickDir2D(rX, rY, 0.0f);
     MR::normalizeOrZero(&stickDir2D);
 
     if (_66C) {
@@ -62,7 +62,7 @@ void Mario::stick2DadjustGround(f32& rX, f32& rY) {
         return;
     }
 
-    TVec3f vec2;
+    Vec3f vec2;
     vec2.x = _660.dot(getCamDirX());
     vec2.y = _660.dot(getCamDirY());
     vec2.z = 0.0f;
@@ -82,9 +82,9 @@ void Mario::stick2DadjustGround(f32& rX, f32& rY) {
     _66C = true;
 }
 
-void Mario::calcDir2D(f32 x, f32 y, TVec3f* pOut) {
-    TVec3f xDir;
-    TVec3f yDir;
+void Mario::calcDir2D(f32 x, f32 y, Vec3f* pOut) {
+    Vec3f xDir;
+    Vec3f yDir;
     MR::vecKillElement(getCamDirX(), _6A0, &xDir);
     MR::vecKillElement(getCamDirY(), _6A0, &yDir);
 

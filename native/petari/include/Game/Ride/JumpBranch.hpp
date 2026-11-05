@@ -18,10 +18,10 @@ public:
 
     bool updateBind();
 
-    TVec3f mCenter;
-    TVec3f mSide;
-    TVec3f mUp;
-    TVec3f mFront;
+    Vec3f mCenter;
+    Vec3f mSide;
+    Vec3f mUp;
+    Vec3f mFront;
     LiveActor* mRider;
     SwingRopePoint* mSwingPoint;
     bool mSwingReverse;

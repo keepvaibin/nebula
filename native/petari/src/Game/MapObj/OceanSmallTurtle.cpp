@@ -89,16 +89,16 @@ void OceanSmallTurtle::control() {
 }
 
 void OceanSmallTurtle::calcAndSetBaseMtx() {
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.identity();
     mPosition.set(mMercatorPos);
 
-    TPos3f rotateMtx;
+    Pos3f rotateMtx;
     MR::makeMtxRotate(rotateMtx, mRotation);
     mtx.concat(rotateMtx);
 
     if (isNerve(GET_NERVE(OceanSmallTurtle, OceanSmallTurtleNrvRailMove))) {
-        TPos3f rotateMtx2;
+        Pos3f rotateMtx2;
         MR::makeMtxRotate(rotateMtx2, mInfoRotate);
         mtx.concat(rotateMtx2);
     }
@@ -106,8 +106,8 @@ void OceanSmallTurtle::calcAndSetBaseMtx() {
     mtx.setTrans(mPosition);
 
     if (isBound) {
-        TVec3f up(-mGravity);
-        TVec3f scaledUp;
+        Vec3f up(-mGravity);
+        Vec3f scaledUp;
         scaledUp.scale(mBoundDisplacement, up);
         mtx[0][3] += scaledUp.x;
         mtx[1][3] += scaledUp.y;
@@ -122,9 +122,9 @@ void OceanSmallTurtle::exeWait() {
         mStartRotationX = mRotation.x;
     }
 
-    TVec3f up;
+    Vec3f up;
     up.negate(mGravity);
-    TVec3f scaledUp;
+    Vec3f scaledUp;
     scaledUp.scale(mArg1, up);
 
     if (MR::isInWater(this, scaledUp)) {
@@ -138,10 +138,10 @@ void OceanSmallTurtle::exeWait() {
 
 void OceanSmallTurtle::exeFloatSignal() {
     f32 speedAndDir = 3.0f * (getNerveStep() % 8 < 4 ? ::sRambleSide : -::sRambleSide);
-    TVec3f sideVec;
+    Vec3f sideVec;
     MR::calcSideVec(&sideVec, this);
 
-    TVec3f velocity;
+    Vec3f velocity;
 
     velocity.scale(speedAndDir, sideVec);
     mVelocity.set(velocity);
@@ -244,7 +244,7 @@ bool OceanSmallTurtle::catchNearestRailPos() {
         return true;
     }
 
-    TVec3f vec;
+    Vec3f vec;
     vec.sub(mStartNearestRailPos, mMercatorPos);
 
     MR::normalize(&vec);
@@ -254,9 +254,9 @@ bool OceanSmallTurtle::catchNearestRailPos() {
 }
 
 void OceanSmallTurtle::floatFloater() {
-    TVec3f up;
+    Vec3f up;
     up.negate(mGravity);
-    TVec3f scaledUp;
+    Vec3f scaledUp;
     scaledUp.scale(mArg1, up);
 
     if (MR::isInWater(this, scaledUp)) {

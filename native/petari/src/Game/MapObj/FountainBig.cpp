@@ -30,7 +30,7 @@ void FountainBig::init(const JMapInfoIter& rIter) {
     MR::invalidateHitSensors(this);
     initEffectKeeper(0, nullptr, false);
     initSound(4, false);
-    TVec3f vec;
+    Vec3f vec;
     MR::calcUpVec(&vec, this);
     mClippingRadius.scaleAdd(300.0f, vec, mPosition);
     MR::setClippingTypeSphere(this, 600.0f, &mClippingRadius);
@@ -116,7 +116,7 @@ void FountainBig::exeSpoutEnd() {
 
 void FountainBig::updateHitSensor(HitSensor* pSensor) {
     f32 pSensorY = pSensor->mRadius;
-    TVec3f vec1, vec2, vec3;
+    Vec3f vec1, vec2, vec3;
     MR::calcUpVec(&vec1, this);
     vec2.scaleAdd(pSensorY, vec1, mPosition);
     vec3.scaleAdd(600.0f - pSensorY, vec1, vec2);

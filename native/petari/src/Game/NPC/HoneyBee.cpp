@@ -123,7 +123,7 @@ void HoneyBee::init(const JMapInfoIter& rIter) {
         _160.set(getBaseMtx());
         MR::extractMtxTrans(_160, &_190);
         MR::calcModelBoundingRadius(&radius, this);
-        MR::setShadowDropPositionAtJoint(this, nullptr, "Center", TVec3f(0.0f, 0.0f, 0.0f));
+        MR::setShadowDropPositionAtJoint(this, nullptr, "Center", Vec3f(0.0f, 0.0f, 0.0f));
         MR::onCalcShadow(this, nullptr);
         MR::setClippingTypeSphere(this, radius, &_190);
         mLodCtrl->invalidate();

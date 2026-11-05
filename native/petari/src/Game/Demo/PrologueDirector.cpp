@@ -198,10 +198,10 @@ void PrologueDirector::exeArrive() {
     if (MR::isFirstStep(this)) {
         MR::permitLevelSE();
 
-        TPos3f baseMtx;
+        Pos3f baseMtx;
         baseMtx.set(MR::getJointMtx(mMarioPosDummyModel, "MarioPosition"));
 
-        TVec3f trans;
+        Vec3f trans;
         baseMtx.getTrans(trans);
 
         MR::setPlayerBaseMtx(baseMtx);
@@ -210,7 +210,7 @@ void PrologueDirector::exeArrive() {
         MR::setImageEffectControlAuto();
     }
 
-    TMtx34f baseMtx;
+    Mtx34f baseMtx;
     baseMtx.set(MR::getJointMtx(mMarioPosDummyModel, "MarioPosition"));
 
     MR::setPlayerBaseMtx(baseMtx);

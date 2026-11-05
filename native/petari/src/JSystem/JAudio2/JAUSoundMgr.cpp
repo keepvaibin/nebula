@@ -7,7 +7,7 @@
 JAUSoundMgr::JAUSoundMgr() : JAISoundStarter(true), mSeMgr(true), mSeqMgr(true), mStreamMgr(true) {
 }
 
-bool JAUSoundMgr::startSound(JAISoundID soundID, JAISoundHandle* pHandle, const TVec3f* pPos) {
+bool JAUSoundMgr::startSound(JAISoundID soundID, JAISoundHandle* pHandle, const Vec3f* pPos) {
     JAISoundInfo* info = JASGlobalInstance< JAISoundInfo >::sInstance;
 
     int sectionID;

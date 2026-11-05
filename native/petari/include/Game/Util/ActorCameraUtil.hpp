@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class ActorCameraInfo;
 class CameraTargetArg;
@@ -34,7 +34,7 @@ namespace MR {
     void endActorCameraProgrammable(const LiveActor*, s32, bool);
     bool isActiveActorCamera(const LiveActor*, const ActorCameraInfo*);
     bool isActiveMultiActorCamera(const LiveActor*, const ActorCameraInfo*, const char*);
-    void setProgrammableCameraParam(const LiveActor*, const TVec3f&, const TVec3f&, const TVec3f&);
+    void setProgrammableCameraParam(const LiveActor*, const Vec3f&, const Vec3f&, const Vec3f&);
     void setProgrammableCameraParamFovy(const LiveActor*, f32);
     void initAnimCamera(const LiveActor*, const ActorCameraInfo*, const char*, const char*);
     void endAnimCamera(const LiveActor*, const ActorCameraInfo*, const char*, s32, bool);

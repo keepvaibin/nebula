@@ -114,15 +114,15 @@ void TombSpiderAcid::updateDeleteAcid() {
     }
 }
 
-void TombSpiderAcid::updateGroundMtx(TPos3f* pDstMtx, MtxPtr pSrcMtx) {
-    TVec3f up(-pSrcMtx[0][2], -pSrcMtx[1][2], -pSrcMtx[2][2]);
-    TVec3f side(up.y, -up.x, 0.0f);
-    TVec3f front(0.0f, 0.0f, 1.0f);
+void TombSpiderAcid::updateGroundMtx(Pos3f* pDstMtx, MtxPtr pSrcMtx) {
+    Vec3f up(-pSrcMtx[0][2], -pSrcMtx[1][2], -pSrcMtx[2][2]);
+    Vec3f side(up.y, -up.x, 0.0f);
+    Vec3f front(0.0f, 0.0f, 1.0f);
 
-    TVec3f checkLine(up);
+    Vec3f checkLine(up);
     checkLine.scale(-::sDistanceCheckMap);
-    TVec3f mtxPos(pSrcMtx[0][3], pSrcMtx[1][3], pSrcMtx[2][3]);
-    TVec3f trans(0.0f, 0.0f, 0.0f);
+    Vec3f mtxPos(pSrcMtx[0][3], pSrcMtx[1][3], pSrcMtx[2][3]);
+    Vec3f trans(0.0f, 0.0f, 0.0f);
     MR::getFirstPolyOnLineToMap(&trans, nullptr, mtxPos, checkLine);
 
     pDstMtx->setTR(side, up, front, trans);

@@ -26,7 +26,7 @@ public:
     virtual void draw() const;
     virtual void control();
 
-    bool isTouchRail(const HitSensor*, TVec3f*, TVec3f*) const;
+    bool isTouchRail(const HitSensor*, Vec3f*, Vec3f*) const;
     void initDraw() const;
     void registerRail(const LiveActor*, ElectricRailType);
     ModelObj* createModel(ElectricRailType) const;
@@ -38,7 +38,7 @@ public:
 
 namespace ElectricRailFunction {
     void registerRail(const LiveActor*, ElectricRailType);
-    bool isTouchRail(const HitSensor*, TVec3f*, TVec3f*);
+    bool isTouchRail(const HitSensor*, Vec3f*, Vec3f*);
     f32 getHitSensorRadius();
     u32 calcMeshSize(u32, s32);
 };  // namespace ElectricRailFunction

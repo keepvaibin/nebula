@@ -52,7 +52,7 @@ JPAEmitterManager::JPAEmitterManager(u32 i_ptclNum, u32 i_emtrNum, NebulaArena* 
     pWd = new (pHeap, 0) JPAEmitterWorkData();
 }
 
-JPABaseEmitter* JPAEmitterManager::createSimpleEmitterID(JGeometry::TVec3< f32 > const& pos, u16 resID, u8 group_id, u8 res_mgr_id,
+JPABaseEmitter* JPAEmitterManager::createSimpleEmitterID(Vec3f const& pos, u16 resID, u8 group_id, u8 res_mgr_id,
                                                          JPAEmitterCallBack* emtrCB, JPAParticleCallBack* ptclCB) {
     JPAResource* pRes = pResMgrAry[res_mgr_id]->getResource(resID);
 

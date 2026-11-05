@@ -109,9 +109,9 @@ void GrandStarReturnDemoStarter::control() {
     }
 }
 
-void GrandStarReturnDemoStarter::calcOffsetStarToCore(TVec3f* pOffset) const {
-    TVec3f namePos;
-    TVec3f jointPos;
+void GrandStarReturnDemoStarter::calcOffsetStarToCore(Vec3f* pOffset) const {
+    Vec3f namePos;
+    Vec3f jointPos;
 
     MR::findNamePos("\203\122\203\101\222\206\220\123" /* コア中心 */, &namePos, nullptr);
     MR::copyJointPos(mPowerStar, "PowerStar", &jointPos);
@@ -120,7 +120,7 @@ void GrandStarReturnDemoStarter::calcOffsetStarToCore(TVec3f* pOffset) const {
 }
 
 void GrandStarReturnDemoStarter::updateRailMoveEndDir() {
-    TVec3f offset;
+    Vec3f offset;
     calcOffsetStarToCore(&offset);
     MR::normalize(&offset);
 
@@ -136,9 +136,9 @@ void GrandStarReturnDemoStarter::emitEffectRush() {
     MR::emitEffect(mPowerStar, "Blur5");
 }
 
-void GrandStarReturnDemoStarter::updateRushStarPos(const TVec3f& rPosition, s32 frame) {
-    TVec3f offset;
-    TVec3f newPosition;
+void GrandStarReturnDemoStarter::updateRushStarPos(const Vec3f& rPosition, s32 frame) {
+    Vec3f offset;
+    Vec3f newPosition;
 
     offset.scale(100.0f * frame, mDistanceToCore);
     newPosition.add(rPosition, offset);
@@ -212,7 +212,7 @@ void GrandStarReturnDemoStarter::exeFlyWait() {
 }
 
 void GrandStarReturnDemoStarter::exeRushToCore() {
-    TVec3f position;
+    Vec3f position;
     mPrevTransform.getTrans(position);
 
     if (MR::isFirstStep(this)) {

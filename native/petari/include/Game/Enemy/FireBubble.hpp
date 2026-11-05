@@ -14,12 +14,12 @@ public:
     virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 
     void initHitSensors(const char* const, const char* const);
-    void appear(const TVec3f&, const TVec3f&, const TVec3f&);
+    void appear(const Vec3f&, const Vec3f&, const Vec3f&);
     void initMapToolInfo(const JMapInfoIter& rIter);
     void updateChaseFrontVec(f32);
     void updateChaseFrontVecAndVelocity(f32);
     void updateGravity(f32);
-    void calcReflectVelocity(TVec3f*) const;
+    void calcReflectVelocity(Vec3f*) const;
     bool tryChaseEnd();
     bool tryReflect();
     void killOrWaitToApppear();
@@ -36,10 +36,10 @@ public:
     bool isMovingDown();  // fabricated
 
     bool mIsValidInfo;
-    TVec3f _90;
-    TVec3f _9C;
-    TVec3f _A8;
-    TVec3f _B4;
+    Vec3f _90;
+    Vec3f _9C;
+    Vec3f _A8;
+    Vec3f _B4;
     s32 mActFrame;
     s32 mChaseCounter;
 };

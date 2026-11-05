@@ -33,10 +33,10 @@ public:
     bool _9d;
     RingBeamShadowDrawer* _a0;
     ModelObj* _a4;
-    TVec3f _a8;
-    TVec3f _b4;
-    TVec3f _c0;
-    TVec3f _cc;
+    Vec3f _a8;
+    Vec3f _b4;
+    Vec3f _c0;
+    Vec3f _cc;
 };
 
 class RingBeamShadowDrawer : public ShadowVolumeDrawer {

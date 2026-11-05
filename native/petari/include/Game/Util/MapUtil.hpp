@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class CollisionPartsFilterBase;
 class HitInfo;
@@ -11,41 +11,41 @@ class Triangle;
 class TriangleFilterBase;
 
 namespace MR {
-    const TVec3f* getNormal(const Triangle*);
-    bool isWallPolygon(const TVec3f&, const TVec3f&);
-    bool isFloorPolygon(const TVec3f&, const TVec3f&);
-    bool isFloorPolygonCos(const TVec3f&, const TVec3f&, f32);
+    const Vec3f* getNormal(const Triangle*);
+    bool isWallPolygon(const Vec3f&, const Vec3f&);
+    bool isFloorPolygon(const Vec3f&, const Vec3f&);
+    bool isFloorPolygonCos(const Vec3f&, const Vec3f&, f32);
     bool isWallPolygon(f32);
     bool isFloorPolygon(f32);
     bool isCeilingPolygon(f32);
     bool isWaterPolygon(const Triangle*);
     bool isThroughPolygon(const Triangle*);
-    bool getFirstPolyOnLineToMap(TVec3f*, Triangle*, const TVec3f&, const TVec3f&);
-    bool getFirstPolyOnLineToMapAndMoveLimit(TVec3f*, Triangle*, const TVec3f&, const TVec3f&);
-    bool getFirstPolyOnLineToWaterSurface(TVec3f*, Triangle*, const TVec3f&, const TVec3f&);
-    bool getFirstPolyOnLineToMapExceptSensor(TVec3f*, Triangle*, const TVec3f&, const TVec3f&, const HitSensor*);
-    bool getFirstPolyOnLineToMapExceptActor(TVec3f*, Triangle*, const TVec3f&, const TVec3f&, const LiveActor*);
-    bool getFirstPolyOnLineToMap(TVec3f*, Triangle*, const TVec3f&, const TVec3f&, const CollisionPartsFilterBase*, const TriangleFilterBase*);
-    bool getFirstPolyOnLineToWaterSurface(TVec3f*, Triangle*, const TVec3f&, const TVec3f&, const CollisionPartsFilterBase*,
+    bool getFirstPolyOnLineToMap(Vec3f*, Triangle*, const Vec3f&, const Vec3f&);
+    bool getFirstPolyOnLineToMapAndMoveLimit(Vec3f*, Triangle*, const Vec3f&, const Vec3f&);
+    bool getFirstPolyOnLineToWaterSurface(Vec3f*, Triangle*, const Vec3f&, const Vec3f&);
+    bool getFirstPolyOnLineToMapExceptSensor(Vec3f*, Triangle*, const Vec3f&, const Vec3f&, const HitSensor*);
+    bool getFirstPolyOnLineToMapExceptActor(Vec3f*, Triangle*, const Vec3f&, const Vec3f&, const LiveActor*);
+    bool getFirstPolyOnLineToMap(Vec3f*, Triangle*, const Vec3f&, const Vec3f&, const CollisionPartsFilterBase*, const TriangleFilterBase*);
+    bool getFirstPolyOnLineToWaterSurface(Vec3f*, Triangle*, const Vec3f&, const Vec3f&, const CollisionPartsFilterBase*,
                                           const TriangleFilterBase*);
-    bool getFirstPolyNormalOnLineToMap(TVec3f*, const TVec3f&, const TVec3f&, TVec3f*, const HitSensor*);
-    u32 getNearPolyOnLineSort(const TVec3f&, const TVec3f&, const TVec3f&, const HitSensor*);
-    bool getSortedPoly(TVec3f*, Triangle*, u32);
+    bool getFirstPolyNormalOnLineToMap(Vec3f*, const Vec3f&, const Vec3f&, Vec3f*, const HitSensor*);
+    u32 getNearPolyOnLineSort(const Vec3f&, const Vec3f&, const Vec3f&, const HitSensor*);
+    bool getSortedPoly(Vec3f*, Triangle*, u32);
     const Triangle* getSortedPoly(u32);
-    bool isExistMapCollision(const TVec3f&, const TVec3f&);
-    bool isExistMoveLimitCollision(const TVec3f&, const TVec3f&);
-    bool isExistMapCollisionExceptActor(const TVec3f&, const TVec3f&, const LiveActor*);
-    bool checkStrikePointToMap(const TVec3f&, HitInfo*);
-    bool checkStrikeBallToMap(const TVec3f&, f32);
-    bool calcMapGround(const TVec3f&, TVec3f*, f32);
-    bool calcMapGroundUpper(TVec3f*, const LiveActor*);
+    bool isExistMapCollision(const Vec3f&, const Vec3f&);
+    bool isExistMoveLimitCollision(const Vec3f&, const Vec3f&);
+    bool isExistMapCollisionExceptActor(const Vec3f&, const Vec3f&, const LiveActor*);
+    bool checkStrikePointToMap(const Vec3f&, HitInfo*);
+    bool checkStrikeBallToMap(const Vec3f&, f32);
+    bool calcMapGround(const Vec3f&, Vec3f*, f32);
+    bool calcMapGroundUpper(Vec3f*, const LiveActor*);
     bool isFallNextMove(const LiveActor*, f32, f32, f32, const TriangleFilterBase*);
-    bool isFallNextMove(const TVec3f&, const TVec3f&, const TVec3f&, f32, f32, f32, const TriangleFilterBase*);
+    bool isFallNextMove(const Vec3f&, const Vec3f&, const Vec3f&, f32, f32, f32, const TriangleFilterBase*);
     bool isFallOrDangerNextMove(const LiveActor*, f32, f32, f32);
-    bool isFallOrDangerNextMove(const TVec3f&, const TVec3f&, const TVec3f&, f32, f32, f32);
-    void calcVelocityMovingPoint(const Triangle*, const TVec3f&, TVec3f*);
-    u32 createAreaPolygonList(Triangle*, u32, const TVec3f&, const TVec3f&);
-    u32 createAreaPolygonListArray(Triangle*, u32, TVec3f*, u32);
+    bool isFallOrDangerNextMove(const Vec3f&, const Vec3f&, const Vec3f&, f32, f32, f32);
+    void calcVelocityMovingPoint(const Triangle*, const Vec3f&, Vec3f*);
+    u32 createAreaPolygonList(Triangle*, u32, const Vec3f&, const Vec3f&);
+    u32 createAreaPolygonListArray(Triangle*, u32, Vec3f*, u32);
     bool trySetMoveLimitCollision(LiveActor*);
     bool isBindedGroundIce(const LiveActor*);
     bool isBindedGroundSand(const LiveActor*);
@@ -88,17 +88,17 @@ namespace MR {
     bool isWallCodeNoAction(const Triangle*);
     bool isCameraCodeThrough(const Triangle*);
     bool isCodeSand(const Triangle*);
-    const Triangle* getCameraPolyFast(const TVec3f&, const TVec3f&, const HitSensor*);
-    bool getFirstPolyOnLineBFast(const TVec3f&, const TVec3f&, TVec3f*, Triangle*);
+    const Triangle* getCameraPolyFast(const Vec3f&, const Vec3f&, const HitSensor*);
+    bool getFirstPolyOnLineBFast(const Vec3f&, const Vec3f&, Vec3f*, Triangle*);
 };  // namespace MR
 
 namespace Collision {
-    s32 checkStrikePointToMap(const TVec3f&, HitInfo*);
-    s32 checkStrikeBallToMap(const TVec3f&, f32, const CollisionPartsFilterBase*, const TriangleFilterBase*);
-    s32 checkStrikeBallToMapWithMovingReaction(const TVec3f&, f32, const CollisionPartsFilterBase*, const TriangleFilterBase*);
-    s32 checkStrikeBallToMapWithThickness(const TVec3f&, f32, f32, const CollisionPartsFilterBase*, const TriangleFilterBase*);
-    s32 checkStrikeLineToMap(const TVec3f&, const TVec3f&, s32, const CollisionPartsFilterBase*, const TriangleFilterBase*);
-    s32 checkStrikeLineToSunshade(const TVec3f&, const TVec3f&, s32, const CollisionPartsFilterBase*, const TriangleFilterBase*);
+    s32 checkStrikePointToMap(const Vec3f&, HitInfo*);
+    s32 checkStrikeBallToMap(const Vec3f&, f32, const CollisionPartsFilterBase*, const TriangleFilterBase*);
+    s32 checkStrikeBallToMapWithMovingReaction(const Vec3f&, f32, const CollisionPartsFilterBase*, const TriangleFilterBase*);
+    s32 checkStrikeBallToMapWithThickness(const Vec3f&, f32, f32, const CollisionPartsFilterBase*, const TriangleFilterBase*);
+    s32 checkStrikeLineToMap(const Vec3f&, const Vec3f&, s32, const CollisionPartsFilterBase*, const TriangleFilterBase*);
+    s32 checkStrikeLineToSunshade(const Vec3f&, const Vec3f&, s32, const CollisionPartsFilterBase*, const TriangleFilterBase*);
     const HitInfo* getStrikeInfoMap(u32);
     u32 getStrikeInfoNumMap();
 };  // namespace Collision

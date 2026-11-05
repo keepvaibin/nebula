@@ -171,7 +171,7 @@ void StarPointerPeekZ::setDrawSyncToken() {
             mInfos[channel]->mZDepth = channel < done && probes[channel].x >= 0.0f ? probes[channel].value : 0.0f;
             mInfos[channel]->mDrawReady = true;
 
-            TVec2f pos;
+            Vec2f pos;
             MR::convertScreenPosToFrame(&pos, mInfos[channel]->mPos);
             probes[channel].x = pos.x;
             probes[channel].y = pos.y;
@@ -186,12 +186,12 @@ void StarPointerPeekZ::setDrawSyncToken() {
 namespace StarPointerFunction {
     // Moves rPos along rDir to the
     // first screen edge (inset by the margins) that stays in the screen.
-    bool forceOutsideScreenEdge(TVec2f* pOut, const TVec2f& rPos, const TVec2f& rDir, f32 marginX, f32 marginY) {
+    bool forceOutsideScreenEdge(Vec2f* pOut, const Vec2f& rPos, const Vec2f& rDir, f32 marginX, f32 marginY) {
         if (!isInScreen(rPos, marginX, marginY)) {
             return false;
         }
 
-        TVec2f dir;
+        Vec2f dir;
         dir.x = rDir.x;
         dir.y = rDir.y;
         MR::normalizeOrZero(&dir);
@@ -199,7 +199,7 @@ namespace StarPointerFunction {
         if (dir.x != 0.0f) {
             f32 edge = (0.0f >= dir.x) ? marginX : (f32)MR::getScreenWidth() - marginX;
             f32 t = (edge - rPos.x) / dir.x;
-            TVec2f pos;
+            Vec2f pos;
             pos.x = dir.x * t + rPos.x;
             pos.y = dir.y * t + rPos.y;
             if (isInScreen(pos, marginX, marginY)) {
@@ -212,7 +212,7 @@ namespace StarPointerFunction {
         if (dir.y != 0.0f) {
             f32 edge = (0.0f >= dir.y) ? marginY : (f32)MR::getScreenHeight() - marginY;
             f32 t = (edge - rPos.y) / dir.y;
-            TVec2f pos;
+            Vec2f pos;
             pos.x = dir.x * t + rPos.x;
             pos.y = dir.y * t + rPos.y;
             if (isInScreen(pos, marginX, marginY)) {
@@ -225,7 +225,7 @@ namespace StarPointerFunction {
         return false;
     }
 
-    bool isInScreen(const TVec2f& rPos, f32 marginX, f32 marginY) {
+    bool isInScreen(const Vec2f& rPos, f32 marginX, f32 marginY) {
         if (rPos.x < marginX) {
             return false;
         }
@@ -245,7 +245,7 @@ namespace StarPointerFunction {
         return true;
     }
 
-    bool forceInsideScreenEdge(TVec2f* pPos) {
+    bool forceInsideScreenEdge(Vec2f* pPos) {
         bool forced = false;
 
         f32 margin = 0.0f;
@@ -283,11 +283,11 @@ namespace StarPointerFunction {
         return getStarPointerDirector()->getStarPointerController(channel)->mPastPointNum;
     }
 
-    const TVec2f& getPastPosition(s32 channel, s32 index) {
+    const Vec2f& getPastPosition(s32 channel, s32 index) {
         return getStarPointerDirector()->getStarPointerController(channel)->mPastPosition[index];
     }
 
-    const TVec2f& getNextPastPosition(s32 channel, s32 index) {
+    const Vec2f& getNextPastPosition(s32 channel, s32 index) {
         return getStarPointerDirector()->getStarPointerController(channel)->mNextPastPosition[index];
     }
 

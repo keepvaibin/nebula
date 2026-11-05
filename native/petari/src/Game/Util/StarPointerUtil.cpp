@@ -42,7 +42,7 @@ namespace {
         CollisionParts* mCollisionParts;
     };
 
-    typedef bool (*StarPointerFunc1)(StarPointerTargetInfo*, const TVec3f&, const TVec2f&, f32, f32);
+    typedef bool (*StarPointerFunc1)(StarPointerTargetInfo*, const Vec3f&, const Vec2f&, f32, f32);
     typedef bool (*StarPointerFunc2)(s32);
 
     StarPointerDirector* getStarPointerDirector() {
@@ -75,11 +75,11 @@ namespace {
         }
     }
 
-    bool checkPointingTarget(StarPointerTargetInfo* pTargetInfo, const TVec3f& rOffset, const TVec2f& rPointerPos, f32 zMargin, f32 radiusMargin) {
+    bool checkPointingTarget(StarPointerTargetInfo* pTargetInfo, const Vec3f& rOffset, const Vec2f& rPointerPos, f32 zMargin, f32 radiusMargin) {
         return pTargetInfo->mTarget->isPointing(rPointerPos, zMargin, radiusMargin);
     }
 
-    bool checkPointingWithoutCheckZ(StarPointerTargetInfo* pTargetInfo, const TVec3f& rOffset, const TVec2f& rPointerPos, f32 zMargin,
+    bool checkPointingWithoutCheckZ(StarPointerTargetInfo* pTargetInfo, const Vec3f& rOffset, const Vec2f& rPointerPos, f32 zMargin,
                                     f32 radiusMargin) {
         return checkPointingTarget(pTargetInfo, rOffset, rPointerPos, ::hPointColRayLength, radiusMargin);
     }
@@ -162,24 +162,24 @@ namespace MR {
         ::getStarPointerDirector()->setGameSceneCameraMtx();
     }
 
-    void initStarPointerTarget(LiveActor* pActor, f32 radius, const TVec3f& rOffset) {
-        pActor->initActorStarPointerTarget(radius, &pActor->mPosition, pActor->getBaseMtx(), TVec3f(rOffset));
+    void initStarPointerTarget(LiveActor* pActor, f32 radius, const Vec3f& rOffset) {
+        pActor->initActorStarPointerTarget(radius, &pActor->mPosition, pActor->getBaseMtx(), Vec3f(rOffset));
     }
 
-    void initStarPointerTargetAtPos(LiveActor* pActor, f32 radius, const TVec3f* pPos, const TVec3f& rOffset) {
-        pActor->initActorStarPointerTarget(radius, pPos, pActor->getBaseMtx(), TVec3f(rOffset));
+    void initStarPointerTargetAtPos(LiveActor* pActor, f32 radius, const Vec3f* pPos, const Vec3f& rOffset) {
+        pActor->initActorStarPointerTarget(radius, pPos, pActor->getBaseMtx(), Vec3f(rOffset));
     }
 
-    void initStarPointerTargetAtMtx(LiveActor* pActor, f32 radius, MtxPtr pMtx, const TVec3f& rOffset) {
-        pActor->initActorStarPointerTarget(radius, nullptr, pMtx, TVec3f(rOffset));
+    void initStarPointerTargetAtMtx(LiveActor* pActor, f32 radius, MtxPtr pMtx, const Vec3f& rOffset) {
+        pActor->initActorStarPointerTarget(radius, nullptr, pMtx, Vec3f(rOffset));
     }
 
-    void initStarPointerTargetAtJoint(LiveActor* pActor, const char* pJointName, f32 radius, const TVec3f& rOffset) {
+    void initStarPointerTargetAtJoint(LiveActor* pActor, const char* pJointName, f32 radius, const Vec3f& rOffset) {
         MtxPtr mtx = MR::getJointMtx(pActor, pJointName);
-        pActor->initActorStarPointerTarget(radius, nullptr, mtx, TVec3f(rOffset));
+        pActor->initActorStarPointerTarget(radius, nullptr, mtx, Vec3f(rOffset));
     }
 
-    void addStarPointerTargetCircle(LayoutActor* pActor, const char* pLayoutName, f32 radius, const TVec2f& rPosition, const char* pPaneName) {
+    void addStarPointerTargetCircle(LayoutActor* pActor, const char* pLayoutName, f32 radius, const Vec2f& rPosition, const char* pPaneName) {
         pActor->mPointingTarget->addTargetCircle(pActor, pLayoutName, radius, rPosition, pPaneName);
     }
 
@@ -228,7 +228,7 @@ namespace MR {
             return false;
         }
 
-        TVec2f pos = getStarPointerScreenPositionOrEdge(channel);
+        Vec2f pos = getStarPointerScreenPositionOrEdge(channel);
         if (pActor->getLayoutManager()->isPointing(pLayoutName, pos)) {
             ::onReaction(reinterpret_cast< u64 >(pActor) + reinterpret_cast< u64 >(pLayoutName), channel, enableTouch, false, false);
 
@@ -265,7 +265,7 @@ namespace MR {
         }
 
         StarPointerLayoutTarget* target = pActor->mPointingTarget->getTarget(pLayoutName);
-        TVec2f pos = getStarPointerScreenPositionOrEdge(channel);
+        Vec2f pos = getStarPointerScreenPositionOrEdge(channel);
         if (target->isPointing(pos)) {
             ::onReaction(reinterpret_cast< u64 >(pActor) + reinterpret_cast< u64 >(pLayoutName), channel, enableTouch, false, false);
 
@@ -456,8 +456,8 @@ namespace MR {
         pActor->mStarPointerTarget->mRadius3d = radius;
     }
 
-    bool isStarPointerPointing(const TVec3f& rPos, f32 radius, s32 channel, bool enableTouch) {
-        StarPointerTarget target(radius, &rPos, nullptr, TVec3f(0.0f, 0.0f, 0.0f));
+    bool isStarPointerPointing(const Vec3f& rPos, f32 radius, s32 channel, bool enableTouch) {
+        StarPointerTarget target(radius, &rPos, nullptr, Vec3f(0.0f, 0.0f, 0.0f));
 
         StarPointerController* controller = ::getStarPointerController(channel);
 
@@ -498,12 +498,12 @@ namespace MR {
     }
 
     // The 2D position menus and layouts test is this frame's, where the pointer is drawn (StarPointerLayout).
-    TVec2f* getStarPointerScreenPosition(s32 channel) {
+    Vec2f* getStarPointerScreenPosition(s32 channel) {
         return &::getStarPointerController(channel)->mInfo.mPos;
     }
 
-    TVec2f getStarPointerScreenPositionOrEdge(s32 channel) {
-        TVec2f pos(::getStarPointerController(channel)->mInfo.mPos);
+    Vec2f getStarPointerScreenPositionOrEdge(s32 channel) {
+        Vec2f pos(::getStarPointerController(channel)->mInfo.mPos);
         StarPointerFunction::forceInsideScreenEdge(&pos);
         return pos;
     }
@@ -535,40 +535,40 @@ namespace MR {
         return &pActor->mStarPointerTarget->mLastPointedChannel;
     }
 
-    TVec2f* getStarPointerScreenVelocity(s32 channel) {
+    Vec2f* getStarPointerScreenVelocity(s32 channel) {
         return &::getStarPointerController(channel)->mScreenVel;
     }
 
-    void getStarPointerWorldVelocityDirection(TVec3f* pVel, s32 channel) {
+    void getStarPointerWorldVelocityDirection(Vec3f* pVel, s32 channel) {
         pVel->set(::getStarPointerController(channel)->mWorldVel);
     }
 
-    TVec3f* getStarPointerWorldPosUsingDepth(s32 channel) {
+    Vec3f* getStarPointerWorldPosUsingDepth(s32 channel) {
         return &::getStarPointerController(channel)->mWorldPos;
     }
 
-    void calcStarPointerWorldPointingPos(TVec3f* pPos, const TVec3f& rPos, s32 channel) {
+    void calcStarPointerWorldPointingPos(Vec3f* pPos, const Vec3f& rPos, s32 channel) {
         f32 camZ = MR::calcCameraDistanceZ(rPos);
         MR::calcWorldPositionFromScreen(pPos, ::getStarPointerController(channel)->mPastInfo.mPos, camZ);
     }
 
-    void calcStarPointerWorldPointingPosInsideEdge(TVec3f* pPos, const TVec3f& rPos, s32 channel) {
+    void calcStarPointerWorldPointingPosInsideEdge(Vec3f* pPos, const Vec3f& rPos, s32 channel) {
         f32 camZ = MR::calcCameraDistanceZ(rPos);
         MR::calcWorldPositionFromScreen(pPos, getStarPointerScreenPositionOrEdge(channel), camZ);
     }
 
-    bool calcStarPointerPosOnPlane(TVec3f* pPos, const TVec3f& rPlaneBasePos, const TVec3f& rPlaneNorm, s32 channel, bool clampEdge) {
+    bool calcStarPointerPosOnPlane(Vec3f* pPos, const Vec3f& rPlaneBasePos, const Vec3f& rPlaneNorm, s32 channel, bool clampEdge) {
         ::getStarPointerController(channel);  // something stripped
 
-        TVec2f screenPos;
+        Vec2f screenPos;
         if (clampEdge) {
             screenPos = getStarPointerScreenPositionOrEdge(channel);
         } else {
             screenPos.set(*getStarPointerScreenPosition(channel));
         }
 
-        TVec3f camPos = MR::getCamPos();
-        TVec3f pointRay;
+        Vec3f camPos = MR::getCamPos();
+        Vec3f pointRay;
         MR::calcWorldPositionFromScreen(&pointRay, screenPos, -1.0f);
         pointRay.sub(camPos);
         MR::normalize(&pointRay);
@@ -577,12 +577,12 @@ namespace MR {
             return true;
         }
 
-        TVec3f camNorm = -MR::getCamZdir();
-        TVec3f forceIntersectPos;
+        Vec3f camNorm = -MR::getCamZdir();
+        Vec3f forceIntersectPos;
         MR::checkHitSemilinePlane(&forceIntersectPos, camPos, pointRay, rPlaneBasePos, camNorm);
 
-        TVec3f forceNorm;
-        TVec3f checkDir = rPlaneBasePos;
+        Vec3f forceNorm;
+        Vec3f checkDir = rPlaneBasePos;
         checkDir.sub(forceIntersectPos);
 
         if (checkDir.dot(rPlaneNorm) < 0.0f) {
@@ -596,12 +596,12 @@ namespace MR {
         return true;
     }
 
-    bool calcStarPointerWorldVelocityDirectionOnPlane(TVec3f* pDir, const TVec3f& rPlaneBasePos, const TVec3f& rPlaneNorm, s32 channel) {
+    bool calcStarPointerWorldVelocityDirectionOnPlane(Vec3f* pDir, const Vec3f& rPlaneBasePos, const Vec3f& rPlaneNorm, s32 channel) {
         StarPointerController* controller = ::getStarPointerController(channel);
-        TVec3f camPos = MR::getCamPos();
-        const TVec2f& posA = controller->mPastInfo.mPos;
-        const TVec2f& posB = posA.subInline(controller->mScreenVel);
-        TVec3f toPointA, toPointB;
+        Vec3f camPos = MR::getCamPos();
+        const Vec2f& posA = controller->mPastInfo.mPos;
+        const Vec2f& posB = posA.subInline(controller->mScreenVel);
+        Vec3f toPointA, toPointB;
         MR::calcWorldPositionFromScreen(&toPointA, posA, -1.0f);
         MR::calcWorldPositionFromScreen(&toPointB, posB, -1.0f);
         toPointA.sub(camPos);
@@ -619,14 +619,14 @@ namespace MR {
             return false;
         }
 
-        TVec3f camDiff = rPlaneBasePos;
+        Vec3f camDiff = rPlaneBasePos;
         camDiff.sub(camPos);
         f32 projCam = rPlaneNorm.dot(camDiff);
 
         f32 distA = projCam / projA;
         f32 distB = projCam / projB;
 
-        TVec3f planePosA, planePosB;
+        Vec3f planePosA, planePosB;
         planePosA.set(camPos);
         planePosA.add(toPointA * distA);
         planePosB.set(camPos);
@@ -637,24 +637,24 @@ namespace MR {
         return true;
     }
 
-    f32 calcPointRadius2D(const TVec3f& rPosition, f32 radius) {
+    f32 calcPointRadius2D(const Vec3f& rPosition, f32 radius) {
         f32 fovyRad = MR::toRadian(MR::getRenderFovy());
         f32 tan = MR::tan(fovyRad * 0.5f);
         f32 focalDist = (static_cast< s32 >(NebulaFrameClock::cScreenLines) * 0.5f) / tan;
 
-        TVec3f viewPos;
+        Vec3f viewPos;
         MR::getCameraViewMtx().mult(rPosition, viewPos);
 
         return radius * focalDist / -viewPos.z;
     }
 
-    bool calcStarPointerStrokeRotateMoment(TVec3f* pMoment, const TVec3f& rPosition, f32 radius, s32 channel) {
+    bool calcStarPointerStrokeRotateMoment(Vec3f* pMoment, const Vec3f& rPosition, f32 radius, s32 channel) {
         if (!isStarPointerInScreen(channel)) {
             pMoment->zero();
             return false;
         }
 
-        TVec2f screenVel = ::getStarPointerController(channel)->mScreenVel;
+        Vec2f screenVel = ::getStarPointerController(channel)->mScreenVel;
 
         f32 rad2D = MR::calcPointRadius2D(rPosition, radius);
         screenVel.scale(1.0f / rad2D);
@@ -668,14 +668,14 @@ namespace MR {
             screenVel.scale(0.726f / speed);
         }
 
-        TVec2f screenPos;
+        Vec2f screenPos;
         screenPos.set(::getStarPointerController(channel)->mPastInfo.mPos);
 
-        TVec2f pos2D;
+        Vec2f pos2D;
         MR::calcScreenPosition(&pos2D, rPosition);
 
         f32 dist;
-        TVec2f dir;
+        Vec2f dir;
         MR::separateScalarAndDirection(&dist, &dir, screenPos - pos2D);
 
         f32 ratio = dist / rad2D;
@@ -685,16 +685,16 @@ namespace MR {
         }
         ratio = MR::clamp(ratio, 0.0f, 1.0f);
 
-        TVec3f moment;
+        Vec3f moment;
         moment.set< f32 >(screenVel.y, screenVel.x, 0.0f);
 
-        TVec3f stroke;
+        Vec3f stroke;
         stroke.x = dir.x * ratio;
         stroke.y = -dir.y * ratio;
         stroke.z = MR::sqrt(1.0f - ratio * ratio);
 
-        TQuat4f rot;
-        TVec3f front;
+        Quat4f rot;
+        Vec3f front;
         front.x = 0.0f;
         front.y = 0.0f;
         front.z = 1.0f;
@@ -706,7 +706,7 @@ namespace MR {
     }
 
     bool calcStarPointerScreenDistanceToTarget(const LiveActor* pActor, f32* pDistance, s32 channel) {
-        TVec2f screenPos;
+        Vec2f screenPos;
         if (!pActor->mStarPointerTarget->calcScreenPosition(&screenPos)) {
             return false;
         }
@@ -720,13 +720,13 @@ namespace MR {
             return false;
         }
 
-        TVec2f targetPos(controller->mPastInfo.mPos);
+        Vec2f targetPos(controller->mPastInfo.mPos);
         screenPos -= targetPos;
         *pDistance = screenPos.length();
         return true;
     }
 
-    bool tryStartStarPointerCommandStream(const LiveActor* pActor, const TVec3f* pPos, s32 channel, bool b) {
+    bool tryStartStarPointerCommandStream(const LiveActor* pActor, const Vec3f* pPos, s32 channel, bool b) {
         return ::getStarPointerLayout(channel)->startCommandStream(pActor, pPos, b);
     }
 
@@ -852,7 +852,7 @@ namespace MR {
         if (pTarget == nullptr || NebulaHost::option(NEBULA_OPTION_TOUCH_POINTER) == 0) {
             return;
         }
-        TVec2f position;
+        Vec2f position;
         f32 radius;
         if (!pTarget->calcScreenCircle(&position, &radius)) {
             return;
@@ -865,7 +865,7 @@ namespace MR {
         NebulaHost::gameContext(NEBULA_CONTEXT_TOUCH_TARGET, static_cast< s32 >(x | (y << 12) | (r << 24)));
     }
 
-    void requestStarPointerModeBigBubble(void* pRequester, const TVec3f& rPosition) {
+    void requestStarPointerModeBigBubble(void* pRequester, const Vec3f& rPosition) {
         ::getStarPointerOnOffController()->requestMode(pRequester, StarPointerMode_BigBubble);
         ::getStarPointerDirector()->mNozzleAimPos.set(rPosition);
     }

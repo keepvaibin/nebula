@@ -45,7 +45,7 @@ void KoopaFireShort::init(const JMapInfoIter& rIter) {
     MR::connectToSceneEnemy(this);
     initHitSensor(1);
 
-    TVec3f sensorOffset = TVec3f(0.0f, 0.0f, 0.0f);
+    Vec3f sensorOffset = Vec3f(0.0f, 0.0f, 0.0f);
     MR::addHitSensor(this, "Attack", ATYPE_KOOPA_FIRE, 8, 130.0f, sensorOffset);
     initBinder(50.0f, 0.0f, 0);
 
@@ -59,7 +59,7 @@ void KoopaFireShort::init(const JMapInfoIter& rIter) {
     initSound(4, false);
     initNerve(GET_NERVE(KoopaFireShort, KoopaFireShortNrvFly));
 
-    TVec3f pointerOffset;
+    Vec3f pointerOffset;
     pointerOffset.set(0.0f);
     MR::initStarPointerTarget(this, 100.0f, pointerOffset);
     MR::initShadowVolumeSphere(this, 200.0f);
@@ -76,7 +76,7 @@ void KoopaFireShort::appear() {
 
     MR::calcGravity(this);
 
-    TPos3f transform;
+    Pos3f transform;
     transform.setInline(MR::getJointMtx(mKoopa, "Tongue2"));
     transform.getTrans(mPosition);
     transform.getYDir(mVelocity);
@@ -153,7 +153,7 @@ void KoopaFireShort::exeFly() {
     }
 
     if (MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false)) {
-        TVec3f gravity = -mGravity;
+        Vec3f gravity = -mGravity;
         MR::calcStarPointerWorldVelocityDirectionOnPlane(&mVelocity, mPosition, gravity, 1);
 
         mSpeed = 80.0f;
@@ -232,7 +232,7 @@ void KoopaFireShort::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
 }
 
 void KoopaFireShort::updateFly() {
-    TVec3f difference = *MR::getPlayerPos() - mPosition;
+    Vec3f difference = *MR::getPlayerPos() - mPosition;
     MR::normalizeOrZero(&difference);
     difference.scale(0.0f);
     mVelocity.add(difference);

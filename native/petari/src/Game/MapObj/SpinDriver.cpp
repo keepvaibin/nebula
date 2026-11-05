@@ -85,7 +85,7 @@ void SpinDriver::init(const JMapInfoIter& rIter) {
 
     MR::offCalcGravity(this);
 
-    TVec3f gravityVector;
+    Vec3f gravityVector;
     MR::calcGravityVectorOrZero(this, &gravityVector, nullptr, 0);
 
     if (MR::isNearZero(gravityVector)) {
@@ -95,7 +95,7 @@ void SpinDriver::init(const JMapInfoIter& rIter) {
     mGravity.set(gravityVector);
 
     initHitSensor(1);
-    MR::addHitSensor(this, "body", ATYPE_SPIN_DRIVER_BIND, 16, 300.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensor(this, "body", ATYPE_SPIN_DRIVER_BIND, 16, 300.0f, Vec3f(0.0f, 0.0f, 0.0f));
 
     initEffectKeeper(0, nullptr, false);
 
@@ -161,7 +161,7 @@ void SpinDriver::initShootPath(const JMapInfoIter& rIter) {
         mShootPath->initUsingParabolic(rIter, mPosition);
         mShootPath->calcInitPose(&_E8, &_D0, &_DC, _134);
     } else {
-        TPos3f rotateMtx;
+        Pos3f rotateMtx;
         MR::makeMtxRotate(rotateMtx, mRotation);
         rotateMtx.getXYZDir(_DC, _E8, _D0);
     }
@@ -218,10 +218,10 @@ void SpinDriver::control() {
 }
 
 void SpinDriver::calcAndSetBaseMtx() {
-    TPos3f baseMtx;
+    Pos3f baseMtx;
     MR::makeMtxUpFrontPos(&baseMtx, _E8, _D0, mPosition);
 
-    TPos3f yMtx;
+    Pos3f yMtx;
     yMtx.identity();
     yMtx.setEulerY(_104);
 
@@ -492,10 +492,10 @@ void SpinDriver::exeShootStart() {
     f32 square = half * half;
     f32 val = square * square;
 
-    TVec3f upVec;
+    Vec3f upVec;
     MR::calcUpVec(&upVec, this);
 
-    TVec3f vec50;
+    Vec3f vec50;
     vec50.set(mPosition - upVec * 200.0f * (1.0f - val));
 
     f32 val2 = MR::clamp(2.0f * progress, 0.0f, 1.0f);
@@ -621,7 +621,7 @@ bool SpinDriver::startBind(HitSensor* pSensor) {
 
     _11C = 0.0f;
 
-    TRot3f rotation;
+    Rot3f rotation;
     rotation.set(_8C->getBaseMtx());
     rotation.getQuat(_98);
 
@@ -647,9 +647,9 @@ void SpinDriver::cancelBind() {
 void SpinDriver::updateBindPosition() {
     f32 progress = static_cast< f32 >(getNerveStep()) / _124;
 
-    TVec3f oldPos(_B8);
+    Vec3f oldPos(_B8);
 
-    TVec3f position;
+    Vec3f position;
     mShootPath->calcPosition(&position, progress);
 
     _B8 = position;
@@ -660,7 +660,7 @@ void SpinDriver::moveBindPosToCenter() {
     _B8 += _C4;
 
     f32 mag;
-    TVec3f dir(mPosition - _B8);
+    Vec3f dir(mPosition - _B8);
     MR::separateScalarAndDirection(&mag, &dir, dir);
 
     _C4 += dir * 1.5f * (mag / 120.0f);
@@ -670,24 +670,24 @@ void SpinDriver::moveBindPosToCenter() {
 }
 
 void SpinDriver::updateBindActorMatrix(f32 a1) {
-    TPos3f makeMtx;
+    Pos3f makeMtx;
     MR::makeMtxUpFrontPos(&makeMtx, _E8, _D0, mPosition);
 
-    TQuat4f quat;
+    Quat4f quat;
     makeMtx.getQuat(quat);
 
     _A8.slerp(_98, quat, a1);
 }
 
 void SpinDriver::calcBindActorMatrix() {
-    TPos3f baseMtx;
+    Pos3f baseMtx;
     baseMtx.setQT(_A8, _B8);
     MR::setBaseTRMtx(_8C, baseMtx);
 }
 
 void SpinDriver::calcParabolicBindPose() {
     if (!MR::isNearZero(_C4)) {
-        TVec3f direction;
+        Vec3f direction;
         MR::normalize(_C4, &direction);
 
         if (_124 > 0) {
@@ -695,7 +695,7 @@ void SpinDriver::calcParabolicBindPose() {
             rate = MR::normalize(rate, static_cast< f32 >(_12C) / _124, static_cast< f32 >(_130) / _124);
 
             if (rate > 0.0f) {
-                TQuat4f rotation;
+                Quat4f rotation;
                 const f32 angle = PI * rate;
                 rotation.setRotate(_DC, angle);
                 rotation.rotate(direction);
@@ -706,11 +706,11 @@ void SpinDriver::calcParabolicBindPose() {
     }
 }
 
-void SpinDriver::turnBindHead(const TVec3f& rVec, f32 f1) {
-    TVec3f yDir;
+void SpinDriver::turnBindHead(const Vec3f& rVec, f32 f1) {
+    Vec3f yDir;
     _A8.getYDir(yDir);
 
-    TQuat4f q;
+    Quat4f q;
     q.setRotate(yDir, rVec, f1);
     _A8.mult(q);
     _A8.normalize();

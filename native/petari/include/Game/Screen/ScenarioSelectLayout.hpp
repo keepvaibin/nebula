@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/Screen/LayoutActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class BackButton;
 class CameraContext;
@@ -33,7 +33,7 @@ public:
     void fadeOutText();
     bool trySelect();
     ScenarioSelectStar* getSelectedStar() const;
-    void calcWorldPositionFromScreenPos(TVec3f*, const TVec2f&, f32) const;
+    void calcWorldPositionFromScreenPos(Vec3f*, const Vec2f&, f32) const;
     bool calcDisplayScenarioNum(s32*, s32*) const;
     void appearAllStar(s32, s32, bool);
     void appearStar(s32, s32, int);
@@ -60,17 +60,17 @@ public:
     s32 mSelectedScenarioNo;
     s32 _24;
     bool _28;
-    TMtx34f mEffectHostMtx;
+    Mtx34f mEffectHostMtx;
     ScenarioSelectStar** mStar;
     MultiSceneActor* mScenarioSky;
     EffectSystem* mEffectSystem;
     const CameraContext* mCameraContext;
-    TVec2f mNewTextFollowPos;
-    TVec2f mNewGreenTextFollowPos;
-    TVec2f mQuestionPane[2];
-    TVec2f mStarTopFollowPos;
+    Vec2f mNewTextFollowPos;
+    Vec2f mNewGreenTextFollowPos;
+    Vec2f mQuestionPane[2];
+    Vec2f mStarTopFollowPos;
     BackButton* mBackButton;
-    TVec2f mMarioPaneFollowPos;
+    Vec2f mMarioPaneFollowPos;
     const char* mMarioPaneName;
     s32 _A4;
     s32 _A8;

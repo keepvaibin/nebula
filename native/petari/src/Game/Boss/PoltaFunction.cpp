@@ -13,7 +13,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
-#include <JSystem/JMath/JMath.hpp>
+#include <nebula_geometry.hpp>
 
 namespace PoltaFunction {
     void onMovement(Polta* pPolta) {
@@ -158,8 +158,8 @@ namespace PoltaFunction {
             return false;
         }
 
-        TVec3f direction(*MR::getPlayerPos());
-        const TVec3f& rGravity = pPolta->mGravity;
+        Vec3f direction(*MR::getPlayerPos());
+        const Vec3f& rGravity = pPolta->mGravity;
         direction.sub(pPolta->mPosition);
         direction.orthogonalize(rGravity);
 
@@ -168,7 +168,7 @@ namespace PoltaFunction {
         }
 
         MR::rotateVecDegree(&direction, pPolta->mGravity, angle);
-        TVec3f position;
+        Vec3f position;
         position.scaleAdd(distance, direction, pPolta->mPosition);
 
         pRock->start(pPolta, position);
@@ -177,7 +177,7 @@ namespace PoltaFunction {
 
 // this is the only way I could match this
 // TODO fix
-    bool appearRockCircle(Polta* pPolta, const TVec3f& rCenter, f32 radius, s32 index, s32 count, s32 rockType) {
+    bool appearRockCircle(Polta* pPolta, const Vec3f& rCenter, f32 radius, s32 index, s32 count, s32 rockType) {
         PoltaRock* const pRock = pPolta->mRockHolder->getDeadMember();
         if (pRock == nullptr) {
             return false;
@@ -198,49 +198,49 @@ namespace PoltaFunction {
             break;
         }
 
-        const TVec3f& rFront = pPolta->_C4;
-        TVec3f direction(rFront);
+        const Vec3f& rFront = pPolta->_C4;
+        Vec3f direction(rFront);
         f32 sign = index % 2 ? 1.0f : -1.0f;
         f32 angle = sign * (15.0f + 7.0f * (index + 1));
-        const TVec3f& rGravity = pPolta->mGravity;
+        const Vec3f& rGravity = pPolta->mGravity;
         MR::rotateVecDegree(&direction, rGravity, angle);
         direction.orthogonalize(pPolta->mGravity);
         MR::normalizeOrZero(&direction);
 
-        TVec3f position;
+        Vec3f position;
         position.scaleAdd(radius, direction, rCenter);
-        TVec3f offset(radius * -MR::sinDegree(angle), 0.0f, radius * MR::cosDegree(angle));
+        Vec3f offset(radius * -MR::sinDegree(angle), 0.0f, radius * MR::cosDegree(angle));
 
-        const TVec3f& rOffset = offset;
+        const Vec3f& rOffset = offset;
         pRock->start(pPolta, position, rOffset);
         return true;
     }
 
-    bool appearWhiteRockCircle(Polta* pPolta, const TVec3f& rCenter, f32 radius, s32 index, s32 count) {
+    bool appearWhiteRockCircle(Polta* pPolta, const Vec3f& rCenter, f32 radius, s32 index, s32 count) {
         return appearRockCircle(pPolta, rCenter, radius, index, count, 0);
     }
 
-    bool appearBlackRockCircle(Polta* pPolta, const TVec3f& rCenter, f32 radius, s32 index, s32 count) {
+    bool appearBlackRockCircle(Polta* pPolta, const Vec3f& rCenter, f32 radius, s32 index, s32 count) {
         return appearRockCircle(pPolta, rCenter, radius, index, count, 1);
     }
 
-    bool appearYellowRockCircle(Polta* pPolta, const TVec3f& rCenter, f32 radius, s32 index, s32 count) {
+    bool appearYellowRockCircle(Polta* pPolta, const Vec3f& rCenter, f32 radius, s32 index, s32 count) {
         return appearRockCircle(pPolta, rCenter, radius, index, count, 2);
     }
 
     bool appearBombTeresaFromRoot(Polta* pPolta, f32 param2, f32 param3, s32 param4) {
-        TVec3f position;
+        Vec3f position;
         position.scaleAdd(-120.0f, pPolta->mGravity, pPolta->mPosition);
         BombTeresa* pBombTeresa = pPolta->mBombTeresaHolder->getDeadMember();
         if (pBombTeresa == nullptr) {
             return false;
         }
 
-        pBombTeresa->appearShadow(position, TVec3f(0.0f, 0.0f, 0.0f));
+        pBombTeresa->appearShadow(position, Vec3f(0.0f, 0.0f, 0.0f));
         return true;
     }
 
-    bool appearBombTeresaNormal(Polta* pPolta, const TVec3f& rPosition, const TVec3f& rVelocity) {
+    bool appearBombTeresaNormal(Polta* pPolta, const Vec3f& rPosition, const Vec3f& rVelocity) {
         BombTeresa* pBombTeresa = pPolta->mBombTeresaHolder->getDeadMember();
         if (pBombTeresa == nullptr) {
             return false;

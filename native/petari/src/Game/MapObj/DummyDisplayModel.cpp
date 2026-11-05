@@ -8,8 +8,8 @@
 #include "Game/Util/EventUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
-#include <JSystem/JMath/JMath.hpp>
+#include <nebula_geometry.hpp>
+
 
 #include "Game/Util/StringUtil.hpp"
 #include "Game/System/NebulaMods.hpp"
@@ -168,10 +168,10 @@ void DummyDisplayModel::control() {
 
 void DummyDisplayModel::calcAndSetBaseMtx() {
     PartsModel::calcAndSetBaseMtx();
-    TPos3f* m = (TPos3f*)getBaseMtx();
+    Pos3f* m = (Pos3f*)getBaseMtx();
 
-    TVec3f offset;
-    TVec3f v19 = mModelInfo->_4;
+    Vec3f offset;
+    Vec3f v19 = mModelInfo->_4;
     offset.negate(v19);
     NebulaMtxMultVec((MtxPtr)m, offset, &mPosition);
     m->setTrans(mPosition);
@@ -188,8 +188,8 @@ void DummyDisplayModel::calcAndSetBaseMtx() {
     case ITEM_TYPE_GRAND_STAR:
 
         if (!_AC) {
-            TPos3f rot;
-            rot.makeRotate(TVec3f(0.0f, 1.0f, 0.0f), MR::toRadian(mRotation.y));
+            Pos3f rot;
+            rot.makeRotate(Vec3f(0.0f, 1.0f, 0.0f), MR::toRadian(mRotation.y));
             MR::multMtx(*m, rot, *m);
         }
 
@@ -198,7 +198,7 @@ void DummyDisplayModel::calcAndSetBaseMtx() {
 }
 
 namespace MR {
-    DummyDisplayModel* createDummyDisplayModel(LiveActor* pHost, const JMapInfoIter& rIter, s32 a3, const TVec3f& a4, const TVec3f& a5) {
+    DummyDisplayModel* createDummyDisplayModel(LiveActor* pHost, const JMapInfoIter& rIter, s32 a3, const Vec3f& a4, const Vec3f& a5) {
         DummyDisplayModel* mdl = ::tryCreateDummyModel(pHost, rIter, a3, -1);
 
         if (mdl == nullptr) {
@@ -220,7 +220,7 @@ namespace MR {
         return mdl;
     }
 
-    DummyDisplayModel* createDummyDisplayModel(LiveActor* pHost, const JMapInfoIter& rIter, MtxPtr mtx, s32 a3, const TVec3f& a4, const TVec3f& a5) {
+    DummyDisplayModel* createDummyDisplayModel(LiveActor* pHost, const JMapInfoIter& rIter, MtxPtr mtx, s32 a3, const Vec3f& a4, const Vec3f& a5) {
         DummyDisplayModel* mdl = ::tryCreateDummyModel(pHost, rIter, a3, -1);
 
         if (mdl == nullptr) {
@@ -231,7 +231,7 @@ namespace MR {
         return mdl;
     }
 
-    DummyDisplayModel* createDummyDisplayModelCrystalItem(LiveActor* pHost, const JMapInfoIter& rIter, const TVec3f& a4, const TVec3f& a5) {
+    DummyDisplayModel* createDummyDisplayModelCrystalItem(LiveActor* pHost, const JMapInfoIter& rIter, const Vec3f& a4, const Vec3f& a5) {
         DummyDisplayModel* mdl = ::tryCreateDummyModel(pHost, rIter, -1, 0x21);
 
         if (mdl == nullptr) {
@@ -242,7 +242,7 @@ namespace MR {
         return mdl;
     }
 
-    DummyDisplayModel* createDummyDisplayModelCrystalItem(LiveActor* pHost, s32 a2, const TVec3f& a3, const TVec3f& a4) {
+    DummyDisplayModel* createDummyDisplayModelCrystalItem(LiveActor* pHost, s32 a2, const Vec3f& a3, const Vec3f& a4) {
         DummyDisplayModel* mdl = ::tryCreateDummyModel(pHost, JMapInfoIter(), a2, 0x21);
         mdl->initFixedPosition(a3, a4, nullptr);
         return mdl;

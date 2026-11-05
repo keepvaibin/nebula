@@ -98,8 +98,8 @@ public:
     }
 
     virtual void set(void*, void*) = 0;
-    virtual void getPos(TVec3f*, f32) const = 0;
-    virtual void getWatchPos(TVec3f*, f32) const = 0;
+    virtual void getPos(Vec3f*, f32) const = 0;
+    virtual void getWatchPos(Vec3f*, f32) const = 0;
     virtual f32 getTwist(f32) const = 0;
     virtual f32 getFovy(f32) const = 0;
 };
@@ -112,8 +112,8 @@ public:
     }
 
     virtual void set(void*, void*);
-    virtual void getPos(TVec3f*, f32) const;
-    virtual void getWatchPos(TVec3f*, f32) const;
+    virtual void getPos(Vec3f*, f32) const;
+    virtual void getWatchPos(Vec3f*, f32) const;
     virtual f32 getTwist(f32) const;
     virtual f32 getFovy(f32) const;
 
@@ -135,8 +135,8 @@ public:
     }
 
     virtual void set(void*, void*);
-    virtual void getPos(TVec3f*, f32) const;
-    virtual void getWatchPos(TVec3f*, f32) const;
+    virtual void getPos(Vec3f*, f32) const;
+    virtual void getWatchPos(Vec3f*, f32) const;
     virtual f32 getTwist(f32) const;
     virtual f32 getFovy(f32) const;
 

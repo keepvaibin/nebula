@@ -152,7 +152,7 @@ void RunawayRabbit::init(const JMapInfoIter& rIter) {
 
 void RunawayRabbit::initShadow() {
     MR::initShadowVolumeSphere(this, ::sShadowRadius);
-    TVec3f zeroVec(0.0f, 0.0f, 0.0f);
+    Vec3f zeroVec(0.0f, 0.0f, 0.0f);
     MR::setShadowDropPositionAtJoint(this, nullptr, "Spine", zeroVec);
 }
 
@@ -166,9 +166,9 @@ void RunawayRabbit::initAfterPlacement() {
 
 void RunawayRabbit::initSensor() {
     initHitSensor(2);
-    MR::addHitSensorAtJointEnemy(this, "Body", "Spine", 8, ::sBodyRadius, TVec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorAtJointEnemy(this, "Catch", "Spine", 8, ::sCatchRadius, TVec3f(0.0f, 0.0f, 0.0f));
-    MR::initStarPointerTargetAtJoint(this, "Spine", ::sBodyRadius, TVec3f(0, 0, 0));
+    MR::addHitSensorAtJointEnemy(this, "Body", "Spine", 8, ::sBodyRadius, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointEnemy(this, "Catch", "Spine", 8, ::sCatchRadius, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::initStarPointerTargetAtJoint(this, "Spine", ::sBodyRadius, Vec3f(0, 0, 0));
 }
 
 void RunawayRabbit::appear() {
@@ -198,7 +198,7 @@ void RunawayRabbit::updatePose() {
 }
 
 void RunawayRabbit::updateBindActorMatrix() {
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.setQT(mPlayerPoseQuat, mPlayerBindPos);
     MR::setPlayerBaseMtx(mtx);
 }

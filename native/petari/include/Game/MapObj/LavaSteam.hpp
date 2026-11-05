@@ -17,6 +17,6 @@ public:
     void exeSteam();
     void exeSteamEnd();
 
-    TVec3f mUp;
-    TVec3f mEffectScale;
+    Vec3f mUp;
+    Vec3f mEffectScale;
 };

@@ -59,8 +59,8 @@ void Rosetta::init(const JMapInfoIter& rIter) {
     NPCActor::initialize(rIter, caps);
 
     initHitSensor(2);
-    MR::addHitSensorNpc(this, "Head", 8, 70.0f, TVec3f(0.0f, 160.0f, 0.0f));
-    MR::addHitSensorNpc(this, "Body", 8, 80.0f, TVec3f(0.0f, 50.0f, 0.0f));
+    MR::addHitSensorNpc(this, "Head", 8, 70.0f, Vec3f(0.0f, 160.0f, 0.0f));
+    MR::addHitSensorNpc(this, "Body", 8, 80.0f, Vec3f(0.0f, 50.0f, 0.0f));
 
     if (mMsgCtrl != nullptr) {
         MR::registerBranchFunc(getMsgCtrl(), TalkMessageFunc(this, &Rosetta::branchFunc));
@@ -139,7 +139,7 @@ void Rosetta::endDemoWithInterpole() {
 
 void Rosetta::control() {
     if (canUpdateStarePos()) {
-        TVec3f starePos;
+        Vec3f starePos;
         MR::calcPlayerFaceStarePos(&starePos, MR::getJointMtx(this, "Head"), getBaseMtx());
         mTurnJointCtrl->setStarePos(starePos);
     }
@@ -215,8 +215,8 @@ bool Rosetta::canUpdateStarePos() const {
         return false;
     }
 
-    TVec3f dir = *MR::getPlayerPos() - mPosition;
-    TVec3f yDir;
+    Vec3f dir = *MR::getPlayerPos() - mPosition;
+    Vec3f yDir;
     MR::extractMtxYDir(getBaseMtx(), &yDir);
 
     if (MR::normalizeOrZero(&dir)) {

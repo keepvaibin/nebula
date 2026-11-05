@@ -25,7 +25,7 @@ LavaProminenceTriple::LavaProminenceTriple(const char* pName)
 
 void LavaProminenceTriple::init(const JMapInfoIter& rIter) {
     MR::initDefaultPos(this, rIter);
-    TQuat4f rot;
+    Quat4f rot;
     rot.setEulerDegree(mRotation.x, mRotation.y, mRotation.z);
     rot.getZDir(mFront);
     rot.getXDir(mSide);
@@ -101,7 +101,7 @@ void LavaProminenceTriple::control() {
 
     mRotation.y += mRotateVel / 100.0f;
     MR::repeatDegree(&mRotation.y);
-    mCurrRot.setRotate(TVec3f(0, 1, 0), MR::toRadian(mRotation.y));
+    mCurrRot.setRotate(Vec3f(0, 1, 0), MR::toRadian(mRotation.y));
     mBloomModel->mPosition.set(mPosition);
     MR::startLevelSound(this, "SE_OJ_LV_PROMINENCE_T_MOVE");
     updateEffectClipping();
@@ -114,9 +114,9 @@ void LavaProminenceTriple::control() {
 }
 
 void LavaProminenceTriple::calcAndSetBaseMtx() {
-    TQuat4f rot = mBaseRot;
+    Quat4f rot = mBaseRot;
     rot.mult(rot, mCurrRot);
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.zeroTrans();
     mtx.setQT(rot, mPosition);
     MR::setBaseTRMtx(this, mtx);
@@ -127,7 +127,7 @@ void LavaProminenceTriple::attackSensor(HitSensor* pSender, HitSensor* pReceiver
     MR::sendMsgEnemyAttackFireStrong(pReceiver, pSender);
 }
 void LavaProminenceTriple::updateHitSensor(HitSensor* pSensor) {
-    TVec3f diff = *MR::getPlayerCenterPos();
+    Vec3f diff = *MR::getPlayerCenterPos();
     diff -= mPosition;
 
     if (MR::isNearZero(diff)) {
@@ -170,7 +170,7 @@ void LavaProminenceTriple::updateHitSensor(HitSensor* pSensor) {
     angle += mRotation.y;
     MR::repeatDegree(&angle);
 
-    TVec3f offset = mFront * MR::cosDegree(angle);
+    Vec3f offset = mFront * MR::cosDegree(angle);
     offset += mSide * MR::sinDegree(angle);
     offset *= mScale.y * ::sToSensorRadius;
     pSensor->mPosition.set(*getPosition());
@@ -186,7 +186,7 @@ void LavaProminenceTriple::updateEffectClipping() {
 }
 
 void LavaProminenceTriple::updateEffectClippingIndividual(bool* pIsAppear, const char* pEffectName, const char* pJointName) {
-    TVec3f jointPos;
+    Vec3f jointPos;
     MR::copyJointPos(this, pJointName, &jointPos);
 
     if (*pIsAppear == true) {

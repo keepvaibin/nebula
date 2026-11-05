@@ -36,8 +36,8 @@ public:
     void exeFlyLectureB();
 
     s32 _15C;
-    TMtx34f _160;
-    TVec3f _190;
+    Mtx34f _160;
+    Vec3f _190;
     s32 mArg0;
     f32 _1A0;
 };

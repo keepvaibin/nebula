@@ -22,7 +22,7 @@ void BossKameckMoveRail::init(const JMapInfoIter& rIter) {
     }
 }
 
-void BossKameckMoveRail::calcMovePosition(TVec3f* pPos, s32 idx) const {
+void BossKameckMoveRail::calcMovePosition(Vec3f* pPos, s32 idx) const {
     MR::calcRailPointPos(pPos, this, idx);
 }
 

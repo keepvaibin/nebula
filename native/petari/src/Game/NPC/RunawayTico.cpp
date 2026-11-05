@@ -92,14 +92,14 @@ void RunawayTico::initAfterPlacement() {
     }
 }
 
-void RunawayTico::appearBushComment(const TVec3f& rPos) {
+void RunawayTico::appearBushComment(const Vec3f& rPos) {
     MR::forwardNodeNextBranchLeft(mMsgCtrl);
     appear();
     setPosAfterCaught(rPos);
     MR::requestStartDemoMarioPuppetable(this, "\202\332\202\342\202\253" /* ぼやき */, GET_NERVE(RunawayTico, RunawayTicoNrvAppear), GET_NERVE(RunawayTico, RunawayTicoNrvWait));
 }
 
-void RunawayTico::appearHoleComment(const TVec3f& rPos) {
+void RunawayTico::appearHoleComment(const Vec3f& rPos) {
     MR::forwardNodeNextBranchRight(mMsgCtrl);
     MR::forwardNodeCurrentBranchLeft(mMsgCtrl);
     appear();
@@ -107,7 +107,7 @@ void RunawayTico::appearHoleComment(const TVec3f& rPos) {
     MR::requestStartDemoMarioPuppetable(this, "\202\332\202\342\202\253" /* ぼやき */, GET_NERVE(RunawayTico, RunawayTicoNrvAppear), GET_NERVE(RunawayTico, RunawayTicoNrvWait));
 }
 
-void RunawayTico::appearPipeComment(const TVec3f& rPos) {
+void RunawayTico::appearPipeComment(const Vec3f& rPos) {
     MR::forwardNodeNextBranchRight(mMsgCtrl);
     MR::forwardNodeCurrentBranchRight(mMsgCtrl);
     appear();
@@ -115,7 +115,7 @@ void RunawayTico::appearPipeComment(const TVec3f& rPos) {
     MR::requestStartDemoMarioPuppetable(this, "\202\332\202\342\202\253" /* ぼやき */, GET_NERVE(RunawayTico, RunawayTicoNrvAppear), GET_NERVE(RunawayTico, RunawayTicoNrvWait));
 }
 
-void RunawayTico::appearMamaComment(const TVec3f& rPos) {
+void RunawayTico::appearMamaComment(const Vec3f& rPos) {
     mIsAllCaught = true;
 
     MR::forwardNode(mMsgCtrl);
@@ -124,11 +124,11 @@ void RunawayTico::appearMamaComment(const TVec3f& rPos) {
     MR::requestStartDemoMarioPuppetable(this, "\202\332\202\342\202\253" /* ぼやき */, GET_NERVE(RunawayTico, RunawayTicoNrvAppear), GET_NERVE(RunawayTico, RunawayTicoNrvWait));
 }
 
-void RunawayTico::setPosAfterCaught(const TVec3f& rPos) {
-    TVec3f front;
+void RunawayTico::setPosAfterCaught(const Vec3f& rPos) {
+    Vec3f front;
     MR::getPlayerFrontVec(&front);
 
-    TPos3f mtx;
+    Pos3f mtx;
     MR::makeMtxUpFrontPos(&mtx, -mGravity, -front, rPos);
     setBaseMtx(mtx);
     setInitPose();
@@ -198,7 +198,7 @@ void RunawayTico::exeGuide1() {
     if (MR::isFirstStep(this)) {
         MR::startAction(this, "Metamorphosis");
 
-        TPos3f mtx;
+        Pos3f mtx;
         mtx.set(MR::getJointMtx(this, "Body"));
         MR::addTransMtxLocalY(mtx.toMtxPtr(), ::sAwayYOffset);
         setBaseMtx(mtx);

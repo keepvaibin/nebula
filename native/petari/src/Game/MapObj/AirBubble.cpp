@@ -38,7 +38,7 @@ void AirBubble::init(const JMapInfoIter& rIter) {
     initModelManagerWithAnm("AirBubble", nullptr, false);
     MR::connectToSceneItem(this);
     initHitSensor(1);
-    MR::addHitSensorMapObj(this, "body", 8, mScale.x * ::cHitSensorRadius, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorMapObj(this, "body", 8, mScale.x * ::cHitSensorRadius, Vec3f(0.0f, 0.0f, 0.0f));
     initEffectKeeper(0, nullptr, false);
     initSound(2, false);
     initNerve(GET_NERVE(AirBubble, AirBubbleNrvWait));
@@ -72,7 +72,7 @@ void AirBubble::kill() {
 void AirBubble::control() {
 }
 
-void AirBubble::appearMove(const TVec3f& rTrans, s32 life) {
+void AirBubble::appearMove(const Vec3f& rTrans, s32 life) {
     _8C.set(rTrans);
     mPosition.set(rTrans);
     appear();
@@ -107,7 +107,7 @@ void AirBubble::exeWait() {
         return;
     }
 
-    mPosition = _8C + TVec3f(0.0f, 1.0f, 0.0f) * _B0 * 1.0f;
+    mPosition = _8C + Vec3f(0.0f, 1.0f, 0.0f) * _B0 * 1.0f;
 }
 
 void AirBubble::exeMove() {

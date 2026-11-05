@@ -15,7 +15,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <JSystem/JMath/JMath.hpp>
+#include <nebula_geometry.hpp>
 
 namespace {
     struct WallPartPlacementAngle {
@@ -189,9 +189,9 @@ void TripodBossGuardWall::updateMatrix() {
 }
 
 void TripodBossGuardWall::updateCameraTarget() {
-    TVec3f front;
-    TVec3f up;
-    TVec3f fromPlayer = mPosition - *MR::getPlayerPos();
+    Vec3f front;
+    Vec3f up;
+    Vec3f fromPlayer = mPosition - *MR::getPlayerPos();
     front.x = fromPlayer.x;
     front.y = fromPlayer.y;
     front.z = fromPlayer.z;
@@ -205,7 +205,7 @@ void TripodBossGuardWall::updateCameraTarget() {
         MR::normalize(&front);
     }
 
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.identity();
     MR::makeMtxUpFrontPos(&mtx, up, front, mPosition);
     mCameraTargetMtx->setMtx(mtx);

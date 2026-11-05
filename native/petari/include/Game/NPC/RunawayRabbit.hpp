@@ -70,10 +70,10 @@ public:
     FootPrint* mFootPrint;
     SpotMarkLight* mSpotMarkLight;
     TalkMessageCtrl* mMsgCtrl;
-    TQuat4f mPoseQuat;
-    TVec3f mFrontVec;
-    TQuat4f mPlayerPoseQuat;
-    TVec3f mPlayerBindPos;
+    Quat4f mPoseQuat;
+    Vec3f mFrontVec;
+    Quat4f mPlayerPoseQuat;
+    Vec3f mPlayerBindPos;
     u8 _DC[4];
     s32 mGroupId;
     s32 mRunawayLevel;

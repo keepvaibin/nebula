@@ -157,7 +157,7 @@ namespace MR {
         nebula_snprintf(pBuffer, size, "%s%02d", pName, shapeId);
     }
 
-    void initMapPartsClipping(LiveActor* pActor, const JMapInfoIter& rIter, TVec3f* pCenter, bool ignoreRail) {
+    void initMapPartsClipping(LiveActor* pActor, const JMapInfoIter& rIter, Vec3f* pCenter, bool ignoreRail) {
         f32 radius = 0.0f;
         if (getJ3DModel(pActor)) {
             calcModelBoundingRadius(&radius, pActor);
@@ -205,9 +205,9 @@ namespace MR {
         }
 
         if (shadowType == 2) {
-            TBox3f bounds;
+            Box3f bounds;
             calcModelBoundingBox(&bounds, pActor);
-            TVec3f size;
+            Vec3f size;
             size.sub(bounds.f, bounds.i);
             initShadowVolumeBox(pActor, size, pActor->getBaseMtx());
         } else {
@@ -215,7 +215,7 @@ namespace MR {
         }
 
         if (isExistJoint(pActor, ::cFollowJointName)) {
-            TVec3f offset(0.0f, 0.0f, 0.0f);
+            Vec3f offset(0.0f, 0.0f, 0.0f);
             setShadowDropPositionAtJoint(pActor, nullptr, ::cFollowJointName, offset);
         }
     }

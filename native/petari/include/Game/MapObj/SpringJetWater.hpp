@@ -17,5 +17,5 @@ public:
     void exeEnd();
 
     const char* mObjName;
-    TVec3f mUp;
+    Vec3f mUp;
 };

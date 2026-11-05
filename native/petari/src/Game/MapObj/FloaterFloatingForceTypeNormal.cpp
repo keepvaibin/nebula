@@ -41,7 +41,7 @@ void FloaterFloatingForceTypeNormal::start() {
     setStateMove();
 }
 
-void FloaterFloatingForceTypeNormal::updateHostTrans(TVec3f* pDst) const {
+void FloaterFloatingForceTypeNormal::updateHostTrans(Vec3f* pDst) const {
     pDst->set(_1C - (_28 * _40));
 }
 

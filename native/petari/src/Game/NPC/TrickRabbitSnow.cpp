@@ -74,7 +74,7 @@ void TrickRabbitSnow::init(const JMapInfoIter& rIter) {
     initSensor();
     initBinder(::sBindRadius, ::sBindYOffset, 0);
 
-    mMsgCtrl = MR::createTalkCtrl(this, rIter, "SnowRabbit", TVec3f(0.0f, 120.0f, 0.0f), nullptr);
+    mMsgCtrl = MR::createTalkCtrl(this, rIter, "SnowRabbit", Vec3f(0.0f, 120.0f, 0.0f), nullptr);
 
     initState();
     initSound(4, false);
@@ -97,9 +97,9 @@ void TrickRabbitSnow::initAfterPlacement() {
 
 void TrickRabbitSnow::initSensor() {
     initHitSensor(2);
-    MR::addHitSensorAtJointEnemy(this, "Body", "Spine", 8, ::sBodyRadius, TVec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorAtJointEnemy(this, "Catch", "Spine", 8, ::sCatchRadius, TVec3f(0.0f, 0.0f, 0.0f));
-    MR::initStarPointerTargetAtJoint(this, "Spine", ::sBodyRadius, TVec3f(0.0f));
+    MR::addHitSensorAtJointEnemy(this, "Body", "Spine", 8, ::sBodyRadius, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointEnemy(this, "Catch", "Spine", 8, ::sCatchRadius, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::initStarPointerTargetAtJoint(this, "Spine", ::sBodyRadius, Vec3f(0.0f));
 }
 
 void TrickRabbitSnow::initState() {
@@ -319,8 +319,8 @@ void TrickRabbitSnow::exeVanish() {
 
     MR::startSound(this, "SE_SM_METAMORPHOSE_SMOKE");
 
-    TVec3f trans;
-    TVec3f rotate;
+    Vec3f trans;
+    Vec3f rotate;
 
     if (MR::tryFindLinkNamePos(this, "\211\102\202\352\210\312\222\165" /* 隠れ位置 */, &trans, &rotate)) {
         mPosition.set(trans);

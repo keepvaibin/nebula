@@ -20,8 +20,8 @@ public:
     void exeOnGround();
     void exeRising();
 
-    TVec3f _8C;
-    TVec3f _98;
+    Vec3f _8C;
+    Vec3f _98;
     s32 mFallingTime;
     s32 mHoldTime;
     f32 mMovementDist;

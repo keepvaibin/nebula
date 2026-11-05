@@ -6,7 +6,7 @@
 #include "Game/Util.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "math_types.hpp"
-#include <JSystem/JMath.hpp>
+#include <nebula_geometry.hpp>
 #include <cmath>
 
 #include "Game/Util/StringUtil.hpp"
@@ -71,15 +71,15 @@ void CocoNut::init(const JMapInfoIter& rIter) {
 }
 
 void CocoNut::initAfterPlacement() {
-    TPos3f stack_50;
+    Pos3f stack_50;
 
-    TVec3f gravity(mGravity);
+    Vec3f gravity(mGravity);
     MR::makeMtxTR(&stack_50.mMtx[0], this);
 
     _94.set< f32 >(stack_50.mMtx[0][2], stack_50.mMtx[1][2], stack_50.mMtx[2][2]);
 
     if (MR::isSameDirection(_94, gravity)) {
-        TPos3f stack_20;
+        Pos3f stack_20;
         MR::makeMtxUpNoSupport(&stack_20, -gravity);
         _94.set< f32 >(stack_20.mMtx[0][2], stack_20.mMtx[1][2], stack_20.mMtx[2][2]);
     }
@@ -113,7 +113,7 @@ void CocoNut::startClipped() {
     LiveActor::startClipped();
 }
 
-void CocoNut::hit(const TVec3f& rA1, f32 a2) {
+void CocoNut::hit(const Vec3f& rA1, f32 a2) {
     setFrontVec(rA1);
 
     f32 var_f0;
@@ -133,11 +133,11 @@ void CocoNut::hit(const TVec3f& rA1, f32 a2) {
     }
 }
 
-bool CocoNut::isPossibleToHit(const TVec3f& rA1, const TVec3f& rA2, const TVec3f& rA3) const {
-    TVec3f stack_2C;
-    TVec3f stack_20;
-    TVec3f stack_14;
-    TVec3f stack_8;
+bool CocoNut::isPossibleToHit(const Vec3f& rA1, const Vec3f& rA2, const Vec3f& rA3) const {
+    Vec3f stack_2C;
+    Vec3f stack_20;
+    Vec3f stack_14;
+    Vec3f stack_8;
 
     stack_2C.sub(rA2, rA1);
 
@@ -172,8 +172,8 @@ f32 CocoNut::calcMoveSpeed() const {
 
 void CocoNut::initSensor() {
     initHitSensor(2);
-    MR::addHitSensor(this, "body", ATYPE_COCO_NUT, 16, 65.0f * mScale.x, TVec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensor(this, "eye", ATYPE_EYE, 16, 2000.0f * mScale.x, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensor(this, "body", ATYPE_COCO_NUT, 16, 65.0f * mScale.x, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensor(this, "eye", ATYPE_EYE, 16, 2000.0f * mScale.x, Vec3f(0.0f, 0.0f, 0.0f));
 }
 
 void CocoNut::initModel() {
@@ -193,12 +193,12 @@ void CocoNut::initEffect() {
 }
 
 void CocoNut::updateRotate(f32 a1) {
-    TPos3f stack_38;
-    TVec3f stack_2C;
-    TVec3f stack_20 = -mGravity;
+    Pos3f stack_38;
+    Vec3f stack_2C;
+    Vec3f stack_20 = -mGravity;
 
     if (!MR::normalizeOrZero(mVelocity, &stack_2C) && !MR::isSameDirection(stack_2C, stack_20)) {
-        TVec3f stack_14 = stack_2C.cross(stack_20);
+        Vec3f stack_14 = stack_2C.cross(stack_20);
 
         f32 angle = (mVelocity.length() * -180.0f * a1) / (_D0 * MR::pi());
         stack_38.makeRotate(stack_14, MR::toRadian(angle));
@@ -208,7 +208,7 @@ void CocoNut::updateRotate(f32 a1) {
 }
 
 void CocoNut::updateGravity() {
-    TVec3f stack_8;
+    Vec3f stack_8;
 
     f32 f31 = _13C ? 0.4f : 1.0f;
     stack_8.set(mGravity);
@@ -222,15 +222,15 @@ void CocoNut::updateGravity() {
 
 // issues around MR::deleteEffect and Normalize calls
 void CocoNut::processMove() {
-    TVec3f stack_2C;
-    TVec3f stack_20;
-    TVec3f stack_14;
-    TVec3f stack_8;
+    Vec3f stack_2C;
+    Vec3f stack_20;
+    Vec3f stack_14;
+    Vec3f stack_8;
 
     if (isOnGround()) {
         f32 temp_f31 = calcMoveSpeed();
         bool temp_r31 = MR::isBindedGroundWater(this);
-        const TVec3f* temp_r3_1 = MR::getGroundNormal(this);
+        const Vec3f* temp_r3_1 = MR::getGroundNormal(this);
 
         if (2.5f < _90) {
             if (mGravity.dot(*temp_r3_1) < 0.0f) {
@@ -322,9 +322,9 @@ void CocoNut::processMove() {
     updateGravity();
 }
 
-void CocoNut::setFrontVec(const TVec3f& rA1) {
-    TVec3f stack_14;
-    TVec3f stack_8(mGravity);
+void CocoNut::setFrontVec(const Vec3f& rA1) {
+    Vec3f stack_14;
+    Vec3f stack_8(mGravity);
 
     if (!MR::normalizeOrZero(rA1, &stack_14)) {
         if (MR::isSameDirection(rA1, stack_8)) {
@@ -349,15 +349,15 @@ bool CocoNut::tryHit(HitSensor* pOtherSensor, HitSensor* pMySensor) {
         return false;
     }
 
-    TVec3f* otherSensorPos = &pOtherSensor->mPosition;
-    TVec3f* mySensorPos = &pMySensor->mPosition;
+    Vec3f* otherSensorPos = &pOtherSensor->mPosition;
+    Vec3f* mySensorPos = &pMySensor->mPosition;
 
     if (!nut->isPossibleToHit(*mySensorPos, *otherSensorPos, mVelocity)) {
         return false;
     }
 
-    TVec3f stack_1C;
-    TVec3f stack_10;
+    Vec3f stack_1C;
+    Vec3f stack_10;
     f32 stack_C;
     f32 stack_8;
     calcHitSpeedAndFrontVec(&stack_C, &stack_8, &stack_1C, &stack_10, *otherSensorPos, *mySensorPos);
@@ -367,15 +367,15 @@ bool CocoNut::tryHit(HitSensor* pOtherSensor, HitSensor* pMySensor) {
 }
 
 bool CocoNut::tryPushedFromActor(HitSensor* pOtherSensor, HitSensor* pMySensor) {
-    TVec3f stack_34;
-    TVec3f stack_28;
-    TVec3f stack_1C;
-    TVec3f stack_10;
+    Vec3f stack_34;
+    Vec3f stack_28;
+    Vec3f stack_1C;
+    Vec3f stack_10;
     f32 stack_C;
     f32 stack_8;
 
-    TVec3f* otherSensorPos = &pOtherSensor->mPosition;
-    TVec3f* mySensorPos = &pMySensor->mPosition;
+    Vec3f* otherSensorPos = &pOtherSensor->mPosition;
+    Vec3f* mySensorPos = &pMySensor->mPosition;
 
     if (_13C) {
         return false;
@@ -430,9 +430,9 @@ void CocoNut::reviseFrontVec() {
         return;
     }
 
-    TVec3f stack_20(mGravity);
-    TVec3f stack_14;
-    TVec3f stack_8;
+    Vec3f stack_20(mGravity);
+    Vec3f stack_14;
+    Vec3f stack_8;
 
     stack_14.sub(found_actor->mPosition, this->mPosition);
 
@@ -488,7 +488,7 @@ void CocoNut::tryMoveEnd() {
 }
 
 bool CocoNut::tryDisappear() {
-    TVec3f stack_14;
+    Vec3f stack_14;
     stack_14.scale(-100.0f, mGravity);
 
     if (MR::isInWater(this, stack_14)) {
@@ -496,7 +496,7 @@ bool CocoNut::tryDisappear() {
         return true;
     }
 
-    if (MR::isInDeath(this, TVec3f(0.0f, 0.0f, 0.0f))) {
+    if (MR::isInDeath(this, Vec3f(0.0f, 0.0f, 0.0f))) {
         setNerve(GET_NERVE(CocoNut, CocoNutNrvBreak));
         return true;
     }
@@ -513,21 +513,21 @@ bool CocoNut::isValidPushedFromPlayer(const HitSensor* pArg0, const HitSensor* p
         return false;
     }
 
-    TVec3f* playerVelocity = MR::getPlayerVelocity();
+    Vec3f* playerVelocity = MR::getPlayerVelocity();
     f32 nutVelocitySquared = mVelocity.squared();
 
     if (playerVelocity->squared() < nutVelocitySquared) {
         return false;
     }
 
-    TVec3f stack_14;
+    Vec3f stack_14;
     stack_14.sub(pArg0->mPosition, pArg1->mPosition);
 
     if (MR::normalizeOrZero(&stack_14)) {
         return false;
     }
 
-    TVec3f stack_8;
+    Vec3f stack_8;
 
     if (MR::normalizeOrZero(*playerVelocity, &stack_8)) {
         return false;
@@ -540,10 +540,10 @@ bool CocoNut::isValidPushedFromPlayer(const HitSensor* pArg0, const HitSensor* p
     return true;
 }
 
-// the frsqrte is most likely an inlined function. possibly JGeometry::TUtil<f32>::sqrt
-void CocoNut::calcHitSpeedAndFrontVec(f32* pArg0, f32* pArg1, TVec3f* pArg2, TVec3f* pArg3, const TVec3f& rArg4, const TVec3f& rArg5) const {
-    TVec3f stack_14;
-    TVec3f stack_8;
+// the frsqrte is most likely an inlined function. possibly FloatUtil::sqrt
+void CocoNut::calcHitSpeedAndFrontVec(f32* pArg0, f32* pArg1, Vec3f* pArg2, Vec3f* pArg3, const Vec3f& rArg4, const Vec3f& rArg5) const {
+    Vec3f stack_14;
+    Vec3f stack_8;
 
     pArg3->sub(rArg5, rArg4);
     MR::normalize(pArg3);
@@ -573,7 +573,7 @@ void CocoNut::calcHitSpeedAndFrontVec(f32* pArg0, f32* pArg1, TVec3f* pArg2, TVe
 
 bool CocoNut::isOnGround() const {
     if (0.0f < _90 && MR::isOnGround(this)) {
-        const TVec3f* groundNormal = MR::getGroundNormal(this);
+        const Vec3f* groundNormal = MR::getGroundNormal(this);
 
         if (groundNormal->dot(mGravity) < MR::cosDegree(120.0f)) {
             return true;
@@ -583,7 +583,7 @@ bool CocoNut::isOnGround() const {
     return false;
 }
 
-bool CocoNut::getWallNormal(TVec3f* pArg0) const {
+bool CocoNut::getWallNormal(Vec3f* pArg0) const {
     if (MR::isBindedWall(this)) {
         pArg0->set(*MR::getWallNormal(this));
         return true;
@@ -649,11 +649,11 @@ void CocoNut::calcAndSetBaseMtx() {
     MR::setBaseTRMtx(this, _A0);
 
     if (isNerve(GET_NERVE(CocoNut, CocoNutNrvMove)) && MR::isOnGround(this)) {
-        const TVec3f* groundNormal = MR::getGroundNormal(this);
+        const Vec3f* groundNormal = MR::getGroundNormal(this);
         f32 temp_f31 = _D0;
 
-        TVec3f stack_14;
-        TVec3f stack_8(*groundNormal);
+        Vec3f stack_14;
+        Vec3f stack_8(*groundNormal);
         stack_8.scale(temp_f31);
 
         stack_14.sub(mPosition, stack_8);
@@ -745,14 +745,14 @@ bool CocoNut::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pRe
 
     _8C = var_f31;
     _90 = var_f30;
-    TVec3f stack_2C;
-    TVec3f stack_20;
-    TVec3f stack_14;
+    Vec3f stack_2C;
+    Vec3f stack_20;
+    Vec3f stack_14;
     stack_2C.sub(pReceiver->mPosition, pSender->mPosition);
 
     if (MR::isMsgStarPieceReflect(msg) && !MR::normalizeOrZero(stack_2C, &stack_20) && !MR::normalizeOrZero(pSender->mHost->mVelocity, &stack_14)) {
         if (stack_20.dot(stack_14) < MR::cosDegree(60.0f)) {
-            TVec3f stack_8(stack_14);
+            Vec3f stack_8(stack_14);
             stack_8.scale(65.0f);
             stack_2C.add(stack_8);
         }
@@ -779,7 +779,7 @@ bool CocoNut::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver)
 
     if (MR::isMsgPlayerKick(msg)) {
         if (isValidPushedFromPlayer(pReceiver, pSender)) {
-            TVec3f* playerVelocity = MR::getPlayerVelocity();
+            Vec3f* playerVelocity = MR::getPlayerVelocity();
             setFrontVec(*playerVelocity);
             temp_f1 = _94.dot(*playerVelocity);
             var_f2 = 18.0f;
@@ -818,7 +818,7 @@ void CocoNut::statusToHide() {
 }
 
 void CocoNut::emitEffectSpinHit(const HitSensor* pOtherSensor, const HitSensor* pMySensor) {
-    TVec3f point;  // point 70% of the way between pOtherSensor and pMySensor
+    Vec3f point;  // point 70% of the way between pOtherSensor and pMySensor
     point.lerp(pOtherSensor->mPosition, pMySensor->mPosition, 0.7f);
     _108.mMtx[0][0] = 1.0f;
     _108.mMtx[1][0] = 0.0f;

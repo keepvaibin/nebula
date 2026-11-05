@@ -41,19 +41,19 @@ MarioAnimator* MarioModule::getAnimator() const {
     return mActor->mMarioAnim;
 }
 
-TVec3f& MarioModule::getShadowPos() const {
+Vec3f& MarioModule::getShadowPos() const {
     return mActor->mMario->mShadowPos;
 }
 
-const TVec3f& MarioModule::getGravityVec() const {
+const Vec3f& MarioModule::getGravityVec() const {
     return *mActor->mMario->getGravityVec();
 }
 
-const TVec3f& MarioModule::getAirGravityVec() const {
+const Vec3f& MarioModule::getAirGravityVec() const {
     return mActor->mMario->getAirGravityVec();
 }
 
-TVec3f& MarioModule::getFrontVec() const {
+Vec3f& MarioModule::getFrontVec() const {
     return mActor->mMario->mFrontVec;
 }
 
@@ -268,11 +268,11 @@ bool MarioModule::isStickFull() const {
     return mActor->mMario->mStickPos.z > 0.9f;
 }
 
-TVec3f& MarioModule::getWorldPadDir() const {
+Vec3f& MarioModule::getWorldPadDir() const {
     return mActor->mMario->mWorldPadDir;
 }
 
-bool MarioModule::calcWorldPadDir(TVec3f* pDest, f32 a2, f32 a3, bool a4) {
+bool MarioModule::calcWorldPadDir(Vec3f* pDest, f32 a2, f32 a3, bool a4) {
     pDest->zero();
     if (MR::isNearZero(a2) && MR::isNearZero(a3)) {
         return false;
@@ -300,16 +300,16 @@ bool MarioModule::calcWorldPadDir(TVec3f* pDest, f32 a2, f32 a3, bool a4) {
     return true;
 }
 
-void MarioModule::addVelocity(const TVec3f& rAdd) {
+void MarioModule::addVelocity(const Vec3f& rAdd) {
     mActor->mMario->mVelocity += rAdd;
 }
 
-void MarioModule::addVelocity(const TVec3f& rAdd, f32 scale) {
-    TVec3f& velocity = mActor->mMario->mVelocity;
+void MarioModule::addVelocity(const Vec3f& rAdd, f32 scale) {
+    Vec3f& velocity = mActor->mMario->mVelocity;
     velocity.scaleAdd(scale, rAdd);
 }
 
-void MarioModule::addVelocityAfter(const TVec3f& rAdd) {
+void MarioModule::addVelocityAfter(const Vec3f& rAdd) {
     mActor->mMario->mVelocityAfter += rAdd;
 }
 
@@ -317,11 +317,11 @@ void MarioModule::clearVelocity() {
     mActor->mMario->mVelocity.zero();
 }
 
-TVec3f& MarioModule::getVelocity() const {
+Vec3f& MarioModule::getVelocity() const {
     return mActor->mMario->mVelocity;
 }
 
-void MarioModule::addTrans(const TVec3f& rShift, const char* pName) {
+void MarioModule::addTrans(const Vec3f& rShift, const char* pName) {
     mActor->mMario->addTrans(rShift, pName);
 }
 
@@ -329,20 +329,20 @@ f32 MarioModule::cutGravityElementFromJumpVec(bool useActorGravity) {
     if (useActorGravity) {
         return MR::vecKillElement(mActor->getMario()->mJumpVec, mActor->_240, &mActor->getMario()->mJumpVec);
     } else {
-        TVec3f* pJumpVec = &mActor->mMario->mJumpVec;
+        Vec3f* pJumpVec = &mActor->mMario->mJumpVec;
         return MR::vecKillElement(*pJumpVec, mActor->getGravityVec(), pJumpVec);
     }
 }
 
-f32 MarioModule::cutVecElementFromJumpVec(const TVec3f& rCut) {
+f32 MarioModule::cutVecElementFromJumpVec(const Vec3f& rCut) {
     return MR::vecKillElement(mActor->mMario->mJumpVec, rCut, &mActor->mMario->mJumpVec);
 }
 
-TVec3f& MarioModule::getJumpVec() const {
+Vec3f& MarioModule::getJumpVec() const {
     return mActor->mMario->mJumpVec;
 }
 
-void MarioModule::setJumpVec(const TVec3f& rVec) {
+void MarioModule::setJumpVec(const Vec3f& rVec) {
     mActor->mMario->mJumpVec = rVec;
 }
 
@@ -350,23 +350,23 @@ void MarioModule::playEffect(const char* pEffectName) {
     mActor->playEffect(pEffectName);
 }
 
-void MarioModule::playEffectTrans(const char* pEffectName, const TVec3f& rTrans) {
+void MarioModule::playEffectTrans(const char* pEffectName, const Vec3f& rTrans) {
     mActor->playEffectTrans(pEffectName, rTrans);
 }
 
-void MarioModule::playEffectRT(const char* pEffectName, const TVec3f& a2, const TVec3f& a3) {
+void MarioModule::playEffectRT(const char* pEffectName, const Vec3f& a2, const Vec3f& a3) {
     mActor->playEffectRT(pEffectName, a2, a3);
 }
 
-void MarioModule::playEffectRTZ(const char* pEffectName, const TVec3f& a2, const TVec3f& a3) {
+void MarioModule::playEffectRTZ(const char* pEffectName, const Vec3f& a2, const Vec3f& a3) {
     mActor->playEffectRTZ(pEffectName, a2, a3);
 }
 
-void MarioModule::playEffectRTW(const char* pEffectName, const TVec3f& a2, const TVec3f& a3) {
+void MarioModule::playEffectRTW(const char* pEffectName, const Vec3f& a2, const Vec3f& a3) {
     mActor->playEffectRTW(pEffectName, a2, a3);
 }
 
-void MarioModule::playEffectSRT(const char* pEffectName, f32 a2, const TVec3f& a3, const TVec3f& a4) {
+void MarioModule::playEffectSRT(const char* pEffectName, f32 a2, const Vec3f& a3, const Vec3f& a4) {
     mActor->playEffectSRT(pEffectName, a2, a3, a4);
 }
 
@@ -408,19 +408,19 @@ void MarioModule::startCamVib(u32 strength) {
     }
 }
 
-TVec3f& MarioModule::getCamPos() const {
+Vec3f& MarioModule::getCamPos() const {
     return mActor->mCamPos;
 }
 
-TVec3f& MarioModule::getCamDirX() const {
+Vec3f& MarioModule::getCamDirX() const {
     return mActor->mCamDirX;
 }
 
-TVec3f& MarioModule::getCamDirY() const {
+Vec3f& MarioModule::getCamDirY() const {
     return mActor->mCamDirY;
 }
 
-TVec3f& MarioModule::getCamDirZ() const {
+Vec3f& MarioModule::getCamDirZ() const {
     return mActor->mCamDirZ;
 }
 
@@ -504,7 +504,7 @@ bool MarioModule::checkSquat(bool a1) {
     return mActor->checkButtonType(9, false);
 }
 
-TVec3f& MarioModule::getTrans() const {
+Vec3f& MarioModule::getTrans() const {
     return mActor->mMario->mPosition;
 }
 
@@ -573,7 +573,7 @@ f32 MarioModule::calcPolygonAngleD(const Triangle* pTri) const {
     return calcAngleD(*pTri->getNormal(0));
 }
 
-f32 MarioModule::calcAngleD(const TVec3f& rVec) const {
+f32 MarioModule::calcAngleD(const Vec3f& rVec) const {
     f32 f31 = (MR::acosEx(-mActor->mMario->getAirGravityVec().dot(rVec)) / 3.14159f) * 180.0f;
     if (MR::isNearZero(f31, 1.0f)) {
         f31 = 0.0f;

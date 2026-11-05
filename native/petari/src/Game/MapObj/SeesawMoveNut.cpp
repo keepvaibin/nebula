@@ -116,10 +116,10 @@ bool SeesawMoveNut::isEnableStart() const {
         return false;
     }
 
-    TVec3f frontVec;
+    Vec3f frontVec;
     MR::calcFrontVec(&frontVec, this);
 
-    TVec3f dirToPlayerNoFront;
+    Vec3f dirToPlayerNoFront;
     dirToPlayerNoFront.sub(*MR::getPlayerPos(), mPosition);
     dirToPlayerNoFront.orthogonalize(frontVec);
 

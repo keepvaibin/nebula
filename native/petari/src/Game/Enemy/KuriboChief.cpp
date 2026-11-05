@@ -31,7 +31,7 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 namespace {
     static const f32 sBinderSize = 300.0f;
@@ -135,7 +135,7 @@ void KuriboChief::init(const JMapInfoIter& rIter) {
     initEffectKeeper(1, nullptr, false);
     MR::initShadowFromCSV(this, "Shadow");
     mScaleController = new AnimScaleController(&::sParam.mScaleParam);
-    MR::initStarPointerTargetAtJoint(this, "Body", 350.0f, TVec3f(350.0f, 0.0f, 0.0f));
+    MR::initStarPointerTargetAtJoint(this, "Body", 350.0f, Vec3f(350.0f, 0.0f, 0.0f));
     initSensor();
     initBinder(::sBinderSize, ::sBinderYOffset, 0);
     initNerve(GET_NERVE(KuriboChief, KuriboChiefNrvWander));
@@ -167,12 +167,12 @@ void KuriboChief::initAfterPlacement() {
 
 void KuriboChief::initSensor() {
     LiveActor::initHitSensor(8);
-    MR::addHitSensorAtJointEnemy(this, "Body", "Body", 8, 150.0f, TVec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorAtJointEnemy(this, "Head1", "Head", 8, 300.0f, TVec3f(120.0f, 0.0f, 0.0f));
-    MR::addHitSensorAtJointEnemy(this, "Head2", "Head", 8, 150.0f, TVec3f(360.0f, 0.0f, 0.0f));
-    MR::addHitSensorAtJointEnemy(this, "LegL", "LegL", 8, 130.0f, TVec3f(60.0f, -50.0f, 0.0f));
-    MR::addHitSensorAtJointEnemy(this, "LegR", "LegR", 8, 130.0f, TVec3f(60.0f, -50.0f, 0.0f));
-    MR::addHitSensorEnemy(this, "Punch", 8, 400.0f, TVec3f(0.0f, 150.0f, 0.0f));
+    MR::addHitSensorAtJointEnemy(this, "Body", "Body", 8, 150.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointEnemy(this, "Head1", "Head", 8, 300.0f, Vec3f(120.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointEnemy(this, "Head2", "Head", 8, 150.0f, Vec3f(360.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointEnemy(this, "LegL", "LegL", 8, 130.0f, Vec3f(60.0f, -50.0f, 0.0f));
+    MR::addHitSensorAtJointEnemy(this, "LegR", "LegR", 8, 130.0f, Vec3f(60.0f, -50.0f, 0.0f));
+    MR::addHitSensorEnemy(this, "Punch", 8, 400.0f, Vec3f(0.0f, 150.0f, 0.0f));
 }
 
 void KuriboChief::initState() {

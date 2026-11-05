@@ -11,7 +11,7 @@ void SpinDriverShootPath::init(const JMapInfoIter& rIter) {
     mUsesParabolic = false;
 }
 
-void SpinDriverShootPath::initUsingParabolic(const JMapInfoIter& rIter, const TVec3f& rStartingPosition) {
+void SpinDriverShootPath::initUsingParabolic(const JMapInfoIter& rIter, const Vec3f& rStartingPosition) {
     mRailRider = new RailRider(rIter);
     mUsesParabolic = mRailRider->getPointNum() <= 2;
 
@@ -22,19 +22,19 @@ void SpinDriverShootPath::initUsingParabolic(const JMapInfoIter& rIter, const TV
     setStartPosition(rStartingPosition);
 }
 
-void SpinDriverShootPath::setStartPosition(const TVec3f& rStartPos) {
+void SpinDriverShootPath::setStartPosition(const Vec3f& rStartPos) {
     if (mUsesParabolic) {
-        TVec3f startPos(mRailRider->mStartPos);
-        TVec3f endPos(mRailRider->mEndPos);
+        Vec3f startPos(mRailRider->mStartPos);
+        Vec3f endPos(mRailRider->mEndPos);
         mPath->initFromMaxHeight(rStartPos, endPos, startPos);
     }
 
-    TVec3f position;
+    Vec3f position;
     calcPosition(&position, 0.0f);
     mStartPosition = rStartPos - position;
 }
 
-void SpinDriverShootPath::calcPosition(TVec3f* pOutPosition, f32 a2) const {
+void SpinDriverShootPath::calcPosition(Vec3f* pOutPosition, f32 a2) const {
     if (mUsesParabolic) {
         mPath->calcPosition(pOutPosition, a2);
         return;
@@ -46,21 +46,21 @@ void SpinDriverShootPath::calcPosition(TVec3f* pOutPosition, f32 a2) const {
 }
 
 namespace {
-    inline void calcInitialDirection(const SpinDriverShootPath* pPath, TVec3f* pOutDirection, f32 sampleStep) {
+    inline void calcInitialDirection(const SpinDriverShootPath* pPath, Vec3f* pOutDirection, f32 sampleStep) {
         f32 startTime = 0.0f;
         f32 endTime = sampleStep;
-        TVec3f start;
+        Vec3f start;
         pPath->calcPosition(&start, startTime);
-        TVec3f end;
+        Vec3f end;
         pPath->calcPosition(&end, endTime);
-        TVec3f direction(end);
+        Vec3f direction(end);
         direction.sub(direction, start);
         pOutDirection->set(direction);
         MR::normalizeOrZero(pOutDirection);
     }
 };  // namespace
 
-void SpinDriverShootPath::calcDirection(TVec3f* pOutDirection, f32 a2, f32 a3) const {
+void SpinDriverShootPath::calcDirection(Vec3f* pOutDirection, f32 a2, f32 a3) const {
     f32 v6;
     f32 v7;
 
@@ -77,27 +77,27 @@ void SpinDriverShootPath::calcDirection(TVec3f* pOutDirection, f32 a2, f32 a3) c
         }
     }
 
-    TVec3f stack_20;
+    Vec3f stack_20;
     calcPosition(&stack_20, v7);
-    TVec3f stack_14;
+    Vec3f stack_14;
     calcPosition(&stack_14, v6);
-    TVec3f stack_8 = stack_14;
+    Vec3f stack_8 = stack_14;
     stack_8.sub(stack_8, stack_20);
     pOutDirection->set(stack_8);
     MR::normalizeOrZero(pOutDirection);
 }
 
-void SpinDriverShootPath::calcInitPose(TVec3f* pPos1, TVec3f* pPos2, TVec3f* pPos3, f32 f1) const {
-    TVec3f pos0;
+void SpinDriverShootPath::calcInitPose(Vec3f* pPos1, Vec3f* pPos2, Vec3f* pPos3, f32 f1) const {
+    Vec3f pos0;
     calcPosition(&pos0, 0.0f);
 
-    TVec3f pos1;
+    Vec3f pos1;
     calcPosition(&pos1, 1.0f);
 
-    TVec3f vec60;
+    Vec3f vec60;
     ::calcInitialDirection(this, &vec60, 0.01f);
 
-    TVec3f vec6C;
+    Vec3f vec6C;
     vec6C.set(pos1 - pos0);
     vec6C.orthogonalize(vec60);
     MR::normalizeOrZero(&vec6C);
@@ -108,7 +108,7 @@ void SpinDriverShootPath::calcInitPose(TVec3f* pPos1, TVec3f* pPos2, TVec3f* pPo
 
     MR::rotateVecDegree(&vec6C, vec60, f1);
 
-    TVec3f vec78;
+    Vec3f vec78;
     vec78.cross(vec6C, vec60);
     MR::normalize(&vec78);
 
@@ -133,28 +133,28 @@ f32 SpinDriverShootPath::getTotalLength() const {
     return mRailRider->getTotalLength();
 }
 
-void SpinDriverShootPath::calcClippingInfo(TVec3f* pVec, f32* pF1, f32 f2, f32 f3) {
+void SpinDriverShootPath::calcClippingInfo(Vec3f* pVec, f32* pF1, f32 f2, f32 f3) {
     s32 totalSteps = getTotalLength() / f2;
 
-    TVec3f pos0;
+    Vec3f pos0;
     calcPosition(&pos0, 0.0f);
 
-    TBox3f box;
+    Box3f box;
     box.set(pos0, pos0);
 
     for (s32 i = 1; i <= totalSteps; i++) {
-        TVec3f pos;
+        Vec3f pos;
         calcPosition(&pos, static_cast< f32 >(i) / totalSteps);
 
         box.extend(pos);
     }
 
-    TVec3f padding(f3);
+    Vec3f padding(f3);
     box.i.sub(padding);
     box.f.add(padding);
     box.getCenter(pVec);
 
-    TVec3f sizeVec;
+    Vec3f sizeVec;
     sizeVec.sub(box.f, box.i);
 
     *pF1 = 0.5f * sizeVec.length();

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class CollisionParts;
 class MapObjConnector;
@@ -31,7 +31,7 @@ public:
     SpringValue* mSpringValue;
     MapObjConnector* mConnector;
     CollisionParts* mSpringModel;
-    TPos3f _9C;
+    Pos3f _9C;
     bool _CC;
     bool _CD;
     bool _CE;

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/NameObj/NameObj.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class Camera;
 class CameraHeightArrange;
@@ -64,7 +64,7 @@ public:
     CameraPoseParam* mPoseParam;
     CameraHeightArrange* mVPan;
     bool mIsLOfsErpOff;
-    TPos3f mZoneMatrix;
+    Pos3f mZoneMatrix;
 };
 
 class CamTranslatorDummy : public CamTranslatorBase {

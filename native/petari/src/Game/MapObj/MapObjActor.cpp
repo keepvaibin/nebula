@@ -143,7 +143,7 @@ void MapObjActor::initialize(const JMapInfoIter& rIter, const MapObjActorInitInf
     if (rInfo.mUseMirrorReflection) {
         MR::initMirrorReflection(this);
         _B5 = rInfo._74;
-        TPos3f mtx(getBaseMtx());
+        Pos3f mtx(getBaseMtx());
         MR::setMirrorReflectionInfoFromMtxYUp(mtx);
     }
 
@@ -199,7 +199,7 @@ void MapObjActor::initialize(const JMapInfoIter& rIter, const MapObjActorInitInf
             radius *= mScale.x;
         }
 
-        TVec3f position(rInfo.mSensorPosition);
+        Vec3f position(rInfo.mSensorPosition);
         if (rInfo.mIsAffectedByScale) {
             position.mul(mScale);
         }
@@ -513,7 +513,7 @@ void MapObjActor::calcAndSetBaseMtx() {
     if (!hasRotation) {
         LiveActor::calcAndSetBaseMtx();
     } else {
-        TPos3f mtx;
+        Pos3f mtx;
         mtx.identity();
 
         if (mRailPosture != nullptr && mRailPosture->isWorking()) {

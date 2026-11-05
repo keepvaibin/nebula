@@ -26,7 +26,7 @@ JAISoundHandle* JAISoundHandles::getHandleUserData(uintptr_t addr) {
     return nullptr;
 }
 
-void JAISoundHandles::setPos(const TVec3f& pos) {
+void JAISoundHandles::setPos(const Vec3f& pos) {
     for (int i = 0; i < mNumHandles; i++) {
         if (mHandles[i].isSoundAttached()) {
             mHandles[i].getSound()->setPos(pos);

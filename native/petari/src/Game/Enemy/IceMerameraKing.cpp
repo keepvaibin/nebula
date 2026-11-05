@@ -24,8 +24,8 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "JSystem/JGeometry/TVec.hpp"
-#include <JSystem/JGeometry/TUtil.hpp>
+#include <nebula_geometry.hpp>
+
 
 // TODO: the symbol order for header funcs is out of order between JointControlDelegator funcs
 //       and Array funcs. This needs to be fixed in order to link.
@@ -62,8 +62,8 @@ namespace {
     static const MR::ActorMoveParam hAttackParam = {0.0f, 6.0f, 0.98f, 0.0f};
     static const MR::ActorMoveParam hExtinguishOnAirParam = {0.0f, 0.125f, 0.96f, 0.0f};
     static const MR::ActorMoveParam hExtinguishFallOnAirParam = {0.0f, 4.0f, 0.96f, 0.0f};
-    static const TVec3f hBinderOffset(-100.586f, 222.65601f, -91.796898f);
-    static const TVec3f hEscapeBinderOffset(-39.0625f, 91.796898f, -47.851601f);
+    static const Vec3f hBinderOffset(-100.586f, 222.65601f, -91.796898f);
+    static const Vec3f hEscapeBinderOffset(-39.0625f, 91.796898f, -47.851601f);
 };  // namespace
 
 IceMerameraKing::IceMerameraKing(const char* pName)
@@ -92,7 +92,7 @@ void IceMerameraKing::init(const JMapInfoIter& rIter) {
     initBinder((130.0f * v5), (130.0f * v5), 0);
     MR::setBinderOffsetVec(this, &_110, true);
     initHitSensor(1);
-    MR::addHitSensorAtJointEnemy(this, "body", "JointRoot", 32, (130.0f * v5), TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointEnemy(this, "body", "JointRoot", 32, (130.0f * v5), Vec3f(0.0f, 0.0f, 0.0f));
     initEffectKeeper(0, nullptr, false);
     initSound(4, false);
     initNerve(GET_NERVE(IceMerameraKing, HostTypeNrvSearch));
@@ -101,7 +101,7 @@ void IceMerameraKing::init(const JMapInfoIter& rIter) {
     MR::setShadowDropLength(this, nullptr, 1500.0f);
     MR::declarePowerStar(this);
     MR::declareStarPiece(this, 24);
-    mFixedPos = new FixedPosition(this, "Top", TVec3f(0, 0, 0), TVec3f(0.0f, 0.0f, 0.0f));
+    mFixedPos = new FixedPosition(this, "Top", Vec3f(0, 0, 0), Vec3f(0.0f, 0.0f, 0.0f));
     MR::tryRegisterDemoCast(this, rIter);
     mIce.init(6);
     for (s32 i = 0; i < 6; i++) {
@@ -178,7 +178,7 @@ void IceMerameraKing::kill() {
 }
 
 void IceMerameraKing::control() {
-    TVec3f v7;
+    Vec3f v7;
     MR::copyJointScale(this, "Center", &v7);
     f32 v3 = 130.0f * v7.x;
     MR::setBinderRadius(this, v3);
@@ -197,7 +197,7 @@ void IceMerameraKing::control() {
     }
 
     if (!isNerve(GET_NERVE(IceMerameraKing, HostTypeNrvEscape)) && !isNerve(GET_NERVE(IceMerameraKing, HostTypeNrvEscapeJump))) {
-        TQuat4f quad(0, 0, 0, 1);
+        Quat4f quad(0, 0, 0, 1);
         _100.slerp(quad, 0.25f);
     }
 
@@ -267,7 +267,7 @@ void IceMerameraKing::exeThrow() {
         }
 
         _E0 += 1;
-        TVec3f& icePos = mThrowingIce->mPosition;
+        Vec3f& icePos = mThrowingIce->mPosition;
         mThrowingIce->emitIce(icePos, *MR::getPlayerCenterPos() + *MR::getPlayerVelocity() * 35.0f, -5.0f, mGravity);
         mThrowingIce = nullptr;
         MR::startSound(this, "SE_BM_ICEMERAKING_THROW");
@@ -316,7 +316,7 @@ void IceMerameraKing::exeExtinguish() {
         MR::startSound(this, "SE_BM_ICEMERAKING_SMOKE");
         MR::deleteEffect(this, "BodyIce");
         MR::emitEffectWithParticleCallBack(this, "BodyIceOff", mSpinParticle);
-        TVec3f v4 = mPosition - *MR::getPlayerCenterPos();
+        Vec3f v4 = mPosition - *MR::getPlayerCenterPos();
         MR::vecKillElement(v4, mGravity, &v4);
         MR::normalizeOrZero(&v4);
         MR::setVelocitySeparateHV(this, v4, 20.0f, 0.0f);
@@ -686,7 +686,7 @@ bool IceMerameraKing::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pR
             isNerve(GET_NERVE(IceMerameraKing, HostTypeNrvRecover))) {
             return false;
         } else {
-            TVec3f v10 = *MR::getPlayerCenterPos() - mPosition;
+            Vec3f v10 = *MR::getPlayerCenterPos() - mPosition;
             MR::vecKillElement(v10, mGravity, &v10);
 
             if (v10.length() < getSensor("body")->getRadius()) {
@@ -702,7 +702,7 @@ bool IceMerameraKing::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pR
 }
 
 void IceMerameraKing::addVelocityToInitPos() {
-    TVec3f v12 = _C8 - mPosition;
+    Vec3f v12 = _C8 - mPosition;
 
     if (0.0f < mGravity.dot(v12)) {
         MR::vecKillElement(v12, mGravity, &v12);
@@ -712,7 +712,7 @@ void IceMerameraKing::addVelocityToInitPos() {
 }
 
 void IceMerameraKing::calcAndSetBaseMtx() {
-    TPos3f v3;
+    Pos3f v3;
     MR::makeMtxUpFrontPos(&v3, _BC, _B0, mPosition);
     MR::setBaseTRMtx(this, v3);
     mFixedPos->calc();
@@ -737,9 +737,9 @@ bool IceMerameraKing::isEnableThrow() {
     if (MR::isPlayerInWaterMode() || MR::isPlayerOnWaterSurface()) {
         return false;
     }
-    TVec3f v10 = *MR::getPlayerCenterPos() - mPosition;
+    Vec3f v10 = *MR::getPlayerCenterPos() - mPosition;
     MR::normalizeOrZero(&v10);
-    TVec3f v9;
+    Vec3f v9;
     MR::calcUpVec(&v9, this);
     bool flag = false;
     flag = -0.60f < v9.dot(v10);
@@ -768,9 +768,9 @@ ThrowingIce* IceMerameraKing::getDeadWeaponAndAppear() {
     return nullptr;
 }
 
-bool IceMerameraKing::calcJoint(TPos3f* a2, const JointControllerInfo& info) {
-    TPos3f mtx;
-    TVec3f v3;
+bool IceMerameraKing::calcJoint(Pos3f* a2, const JointControllerInfo& info) {
+    Pos3f mtx;
+    Vec3f v3;
     mtx.makeQuat(_100);
     a2->getTrans(v3);
     a2->zeroTransInline2();
@@ -785,8 +785,8 @@ namespace {
 
 IceMerameraKingShockWave::IceMerameraKingShockWave() : ModelObj("\217\325\214\202" /* 衝撃 */, "IceMerameraKingShock", nullptr, -2, -2, -2, false) {
     initHitSensor(2);
-    MR::addHitSensorEnemyAttack(this, "circle", 16, 15.0f, TVec3f(0.0f, -100.0f, 0.0f));
-    MR::addHitSensorEnemyAttack(this, "circle_end", 16, 24.0f, TVec3f(0.0f, -100.0f, 0.0f));
+    MR::addHitSensorEnemyAttack(this, "circle", 16, 15.0f, Vec3f(0.0f, -100.0f, 0.0f));
+    MR::addHitSensorEnemyAttack(this, "circle_end", 16, 24.0f, Vec3f(0.0f, -100.0f, 0.0f));
 }
 
 void IceMerameraKingShockWave::appear() {
@@ -797,7 +797,7 @@ void IceMerameraKingShockWave::appear() {
 }
 
 void IceMerameraKingShockWave::control() {
-    TVec3f v7;
+    Vec3f v7;
     MR::copyJointScale(this, ::hScaleJointName[2], &v7);
     f32 v3 = 15.0f * v7.y;
     getSensor("circle")->mRadius = v3;
@@ -812,13 +812,13 @@ void IceMerameraKingShockWave::control() {
 void IceMerameraKingShockWave::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     if (pSender != getSensor("circle_end") && MR::isSensorPlayer(pReceiver)) {
         HitSensor* sensor = getSensor("circle_end");
-        TVec3f v14 = sensor->mPosition - pReceiver->mPosition;
+        Vec3f v14 = sensor->mPosition - pReceiver->mPosition;
         if (v14.length() < sensor->getRadius() + pReceiver->getRadius()) {
             return;
         }
 
-        TVec3f v15 = pReceiver->mPosition - pSender->mPosition;
-        TVec3f v16;
+        Vec3f v15 = pReceiver->mPosition - pSender->mPosition;
+        Vec3f v16;
         MR::calcUpVec(&v16, this);
 
         if (MR::abs(v15.dot(v16)) < 200.0f) {

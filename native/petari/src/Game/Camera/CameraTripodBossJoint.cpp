@@ -19,7 +19,7 @@ CameraTripodBossJoint::CameraTripodBossJoint(const char* pName)
 }
 
 void CameraTripodBossJoint::reset() {
-    TVec3f watchPos;
+    Vec3f watchPos;
     CameraLocalUtil::makeWatchPoint(&watchPos, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
     CameraLocalUtil::setWatchPos(this, watchPos);
     calcIdealPose();
@@ -85,12 +85,12 @@ void CameraTripodBossJoint::calcIdealPose() {
         }
     }
 
-    TVec3f pos;
-    MR::polarToCrossDegree(TVec3f(0.0f, 0.0f, 0.0f), &pos, mDist, mAngleX, (mAngleY - 90.0f) + mRoundAngle);
+    Vec3f pos;
+    MR::polarToCrossDegree(Vec3f(0.0f, 0.0f, 0.0f), &pos, mDist, mAngleX, (mAngleY - 90.0f) + mRoundAngle);
 
-    TVec3f up;
+    Vec3f up;
     if (MR::isCreatedTripodBoss()) {
-        TPos3f mtx;
+        Pos3f mtx;
         MR::getTripodBossJointMatrix(&mtx, mJointID);
         mtx.mult33(pos, pos);
         mtx.getYDir(up);
@@ -98,13 +98,13 @@ void CameraTripodBossJoint::calcIdealPose() {
         up.set< f32 >(0.0f, 1.0f, 0.0f);
     }
 
-    TVec3f watchPoint;
+    Vec3f watchPoint;
     CameraLocalUtil::makeWatchPoint(&watchPoint, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
 
     if (MR::isCreatedTripodBoss()) {
-        TPos3f mtx;
+        Pos3f mtx;
         MR::getTripodBossJointMatrix(&mtx, mJointID);
-        TVec3f offset;
+        Vec3f offset;
         mtx.mult33(mAxis, offset);
         watchPoint.add(offset);
     }

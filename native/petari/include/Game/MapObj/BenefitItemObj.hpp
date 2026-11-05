@@ -2,7 +2,7 @@
 
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class ActorCameraInfo;
 class FlashingCtrl;
@@ -41,7 +41,7 @@ public:
     virtual void initEscape();
     virtual void doEscape();
 
-    void shoot(const TVec3f&, const TVec3f&, bool);
+    void shoot(const Vec3f&, const Vec3f&, bool);
     void exeShoot();
     void exeWait();
     void exeAppearGround();
@@ -53,16 +53,16 @@ public:
     u32 _8C;
     u32 _90;
     u32 _94;
-    TVec3f _98;
-    TVec3f _A4;
+    Vec3f _98;
+    Vec3f _A4;
     s16 _B0;
     s16 _B2;
     s16 _B4;
     s16 _B6;
     s16 _B8;
     s16 _BA;
-    TVec3f _BC;
-    TVec3f _C8;
+    Vec3f _BC;
+    Vec3f _C8;
     MtxPtr mFollowMtx;
     u8 _D8;
     u8 _D9;
@@ -82,7 +82,7 @@ public:
     u8 _E7;
     f32 _E8;
     f32 _EC;
-    TMtx34f _F0;
+    Mtx34f _F0;
     const char* _120;
     FlashingCtrl* mFlashCtrl;
     ActorCameraInfo* mCameraInfo;

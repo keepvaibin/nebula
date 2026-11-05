@@ -69,7 +69,7 @@ public:
     AnimScaleController* mAnimScaleController;
     WalkerStateBindStarPointer* mBindStarPointerState;
     s32 mTurtleType;
-    TVec3f mAppearPos;
-    TQuat4f mTargetQuat;
-    TVec3f mTurnAxis;
+    Vec3f mAppearPos;
+    Quat4f mTargetQuat;
+    Vec3f mTurnAxis;
 };

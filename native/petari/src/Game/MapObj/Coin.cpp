@@ -5,7 +5,7 @@
 #include "Game/MapObj/PurpleCoinHolder.hpp"
 #include "Game/NameObj/NameObjArchiveListCollector.hpp"
 #include "Game/Util.hpp"
-#include <JSystem/JMath/JMath.hpp>
+#include <nebula_geometry.hpp>
 
 namespace NrvCoin {
     NEW_NERVE(CoinNrvNonActive, Coin, NonActive);
@@ -42,7 +42,7 @@ void Coin::init(const JMapInfoIter& rIter) {
     initModelManagerWithAnm(mIsPurpleCoin ? "PurpleCoin" : "Coin", nullptr, false);
     MR::connectToSceneItemStrongLight(this);
     initHitSensor(1);
-    MR::addHitSensor(this, "coin", ATYPE_COIN, 4, 55.0f, TVec3f(0.0f, 70.0f, 0.0f));
+    MR::addHitSensor(this, "coin", ATYPE_COIN, 4, 55.0f, Vec3f(0.0f, 70.0f, 0.0f));
     initBinder(55.0f, 70.0f, 0);
     MR::setBinderExceptSensorType(this, &mPosition, 10.0f);
     MR::setClippingFar100m(this);
@@ -54,7 +54,7 @@ void Coin::init(const JMapInfoIter& rIter) {
     }
 
     if (_BA) {
-        TVec3f axis;
+        Vec3f axis;
         MR::calcActorAxisY(&axis, this);
         mGravity.set(-axis);
     }
@@ -63,7 +63,7 @@ void Coin::init(const JMapInfoIter& rIter) {
 
     if (mIsNeedBubble) {
         mAirBubble = MR::createPartsModelNoSilhouettedMapObj(this, "\203\101\203\217" /* アワ */, "AirBubble", nullptr);
-        mAirBubble->initFixedPosition(TVec3f(0.0f, 70.0f, 0.0f), TVec3f(0.0f, 0.0f, 0.0f), nullptr);
+        mAirBubble->initFixedPosition(Vec3f(0.0f, 70.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f), nullptr);
         mAirBubble->makeActorDead();
         MR::registerDemoSimpleCastAll(mAirBubble);
         MR::startBck(mAirBubble, "Move");
@@ -172,11 +172,11 @@ void Coin::makeActorDead() {
 }
 
 void Coin::calcAndSetBaseMtx() {
-    TVec3f another_vec;
-    another_vec.set(MR::isNearZero(mGravity) ? TVec3f(0.0f, 1.0f, 0.0f) : -mGravity);
+    Vec3f another_vec;
+    another_vec.set(MR::isNearZero(mGravity) ? Vec3f(0.0f, 1.0f, 0.0f) : -mGravity);
     mDropPosition.scaleAdd(70.0f, another_vec, mPosition);
 
-    TPos3f pos;
+    Pos3f pos;
 
     if (_BA) {
         MR::makeMtxTR(pos.toMtxPtr(), this);
@@ -273,7 +273,7 @@ void Coin::exeMove() {
         MR::startSound(this, "SE_OJ_FALL_IN_MAGMA_S");
         kill();
     } else {
-        if (MR::isInDeath(this, TVec3f(0.0f, 0.0f, 0.0f))) {
+        if (MR::isInDeath(this, Vec3f(0.0f, 0.0f, 0.0f))) {
             kill();
         } else {
             MR::calcGravityOrZero(this);
@@ -379,7 +379,7 @@ void Coin::appearFixTimer(s32 a1, s32 a2) {
     setNerve(GET_NERVE(Coin, CoinNrvFixTimer));
 }
 
-void Coin::appearMove(const TVec3f& a1, const TVec3f& a2, s32 a3, s32 a4) {
+void Coin::appearMove(const Vec3f& a1, const Vec3f& a2, s32 a3, s32 a4) {
     mPosition.set(a1);
     makeActorAppeared();
     MR::invalidateClipping(this);
@@ -388,7 +388,7 @@ void Coin::appearMove(const TVec3f& a1, const TVec3f& a2, s32 a3, s32 a4) {
     MR::onCalcShadow(this, nullptr);
     mVelocity.set(a2);
 
-    TVec3f stack_14;
+    Vec3f stack_14;
     if (MR::normalizeOrZero(a2, &stack_14)) {
         mGravity.x = 0.0f;
         mGravity.y = -1.0f;
@@ -403,7 +403,7 @@ void Coin::appearMove(const TVec3f& a1, const TVec3f& a2, s32 a3, s32 a4) {
     setNerve(GET_NERVE(Coin, CoinNrvMove));
 }
 
-void Coin::appearHop(const TVec3f& a1, const TVec3f& a2) {
+void Coin::appearHop(const Vec3f& a1, const Vec3f& a2) {
     if (MR::isNearZero(a2)) {
         mGravity.x = 0.0f;
         mGravity.y = -1.0f;

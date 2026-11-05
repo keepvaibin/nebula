@@ -9,8 +9,8 @@ public:
     virtual ~IceVolcanoUpDownPlane();
 
     void move();
-    bool tryCalcNearestPosToPlayer(TVec3f*) const;
-    TVec3f* getSoundCalcPos();
+    bool tryCalcNearestPosToPlayer(Vec3f*) const;
+    Vec3f* getSoundCalcPos();
 
-    TVec3f mNearestPosToPlayer;
+    Vec3f mNearestPosToPlayer;
 };

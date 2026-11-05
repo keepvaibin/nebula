@@ -20,13 +20,13 @@ public:
     virtual void move();
     virtual void doAtEndPoint();
     virtual bool endMove();
-    virtual TVec3f* getSoundCalcPos();
+    virtual Vec3f* getSoundCalcPos();
 
     bool isMoving() const;
     void exeWait();
     void exeMove();
 
-    TVec3f _C4;
+    Vec3f _C4;
     u8 _D0;
 };
 

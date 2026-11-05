@@ -45,7 +45,7 @@ public:
 
     s32 mHideStep;
     s32 mAppearStep;
-    TVec3f _98;
+    Vec3f _98;
     bool _A4;
     bool mIsValidPop;
     f32 mPopAccel;

@@ -3,7 +3,7 @@
 #include "Game/Util/Array.hpp"
 #include "Game/Camera/CameraHolder.hpp"
 #include "Game/NameObj/NameObj.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class CameraCover;
 class CameraDirector;
@@ -107,7 +107,7 @@ public:
     bool isStartAnimCameraEnd() const;
     u32 getStartAnimCameraFrame() const;
     void endStartAnimCamera();
-    void startTalkCamera(const TVec3f&, const TVec3f&, f32, f32, s32);
+    void startTalkCamera(const Vec3f&, const Vec3f&, f32, f32, s32);
     void endTalkCamera(bool, s32);
     void startSubjectiveCamera(s32);
     void endSubjectiveCamera(s32);
@@ -120,7 +120,7 @@ public:
     void checkEndOfEventCamera();
     void controlCameraSE();
     void removeEndEventAtLanding(s32, const char*);
-    void calcViewMtxFromPoseParam(TPos3f*, const CameraPoseParam*);
+    void calcViewMtxFromPoseParam(Pos3f*, const CameraPoseParam*);
     bool isPlayableCameraSE(bool);
     void resetCameraMan();
     void createStartAnimCamera();
@@ -165,7 +165,7 @@ public:
     s32 mStartTime;
     bool mStartCameraCreated;
     CameraTargetMtx* mCameraTargetMtx;
-    TPos3f mTargetMtx;
+    Pos3f mTargetMtx;
     bool mRequestCameraManReset;
     bool mRequestCameraLocalOffsetReset;
     bool mIsSubjectiveCamera;
@@ -173,7 +173,7 @@ public:
     s32 mSubjectiveFrame;
     u32 _1B8;
     f32 mNearZ;
-    TPos3f mViewMtx;
+    Pos3f mViewMtx;
     bool mIsSubjectiveCalced;
     bool _1F1;
     bool mIsCameraNG;

@@ -13,8 +13,8 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/SpringValue.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
+
 
 namespace {
     static const s32 sOnSomethingAcc = 0;
@@ -35,7 +35,7 @@ HipDropSwitch::HipDropSwitch(const char* pName) : LiveActor(pName), _8C(), mConn
 }
 
 inline void HipDropSwitch::initStarPointerTarget() {
-    TVec3f targetOffs;
+    Vec3f targetOffs;
     targetOffs.set(0.0f);
     MR::initStarPointerTarget(this, 150.0f, targetOffs);
 }
@@ -47,8 +47,8 @@ void HipDropSwitch::init(const JMapInfoIter& rIter) {
     MR::initLightCtrl(this);
     initSound(4, false);
     initHitSensor(2);
-    MR::addHitSensorMapObj(this, "body", 16, 0.0f, TVec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorMapObj(this, "hit", 16, 0.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorMapObj(this, "body", 16, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorMapObj(this, "hit", 16, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
     initStarPointerTarget();
     MR::initCollisionParts(this, "HipDropSwitch", getSensor("body"), nullptr);
     mSpringModel = MR::createCollisionPartsFromLiveActor(this, "Move", getSensor("hit"), MR::CollisionScaleType_Unk2);
@@ -76,13 +76,13 @@ void HipDropSwitch::control() {
 
 void HipDropSwitch::calcAnim() {
     LiveActor::calcAnim();
-    TPos3f mtx;
+    Pos3f mtx;
     MtxPtr jointMtx = MR::getJointMtx(this, "Move");
     mtx.set(jointMtx);
     f32 springValue = mSpringValue->mSpringValue;
 
     if (!MR::isNearZero(springValue)) {
-        TVec3f trans, upVec;
+        Vec3f trans, upVec;
         mtx.getTrans(trans);
         MR::calcUpVec(&upVec, this);
         trans += upVec * springValue;

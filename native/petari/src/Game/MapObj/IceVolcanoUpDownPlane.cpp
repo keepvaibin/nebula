@@ -15,18 +15,18 @@ void IceVolcanoUpDownPlane::move() {
     }
 }
 
-bool IceVolcanoUpDownPlane::tryCalcNearestPosToPlayer(TVec3f* pDst) const {
-    TVec3f dirVec;
+bool IceVolcanoUpDownPlane::tryCalcNearestPosToPlayer(Vec3f* pDst) const {
+    Vec3f dirVec;
     dirVec.sub(*MR::getPlayerPos(), mPosition);
 
-    TVec3f upVec;
+    Vec3f upVec;
     MR::calcUpVec(&upVec, this);
 
     if (dirVec.dot(upVec) <= -380.0f) {
         return false;
     }
 
-    TVec3f offset = dirVec.killElement(upVec);
+    Vec3f offset = dirVec.killElement(upVec);
 
     f32 radius;
     MR::calcModelBoundingRadius(&radius, this);
@@ -39,7 +39,7 @@ bool IceVolcanoUpDownPlane::tryCalcNearestPosToPlayer(TVec3f* pDst) const {
     return true;
 }
 
-TVec3f* IceVolcanoUpDownPlane::getSoundCalcPos() {
+Vec3f* IceVolcanoUpDownPlane::getSoundCalcPos() {
     return &mNearestPosToPlayer;
 }
 

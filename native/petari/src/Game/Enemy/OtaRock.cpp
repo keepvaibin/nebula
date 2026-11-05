@@ -90,7 +90,7 @@ void OtaRock::control() {
 
 void OtaRock::calcAndSetBaseMtx() {
     MR::setBaseTRMtx(this, _A4);
-    TVec3f scale = mAnimScaleController->_C * mScale;
+    Vec3f scale = mAnimScaleController->_C * mScale;
     MR::setBaseScale(this, scale);
 }
 
@@ -142,21 +142,21 @@ void OtaRock::initModel() {
         mFireBallArray[i].mHost = this;
     }
 
-    mFixedPosition = new FixedPosition(this, "Mouth", TVec3f(0.0f, 0.0f, 50.0f), TVec3f(0.0f, 0.0f, -90.0f));
+    mFixedPosition = new FixedPosition(this, "Mouth", Vec3f(0.0f, 0.0f, 50.0f), Vec3f(0.0f, 0.0f, -90.0f));
 
-    TPos3f mtxTR;
+    Pos3f mtxTR;
     MR::makeMtxTR(mtxTR.toMtxPtr(), this);
     mtxTR.getZDir(_D4);
 }
 
 void OtaRock::initSensor() {
     initHitSensor(1);
-    MR::addHitSensorMtxEnemy(this, "body", 8, ::cSensorRadius, getBaseMtx(), static_cast< TVec3f >(::cSensorOffset));
+    MR::addHitSensorMtxEnemy(this, "body", 8, ::cSensorRadius, getBaseMtx(), static_cast< Vec3f >(::cSensorOffset));
 }
 
 void OtaRock::updateBaseMtx() {
-    TVec3f up = -mGravity;
-    TVec3f front;
+    Vec3f up = -mGravity;
+    Vec3f front;
     if (MR::isStageStateScenarioOpeningCamera()) {
         front.set(_D4);
     } else {
@@ -215,7 +215,7 @@ bool OtaRock::isValidThrowFireBall() const {
 
 void OtaRock::throwCocoNut() {
     CocoNutBall* pCocoNut = OtaRock::getDisappearedCocoNut();
-    TVec3f fixedTrans;
+    Vec3f fixedTrans;
     mFixedPosition->calc();
     mFixedPosition->copyTrans(&fixedTrans);
     f32 f = MR::getRandom(::cThrowAngleMin, ::cThrowAngleMax);
@@ -225,7 +225,7 @@ void OtaRock::throwCocoNut() {
 
 void OtaRock::throwFireBall() {
     FireBall* fireBall = getDisappearedFireBall();
-    TVec3f fixedTrans;
+    Vec3f fixedTrans;
     mFixedPosition->calc();
     mFixedPosition->copyTrans(&fixedTrans);
     fireBall->appearAndThrow(fixedTrans, ::cThrowFireBallSpeed, 0.0f);

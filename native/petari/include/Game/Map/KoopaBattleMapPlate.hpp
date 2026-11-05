@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class KoopaBattleMapPlate : public LiveActor {
 public:
@@ -13,5 +13,5 @@ public:
     bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 
 private:
-    TPos3f _8C;
+    Pos3f _8C;
 };

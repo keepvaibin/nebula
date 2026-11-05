@@ -4,7 +4,7 @@
 BigBubbleCameraArea::BigBubbleCameraArea(int formType, const char* pName) : CubeCameraArea(formType, pName) {
 }
 
-bool BigBubbleCameraArea::isInVolume(const TVec3f& rPos) const {
+bool BigBubbleCameraArea::isInVolume(const Vec3f& rPos) const {
     if (MR::isPlayerBindedBigBubble()) {
         return CubeCameraArea::isInVolume(rPos);
     }
@@ -15,7 +15,7 @@ bool BigBubbleCameraArea::isInVolume(const TVec3f& rPos) const {
 BigBubbleSwitchArea::BigBubbleSwitchArea(int formType, const char* pName) : SwitchArea(formType, pName) {
 }
 
-bool BigBubbleSwitchArea::isInVolume(const TVec3f& rPos) const {
+bool BigBubbleSwitchArea::isInVolume(const Vec3f& rPos) const {
     if (MR::isPlayerBindedBigBubble()) {
         return AreaObj::isInVolume(rPos);
     }

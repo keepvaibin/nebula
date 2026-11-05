@@ -18,28 +18,28 @@ public:
     void setParam(f32, f32, f32, f32, f32, bool);
     void calcIdealPos();
     void calcRotPos();
-    void constrainDistance(TVec3f*, const TVec3f&);
+    void constrainDistance(Vec3f*, const Vec3f&);
     void constrainAngleX(f32*);
-    void constrainAngleY(f32*, const TVec3f&, f32);
+    void constrainAngleY(f32*, const Vec3f&, f32);
     f32 getMagnitudeOfMovingRound() const;
-    void checkShiftStateToRound(const TVec3f&, const TVec3f&);
+    void checkShiftStateToRound(const Vec3f&, const Vec3f&);
     void arrangeHeight();
     void reflectRotOffset();
     bool isWallForward() const;
     void arrangeLookUp();
-    bool checkAscent(TVec3f*) const;
+    bool checkAscent(Vec3f*) const;
     void arrangeLookDown();
-    bool checkDescent(TVec3f*) const;
+    bool checkDescent(Vec3f*) const;
     void startRound(f32, f32);
-    void checkValidityOfRound(const TVec3f&, const TVec3f&);
+    void checkValidityOfRound(const Vec3f&, const Vec3f&);
     bool isUpsideDownByRoll() const;
 
     f32 mDistMax;
     f32 mDistMin;
     f32 mAngleXMin;
     f32 mAngleXRange;
-    TVec3f mPos;
-    TVec3f mWatchPos;
+    Vec3f mPos;
+    Vec3f mWatchPos;
     f32 mAngleYRoundSpeed;  // moving round magnitude (rate?)
     f32 mAngleXSpeed;
     bool mCheckWall;

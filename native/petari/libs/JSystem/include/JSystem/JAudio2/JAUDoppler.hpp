@@ -2,11 +2,11 @@
 
 #include "JSystem/JAudio2/JASSoundParams.hpp"
 #include "JSystem/JAudio2/JAUAudible.hpp"
-#include "JSystem/JGeometry/TVec.hpp"
+#include <nebula_geometry.hpp>
 
 class JAUDopplerAudibleAbsPos {
 public:
-    void init(TVec3f* pAudiblePos, const TVec3f& rPos, const TVec3f* pPos) {
+    void init(Vec3f* pAudiblePos, const Vec3f& rPos, const Vec3f* pPos) {
         pAudiblePos->set(rPos);
 
         if (pPos != nullptr) {
@@ -18,30 +18,30 @@ public:
         }
     }
 
-    void calc(const TVec3f& rPos) {
+    void calc(const Vec3f& rPos) {
         mVelocity.sub(rPos, mPos);
         mPos.set(rPos);
     }
 
-    const TVec3f& getPos() const {
+    const Vec3f& getPos() const {
         return mPos;
     }
 
-    const TVec3f& getVelocity() const {
+    const Vec3f& getVelocity() const {
         return mVelocity;
     }
 
-    TVec3f mPos;
-    TVec3f mVelocity;
+    Vec3f mPos;
+    Vec3f mVelocity;
 };
 
 class JAUDopplerAudibleRelPos {
 public:
-    const TVec3f& getPos() const {
+    const Vec3f& getPos() const {
         return mPos;
     }
 
-    const TVec3f& getDir() const {
+    const Vec3f& getDir() const {
         return mDir;
     }
 
@@ -49,14 +49,14 @@ public:
         return mDist;
     }
 
-    TVec3f mPos;
-    TVec3f mDir;
+    Vec3f mPos;
+    Vec3f mDir;
     f32 mDist;
 };
 
 class JAUDopplerAudibleChannel {
 public:
-    const TVec3f& getDir() const {
+    const Vec3f& getDir() const {
         return mRelPos.getDir();
     }
 

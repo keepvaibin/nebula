@@ -23,5 +23,5 @@ public:
     LiveActor* mHost;
     f32 mSpeed;
     f32 mRadius;
-    TVec3f mEndPos;
+    Vec3f mEndPos;
 };

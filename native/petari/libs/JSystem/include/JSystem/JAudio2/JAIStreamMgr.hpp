@@ -9,7 +9,7 @@ struct JAIStreamDataMgr;
 class JAIStreamMgr : public JASGlobalInstance< JAIStreamMgr > {
 public:
     JAIStreamMgr(bool setInstance);
-    bool startSound(JAISoundID id, JAISoundHandle* handle, const TVec3f* posPtr);
+    bool startSound(JAISoundID id, JAISoundHandle* handle, const Vec3f* posPtr);
     void freeDeadStream_();
     void calc();
     void stop();

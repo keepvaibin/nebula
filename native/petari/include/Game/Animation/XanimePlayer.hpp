@@ -1,7 +1,7 @@
 #pragma once
 
 #include <JSystem/J3DGraphAnimator/J3DAnimation.hpp>
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class J3DAnmTransform;
 class J3DModel;
@@ -47,7 +47,7 @@ public:
     void updateBeforeMovement();
     void updateAfterMovement();
     void updateInterpoleRatio();
-    void getMainAnimationTrans(u32, TVec3f*) const;
+    void getMainAnimationTrans(u32, Vec3f*) const;
     bool isRun(const char*) const;
     bool isTerminate(const char*) const;
     bool isTerminate() const;

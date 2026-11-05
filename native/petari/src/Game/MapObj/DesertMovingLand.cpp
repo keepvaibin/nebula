@@ -57,7 +57,7 @@ void DesertMovingLand::init(const JMapInfoIter& rIter) {
     MR::getJMapInfoArg0NoInit(rIter, &arg);
     MR::getJMapInfoArg1NoInit(rIter, &_DC);
     MR::getJMapInfoArg2NoInit(rIter, &_E0);
-    TVec3f stack_3C;
+    Vec3f stack_3C;
     MR::calcUpVec(&stack_3C, this);
 
     if (MR::isValidSwitchA(this)) {
@@ -82,10 +82,10 @@ void DesertMovingLand::control() {
 
 void DesertMovingLand::startDemo() {
     MtxPtr playerBaseMtx = MR::getPlayerDemoActor()->getBaseMtx();
-    TMtx34f stack_38;
+    Mtx34f stack_38;
     stack_38.set(playerBaseMtx);
     MtxPtr jointMtx = MR::getJointMtx(this, mObjectName);
-    TMtx34f stack_8;
+    Mtx34f stack_8;
     stack_8.set(jointMtx);
     stack_8.invert(stack_8);
     _E4.concat(stack_8, stack_38);
@@ -93,7 +93,7 @@ void DesertMovingLand::startDemo() {
 
 void DesertMovingLand::updateDemoPlayerPos() {
     MtxPtr jointMtx = MR::getJointMtx(this, mObjectName);
-    TPos3f stack_8;
+    Pos3f stack_8;
     stack_8.set(jointMtx);
     stack_8.concat(stack_8, _E4);
     stack_8.getTrans(MR::getPlayerDemoActor()->mPosition);
@@ -112,7 +112,7 @@ void DesertMovingLand::exeWait() {
 
 void DesertMovingLand::exeMoveDown() {
     if (MR::isFirstStep(this)) {
-        TVec3f stack_8(_D0 - _C4);
+        Vec3f stack_8(_D0 - _C4);
         stack_8.setLength(stack_8.length() / _DC);
         mVelocity.set(stack_8);
         MR::startAtmosphereSE("SE_OJ_DESERT_LAND_MOVE_ST");
@@ -137,7 +137,7 @@ void DesertMovingLand::exeMoveDown() {
 
 void DesertMovingLand::exeMoveUp() {
     if (MR::isFirstStep(this)) {
-        TVec3f stack_8(_C4 - _D0);
+        Vec3f stack_8(_C4 - _D0);
         stack_8.setLength(stack_8.length() / _E0);
         mVelocity.set(stack_8);
         MR::startAtmosphereSE("SE_OJ_DESERT_LAND_MOVE_ST");

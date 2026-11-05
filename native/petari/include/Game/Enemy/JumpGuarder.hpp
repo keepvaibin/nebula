@@ -21,9 +21,9 @@ public:
     void updateRotate();
 
     MtxPtr mBodyJointMtx;
-    TMtx34f _90;
+    Mtx34f _90;
     PartsModel* mHeadModel;
-    TVec3f _C4;
+    Vec3f _C4;
     bool mIsEventCamera;
     ActorCameraInfo* mCameraInfo;
     MultiEventCamera* mMultEventCamera;

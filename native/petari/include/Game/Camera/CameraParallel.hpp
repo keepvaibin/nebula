@@ -16,7 +16,7 @@ public:
     void calcIdealPose();
     void calcRound();
 
-    void setParam(const TVec2f& angle, f32 dist, bool enabled) {
+    void setParam(const Vec2f& angle, f32 dist, bool enabled) {
         mAngleX = angle.x;
         mAngleY = angle.y;
         mDist = dist;

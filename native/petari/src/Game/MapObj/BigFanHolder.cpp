@@ -14,13 +14,13 @@ namespace {
 BigFanHolder::BigFanHolder() : DeriveActorGroup("\221\345\214\136\220\356\225\227\213\100\212\307\227\235" /* 大型扇風機管理 */, ::sMaxBigFan) {
 }
 
-void BigFanHolder::calcWindInfo(TVec3f* pWindInfo, const TVec3f& rPos, f32* pWindSpeed) {
+void BigFanHolder::calcWindInfo(Vec3f* pWindInfo, const Vec3f& rPos, f32* pWindSpeed) {
     s32 count = getObjNum();
-    TVec3f stack_2C;
+    Vec3f stack_2C;
     stack_2C.zero();
 
     for (int i = 0; i < count; i++) {
-        TVec3f windVec;
+        Vec3f windVec;
         windVec.zero();
         getMember(i)->calcWindInfo(&windVec, rPos);
         f32 speed = getMember(i)->mWindSpeed;
@@ -47,7 +47,7 @@ void BigFanFunction::createBigFanHolder() {
     MR::createSceneObj(SceneObj_BigFanHolder);
 }
 
-void BigFanFunction::calcWindInfo(TVec3f* pWindInfo, const TVec3f& rPos, f32* pWindSpeed) {
+void BigFanFunction::calcWindInfo(Vec3f* pWindInfo, const Vec3f& rPos, f32* pWindSpeed) {
     if (!MR::isExistSceneObj(SceneObj_BigFanHolder)) {
         pWindInfo->zero();
 

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/Util/JMapInfo.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 
@@ -28,12 +28,12 @@ public:
 // A collision model natively: its arrays and octree, and its scalars. KCollisionServer::setData makes one from a
 // cooked .kcl (KCLHeader); DynamicCollisionObj builds its own (KCollisionServer::setModel).
 struct KCLFile {
-    TVec3f* mPos;
-    TVec3f* mNorms;
+    Vec3f* mPos;
+    Vec3f* mNorms;
     KC_PrismData* mPrisms;  // 1-based
     void* mOctree;
     f32 mThickness;
-    TVec3f mMin;
+    Vec3f mMin;
     s32 mXMask;
     s32 mYMask;
     s32 mZMask;
@@ -67,7 +67,7 @@ public:
         inline V3u() {
         }
 
-        void setUsingCast(const TVec3f&);
+        void setUsingCast(const Vec3f&);
 
         u32 x;
         u32 y;
@@ -86,26 +86,26 @@ public:
     u32 checkArea3D(Fxyz*, Fxyz*, KC_PrismData**, u32);
     u32 checkSphere(Fxyz*, f32, f32, u32, KC_PrismData**, f32*, u8*);
     u32 checkSphereWithThickness(Fxyz*, f32, f32, u32, KC_PrismData**, f32*, u8*, f32);
-    KC_PrismData* checkArrow(const TVec3f&, const TVec3f&, f32*, u8*, u32*, KC_PrismData**, u32) const;
+    KC_PrismData* checkArrow(const Vec3f&, const Vec3f&, f32*, u8*, u32*, KC_PrismData**, u32) const;
     bool KCHitSphere(KC_PrismData*, Fxyz*, f32, f32, f32*, u8*);
     bool KCHitSphereWithThickness(KC_PrismData*, Fxyz*, f32, f32, f32*, u8*, f32);
     bool isNearParallelNormal(const KC_PrismData*) const;
-    bool KCHitArrow(KC_PrismData*, const TVec3f&, const TVec3f&, f32*, u8*) const;
+    bool KCHitArrow(KC_PrismData*, const Vec3f&, const Vec3f&, f32*, u8*) const;
     s32 toIndex(const KC_PrismData*) const;
-    TVec3f* getFaceNormal(const KC_PrismData*) const;
-    TVec3f* getEdgeNormal1(const KC_PrismData*) const;
-    TVec3f* getEdgeNormal2(const KC_PrismData*) const;
-    TVec3f* getEdgeNormal3(const KC_PrismData*) const;
-    TVec3f* getNormal(u32) const;
+    Vec3f* getFaceNormal(const KC_PrismData*) const;
+    Vec3f* getEdgeNormal1(const KC_PrismData*) const;
+    Vec3f* getEdgeNormal2(const KC_PrismData*) const;
+    Vec3f* getEdgeNormal3(const KC_PrismData*) const;
+    Vec3f* getNormal(u32) const;
     void calXvec(const Fxyz*, const Fxyz*, Fxyz*) const;
-    TVec3f getPos(const KC_PrismData*, int) const;
+    Vec3f getPos(const KC_PrismData*, int) const;
     KC_PrismData* getPrismData(u32) const;
     s32 getTriangleNum() const;
     JMapInfoIter getAttributes(u32) const;
     s32* searchBlock(s32*, const u32&, const u32&, const u32&) const;
     bool isInsideMinMaxInLocalSpace(const V3u&) const;
-    bool outCheck(const TVec3f*, const TVec3f*, V3u*, V3u*) const;
-    void objectSpaceToLocalSpace(V3u*, const TVec3f&) const;
+    bool outCheck(const Vec3f*, const Vec3f*, V3u*, V3u*) const;
+    void objectSpaceToLocalSpace(V3u*, const Vec3f&) const;
 
     KCLFile* mFile;
     JMapInfo* mapInfo;

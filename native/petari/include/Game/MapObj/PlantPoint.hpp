@@ -1,16 +1,16 @@
 #pragma once
 
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class PlantPoint {
 public:
-    PlantPoint(const TVec3f&, const TVec3f&, f32);
+    PlantPoint(const Vec3f&, const Vec3f&, f32);
 
-    virtual void setAxisAndPos(const TVec3f&, const TVec3f&, const TVec3f&, const TVec3f&);
+    virtual void setAxisAndPos(const Vec3f&, const Vec3f&, const Vec3f&, const Vec3f&);
 
-    TVec3f mPosition;
-    TVec3f mSide;
-    TVec3f mUp;
-    TVec3f mFront;
+    Vec3f mPosition;
+    Vec3f mSide;
+    Vec3f mUp;
+    Vec3f mFront;
     f32 mThickness;
 };

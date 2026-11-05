@@ -16,5 +16,5 @@ public:
 
     bool _3C;
     bool _3D;
-    TVec3f _40;
+    Vec3f _40;
 };

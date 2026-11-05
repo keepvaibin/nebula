@@ -14,6 +14,6 @@ public:
     void exeMove();
     void exeMetamorphosis();
 
-    TVec3f _8C;
-    TVec3f _98;
+    Vec3f _8C;
+    Vec3f _98;
 };

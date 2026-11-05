@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class TripodBossGuardWallPart : public LiveActor {
 public:
@@ -19,7 +19,7 @@ public:
     void requestStartDemo();
     bool requestBreak();
     bool isEndDemo() const;
-    void setHostMatrix(const TPos3f*);
+    void setHostMatrix(const Pos3f*);
     void setPlacementAngle(f32);
     void setStartTiming(s32);
 
@@ -29,7 +29,7 @@ public:
     void exeBreak();
     void exeRepair();
 
-    const TPos3f* mHostMtx;
+    const Pos3f* mHostMtx;
     f32 mPlacementAngle;
     s32 mStartTiming;
 };

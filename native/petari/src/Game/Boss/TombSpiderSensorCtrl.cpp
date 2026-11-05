@@ -113,7 +113,7 @@ bool TombSpiderSensorCtrl::updateVitalSpot(HitSensor* pSensor) {
 namespace {
     void updateAttackSensorPos(HitSensor* pSensor, const LiveActor* pActor) {
         MtxPtr baseMtx = pActor->getBaseMtx();
-        TVec2f pos(baseMtx[0][2], baseMtx[1][2]);
+        Vec2f pos(baseMtx[0][2], baseMtx[1][2]);
         MR::normalize(&pos);
         f32 dist = MR::calcDistanceXY(pActor->mPosition, *MR::getPlayerPos()) - ::sAttackSensorDistanceOffset;
         pos.scale(dist);
@@ -126,10 +126,10 @@ namespace {
 
 bool TombSpiderSensorCtrl::updateAttackSensor(HitSensor* pSensor) {
     if (pSensor->isType(ATYPE_ENEMY_ATTACK)) {
-        TVec3f* pPos = &mParent->mPosition;
+        Vec3f* pPos = &mParent->mPosition;
         f32 dist = MR::calcDistanceXY(*pPos, *MR::getPlayerPos()) - ::sAttackSensorDistanceOffset;
 
-        TVec2f pos(1.0f, 0.0f);
+        Vec2f pos(1.0f, 0.0f);
 
         MR::rotateVecDegree(&pos, mParent->getRotate() - 90.0f);
         pos.scale(dist);
@@ -164,7 +164,7 @@ bool TombSpiderSensorCtrl::updateAttackSensor(HitSensor* pSensor) {
 }
 
 void TombSpiderSensorCtrl::initSensor() {
-    MR::addHitSensor(mParent, "body", ATYPE_TOMB_SPIDER_BODY, 8, 600.0f, TVec3f(0.0f, -100.0f, 0.0f));
+    MR::addHitSensor(mParent, "body", ATYPE_TOMB_SPIDER_BODY, 8, 600.0f, Vec3f(0.0f, -100.0f, 0.0f));
 
     MR::addHitSensorCallback(mParent, "eye", ATYPE_TOMB_SPIDER_EYE, 8, 280.0f);
     MR::addHitSensorCallback(mParent, "hip", ATYPE_TOMB_SPIDER_HIP, 8, 600.0f);
@@ -182,7 +182,7 @@ void TombSpiderSensorCtrl::initSensor() {
     MR::addHitSensorCallback(mParent, "vital_spot_l", ATYPE_TOMB_SPIDER_VITAL_SPOT_L, 8, 200.0f);
     MR::addHitSensorCallback(mParent, "vital_spot_r", ATYPE_TOMB_SPIDER_VITAL_SPOT_R, 8, 200.0f);
 
-    MR::addHitSensor(mParent, "cocoon", ATYPE_TOMB_SPIDER_COCOON, 8, 750.0f, TVec3f(0.0f, -50.0f, 0.0f));
+    MR::addHitSensor(mParent, "cocoon", ATYPE_TOMB_SPIDER_COCOON, 8, 750.0f, Vec3f(0.0f, -50.0f, 0.0f));
 
     TombSpiderFunction::invalidateAllPartsSensor(mParent);
 }

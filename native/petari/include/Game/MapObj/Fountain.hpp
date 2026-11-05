@@ -17,5 +17,5 @@ public:
     void exeMove();
 
     const char* mFountainName;
-    TVec3f mUp;
+    Vec3f mUp;
 };

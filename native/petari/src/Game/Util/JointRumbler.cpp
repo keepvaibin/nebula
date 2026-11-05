@@ -68,7 +68,7 @@ void JointRumbler::updateModelScale(f32 scale) {
     mModelScale = scale;
 }
 
-void JointRumbler::updateScale(TVec3f* pVec, f32 scale) {
+void JointRumbler::updateScale(Vec3f* pVec, f32 scale) {
     if (!testFlag(FLAG_LOCK_X)) {
         pVec->x = scale;
     }

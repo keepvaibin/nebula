@@ -146,11 +146,11 @@ void HanachanParts::init(const JMapInfoIter& rIter) {
     initHitSensor(1);
 
     if (mPartsType == PartsType_Body) {
-        MR::addHitSensorEnemy(this, "body", 32, 85.0f, TVec3f(0.0f, 100.0f, 0.0f));
+        MR::addHitSensorEnemy(this, "body", 32, 85.0f, Vec3f(0.0f, 100.0f, 0.0f));
     } else if (mPartsType == PartsType_BodyS) {
-        MR::addHitSensorEnemy(this, "body", 32, 85.0f, TVec3f(0.0f, 85.0f, 0.0f));
+        MR::addHitSensorEnemy(this, "body", 32, 85.0f, Vec3f(0.0f, 85.0f, 0.0f));
     } else if (mPartsType == PartsType_Head) {
-        MR::addHitSensorEnemy(this, "body", 32, 85.0f, TVec3f(0.0f, 100.0f, 0.0f));
+        MR::addHitSensorEnemy(this, "body", 32, 85.0f, Vec3f(0.0f, 100.0f, 0.0f));
     }
 
     initBinder(100.0f, 100.0f, 0);
@@ -162,7 +162,7 @@ void HanachanParts::init(const JMapInfoIter& rIter) {
     MR::invalidateClipping(this);
     MR::onCalcGravity(this);
     MR::initShadowVolumeSphere(this, 70.0f);
-    MR::initStarPointerTarget(this, 110.0f, TVec3f(0.0f, 80.0f, 0.0f));
+    MR::initStarPointerTarget(this, 110.0f, Vec3f(0.0f, 80.0f, 0.0f));
     MR::startBrk(this, "Normal");
 
     if (mPartsType == PartsType_Head) {
@@ -181,7 +181,7 @@ void HanachanParts::kill() {
     }
 }
 
-const TVec3f* HanachanParts::getCommonGravity() const {
+const Vec3f* HanachanParts::getCommonGravity() const {
     if (mHost->isNerve(GET_NERVE(Hanachan, HanachanNrvHanachanTrample)) || mHost->isNerve(GET_NERVE(Hanachan, HanachanNrvHanachanBecomeAngry)) ||
         mHost->isNerve(GET_NERVE(Hanachan, HanachanNrvHanachanOverturn)) || mHost->isNerve(GET_NERVE(Hanachan, HanachanNrvHanachanOverturnBound)) ||
         mHost->isNerve(GET_NERVE(Hanachan, HanachanNrvHanachanRecover))) {
@@ -342,7 +342,7 @@ bool HanachanParts::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
         return false;
     }
 
-    TVec3f dir = pReceiver->mPosition - pSender->mPosition;
+    Vec3f dir = pReceiver->mPosition - pSender->mPosition;
 
     f32 depth;
 
@@ -366,10 +366,10 @@ bool HanachanParts::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
 }
 
 void HanachanParts::calcAndSetBaseMtx() {
-    TQuat4f rot;
+    Quat4f rot;
     rot = mRotationQuat;
 
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.makeQuat(rot);
     mtx.setTrans(mPosition);
 
@@ -738,7 +738,7 @@ void HanachanParts::endStarPointerBind() {
 
 bool HanachanParts::isHeadHitWall() {
     if (mPartsType == PartsType_Head && MR::isBindedWall(this)) {
-        TVec3f wallNormal = *MR::getWallNormal(this);
+        Vec3f wallNormal = *MR::getWallNormal(this);
 
         if (wallNormal.dot(mHost->mFrontDir) <= ::hHitWallCheck) {
             return true;
@@ -1172,21 +1172,21 @@ bool Hanachan::isOwnSensor(HitSensor* pSensor) {
     return false;
 }
 
-void Hanachan::setNerveBlow(const TVec3f& rPos) {
-    TVec3f dir = *getPosition() - rPos;
+void Hanachan::setNerveBlow(const Vec3f& rPos) {
+    Vec3f dir = *getPosition() - rPos;
     MR::vecKillElement(dir, mGravity, &dir);
     MR::normalizeOrZero(&dir);
 
-    const TVec3f& rGravity = mGravity;
-    TVec3f side = dir.cross(rGravity);
+    const Vec3f& rGravity = mGravity;
+    Vec3f side = dir.cross(rGravity);
 
     f32 angle = ::hInitBlowRadian;
     f32 numSegments = mBodyParts.size() - 1;
     f32 angleStep = (MR::pi() - ::hInitBlowRadian * 2.0f) / numSegments;
-    TVec3f blow;
-    TVec3f up;
+    Vec3f blow;
+    Vec3f up;
 
-    TVec3f headDir = *mBodyParts[0]->getPosition() - rPos;
+    Vec3f headDir = *mBodyParts[0]->getPosition() - rPos;
 
     if (headDir.dot(side) < 0.0f) {
         angleStep = -angleStep;
@@ -1271,7 +1271,7 @@ bool Hanachan::isStarPointerPointing() {
 void Hanachan::moveHeadAlongRail(f32 speed) {
     mBodyParts[0]->mRotationQuat.getZDir(mFrontDir);
 
-    TVec3f railDir;
+    Vec3f railDir;
     f32 dist = MR::calcMovingDirectionAlongRail(this, &railDir, mBodyParts[0]->mPosition, 800.0f, false, nullptr);
     if (::hFarDistToPursuePlayer < dist) {
         moveHeadToPlayer(speed, 0.04f);
@@ -1293,7 +1293,7 @@ void Hanachan::moveHeadAlongRail(f32 speed) {
 void Hanachan::moveHeadToPlayer(f32 speed, f32 turnSpeed) {
     mBodyParts[0]->mRotationQuat.getZDir(mFrontDir);
 
-    TVec3f playerDir;
+    Vec3f playerDir;
     MR::calcVecToPlayerH(&playerDir, mBodyParts[0], nullptr);
     MR::turnVecToVecRadian(&mFrontDir, mFrontDir, playerDir, turnSpeed, mBodyParts[0]->mGravity);
 
@@ -1303,19 +1303,19 @@ void Hanachan::moveHeadToPlayer(f32 speed, f32 turnSpeed) {
     MR::blendQuatUpFront(&pHead->mRotationQuat, -pHead->mGravity, mFrontDir, 0.5f, 0.5f);
 }
 
-TVec3f Hanachan::calcSensorDirection(const HitSensor* pSensor, const HitSensor* pTarget) const {
-    TVec3f dir = pTarget->mPosition - pSensor->mPosition;
+Vec3f Hanachan::calcSensorDirection(const HitSensor* pSensor, const HitSensor* pTarget) const {
+    Vec3f dir = pTarget->mPosition - pSensor->mPosition;
     MR::normalizeOrZero(&dir);
     return dir;
 }
 
 void Hanachan::moveBodyAlongHead() {
-    TVec3f* grav;
+    Vec3f* grav;
     for (s32 i = 1; i < mBodyParts.size(); i++) {
-        TVec3f toPrev = mBodyParts[i - 1]->getSensor("body")->mPosition;
+        Vec3f toPrev = mBodyParts[i - 1]->getSensor("body")->mPosition;
         toPrev.sub(mBodyParts[i]->getSensor("body")->mPosition);
 
-        TVec3f push = -toPrev;
+        Vec3f push = -toPrev;
         push.setLength(::hCollideRange + mBodyParts[i - 1]->getSensor("body")->getRadius() / 2.0f +
                        mBodyParts[i]->getSensor("body")->getRadius() / 2.0f);
 
@@ -1324,7 +1324,7 @@ void Hanachan::moveBodyAlongHead() {
         grav = &mBodyParts[i]->mGravity;
         HitSensor* pTarget = mBodyParts[i - 1]->getSensor("body");
         HitSensor* pSensor = mBodyParts[i]->getSensor("body");
-        TQuat4f* pRotation = &mBodyParts[i]->mRotationQuat;
+        Quat4f* pRotation = &mBodyParts[i]->mRotationQuat;
 
         MR::blendQuatUpFront(pRotation, -*grav, calcSensorDirection(pSensor, pTarget), 0.3f, 0.5f);
     }

@@ -12,12 +12,12 @@ public:
     virtual bool close();
     virtual bool update();
 
-    void setVec(const TVec3f&);
+    void setVec(const Vec3f&);
 
     u16 mTimer;
     u16 _14;
     u16 _16;
-    TVec3f _18;
+    Vec3f _18;
     bool mNoDamage;
     bool mTookDamage;
 };

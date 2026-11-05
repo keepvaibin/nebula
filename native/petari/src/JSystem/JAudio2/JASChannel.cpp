@@ -4,8 +4,8 @@
 #include "JSystem/JAudio2/JASCalc.hpp"
 #include "JSystem/JAudio2/JASVoiceSlot.hpp"
 #include "JSystem/JAudio2/JASDriverIF.hpp"
-#include "JSystem/JGeometry.hpp"
-#include "JSystem/JMath/JMATrigonometric.hpp"
+#include <nebula_geometry.hpp>
+#include <nebula_geometry.hpp>
 #include "JSystem/JSupport/JSupport.hpp"
 
 GameMessageQueue JASChannel::sBankDisposeMsgQ;
@@ -396,7 +396,7 @@ void JASChannel::updateMixer(f32 i_volume, f32 i_pan, f32 i_fxmix, f32 i_dolby, 
                     if (JASDriver::getOutputMode() == 0) {
                         volume *= scale;
                     } else {
-                        volume *= JMASinRadian(scale * JGeometry::TUtil< f32 >::PI() * 0.5f);
+                        volume *= Angle::sinRadian(scale * FloatUtil::PI() * 0.5f);
                     }
                     break;
                 }
@@ -427,7 +427,7 @@ void JASChannel::updateMixer(f32 i_volume, f32 i_pan, f32 i_fxmix, f32 i_dolby, 
                 switch (config.lower1) {
                 case 3:
                 case 7:
-                    volume *= JMASinRadian((scale * 0.34776f + 0.32612f) * JGeometry::TUtil< f32 >::PI() * 0.5f);
+                    volume *= Angle::sinRadian((scale * 0.34776f + 0.32612f) * FloatUtil::PI() * 0.5f);
                     break;
                 case 2:
                 case 6:
@@ -437,7 +437,7 @@ void JASChannel::updateMixer(f32 i_volume, f32 i_pan, f32 i_fxmix, f32 i_dolby, 
                     if (JASDriver::getOutputMode() == 0) {
                         volume *= scale;
                     } else {
-                        volume *= JMASinRadian(scale * JGeometry::TUtil< f32 >::PI() * 0.5f);
+                        volume *= Angle::sinRadian(scale * FloatUtil::PI() * 0.5f);
                     }
                     break;
                 }

@@ -20,7 +20,7 @@ LavaJamboSunPlanet::LavaJamboSunPlanet(const char* pName) : LiveActor(pName) {
     mBloomModel = nullptr;
     mLodCtrl = nullptr;
     _94 = 0.0f;
-    _98.setPSZeroVec();
+    _98.setZeroVec();
 }
 
 void LavaJamboSunPlanet::init(const JMapInfoIter& rIter) {

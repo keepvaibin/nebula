@@ -25,7 +25,7 @@ void ManholeCover::init(const JMapInfoIter& rIter) {
     info.setupEffect(0);
     info.setupSound(4);
     info.setupHitSensor();
-    info.setupHitSensorParam(1, ::sSensorRadius, TVec3f(0.0f, 0.0f, 0.0f));
+    info.setupHitSensorParam(1, ::sSensorRadius, Vec3f(0.0f, 0.0f, 0.0f));
     info.setupNerve(GET_NERVE(ManholeCover, HostTypeWait));
     MapObjActor::initialize(rIter, info);
 }

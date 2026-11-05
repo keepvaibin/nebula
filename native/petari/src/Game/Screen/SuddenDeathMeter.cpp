@@ -126,7 +126,7 @@ void SuddenDeathMeter::exePowerUp() {
         setRecoveryCountAnimFrame();
     }
 
-    TVec2f position;
+    Vec2f position;
     calcMarioHeadPosition(&position);
     setPowerUpMeterPosition(position);
 
@@ -216,8 +216,8 @@ void SuddenDeathMeter::setCount(s32 count) {
     }
 }
 
-void SuddenDeathMeter::calcMarioHeadPosition(TVec2f* pHeadPosition) const {
-    TVec2f screenPos;
+void SuddenDeathMeter::calcMarioHeadPosition(Vec2f* pHeadPosition) const {
+    Vec2f screenPos;
     MR::calcScreenPosition(&screenPos, *MR::getPlayerCenterPos());
     f32 radius = MR::calcPointRadius2D(*MR::getPlayerCenterPos(), ::sMarioWorldOffset);
 
@@ -229,13 +229,13 @@ void SuddenDeathMeter::calcMarioHeadPosition(TVec2f* pHeadPosition) const {
     pHeadPosition->y = screenPos.y;
 }
 
-void SuddenDeathMeter::calcPowerUpMeterBasePosition(TVec2f* pBasePosition) const {
+void SuddenDeathMeter::calcPowerUpMeterBasePosition(Vec2f* pBasePosition) const {
     pBasePosition->x = MR::getPaneTransX(this, "MoveMeterW");
     pBasePosition->y = MR::getPaneTransY(this, "MoveMeterW");
 }
 
-void SuddenDeathMeter::setPowerUpMeterPosition(const TVec2f& rPosition) {
-    TVec2f basePosition;
+void SuddenDeathMeter::setPowerUpMeterPosition(const Vec2f& rPosition) {
+    Vec2f basePosition;
     calcPowerUpMeterBasePosition(&basePosition);
     mFollowPosW.set(rPosition - basePosition);
 }

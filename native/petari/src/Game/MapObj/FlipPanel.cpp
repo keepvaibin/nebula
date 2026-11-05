@@ -6,7 +6,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util.hpp"
-#include <JSystem/JMath/JMath.hpp>
+#include <nebula_geometry.hpp>
 #include "Game/System/NebulaHost.hpp"
 
 namespace NrvFlipPanel {
@@ -215,14 +215,14 @@ bool FlipPanel::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceive
     return false;
 }
 
-bool FlipPanel::calcJointMove(TPos3f* pPos, const JointControllerInfo& rInfo) {
+bool FlipPanel::calcJointMove(Pos3f* pPos, const JointControllerInfo& rInfo) {
     if (!_CC) {
         return false;
     }
 
-    TVec3f jointPos;
+    Vec3f jointPos;
     MR::copyJointPos(this, "Panel", &jointPos);
-    TVec3f upVec;
+    Vec3f upVec;
     MR::calcUpVec(&upVec, this);
     jointPos.scaleAdd(-25.0f, upVec, jointPos);
     pPos->setTrans(jointPos);
@@ -240,7 +240,7 @@ bool FlipPanel::checkPlayerOnTop() {
         return false;
     }
 
-    TVec3f upVec;
+    Vec3f upVec;
     MR::calcUpVec(&upVec, this);
 
     if (!MR::getPlayerGroundingPolygon()) {

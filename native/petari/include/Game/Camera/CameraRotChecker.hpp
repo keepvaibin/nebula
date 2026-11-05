@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class CameraRotChecker {
 public:
@@ -8,6 +8,6 @@ public:
 
     void update();
 
-    TPos3f mMtx;
+    Pos3f mMtx;
     bool mIsRotatingHard;
 };

@@ -27,8 +27,8 @@ public:
     void setEndDrawShepeOffset(f32);
     void onCutDropShadow();
     void offCutDropShadow();
-    void calcBaseDropPosition(TVec3f*) const;
-    void calcBaseDropPosition(TVec3f*, const ShadowController*) const;
+    void calcBaseDropPosition(Vec3f*) const;
+    void calcBaseDropPosition(Vec3f*, const ShadowController*) const;
     f32 calcBaseDropLength() const;
     f32 calcBaseDropLength(const ShadowController*) const;
 

@@ -3,7 +3,7 @@
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/JMapInfo.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 #include <cstddef>
 
 class ClipAreaDropLaser : public LiveActor {
@@ -17,7 +17,7 @@ public:
     void exeMove();
     void incrementDrawCount();
 
-    TVec3f mPoints[0x40];
+    Vec3f mPoints[0x40];
     f32 mNumPointsToDraw;
     int mPointIndexToSkipDraw;
     int mDrawCount;

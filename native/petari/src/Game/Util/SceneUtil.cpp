@@ -204,7 +204,7 @@ namespace MR {
         return getStageDataHolder()->getStartPosNum();
     }
 
-    bool getMarioStartPose(s32 marioNo, TVec3f* pTrans, TVec3f* pRotate) {
+    bool getMarioStartPose(s32 marioNo, Vec3f* pTrans, Vec3f* pRotate) {
         const JMapInfoIter iter = getStageDataHolder()->makeMarioJMapInfoIter(JMapIdInfo(marioNo, 0));
         if (!iter.isValid()) {
             return false;
@@ -232,7 +232,7 @@ namespace MR {
         return getStageDataHolder()->getGeneralPosNum();
     }
 
-    void getGeneralPosData(const char** ppName, TVec3f* pPosition, TVec3f* pRotation, JMapLinkInfo** ppLinkInfo, int index) {
+    void getGeneralPosData(const char** ppName, Vec3f* pPosition, Vec3f* pRotation, JMapLinkInfo** ppLinkInfo, int index) {
         JMapInfoIter iter = getStageDataHolder()->getGeneralPosInfoFromDataIndex(index);
         iter.getValue("PosName", ppName);
         getJMapInfoTrans(iter, pPosition);
@@ -393,11 +393,11 @@ namespace MR {
         return getStageDataHolder()->findPlacedStageDataHolder(rIter)->mZoneID;
     }
 
-    const TPos3f* getZonePlacementMtx(const JMapInfoIter& rIter) {
+    const Pos3f* getZonePlacementMtx(const JMapInfoIter& rIter) {
         return &getStageDataHolder()->findPlacedStageDataHolder(rIter)->mPlacementMtx;
     }
 
-    const TPos3f* getZonePlacementMtx(s32 zoneId) {
+    const Pos3f* getZonePlacementMtx(s32 zoneId) {
         return &getStageDataHolder()->getStageDataHolderFromZoneId(zoneId)->mPlacementMtx;
     }
 

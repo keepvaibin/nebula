@@ -2,7 +2,7 @@
 #include "JSystem/J3DGraphAnimator/J3DMaterialAttach.hpp"
 #include "JSystem/J3DGraphAnimator/J3DModelData.hpp"
 #include "JSystem/J3DGraphBase/J3DStruct.hpp"
-#include "JSystem/JMath/JMath.hpp"
+#include <nebula_geometry.hpp>
 
 void J3DFrameCtrl::init(s16 endFrame) {
     mAttribute = EMode_LOOP;
@@ -510,7 +510,7 @@ void J3DAnmTransformFullWithLerp::getTransform(u16 jointNo, J3DTransformInfo* pT
 }
 
 inline f32 J3DHermiteInterpolation(f32 p1, f32 const* p2, f32 const* p3, f32 const* p4, f32 const* p5, f32 const* p6, f32 const* p7) {
-    return JMAHermiteInterpolation(p1, *p2, *p3, *p4, *p5, *p6, *p7);
+    return hermiteInterpolation(p1, *p2, *p3, *p4, *p5, *p6, *p7);
 }
 
 // Keys are s16 (GQR5): time, value, out tangent of the first key, then time, value, in tangent of the second.

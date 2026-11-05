@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/Util/Color.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 #include <JSystem/JParticle/JPAEmitterCallBack.hpp>
 
 enum { FORCE_FOLLOW_ON = 0x1, FORCE_FOLLOW_OFF = 0x2, FORCE_SCALE_ON = 0x10, RESET_FOLLOW_CURRENT = 0x40, BASE_SCALE = 0x100 };
@@ -28,13 +28,13 @@ public:
         }
     };
 
-    MultiEmitterCallBack(const MultiEmitter*, const TVec3f&);
-    MultiEmitterCallBack(const MultiEmitter*, const TVec3f*, const TVec3f*, const TVec3f*, const TVec3f&);
-    MultiEmitterCallBack(const MultiEmitter*, MtxPtr, const TVec3f&);
-    MultiEmitterCallBack(const MultiEmitter*, MtxPtr, const TVec3f*, const TVec3f&);
+    MultiEmitterCallBack(const MultiEmitter*, const Vec3f&);
+    MultiEmitterCallBack(const MultiEmitter*, const Vec3f*, const Vec3f*, const Vec3f*, const Vec3f&);
+    MultiEmitterCallBack(const MultiEmitter*, MtxPtr, const Vec3f&);
+    MultiEmitterCallBack(const MultiEmitter*, MtxPtr, const Vec3f*, const Vec3f&);
 
     void execute(JPABaseEmitter*);
-    void setHostSRT(const TVec3f*, const TVec3f*, const TVec3f*);
+    void setHostSRT(const Vec3f*, const Vec3f*, const Vec3f*);
     void setHostMtx(MtxPtr);
     void setBaseScale(f32);
     void forceFollowOn();
@@ -44,7 +44,7 @@ public:
     void init(JPABaseEmitter*);
     void setSRTFromHostMtx(JPABaseEmitter*, MtxPtr, const FlagSRT&, bool);
     void setSRTFromHostSRT(JPABaseEmitter*, const FlagSRT&, bool);
-    void setScaleFromHostScale(JPABaseEmitter*, const TVec3f&, bool, bool);
+    void setScaleFromHostScale(JPABaseEmitter*, const Vec3f&, bool, bool);
     void effectLight(JPABaseEmitter*);
     void followSRT(JPABaseEmitter*, bool);
     void setColor(JPABaseEmitter*);
@@ -69,11 +69,11 @@ public:
     }
 
     const MultiEmitter* mEmitter;
-    const TVec3f* mScale;
-    const TVec3f* mRotation;
-    const TVec3f* mTranslation;
+    const Vec3f* mScale;
+    const Vec3f* mRotation;
+    const Vec3f* mTranslation;
     MtxPtr mMtx;
-    TVec3f _18;
+    Vec3f _18;
     f32 mBaseScale;
     Color8 mPrmColor;
     Color8 mEnvColor;

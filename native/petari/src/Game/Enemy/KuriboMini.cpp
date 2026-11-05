@@ -24,7 +24,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 namespace {
     class KuriboMiniParam {
@@ -98,7 +98,7 @@ void KuriboMini::init(const JMapInfoIter& rIter) {
     mScaleController = new AnimScaleController(nullptr);
     initSound(4, false);
     initEffectKeeper(1, nullptr, false);
-    MR::initStarPointerTarget(this, 40.0f, TVec3f(0.0f, 60.0f, 0.0f));
+    MR::initStarPointerTarget(this, 40.0f, Vec3f(0.0f, 60.0f, 0.0f));
     MR::initShadowVolumeSphere(this, 40.0f);
     initSensor();
     initBinder(60.0f, 60.0f, 0);
@@ -129,8 +129,8 @@ void KuriboMini::initAfterPlacement() {
 
 void KuriboMini::initSensor() {
     initHitSensor(2);
-    MR::addHitSensorEnemy(this, "body", 8, 60.0f, TVec3f(0.0f, 60.0f, 0.0f));
-    MR::addHitSensorEnemyAttack(this, "attack", 8, 40.0f, TVec3f(0.0f, 60.0f, 0.0f));
+    MR::addHitSensorEnemy(this, "body", 8, 60.0f, Vec3f(0.0f, 60.0f, 0.0f));
+    MR::addHitSensorEnemyAttack(this, "attack", 8, 40.0f, Vec3f(0.0f, 60.0f, 0.0f));
 }
 
 void KuriboMini::initState() {
@@ -379,7 +379,7 @@ bool KuriboMini::tryPointBind() {
 }
 
 bool KuriboMini::tryDeadMap() {
-    if (MR::isInDeath(this, TVec3f(0.0f, 0.0f, 0.0f)) || MR::isBindedGroundDamageFire(this) || MR::isInWater(mPosition)) {
+    if (MR::isInDeath(this, Vec3f(0.0f, 0.0f, 0.0f)) || MR::isBindedGroundDamageFire(this) || MR::isInWater(mPosition)) {
         mItemGenerator->setTypeNone();
         kill();
         return true;

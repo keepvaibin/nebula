@@ -57,9 +57,9 @@ void FileSelectSky::exeWait() {
         mAngleY = 0.0f;
     }
 
-    TPos3f rotateX, rotateY;
-    rotateY.makeRotate(TVec3f(0.0f, 1.0f, 0.0f), mAngleY);
-    rotateX.makeRotate(TVec3f(1.0f, 0.0f, 0.0f), mAngleX);
+    Pos3f rotateX, rotateY;
+    rotateY.makeRotate(Vec3f(0.0f, 1.0f, 0.0f), mAngleY);
+    rotateX.makeRotate(Vec3f(1.0f, 0.0f, 0.0f), mAngleX);
     mBaseMtx.concat(rotateY, rotateX);
     mBaseMtx.invert(mBaseMtx);
     f32 step = (getNerveStep() * PI) / ::cCycleX;

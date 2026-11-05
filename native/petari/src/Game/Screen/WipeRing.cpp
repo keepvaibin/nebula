@@ -47,7 +47,7 @@ void WipeRing::exeWipeIn() {
         MR::getAnimCtrl(this, 0)->setRate(0.0f);
     }
 
-    const f32 angle = (1.0f + static_cast< f32 >(getNerveStep()) / mAnimFrame) * JGeometry::TUtil< f32 >::PI();
+    const f32 angle = (1.0f + static_cast< f32 >(getNerveStep()) / mAnimFrame) * FloatUtil::PI();
     f32 f = MR::sin(0.5f * angle);
 
     MR::getAnimCtrl(this, 0)->setFrame(mWipeInFrame * (1.0f - f));
@@ -75,7 +75,7 @@ void WipeRing::exeWipeOut() {
         MR::getAnimCtrl(this, 0)->setRate(0.0f);
     }
 
-    const f32 angle = (static_cast< f32 >(getNerveStep()) / mAnimFrame) * JGeometry::TUtil< f32 >::PI();
+    const f32 angle = (static_cast< f32 >(getNerveStep()) / mAnimFrame) * FloatUtil::PI();
     f32 f = MR::sin(0.5f * angle);
 
     MR::getAnimCtrl(this, 0)->setFrame(mWipeOutFrame * (1.0f - f) + f * MR::getAnimCtrl(this, 0)->getEnd());
@@ -142,7 +142,7 @@ bool WipeRing::isWipeOut() const {
     return isNerve(GET_NERVE_ANON(WipeRingNrvWipeOut));
 }
 
-void WipeRing::setCenterPos(const TVec3f& rPos) {
+void WipeRing::setCenterPos(const Vec3f& rPos) {
     if (MR::calcScreenPosition(&mCenterPos, rPos)) {
         return;
     }
@@ -158,7 +158,7 @@ void WipeRing::startAnim(const char* pAnimName) {
 namespace {
     bool canCenterOnMario() {
         if (MR::isEqualStageName("IceVolcanoGalaxy") && MR::getCurrentScenarioNo() == 1) {
-            TVec3f position(15060.0f, -11800.0f, 1260.0f);
+            Vec3f position(15060.0f, -11800.0f, 1260.0f);
             if (MR::getPlayerPos()->distance(position) < 600.0f) {
                 return false;
             }
@@ -168,7 +168,7 @@ namespace {
     }
 };  // namespace
 
-bool WipeRing::getMarioCenterPos(TVec3f* pCenterPos) {
+bool WipeRing::getMarioCenterPos(Vec3f* pCenterPos) {
     if (MR::isExistMario() && ::canCenterOnMario()) {
         pCenterPos->set(static_cast< const Vec& >(*MR::getPlayerCenterPos()));
 
@@ -182,21 +182,21 @@ bool WipeRing::getMarioCenterPos(TVec3f* pCenterPos) {
 f32 WipeRing::calcRadius() const {
     f32 radius = mCenterPos.length();
 
-    TVec2f screenHeightPos = TVec2f(0.0f, static_cast< f32 >(MR::getScreenHeight()));
+    Vec2f screenHeightPos = Vec2f(0.0f, static_cast< f32 >(MR::getScreenHeight()));
     f32 screenHeightDistance = mCenterPos.distance(screenHeightPos);
 
     if (radius < screenHeightDistance) {
         radius = screenHeightDistance;
     }
 
-    TVec2f screenWidthPos = TVec2f(static_cast< f32 >(MR::getScreenWidth()), 0.0f);
+    Vec2f screenWidthPos = Vec2f(static_cast< f32 >(MR::getScreenWidth()), 0.0f);
     f32 screenWidthDistance = mCenterPos.distance(screenWidthPos);
 
     if (radius < screenWidthDistance) {
         radius = screenWidthDistance;
     }
 
-    TVec2f screenMaxPos = TVec2f(static_cast< f32 >(MR::getScreenWidth()), static_cast< f32 >(MR::getScreenHeight()));
+    Vec2f screenMaxPos = Vec2f(static_cast< f32 >(MR::getScreenWidth()), static_cast< f32 >(MR::getScreenHeight()));
     f32 screenMaxDistance = mCenterPos.distance(screenMaxPos);
 
     if (radius < screenMaxDistance) {
@@ -215,7 +215,7 @@ void WipeRing::updatePlayerPos() {
         return;
     }
 
-    TVec3f marioCenterPos;
+    Vec3f marioCenterPos;
 
     if (!getMarioCenterPos(&marioCenterPos) && !MR::isFirstStep(this)) {
         return;

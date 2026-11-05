@@ -7,7 +7,7 @@
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include "JSystem/JGeometry/TVec.hpp"
+#include <nebula_geometry.hpp>
 
 LavaGalaxyParts::~LavaGalaxyParts() {
 }
@@ -18,7 +18,7 @@ LavaGalaxyParts::LavaGalaxyParts(const char* pName) : LiveActor(pName), mLodCtrl
 void LavaGalaxyParts::initAfterPlacement() {
     if (mMtxSetter != nullptr) {
 
-        TVec3f groundVec;
+        Vec3f groundVec;
         MR::calcMapGroundUpper(&groundVec, this);
 
         f32 yOffset = mPosition.distance(groundVec);
@@ -26,8 +26,8 @@ void LavaGalaxyParts::initAfterPlacement() {
             yOffset *= -1.0f;
         }
 
-        TVec3f uselessVec(0.0f, yOffset, 0.0f);
-        mMtxSetter->updateMtxUseBaseMtxWithLocalOffset(TVec3f(0.0f, yOffset, 0.0f));
+        Vec3f uselessVec(0.0f, yOffset, 0.0f);
+        mMtxSetter->updateMtxUseBaseMtxWithLocalOffset(Vec3f(0.0f, yOffset, 0.0f));
         MR::offCalcGravity(this);
     }
 }

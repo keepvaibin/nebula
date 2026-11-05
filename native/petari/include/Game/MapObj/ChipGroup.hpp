@@ -2,7 +2,7 @@
 
 #include "Game/Util/Array.hpp"
 #include "Game/NameObj/NameObj.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class ChipBase;
 class StageSwitchCtrl;
@@ -30,7 +30,7 @@ public:
 
     MR::GrowTable< ChipEntry, 5 > mChips;
     StageSwitchCtrl* mSwitchCtrl;
-    TVec3f mUIPos;
+    Vec3f mUIPos;
     s32 mGotCount;
     s32 mTotalCount;
     s32 mStageSwitchArg;

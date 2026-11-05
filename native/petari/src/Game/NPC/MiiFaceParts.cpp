@@ -70,7 +70,7 @@ void MiiFaceParts::drawXlu(const MiiDrawCoreSetting* pSetting) const {
     }
 }
 
-void MiiFaceParts::initFixedPosition(MtxPtr pParam1, const TVec3f& rParam2, const TVec3f& rParam3) {
+void MiiFaceParts::initFixedPosition(MtxPtr pParam1, const Vec3f& rParam2, const Vec3f& rParam3) {
     _CC = new FixedPosition(pParam1, rParam2, rParam3);
     _C8 = _CC->mMtx;
 }

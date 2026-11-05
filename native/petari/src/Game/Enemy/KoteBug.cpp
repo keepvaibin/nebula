@@ -94,7 +94,7 @@ void KoteBug::init(const JMapInfoIter& rIter) {
     }
 
     initModelManagerWithAnm("KoteBug", nullptr, false);
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.set(getBaseMtx());
     mtx.getZDir(mFront);
 
@@ -103,11 +103,11 @@ void KoteBug::init(const JMapInfoIter& rIter) {
     f32 scale = mScale.y;
     initBinder(70.0f * scale, 70.0f * scale, 0);
     initHitSensor(1);
-    MR::addHitSensorAtJointEnemy(this, "body", "Center", 32, 100.0f * scale, TVec3f(0.0f, 20.0f * scale, 0.0f));
+    MR::addHitSensorAtJointEnemy(this, "body", "Center", 32, 100.0f * scale, Vec3f(0.0f, 20.0f * scale, 0.0f));
     initEffectKeeper(0, nullptr, false);
     initSound(4, false);
     initNerve(GET_NERVE(KoteBug, HostTypeNrvWait));
-    MR::initStarPointerTarget(this, 110.0f, TVec3f(0.0f, 80.0f, 0.0f));
+    MR::initStarPointerTarget(this, 110.0f, Vec3f(0.0f, 80.0f, 0.0f));
     MR::declareStarPiece(this, 3);
     MR::declareCoin(this, 1);
     mSpinHitController = new SpinHitController(this, 3, false);
@@ -139,7 +139,7 @@ void KoteBug::kill() {
 }
 
 void KoteBug::control() {
-    if (MR::isInDeath(this, TVec3f(0.0f, 0.0f, 0.0f)) || MR::isInWater(mPosition)) {
+    if (MR::isInDeath(this, Vec3f(0.0f, 0.0f, 0.0f)) || MR::isInWater(mPosition)) {
         kill();
         return;
     }
@@ -148,15 +148,15 @@ void KoteBug::control() {
     mStampController->updateNerve();
     if (isNerve(GET_NERVE(KoteBug, HostTypeNrvOverturn)) || isNerve(GET_NERVE(KoteBug, HostTypeNrvOverturnFall)) ||
         isNerve(GET_NERVE(KoteBug, HostTypeNrvPreRecover)) || isNerve(GET_NERVE(KoteBug, HostTypeNrvStampDeath))) {
-        TQuat4f rotation;
-        rotation.setRotate(TVec3f(1, 0, 0), 3.1415927f);
+        Quat4f rotation;
+        rotation.setRotate(Vec3f(1, 0, 0), 3.1415927f);
         mPosture.slerp(rotation, ::hOverturnRotateRate);
     } else if (isNerve(GET_NERVE(KoteBug, HostTypeNrvFlyPursueLast))) {
-        TQuat4f rotation;
-        rotation.setRotate(TVec3f(1, 0, 0), ::hJitabataAngle);
+        Quat4f rotation;
+        rotation.setRotate(Vec3f(1, 0, 0), ::hJitabataAngle);
         mPosture.slerp(rotation, ::hJitabataPostureRate);
     } else {
-        mPosture.slerp(TQuat4f(0, 0, 0, 1), ::hRecoverRotateRate);
+        mPosture.slerp(Quat4f(0, 0, 0, 1), ::hRecoverRotateRate);
     }
 
     if (isNerve(GET_NERVE(KoteBug, HostTypeNrvNoCalcWait)) || isNerve(GET_NERVE(KoteBug, HostTypeNrvWait)) ||
@@ -422,8 +422,8 @@ void KoteBug::exeBlow() {
         MR::onCalcGravity(this);
     }
 
-    TQuat4f rotation;
-    rotation.setRotate(TVec3f(1, 0, 0), ::hBlowRotateAngle);
+    Quat4f rotation;
+    rotation.setRotate(Vec3f(1, 0, 0), ::hBlowRotateAngle);
     mPosture.mult(mPosture, rotation);
 
     if (mSpinHitController->execute(this)) {
@@ -548,7 +548,7 @@ bool KoteBug::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver)
 void KoteBug::setOverturnFall(HitSensor* pSender, HitSensor* pReceiver) {
     MR::startSound(this, "SE_EM_KOTEBUG_TRAMPLE");
 
-    TVec3f direction(pReceiver->mPosition);
+    Vec3f direction(pReceiver->mPosition);
     direction -= pSender->mPosition;
     MR::vecKillElement(direction, mGravity, &direction);
     MR::normalizeOrZero(&direction);
@@ -629,20 +629,20 @@ bool KoteBug::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
 }
 
 void KoteBug::calcAndSetBaseMtx() {
-    TPos3f mtx;
+    Pos3f mtx;
     MR::calcMtxFromGravityAndZAxis(&mtx, this, mGravity, mFront);
-    TPos3f stampMtx(mStampController->_14);
+    Pos3f stampMtx(mStampController->_14);
     mtx.concat(stampMtx, mtx);
     mtx.setTrans(mPosition);
     MR::setBaseTRMtx(this, mtx);
 
-    TVec3f scale = mScaleController->_C * mScale;
+    Vec3f scale = mScaleController->_C * mScale;
     MR::setBaseScale(this, scale);
     mJointController->registerCallBack();
 }
 
-bool KoteBug::calcJoint(TPos3f* pMtx, const JointControllerInfo& rInfo) {
-    TPos3f rotation;
+bool KoteBug::calcJoint(Pos3f* pMtx, const JointControllerInfo& rInfo) {
+    Pos3f rotation;
     rotation.makeQuat(mPosture);
     pMtx->concat(*pMtx, rotation);
     return true;

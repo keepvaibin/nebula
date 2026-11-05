@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class SphereSelectorHandle : public LiveActor {
 public:
@@ -29,7 +29,7 @@ public:
     void setStateConfirmStartAtFirstStep();
     bool tryRelease();
     void stackPointerVelocity();
-    TVec2f* getPointerVelocity();
+    Vec2f* getPointerVelocity();
 
     void exeWait();
     void exeHold();
@@ -47,17 +47,17 @@ public:
 
 public:
     bool mIsFileSelectMode;
-    TPos3f _90;
-    TVec3f _C0;
+    Pos3f _90;
+    Vec3f _C0;
     f32 mRotateSpeed;
     f32 mTargetRotateSpeed;
     f32 _D4;
     f32 _D8;
-    TVec3f _DC;
-    TVec3f _E8;
-    TVec2f _F4[3];
+    Vec3f _DC;
+    Vec3f _E8;
+    Vec2f _F4[3];
     s32 _10C;
-    TVec3f _110;
-    TVec3f _11C;
+    Vec3f _110;
+    Vec3f _11C;
     bool _128;
 };

@@ -10,7 +10,7 @@ namespace MR {
         mVtxMode = format;
     }
 
-    void ddSendVtxData(const TVec3f& rVec1, const TVec3f& rVec2, const TVec2f& rVec3) {
+    void ddSendVtxData(const Vec3f& rVec1, const Vec3f& rVec2, const Vec2f& rVec3) {
         J3DNativeDraw::position(rVec1.x, rVec1.y, rVec1.z);
         if ((mVtxMode & 1) != 0) {
             J3DNativeDraw::normal(rVec2.x, rVec2.y, rVec2.z);
@@ -21,7 +21,7 @@ namespace MR {
         }
     }
 
-    void ddSendVtxData(const TVec3f& rVec1, const TVec2f& rVec2) {
+    void ddSendVtxData(const Vec3f& rVec1, const Vec2f& rVec2) {
         J3DNativeDraw::position(rVec1.x, rVec1.y, rVec1.z);
         if ((mVtxMode & 2) != 0) {
             J3DNativeDraw::texCoord(rVec2.x, rVec2.y);

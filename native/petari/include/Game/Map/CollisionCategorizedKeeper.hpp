@@ -23,17 +23,17 @@ public:
     void addToGlobal(CollisionParts*);
     void removeFromGlobal(CollisionParts*);
 
-    s32 checkStrikePoint(const TVec3f&, HitInfo*);
-    s32 checkStrikeBall(const TVec3f&, f32, bool, const CollisionPartsFilterBase*, const TriangleFilterBase*);
-    s32 checkStrikeBallWithThickness(const TVec3f&, f32, f32, const CollisionPartsFilterBase*, const TriangleFilterBase*);
-    s32 checkStrikeLine(const TVec3f&, const TVec3f&, s32, const CollisionPartsFilterBase*, const TriangleFilterBase*);
-    s32 collectStrikeBall(const TVec3f&, f32, bool, const CollisionPartsFilterBase*, const TriangleFilterBase*);
-    s32 collectStrikeBallWithThickness(const TVec3f&, f32, f32, const CollisionPartsFilterBase*, const TriangleFilterBase*);
-    s32 collectStrikeLine(const TVec3f&, const TVec3f&, s32, const CollisionPartsFilterBase*, const TriangleFilterBase*);
+    s32 checkStrikePoint(const Vec3f&, HitInfo*);
+    s32 checkStrikeBall(const Vec3f&, f32, bool, const CollisionPartsFilterBase*, const TriangleFilterBase*);
+    s32 checkStrikeBallWithThickness(const Vec3f&, f32, f32, const CollisionPartsFilterBase*, const TriangleFilterBase*);
+    s32 checkStrikeLine(const Vec3f&, const Vec3f&, s32, const CollisionPartsFilterBase*, const TriangleFilterBase*);
+    s32 collectStrikeBall(const Vec3f&, f32, bool, const CollisionPartsFilterBase*, const TriangleFilterBase*);
+    s32 collectStrikeBallWithThickness(const Vec3f&, f32, f32, const CollisionPartsFilterBase*, const TriangleFilterBase*);
+    s32 collectStrikeLine(const Vec3f&, const Vec3f&, s32, const CollisionPartsFilterBase*, const TriangleFilterBase*);
     void growHitInfo();
-    u32 createAreaPolygonList(Triangle*, u32, const TVec3f&, const TVec3f&);
-    u32 createAreaPolygonListArray(Triangle*, u32, TVec3f*, u32);
-    bool isSphereOverlappingWithBox(const TVec3f&, const TVec3f&, const TVec3f&, f32);
+    u32 createAreaPolygonList(Triangle*, u32, const Vec3f&, const Vec3f&);
+    u32 createAreaPolygonListArray(Triangle*, u32, Vec3f*, u32);
+    bool isSphereOverlappingWithBox(const Vec3f&, const Vec3f&, const Vec3f&, f32);
     bool searchSameHostParts(CollisionParts**, CollisionParts*) const;
     HitInfo* getStrikeInfo(u32);
     CollisionZone* getZone(int);
@@ -55,13 +55,13 @@ public:
     void addParts(CollisionParts*);
     void calcMinMaxAndRadius();
     void calcMinMaxAndRadiusIfMoveOuter(CollisionParts*);
-    void addAndUpdateMinMax(TVec3f, TVec3f);
+    void addAndUpdateMinMax(Vec3f, Vec3f);
     void eraseParts(CollisionParts*);
 
     s32 mZoneID;
     MR::Vector< MR::FixedArray< CollisionParts*, 512 > > mParts;
-    TVec3f mCenter;
+    Vec3f mCenter;
     f32 mRadius;
-    TVec3f mMin;
-    TVec3f mMax;
+    Vec3f mMin;
+    Vec3f mMax;
 };

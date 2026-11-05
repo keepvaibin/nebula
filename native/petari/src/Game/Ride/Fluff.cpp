@@ -69,12 +69,12 @@ void Fluff::init(const JMapInfoIter& rIter) {
     MR::connectToSceneRide(this);
 
     initHitSensor(6);
-    MR::addHitSensorBinder(this, "bind", 8, 150.0f, TVec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorAtJointRide(this, "body", "MarioHang", 8, 150.0f, TVec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorRide(this, "WindReceiver", 8, 300.0f, TVec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorAtJointRide(this, "DamageMario", "MarioHang", 8, 60.0f, TVec3f(0.0f, -50.0f, 0.0f));
-    MR::addHitSensorAtJointRide(this, "DamageMiddle", "joint3", 8, 50.0f, TVec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorAtJointRide(this, "DamageHead", "Head", 8, 100.0f, TVec3f(80.0f, 0.0f, 0.0f));
+    MR::addHitSensorBinder(this, "bind", 8, 150.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointRide(this, "body", "MarioHang", 8, 150.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorRide(this, "WindReceiver", 8, 300.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointRide(this, "DamageMario", "MarioHang", 8, 60.0f, Vec3f(0.0f, -50.0f, 0.0f));
+    MR::addHitSensorAtJointRide(this, "DamageMiddle", "joint3", 8, 50.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointRide(this, "DamageHead", "Head", 8, 100.0f, Vec3f(80.0f, 0.0f, 0.0f));
 
     initBinder(50.0f, -80.0f, 0);
     initEffectKeeper(0, nullptr, false);
@@ -270,7 +270,7 @@ void Fluff::exeRideSpinUp() {
     }
 
     if (mSpinsRemaining >= 0 && MR::isLessStep(this, ::sStepSpinUpAccel)) {
-        TVec3f lift = mUp;
+        Vec3f lift = mUp;
         if (isNerve(GET_NERVE(Fluff, FluffNrvRideSpinUpOnWind))) {
             lift.scale(::sSpinUpAccelOnWindY);
         } else {
@@ -290,7 +290,7 @@ void Fluff::exeRideSpinUp() {
 }
 
 void Fluff::calcAndSetBaseMtx() {
-    TPos3f posMtx;
+    Pos3f posMtx;
     MR::makeMtxUpFrontPos(&posMtx, mTargetUpVec, mFront, mPosition);
     MR::setBaseTRMtx(this, posMtx);
 }
@@ -355,7 +355,7 @@ bool Fluff::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
             MR::getPlayerFrontVec(&mFront);
         }
 
-        TVec3f up = mUp;
+        Vec3f up = mUp;
         mBaseMtx.getYDir(mUp);
         MR::makeAxisUpFront(&mSide, &mFront, mUp, mFront);
         calcAnim();
@@ -383,9 +383,9 @@ bool Fluff::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
     }
 
     if (MR::isMsgUpdateBaseMtx(msg)) {
-        TVec3f hangPos;
+        Vec3f hangPos;
         MR::copyJointPos(this, "MarioHang", &hangPos);
-        TPos3f mtx;
+        Pos3f mtx;
         mtx.setTrans(hangPos);
         MR::makeMtxUpFrontPos(&mtx, mTargetUpVec, mFront, hangPos);
         MR::setPlayerBaseMtx(mtx);
@@ -407,7 +407,7 @@ bool Fluff::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
 
 void Fluff::endBind(f32 jumpY) {
     if (jumpY > 0.0f) {
-        TVec3f jumpVec = mUp * jumpY;
+        Vec3f jumpVec = mUp * jumpY;
         MR::vecKillElement(mVelocity, mGravity, &mVelocity);
         jumpVec.add(mVelocity);
         MR::startBckPlayer("Fall");
@@ -452,7 +452,7 @@ bool Fluff::updateRide() {
     MR::vecBlend(mUp, -mGravity, &mUp, ::sBlendRateAxisY);
     MR::normalize(&mUp);
 
-    TVec3f front(0.0f, 0.0f, 0.0f);
+    Vec3f front(0.0f, 0.0f, 0.0f);
     MR::calcWorldStickDirectionXZ(&front, PLAYER_1);
     MR::vecKillElement(front, mUp, &front);
     if (!MR::isNearZero(front)) {
@@ -461,7 +461,7 @@ bool Fluff::updateRide() {
             MR::vecKillElement(front, mWindDir, &front);
         }
 
-        TVec3f steerTargetDirection = front;
+        Vec3f steerTargetDirection = front;
         if (!MR::isNearZero(steerTargetDirection)) {
             MR::normalize(&steerTargetDirection);
             MR::vecBlend(mFront, steerTargetDirection, &mFront, ::sRideFrontBlendRate);
@@ -479,13 +479,13 @@ bool Fluff::updateRide() {
 }
 
 void Fluff::updateWind() {
-    TVec3f windFront(0.0f, 0.0f, 0.0f);
+    Vec3f windFront(0.0f, 0.0f, 0.0f);
     mWindDir.zero();
     FluffFunction::calcFluffWindInfo(mPosition, &mWindDir, &mWindDistance);
     if (mWindDistance > 0.0f) {
         f32 windFactor = MR::clamp((mWindDistance - ::sDistanceToWindNear) / (::sDistanceToWindFar - ::sDistanceToWindNear), 0.0f, 1.0f);
         f32 windSpeedScale = ::sWindAccelFar + (::sWindAccelNear - ::sWindAccelFar) * MR::getEaseInValue(1.0f - windFactor, 0.0f, 1.0f, 1.0f);
-        TVec3f windImpulse = mWindDir;
+        Vec3f windImpulse = mWindDir;
         windImpulse.scale(windSpeedScale);
         mVelocity.add(windImpulse);
 
@@ -512,11 +512,11 @@ void Fluff::updateWind() {
         MR::startLevelSound(this, "SE_OJ_LV_FLUFF_FLY_FALL");
     }
 
-    TVec3f gravity = mGravity;
+    Vec3f gravity = mGravity;
     gravity.scale(::sRideGravity);
     mVelocity.add(gravity);
 
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.identity();
     MR::makeMtxUpFront(&mtx, mUp, mFront);
     mtx.getXDir(mSide);
@@ -532,12 +532,12 @@ void Fluff::updateWind() {
     }
 
     if (!MR::isNearZero(windFront)) {
-        TVec3f front = windFront;
+        Vec3f front = windFront;
         MR::normalize(&front);
-        TVec3f baseUp;
+        Vec3f baseUp;
         mBaseMtx.getYDir(baseUp);
 
-        TPos3f mtx;
+        Pos3f mtx;
         mtx.identity();
         MR::makeMtxUpFrontPos(&mtx, baseUp, front, mPosition);
 

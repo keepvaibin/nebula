@@ -12,7 +12,7 @@ public:
     virtual void start() override;
     virtual void end() override;
     virtual bool receiveMsg(u32) override;
-    virtual const TMtx34f& getRotateMtx() const override {
+    virtual const Mtx34f& getRotateMtx() const override {
         return mRotateMtx;
     }
 
@@ -37,19 +37,19 @@ public:
     f32 getDistanceFromRotAxis() const;
     void addForceHipDrop();
     bool isGoingToReachTargetAngle() const;
-    void calcRotatedAngle(f32*, const TPos3f&) const;
+    void calcRotatedAngle(f32*, const Pos3f&) const;
     bool tryHipDrop();
 
     f32 mAngularSpeedMax;
     f32 mInertiaConst;
     f32 mRotateAngle;
     f32 mRestoreForce;
-    TPos3f mRotateMtx;
+    Pos3f mRotateMtx;
     bool mHipDrop;
-    TVec3f mRotateAxis;
+    Vec3f mRotateAxis;
     f32 mAngularVelocity;
     f32 mAngularAccel;
-    TVec3f mInitialUp;
+    Vec3f mInitialUp;
     const char* mMoveSound;
     f32 mMoveSoundSpeed;
 };

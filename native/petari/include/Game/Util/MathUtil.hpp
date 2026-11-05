@@ -1,10 +1,10 @@
 #pragma once
 
-#include <JSystem/JGeometry/TMatrix.hpp>
-#include <JSystem/JGeometry/TQuat.hpp>
-#include <JSystem/JGeometry/TUtil.hpp>
-#include <JSystem/JGeometry/TVec.hpp>
-#include <JSystem/JMath/JMATrigonometric.hpp>
+#include <nebula_geometry.hpp>
+
+
+
+
 #include <NebulaGpu.h>
 
 namespace MR {
@@ -39,7 +39,7 @@ namespace MR {
     /// @param[out] pDst A pointer to the three-dimensional vector to initialize.
     /// @param min The inclusive minimum number.
     /// @param min The exclusive maximum number.
-    void calcRandomVec(TVec3f* pDst, f32 min, f32 max);
+    void calcRandomVec(Vec3f* pDst, f32 min, f32 max);
 
     /// @brief Computes the next pseudorandom Boolean.
     /// @return `true` if the pseudorandom number is less than one half, `false` otherwise.
@@ -53,19 +53,19 @@ namespace MR {
     /// @brief Initializes a three-dimensional vector with pseudorandom elements within the half-open interval `[-range, range)`.
     /// @param[out] pDst A pointer to the three-dimensional vector to initialize.
     /// @param range The inclusive negative number and the exclusive positive number.
-    void getRandomVector(TVec3f* pDst, f32 range);
+    void getRandomVector(Vec3f* pDst, f32 range);
 
     /// @brief Computes vector addition with a pseudorandom three-dimensional vector.
     /// @param[out] pDst A pointer to the three-dimensional vector to initialize.
     /// @param[in] rSrc A reference to the three-dimensional base vector.
     /// @param range The inclusive negative number and the exclusive positive number.
-    void addRandomVector(TVec3f* pDst, const TVec3f& rSrc, f32 range);
+    void addRandomVector(Vec3f* pDst, const Vec3f& rSrc, f32 range);
 
     /// @brief Computes vector addition with a pseudorandom three-dimensional vector while maintaining the original length.
     /// @param[out] pDst A pointer to the three-dimensional vector to initialize.
     /// @param[in] rSrc A reference to the three-dimensional base vector.
     /// @param range The inclusive negative number and the exclusive positive number.
-    void turnRandomVector(TVec3f* pDst, const TVec3f& rSrc, f32 range);
+    void turnRandomVector(Vec3f* pDst, const Vec3f& rSrc, f32 range);
 
     /// @brief Computes unclamped linear interpolation between two numbers.
     /// @param t The linear interpolant.
@@ -118,10 +118,10 @@ namespace MR {
     f32 getScaleWithReactionValueZeroToOne(f32 x, f32 rate, f32 amplitude);
     f32 getConvergeVibrationValue(f32 x, f32 start, f32 end, f32 dampScale, f32 rate);
     f32 getReduceVibrationValue(f32 x, f32 time, f32 base, f32 amplitude, f32 freq);
-    void makeAxisFrontUp(TVec3f* pSide, TVec3f* pUp, const TVec3f& rFront, const TVec3f& rUp);
-    void makeAxisFrontSide(TVec3f* pUp, TVec3f* pSide, const TVec3f& rFront, const TVec3f& rSide);
-    void makeAxisUpFront(TVec3f* pSide, TVec3f* pFront, const TVec3f& rUp, const TVec3f& rFront);
-    void makeAxisUpSide(TVec3f* pFront, TVec3f* pSide, const TVec3f& rUp, const TVec3f& rSide);
+    void makeAxisFrontUp(Vec3f* pSide, Vec3f* pUp, const Vec3f& rFront, const Vec3f& rUp);
+    void makeAxisFrontSide(Vec3f* pUp, Vec3f* pSide, const Vec3f& rFront, const Vec3f& rSide);
+    void makeAxisUpFront(Vec3f* pSide, Vec3f* pFront, const Vec3f& rUp, const Vec3f& rFront);
+    void makeAxisUpSide(Vec3f* pFront, Vec3f* pSide, const Vec3f& rUp, const Vec3f& rSide);
 
     /*
      * Generate an orthogonal vector to the second argument, starting by projecting the z-vector
@@ -129,45 +129,45 @@ namespace MR {
      * argument, the x-vector is instead projected into the orthognal plane. Regardless, the
      * normalized result is placed into the first argument.
      */
-    void makeAxisVerticalZX(TVec3f* pVec, const TVec3f& rAxis);
+    void makeAxisVerticalZX(Vec3f* pVec, const Vec3f& rAxis);
 
-    void makeAxisCrossPlane(TVec3f* pVec, TVec3f* pCross, const TVec3f& rNorm);
-    bool makeAxisAndCosignVecToVec(TVec3f* pAxis, f32* pCos, const TVec3f& rFrom, const TVec3f& rTo);
+    void makeAxisCrossPlane(Vec3f* pVec, Vec3f* pCross, const Vec3f& rNorm);
+    bool makeAxisAndCosignVecToVec(Vec3f* pAxis, f32* pCos, const Vec3f& rFrom, const Vec3f& rTo);
 
     /*
      * Projects rPoint onto the directed line defined by rPointA and rPointB and places the result into pDst
      */
-    f32 calcPerpendicFootToLine(TVec3f* pDst, const TVec3f& rPos, const TVec3f& rPointA, const TVec3f& rPointB);
+    f32 calcPerpendicFootToLine(Vec3f* pDst, const Vec3f& rPos, const Vec3f& rPointA, const Vec3f& rPointB);
 
     /*
      * Same as above, except the result of the projection is clamped between rPointA and rPointB
      */
-    f32 calcPerpendicFootToLineInside(TVec3f* pDst, const TVec3f& rPos, const TVec3f& rPointA, const TVec3f& rPointB);
+    f32 calcPerpendicFootToLineInside(Vec3f* pDst, const Vec3f& rPos, const Vec3f& rPointA, const Vec3f& rPointB);
 
-    bool checkHitSegmentSphere(const TVec3f& rSpherePos, const TVec3f& rPointA, const TVec3f& rPointB, f32 radius, TVec3f* pDir);
-    bool checkHitSemilinePlane(TVec3f* pHitPos, const TVec3f& rPos, const TVec3f& rDir, const TVec3f& rPlanePos, const TVec3f& rPlaneNorm);
-    bool calcReboundVelocity(TVec3f* pVel, const TVec3f& rNormal, f32 reboundRate);
-    bool calcReboundVelocity(TVec3f* pVel, const TVec3f& rNormal, f32 reboundRateV, f32 reboundRateH);
+    bool checkHitSegmentSphere(const Vec3f& rSpherePos, const Vec3f& rPointA, const Vec3f& rPointB, f32 radius, Vec3f* pDir);
+    bool checkHitSemilinePlane(Vec3f* pHitPos, const Vec3f& rPos, const Vec3f& rDir, const Vec3f& rPlanePos, const Vec3f& rPlaneNorm);
+    bool calcReboundVelocity(Vec3f* pVel, const Vec3f& rNormal, f32 reboundRate);
+    bool calcReboundVelocity(Vec3f* pVel, const Vec3f& rNormal, f32 reboundRateV, f32 reboundRateH);
     void calcParabolicFunctionParam(f32* pAccel, f32* pVel, f32 max, f32 end);
 
-    void makeQuatRotateRadian(TQuat4f* pQuat, const TVec3f& rRot);
-    void makeQuatRotateDegree(TQuat4f* pQuat, const TVec3f& rRot);
-    void makeQuatFromVec(TQuat4f* pQuat, const TVec3f& rFront, const TVec3f& rUp);
-    void makeQuatSideUp(TQuat4f* pParam1, const TVec3f& rParam2, const TVec3f& rParam3);
-    void makeQuatUpFront(TQuat4f* pQuat, const TVec3f& rUp, const TVec3f& rFront);
-    void makeQuatUpNoSupport(TQuat4f* pQuat, const TVec3f& rUp);
-    void blendQuatUpFront(TQuat4f* pDst, const TVec3f& rUp, const TVec3f& rFront, f32 upRate, f32 frontRate);
-    void blendQuatUpFront(TQuat4f* pDst, const TQuat4f& rSrc, const TVec3f& rUp, const TVec3f& rFront, f32 upRate, f32 frontRate);
-    void blendQuatFrontUp(TQuat4f* pDst, const TVec3f& rFront, const TVec3f& rUp, f32 upRate, f32 frontRate);
-    void blendQuatFrontUp(TQuat4f* pDst, const TQuat4f& rSrc, const TVec3f& rFront, const TVec3f& rUp, f32 frontRate, f32 upRate);
-    void rotateQuatMoment(TQuat4f* pQuat, const TVec3f& rMoment);
-    void rotateQuatRollBall(TQuat4f* pQuat, const TVec3f& rVel, const TVec3f& rNorm, f32 radius);
-    bool turnQuat(TQuat4f* pDst, const TQuat4f& rSrc, const TVec3f& rFrom, const TVec3f& rTo, f32 angle);
-    bool turnQuatXDirRad(TQuat4f* pDst, const TQuat4f& rSrc, const TVec3f& rTo, f32 angle);
-    void turnQuatXDirRate(TQuat4f* pDst, const TQuat4f& rSrc, const TVec3f& rTo, f32 rate);
-    bool turnQuatYDirRad(TQuat4f* pDst, const TQuat4f& rSrc, const TVec3f& rTo, f32 angle);
-    void turnQuatYDirRate(TQuat4f* pDst, const TQuat4f& rSrc, const TVec3f& rTo, f32 rate);
-    bool turnQuatZDirRad(TQuat4f* pDst, const TQuat4f& rSrc, const TVec3f& rTo, f32 angle);
+    void makeQuatRotateRadian(Quat4f* pQuat, const Vec3f& rRot);
+    void makeQuatRotateDegree(Quat4f* pQuat, const Vec3f& rRot);
+    void makeQuatFromVec(Quat4f* pQuat, const Vec3f& rFront, const Vec3f& rUp);
+    void makeQuatSideUp(Quat4f* pParam1, const Vec3f& rParam2, const Vec3f& rParam3);
+    void makeQuatUpFront(Quat4f* pQuat, const Vec3f& rUp, const Vec3f& rFront);
+    void makeQuatUpNoSupport(Quat4f* pQuat, const Vec3f& rUp);
+    void blendQuatUpFront(Quat4f* pDst, const Vec3f& rUp, const Vec3f& rFront, f32 upRate, f32 frontRate);
+    void blendQuatUpFront(Quat4f* pDst, const Quat4f& rSrc, const Vec3f& rUp, const Vec3f& rFront, f32 upRate, f32 frontRate);
+    void blendQuatFrontUp(Quat4f* pDst, const Vec3f& rFront, const Vec3f& rUp, f32 upRate, f32 frontRate);
+    void blendQuatFrontUp(Quat4f* pDst, const Quat4f& rSrc, const Vec3f& rFront, const Vec3f& rUp, f32 frontRate, f32 upRate);
+    void rotateQuatMoment(Quat4f* pQuat, const Vec3f& rMoment);
+    void rotateQuatRollBall(Quat4f* pQuat, const Vec3f& rVel, const Vec3f& rNorm, f32 radius);
+    bool turnQuat(Quat4f* pDst, const Quat4f& rSrc, const Vec3f& rFrom, const Vec3f& rTo, f32 angle);
+    bool turnQuatXDirRad(Quat4f* pDst, const Quat4f& rSrc, const Vec3f& rTo, f32 angle);
+    void turnQuatXDirRate(Quat4f* pDst, const Quat4f& rSrc, const Vec3f& rTo, f32 rate);
+    bool turnQuatYDirRad(Quat4f* pDst, const Quat4f& rSrc, const Vec3f& rTo, f32 angle);
+    void turnQuatYDirRate(Quat4f* pDst, const Quat4f& rSrc, const Vec3f& rTo, f32 rate);
+    bool turnQuatZDirRad(Quat4f* pDst, const Quat4f& rSrc, const Vec3f& rTo, f32 angle);
 
     /// @brief Returns a number representing the sign of a number.
     /// @param x The number to evaluate.
@@ -176,12 +176,12 @@ namespace MR {
     /// @retval `0.0f` if the number is zero.
     f32 sign(f32 x);
 
-    void clampVecAngleDeg(TVec3f* pDst, const TVec3f& rBase, f32 angle);
-    void clampLength(TVec3f* pDst, const TVec3f& rSrc, f32 length);
+    void clampVecAngleDeg(Vec3f* pDst, const Vec3f& rBase, f32 angle);
+    void clampLength(Vec3f* pDst, const Vec3f& rSrc, f32 length);
     f32 convergeRadian(f32 angle, f32 target, f32 speed);
     bool isInRange(f32 x, f32 min, f32 max);
     f32 calcRotateY(f32 x, f32 z);
-    f32 calcRotateZ(const TVec3f& rVecA, const TVec3f& rVecB);
+    f32 calcRotateZ(const Vec3f& rVecA, const Vec3f& rVecB);
 
     inline f32 toDegree(f32 angle) {
         f32 cnv = 180.0f / PI;
@@ -196,65 +196,65 @@ namespace MR {
     /// @param[in] rPos1 A reference to the position of the first point.
     /// @param[in] rPos2 A reference to the position of the second point.
     /// @return The distance between the points.
-    f32 calcDistanceXY(const TVec3f& rPos1, const TVec3f& rPos2);
+    f32 calcDistanceXY(const Vec3f& rPos1, const Vec3f& rPos2);
 
     void rotateVecDegree(f32* pX, f32* pY, f32 degree);
-    void rotateVecDegree(TVec2f* pDst, f32 degree);
-    void rotateVecDegree(TVec3f* pDst, const TVec3f& rAxis, f32 degree);
-    void rotateVecDegree(TVec3f* pDst, const TVec3f& rSrc, const TVec3f& rAxis, f32 degree);
-    void rotateVecRadian(TVec3f* pDst, const TVec3f& rAxis, f32 angle);
-    void rotateVecRadian(TVec3f* pDst, const TVec3f& rSrc, const TVec3f& rAxis, f32 angle);
-    void calcLocalVec(TVec3f* pVec, MtxPtr pMtx);
+    void rotateVecDegree(Vec2f* pDst, f32 degree);
+    void rotateVecDegree(Vec3f* pDst, const Vec3f& rAxis, f32 degree);
+    void rotateVecDegree(Vec3f* pDst, const Vec3f& rSrc, const Vec3f& rAxis, f32 degree);
+    void rotateVecRadian(Vec3f* pDst, const Vec3f& rAxis, f32 angle);
+    void rotateVecRadian(Vec3f* pDst, const Vec3f& rSrc, const Vec3f& rAxis, f32 angle);
+    void calcLocalVec(Vec3f* pVec, MtxPtr pMtx);
 
     /// @brief Converts a two-dimensional vector into a vector of unit length.
     /// @param[in,out] pVec A pointer to the two-dimensional vector to evaluate and initialize.
-    void normalize(TVec2f* pVec);
+    void normalize(Vec2f* pVec);
 
     /// @brief Converts a three-dimensional vector into a vector of unit length.
     /// @param[in,out] pVec A pointer to the three-dimensional vector to evaluate and initialize.
-    void normalize(TVec3f* pVec);
+    void normalize(Vec3f* pVec);
 
     /// @brief Converts the column vectors in a 3×4 matrix into vectors of unit length.
     /// @param[in,out] pMtx A pointer to the 3×4 matrix to evaluate and initialize.
-    void normalize(TPos3f* pMtx);
+    void normalize(Pos3f* pMtx);
 
     /// @brief Converts a two-dimensional vector into a vector of unit length.
     /// @param[in] rSrc A reference to the two-dimensional vector to evaluate.
     /// @param[out] pDst A pointer to the two-dimensional vector to initialize.
-    void normalize(const TVec2f& rSrc, TVec2f* pDst);
+    void normalize(const Vec2f& rSrc, Vec2f* pDst);
 
     /// @brief Converts a three-dimensional vector into a vector of unit length.
     /// @param[in] rSrc A reference to the three-dimensional vector to evaluate.
     /// @param[out] pDst A pointer to the three-dimensional vector to initialize.
-    void normalize(const TVec3f& rSrc, TVec3f* pDst);
+    void normalize(const Vec3f& rSrc, Vec3f* pDst);
 
     /// @brief Converts a two-dimensional vector into a vector of unit length.
     /// @param[in,out] pVec A pointer to the two-dimensional vector to evaluate and initialize.
     /// @return `true` if the vector could not be converted and was initialized with the zero vector, `false` otherwise.
-    bool normalizeOrZero(TVec2f* pVec);
+    bool normalizeOrZero(Vec2f* pVec);
 
     /// @brief Converts a three-dimensional vector into a vector of unit length.
     /// @param[in,out] pVec A pointer to the three-dimensional vector to evaluate and initialize.
     /// @return `true` if the vector could not be converted and was initialized with the zero vector, `false` otherwise.
-    bool normalizeOrZero(TVec3f* pVec);
+    bool normalizeOrZero(Vec3f* pVec);
 
     /// @brief Converts a three-dimensional vector into a vector of unit length.
     /// @param[in] rSrc A reference to the three-dimensional vector to evaluate.
     /// @param[out] pDst A pointer to the three-dimensional vector to initialize.
     /// @return `true` if the vector could not be converted and was initialized with the zero vector, `false` otherwise.
-    bool normalizeOrZero(const TVec3f& rSrc, TVec3f* pDst);
+    bool normalizeOrZero(const Vec3f& rSrc, Vec3f* pDst);
 
     /// @brief Extracts the magnitude and direction from a two-dimensional vector.
     /// @param[out] pScalar A pointer to the magnitude to initialize.
     /// @param[out] pDir A pointer to the two-dimensional directional vector to initialize.
     /// @param[in] rVec A reference to the two-dimensional vector to evaluate.
-    void separateScalarAndDirection(f32* pScalar, TVec2f* pDir, const TVec2f& rVec);
+    void separateScalarAndDirection(f32* pScalar, Vec2f* pDir, const Vec2f& rVec);
 
     /// @brief Extracts the magnitude and direction from a three-dimensional vector.
     /// @param[out] pScalar A pointer to the magnitude to initialize.
     /// @param[out] pDir A pointer to the three-dimensional directional vector to initialize.
     /// @param[in] rVec A reference to the three-dimensional vector to evaluate.
-    void separateScalarAndDirection(f32* pScalar, TVec3f* pDir, const TVec3f& rVec);
+    void separateScalarAndDirection(f32* pScalar, Vec3f* pDir, const Vec3f& rVec);
 
     /// @brief Maps a number to the unit interval.
     /// @param x The number to evaluate.
@@ -265,26 +265,26 @@ namespace MR {
 
     f32 normalizeAbs(f32 x, f32 min, f32 max);
 
-    bool turnVecToVecCos(TVec3f* pDst, const TVec3f& rFrom, const TVec3f& rTo, f32 cosAngle, const TVec3f& rAxis, f32 fallbackLength = 0.02f);
+    bool turnVecToVecCos(Vec3f* pDst, const Vec3f& rFrom, const Vec3f& rTo, f32 cosAngle, const Vec3f& rAxis, f32 fallbackLength = 0.02f);
 
-    bool turnVecToVecCosOnPlane(TVec3f* pDst, const TVec3f& rFrom, const TVec3f& rTo, const TVec3f& rAxis, f32 cosAngle);
-    bool turnVecToVecCosOnPlane(TVec3f* pVec, const TVec3f& rTo, const TVec3f& rAxis, f32 cosAngle);
-    f32 turnVecToVecRadian(TVec3f* pDst, const TVec3f& rFrom, const TVec3f& rTo, f32 angle, const TVec3f& rAxis);
-    f32 turnVecToVecDegree(TVec3f* pDst, const TVec3f& rFrom, const TVec3f& rTo, f32 angle, const TVec3f& rAxis);
-    void calcMomentRollBall(TVec3f* pMoment, const TVec3f& rVel, const TVec3f& rUp, f32 radius);
-    bool calcReflectionVector(TVec3f* pDir, const TVec3f& rNorm, f32 rate, f32 cosAngleMin);
+    bool turnVecToVecCosOnPlane(Vec3f* pDst, const Vec3f& rFrom, const Vec3f& rTo, const Vec3f& rAxis, f32 cosAngle);
+    bool turnVecToVecCosOnPlane(Vec3f* pVec, const Vec3f& rTo, const Vec3f& rAxis, f32 cosAngle);
+    f32 turnVecToVecRadian(Vec3f* pDst, const Vec3f& rFrom, const Vec3f& rTo, f32 angle, const Vec3f& rAxis);
+    f32 turnVecToVecDegree(Vec3f* pDst, const Vec3f& rFrom, const Vec3f& rTo, f32 angle, const Vec3f& rAxis);
+    void calcMomentRollBall(Vec3f* pMoment, const Vec3f& rVel, const Vec3f& rUp, f32 radius);
+    bool calcReflectionVector(Vec3f* pDir, const Vec3f& rNorm, f32 rate, f32 cosAngleMin);
 
     /// @brief Determines if a three-dimensional vector is approximately parallel to another vector.
     /// @param[in] rVec1 A reference to the first three-dimensional vector to evaluate.
     /// @param[in] rVec2 A reference to the second three-dimensional vector to evaluate.
     /// @param tolerance The maximum allowed difference from zero.
-    bool isSameDirection(const TVec3f& rVec1, const TVec3f& rVec2, f32 tolerance = 0.01f);
+    bool isSameDirection(const Vec3f& rVec1, const Vec3f& rVec2, f32 tolerance = 0.01f);
 
     /// @brief Determines if a three-dimensional vector is not angled acutely or parallel to another vector.
     /// @param[in] rVec1 A reference to the first three-dimensional vector to evaluate.
     /// @param[in] rVec2 A reference to the second three-dimensional vector to evaluate.
     /// @param tolerance The maximum allowed difference from zero.
-    bool isOppositeDirection(const TVec3f& rVec1, const TVec3f& rVec2, f32 tolerance = 0.01f);
+    bool isOppositeDirection(const Vec3f& rVec1, const Vec3f& rVec2, f32 tolerance = 0.01f);
 
     /// @brief Determines if a number is approximately equal to zero.
     /// @param x The number to evaluate.
@@ -296,13 +296,13 @@ namespace MR {
     /// @param[in] rVec A reference to the three-dimensional vector to evaluate.
     /// @param tolerance The maximum allowed difference from zero.
     /// @return `true` if the elements are approximately equal to zero, `false` otherwise.
-    bool isNearZero(const TVec3f& rVec, f32 tolerance = 0.001f);
+    bool isNearZero(const Vec3f& rVec, f32 tolerance = 0.001f);
 
     /// @brief Determines if the elements of a two-dimensional vector are all approximately equal to zero.
     /// @param[in] rVec A reference to the two-dimensional vector to evaluate.
     /// @param tolerance The maximum allowed difference from zero.
     /// @return `true` if the elements are approximately equal to zero, `false` otherwise.
-    bool isNearZero(const TVec2f& rVec, f32 tolerance = 0.001f);
+    bool isNearZero(const Vec2f& rVec, f32 tolerance = 0.001f);
 
     f32 diffAngleAbs(f32 angle1, f32 angle2);
     f32 normalizeAngleAbs(f32 angle);
@@ -326,13 +326,13 @@ namespace MR {
     void sortSmall(s32 length, f32* pSortArray, s32* pIndexArray);
     void sortSmall(s32 length, u32* pSortArray, s32* pIndexArray);
 
-    f32 vecKillElement(const TVec3f& rSrc, const TVec3f& rKillDir, TVec3f* pDst);
-    void vecScaleAdd(const TVec3f* pScale, const TVec3f* pAdd, f32 scale);
-    void PSvecBlend(const TVec3f* pFrom, const TVec3f* pTo, TVec3f* pDst, f32 invRate, f32 rate);
-    void vecBlend(const TVec3f& rFrom, const TVec3f& rTo, TVec3f* pDst, f32 rate);
-    void vecBlendNormal(const TVec3f& rFrom, const TVec3f& rTo, TVec3f* pVec, f32 rate);
-    bool vecBlendSphere(const TVec3f& rFrom, const TVec3f& rTo, TVec3f* pVec, f32 rate);
-    void vecRotAxis(const TVec3f& rFrom, const TVec3f& rTo, const TVec3f& rAxis, TVec3f* pVec, f32 angle);
+    f32 vecKillElement(const Vec3f& rSrc, const Vec3f& rKillDir, Vec3f* pDst);
+    void vecScaleAdd(const Vec3f* pScale, const Vec3f* pAdd, f32 scale);
+    void PSvecBlend(const Vec3f* pFrom, const Vec3f* pTo, Vec3f* pDst, f32 invRate, f32 rate);
+    void vecBlend(const Vec3f& rFrom, const Vec3f& rTo, Vec3f* pDst, f32 rate);
+    void vecBlendNormal(const Vec3f& rFrom, const Vec3f& rTo, Vec3f* pVec, f32 rate);
+    bool vecBlendSphere(const Vec3f& rFrom, const Vec3f& rTo, Vec3f* pVec, f32 rate);
+    void vecRotAxis(const Vec3f& rFrom, const Vec3f& rTo, const Vec3f& rAxis, Vec3f* pVec, f32 angle);
 
     /// @brief Computes wrapping linear interpolation between two colors.
     /// @param[out] pDst A pointer to the color to initialize.
@@ -348,39 +348,39 @@ namespace MR {
     /// @param t The linear interpolant.
     void blendVec(Vec* pDst, const Vec& rStart, const Vec& rEnd, f32 t);
 
-    f32 turnVecToPlane(TVec3f* pDst, const TVec3f& rSrc, const TVec3f& rNorm);
-    u32 getMinAbsElementIndex(const TVec3f& rVec);
-    f32 getMaxElement(const TVec3f& rVec);
-    f32 getMaxAbsElement(const TVec3f& rVec);
-    u32 getMaxElementIndex(const TVec3f& rVec);
-    u32 getMaxAbsElementIndex(const TVec3f& rVec);
-    f32 diffAngleAbsFast(const TVec3f& rA, const TVec3f& rB);
-    f32 diffAngleAbs(const TVec3f& rA, const TVec3f& rB);
-    f32 diffAngleAbs(const TVec2f& rA, const TVec2f& rB);
-    f32 diffAngleSigned(const TVec3f& rA, const TVec3f& rB, const TVec3f& rAxis);
-    f32 diffAngleAbsHorizontal(const TVec3f& rA, const TVec3f& rB, const TVec3f& rAxis);
-    f32 diffAngleSignedHorizontal(const TVec3f& rA, const TVec3f& rB, const TVec3f& rAxis);
-    bool isNearAngleRadian(const TVec3f& rA, const TVec3f& rB, f32 angle);
-    bool isNearAngleDegree(const TVec3f& rA, const TVec3f& rB, f32 angle);
-    bool isNearAngleRadianHV(const TVec3f& rA, const TVec3f& rB, const TVec3f& rAxis, f32 angleH, f32 angleV);
-    bool isNearAngleDegreeHV(const TVec3f& rA, const TVec3f& rB, const TVec3f& rAxis, f32 angleH, f32 angleV);
-    void createBoundingBox(const TVec3f* pPoints, u32 numPoints, TVec3f* pMin, TVec3f* pMax);
+    f32 turnVecToPlane(Vec3f* pDst, const Vec3f& rSrc, const Vec3f& rNorm);
+    u32 getMinAbsElementIndex(const Vec3f& rVec);
+    f32 getMaxElement(const Vec3f& rVec);
+    f32 getMaxAbsElement(const Vec3f& rVec);
+    u32 getMaxElementIndex(const Vec3f& rVec);
+    u32 getMaxAbsElementIndex(const Vec3f& rVec);
+    f32 diffAngleAbsFast(const Vec3f& rA, const Vec3f& rB);
+    f32 diffAngleAbs(const Vec3f& rA, const Vec3f& rB);
+    f32 diffAngleAbs(const Vec2f& rA, const Vec2f& rB);
+    f32 diffAngleSigned(const Vec3f& rA, const Vec3f& rB, const Vec3f& rAxis);
+    f32 diffAngleAbsHorizontal(const Vec3f& rA, const Vec3f& rB, const Vec3f& rAxis);
+    f32 diffAngleSignedHorizontal(const Vec3f& rA, const Vec3f& rB, const Vec3f& rAxis);
+    bool isNearAngleRadian(const Vec3f& rA, const Vec3f& rB, f32 angle);
+    bool isNearAngleDegree(const Vec3f& rA, const Vec3f& rB, f32 angle);
+    bool isNearAngleRadianHV(const Vec3f& rA, const Vec3f& rB, const Vec3f& rAxis, f32 angleH, f32 angleV);
+    bool isNearAngleDegreeHV(const Vec3f& rA, const Vec3f& rB, const Vec3f& rAxis, f32 angleH, f32 angleV);
+    void createBoundingBox(const Vec3f* pPoints, u32 numPoints, Vec3f* pMin, Vec3f* pMax);
 
     /// @brief Determines if a three-dimensional vector contains a magnitude approximately equal to one.
     /// @param[in] rVec A reference to the three-dimensional vector to evaluate.
     /// @param tolerance The maximum allowed difference from zero.
-    bool isNormalize(const TVec3f& rVec, f32 tolerance = 0.001f);
+    bool isNormalize(const Vec3f& rVec, f32 tolerance = 0.001f);
 
     /// @brief Initializes a three-dimensional vector with elements equal to NaN.
     /// @param[out] rDst A reference to the three-dimensional vector to initialize.
-    void setNan(TVec3f& rDst);
+    void setNan(Vec3f& rDst);
 
     /// @brief Determines if the elements of a three-dimensional vector are equal to NaN.
     /// @param[in] rVec A reference to the three-dimensional vector to evaluate.
     /// @return `true` if the elements are equal to NaN, `false` otherwise.
-    bool isNan(const TVec3f& rVec);
+    bool isNan(const Vec3f& rVec);
 
-    f32 getFootPoint(const TVec3f& rPointA, const TVec3f& rPointB, const TVec3f& rPos, TVec3f* pDst);
+    f32 getFootPoint(const Vec3f& rPointA, const Vec3f& rPointB, const Vec3f& rPos, Vec3f* pDst);
 
     /// @brief Computes the remainder of floating-point division.
     /// @param x The dividend.
@@ -410,8 +410,8 @@ namespace MR {
     /// @param[in] rSrc A reference to the three-dimensional fixed-point vector to evaluate.
     /// @param q The number of bits reserved for the decimal portion.
 
-    void getRotatedAxisY(TVec3f* pDst, const TVec3f& rSrc);
-    void getRotatedAxisZ(TVec3f* pDst, const TVec3f& rSrc);
+    void getRotatedAxisY(Vec3f* pDst, const Vec3f& rSrc);
+    void getRotatedAxisZ(Vec3f* pDst, const Vec3f& rSrc);
 
     template < typename T >
     T converge(T current, T target, T step) {
@@ -426,16 +426,16 @@ namespace MR {
 
     /// @brief Returns the value of pi (3.14159274f)
     inline f32 pi() {
-        return PI;  // TODO: test if actually JGeometry::TUtil<f32>::PI();
+        return PI;  // TODO: test if actually FloatUtil::PI();
     }
 
     /// @brief Returns the value of pi * 2 (6.2831855f)
     inline f32 pi2() {
-        return PI * 2.0f;  // TODO: test if actually JGeometry::TUtil<f32>::PI() * 2.0f;
+        return PI * 2.0f;  // TODO: test if actually FloatUtil::PI() * 2.0f;
     }
 
     inline f32 epsilon() {
-        return JGeometry::TUtil< f32 >::epsilon();
+        return FloatUtil::epsilon();
     }
 
     inline f32 fabs(f64 x) {
@@ -454,35 +454,35 @@ namespace MR {
     /// @param x The number of radians to evaluate.
     /// @return The ratio of the length of the adjacent to that of the hypotenuse.
     inline f32 cos(f32 x) {
-        return JMACosRadian(x);
+        return Angle::cosRadian(x);
     }
 
     /// @brief Computes the sine of a number, in radians.
     /// @param x The number of radians to evaluate.
     /// @return The ratio of the length of the opposite to that of the hypotenuse.
     inline f32 sin(f32 x) {
-        return JMASinRadian(x);
+        return Angle::sinRadian(x);
     }
 
     /// @brief Computes the tangent of a number, in radians.
     /// @param x The number of radians to evaluate.
     /// @return The ratio of the length of the opposite to that of the adjacent.
     inline f32 tan(f32 x) {
-        return JMASinRadian(x) / JMACosRadian(x);
+        return Angle::sinRadian(x) / Angle::cosRadian(x);
     }
 
     /// @brief Computes the arccos of a number in radians.
     /// @param x The ratio to evaluate.
     /// @return The angle in radians such that cos(angle) = x.
     inline f32 acos(f32 x) {
-        return JMAAcosRadian(x);
+        return Angle::acosRadian(x);
     }
 
     /// @brief Computes the arcsin of a number in radians.
     /// @param x The ratio to evaluate.
     /// @return The angle in radians such that sin(angle) = x.
     inline f32 asin(f32 x) {
-        return JMAAsinRadian(x);
+        return Angle::asinRadian(x);
     }
 
     /// @brief Computes the angle of the vector given by (x,y), in radians.
@@ -490,28 +490,28 @@ namespace MR {
     /// @param y The y coordinate of input vector
     /// @return The heading angle of the vector given by (x,y).
     inline f32 atan2(f32 x, f32 y) {
-        return JMAATan2(x, y);
+        return Angle::atan2Radian(x, y);
     }
 
     /// @brief Computes the cosine of a number, in degrees.
     /// @param x The number of degrees to evaluate.
     /// @return The ratio of the length of the adjacent to that of the hypotenuse.
     inline f32 cosDegree(f32 x) {
-        return JMACosDegree(x);
+        return Angle::cosDegree(x);
     }
 
     /// @brief Computes the sine of a number, in degrees.
     /// @param x The number of degrees to evaluate.
     /// @return The ratio of the length of the opposite to that of the hypotenuse.
     inline f32 sinDegree(f32 x) {
-        return JMASinDegree(x);
+        return Angle::sinDegree(x);
     }
 
     /// @brief Computes the tangent of a number, in degrees.
     /// @param x The number of degrees to evaluate.
     /// @return The ratio of the length of the opposite to that of the adjacent.
     inline f32 tanDegree(f32 x) {
-        return JMASinDegree(x) / JMACosDegree(x);
+        return Angle::sinDegree(x) / Angle::cosDegree(x);
     }
 
     /// @brief Compares two numbers for the smallest value.

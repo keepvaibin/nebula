@@ -134,7 +134,7 @@ void PowerStarEventKeeper::initStarInfoTableAfterPlacement() {
     }
 }
 
-void PowerStarEventKeeper::requestAppearPowerStar(const char* pName, s32 starNum, const TVec3f* pPos, bool forceAppear, bool a2) {
+void PowerStarEventKeeper::requestAppearPowerStar(const char* pName, s32 starNum, const Vec3f* pPos, bool forceAppear, bool a2) {
     if (starNum < 0) {
         starNum = findStarID(pName);
     }

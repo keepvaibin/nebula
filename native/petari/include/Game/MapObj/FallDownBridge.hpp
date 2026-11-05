@@ -14,7 +14,7 @@ public:
     void exeWait();
     void exeQuake();
 
-    TVec3f _8C;
+    Vec3f _8C;
     f32 _98;
     f32 _9C;
     f32 _A0;

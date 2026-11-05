@@ -144,7 +144,7 @@ void DinoPackunBattleVs1Lv2::exeTurn() {
         MR::startSound(getHost(), "SE_BM_D_PAKKUN_SLAVER");
     }
 
-    TVec3f side;
+    Vec3f side;
     MR::calcSideVec(&side, getHost());
     MR::turnDirectionDegree(getHost(), &getHost()->_E8, side * _10, 1.0f);
     MR::addVelocityMoveToDirection(getHost(), getHost()->_E8, 1.3f);

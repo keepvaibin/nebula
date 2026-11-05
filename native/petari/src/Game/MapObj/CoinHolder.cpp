@@ -19,7 +19,7 @@ CoinHolder::CoinHolder(const char* pName) : DeriveActorGroup< Coin >(pName, ::sC
     mHostInfos.init(::sCreateCoinNum);
 }
 
-bool CoinHolder::hopCoin(const NameObj* pObj, const TVec3f& rPosition, const TVec3f& rDirection) {
+bool CoinHolder::hopCoin(const NameObj* pObj, const Vec3f& rPosition, const Vec3f& rDirection) {
     CoinHostInfo* hostInfo = findHostInfo(pObj);
 
     if (hostInfo->_8 >= hostInfo->_4) {
@@ -37,49 +37,49 @@ bool CoinHolder::hopCoin(const NameObj* pObj, const TVec3f& rPosition, const TVe
     return false;
 }
 
-bool CoinHolder::appearCoinFix(const NameObj* pObj, const TVec3f& rPosition, s32 count) {
-    TVec3f velocity(0.0f, 0.0f, 0.0f);
+bool CoinHolder::appearCoinFix(const NameObj* pObj, const Vec3f& rPosition, s32 count) {
+    Vec3f velocity(0.0f, 0.0f, 0.0f);
 
     return appearCoin(pObj, rPosition, velocity, count, -1, -1, count == 1 ? 0.0f : ::sRandomizeVel);
 }
 
-bool CoinHolder::appearCoinPop(const NameObj* pObj, const TVec3f& rPosition, s32 count) {
-    TVec3f gravity;
+bool CoinHolder::appearCoinPop(const NameObj* pObj, const Vec3f& rPosition, s32 count) {
+    Vec3f gravity;
     MR::calcGravityVector(this, rPosition, &gravity, nullptr, 0);
-    TVec3f velocity = -gravity * ::sCoinVelVertical;
+    Vec3f velocity = -gravity * ::sCoinVelVertical;
 
     return appearCoin(pObj, rPosition, velocity, count, -1, -1, count == 1 ? 0.0f : ::sRandomizeVel);
 }
 
-bool CoinHolder::appearCoinPopToDirection(const NameObj* pObj, const TVec3f& rPosition, const TVec3f& rDirection, s32 count) {
-    TVec3f direction;
+bool CoinHolder::appearCoinPopToDirection(const NameObj* pObj, const Vec3f& rPosition, const Vec3f& rDirection, s32 count) {
+    Vec3f direction;
     MR::normalize(rDirection, &direction);
 
     return appearCoin(pObj, rPosition, direction * ::sCoinVelVertical, count, -1, -1, count == 1 ? 0.0f : ::sRandomizeVel);
 }
 
-bool CoinHolder::appearCoinToVelocity(const NameObj* pObj, const TVec3f& rPosition, const TVec3f& rVelocity, s32 count) {
+bool CoinHolder::appearCoinToVelocity(const NameObj* pObj, const Vec3f& rPosition, const Vec3f& rVelocity, s32 count) {
     return appearCoin(pObj, rPosition, rVelocity, count, -1, -1, count == 1 ? 0.0f : ::sRandomizeVel);
 }
 
-bool CoinHolder::appearCoinCircle(const NameObj* pObj, const TVec3f& rPosition, s32 count) {
+bool CoinHolder::appearCoinCircle(const NameObj* pObj, const Vec3f& rPosition, s32 count) {
     if (count == 1) {
         return appearCoinPop(pObj, rPosition, count);
     }
 
     bool appeared = false;
-    TVec3f gravity;
+    Vec3f gravity;
     MR::calcGravityVector(this, rPosition, &gravity, nullptr, 0);
-    TVec3f axis;
+    Vec3f axis;
     MR::makeAxisVerticalZX(&axis, gravity);
 
     for (s32 i = 0; i < count; i++) {
         f32 angle = 360.0f / count;
 
-        TVec3f horizontal;
+        Vec3f horizontal;
         MR::rotateVecDegree(&horizontal, axis, gravity, i * angle);
         horizontal.setLength(::sCircleVelHRatio);
-        TVec3f velocity(horizontal - gravity);
+        Vec3f velocity(horizontal - gravity);
         velocity.setLength(::sCircleVelLength);
 
         appeared |= appearCoin(pObj, rPosition, velocity, 1, -1, -1, 0.0f);
@@ -167,7 +167,7 @@ namespace MR {
     }
 };  // namespace MR
 
-bool CoinHolder::appearCoin(const NameObj* pObj, const TVec3f& rPosition, const TVec3f& rVelocity, s32 count, s32 life, s32 cannotTime,
+bool CoinHolder::appearCoin(const NameObj* pObj, const Vec3f& rPosition, const Vec3f& rVelocity, s32 count, s32 life, s32 cannotTime,
                             f32 randomize) {
     CoinHostInfo* pHostInfo = findHostInfo(pObj);
     if (pHostInfo == nullptr) {
@@ -185,7 +185,7 @@ bool CoinHolder::appearCoin(const NameObj* pObj, const TVec3f& rPosition, const 
             break;
         }
 
-        TVec3f velocity(rVelocity);
+        Vec3f velocity(rVelocity);
         if (!MR::isNearZero(randomize)) {
             MR::addRandomVector(&velocity, velocity, randomize);
         }

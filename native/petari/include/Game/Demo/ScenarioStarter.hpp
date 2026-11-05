@@ -24,21 +24,21 @@ public:
     void exeShowWelcomeLayout();
     bool isStartBgmOnWelcome();
     void calcShootMotionTime();
-    void turnBindHead(const TVec3f&, f32);
+    void turnBindHead(const Vec3f&, f32);
     void updateBindPosition();
     void updateShootMotion();
     bool trySkipTrigger() const;
     void updateBindActorMtx();
 
     LiveActor* _8C;
-    TVec3f _90;
-    TVec3f _9C;
-    TQuat4f _A8;
+    Vec3f _90;
+    Vec3f _9C;
+    Quat4f _A8;
     SpinDriverShootPath* _B8;
     SpinDriverCamera* mSpinDriverCamera;
-    TVec3f _C0;
-    TVec3f _CC;
-    TVec3f _D8;
+    Vec3f _C0;
+    Vec3f _CC;
+    Vec3f _D8;
     f32 _E4;
     f32 _E8;
     f32 _EC;
@@ -49,7 +49,7 @@ public:
     f32 mInitalPlayerRotation;
     SimpleLayout* mWelcomeLayout;
     ScenarioTitle* mTitle;
-    TVec3f _10C;
-    TVec3f _118;
+    Vec3f _10C;
+    Vec3f _118;
     bool _124;
 };

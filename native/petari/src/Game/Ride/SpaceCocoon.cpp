@@ -123,9 +123,9 @@ void SpaceCocoon::init(const JMapInfoIter& rIter) {
     mPointerPos.set(mNeutralPos);
 
     initHitSensor(3);
-    MR::addHitSensorTransferableBinder(this, "Bind", 8, 200.0f, TVec3f(0.0f, 100.0f, 0.0f));
-    MR::addHitSensorMapObj(this, "Push", 8, 50.0f, TVec3f(0.0f, -50.0f, 0.0f));
-    MR::addHitSensor(this, "Attack", ATYPE_SPRING_ATTACKER, 8, 150.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorTransferableBinder(this, "Bind", 8, 200.0f, Vec3f(0.0f, 100.0f, 0.0f));
+    MR::addHitSensorMapObj(this, "Push", 8, 50.0f, Vec3f(0.0f, -50.0f, 0.0f));
+    MR::addHitSensor(this, "Attack", ATYPE_SPRING_ATTACKER, 8, 150.0f, Vec3f(0.0f, 0.0f, 0.0f));
     initBinder(50.0f, 50.0f, 8);
     MR::offBind(this);
 
@@ -143,7 +143,7 @@ void SpaceCocoon::init(const JMapInfoIter& rIter) {
     f32 delta = mHeight / (mNumPoints + 1);
 
     for (s32 idx = 0; idx < mNumPoints; idx++) {
-        TVec3f spawnPos = mUp;
+        Vec3f spawnPos = mUp;
         spawnPos.scale((mNumPoints - idx) * delta);
         spawnPos.add(mBasePos);
 
@@ -164,7 +164,7 @@ void SpaceCocoon::init(const JMapInfoIter& rIter) {
     mCocoonModel->initWithoutIter();
 
     updateDrawPoints();
-    MR::initStarPointerTarget(this, 300.0f, TVec3f(0.0f, 50.0f, 0.0f));
+    MR::initStarPointerTarget(this, 300.0f, Vec3f(0.0f, 50.0f, 0.0f));
 
     MR::calcGravity(this);
 
@@ -334,7 +334,7 @@ void SpaceCocoon::exeBindAttack() {
             MR::startBckPlayer("AirRotation");
         }
 
-        endBind(TVec3f(0.0f, 0.0f, 0.0f), false);
+        endBind(Vec3f(0.0f, 0.0f, 0.0f), false);
     }
 }
 
@@ -369,8 +369,8 @@ void SpaceCocoon::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     if (!isKinopioAttached() && mRider == nullptr && MR::isSensorNpc(pReceiver) && pReceiver->receiveMessage(ACTMES_NPC_EVENT_START, pSender)) {
         mRider = pReceiver->mHost;
         MR::emitEffect(mCocoonModel, "Stick");
-        TVec3f side = mSide;
-        TVec3f front = mFront;
+        Vec3f side = mSide;
+        Vec3f front = mFront;
         side.scale(mSide.dot(mRider->mVelocity));
         front.scale(mFront.dot(mRider->mVelocity));
         mSpringVel.set(side);
@@ -411,7 +411,7 @@ bool SpaceCocoon::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor*
 bool SpaceCocoon::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
     if (mRider != nullptr && MR::isSensor(pReceiver, "Bind")) {
         MR::endBindAndPlayerDamageMsg(this, msg);
-        endBind(TVec3f(0.0f, 0.0f, 0.0f), true);
+        endBind(Vec3f(0.0f, 0.0f, 0.0f), true);
         return true;
     }
 
@@ -426,8 +426,8 @@ bool SpaceCocoon::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pRecei
 
         mRider = pSender->mHost;
         MR::invalidateClipping(this);
-        TVec3f side = mSide;
-        TVec3f front = mFront;
+        Vec3f side = mSide;
+        Vec3f front = mFront;
         side.scale(mSide.dot(*MR::getPlayerVelocity()));
         front.scale(mFront.dot(*MR::getPlayerVelocity()));
         mSpringVel.set(side);
@@ -455,7 +455,7 @@ bool SpaceCocoon::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pRecei
     }
 
     if (MR::isMsgRushCancel(msg)) {
-        endBind(TVec3f(::sCancelJumpSpeedXZ, ::sCancelJumpSpeedY, ::sCancelJumpSpeedXZ), false);
+        endBind(Vec3f(::sCancelJumpSpeedXZ, ::sCancelJumpSpeedY, ::sCancelJumpSpeedXZ), false);
         return true;
     }
 
@@ -501,7 +501,7 @@ bool SpaceCocoon::updateBindWait() {
 bool SpaceCocoon::updateSpringPoint() {
     mSpringVel.mult(::sFrictionRate);
 
-    TVec3f springDiff = mNeutralPos - mCocoonPos;
+    Vec3f springDiff = mNeutralPos - mCocoonPos;
 
     mSpringVel.add(springDiff * ::sAccelRate);
     mCocoonPos.add(mSpringVel);
@@ -530,7 +530,7 @@ void SpaceCocoon::updateHang() {
         MR::calcStarPointerPosOnPlane(&mPointerPos, mNeutralPos, mUp, mPadChannel, false);
     }
 
-    TVec3f pos = mPointerPos;
+    Vec3f pos = mPointerPos;
     if (pos.distance(mNeutralPos) > ::sDistanceMax) {
         pos.set(mPointerPos);
         pos.sub(mNeutralPos);
@@ -581,27 +581,27 @@ void SpaceCocoon::updateActorMtx() {
 }
 
 void SpaceCocoon::updateDrawPoints() {
-    TVec3f prevPos = mCocoonPos;
+    Vec3f prevPos = mCocoonPos;
     f32 delta = mHeight / (mNumPoints + 1);
 
     for (s32 idx = 0; idx < mNumPoints; idx++) {
         f32 t = MR::getEaseOutValue(static_cast< f32 >(idx + 1) / static_cast< f32 >(mNumPoints + 1), 0.0f, 1.0f, 1.0f);
         t = MR::getEaseOutValue(t, 0.0f, 1.0f, 1.0f);
 
-        TVec3f baseUp = mUp * ((idx + 1) * delta);
+        Vec3f baseUp = mUp * ((idx + 1) * delta);
 
-        TVec3f pos;
+        Vec3f pos;
         pos.x = mCocoonPos.x * (1.0f - t) + mNeutralPos.x * t;
         pos.y = mCocoonPos.y * (1.0f - t) + mNeutralPos.y * t;
         pos.z = mCocoonPos.z * (1.0f - t) + mNeutralPos.z * t;
 
         pos.sub(baseUp);
 
-        TVec3f up = prevPos - pos;
+        Vec3f up = prevPos - pos;
         MR::normalize(&up);
 
-        TVec3f side = mSide;
-        TVec3f front = mFront;
+        Vec3f side = mSide;
+        Vec3f front = mFront;
 
         if (MR::isNearZero(side.dot(up))) {
             side.cross(up, front);
@@ -648,7 +648,7 @@ bool SpaceCocoon::tryTouch() {
     }
 
     if (touchChannel >= 0) {
-        TVec3f pointerVel(0.0f, 0.0f, 0.0f);
+        Vec3f pointerVel(0.0f, 0.0f, 0.0f);
         MR::calcStarPointerWorldVelocityDirectionOnPlane(&pointerVel, mNeutralPos, mUp, touchChannel);
         pointerVel.scale(::sPointerSpeedAccelRate);
         mSpringVel.add(pointerVel);
@@ -697,9 +697,9 @@ bool SpaceCocoon::tryRelease() {
     MR::normalize(&mVelocity);
 
     // turn mario so he flies feet-first
-    TVec3f reaxisUp = mVelocity * -1.0f;
-    TVec3f reaxisFront = mUp;
-    TVec3f reaxisSide = reaxisUp.cross(reaxisFront);
+    Vec3f reaxisUp = mVelocity * -1.0f;
+    Vec3f reaxisFront = mUp;
+    Vec3f reaxisSide = reaxisUp.cross(reaxisFront);
     MR::normalize(&reaxisSide);
     reaxisFront.cross(reaxisSide, reaxisUp);
     MR::normalize(&reaxisFront);
@@ -760,7 +760,7 @@ bool SpaceCocoon::isKinopioAttached() const {
     return false;
 }
 
-void SpaceCocoon::endBind(const TVec3f& rJumpVec, bool attackSuccess) {
+void SpaceCocoon::endBind(const Vec3f& rJumpVec, bool attackSuccess) {
     MR::endMultiActorCamera(this, mCameraInfo, "\203\105\203\106\203\103\203\147" /* ウェイト */, true);
     MR::endMultiActorCamera(this, mCameraInfo, "\221\137\202\242\222\206" /* 狙い中 */, true);
     MR::endMultiActorCamera(this, mCameraInfo, "\215\125\214\202\222\206" /* 攻撃中 */, true);
@@ -815,10 +815,10 @@ void SpaceCocoon::draw() const {
 }
 
 namespace {
-    void drawPoints(const TVec3f& rPos, const TVec3f& rSide, const TVec3f& rFront, f32 thickness, f32 x1, f32 y1, f32 x2, f32 y2, Color8 color1,
+    void drawPoints(const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 thickness, f32 x1, f32 y1, f32 x2, f32 y2, Color8 color1,
                     Color8 color2, f32 texX1, f32 texX2, f32 texY) {
-        TVec3f side = rSide;
-        TVec3f front = rFront;
+        Vec3f side = rSide;
+        Vec3f front = rFront;
         side.scale(thickness);
         front.scale(thickness);
 

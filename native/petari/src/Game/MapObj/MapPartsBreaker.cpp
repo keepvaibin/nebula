@@ -15,7 +15,7 @@ void MapPartsBreaker::exeWait() {
 
 void MapPartsBreaker::exeReactToTornado() {
     if (isFirstStep()) {
-        TVec3f* vel = &mHost->mVelocity;
+        Vec3f* vel = &mHost->mVelocity;
         vel->set((_28 * 5.0f) * _34);
     }
 
@@ -53,9 +53,3 @@ void MapPartsBreaker::exeBreak() {
     }
 }
 
-// TODO: this SHOULD NOT be here, however moving this to its proper place causes linkage issues since
-// TVec2f::squared is not used in this file... at all.
-template <>
-f32 TVec2f::squared(const TVec2f& rOther) const {
-    return (x - rOther.x) * (x - rOther.x) + (y - rOther.y) * (y - rOther.y);
-}

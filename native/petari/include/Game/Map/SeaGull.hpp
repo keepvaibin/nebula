@@ -22,11 +22,11 @@ public:
     s32 mPointIndex;
     bool mIsReverse;
     s32 mTargetUpdateTimer;
-    TVec3f* mTargetPosition;
-    TVec3f mUp;
-    TVec3f mFront;
-    TVec3f mBankedUp;
-    TVec3f mSide;
+    Vec3f* mTargetPosition;
+    Vec3f mUp;
+    Vec3f mFront;
+    Vec3f mBankedUp;
+    Vec3f mSide;
     s32 mHoverTimer;
     f32 mBankAngle;
     s32 mGlideTimer;
@@ -41,8 +41,8 @@ public:
     virtual ~SeaGullGroup();
     virtual void init(const JMapInfoIter& rIter);
 
-    TVec3f* updatePosInfo(s32* pPointIndex, bool isReverse) const;
+    Vec3f* updatePosInfo(s32* pPointIndex, bool isReverse) const;
 
     s32 mPointCount;
-    TVec3f* mPoints;
+    Vec3f* mPoints;
 };

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class ActorCameraInfo;
 class AnimScaleController;
@@ -41,7 +41,7 @@ public:
     void initScaleJointController();
     void startHitReaction();
     bool isHitReaction(s32) const;
-    bool hitScaleJoint(TPos3f*, const JointControllerInfo&);
+    bool hitScaleJoint(Pos3f*, const JointControllerInfo&);
     DinoPackunEggShell* getEggShell();
     PartsModel* getEggBrokenModel();
     PartsModel* getBallModel();
@@ -56,7 +56,7 @@ public:
     void appearStarPiece(s32);
     bool isSensorEgg(const HitSensor*) const;
     void resetPosition();
-    void adjustTailRootPosition(const TVec3f&, f32);
+    void adjustTailRootPosition(const Vec3f&, f32);
     void activateParts();
     void onMovementParts();
     void onAimTailBall(s32);
@@ -79,12 +79,12 @@ public:
     DinoPackunSequencer* mSequence;
     JointControlDelegator< DinoPackun >* _B4;
     AnimScaleController* _B8;
-    TQuat4f _BC;
-    TVec4f _CC;
-    TVec3f _DC;
-    TVec3f _E8;
+    Quat4f _BC;
+    Vec4f _CC;
+    Vec3f _DC;
+    Vec3f _E8;
     s32 _F4;
-    TVec3f mCameraVec;
+    Vec3f mCameraVec;
     f32 _104;
     f32 _108;
     s32 _10C;

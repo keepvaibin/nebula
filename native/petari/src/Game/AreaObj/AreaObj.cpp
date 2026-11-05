@@ -60,7 +60,7 @@ void AreaObj::init(const JMapInfoIter& rIter) {
     SleepControlFunc::addSleepControl(this, rIter);
 }
 
-bool AreaObj::isInVolume(const TVec3f& rPos) const {
+bool AreaObj::isInVolume(const Vec3f& rPos) const {
     return isValid() && mForm->isInVolume(rPos);
 }
 
@@ -88,11 +88,11 @@ bool AreaObj::isValidSwitchB() const {
     return mSwitchCtrl->isValidSwitchB();
 }
 
-void AreaObj::setFollowMtx(const TPos3f* pMtx) {
-    mForm->_4 = const_cast< TPos3f* >(pMtx);
+void AreaObj::setFollowMtx(const Pos3f* pMtx) {
+    mForm->_4 = const_cast< Pos3f* >(pMtx);
 }
 
-TPos3f* AreaObj::getFollowMtx() const {
+Pos3f* AreaObj::getFollowMtx() const {
     return mForm->_4;
 }
 
@@ -107,7 +107,7 @@ void AreaObjMgr::entry(AreaObj* pAreaObj) {
     mArray.push_back(pAreaObj);
 }
 
-AreaObj* AreaObjMgr::find_in(const TVec3f& rVec) const {
+AreaObj* AreaObjMgr::find_in(const Vec3f& rVec) const {
     // The last one added wins.
     for (AreaObj* const* p = mArray.end(); p != mArray.begin();) {
         p--;

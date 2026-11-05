@@ -3,7 +3,7 @@
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class ModelObj;
 class RockCreator;
@@ -33,7 +33,7 @@ public:
     bool isBreakByWall() const;
     bool isBodySensor(HitSensor*) const;  // stripped
     bool move(f32);
-    void calcBaseMtx(TPos3f*) const;
+    void calcBaseMtx(Pos3f*) const;
     bool isInClippingRange() const;
     void startSoundWanwanVoice();
     void startRollLevelSound(bool);
@@ -74,20 +74,20 @@ public:
     f32 mMoveSpeed;
     bool mBreakModelOnRailGoal;
     bool mSlowDownOnAttack;
-    TVec3f mAppearPos;
+    Vec3f mAppearPos;
     f32 mRadius;
     f32 mRotateSpeed;
-    TPos3f mBaseMtx;
-    TVec3f mFallVelocity;
+    Pos3f mBaseMtx;
+    Vec3f mFallVelocity;
     f32 mGravityRate;
     s32 mCurrentRailPoint;
-    TVec3f mPrevPos;
-    TVec3f mFront;
+    Vec3f mPrevPos;
+    Vec3f mFront;
     u32 mAirTime;
     bool mIsNormalGravity;
     s32 mWanwanVoiceTimer;
     s32 mFreezeTime;
-    TVec3f mFreezePos;
+    Vec3f mFreezePos;
     const Nerve* mUnfreezeNerve;
     s32 mInvalidBindTime;
     s32 mAppearTime;

@@ -12,38 +12,38 @@ void CameraSlide::reset() {
 }
 
 CameraTargetObj* CameraSlide::calc() {
-    TVec3f front = mAxis.cross(mUp);
+    Vec3f front = mAxis.cross(mUp);
     if (MR::isNearZero(front)) {
         return nullptr;
     }
     MR::normalize(&front);
 
-    TVec3f up = front.cross(mAxis);
+    Vec3f up = front.cross(mAxis);
     MR::normalize(&up);
 
-    TQuat4f rot;
+    Quat4f rot;
     rot.setRotate(front, mAngleA * MR::pi() / 180.0f);
 
-    TVec3f side = mAxis;
+    Vec3f side = mAxis;
     rot.transform(side);
 
-    const TPos3f& mtx = mZoneMatrix;
+    const Pos3f& mtx = mZoneMatrix;
 
     mtx.mult33(front);
     mtx.mult33(up);
     mtx.mult33(side);
 
-    TVec3f watchPoint = mWPoint;
+    Vec3f watchPoint = mWPoint;
     mtx.mult(watchPoint, watchPoint);
 
-    TVec3f camZ = CameraLocalUtil::getTarget(this)->getPosition() - watchPoint;
-    TVec3f watchPos = side * side.dot(camZ) + watchPoint;
+    Vec3f camZ = CameraLocalUtil::getTarget(this)->getPosition() - watchPoint;
+    Vec3f watchPos = side * side.dot(camZ) + watchPoint;
 
-    TVec3f watchOffset;
+    Vec3f watchOffset;
     CameraLocalUtil::makeWatchOffset(&watchOffset, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
     watchPos.add(watchOffset);
 
-    TVec3f pos = watchPos + front * mDist;
+    Vec3f pos = watchPos + front * mDist;
     CameraLocalUtil::setWatchPos(this, watchPos);
     CameraLocalUtil::setPos(this, pos);
     CameraLocalUtil::setUpVec(this, up);

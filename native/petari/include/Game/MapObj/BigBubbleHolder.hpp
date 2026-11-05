@@ -17,7 +17,7 @@ public:
     virtual void draw() const;
 
     void addMoveLimitter(BigBubbleMoveLimitter*);
-    BigBubble* generateBigBubble(LiveActor*, const TVec3f&, const TVec3f&, f32, bool, s32, s32, s32);
+    BigBubble* generateBigBubble(LiveActor*, const Vec3f&, const Vec3f&, f32, bool, s32, s32, s32);
     BigBubbleMoveLimitter* getMoveLimitter(s32) const;
     void sortDrawOrder();
 
@@ -33,8 +33,8 @@ public:
 namespace MR {
     void setUpBigBubbleDraw();
     void createBigBubbleHolder();
-    BigBubble* generateBigBubble(LiveActor*, const TVec3f&, const TVec3f&, f32, bool, s32, s32, s32);
-    void limitBigBubblePosition(TVec3f*, f32, s32);
+    BigBubble* generateBigBubble(LiveActor*, const Vec3f&, const Vec3f&, f32, bool, s32, s32, s32);
+    void limitBigBubblePosition(Vec3f*, f32, s32);
     void addBigBubbleMoveLimitter(BigBubbleMoveLimitter*);
     bool isPlayerBindedBigBubble();
 };  // namespace MR

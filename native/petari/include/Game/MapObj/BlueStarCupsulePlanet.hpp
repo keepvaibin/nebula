@@ -26,7 +26,7 @@ public:
     void updatePose();
     void decidedTarget();
     void releasedTarget();
-    void getTargetPosition(TVec3f*);
+    void getTargetPosition(Vec3f*);
     bool isReleaseForce() const;
     f32 getPointableRange() const;
     void emitNerveEffect();

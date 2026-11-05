@@ -42,9 +42,9 @@ public:
     void declareReceiveNum(const NameObj*, s32);
     s32 getDeclareRemnantStarPieceCount(const NameObj*);
     s32 getDeclareRemnantStarPieceCountNotExist(const NameObj*);
-    bool hopPiece(const NameObj*, const TVec3f&, const TVec3f&);
-    bool appearPiece(const NameObj*, const TVec3f&, s32, f32, f32, bool, bool);
-    bool appearPieceToDirection(const NameObj*, const TVec3f&, const TVec3f&, s32, f32, f32, bool, bool);
+    bool hopPiece(const NameObj*, const Vec3f&, const Vec3f&);
+    bool appearPiece(const NameObj*, const Vec3f&, s32, f32, f32, bool, bool);
+    bool appearPieceToDirection(const NameObj*, const Vec3f&, const Vec3f&, s32, f32, f32, bool, bool);
     bool gotByPlayer();
     void updateSound();
     void initCSDelay();
@@ -52,7 +52,7 @@ public:
     bool giftToTarget(HitSensor*, u32);
     StarPiece* getDeadStarPiece();
     void createStarPieces();
-    TVec3f calcPosCameraShoot(s32);
+    Vec3f calcPosCameraShoot(s32);
     void clearGotCountReceiver(const NameObj*);
     StarPieceHostInfo* findHostInfo(const NameObj*);
     StarPieceReceiverInfo* findReceiverInfo(const NameObj*);
@@ -100,6 +100,6 @@ public:
     f32 _9C;
     s32 _A0;
     s32 _A4;
-    TVec3f _A8;
-    TVec3f _B4;
+    Vec3f _A8;
+    Vec3f _B4;
 };

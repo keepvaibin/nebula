@@ -47,7 +47,7 @@ void FlexibleSphere::init(const JMapInfoIter& rIter) {
     initModelManagerWithAnm(arcName, nullptr, false);
 
     initHitSensor(1);
-    MR::addHitSensorMapObj(this, "body", 8, 1000.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorMapObj(this, "body", 8, 1000.0f, Vec3f(0.0f, 0.0f, 0.0f));
     MR::invalidateHitSensors(this);
 
     initEffectKeeper(0, nullptr, false);

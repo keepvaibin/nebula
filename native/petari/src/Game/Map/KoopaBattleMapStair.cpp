@@ -114,7 +114,7 @@ bool KoopaBattleMapStair::isRequestAttackVs3() const {
 }
 
 namespace {
-    void updateNearestPos(TVec3f* pPos, f32* pDist, const TVec3f& rCandidatePos, const TVec3f& rReferencePos, s32 targetIndex, s32 index) {
+    void updateNearestPos(Vec3f* pPos, f32* pDist, const Vec3f& rCandidatePos, const Vec3f& rReferencePos, s32 targetIndex, s32 index) {
         if (targetIndex >= 0) {
             if (targetIndex == index) {
                 pPos->set(rCandidatePos);
@@ -131,25 +131,25 @@ namespace {
         }
     }
 
-    inline void updateOffsetPos(TVec3f* pPos, f32* pDist, const TVec3f& rCenter, const TVec3f& rX, const TVec3f& rZ, f32 width, f32 depth,
-                                const OffsetPair& rOffset, const TVec3f& rOrigin, s32 selection, s32 index) {
-        TVec3f candidate = rCenter + (rX * width * rOffset.x) + (rZ * depth * rOffset.z);
+    inline void updateOffsetPos(Vec3f* pPos, f32* pDist, const Vec3f& rCenter, const Vec3f& rX, const Vec3f& rZ, f32 width, f32 depth,
+                                const OffsetPair& rOffset, const Vec3f& rOrigin, s32 selection, s32 index) {
+        Vec3f candidate = rCenter + (rX * width * rOffset.x) + (rZ * depth * rOffset.z);
 
         updateNearestPos(pPos, pDist, candidate, rOrigin, selection, index);
     }
 
-    inline void updateTurnPos(TVec3f* pPos, f32* pDist, const TVec3f& rCenter, const TVec3f& rX, const TVec3f& rZ, const TVec3f& rOrigin) {
+    inline void updateTurnPos(Vec3f* pPos, f32* pDist, const Vec3f& rCenter, const Vec3f& rX, const Vec3f& rZ, const Vec3f& rOrigin) {
         updateNearestPos(pPos, pDist, rCenter + rZ * ::sTurnHalfWidthZ - rX * ::sTurnHalfWidthX, rOrigin, -1, -1);
     }
 };  // namespace
 
-f32 KoopaBattleMapStair::calcAndSetTargetPos(TVec3f* pPos, const TVec3f& rReferencePos) {
-    TVec3f axisZ;
-    TVec3f axisY;
-    TVec3f axisX;
+f32 KoopaBattleMapStair::calcAndSetTargetPos(Vec3f* pPos, const Vec3f& rReferencePos) {
+    Vec3f axisZ;
+    Vec3f axisY;
+    Vec3f axisX;
     MR::calcActorAxis(&axisX, &axisY, &axisZ, this);
 
-    TVec3f center = (axisY * ::sHalfHeight) + mPosition;
+    Vec3f center = (axisY * ::sHalfHeight) + mPosition;
     f32 distance = center.distance(rReferencePos);
     pPos->set(center);
 

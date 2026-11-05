@@ -30,8 +30,8 @@ public:
     void setLastGotNote(Note*);
     f32 getNoteCoord(s32);
 
-    TVec3f _8C;
-    TVec3f _98;
+    Vec3f _8C;
+    Vec3f _98;
     f32 mAppearanceSpeed;
     s32 mTimeLimit;
     s32 mMelodyNoteNum;

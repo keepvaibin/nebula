@@ -39,7 +39,7 @@ void LightPointCtrl::update() {
     }
 }
 
-void LightPointCtrl::requestPointLight(const LiveActor* pActor, TVec3f pos, Color8 color, f32 intensity, s32 duration) {
+void LightPointCtrl::requestPointLight(const LiveActor* pActor, Vec3f pos, Color8 color, f32 intensity, s32 duration) {
     if (mStep == -1 && isUpdateCandidateActor(pActor)) {
         mCandidateActor = pActor;
         mTargetInfo->mPos = pos;

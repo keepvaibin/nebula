@@ -18,8 +18,8 @@ MercatorRailMoveParts::MercatorRailMoveParts(const char* pName) : LiveActor(pNam
 }
 
 void MercatorRailMoveParts::initAfterPlacement() {
-    TVec3f trans;
-    TPos3f rotate;
+    Vec3f trans;
+    Pos3f rotate;
     MR::convertMercatorPlaneToSphereTransAndRotate(&trans, &rotate, mLocalTrans, false);
     mPosition.set(trans);
 
@@ -51,17 +51,17 @@ void MercatorRailMoveParts::control() {
         updatePose();
     }
 
-    TVec3f trans;
-    TPos3f rotate;
+    Vec3f trans;
+    Pos3f rotate;
     MR::convertMercatorPlaneToSphereTransAndRotate(&trans, &rotate, mRailMover->_28, false);
     mPosition.set(trans);
 }
 
 void MercatorRailMoveParts::calcAndSetBaseMtx() {
-    TVec3f trans;
-    TPos3f rotate;
+    Vec3f trans;
+    Pos3f rotate;
     MR::convertMercatorPlaneToSphereTransAndRotate(&trans, &rotate, mRailMover->_28, false);
-    TPos3f baseMtx;
+    Pos3f baseMtx;
     baseMtx.identity();
 
     if (mRailRotator->isWorking()) {
@@ -78,7 +78,7 @@ void MercatorRailMoveParts::calcAndSetBaseMtx() {
 }
 
 void MercatorRailMoveParts::updatePose() {
-    TMtx34f mtx;
+    Mtx34f mtx;
     mtx.identity();
     MR::makeMtxRotate(mtx.toMtxPtr(), mLocalRotation.x, mLocalRotation.y, mLocalRotation.z);
 
@@ -99,7 +99,7 @@ void MercatorRailMoveParts::init(const JMapInfoIter& rIter) {
     MR::connectToSceneMapObj(this);
     initHitSensor(1);
 
-    MR::addHitSensorMapObj(this, "body", 4, 0.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorMapObj(this, "body", 4, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
     MR::initCollisionParts(this, objName, getSensor("body"), nullptr);
 
     if (MR::useStageSwitchReadB(this, rIter)) {
@@ -107,7 +107,7 @@ void MercatorRailMoveParts::init(const JMapInfoIter& rIter) {
     }
 
     initRailRider(rIter);
-    TVec3f what;
+    Vec3f what;
     what = mPosition;
     mRailMover = MR::createMapPartsRailMoverForMercator(this, rIter, true);
     mRailMover->start();

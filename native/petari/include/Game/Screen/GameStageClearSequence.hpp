@@ -18,5 +18,5 @@ public:
     void exeGrandStarGetDemo();
 
     SimpleEffectLayout* mEffectLayout;
-    TVec2f mEffectFollowPos;
+    Vec2f mEffectFollowPos;
 };

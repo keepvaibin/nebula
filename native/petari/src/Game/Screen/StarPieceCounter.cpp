@@ -38,7 +38,7 @@ void StarPieceCounter::init(const JMapInfoIter& rIter) {
     MR::setFollowPos(&mFollowPos, this, "TSPieceCounter");
 
     mPaneRumbler = new CountUpPaneRumbler(this, "TCounter");
-    mLayoutAppearer = new CounterLayoutAppearer(this, TVec2f(0.0f, 30.0f));
+    mLayoutAppearer = new CounterLayoutAppearer(this, Vec2f(0.0f, 30.0f));
 
     if (!MR::isStageAstroLocation()) {
         MR::createAndAddPaneCtrl(this, "StarPieceCounter", 1);
@@ -254,7 +254,7 @@ void StarPieceCounter::exeAppear() {
         if (isDispCenter()) {
             MR::showPaneRecursive(this, "TSPieceCounter");
             MR::hidePaneRecursive(this, "StarPieceCounter");
-            mLayoutAppearer->setAppearOffset(TVec2f(0.0f, ::cAppearOffsetCenterY));
+            mLayoutAppearer->setAppearOffset(Vec2f(0.0f, ::cAppearOffsetCenterY));
 
             if (MR::isStageAstroLocation()) {
                 MR::showPaneRecursive(this, "PicTStarPiece");
@@ -266,7 +266,7 @@ void StarPieceCounter::exeAppear() {
         } else {
             MR::showPaneRecursive(this, "StarPieceCounter");
             MR::hidePaneRecursive(this, "TSPieceCounter");
-            mLayoutAppearer->setAppearOffset(TVec2f(::cAppearOffsetRightX, 0.0f));
+            mLayoutAppearer->setAppearOffset(Vec2f(::cAppearOffsetRightX, 0.0f));
         }
 
         f32 y = 0.0f;
@@ -277,7 +277,7 @@ void StarPieceCounter::exeAppear() {
             y = ::cBaseOffsetEatTicoY;
         }
 
-        mLayoutAppearer->appear(TVec2f(0.0f, y));
+        mLayoutAppearer->appear(Vec2f(0.0f, y));
     }
 
     if (mLayoutAppearer->isAppeared()) {

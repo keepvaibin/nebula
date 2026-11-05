@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/NameObj/NameObj.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class J3DModelX;
 class Triangle;
@@ -15,21 +15,21 @@ public:
     virtual void draw() const;
 
     void setMode(u32);
-    void create(const TVec3f&, const TVec3f&, const TVec3f&);
+    void create(const Vec3f&, const Vec3f&, const Vec3f&);
     void calcView(J3DModelX*, u32, J3DModelX*);
-    void drawAndCaptureTex(J3DModelX*, const TVec3f&);
+    void drawAndCaptureTex(J3DModelX*, const Vec3f&);
     void setUpdateFlag();
     void draw1() const;
     void sendVtx() const;
     void sendZsortedVtx(bool) const;
     void initCaptureTex();
-    void setViewMtx(const TVec3f&);
-    void drawVolumeBox(const TVec3f&, const TVec3f&) const;
+    void setViewMtx(const Vec3f&);
+    void drawVolumeBox(const Vec3f&, const Vec3f&) const;
     void draw3() const;
     void doSortPolygons();
-    const TVec3f& getDrawPos(u32) const;
-    const TVec3f& getDrawPos(u32, u32) const;
-    const TVec2f& getDrawTx(u32, u32) const;
+    const Vec3f& getDrawPos(u32) const;
+    const Vec3f& getDrawPos(u32, u32) const;
+    const Vec2f& getDrawTx(u32, u32) const;
 
     u8 _C;
     u16 _E;
@@ -38,22 +38,22 @@ public:
     f32 _18;
     f32 _1C;
     f32 _20;
-    TVec3f _24;
-    TVec3f _30;
-    TVec3f _3C;
-    TVec3f _48;
+    Vec3f _24;
+    Vec3f _30;
+    Vec3f _3C;
+    Vec3f _48;
     u32 _54;
     u16 _58;
     u16 _5A;
     u8* _5C;
-    TVec3f* _60;
-    TVec2f* _64;
+    Vec3f* _60;
+    Vec2f* _64;
     u16* _68;
     u16 _6C;
     u16 _6E;
     u8 _70[128];
     s32 _F0[128];
-    TVec3f _2F0;
+    Vec3f _2F0;
     JUTTexture* _300;
     u8 _304;
     bool _305;
@@ -62,8 +62,8 @@ public:
     u16 _308;
     f32 _30C;
     f32 _310;
-    TVec3f _314;
-    TVec3f _320;
+    Vec3f _314;
+    Vec3f _320;
     Triangle* _32C;
     Triangle* _330;
     Triangle* _334;

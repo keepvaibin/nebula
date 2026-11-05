@@ -5,15 +5,15 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/PlayerUtil.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 namespace {
-    inline void removeVelocity(DinoPackun* pHost, const TVec3f& rDir) {
-        TVec3f* pVelocity = &pHost->mVelocity;
+    inline void removeVelocity(DinoPackun* pHost, const Vec3f& rDir) {
+        Vec3f* pVelocity = &pHost->mVelocity;
         pHost->mVelocity.scaleAdd(-rDir.dot(*pVelocity), rDir, *pVelocity);
     }
 
-    static TVec3f sEggOutPosition = TVec3f(0.0f, 60.0f, -320.0f);
+    static Vec3f sEggOutPosition = Vec3f(0.0f, 60.0f, -320.0f);
 };  // namespace
 
 namespace NrvDinoPackunBattleEgg {
@@ -67,7 +67,7 @@ bool DinoPackunBattleEgg::receiveMsgPush(HitSensor* pSender, HitSensor* pReceive
     if ((isNerve(GET_NERVE(DinoPackunBattleEgg, DinoPackunBattleEggNrvWalk)) ||
          isNerve(GET_NERVE(DinoPackunBattleEgg, DinoPackunBattleEggNrvTurn))) &&
         getHost()->isSensorEgg(pReceiver) && MR::isSensorMapObj(pSender)) {
-        TVec3f v11;
+        Vec3f v11;
         MR::calcSensorHorizonNormalize(&v11, getHost()->mGravity, pSender, pReceiver);
 
         if (getHost()->mVelocity.dot(v11) < 0.0f) {
@@ -75,7 +75,7 @@ bool DinoPackunBattleEgg::receiveMsgPush(HitSensor* pSender, HitSensor* pReceive
         }
 
         if (isNerve(GET_NERVE(DinoPackunBattleEgg, DinoPackunBattleEggNrvWalk)) && getHost()->_E8.dot(v11) < 0.0f) {
-            TVec3f v10;
+            Vec3f v10;
             MR::calcSideVec(&v10, getHost());
 
             f32 v9;

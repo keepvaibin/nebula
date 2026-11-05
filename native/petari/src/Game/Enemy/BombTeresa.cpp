@@ -25,8 +25,8 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
-#include <JSystem/JMath/JMath.hpp>
+#include <nebula_geometry.hpp>
+
 #include <nebula_math.h>
 
 namespace NrvBombTeresa {
@@ -108,9 +108,9 @@ void BombTeresa::initTongue() {
 void BombTeresa::initSensor() {
     f32 mScaleXTemp = mScale.x;
     initHitSensor(2);
-    MR::addHitSensorPosEye(this, "tungue", 8, (mScaleXTemp * 20.0f), &_C4, TVec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorEnemy(this, "body", 8, (mScaleXTemp * 85.0f), TVec3f(0.0f, 0.0f, 0.0f));
-    MR::initStarPointerTarget(this, (mScaleXTemp * 85.0f), TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorPosEye(this, "tungue", 8, (mScaleXTemp * 20.0f), &_C4, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemy(this, "body", 8, (mScaleXTemp * 85.0f), Vec3f(0.0f, 0.0f, 0.0f));
+    MR::initStarPointerTarget(this, (mScaleXTemp * 85.0f), Vec3f(0.0f, 0.0f, 0.0f));
 }
 
 void BombTeresa::makeActorAppeared() {
@@ -141,7 +141,7 @@ void BombTeresa::control() {
 
 void BombTeresa::calcAndSetBaseMtx() {
     MR::setBaseTRMtx(this, _9C);
-    TVec3f scale = mScaleController->_C * mScale;
+    Vec3f scale = mScaleController->_C * mScale;
     MR::setBaseScale(this, scale);
     mJointDelegator->registerCallBack();
     mJointDelegator2->registerCallBack();
@@ -161,52 +161,52 @@ void BombTeresa::updateDriftReleaseVelocity() {
     MR::blendQuatUpFront(&_9C, -mGravity, _AC, 0.1f, 0.6f);
 }
 
-bool BombTeresa::rootTongueMtxCallBack(TPos3f* pMtx, const JointControllerInfo& rInfo) {
+bool BombTeresa::rootTongueMtxCallBack(Pos3f* pMtx, const JointControllerInfo& rInfo) {
     if (_DC == 0.0f) {
         return false;
     }
 
-    TVec3f pos;
-    TVec3f tonguePos;
-    TVec3f side;
+    Vec3f pos;
+    Vec3f tonguePos;
+    Vec3f side;
     pMtx->getTrans(pos);
     MR::copyJointPos(this, "Tongue2", &tonguePos);
     pMtx->getXDir(side);
-    TVec3f dir = tonguePos - pos;
+    Vec3f dir = tonguePos - pos;
     if (MR::normalizeOrZero(&dir)) {
         dir.set(side);
     }
 
     MR::turnMtxToXDirRate(pMtx, dir, (0.5f * _DC));
     f32 dist = MR::getEaseInOutValue(MR::normalize(pos.distance(tonguePos), 400.0f, 1000.0f), 1.0f, 0.5f, 1.0f);
-    MR::preScaleMtx(pMtx->toMtxPtr(), TVec3f(1.0f, dist, dist));
+    MR::preScaleMtx(pMtx->toMtxPtr(), Vec3f(1.0f, dist, dist));
     return true;
 }
 
-bool BombTeresa::endTongueMtxCallBack(TPos3f* pMtx, const JointControllerInfo& rInfo) {
+bool BombTeresa::endTongueMtxCallBack(Pos3f* pMtx, const JointControllerInfo& rInfo) {
     if (_DC == 0.0f) {
         return false;
     }
 
-    TVec3f pos;
-    TVec3f tonguePos;
-    TVec3f side;
+    Vec3f pos;
+    Vec3f tonguePos;
+    Vec3f side;
     pMtx->getTrans(pos);
     MR::copyJointPos(this, "Tongue1", &tonguePos);
     MR::vecBlend(pos, _C4, &pos, _DC);
     pMtx->getXDir(side);
-    TVec3f dir = pos - tonguePos;
+    Vec3f dir = pos - tonguePos;
     if (MR::normalizeOrZero(&dir)) {
         dir.set(side);
     }
 
     MR::turnMtxToXDirRate(pMtx, dir, _DC);
-    TVec3f side2;
+    Vec3f side2;
     pMtx->getXDir(side2);
     pos += side2 * -35.0f * _DC;
     pMtx->setTrans(pos);
     f32 dist = MR::getEaseInOutValue(MR::normalize(pos.distance(tonguePos), 400.0f, 1000.0f), 1.0f, 0.5f, 1.0f);
-    MR::preScaleMtx(pMtx->toMtxPtr(), TVec3f(1.0f, dist, dist));
+    MR::preScaleMtx(pMtx->toMtxPtr(), Vec3f(1.0f, dist, dist));
     return true;
 }
 
@@ -241,7 +241,7 @@ bool BombTeresa::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
     }
 
     if (MR::isSensorEnemy(pSender)) {
-        TVec3f deltaPos = MR::getSensorPos(pReceiver) - MR::getSensorPos(pSender);
+        Vec3f deltaPos = MR::getSensorPos(pReceiver) - MR::getSensorPos(pSender);
 
         if (MR::normalizeOrZero(&deltaPos)) {
             MR::getRandomVector(&deltaPos, 1.0);
@@ -281,9 +281,9 @@ bool BombTeresa::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* p
     }
 
     if (MR::isMsgToEnemyAttackShockWave(msg) && isEnableShockWave()) {
-        TVec3f uVar1;
+        Vec3f uVar1;
         MR::calcSensorDirectionNormalize(&uVar1, pSender, pReceiver);
-        TVec3f v16(uVar1);
+        Vec3f v16(uVar1);
         v16.mult(20.0f);
         mVelocity.set(v16);
         setNerve(GET_NERVE(BombTeresa, BombTeresaNrvShock));
@@ -489,7 +489,7 @@ void BombTeresa::exeWait() {
 
     _C4 = mPosition;
     updateNormalVelocity();
-    if (MR::isInDeath(this, TVec3f(0.0f, 0.0f, 0.0f))) {
+    if (MR::isInDeath(this, Vec3f(0.0f, 0.0f, 0.0f))) {
         tryRevival();
     } else if (MR::isNearPlayerAnyTime(this, 1800.0f)) {
         setNerve(GET_NERVE(BombTeresa, BombTeresaNrvChase));
@@ -512,7 +512,7 @@ void BombTeresa::exeWander() {
     MR::rotateDirectionGravityDegree(this, &_AC, getNerveStep() % 600 < 400 ? 0.5f : -0.5f);
     MR::addVelocityMoveToDirection(this, _AC, 0.5f);
     updateNormalVelocity();
-    if (MR::isInDeath(this, TVec3f(0.0f, 0.0f, 0.0f))) {
+    if (MR::isInDeath(this, Vec3f(0.0f, 0.0f, 0.0f))) {
         tryRevival();
     } else if (MR::isNearPlayerAnyTime(this, 1800.0f)) {
         setNerve(GET_NERVE(BombTeresa, BombTeresaNrvChase));
@@ -582,9 +582,9 @@ void BombTeresa::exeDirectTackle() {
 }
 
 void BombTeresa::exeDrift() {
-    TVec3f v14;
-    TPos3f v16;
-    TVec3f v15;
+    Vec3f v14;
+    Pos3f v16;
+    Vec3f v15;
     if (MR::isFirstStep(this)) {
         MR::startAction(this, "Spin");
         MR::startBrk(this, "Normal");
@@ -616,9 +616,9 @@ void BombTeresa::exeDrift() {
     }
 
     MR::calcPlayerJointMtx(&v16, "HandR");
-    TVec3f v13;
+    Vec3f v13;
     v16.getTrans(v13);
-    TVec3f v12;
+    Vec3f v12;
     v16.getZDir(v12);
     if (!MR::normalizeOrZero(&v12)) {
         v13.scaleAdd(20.0f, v12, v13);
@@ -835,7 +835,7 @@ bool BombTeresa::isEnableShockWave() const {
     return true;
 }
 
-bool BombTeresa::appearNormal(const TVec3f& rPosition, const TVec3f& rVelocity) {
+bool BombTeresa::appearNormal(const Vec3f& rPosition, const Vec3f& rVelocity) {
     if (!MR::isDead(this)) {
         return false;
     }
@@ -850,7 +850,7 @@ bool BombTeresa::appearNormal(const TVec3f& rPosition, const TVec3f& rVelocity) 
     return true;
 }
 
-bool BombTeresa::appearShadow(const TVec3f& rPosition, const TVec3f& rVelocity) {
+bool BombTeresa::appearShadow(const Vec3f& rPosition, const Vec3f& rVelocity) {
     if (!appearNormal(rPosition, rVelocity)) {
         return false;
     }
@@ -862,7 +862,7 @@ bool BombTeresa::appearShadow(const TVec3f& rPosition, const TVec3f& rVelocity) 
 }
 
 void BombTeresa::addTeresaSpinPullVelocity(f32 arg0) {
-    TVec3f PlayerCenterPos = TVec3f(*MR::getPlayerCenterPos());
+    Vec3f PlayerCenterPos = Vec3f(*MR::getPlayerCenterPos());
     MR::addVelocityClockwiseToTarget(this, PlayerCenterPos, _E0);
     MR::addVelocityMoveToTarget(this, PlayerCenterPos, 0.0f, _E4, 0.0f, 150.0f);
     MR::addVelocityKeepHeight(this, PlayerCenterPos, arg0, 3.0f, 100.0f);

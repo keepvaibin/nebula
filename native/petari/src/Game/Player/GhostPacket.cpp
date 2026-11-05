@@ -1,5 +1,5 @@
 #include "Game/Player/GhostPacket.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 #include <cstdio>
 
 GhostPacket::GhostPacket(void* pData, u32 len) {
@@ -35,13 +35,13 @@ void GhostPacket::read(s8* pOut) {
     read((u8*)pOut, 1);
 }
 
-void GhostPacket::read(TVec3Sc* pOut) {
+void GhostPacket::read(Vec3Sc* pOut) {
     read((u8*)&pOut->x, 1);
     read((u8*)&pOut->y, 1);
     read((u8*)&pOut->z, 1);
 }
 
-void GhostPacket::read(TVec3s* pOut) {
+void GhostPacket::read(Vec3s* pOut) {
     read(&pOut->x);
     read(&pOut->y);
     read(&pOut->z);

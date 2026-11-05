@@ -155,7 +155,7 @@ void DharmaSambo::init(const JMapInfoIter& rIter) {
         }
 
         mParts.push_back(part);
-        mFixedPositions.push_back(new FixedPosition(this, joint_name[i], TVec3f(0.0f, 0.0f, 0.0f), TVec3f(0.0f, -90.0f, -90.0f)));
+        mFixedPositions.push_back(new FixedPosition(this, joint_name[i], Vec3f(0.0f, 0.0f, 0.0f), Vec3f(0.0f, -90.0f, -90.0f)));
     }
 }
 
@@ -227,7 +227,7 @@ void DharmaSambo::control() {
             } else {
                 hit->mIndex = -1;
                 hit->setNerve(GET_NERVE(DharmaSamboParts, HostTypeNrvBlow));
-                TVec3f direction(mPosition - *MR::getPlayerCenterPos());
+                Vec3f direction(mPosition - *MR::getPlayerCenterPos());
                 MR::addVelocitySeparateHV(this, direction, ::hSpinHitVelH, ::hSpinHitVelV);
                 MR::stopBck(this);
                 setNerve(GET_NERVE(DharmaSambo, HostTypeNrvSpinHitted));
@@ -256,7 +256,7 @@ void DharmaSambo::control() {
 
             if (mParts[i]->mIndex != -1) {
                 s32 index = mParts[i]->mIndex;
-                TVec3f direction;
+                Vec3f direction;
                 mFixedPositions[index]->copyTrans(&direction);
                 direction -= mParts[i]->mPosition;
                 mParts[i]->mPosition.add(direction * ::hSpinHittedMoveBodyRate);
@@ -505,7 +505,7 @@ void DharmaSambo::exeEscapeRun() {
             setNerve(GET_NERVE(DharmaSambo, HostTypeNrvEscapeWaitLand));
         }
     } else {
-        TVec3f direction(mPosition);
+        Vec3f direction(mPosition);
         direction -= *MR::getPlayerPos();
         MR::vecKillElement(direction, mGravity, &direction);
         MR::normalizeOrZero(&direction);
@@ -542,7 +542,7 @@ void DharmaSambo::exeEscapeLand() {
             MR::moveAndTurnToPlayer(this, ::hEscapeWaitAirParam[0], ::hEscapeWaitAirParam[1], ::hEscapeWaitAirParam[2], ::hEscapeWaitAirParam[3]);
         }
     } else {
-        TVec3f direction(mPosition);
+        Vec3f direction(mPosition);
         direction -= *MR::getPlayerPos();
         MR::vecKillElement(direction, mGravity, &direction);
         MR::normalizeOrZero(&direction);
@@ -559,8 +559,8 @@ void DharmaSambo::exeEscapeLand() {
             return;
         }
 
-        const TVec3f* playerPos = MR::getPlayerCenterPos();
-        TVec3f direction(mPosition);
+        const Vec3f* playerPos = MR::getPlayerCenterPos();
+        Vec3f direction(mPosition);
         direction -= *playerPos;
         MR::addVelocitySeparateHV(this, direction, ::hEscapeRunVelH, ::hEscapeRunVelV);
         setNerve(GET_NERVE(DharmaSambo, HostTypeNrvEscapeRun));
@@ -746,10 +746,10 @@ void DharmaSamboParts::init(const JMapInfoIter& rIter) {
     initNerve(GET_NERVE(DharmaSamboParts, HostTypeNrvDoNothing));
     f32 scale = mScale.y;
     initHitSensor(1);
-    MR::addHitSensorEnemy(this, "body", 16, 80.0f * scale, TVec3f(0.0f, 80.0f * scale, 0.0f));
+    MR::addHitSensorEnemy(this, "body", 16, 80.0f * scale, Vec3f(0.0f, 80.0f * scale, 0.0f));
     MR::initLightCtrl(this);
     MR::initShadowVolumeSphere(this, 80.0f * mScale.y);
-    MR::initStarPointerTarget(this, 110.0f, TVec3f(0.0f, 80.0f, 0.0f));
+    MR::initStarPointerTarget(this, 110.0f, Vec3f(0.0f, 80.0f, 0.0f));
 }
 
 void DharmaSamboParts::appear() {
@@ -818,7 +818,7 @@ void DharmaSamboParts::setHead(bool head) {
 
 void DharmaSambo::calcAndSetBaseMtx() {
     LiveActor::calcAndSetBaseMtx();
-    TVec3f scale(mAnimScaleController->_C);
+    Vec3f scale(mAnimScaleController->_C);
     scale.mul(scale, mScale);
     MR::setBaseScale(this, scale);
 }
@@ -827,11 +827,11 @@ void DharmaSamboParts::calcAndSetBaseMtx() {
     LiveActor::calcAndSetBaseMtx();
 
     if (mIsHead && mHost->mPartsCount == 1 && mHost->isNerve(GET_NERVE(DharmaSambo, HostTypeNrvStarPointerBind))) {
-        TVec3f scale(mHost->mAnimScaleController->_C);
+        Vec3f scale(mHost->mAnimScaleController->_C);
         scale.mul(scale, mScale);
         MR::setBaseScale(this, scale);
     } else {
-        MR::setBaseScale(this, TVec3f(1, 1, 1));
+        MR::setBaseScale(this, Vec3f(1, 1, 1));
     }
 }
 
@@ -920,7 +920,7 @@ bool DharmaSamboParts::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSe
     }
 
     if (MR::isMsgPlayerSpinAttack(msg)) {
-        TVec3f direction(pSender->mPosition);
+        Vec3f direction(pSender->mPosition);
         direction -= pReceiver->mPosition;
         mHitDistance = direction.length();
         mHost->mHitSensor = pSender;

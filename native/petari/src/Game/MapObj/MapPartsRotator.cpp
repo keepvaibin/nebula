@@ -196,14 +196,14 @@ bool MapPartsRotator::isReachedTargetAngle() const {
 }
 
 void MapPartsRotator::updateRotateMtx(AxisType type, f32 angle) {
-    TVec3f rotateAxisDir;
+    Vec3f rotateAxisDir;
     calcRotateAxisDir(type, &rotateAxisDir);
     mRotateMtx.identity();
     mRotateMtx.makeRotateDegree(rotateAxisDir, angle);
     mRotateMtx.concat(mRotateMtx, mBaseHostMtx);
 }
 
-void MapPartsRotator::calcRotateAxisDir(AxisType type, TVec3f* pDir) const {
+void MapPartsRotator::calcRotateAxisDir(AxisType type, Vec3f* pDir) const {
     switch (type) {
     case AxisType_XAxis:
         mBaseHostMtx.getXDir(*pDir);

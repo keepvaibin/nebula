@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/MapObj/MapPartsFunction.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class SpringValue;
 
@@ -44,10 +44,10 @@ public:
     f32 mRotateAngle;
     f32 mRotateSpeed;
     s32 mRotateAccelType;
-    TVec3f _30;
-    TVec3f mUpDirection;
+    Vec3f _30;
+    Vec3f mUpDirection;
     f32 _48;
     f32 _4C;
-    TVec3f _50;
+    Vec3f _50;
     f32 _5C;
 };

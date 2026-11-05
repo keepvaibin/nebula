@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 #include "Game/System/NebulaInput.hpp"
 #include <NebulaGpu.h>
 
@@ -24,14 +24,14 @@ namespace MR {
 };  // namespace MR
 
 namespace MR {
-    bool isJudgedToClipFrustum(const TVec3f&, f32);
-    bool isJudgedToClipFrustum100m(const TVec3f&, f32);
-    bool isJudgedToClipFrustum300m(const TVec3f&, f32);
-    bool isJudgedToNearClip(const TVec3f&, f32);
-    bool isInWater(const TVec3f&);
-    bool isInWater(const LiveActor*, const TVec3f&);
-    bool isInDeath(const TVec3f&);
-    bool isInDarkMatter(const TVec3f&);
+    bool isJudgedToClipFrustum(const Vec3f&, f32);
+    bool isJudgedToClipFrustum100m(const Vec3f&, f32);
+    bool isJudgedToClipFrustum300m(const Vec3f&, f32);
+    bool isJudgedToNearClip(const Vec3f&, f32);
+    bool isInWater(const Vec3f&);
+    bool isInWater(const LiveActor*, const Vec3f&);
+    bool isInDeath(const Vec3f&);
+    bool isInDarkMatter(const Vec3f&);
     void connectToScene(LiveActor*, int, int, int, int);
     void connectToScene(NameObj*, int, int, int, int);
     void connectToSceneCollisionMapObj(LiveActor*);
@@ -140,31 +140,31 @@ namespace MR {
     void declarePowerStar(const NameObj*);
     void declarePowerStar(const NameObj*, s32);
     void declarePowerStarCoin100();
-    void appearPowerStarContinueCurrentDemo(const NameObj*, const TVec3f&);
+    void appearPowerStarContinueCurrentDemo(const NameObj*, const Vec3f&);
     void appearPowerStarWithoutDemo(const NameObj*);
     void requestAppearPowerStar(const NameObj*);
-    void requestAppearPowerStar(const NameObj*, const TVec3f&);
-    void requestAppearPowerStar(const NameObj*, s32, const TVec3f&);
+    void requestAppearPowerStar(const NameObj*, const Vec3f&);
+    void requestAppearPowerStar(const NameObj*, s32, const Vec3f&);
     void requestAppearPowerStar(const NameObj*, const LiveActor*, f32);
     void requestAppearPowerStarCoin100();
     bool isEndPowerStarAppearDemo(const NameObj*);
     ModelObj* createPowerStarDemoModel(const NameObj*, const char*, MtxPtr);
     void declareCoin(const NameObj*, s32);
     s32 getDeclareRemnantCoinCount(const NameObj*);
-    void hopCoin(const NameObj*, const TVec3f&, const TVec3f&);
-    void appearCoinFix(const NameObj*, const TVec3f&, s32);
-    void appearCoinPop(const NameObj*, const TVec3f&, s32);
-    void appearCoinPopToDirection(const NameObj*, const TVec3f&, const TVec3f&, s32);
-    void appearCoinToVelocity(const NameObj*, const TVec3f&, const TVec3f&, s32);
-    void appearCoinCircle(const NameObj*, const TVec3f&, s32);
+    void hopCoin(const NameObj*, const Vec3f&, const Vec3f&);
+    void appearCoinFix(const NameObj*, const Vec3f&, s32);
+    void appearCoinPop(const NameObj*, const Vec3f&, s32);
+    void appearCoinPopToDirection(const NameObj*, const Vec3f&, const Vec3f&, s32);
+    void appearCoinToVelocity(const NameObj*, const Vec3f&, const Vec3f&, s32);
+    void appearCoinCircle(const NameObj*, const Vec3f&, s32);
     void declareStarPiece(const NameObj*, s32);
     s32 getDeclareRemnantStarPieceCount(const NameObj*);
     s32 getDeclareRemnantStarPieceCountNotExist(const NameObj*);
     void declareStarPieceReceiver(const NameObj*, s32);
     void clearGotCountStarPieceReceiver(const NameObj*);
-    void hopStarPiece(const NameObj*, const TVec3f&, const TVec3f&);
-    bool appearStarPiece(const NameObj*, const TVec3f&, s32, f32, f32, bool);
-    bool appearStarPieceToDirection(const NameObj*, const TVec3f&, const TVec3f&, s32, f32, f32, bool);
+    void hopStarPiece(const NameObj*, const Vec3f&, const Vec3f&);
+    bool appearStarPiece(const NameObj*, const Vec3f&, s32, f32, f32, bool);
+    bool appearStarPieceToDirection(const NameObj*, const Vec3f&, const Vec3f&, s32, f32, f32, bool);
     void initStarPieceGetCSSound();
     BenefitItemOneUp* createKinokoOneUp();
     void appearKinokoOneUpPop(BenefitItemObj*, MtxPtr, f32);
@@ -193,11 +193,11 @@ namespace MR {
     bool isSame(const NameObj*, const NameObj*);
     bool tryRegisterNamePosLinkObj(const NameObj*, const JMapInfoIter&);
     bool findNamePos(const char*, MtxPtr);
-    bool findNamePos(const char*, TVec3f*, TVec3f*);
+    bool findNamePos(const char*, Vec3f*, Vec3f*);
     void findNamePosOnGround(const char*, MtxPtr);
     bool tryFindNamePos(const char*, MtxPtr);
-    bool tryFindNamePos(const char*, TVec3f*, TVec3f*);
+    bool tryFindNamePos(const char*, Vec3f*, Vec3f*);
     void findLinkNamePos(const NameObj*, const char*, MtxPtr);
     bool tryFindLinkNamePos(const NameObj*, const char*, MtxPtr);
-    bool tryFindLinkNamePos(const NameObj*, const char*, TVec3f*, TVec3f*);
+    bool tryFindLinkNamePos(const NameObj*, const char*, Vec3f*, Vec3f*);
 };  // namespace MR

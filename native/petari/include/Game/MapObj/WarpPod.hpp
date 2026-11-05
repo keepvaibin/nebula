@@ -64,7 +64,7 @@ public:
     s32 mGrandstarReq;
     s32 mCameraTime;
     s32 mGlowColorIndex;
-    TVec3f* _C4;
+    Vec3f* _C4;
     u16 _C8;
     bool mArg7;
     bool mIsInactive;

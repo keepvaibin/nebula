@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 struct PowerStarInfo {
     bool _0;
@@ -21,7 +21,7 @@ public:
     bool isRed(const char*, s32) const;
     bool isGrand(const char*, s32) const;
     void initStarInfoTableAfterPlacement();
-    void requestAppearPowerStar(const char*, s32, const TVec3f*, bool, bool);
+    void requestAppearPowerStar(const char*, s32, const Vec3f*, bool, bool);
     bool isExistPowerStarAtScenario(int) const;
     bool isCorrectStarIdWithBBS(const char*, const char*, s32) const;
     bool isSuccess(const char*, s32) const;

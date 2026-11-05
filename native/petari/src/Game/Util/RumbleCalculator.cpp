@@ -1,5 +1,5 @@
 #include "Game/Util/RumbleCalculator.hpp"
-#include <JSystem/JMath/JMATrigonometric.hpp>
+#include <nebula_geometry.hpp>
 
 RumbleCalculator::RumbleCalculator(f32 frequency, f32 phaseOffset, f32 amplitude, u32 duration) {
     _4 = duration;
@@ -30,7 +30,7 @@ void RumbleCalculator::calc() {
         f32 progress = static_cast< f32 >(_4) / static_cast< f32 >(_8);
         f32 attenuation = 1.0f + -progress;
 
-        TVec3f phases;
+        Vec3f phases;
         f32 phase = progress;
         phase *= TWO_PI;
         phases.x = _18 * phase;
@@ -52,6 +52,6 @@ RumbleCalculatorCosMultLinear::RumbleCalculatorCosMultLinear(f32 frequency, f32 
     : RumbleCalculator(frequency, phaseOffset, amplitude, duration) {
 }
 
-void RumbleCalculatorCosMultLinear::calcValues(TVec3f* pValues, const TVec3f& rPhases) {
-    pValues->set< f32 >(JMACosRadian(rPhases.x), JMACosRadian(rPhases.y), JMACosRadian(rPhases.z));
+void RumbleCalculatorCosMultLinear::calcValues(Vec3f* pValues, const Vec3f& rPhases) {
+    pValues->set< f32 >(Angle::cosRadian(rPhases.x), Angle::cosRadian(rPhases.y), Angle::cosRadian(rPhases.z));
 }

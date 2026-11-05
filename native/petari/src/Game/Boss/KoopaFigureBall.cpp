@@ -59,15 +59,15 @@ void KoopaFigureBall::control() {
     mAngle += (mVelocity.dot(mFront) * 180.0f) / (mRadius * MR::pi());
     MR::makeMtxUpFrontPos(&mBaseMtx, -mGravity, mFront, mPosition + mGravity * mRadius);
 
-    TVec3f yDir;
-    TVec3f newTrans;
+    Vec3f yDir;
+    Vec3f newTrans;
     mBaseMtx.getYDir(yDir);
     mBaseMtx.getTrans(newTrans);
     newTrans += yDir * mRadius;
     mBaseMtx.setTrans(newTrans);
 
-    TPos3f rotMtx;
-    rotMtx.makeRotate(TVec3f(1.0f, 0.0f, 0.0f), MR::toRadian(mAngle));
+    Pos3f rotMtx;
+    rotMtx.makeRotate(Vec3f(1.0f, 0.0f, 0.0f), MR::toRadian(mAngle));
     mBaseMtx.concat(mBaseMtx, rotMtx);
 }
 

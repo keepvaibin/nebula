@@ -55,18 +55,18 @@ public:
 
     f32 mSurfSpeed;
     f32 mOrthoSpeed;
-    TVec3f mOrthoVelocity;
+    Vec3f mOrthoVelocity;
 
     f32 mSteerRate;
     f32 mSteerAccel;
 
-    TVec3f mFront;
-    TVec3f mUp;
-    TVec3f mSide;
-    TVec3f mBaseUp;    // base up vector for modification
-    TVec3f mBaseSide;  // base side vector for modification
-    TVec3f mGroundNormal;
-    TVec3f mWarpPos;
+    Vec3f mFront;
+    Vec3f mUp;
+    Vec3f mSide;
+    Vec3f mBaseUp;    // base up vector for modification
+    Vec3f mBaseSide;  // base side vector for modification
+    Vec3f mGroundNormal;
+    Vec3f mWarpPos;
 
     LiveActor* mRider;
 
@@ -74,9 +74,9 @@ public:
     f32 mRayTilt;
     bool mInWater;
     s32 mAirTime;
-    TVec3f mWaterNormal;
+    Vec3f mWaterNormal;
     WaterInfo mWaterInfo;
-    TVec3f mWaterShadowPos;
+    Vec3f mWaterShadowPos;
     f32 mShadowAlpha;
 
     s32 mTwistBufferSize;
@@ -86,7 +86,7 @@ public:
     bool mInTutorial;
     s32 mLectureIdx;
 
-    TPos3f mEffectHostMtx;
+    Pos3f mEffectHostMtx;
     ActorJointCtrl* mActorJointCtrl;
     ProjmapEffectMtxSetter* mProjmapFxMtxSetter;
 };

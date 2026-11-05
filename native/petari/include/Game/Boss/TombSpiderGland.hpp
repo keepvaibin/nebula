@@ -4,7 +4,7 @@
 
 class TombSpiderGland : public PartsModel {
 public:
-    TombSpiderGland(LiveActor*, const char*, const TVec3f&, const TVec3f&, const char*);
+    TombSpiderGland(LiveActor*, const char*, const Vec3f&, const Vec3f&, const char*);
 
     virtual void init(const JMapInfoIter& rIter);
 

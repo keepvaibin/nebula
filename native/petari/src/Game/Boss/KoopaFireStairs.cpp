@@ -10,7 +10,7 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <JSystem/JMath/JMATrigonometric.hpp>
+#include <nebula_geometry.hpp>
 
 namespace {
     // static const f32 sFlyUpHeight = _;
@@ -37,7 +37,7 @@ void KoopaFireStairs::init(const JMapInfoIter& rIter) {
     MR::connectToSceneEnemy(this);
 
     initHitSensor(1);
-    MR::addHitSensorEnemyAttack(this, "Fire", 8, 100.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemyAttack(this, "Fire", 8, 100.0f, Vec3f(0.0f, 0.0f, 0.0f));
     initEffectKeeper(1, nullptr, false);
 
     MR::addEffectHitNormal(this, "Hit");
@@ -75,7 +75,7 @@ void KoopaFireStairs::makeActorDead() {
     mBreakModel->makeActorDead();
 }
 
-void KoopaFireStairs::setInfo(const KoopaBattleMapStair* pStair, const TVec3f* pAxis) {
+void KoopaFireStairs::setInfo(const KoopaBattleMapStair* pStair, const Vec3f* pAxis) {
     mStair = pStair;
 
     _A0.set(mPosition);
@@ -83,9 +83,9 @@ void KoopaFireStairs::setInfo(const KoopaBattleMapStair* pStair, const TVec3f* p
     MR::calcGravity(this);
 
     if (pAxis != nullptr) {
-        TVec3f vec1 = mStair->mPosition - _A0;
-        TVec3f vec2 = mStair->_AC - _A0;
-        TVec3f vec;
+        Vec3f vec1 = mStair->mPosition - _A0;
+        Vec3f vec2 = mStair->_AC - _A0;
+        Vec3f vec;
         vec.cross(vec1, vec2);
 
         if (vec.dot(pStair->mGravity) > 0.0f) {
@@ -102,7 +102,7 @@ void KoopaFireStairs::setInfo(const KoopaBattleMapStair* pStair, const TVec3f* p
         MR::normalize(&_94);
     } else {
         s32 breakTime = mStair->calcRemainTimeToBreak();
-        TVec3f v10 = mStair->_AC - mPosition;
+        Vec3f v10 = mStair->_AC - mPosition;
         f32 length = v10.length();
 
         mVelocity.set(v10);
@@ -116,10 +116,10 @@ void KoopaFireStairs::setInfo(const KoopaBattleMapStair* pStair, const TVec3f* p
 // TODO fix
 void KoopaFireStairs::exeFly() {
     if (mStair->isBreak()) {
-        TVec3f v15(mVelocity);
+        Vec3f v15(mVelocity);
         MR::normalizeOrZero(&v15);
         v15.scale(100.0f);
-        const TVec3f& rPosition = mPosition;
+        const Vec3f& rPosition = mPosition;
         v15.add(rPosition);
         MR::emitEffectHit(this, v15, "Hit");
         MR::emitEffect(this, "MeteorStrikeBreak");
@@ -131,7 +131,7 @@ void KoopaFireStairs::exeFly() {
         setNerve(GET_NERVE(KoopaFireStairs, KoopaFireStairsNrvBreak));
     } else {
         if (mIsKoopaJr) {
-            TVec3f v14(mPosition);
+            Vec3f v14(mPosition);
             f32 rate = mStair->calcTimeRate();
 
             mPosition = _A0 * (1.0f - rate) + mStair->_AC * rate;
@@ -141,7 +141,7 @@ void KoopaFireStairs::exeFly() {
 
             mPosition.add(_AC * v6 * 1500.0f);
 
-            TVec3f v13 = mPosition - v14;
+            Vec3f v13 = mPosition - v14;
 
             if (!MR::isNearZero(v13)) {
                 MR::normalize(&v13);
@@ -168,7 +168,7 @@ void KoopaFireStairs::exeBreak() {
 }
 
 void KoopaFireStairs::calcAndSetBaseMtx() {
-    TPos3f v5;
+    Pos3f v5;
     v5.identity();
     MR::makeMtxFrontUpPos(&v5, _94, -mGravity, mPosition);
     MR::rotateMtxLocalXDegree(v5, mRotation.x);

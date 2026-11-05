@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class JumpStand : public LiveActor {
 public:
@@ -23,6 +23,6 @@ public:
     void endBindAndShootUp(f32, JumpType);
 
     LiveActor* mBindedActor;
-    TPos3f _90;
+    Pos3f _90;
     bool mIsMarioJumpingHigh;
 };

@@ -45,7 +45,7 @@ void GameSceneScenarioOpeningCameraState::start() {
     MR::startStageBGM("BGM_START_DEMO", false);
     NebulaMtxCopy(MR::getPlayerBaseMtx(), mBaseMtx);
 
-    TVec3f namePos;
+    Vec3f namePos;
 
     if (MR::tryFindNamePos("\203\130\203\136\201\133\203\147\203\112\203\201\203\211\203\175\203\212\203\111\215\300\225\127" /* スタートカメラマリオ座標 */, &namePos, nullptr)) {
         MR::setPlayerPos("\203\130\203\136\201\133\203\147\203\112\203\201\203\211\203\175\203\212\203\111\215\300\225\127" /* スタートカメラマリオ座標 */);

@@ -12,25 +12,25 @@ void CameraTrundle::reset() {
 }
 
 CameraTargetObj* CameraTrundle::calc() {
-    TVec3f watchPos;
+    Vec3f watchPos;
     CameraLocalUtil::makeWatchPoint(&watchPos, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
 
-    TVec3f watchPoint = mWPoint;
+    Vec3f watchPoint = mWPoint;
     mZoneMatrix.mult(watchPoint, watchPoint);
 
-    TVec3f side = mAxis;
+    Vec3f side = mAxis;
     mZoneMatrix.mult33(side);
 
-    TVec3f up = CameraLocalUtil::getTarget(this)->getPosition() - watchPoint;
+    Vec3f up = CameraLocalUtil::getTarget(this)->getPosition() - watchPoint;
     up.sub(side * side.dot(up));
 
-    TVec3f camZ = up.cross(side);
+    Vec3f camZ = up.cross(side);
     if (MR::isNearZero(camZ)) {
         return CameraLocalUtil::getTarget(this);
     }
     MR::normalize(&camZ);
 
-    TQuat4f rotX;
+    Quat4f rotX;
     rotX.setRotate(side, -mAngleX);
     rotX.transform(camZ);
 
@@ -44,7 +44,7 @@ CameraTargetObj* CameraTrundle::calc() {
         if (rate < -1.0f) {
             rate = -1.0f;
         }
-        TQuat4f rotY;
+        Quat4f rotY;
         rotY.setRotate(up, mAngleY * rate);
         rotY.transform(camZ);
     }

@@ -14,10 +14,10 @@ public:
     virtual void kill();
     virtual bool receiveMsgEnemyAttack(u32, HitSensor*, HitSensor*);
 
-    virtual void calcTripodLocalMatrix(TPos3f*);
+    virtual void calcTripodLocalMatrix(Pos3f*);
     virtual void activateTripodBoss();
 
-    void setLocalMatrix(const TPos3f&);
+    void setLocalMatrix(const Pos3f&);
     void setActiveLebel(s32);
     void setHasCollision(bool);
     bool tryShootSetting();
@@ -39,7 +39,7 @@ public:
     void exeRestart();
     void exeBreak();
 
-    TPos3f _E4;
+    Pos3f _E4;
     HomingKiller* mKiller;
     f32 mCanShootSettingPlayerDistance;
     s32 mActiveLabel;

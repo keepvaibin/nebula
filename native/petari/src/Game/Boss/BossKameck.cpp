@@ -46,8 +46,8 @@ void BossKameck::init(const JMapInfoIter& rIter) {
     MR::invalidateClipping(this);
     MR::initShadowFromCSV(this, "Shadow");
     initHitSensor(2);
-    MR::addHitSensorEnemy(this, "body", 8, 300.0f, TVec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorEnemyAttack(this, "attack", 8, 240.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemy(this, "body", 8, 300.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemyAttack(this, "attack", 8, 240.0f, Vec3f(0.0f, 0.0f, 0.0f));
     initEffectKeeper(0, nullptr, false);
     MR::createKameckBeamHolder();
     MR::createKameckFireBallHolder();
@@ -122,7 +122,7 @@ s32 BossKameck::getLivingKameckNum() const {
 }
 
 void BossKameck::appearStarPieceToPlayer(s32 num) {
-    TVec3f dir;
+    Vec3f dir;
     MR::calcVecToPlayerH(&dir, this, nullptr);
     dir.sub(mGravity);
     MR::normalizeOrZero(&dir);
@@ -174,7 +174,7 @@ void BossKameck::endDemo() {
 }
 
 void BossKameck::setPose(MtxPtr pPoseMtx) {
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.set(pPoseMtx);
     mtx.getQuat(_90);
     mtx.getTrans(mPosition);
@@ -186,8 +186,8 @@ void BossKameck::killAllBeam() {
 }
 
 void BossKameck::updatePose() {
-    TVec3f v19;
-    TVec3f v18;
+    Vec3f v19;
+    Vec3f v18;
     v19.set(-mGravity);
     v18.killElement(mVelocity - _C8, mGravity);
     f32 mag = v18.length();

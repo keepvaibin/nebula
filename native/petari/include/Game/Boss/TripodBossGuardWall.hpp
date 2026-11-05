@@ -34,8 +34,8 @@ public:
 
     CameraTargetMtx* mCameraTargetMtx;
     TripodBossGuardWallPart mParts[8];
-    TPos3f mBaseMtx;
-    TVec3f mStartTrans;
+    Pos3f mBaseMtx;
+    Vec3f mStartTrans;
     s32 mJointID;
     ActorCameraInfo* mCameraInfo;
 };

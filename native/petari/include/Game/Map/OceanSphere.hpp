@@ -9,8 +9,8 @@ class WaterInfo;
 
 class OceanSpherePlane {
 public:
-    OceanSpherePlane(s32 pointCount, const TVec3f* pCenter, const TVec3f& rAxis1, const TVec3f& rAxis2, const TVec2f& rTex1, const TVec2f& rTex2,
-                     const TVec2f& rTex3);
+    OceanSpherePlane(s32 pointCount, const Vec3f* pCenter, const Vec3f& rAxis1, const Vec3f& rAxis2, const Vec2f& rTex1, const Vec2f& rTex2,
+                     const Vec2f& rTex3);
 
     void update(f32 radius, f32 wave1Time, f32 wave2Time);
     OceanSpherePoint* getPoint(int col, int row) const {
@@ -24,7 +24,7 @@ public:
 
 class OceanSpherePlaneEdge {
 public:
-    OceanSpherePlaneEdge(s32 pointCount, const TVec3f* pCenter, const TVec3f& rAxis1, const TVec3f& rAxis2, const TVec2f& rTex1, const TVec2f& rTex2);
+    OceanSpherePlaneEdge(s32 pointCount, const Vec3f* pCenter, const Vec3f& rAxis1, const Vec3f& rAxis2, const Vec2f& rTex1, const Vec2f& rTex2);
 
     void update(f32 radius, f32 wave1Time, f32 wave2Time);
 
@@ -41,8 +41,8 @@ public:
     virtual void control();
     virtual void draw() const;
 
-    bool isInWater(const TVec3f& rPos) const;
-    bool calcWaterInfo(const TVec3f& rPos, const TVec3f& rGravity, WaterInfo* pInfo) const;
+    bool isInWater(const Vec3f& rPos) const;
+    bool calcWaterInfo(const Vec3f& rPos, const Vec3f& rGravity, WaterInfo* pInfo) const;
     void exeWait();
     void exeRiseUp();
     void initPoints();

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class ActorCameraInfo;
 class J3DShapeDraw;
@@ -52,22 +52,22 @@ public:
     bool tryAccelHangUp();
 
     PartsModel* mSeedPartsModel;
-    TPos3f mSeedMtx;
+    Pos3f mSeedMtx;
     PlantStalk* mStalk;
     PartsModel* mTopPartsModel;
-    TPos3f mTopMtx;
+    Pos3f mTopMtx;
     s32 mNumLeaves;
     PlantLeaf** mLeaves;
     J3DShapeDraw* mShapeDraw;
     LiveActor* mRider;
     f32 mRailCoord;
-    TVec3f mUp;
-    TVec3f mFront;
+    Vec3f mUp;
+    Vec3f mFront;
     f32 mRideVelocity;
     s32 mAccelTimer;
     f32 mJumpSpeed;
     f32 mJumpSpeedOffsetY;
-    TVec3f mClippingCenter;
+    Vec3f mClippingCenter;
     ActorCameraInfo* mCameraInfo;
     bool mPlayAppearDemo;
     bool mGrabbedTop;

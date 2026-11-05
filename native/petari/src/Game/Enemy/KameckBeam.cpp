@@ -21,7 +21,7 @@ namespace {
 KameckBeamEventListener::KameckBeamEventListener() {
 }
 
-KameckBeamCollisionFilter::KameckBeamCollisionFilter(const TVec3f* pVec, f32 f) : _4(pVec), _8(f) {
+KameckBeamCollisionFilter::KameckBeamCollisionFilter(const Vec3f* pVec, f32 f) : _4(pVec), _8(f) {
 }
 
 bool KameckBeamCollisionFilter::isInvalidParts(const CollisionParts* pCollisionParts) const {
@@ -70,7 +70,7 @@ void KameckBeam::init(const JMapInfoIter& rIter) {
     MR::setEffectHostSRT(this, "BeamTurtle", &mPosition, nullptr, nullptr);
     MR::setEffectHostSRT(this, "BeamFire", &mPosition, nullptr, nullptr);
     initHitSensor(1);
-    MR::addHitSensorEnemyAttack(this, "attack", 8, ::sBeamRadius, TVec3f(0.0f));
+    MR::addHitSensorEnemyAttack(this, "attack", 8, ::sBeamRadius, Vec3f(0.0f));
     MR::initShadowVolumeSphere(this, ::sBeamRadius);
     MR::onCalcShadow(this, nullptr);
     MR::invalidateClipping(this);
@@ -137,7 +137,7 @@ bool KameckBeam::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiv
     return false;
 }
 
-void KameckBeam::setWandLocalPosition(const TVec3f& rLocalPos) {
+void KameckBeam::setWandLocalPosition(const Vec3f& rLocalPos) {
     mWandLocalPosition.set(rLocalPos);
 }
 
@@ -190,7 +190,7 @@ bool KameckBeam::requestFollowWand(MtxPtr pMtx, f32 scale) {
 }
 
 void KameckBeam::requestShootToPlayerGround(f32 speed) {
-    TVec3f shootDir;
+    Vec3f shootDir;
     MR::getPlayerGroundPos(&shootDir);
 
     shootDir -= mGravity * ::sBeamRadius;
@@ -206,7 +206,7 @@ void KameckBeam::requestShootToPlayerGround(f32 speed) {
 }
 
 void KameckBeam::requestShootToPlayerCenter(f32 speed) {
-    TVec3f shootDir;
+    Vec3f shootDir;
     shootDir.set(*MR::getPlayerCenterPos() - mPosition);
 
     MR::normalizeOrZero(&shootDir);
@@ -219,7 +219,7 @@ void KameckBeam::requestShootToPlayerCenter(f32 speed) {
     requestShoot(shootDir, speed);
 }
 
-void KameckBeam::requestShoot(const TVec3f& rDir, f32 speed) {
+void KameckBeam::requestShoot(const Vec3f& rDir, f32 speed) {
     emitBeamEffect();
     MR::onBind(this);
     MR::validateHitSensors(this);
@@ -304,7 +304,7 @@ bool KameckBeam::tryChangeFire() {
         break;
     }
 
-    TVec3f result;
+    Vec3f result;
     result.killElement(_A4, mGravity);
 
     if (MR::isNearZero(result)) {
@@ -319,7 +319,7 @@ bool KameckBeam::tryChangeFire() {
         if (mKameckFireBalls[i] != nullptr) {
             mKameckFireBalls[i]->setEventListener(mEventListener);
             mKameckFireBalls[i]->mPosition.set(mPosition);
-            TVec3f result2;
+            Vec3f result2;
             MR::rotateVecDegree(&result2, result, mGravity, ::sFireAngleList[fireAngleListIndex][i]);
             mKameckFireBalls[i]->appearDirection(result2);
             b1 = true;

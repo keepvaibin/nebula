@@ -9,7 +9,7 @@ public:
 
     virtual ~BigBubbleCameraArea();
 
-    virtual bool isInVolume(const TVec3f&) const;
+    virtual bool isInVolume(const Vec3f&) const;
 
     virtual const char* getManagerName() const {
         return "CubeCamera";
@@ -22,7 +22,7 @@ public:
 
     virtual ~BigBubbleSwitchArea();
 
-    virtual bool isInVolume(const TVec3f&) const;
+    virtual bool isInVolume(const Vec3f&) const;
 
     virtual const char* getManagerName() const {
         return "SwitchArea";

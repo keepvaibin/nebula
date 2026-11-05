@@ -87,7 +87,7 @@ namespace MR {
         return EventFunction::getPowerStarEventKeeper()->isGrand(pParam1, param2);
     }
 
-    void appearEventPowerStar(const char* pParam1, s32 param2, const TVec3f* pParam3, bool param4, bool param5) {
+    void appearEventPowerStar(const char* pParam1, s32 param2, const Vec3f* pParam3, bool param4, bool param5) {
         EventFunction::getPowerStarEventKeeper()->requestAppearPowerStar(pParam1, param2, pParam3, param4, param5);
     }
 

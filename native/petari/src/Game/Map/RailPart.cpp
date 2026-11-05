@@ -1,11 +1,11 @@
 #include "Game/Map/RailPart.hpp"
 #include "Game/Map/BezierRail.hpp"
-#include <JSystem/JMath/JMath.hpp>
+#include <nebula_geometry.hpp>
 
 RailPart::RailPart() : mRailPartLinear(nullptr), mRailPartBezier(nullptr) {
 }
 
-void RailPart::init(const TVec3f& rPoint1, const TVec3f& rPoint1Ctrl, const TVec3f& rPoint2Ctrl, const TVec3f& rPoint2) {
+void RailPart::init(const Vec3f& rPoint1, const Vec3f& rPoint1Ctrl, const Vec3f& rPoint2Ctrl, const Vec3f& rPoint2) {
     if ((rPoint1.epsilonEquals(rPoint1Ctrl, 0.1f)) && (rPoint2.epsilonEquals(rPoint2Ctrl, 0.1f))) {
         mRailPartLinear = new LinearRailPart();
         mRailPartLinear->set(rPoint1, rPoint2);
@@ -14,12 +14,12 @@ void RailPart::init(const TVec3f& rPoint1, const TVec3f& rPoint1Ctrl, const TVec
     }
 }
 
-void RailPart::initForBezier(const TVec3f& rPoint1, const TVec3f& rPoint1Ctrl, const TVec3f& rPoint2Ctrl, const TVec3f& rPoint2) {
+void RailPart::initForBezier(const Vec3f& rPoint1, const Vec3f& rPoint1Ctrl, const Vec3f& rPoint2Ctrl, const Vec3f& rPoint2) {
     mRailPartBezier = new BezierRailPart();
     mRailPartBezier->set(rPoint1, rPoint1Ctrl, rPoint2Ctrl, rPoint2);
 }
 
-void RailPart::calcPos(TVec3f* pOut, f32 t) const {
+void RailPart::calcPos(Vec3f* pOut, f32 t) const {
     if (mRailPartLinear) {
         pOut->scaleAdd(t, mRailPartLinear->mCtrlDegree1, mRailPartLinear->mStart);
     } else {
@@ -27,7 +27,7 @@ void RailPart::calcPos(TVec3f* pOut, f32 t) const {
     }
 }
 
-void RailPart::calcVelocity(TVec3f* pOut, f32 t) const {
+void RailPart::calcVelocity(Vec3f* pOut, f32 t) const {
     if (mRailPartLinear) {
         pOut->set(mRailPartLinear->mCtrlDegree1);
     } else {
@@ -59,7 +59,7 @@ f32 RailPart::getParam(f32 t) const {
     return mRailPartBezier->getParam(t);
 }
 
-f32 RailPart::getNearestParam(const TVec3f& rPos, f32 t) const {
+f32 RailPart::getNearestParam(const Vec3f& rPos, f32 t) const {
     if (mRailPartLinear) {
         return mRailPartLinear->getNearestParam(rPos, t);
     }
@@ -67,15 +67,15 @@ f32 RailPart::getNearestParam(const TVec3f& rPos, f32 t) const {
     return mRailPartBezier->getNearestParam(rPos, t);
 }
 
-void LinearRailPart::set(const TVec3f& rPoint1, const TVec3f& rPoint2) {
+void LinearRailPart::set(const Vec3f& rPoint1, const Vec3f& rPoint2) {
     mStart = rPoint1;
     mCtrlDegree1 = rPoint2;
     mCtrlDegree1 -= rPoint1;
     mLength = NebulaVecMagXYZ(&mCtrlDegree1);
 }
 
-f32 LinearRailPart::getNearestParam(const register TVec3f& rPos, f32 t) const {
-    TVec3f v = rPos;
+f32 LinearRailPart::getNearestParam(const register Vec3f& rPos, f32 t) const {
+    Vec3f v = rPos;
     v -= mStart;
 
     f32 proj = v.dot(mCtrlDegree1) / mCtrlDegree1.squared();

@@ -11,7 +11,7 @@ public:
     virtual CameraTargetObj* calc();
     virtual CamTranslatorBase* createTranslator();
 
-    void goRoundBehind(TVec3f&, TVec3f&, TVec3f&);
+    void goRoundBehind(Vec3f&, Vec3f&, Vec3f&);
 
     void setParam(f32 distMin, f32 distMax, f32 pitchMax) {
         mDistMin = distMin;

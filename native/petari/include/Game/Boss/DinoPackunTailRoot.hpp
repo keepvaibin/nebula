@@ -8,8 +8,8 @@ public:
     DinoPackunTailRoot(const char*, DinoPackun*);
 
     virtual void init(const JMapInfoIter&);
-    virtual void addNodeVelocity(const TVec3f&);
+    virtual void addNodeVelocity(const Vec3f&);
     virtual JointController* createJointControllerOwn(LiveActor*, const char*);
 
-    bool calcJointDirection(TPos3f*, const JointControllerInfo&);
+    bool calcJointDirection(Pos3f*, const JointControllerInfo&);
 };

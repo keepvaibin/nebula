@@ -6,7 +6,7 @@
 #include "Game/Player/MarioState.hpp"
 #include "Game/Util/MathUtil.hpp"
 
-bool Mario::blown(const TVec3f& rVec) {
+bool Mario::blown(const Vec3f& rVec) {
     if (getCurrentStatus() == MarioStatus_Blown) {
         return false;
     }
@@ -76,7 +76,7 @@ bool MarioBlown::update() {
         }
 
         if (mTimer > 60) {
-            TVec3f killed;
+            Vec3f killed;
             if (MR::isNearZero(MR::vecKillElement(mActor->getLastMove(), mActor->_240, &killed))) {
                 return false;
             }

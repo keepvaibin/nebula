@@ -1,19 +1,19 @@
 #pragma once
 
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class BossStinkBug;
 class HitSensor;
 
 namespace BossStinkBugFunction {
-    void addHeightOffset(TVec3f*, const BossStinkBug*, f32);
-    void addLocalHeightOffset(TVec3f*, BossStinkBug*, f32);
-    void calcDiffCurrentRailPosition(TVec3f*, BossStinkBug*, f32, f32);
+    void addHeightOffset(Vec3f*, const BossStinkBug*, f32);
+    void addLocalHeightOffset(Vec3f*, BossStinkBug*, f32);
+    void calcDiffCurrentRailPosition(Vec3f*, BossStinkBug*, f32, f32);
     void moveRail(BossStinkBug*, f32, f32, f32);
-    void turnRailGround(BossStinkBug*, const TVec3f&, f32, bool);
-    void turnRail(BossStinkBug*, const TVec3f&, f32, f32, f32, f32, f32, bool);
-    void regainToRail(BossStinkBug*, const TVec3f&, f32, f32, f32, f32);
-    void setFallVelocity(BossStinkBug*, const TVec3f&, f32, f32, f32);
+    void turnRailGround(BossStinkBug*, const Vec3f&, f32, bool);
+    void turnRail(BossStinkBug*, const Vec3f&, f32, f32, f32, f32, f32, bool);
+    void regainToRail(BossStinkBug*, const Vec3f&, f32, f32, f32, f32);
+    void setFallVelocity(BossStinkBug*, const Vec3f&, f32, f32, f32);
     void throwBomb(BossStinkBug*);
     void invalidateAttack(BossStinkBug*);
     bool isHipDropableSensor(const BossStinkBug*, const HitSensor*);

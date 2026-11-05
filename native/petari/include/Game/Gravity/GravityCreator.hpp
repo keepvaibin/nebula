@@ -17,7 +17,7 @@ public:
 
     virtual PlanetGravity* getGravity() = 0;
     virtual PlanetGravity* createInstance() = 0;
-    virtual void settingFromSRT(const TVec3f& rTrans, const TVec3f& rRotate, const TVec3f& rScale) {
+    virtual void settingFromSRT(const Vec3f& rTrans, const Vec3f& rRotate, const Vec3f& rScale) {
     }
     virtual void settingFromJMapArgs(s32 arg0, s32 arg1, s32 arg2) {
     }
@@ -34,7 +34,7 @@ public:
 
     virtual PlanetGravity* getGravity();
     virtual PlanetGravity* createInstance();
-    virtual void settingFromSRT(const TVec3f& rTrans, const TVec3f& rRotate, const TVec3f& rScale);
+    virtual void settingFromSRT(const Vec3f& rTrans, const Vec3f& rRotate, const Vec3f& rScale);
     virtual void settingFromJMapArgs(s32 arg0, s32 arg1, s32 arg2);
 
     CubeGravity* mGravityInstance;
@@ -47,7 +47,7 @@ public:
 
     virtual PlanetGravity* getGravity();
     virtual PlanetGravity* createInstance();
-    virtual void settingFromSRT(const TVec3f& rTrans, const TVec3f& rRotate, const TVec3f& rScale);
+    virtual void settingFromSRT(const Vec3f& rTrans, const Vec3f& rRotate, const Vec3f& rScale);
     virtual void settingFromJMapArgs(s32 arg0, s32 arg1, s32 arg2);
 
     DiskGravity* mGravityInstance;
@@ -60,7 +60,7 @@ public:
 
     virtual PlanetGravity* getGravity();
     virtual PlanetGravity* createInstance();
-    virtual void settingFromSRT(const TVec3f& rTrans, const TVec3f& rRotate, const TVec3f& rScale);
+    virtual void settingFromSRT(const Vec3f& rTrans, const Vec3f& rRotate, const Vec3f& rScale);
     virtual void settingFromJMapArgs(s32 arg0, s32 arg1, s32 arg2);
 
     DiskTorusGravity* mGravityInstance;
@@ -73,7 +73,7 @@ public:
 
     virtual PlanetGravity* getGravity();
     virtual PlanetGravity* createInstance();
-    virtual void settingFromSRT(const TVec3f& rTrans, const TVec3f& rRotate, const TVec3f& rScale);
+    virtual void settingFromSRT(const Vec3f& rTrans, const Vec3f& rRotate, const Vec3f& rScale);
     virtual void settingFromJMapArgs(s32 arg0, s32 arg1, s32 arg2);
 
     ConeGravity* mGravityInstance;
@@ -86,7 +86,7 @@ public:
 
     virtual PlanetGravity* getGravity();
     virtual PlanetGravity* createInstance();
-    virtual void settingFromSRT(const TVec3f& rTrans, const TVec3f& rRotate, const TVec3f& rScale);
+    virtual void settingFromSRT(const Vec3f& rTrans, const Vec3f& rRotate, const Vec3f& rScale);
 
     ParallelGravity* mGravityInstance;
 };
@@ -98,7 +98,7 @@ public:
 
     virtual PlanetGravity* getGravity();
     virtual PlanetGravity* createInstance();
-    virtual void settingFromSRT(const TVec3f& rTrans, const TVec3f& rRotate, const TVec3f& rScale);
+    virtual void settingFromSRT(const Vec3f& rTrans, const Vec3f& rRotate, const Vec3f& rScale);
     virtual void settingFromJMapArgs(s32 arg0, s32 arg1, s32 arg2);
 
     ParallelGravity* mGravityInstance;
@@ -111,7 +111,7 @@ public:
 
     virtual PlanetGravity* getGravity();
     virtual PlanetGravity* createInstance();
-    virtual void settingFromSRT(const TVec3f& rTrans, const TVec3f& rRotate, const TVec3f& rScale);
+    virtual void settingFromSRT(const Vec3f& rTrans, const Vec3f& rRotate, const Vec3f& rScale);
     virtual void settingFromJMapArgs(s32 arg0, s32 arg1, s32 arg2);
 
     ParallelGravity* mGravityInstance;
@@ -124,7 +124,7 @@ public:
 
     virtual PlanetGravity* getGravity();
     virtual PlanetGravity* createInstance();
-    virtual void settingFromSRT(const TVec3f& rTrans, const TVec3f& rRotate, const TVec3f& rScale);
+    virtual void settingFromSRT(const Vec3f& rTrans, const Vec3f& rRotate, const Vec3f& rScale);
 
     PointGravity* mGravityInstance;
 };
@@ -136,7 +136,7 @@ public:
 
     virtual PlanetGravity* getGravity();
     virtual PlanetGravity* createInstance();
-    virtual void settingFromSRT(const TVec3f& rTrans, const TVec3f& rRotate, const TVec3f& rScale);
+    virtual void settingFromSRT(const Vec3f& rTrans, const Vec3f& rRotate, const Vec3f& rScale);
     virtual void settingFromJMapArgs(s32 arg0, s32 arg1, s32 arg2);
 
     SegmentGravity* mGravityInstance;

@@ -26,18 +26,18 @@ void Mario::checkBump() {
     }
 }
 
-void Mario::startBump(const TVec3f& rVec) {
+void Mario::startBump(const Vec3f& rVec) {
     if ((getTrans() - rVec).length() >= 100.0f) {
         return;
     }
 
-    TVec3f v21;
-    const TVec3f* grav = &getAirGravityVec();
-    const TVec3f* norm = _4DC->getNormal(0);
+    Vec3f v21;
+    const Vec3f* grav = &getAirGravityVec();
+    const Vec3f* norm = _4DC->getNormal(0);
     MR::vecKillElement(*norm, *grav, &v21);
 
     if (!MR::normalizeOrZero(&v21) && MR::diffAngleAbsHorizontal(mFrontVec, -v21, getAirGravityVec()) > 0.52359879f) {
-        TVec3f v20;
+        Vec3f v20;
         if (MR::vecKillElement(getTrans() - rVec, getAirGravityVec(), &v20) > 0.0f) {
             return;
         }
@@ -53,7 +53,7 @@ void Mario::startBump(const TVec3f& rVec) {
     _3D0 = 0;
     mMovementStates._10 = 0;
     _790 = -(*_4DC->getNormal(0));
-    TVec3f v19;
+    Vec3f v19;
     MR::vecKillElement(-(*_4DC->getNormal(0)), mSideVec, &v19);
 
     if (!MR::normalizeOrZero(&v19)) {

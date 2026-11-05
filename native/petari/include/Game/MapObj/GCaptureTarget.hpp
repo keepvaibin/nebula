@@ -22,7 +22,7 @@ public:
     void decidedTarget();
     void releasedTarget();
     void emitNerveEffect();
-    void getTargetPosition(TVec3f*);
+    void getTargetPosition(Vec3f*);
     bool isReleaseForce() const;
     f32 getPointableRange() const;
     f32 releaseDistance() const;

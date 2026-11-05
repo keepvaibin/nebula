@@ -6,24 +6,24 @@ class SegmentGravity : public PlanetGravity {
 public:
     SegmentGravity();
 
-    virtual void updateMtx(const TPos3f& rMtx);
-    virtual bool calcOwnGravityVector(TVec3f* pDest, f32* pScalar, const TVec3f& rPosition) const;
+    virtual void updateMtx(const Pos3f& rMtx);
+    virtual bool calcOwnGravityVector(Vec3f* pDest, f32* pScalar, const Vec3f& rPosition) const;
 
-    void setGravityPoint(u32 index, const TVec3f& rGravityPoint);
-    void setSideVector(const TVec3f& rSideVec);
+    void setGravityPoint(u32 index, const Vec3f& rGravityPoint);
+    void setSideVector(const Vec3f& rSideVec);
     void setValidSideDegree(f32 val);
     void setEdgeValid(u32 index, bool val);
     void updateLocalParam();
 
     // Represents the centers of each base of the cylinder
-    TVec3f mGravityPoints[2];
-    TVec3f mWorldGravityPoints[2];
+    Vec3f mGravityPoints[2];
+    Vec3f mWorldGravityPoints[2];
 
-    TVec3f mSideVector;
-    TVec3f mOppositeSideVecOrtho;
-    TVec3f mWorldOppositeSideVecOrtho;
+    Vec3f mSideVector;
+    Vec3f mOppositeSideVecOrtho;
+    Vec3f mWorldOppositeSideVecOrtho;
 
-    TVec3f mAxis;
+    Vec3f mAxis;
     f32 mAxisLength;
 
     f32 mValidSideDegree;

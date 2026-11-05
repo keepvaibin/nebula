@@ -28,7 +28,7 @@ void BenefitItemLifeUp::initModelAndEfx() {
 
     initBinder(50.0f, 50.0f, 0);
     initHitSensor(1);
-    MR::addHitSensorMapObj(this, "body", 4, 50.0f, TVec3f(0.0f, 50.0f, 0.0f));
+    MR::addHitSensorMapObj(this, "body", 4, 50.0f, Vec3f(0.0f, 50.0f, 0.0f));
 }
 
 void BenefitItemLifeUp::runEfx(const char* pName) {

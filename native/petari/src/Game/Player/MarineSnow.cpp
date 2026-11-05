@@ -11,9 +11,9 @@
 #include "Game/System/NebulaArena.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
 
-MarineSnow::MarineSnow() : mParticleCount(16), mParticlePositions(new TVec3f[mParticleCount]), mCellSize(1000.0f) {
+MarineSnow::MarineSnow() : mParticleCount(16), mParticlePositions(new Vec3f[mParticleCount]), mCellSize(1000.0f) {
     for (s32 idx = 0; idx < mParticleCount; idx++) {
-        TVec3f randVec;
+        Vec3f randVec;
         randVec.set(MR::getRandom() * mCellSize, MR::getRandom() * mCellSize, MR::getRandom() * mCellSize);
         mParticlePositions[idx] = randVec;
     }
@@ -35,7 +35,7 @@ void MarineSnow::clear() {
     }
 }
 
-void MarineSnow::draw(const TVec3f& rPosition, const TVec3f& rUp, f32 surfaceDistance) const {
+void MarineSnow::draw(const Vec3f& rPosition, const Vec3f& rUp, f32 surfaceDistance) const {
     if (mFadeStep == 0) {
         return;
     }
@@ -62,19 +62,19 @@ void MarineSnow::draw(const TVec3f& rPosition, const TVec3f& rUp, f32 surfaceDis
     u32 end = start + mParticleCount / 2;
     pointCount = mParticleCount;
 
-    TVec3f cameraForward = -MR::getCamZdir();
-    TVec3f cameraUp = MR::getCamYdir();
+    Vec3f cameraForward = -MR::getCamZdir();
+    Vec3f cameraUp = MR::getCamYdir();
 
-    TVec3f billboardRight;
+    Vec3f billboardRight;
     billboardRight.cross(cameraForward, cameraUp);
     MR::normalizeOrZero(&billboardRight);
 
-    TVec3f billboardUp;
+    Vec3f billboardUp;
     billboardUp.cross(billboardRight, cameraForward);
     MR::normalizeOrZero(&billboardUp);
 
-    TVec3f diagonalUp = (billboardRight + billboardUp) * 10.0f;
-    TVec3f diagonalDown = (billboardRight - billboardUp) * 10.0f;
+    Vec3f diagonalUp = (billboardRight + billboardUp) * 10.0f;
+    Vec3f diagonalDown = (billboardRight - billboardUp) * 10.0f;
 
     // runtime/src/render/materials/tex_vertex_alpha.hlsl: the flake texture, its alpha times the cell's opacity (the
     // vertices' alpha); blended by alpha, depth tested.
@@ -89,11 +89,11 @@ void MarineSnow::draw(const TVec3f& rPosition, const TVec3f& rUp, f32 surfaceDis
     for (s32 i = -4; i < 4; i++) {
         for (s32 j = -4; j < 4; j++) {
             for (s32 k = -4; k < 4; k++) {
-                TVec3f cellOrigin;
+                Vec3f cellOrigin;
                 cellOrigin.x = originX + i * mCellSize;
                 cellOrigin.y = originY + j * mCellSize;
                 cellOrigin.z = originZ + k * mCellSize;
-                TVec3f surfaceOffset = cellOrigin + rUp * mCellSize - rPosition;
+                Vec3f surfaceOffset = cellOrigin + rUp * mCellSize - rPosition;
 
                 if (surfaceOffset.dot(rUp) > surfaceDistance) {
                     continue;
@@ -127,7 +127,7 @@ void MarineSnow::draw(const TVec3f& rPosition, const TVec3f& rUp, f32 surfaceDis
                 }
 
 
-                TMtx34f mtx;
+                Mtx34f mtx;
                 MtxPtr pTranslationMtx = MR::tmpMtxTrans(cellOrigin);
                 MR::multMtx(mtx, pTranslationMtx, MR::getCameraViewMtx());
                 J3DNativeShape::setPosition(0, mtx);

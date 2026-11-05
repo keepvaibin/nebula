@@ -146,7 +146,7 @@ void MarioActor::trySetLockOnTarget(HitSensor* pSensor) {
         return;
     }
 
-    TVec3f vec = pSensor->mPosition - mPosition;
+    Vec3f vec = pSensor->mPosition - mPosition;
     if (vec.length() > 500.0f) {
         return;
     }
@@ -157,7 +157,7 @@ void MarioActor::trySetLockOnTarget(HitSensor* pSensor) {
         return;
     }
 
-    TVec3f front;
+    Vec3f front;
     getFrontVec(&front);
     MR::vecKillElement(front, getGravityVec(), &front);
 
@@ -221,27 +221,27 @@ bool MarioActor::tryCoinPullOne(HitSensor* pSensor) {
     return pSensor->receiveMessage(ACTMES_ITEM_PULL, getSensor("body"));
 }
 
-void MarioActor::tryPullTrans(TVec3f* pVelocity, const TVec3f& rPosition) {
-    TVec3f center(_2A0);
-    TVec3f ground;
+void MarioActor::tryPullTrans(Vec3f* pVelocity, const Vec3f& rPosition) {
+    Vec3f center(_2A0);
+    Vec3f ground;
     getGroundPos(&ground);
     if (IsMarioSwimming()) {
         ground = center - _4B8 * 600.0f;
     } else if (mMario->mMovementStates._1) {
-        TVec3f offset = ground - center;
+        Vec3f offset = ground - center;
         f32 height = MR::vecKillElement(offset, mMario->_368, &offset);
         ground = center + mMario->_368 * height;
     }
 
-    TVec3f foot;
+    Vec3f foot;
     f32 projection = MR::getFootPoint(center, ground, rPosition, &foot);
-    TVec3f inward = foot - rPosition;
+    Vec3f inward = foot - rPosition;
     f32 radius = inward.length();
     if (radius > 600.0f) {
         radius = 600.0f;
     }
 
-    TVec3f speed;
+    Vec3f speed;
     speed.y = 400000.0f / (10000.0f + radius * radius);
     f32 height = MR::abs(projection * (ground - center).length());
     if (height < speed.y) {
@@ -256,14 +256,14 @@ void MarioActor::tryPullTrans(TVec3f* pVelocity, const TVec3f& rPosition) {
         speed.y = 0.4f * speed.y;
     }
 
-    TVec3f axis = ground - center;
+    Vec3f axis = ground - center;
     MR::normalizeOrZero(&axis);
     MR::normalizeOrZero(&inward);
-    TVec3f tangent;
+    Vec3f tangent;
     tangent.cross(axis, inward);
     speed.z = (0.01f + 0.04f * (600.0f - radius) / 600.0f) * (2.0f * (MR::pi() * radius)) * getConst().getTable()->mCoinPullAngleSpeedRatio;
-    TVec3f nextPosition = rPosition + tangent * speed.z;
-    TVec3f pull = foot - nextPosition;
+    Vec3f nextPosition = rPosition + tangent * speed.z;
+    Vec3f pull = foot - nextPosition;
     f32 nextRadius = pull.length();
     MR::normalizeOrZero(&pull);
     f32 pullSpeed = radius / 25.0f;
@@ -293,10 +293,10 @@ bool MarioActor::releaseThrowMemoSensor() {
 
         s32 idx = _468 - 1;
         if (_470 != nullptr) {
-            TVec3f diff = _470->mPosition - _2A0;
+            Vec3f diff = _470->mPosition - _2A0;
 
             if (mMario->isSwimming()) {
-                TVec3f throwVec;
+                Vec3f throwVec;
                 getThrowVec(&throwVec);
                 if (MR::diffAngleAbs(diff, throwVec) > PI / 3.0f) {
                     _470 = nullptr;
@@ -405,16 +405,16 @@ void MarioActor::tryTornadoPull(HitSensor* pSensor) {
     case ATYPE_COIN:
     case ATYPE_STAR_PIECE: {
         if (mPlayerMode == 7 || IsMarioSwimming()) {
-            TVec3f center(_2A0);
-            TVec3f ground;
+            Vec3f center(_2A0);
+            Vec3f ground;
             getGroundPos(&ground);
             if (IsMarioSwimming()) {
                 ground = center - _4B8 * 600.0f;
             }
 
             center += mMario->mHeadVec * 200.0f;
-            TVec3f position(pSensor->mPosition);
-            TVec3f foot;
+            Vec3f position(pSensor->mPosition);
+            Vec3f foot;
             f32 projection = MR::getFootPoint(center, ground, position, &foot);
             if (projection < -0.1f) {
                 return;
@@ -424,7 +424,7 @@ void MarioActor::tryTornadoPull(HitSensor* pSensor) {
                 return;
             }
 
-            TVec3f offset = foot - position;
+            Vec3f offset = foot - position;
             if (offset.length() > 600.0f) {
                 return;
             }

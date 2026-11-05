@@ -41,8 +41,8 @@ void BombBirdBomb::init(const JMapInfoIter& rIter) {
     MR::connectToSceneEnemy(this);
     MR::onCalcGravity(this);
     initHitSensor(2);
-    MR::addHitSensorEnemy(this, "body", 8, 60.0f, TVec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorEnemyAttack(this, "bomb", 8, ::sExplosionRadius, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemy(this, "body", 8, 60.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemyAttack(this, "bomb", 8, ::sExplosionRadius, Vec3f(0.0f, 0.0f, 0.0f));
     MR::invalidateHitSensor(this, "bomb");
     initBinder(getSensor("body")->mRadius, 0.0f, 0);
     initEffectKeeper(0, nullptr, false);
@@ -69,14 +69,14 @@ void BombBirdBomb::calcAndSetBaseMtx() {
     MR::setBaseScale(this, mScale);
 }
 
-void BombBirdBomb::hold(const TVec3f& rPos) {
+void BombBirdBomb::hold(const Vec3f& rPos) {
     MR::resetPosition(this, rPos);
     appear();
     MR::showModel(this);
     setNerve(GET_NERVE(BombBirdBomb, HostTypeNrvHold));
 }
 
-void BombBirdBomb::start(const TVec3f& rTrans, const TVec3f& rVelocity) {
+void BombBirdBomb::start(const Vec3f& rTrans, const Vec3f& rVelocity) {
     mPosition.set(rTrans);
     MR::showModel(this);
     MR::validateHitSensor(this, "body");
@@ -131,7 +131,7 @@ void BombBirdBomb::exeWait() {
     }
 
     f32 dotP = mGravity.dot(mVelocity);
-    TVec3f velocity;
+    Vec3f velocity;
     velocity.set(0.0f);
 
     if (MR::calcVelocityAreaOrRailMoveOnGround(&velocity, this)) {

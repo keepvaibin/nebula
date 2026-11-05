@@ -2,7 +2,7 @@
 
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/NativeMesh.hpp"
-#include <JSystem/JGeometry.hpp>
+#include <nebula_geometry.hpp>
 
 class ElectricRailMovingPoint : public LiveActor {
 public:
@@ -26,7 +26,7 @@ public:
     virtual void attackSensor(HitSensor*, HitSensor*);
 
     void disappear();
-    bool isTouchRail(const HitSensor*, TVec3f*, TVec3f*) const;
+    bool isTouchRail(const HitSensor*, Vec3f*, Vec3f*) const;
     void initMapToolInfo(const JMapInfoIter&);
     void initSensor();
     void initRail(const JMapInfoIter&);
@@ -42,7 +42,7 @@ public:
     void updatePointPosAndModel();
     bool isValidCoord(f32) const;
     f32 getRepeatedCoord(f32) const;
-    void calcPointPos(TVec3f*, f32) const;
+    void calcPointPos(Vec3f*, f32) const;
     void move();
     void exeDisappear();
     void exeDisappeared();
@@ -52,18 +52,18 @@ public:
     f32 mMovementSpeed;
     f32 mSegmentLength;
     s32 mStackHeight;
-    TPos3f _9C;
+    Pos3f _9C;
     u8 _CC;
     u8 _CD;
     u8 _CE;
     u8 _CF;
-    TVec3f* mSensorOffsets;
+    Vec3f* mSensorOffsets;
     ElectricRailMovingPoint* mMovingPoints;
     s32 _D8;
     // The rail as the renderer draws it while it waits.
     NativeMesh mMesh;
     s32 _E4;
-    TVec3f* _E8;
+    Vec3f* _E8;
     f32 _EC;
     f32 _F0;
 };

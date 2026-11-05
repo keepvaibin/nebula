@@ -107,7 +107,7 @@ void PartsModel::calcViewAndEntry() {
     LiveActor::calcViewAndEntry();
 }
 
-void PartsModel::initFixedPosition(const TVec3f& rLocalTrans, const TVec3f& rLocalRotate, const char* pJointName) {
+void PartsModel::initFixedPosition(const Vec3f& rLocalTrans, const Vec3f& rLocalRotate, const char* pJointName) {
     if (pJointName != nullptr) {
         mFixedPosition = new FixedPosition(mHost, pJointName, rLocalTrans, rLocalRotate);
     } else {
@@ -118,10 +118,10 @@ void PartsModel::initFixedPosition(const TVec3f& rLocalTrans, const TVec3f& rLoc
 }
 
 void PartsModel::initFixedPosition(const char* pJointName) {
-    initFixedPosition(TVec3f(0.0f, 0.0f, 0.0f), TVec3f(0.0f, 0.0f, 0.0f), pJointName);
+    initFixedPosition(Vec3f(0.0f, 0.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f), pJointName);
 }
 
-void PartsModel::initFixedPosition(MtxPtr pMtx, const TVec3f& rLocalTrans, const TVec3f& rLocalRotate) {
+void PartsModel::initFixedPosition(MtxPtr pMtx, const Vec3f& rLocalTrans, const Vec3f& rLocalRotate) {
     mFixedPosition = new FixedPosition(pMtx, rLocalTrans, rLocalRotate);
     mMtx = mFixedPosition->mMtx;
 }

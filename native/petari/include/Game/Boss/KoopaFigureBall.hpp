@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class Koopa;
 
@@ -21,9 +21,9 @@ public:
     virtual void control();
 
     Koopa* mKoopa;
-    TVec3f mFront;
+    Vec3f mFront;
     f32 mRadius;
     f32 mAngle;
-    TPos3f mBaseMtx;
+    Pos3f mBaseMtx;
     const MR::ActorMoveParam* mMoveParam;
 };

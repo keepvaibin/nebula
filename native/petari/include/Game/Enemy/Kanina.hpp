@@ -85,13 +85,13 @@ public:
     JointRumbler* mJointRumbler;
     BenefitItemObj* mKinokoOneUp;
     AnimationRandomPlayer* mAnimationRandomPlayer;
-    TVec3f _98;
-    TQuat4f _A4;
+    Vec3f _98;
+    Quat4f _A4;
     u32 _B4;
     u32 _B8;
     f32 _BC;
-    TVec3f _C0;
+    Vec3f _C0;
     KaninaType mType;
-    TVec3f _D0;
+    Vec3f _D0;
     s32 _DC;
 };

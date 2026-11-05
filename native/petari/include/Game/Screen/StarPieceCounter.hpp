@@ -36,7 +36,7 @@ public:
     s32 mInvalidCountUpFrame;
     CounterLayoutAppearer* mLayoutAppearer;
     CountUpPaneRumbler* mPaneRumbler;
-    TVec2f mFollowPos;
+    Vec2f mFollowPos;
     s32 _3C;
     int mMode;
 };

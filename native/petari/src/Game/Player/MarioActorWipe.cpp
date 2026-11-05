@@ -17,8 +17,8 @@ void MarioActor::drawPreWipe() const {
         NebulaNativeMaterial material;
         TDDraw::setupNative(&material, 0, 1, 2);
         NativeShader::send(material);
-        TVec3f origin(0.0f, 0.0f, 0.0f);
-        TVec3f size(width, height, 0.0f);
+        Vec3f origin(0.0f, 0.0f, 0.0f);
+        Vec3f size(width, height, 0.0f);
         TDDraw::drawFillBox(origin, size, _A6C > 128 ? 224 : (_A6C + (_A6C >> 1)) + (_A6C >> 2));
     }
     MR::loadViewMtx();

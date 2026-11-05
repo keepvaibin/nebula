@@ -31,8 +31,8 @@ void PTimerSwitch::init(const JMapInfoIter& rIter) {
     initModelManagerWithAnm("PTimerSwitch", nullptr, false);
     MR::connectToSceneMapObj(this);
     initHitSensor(2);
-    MR::addHitSensorMapObj(this, "body", 16, 0.0f, TVec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensor(this, "hit", ATYPE_SWITCH, 16, 120.0f, TVec3f(0.0f, 50.0f, 0.0f));
+    MR::addHitSensorMapObj(this, "body", 16, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensor(this, "hit", ATYPE_SWITCH, 16, 120.0f, Vec3f(0.0f, 50.0f, 0.0f));
     MR::initCollisionParts(this, "PTimerSwitch", getSensor("body"), 0);
     mSwitchCollision = MR::createCollisionPartsFromLiveActor(this, "Move", getSensor("hit"), MR::CollisionScaleType_Unk2);
     initSound(4, false);
@@ -60,7 +60,7 @@ void PTimerSwitch::kill() {
 
 void PTimerSwitch::calcAnim() {
     LiveActor::calcAnim();
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.setInline(MR::getJointMtx(this, "Move"));
     mSwitchCollision->setMtx(mtx);
 }

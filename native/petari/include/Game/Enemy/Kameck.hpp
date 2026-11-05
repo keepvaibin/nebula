@@ -77,8 +77,8 @@ public:
     SmallKameckBeamEventListener* mBeamEventListener;
     AnimScaleController* mAnimScaleController;
     WalkerStateBindStarPointer* mStateBindStarPointer;
-    TQuat4f mRotateQuat;
-    TVec3f mFrontVec;
+    Quat4f mRotateQuat;
+    Vec3f mFrontVec;
     s32 mBeamType;
     s32 mMoveStep;
     f32 mRailCoord;

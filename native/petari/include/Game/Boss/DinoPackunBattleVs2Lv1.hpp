@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/Boss/DinoPackunAction.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class DinoPackunStateDamage;
 class DinoPackunTrackFireHolder;
@@ -48,7 +48,7 @@ public:
     DinoPackunTrackFireHolder* mTrackFireHolder;
     DinoPackunFireHolder* mFireHolder;
     DinoPackunStateFire* mStateFire;
-    TVec3f _28;
+    Vec3f _28;
     s32 _34;
     u8 _38;
     u8 _39;

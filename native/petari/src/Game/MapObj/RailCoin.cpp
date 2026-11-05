@@ -10,7 +10,7 @@ namespace {
             mGroup = pGroup;
         }
 
-        virtual void setPosition(s32, const TVec3f&);
+        virtual void setPosition(s32, const Vec3f&);
 
         CoinGroup* mGroup;
     };
@@ -66,7 +66,7 @@ namespace MR {
 };  // namespace MR
 
 namespace {
-    void RailCoinMercatorDivInfo::setPosition(s32 idx, const TVec3f& rPos) {
+    void RailCoinMercatorDivInfo::setPosition(s32 idx, const Vec3f& rPos) {
         mGroup->setCoinTrans(idx, rPos);
     }
 };  // namespace

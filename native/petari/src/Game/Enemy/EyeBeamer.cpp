@@ -22,8 +22,8 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
-#include <JSystem/JGeometry/TQuat.hpp>
+#include <nebula_geometry.hpp>
+
 #include <nebula_math.h>
 
 namespace NrvEyeBeamer {
@@ -57,8 +57,8 @@ void EyeBeamer::init(const JMapInfoIter& rIter) {
     MR::getJMapInfoArg0NoInit(rIter, &_15C);
     MR::getJMapInfoArg1NoInit(rIter, &_160);
     initHitSensor(2);
-    MR::addHitSensorMapObj(this, "body", 8, 0.0f, TVec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorEye(this, "beam", 8, 140.0f + (0.5f * _15C), TVec3f(0.0f, 0.5f * (-_15C), 0.0f));
+    MR::addHitSensorMapObj(this, "body", 8, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEye(this, "beam", 8, 140.0f + (0.5f * _15C), Vec3f(0.0f, 0.5f * (-_15C), 0.0f));
     initSound(4, 0);
     MR::initCollisionParts(this, "EyeBeamer", getSensor("body"), 0);
     initRailMoveFunction(rIter);
@@ -115,12 +115,12 @@ void EyeBeamer::initModel() {
 
 void EyeBeamer::initAfterPlacement() {
     updatePoseAndTrans();
-    TVec3f stack_80;
+    Vec3f stack_80;
     MR::calcUpVec(&stack_80, this);
     stack_80.negate();
-    TVec3f stack_74;
+    Vec3f stack_74;
     stack_74.set(mPosition - (stack_80 * 300.0f));
-    TVec3f stack_68;
+    Vec3f stack_68;
     f32 dist;
     if (MR::getFirstPolyOnLineToMapExceptActor(&stack_68, 0, stack_74, stack_80 * (300.0f + _15C), this)) {
         dist = stack_68.distance(mPosition);
@@ -145,11 +145,11 @@ void EyeBeamer::initRailMoveFunction(const JMapInfoIter& rIter) {
 }
 
 void EyeBeamer::updatePoseAndTrans() {
-    TPos3f stack_38;
+    Pos3f stack_38;
     stack_38.identity();
     stack_38.setQuat(_DC);
     if (mIsInMercatorCube) {
-        TPos3f stack_8;
+        Pos3f stack_8;
         stack_8.identity();
         MR::convertMercatorPlaneToSphereTransAndRotate(&mPosition, &stack_8, _EC, true);
         stack_38.concat(stack_8, stack_38);
@@ -166,14 +166,14 @@ void EyeBeamer::updateWaterSurfaceMtx() {
         return;
 
     mWaterSurfaceMtx.setQuat(_DC);
-    TVec3f stack_38;
+    Vec3f stack_38;
     mWaterSurfaceMtx.getYDir(stack_38);
-    TVec3f stack_2C;
-    TVec3f stack_20(_EC - (stack_38 * (_160 + (stack_38).dot(_EC - _104))));
+    Vec3f stack_2C;
+    Vec3f stack_20(_EC - (stack_38 * (_160 + (stack_38).dot(_EC - _104))));
     stack_2C.set(stack_20);
 
     if (mIsInMercatorCube) {
-        TPos3f stack_44;
+        Pos3f stack_44;
         stack_44.identity();
         MR::convertMercatorPlaneToSphereTransAndRotate(&stack_2C, &stack_44, stack_2C, true);
         mWaterSurfaceMtx.concat(stack_44, mWaterSurfaceMtx);
@@ -209,7 +209,7 @@ void EyeBeamer::calcAnim() {
     _9C.setInline(mtx);
     f32 one = 1.0f;
     f32 temp = _15C / 2000.0f;
-    MR::preScaleMtx(_9C, TVec3f(one, temp, one));
+    MR::preScaleMtx(_9C, Vec3f(one, temp, one));
 }
 
 void EyeBeamer::calcAndSetBaseMtx() {
@@ -259,15 +259,15 @@ void EyeBeamer::exeDemoTurn() {
 
     f32 rate = MR::calcDemoPartStepRate("\203\101\203\103\203\162\201\133\203\175\201\133\211\361\223\135" /* アイビーマー回転 */);
     f32 easeIn = MR::getEaseInOutValue(rate, 0.0f, 1.0f, 1.0f);
-    TQuat4f stack_30;
-    TVec3f stack_24;
+    Quat4f stack_30;
+    Vec3f stack_24;
     _CC.getXDir(stack_24);
     stack_30.setRotate(stack_24, PI * easeIn);
     NebulaQuatMultiply((Quaternion*)&stack_30, (Quaternion*)&_CC, (Quaternion*)&_DC);
 
     if (MR::isDemoPartLastStep("\203\101\203\103\203\162\201\133\203\175\201\133\211\361\223\135" /* アイビーマー回転 */)) {
-        TQuat4f stack_14;
-        TVec3f stack_8;
+        Quat4f stack_14;
+        Vec3f stack_8;
         _CC.getXDir(stack_8);
         stack_14.setRotate(stack_8, PI);
         NebulaQuatMultiply((Quaternion*)&stack_14, (Quaternion*)&_CC, (Quaternion*)&_DC);
@@ -291,8 +291,8 @@ void EyeBeamer::exeTurn() {
         MR::startSound(this, "SE_OJ_EYE_BEAMER_TURN");
     }
     f32 easeInOut = MR::calcNerveEaseInOutRate(this, 300);
-    TQuat4f stack_14;
-    TVec3f stack_8;
+    Quat4f stack_14;
+    Vec3f stack_8;
     _CC.getXDir(stack_8);
     stack_14.setRotate(stack_8, PI * easeInOut);
     NebulaQuatMultiply((Quaternion*)&stack_14, (Quaternion*)&_CC, (Quaternion*)&_DC);
@@ -312,15 +312,15 @@ void EyeBeamer::exeGotoPatrol() {
 void EyeBeamer::exePatrol() {
     if (MR::isFirstStep(this)) {
         MR::validateClipping(this);
-        TVec3f stack_48;
-        TQuat4f stack_38;
+        Vec3f stack_48;
+        Quat4f stack_38;
         _CC.getXDir(stack_48);
         stack_38.setRotate(stack_48, PI);
         NebulaQuatMultiply((Quaternion*)&stack_38, (Quaternion*)&_CC, (Quaternion*)&_DC);
         if (_160 > 0)
             MR::emitEffect(this, "BeamSurface");
     }
-    TVec3f stack_2C;
+    Vec3f stack_2C;
     MR::calcUpVec(&stack_2C, this);
     stack_2C.negate();
     _140.set(mPosition + ((stack_2C * _15C) * 0.5));
@@ -329,18 +329,18 @@ void EyeBeamer::exePatrol() {
     _EC.set(mRailMover->_28);
 }
 
-bool EyeBeamer::isInBeamRange(const TVec3f& rVec) const {
-    TVec3f stack_44;
+bool EyeBeamer::isInBeamRange(const Vec3f& rVec) const {
+    Vec3f stack_44;
     MR::calcUpVec(&stack_44, this);
     stack_44.negate();
-    TVec3f stack_38;
+    Vec3f stack_38;
     _9C.getTrans(stack_38);
     f32 dot = stack_44.dot(rVec - stack_38);
 
     if (dot < 0.0f || _15C < dot)
         return false;
     else {
-        TVec3f stack_2C;
+        Vec3f stack_2C;
         stack_2C.set(stack_38 + (stack_44 * dot));
         f32 dist = stack_2C.distance(rVec);
 

@@ -64,13 +64,13 @@ void Kameck::init(const JMapInfoIter& rIter) {
     MR::initShadowVolumeSphere(this, 70.0f);
     MR::makeQuatAndFrontFromRotate(&mRotateQuat, &mFrontVec, this);
     initHitSensor(2);
-    MR::addHitSensorEnemy(this, "body", 8, 120.0f, TVec3f(0.0f, 40.0f, 0.0f));
-    MR::addHitSensorEnemyAttack(this, "attack", 8, 80.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemy(this, "body", 8, 120.0f, Vec3f(0.0f, 40.0f, 0.0f));
+    MR::addHitSensorEnemyAttack(this, "attack", 8, 80.0f, Vec3f(0.0f, 0.0f, 0.0f));
     initBinder(70.0f, 0.0f, 0);
     MR::offBind(this);
     initBeam();
     initEffectKeeper(1, nullptr, false);
-    MR::initStarPointerTarget(this, 80.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::initStarPointerTarget(this, 80.0f, Vec3f(0.0f, 0.0f, 0.0f));
 
     mAnimScaleController = new AnimScaleController(nullptr);
     mAnimScaleController->setParamTight();
@@ -268,7 +268,7 @@ bool Kameck::requestDown(HitSensor* pSender, HitSensor* pReceiver) {
 
 bool Kameck::requestGuard(HitSensor* pSender, HitSensor* pReceiver) {
     if (isEnableGurad()) {
-        TVec3f vec;
+        Vec3f vec;
         vec.killElement(-pSender->mHost->mVelocity, mGravity);
 
         if (!MR::normalizeOrZero(&vec)) {
@@ -398,7 +398,7 @@ bool Kameck::tryAppearEnd() {
 
 bool Kameck::tryAttackWait() {
     if (MR::isNearPlayer(this, ::sAttackRange) && !mActiveActorList->isFull()) {
-        mBeam = MR::startFollowKameckBeam(mBeamType, MR::getJointMtx(this, "Wand"), 0.6f, TVec3f(0.0f, 110.0f, 0.0f), mBeamEventListener);
+        mBeam = MR::startFollowKameckBeam(mBeamType, MR::getJointMtx(this, "Wand"), 0.6f, Vec3f(0.0f, 110.0f, 0.0f), mBeamEventListener);
 
         if (mBeam != nullptr) {
             setNerve(GET_NERVE(Kameck, KameckNrvAttackWait));

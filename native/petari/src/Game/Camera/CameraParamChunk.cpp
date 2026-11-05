@@ -66,7 +66,7 @@ bool CameraParamChunk::isSubjectiveCameraOff() const {
     return (mExParam.mFlag >> 5) & 1;
 }
 
-void CameraParamChunk::getVPanAxis(TVec3f* pOut) const {
+void CameraParamChunk::getVPanAxis(Vec3f* pOut) const {
     pOut->set(mExParam.mVPanAxis);
 
     if (MR::isNearZero(*pOut)) {

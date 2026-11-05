@@ -7,7 +7,7 @@
 #include "Game/Util.hpp"
 
 namespace {
-    static TVec3f sInkShotOffset(0.0f, 20.0f, 0.0f);
+    static Vec3f sInkShotOffset(0.0f, 20.0f, 0.0f);
     static const f32 sBaseScale = 1.0f;
     static const f32 sBodyHitRadius = 70.0f;
     static const f32 sBodyHitYOffset = 70.0f;
@@ -126,9 +126,9 @@ void TakoHei::initAfterPlacement() {
 void TakoHei::initSensor() {
     const f32 scaleX = mScale.x;
     initHitSensor(2);
-    MR::addHitSensorEnemyAttack(this, "attack", 8, ::sAttackHitRadius * scaleX, TVec3f(0.0f, ::sAttackHitYOffset * scaleX, 0.0f));
-    MR::addHitSensorEnemy(this, "body", 8, ::sBodyHitRadius * scaleX, TVec3f(0.0f, ::sBodyHitYOffset * scaleX, 0.0f));
-    MR::initStarPointerTarget(this, ::sPointerHitSize * mScale.y, TVec3f(0.0f, ::sPointerHitSize * mScale.y, 0.0f));
+    MR::addHitSensorEnemyAttack(this, "attack", 8, ::sAttackHitRadius * scaleX, Vec3f(0.0f, ::sAttackHitYOffset * scaleX, 0.0f));
+    MR::addHitSensorEnemy(this, "body", 8, ::sBodyHitRadius * scaleX, Vec3f(0.0f, ::sBodyHitYOffset * scaleX, 0.0f));
+    MR::initStarPointerTarget(this, ::sPointerHitSize * mScale.y, Vec3f(0.0f, ::sPointerHitSize * mScale.y, 0.0f));
 }
 
 void TakoHei::kill() {
@@ -163,7 +163,7 @@ void TakoHei::control() {
 
 void TakoHei::calcAndSetBaseMtx() {
     MR::setBaseTRMtx(this, _94);
-    TVec3f scale = _8C->_C * mScale;
+    Vec3f scale = _8C->_C * mScale;
     MR::setBaseScale(this, scale);
 }
 
@@ -178,7 +178,7 @@ void TakoHei::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
         }
     } else if ((MR::isSensorPlayer(pReceiver) && !canAttack()) || MR::isSensorEnemy(pReceiver)) {
         if (MR::sendMsgPush(pReceiver, pSender) && isPushMovable()) {
-            TVec3f sensorDirection;
+            Vec3f sensorDirection;
             MR::calcSensorDirectionNormalize(&sensorDirection, pReceiver, pSender);
             if (mVelocity.dot(sensorDirection) < 0.0f) {
                 mVelocity.orthogonalize(sensorDirection);
@@ -192,7 +192,7 @@ bool TakoHei::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
         if ((MR::isSensorPlayer(pSender) && !canAttack()) || MR::isSensorEnemy(pSender)) {
             if (isPushMovable()) {
                 MR::startBtp(this, "BlinkTwice");
-                TVec3f sensorDirection;
+                Vec3f sensorDirection;
                 MR::calcSensorDirectionNormalize(&sensorDirection, pSender, pReceiver);
                 mVelocity += sensorDirection * (MR::isSensorPlayer(pSender) ? ::sPushMarioAccel : ::sPushAccel);
                 _8C->startAndAddScaleVelocityY(MR::isSensorPlayer(pSender) ? ::sPushScaleYMarioSpeed : ::sPushScaleYSpeed);
@@ -360,7 +360,7 @@ bool TakoHei::tryWalk() {
 }
 
 bool TakoHei::tryWalkEnd() {
-    TVec3f scaleAdd;
+    Vec3f scaleAdd;
     scaleAdd.killElement(_BC - mPosition, mGravity);
 
     if (MR::isGreaterStep(this, ::sWalkEndTime) || scaleAdd.squared() < ::sWalkTerritoryRadius) {
@@ -671,8 +671,8 @@ void TakoHei::exeAttackSign() {
 
 void TakoHei::exeAttack() {
     if (MR::isFirstStep(this)) {
-        TPos3f mouthMtx = MR::getJointMtx(this, "Mouth");
-        TVec3f mult;
+        Pos3f mouthMtx = MR::getJointMtx(this, "Mouth");
+        Vec3f mult;
         mouthMtx.mult(::sInkShotOffset, mult);
         MR::spurtTakoHeiInk(mult, _B0 * ::sSpurtPowerH + mGravity * ::sSpurtPowerV);
 
@@ -838,7 +838,7 @@ void TakoHei::decideNextTargetPos() {
 }
 
 bool TakoHei::checkFront() const {
-    TVec3f positionUpOffset;
+    Vec3f positionUpOffset;
     MR::calcPositionUpOffset(&positionUpOffset, this, ::sCheckFrontHeight);
     return MR::isExistMapCollision(positionUpOffset, _B0 * ::sCheckFrontAttackSpace);
 }
@@ -900,11 +900,11 @@ bool TakoHei::isFallNextMove() const {
 }
 
 bool TakoHei::isInSightMario() const {
-    TVec3f toPlayer(*MR::getPlayerPos() - mPosition);
+    Vec3f toPlayer(*MR::getPlayerPos() - mPosition);
     f32 scalarToPlayer;
     MR::separateScalarAndDirection(&scalarToPlayer, &toPlayer, toPlayer);
 
-    TVec3f quatZDir;
+    Vec3f quatZDir;
 
     _94.getZDir(quatZDir);
 

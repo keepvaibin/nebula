@@ -95,7 +95,7 @@ HitSensor* MarioActor::getNearestRushTarget(bool myBool) const {
         }
 
         if (target != nullptr) {
-            TVec3f targetPos(target->mPosition);
+            Vec3f targetPos(target->mPosition);
             f32 size2;
             f32 size1 = (targetPos - mPosition).length();
             size2 = (targetPos - _2A0).length();
@@ -140,7 +140,7 @@ HitSensor* MarioActor::getNearestRushTarget(bool myBool) const {
             continue;
         }
 
-        TVec3f pos(_7E4[idx]->mPosition);
+        Vec3f pos(_7E4[idx]->mPosition);
         f32 size2;
         f32 size1 = (pos - mPosition).length();
         size2 = (pos - _2A0).length();
@@ -183,7 +183,7 @@ HitSensor* MarioActor::getNearestJumpTarget() const {
             continue;
         }
 
-        TVec3f position(_7E4[i]->mPosition);
+        Vec3f position(_7E4[i]->mPosition);
         f32 centerDistance;
         f32 distance = (position - mPosition).length();
         centerDistance = (position - _2A0).length();
@@ -395,7 +395,7 @@ void MarioActor::tryRushInRush() {
 
     if (!target->receiveMessage(ACTMES_AUTORUSH_BEGIN, getSensor("body"))) {
         if (_934) {
-            const RushEndInfo rushEndInfo = RushEndInfo(nullptr, 4, TVec3f(0.0f, 0.0f, 0.0f), false, 0);
+            const RushEndInfo rushEndInfo = RushEndInfo(nullptr, 4, Vec3f(0.0f, 0.0f, 0.0f), false, 0);
             endRush(&rushEndInfo);
         }
 

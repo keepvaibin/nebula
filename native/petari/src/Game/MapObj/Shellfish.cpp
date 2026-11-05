@@ -46,19 +46,19 @@ void Shellfish::init(const JMapInfoIter& rIter) {
     initModelManagerWithAnm("Shellfish", nullptr, false);
     MR::connectToSceneMapObjStrongLight(this);
     initHitSensor(2);
-    MR::addHitSensorEnemy(this, "body", 8, 400.0f, TVec3f(::sBodyHitOffset));
-    MR::addHitSensorAtJointEnemyAttack(this, "core", "Lid", 8, 120.0f, TVec3f(::sSandHitOffset));
+    MR::addHitSensorEnemy(this, "body", 8, 400.0f, Vec3f(::sBodyHitOffset));
+    MR::addHitSensorAtJointEnemyAttack(this, "core", "Lid", 8, 120.0f, Vec3f(::sSandHitOffset));
     MR::invalidateHitSensor(this, "core");
     MR::initCollisionPartsAutoEqualScaleOne(this, "Hi", getSensor("body"), MR::getJointMtx(this, "Lid"));
     mLowCollision = MR::createCollisionPartsFromLiveActor(this, "Low", getSensor("body"), MR::CollisionScaleType_NotUsingScale);
     MR::validateCollisionParts(mLowCollision);
     MR::initLightCtrlNoDrawEnemy(this);
     MR::initShadowVolumeCylinder(this, 170.0f);
-    TVec3f front;
+    Vec3f front;
     MR::calcFrontVec(&front, this);
-    TVec3f up;
+    Vec3f up;
     MR::calcUpVec(&up, this);
-    TVec3f shadowPosition;
+    Vec3f shadowPosition;
     shadowPosition.scaleAdd(30.0f, front, mPosition);
     shadowPosition.scaleAdd(5.0f, up, shadowPosition);
     MR::setShadowDropPosition(this, nullptr, shadowPosition);
@@ -66,7 +66,7 @@ void Shellfish::init(const JMapInfoIter& rIter) {
     initEffectKeeper(2, nullptr, false);
     MR::addEffectHitNormal(this, nullptr);
     initSound(4, false);
-    MR::initStarPointerTarget(this, 260.0f, TVec3f(0.0f, 130.0f, -50.0f));
+    MR::initStarPointerTarget(this, 260.0f, Vec3f(0.0f, 130.0f, -50.0f));
     mScaleController = new AnimScaleController(nullptr);
     mScaleController->setParamTight();
     mStarPointerState = new WalkerStateBindStarPointer(this, mScaleController);
@@ -82,7 +82,7 @@ void Shellfish::initAfterPlacement() {
 
 void Shellfish::calcAndSetBaseMtx() {
     LiveActor::calcAndSetBaseMtx();
-    TVec3f scale;
+    Vec3f scale;
     scale.mul(mScaleController->_C, mScale);
     MR::setBaseScale(this, scale);
 }
@@ -120,7 +120,7 @@ void Shellfish::exeOpen() {
 
     if (mIsItemBound && MR::isLessStep(this, ::sStepToSetPosItem) && MR::isGreaterStep(this, ::sStepToApperItem)) {
         f32 speed = 0.5f;
-        TVec3f up;
+        Vec3f up;
         MR::calcUpVec(&up, this);
         mItem->mPosition.scaleAdd(speed, up, mItem->mPosition);
     }
@@ -196,13 +196,13 @@ void Shellfish::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     if (MR::isSensorEnemyAttack(pSender) && MR::isSensorPlayer(pReceiver)) {
         MR::emitEffectHitBetweenSensors(this, pSender, pReceiver, 0.0f, nullptr);
         MtxPtr mtx = getBaseMtx();
-        TVec3f direction(mtx[0][2], mtx[1][2], mtx[2][2]);
+        Vec3f direction(mtx[0][2], mtx[1][2], mtx[2][2]);
 
         if (MR::sendMsgEnemyAttackStrongToDir(pReceiver, pSender, direction)) {
             MR::invalidateCollisionParts(this);
         }
 
-        TVec3f push;
+        Vec3f push;
         push.scale(::sHitPushPower, direction);
         MR::pushPlayer(push);
     }
@@ -298,7 +298,7 @@ void Shellfish::startBindItem() {
 
 void Shellfish::endBindItem() {
     putItem();
-    TVec3f up;
+    Vec3f up;
     MR::calcUpVec(&up, this);
     mItem->mPosition.scaleAdd(30.0f, up, mItem->mPosition);
     MR::sendArbitraryMsg(ACTMES_ITEM_END_MOVE, mItem->getSensor(nullptr), getSensor("body"));

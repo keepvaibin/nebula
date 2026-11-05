@@ -5,7 +5,7 @@
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/JMapInfo.hpp"
-#include <JSystem/JGeometry/TQuat.hpp>
+#include <nebula_geometry.hpp>
 
 class ItemGenerator;
 class WalkerStateStagger;
@@ -42,9 +42,9 @@ public:
     bool requestBlowDown(HitSensor*, HitSensor*);
     bool requestAttackSuccess();
     void onNoGravitySupport();
-    void setUp(const TVec3f&, const TQuat4f&, const TVec3f&);
-    void appearBlowed(const TVec3f&, const TQuat4f&, const TVec3f&);
-    void appearHipDropped(const TVec3f&, const TQuat4f&);
+    void setUp(const Vec3f&, const Quat4f&, const Vec3f&);
+    void appearBlowed(const Vec3f&, const Quat4f&, const Vec3f&);
+    void appearHipDropped(const Vec3f&, const Quat4f&);
     bool tryNonActive();
     bool tryActive();
     bool tryEndBlow();
@@ -85,8 +85,8 @@ public:
     WalkerStateBindStarPointer* mBindStarPointer;
     WalkerStateStagger* mStateStagger;
     WalkerStateChase* mStateChase;
-    TQuat4f _A8;
-    TVec3f _B8;
+    Quat4f _A8;
+    Vec3f _B8;
     bool _C4;
     u8 _C5;
 };

@@ -21,9 +21,9 @@ public:
 
     BindCone* mCone;
     HitSensor* mBoundSensor;
-    TVec3f mHoleGravity;
-    TVec3f _A0;
-    TVec3f mInitialVelocity;
-    TVec3f mBindVelocity;
+    Vec3f mHoleGravity;
+    Vec3f _A0;
+    Vec3f mInitialVelocity;
+    Vec3f mBindVelocity;
     s32 mSettledFrames;
 };

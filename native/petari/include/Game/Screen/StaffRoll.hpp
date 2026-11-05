@@ -29,7 +29,7 @@ public:
     }
 
 private:
-    TVec2f mPosition;
+    Vec2f mPosition;
 };
 
 class StaffRollPicture : public LayoutActor {
@@ -98,8 +98,8 @@ private:
     const char16_t* mMsg;
     u32 mMsgLineNum;
     u32 mMsgLine;
-    TVec2f mTitleLogoPos;
-    TVec2f mEndLogoPos;
+    Vec2f mTitleLogoPos;
+    Vec2f mEndLogoPos;
     s32 _48;
     s32 _4C;
 };

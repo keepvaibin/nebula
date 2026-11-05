@@ -39,14 +39,14 @@ void SoundEmitterCube::movement() {
         break;
     }
 
-    TDirBox3f worldBox;
+    DirBox3f worldBox;
     MR::calcCubeWorldBox(&worldBox, this);
-    TBox3f bounds;
+    Box3f bounds;
     bounds.i.set(worldBox._24);
     bounds.f.set(worldBox._24);
-    TVec3f cornerZ;
-    TVec3f cornerY;
-    TVec3f cornerX;
+    Vec3f cornerZ;
+    Vec3f cornerY;
+    Vec3f cornerX;
     cornerX.scaleAdd(worldBox._30.x, worldBox._0, worldBox._24);
     cornerY.scaleAdd(worldBox._30.y, worldBox._C, worldBox._24);
     cornerZ.scaleAdd(worldBox._30.z, worldBox._18, worldBox._24);

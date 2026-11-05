@@ -81,7 +81,7 @@ bool Mario::isDamaging() const {
     }
 }
 
-bool Mario::damageLarge(const TVec3f& rDirection) {
+bool Mario::damageLarge(const Vec3f& rDirection) {
     if (damage(rDirection)) {
         if (isStatusActive(MarioStatus_Swim)) {
             mSwim->_AD = 1;
@@ -290,7 +290,7 @@ bool Mario::damageWallCheck() {
         return false;
     }
 
-    TVec3f normal;
+    Vec3f normal;
     if (checkWallCodeNorm(CollisionWallCode_Rebound, &normal, false)) {
         return doFlipJump(normal * 5.0f);
     }
@@ -369,7 +369,7 @@ bool Mario::damagePolygonCheck(const Triangle* pTriangle) {
     return false;
 }
 
-bool Mario::flipLarge(const TVec3f& rDirection) {
+bool Mario::flipLarge(const Vec3f& rDirection) {
     if (damage(rDirection)) {
         if (isStatusActive(MarioStatus_Swim)) {
             mSwim->_AD = 1;
@@ -405,7 +405,7 @@ bool Mario::isEnableAddDamage() const {
     return getDamageAfterTimer() == 0;
 }
 
-bool Mario::damage(const TVec3f& rDirection) {
+bool Mario::damage(const Vec3f& rDirection) {
     _7C4 = rDirection;
     if (!isEnableAddDamage()) {
         return false;
@@ -486,7 +486,7 @@ bool MarioDamage::start() {
     return true;
 }
 
-void MarioDamage::setVec(const TVec3f& rDirection) {
+void MarioDamage::setVec(const Vec3f& rDirection) {
     MR::vecKillElement(rDirection, mActor->_240, &_1C);
     _1C.setLength(mActor->getConst().getTable()->mJumpDistDamage);
 }
@@ -496,9 +496,9 @@ void MarioDamage::setVecSize(f32 horizontal, f32 vertical) {
     _1C += -mActor->_240 * vertical;
 }
 
-void MarioDamage::stopHead(const TVec3f& rNormal) {
+void MarioDamage::stopHead(const Vec3f& rNormal) {
     if (!_18) {
-        TVec3f horizontal;
+        Vec3f horizontal;
         f32 verticalSpeed = MR::vecKillElement(_1C, mActor->_240, &horizontal);
         f32 towardWall = MR::vecKillElement(horizontal, rNormal, &_1C);
         _1C += mActor->_240 * verticalSpeed;
@@ -506,7 +506,7 @@ void MarioDamage::stopHead(const TVec3f& rNormal) {
             _1C += rNormal * -towardWall * 0.5f;
         }
     } else {
-        TVec3f horizontal;
+        Vec3f horizontal;
         MR::vecKillElement(rNormal, getAirGravityVec(), &horizontal);
         if (!MR::normalizeOrZero(&horizontal)) {
             f32 towardWall = MR::vecKillElement(_1C, rNormal, &_1C);
@@ -729,7 +729,7 @@ bool MarioFireRun::start() {
 
 bool MarioFireRun::move() {
     if (getStickX() != 0.0f || getStickY() != 0.0f) {
-        const TVec3f& padDir = getWorldPadDir();
+        const Vec3f& padDir = getWorldPadDir();
         getPlayer()->setFrontVecKeepUp(padDir, mActor->getConst().getTable()->mFireRunTurnRatio);
     }
 
@@ -754,7 +754,7 @@ bool MarioFireRun::update() {
                 _18 = 50.0f;
             }
 
-            const TVec3f& velocity = mActor->_288;
+            const Vec3f& velocity = mActor->_288;
             if (velocity.dot(getAirGravityVec()) < -10.0f) {
                 _18 = 0.0f;
                 addVelocity(getFrontVec() * 5.0f);
@@ -804,7 +804,7 @@ bool MarioFireRun::update() {
                 _18 = 50.0f;
             }
 
-            const TVec3f& velocity = mActor->_288;
+            const Vec3f& velocity = mActor->_288;
             if (velocity.dot(getAirGravityVec()) < -10.0f) {
                 _18 = 0.0f;
                 addVelocity(getFrontVec() * 5.0f);
@@ -1139,7 +1139,7 @@ bool MarioFireDance::update() {
         if (_26) {
             _26--;
         } else {
-            const TVec3f& padDir = getWorldPadDir();
+            const Vec3f& padDir = getWorldPadDir();
             getPlayer()->setFrontVecKeepUp(padDir, mActor->getConst().getTable()->mFireDanceTurnRatio);
             _14 += getFrontVec() * mActor->getConst().getTable()->mFireDanceMoveAcc;
         }

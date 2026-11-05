@@ -38,13 +38,13 @@ void ShadowVolumeDrawer::offCutDropShadow() {
     mIsCutDropShadow = false;
 }
 
-void ShadowVolumeDrawer::calcBaseDropPosition(TVec3f* pVec) const {
+void ShadowVolumeDrawer::calcBaseDropPosition(Vec3f* pVec) const {
     calcBaseDropPosition(pVec, getController());
 }
 
-void ShadowVolumeDrawer::calcBaseDropPosition(TVec3f* pPosition, const ShadowController* pController) const {
-    TVec3f position;
-    TVec3f direction;
+void ShadowVolumeDrawer::calcBaseDropPosition(Vec3f* pPosition, const ShadowController* pController) const {
+    Vec3f position;
+    Vec3f direction;
     pController->getDropPos(&position);
     pController->getDropDir(&direction);
     pPosition->set(position + direction * mStartDrawShapeOffset);

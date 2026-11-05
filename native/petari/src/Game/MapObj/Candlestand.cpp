@@ -55,7 +55,7 @@ void Candlestand::init(const JMapInfoIter& rIter) {
     MapObjActorUtil::setupInitInfoSimpleMapObj(&info);
     info.setupHitSensor();
 
-    TVec3f sensorOffset;
+    Vec3f sensorOffset;
     sensorOffset.y = ::getParam(mObjectName)->mSensorHeight;
     sensorOffset.x = 0.0f;
     sensorOffset.z = 0.0f;
@@ -223,7 +223,7 @@ void Candlestand::appearItem() {
     f32 angle;
     f32 radians;
 
-    TVec3f position(mPosition);
+    Vec3f position(mPosition);
     f32 height = ::getParam(mObjectName)->mItemHeight;
     if (::getParam(mObjectName)->mCanUseSwitch) {
         height *= mScale.y;
@@ -235,13 +235,13 @@ void Candlestand::appearItem() {
         if (MR::isNearZero(angle)) {
             MR::appearCoinPop(this, position, 1);
         } else {
-            TVec3f front;
+            Vec3f front;
             MR::calcFrontVec(&front, this);
 
-            TVec3f up;
+            Vec3f up;
             MR::calcUpVec(&up, this);
 
-            TPos3f rotation;
+            Pos3f rotation;
             radians = MR::toRadian(angle);
             rotation.makeRotate(front, radians);
             rotation.mult(up, up);

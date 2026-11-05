@@ -24,8 +24,8 @@ public:
     virtual ~FloaterFloatingForceTypeSpring();
     virtual void init(const JMapInfoIter&);
     virtual void start();
-    virtual void updateHostVelocity(TVec3f*) const;
-    virtual const TVec3f& getCurrentVelocity() const {
+    virtual void updateHostVelocity(Vec3f*) const;
+    virtual const Vec3f& getCurrentVelocity() const {
         return mVelocity;
     }
 
@@ -40,6 +40,6 @@ public:
     void exeMoveReturn();
 
     FloaterSpringForce* mSpringForce;
-    TVec3f mVelocity;
+    Vec3f mVelocity;
     f32 _48;
 };

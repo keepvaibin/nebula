@@ -411,7 +411,7 @@ public:
     void releaseHandle();
     void attachHandle(JAISoundHandle* handle);
 
-    void start_JAISound_(JAISoundID id, const TVec3f* posPtr, JAIAudience* audience);
+    void start_JAISound_(JAISoundID id, const Vec3f* posPtr, JAIAudience* audience);
     void stop();
     void stop(u32 fadeTime);
     void die_JAISound_();
@@ -544,7 +544,7 @@ public:
         }
     }
 
-    bool setPos(const TVec3f& pos) {
+    bool setPos(const Vec3f& pos) {
         if (mAudible != nullptr) {
             mAudible->setPos(pos);
         }

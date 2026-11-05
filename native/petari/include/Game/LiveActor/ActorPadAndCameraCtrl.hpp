@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class ModelManager;
 class ResourceHolder;
@@ -24,16 +24,16 @@ struct ActorPadAndCameraCtrlInfo {
 
 class ActorPadAndCameraCtrl {
 public:
-    ActorPadAndCameraCtrl(const ModelManager*, const TVec3f*);
+    ActorPadAndCameraCtrl(const ModelManager*, const Vec3f*);
 
-    static ActorPadAndCameraCtrl* tryCreate(const ModelManager*, const TVec3f*);
+    static ActorPadAndCameraCtrl* tryCreate(const ModelManager*, const Vec3f*);
 
     void update();
     void updateInfoBck();
     void updatePadAndCamera(const ActorPadAndCameraCtrlInfo*);
 
     const ModelManager* _0;
-    const TVec3f* _4;
+    const Vec3f* _4;
     const ResourceHolder* _8;
     const char* _C;
     s32 mInfoNum;

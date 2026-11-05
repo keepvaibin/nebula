@@ -4,7 +4,7 @@
 
 #include "Game/NameObj/NameObj.hpp"
 #include "Game/Screen/CaptureScreenDirector.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class CameraCover : public NameObj {
 public:
@@ -22,7 +22,7 @@ public:
         return _3C;
     }
 
-    TMtx34f _C;
+    Mtx34f _C;
     NebulaAtomic< s32 > _3C;
     u8 _40;
     bool _41;

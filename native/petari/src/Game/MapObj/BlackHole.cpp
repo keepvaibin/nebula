@@ -20,7 +20,7 @@ void BlackHole::init(const JMapInfoIter& rIter) {
     initModel();
     MR::connectToSceneMapObj(this);
     initHitSensor(1);
-    MR::addHitSensorEye(this, "body", 16, _A0, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEye(this, "body", 16, _A0, Vec3f(0.0f, 0.0f, 0.0f));
     initEffectKeeper(0, nullptr, false);
     MR::setEffectHostMtx(this, "BlackHoleSuction", (MtxPtr)&_D8);
     f32 radius = _A0;
@@ -83,9 +83,9 @@ bool BlackHole::tryStartDemoCamera() {
 
 void BlackHole::calcAndSetBaseMtx() {
     LiveActor::calcAndSetBaseMtx();
-    TVec3f dirToCam;
+    Vec3f dirToCam;
     dirToCam.sub(MR::getCamPos(), mPosition);
-    TVec3f camYDir;
+    Vec3f camYDir;
     camYDir.set(MR::getCamYdir());
 
     if (MR::normalizeOrZero(&dirToCam)) {
@@ -134,7 +134,7 @@ void BlackHole::initMapToolInfo(const JMapInfoIter& rIter) {
     if (_A4 == nullptr) {
         _A0 = 500.0f * mScale.x;
     } else {
-        TVec3f size(mScale);
+        Vec3f size(mScale);
         size.scale(500.0f);
 
         _A0 = size.length();
@@ -162,14 +162,14 @@ void BlackHole::initCubeBox() {
     MR::makeMtxRotate(_A8, mRotation.x, mRotation.y, mRotation.z);
     _A8.setTrans(mPosition);
 
-    _A4 = new TBox3f();
-    TVec3f vecStart(0.5f * (1000.0f * -mScale.x), 0.5f * (1000.0f * -mScale.y), 0.5f * (1000.0f * -mScale.z));
-    TVec3f vecEnd(0.5f * (1000.0f * mScale.x), 0.5f * (1000.0f * mScale.y), 0.5f * (1000.0f * mScale.z));
+    _A4 = new Box3f();
+    Vec3f vecStart(0.5f * (1000.0f * -mScale.x), 0.5f * (1000.0f * -mScale.y), 0.5f * (1000.0f * -mScale.z));
+    Vec3f vecEnd(0.5f * (1000.0f * mScale.x), 0.5f * (1000.0f * mScale.y), 0.5f * (1000.0f * mScale.z));
     _A4->set(vecStart, vecEnd);
 }
 
-bool BlackHole::isInCubeBox(const TVec3f& rVec) const {
-    TVec3f pos;
+bool BlackHole::isInCubeBox(const Vec3f& rVec) const {
+    Vec3f pos;
     _A8.multTranspose(rVec, pos);
     return _A4->intersectsPoint(pos);
 }

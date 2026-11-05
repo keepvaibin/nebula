@@ -44,12 +44,12 @@ void Jiraira::init(const JMapInfoIter& rIter) {
     MR::connectToSceneCollisionEnemy(this);
     initHitSensor(2);
     f32 scaleY = mScale.y;
-    TVec3f offset;
+    Vec3f offset;
     offset.x = 0.0f;
     offset.y = 30.0f;
     offset.z = 0.0f;
     MR::addHitSensorMapObjMoveCollision(this, "body", 16, scaleY * 100.0f, offset);
-    TVec3f offset2;
+    Vec3f offset2;
     offset2.x = 0.0f;
     offset2.y = 30.0f * scaleY;
     offset2.z = 0.0f;

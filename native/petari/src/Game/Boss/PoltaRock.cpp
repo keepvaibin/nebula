@@ -32,7 +32,7 @@ void PoltaRock::init(const JMapInfoIter& rIter) {
     MR::initLightCtrl(this);
     MR::onCalcGravity(this);
     initHitSensor(1);
-    MR::addHitSensorEnemy(this, "Body", 8, 120.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemy(this, "Body", 8, 120.0f, Vec3f(0.0f, 0.0f, 0.0f));
     initBinder(120.0f, 0.0f, 0);
     initEffectKeeper(0, nullptr, false);
     initSound(4, false);
@@ -64,7 +64,7 @@ void PoltaRock::calcAndSetBaseMtx() {
     MR::setBaseScale(this, mScale);
 }
 
-void PoltaRock::start(Polta* pPolta, const TVec3f& rPosition, const TVec3f& rVec2) {
+void PoltaRock::start(Polta* pPolta, const Vec3f& rPosition, const Vec3f& rVec2) {
     mOwner = pPolta;
     mPosition.set(rPosition);
     _AC.set(rVec2);
@@ -130,7 +130,7 @@ bool PoltaRock::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pR
 }
 
 void PoltaRock::exeFloat() {
-    TVec3f v3;
+    Vec3f v3;
 
     if (MR::isFirstStep(this)) {
         MR::startSound(this, "SE_OJ_POLTA_ROCK_FLOAT_ST");
@@ -149,7 +149,7 @@ void PoltaRock::exeFloat() {
 }
 
 void PoltaRock::exeSign() {
-    TVec3f v3;
+    Vec3f v3;
 
     if (MR::isFirstStep(this)) {
         MR::startAction(this, "Sign");
@@ -193,7 +193,7 @@ void PoltaRock::exeMove() {
 void PoltaRock::generateKill() {
     switch (mType) {
     case 1:
-        PoltaFunction::appearBombTeresaNormal(getOwner(), mPosition, TVec3f(0.0f, 0.0f, 0.0f));
+        PoltaFunction::appearBombTeresaNormal(getOwner(), mPosition, Vec3f(0.0f, 0.0f, 0.0f));
         break;
     case 2:
         MR::appearCoinPop(getOwner(), mPosition, 1);

@@ -2,7 +2,7 @@
 
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class ActorCameraInfo;
 class GCaptureRibbon;
@@ -17,19 +17,19 @@ public:
         virtual void init(const JMapInfoIter&);
         virtual void kill();
 
-        void updateTransTraction(const TVec3f&, const TVec3f&, s32);
+        void updateTransTraction(const Vec3f&, const Vec3f&, s32);
 
         void forceKill() {
             MR::forceDeleteEffectAll(this);
             LiveActor::kill();
         };
 
-        void setPosAll(TVec3f& mPos) {
+        void setPosAll(Vec3f& mPos) {
             mPosition.set(mPos);
             mHostMtx.setTrans(mPosition);
         }
 
-        TPos3f mHostMtx;
+        Pos3f mHostMtx;
     };
 
     /// @brief Creates a new `AstroDomeBlueStar`.
@@ -48,7 +48,7 @@ public:
     bool tryStartBind(const LiveActor*);
     bool isActiveBind() const;
     bool isValidBindStart() const;
-    void calcZoomInPos(TVec3f*) const;
+    void calcZoomInPos(Vec3f*) const;
 
     void exeAppear();
     void exeWait();
@@ -63,9 +63,9 @@ public:
     void exeGalaxyConfirm();
 
     GCaptureRibbon* mCaptureRibbon;
-    TPos3f mHostMtx;
-    TPos3f mBindStartMtx;
+    Pos3f mHostMtx;
+    Pos3f mBindStartMtx;
     ActorCameraInfo* mCameraInfo;
-    TVec3f mZoomPos;
+    Vec3f mZoomPos;
     CaptureActor* mCaptureActor;
 };

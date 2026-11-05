@@ -4,7 +4,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
-#include <JSystem/JMath/JMath.hpp>
+#include <nebula_geometry.hpp>
 #include <nebula_math.h>
 
 namespace {
@@ -48,7 +48,7 @@ namespace MR {
         railRider->setCoord(railRider->getPointCoord(index));
     }
 
-    void moveCoordToNearestPos(LiveActor* pActor, const TVec3f& rPos) {
+    void moveCoordToNearestPos(LiveActor* pActor, const Vec3f& rPos) {
         pActor->mRailRider->moveToNearestPos(rPos);
     }
 
@@ -76,7 +76,7 @@ namespace MR {
         moveTransToCurrentRailPos(pActor);
     }
 
-    void moveCoordAndTransToNearestRailPos(LiveActor* pActor, const TVec3f& rPos) {
+    void moveCoordAndTransToNearestRailPos(LiveActor* pActor, const Vec3f& rPos) {
         pActor->mRailRider->moveToNearestPos(rPos);
         moveTransToCurrentRailPos(pActor);
     }
@@ -139,7 +139,7 @@ namespace MR {
         }
     }
 
-    void setRailDirectionCloseToNearestPos(LiveActor* pActor, const TVec3f& rPos) {
+    void setRailDirectionCloseToNearestPos(LiveActor* pActor, const Vec3f& rPos) {
         setRailDirectionCloseToCoord(pActor, calcNearestRailCoord(pActor, rPos));
     }
 
@@ -147,8 +147,8 @@ namespace MR {
         pActor->mRailRider->reverse();
     }
 
-    f32 calcMovingDirectionAlongRail(LiveActor* pActor, TVec3f* pDir, const TVec3f& rPos, f32 curveRatio, bool horizontal, bool* pReachedGoal) {
-        TVec3f pos, dir;
+    f32 calcMovingDirectionAlongRail(LiveActor* pActor, Vec3f* pDir, const Vec3f& rPos, f32 curveRatio, bool horizontal, bool* pReachedGoal) {
+        Vec3f pos, dir;
         f32 coord = calcNearestRailPosAndDirection(&pos, &dir, pActor, rPos);
         setRailCoord(pActor, coord);
 
@@ -167,7 +167,7 @@ namespace MR {
             dir = -dir;
         }
 
-        TVec3f fromInPos = pos - rPos;
+        Vec3f fromInPos = pos - rPos;
 
         if (horizontal) {
             vecKillElement(fromInPos, pActor->mGravity, &fromInPos);
@@ -182,75 +182,75 @@ namespace MR {
         return distTravelled;
     }
 
-    f32 calcMovingDirectionAlongRailH(LiveActor* pActor, TVec3f* pDir, const TVec3f& rPos, f32 curveRatio, bool* pReachedGoal) {
+    f32 calcMovingDirectionAlongRailH(LiveActor* pActor, Vec3f* pDir, const Vec3f& rPos, f32 curveRatio, bool* pReachedGoal) {
         return calcMovingDirectionAlongRail(pActor, pDir, rPos, curveRatio, true, pReachedGoal);
     }
 
-    void calcRailClippingInfo(TVec3f* pCenter, f32* pRadius, const LiveActor* pActor, f32 delta, f32 padding) {
+    void calcRailClippingInfo(Vec3f* pCenter, f32* pRadius, const LiveActor* pActor, f32 delta, f32 padding) {
         f32 totalLength = getRailTotalLength(pActor);
         s32 numPoints = totalLength / delta;
-        TBox3f clipBox;
-        TBox3f box;
+        Box3f clipBox;
+        Box3f box;
         pActor->mRailRider->calcPosAtCoord(&box.f, 0.0f);
         pActor->mRailRider->calcPosAtCoord(&box.i, totalLength);
 
-        clipBox.set(TVec3f(MR::min(box.f.x, box.i.x), MR::min(box.f.y, box.i.y), MR::min(box.f.z, box.i.z)),
-                    TVec3f(MR::max(box.f.x, box.i.x), MR::max(box.f.y, box.i.y), MR::max(box.f.z, box.i.z)));
+        clipBox.set(Vec3f(MR::min(box.f.x, box.i.x), MR::min(box.f.y, box.i.y), MR::min(box.f.z, box.i.z)),
+                    Vec3f(MR::max(box.f.x, box.i.x), MR::max(box.f.y, box.i.y), MR::max(box.f.z, box.i.z)));
 
-        TVec3f pos;
+        Vec3f pos;
         for (s32 idx = 1; idx < numPoints; idx++) {
             pActor->mRailRider->calcPosAtCoord(&pos, idx * delta);
             clipBox.extend(pos);
         }
 
-        TVec3f padVec;
+        Vec3f padVec;
         padVec.set(padding);
         clipBox.i.sub(padVec);
         clipBox.f.add(padVec);
         pCenter->lerp(clipBox.f, clipBox.i, 0.5f);
 
-        TVec3f diameterVec;
+        Vec3f diameterVec;
         diameterVec.sub(clipBox.f, clipBox.i);
         *pRadius = diameterVec.length() * 0.5f;
     }
 
-    void initAndSetRailClipping(TVec3f* pCenter, LiveActor* pActor, f32 delta, f32 padding) {
+    void initAndSetRailClipping(Vec3f* pCenter, LiveActor* pActor, f32 delta, f32 padding) {
         f32 radius = 0.0f;
         calcRailClippingInfo(pCenter, &radius, pActor, delta, padding);
         setClippingTypeSphere(pActor, radius, pCenter);
     }
 
-    f32 calcNearestRailCoord(const LiveActor* pActor, const TVec3f& rPos) {
+    f32 calcNearestRailCoord(const LiveActor* pActor, const Vec3f& rPos) {
         return pActor->mRailRider->calcNearestPos(rPos);
     }
 
-    f32 calcNearestRailPos(TVec3f* pOutPos, const LiveActor* pActor, const TVec3f& rPos) {
+    f32 calcNearestRailPos(Vec3f* pOutPos, const LiveActor* pActor, const Vec3f& rPos) {
         f32 coord = calcNearestRailCoord(pActor, rPos);
         pActor->mRailRider->calcPosAtCoord(pOutPos, coord);
         return coord;
     }
 
-    f32 calcNearestRailDirection(TVec3f* pOutDir, const LiveActor* pActor, const TVec3f& rPos) {
+    f32 calcNearestRailDirection(Vec3f* pOutDir, const LiveActor* pActor, const Vec3f& rPos) {
         f32 coord = calcNearestRailCoord(pActor, rPos);
         pActor->mRailRider->calcDirectionAtCoord(pOutDir, coord);
         return coord;
     }
 
-    f32 calcNearestRailPosAndDirection(TVec3f* pOutPos, TVec3f* pOutDir, const LiveActor* pActor, const TVec3f& rPos) {
+    f32 calcNearestRailPosAndDirection(Vec3f* pOutPos, Vec3f* pOutDir, const LiveActor* pActor, const Vec3f& rPos) {
         f32 coord = calcNearestRailCoord(pActor, rPos);
         pActor->mRailRider->calcDirectionAtCoord(pOutDir, coord);
         pActor->mRailRider->calcPosAtCoord(pOutPos, coord);
         return coord;
     }
 
-    f32 calcRailPosNearestPlayer(TVec3f* pOutPos, const LiveActor* pActor) {
+    f32 calcRailPosNearestPlayer(Vec3f* pOutPos, const LiveActor* pActor) {
         return calcNearestRailPos(pOutPos, pActor, *MR::getPlayerPos());
     }
 };  // namespace MR
 
 namespace {
-    void updateBoundingBox(const RailRider* pRailRider, TBox3f* pBox) {
-        TVec3f pos(pRailRider->mCurPos);
+    void updateBoundingBox(const RailRider* pRailRider, Box3f* pBox) {
+        Vec3f pos(pRailRider->mCurPos);
 
         pBox->i.x = pBox->i.x >= pos.x ? pos.x : pBox->i.x;
         pBox->i.y = MR::min(pBox->i.y, pos.y);
@@ -263,7 +263,7 @@ namespace {
 };  // namespace
 
 namespace MR {
-    void calcBoundingBox(RailRider* pRailRider, TBox3f* pBox, f32 delta) {
+    void calcBoundingBox(RailRider* pRailRider, Box3f* pBox, f32 delta) {
         f32 coord = pRailRider->mCoord;
         pRailRider->setCoord(0.0f);
 
@@ -282,7 +282,7 @@ namespace MR {
         pRailRider->setCoord(coord);
     }
 
-    void calcBoundingBox(const LiveActor* pActor, TBox3f* pBox, f32 delta) {
+    void calcBoundingBox(const LiveActor* pActor, Box3f* pBox, f32 delta) {
         calcBoundingBox(pActor->mRailRider, pBox, delta);
     }
 
@@ -309,16 +309,16 @@ namespace MR {
     }
 
     f32 calcDistanceHorizonToCurrentPos(const LiveActor* pActor) {
-        TVec3f horizontal;
+        Vec3f horizontal;
         horizontal.killElement(getRailPos(pActor) - pActor->mPosition, pActor->mGravity);
         return horizontal.length();
     }
 
-    void calcRailPosAtCoord(TVec3f* pPos, const LiveActor* pActor, f32 coord) {
+    void calcRailPosAtCoord(Vec3f* pPos, const LiveActor* pActor, f32 coord) {
         pActor->mRailRider->calcPosAtCoord(pPos, coord);
     }
 
-    void calcRailPosFrontCoord(TVec3f* pPos, const LiveActor* pActor, f32 frontDist) {
+    void calcRailPosFrontCoord(Vec3f* pPos, const LiveActor* pActor, f32 frontDist) {
         f32 coord = getRailCoord(pActor);
         coord = isRailGoingToEnd(pActor) ? coord + frontDist : coord - frontDist;
 
@@ -331,49 +331,49 @@ namespace MR {
         calcRailPosAtCoord(pPos, pActor, coord);
     }
 
-    void calcRailDirectionAtCoord(TVec3f* pDir, const LiveActor* pActor, f32 coord) {
+    void calcRailDirectionAtCoord(Vec3f* pDir, const LiveActor* pActor, f32 coord) {
         pActor->mRailRider->calcDirectionAtCoord(pDir, coord);
     }
 
-    void calcRailPosAndDirectionAtCoord(TVec3f* pPos, TVec3f* pDir, const LiveActor* pActor, f32 coord) {
+    void calcRailPosAndDirectionAtCoord(Vec3f* pPos, Vec3f* pDir, const LiveActor* pActor, f32 coord) {
         calcRailPosAtCoord(pPos, pActor, coord);
         calcRailDirectionAtCoord(pDir, pActor, coord);
     }
 
-    void calcRailStartPos(TVec3f* pPos, const LiveActor* pActor) {
+    void calcRailStartPos(Vec3f* pPos, const LiveActor* pActor) {
         calcRailPosAtCoord(pPos, pActor, 0.0f);
     }
 
-    void calcRailEndPos(TVec3f* pPos, const LiveActor* pActor) {
+    void calcRailEndPos(Vec3f* pPos, const LiveActor* pActor) {
         calcRailPosAtCoord(pPos, pActor, getRailTotalLength(pActor));
     }
 
-    void calcRailPointPos(TVec3f* pPos, const LiveActor* pActor, int index) {
+    void calcRailPointPos(Vec3f* pPos, const LiveActor* pActor, int index) {
         pActor->mRailRider->copyPointPos(pPos, index);
     }
 
-    void calcRailStartPointPos(TVec3f* pPos, const LiveActor* pActor) {
+    void calcRailStartPointPos(Vec3f* pPos, const LiveActor* pActor) {
         calcRailPointPos(pPos, pActor, 0);
     }
 
-    void calcRailEndPointPos(TVec3f* pPos, const LiveActor* pActor) {
+    void calcRailEndPointPos(Vec3f* pPos, const LiveActor* pActor) {
         calcRailPointPos(pPos, pActor, getRailPointNum(pActor) - 1);
     }
 
-    void calcRailStartPointDirection(TVec3f* pDir, const LiveActor* pActor) {
+    void calcRailStartPointDirection(Vec3f* pDir, const LiveActor* pActor) {
         pActor->mRailRider->calcDirectionAtCoord(pDir, 0.0f);
     }
 
-    void calcRailEndPointDirection(TVec3f* pDir, const LiveActor* pActor) {
+    void calcRailEndPointDirection(Vec3f* pDir, const LiveActor* pActor) {
         pActor->mRailRider->calcDirectionAtCoord(pDir, getRailTotalLength(pActor));
     }
 
-    void calcRailStartPointPosAndDirection(TVec3f* pPos, TVec3f* pDir, const LiveActor* pActor) {
+    void calcRailStartPointPosAndDirection(Vec3f* pPos, Vec3f* pDir, const LiveActor* pActor) {
         calcRailStartPointPos(pPos, pActor);
         calcRailStartPointDirection(pDir, pActor);
     }
 
-    void calcRailEndPointPosAndDirection(TVec3f* pPos, TVec3f* pDir, const LiveActor* pActor) {
+    void calcRailEndPointPosAndDirection(Vec3f* pPos, Vec3f* pDir, const LiveActor* pActor) {
         calcRailEndPointPos(pPos, pActor);
         calcRailEndPointDirection(pDir, pActor);
     }
@@ -471,19 +471,19 @@ namespace MR {
         return pActor->mRailRider->getPointCoord(index);
     }
 
-    const TVec3f& getRailPos(const LiveActor* pActor) {
+    const Vec3f& getRailPos(const LiveActor* pActor) {
         return pActor->mRailRider->mCurPos;
     }
 
-    const TVec3f& getRailPointPosStart(const LiveActor* pActor) {
+    const Vec3f& getRailPointPosStart(const LiveActor* pActor) {
         return pActor->mRailRider->mStartPos;
     }
 
-    const TVec3f& getRailPointPosEnd(const LiveActor* pActor) {
+    const Vec3f& getRailPointPosEnd(const LiveActor* pActor) {
         return pActor->mRailRider->mEndPos;
     }
 
-    const TVec3f& getRailDirection(const LiveActor* pActor) {
+    const Vec3f& getRailDirection(const LiveActor* pActor) {
         return pActor->mRailRider->mCurDirection;
     }
 

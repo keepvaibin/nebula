@@ -8,7 +8,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
 
 GCaptureRibbon::GCaptureRibbon(const char* pName) : LiveActor(pName), mTexture(), _990(), _994() {
@@ -29,7 +29,7 @@ void GCaptureRibbon::draw() const {
             for (s32 i = 0; i < _990; i++) {
                 f32 v2 = i / (_990 - 1.0f);
 
-                TVec3f v1 = _690[i] * width;
+                Vec3f v1 = _690[i] * width;
 
                 J3DNativeDraw::position(v1.x + _90[i].x, v1.y + _90[i].y, v1.z + _90[i].z);
                 J3DNativeDraw::texCoord(0.0f, v2);
@@ -43,7 +43,7 @@ void GCaptureRibbon::draw() const {
             for (s32 j = 0; j < _990; j++) {
                 f32 v2 = j / (_990 - 1.0f);
 
-                TVec3f v1 = _390[j] * width;
+                Vec3f v1 = _390[j] * width;
 
                 J3DNativeDraw::position(v1.x + _90[j].x, v1.y + _90[j].y, v1.z + _90[j].z);
                 J3DNativeDraw::texCoord(0.0f, v2);
@@ -59,14 +59,14 @@ void GCaptureRibbon::reset() {
     _994 = 0;
 }
 
-void GCaptureRibbon::lengthen(const TVec3f& a1, const TVec3f& a2) {
+void GCaptureRibbon::lengthen(const Vec3f& a1, const Vec3f& a2) {
     _90[0].set(a1);
     _90[1].set(a2);
     _990 = 2;
     updateAxis();
 }
 
-void GCaptureRibbon::shorten(const TVec3f& a1, const TVec3f& a2) {
+void GCaptureRibbon::shorten(const Vec3f& a1, const Vec3f& a2) {
     _90[0].set(a1);
     _90[1].set(a2);
     _990 = 2;
@@ -74,22 +74,22 @@ void GCaptureRibbon::shorten(const TVec3f& a1, const TVec3f& a2) {
 }
 
 void GCaptureRibbon::updateAxis() {
-    TQuat4f quat;
+    Quat4f quat;
     if (_990 >= 2) {
-        TVec3f v1 = _90[1] - _90[0];
+        Vec3f v1 = _90[1] - _90[0];
         MR::normalizeOrZero(&v1);
 
         if (MR::isNearZero(v1)) {
-            _390[0] = TVec3f(1, 0, 0);
-            _690[0] = TVec3f(0, 1, 0);
-            v1 = TVec3f(0, 0, 1);
+            _390[0] = Vec3f(1, 0, 0);
+            _690[0] = Vec3f(0, 1, 0);
+            v1 = Vec3f(0, 0, 1);
         } else {
             MR::makeAxisVerticalZX(&_390[0], v1);
             _690[0].cross(v1, _390[0]);
         }
 
         for (s32 i = 1; i < _990 - 1; i++) {
-            TVec3f v2 = _90[i + 1] - _90[i];
+            Vec3f v2 = _90[i + 1] - _90[i];
             if (MR::isNearZero(v2)) {
                 _390[i] = _390[i - 1];
                 _690[i] = _690[i - 1];

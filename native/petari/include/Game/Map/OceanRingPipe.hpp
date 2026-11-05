@@ -28,8 +28,8 @@ public:
     u32 _94;
     s32 _98;
     s32 _9C;
-    TVec3f* _A0;
-    TVec3s* _A4;
+    Vec3f* _A0;
+    Vec3s* _A4;
     f32 _A8;
     f32 _AC;
     OceanRingPipeInside* mPipeInside;

@@ -32,7 +32,7 @@ namespace {
         return MR::getSceneObj< CameraContext >(SceneObj_CameraContext);
     }
 
-    void calcNormalizedScreenPosToScreenPos(TVec3f* pScreenPos, const TVec3f& rNormalizedPos) {
+    void calcNormalizedScreenPosToScreenPos(Vec3f* pScreenPos, const Vec3f& rNormalizedPos) {
         f32 width = MR::getScreenWidth();
         f32 height = MR::getScreenHeight();
 
@@ -42,9 +42,9 @@ namespace {
 };  // namespace
 
 namespace MR {
-    bool calcScreenPosition(TVec2f* pScreenPos, const TVec3f& rPos) {
-        TVec3f normalizedScreenPos;
-        TVec3f screenPos;
+    bool calcScreenPosition(Vec2f* pScreenPos, const Vec3f& rPos) {
+        Vec3f normalizedScreenPos;
+        Vec3f screenPos;
         bool ret = calcNormalizedScreenPosition(&normalizedScreenPos, rPos);
         ::calcNormalizedScreenPosToScreenPos(&screenPos, normalizedScreenPos);
         pScreenPos->x = screenPos.x;
@@ -52,26 +52,26 @@ namespace MR {
         return ret;
     }
 
-    bool calcScreenPosition(TVec3f* pScreenPos, const TVec3f& rPos) {
-        TVec3f normalizedScreenPos;
+    bool calcScreenPosition(Vec3f* pScreenPos, const Vec3f& rPos) {
+        Vec3f normalizedScreenPos;
         bool ret = calcNormalizedScreenPosition(&normalizedScreenPos, rPos);
         ::calcNormalizedScreenPosToScreenPos(pScreenPos, normalizedScreenPos);
         return ret;
     }
 
-    bool calcNormalizedScreenPosition(TVec3f* pScreenPos, const TVec3f& rPos) {
-        TVec3f pos;
+    bool calcNormalizedScreenPosition(Vec3f* pScreenPos, const Vec3f& rPos) {
+        Vec3f pos;
         ::getCameraContext()->getViewMtx().mult(rPos, pos);
 
         return calcNormalizedScreenPositionFromView(pScreenPos, pos);
     }
 
-    bool calcNormalizedScreenPositionFromView(TVec3f* pScreenPos, const TVec3f& rPos) {
-        TProj3f proj;
+    bool calcNormalizedScreenPositionFromView(Vec3f* pScreenPos, const Vec3f& rPos) {
+        Proj3f proj;
         proj.set(::getCameraContext()->mProjection);
-        TVec4f pos(rPos.x * proj.toMtx44()[0][0] + rPos.z * proj.toMtx44()[0][2], rPos.y * proj.toMtx44()[1][1] + rPos.z * proj.toMtx44()[1][2],
+        Vec4f pos(rPos.x * proj.toMtx44()[0][0] + rPos.z * proj.toMtx44()[0][2], rPos.y * proj.toMtx44()[1][1] + rPos.z * proj.toMtx44()[1][2],
                    rPos.z * proj.toMtx44()[2][2] + proj.toMtx44()[2][3], -rPos.z);
-        pScreenPos->scale(1.0f / pos.w, *pos.toTVec3());
+        pScreenPos->scale(1.0f / pos.w, *pos.toVec3());
         pScreenPos->y = -pScreenPos->y;
 
         if (1.0f < MR::abs(pScreenPos->x) || 1.0f < MR::abs(pScreenPos->y)) {
@@ -81,26 +81,26 @@ namespace MR {
         return 0.0f < pScreenPos->z == false;
     }
 
-    bool calcWorldPositionFromScreen(TVec3f* pPos, const TVec2f& rScreenPos, f32 distZ) {
+    bool calcWorldPositionFromScreen(Vec3f* pPos, const Vec2f& rScreenPos, f32 distZ) {
         f32 width = MR::getScreenWidth();
         f32 height = MR::getScreenHeight();
 
-        TVec2f center(rScreenPos.x - width * 0.5f, rScreenPos.y - height * 0.5f);
+        Vec2f center(rScreenPos.x - width * 0.5f, rScreenPos.y - height * 0.5f);
 
         return calcWorldPositionFromCenterScreen(pPos, center, distZ);
     }
 
-    bool calcWorldPositionFromCenterScreen(TVec3f* pPos, const TVec2f& rScreenPos, f32 distZ) {
+    bool calcWorldPositionFromCenterScreen(Vec3f* pPos, const Vec2f& rScreenPos, f32 distZ) {
         f32 height = MR::getScreenHeight();
         f32 focalLength = height * 0.5f / MR::tan(MR::toRadian(::getCameraContext()->mFovy) * 0.5f);
 
         f32 dist = (distZ >= 0.0f ? distZ : focalLength);
         f32 ratio = dist / focalLength;
 
-        TVec3f viewPos(rScreenPos.x * ratio, -rScreenPos.y * ratio, -dist);
+        Vec3f viewPos(rScreenPos.x * ratio, -rScreenPos.y * ratio, -dist);
 
-        TPos3f inv = getCameraInvViewMtx();
-        TVec3f pos;
+        Pos3f inv = getCameraInvViewMtx();
+        Vec3f pos;
         inv.mult(viewPos, pos);
 
         if (pPos != nullptr) {
@@ -110,14 +110,14 @@ namespace MR {
         return true;
     }
 
-    bool calcWorldRayDirectionFromScreen(TVec3f* pDir, const TVec2f& rScreenPos) {
+    bool calcWorldRayDirectionFromScreen(Vec3f* pDir, const Vec2f& rScreenPos) {
         bool ret = calcWorldPositionFromScreen(pDir, rScreenPos, -1.0f);
         pDir->sub(getCamPos());
         return ret;
     }
 
-    f32 calcCameraDistanceZ(const TVec3f& rPos) {
-        const TPos3f& viewMtx = getCameraViewMtx();
+    f32 calcCameraDistanceZ(const Vec3f& rPos) {
+        const Pos3f& viewMtx = getCameraViewMtx();
         return MR::abs(rPos.x * viewMtx.get(2, 0) + rPos.y * viewMtx.get(2, 1) + rPos.z * viewMtx.get(2, 2) + 1.0f * viewMtx.get(2, 3));
     }
 
@@ -135,19 +135,19 @@ namespace MR {
         NebulaMtxCopy(::getCameraContext()->getViewMtx(), j3dSys.mViewMtx);
     }
 
-    const TPos3f& getCameraViewMtx() {
+    const Pos3f& getCameraViewMtx() {
         return ::getCameraContext()->getViewMtx();
     }
 
-    const TPos3f& getCameraInvViewMtx() {
+    const Pos3f& getCameraInvViewMtx() {
         return ::getCameraContext()->getInvViewMtx();
     }
 
-    const TProj3f& getCameraProjectionMtx() {
+    const Proj3f& getCameraProjectionMtx() {
         return ::getCameraContext()->mProjection;
     }
 
-    void setCameraViewMtx(const TPos3f& rMtx, bool a2, bool a3, const TVec3f& a4) {
+    void setCameraViewMtx(const Pos3f& rMtx, bool a2, bool a3, const Vec3f& a4) {
         ::getCameraContext()->setViewMtx(rMtx, a2, a3, a4);
     }
 
@@ -183,32 +183,32 @@ namespace MR {
         ::getCameraContext()->setShakeOffset(offsetX, offsetY);
     }
 
-    const TVec3f getCamPos() {
-        TPos3f viewMtx = ::getCameraContext()->getInvViewMtx();
-        TVec3f pos;
+    const Vec3f getCamPos() {
+        Pos3f viewMtx = ::getCameraContext()->getInvViewMtx();
+        Vec3f pos;
         MR::extractMtxTrans(viewMtx, &pos);
         return pos;
     }
 
-    TVec3f getCamXdir() {
-        TPos3f viewMtx = ::getCameraContext()->getInvViewMtx();
-        TVec3f dir;
+    Vec3f getCamXdir() {
+        Pos3f viewMtx = ::getCameraContext()->getInvViewMtx();
+        Vec3f dir;
         viewMtx.getXDir(dir);
         MR::normalizeOrZero(&dir);
         return dir;
     }
 
-    TVec3f getCamYdir() {
-        TPos3f viewMtx = ::getCameraContext()->getInvViewMtx();
-        TVec3f dir;
+    Vec3f getCamYdir() {
+        Pos3f viewMtx = ::getCameraContext()->getInvViewMtx();
+        Vec3f dir;
         viewMtx.getYDir(dir);
         MR::normalizeOrZero(&dir);
         return dir;
     }
 
-    TVec3f getCamZdir() {
-        TPos3f viewMtx = ::getCameraContext()->getInvViewMtx();
-        TVec3f dir;
+    Vec3f getCamZdir() {
+        Pos3f viewMtx = ::getCameraContext()->getInvViewMtx();
+        Vec3f dir;
         viewMtx.getZDir(dir);
         MR::normalizeOrZero(&dir);
         return -dir;
@@ -222,11 +222,11 @@ namespace MR {
         return MR::isExistSceneObj(SceneObj_MirrorCamera);
     }
 
-    const TPos3f& getMirrorCameraViewMtx() {
+    const Pos3f& getMirrorCameraViewMtx() {
         return getMirrorCamera()->mViewMtx;
     }
 
-    const TPos3f& getMirrorModelTexMtx() {
+    const Pos3f& getMirrorModelTexMtx() {
         return getMirrorCamera()->mModelTexMtx;
     }
 
@@ -312,7 +312,7 @@ namespace MR {
             chunk->mGeneralParam->mNum1 = time;
             chunk->mGeneralParam->mNum2 = type;
             chunk->setLOfsErpOff(true);
-            chunk->mExParam.setWOffset(TVec3f(0.0f, 0.0f, 0.0f));
+            chunk->mExParam.setWOffset(Vec3f(0.0f, 0.0f, 0.0f));
             chunk->mExParam.mLOffsetV = 100.0f;
             chunk->_64 = true;
         }
@@ -369,7 +369,7 @@ namespace MR {
         }
     }
 
-    void startBlackHoleCamera(const char* pEventName, const TVec3f& rWPoint, const TVec3f& rPos) {
+    void startBlackHoleCamera(const char* pEventName, const Vec3f& rWPoint, const Vec3f& rPos) {
         CameraParamChunkEvent* chunk = getCameraDirector()->getEventParameter(0, pEventName);
         if (chunk != nullptr) {
             chunk->mGeneralParam->mWPoint.set(rWPoint);
@@ -428,7 +428,7 @@ namespace MR {
         CameraParamChunkEvent* chunk = getCameraDirector()->getEventParameter(0, ::sLauncherFlightCameraName);
         if (chunk != nullptr) {
             chunk->setCameraType("CAM_TYPE_OBJ_PARALLEL", getCameraDirector()->mHolder);
-            chunk->mExParam.setWOffset(TVec3f(0.0f, 0.0f, 0.0f));
+            chunk->mExParam.setWOffset(Vec3f(0.0f, 0.0f, 0.0f));
             chunk->mExParam.mLOffset = 0.0f;
             chunk->mGeneralParam->mDist = 900.0f;
             chunk->mGeneralParam->mAngleA = 1.4f;
@@ -467,7 +467,7 @@ namespace MR {
         }
     }
 
-    void setProgrammableCameraParam(const char* pEventName, const TVec3f& rWPoint, const TVec3f& rPos, const TVec3f& rUpVec, bool isLOfsErpOff) {
+    void setProgrammableCameraParam(const char* pEventName, const Vec3f& rWPoint, const Vec3f& rPos, const Vec3f& rUpVec, bool isLOfsErpOff) {
         CameraParamChunkEvent* chunk = getCameraDirector()->getEventParameter(0, pEventName);
         if (chunk != nullptr) {
             chunk->mGeneralParam->mWPoint.set(rWPoint);
@@ -516,7 +516,7 @@ namespace MR {
         getCameraDirector()->mRegisterHolder->declareMtxReg(::createRegisterName(pObj, id), mtx);
     }
 
-    void declareCameraRegisterVec(const NameObj* pObj, u32 id, TVec3f* pVec) {
+    void declareCameraRegisterVec(const NameObj* pObj, u32 id, Vec3f* pVec) {
         getCameraDirector()->mRegisterHolder->declareVecReg(::createRegisterName(pObj, id), pVec);
     }
 
@@ -590,7 +590,7 @@ namespace MR {
         return ret;
     }
 
-    void startTalkCamera(const TVec3f& rPosition, const TVec3f& rUp, f32 axisX, f32 axisY, s32 frame) {
+    void startTalkCamera(const Vec3f& rPosition, const Vec3f& rUp, f32 axisX, f32 axisY, s32 frame) {
         getCameraDirector()->startTalkCamera(rPosition, rUp, axisX, axisY, frame);
     }
 
@@ -606,7 +606,7 @@ namespace MR {
         requestMovementOn(getCameraDirector());
     }
 
-    const TVec3f& getCameraWatchPos() {
+    const Vec3f& getCameraWatchPos() {
         return getCameraDirector()->mPoseParam1->mWatchPos;
     }
 

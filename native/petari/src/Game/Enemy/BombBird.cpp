@@ -82,7 +82,7 @@ void BombBird::init(const JMapInfoIter& rIter) {
     MR::connectToSceneEnemy(this);
     initNerve(GET_NERVE(BombBird, HostTypeNrvFlyOnRail));
     initHitSensor(1);
-    MR::addHitSensorEnemy(this, "body", 16, 100.0f, TVec3f(0.0f, 100.0f, 0.0f));
+    MR::addHitSensorEnemy(this, "body", 16, 100.0f, Vec3f(0.0f, 100.0f, 0.0f));
     initSound(4, false);
     MR::onCalcGravity(this);
     MR::initShadowVolumeSphere(this, getSensor("body")->getRadius());
@@ -90,7 +90,7 @@ void BombBird::init(const JMapInfoIter& rIter) {
     MR::initLightCtrl(this);
     MR::declareCoin(this, 1);
     MR::declareStarPiece(this, 3);
-    mFixedPos = new FixedPosition(this, "BombPos", TVec3f(0, 0, 0), TVec3f(0, 0, 0));
+    mFixedPos = new FixedPosition(this, "BombPos", Vec3f(0, 0, 0), Vec3f(0, 0, 0));
     mFixedPos->mNormalizeScale = false;
     mSpinHitController = new SpinHitController(this, 25, 20, 4, 1.5f, 30.0f, 40.0f, 3, false);
 
@@ -108,7 +108,7 @@ void BombBird::init(const JMapInfoIter& rIter) {
     }
 
     initEffectKeeper(1, nullptr, false);
-    MR::initStarPointerTarget(this, getSensor("body")->getRadius(), TVec3f(0.0f, 0.5f * getSensor("body")->getRadius(), 0.0f));
+    MR::initStarPointerTarget(this, getSensor("body")->getRadius(), Vec3f(0.0f, 0.5f * getSensor("body")->getRadius(), 0.0f));
     mScaleController = new AnimScaleController(nullptr);
     mStarPointer = new WalkerStateBindStarPointer(this, mScaleController);
     if (MR::isValidSwitchAppear(this)) {
@@ -211,7 +211,7 @@ void BombBird::exeFlyOnRailSearch() {
         } else if (MR::isGreaterStep(this, 54)) {
             mHoldBomb = true;
             if (mHeldBomb) {
-                TVec3f scale;
+                Vec3f scale;
                 MR::copyJointScale(this, "BombPos", &scale);
                 mHeldBomb->mScale.set(scale);
             }
@@ -313,7 +313,7 @@ void BombBird::exeEscape() {
         MR::validateClipping(this);
     }
 
-    TVec3f escapeDirection(mPosition);
+    Vec3f escapeDirection(mPosition);
     escapeDirection -= *MR::getPlayerCenterPos();
     MR::vecKillElement(escapeDirection, mGravity, &escapeDirection);
     MR::normalizeOrZero(&escapeDirection);
@@ -372,7 +372,7 @@ void BombBird::exeSwoonStart() {
 
     const BombBirdParam* param = &::hOnGroundParam;
     MR::moveAndTurnToPlayer(this, &mFront, param->_0, param->_4, param->_8, param->_C);
-    TVec3f area(0, 0, 0);
+    Vec3f area(0, 0, 0);
     if (MR::calcVelocityAreaOrRailMoveOnGround(&area, this)) {
         mVelocity.set(area * ::hShiftingSandVel);
     }
@@ -395,7 +395,7 @@ void BombBird::exeSwoon() {
     }
 
     MR::moveAndTurnToPlayer(this, &mFront, ::hOnGroundParam._0, ::hOnGroundParam._4, ::hOnGroundParam._8, ::hOnGroundParam._C);
-    TVec3f area(0, 0, 0);
+    Vec3f area(0, 0, 0);
     if (MR::calcVelocityAreaOrRailMoveOnGround(&area, this)) {
         mVelocity.set(area * ::hShiftingSandVel);
     }
@@ -419,7 +419,7 @@ void BombBird::exeSwoonEnd() {
     const BombBirdParam* param = &::hOnGroundParam;
     MR::moveAndTurnToPlayer(this, &mFront, param->_0, param->_4, param->_8, param->_C);
 
-    TVec3f area(0, 0, 0);
+    Vec3f area(0, 0, 0);
     if (MR::calcVelocityAreaOrRailMoveOnGround(&area, this)) {
         mVelocity.set(area * ::hShiftingSandVel);
     }
@@ -453,7 +453,7 @@ void BombBird::exeTrample() {
     MR::moveAndTurnToPlayer(this, &mFront, param->_0, param->_4, param->_8, param->_C);
 
     if (MR::isStep(this, 36)) {
-        TVec3f pos(mPosition - mGravity * getSensor("body")->getRadius());
+        Vec3f pos(mPosition - mGravity * getSensor("body")->getRadius());
         MR::appearCoinPop(this, pos, 1);
         MR::startSound(this, "SE_EM_EXPLODE_S");
         MR::emitEffect(this, "Death");
@@ -555,15 +555,15 @@ bool BombBird::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver
 }
 
 void BombBird::calcAndSetBaseMtx() {
-    TPos3f mtx;
+    Pos3f mtx;
     MR::calcMtxFromGravityAndZAxis(&mtx, this, mGravity, mFront);
     MR::setBaseTRMtx(this, mtx);
-    TVec3f scale(mScaleController->_C * mScale);
+    Vec3f scale(mScaleController->_C * mScale);
     MR::setBaseScale(this, scale);
     if (mHoldBomb && mHeldBomb) {
         mFixedPos->calc();
         mFixedPos->copyTrans(&mHeldBomb->mPosition);
-        TVec3f scale;
+        Vec3f scale;
         mFixedPos->mMtx.getScale(scale);
         MR::setBaseScale(mHeldBomb, scale);
     }

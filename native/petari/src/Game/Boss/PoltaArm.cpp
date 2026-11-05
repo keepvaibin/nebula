@@ -281,7 +281,7 @@ bool PoltaArm::requestControlled(const char* pActionName) {
 }
 
 void PoltaArm::appearBreakModel() {
-    TVec3f jointPos;
+    Vec3f jointPos;
     MR::copyJointPos(this, mIsLeftArm ? "HandL" : "HandR", &jointPos);
     MR::makeMtxUpNoSupportPos(&_98, -mGravity, jointPos);
     mBreakModel->mScale.set(1.0f, 1.0f, 1.0f);

@@ -115,13 +115,13 @@ bool HipDropRock::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor*
 
 void HipDropRock::initBreakModel() {
     mBreakModelMtx.set(getBaseMtx());
-    TVec3f v1;
-    TVec3f v2;
+    Vec3f v1;
+    Vec3f v2;
     v1.x = 0.0f;
     v1.y = 1.0f;
     v1.z = 0.0f;
     v2.scale(MR::getRandom(0.0f, 180.0f), v1);
-    TPos3f mtx;
+    Pos3f mtx;
     MR::makeMtxMoment(&mtx, v2);
     mBreakModelMtx.concat(mtx);
 

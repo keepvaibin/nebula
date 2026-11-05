@@ -15,7 +15,7 @@ namespace {
 };  // namespace
 
 ReturnDemoRailMove::ReturnDemoRailMove(LiveActor* pDemoStarter, LiveActor* pPowerStar, const JMapInfoIter& rIter, bool isGrandstar,
-                                       TPos3f* pTransform)
+                                       Pos3f* pTransform)
     : mDemoStarter(pDemoStarter), mPowerStar(pPowerStar), mIsGrandStar(isGrandstar), mTransform(pTransform), mShootPath(nullptr),
       mPathDrawer(nullptr), mForward(0.0f, 0.0f, 1.0f) {
     mShootPath = new SpinDriverShootPath();
@@ -29,20 +29,20 @@ ReturnDemoRailMove::ReturnDemoRailMove(LiveActor* pDemoStarter, LiveActor* pPowe
 }
 
 void ReturnDemoRailMove::posToStart() {
-    TVec3f position;
-    TVec3f forward;
+    Vec3f position;
+    Vec3f forward;
     calcPathPosDir(&position, &forward, 0.0f);
 
-    MR::makeMtxUpFront(getMtx(), forward, TVec3f(0.0f, -1.0f, 0.0f));
+    MR::makeMtxUpFront(getMtx(), forward, Vec3f(0.0f, -1.0f, 0.0f));
     mTransform->setTrans(position);
     MR::setPlayerBaseMtx(*mTransform);
 };
 
 void ReturnDemoRailMove::posToEnd() {
-    TVec3f position;
+    Vec3f position;
     calcPathPosDir(&position, nullptr, 1.0f);
 
-    MR::makeMtxUpFront(getMtx(), TVec3f(0.0f, 1.0f, 0.0f), mForward);
+    MR::makeMtxUpFront(getMtx(), Vec3f(0.0f, 1.0f, 0.0f), mForward);
     mTransform->setTrans(position);
     MR::setPlayerBaseMtx(*mTransform);
 };
@@ -55,7 +55,7 @@ s32 ReturnDemoRailMove::getDemoFlyBrakeFrame() const {
     return (mIsGrandStar) ? 296 : 45;
 };
 
-void ReturnDemoRailMove::calcPathPosDir(TVec3f* position, TVec3f* direction, f32 t) const {
+void ReturnDemoRailMove::calcPathPosDir(Vec3f* position, Vec3f* direction, f32 t) const {
     if (position != nullptr) {
         mShootPath->calcPosition(position, t);
     }
@@ -110,17 +110,17 @@ void ReturnDemoRailMove::update(s32 currentStep, s32 maxSteps) {
 
     MR::startLevelSound(mPowerStar, "SE_OJ_LV_RET_POW_STAR_FLY");
 
-    TVec3f position;
-    TVec3f direction;
+    Vec3f position;
+    Vec3f direction;
     calcPathPosDir(&position, &direction, t);
 
-    MR::makeMtxUpFront(getMtx(), direction, TVec3f(0.0f, -1.0f, 0.0f));
+    MR::makeMtxUpFront(getMtx(), direction, Vec3f(0.0f, -1.0f, 0.0f));
 
     if (MR::isGreaterStep(mDemoStarter, startStepSecondDemo)) {
         f32 rate = MR::calcNerveEaseOutRate(mDemoStarter, startStepSecondDemo, maxSteps);
 
-        TPos3f transform;
-        MR::makeMtxUpFront(&transform, TVec3f(0.0f, 1.0f, 0.0f), mForward);
+        Pos3f transform;
+        MR::makeMtxUpFront(&transform, Vec3f(0.0f, 1.0f, 0.0f), mForward);
         MR::blendMtxRotateSlerp(*mTransform, transform, rate, *mTransform);
     }
 

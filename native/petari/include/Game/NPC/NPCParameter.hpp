@@ -4,7 +4,7 @@
 #include "Game/NPC/NPCActorItem.hpp"
 #include "Game/Util/Array.hpp"
 #include "Game/Util/JMapInfo.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class JMapInfo;
 class NPCActorItem;
@@ -41,11 +41,11 @@ public:
 
 class NPCParameterV3f : public NPCParameterBase {
 public:
-    NPCParameterV3f(const char*, TVec3f*, f32, f32);
+    NPCParameterV3f(const char*, Vec3f*, f32, f32);
 
     virtual void read(JMapInfo*, s32);
 
-    TVec3f* _8;
+    Vec3f* _8;
     f32 _C;
     f32 _10;
 };

@@ -3,11 +3,11 @@
 SphereController::SphereController() : _4(0) {
 }
 
-f32 SphereController::calcMoveVector(TVec3f* pDst, const TVec3f& rSrc) {
+f32 SphereController::calcMoveVector(Vec3f* pDst, const Vec3f& rSrc) {
     return pDst->x = pDst->y = pDst->z = 0.0f;
 }
 
-void SphereController::update(const TVec3f& sSrc) {
+void SphereController::update(const Vec3f& sSrc) {
 }
 
 bool SphereController::doBrake() const {

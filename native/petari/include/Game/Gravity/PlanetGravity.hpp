@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry.hpp>
+#include <nebula_geometry.hpp>
 
 class NameObj;
 
@@ -19,14 +19,14 @@ class PlanetGravity {
 public:
     PlanetGravity();
 
-    virtual void updateMtx(const TPos3f& rMtx);
+    virtual void updateMtx(const Pos3f& rMtx);
 
-    virtual bool calcOwnGravityVector(TVec3f* pDest, f32* pScalar, const TVec3f& rPosition) const {
+    virtual bool calcOwnGravityVector(Vec3f* pDest, f32* pScalar, const Vec3f& rPosition) const {
         return false;
     }
 
-    bool calcGravity(TVec3f* pDest, const TVec3f& rPosition) const;
-    bool calcGravityFromMassPosition(TVec3f* pDirection, f32* pScalar, const TVec3f& rPosition, const TVec3f& rMassPosition) const;
+    bool calcGravity(Vec3f* pDest, const Vec3f& rPosition) const;
+    bool calcGravityFromMassPosition(Vec3f* pDirection, f32* pScalar, const Vec3f& rPosition, const Vec3f& rMassPosition) const;
 
     bool isInRangeSquare(f32 radius) const;
     bool isInRangeDistance(f32 radius) const;

@@ -12,7 +12,7 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <JSystem/JMath/JMATrigonometric.hpp>
+#include <nebula_geometry.hpp>
 
 namespace NrvStarPieceGroup {
     NEW_NERVE(HostTypeNrvGroup, StarPieceGroup, Group);
@@ -229,15 +229,15 @@ void StarPieceGroup::placementPieceOnCircle() {
         return;
     }
 
-    TPos3f mtxTRS;
+    Pos3f mtxTRS;
     MR::makeMtxTRS(mtxTRS.toMtxPtr(), this);
 
-    TVec3f zDir;
-    TVec3f xDir;
+    Vec3f zDir;
+    Vec3f xDir;
     mtxTRS.getXDir(xDir);
     mtxTRS.getZDir(zDir);
 
-    const TVec3f center(*getPosition());
+    const Vec3f center(*getPosition());
     f32 currentAngle = 0.0f;
     f32 angleBetweenPieces = TWO_PI / mNumPieces;
     for (u32 i = 0; i < mNumPieces; i++) {
@@ -272,7 +272,7 @@ void StarPieceGroup::placementPieceOnRail() {
             railCoord = i * coordDistBetweenPieces;
         }
 
-        TVec3f railPos;
+        Vec3f railPos;
         MR::calcRailPosAtCoord(&railPos, this, railCoord);
         MR::resetPosition(mPieces[i], railPos);
         mRailCoords[i] = railCoord;
@@ -282,7 +282,7 @@ void StarPieceGroup::placementPieceOnRail() {
 void StarPieceGroup::placementPieceOnRailPoint() {
     s32 numRailPoints = MR::getRailPointNum(this);
     for (int i = 0; i < numRailPoints; i++) {
-        TVec3f railPointPos;
+        Vec3f railPointPos;
         MR::calcRailPointPos(&railPointPos, this, i);
         MR::resetPosition(mPieces[i], railPointPos);
     }
@@ -333,7 +333,7 @@ void StarPieceGroup::exeFlow() {
     for (u32 i = 0; i < mNumPieces; i++) {
         mRailCoords[i] = MR::repeat(mRailCoords[i] + mRailSpeed, 0.0f, railLength);
         if (mPieces[i]->isOnRailMove()) {
-            TVec3f railPos;
+            Vec3f railPos;
             MR::calcRailPosAtCoord(&railPos, this, mRailCoords[i]);
             MR::resetPosition(mPieces[i], railPos);
         }

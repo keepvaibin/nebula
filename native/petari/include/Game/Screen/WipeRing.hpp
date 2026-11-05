@@ -15,9 +15,9 @@ public:
     virtual bool isWipeIn() const;
     virtual bool isWipeOut() const;
 
-    void setCenterPos(const TVec3f&);
+    void setCenterPos(const Vec3f&);
     void startAnim(const char*);
-    bool getMarioCenterPos(TVec3f*);
+    bool getMarioCenterPos(Vec3f*);
     f32 calcRadius() const;
     f32 calcMaxRadius() const;
     void updatePlayerPos();
@@ -27,7 +27,7 @@ public:
     void exeWipeOut();
 
 private:
-    TVec2f mCenterPos;
+    Vec2f mCenterPos;
     s32 mAnimFrame;
     f32 mWipeOutFrame;
     f32 mWipeInFrame;

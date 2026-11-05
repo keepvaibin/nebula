@@ -182,8 +182,8 @@ bool MarioSkate::update() {
     }
 
     f32 angle = MR::diffAngleAbsHorizontal(getWorldPadDir(), getFrontVec(), getGravityVec());
-    TVec3f cross;
-    const TVec3f& rPad = getWorldPadDir();
+    Vec3f cross;
+    const Vec3f& rPad = getWorldPadDir();
     cross.cross(getFrontVec(), rPad);
     if (cross.dot(getGravityVec()) < 0.0f) {
         angle = -angle;
@@ -278,7 +278,7 @@ bool MarioSkate::close() {
                 break;
             }
 
-            TVec3f velocity;
+            Vec3f velocity;
             Mario* pPlayer = getPlayer();
             f32 vertical = MR::vecKillElement(pPlayer->mJumpVec, getGravityVec(), &velocity);
             velocity *= 1.5f;

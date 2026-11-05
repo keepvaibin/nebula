@@ -190,14 +190,14 @@ void TeresaRacer::exeMove() {
         setNerve(GET_NERVE(TeresaRacer, TeresaRacerNrvGoal));
     } else {
         MR::getCurrentRailPointArg0NoInit(this, &_10C);  // speed
-        TVec3f up;
+        Vec3f up;
         MR::extractMtxYDir(getBaseMtx(), &up);
         MR::adjustmentRailCoordSpeed(this, _10C, _110);
         MR::moveRailRider(this);
         if (mRacerId == -1) {
             MR::decidePose(this, up, MR::getRailDirection(this), MR::getRailPos(this), 1.0f, 0.05f, 0.1f);
         } else {
-            TVec3f dir = MR::getRailDirection(this) + -MR::getCamZdir() * ::sCameraDirScale;
+            Vec3f dir = MR::getRailDirection(this) + -MR::getCamZdir() * ::sCameraDirScale;
 
             if (!MR::normalizeOrZero(&dir)) {
                 MR::decidePose(this, up, dir, MR::getRailPos(this), 1.0f, 0.05f, 0.1f);

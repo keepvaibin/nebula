@@ -22,26 +22,26 @@ void CameraManPause::calc() {
         return;
     }
 
-    TPos3f mtx;
+    Pos3f mtx;
     if (CameraLocalUtil::getTarget(this)->getMapBaseMtx() != nullptr) {
         mtx.set(*CameraLocalUtil::getTarget(this)->getMapBaseMtx());
     } else {
         mtx.identity();
     }
 
-    TVec3f pos = CameraLocalUtil::getTarget(this)->getPosition();
-    TVec3f watchUp, watchPos;
+    Vec3f pos = CameraLocalUtil::getTarget(this)->getPosition();
+    Vec3f watchUp, watchPos;
     mtx.getYDir(watchUp);
     mtx.getTrans(watchPos);
 
     mtx.setTrans(watchPos + watchUp * watchUp.dot(pos - watchPos));
 
-    TPos3f inv = mtx;
+    Pos3f inv = mtx;
     inv.invert(inv);
     inv.mult(pos, pos);
 
     f32 length, angleX, angleY;
-    MR::crossToPolar(TVec3f(0.0f, 0.0f, 0.0f), pos, &length, &angleX, &angleY);
+    MR::crossToPolar(Vec3f(0.0f, 0.0f, 0.0f), pos, &length, &angleX, &angleY);
 
     if (MR::isHeldCamera(PLAYER_1)) {
         mDistOffset -= MR::getMoveStickY(PLAYER_1) * 200.0f;
@@ -58,21 +58,21 @@ void CameraManPause::calc() {
         mAngle.zero();
     }
 
-    TVec3f newPos;
-    MR::polarToCross(TVec3f(0.0f, 0.0f, 0.0f), &newPos, mDistBase + mDistOffset + length, mAngle.x, mAngle.y + angleY);
+    Vec3f newPos;
+    MR::polarToCross(Vec3f(0.0f, 0.0f, 0.0f), &newPos, mDistBase + mDistOffset + length, mAngle.x, mAngle.y + angleY);
 
     mtx.mult(newPos, newPos);
 
-    TPos3f rotX;
-    rotX.makeRotate(TVec3f(-1.0f, 0.0f, 0.0f), mAngle.x);
+    Pos3f rotX;
+    rotX.makeRotate(Vec3f(-1.0f, 0.0f, 0.0f), mAngle.x);
 
-    TPos3f rotY;
-    rotY.makeRotate(TVec3f(0.0f, 1.0f, 0.0f), mAngle.y + angleY);
+    Pos3f rotY;
+    rotY.makeRotate(Vec3f(0.0f, 1.0f, 0.0f), mAngle.y + angleY);
 
-    TPos3f rotMtx;
+    Pos3f rotMtx;
     rotMtx.concat(rotY, rotX);
 
-    TVec3f up;
+    Vec3f up;
     rotMtx.getYDir(up);
 
     CameraLocalUtil::setWatchPos(this, watchPos);

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/Boss/TombSpider.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class ActorCameraInfo;
 
@@ -24,6 +24,6 @@ public:
     }
 
     TombSpider* mParent;
-    TPos3f mMtx;
+    Pos3f mMtx;
     f32 mRotateSpeed;
 };

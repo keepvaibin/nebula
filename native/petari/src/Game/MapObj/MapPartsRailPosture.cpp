@@ -41,7 +41,7 @@ void MapPartsRailPosture::exeMove() {
     s32 arg0 = -1;
     MR::getRailArg0NoInit(mHost, &arg0);
 
-    TVec3f shadowVector;
+    Vec3f shadowVector;
 
     if (mMovePosture == 3) {
         MR::calcDropShadowVector(mHost, &shadowVector, nullptr, 0);
@@ -49,16 +49,16 @@ void MapPartsRailPosture::exeMove() {
         MR::calcGravityVector(mHost, &shadowVector, nullptr, 0);
     }
 
-    TVec3f v11 = MR::getRailDirection(mHost);
+    Vec3f v11 = MR::getRailDirection(mHost);
 
     if (!MR::isSameDirection(shadowVector, v11)) {
         if (!MR::isRailGoingToEnd(mHost)) {
             v11.negate();
         }
 
-        TVec3f v10(1.0f, 0.0f, 0.0f);
-        TVec3f v9(0.0f, 1.0f, 0.0f);
-        TVec3f v8(0.0f, 0.0f, 1.0f);
+        Vec3f v10(1.0f, 0.0f, 0.0f);
+        Vec3f v9(0.0f, 1.0f, 0.0f);
+        Vec3f v8(0.0f, 0.0f, 1.0f);
 
         // BUG: as in the original, tests the member function's address (`__ptmf_test`), which is always true.
         if (mMovePosture == 1 || &MapPartsRailPosture::isPostureTypeRailDirRailUseShadowGravity != nullptr) {
@@ -76,7 +76,7 @@ void MapPartsRailPosture::exeMove() {
             MR::normalize(&v9);
         }
 
-        TVec3f v7;
+        Vec3f v7;
         _18.getXDir(v7);
         MR::normalize(&v7);
 

@@ -63,7 +63,7 @@ void OtaKingLongFoot::control() {
 
 void OtaKingLongFoot::calcAndSetBaseMtx() {
     PartsModel::calcAndSetBaseMtx();
-    TVec3f scale = mScaleController->_C * mScale;
+    Vec3f scale = mScaleController->_C * mScale;
     MR::setBaseScale(this, scale);
 }
 
@@ -95,12 +95,12 @@ bool OtaKingLongFoot::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSens
 
 void OtaKingLongFoot::initSensor() {
     initHitSensor(6);
-    MR::addHitSensorAtJointEnemy(this, "Foot14", "Foot14", 8, ::cFoot14SensorRadius, TVec3f(::cFoot14SensorOffset));
-    MR::addHitSensorAtJointEnemy(this, "Foot12", "Foot12", 8, ::cFoot12SensorRadius, TVec3f(::cFoot12SensorOffset));
-    MR::addHitSensorAtJointEnemy(this, "Foot10", "Foot10", 8, ::cFoot10SensorRadius, TVec3f(::cFoot10SensorOffset));
-    MR::addHitSensorAtJointEnemy(this, "Foot08", "Foot08", 8, ::cFoot08SensorRadius, TVec3f(::cFoot08SensorOffset));
-    MR::addHitSensorAtJointEnemy(this, "Foot06", "Foot06", 8, ::cFoot06SensorRadius, TVec3f(::cFoot06SensorOffset));
-    MR::addHitSensorAtJointEnemy(this, "Foot05", "Foot05", 8, ::cFoot05SensorRadius, TVec3f(::cFoot05SensorOffset));
+    MR::addHitSensorAtJointEnemy(this, "Foot14", "Foot14", 8, ::cFoot14SensorRadius, Vec3f(::cFoot14SensorOffset));
+    MR::addHitSensorAtJointEnemy(this, "Foot12", "Foot12", 8, ::cFoot12SensorRadius, Vec3f(::cFoot12SensorOffset));
+    MR::addHitSensorAtJointEnemy(this, "Foot10", "Foot10", 8, ::cFoot10SensorRadius, Vec3f(::cFoot10SensorOffset));
+    MR::addHitSensorAtJointEnemy(this, "Foot08", "Foot08", 8, ::cFoot08SensorRadius, Vec3f(::cFoot08SensorOffset));
+    MR::addHitSensorAtJointEnemy(this, "Foot06", "Foot06", 8, ::cFoot06SensorRadius, Vec3f(::cFoot06SensorOffset));
+    MR::addHitSensorAtJointEnemy(this, "Foot05", "Foot05", 8, ::cFoot05SensorRadius, Vec3f(::cFoot05SensorOffset));
 }
 
 void OtaKingLongFoot::exeWait() {

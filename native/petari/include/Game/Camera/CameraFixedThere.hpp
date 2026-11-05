@@ -25,14 +25,14 @@ public:
     }
 
     void copyStatusFromPrevCamera();
-    bool calcEyeDir(TVec3f*);
+    bool calcEyeDir(Vec3f*);
     void makeAxisAndRoll();
-    void updateUpVec(const TVec3f&);
-    void updateNormalUpVec(const TVec3f&);
+    void updateUpVec(const Vec3f&);
+    void updateNormalUpVec(const Vec3f&);
 
     u32 mCameraType;
     bool mIsFovyFixed;
-    TVec3f mUp;
-    TVec3f mAxis;
+    Vec3f mUp;
+    Vec3f mAxis;
     f32 mRoll;
 };

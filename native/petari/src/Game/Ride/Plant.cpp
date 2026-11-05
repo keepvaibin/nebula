@@ -127,8 +127,8 @@ void Plant::init(const JMapInfoIter& pMapInfoIter) {
     initLeaf();
     initHitSensor(3);
     MR::addHitSensorCallbackBinder(this, "bind", 5, 100.0f);
-    MR::addHitSensorMapObj(this, "seed", 5, 300.0f, TVec3f(0.0f, 50.0f, 0.0f));
-    MR::addHitSensorRide(this, "Ride", 8, 50.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorMapObj(this, "seed", 5, 300.0f, Vec3f(0.0f, 50.0f, 0.0f));
+    MR::addHitSensorRide(this, "Ride", 8, 50.0f, Vec3f(0.0f, 0.0f, 0.0f));
 
     MR::initMultiActorCamera(this, pMapInfoIter, &mCameraInfo, "\217\157\214\273\203\146\203\202" /* 出現デモ */);
     MR::initMultiActorCamera(this, pMapInfoIter, &mCameraInfo, "\222\315\202\334\202\350" /* 掴まり */);
@@ -340,7 +340,7 @@ void Plant::exeHangDown() {
     if (MR::isRailReachedNearGoal(this, ::sHangReachedDistance)) {
         MR::endMultiActorCameraAtLanding(this, mCameraInfo, "\222\315\202\334\202\350" /* 掴まり */);
         MR::startBckPlayer("GrowPlantJump");
-        MR::endBindAndPlayerJump(this, TVec3f(0.0f, 0.0f, 0.0f), 0);
+        MR::endBindAndPlayerJump(this, Vec3f(0.0f, 0.0f, 0.0f), 0);
         mRider = nullptr;
         setNerve(GET_NERVE(Plant, PlantNrvGrowthWaitInvalid));
         return;
@@ -367,26 +367,26 @@ void Plant::initLeaf() {
     mNumLeaves = (s32)((MR::getRailTotalLength(this) - ::sLeafPosOffsetStart - ::sLeafPosOffsetEnd) / (::sLeafIntervalMax - ::sLeafIntervalMin)) + 2;
     mLeaves = new PlantLeaf*[mNumLeaves];
 
-    TRot3f mtx;
+    Rot3f mtx;
     mtx.identity();
 
-    TVec3f baseRotate(0.0f, 0.0f, 1.0f);
+    Vec3f baseRotate(0.0f, 0.0f, 1.0f);
     leafPos = MR::getRailTotalLength(this) - ::sLeafPosOffsetStart;
 
     MR::getRailTotalLength(this);
 
     for (s32 leaf = 0; leaf < mNumLeaves; leaf++) {
         leafRatio = static_cast< f32 >(leaf) / static_cast< f32 >(mNumLeaves);
-        TVec3f railDirection;
+        Vec3f railDirection;
         MR::calcRailDirectionAtCoord(&railDirection, this, leafPos);
 
-        TVec3f growDirection = baseRotate;
+        Vec3f growDirection = baseRotate;
         f32 dot = growDirection.dot(railDirection);
         if (MR::abs(dot) > ::sLeafAxisDotMax) {
             if (dot > 0.0f) {
-                growDirection.cross(TVec3f(0.0f, 1.0f, 0.0f), railDirection);
+                growDirection.cross(Vec3f(0.0f, 1.0f, 0.0f), railDirection);
             } else {
-                growDirection.cross(railDirection, TVec3f(0.0f, 1.0f, 0.0f));
+                growDirection.cross(railDirection, Vec3f(0.0f, 1.0f, 0.0f));
             }
 
             MR::normalize(&growDirection);
@@ -398,7 +398,7 @@ void Plant::initLeaf() {
         mLeaves[leaf]->initWithoutIter();
         leafPos -= MR::getInterpolateValue(leafRatio, ::sLeafIntervalMin, ::sLeafIntervalMax);
 
-        mtx.setRotate(TVec3f(0.0f, 1.0f, 0.0f), MR::toRadian(MR::getRandom(::sLeafRotateMin, ::sLeafRotateMax)));
+        mtx.setRotate(Vec3f(0.0f, 1.0f, 0.0f), MR::toRadian(MR::getRandom(::sLeafRotateMin, ::sLeafRotateMax)));
         mtx.mult(baseRotate, baseRotate);
     }
 }
@@ -517,9 +517,9 @@ bool Plant::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
     }
 
     if (MR::isMsgUpdateBaseMtx(msg)) {
-        TVec3f side;
+        Vec3f side;
         MR::makeAxisUpFront(&side, &mFront, mUp, mFront);
-        TPos3f mtx;
+        Pos3f mtx;
         mtx.setXYZDir(side, mUp, mFront);
         mtx.setTrans(mPosition);
         MR::setBaseTRMtx(mRider, mtx);
@@ -549,8 +549,8 @@ bool Plant::updateGrowUp() {
     f32 growthPercent = mStalk->mGrowthPercent;
     mTopPartsModel->mScale.set(growthPercent);
     for (s32 leaf = 0; leaf < mNumLeaves; leaf++) {
-        TVec3f axisY;
-        TVec3f pos;
+        Vec3f axisY;
+        Vec3f pos;
         f32 leafCoord = mLeaves[leaf]->mLeafCoord;
         mStalk->calcPosAndAxisY(&pos, &axisY, leafCoord * mStalk->mGrowthPercent);
         mLeaves[leaf]->updateGrowUp(pos, axisY, growthPercent, 10.0f);
@@ -613,7 +613,7 @@ void Plant::updateBindLeaf() {
         springPower *= -1.0f;
     }
 
-    TVec3f railDir = MR::getRailDirection(this) * 20.0f;
+    Vec3f railDir = MR::getRailDirection(this) * 20.0f;
     if (MR::isRailGoingToEnd(this)) {
         railDir.scale(-1.0f);
     }
@@ -660,11 +660,11 @@ bool Plant::tryReachGoal() {
     }
 
     MR::moveCoordToEndPos(this);
-    TVec3f endPoint;
+    Vec3f endPoint;
     MR::calcRailEndPointPos(&endPoint, this);
     MR::setPlayerPos(endPoint);
 
-    TVec3f endFront = mStalk->mPlantPoints[0]->mUp;
+    Vec3f endFront = mStalk->mPlantPoints[0]->mUp;
     MR::vecKillElement(endFront, mGravity, &endFront);
 
     if (!MR::isNearZero(endFront)) {
@@ -672,7 +672,7 @@ bool Plant::tryReachGoal() {
         MR::setPlayerFrontTargetVec(endFront, 1);
     }
 
-    TVec3f endUp = mStalk->mPlantPoints[0]->mUp;
+    Vec3f endUp = mStalk->mPlantPoints[0]->mUp;
     endUp.scale(mJumpSpeed);
 
     endUp.add(mGravity * -mJumpSpeedOffsetY);

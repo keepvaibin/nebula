@@ -8,8 +8,8 @@
 #include "Game/Util/StringUtil.hpp"
 
 namespace {
-    static const TVec3f sOutPosition(0.0f, 100.0f, -300.0f);
-    static const TVec3f sEggOutPosition(0.0f, 0.0f, -400.0f);
+    static const Vec3f sOutPosition(0.0f, 100.0f, -300.0f);
+    static const Vec3f sEggOutPosition(0.0f, 0.0f, -400.0f);
 };  // namespace
 
 namespace NrvDinoPackunStateDamage {
@@ -92,20 +92,20 @@ void DinoPackunStateDamage::exePunched() {
 }
 
 void DinoPackunStateDamage::exePulled() {
-    TVec3f v21(0.0f, 0.0f, 0.0f);
+    Vec3f v21(0.0f, 0.0f, 0.0f);
     getHost()->mTail->getEndTailPosition(&v21);
 
     if (MR::isFirstStep(this)) {
         getHost()->startDemo();
 
         if (_14) {
-            TVec3f v20;
+            Vec3f v20;
             MR::calcSideVec(&v20, getHost());
-            TVec3f v19;
+            Vec3f v19;
             MR::calcUpVec(&v19, getHost());
-            TVec3f stack_20;
+            Vec3f stack_20;
             stack_20.set(MR::getSensorPos(getHost()->getSensor("head")));
-            TVec3f stack_14(v21 - stack_20);
+            Vec3f stack_14(v21 - stack_20);
             MR::normalizeOrZero(&stack_14);
 
             if (v19.dot(stack_14) > 0.7f) {
@@ -124,7 +124,7 @@ void DinoPackunStateDamage::exePulled() {
     getHost()->adjustTailRootPosition(!_14 ? ::sEggOutPosition : ::sOutPosition, 0.1f);
 
     if (v21.distance(getHost()->mPosition) > 800.0f) {
-        TVec3f v15;
+        Vec3f v15;
         getHost()->mTail->getTailNodePosition(&v15, 3);
         MR::turnDirectionFromTargetDegree(getHost(), &getHost()->_E8, v15, 6.0f);
     }

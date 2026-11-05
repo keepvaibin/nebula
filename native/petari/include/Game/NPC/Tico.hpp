@@ -51,7 +51,7 @@ public:
     static const f32 sFloatSeMinVolume;
 
     u32 _15C;
-    TVec3f _160;
+    Vec3f _160;
     f32 _16C;
     TicoDemoGetPower* mDemoGetPower;
     TalkMessageCtrl* _174;

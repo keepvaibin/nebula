@@ -19,7 +19,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include <JSystem/JMath/JMath.hpp>
+#include <nebula_geometry.hpp>
 
 #define POIHANA_BEHAVIOR_NORMAL 0
 #define POIHANA_BEHAVIOR_SLEEP 1
@@ -109,7 +109,7 @@ void Poihana::init(const JMapInfoIter& rIter) {
 
     initHitSensor(2);
     MR::addHitSensorPriorBinder(this, "binder", 8, ::sNormalBinderRadius, ::sNormalBinderPos);
-    MR::addHitSensorAtJoint(this, "body", "Body", ATYPE_KILLER_TARGET_ENEMY, 8, 70.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJoint(this, "body", "Body", ATYPE_KILLER_TARGET_ENEMY, 8, 70.0f, Vec3f(0.0f, 0.0f, 0.0f));
 
     bool useSmallBinder = false;
     MR::getJMapInfoArg7NoInit(rIter, &useSmallBinder);
@@ -125,7 +125,7 @@ void Poihana::init(const JMapInfoIter& rIter) {
     initEffectKeeper(1, nullptr, false);
     initSound(4, false);
 
-    MR::initStarPointerTarget(this, 100.0f, TVec3f(0.0f, 100.0f, 0.0f));
+    MR::initStarPointerTarget(this, 100.0f, Vec3f(0.0f, 100.0f, 0.0f));
     mAnimScaleCtrl = new AnimScaleController(nullptr);
     mBindStarPointer = new WalkerStateBindStarPointer(this, mAnimScaleCtrl);
 
@@ -160,7 +160,7 @@ void Poihana::init(const JMapInfoIter& rIter) {
 }
 
 void Poihana::initAfterPlacement() {
-    TPos3f baseMtx;
+    Pos3f baseMtx;
     MR::makeMtxUpNoSupportPos(&baseMtx, -mGravity, mPosition);
     MR::setBaseTRMtx(this, baseMtx);
     MR::calcFrontVec(&mFrontVec, this);
@@ -181,7 +181,7 @@ void Poihana::control() {
 }
 
 void Poihana::calcAndSetBaseMtx() {
-    TPos3f baseMtx;
+    Pos3f baseMtx;
     MR::calcMtxFromGravityAndZAxis(&baseMtx, this, mGravity, mFrontVec);
 
     if (isNerveTypeWalkOrWait()) {
@@ -190,7 +190,7 @@ void Poihana::calcAndSetBaseMtx() {
 
     MR::setBaseTRMtx(this, baseMtx);
 
-    TVec3f scale = mAnimScaleCtrl->_C * mScale;
+    Vec3f scale = mAnimScaleCtrl->_C * mScale;
     MR::setBaseScale(this, scale);
 }
 
@@ -344,7 +344,7 @@ void Poihana::exeShootUpCharge() {
         MR::startBck(this, "ThrowStart");
     }
 
-    TVec3f& rGravity = mGravity;
+    Vec3f& rGravity = mGravity;
     f32 dot = rGravity.dot(mVelocity);
     mVelocity.scale(dot, rGravity);
 
@@ -360,7 +360,7 @@ void Poihana::exeShootUp() {
         MR::startActorCameraNoTarget(this, mCamInfo);
     }
 
-    TVec3f& rGravity = mGravity;
+    Vec3f& rGravity = mGravity;
     f32 dot = rGravity.dot(mVelocity);
     mVelocity.scale(dot, rGravity);
 
@@ -568,13 +568,13 @@ void Poihana::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
         }
     }
 
-    TVec3f pushVelocity;
+    Vec3f pushVelocity;
     pushVelocity.sub(mPosition, pReceiver->mHost->mPosition);
 
     MR::normalizeOrZero(&pushVelocity);
 
     if (mVelocity.dot(pushVelocity) < 0.0f) {
-        const TVec3f& rVelocity = mVelocity;
+        const Vec3f& rVelocity = mVelocity;
         mVelocity.scaleAdd(-pushVelocity.dot(rVelocity), pushVelocity, rVelocity);
     }
 }
@@ -630,7 +630,7 @@ bool Poihana::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pRec
 
 bool Poihana::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
     if (MR::isSensorEnemy(pSender) || MR::isSensorMapObj(pSender)) {
-        TVec3f pushOffset;
+        Vec3f pushOffset;
         pushOffset.sub(mPosition, pSender->mHost->mPosition);
         MR::normalizeOrZero(&pushOffset);
         mVelocity.scaleAdd(::sReceivePushPower, pushOffset, mVelocity);
@@ -684,7 +684,7 @@ bool Poihana::tryToStartBind(HitSensor* pSender) {
     }
 
     LiveActor* pBindedActor = pSender->mHost;
-    if (MR::isInWater(pBindedActor, TVec3f(0.0f, 0.0f, 0.0f))) {
+    if (MR::isInWater(pBindedActor, Vec3f(0.0f, 0.0f, 0.0f))) {
         return false;
     }
 
@@ -696,7 +696,7 @@ bool Poihana::tryToStartBind(HitSensor* pSender) {
 }
 
 void Poihana::updateBindActorMtx() {
-    TPos3f binderMtx;
+    Pos3f binderMtx;
     MR::makeMtxTR(binderMtx.toMtxPtr(), mBindedActor);
     MR::setBaseTRMtx(mBindedActor, binderMtx);
 }
@@ -705,7 +705,7 @@ void Poihana::endBind() {
     MR::validateClipping(this);
 
     if (MR::isPlayerInRush()) {
-        TVec3f jumpVec;
+        Vec3f jumpVec;
         jumpVec.scale(-mLaunchIntensity, mGravity);
         MR::endBindAndPlayerJump(this, jumpVec, 0);
         MR::startSound(this, "SE_PM_HELI_JUMP");
@@ -770,14 +770,14 @@ void Poihana::controlVelocity() {
         return;
     }
 
-    TVec3f gravity = MR::isBindedGround(this) ? -*MR::getGroundNormal(this) : mGravity;
+    Vec3f gravity = MR::isBindedGround(this) ? -*MR::getGroundNormal(this) : mGravity;
 
-    TVec3f frontVec(mFrontVec);
+    Vec3f frontVec(mFrontVec);
     MR::turnVecToPlane(&mFrontVec, frontVec, gravity);
 
     if (MR::isBindedGround(this)) {
-        TVec3f addVel;
-        const TVec3f& rVelocity = mVelocity;
+        Vec3f addVel;
+        const Vec3f& rVelocity = mVelocity;
         addVel.scaleAdd(-mFrontVec.dot(rVelocity), mFrontVec, rVelocity);
         addVel.scale(::sVelocityDownRateSide);
 
@@ -785,7 +785,7 @@ void Poihana::controlVelocity() {
         mVelocity.add(addVel);
 
         if (mVelocity.dot(gravity) > 0.0f) {
-            const TVec3f& rVelocity = mVelocity;
+            const Vec3f& rVelocity = mVelocity;
             mVelocity.scaleAdd(-gravity.dot(rVelocity), gravity, rVelocity);
         }
 
@@ -812,7 +812,7 @@ void Poihana::calcMyGravity() {
         return;
     }
 
-    TVec3f upVec, gravityPos;
+    Vec3f upVec, gravityPos;
     MR::calcUpVec(&upVec, this);
     gravityPos.scaleAdd(::sGravityOffsetY, upVec, mPosition);
     MR::calcGravity(this, gravityPos);
@@ -843,7 +843,7 @@ bool Poihana::tryDrown() {
         return false;
     }
 
-    if (!MR::isInWater(this, TVec3f(0.0f, 0.0f, 0.0f))) {
+    if (!MR::isInWater(this, Vec3f(0.0f, 0.0f, 0.0f))) {
         return false;
     }
 
@@ -946,11 +946,11 @@ bool Poihana::isNeedForGetUp() const {
 }
 
 bool Poihana::isBackAttack(HitSensor* pMySensor) const {
-    TVec3f frontVec;
+    Vec3f frontVec;
     MR::calcFrontVec(&frontVec, this);
     frontVec.negate();
 
-    TVec3f offset;
+    Vec3f offset;
     offset.sub(pMySensor->mPosition, mPosition);
     return offset.dot(frontVec) > 0.0f;
 }

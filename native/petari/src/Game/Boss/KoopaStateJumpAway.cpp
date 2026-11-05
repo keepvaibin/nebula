@@ -63,7 +63,7 @@ void KoopaStateJumpAway::exeJump() {
     }
 
     MR::addVelocityToGravity(mHost, ::sJumpGravity);
-    TVec3f newFront = mHost->mVelocity;
+    Vec3f newFront = mHost->mVelocity;
     MR::vecKillElement(newFront, mHost->mGravity, &newFront);
 
     if (!MR::isNearZero(newFront)) {

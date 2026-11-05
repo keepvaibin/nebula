@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class JUTTexture;
 
@@ -10,10 +10,10 @@ public:
 
     void view();
     void clear();
-    void draw(const TVec3f& rPosition, const TVec3f& rUp, f32 surfaceDistance) const;
+    void draw(const Vec3f& rPosition, const Vec3f& rUp, f32 surfaceDistance) const;
 
     u32 mParticleCount;
-    TVec3f* mParticlePositions;
+    Vec3f* mParticlePositions;
     f32 mCellSize;
     u16 mFadeStep;
     JUTTexture* mTexture;

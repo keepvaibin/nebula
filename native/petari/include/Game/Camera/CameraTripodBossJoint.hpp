@@ -14,7 +14,7 @@ public:
     }
     virtual CamTranslatorBase* createTranslator();
 
-    void setParam(const TVec2f& angle, f32 dist, s32 jointID, const TVec3f& axis) {
+    void setParam(const Vec2f& angle, f32 dist, s32 jointID, const Vec3f& axis) {
         mAngleX = angle.x;
         mAngleY = angle.y;
         mDist = dist;
@@ -28,7 +28,7 @@ public:
     f32 mAngleY;
     f32 mDist;
     s32 mJointID;
-    TVec3f mAxis;
+    Vec3f mAxis;
     bool mIsRounding;
     f32 mRoundTarget;
     f32 mRoundAngle;

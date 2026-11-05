@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/NameObj/NameObj.hpp"
-#include <JSystem/JGeometry/THex.hpp>
+#include <nebula_geometry.hpp>
 
 class ClippingJudge : public NameObj {
 public:
@@ -12,12 +12,12 @@ public:
 
     virtual void movement();
 
-    bool isJudgedToClipFrustum(const TVec3f&, f32) const;
-    bool isJudgedToClipFrustum(const TVec3f&, f32, s32) const;
-    void calcViewingVolume(THex3f*, f32);
+    bool isJudgedToClipFrustum(const Vec3f&, f32) const;
+    bool isJudgedToClipFrustum(const Vec3f&, f32, s32) const;
+    void calcViewingVolume(Hex3f*, f32);
 
-    THex3f mFrustum;
-    THex3f mClipFrustums[0x8];
+    Hex3f mFrustum;
+    Hex3f mClipFrustums[0x8];
     f32 mClipDistances[0x8];
 };
 

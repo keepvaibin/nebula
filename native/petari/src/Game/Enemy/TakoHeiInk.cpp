@@ -24,7 +24,7 @@ void TakoHeiInk::init(const JMapInfoIter& rIter) {
     MR::onCalcGravity(this);
     initHitSensor(1);
 
-    MR::addHitSensorEnemy(this, "Body", 8, ::sModelSize, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemy(this, "Body", 8, ::sModelSize, Vec3f(0.0f, 0.0f, 0.0f));
     initBinder(::sModelSize, 0.0f, 0);
     initEffectKeeper(0, nullptr, false);
     initSound(1, false);
@@ -42,7 +42,7 @@ void TakoHeiInk::kill() {
 void TakoHeiInk::control() {
 }
 
-void TakoHeiInk::start(const TVec3f& startPos, const TVec3f& startVelocity, bool startOffBind) {
+void TakoHeiInk::start(const Vec3f& startPos, const Vec3f& startVelocity, bool startOffBind) {
     mPosition.set(startPos);
     setNerve(GET_NERVE(TakoHeiInk, TakoHeiInkNrvWait));
     appear();

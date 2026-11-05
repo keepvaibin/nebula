@@ -8,7 +8,7 @@
 #include "Game/Player/MarioSwim.hpp"
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include <JSystem/JMath/JMath.hpp>
+#include <nebula_geometry.hpp>
 #include <cstring>
 
 bool Mario::isWalling() const {
@@ -23,7 +23,7 @@ void Mario::checkWallStick() {
 
     if (!checkWallJumpCode() && isEnableStickWall()) {
         if (mActor->_334) {
-            TVec3f horizontal;
+            Vec3f horizontal;
             f32 vertical = MR::vecKillElement(mJumpVec, mActor->_240, &horizontal);
             horizontal.setLength(-0.25f);
             mJumpVec = mActor->_240 * vertical + horizontal;
@@ -43,7 +43,7 @@ void Mario::checkWallStick() {
 
 u8 Mario::checkStickWallSide() {
     if (isStickOn()) {
-        const TVec3f& direction = getWorldPadDir();
+        const Vec3f& direction = getWorldPadDir();
         if (direction.dot(getWallNorm()) < -0.5f) {
             return 1;
         }
@@ -58,7 +58,7 @@ u8 Mario::checkStickWallSide() {
 
 s32 Mario::checkStickFrontBack() {
     if (isStickOn()) {
-        const TVec3f& direction = getWorldPadDir();
+        const Vec3f& direction = getWorldPadDir();
         if (direction.dot(-mFrontVec) < -0.5f) {
             return 1;
         }
@@ -139,7 +139,7 @@ void Mario::fixWallingDir(bool immediate) {
 }
 
 bool Mario::fixWallingTop() {
-    TVec3f side = getWallNorm().cross(getAirGravityVec());
+    Vec3f side = getWallNorm().cross(getAirGravityVec());
     MR::normalizeOrZero(&side);
     if (MR::isNearZero(side)) {
         return false;
@@ -201,7 +201,7 @@ bool Mario::checkWallCode(const char* pCode, bool frontBackOnly) const {
     return false;
 }
 
-bool Mario::checkWallCodeNorm(u16 code, TVec3f* pNormal, bool frontBackOnly) const {
+bool Mario::checkWallCodeNorm(u16 code, Vec3f* pNormal, bool frontBackOnly) const {
     if (mMovementStates._19) {
         u16 wallCode = MR::getWallCodeIndex(mBackWallTriangle);
         if (wallCode == code) {
@@ -249,7 +249,7 @@ void Mario::setWallCancel() {
 
 void Mario::keepDistFrontWall() {
     if (mMovementStates._8) {
-        TVec3f horizontal;
+        Vec3f horizontal;
         MR::vecKillElement(_4E8 - mGroundPos, *getGravityVec(), &horizontal);
         if (horizontal.length() < 80.0f) {
             push(*mFrontWallTriangle->getNormal(0) * (80.0f - horizontal.length()));
@@ -315,7 +315,7 @@ bool Mario::isEnableStickWall() {
         }
     }
 
-    TVec3f horizontal;
+    Vec3f horizontal;
     if (mMovementStates._19) {
         MR::vecKillElement(mJumpVec, mActor->_240, &horizontal);
         if (mBackWallTriangle->getNormal(0)->dot(horizontal) > 0.0f) {
@@ -335,7 +335,7 @@ bool Mario::isEnableStickWall() {
         return false;
     }
 
-    TVec3f side = getWallNorm().cross(getAirGravityVec());
+    Vec3f side = getWallNorm().cross(getAirGravityVec());
     if (MR::normalizeOrZero(&side)) {
         return false;
     }
@@ -374,7 +374,7 @@ bool Mario::isEnableStickWall() {
         return false;
     }
 
-    TVec3f position(mActor->_2AC);
+    Vec3f position(mActor->_2AC);
     f32 distance = 120.0f;
     if (mMovementStates._19) {
         distance = -120.0f;
@@ -425,7 +425,7 @@ bool MarioWall::update() {
 
     if (getPlayer()->mDrawStates._6) {
         if (_1D) {
-            TVec3f horizontal;
+            Vec3f horizontal;
             MarioActor* actor = mActor;
             if (MR::vecKillElement(actor->getLastMove(), getGravityVec(), &horizontal) < 1.0f) {
                 release = true;
@@ -465,7 +465,7 @@ bool MarioWall::update() {
     if (release) {
         if (!getPlayer()->mMovementStates._1) {
             _1C = 1;
-            TVec3f normal(getPlayer()->getWallNorm());
+            Vec3f normal(getPlayer()->getWallNorm());
             _24 = normal;
             getPlayer()->setFrontVecKeepUp(-normal);
         }
@@ -601,13 +601,13 @@ bool MarioWall::startJump() {
         return false;
     }
 
-    TVec3f velocity(getPlayer()->getWallNorm());
+    Vec3f velocity(getPlayer()->getWallNorm());
     _24 = velocity;
     if (!getPlayer()->mDrawStates._3 && _14 < 15 && !MR::isNearZero(_30)) {
         f32 dot = velocity.dot(-_30);
         if (dot < mActor->getConst().getTable()->mWallTriJumpMargin && dot > 0.0f) {
             Mtx rotation;
-            TVec3f axis;
+            Vec3f axis;
             axis.cross(-_30, velocity);
             NebulaMtxRotAxisRad(rotation, &axis, MR::acos(dot));
             NebulaMtxMultVec(rotation, &velocity, &velocity);
@@ -628,7 +628,7 @@ bool MarioWall::startBackJump(u32 type) {
         return false;
     }
 
-    TVec3f velocity(getPlayer()->getWallNorm());
+    Vec3f velocity(getPlayer()->getWallNorm());
     if (getPlayer()->mMovementStates.jumping && velocity.dot(getPlayer()->mJumpVec) > 0.0f) {
         return false;
     }
@@ -669,7 +669,7 @@ bool Mario::fixWallingDist() {
     }
 
     if (mMovementStates._19) {
-        TVec3f position(_4F4 + *mBackWallTriangle->getNormal(0) * 79.0f);
+        Vec3f position(_4F4 + *mBackWallTriangle->getNormal(0) * 79.0f);
         f32 distance = MR::vecKillElement(position - mPosition, *mBackWallTriangle->getNormal(0), &position);
         mPosition += *mBackWallTriangle->getNormal(0) * distance;
         if (!fixWallingTop()) {
@@ -683,11 +683,11 @@ bool Mario::fixWallingDist() {
         }
 
         if (MR::isExistMapCollision(mPosition, mFrontVec * 100.0f) && mFrontVec.dot(*mFrontWallTriangle->getNormal(0)) < -0.999f) {
-            TVec3f position(_4E8 + *mFrontWallTriangle->getNormal(0) * 60.0f - _75C * 80.0f);
-            TVec3f correction;
+            Vec3f position(_4E8 + *mFrontWallTriangle->getNormal(0) * 60.0f - _75C * 80.0f);
+            Vec3f correction;
             MR::vecKillElement(position - mPosition, *getGravityVec(), &correction);
             if (!MR::isNearZero(correction)) {
-                TVec3f relative(correction + mActor->_288);
+                Vec3f relative(correction + mActor->_288);
                 if (MR::abs(relative.x) < MR::abs(correction.x)) {
                     correction.x = relative.x;
                 }
@@ -736,7 +736,7 @@ void Mario::tryWallPunch() {
             }
         } else {
             stopWalk();
-            TVec3f velocity(getWallNorm() * mActor->getConst().getTable()->mWallSpinFlipGround);
+            Vec3f velocity(getWallNorm() * mActor->getConst().getTable()->mWallSpinFlipGround);
             if (mMovementStates.jumping) {
                 velocity.scale(mActor->getConst().getTable()->mWallSpinFlipAirRatio);
             }

@@ -57,7 +57,7 @@ void AirBubbleGenerator::exeWait() {
 }
 
 void AirBubbleGenerator::exeGenerate() {
-    TVec3f axisY;
+    Vec3f axisY;
 
     if (MR::isFirstStep(this)) {
         MR::startSound(this, "SE_OJ_AIR_BUBBLE_APPEAR");

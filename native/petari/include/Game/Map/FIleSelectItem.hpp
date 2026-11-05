@@ -2,7 +2,7 @@
 
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/System/NerveExecutor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class FileSelectIconID;
 class FileSelectItem;
@@ -71,10 +71,10 @@ public:
     FileSelectModel** mModels;
     MiiFaceParts* mFaceParts;
     FileSelectNumber* _A0;
-    TPos3f _A4;
-    TMtx34f _D4;
-    TMtx34f _104;
-    TVec3f _134;
+    Pos3f _A4;
+    Mtx34f _D4;
+    Mtx34f _104;
+    Vec3f _134;
     s32 _140;
     u8 _144;
     bool mIsInvalidateSelect;
@@ -87,7 +87,7 @@ public:
     u8 _155;
     u8 _156;
     u8 _157;
-    TVec2f _158;
+    Vec2f _158;
     f32 _160;
     bool mIsInvalidRotate;
     u8 _165;

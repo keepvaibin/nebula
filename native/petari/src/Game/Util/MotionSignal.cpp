@@ -289,7 +289,7 @@ namespace MotionSignal {
     }
 
     void sceneCamera(f32 (*pOut)[4]) {
-        const TPos3f& view = MR::getCameraViewMtx();
+        const Pos3f& view = MR::getCameraViewMtx();
         for (int row = 0; row < 3; row++) {
             for (int column = 0; column < 4; column++) {
                 pOut[row][column] = view.mMtx[row][column];
@@ -297,7 +297,7 @@ namespace MotionSignal {
         }
         pOut[3][0] = pOut[3][1] = pOut[3][2] = pOut[3][3] = 0.0f;
         if (MR::isExistSceneObj(SceneObj_MarioHolder) && MR::getMarioHolder()->getMarioActor() != nullptr) {
-            const TVec3f& gravity = MR::getMarioHolder()->getMarioActor()->getGravityVec();
+            const Vec3f& gravity = MR::getMarioHolder()->getMarioActor()->getGravityVec();
             if (gravity.x != 0.0f || gravity.y != 0.0f || gravity.z != 0.0f) {
                 pOut[3][0] = -gravity.x;
                 pOut[3][1] = -gravity.y;
@@ -330,7 +330,7 @@ namespace MotionSignal {
         }
     }
 
-    void playerPlaced(LiveActor* pPlayer, const TVec3f& rTarget) {
+    void playerPlaced(LiveActor* pPlayer, const Vec3f& rTarget) {
         const f32 dx = rTarget.x - pPlayer->mPosition.x;
         const f32 dy = rTarget.y - pPlayer->mPosition.y;
         const f32 dz = rTarget.z - pPlayer->mPosition.z;

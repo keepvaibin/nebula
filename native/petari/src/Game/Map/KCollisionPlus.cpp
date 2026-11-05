@@ -4,7 +4,7 @@ bool KCollisionServer::isInsideMinMaxInLocalSpace(const V3u& rPoint) const {
     return (rPoint.x & mFile->mXMask) == 0 && (rPoint.y & mFile->mYMask) == 0 && (rPoint.z & mFile->mZMask) == 0;
 }
 
-bool KCollisionServer::outCheck(const TVec3f* pPosA, const TVec3f* pPosB, V3u* pPointA, V3u* pPointB) const {
+bool KCollisionServer::outCheck(const Vec3f* pPosA, const Vec3f* pPosB, V3u* pPointA, V3u* pPointB) const {
     objectSpaceToLocalSpace(pPointA, *pPosA);
     objectSpaceToLocalSpace(pPointB, *pPosB);
 
@@ -46,7 +46,7 @@ bool KCollisionServer::outCheck(const TVec3f* pPosA, const TVec3f* pPosB, V3u* p
     return true;
 }
 
-void KCollisionServer::objectSpaceToLocalSpace(V3u* pPoint, const TVec3f& rPos) const {
+void KCollisionServer::objectSpaceToLocalSpace(V3u* pPoint, const Vec3f& rPos) const {
     pPoint->x = static_cast< s32 >(rPos.x - mFile->mMin.x);
     pPoint->y = static_cast< s32 >(rPos.y - mFile->mMin.y);
     pPoint->z = static_cast< s32 >(rPos.z - mFile->mMin.z);

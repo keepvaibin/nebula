@@ -113,7 +113,7 @@ void KoopaSequencerVs2::exeDemoDown() {
 
         MR::setPlayerPosAndWait("\203\137\203\105\203\223\203\146\203\202\214\343\201\151\203\175\203\212\203\111\201\152" /* ダウンデモ後（マリオ） */);
 
-        TVec3f namePos;
+        Vec3f namePos;
         MR::findNamePos("\203\146\203\202\222\206\220\123" /* デモ中心 */, &namePos, nullptr);
 
         MR::startAfterBossBGM();

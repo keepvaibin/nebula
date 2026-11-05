@@ -145,7 +145,7 @@ FileSelector::FileSelector(const char* pName)
 void FileSelector::init(const JMapInfoIter& rIter) {
     MR::connectToScene(this, MR::MovementType_Environment, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_None);
     initHitSensor(1);
-    MR::addHitSensorPriorBinder(this, "body", 8, 500.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorPriorBinder(this, "body", 8, 500.0f, Vec3f(0.0f, 0.0f, 0.0f));
     initUserFileArray();
     MR::invalidateClipping(this);
     createCameraController();
@@ -226,16 +226,16 @@ void FileSelector::control() {
 
     for (int i = 0; i < mItems->getObjNum(); i++) {
         LiveActor* pActor = mItems->getActor(i);
-        TVec3f& rPosition = pActor->mPosition;
+        Vec3f& rPosition = pActor->mPosition;
         rPosition = _98[i] * 0.05f + rPosition * 0.95f;
     }
 
-    TVec3f* pEffectPosition;
+    Vec3f* pEffectPosition;
 
     for (int i = 0; i < mItems->getObjNum(); i++) {
         LiveActor* pActor = mItems->getActor(i);
         pEffectPosition = &mSelectEffect[i].mPosition;
-        pEffectPosition->set(pActor->mPosition + TVec3f(0.0f, ::sSelectEffectOffset, 0.0f));
+        pEffectPosition->set(pActor->mPosition + Vec3f(0.0f, ::sSelectEffectOffset, 0.0f));
     }
 
     updateBgm();
@@ -251,7 +251,7 @@ bool FileSelector::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pRece
     }
 
     if (MR::isMsgUpdateBaseMtx(msg)) {
-        TMtx34f baseMtx;
+        Mtx34f baseMtx;
         baseMtx.identity();
 
         MR::setPlayerBaseMtx(baseMtx.toMtxPtr());
@@ -290,7 +290,7 @@ namespace {
 
 void FileSelector::createFileItems() {
     mItems = new DeriveActorGroup< FileSelectItem >("\221\123\203\164\203\100\203\103\203\213\203\101\203\103\203\145\203\200\225\333\216\235" /* 全ファイルアイテム保持 */, USER_FILE_NUM);
-    _98 = new TVec3f[USER_FILE_NUM]();
+    _98 = new Vec3f[USER_FILE_NUM]();
 
     calcBasePos(0.0f);
     MR::createSceneObj(SceneObj_MiiFacePartsHolder);
@@ -364,8 +364,8 @@ void FileSelector::updateQuitButton() {
 void FileSelector::offerFilesToMenuFocus() {
     for (int i = 0; i < mItems->getObjNum(); i++) {
         FileSelectItem* pItem = static_cast< FileSelectItem* >(mItems->getActor(i));
-        TVec2f screen;
-        if (!pItem->mIsInvalidateSelect && MR::calcScreenPosition(&screen, pItem->mPosition + TVec3f(0.0f, 900.0f, 0.0f))) {
+        Vec2f screen;
+        if (!pItem->mIsInvalidateSelect && MR::calcScreenPosition(&screen, pItem->mPosition + Vec3f(0.0f, 900.0f, 0.0f))) {
             NebulaMenuFocus::offerTarget(pItem, screen);
         }
     }
@@ -743,19 +743,19 @@ namespace {
         return r;
     }
 
-    class RotateMtx : public TPos3f {
+    class RotateMtx : public Pos3f {
     public:
         f32& ref(int x, int y) {
             return mMtx[x][y];
         }
 
-        void makeRotate(const TVec3f& rAxis, f32 angle) {
+        void makeRotate(const Vec3f& rAxis, f32 angle) {
             zeroTrans();
             setRotate(rAxis, angle);
         }
 
-        void setRotate(const TVec3f& rAxis, f32 angle) {
-            TVec3f vec;
+        void setRotate(const Vec3f& rAxis, f32 angle) {
+            Vec3f vec;
             vec.normalize(rAxis);
 
             f32 s = calcSin(angle);
@@ -789,14 +789,14 @@ namespace {
 
 void FileSelector::calcBasePos(f32 offset) {
     f32 thetaStep = 2.0f * PI / USER_FILE_NUM;
-    TPos3f translationMtx;
-    TPos3f& translation = translationMtx;
+    Pos3f translationMtx;
+    Pos3f& translation = translationMtx;
     translation.makeTrans(0.0f, offset, 0.0f);
 
     RotateMtx rotation;
-    rotation.makeRotate(TVec3f(1.0f, 0.0f, 0.0f), ::sSlopeDegree * PI / 180.0f);
+    rotation.makeRotate(Vec3f(1.0f, 0.0f, 0.0f), ::sSlopeDegree * PI / 180.0f);
 
-    TPos3f transform;
+    Pos3f transform;
     transform.concat(translation, rotation);
 
     for (int i = 0; i < USER_FILE_NUM; i++) {

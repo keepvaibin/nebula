@@ -11,7 +11,7 @@
 SpinDriverCamera::SpinDriverCamera() : mCamera(), mTargetMtx(), mCameraInfo(), mAppearCameraFrame() {
 }
 
-void SpinDriverCamera::startAppearCamera(LiveActor* pActor, const TVec3f& a2, const TVec3f& a3, const TVec3f& a4) {
+void SpinDriverCamera::startAppearCamera(LiveActor* pActor, const Vec3f& a2, const Vec3f& a3, const Vec3f& a4) {
     if (mCameraInfo == nullptr) {
         return;
     }
@@ -24,7 +24,7 @@ void SpinDriverCamera::startAppearCamera(LiveActor* pActor, const TVec3f& a2, co
 
     MR::startMultiActorCameraTargetOther(pActor, mCameraInfo, "\217\157\214\273\203\103\203\170\203\223\203\147\227\160" /* 出現イベント用 */, CameraTargetArg(mTargetMtx));
 
-    TPos3f upPos;
+    Pos3f upPos;
     MR::makeMtxUpFrontPos(&upPos, a2, a3, a4);
     mTargetMtx->setMtx(upPos.toMtxPtr());
 }
@@ -45,19 +45,19 @@ s32 SpinDriverCamera::getAppearCameraFrames() const {
     return mAppearCameraFrame;
 }
 
-void SpinDriverCamera::start(const TVec3f& a1, const TVec3f& a2, const TVec3f& a3) {
+void SpinDriverCamera::start(const Vec3f& a1, const Vec3f& a2, const Vec3f& a3) {
     if (mCamera == nullptr) {
         return;
     }
 
     mCamera->start(CameraTargetArg(mTargetMtx), 0);
 
-    TPos3f mtx;
+    Pos3f mtx;
     MR::makeMtxUpFrontPos(&mtx, a1, a2, a3);
     mTargetMtx->setMtx(mtx.toMtxPtr());
 }
 
-void SpinDriverCamera::update(const TVec3f& a1, const TVec3f& a2) {
+void SpinDriverCamera::update(const Vec3f& a1, const Vec3f& a2) {
     if (mCamera == nullptr || mCamera->isEnd()) {
         return;
     }
@@ -83,20 +83,20 @@ void SpinDriverCamera::end() {
     mCamera->changeTargetPlayer();
 }
 
-void SpinDriverCamera::updateTargetMatrix(const TVec3f& rRot, const TVec3f& rTrans) {
+void SpinDriverCamera::updateTargetMatrix(const Vec3f& rRot, const Vec3f& rTrans) {
     if (MR::isNearZero(rRot)) {
         return;
     }
 
-    TPos3f targetMtx = mTargetMtx->mMatrix;
+    Pos3f targetMtx = mTargetMtx->mMatrix;
 
-    TVec3f yDir;
+    Vec3f yDir;
     targetMtx.getYDir(yDir);
 
-    TVec3f rotVec;
+    Vec3f rotVec;
     MR::normalize(rRot, &rotVec);
 
-    TPos3f rotMtx;
+    Pos3f rotMtx;
     rotMtx.identity();
     rotMtx.setRotate(yDir, rotVec);
 

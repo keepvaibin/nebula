@@ -18,7 +18,7 @@ public:
 
     bool isBodySensor(const HitSensor*) const;
     bool isNerveSwoon() const;
-    void updateFrontVecToPlayer(const TVec3f&);
+    void updateFrontVecToPlayer(const Vec3f&);
     void exeConnectedBody() {
     }
 
@@ -28,7 +28,7 @@ public:
     void exeSwoonEnd();
     void exeBlow();
 
-    TVec3f mFrontVec;
+    Vec3f mFrontVec;
 };
 
 class CocoSambo : public LiveActor {
@@ -75,9 +75,9 @@ public:
     inline bool isSensorTryToFallHead(HitSensor* pSensor);
 
     CocoSamboHead* mHead;
-    TVec3f mHitEffectScale;
-    TVec3f mFrontVec;
-    TVec3f mUpVec;
+    Vec3f mHitEffectScale;
+    Vec3f mFrontVec;
+    Vec3f mUpVec;
     f32 mPlayerSearchDistance;
     AnimScaleParam* mAnimScaleParam;
     AnimScaleController* mAnimScaleController;

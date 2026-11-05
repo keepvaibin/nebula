@@ -25,7 +25,7 @@ LavaGeyser::LavaGeyser(const char* pName) : LiveActor(pName) {
 
 void LavaGeyser::init(const JMapInfoIter& iter) {
     MR::initDefaultPos(this, iter);
-    TQuat4f quat1;
+    Quat4f quat1;
     quat1.setEulerDegree(mRotation.x, mRotation.y, mRotation.z);
     quat1.getYDir(_A0);
     MR::getJMapInfoArg0NoInit(iter, &mArg0);
@@ -59,10 +59,10 @@ void LavaGeyser::startClipped() {
 }
 
 void LavaGeyser::updateHitSensor(HitSensor* pSensor) {
-    TVec3f cPos = *MR::getPlayerCenterPos();
+    Vec3f cPos = *MR::getPlayerCenterPos();
     cPos -= mPosition;
     f32 v1 = _A0.dot(cPos);
-    TVec3f v2 = _94;
+    Vec3f v2 = _94;
     v2 -= mPosition;
     f32 v3 = _A0.dot(v2) + -100.f;
     if (v3 < 0.f) {
@@ -105,7 +105,7 @@ void LavaGeyser::exeWait() {
 
 void LavaGeyser::exeSign() {
     if (MR::isFirstStep(this)) {
-        const TVec3f* pos = &mPosition;
+        const Vec3f* pos = &mPosition;
         _94.set(*pos);
         MR::emitEffect(this, "Sign");
     }

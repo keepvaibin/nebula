@@ -13,7 +13,7 @@ public:
     virtual void initBullet(const JMapInfoIter&);
     virtual bool shotBullet(f32);
 
-    void calcGunPointFromCannon(TPos3f*);
+    void calcGunPointFromCannon(Pos3f*);
 
     ActorCameraInfo* mCameraInfo;
     bool mIsInvalidSpinKill;

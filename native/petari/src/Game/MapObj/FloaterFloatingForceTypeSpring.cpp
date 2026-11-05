@@ -80,7 +80,7 @@ void FloaterFloatingForceTypeSpring::updateVelocity() {
     mSpringForce->mSpringValue->update();
 }
 
-void FloaterFloatingForceTypeSpring::updateHostVelocity(TVec3f* pDst) const {
+void FloaterFloatingForceTypeSpring::updateHostVelocity(Vec3f* pDst) const {
     pDst->set(getCurrentVelocity());
 }
 

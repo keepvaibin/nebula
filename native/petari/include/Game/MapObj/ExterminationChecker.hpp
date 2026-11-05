@@ -27,7 +27,7 @@ public:
 
     LiveActorGroup* mGroup;
     KeySwitch* mKeySwitch;
-    TVec3f mKeySwitchPos;
+    Vec3f mKeySwitchPos;
     u8 _A0;
     u8 _A1;
 };

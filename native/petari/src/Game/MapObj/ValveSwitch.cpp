@@ -27,8 +27,8 @@ void ValveSwitch::init(const JMapInfoIter& rIter) {
     MR::connectToSceneMapObjDecorationStrongLight(this);
     MR::initLightCtrl(this);
     initHitSensor(2);
-    MR::addHitSensorMapObj(this, "body", 8, 100.0f, TVec3f(0.0f, 0.0f, 0.0f));
-    TVec3f binder;
+    MR::addHitSensorMapObj(this, "body", 8, 100.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    Vec3f binder;
     binder.scale(-75.0f, mGravity);
     MR::addHitSensorAtJoint(this, "binder", "Valve", ATYPE_BINDER, 8, 150.0f, binder);
     _90.set(MR::getJointMtx(this, "Valve"));
@@ -139,7 +139,7 @@ bool ValveSwitch::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pRecei
 }
 
 void ValveSwitch::updateBindActorMtx() {
-    TPos3f posMtx;
+    Pos3f posMtx;
     posMtx.set(_8C->getBaseMtx());
     HitSensor* sensor = getSensor("binder");
     posMtx.mMtx[0][3] = sensor->mPosition.x;

@@ -1,11 +1,11 @@
 #include "JSystem/JParticle/JPAMath.hpp"
-#include "JSystem/JMath/JMATrigonometric.hpp"
+#include <nebula_geometry.hpp>
 
-void JPAGetDirMtx(JGeometry::TVec3< f32 > const& param_0, f32 (*param_1)[4]) {
-    JGeometry::TVec3< f32 > local_78 = JGeometry::TVec3< f32 >(param_0.y, -param_0.x, 0.0f);
+void JPAGetDirMtx(Vec3f const& param_0, f32 (*param_1)[4]) {
+    Vec3f local_78 = Vec3f(param_0.y, -param_0.x, 0.0f);
     f32 len = local_78.length();
 
-    if (len <= JGeometry::TUtil< f32 >::epsilon()) {
+    if (len <= FloatUtil::epsilon()) {
         local_78.zero();
     } else {
         local_78.scale(1.0f / len);
@@ -31,10 +31,10 @@ void JPAGetDirMtx(JGeometry::TVec3< f32 > const& param_0, f32 (*param_1)[4]) {
 }
 
 void JPAGetYZRotateMtx(s16 angleY, s16 angleZ, f32 (*param_2)[4]) {
-    f32 cosy = JMASCos(angleY);
-    f32 cosz = JMASCos(angleZ);
-    f32 siny = JMASSin(angleY);
-    f32 sinz = JMASSin(angleZ);
+    f32 cosy = Angle::cosShort(angleY);
+    f32 cosz = Angle::cosShort(angleZ);
+    f32 siny = Angle::sinShort(angleY);
+    f32 sinz = Angle::sinShort(angleZ);
     param_2[0][0] = (cosy * cosz);
     param_2[0][1] = -sinz;
     param_2[0][2] = (siny * cosz);
@@ -50,12 +50,12 @@ void JPAGetYZRotateMtx(s16 angleY, s16 angleZ, f32 (*param_2)[4]) {
 }
 
 void JPAGetXYZRotateMtx(s16 x, s16 y, s16 z, Mtx mtx) {
-    f32 cosx = JMASCos(x);
-    f32 siny = JMASSin(y);
-    f32 cosy = JMASCos(y);
-    f32 cosz = JMASCos(z);
-    f32 sinx = JMASSin(x);
-    f32 sinz = JMASSin(z);
+    f32 cosx = Angle::cosShort(x);
+    f32 siny = Angle::sinShort(y);
+    f32 cosy = Angle::cosShort(y);
+    f32 cosz = Angle::cosShort(z);
+    f32 sinx = Angle::sinShort(x);
+    f32 sinz = Angle::sinShort(z);
     mtx[0][0] = cosy * cosz;
     mtx[1][0] = cosy * sinz;
     mtx[2][0] = -siny;
@@ -75,19 +75,19 @@ void JPAGetXYZRotateMtx(s16 x, s16 y, s16 z, Mtx mtx) {
 }
 
 void JPASetRMtxfromMtx(f32 const (*param_0)[4], f32 (*param_1)[4]) {
-    JGeometry::TVec3< f32 > dummy_0;
-    JGeometry::TVec3< f32 > dummy_1;
+    Vec3f dummy_0;
+    Vec3f dummy_1;
     JPASetRMtxSTVecfromMtx(param_0, param_1, &dummy_0, &dummy_1);
 }
 
 /* NEW IN SMG1 */
-void JPASetRMtxTVecfromMtx(f32 const (*param_0)[4], f32 (*param_1)[4], JGeometry::TVec3< f32 >* param_2) {
-    JGeometry::TVec3< f32 > dummy;
+void JPASetRMtxTVecfromMtx(f32 const (*param_0)[4], f32 (*param_1)[4], Vec3f* param_2) {
+    Vec3f dummy;
     JPASetRMtxSTVecfromMtx(param_0, param_1, &dummy, param_2);
 }
 
-void JPASetRMtxSTVecfromMtx(f32 const (*param_0)[4], f32 (*param_1)[4], JGeometry::TVec3< f32 >* param_2, JGeometry::TVec3< f32 >* param_3) {
-    JGeometry::TVec3< f32 > aTStack_54 = JGeometry::TVec3< f32 >(param_0[0][0], param_0[1][0], param_0[2][0]);
+void JPASetRMtxSTVecfromMtx(f32 const (*param_0)[4], f32 (*param_1)[4], Vec3f* param_2, Vec3f* param_3) {
+    Vec3f aTStack_54 = Vec3f(param_0[0][0], param_0[1][0], param_0[2][0]);
     param_2->x = aTStack_54.length();
     aTStack_54.set< f32 >(param_0[0][1], param_0[1][1], param_0[2][1]);
     param_2->y = aTStack_54.length();
@@ -139,5 +139,5 @@ f32 JPACalcKeyAnmValue(f32 param_0, u16 param_1, f32 const* param_2) {
         }
     }
 
-    return JMAHermiteInterpolation(param_0, param_2[0], param_2[1], param_2[3], param_2[4], param_2[5], param_2[6]);
+    return hermiteInterpolation(param_0, param_2[0], param_2[1], param_2[3], param_2[4], param_2[5], param_2[6]);
 }

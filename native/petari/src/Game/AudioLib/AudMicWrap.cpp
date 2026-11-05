@@ -28,7 +28,7 @@ namespace AudMicWrap {
         AudWrap::getSystem()->mAudience.updateSetting();
     }
 
-    const TVec3f& getMicPos() {
+    const Vec3f& getMicPos() {
         return AudWrap::getSystem()->getMicPos(0);
     }
 };  // namespace AudMicWrap

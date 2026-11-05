@@ -3,9 +3,9 @@
 #include "Game/System/GameSystemObjHolder.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
-#include <JSystem/JGeometry/TUtil.hpp>
-#include <JSystem/JMath/JMATrigonometric.hpp>
-#include <JSystem/JMath/JMath.hpp>
+#include <nebula_geometry.hpp>
+
+
 #include <nebula_math.h>
 
 
@@ -13,7 +13,7 @@ const Vec gZeroVec = {0.0f, 0.0f, 0.0f};
 
 namespace MR {
     f32 acosEx(f32 x) {
-        return JMAAcosRadian(x);
+        return Angle::acosRadian(x);
     }
 
     f32 getRandom() {
@@ -35,7 +35,7 @@ namespace MR {
         return getRandom(0.0f, 360.0f);
     }
 
-    void calcRandomVec(TVec3f* pDst, f32 min, f32 max) {
+    void calcRandomVec(Vec3f* pDst, f32 min, f32 max) {
         pDst->set< f32 >(getRandom(min, max), getRandom(min, max), getRandom(min, max));
     }
 
@@ -51,19 +51,19 @@ namespace MR {
         }
     }
 
-    void getRandomVector(TVec3f* pDst, f32 range) {
+    void getRandomVector(Vec3f* pDst, f32 range) {
         pDst->set< f32 >(getRandom(-range, range), getRandom(-range, range), getRandom(-range, range));
     }
 
-    void addRandomVector(TVec3f* pDst, const TVec3f& rSrc, f32 range) {
+    void addRandomVector(Vec3f* pDst, const Vec3f& rSrc, f32 range) {
         f32 x = getRandom(-range, range);
         f32 y = getRandom(-range, range);
         f32 z = getRandom(-range, range);
 
-        pDst->set(rSrc + TVec3f(x, y, z));
+        pDst->set(rSrc + Vec3f(x, y, z));
     }
 
-    void turnRandomVector(TVec3f* pDst, const TVec3f& rSrc, f32 range) {
+    void turnRandomVector(Vec3f* pDst, const Vec3f& rSrc, f32 range) {
         f32 srcLength = rSrc.length();
 
         addRandomVector(pDst, rSrc, range);
@@ -84,21 +84,21 @@ namespace MR {
     }
 
     f32 getLinerValueFromMinMax(f32 x, f32 min, f32 max, f32 start, f32 end) {
-        return getInterpolateValue((JGeometry::TUtil< f32 >::clamp(x, min, max) - min) / (max - min), start, end);
+        return getInterpolateValue((FloatUtil::clamp(x, min, max) - min) / (max - min), start, end);
     }
 
     f32 getEaseInValue(f32 x, f32 start, f32 end, f32 max) {
-        return getInterpolateValue(1.0f - JMACosRadian(x / max * pi() / 2.0f), start, end);
+        return getInterpolateValue(1.0f - Angle::cosRadian(x / max * pi() / 2.0f), start, end);
     }
 
     f32 getEaseOutValue(f32 x, f32 start, f32 end, f32 max) {
         f32 t = x / max * pi() / 2.0f;
-        return getInterpolateValue(JMASinRadian(t), start, end);
+        return getInterpolateValue(Angle::sinRadian(t), start, end);
     }
 
     f32 getEaseInOutValue(f32 x, f32 start, f32 end, f32 max) {
         f32 t = x / max * pi();
-        return getInterpolateValue((1.0f - JMACosRadian(t)) / 2.0f, start, end);
+        return getInterpolateValue((1.0f - Angle::cosRadian(t)) / 2.0f, start, end);
     }
 
     f32 getScaleWithReactionValueZeroToOne(f32 x, f32 freq, f32 amplitude) {
@@ -106,7 +106,7 @@ namespace MR {
             return getEaseOutValue(x * 2.0f, 0.0f, 1.0f, 1.0f);
         } else {
             f32 t = (x - 0.5f) * 2.0f;
-            return 1.0f + (1.0f - JMACosRadian(pi() * freq * t)) * (1.0f - t) * amplitude;
+            return 1.0f + (1.0f - Angle::cosRadian(pi() * freq * t)) * (1.0f - t) * amplitude;
         }
     }
 
@@ -116,14 +116,14 @@ namespace MR {
         f32 convergeWeight = (t1 * t1) * (t1 * t1);
         f32 dampRatio = dampScale * t1;
 
-        f32 vibration = JMASinRadian(PI * (x + rate * vibWeight));
+        f32 vibration = Angle::sinRadian(PI * (x + rate * vibWeight));
         return getInterpolateValue((1.0f - convergeWeight) + vibration * dampRatio, start, end);
     }
 
     f32 getReduceVibrationValue(f32 x, f32 time, f32 base, f32 amplitude, f32 freq) {
         f32 vibMax = base + amplitude;
 
-        f32 vib = JMACosRadian(x * (1.0f / freq * PI));
+        f32 vib = Angle::cosRadian(x * (1.0f / freq * PI));
         f32 vibration = (amplitude * 0.5f) * (vib - 1.0f);
         if (x >= time) {
             return vibration + vibMax;
@@ -135,47 +135,47 @@ namespace MR {
         }
     }
 
-    void makeAxisFrontUp(TVec3f* pSide, TVec3f* pUp, const TVec3f& rFront, const TVec3f& rUp) {
+    void makeAxisFrontUp(Vec3f* pSide, Vec3f* pUp, const Vec3f& rFront, const Vec3f& rUp) {
         pSide->cross(rUp, rFront);
         normalize(pSide);
         pUp->cross(rFront, *pSide);
     }
 
-    void makeAxisFrontSide(TVec3f* pUp, TVec3f* pSide, const TVec3f& rFront, const TVec3f& rSide) {
+    void makeAxisFrontSide(Vec3f* pUp, Vec3f* pSide, const Vec3f& rFront, const Vec3f& rSide) {
         pUp->cross(rFront, rSide);
         normalize(pUp);
         pSide->cross(*pUp, rFront);
     }
 
-    void makeAxisUpFront(TVec3f* pSide, TVec3f* pFront, const TVec3f& rUp, const TVec3f& rFront) {
+    void makeAxisUpFront(Vec3f* pSide, Vec3f* pFront, const Vec3f& rUp, const Vec3f& rFront) {
         pSide->cross(rUp, rFront);
         normalize(pSide);
         pFront->cross(*pSide, rUp);
     }
 
-    void makeAxisUpSide(TVec3f* pFront, TVec3f* pSide, const TVec3f& rUp, const TVec3f& rSide) {
+    void makeAxisUpSide(Vec3f* pFront, Vec3f* pSide, const Vec3f& rUp, const Vec3f& rSide) {
         pFront->cross(rSide, rUp);
         normalize(pFront);
         pSide->cross(rUp, *pFront);
     }
 
-    void makeAxisVerticalZX(TVec3f* pVec, const TVec3f& rAxis) {
-        pVec->killElement(TVec3f(0.0f, 0.0f, 1.0f), rAxis);
+    void makeAxisVerticalZX(Vec3f* pVec, const Vec3f& rAxis) {
+        pVec->killElement(Vec3f(0.0f, 0.0f, 1.0f), rAxis);
         if (isNearZero(*pVec)) {
-            pVec->killElement(TVec3f(1.0f, 0.0f, 0.0f), rAxis);
+            pVec->killElement(Vec3f(1.0f, 0.0f, 0.0f), rAxis);
         }
 
         normalize(pVec);
     }
 
-    void makeAxisCrossPlane(TVec3f* pVec, TVec3f* pCross, const TVec3f& rNorm) {
+    void makeAxisCrossPlane(Vec3f* pVec, Vec3f* pCross, const Vec3f& rNorm) {
         makeAxisVerticalZX(pVec, rNorm);
         pCross->cross(*pVec, rNorm);
         normalizeOrZero(pCross);
     }
 
-    bool makeAxisAndCosignVecToVec(TVec3f* pAxis, f32* pCos, const TVec3f& rFrom, const TVec3f& rTo) {
-        TVec3f from;
+    bool makeAxisAndCosignVecToVec(Vec3f* pAxis, f32* pCos, const Vec3f& rFrom, const Vec3f& rTo) {
+        Vec3f from;
         if (isOppositeDirection(rFrom, rTo)) {
             turnRandomVector(&from, rFrom, 0.01f);
             normalize(&from);
@@ -183,7 +183,7 @@ namespace MR {
             from.set(rFrom);
         }
 
-        TVec3f axis = from.cross(rTo);
+        Vec3f axis = from.cross(rTo);
 
         if (isNearZero(axis)) {
             pAxis->zero();
@@ -192,14 +192,14 @@ namespace MR {
             return false;
         } else {
             normalize(axis, pAxis);
-            *pCos = JGeometry::TUtil< f32 >::clamp(from.dot(rTo), -1.0f, 1.0f);
+            *pCos = FloatUtil::clamp(from.dot(rTo), -1.0f, 1.0f);
 
             return true;
         }
     }
 
-    f32 calcPerpendicFootToLine(TVec3f* pDst, const TVec3f& rPos, const TVec3f& rPointA, const TVec3f& rPointB) {
-        TVec3f offset = rPointB - rPointA;
+    f32 calcPerpendicFootToLine(Vec3f* pDst, const Vec3f& rPos, const Vec3f& rPointA, const Vec3f& rPointB) {
+        Vec3f offset = rPointB - rPointA;
         f32 ratio = rPos.dot(offset) - rPointA.dot(offset);
         ratio /= offset.squared();
         offset.scale(ratio);
@@ -208,20 +208,20 @@ namespace MR {
         return ratio;
     }
 
-    f32 calcPerpendicFootToLineInside(TVec3f* pDst, const TVec3f& rPos, const TVec3f& rPointA, const TVec3f& rPointB) {
-        TVec3f offset = rPointB - rPointA;
+    f32 calcPerpendicFootToLineInside(Vec3f* pDst, const Vec3f& rPos, const Vec3f& rPointA, const Vec3f& rPointB) {
+        Vec3f offset = rPointB - rPointA;
         f32 ratio = rPos.dot(offset) - rPointA.dot(offset);
         ratio /= offset.squared();
-        ratio = JGeometry::TUtil< f32 >::clamp(ratio, 0.0f, 1.0f);
+        ratio = FloatUtil::clamp(ratio, 0.0f, 1.0f);
         offset.scale(ratio);
         pDst->set(rPointA);
         pDst->add(offset);
         return ratio;
     }
 
-    bool checkHitSegmentSphere(const TVec3f& rSpherePos, const TVec3f& rPointA, const TVec3f& rPointB, f32 radius, TVec3f* pDir) {
-        TVec3f pos = rSpherePos;
-        TVec3f segment = rPointB;
+    bool checkHitSegmentSphere(const Vec3f& rSpherePos, const Vec3f& rPointA, const Vec3f& rPointB, f32 radius, Vec3f* pDir) {
+        Vec3f pos = rSpherePos;
+        Vec3f segment = rPointB;
         pos -= rPointA;
         segment -= rPointA;
 
@@ -246,7 +246,7 @@ namespace MR {
                 return true;
             }
         } else {
-            TVec3f offset = segment;
+            Vec3f offset = segment;
             offset.scale(dot / segment.squared());
             offset.sub(pos);
             if (offset.squared() <= radSquared) {
@@ -262,9 +262,9 @@ namespace MR {
         return false;
     }
 
-    bool checkHitSemilinePlane(TVec3f* pHitPos, const TVec3f& rPos, const TVec3f& rDir, const TVec3f& rPlanePos, const TVec3f& rPlaneNorm) {
+    bool checkHitSemilinePlane(Vec3f* pHitPos, const Vec3f& rPos, const Vec3f& rDir, const Vec3f& rPlanePos, const Vec3f& rPlaneNorm) {
         f32 dot = rDir.dot(rPlaneNorm);
-        TVec3f offset = rPlanePos - rPos;
+        Vec3f offset = rPlanePos - rPos;
         if (0.0f < dot) {
             return false;
         }
@@ -276,7 +276,7 @@ namespace MR {
         return true;
     }
 
-    bool calcReboundVelocity(TVec3f* pVel, const TVec3f& rNormal, f32 reboundRate) {
+    bool calcReboundVelocity(Vec3f* pVel, const Vec3f& rNormal, f32 reboundRate) {
         f32 dot = pVel->dot(rNormal);
         if (dot < 0.0f) {
             f32 rate = reboundRate + 1.0f;
@@ -289,7 +289,7 @@ namespace MR {
         return false;
     }
 
-    bool calcReboundVelocity(TVec3f* pVel, const TVec3f& rNormal, f32 reboundRateV, f32 reboundRateH) {
+    bool calcReboundVelocity(Vec3f* pVel, const Vec3f& rNormal, f32 reboundRateV, f32 reboundRateH) {
         f32 dot = pVel->dot(rNormal);
         if (dot < 0.0f) {
             pVel->sub(rNormal * dot);
@@ -335,46 +335,46 @@ namespace MR {
         *pVel = -2.0f * t * a;
     }
 
-    void makeQuatRotateRadian(TQuat4f* pQuat, const TVec3f& rRot) {
+    void makeQuatRotateRadian(Quat4f* pQuat, const Vec3f& rRot) {
         pQuat->setEuler(rRot.x, rRot.y, rRot.z);
     }
 
-    void makeQuatRotateDegree(TQuat4f* pQuat, const TVec3f& rRot) {
+    void makeQuatRotateDegree(Quat4f* pQuat, const Vec3f& rRot) {
         pQuat->setEulerDegree(rRot.x, rRot.y, rRot.z);
     }
 
-    void makeQuatFromVec(TQuat4f* pQuat, const TVec3f& rFront, const TVec3f& rUp) {
-        TPos3f mtx;
+    void makeQuatFromVec(Quat4f* pQuat, const Vec3f& rFront, const Vec3f& rUp) {
+        Pos3f mtx;
         makeMtxFrontUp(&mtx, rFront, rUp);
         mtx.getQuat(*pQuat);
     }
 
-    void makeQuatSideUp(TQuat4f* pParam1, const TVec3f& rParam2, const TVec3f& rParam3) {
-        TPos3f mtx;
+    void makeQuatSideUp(Quat4f* pParam1, const Vec3f& rParam2, const Vec3f& rParam3) {
+        Pos3f mtx;
         makeMtxSideUp(&mtx, rParam2, rParam3);
         mtx.getQuat(*pParam1);
     }
 
-    void makeQuatUpFront(TQuat4f* pQuat, const TVec3f& rUp, const TVec3f& rFront) {
-        TPos3f mtx;
+    void makeQuatUpFront(Quat4f* pQuat, const Vec3f& rUp, const Vec3f& rFront) {
+        Pos3f mtx;
         makeMtxUpFront(&mtx, rUp, rFront);
         mtx.getQuat(*pQuat);
     }
 
-    void makeQuatUpNoSupport(TQuat4f* pQuat, const TVec3f& rUp) {
-        TPos3f mtx;
+    void makeQuatUpNoSupport(Quat4f* pQuat, const Vec3f& rUp) {
+        Pos3f mtx;
         makeMtxUpNoSupport(&mtx, rUp);
         mtx.getQuat(*pQuat);
     }
 
-    void blendQuatUpFront(TQuat4f* pDst, const TVec3f& rUp, const TVec3f& rFront, f32 upRate, f32 frontRate) {
+    void blendQuatUpFront(Quat4f* pDst, const Vec3f& rUp, const Vec3f& rFront, f32 upRate, f32 frontRate) {
         blendQuatUpFront(pDst, *pDst, rUp, rFront, upRate, frontRate);
     }
 
-    void blendQuatUpFront(TQuat4f* pDst, const TQuat4f& rSrc, const TVec3f& rUp, const TVec3f& rFront, f32 upRate, f32 frontRate) {
-        TQuat4f q;
+    void blendQuatUpFront(Quat4f* pDst, const Quat4f& rSrc, const Vec3f& rUp, const Vec3f& rFront, f32 upRate, f32 frontRate) {
+        Quat4f q;
         q.set(rSrc);
-        TVec3f up;
+        Vec3f up;
         q.getYDir(up);
 
         bool isUpSame = up.dot(rUp) >= 0.0f ? false : isSameDirection(up, rUp);
@@ -382,15 +382,15 @@ namespace MR {
             turnRandomVector(&up, up, 0.001f);
         }
 
-        TQuat4f upRot;
+        Quat4f upRot;
         upRot.setRotate(up, rUp, upRate);
         q.mult(upRot);
 
         q.getYDir(up);
-        TVec3f front;
+        Vec3f front;
         q.getZDir(front);
 
-        TVec3f targetFront = rFront.killElement(up);
+        Vec3f targetFront = rFront.killElement(up);
         MR::normalizeOrZero(&targetFront);
 
         bool isFrontSame = front.dot(targetFront) >= 0.0f ? false : isSameDirection(front, targetFront);
@@ -398,7 +398,7 @@ namespace MR {
             turnRandomVector(&front, front, 0.001f);
         }
 
-        TQuat4f frontRot;
+        Quat4f frontRot;
         frontRot.setRotate(front, targetFront, frontRate);
         q.mult(frontRot);
 
@@ -406,14 +406,14 @@ namespace MR {
         pDst->set(q);
     }
 
-    void blendQuatFrontUp(TQuat4f* pDst, const TVec3f& rFront, const TVec3f& rUp, f32 upRate, f32 frontRate) {
+    void blendQuatFrontUp(Quat4f* pDst, const Vec3f& rFront, const Vec3f& rUp, f32 upRate, f32 frontRate) {
         blendQuatFrontUp(pDst, *pDst, rFront, rUp, upRate, frontRate);
     }
 
-    void blendQuatFrontUp(TQuat4f* pDst, const TQuat4f& rSrc, const TVec3f& rFront, const TVec3f& rUp, f32 frontRate, f32 upRate) {
-        TQuat4f q;
+    void blendQuatFrontUp(Quat4f* pDst, const Quat4f& rSrc, const Vec3f& rFront, const Vec3f& rUp, f32 frontRate, f32 upRate) {
+        Quat4f q;
         q.set(rSrc);
-        TVec3f up;
+        Vec3f up;
         q.getZDir(up);
 
         bool isUpSame = up.dot(rUp) >= 0.0f ? false : isSameDirection(up, rUp);
@@ -421,15 +421,15 @@ namespace MR {
             turnRandomVector(&up, up, 0.001f);
         }
 
-        TQuat4f upRot;
+        Quat4f upRot;
         upRot.setRotate(up, rUp, upRate);
         q.mult(upRot);
 
-        TVec3f front;
+        Vec3f front;
         q.getYDir(front);
         q.getZDir(up);
 
-        TVec3f targetFront = rFront.killElement(up);
+        Vec3f targetFront = rFront.killElement(up);
         MR::normalizeOrZero(&targetFront);
 
         bool isFrontSame = front.dot(targetFront) >= 0.0f ? false : isSameDirection(front, targetFront);
@@ -437,7 +437,7 @@ namespace MR {
             turnRandomVector(&front, front, 0.001f);
         }
 
-        TQuat4f frontRot;
+        Quat4f frontRot;
         frontRot.setRotate(front, targetFront, frontRate);
         q.mult(frontRot);
 
@@ -445,25 +445,25 @@ namespace MR {
         pDst->set(q);
     }
 
-    void rotateQuatMoment(TQuat4f* pQuat, const TVec3f& rMoment) {
-        TQuat4f rot;
+    void rotateQuatMoment(Quat4f* pQuat, const Vec3f& rMoment) {
+        Quat4f rot;
         f32 rate;
-        TVec3f axis;
+        Vec3f axis;
         separateScalarAndDirection(&rate, &axis, rMoment);
         rot.setRotate(axis, rate);
         pQuat->mult(rot);
         pQuat->normalize();
     }
 
-    void rotateQuatRollBall(TQuat4f* pQuat, const TVec3f& rVel, const TVec3f& rNorm, f32 radius) {
-        TVec3f moment;
+    void rotateQuatRollBall(Quat4f* pQuat, const Vec3f& rVel, const Vec3f& rNorm, f32 radius) {
+        Vec3f moment;
         calcMomentRollBall(&moment, rVel, rNorm, radius);
         rotateQuatMoment(pQuat, moment);
     }
 
-    bool turnQuat(TQuat4f* pDst, const TQuat4f& rSrc, const TVec3f& rFrom, const TVec3f& rTo, f32 angle) {
-        TVec3f from;
-        TVec3f target = rTo;
+    bool turnQuat(Quat4f* pDst, const Quat4f& rSrc, const Vec3f& rFrom, const Vec3f& rTo, f32 angle) {
+        Vec3f from;
+        Vec3f target = rTo;
 
         bool isSameDir = rFrom.dot(rTo) >= 0.0f ? false : isSameDirection(rFrom, rTo);
         if (isSameDir) {
@@ -475,15 +475,15 @@ namespace MR {
         MR::normalizeOrZero(&from);
         MR::normalizeOrZero(&target);
 
-        f32 angleBetween = acosEx(JGeometry::TUtil< f32 >::clamp(from.dot(target), -1.0f, 1.0f));
+        f32 angleBetween = acosEx(FloatUtil::clamp(from.dot(target), -1.0f, 1.0f));
         f32 rate;
         if (angleBetween <= angle) {
             rate = 1.0f;
         } else {
-            rate = JGeometry::TUtil< f32 >::clamp(angle / angleBetween, 0.0f, 1.0f);
+            rate = FloatUtil::clamp(angle / angleBetween, 0.0f, 1.0f);
         }
 
-        TQuat4f rot;
+        Quat4f rot;
         rot.setRotate(from, target, rate);
         pDst->mult(rot, rSrc);
         pDst->normalize();
@@ -491,36 +491,36 @@ namespace MR {
         return angleBetween < 0.015f;
     }
 
-    bool turnQuatXDirRad(TQuat4f* pDst, const TQuat4f& rSrc, const TVec3f& rTo, f32 angle) {
-        TVec3f xDir;
+    bool turnQuatXDirRad(Quat4f* pDst, const Quat4f& rSrc, const Vec3f& rTo, f32 angle) {
+        Vec3f xDir;
         rSrc.getXDir(xDir);
         return turnQuat(pDst, rSrc, xDir, rTo, angle);
     }
 
-    void turnQuatXDirRate(TQuat4f* pDst, const TQuat4f& rSrc, const TVec3f& rTo, f32 rate) {
-        TVec3f xDir;
+    void turnQuatXDirRate(Quat4f* pDst, const Quat4f& rSrc, const Vec3f& rTo, f32 rate) {
+        Vec3f xDir;
         rSrc.getXDir(xDir);
-        TQuat4f rot;
+        Quat4f rot;
         rot.setRotate(xDir, rTo, rate);
         pDst->mult(rot, rSrc);
     }
 
-    bool turnQuatYDirRad(TQuat4f* pDst, const TQuat4f& rSrc, const TVec3f& rTo, f32 angle) {
-        TVec3f yDir;
+    bool turnQuatYDirRad(Quat4f* pDst, const Quat4f& rSrc, const Vec3f& rTo, f32 angle) {
+        Vec3f yDir;
         rSrc.getYDir(yDir);
         return turnQuat(pDst, rSrc, yDir, rTo, angle);
     }
 
-    void turnQuatYDirRate(TQuat4f* pDst, const TQuat4f& rSrc, const TVec3f& rTo, f32 rate) {
-        TVec3f yDir;
+    void turnQuatYDirRate(Quat4f* pDst, const Quat4f& rSrc, const Vec3f& rTo, f32 rate) {
+        Vec3f yDir;
         rSrc.getYDir(yDir);
-        TQuat4f rot;
+        Quat4f rot;
         rot.setRotate(yDir, rTo, rate);
         pDst->mult(rot, rSrc);
     }
 
-    bool turnQuatZDirRad(TQuat4f* pDst, const TQuat4f& rSrc, const TVec3f& rTo, f32 angle) {
-        TVec3f zDir;
+    bool turnQuatZDirRad(Quat4f* pDst, const Quat4f& rSrc, const Vec3f& rTo, f32 angle) {
+        Vec3f zDir;
         rSrc.getZDir(zDir);
         return turnQuat(pDst, rSrc, zDir, rTo, angle);
     }
@@ -537,12 +537,12 @@ namespace MR {
         return 0.0f;
     }
 
-    void clampVecAngleDeg(TVec3f* pDst, const TVec3f& rBase, f32 angle) {
+    void clampVecAngleDeg(Vec3f* pDst, const Vec3f& rBase, f32 angle) {
         if (pDst->angle(rBase) * _180_PI <= angle) {
             return;
         }
 
-        TVec3f axis = rBase.cross(*pDst);
+        Vec3f axis = rBase.cross(*pDst);
         if (MR::normalizeOrZero(&axis)) {
             return;
         }
@@ -551,7 +551,7 @@ namespace MR {
         rotateVecDegree(pDst, rBase, axis, angle);
     }
 
-    void clampLength(TVec3f* pDst, const TVec3f& rSrc, f32 length) {
+    void clampLength(Vec3f* pDst, const Vec3f& rSrc, f32 length) {
         if (rSrc.squared() > length * length) {
             pDst->setLength(rSrc, length);
         } else {
@@ -610,74 +610,74 @@ namespace MR {
         return MR::repeatDegree(MR::toDegree(MR::atan2(-z, x)) + 90.0f);
     }
 
-    f32 calcRotateZ(const TVec3f& rVecA, const TVec3f& rVecB) {
-        TVec2f vec(rVecB.x, rVecB.y);
+    f32 calcRotateZ(const Vec3f& rVecA, const Vec3f& rVecB) {
+        Vec2f vec(rVecB.x, rVecB.y);
         vec.x -= rVecA.x;
         vec.y -= rVecA.y;
         return MR::atan2(vec.y, vec.x) * _180_PI;
     }
 
-    f32 calcDistanceXY(const TVec3f& rPos1, const TVec3f& rPos2) {
+    f32 calcDistanceXY(const Vec3f& rPos1, const Vec3f& rPos2) {
         f32 xDelta = rPos1.x - rPos2.x;
         f32 yDelta = rPos1.y - rPos2.y;
-        return JGeometry::TUtil< f32 >::sqrt(xDelta * xDelta + yDelta * yDelta);
+        return FloatUtil::sqrt(xDelta * xDelta + yDelta * yDelta);
     }
 
     void rotateVecDegree(f32* pX, f32* pY, f32 degree) {
         f32 x = *pX;
         f32 y = *pY;
-        f32 Sin = JMASinDegree(degree);
-        f32 Cos = JMACosDegree(degree);
+        f32 Sin = Angle::sinDegree(degree);
+        f32 Cos = Angle::cosDegree(degree);
 
         *pX = (Cos * x) - (Sin * y);
         *pY = (Sin * x) + (Cos * y);
     }
 
-    void rotateVecDegree(TVec2f* pDst, f32 degree) {
+    void rotateVecDegree(Vec2f* pDst, f32 degree) {
         rotateVecDegree(&pDst->x, &pDst->y, degree);
     }
 
-    void rotateVecDegree(TVec3f* pDst, const TVec3f& rAxis, f32 degree) {
+    void rotateVecDegree(Vec3f* pDst, const Vec3f& rAxis, f32 degree) {
         rotateVecDegree(pDst, *pDst, rAxis, degree);
     }
 
-    void rotateVecDegree(TVec3f* pDst, const TVec3f& rSrc, const TVec3f& rAxis, f32 degree) {
-        TRot3f rotation;
+    void rotateVecDegree(Vec3f* pDst, const Vec3f& rSrc, const Vec3f& rAxis, f32 degree) {
+        Rot3f rotation;
         rotation.identity();
         rotation.setRotate(rAxis, degree * PI_180);
         rotation.mult(rSrc, *pDst);
     }
 
-    void rotateVecRadian(TVec3f* pDst, const TVec3f& rAxis, f32 angle) {
+    void rotateVecRadian(Vec3f* pDst, const Vec3f& rAxis, f32 angle) {
         rotateVecRadian(pDst, *pDst, rAxis, angle);
     }
 
-    void rotateVecRadian(TVec3f* pDst, const TVec3f& rSrc, const TVec3f& rAxis, f32 angle) {
-        TRot3f rotation;
+    void rotateVecRadian(Vec3f* pDst, const Vec3f& rSrc, const Vec3f& rAxis, f32 angle) {
+        Rot3f rotation;
         rotation.identity();
         rotation.setRotate(rAxis, angle);
         rotation.mult(rSrc, *pDst);
     }
 
-    void calcLocalVec(TVec3f* pVec, MtxPtr pMtx) {
-        TPos3f inv = pMtx;
+    void calcLocalVec(Vec3f* pVec, MtxPtr pMtx) {
+        Pos3f inv = pMtx;
         inv.invert(inv);
         inv.mult(*pVec, *pVec);
     }
 
-    void normalize(TVec2f* pVec) {
-        TVec3f temp(pVec->x, pVec->y, 0.0f);
+    void normalize(Vec2f* pVec) {
+        Vec3f temp(pVec->x, pVec->y, 0.0f);
         normalize(&temp);
         pVec->x = temp.x;
         pVec->y = temp.y;
     }
 
-    void normalize(TVec3f* pVec) {
+    void normalize(Vec3f* pVec) {
         NebulaVecNormalize(pVec, pVec);
     }
 
-    void normalize(TPos3f* pMtx) {
-        TVec3f x, y, z;
+    void normalize(Pos3f* pMtx) {
+        Vec3f x, y, z;
         pMtx->getXYZDir(x, y, z);
         normalize(&x);
         normalize(&y);
@@ -685,17 +685,17 @@ namespace MR {
         pMtx->setXYZDir(x, y, z);
     }
 
-    void normalize(const TVec2f& rSrc, TVec2f* pDst) {
+    void normalize(const Vec2f& rSrc, Vec2f* pDst) {
         *pDst = rSrc;
         normalize(pDst);
     }
 
-    void normalize(const TVec3f& rSrc, TVec3f* pDst) {
+    void normalize(const Vec3f& rSrc, Vec3f* pDst) {
         pDst->set(rSrc);
         normalize(pDst);
     }
 
-    bool normalizeOrZero(TVec2f* pVec) {
+    bool normalizeOrZero(Vec2f* pVec) {
         if (isNearZero(*pVec)) {
             pVec->zero();
             return true;
@@ -705,7 +705,7 @@ namespace MR {
         return false;
     }
 
-    bool normalizeOrZero(TVec3f* pVec) {
+    bool normalizeOrZero(Vec3f* pVec) {
         if (isNearZero(*pVec)) {
             pVec->zero();
             return true;
@@ -715,13 +715,13 @@ namespace MR {
         return false;
     }
 
-    bool normalizeOrZero(const TVec3f& rSrc, TVec3f* pDst) {
+    bool normalizeOrZero(const Vec3f& rSrc, Vec3f* pDst) {
         pDst->set(rSrc);
 
         return normalizeOrZero(pDst);
     }
 
-    void separateScalarAndDirection(f32* pScalar, TVec2f* pDir, const TVec2f& rVec) {
+    void separateScalarAndDirection(f32* pScalar, Vec2f* pDir, const Vec2f& rVec) {
         *pScalar = rVec.length();
 
         if (isNearZero(rVec)) {
@@ -731,7 +731,7 @@ namespace MR {
         }
     }
 
-    void separateScalarAndDirection(f32* pScalar, TVec3f* pDir, const TVec3f& rVec) {
+    void separateScalarAndDirection(f32* pScalar, Vec3f* pDir, const Vec3f& rVec) {
         *pScalar = rVec.length();
 
         if (isNearZero(rVec)) {
@@ -751,7 +751,7 @@ namespace MR {
             return 1.0f;
         }
 
-        return (JGeometry::TUtil< f32 >::clamp(x, min, max) - min) / range;
+        return (FloatUtil::clamp(x, min, max) - min) / range;
     }
 
     f32 normalizeAbs(f32 x, f32 min, f32 max) {
@@ -762,7 +762,7 @@ namespace MR {
         }
     }
 
-    bool turnVecToVecCos(TVec3f* pDst, const TVec3f& rFrom, const TVec3f& rTo, f32 cosAngle, const TVec3f& rAxis, f32 fallbackLength) {
+    bool turnVecToVecCos(Vec3f* pDst, const Vec3f& rFrom, const Vec3f& rTo, f32 cosAngle, const Vec3f& rAxis, f32 fallbackLength) {
         if (isNearZero(rFrom)) {
             return false;
         }
@@ -778,10 +778,10 @@ namespace MR {
         }
 
         f32 sinAngle = NebulaSqrt(1.0f - cosAngle * cosAngle);
-        TVec3f rejectFrom = rTo.killElement(rFrom);
+        Vec3f rejectFrom = rTo.killElement(rFrom);
 
         if (isNearZero(rejectFrom)) {
-            TVec3f fallback = rFrom.cross(rAxis);
+            Vec3f fallback = rFrom.cross(rAxis);
             normalize(&fallback);
             pDst->set(rFrom + fallback * fallbackLength);
             normalize(pDst);
@@ -794,8 +794,8 @@ namespace MR {
         return false;
     }
 
-    bool turnVecToVecCosOnPlane(TVec3f* pDst, const TVec3f& rFrom, const TVec3f& rTo, const TVec3f& rAxis, f32 cosAngle) {
-        TVec3f planarTo = rTo.killElement(rAxis);
+    bool turnVecToVecCosOnPlane(Vec3f* pDst, const Vec3f& rFrom, const Vec3f& rTo, const Vec3f& rAxis, f32 cosAngle) {
+        Vec3f planarTo = rTo.killElement(rAxis);
         normalizeOrZero(&planarTo);
         if (!MR::isNearZero(planarTo)) {
             if (cosAngle > -1.0f) {
@@ -809,12 +809,12 @@ namespace MR {
         return false;
     }
 
-    bool turnVecToVecCosOnPlane(TVec3f* pVec, const TVec3f& rTo, const TVec3f& rAxis, f32 cosAngle) {
+    bool turnVecToVecCosOnPlane(Vec3f* pVec, const Vec3f& rTo, const Vec3f& rAxis, f32 cosAngle) {
         return turnVecToVecCosOnPlane(pVec, *pVec, rTo, rAxis, cosAngle);
     }
 
-    f32 turnVecToVecRadian(TVec3f* pDst, const TVec3f& rFrom, const TVec3f& rTo, f32 angle, const TVec3f& rAxis) {
-        const f32 rawAngle = JMAAcosRadian(JGeometry::TUtil< f32 >::clamp(rFrom.dot(rTo), -1.0f, 1.0f));
+    f32 turnVecToVecRadian(Vec3f* pDst, const Vec3f& rFrom, const Vec3f& rTo, f32 angle, const Vec3f& rAxis) {
+        const f32 rawAngle = Angle::acosRadian(FloatUtil::clamp(rFrom.dot(rTo), -1.0f, 1.0f));
         f32 angleBetween = rawAngle;
         f32 angleMoved = 0.0f;
         f32 angleClamped = angleBetween;
@@ -827,7 +827,7 @@ namespace MR {
             return 0.0f;
         }
 
-        TQuat4f rot;
+        Quat4f rot;
         bool isSameDir = rFrom.dot(rTo) >= 0.0f ? false : isSameDirection(rFrom, rTo);
         if (isSameDir) {
             rot.setRotate(rAxis, angleClamped);
@@ -835,7 +835,7 @@ namespace MR {
             rot.setRotate(rFrom, rTo, angleClamped / rawAngle);
         }
 
-        TVec3f v = rFrom;
+        Vec3f v = rFrom;
         rot.transform(v);
         normalizeOrZero(&v);
         if (!isNearZero(v)) {
@@ -845,24 +845,24 @@ namespace MR {
         return angleMoved;
     }
 
-    f32 turnVecToVecDegree(TVec3f* pDst, const TVec3f& rFrom, const TVec3f& rTo, f32 angle, const TVec3f& rAxis) {
+    f32 turnVecToVecDegree(Vec3f* pDst, const Vec3f& rFrom, const Vec3f& rTo, f32 angle, const Vec3f& rAxis) {
         return turnVecToVecRadian(pDst, rFrom, rTo, angle * (PI / 180.0f), rAxis) * _180_PI;
     }
 
-    void calcMomentRollBall(TVec3f* pMoment, const TVec3f& rVel, const TVec3f& rUp, f32 radius) {
-        TVec3f up;
+    void calcMomentRollBall(Vec3f* pMoment, const Vec3f& rVel, const Vec3f& rUp, f32 radius) {
+        Vec3f up;
         up.set(rUp);
         if (normalizeOrZero(&up)) {
             pMoment->zero();
             return;
         }
 
-        TVec3f moment = up.cross(rVel);
+        Vec3f moment = up.cross(rVel);
         moment /= radius;
         pMoment->set(moment);
     }
 
-    bool calcReflectionVector(TVec3f* pDir, const TVec3f& rNorm, f32 rate, f32 cosAngleMin) {
+    bool calcReflectionVector(Vec3f* pDir, const Vec3f& rNorm, f32 rate, f32 cosAngleMin) {
         f32 dot = rNorm.dot(*pDir);
         if (dot < -cosAngleMin) {
             pDir->sub(rNorm * dot * (rate + 1.0f));
@@ -877,7 +877,7 @@ namespace MR {
         return false;
     }
 
-    bool isSameDirection(const TVec3f& rVec1, const TVec3f& rVec2, f32 tolerance) {
+    bool isSameDirection(const Vec3f& rVec1, const Vec3f& rVec2, f32 tolerance) {
         if (MR::abs(rVec1.y * rVec2.z - rVec1.z * rVec2.y) > tolerance) {
             return false;
         }
@@ -893,7 +893,7 @@ namespace MR {
         return true;
     }
 
-    bool isOppositeDirection(const TVec3f& rVec1, const TVec3f& rVec2, f32 tolerance) {
+    bool isOppositeDirection(const Vec3f& rVec1, const Vec3f& rVec2, f32 tolerance) {
         if (rVec1.dot(rVec2) >= 0.0f) {
             return false;
         }
@@ -913,7 +913,7 @@ namespace MR {
         return false;
     }
 
-    bool isNearZero(const TVec3f& rVec, f32 tolerance) {
+    bool isNearZero(const Vec3f& rVec, f32 tolerance) {
         if (rVec.x > tolerance) {
             return false;
         }
@@ -941,7 +941,7 @@ namespace MR {
         return true;
     }
 
-    bool isNearZero(const TVec2f& rVec, f32 tolerance) {
+    bool isNearZero(const Vec2f& rVec, f32 tolerance) {
         if (rVec.x > tolerance) {
             return false;
         }
@@ -1019,7 +1019,7 @@ namespace MR {
     }
 
     u8 lerp(u8 start, u8 end, f32 t) {
-        return (s32)(JGeometry::TUtil< f32 >::clamp(start + (end - start) * t, 0.0f, 255.0f));
+        return (s32)(FloatUtil::clamp(start + (end - start) * t, 0.0f, 255.0f));
     }
 
     NebulaColor8 lerp(NebulaColor8 start, NebulaColor8 end, f32 t) {
@@ -1095,7 +1095,7 @@ f32 VecKillElement(const Vec* pSrc, const Vec* pKill, const Vec* pDst) {
 }
 
 namespace MR {
-    f32 vecKillElement(const TVec3f& rSrc, const TVec3f& rKillDir, TVec3f* pDst) {
+    f32 vecKillElement(const Vec3f& rSrc, const Vec3f& rKillDir, Vec3f* pDst) {
         if (isNearZero(rKillDir)) {
             *pDst = rSrc;
 
@@ -1105,15 +1105,15 @@ namespace MR {
         return VecKillElement(rSrc, rKillDir, pDst);
     }
 
-    void vecScaleAdd(const register TVec3f* pA1, const register TVec3f* pA2, register f32 a3) {
+    void vecScaleAdd(const register Vec3f* pA1, const register Vec3f* pA2, register f32 a3) {
         // The original stores through pA1, declared const.
-        TVec3f* dst = const_cast< TVec3f* >(pA1);
+        Vec3f* dst = const_cast< Vec3f* >(pA1);
         dst->x = pA2->x * a3 + pA1->x;
         dst->y = pA2->y * a3 + pA1->y;
         dst->z = pA2->z * a3 + pA1->z;
     }
 
-    void PSvecBlend(const register TVec3f* pA1, const register TVec3f* pA2, register TVec3f* pA3, register f32 a4, register f32 a5) {
+    void PSvecBlend(const register Vec3f* pA1, const register Vec3f* pA2, register Vec3f* pA3, register f32 a4, register f32 a5) {
         const f32 x = pA2->x * a5 + pA1->x * a4;
         const f32 y = pA2->y * a5 + pA1->y * a4;
         const f32 z = pA2->z * a5 + pA1->z * a4;
@@ -1122,12 +1122,12 @@ namespace MR {
         pA3->z = z;
     }
 
-    void vecBlend(const TVec3f& rFrom, const TVec3f& rTo, TVec3f* pDst, f32 rate) {
+    void vecBlend(const Vec3f& rFrom, const Vec3f& rTo, Vec3f* pDst, f32 rate) {
         PSvecBlend(&rFrom, &rTo, pDst, 1.0f - rate, rate);
     }
 
-    void vecBlendNormal(const TVec3f& rFrom, const TVec3f& rTo, TVec3f* pVec, f32 rate) {
-        TVec3f vA;
+    void vecBlendNormal(const Vec3f& rFrom, const Vec3f& rTo, Vec3f* pVec, f32 rate) {
+        Vec3f vA;
         if (isNearZero(rFrom)) {
             vA.zero();
         } else {
@@ -1136,7 +1136,7 @@ namespace MR {
             NebulaVecScale(vA, vA, 1.0f - rate);
         }
 
-        TVec3f vB;
+        Vec3f vB;
         if (isNearZero(rTo)) {
             vB.zero();
         } else {
@@ -1148,7 +1148,7 @@ namespace MR {
         NebulaVecAdd(vA, vB, pVec);
     }
 
-    bool vecBlendSphere(const TVec3f& rFrom, const TVec3f& rTo, TVec3f* pVec, f32 rate) {
+    bool vecBlendSphere(const Vec3f& rFrom, const Vec3f& rTo, Vec3f* pVec, f32 rate) {
         f32 lenFrom = rFrom.length();
         f32 lenTo = rTo.length();
         f32 diffAngle;
@@ -1174,13 +1174,13 @@ namespace MR {
             return false;
         }
 
-        *pVec = (rFrom * JMASinRadian(diffAngle * (1.0f - rate)) + rTo * JMASinRadian(diffAngle * rate)) / JMASinRadian(diffAngle);
+        *pVec = (rFrom * Angle::sinRadian(diffAngle * (1.0f - rate)) + rTo * Angle::sinRadian(diffAngle * rate)) / Angle::sinRadian(diffAngle);
         pVec->setLength(lenFrom * (1.0f - rate) + lenTo * rate);
 
         return true;
     }
 
-    void vecRotAxis(const TVec3f& rFrom, const TVec3f& rTo, const TVec3f& rAxis, TVec3f* pVec, f32 angle) {
+    void vecRotAxis(const Vec3f& rFrom, const Vec3f& rTo, const Vec3f& rAxis, Vec3f* pVec, f32 angle) {
         f32 lenFrom = rFrom.length();
         f32 lenTo = rTo.length();
         f32 diffAngle;
@@ -1200,7 +1200,7 @@ namespace MR {
                 angle = -angle;
             }
 
-            TPos3f rot;
+            Pos3f rot;
             NebulaMtxRotAxisRad(rot, rAxis, angle);
             NebulaMtxMultVec(rot, rFrom, pVec);
             return;
@@ -1223,8 +1223,8 @@ namespace MR {
         pDst->z = getInterpolateValue(t, rStart.z, rEnd.z);
     }
 
-    f32 turnVecToPlane(TVec3f* pDst, const TVec3f& rSrc, const TVec3f& rNorm) {
-        TVec3f vec = rSrc;
+    f32 turnVecToPlane(Vec3f* pDst, const Vec3f& rSrc, const Vec3f& rNorm) {
+        Vec3f vec = rSrc;
         f32 length = rSrc.length();
         f32 proj = rNorm.dot(rSrc);
         vec.sub(rNorm * proj);
@@ -1233,7 +1233,7 @@ namespace MR {
         return length;
     }
 
-    u32 getMinAbsElementIndex(const TVec3f& rVec) {
+    u32 getMinAbsElementIndex(const Vec3f& rVec) {
         f64 abs_x = abs(rVec.x);
         f64 abs_y = abs(rVec.y);
         f64 abs_z = abs(rVec.z);
@@ -1249,17 +1249,17 @@ namespace MR {
         return 2;
     }
 
-    f32 getMaxElement(const TVec3f& rVec) {
+    f32 getMaxElement(const Vec3f& rVec) {
         f32* vec_arr = (f32*)(&rVec);
         return vec_arr[getMaxElementIndex(rVec)];
     }
 
-    f32 getMaxAbsElement(const TVec3f& rVec) {
+    f32 getMaxAbsElement(const Vec3f& rVec) {
         f32* vec_arr = (f32*)(&rVec);
         return vec_arr[getMaxAbsElementIndex(rVec)];
     }
 
-    u32 getMaxElementIndex(const TVec3f& rVec) {
+    u32 getMaxElementIndex(const Vec3f& rVec) {
         if (rVec.x > rVec.y && rVec.x > rVec.z) {
             return 0;
         }
@@ -1271,7 +1271,7 @@ namespace MR {
         return 2;
     }
 
-    u32 getMaxAbsElementIndex(const TVec3f& rVec) {
+    u32 getMaxAbsElementIndex(const Vec3f& rVec) {
         f64 abs_x = abs(rVec.x);
         f64 abs_y = abs(rVec.y);
         f64 abs_z = abs(rVec.z);
@@ -1287,11 +1287,11 @@ namespace MR {
         return 2;
     }
 
-    f32 diffAngleAbsFast(const TVec3f& rA, const TVec3f& rB) {
+    f32 diffAngleAbsFast(const Vec3f& rA, const Vec3f& rB) {
         return MR::acos(rA.dot(rB));
     }
 
-    f32 diffAngleAbs(const TVec3f& rA, const TVec3f& rB) {
+    f32 diffAngleAbs(const Vec3f& rA, const Vec3f& rB) {
         f32 length1 = rA.length();
         f32 length2 = rB.length();
         f32 x = rA.dot(rB) / (length1 * length2);
@@ -1305,7 +1305,7 @@ namespace MR {
         }
     }
 
-    f32 diffAngleAbs(const TVec2f& rA, const TVec2f& rB) {
+    f32 diffAngleAbs(const Vec2f& rA, const Vec2f& rB) {
         f32 length1 = rA.length();
         f32 length2 = rB.length();
         f32 x = rA.dot(rB) / (length1 * length2);
@@ -1319,10 +1319,10 @@ namespace MR {
         }
     }
 
-    f32 diffAngleSigned(const TVec3f& rA, const TVec3f& rB, const TVec3f& rAxis) {
+    f32 diffAngleSigned(const Vec3f& rA, const Vec3f& rB, const Vec3f& rAxis) {
         f32 angleDiff = diffAngleAbs(rA, rB);
 
-        TVec3f v = rA.cross(rAxis);
+        Vec3f v = rA.cross(rAxis);
 
         if (v.dot(rB) >= 0.0f) {
             return angleDiff;
@@ -1331,8 +1331,8 @@ namespace MR {
         }
     }
 
-    f32 diffAngleAbsHorizontal(const TVec3f& rA, const TVec3f& rB, const TVec3f& rAxis) {
-        TVec3f horizonA, horizonB;
+    f32 diffAngleAbsHorizontal(const Vec3f& rA, const Vec3f& rB, const Vec3f& rAxis) {
+        Vec3f horizonA, horizonB;
 
         vecKillElement(rA, rAxis, &horizonA);
         vecKillElement(rB, rAxis, &horizonB);
@@ -1340,12 +1340,12 @@ namespace MR {
         return diffAngleAbs(horizonA, horizonB);
     }
 
-    f32 diffAngleSignedHorizontal(const TVec3f& rA, const TVec3f& rB, const TVec3f& rAxis) {
-        TVec3f horizonA, horizonB;
+    f32 diffAngleSignedHorizontal(const Vec3f& rA, const Vec3f& rB, const Vec3f& rAxis) {
+        Vec3f horizonA, horizonB;
         vecKillElement(rA, rAxis, &horizonA);
         vecKillElement(rB, rAxis, &horizonB);
         f32 angleAbs = diffAngleAbs(horizonA, horizonB);
-        TPos3f mtx;
+        Pos3f mtx;
         NebulaMtxRotAxisRad(mtx, rAxis, 0.00017453293f);
         f32 angle1 = horizonA.dot(horizonB);
         NebulaMtxMultVec(mtx, horizonA, horizonA);
@@ -1358,72 +1358,72 @@ namespace MR {
         }
     }
 
-    bool isNearAngleRadian(const TVec3f& rA, const TVec3f& rB, f32 angle) {
+    bool isNearAngleRadian(const Vec3f& rA, const Vec3f& rB, f32 angle) {
         if (isNearZero(rA) || isNearZero(rB)) {
             return false;
         }
 
-        TVec3f normA;
+        Vec3f normA;
         normalize(rA, &normA);
 
-        TVec3f normB;
+        Vec3f normB;
         normalize(rB, &normB);
 
-        return normA.dot(normB) >= JMACosRadian(angle);
+        return normA.dot(normB) >= Angle::cosRadian(angle);
     }
 
-    bool isNearAngleDegree(const TVec3f& rA, const TVec3f& rB, f32 angle) {
+    bool isNearAngleDegree(const Vec3f& rA, const Vec3f& rB, f32 angle) {
         return isNearAngleRadian(rA, rB, angle * (PI / 180.0f));
     }
 
-    bool isNearAngleRadianHV(const TVec3f& rA, const TVec3f& rB, const TVec3f& rAxis, f32 angleH, f32 angleV) {
+    bool isNearAngleRadianHV(const Vec3f& rA, const Vec3f& rB, const Vec3f& rAxis, f32 angleH, f32 angleV) {
         if (angleV > HALF_PI_D) {
             angleV = HALF_PI;
         }
 
-        TVec3f unitA;
+        Vec3f unitA;
         if (normalizeOrZero(rA, &unitA)) {
             return false;
         }
 
-        TVec3f unitB;
+        Vec3f unitB;
         if (normalizeOrZero(rB, &unitB)) {
             return false;
         }
 
-        TVec3f unitAxis;
+        Vec3f unitAxis;
         if (normalizeOrZero(rAxis, &unitAxis)) {
             return false;
         }
 
-        TVec3f horizonA;
+        Vec3f horizonA;
         horizonA.killElement(rA, rAxis);
         normalizeOrZero(&horizonA);
 
-        if (horizonA.dot(unitB) < JMACosRadian(angleH)) {
+        if (horizonA.dot(unitB) < Angle::cosRadian(angleH)) {
             return false;
         }
 
-        if (MR::abs(unitA.dot(unitAxis)) > MR::abs(JMASinRadian(angleV))) {
+        if (MR::abs(unitA.dot(unitAxis)) > MR::abs(Angle::sinRadian(angleV))) {
             return false;
         }
 
         return true;
     }
 
-    bool isNearAngleDegreeHV(const TVec3f& rA, const TVec3f& rB, const TVec3f& rAxis, f32 angleH, f32 angleV) {
+    bool isNearAngleDegreeHV(const Vec3f& rA, const Vec3f& rB, const Vec3f& rAxis, f32 angleH, f32 angleV) {
         angleV = PI_180 * angleV;
         angleH = PI_180 * angleH;
 
         return isNearAngleRadianHV(rA, rB, rAxis, angleH, angleV);
     }
 
-    void createBoundingBox(const TVec3f* pPoints, u32 numPoints, TVec3f* pMin, TVec3f* pMax) {
+    void createBoundingBox(const Vec3f* pPoints, u32 numPoints, Vec3f* pMin, Vec3f* pMax) {
         *pMin = pPoints[0];
         *pMax = pPoints[0];
 
         for (u32 idx = 1; idx < numPoints; idx++) {
-            const TVec3f& point = pPoints[idx];
+            const Vec3f& point = pPoints[idx];
 
             if (point.x < pMin->x) {
                 pMin->x = point.x;
@@ -1451,18 +1451,18 @@ namespace MR {
         }
     }
 
-    bool isNormalize(const TVec3f& rVec, f32 tolerance) {
+    bool isNormalize(const Vec3f& rVec, f32 tolerance) {
         return MR::abs(1.0f - rVec.length()) <= tolerance;
     }
 
-    void setNan(TVec3f& rDst) {
-        JGeometry::TVec3< int >* tmp = (JGeometry::TVec3< int >*)&rDst;
+    void setNan(Vec3f& rDst) {
+        Vec3< int >* tmp = (Vec3< int >*)&rDst;
         tmp->x = -1;
         tmp->y = -1;
         tmp->z = -1;
     }
 
-    bool isNan(const TVec3f& rVec) {
+    bool isNan(const Vec3f& rVec) {
         // NaN in any component (MSL's __fpclassifyf answered 1 for NaN alone).
         if (__builtin_isnan(rVec.x) || __builtin_isnan(rVec.y) || __builtin_isnan(rVec.z)) {
             return true;
@@ -1471,8 +1471,8 @@ namespace MR {
         return false;
     }
 
-    f32 getFootPoint(const TVec3f& rPointA, const TVec3f& rPointB, const TVec3f& rPos, TVec3f* pDst) {
-        TVec3f segment = rPointB - rPointA;
+    f32 getFootPoint(const Vec3f& rPointA, const Vec3f& rPointB, const Vec3f& rPos, Vec3f* pDst) {
+        Vec3f segment = rPointB - rPointA;
         f32 length = segment.length();
         f32 proj = -(segment.x * (rPointA.x - rPos.x) + segment.y * (rPointA.y - rPos.y) + segment.z * (rPointA.z - rPos.z)) / (length * length);
         *pDst = rPointA + segment * proj;
@@ -1483,26 +1483,26 @@ namespace MR {
         return fmod(x, y);
     }
 
-    void getRotatedAxisY(TVec3f* pDst, const TVec3f& rPSrc) {
+    void getRotatedAxisY(Vec3f* pDst, const Vec3f& rPSrc) {
         f32 var = rPSrc.x;
-        f32 CosX = JMACosDegree(var);
+        f32 CosX = Angle::cosDegree(var);
         var = rPSrc.y;
-        f32 CosY = JMACosDegree(var);
+        f32 CosY = Angle::cosDegree(var);
         var = rPSrc.z;
-        f32 CosZ = JMACosDegree(var);
+        f32 CosZ = Angle::cosDegree(var);
         var = rPSrc.x;
-        f32 SinX = JMASinDegree(var);
+        f32 SinX = Angle::sinDegree(var);
         var = rPSrc.y;
-        f32 SinY = JMASinDegree(var);
+        f32 SinY = Angle::sinDegree(var);
         var = rPSrc.z;
-        f32 SinZ = JMASinDegree(var);
+        f32 SinZ = Angle::sinDegree(var);
 
         pDst->set((SinX * (CosZ * SinY)) - (SinZ * CosX), (SinX * (SinZ * SinY)) + (CosZ * CosX), CosY * SinX);
     }
 
-    void getRotatedAxisZ(TVec3f* pDst, const TVec3f& rPSrc) {
-        TVec3f vec(0.0f, 0.0f, 1.0f);
-        TPos3f mtx;
+    void getRotatedAxisZ(Vec3f* pDst, const Vec3f& rPSrc) {
+        Vec3f vec(0.0f, 0.0f, 1.0f);
+        Pos3f mtx;
         MR::makeMtxTR(mtx, 0.0f, 0.0f, 0.0f, rPSrc.x, rPSrc.y, rPSrc.z);
         NebulaMtxMultVec(mtx, &vec, pDst);
     }

@@ -27,7 +27,7 @@ void WaterfallCaveCover::init(const JMapInfoIter& rIter) {
     rInitInfo.setupGroupClipping(16);
     rInitInfo.setupNerve(GET_NERVE(WaterfallCaveCover, HostTypeWait));
     rInitInfo.setupHitSensor();
-    rInitInfo.setupHitSensorParam(8, ::sSensorRadius, TVec3f(0.0f, 0.0f, 0.0f));
+    rInitInfo.setupHitSensorParam(8, ::sSensorRadius, Vec3f(0.0f, 0.0f, 0.0f));
     rInitInfo.setupEffect(nullptr);
     initialize(rIter, rInitInfo);
 }

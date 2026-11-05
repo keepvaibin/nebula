@@ -73,7 +73,7 @@ void WaterAreaHolder::movement() {
             }
             mCamInWater = true;
         }
-        MR::getWaterAreaInfo(&mWaterInfo, MR::getCamPos(), TVec3f(0.0f, -1.0f, 0.0f), false);
+        MR::getWaterAreaInfo(&mWaterInfo, MR::getCamPos(), Vec3f(0.0f, -1.0f, 0.0f), false);
     } else {
         if (mCamInWater) {
             if (mUseBloom) {
@@ -113,7 +113,7 @@ void WaterAreaFunction::createWaterAreaHolder() {
     MR::createSceneObj(SceneObj_WaterAreaHolder);
 }
 
-bool WaterAreaFunction::tryInOceanArea(const TVec3f& rPos, WaterInfo* pWaterInfo) {
+bool WaterAreaFunction::tryInOceanArea(const Vec3f& rPos, WaterInfo* pWaterInfo) {
     if (!MR::isExistSceneObj(SceneObj_WaterAreaHolder)) {
         return false;
     }
@@ -149,7 +149,7 @@ bool WaterAreaFunction::tryInOceanArea(const TVec3f& rPos, WaterInfo* pWaterInfo
     return false;
 }
 
-bool WaterAreaFunction::tryInWhirlPoolAccelerator(const TVec3f& rPos, TVec3f* pVel) {
+bool WaterAreaFunction::tryInWhirlPoolAccelerator(const Vec3f& rPos, Vec3f* pVel) {
     if (!MR::isExistSceneObj(SceneObj_WaterAreaHolder)) {
         return false;
     }

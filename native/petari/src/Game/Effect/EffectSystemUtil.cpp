@@ -86,7 +86,7 @@ namespace MR {
             pSystem->mCalcExec->movementNormal();
         }
 
-        void drawEffect3D(const EffectSystem* pSystem, const TPos3f& rViewMtx) {
+        void drawEffect3D(const EffectSystem* pSystem, const Pos3f& rViewMtx) {
             pSystem->mDrawExec->drawWithViewMtx3D(rViewMtx);
         }
 
@@ -259,7 +259,7 @@ namespace MR {
             getEffectSystem()->mEmitterHolder->forceDeleteAllOneTimeEmitters();
         }
 
-        void createParticleEmitter(ParticleEmitter* pEmitter, JPAEmitterManager* pManager, const TVec3f& rPosition, u16 resourceId, u8 groupId,
+        void createParticleEmitter(ParticleEmitter* pEmitter, JPAEmitterManager* pManager, const Vec3f& rPosition, u16 resourceId, u8 groupId,
                                    u8 resourceManagerId) {
             JPABaseEmitter* pBaseEmitter = pManager->createSimpleEmitterID(rPosition, resourceId, groupId, resourceManagerId, nullptr, nullptr);
             if (pBaseEmitter != nullptr) {

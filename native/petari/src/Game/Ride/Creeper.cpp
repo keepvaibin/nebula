@@ -64,10 +64,10 @@ namespace {
     static Color8 sColorMinusX(0xC8, 0xC8, 0xC8, 0xFF);
 };  // namespace
 
-CreeperPoint::CreeperPoint(const TVec3f& rPos, const TVec3f& rUp, const CreeperPoint* pPrevPoint)
+CreeperPoint::CreeperPoint(const Vec3f& rPos, const Vec3f& rUp, const CreeperPoint* pPrevPoint)
     : mPosition(rPos), mNeutralPos(rPos), mVelocity(0.0f, 0.0f, 0.0f), mSide(1.0f, 0.0f, 0.0f), mUp(rUp), mFront(0.0f, 0.0f, 1.0f),
       mProjection(0.0f, 0.0f, 0.0f), mPrevPoint(pPrevPoint) {
-    TVec3f front = mSide.cross(mUp);
+    Vec3f front = mSide.cross(mUp);
     if (MR::isNearZero(front)) {
         MR::makeAxisUpFront(&mSide, &mFront, mUp, mFront);
     } else {
@@ -78,14 +78,14 @@ CreeperPoint::CreeperPoint(const TVec3f& rPos, const TVec3f& rUp, const CreeperP
         return;
     }
 
-    TVec3f posDiff = mPosition - pPrevPoint->mPosition;
+    Vec3f posDiff = mPosition - pPrevPoint->mPosition;
     mProjection.x = pPrevPoint->mSide.dot(posDiff);
     mProjection.y = pPrevPoint->mUp.dot(posDiff);
     mProjection.z = pPrevPoint->mFront.dot(posDiff);
 }
 
 void CreeperPoint::updateFree() {
-    TVec3f restoreVec(mNeutralPos - mPosition);
+    Vec3f restoreVec(mNeutralPos - mPosition);
 
     mVelocity.add(restoreVec * ::sFreeBackAccelRate);
     mPosition.add(mVelocity);
@@ -98,7 +98,7 @@ void CreeperPoint::updateFree() {
     mPosition.add(mPrevPoint->mPosition);
 }
 
-void CreeperPoint::updateBend(bool bend, const TVec3f& bendDirection, f32 t, f32 bendRate) {
+void CreeperPoint::updateBend(bool bend, const Vec3f& bendDirection, f32 t, f32 bendRate) {
     mVelocity.mult(::sPointFrictionHang);
 
     if (bend) {
@@ -121,7 +121,7 @@ void CreeperPoint::updateLocalAxis() {
     mUp.sub(mPrevPoint->mPosition);
     MR::normalize(&mUp);
 
-    TVec3f front = mSide.cross(mUp);
+    Vec3f front = mSide.cross(mUp);
     if (MR::isNearZero(front)) {
         MR::makeAxisUpFront(&mSide, &mFront, mUp, mFront);
     } else {
@@ -154,7 +154,7 @@ void Creeper::init(const JMapInfoIter& rIter) {
     MR::connectToScene(this, MR::MovementType_Ride, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_Creeper);
 
     initHitSensor(3);
-    MR::addHitSensorBinder(this, "bind", 8, 100.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorBinder(this, "bind", 8, 100.0f, Vec3f(0.0f, 0.0f, 0.0f));
     initRailRider(rIter);
 
     mPosition.set(MR::getRailPos(this));
@@ -225,7 +225,7 @@ void Creeper::exeHangDown() {
 
     if (MR::isRailReachedNearGoal(this, ::sHangEndCoord)) {
         MR::endMultiActorCamera(this, mCameraInfo, "\222\315\202\334\202\350" /* 掴まり */, true);
-        MR::endBindAndPlayerJump(this, TVec3f(0.0f, 0.0f, 0.0f), 0);
+        MR::endBindAndPlayerJump(this, Vec3f(0.0f, 0.0f, 0.0f), 0);
         MR::startSound(mRider, "SE_PV_JUMP_S");
         MR::startSound(this, "SE_OJ_CREEPER_SWING");
         mRider = nullptr;
@@ -246,7 +246,7 @@ void Creeper::initPoints() {
 
     CreeperPoint* prevPoint = nullptr;
 
-    TVec3f bendSum(0.0f, 0.0f, 0.0f);  // cumulative direction
+    Vec3f bendSum(0.0f, 0.0f, 0.0f);  // cumulative direction
 
     for (s32 i = 0; i < mNumPoints - 1; i++) {
         MR::setRailCoord(this, ::sInterval * i);
@@ -316,7 +316,7 @@ bool Creeper::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver)
     }
 
     if (MR::isMsgUpdateBaseMtx(msg)) {
-        TPos3f mtx;
+        Pos3f mtx;
         mtx.identity();
         MR::makeMtxUpFrontPos(&mtx, mUp, mFront, mPosition);
         MR::setBaseTRMtx(mRider, mtx);
@@ -325,7 +325,7 @@ bool Creeper::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver)
 
     if (MR::isMsgRushCancel(msg)) {
         MR::endMultiActorCamera(this, mCameraInfo, "\222\315\202\334\202\350" /* 掴まり */, true);
-        MR::endBindAndPlayerJump(this, TVec3f(0.0f, 0.0f, 0.0f), 0);
+        MR::endBindAndPlayerJump(this, Vec3f(0.0f, 0.0f, 0.0f), 0);
         mRider = nullptr;
         setNerve(GET_NERVE(Creeper, CreeperNrvFreeInvalid));
         return true;
@@ -391,7 +391,7 @@ bool Creeper::tryJump() {
 
     calcAndGetCurrentInfo(&mPosition, &mUp);
 
-    TVec3f launchFront = -mBendDirection;
+    Vec3f launchFront = -mBendDirection;
 
     MR::vecKillElement(launchFront, mGravity, &launchFront);
     MR::normalizeOrZero(&launchFront);
@@ -399,7 +399,7 @@ bool Creeper::tryJump() {
         MR::setPlayerFrontTargetVec(launchFront, 1);
     }
 
-    TVec3f launch;
+    Vec3f launch;
     launch = launchFront * mJumpSpeedFront - mGravity * mJumpSpeedUp;
 
     MR::startBckPlayer("GrowPlantJump");
@@ -450,7 +450,7 @@ bool Creeper::updateHangUp(f32 rotateSpeed) {
     return false;
 }
 
-void Creeper::calcAndGetCurrentInfo(TVec3f* pPosition, TVec3f* pUp) const {
+void Creeper::calcAndGetCurrentInfo(Vec3f* pPosition, Vec3f* pUp) const {
     f32 t0 = MR::getRailCoord(this) / ::sInterval;
     s32 i = t0;
     f32 t = t0 - i;
@@ -468,13 +468,13 @@ void Creeper::calcAndGetCurrentInfo(TVec3f* pPosition, TVec3f* pUp) const {
 }
 
 namespace {
-    void sendVertex(const TVec3f& rPos, const TVec3f& rSide, const TVec3f& rFront, f32 x, f32 y, u32 color, f32 texX, f32 texY) {
+    void sendVertex(const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 x, f32 y, u32 color, f32 texX, f32 texY) {
         J3DNativeDraw::position(rPos.x + rSide.x * x + rFront.x * y, rPos.y + rSide.y * x + rFront.y * y, rPos.z + rSide.z * x + rFront.z * y);
         J3DNativeDraw::color(color);
         J3DNativeDraw::texCoord(texX, texY);
     }
 
-    void drawPolygon(const TVec3f& rPos, const TVec3f& rSide, const TVec3f& rFront, f32 x1, f32 y1, f32 x2, f32 y2, u32 color1, u32 color2,
+    void drawPolygon(const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 x1, f32 y1, f32 x2, f32 y2, u32 color1, u32 color2,
                      f32 texY) {
         ::sendVertex(rPos, rSide, rFront, x1, y1, color1, 1.0f, texY);
         ::sendVertex(rPos, rSide, rFront, x2, y2, color2, 0.0f, texY);

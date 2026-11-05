@@ -50,15 +50,15 @@ void WhirlPool::movement() {
 void WhirlPool::initPoints() {
     mPointCount = static_cast< s32 >(mHeight / 50.0f) + 1;
     mPoints = new WhirlPoolPoint*[mPointCount];
-    TPos3f rotation;
+    Pos3f rotation;
     rotation.identity();
     MR::makeMtxRotate(rotation, 0.0f, 10.0f, 0.0f);
-    TVec3f normal(0.0f, 0.0f, 1.0f);
+    Vec3f normal(0.0f, 0.0f, 1.0f);
 
     f32 angle = 0.0f;
 
     for (s32 i = 0; i < mPointCount; i++) {
-        TVec3f position(mAxis);
+        Vec3f position(mAxis);
         f32 pointOffset = i;
         position.scale(-50.0f * pointOffset);
         position.add(mPosition);
@@ -117,8 +117,8 @@ void WhirlPool::drawPlane(f32 x0, f32 y0, f32 x1, f32 y1, f32 u0, f32 u1, f32 u2
     f32 v1 = mTexOffsetV1;
     f32 v2 = mTexOffsetV2;
 
-    TVec3f offset(0.0f, 0.0f, 50.0f);
-    TPos3f rotation;
+    Vec3f offset(0.0f, 0.0f, 50.0f);
+    Pos3f rotation;
     rotation.identity();
     MR::makeMtxRotate(rotation, 0.0f, mRotation, 0.0f);
     rotation.mult(offset, offset);
@@ -128,11 +128,11 @@ void WhirlPool::drawPlane(f32 x0, f32 y0, f32 x1, f32 y1, f32 u0, f32 u1, f32 u2
 
     for (s32 i = 0; i < mPointCount; i++) {
         pPoint = mPoints[i];
-        TVec3f side(pPoint->mSide);
-        TVec3f normal(pPoint->mNormal);
+        Vec3f side(pPoint->mSide);
+        Vec3f normal(pPoint->mNormal);
         side.scale(pPoint->mRadius);
         normal.scale(pPoint->mRadius);
-        TVec3f position(pPoint->mPosition);
+        Vec3f position(pPoint->mPosition);
         position.add(offset);
         rotation.mult(offset, offset);
 
@@ -166,7 +166,7 @@ void WhirlPool::loadMaterial() const {
                            sWhirlPoolStageColor1.a);
     NativeShader::setColor(material, 4, sWhirlPoolStageColor2.r, sWhirlPoolStageColor2.g, sWhirlPoolStageColor2.b,
                            sWhirlPoolStageColor2.a);
-    TPos3f screen;
+    Pos3f screen;
     MR::calcTexProjectionMtx(&screen);
     for (u32 row = 0; row < 3; row++) {
         for (u32 column = 0; column < 4; column++) {

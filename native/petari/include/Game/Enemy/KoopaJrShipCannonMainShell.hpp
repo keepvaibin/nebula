@@ -12,7 +12,7 @@ public:
     virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);
     virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 
-    virtual void launch(const TVec3f&, const TVec3f&);
+    virtual void launch(const Vec3f&, const Vec3f&);
     virtual f32 getBaseScale() const;
 
     void explosion();
@@ -20,7 +20,7 @@ public:
     void exeWait();
     void exeFly();
 
-    TQuat4f _8C;
+    Quat4f _8C;
 };
 
 namespace CannonShellUtil {

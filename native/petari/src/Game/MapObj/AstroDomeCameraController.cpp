@@ -87,34 +87,34 @@ bool AstroDomeCameraController::receiveOtherMsg(u32 msg, HitSensor* pSender, Hit
     return false;
 }
 
-void AstroDomeCameraController::calcZoomOutPos(TVec3f* pDst) const {
-    SphereSelectorFunction::calcOffsetPos(pDst, gZeroVec, TVec3f(0.0f, 0.0f, ::cZoomOutPosZ), -mStartPos, TVec3f(0.0f, 1.0f, 0.0f));
+void AstroDomeCameraController::calcZoomOutPos(Vec3f* pDst) const {
+    SphereSelectorFunction::calcOffsetPos(pDst, gZeroVec, Vec3f(0.0f, 0.0f, ::cZoomOutPosZ), -mStartPos, Vec3f(0.0f, 1.0f, 0.0f));
 }
 
-void AstroDomeCameraController::calcZoomInPos(TVec3f* pDst, const TVec3f& rUp) const {
-    TVec3f zoomOutPos;
+void AstroDomeCameraController::calcZoomInPos(Vec3f* pDst, const Vec3f& rUp) const {
+    Vec3f zoomOutPos;
     calcZoomOutPos(&zoomOutPos);
 
-    TVec3f x;
+    Vec3f x;
     x.sub(SphereSelectorFunction::getSelectedActorTrans(), zoomOutPos);
     SphereSelectorFunction::calcOffsetPos(pDst, SphereSelectorFunction::getSelectedActorTrans(), ::cZoomInPos, x, rUp);
 }
 
-void AstroDomeCameraController::calcZoomInTarget(TVec3f* pDst, const TVec3f& rUp) const {
-    TVec3f offset;
+void AstroDomeCameraController::calcZoomInTarget(Vec3f* pDst, const Vec3f& rUp) const {
+    Vec3f offset;
     offset.scale(::cZoomInTargetOffsetY, rUp);
     pDst->add(SphereSelectorFunction::getSelectedActorTrans(), offset);
 }
 
-void AstroDomeCameraController::calcZoomInUp(TVec3f* pDst) const {
-    TPos3f rotateMtx;
-    SphereSelectorFunction::calcHandledRotateMtx(TVec3f(0.0f, 0.0f, 0.0f), &rotateMtx);
+void AstroDomeCameraController::calcZoomInUp(Vec3f* pDst) const {
+    Pos3f rotateMtx;
+    SphereSelectorFunction::calcHandledRotateMtx(Vec3f(0.0f, 0.0f, 0.0f), &rotateMtx);
     rotateMtx.getYDir(*pDst);
 }
 
 void AstroDomeCameraController::exeGalaxySelectStart() {
     s32 startFrame = SphereSelectorFunction::getSelectStartFrame();
-    TVec3f zoomOutPos;
+    Vec3f zoomOutPos;
 
     if (MR::isFirstStep(this)) {
         calcZoomOutPos(&zoomOutPos);
@@ -132,7 +132,7 @@ void AstroDomeCameraController::exeGalaxySelect() {
         mEaseRate = 1.0f;
     }
 
-    TVec3f zoomOutPos;
+    Vec3f zoomOutPos;
     calcZoomOutPos(&zoomOutPos);
 
     mZoomPos.reset(zoomOutPos);
@@ -142,16 +142,16 @@ void AstroDomeCameraController::exeGalaxySelect() {
 void AstroDomeCameraController::exeGalaxyConfirmStart() {
     s32 frame = SphereSelectorFunction::getConfirmStartCancelFrame();
 
-    TVec3f vecUp;
+    Vec3f vecUp;
     calcZoomInUp(&vecUp);
 
-    TVec3f vecTarget;
+    Vec3f vecTarget;
     calcZoomInTarget(&vecTarget, vecUp);
 
     if (MR::isFirstStep(this)) {
         mTargetPos.setEnd(vecTarget);
 
-        TVec3f zoomInPos;
+        Vec3f zoomInPos;
         calcZoomInPos(&zoomInPos, vecUp);
 
         mZoomPos.setEnd(zoomInPos);
@@ -165,18 +165,18 @@ void AstroDomeCameraController::exeGalaxyConfirmStart() {
 }
 
 void AstroDomeCameraController::exeGalaxyConfirm() {
-    TVec3f vecUp;
+    Vec3f vecUp;
     calcZoomInUp(&vecUp);
 
     if (MR::isFirstStep(this)) {
         mEaseRate = 1.0f;
     }
 
-    TVec3f zoomInPos;
+    Vec3f zoomInPos;
     calcZoomInPos(&zoomInPos, vecUp);
     mZoomPos.reset(zoomInPos);
 
-    TVec3f zoomInTarget;
+    Vec3f zoomInTarget;
     calcZoomInTarget(&zoomInTarget, vecUp);
     mTargetPos.reset(zoomInTarget);
 }
@@ -185,7 +185,7 @@ void AstroDomeCameraController::exeGalaxyConfirmCancel() {
     s32 frame = SphereSelectorFunction::getConfirmStartCancelFrame();
 
     if (MR::isFirstStep(this)) {
-        TVec3f zoomOutPos;
+        Vec3f zoomOutPos;
         calcZoomOutPos(&zoomOutPos);
 
         mZoomPos.setEnd(zoomOutPos);

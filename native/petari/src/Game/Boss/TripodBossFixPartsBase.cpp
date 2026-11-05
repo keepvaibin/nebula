@@ -8,7 +8,7 @@
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
-#include <JSystem/JMath.hpp>
+#include <nebula_geometry.hpp>
 
 TripodBossFixPartsBase::TripodBossFixPartsBase(const char* pName)
     : LiveActor(pName), _BC(0.0f, 0.0f, 0.0f), mBreakMovement(), mJointID(-1), _D0(0.0f, 0.0f, 0.0f), mClippingRadius(), _E0(), _E1() {
@@ -30,14 +30,14 @@ void TripodBossFixPartsBase::initAfterPlacement() {
 }
 
 void TripodBossFixPartsBase::initClippingSphere() {
-    TBox3f boundingBox;
+    Box3f boundingBox;
     MR::calcModelBoundingBox(&boundingBox, this);
 
     _D0 = (boundingBox.i + boundingBox.f) * 0.5f;
     mClippingRadius = _D0.distance(boundingBox.i);
 }
 
-void TripodBossFixPartsBase::setClippingSphere(const TVec3f& a1, f32 radius) {
+void TripodBossFixPartsBase::setClippingSphere(const Vec3f& a1, f32 radius) {
     _D0 = a1;
     mClippingRadius = radius;
 }
@@ -64,7 +64,7 @@ bool TripodBossFixPartsBase::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSen
     return false;
 }
 
-void TripodBossFixPartsBase::calcTripodLocalMatrix(TPos3f* pMtx) {
+void TripodBossFixPartsBase::calcTripodLocalMatrix(Pos3f* pMtx) {
     MR::makeMtxTR(*pMtx, _BC, mRotation);
 }
 
@@ -72,7 +72,7 @@ void TripodBossFixPartsBase::activateTripodBoss() {
 }
 
 void TripodBossFixPartsBase::startBreakMovement() {
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.set(getBaseMtx());
 
     mBreakMovement->start(mtx, mJointID);
@@ -94,7 +94,7 @@ void TripodBossFixPartsBase::updateTripodMatrix() {
         return;
     }
 
-    TVec3f mul;
+    Vec3f mul;
     _8C.mult(_D0, mul);
 
     if (MR::isJudgedToClipFrustum(mul, mClippingRadius)) {

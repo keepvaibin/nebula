@@ -31,13 +31,13 @@ MtxPtr CameraRegisterHolder::getMtx(const char* pName) const {
     return mMatrices[index];
 }
 
-void CameraRegisterHolder::declareVecReg(const char* pName, const TVec3f* pValue) {
+void CameraRegisterHolder::declareVecReg(const char* pName, const Vec3f* pValue) {
     mVectors[mNrVectors] = pValue;
     mVectorNames[mNrVectors] = pName;
     mNrVectors++;
 }
 
-const TVec3f* CameraRegisterHolder::getVec(const char* pName) const {
+const Vec3f* CameraRegisterHolder::getVec(const char* pName) const {
     s32 index = searchName(mVectorNames, mNrVectors, pName);
 
     if (index < 0) {

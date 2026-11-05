@@ -186,7 +186,7 @@ void MarioActor::initBeeMario() {
     _9E8 = new MarioParts(this, "B-WING", "BeeMarioWing", false, nullptr, nullptr);
     _9E8->initWithoutIter();
 
-    _9E8->initFixedPosition(_DDC.toMtxPtr(), TVec3f(0.0f, 0.0f, 0.0f), TVec3f(0.0f, 0.0f, 0.0f));
+    _9E8->initFixedPosition(_DDC.toMtxPtr(), Vec3f(0.0f, 0.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
     _9E8->makeActorDead();
 
     _9F0 = 0;
@@ -319,7 +319,7 @@ void MarioActor::initTeresaMario() {
     _9A4->initWithoutIter();
     _9A4->kill();
 
-    _9A4->initFixedPosition(TVec3f(0.0f, 0.0f, 0.0f), TVec3f(0.0f, 0.0f, 0.0f), nullptr);
+    _9A4->initFixedPosition(Vec3f(0.0f, 0.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f), nullptr);
 
     _9A8 = 0.0f;
     _9AC = 0.0f;
@@ -702,7 +702,7 @@ void MarioActor::updateFace() {
 
     MR::showModel(_A5C);
 
-    TVec3f partsControl;
+    Vec3f partsControl;
     if (mMarioAnim->_6C) {
         XanimePlayer* player = mMarioAnim->mXanimePlayerUpper;
         const s32 partsControlJoint = MR::getJointIndex(this, "PartsControl");
@@ -964,7 +964,7 @@ void MarioActor::drawModelBlur() const {
     model->mFlags._13 = true;
 
     Mtx inv;
-    NebulaMtxInverse(const_cast< TMtx34f& >(_AB0).toMtxPtr(), inv);
+    NebulaMtxInverse(const_cast< Mtx34f& >(_AB0).toMtxPtr(), inv);
     MR::multMtx(inv, inv, MR::getCameraViewMtx());
     for (u32 i = 1; i < 8; i++) {
         const u32 idx = static_cast< u32 >(i + _B12) & 7;

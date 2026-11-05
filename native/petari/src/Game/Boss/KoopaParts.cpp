@@ -55,7 +55,7 @@ namespace {
     };
 };  // namespace
 
-KoopaFireStairs* KoopaParts::emitFireStairsToPos(const KoopaBattleMapStair* pBattleMapStair, const TVec3f& rPosition, bool useFront) {
+KoopaFireStairs* KoopaParts::emitFireStairsToPos(const KoopaBattleMapStair* pBattleMapStair, const Vec3f& rPosition, bool useFront) {
     LiveActor* actor = mFireStairs->getDeadActor();
 
     if (actor == nullptr) {
@@ -122,7 +122,7 @@ void KoopaParts::emitShockWave() {
     pActor->appear();
 }
 
-TVec3f& KoopaParts::getPlanetPos() const {
+Vec3f& KoopaParts::getPlanetPos() const {
     if (KoopaFunction::isKoopaVs1(mKoopa) || KoopaFunction::isKoopaVs2(mKoopa)) {
         return mPlanetLv1->mPosition;
     }

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/NameObj/NameObj.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 struct ResTIMG;
 class JUTTexture;
@@ -11,9 +11,9 @@ class FootPrintInfo {
 public:
     FootPrintInfo();
 
-    TVec3f mPos;
-    TVec3f _C;
-    TVec3f _18;
+    Vec3f mPos;
+    Vec3f _C;
+    Vec3f _18;
 
     /// @brief Frames left before becoming invalid. Also controls the footprint's alpha.
     s32 mTimeLeft;
@@ -33,11 +33,11 @@ public:
     virtual void draw() const;
 
     void setTexture(ResTIMG*);
-    bool addPrint(const TVec3f&, const TVec3f&, const TVec3f&, bool);
+    bool addPrint(const Vec3f&, const Vec3f&, const Vec3f&, bool);
     void clear();
     void initMember(s32, s32);
     void clearForce();
-    TVec3f* getPrintPos(u32) const;
+    Vec3f* getPrintPos(u32) const;
     void invalidate(u32);
     bool isValid(u32) const;
 
@@ -46,7 +46,7 @@ public:
     /// @brief Array of footprints.
     FootPrintInfo* mPrints;
 
-    TVec3f mLastPrintPos;
+    Vec3f mLastPrintPos;
 
     /// @brief Size of the mPrints array.
     s32 mPrintMaxNum;

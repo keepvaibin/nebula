@@ -47,7 +47,7 @@ void PenguinCoach::init(const JMapInfoIter& rIter) {
     caps.mShadowSize = 130.0f;
     caps.mSensor = false;
     caps.mMakeActor = false;
-    caps.mMessageOffset = TVec3f(0.0f, 430.0f, 0.0f);
+    caps.mMessageOffset = Vec3f(0.0f, 430.0f, 0.0f);
     caps.mPointerSize = 180.0f;
     caps.mStarPointerOffs.set(0.0f, 200.0f, 80.0f);
 
@@ -66,8 +66,8 @@ void PenguinCoach::init(const JMapInfoIter& rIter) {
     }
 
     initHitSensor(2);
-    MR::addHitSensorPush(this, "body", 8, 160.0f, TVec3f(0.0f, 150.0f, 0.0f));
-    MR::addHitSensorPush(this, "head", 8, 150.0f, TVec3f(0.0f, 300.0f, 40.0f));
+    MR::addHitSensorPush(this, "body", 8, 160.0f, Vec3f(0.0f, 150.0f, 0.0f));
+    MR::addHitSensorPush(this, "head", 8, 150.0f, Vec3f(0.0f, 300.0f, 40.0f));
 
     if (mBehavior == Behavior_Tutorial || mBehavior == Behavior_Race) {
         if (mBehavior == Behavior_Tutorial) {
@@ -129,7 +129,7 @@ bool PenguinCoach::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor
 }
 
 void PenguinCoach::control() {
-    TVec3f starePos;
+    Vec3f starePos;
     MR::calcPlayerFaceStarePos(&starePos, MR::getJointMtx(this, "Head"), getBaseMtx());
     mTurnJointCtrl->setStarePos(starePos);
     mTurnJointCtrl->update();

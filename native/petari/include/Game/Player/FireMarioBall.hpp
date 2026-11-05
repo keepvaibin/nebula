@@ -3,7 +3,7 @@
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/JMapInfo.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class FireMarioBall : public LiveActor {
 public:
@@ -17,7 +17,7 @@ public:
 
     bool attackFire(HitSensor*);
     void exeThrow();
-    void appearAndThrow(const TVec3f&, const TVec3f&);
+    void appearAndThrow(const Vec3f&, const Vec3f&);
     HitSensor* isBindedAny() const;
     bool tryToKill();
 

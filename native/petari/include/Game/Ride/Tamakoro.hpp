@@ -3,7 +3,7 @@
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class AudTamakoroBgmCtrl;
 class JointController;
@@ -27,7 +27,7 @@ public:
 
     void initSensor();
     void initJointControl();
-    bool ringMtxCallBack(TPos3f*, const JointControllerInfo&);
+    bool ringMtxCallBack(Pos3f*, const JointControllerInfo&);
     void updateBindActorMatrix();
     void updateRingUpVec();
     bool requestBind(HitSensor*);
@@ -108,18 +108,18 @@ private:
     SphereAccelSensorController* mAccelSensorCtrl;
     TamakoroTutorial* mTutorial;
     JointController* mJointCtrl;
-    TQuat4f mBallRotateQuat;
-    TQuat4f mMarioRotateQuat;
-    TVec3f mRingUp;
-    TVec3f _C4;  // unused
-    TVec3f mKickVel;
-    TVec3f mMarioBindRequestPos;
-    TVec3f mMarioUp;
-    TVec3f mMarioPos;
-    TVec3f mMoment;
-    TVec3f mMarioFront;
-    TVec3f mDirectionToMario;
-    TVec3f mAccelDir;
+    Quat4f mBallRotateQuat;
+    Quat4f mMarioRotateQuat;
+    Vec3f mRingUp;
+    Vec3f _C4;  // unused
+    Vec3f mKickVel;
+    Vec3f mMarioBindRequestPos;
+    Vec3f mMarioUp;
+    Vec3f mMarioPos;
+    Vec3f mMoment;
+    Vec3f mMarioFront;
+    Vec3f mDirectionToMario;
+    Vec3f mAccelDir;
     f32 mAccelRate;
     f32 mMarioRotateYAngle;
     f32 mMarioOffset;

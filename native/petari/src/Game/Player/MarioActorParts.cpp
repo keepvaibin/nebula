@@ -46,7 +46,7 @@ void MarioActor::initParts() {
     _9C4 = new MarioParts(this, "\225\130\214\213\203\202\203\146\203\213" /* 氷結モデル */, "MarioFreezeIce", true, nullptr, nullptr);
     _9C4->initWithoutIter();
     _9C4->makeActorDead();
-    _9C4->initFixedPosition(TVec3f(0.0f, 0.0f, 0.0f), TVec3f(0.0f, 0.0f, 0.0f), nullptr);
+    _9C4->initFixedPosition(Vec3f(0.0f, 0.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f), nullptr);
 
     _9A0 = new JetTurtleShadow("\203\112\203\201\203\126\203\203\203\150\203\105\203\202\203\146\203\213" /* カメシャドウモデル */);
     _9A0->initWithoutIter();
@@ -156,8 +156,8 @@ void MarioActor::updateTakingPosition() {
     }
     if (_B92 < 0) {
         Mtx base;
-        TVec3f position;
-        TVec3f rotation;
+        Vec3f position;
+        Vec3f rotation;
         bool updateAnimation;
         if (_B92 == -3) {
             _494->calc();
@@ -210,26 +210,26 @@ void MarioActor::updateTakingPosition() {
     } else if (_468) {
         if (_428[0]->isType(ATYPE_COINTHROW) || _428[0]->isType(ATYPE_JET_TURTLE) || _428[0]->isType(ATYPE_JET_TURTLE_SLOW) ||
             _428[0]->isType(ATYPE_BOMBHEI)) {
-            TVec3f position;
+            Vec3f position;
             _494->calc();
             _494->copyTrans(&position);
-            TVec3f& carryPosition = _428[0]->mHost->mPosition;
-            const TVec3f& velocity = mVelocity;
+            Vec3f& carryPosition = _428[0]->mHost->mPosition;
+            const Vec3f& velocity = mVelocity;
             carryPosition = position + velocity;
             _494->copyRotate(&_428[0]->mHost->mRotation);
             return;
         }
-        TVec3f position;
+        Vec3f position;
         mNullAnimation->getLastPos(&position);
         NebulaMtxMultVec(_E3C.toMtxPtr(), &position, &position);
         NebulaMtxMultVec(getBaseMtx(), &position, &position);
         f32 offset = 10.0f * (mMario->mWalkSpeed * mMario->mWalkSpeed);
-        offset *= JMASinRadian(_490);
+        offset *= Angle::sinRadian(_490);
         _490 += MR::getRandom(0.1f, 1.0f);
         position.y += offset;
         _428[0]->mHost->mPosition = position;
-        TVec3f& carryRotation = _428[0]->mHost->mRotation;
-        const TVec3f& rotation = mRotation;
+        Vec3f& carryRotation = _428[0]->mHost->mRotation;
+        const Vec3f& rotation = mRotation;
         carryRotation = _438[0] + rotation;
     }
 }
@@ -321,11 +321,11 @@ void MarioActor::shootFireBall() {
     if (index == ARRAY_SIZE(_B54))
         return;
     FireMarioBall* ball = _B54[index];
-    TVec3f direction;
+    Vec3f direction;
     direction = mMario->mFrontVec;
     direction += mMario->mHeadVec;
     MR::normalize(&direction);
-    TVec3f position;
+    Vec3f position;
     getRealPos("HandR", &position);
     position += mMario->mFrontVec * 30.0f;
     ball->appearAndThrow(position, direction);
@@ -383,7 +383,7 @@ void MarioActor::updateFairyStar() {
             MR::startBck(_994, "SpinTimer");
             playSound("\203\130\203\163\203\223\213\226\211\302" /* スピン許可 */, -1);
         }
-        TVec3f position;
+        Vec3f position;
         MR::copyJointPos(_994, "Center", &position);
         Color8 color(255, 225, 225, 255);
         f32 power = 0.001f;
@@ -424,7 +424,7 @@ void MarioActor::updateThrowVector() {
             if (!_47C)
                 _484 = _2A0;
             _47C++;
-            TVec3f direction = _46C->mPosition - _484;
+            Vec3f direction = _46C->mPosition - _484;
             if (direction.length() <= 40.0f + _46C->getRadius()) {
                 _484 = _46C->mPosition;
                 _470 = _46C;
@@ -450,23 +450,23 @@ void MarioActor::updateThrowVector() {
     }
 }
 
-void MarioActor::createIceFloor(const TVec3f& rVec) {
-    TPos3f mtx;
+void MarioActor::createIceFloor(const Vec3f& rVec) {
+    Pos3f mtx;
     mtx.identity();
 
-    TVec3f upVec;
+    Vec3f upVec;
     getUpVec(&upVec);
 
     MR::makeMtxUpFront(&mtx, -getAirGravityVec(), mMario->mFrontVec);
 
-    TVec3f vec;
+    Vec3f vec;
     mtx.getEuler(vec);
 
     vec *= 180.0f / PI;
     createIceFloor(rVec, vec);
 }
 
-void MarioActor::createIceFloor(const TVec3f& rVec1, const TVec3f& rVec2) {
+void MarioActor::createIceFloor(const Vec3f& rVec1, const Vec3f& rVec2) {
     _B4C[_B50]->setOn(_B50, rVec1, rVec2);
 
     _B50 = (_B50 + 1) % 20;
@@ -476,15 +476,15 @@ void MarioActor::createIceFloor(const TVec3f& rVec1, const TVec3f& rVec2) {
     }
 }
 
-void MarioActor::createIceWall(const TVec3f& rVec1, const TVec3f& rVec2) {
-    TPos3f mtx;
+void MarioActor::createIceWall(const Vec3f& rVec1, const Vec3f& rVec2) {
+    Pos3f mtx;
     mtx.identity();
-    TVec3f upVec;
+    Vec3f upVec;
     getUpVec(&upVec);
 
     MR::makeMtxFrontUp(&mtx, getGravityVector(), rVec2);
 
-    TVec3f vec;
+    Vec3f vec;
     mtx.getEuler(vec);
     vec *= 180.0f / PI;
     _B4C[_B50]->setOn(_B50, rVec1, vec);
@@ -497,10 +497,10 @@ void MarioActor::createIceWall(const TVec3f& rVec1, const TVec3f& rVec2) {
 }
 
 void MarioActor::updateBaseMtxTeresa(MtxPtr mtx) {
-    TVec3f horizontal;
+    Vec3f horizontal;
     f32 tilt = MR::clamp(MR::vecKillElement(mVelocity, getGravityVec(), &horizontal) / 10.0f, -1.0f, 1.0f);
     if (!MR::isNearZero(mMario->getWorldPadDir())) {
-        const TVec3f& front = mMario->mFrontVec;
+        const Vec3f& front = mMario->mFrontVec;
         if (MR::diffAngleAbsHorizontal(mMario->getWorldPadDir(), front, getGravityVec()) > 0.3926991f)
             tilt = 0.0f;
     }

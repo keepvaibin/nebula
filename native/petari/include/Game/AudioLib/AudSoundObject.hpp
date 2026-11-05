@@ -43,14 +43,14 @@ public:
 
 class AudSoundObject : public JAUSoundObject, JKRDisposer {
 public:
-    AudSoundObject(TVec3f*, u8, NebulaArena*);
+    AudSoundObject(Vec3f*, u8, NebulaArena*);
 
     virtual JAISoundHandle* startSound(JAISoundID);
     virtual JAISoundHandle* startLevelSound(JAISoundID);
     virtual ~AudSoundObject();
 
     void addToSoundObjHolder();
-    void setTrans(TVec3f*);
+    void setTrans(Vec3f*);
     bool writePort(JAISoundHandle*, u32, u16);
     bool isLimitedSound(JAISoundID);
     JAISoundHandle* startLevelSound(const char*);

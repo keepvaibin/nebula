@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class ModelObj;
 
@@ -23,7 +23,7 @@ public:
     void appearItem();
 
     ModelObj* mBreakModel;
-    TMtx34f mBreakModelMtx;
+    Mtx34f mBreakModelMtx;
     s32 mItemType;
     s32 mStarPieceNum;
     bool mObjArg7;

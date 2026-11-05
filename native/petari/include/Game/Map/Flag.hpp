@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class Color8;
 class JUTTexture;
@@ -14,7 +14,7 @@ public:
         FixPoints() {
         }
 
-        TVec3f mPos;
+        Vec3f mPos;
         SwingRopePoint** mPoints;
     };
 
@@ -27,7 +27,7 @@ public:
     virtual void draw() const;
     virtual void appear();
 
-    void setInfoPos(const char* pObjName, const TVec3f* pPos, const TVec3f& rSide, f32 stickLength, f32 width, f32 height, s32 numPointsU,
+    void setInfoPos(const char* pObjName, const Vec3f* pPos, const Vec3f& rSide, f32 stickLength, f32 width, f32 height, s32 numPointsU,
                     s32 numPointsV, f32);
     void updateFlag();
     void loadMaterial() const;
@@ -58,14 +58,14 @@ public:
     f32 mPointIntervalU;
     f32 mPointIntervalV;
     FixPoints* mFixPoints;
-    TVec3f mUp;
-    TVec3f mClipCenter;
-    const TVec3f* mBasePos;
-    TPos3f* mBaseMtx;
+    Vec3f mUp;
+    Vec3f mClipCenter;
+    const Vec3f* mBasePos;
+    Pos3f* mBaseMtx;
     f32 mStickLength;
     f32 mWavePhase;
-    TVec3f mSide;
-    TVec3f mFront;
+    Vec3f mSide;
+    Vec3f mFront;
     bool mIsVerticalFlag;
     s32 mWaitTime;
     f32 mGravityScale;

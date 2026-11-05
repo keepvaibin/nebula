@@ -95,14 +95,14 @@ void Kuribo::init(const JMapInfoIter& rIter) {
         MR::calcGravity(this);
     } else {
         MR::offCalcGravity(this);
-        TVec3f v8;
+        Vec3f v8;
         MR::getUpVecFromQuat(&v8, _A8);
         mGravity.set(v8);
     }
 
     mScaleController = new AnimScaleController(nullptr);
     mItemGenerator = new ItemGenerator();
-    MR::initStarPointerTarget(this, 70.0f * mScale.y, TVec3f(0.0f, 75.0f * mScale.y, 0.0f));
+    MR::initStarPointerTarget(this, 70.0f * mScale.y, Vec3f(0.0f, 75.0f * mScale.y, 0.0f));
     initSound(4, false);
     if (MR::isEqualStageName("KoopaBattleVs2Galaxy")) {
         MR::setSeVersion(this, 1);
@@ -150,8 +150,8 @@ void Kuribo::initState() {
 void Kuribo::initSensor() {
     f32 y_scale = mScale.y;
     initHitSensor(2);
-    MR::addHitSensor(this, "body", ATYPE_KURIBO, 8, 75.0f * y_scale, TVec3f(0.0f, 75.0f * y_scale, 0.0f));
-    MR::addHitSensor(this, "attack", ATYPE_ENEMY_ATTACK, 8, 45.0f * y_scale, TVec3f(0.0f, 75.0f * y_scale, 0.0f));
+    MR::addHitSensor(this, "body", ATYPE_KURIBO, 8, 75.0f * y_scale, Vec3f(0.0f, 75.0f * y_scale, 0.0f));
+    MR::addHitSensor(this, "attack", ATYPE_ENEMY_ATTACK, 8, 45.0f * y_scale, Vec3f(0.0f, 75.0f * y_scale, 0.0f));
 }
 
 void Kuribo::initAppearState(const JMapInfoIter& rIter) {
@@ -202,7 +202,7 @@ void Kuribo::control() {
 
     MR::blendQuatFromGroundAndFront(&_A8, this, _B8, 0.05f, 0.5f);
     if (!isNerve(GET_NERVE(Kuribo, KuriboNrvBindStarPointer))) {
-        TVec3f v3(0, 0, 0);
+        Vec3f v3(0, 0, 0);
         if (MR::calcVelocityAreaOrRailMoveOnGround(&v3, this)) {
             MR::addVelocity(this, v3 * 0.05f);
         }
@@ -217,7 +217,7 @@ void Kuribo::control() {
 
 void Kuribo::calcAndSetBaseMtx() {
     MR::setBaseTRMtx(this, _A8);
-    TVec3f scale = mScaleController->_C * mScale;
+    Vec3f scale = mScaleController->_C * mScale;
     MR::setBaseScale(this, scale);
 }
 
@@ -431,7 +431,7 @@ void Kuribo::onNoGravitySupport() {
     MR::offCalcGravity(this);
 }
 
-void Kuribo::setUp(const TVec3f& a1, const TQuat4f& a2, const TVec3f& a3) {
+void Kuribo::setUp(const Vec3f& a1, const Quat4f& a2, const Vec3f& a3) {
     mPosition.set(a1);
     mVelocity.set(a3);
     _A8.x = a2.x;
@@ -441,7 +441,7 @@ void Kuribo::setUp(const TVec3f& a1, const TQuat4f& a2, const TVec3f& a3) {
     _A8.getZDir(_B8);
 }
 
-void Kuribo::appearBlowed(const TVec3f& a1, const TQuat4f& a2, const TVec3f& a3) {
+void Kuribo::appearBlowed(const Vec3f& a1, const Quat4f& a2, const Vec3f& a3) {
     setUp(a1, a2, a3);
     setNerve(GET_NERVE(Kuribo, KuriboNrvBlow));
     MR::startAction(this, "Blow");
@@ -451,8 +451,8 @@ void Kuribo::appearBlowed(const TVec3f& a1, const TQuat4f& a2, const TVec3f& a3)
     }
 }
 
-void Kuribo::appearHipDropped(const TVec3f& a1, const TQuat4f& a2) {
-    setUp(a1, a2, TVec3f(0.0f, 0.0f, 0.0f));
+void Kuribo::appearHipDropped(const Vec3f& a1, const Quat4f& a2) {
+    setUp(a1, a2, Vec3f(0.0f, 0.0f, 0.0f));
     appear();
     MR::startAction(this, "HipDropDown");
     setNerve(GET_NERVE(Kuribo, KuriboNrvHipDropDown));
@@ -520,7 +520,7 @@ bool Kuribo::tryPointBind() {
 
 bool Kuribo::tryDead() {
     if (isEnableDead()) {
-        if (MR::isInDeath(this, TVec3f(0.0f, 0.0f, 0.0f)) || MR::isBindedGroundDamageFire(this) || MR::isInWater(mPosition)) {
+        if (MR::isInDeath(this, Vec3f(0.0f, 0.0f, 0.0f)) || MR::isBindedGroundDamageFire(this) || MR::isInWater(mPosition)) {
             mItemGenerator->setTypeNone();
             kill();
             return true;
@@ -601,7 +601,7 @@ void Kuribo::endNonActive() {
 void Kuribo::exeAppearFromBox() {
     if (MR::isFirstStep(this)) {
         MR::startAction(this, "AppearFromBox");
-        TVec3f zDir;
+        Vec3f zDir;
         _A8.getZDir(zDir);
         MR::setVelocitySeparateHV(this, zDir, 7.0f, 30.0f);
         MR::offBind(this);

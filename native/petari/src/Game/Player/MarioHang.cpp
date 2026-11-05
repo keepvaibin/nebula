@@ -13,8 +13,8 @@ bool Mario::isHanging() const {
     return getCurrentStatus() == MarioStatus_Hang;
 }
 
-bool Mario::fixHangDir(const TVec3f& rPosition, TVec3f* pDirection) {
-    TVec3f horizontal(rPosition - mPosition);
+bool Mario::fixHangDir(const Vec3f& rPosition, Vec3f* pDirection) {
+    Vec3f horizontal(rPosition - mPosition);
     MR::vecKillElement(horizontal, *getGravityVec(), &horizontal);
     MR::normalizeOrZero(&horizontal);
     Triangle pTriangle;
@@ -100,9 +100,9 @@ void Mario::checkHang() {
         }
     }
 
-    TVec3f previousPosition(mPosition);
+    Vec3f previousPosition(mPosition);
     if (front && mMovementStates._39 && isEnableHang()) {
-        TVec3f direction(_4A4 - mPosition);
+        Vec3f direction(_4A4 - mPosition);
         MR::vecKillElement(direction, getAirGravityVec(), &direction);
         MR::normalizeOrZero(&direction);
         if (getFrontWallNorm().dot(direction) >= -0.8f) {
@@ -125,20 +125,20 @@ void Mario::checkHang() {
             mHang->_1E = started;
         }
     } else if (back && isEnableBackHang()) {
-        TVec3f position;
+        Vec3f position;
         getLastGroundPos(&position);
         if ((mPosition - position).dot(getAirGravityVec()) >= 160.0f) {
             return;
         }
 
-        TVec3f direction(-mFrontVec);
+        Vec3f direction(-mFrontVec);
         u32 edge = getLastGroundEdgeIndex(mActor->_2A0, direction);
         direction = _4F4 - mActor->_2A0;
         MR::normalizeOrZero(&direction);
         u32 positionEdge = getLastGroundEdgeIndex(mActor->_2A0, direction);
         direction = -*mBackWallTriangle->getNormal(0);
         u32 normalEdge = getLastGroundEdgeIndex(mActor->_2A0, direction);
-        TVec3f normal;
+        Vec3f normal;
         if (edge == positionEdge && edge == normalEdge) {
             normal = *getLastGroundEdgeNrm(edge);
         } else {
@@ -158,7 +158,7 @@ void Mario::checkHang() {
             return;
         }
 
-        TVec3f horizontal;
+        Vec3f horizontal;
         f32 distance = 0.0f;
         switch (edge) {
         case 0:
@@ -183,7 +183,7 @@ void Mario::checkHang() {
             mVelocity.zero();
             stopWalk();
             stopJump();
-            TVec3f hangDirection;
+            Vec3f hangDirection;
             bool found = fixHangDir(position, &hangDirection);
             setTrans(position, nullptr);
             setFrontVecKeepUp(normal);
@@ -196,16 +196,16 @@ void Mario::checkHang() {
             mHang->_1E = 0;
         }
     } else if (side && isEnableSideHang()) {
-        TVec3f position;
+        Vec3f position;
         getLastGroundPos(&position);
         if ((mPosition - position).dot(getAirGravityVec()) >= 160.0f) {
             return;
         }
 
-        TVec3f direction(_500 - mActor->_2A0);
+        Vec3f direction(_500 - mActor->_2A0);
         MR::normalizeOrZero(&direction);
         u32 edge = getLastGroundEdgeIndex(mActor->_2A0, direction);
-        TVec3f sideDirection(mSideVec);
+        Vec3f sideDirection(mSideVec);
         if (sideDirection.dot(direction) < 0.0f) {
             direction = -sideDirection;
         } else {
@@ -215,7 +215,7 @@ void Mario::checkHang() {
         u32 sideEdge = getLastGroundEdgeIndex(mActor->_2A0, direction);
         direction = -*mSideWallTriangle->getNormal(0);
         u32 normalEdge = getLastGroundEdgeIndex(mActor->_2A0, direction);
-        TVec3f normal;
+        Vec3f normal;
         if (edge == sideEdge && edge == normalEdge) {
             normal = *getLastGroundEdgeNrm(edge);
         } else {
@@ -242,7 +242,7 @@ void Mario::checkHang() {
             mVelocity.zero();
             stopWalk();
             stopJump();
-            TVec3f hangDirection;
+            Vec3f hangDirection;
             bool found = fixHangDir(position, &hangDirection);
             setTrans(position, nullptr);
             setFrontVecKeepUp(normal);
@@ -309,8 +309,8 @@ bool Mario::isEnableHang() {
         }
     }
 
-    TVec3f shadowPos(mShadowPos);
-    TVec3f up(-getAirGravityVec());
+    Vec3f shadowPos(mShadowPos);
+    Vec3f up(-getAirGravityVec());
     f32 slope = _45C->getNormal(0)->dot(up);
     f32 height = mActor->getConst().getTable()->mWallHangGrHeight;
     if (slope > 0.0f) {
@@ -380,8 +380,8 @@ bool Mario::isEnableBackHang() {
         return false;
     }
 
-    TVec3f ground;
-    TVec3f horizontal;
+    Vec3f ground;
+    Vec3f horizontal;
     if (getPlayer()->getShadowNorm().dot(*getGravityVec()) < -0.707f) {
         if (turn) {
             ground = mPosition;
@@ -404,8 +404,8 @@ bool Mario::isEnableBackHang() {
         return false;
     }
 
-    TVec3f distance;
-    TVec3f position;
+    Vec3f distance;
+    Vec3f position;
     getLastGroundPos(&position);
     MR::vecKillElement(position - mPosition, getAirGravityVec(), &distance);
     return !(distance.length() >= 84.0f);
@@ -455,8 +455,8 @@ bool Mario::isEnableSideHang() {
         return false;
     }
 
-    TVec3f ground;
-    TVec3f horizontal;
+    Vec3f ground;
+    Vec3f horizontal;
     if (getPlayer()->getShadowNorm().dot(*getGravityVec()) < -0.707f) {
         getLastGroundPos(&ground);
         f32 height = MR::vecKillElement(mShadowPos - ground, *getGravityVec(), &horizontal);
@@ -473,8 +473,8 @@ bool Mario::isEnableSideHang() {
         return false;
     }
 
-    TVec3f distance;
-    TVec3f position;
+    Vec3f distance;
+    Vec3f position;
     getLastGroundPos(&position);
     MR::vecKillElement(position - mPosition, getAirGravityVec(), &distance);
     return !(distance.length() >= 84.0f);
@@ -483,15 +483,15 @@ bool Mario::isEnableSideHang() {
 void MarioHang::recordWallPolygon(const Triangle* pTriangle) {
     *_20 = *pTriangle;
     mWallSensor = pTriangle->mSensor;
-    TPos3f matrix;
+    Pos3f matrix;
     MR::makeMtxWithoutScale(&matrix, *_20->getBaseInvMtx());
     NebulaMtxMultVecSR(matrix.toMtxPtr(), _20->getNormal(0), &_28);
     _34 = *_20->getNormal(0);
 }
 
-void MarioHang::recordHangNorm(const TVec3f& rNormal) {
+void MarioHang::recordHangNorm(const Vec3f& rNormal) {
     _34 = rNormal;
-    TPos3f matrix;
+    Pos3f matrix;
     MR::makeMtxWithoutScale(&matrix, *_20->getBaseInvMtx());
     NebulaMtxMultVecSR(matrix.toMtxPtr(), &rNormal, &_28);
 }
@@ -539,10 +539,10 @@ bool MarioHang::start() {
 
 bool MarioHang::update() {
     getPlayer()->mDrawStates._A = false;
-    TPos3f matrix;
+    Pos3f matrix;
     matrix.identity();
     MR::makeMtxWithoutScale(&matrix, *_20->getBaseMtx());
-    TVec3f normal;
+    Vec3f normal;
     NebulaMtxMultVecSR(matrix.toMtxPtr(), &_28, &normal);
     getPlayer()->setFrontVecKeepUp(-normal);
     _34 = normal;
@@ -569,7 +569,7 @@ bool MarioHang::update() {
         }
     } else {
         if (getPlayer()->mMovementStates._1A && _14 > 2) {
-            TVec3f movement(mActor->getLastMove());
+            Vec3f movement(mActor->getLastMove());
             if (movement.dot(getPlayer()->getSideWallNorm()) < 0.0f) {
                 _1C = 1;
             }
@@ -796,8 +796,8 @@ void MarioHang::tryClimb(bool jump) {
     _14 = 0;
 }
 bool MarioHang::postureCtrl(MtxPtr pMatrix) {
-    TVec3f up;
-    TVec3f direction(getPlayer()->mHeadVec);
+    Vec3f up;
+    Vec3f direction(getPlayer()->mHeadVec);
     direction += _34;
     if (MR::isNearZero(direction)) {
         return false;
@@ -808,7 +808,7 @@ bool MarioHang::postureCtrl(MtxPtr pMatrix) {
             return false;
         }
 
-        MR::makeMtxFrontUp(reinterpret_cast< TPos3f* >(pMatrix), -_34, getPlayer()->_368);
+        MR::makeMtxFrontUp(reinterpret_cast< Pos3f* >(pMatrix), -_34, getPlayer()->_368);
     } else {
         f32 blend = MR::clamp(_14 / 30.0f, 0.0f, 1.0f);
         MR::vecBlendSphere(getPlayer()->_368, getPlayer()->mHeadVec, &up, blend);
@@ -816,7 +816,7 @@ bool MarioHang::postureCtrl(MtxPtr pMatrix) {
             return false;
         }
 
-        MR::makeMtxFrontUp(reinterpret_cast< TPos3f* >(pMatrix), -_34, up);
+        MR::makeMtxFrontUp(reinterpret_cast< Pos3f* >(pMatrix), -_34, up);
     }
 
     return true;

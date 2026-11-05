@@ -172,7 +172,7 @@ namespace MR {
         showMaterial(getJ3DModel(pActor), pMaterialName);
     }
 
-    void calcFogStartEnd(TVec3f vec, f32 f1, f32* pFogStart, f32* pFogEnd) {
+    void calcFogStartEnd(Vec3f vec, f32 f1, f32* pFogStart, f32* pFogEnd) {
         Vec multVec;
         NebulaMtxMultVec(j3dSys.mViewMtx, vec, &multVec);
 
@@ -443,18 +443,18 @@ namespace MR {
         return maxNum;
     }
 
-    void calcModelBoundingBox(TBox3f* pOut, const LiveActor* pActor) {
+    void calcModelBoundingBox(Box3f* pOut, const LiveActor* pActor) {
         s32 jointNum = getJointNum(pActor);
         for (u16 i = 0; i < jointNum; i++) {
-            TPos3f jointMtx;
-            TBox3f bounds;
+            Pos3f jointMtx;
+            Box3f bounds;
             J3DJoint* pJoint = getJoint(pActor, i);
-            TVec3f jointMin(*pJoint->getMin());
-            TVec3f jointMax(*pJoint->getMax());
+            Vec3f jointMin(*pJoint->getMin());
+            Vec3f jointMax(*pJoint->getMax());
             jointMtx.setInline(getJointMtx(pActor, i));
-            TVec3f translation;
+            Vec3f translation;
             jointMtx.getTrans(translation);
-            TVec3f scale;
+            Vec3f scale;
             jointMtx.getScale(scale);
             jointMin.mul(scale);
             jointMax.mul(scale);
@@ -472,12 +472,12 @@ namespace MR {
 
     void calcModelBoundingRadius(f32* pOut, const LiveActor* pActor) {
         MR::getJointNum(pActor);
-        TBox3f boundingBox;
+        Box3f boundingBox;
         calcModelBoundingBox(&boundingBox, pActor);
-        TVec3f i = boundingBox.i;
-        TVec3f f = boundingBox.f;
+        Vec3f i = boundingBox.i;
+        Vec3f f = boundingBox.f;
 
-        TVec3f max;
+        Vec3f max;
         max.set(MR::max(MR::abs(i.x), MR::abs(f.x)), MR::max(MR::abs(i.y), MR::abs(f.y)), MR::max(MR::abs(i.z), MR::abs(f.z)));
 
         *pOut = max.length();

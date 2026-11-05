@@ -14,7 +14,7 @@ void CameraSpiral::reset() {
 
 
 CameraTargetObj* CameraSpiral::calc() {
-    TVec3f watchPoint;
+    Vec3f watchPoint;
     CameraLocalUtil::makeWatchPoint(&watchPoint, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
 
     const s32 timer = mTimer;
@@ -43,13 +43,13 @@ CameraTargetObj* CameraSpiral::calc() {
     f32 angle = mAngleEnd * rate + mAngleStart * invrate;
     f32 dist = mDistEnd * rate + mDistStart * invrate;
 
-    TVec3f spiralDir(MR::sin(angle), 0.0f, MR::cos(angle));
-    TVec3f offset = spiralDir * dist + TVec3f(0.0f, offsetY, 0.0f);
+    Vec3f spiralDir(MR::sin(angle), 0.0f, MR::cos(angle));
+    Vec3f offset = spiralDir * dist + Vec3f(0.0f, offsetY, 0.0f);
 
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.identity();
-    const TVec3f& rSide = CameraLocalUtil::getTarget(this)->getSideVec();
-    TPos3f* const pMtx = &mtx;
+    const Vec3f& rSide = CameraLocalUtil::getTarget(this)->getSideVec();
+    Pos3f* const pMtx = &mtx;
     pMtx->setXDir(rSide);
     pMtx->setYDir(CameraLocalUtil::getTarget(this)->getUpVec());
     pMtx->setZDir(CameraLocalUtil::getTarget(this)->getFrontVec());
@@ -57,14 +57,14 @@ CameraTargetObj* CameraSpiral::calc() {
     pMtx->mult33(offset);
     pMtx->mult33(spiralDir);
 
-    TVec3f pos;
+    Vec3f pos;
     pos.add(watchPoint, offset);
     MR::normalize(&offset);
 
-    TQuat4f rot;
+    Quat4f rot;
     rot.setRotate(spiralDir, offset);
 
-    TVec3f up;
+    Vec3f up;
     rot.transform(CameraLocalUtil::getTarget(this)->getUpVec(), up);
 
     CameraLocalUtil::setPos(this, pos);

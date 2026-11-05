@@ -11,7 +11,7 @@ public:
 
     virtual void init(const JMapInfoIter& rIter);
 
-    void setMtx(MtxPtr pMatrix, const TVec3f& rSize, f32 offset);
+    void setMtx(MtxPtr pMatrix, const Vec3f& rSize, f32 offset);
     void setSurfaceAndSync(s32 surface);
     void setSurface(s32 surface);
     void invalidate();
@@ -20,7 +20,7 @@ public:
     u8 _120[4];
     AreaForm* mForm;
     MtxPtr _128;
-    TVec3f _12C;
+    Vec3f _12C;
     f32 _138;
 };
 
@@ -33,11 +33,11 @@ public:
     virtual void init(const JMapInfoIter& rIter);
     virtual void movement();
 
-    bool hitCheck(const TVec3f& rPos, f32 radius, TVec3f* pPoint, TVec3f* pNormal);
+    bool hitCheck(const Vec3f& rPos, f32 radius, Vec3f* pPoint, Vec3f* pNormal);
 
     u32 _3C;
     f32 _40;
-    TVec3f _44;
+    Vec3f _44;
     s32 _50;
     s32 _54;
     bool _58;

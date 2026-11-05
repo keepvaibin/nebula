@@ -28,15 +28,15 @@ void ClippingJudge::movement() {
     }
 }
 
-bool ClippingJudge::isJudgedToClipFrustum(const TVec3f& rVec, f32 a2) const {
+bool ClippingJudge::isJudgedToClipFrustum(const Vec3f& rVec, f32 a2) const {
     return !mFrustum.mayIntersectBall3(rVec, a2);
 }
 
-bool ClippingJudge::isJudgedToClipFrustum(const TVec3f& rVec, f32 a2, s32 index) const {
+bool ClippingJudge::isJudgedToClipFrustum(const Vec3f& rVec, f32 a2, s32 index) const {
     return (!index) ? !mFrustum.mayIntersectBall3(rVec, a2) : !mClipFrustums[index].mayIntersectBall3(rVec, a2);
 }
 
-void ClippingJudge::calcViewingVolume(THex3f* pVolume, f32 farClip) {
+void ClippingJudge::calcViewingVolume(Hex3f* pVolume, f32 farClip) {
     f32 nearClip = 500.0f;
     if (MR::isSubjectiveCameraOnForObjClipping()) {
         nearClip = 100.0f;
@@ -44,18 +44,18 @@ void ClippingJudge::calcViewingVolume(THex3f* pVolume, f32 farClip) {
 
     f32 aspect = MR::getAspect();
     f32 fovy = MR::getRenderFovy();
-    TPos3f cameraMtx;
+    Pos3f cameraMtx;
     cameraMtx.setPositionFromLookAt(MR::getCameraViewMtx());
-    f32 height = nearClip * static_cast< f32 >(tan(fovy * (JGeometry::TUtil< f32 >::PI() / 360.0f)));
+    f32 height = nearClip * static_cast< f32 >(tan(fovy * (FloatUtil::PI() / 360.0f)));
     f32 width = aspect * height;
 
-    TVec3f front;
+    Vec3f front;
     cameraMtx.getZDir(front);
-    TVec3f position;
-    TVec3f bottomRight(width, -height, nearClip);
-    TVec3f topRight(width, height, nearClip);
-    TVec3f topLeft(-width, height, nearClip);
-    TVec3f bottomLeft(-width, -height, nearClip);
+    Vec3f position;
+    Vec3f bottomRight(width, -height, nearClip);
+    Vec3f topRight(width, height, nearClip);
+    Vec3f topLeft(-width, height, nearClip);
+    Vec3f bottomLeft(-width, -height, nearClip);
     cameraMtx.getTrans(position);
     cameraMtx.mult(topRight, topRight);
     cameraMtx.mult(topLeft, topLeft);
@@ -67,9 +67,9 @@ void ClippingJudge::calcViewingVolume(THex3f* pVolume, f32 farClip) {
     pVolume->mPlanes[2].set(position, bottomRight, bottomLeft);
     pVolume->mPlanes[0].set(position, bottomLeft, topLeft);
 
-    TVec3f back;
+    Vec3f back;
     back.negate(front);
-    TVec3f planePosition;
+    Vec3f planePosition;
     planePosition.scaleAdd(farClip, front, position);
     pVolume->mPlanes[5].set(back, planePosition);
     planePosition.scaleAdd(nearClip, front, position);

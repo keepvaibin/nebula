@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class Polta;
 class PoltaArm;
@@ -37,12 +37,12 @@ namespace PoltaFunction {
     bool isMaxGenerateBombTeresa(Polta* pPolta);
     s32 getCountDeadGroundRock(Polta* pPolta);
     bool appearGroundRock(Polta* pPolta, f32 distance, f32 angle);
-    bool appearRockCircle(Polta* pPolta, const TVec3f& rCenter, f32 radius, s32 index, s32 count, s32 rockType);
-    bool appearWhiteRockCircle(Polta* pPolta, const TVec3f& rCenter, f32 radius, s32 index, s32 count);
-    bool appearBlackRockCircle(Polta* pPolta, const TVec3f& rCenter, f32 radius, s32 index, s32 count);
-    bool appearYellowRockCircle(Polta* pPolta, const TVec3f& rCenter, f32 radius, s32 index, s32 count);
+    bool appearRockCircle(Polta* pPolta, const Vec3f& rCenter, f32 radius, s32 index, s32 count, s32 rockType);
+    bool appearWhiteRockCircle(Polta* pPolta, const Vec3f& rCenter, f32 radius, s32 index, s32 count);
+    bool appearBlackRockCircle(Polta* pPolta, const Vec3f& rCenter, f32 radius, s32 index, s32 count);
+    bool appearYellowRockCircle(Polta* pPolta, const Vec3f& rCenter, f32 radius, s32 index, s32 count);
     bool appearBombTeresaFromRoot(Polta* pPolta, f32 param2, f32 param3, s32 param4);
-    bool appearBombTeresaNormal(Polta* pPolta, const TVec3f& rPosition, const TVec3f& rVelocity);
+    bool appearBombTeresaNormal(Polta* pPolta, const Vec3f& rPosition, const Vec3f& rVelocity);
     void disperseBombTeresa(Polta* pPolta);
     void breakGroundRock(Polta* pPolta);
     void killBombTeresa(Polta* pPolta);

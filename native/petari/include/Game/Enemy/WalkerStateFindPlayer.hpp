@@ -16,7 +16,7 @@ public:
 
 class WalkerStateFindPlayer : public ActorStateBase< LiveActor > {
 public:
-    WalkerStateFindPlayer(LiveActor* pHost, TVec3f* pPosition, WalkerStateParam* pStateParam, WalkerStateFindPlayerParam* pFindPlayerParam);
+    WalkerStateFindPlayer(LiveActor* pHost, Vec3f* pPosition, WalkerStateParam* pStateParam, WalkerStateFindPlayerParam* pFindPlayerParam);
 
     virtual void appear();
 
@@ -28,7 +28,7 @@ public:
     bool isFindJumpBegin() const;
     bool isLandStart() const;
 
-    TVec3f* mDirection;
+    Vec3f* mDirection;
     WalkerStateParam* mStateParam;
     WalkerStateFindPlayerParam* mFindPlayerParam;
 };

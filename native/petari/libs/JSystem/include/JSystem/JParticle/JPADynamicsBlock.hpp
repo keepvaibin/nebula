@@ -1,6 +1,6 @@
 #pragma once
 
-#include "JSystem/JGeometry/TVec.hpp"
+#include <nebula_geometry.hpp>
 
 struct JPAEmitterWorkData;
 
@@ -11,9 +11,9 @@ struct JPADynamicsBlockData {
 
     u32 mFlags;
     u32 mResUserWork;
-    JGeometry::TVec3< f32 > mEmitterScl;
-    JGeometry::TVec3< f32 > mEmitterTrs;
-    JGeometry::TVec3< f32 > mEmitterDir;
+    Vec3f mEmitterScl;
+    Vec3f mEmitterTrs;
+    Vec3f mEmitterDir;
     f32 mInitialVelOmni;
     f32 mInitialVelAxis;
     f32 mInitialVelRndm;
@@ -27,7 +27,7 @@ struct JPADynamicsBlockData {
     f32 mVolumeMinRad;
     f32 mAirResist;
     f32 mMoment;
-    JGeometry::TVec3< s16 > mEmitterRot;
+    Vec3< s16 > mEmitterRot;
     s16 mMaxFrame;
     s16 mStartFrame;
     s16 mLifeTime;
@@ -74,16 +74,16 @@ public:
     f32 getRateRndm() const {
         return mpData->mRateRndm;
     }
-    void getEmitterScl(JGeometry::TVec3< f32 >* vec) const {
+    void getEmitterScl(Vec3f* vec) const {
         vec->set(mpData->mEmitterScl.x, mpData->mEmitterScl.y, mpData->mEmitterScl.z);
     }
-    void getEmitterTrs(JGeometry::TVec3< f32 >* vec) const {
+    void getEmitterTrs(Vec3f* vec) const {
         vec->set(mpData->mEmitterTrs.x, mpData->mEmitterTrs.y, mpData->mEmitterTrs.z);
     }
-    void getEmitterDir(JGeometry::TVec3< f32 >* vec) const {
+    void getEmitterDir(Vec3f* vec) const {
         vec->set(mpData->mEmitterDir.x, mpData->mEmitterDir.y, mpData->mEmitterDir.z);
     }
-    void getEmitterRot(JGeometry::TVec3< s16 >* vec) const {
+    void getEmitterRot(Vec3< s16 >* vec) const {
         vec->set(mpData->mEmitterRot.x, mpData->mEmitterRot.y, mpData->mEmitterRot.z);
     }
     s16 getMaxFrame() {

@@ -78,16 +78,16 @@ bool MapPartsSeesaw2AxisRotator::receiveMsg(u32 msg) {
 }
 
 void MapPartsSeesaw2AxisRotator::rotate() {
-    TVec3f position(*MR::getPlayerPos());
+    Vec3f position(*MR::getPlayerPos());
     mBaseMtxInv.mult(position, position);
     f32 distance = position.length();
-    TVec3f axis;
+    Vec3f axis;
     axis.cross(mUp, position);
     MR::normalize(&axis);
-    TPos3f tilt;
+    Pos3f tilt;
     tilt.identity();
     tilt.setRotate(axis, MR::toRadian(mRotateAngle));
-    TPos3f target;
+    Pos3f target;
     target.concat(mBaseMtx, tilt);
     target.zeroTrans();
 
@@ -104,7 +104,7 @@ void MapPartsSeesaw2AxisRotator::rotate() {
 
 void MapPartsSeesaw2AxisRotator::restoreMove() {
     f32 speed = MR::clamp(0.0001f * mRestoreForce, 0.0f, 1.0f);
-    TPos3f target;
+    Pos3f target;
     target.set(mBaseMtx);
     target.zeroTrans();
     MR::blendMtxRotate(mRotateMtx.toMtxPtr(), target.toMtxPtr(), speed, mRotateMtx.toMtxPtr());

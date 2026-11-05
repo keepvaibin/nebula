@@ -23,5 +23,5 @@ public:
 private:
     AnimScaleController* mScaleController;
     WalkerStateBindStarPointer* mStateBindStarPointer;
-    TVec3f mRailClipping;
+    Vec3f mRailClipping;
 };

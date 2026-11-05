@@ -6,10 +6,10 @@
 
 void Mario::set25Dmode(const AreaObj* pArea) {
     Mtx matrix;
-    TVec3f rotation;
+    Vec3f rotation;
     MR::calcCubeRotate(pArea, &rotation);
-    TVec3f normal(0.0f, 0.0f, 1.0f);
-    TVec3f up(0.0f, 1.0f, 0.0f);
+    Vec3f normal(0.0f, 0.0f, 1.0f);
+    Vec3f up(0.0f, 1.0f, 0.0f);
     MR::makeMtxTR(matrix, 0.0f, 0.0f, 0.0f, rotation.x, rotation.y, rotation.z);
     NebulaMtxMultVec(matrix, &normal, &normal);
     NebulaMtxMultVec(matrix, &up, &up);
@@ -21,7 +21,7 @@ void Mario::set25Dmode(const AreaObj* pArea) {
 }
 
 void Mario::update25Dmode() {
-    TVec3f up;
+    Vec3f up;
     MR::vecKillElement(-*getGravityVec(), _6D0, &up);
     MR::normalizeOrZero(&up);
     if (MR::isNearZero(up)) {
@@ -78,7 +78,7 @@ void Mario::update25Dmode() {
         _6AC = mode;
         mMovementStates._3B = true;
     } else {
-        TVec2f stick(mStickPos.x, mStickPos.y);
+        Vec2f stick(mStickPos.x, mStickPos.y);
         if (MR::diffAngleAbs(_6C8, stick) >= 0.7853982f) {
             _6AC = mode;
             _6C8.set(mStickPos.x, mStickPos.y);
@@ -91,11 +91,11 @@ void Mario::updateAxisFromMode(u8 mode) {
         return;
     }
 
-    TVec3f side;
-    TVec3f normal;
+    Vec3f side;
+    Vec3f normal;
     if (mode < 4) {
-        TVec3f up;
-        TVec3f planeUp;
+        Vec3f up;
+        Vec3f planeUp;
         MR::vecKillElement(-*getGravityVec(), _6D0, &up);
         MR::vecKillElement(_6DC, _6D0, &planeUp);
         MR::normalizeOrZero(&up);
@@ -139,14 +139,14 @@ void Mario::updateAxisFromMode(u8 mode) {
                 break;
             }
         } else {
-            TVec3f axis;
+            Vec3f axis;
             axis.cross(up, planeUp);
             MR::normalize(&axis);
             if (axis.dot(_6D0) < 0.0f) {
                 axis = -axis;
             }
 
-            TVec3f tangent;
+            Vec3f tangent;
             tangent.cross(axis, up);
             MR::normalize(&tangent);
             switch (mode) {
@@ -174,6 +174,6 @@ void Mario::updateAxisFromMode(u8 mode) {
     _6BC = -normal;
 }
 
-void Mario::calcMoveDir25D(f32 x, f32 y, TVec3f* pDirection) {
+void Mario::calcMoveDir25D(f32 x, f32 y, Vec3f* pDirection) {
     *pDirection = _6B0 * x - _6BC * y;
 }

@@ -49,7 +49,7 @@ RemovableTurtle::RemovableTurtle(LiveActor* pHost, bool isGolden) {
     }
 
     mShellModel->_99 = true;
-    mShellModel->initFixedPosition(TVec3f(-5.85f, -68.0f, 30.0f), TVec3f(0.0f, 0.0f, 0.0f), nullptr);
+    mShellModel->initFixedPosition(Vec3f(-5.85f, -68.0f, 30.0f), Vec3f(0.0f, 0.0f, 0.0f), nullptr);
     mShellModel->initWithoutIter();
     mShellModel->makeActorDead();
 
@@ -92,7 +92,7 @@ void Penguin::init(const JMapInfoIter& rIter) {
     MR::initLightCtrl(this);
 
     initHitSensor(1);
-    MR::addHitSensorMtxNpc(this, "push", 8, 80.0f, MR::getJointMtx(this, "CenterJoint"), TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorMtxNpc(this, "push", 8, 80.0f, MR::getJointMtx(this, "CenterJoint"), Vec3f(0.0f, 0.0f, 0.0f));
 
     initEffectKeeper(0, nullptr, false);
     initSound(4, false);
@@ -100,7 +100,7 @@ void Penguin::init(const JMapInfoIter& rIter) {
     MR::initShadowVolumeSphere(this, 50.0f);
     MR::onCalcShadowOneTime(this, nullptr);
 
-    initTalkCtrl(rIter, "Penguin", TVec3f(0.0f, 150.0f, 0.0f), nullptr);
+    initTalkCtrl(rIter, "Penguin", Vec3f(0.0f, 150.0f, 0.0f), nullptr);
 
     NPCActorCaps caps("");
     caps.mLodCtrl = true;
@@ -188,8 +188,8 @@ void Penguin::initAfterPlacement() {
         MR::calcGravity(this);
         MR::turnQuatYDirRad(&_A0, _A0, -mGravity, PI);
 
-        TVec3f pos;
-        TVec3f grav = mGravity;
+        Vec3f pos;
+        Vec3f grav = mGravity;
         Triangle triangle;
         if (MR::getFirstPolyOnLineToWaterSurface(&pos, &triangle, mPosition - grav * 100.0f, grav * 500.0f)) {
             mPosition.set(pos);

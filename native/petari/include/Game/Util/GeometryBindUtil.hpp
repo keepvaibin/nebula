@@ -1,30 +1,30 @@
 #pragma once
 
-#include <JSystem/JGeometry.hpp>
+#include <nebula_geometry.hpp>
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 
 class BindSphere {
 public:
-    BindSphere(const TVec3f& rPosition, f32 radius);
+    BindSphere(const Vec3f& rPosition, f32 radius);
 
     f32 getRadius() const {
         return mRadius;
     }
 
-    TVec3f mPosition;
+    Vec3f mPosition;
     f32 mRadius;
 };
 
 class BindCone {
 public:
-    BindCone(const TVec3f& rPosition, const TVec3f& rDirection, f32 height, f32 radius);
+    BindCone(const Vec3f& rPosition, const Vec3f& rDirection, f32 height, f32 radius);
 
-    bool isInPoint(const TVec3f& rPoint) const;
+    bool isInPoint(const Vec3f& rPoint) const;
     void calcVertexPosition();
     void calcGeneratrixLength();
-    void setPosition(const TVec3f& rPosition);
-    void setDirection(const TVec3f& rDirection);
+    void setPosition(const Vec3f& rPosition);
+    void setDirection(const Vec3f& rDirection);
 
     f32 getRadius() const {
         return mRadius;
@@ -34,9 +34,9 @@ public:
         return mGeneratrixLength;
     }
 
-    TVec3f mPosition;
-    TVec3f mVertex;
-    TVec3f mDirection;
+    Vec3f mPosition;
+    Vec3f mVertex;
+    Vec3f mDirection;
     f32 mHeight;
     f32 mRadius;
     f32 mGeneratrixLength;
@@ -47,13 +47,13 @@ public:
     BindResult() : mPosition(0, 0, 0), mNormal(0, 0, 0), mContactPosition(0, 0, 0), mIsBound() {
     }
 
-    TVec3f mPosition;
-    TVec3f mNormal;
-    TVec3f mContactPosition;
+    Vec3f mPosition;
+    Vec3f mNormal;
+    Vec3f mContactPosition;
     bool mIsBound;
 };
 
 namespace MR {
-    bool bindSpereToCone(BindResult* pResult, const TVec3f& rMovement, const BindSphere& rSphere, const BindCone& rCone);
-    void updateBindPositionAndVelocity(TVec3f* pPosition, TVec3f* pVelocity, const BindResult& rResult, f32 factor);
+    bool bindSpereToCone(BindResult* pResult, const Vec3f& rMovement, const BindSphere& rSphere, const BindCone& rCone);
+    void updateBindPositionAndVelocity(Vec3f* pPosition, Vec3f* pVelocity, const BindResult& rResult, f32 factor);
 };  // namespace MR

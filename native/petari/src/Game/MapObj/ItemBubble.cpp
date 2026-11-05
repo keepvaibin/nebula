@@ -36,7 +36,7 @@ void ItemBubble::init(const JMapInfoIter& rIter) {
     NebulaMtxCopy(_9C, _CC);
     _108 = mPosition;
     initHitSensor(1);
-    MR::addHitSensorMapObj(this, "body", 8, mScale.x * ::cHitSensorRadius, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorMapObj(this, "body", 8, mScale.x * ::cHitSensorRadius, Vec3f(0.0f, 0.0f, 0.0f));
     initEffectKeeper(0, nullptr, false);
     initSound(4, false);
     initNerve(GET_NERVE(ItemBubble, ItemBubbleNrvWait));
@@ -67,16 +67,16 @@ void ItemBubble::init(const JMapInfoIter& rIter) {
 
             switch (itemCount) {
             case 1:
-                _90[i]->initFixedPosition(_CC, TVec3f(0.0f, -67.379997f, 0.0f), TVec3f(0.0f, 0.0f, 0.0f));
+                _90[i]->initFixedPosition(_CC, Vec3f(0.0f, -67.379997f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
                 continue;
             case 2:
 
                 switch (i) {
                 case 0:
-                    _90[i]->initFixedPosition(_CC, TVec3f(-55.66f, -92.290001f, 0.0f), TVec3f(0.0f, 0.0f, 0.0f));
+                    _90[i]->initFixedPosition(_CC, Vec3f(-55.66f, -92.290001f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
                     continue;
                 case 1:
-                    _90[i]->initFixedPosition(_CC, TVec3f(55.66f, -43.950001f, 0.0f), TVec3f(0.0f, 0.0f, 0.0f));
+                    _90[i]->initFixedPosition(_CC, Vec3f(55.66f, -43.950001f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
                     continue;
                 }
 
@@ -85,13 +85,13 @@ void ItemBubble::init(const JMapInfoIter& rIter) {
 
                 switch (i) {
                 case 0:
-                    _90[i]->initFixedPosition(_CC, TVec3f(0.0f, -19.040001f, 0.0f), TVec3f(0.0f, 0.0f, 0.0f));
+                    _90[i]->initFixedPosition(_CC, Vec3f(0.0f, -19.040001f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
                     continue;
                 case 1:
-                    _90[i]->initFixedPosition(_CC, TVec3f(-55.66f, -130.37f, 0.0f), TVec3f(0.0f, 0.0f, 0.0f));
+                    _90[i]->initFixedPosition(_CC, Vec3f(-55.66f, -130.37f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
                     continue;
                 case 2:
-                    _90[i]->initFixedPosition(_CC, TVec3f(67.379997f, -130.37f, 0.0f), TVec3f(0.0f, 0.0f, 0.0f));
+                    _90[i]->initFixedPosition(_CC, Vec3f(67.379997f, -130.37f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
                     continue;
                 }
 
@@ -109,7 +109,7 @@ void ItemBubble::init(const JMapInfoIter& rIter) {
 
             switch (itemCount) {
             case 1:
-                _90[i]->initFixedPosition(_CC, TVec3f(0.0f, 0.0f, 0.0f), TVec3f(0.0f, 0.0f, 0.0f));
+                _90[i]->initFixedPosition(_CC, Vec3f(0.0f, 0.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
                 continue;
             }
 
@@ -127,12 +127,12 @@ void ItemBubble::init(const JMapInfoIter& rIter) {
     }
 
     if ((itemType == 0 && itemCount > 3) || (itemType == 1 && itemCount > 1)) {
-        TVec3f vec3;
-        TVec3f vec(0.0f, 60.0f, 0.0f);
-        TVec3f vec2;
+        Vec3f vec3;
+        Vec3f vec(0.0f, 60.0f, 0.0f);
+        Vec3f vec2;
         vec2.zero();
 
-        TRot3f mtx;
+        Rot3f mtx;
         NebulaMtxRotRad(mtx, (char)90, TWO_PI / static_cast< f32 >(itemCount));
 
         if (itemType == 0) {
@@ -168,11 +168,11 @@ void ItemBubble::init(const JMapInfoIter& rIter) {
 }
 
 void ItemBubble::initAfterPlacement() {
-    TVec3f grav;
+    Vec3f grav;
     MR::calcGravityVector(this, &grav, nullptr, 0);
-    TPos3f mtx;
+    Pos3f mtx;
     MR::makeMtxRotate(mtx, mRotation);
-    TVec3f vec;
+    Vec3f vec;
     mtx.getZDir(vec);
 
     if (mUseRail) {
@@ -191,7 +191,7 @@ void ItemBubble::kill() {
     }
 
     if (mItemCount != 0) {
-        TVec3f grav;
+        Vec3f grav;
         MR::calcGravityVector(this, &grav, nullptr, 0);
 
         for (u32 i = 0; i < mItemCount; i++) {
@@ -216,7 +216,7 @@ void ItemBubble::kill() {
 }
 
 void ItemBubble::calcAndSetBaseMtx() {
-    TVec3f camPos = MR::getCamPos();
+    Vec3f camPos = MR::getCamPos();
     camPos.sub(mPosition);
 
     if (MR::isNearZero(camPos)) {
@@ -224,16 +224,16 @@ void ItemBubble::calcAndSetBaseMtx() {
     }
 
     MR::normalize(&camPos);
-    TVec3f YDir(MR::getCamYdir());
-    TVec3f camcross(YDir.cross(camPos));
+    Vec3f YDir(MR::getCamYdir());
+    Vec3f camcross(YDir.cross(camPos));
 
     if (MR::isNearZero(camcross)) {
         return;
     }
 
     MR::normalize(&camcross);
-    reinterpret_cast< TPos3f* >(getBaseMtx())->setXYZDir(camcross, YDir, camPos);
-    reinterpret_cast< TPos3f* >(getBaseMtx())->setTrans(mPosition);
+    reinterpret_cast< Pos3f* >(getBaseMtx())->setXYZDir(camcross, YDir, camPos);
+    reinterpret_cast< Pos3f* >(getBaseMtx())->setTrans(mPosition);
 }
 
 void ItemBubble::exeWait() {
@@ -261,7 +261,7 @@ void ItemBubble::exeWait() {
     MtxPtr pMtx = MR::tmpMtxRotZDeg(mRotation.z);
     MR::multMtx(_9C, pMtx, _9C);
 
-    mPosition = _108 + TVec3f(0.0f, 1.0f, 0.0f).multInLine2(_8C).multInLine2(30.0f);
+    mPosition = _108 + Vec3f(0.0f, 1.0f, 0.0f).multInLine2(_8C).multInLine2(30.0f);
 
     MR::setMtxTrans(_9C, mPosition.x, mPosition.y, mPosition.z);
 

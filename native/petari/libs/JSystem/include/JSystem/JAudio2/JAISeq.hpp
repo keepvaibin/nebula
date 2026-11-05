@@ -37,7 +37,7 @@ public:
     virtual bool JAISound_tryDie_();
 
     JAISeq(JAISeqMgr* seqMgr, JAISoundStrategyMgr< JAISeq >* soundStrategyMgr);
-    void JAISeqMgr_startID_(JAISoundID id, const TVec3f* posPtr, JAIAudience* audience, int category, int);
+    void JAISeqMgr_startID_(JAISoundID id, const Vec3f* posPtr, JAIAudience* audience, int category, int);
     void playSeqData_(const JASSoundParams& params, JAISoundActivity activity);
     void reserveChildTracks_(int);
     void releaseChildTracks_();

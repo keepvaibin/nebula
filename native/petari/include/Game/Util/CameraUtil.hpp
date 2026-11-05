@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class LiveActor;
 class ActorCameraInfo;
@@ -9,41 +9,41 @@ class NameObj;
 class JMapInfoIter;
 
 namespace MR {
-    bool calcScreenPosition(TVec2f*, const TVec3f&);
-    bool calcScreenPosition(TVec3f*, const TVec3f&);
-    bool calcNormalizedScreenPosition(TVec3f*, const TVec3f&);
-    bool calcNormalizedScreenPositionFromView(TVec3f*, const TVec3f&);
-    bool calcWorldPositionFromScreen(TVec3f*, const TVec2f&, f32);
-    bool calcWorldPositionFromCenterScreen(TVec3f*, const TVec2f&, f32);
-    bool calcWorldRayDirectionFromScreen(TVec3f*, const TVec2f&);
+    bool calcScreenPosition(Vec2f*, const Vec3f&);
+    bool calcScreenPosition(Vec3f*, const Vec3f&);
+    bool calcNormalizedScreenPosition(Vec3f*, const Vec3f&);
+    bool calcNormalizedScreenPositionFromView(Vec3f*, const Vec3f&);
+    bool calcWorldPositionFromScreen(Vec3f*, const Vec2f&, f32);
+    bool calcWorldPositionFromCenterScreen(Vec3f*, const Vec2f&, f32);
+    bool calcWorldRayDirectionFromScreen(Vec3f*, const Vec2f&);
 
-    f32 calcCameraDistanceZ(const TVec3f&);
+    f32 calcCameraDistanceZ(const Vec3f&);
     void loadProjectionMtx();
     // The scene's opaque surfaces are drawn: tells the renderer, with the camera's projection and the screen.
     void sceneOpaqueEnd();
     void loadViewMtx();
-    const TPos3f& getCameraViewMtx();
-    const TPos3f& getCameraInvViewMtx();
-    const TProj3f& getCameraProjectionMtx();
+    const Pos3f& getCameraViewMtx();
+    const Pos3f& getCameraInvViewMtx();
+    const Proj3f& getCameraProjectionMtx();
 
     f32 getAspect();
     f32 getNearZ();
     f32 getFarZ();
     f32 getFovy();
     f32 getRenderFovy();  // CameraContext::getRenderFovy
-    void setCameraViewMtx(const TPos3f&, bool, bool, const TVec3f&);
+    void setCameraViewMtx(const Pos3f&, bool, bool, const Vec3f&);
     void setNearZ(f32);
     void setFovy(f32);
     void setShakeOffset(f32, f32);
-    const TVec3f getCamPos();
-    TVec3f getCamXdir();
-    TVec3f getCamYdir();
-    TVec3f getCamZdir();
+    const Vec3f getCamPos();
+    Vec3f getCamXdir();
+    Vec3f getCamYdir();
+    Vec3f getCamZdir();
 
     void createMirrorCamera();
     bool isExistMirrorCamera();
-    const TPos3f& getMirrorCameraViewMtx();
-    const TPos3f& getMirrorModelTexMtx();
+    const Pos3f& getMirrorCameraViewMtx();
+    const Pos3f& getMirrorModelTexMtx();
 
     void completeCameraParameters();
     void resetCameraMan();
@@ -67,7 +67,7 @@ namespace MR {
     void pauseOffAnimCamera(const ActorCameraInfo*, const char*);
 
     void declareBlackHoleCamera(const char*);
-    void startBlackHoleCamera(const char*, const TVec3f&, const TVec3f&);
+    void startBlackHoleCamera(const char*, const Vec3f&, const Vec3f&);
 
     void declareLauncherCamera();
     void endLauncherCamera();
@@ -81,13 +81,13 @@ namespace MR {
     void endSubjectiveCamera(s32);
 
     void declareEventCameraProgrammable(const char*);
-    void setProgrammableCameraParam(const char*, const TVec3f&, const TVec3f&, const TVec3f&, bool);
+    void setProgrammableCameraParam(const char*, const Vec3f&, const Vec3f&, const Vec3f&, bool);
     void setProgrammableCameraParamFovy(const char*, f32);
 
     u32 getEventCameraFrames(const ActorCameraInfo*, const char*);
 
     void declareCameraRegisterMtx(const NameObj*, u32, MtxPtr);
-    void declareCameraRegisterVec(const NameObj*, u32, TVec3f*);
+    void declareCameraRegisterVec(const NameObj*, u32, Vec3f*);
 
     void startStartPosCamera(bool);
     void endStartPosCamera();
@@ -105,13 +105,13 @@ namespace MR {
     bool isCameraPossibleToRoundRight();
     bool isCameraControlNG();
 
-    void startTalkCamera(const TVec3f&, const TVec3f&, f32, f32, s32);
+    void startTalkCamera(const Vec3f&, const Vec3f&, f32, f32, s32);
     void endTalkCamera(bool, s32);
 
     void pauseOnCameraDirector();
     void pauseOffCameraDirector();
 
-    const TVec3f& getCameraWatchPos();
+    const Vec3f& getCameraWatchPos();
 
     void zoomInTargetGameCamera();
     void zoomOutTargetGameCamera();

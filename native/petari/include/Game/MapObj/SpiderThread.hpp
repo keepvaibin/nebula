@@ -24,10 +24,10 @@ public:
     virtual void draw() const;
     virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 
-    void initThread(const TVec3f&);
-    void startActorBind(LiveActor*, const TVec3f**, const TVec3f**, const TVec3f**, const TVec3f&, const TVec3f&, s32);
-    bool touchActor(const TVec3f&, const TVec3f&);
-    void tryPush(const TVec3f&, f32);
+    void initThread(const Vec3f&);
+    void startActorBind(LiveActor*, const Vec3f**, const Vec3f**, const Vec3f**, const Vec3f&, const Vec3f&, s32);
+    bool touchActor(const Vec3f&, const Vec3f&);
+    void tryPush(const Vec3f&, f32);
     void stopAllPartsPoint();
     void cutSpiderThread();
     void initMainThreads();
@@ -35,7 +35,7 @@ public:
     void updatePointerInfo();
     void updateHangedPoint();
     void tryTouchPoint(s32);
-    void findNearestPointPos(const TVec3f**, const TVec3f**, s32*, s32*, const TVec3f&) const;
+    void findNearestPointPos(const Vec3f**, const Vec3f**, s32*, s32*, const Vec3f&) const;
     SpiderThreadHangInfo* findHangInfo(LiveActor*) const;
     void initDraw() const;
 
@@ -71,7 +71,7 @@ public:
     s32 mCutPointsBufferSize;
     s32 mNumCutPoints;
     SpiderThreadMainPoint** mCutPoints;
-    TVec3f mFront;
+    Vec3f mFront;
     SpiderThreadWindCtrl* mWindCtrl;
     bool mIsBloomOn;
     JUTTexture* mThreadTexture;
@@ -79,17 +79,17 @@ public:
 };
 
 namespace MR {
-    void initSpiderThread(const TVec3f&);
+    void initSpiderThread(const Vec3f&);
     void appearSpiderThread();
     void startSpiderThreadBattle();
     void startSpiderThreadChance();
     void startSpiderThreadBattleEnd();
     void pauseOffSpiderThread();
     f32 getSpiderThreadPosZ();
-    void startActorBindToSpiderThread(LiveActor*, const TVec3f**, const TVec3f**, const TVec3f**, const TVec3f&, const TVec3f&);
+    void startActorBindToSpiderThread(LiveActor*, const Vec3f**, const Vec3f**, const Vec3f**, const Vec3f&, const Vec3f&);
     bool sendMsgToSpiderThread(u32, HitSensor*);
-    bool touchActorToSpiderThread(const TVec3f&, const TVec3f&);
-    void tryPushSpiderThread(const TVec3f&, f32);
+    bool touchActorToSpiderThread(const Vec3f&, const Vec3f&);
+    void tryPushSpiderThread(const Vec3f&, f32);
     void onSpiderThreadBloom();
     void drawSpiderThreadBloom();
 };  // namespace MR

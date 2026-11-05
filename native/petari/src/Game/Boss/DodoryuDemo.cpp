@@ -42,7 +42,7 @@ namespace {
 
 namespace {
     void resetCastDisposition(Dodoryu* pDodoryu) {
-        TPos3f mtx;
+        Pos3f mtx;
 
         pDodoryu->killAllHillPieces();
         MR::findNamePos("\203\150\203\150\203\212\203\205\203\105\215\304\203\132\203\142\203\147" /* ドドリュウ再セット */, mtx.toMtxPtr());
@@ -80,7 +80,7 @@ void DodoryuDemoOpening::end() {
     MR::endAnimCamera(mHost, &mActorCameraInfo, "OpeningDemo", -1, true);
     MR::endDemo(mHost, "\203\150\203\150\203\212\203\205\203\105\212\112\216\156\203\146\203\202" /* ドドリュウ開始デモ */);
 
-    TPos3f playerResetMtx;
+    Pos3f playerResetMtx;
     mHost->getPlayerResetMtx(&playerResetMtx, 0);
     mHost->_150 = false;
 
@@ -222,14 +222,14 @@ bool DodoryuDemoOpening::tryFinish() {
 }
 
 void DodoryuDemoOpening::turnToRabbit() {
-    TVec3f rabbitDir;
+    Vec3f rabbitDir;
     mHost->calcRabbitDir(&rabbitDir);
-    TPos3f mtx(mHost->mBaseMtx);
-    TVec3f up;
+    Pos3f mtx(mHost->mBaseMtx);
+    Vec3f up;
     mtx.getZDir(up);
-    TVec3f front;
+    Vec3f front;
     mtx.getTrans(front);
-    TPos3f rotation;
+    Pos3f rotation;
     rotation.setRotate(up, rabbitDir);
     mtx.concat(rotation, mtx);
     mtx.setTrans(front);
@@ -288,7 +288,7 @@ void DodoryuDemoAppear::exePlay() {
         MR::startBossBGM(MR::BossBgmID_DodoryuA);
 
         Dodoryu* pHost = mHost;
-        TVec3f jointPos;
+        Vec3f jointPos;
         MR::copyJointPos(mHost, "Nose", &jointPos);
         MR::appearStarPiece(pHost, jointPos, 8, 20.0f, 40.0f, false);
 
@@ -348,7 +348,7 @@ void DodoryuDemoAngry::exePlay() {
         MR::startBossBGM(MR::BossBgmID_DodoryuB);
 
         Dodoryu* pHost = mHost;
-        TVec3f jointPos;
+        Vec3f jointPos;
         MR::copyJointPos(mHost, "Nose", &jointPos);
         MR::appearStarPiece(pHost, jointPos, 16, 20.0f, 40.0f, false);
 

@@ -68,7 +68,7 @@ void WarpCube::movement() {
     }
 
     if (mInvalidateTimer == 1) {
-        TVec3f pos;
+        Vec3f pos;
         MR::calcCubePos(this, &pos);
 
         if (MR::calcDistanceToPlayer(pos) < 300.0f) {
@@ -89,15 +89,15 @@ void WarpCube::draw() const {
     NativeShader::setDepth(material, true, NEBULA_COMPARE_LEQUAL, false);
     NativeShader::send(material);
 
-    TVec3f cubeRotate;
-    TVec3f up(0.0f, 1.0f, 0.0f);
+    Vec3f cubeRotate;
+    Vec3f up(0.0f, 1.0f, 0.0f);
     MR::calcCubeRotate(this, &cubeRotate);
 
     Mtx matrix;
     MR::makeMtxTR(matrix, 0.0f, 0.0f, 0.0f, cubeRotate.x, cubeRotate.y, cubeRotate.z);
     NebulaMtxMultVecSR(matrix, &up, &up);
 
-    TVec3f cubePos;
+    Vec3f cubePos;
     MR::calcCubePos(this, &cubePos);
 
     u32 flags = 0x1FFF0080;

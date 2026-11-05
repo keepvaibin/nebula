@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class CameraTargetMtx;
 class ModelObj;
@@ -33,12 +33,12 @@ public:
     bool trySpinUp(s32 step);
     void endBind(f32 ejectForce);
 
-    TVec3f mSide;
-    TVec3f mUp;
-    TVec3f mFront;
-    TPos3f mBaseMtx;
-    TVec3f mTargetUpVec;
-    TVec3f mWindDir;
+    Vec3f mSide;
+    Vec3f mUp;
+    Vec3f mFront;
+    Pos3f mBaseMtx;
+    Vec3f mTargetUpVec;
+    Vec3f mWindDir;
     f32 mWindDistance;
     s32 mWindSpinTimer;
     s32 mSpinsRemaining;

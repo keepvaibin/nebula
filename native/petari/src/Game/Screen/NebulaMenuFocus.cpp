@@ -23,7 +23,7 @@ namespace {
     struct Entry {
         ButtonPaneController* mButton;
         const void* mKey;
-        TVec2f mCentre;
+        Vec2f mCentre;
     };
 
     // Offered during a frame; at the next update they are the places the highlight can move to.
@@ -34,7 +34,7 @@ namespace {
 
     const void* sFocus = nullptr;  // the button or target highlighted
     bool sActive = false;
-    TVec2f sPointerAnchor(0.0f, 0.0f);  // where the pointer was when the D-pad or stick took over
+    Vec2f sPointerAnchor(0.0f, 0.0f);  // where the pointer was when the D-pad or stick took over
     NebulaMenuFocus::Repeat sRepeat = {NebulaMenuFocus::Direction_None, 0};
     bool sHadEntries = false;
     s32 sGapFrames = 0;
@@ -58,7 +58,7 @@ namespace {
     }
 
     // The centre in layout space (y up): a button's bounding pane from its last calculated matrix, or the target's own.
-    bool getCentre(const Entry& rEntry, TVec2f* pCentre) {
+    bool getCentre(const Entry& rEntry, Vec2f* pCentre) {
         if (rEntry.mButton == nullptr) {
             *pCentre = rEntry.mCentre;
             return true;
@@ -110,7 +110,7 @@ namespace {
             }
         }
         for (s32 i = 0; i < sEntryCount; i++) {
-            TVec2f centre;
+            Vec2f centre;
             if (!getCentre(sEntries[i], &centre)) {
                 continue;
             }
@@ -128,7 +128,7 @@ namespace {
     // The nearest place in the pressed direction: distance along it plus twice the distance across it, so one
     // straight ahead wins over a closer one off to the side. None ahead: the highlight stays.
     const Entry* findNext(const Entry& rFrom, Direction direction) {
-        TVec2f from;
+        Vec2f from;
         if (!getCentre(rFrom, &from)) {
             return &rFrom;
         }
@@ -137,7 +137,7 @@ namespace {
         const Entry* pBest = &rFrom;
         f32 bestScore = 0.0f;
         for (s32 i = 0; i < sEntryCount; i++) {
-            TVec2f centre;
+            Vec2f centre;
             if (&sEntries[i] == &rFrom || !getCentre(sEntries[i], &centre)) {
                 continue;
             }
@@ -237,7 +237,7 @@ namespace NebulaMenuFocus {
             sFocus = nullptr;
         }
 
-        const TVec2f* pPointer = MR::getStarPointerScreenPosition(PLAYER_1);
+        const Vec2f* pPointer = MR::getStarPointerScreenPosition(PLAYER_1);
         if (sActive && MR::isStarPointerInScreen(PLAYER_1) &&
             (absolute(pPointer->x - sPointerAnchor.x) > cPointerHandBack ||
              absolute(pPointer->y - sPointerAnchor.y) > cPointerHandBack)) {
@@ -279,12 +279,12 @@ namespace NebulaMenuFocus {
     }
 
     void offer(ButtonPaneController* pButton) {
-        const Entry entry = {pButton, nullptr, TVec2f(0.0f, 0.0f)};
+        const Entry entry = {pButton, nullptr, Vec2f(0.0f, 0.0f)};
         addOffered(entry);
     }
 
-    void offerTarget(const void* pKey, const TVec2f& rScreenPos) {
-        Entry entry = {nullptr, pKey, TVec2f(0.0f, 0.0f)};
+    void offerTarget(const void* pKey, const Vec2f& rScreenPos) {
+        Entry entry = {nullptr, pKey, Vec2f(0.0f, 0.0f)};
         MR::convertScreenPosToLayoutPos(&entry.mCentre, rScreenPos);
         addOffered(entry);
     }

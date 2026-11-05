@@ -24,7 +24,7 @@ JAISeq::JAISeq(JAISeqMgr* seqMgr, JAISoundStrategyMgr< JAISeq >* soundStrategyMg
     inner_.outputTrack.mNebulaOwnerRoute = 2;
 }
 
-void JAISeq::JAISeqMgr_startID_(JAISoundID id, const TVec3f* posPtr, JAIAudience* audience, int category, int numTracks) {
+void JAISeq::JAISeqMgr_startID_(JAISoundID id, const Vec3f* posPtr, JAIAudience* audience, int category, int numTracks) {
     inner_.mCategory = category;
     reserveChildTracks_(numTracks);
     start_JAISound_(id, posPtr, audience);

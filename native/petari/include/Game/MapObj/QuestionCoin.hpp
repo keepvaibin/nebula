@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class ActorCameraInfo;
 
@@ -31,16 +31,16 @@ public:
         return 0.0f < mLaunchSpeed;
     }
 
-    TPos3f mBaseMtx;
+    Pos3f mBaseMtx;
     LiveActor* mBoundActor;
-    TPos3f mActorMtx;
-    TQuat4f mLaunchQuat;
+    Pos3f mActorMtx;
+    Quat4f mLaunchQuat;
     ActorCameraInfo* mCameraInfo;
     f32 mLaunchSpeed;
     bool mIsWeakGravity;
     bool mCalcShadow;
     s32 mPoseType;
     s32 mShadowDropLengthType;
-    TVec3f mShadowPos;
+    Vec3f mShadowPos;
     f32 mShadowDropLength;
 };

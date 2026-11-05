@@ -44,7 +44,7 @@ void Mario::calcTornadoTilt() {
             _54C = mHeadVec;
         }
     } else {
-        TVec3f tilt(getWorldPadDir() * mActor->getConst().getTable()->mTornadoTiltAngle +
+        Vec3f tilt(getWorldPadDir() * mActor->getConst().getTable()->mTornadoTiltAngle +
                     mHeadVec * (1.0f - mActor->getConst().getTable()->mTornadoTiltAngle));
         MR::normalize(&tilt);
         bool blended = MR::vecBlendSphere(_54C, tilt, &_54C, mActor->getConst().getTable()->mTornadoTiltSpeed);
@@ -57,7 +57,7 @@ void Mario::calcTornadoTilt() {
     }
 }
 
-void Mario::reflectWallOnSpinning(const TVec3f& rNormal, u16 time) {
+void Mario::reflectWallOnSpinning(const Vec3f& rNormal, u16 time) {
     setFrontVecKeepUp(rNormal);
     _3F8 = time;
     _328 = mFrontVec;

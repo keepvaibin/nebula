@@ -31,7 +31,7 @@ void BallRail::init(const JMapInfoIter& rIter) {
     MR::moveCoordToStartPos(this);
     MR::setRailCoordSpeed(this, 0.0f);
     initHitSensor(1);
-    TVec3f offs;
+    Vec3f offs;
     offs.y = _AC;
     offs.x = 0.0f;
     offs.z = 0.0f;
@@ -45,8 +45,8 @@ void BallRail::control() {
 
 bool BallRail::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
     if (msg == ACTMES_SPHERE_PLAYER_BINDED && isNerve(GET_NERVE(BallRail, BallRailNrvWait))) {
-        TVec3f v9(pSender->mHost->mVelocity);
-        TVec3f v8 = pSender->mPosition - pReceiver->mPosition;
+        Vec3f v9(pSender->mHost->mVelocity);
+        Vec3f v8 = pSender->mPosition - pReceiver->mPosition;
 
         if (v8.dot(v9) > 0.0f) {
             return false;
@@ -69,7 +69,7 @@ bool BallRail::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver
 }
 
 namespace {
-    inline void initPointSide(BallRailPoint* pPoint, const TVec3f& rUp) {
+    inline void initPointSide(BallRailPoint* pPoint, const Vec3f& rUp) {
         pPoint->_C.cross(pPoint->_24, rUp);
         MR::normalizeOrZero(&pPoint->_C);
     }
@@ -96,7 +96,7 @@ void BallRail::initRailPoints() {
 
     BallRailPoint* pLastPoint;
     BallRailPoint* pPoint;
-    TVec3f up(0, 1, 0);
+    Vec3f up(0, 1, 0);
 
     if (mNumPoints >= 2U) {
         ::initPointSide(mRailPoints, up);
@@ -134,10 +134,10 @@ void BallRail::exeSetUp() {
     MR::moveCoord(this, 3.0f);
     MR::moveTransToCurrentRailPos(this);
 
-    TVec3f v7;
+    Vec3f v7;
 
     if (MR::isLessStep(this, 15)) {
-        TVec3f v6;
+        Vec3f v6;
         v6.scaleAdd(-_90->mRadius, mGravity, mPosition);
         f32 rate = MR::calcNerveEaseInRate(this, 15);
         MR::vecBlend(_94, v6, &v7, rate);
@@ -149,7 +149,7 @@ void BallRail::exeSetUp() {
         MR::tryRumblePadStrong(this, PLAYER_1);
     }
 
-    TVec3f& rVelocity = _90->mHost->mVelocity;
+    Vec3f& rVelocity = _90->mHost->mVelocity;
     rVelocity.set(v7 - _90->mPosition);
 
     if (MR::isGreaterStep(this, 45)) {
@@ -162,11 +162,11 @@ void BallRail::exeRun() {
         MR::setRailCoordSpeed(this, 0.0f);
     }
 
-    TVec3f v14 = MR::getRailDirection(this);
+    Vec3f v14 = MR::getRailDirection(this);
 
-    TVec3f acceleration = mGravity * mAcceleration;
+    Vec3f acceleration = mGravity * mAcceleration;
     MR::accelerateRailCoordSpeed(this, acceleration.dot(v14));
-    TVec3f v12;
+    Vec3f v12;
     MR::slowDownRailCoordSpeed(this, mDeceleration);
 
     if (!MR::isRailGoingToEnd(this) || MR::getRailCoordSpeed(this) < 6.0f) {
@@ -180,11 +180,11 @@ void BallRail::exeRun() {
     MR::moveRailRider(this);
     MR::moveTransToCurrentRailPos(this);
     v12.scaleAdd(-_90->mRadius, mGravity, mPosition);
-    TVec3f& rVelocity = _90->mHost->mVelocity;
+    Vec3f& rVelocity = _90->mHost->mVelocity;
     rVelocity.set(v12 - _90->mPosition);
 
     if (MR::isRailReachedGoal(this)) {
-        TVec3f& rVelocity = _90->mHost->mVelocity;
+        Vec3f& rVelocity = _90->mHost->mVelocity;
         rVelocity.set(MR::getRailDirection(this) * MR::getRailCoordSpeed(this));
         _90->receiveMessage(ACTMES_END_BALL_RAIL, getSensor("bind"));
         _90 = nullptr;

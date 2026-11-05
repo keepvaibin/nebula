@@ -4,8 +4,8 @@
 #include "Game/Util/PlayerUtil.hpp"
 
 namespace DodoryuUtil {
-    bool calcVerticalizedDir(Dodoryu* pDodoryu, TVec3f* pVec, const TVec3f& rVec) {
-        TVec3f yDir;
+    bool calcVerticalizedDir(Dodoryu* pDodoryu, Vec3f* pVec, const Vec3f& rVec) {
+        Vec3f yDir;
         pDodoryu->mBaseMtx.getYDir(yDir);
 
         pVec->killElement(rVec, yDir);
@@ -19,27 +19,27 @@ namespace DodoryuUtil {
         return true;
     }
 
-    void turnToward(Dodoryu* pDodoryu, const TVec3f& rDirection, f32 maxAngle) {
-        TVec3f up;
-        TVec3f front;
-        TVec3f position;
+    void turnToward(Dodoryu* pDodoryu, const Vec3f& rDirection, f32 maxAngle) {
+        Vec3f up;
+        Vec3f front;
+        Vec3f position;
         pDodoryu->mBaseMtx.getYDir(up);
         pDodoryu->mBaseMtx.getZDir(front);
         pDodoryu->mBaseMtx.getTrans(position);
 
         f32 maxRadian = maxAngle * MR::pi() / 180.0f;
 
-        TPos3f mtx;
+        Pos3f mtx;
         mtx.makeRotate(front, rDirection, maxRadian);
         mtx.concat(pDodoryu->mBaseMtx);
         mtx.setTrans(position);
         pDodoryu->setMtx(mtx);
     }
 
-    void accelerate(Dodoryu* pDodoryu, const TVec3f& rDirection, f32 acceleration, f32 lateralDamping, f32 maxSpeed) {
-        TVec3f direction(rDirection);
-        TVec3f& rVelocity = pDodoryu->mVelocity;
-        TVec3f lateralVelocity;
+    void accelerate(Dodoryu* pDodoryu, const Vec3f& rDirection, f32 acceleration, f32 lateralDamping, f32 maxSpeed) {
+        Vec3f direction(rDirection);
+        Vec3f& rVelocity = pDodoryu->mVelocity;
+        Vec3f lateralVelocity;
         lateralVelocity.killElement(rVelocity, direction);
         rVelocity -= lateralVelocity;
         lateralVelocity *= lateralDamping;
@@ -50,14 +50,14 @@ namespace DodoryuUtil {
             rVelocity.setLength(maxSpeed);
         }
 
-        TVec3f yDir;
+        Vec3f yDir;
         pDodoryu->mBaseMtx.getYDir(yDir);
         rVelocity.orthogonalize(yDir);
     }
 
     void addVelocity(Dodoryu* pDodoryu, bool isSnap) {
-        TVec3f trans;
-        TPos3f mtx = pDodoryu->mBaseMtx;
+        Vec3f trans;
+        Pos3f mtx = pDodoryu->mBaseMtx;
 
         mtx.getTrans(trans);
         trans.add(pDodoryu->mVelocity);
@@ -70,11 +70,11 @@ namespace DodoryuUtil {
     }
 
     void rotateVelocityByWall(Dodoryu* pDodoryu) {
-        TVec3f up;
+        Vec3f up;
         pDodoryu->mBaseMtx.getYDir(up);
 
         f32 speed = pDodoryu->mVelocity.length();
-        TVec3f velocity(pDodoryu->mVelocity);
+        Vec3f velocity(pDodoryu->mVelocity);
         velocity.orthogonalize(pDodoryu->_134);
 
         if (MR::isNearZero(velocity)) {
@@ -85,10 +85,10 @@ namespace DodoryuUtil {
         pDodoryu->mVelocity.set(velocity);
     }
 
-    void calcEscapeDir(Dodoryu* pDodoryu, TVec3f* pDirection, f32 maxAngle) {
-        TVec3f up;
-        const TVec3f* pPlayerPos = MR::getPlayerPos();
-        TVec3f away(pDodoryu->mPosition);
+    void calcEscapeDir(Dodoryu* pDodoryu, Vec3f* pDirection, f32 maxAngle) {
+        Vec3f up;
+        const Vec3f* pPlayerPos = MR::getPlayerPos();
+        Vec3f away(pDodoryu->mPosition);
         away.sub(*pPlayerPos);
         pDirection->set(away);
         if (!calcVerticalizedDir(pDodoryu, pDirection, *pDirection)) {
@@ -98,7 +98,7 @@ namespace DodoryuUtil {
         pDodoryu->mBaseMtx.getYDir(up);
         const f32 randomAngle = 2.0f * maxAngle * (MR::getRandom() - 0.5f);
         f32 angle = randomAngle * MR::pi() / 180.0f;
-        TPos3f rotation;
+        Pos3f rotation;
         rotation.makeRotate(up, angle);
         rotation.mult33(*pDirection);
     }

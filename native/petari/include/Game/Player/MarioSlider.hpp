@@ -17,9 +17,9 @@ public:
     void calcGroundAccel();
     void calcWallHit();
 
-    TVec3f _14;
-    TVec3f _20;
-    TVec3f _2C;
+    Vec3f _14;
+    Vec3f _20;
+    Vec3f _2C;
     f32 _38;
     f32 _3C;
     u16 _40;

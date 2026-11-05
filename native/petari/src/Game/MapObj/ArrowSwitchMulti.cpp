@@ -89,11 +89,11 @@ void ArrowSwitchMulti::init(const JMapInfoIter& rIter) {
 
     if (MR::isInAreaObj("PlaneModeCube", mPosition)) {
         initHitSensor(1);
-        MR::addHitSensorMapObj(this, "body", 8, 100.0f, TVec3f(0.0f, 50.0f, 250.0f));
+        MR::addHitSensorMapObj(this, "body", 8, 100.0f, Vec3f(0.0f, 50.0f, 250.0f));
     } else {
         initHitSensor(2);
-        MR::addHitSensorMapObj(this, "body", 8, 100.0f, TVec3f(0.0f, 50.0f, 250.0f));
-        MR::addHitSensorMapObjMoveCollision(this, "collision", 8, 0.0f, TVec3f(0.0f, 0.0f, 0.0f));
+        MR::addHitSensorMapObj(this, "body", 8, 100.0f, Vec3f(0.0f, 50.0f, 250.0f));
+        MR::addHitSensorMapObjMoveCollision(this, "collision", 8, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
         MR::initCollisionParts(this, "ArrowSwitch", getSensor("collision"), nullptr);
     }
 
@@ -108,9 +108,9 @@ void ArrowSwitchMulti::control() {
 
 void ArrowSwitchMulti::calcAndSetBaseMtx() {
     LiveActor::calcAndSetBaseMtx();
-    TPos3f pos;
+    Pos3f pos;
     pos.set(getBaseMtx());
-    TPos3f rot;
+    Pos3f rot;
     rot.identity();
     rot.setEulerY(MR::toRadian(mRotAngle));
     pos.concat(pos, rot);

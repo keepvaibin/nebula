@@ -67,8 +67,8 @@ s32 LayoutActor::getNerveStep() const {
     return mSpine->mStep;
 }
 
-TVec2f LayoutActor::getTrans() const {
-    TVec2f trans;
+Vec2f LayoutActor::getTrans() const {
+    Vec2f trans;
 
     MR::copyPaneTrans(&trans, this, nullptr);
     MR::convertLayoutPosToScreenPos(&trans, trans);
@@ -77,20 +77,20 @@ TVec2f LayoutActor::getTrans() const {
 }
 
 namespace {
-    inline void setRootTranslation(LayoutActor* pActor, const TVec2f& rTrans) {
+    inline void setRootTranslation(LayoutActor* pActor, const Vec2f& rTrans) {
         f32 y = rTrans.y;
         f32 x = rTrans.x;
-        TVec2f trans(x, y);
+        Vec2f trans(x, y);
         nw4r::lyt::Pane* pRootPane = MR::getRootPane(pActor);
-        TVec3f translation(trans.x, trans.y, 0.0f);
+        Vec3f translation(trans.x, trans.y, 0.0f);
         pRootPane->mTranslate.x = translation.x;
         pRootPane->mTranslate.y = translation.y;
         pRootPane->mTranslate.z = translation.z;
     }
 };  // namespace
 
-void LayoutActor::setTrans(const TVec2f& rTrans) {
-    TVec2f trans;
+void LayoutActor::setTrans(const Vec2f& rTrans) {
+    Vec2f trans;
     MR::convertScreenPosToLayoutPos(&trans, rTrans);
     ::setRootTranslation(this, trans);
 }

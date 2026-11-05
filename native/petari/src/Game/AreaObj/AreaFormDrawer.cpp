@@ -1,5 +1,5 @@
 #include "Game/Util/Color.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 namespace {
     static Color8 sAreaCol = Color8(128, 0, 0, 128);

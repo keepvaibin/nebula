@@ -314,9 +314,9 @@ void OceanRingDrawer::draw() const {
 
 void OceanRingDrawer::drawBloom() const {
     loadMaterialBloom();
-    TVec3f zDir = MR::getCamZdir();
+    Vec3f zDir = MR::getCamZdir();
     zDir.scale(::sBloomCameraOffsetZ);
-    TVec3f camPos = MR::getCamPos();
+    Vec3f camPos = MR::getCamPos();
     zDir.add(camPos);
 
     if (!mRing->mIsClipped) {
@@ -429,7 +429,7 @@ void OceanRingDrawer::drawGD() {
 void OceanRingDrawer::loadMaterial() const {
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
 
-    TMtx34f mtx;
+    Mtx34f mtx;
     mtx.identity();
     mtx.mMtx[0][2] = _C;
     mtx.mMtx[1][2] = _10;
@@ -468,7 +468,7 @@ void OceanRingDrawer::loadMaterial() const {
 void OceanRingDrawer::loadMaterialBloom() const {
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
 
-    TMtx34f mtx;
+    Mtx34f mtx;
     mtx.identity();
     mtx.mMtx[0][2] = _C;
     mtx.mMtx[1][2] = _10;
@@ -476,7 +476,7 @@ void OceanRingDrawer::loadMaterialBloom() const {
     mtx.mMtx[0][2] = _14;
     mtx.mMtx[1][2] = _18;
     J3DNativeShape::setTexture(1, mtx.toMtxPtr(), 2);
-    TVec3f zDir = MR::getCamZdir();
+    Vec3f zDir = MR::getCamZdir();
     f32 v6 = ((MR::clamp(zDir.y, -0.2f, 0.1f) - -0.2f) / 0.3f);
     f32 v8 = ((MR::clamp(WaterAreaFunction::getCameraWaterDepth(), 150.0f, 300.0f) - 150.0f) / 150.0f);
 

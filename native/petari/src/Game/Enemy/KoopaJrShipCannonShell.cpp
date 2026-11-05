@@ -12,8 +12,8 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include "JSystem/JGeometry/TVec.hpp"
-#include "JSystem/JMath/JMath.hpp"
+#include <nebula_geometry.hpp>
+
 
 namespace {
     static const f32 sBodySensorRadius = 75.0f;
@@ -52,7 +52,7 @@ KoopaJrShipCannonShell::KoopaJrShipCannonShell(const char* pName) : CannonShellB
 }
 
 inline void KoopaJrShipCannonShell::initStarPointer() {
-    TVec3f offset;
+    Vec3f offset;
     offset.set(0.0f);
     MR::initStarPointerTarget(this, ::sStarWandRadius, offset);
 }
@@ -62,8 +62,8 @@ void KoopaJrShipCannonShell::init(const JMapInfoIter& rIter) {
     MR::startBck(this, "KoopaJrShipCannonShell");
     initSound(4, false);
     initHitSensor(2);
-    MR::addHitSensorEnemy(this, "body", 8, ::sBodySensorRadius, TVec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorEnemyAttack(this, "attack", 8, ::sAttackSensorRadius * getBaseScale(), TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemy(this, "body", 8, ::sBodySensorRadius, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemyAttack(this, "attack", 8, ::sAttackSensorRadius * getBaseScale(), Vec3f(0.0f, 0.0f, 0.0f));
 
     initBinder(::sBinderRadius * getBaseScale(), 0.0f, 0);
     initEffectKeeper(0, nullptr, false);
@@ -168,15 +168,15 @@ bool KoopaJrShipCannonShell::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSen
     return true;
 }
 
-void KoopaJrShipCannonShell::launch(const TVec3f& rStartPos, const TVec3f& rVelocity) {
+void KoopaJrShipCannonShell::launch(const Vec3f& rStartPos, const Vec3f& rVelocity) {
     appear();
 
     mPosition.set(rStartPos);
 
-    TVec3f vec(rVelocity);
+    Vec3f vec(rVelocity);
     MR::normalize(&vec);
 
-    TPos3f mtx;
+    Pos3f mtx;
     MR::calcMtxFromGravityAndZAxis(&mtx, this, mGravity, vec);
     mtx.getQuat(_8C);
     mVelocity.set(rVelocity);
@@ -268,7 +268,7 @@ void KoopaJrShipCannonShell::exeFreeze() {
 
     _B4++;
     MR::startDPDFreezeLevelSound(this);
-    TVec3f vec14;
+    Vec3f vec14;
     f32 scale = ::sFreezeRumbleWidth * MR::cosDegree(MR::repeatDegree(_B4 * ::sFreezeRumbleSpeed)) *
                 static_cast< f32 >(::sFreezeFrame - getNerveStep()) / ::sFreezeFrame;
 

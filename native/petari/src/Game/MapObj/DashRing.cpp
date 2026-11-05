@@ -11,7 +11,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "JSystem/JGeometry/TVec.hpp"
+#include <nebula_geometry.hpp>
 
 DashRing::~DashRing() {
 }
@@ -34,7 +34,7 @@ void DashRing::initCommon(const JMapInfoIter& rIter, const char* pName) {
     }
 
     initHitSensor(1);
-    MR::addHitSensorMapObj(this, "body", 4, 1000.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorMapObj(this, "body", 4, 1000.0f, Vec3f(0.0f, 0.0f, 0.0f));
     MR::validateClipping(this);
     calcAxis();
 
@@ -94,8 +94,8 @@ void DashRing::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
         return;
     }
 
-    TVec3f dir(MR::getSensorPos(pReceiver) - mPosition);
-    TVec3f vec40;
+    Vec3f dir(MR::getSensorPos(pReceiver) - mPosition);
+    Vec3f vec40;
     f32 val = MR::vecKillElement(dir, mAxis, &vec40);
 
     if (MR::abs(val) < 20.0f && vec40.length() < 200.0f) {
@@ -209,14 +209,14 @@ void DashRing::control() {
 
 void DashRing::calcAndSetBaseMtx() {
     if (mDoLoop) {
-        TPos3f pos;
+        Pos3f pos;
         MR::makeMtxFrontSidePos(&pos, mAxis, mSubAxis, mPosition);
         NebulaMtxCopy(pos, getBaseMtx());
     }
 }
 
 void DashRing::calcAxis() {
-    TVec3f axis(0.0f, 1.0f, 0.0f);
+    Vec3f axis(0.0f, 1.0f, 0.0f);
 
     Mtx mtxTR;
     MR::makeMtxTR(mtxTR, 0.0f, 0.0f, 0.0f, mRotation.x, mRotation.y, mRotation.z);
@@ -228,8 +228,8 @@ void DashRing::calcAxis() {
 }
 
 void DashRing::calcSubAxis() {
-    TVec3f axis(mAxis);
-    TVec3f subAxis;
+    Vec3f axis(mAxis);
+    Vec3f subAxis;
 
     if (!MR::isNearZero(axis.y)) {
         subAxis.x = axis.y;
@@ -246,7 +246,7 @@ void DashRing::calcSubAxis() {
 }
 
 void DashRing::draw() const {
-    TVec3f axis, subAxis;
+    Vec3f axis, subAxis;
     axis = mAxis;
     subAxis = mSubAxis;
 
@@ -267,9 +267,9 @@ void DashRing::draw() const {
     }
 
     f32 f2 = mScale.x * 200.0f * f1;
-    f32 segmentLength = (f2 * JMath::TAngleConstant_< f32 >::RADIAN_DEG360()) / 64.0f;
+    f32 segmentLength = (f2 * Angle::cRadian360) / 64.0f;
 
-    TPos3f rotMtx;
+    Pos3f rotMtx;
     NebulaMtxRotAxisRad(rotMtx, axis, TWO_PI / 64.0f);
 
     NebulaNativeMaterial material;
@@ -278,9 +278,9 @@ void DashRing::draw() const {
     NativeShader::send(material);
 
     for (u32 idx = 0; idx <= 64; idx++) {
-        TVec3f vecB0 = mPosition + subAxis * f2;
+        Vec3f vecB0 = mPosition + subAxis * f2;
 
-        TVec3f crossVec;
+        Vec3f crossVec;
         crossVec.cross(subAxis, axis);
 
         TDDraw::drawCylinder(vecB0 - crossVec * segmentLength * 0.5f, crossVec * segmentLength, mScale.y * f1 * 30.0f, 0x00808060, 0x00808080, 0x10);

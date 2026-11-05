@@ -21,30 +21,30 @@ void CameraFrontAndBack::reset() {
 }
 
 CameraTargetObj* CameraFrontAndBack::calc() {
-    TVec3f pos = CameraLocalUtil::getPos(this);
-    TVec3f axis = mAxis;
+    Vec3f pos = CameraLocalUtil::getPos(this);
+    Vec3f axis = mAxis;
     mZoneMatrix.mult33(axis);
-    TVec3f wPoint = mWPoint;
+    Vec3f wPoint = mWPoint;
     mZoneMatrix.mult(wPoint, wPoint);
 
-    TVec3f posDir = CameraLocalUtil::getTarget(this)->getPosition() - wPoint;
+    Vec3f posDir = CameraLocalUtil::getTarget(this)->getPosition() - wPoint;
     posDir.orthogonalize(axis);
     if (MR::isNearZero(posDir)) {
         return nullptr;
     }
 
-    TVec3f watchPoint;
+    Vec3f watchPoint;
     CameraLocalUtil::makeWatchPoint(&watchPoint, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
-    TVec3f front, up;
+    Vec3f front, up;
     mZoneMatrix.getZDir(front);
     mZoneMatrix.getYDir(up);
 
-    TQuat4f baseQuat;
+    Quat4f baseQuat;
     calcBaseQuat(&baseQuat, axis);
     baseQuat.transform(front);
     baseQuat.transform(up);
 
-    TQuat4f dipQuat;
+    Quat4f dipQuat;
     calcDipQuat(&dipQuat, front, posDir);
     dipQuat.transform(front);
     dipQuat.transform(up);
@@ -63,18 +63,18 @@ CamTranslatorBase* CameraFrontAndBack::createTranslator() {
     return new CamTranslatorFrontAndBack(this);
 }
 
-void CameraFrontAndBack::calcBaseQuat(TQuat4f* pQuat, const TVec3f& rAxis) {
-    TVec3f side;
+void CameraFrontAndBack::calcBaseQuat(Quat4f* pQuat, const Vec3f& rAxis) {
+    Vec3f side;
     mZoneMatrix.getXDir(side);
-    TQuat4f q1;
+    Quat4f q1;
     q1.setRotate(side, rAxis);
-    TQuat4f q2;
+    Quat4f q2;
     q2.setRotate(rAxis, mRotateRate);
     pQuat->mult(q2, q1);
 }
 
-void CameraFrontAndBack::calcDipQuat(TQuat4f* pDipQuat, const TVec3f& rFront, const TVec3f& rDir) {
-    TVec3f side = rDir;
+void CameraFrontAndBack::calcDipQuat(Quat4f* pDipQuat, const Vec3f& rFront, const Vec3f& rDir) {
+    Vec3f side = rDir;
     MR::normalize(&side);
     f32 angle = side.angle(rFront);
     f32 rate = 1.0f;

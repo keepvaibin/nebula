@@ -11,7 +11,7 @@
 #include "Game/Util/ParabolicPath.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 #include <nebula_math.h>
 
 namespace {
@@ -37,7 +37,7 @@ void MoguStone::init(const JMapInfoIter& rIter) {
     initBinder(40.0f * mScale.y, 0.0f, 0);
     ModelObj::init(rIter);
     initHitSensor(1);
-    MR::addHitSensorEnemy(this, "body", 32, 80.0f * mScale.y, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemy(this, "body", 32, 80.0f * mScale.y, Vec3f(0.0f, 0.0f, 0.0f));
     initNerve(GET_NERVE(MoguStone, MoguStoneNrvTaken));
     MR::invalidateClipping(this);
     MR::onCalcGravity(this);
@@ -50,7 +50,7 @@ void MoguStone::appear() {
     setNerve(GET_NERVE(MoguStone, MoguStoneNrvTaken));
 }
 
-void MoguStone::emit(bool arg1, const TVec3f& pArg2, const TVec3f& pArg3, f32 arg4) {
+void MoguStone::emit(bool arg1, const Vec3f& pArg2, const Vec3f& pArg3, f32 arg4) {
     _BC = arg4;
 
     mPosition.set(pArg2);
@@ -59,7 +59,7 @@ void MoguStone::emit(bool arg1, const TVec3f& pArg2, const TVec3f& pArg3, f32 ar
 
     MR::calcGravity(this);
 
-    TVec3f v1(pArg3);
+    Vec3f v1(pArg3);
     v1 -= pArg2;
 
     if (arg1) {
@@ -88,13 +88,13 @@ void MoguStone::doBehavior() {
     }
 
     f32 scale = _BC;
-    TVec3f v1(_B0);
+    Vec3f v1(_B0);
     v1.x *= scale;
     v1.y *= scale;
     v1.z *= scale;
     mVelocity.set(v1);
 
-    TVec3f up(-mGravity);
+    Vec3f up(-mGravity);
     MR::makeQuatUpFront(&_90, up, _B0);
 
     if (MR::isGreaterStep(this, 100)) {
@@ -177,7 +177,7 @@ bool MoguStone::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* p
 }
 
 void MoguStone::calcAndSetBaseMtx() {
-    TPos3f mtx;
+    Pos3f mtx;
     mtx[0][3] = 0.0f;
     mtx[1][3] = 0.0f;
     mtx[2][3] = 0.0f;
@@ -198,7 +198,7 @@ void ThrowingIce::init(const JMapInfoIter& rIter) {
     initBinder(60.0f * mScale.y, 0.0f, 0);
     ModelObj::init(rIter);
     initHitSensor(1);
-    MR::addHitSensorEnemy(this, "body", 32, 80.0f * mScale.y, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemy(this, "body", 32, 80.0f * mScale.y, Vec3f(0.0f, 0.0f, 0.0f));
     initNerve(GET_NERVE(MoguStone, MoguStoneNrvTaken));
     MR::invalidateClipping(this);
     MR::onCalcGravity(this);
@@ -206,11 +206,11 @@ void ThrowingIce::init(const JMapInfoIter& rIter) {
     makeActorDead();
 }
 
-void ThrowingIce::emitIce(const TVec3f& arg1, const TVec3f& arg2, f32 arg3, const TVec3f& arg4) {
+void ThrowingIce::emitIce(const Vec3f& arg1, const Vec3f& arg2, f32 arg3, const Vec3f& arg4) {
     mPath->initFromUpVectorAddHeight(arg1, arg2, -arg4, ::hAddHeight);
     _BC = arg3;
 
-    TVec3f v2(arg2);
+    Vec3f v2(arg2);
     v2 -= arg1;
     MR::vecKillElement(v2, mGravity, &_B0);
     MR::normalizeOrZero(&_B0);
@@ -220,14 +220,14 @@ void ThrowingIce::emitIce(const TVec3f& arg1, const TVec3f& arg2, f32 arg3, cons
 
 void ThrowingIce::doBehavior() {
     if (MR::isFirstStep(this)) {
-        TVec3f v1 = _B0.cross(mGravity);
+        Vec3f v1 = _B0.cross(mGravity);
         _A0.setRotate(v1, 0.25f);
     }
 
     f32 rate = MR::calcNerveRate(this, 101);
-    TVec3f v2;
+    Vec3f v2;
     mPath->calcPosition(&v2, rate);
-    TVec3f v3(v2);
+    Vec3f v3(v2);
     v3 -= mPosition;
     mVelocity.set(v3);
 }

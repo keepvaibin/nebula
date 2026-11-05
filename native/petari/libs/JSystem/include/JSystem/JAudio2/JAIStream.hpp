@@ -16,7 +16,7 @@ public:
     };
 
     JAIStream(JAIStreamMgr* streamMgr, JAISoundStrategyMgr< JAIStream >* soundStrategyMgr);
-    void JAIStreamMgr_startID_(JAISoundID id, s32 streamFileEntry, const TVec3f* posPtr, JAIAudience* audience, int category);
+    void JAIStreamMgr_startID_(JAISoundID id, s32 streamFileEntry, const Vec3f* posPtr, JAIAudience* audience, int category);
     bool prepare_prepareStream_();
     void prepare_();
     void prepare_startStream_();

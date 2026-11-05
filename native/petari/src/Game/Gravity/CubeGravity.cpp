@@ -1,6 +1,6 @@
 #include "Game/Gravity.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include <JSystem/JMath/JMath.hpp>
+#include <nebula_geometry.hpp>
 
 #define REGION_NEGATIVE_X 0
 #define REGION_BETWEEN_X 1
@@ -41,19 +41,19 @@ CubeGravity::CubeGravity() : PlanetGravity() {
     mPosition.identity();
 }
 
-void CubeGravity::setCube(const TPos3f& rCube) {
+void CubeGravity::setCube(const Pos3f& rCube) {
     mCube = rCube;
 
     updateIdentityMtx();
 }
 
-int CubeGravity::calcGravityArea(const TVec3f& rPosition) const {
-    TVec3f dirX, dirY, dirZ, trans;
+int CubeGravity::calcGravityArea(const Vec3f& rPosition) const {
+    Vec3f dirX, dirY, dirZ, trans;
     mPosition.getXDir(dirX);
     mPosition.getYDir(dirY);
     mPosition.getZDir(dirZ);
     mPosition.getTrans(trans);
-    TVec3f relativePosition = rPosition - trans;
+    Vec3f relativePosition = rPosition - trans;
     int area;  // Region of the cube
     f32 xDirDistance = relativePosition.dot(dirX) / lenX, yDirDistance = relativePosition.dot(dirY) / lenY,
         zDirDistance = relativePosition.dot(dirZ) / lenZ;
@@ -109,8 +109,8 @@ int CubeGravity::calcGravityArea(const TVec3f& rPosition) const {
     return area;
 }
 
-bool CubeGravity::calcFaceGravity(const TVec3f& rPosition, s32 area, TVec3f* pDest, f32* pScalar) const {
-    TVec3f antiFaceDir;  // Negative of the normal vector of the face an object is on
+bool CubeGravity::calcFaceGravity(const Vec3f& rPosition, s32 area, Vec3f* pDest, f32* pScalar) const {
+    Vec3f antiFaceDir;  // Negative of the normal vector of the face an object is on
     switch (area) {
     case REGION_Z_FACE_NEGATIVE:
         mPosition.getZDir(antiFaceDir);
@@ -142,7 +142,7 @@ bool CubeGravity::calcFaceGravity(const TVec3f& rPosition, s32 area, TVec3f* pDe
     default:
         return false;
     }
-    TVec3f trans;
+    Vec3f trans;
     f32 length;
     mPosition.getTrans(trans);
     MR::separateScalarAndDirection(&length, &antiFaceDir, antiFaceDir);
@@ -155,7 +155,7 @@ bool CubeGravity::calcFaceGravity(const TVec3f& rPosition, s32 area, TVec3f* pDe
     return true;
 }
 
-bool CubeGravity::calcEdgeGravity(const TVec3f& rPosition, s32 area, TVec3f* pDest, f32* pScalar) const {
+bool CubeGravity::calcEdgeGravity(const Vec3f& rPosition, s32 area, Vec3f* pDest, f32* pScalar) const {
     // There is a mistake here: so long as area is not both even and negative, the function will not
     // return here. The intent is that area should be neither even nor negative, since all edges
     // are odd and positive. However, this mistake does not really matter since the switch will
@@ -165,7 +165,7 @@ bool CubeGravity::calcEdgeGravity(const TVec3f& rPosition, s32 area, TVec3f* pDe
         return false;
     }
 
-    TVec3f edgeVector, edgeTranslation, xDir, yDir, zDir, trans, positionOppositeInOrthogonalPlane;
+    Vec3f edgeVector, edgeTranslation, xDir, yDir, zDir, trans, positionOppositeInOrthogonalPlane;
 
     mPosition.getXDir(xDir);
     mPosition.getYDir(yDir);
@@ -253,8 +253,8 @@ bool CubeGravity::calcEdgeGravity(const TVec3f& rPosition, s32 area, TVec3f* pDe
     return true;
 }
 
-bool CubeGravity::calcCornerGravity(const TVec3f& rPosition, s32 area, TVec3f* pDest, f32* pScalar) const {
-    TVec3f vertex, xDir, yDir, zDir, trans;
+bool CubeGravity::calcCornerGravity(const Vec3f& rPosition, s32 area, Vec3f* pDest, f32* pScalar) const {
+    Vec3f vertex, xDir, yDir, zDir, trans;
 
     mPosition.getXDir(xDir);
     mPosition.getYDir(yDir);
@@ -300,7 +300,7 @@ bool CubeGravity::calcCornerGravity(const TVec3f& rPosition, s32 area, TVec3f* p
     mPosition.getTrans(trans);
     vertex += trans;
 
-    TVec3f gravity = vertex - rPosition;
+    Vec3f gravity = vertex - rPosition;
     if (gravity.isZero()) {
         *pScalar = 0.0;
         pDest->normalize(vertex - trans);
@@ -311,12 +311,12 @@ bool CubeGravity::calcCornerGravity(const TVec3f& rPosition, s32 area, TVec3f* p
     return true;
 }
 
-bool CubeGravity::calcOwnGravityVector(TVec3f* pDest, f32* pScalar, const TVec3f& rPosition) const {
+bool CubeGravity::calcOwnGravityVector(Vec3f* pDest, f32* pScalar, const Vec3f& rPosition) const {
     int area = calcGravityArea(rPosition);
     if (area < 0) {
         return false;
     }
-    TVec3f gravityForce;
+    Vec3f gravityForce;
     f32 scalar;
     if (!calcFaceGravity(rPosition, area, &gravityForce, &scalar) && !calcEdgeGravity(rPosition, area, &gravityForce, &scalar) &&
         !calcCornerGravity(rPosition, area, &gravityForce, &scalar)) {
@@ -337,9 +337,9 @@ bool CubeGravity::calcOwnGravityVector(TVec3f* pDest, f32* pScalar, const TVec3f
     return true;
 }
 
-void CubeGravity::updateMtx(const TPos3f& rMtx) {
+void CubeGravity::updateMtx(const Pos3f& rMtx) {
     mPosition.concat(rMtx, mCube);
-    TVec3f dir;
+    Vec3f dir;
     mPosition.getXDir(dir);
     lenX = dir.length();
     mPosition.getYDir(dir);

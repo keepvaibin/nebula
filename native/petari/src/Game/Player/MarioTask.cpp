@@ -262,14 +262,14 @@ bool Mario::taskOnHipDropSlide(u32 flags) {
         return false;
     }
 
-    TVec3f dir(mPosition);
+    Vec3f dir(mPosition);
     dir -= _A4C;
     dir.setLength(_A64);
 
-    TVec3f dirCopy(dir);
+    Vec3f dirCopy(dir);
     MR::normalizeOrZero(&dir);
 
-    TVec3f reverseGravity = -_70C;
+    Vec3f reverseGravity = -_70C;
     if (dir.dot(reverseGravity) <= sZero) {
         return false;
     }
@@ -305,7 +305,7 @@ void Mario::startHipDropSlide(const HitSensor* pSensor) {
 
     pushTask(&Mario::taskOnHipDropSlide, 0x100);
 
-    TVec3f dir(mPosition - pSensor->mPosition);
+    Vec3f dir(mPosition - pSensor->mPosition);
 
     if (MR::isSameDirection(dir, getAirGravityVec(), sSameDirEpsilon) || MR::isNearZero(dir, sNearZeroEpsilon)) {
         dir = -mFrontVec;
@@ -333,7 +333,7 @@ void Mario::startJumpDropSlide(const HitSensor* pSensor) {
         return;
     }
 
-    TVec3f dir(mPosition - pSensor->mPosition);
+    Vec3f dir(mPosition - pSensor->mPosition);
     MR::normalizeOrZero(&dir);
 
     f32 dot = dir.dot(-getAirGravityVec());
@@ -343,7 +343,7 @@ void Mario::startJumpDropSlide(const HitSensor* pSensor) {
 
     pushTask(&Mario::taskOnHipDropSlide, 0x200);
 
-    TVec3f slideDir(mPosition - pSensor->mPosition);
+    Vec3f slideDir(mPosition - pSensor->mPosition);
 
     if (MR::isSameDirection(slideDir, getAirGravityVec(), sSameDirEpsilon) || MR::isNearZero(slideDir, sNearZeroEpsilon)) {
         slideDir = -mFrontVec;

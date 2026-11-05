@@ -1,12 +1,10 @@
 #pragma once
 
-#include <JSystem/JMath/random.hpp>
+#include <nebula_geometry.hpp>
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 
-namespace JMath {
-    class TRandom_fast_;
-};  // namespace JMath
+class FastRandom;
 
 class AudSystemWrapper;
 class CaptureScreenDirector;
@@ -50,6 +48,6 @@ public:
     PlayerInputs* mPlayerInputs;
     MessageHolder* mMessageHolder;
     StarPointerDirector* mStarPointerDirector;
-    JMath::TRandom_fast_ mRandom;
+    FastRandom mRandom;
     u32 mLanguage;
 };

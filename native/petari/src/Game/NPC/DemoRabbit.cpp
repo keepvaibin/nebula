@@ -119,10 +119,10 @@ void DemoRabbit::fadeOut() {
 }
 
 void DemoRabbit::fadeIn() {
-    TVec3f railEndPos;
+    Vec3f railEndPos;
     MR::calcRailEndPos(&railEndPos, this);
 
-    TVec3f gravityVector;
+    Vec3f gravityVector;
     MR::calcGravityVector(this, railEndPos, &gravityVector, nullptr, 0);
 
 
@@ -139,7 +139,7 @@ void DemoRabbit::updateStopVelocity() {
 
     // No ground within 10 units: the up vector (the fall kept, the drift stopped). Left unset, `normal` can be a long
     // vector, which makes the kept part of the velocity grow each frame until the binder steps through the ground.
-    TVec3f normal(-mGravity);
+    Vec3f normal(-mGravity);
     MR::getFirstPolyNormalOnLineToMap(&normal, mPosition, mGravity * 10.0f, nullptr, nullptr);
     MR::vecKillElement(mVelocity, normal, &normal);
     mVelocity.sub(normal);
@@ -159,7 +159,7 @@ void DemoRabbit::updateNormalVelocity() {
     MR::reboundVelocityFromCollision(this, -0.05f);
 }
 
-void DemoRabbit::updateRun(const TVec3f& targetDir, bool unused) {
+void DemoRabbit::updateRun(const Vec3f& targetDir, bool unused) {
     f32 turnAngle = MR::calcNerveValue(this, ::sRunawayTurnDeccelTime, ::sRunawayTurnStartLimit, ::sRunawayTurnLimit);
 
     MR::turnDirectionDegree(this, &mFrontVec, targetDir - mPosition, turnAngle);
@@ -302,7 +302,7 @@ void DemoRabbit::exeGuide() {
         MR::startSound(this, "SE_SM_RABBIT_JUMP");
     }
 
-    TVec3f railPosFrontCoord;
+    Vec3f railPosFrontCoord;
     MR::calcRailPosFrontCoord(&railPosFrontCoord, this, 200.0f);
 
     if (MR::isRailReachedNearGoal(this, ::sNearGoalDistance)) {

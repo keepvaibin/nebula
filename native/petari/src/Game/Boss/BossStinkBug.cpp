@@ -24,8 +24,8 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
-#include <JSystem/JMath/JMath.hpp>
+#include <nebula_geometry.hpp>
+
 #include <nebula_math.h>
 
 namespace {
@@ -41,7 +41,7 @@ namespace {
 
     const char* sLegJointNameList[] = {"RightFootA3", "LeftFootA3", "RightFootB3", "LeftFootB3", "RightFootC3", "LeftFootC3"};
 
-    static TVec3f sAppearStarPieceOffset(0.0f, 200.0f, 0.0f);
+    static Vec3f sAppearStarPieceOffset(0.0f, 200.0f, 0.0f);
 };  // namespace
 
 BossStinkBug::BossStinkBug(const char* pName)
@@ -134,10 +134,10 @@ void BossStinkBug::initCamera(const JMapInfoIter& rIter) {
 
 void BossStinkBug::initSensor() {
     initHitSensor(5);
-    MR::addHitSensorEye(this, "eye", 8, 1000.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEye(this, "eye", 8, 1000.0f, Vec3f(0.0f, 0.0f, 0.0f));
     MR::invalidateHitSensor(this, "eye");
-    MR::addHitSensorEnemyAttack(this, "attack_left", 8, 200.0f, TVec3f(-120.0f, 50.0f, 300.0f));
-    MR::addHitSensorEnemyAttack(this, "attack_right", 8, 200.0f, TVec3f(120.0f, 50.0f, 300.0f));
+    MR::addHitSensorEnemyAttack(this, "attack_left", 8, 200.0f, Vec3f(-120.0f, 50.0f, 300.0f));
+    MR::addHitSensorEnemyAttack(this, "attack_right", 8, 200.0f, Vec3f(120.0f, 50.0f, 300.0f));
     MR::invalidateHitSensor(this, "attack_left");
     MR::invalidateHitSensor(this, "attack_right");
 
@@ -186,7 +186,7 @@ void BossStinkBug::control() {
 
 void BossStinkBug::calcAndSetBaseMtx() {
     _98->setCallBackFunction();
-    TPos3f pos;
+    Pos3f pos;
     pos.setQuat(_DC);
     pos.setTrans(mPosition);
 
@@ -200,8 +200,8 @@ void BossStinkBug::calcAndSetBaseMtx() {
     MR::setBaseScale(this, mScale);
 }
 
-void BossStinkBug::calcUpVec(TVec3f* pOut) const {
-    TPos3f pos;
+void BossStinkBug::calcUpVec(Vec3f* pOut) const {
+    Pos3f pos;
     pos.identity();
     pos.setQuat(_DC);
 
@@ -242,7 +242,7 @@ void BossStinkBug::updatePose() {
 }
 
 void BossStinkBug::setPose(MtxPtr pMtx) {
-    TPos3f pos(pMtx);
+    Pos3f pos(pMtx);
     pos.getQuat(_DC);
     pos.getTrans(mPosition);
     _DC.getZDir(_EC);
@@ -325,10 +325,10 @@ void BossStinkBug::updateJointControl() {
     jointCtrl->startUpdate();
 
     for (int i = 0; i < 6; i++) {
-        TVec3f legJointPos;
+        Vec3f legJointPos;
         MR::copyJointPos(this, ::sLegJointNameList[i], &legJointPos);
-        TVec3f groundCheckPos = _90[i]->mPosition;
-        TVec3f dirGroundCheckToLegJoint = legJointPos - groundCheckPos;
+        Vec3f groundCheckPos = _90[i]->mPosition;
+        Vec3f dirGroundCheckToLegJoint = legJointPos - groundCheckPos;
 
         if (MR::isBinded(_90[i])) {
             _90[i]->bringFriction(_108, 0.2f);
@@ -342,14 +342,14 @@ void BossStinkBug::updateJointControl() {
         jointCtrl->setIKEndPosition(::sLegJointNameList[i], _90[i]->mPosition, _10C);
 
         if (MR::isBinded(_90[i])) {
-            TVec3f fix = *MR::getBindedFixReactionVector(_90[i]);
+            Vec3f fix = *MR::getBindedFixReactionVector(_90[i]);
 
             if (!MR::isNearZero(fix)) {
                 MR::normalize(&fix);
                 jointCtrl->setIKEndDirection(::sLegJointNameList[i], fix, 0.1f * _10C);
             }
         } else {
-            TVec3f yDir;
+            Vec3f yDir;
             MR::extractMtxYDir(MR::getJointMtx(this, ::sLegJointNameList[i]), &yDir);
             jointCtrl->setIKEndDirection(::sLegJointNameList[i], yDir, 0.05f * _10C);
         }
@@ -359,7 +359,7 @@ void BossStinkBug::updateJointControl() {
 }
 
 void BossStinkBug::appearStarPiece(s32 num) {
-    TVec3f offsetVec;
+    Vec3f offsetVec;
     NebulaMtxMultVec(MR::getJointMtx(this, "Body"), ::sAppearStarPieceOffset, offsetVec);
     MR::appearStarPieceToDirection(this, offsetVec, -mGravity, num, 30.0f, 40.0f, false);
     MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
@@ -406,10 +406,10 @@ bool BossStinkBug::throwBomb(f32 f1, f32 f2) {
         return false;
     }
 
-    TPos3f jointMtx(MR::getJointMtx(mBombLauncher, "DischargePosition"));
+    Pos3f jointMtx(MR::getJointMtx(mBombLauncher, "DischargePosition"));
 
-    TVec3f trans;
-    TVec3f yDir;
+    Vec3f trans;
+    Vec3f yDir;
 
     jointMtx.getTrans(trans);
     jointMtx.getYDir(yDir);

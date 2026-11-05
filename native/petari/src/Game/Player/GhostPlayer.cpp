@@ -172,7 +172,7 @@ void GhostPlayer::init(const JMapInfoIter& rIter) {
     mVelocity.zero();
     initAnimation();
     initHitSensor(1);
-    MR::addHitSensorRide(this, "body", 4, 40.0f, TVec3f(0.0f, 80.0f, 0.0f));
+    MR::addHitSensorRide(this, "body", 4, 40.0f, Vec3f(0.0f, 80.0f, 0.0f));
     MR::initShadowVolumeSphere(this, 50.0f);
     MR::validateShadow(this, nullptr);
     MR::calcGravity(this);
@@ -199,7 +199,7 @@ void GhostPlayer::init(const JMapInfoIter& rIter) {
     NebulaMtxCopy(getBaseMtx(), mTargetRotationMtx);
     mJetTurtleShadow = new JetTurtleShadow("\203\112\203\201\203\126\203\203\203\150\203\105\203\202\203\146\203\213" /* カメシャドウモデル */);
     mJetTurtleShadow->initWithoutIter();
-    mHandRPos = new FixedPosition(this, "HandR", TVec3f(15.59f, 42.5f, 42.93f), TVec3f(-17.05f, -0.7f, 113.55f));
+    mHandRPos = new FixedPosition(this, "HandR", Vec3f(15.59f, 42.5f, 42.93f), Vec3f(-17.05f, -0.7f, 113.55f));
     MR::declareStarPiece(this, 50);
     MR::declareCoin(this, 50);
     mAppearStarPieceCooldown = 0;
@@ -287,7 +287,7 @@ void GhostPlayer::exePreStartDemo0() {
         MR::startSound(this, "SE_BM_GHOST_MARIO_APPEAR");
         MR::startSound(this, "SE_BV_GHOST_MARIO_APPEAR");
         MR::offPlayerControl();
-        TPos3f* cameraTargetMatrix = &mCameraTargetMtx->mMatrix;
+        Pos3f* cameraTargetMatrix = &mCameraTargetMtx->mMatrix;
         cameraTargetMatrix->set(getBaseMtx());
 
         MR::startMultiActorCameraTargetOther(this, mCameraInfo, "\203\214\201\133\203\130\212\112\216\1561" /* レース開始1 */, CameraTargetArg(mCameraTargetMtx));
@@ -296,7 +296,7 @@ void GhostPlayer::exePreStartDemo0() {
 
     if (getNerveStep() == 1) {
         Mtx playerPosMtx;
-        TVec3f playerPosVec;
+        Vec3f playerPosVec;
 
         MR::findNamePos("\203\123\201\133\203\130\203\147\203\146\203\202\203\175\203\212\203\111\210\312\222\165" /* ゴーストデモマリオ位置 */, playerPosMtx);
         MR::extractMtxTrans(playerPosMtx, &playerPosVec);
@@ -324,7 +324,7 @@ void GhostPlayer::exePreStartDemo0() {
     }
     if (getNerveStep() == 240) {
         MR::endMultiActorCamera(this, mCameraInfo, "\203\214\201\133\203\130\212\112\216\1561" /* レース開始1 */, false);
-        TPos3f* cameraTargetMatrix = &mCameraTargetMtx->mMatrix;
+        Pos3f* cameraTargetMatrix = &mCameraTargetMtx->mMatrix;
         cameraTargetMatrix->set(getBaseMtx());
         MR::startMultiActorCameraTargetOther(this, mCameraInfo, "\203\214\201\133\203\130\212\112\216\1562" /* レース開始2 */, CameraTargetArg(mCameraTargetMtx));
         setNerve(GET_NERVE(GhostPlayer, HostTypeNrvPreStartDemo1));
@@ -389,19 +389,19 @@ void GhostPlayer::exePreStartDemo2() {
         MR::startSystemSE("SE_SY_RACE_COUNT_DOWN");
     }
 
-    TVec3f normalizedFrontVec = mInitialDirection;
-    TVec3f upVec;
-    TVec3f frontVec;
+    Vec3f normalizedFrontVec = mInitialDirection;
+    Vec3f upVec;
+    Vec3f frontVec;
 
     bool isNormalized = MR::normalizeOrZero(&normalizedFrontVec);
-    TPos3f* baseMtx = reinterpret_cast< TPos3f* >(getBaseMtx());
+    Pos3f* baseMtx = reinterpret_cast< Pos3f* >(getBaseMtx());
     baseMtx->getYDir(upVec);
     if (!isNormalized) {
         MR::calcFrontVec(&frontVec, this);
         if (MR::vecBlendSphere(frontVec, normalizedFrontVec, &frontVec, 0.1f) == false) {
             frontVec = normalizedFrontVec;
         }
-        MR::makeMtxUpFront(reinterpret_cast< TPos3f* >(getBaseMtx()), upVec, frontVec);
+        MR::makeMtxUpFront(reinterpret_cast< Pos3f* >(getBaseMtx()), upVec, frontVec);
         NebulaMtxCopy(getBaseMtx(), mTargetRotationMtx);
         MR::extractMtxTrans(getBaseMtx(), &mPosition);
     }
@@ -423,7 +423,7 @@ void GhostPlayer::exeWinDemo() {
         MR::tryPlayerKillTakingActor();
         MR::readyPlayerDemo();
 
-        TVec3f playerPosVec;
+        Vec3f playerPosVec;
         Mtx playerPosMtx;
         MR::findNamePos("\225\211\202\257\216\236\203\175\203\212\203\111\210\312\222\165" /* 負け時マリオ位置 */, playerPosMtx);
         MR::extractMtxTrans(playerPosMtx, &playerPosVec);
@@ -541,7 +541,7 @@ void GhostPlayer::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     } else {
         if (isNerve(GET_NERVE(GhostPlayer, HostTypeNrvRun)) && MR::sendMsgPush(pReceiver, pSender) && mAppearStarPieceCooldown == 0) {
             if (MR::appearStarPiece(this, mPosition, 1, 10.0f, 40.0f, false)) {
-                if (MR::isInWater(this, TVec3f(0.0f, 0.0f, 0.0f))) {
+                if (MR::isInWater(this, Vec3f(0.0f, 0.0f, 0.0f))) {
                     MR::startSound(this, "SE_OJ_STAR_PIECE_BURST_W");
                 } else {
                     MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
@@ -560,13 +560,13 @@ bool GhostPlayer::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor*
         return true;
     }
     if (MR::isMsgPlayerTrample(msg) && mPlayerTrampleCooldown == 0) {
-        TVec3f frontVec;
-        TVec3f upVec;
+        Vec3f frontVec;
+        Vec3f upVec;
         MR::calcUpVec(&upVec, this);
         MR::calcFrontVec(&frontVec, this);
 
         if (MR::appearStarPiece(this, mPosition, 5, 10.0f, 40.0f, false)) {
-            if (MR::isInWater(this, TVec3f(0.0f, 0.0f, 0.0f))) {
+            if (MR::isInWater(this, Vec3f(0.0f, 0.0f, 0.0f))) {
                 MR::startSound(this, "SE_OJ_STAR_PIECE_BURST_W");
             } else {
                 MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
@@ -628,19 +628,19 @@ u32 GhostPlayer::receiveGhostPacket(GhostPacket* pPacket) {
     pPacket->mCurOffs = 4;
 
     if ((updateFlags & 0x0001) != 0) {
-        TVec3s rawPos;
+        Vec3s rawPos;
         pPacket->read(&rawPos);
         MR::convToFloat(rawPos, -2, &mPosition);
     }
 
     if ((updateFlags & 0x0800) != 0) {
-        TVec3Sc rawVel;
+        Vec3Sc rawVel;
         pPacket->read(&rawVel);
         MR::convToFloat(rawVel, 0, &mVelocity);
     }
 
     if ((updateFlags & 0x0400) != 0) {
-        TVec3Sc rawScale;
+        Vec3Sc rawScale;
         pPacket->read(&rawScale);
         MR::convToFloat(rawScale, 3, &mScale);
     }
@@ -797,14 +797,14 @@ f32 getShiftRatio(s8 shiftValue) {
 }
 
 namespace MR {
-    void convToFloat(TVec3s& rInVec, s8 shiftValue, TVec3f* pOutVec) {
+    void convToFloat(Vec3s& rInVec, s8 shiftValue, Vec3f* pOutVec) {
         f32 factor = 1.0f / getShiftRatio(shiftValue);
         pOutVec->x = static_cast< f32 >(rInVec.x) * factor;
         pOutVec->y = static_cast< f32 >(rInVec.y) * factor;
         pOutVec->z = static_cast< f32 >(rInVec.z) * factor;
     }
 
-    void convToFloat(TVec3Sc& rInVec, s8 shiftValue, TVec3f* pOutVec) {
+    void convToFloat(Vec3Sc& rInVec, s8 shiftValue, Vec3f* pOutVec) {
         f32 factor = 1.0f / getShiftRatio(shiftValue);
         pOutVec->x = static_cast< f32 >(rInVec.x) * factor;
         pOutVec->y = static_cast< f32 >(rInVec.y) * factor;

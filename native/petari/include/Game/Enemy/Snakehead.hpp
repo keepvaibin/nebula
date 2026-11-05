@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class AnimScaleController;
 class BenefitItemOneUp;
@@ -48,12 +48,12 @@ public:
 
     AnimScaleController* mController;
     WalkerStateBindStarPointer* mStarPointer;
-    TPos3f mBodyMtx;
-    TVec3f _C4;
+    Pos3f mBodyMtx;
+    Vec3f _C4;
     f32 mForwardSpeed;
     f32 mBackwardSpeed;
     f32 mActivationRadius;
-    TVec3f mRailCenter;
+    Vec3f mRailCenter;
     SnakeheadType _E8;
     BenefitItemOneUp* mItem;
 };

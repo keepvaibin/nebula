@@ -14,7 +14,7 @@ namespace {
     const f32 sDefaultDistanceInvalid = 3000.0f;
 };  // namespace
 
-ActorPadAndCameraCtrl::ActorPadAndCameraCtrl(const ModelManager* pModelManager, const TVec3f* pPosition)
+ActorPadAndCameraCtrl::ActorPadAndCameraCtrl(const ModelManager* pModelManager, const Vec3f* pPosition)
     : _0(pModelManager), _4(pPosition), _8(pModelManager->getResourceHolder()), _C(), mInfoNum(), mInfo() {
     JMapInfo* parser = MR::tryCreateCsvParser(_8, "%s.bcsv", ::sFileName);
     if (!parser) {
@@ -49,7 +49,7 @@ ActorPadAndCameraCtrl::ActorPadAndCameraCtrl(const ModelManager* pModelManager, 
     }
 }
 
-ActorPadAndCameraCtrl* ActorPadAndCameraCtrl::tryCreate(const ModelManager* pModelManager, const TVec3f* pPosition) {
+ActorPadAndCameraCtrl* ActorPadAndCameraCtrl::tryCreate(const ModelManager* pModelManager, const Vec3f* pPosition) {
     const ResourceHolder* resourceHolder = pModelManager->getResourceHolder();
     if (!MR::isExistFileInArc(resourceHolder, "%s.bcsv", ::sFileName)) {
         return nullptr;

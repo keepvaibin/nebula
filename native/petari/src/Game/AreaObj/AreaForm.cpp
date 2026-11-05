@@ -27,18 +27,18 @@ void AreaFormCube::init(const JMapInfoIter& rIter) {
     updateBoxParam();
 }
 
-bool AreaFormCube::isInVolume(const TVec3f& rPos) const {
-    TPos3f pos;
+bool AreaFormCube::isInVolume(const Vec3f& rPos) const {
+    Pos3f pos;
     calcWorldMtx(&pos);
 
-    TVec3f transpose;
+    Vec3f transpose;
     pos.multTranspose(rPos, transpose);
 
     return transpose.x >= mBounding.i.x && transpose.y >= mBounding.i.y && transpose.z >= mBounding.i.z && transpose.x < mBounding.f.x &&
            transpose.y < mBounding.f.y && transpose.z < mBounding.f.z;
 }
 
-void AreaFormCube::calcWorldPos(TVec3f* pPos) const {
+void AreaFormCube::calcWorldPos(Vec3f* pPos) const {
     if (_4 != nullptr) {
         _4->mult(mTranslation, *pPos);
     } else {
@@ -46,10 +46,10 @@ void AreaFormCube::calcWorldPos(TVec3f* pPos) const {
     }
 }
 
-void AreaFormCube::calcWorldRotate(TVec3f* pOut) const {
-    const TPos3f* pFollowMtx = _4;
+void AreaFormCube::calcWorldRotate(Vec3f* pOut) const {
+    const Pos3f* pFollowMtx = _4;
     if (pFollowMtx != nullptr) {
-        TPos3f stack = _48;
+        Pos3f stack = _48;
         stack.zeroTrans();
         stack.concat(*pFollowMtx, stack);
         stack.getEulerXYZ(*pOut);
@@ -59,8 +59,8 @@ void AreaFormCube::calcWorldRotate(TVec3f* pOut) const {
     }
 }
 
-void AreaFormCube::calcWorldBox(TDirBox3f* pBox) const {
-    TPos3f pos;
+void AreaFormCube::calcWorldBox(DirBox3f* pBox) const {
+    Pos3f pos;
     calcWorldMtx(&pos);
 
     pBox->_0.x = pos.mMtx[0][0];
@@ -80,8 +80,8 @@ void AreaFormCube::calcWorldBox(TDirBox3f* pBox) const {
     pos.mult(mBounding.i, pBox->_24);
 }
 
-void AreaFormCube::calcLocalPos(TVec3f* pPos, const TVec3f& rPos) const {
-    TPos3f worldMtx;
+void AreaFormCube::calcLocalPos(Vec3f* pPos, const Vec3f& rPos) const {
+    Pos3f worldMtx;
     calcWorldMtx(&worldMtx);
     worldMtx.multTranspose(rPos, *pPos);
 }
@@ -95,22 +95,22 @@ void AreaFormCube::updateBoxParam() {
 
     _48.setTrans(mTranslation);
 
-    TVec3f v10(0.5f * (-mScale.x * getBaseSize()), 0.5f * (-mScale.y * getBaseSize()), 0.5f * (-mScale.z * getBaseSize()));
-    TVec3f v9(0.5f * (mScale.x * getBaseSize()), 0.5f * (mScale.y * getBaseSize()), 0.5f * (mScale.z * getBaseSize()));
+    Vec3f v10(0.5f * (-mScale.x * getBaseSize()), 0.5f * (-mScale.y * getBaseSize()), 0.5f * (-mScale.z * getBaseSize()));
+    Vec3f v9(0.5f * (mScale.x * getBaseSize()), 0.5f * (mScale.y * getBaseSize()), 0.5f * (mScale.z * getBaseSize()));
 
     mBounding.i.set(v10);
     mBounding.f.set(v9);
 
     if (_8 == 1) {
-        TVec3f temp(0.0f, 0.5f * (mScale.y * getBaseSize()), 0.0f);
+        Vec3f temp(0.0f, 0.5f * (mScale.y * getBaseSize()), 0.0f);
 
         mBounding.i += temp;
         mBounding.f += temp;
     }
 }
 
-void AreaFormCube::calcWorldMtx(TPos3f* pPos) const {
-    const TPos3f* pFollowMtx = _4;
+void AreaFormCube::calcWorldMtx(Pos3f* pPos) const {
+    const Pos3f* pFollowMtx = _4;
     if (pFollowMtx != nullptr) {
         pPos->concat(*pFollowMtx, _48);
     } else {
@@ -125,7 +125,7 @@ AreaFormSphere::AreaFormSphere() {
     mRadius = 0.0f;
 }
 
-void AreaFormSphere::calcUpVec(TVec3f* pOut) const {
+void AreaFormSphere::calcUpVec(Vec3f* pOut) const {
     if (_4 != nullptr) {
         _4->mult33(mUp, *pOut);
         MR::normalize(pOut);
@@ -134,7 +134,7 @@ void AreaFormSphere::calcUpVec(TVec3f* pOut) const {
     }
 }
 
-void AreaFormSphere::calcPos(TVec3f* pOut) const {
+void AreaFormSphere::calcPos(Vec3f* pOut) const {
     if (_4 != nullptr) {
         _4->mult(mTranslation, *pOut);
     } else {
@@ -142,8 +142,8 @@ void AreaFormSphere::calcPos(TVec3f* pOut) const {
     }
 }
 
-bool AreaFormSphere::isInVolume(const TVec3f& rVector) const {
-    TVec3f pos;
+bool AreaFormSphere::isInVolume(const Vec3f& rVector) const {
+    Vec3f pos;
     calcPos(&pos);
 
     return (rVector - pos).length() < mRadius;
@@ -164,22 +164,22 @@ void AreaFormBowl::init(const JMapInfoIter& rIter) {
     _20 = scale_x;
     _20 *= 500.0f;
 
-    TVec3f rotation;
+    Vec3f rotation;
     MR::getJMapInfoRotate(rIter, &rotation);
     calcUpVec(rotation);
 }
 
-bool AreaFormBowl::isInVolume(const TVec3f& rPos) const {
+bool AreaFormBowl::isInVolume(const Vec3f& rPos) const {
     if ((rPos - mTranslation).length() > _20) {
         return false;
     }
 
-    TVec3f relative(rPos - mTranslation);
+    Vec3f relative(rPos - mTranslation);
     return relative.dot(mUp) < 0.0f;
 }
 
-void AreaFormBowl::calcUpVec(const TVec3f& rPos) {
-    TVec3f up(0.0f, 1.0f, 0.0f);
+void AreaFormBowl::calcUpVec(const Vec3f& rPos) {
+    Vec3f up(0.0f, 1.0f, 0.0f);
 
     Mtx mtx;
     MR::makeMtxTR(mtx, 0.0f, 0.0f, 0.0f, rPos.x, rPos.y, rPos.z);
@@ -198,7 +198,7 @@ AreaFormCylinder::AreaFormCylinder() {
     mHeight = 0.0f;
 }
 
-void AreaFormCylinder::calcPos(TVec3f* pPos) const {
+void AreaFormCylinder::calcPos(Vec3f* pPos) const {
     if (_4 != nullptr) {
         _4->mult(mTranslation, *pPos);
     } else {
@@ -206,15 +206,15 @@ void AreaFormCylinder::calcPos(TVec3f* pPos) const {
     }
 }
 
-void AreaFormCylinder::calcCenterPos(TVec3f* pCenterPos) const {
+void AreaFormCylinder::calcCenterPos(Vec3f* pCenterPos) const {
     calcPos(pCenterPos);
 
-    TVec3f upVec;
+    Vec3f upVec;
     calcUpVec(&upVec);
     pCenterPos->add(upVec * mHeight * 0.5f);
 }
 
-void AreaFormCylinder::calcUpVec(TVec3f* pUpVec) const {
+void AreaFormCylinder::calcUpVec(Vec3f* pUpVec) const {
     if (_4 != nullptr) {
         _4->mult33(mRotation, *pUpVec);
         MR::normalize(pUpVec);
@@ -223,14 +223,14 @@ void AreaFormCylinder::calcUpVec(TVec3f* pUpVec) const {
     }
 }
 
-bool AreaFormCylinder::isInVolume(const TVec3f& rVec) const {
-    TVec3f pos;
+bool AreaFormCylinder::isInVolume(const Vec3f& rVec) const {
+    Vec3f pos;
     calcPos(&pos);
 
-    TVec3f up;
+    Vec3f up;
     calcUpVec(&up);
 
-    TVec3f stack_8 = rVec - pos;
+    Vec3f stack_8 = rVec - pos;
     f32 v6 = MR::vecKillElement(stack_8, up, &stack_8);
     f32 v7 = stack_8.length();
 
@@ -245,7 +245,7 @@ bool AreaFormCylinder::isInVolume(const TVec3f& rVec) const {
     return ret;
 }
 
-void AreaFormCylinder::calcDir(const TVec3f& rRotation) {
+void AreaFormCylinder::calcDir(const Vec3f& rRotation) {
     mRotation.x = 0.0f;
     mRotation.y = 1.0f;
     mRotation.z = 0.0f;
@@ -268,10 +268,10 @@ void AreaFormSphere::init(const JMapInfoIter& rIter) {
     mRadius = scale_x;
     mRadius *= 500.0f;
 
-    TVec3f rotation;
+    Vec3f rotation;
     MR::getJMapInfoRotate(rIter, &rotation);
 
-    TVec3f up(0.0f, 1.0f, 0.0f);
+    Vec3f up(0.0f, 1.0f, 0.0f);
 
     Mtx mtx;
     MR::makeMtxTR(mtx, 0.0f, 0.0f, 0.0f, rotation.x, rotation.y, rotation.z);
@@ -281,7 +281,7 @@ void AreaFormSphere::init(const JMapInfoIter& rIter) {
 
 void AreaFormCylinder::init(const JMapInfoIter& rIter) {
     MR::getJMapInfoTrans(rIter, &mTranslation);
-    TVec3f rotate;
+    Vec3f rotate;
 
     MR::getJMapInfoRotate(rIter, &rotate);
     calcDir(rotate);

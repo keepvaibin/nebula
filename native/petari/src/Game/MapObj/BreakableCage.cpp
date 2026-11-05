@@ -25,7 +25,7 @@ BreakableCage::BreakableCage(const char* pName)
 }
 
 void BreakableCage::init(const JMapInfoIter& rIter) {
-    TVec3f sensorOffset(::cHitSensorOffsetCage);
+    Vec3f sensorOffset(::cHitSensorOffsetCage);
     const char* pName;
     f32 sensorRadius = 300.0f;
 
@@ -136,9 +136,9 @@ void BreakableCage::kill() {
 
 void BreakableCage::calcAndSetBaseMtx() {
     if (mCageType == CAGE_NORMAL) {
-        TPos3f rotationMtx;
-        rotationMtx.makeRotate(TVec3f(0.0f, 1.0f, 0.0f), MR::toRadian(mRotation.y));
-        TPos3f baseMtx;
+        Pos3f rotationMtx;
+        rotationMtx.makeRotate(Vec3f(0.0f, 1.0f, 0.0f), MR::toRadian(mRotation.y));
+        Pos3f baseMtx;
         baseMtx.concat(mMtx, rotationMtx);
         MR::setBaseTRMtx(this, baseMtx);
     } else {
@@ -202,7 +202,7 @@ void BreakableCage::initModel(const char* pName, const JMapInfoIter& rIter) {
         MR::invalidateClipping(mBreakModel);
         MR::registerDemoSimpleCastAll(mBreakModel);
         mBreakModel->makeActorDead();
-        mItemModel = MR::createDummyDisplayModel(this, rIter, -1, TVec3f(0.0f, 150.0f, 0.0f), TVec3f(0.0f, 0.0f, 0.0f));
+        mItemModel = MR::createDummyDisplayModel(this, rIter, -1, Vec3f(0.0f, 150.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
 
         if (mItemModel != nullptr) {
             s32 modelId = MR::getDummyDisplayModelId(rIter, -1);
@@ -221,9 +221,9 @@ void BreakableCage::initModel(const char* pName, const JMapInfoIter& rIter) {
 void BreakableCage::initBaseMtxForCage() {
     MR::calcGravity(this);
 
-    TPos3f baseMtx;
+    Pos3f baseMtx;
     MR::makeMtxRotate(baseMtx, mRotation);
-    TVec3f front;
+    Vec3f front;
     baseMtx.getZDir(front);
 
     MR::makeMtxUpFrontPos(&mMtx, -mGravity, front, mPosition);

@@ -27,7 +27,7 @@ void TripodBossRotateParts::activateTripodBoss() {
     mRotator->start();
 }
 
-void TripodBossRotateParts::calcTripodLocalMatrix(TPos3f* pMtx) {
+void TripodBossRotateParts::calcTripodLocalMatrix(Pos3f* pMtx) {
     if (mRotator->isWorking()) {
         pMtx->set(mRotator->getRotateMtx());
         pMtx->setTrans(_BC);

@@ -93,10 +93,10 @@ public:
     u32 mBrightObjCount;
     struct NebulaScreenProbe* mProbes = nullptr;
     u32 mProbeCapacity = 0;
-    TVec2f _60;
+    Vec2f _60;
     f32 _68;
-    TVec2f _6C;
-    TVec2f _74;
+    Vec2f _6C;
+    Vec2f _74;
     u16 _7C;
 };
 

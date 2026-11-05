@@ -35,7 +35,7 @@ void WoodBox::init(const JMapInfoIter& rIter) {
 
     f32 radius = 120.0f * mScale.x;
     initHitSensor(1);
-    TVec3f sensorOffset(0.0f, radius, 0.0f);
+    Vec3f sensorOffset(0.0f, radius, 0.0f);
     MR::addHitSensor(this, "body", ATYPE_PUNCH_BOX, 8, radius, sensorOffset);
 
     s32 arg0_Coins = 1;
@@ -57,7 +57,7 @@ void WoodBox::init(const JMapInfoIter& rIter) {
     calcAndSetBaseMtx();
     NebulaMtxCopy(getBaseMtx(), mBaseMtx);
     ;
-    MR::addTransMtx(mBaseMtx, TVec3f(0.0f, 100.0f, 0.0f));
+    MR::addTransMtx(mBaseMtx, Vec3f(0.0f, 100.0f, 0.0f));
 
     mHasPowerStar = false;
 
@@ -246,7 +246,7 @@ void WoodBox::exeHit() {
         }
 
         if (mOneUp != nullptr) {
-            TVec3f upVec;
+            Vec3f upVec;
             MR::calcUpVec(&upVec, this);
             Mtx spawnMtx;
             NebulaMtxCopy(getBaseMtx(), spawnMtx);
@@ -282,20 +282,20 @@ void WoodBox::doHit(HitSensor* pSender, HitSensor* pReceiver) {
             MR::invalidateCollisionParts(this);
         }
 
-        if (MR::isInWater(this, TVec3f(0.0f, 0.0f, 0.0f))) {
+        if (MR::isInWater(this, Vec3f(0.0f, 0.0f, 0.0f))) {
             MR::startSound(this, "SE_OJ_WOOD_BOX_BREAK_W");
         } else {
             MR::startSound(this, "SE_OJ_WOOD_BOX_BREAK");
         }
 
-        if (!MR::isInWater(this, TVec3f(0.0f, 0.0f, 0.0f))) {
+        if (!MR::isInWater(this, Vec3f(0.0f, 0.0f, 0.0f))) {
             MR::startSound(this, "SE_EM_EXPLODE_S");
         }
 
         mBreakModel->appear();
         MR::startBck(mBreakModel, "Break");
 
-        if (MR::isInWater(this, TVec3f(0.0f, 0.0f, 0.0f))) {
+        if (MR::isInWater(this, Vec3f(0.0f, 0.0f, 0.0f))) {
             MR::emitEffect(mBreakModel, "BreakWater");
         } else {
             MR::emitEffect(mBreakModel, "Break");

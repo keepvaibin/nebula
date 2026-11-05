@@ -27,15 +27,15 @@ void CameraSubjective::reset() {
     mMtx.setXDir(CameraLocalUtil::getTarget(this)->getSideVec());
     mMtx.setYDir(CameraLocalUtil::getTarget(this)->getUpVec());
     mMtx.setZDir(CameraLocalUtil::getTarget(this)->getFrontVec());
-    mMtx.setTrans(TVec3f(0.0f, 0.0f, 0.0f));
+    mMtx.setTrans(Vec3f(0.0f, 0.0f, 0.0f));
 
     mAngleVel.zero();
 }
 
 CameraTargetObj* CameraSubjective::calc() {
-    TVec2f accel(0.0f, 0.0f);
+    Vec2f accel(0.0f, 0.0f);
 
-    TVec2f stick(0.0f, 0.0f);
+    Vec2f stick(0.0f, 0.0f);
     if (MR::getMoveStickX(PLAYER_1) < -::sPadStickPlay) {
         stick.x = (MR::getMoveStickX(PLAYER_1) + ::sPadStickPlay) / (1.0f - ::sPadStickPlay);
     } else if (MR::getMoveStickX(PLAYER_1) > ::sPadStickPlay) {
@@ -74,19 +74,19 @@ CameraTargetObj* CameraSubjective::calc() {
     mAngleVel.x = MR::clamp(mAngleVel.x + accel.y / ::sDivH, -1.0f, 2.0f);
     mAngleVel.y = MR::clamp(mAngleVel.y + accel.x / ::sDivW, -1.0f, 2.0f);
 
-    TPos3f rotX;
-    rotX.makeRotate(TVec3f(1.0f, 0.0f, 0.0f), mAngle.x * MR::pi() / 180.0f);
-    TPos3f rotY;
-    rotY.makeRotate(TVec3f(0.0f, 1.0f, 0.0f), mAngle.y * MR::pi() / 180.0f);
+    Pos3f rotX;
+    rotX.makeRotate(Vec3f(1.0f, 0.0f, 0.0f), mAngle.x * MR::pi() / 180.0f);
+    Pos3f rotY;
+    rotY.makeRotate(Vec3f(0.0f, 1.0f, 0.0f), mAngle.y * MR::pi() / 180.0f);
 
-    TPos3f rot;
+    Pos3f rot;
     rot.concat(mMtx, rotY);
     rot.concat(rotX);
 
-    TVec3f front;
+    Vec3f front;
     rot.getZDir(front);
     front.scale(-::sDistance);
-    TVec3f up;
+    Vec3f up;
     rot.getYDir(up);
 
     CameraLocalUtil::setWatchPos(this, CameraLocalUtil::getPos(this) - front);

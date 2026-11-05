@@ -7,7 +7,7 @@
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 namespace {
     static const f32 sEffectPosOffsetY = 5000.0f;
@@ -32,16 +32,16 @@ void LavaBreakColumn::control() {
         return;
     }
 
-    TVec3f pos;
+    Vec3f pos;
     MR::copyJointPos(this, "Move", &pos);
     MR::calcMapGround(pos, &mEffectPos, ::sEffectPosOffsetY);
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.set(getBaseMtx());
-    TVec3f up;
+    Vec3f up;
     mtx.getYDir(up);
     MR::normalize(&up);
-    TVec3f offset = pos + up * -1000.0f;
-    TVec3f diff = mEffectPos - offset;
+    Vec3f offset = pos + up * -1000.0f;
+    Vec3f diff = mEffectPos - offset;
     MR::normalize(&diff);
 
     if (diff.dot(mGravity) < 0.0f) {

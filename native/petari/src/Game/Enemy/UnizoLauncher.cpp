@@ -23,7 +23,7 @@ void UnizoLauncher::init(const JMapInfoIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::connectToSceneEnemyMovement(this);
     initHitSensor(1);
-    MR::addHitSensorEnemy(this, "Body", 8, 100.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemy(this, "Body", 8, 100.0f, Vec3f(0.0f, 0.0f, 0.0f));
     initSound(8, false);
     initNerve(GET_NERVE(UnizoLauncher, UnizoLauncherNrvWait));
 

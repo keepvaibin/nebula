@@ -34,9 +34,9 @@ void OceanRingPipe::init(const JMapInfoIter& rIter) {
         f32 f30 = 300.0f;
         f32 f29 = 200.0f;
         f32 f28 = 500.0f;
-        TVec3f vec(1.0f, 0.0f, 0.0f);
+        Vec3f vec(1.0f, 0.0f, 0.0f);
         for (s32 i = 0; i < _98; i += 7) {
-            TVec3f grav(0.0f, -1.0f, 0.0f);
+            Vec3f grav(0.0f, -1.0f, 0.0f);
             MR::calcGravityVector(this, _A0[calcPointIndex(i, 0)], &grav, nullptr, 0);
             if (grav.y > -0.9f) {
                 continue;
@@ -74,20 +74,20 @@ void OceanRingPipe::initPoints() {
     f32 length = MR::getRailTotalLength(this) / (_98 - 1);
     f32 angle = getAngle();
 
-    _A0 = new TVec3f[_94];
-    _A4 = new TVec3s[_94];
+    _A0 = new Vec3f[_94];
+    _A4 = new Vec3s[_94];
 
     s32 idx = 0;
 
     for (s32 i = 0; i < _98; i++) {
-        TVec3f grav;
+        Vec3f grav;
         MR::calcGravityVector(this, MR::getRailPos(this), &grav, nullptr, 0);
 
-        TVec3f side;
+        Vec3f side;
         side.cross(MR::getRailDirection(this), -grav);
         MR::normalize(&side);
 
-        TPos3f mtx;
+        Pos3f mtx;
         mtx.identity();
         mtx.setRotate(MR::getRailDirection(this), angle);
 
@@ -102,19 +102,19 @@ void OceanRingPipe::initPoints() {
         MR::getNextRailPointArg1NoInit(this, &flt2);
 
         f32 f3 = 1.0f;
-        TVec3f v1(side);
+        Vec3f v1(side);
 
         if (sumDist > 0.0f) {
             f3 = ((flt * nextDist + flt2 * currDist) / sumDist) / (_AC / 100.0f);
             f32 fff = flt - flt2;
 
             if (MR::abs(fff) > 0.0001f) {
-                TVec3f v2(side);
-                TVec3f v3(side);
+                Vec3f v2(side);
+                Vec3f v3(side);
                 v2.scale(flt);
                 v3.scale(flt2);
 
-                TVec3f railPos;
+                Vec3f railPos;
                 MR::calcRailPosAtCoord(&railPos, this, MR::repeat(MR::getRailCoord(this) - 300.0f, 0.0f, MR::getRailTotalLength(this)));
                 v2.add(railPos);
 
@@ -128,7 +128,7 @@ void OceanRingPipe::initPoints() {
         }
 
         for (s32 j = 0; j < _9C; j++) {
-            TVec3f v4(side);
+            Vec3f v4(side);
             v4.scale(_A8 * f3);
             v4.add(MR::getRailPos(this));
 

@@ -22,7 +22,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 namespace {
     static f32 cJumpSpeed = 20.0f;
@@ -72,8 +72,8 @@ void Rabbit::init(const JMapInfoIter& rIter) {
     initBinder(10.0f, 10.0f, 0);
     MR::onCalcGravity(this);
     initHitSensor(1);
-    MR::addHitSensorMtxNpc(this, "body", 8, 60.0f, MR::getJointMtx(this, "Spine"), TVec3f(0.0f, 0.0f, 0.0f));
-    MR::initStarPointerTargetAtJoint(this, "Spine", 60.0f, TVec3f(0.0f, 60.0f, 0.0f));
+    MR::addHitSensorMtxNpc(this, "body", 8, 60.0f, MR::getJointMtx(this, "Spine"), Vec3f(0.0f, 0.0f, 0.0f));
+    MR::initStarPointerTargetAtJoint(this, "Spine", 60.0f, Vec3f(0.0f, 60.0f, 0.0f));
     initEffectKeeper(0, nullptr, false);
     MR::initShadowFromCSV(this, "Shadow");
     mLodCtrl = MR::createLodCtrlNPC(this, rIter);
@@ -85,7 +85,7 @@ void Rabbit::init(const JMapInfoIter& rIter) {
 
     s32 messageId;
     if (MR::getJMapInfoMessageID(rIter, &messageId)) {
-        mMsgCtrl = MR::createTalkCtrl(this, rIter, name, TVec3f(0.0f, 160.0f, 0.0f), nullptr);
+        mMsgCtrl = MR::createTalkCtrl(this, rIter, name, Vec3f(0.0f, 160.0f, 0.0f), nullptr);
         MR::onRootNodeAutomatic(mMsgCtrl);
         MR::useStageSwitchReadA(this, rIter);
         MR::useStageSwitchReadB(this, rIter);
@@ -200,9 +200,9 @@ void Rabbit::exeAppear() {
     }
 
     ParabolicPath path = ParabolicPath();
-    TVec3f v9, v8;
+    Vec3f v9, v8;
     v8.set(0.0f, ::cAppearHeight, 0.0f);
-    path.initFromUpVector(v8, TVec3f(0.0f, 0.0f, 0.0f), -mGravity, ::cAppearHop);
+    path.initFromUpVector(v8, Vec3f(0.0f, 0.0f, 0.0f), -mGravity, ::cAppearHop);
     path.calcPosition(&v9, getNerveStep() / MR::getBckFrameMax(this));
     _168 = -v9.y;
 
@@ -228,7 +228,7 @@ void Rabbit::exeWait() {
     }
 
     if (getNerveStep() > 30) {
-        TVec3f playerPos = *MR::getPlayerPos() - mPosition;
+        Vec3f playerPos = *MR::getPlayerPos() - mPosition;
         MR::normalizeOrZero(&playerPos);
         if (!MR::isNearZero(playerPos)) {
             if (isNeedTurn(playerPos) && MR::isBckOneTimeAndStopped(this)) {
@@ -261,7 +261,7 @@ void Rabbit::exeGoal() {
     }
 
     if (getNerveStep() > 30) {
-        TVec3f playerPos = *MR::getPlayerPos() - mPosition;
+        Vec3f playerPos = *MR::getPlayerPos() - mPosition;
         MR::normalizeOrZero(&playerPos);
         if (!MR::isNearZero(playerPos)) {
             MR::blendQuatUpFront(&_A0, -mGravity, playerPos, 0.5f, 0.5f);
@@ -290,15 +290,15 @@ void Rabbit::exeFinish() {
 }
 
 void Rabbit::calcAndSetBaseMtx() {
-    TVec3f pos(mPosition);
+    Vec3f pos(mPosition);
     mPosition += mGravity * _168;
     NPCActor::calcAndSetBaseMtx();
     mPosition = pos;
 }
 
-void Rabbit::calcRailPos(TVec3f* pPos) {
+void Rabbit::calcRailPos(Vec3f* pPos) {
     Triangle triangle = Triangle();
-    TVec3f pos;
+    Vec3f pos;
     if (MR::getFirstPolyOnLineToMap(&pos, &triangle, *pPos + mGravity * -500.0f, mGravity * 1000.0f)) {
         *pPos = pos;
     }
@@ -306,8 +306,8 @@ void Rabbit::calcRailPos(TVec3f* pPos) {
     _180 = MR::sqrt(MR::max(1.0f, MR::abs((*pPos - mPosition).y / 80.0f)));
 }
 
-bool Rabbit::isNeedTurn(const TVec3f& rA1) {
-    TVec3f v2;
+bool Rabbit::isNeedTurn(const Vec3f& rA1) {
+    Vec3f v2;
     _A0.getZDir(v2);
     return MR::diffAngleAbs(rA1, v2) > 0.78539819f;
 }
@@ -371,7 +371,7 @@ void Rabbit::exePreJump() {
         MR::startSound(this, "SE_SM_RABBIT_HOP");
     }
 
-    TVec3f railDir(MR::getRailDirection(this));
+    Vec3f railDir(MR::getRailDirection(this));
     MR::blendQuatUpFront(&_A0, -mGravity, railDir, 0.5f, 0.5f);
 
     if (MR::isBckStopped(this)) {
@@ -406,7 +406,7 @@ void Rabbit::exeMove() {
         _170 *= hopStrengh;
         MR::moveCoordToNearestPos(this, mPosition);
         MR::moveCoord(this, 20.0f * _170);
-        TVec3f railPos(MR::getRailPos(this));
+        Vec3f railPos(MR::getRailPos(this));
         calcRailPos(&railPos);
         _174 = railPos - mPosition;
         MR::normalizeOrZero(&_174);
@@ -457,7 +457,7 @@ void Rabbit::exeNear() {
         _170 = ::cProgressSpeed;
         MR::moveCoordToNearestPos(this, mPosition);
         MR::moveCoord(this, 20.0f * _170);
-        TVec3f railPos(MR::getRailPos(this));
+        Vec3f railPos(MR::getRailPos(this));
         calcRailPos(&railPos);
         _174 = railPos - mPosition;
         MR::normalizeOrZero(&_174);

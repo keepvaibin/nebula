@@ -14,7 +14,7 @@ class AudAudience_withSetting;
 template < int SIZE, class T, class U >
 class AudGenericAudible_ : public JAIAudible {
 public:
-    AudGenericAudible_(const TVec3f& rPos, const TVec3f* pPos, u32 mask) : JAIAudible(), mAbsPos() {
+    AudGenericAudible_(const Vec3f& rPos, const Vec3f* pPos, u32 mask) : JAIAudible(), mAbsPos() {
         mAudibleParam = -1;
         mAbsPos.init(&mPos, rPos, pPos);
 
@@ -50,7 +50,7 @@ public:
         mAbsPos.calc(mPos);
     }
 
-    const TVec3f& getPos() const {
+    const Vec3f& getPos() const {
         return mPos;
     }
 
@@ -66,7 +66,7 @@ public:
         return getAudibleParam().getVolDistBit();
     }
 
-    const TVec3f& getVelocity() const {
+    const Vec3f& getVelocity() const {
         return mAbsPos.getVelocity();
     }
 
@@ -85,7 +85,7 @@ class AudDopplerAudible : public AudGenericAudible_< SIZE, JAUDopplerAudibleChan
                           public JASPoolAllocObject< AudDopplerAudible< SIZE > > {
 public:
     typedef AudGenericAudible_< SIZE, JAUDopplerAudibleChannel, JAUDopplerAudibleAbsPos > Base;
-    AudDopplerAudible(const TVec3f& rPos, const TVec3f* pPos, u32 mask)
+    AudDopplerAudible(const Vec3f& rPos, const Vec3f* pPos, u32 mask)
         : Base(rPos, pPos, mask) {
 
           };

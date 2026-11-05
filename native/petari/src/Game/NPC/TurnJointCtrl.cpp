@@ -7,8 +7,8 @@
 #include "Game/Util/MtxUtil.hpp"
 
 namespace {
-    void makeMtxRotVecDegree(MtxPtr pMtx, const TVec3f& rFrom, const TVec3f& rTo, f32 degree) {
-        TVec3f axis = rFrom.cross(rTo);
+    void makeMtxRotVecDegree(MtxPtr pMtx, const Vec3f& rFrom, const Vec3f& rTo, f32 degree) {
+        Vec3f axis = rFrom.cross(rTo);
         f32 dot = rFrom.dot(rTo);
 
         if (MR::normalizeOrZero(&axis)) {
@@ -79,7 +79,7 @@ void TurnJointCtrl::invalidate() {
     endCtrl(0);
 }
 
-void TurnJointCtrl::setStarePos(const TVec3f& rPos) {
+void TurnJointCtrl::setStarePos(const Vec3f& rPos) {
     if (!mEnabled && MR::isNearZero(mCtrlRate->_0)) {
         return;
     }
@@ -115,15 +115,15 @@ void TurnJointCtrl::setCallBackFunction() {
     }
 }
 
-bool TurnJointCtrl::updateJointMtxCallBackFace(TPos3f* pMtx, const JointControllerInfo& rInfo) {
+bool TurnJointCtrl::updateJointMtxCallBackFace(Pos3f* pMtx, const JointControllerInfo& rInfo) {
     return updateJointMtxCallBack(pMtx, mFace);
 }
 
-bool TurnJointCtrl::updateJointMtxCallBackWaist(TPos3f* pMtx, const JointControllerInfo& rInfo) {
+bool TurnJointCtrl::updateJointMtxCallBackWaist(Pos3f* pMtx, const JointControllerInfo& rInfo) {
     return updateJointMtxCallBack(pMtx, mWaist);
 }
 
-void TurnJointCtrl::getMtxDir(TVec3f* pDir, const TPos3f* pMtx, AXIS axis) {
+void TurnJointCtrl::getMtxDir(Vec3f* pDir, const Pos3f* pMtx, AXIS axis) {
     switch (axis) {
     case X:
         pMtx->getXDir(*pDir);
@@ -139,34 +139,34 @@ void TurnJointCtrl::getMtxDir(TVec3f* pDir, const TPos3f* pMtx, AXIS axis) {
     MR::normalizeOrZero(pDir);
 }
 
-bool TurnJointCtrl::updateJointMtxCallBack(TPos3f* pMtx, const Ctrl& rCtrl) {
+bool TurnJointCtrl::updateJointMtxCallBack(Pos3f* pMtx, const Ctrl& rCtrl) {
     if (!mEnabled && MR::isNearZero(mCtrlRate->_0)) {
         return false;
     }
 
-    TVec3f position;
+    Vec3f position;
     pMtx->getTrans(position);
-    TVec3f direction(mStarePos);
+    Vec3f direction(mStarePos);
     direction.sub(position);
 
     if (MR::normalizeOrZero(&direction)) {
         return false;
     }
 
-    TPos3f result = *pMtx;
-    TPos3f rotation;
-    result.setTrans(TVec3f(0.0f));
+    Pos3f result = *pMtx;
+    Pos3f rotation;
+    result.setTrans(Vec3f(0.0f));
 
-    TVec3f verticalAxis;
-    TVec3f horizontalAxis;
-    TVec3f front;
-    TVec3f projected;
+    Vec3f verticalAxis;
+    Vec3f horizontalAxis;
+    Vec3f front;
+    Vec3f projected;
     getMtxDir(&verticalAxis, pMtx, rCtrl.mVerticalTurnAxis);
     MR::vecKillElement(direction, verticalAxis, &projected);
 
     if (!MR::normalizeOrZero(&projected)) {
         getMtxDir(&front, pMtx, rCtrl.mFrontAxis);
-        TVec3f cross;
+        Vec3f cross;
         cross.cross(direction, front);
         MR::normalizeOrZero(&cross);
         MR::vecBlendSphere(front, projected, &projected, rCtrl.mBlendRate);

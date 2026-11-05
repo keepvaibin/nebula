@@ -1,5 +1,5 @@
 #include "JSystem/JParticle/JPAExtraShape.hpp"
-#include "JSystem/JMath/JMATrigonometric.hpp"
+#include <nebula_geometry.hpp>
 #include "JSystem/JParticle/JPAEmitter.hpp"
 #include "JSystem/JParticle/JPAParticle.hpp"
 
@@ -85,7 +85,7 @@ void JPACalcAlphaFlickAnm(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
         alpha = esp->getAlphaBaseValue();
     }
     s32 theta = ptcl->mAlphaWaveRandom * ptcl->mAge * 16384.0f * (1.0f - esp->getAlphaFreq());
-    f32 wave = JMASSin(theta);
+    f32 wave = Angle::sinShort(theta);
     alpha *= (1.0f + esp->getAlphaAmp() * (wave - 1.0f) * 0.5f) * 255.0f;
     ptcl->mPrmColorAlphaAnm = nebula_f32_to_u8(alpha);
 }

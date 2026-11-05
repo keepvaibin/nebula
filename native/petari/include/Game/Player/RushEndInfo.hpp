@@ -1,16 +1,16 @@
 #pragma once
 
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class LiveActor;
 
 class RushEndInfo {
 public:
-    RushEndInfo(LiveActor*, u32, const TVec3f&, bool, u32);
+    RushEndInfo(LiveActor*, u32, const Vec3f&, bool, u32);
 
     u32 _0;
     u32 _4;
-    TVec3f _8;
+    Vec3f _8;
     bool _14;
     u32 _18;
     LiveActor* _1C;

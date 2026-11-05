@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class EffectSystem;
 class NameObjAdaptor;
@@ -17,10 +17,10 @@ public:
     void drawFor2DModel() const;
     void drawForBloomEffect() const;
     void drawAfterImageEffect() const;
-    void drawWithViewMtx3D(const TPos3f&) const;
-    void drawWithViewMtxAfterIndirect(const TPos3f&) const;
-    void drawWithViewMtxForBloomEffect(const TPos3f&) const;
-    void drawWithViewMtxAfterImageEffect(const TPos3f&) const;
+    void drawWithViewMtx3D(const Pos3f&) const;
+    void drawWithViewMtxAfterIndirect(const Pos3f&) const;
+    void drawWithViewMtxForBloomEffect(const Pos3f&) const;
+    void drawWithViewMtxAfterImageEffect(const Pos3f&) const;
     void initDrawAdaptor();
 
     const EffectSystem* mHost;

@@ -6,7 +6,7 @@
 #include <JSystem/J3DGraphAnimator/J3DMtxBuffer.hpp>
 #include <JSystem/J3DGraphBase/J3DMaterial.hpp>
 #include <JSystem/J3DGraphBase/J3DShape.hpp>
-#include <JSystem/JGeometry.hpp>
+#include <nebula_geometry.hpp>
 #include <JSystem/JUtility/JUTNameTab.hpp>
 
 namespace MR {
@@ -51,30 +51,30 @@ namespace MR {
         return MR::getJ3DModelData(pActor)->mJointTree.mJointName->getIndex(pName) != -1;
     }
 
-    void copyJointPos(J3DModel* pModel, const char* pName, TVec3f* pPos) {
+    void copyJointPos(J3DModel* pModel, const char* pName, Vec3f* pPos) {
         MtxPtr jointMtx = MR::getJointMtx(pModel, pName);
         pPos->set< f32 >(jointMtx[0][3], jointMtx[1][3], jointMtx[2][3]);
     }
 
-    void copyJointPos(const LiveActor* pActor, const char* pName, TVec3f* pPos) {
+    void copyJointPos(const LiveActor* pActor, const char* pName, Vec3f* pPos) {
         copyJointPos(MR::getJ3DModel(pActor), pName, pPos);
     }
 
-    void copyJointPos(J3DModel* pModel, int idx, TVec3f* pPos) {
+    void copyJointPos(J3DModel* pModel, int idx, Vec3f* pPos) {
         MtxPtr jointMtx = pModel->mMtxBuffer->mpAnmMtx[idx];
         pPos->set< f32 >(jointMtx[0][3], jointMtx[1][3], jointMtx[2][3]);
     }
 
-    void copyJointPos(const LiveActor* pActor, int idx, TVec3f* pPos) {
+    void copyJointPos(const LiveActor* pActor, int idx, Vec3f* pPos) {
         copyJointPos(MR::getJ3DModel(pActor), idx, pPos);
     }
 
-    void copyJointScale(const LiveActor* pActor, const char* pName, TVec3f* pScale) {
-        TMtx34f mtx;
+    void copyJointScale(const LiveActor* pActor, const char* pName, Vec3f* pScale) {
+        Mtx34f mtx;
         mtx.set(MR::getJointMtx(pActor, pName));
-        pScale->x = JGeometry::TUtil< f32 >::sqrt(mtx(2, 0) * mtx(2, 0) + (mtx(0, 0) * mtx(0, 0) + mtx(1, 0) * mtx(1, 0)));
-        pScale->y = JGeometry::TUtil< f32 >::sqrt(mtx(2, 1) * mtx(2, 1) + (mtx(0, 1) * mtx(0, 1) + mtx(1, 1) * mtx(1, 1)));
-        pScale->z = JGeometry::TUtil< f32 >::sqrt(mtx(2, 2) * mtx(2, 2) + (mtx(0, 2) * mtx(0, 2) + mtx(1, 2) * mtx(1, 2)));
+        pScale->x = FloatUtil::sqrt(mtx(2, 0) * mtx(2, 0) + (mtx(0, 0) * mtx(0, 0) + mtx(1, 0) * mtx(1, 0)));
+        pScale->y = FloatUtil::sqrt(mtx(2, 1) * mtx(2, 1) + (mtx(0, 1) * mtx(0, 1) + mtx(1, 1) * mtx(1, 1)));
+        pScale->z = FloatUtil::sqrt(mtx(2, 2) * mtx(2, 2) + (mtx(0, 2) * mtx(0, 2) + mtx(1, 2) * mtx(1, 2)));
     }
 
     void hideJoint(J3DJoint* pJoint) {

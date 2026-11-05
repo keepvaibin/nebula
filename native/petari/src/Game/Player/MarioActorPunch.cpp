@@ -76,7 +76,7 @@ bool MarioActor::trySpinPunch() {
 }
 
 void MarioActor::printHitMark(HitSensor* pSensor) {
-    TVec3f vec(pSensor->mPosition - _2A0);
+    Vec3f vec(pSensor->mPosition - _2A0);
     vec.setLength(200.0f);
     playEffectTrans("\203\160\203\223\203\140\203\161\203\142\203\147" /* パンチヒット */, _2A0 + vec);
 }
@@ -109,14 +109,14 @@ void MarioActor::reactionPunch(HitSensor* pSensor) {
     if (pSensor->isType(ATYPE_BEGOMAN)) {
         mMario->stopWalk();
 
-        TVec3f reactDir(_2A0 - pSensor->mPosition);
+        Vec3f reactDir(_2A0 - pSensor->mPosition);
         MR::vecKillElement(reactDir, getGravityVector(), &reactDir);
         reactDir.setLength(20.0f);
         mMario->addReaction(reactDir);
     }
 
     if (mMario->isSwimming()) {
-        TVec3f punchDir(_2A0 - pSensor->mPosition);
+        Vec3f punchDir(_2A0 - pSensor->mPosition);
         punchDir.setLength(5.0f);
         mMario->mSwim->hitPunch(punchDir);
     }
@@ -169,7 +169,7 @@ bool MarioActor::tryPunchAirAfter(HitSensor* pSensor) {
     }
 
     if (!_3E5 && mPlayerMode != 1) {
-        TVec3f vec(pSensor->mPosition - getSensor("body")->mPosition);
+        Vec3f vec(pSensor->mPosition - getSensor("body")->mPosition);
         MR::vecKillElement(vec, getGravityVector(), &vec);
 
         if (MR::diffAngleAbs(vec, mMario->mFrontVec) >= MR::pi() / 4.0f) {
@@ -197,8 +197,8 @@ bool MarioActor::sendBodyAttack(HitSensor* pSensor) {
     }
 
     if (isStatus && !getMovementStates()._8 && !isDamaging() && !getMovementStates()._B) {
-        TVec3f newPos(pSensor->mPosition - getSensor("body")->mPosition);
-        TVec3f* frontVec = &mMario->mFrontVec;
+        Vec3f newPos(pSensor->mPosition - getSensor("body")->mPosition);
+        Vec3f* frontVec = &mMario->mFrontVec;
         if (MR::diffAngleAbsHorizontal(newPos, *frontVec, getGravityVector()) >= HALF_PI) {
             return false;
         }

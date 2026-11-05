@@ -19,7 +19,7 @@ namespace NrvWalkerStateChase {
 WalkerStateChaseParam::WalkerStateChaseParam() : mChaseTime(130), mForceChaseEndTime(300), mTurnMaxRateDegree(2.0f), mChaseEndWaitTime(30) {
 }
 
-WalkerStateChase::WalkerStateChase(LiveActor* pHost, TVec3f* pDirection, WalkerStateParam* pStateParam, WalkerStateChaseParam* pChaseParam)
+WalkerStateChase::WalkerStateChase(LiveActor* pHost, Vec3f* pDirection, WalkerStateParam* pStateParam, WalkerStateChaseParam* pChaseParam)
     : ActorStateBase< LiveActor >("\203\116\203\212\203\173\201\133\222\307\202\242\202\251\202\257\217\363\221\324" /* クリボー追いかけ状態 */, pHost), mStateParam(pStateParam), mChaseParam(pChaseParam), mDirection(pDirection) {
     if (mChaseParam == nullptr) {
         mChaseParam = &::sDefaultParam;

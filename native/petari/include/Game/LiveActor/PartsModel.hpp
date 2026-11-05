@@ -16,9 +16,9 @@ public:
     virtual void makeActorDead() override;
     virtual void calcAndSetBaseMtx() override;
 
-    void initFixedPosition(const TVec3f&, const TVec3f&, const char*);
+    void initFixedPosition(const Vec3f&, const Vec3f&, const char*);
     void initFixedPosition(const char*);
-    void initFixedPosition(MtxPtr, const TVec3f&, const TVec3f&);
+    void initFixedPosition(MtxPtr, const Vec3f&, const Vec3f&);
     void loadFixedPosition(const char*);
     void offFixedPosNormalizeScale();
 

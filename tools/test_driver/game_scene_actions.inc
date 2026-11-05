@@ -7,7 +7,7 @@
             nebula_snprintf(sStage, sizeof(sStage), "%s", action.stage);
             MR::requestChangeStageInGameMoving(sStage, action.scenario);
         } else if (action.kind == NEBULA_TEST_PLACE_PLAYER) {
-            MR::setPlayerPos(TVec3f(action.position[0], action.position[1], action.position[2]));
+            MR::setPlayerPos(Vec3f(action.position[0], action.position[1], action.position[2]));
         } else if (action.kind == NEBULA_TEST_KILL_PLAYER) {
             MR::forceKillPlayerByAbyss();
         } else if (action.kind == NEBULA_TEST_GET_STAR || action.kind == NEBULA_TEST_GET_GRAND_STAR) {

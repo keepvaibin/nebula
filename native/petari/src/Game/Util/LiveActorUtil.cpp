@@ -35,7 +35,7 @@
 #include <cstdio>
 
 namespace {
-    CollisionParts* createCollisionParts(ResourceHolder* pResHolder, const char* pName, HitSensor* pSensor, const TPos3f& rMtx,
+    CollisionParts* createCollisionParts(ResourceHolder* pResHolder, const char* pName, HitSensor* pSensor, const Pos3f& rMtx,
                                          MR::CollisionScaleType scaleType, s32 unk) {
         CollisionParts* parts = new CollisionParts();
         char kcl[256];
@@ -99,7 +99,7 @@ namespace {
         }
     }
 
-    void calcCollisionMtx(TPos3f* pMtx, const LiveActor* pActor) {
+    void calcCollisionMtx(Pos3f* pMtx, const LiveActor* pActor) {
         pMtx->set(pActor->getBaseMtx());
 
         f32 scale = pActor->mScale.x;
@@ -252,7 +252,7 @@ namespace MR {
             return nullptr;
         }
 
-        TPos3f mtx;
+        Pos3f mtx;
         const char* pCollisionName = "MoveLimit";
         MR::makeMtxTRS(mtx, pActor);
         CollisionParts* parts = ::createCollisionParts(MR::getResourceHolder(pActor), pCollisionName, pSensor, mtx, MR::CollisionScaleType_Unk2, 3);
@@ -275,7 +275,7 @@ namespace MR {
             return nullptr;
         }
 
-        TPos3f mtx;
+        Pos3f mtx;
         const char* pCollisionName = "WaterSurface";
         MR::makeMtxTRS(mtx, pActor);
         CollisionParts* parts = ::createCollisionParts(MR::getResourceHolder(pActor), pCollisionName, pSensor, mtx, MR::CollisionScaleType_Unk2, 2);
@@ -298,7 +298,7 @@ namespace MR {
             return nullptr;
         }
 
-        TPos3f mtx;
+        Pos3f mtx;
         const char* pCollisionName = "Sunshade";
         MR::makeMtxTRS(mtx, pActor);
         CollisionParts* parts = ::createCollisionParts(MR::getResourceHolder(pActor), pCollisionName, pSensor, mtx, MR::CollisionScaleType_Unk2, 1);
@@ -350,7 +350,7 @@ namespace MR {
             return false;
         }
 
-        const TVec3f* normal = binder->mGroundInfo.mParentTriangle.getNormal(0);
+        const Vec3f* normal = binder->mGroundInfo.mParentTriangle.getNormal(0);
         return !(0.0f < pActor->mVelocity.dot(*normal));
     }
 
@@ -358,7 +358,7 @@ namespace MR {
         bool isGround = false;
 
         if (isOnGround(pActor)) {
-            const TVec3f* normal = pActor->mBinder->mGroundInfo.mParentTriangle.getNormal(0);
+            const Vec3f* normal = pActor->mBinder->mGroundInfo.mParentTriangle.getNormal(0);
 
             if (MR::isFloorPolygonCos(*normal, pActor->mGravity, cos)) {
                 isGround = true;
@@ -432,10 +432,10 @@ namespace MR {
         return isMoveLimit;
     }
 
-    bool isBindedWallOrSlopeGround(const LiveActor* pActor, f32 cos, TVec3f* pNormal) {
+    bool isBindedWallOrSlopeGround(const LiveActor* pActor, f32 cos, Vec3f* pNormal) {
         if (isBindedWall(pActor)) {
             if (pNormal != nullptr) {
-                const TVec3f* normal = pActor->mBinder->mWallInfo.mParentTriangle.getNormal(0);
+                const Vec3f* normal = pActor->mBinder->mWallInfo.mParentTriangle.getNormal(0);
                 pNormal->set(*normal);
             }
 
@@ -443,11 +443,11 @@ namespace MR {
         }
 
         if (isOnGround(pActor)) {
-            const TVec3f* normal = pActor->mBinder->mGroundInfo.mParentTriangle.getNormal(0);
+            const Vec3f* normal = pActor->mBinder->mGroundInfo.mParentTriangle.getNormal(0);
 
             if (!MR::isFloorPolygonCos(*normal, pActor->mGravity, cos)) {
                 if (pNormal != nullptr) {
-                    const TVec3f* groundNormal = pActor->mBinder->mGroundInfo.mParentTriangle.getNormal(0);
+                    const Vec3f* groundNormal = pActor->mBinder->mGroundInfo.mParentTriangle.getNormal(0);
                     pNormal->set(*groundNormal);
                 }
 
@@ -499,8 +499,8 @@ namespace MR {
             const Binder* binder = pActor->mBinder;
             const HitInfo* pRoofInfo = &binder->mRoofInfo;
             const HitInfo* pGroundInfo = &binder->mGroundInfo;
-            TVec3f roofPower;
-            TVec3f groundPower;
+            Vec3f roofPower;
+            Vec3f groundPower;
             pRoofInfo->mParentTriangle.calcForceMovePower(&roofPower, pRoofInfo->mHitPos);
             pGroundInfo->mParentTriangle.calcForceMovePower(&groundPower, pGroundInfo->mHitPos);
 
@@ -526,7 +526,7 @@ namespace MR {
                 continue;
             }
 
-            TVec3f power1;
+            Vec3f power1;
             plane1->mParentTriangle.calcForceMovePower(&power1, plane1->mHitPos);
 
             for (s32 j = i + 1; j < planeNum; j++) {
@@ -540,13 +540,13 @@ namespace MR {
                     continue;
                 }
 
-                TVec3f power2;
+                Vec3f power2;
                 plane2->mParentTriangle.calcForceMovePower(&power2, plane2->mHitPos);
 
-                TVec3f diffHit(plane1->mHitPos);
+                Vec3f diffHit(plane1->mHitPos);
                 diffHit.sub(plane2->mHitPos);
 
-                TVec3f diffPower(power2);
+                Vec3f diffPower(power2);
                 diffPower.sub(power1);
 
                 if (0.0f < diffPower.dot(diffHit)) {
@@ -631,7 +631,7 @@ namespace MR {
         MR::getClippingDirector()->mActorHolder->setTypeToSphere(pActor, radius, nullptr);
     }
 
-    void setClippingTypeSphere(LiveActor* pActor, f32 radius, const TVec3f* pTrans) {
+    void setClippingTypeSphere(LiveActor* pActor, f32 radius, const Vec3f* pTrans) {
         MR::getClippingDirector()->mActorHolder->setTypeToSphere(pActor, radius, pTrans);
     }
 
@@ -735,18 +735,18 @@ namespace MR {
         NebulaMtxCopy(pMtx, (MtxPtr)&getJ3DModel(pActor)->mBaseTransformMtx);
     }
 
-    void setBaseTRMtx(LiveActor* pActor, const TPos3f& rMtx) {
+    void setBaseTRMtx(LiveActor* pActor, const Pos3f& rMtx) {
         NebulaMtxCopy((MtxPtr)rMtx.mMtx, (MtxPtr)&getJ3DModel(pActor)->mBaseTransformMtx);
     }
 
-    void setBaseTRMtx(LiveActor* pActor, const TQuat4f& rQuat) {
-        TPos3f mtx;
+    void setBaseTRMtx(LiveActor* pActor, const Quat4f& rQuat) {
+        Pos3f mtx;
         mtx.setQT(rQuat, pActor->mPosition);
 
         NebulaMtxCopy((MtxPtr)mtx.mMtx, (MtxPtr)&getJ3DModel(pActor)->mBaseTransformMtx);
     }
 
-    void setBaseScale(LiveActor* pActor, const TVec3f& rScale) {
+    void setBaseScale(LiveActor* pActor, const Vec3f& rScale) {
         J3DModel* pModel = getJ3DModel(pActor);
         pModel->mBaseScale.x = rScale.x;
         pModel->mBaseScale.y = rScale.y;
@@ -1611,9 +1611,9 @@ namespace MR {
         pActor->mModelManager->updateList();
     }
 
-    void setMirrorReflectionInfoFromMtxYUp(const TPos3f& rMtx) {
-        TVec3f up;
-        TVec3f pos;
+    void setMirrorReflectionInfoFromMtxYUp(const Pos3f& rMtx) {
+        Vec3f up;
+        Vec3f pos;
         rMtx.getYDir(up);
         rMtx.getTrans(pos);
         MR::getMirrorCamera()->setMirrorMapInfo(up, pos);
@@ -1732,11 +1732,11 @@ namespace MR {
         pActor->mActorLightCtrl->loadLight();
     }
 
-    void calcLightPos0(TVec3f* pPos, const LiveActor* pActor) {
+    void calcLightPos0(Vec3f* pPos, const LiveActor* pActor) {
         LightFunction::calcLightWorldPos(pPos, pActor->mActorLightCtrl->getActorLight()->mInfo0);
     }
 
-    void calcLightPos1(TVec3f* pPos, const LiveActor* pActor) {
+    void calcLightPos1(Vec3f* pPos, const LiveActor* pActor) {
         LightFunction::calcLightWorldPos(pPos, pActor->mActorLightCtrl->getActorLight()->mInfo1);
     }
 
@@ -1858,19 +1858,19 @@ namespace MR {
         return true;
     }
 
-    const TVec3f* getGroundNormal(const LiveActor* pActor) {
+    const Vec3f* getGroundNormal(const LiveActor* pActor) {
         return pActor->mBinder->mGroundInfo.mParentTriangle.getNormal(0);
     }
 
-    const TVec3f* getWallNormal(const LiveActor* pActor) {
+    const Vec3f* getWallNormal(const LiveActor* pActor) {
         return pActor->mBinder->mWallInfo.mParentTriangle.getNormal(0);
     }
 
-    const TVec3f* getRoofNormal(const LiveActor* pActor) {
+    const Vec3f* getRoofNormal(const LiveActor* pActor) {
         return pActor->mBinder->mRoofInfo.mParentTriangle.getNormal(0);
     }
 
-    const TVec3f* getBindedNormal(const LiveActor* pActor) {
+    const Vec3f* getBindedNormal(const LiveActor* pActor) {
         if (isBindedGround(pActor)) {
             return getGroundNormal(pActor);
         }
@@ -1886,7 +1886,7 @@ namespace MR {
         return getGroundNormal(pActor);
     }
 
-    const TVec3f* getBindedHitPos(const LiveActor* pActor) {
+    const Vec3f* getBindedHitPos(const LiveActor* pActor) {
         if (isBindedGround(pActor)) {
             return getGroundHitPos(pActor);
         }
@@ -1902,21 +1902,21 @@ namespace MR {
         return getGroundHitPos(pActor);
     }
 
-    const TVec3f* getGroundHitPos(const LiveActor* pActor) {
+    const Vec3f* getGroundHitPos(const LiveActor* pActor) {
         return &pActor->mBinder->mGroundInfo.mHitPos;
     }
 
-    const TVec3f* getWallHitPos(const LiveActor* pActor) {
+    const Vec3f* getWallHitPos(const LiveActor* pActor) {
         return &pActor->mBinder->mWallInfo.mHitPos;
     }
 
-    const TVec3f* getRoofHitPos(const LiveActor* pActor) {
+    const Vec3f* getRoofHitPos(const LiveActor* pActor) {
         return &pActor->mBinder->mRoofInfo.mHitPos;
     }
 
-    void calcWallNormalHorizontal(TVec3f* pVec, const LiveActor* pActor) {
-        const TVec3f* normal = getWallNormal(pActor);
-        const TVec3f* grav = &pActor->mGravity;
+    void calcWallNormalHorizontal(Vec3f* pVec, const LiveActor* pActor) {
+        const Vec3f* normal = getWallNormal(pActor);
+        const Vec3f* grav = &pActor->mGravity;
         pVec->killElement(*normal, *grav);
     }
 
@@ -1952,7 +1952,7 @@ namespace MR {
         return pActor->mBinder->mPlaneNum;
     }
 
-    const TVec3f* getBindedPlaneNormal(const LiveActor* pActor, int planeIndex) {
+    const Vec3f* getBindedPlaneNormal(const LiveActor* pActor, int planeIndex) {
         return pActor->mBinder->getPlane(planeIndex)->mParentTriangle.getNormal(0);
     }
 
@@ -1960,11 +1960,11 @@ namespace MR {
         return pActor->mBinder->getPlane(planeIndex)->mParentTriangle.mSensor;
     }
 
-    TVec3f* getBindedFixReactionVector(const LiveActor* pActor) {
+    Vec3f* getBindedFixReactionVector(const LiveActor* pActor) {
         return &pActor->mBinder->mFixReactionVector;
     }
 
-    void setBinderOffsetVec(LiveActor* pActor, const TVec3f* pVec, bool b) {
+    void setBinderOffsetVec(LiveActor* pActor, const Vec3f* pVec, bool b) {
         Binder* binder = pActor->mBinder;
         binder->mOffsetVec = pVec;
         binder->_1EC._4 = b;
@@ -2125,7 +2125,7 @@ namespace MR {
     }
 
     void calcGravity(LiveActor* pActor) {
-        TVec3f gravity;
+        Vec3f gravity;
         calcGravityVector(pActor, pActor->mPosition, &gravity, nullptr, 0);
 
         if (!isNearZero(gravity)) {
@@ -2133,8 +2133,8 @@ namespace MR {
         }
     }
 
-    void calcGravity(LiveActor* pActor, const TVec3f& rPos) {
-        TVec3f gravity;
+    void calcGravity(LiveActor* pActor, const Vec3f& rPos) {
+        Vec3f gravity;
         calcGravityVector(pActor, rPos, &gravity, nullptr, 0);
 
         if (!isNearZero(gravity)) {
@@ -2146,8 +2146,8 @@ namespace MR {
         calcGravityOrZero(pActor, pActor->mPosition);
     }
 
-    void calcGravityOrZero(LiveActor* pActor, const TVec3f& rPos) {
-        TVec3f gravity;
+    void calcGravityOrZero(LiveActor* pActor, const Vec3f& rPos) {
+        Vec3f gravity;
         calcGravityVectorOrZero(pActor, rPos, &gravity, nullptr, 0);
 
         if (!isNearZero(gravity)) {
@@ -2156,7 +2156,7 @@ namespace MR {
         }
 
         if (isBindedGround(pActor)) {
-            const TVec3f* normal = pActor->mBinder->mGroundInfo.mParentTriangle.getNormal(0);
+            const Vec3f* normal = pActor->mBinder->mGroundInfo.mParentTriangle.getNormal(0);
             pActor->mGravity.set(-*normal);
         }
     }
@@ -2190,21 +2190,21 @@ namespace MR {
     }
 
     CollisionParts* createCollisionPartsFromLiveActor(LiveActor* pActor, const char* pName, HitSensor* pSensor, CollisionScaleType scaleType) {
-        TPos3f mtx;
+        Pos3f mtx;
         makeMtxTRS(mtx, pActor);
         return ::createCollisionParts(getResourceHolder(pActor), pName, pSensor, mtx, scaleType, 0);
     }
 
     CollisionParts* createCollisionPartsFromLiveActor(LiveActor* pActor, const char* pName, HitSensor* pSensor, MtxPtr pMtx,
                                                       CollisionScaleType scaleType) {
-        TPos3f mtx;
+        Pos3f mtx;
         mtx.set(pMtx);
         CollisionParts* pParts = ::createCollisionParts(getResourceHolder(pActor), pName, pSensor, mtx, scaleType, 0);
-        pParts->_0 = reinterpret_cast< TPos3f* >(pMtx);
+        pParts->_0 = reinterpret_cast< Pos3f* >(pMtx);
         return pParts;
     }
 
-    CollisionParts* createCollisionPartsFromResourceHolder(ResourceHolder* pResHolder, const char* pName, HitSensor* pSensor, const TPos3f& rMtx,
+    CollisionParts* createCollisionPartsFromResourceHolder(ResourceHolder* pResHolder, const char* pName, HitSensor* pSensor, const Pos3f& rMtx,
                                                            CollisionScaleType scaleType) {
         return ::createCollisionParts(pResHolder, pName, pSensor, rMtx, scaleType, 0);
     }
@@ -2220,11 +2220,11 @@ namespace MR {
             return nullptr;
         }
 
-        TPos3f mtx;
+        Pos3f mtx;
         const char* pCollisionName = "MoveLimit";
         mtx.set(pMtx);
         CollisionParts* pParts = ::createCollisionParts(getResourceHolder(pActor), pCollisionName, pSensor, mtx, CollisionScaleType_Unk2, 3);
-        pParts->_0 = reinterpret_cast< TPos3f* >(pMtx);
+        pParts->_0 = reinterpret_cast< Pos3f* >(pMtx);
 
         if (pParts != nullptr) {
             validateCollisionParts(pParts);
@@ -2244,11 +2244,11 @@ namespace MR {
             return nullptr;
         }
 
-        TPos3f mtx;
+        Pos3f mtx;
         const char* pCollisionName = "WaterSurface";
         mtx.set(pMtx);
         CollisionParts* pParts = ::createCollisionParts(getResourceHolder(pActor), pCollisionName, pSensor, mtx, CollisionScaleType_Unk2, 2);
-        pParts->_0 = reinterpret_cast< TPos3f* >(pMtx);
+        pParts->_0 = reinterpret_cast< Pos3f* >(pMtx);
 
         if (pParts != nullptr) {
             validateCollisionParts(pParts);
@@ -2268,11 +2268,11 @@ namespace MR {
             return nullptr;
         }
 
-        TPos3f mtx;
+        Pos3f mtx;
         const char* pCollisionName = "Sunshade";
         mtx.set(pMtx);
         CollisionParts* pParts = ::createCollisionParts(getResourceHolder(pActor), pCollisionName, pSensor, mtx, CollisionScaleType_Unk2, 1);
-        pParts->_0 = reinterpret_cast< TPos3f* >(pMtx);
+        pParts->_0 = reinterpret_cast< Pos3f* >(pMtx);
 
         if (pParts != nullptr) {
             validateCollisionParts(pParts);
@@ -2420,7 +2420,7 @@ namespace MR {
             return;
         }
 
-        TPos3f mtx;
+        Pos3f mtx;
         ::calcCollisionMtx(&mtx, pActor);
         pParts->resetAllMtx(mtx);
     }
@@ -2528,8 +2528,8 @@ namespace MR {
         return pModel;
     }
 
-    PartsModel* createPartsModelEnemyAndFix(LiveActor* pHost, const char* pName, const char* pModelName, MtxPtr pMtx, const TVec3f& rPos,
-                                            const TVec3f& rRot, const char* pJointName) {
+    PartsModel* createPartsModelEnemyAndFix(LiveActor* pHost, const char* pName, const char* pModelName, MtxPtr pMtx, const Vec3f& rPos,
+                                            const Vec3f& rRot, const char* pJointName) {
         PartsModel* pModel = new PartsModel(pHost, pName, pModelName, pMtx, MR::DrawBufferType_Enemy, false);
         pModel->initFixedPosition(rPos, rRot, pJointName);
         pModel->initWithoutIter();
@@ -2563,7 +2563,7 @@ namespace MR {
         return pLod;
     }
 
-    Flag* createMapFlag(const char* pName, const char* pInfoName, const TVec3f* pPos, const TVec3f& rRot, f32 a5, f32 a6, f32 a7, s32 a8, s32 a9,
+    Flag* createMapFlag(const char* pName, const char* pInfoName, const Vec3f* pPos, const Vec3f& rRot, f32 a5, f32 a6, f32 a7, s32 a8, s32 a9,
                         f32 a10) {
         Flag* pFlag = new Flag(pName);
         pFlag->setInfoPos(pInfoName, pPos, rRot, a5, a6, a7, a8, a9, a10);
@@ -2647,7 +2647,7 @@ namespace MR {
             return;
         }
 
-        TPos3f mtx;
+        Pos3f mtx;
         ::calcCollisionMtx(&mtx, pActor);
         pParts->setMtx(mtx);
     }

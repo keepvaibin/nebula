@@ -29,20 +29,20 @@ bool WaterPressure::shotBullet(f32 speed) {
     if (pBullet == nullptr) {
         return false;
     }
-    TPos3f point;
+    Pos3f point;
     calcGunPointFromCannon(&point);
     pBullet->shotWaterBullet(this, point, speed, !isShotTypeOnGravity(), false, mIsInvalidSpinKill, &mCameraInfo);
     return true;
 }
 
-void WaterPressure::calcGunPointFromCannon(TPos3f* pMtx) {
-    TPos3f jointMtx = MR::getJointMtx(this, "Cannon1");
-    TVec3f sideVec, pos;
+void WaterPressure::calcGunPointFromCannon(Pos3f* pMtx) {
+    Pos3f jointMtx = MR::getJointMtx(this, "Cannon1");
+    Vec3f sideVec, pos;
     jointMtx.getXDir(sideVec);
     jointMtx.getTrans(pos);
     pos.scaleAdd(::sGunPointOffset, sideVec, pos);
     pMtx->set(jointMtx);
-    TVec3f upVec, frontVec;
+    Vec3f upVec, frontVec;
     jointMtx.getYDir(upVec);
     jointMtx.getZDir(frontVec);
     MR::makeMtxFrontUpPos(pMtx, sideVec, upVec, pos);

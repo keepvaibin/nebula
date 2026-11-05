@@ -8,7 +8,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <JSystem/JMath/JMATrigonometric.hpp>
+#include <nebula_geometry.hpp>
 
 namespace NrvPalmIsland {
     NEW_NERVE(PalmIslandNrvWait, PalmIsland, Wait);

@@ -42,9 +42,9 @@ void ShadowVolumeFlatModel::draw() const {
 
 void ShadowVolumeFlatModel::loadModelDrawMtx() const {
     ShadowController* controller = getController();
-    TPos3f rootMtx;
-    TPos3f dropMtx;
-    TVec3f displacement;
+    Pos3f rootMtx;
+    Pos3f dropMtx;
+    Vec3f displacement;
     controller->getDropDir(&displacement);
     displacement.scale(calcBaseDropLength());
     calcRootJoint(&rootMtx, displacement);
@@ -63,17 +63,17 @@ void ShadowVolumeFlatModel::loadModelDrawMtx() const {
     J3DNativeShape::setPosition(mDropDrawMtxIndex / 3, dropMtx);
 }
 
-void ShadowVolumeFlatModel::calcRootJoint(TPos3f* pMtx, const TVec3f& rDisplacement) const {
+void ShadowVolumeFlatModel::calcRootJoint(Pos3f* pMtx, const Vec3f& rDisplacement) const {
     pMtx->set(mBaseMtx);
-    TVec3f up(mBaseMtx[0][1], mBaseMtx[1][1], mBaseMtx[2][1]);
+    Vec3f up(mBaseMtx[0][1], mBaseMtx[1][1], mBaseMtx[2][1]);
     if (up.dot(rDisplacement) >= 0.0f) {
         MR::addTransMtx(*pMtx, rDisplacement);
     }
 }
 
-void ShadowVolumeFlatModel::calcDropJoint(TPos3f* pMtx, const TVec3f& rDisplacement) const {
+void ShadowVolumeFlatModel::calcDropJoint(Pos3f* pMtx, const Vec3f& rDisplacement) const {
     pMtx->set(mBaseMtx);
-    TVec3f up(mBaseMtx[0][1], mBaseMtx[1][1], mBaseMtx[2][1]);
+    Vec3f up(mBaseMtx[0][1], mBaseMtx[1][1], mBaseMtx[2][1]);
     if (up.dot(rDisplacement) < 0.0f) {
         MR::addTransMtx(*pMtx, rDisplacement);
     }

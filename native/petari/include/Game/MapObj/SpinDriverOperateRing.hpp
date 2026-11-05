@@ -11,25 +11,25 @@ public:
 
     void setRadiusRate(f32);
     void reset();
-    void update(const TVec3f&, const TVec3f&);
+    void update(const Vec3f&, const Vec3f&);
     void updatePosition();
-    void updateControlPoint(const TVec3f&);
-    void updateDirection(const TVec3f&);
+    void updateControlPoint(const Vec3f&);
+    void updateDirection(const Vec3f&);
     void resetVelocityAndTrans();
-    void addAccelToOperatePlane(const TVec3f&);
-    void addAccelOperate(TVec3f*, const TVec3f&);
+    void addAccelToOperatePlane(const Vec3f&);
+    void addAccelOperate(Vec3f*, const Vec3f&);
     void addAccelToCenter();
     void attenuateVelocity();
-    void calcOperatePowerByDPD(TVec3f*) const;
+    void calcOperatePowerByDPD(Vec3f*) const;
 
     void exeWait();
 
-    TVec3f _8C;
-    TVec3f _98;
-    TVec3f _A4;
-    TVec3f mAccelerate;
-    TVec3f mDirection;
-    TVec3f _C8;
+    Vec3f _8C;
+    Vec3f _98;
+    Vec3f _A4;
+    Vec3f mAccelerate;
+    Vec3f mDirection;
+    Vec3f _C8;
     f32 mRadiusRate;
     f32 _D8;
     f32 _DC;

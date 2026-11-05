@@ -32,5 +32,5 @@ public:
     f32 mPipeHeight;
     MtxPtr mTopMtx;
     MtxPtr mBottomMtx;
-    TVec3f _9C;
+    Vec3f _9C;
 };

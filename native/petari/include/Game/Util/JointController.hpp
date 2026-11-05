@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry.hpp>
+#include <nebula_geometry.hpp>
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 
@@ -19,8 +19,8 @@ class JointController {
 public:
     JointController();
 
-    virtual bool calcJointMatrix(TPos3f*, const JointControllerInfo&);
-    virtual bool calcJointMatrixAfterChild(TPos3f*, const JointControllerInfo&);
+    virtual bool calcJointMatrix(Pos3f*, const JointControllerInfo&);
+    virtual bool calcJointMatrixAfterChild(Pos3f*, const JointControllerInfo&);
 
     void registerCallBack();
     void calcJointMatrixAndSetSystem(J3DJoint*);
@@ -34,7 +34,7 @@ public:
 template < typename T >
 class JointControlDelegator : public JointController {
 public:
-    typedef bool (T::*func)(TPos3f*, const JointControllerInfo&);
+    typedef bool (T::*func)(Pos3f*, const JointControllerInfo&);
 
     inline JointControlDelegator(T* pHost, func calcFunc, func calcAfterChild) : JointController() {
         mHost = pHost;
@@ -51,7 +51,7 @@ public:
     virtual ~JointControlDelegator() {
     }
 
-    virtual bool calcJointMatrix(TPos3f* pMtx, const JointControllerInfo& rInfo) {
+    virtual bool calcJointMatrix(Pos3f* pMtx, const JointControllerInfo& rInfo) {
         if (mMtxCalcFunc != nullptr) {
             return (mHost->*mMtxCalcFunc)(pMtx, rInfo);
         } else {
@@ -59,7 +59,7 @@ public:
         }
     }
 
-    virtual bool calcJointMatrixAfterChild(TPos3f* pMtx, const JointControllerInfo& rInfo) {
+    virtual bool calcJointMatrixAfterChild(Pos3f* pMtx, const JointControllerInfo& rInfo) {
         if (mMtxCalcAfterChildFunc != nullptr) {
             return (mHost->*mMtxCalcAfterChildFunc)(pMtx, rInfo);
         } else {
@@ -78,8 +78,8 @@ namespace MR {
 
     template < class T >
     JointController* createJointController(T* pHost, const LiveActor* pActor, const char* pJointName,
-                                           bool (T::*calcFunc)(TPos3f*, const JointControllerInfo&),
-                                           bool (T::*calcChild)(TPos3f*, const JointControllerInfo&)) {
+                                           bool (T::*calcFunc)(Pos3f*, const JointControllerInfo&),
+                                           bool (T::*calcChild)(Pos3f*, const JointControllerInfo&)) {
         JointControlDelegator< T >* pController = new JointControlDelegator< T >(pHost, calcFunc, calcChild);
         setJointControllerParam(pController, pActor, pJointName);
         return pController;
@@ -87,23 +87,23 @@ namespace MR {
 
     template < class T >
     JointController* createJointController(T* pHost, const LiveActor* pActor, u16 jointIndex,
-                                           bool (T::*calcFunc)(TPos3f*, const JointControllerInfo&),
-                                           bool (T::*calcChild)(TPos3f*, const JointControllerInfo&)) {
+                                           bool (T::*calcFunc)(Pos3f*, const JointControllerInfo&),
+                                           bool (T::*calcChild)(Pos3f*, const JointControllerInfo&)) {
         JointControlDelegator< T >* controller = new JointControlDelegator< T >(pHost, calcFunc, calcChild);
         setJointControllerParam(controller, pActor, jointIndex);
         return controller;
     }
 
     template < class T >
-    JointControlDelegator< T >* createJointDelegator(T* pHost, const LiveActor* pActor, bool (T::*calcFunc)(TPos3f*, const JointControllerInfo&),
-                                                     bool (T::*calcChild)(TPos3f*, const JointControllerInfo&), const char* pName) {
+    JointControlDelegator< T >* createJointDelegator(T* pHost, const LiveActor* pActor, bool (T::*calcFunc)(Pos3f*, const JointControllerInfo&),
+                                                     bool (T::*calcChild)(Pos3f*, const JointControllerInfo&), const char* pName) {
         JointControlDelegator< T >* delegator = new JointControlDelegator< T >(pHost, calcFunc, calcChild);
         setJointControllerParam(delegator, pActor, pName);
         return delegator;
     }
 
     template < class T >
-    JointControlDelegator< T >* createJointDelegatorWithNullChildFunc(T* pHost, bool (T::*calcFunc)(TPos3f*, const JointControllerInfo&),
+    JointControlDelegator< T >* createJointDelegatorWithNullChildFunc(T* pHost, bool (T::*calcFunc)(Pos3f*, const JointControllerInfo&),
                                                                       const char* pName) {
         JointControlDelegator< T >* delegator = new JointControlDelegator< T >(pHost, calcFunc, 0);
         setJointControllerParam(delegator, pHost, pName);
@@ -111,7 +111,7 @@ namespace MR {
     }
 
     template < class T >
-    JointControlDelegator< T >* createJointDelegatorWithNullMtxFunc(T* pHost, bool (T::*calcFunc)(TPos3f*, const JointControllerInfo&),
+    JointControlDelegator< T >* createJointDelegatorWithNullMtxFunc(T* pHost, bool (T::*calcFunc)(Pos3f*, const JointControllerInfo&),
                                                                     const char* pName) {
         JointControlDelegator< T >* delegator = new JointControlDelegator< T >(calcFunc, pHost, 0);
         setJointControllerParam(delegator, pHost, pName);
@@ -119,7 +119,7 @@ namespace MR {
     }
 
     template < class T >
-    JointController* createJointController(T* pHost, const char* pName, bool (T::*calcFunc)(TPos3f*, const JointControllerInfo&)) {
+    JointController* createJointController(T* pHost, const char* pName, bool (T::*calcFunc)(Pos3f*, const JointControllerInfo&)) {
         JointControlDelegator< T >* delegator = new JointControlDelegator< T >(pHost, calcFunc, 0);
         setJointControllerParam(delegator, pHost, pName);
         return delegator;

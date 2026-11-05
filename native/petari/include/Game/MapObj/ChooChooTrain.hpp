@@ -17,7 +17,7 @@ public:
     virtual void control();
 
     MR::Vector< MR::AssignableArray< ModelObj* > > mModelArray;
-    TVec3f _98;
+    Vec3f _98;
     f32 mRailSpeed;
     s32 mWhistleTimer;
 };

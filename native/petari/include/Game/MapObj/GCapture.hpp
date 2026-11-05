@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class CameraTargetMtx;
 class GCaptureRibbon;
@@ -14,7 +14,7 @@ public:
 
     virtual void decidedTarget() = 0;
     virtual void releasedTarget() = 0;
-    virtual void getTargetPosition(TVec3f*) = 0;
+    virtual void getTargetPosition(Vec3f*) = 0;
     virtual bool canEndHold() const {
         return true;
     }
@@ -61,8 +61,8 @@ public:
     void upTractPower();
     void downTractPower();
     void fillGapBindTrans();
-    void updateRibbon(const TVec3f&, s32);
-    void updateRibbonPointEffectMatrix(const TVec3f&);
+    void updateRibbon(const Vec3f&, s32);
+    void updateRibbonPointEffectMatrix(const Vec3f&);
     void addRotateAccelPointing();
     bool tryAddVelocityReflectJumpCollision();
     bool requestTarget(GCaptureTargetable*);
@@ -81,13 +81,13 @@ public:
     void exeHold();
     void exeBreak();
 
-    TPos3f _8C;
-    TQuat4f _BC;
-    TVec3f mEffectPos;
-    TVec3f _D8;
-    TVec3f _E4;
-    TVec3f _F0;
-    TVec3f _FC;
+    Pos3f _8C;
+    Quat4f _BC;
+    Vec3f mEffectPos;
+    Vec3f _D8;
+    Vec3f _E4;
+    Vec3f _F0;
+    Vec3f _FC;
     LiveActor* _108;
     GCaptureTargetable* mTarget;
     GCaptureTargetable* _110;

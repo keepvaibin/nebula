@@ -381,7 +381,7 @@ AreaObjMgr* AreaObjContainer::getManager(const char* pName) const {
     return *std::find_if(mManagerArray, mManagerArray + mNumManagers, [&](const auto& item) { return IsManagerName()(item, pName); });
 }
 
-AreaObj* AreaObjContainer::getAreaObj(const char* pName, const TVec3f& rVec) const {
+AreaObj* AreaObjContainer::getAreaObj(const char* pName, const Vec3f& rVec) const {
     return getManager(pName)->find_in(rVec);
 }
 

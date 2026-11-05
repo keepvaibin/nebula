@@ -54,8 +54,8 @@ bool Mario::isNotReflectGlassGround() const {
         return false;
     }
 
-    TVec3f vec(1627.0f, 783.0f, -2152.0f);
-    TVec3f v10 = mPosition - vec;
+    Vec3f vec(1627.0f, 783.0f, -2152.0f);
+    Vec3f v10 = mPosition - vec;
 
     f32 v4 = MR::diffAngleAbs(getCamDirZ(), v10);
     f32 v5 = v4;
@@ -92,14 +92,14 @@ bool Mario::isUseAnotherMovingPolygon() const {
     return false;
 }
 
-bool Mario::isUseFooSpecialGravity(const TVec3f& rA1, TVec3f* pA2) const {
+bool Mario::isUseFooSpecialGravity(const Vec3f& rA1, Vec3f* pA2) const {
     if (!isStatusActive(MarioStatus_Foo)) {
         return false;
     }
 
     if (MR::isEqualStageName("HeavensDoorGalaxy") && MR::getCurrentScenarioNo() == 2) {
-        TVec3f vec(14760.0f, -10676.2f, 6770.0f);
-        TVec3f res = vec - rA1;
+        Vec3f vec(14760.0f, -10676.2f, 6770.0f);
+        Vec3f res = vec - rA1;
         pA2->set(res);
         MR::normalizeOrZero(pA2);
         return true;
@@ -120,8 +120,8 @@ void Mario::updateOnimasu() {
 
     const HitSensor* sensor = _5FC;
     MtxPtr inverse = sensor->mHost->mCollisionParts->mInvBaseMatrix;
-    TVec3f localPosition;
-    TVec3f previousPosition;
+    Vec3f localPosition;
+    Vec3f previousPosition;
     previousPosition = _600;
     NebulaMtxMultVec(inverse, &mActor->mPosition, &localPosition);
     if (_60C) {
@@ -134,7 +134,7 @@ void Mario::updateOnimasu() {
         if (previousPosition.y < -400.0f && localPosition.y > -400.0f) {
             if (MR::isInRange(localPosition.x, -400.0f, 400.0f) && MR::isInRange(localPosition.z, -400.0f, 400.0f)) {
                 localPosition = _600;
-                TVec3f position;
+                Vec3f position;
                 NebulaMtxMultVec(sensor->mHost->mCollisionParts->mBaseMatrix, &localPosition, &position);
                 setTrans(position, nullptr);
                 mVelocity.zero();
@@ -160,9 +160,9 @@ void Mario::updateOnimasu() {
                    MR::isInRange(localPosition.z, -400.0f, 400.0f)) {
             mVelocity.zero();
             localPosition = _600;
-            TVec3f position;
+            Vec3f position;
             NebulaMtxMultVec(sensor->mHost->mCollisionParts->mBaseMatrix, &localPosition, &position);
-            TVec3f displacement(position - mPosition);
+            Vec3f displacement(position - mPosition);
             f32 height = 10.0f + mVerticalSpeed;
             if (-displacement.dot(getShadowNorm()) > height) {
                 MR::vecKillElement(displacement, getShadowNorm(), &displacement);
@@ -176,9 +176,9 @@ void Mario::updateOnimasu() {
         bool correctX = false;
         bool correctY = false;
         bool correctZ = false;
-        TVec3f axisX;
-        TVec3f axisY;
-        TVec3f axisZ;
+        Vec3f axisX;
+        Vec3f axisY;
+        Vec3f axisZ;
         sensor->mHost->mCollisionParts->mBaseMatrix.getXDir(axisX);
         sensor->mHost->mCollisionParts->mBaseMatrix.getYDir(axisY);
         sensor->mHost->mCollisionParts->mBaseMatrix.getZDir(axisZ);
@@ -286,10 +286,10 @@ void Mario::updateOnimasu() {
         }
 
         if (correctX | correctY | correctZ) {
-            TVec3f position;
+            Vec3f position;
             NebulaMtxMultVec(sensor->mHost->mCollisionParts->mBaseMatrix, &localPosition, &position);
             if (mMovementStates._8 || mMovementStates._19 || mMovementStates._1A) {
-                TVec3f displacement(position - mPosition);
+                Vec3f displacement(position - mPosition);
                 if (getWallNorm().dot(displacement) < 0.0f) {
                     addVelocity(-displacement);
                 } else {
@@ -327,7 +327,7 @@ void Mario::updateOnimasu() {
         }
 
         if (corrected) {
-            TVec3f position;
+            Vec3f position;
             NebulaMtxMultVec(sensor->mHost->mCollisionParts->mBaseMatrix, &_600, &position);
             setTrans(position, nullptr);
             localPosition = _600;

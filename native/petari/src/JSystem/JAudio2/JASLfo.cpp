@@ -1,5 +1,5 @@
 #include "JSystem/JAudio2/JASLfo.hpp"
-#include "JSystem/JMath/JMATrigonometric.hpp"
+#include <nebula_geometry.hpp>
 
 JASLfo::JASLfo() {
     _0 = 0;
@@ -20,7 +20,7 @@ f32 JASLfo::getValue() const {
         return 0.0f;
     }
 
-    return mDepth * JMASinLap(_8);
+    return mDepth * Angle::sinLap(_8);
 }
 
 void JASLfo::incCounter(f32 param_0) {

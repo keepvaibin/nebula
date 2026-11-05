@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class LiveActor;
 class JointController;
@@ -28,13 +28,13 @@ public:
     void endCtrl(s32);
     void validate();
     void invalidate();
-    void setStarePos(const TVec3f&);
+    void setStarePos(const Vec3f&);
     void update();
     void setCallBackFunction();
-    bool updateJointMtxCallBackFace(TPos3f*, const JointControllerInfo&);
-    bool updateJointMtxCallBackWaist(TPos3f*, const JointControllerInfo&);
-    void getMtxDir(TVec3f*, const TPos3f*, AXIS);
-    bool updateJointMtxCallBack(TPos3f*, const Ctrl&);
+    bool updateJointMtxCallBackFace(Pos3f*, const JointControllerInfo&);
+    bool updateJointMtxCallBackWaist(Pos3f*, const JointControllerInfo&);
+    void getMtxDir(Vec3f*, const Pos3f*, AXIS);
+    bool updateJointMtxCallBack(Pos3f*, const Ctrl&);
 
     LiveActor* mActor;
     Ctrl mFace;
@@ -43,8 +43,8 @@ public:
     f32 mHorizontalDegreeMax;
     f32 mPositiveDegreeMax;
     f32 mNegativeDegreeMax;
-    TVec3f mStarePos;
-    TVec3f _50;
+    Vec3f mStarePos;
+    Vec3f _50;
     f32 _5C;
     f32 _60;
     s32 mCtrlFrames;

@@ -53,7 +53,7 @@ bool TalkSupportPlayerWatcher::isEnableTalkPlayerStateEvent() const {
         return true;
     }
 
-    if (MR::isPlayerInWaterMode() || MR::isInWater(MR::getPlayerDemoActor(), TVec3f(0.0f, 0.0f, 0.0f))) {
+    if (MR::isPlayerInWaterMode() || MR::isInWater(MR::getPlayerDemoActor(), Vec3f(0.0f, 0.0f, 0.0f))) {
         return true;
     }
 

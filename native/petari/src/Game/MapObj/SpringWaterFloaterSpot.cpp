@@ -99,8 +99,8 @@ void SpringWaterFloaterSpot::control() {
     _AC.add(mVelocity);
     MR::makeMtxUpNoSupportPos(&_CC, -mGravity, _AC);
 
-    TVec3f vec20;
-    TVec3f vec14(0.0f, -70.0f + _A4, 0.0f);
+    Vec3f vec20;
+    Vec3f vec14(0.0f, -70.0f + _A4, 0.0f);
     NebulaMtxMultVec(_CC, vec14, vec20);
     _CC.setTrans(vec20);
 }
@@ -108,12 +108,12 @@ void SpringWaterFloaterSpot::control() {
 void SpringWaterFloaterSpot::calcAndSetBaseMtx() {
     mPosition.set(_AC);
 
-    TPos3f baseMtx;
+    Pos3f baseMtx;
     MR::makeMtxTR(baseMtx, this);
 
     if (mNeedsBound) {
-        TVec3f up(-mGravity);
-        TVec3f offset;
+        Vec3f up(-mGravity);
+        Vec3f offset;
         offset.scale(mBoundSize, up);
         baseMtx[0][3] += offset.x;
         baseMtx[1][3] += offset.y;
@@ -124,8 +124,8 @@ void SpringWaterFloaterSpot::calcAndSetBaseMtx() {
 }
 
 void SpringWaterFloaterSpot::exeWait() {
-    TVec3f up(-mGravity);
-    TVec3f vec1C;
+    Vec3f up(-mGravity);
+    Vec3f vec1C;
     vec1C.scale(_A4, up);
 
     if (MR::isInWater(this, vec1C)) {
@@ -140,10 +140,10 @@ void SpringWaterFloaterSpot::exeWait() {
 void SpringWaterFloaterSpot::exeFloatSignal() {
     f32 scale = 3.0f * (getNerveStep() % 8 < 4 ? 1.0f : -1.0f);
 
-    TVec3f sideVec;
+    Vec3f sideVec;
     MR::calcSideVec(&sideVec, this);
 
-    TVec3f scaledSideVec;
+    Vec3f scaledSideVec;
     scaledSideVec.scale(scale, sideVec);
     mVelocity.set(scaledSideVec);
 
@@ -233,10 +233,10 @@ bool SpringWaterFloaterSpot::boundFloater() {
 }
 
 void SpringWaterFloaterSpot::floatFloater() {
-    TVec3f up;
+    Vec3f up;
     up.negate(mGravity);
 
-    TVec3f scaledUp;
+    Vec3f scaledUp;
     scaledUp.scale(_A4, up);
 
     if (MR::isInWater(this, scaledUp)) {

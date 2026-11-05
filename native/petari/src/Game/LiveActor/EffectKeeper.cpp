@@ -54,10 +54,10 @@ void EffectKeeper::init(LiveActor* pActor) {
 
 namespace {
     s32 getFloorCodeBelow(MtxPtr pMtx, f32 distance) {
-        TVec3f direction;
-        TVec3f position;
-        TVec3f intersection;
-        TPos3f mtx;
+        Vec3f direction;
+        Vec3f position;
+        Vec3f intersection;
+        Pos3f mtx;
         mtx.set(pMtx);
         mtx.getYDir(direction);
         direction.negate();
@@ -101,16 +101,16 @@ void EffectKeeper::addEffect(const char* pParam1, LiveActor* pActor) {
     MR::Effect::addAutoEffect(this, pActor, MR::Effect::createAutoEffect(_0, pParam1));
 }
 
-void EffectKeeper::registerEffect(const char* pParam1, const TVec3f* pParam2, const TVec3f* pParam3, const TVec3f* pParam4, const char* pParam5) {
-    registMultiEmitter(new MultiEmitter(pParam1, pParam2, pParam3, pParam4, TVec3f(0.0f, 0.0f, 0.0f)), pParam1, pParam5);
+void EffectKeeper::registerEffect(const char* pParam1, const Vec3f* pParam2, const Vec3f* pParam3, const Vec3f* pParam4, const char* pParam5) {
+    registMultiEmitter(new MultiEmitter(pParam1, pParam2, pParam3, pParam4, Vec3f(0.0f, 0.0f, 0.0f)), pParam1, pParam5);
 }
 
 void EffectKeeper::registerEffect(const char* pParam1, MtxPtr pParam2, const char* pParam3, const char*) {
-    registMultiEmitter(new MultiEmitter(pParam1, pParam2, TVec3f(0.0f, 0.0f, 0.0f)), pParam1, pParam3);
+    registMultiEmitter(new MultiEmitter(pParam1, pParam2, Vec3f(0.0f, 0.0f, 0.0f)), pParam1, pParam3);
 }
 
-void EffectKeeper::registerEffect(const char* pParam1, MtxPtr pParam2, const TVec3f* pParam3, const char* pParam4, const char*) {
-    registMultiEmitter(new MultiEmitter(pParam1, pParam2, pParam3, TVec3f(0.0f, 0.0f, 0.0f)), pParam1, pParam4);
+void EffectKeeper::registerEffect(const char* pParam1, MtxPtr pParam2, const Vec3f* pParam3, const char* pParam4, const char*) {
+    registMultiEmitter(new MultiEmitter(pParam1, pParam2, pParam3, Vec3f(0.0f, 0.0f, 0.0f)), pParam1, pParam4);
 }
 
 void EffectKeeper::registerEffectWithoutSRT(const char* pParam1, const char* pParam2) {

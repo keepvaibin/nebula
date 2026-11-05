@@ -17,21 +17,21 @@ HitSensorKeeper::HitSensorKeeper(int sensorCount) {
     }
 }
 
-HitSensor* HitSensorKeeper::add(const char* pName, u32 sensorType, u16 sensorGroupSize, f32 radius, LiveActor* pActor, const TVec3f& a6) {
+HitSensor* HitSensorKeeper::add(const char* pName, u32 sensorType, u16 sensorGroupSize, f32 radius, LiveActor* pActor, const Vec3f& a6) {
     HitSensorInfo* pInfo = new HitSensorInfo(pName, new HitSensor(sensorType, sensorGroupSize, radius, pActor), nullptr, nullptr, a6, false);
     registHitSensorInfo(pInfo);
     return pInfo->mSensor;
 }
 
-HitSensor* HitSensorKeeper::addPos(const char* pName, u32 sensorType, u16 sensorGroupSize, f32 radius, LiveActor* pActor, const TVec3f* pPos,
-                                   const TVec3f& a7) {
+HitSensor* HitSensorKeeper::addPos(const char* pName, u32 sensorType, u16 sensorGroupSize, f32 radius, LiveActor* pActor, const Vec3f* pPos,
+                                   const Vec3f& a7) {
     HitSensorInfo* pInfo = new HitSensorInfo(pName, new HitSensor(sensorType, sensorGroupSize, radius, pActor), pPos, nullptr, a7, false);
     registHitSensorInfo(pInfo);
     return pInfo->mSensor;
 }
 
 HitSensor* HitSensorKeeper::addMtx(const char* pName, u32 sensorType, u16 sensorGroupSize, f32 radius, LiveActor* pActor, MtxPtr mtx,
-                                   const TVec3f& a7) {
+                                   const Vec3f& a7) {
     HitSensorInfo* pInfo = new HitSensorInfo(pName, new HitSensor(sensorType, sensorGroupSize, radius, pActor), nullptr, mtx, a7, false);
     registHitSensorInfo(pInfo);
     return pInfo->mSensor;
@@ -39,7 +39,7 @@ HitSensor* HitSensorKeeper::addMtx(const char* pName, u32 sensorType, u16 sensor
 
 HitSensor* HitSensorKeeper::addCallback(const char* pName, u32 sensorType, u16 sensorGroupSize, f32 radius, LiveActor* pActor) {
     HitSensorInfo* pInfo =
-        new HitSensorInfo(pName, new HitSensor(sensorType, sensorGroupSize, radius, pActor), nullptr, nullptr, TVec3f(0.0f, 0.0f, 0.0f), true);
+        new HitSensorInfo(pName, new HitSensor(sensorType, sensorGroupSize, radius, pActor), nullptr, nullptr, Vec3f(0.0f, 0.0f, 0.0f), true);
     registHitSensorInfo(pInfo);
     return pInfo->mSensor;
 }

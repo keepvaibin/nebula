@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/NameObj/NameObj.hpp"
-#include <JSystem/JGeometry.hpp>
+#include <nebula_geometry.hpp>
 
 class CameraContext : public NameObj {
 public:
@@ -9,11 +9,11 @@ public:
     virtual ~CameraContext();
 
     void initParams();
-    const TPos3f& getViewMtx() const;
-    const TPos3f& getInvViewMtx() const;
+    const Pos3f& getViewMtx() const;
+    const Pos3f& getInvViewMtx() const;
     f32 getAspect() const;
     f32 getRenderFovy() const;
-    void setViewMtx(const TPos3f&, bool, bool, const TVec3f&);
+    void setViewMtx(const Pos3f&, bool, bool, const Vec3f&);
     void setNearZ(f32);
     void setFovy(f32);
     void setShakeOffset(f32, f32);
@@ -31,12 +31,12 @@ public:
         return mFovy;
     }
 
-    TPos3f mView;
-    TPos3f mViewInv;
-    TProj3f mProjection;
+    Pos3f mView;
+    Pos3f mViewInv;
+    Proj3f mProjection;
     f32 mAspectRatio;
     f32 mNearZ;
     f32 mFarZ;
     f32 mFovy;
-    TVec2f mShakeOffset;
+    Vec2f mShakeOffset;
 };

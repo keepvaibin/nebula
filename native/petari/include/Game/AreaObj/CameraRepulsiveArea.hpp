@@ -14,7 +14,7 @@ public:
         return "CameraRepulsiveArea";
     }
 
-    virtual TVec3f getRepulsion(const TVec3f&) = 0;
+    virtual Vec3f getRepulsion(const Vec3f&) = 0;
 };
 
 class CameraRepulsiveSphere : public CameraRepulsiveArea {
@@ -24,7 +24,7 @@ public:
 
     virtual ~CameraRepulsiveSphere();
 
-    virtual TVec3f getRepulsion(const TVec3f&);
+    virtual Vec3f getRepulsion(const Vec3f&);
 };
 
 class CameraRepulsiveCylinder : public CameraRepulsiveArea {
@@ -34,5 +34,5 @@ public:
 
     virtual ~CameraRepulsiveCylinder();
 
-    virtual TVec3f getRepulsion(const TVec3f&);
+    virtual Vec3f getRepulsion(const Vec3f&);
 };

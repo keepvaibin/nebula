@@ -30,7 +30,6 @@ namespace NrvSuperSpinDriver {
     NEW_NERVE(SuperSpinDriverNrvCoolDown, SuperSpinDriver, CoolDown);
 };  // namespace NrvSuperSpinDriver
 
-// Fix JGeometry inlining
 SuperSpinDriver::SuperSpinDriver(const char* pName, s32 color)
     : LiveActor(pName), mBindActor(), mShootPath(), mSpinDriverCamera(), mOperateRing(), mPathDrawer(), mEmptyModel(), _A4(0, 0, 0, 1),
       _B4(0, 0, 0, 1), _C4(0, 0, 0), _D0(0, 0, 0), mShootPathDirection(0, 1, 0), _E8(0, 0, 1), _F4(1, 0, 0), _100(0, 1, 0),
@@ -108,7 +107,7 @@ void SuperSpinDriver::initParamFromJMapInfo(const JMapInfoIter& rIter) {
 void SuperSpinDriver::initGravityAxis() {
     MR::offCalcGravity(this);
 
-    TVec3f gravity;
+    Vec3f gravity;
     MR::calcGravityVectorOrZero(this, &gravity, nullptr, 0);
 
     if (MR::isNearZero(gravity)) {
@@ -120,8 +119,8 @@ void SuperSpinDriver::initGravityAxis() {
 
 void SuperSpinDriver::initSensor() {
     initHitSensor(2);
-    MR::addHitSensor(this, "bind", ATYPE_SPIN_CANNON_BIND, 16, 300.0f, TVec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorPosRide(this, "body", 16, 300.0f, &_C4, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensor(this, "bind", ATYPE_SPIN_CANNON_BIND, 16, 300.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorPosRide(this, "body", 16, 300.0f, &_C4, Vec3f(0.0f, 0.0f, 0.0f));
     MR::invalidateHitSensor(this, "body");
 }
 
@@ -281,10 +280,10 @@ void SuperSpinDriver::control() {
 }
 
 void SuperSpinDriver::calcAndSetBaseMtx() {
-    TPos3f mtx;
+    Pos3f mtx;
     MR::makeMtxUpFrontPos(&mtx, _100, _E8, mPosition);
 
-    TPos3f mtxRotate;
+    Pos3f mtxRotate;
     mtxRotate.identity();
     mtxRotate.setEulerY(mFrontAngle);
 
@@ -392,7 +391,7 @@ bool SuperSpinDriver::tryBind(HitSensor* pSender, HitSensor* pReceiver) {
     _134 = 0.0f;
     _138 = 0.0f;
     _148 = 0.0f;
-    TPos3f bindActorBaseMtx(mBindActor->getBaseMtx());
+    Pos3f bindActorBaseMtx(mBindActor->getBaseMtx());
     bindActorBaseMtx.getQuat(_A4);
     _B4 = _A4;
 
@@ -748,8 +747,8 @@ void SuperSpinDriver::exeShoot() {
     updateBindPosition(rate);
 
     if (!MR::isNearZero(mShootPathDirection)) {
-        TVec3f stack_2C;
-        TVec3f stack_20 = mShootPathDirection + (mOperateRing->mDirection * mOperateRing->mRadiusRate) * 0.8f;
+        Vec3f stack_2C;
+        Vec3f stack_20 = mShootPathDirection + (mOperateRing->mDirection * mOperateRing->mRadiusRate) * 0.8f;
         MR::normalize(stack_20, &stack_2C);
         turnBindHead(stack_2C, 0.4f);
     }
@@ -804,7 +803,7 @@ void SuperSpinDriver::endBind() {
 }
 
 void SuperSpinDriver::updateBindActorMatrix() {
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.identity();
     mtx.setEulerY(_138);
     f32 offset = -75.0f;
@@ -812,11 +811,11 @@ void SuperSpinDriver::updateBindActorMatrix() {
     offset *= rate;
     mtx.setTrans(0.0f, offset, 0.0f);
 
-    TPos3f mtx2;
+    Pos3f mtx2;
     mtx2.identity();
     mtx2.setEulerX(_148);
 
-    TPos3f mtx3;
+    Pos3f mtx3;
     mtx3.setQT(_B4, _C4);
 
     mtx3.concat(mtx3, mtx2);
@@ -825,23 +824,23 @@ void SuperSpinDriver::updateBindActorMatrix() {
 }
 
 void SuperSpinDriver::updateBindActorPoseToShoot(f32 a1) {
-    TPos3f stack_18;
+    Pos3f stack_18;
     stack_18.identity();
 
     MR::makeMtxUpFront(&stack_18, _100, _E8);
 
-    TQuat4f stack_8;
+    Quat4f stack_8;
     stack_18.getQuat(stack_8);
 
     _B4.set(_A4);
     _B4.slerp(stack_8, a1);
 }
 
-void SuperSpinDriver::turnBindHead(const TVec3f& rVec, f32 a2) {
-    TVec3f quatYDir;
+void SuperSpinDriver::turnBindHead(const Vec3f& rVec, f32 a2) {
+    Vec3f quatYDir;
     _B4.getYDir(quatYDir);
 
-    TQuat4f quat;
+    Quat4f quat;
     quat.setRotate(quatYDir, rVec, a2);
 
     _B4.mult(quat);
@@ -849,10 +848,10 @@ void SuperSpinDriver::turnBindHead(const TVec3f& rVec, f32 a2) {
 }
 
 void SuperSpinDriver::moveBindPosToCenter() {
-    TVec3f pos(mPosition);
+    Vec3f pos(mPosition);
     _C4 += _D0;
 
-    TVec3f vec(pos - _C4);
+    Vec3f vec(pos - _C4);
     f32 scalar;
     MR::separateScalarAndDirection(&scalar, &vec, vec);
 
@@ -909,7 +908,7 @@ void SuperSpinDriver::updateOperateRate() {
 void SuperSpinDriver::updateBindPosition(f32 coord) {
     mShootPath->calcPosition(&mShootPathPosition, coord);
 
-    TVec3f direction;
+    Vec3f direction;
     mShootPath->calcDirection(&direction, coord, 0.0099999998f);
 
     if (!MR::isNearZero(direction)) {
@@ -917,8 +916,8 @@ void SuperSpinDriver::updateBindPosition(f32 coord) {
     }
 
     mOperateRing->update(mShootPathPosition, mShootPathDirection);
-    TVec3f stack_20 = _C4;
-    TVec3f stack_14 = mShootPathPosition + mOperateRing->_A4;
+    Vec3f stack_20 = _C4;
+    Vec3f stack_14 = mShootPathPosition + mOperateRing->_A4;
     _C4.set(stack_14);
     _D0 = _C4 - stack_20;
 }

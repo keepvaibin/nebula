@@ -20,6 +20,6 @@ public:
 
     StrayTico** mStrayTicos;
     s32 mTicoNum;
-    TVec3f _94;
+    Vec3f _94;
     u8 _A0;
 };

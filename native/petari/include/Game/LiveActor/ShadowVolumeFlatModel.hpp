@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/ShadowVolumeModel.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class J3DModelData;
 
@@ -17,8 +17,8 @@ public:
     void initModel(const char*);
     void setBaseMatrixPtr(MtxPtr);
     void initJointDrawMtxResister();
-    void calcRootJoint(TPos3f*, const TVec3f&) const;
-    void calcDropJoint(TPos3f*, const TVec3f&) const;
+    void calcRootJoint(Pos3f*, const Vec3f&) const;
+    void calcDropJoint(Pos3f*, const Vec3f&) const;
 
     MtxPtr mBaseMtx;
     s32 mRootDrawMtxIndex;

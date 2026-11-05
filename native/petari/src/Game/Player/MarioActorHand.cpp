@@ -103,7 +103,7 @@ void MarioActor::updateHand() {
     }
     _A58 = false;
 
-    TVec3f control;
+    Vec3f control;
     mMarioAnim->getXanimePlayer()->getMainAnimationTrans(MR::getJointIndex(this, "PartsControl"), &control);
     f32 leftControl = control.y;
     f32 rightControl = control.z;

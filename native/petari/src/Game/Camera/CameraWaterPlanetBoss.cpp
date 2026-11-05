@@ -31,11 +31,11 @@ void CameraWaterPlanetBoss::reset() {
 }
 
 CameraTargetObj* CameraWaterPlanetBoss::calc() {
-    TVec3f watchPos;
+    Vec3f watchPos;
     CameraLocalUtil::makeWatchPoint(&watchPos, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
 
-    TVec3f gravUp = -CameraLocalUtil::getTarget(this)->getGravityVector();
-    TVec3f watchFront = watchPos - CameraLocalUtil::getPos(this);
+    Vec3f gravUp = -CameraLocalUtil::getTarget(this)->getGravityVector();
+    Vec3f watchFront = watchPos - CameraLocalUtil::getPos(this);
     f32 camDist = watchFront.length();
 
     f32 dist;
@@ -52,13 +52,13 @@ CameraTargetObj* CameraWaterPlanetBoss::calc() {
     }
     MR::normalize(&watchFront);
 
-    TVec3f camUp = CameraLocalUtil::getUpVec(this);
-    TVec3f camFront = CameraLocalUtil::getWatchPos(this) - CameraLocalUtil::getPos(this);
+    Vec3f camUp = CameraLocalUtil::getUpVec(this);
+    Vec3f camFront = CameraLocalUtil::getWatchPos(this) - CameraLocalUtil::getPos(this);
     MR::normalize(&camFront);
-    TQuat4f rotFront;
+    Quat4f rotFront;
     rotFront.setRotate(camFront, watchFront);
 
-    TVec3f front, up, side;
+    Vec3f front, up, side;
     front.set(watchFront);
     up.set(camUp);
     rotFront.transform(up);
@@ -69,7 +69,7 @@ CameraTargetObj* CameraWaterPlanetBoss::calc() {
     up.cross(front, side);
 
     if (gravUp.dot(up) < 0.0f) {
-        TQuat4f upsideDownRot;
+        Quat4f upsideDownRot;
         if (front.dot(gravUp) < 0.0f) {
             upsideDownRot.setRotate(front, -gravUp);
         } else {
@@ -80,7 +80,7 @@ CameraTargetObj* CameraWaterPlanetBoss::calc() {
         upsideDownRot.transform(up);
     }
 
-    TVec3f gravSide = CameraLocalUtil::getTarget(this)->getSideVec();
+    Vec3f gravSide = CameraLocalUtil::getTarget(this)->getSideVec();
     gravSide -= gravUp * gravUp.dot(gravSide);
     MR::normalize(&gravSide);
 
@@ -119,13 +119,13 @@ CameraTargetObj* CameraWaterPlanetBoss::calc() {
         }
     }
 
-    TQuat4f rot;
+    Quat4f rot;
     rot.setRotate(side, gravSide, mSideBlendRate);
     rot.transform(front);
     rot.transform(up);
     rot.transform(side);
 
-    TVec3f pos = watchPos - front * dist;
+    Vec3f pos = watchPos - front * dist;
     f32 lastMoveLen = CameraLocalUtil::getTarget(this)->getLastMove().length();
     if (lastMoveLen > ::sLastMoveLen) {
         mLastMoveDir.set(CameraLocalUtil::getTarget(this)->getLastMove());
@@ -152,10 +152,10 @@ CameraTargetObj* CameraWaterPlanetBoss::calc() {
     }
 
     if (mIsBlendUpEnabled && mCollideCount == 0) {
-        TVec3f wPoint = mWPoint;
+        Vec3f wPoint = mWPoint;
         mZoneMatrix.mult(wPoint, wPoint);
 
-        TVec3f dir = CameraLocalUtil::getTarget(this)->getPosition() - wPoint;
+        Vec3f dir = CameraLocalUtil::getTarget(this)->getPosition() - wPoint;
         f32 gravDot = gravUp.dot(dir);
         f32 rate = (gravDot - mDotFrontMin) / (mDotFrontMax - mDotFrontMin);
         if (rate > 1.0f) {
@@ -164,15 +164,15 @@ CameraTargetObj* CameraWaterPlanetBoss::calc() {
             rate = 0.0f;
         }
 
-        TVec3f rotMin = gravUp;
+        Vec3f rotMin = gravUp;
         rot.setRotate(side, mAngleXMin + MR::pi() / 2.0f);
         rot.transform(rotMin);
 
-        TVec3f rotMax = gravUp;
+        Vec3f rotMax = gravUp;
         rot.setRotate(side, mAngleXMax + MR::pi() / 2.0f);
         rot.transform(rotMax);
 
-        TVec3f upBlend = rotMin;
+        Vec3f upBlend = rotMin;
         rot.setRotate(rotMin, rotMax, rate);
         rot.transform(upBlend);
 

@@ -10,15 +10,15 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
-#include "JSystem/JGeometry/TMatrix.hpp"
-#include "JSystem/JGeometry/TVec.hpp"
+#include <nebula_geometry.hpp>
+
 #include "math_types.hpp"
 
 LavaHomeSeesaw::LavaHomeSeesaw(const char* pName) : LiveActor(pName), mSeesawRotator(), mMtxSetter(), _94(gZeroVec), mYOffset() {
 }
 
 void LavaHomeSeesaw::initAfterPlacement() {
-    TVec3f gravity(mGravity);
+    Vec3f gravity(mGravity);
     gravity *= 1000.0f;
     if (!MR::getFirstPolyOnLineToMap(&_94, nullptr, mPosition, gravity)) {
         MR::calcMapGroundUpper(&_94, this);
@@ -29,8 +29,8 @@ void LavaHomeSeesaw::initAfterPlacement() {
         mYOffset *= -1.0f;
     }
 
-    TVec3f uselessVec(0.0f, mYOffset, 0.0f);
-    mMtxSetter->updateMtxUseBaseMtxWithLocalOffset(TVec3f(0.0f, mYOffset, 0.0f));
+    Vec3f uselessVec(0.0f, mYOffset, 0.0f);
+    mMtxSetter->updateMtxUseBaseMtxWithLocalOffset(Vec3f(0.0f, mYOffset, 0.0f));
     MR::offCalcGravity(this);
 }
 
@@ -44,7 +44,7 @@ void LavaHomeSeesaw::calcAndSetBaseMtx() {
     if (mSeesawRotator == nullptr || !mSeesawRotator->isWorking()) {
         LiveActor::calcAndSetBaseMtx();
     } else {
-        TPos3f mtx;
+        Pos3f mtx;
         mtx.identity();
         mtx.set(mSeesawRotator->getRotateMtx());
         mtx.setTrans(mPosition);

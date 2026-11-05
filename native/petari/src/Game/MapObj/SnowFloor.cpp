@@ -47,7 +47,7 @@ SnowFloor::SnowFloor(const char* pName) : LiveActor(pName), _E4(), _E8() {
 
 void SnowFloor::init(const JMapInfoIter& rIter) {
     initHitSensor(1);
-    MR::addHitSensorEye(this, "eye", 16, 1.4142f * (::sTextureSize * ::sCellSize), TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEye(this, "eye", 16, 1.4142f * (::sTextureSize * ::sCellSize), Vec3f(0.0f, 0.0f, 0.0f));
     mSnowDepth = new f32[::sTextureSize * ::sTextureSize];
     mBaseDepth = new u8[::sTextureSize * ::sTextureSize];
 
@@ -88,7 +88,7 @@ void SnowFloor::init(const JMapInfoIter& rIter) {
 
 void SnowFloor::drawSetup() {
     mTexCoords = new f32[::sStripCount + 1];
-    mDirections = new TVec3f[::sStripCount];
+    mDirections = new Vec3f[::sStripCount];
     f32 halfStripAngle = mHalfAngle / ::sStripCount;
     f32 angleRange = 2.0f * mHalfAngle - 2.0f * halfStripAngle;
     u32 i;
@@ -119,9 +119,9 @@ void SnowFloor::initLocalPoint(const JMapInfoIter& rIter) {
     mHalfAngle = halfLength / 900.0f;
 }
 
-bool SnowFloor::calcLocalPoint(const TVec3f& rPosition, TVec3f* pPoint) {
-    TVec3f offset(rPosition - mPosition);
-    TVec3f radial;
+bool SnowFloor::calcLocalPoint(const Vec3f& rPosition, Vec3f* pPoint) {
+    Vec3f offset(rPosition - mPosition);
+    Vec3f radial;
     MR::vecKillElement(offset, mAxis, &radial);
     f32 radius = radial.length();
     f32 angle = MR::diffAngleSignedHorizontal(mUp, radial, mAxis);
@@ -150,7 +150,7 @@ void SnowFloor::createReduceMap(u16 size) {
 
     for (s32 y = 0; y < size; y++) {
         for (s32 x = 0; x < size; x++) {
-            TVec2f offset(x - center, y - center);
+            Vec2f offset(x - center, y - center);
             f32 distance = offset.length();
 
             if (distance >= size / 2) {
@@ -178,8 +178,8 @@ void SnowFloor::createReduceMap(u16 size) {
     }
 }
 
-void SnowFloor::digPlayerWalk(const TVec3f& rPoint) {
-    TVec2f point(rPoint.x, rPoint.y);
+void SnowFloor::digPlayerWalk(const Vec3f& rPoint) {
+    Vec2f point(rPoint.x, rPoint.y);
 
     if (rPoint.z < mRadius - 50.0f) {
         return;
@@ -226,8 +226,8 @@ void SnowFloor::digPlayerWalk(const TVec3f& rPoint) {
     }
 }
 
-void SnowFloor::digDpd(const TVec3f& rPoint) {
-    TVec2f point(rPoint.x, rPoint.y);
+void SnowFloor::digDpd(const Vec3f& rPoint) {
+    Vec2f point(rPoint.x, rPoint.y);
 
     if (rPoint.z < mRadius - 250.0f) {
         return;
@@ -253,8 +253,8 @@ void SnowFloor::digDpd(const TVec3f& rPoint) {
 }
 
 void SnowFloor::control() {
-    TVec3f position(*MR::getPlayerPos());
-    TVec3f localPoint;
+    Vec3f position(*MR::getPlayerPos());
+    Vec3f localPoint;
     bool changed = false;
     updateCheckList();
 
@@ -327,8 +327,8 @@ void SnowFloor::control() {
     createTexture();
 }
 
-bool SnowFloor::doErase(const TVec3f& rPosition, f32 radius, f32 amount) {
-    TVec3f localPoint;
+bool SnowFloor::doErase(const Vec3f& rPosition, f32 radius, f32 amount) {
+    Vec3f localPoint;
 
     if (calcLocalPoint(rPosition, &localPoint)) {
         f32 radiusSq = radius * radius;
@@ -339,7 +339,7 @@ bool SnowFloor::doErase(const TVec3f& rPosition, f32 radius, f32 amount) {
         }
 
         f32 localRadius = MR::sqrt(radiusSq - height * height);
-        TVec2f point(localPoint.x, localPoint.y);
+        Vec2f point(localPoint.x, localPoint.y);
         point.x += 1.0f;
         point.y += 1.0f;
         point.x *= 0.5f;
@@ -359,13 +359,13 @@ namespace {
     f32 sWeights[4096];
 }  // namespace
 
-f32 SnowFloor::doMove(TVec2f from, TVec2f to, f32 radius, f32 amount) {
+f32 SnowFloor::doMove(Vec2f from, Vec2f to, f32 radius, f32 amount) {
     f32 removed = 0.0f;
     f32 weightTotal = 0.0f;
     f32 depthTotal = 0.0f;
     u32 minX;
     u32 count = 0;
-    TVec2f unitDirection(to - from);
+    Vec2f unitDirection(to - from);
     unitDirection.normalize();
     u16* const xs = sXs;
     u16* const ys = sYs;
@@ -388,7 +388,7 @@ f32 SnowFloor::doMove(TVec2f from, TVec2f to, f32 radius, f32 amount) {
         u32 row = y * ::sTextureSize;
 
         for (u32 x = minX; x < maxX; x++) {
-            TVec2f offset(x - to.x, y - to.y);
+            Vec2f offset(x - to.x, y - to.y);
             f32 distanceSq = offset.squared();
 
             if (distanceSq <= radiusSq) {
@@ -429,7 +429,7 @@ f32 SnowFloor::doMove(TVec2f from, TVec2f to, f32 radius, f32 amount) {
     return depthTotal;
 }
 
-void SnowFloor::doErase(TVec2f point, f32 radius, f32 amount) {
+void SnowFloor::doErase(Vec2f point, f32 radius, f32 amount) {
     point.x *= ::sTextureSize;
     point.y *= ::sTextureSize;
     u32 minX;
@@ -447,7 +447,7 @@ void SnowFloor::doErase(TVec2f point, f32 radius, f32 amount) {
         u32 row = y * ::sTextureSize;
 
         for (u32 x = minX; x < maxX; x++) {
-            TVec2f offset(x - point.x, y - point.y);
+            Vec2f offset(x - point.x, y - point.y);
             f32 distanceSq = offset.squared();
 
             if (distanceSq <= radiusSq) {
@@ -507,10 +507,10 @@ void SnowFloor::updateCheckList() {
 
     if (mCheckCount != 0) {
         HitSensor* sensor = mCheckList[0];
-        TVec3f localPoint;
+        Vec3f localPoint;
 
         if (calcLocalPoint(sensor->mPosition, &localPoint)) {
-            TVec2f point(localPoint.x, localPoint.y);
+            Vec2f point(localPoint.x, localPoint.y);
             point.x += 1.0f;
             point.y += 1.0f;
             point.x *= 0.5f;
@@ -540,9 +540,9 @@ void SnowFloor::updateCheckList() {
     }
 }
 
-f32 SnowFloor::calcCoverSnow(const TVec2f& rPoint, f32 radius) {
+f32 SnowFloor::calcCoverSnow(const Vec2f& rPoint, f32 radius) {
     f32 total = 0.0f;
-    TVec2f point(rPoint);
+    Vec2f point(rPoint);
     f32 outerRadius = 1.732051f * radius;
     point.x *= ::sTextureSize;
     point.y *= ::sTextureSize;
@@ -560,7 +560,7 @@ f32 SnowFloor::calcCoverSnow(const TVec2f& rPoint, f32 radius) {
         u32 row = y * ::sTextureSize;
 
         for (u32 x = minX; x < maxX; x++) {
-            TVec2f offset(x - point.x, y - point.y);
+            Vec2f offset(x - point.x, y - point.y);
 
             if (offset.squared() <= radiusSq) {
                 total += mSnowDepth[row + x];
@@ -595,9 +595,9 @@ void SnowFloor::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
         }
 
         if (pReceiver->mHost->getBaseMtx()) {
-            TVec3f up;
+            Vec3f up;
             MR::calcUpVec(&up, pReceiver->mHost);
-            TVec3f position(pReceiver->mPosition - up * (pReceiver->mRadius - 20.0f));
+            Vec3f position(pReceiver->mPosition - up * (pReceiver->mRadius - 20.0f));
             doErase(position, 20.0f, ::cFireballDigAmount);
         }
     }
@@ -635,15 +635,15 @@ void SnowFloor::draw() const {
 }
 
 void SnowFloor::drawLayer(s32 layer) const {
-    TVec3f p3, p2, p1, p0;
-    TVec3f axis(mAxis);
-    TVec3f tangent, cross;
+    Vec3f p3, p2, p1, p0;
+    Vec3f axis(mAxis);
+    Vec3f tangent, cross;
     f32 halfWidth = (static_cast< f32 >(::sTextureSize) * ::sCellSize) / ::sStripCount;
     f32 halfLength = static_cast< f32 >(::sTextureSize) * ::sCellSize;
 
     for (u32 i = 0; i < ::sStripCount; i++) {
-        TVec3f center(mPosition + mDirections[i] * (mRadius + ::sLayerHeight * layer));
-        const TVec3f& direction = mDirections[i];
+        Vec3f center(mPosition + mDirections[i] * (mRadius + ::sLayerHeight * layer));
+        const Vec3f& direction = mDirections[i];
         tangent.cross(direction, axis);
         MR::normalizeOrZero(&tangent);
         cross.cross(tangent, direction);

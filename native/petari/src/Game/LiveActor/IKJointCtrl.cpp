@@ -37,15 +37,15 @@ void IKJointCtrl::init(const IKJointCtrlParam& rParam) {
     mEndCtrl = MR::createJointController< IKJointCtrl >(this, mActor, _B4, &IKJointCtrl::updateEndJointCallBack, nullptr);
 }
 
-void IKJointCtrl::setEndPosition(const TVec3f& rPos, f32 a2) {
-    TVec3f joint_pos;
+void IKJointCtrl::setEndPosition(const Vec3f& rPos, f32 a2) {
+    Vec3f joint_pos;
     MR::copyJointPos(mActor, _B4, &joint_pos);
     MR::vecBlend(joint_pos, rPos, &joint_pos, a2);
     mJoint->update(MR::getJointMtx(mActor, _B0), MR::getJointMtx(mActor, _B2), MR::getJointMtx(mActor, _B4), joint_pos);
     _A8 = a2;
 }
 
-void IKJointCtrl::setEndDirection(const TVec3f& rDirection, f32 a2) {
+void IKJointCtrl::setEndDirection(const Vec3f& rDirection, f32 a2) {
     s32 val = MR::vecBlendSphere(_78, rDirection, &_78, a2);
 
     if (!val) {
@@ -75,17 +75,17 @@ void IKJointCtrl::setCallBackFunction() {
     }
 }
 
-bool IKJointCtrl::updateRootJointCallBack(TPos3f* pPos, const JointControllerInfo& rInfo) {
+bool IKJointCtrl::updateRootJointCallBack(Pos3f* pPos, const JointControllerInfo& rInfo) {
     pPos->concat(mJoint->_30, _4);
     return true;
 }
 
-bool IKJointCtrl::updateMiddleJointCallBack(TPos3f* pPos, const JointControllerInfo& rInfo) {
+bool IKJointCtrl::updateMiddleJointCallBack(Pos3f* pPos, const JointControllerInfo& rInfo) {
     pPos->concat(mJoint->_60, _34);
     return true;
 }
 
-bool IKJointCtrl::updateEndJointCallBack(TPos3f* pMtx, const JointControllerInfo& rInfo) {
+bool IKJointCtrl::updateEndJointCallBack(Pos3f* pMtx, const JointControllerInfo& rInfo) {
     f32 angle = mEndDirMaxDegree * _AC;
     MR::turnMtxToLocalDirDegree(pMtx, mEndLocalDir, _78, angle);
     pMtx->mult33(mEndLocalDir, _90);
@@ -114,11 +114,11 @@ void IKJointCtrlHolder::startUpdate() {
     }
 }
 
-void IKJointCtrlHolder::setEndPosition(const char* pName, const TVec3f& rPos, f32 a3) {
+void IKJointCtrlHolder::setEndPosition(const char* pName, const Vec3f& rPos, f32 a3) {
     findIKJointCtrl(pName)->setEndPosition(rPos, a3);
 }
 
-void IKJointCtrlHolder::setEndDirection(const char* pName, const TVec3f& rDirection, f32 a3) {
+void IKJointCtrlHolder::setEndDirection(const char* pName, const Vec3f& rDirection, f32 a3) {
     findIKJointCtrl(pName)->setEndDirection(rDirection, a3);
 }
 

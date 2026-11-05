@@ -47,7 +47,7 @@ void SystemWipeHolder::draw() const {
     }
 }
 
-void SystemWipeHolder::setWipeRingCenter(const TVec3f& rCenter) {
+void SystemWipeHolder::setWipeRingCenter(const Vec3f& rCenter) {
     static_cast< WipeRing* >(findWipe("\211\176\203\217\203\103\203\166" /* 円ワイプ */))->setCenterPos(rCenter);
 }
 

@@ -38,7 +38,7 @@ void ClipFieldFillDraw::setUpFillScreen() const {
     NebulaMtxOrtho(projectionMtx, 0.0f, MR::getScreenHeight(), 0.0f, MR::getScreenWidth(), -1.0f, 1.0f);
     J3DNativeView::setOrthographic(projectionMtx);
 
-    TMtx34f posMtx;
+    Mtx34f posMtx;
     posMtx.identity();
     J3DNativeShape::setPosition(0, (MtxPtr)&posMtx);
     J3DPass::positionMatrix(0);

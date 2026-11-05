@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry.hpp>
+#include <nebula_geometry.hpp>
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 
@@ -13,8 +13,8 @@ public:
     SpinHitController(const NameObj*, s32, s32, s32, f32, f32, f32, s32, bool);
 
     void setParameter(const NameObj*, s32, s32, s32, f32, f32, f32, s32, bool);
-    void start(LiveActor*, const TVec3f&, const TVec3f&);
-    void startWithoutStopScene(LiveActor*, const TVec3f&, const TVec3f&);
+    void start(LiveActor*, const Vec3f&, const Vec3f&);
+    void startWithoutStopScene(LiveActor*, const Vec3f&, const Vec3f&);
     bool execute(LiveActor*);
     void emitItem(LiveActor*);
 

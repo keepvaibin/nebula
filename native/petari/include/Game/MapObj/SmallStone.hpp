@@ -39,10 +39,10 @@ public:
 
     virtual ~SmallStoneMember();
 
-    const TVec3f& getRotation() const {
+    const Vec3f& getRotation() const {
         return mRotation;
     }
-    bool tryPlaceOnGround(const TVec3f& rStart, const TVec3f& rRay);
+    bool tryPlaceOnGround(const Vec3f& rStart, const Vec3f& rRay);
     bool tryShake();
     bool tryPush(HitSensor* pSender, HitSensor* pReceiver);
     void movementByHost(SmallStone* pHost);

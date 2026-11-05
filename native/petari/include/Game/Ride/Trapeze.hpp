@@ -2,7 +2,7 @@
 
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class ActorCameraInfo;
 class JUTTexture;
@@ -32,7 +32,7 @@ public:
 
     bool tryJump();
 
-    void updateStick(const TVec3f&, f32);
+    void updateStick(const Vec3f&, f32);
     void updateStickMtx();
     void updateHangPoint();
     bool updateBind();
@@ -42,15 +42,15 @@ public:
     bool isStartSwingFront() const;
     bool isStartSwingBack() const;
 
-    void drawRope(const TVec3f&, const TVec3f&, const TVec3f&, const TVec3f&, f32, f32) const;
+    void drawRope(const Vec3f&, const Vec3f&, const Vec3f&, const Vec3f&, f32, f32) const;
 
-    TVec3f mSide;
-    TVec3f mUp;
-    TVec3f mFront;
+    Vec3f mSide;
+    Vec3f mUp;
+    Vec3f mFront;
     f32 mRopeLength;
     SwingRopePoint* mStickPoint;
     PartsModel* mTrapezeModel;
-    TPos3f mPosMtx;
+    Pos3f mPosMtx;
     LiveActor* mRider;
     SwingRopePoint* mHangPoint;
     f32 mGrabCoord;

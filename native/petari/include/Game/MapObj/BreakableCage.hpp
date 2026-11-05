@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class ActorCameraInfo;
 class DummyDisplayModel;
@@ -36,7 +36,7 @@ public:
     void exeWaitStartDemoBreak();
     void exeBreak();
 
-    TPos3f mMtx;
+    Pos3f mMtx;
     ModelObj* mBreakModel;
     CageType mCageType;
     f32 mRotationSpeed;

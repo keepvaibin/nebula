@@ -23,7 +23,7 @@ public:
     void appearCoinAll();
     void appearCoinFix();
     void appearCoinAllTimer();
-    void setCoinTrans(s32, const TVec3f&);
+    void setCoinTrans(s32, const Vec3f&);
     void exeAppear();
     void exeTryStartDemo();
     void exeDemoAppear();

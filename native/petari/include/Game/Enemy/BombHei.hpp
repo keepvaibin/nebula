@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class AnimScaleController;
 class JointController;
@@ -50,15 +50,15 @@ public:
     void exeBindStarPointer();
     void endBindStarPointer();
 
-    bool calcJoint(TPos3f*, const JointControllerInfo&);
+    bool calcJoint(Pos3f*, const JointControllerInfo&);
     void startBoundSound();
 
     AnimScaleController* mScaleController;
     WalkerStateBindStarPointer* mBindStarPointerState;
-    TQuat4f mRotQuat;
-    TVec3f mFront;
-    TVec3f mBinderOffset;
-    TVec3f mTargetFront;
+    Quat4f mRotQuat;
+    Vec3f mFront;
+    Vec3f mBinderOffset;
+    Vec3f mTargetFront;
     s32 mCountdown;
     HitSensor* mCarrySensor;
     f32 mExplodeRadius;

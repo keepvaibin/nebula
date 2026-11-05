@@ -25,7 +25,7 @@ void MarioLauncherAttractor::init(const JMapInfoIter& rIter) {
     MR::setClippingTypeSphere(this, pGravity->mRange);
     MR::setClippingFar200m(this);
 
-    mScale.set(TVec3f(scale));
+    mScale.set(Vec3f(scale));
 
     // Connect to executor, init nerve and start animation
     MR::connectToSceneMapObj(this);

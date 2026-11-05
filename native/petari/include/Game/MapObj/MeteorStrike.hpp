@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 enum MeteorStrikeType {
     MeteorStrikeType_Environment = 1,
@@ -23,13 +23,13 @@ public:
     virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
 
     void appear(s32);
-    bool getMovedPos(TVec3f*, s32) const;
+    bool getMovedPos(Vec3f*, s32) const;
     static f32 getSpeed(const JMapInfoIter&);
     void initMapToolInfo(const JMapInfoIter&);
     void initModel();
     void initRailDirection();
-    void calcBreakPosture(const TVec3f&, TPos3f*);
-    void emitEffectColumn(const TPos3f&);
+    void calcBreakPosture(const Vec3f&, Pos3f*);
+    void emitEffectColumn(const Pos3f&);
     void startRumble();
     bool isInScreen() const;
 
@@ -38,9 +38,9 @@ public:
 
     s32 mType;
     f32 mStepSize;  // Obj_arg0
-    TVec3f mRailDir;
+    Vec3f mRailDir;
     ModelObj* mBrokenModel;
     s32 mStepsLeft;
     s32 mTotalSteps;
-    TMtx34f mLavaColumnPos;
+    Mtx34f mLavaColumnPos;
 };

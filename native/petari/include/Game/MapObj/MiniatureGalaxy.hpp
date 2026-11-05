@@ -2,7 +2,7 @@
 
 #include "Game/LiveActor/LiveActor.hpp"
 #include <JSystem/J3DGraphBase/J3DTexture.hpp>
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 enum MiniatureGalaxyType {
     MiniatureGalaxyType_Normal,
@@ -67,10 +67,10 @@ public:
     ModelObj* mShadowModel;
     ModelObj* mSelectModel;
     ModelObj* mStarPlateModel;
-    TPos3f mPosMtx;
-    TPos3f mShadowBaseMtx;
+    Pos3f mPosMtx;
+    Pos3f mShadowBaseMtx;
     ProjmapEffectMtxSetter* mProjmapEffectMtxSetter;
-    TVec3f mInitPos;
+    Vec3f mInitPos;
     const char* mObjectName;
     const char* mGalaxyName;
     s32 mCanZoomIn;

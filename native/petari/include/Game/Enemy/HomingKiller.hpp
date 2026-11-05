@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class ModelObj;
 class PartsModel;
@@ -21,13 +21,13 @@ public:
     virtual bool receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
     virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 
-    void appear(const TVec3f&, const TVec3f&);
+    void appear(const Vec3f&, const Vec3f&);
     bool isMoveStart() const;
     void setChaseStartEndDistance(f32, f32);
     void initMapToolInfo(const JMapInfoIter&);
     void calcInitPosture();
     void updateVelocity();
-    void updateRotateZ(const TVec3f&);
+    void updateRotateZ(const Vec3f&);
     bool processMove();
     bool processChase();
 
@@ -38,8 +38,8 @@ public:
     bool tryToExplosion(HitSensor* pSender, HitSensor* pReceiver);
     void sendMsgExplosionToNearActor();
 
-    bool isUpdateChaseFrontVec(const TVec3f&) const;
-    void calcFrontVecToTarget(TVec3f*) const;
+    bool isUpdateChaseFrontVec(const Vec3f&) const;
+    void calcFrontVecToTarget(Vec3f*) const;
 
     bool isValidShowModel() const;
     bool isWaterBreak() const;
@@ -62,7 +62,7 @@ public:
         return mType == Type_MagnumKiller ? 4.0f : 1.0f;
     }
 
-    void setBasePosAndFront(const TVec3f& pos, const TVec3f& front) {
+    void setBasePosAndFront(const Vec3f& pos, const Vec3f& front) {
         mBasePos.set(pos);
         mBaseFront.set(front);
     }
@@ -76,18 +76,18 @@ public:
     f32 mChaseEndDist;
     f32 mChaseRotateSpeed;
     f32 mChaseStartAngle;
-    TVec3f mFront;
-    TVec3f mUp;
-    TVec3f mBasePos;
-    TVec3f mBaseFront;
-    TVec3f mBaseUp;
-    TPos3f mBaseMtx;
+    Vec3f mFront;
+    Vec3f mUp;
+    Vec3f mBasePos;
+    Vec3f mBaseFront;
+    Vec3f mBaseUp;
+    Pos3f mBaseMtx;
     s32 mFreezeTime;
-    TVec3f mFreezePos;
+    Vec3f mFreezePos;
     const Nerve* mUnfreezeNerve;
     s32 mChaseInvalidTime;
     s32 mMoveTime;
-    TPos3f mEffectMtx;
+    Pos3f mEffectMtx;
     HitSensor* mTargetSensor;
     bool mDisableChase;
     bool mIsLinearShot;       // if set, ignore gravity and disable chase

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class JPABaseEmitter;
 
@@ -16,8 +16,8 @@ public:
     bool isContinuousParticle() const;
 
     // In MultiEmitterAccess
-    void setGlobalRotation(const TVec3s&);
-    void setGlobalScale(const TVec3f&);
+    void setGlobalRotation(const Vec3s&);
+    void setGlobalScale(const Vec3f&);
     void setGlobalSRTMatrix(const Mtx);
     void setGlobalPrmColor(u8, u8, u8);
     void setGlobalEnvColor(u8, u8, u8);

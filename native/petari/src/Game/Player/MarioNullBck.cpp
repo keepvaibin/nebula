@@ -21,11 +21,11 @@ void MarioNullBck::appear() {
     LiveActor::appear();
 }
 
-void MarioNullBck::getLastPos(TVec3f* pDest) {
+void MarioNullBck::getLastPos(Vec3f* pDest) {
     MR::copyJointPos(this, "DummyItem", pDest);
 }
 
-bool MarioNullBck::getFramePos(f32 a1, TVec3f* a2, TVec3f* a3) {
+bool MarioNullBck::getFramePos(f32 a1, Vec3f* a2, Vec3f* a3) {
     bool ret = false;
     if (MR::isDead(this)) {
         return true;

@@ -28,10 +28,10 @@ bool Mario::doRecovery() {
         changeStatus(mRecovery);
         stopJump();
     } else {
-        TVec3f gravity;
-        TVec3f position(*getLastSafetyTrans(&gravity));
+        Vec3f gravity;
+        Vec3f position(*getLastSafetyTrans(&gravity));
         position += gravity * 160.0f;
-        TVec3f direction(mPosition - position);
+        Vec3f direction(mPosition - position);
         MR::normalizeOrZero(&direction);
         doPointWarpRecovery(position, direction);
     }
@@ -64,7 +64,7 @@ bool MarioRecovery::calcFirstVector() {
     MarioActor* actor = mActor;
     f32 vertical = MR::vecKillElement(actor->getLastMove(), getGravityVec(), &_1C);
     _28 = getGravityVec() * vertical;
-    TVec3f offset(getTrans() - _34);
+    Vec3f offset(getTrans() - _34);
     offset.setLength(10.0f);
     _1C += offset;
     _14 = 60;
@@ -76,10 +76,10 @@ bool MarioRecovery::calcFirstVector() {
         return false;
     }
 
-    TVec3f horizontal;
+    Vec3f horizontal;
     MR::vecKillElement(_70, getGravityVec(), &horizontal);
     if (_12) {
-        TVec3f alternate;
+        Vec3f alternate;
         MR::vecKillElement(_4C - _34, getGravityVec(), &alternate);
         horizontal = alternate;
     }
@@ -107,7 +107,7 @@ bool MarioRecovery::calcFirstVector() {
     _80 = _7C / _18;
     _7C = 0.0f;
     mActor->_F44 = false;
-    const TVec3f& position = mActor->mPosition;
+    const Vec3f& position = mActor->mPosition;
     addTrans(position - getTrans(), "Module");
     update();
     _12 = 0;
@@ -117,7 +117,7 @@ bool MarioRecovery::calcFirstVector() {
 void MarioRecovery::updateJump() {
     Mtx rotation;
     NebulaMtxRotAxisRad(rotation, &_64, _7C);
-    TVec3f rotated;
+    Vec3f rotated;
     NebulaMtxMultVec(rotation, &_70, &rotated);
     if (_88 > 60 && _88 < 120) {
         if (_7C < 4.712389f) {
@@ -136,8 +136,8 @@ void MarioRecovery::updateJump() {
         radius = 300.0f;
     }
     rotated.setLength(radius);
-    TVec3f target(_34 + rotated);
-    TVec3f velocity(target - getTrans());
+    Vec3f target(_34 + rotated);
+    Vec3f velocity(target - getTrans());
     velocity = velocity * (25.0f / (25.0f + _88));
     u32 elapsed = _18 - _88;
     if (elapsed < 60) {
@@ -166,11 +166,11 @@ bool MarioRecovery::start() {
         _16 = 180;
         mActor->_F44 = false;
         if (MR::diffAngleAbs(_34 - _4C, _58) >= 1.5707964f) {
-            TVec3f direction(_34 - _4C);
+            Vec3f direction(_34 - _4C);
             if (MR::normalizeOrZero(&direction)) {
                 direction.set< f32 >(1.0f, 0.0f, 0.0f);
             }
-            TVec3f cross = _58.cross(direction);
+            Vec3f cross = _58.cross(direction);
             if (MR::normalizeOrZero(&cross)) {
                 cross.set< f32 >(0.0f, 0.0f, 1.0f);
             }
@@ -227,9 +227,9 @@ bool MarioRecovery::update() {
         updateJump();
         bool passed = false;
         bool distant = true;
-        TVec3f shadow(getShadowPos());
-        TVec3f shadowOffset(shadow - _34);
-        TVec3f initialOffset(_40 - _34);
+        Vec3f shadow(getShadowPos());
+        Vec3f shadowOffset(shadow - _34);
+        Vec3f initialOffset(_40 - _34);
         if (MR::isNearZero(shadowOffset)) {
             passed = true;
         }
@@ -263,7 +263,7 @@ bool MarioRecovery::update() {
             _1A = 0;
             calcFirstVector();
         } else {
-            TVec3f horizontal;
+            Vec3f horizontal;
             f32 distance = MR::vecKillElement(_34 - getTrans(), _58, &horizontal);
             if (MR::abs(distance) < 10.0f) {
                 addTrans(_58 * distance, "Module");

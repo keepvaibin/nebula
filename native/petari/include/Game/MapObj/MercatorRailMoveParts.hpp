@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class MapPartsAppearController;
 class MapPartsRailMover;
@@ -25,9 +25,9 @@ public:
     MapPartsRailMover* mRailMover;
     MapPartsRailRotator* mRailRotator;
     MapPartsAppearController* mAppearController;
-    TMtx34f mRotateMtx;
-    TVec3f mLocalTrans;
-    TVec3f mLocalRotation;
-    TVec3f _E0;
+    Mtx34f mRotateMtx;
+    Vec3f mLocalTrans;
+    Vec3f mLocalRotation;
+    Vec3f _E0;
     bool mIsNotMoving;
 };

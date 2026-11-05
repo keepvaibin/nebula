@@ -2,7 +2,7 @@
 
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class AnimScaleController;
 template < typename T >
@@ -56,10 +56,10 @@ public:
     bool tryRevival();
     bool requestDrift();
     bool requestDisperse();
-    bool appearNormal(const TVec3f&, const TVec3f&);
-    bool appearShadow(const TVec3f&, const TVec3f&);
-    bool rootTongueMtxCallBack(TPos3f*, const JointControllerInfo&);
-    bool endTongueMtxCallBack(TPos3f*, const JointControllerInfo&);
+    bool appearNormal(const Vec3f&, const Vec3f&);
+    bool appearShadow(const Vec3f&, const Vec3f&);
+    bool rootTongueMtxCallBack(Pos3f*, const JointControllerInfo&);
+    bool endTongueMtxCallBack(Pos3f*, const JointControllerInfo&);
     void updateNormalVelocity();
     void updateDriftReleaseVelocity();
     bool isTouchTongue() const;
@@ -81,11 +81,11 @@ public:
     JointControlDelegator< BombTeresa >* mJointDelegator2;
     AnimScaleController* mScaleController;
     WalkerStateBindStarPointer* mBindStarPointer;
-    TQuat4f _9C;
-    TVec3f _AC;
-    TVec3f _B8;
-    TVec3f _C4;
-    TVec3f _D0;
+    Quat4f _9C;
+    Vec3f _AC;
+    Vec3f _B8;
+    Vec3f _C4;
+    Vec3f _D0;
     f32 _DC;
     f32 _E0;
     f32 _E4;

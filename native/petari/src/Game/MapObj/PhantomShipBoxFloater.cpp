@@ -2,7 +2,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/FloaterFloatingForceTypeSpring.hpp"
 #include "Game/Util.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 namespace {
     const char* const cEffectName = "Ripple";
@@ -48,8 +48,8 @@ void PhantomShipBoxFloater::control() {
 }
 
 f32 PhantomShipBoxFloater::getCurrentSinkDepth() const {
-    TVec3f zDir, yDir;
-    TPos3f depthMtx;
+    Vec3f zDir, yDir;
+    Pos3f depthMtx;
     depthMtx.setInline(getBaseMtx());
     depthMtx.getTrans(zDir);
     depthMtx.getYDir(yDir);

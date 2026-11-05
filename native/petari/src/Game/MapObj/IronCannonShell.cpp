@@ -93,16 +93,16 @@ bool IronCannonLauncherPoint::tryShotBullet(f32 offset) {
         return false;
     }
 
-    TPos3f mtx;
+    Pos3f mtx;
     MR::makeMtxTRS(mtx, mPosition, mRotation, mScale);
-    TVec3f vec;
+    Vec3f vec;
     mtx.getZDir(vec);
 
-    TVec3f vec2;
+    Vec3f vec2;
     vec2.scaleAdd(::sGunPointOffset + offset, vec, mPosition);
     pShell->launch(vec2, vec * mBulletSpeed);
 
-    TVec3f shadowdir;
+    Vec3f shadowdir;
     mtx.getYDir(shadowdir);
     shadowdir.negate();
     MR::setShadowDropDirection(pShell, nullptr, shadowdir);
@@ -123,7 +123,7 @@ void IronCannonLauncher::init(const JMapInfoIter& rIter) {
 
     MR::useStageSwitchReadA(this, rIter);
     MR::setClippingTypeSphereContainsModelBoundingBox(this, ::sGunPointModelOffset);
-    TVec3f front;
+    Vec3f front;
     MR::calcFrontVec(&front, this);
     mEffectMtx.scaleAdd(::sGunPointModelOffset, front, mPosition);
     MR::setEffectHostSRT(this, "Shoot", &mEffectMtx, nullptr, nullptr);

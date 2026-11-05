@@ -13,7 +13,7 @@ public:
 
     void calcPosAndUp(f32 accel);
 
-    void setParam(const TVec2f& angle, f32 dist, f32 rate) {
+    void setParam(const Vec2f& angle, f32 dist, f32 rate) {
         mAngleX = angle.x;
         mAngleY = angle.y;
         mDist = dist;

@@ -21,7 +21,7 @@ public:
 
     f32 mRadius;
     f32 mHeight;
-    TVec3f mAxis;
+    Vec3f mAxis;
     s32 mPointCount;
     WhirlPoolPoint** mPoints;
     f32 mRotation;
@@ -33,5 +33,5 @@ public:
     f32 mTexOffsetV2;
     JUTTexture* mTexture;
     JUTTexture* mIndirectTexture;
-    TVec3f mClippingCenter;
+    Vec3f mClippingCenter;
 };

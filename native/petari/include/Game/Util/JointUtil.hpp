@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class J3DJoint;
 class J3DModel;
@@ -18,11 +18,11 @@ namespace MR {
     const char* getJointName(const LiveActor*, int);
     s32 getJointNum(const LiveActor*);
     bool isExistJoint(const LiveActor*, const char*);
-    void copyJointPos(J3DModel*, const char*, TVec3f*);
-    void copyJointPos(const LiveActor*, const char*, TVec3f*);
-    void copyJointPos(J3DModel*, int, TVec3f*);
-    void copyJointPos(const LiveActor*, int, TVec3f*);
-    void copyJointScale(const LiveActor*, const char*, TVec3f*);
+    void copyJointPos(J3DModel*, const char*, Vec3f*);
+    void copyJointPos(const LiveActor*, const char*, Vec3f*);
+    void copyJointPos(J3DModel*, int, Vec3f*);
+    void copyJointPos(const LiveActor*, int, Vec3f*);
+    void copyJointScale(const LiveActor*, const char*, Vec3f*);
     void hideJoint(J3DJoint*);
     void hideJoint(J3DModel*, const char*);
     void hideJoint(const LiveActor*, const char*);
@@ -42,8 +42,8 @@ namespace MR {
     J3DJoint* getParentJoint(J3DModelData*, J3DJoint*);
     J3DJoint* getParentJoint(const LiveActor*, J3DJoint*);
 
-    inline TVec3f getJointPos(const LiveActor* pActor, const char* pJointName) {
-        TVec3f jointPos;
+    inline Vec3f getJointPos(const LiveActor* pActor, const char* pJointName) {
+        Vec3f jointPos;
         copyJointPos(pActor, pJointName, &jointPos);
         return jointPos;
     }

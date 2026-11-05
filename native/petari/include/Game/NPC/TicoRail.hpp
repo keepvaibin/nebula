@@ -29,7 +29,7 @@ public:
     bool isGreaterEqualStepAndRandom(s32) const;
     bool isSameRailActor(const LiveActor*) const;
 
-    TVec3f _8C;
+    Vec3f _8C;
     LiveActor* _98;
     LodCtrl* mLodCtrl;
 };

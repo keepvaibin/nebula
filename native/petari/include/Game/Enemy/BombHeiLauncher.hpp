@@ -21,7 +21,7 @@ public:
     void exeLauncherWait();
     void exeStop();
 
-    TVec3f* getBombVelocity() const {
+    Vec3f* getBombVelocity() const {
         return &mBomb->mVelocity;
     }
 

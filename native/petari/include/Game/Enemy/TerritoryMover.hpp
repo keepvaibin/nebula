@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry.hpp>
+#include <nebula_geometry.hpp>
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 
@@ -13,11 +13,11 @@ public:
     void decideNextTargetPos(const LiveActor*);
     bool isReachedTarget(const LiveActor*, f32);
 
-    void setCenter(const TVec3f& rPos) {
+    void setCenter(const Vec3f& rPos) {
         mCenter.set(rPos);
     }
 
     f32 mRadius;
-    TVec3f mCenter;
-    TVec3f mTarget;
+    Vec3f mCenter;
+    Vec3f mTarget;
 };

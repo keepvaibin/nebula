@@ -10,7 +10,7 @@ public:
 
     virtual void update();
 
-    TPos3f mFollowMtx;
+    Pos3f mFollowMtx;
     AreaObj* mObj;
 };
 

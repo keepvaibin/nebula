@@ -38,7 +38,7 @@ void TripodBossCore::init(const JMapInfoIter& rIter) {
     MR::connectToScene(this, MR::MovementType_MapObjDecoration, MR::CalcAnimType_MapObjDecoration, MR::DrawBufferType_TripodBoss, MR::DrawType_None);
     initClippingSphere();
     initHitSensor(1);
-    MR::addHitSensor(this, "body", ATYPE_BREAKABLE_CAGE, 8, ::sHitSensorRadius * mScale.x, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensor(this, "body", ATYPE_BREAKABLE_CAGE, 8, ::sHitSensorRadius * mScale.x, Vec3f(0.0f, 0.0f, 0.0f));
     MR::initCollisionParts(this, "TripodBossCore", getSensor("body"), nullptr);
     initSound(4, false);
 

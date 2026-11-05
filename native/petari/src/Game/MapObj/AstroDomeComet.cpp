@@ -39,7 +39,7 @@ void AstroDomeComet::init(const JMapInfoIter& rIter) {
         mPointingActors[i]->initWithoutIter();
         MR::invalidateClipping(mPointingActors[i]);
         MR::initStarPointerTargetAtMtx(mPointingActors[i], ::cPointingRadius, MR::getJointMtx(this, "CometIcon"),
-                                       TVec3f(0.0f, ::cPointingPosY + ::cPointingOffsetY * i, 0.0f));
+                                       Vec3f(0.0f, ::cPointingPosY + ::cPointingOffsetY * i, 0.0f));
         mPointingActors[i]->makeActorDead();
     }
 

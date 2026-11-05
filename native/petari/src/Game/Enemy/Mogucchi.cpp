@@ -25,7 +25,7 @@
 
 namespace {
     inline void resetBodySensorOffset(LiveActor* pActor) {
-        MR::setSensorOffset(pActor, "body", TVec3f(0.0f, 0.0f, 0.0f));
+        MR::setSensorOffset(pActor, "body", Vec3f(0.0f, 0.0f, 0.0f));
     }
 
     NEW_NERVE_ONEND(MogucchiNrvStroll, Mogucchi, Stroll, Stroll);
@@ -65,7 +65,7 @@ void Mogucchi::init(const JMapInfoIter& rIter) {
     initNerve(GET_NERVE_ANON(MogucchiNrvStroll));
     MR::useStageSwitchWriteDead(this, rIter);
 
-    MR::initStarPointerTargetAtJoint(this, "Head", 83.0f, TVec3f(::sHeadOffset));
+    MR::initStarPointerTargetAtJoint(this, "Head", 83.0f, Vec3f(::sHeadOffset));
     createMogucchiHill();
     createHole();
     MR::startBck(this, "Walk");
@@ -155,7 +155,7 @@ void Mogucchi::exeAppearDown() {
         MR::startSound(this, "SE_EV_MOGUCCHI_SWOON");
 
         ::resetBodySensorOffset(this);
-        MR::setSensorOffset(this, "spin", TVec3f(0.0f, 0.0f, 0.0f));
+        MR::setSensorOffset(this, "spin", Vec3f(0.0f, 0.0f, 0.0f));
     }
 
     MR::startLevelSound(this, "SE_EM_LV_SWOON_S");
@@ -201,7 +201,7 @@ void Mogucchi::exeScatter() {
     MR::normalizeOrZero(&mScatterNormal);
 
     if (!MR::isNearZero(mScatterNormal)) {
-        TRot3f mtx;
+        Rot3f mtx;
         mtx.setXDir(mRailGravity.cross(mScatterNormal));
         mtx.setYDir(-mRailGravity);
         mtx.setZDir(-mScatterNormal);
@@ -242,7 +242,7 @@ void Mogucchi::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
             return;
         }
 
-        TVec3f attackDir;
+        Vec3f attackDir;
         calcAttackDir(&attackDir, pSender->mPosition, pReceiver->mPosition);
 
         if (MR::sendMsgEnemyAttackStrongToDir(pReceiver, pSender, attackDir)) {
@@ -264,9 +264,9 @@ bool Mogucchi::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pR
 
 void Mogucchi::initSensor() {
     LiveActor::initHitSensor(3);
-    MR::addHitSensorAtJointEnemy(this, "head", "Head", 32, 83.0f, TVec3f(::sHeadOffset));
-    MR::addHitSensorAtJointEnemy(this, "body", "Spine", 32, 120.0f, TVec3f(::sBodyOffset));
-    MR::addHitSensorEnemy(this, "spin", 16, 180.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointEnemy(this, "head", "Head", 32, 83.0f, Vec3f(::sHeadOffset));
+    MR::addHitSensorAtJointEnemy(this, "body", "Spine", 32, 120.0f, Vec3f(::sBodyOffset));
+    MR::addHitSensorEnemy(this, "spin", 16, 180.0f, Vec3f(0.0f, 0.0f, 0.0f));
 }
 
 void Mogucchi::createMogucchiHill() {
@@ -323,7 +323,7 @@ void Mogucchi::reflectStarPointer2P() {
 void Mogucchi::updatePosition() {
     Triangle triangle = Triangle();
 
-    TVec3f v1;
+    Vec3f v1;
     mGrounded = MR::getFirstPolyOnLineToMap(&v1, &triangle, MR::getRailPos(this), mRailGravity.scaleInline(1000.0f));
 
     if (mGrounded) {
@@ -339,7 +339,7 @@ void Mogucchi::createHole() {
     mHole->initWithoutIter();
 }
 
-void Mogucchi::calcAttackDir(TVec3f* pDir, const TVec3f& rSenderPos, const TVec3f& rReceiverPos) const {
+void Mogucchi::calcAttackDir(Vec3f* pDir, const Vec3f& rSenderPos, const Vec3f& rReceiverPos) const {
     pDir->sub(rReceiverPos, rSenderPos);
     pDir->orthogonalize(mRailGravity);
     MR::normalizeOrZero(pDir);
@@ -353,13 +353,13 @@ void Mogucchi::calcAttackDir(TVec3f* pDir, const TVec3f& rSenderPos, const TVec3
 }
 
 void Mogucchi::makeEulerRotation() {
-    TPos3f mtx;
+    Pos3f mtx;
     MR::makeMtxUpFront(&mtx, -mRailGravity, MR::getRailDirection(this));
     mtx.getEulerXYZ(mRotation);
     mRotation.mult(180.0f / PI);
 }
 
-void Mogucchi::calcScatterVec(const TVec3f& rStart, const TVec3f& rEnd) {
+void Mogucchi::calcScatterVec(const Vec3f& rStart, const Vec3f& rEnd) {
     mScatterNormal.sub(rEnd, rStart);
     mScatterNormal.orthogonalize(mRailGravity);
     MR::normalizeOrZero(&mScatterNormal);
@@ -439,7 +439,7 @@ bool Mogucchi::receiveAttackByBodySensor(u32 msg, HitSensor* pSender, HitSensor*
 }
 
 void Mogucchi::updateReferenceMtx() {
-    TVec3f v1 = mRotation * (PI / 180.0f);
+    Vec3f v1 = mRotation * (PI / 180.0f);
 
     mNewHolePos.setRT(v1, mPosition);
 

@@ -1,7 +1,7 @@
 #include "Game/Map/OceanSpherePoint.hpp"
 #include "Game/Util/MathUtil.hpp"
 
-OceanSpherePoint::OceanSpherePoint(const TVec3f* pCenter, const TVec3f& rNormal, f32 wave1Pos, f32 wave2Pos, const TVec2f& rTexCoord)
+OceanSpherePoint::OceanSpherePoint(const Vec3f* pCenter, const Vec3f& rNormal, f32 wave1Pos, f32 wave2Pos, const Vec2f& rTexCoord)
     : mPos(*pCenter), mCenter(pCenter), mNormal(rNormal), mWave1Pos(wave1Pos), mWave2Pos(wave2Pos), mTexCoord(rTexCoord) {
 }
 

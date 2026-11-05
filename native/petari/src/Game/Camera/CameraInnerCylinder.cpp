@@ -14,7 +14,7 @@ void CameraInnerCylinder::reset() {
 }
 
 CameraTargetObj* CameraInnerCylinder::calc() {
-    TVec3f watchPoint;
+    Vec3f watchPoint;
     CameraLocalUtil::makeWatchPoint(&watchPoint, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
 
     watchPoint = watchPoint - CameraLocalUtil::getTarget(this)->getPosition() + CameraLocalUtil::getTarget(this)->getGroundPos();
@@ -22,10 +22,10 @@ CameraTargetObj* CameraInnerCylinder::calc() {
     if (mIsNotInitialized) {
         mIsNotInitialized = false;
     } else {
-        TVec3f prevDir = mLastWatchPoint - CameraLocalUtil::getTarget(this)->getPosition();
+        Vec3f prevDir = mLastWatchPoint - CameraLocalUtil::getTarget(this)->getPosition();
         f32 prevUp = CameraLocalUtil::getTarget(this)->getUpVec().dot(prevDir);
 
-        TVec3f watchDir = watchPoint - CameraLocalUtil::getTarget(this)->getPosition();
+        Vec3f watchDir = watchPoint - CameraLocalUtil::getTarget(this)->getPosition();
         f32 newUp = CameraLocalUtil::getTarget(this)->getUpVec().dot(watchDir);
 
         f32 length = newUp * 0.05f + prevUp * 0.95f;
@@ -35,16 +35,16 @@ CameraTargetObj* CameraInnerCylinder::calc() {
 
     mLastWatchPoint.set(watchPoint);
 
-    TPos3f zoneMtx;
+    Pos3f zoneMtx;
     zoneMtx.set(mZoneMatrix);
-    TPos3f invMtx = zoneMtx;
+    Pos3f invMtx = zoneMtx;
     invMtx.invert(invMtx);
     invMtx.mult(watchPoint, watchPoint);
 
-    TVec3f groundPos = CameraLocalUtil::getTarget(this)->getGroundPos();
+    Vec3f groundPos = CameraLocalUtil::getTarget(this)->getGroundPos();
     invMtx.mult(groundPos, groundPos);
 
-    TVec3f front = groundPos - mWPoint;
+    Vec3f front = groundPos - mWPoint;
     front -= mAxis * front.dot(mAxis);
     if (MR::isNearZero(front)) {
         return nullptr;
@@ -52,41 +52,41 @@ CameraTargetObj* CameraInnerCylinder::calc() {
 
     MR::normalize(&front);
 
-    TVec3f up(0.0f, 1.0f, 0.0f);
-    TVec3f side = up.cross(mAxis);
+    Vec3f up(0.0f, 1.0f, 0.0f);
+    Vec3f side = up.cross(mAxis);
     if (MR::isNearZero(side)) {
         return nullptr;
     }
 
     MR::normalize(&side);
 
-    TVec3f camUp = mAxis.cross(side);
+    Vec3f camUp = mAxis.cross(side);
     f32 angleX = camUp.dot(front);
     f32 angleY = side.dot(front);
 
-    TVec3f watchDir = watchPoint - groundPos;
-    TVec3f watchSide = side * side.dot(watchDir);
+    Vec3f watchDir = watchPoint - groundPos;
+    Vec3f watchSide = side * side.dot(watchDir);
 
-    TVec3f watchFront = watchDir - watchSide;
+    Vec3f watchFront = watchDir - watchSide;
     watchSide *= mSideDist;
     watchPoint.set(watchSide + watchFront + groundPos);
 
-    TPos3f mtx1;
+    Pos3f mtx1;
     mtx1.setXDir(side);
     mtx1.setYDir(camUp);
     mtx1.setZDir(mAxis);
     mtx1.setTrans(watchPoint);
 
-    TPos3f mtx2;
-    mtx2.makeRotate(TVec3f(1.0f, 0.0f, 0.0f), mAngleA * angleX);
+    Pos3f mtx2;
+    mtx2.makeRotate(Vec3f(1.0f, 0.0f, 0.0f), mAngleA * angleX);
 
-    TPos3f mtx3;
-    mtx3.makeRotate(TVec3f(0.0f, 1.0f, 0.0f), -mAngleB * angleY);
+    Pos3f mtx3;
+    mtx3.makeRotate(Vec3f(0.0f, 1.0f, 0.0f), -mAngleB * angleY);
 
     mtx1.concat(mtx1, mtx3);
     mtx1.concat(mtx1, mtx2);
 
-    TVec3f pos(0.0f, 0.0f, mDist);
+    Vec3f pos(0.0f, 0.0f, mDist);
     mtx1.mult(pos, pos);
     zoneMtx.mult(watchPoint, watchPoint);
     zoneMtx.mult33(up, up);

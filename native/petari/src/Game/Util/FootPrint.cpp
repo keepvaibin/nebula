@@ -91,7 +91,7 @@ void FootPrint::movement() {
     }
 }
 
-bool FootPrint::addPrint(const TVec3f& rPos, const TVec3f& rArg2, const TVec3f& rArg3, bool arg4) {
+bool FootPrint::addPrint(const Vec3f& rPos, const Vec3f& rArg2, const Vec3f& rArg3, bool arg4) {
     _3C = false;
 
     if (mPrintNum > 0 && rPos.distance(mLastPrintPos) < mMinPrintDistance) {
@@ -141,8 +141,8 @@ void FootPrint::draw() const {
         NativeShader::setColor(material, 0, color.r, color.g, color.b, color.a);
         NativeShader::send(material);
 
-        TVec3f cross = mPrints[i]._C.cross(mPrints[i]._18);
-        TVec3f v1;
+        Vec3f cross = mPrints[i]._C.cross(mPrints[i]._18);
+        Vec3f v1;
         if ((i & 1) != 0) {
             v1 = mPrints[i].mPos + cross * _2C;
         } else {
@@ -166,7 +166,7 @@ void FootPrint::clearForce() {
     mRotatingPrintIndex = 0;
 }
 
-TVec3f* FootPrint::getPrintPos(u32 index) const {
+Vec3f* FootPrint::getPrintPos(u32 index) const {
     return &mPrints[index % mPrintMaxNum].mPos;
 }
 

@@ -140,7 +140,7 @@ KoopaBattleBase::~KoopaBattleBase() {
 }
 
 namespace MR {
-    void moveAndTurnToPlayer(LiveActor* pActor, TVec3f* pVec, const MR::ActorMoveParam& rMoveParam) {
+    void moveAndTurnToPlayer(LiveActor* pActor, Vec3f* pVec, const MR::ActorMoveParam& rMoveParam) {
         moveAndTurnToPlayer(pActor, pVec, rMoveParam._0, rMoveParam._4, rMoveParam._8, rMoveParam._C);
     }
 };  // namespace MR

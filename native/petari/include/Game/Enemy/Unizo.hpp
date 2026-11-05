@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class AnimScaleController;
 class ModelObj;
@@ -39,7 +39,7 @@ public:
     void doJump();
     void doAttack(HitSensor*);
     void doJumpDown();
-    void doFireDown(const TVec3f&);
+    void doFireDown(const Vec3f&);
     void doBreak();
     void doSpin();
     bool isBreakGround();
@@ -62,9 +62,9 @@ public:
     void endPointing();
 
     s32 mType;
-    TQuat4f mQuat;
-    TPos3f mBaseMtx;
-    TPos3f mRippleMtx;
+    Quat4f mQuat;
+    Pos3f mBaseMtx;
+    Pos3f mRippleMtx;
     s32 mFrame;
     s32 mBlinkCount;
     s32 mBlinkFrame;

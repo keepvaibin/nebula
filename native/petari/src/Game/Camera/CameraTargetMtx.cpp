@@ -9,31 +9,31 @@ CameraTargetMtx::CameraTargetMtx(const char* pName)
     mMatrix.identity();
 }
 
-const TVec3f& CameraTargetMtx::getPosition() const {
+const Vec3f& CameraTargetMtx::getPosition() const {
     return mPosition;
 }
 
-const TVec3f& CameraTargetMtx::getUpVec() const {
+const Vec3f& CameraTargetMtx::getUpVec() const {
     return mUp;
 }
 
-const TVec3f& CameraTargetMtx::getFrontVec() const {
+const Vec3f& CameraTargetMtx::getFrontVec() const {
     return mFront;
 }
 
-const TVec3f& CameraTargetMtx::getSideVec() const {
+const Vec3f& CameraTargetMtx::getSideVec() const {
     return mSide;
 }
 
-const TVec3f& CameraTargetMtx::getLastMove() const {
+const Vec3f& CameraTargetMtx::getLastMove() const {
     return mLastMove;
 }
 
-const TVec3f& CameraTargetMtx::getGroundPos() const {
+const Vec3f& CameraTargetMtx::getGroundPos() const {
     return mPosition;
 }
 
-const TVec3f& CameraTargetMtx::getGravityVector() const {
+const Vec3f& CameraTargetMtx::getGravityVector() const {
     return mGravityVector;
 }
 
@@ -53,7 +53,7 @@ void CameraTargetMtx::movement() {
     mMatrix.getZDir(mFront);
     mMatrix.getXDir(mSide);
 
-    TVec3f position;
+    Vec3f position;
     mMatrix.getTrans(position);
 
     if (mInvalidLastMove) {

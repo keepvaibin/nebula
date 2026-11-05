@@ -3,7 +3,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
-#include <JSystem/JMath/JMATrigonometric.hpp>
+#include <nebula_geometry.hpp>
 
 namespace {
     const s32 hIsShakableStep = 20;
@@ -85,7 +85,7 @@ void PlantGroup::init(const JMapInfoIter& rIter) {
     initSound(4, false);
     initEffectKeeper(0, "Bush", false);
     MR::setEffectHostSRT(this, "HintShakeLeaf", &mHintPosition, &mHintRotation, nullptr);
-    MR::initStarPointerTarget(this, 0.0f, TVec3f(0.0f));
+    MR::initStarPointerTarget(this, 0.0f, Vec3f(0.0f));
     MR::useStageSwitchSleep(this, rIter);
     MR::useStageSwitchReadAppear(this, rIter);
 
@@ -146,10 +146,10 @@ void PlantGroup::initMember(s32 itemCount, const JMapInfoIter&) {
     }
 
     initHitSensor(1);
-    MR::addHitSensorMapObj(this, "\213\253\212\105\213\205" /* 境界球 */, 16, 100.0f, TVec3f(gZeroVec));
+    MR::addHitSensorMapObj(this, "\213\253\212\105\213\205" /* 境界球 */, 16, 100.0f, Vec3f(gZeroVec));
 }
 
-s32 PlantGroup::placeOnCollisionFormCircle(TVec3f* pCenter, const TVec3f& rGravity, const TVec3f& rAxisX, const TVec3f& rAxisY) {
+s32 PlantGroup::placeOnCollisionFormCircle(Vec3f* pCenter, const Vec3f& rGravity, const Vec3f& rAxisX, const Vec3f& rAxisY) {
     pCenter->set(0, 0, 0);
     s32 ring = 0;
     f32 angle = 0.0f;
@@ -158,18 +158,18 @@ s32 PlantGroup::placeOnCollisionFormCircle(TVec3f* pCenter, const TVec3f& rGravi
     s32 placedCount = 0;
 
     for (s32 i = 0; i < mMemberCount; i++) {
-        TVec3f offset(rAxisX);
-        offset.scale(JMACosRadian(angle));
-        offset += rAxisY * JMASinRadian(angle);
+        Vec3f offset(rAxisX);
+        offset.scale(Angle::cosRadian(angle));
+        offset += rAxisY * Angle::sinRadian(angle);
         offset.scale(radius);
-        TVec3f start(mPosition);
+        Vec3f start(mPosition);
         start += offset;
-        const TVec3f up = rGravity * 100.0f;
-        const TVec3f* pUp = &up;
+        const Vec3f up = rGravity * 100.0f;
+        const Vec3f* pUp = &up;
         start -= *pUp;
 
-        const TVec3f ray = rGravity * ::sCheckLineLength;
-        const TVec3f* pRay = &ray;
+        const Vec3f ray = rGravity * ::sCheckLineLength;
+        const Vec3f* pRay = &ray;
 
         if (MR::getFirstPolyOnLineToMap(&mMembers[i]->mPosition, nullptr, start, *pRay)) {
             *pCenter += mMembers[i]->mPosition;
@@ -193,13 +193,13 @@ s32 PlantGroup::placeOnCollisionFormCircle(TVec3f* pCenter, const TVec3f& rGravi
     return placedCount;
 }
 
-f32 PlantGroup::calcBoundingSphereRadius(const TVec3f& rCenter) {
-    TVec3f min(rCenter);
-    TVec3f max(rCenter);
+f32 PlantGroup::calcBoundingSphereRadius(const Vec3f& rCenter) {
+    Vec3f min(rCenter);
+    Vec3f max(rCenter);
 
     for (s32 i = 0; i < mMemberCount; i++) {
         if (!MR::isDead(mMembers[i])) {
-            const TVec3f& pos = mMembers[i]->mPosition;
+            const Vec3f& pos = mMembers[i]->mPosition;
 
             if (pos.x < min.x) {
                 min.x = pos.x;
@@ -225,7 +225,7 @@ f32 PlantGroup::calcBoundingSphereRadius(const TVec3f& rCenter) {
     }
 
     mPosition.set((max + min) / 2.0f);
-    TVec3f size(max - min);
+    Vec3f size(max - min);
 
     if (size.x < size.y) {
         if (size.y < size.z) {
@@ -243,14 +243,14 @@ f32 PlantGroup::calcBoundingSphereRadius(const TVec3f& rCenter) {
 }
 
 void PlantGroup::initAfterPlacement() {
-    TVec3f gravity;
-    TVec3f axisX;
+    Vec3f gravity;
+    Vec3f axisX;
     axisX.set(1, 0, 0);
-    TVec3f axisY;
+    Vec3f axisY;
     axisY.set(0, 1, 0);
     MR::calcGravityVector(this, mPosition, &gravity, nullptr, 0);
     MR::makeAxisCrossPlane(&axisX, &axisY, gravity);
-    TVec3f center;
+    Vec3f center;
     placeOnCollisionFormCircle(&center, gravity, axisX, axisY);
     f32 radius = calcBoundingSphereRadius(center);
     f32 scale = mScale.y;
@@ -268,10 +268,10 @@ void PlantGroup::control() {
         mMembers[i]->movement();
 
         if (pointing) {
-            TVec2f velocity(*MR::getStarPointerScreenVelocity(1));
+            Vec2f velocity(*MR::getStarPointerScreenVelocity(1));
 
             if (::sScratchVel * ::sScratchVel < velocity.squared()) {
-                TVec3f pos(*MR::getStarPointerWorldPosUsingDepth(1));
+                Vec3f pos(*MR::getStarPointerWorldPosUsingDepth(1));
 
                 if (mMembers[i]->tryPush(pos, ::sDPDTouchRadius, 2) == true) {
                     MR::tryRumblePadVeryWeak(this, 1);
@@ -316,7 +316,7 @@ bool PlantGroup::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor*) {
 
 void PlantGroup::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     if (MR::isSensorPlayer(pReceiver) || MR::isSensorEnemy(pReceiver)) {
-        TVec3f velocity(pReceiver->mHost->mVelocity);
+        Vec3f velocity(pReceiver->mHost->mVelocity);
         MR::vecKillElement(velocity, pReceiver->mHost->mGravity, &velocity);
 
         if (velocity.squared() < 2.0f) {
@@ -429,7 +429,7 @@ void PlantMember::exeShakeStrong() {
 
 bool PlantMember::generateItem(PlantGroup* pGroup) {
     if (mHasItem == true) {
-        TVec3f velocity(-mGravity);
+        Vec3f velocity(-mGravity);
         velocity.scale(::sCoinVel);
 
         if (pGroup->mIsStarPiece) {
@@ -448,17 +448,17 @@ bool PlantMember::generateItem(PlantGroup* pGroup) {
 
 void PlantMember::initPosture() {
     MR::calcGravityVector(this, &mGravity, nullptr, 0);
-    TVec3f axis;
+    Vec3f axis;
     axis.set(1, 0, 0);
 
     if (MR::isSameDirection(mGravity, axis, 0.01f)) {
         axis.set(0, 1, 0);
     }
 
-    TPos3f posture;
+    Pos3f posture;
     MR::calcMtxFromGravityAndZAxis(&posture, this, mGravity, axis);
-    TVec3f euler;
-    TPos3f rotation;
+    Vec3f euler;
+    Pos3f rotation;
     f32 angle = MR::getRandom(-PI, PI);
     rotation.makeRotate(mGravity, angle);
     posture.concat(rotation, posture);
@@ -484,7 +484,7 @@ bool PlantMember::tryShake(HitSensor* pSensor) {
         return false;
     }
 
-    TVec3f diff(pSensor->mPosition - mPosition);
+    Vec3f diff(pSensor->mPosition - mPosition);
     MR::vecKillElement(diff, mGravity, &diff);
     f32 distance = diff.length();
 
@@ -499,7 +499,7 @@ bool PlantMember::tryShake(HitSensor* pSensor) {
     return true;
 }
 
-bool PlantMember::tryPush(const TVec3f& rPosition, f32 radius, s32 touchType) {
+bool PlantMember::tryPush(const Vec3f& rPosition, f32 radius, s32 touchType) {
     if (MR::isDead(this)) {
         return false;
     }
@@ -510,7 +510,7 @@ bool PlantMember::tryPush(const TVec3f& rPosition, f32 radius, s32 touchType) {
         return false;
     }
 
-    TVec3f diff(rPosition - mPosition);
+    Vec3f diff(rPosition - mPosition);
     radius += ::sCollisionRadius * mScale.y;
     radius *= radius;
 

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/NameObj/NameObj.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 #define NR_REGISTERS 0x40
 
@@ -12,8 +12,8 @@ public:
     void declareMtxReg(const char*, MtxPtr);
     MtxPtr getMtx(const char*) const;
 
-    void declareVecReg(const char*, const TVec3f*);
-    const TVec3f* getVec(const char*) const;
+    void declareVecReg(const char*, const Vec3f*);
+    const Vec3f* getVec(const char*) const;
     void declareFloatReg(const char*, const f32*);
     const char* getDummyVecRegName() const;
 
@@ -28,12 +28,12 @@ public:
     MtxPtr mMatrices[NR_REGISTERS];
     const char* mMatrixNames[NR_REGISTERS];
     u32 mNrVectors;
-    const TVec3f* mVectors[NR_REGISTERS];
+    const Vec3f* mVectors[NR_REGISTERS];
     const char* mVectorNames[NR_REGISTERS];
     u32 mNrFloats;
     const f32* mFloats[NR_REGISTERS];
     const char* mFloatNames[NR_REGISTERS];
-    TMtx34f mDummyMatrix;
-    TVec3f mDummyVector;
+    Mtx34f mDummyMatrix;
+    Vec3f mDummyVector;
     f32 mDummyFloat;
 };

@@ -18,7 +18,7 @@
 #include <JSystem/J3DGraphBase/J3DPacket.hpp>
 #include <JSystem/J3DGraphBase/J3DShape.hpp>
 #include <JSystem/J3DGraphBase/J3DSys.hpp>
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 #include "Game/System/NebulaFrameClock.hpp"
 #include <NebulaGpuTypes.h>
 #include "Game/Util/RenderSignals.hpp"
@@ -33,7 +33,7 @@ namespace {
 };  // namespace
 
 const JUTTexture* mShadowTex;
-TVec3f mShadowVec;
+Vec3f mShadowVec;
 
 namespace MR {
     void drawInit() {
@@ -169,7 +169,7 @@ namespace MR {
         NebulaMtxOrtho(projMtx, 0.0f, height, 0.0f, width, 0.0f, 1.0f);
         J3DNativeView::setOrthographic(projMtx);
         MR::setDefaultViewportAndScissor();
-        TMtx34f mtxImm;
+        Mtx34f mtxImm;
         mtxImm.identity();
         J3DNativeShape::setPosition(0, mtxImm);
         J3DPass::positionMatrix(0);
@@ -212,7 +212,7 @@ namespace MR {
     }
 
     void fillScreenSetup(const NebulaColor8& rColor) {
-        TMtx34f mtxImm;
+        Mtx34f mtxImm;
         mtxImm.identity();
         J3DNativeShape::setPosition(0, mtxImm);
         J3DPass::positionMatrix(0);
@@ -230,7 +230,7 @@ namespace MR {
         J3DNativeShape::setCurrentIdentity();
     }
 
-    void fillScreenArea(const TVec2s& rMin, const TVec2s& rMax) {
+    void fillScreenArea(const Vec2s& rMin, const Vec2s& rMax) {
         J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, 0);
         {
             u16 maxX = rMax.x;
@@ -249,7 +249,7 @@ namespace MR {
         fillScreenSetup(color);
         u16 width = getScreenWidth();
         u16 height = getScreenHeight();
-        fillScreenArea(TVec2s(0, 0), TVec2s(width, height));
+        fillScreenArea(Vec2s(0, 0), Vec2s(width, height));
     }
 
     void setupShadowVolumeDraw() {
@@ -284,7 +284,7 @@ namespace MR {
         Mtx44 projMtx;
         NebulaMtxOrtho(projMtx, 0.0f, MR::getScreenHeight(), 0.0f, MR::getScreenWidth(), -1.0f, 1.0f);
         J3DNativeView::setOrthographic(projMtx);
-        TMtx34f mtxImm;
+        Mtx34f mtxImm;
         mtxImm.identity();
         J3DNativeShape::setPosition(0, mtxImm);
         // Half black where the volumes and marks left the stencil set, and the stencil cleared there.
@@ -317,7 +317,7 @@ namespace MR {
         return mShadowTex;
     }
 
-    const TVec3f& getMarioShadowVec() {
+    const Vec3f& getMarioShadowVec() {
         return mShadowVec;
     }
 
@@ -325,18 +325,18 @@ namespace MR {
         mShadowTex = pShadowTex;
     }
 
-    void setMarioShadowVec(const TVec3f& rVec) {
+    void setMarioShadowVec(const Vec3f& rVec) {
         mShadowVec = rVec;
     }
 
     void loadTexProjectionMtx(u32 id) {
-        TPos3f matrix;
+        Pos3f matrix;
         calcTexProjectionMtx(&matrix);
         J3DNativeShape::setTexture((id - J3D_TEXMTX0) / 3, matrix, 3);
     }
 
-    void calcTexProjectionMtx(TPos3f* pMtx) {
-        TProj3f cameraProjection = MR::getCameraProjectionMtx();
+    void calcTexProjectionMtx(Pos3f* pMtx) {
+        Proj3f cameraProjection = MR::getCameraProjectionMtx();
         cameraProjection.mMtx[2][0] = 0.0f;
         cameraProjection.mMtx[2][1] = 0.0f;
         cameraProjection.mMtx[2][2] = -1.0f;
@@ -345,9 +345,9 @@ namespace MR {
         cameraProjection.mMtx[3][1] = 0.0f;
         cameraProjection.mMtx[3][2] = 0.0f;
         cameraProjection.mMtx[3][3] = 1.0f;
-        TPos3f matrix;
+        Pos3f matrix;
         MR::multMtx(matrix, MR::getCameraViewMtx(), cameraProjection);
-        TPos3f mat;
+        Pos3f mat;
         mat.identity();
         mat[0][0] = 0.5f;
         mat[0][2] = 0.5f;

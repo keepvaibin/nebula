@@ -2,7 +2,7 @@
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
-#include <JSystem/JMath/JMath.hpp>
+#include <nebula_geometry.hpp>
 
 namespace {
     static const char* const cDemoName = "\203\112\203\115\217\157\214\273" /* カギ出現 */;
@@ -27,7 +27,7 @@ void KeySwitch::init(const JMapInfoIter& rIter) {
     initModelManagerWithAnm("KeySwitch", 0, false);
     MR::connectToSceneMapObjDecoration(this);
     initHitSensor(1);
-    TVec3f box;
+    Vec3f box;
     box.x = 0.0f;
     box.y = 105.0f;
     box.z = 0.0f;
@@ -73,7 +73,7 @@ void KeySwitch::initKeySwitchByOwner(const JMapInfoIter& rIter) {
     MR::initActorCamera(this, rIter, &mCameraInfo);
 }
 
-void KeySwitch::appearKeySwitch(const TVec3f& rVec) {
+void KeySwitch::appearKeySwitch(const Vec3f& rVec) {
     MR::resetPosition(this, rVec);
     MR::onCalcGravity(this);
     MR::invalidateClipping(this);
@@ -115,7 +115,7 @@ void KeySwitch::exeAppear() {
             }
 
             MR::startSound(this, "SE_OJ_KEY_SWITCH_BOUND", mag);
-            TVec3f neg;
+            Vec3f neg;
             neg.negate(mGravity);
             MR::calcReboundVelocity(&mVelocity, neg, 0.60f, 0.7f);
         } else {
@@ -152,9 +152,9 @@ void KeySwitch::kill() {
 }
 
 void KeySwitch::calcAndSetBaseMtx() {
-    TVec3f front;
+    Vec3f front;
     MR::calcFrontVec(&front, this);
-    TPos3f mtx;
+    Pos3f mtx;
     MR::calcMtxFromGravityAndZAxis(&mtx, this, mGravity, front);
     MR::setBaseTRMtx(this, mtx);
 }
@@ -214,11 +214,11 @@ bool KeySwitch::tryAvoid() {
     }
 
     sensorActor = sensor->mHost;
-    TVec3f up;
+    Vec3f up;
     MR::calcUpVec(&up, sensorActor);
-    TVec3f thing;
+    Vec3f thing;
     thing.sub(mPosition, sensorActor->mPosition);
-    TVec3f stack_8 = thing.killElement(up);
+    Vec3f stack_8 = thing.killElement(up);
 
     if (MR::normalizeOrZero(&stack_8)) {
         MR::calcFrontVec(&stack_8, sensorActor);

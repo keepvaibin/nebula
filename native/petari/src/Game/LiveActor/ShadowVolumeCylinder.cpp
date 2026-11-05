@@ -23,12 +23,12 @@ void ShadowVolumeCylinder::setRadius(f32 radius) {
 
 void ShadowVolumeCylinder::loadModelDrawMtx() const {
     ShadowController* controller = getController();
-    TVec3f position;
+    Vec3f position;
     calcBaseDropPosition(&position);
-    TVec3f direction;
+    Vec3f direction;
     controller->getDropDir(&direction);
-    TVec3f up(-direction);
-    TPos3f mtx;
+    Vec3f up(-direction);
+    Pos3f mtx;
     MR::makeMtxUpNoSupportPos(&mtx, up, position);
 
     f32 radius = mRadius / ::sModelScale;
@@ -36,7 +36,7 @@ void ShadowVolumeCylinder::loadModelDrawMtx() const {
         radius *= controller->getHost()->mScale.x;
     }
 
-    TVec3f scale(radius, calcBaseDropLength() / ::sModelScale, radius);
+    Vec3f scale(radius, calcBaseDropLength() / ::sModelScale, radius);
     MR::preScaleMtx(mtx, scale);
     NebulaMtxConcat(MR::getCameraViewMtx(), mtx, mtx);
     J3DNativeShape::setPosition(0, mtx);

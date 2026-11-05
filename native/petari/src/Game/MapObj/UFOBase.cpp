@@ -18,7 +18,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 #include <cstddef>
 #include <cstdio>
 
@@ -171,8 +171,8 @@ void UFOBase::control() {
 }
 
 void UFOBase::calcAndSetBaseMtx() {
-    TVec3f vec;
-    TPos3f mtx;
+    Vec3f vec;
+    Pos3f mtx;
     mtx.identity();
     MR::calcUpVec(&vec, this);
     MR::makeMtxUpFrontPos(&mtx, vec, _9C, mPosition);
@@ -201,7 +201,7 @@ UFOBreakable::UFOBreakable(const char* pName) : UFOBase(pName) {
 }
 
 void UFOBreakable::initSensorType() {
-    MR::addHitSensor(this, "body", ATYPE_KILLER_TARGET_MAPOBJ, 8, 100.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensor(this, "body", ATYPE_KILLER_TARGET_MAPOBJ, 8, 100.0f, Vec3f(0.0f, 0.0f, 0.0f));
 }
 
 bool UFOBreakable::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {

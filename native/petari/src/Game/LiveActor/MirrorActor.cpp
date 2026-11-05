@@ -6,7 +6,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
-#include <JSystem/JMath/JMath.hpp>
+#include <nebula_geometry.hpp>
 
 MirrorActor::~MirrorActor() {
 }
@@ -21,10 +21,10 @@ void MirrorActor::init(const JMapInfoIter& rIter) {
     MR::syncMaterialAnimation(this, mHost);
     MR::invalidateClipping(this);
 
-    TBox3f box;
+    Box3f box;
     MR::calcModelBoundingBox(&box, mHost);
 
-    TVec3f center;
+    Vec3f center;
     center.lerp(box.f, box.i, 0.5f);
     mRadius = 0.5f * (box.f - box.i).length();
     mCenter = center;
@@ -71,6 +71,6 @@ bool MirrorActor::isHostInTheOtherSideOfMirror() const {
     return false;
 }
 
-TVec3f MirrorActor::getHostCenterPos() const {
+Vec3f MirrorActor::getHostCenterPos() const {
     return mCenter + mHost->mPosition;
 }

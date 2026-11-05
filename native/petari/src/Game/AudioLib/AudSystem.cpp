@@ -32,7 +32,7 @@
 #include <JSystem/JAudio2/JAUAudioData.hpp>
 #include <JSystem/JAudio2/JAUSoundMgr.hpp>
 #include <JSystem/JAudio2/JAUStdSoundInfo.hpp>
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 #include "Game/System/AssetFolder.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
@@ -245,7 +245,7 @@ void AudSystem::calc() {
     JAUSoundMgr::calc();
 }
 
-bool AudSystem::startSound(JAISoundID soundID, JAISoundHandle* pHandle, const TVec3f* pPos) {
+bool AudSystem::startSound(JAISoundID soundID, JAISoundHandle* pHandle, const Vec3f* pPos) {
     if (mIsResetReady && soundID.getGroupID() != 0xD) {  // HOMESE
         return false;
     }
@@ -286,7 +286,7 @@ bool AudSystem::startSound(JAISoundID soundID, JAISoundHandle* pHandle, const TV
     return true;
 }
 
-bool AudSystem::startLevelSound(JAISoundID soundID, JAISoundHandle* pHandle, const TVec3f* pPos) {
+bool AudSystem::startLevelSound(JAISoundID soundID, JAISoundHandle* pHandle, const Vec3f* pPos) {
     if (mIsResetReady && soundID.getGroupID() != 0xD) {  // HOMESE
         return false;
     }
@@ -687,7 +687,7 @@ void AudSystem::setMicMtx(MtxPtr pMtx, s32 mic) {
     mAudience.mStates[mic].setMtx(pMtx);
 }
 
-const TVec3f& AudSystem::getMicPos(s32 mic) {
+const Vec3f& AudSystem::getMicPos(s32 mic) {
     return mAudience.mStates[mic].getPos();
 }
 
@@ -848,8 +848,8 @@ void AudSystem::updateLimitedSound() {
     }
 }
 
-bool AudSystem::isAlreadyPlayingSoundNear(JAISoundID soundID, const TVec3f* pPos, f32 range) {
-    TVec3f pos;
+bool AudSystem::isAlreadyPlayingSoundNear(JAISoundID soundID, const Vec3f* pPos, f32 range) {
+    Vec3f pos;
     for (s32 category = 0; category < JAISeMgr::NUM_CATEGORIES; category++) {
         for (JSULink< JAISe >* it = getSeMgr().getCategory(category)->getSeList()->getFirst(); it != getSeMgr().getCategory(0)->getSeList()->getEnd();
              it = it->getNext()) {
@@ -870,7 +870,7 @@ bool AudSystem::isAlreadyPlayingSoundNear(JAISoundID soundID, const TVec3f* pPos
                 continue;
             }
 
-            TVec3f diff(0.0f);
+            Vec3f diff(0.0f);
             diff.sub(pos, *pPos);
             if (diff.length() <= range && diff.length() != 0.0f) {
                 return true;

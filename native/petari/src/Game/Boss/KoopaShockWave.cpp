@@ -81,7 +81,7 @@ void KoopaShockWave::makeActorDead() {
 }
 
 namespace {
-    void makeShockWaveMtx(TPos3f* pDest, const TVec3f& rUp, const TVec3f& rFront, const TVec3f& r6, f32 f1, f32 f2) {
+    void makeShockWaveMtx(Pos3f* pDest, const Vec3f& rUp, const Vec3f& rFront, const Vec3f& r6, f32 f1, f32 f2) {
         MR::makeMtxUpFrontPos(pDest, rUp, rFront, rUp * f1 * f2 + r6);
     }
 };  // namespace
@@ -107,7 +107,7 @@ void KoopaShockWave::exeWaveAttack() {
         mFront.set(mKoopa->mFront);
         MR::normalizeOrZero(&mUp);
 
-        TVec3f vec2 = mUp;
+        Vec3f vec2 = mUp;
         vec2.scale(KoopaFunction::getPlanetRadius(mKoopa));
 
         vec2.add(KoopaFunction::getPlanetCenterPos(mKoopa));
@@ -151,18 +151,18 @@ void KoopaShockWave::exeWaveAttack() {
 }
 
 void KoopaShockWave::updateHitSensor(HitSensor* pSensor) {
-    TVec3f playerPos = *MR::getPlayerPos();
+    Vec3f playerPos = *MR::getPlayerPos();
     MR::calcLocalVec(&playerPos, _94);
 
     f32 degree = MR::toDegree(MR::atan2(-playerPos.z, playerPos.x)) + 180.0f;
 
-    TPos3f matrix = _94;
+    Pos3f matrix = _94;
     matrix.setTrans(KoopaFunction::getPlanetCenterPos(mKoopa));
 
-    TVec3f rotateVec;
+    Vec3f rotateVec;
     rotateVec.set(0.0f, KoopaFunction::getPlanetRadius(mKoopa), 0.0f);
-    MR::rotateVecDegree(&rotateVec, TVec3f(0.0f, 0.0f, 1.0f), mAngle);
-    MR::rotateVecDegree(&rotateVec, TVec3f(0.0f, 1.0f, 0.0f), degree);
+    MR::rotateVecDegree(&rotateVec, Vec3f(0.0f, 0.0f, 1.0f), mAngle);
+    MR::rotateVecDegree(&rotateVec, Vec3f(0.0f, 1.0f, 0.0f), degree);
 
     matrix.mult(rotateVec, rotateVec);
     MR::setSensorPos(pSensor, rotateVec);

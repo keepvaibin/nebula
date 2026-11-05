@@ -31,14 +31,14 @@ void NeedlePlant::init(const JMapInfoIter& rIter) {
     info.setupConnectToScene();
     info.setupAffectedScale();
     info.setupHitSensor();
-    info.setupHitSensorParam(4, 180.0f, TVec3f(0.0f, mScale.x * 150.0f, 0.0f));
+    info.setupHitSensorParam(4, 180.0f, Vec3f(0.0f, mScale.x * 150.0f, 0.0f));
     info.setupShadow(nullptr);
     info.setupNerve(GET_NERVE(NeedlePlant, NeedlePlantNrvWait));
     initialize(rIter, info);
     initEffectKeeper(1, "NeedlePlant", false);
     MR::addEffectHitNormal(this, nullptr);
     initSound(4, 0);
-    MR::initStarPointerTarget(this, mScale.x * 150.0f, TVec3f(0.0f, mScale.x * 150.0f, 0.0f));
+    MR::initStarPointerTarget(this, mScale.x * 150.0f, Vec3f(0.0f, mScale.x * 150.0f, 0.0f));
     MR::getJMapInfoArg0NoInit(rIter, &mObjArg0);
 
     if (mObjArg0 == -1) {

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/NameObj/NameObj.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class CameraMan;
 class CameraPoseParam;
@@ -13,18 +13,18 @@ public:
     void calcPose(CameraMan*);
     void calcStartPose(CameraMan*);
     void calcSafePose(CameraMan*);
-    void moveToIdealPosition(TVec3f*);
+    void moveToIdealPosition(Vec3f*);
 
     CameraPoseParam* mPoseParam;
     bool mStartPose;
     bool mCalcIdeal;
-    TVec3f mPos;
+    Vec3f mPos;
     f32 mSpeed;
     s32 _24;
     u32 _28;
     bool _2C;
     bool _2D;
-    TVec3f _30;
+    Vec3f _30;
     bool mIsZeroFrameMoveOff;
     bool mIsResetting;
 };

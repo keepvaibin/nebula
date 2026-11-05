@@ -149,7 +149,7 @@ void SkeletalFishGuardHolder::appearGuard(s32 numGuards, s32 startGuard) {
     s32 pos = mBossRail->getFillUpNamePos(startGuard);
     s32 waitID;
 
-    TVec3f guardPos;
+    Vec3f guardPos;
     if (pos >= 0 && SkeletalFishBossFunc::copyGuardPos(&guardPos, pos)) {
         for (s32 i = 0; i < mNumGuards; i++) {
             if (MR::isDead(mGuards[i])) {

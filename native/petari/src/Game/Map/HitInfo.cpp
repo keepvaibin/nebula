@@ -2,7 +2,7 @@
 #include "Game/Map/CollisionParts.hpp"
 #include "Game/Map/KCollision.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 Triangle::Triangle() {
     mParts = nullptr;
@@ -23,7 +23,7 @@ void Triangle::fillData(CollisionParts* pParts, u32 index, HitSensor* pSensor) {
     mSensor = pSensor;
 
     KCollisionServer* pServer = pParts->mServer;
-    TPos3f* pMatrix;
+    Pos3f* pMatrix;
     KC_PrismData* pPrism = pServer->getPrismData(index);
 
     mNormals[0].set(*pServer->getFaceNormal(pPrism));
@@ -68,23 +68,23 @@ bool Triangle::isValid() const {
     return mIdx != 0xFFFFFFFF;
 }
 
-const TVec3f* Triangle::getNormal(int index) const {
+const Vec3f* Triangle::getNormal(int index) const {
     return &mNormals[index];
 }
 
-const TVec3f* Triangle::getFaceNormal() const {
+const Vec3f* Triangle::getFaceNormal() const {
     return &mNormals[0];
 }
 
-const TVec3f* Triangle::getEdgeNormal(int index) const {
+const Vec3f* Triangle::getEdgeNormal(int index) const {
     return &mNormals[index + 1];
 }
 
-const TVec3f* Triangle::getPos(int index) const {
+const Vec3f* Triangle::getPos(int index) const {
     return &mPos[index];
 }
 
-const TVec3f* Triangle::calcAndGetNormal(int index) {
+const Vec3f* Triangle::calcAndGetNormal(int index) {
     KCollisionServer* server = mParts->mServer;
     KC_PrismData* prism = server->getPrismData(mIdx);
 
@@ -124,7 +124,7 @@ const TVec3f* Triangle::calcAndGetNormal(int index) {
     return &mNormals[index];
 }
 
-const TVec3f* Triangle::calcAndGetEdgeNormal(int index) {
+const Vec3f* Triangle::calcAndGetEdgeNormal(int index) {
     KCollisionServer* server = mParts->mServer;
     KC_PrismData* prism = server->getPrismData(mIdx);
 
@@ -157,11 +157,11 @@ const TVec3f* Triangle::calcAndGetEdgeNormal(int index) {
     return &mNormals[index + 1];
 }
 
-const TVec3f* Triangle::calcAndGetPos(int index) {
+const Vec3f* Triangle::calcAndGetPos(int index) {
     KCollisionServer* server = mParts->mServer;
     KC_PrismData* prism = server->getPrismData(mIdx);
 
-    TVec3f* pos = &mPos[index];
+    Vec3f* pos = &mPos[index];
 
     pos->set(server->getPos(prism, index));
 
@@ -170,7 +170,7 @@ const TVec3f* Triangle::calcAndGetPos(int index) {
     return pos;
 }
 
-void Triangle::calcForceMovePower(TVec3f* a1, const TVec3f& a2) const {
+void Triangle::calcForceMovePower(Vec3f* a1, const Vec3f& a2) const {
     mParts->calcForceMovePower(a1, a2);
 }
 
@@ -182,15 +182,15 @@ JMapInfoIter Triangle::getAttributes() const {
     return mParts->mServer->getAttributes(mIdx);
 }
 
-TPos3f* Triangle::getBaseMtx() const {
+Pos3f* Triangle::getBaseMtx() const {
     return &mParts->mBaseMatrix;
 }
 
-TPos3f* Triangle::getBaseInvMtx() const {
+Pos3f* Triangle::getBaseInvMtx() const {
     return &mParts->mInvBaseMatrix;
 }
 
-TPos3f* Triangle::getPrevBaseMtx() const {
+Pos3f* Triangle::getPrevBaseMtx() const {
     return &mParts->mPrevBaseMatrix;
 }
 

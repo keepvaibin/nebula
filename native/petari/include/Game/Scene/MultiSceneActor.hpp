@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/NameObj/NameObj.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class EffectSystem;
 class ModelManager;
@@ -30,9 +30,9 @@ public:
     void initNerve(const Nerve*);
     s32 getNerveStep() const;
 
-    TVec3f mTranslation;
-    TVec3f mRotation;
-    TVec3f mScale;
+    Vec3f mTranslation;
+    Vec3f mRotation;
+    Vec3f mScale;
     bool _30;
     ModelManager* mModelManager;
     EffectSystem* mEffectSystem;

@@ -12,8 +12,8 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
+
 
 namespace {
     // sGravity
@@ -74,8 +74,8 @@ StinkBugParent::StinkBugParent(const char* pName) : StinkBugBase(pName) {
 void StinkBugParent::init(const JMapInfoIter& rIter) {
     StinkBugBase::init(rIter);
     initHitSensor(2);
-    MR::addHitSensorEye(this, "body", 4, 250.0f, TVec3f(0.0f, 150.0f, 0.0f));
-    MR::addHitSensorAtJointEnemyAttack(this, "head", "Face", 8, 160.0f, TVec3f(0.0f, -50.0f, 80.0f));
+    MR::addHitSensorEye(this, "body", 4, 250.0f, Vec3f(0.0f, 150.0f, 0.0f));
+    MR::addHitSensorAtJointEnemyAttack(this, "head", "Face", 8, 160.0f, Vec3f(0.0f, -50.0f, 80.0f));
     MR::initCollisionParts(this, "SwitchChildJ", getSensor("body"), nullptr);
     mParent = MR::createCollisionPartsFromLiveActor(this, "Switch", getSensor("body"), getBaseMtx(), MR::CollisionScaleType_Unk2);
     initBinder(300.0f, 300.0f, 0);
@@ -190,7 +190,7 @@ void StinkBugParent::exeBack() {
     if (MR::isNear(this, _98, (2.0f * ::getParam(mIsChildAlive)->mDashDistance))) {
         setNerve(GET_NERVE(StinkBugParent, StinkBugParentNrvWait));
     } else {
-        TVec3f a1;
+        Vec3f a1;
         a1.sub(_98, mPosition);
         MR::normalize(&a1);
         MR::turnVecToPlane(&a1, a1, mGravity);
@@ -317,7 +317,7 @@ void StinkBugParent::exeDemoChildDown() {
 
 void StinkBugParent::exeDemoAnger() {
     if (MR::isFirstStep(this)) {
-        TVec3f v1;
+        Vec3f v1;
         MR::overlayWithPreviousScreen(2);
         MR::startBck(this, "Anger");
         MR::startBrk(this, "Anger");
@@ -331,7 +331,7 @@ void StinkBugParent::exeDemoAnger() {
     MR::startLevelSound(this, "SE_EM_LV_STINKBUG_L_ANGRY");
 
     if (MR::isBckStopped(this)) {
-        TVec3f v2, v3;
+        Vec3f v2, v3;
         v2.scaleAdd(200.0f, _8C, mPosition);
         v3.scaleAdd(-1.0f, mGravity, _8C);
         MR::normalize(&v3);
@@ -358,15 +358,15 @@ void StinkBugParent::control() {
         MR::offBind(this);
     } else {
         MR::onBind(this);
-        TVec3f& vel = mVelocity;
-        TVec3f& grav = mGravity;
+        Vec3f& vel = mVelocity;
+        Vec3f& grav = mGravity;
         vel.scaleAdd(-grav.dot(vel), grav, vel);
         mVelocity.scaleAdd(2.0f, mGravity, mVelocity);
     }
 }
 
 void StinkBugParent::calcAndSetBaseMtx() {
-    TPos3f mtx;
+    Pos3f mtx;
     MR::calcMtxFromGravityAndZAxis(&mtx, this, mGravity, _8C);
     MR::setBaseTRMtx(this, mtx);
 }
@@ -463,11 +463,11 @@ bool StinkBugParent::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pRe
 }
 
 void StinkBugParent::jumpBackPlayerFromChild() const {
-    TVec3f v10, v9, v8;
+    Vec3f v10, v9, v8;
     MR::findNamePos("\216\161\230\101\202\352\203\112\203\201\203\200\203\126\203\146\203\202\214\343\203\174\203\103\203\223\203\147" /* 子連れカメムシデモ後ポイント */, &v10, nullptr);
     v9.sub(v10, *MR::getPlayerPos());
     MR::normalize(v9, &v8);
-    TVec3f v7 = -v8;
+    Vec3f v7 = -v8;
     MR::offBind(MR::getPlayerDemoActor());
     MR::unlockPlayerAnimation();
     MR::forceFlyPlayer(v10, v7, 0);
@@ -498,7 +498,7 @@ bool StinkBugParent::isHitChild() const {
         return false;
     }
 
-    TVec3f v1, v2, v3, v4;
+    Vec3f v1, v2, v3, v4;
     MR::copyJointPos(this, "ChildCenter", &v1);
     v2.sub(*MR::getPlayerPos(), v1);
     MR::calcUpVec(&v3, this);

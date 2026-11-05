@@ -21,7 +21,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 namespace {
     static const s32 sStepDemoGateOpen = 180;
@@ -56,9 +56,9 @@ bool TombSpiderDemo::updateGateOpen() {
         TombSpiderFunction::startTombSpiderDemo(mParent, "\203\121\201\133\203\147\203\111\201\133\203\166\203\223\203\146\203\202[\203\147\203\104\201\133\203\200\203\130\203\160\203\103\203\137\201\133]" /* ゲートオープンデモ[トゥームスパイダー] */, nullptr);
         MR::startEventCamera(getCameraInfo(), "\203\121\201\133\203\147\203\111\201\133\203\166\203\223\203\146\203\202[\203\147\203\104\201\133\203\200\203\130\203\160\203\103\203\137\201\133]" /* ゲートオープンデモ[トゥームスパイダー] */, CameraTargetArg(mParent));
 
-        TVec3f pos(mParent->mPosition);
+        Vec3f pos(mParent->mPosition);
         pos.z += ::sPlanetRadius;
-        MR::makeMtxTR(mMtx, pos, TVec3f(270.0f, 180.0f, 0.0f));
+        MR::makeMtxTR(mMtx, pos, Vec3f(270.0f, 180.0f, 0.0f));
 
         MR::startBckWithInterpole(MR::getPlayerDemoActor(), "CocoonFly", 0);
         MR::setBckFrameAndStop(MR::getPlayerDemoActor(), 50.0f);
@@ -69,13 +69,13 @@ bool TombSpiderDemo::updateGateOpen() {
     if (MR::isLessEqualStep(mParent, ::sStepGateBreak)) {
         mMtx[2][3] -= ::sGateOpenPlayerSpeed;
     } else {
-        TVec3f startPos(mParent->mPosition.x, mParent->mPosition.y,
+        Vec3f startPos(mParent->mPosition.x, mParent->mPosition.y,
                         mParent->mPosition.z + (::sPlanetRadius - ::sGateOpenPlayerSpeed * ::sStepGateBreak));
-        TVec3f endPos(mParent->mPosition.x, mParent->mPosition.y - ::sPlanetInsideRadius, mParent->mPosition.z);
+        Vec3f endPos(mParent->mPosition.x, mParent->mPosition.y - ::sPlanetInsideRadius, mParent->mPosition.z);
 
         f32 t1 = (mParent->getNerveStep() - (::sStepGateBreak + 3)) / static_cast< f32 >(::sStepDemoGateOpen - (::sStepGateBreak + 3));
         f32 t2 = MR::getEaseInValue(t1, 0.0f, 1.0f, 1.0f);
-        TVec3f pos;
+        Vec3f pos;
         pos.x = startPos.x * (1.0f - t1) + endPos.x * t1;
         pos.y = startPos.y * (1.0f - t2) + endPos.y * t2;
         pos.z = startPos.z * (1.0f - t1) + endPos.z * t1;
@@ -197,8 +197,8 @@ bool TombSpiderDemo::updateBattle2ndStart() {
 
     if (MR::isBckStopped(mParent)) {
         for (s32 idx = 0; idx < 25; idx++) {
-            TVec3f dir(1.0f, 0.0f, 0.0f);
-            MR::rotateVecDegree(&dir, TVec3f(0.0f, 0.0f, 1.0f), MR::getRandom() * 360.0f);
+            Vec3f dir(1.0f, 0.0f, 0.0f);
+            MR::rotateVecDegree(&dir, Vec3f(0.0f, 0.0f, 1.0f), MR::getRandom() * 360.0f);
             MR::appearStarPieceToDirection(mParent, mParent->mPosition, dir, 1, 0.0f, 40.0f, false);
             MR::startSound(mParent, "SE_OJ_STAR_PIECE_BURST");
         }

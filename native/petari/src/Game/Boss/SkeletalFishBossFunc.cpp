@@ -6,12 +6,12 @@ namespace {
     static const char* sNamePosName = "\203\113\201\133\203\150\217\157\214\273\203\174\203\103\203\223\203\147" /* ガード出現ポイント */;
 };  // namespace
 
-s32 SkeletalFishBossFunc::getNearestGuardPosID(const TVec3f& rVec) {
+s32 SkeletalFishBossFunc::getNearestGuardPosID(const Vec3f& rVec) {
     f32 closest = 100000.0f;
     s32 posID = -1;
 
     for (int i = 0; i < 16; i++) {
-        TVec3f pos;
+        Vec3f pos;
 
         if (!copyGuardPos(&pos, i)) {
             continue;
@@ -28,7 +28,7 @@ s32 SkeletalFishBossFunc::getNearestGuardPosID(const TVec3f& rVec) {
     return posID;
 }
 
-bool SkeletalFishBossFunc::copyGuardPos(TVec3f* pOut, s32 idx) {
+bool SkeletalFishBossFunc::copyGuardPos(Vec3f* pOut, s32 idx) {
     char name[256];
     nebula_snprintf(name, sizeof(name), "%s%d", ::sNamePosName, idx);
 

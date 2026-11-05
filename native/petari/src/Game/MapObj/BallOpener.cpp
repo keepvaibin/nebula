@@ -32,7 +32,7 @@ BallOpener::~BallOpener() {
 
 BallOpener::BallOpener(const char* pName)
     : LiveActor(pName), mBoundSensor(), _A0(0, 0, 0), mInitialVelocity(0, 0, 0), mBindVelocity(0, 0, 0), mSettledFrames() {
-    mCone = new BindCone(mPosition, TVec3f(0.0f, 1.0f, 0.0f), ::sHoleDepth, ::sHoleRadius);
+    mCone = new BindCone(mPosition, Vec3f(0.0f, 1.0f, 0.0f), ::sHoleDepth, ::sHoleRadius);
 }
 
 void BallOpener::init(const JMapInfoIter& rIter) {
@@ -40,7 +40,7 @@ void BallOpener::init(const JMapInfoIter& rIter) {
     initModelManagerWithAnm("BallOpener", nullptr, false);
     MR::connectToSceneMapObj(this);
     initHitSensor(1);
-    MR::addHitSensor(this, "body", ATYPE_JUMP_HOLE, 8, ::sHoleRadius, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensor(this, "body", ATYPE_JUMP_HOLE, 8, ::sHoleRadius, Vec3f(0.0f, 0.0f, 0.0f));
     initEffectKeeper(1, nullptr, false);
     initSound(4, false);
     MR::initCollisionParts(this, "BallOpener", getSensor(nullptr), nullptr);
@@ -62,8 +62,8 @@ bool BallOpener::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiv
     if (msg == ACTMES_SPHERE_PLAYER_BINDED) {
         f32 radiusSquared = pReceiver->mRadius * pReceiver->mRadius;
 
-        TVec3f offset = pReceiver->mPosition - pSender->mPosition;
-        TVec3f lateral;
+        Vec3f offset = pReceiver->mPosition - pSender->mPosition;
+        Vec3f lateral;
         lateral.killElement2(offset, mHoleGravity);
 
         if (lateral.squared() <= radiusSquared && offset.squared(lateral) <= ::sLaunchValidHeight * ::sLaunchValidHeight) {
@@ -137,8 +137,8 @@ void BallOpener::exeOpen() {
 void BallOpener::bindHole() {
     f32 radius = mBoundSensor->mRadius;
 
-    TVec3f previous(mBoundSensor->mPosition);
-    TVec3f position(previous);
+    Vec3f previous(mBoundSensor->mPosition);
+    Vec3f position(previous);
     mBindVelocity += mHoleGravity * ::sGravityAcc;
 
     BindResult result;
@@ -146,9 +146,9 @@ void BallOpener::bindHole() {
     MR::bindSpereToCone(&result, mBindVelocity, sphere, *mCone);
     MR::updateBindPositionAndVelocity(&position, &mBindVelocity, result, ::sHoleRefrecRate);
 
-    TVec3f lateralVelocity;
+    Vec3f lateralVelocity;
     lateralVelocity.killElement2(mBindVelocity, mHoleGravity);
-    TVec3f lateralOffset;
+    Vec3f lateralOffset;
     lateralOffset.killElement2(position - mPosition, mHoleGravity);
 
     f32 limit = ::sHoleRadius - radius;
@@ -157,7 +157,7 @@ void BallOpener::bindHole() {
         MR::separateScalarAndDirection(&distance, &lateralOffset, lateralOffset);
         position -= lateralOffset * (distance - limit);
 
-        TVec3f tangent = lateralVelocity - lateralOffset * lateralVelocity.dot(lateralOffset);
+        Vec3f tangent = lateralVelocity - lateralOffset * lateralVelocity.dot(lateralOffset);
         if (tangent.isZero()) {
             tangent = mHoleGravity;
         } else {

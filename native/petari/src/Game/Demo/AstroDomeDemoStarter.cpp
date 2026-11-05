@@ -88,7 +88,7 @@ void AstroDomeDemoStarter::movePlayer() {
 
     f32 demoPartStepRate = MR::calcDemoPartStepRate(::cJumpOutPartName);
 
-    TVec3f direction;
+    Vec3f direction;
 
     _8C->calcDirection(&direction, demoPartStepRate, 0.01f);
 
@@ -96,16 +96,16 @@ void AstroDomeDemoStarter::movePlayer() {
     f32 spinRate = ::countRotations(speed) + (-MR::pi() / 4.0f);
     f32 angle = MR::getEaseOutValue(demoPartStepRate, 0.0f, 1.0f, 1.0f) * spinRate;
 
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.identity();
     mtx.setEulerY(angle);
 
-    TVec3f position;
+    Vec3f position;
 
     _8C->calcPosition(&position, demoPartStepRate);
 
-    TPos3f mtx2;
-    MR::makeMtxUpFrontPos(&mtx2, direction, TVec3f(0.0f, -1.0f, 0.0f), position);
+    Pos3f mtx2;
+    MR::makeMtxUpFrontPos(&mtx2, direction, Vec3f(0.0f, -1.0f, 0.0f), position);
 
     mtx2.concat(mtx);
 
@@ -125,8 +125,8 @@ void AstroDomeDemoStarter::exeSpinDriverAppear() {
     if (MR::isFirstStep(this)) {
         MtxPtr playerDemobaseMtx = MR::getPlayerDemoActor()->getBaseMtx();
         _C4.set(playerDemobaseMtx);
-        TPos3f rotateMtx;
-        MR::makeMtxRotate(rotateMtx, TVec3f(::cAppearRotate));
+        Pos3f rotateMtx;
+        MR::makeMtxRotate(rotateMtx, Vec3f(::cAppearRotate));
         _C4.getTrans(mPosition);
         MR::makeMtxUpFrontPos(&_94, MR::getCamYdir(), MR::getCamZdir(), mPosition);
         _94.concat(rotateMtx);
@@ -140,7 +140,7 @@ void AstroDomeDemoStarter::exeSpinDriverAppear() {
     MR::startLevelSound(this, "SE_OJ_LV_S_SPIN_DRV_SHINE");
     MR::startLevelSound(this, "SE_OJ_LV_SPIN_DRV_CAPTURE");
 
-    TPos3f slerpMtx;
+    Pos3f slerpMtx;
     MR::blendMtxRotateSlerp(_C4, _94, MR::calcDemoPartStepRate("\203\130\203\163\203\223\203\150\203\211\203\103\203\157\217\157\214\273" /* スピンドライバ出現 */), slerpMtx);
     slerpMtx.setTrans(mPosition);
     MR::setPlayerBaseMtx(slerpMtx);
@@ -184,9 +184,9 @@ void AstroDomeDemoStarter::exeSpinDriverShoot() {
         MR::startSoundPlayer("SE_PV_JUMP_JOY");
     }
 
-    TPos3f playerBaseMtx = _94;
-    TVec3f mult;
-    _94.mult(TVec3f(0.0f, getNerveStep() * 50.0f, 0.0f), mult);
+    Pos3f playerBaseMtx = _94;
+    Vec3f mult;
+    _94.mult(Vec3f(0.0f, getNerveStep() * 50.0f, 0.0f), mult);
 
     playerBaseMtx.setTrans(mult);
     MR::setPlayerBaseMtx(playerBaseMtx);

@@ -9,22 +9,22 @@
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include <JSystem/JMath/JMATrigonometric.hpp>
+#include <nebula_geometry.hpp>
 
 namespace CameraLocalUtil {
-    const TVec3f& getWatchPos(const CameraMan* pCameraMan) {
+    const Vec3f& getWatchPos(const CameraMan* pCameraMan) {
         return pCameraMan->mPoseParam->mWatchPos;
     }
 
-    const TVec3f& getPos(const CameraMan* pCameraMan) {
+    const Vec3f& getPos(const CameraMan* pCameraMan) {
         return pCameraMan->mPoseParam->mPos;
     }
 
-    const TVec3f& getUpVec(const CameraMan* pCameraMan) {
+    const Vec3f& getUpVec(const CameraMan* pCameraMan) {
         return pCameraMan->mPoseParam->mUpVec;
     }
 
-    const TVec3f& getWatchUpVec(const CameraMan* pCameraMan) {
+    const Vec3f& getWatchUpVec(const CameraMan* pCameraMan) {
         return pCameraMan->mPoseParam->mWatchUpVec;
     }
 
@@ -32,11 +32,11 @@ namespace CameraLocalUtil {
         return pCameraMan->mPoseParam->mFovy;
     }
 
-    const TVec3f& getGlobalOffset(const CameraMan* pCameraMan) {
+    const Vec3f& getGlobalOffset(const CameraMan* pCameraMan) {
         return pCameraMan->mPoseParam->mGlobalOffset;
     }
 
-    const TVec3f& getLocalOffset(const CameraMan* pCameraMan) {
+    const Vec3f& getLocalOffset(const CameraMan* pCameraMan) {
         return pCameraMan->mPoseParam->mLocalOffset;
     }
 
@@ -44,19 +44,19 @@ namespace CameraLocalUtil {
         return pCameraMan->mPoseParam->mRoll;
     }
 
-    void setWatchPos(CameraMan* pCameraMan, const TVec3f& rWatchPos) {
+    void setWatchPos(CameraMan* pCameraMan, const Vec3f& rWatchPos) {
         pCameraMan->mPoseParam->mWatchPos.set(rWatchPos);
     }
 
-    void setPos(CameraMan* pCameraMan, const TVec3f& rPos) {
+    void setPos(CameraMan* pCameraMan, const Vec3f& rPos) {
         pCameraMan->mPoseParam->mPos.set(rPos);
     }
 
-    void setUpVec(CameraMan* pCameraMan, const TVec3f& rUpVec) {
+    void setUpVec(CameraMan* pCameraMan, const Vec3f& rUpVec) {
         pCameraMan->mPoseParam->mUpVec.set(rUpVec);
     }
 
-    void setWatchUpVec(CameraMan* pCameraMan, const TVec3f& rWatchUpVec) {
+    void setWatchUpVec(CameraMan* pCameraMan, const Vec3f& rWatchUpVec) {
         pCameraMan->mPoseParam->mWatchUpVec.set(rWatchUpVec);
     }
 
@@ -64,11 +64,11 @@ namespace CameraLocalUtil {
         pCameraMan->mPoseParam->mFovy = fovy;
     }
 
-    void setGlobalOffset(CameraMan* pCameraMan, const TVec3f& rGlobalOffset) {
+    void setGlobalOffset(CameraMan* pCameraMan, const Vec3f& rGlobalOffset) {
         pCameraMan->mPoseParam->mGlobalOffset.set(rGlobalOffset);
     }
 
-    void setLocalOffset(CameraMan* pCameraMan, const TVec3f& rLocalOffset) {
+    void setLocalOffset(CameraMan* pCameraMan, const Vec3f& rLocalOffset) {
         pCameraMan->mPoseParam->mLocalOffset.set(rLocalOffset);
     }
 
@@ -92,7 +92,7 @@ namespace CameraLocalUtil {
         return getCameraDirector()->mRegisterHolder->getMtx(pRegName);
     }
 
-    const TVec3f& getVecReg(const char* pRegName) {
+    const Vec3f& getVecReg(const char* pRegName) {
         return *getCameraDirector()->mRegisterHolder->getVec(pRegName);
     }
 
@@ -116,19 +116,19 @@ namespace CameraLocalUtil {
         return pCamera->mCameraMan->mDirector->getTarget();
     }
 
-    const TVec3f& getWatchPos(const Camera* pCamera) {
+    const Vec3f& getWatchPos(const Camera* pCamera) {
         return pCamera->mPoseParam->mWatchPos;
     }
 
-    const TVec3f& getPos(const Camera* pCamera) {
+    const Vec3f& getPos(const Camera* pCamera) {
         return pCamera->mPoseParam->mPos;
     }
 
-    const TVec3f& getUpVec(const Camera* pCamera) {
+    const Vec3f& getUpVec(const Camera* pCamera) {
         return pCamera->mPoseParam->mUpVec;
     }
 
-    const TVec3f& getWatchUpVec(const Camera* pCamera) {
+    const Vec3f& getWatchUpVec(const Camera* pCamera) {
         return pCamera->mPoseParam->mWatchUpVec;
     }
 
@@ -136,11 +136,11 @@ namespace CameraLocalUtil {
         return pCamera->mPoseParam->mFovy;
     }
 
-    const TVec3f& getGlobalOffset(const Camera* pCamera) {
+    const Vec3f& getGlobalOffset(const Camera* pCamera) {
         return pCamera->mPoseParam->mGlobalOffset;
     }
 
-    const TVec3f& getLocalOffset(const Camera* pCamera) {
+    const Vec3f& getLocalOffset(const Camera* pCamera) {
         return pCamera->mPoseParam->mLocalOffset;
     }
 
@@ -156,23 +156,23 @@ namespace CameraLocalUtil {
         return pCamera->mPoseParam->mRoll;
     }
 
-    void setWatchPos(Camera* pCamera, const TVec3f& rWatchPos) {
+    void setWatchPos(Camera* pCamera, const Vec3f& rWatchPos) {
         pCamera->mPoseParam->mWatchPos.set(rWatchPos);
     }
 
-    void setPos(Camera* pCamera, const TVec3f& rPos) {
+    void setPos(Camera* pCamera, const Vec3f& rPos) {
         pCamera->mPoseParam->mPos.set(rPos);
     }
 
-    void setUpVec(Camera* pCamera, const TVec3f& rUpVec) {
+    void setUpVec(Camera* pCamera, const Vec3f& rUpVec) {
         pCamera->mPoseParam->mUpVec.set(rUpVec);
     }
 
-    void setWatchUpVec(Camera* pCamera, const TVec3f& rWatchUpVec) {
+    void setWatchUpVec(Camera* pCamera, const Vec3f& rWatchUpVec) {
         pCamera->mPoseParam->mWatchUpVec.set(rWatchUpVec);
     }
 
-    void setUpVecAndWatchUpVec(Camera* pCamera, const TVec3f& rUpVec) {
+    void setUpVecAndWatchUpVec(Camera* pCamera, const Vec3f& rUpVec) {
         CameraPoseParam* pPoseParam = pCamera->mPoseParam;
 
         pPoseParam->mUpVec.set(rUpVec);
@@ -183,11 +183,11 @@ namespace CameraLocalUtil {
         pCamera->mPoseParam->mFovy = fovy;
     }
 
-    void setGlobalOffset(Camera* pCamera, const TVec3f& rGlobalOffset) {
+    void setGlobalOffset(Camera* pCamera, const Vec3f& rGlobalOffset) {
         pCamera->mPoseParam->mGlobalOffset.set(rGlobalOffset);
     }
 
-    void setLocalOffset(Camera* pCamera, const TVec3f& rLocalOffset) {
+    void setLocalOffset(Camera* pCamera, const Vec3f& rLocalOffset) {
         pCamera->mPoseParam->mLocalOffset.set(rLocalOffset);
     }
 
@@ -203,14 +203,14 @@ namespace CameraLocalUtil {
         pCamera->mPoseParam->mRoll = roll;
     }
 
-    void recalcUpVec(TVec3f* pUp, const TVec3f& rFront) {
-        TVec3f side = pUp->cross(rFront);
+    void recalcUpVec(Vec3f* pUp, const Vec3f& rFront) {
+        Vec3f side = pUp->cross(rFront);
         MR::normalize(&side);
         pUp->cross(rFront, side);
         MR::normalize(pUp);
     }
 
-    void makeWatchOffset(TVec3f* pDst, Camera* pCamera, CameraTargetObj* pTarget, f32 scale) {
+    void makeWatchOffset(Vec3f* pDst, Camera* pCamera, CameraTargetObj* pTarget, f32 scale) {
         f32 offset;
         if (pCamera->mIsLOfsErpOff || pCamera->mCameraMan->mRequestLOfsReset) {
             offset = 1.0f;
@@ -221,30 +221,30 @@ namespace CameraLocalUtil {
             }
         }
 
-        TVec3f localOffs = getLocalOffset(pCamera);
+        Vec3f localOffs = getLocalOffset(pCamera);
         localOffs += (pTarget->getFrontVec() * getFrontOffset(pCamera) + pTarget->getUpVec() * getUpperOffset(pCamera) - localOffs) * offset;
         setLocalOffset(pCamera, localOffs);
 
-        TVec3f globalOffs = getGlobalOffset(pCamera);
+        Vec3f globalOffs = getGlobalOffset(pCamera);
         pCamera->mZoneMatrix.mult33(globalOffs);
         pDst->set(globalOffs + localOffs);
     }
 
-    void makeWatchPoint(TVec3f* pDst, Camera* pCamera, CameraTargetObj* pTarget, f32 scale) {
+    void makeWatchPoint(Vec3f* pDst, Camera* pCamera, CameraTargetObj* pTarget, f32 scale) {
         makeWatchOffset(pDst, pCamera, pTarget, scale);
         pDst->add(pTarget->getPosition());
     }
 
-    void makeWatchOffsetImm(TVec3f* pDst, Camera* pCamera, CameraTargetObj* pTarget) {
-        TVec3f offs = pTarget->getFrontVec() * getFrontOffset(pCamera) + pTarget->getUpVec() * getUpperOffset(pCamera);
+    void makeWatchOffsetImm(Vec3f* pDst, Camera* pCamera, CameraTargetObj* pTarget) {
+        Vec3f offs = pTarget->getFrontVec() * getFrontOffset(pCamera) + pTarget->getUpVec() * getUpperOffset(pCamera);
         setLocalOffset(pCamera, offs);
 
-        TVec3f globOffs = getGlobalOffset(pCamera);
+        Vec3f globOffs = getGlobalOffset(pCamera);
         pCamera->mZoneMatrix.mult33(globOffs);
         pDst->set(globOffs + offs);
     }
 
-    void makeWatchPointImm(TVec3f* pDst, Camera* pCamera, CameraTargetObj* pTarget) {
+    void makeWatchPointImm(Vec3f* pDst, Camera* pCamera, CameraTargetObj* pTarget) {
         makeWatchOffsetImm(pDst, pCamera, pTarget);
         pDst->add(pTarget->getPosition());
     }
@@ -309,8 +309,8 @@ namespace CameraLocalUtil {
         return MR::isPressedRight(PLAYER_1);
     }
 
-    void slerpCamera(TQuat4f* pDst, const TQuat4f& rA, const TQuat4f& rB, f32 ratio, bool reverse) {
-        TQuat4f rotA, rotB;
+    void slerpCamera(Quat4f* pDst, const Quat4f& rA, const Quat4f& rB, f32 ratio, bool reverse) {
+        Quat4f rotA, rotB;
         rotA.normalize(rA);
         rotB.normalize(rB);
         f32 cos = rotA.dot(rotB);
@@ -343,21 +343,21 @@ namespace CameraLocalUtil {
                   sratio * rotA.w + ratio * rotB.w);
     }
 
-    bool makeTowerCameraMtx(TPos3f* pMtx, const TPos3f& rMtx, const TVec3f& rPos, const TVec3f& rUp, const TVec3f& rWatchPos) {
-        TVec3f pos = rPos;
-        TVec3f up = rUp;
+    bool makeTowerCameraMtx(Pos3f* pMtx, const Pos3f& rMtx, const Vec3f& rPos, const Vec3f& rUp, const Vec3f& rWatchPos) {
+        Vec3f pos = rPos;
+        Vec3f up = rUp;
         rMtx.mult(pos, pos);
         rMtx.mult33(up);
 
-        TVec3f diff = rWatchPos - pos;
-        TVec3f front = diff.killElement(up);
+        Vec3f diff = rWatchPos - pos;
+        Vec3f front = diff.killElement(up);
 
         if (MR::isNearZero(front)) {
             return false;
         }
 
         MR::normalize(&front);
-        TVec3f side = up.cross(front);
+        Vec3f side = up.cross(front);
         pMtx->setXDir(side);
         pMtx->setYDir(up);
         pMtx->setZDir(front);
@@ -366,17 +366,17 @@ namespace CameraLocalUtil {
     }
 
 
-    void arrangeDistanceByFovy(Camera* pCamera, TVec3f pos, f32 offset) {
-        TVec3f viewDir = getPos(pCamera) - getWatchPos(pCamera);
+    void arrangeDistanceByFovy(Camera* pCamera, Vec3f pos, f32 offset) {
+        Vec3f viewDir = getPos(pCamera) - getWatchPos(pCamera);
         if (MR::isNearZero(viewDir)) {
             return;
         }
 
         f32 viewDist = viewDir.length();
         MR::normalize(&viewDir);
-        TVec3f posDiff = pos - getWatchPos(pCamera);
+        Vec3f posDiff = pos - getWatchPos(pCamera);
         f32 projDist = posDiff.dot(viewDir);
-        TVec3f projZ = viewDir * projDist;
+        Vec3f projZ = viewDir * projDist;
 
         f32 dist = projDist + (offset + posDiff.distance(projZ)) / MR::tanDegree(MR::getFovy() * 0.5f);
         if (dist > viewDist) {
@@ -385,7 +385,7 @@ namespace CameraLocalUtil {
     }
 
     void arrangeDistanceByPushAndPull(Camera* pCamera, f32 push, f32 pull) {
-        TVec3f viewDir = getPos(pCamera) - getWatchPos(pCamera);
+        Vec3f viewDir = getPos(pCamera) - getWatchPos(pCamera);
         f32 viewDist = viewDir.length();
 
         if (viewDist < push) {
@@ -401,8 +401,8 @@ namespace CameraLocalUtil {
         setPos(pCamera, getWatchPos(pCamera) + viewDir);
     }
 
-    inline void keepAwayWatchPos(CameraMan* pCameraMan, Camera* pCamera, TVec3f* watchPos, const TVec3f& pos) {
-        TVec3f dir = *watchPos - pos;
+    inline void keepAwayWatchPos(CameraMan* pCameraMan, Camera* pCamera, Vec3f* watchPos, const Vec3f& pos) {
+        Vec3f dir = *watchPos - pos;
         f32 length = dir.length();
 
         if (length < 300.0f) {
@@ -415,18 +415,18 @@ namespace CameraLocalUtil {
         }
     }
 
-    inline void calcSafeUpVec(CameraMan* pCameraMan, Camera* pCamera, TVec3f* up, const TVec3f& watchPos, const TVec3f& pos) {
-        TVec3f camWatchDir = watchPos - pos;
+    inline void calcSafeUpVec(CameraMan* pCameraMan, Camera* pCamera, Vec3f* up, const Vec3f& watchPos, const Vec3f& pos) {
+        Vec3f camWatchDir = watchPos - pos;
         MR::normalize(&camWatchDir);
         MR::normalizeOrZero(up);
 
         if (MR::isNearZero(*up) || MR::abs(camWatchDir.dot(*up)) > 0.98f) {
-            TVec3f watchDir = getWatchPos(pCameraMan) - getPos(pCameraMan);
+            Vec3f watchDir = getWatchPos(pCameraMan) - getPos(pCameraMan);
             MR::normalize(&watchDir);
             if (MR::abs(camWatchDir.dot(watchDir)) > 0.98f) {
                 up->set(getUpVec(pCameraMan));
             } else {
-                TQuat4f rot;
+                Quat4f rot;
                 rot.setRotate(watchDir, camWatchDir);
                 rot.transform(getUpVec(pCameraMan), *up);
             }
@@ -435,9 +435,9 @@ namespace CameraLocalUtil {
     }
 
     void calcSafePose(CameraMan* pCameraMan, Camera* pCamera) {
-        TVec3f pos = getPos(pCamera);
-        TVec3f watchPos = getWatchPos(pCamera);
-        TVec3f up = getUpVec(pCamera);
+        Vec3f pos = getPos(pCamera);
+        Vec3f watchPos = getWatchPos(pCamera);
+        Vec3f up = getUpVec(pCamera);
 
         if (MR::isNan(pos) || MR::isNan(watchPos) || MR::isNan(up)) {
             return;

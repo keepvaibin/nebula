@@ -80,7 +80,7 @@ void MapPartsFloatingForce::initForSpringMotion(const JMapInfoIter& rIter) {
 
 void MapPartsFloatingForce::start() {
     _30.set(mHost->mPosition);
-    TPos3f baseMtx;
+    Pos3f baseMtx;
     baseMtx.set(mHost->getBaseMtx());
     baseMtx.getYDir(mUpDirection);
     MR::normalize(&mUpDirection);
@@ -183,7 +183,7 @@ void MapPartsFloatingForce::exeMove() {
     _50.set(-mUpDirection * _4C);
     _48 += _4C;
     _48 = MR::clamp(_48, 0.0f, _20);
-    TVec3f* const pPosition = &mHost->mPosition;
+    Vec3f* const pPosition = &mHost->mPosition;
     pPosition->set(_30 - mUpDirection * _48);
     if (mObjectName != nullptr) {
         if (_4C > 0.1f) {

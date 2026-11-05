@@ -7,7 +7,7 @@ JAISoundStarter::JAISoundStarter(bool setInstance) : JASGlobalInstance< JAISound
 JAISoundStarter::~JAISoundStarter() {
 }
 
-bool JAISoundStarter::startLevelSound(JAISoundID id, JAISoundHandle* handlePtr, const TVec3f* posPtr) {
+bool JAISoundStarter::startLevelSound(JAISoundID id, JAISoundHandle* handlePtr, const Vec3f* posPtr) {
     JAISoundHandle* handlePtr2 = handlePtr;
     if (handlePtr2->isSoundAttached()) {
         if ((*handlePtr2)->getID() == id) {

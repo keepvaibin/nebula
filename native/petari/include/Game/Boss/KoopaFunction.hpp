@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class HitSensor;
 class Koopa;
@@ -39,10 +39,10 @@ namespace KoopaFunction {
     void createKoopaRollBall(Koopa* pKoopa);
     s32 registerBattleMapStair(KoopaBattleMapStair* pBattleMapStair);
     void setKoopaPos(Koopa* pKoopa, const char* pDemoName);
-    TVec3f& getPlanetCenterPos(const Koopa* pKoopa);
+    Vec3f& getPlanetCenterPos(const Koopa* pKoopa);
     f32 getPlanetRadius(const Koopa* pKoopa);
-    const TVec3f& getKoopaFront(const Koopa* pKoopa);
-    TVec3f* getKoopaFrontPtr(Koopa* pKoopa);
+    const Vec3f& getKoopaFront(const Koopa* pKoopa);
+    Vec3f* getKoopaFrontPtr(Koopa* pKoopa);
     bool isKoopaSightPlayer(const Koopa* pKoopa, const MR::ActorSightParam& rSightParam);
     bool escapeKoopaFromPlayer(Koopa* pKoopa, const MR::ActorMoveParam& rMoveParam);
     bool isKoopaVs1(const Koopa* pKoopa);
@@ -66,7 +66,7 @@ namespace KoopaFunction {
     void emitKoopaFireShortFast(Koopa* pKoopa);
     void emitKoopaFireShortCurve(Koopa* pKoopa);
     void emitKoopaFireLongTime(Koopa* pKoopa);
-    KoopaFireStairs* emitFireStairsToTarget(Koopa* pKoopa, const KoopaBattleMapStair* pStair, const TVec3f& rPosition, bool useFront);
+    KoopaFireStairs* emitFireStairsToTarget(Koopa* pKoopa, const KoopaBattleMapStair* pStair, const Vec3f& rPosition, bool useFront);
     void killKoopaFireStairsAll(Koopa* pKoopa);
     void emitKoopaShockWave(Koopa* pKoopa);
     KoopaBattleMapPlanet* getKoopaPlanet(Koopa* pKoopa);

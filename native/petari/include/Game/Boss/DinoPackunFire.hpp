@@ -21,9 +21,9 @@ public:
     virtual void calcAndSetBaseMtx();
     virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);
 
-    void appearShot(const TVec3f&, const TVec3f&);
+    void appearShot(const Vec3f&, const Vec3f&);
     void exeShot();
     void exeGround();
 
-    TQuat4f _8C;
+    Quat4f _8C;
 };

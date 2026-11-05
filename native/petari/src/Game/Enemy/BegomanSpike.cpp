@@ -212,7 +212,7 @@ void BegomanSpike::control() {
         return;
     }
 
-    if (MR::isInDeath(this, TVec3f(0.0f, 0.0f, 0.0f))) {
+    if (MR::isInDeath(this, Vec3f(0.0f, 0.0f, 0.0f))) {
         kill();
         return;
     }
@@ -236,7 +236,7 @@ void BegomanSpike::control() {
     }
 }
 
-bool BegomanSpike::onTouchElectric(const TVec3f& rPos, const TVec3f& rDirection) {
+bool BegomanSpike::onTouchElectric(const Vec3f& rPos, const Vec3f& rDirection) {
     if (isNerve(GET_NERVE(BegomanSpike, HostTypeNrvElectricDeath)) || isNerve(GET_NERVE(BegomanSpike, HostTypeNrvInWater)) ||
         isNerve(GET_NERVE(BegomanSpike, HostTypeNrvBrokenPiece))) {
         return false;
@@ -504,7 +504,7 @@ void BegomanSpike::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 
     if (msgResult) {
-        TVec3f dirFromSenderToReceiver(pSender->mPosition);
+        Vec3f dirFromSenderToReceiver(pSender->mPosition);
 
         dirFromSenderToReceiver -= pReceiver->mPosition;
         MR::normalizeOrZero(&dirFromSenderToReceiver);
@@ -532,7 +532,7 @@ bool BegomanSpike::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor*
     }
 
     if (MR::isMsgEnemyAttackElectric(msg)) {
-        TVec3f direction(pSender->mHost->mVelocity);
+        Vec3f direction(pSender->mHost->mVelocity);
         MR::vecKillElement(direction, mGravity, &direction);
         MR::normalizeOrZero(&direction);
         return onTouchElectric(pSender->mPosition, direction);
@@ -545,7 +545,7 @@ bool BegomanSpike::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor*
     }
 
     if (MR::isSensorEnemy(pSender)) {
-        TVec3f direction(pReceiver->mPosition - pSender->mPosition);
+        Vec3f direction(pReceiver->mPosition - pSender->mPosition);
         MR::normalizeOrZero(&direction);
         if (MR::isNearZero(direction)) {
             return false;
@@ -605,9 +605,9 @@ bool BegomanSpike::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor
     }
 
     if (pReceiver == getSensor("body") && (MR::isMsgPlayerHitAll(msg) || MR::isMsgStarPieceAttack(msg))) {
-        TVec3f direction(pReceiver->mPosition);
+        Vec3f direction(pReceiver->mPosition);
         direction.sub(pSender->mPosition);
-        TVec3f hitPos(-direction);
+        Vec3f hitPos(-direction);
         f32 radius = getSensor("body")->mRadius;
         hitPos.setLength(radius);
         hitPos.add(getSensor("body")->mPosition);

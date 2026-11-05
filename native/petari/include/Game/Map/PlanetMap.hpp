@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class LodCtrl;
 class ModelObj;
@@ -27,7 +27,7 @@ public:
     bool tryDeleteMyEffect();
 
     const char* mModelName;
-    TVec3f _90;
+    Vec3f _90;
     LodCtrl* mLODCtrl;
     ModelObj* mBloomModel;
     PartsModel* mWaterModel;

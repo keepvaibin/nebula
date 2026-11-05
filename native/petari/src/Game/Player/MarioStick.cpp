@@ -37,7 +37,7 @@ MarioStick::MarioStick(MarioActor* pActor) : MarioState(pActor, MarioStatus_Stic
 }
 
 bool MarioStick::startJump() {
-    TVec3f v7(_2C);
+    Vec3f v7(_2C);
     v7.scale(mActor->getConst().getTable()->mBeeStickJumpPower);
     f32 v2 = -mActor->getConst().getTable()->mBeeStickJumpBonus;
     v7 += getGravityVec() * v2;
@@ -47,7 +47,7 @@ bool MarioStick::startJump() {
 }
 
 bool MarioStick::postureCtrl(MtxPtr pMtx) {
-    MR::makeMtxFrontUp(reinterpret_cast< TPos3f* >(pMtx), _6C, _78);
+    MR::makeMtxFrontUp(reinterpret_cast< Pos3f* >(pMtx), _6C, _78);
     return true;
 }
 
@@ -61,9 +61,9 @@ bool MarioStick::setStickSensor(const HitSensor* pSensor) {
     }
 
     if (pSensor->isType(ATYPE_BEE_FLOWER)) {
-        TVec3f v12;
+        Vec3f v12;
         MR::getRotatedAxisY(&v12, pSensor->mHost->mRotation);
-        TVec3f v11(mActor->_2A0 - pSensor->mPosition);
+        Vec3f v11(mActor->_2A0 - pSensor->mPosition);
         MR::normalizeOrZero(&v11);
 
         if (v12.dot(v11) < mActor->getConst().getTable()->mBeeStickAngleLimit) {
@@ -120,11 +120,11 @@ bool MarioStick::update() {
     Mtx rotMtx;
     NebulaMtxRotAxisRad(rotMtx, &player->mSideVec, 0.01f * getStickY());
 
-    TVec3f stack_2C(_14 - _38);
+    Vec3f stack_2C(_14 - _38);
     NebulaMtxMultVec(rotMtx, &stack_2C, &stack_2C);
 
     if (MR::diffAngleAbs(stack_2C, _2C) < 1.308997f) {
-        TVec3f stack_20(-stack_2C);
+        Vec3f stack_20(-stack_2C);
         if (!MR::normalizeOrZero(&stack_20)) {
             _6C = stack_20;
         }
@@ -133,7 +133,7 @@ bool MarioStick::update() {
     }
 
     const f32 angle = 0.01f * -getStickX();
-    const TVec3f* gravityVec = getPlayer()->getGravityVec();
+    const Vec3f* gravityVec = getPlayer()->getGravityVec();
     NebulaMtxRotAxisRad(secondRotMtx, gravityVec, angle);
     NebulaMtxMultVec(secondRotMtx, &stack_2C, &stack_2C);
 
@@ -144,7 +144,7 @@ bool MarioStick::update() {
     }
 
     if (MR::diffAngleAbs(stack_2C, _2C) < 1.308997f) {
-        TVec3f stack_14(-stack_2C);
+        Vec3f stack_14(-stack_2C);
         if (!MR::normalizeOrZero(&stack_14)) {
             _6C = stack_14;
         }

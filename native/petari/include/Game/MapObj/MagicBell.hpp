@@ -16,11 +16,11 @@ public:
     void exeWait();
     void exeRing();
     bool tryRing();
-    void startRing(const TVec3f&, const TVec3f&);
+    void startRing(const Vec3f&, const Vec3f&);
 
     Swinger* mBellSwinger;
     MtxPtr mSurface2Mtx;
     Swinger* mBellRodSwinger;
     MtxPtr mSurface1Mtx;
-    TVec3f mHitMarkPosition;
+    Vec3f mHitMarkPosition;
 };

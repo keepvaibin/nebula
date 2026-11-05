@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActorGroup.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class KameckBeam;
 class KameckBeamEventListener;
@@ -30,7 +30,7 @@ namespace MR {
     void createKameckBeamHolder();
     void createKameckFireBallHolder();
     void createKameckBeamTurtleHolder();
-    KameckBeam* startFollowKameckBeam(s32, MtxPtr, f32, const TVec3f&, KameckBeamEventListener*);
+    KameckBeam* startFollowKameckBeam(s32, MtxPtr, f32, const Vec3f&, KameckBeamEventListener*);
     KameckBeam* getKameckBeam();
     KameckFireBall* getKameckFireBall();
     KameckTurtle* getKameckBeamTurtle();

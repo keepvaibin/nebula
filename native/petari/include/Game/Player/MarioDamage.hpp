@@ -13,10 +13,10 @@ public:
     virtual bool update();
     virtual bool notice();
 
-    void setVec(const TVec3f&);
+    void setVec(const Vec3f&);
     void setVecSize(f32, f32);
 
-    void stopHead(const TVec3f&);
+    void stopHead(const Vec3f&);
 
     inline void setStrings(const char* pChar1, const char* pChar2) {
         _28 = pChar1;
@@ -28,7 +28,7 @@ public:
     u16 _14;
     u16 _16;
     u16 _18;
-    TVec3f _1C;
+    Vec3f _1C;
     const char* _28;
     const char* _2C;
 };

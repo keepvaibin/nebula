@@ -53,7 +53,7 @@ void SnowFloorTile::init(const JMapInfoIter& rIter) {
 
     mCellSize = 128.0f * mScale.x / ::sTextureSize;
     initHitSensor(1);
-    MR::addHitSensorEye(this, "eye", 16, 1.4142f * (mTextureSize * mCellSize), TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEye(this, "eye", 16, 1.4142f * (mTextureSize * mCellSize), Vec3f(0.0f, 0.0f, 0.0f));
     mSnowDepth = new f32[mTextureSize * mTextureSize];
 
     for (u32 y = 0; y < mTextureSize; y++) {
@@ -92,8 +92,8 @@ void SnowFloorTile::initLocalPoint(const JMapInfoIter& rIter) {
     NebulaMtxMultVecSR(mtx, &mForward, &mForward);
 }
 
-bool SnowFloorTile::calcLocalPoint(const TVec3f& rPosition, TVec3f* pPoint, f32 heightLimit) {
-    TVec3f offset(rPosition - mPosition);
+bool SnowFloorTile::calcLocalPoint(const Vec3f& rPosition, Vec3f* pPoint, f32 heightLimit) {
+    Vec3f offset(rPosition - mPosition);
     f32 right = offset.dot(mRight);
     f32 up = offset.dot(mUp);
     f32 forward = offset.dot(mForward);
@@ -138,7 +138,7 @@ void SnowFloorTile::createReduceMap(u16 size) {
 
     for (s32 y = 0; y < size; y++) {
         for (s32 x = 0; x < size; x++) {
-            TVec2f offset(x - center, y - center);
+            Vec2f offset(x - center, y - center);
             f32 distance = offset.length();
 
             if (distance >= size / 2) {
@@ -166,15 +166,15 @@ void SnowFloorTile::createReduceMap(u16 size) {
     }
 }
 
-void SnowFloorTile::digPlayerWalk(const TVec3f& rPoint) {
-    TVec2f point(rPoint.x, rPoint.y);
+void SnowFloorTile::digPlayerWalk(const Vec3f& rPoint) {
+    Vec2f point(rPoint.x, rPoint.y);
     MR::setPlayerWalkingResist(0.1f);
     doMove(mLastPlayerPoint, point, 20.0f / static_cast< f32 >(mCellSize), ::cPlayerDigAmount);
     mLastPlayerPoint = point;
 }
 
-void SnowFloorTile::digDpd(const TVec3f& rPoint) {
-    TVec2f point(rPoint.x, rPoint.y);
+void SnowFloorTile::digDpd(const Vec3f& rPoint) {
+    Vec2f point(rPoint.x, rPoint.y);
     s32 volume = doMove(mLastDpdPoint, point, 50.0f / static_cast< f32 >(mCellSize), ::cDpdDigAmount) / 200.0f;
 
     if (volume > 100) {
@@ -186,8 +186,8 @@ void SnowFloorTile::digDpd(const TVec3f& rPoint) {
 }
 
 void SnowFloorTile::control() {
-    TVec3f position(*MR::getPlayerPos());
-    TVec3f localPoint;
+    Vec3f position(*MR::getPlayerPos());
+    Vec3f localPoint;
     bool changed = false;
 
     if (calcLocalPoint(position, &localPoint, 20.0f)) {
@@ -225,8 +225,8 @@ void SnowFloorTile::control() {
     createTexture();
 }
 
-bool SnowFloorTile::doErase(const TVec3f& rPosition, f32 radius, f32 amount) {
-    TVec3f localPoint;
+bool SnowFloorTile::doErase(const Vec3f& rPosition, f32 radius, f32 amount) {
+    Vec3f localPoint;
 
     if (calcLocalPoint(rPosition, &localPoint, 20.0f)) {
         f32 radiusSq = radius * radius;
@@ -237,7 +237,7 @@ bool SnowFloorTile::doErase(const TVec3f& rPosition, f32 radius, f32 amount) {
         }
 
         f32 localRadius = MR::sqrt(radiusSq - height * height);
-        TVec2f point(localPoint.x, localPoint.y);
+        Vec2f point(localPoint.x, localPoint.y);
         doErase(point, localRadius / mCellSize, amount);
         return true;
     }
@@ -252,14 +252,14 @@ namespace {
     f32 sWeights[4096];
 }  // namespace
 
-f32 SnowFloorTile::doMove(TVec2f from, TVec2f to, f32 radius, f32 amount) {
+f32 SnowFloorTile::doMove(Vec2f from, Vec2f to, f32 radius, f32 amount) {
     f32 outerRadius;
     f32 removed = 0.0f;
     f32 weightTotal = 0.0f;
     f32 depthTotal = 0.0f;
     u32 minX;
     u32 count = 0;
-    TVec2f unitDirection(to - from);
+    Vec2f unitDirection(to - from);
     unitDirection.normalize();
     u16* const xs = sXs;
     u16* const ys = sYs;
@@ -284,7 +284,7 @@ f32 SnowFloorTile::doMove(TVec2f from, TVec2f to, f32 radius, f32 amount) {
         u32 row = y * mTextureSize;
 
         for (u32 x = minX; x < maxX; x++) {
-            TVec2f offset(x - to.x, y - to.y);
+            Vec2f offset(x - to.x, y - to.y);
             f32 distanceSq = offset.squared();
 
             totalSnow += mSnowDepth[row + x];
@@ -337,7 +337,7 @@ f32 SnowFloorTile::doMove(TVec2f from, TVec2f to, f32 radius, f32 amount) {
     return depthTotal;
 }
 
-void SnowFloorTile::doErase(TVec2f point, f32 radius, f32 amount) {
+void SnowFloorTile::doErase(Vec2f point, f32 radius, f32 amount) {
     point.x *= mTextureSize;
     point.y *= mTextureSize;
     u32 minX;
@@ -355,7 +355,7 @@ void SnowFloorTile::doErase(TVec2f point, f32 radius, f32 amount) {
         u32 row = y * mTextureSize;
 
         for (u32 x = minX; x < maxX; x++) {
-            TVec2f offset(x - point.x, y - point.y);
+            Vec2f offset(x - point.x, y - point.y);
             f32 distanceSq = offset.squared();
 
             if (distanceSq <= radiusSq) {
@@ -398,13 +398,13 @@ void SnowFloorTile::createTexture() {
 void SnowFloorTile::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     if (MR::isSensorEnemy(pReceiver)) {
         if (MR::isEqualString(pReceiver->mHost->mName, "\203\175\203\212\203\111\211\212\213\205" /* マリオ炎球 */)) {
-            TVec3f localPoint;
+            Vec3f localPoint;
             calcLocalPoint(pReceiver->mPosition, &localPoint, 200.0f);
-            doErase(TVec2f(localPoint.x, localPoint.y), 30.0f / mCellSize, ::cHipdropDigAmount);
+            doErase(Vec2f(localPoint.x, localPoint.y), 30.0f / mCellSize, ::cHipdropDigAmount);
         } else if (pReceiver->mHost->getBaseMtx()) {
-            TVec3f up;
+            Vec3f up;
             MR::calcUpVec(&up, pReceiver->mHost);
-            TVec3f position(pReceiver->mPosition - up * (pReceiver->mRadius - 20.0f));
+            Vec3f position(pReceiver->mPosition - up * (pReceiver->mRadius - 20.0f));
             doErase(position, 20.0f, ::cFireballDigAmount);
         }
 
@@ -442,14 +442,14 @@ void SnowFloorTile::draw() const {
 }
 
 void SnowFloorTile::drawLayer(s32 layer) const {
-    TVec3f p3, p2, p1, p0;
+    Vec3f p3, p2, p1, p0;
     p0 = -mRight * mTextureSize * mCellSize - mForward * mTextureSize * mCellSize;
     p1 = mRight * mTextureSize * mCellSize - mForward * mTextureSize * mCellSize;
     p2 = mRight * mTextureSize * mCellSize + mForward * mTextureSize * mCellSize;
     p3 = -mRight * mTextureSize * mCellSize + mForward * mTextureSize * mCellSize;
 
     for (u32 i = 0; i < ::sStripCount; i++) {
-        TVec3f center(mPosition + mUp * (5.0f + ::sLayerHeight * layer));
+        Vec3f center(mPosition + mUp * (5.0f + ::sLayerHeight * layer));
         J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
         TDDraw::sendPoint(center + p0);
         J3DNativeDraw::texCoord(0.0f, 0.0f);

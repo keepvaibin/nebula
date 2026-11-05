@@ -14,5 +14,5 @@ public:
     void exeWait();
     void tryAttack();
 
-    TVec3f mNamePos;
+    Vec3f mNamePos;
 };

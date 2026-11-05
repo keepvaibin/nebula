@@ -10,13 +10,13 @@ public:
 
 class WalkerStateBlowDamage : public ActorStateBase< LiveActor > {
 public:
-    WalkerStateBlowDamage(LiveActor* pHost, TVec3f* pDirection, WalkerStateBlowDamageParam* pBlowDamageParam);
+    WalkerStateBlowDamage(LiveActor* pHost, Vec3f* pDirection, WalkerStateBlowDamageParam* pBlowDamageParam);
 
     virtual void appear();
 
     void exeBlow();
     void exeBlowLand();
 
-    TVec3f* mDirection;
+    Vec3f* mDirection;
     WalkerStateBlowDamageParam* mBlowDamageParam;
 };

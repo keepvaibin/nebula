@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class HitSensor;
 class JMapInfoIter;
@@ -25,7 +25,7 @@ namespace MR {
     void getMapPartsObjectName(char*, u32, const JMapInfoIter&);
     void getMapPartsObjectNameIfExistShapeID(char*, u32, const JMapInfoIter&);
     void getMapPartsObjectName(char*, u32, const char*, s32);
-    void initMapPartsClipping(LiveActor*, const JMapInfoIter&, TVec3f*, bool);
+    void initMapPartsClipping(LiveActor*, const JMapInfoIter&, Vec3f*, bool);
     bool isMapPartsPressOn(const JMapInfoIter&);
     MapPartsRailGuideDrawer* createMapPartsRailGuideDrawer(LiveActor*, const char*, const JMapInfoIter&);
     void initMapPartsShadow(LiveActor*, const JMapInfoIter&);

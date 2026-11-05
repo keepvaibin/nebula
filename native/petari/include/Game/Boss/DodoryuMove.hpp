@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class Dodoryu;
 
@@ -68,7 +68,7 @@ namespace DodoryuSub {
         f32 _20;
         f32 _24;
         f32 _28;
-        TVec3f _2C;
+        Vec3f _2C;
     };
 
     class MoveStateJumpOut : public MoveState {

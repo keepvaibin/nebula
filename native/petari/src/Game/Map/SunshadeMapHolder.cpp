@@ -7,7 +7,7 @@ SunshadeMapHolder::SunshadeMapHolder() : NameObj("\223\372\202\346\202\257\203\1
 }
 
 namespace MR {
-    bool isInShadeFromTheSun(const TVec3f& rPos, f32 a2) {
+    bool isInShadeFromTheSun(const Vec3f& rPos, f32 a2) {
         if (!MR::isInAreaObj("SunLightArea", rPos)) {
             return true;
         }

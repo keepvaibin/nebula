@@ -2,7 +2,7 @@
 
 #include "Game/Screen/CustomTagProcessor.hpp"
 #include "Game/Screen/LayoutCoreUtil.hpp"
-#include <JSystem/JGeometry/TBox.hpp>
+#include <nebula_geometry.hpp>
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 
@@ -161,17 +161,17 @@ namespace MR {
     bool isHiddenPane(const LayoutActor*, const char*);
     void showScreen(LayoutActor*);
     void hideScreen(LayoutActor*);
-    void setFollowPos(const TVec2f*, const LayoutActor*, const char*);
+    void setFollowPos(const Vec2f*, const LayoutActor*, const char*);
     void setFollowTypeReplace(const LayoutActor*, const char*);
     void setFollowTypeAdd(const LayoutActor*, const char*);
-    void copyPaneTrans(TVec2f*, const LayoutActor*, const char*);
+    void copyPaneTrans(Vec2f*, const LayoutActor*, const char*);
     f32 getPaneTransX(const LayoutActor*, const char*);
     f32 getPaneTransY(const LayoutActor*, const char*);
     void setLayoutPosAtPaneTrans(LayoutActor*, const LayoutActor*, const char*);
-    void copyPaneScale(TVec2f*, const LayoutActor*, const char*);
+    void copyPaneScale(Vec2f*, const LayoutActor*, const char*);
     void setPaneScale(const LayoutActor*, f32, f32, const char*);
     void setLayoutScaleAtPaneScale(LayoutActor*, const LayoutActor*, const char*);
-    void copyPaneRotate(TVec3f*, const LayoutActor*, const char*);
+    void copyPaneRotate(Vec3f*, const LayoutActor*, const char*);
     void setPaneRotate(const LayoutActor*, f32, f32, f32, const char*);
     void setLayoutScalePosAtPaneScaleTrans(LayoutActor*, const LayoutActor*, const char*);
     void setLayoutScalePosAtPaneScaleTransIfExecCalcAnim(LayoutActor*, const LayoutActor*, const char*);
@@ -251,7 +251,7 @@ namespace MR {
     SimpleLayout* createSimpleLayoutTalkParts(const char*, const char*, u32);
     nw4r::lyt::Pane* getPane(const LayoutActor*, const char*);
     nw4r::lyt::Pane* getRootPane(const LayoutActor*);
-    void calcTextBoxRectRecursive(TBox2f*, const LayoutActor*, const char*);
+    void calcTextBoxRectRecursive(Box2f*, const LayoutActor*, const char*);
     u32 getTextLineNumMaxRecursive(const LayoutActor*, const char*);
     void invalidateParentAnim(LayoutActor*);
     void setCometPaneAnimFromId(LayoutActor*, const char*, int, u32);

@@ -133,7 +133,7 @@ bool JAISe::JAISound_tryDie_() {
     return false;
 }
 
-void JAISe::JAISeMgr_startID_(JAISoundID id, const TVec3f* posPtr, JAIAudience* audience) {
+void JAISe::JAISeMgr_startID_(JAISoundID id, const Vec3f* posPtr, JAIAudience* audience) {
     start_JAISound_(id, posPtr, audience);
     inner_._26C = false;
     if (inner_.mSoundStrategyMgr != nullptr) {

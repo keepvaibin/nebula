@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class PlayerInput;
 
@@ -12,7 +12,7 @@ public:
     bool isChanged() const;
 
     const PlayerInput* mPad;
-    TVec2f mStick;
+    Vec2f mStick;
     f32 mSpeed;
     u32 mHold;
     u32 mTrigger;

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry.hpp>
+#include <nebula_geometry.hpp>
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 
@@ -14,11 +14,11 @@ namespace MR {
     void onStarPointerSceneOut();
     void setStarPointerModeBase();
     void setStarPointerCameraMtxAtGameScene();
-    void initStarPointerTarget(LiveActor*, f32, const TVec3f& rOffset = TVec3f(0.0f));
-    void initStarPointerTargetAtPos(LiveActor*, f32, const TVec3f*, const TVec3f&);
-    void initStarPointerTargetAtMtx(LiveActor*, f32, MtxPtr, const TVec3f&);
-    void initStarPointerTargetAtJoint(LiveActor*, const char*, f32, const TVec3f&);
-    void addStarPointerTargetCircle(LayoutActor*, const char*, f32, const TVec2f&, const char*);
+    void initStarPointerTarget(LiveActor*, f32, const Vec3f& rOffset = Vec3f(0.0f));
+    void initStarPointerTargetAtPos(LiveActor*, f32, const Vec3f*, const Vec3f&);
+    void initStarPointerTargetAtMtx(LiveActor*, f32, MtxPtr, const Vec3f&);
+    void initStarPointerTargetAtJoint(LiveActor*, const char*, f32, const Vec3f&);
+    void addStarPointerTargetCircle(LayoutActor*, const char*, f32, const Vec2f&, const char*);
     bool isStarPointerValid(s32);
     bool isStarPointerPointing(const LiveActor*, s32, bool, const char*);
     bool tryStarPointerCheck(const LiveActor*, bool, const char*);
@@ -45,27 +45,27 @@ namespace MR {
     void tryShowTimeoutedStarPointerGuidance();
     bool isExistStarPointerTarget(const LiveActor*);
     void setStarPointerTargetRadius3d(LiveActor*, f32);
-    bool isStarPointerPointing(const TVec3f&, f32, s32, bool);
+    bool isStarPointerPointing(const Vec3f&, f32, s32, bool);
     MtxPtr getStarPointerViewMtx();
     Mtx44Ptr getStarPointerProjMtx();
     f32 getStarPointerRadius(s32);
-    TVec2f* getStarPointerScreenPosition(s32);
-    TVec2f getStarPointerScreenPositionOrEdge(s32);
+    Vec2f* getStarPointerScreenPosition(s32);
+    Vec2f getStarPointerScreenPositionOrEdge(s32);
     f32 getStarPointerScreenSpeed(s32);
     bool isStarPointerInScreen(s32);
     bool isStarPointerInScreenAnyPort(s32*);
     s32* getStarPointerLastPointedPort(const LiveActor*);
-    TVec2f* getStarPointerScreenVelocity(s32);
-    void getStarPointerWorldVelocityDirection(TVec3f*, s32);
-    TVec3f* getStarPointerWorldPosUsingDepth(s32);
-    void calcStarPointerWorldPointingPos(TVec3f*, const TVec3f&, s32);
-    void calcStarPointerWorldPointingPosInsideEdge(TVec3f*, const TVec3f&, s32);
-    bool calcStarPointerPosOnPlane(TVec3f*, const TVec3f&, const TVec3f&, s32, bool);
-    bool calcStarPointerWorldVelocityDirectionOnPlane(TVec3f*, const TVec3f&, const TVec3f&, s32);
-    f32 calcPointRadius2D(const TVec3f&, f32);
-    bool calcStarPointerStrokeRotateMoment(TVec3f*, const TVec3f&, f32, s32);
+    Vec2f* getStarPointerScreenVelocity(s32);
+    void getStarPointerWorldVelocityDirection(Vec3f*, s32);
+    Vec3f* getStarPointerWorldPosUsingDepth(s32);
+    void calcStarPointerWorldPointingPos(Vec3f*, const Vec3f&, s32);
+    void calcStarPointerWorldPointingPosInsideEdge(Vec3f*, const Vec3f&, s32);
+    bool calcStarPointerPosOnPlane(Vec3f*, const Vec3f&, const Vec3f&, s32, bool);
+    bool calcStarPointerWorldVelocityDirectionOnPlane(Vec3f*, const Vec3f&, const Vec3f&, s32);
+    f32 calcPointRadius2D(const Vec3f&, f32);
+    bool calcStarPointerStrokeRotateMoment(Vec3f*, const Vec3f&, f32, s32);
     bool calcStarPointerScreenDistanceToTarget(const LiveActor*, f32*, s32);
-    bool tryStartStarPointerCommandStream(const LiveActor*, const TVec3f*, s32, bool);
+    bool tryStartStarPointerCommandStream(const LiveActor*, const Vec3f*, s32, bool);
     bool tryEndStarPointerCommandStream(const LiveActor*, s32);
     bool isStarPointerCommandStream(const LiveActor*, s32);
     void startStarPointerModeTitle(void*);
@@ -98,7 +98,7 @@ namespace MR {
     void requestStarPointerModeBlueStarReady(void*);
     // Each frame `pActor` can be grabbed: a finger landing on it grabs it (NEBULA_CONTEXT_TOUCH_TARGET).
     void reportStarPointerGrabTarget(const LiveActor* pActor);
-    void requestStarPointerModeBigBubble(void*, const TVec3f&);
+    void requestStarPointerModeBigBubble(void*, const Vec3f&);
     bool isStarPointerModeBlueStarReady();
     bool isStarPointerModeStarPieceTarget();
     bool isStarPointerModeMarioLauncher();
@@ -121,7 +121,7 @@ namespace MR {
 
     /*
     inline void initStarPointerTarget(LiveActor* pActor, f32 radius) {
-        TVec3f zeroOffset;
+        Vec3f zeroOffset;
         zeroOffset.x = 0.0f;
         zeroOffset.y = 0.0f;
         zeroOffset.z = 0.0f;

@@ -52,8 +52,8 @@ void FileSelectCameraController::goToFarPoint() {
     setNerve(GET_NERVE_ANON(FileSelectCameraControllerNrvMoveToFarPoint));
 }
 
-void FileSelectCameraController::goToNearPoint(const TVec3f& rPoint) {
-    mNearTarget.set(rPoint + TVec3f(::cNearTargetOffset));
+void FileSelectCameraController::goToNearPoint(const Vec3f& rPoint) {
+    mNearTarget.set(rPoint + Vec3f(::cNearTargetOffset));
 
     setNerve(GET_NERVE_ANON(FileSelectCameraControllerNrvMoveToNearPoint));
 }
@@ -90,9 +90,9 @@ void FileSelectCameraController::exeMoveToFarPoint() {
     f32 squaredTime = getNerveStep() / 60.0f;
 
     squaredTime *= squaredTime;
-    mWPoint += (TVec3f(::cFarTarget) - mWPoint) * squaredTime;
+    mWPoint += (Vec3f(::cFarTarget) - mWPoint) * squaredTime;
     mFovy += (::cFarFovy - mFovy) * squaredTime;
-    mPosition.add((TVec3f(::cFarPoint) - mPosition) * squaredTime);
+    mPosition.add((Vec3f(::cFarPoint) - mPosition) * squaredTime);
 
     MR::setNerveAtStep(this, GET_NERVE_ANON(FileSelectCameraControllerNrvFarPoint), 60);
 }
@@ -100,11 +100,11 @@ void FileSelectCameraController::exeMoveToFarPoint() {
 void FileSelectCameraController::exeFarPoint() {
     mWPoint = ::cFarTarget;
     mFovy = ::cFarFovy;
-    mPosition.set(TVec3f(::cFarPoint));
+    mPosition.set(Vec3f(::cFarPoint));
 }
 
 void FileSelectCameraController::exeMoveToNearPoint() {
-    TVec3f nearPoint = mNearTarget + ::cNearPointOffset;
+    Vec3f nearPoint = mNearTarget + ::cNearPointOffset;
     f32 squaredTime = getNerveStep() / 60.0f;
 
     squaredTime *= squaredTime;
@@ -116,7 +116,7 @@ void FileSelectCameraController::exeMoveToNearPoint() {
 }
 
 void FileSelectCameraController::exeNearPoint() {
-    TVec3f nearPoint = mNearTarget + ::cNearPointOffset;
+    Vec3f nearPoint = mNearTarget + ::cNearPointOffset;
 
     mFovy = ::cNearFovy;
     mPosition.set(nearPoint);

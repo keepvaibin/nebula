@@ -24,7 +24,7 @@ void DeathArea::movement() {
     MR::forceKillPlayerByAbyss();
 }
 
-bool DeathArea::isInVolume(const TVec3f& rVec) const {
+bool DeathArea::isInVolume(const Vec3f& rVec) const {
     if (isValidSwitchA() && !isOnSwitchA()) {
         return false;
     }

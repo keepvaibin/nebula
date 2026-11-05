@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class AnimScaleController;
 class FootPrint;
@@ -68,19 +68,19 @@ public:
     bool isSolidBody() const;
     bool receivePlayerAttackAtBody(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
     bool receivePlayerAttackAtSpin(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
-    void calcMouthPos(TVec3f* pOut) const;
+    void calcMouthPos(Vec3f* pOut) const;
 
     AnimScaleController* mAnimScaleCtrl;
     FootPrint* mFootPrint;
     f32 mFootprintYOffs;
     bool mRequestSmoke;
-    TVec3f mFront;
-    TVec3f mBodyCenter;
-    TVec3f mTargetDir;
+    Vec3f mFront;
+    Vec3f mBodyCenter;
+    Vec3f mTargetDir;
     s32 mMeanderStep;
     f32 mMeanderAngle;
     s32 mStarPieceTotal;
     s32 mStarPieceRemaining;
     u8 _D0;  // unused
-    TMtx34f mHeadMtx;
+    Mtx34f mHeadMtx;
 };

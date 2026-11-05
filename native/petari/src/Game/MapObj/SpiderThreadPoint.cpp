@@ -18,7 +18,7 @@ namespace {
     // static const _32 sPushAccelRate =
 };  // namespace
 
-SpiderThreadPoint::SpiderThreadPoint(const TVec3f& rPos, f32 friction)
+SpiderThreadPoint::SpiderThreadPoint(const Vec3f& rPos, f32 friction)
     : mBasePos(rPos), mPosition(rPos), mVelocity(0.0f, 0.0f, 0.0f), mFriction(friction), mUp(0.0f, 1.0f, 0.0f), mFront(0.0f, 0.0f, 1.0f) {
     mWindStartTime = ::getWindCtrl()->getTimeToStartWind();
     mWindTime = ::getWindCtrl()->getWindTime();
@@ -27,12 +27,12 @@ SpiderThreadPoint::SpiderThreadPoint(const TVec3f& rPos, f32 friction)
 
 bool SpiderThreadPoint::updateSpring() {
     mVelocity.scale(mFriction);
-    TVec3f v1(mBasePos - mPosition);
-    TVec3f v2(v1 * ::sAccelRate);
+    Vec3f v1(mBasePos - mPosition);
+    Vec3f v2(v1 * ::sAccelRate);
     mVelocity.add(v2);
     mPosition.add(mVelocity);
 
-    TVec3f v3(mBasePos - mPosition);
+    Vec3f v3(mBasePos - mPosition);
     v3.z = 0.0f;
 
     f32 mag1 = v3.length();
@@ -47,8 +47,8 @@ bool SpiderThreadPoint::updateSpring() {
     return false;
 }
 
-void SpiderThreadPoint::updateDrawVec(const TVec3f* pPosA, const TVec3f* pPosB) {
-    TVec3f diff(*pPosB);
+void SpiderThreadPoint::updateDrawVec(const Vec3f* pPosA, const Vec3f* pPosB) {
+    Vec3f diff(*pPosB);
     diff.sub(*pPosA);
     diff.z = 0.0f;
 
@@ -76,17 +76,17 @@ void SpiderThreadPoint::updatePos() {
     mPosition.add(mVelocity);
 }
 
-void SpiderThreadPoint::restrict(const TVec3f* pAnchor, f32 length) {
-    TVec3f nextPosDiff(mPosition);
+void SpiderThreadPoint::restrict(const Vec3f* pAnchor, f32 length) {
+    Vec3f nextPosDiff(mPosition);
     nextPosDiff.add(mVelocity);
     nextPosDiff.sub(*pAnchor);
 
-    TVec3f v2(nextPosDiff);
+    Vec3f v2(nextPosDiff);
     if (!MR::isNearZero(v2)) {
         MR::normalize(&v2);
 
         if (nextPosDiff.squared() >= length * length) {
-            TVec3f restriction = v2 * length;
+            Vec3f restriction = v2 * length;
             mVelocity.x -= nextPosDiff.x - restriction.x;
             mVelocity.y -= nextPosDiff.y - restriction.y;
             mVelocity.z -= nextPosDiff.z - restriction.z;
@@ -94,12 +94,12 @@ void SpiderThreadPoint::restrict(const TVec3f* pAnchor, f32 length) {
     }
 }
 
-void SpiderThreadPoint::updateHang(const TVec3f& rPos) {
+void SpiderThreadPoint::updateHang(const Vec3f& rPos) {
     mPosition = rPos;
     mVelocity.zero();
 }
 
-bool SpiderThreadPoint::tryTouch(f32 radius, const TVec3f& rVec, s32 channel) {
+bool SpiderThreadPoint::tryTouch(f32 radius, const Vec3f& rVec, s32 channel) {
     if (!MR::isStarPointerPointing(mPosition, radius, channel, false)) {
         return false;
     }
@@ -108,7 +108,7 @@ bool SpiderThreadPoint::tryTouch(f32 radius, const TVec3f& rVec, s32 channel) {
     return true;
 }
 
-bool SpiderThreadPoint::tryPush(const TVec3f& rPos, f32 radius) {
+bool SpiderThreadPoint::tryPush(const Vec3f& rPos, f32 radius) {
     f32 dist = MR::calcDistanceXY(mPosition, rPos);
     if (dist > radius || mPosition.z < rPos.z) {
         return false;

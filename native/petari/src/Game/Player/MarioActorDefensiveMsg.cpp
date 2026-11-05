@@ -56,7 +56,7 @@ bool MarioActor::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* p
     if (!_FCC && !_FCD) {
         if (!cylinderHitCheck(pSender, nullptr)) {
             if (msg == ACTMES_ENEMY_ATTACK_FLIP_ROT && _3E5) {
-                TVec3f direction(pReceiver->mPosition);
+                Vec3f direction(pReceiver->mPosition);
                 direction -= pSender->mPosition;
                 if (MR::isNearZero(direction)) {
                     getFrontVec(&direction);
@@ -96,7 +96,7 @@ bool MarioActor::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* p
     }
     }
 
-    TVec3f direction(pReceiver->mPosition);
+    Vec3f direction(pReceiver->mPosition);
     direction -= pSender->mPosition;
     direction.length();
     if (MR::isNearZero(direction)) {
@@ -171,8 +171,8 @@ bool MarioActor::tryAttackMsg(u32 msg, const HitSensor* pSensor, bool* pHandled)
     }
 }
 
-bool MarioActor::tryVectorAttackMsg(u32 msg, const TVec3f& rVec) {
-    TVec3f newVec;
+bool MarioActor::tryVectorAttackMsg(u32 msg, const Vec3f& rVec) {
+    Vec3f newVec;
     bool out = false;
     switch (msg) {
     case ACTMES_ENEMY_ATTACK_MAXIMUM:
@@ -276,7 +276,7 @@ bool MarioActor::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
         return MR::sendMsgPush(_924, pSender);
     }
 
-    TVec3f push;
+    Vec3f push;
     if (!cylinderHitCheck(pSender, &push)) {
         return false;
     }
@@ -308,7 +308,7 @@ bool MarioActor::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
 
         mMario->push(push * 1.1f);
         if (mMario->isStatusActive(MarioStatus_Foo)) {
-            TVec3f direction(pReceiver->mPosition);
+            Vec3f direction(pReceiver->mPosition);
             direction -= pSender->mPosition;
             if (!MR::normalizeOrZero(&direction)) {
                 mMario->_97C->hitWall(direction, nullptr);
@@ -342,7 +342,7 @@ bool MarioActor::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiv
     if (_934) {
         if (msg == ACTMES_INHALE_BLACK_HOLE && _924->isType(ATYPE_MARIO_LAUNCHER_BIND)) {
             if (!_924->receiveMessage(ACTMES_RUSH_CANCEL, getSensor("body")) || _934) {
-                RushEndInfo info(nullptr, 4, TVec3f(0.0f), false, 0);
+                RushEndInfo info(nullptr, 4, Vec3f(0.0f), false, 0);
                 endRush(&info);
             }
         } else {
@@ -388,7 +388,7 @@ bool MarioActor::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiv
         }
 
         if (MR::isSensorPlayer(pReceiver)) {
-            TVec3f velocity(pReceiver->mPosition);
+            Vec3f velocity(pReceiver->mPosition);
             velocity -= pSender->mPosition;
             if (!isJumping()) {
                 MR::vecKillElement(velocity, getGravityVector(), &velocity);
@@ -410,7 +410,7 @@ bool MarioActor::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiv
                 return false;
             }
 
-            TVec3f velocity(pReceiver->mPosition);
+            Vec3f velocity(pReceiver->mPosition);
             velocity -= pSender->mPosition;
             if (!isJumping()) {
                 MR::vecKillElement(velocity, getGravityVector(), &velocity);
@@ -438,7 +438,7 @@ bool MarioActor::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiv
             return false;
         }
 
-        TVec3f direction(pReceiver->mPosition);
+        Vec3f direction(pReceiver->mPosition);
         direction -= pSender->mPosition;
         MR::normalizeOrZero(&direction);
         f32 speed = mMario->cutVecElementFromJumpVec(direction);
@@ -459,7 +459,7 @@ bool MarioActor::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiv
         changeAnimation("\224\362\202\321\202\267\202\263\202\350\203\127\203\203\203\223\203\166" /* 飛びすさりジャンプ */);
         break;
     case ACTMES_REFLECT: {
-        TVec3f normal;
+        Vec3f normal;
         MR::calcDistance(pSender, pReceiver, &normal);
         mMario->reflectWallOnSpinning(normal, 5);
         if (mMario->mWalkSpeed > 0.5f) {
@@ -481,7 +481,7 @@ bool MarioActor::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiv
         return mMario->_97C->passRing(pSender);
     case ACTMES_FOUNTAINJUMP: {
         mMario->touchWater();
-        TVec3f horizontal;
+        Vec3f horizontal;
         MR::vecKillElement(pReceiver->mPosition - pSender->mPosition, getGravityVec(), &horizontal);
         if (horizontal.length() >= pSender->mRadius) {
             return receiveMsgPush(pSender, pReceiver);
@@ -553,11 +553,11 @@ bool MarioActor::receiveMsgTaken(HitSensor* pSender, HitSensor* pReceiver) {
     return true;
 }
 
-bool MarioActor::cylinderHitCheck(const HitSensor* pSensor, TVec3f* pPush) {
+bool MarioActor::cylinderHitCheck(const HitSensor* pSensor, Vec3f* pPush) {
     Mario* pMario = mMario;
     f32 radius = pSensor->mRadius;
-    TVec3f delta = pSensor->mPosition - (_2A0 + pMario->_350 + pMario->_35C + mVelocity);
-    TVec3f radial;
+    Vec3f delta = pSensor->mPosition - (_2A0 + pMario->_350 + pMario->_35C + mVelocity);
+    Vec3f radial;
     f32 axial = MR::vecKillElement(delta, _4C4, &radial);
     f32 spherePenetration = 100.0f + radius - delta.length();
     if (spherePenetration < 0.0f) {
@@ -618,7 +618,7 @@ bool MarioActor::cylinderHitCheck(const HitSensor* pSensor, TVec3f* pPush) {
     return false;
 }
 
-void MarioState::hitWall(const TVec3f&, HitSensor*) {
+void MarioState::hitWall(const Vec3f&, HitSensor*) {
 }
 
 bool MarioState::passRing(const HitSensor*) {

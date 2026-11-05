@@ -37,8 +37,8 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <JSystem/J3DGraphAnimator/J3DJoint.hpp>
-#include <JSystem/JMath/JMATrigonometric.hpp>
-#include <JSystem/JMath/JMath.hpp>
+#include <nebula_geometry.hpp>
+
 #include <cstdio>
 
 namespace {
@@ -212,20 +212,20 @@ void SkeletalFishBoss::control() {
 
 void SkeletalFishBoss::calcAnim() {
     LiveActor::calcAnim();
-    TVec3f cameraDir;
+    Vec3f cameraDir;
     MR::getCameraInvViewMtx().getZDir(cameraDir);
     cameraDir.negate();
 
     if (!MR::isNoCalcAnim(this)) {
         for (u32 i = 0; i < ARRAY_SIZE(::sShadowInfo); i++) {
             const JointToShadow* pShadow = &::sShadowInfo[i];
-            TPos3f jointMtx(MR::getJointMtx(this, pShadow->mJointName));
-            TVec3f position;
+            Pos3f jointMtx(MR::getJointMtx(this, pShadow->mJointName));
+            Vec3f position;
             jointMtx.getTrans(position);
-            TVec3f gravity;
+            Vec3f gravity;
             MR::calcGravityVector(this, position, &gravity, nullptr, 0);
 
-            if (cameraDir.dot(gravity) < JMACosRadian(1.8325958f)) {
+            if (cameraDir.dot(gravity) < Angle::cosRadian(1.8325958f)) {
                 MR::invalidateShadow(this, pShadow->mName);
             } else {
                 MR::validateShadow(this, pShadow->mName);
@@ -239,7 +239,7 @@ void SkeletalFishBoss::calcAnim() {
     mBossHead->updateCollisionMtx();
 }
 
-bool SkeletalFishBoss::calcJoint(TPos3f* pJointPos, const JointControllerInfo& rInfo) {
+bool SkeletalFishBoss::calcJoint(Pos3f* pJointPos, const JointControllerInfo& rInfo) {
     if (mJointIndicies[rInfo.mJoint->getJntNo()] == -1) {
         return false;
     }
@@ -248,7 +248,7 @@ bool SkeletalFishBoss::calcJoint(TPos3f* pJointPos, const JointControllerInfo& r
     return true;
 }
 
-void SkeletalFishBoss::damage(const HitSensor* pSensor, const TVec3f& rStarPieceOffs) {
+void SkeletalFishBoss::damage(const HitSensor* pSensor, const Vec3f& rStarPieceOffs) {
     if (isEnableToBeDamaged()) {
         _D4 = pSensor;
         MR::shakeCameraStrong();
@@ -287,7 +287,7 @@ void SkeletalFishBoss::exeSwim() {
 
     MR::startLevelSound(mBossHead, "SE_BM_LV_SKL_BOSS_SWIM_FAR");
     MR::startLevelSound(mBossHead, "SE_BM_LV_SKL_BOSS_SWIM_NEAR");
-    TVec3f mouthPos;
+    Vec3f mouthPos;
     getMouthSensorCenterPos(mouthPos, 5000.0f);
 
     bool isClose = mouthPos.distance(*MR::getPlayerPos()) < 5000.0f;
@@ -313,7 +313,7 @@ void SkeletalFishBoss::exeOpen() {
 }
 
 void SkeletalFishBoss::exeOpenWait() {
-    TVec3f mouthPos;
+    Vec3f mouthPos;
     getMouthSensorCenterPos(mouthPos, 7000.0f);
     bool isClose = mouthPos.distance(*MR::getPlayerPos()) < 7000.0f;
 
@@ -617,7 +617,7 @@ void SkeletalFishBoss::calcAndSetBaseMtx() {
             mControllers[i]->registerCallBack();
         }
 
-        TPos3f railMtx;
+        Pos3f railMtx;
         mRailControl->getMtx(&railMtx, 0.0f);
         MR::setBaseTRMtx(this, railMtx);
         _120.setInline(railMtx);
@@ -741,8 +741,8 @@ void SkeletalFishBoss::invalidateCollision() {
     MR::invalidateCollisionParts(head->_100);
 }
 
-void SkeletalFishBoss::getMouthSensorCenterPos(TVec3f& rPos, f32 a2) const {
-    TPos3f mtx(MR::getJointMtx(this, "Head"));
+void SkeletalFishBoss::getMouthSensorCenterPos(Vec3f& rPos, f32 a2) const {
+    Pos3f mtx(MR::getJointMtx(this, "Head"));
     rPos.z = a2;
     rPos.x = 0.0f;
     rPos.y = 0.0f;
@@ -772,21 +772,21 @@ void SkeletalFishBoss::startDamageAnim() {
 }
 
 void SkeletalFishBoss::calcPlanetCenterPosition() {
-    TVec3f firstPnt;
+    Vec3f firstPnt;
     MR::calcRailPointPos(&firstPnt, MR::getSkeletalFishBossRailHolder()->getInOrder(0), 0);
-    TVec3f secondPnt;
+    Vec3f secondPnt;
     MR::calcRailPointPos(&secondPnt, MR::getSkeletalFishBossRailHolder()->getInOrder(0), 1);
     calcGravityCenter(&_180, firstPnt, secondPnt);
 }
 
-bool SkeletalFishBoss::calcGravityCenter(TVec3f* pOut, const TVec3f& rFirstPoint, const TVec3f& rSecondPoint) {
-    TVec3f firstGravityCenter(rFirstPoint);
-    TVec3f firstGravityVector;
+bool SkeletalFishBoss::calcGravityCenter(Vec3f* pOut, const Vec3f& rFirstPoint, const Vec3f& rSecondPoint) {
+    Vec3f firstGravityCenter(rFirstPoint);
+    Vec3f firstGravityVector;
     MR::calcGravityVector(this, firstGravityCenter, &firstGravityVector, nullptr, 0);
     firstGravityVector.negate();
 
-    TVec3f secondGravityCenter(rSecondPoint);
-    TVec3f secondGravityVector;
+    Vec3f secondGravityCenter(rSecondPoint);
+    Vec3f secondGravityVector;
     MR::calcGravityVector(this, secondGravityCenter, &secondGravityVector, nullptr, 0);
     secondGravityVector.negate();
 
@@ -795,8 +795,8 @@ bool SkeletalFishBoss::calcGravityCenter(TVec3f* pOut, const TVec3f& rFirstPoint
     f32 dotProduct = firstGravityVector.dot(secondGravityVector);
     f32 dotProductSquared = dotProduct * dotProduct;
 
-    TVec3f distanceVector(firstGravityCenter - secondGravityCenter);
-    TVec3f reversedDistanceVector(secondGravityCenter - firstGravityCenter);
+    Vec3f distanceVector(firstGravityCenter - secondGravityCenter);
+    Vec3f reversedDistanceVector(secondGravityCenter - firstGravityCenter);
     f32 dotFirst = distanceVector.dot(secondGravityVector);
     f32 dotSecond = reversedDistanceVector.dot(firstGravityVector);
 
@@ -859,13 +859,13 @@ void SkeletalFishBoss::startCamera(const char* pCameraName) {
 
 void SkeletalFishBoss::resetCamera() {
     MR::startGlobalEventCameraTargetPlayer("\203\146\203\202\217\111\227\271\214\343\203\112\203\201\203\211" /* デモ終了後カメラ */, 0);
-    TPos3f playerMtx(MR::getPlayerBaseMtx());
-    TVec3f position;
+    Pos3f playerMtx(MR::getPlayerBaseMtx());
+    Vec3f position;
     playerMtx.getTrans(position);
-    TVec3f targetPosition;
+    Vec3f targetPosition;
     playerMtx.getYDir(targetPosition);
-    TVec3f frontDirection;
-    TVec3f cameraTarget = position + targetPosition * 1200.0f;
+    Vec3f frontDirection;
+    Vec3f cameraTarget = position + targetPosition * 1200.0f;
     targetPosition = cameraTarget;
     playerMtx.getZDir(frontDirection);
     MR::setProgrammableCameraParam("\203\146\203\202\217\111\227\271\214\343\203\112\203\201\203\211" /* デモ終了後カメラ */, position, targetPosition, frontDirection, true);
@@ -989,7 +989,7 @@ void SkeletalFishBoss::endBreakDemo() {
     MR::showPlayer();
     mBreakModel->makeActorDead();
     MR::hideModel(this);
-    TVec3f offset(0.0f, 1573.0f, 0.0f);
+    Vec3f offset(0.0f, 1573.0f, 0.0f);
     _150.mult(offset, offset);
     MR::requestAppearPowerStar(this, offset);
 }
@@ -1005,10 +1005,10 @@ SkeletalFishBossHead::SkeletalFishBossHead(LiveActor* pActor)
     : PartsModel(pActor, "\203\130\203\112\203\213\203\126\203\203\201\133\203\116\223\252" /* スカルシャーク頭 */, "SkeletalFishBossHeadA", nullptr, MR::DrawBufferType_Enemy, false) {
     initFixedPosition("Head");
     initHitSensor(17);
-    MR::addHitSensorAtJointEnemy(this, "body", "Head", 8, 400.0f, TVec3f(0.0f, -120.0f, 320.0f));
+    MR::addHitSensorAtJointEnemy(this, "body", "Head", 8, 400.0f, Vec3f(0.0f, -120.0f, 320.0f));
 
     for (u32 i = 0; i < ARRAY_SIZE(::sHitPosData); i++) {
-        TVec3f offset(::sHitPosData[i].mOffset);
+        Vec3f offset(::sHitPosData[i].mOffset);
 
         offset.scale(9.0f / 10.0f);
         MR::addHitSensorAtJointEnemyAttack(this, ::sHitPosData[i].mName, ::sHitPosData[i].mSensorName, 8, 270.0f, offset);

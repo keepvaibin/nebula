@@ -19,15 +19,15 @@ public:
 
 class WalkerStateWander : public ActorStateBase< LiveActor > {
 public:
-    WalkerStateWander(LiveActor* pHost, TVec3f* pDirection, WalkerStateParam* pStateParam, WalkerStateWanderParam* pWanderParam);
+    WalkerStateWander(LiveActor* pHost, Vec3f* pDirection, WalkerStateParam* pStateParam, WalkerStateWanderParam* pWanderParam);
 
     virtual void appear();
 
-    void setWanderCenter(const TVec3f& rCenter);
+    void setWanderCenter(const Vec3f& rCenter);
     void exeWait();
     void exeWalk();
 
-    TVec3f* mDirection;
+    Vec3f* mDirection;
     TerritoryMover* mTerritoryMover;
     WalkerStateParam* mStateParam;
     WalkerStateWanderParam* mWanderParam;

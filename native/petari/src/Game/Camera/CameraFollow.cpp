@@ -11,7 +11,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/TriangleFilter.hpp"
 #include "Game/Util/VectorUtil.hpp"
-#include <JSystem/JGeometry/TUtil.hpp>
+#include <nebula_geometry.hpp>
 
 namespace {
     static const f32 sCameraRadius = 15.0f;  // TODO: check if this makes sense as this const
@@ -19,8 +19,8 @@ namespace {
     static const f32 sColCheckHeight = 100.0f;
     static const f32 sRoundAddition = 0.08f;
     static const f32 sRoundResetAddition = 0.2f;
-    static const f32 sRoundInterval = JGeometry::TUtil< f32 >::PI() / 4.0f;
-    static const f32 sLookDownAngle = 75.0f * JGeometry::TUtil< f32 >::PI() / 180.0f;
+    static const f32 sRoundInterval = FloatUtil::PI() / 4.0f;
+    static const f32 sLookDownAngle = 75.0f * FloatUtil::PI() / 180.0f;
 };  // namespace
 
 CameraFollow::CameraFollow(const char* pName)
@@ -40,7 +40,7 @@ void CameraFollow::reset() {
     CameraLocalUtil::setUpVecAndWatchUpVec(this, CameraLocalUtil::getTarget(this)->getUpVec());
     mVPan->reset();
 
-    TPos3f zoneMtx = mZoneMatrix;
+    Pos3f zoneMtx = mZoneMatrix;
     zoneMtx.invert(zoneMtx);
     mPos.set(CameraLocalUtil::getPos(this));
     zoneMtx.mult(mPos, mPos);
@@ -88,16 +88,16 @@ bool CameraFollow::isEnableToRoundRight() const {
 }
 
 void CameraFollow::calcIdealPos() {
-    const TPos3f& zoneMtx = mZoneMatrix;
+    const Pos3f& zoneMtx = mZoneMatrix;
 
-    TPos3f mtx = zoneMtx;
+    Pos3f mtx = zoneMtx;
     mtx.invert(mtx);
-    TVec3f watchPos = CameraLocalUtil::getWatchPos(this);
+    Vec3f watchPos = CameraLocalUtil::getWatchPos(this);
     mtx.mult(watchPos, watchPos);
-    TVec3f front = CameraLocalUtil::getTarget(this)->getFrontVec();
+    Vec3f front = CameraLocalUtil::getTarget(this)->getFrontVec();
     mtx.mult33(front);
 
-    TVec3f pos = mPos;
+    Vec3f pos = mPos;
     constrainDistance(&pos, watchPos);
     f32 angleY, angleX, length;
     MR::crossToPolar(watchPos, pos, &length, &angleX, &angleY);
@@ -112,20 +112,20 @@ void CameraFollow::calcIdealPos() {
     zoneMtx.mult(pos, pos);
     CameraLocalUtil::setPos(this, pos);
 
-    TVec3f up(0.0f, 1.0f, 0.0f);
+    Vec3f up(0.0f, 1.0f, 0.0f);
     zoneMtx.mult33(up);
     CameraLocalUtil::setUpVecAndWatchUpVec(this, up);
 }
 
 void CameraFollow::calcRotPos() {
-    TPos3f zoneMtx = mZoneMatrix;
-    TPos3f mtx = zoneMtx;
+    Pos3f zoneMtx = mZoneMatrix;
+    Pos3f mtx = zoneMtx;
     mtx.invert(mtx);
 
-    TVec3f watchPos = CameraLocalUtil::getWatchPos(this);
+    Vec3f watchPos = CameraLocalUtil::getWatchPos(this);
     mtx.mult(watchPos, watchPos);
 
-    TVec3f pos = mPos;
+    Vec3f pos = mPos;
     f32 length, angleX, angleY;
     MR::crossToPolar(watchPos, pos, &length, &angleX, &angleY);
     angleY = MR::convergeRadian(angleY, mAngleYTarget, mAngleYSpeed);
@@ -133,7 +133,7 @@ void CameraFollow::calcRotPos() {
         mIsRounding = false;
     }
 
-    TVec3f newPos;
+    Vec3f newPos;
     MR::polarToCross(watchPos, &newPos, length, angleX, angleY);
 
     
@@ -143,13 +143,13 @@ void CameraFollow::calcRotPos() {
     zoneMtx.mult(newPos, newPos);
     CameraLocalUtil::setPos(this, newPos);
 
-    TVec3f up(0.0f, 1.0f, 0.0f);
+    Vec3f up(0.0f, 1.0f, 0.0f);
     zoneMtx.mult33(up);
     CameraLocalUtil::setUpVecAndWatchUpVec(this, up);
 }
 
-void CameraFollow::constrainDistance(TVec3f* pPos, const TVec3f& rWatchPos) {
-    TVec3f diff = *pPos - rWatchPos;
+void CameraFollow::constrainDistance(Vec3f* pPos, const Vec3f& rWatchPos) {
+    Vec3f diff = *pPos - rWatchPos;
     if (diff.length() < mDistMin) {
         if (MR::isNearZero(diff)) {
             diff.set(mPos - mWatchPos);
@@ -175,10 +175,10 @@ void CameraFollow::constrainAngleX(f32* pAngleX) {
     }
 }
 
-void CameraFollow::constrainAngleY(f32* pAngleY, const TVec3f& rDir, f32 vecLength) {
+void CameraFollow::constrainAngleY(f32* pAngleY, const Vec3f& rDir, f32 vecLength) {
     f32 length, angleX, angleY;
-    TVec3f vec = rDir * -vecLength;
-    MR::crossToPolar(TVec3f(0.0f, 0.0f, 0.0f), vec, &length, &angleX, &angleY);
+    Vec3f vec = rDir * -vecLength;
+    MR::crossToPolar(Vec3f(0.0f, 0.0f, 0.0f), vec, &length, &angleX, &angleY);
 
     if (CameraLocalUtil::tryCameraResetTrigger()) {
         startRound(angleY, ::sRoundResetAddition);
@@ -188,9 +188,9 @@ void CameraFollow::constrainAngleY(f32* pAngleY, const TVec3f& rDir, f32 vecLeng
 }
 
 f32 CameraFollow::getMagnitudeOfMovingRound() const {
-    const TVec3f& move = CameraLocalUtil::getTarget(this)->getLastMove();
+    const Vec3f& move = CameraLocalUtil::getTarget(this)->getLastMove();
 
-    TVec3f moveH = move.killElement(CameraLocalUtil::getTarget(this)->getUpVec());
+    Vec3f moveH = move.killElement(CameraLocalUtil::getTarget(this)->getUpVec());
     if (CameraLocalUtil::getTarget(this)->isJumping()) {
         moveH.zero();
     }
@@ -198,7 +198,7 @@ f32 CameraFollow::getMagnitudeOfMovingRound() const {
     return mAngleYRoundSpeed * MR::clamp(moveH.length() / ::sCameraRadius, 0.0f, 1.0f);
 }
 
-void CameraFollow::checkShiftStateToRound(const TVec3f& rWatchPos, const TVec3f& rPos) {
+void CameraFollow::checkShiftStateToRound(const Vec3f& rWatchPos, const Vec3f& rPos) {
     bool left, right;
     if (isUpsideDownByRoll()) {
         left = CameraLocalUtil::testCameraPadTriggerRoundRight() && mIsRoundLeftValid;
@@ -222,7 +222,7 @@ void CameraFollow::arrangeHeight() {
     if (!mCheckWall) {
         mAngleXSpeed *= 0.99f;
     } else {
-        TVec3f camDir = CameraLocalUtil::getWatchPos(this) - CameraLocalUtil::getPos(this);
+        Vec3f camDir = CameraLocalUtil::getWatchPos(this) - CameraLocalUtil::getPos(this);
         if (camDir.dot(CameraLocalUtil::getTarget(this)->getFrontVec()) < 0.0f) {
             mAngleXSpeed *= 0.99f;
         } else {
@@ -244,19 +244,19 @@ void CameraFollow::reflectRotOffset() {
         angleX = ::sLookDownAngle;
     }
 
-    TVec3f pos;
+    Vec3f pos;
     MR::polarToCross(CameraLocalUtil::getWatchPos(this), &pos, length, angleX, angleY);
     CameraLocalUtil::setPos(this, pos);
 }
 
 bool CameraFollow::isWallForward() const {
-    TVec3f pos = CameraLocalUtil::getTarget(this)->getPosition() + CameraLocalUtil::getTarget(this)->getUpVec() * ::sColCheckHeight;
-    TVec3f front = CameraLocalUtil::getTarget(this)->getFrontVec() * ::sSlopeFrontDist;
+    Vec3f pos = CameraLocalUtil::getTarget(this)->getPosition() + CameraLocalUtil::getTarget(this)->getUpVec() * ::sColCheckHeight;
+    Vec3f front = CameraLocalUtil::getTarget(this)->getFrontVec() * ::sSlopeFrontDist;
     return Collision::checkStrikeLineToMap(pos, front, 0, nullptr, nullptr) != 0;
 }
 
 void CameraFollow::arrangeLookUp() {
-    TVec3f mapPos;
+    Vec3f mapPos;
     if (!checkAscent(&mapPos)) {
         mAngleXSpeed *= 0.99f;
         return;
@@ -265,11 +265,11 @@ void CameraFollow::arrangeLookUp() {
     mAngleXSpeed *= 0.99f;
 }
 
-bool CameraFollow::checkAscent(TVec3f* pVec) const {
-    TVec3f pos = CameraLocalUtil::getTarget(this)->getPosition();
+bool CameraFollow::checkAscent(Vec3f* pVec) const {
+    Vec3f pos = CameraLocalUtil::getTarget(this)->getPosition();
     pos += CameraLocalUtil::getTarget(this)->getFrontVec() * ::sSlopeFrontDist;
     pos += CameraLocalUtil::getTarget(this)->getUpVec() * ::sSlopeFrontDist;
-    TVec3f dir = CameraLocalUtil::getTarget(this)->getUpVec() * -::sSlopeFrontDist;
+    Vec3f dir = CameraLocalUtil::getTarget(this)->getUpVec() * -::sSlopeFrontDist;
 
     if (Collision::checkStrikeLineToMap(pos, dir, 0, nullptr, nullptr) == 0) {
         return false;
@@ -280,7 +280,7 @@ bool CameraFollow::checkAscent(TVec3f* pVec) const {
 }
 
 void CameraFollow::arrangeLookDown() {
-    TVec3f mapPos;
+    Vec3f mapPos;
     if (checkDescent(&mapPos)) {
         mAngleXSpeed *= 0.99f;
         return;
@@ -296,11 +296,11 @@ void CameraFollow::arrangeLookDown() {
     }
 }
 
-bool CameraFollow::checkDescent(TVec3f* pVec) const {
-    TVec3f pos = CameraLocalUtil::getTarget(this)->getPosition();
+bool CameraFollow::checkDescent(Vec3f* pVec) const {
+    Vec3f pos = CameraLocalUtil::getTarget(this)->getPosition();
     pos += CameraLocalUtil::getTarget(this)->getFrontVec() * ::sSlopeFrontDist;
     pos += CameraLocalUtil::getTarget(this)->getUpVec() * ::sColCheckHeight;
-    TVec3f dir = CameraLocalUtil::getTarget(this)->getUpVec() * -::sSlopeFrontDist;
+    Vec3f dir = CameraLocalUtil::getTarget(this)->getUpVec() * -::sSlopeFrontDist;
 
     if (Collision::checkStrikeLineToMap(pos, dir, 0, nullptr, nullptr) == 0) {
         return false;
@@ -316,20 +316,20 @@ void CameraFollow::startRound(f32 angle, f32 rate) {
     mIsRounding = true;
 }
 
-void CameraFollow::checkValidityOfRound(const TVec3f& rWatchPos, const TVec3f& rPos) {
-    // const TPos3f& zoneMtx = mZoneMatrix;
+void CameraFollow::checkValidityOfRound(const Vec3f& rWatchPos, const Vec3f& rPos) {
+    // const Pos3f& zoneMtx = mZoneMatrix;
 
-    TPos3f mtx = mZoneMatrix;
+    Pos3f mtx = mZoneMatrix;
     mtx.invert(mtx);
-    TVec3f watchPos = rWatchPos;
+    Vec3f watchPos = rWatchPos;
     mtx.mult(watchPos, watchPos);
-    TVec3f pos = rPos;
+    Vec3f pos = rPos;
     mtx.mult(pos, pos);
 
     f32 length, angleX, angleY;
     MR::crossToPolar(watchPos, pos, &length, &angleX, &angleY);
 
-    TVec3f newPosLeft;
+    Vec3f newPosLeft;
     MR::polarToCross(watchPos, &newPosLeft, length, angleX, angleY - ::sRoundInterval);
     mZoneMatrix.mult(newPosLeft, newPosLeft);
     if (Collision::checkStrikeLineToMap(rPos, newPosLeft - rPos, 0, nullptr, nullptr) != 0) {
@@ -338,7 +338,7 @@ void CameraFollow::checkValidityOfRound(const TVec3f& rWatchPos, const TVec3f& r
         mIsRoundLeftValid = true;
     }
 
-    TVec3f newPosRight;
+    Vec3f newPosRight;
     MR::polarToCross(watchPos, &newPosRight, length, angleX, angleY + ::sRoundInterval);
     mZoneMatrix.mult(newPosRight, newPosRight);
     if (Collision::checkStrikeLineToMap(rPos, newPosRight - rPos, 0, nullptr, nullptr) != 0) {

@@ -2,7 +2,7 @@
 
 #include "Game/Player/MarioModule.hpp"
 #include "Game/Util/TriangleFilter.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class AreaObj;
 class CubeCameraArea;
@@ -74,43 +74,43 @@ public:
     void updateMorphResetTimer();
     void doExtraServices();
     bool isEnableCheckGround();
-    void setGroundNorm(const TVec3f&);
+    void setGroundNorm(const Vec3f&);
     void checkForceGrounding();
     void updateGroundInfo();
     void fixHeadFrontVecByGravity();
     bool isNonFixHeadVec() const;
-    void createMtxDir(MtxPtr, const TVec3f&, const TVec3f&, const TVec3f&);
+    void createMtxDir(MtxPtr, const Vec3f&, const Vec3f&, const Vec3f&);
     void createDirectionMtx(MtxPtr);
-    bool createCorrectionMtx(MtxPtr, TVec3f*);
+    bool createCorrectionMtx(MtxPtr, Vec3f*);
     void createAngleMtx(MtxPtr, bool);
-    void slopeTiltHead(TVec3f*);
+    void slopeTiltHead(Vec3f*);
     void fixFrontVecByGravity();
     void fixFrontVecFromUpSide();
     void fixSideVecFromFrontUp();
-    void setSideVec(const TVec3f&);
-    void setHeadVec(const TVec3f&);
-    void setFrontVec(const TVec3f&);
-    void setFrontVecKeepUp(const TVec3f&, f32);
-    void setFrontVecKeepUp(const TVec3f&, u32);
-    void setFrontVecKeepUp(const TVec3f&);
-    void setFrontVecKeepUpAngle(const TVec3f&, f32);
-    void setFrontVecKeepSide(const TVec3f&);
-    void setHeadAndFrontVecFromRotate(const TVec3f&);
-    void forceSetHeadVecKeepSide(const TVec3f&);
-    void setGravityVec(const TVec3f&);
+    void setSideVec(const Vec3f&);
+    void setHeadVec(const Vec3f&);
+    void setFrontVec(const Vec3f&);
+    void setFrontVecKeepUp(const Vec3f&, f32);
+    void setFrontVecKeepUp(const Vec3f&, u32);
+    void setFrontVecKeepUp(const Vec3f&);
+    void setFrontVecKeepUpAngle(const Vec3f&, f32);
+    void setFrontVecKeepSide(const Vec3f&);
+    void setHeadAndFrontVecFromRotate(const Vec3f&);
+    void forceSetHeadVecKeepSide(const Vec3f&);
+    void setGravityVec(const Vec3f&);
     void draw() const;
-    void addTrans(const TVec3f&, const char*);
-    void setTrans(const TVec3f&, const char*);
+    void addTrans(const Vec3f&, const char*);
+    void setTrans(const Vec3f&, const char*);
     bool isEnableRush() const;
     bool isForceStopRush() const;
     bool isInvincible() const;
     bool isCeiling() const;
     void inputStick();
     void updateSoundCode();
-    const TVec3f& getShadowNorm() const;
-    const TVec3f& getAirGravityVec() const;
-    const TVec3f getAirFrontVec() const;
-    const TVec3f* getGravityVec() const;
+    const Vec3f& getShadowNorm() const;
+    const Vec3f& getAirGravityVec() const;
+    const Vec3f getAirFrontVec() const;
+    const Vec3f* getGravityVec() const;
     void initAfterConst();
     void writeBackPhyisicalVector();
     void update();
@@ -133,24 +133,24 @@ public:
     f32 calcDistToCeil(bool);
     f32 calcDistToCeilOnPress();
     f32 calcDistToCeilHead();
-    void fixTransBetweenWall(const TVec3f&, const TVec3f&);
+    void fixTransBetweenWall(const Vec3f&, const Vec3f&);
     f32 calcDistWidth();
     void updateCameraPolygon();
     void setCameraPolygon(const Triangle*);
-    void checkAllWall(const TVec3f&, f32);
+    void checkAllWall(const Vec3f&, f32);
     void calcFrontFloor();
-    const TVec3f& getWallNorm() const;
-    const TVec3f& getSideWallNorm() const;
-    const TVec3f& getFrontWallNorm() const;
-    const TVec3f& getBackWallNorm() const;
-    const TVec3f& getWallPos() const;
+    const Vec3f& getWallNorm() const;
+    const Vec3f& getSideWallNorm() const;
+    const Vec3f& getFrontWallNorm() const;
+    const Vec3f& getBackWallNorm() const;
+    const Vec3f& getWallPos() const;
     const Triangle* getWallPolygon() const;
     const Triangle* getGroundPolygon() const;
     void updateFloorCode();
     void updateWallFloorCode();
     void saveLastSafetyTrans();
     void setNotSafetyTimer();
-    const TVec3f* getLastSafetyTrans(TVec3f*) const;
+    const Vec3f* getLastSafetyTrans(Vec3f*) const;
     bool checkCurrentFloorCodeSevere(u32) const;
     bool isCurrentFloorSink() const;
     bool isCurrentFloorSand() const;
@@ -165,16 +165,16 @@ public:
     void updateCubeCode();
 
     bool isDamaging() const;
-    bool damageLarge(const TVec3f&);
+    bool damageLarge(const Vec3f&);
     void decDamageAfterTimer();
     bool checkDamage();
     u16 getDamageAfterTimer() const;
     bool damageFloorCheck();
     bool damageWallCheck();
     bool damagePolygonCheck(const Triangle*);
-    bool flipLarge(const TVec3f&);
+    bool flipLarge(const Vec3f&);
     bool isEnableAddDamage() const;
-    bool damage(const TVec3f&);
+    bool damage(const Vec3f&);
     bool doAbyssDamage();
     void connectToFireRun();
     bool doFireDanceWithInitialDamage(u8);
@@ -190,20 +190,20 @@ public:
     bool requestCrush();
     bool tryCrush();
 
-    bool doFlipWeak(const TVec3f&);
-    bool faint(const TVec3f&);
+    bool doFlipWeak(const Vec3f&);
+    bool faint(const Vec3f&);
 
-    bool doFlipJump(const TVec3f&);
-    bool doFlipBackRoll(const TVec3f&);
-    bool doFlipLarge(const TVec3f&);
-    bool doFlipRot(const TVec3f&);
+    bool doFlipJump(const Vec3f&);
+    bool doFlipBackRoll(const Vec3f&);
+    bool doFlipLarge(const Vec3f&);
+    bool doFlipRot(const Vec3f&);
 
     bool doFrontStep();
 
     void beeMarioOnGround();
     bool beeMarioOnAir();
 
-    bool blown(const TVec3f&);
+    bool blown(const Vec3f&);
 
     bool taskOnEffectCheck(u32);
 
@@ -221,14 +221,14 @@ public:
     void startTornadoCentering(HitSensor*);
     bool taskOnTornadoCentering(u32);
     void trySpinJump(u8);
-    void tryForceJumpDelay(const TVec3f&);
-    void tryFreeJumpDelay(const TVec3f&);
-    void tryForceJump(const TVec3f&, bool);
-    void tryForceFreeJump(const TVec3f&);
-    void tryForcePowerJump(const TVec3f&, bool);
-    void tryFreeJump(const TVec3f&, bool);
-    void tryWallJump(const TVec3f&, bool);
-    void tryStickJump(const TVec3f&);
+    void tryForceJumpDelay(const Vec3f&);
+    void tryFreeJumpDelay(const Vec3f&);
+    void tryForceJump(const Vec3f&, bool);
+    void tryForceFreeJump(const Vec3f&);
+    void tryForcePowerJump(const Vec3f&, bool);
+    void tryFreeJump(const Vec3f&, bool);
+    void tryWallJump(const Vec3f&, bool);
+    void tryStickJump(const Vec3f&);
     void trySlipUpJump();
     void tryHangSlipUp();
     void tryDrop();
@@ -246,7 +246,7 @@ public:
     void doAirWalk();
     void stopJump();
     void cancelTornadoJump();
-    void setRocketBooster(const TVec3f&, f32, u16);
+    void setRocketBooster(const Vec3f&, f32, u16);
     void procRocketBooster();
     bool isSoftLandingFloor() const;
     void checkAndTryForceJump();
@@ -261,16 +261,16 @@ public:
     f32 decideInertia(f32);
     f32 decideInertiaOnIce(f32);
     f32 decideInertiaOnSlip(f32);
-    void calcShadowDir(const TVec3f&, TVec3f*);
-    bool retainMoveDir(f32, f32, TVec3f*);
-    void calcMoveDir(f32, f32, TVec3f*, bool);
+    void calcShadowDir(const Vec3f&, Vec3f*);
+    bool retainMoveDir(f32, f32, Vec3f*);
+    void calcMoveDir(f32, f32, Vec3f*, bool);
     bool checkLockOnHoming();
     void doLockOnHoming();
     void fixPositionInTower();
 
     void check2DMode();
-    void calcMoveDir2D(f32, f32, TVec3f*);
-    void calcShadowDir2D(const TVec3f&, TVec3f*);
+    void calcMoveDir2D(f32, f32, Vec3f*);
+    void calcShadowDir2D(const Vec3f&, Vec3f*);
     void stick2Dadjust(f32&, f32&);
     void set2Dmode(bool);
     void beforeJumping2D();
@@ -280,7 +280,7 @@ public:
     void set25Dmode(const AreaObj*);
     void update25Dmode();
     void updateAxisFromMode(u8);
-    void calcMoveDir25D(f32, f32, TVec3f*);
+    void calcMoveDir25D(f32, f32, Vec3f*);
 
     bool checkPressDamage();
     bool checkVerticalPress(bool);
@@ -313,7 +313,7 @@ public:
     bool isNoWalkFallOnDossun() const;
     bool isNotReflectGlassGround() const;
     bool isUseAnotherMovingPolygon() const;
-    bool isUseFooSpecialGravity(const TVec3f&, TVec3f*) const;
+    bool isUseFooSpecialGravity(const Vec3f&, Vec3f*) const;
     void updateOnimasu();
     bool isHeadPushEnableArea() const;
     bool isOnimasuBinderPressSkip() const;
@@ -321,7 +321,7 @@ public:
     void checkTornado();
     void resetTornado();
     void calcTornadoTilt();
-    void reflectWallOnSpinning(const TVec3f&, u16);
+    void reflectWallOnSpinning(const Vec3f&, u16);
     void forceStopTornado();
     void startRotationTask(u32);
     void doSpinWallEffect();
@@ -339,7 +339,7 @@ public:
 
     void startTalk(const LiveActor*);
     void endTalk();
-    void setLastNonFixMoveVec(const TVec3f&);
+    void setLastNonFixMoveVec(const Vec3f&);
 
     bool isWalling() const;
     void checkWallStick();
@@ -350,7 +350,7 @@ public:
     bool fixWallingTop();
     bool checkWallFloorCode(u16) const;
     bool checkWallCode(const char*, bool) const;
-    bool checkWallCodeNorm(u16, TVec3f*, bool) const;
+    bool checkWallCodeNorm(u16, Vec3f*, bool) const;
     void setWallCancel();
     void keepDistFrontWall();
     bool isEnableStickWall();
@@ -359,14 +359,14 @@ public:
     void tryWallPunch();
 
     bool isHanging() const;
-    bool fixHangDir(const TVec3f&, TVec3f*);
+    bool fixHangDir(const Vec3f&, Vec3f*);
     bool isEnableBackHang();
     bool isEnableSideHang();
     void checkHang();
     bool isEnableHang();
 
     bool isSwimming() const;
-    bool forceStartSwimAndShoot(const TVec3f&);
+    bool forceStartSwimAndShoot(const Vec3f&);
     bool forceExitSwim();
     bool checkStartSwim();
     void startSwim();
@@ -406,27 +406,27 @@ public:
     void startSlider();
 
     void checkStep();
-    void startStep(const TVec3f&);
+    void startStep(const Vec3f&);
 
     void checkBump();
-    void startBump(const TVec3f&);
+    void startBump(const Vec3f&);
 
     void checkEnforceMove();
     void checkEnforceMoveInner();
     void recordRelativePosition();
     void invalidateRelativePosition();
-    TPos3f* getMoveBaseMtx() const;
+    Pos3f* getMoveBaseMtx() const;
     u32 moveRelativePosition(u32);
     u32 moveRelativePositionWall();
     void recordLastGround();
-    void getLastGroundPos(TVec3f*) const;
-    const TVec3f* getLastGroundEdgeNrm(u32) const;
-    u32 getLastGroundEdgeIndex(const TVec3f&, const TVec3f&) const;
+    void getLastGroundPos(Vec3f*) const;
+    const Vec3f* getLastGroundEdgeNrm(u32) const;
+    u32 getLastGroundEdgeIndex(const Vec3f&, const Vec3f&) const;
     void pushedByReaction();
-    void addReaction(const TVec3f&);
+    void addReaction(const Vec3f&);
     void tryPushToVelocity();
-    void push(const TVec3f&);
-    void push2(const TVec3f&);
+    void push(const Vec3f&);
+    void push2(const Vec3f&);
     void powerAreaMove();
     void powerRailMove();
     void recordJumpEnforceMove();
@@ -454,26 +454,26 @@ public:
     void startJumpDropSlide(const HitSensor*);
 
     void startTeresaMode();
-    bool getHitWallNorm(TVec3f*);
+    bool getHitWallNorm(Vec3f*);
     void resetTeresaMode();
-    void doTeresaReflection(const TVec3f&, bool);
+    void doTeresaReflection(const Vec3f&, bool);
     void startTeresaDisappear();
 
     void stopPunch();
     void startMagic();
 
     bool doObjWarp(LiveActor*);
-    bool doPointWarp(const TVec3f&, const TVec3f&, s32);
+    bool doPointWarp(const Vec3f&, const Vec3f&, s32);
     bool isVisibleRecoveryWarpBubble() const;
     void doCubeWarp();
-    bool doPointWarpRecovery(const TVec3f&, const TVec3f&);
+    bool doPointWarpRecovery(const Vec3f&, const Vec3f&);
 
     bool isDisableStayHere() const;
     bool isDisableFpViewMode() const;
     void tryFpViewMode();
 
     void stick2DadjustGround(f32&, f32&);
-    void calcDir2D(f32, f32, TVec3f*);
+    void calcDir2D(f32, f32, Vec3f*);
 
     // instruction comments to make it easier to identify each bit
     struct MovementStates {
@@ -592,19 +592,19 @@ public:
         return mPrevDrawStates;
     }
 
-    const TVec3f& getUpVec() const {
+    const Vec3f& getUpVec() const {
         return _1FC;
     }
 
-    const TVec3f& getFrontVec() const {
+    const Vec3f& getFrontVec() const {
         return mFrontVec;
     }
 
-    const TVec3f& getJumpVec() const {
+    const Vec3f& getJumpVec() const {
         return mJumpVec;
     }
 
-    inline void setJumpVec(const TVec3f& rVec) {
+    inline void setJumpVec(const Vec3f& rVec) {
         mJumpVec = rVec;
     }
 
@@ -663,75 +663,75 @@ public:
 
     f32 _38;
     f32 _3C;
-    TVec3f _40;
-    TVec3f _4C;
-    TVec3f _58;
-    TMtx34f _64;
-    TMtx34f _94;
-    TMtx34f _C4;
-    TMtx34f _F4;
+    Vec3f _40;
+    Vec3f _4C;
+    Vec3f _58;
+    Mtx34f _64;
+    Mtx34f _94;
+    Mtx34f _C4;
+    Mtx34f _F4;
     f32 _124;
     f32 _128;
     u32 _12C;
-    TVec3f mPosition;
-    TVec3f _13C;
-    TVec3f _148;
-    TVec3f _154;
-    TVec3f mVelocity;
-    TVec3f _16C;
-    TVec3f mVelocityAfter;
-    TVec3f _184;
-    TVec3f _190;
-    TVec3f _19C;
-    TVec3f _1A8;
-    TVec3f _1B4;
-    TVec3f mStickPos;
-    TVec3f mWorldPadDir;
-    TVec3f mAirGravityVec;
-    TVec3f _1E4;
-    TVec3f mHeadVec;
-    TVec3f _1FC;
-    TVec3f mFrontVec;
-    TVec3f _214;
-    TVec3f _220;
-    TVec3f _22C;
-    TVec3f _238;
-    TVec3f _244;
-    TVec3f _250;
-    TVec3f _25C;
-    TVec3f _268;
+    Vec3f mPosition;
+    Vec3f _13C;
+    Vec3f _148;
+    Vec3f _154;
+    Vec3f mVelocity;
+    Vec3f _16C;
+    Vec3f mVelocityAfter;
+    Vec3f _184;
+    Vec3f _190;
+    Vec3f _19C;
+    Vec3f _1A8;
+    Vec3f _1B4;
+    Vec3f mStickPos;
+    Vec3f mWorldPadDir;
+    Vec3f mAirGravityVec;
+    Vec3f _1E4;
+    Vec3f mHeadVec;
+    Vec3f _1FC;
+    Vec3f mFrontVec;
+    Vec3f _214;
+    Vec3f _220;
+    Vec3f _22C;
+    Vec3f _238;
+    Vec3f _244;
+    Vec3f _250;
+    Vec3f _25C;
+    Vec3f _268;
     u8 _274;
     f32 mWalkSpeed;
     f32 mPrevAnimFrame;
     f32 _280;
-    TVec3f _284;
-    TVec3f _290;
-    TVec3f _29C;
-    TVec3f _2A8;
+    Vec3f _284;
+    Vec3f _290;
+    Vec3f _29C;
+    Vec3f _2A8;
     f32 _2B4;
-    TVec3f _2B8;
-    TVec3f _2C4;
+    Vec3f _2B8;
+    Vec3f _2C4;
     f32 _2D0;
-    TVec3f mJumpVec;
-    TVec3f _2E0;
-    TVec3f _2EC;
-    TVec3f _2F8;
-    TVec3f _304;
-    TVec3f mSideVec;
-    TVec3f mShadowPos;
-    TVec3f _328;
-    TVec3f _334;
+    Vec3f mJumpVec;
+    Vec3f _2E0;
+    Vec3f _2EC;
+    Vec3f _2F8;
+    Vec3f _304;
+    Vec3f mSideVec;
+    Vec3f mShadowPos;
+    Vec3f _328;
+    Vec3f _334;
     f32 _340;
-    TVec3f _344;  // left/right?
-    TVec3f _350;
-    TVec3f _35C;
-    TVec3f _368;
-    TVec3f _374;
-    TVec3f _380;
-    TVec3f _38C;
-    TVec3f _398;
-    TVec3f _3A4;
-    TVec3f _3B0;
+    Vec3f _344;  // left/right?
+    Vec3f _350;
+    Vec3f _35C;
+    Vec3f _368;
+    Vec3f _374;
+    Vec3f _380;
+    Vec3f _38C;
+    Vec3f _398;
+    Vec3f _3A4;
+    Vec3f _3B0;
     u16 _3BC;
     u16 _3BE;
     u16 _3C0;
@@ -745,8 +745,8 @@ public:
     u16 _3D0;
     u16 _3D2;
     u16 _3D4;
-    TVec3f _3D8;
-    TVec3f _3E4;
+    Vec3f _3D8;
+    Vec3f _3E4;
     f32 _3F0;
     f32 _3F4;
     u16 _3F8;
@@ -781,8 +781,8 @@ public:
     u16 _436;
     u16 _438;
     u16 _43A;
-    TVec3f _43C;  // front?
-    TVec3f _448;
+    Vec3f _43C;  // front?
+    Vec3f _448;
     f32 _454;
     TriangleFilterDelegator< Mario >* _458;
     Triangle* _45C;
@@ -797,11 +797,11 @@ public:
     Triangle* _480;
     Triangle* _484;
     f32 mVerticalSpeed;
-    TVec3f mGroundPos;
-    TVec3f _498;
-    TVec3f _4A4;
-    TVec3f _4B0;
-    TVec3f _4BC;
+    Vec3f mGroundPos;
+    Vec3f _498;
+    Vec3f _4A4;
+    Vec3f _4B0;
+    Vec3f _4BC;
     Triangle* _4C8;
     Triangle* mFrontWallTriangle;
     Triangle* mBackWallTriangle;
@@ -810,15 +810,15 @@ public:
     Triangle* _4DC;
     f32 _4E0;
     f32 _4E4;
-    TVec3f _4E8;
-    TVec3f _4F4;
+    Vec3f _4E8;
+    Vec3f _4F4;
 
     // FAKE
-    TVec3f _500;
+    Vec3f _500;
     // NOT FAKE
 
-    TVec3f _50C;
-    TVec3f _518;
+    Vec3f _50C;
+    Vec3f _518;
     f32 _524;
     f32 _528;
     f32 _52C;
@@ -829,7 +829,7 @@ public:
     f32 mYAngleOffset;
     u16 _544;
     f32 _548;
-    TVec3f _54C;
+    Vec3f _54C;
     u32 _558;
 
     /// FAKE
@@ -845,7 +845,7 @@ public:
     u32 _578;
     Triangle* _57C[0x20];
     const HitSensor* _5FC;
-    TVec3f _600;
+    Vec3f _600;
     u8 _60C;
     bool _60D;
     u8 _60E;
@@ -857,32 +857,32 @@ public:
     f32 _61C;
     f32 _620;
     bool _624;
-    TVec3f _628;
+    Vec3f _628;
     f32 _634;
 
     u8 _638;
-    TVec3f mSide2D;
-    TVec3f mUp2D;
-    TVec3f mNormal2D;
-    TVec3f _660;
+    Vec3f mSide2D;
+    Vec3f mUp2D;
+    Vec3f mNormal2D;
+    Vec3f _660;
     bool _66C;
-    TVec3f _670;
-    TVec3f _67C;
+    Vec3f _670;
+    Vec3f _67C;
 
-    TVec3f _688;
-    TVec3f _694;
-    TVec3f _6A0;
+    Vec3f _688;
+    Vec3f _694;
+    Vec3f _6A0;
     u8 _6AC;
     u8 _6AD;
-    TVec3f _6B0;
-    TVec3f _6BC;
-    TVec2f _6C8;
-    TVec3f _6D0;
-    TVec3f _6DC;
-    TVec3f _6E8;
-    TVec3f _6F4;
-    TVec3f _700;
-    TVec3f _70C;
+    Vec3f _6B0;
+    Vec3f _6BC;
+    Vec2f _6C8;
+    Vec3f _6D0;
+    Vec3f _6DC;
+    Vec3f _6E8;
+    Vec3f _6F4;
+    Vec3f _700;
+    Vec3f _70C;
     f32 _718;
     u8 mTargetWalkSpeedIndex;
     u8 _71D;
@@ -896,13 +896,13 @@ public:
     u8 mIceAnimFoot;
     u8 mSinkTimer;
     f32 _738;
-    TVec3f _73C;
+    Vec3f _73C;
     u8 mPoisonTimer;
     f32 _74C;
     u32 _750;
     u32 _754;
     MarioWall* mWall;
-    TVec3f _75C;
+    Vec3f _75C;
     MarioStick* mStick;
     u16 _76C;
     f32 _770;
@@ -913,7 +913,7 @@ public:
     MarioBury* mBury;
     MarioWait* mWait;
     MarioClimb* mClimb;
-    TVec3f _790;
+    Vec3f _790;
     MarioHang* mHang;
     MarioRecovery* mRecovery;
     MarioWarp* mWarp;
@@ -924,14 +924,14 @@ public:
     MarioTalk* mTalk;
     MarioTeresa* mTeresa;
     MarioDamage* mDamage;
-    TVec3f _7C4;
+    Vec3f _7C4;
     u16 _7D0;
-    TVec3f _7D4;
+    Vec3f _7D4;
     Triangle* _7E0;
-    TMtx34f _7E4;
-    TVec3f _814;
+    Mtx34f _7E4;
+    Vec3f _814;
     Triangle* _820;
-    TMtx34f _824;
+    Mtx34f _824;
     MarioFlow* mFlow;
     MarioFireDamage* mFireDamage;
     MarioFireDance* mFireDance;
@@ -952,19 +952,19 @@ public:
     bool _898;
     MarioFpView* mFpView;
     MarioMove* mMove;
-    TVec3f _8A4;
+    Vec3f _8A4;
     union {
         struct {
-            TVec3f _8B0;
-            TVec3f _8BC;
+            Vec3f _8B0;
+            Vec3f _8BC;
         };
-        TVec3f mRelativeWallPos[2];
+        Vec3f mRelativeWallPos[2];
     };
     Triangle* _8C8;
     Triangle* _8CC[2];
     HitSensor* _8D4;
     HitSensor* _8D8;
-    TVec3f _8DC;
+    Vec3f _8DC;
     Triangle* _8E8;
     u8 _8EC;
 
@@ -974,17 +974,17 @@ public:
 
     f32 _8F4;
 
-    TVec3f _8F8;
-    TVec3f _904;
+    Vec3f _8F8;
+    Vec3f _904;
     // NOT FAKE
 
-    TVec3f _910;
-    TVec3f _91C;
-    TVec3f _928;
+    Vec3f _910;
+    Vec3f _91C;
+    Vec3f _928;
     f32 _934;
-    TVec3f _938;
-    TVec3f _944;
-    TVec3f _950;
+    Vec3f _938;
+    Vec3f _944;
+    Vec3f _950;
     FloorCode* _95C;
     u16 _960;
     u16 _962;
@@ -1007,11 +1007,11 @@ public:
     u16 _A34;
     uintptr_t _A38;
     u16 _A3C;
-    TVec3f _A40;
-    TVec3f _A4C;
-    TVec3f _A58;
+    Vec3f _A40;
+    Vec3f _A4C;
+    Vec3f _A58;
     f32 _A64;
     HitSensor* _A68;
     u8 _A6C[0x20];  // animations
-    TVec3f _A8C[9];
+    Vec3f _A8C[9];
 };
