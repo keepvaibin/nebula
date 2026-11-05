@@ -31,25 +31,8 @@ void J3DShape::initialize() {
     mCurrentViewNo = &j3dDefaultViewNo;
     mHasNBT = false;
     mHasPNMTXIdx = false;
-    mNormalAsTexture = false;
     mNebulaRegistered = false;
     mNebulaWhole = false;
-}
-
-void J3DShape::addTexMtxIndex(u32 coord, u32 valueBase) {
-    for (u16 g = 0; g < mMtxGroupNum; g++) {
-        J3DShapeMesh* pMesh = mShapeDraw[g]->getMesh();
-        if ((pMesh->mAttributes & NEBULA_SHAPE_POSITION_MATRIX) == 0) {
-            return;
-        }
-        pMesh->mAttributes |= static_cast< u32 >(NEBULA_SHAPE_TEXTURE_MATRIX0) << coord;
-        NebulaShapeCorner* pCorners = pMesh->corners();
-        for (u32 c = 0; c < pMesh->mCornerCount; c++) {
-            pCorners[c].texture_matrix[coord] = valueBase == cTexMtxBasePlaceZero ? 0
-                                                : valueBase >= 30                ? NEBULA_CORNER_NORMAL_MATRIX
-                                                                                 : NEBULA_CORNER_POSITION_MATRIX;
-        }
-    }
 }
 
 // The normal matrices this shape reads, scaled for its bump map, into `pBump`.
@@ -84,15 +67,10 @@ void J3DShape::initVtxAttr() {
 
 void J3DShape::loadPreDrawSetting() const {
     prepareGeometry();
-    mCurrentMtx.load();
 }
 
 void J3DShape::drawGroups(void (*pCallback)(J3DShape*)) const {
     prepareGeometry();
-    if (sEnvelopeFlag != 0 && !mHasPNMTXIdx)
-        mCurrentMtx.load();
-    sEnvelopeFlag = mHasPNMTXIdx;
-    loadPacketMatrices();
     J3DShape* pSelf = const_cast< J3DShape* >(this);
     const u32 palette = j3dSys.getModel()->drawPalette(mDrawMtx[*mCurrentViewNo], mNrmMtx[*mCurrentViewNo]);
     if (pCallback != nullptr) {
@@ -105,11 +83,7 @@ void J3DShape::drawGroups(void (*pCallback)(J3DShape*)) const {
     }
     for (u16 n = mMtxGroupNum, i = 0; i < n; i++) {
         if (mShapeDraw[i] != nullptr) {
-            const bool single = mShapeMtx[i] != nullptr && !mShapeMtx[i]->isMulti();
-            J3DNativeShape::setPalette(palette, single ? mShapeMtx[i]->getUseMtxIndex(0) : 0);
-            if (single && mNormalAsTexture) {
-                J3DNativeShape::setNormal33Texture(0, mNrmMtx[*mCurrentViewNo][mShapeMtx[i]->getUseMtxIndex(0)]);
-            }
+            J3DNativeShape::setPalette(palette, mShapeMtx[i] != nullptr && !mShapeMtx[i]->isMulti() ? mShapeMtx[i]->getUseMtxIndex(0) : 0);
             mShapeDraw[i]->draw();
         }
     }
@@ -135,12 +109,9 @@ void J3DShape::simpleDraw() const {
 
 void J3DShape::simpleDrawCache() const {
     prepareGeometry();
-    if (sEnvelopeFlag && !mHasPNMTXIdx)
-        mCurrentMtx.load();
 
     for (u16 n = mMtxGroupNum, i = 0; i < n; i++)
         if (mShapeDraw[i] != nullptr)
             mShapeDraw[i]->draw();
 }
 
-bool J3DShape::sEnvelopeFlag;

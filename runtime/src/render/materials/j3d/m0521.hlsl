@@ -8,6 +8,7 @@ struct MaterialConstants {
     float4 fog_color;
     float4 ovr;
     float4 ovr_coord;
+    float4 coord[2];
 };
 #include "j3d_material.hlsli"
 
@@ -50,21 +51,7 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
 #endif
     {  // coordinate 0: kind 0, projective 0, row 5
         const float4 c = float4(v.uv[0], 1.0, 1.0);
-        float3 res;
-        if (((vs_header.w >> 0u) & 1u) != 0u) {
-            const uint tm = native_tex_matrix(v, 0u);
-            res = float3(dot(c, native_matrix_row(tm + 0u)), dot(c, native_matrix_row(tm + 1u)), 1.0);
-        } else {
-            res = float3(dot(c, native_tex_row(0)), dot(c, native_tex_row(1)), 1.0);
-        }
-        const uint pt = native_post(0u);
-        const bool posted = (pt & 0x3Fu) != 61u;
-        if (posted) {
-            if ((pt & 0x100u) != 0u) res = dot(res, res) > 0.0 ? normalize(res) : res;
-            res = float3(dot(float4(res, 1.0), native_coord_post_row(0)), dot(float4(res, 1.0), native_coord_post_row(1)), dot(float4(res, 1.0), native_coord_post_row(2)));
-        }
-        if (posted && res.z == 0.0) res.xy = clamp(res.xy * 0.5, -1.0, 1.0);
-        o.uv[0] = float4(res, posted ? 1.0 : 0.0);
+        o.uv[0] = float4(dot(c, material.coord[0]), dot(c, material.coord[1]), 1.0, 0.0);
     }
     j3d_vertex_override(v, o);
 }

@@ -77,7 +77,7 @@ namespace MR {
         Mtx identity;
         NebulaMtxIdentity(identity);
         J3DNativeShape::setPosition(0, identity);
-        J3DNativeShape::setCurrentIdentity();
+        J3DNativeShape::setCurrentPosition(0);
     }
 
     // runtime/src/render/materials/vertex_color.hlsl: the colour over the screen, blended by its alpha.
@@ -186,7 +186,7 @@ namespace MR {
         NativeShader::setColor(material, 0, 0, 0, 0, 0);
         NativeShader::setStencil(material, NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ZERO);
         NativeShader::send(material);
-        J3DNativeShape::setCurrentIdentity();
+        J3DNativeShape::setCurrentPosition(0);
 
         J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 4, 0);
         J3DNativeDraw::position(0.0f, 0.0f, 0.0f);
@@ -209,7 +209,7 @@ namespace MR {
                            NEBULA_CULL_NONE);
         NativeShader::setColor(material, 0, rColor.r, rColor.g, rColor.b, rColor.a);
         NativeShader::send(material);
-        J3DNativeShape::setCurrentIdentity();
+        J3DNativeShape::setCurrentPosition(0);
     }
 
     void fillScreenArea(const TVec2s& rMin, const TVec2s& rMax) {
@@ -272,7 +272,7 @@ namespace MR {
         NativeShader::setColor(material, 0, 0, 0, 0, 0x80);
         NativeShader::setStencil(material, NEBULA_STENCIL_IF_SET, NEBULA_STENCIL_ZERO);
         NativeShader::send(material);
-        J3DNativeShape::setCurrentIdentity();
+        J3DNativeShape::setCurrentPosition(0);
 
         const f32 width = MR::getScreenWidth();
         const f32 height = MR::getScreenHeight();
@@ -302,12 +302,6 @@ namespace MR {
 
     void setMarioShadowVec(const TVec3f& rVec) {
         mShadowVec = rVec;
-    }
-
-    void loadTexProjectionMtx(u32 id) {
-        TPos3f matrix;
-        calcTexProjectionMtx(&matrix);
-        J3DNativeShape::setTexture((id - J3D_TEXMTX0) / 3, matrix, 3);
     }
 
     void calcTexProjectionMtx(TPos3f* pMtx) {

@@ -69,21 +69,20 @@ void OceanRingPipeInside::loadMaterial() const {
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
     J3DNativeShape::setNormal(0, MR::getCameraViewMtx());
 
-    TMtx34f mtx;
-    mtx.identity();
-    mtx.mMtx[0][2] = mTexU0;
-    mtx.mMtx[1][2] = mTexV0;
-    J3DNativeShape::setTexture(0, mtx.toMtxPtr(), 2);
-    mtx.mMtx[0][2] = mTexU1;
-    mtx.mMtx[1][2] = mTexV1;
-    J3DNativeShape::setTexture(1, mtx.toMtxPtr(), 2);
-
     // runtime/src/render/materials/ocean_ring_pipe_inside.hlsl: the texture warped by itself (sIndirectScale texels a
     // step), sStageColor0 toward sStageColor1 by its colour, its alpha squared, both times four; blended by alpha, depth tested
     // and not written, back faces culled, no fog.
     NebulaNativeMaterial material;
     NativeShader::init(material, NEBULA_SHADER_OCEAN_RING_PIPE_INSIDE, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL,
                        false, NEBULA_CULL_BACK);
+    TMtx34f mtx;
+    mtx.identity();
+    mtx.mMtx[0][2] = mTexU0;
+    mtx.mMtx[1][2] = mTexV0;
+    NativeShader::setMatrix(material, 3, 0, mtx.toMtxPtr());
+    mtx.mMtx[0][2] = mTexU1;
+    mtx.mMtx[1][2] = mTexV1;
+    NativeShader::setMatrix(material, 3, 1, mtx.toMtxPtr());
     NativeShader::setColor(material, 0, ::sStageColor0.r, ::sStageColor0.g, ::sStageColor0.b, ::sStageColor0.a);
     NativeShader::setColor(material, 4, ::sStageColor1.r, ::sStageColor1.g, ::sStageColor1.b, ::sStageColor1.a);
     material.constants[8] = ::sIndirectScale;
@@ -91,9 +90,7 @@ void OceanRingPipeInside::loadMaterial() const {
     material.constants[11] = static_cast< f32 >(mWaterPipeInsideTex->getHeight());
     NativeShader::setTexture(material, 0, mWaterPipeInsideTex);
     NativeShader::send(material);
-    static const u8 kPlaces[8] = {0, 1, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture,
-                                  J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture};
-    J3DNativeShape::setCurrent(0, kPlaces);
+    J3DNativeShape::setCurrentPosition(0);
 }
 
 void OceanRingPipeInside::sendGD() {

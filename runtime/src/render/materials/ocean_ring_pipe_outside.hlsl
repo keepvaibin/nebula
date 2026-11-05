@@ -7,6 +7,7 @@ struct MaterialConstants {
     float4 color;    // rgb the base, a the rim's strength
     float4 warp;     // x: highlight texels per indirect step; zw: the highlight texture's size
     float4 channel;  // x: the alpha channel's material alpha, y: its ambient alpha (as the drawing state held them)
+    float4 coord[6];  // texture matrices, three rows each
 };
 
 #include "native_material.hlsli"
@@ -27,8 +28,8 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
                      material.channel.x * saturate((material.channel.y * 255.0 + lit) / 255.0));
     const float4 c0 = float4(v.uv[0], 1.0, 1.0);
     const float4 n = float4(v.nrm, 1.0);
-    o.uv[0] = float4(dot(c0, native_tex_row(0)), dot(c0, native_tex_row(1)),
-                     dot(n, native_tex_row(3)), dot(n, native_tex_row(4)));
+    o.uv[0] = float4(dot(c0, material.coord[0]), dot(c0, material.coord[1]),
+                     dot(n, material.coord[3]), dot(n, material.coord[4]));
 }
 
 float4 material_color(NativeVaryings i) {

@@ -381,7 +381,7 @@ void SpiderThread::initDraw() const {
     NativeShader::setTexture(material, 0, mThreadTexture);
     NativeShader::setTexture(material, 1, mIndirectTexture);
     NativeShader::send(material);
-    J3DNativeShape::setCurrentIdentity();
+    J3DNativeShape::setCurrentPosition(0);
 }
 
 namespace {

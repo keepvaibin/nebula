@@ -27,7 +27,7 @@ namespace {
         NativeShader::setColor(material, 4, 0x32, 0x32, 0x96, 0xFF);
         NativeShader::setTexture(material, 0, pTexture);
         NativeShader::send(material);
-        J3DNativeShape::setCurrentIdentity();
+        J3DNativeShape::setCurrentPosition(0);
     }
 }  // namespace
 namespace {

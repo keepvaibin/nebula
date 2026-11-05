@@ -133,9 +133,6 @@ void FurCtrl::drawFur() {
         mDrawer->mMixFog--;
     }
 
-    J3DShape* pShape = pModelData->getShapeNodePointer(mShapeIndex);
-    pShape->mCurrentMtx.setCurrentTexMtx(J3D_TEXMTX0, J3D_TEXMTX1, J3D_TEXMTX2, J3D_IDENTITY, J3D_IDENTITY, J3D_IDENTITY,
-                                         J3D_IDENTITY, J3D_IDENTITY);
     J3DShapePacket* pPacket;
 
     for (s32 i = 0; i < mDrawer->mNumLayers; i++) {

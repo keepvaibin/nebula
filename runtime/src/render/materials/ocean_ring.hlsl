@@ -7,6 +7,7 @@ struct MaterialConstants {
     float4 highlight;  // rgb added where the red equals a (the level)
     float4 tint;       // the screen's tint (rgb)
     float4 warp;       // x: screen texels per indirect step; y: 1 warped, 0 not; zw: the screen texture's size
+    float4 coord[12];  // texture matrices, three rows each
 };
 
 #include "native_material.hlsli"
@@ -17,10 +18,10 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
     const float4 c1 = float4(v.uv[1], 1.0, 1.0);
     const float4 c2 = float4(v.uv[2], 1.0, 1.0);
     const float4 p = float4(v.pos, 1.0);
-    o.uv[0] = float4(dot(c0, native_tex_row(0)), dot(c0, native_tex_row(1)),
-                     dot(c1, native_tex_row(3)), dot(c1, native_tex_row(4)));
-    o.uv[1] = float4(dot(c2, native_tex_row(6)), dot(c2, native_tex_row(7)), 0.0, 0.0);
-    o.uv[2] = float4(dot(p, native_tex_row(9)), dot(p, native_tex_row(10)), dot(p, native_tex_row(11)), 1.0);
+    o.uv[0] = float4(dot(c0, material.coord[0]), dot(c0, material.coord[1]),
+                     dot(c1, material.coord[3]), dot(c1, material.coord[4]));
+    o.uv[1] = float4(dot(c2, material.coord[6]), dot(c2, material.coord[7]), 0.0, 0.0);
+    o.uv[2] = float4(dot(p, material.coord[9]), dot(p, material.coord[10]), dot(p, material.coord[11]), 1.0);
 }
 
 float4 material_color(NativeVaryings i) {

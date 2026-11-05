@@ -1197,6 +1197,16 @@ void RenderCore::write_scene_vs_constants(const VertexConstants& cpu, VertexCons
         const std::uint8_t lights = interp_draw_facts(draw_state_).second;
         scene.light_masks.push_back(lights);
         scene.category.push_back(record.category);
+        // Its material's texture matrices, once per material: a replay moves those that change.
+        if (native_constants_dirty_) current_ps_record_ = -1;
+        if (current_ps_record_ < 0 && native_material_ != nullptr && native_material_->coord_count != 0u) {
+            current_ps_record_ = static_cast<std::int32_t>(scene.materials.size());
+            scene.materials.push_back({static_cast<std::uint32_t>(scene.material_coords.size()),
+                                       native_material_->coord_first, native_material_->coord_count});
+            const float* coords = native_material_->constants + 4u * native_material_->coord_first;
+            scene.material_coords.insert(scene.material_coords.end(), coords, coords + 12u * native_material_->coord_count);
+        }
+        scene.material.push_back(current_ps_record_);
     }
     if (!motion_scene_) {
         return;
@@ -3009,10 +3019,50 @@ bool RenderCore::prepare_interp_sequence(const InterpScene& scene, const InterpS
             model_rows += motion ? 3u * matrices : 0u;
         }
     }
+    // The materials whose texture matrices moved since the record's match: a block each.
+    interp_ps_slot_.assign(count, -1);
+    interp_material_slot_.assign(scene.materials.size(), -1);
+    interp_material_pairs_.clear();
+    if (before_valid) {
+        for (std::size_t r = 0; r < count; ++r) {
+            const std::int32_t m = scene.prev_index[r];
+            const std::int32_t b = scene.material[r];
+            if (m < 0 || b < 0) continue;
+            const std::int32_t a = before_scene.material[static_cast<std::size_t>(m)];
+            if (a < 0) continue;
+            const InterpScene::Material& now = scene.materials[static_cast<std::size_t>(b)];
+            const InterpScene::Material& was = before_scene.materials[static_cast<std::size_t>(a)];
+            if (now.count != was.count || now.first != was.first ||
+                std::memcmp(scene.material_coords.data() + now.first_word, before_scene.material_coords.data() + was.first_word,
+                            12u * now.count * sizeof(float)) == 0) {
+                continue;
+            }
+            std::int32_t& slot = interp_material_slot_[static_cast<std::size_t>(b)];
+            if (slot < 0) {
+                slot = static_cast<std::int32_t>(interp_material_pairs_.size());
+                interp_material_pairs_.push_back({a, b});
+            }
+            interp_ps_slot_[r] = slot;
+        }
+    }
     interp_layout_ = {static_cast<std::uint32_t>(interp_moving_.size()),
                       static_cast<std::uint32_t>(interp_palette_source_.size()),
-                      motion ? static_cast<std::uint32_t>(interp_palette_source_.size()) : 0u, model_rows};
+                      motion ? static_cast<std::uint32_t>(interp_palette_source_.size()) : 0u, model_rows,
+                      static_cast<std::uint32_t>(interp_material_pairs_.size())};
     const interp_gpu::Layout& layout = interp_layout_;
+    for (std::size_t s = 0; s < interp_material_pairs_.size(); ++s) {
+        const InterpScene::Material& was = before_scene.materials[static_cast<std::size_t>(interp_material_pairs_[s][0])];
+        const InterpScene::Material& now = scene.materials[static_cast<std::size_t>(interp_material_pairs_[s][1])];
+        const float* a = before_scene.material_coords.data() + was.first_word;
+        const float* b = scene.material_coords.data() + now.first_word;
+        const std::uint32_t base = layout.material_offset(static_cast<std::uint32_t>(s)) / 4u + 4u * now.first;
+        for (std::uint32_t k = 0; k < now.count; ++k, a += 12, b += 12) {
+            // A matrix whose rotation or scale changes maps space; a scroll wraps.
+            bool spatial = false;
+            for (unsigned i = 0; i < 12u; ++i) spatial = spatial || ((i & 3u) != 3u && a[i] != b[i]);
+            interp_program_.tex_matrix(base + 12u * k, a, b, spatial);
+        }
+    }
     for (std::size_t s = 0; s < interp_moving_.size(); ++s) {
         const InterpRecordMotion& moving = interp_moving_[s];
         interp_vs_slot_[moving.record] = static_cast<std::int32_t>(s);
@@ -3120,6 +3170,7 @@ bool RenderCore::prepare_interp_sequence(const InterpScene& scene, const InterpS
     sequence.layout = layout;
     sequence.record_vs_slot = interp_vs_slot_;
     sequence.record_palette_slot = interp_record_palette_slot_;
+    sequence.record_ps_slot = interp_ps_slot_;
     sequence.palette_source = interp_palette_source_;
     sequence.model_copies = interp_model_copies_;
     sequence.program = &interp_program_;
@@ -4549,7 +4600,10 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         if (native_constants_dirty_ || frame_bindings_dirty_ || current_ps_constants_ == 0u) {
             UploadRing::Allocation alloc =
                 renderer_.constant_ring().allocate(sizeof(native_material_->constants), 256u);
-            std::memcpy(alloc.cpu, native_material_->constants, sizeof(native_material_->constants));
+            const std::uint32_t coord_end = native_material_->coord_first + 3u * native_material_->coord_count;
+            const std::uint32_t rows = native_material_->constant_rows != 0u ? native_material_->constant_rows
+                                                                             : std::max<std::uint32_t>(32u, coord_end);
+            std::memcpy(alloc.cpu, native_material_->constants, rows * 4u * sizeof(float));
             current_ps_constants_ = alloc.gpu;
             current_ps_record_ = -1;
             native_constants_dirty_ = false;
@@ -4951,15 +5005,6 @@ void RenderCore::apply_native_material(const material::Native* native) {
         out.edge_lod = t.edge_lod != 0u;
         out.bias_clamp = false;
         native_texture_mask_ = static_cast<std::uint8_t>(native_texture_mask_ | (1u << map));
-    }
-    // Its texgens' post-transform matrices, as a material's texgens set them (a draw's own texgens replace them:
-    // apply_record_matrices).
-    for (unsigned i = 0; i < 8u; ++i) {
-        if (m.texgen_post[i] == material::kNativeKept) {
-            continue;  // the draw's texgens as they are (an instance's differed list that loads none)
-        }
-        draw_state_.post_texgen[i] = PostTexGen{static_cast<std::uint8_t>(m.texgen_post[i] & 0x3Fu),
-                                                  (m.texgen_post[i] & 0x80u) != 0u};
     }
     draw_state_.dirty |= kStateDirtyVertexConstants;
     // The material's own lights (a J3D colour block that loads them) into the light rows its shader reads.

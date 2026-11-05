@@ -459,5 +459,5 @@ void Flag::loadMaterial() const {
     material.constants[0] = mAlpha / 255.0f;
     NativeShader::setTexture(material, 0, mTexture);
     NativeShader::send(material);
-    J3DNativeShape::setCurrentIdentity();
+    J3DNativeShape::setCurrentPosition(0);
 }

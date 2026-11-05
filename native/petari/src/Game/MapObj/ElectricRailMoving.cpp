@@ -75,8 +75,7 @@ void ElectricRailMoving::init(const JMapInfoIter& rIter) {
 
 void ElectricRailMoving::draw() const {
     if (MR::isValidDraw(this)) {
-        J3DPass::textureMatrix(1, 1);
-        J3DNativeShape::setTexture(1, _9C, 2);
+        J3DNativeMaterial::setCoordinate(1, _9C);
         J3DNativeMaterial::setCurrentRegister(1, Color8(0xFF, 0xFF, 0xFF, _CC));
 
         if (isNerve(GET_NERVE(ElectricRailMoving, ElectricRailMovingNrvWait))) {

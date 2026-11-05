@@ -863,5 +863,5 @@ void SpaceCocoon::initDraw() const {
     material.constants[1] = 1.0f;
     NativeShader::setTexture(material, 0, mTexture);
     NativeShader::send(material);
-    J3DNativeShape::setCurrentIdentity();
+    J3DNativeShape::setCurrentPosition(0);
 }

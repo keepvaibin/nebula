@@ -13,11 +13,3 @@ J3DModelData::J3DModelData() {
     clear();
 }
 
-void J3DModelData::syncJ3DSysFlags() const {
-    if (checkFlag(0x20)) {
-        j3dSys.onFlag(J3DSysFlag_PostTexMtx);
-    } else {
-        j3dSys.offFlag(J3DSysFlag_PostTexMtx);
-    }
-}
-

@@ -168,7 +168,7 @@ void NormalMapBase::updateBtkMtx() {
 void NormalMapBase::loadTexMtxBtk(J3DMaterial* pMaterial) const {
     if (mBtkPlayer != nullptr) {
         if (_150) {
-            J3DNativeShape::setTexture(0, _184[pMaterial->mIndex], 2);
+            NativeShader::setMatrix(sNormalMap, 9, 0, _184[pMaterial->mIndex]);
         }
     }
 }
@@ -322,7 +322,6 @@ void NormalMapBase::shapeAnalyzeDraw(J3DModel* pModel) const {
                     MR::normalize(&localMtx);
                     updateLightMtx(localMtx);
                     drawMaterialSetting(pModel->getMaterial(pMaterial->mIndex));
-                    pMaterial->mCurrentMtx.load();
                     found = true;
                     break;
                 }
@@ -391,7 +390,7 @@ void NormalMapBase::loadTexture1(J3DMaterial* pMaterial) const {
 void NormalMapBase::drawMaterialSetting(J3DMaterial* pMaterial) const {
     loadTexture1(pMaterial);
     loadTexMtxBtk(pMaterial);
-    J3DNativeShape::setTexture(2, pMaterial->getTexMtx(0)->getMtx(), 2);
+    NativeShader::setMatrix(sNormalMap, 9, 2, pMaterial->getTexMtx(0)->getMtx());
     Color8 ambient;
     Color8 material;
     ambient.set(mAmbColor, mAmbColor, mAmbColor, mAmbAlpha);
@@ -445,7 +444,7 @@ void NormalMapBase::drawSetting(MtxPtr pMtx) const {
     Mtx scale_mtx;
     NebulaMtxScale(scale_mtx, 0.0f, 0.0f, 0.0f);
     MR::setMtxTrans(scale_mtx, 0.5f, 0.5f, 0.0f);
-    J3DNativeShape::setTexture(1, scale_mtx, 2);
+    NativeShader::setMatrix(sNormalMap, 9, 1, scale_mtx);
 
     // Channel 0: lit by the hard light mask with the ambient colour from the material and the material colour from
     // the vertex; else by no lights from the material's colours (the model's light registers) or the vertex's. Its

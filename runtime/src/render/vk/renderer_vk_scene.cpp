@@ -1923,7 +1923,7 @@ VkDescriptorSet RendererVk::constants_set(VkBuffer b0, VkBuffer b1, VkBuffer row
     }
     const VkDescriptorBufferInfo infos[3] = {
         {b0, 0, sizeof(VertexConstants)},
-        {b1, 0, 128u * sizeof(float)},  // a native material's constants (MaterialBlock)
+        {b1, 0, 216u * sizeof(float)},  // a native material's constants (MaterialBlock)
         {rows, rows_offset, VK_WHOLE_SIZE},
     };
     VkWriteDescriptorSet writes[3]{};

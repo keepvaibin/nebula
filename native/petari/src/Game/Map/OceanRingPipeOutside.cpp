@@ -64,7 +64,6 @@ void OceanRingPipeOutside::loadMaterial() const {
     mtx.identity();
     mtx.mMtx[0][2] = mTexU;
     mtx.mMtx[1][2] = 0.0f;
-    J3DNativeShape::setTexture(0, mtx.toMtxPtr(), 2);
 
     TPos3f mtx2;
     mtx2.identity();
@@ -79,7 +78,6 @@ void OceanRingPipeOutside::loadMaterial() const {
 
     MR::multMtx(mtx2, scaleMtx, mtx2);
     MR::multMtx(mtx2, qMtx2, mtx2);
-    J3DNativeShape::setTexture(1, mtx2, 2);
 
     // runtime/src/render/materials/ocean_ring_pipe_outside.hlsl: the highlight texture (1) by the normal, warped by
     // the indirect texture (0) at sIndirectScale texels a step, over sStageColor0 with light 2's rim; opaque, depth tested
@@ -88,6 +86,8 @@ void OceanRingPipeOutside::loadMaterial() const {
     NebulaNativeMaterial material;
     NativeShader::init(material, NEBULA_SHADER_OCEAN_RING_PIPE_OUTSIDE, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_LEQUAL,
                        true, mRingPipe->_90 ? NEBULA_CULL_BACK : NEBULA_CULL_NONE);
+    NativeShader::setMatrix(material, 3, 0, mtx.toMtxPtr());
+    NativeShader::setMatrix(material, 3, 1, mtx2);
     NativeShader::setColor(material, 0, ::sStageColor0.r, ::sStageColor0.g, ::sStageColor0.b, ::sStageColor0.a);
     material.constants[4] = ::sIndirectScale;
     material.constants[6] = static_cast< f32 >(mWaterPipeHighLightTex->getWidth());
@@ -97,9 +97,7 @@ void OceanRingPipeOutside::loadMaterial() const {
     NativeShader::setTexture(material, 0, mWaterPipeIndirectTex);
     NativeShader::setTexture(material, 1, mWaterPipeHighLightTex);
     NativeShader::send(material);
-    static const u8 kPlaces[8] = {0, 1, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture,
-                                  J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture};
-    J3DNativeShape::setCurrent(0, kPlaces);
+    J3DNativeShape::setCurrentPosition(0);
 }
 
 void OceanRingPipeOutside::sendGD() {

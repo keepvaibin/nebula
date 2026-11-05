@@ -28,12 +28,11 @@ f32 scale = 1.0f;
 void shapeCallBack(J3DShape* pShape) {
     Mtx mtx;
     NebulaMtxScale(mtx, scale, scale, 0.0f);
-    J3DNativeShape::setTexture(0, mtx, 2);
     J3DNativeShape::flushState();
     J3DNativeMaterial::applyPass(NEBULA_PASS_FLEXIBLE_COORDINATES);
-    J3DPass::textureMatrix(0, 0);
-    J3DPass::textureMatrix(1, 0);
-    J3DPass::textureMatrix(2, 0);
+    J3DNativeMaterial::setCoordinate(0, mtx);
+    J3DNativeMaterial::setCoordinate(1, mtx);
+    J3DNativeMaterial::setCoordinate(2, mtx);
 }
 
 FlexibleSphere::FlexibleSphere(const char* pName) : LiveActor(pName), mTimer() {

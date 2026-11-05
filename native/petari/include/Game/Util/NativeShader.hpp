@@ -37,8 +37,14 @@ namespace NativeShader {
         rMaterial.cull = cull;
         rMaterial.color_write = 1;
         rMaterial.alpha_write = 2;  // the pass's
-        for (u32 i = 0; i < 8; i++) {
-            rMaterial.texgen_post[i] = 61;  // the identity post-transform 
+    }
+
+    // Texture matrix `index` among the constants its shader declares from row `first` (three rows each).
+    inline void setMatrix(NebulaNativeMaterial& rMaterial, u32 first, u32 index, const f32 (*pMtx)[4]) {
+        memcpy(rMaterial.constants + (first + index * 3) * 4, pMtx, 12 * sizeof(f32));
+        rMaterial.coord_first = static_cast< u8 >(first);
+        if (rMaterial.coord_count <= index) {
+            rMaterial.coord_count = static_cast< u8 >(index + 1);
         }
     }
 

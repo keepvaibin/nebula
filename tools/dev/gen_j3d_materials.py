@@ -84,7 +84,7 @@ def shader_key(p):
         lit.append(c)
     return (
         tuple(stages),
-        # The texgens' types and sources only (the shader takes the draw's matrix indices and post-transforms).
+        # The texgens' types and sources only (its matrices are constants).
         tuple((t[0], t[1]) for t in p["tex_gen"][:p["tex_gens"]]),
         tuple(p["ind_order"][:p["ind_stages"]]),
         tuple(lit),
@@ -213,8 +213,12 @@ def emit_vertex(p, out):
         if kind != 0:
             raise Unsupported(f"texgen kind {kind} (emboss)")
         if row == 0:
-            coord = "float4(v.pos, 1.0)"
+            coord = "float4(v.eye, 1.0)"  # an environment or projection map: the eye-space position
         elif row == 1:
+            coord = "float4(j3d_eye_normal(v), 1.0)"  # and normal
+        elif row == 13:
+            coord = "float4(v.pos, 1.0)"  # as sent, through a plain matrix
+        elif row == 14:
             coord = "float4(v.nrm, 1.0)"
         elif row == 3:
             coord = "float4(v.tangent, 1.0)"  # the binormal row (Dolphin BinormalT), as the uber shader read it
@@ -224,38 +228,16 @@ def emit_vertex(p, out):
             coord = f"float4(v.uv[{row - 5}], 1.0, 1.0)"
         else:
             raise Unsupported(f"texgen source row {row}")
-        gen_type = 0 if projective else 1  # three outputs or two
         out.append(f"    {{  // coordinate {i}: kind {kind}, projective {projective}, row {row}")
         out.append(f"        const float4 c = {coord};")
-        # The texgen's matrix from matrix memory by the index the shape loads (its current matrix, taken over
-        # the material's texgen id: GPU_TEXMTX0 30 + 3k, 60 the identity) or the vertex's own; its post-transform matrix
-        # by the program's row (GPU_PTTEXMTX0's 0 + 3k, 61 the identity).
-        # As the uber shader: the draw's texture matrix rows (native_tex_row: the matrix its current matrix index
-        # names) or, where the shape carries per-vertex indices, the vertex's matrix from the matrix rows; then the
-        # post-transform the draw's texgen names (native_coord_post_row: the material's, or a shape's env map or
-        # projection), 61 the identity.
-        out.append(f"        float3 res;")
-        out.append(f"        if (((vs_header.w >> {i}u) & 1u) != 0u) {{")
-        out.append(f"            const uint tm = native_tex_matrix(v, {i}u);")
-        rows = [f"dot(c, native_matrix_row(tm + {r}u))" for r in range(3)]
-        third = rows[2] if gen_type == 0 else "1.0"
-        out.append(f"            res = float3({rows[0]}, {rows[1]}, {third});")
-        out.append("        } else {")
-        irows = [f"dot(c, native_tex_row({3 * i + r}))" for r in range(3)]
-        ithird = irows[2] if gen_type == 0 else "1.0"
-        out.append(f"            res = float3({irows[0]}, {irows[1]}, {ithird});")
-        out.append("        }")
-        out.append(f"        const uint pt = native_post({i}u);")
-        out.append("        const bool posted = (pt & 0x3Fu) != 61u;")
-        out.append("        if (posted) {")
-        out.append("            if ((pt & 0x100u) != 0u) res = dot(res, res) > 0.0 ? normalize(res) : res;")
-        prow = [f"dot(float4(res, 1.0), native_coord_post_row({3 * i + r}))" for r in range(3)]
-        out.append(f"            res = float3({prow[0]}, {prow[1]}, {prow[2]});")
-        out.append("        }")
-        # A projected coordinate's q of 0: s and t are halved and clamped (as the uber shader and Dolphin).
-        projected = "true" if gen_type == 0 else "posted"
-        out.append(f"        if ({projected} && res.z == 0.0) res.xy = clamp(res.xy * 0.5, -1.0, 1.0);")
-        out.append(f"        o.uv[{i}] = float4(res, {projected} ? 1.0 : 0.0);")
+        rows = [f"dot(c, material.coord[{3 * i + r}])" for r in range(3)]
+        if projective:
+            out.append(f"        float3 res = float3({rows[0]}, {rows[1]}, {rows[2]});")
+            # A projected coordinate's q of 0: s and t are halved and clamped.
+            out.append("        if (res.z == 0.0) res.xy = clamp(res.xy * 0.5, -1.0, 1.0);")
+            out.append(f"        o.uv[{i}] = float4(res, 1.0);")
+        else:
+            out.append(f"        o.uv[{i}] = float4({rows[0]}, {rows[1]}, 1.0, 0.0);")
         out.append("    }")
     out.append("    j3d_vertex_override(v, o);")
     out.append("}")

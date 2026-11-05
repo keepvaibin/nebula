@@ -1,5 +1,4 @@
 #include "JSystem/JParticle/JPANativeColor.hpp"
-#include "Game/System/ShapePacketUserData.hpp"
 #include "Game/System/GameThreads.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
@@ -51,13 +50,6 @@ extern "C" void NebulaMtxRotRad(Mtx pMtx, char axis, f32 radians) {
     f32 sin = JMASinRadian(radians);
     f32 cos = JMACosRadian(radians);
     NebulaMtxRotTrig(pMtx, axis, sin, cos);
-}
-
-void J3DShape::loadPacketMatrices() const {
-    ShapePacketUserData* pData = MR::getJ3DShapePacketUserData(j3dSys.getShapePacket());
-    if (pData != nullptr) {
-        pData->loadPostMatrices(j3dSys.getShapePacket()->mpMaterial);
-    }
 }
 
 namespace {

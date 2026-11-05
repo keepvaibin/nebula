@@ -81,10 +81,6 @@ namespace nw4r {
                 return (mtx - J3D_TEXMTX0) / 3;
             }
 
-            inline u32 GetTexMtx(u32 idx) {
-                return J3D_TEXMTX0 + idx * 3;
-            }
-
             void SetColorComponentValue(nw4r::ut::Color* pColor, u32 idx, s16 value) {
                 u8 bvalue = nw4r::ut::Min< s16 >(nw4r::ut::Max< s16 >(value, 0), 255);
 
@@ -570,6 +566,10 @@ namespace nw4r {
             u8 places[8] = {J3D_IDENTITY, J3D_IDENTITY, J3D_IDENTITY, J3D_IDENTITY,
                             J3D_IDENTITY, J3D_IDENTITY, J3D_IDENTITY, J3D_IDENTITY};
             rSetup.tex_gens = mNum.texCoordGen;
+            for (u32 c = 0; c < 8; c++) {
+                memset(rValues.coord[c], 0, sizeof(rValues.coord[c]));
+                rValues.coord[c][0] = rValues.coord[c][5] = rValues.coord[c][10] = 1.0f;
+            }
             if (mNum.texCoordGen > 0) {
                 const TexCoordGen* const pTexCoordGen = GetTexCoordGenAry();
 
@@ -582,9 +582,6 @@ namespace nw4r {
                     }
 
                     if (i < 8) {
-                        rSetup.tex_gen_post[i] = static_cast< u8 >(J3D_PTIDENTITY);
-                    }
-                    if (i < 8) {
                         places[i] = static_cast< u8 >(texMtx);
                     }
                 }
@@ -593,14 +590,14 @@ namespace nw4r {
             if (setTexMtx) {
                 const TexSRT* const pTexSrt = GetTexSRTAry();
 
-                for (u8 i = 0; i < mNum.texSRT; i++) {
-                    if (!useTexMtx[i]) {
+                for (u8 c = 0; c < 8; c++) {
+                    if (places[c] == J3D_IDENTITY || GetTexMtxIdx(places[c]) >= mNum.texSRT || !useTexMtx[GetTexMtxIdx(places[c])]) {
                         continue;
                     }
 
                     math::MTX34 mtx;
-                    CalcTextureMtx(&mtx, pTexSrt[i]);
-                    J3DNativeShape::setTexture((GetTexMtx(i) - J3D_TEXMTX0) / 3, mtx, 2);
+                    CalcTextureMtx(&mtx, pTexSrt[GetTexMtxIdx(places[c])]);
+                    memcpy(rValues.coord[c], &mtx, sizeof(rValues.coord[c]));
                 }
             }
 
@@ -704,7 +701,7 @@ namespace nw4r {
             const bool remap = mRegisterColors[0] != DefaultBlackColor || !IsWhiteColor(mRegisterColors[1]);
             const u32 shader = mNativeShaders[(useRasStage ? 1 : 0) | (remap ? 2 : 0)];
             J3DNativeMaterial::sendWhole(shader != 0 ? NEBULA_SHADER_J3D_FIRST + shader - 1 : 0, rSetup, rValues);
-            J3DNativeShape::setCurrentFromFile(0, places);
+            J3DNativeShape::setCurrentPosition(0);
 
             return useRasStage && useVtxColor;
         }

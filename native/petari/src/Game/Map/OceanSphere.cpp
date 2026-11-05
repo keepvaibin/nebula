@@ -612,7 +612,7 @@ void OceanSphere::draw() const {
 void OceanSphere::loadMaterialFace() const {
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
     J3DNativeShape::setNormal(0, MR::getCameraViewMtx());
-    J3DNativeShape::setCurrentIdentity();
+    J3DNativeShape::setCurrentPosition(0);
     sendFaceMaterial(mWaterTex, sOceanSphereStageColor0Face, mStageColor1Front, sOceanSphereStageColor2Face, sOceanSphereKColor0Face,
                      NEBULA_CULL_BACK);
 }
@@ -623,15 +623,13 @@ void OceanSphere::loadMaterialBack() const {
     pos.set(MR::getCameraViewMtx());
     pos.zeroTrans();
     pos.scale(0.779175f);
-    J3DNativeShape::setTexture(0, pos.toMtxPtr(), 2);
-    static const u8 kPlaces[8] = {0, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture,
-                                  J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture};
-    J3DNativeShape::setCurrent(0, kPlaces);
+    J3DNativeShape::setCurrentPosition(0);
     // runtime/src/render/materials/ocean_sphere_env.hlsl: the environment map by the normal from sOceanSphereStageColor0Env
     // toward sOceanSphereStageColor1Env; opaque, depth tested and written, front faces culled, no fog.
     NebulaNativeMaterial material;
     NativeShader::init(material, NEBULA_SHADER_OCEAN_SPHERE_ENV, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_LEQUAL, true,
                        NEBULA_CULL_FRONT);
+    NativeShader::setMatrix(material, 2, 0, pos.toMtxPtr());
     const NebulaColor8& rLow = sOceanSphereStageColor0Env;
     const NebulaColor8& rHigh = sOceanSphereStageColor1Env;
     NativeShader::setColor(material, 0, rLow.r, rLow.g, rLow.b, rLow.a);

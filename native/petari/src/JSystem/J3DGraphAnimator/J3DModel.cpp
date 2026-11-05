@@ -8,6 +8,7 @@
 extern "C" const NebulaHostServices* nebula_host(void);
 
 void J3DModel::initialize() {
+    NebulaMtxIdentity(mViewAtCalc);
     mModelData = NULL;
     mMotionEpoch = 0;
     mFlags = 0;
@@ -130,7 +131,7 @@ void J3DModel::calcAllMaterials() {
     u16 matNum = mModelData->getMaterialNum();
     for (u16 i = 0; i < matNum; i++) {
         J3DMaterial* material = mMaterials[i];
-        material->calc(getAnmMtx(material->getJoint()->getJntNo()));
+        material->calc();
     }
 }
 
@@ -140,7 +141,7 @@ void J3DModel::calcMaterial() {
     for (u16 i = 0; i < matNum; i++) {
         J3DMaterial* material = mMaterials[i];
         if (material != mModelData->getMaterialNodePointer(i)) {
-            material->calc(getAnmMtx(material->getJoint()->getJntNo()));
+            material->calc();
         }
     }
 }
@@ -170,7 +171,6 @@ void J3DModel::calc() {
     j3dSys.setModel(this);
     mNebulaGeneration++;
 
-    mModelData->syncJ3DSysFlags();
     mVertexBuffer.setCurrentVtxPos(mVertexBuffer.mVtxPosArray[0]);
     mVertexBuffer.setCurrentVtxNrm(mVertexBuffer.mVtxNrmArray[0]);
     mVertexBuffer.setCurrentVtxCol(mVertexBuffer.mVtxColArray[0]);
@@ -190,7 +190,6 @@ void J3DModel::calc() {
 void J3DModel::entry() {
     j3dSys.setModel(this);
 
-    mModelData->syncJ3DSysFlags();
     j3dSys.setTexture(mModelData->getTexture());
 
     for (u16 i = 0; i < mModelData->getJointNum(); i++) {
@@ -203,6 +202,7 @@ void J3DModel::entry() {
 
 void J3DModel::viewCalc() {
     mNebulaGeneration++;
+    NebulaMtxCopy(j3dSys.getViewMtx(), mViewAtCalc);
     mMtxBuffer->swapDrawMtx();
     mMtxBuffer->swapNrmMtx();
 

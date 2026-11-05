@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 132u
+#define NEBULA_GAME_API_VERSION 133u
 
 /* Viewports, scissors, clears, target sizes and picture points count this many units across a frame on each axis. */
 #define NEBULA_FRAME_UNITS 65536.0f
@@ -352,7 +352,6 @@ enum {
 enum { NEBULA_CULL_NONE = 0, NEBULA_CULL_BACK = 1, NEBULA_CULL_FRONT = 2, NEBULA_CULL_ALL = 3 /* draw nothing */ };
 /* blend_op, depth_test or cull: the drawing state's blending, depth or culling as it is (a material that replaces only
    the shader of the draws after the state the game set: J3DModelX's override passes). */
-enum { NEBULA_NATIVE_KEPT = 0xFF };
 /* A texture's image: the drawing state's map as it is (its image, size and sampling: textures the game loads per draw). */
 
 typedef struct NebulaNativeMaterial {
@@ -362,7 +361,10 @@ typedef struct NebulaNativeMaterial {
     uint8_t cull, color_write, alpha_write; /* writes: 0 off, 1 on; alpha_write 2 the pass's (J3DNativeState::setPassAlpha) */
     uint8_t light_mask;        /* the lights below the material sets (the others keep what was set before) */
     uint8_t stencil;           /* 0x80 | test << 4 | op (NEBULA_STENCIL_*); 0 the pass's */
-    float constants[128];
+    float constants[216];
+    /* Its texture matrices among the constants: `coord_count` of three rows from row `coord_first` (a row four floats),
+       the replay's frames moving them between two game frames. `constant_rows`: rows in use, 0 the first 32 and those. */
+    uint8_t constant_rows, coord_first, coord_count;
     struct {
         uint64_t image;        /* the texture: its record's address (or a capture's key); the record has its size */
         uint8_t repeat_s, repeat_t; /* 0 clamp, 1 repeat, 2 mirror */
@@ -375,10 +377,6 @@ typedef struct NebulaNativeMaterial {
         uint8_t reserved[3];
     } textures[8];
     NebulaMaterialLight light[8];
-    /* Texgen i's post-transform matrix row (3k for matrix k; 61 the identity), | 0x80 to normalize first: the
-       drawing state's until a draw's own texgens replace it (a shape's env map or projection); NEBULA_NATIVE_KEPT keeps the
-       draw's (an instance's differed list that loads no texgens). */
-    uint8_t texgen_post[8];
     uint32_t constants_only; /* bit 0: only the constants of the material the draws use change (the game folding a state
                                 change of one of its values in); its state, textures and lights stay as set since; bit 1: the first 84 constants are
                                 the register file (j3d_material.hlsli's layout), which the game keeps current) */
@@ -1133,7 +1131,6 @@ typedef struct NebulaHostServices {
     void (*light)(void* user, uint32_t index, const NebulaLight* light);
     /* Coordinate `coord` of the draws after this is texture coordinate `from`, through matrix slot `matrix_slot` (0-9
        position matrices, 10-19 texture matrices, 20 identity). */
-    void (*texture_coordinate)(void* user, uint32_t coord, uint32_t from, uint32_t matrix_slot);
     /* Vertices drawn as the game sends them (NebulaImmediate). */
     void (*immediate)(void* user, const NebulaImmediate* draw);
     /* A pass into a texture target the renderer owns (E-07): the records until target_end draw into it, not the

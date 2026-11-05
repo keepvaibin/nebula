@@ -601,13 +601,13 @@ void TrampleStar::drawSelf() const {
     mtx4[1][3] = debug5;
     MR::multMtx(mtx3, mtx3, mtx4);
 
-    J3DNativeShape::setTexture(1, mtx3, 3);
     // runtime/src/render/materials/trample_star.hlsl: blended by alpha, depth tested early and written, no culling.
     NebulaNativeMaterial material;
     TDDraw::setupNative(&material, 0, 1, 0);
     material.shader = NEBULA_SHADER_TRAMPLE_STAR;
     NativeShader::setDepth(material, true, NEBULA_COMPARE_LEQUAL, true);
     material.early_depth = 1;
+    NativeShader::setMatrix(material, 3, 0, mtx3);
     NativeShader::setColor(material, 0, 0xCC, 0xCC, 0xCC, 0xFF);
     NativeShader::setColor(material, 4, 0x7F, 0x7F, 0x93, 0xC3);
     material.constants[8] = 0xB4 / 255.0f;
@@ -615,9 +615,7 @@ void TrampleStar::drawSelf() const {
     NativeShader::setTexture(material, 0, mTexture);
     NativeShader::setTexture(material, 1, MR::getMarioShadowTexForLoad());
     NativeShader::send(material);
-    static const u8 kPlaces[8] = {J3DNativeShape::kIdentityTexture, 1, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture,
-                                  J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture};
-    J3DNativeShape::setCurrent(0, kPlaces);
+    J3DNativeShape::setCurrentPosition(0);
 
     J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLES, mNumDrawVtxs, MR::ddVtxAttributes());
     {

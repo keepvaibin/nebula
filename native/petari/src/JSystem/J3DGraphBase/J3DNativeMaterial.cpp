@@ -3,6 +3,7 @@
 #include <JSystem/J3DGraphBase/J3DNativeTexGen.hpp>
 #include "JSystem/J3DGraphBase/J3DNativeMaterial.hpp"
 #include "JSystem/J3DGraphBase/J3DMaterial.hpp"
+#include "JSystem/J3DGraphAnimator/J3DModel.hpp"
 #include "JSystem/J3DGraphAnimator/J3DModelData.hpp"
 #include "JSystem/J3DGraphBase/J3DNativeShape.hpp"
 #include "JSystem/J3DGraphBase/J3DPacket.hpp"
@@ -35,7 +36,10 @@ namespace {
         SLOT_OVR = 28,
         SLOT_OVR_COORD = 29,
     };
-    f32 sValues[124];
+    // The coordinates' matrices after the slots.
+    const u32 cCoordsAt = 124;
+    f32 sValues[cCoordsAt + 8 * 12];
+    u32 sCoordCount = 0;
     u32 sLayout = 0;
 
     // The ambient colours now: a material with its own sets them, an actor's light sets them after that.
@@ -175,6 +179,11 @@ namespace {
                 pOut += 4;
             }
         }
+        // Last: the shader declares the coordinates' rows it reads, and more is nothing to it.
+        memcpy(pOut, sValues + cCoordsAt, sCoordCount * 12 * sizeof(f32));
+        sCurrent.coord_first = static_cast< u8 >((pOut - sCurrent.constants) / 4);
+        sCurrent.coord_count = static_cast< u8 >(sCoordCount);
+        sCurrent.constant_rows = static_cast< u8 >(sCurrent.coord_first + sCoordCount * 3);
     }
 
     // Slot `slot` of the current material's values into its constants, if its shader reads it.
@@ -187,19 +196,6 @@ namespace {
     // The draw's native material from the list's program and values (j3d_material.hlsli's constants).
     void sendNative(const J3DMaterialSetup& rSetup, const J3DMaterialValues& rValues, u32 shader,
                     bool layout = false, const NebulaCookedMaterial* cooked = NULL, bool own = false) {
-        // Texture matrices into their places (as the material's data has them).
-        for (u32 i = 0; i < 8; i++) {
-            const u8 id = rSetup.texture_matrix[i].id;
-            if (!rSetup.texture_matrix[i].present || (!own && !rSetup.texture_matrix[i].listed)) {
-                continue;
-            }
-            const f32(*pMtx)[4] = reinterpret_cast< const f32(*)[4] >(rValues.texture_matrix[i]);
-            if (id >= 64) {
-                J3DNativeShape::setPostTexture((id - 64) / 3, pMtx);
-            } else if (id >= 30) {
-                J3DNativeShape::setTexture((id - 30) / 3, pMtx, rSetup.texture_matrix[i].rows == 2 ? 2 : 3);
-            }
-        }
         NebulaNativeMaterial& material = sCurrent;
         memset(&material, 0, sizeof(material));
         material.shader = shader;
@@ -231,6 +227,8 @@ namespace {
             pScale[0] = rValues.tex_coord_scale[k].scale_s != 0 ? rValues.tex_coord_scale[k].scale_s : pScale[2];
             pScale[1] = rValues.tex_coord_scale[k].scale_t != 0 ? rValues.tex_coord_scale[k].scale_t : pScale[3];
         }
+        sCoordCount = rSetup.tex_gens > 8 ? 8 : rSetup.tex_gens;
+        memcpy(sValues + cCoordsAt, rValues.coord, sCoordCount * 12 * sizeof(f32));
         packConstants(shader);
         for (u32 map = 0; map < 8; map++) {
             const NebulaMaterialTexture& rTex = rValues.texture[map];
@@ -248,15 +246,6 @@ namespace {
             material.textures[map].lod_bias = rTex.lod_bias;
             material.textures[map].min_lod = rTex.min_lod;
             material.textures[map].max_lod = rTex.max_lod;
-        }
-        // Its texgens' post-transform rows (a shape's own texgens replace them at its draw). A model's own copy leaves
-        // them as the draw has them (a shape's own, ShapePacketUserData's environment maps).
-        const bool keepTexGens = own;
-        for (u32 i = 0; i < 8; i++) {
-            material.texgen_post[i] = keepTexGens ? static_cast< u8 >(NEBULA_NATIVE_KEPT)
-                                      : i < rSetup.tex_gens
-                                          ? static_cast< u8 >(rSetup.tex_gen_post[i] & 0x3F)
-                                          : 61;
         }
         if (!own && (rSetup.loads & J3D_LOADS_LIGHTS) != 0) {
             material.light_mask = rValues.light_mask;
@@ -345,21 +334,28 @@ namespace {
             memcpy(pVal->ind_matrix[i].m, rMtx.field_0x0, sizeof(pVal->ind_matrix[i].m));
             pVal->ind_matrix[i].scale = static_cast< s8 >(rMtx.field_0x18);
         }
-        // The post-transform row each coordinate uses (identity unless the model asks for post matrices).
-        for (u32 i = 0; i < pOut->tex_gens && i < 8; i++) {
-            pOut->tex_gen_post[i] = pMaterial->mPostTexMtx && pMaterial->mTexCoord[i].getTexGenMtx() != 60 ? static_cast< u8 >(i * 3) : 61;
-        }
         pOut->loads |= J3D_LOADS_CHANNELS;
-        for (u32 i = 0; i < 8; i++) {
-            J3DTexMtx* pMtx = pMaterial->getTexMtx(i);
-            if (pMtx == NULL) {
-                continue;
+        // Each coordinate's matrix: a map of the view's world takes the view it draws in.
+        for (u32 i = 0; i < pOut->tex_gens && i < 8; i++) {
+            memset(pVal->coord[i], 0, sizeof(pVal->coord[i]));
+            pVal->coord[i][0] = pVal->coord[i][5] = pVal->coord[i][10] = 1.0f;
+            const u8 place = pMaterial->mTexCoord[i].getTexGenMtx();
+            J3DTexMtx* pMtx = place != J3D_IDENTITY ? pMaterial->getTexMtx((place - J3D_TEXMTX0) / 3) : NULL;
+            if (pMtx != NULL) {
+                if (pMtx->followsView()) {
+                    Mtx world;
+                    if (j3dSys.getModel() != NULL) {
+                        NebulaMtxInverse(j3dSys.getModel()->viewAtCalc(), world);
+                    } else {
+                        NebulaMtxInverse(j3dSys.getViewMtx(), world);
+                    }
+                    if (pMtx->isDirectionMap()) {
+                        world[0][3] = world[1][3] = world[2][3] = 0.0f;
+                    }
+                    pMtx->calc(world);
+                }
+                memcpy(pVal->coord[i], pMtx->getMtx(), sizeof(pVal->coord[i]));
             }
-            pOut->texture_matrix[i].present = 1;
-            pOut->texture_matrix[i].listed = i < pOut->tex_gens && pMaterial->mTexCoord[i].getTexGenMtx() != J3D_IDENTITY;
-            pOut->texture_matrix[i].id = static_cast< u8 >(pMaterial->mPostTexMtx ? i * 3 + 0x40 : i * 3 + 30);
-            pOut->texture_matrix[i].rows = pMaterial->mPostTexMtx || pMtx->getTexMtxInfo().mProjection != J3D_MTX2x4 ? 3 : 2;
-            memcpy(pVal->texture_matrix[i], pMtx->getMtx(), sizeof(pVal->texture_matrix[i]));
         }
         for (u32 i = 0; i < 2; i++) {
             copyColor(pVal->material_color[i], pMaterial->mMatColor[i]);
@@ -546,6 +542,21 @@ namespace J3DNativeMaterial {
 
     const f32* lightAmbient(u32 channel) {
         return sAmbient[channel & 1];
+    }
+
+    void setCoordinate(u32 coord, const f32 (*pMtx)[4]) {
+        if (sCurrentKind != CURRENT_J3D) {
+            return;
+        }
+        memcpy(sValues + cCoordsAt + coord * 12, pMtx, 12 * sizeof(f32));
+        if (coord >= sCoordCount) {
+            sCoordCount = coord + 1;
+            packConstants(sCurrent.shader);
+        } else {
+            memcpy(sCurrent.constants + (sCurrent.coord_first + coord * 3) * 4, pMtx, 12 * sizeof(f32));
+        }
+        sCurrent.constants_only = 1;
+        J3DNativeState::sendMaterial(&sCurrent);
     }
 
     void setCurrentRegister(u32 index, NebulaColor8 color) {

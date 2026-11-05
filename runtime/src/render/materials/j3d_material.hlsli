@@ -13,6 +13,7 @@
 //   ovr         a pass that replaces the material's colour (j3d_override): x the mode (0 none), y and z alphas A0 and A1
 //               (0-1), w the alpha reference (drawn above it; -1 always)
 //   ovr_coord   x: coordinate 0 replaced (j3d_vertex_override; 0 none, 1 the vertex's normal)
+//   coord       last: three rows per texture coordinate, its matrix
 
 #include "native_material.hlsli"
 
@@ -228,6 +229,13 @@ float2 j3d_coord(float4 uv) {
 
 // Coordinate 0 replaced over the material's own stages (J3DNativeMaterial::overrideCoordinate): 1 the vertex's normal
 // (the normal through the identity, 2x4, normalized: J3DModelX list 6, the ghost's shell over the screen's copy).
+// The vertex's normal in eye space, unit length or zero: what an environment map reads.
+float3 j3d_eye_normal(NativeVertex v) {
+    const float3 n = float3(dot(native_normal_row(v.pn_row).xyz, v.nrm), dot(native_normal_row(v.pn_row + 1u).xyz, v.nrm),
+                            dot(native_normal_row(v.pn_row + 2u).xyz, v.nrm));
+    return dot(n, n) > 0.0 ? normalize(n) : n;
+}
+
 void j3d_vertex_override(NativeVertex v, inout NativeVaryings o) {
     if (material.ovr_coord.x == 1.0) {
         const float3 n = dot(v.nrm, v.nrm) > 0.0 ? normalize(v.nrm) : v.nrm;

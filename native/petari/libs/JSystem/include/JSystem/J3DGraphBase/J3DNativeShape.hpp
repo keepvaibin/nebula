@@ -30,27 +30,9 @@ namespace J3DNativeShape {
     void setPosition(u32 index, const f32 (*pMtx)[4], u16 modelMatrix = 0);
     void setNormal(u32 index, const f32 (*pMtx)[4], u16 modelMatrix = 0);
     void setNormal33(u32 index, const f32 (*pMtx)[3], u16 modelMatrix = 0);
-    // A texture matrix of `rows` rows (2 or 3) of four.
-    void setTexture(u32 index, const f32 (*pMtx)[4], u32 rows);
-    // A normal matrix as texture matrix `index` (its fourth column zero).
-    void setNormalTexture(u32 index, const f32 (*pMtx)[4]);
-    void setNormal33Texture(u32 index, const f32 (*pMtx)[3]);
-    void setPostTexture(u32 index, const f32 (*pMtx)[4]);
-    // The matrices the next draw's corners take when they carry none: the position matrix's place and texture
-    // coordinates 0-7's texture matrix places (the model file's matrix ids, three apart, the identity's at 60).
-    // The position slot (0-9) and each coordinate's texture slot (0-9, kIdentityTexture) for corners that carry none.
-    void setCurrent(u8 position, const u8* pTexture);
-    // The same from a model file's matrix numbers.
-    void setCurrentFromFile(u8 position, const u8* pIds);
-    // The first position matrix, no texture matrices.
-    void setCurrentIdentity();
     // The position matrix corners without one take (J3DNativeState::setCurrentMtx).
     void setCurrentPosition(u32 index);
     u8 currentPosition();
-    // Texture coordinate `coord` of the next draw generated as given (GpuSetTexCoordGen's values).
-    void setTexGen(u8 coord, u8 type, u8 source, bool normalize, u8 postMatrix);
-    // Texture matrices, current matrices and texgens set since the last draw, as a record now (before a material
-    // record, which must not overtake them).
     // The draw matrices of the model drawn (J3DShapeMtxConcatView::loadPalette): the next shape draw reads block
     // `palette`, a shape of one matrix its `matrix`.
     void setPalette(u32 palette, u16 matrix);

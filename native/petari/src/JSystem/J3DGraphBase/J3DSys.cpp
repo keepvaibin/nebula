@@ -19,9 +19,6 @@ static struct {
 
 J3DTexCoordScaleInfo J3DSys::sTexCoordScaleTable[8];
 
-static Mtx j3dIdentityMtx = {
-    {1.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, 0.0f},
-};
 
 
 u32 j3dDefaultViewNo;
@@ -61,8 +58,6 @@ J3DSys::J3DSys() {
 void J3DSys::drawInit() {
     reinitTexture();
 
-    for (u32 i = 0; i < 10; i++)
-        J3DNativeShape::setTexture(i, j3dIdentityMtx, 3);
 
 
 

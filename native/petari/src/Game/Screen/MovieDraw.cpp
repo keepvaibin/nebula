@@ -53,7 +53,7 @@ namespace MovieDraw {
         setPlane(material, 2, pV);
         NativeShader::send(material);
         // The coordinates' texture matrices: the identity's place.
-        J3DNativeShape::setCurrentIdentity();
+        J3DNativeShape::setCurrentPosition(0);
 
         J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
         J3DNativeDraw::position(static_cast< f32 >(x), static_cast< f32 >(y), 0.0f);

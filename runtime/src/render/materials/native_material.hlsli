@@ -47,12 +47,6 @@ float level_line(float value, float level) {
 // row_bases.y (rows 30-63), normal rows from row_bases.x, light n's four rows at row_bases.w + 4n.
 StructuredBuffer<float4> mtx_rows : register(t3, space1);
 float4 native_position_row(uint r) { return mtx_rows[draw_counts.w + r]; }
-// A texture coordinate's matrix row: a texture place's, or (native_tex_matrix) the vertex's position or normal matrix's.
-float4 native_matrix_row(uint r) {
-    if (r >= 0x40000u) return mtx_rows[row_bases.x + (r - 0x40000u)];
-    if (r >= 0x20000u) return mtx_rows[draw_counts.w + (r - 0x20000u)];
-    return mtx_rows[r < 30u ? draw_counts.w + r : row_bases.y + (r - 30u)];
-}
 float4 native_normal_row(uint q) { return mtx_rows[row_bases.x + q]; }
 float4 native_light_row(uint n, uint w) { return mtx_rows[row_bases.w + 4u * n + w]; }
 
@@ -110,17 +104,6 @@ float3 native_fog(float3 c, float4 pos, float4 fog, float4 fog_color) {
     }
     return lerp(c, fog_color.rgb, f);
 }
-float4 native_post_row(uint q) { return mtx_rows[row_bases.z + q]; }
-uint native_post(uint i) { return vs_post[i >> 2u][i & 3u]; }
-// Texture coordinate i's own matrix row r, and its post-transform matrix row r, named 3i + r.
-float4 native_tex_row(uint k) {
-    const uint i = k / 3u + 1u;
-    return native_matrix_row(min(draw_rows[i >> 2u][i & 3u], 61u) + k % 3u);
-}
-float4 native_coord_post_row(uint k) {
-    return native_post_row(((native_post(k / 3u) & 0x3Fu) + k % 3u) & 0x3Fu);
-}
-
 struct NativeVertexIn {
     float3 pos : POSITION;
     float3 nrm : NORMAL;
@@ -181,16 +164,6 @@ float4 native_unpack_color(uint c) {
 
 void material_vertex(NativeVertex v, inout NativeVaryings o);
 
-// Texture coordinate i's matrix: the vertex's own index where the shape carries one (vs_header.w bit i: skinned
-// shapes' per-vertex texture matrices), else the draw's (draw_rows: the rows the shape loads, as
-// the draw names); its rows through native_matrix_row (60: the identity).
-uint native_tex_matrix(NativeVertex v, uint i) {
-    if (((vs_header.w >> i) & 1u) == 0u) {
-        return draw_rows[(i + 1u) >> 2u][(i + 1u) & 3u];
-    }
-    const uint code = (v.mtx_idx.y >> (4u * i)) & 15u;
-    return code == 15u ? 0x20000u + v.pn_row : code == 14u ? 0x40000u + v.pn_row : 30u + 3u * code;
-}
 float4 material_color(NativeVaryings i);
 
 // The texture coordinates `mask` names moved by 1 / divisor in x (and in y when `bottom`).

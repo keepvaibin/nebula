@@ -24,13 +24,14 @@ struct MaterialConstants {
     float4 params2;  // x: light A (0 none, 1 one, 2 the gradient), y: light B (0 none, 1 one, 2 stage 0's alpha),
                      // z: 1 the raster is one (mode 4), w: 1 light B's alpha from stage 0
     float4 params3;  // x: 1 coordinate 0 through matrix 0 (the BTK), else the vertex's; y: K; zw: the gradient's size
+    float4 coord[9];  // texture matrices, three rows each
 };
 
 #include "native_material.hlsli"
 
 float2 normal_map_coord(NativeVertex v, uint i) {
     const float4 c = float4(v.uv[0], 1.0, 1.0);
-    return float2(dot(c, native_tex_row(3u * i)), dot(c, native_tex_row(3u * i + 1u)));
+    return float2(dot(c, material.coord[3u * i]), dot(c, material.coord[3u * i + 1u]));
 }
 
 void material_vertex(NativeVertex v, inout NativeVaryings o) {

@@ -49,12 +49,18 @@ public:
         mTexMtxInfo = info;
     }
 
-    void load(u32) const;
-    void calc(const Mtx);
-    void calcTexMtx(const Mtx);
-    void calcPostTexMtx(const Mtx);
-    inline void loadTexMtx(u32) const;
-    inline void loadPostTexMtx(u32) const;
+    // The matrix from eye-space positions or normals, or from the coordinate: its animation and effect matrix, and
+    // `world` (eye to world) for a map fixed in the world.
+    void calc(const Mtx world);
+    bool followsView() const {
+        const u32 mode = mTexMtxInfo.mInfo & 0x3F;
+        return mode == 2 || mode == 5 || mode == 8 || mode == 10 || mode == 11;
+    }
+    // A map of the direction: the world's turn alone.
+    bool isDirectionMap() const {
+        const u32 mode = mTexMtxInfo.mInfo & 0x3F;
+        return mode == 5 || mode == 10 || mode == 11;
+    }
 
     J3DTexMtxInfo& getTexMtxInfo() {
         return mTexMtxInfo;

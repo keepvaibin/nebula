@@ -429,19 +429,6 @@ void OceanRingDrawer::drawGD() {
 void OceanRingDrawer::loadMaterial() const {
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
 
-    TMtx34f mtx;
-    mtx.identity();
-    mtx.mMtx[0][2] = _C;
-    mtx.mMtx[1][2] = _10;
-    J3DNativeShape::setTexture(0, mtx.toMtxPtr(), 2);
-    mtx.mMtx[0][2] = _14;
-    mtx.mMtx[1][2] = _18;
-    J3DNativeShape::setTexture(1, mtx.toMtxPtr(), 2);
-    mtx.mMtx[0][2] = _1C;
-    mtx.mMtx[1][2] = _20;
-    J3DNativeShape::setTexture(2, mtx.toMtxPtr(), 2);
-    MR::loadTexProjectionMtx(39);
-
     // runtime/src/render/materials/ocean_ring.hlsl: the water (texture 0) at the first two scrolls, color1's highlight,
     // the screen behind (texture 1, by texture matrix 3) tinted by color2 and warped by the indirect texture (2, the third
     // scroll) unless the camera is in the water; blended by the vertex alpha where above zero, depth tested and not
@@ -450,6 +437,20 @@ void OceanRingDrawer::loadMaterial() const {
     NebulaNativeMaterial material;
     NativeShader::init(material, NEBULA_SHADER_OCEAN_RING, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, false,
                        NEBULA_CULL_NONE);
+    TMtx34f mtx;
+    mtx.identity();
+    mtx.mMtx[0][2] = _C;
+    mtx.mMtx[1][2] = _10;
+    NativeShader::setMatrix(material, 3, 0, mtx.toMtxPtr());
+    mtx.mMtx[0][2] = _14;
+    mtx.mMtx[1][2] = _18;
+    NativeShader::setMatrix(material, 3, 1, mtx.toMtxPtr());
+    mtx.mMtx[0][2] = _1C;
+    mtx.mMtx[1][2] = _20;
+    NativeShader::setMatrix(material, 3, 2, mtx.toMtxPtr());
+    TPos3f projection;
+    MR::calcTexProjectionMtx(&projection);
+    NativeShader::setMatrix(material, 3, 3, projection);
     NativeShader::setColor(material, 0, ::color1.r, ::color1.g, ::color1.b, ::color1.a);
     NativeShader::setColor(material, 4, ::color2.r, ::color2.g, ::color2.b, ::color2.a);
     material.constants[8] = ::sIndirectScale;
@@ -460,22 +461,12 @@ void OceanRingDrawer::loadMaterial() const {
     NativeShader::setTexture(material, 1, &screen);
     NativeShader::setTexture(material, 2, mWaterIndTex);
     NativeShader::send(material);
-    static const u8 kPlaces[8] = {0, 1, 2, 3,
-                                  J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture};
-    J3DNativeShape::setCurrent(0, kPlaces);
+    J3DNativeShape::setCurrentPosition(0);
 }
 
 void OceanRingDrawer::loadMaterialBloom() const {
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
 
-    TMtx34f mtx;
-    mtx.identity();
-    mtx.mMtx[0][2] = _C;
-    mtx.mMtx[1][2] = _10;
-    J3DNativeShape::setTexture(0, mtx.toMtxPtr(), 2);
-    mtx.mMtx[0][2] = _14;
-    mtx.mMtx[1][2] = _18;
-    J3DNativeShape::setTexture(1, mtx.toMtxPtr(), 2);
     TVec3f zDir = MR::getCamZdir();
     f32 v6 = ((MR::clamp(zDir.y, -0.2f, 0.1f) - -0.2f) / 0.3f);
     f32 v8 = ((MR::clamp(WaterAreaFunction::getCameraWaterDepth(), 150.0f, 300.0f) - 150.0f) / 150.0f);
@@ -491,11 +482,17 @@ void OceanRingDrawer::loadMaterialBloom() const {
     NebulaNativeMaterial material;
     NativeShader::init(material, NEBULA_SHADER_OCEAN_RING_BLOOM, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, true,
                        NEBULA_CULL_NONE);
+    TMtx34f mtx;
+    mtx.identity();
+    mtx.mMtx[0][2] = _C;
+    mtx.mMtx[1][2] = _10;
+    NativeShader::setMatrix(material, 2, 0, mtx.toMtxPtr());
+    mtx.mMtx[0][2] = _14;
+    mtx.mMtx[1][2] = _18;
+    NativeShader::setMatrix(material, 2, 1, mtx.toMtxPtr());
     NativeShader::setColor(material, 0, 80, 80, 80, v19);
     NativeShader::setColor(material, 4, 80, 80, 80, 255);
     NativeShader::setTexture(material, 0, mWaterTex);
     NativeShader::send(material);
-    static const u8 kPlaces[8] = {0, 1, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture,
-                                  J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture};
-    J3DNativeShape::setCurrent(0, kPlaces);
+    J3DNativeShape::setCurrentPosition(0);
 }

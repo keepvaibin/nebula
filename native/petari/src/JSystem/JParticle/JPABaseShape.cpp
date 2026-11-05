@@ -193,7 +193,7 @@ namespace JPAParticleBatch {
             return;
         }
         J3DNativeShape::setPosition(0, sCamera);
-        J3DNativeShape::setCurrentIdentity();
+        J3DNativeShape::setCurrentPosition(0);
         if (!sBatchExtras && (sBatchPrimitive == NEBULA_PRIMITIVE_QUADS || sBatchPrimitive == NEBULA_PRIMITIVE_TRIANGLE_STRIP)) {
             J3DNativeDraw::drawCorners(sBatchPrimitive, sBatchCount, sBatch);
             sBatchCount = 0;

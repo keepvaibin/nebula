@@ -145,12 +145,9 @@ void FurDrawer::setupMaterial(DynamicFurParam* pParam) const {
     }
 
     NebulaMtxScale(bodyMtx, mBodyUVScale, mBodyUVScale, 1.0f);
-    J3DNativeShape::setTexture(0, bodyMtx, 2);
-    J3DNativeShape::setTexture(1, furMtx, 2);
-
-    if (mUseIndirect) {
-        J3DNativeShape::setTexture(2, indirectMtx, 2);
-    }
+    NativeShader::setMatrix(sMaterial, 10, 0, bodyMtx);
+    NativeShader::setMatrix(sMaterial, 10, 1, furMtx);
+    NativeShader::setMatrix(sMaterial, 10, 2, indirectMtx);
 
 
     u32 sources;

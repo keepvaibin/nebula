@@ -158,6 +158,11 @@ public:
     enum { cNebulaPalettes = 4 };
     NebulaPalette mNebulaPalette[cNebulaPalettes] = {};
     u32 mNebulaGeneration = 0;
+    // The view its draw matrices were last made in.
+    Mtx mViewAtCalc;
+    const f32 (*viewAtCalc() const)[4] {
+        return mViewAtCalc;
+    }
     u8 mNebulaPaletteNext = 0;
 
 

@@ -164,37 +164,25 @@ fn emit_vertex(p: &Program, out: &mut Vec<String>) -> Result<()> {
             bail!("texgen kind {kind} (emboss)");
         }
         let coord = match row {
-            0 => "float4(v.pos, 1.0)".to_string(),
-            1 => "float4(v.nrm, 1.0)".to_string(),
+            0 => "float4(v.eye, 1.0)".to_string(),
+            1 => "float4(j3d_eye_normal(v), 1.0)".to_string(),
+            13 => "float4(v.pos, 1.0)".to_string(),
+            14 => "float4(v.nrm, 1.0)".to_string(),
             3 => "float4(v.tangent, 1.0)".to_string(),
             4 => "float4(v.binormal, 1.0)".to_string(),
             5..=12 => format!("float4(v.uv[{}], 1.0, 1.0)", row - 5),
             _ => bail!("texgen source row {row}"),
         };
-        let three = projective != 0;
         out.push(format!("    {{  // coordinate {i}: kind {kind}, projective {projective}, row {row}"));
         out.push(format!("        const float4 c = {coord};"));
-        out.push("        float3 res;".into());
-        out.push(format!("        if (((vs_header.w >> {i}u) & 1u) != 0u) {{"));
-        out.push(format!("            const uint tm = native_tex_matrix(v, {i}u);"));
-        let third = if three { "dot(c, native_matrix_row(tm + 2u))" } else { "1.0" };
-        out.push(format!("            res = float3(dot(c, native_matrix_row(tm + 0u)), dot(c, native_matrix_row(tm + 1u)), {third});"));
-        out.push("        } else {".into());
         let (a, b, c) = (3 * i, 3 * i + 1, 3 * i + 2);
-        let third = if three { format!("dot(c, native_tex_row({c}))") } else { "1.0".to_string() };
-        out.push(format!("            res = float3(dot(c, native_tex_row({a})), dot(c, native_tex_row({b})), {third});"));
-        out.push("        }".into());
-        out.push(format!("        const uint pt = native_post({i}u);"));
-        out.push("        const bool posted = (pt & 0x3Fu) != 61u;".into());
-        out.push("        if (posted) {".into());
-        out.push("            if ((pt & 0x100u) != 0u) res = dot(res, res) > 0.0 ? normalize(res) : res;".into());
-        out.push(format!(
-            "            res = float3(dot(float4(res, 1.0), native_coord_post_row({a})), dot(float4(res, 1.0), native_coord_post_row({b})), dot(float4(res, 1.0), native_coord_post_row({c})));"
-        ));
-        out.push("        }".into());
-        let projected = if three { "true" } else { "posted" };
-        out.push(format!("        if ({projected} && res.z == 0.0) res.xy = clamp(res.xy * 0.5, -1.0, 1.0);"));
-        out.push(format!("        o.uv[{i}] = float4(res, {projected} ? 1.0 : 0.0);"));
+        if projective != 0 {
+            out.push(format!("        float3 res = float3(dot(c, material.coord[{a}]), dot(c, material.coord[{b}]), dot(c, material.coord[{c}]));"));
+            out.push("        if (res.z == 0.0) res.xy = clamp(res.xy * 0.5, -1.0, 1.0);".into());
+            out.push(format!("        o.uv[{i}] = float4(res, 1.0);"));
+        } else {
+            out.push(format!("        o.uv[{i}] = float4(dot(c, material.coord[{a}]), dot(c, material.coord[{b}]), 1.0, 0.0);"));
+        }
         out.push("    }".into());
     }
     out.push("    j3d_vertex_override(v, o);".into());
@@ -762,6 +750,15 @@ fn compact(text: &str) -> Result<String> {
             mask |= 1 << n;
             members.push_str(&format!("    float4 {slot};\n"));
         }
+    }
+    let mut rows = 0usize;
+    for part in text.split("material.coord[").skip(1) {
+        if let Some(end) = part.find(']') {
+            rows = rows.max(part[..end].parse::<usize>().unwrap_or(0) + 1);
+        }
+    }
+    if rows != 0 {
+        members.push_str(&format!("    float4 coord[{rows}];\n"));
     }
     const INCLUDE: &str = "#include \"j3d_material.hlsli\"";
     if !text.contains(INCLUDE) {

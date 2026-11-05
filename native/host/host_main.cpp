@@ -2533,21 +2533,6 @@ void svc_light(void*, uint32_t index, const NebulaLight* light) {
 #endif
 }
 
-void svc_texture_coordinate(void*, uint32_t coord, uint32_t from, uint32_t matrix_slot) {
-#if defined(NEBULA_HOST_RENDERER)
-    galaxy::render::state::Op op{};
-    op.kind = galaxy::render::state::kTexCoordGen;
-    op.a[0] = static_cast<std::uint8_t>(coord);
-    op.a[2] = static_cast<std::uint8_t>((5u + from) | 5u << 4u);  // source row 5 + n, no emboss source
-    op.a[4] = 61u;                                                // the identity post-transform
-    op.a[5] = 1u;
-    op.a[6] = static_cast<std::uint8_t>(matrix_slot);
-    attach_state_ops(&op, 1u);
-#else
-    (void)coord, (void)from, (void)matrix_slot;
-#endif
-}
-
 std::uint32_t svc_material_layout(void*, std::uint32_t shader) {
 #if defined(NEBULA_HOST_RENDERER)
     return galaxy::render::native_material_layout(shader);
@@ -4367,7 +4352,6 @@ int main(int argc, char** argv) {
     services.view_viewport = svc_view_viewport;
     services.view_scissor = svc_view_scissor;
     services.light = svc_light;
-    services.texture_coordinate = svc_texture_coordinate;
     services.immediate = svc_immediate;
     services.target_begin = svc_target_begin;
     services.target_begin_pixels = svc_target_begin_pixels;

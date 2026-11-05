@@ -55,7 +55,7 @@ void ClipFieldFillDraw::sendFillScreen(NebulaColor8 color) const {
     material.alpha_write = 0;
     NativeShader::setStencil(material, _25 ? NEBULA_STENCIL_IF_SET : NEBULA_STENCIL_IF_ZERO, NEBULA_STENCIL_KEEP);
     NativeShader::send(material);
-    J3DNativeShape::setCurrentIdentity();
+    J3DNativeShape::setCurrentPosition(0);
 
     J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 4, NEBULA_SHAPE_TEXCOORD0);
     {

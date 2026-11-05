@@ -15,13 +15,14 @@ struct MaterialConstants {
     float4 params2;  // x: the indirect scale, y: the alpha reference (0-255), zw: texture 1's size (texels)
     float4 fog;      // start, end, near, far
     float4 fog_color;  // rgb; w: the fog type
+    float4 coord[9];  // texture matrices, three rows each
 };
 
 #include "native_material.hlsli"
 
 float2 fur_coord(NativeVertex v, uint i) {
     const float4 c = float4(v.uv[0], 1.0, 1.0);
-    return float2(dot(c, native_tex_row(3u * i)), dot(c, native_tex_row(3u * i + 1u)));
+    return float2(dot(c, material.coord[3u * i]), dot(c, material.coord[3u * i + 1u]));
 }
 
 void material_vertex(NativeVertex v, inout NativeVaryings o) {

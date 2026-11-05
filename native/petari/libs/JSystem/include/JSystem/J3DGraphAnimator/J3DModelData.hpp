@@ -15,7 +15,6 @@ public:
     }
 
     void clear();
-    void syncJ3DSysFlags() const;
 
     J3DMaterialTable& getMaterialTable() {
         return mMaterialTable;
@@ -136,9 +135,6 @@ public:
     }
     bool checkBBoardFlag() const {
         return mbHasBillboard == 1;
-    }
-    void syncJ3DSys() const {
-        syncJ3DSysFlags();
     }
     void makeHierarchy(J3DJoint* joint, J3DModelHierarchy const** hierarchy) {
         mJointTree.makeHierarchy(joint, hierarchy, &mMaterialTable, &mShapeTable);

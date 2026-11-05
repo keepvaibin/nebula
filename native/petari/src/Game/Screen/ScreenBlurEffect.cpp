@@ -26,7 +26,7 @@ namespace {
         NativeShader::setTexture(material, 0, pPicture);
         NativeShader::setTexture(material, 1, pDepth);
         NativeShader::send(material);
-        J3DNativeShape::setCurrentIdentity();
+        J3DNativeShape::setCurrentPosition(0);
     }
 }  // namespace
 #include <JSystem/JGeometry/TMatrix.hpp>

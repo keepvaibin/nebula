@@ -3,7 +3,6 @@
 #include "Game/Player/J3DModelX.hpp"
 #include "Game/Util/NativeShader.hpp"
 #include "JSystem/J3DGraphBase/J3DNativeMaterial.hpp"
-#include "Game/System/ShapePacketUserData.hpp"
 #include "Game/Util/DirectDraw.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MemoryUtil.hpp"
@@ -32,6 +31,7 @@ class J3DShapePacketX : public J3DShapePacket {};
 
 void J3DModelX::viewCalc2() {
     mNebulaGeneration++;
+    NebulaMtxCopy(j3dSys.getViewMtx(), mViewAtCalc);
     J3DMtxBuffer2* buffer = static_cast< J3DMtxBuffer2* >(mMtxBuffer);
     buffer->swapDrawMtx();
     buffer->swapNrmMtx();
@@ -57,6 +57,7 @@ void J3DModelX::copyAnmMtxBuffer(const J3DModelX* model) {
 
 void J3DModelX::viewCalc3(u32 view, MtxPtr mtx) {
     mNebulaGeneration++;
+    NebulaMtxCopy(j3dSys.getViewMtx(), mViewAtCalc);
     J3DMtxBuffer2* buffer = static_cast< J3DMtxBuffer2* >(mMtxBuffer);
     buffer->rotationMtx(*mExtraMtxBuffer[view + _DC]);
 
@@ -78,6 +79,7 @@ void J3DModelX::viewCalc3(u32 view, MtxPtr mtx) {
 
 void J3DModelX::viewCalcRef(u32 view, J3DModel* model) {
     mNebulaGeneration++;
+    NebulaMtxCopy(j3dSys.getViewMtx(), mViewAtCalc);
     J3DMtxBuffer2* buffer = static_cast< J3DMtxBuffer2* >(mMtxBuffer);
     buffer->rotationMtx(*mExtraMtxBuffer[view + _DC]);
     buffer->calcDrawMtx2(getMtxCalcMode(), mBaseScale, mBaseTransformMtx, model->getMtxBuffer());
@@ -86,6 +88,7 @@ void J3DModelX::viewCalcRef(u32 view, J3DModel* model) {
 
 void J3DModelX::viewCalcRefPos(u32 view, J3DModel* model, const TVec3f& pos, const TVec3f& normal) {
     mNebulaGeneration++;
+    NebulaMtxCopy(j3dSys.getViewMtx(), mViewAtCalc);
     J3DMtxBuffer2* buffer = static_cast< J3DMtxBuffer2* >(mMtxBuffer);
     buffer->rotationMtx(*mExtraMtxBuffer[view + _DC]);
     buffer->calcDrawMtx3(getMtxCalcMode(), mBaseScale, mBaseTransformMtx, model->getMtxBuffer(), pos, normal);
@@ -145,7 +148,6 @@ void J3DMtxBuffer2::calcDrawMtx3(u32 mode, const Vec& scale, const Mtx& base, J3
 
 void J3DModelX::directDraw(J3DModel* model) {
     j3dSys.setModel(this);
-    mModelData->syncJ3DSysFlags();
     j3dSys.setTexture(mModelData->getTexture());
 
     bool fog = false;
@@ -200,10 +202,6 @@ void J3DModelX::drawIn(J3DMaterial* material, bool fog, MtxPtr base, J3DModel* m
         TVec3f pos;
         MR::extractMtxTrans(mBaseTransformMtx, &pos);
         TDDraw::mixFogColor(pos, _1D4, _1D8);
-    }
-
-    if (MR::getJ3DShapePacketUserData(packet)) {
-        MR::getJ3DShapePacketUserData(packet)->load();
     }
 
     s32 override = -1;
@@ -274,7 +272,6 @@ void J3DModelX::drawIn(J3DMaterial* material, bool fog, MtxPtr base, J3DModel* m
         packet->setShape(replacement->getShape());
         packet->mpShape->mDrawMtx = original->mDrawMtx;
         packet->mpShape->mDrawMtxData = original->mDrawMtxData;
-        packet->mpShape->mCurrentMtx = material->mCurrentMtx;
     }
 
     shapePacketDrawFast(static_cast< J3DShapePacketX* >(packet));

@@ -17,7 +17,6 @@ enum J3DModelLoaderFlagTypes {
     J3DMLF_MtxTypeMask =
         J3DMLF_MtxSoftImageCalc | J3DMLF_MtxMayaCalc | J3DMLF_MtxBasicCalc | J3DMLF_04,  // 0 - 2 (0 = Basic, 1 = SoftImage, 2 = Maya)
 
-    J3DMLF_UsePostTexMtx = 0x00000020,
     J3DMLF_07 = 0x00000040,
     J3DMLF_08 = 0x00000080,
     J3DMLF_10 = 0x00000200,

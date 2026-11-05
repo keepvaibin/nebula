@@ -155,10 +155,6 @@ void J3DJoint::entryIn() {
         } else {
             J3DMatPacket* matPacket = j3dSys.getModel()->getMatPacket(mesh->getIndex());
             J3DShapePacket* shapePacket = j3dSys.getModel()->getShapePacket(mesh->getShape()->getIndex());
-            if (!matPacket->isLocked()) {
-                mesh->calc(anmMtx);
-            }
-            mesh->setCurrentMtx();
             matPacket->setShapePacket(shapePacket);
             J3DDrawBuffer* drawBuffer = j3dSys.getDrawBuffer(mesh->isDrawModeOpaTexEdge());
             if (matPacket->entry(drawBuffer)) {

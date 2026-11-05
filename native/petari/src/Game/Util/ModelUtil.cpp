@@ -6,7 +6,6 @@
 #include "Game/LiveActor/ModelManager.hpp"
 #include "Game/Player/J3DModelX.hpp"
 #include "Game/System/ResourceHolder.hpp"
-#include "Game/System/ShapePacketUserData.hpp"
 #include "Game/Util.hpp"
 #include <JSystem/J3DGraphAnimator/J3DJoint.hpp>
 #include <cstdio>
@@ -237,76 +236,6 @@ namespace MR {
         return isExistEffectTexMtx(getJ3DModelData(pActor));
     }
 
-    bool isUseTexMtxEnvMap(J3DMaterial* pMaterial) {
-        for (u32 idx = 0; idx < 8; idx++) {
-            J3DTexMtx* texMtx = pMaterial->getTexMtx(idx);
-            if (texMtx == nullptr) {
-                continue;
-            }
-
-            u32 temp = texMtx->getTexMtxInfo().mInfo & 0x3F;
-            if (temp == 1 || temp == 6 || temp == 7) {
-                if (!isUseTexMtx(pMaterial, idx)) {
-                    return false;
-                }
-
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    bool isUseTexMtxProjMap(J3DMaterial* pMaterial) {
-        for (u32 idx = 0; idx < 8; idx++) {
-            J3DTexMtx* texMtx = pMaterial->getTexMtx(idx);
-            if (texMtx == nullptr) {
-                continue;
-            }
-
-            u32 temp = texMtx->getTexMtxInfo().mInfo & 0x3F;
-            if (temp == 2 || temp == 3 || temp == 8 || temp == 9) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    void initEnvelopeAndEnvMapOrProjMapModelData(J3DModelData* pModelData) {
-
-
-        for (int i = 0; i < pModelData->getMaterialNum(); i++) {
-            J3DMaterial* material = pModelData->getMaterialNodePointer(i);
-            if (!isEnvelope(material)) {
-                continue;
-            }
-
-            bool isUseEnvMap = isUseTexMtxEnvMap(material);
-            bool isUseProjMap = isUseTexMtxProjMap(material);
-            if (!isUseEnvMap && !isUseProjMap) {
-                continue;
-            }
-
-            J3DShape* shape = material->getShape();
-            if (isUseEnvMap) {
-                shape->mNormalAsTexture = true;
-            }
-
-            for (u32 idx = 0; idx < 8; idx++) {
-                J3DTexCoord* texCoord = material->getTexCoord(idx);
-                if (texCoord->getTexGenSrc() == 1) {
-                    shape->addTexMtxIndex(idx, 30);
-                } else if (texCoord->getTexGenSrc() == 0) {
-                    // In a material with indirect stages: texture place 0, as v1 and the original draw it (the manta ray's body,
-                    // runs s4_rC against s4_g5 and v1). Otherwise the corner's position (Rosalina's fade, ros_rc1).
-                    const bool isIndirect = material->getIndTexStageNum() != 0;
-                    shape->addTexMtxIndex(idx, isIndirect ? J3DShape::cTexMtxBasePlaceZero : 0);
-                }
-            }
-        }
-    }
-
     ResTIMG* getResTIMG(const LiveActor* pActor, int idx) {
         return getResTIMG(getJ3DModelData(pActor), idx);
     }
@@ -512,7 +441,6 @@ namespace MR {
             (MR::MutexHolder< 0 >::sMutex).unlock();
         }
 
-        initJ3DShapePacketUserData(newModel);
         Mtx mtx;
         NebulaMtxIdentity(mtx);
         newModel->unlock();

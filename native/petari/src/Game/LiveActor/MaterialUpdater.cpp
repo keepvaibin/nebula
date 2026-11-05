@@ -60,12 +60,6 @@ void MaterialUpdater::push(MaterialCtrl* pCtrl) {
 void MaterialUpdater::checkMaterial() {
     checkTexture();
 
-    for (u16 i = 0; i < mModel->getModelData()->getMaterialNum(); i++) {
-        if (!MR::isNormalTexMtx(mModel->getModelData()->getMaterialNodePointer(i))) {
-            mModel->ownMaterial(i);
-        }
-    }
-
     checkViewProjmapEffectMtx();
 }
 

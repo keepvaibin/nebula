@@ -397,10 +397,8 @@ void J3DModelLoader_v26::readMaterial(J3DMaterialBlock const* i_block, u32 i_fla
 
 // What a material takes from its model once the whole file is read.
 void J3DModelLoader::finishMaterials() {
-    const bool postTexMtx = mpModelData != NULL && mpModelData->checkFlag(0x20);
     for (u16 i = 0; i < mpMaterialTable->mMaterialNum; i++) {
         mpMaterialTable->mMaterialNodePointer[i]->mTexture = mpMaterialTable->mTexture;
-        mpMaterialTable->mMaterialNodePointer[i]->mPostTexMtx = postTexMtx;
     }
 }
 

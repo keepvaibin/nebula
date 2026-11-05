@@ -20,16 +20,16 @@ namespace {
     // runtime/src/render/materials/spin_driver_path.hlsl: the path's colour texture (0) at its alpha times the mask's
     // (1), through texture matrices 0 and 1; added by source alpha where above zero, depth tested and not written, no
     // culling.
+    NebulaNativeMaterial sPathMaterial;
+
     void sendPathMaterial(JUTTexture* pColor, JUTTexture* pMask) {
-        NebulaNativeMaterial material;
+        NebulaNativeMaterial& material = sPathMaterial;
         NativeShader::init(material, NEBULA_SHADER_SPIN_DRIVER_PATH, NativeShader::BLEND_ADD_ALPHA, NEBULA_COMPARE_LEQUAL,
                            false, NEBULA_CULL_NONE);
         NativeShader::setTexture(material, 0, pColor);
         NativeShader::setTexture(material, 1, pMask);
         NativeShader::send(material);
-        static const u8 kPlaces[8] = {0, 1, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture,
-                                      J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture};
-        J3DNativeShape::setCurrent(0, kPlaces);
+    J3DNativeShape::setCurrentPosition(0);
     }
 }  // namespace
 
@@ -299,13 +299,14 @@ void SpinDriverPathDrawer::draw() const {
     mtx[1][1] = -maskSteps;
     mtx[1][3] = 0.5f + maskSteps * drawCode;
 
-    J3DNativeShape::setTexture(1, mtx, 2);
+    NativeShader::setMatrix(sPathMaterial, 0, 1, mtx);
 
     mtx.identity();
     mtx[1][1] = 1.0f / mFadeScale;
     mtx[1][3] = 1.0f - drawBaseCode * mtx[1][1];
 
-    J3DNativeShape::setTexture(0, mtx, 2);
+    NativeShader::setMatrix(sPathMaterial, 0, 0, mtx);
+    NativeShader::send(sPathMaterial);
 
     for (u32 i = 1; i < mPositionCount; i++) {
         TVec3f prev90(_90[i - 1]), curr90(_90[i]);

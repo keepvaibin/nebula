@@ -577,6 +577,19 @@ bool RendererVk::begin_replay_sequence(const ReplaySequence& sequence) {
             }
         }
     }
+    interp_material_copied_.assign(static_cast<std::size_t>(layout.material_count), 0u);
+    for (const DrawCall& call : run_log_.draws) {
+        if (call.replay_record < 0 || static_cast<std::size_t>(call.replay_record) >= sequence.record_ps_slot.size()) continue;
+        const std::int32_t slot = sequence.record_ps_slot[static_cast<std::size_t>(call.replay_record)];
+        if (slot >= 0 && interp_material_copied_[static_cast<std::size_t>(slot)] == 0u) {
+            interp_material_copied_[static_cast<std::size_t>(slot)] = 1u;
+            if (!copy_block(call.ps_constants, interp_gpu::kMaterialConstantBytes,
+                            layout.material_offset(static_cast<std::uint32_t>(slot)))) {
+                replay_failure_ = 9u;
+                return false;
+            }
+        }
+    }
     // Each palette slot takes its source draw's blocks (draw_matrices.h) at their rows; a motion vector's slot its
     // position and texture blocks.
     static constexpr std::array<std::pair<std::uint32_t, std::uint32_t>, 5> kBlocks{{
@@ -824,6 +837,9 @@ bool RendererVk::record_replay_list(ReplayList& list) {
                 const auto record = static_cast<std::size_t>(call.replay_record);
                 if (const std::int32_t slot = sequence.record_vs_slot[record]; slot >= 0) {
                     call.vs_constants = output + layout.vs_offset(static_cast<std::uint32_t>(slot));
+                }
+                if (const std::int32_t slot = sequence.record_ps_slot[record]; slot >= 0) {
+                    call.ps_constants = output + layout.material_offset(static_cast<std::uint32_t>(slot));
                 }
                 if (record < sequence.record_palette_slot.size() && sequence.record_palette_slot[record] >= 0) {
                     call.matrix_palette =

@@ -31,7 +31,6 @@ class J3DDrawBuffer;
 class J3DTexture;
 
 enum J3DSysFlag {
-    J3DSysFlag_PostTexMtx = 0x40000000,
 };
 
 class J3DSys {

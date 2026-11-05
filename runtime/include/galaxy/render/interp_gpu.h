@@ -89,6 +89,9 @@ inline constexpr std::uint32_t kPaletteRows = draw_rows::kRows;
 inline constexpr std::uint32_t kPaletteWords = (kPaletteRows * 5u + 63u) & ~63u;
 inline constexpr std::uint32_t kPaletteBytes = kPaletteWords * 4u;
 inline constexpr std::uint32_t kVsBytes = sizeof(VertexConstants);
+// A material's constants (NebulaNativeMaterial::constants) and their block.
+inline constexpr std::uint32_t kMaterialConstantBytes = 216u * sizeof(float);
+inline constexpr std::uint32_t kMaterialBytes = 1024u;
 // The rows a motion vector reads from a palette at the frame presented before
 // (position and texture matrices, rows 0-63), after 16 unused float4.
 inline constexpr std::uint32_t kPrevPaletteRows = 64u;
@@ -113,6 +116,7 @@ struct Layout {
     std::uint32_t palette_count = 0;
     std::uint32_t prev_palette_count = 0;  // 0, or palette_count with motion vectors
     std::uint32_t model_rows = 0;          // models' blocks, as rows, after the previous palettes
+    std::uint32_t material_count = 0;      // materials' constants, after the models' blocks
     [[nodiscard]] std::uint32_t vs_offset(std::uint32_t slot) const noexcept { return slot * kVsBytes; }
     [[nodiscard]] std::uint32_t palette_base() const noexcept { return vs_count * kVsBytes; }
     [[nodiscard]] std::uint32_t palette_offset(std::uint32_t slot) const noexcept {
@@ -121,8 +125,14 @@ struct Layout {
     [[nodiscard]] std::uint32_t prev_palette_offset(std::uint32_t slot) const noexcept {
         return palette_base() + palette_count * kPaletteBytes + slot * kPrevPaletteBytes;
     }
+    [[nodiscard]] std::uint32_t materials_base() const noexcept {
+        return (models_base() + model_rows * 16u + 255u) & ~255u;
+    }
+    [[nodiscard]] std::uint32_t material_offset(std::uint32_t slot) const noexcept {
+        return materials_base() + slot * kMaterialBytes;
+    }
     [[nodiscard]] std::uint32_t bytes() const noexcept {
-        return models_base() + model_rows * 16u;
+        return materials_base() + material_count * kMaterialBytes;
     }
     [[nodiscard]] std::uint32_t models_base() const noexcept {
         return palette_base() + palette_count * kPaletteBytes + prev_palette_count * kPrevPaletteBytes;

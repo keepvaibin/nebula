@@ -50,7 +50,7 @@ pub fn cook_model(bytes: &[u8]) -> Result<Vec<u8>> {
             bounded[4..8].copy_from_slice(&actual.to_be_bytes());
             let table = Mat3::parse(&bounded)?;
             for i in 0..table.len() {
-                let p = table.compatibility_program(i, 0x11100000, false)?;
+                let p = table.compatibility_program(i, 0x11100000)?;
                 let written = table.name(i).and_then(|name| written_shader(&name));
                 let shader = match written {
                     Some(id) => id,
@@ -107,7 +107,7 @@ pub fn generated_shaders(bytes: &[u8]) -> Result<Vec<(String, String)>> {
             let table = Mat3::parse(bytes.get(at..at + size).context("a model block past the file's end")?)?;
             let mut out = Vec::new();
             for i in 0..table.len() {
-                let program = table.compatibility_program(i, 0x11100000, false)?;
+                let program = table.compatibility_program(i, 0x11100000)?;
                 let name = table.name(i).unwrap_or_else(|| format!("material{i}"));
                 out.push((name, super::shader_source::material_source(&normalize_program(&program)?)?));
             }
@@ -298,7 +298,6 @@ impl<'a> Mat3<'a> {
         &self,
         material: usize,
         flags: u32,
-        post_matrices: bool,
     ) -> Result<[u8; PROGRAM_BYTES]> {
         let init = self.init(material)?;
         let stages = self.byte_property(material, 4, 0x58, 0xff)?;
@@ -422,17 +421,23 @@ impl<'a> Mat3<'a> {
                 p[560 + i * 4..564 + i * 4].copy_from_slice(swap);
             }
         }
+        let mut as_sent = [None; 8];
         for i in 0..usize::from(texgens) {
             let coord = self
                 .property(material, 0x28 + i * 2, 0x38, 4)?
                 .unwrap_or(&[1, 4, 60, 0]);
             let b = 592 + 8 * i;
             p[b..b + 3].copy_from_slice(&coord[..3]);
-            p[b + 4] = if post_matrices && coord[2] != 60 {
-                (3 * i) as u8
+            p[b + 4] = 61;
+            let mode = if (30..60).contains(&coord[2]) {
+                self.property(material, 0x48 + usize::from(coord[2] - 30) / 3 * 2, 0x40, 100)?
+                    .map_or(0, |m| m[1] & 0x3f)
             } else {
-                61
+                0
             };
+            if coord[1] <= 1 && mode == 0 {
+                as_sent[i] = Some(13 + coord[1]);
+            }
         }
         for i in 0..4 {
             let c = self
@@ -503,7 +508,13 @@ impl<'a> Mat3<'a> {
             p[6] = self.byte_property(material, 5, 0x78, 0)?;
         }
         p[8..10].copy_from_slice(&loads.to_le_bytes());
-        normalize_program(&p)
+        let mut p = normalize_program(&p)?;
+        for (i, row) in as_sent.iter().enumerate() {
+            if let Some(row) = row {
+                p[592 + 8 * i + 1] = (p[592 + 8 * i + 1] & 0xF0) | row;
+            }
+        }
+        Ok(p)
     }
 }
 

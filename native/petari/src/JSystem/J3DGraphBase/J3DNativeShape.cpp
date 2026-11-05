@@ -1,7 +1,6 @@
 #include "JSystem/J3DGraphBase/J3DNativeState.hpp"
 #include "JSystem/J3DGraphBase/J3DNativeDraw.hpp"
 #include "JSystem/J3DGraphBase/J3DNativeMaterial.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeTexGen.hpp>
 #include "JSystem/J3DGraphBase/J3DNativeShape.hpp"
 #include "JSystem/J3DGraphAnimator/J3DModelData.hpp"
 #include "JSystem/J3DGraphBase/J3DShape.hpp"
@@ -92,42 +91,12 @@ namespace {
     // Places given since the last record: the next record carries them whether its corners read them or not.
     u32 sGivenPlaces = 0;
     u8 sCurrentPosition = 0;
-    NebulaDrawMatrix sTextures[64];
-    u32 sTextureCount = 0;
-    NebulaShapeCurrent sCurrent;
-    bool sCurrentSet = false;
-    NebulaShapeTexGen sTexGens[8];
-    u32 sTexGenCount = 0;
     // A record's matrices: its position and normal matrices, then the texture matrices.
-    NebulaDrawMatrix sRecord[2 * J3DNativeShape::kPositions + 64];
+    NebulaDrawMatrix sRecord[2 * J3DNativeShape::kPositions];
     // The next draw's block: a shape of one matrix takes it once; a skinned shape keeps the last one.
     u32 sNextPalette = 0;
     u16 sNextPaletteMatrix = 0;
     u32 sLastPalette = 0;
-
-    NebulaDrawMatrix* nextTexture(u32 kind, u32 place) {
-        J3DNativeDraw::flush();
-        // A texture matrix given again for the same place before a record replaces the pending one, as a load into
-        // a slot replaces what the slot held: only the last one before a draw is the one it reads.
-        for (u32 i = 0; i < sTextureCount; i++) {
-            if (sTextures[i].kind == kind && sTextures[i].place == place) {
-                NebulaDrawMatrix* pOut = &sTextures[i];
-                memset(pOut, 0, sizeof(*pOut));
-                pOut->kind = static_cast< u8 >(kind);
-                pOut->place = static_cast< u8 >(place);
-                return pOut;
-            }
-        }
-        if (sTextureCount == sizeof(sTextures) / sizeof(sTextures[0])) {
-            fail("more texture matrices before one draw than a draw can carry", nullptr);
-            return nullptr;
-        }
-        NebulaDrawMatrix* pOut = &sTextures[sTextureCount++];
-        memset(pOut, 0, sizeof(*pOut));
-        pOut->kind = static_cast< u8 >(kind);
-        pOut->place = static_cast< u8 >(place);
-        return pOut;
-    }
 
     NebulaDrawMatrix* placeAt(Place* pPlaces, u32 kind, u32 place, u16 modelMatrix) {
         J3DNativeDraw::flush();
@@ -163,9 +132,6 @@ namespace {
             }
         }
         if (textures) {
-            memcpy(&sRecord[count], sTextures, sTextureCount * sizeof(sTextures[0]));
-            count += sTextureCount;
-            sTextureCount = 0;
         }
         return count;
     }
@@ -196,70 +162,6 @@ namespace J3DNativeShape {
         if (NebulaDrawMatrix* pOut = placeAt(sNormals, NEBULA_DRAW_MATRIX_NORMAL, index, modelMatrix)) {
             copyRows(pOut->values, &pMtx[0][0], 3, 3, 3, 3);
         }
-    }
-
-    void setTexture(u32 index, const f32 (*pMtx)[4], u32 rows) {
-        const u32 kind = rows == 2 ? NEBULA_DRAW_MATRIX_TEXTURE_2X4 : NEBULA_DRAW_MATRIX_TEXTURE;
-        if (NebulaDrawMatrix* pOut = nextTexture(kind, index)) {
-            copyRows(pOut->values, &pMtx[0][0], rows == 2 ? 2 : 3, 4, 4, 4);
-        }
-    }
-
-    void setNormalTexture(u32 index, const f32 (*pMtx)[4]) {
-        if (NebulaDrawMatrix* pOut = nextTexture(NEBULA_DRAW_MATRIX_TEXTURE, index)) {
-            copyRows(pOut->values, &pMtx[0][0], 3, 3, 4, 4);
-        }
-    }
-
-    void setNormal33Texture(u32 index, const f32 (*pMtx)[3]) {
-        if (NebulaDrawMatrix* pOut = nextTexture(NEBULA_DRAW_MATRIX_TEXTURE, index)) {
-            copyRows(pOut->values, &pMtx[0][0], 3, 3, 3, 4);
-        }
-    }
-
-    void setPostTexture(u32 index, const f32 (*pMtx)[4]) {
-        if (NebulaDrawMatrix* pOut = nextTexture(NEBULA_DRAW_MATRIX_POST_TEXTURE, index)) {
-            copyRows(pOut->values, &pMtx[0][0], 3, 4, 4, 4);
-        }
-    }
-
-    void setTexGen(u8 coord, u8 type, u8 source, bool normalize, u8 postMatrix) {
-        J3DNativeDraw::flush();
-        if (sTexGenCount == 8) {
-            fail("more texture coordinate generators before one draw than a draw can carry", nullptr);
-            return;
-        }
-        NebulaShapeTexGen& rOut = sTexGens[sTexGenCount++];
-        rOut.coord = coord;
-        rOut.type = J3DNativeTexGen::kind(type, source);
-        rOut.source = J3DNativeTexGen::source(source);
-        rOut.normalize = normalize ? 1 : 0;
-        rOut.post_matrix = J3DNativeTexGen::post(postMatrix);
-        rOut.reserved[0] = rOut.reserved[1] = rOut.reserved[2] = 0;
-    }
-
-    void setCurrent(u8 position, const u8* pTexture) {
-        J3DNativeDraw::flush();
-        sCurrent.position = position;
-        for (u32 t = 0; t < 8; t++) {
-            sCurrent.texture[t] = pTexture[t];
-        }
-        sCurrentSet = true;
-        sCurrentPosition = sCurrent.position;
-    }
-
-    void setCurrentFromFile(u8 position, const u8* pIds) {
-        u8 slots[8];
-        for (u32 t = 0; t < 8; t++) {
-            slots[t] = static_cast< u8 >(pIds[t] >= J3D_TEXMTX0 ? (pIds[t] - J3D_TEXMTX0) / 3 : 0);
-        }
-        setCurrent(static_cast< u8 >(position / 3), slots);
-    }
-
-    void setCurrentIdentity() {
-        static const u8 kIdentity[8] = {J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture,
-                                        J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture};
-        setCurrent(0, kIdentity);
     }
 
     u8 currentPosition() {
@@ -311,9 +213,9 @@ namespace J3DNativeShape {
             if ((pMesh->mAttributes & NEBULA_SHAPE_MODEL_MATRICES) != 0) {
                 continue;
             }
-            // Corners without a place of their own take the shape's current one.
+            // Corners without a place of their own take the first.
             const bool ownPlaces = (pMesh->mAttributes & NEBULA_SHAPE_POSITION_MATRIX) != 0;
-            const u32 current = pShape->mCurrentMtx.mPosition / 3;
+            const u32 current = 0;
             pMesh->mAttributes |= NEBULA_SHAPE_MODEL_MATRICES | NEBULA_SHAPE_POSITION_MATRIX;
             NebulaShapeCorner* pCorners = pMesh->corners();
             for (u32 c = 0; c < pMesh->mCornerCount; c++) {
@@ -416,11 +318,8 @@ namespace J3DNativeShape {
         const u32 count = gather(0, true);
         const NebulaHostServices* pHost = nebula_host();
         pHost->shape_draw(pHost->user, keyOf(pShape), keyOf(j3dSys.getVtxPos()), keyOf(j3dSys.getVtxNrm()),
-                          keyOf(j3dSys.getVtxCol()), sRecord, count, sCurrentSet ? &sCurrent : nullptr, sTexGens,
-                          sTexGenCount, J3DNativeState::pass(), sLastPalette, 0);
+                          keyOf(j3dSys.getVtxCol()), sRecord, count, nullptr, nullptr, 0, J3DNativeState::pass(), sLastPalette, 0);
         sNextPalette = 0;
-        sCurrentSet = false;
-        sTexGenCount = 0;
     }
 
     void draw(const J3DShapeDraw* pDraw) {
@@ -433,34 +332,26 @@ namespace J3DNativeShape {
         const NebulaHostServices* pHost = nebula_host();
         pHost->shape_draw(pHost->user, keyOf(pDraw), keyOf(j3dSys.getVtxPos()),
                           keyOf(j3dSys.getVtxNrm()), keyOf(j3dSys.getVtxCol()), sRecord, count,
-                          sCurrentSet ? &sCurrent : nullptr, sTexGens, sTexGenCount, J3DNativeState::pass(), palette,
+                          nullptr, nullptr, 0, J3DNativeState::pass(), palette,
                           sNextPaletteMatrix);
         sNextPalette = 0;
-        sCurrentSet = false;
-        sTexGenCount = 0;
     }
 
     void drawGeometry(u64 key, u64 position, u64 normal, u64 color, u32 places) {
         J3DNativeDraw::flush();
         const u32 count = gather(places != 0 ? places : 1u << sCurrentPosition, true);
         const NebulaHostServices* pHost = nebula_host();
-        pHost->shape_draw(pHost->user, key, position, normal, color, sRecord, count, sCurrentSet ? &sCurrent : nullptr,
-                          sTexGens, sTexGenCount, J3DNativeState::pass(), 0, 0);
-        sCurrentSet = false;
-        sTexGenCount = 0;
+        pHost->shape_draw(pHost->user, key, position, normal, color, sRecord, count, nullptr, nullptr, 0, J3DNativeState::pass(), 0, 0);
     }
 
     void flushState() {
         J3DNativeDraw::flush();
-        if (sTextureCount == 0 && sGivenPlaces == 0 && !sCurrentSet && sTexGenCount == 0) {
+        if (sGivenPlaces == 0) {
             return;
         }
         const u32 count = gather(0, true);
         const NebulaHostServices* pHost = nebula_host();
-        pHost->shape_draw(pHost->user, 0, 0, 0, 0, sRecord, count, sCurrentSet ? &sCurrent : nullptr, sTexGens,
-                          sTexGenCount, J3DNativeState::pass(), 0, 0);
-        sCurrentSet = false;
-        sTexGenCount = 0;
+        pHost->shape_draw(pHost->user, 0, 0, 0, 0, sRecord, count, nullptr, nullptr, 0, J3DNativeState::pass(), 0, 0);
     }
 
     u32 positionMatrices(u32 mask, const NebulaDrawMatrix** ppMatrices) {

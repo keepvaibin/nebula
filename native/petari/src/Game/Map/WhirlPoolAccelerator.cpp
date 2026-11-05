@@ -181,7 +181,7 @@ void WhirlPoolAccelerator::loadMaterial() const {
     NativeShader::setColor(material, 4, rHigh.r, rHigh.g, rHigh.b, rHigh.a);
     NativeShader::setTexture(material, 0, mTexture);
     NativeShader::send(material);
-    J3DNativeShape::setCurrentIdentity();
+    J3DNativeShape::setCurrentPosition(0);
 }
 
 WhirlPoolAccelerator::~WhirlPoolAccelerator() {

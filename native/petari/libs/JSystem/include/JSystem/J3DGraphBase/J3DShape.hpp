@@ -16,54 +16,6 @@ enum J3DShpFlag {
     J3DShpFlag_EnableLod = 0x0100,
 };
 
-class J3DCurrentMtxInfo {
-public:
-    u32 mMtxIdxRegA;
-    u32 mMtxIdxRegB;
-};
-
-// The matrices a shape's corners take when they carry none: its position matrix's id and texture coordinates 0-7's
-// (J3D_IDENTITY where a coordinate has no matrix).
-class J3DCurrentMtx {
-public:
-    J3DCurrentMtx() {
-        mPosition = 0;
-        for (int i = 0; i < 8; i++) {
-            mTexture[i] = J3D_IDENTITY;
-        }
-    }
-
-    // The model file's form: six bits per id, the position's and four texture coordinates' in the first word, the
-    // other four in the second.
-    J3DCurrentMtx& operator=(J3DCurrentMtxInfo const& info) {
-        mPosition = info.mMtxIdxRegA & 0x3F;
-        for (int i = 0; i < 4; i++) {
-            mTexture[i] = (info.mMtxIdxRegA >> (6 * (i + 1))) & 0x3F;
-            mTexture[4 + i] = (info.mMtxIdxRegB >> (6 * i)) & 0x3F;
-        }
-        return *this;
-    }
-
-    void load() const {
-        J3DNativeShape::setCurrentFromFile(mPosition, mTexture);
-    }
-
-    inline void setCurrentTexMtx(u8 param_1, u8 param_2, u8 param_3, u8 param_4, u8 param_5, u8 param_6, u8 param_7, u8 param_8) {
-        mPosition = 0;
-        mTexture[0] = param_1;
-        mTexture[1] = param_2;
-        mTexture[2] = param_3;
-        mTexture[3] = param_4;
-        mTexture[4] = param_5;
-        mTexture[5] = param_6;
-        mTexture[6] = param_7;
-        mTexture[7] = param_8;
-    }
-
-    u8 mPosition;
-    u8 mTexture[8];
-};
-
 // The matrix of a group of one, in its model's draw matrices.
 class J3DShapeMtx {
 public:
@@ -96,14 +48,11 @@ public:
     void initialize();
     // Each corner carries a texture matrix place for coordinate `coord`: `valueBase` (0 position matrices, 30 texture
     // matrices, in their ids) plus its position matrix's id.
-    static const u32 cTexMtxBasePlaceZero = 0xFFFFFFFFu;  // addTexMtxIndex: every corner at texture place 0
-    void addTexMtxIndex(u32 coord, u32 valueBase);
     void calcNBTScale(Vec const&, f32 (*)[3][3], f32 (*)[3][3]);
     u16 countBumpMtxNum() const;
     void initVtxAttr();
     void loadPreDrawSetting() const;
     // The packet's: what its user data loads before the draw (the post-transform of a skinned shape's coordinates).
-    void loadPacketMatrices() const;
     // The draw itself once its material is sent: from its model's block of matrices. `pCallback`: called before the draw.
     void drawGroups(void (*pCallback)(J3DShape*) = nullptr) const;
 
@@ -153,12 +102,6 @@ public:
         mCurrentViewNo = pViewNoPtr;
     }
 
-    void setCurrentMtx(J3DCurrentMtx& mtx) {
-        mCurrentMtx = mtx;
-    }
-    const J3DCurrentMtx& getCurrentMtx() const {
-        return mCurrentMtx;
-    }
 
     void setDrawMtx(Mtx** pDrawMtx) {
         mDrawMtx = pDrawMtx;
@@ -197,7 +140,6 @@ public:
         return &mMax;
     }
 
-    static bool sEnvelopeFlag;
     friend struct J3DShapeFactory;
     friend class J3DJointTree;
 
@@ -213,9 +155,7 @@ public:
     bool mHasNBT;
     J3DShapeMtx** mShapeMtx;
     J3DShapeDraw** mShapeDraw;
-    J3DCurrentMtx mCurrentMtx;
     bool mHasPNMTXIdx;
-    bool mNormalAsTexture;
     J3DVertexData* mVertexData;
     J3DDrawMtxData* mDrawMtxData;
     Mtx** mDrawMtx;

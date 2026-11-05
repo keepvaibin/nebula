@@ -12,6 +12,7 @@ struct MaterialConstants {
     float4 tex_scale1;
     float4 ovr;
     float4 ovr_coord;
+    float4 coord[8];
 };
 #include "j3d_material.hlsli"
 
@@ -54,57 +55,17 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
 #endif
     {  // coordinate 0: kind 0, projective 0, row 5
         const float4 c = float4(v.uv[0], 1.0, 1.0);
-        float3 res;
-        if (((vs_header.w >> 0u) & 1u) != 0u) {
-            const uint tm = native_tex_matrix(v, 0u);
-            res = float3(dot(c, native_matrix_row(tm + 0u)), dot(c, native_matrix_row(tm + 1u)), 1.0);
-        } else {
-            res = float3(dot(c, native_tex_row(0)), dot(c, native_tex_row(1)), 1.0);
-        }
-        const uint pt = native_post(0u);
-        const bool posted = (pt & 0x3Fu) != 61u;
-        if (posted) {
-            if ((pt & 0x100u) != 0u) res = dot(res, res) > 0.0 ? normalize(res) : res;
-            res = float3(dot(float4(res, 1.0), native_coord_post_row(0)), dot(float4(res, 1.0), native_coord_post_row(1)), dot(float4(res, 1.0), native_coord_post_row(2)));
-        }
-        if (posted && res.z == 0.0) res.xy = clamp(res.xy * 0.5, -1.0, 1.0);
-        o.uv[0] = float4(res, posted ? 1.0 : 0.0);
+        o.uv[0] = float4(dot(c, material.coord[0]), dot(c, material.coord[1]), 1.0, 0.0);
     }
     {  // coordinate 1: kind 0, projective 1, row 0
-        const float4 c = float4(v.pos, 1.0);
-        float3 res;
-        if (((vs_header.w >> 1u) & 1u) != 0u) {
-            const uint tm = native_tex_matrix(v, 1u);
-            res = float3(dot(c, native_matrix_row(tm + 0u)), dot(c, native_matrix_row(tm + 1u)), dot(c, native_matrix_row(tm + 2u)));
-        } else {
-            res = float3(dot(c, native_tex_row(3)), dot(c, native_tex_row(4)), dot(c, native_tex_row(5)));
-        }
-        const uint pt = native_post(1u);
-        const bool posted = (pt & 0x3Fu) != 61u;
-        if (posted) {
-            if ((pt & 0x100u) != 0u) res = dot(res, res) > 0.0 ? normalize(res) : res;
-            res = float3(dot(float4(res, 1.0), native_coord_post_row(3)), dot(float4(res, 1.0), native_coord_post_row(4)), dot(float4(res, 1.0), native_coord_post_row(5)));
-        }
-        if (true && res.z == 0.0) res.xy = clamp(res.xy * 0.5, -1.0, 1.0);
-        o.uv[1] = float4(res, true ? 1.0 : 0.0);
+        const float4 c = float4(v.eye, 1.0);
+        float3 res = float3(dot(c, material.coord[3]), dot(c, material.coord[4]), dot(c, material.coord[5]));
+        if (res.z == 0.0) res.xy = clamp(res.xy * 0.5, -1.0, 1.0);
+        o.uv[1] = float4(res, 1.0);
     }
     {  // coordinate 2: kind 0, projective 0, row 1
-        const float4 c = float4(v.nrm, 1.0);
-        float3 res;
-        if (((vs_header.w >> 2u) & 1u) != 0u) {
-            const uint tm = native_tex_matrix(v, 2u);
-            res = float3(dot(c, native_matrix_row(tm + 0u)), dot(c, native_matrix_row(tm + 1u)), 1.0);
-        } else {
-            res = float3(dot(c, native_tex_row(6)), dot(c, native_tex_row(7)), 1.0);
-        }
-        const uint pt = native_post(2u);
-        const bool posted = (pt & 0x3Fu) != 61u;
-        if (posted) {
-            if ((pt & 0x100u) != 0u) res = dot(res, res) > 0.0 ? normalize(res) : res;
-            res = float3(dot(float4(res, 1.0), native_coord_post_row(6)), dot(float4(res, 1.0), native_coord_post_row(7)), dot(float4(res, 1.0), native_coord_post_row(8)));
-        }
-        if (posted && res.z == 0.0) res.xy = clamp(res.xy * 0.5, -1.0, 1.0);
-        o.uv[2] = float4(res, posted ? 1.0 : 0.0);
+        const float4 c = float4(j3d_eye_normal(v), 1.0);
+        o.uv[2] = float4(dot(c, material.coord[6]), dot(c, material.coord[7]), 1.0, 0.0);
     }
     j3d_vertex_override(v, o);
 }

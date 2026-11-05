@@ -529,6 +529,16 @@ private:
         std::vector<Model> models;
         std::vector<std::uint32_t> model_words;
         std::vector<std::uint8_t> per_vertex;   // per-vertex palette draw
+        // Materials with texture matrices, each once a run of draws: their matrices in `material_coords`; per record
+        // its material, or -1.
+        struct Material {
+            std::uint32_t first_word = 0;
+            std::uint8_t first = 0;  // the matrices' first row among its constants
+            std::uint8_t count = 0;
+        };
+        std::vector<Material> materials;
+        std::vector<float> material_coords;
+        std::vector<std::int32_t> material;
         std::vector<std::uint8_t> particle;     // its corners place themselves by the presented frame's time
         // Per record, from its drawing state: texgen i's bit when it maps position or normal (its matrices lerp
         // whole), and the lights its colour channels and emboss texgens evaluate.
@@ -573,7 +583,7 @@ private:
             return r - layers[layer].first < layers[layer].count;
         }
         void clear() noexcept {
-            constants.clear(); prev_index.clear();
+            constants.clear(); prev_index.clear(); materials.clear(); material_coords.clear(); material.clear();
             model.clear(); models.clear(); model_words.clear();
             palette.clear(); per_vertex.clear(); particle.clear(); light_masks.clear(); palette_tables.clear(); palette_rows.clear(); palette_count = 0;
             valid = false; serial = 0;
@@ -759,6 +769,9 @@ private:
     interp_gpu::Layout interp_layout_{};
     std::vector<std::int32_t> interp_vs_slot_;             // per record
     std::vector<std::int32_t> interp_record_palette_slot_;  // per record
+    std::vector<std::int32_t> interp_ps_slot_;              // per record: its material's block, -1 none
+    std::vector<std::int32_t> interp_material_slot_;        // per scene material
+    std::vector<std::array<std::int32_t, 2>> interp_material_pairs_;  // per block: the material before and now
     std::vector<std::int32_t> interp_palette_slot_;        // per interp_palette_motions_ entry
     std::vector<std::int32_t> interp_palette_entry_;       // per palette slot: its entry
     std::vector<std::array<std::uint32_t, 5>> interp_palette_source_;  // per palette slot: its draw's blocks

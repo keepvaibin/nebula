@@ -44,8 +44,7 @@ public:
 
     void initialize();
     // The texture matrices and the coordinates' matrix places at the joint matrix given.
-    void calc(f32 const (*)[4]);
-    void setCurrentMtx();
+    void calc();
     void load();
     // Sent as the material of the draws that follow.
     void useForDraw();
@@ -135,11 +134,9 @@ public:
     u32 mInvalid;
     // Materials with the same ID are the same in everything: they draw together. Bit 31: this one never joins another.
     u32 mID;
-    J3DCurrentMtx mCurrentMtx;
     const NebulaCookedMaterial* mNativeMaterial;
     J3DTexture* mTexture;
     // The model's coordinates go through post-transform matrices.
-    bool mPostTexMtx;
 
     // What the file gives it: without these the neutral values are drawn.
     bool mHasAmbient;

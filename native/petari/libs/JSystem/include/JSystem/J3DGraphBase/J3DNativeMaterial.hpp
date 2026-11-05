@@ -24,13 +24,9 @@ enum {
 struct J3DMaterialSetup {
     u8 tex_gens, cull, z_compare_location, fog_type;
     u16 loads;
-    u8 tex_gen_post[8];  // each coordinate's post-transform row (61 the identity)
     struct { u8 comp0, op, comp1; } alpha_compare;
     struct { u8 type, source, destination; } blend;  // NEBULA_BLEND_*, NEBULA_FACTOR_*
     struct { u8 enable, func, update; } z_mode;
-    // Coordinate i's texture matrix, when the material has one: `id` its place (a post-transform one from 64), `rows`
-    // 2 or 3, `listed` whether the material's own list loads it (a differed list loads every one).
-    struct { u8 present, listed, id, rows; } texture_matrix[8];
 };
 
 // The material's values.
@@ -45,7 +41,7 @@ struct J3DMaterialValues {
     NebulaMaterialTexture texture[8];
     NebulaMaterialLight light[8];
     struct { f32 start, end, near_z, far_z; u8 color[4]; } fog;
-    f32 texture_matrix[8][12];
+    f32 coord[8][12];  // each coordinate's matrix
 };
 
 // A J3D material as the renderer takes it: every
@@ -61,6 +57,8 @@ namespace J3DNativeMaterial {
     const f32* lightAmbient(u32 channel);
     // The current J3D material's stage colour `index` (0 the output, 1-3 the others), and its fog.
     void setCurrentRegister(u32 index, NebulaColor8 color);
+    // The current J3D material's texture coordinate `coord` through this matrix.
+    void setCoordinate(u32 coord, const f32 (*pMtx)[4]);
     const f32* currentRegister(u32 index);
     void setCurrentMaterialColor(u32 channel, NebulaColor8 color);
     void setCurrentAmbient(u32 channel, NebulaColor8 color);

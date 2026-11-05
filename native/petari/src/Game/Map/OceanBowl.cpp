@@ -398,7 +398,7 @@ void OceanBowl::loadMaterial() const {
     // 1) warped by the indirect texture (texture 2); alpha the vertex alpha times the shore mask (texture 3). Blended by
     // its alpha (added under water), depth tested, not written.
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-    J3DNativeShape::setCurrentIdentity();
+    J3DNativeShape::setCurrentPosition(0);
     const bool inWater = MR::isCameraInWater();
     JUTTexture screenTexture(MR::getScreenResTIMG());
     NebulaNativeMaterial material;
@@ -440,7 +440,7 @@ void OceanBowl::loadMaterialBloom() const {
     // the grey c1, alpha the texture's by the vertex alpha at both; blended by its alpha where above zero, depth
     // tested and written before texturing, no culling.
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-    J3DNativeShape::setCurrentIdentity();
+    J3DNativeShape::setCurrentPosition(0);
     NebulaNativeMaterial material;
     NativeShader::init(material, NEBULA_SHADER_OCEAN_BOWL_BLOOM, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, true,
                        NEBULA_CULL_NONE);

@@ -15,6 +15,7 @@ TEXEL = re.compile(r"j3d_texel\(i\.uv\[(\d)\], \du\)")
 WRAP = re.compile(r"j3d_in\((prev|r0|r1|r2)\.(rgb|aaa|a)\)")
 NAMED = re.compile(r"material\.(reg|kcolor|mat_color|amb_color|ind_mtx|tex_scale)\[(\d+)\]")
 USED = re.compile(r"material\.([a-z_]+[0-9]*)\b")
+COORD = re.compile(r"material\.coord\[(\d+)\]")
 
 
 def drop_unused_registers(lines):
@@ -102,11 +103,15 @@ def compact(text):
     text = NAMED.sub(lambda m: f"material.{m.group(1)}{m.group(2)}", text)
     used = {m.group(1) for m in USED.finditer(text)} | ALWAYS
     used.discard("hlsli")
+    used.discard("coord")
     unknown = used - set(SLOTS)
     if unknown:
         raise ValueError(f"constants outside the slots: {sorted(unknown)}")
     mask = sum(1 << n for n, name in enumerate(SLOTS) if name in used)
     members = "".join(f"    float4 {name};\n" for name in SLOTS if name in used)
+    rows = [int(m.group(1)) for m in COORD.finditer(text)]
+    if rows:
+        members += f"    float4 coord[{max(rows) + 1}];\n"
     head = f"// constants 0x{mask:08x}\nstruct MaterialConstants {{\n{members}}};\n"
     include = '#include "j3d_material.hlsli"'
     if include not in text:

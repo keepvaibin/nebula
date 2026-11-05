@@ -21,7 +21,7 @@ NORMAL_ROWS = """    const uint nq = v.pn_row;
 def env_coordinates(text):
     """The texture coordinates generated from the normal: what an environment map reads."""
     found = set()
-    for m in re.finditer(r"// coordinate (\d+):[^\n]*\n\s*const float4 c = float4\(v\.nrm, 1\.0\);", text):
+    for m in re.finditer(r"// coordinate (\d+):[^\n]*\n\s*const float4 c = float4\(j3d_eye_normal\(v\), 1\.0\);", text):
         found.add(m.group(1))
     return found
 

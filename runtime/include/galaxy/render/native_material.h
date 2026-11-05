@@ -20,7 +20,8 @@ struct Native {
     std::uint8_t blend_op, blend_src, blend_dst;
     std::uint8_t depth_test, depth_func, depth_write, early_depth;
     std::uint8_t cull, color_write, alpha_write, light_mask, stencil;
-    float constants[128];
+    float constants[216];
+    std::uint8_t constant_rows, coord_first, coord_count;
     struct {
         std::uint64_t image;
         std::uint8_t repeat_s, repeat_t;
@@ -29,7 +30,6 @@ struct Native {
         std::uint8_t reserved[3];
     } textures[8];
     NativeLight light[8];
-    std::uint8_t texgen_post[8];
     std::uint32_t constants_only;
 };
 inline constexpr std::uint8_t kNativeBlendReplace = 0u, kNativeBlendAdd = 1u, kNativeBlendSubtract = 2u,

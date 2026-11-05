@@ -58,6 +58,7 @@ bool J3DMatPacket::isSame(J3DMatPacket* pOther) const {
 }
 
 void J3DMatPacket::draw() {
+    j3dSys.setModel(getShapePacket()->mpModel);
     mpMaterial->load();
     J3DNativeMaterial::send(mpMaterial);
 
@@ -100,8 +101,6 @@ void J3DShapePacket::prepareDraw() const {
     } else {
         mpShape->setNrmMtx(mpMtxBuffer->mpBumpMtxArr[1][mpShape->getBumpMtxOffset()]);
     }
-
-    mpModel->getModelData()->syncJ3DSysFlags();
 }
 
 void J3DShapePacket::draw() {

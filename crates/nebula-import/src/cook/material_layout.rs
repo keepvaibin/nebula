@@ -331,6 +331,13 @@ pub fn programs(source: &[u8]) -> Result<[[u8; PROGRAM_BYTES]; 4]> {
             p[0] = n as u8;
         }
         *p = normalize_program(p)?;
+        // A layout's position or normal source is as sent: rows 13 and 14.
+        for i in 0..usize::from(p[1]) {
+            let at = 592 + 8 * i + 1;
+            if p[at] & 15 <= 1 {
+                p[at] = (p[at] & 0xF0) | (13 + (p[at] & 15));
+            }
+        }
     }
     Ok(result)
 }

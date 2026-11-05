@@ -5,6 +5,7 @@
 struct MaterialConstants {
     float4 low;   // rgb where the map is black
     float4 high;  // rgb where it is white
+    float4 coord[3];  // texture matrices, three rows each
 };
 
 #include "native_material.hlsli"
@@ -12,7 +13,7 @@ struct MaterialConstants {
 void material_vertex(NativeVertex v, inout NativeVaryings o) {
     const float4 n = float4(v.nrm, 1.0);
     o.color = float4(1.0, 1.0, 1.0, 1.0);
-    o.uv[0] = float4(dot(n, native_tex_row(0)), dot(n, native_tex_row(1)), 1.0, 0.0);
+    o.uv[0] = float4(dot(n, material.coord[0]), dot(n, material.coord[1]), 1.0, 0.0);
 }
 
 float4 material_color(NativeVaryings i) {

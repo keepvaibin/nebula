@@ -1,7 +1,6 @@
 #include "Game/System/DrawBuffer.hpp"
 #include "JSystem/J3DGraphBase/J3DNativeMaterial.hpp"
 #include "Game/LiveActor/ActorLightCtrl.hpp"
-#include "Game/System/ShapePacketUserData.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
 #include <JSystem/J3DGraphAnimator/J3DModel.hpp>
@@ -41,13 +40,11 @@ void DrawBufferShapeDrawer::swap(DrawBufferShapeDrawer* pOther) {
 
 void DrawBufferShapeDrawer::draw() const {
     J3DMaterial* pShared = mMatPacket->getMaterial();
+    j3dSys.setModel(mPackets[0]->mShapePacket->mpModel);
     J3DNativeMaterial::send(pShared);
 
     J3DShapePacket* firstPacket = mPackets[0]->mShapePacket;
     firstPacket->mpShape->loadPreDrawSetting();
-    if (MR::getJ3DShapePacketUserData(firstPacket) != nullptr) {
-        MR::getJ3DShapePacketUserData(firstPacket)->load();
-    }
 
     for (s32 idx = 0; idx < mNumPackets; idx++) {
         J3DShapePacket* packet = mPackets[idx]->mShapePacket;
@@ -59,7 +56,6 @@ void DrawBufferShapeDrawer::draw() const {
         if ((packet->mpShape->mFlags & 1) == 0) {
             if (packet->mpMaterial != pShared) {
                 J3DNativeMaterial::sendOwn(packet->mpMaterial, pShared);
-                packet->mpMaterial->setCurrentMtx();
                 packet->mpShape->loadPreDrawSetting();
             }
             packet->drawFast();

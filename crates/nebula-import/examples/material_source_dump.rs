@@ -48,7 +48,7 @@ fn scan(
                 counts[0] += 1;
                 for i in 0..mat.len() {
                     match mat
-                        .compatibility_program(i, flags, false)
+                        .compatibility_program(i, flags)
                         .and_then(|p| Ok((cooked_shader(&p)?, p)))
                     {
                         Ok((shader, p)) => {

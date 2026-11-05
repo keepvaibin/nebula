@@ -16,10 +16,6 @@ enum J3DLightFalloff {
 typedef NebulaPassState J3DDrawState;
 
 #ifdef __cplusplus
-namespace J3DPass {
-    void textureMatrix(u8 coord, u8 matrix);  // coordinate `coord` is texture coordinate 0 through texture matrix `matrix`
-    void textureIdentity(u8 coord);           // coordinate `coord` is its own texture coordinate
-};  // namespace J3DPass
 
 extern "C" {
 #endif

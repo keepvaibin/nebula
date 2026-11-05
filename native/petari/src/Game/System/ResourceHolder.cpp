@@ -219,7 +219,6 @@ ResFileInfo* ResourceHolder::createAndRegisterObject(const char* pName, void* pD
         (MR::MutexHolder< 0 >::sMutex).lock();
         J3DModelData* modelData = J3DModelLoaderDataBase::loadBinaryMaterials(pData, J3DMLF_Material_UseIndirect | J3DMLF_UseUniqueMaterials);
         (MR::MutexHolder< 0 >::sMutex).unlock();
-        MR::initEnvelopeAndEnvMapOrProjMapModelData(modelData);
         MotionSignal::modelResource(modelData, pName);
         J3DNativeShape::registerModel(modelData);
         return mModelResTable->add(pName, modelData, true);

@@ -17,6 +17,7 @@ struct ReplaySequence {
     interp_gpu::Layout layout{};
     std::span<const std::int32_t> record_vs_slot;       // per scene record, -1 none
     std::span<const std::int32_t> record_palette_slot;  // per scene record, -1 none
+    std::span<const std::int32_t> record_ps_slot;       // per scene record: its material's block, -1 none
     // Per palette slot: its source draw's blocks (float4 offsets in the matrix ring: positions, textures, normals,
     // post-transform matrices, lights).
     std::span<const std::array<std::uint32_t, 5>> palette_source;

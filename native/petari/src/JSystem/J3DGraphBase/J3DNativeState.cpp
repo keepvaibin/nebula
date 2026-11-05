@@ -184,9 +184,6 @@ namespace J3DNativeState {
     void initDefaults() {
         const NebulaColor8 black = {0, 0, 0, 0};
 
-        for (u8 i = 0; i < 8; i++) {
-            J3DPass::textureIdentity(i);
-        }
         lineWidth(1.0f);
         pointSize(1.0f);
 
@@ -194,8 +191,6 @@ namespace J3DNativeState {
         NebulaMtxIdentity(identity);
         J3DNativeShape::setPosition(0, identity);
         J3DNativeShape::setNormal(0, identity);
-        J3DNativeShape::setTexture(J3DNativeShape::kIdentityTexture, identity, 3);
-        J3DNativeShape::setPostTexture(J3DNativeShape::kIdentityPost, identity);
         J3DNativeView::setViewport(0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f);
         J3DNativeView::setProjectionv(sDefaultProjection);
 
@@ -232,26 +227,6 @@ void J3DNativeStateSendLight(const J3DNativeLight* pLight, u8 index) {
     J3DNativeState::sendLight(pLight, index);
 }
 
-namespace J3DPass {
-    namespace {
-        const u8 cFirstTextureSlot = 10;
-        const u8 cIdentitySlot = 20;
-
-        void sendCoordinate(u8 coord, u8 fromCoordinate, u8 matrixSlot) {
-            J3DNativeShape::flushState();
-            const NebulaHostServices* pHost = nebula_host();
-            pHost->texture_coordinate(pHost->user, coord, fromCoordinate, matrixSlot);
-        }
-    }  // namespace
-
-    void textureMatrix(u8 coord, u8 matrix) {
-        sendCoordinate(coord, 0, static_cast< u8 >(cFirstTextureSlot + matrix));
-    }
-
-    void textureIdentity(u8 coord) {
-        sendCoordinate(coord, coord, cIdentitySlot);
-    }
-};  // namespace J3DPass
 
 extern "C" {
 void J3DNativeStateUse(u8 source, u8 destination, int depthTest, u8 compare, int depthWrite, u8 cull, int colorWrite, int alphaWrite) {

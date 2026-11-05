@@ -206,7 +206,7 @@ void StarPointerBlur::initDraw() const {
     TPos3f mtx;
     mtx.identity();
     J3DNativeShape::setPosition(0, mtx);
-    J3DNativeShape::setCurrentIdentity();
+    J3DNativeShape::setCurrentPosition(0);
     // runtime/src/render/materials/color_tex_alpha.hlsl: mMainColor at the trail texture's alpha, added by it; depth
     // tested and written, no culling.
     NebulaNativeMaterial material;

@@ -157,7 +157,7 @@ void WhirlPool::loadMaterial() const {
     // runtime/src/render/materials/whirlpool.hlsl: the swirl (texture 0) over the screen behind (texture 1) warped by
     // the indirect texture (texture 2); blended by its alpha where above zero, depth tested and written.
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-    J3DNativeShape::setCurrentIdentity();
+    J3DNativeShape::setCurrentPosition(0);
     JUTTexture screenTexture(MR::getScreenResTIMG());
     NebulaNativeMaterial material;
     NativeShader::init(material, NEBULA_SHADER_WHIRLPOOL, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, true,

@@ -133,7 +133,6 @@ void ElectricRailHolder::control() {
 
 void ElectricRailHolder::initDraw() const {
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-    J3DPass::textureMatrix(0, 0);
 }
 
 void ElectricRailFunction::registerRail(const LiveActor* pActor, ElectricRailType railType) {

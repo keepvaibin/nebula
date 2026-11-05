@@ -70,7 +70,7 @@ namespace TDDraw {
         }
 
         J3DNativeShape::setNormal(0, mtx);
-        J3DNativeShape::setCurrentIdentity();
+        J3DNativeShape::setCurrentPosition(0);
 
         static const NebulaShaderId kShaders[3] = {NEBULA_SHADER_VERTEX_COLOR, NEBULA_SHADER_DD_TEXTURE,
                                                    NEBULA_SHADER_DD_TEXTURE_COLOR};
