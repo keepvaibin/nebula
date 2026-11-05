@@ -23,7 +23,7 @@ void StationedArchiveLoader::loadResourcesFromTable(const StationedArchiveLoader
         NebulaArena* pHeap = rCondition.getProperHeap(pInfo);
 
         if (pHeap == nullptr) {
-            pHeap = MR::getStationedHeap();
+            pHeap = MR::getPermanentHeap();
         }
 
         switch (pInfo->mLoadType) {

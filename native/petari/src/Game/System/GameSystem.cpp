@@ -56,7 +56,7 @@ extern "C" void nebula_game_main(void) {
     (MR::MutexHolder< 2 >::sMutex).init();
     nw4r::lyt::LytInit();
     SingletonHolder< HeapMemoryWatcher >::init();
-    SingletonHolder< HeapMemoryWatcher >::get()->setCurrentHeapToStationedHeap();
+    SingletonHolder< HeapMemoryWatcher >::get()->setCurrentHeapToPermanent();
     SingletonHolder< GameSystem >::init();
     SingletonHolder< GameSystem >::get()->init();
 
@@ -105,7 +105,7 @@ bool GameSystem::isDoneLoadSystemArchive() const {
 void GameSystem::startToLoadSystemArchive() {
     mIsExecuteLoadSystemArchive = true;
 
-    SingletonHolder< HeapMemoryWatcher >::get()->setCurrentHeapToStationedHeap();
+    SingletonHolder< HeapMemoryWatcher >::get()->setCurrentHeapToPermanent();
     SingletonHolder< NameObjRegister >::get()->setCurrentHolder(mObjHolder->mObjHolder);
     setNerve(GET_NERVE(GameSystem, GameSystemLoadStationedArchive));
 }

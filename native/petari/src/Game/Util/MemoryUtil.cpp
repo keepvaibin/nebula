@@ -26,8 +26,8 @@ namespace MR {
         return SingletonHolder< HeapMemoryWatcher >::get()->mFileCacheHeap;
     }
 
-    NebulaArena* getStationedHeap() {
-        return SingletonHolder< HeapMemoryWatcher >::get()->mStationedHeap;
+    NebulaArena* getPermanentHeap() {
+        return SingletonHolder< HeapMemoryWatcher >::get()->mPermanent;
     }
 
     NebulaArena* getSceneHeap() {

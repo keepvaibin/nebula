@@ -47,7 +47,7 @@ NebulaArena* ConditionUsePlayerHeap::getProperHeap(const MR::StationedFileInfo* 
 PlayerHeapHolder::PlayerHeapHolder() : mCondition(), mHeap(), mIsDataMario(true) {
     ConditionUsePlayerHeap* condition = new ConditionUsePlayerHeap();
     // Room for either player's archives: a change of player loads the other's in the same heaps at any time. Pages not used cost nothing.
-    mHeap = NebulaArena::create(MR::getStationedHeap());
+    mHeap = NebulaArena::create(MR::getPermanentHeap());
     condition->mHeap = mHeap;
     mCondition = condition;
     condition->mIsDataMario = mIsDataMario;
@@ -146,7 +146,7 @@ void GameSystemStationedArchiveLoader::startToLoadStationedArchivePlayer(bool a1
 
 void GameSystemStationedArchiveLoader::startToLoadStationedArchiveOthers() {
     StationedArchiveLoader::loadResourcesFromTable(ConditionIfIsNotPlayer());
-    StationedArchiveLoader::loadScenarioData(MR::getStationedHeap());
+    StationedArchiveLoader::loadScenarioData(MR::getPermanentHeap());
 }
 
 void GameSystemStationedArchiveLoader::createAndAddPlayerArchives(bool isDataMario) {

@@ -16,7 +16,7 @@ namespace {
         if (!GameAssets::open(path, &file)) {
             NEBULA_PANIC("%s is missing: the game content was not cooked by this version", path);
         }
-        u8* pData = static_cast< u8* >(NebulaArena::alloc(file.mLength, 32, MR::getStationedHeap()));
+        u8* pData = static_cast< u8* >(NebulaArena::alloc(file.mLength, 32, MR::getPermanentHeap()));
         if (pData == nullptr || GameAssets::read(&file, pData, file.mLength, 0) < static_cast< s32 >(file.mLength)) {
             NEBULA_PANIC("%s cannot be read", path);
         }
@@ -63,7 +63,7 @@ namespace {
             }
         }
         const u32 added = sAddedGalaxyCount * pOld->mEntrySize;
-        u8* pNew = static_cast< u8* >(NebulaArena::alloc(baseLength + added + words, 32, MR::getStationedHeap()));
+        u8* pNew = static_cast< u8* >(NebulaArena::alloc(baseLength + added + words, 32, MR::getPermanentHeap()));
         memcpy(pNew, pBase, rowsEnd);
         memset(pNew + rowsEnd, 0, added);
         memcpy(pNew + rowsEnd + added, pBase + rowsEnd, baseLength - rowsEnd);

@@ -1467,14 +1467,14 @@ namespace {
         for (u16 code = cMapFirst; code <= cMapLast; code++) {
             f.mOriginal[code - cMapFirst] = pFont->FindGlyphIndex(code);
         }
-        // One block that lasts the game (the stationed heap's room for it, HeapMemoryWatcher): the sheets, our widths,
+        // One block that lasts the game (the permanent arena, HeapMemoryWatcher): the sheets, our widths,
         // our code maps.
         const u32 sheetsBytes = static_cast< u32 >(sheets * f.mSheetBytes);
         const u32 widthBytes = (sizeof(nw4r::ut::FontWidth) + added * sizeof(nw4r::ut::CharWidths) + 7u) & ~7u;
         const u32 mapBytes = sizeof(nw4r::ut::FontCodeMap) + (cMapLast - cMapFirst + 1) * sizeof(u16);
         const u32 keyMapBytes = (sizeof(nw4r::ut::FontCodeMap) + cKeyCells * sizeof(u16) + 7u) & ~7u;
         const u32 bytes = sheetsBytes + widthBytes + keyMapBytes + mapBytes;
-        u8* pBlock = static_cast< u8* >(NebulaArena::alloc(bytes, 32, MR::getStationedHeap()));
+        u8* pBlock = static_cast< u8* >(NebulaArena::alloc(bytes, 32, MR::getPermanentHeap()));
         memcpy(pBlock, pGlyph->sheetImage, static_cast< size_t >(f.mFirstSheet) * f.mSheetBytes);
         memset(pBlock + f.mFirstSheet * f.mSheetBytes, 0, sheetsBytes - f.mFirstSheet * f.mSheetBytes);
         for (s32 sheet = f.mFirstSheet; sheet < sheets; sheet++) {
