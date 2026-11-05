@@ -14,7 +14,6 @@ public:
     virtual ~J3DModelData() {
     }
 
-    s32 newSharedSnapshot(u32);
     void clear();
     void syncJ3DSysFlags() const;
 
@@ -137,30 +136,6 @@ public:
     }
     bool checkBBoardFlag() const {
         return mbHasBillboard == 1;
-    }
-    bool isLocked() {
-        return mMaterialTable.isLocked();
-    }
-    void entryTexMtxAnimator(J3DAnmTextureSRTKey* anm) {
-        mMaterialTable.entryTexMtxAnimator(anm);
-    }
-    int entryStageColorAnimator(J3DAnmStageColorKey* anm) {
-        return mMaterialTable.entryStageColorAnimator(anm);
-    }
-    void entryTexNoAnimator(J3DAnmTexPattern* anm) {
-        mMaterialTable.entryTexNoAnimator(anm);
-    }
-    int removeTexNoAnimator(J3DAnmTexPattern* anm) {
-        return mMaterialTable.removeTexNoAnimator(anm);
-    }
-    int removeTexMtxAnimator(J3DAnmTextureSRTKey* anm) {
-        return mMaterialTable.removeTexMtxAnimator(anm);
-    }
-    int removeStageColorAnimator(J3DAnmStageColorKey* anm) {
-        return mMaterialTable.removeStageColorAnimator(anm);
-    }
-    int removeMatColorAnimator(J3DAnmColor* anm) {
-        return mMaterialTable.removeMatColorAnimator(anm);
     }
     void syncJ3DSys() const {
         syncJ3DSysFlags();

@@ -14,7 +14,7 @@
 
 namespace {
     inline bool isUseLightChanNo(J3DMaterial* pMaterial, int channel, int index) {
-        const J3DColorChan* pChan = pMaterial->mColorBlock->getColorChan(channel);
+        const J3DColorChan* pChan = pMaterial->getColorChan(channel);
         if (pChan->getEnable() == 0) {
             return false;
         }
@@ -147,7 +147,7 @@ namespace MR {
     }
 
     void updateModelDiffMaterials(LiveActor* pActor) {
-        pActor->mModelManager->updateList(true);
+        pActor->mModelManager->updateList();
     }
 
     bool isEnvelope(J3DMaterial* pMaterial) {
@@ -207,7 +207,7 @@ namespace MR {
 
     bool isNormalTexMtx(J3DMaterial* pMaterial) {
         for (u32 idx = 0; idx < 8; idx++) {
-            J3DTexMtx* texMtx = pMaterial->mTexGenBlock->getTexMtx(idx);
+            J3DTexMtx* texMtx = pMaterial->getTexMtx(idx);
 
             if (texMtx != nullptr && (texMtx->getTexMtxInfo().mInfo & 0x3F) != 0 && isUseTexMtx(pMaterial, idx)) {
                 return false;
@@ -219,7 +219,7 @@ namespace MR {
 
     bool isUseTexMtx(J3DMaterial* pMaterial, u32 idx) {
         const NebulaCookedMaterial* pCooked = pMaterial->mNativeMaterial;
-        return pMaterial->mTexGenBlock->getTexMtx(idx) != nullptr && pCooked != nullptr &&
+        return pMaterial->getTexMtx(idx) != nullptr && pCooked != nullptr &&
                (pCooked->used_coords & (1u << idx)) != 0;
     }
 
@@ -239,7 +239,7 @@ namespace MR {
 
     bool isUseTexMtxEnvMap(J3DMaterial* pMaterial) {
         for (u32 idx = 0; idx < 8; idx++) {
-            J3DTexMtx* texMtx = pMaterial->mTexGenBlock->getTexMtx(idx);
+            J3DTexMtx* texMtx = pMaterial->getTexMtx(idx);
             if (texMtx == nullptr) {
                 continue;
             }
@@ -259,7 +259,7 @@ namespace MR {
 
     bool isUseTexMtxProjMap(J3DMaterial* pMaterial) {
         for (u32 idx = 0; idx < 8; idx++) {
-            J3DTexMtx* texMtx = pMaterial->mTexGenBlock->getTexMtx(idx);
+            J3DTexMtx* texMtx = pMaterial->getTexMtx(idx);
             if (texMtx == nullptr) {
                 continue;
             }
@@ -300,8 +300,7 @@ namespace MR {
                 } else if (texCoord->getTexGenSrc() == 0) {
                     // In a material with indirect stages: texture place 0, as v1 and the original draw it (the manta ray's body,
                     // runs s4_rC against s4_g5 and v1). Otherwise the corner's position (Rosalina's fade, ros_rc1).
-                    const J3DIndBlock* pIndirect = material->getIndBlock();
-                    const bool isIndirect = pIndirect != nullptr && pIndirect->getIndTexStageNum() != 0;
+                    const bool isIndirect = material->getIndTexStageNum() != 0;
                     shape->addTexMtxIndex(idx, isIndirect ? J3DShape::cTexMtxBasePlaceZero : 0);
                 }
             }
@@ -385,7 +384,7 @@ namespace MR {
             for (j = 0; j < materialNum; j++) {
                 J3DShapePacket* shapePacketModel1 = pModel1->getShapePacket(j);
                 if (shapePacketModel1->getShape()->getMaterial()->getIndex() == idx) {
-                    shapePacketModel1->setSnapshot(shapePacketModel2->getSnapshot());
+                    shapePacketModel1->mpMaterial = shapePacketModel2->mpMaterial;
                     break;
                 }
             }
@@ -520,15 +519,10 @@ namespace MR {
         (MR::MutexHolder< 0 >::sMutex).lock();
         NebulaMtxCopy(mtx, j3dSys.mViewMtx);
         newModel->calc();
-        newModel->calcMaterial();
+        newModel->calcAllMaterials();
         newModel->viewCalc();
         newModel->viewCalc();
         (MR::MutexHolder< 0 >::sMutex).unlock();
-        if (modelData->getModelDataType() == 0) {
-            (MR::MutexHolder< 0 >::sMutex).lock();
-            newModel->makeMesh();
-            (MR::MutexHolder< 0 >::sMutex).unlock();
-        }
 
         newModel->lock();
         return newModel;

@@ -76,7 +76,7 @@ void LavaGalaxyParts::init(const JMapInfoIter& rIter) {
         initModelManagerWithAnm(objectName, nullptr, true);
 
         mMtxSetter = MR::initMaterialProjmapEffectMtxSetter(this);
-        MR::newDifferedMaterials(this);
+        MR::prepareMaterials(this);
     } else {
         initModelManagerWithAnm(objectName, nullptr, false);
     }

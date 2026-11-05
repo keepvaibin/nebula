@@ -1,5 +1,4 @@
 #include "JSystem/J3DGraphBase/J3DDrawBuffer.hpp"
-#include "JSystem/J3DGraphAnimator/J3DMaterialAnm.hpp"
 #include <nebula_cooked_texture.h>
 #include "JSystem/J3DGraphBase/J3DMaterial.hpp"
 #include "JSystem/J3DGraphBase/J3DPacket.hpp"
@@ -70,25 +69,6 @@ int J3DDrawBuffer::entryMatSort(J3DMatPacket* pMatPacket) {
     return 1;
 }
 
-int J3DDrawBuffer::entryMatAnmSort(J3DMatPacket* pMatPacket) {
-    J3DMaterialAnm* pMaterialAnm = pMatPacket->mpMaterialAnm;
-    if (pMaterialAnm == nullptr) {
-        return entryMatSort(pMatPacket);
-    }
-
-    pMatPacket->drawClear();
-    pMatPacket->getShapePacket()->drawClear();
-
-    for (u32 i = 0; i < mEntryCount; i++) {
-        if (mEntries[i].mPacket->mpMaterialAnm == pMaterialAnm) {
-            mEntries[i].mPacket->addShapePacket(pMatPacket->getShapePacket());
-            return 0;
-        }
-    }
-    add(static_cast< u64 >(pMaterialAnm->mDrawSlot) << 32, pMatPacket);
-    return 1;
-}
-
 int J3DDrawBuffer::entryZSort(J3DMatPacket* pMatPacket) {
     pMatPacket->drawClear();
     pMatPacket->getShapePacket()->drawClear();
@@ -138,7 +118,7 @@ int J3DDrawBuffer::entryNonSort(J3DMatPacket* pMatPacket) {
 }
 
 J3DDrawBuffer::sortFunc J3DDrawBuffer::sortFuncTable[6] = {
-    &J3DDrawBuffer::entryMatSort,   &J3DDrawBuffer::entryMatAnmSort,  &J3DDrawBuffer::entryZSort,
+    &J3DDrawBuffer::entryMatSort,   &J3DDrawBuffer::entryMatSort,  &J3DDrawBuffer::entryZSort,
     &J3DDrawBuffer::entryModelSort, &J3DDrawBuffer::entryInvalidSort, &J3DDrawBuffer::entryNonSort,
 };
 

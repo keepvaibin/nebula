@@ -9,45 +9,12 @@
 class J3DMatPacket;
 class J3DDrawBuffer;
 class J3DMaterial;
-class J3DMaterialAnm;
 class J3DModel;
 class J3DMtxBuffer;
 class J3DShape;
-class J3DTexMtx;
-class J3DTexMtxObj;
-class J3DTexture;
 
-enum J3DDiffFlag {
-    J3DDiffFlag_MatColor = 0x1,
-    J3DDiffFlag_ColorChan = 0x2,
-    J3DDiffFlag_AmbColor = 0x4,
-    J3DDiffFlag_TexGen = 0x1000,
-    J3DDiffFlag_StageColor = 0x1000000,
-    J3DDiffFlag_KonstColor = 0x2000000,  // is this right?
-    J3DDiffFlag_TexCoordScale = 0x4000000,
-    J3DDiffFlag_StageStageIndirect = 0x8000000,
-    J3DDiffFlag_Fog = 0x10000000,
-    J3DDiffFlag_Blend = 0x20000000,
-    J3DDiffFlag_Unk40000000 = 0x40000000,
-    J3DDiffFlag_Changed = 1u << 31,
-};
-
-// A material's typed snapshot (J3DNativeMaterial): made with its owner
-// (a material, a material packet, an instance's shape packet), refreshed where J3D built or patched the list.
-class J3DMaterialSnapshot {
-public:
-    J3DMaterialSnapshot() {
-        mpNebulaMaterial = nullptr;
-        mNebulaCaptured = false;
-        mNebulaDiffFlags = 0;
-    }
-
-    J3DError newSnapshot();
-
-    struct NebulaMaterialParts* mpNebulaMaterial;
-    bool mNebulaCaptured;
-    u32 mNebulaDiffFlags;
-};
+// A material whose packet never joins another's.
+const u32 J3DMaterialID_Alone = 1u << 31;
 
 class J3DPacket {
 public:
@@ -94,20 +61,7 @@ class J3DDrawPacket : public J3DPacket {
 public:
     J3DDrawPacket();
     ~J3DDrawPacket();
-    J3DError newSnapshot();
     virtual void draw();
-
-    J3DMaterialSnapshot* getSnapshot() {
-        return mpSnapshot;
-    }
-
-    void setSnapshot(J3DMaterialSnapshot* pObj) {
-        mpSnapshot = pObj;
-    }
-
-    bool isValidSnapshot() const {
-        return mpSnapshot;
-    }
 
     enum {
         LOCKED = 0x01,
@@ -128,24 +82,17 @@ public:
     void unlock() {
         offFlag(LOCKED);
     }
-    J3DTexMtxObj* getTexMtxObj() {
-        return mpTexMtxObj;
-    }
     bool isLocked() const {
         return checkFlag(1);
     }
 
 public:
     u32 mFlags;
-    char unk_0x14[0x20 - 0x14];
-    J3DMaterialSnapshot* mpSnapshot;
-    J3DTexMtxObj* mpTexMtxObj;
 };
 
 class J3DShapePacket : public J3DDrawPacket {
 public:
     J3DShapePacket();
-    J3DError newDifferedSnapshot(u32);
     void prepareDraw() const;
     void drawFast();
 
@@ -181,8 +128,9 @@ public:
     J3DShape* mpShape;
     J3DMtxBuffer* mpMtxBuffer;
     Mtx* mpBaseMtxPtr;
-    u32 mDiffFlag;
     J3DModel* mpModel;
+    // What it draws: the model data's material, or the model's own copy.
+    J3DMaterial* mpMaterial;
 };
 
 class J3DMatPacket : public J3DDrawPacket {
@@ -205,24 +153,14 @@ public:
         mpMaterial = pMaterial;
     }
 
-    void setTexture(J3DTexture* pTexture) {
-        mpTexture = pTexture;
-    }
-
     void setInitShapePacket(J3DShapePacket* packet) {
         mpInitShapePacket = packet;
     }
     void setMaterialID(u32 id) {
-        mDiffFlag = id;
-    }
-    void setMaterialAnmID(J3DMaterialAnm* materialAnm) {
-        mpMaterialAnm = materialAnm;
+        mMaterialID = id;
     }
     BOOL isChanged() {
-        return mDiffFlag & J3DDiffFlag_Changed;
-    }
-    bool isEnabled_Diff() {
-        return mpInitShapePacket->getSnapshot() != NULL;
+        return mMaterialID & J3DMaterialID_Alone;
     }
 
     virtual ~J3DMatPacket();
@@ -233,7 +171,5 @@ public:
     J3DShapePacket* mpInitShapePacket;
     J3DShapePacket* mpShapePacket;
     J3DMaterial* mpMaterial;
-    u32 mDiffFlag;
-    J3DTexture* mpTexture;
-    J3DMaterialAnm* mpMaterialAnm;
+    u32 mMaterialID;
 };

@@ -2,7 +2,9 @@
 
 #include "Game/Util/Array.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include <JSystem/J3DGraphAnimator/J3DModel.hpp>
 #include <JSystem/J3DGraphAnimator/J3DModelData.hpp>
+#include <JSystem/J3DGraphBase/J3DMaterial.hpp>
 #include <JSystem/J3DGraphBase/J3DStruct.hpp>
 #include <JSystem/J3DGraphBase/J3DTexture.hpp>
 #include <JSystem/JUtility/JUTNameTab.hpp>
@@ -14,18 +16,18 @@ class ResourceHolder;
 
 class MaterialCtrl {
 public:
-    MaterialCtrl(J3DModelData*, const char*);
+    MaterialCtrl(J3DModel*, const char*);
 
     virtual void update();
     virtual void updateMaterial(J3DMaterial*);
 
-    J3DModelData* mModelData;
+    J3DModel* mModel;
     J3DMaterial* mMaterial;
 };
 
 class FogCtrl : public MaterialCtrl {
 public:
-    FogCtrl(J3DModelData*, bool);
+    FogCtrl(J3DModel*, bool);
 
     virtual void update() override;
 
@@ -36,7 +38,7 @@ public:
 
 class MatColorCtrl : public MaterialCtrl {
 public:
-    MatColorCtrl(J3DModelData*, const char*, u32, const J3DColor*);
+    MatColorCtrl(J3DModel*, const char*, u32, const J3DColor*);
 
     virtual void updateMaterial(J3DMaterial*) override;
 
@@ -46,7 +48,7 @@ public:
 
 class ViewProjmapEffectMtxSetter : public MaterialCtrl {
 public:
-    ViewProjmapEffectMtxSetter(J3DModelData*);
+    ViewProjmapEffectMtxSetter(J3DModel*);
 
     virtual void update() override;
 
@@ -74,22 +76,22 @@ public:
     UpdateEffectMtxInfo* mUpdatingMtxInfo;
     s32 mNumUpdatingMtx;
     TPos3f mEffectMtx;
-    J3DModel* mModel;
 };
 
 class MirrorReflectionMtxSetter : public MaterialCtrl {
 public:
     MirrorReflectionMtxSetter(J3DModel*, const ResourceHolder*);
 
-    void addUpdatingTexMtxFromName(J3DModelData* pModelData) {
+    void addUpdatingTexMtxFromName(J3DModel* pModel) {
+        J3DModelData* pModelData = pModel->getModelData();
         u16 textureNum = pModelData->getTexture()->getNum();
         for (u16 i = 0; i < textureNum; i++) {
             if (MR::isEqualString(pModelData->getTextureName()->getName(i), sMirrorTextureName)) {
-                addUpdatingTexMtxFromTexNo(pModelData, i);
+                addUpdatingTexMtxFromTexNo(pModel, i);
             }
         }
     }
-    void addUpdatingTexMtxFromTexNo(J3DModelData*, u16);
+    void addUpdatingTexMtxFromTexNo(J3DModel*, u16);
     void addUpdatingTexMtxFromTexCoord(J3DMaterial*);
     void addUpdatingTexMtx(J3DTexMtx*);
     virtual void update() override;
@@ -111,7 +113,7 @@ public:
 
 class TexMtxCtrl : public MaterialCtrl {
 public:
-    TexMtxCtrl(J3DModelData*, const char*);
+    TexMtxCtrl(J3DModel*, const char*);
 
     void setTexMtx(u32, J3DTexMtx*);
     virtual void updateMaterial(J3DMaterial*) override;

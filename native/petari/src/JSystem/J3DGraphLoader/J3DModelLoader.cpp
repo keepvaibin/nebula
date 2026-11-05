@@ -15,10 +15,8 @@
 #include "Game/Util/ByteView.hpp"
 
 namespace {
-    // A material's ID (mDiffFlag): packets with the same ID share their material state (J3DMatPacket::isSame). Each
-    // material table takes a fresh range, so IDs are unique
-    // across models, never 0 (a material no loader named), and below bit 30 (J3DDiffFlag_Unk40000000,
-    // J3DDiffFlag_Changed).
+    // A material's ID: materials with the same ID are the same in everything. Each material table takes a fresh range,
+    // so IDs are unique across models, never 0 (a material no loader named), and below bit 30.
     u32 sNextMaterialID = 1;
 
     u32 allocMaterialIDs(u32 count) {
@@ -128,6 +126,7 @@ J3DModelData* J3DModelLoader::load(void const* i_data, u32 i_flags) {
         }
         block = (J3DModelBlock*)((uintptr_t)block + block->mBlockSize);
     }
+    finishMaterials();
     J3DModelHierarchy const* hierarchy = mpModelData->getHierarchy();
     mpModelData->makeHierarchy(NULL, &hierarchy);
     mpModelData->getJointTree().findImportantMtxIndex();
@@ -161,6 +160,7 @@ J3DMaterialTable* J3DModelLoader::loadMaterialTable(void const* i_data) {
     if (mpMaterialTable->mTexture == NULL) {
         mpMaterialTable->mTexture = new J3DTexture(0, NULL);
     }
+    finishMaterials();
     return mpMaterialTable;
 }
 
@@ -168,7 +168,7 @@ J3DModelData* J3DModelLoader::loadBinaryMaterials(void const* i_data, u32 i_flag
     mpModelData = new J3DModelData();
     mpModelData->clear();
     mpModelData->mpRawData = i_data;
-    // Its materials are full ones made from MAT3 (no precompiled lists): the model is drawn as a .bmd one.
+    // Its materials are full ones made from MAT3: the model is drawn as a .bmd one.
     mpModelData->setModelDataType(0);
     mpMaterialTable = &mpModelData->mMaterialTable;
     J3DModelFileData const* data = (J3DModelFileData*)i_data;
@@ -199,8 +199,7 @@ J3DModelData* J3DModelLoader::loadBinaryMaterials(void const* i_data, u32 i_flag
             readTexture((J3DTextureBlock*)block);
             break;
         case 'MDL3':
-            // The file's precompiled material lists: its materials come from MAT3, their lists
-            // from J3DModel::makeMesh as a .bmd model's.
+            // The file's precompiled material lists: its materials come from MAT3.
             break;
         case 'MAT3':
             flags = 0x50100000;
@@ -213,6 +212,7 @@ J3DModelData* J3DModelLoader::loadBinaryMaterials(void const* i_data, u32 i_flag
         }
         block = (J3DModelBlock*)((uintptr_t)block + block->mBlockSize);
     }
+    finishMaterials();
     J3DModelHierarchy const* hierarchy = mpModelData->getHierarchy();
     mpModelData->makeHierarchy(NULL, &hierarchy);
     mpModelData->getJointTree().findImportantMtxIndex();
@@ -394,29 +394,18 @@ void J3DModelLoader_v26::readMaterial(J3DMaterialBlock const* i_block, u32 i_fla
     }
     mpMaterialTable->mMaterialNodePointer = new J3DMaterial*[mpMaterialTable->mMaterialNum];
     const u32 materialIDs = allocMaterialIDs(mpMaterialTable->mMaterialNum);
-    if (i_flags & 0x200000) {
-        mpMaterialTable->field_0x10 = new J3DMaterial[mpMaterialTable->mUniqueMatNum];
-    } else {
-        mpMaterialTable->field_0x10 = NULL;
-    }
-    if (i_flags & 0x200000) {
-        for (u16 i = 0; i < mpMaterialTable->mUniqueMatNum; i++) {
-            factory.create(&mpMaterialTable->field_0x10[i], J3DMaterialFactory::MATERIAL_TYPE_NORMAL, i, i_flags);
-            mpMaterialTable->field_0x10[i].mDiffFlag = materialIDs + i;
-        }
-    }
     for (u16 i = 0; i < mpMaterialTable->mMaterialNum; i++) {
         mpMaterialTable->mMaterialNodePointer[i] = factory.create(NULL, J3DMaterialFactory::MATERIAL_TYPE_NORMAL, i, i_flags);
+        mpMaterialTable->mMaterialNodePointer[i]->mID = materialIDs + factory.getMaterialID(i);
     }
-    if (i_flags & 0x200000) {
-        for (u16 i = 0; i < mpMaterialTable->mMaterialNum; i++) {
-            mpMaterialTable->mMaterialNodePointer[i]->mDiffFlag = materialIDs + factory.getMaterialID(i);
-            mpMaterialTable->mMaterialNodePointer[i]->mpOrigMaterial = &mpMaterialTable->field_0x10[factory.getMaterialID(i)];
-        }
-    } else {
-        for (u16 i = 0; i < mpMaterialTable->mMaterialNum; i++) {
-            mpMaterialTable->mMaterialNodePointer[i]->mDiffFlag = materialIDs + factory.getMaterialID(i);
-        }
+}
+
+// What a material takes from its model once the whole file is read.
+void J3DModelLoader::finishMaterials() {
+    const bool postTexMtx = mpModelData != NULL && mpModelData->checkFlag(0x20);
+    for (u16 i = 0; i < mpMaterialTable->mMaterialNum; i++) {
+        mpMaterialTable->mMaterialNodePointer[i]->mTexture = mpMaterialTable->mTexture;
+        mpMaterialTable->mMaterialNodePointer[i]->mPostTexMtx = postTexMtx;
     }
 }
 
@@ -476,8 +465,7 @@ void J3DModelLoader_v26::readMaterialTable(J3DMaterialBlock const* i_block, u32 
         mpMaterialTable->mMaterialNodePointer[i] = factory.create(NULL, J3DMaterialFactory::MATERIAL_TYPE_NORMAL, i, i_flags);
     }
     for (u16 i = 0; i < mpMaterialTable->mMaterialNum; i++) {
-        // Bit 31: these materials never share a packet.
-        mpMaterialTable->mMaterialNodePointer[i]->mDiffFlag = J3DDiffFlag_Changed | (materialIDs + factory.getMaterialID(i));
+        mpMaterialTable->mMaterialNodePointer[i]->mID = J3DMaterialID_Alone | (materialIDs + factory.getMaterialID(i));
     }
 }
 

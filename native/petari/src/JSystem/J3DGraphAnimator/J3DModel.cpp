@@ -1,6 +1,5 @@
 #include "JSystem/J3DGraphAnimator/J3DModel.hpp"
 #include "JSystem/J3DGraphAnimator/J3DJoint.hpp"
-#include "JSystem/J3DGraphAnimator/J3DMaterialAnm.hpp"
 #include "JSystem/J3DGraphBase/J3DMaterial.hpp"
 #include "JSystem/J3DGraphBase/J3DShapeMtx.hpp"
 
@@ -8,7 +7,6 @@ void J3DModel::initialize() {
     mModelData = NULL;
     mMotionEpoch = 0;
     mFlags = 0;
-    mDiffFlag = 0;
     mCalcCallBack = NULL;
     mUserArea = 0;
 
@@ -22,6 +20,7 @@ void J3DModel::initialize() {
     mMtxBuffer = NULL;
     mMatPacket = NULL;
     mShapePacket = NULL;
+    mMaterials = NULL;
     mUnkCalc1 = NULL;
 }
 
@@ -41,7 +40,7 @@ s32 J3DModel::entryModelData(J3DModelData* pModelData, u32 mdlFlags, u32 mtxNum)
         return ret;
     }
 
-    ret = createMatPacket(pModelData, mdlFlags);
+    ret = createMatPacket(pModelData);
     if (ret != kJ3DError_Success) {
         return ret;
     }
@@ -54,15 +53,6 @@ s32 J3DModel::entryModelData(J3DModelData* pModelData, u32 mdlFlags, u32 mtxNum)
     }
     if (mdlFlags & J3DMdlFlag_UseDefaultJ3D) {
         onFlag(J3DMdlFlag_UseDefaultJ3D);
-    }
-    if (mdlFlags & J3DMdlFlag_UseSharedSnapshot) {
-        onFlag(J3DMdlFlag_UseSharedSnapshot);
-    }
-    if (mdlFlags & J3DMdlFlag_UseSingleSnapshot) {
-        onFlag(J3DMdlFlag_UseSingleSnapshot);
-    }
-    if (mdlFlags & J3DMdlFlag_DifferedSnapshots) {
-        onFlag(J3DMdlFlag_DifferedSnapshots);
     }
 
     return kJ3DError_Success;
@@ -81,64 +71,40 @@ s32 J3DModel::createShapePacket(J3DModelData* pModelData) {
     return kJ3DError_Success;
 }
 
-s32 J3DModel::createMatPacket(J3DModelData* pModelData, u32 mdlFlags) {
-    if (pModelData->getMaterialNum() != 0) {
-        mMatPacket = new J3DMatPacket[pModelData->getMaterialNum()];
+s32 J3DModel::createMatPacket(J3DModelData* pModelData) {
+    u16 matNum = pModelData->getMaterialNum();
+    if (matNum != 0) {
+        mMatPacket = new J3DMatPacket[matNum];
+        mMaterials = new J3DMaterial*[matNum];
     }
 
-    u16 matNum = pModelData->getMaterialNum();
     for (u16 i = 0; i < matNum; i++) {
         J3DMaterial* materialNode = pModelData->getMaterialNodePointer(i);
         J3DMatPacket* matPacket = mMatPacket + i;
         J3DShapePacket* shapePacket = mShapePacket + materialNode->getShape()->getIndex();
 
+        mMaterials[i] = materialNode;
+        shapePacket->mpMaterial = materialNode;
         matPacket->setMaterial(materialNode);
         matPacket->setInitShapePacket(shapePacket);
         matPacket->addShapePacket(shapePacket);
-        matPacket->setTexture(pModelData->getTexture());
-        matPacket->setMaterialID(materialNode->mDiffFlag);
+        matPacket->setMaterialID(materialNode->getID());
 
         if (pModelData->getModelDataType() == 1) {
             matPacket->lock();
         }
-
-        if (mdlFlags & J3DMdlFlag_DifferedSnapshots) {
-            J3DMaterialSnapshot* dlobj = materialNode->getSharedSnapshot();
-            matPacket->setSnapshot(dlobj);
-        } else {
-            if (pModelData->getModelDataType() == 1) {
-                if (mdlFlags & J3DMdlFlag_UseSingleSnapshot) {
-                    matPacket->mpSnapshot = materialNode->getSharedSnapshot();
-                    matPacket->setSnapshot(matPacket->mpSnapshot);
-                } else {
-                    J3DMaterialSnapshot* dlobj = materialNode->getSharedSnapshot();
-
-                    matPacket->setSnapshot(dlobj);
-                }
-            } else if (mdlFlags & J3DMdlFlag_UseSharedSnapshot) {
-                if (mdlFlags & J3DMdlFlag_UseSingleSnapshot) {
-                    materialNode->newSharedSnapshot();
-
-                    J3DMaterialSnapshot* dlobj = materialNode->getSharedSnapshot();
-                    matPacket->setSnapshot(dlobj);
-                } else {
-                    materialNode->newSharedSnapshot();
-
-                    J3DMaterialSnapshot* dlobj = materialNode->getSharedSnapshot();
-
-                    matPacket->setSnapshot(dlobj);
-                }
-            } else {
-                if (mdlFlags & J3DMdlFlag_UseSingleSnapshot) {
-                    matPacket->newSnapshot();
-                } else {
-                    matPacket->newSnapshot();
-                }
-            }
-        }
     }
 
     return kJ3DError_Success;
+}
+
+J3DMaterial* J3DModel::ownMaterial(u16 idx) {
+    J3DMaterial* pShared = mModelData->getMaterialNodePointer(idx);
+    if (mMaterials[idx] == pShared) {
+        mMaterials[idx] = new J3DMaterial(*pShared);
+        mShapePacket[pShared->getShape()->getIndex()].mpMaterial = mMaterials[idx];
+    }
+    return mMaterials[idx];
 }
 
 void J3DModel::lock() {
@@ -155,57 +121,22 @@ void J3DModel::unlock() {
     }
 }
 
-void J3DModel::makeMesh() {
+void J3DModel::calcAllMaterials() {
     j3dSys.setModel(this);
-    j3dSys.setTexture(mModelData->getTexture());
-
     u16 matNum = mModelData->getMaterialNum();
     for (u16 i = 0; i < matNum; i++) {
-        j3dSys.setMatPacket(&mMatPacket[i]);
-        mModelData->getMaterialNodePointer(i)->makeSnapshot();
+        J3DMaterial* material = mMaterials[i];
+        material->calc(getAnmMtx(material->getJoint()->getJntNo()));
     }
 }
 
 void J3DModel::calcMaterial() {
     j3dSys.setModel(this);
-
-    mModelData->syncJ3DSysFlags();
-    j3dSys.setTexture(mModelData->getTexture());
-
     u16 matNum = mModelData->getMaterialNum();
     for (u16 i = 0; i < matNum; i++) {
-        j3dSys.setMatPacket(&mMatPacket[i]);
-
-        J3DMaterial* material = mModelData->getMaterialNodePointer(i);
-        if (material->getMaterialAnm() != NULL) {
-            material->getMaterialAnm()->calc(material);
-        }
-
-        material->calc(getAnmMtx(material->getJoint()->getJntNo()));
-    }
-}
-
-void J3DModel::calcDiffTexMtx() {
-    j3dSys.setModel(this);
-
-    u16 matNum = mModelData->getMaterialNum();
-    for (u16 i = 0; i < matNum; i++) {
-        j3dSys.setMatPacket(&mMatPacket[i]);
-        J3DMaterial* materialNode = mModelData->getMaterialNodePointer(i);
-        materialNode->calcDiffTexMtx(getAnmMtx(materialNode->getJoint()->getJntNo()));
-    }
-
-    u16 shapeNum = getModelData()->getShapeNum();
-    for (u16 i = 0; i < shapeNum; i++) {
-        J3DShapePacket* shapePacket = getShapePacket(i);
-        J3DTexGenBlock* texGenBlock = mModelData->getShapeNodePointer(i)->getMaterial()->getTexGenBlock();
-
-        for (u16 j = 0; (int)j < 8; j++) {
-            J3DTexMtx* texMtxNode = texGenBlock->getTexMtx(j);
-            J3DTexMtxObj* texMtxObj = shapePacket->getTexMtxObj();
-            if (texMtxNode != NULL && texMtxObj != NULL) {
-                texMtxObj->setMtx(j, texMtxNode->getMtx());
-            }
+        J3DMaterial* material = mMaterials[i];
+        if (material != mModelData->getMaterialNodePointer(i)) {
+            material->calc(getAnmMtx(material->getJoint()->getJntNo()));
         }
     }
 }

@@ -1,6 +1,6 @@
 #include "Game/System/ResourceHolder.hpp"
 #include "Game/System/GameThreads.hpp"
-#include "Game/Animation/MaterialAnmBuffer.hpp"
+#include <JSystem/J3DGraphAnimator/J3DAnimation.hpp>
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/MutexHolder.hpp"
@@ -41,12 +41,12 @@ ResourceHolder::ResourceHolder(AssetFolder& rArchive)
     : mModelResTable(&mDefaultTable), mMotionResTable(&mDefaultTable), mBtkResTable(&mDefaultTable), mBpkResTable(&mDefaultTable),
       mBtpResTable(&mDefaultTable), mBlkResTable(&mDefaultTable), mBrkResTable(&mDefaultTable), mBasResTable(&mDefaultTable),
       mBmtResTable(&mDefaultTable), mBvaResTable(&mDefaultTable), mBanmtResTable(&mDefaultTable), mFileInfoTable(&mDefaultTable), mArchive(&rArchive),
-      mMaterialBuf(nullptr), mBckCtrl(nullptr), mBackupMaterialData(nullptr), mTotalResourceSize(0) {
+      mMaterialBound(false), mBckCtrl(nullptr), mBackupMaterialData(nullptr), mTotalResourceSize(0) {
     mHeap = MR::getCurrentHeap();
     initializeArc(*mArchive);
 
     if (mModelResTable->mCount != 0 && isExistMaterialAnm()) {
-        newMaterialAnmBuffer(reinterpret_cast< J3DModelData* >(mModelResTable->getRes(getModelName())));
+        bindMaterialAnimations(reinterpret_cast< J3DModelData* >(mModelResTable->getRes(getModelName())));
     }
 
     if (mMotionResTable->mCount != 0) {
@@ -69,9 +69,20 @@ bool ResourceHolder::isExistMaterialAnm() const {
     return mBpkResTable->mCount != 0 || mBtpResTable->mCount != 0 || mBtkResTable->mCount != 0 || mBrkResTable->mCount != 0;
 }
 
-void ResourceHolder::newMaterialAnmBuffer(J3DModelData* pModelData) {
-    MR::CurrentHeapRestorer heap(mHeap);
-    mMaterialBuf = new MaterialAnmBuffer(this, pModelData, true);
+void ResourceHolder::bindMaterialAnimations(J3DModelData* pModelData) {
+    mMaterialBound = true;
+    for (u32 r = 0; r < mBpkResTable->mCount; r++) {
+        static_cast< J3DAnmColorKey* >(mBpkResTable->getRes(r))->searchUpdateMaterialID(pModelData);
+    }
+    for (u32 r = 0; r < mBtpResTable->mCount; r++) {
+        static_cast< J3DAnmTexPattern* >(mBtpResTable->getRes(r))->searchUpdateMaterialID(pModelData);
+    }
+    for (u32 r = 0; r < mBtkResTable->mCount; r++) {
+        static_cast< J3DAnmTextureSRTKey* >(mBtkResTable->getRes(r))->searchUpdateMaterialID(pModelData);
+    }
+    for (u32 r = 0; r < mBrkResTable->mCount; r++) {
+        static_cast< J3DAnmStageColorKey* >(mBrkResTable->getRes(r))->searchUpdateMaterialID(pModelData);
+    }
 }
 
 void ResourceHolder::newBckCtrl() {
@@ -209,8 +220,6 @@ ResFileInfo* ResourceHolder::createAndRegisterObject(const char* pName, void* pD
         J3DModelData* modelData = J3DModelLoaderDataBase::loadBinaryMaterials(pData, J3DMLF_Material_UseIndirect | J3DMLF_UseUniqueMaterials);
         (MR::MutexHolder< 0 >::sMutex).unlock();
         MR::initEnvelopeAndEnvMapOrProjMapModelData(modelData);
-        // Lists for its materials, made from their MAT3 data as a .bmd model's are (J3DModelLoader skips the file's).
-        modelData->newSharedSnapshot(0);
         MotionSignal::modelResource(modelData, pName);
         J3DNativeShape::registerModel(modelData);
         return mModelResTable->add(pName, modelData, true);
@@ -219,7 +228,6 @@ ResFileInfo* ResourceHolder::createAndRegisterObject(const char* pName, void* pD
     if (strstr(pName, ".bmd") != nullptr) {
         J3DModelData* modelData =
             J3DModelLoaderDataBase::load(pData, J3DMLF_Material_PE_Full | J3DMLF_Material_UseIndirect | J3DMLF_UseUniqueMaterials | J3DMLF_21);
-        modelData->newSharedSnapshot(0);
         MotionSignal::modelResource(modelData, pName);
         J3DNativeShape::registerModel(modelData);
         return mModelResTable->add(pName, modelData, true);
@@ -235,7 +243,7 @@ void ResourceHolder::backupInitMaterialData(const J3DModelData* pModelData) {
     for (u16 matIdx = 0; matIdx < numMaterials; matIdx++) {
         J3DMaterial* material = pModelData->getMaterialNodePointer(matIdx);
         for (u32 mtxIdx = 0; mtxIdx < 8; mtxIdx++) {
-            J3DTexMtx* texMtx = material->getTexGenBlock()->getTexMtx(mtxIdx);
+            J3DTexMtx* texMtx = material->getTexMtx(mtxIdx);
             if (texMtx != nullptr) {
                 NebulaMtx44Copy(texMtx->getTexMtxInfo().mEffectMtx, mBackupMaterialData[matIdx * 8 + mtxIdx]);
             } else {

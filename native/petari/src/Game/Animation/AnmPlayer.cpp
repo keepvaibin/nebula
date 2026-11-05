@@ -52,16 +52,10 @@ bool AnmPlayerBase::isPlaying(const char* pAnimName) const {
 MaterialAnmPlayerBase::MaterialAnmPlayerBase(const ResTable* pResTable, J3DModelData* pModelData) : AnmPlayerBase(pResTable), mModelData(pModelData) {
 }
 
-void MaterialAnmPlayerBase::beginDiff() {
+void MaterialAnmPlayerBase::applyFrame(J3DModel* pModel) {
     if (mAnmRes != nullptr) {
         reflectFrame();
-        attach(mAnmRes, mModelData);
-    }
-}
-
-void MaterialAnmPlayerBase::endDiff() {
-    if (mAnmRes != nullptr) {
-        detach(mAnmRes, mModelData);
+        apply(mAnmRes, pModel);
     }
 }
 

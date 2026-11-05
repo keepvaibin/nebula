@@ -58,7 +58,7 @@ void LavaHomeSeesaw::init(const JMapInfoIter& rIter) {
     MR::getObjectName(&name, rIter);
     initModelManagerWithAnm(name, nullptr, true);
     mMtxSetter = MR::initMaterialProjmapEffectMtxSetter(this);
-    MR::newDifferedMaterials(this);
+    MR::prepareMaterials(this);
     initSound(4, false);
     initHitSensor(1);
     MR::initCollisionParts(this, name, MR::addBodyMessageSensorMapObj(this), nullptr);

@@ -123,8 +123,7 @@ void MapObjActor::initialize(const JMapInfoIter& rIter, const MapObjActorInitInf
     initModelManagerWithAnm(mObjectName, nullptr, useMesh);
 
     if (rInfo.mDummyChangeTexture != nullptr) {
-        MR::initMaterialChangeTex(this, rInfo.mDummyChangeTexture);
-        MR::newDifferedMaterials(this);
+        MR::prepareMaterials(this);
     }
 
     MtxPtr pJointMtx;
@@ -137,7 +136,7 @@ void MapObjActor::initialize(const JMapInfoIter& rIter, const MapObjActorInitInf
 
     if (rInfo.mUseProjectMapMtx) {
         mMatrixSetter = MR::initMaterialProjmapEffectMtxSetter(this);
-        MR::newDifferedMaterials(this);
+        MR::prepareMaterials(this);
         _B4 = rInfo._48;
     }
 

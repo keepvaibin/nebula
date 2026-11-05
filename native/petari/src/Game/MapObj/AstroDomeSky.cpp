@@ -47,7 +47,7 @@ void AstroDomeSky::init(const JMapInfoIter& rIter) {
     initModelManagerWithAnm(pSkyName, nullptr, true);
 
     mProjmap = MR::initMaterialProjmapEffectMtxSetter(this);
-    MR::newDifferedMaterials(this);
+    MR::prepareMaterials(this);
 
     MR::startBtk(this, pSkyName);
 

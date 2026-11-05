@@ -40,7 +40,8 @@ void DrawBufferShapeDrawer::swap(DrawBufferShapeDrawer* pOther) {
 }
 
 void DrawBufferShapeDrawer::draw() const {
-    J3DNativeMaterial::send(mMatPacket->getMaterial(), mMatPacket->mpTexture, mMatPacket->mpSnapshot);
+    J3DMaterial* pShared = mMatPacket->getMaterial();
+    J3DNativeMaterial::send(pShared);
 
     J3DShapePacket* firstPacket = mPackets[0]->mShapePacket;
     firstPacket->mpShape->loadPreDrawSetting();
@@ -56,8 +57,10 @@ void DrawBufferShapeDrawer::draw() const {
         }
 
         if ((packet->mpShape->mFlags & 1) == 0) {
-            if (packet->mpSnapshot != nullptr) {
-                J3DNativeMaterial::sendDiffered(packet->mpSnapshot);
+            if (packet->mpMaterial != pShared) {
+                J3DNativeMaterial::sendOwn(packet->mpMaterial, pShared);
+                packet->mpMaterial->setCurrentMtx();
+                packet->mpShape->loadPreDrawSetting();
             }
             packet->drawFast();
         }
@@ -205,7 +208,7 @@ namespace {
         J3DMaterial* material;
         material = MR::getMaterial(pModel, materialIndex);
         for (s32 idx = 0; idx < materialIndex; idx++) {
-            if (MR::getMaterial(pModel, idx)->getDiffFlag() == material->getDiffFlag()) {
+            if (MR::getMaterial(pModel, idx)->getID() == material->getID()) {
                 return idx;
             }
         }

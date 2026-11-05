@@ -236,8 +236,7 @@ namespace MR {
     }
 
     void initMirrorReflection(LiveActor* pActor) {
-        initMaterialChangeTex(pActor, "MirrorTex");
-        pActor->mModelManager->newDifferedMaterials();
+        pActor->mModelManager->prepareMaterials();
         changeModelDataTexAll(pActor, "MirrorTex", *MR::getScreenResTIMG());
         pActor->mModelManager->mMaterialUpdater->addMirrorReflectionMtxSetter();
     }
@@ -859,8 +858,8 @@ namespace MR {
         return getJ3DModelData(pActor)->mMaterialTable.getTextureName()->getIndex(pName) != -1;
     }
 
-    void newDifferedMaterials(LiveActor* pActor) {
-        pActor->mModelManager->newDifferedMaterials();
+    void prepareMaterials(LiveActor* pActor) {
+        pActor->mModelManager->prepareMaterials();
     }
 
     void initMaterialFog(LiveActor* pActor, bool enable) {
@@ -869,23 +868,6 @@ namespace MR {
 
     void initMaterialColor0(LiveActor* pActor, const char* pMatName, const J3DColor* pColor) {
         pActor->mModelManager->mMaterialUpdater->addMatColorCtrl(pMatName, 0, pColor);
-    }
-
-    void initMaterialChangeTex(LiveActor* pActor, const char* pTexName) {
-        J3DModelData* pModelData = getJ3DModelData(pActor);
-        MaterialUpdater* pMaterialUpdater = pActor->mModelManager->mMaterialUpdater;
-
-        for (u16 texIndex = 0; texIndex < pModelData->mMaterialTable.getTexture()->getNum(); texIndex++) {
-            if (!MR::isEqualString(pModelData->mMaterialTable.getTextureName()->getName(texIndex), pTexName)) {
-                continue;
-            }
-
-            for (u16 matIndex = 0; matIndex < pModelData->mMaterialTable.getMaterialNum(); matIndex++) {
-                if (isUseTex(pModelData->mMaterialTable.getMaterialNodePointer(matIndex), texIndex)) {
-                    pMaterialUpdater->onPrgFlag(matIndex, 0x4020000);
-                }
-            }
-        }
     }
 
     TexMtxCtrl* initMaterialTexMtx(LiveActor* pActor, const char* pName) {
@@ -1626,7 +1608,7 @@ namespace MR {
     }
 
     void updateMaterial(LiveActor* pActor) {
-        pActor->mModelManager->updateList(true);
+        pActor->mModelManager->updateList();
     }
 
     void setMirrorReflectionInfoFromMtxYUp(const TPos3f& rMtx) {
@@ -1644,7 +1626,6 @@ namespace MR {
 
     void changeModelDataTexAll(LiveActor* pActor, const char* pTexName, const ResTIMG& rTimg) {
         J3DModelData* pModelData = MR::getJ3DModelData(pActor);
-        MaterialUpdater* pMaterialUpdater = pActor->mModelManager->mMaterialUpdater;
 
         for (u16 texIndex = 0; texIndex < pModelData->mMaterialTable.getTexture()->getNum(); texIndex++) {
             const char* name = pModelData->mMaterialTable.getTextureName()->getName(texIndex);
@@ -1654,14 +1635,6 @@ namespace MR {
             }
 
             pModelData->mMaterialTable.getTexture()->setResTIMG(texIndex, rTimg);
-
-            for (u16 matIndex = 0; matIndex < pModelData->mMaterialTable.getMaterialNum(); matIndex++) {
-                J3DMaterial* material = pModelData->mMaterialTable.getMaterialNodePointer(matIndex);
-
-                if (MR::isUseTex(material, texIndex)) {
-                    pMaterialUpdater->onCurFlag(matIndex, 0x4020000);
-                }
-            }
         }
     }
 

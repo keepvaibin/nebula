@@ -74,7 +74,7 @@ void MarioActor::initDrawAndModel() {
     ::initExtraMtxBuffer(baseModel);
 
     MR::initMaterialFog(this, true);
-    MR::newDifferedMaterials(this);
+    MR::prepareMaterials(this);
 
     mModels[0] = baseModel;
     _9E4 = nullptr;
@@ -175,7 +175,7 @@ void MarioActor::initBeeMario() {
     model->copyExtraMtxBuffer(mModels[0]);
 
     MR::initMaterialFog(_9E4, true);
-    MR::newDifferedMaterials(_9E4);
+    MR::prepareMaterials(_9E4);
 
     mModels[2] = model;
     _9E4->kill();
@@ -218,7 +218,7 @@ void MarioActor::initHopperMario() {
     model->copyExtraMtxBuffer(mModels[0]);
 
     MR::initMaterialFog(_A00, true);
-    MR::newDifferedMaterials(_A00);
+    MR::prepareMaterials(_A00);
 
     mModels[5] = model;
     _A00->kill();
@@ -253,7 +253,7 @@ void MarioActor::initIceMario() {
     model->copyAnmMtxBuffer(mModels[0]);
 
     MR::initMaterialFog(_9C0, true);
-    MR::newDifferedMaterials(_9C0);
+    MR::prepareMaterials(_9C0);
 
     mModels[3] = model;
     _9C0->kill();
@@ -296,7 +296,7 @@ void MarioActor::initInvincibleMario() {
     model->copyAnmMtxBuffer(mModels[0]);
 
     MR::initMaterialFog(_9C8, true);
-    MR::newDifferedMaterials(_9C8);
+    MR::prepareMaterials(_9C8);
 
     mModels[4] = model;
     _9C8->kill();
@@ -352,7 +352,7 @@ void MarioActor::initBoneMario() {
     model->copyExtraMtxBuffer(mModels[0]);
 
     MR::initMaterialFog(_A04, true);
-    MR::newDifferedMaterials(_A04);
+    MR::prepareMaterials(_A04);
 
     mModels[1] = model;
     _A04->kill();
@@ -379,7 +379,7 @@ void MarioActor::initModPowerUpModels() {
         pModel->copyExtraMtxBuffer(mModels[0]);
         pModel->copyAnmMtxBuffer(mModels[0]);
         MR::initMaterialFog(pHolder, true);
-        MR::newDifferedMaterials(pHolder);
+        MR::prepareMaterials(pHolder);
         mModels[6 + i] = pModel;
         mModPowerUpModels[i] = pHolder;
         pHolder->kill();
@@ -671,7 +671,7 @@ void MarioActor::initFace() {
     }
 
     MR::initMaterialFog(_A5C, true);
-    MR::newDifferedMaterials(_A5C);
+    MR::prepareMaterials(_A5C);
 
     MR::getJ3DModelData(_A5C)->mMaterialTable.mTexture = MR::getJ3DModelData(this)->mMaterialTable.mTexture;
     MR::getJ3DModelData(_A5C)->mMaterialTable.mTextureName = MR::getJ3DModelData(this)->mMaterialTable.mTextureName;
@@ -1036,8 +1036,7 @@ void MarioActor::copyMaterial(J3DModel* pModel, u16 materialNo, s32 packetIndex)
         J3DShapePacket* shapePacket = &pModel->mShapePacket[i];
         matPacket->mpInitShapePacket = shapePacket;
         matPacket->addShapePacket(shapePacket);
-        matPacket->mpTexture = modelData->mMaterialTable.mTexture;
-        matPacket->mpSnapshot = modelData->getMaterialNodePointer(materialIndex)->mSharedSnapshot;
+        shapePacket->mpMaterial = matPacket->mpMaterial;
     }
 }
 

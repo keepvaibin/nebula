@@ -188,7 +188,9 @@ void J3DModelX::drawIn(J3DMaterial* material, bool fog, MtxPtr base, J3DModel* m
     J3DMatPacket* matPacket = getMatPacket(material->getIndex());
     J3DShapePacket* packet = model ? model->getShapePacket(material->getShape()->getIndex()) : getShapePacket(material->getShape()->getIndex());
     j3dSys.setMatPacket(matPacket);
-    J3DNativeMaterial::send(matPacket->getMaterial(), matPacket->mpTexture, matPacket->getSnapshot());
+    J3DNativeMaterial::send(matPacket->getMaterial());
+    packet->getShape()->loadPreDrawSetting();
+    J3DNativeMaterial::sendOwn(packet->mpMaterial, matPacket->getMaterial());
 
     if (fog) {
         TVec3f pos;
@@ -196,10 +198,6 @@ void J3DModelX::drawIn(J3DMaterial* material, bool fog, MtxPtr base, J3DModel* m
         TDDraw::mixFogColor(pos, _1D4, _1D8);
     }
 
-    packet->getShape()->loadPreDrawSetting();
-    if (packet->getSnapshot()) {
-        J3DNativeMaterial::sendDiffered(packet->getSnapshot());
-    }
     if (MR::getJ3DShapePacketUserData(packet)) {
         MR::getJ3DShapePacketUserData(packet)->load();
     }
@@ -297,11 +295,9 @@ bool J3DModelX::simpleDrawSetup(J3DMaterial* material) {
     J3DMatPacket* matPacket = getMatPacket(material->getIndex());
     J3DShapePacket* packet = getShapePacket(material->getShape()->getIndex());
     j3dSys.setMatPacket(matPacket);
-    J3DNativeMaterial::send(matPacket->getMaterial(), matPacket->mpTexture, matPacket->getSnapshot());
+    J3DNativeMaterial::send(matPacket->getMaterial());
     packet->getShape()->loadPreDrawSetting();
-    if (packet->getSnapshot()) {
-        J3DNativeMaterial::sendDiffered(packet->getSnapshot());
-    }
+    J3DNativeMaterial::sendOwn(packet->mpMaterial, matPacket->getMaterial());
     return true;
 }
 
@@ -455,12 +451,6 @@ J3DModelX::J3DModelX(J3DModelData* data, u32 flags, u32 bufferFlags) : J3DModel(
 void J3DModelX::shapePacketDrawFast(J3DShapePacketX* packet) const {
     if (!(packet->mFlags & 0x10) && packet->getShape()) {
         packet->prepareDraw();
-        if (packet->getTexMtxObj()) {
-            J3DDifferedTexMtx::sTexGenBlock = packet->getShape()->mMaterial->mTexGenBlock;
-            J3DDifferedTexMtx::sTexMtxObj = packet->getTexMtxObj();
-        } else {
-            J3DDifferedTexMtx::sTexGenBlock = nullptr;
-        }
         shapeDrawFast(static_cast< J3DShapeX* >(packet->getShape()));
     }
 }

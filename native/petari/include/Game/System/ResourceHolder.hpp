@@ -5,7 +5,6 @@
 #include "Game/System/AssetFolder.hpp"
 #include "Game/System/NebulaArena.hpp"
 
-class MaterialAnmBuffer;
 class J3DModelData;
 
 typedef const char* ArchiveName;
@@ -16,7 +15,8 @@ public:
 
     const char* getMotionName(u32) const;
     bool isExistMaterialAnm() const;
-    void newMaterialAnmBuffer(J3DModelData*);
+    // Its material animations find their materials in the model.
+    void bindMaterialAnimations(J3DModelData*);
     void newBckCtrl();
 
     Mtx44& getInitEffectMtx(int, int) const;
@@ -82,7 +82,7 @@ public:
     ResTable* mBanmtResTable;
     ResTable* mFileInfoTable;
     ResTable mDefaultTable;
-    MaterialAnmBuffer* mMaterialBuf;
+    bool mMaterialBound;
     BckCtrl* mBckCtrl;
     Mtx44* mBackupMaterialData;
     AssetFolder* mArchive;

@@ -4,45 +4,6 @@
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 
-class J3DTexMtx;
-class J3DTexGenBlock;
-
-class J3DTexMtxObj {
-public:
-    Mtx& getMtx(u16 idx) {
-        return mpTexMtx[idx];
-    }
-
-    void setMtx(u16 idx, const Mtx mtx) {
-        NebulaMtxCopy(mtx, mpTexMtx[idx]);
-    }
-
-    Mtx44& getEffectMtx(u16 idx) {
-        return mpEffectMtx[idx];
-    }
-
-    u16 getNumTexMtx() const {
-        return mTexMtxNum;
-    }
-
-    Mtx* mpTexMtx;
-    Mtx44* mpEffectMtx;
-    u16 mTexMtxNum;
-};
-
-class J3DDifferedTexMtx {
-public:
-    static void loadExecute(f32 const (*)[4]);
-
-    static inline void load(const Mtx m) {
-        if (sTexGenBlock != NULL)
-            loadExecute(m);
-    }
-
-    static J3DTexGenBlock* sTexGenBlock;
-    static J3DTexMtxObj* sTexMtxObj;
-};
-
 class J3DShapeMtxConcatView;
 typedef void (J3DShapeMtxConcatView::*J3DShapeMtxConcatView_LoadFunc)(int, u16) const;
 
@@ -91,8 +52,8 @@ public:
     // The model's block for this view (its matrices through the packet's base matrix, sent the first time they are
     // read after they changed); its id.
     static u32 loadPalette();
-    // What a coordinate's own matrix needs from draw matrix `index` (J3DDifferedTexMtx, a normal matrix as a texture
-    // matrix), for shapes whose material asks.
+    // What a coordinate's own matrix needs from draw matrix `index` (a normal matrix as a texture matrix), for shapes
+    // whose material asks.
     void loadTextureInputs(int slot, u16 index) const;
 
     static MtxPtr sMtxPtrTbl[2];

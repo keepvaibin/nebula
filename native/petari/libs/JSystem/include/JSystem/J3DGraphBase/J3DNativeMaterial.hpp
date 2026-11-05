@@ -7,8 +7,6 @@
 class J3DMaterial;
 class J3DModelData;
 class J3DTexture;
-class J3DMaterialSnapshot;
-struct NebulaMaterialParts;
 struct NebulaNativeMaterial;
 
 // The parts a material loads (the others keep what was set before).
@@ -26,8 +24,6 @@ enum {
 struct J3DMaterialSetup {
     u8 tex_gens, cull, z_compare_location, fog_type;
     u16 loads;
-    // 0: the material as its list sets it. Else an instance's differed list: only the parts these J3D flags name.
-    u32 diff_flags;
     u8 tex_gen_post[8];  // each coordinate's post-transform row (61 the identity)
     struct { u8 comp0, op, comp1; } alpha_compare;
     struct { u8 type, source, destination; } blend;  // NEBULA_BLEND_*, NEBULA_FACTOR_*
@@ -56,19 +52,10 @@ struct J3DMaterialValues {
 // block's settings as values.
 
 namespace J3DNativeMaterial {
-    // `pTexture`: the texture table the material's texture numbers index (its packet's; j3dSys's for shared lists).
-    void build(J3DMaterial* pMaterial, J3DTexture* pTexture, NebulaMaterialParts* pOut);
     // The material the next shape draws use, a record after every command written before it.
-    // A snapshot's storage, from the current heap (where a material list's buffers come from).
-    NebulaMaterialParts* create();
-    // The material as `pList` sets it now (made or patched), into its snapshot.
-    // is new or changed. `diffFlags`: the J3D diff flags of a differed list (0 for a whole list).
-    void capture(J3DMaterial* pMaterial, J3DTexture* pTexture, J3DMaterialSnapshot* pList, u32 diffFlags = 0);
-    // The material `pList` sets (its snapshot; built now for a list from the model file, which has none).
-    void send(J3DMaterial* pMaterial, J3DTexture* pTexture, J3DMaterialSnapshot* pList);
-    // An instance's differed list (a shape packet's: the material with that instance's animated values), when it has
-    // been made.
-    void sendDiffered(J3DMaterialSnapshot* pList);
+    void send(J3DMaterial* pMaterial);
+    // A model's own copy of the material `pShared` just sent, when it has one.
+    void sendOwn(J3DMaterial* pMaterial, const J3DMaterial* pShared);
     // The light environment's ambient colour: materials with none of their own take it, the current one at once.
     void setLightAmbient(u32 channel, NebulaColor8 color);
     const f32* lightAmbient(u32 channel);

@@ -6,29 +6,24 @@
 
 char MirrorReflectionMtxSetter::sMirrorTextureName[] = "MirrorTex";
 
-MaterialCtrl::MaterialCtrl(J3DModelData* pModelData, const char* pMaterialName) : mModelData(pModelData), mMaterial() {
+MaterialCtrl::MaterialCtrl(J3DModel* pModel, const char* pMaterialName) : mModel(pModel), mMaterial() {
     if (pMaterialName) {
-        mMaterial = MR::getMaterial(pModelData, pMaterialName);
+        mMaterial = pModel->ownMaterial(MR::getMaterialNo(pModel->getModelData(), pMaterialName));
     }
 }
 
 void MaterialCtrl::update() {
     if (mMaterial) {
         updateMaterial(mMaterial);
-    } else {
-        u16 i = 0;
-        while (i < mModelData->mMaterialTable.getMaterialNum()) {
-            updateMaterial(mModelData->mMaterialTable.getMaterialNodePointer(i));
-            i++;
-        }
     }
 }
 
-FogCtrl::FogCtrl(J3DModelData* pModelData, bool useAllMaterials) : MaterialCtrl(pModelData, nullptr), mNumMaterials(), mMaterials() {
+FogCtrl::FogCtrl(J3DModel* pModel, bool useAllMaterials) : MaterialCtrl(pModel, nullptr), mNumMaterials(), mMaterials() {
+    J3DModelData* pModelData = pModel->getModelData();
     J3DMaterial* firstMaterial = nullptr;
     for (u16 i = 0; i < pModelData->mMaterialTable.getMaterialNum(); i++) {
         J3DMaterial* material = pModelData->mMaterialTable.getMaterialNodePointer(i);
-        if (useAllMaterials || material->mOutputBlock->getFog()->mType) {
+        if (useAllMaterials || material->getFog()->mType) {
             if (!firstMaterial) {
                 firstMaterial = material;
             }
@@ -41,14 +36,14 @@ FogCtrl::FogCtrl(J3DModelData* pModelData, bool useAllMaterials) : MaterialCtrl(
         firstMaterial = pModelData->mMaterialTable.getMaterialNodePointer(0);
     }
 
-    mFogInfo = *firstMaterial->mOutputBlock->getFog()->getFogInfo();
+    mFogInfo = *firstMaterial->getFog()->getFogInfo();
     if (mNumMaterials > 0) {
         mMaterials = new J3DMaterial*[mNumMaterials];
         s32 materialCount = 0;
         for (u16 i = 0; i < pModelData->mMaterialTable.getMaterialNum(); i++) {
             J3DMaterial* material = pModelData->mMaterialTable.getMaterialNodePointer(i);
-            if (useAllMaterials || material->mOutputBlock->getFog()->mType) {
-                mMaterials[materialCount++] = material;
+            if (useAllMaterials || material->getFog()->mType) {
+                mMaterials[materialCount++] = pModel->ownMaterial(i);
             }
         }
     }
@@ -56,27 +51,28 @@ FogCtrl::FogCtrl(J3DModelData* pModelData, bool useAllMaterials) : MaterialCtrl(
 
 void FogCtrl::update() {
     for (s32 i = 0; i < mNumMaterials; i++) {
-        mMaterials[i]->mOutputBlock->getFog()->setFogInfo(mFogInfo);
+        mMaterials[i]->getFog()->setFogInfo(mFogInfo);
     }
 }
 
-MatColorCtrl::MatColorCtrl(J3DModelData* pModelData, const char* pName, u32 color, const J3DColor* pColor) : MaterialCtrl(pModelData, pName) {
+MatColorCtrl::MatColorCtrl(J3DModel* pModel, const char* pName, u32 color, const J3DColor* pColor) : MaterialCtrl(pModel, pName) {
     mColorChoice = color;
     mColor = pColor;
 }
 
 void MatColorCtrl::updateMaterial(J3DMaterial* pMaterial) {
-    pMaterial->mColorBlock->setMatColor(mColorChoice, mColor);
+    pMaterial->setMatColor(mColorChoice, mColor);
 }
 
-ViewProjmapEffectMtxSetter::ViewProjmapEffectMtxSetter(J3DModelData* pModelData) : MaterialCtrl(nullptr, nullptr), mMatricies(), mNumMatricies() {
+ViewProjmapEffectMtxSetter::ViewProjmapEffectMtxSetter(J3DModel* pModel) : MaterialCtrl(pModel, nullptr), mMatricies(), mNumMatricies() {
+    J3DModelData* pModelData = pModel->getModelData();
     J3DTexMtxInfo* matrices[64];
     for (u16 i = 0; i < pModelData->mMaterialTable.getMaterialNum(); i++) {
         J3DMaterial* material = pModelData->mMaterialTable.getMaterialNodePointer(i);
         for (u32 j = 0; j < 8; j++) {
             J3DTexMtx* texMtx = material->getTexMtx(j);
             if (texMtx && (texMtx->getTexMtxInfo().mInfo & 0x3FU) == J3DTexMtxMode_ViewProjmap && MR::isUseTexMtx(material, j)) {
-                matrices[mNumMatricies] = &texMtx->getTexMtxInfo();
+                matrices[mNumMatricies] = &pModel->ownMaterial(i)->getTexMtx(j)->getTexMtxInfo();
                 mNumMatricies++;
             }
         }
@@ -102,7 +98,7 @@ void ViewProjmapEffectMtxSetter::update() {
 }
 
 ProjmapEffectMtxSetter::ProjmapEffectMtxSetter(J3DModel* pModel, const ResourceHolder* pResourceHolder)
-    : MaterialCtrl(nullptr, nullptr), mUpdatingMtxInfo(), mNumUpdatingMtx(), mModel(pModel) {
+    : MaterialCtrl(pModel, nullptr), mUpdatingMtxInfo(), mNumUpdatingMtx() {
     J3DModelData* modelData = pModel->getModelData();
     mEffectMtx.identity();
     for (u16 i = 0; i < modelData->mMaterialTable.getMaterialNum(); i++) {
@@ -122,7 +118,7 @@ ProjmapEffectMtxSetter::ProjmapEffectMtxSetter(J3DModel* pModel, const ResourceH
         for (u32 j = 0; j < 8; j++) {
             J3DTexMtx* texMtx = material->getTexMtx(j);
             if (texMtx && (texMtx->getTexMtxInfo().mInfo & 0x3FU) == J3DTexMtxMode_Projmap && MR::isUseTexMtx(material, j)) {
-                mUpdatingMtxInfo[matrixCount].mTexMtx = texMtx;
+                mUpdatingMtxInfo[matrixCount].mTexMtx = pModel->ownMaterial(i)->getTexMtx(j);
                 mUpdatingMtxInfo[matrixCount].mInitEffectMtx.set(pResourceHolder->getInitEffectMtx(i, j));
                 matrixCount++;
             }
@@ -160,19 +156,20 @@ void ProjmapEffectMtxSetter::updateMtxUseBaseMtxWithLocalOffset(const TVec3f& rO
 }
 
 MirrorReflectionMtxSetter::MirrorReflectionMtxSetter(J3DModel* pModel, const ResourceHolder* pResourceHolder)
-    : MaterialCtrl(nullptr, nullptr), mNumUpdatingTexMtx() {
+    : MaterialCtrl(pModel, nullptr), mNumUpdatingTexMtx() {
     for (u16 i = 0; i < 8; i++) {
         mUpdatingTexMtx[i] = nullptr;
     }
 
-    addUpdatingTexMtxFromName(pModel->getModelData());
+    addUpdatingTexMtxFromName(pModel);
 }
 
-void MirrorReflectionMtxSetter::addUpdatingTexMtxFromTexNo(J3DModelData* pModelData, u16 texNo) {
+void MirrorReflectionMtxSetter::addUpdatingTexMtxFromTexNo(J3DModel* pModel, u16 texNo) {
+    J3DModelData* pModelData = pModel->getModelData();
     u16 materialNum = pModelData->mMaterialTable.getMaterialNum();
     for (u16 i = 0; i < materialNum; i++) {
         if (MR::isUseTex(pModelData->mMaterialTable.getMaterialNodePointer(i), texNo)) {
-            addUpdatingTexMtxFromTexCoord(pModelData->mMaterialTable.getMaterialNodePointer(i));
+            addUpdatingTexMtxFromTexCoord(pModel->ownMaterial(i));
         }
     }
 }
@@ -198,7 +195,7 @@ void MirrorReflectionMtxSetter::update() {
 }
 
 MarioShadowProjmapMtxSetter::MarioShadowProjmapMtxSetter(J3DModel* pModel, const ResourceHolder* pResourceHolder)
-    : MaterialCtrl(nullptr, nullptr), mProjmapMtxSetter() {
+    : MaterialCtrl(pModel, nullptr), mProjmapMtxSetter() {
     mProjmapMtxSetter = new ProjmapEffectMtxSetter(pModel, pResourceHolder);
 }
 
@@ -229,7 +226,7 @@ void MarioShadowProjmapMtxSetter::update() {
     mProjmapMtxSetter->update();
 }
 
-TexMtxCtrl::TexMtxCtrl(J3DModelData* pModelData, const char* pMaterialName) : MaterialCtrl(pModelData, pMaterialName) {
+TexMtxCtrl::TexMtxCtrl(J3DModel* pModel, const char* pMaterialName) : MaterialCtrl(pModel, pMaterialName) {
     for (u32 i = 0; i < 8; i++) {
         mMatricies[i] = nullptr;
     }
@@ -242,7 +239,7 @@ void TexMtxCtrl::setTexMtx(u32 index, J3DTexMtx* pTexMtx) {
 void TexMtxCtrl::updateMaterial(J3DMaterial* pMaterial) {
     for (u32 i = 0; i < 8; i++) {
         if (mMatricies[i]) {
-            pMaterial->mTexGenBlock->setTexMtx(i, mMatricies[i]);
+            pMaterial->setTexMtx(i, *mMatricies[i]);
         }
     }
 }

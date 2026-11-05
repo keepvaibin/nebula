@@ -25,8 +25,8 @@ public:
     void calcAnim();
     void calcView();
     void entry();
-    void newDifferedMaterials();
-    void updateList(bool);
+    void prepareMaterials();
+    void updateList();
     void startBck(const char*, const char*);
     void startBckWithInterpole(const char*, s32);
     void startBtk(const char*);

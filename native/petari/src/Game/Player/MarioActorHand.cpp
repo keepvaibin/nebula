@@ -40,20 +40,20 @@ void MarioActor::initHand() {
     if (_9C0 != nullptr) {
         _A40 = new ModelHolder("IceMarioHandL", true);
         MR::initMaterialFog(_A40, true);
-        MR::newDifferedMaterials(_A40);
+        MR::prepareMaterials(_A40);
 
         _A44 = new ModelHolder("IceMarioHandR", true);
         MR::initMaterialFog(_A44, true);
-        MR::newDifferedMaterials(_A44);
+        MR::prepareMaterials(_A44);
     }
 
     _A48 = new ModelHolder("MarioHandL", true);
     MR::initMaterialFog(_A48, true);
-    MR::newDifferedMaterials(_A48);
+    MR::prepareMaterials(_A48);
 
     _A4C = new ModelHolder("MarioHandR", true);
     MR::initMaterialFog(_A4C, true);
-    MR::newDifferedMaterials(_A4C);
+    MR::prepareMaterials(_A4C);
 
     _A50 = nullptr;
     _A54 = nullptr;
@@ -61,11 +61,11 @@ void MarioActor::initHand() {
     if (_9C8 != nullptr) {
         _A50 = new ModelHolder("InvincibleMarioHandL", true);
         MR::initMaterialFog(_A50, true);
-        MR::newDifferedMaterials(_A50);
+        MR::prepareMaterials(_A50);
 
         _A54 = new ModelHolder("InvincibleMarioHandR", true);
         MR::initMaterialFog(_A54, true);
-        MR::newDifferedMaterials(_A54);
+        MR::prepareMaterials(_A54);
     }
 
     for (u32 idx = 0; idx < MR::getJointNum(_A48) - 1; idx++) {
