@@ -284,8 +284,8 @@ namespace nw4r {
 };  // namespace nw4r
 
 CustomTagProcessor::CustomTagProcessor(nw4r::lyt::TextBox* textBox)
-    : mAlphaCtrl(), mPlayedSounds(), mColorMappingMin(::setGXColor(textBox->GetMaterial()->GetTevColor(0))),
-      mColorMappingMax(::setGXColor(textBox->GetMaterial()->GetTevColor(1))) {
+    : mAlphaCtrl(), mPlayedSounds(), mColorMappingMin(::setGXColor(textBox->GetMaterial()->GetStageColor(0))),
+      mColorMappingMax(::setGXColor(textBox->GetMaterial()->GetStageColor(1))) {
     mRubyFontWidth = 0.5f * textBox->mFontSize.width;
     mRubyFontHeight = 0.5f * textBox->mFontSize.height;
     mFontWidth = textBox->mFontSize.width;

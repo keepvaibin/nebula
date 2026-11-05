@@ -12,12 +12,12 @@ void J3DMaterialAnm::initialize() {
         mTexNoAnm[i].setAnmFlag(false);
     }
 
-    for (int i = 0; i < ARRAY_SIZE(mTevColorAnm); i++) {
-        mTevColorAnm[i].setAnmFlag(false);
+    for (int i = 0; i < ARRAY_SIZE(mStageColorAnm); i++) {
+        mStageColorAnm[i].setAnmFlag(false);
     }
 
-    for (int i = 0; i < ARRAY_SIZE(mTevKColorAnm); i++) {
-        mTevKColorAnm[i].setAnmFlag(false);
+    for (int i = 0; i < ARRAY_SIZE(mStageConstantAnm); i++) {
+        mStageConstantAnm[i].setAnmFlag(false);
     }
 
     for (int i = 0; i < ARRAY_SIZE(mTexMtxAnm); i++) {
@@ -42,16 +42,16 @@ void J3DMaterialAnm::calc(J3DMaterial* pMaterial) const {
     }
 
     for (u32 i = 0; i < 3; i++) {
-        if (mTevColorAnm[i].getAnmFlag()) {
+        if (mStageColorAnm[i].getAnmFlag()) {
             NebulaColor16* color = pMaterial->mRegisterBlock->getRegisterColor(i);
-            mTevColorAnm[i].calc(color);
+            mStageColorAnm[i].calc(color);
         }
     }
 
-    for (u32 i = 0; i < ARRAY_SIZE(mTevKColorAnm); i++) {
-        if (mTevKColorAnm[i].getAnmFlag()) {
+    for (u32 i = 0; i < ARRAY_SIZE(mStageConstantAnm); i++) {
+        if (mStageConstantAnm[i].getAnmFlag()) {
             NebulaColor8* color = pMaterial->mRegisterBlock->getConstantColor(i);
-            mTevKColorAnm[i].calc(color);
+            mStageConstantAnm[i].calc(color);
         }
     }
 
@@ -87,18 +87,18 @@ void J3DMaterialAnm::setTexNoAnm(int idx, J3DTexNoAnm* pTexNoAnm) {
     }
 }
 
-void J3DMaterialAnm::setTevColorAnm(int idx, J3DTevColorAnm* pTevColorAnm) {
-    if (pTevColorAnm == NULL) {
-        mTevColorAnm[idx].setAnmFlag(false);
+void J3DMaterialAnm::setStageColorAnm(int idx, J3DStageColorAnm* pStageColorAnm) {
+    if (pStageColorAnm == NULL) {
+        mStageColorAnm[idx].setAnmFlag(false);
     } else {
-        mTevColorAnm[idx] = *pTevColorAnm;
+        mStageColorAnm[idx] = *pStageColorAnm;
     }
 }
 
-void J3DMaterialAnm::setTevKColorAnm(int idx, J3DTevKColorAnm* pTevKColorAnm) {
-    if (pTevKColorAnm == NULL) {
-        mTevKColorAnm[idx].setAnmFlag(false);
+void J3DMaterialAnm::setStageConstantAnm(int idx, J3DStageConstantAnm* pStageConstantAnm) {
+    if (pStageConstantAnm == NULL) {
+        mStageConstantAnm[idx].setAnmFlag(false);
     } else {
-        mTevKColorAnm[idx] = *pTevKColorAnm;
+        mStageConstantAnm[idx] = *pStageConstantAnm;
     }
 }

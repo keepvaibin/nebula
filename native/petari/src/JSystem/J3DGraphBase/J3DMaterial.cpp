@@ -1,4 +1,4 @@
-#define J3D_TEV_STAGE_MUTABLE_DEFAULTS
+#define J3D_STAGE_STAGE_MUTABLE_DEFAULTS
 
 #include "JSystem/J3DGraphBase/J3DMaterial.hpp"
 #include "JSystem/J3DGraphBase/J3DNativeMaterial.hpp"

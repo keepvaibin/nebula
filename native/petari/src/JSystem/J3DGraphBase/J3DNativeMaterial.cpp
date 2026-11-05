@@ -64,7 +64,7 @@ namespace {
 
     // The parts `rSetup` loads (J3D_LOADS_*), into the register file. An instance's differed list
     // (diff_flags) loads only the parts its flags name, as J3D's list does and the drawing state takes it
-    // (draw_state.cpp set_material): register and constant colours under TevReg, material colours under MatColor, fog under
+    // (draw_state.cpp set_material): register and constant colours under StageColor, material colours under MatColor, fog under
     // Fog; never the ambient colours, indirect matrices or alpha references, which stay as the shared list and the
     // state changes since left them (an actor's light loader sets the ambient colour between the two lists).
     void loadRegisters(const J3DMaterialSetup& rSetup, const J3DMaterialValues& rValues) {
@@ -72,14 +72,14 @@ namespace {
         const u32 diff = rSetup.diff_flags;
         const bool whole = diff == 0;
         const u16 loads = rSetup.loads;
-        if ((whole || (diff & J3DDiffFlag_TevReg) != 0) && (loads & J3D_LOADS_REGISTER_COLOR) != 0) {
+        if ((whole || (diff & J3DDiffFlag_StageColor) != 0) && (loads & J3D_LOADS_REGISTER_COLOR) != 0) {
             for (u32 r = 0; r < 3; r++) {
                 for (u32 c = 0; c < 4; c++) {
                     pC[4 + r * 4 + c] = rValues.register_color[r][c] / 255.0f;
                 }
             }
         }
-        if ((whole || (diff & J3DDiffFlag_TevReg) != 0) && (loads & J3D_LOADS_KONST_COLOR) != 0) {
+        if ((whole || (diff & J3DDiffFlag_StageColor) != 0) && (loads & J3D_LOADS_KONST_COLOR) != 0) {
             for (u32 k = 0; k < 4; k++) {
                 setColor(pC + 16 + k * 4, rValues.konst_color[k], 4);
             }
@@ -353,7 +353,7 @@ namespace J3DNativeMaterial {
         pParts->cooked = pMaterial->mNativeMaterial;
         J3DMaterialSetup* pOut = &pParts->setup;
         J3DMaterialValues* pVal = &pParts->values;
-        J3DRegisterBlock* pTev = pMaterial->mRegisterBlock;
+        J3DRegisterBlock* pStage = pMaterial->mRegisterBlock;
         J3DIndBlock* pInd = pMaterial->mIndBlock;
         J3DTexGenBlock* pTexGen = pMaterial->mTexGenBlock;
         J3DColorBlock* pColor = pMaterial->mColorBlock;
@@ -368,12 +368,12 @@ namespace J3DNativeMaterial {
         }
 
         // The null register block has no textures or orders.
-        const bool textured = pTev->hasTextures();
+        const bool textured = pStage->hasTextures();
         // Textures first: their sizes fill the coordinate scale table.
         u16 sizes[16];
         memset(sizes, 0, sizeof(sizes));
         for (u32 map = 0; textured && map < 8; map++) {
-            const u16 texNo = pTev->getTexNo(map);
+            const u16 texNo = pStage->getTexNo(map);
             if (texNo != 0xFFFF) {
                 texture(pTexture, map, texNo, pVal, sizes);
                 J3DSys::sTexCoordScaleTable[map].field_0x00 = sizes[map * 2];
@@ -386,20 +386,20 @@ namespace J3DNativeMaterial {
             }
         }
         // The parts a register block variant keeps (the one-stage variant has no colours): left as set before.
-        if (pTev->getRegisterColor(0) != NULL) {
+        if (pStage->getRegisterColor(0) != NULL) {
             pOut->loads |= J3D_LOADS_REGISTER_COLOR;
             for (u32 i = 0; i < 3; i++) {
-                const J3DColorWide& rColor = *pTev->getRegisterColor(i);
+                const J3DColorWide& rColor = *pStage->getRegisterColor(i);
                 pVal->register_color[i][0] = rColor.r;
                 pVal->register_color[i][1] = rColor.g;
                 pVal->register_color[i][2] = rColor.b;
                 pVal->register_color[i][3] = rColor.a;
             }
         }
-        if (pTev->getConstantColor(0) != NULL) {
+        if (pStage->getConstantColor(0) != NULL) {
             pOut->loads |= J3D_LOADS_KONST_COLOR;
             for (u32 i = 0; i < 4; i++) {
-                copyColor(pVal->konst_color[i], *pTev->getConstantColor(i));
+                copyColor(pVal->konst_color[i], *pStage->getConstantColor(i));
             }
         }
 

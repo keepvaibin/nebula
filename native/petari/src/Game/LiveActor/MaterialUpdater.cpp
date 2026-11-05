@@ -122,11 +122,11 @@ void MaterialUpdater::offCurFlagBtk(const J3DAnmBase* pAnm) {
 }
 
 void MaterialUpdater::onCurFlagBrk(const J3DAnmBase* pAnm) {
-    MR::onDiffFlagBrk(mCurFlag, static_cast< const J3DAnmTevRegKey* >(pAnm), "");
+    MR::onDiffFlagBrk(mCurFlag, static_cast< const J3DAnmStageColorKey* >(pAnm), "");
 }
 
 void MaterialUpdater::offCurFlagBrk(const J3DAnmBase* pAnm) {
-    MR::offDiffFlagBrk(mCurFlag, static_cast< const J3DAnmTevRegKey* >(pAnm), "");
+    MR::offDiffFlagBrk(mCurFlag, static_cast< const J3DAnmStageColorKey* >(pAnm), "");
 }
 
 void MaterialUpdater::push(MaterialCtrl* pCtrl) {

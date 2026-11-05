@@ -85,10 +85,10 @@ public:
     }
 
     // The colour and alpha modes (runtime/src/render/materials/particle.hlsl).
-    u32 getTevColorMode() const {
+    u32 getStageColorMode() const {
         return (mpData->mFlags >> 0x0F) & 0x07;
     }
-    u32 getTevAlphaMode() const {
+    u32 getStageAlphaMode() const {
         return (mpData->mFlags >> 0x12) & 0x01;
     }
 

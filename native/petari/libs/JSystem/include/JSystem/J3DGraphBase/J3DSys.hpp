@@ -66,7 +66,7 @@ public:
     void reinitLighting();
     void reinitTransform();
     void reinitTexture();
-    void reinitTevStages();
+    void reinitStageStages();
     void reinitIndStages();
     void reinitPixelProc();
 

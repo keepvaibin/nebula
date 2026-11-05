@@ -86,8 +86,8 @@ public:
     f32 mTexOffs1Y;
     JUTTexture* mWaterTex;
     JUTTexture* mWaterEnvTex;
-    NebulaColor8 mTevReg1Front;
-    NebulaColor8 mTevReg1Back;
+    NebulaColor8 mStageColor1Front;
+    NebulaColor8 mStageColor1Back;
     bool mUseMesh;
     u8 _109;
     u8 _10A;

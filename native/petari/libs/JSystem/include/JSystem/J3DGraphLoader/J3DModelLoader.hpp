@@ -121,13 +121,13 @@ struct J3DMaterialBlock : public J3DModelBlock {
     u32 mpTexMtxInfo;
     u32 field_0x44;
     u32 mpTexNo;
-    u32 mpTevOrderInfo;
+    u32 mpStageOrderInfo;
     u32 mpRegisterColor;
     u32 mpConstantColor;
     u32 mpStageCount;
-    u32 mpTevStageInfo;
-    u32 mpTevSwapModeInfo;
-    u32 mpTevSwapModeTableInfo;
+    u32 mpStageStageInfo;
+    u32 mpStageSwapModeInfo;
+    u32 mpStageSwapModeTableInfo;
     u32 mpFogInfo;
     u32 mpAlphaCompInfo;
     u32 mpBlendInfo;

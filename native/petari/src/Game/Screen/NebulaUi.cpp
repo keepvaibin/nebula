@@ -40,13 +40,13 @@ namespace NebulaUi {
             return;
         }
         if (nw4r::lyt::Material* pContent = pWindow->GetContentMaterial()) {
-            pContent->SetTevColor(0, tevColor(fill, false));
-            pContent->SetTevColor(1, tevColor(fill, true));
+            pContent->SetStageColor(0, tevColor(fill, false));
+            pContent->SetStageColor(1, tevColor(fill, true));
         }
         for (u32 i = 0; i < pWindow->mFrameNum; i++) {
             if (nw4r::lyt::Material* pFrame = pWindow->GetFrameMaterial(i)) {
-                pFrame->SetTevColor(0, tevColor(ring, false));
-                pFrame->SetTevColor(1, tevColor(fill, true));
+                pFrame->SetStageColor(0, tevColor(ring, false));
+                pFrame->SetStageColor(1, tevColor(fill, true));
             }
         }
     }

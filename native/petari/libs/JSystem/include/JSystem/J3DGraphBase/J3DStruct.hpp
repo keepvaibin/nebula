@@ -144,9 +144,9 @@ struct J3DNBTScaleInfo {
     Vec mScale;
 };
 
-struct J3DTevOrderInfo {
-    void operator=(const J3DTevOrderInfo& other) {
-        memcpy((void*)this, &other, sizeof(J3DTevOrderInfo));
+struct J3DStageOrderInfo {
+    void operator=(const J3DStageOrderInfo& other) {
+        memcpy((void*)this, &other, sizeof(J3DStageOrderInfo));
     }
 
     u8 mTexCoord;
@@ -155,22 +155,22 @@ struct J3DTevOrderInfo {
     u8 field_0x3;  // Maybe padding
 };
 
-struct J3DTevSwapModeTableInfo {
+struct J3DStageSwapModeTableInfo {
     u8 field_0x0;
     u8 field_0x1;
     u8 field_0x2;
     u8 field_0x3;
 };
 
-struct J3DTevStageInfo {
+struct J3DStageStageInfo {
     u8 field_0x0;
-    u8 mTevColorOp;
-    u8 mTevColorAB;
-    u8 mTevColorCD;
+    u8 mStageColorOp;
+    u8 mStageColorAB;
+    u8 mStageColorCD;
     u8 field_0x4;
-    u8 mTevAlphaOp;
-    u8 mTevAlphaAB;
-    u8 mTevSwapModeInfo;
+    u8 mStageAlphaOp;
+    u8 mStageAlphaAB;
+    u8 mStageSwapModeInfo;
     u8 field_0x8;
     u8 field_0x9;
     u8 field_0xa;
@@ -185,7 +185,7 @@ struct J3DTevStageInfo {
     u8 field_0x13;
 };
 
-struct J3DIndTevStageInfo {
+struct J3DIndStageStageInfo {
     u8 mIndStage;
     u8 mIndFormat;
     u8 mBiasSel;
@@ -198,7 +198,7 @@ struct J3DIndTevStageInfo {
     u8 pad[3];
 };
 
-struct J3DTevSwapModeInfo {
+struct J3DStageSwapModeInfo {
     u8 mRasSel;
     u8 mTexSel;
     u8 field_0x2;

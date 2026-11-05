@@ -162,8 +162,8 @@ namespace nw4r {
             ut::Color btmCol = detail::MultipleAlpha(mTextColors[1], mGlbAlpha);
             writer.SetGradationMode(topCol != btmCol ? ut::CharWriter::GRADMODE_V : ut::CharWriter::GRADMODE_NONE);
             writer.SetTextColor(topCol, btmCol);
-            ut::Color minCol = GetColor(mpMaterial->GetTevColor(0));
-            ut::Color maxCol = GetColor(mpMaterial->GetTevColor(1));
+            ut::Color minCol = GetColor(mpMaterial->GetStageColor(0));
+            ut::Color maxCol = GetColor(mpMaterial->GetStageColor(1));
             writer.SetColorMapping(minCol, maxCol);
             writer.Setup();
 

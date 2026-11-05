@@ -4,7 +4,7 @@
 class J3DAnmColorKey;
 class J3DAnmTexPattern;
 class J3DAnmTextureSRTKey;
-class J3DAnmTevRegKey;
+class J3DAnmStageColorKey;
 class J3DMaterialAnm;
 class J3DModelData;
 class ResourceHolder;
@@ -31,6 +31,6 @@ namespace MR {
     void offDiffFlagBtp(u32* pFlags, const J3DAnmTexPattern* pAnm, const char* pName);
     void onDiffFlagBtk(u32* pFlags, const J3DAnmTextureSRTKey* pAnm, const char* pName);
     void offDiffFlagBtk(u32* pFlags, const J3DAnmTextureSRTKey* pAnm, const char* pName);
-    void onDiffFlagBrk(u32* pFlags, const J3DAnmTevRegKey* pAnm, const char* pName);
-    void offDiffFlagBrk(u32* pFlags, const J3DAnmTevRegKey* pAnm, const char* pName);
+    void onDiffFlagBrk(u32* pFlags, const J3DAnmStageColorKey* pAnm, const char* pName);
+    void offDiffFlagBrk(u32* pFlags, const J3DAnmStageColorKey* pAnm, const char* pName);
 };  // namespace MR

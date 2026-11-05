@@ -21,7 +21,7 @@ void modifyDiffFlag(u32* pFlags, const T* pAnm, J3DDiffFlag flag, bool enable, c
     }
 }
 
-void modifyDiffFlagBrk(u32*, const J3DAnmTevRegKey*, bool, const char*);
+void modifyDiffFlagBrk(u32*, const J3DAnmStageColorKey*, bool, const char*);
 
 MaterialAnmBuffer::MaterialAnmBuffer(const ResourceHolder* pResourceHolder, J3DModelData* pModelData, bool useDiffFlag) : _0(), _4() {
     searchUpdateMaterialID(pResourceHolder, pModelData);
@@ -72,7 +72,7 @@ void MaterialAnmBuffer::searchUpdateMaterialID(const ResourceHolder* pResourceHo
     const ResTable* pBrkTable = pResourceHolder->mBrkResTable;
 
     for (u32 i = 0; i < pBrkTable->mCount; i++) {
-        static_cast< J3DAnmTevRegKey* >(pBrkTable->getRes(i))->searchUpdateMaterialID(pModelData);
+        static_cast< J3DAnmStageColorKey* >(pBrkTable->getRes(i))->searchUpdateMaterialID(pModelData);
     }
 }
 
@@ -109,7 +109,7 @@ void MaterialAnmBuffer::setDiffFlag(const ResourceHolder* pResourceHolder) {
 
     for (iBrk = 0; iBrk < pBrkTable->mCount; iBrk++) {
         const char* pBrkName = pBrkTable->getResName(iBrk);
-        const J3DAnmTevRegKey* pAnm = static_cast< J3DAnmTevRegKey* >(pBrkTable->getRes(iBrk));
+        const J3DAnmStageColorKey* pAnm = static_cast< J3DAnmStageColorKey* >(pBrkTable->getRes(iBrk));
         MR::onDiffFlagBrk(_4, pAnm, pBrkName);
     }
 }
@@ -138,15 +138,15 @@ void MaterialAnmBuffer::attachMaterialAnmBuffer(J3DModelData* pModelData, bool u
     }
 }
 
-void modifyDiffFlagBrk(u32* pFlags, const J3DAnmTevRegKey* pAnm, bool enable, const char* pName) {
+void modifyDiffFlagBrk(u32* pFlags, const J3DAnmStageColorKey* pAnm, bool enable, const char* pName) {
     for (u16 i = 0; i < pAnm->getCRegUpdateMaterialNum(); i++) {
         u16 material = pAnm->getCRegUpdateMaterialID(i);
 
         if (material != 0xFFFF) {
             if (enable) {
-                pFlags[material] |= J3DDiffFlag_TevReg;
+                pFlags[material] |= J3DDiffFlag_StageColor;
             } else {
-                pFlags[material] &= ~J3DDiffFlag_TevReg;
+                pFlags[material] &= ~J3DDiffFlag_StageColor;
             }
         }
     }
@@ -156,9 +156,9 @@ void modifyDiffFlagBrk(u32* pFlags, const J3DAnmTevRegKey* pAnm, bool enable, co
 
         if (material != 0xFFFF) {
             if (enable) {
-                pFlags[material] |= J3DDiffFlag_TevReg;
+                pFlags[material] |= J3DDiffFlag_StageColor;
             } else {
-                pFlags[material] &= ~J3DDiffFlag_TevReg;
+                pFlags[material] &= ~J3DDiffFlag_StageColor;
             }
         }
     }
@@ -189,11 +189,11 @@ namespace MR {
         modifyDiffFlag(pFlags, pAnm, static_cast< J3DDiffFlag >(0x200), false, pName, "btk");
     }
 
-    void onDiffFlagBrk(u32* pFlags, const J3DAnmTevRegKey* pAnm, const char* pName) {
+    void onDiffFlagBrk(u32* pFlags, const J3DAnmStageColorKey* pAnm, const char* pName) {
         modifyDiffFlagBrk(pFlags, pAnm, true, pName);
     }
 
-    void offDiffFlagBrk(u32* pFlags, const J3DAnmTevRegKey* pAnm, const char* pName) {
+    void offDiffFlagBrk(u32* pFlags, const J3DAnmStageColorKey* pAnm, const char* pName) {
         modifyDiffFlagBrk(pFlags, pAnm, false, pName);
     }
 };  // namespace MR

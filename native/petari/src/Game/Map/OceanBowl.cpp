@@ -37,10 +37,10 @@ namespace {
     const f32 sClippingDistance = 1000.0f;
     const f32 sPointIntervalHalf = ::sPointInterval / 2.0f;
 
-    static NebulaColor8 sOceanBowlTevReg0 = {40, 40, 40, 20};
-    static NebulaColor8 sOceanBowlTevReg1 = {200, 230, 210, 255};
-    static u8 sOceanBowlBloomTevReg0V = 95;
-    static u8 sOceanBowlBloomTevReg1V = 50;
+    static NebulaColor8 sOceanBowlStageColor0 = {40, 40, 40, 20};
+    static NebulaColor8 sOceanBowlStageColor1 = {200, 230, 210, 255};
+    static u8 sOceanBowlBloomStageColor0V = 95;
+    static u8 sOceanBowlBloomStageColor1V = 50;
 };  // namespace
 
 OceanBowl::OceanBowl(const char* pName)
@@ -405,10 +405,10 @@ void OceanBowl::loadMaterial() const {
     NativeShader::init(material, NEBULA_SHADER_OCEAN_BOWL,
                        inWater ? NativeShader::BLEND_ADD_ALPHA : NativeShader::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL,
                        false, NEBULA_CULL_NONE);
-    NativeShader::setColor(material, 0, ::sOceanBowlTevReg0.r, ::sOceanBowlTevReg0.g, ::sOceanBowlTevReg0.b,
-                           ::sOceanBowlTevReg0.a);
-    NativeShader::setColor(material, 4, ::sOceanBowlTevReg1.r, ::sOceanBowlTevReg1.g, ::sOceanBowlTevReg1.b,
-                           ::sOceanBowlTevReg1.a);
+    NativeShader::setColor(material, 0, ::sOceanBowlStageColor0.r, ::sOceanBowlStageColor0.g, ::sOceanBowlStageColor0.b,
+                           ::sOceanBowlStageColor0.a);
+    NativeShader::setColor(material, 4, ::sOceanBowlStageColor1.r, ::sOceanBowlStageColor1.g, ::sOceanBowlStageColor1.b,
+                           ::sOceanBowlStageColor1.a);
     material.constants[8] = mTexU0;
     material.constants[9] = mTexV0;
     material.constants[10] = mTexU1;
@@ -445,9 +445,9 @@ void OceanBowl::loadMaterialBloom() const {
     NativeShader::init(material, NEBULA_SHADER_OCEAN_BOWL_BLOOM, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, true,
                        NEBULA_CULL_NONE);
     material.early_depth = 1;
-    NativeShader::setColor(material, 0, ::sOceanBowlBloomTevReg0V, ::sOceanBowlBloomTevReg0V, ::sOceanBowlBloomTevReg0V,
+    NativeShader::setColor(material, 0, ::sOceanBowlBloomStageColor0V, ::sOceanBowlBloomStageColor0V, ::sOceanBowlBloomStageColor0V,
                            255);
-    NativeShader::setColor(material, 4, ::sOceanBowlBloomTevReg1V, ::sOceanBowlBloomTevReg1V, ::sOceanBowlBloomTevReg1V,
+    NativeShader::setColor(material, 4, ::sOceanBowlBloomStageColor1V, ::sOceanBowlBloomStageColor1V, ::sOceanBowlBloomStageColor1V,
                            255);
     material.constants[8] = mTexU0;
     material.constants[9] = mTexV0;

@@ -23,14 +23,14 @@ struct J3DMaterialInitData {
     u16 mTexMtxIdx[8];
     u8 field_0x058[0x2c];
     u16 mTexNoIdx[8];
-    u16 mTevKColorIdx[4];
-    u8 mTevKColorSel[0x10];
-    u8 mTevKAlphaSel[0x10];
-    u16 mTevOrderIdx[0x10];
-    u16 mTevColorIdx[4];
-    u16 mTevStageIdx[0x10];
-    u16 mTevSwapModeIdx[0x10];
-    u16 mTevSwapModeTableIdx[4];
+    u16 mStageConstantIdx[4];
+    u8 mStageConstantSel[0x10];
+    u8 mStageKAlphaSel[0x10];
+    u16 mStageOrderIdx[0x10];
+    u16 mStageColorIdx[4];
+    u16 mStageStageIdx[0x10];
+    u16 mStageSwapModeIdx[0x10];
+    u16 mStageSwapModeTableIdx[4];
     u8 field_0x12c[0x18];
     u16 mFogIdx;
     u16 mAlphaCompIdx;
@@ -47,7 +47,7 @@ struct J3DIndInitData {
     J3DIndTexMtxInfo mIndTexMtxInfo[3];
     J3DIndTexCoordScaleInfo mIndTexCoordScaleInfo[3];
     u8 field_0x074[4];
-    J3DIndTevStageInfo mIndTevStageInfo[0x10];
+    J3DIndStageStageInfo mIndStageStageInfo[0x10];
 };
 
 struct J3DPatchingInfo {
@@ -55,7 +55,7 @@ struct J3DPatchingInfo {
     u16 mColorChanOffset;
     u16 mTexMtxOffset;
     u16 mTexNoOffset;
-    u16 mTevRegOffset;
+    u16 mStageColorOffset;
     u16 mFogOffset;
     u8 field_0xc[4];
 };

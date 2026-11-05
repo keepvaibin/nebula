@@ -8,9 +8,9 @@ BrkPlayer::BrkPlayer(const ResourceHolder* pResourceHolder, J3DModelData* pModel
 }
 
 void BrkPlayer::attach(J3DAnmBase* pAnmRes, J3DModelData* pModelData) {
-    pModelData->mMaterialTable.entryTevRegAnimator(static_cast< J3DAnmTevRegKey* >(pAnmRes));
+    pModelData->mMaterialTable.entryStageColorAnimator(static_cast< J3DAnmStageColorKey* >(pAnmRes));
 }
 
 void BrkPlayer::detach(J3DAnmBase* pAnmRes, J3DModelData* pModelData) {
-    pModelData->mMaterialTable.removeTevRegAnimator(static_cast< J3DAnmTevRegKey* >(pAnmRes));
+    pModelData->mMaterialTable.removeStageColorAnimator(static_cast< J3DAnmStageColorKey* >(pAnmRes));
 }

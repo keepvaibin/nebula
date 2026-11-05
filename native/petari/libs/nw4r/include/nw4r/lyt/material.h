@@ -112,11 +112,11 @@ namespace nw4r {
                 return GetTexMapAry()[texMapIdx];
             }
 
-            void SetTevColor(u32 idx, const NebulaColor16& color) {
+            void SetStageColor(u32 idx, const NebulaColor16& color) {
                 mRegisterColors[idx] = color;
             }
 
-            void SetTevKColor(u32 idx, ut::Color value) {
+            void SetStageConstant(u32 idx, ut::Color value) {
                 mConstantColors[idx] = value;
             }
 
@@ -144,7 +144,7 @@ namespace nw4r {
                 *GetBlendModePtr() = value;
             }
 
-            const NebulaColor16 GetTevColor(u32 idx) const {
+            const NebulaColor16 GetStageColor(u32 idx) const {
                 return mRegisterColors[idx];
             }
 

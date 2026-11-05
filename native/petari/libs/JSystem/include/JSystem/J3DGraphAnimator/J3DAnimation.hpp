@@ -258,7 +258,7 @@ struct J3DAnmTexPatternFullData {
     u32 mNameTabOffset;
 };
 
-struct J3DAnmTevRegKeyData {
+struct J3DAnmStageColorKeyData {
     J3DAnmDataBlockHeader mHeader;
     u8 field_0x8;
     u8 field_0x9;  // maybe padding
@@ -687,15 +687,15 @@ public:
     s16* mColorA;
     J3DAnmColorKeyTable* mAnmTable;
 };
-class J3DAnmTevRegKey : public J3DAnmBase {
+class J3DAnmStageColorKey : public J3DAnmBase {
 public:
-    J3DAnmTevRegKey();
-    void getTevColorReg(u16, NebulaColor16*) const;
-    void getTevKonstReg(u16, NebulaColor8*) const;
+    J3DAnmStageColorKey();
+    void getStageColorReg(u16, NebulaColor16*) const;
+    void getStageKonstReg(u16, NebulaColor8*) const;
     void searchUpdateMaterialID(J3DMaterialTable*);
     void searchUpdateMaterialID(J3DModelData*);
 
-    virtual ~J3DAnmTevRegKey() {
+    virtual ~J3DAnmStageColorKey() {
     }
     virtual s32 getKind() const {
         return 5;

@@ -1085,7 +1085,7 @@ void J3DAnmColorKey::getColor(u16 index, NebulaColor8* pColor) const {
     }
 }
 
-J3DAnmTevRegKey::J3DAnmTevRegKey() {
+J3DAnmStageColorKey::J3DAnmStageColorKey() {
     mCRegUpdateMaterialNum = mKRegUpdateMaterialNum = 0;
 
     mCRegDataCountR = mCRegDataCountG = mCRegDataCountB = mCRegDataCountA = 0;
@@ -1165,7 +1165,7 @@ void J3DAnmTextureSRTKey::searchUpdateMaterialID(J3DModelData* pModelData) {
     searchUpdateMaterialID(&pModelData->getMaterialTable());
 }
 
-void J3DAnmTevRegKey::getTevColorReg(u16 index, NebulaColor16* pColor) const {
+void J3DAnmStageColorKey::getStageColorReg(u16 index, NebulaColor16* pColor) const {
     J3DAnmCRegKeyTable* entry = &mAnmCRegKeyTable[index];
 
     f32 col;
@@ -1242,7 +1242,7 @@ void J3DAnmTevRegKey::getTevColorReg(u16 index, NebulaColor16* pColor) const {
     }
 }
 
-void J3DAnmTevRegKey::getTevKonstReg(u16 index, NebulaColor8* pColor) const {
+void J3DAnmStageColorKey::getStageKonstReg(u16 index, NebulaColor8* pColor) const {
     J3DAnmKRegKeyTable* entry = &mAnmKRegKeyTable[index];
 
     f32 col;
@@ -1319,7 +1319,7 @@ void J3DAnmTevRegKey::getTevKonstReg(u16 index, NebulaColor8* pColor) const {
     }
 }
 
-void J3DAnmTevRegKey::searchUpdateMaterialID(J3DMaterialTable* pMatTable) {
+void J3DAnmStageColorKey::searchUpdateMaterialID(J3DMaterialTable* pMatTable) {
     for (u16 i = 0; i < mCRegUpdateMaterialNum; i++) {
         s32 index = pMatTable->getMaterialName()->getIndex(mCRegUpdateMaterialName.getName(i));
         if (index != -1) {
@@ -1339,7 +1339,7 @@ void J3DAnmTevRegKey::searchUpdateMaterialID(J3DMaterialTable* pMatTable) {
     }
 }
 
-void J3DAnmTevRegKey::searchUpdateMaterialID(J3DModelData* pModelData) {
+void J3DAnmStageColorKey::searchUpdateMaterialID(J3DModelData* pModelData) {
     searchUpdateMaterialID(&pModelData->getMaterialTable());
 }
 

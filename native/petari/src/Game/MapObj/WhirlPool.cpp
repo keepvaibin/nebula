@@ -8,8 +8,8 @@
 #include "Game/Util/NativeShader.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
 
-NebulaColor8 sWhirlPoolTevReg1 = {0x28, 0x28, 0x28, 0x14};
-NebulaColor8 sWhirlPoolTevReg2 = {0x55, 0x96, 0xBE, 0xFF};
+NebulaColor8 sWhirlPoolStageColor1 = {0x28, 0x28, 0x28, 0x14};
+NebulaColor8 sWhirlPoolStageColor2 = {0x55, 0x96, 0xBE, 0xFF};
 
 WhirlPool::WhirlPool(const char* pName)
     : LiveActor(pName), mRadius(100.0f), mHeight(100.0f), mAxis(0.0f, 1.0f, 0.0f), mPointCount(), mPoints(), mRotation(), mTexOffsetU0(),
@@ -162,10 +162,10 @@ void WhirlPool::loadMaterial() const {
     NebulaNativeMaterial material;
     NativeShader::init(material, NEBULA_SHADER_WHIRLPOOL, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, true,
                        NEBULA_CULL_NONE);
-    NativeShader::setColor(material, 0, sWhirlPoolTevReg1.r, sWhirlPoolTevReg1.g, sWhirlPoolTevReg1.b,
-                           sWhirlPoolTevReg1.a);
-    NativeShader::setColor(material, 4, sWhirlPoolTevReg2.r, sWhirlPoolTevReg2.g, sWhirlPoolTevReg2.b,
-                           sWhirlPoolTevReg2.a);
+    NativeShader::setColor(material, 0, sWhirlPoolStageColor1.r, sWhirlPoolStageColor1.g, sWhirlPoolStageColor1.b,
+                           sWhirlPoolStageColor1.a);
+    NativeShader::setColor(material, 4, sWhirlPoolStageColor2.r, sWhirlPoolStageColor2.g, sWhirlPoolStageColor2.b,
+                           sWhirlPoolStageColor2.a);
     TPos3f screen;
     MR::calcTexProjectionMtx(&screen);
     for (u32 row = 0; row < 3; row++) {

@@ -92,35 +92,35 @@ int J3DMaterialTable::removeTexMtxAnimator(J3DAnmTextureSRTKey* pAnmTexSRTKey) {
     return ret;
 }
 
-int J3DMaterialTable::removeTevRegAnimator(J3DAnmTevRegKey* pAnmTevRegKey) {
+int J3DMaterialTable::removeStageColorAnimator(J3DAnmStageColorKey* pAnmStageColorKey) {
     s32 ret = 0;
 
-    u16 cRegMaterialNum = pAnmTevRegKey->getCRegUpdateMaterialNum();
-    u16 kRegMaterialNum = pAnmTevRegKey->getKRegUpdateMaterialNum();
+    u16 cRegMaterialNum = pAnmStageColorKey->getCRegUpdateMaterialNum();
+    u16 kRegMaterialNum = pAnmStageColorKey->getKRegUpdateMaterialNum();
 
     for (u16 i = 0; i < cRegMaterialNum; i++) {
-        if (pAnmTevRegKey->isValidCRegUpdateMaterialID(i)) {
-            const u16 spC = pAnmTevRegKey->getCRegUpdateMaterialID(i);
+        if (pAnmStageColorKey->isValidCRegUpdateMaterialID(i)) {
+            const u16 spC = pAnmStageColorKey->getCRegUpdateMaterialID(i);
             J3DMaterialAnm* pMatAnm = getMaterialNodePointer(spC)->getMaterialAnm();
-            const J3DAnmCRegKeyTable* table = pAnmTevRegKey->getAnmCRegKeyTable();
+            const J3DAnmCRegKeyTable* table = pAnmStageColorKey->getAnmCRegKeyTable();
             const u8 colorId = table[i].mColorId;
             if (pMatAnm == NULL)
                 ret = 1;
             else
-                pMatAnm->setTevColorAnm(colorId, NULL);
+                pMatAnm->setStageColorAnm(colorId, NULL);
         }
     }
 
     for (u16 i = 0; i < kRegMaterialNum; i++) {
-        if (pAnmTevRegKey->isValidKRegUpdateMaterialID(i)) {
-            const u16 spA = pAnmTevRegKey->getKRegUpdateMaterialID(i);
+        if (pAnmStageColorKey->isValidKRegUpdateMaterialID(i)) {
+            const u16 spA = pAnmStageColorKey->getKRegUpdateMaterialID(i);
             J3DMaterialAnm* pMatAnm = getMaterialNodePointer(spA)->getMaterialAnm();
-            const J3DAnmKRegKeyTable* table = pAnmTevRegKey->getAnmKRegKeyTable();
+            const J3DAnmKRegKeyTable* table = pAnmStageColorKey->getAnmKRegKeyTable();
             const u8 colorId = table[i].mColorId;
             if (pMatAnm == NULL) {
                 ret = 1;
             } else {
-                pMatAnm->setTevKColorAnm(colorId, NULL);
+                pMatAnm->setStageConstantAnm(colorId, NULL);
             }
         }
     }
@@ -249,41 +249,41 @@ int J3DMaterialTable::entryTexMtxAnimator(J3DAnmTextureSRTKey* pAnmTexSRTKey) {
     return rv;
 }
 
-int J3DMaterialTable::entryTevRegAnimator(J3DAnmTevRegKey* pAnmTevRegKey) {
+int J3DMaterialTable::entryStageColorAnimator(J3DAnmStageColorKey* pAnmStageColorKey) {
     int rv = 0;
 
-    u16 cRegNum = pAnmTevRegKey->getCRegUpdateMaterialNum();
-    u16 kRegNum = pAnmTevRegKey->getKRegUpdateMaterialNum();
+    u16 cRegNum = pAnmStageColorKey->getCRegUpdateMaterialNum();
+    u16 kRegNum = pAnmStageColorKey->getKRegUpdateMaterialNum();
     if (isLocked()) {
         return 2;
     }
 
     for (u16 i = 0; i < cRegNum; i++) {
-        if (pAnmTevRegKey->isValidCRegUpdateMaterialID(i)) {
-            const u16 matNo = pAnmTevRegKey->getCRegUpdateMaterialID(i);
+        if (pAnmStageColorKey->isValidCRegUpdateMaterialID(i)) {
+            const u16 matNo = pAnmStageColorKey->getCRegUpdateMaterialID(i);
             J3DMaterialAnm* materialAnm = getMaterialNodePointer(matNo)->getMaterialAnm();
-            const J3DAnmCRegKeyTable* table = pAnmTevRegKey->getAnmCRegKeyTable();
+            const J3DAnmCRegKeyTable* table = pAnmStageColorKey->getAnmCRegKeyTable();
             u8 colorId = table[i].mColorId;
             if (materialAnm == NULL) {
                 rv = 1;
             } else {
-                J3DTevColorAnm tevColorAnm(i, pAnmTevRegKey);
-                materialAnm->setTevColorAnm(colorId, &tevColorAnm);
+                J3DStageColorAnm tevColorAnm(i, pAnmStageColorKey);
+                materialAnm->setStageColorAnm(colorId, &tevColorAnm);
             }
         }
     }
 
     for (u16 i = 0; i < kRegNum; i++) {
-        if (pAnmTevRegKey->isValidKRegUpdateMaterialID(i)) {
-            const u16 matNo = pAnmTevRegKey->getKRegUpdateMaterialID(i);
+        if (pAnmStageColorKey->isValidKRegUpdateMaterialID(i)) {
+            const u16 matNo = pAnmStageColorKey->getKRegUpdateMaterialID(i);
             J3DMaterialAnm* materialAnm = getMaterialNodePointer(matNo)->getMaterialAnm();
-            const J3DAnmKRegKeyTable* table = pAnmTevRegKey->getAnmKRegKeyTable();
+            const J3DAnmKRegKeyTable* table = pAnmStageColorKey->getAnmKRegKeyTable();
             const u8 colorId = table[i].mColorId;
             if (materialAnm == NULL) {
                 rv = 1;
             } else {
-                J3DTevKColorAnm tevKColorAnm(i, pAnmTevRegKey);
-                materialAnm->setTevKColorAnm(colorId, &tevKColorAnm);
+                J3DStageConstantAnm tevKColorAnm(i, pAnmStageColorKey);
+                materialAnm->setStageConstantAnm(colorId, &tevKColorAnm);
             }
         }
     }

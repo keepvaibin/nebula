@@ -20,7 +20,7 @@ namespace {
     const f32 sIndirectScale = 0.15f;
     const f32 sEnvMapScale = 0.6f;
 
-    static NebulaColor8 sTevReg0 = {0x14, 0x65, 0xFF, 0xB9};
+    static NebulaColor8 sStageColor0 = {0x14, 0x65, 0xFF, 0xB9};
 };  // namespace
 
 OceanRingPipeOutside::OceanRingPipeOutside(const OceanRingPipe* pPipe)
@@ -82,13 +82,13 @@ void OceanRingPipeOutside::loadMaterial() const {
     J3DNativeShape::setTexture(1, mtx2, 2);
 
     // runtime/src/render/materials/ocean_ring_pipe_outside.hlsl: the highlight texture (1) by the normal, warped by
-    // the indirect texture (0) at sIndirectScale texels a step, over sTevReg0 with light 2's rim; opaque, depth tested
+    // the indirect texture (0) at sIndirectScale texels a step, over sStageColor0 with light 2's rim; opaque, depth tested
     // and written, back faces culled (or none). The alpha channel's material and ambient alphas are the drawing
     // state's (the site never sets them).
     NebulaNativeMaterial material;
     NativeShader::init(material, NEBULA_SHADER_OCEAN_RING_PIPE_OUTSIDE, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_LEQUAL,
                        true, mRingPipe->_90 ? NEBULA_CULL_BACK : NEBULA_CULL_NONE);
-    NativeShader::setColor(material, 0, ::sTevReg0.r, ::sTevReg0.g, ::sTevReg0.b, ::sTevReg0.a);
+    NativeShader::setColor(material, 0, ::sStageColor0.r, ::sStageColor0.g, ::sStageColor0.b, ::sStageColor0.a);
     material.constants[4] = ::sIndirectScale;
     material.constants[6] = static_cast< f32 >(mWaterPipeHighLightTex->getWidth());
     material.constants[7] = static_cast< f32 >(mWaterPipeHighLightTex->getHeight());

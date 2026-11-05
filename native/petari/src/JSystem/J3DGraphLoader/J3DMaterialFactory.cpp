@@ -270,8 +270,8 @@ J3DColorWide J3DMaterialFactory::newRegisterColor(int i_idx, int i_no) const {
     NebulaColor16 _dflt = {0, 0, 0, 0};
     J3DColorWide dflt = _dflt;
     J3DMaterialInitData* mtl_init_data = &mpMaterialInitData[mpMaterialID[i_idx]];
-    if (mtl_init_data->mTevColorIdx[i_no] != 0xffff) {
-        return J3DColorWide(mpRegisterColor[mtl_init_data->mTevColorIdx[i_no]]);
+    if (mtl_init_data->mStageColorIdx[i_no] != 0xffff) {
+        return J3DColorWide(mpRegisterColor[mtl_init_data->mStageColorIdx[i_no]]);
     } else {
         return dflt;
     }
@@ -280,8 +280,8 @@ J3DColorWide J3DMaterialFactory::newRegisterColor(int i_idx, int i_no) const {
 J3DColor J3DMaterialFactory::newConstantColor(int i_idx, int i_no) const {
     J3DColor dflt = (NebulaColor8){0xff, 0xff, 0xff, 0xff};
     J3DMaterialInitData* mtl_init_data = &mpMaterialInitData[mpMaterialID[i_idx]];
-    if (mtl_init_data->mTevKColorIdx[i_no] != 0xffff) {
-        return mpConstantColor[mtl_init_data->mTevKColorIdx[i_no]];
+    if (mtl_init_data->mStageConstantIdx[i_no] != 0xffff) {
+        return mpConstantColor[mtl_init_data->mStageConstantIdx[i_no]];
     } else {
         return dflt;
     }

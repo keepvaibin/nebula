@@ -458,15 +458,15 @@ void Mii_Setup2DCameraAndParam(f32 size) {
 }
 
 // The parts' forms (runtime/src/render/materials/mii_texture.hlsl), with their colours.
-void Mii_SetTev4Mole(void) {
+void Mii_SetStage4Mole(void) {
     Mii_NativeTextureForm(0, MII_I_MOLE_COLOR0, MII_I_MOLE_COLOR0);
 }
 
-void Mii_SetTev4Mouth(u32 color) {
+void Mii_SetStage4Mouth(u32 color) {
     Mii_NativeTextureForm(1, MII_I_MOUTH_COLOR0[color], MII_I_MOUTH_COLOR1[color]);
 }
 
-void Mii_SetTev4Eye(u32 color, u32 type) {
+void Mii_SetStage4Eye(u32 color, u32 type) {
     NebulaColor8 color0;
 
     switch (type) {
@@ -484,11 +484,11 @@ void Mii_SetTev4Eye(u32 color, u32 type) {
     Mii_NativeTextureForm(2, color0, MII_I_EYE_COLOR1[color]);
 }
 
-void Mii_SetTev4Eyebrow(u32 color) {
+void Mii_SetStage4Eyebrow(u32 color) {
     Mii_NativeTextureForm(0, MII_I_EYEBROW_COLOR0[color], MII_I_EYEBROW_COLOR0[color]);
 }
 
-void Mii_SetTev4Mustache(u32 color) {
+void Mii_SetStage4Mustache(u32 color) {
     Mii_NativeTextureForm(0, MII_I_BEARD_COLOR0[color], MII_I_BEARD_COLOR0[color]);
 }
 
@@ -586,22 +586,22 @@ void Mii_Capture(u8* buffer, const Mii_CharInfo* info, Mii_FaceParts* face, MII_
     J3DPassBlend(NEBULA_FACTOR_INV_DST_ALPHA, NEBULA_FACTOR_DST_ALPHA);
     J3DPassWriteColor(1);
 
-    Mii_SetTev4Mustache(info->beard.color);
+    Mii_SetStage4Mustache(info->beard.color);
     Mii_DrawFaceParts(&face->mustacheR);
     Mii_DrawFaceParts(&face->mustacheL);
 
-    Mii_SetTev4Mouth(info->mouth.color);
+    Mii_SetStage4Mouth(info->mouth.color);
     Mii_DrawFaceParts(&face->mouth);
 
-    Mii_SetTev4Eyebrow(info->eyebrow.color);
+    Mii_SetStage4Eyebrow(info->eyebrow.color);
     Mii_DrawFaceParts(&face->eyebrowR);
     Mii_DrawFaceParts(&face->eyebrowL);
 
-    Mii_SetTev4Eye(info->eye.color, info->eye.type);
+    Mii_SetStage4Eye(info->eye.color, info->eye.type);
     Mii_DrawFaceParts(&face->eyeR);
     Mii_DrawFaceParts(&face->eyeL);
 
-    Mii_SetTev4Mole();
+    Mii_SetStage4Mole();
     Mii_DrawFaceParts(&face->mole);
 
     // The parts' colours stay; their alpha is drawn again on a cleared alpha channel.
@@ -609,22 +609,22 @@ void Mii_Capture(u8* buffer, const Mii_CharInfo* info, Mii_FaceParts* face, MII_
     J3DNativeTargetClear(0x00000000, 2u | 4u);
     J3DPassBlend(NEBULA_FACTOR_INV_DST_ALPHA, NEBULA_FACTOR_ONE);
 
-    Mii_SetTev4Mustache(info->beard.color);
+    Mii_SetStage4Mustache(info->beard.color);
     Mii_DrawFaceParts(&face->mustacheR);
     Mii_DrawFaceParts(&face->mustacheL);
 
-    Mii_SetTev4Mouth(info->mouth.color);
+    Mii_SetStage4Mouth(info->mouth.color);
     Mii_DrawFaceParts(&face->mouth);
 
-    Mii_SetTev4Eyebrow(info->eyebrow.color);
+    Mii_SetStage4Eyebrow(info->eyebrow.color);
     Mii_DrawFaceParts(&face->eyebrowR);
     Mii_DrawFaceParts(&face->eyebrowL);
 
-    Mii_SetTev4Eye(info->eye.color, info->eye.type);
+    Mii_SetStage4Eye(info->eye.color, info->eye.type);
     Mii_DrawFaceParts(&face->eyeR);
     Mii_DrawFaceParts(&face->eyeL);
 
-    Mii_SetTev4Mole();
+    Mii_SetStage4Mole();
     Mii_DrawFaceParts(&face->mole);
 
     J3DPassWriteColor(1);

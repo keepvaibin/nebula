@@ -236,7 +236,7 @@ namespace nw4r {
                     return u8(detail::GetBits(u32(bits), 8, 4));
                 }
 
-                bool HasTevSwapTable() const {
+                bool HasStageSwapTable() const {
                     return detail::TestBit(u32(bits), 12);
                 }
 

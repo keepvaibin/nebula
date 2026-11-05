@@ -34,7 +34,7 @@ J3DAnmBase* J3DAnmLoaderDataBase::load(const void* i_data, J3DAnmLoaderDataBaseF
         }
         case 'brk1': {
             J3DAnmKeyLoader_v15 loader;
-            loader.mAnm = new J3DAnmTevRegKey();
+            loader.mAnm = new J3DAnmStageColorKey();
             return loader.load(i_data);
         }
         case 'bxk1': {
@@ -253,7 +253,7 @@ J3DAnmBase* J3DAnmKeyLoader_v15::load(const void* param_1) {
                              static_cast< const J3DAnmTextureSRTKeyData* >(static_cast< const void* >(block)));
             break;
         case 'TRK1':
-            setAnmTevReg(static_cast< J3DAnmTevRegKey* >(mAnm), static_cast< const J3DAnmTevRegKeyData* >(static_cast< const void* >(block)));
+            setAnmStageColor(static_cast< J3DAnmStageColorKey* >(mAnm), static_cast< const J3DAnmStageColorKeyData* >(static_cast< const void* >(block)));
             break;
         case 'VCK1':
             setAnmVtxColor(static_cast< J3DAnmVtxColorKey* >(mAnm), static_cast< const J3DAnmVtxColorKeyData* >(static_cast< const void* >(block)));
@@ -284,7 +284,7 @@ void J3DAnmKeyLoader_v15::setResource(J3DAnmBase* param_1, const void* param_2) 
             setAnmTextureSRT((J3DAnmTextureSRTKey*)param_1, (const J3DAnmTextureSRTKeyData*)block);
             break;
         case 'TRK1':
-            setAnmTevReg((J3DAnmTevRegKey*)param_1, (const J3DAnmTevRegKeyData*)block);
+            setAnmStageColor((J3DAnmStageColorKey*)param_1, (const J3DAnmStageColorKeyData*)block);
             break;
         case 'VCK1':
             setAnmVtxColor((J3DAnmVtxColorKey*)param_1, (const J3DAnmVtxColorKeyData*)block);
@@ -377,7 +377,7 @@ void J3DAnmKeyLoader_v15::setAnmCluster(J3DAnmClusterKey* param_1, const J3DAnmC
     param_1->mWeight = JSUConvertOffsetToPtr< f32 >(param_2, param_2->mWeightOffset);
 }
 
-void J3DAnmKeyLoader_v15::setAnmTevReg(J3DAnmTevRegKey* param_1, const J3DAnmTevRegKeyData* param_2) {
+void J3DAnmKeyLoader_v15::setAnmStageColor(J3DAnmStageColorKey* param_1, const J3DAnmStageColorKeyData* param_2) {
     param_1->mFrameMax = param_2->mFrameMax;
     param_1->mAttribute = param_2->field_0x8;
     param_1->mFrame = 0.0f;

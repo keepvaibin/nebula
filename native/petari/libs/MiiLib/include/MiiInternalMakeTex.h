@@ -55,11 +55,11 @@ void Mii_MakeTexture(const Mii_CharInfo* info, u8** buffer,
                      MiiResolution resolution);
 void Mii_InitPartTexture(Mii_TexObj* tobj);
 void Mii_Setup2DCameraAndParam(f32 size);
-void Mii_SetTev4Mole(void);
-void Mii_SetTev4Mouth(u32 color);
-void Mii_SetTev4Eye(u32 color, u32 type);
-void Mii_SetTev4Eyebrow(u32 color);
-void Mii_SetTev4Mustache(u32 color);
+void Mii_SetStage4Mole(void);
+void Mii_SetStage4Mouth(u32 color);
+void Mii_SetStage4Eye(u32 color, u32 type);
+void Mii_SetStage4Eyebrow(u32 color);
+void Mii_SetStage4Mustache(u32 color);
 void Mii_SetFaceParts(const Mii_CharInfo* info, Mii_FaceParts* face,
                       MII_I_MASKRSL resolution);
 void Mii_Capture(u8* buffer, const Mii_CharInfo* info, Mii_FaceParts* face,
