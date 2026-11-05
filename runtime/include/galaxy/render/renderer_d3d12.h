@@ -1266,6 +1266,7 @@ private:
     SequenceState sequence_{};
     std::vector<interp_gpu::Copy> interp_copies_;
     std::vector<std::uint8_t> interp_copied_;
+    std::vector<std::uint8_t> interp_material_copied_;
     double sequence_record_ms_ = 0.0;
     std::uint64_t sequence_record_samples_ = 0;
     bool eval_readback_requested_ = false;

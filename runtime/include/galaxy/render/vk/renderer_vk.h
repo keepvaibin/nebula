@@ -935,6 +935,7 @@ private:
     std::uint64_t sequence_serial_ = 0;
     std::vector<interp_gpu::Copy> interp_copies_;
     std::vector<std::uint8_t> interp_copied_;
+    std::vector<std::uint8_t> interp_material_copied_;
     VkDescriptorSetLayout eval_set_layout_ = VK_NULL_HANDLE;
     VkPipelineLayout eval_layout_ = VK_NULL_HANDLE;
     VkPipeline eval_copy_pipeline_ = VK_NULL_HANDLE;
