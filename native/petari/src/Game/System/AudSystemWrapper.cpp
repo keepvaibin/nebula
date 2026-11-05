@@ -31,7 +31,6 @@ AudSystemWrapper::AudSystemWrapper(NebulaArena* pSolidHeap, NebulaArena* pHeap) 
     self->mJaiRemixSeqRes = nullptr;
     self->mSpkRes = nullptr;
     self->_28 = false;
-    self->mDisableReset = false;
     mSpkHeap = NebulaArena::create(pSolidHeap);
 }
 
@@ -51,9 +50,7 @@ void AudSystemWrapper::createAudioSystem() {
         return;
     }
 
-    mDisableReset = true;
     mAudSystem = AudNewAudSystem(mSolidHeap, mSmrRes, mJaiSeqRes, mJaiChordRes, mJaiMeRes, mJaiRemixSeqRes);
-    mDisableReset = false;
 
     MR::removeFileConsideringLanguage(sAudioResFile);
     mSmrRes = nullptr;
@@ -93,10 +90,6 @@ void AudSystemWrapper::setPlayerLuigi(bool isLuigi) {
     if (mAudSystem != nullptr && mAudSystem->mSceneMgr != nullptr) {
         mAudSystem->mSceneMgr->setPlayerLuigi(isLuigi);
     }
-}
-
-bool AudSystemWrapper::isPermitToReset() const {
-    return !mDisableReset;
 }
 
 void AudSystemWrapper::prepareReset() {

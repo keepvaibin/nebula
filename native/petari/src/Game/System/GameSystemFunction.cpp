@@ -136,10 +136,6 @@ namespace GameSystemFunction {
         }
     }
 
-    bool isPermitToResetAudioSystem() {
-        return ::getAudSystemWrapper()->isPermitToReset();
-    }
-
     void prepareResetAudioSystem() {
         ::getAudSystemWrapper()->prepareReset();
     }

@@ -21,7 +21,6 @@ public:
     bool isCreated() const {
         return mAudSystem != nullptr;
     }
-    bool isPermitToReset() const;
     void prepareReset();
     void requestReset(bool);
     bool isResetDone();
@@ -40,5 +39,4 @@ public:
     AssetFolder* mSpkRes;
     bool _28;
     bool mIsResetDone;
-    bool mDisableReset;
 };
