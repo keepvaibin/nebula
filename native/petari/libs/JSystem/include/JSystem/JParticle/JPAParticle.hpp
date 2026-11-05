@@ -1,6 +1,6 @@
 #pragma once
 
-#include "JSystem/JGeometry/TVec.hpp"
+#include <nebula_geometry.hpp>
 #include <NebulaGpu.h>
 
 class NebulaArena;
@@ -31,7 +31,7 @@ public:
         return mAge;
     }
 
-    void setOffsetPosition(const JGeometry::TVec3< f32 >& pos) {
+    void setOffsetPosition(const Vec3f& pos) {
         mOffsetPosition.set(pos);
     }
 
@@ -39,11 +39,11 @@ public:
         mOffsetPosition.set(x, y, z);
     }
 
-    void getOffsetPosition(JGeometry::TVec3< f32 >& pos) {
+    void getOffsetPosition(Vec3f& pos) {
         pos.set(mOffsetPosition);
     }
 
-    void getOffsetPosition(JGeometry::TVec3< f32 >* pos) const {
+    void getOffsetPosition(Vec3f* pos) const {
         pos->set(mOffsetPosition);
     }
 
@@ -51,11 +51,11 @@ public:
         return mRotateAngle;
     }
 
-    void getGlobalPosition(JGeometry::TVec3< f32 >& pos) const {
+    void getGlobalPosition(Vec3f& pos) const {
         pos.set(mPosition);
     }
 
-    void getGlobalPosition(JGeometry::TVec3< f32 >* pos) const {
+    void getGlobalPosition(Vec3f* pos) const {
         pos->set(mPosition);
     }
 
@@ -87,23 +87,23 @@ public:
         setStatus(2);
     }
 
-    void getVelVec(JGeometry::TVec3< f32 >& vec) const {
+    void getVelVec(Vec3f& vec) const {
         vec.set(mVelocity);
     }
 
-    void getLocalPosition(JGeometry::TVec3< f32 >& vec) const {
+    void getLocalPosition(Vec3f& vec) const {
         vec.set(mLocalPosition);
     }
 
-    void getLocalPosition(JGeometry::TVec3< f32 >* vec) const {
+    void getLocalPosition(Vec3f* vec) const {
         vec->set(mLocalPosition);
     }
 
-    void getBaseAxis(JGeometry::TVec3< f32 >& vec) const {
+    void getBaseAxis(Vec3f& vec) const {
         vec.set(mBaseAxis);
     }
 
-    void getBaseAxis(JGeometry::TVec3< f32 >* vec) const {
+    void getBaseAxis(Vec3f* vec) const {
         vec->set(mBaseAxis);
     }
 
@@ -120,14 +120,14 @@ public:
     f32 getCalcCurrentPositionZ(const JPABaseEmitter*) const;
 
 public:
-    JGeometry::TVec3< f32 > mPosition;
-    JGeometry::TVec3< f32 > mLocalPosition;
-    JGeometry::TVec3< f32 > mOffsetPosition;
-    JGeometry::TVec3< f32 > mVelocity;
-    JGeometry::TVec3< f32 > mVelType1;
-    JGeometry::TVec3< f32 > mVelType0;
-    JGeometry::TVec3< f32 > mVelType2;
-    JGeometry::TVec3< f32 > mBaseAxis;
+    Vec3f mPosition;
+    Vec3f mLocalPosition;
+    Vec3f mOffsetPosition;
+    Vec3f mVelocity;
+    Vec3f mVelType1;
+    Vec3f mVelType0;
+    Vec3f mVelType2;
+    Vec3f mBaseAxis;
     f32 mParticleScaleX;
     f32 mParticleScaleY;
     f32 mScaleOut;

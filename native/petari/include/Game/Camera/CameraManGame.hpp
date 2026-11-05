@@ -45,8 +45,8 @@ public:
     void applyParameter();
     void checkReset();
     void setSafePose();
-    void keepAwayWatchPos(TVec3f*, const TVec3f&);
-    void calcSafeUpVec(TVec3f*, const TVec3f&, const TVec3f&);
+    void keepAwayWatchPos(Vec3f*, const Vec3f&);
+    void calcSafeUpVec(Vec3f*, const Vec3f&, const Vec3f&);
     void createDefaultCamera();
     void createDefaultWaterCamera();
     void createDefaultWaterSurfaceCamera();

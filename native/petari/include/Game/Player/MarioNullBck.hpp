@@ -11,8 +11,8 @@ public:
     virtual void init(const JMapInfoIter&);
     virtual void appear();
 
-    void getLastPos(TVec3f*);
-    bool getFramePos(f32, TVec3f*, TVec3f*);
+    void getLastPos(Vec3f*);
+    bool getFramePos(f32, Vec3f*, Vec3f*);
 
     u16 _8C;
 };

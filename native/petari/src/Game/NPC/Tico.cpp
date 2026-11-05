@@ -118,24 +118,24 @@ void Tico::initBase(const JMapInfoIter& rIter, s32 color) {
 }
 
 void Tico::initMessage(const JMapInfoIter& rIter, const char* pMessageId) {
-    if (initTalkCtrl(rIter, pMessageId, TVec3f(0.0f, 120.0f, 0.0f), nullptr)) {
+    if (initTalkCtrl(rIter, pMessageId, Vec3f(0.0f, 120.0f, 0.0f), nullptr)) {
         MR::registerKillFunc(getMsgCtrl(), TalkMessageFunc< Tico >(this, &Tico::killFunc));
         MR::setDistanceToTalk(mMsgCtrl, 350.0f);
     }
 
-    _174 = MR::createTalkCtrlDirect(this, rIter, "Common_Tico000", TVec3f(0.0f, 120.0f, 0.0f), nullptr);
+    _174 = MR::createTalkCtrlDirect(this, rIter, "Common_Tico000", Vec3f(0.0f, 120.0f, 0.0f), nullptr);
     MR::offRootNodeAutomatic(_174);
 }
 
 void Tico::initMessage(const char* pMessageId) {
     JMapInfoIter iter;
 
-    if (initTalkCtrlDirect(iter, pMessageId, TVec3f(0.0f, 120.0f, 0.0f), nullptr)) {
+    if (initTalkCtrlDirect(iter, pMessageId, Vec3f(0.0f, 120.0f, 0.0f), nullptr)) {
         MR::registerKillFunc(getMsgCtrl(), TalkMessageFunc< Tico >(this, &Tico::killFunc));
         MR::setDistanceToTalk(mMsgCtrl, 350.0f);
     }
 
-    _174 = MR::createTalkCtrlDirect(this, iter, "Common_Tico000", TVec3f(0.0f, 120.0f, 0.0f), nullptr);
+    _174 = MR::createTalkCtrlDirect(this, iter, "Common_Tico000", Vec3f(0.0f, 120.0f, 0.0f), nullptr);
     MR::offRootNodeAutomatic(_174);
 }
 
@@ -223,7 +223,7 @@ void Tico::calcAndSetBaseMtx() {
 
 void Tico::control() {
     if (_178) {
-        TVec3f trans;
+        Vec3f trans;
         MR::extractMtxTrans(_178, &trans);
         MR::requestPointLight(this, trans, _17C, 0.998646f, -1);
     }
@@ -234,7 +234,7 @@ void Tico::control() {
         if (!MR::isTimeKeepDemoActive()) {
             MR::startLevelSound(this, "SE_SM_LV_TICO_WAIT");
         }
-        TVec3f len = mPosition - _160;
+        Vec3f len = mPosition - _160;
         MR::startLevelSound(this, "SE_SM_LV_TICO_FLOAT", (100.0f * MR::getLinerValueFromMinMax(len.length(), 1.0f, 11.0f, 0.2f, 1.0f)));
         _160.set(mPosition);
         _16C = MR::calcFloatOffset(this, _16C, 150.0f);

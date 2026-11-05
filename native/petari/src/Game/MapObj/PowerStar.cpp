@@ -57,10 +57,10 @@ namespace {
     }
 
     void requestPointLight(const LiveActor* pActor, int a2) {
-        TVec3f jointPos;
+        Vec3f jointPos;
 
         MR::copyJointPos(pActor, "PowerStar", &jointPos);
-        MR::requestPointLight(pActor, TVec3f(jointPos), lightColor[a2], 1.0f, -1);
+        MR::requestPointLight(pActor, Vec3f(jointPos), lightColor[a2], 1.0f, -1);
     }
 };  // namespace
 
@@ -97,7 +97,7 @@ void PowerStar::init(const JMapInfoIter& rIter) {
     } else {
         MR::connectToSceneNoSilhouettedMapObj(this);
         initHitSensor(1);
-        MR::addHitSensor(this, "body", ATYPE_POWER_STAR_BIND, 8, 75.0f, TVec3f(0.0f, 0.0f, 0.0f));
+        MR::addHitSensor(this, "body", ATYPE_POWER_STAR_BIND, 8, 75.0f, Vec3f(0.0f, 0.0f, 0.0f));
     }
 
     initEffectKeeper(0, nullptr, false);
@@ -176,7 +176,7 @@ void PowerStar::requestAppear() {
     }
 }
 
-void PowerStar::setDemoAppearPos(const TVec3f& rVec) {
+void PowerStar::setDemoAppearPos(const Vec3f& rVec) {
     bool isGroupExist = MR::getGroupFromArray(this);
 
     if (isGroupExist) {
@@ -293,7 +293,7 @@ void PowerStar::makeArchiveList(NameObjArchiveListCollector* pCollector, const J
 
 void PowerStar::control() {
     if (!isNerve(GET_NERVE(PowerStar, PowerStarNrvWaitStartAppear))) {
-        TVec3f jointPos;
+        Vec3f jointPos;
 
         if (isNerve(GET_NERVE(PowerStar, PowerStarNrvStageClearDemo))) {
             MR::copyJointPos(mPowerStarModelObj, "PowerStar", &jointPos);
@@ -304,15 +304,15 @@ void PowerStar::control() {
         bool cond = (isNerve(GET_NERVE(PowerStar, PowerStarNrvAppearDemoKoopa)) && MR::isStageKoopaVs3()) ? true : false;
         s32 val = cond ? 120 : -1;
 
-        MR::requestPointLight(this, TVec3f(jointPos), lightColor[mColorFrame], 1.0f, val);
+        MR::requestPointLight(this, Vec3f(jointPos), lightColor[mColorFrame], 1.0f, val);
     }
 }
 
 void PowerStar::calcAndSetBaseMtx() {
-    TPos3f mtx2;
-    TPos3f mtx;
+    Pos3f mtx2;
+    Pos3f mtx;
     // FIXME
-    mtx.makeRotate(TVec3f(0.0f, 1.0f, 0.0f), MR::toRadian(mRotation.y));
+    mtx.makeRotate(Vec3f(0.0f, 1.0f, 0.0f), MR::toRadian(mRotation.y));
 
     mtx2.concat(_B8, mtx);
     mtx2.setTrans(mPosition);
@@ -418,22 +418,22 @@ void PowerStar::initModel() {
 
 void PowerStar::initSensorGrandStar() {
     initHitSensor(6);
-    TVec3f body1Offs = TVec3f(0.0f, 100.0f, 0.0f);
+    Vec3f body1Offs = Vec3f(0.0f, 100.0f, 0.0f);
     const char* body1Name = "body1";
     MR::addHitSensorMtx(this, body1Name, ATYPE_POWER_STAR_BIND, 8, 60.0f, getBaseMtx(), body1Offs);
-    TVec3f body2Offs = TVec3f(-95.0f, 35.0f, 0.0f);
+    Vec3f body2Offs = Vec3f(-95.0f, 35.0f, 0.0f);
     const char* body2Name = "body2";
     MR::addHitSensorMtx(this, body2Name, ATYPE_POWER_STAR_BIND, 8, 60.0f, getBaseMtx(), body2Offs);
-    TVec3f body3Offs = TVec3f(-55.0f, -75.0f, 0.0f);
+    Vec3f body3Offs = Vec3f(-55.0f, -75.0f, 0.0f);
     const char* body3Name = "body3";
     MR::addHitSensorMtx(this, body3Name, ATYPE_POWER_STAR_BIND, 8, 60.0f, getBaseMtx(), body3Offs);
-    TVec3f body4Offs = TVec3f(55.0f, -75.0f, 0.0f);
+    Vec3f body4Offs = Vec3f(55.0f, -75.0f, 0.0f);
     const char* body4Name = "body4";
     MR::addHitSensorMtx(this, body4Name, ATYPE_POWER_STAR_BIND, 8, 60.0f, getBaseMtx(), body4Offs);
-    TVec3f body5Offs = TVec3f(95.0f, 35.0f, 0.0f);
+    Vec3f body5Offs = Vec3f(95.0f, 35.0f, 0.0f);
     const char* body5Name = "body5";
     MR::addHitSensorMtx(this, body5Name, ATYPE_POWER_STAR_BIND, 8, 60.0f, getBaseMtx(), body5Offs);
-    TVec3f body6Offs = TVec3f(0.0f, 0.0f, 0.0f);
+    Vec3f body6Offs = Vec3f(0.0f, 0.0f, 0.0f);
     const char* body6Name = "body6";
     MR::addHitSensorMtx(this, body6Name, ATYPE_POWER_STAR_BIND, 8, 80.0f, getBaseMtx(), body6Offs);
 }
@@ -453,14 +453,14 @@ void PowerStar::initShadow(const JMapInfoIter& rIter) {
 
 void PowerStar::initPosture() {
     MR::calcGravity(this, mAppearPosition);
-    TPos3f mtx;
+    Pos3f mtx;
     MR::makeMtxRotate(mtx, mInitRotation);
 
     if (!_126) {
-        TVec3f zDir;
+        Vec3f zDir;
         mtx.getZDir(zDir);
 
-        TVec3f up = -mGravity;
+        Vec3f up = -mGravity;
         if (!MR::isSameDirection(up, zDir)) {
             MR::makeMtxUpFront(&_B8, up, zDir);
         } else {
@@ -484,7 +484,7 @@ void PowerStar::endAppearDemo() {
     setNerve(GET_NERVE(PowerStar, PowerStarNrvWait));
 }
 
-PowerStarAppearPoint* PowerStar::getNearestAppearPoint(const TVec3f& rPos) const {
+PowerStarAppearPoint* PowerStar::getNearestAppearPoint(const Vec3f& rPos) const {
     LiveActorGroup* pGroup = MR::getGroupFromArray(this);
     f32 minDist = FLOAT_MAX;
     PowerStarAppearPoint* pNearestAppearPoint = nullptr;
@@ -542,14 +542,14 @@ void PowerStar::requestAppearOrWait() {
     }
 }
 
-void PowerStar::calcAppearDemoRiseTrans(TVec3f* pOutTrans, f32 a2) const {
+void PowerStar::calcAppearDemoRiseTrans(Vec3f* pOutTrans, f32 a2) const {
     if (_125) {
         MR::calcGravityVector(this, mInitPosition, pOutTrans, 0, 0);
         pOutTrans->x *= -a2;
         pOutTrans->y = (pOutTrans->y * -a2);
         pOutTrans->z = (pOutTrans->z * -a2);
     } else {
-        TVec3f vec;
+        Vec3f vec;
         vec.y = a2;
         vec.x = 0.0f;
         vec.z = 0.0f;
@@ -581,7 +581,7 @@ void PowerStar::processWait(f32 val) {
     }
 
     if (!_164) {
-        if (MR::isInWater(this, TVec3f(0.0f, 0.0f, 0.0f))) {
+        if (MR::isInWater(this, Vec3f(0.0f, 0.0f, 0.0f))) {
             MR::startLevelSound(this, "SE_OJ_LV_POW_STAR_EXIST_W");
         } else {
             MR::startLevelSound(this, "SE_OJ_LV_POW_STAR_EXIST");
@@ -603,7 +603,7 @@ void PowerStar::exeAppearDemoRise() {
         MR::emitEffect(this, "Light");
     }
 
-    if (MR::isInWater(this, TVec3f(0.0f, 0.0f, 0.0f))) {
+    if (MR::isInWater(this, Vec3f(0.0f, 0.0f, 0.0f))) {
         MR::startLevelSound(this, "SE_OJ_LV_POW_STAR_EXIST_W");
     } else {
         MR::startLevelSound(this, "SE_OJ_LV_POW_STAR_EXIST");
@@ -624,26 +624,26 @@ void PowerStar::exeAppearDemoMove() {
     }
 
     if (MR::isLessStep(this, 120)) {
-        TVec3f vec;
+        Vec3f vec;
         f32 step = getNerveStep() / 120.0f;
         calcAppearDemoRiseTrans(&vec, 300.0f);
         mPosition.lerp(vec, mAppearPosition, step);
 
-        TVec3f vec2;
+        Vec3f vec2;
         MR::vecKillElement(vec, mGravity, &vec2);
 
-        TVec3f vec3;
+        Vec3f vec3;
         MR::vecKillElement(mAppearPosition, mGravity, &vec3);
 
         f32 val = vec2.distance(vec3) * 0.5f;
         f32 val2 = MR::clamp(val, 300.0f, 5000.0f);
 
-        TVec3f zVec(0.0f, 0.0f, 0.0f);
+        Vec3f zVec(0.0f, 0.0f, 0.0f);
         zVec.y = MR::sin(step * PI) * val2;
         _B8.mult(zVec, zVec);
         mPosition.add(zVec);
     } else {
-        if (MR::isInWater(this, TVec3f(0.0f, 0.0f, 0.0f))) {
+        if (MR::isInWater(this, Vec3f(0.0f, 0.0f, 0.0f))) {
             MR::startLevelSound(this, "SE_OJ_LV_POW_STAR_EXIST_W");
         } else {
             MR::startLevelSound(this, "SE_OJ_LV_POW_STAR_EXIST");
@@ -653,7 +653,7 @@ void PowerStar::exeAppearDemoMove() {
     if (MR::isStep(this, 120)) {
         mPosition.set(mAppearPosition);
 
-        if (MR::isInWater(this, TVec3f(0.0f, 0.0f, 0.0f))) {
+        if (MR::isInWater(this, Vec3f(0.0f, 0.0f, 0.0f))) {
             MR::startSound(this, "SE_OJ_POW_STAR_MOVE_END_W");
         } else {
             MR::startSound(this, "SE_OJ_POW_STAR_MOVE_END");

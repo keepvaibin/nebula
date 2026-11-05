@@ -2,7 +2,7 @@
 #include "JSystem/JAudio2/JASCalc.hpp"
 #include "JSystem/JAudio2/JASSeqCtrl.hpp"
 #include "JSystem/JAudio2/JASTrack.hpp"
-#include "JSystem/JMath/random.hpp"
+#include <nebula_geometry.hpp>
 #include "JSystem/JSupport/JSupport.hpp"
 
 JASSeqParser::Command JASSeqParser::sCmdInfo[0x60] = {{nullptr},
@@ -653,7 +653,7 @@ s32 JASSeqParser::cmdReg(JASTrack* track, u32* args) {
         val ^= readReg(track, reg);
         break;
     case 8:
-        static JMath::TRandom_fast_ oRandom(0);
+        static FastRandom oRandom(0);
         val = val != 0 ? (oRandom.rand() >> 9) % val : oRandom.rand() >> 9;
         break;
     case 9:

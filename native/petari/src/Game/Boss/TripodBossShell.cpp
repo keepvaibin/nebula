@@ -40,8 +40,8 @@ void TripodBossShell::init(const JMapInfoIter& rIter) {
     initModelManagerWithAnm("TripodBossShell", nullptr, false);
     MR::connectToScene(this, MR::MovementType_MapObjDecoration, MR::CalcAnimType_MapObjDecoration, MR::DrawBufferType_TripodBoss, MR::DrawType_None);
     initHitSensor(2);
-    MR::addHitSensorMapObj(this, "body", 16, ::sHitSensorRadius, TVec3f(0.0f, 300.0f, 0.0f));
-    MR::addHitSensor(this, "killer_terget", ATYPE_BREAKABLE_CAGE, 8, ::sHitSensorRadius * mScale.x, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorMapObj(this, "body", 16, ::sHitSensorRadius, Vec3f(0.0f, 300.0f, 0.0f));
+    MR::addHitSensor(this, "killer_terget", ATYPE_BREAKABLE_CAGE, 8, ::sHitSensorRadius * mScale.x, Vec3f(0.0f, 0.0f, 0.0f));
     MR::initCollisionParts(this, "TripodBossShell", getSensor("killer_terget"), nullptr);
     initSound(4, false);
 
@@ -102,11 +102,11 @@ void TripodBossShell::exeBreak() {
         MR::startBck(mBreakModel, "Break");
 
         f32 playerDistance;
-        TVec3f toPlayerDir = *MR::getPlayerPos() - mPosition;
+        Vec3f toPlayerDir = *MR::getPlayerPos() - mPosition;
         MR::separateScalarAndDirection(&playerDistance, &toPlayerDir, toPlayerDir);
 
         if (playerDistance <= ::sBreakStopDistance) {
-            TVec3f up;
+            Vec3f up;
             MR::calcUpVec(&up, this);
 
             if (toPlayerDir.dot(up) > 0.0f) {

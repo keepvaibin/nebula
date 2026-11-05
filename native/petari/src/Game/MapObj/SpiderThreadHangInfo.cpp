@@ -10,7 +10,7 @@ SpiderThreadHangInfo::SpiderThreadHangInfo()
     : mBindedActor(nullptr), mPosition(nullptr), mThreadPart(nullptr), mHangIndex(-1), mIsHanging(false), _14(0) {
 }
 
-void SpiderThreadHangInfo::startBind(LiveActor* pActor, const TVec3f* pPos, SpiderThreadPart* pThreadPart, s32 hangIndex, const TVec3f& rVel,
+void SpiderThreadHangInfo::startBind(LiveActor* pActor, const Vec3f* pPos, SpiderThreadPart* pThreadPart, s32 hangIndex, const Vec3f& rVel,
                                      s32 a2) {
     mBindedActor = pActor;
     mPosition = pPos;

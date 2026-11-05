@@ -24,7 +24,7 @@ NameObj* BaseMatrixFollower::getFollowTargetActor() const {
     return mFollowTarget->mActor;
 }
 
-void BaseMatrixFollower::calcFollowMatrix(TPos3f* pOut) const {
+void BaseMatrixFollower::calcFollowMatrix(Pos3f* pOut) const {
     pOut->set(mFollowTarget->getHostBaseMtx());
     pOut->concat(*pOut, mFollowTarget->_0);
 }
@@ -51,7 +51,7 @@ BaseMatrixFollowTarget::BaseMatrixFollowTarget(const JMapLinkInfo* pInfo) {
     _0.identity();
 }
 
-void BaseMatrixFollowTarget::set(LiveActor* pActor, const TPos3f& rMtx, const TPos3f* pBaseMtx, BaseMatrixFollowValidater* pValidator) {
+void BaseMatrixFollowTarget::set(LiveActor* pActor, const Pos3f& rMtx, const Pos3f* pBaseMtx, BaseMatrixFollowValidater* pValidator) {
     mValidater = pValidator;
     mActor = pActor;
     _0.set(rMtx.mMtx);
@@ -117,12 +117,12 @@ void BaseMatrixFollowTargetHolder::addFollower(BaseMatrixFollower* pFollower) {
     pFollower->mFollowTarget = pTarget;
 }
 
-void BaseMatrixFollowTargetHolder::setFollowTargetInfo(LiveActor* pActor, const JMapInfoIter& rIter, const TPos3f* pBaseMtx,
+void BaseMatrixFollowTargetHolder::setFollowTargetInfo(LiveActor* pActor, const JMapInfoIter& rIter, const Pos3f* pBaseMtx,
                                                        BaseMatrixFollowValidater* pValidater) {
     JMapLinkInfo linkInfo(rIter, true);
     BaseMatrixFollowTarget* pTarget = findFollowTarget(&linkInfo);
     if (pTarget) {
-        TPos3f mtx;
+        Pos3f mtx;
         MR::getJMapInfoMatrixFromRT(rIter, &mtx);
         pTarget->set(pActor, mtx, pBaseMtx, pValidater);
     }
@@ -165,7 +165,7 @@ namespace MR {
         ::getBaseMatrixFollowTargetHolder()->addFollower(pFollower);
     }
 
-    void addBaseMatrixFollowTarget(LiveActor* pActor, const JMapInfoIter& rIter, const TPos3f* pBaseMtx, BaseMatrixFollowValidater* pValidater) {
+    void addBaseMatrixFollowTarget(LiveActor* pActor, const JMapInfoIter& rIter, const Pos3f* pBaseMtx, BaseMatrixFollowValidater* pValidater) {
         if (isValidInfo(rIter) && isExistSceneObj(SceneObj_BaseMatrixFollowTargetHolder)) {
             ::getBaseMatrixFollowTargetHolder()->setFollowTargetInfo(pActor, rIter, pBaseMtx, pValidater);
         }

@@ -24,8 +24,8 @@
 #include "Game/Util/SpringValue.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "math_types.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
+
 #include "Game/System/NebulaInput.hpp"
 
 namespace {
@@ -93,8 +93,8 @@ void GCapture::init(const JMapInfoIter& rIter) {
     MR::connectToScene(this, MR::MovementType_MapObj, MR::CalcAnimType_MapObj, MR::DrawBufferType_None, MR::DrawBufferType_EnemyDecoration);
     initSound(8, false);
     initHitSensor(2);
-    MR::addHitSensorRide(this, "body", 16, 200.0f, TVec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensor(this, "bind", 104, 16, 80.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorRide(this, "body", 16, 200.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensor(this, "bind", 104, 16, 80.0f, Vec3f(0.0f, 0.0f, 0.0f));
     getSensor("bind")->invalidate();
     initBinder(75.0f, 0.0f, 8);
     initEffectKeeper(0, "GCapture", false);
@@ -106,7 +106,7 @@ void GCapture::init(const JMapInfoIter& rIter) {
     MR::setEffectHostMtx(this, "RibbonBreak", _8C.mMtx);
     mCaptureRibbon->initWithoutIter();
     initNerve(GET_NERVE(GCapture, GCaptureNrvWait));
-    MR::initStarPointerTarget(this, 200.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::initStarPointerTarget(this, 200.0f, Vec3f(0.0f, 0.0f, 0.0f));
     makeActorAppeared();
     MR::invalidateClipping(this);
 }
@@ -191,7 +191,7 @@ bool GCapture::requestBind(HitSensor* pSensor) {
     _124 = 1.0f;
     MR::zeroVelocity(this);
 
-    TPos3f pos;
+    Pos3f pos;
     pos.set(_108->getBaseMtx());
     pos.getQuat(_BC);
     _F0.zero();
@@ -254,7 +254,7 @@ bool GCapture::tryCancelCapture() {
     bool ret = false;
 
     if (_110 != nullptr) {
-        TVec3f position;
+        Vec3f position;
         _110->getTargetPosition(&position);
         if (MR::calcDistance(this, position) >= _110->getPointableRange()) {
             ret = true;
@@ -312,7 +312,7 @@ bool GCapture::tryBreak() {
         if (_110->isReleaseForce()) {
             channel = PLAYER_2;
         } else if ((_110->releaseDistance() >= 0.0f) != false) {
-            TVec3f targetPos;
+            Vec3f targetPos;
             _110->getTargetPosition(&targetPos);
             if (mPosition.distance(targetPos) <= _110->releaseDistance()) {
                 channel = PLAYER_2;
@@ -380,7 +380,7 @@ void GCapture::exeWait() {
 }
 
 void GCapture::exeCapture() {
-    TVec3f pos;
+    Vec3f pos;
     _110->getTargetPosition(&pos);
     mPosition.set(*MR::getPlayerCenterPos());
 
@@ -412,7 +412,7 @@ void GCapture::endCapture() {
 }
 
 void GCapture::exeRecapture() {
-    TVec3f targetPos;
+    Vec3f targetPos;
     _110->getTargetPosition(&targetPos);
 
     if (MR::isFirstStep(this)) {
@@ -443,7 +443,7 @@ void GCapture::endRecapture() {
 }
 
 void GCapture::exeTraction() {
-    TVec3f targetPos, rand, v22, dir, v20;
+    Vec3f targetPos, rand, v22, dir, v20;
     _110->getTargetPosition(&targetPos);
 
     if (MR::isFirstStep(this)) {
@@ -540,8 +540,8 @@ void GCapture::exeHold() {
 }
 
 void GCapture::exeBreak() {
-    TVec3f dest, yDir;
-    TQuat4f rot;
+    Vec3f dest, yDir;
+    Quat4f rot;
     if (MR::isFirstStep(this)) {
         MR::calcGravityVector(this, mEffectPos, &dest, nullptr, 0);
         _BC.getYDir(yDir);
@@ -592,8 +592,8 @@ void GCapture::endBindByFireDamage() {
 
 void GCapture::calcBindActorPose() {
     f32 scalar;
-    TVec3f dir;
-    TQuat4f rot;
+    Vec3f dir;
+    Quat4f rot;
     MR::separateScalarAndDirection(&scalar, &dir, _F0);
     rot.setRotate(dir, scalar);
     _BC.mult(rot, _BC);
@@ -601,7 +601,7 @@ void GCapture::calcBindActorPose() {
 }
 
 void GCapture::updateBindActorMatrix() {
-    TPos3f pos;
+    Pos3f pos;
     pos.setQT(_BC, mEffectPos);
     MR::setBaseTRMtx(_108, pos);
 }
@@ -638,21 +638,21 @@ void GCapture::fillGapBindTrans() {
     }
 }
 
-void GCapture::updateRibbon(const TVec3f& rVec, s32 step) {
-    TVec3f v13(mPosition - rVec);
-    TVec3f v12;
+void GCapture::updateRibbon(const Vec3f& rVec, s32 step) {
+    Vec3f v13(mPosition - rVec);
+    Vec3f v12;
     MR::normalizeOrZero(v13, &v12);
     v13 -= v12 * _128 * 180.0f;
     f32 rate = MR::calcNerveRate(this, step);
-    TVec3f v11(rVec + v13 * (rate * rate));
+    Vec3f v11(rVec + v13 * (rate * rate));
     mCaptureRibbon->lengthen(rVec, v11);
     updateRibbonPointEffectMatrix(v11);
 }
 
-void GCapture::updateRibbonPointEffectMatrix(const TVec3f& rVec) {
-    TVec3f v5;
+void GCapture::updateRibbonPointEffectMatrix(const Vec3f& rVec) {
+    Vec3f v5;
     _8C.getTrans(v5);
-    TVec3f v4 = v5 - rVec;
+    Vec3f v4 = v5 - rVec;
 
     if (MR::isNearZero(v4)) {
         _8C.setTrans(rVec);
@@ -662,7 +662,7 @@ void GCapture::updateRibbonPointEffectMatrix(const TVec3f& rVec) {
 }
 
 void GCapture::addRotateAccelPointing() {
-    TVec3f rotate;
+    Vec3f rotate;
     if (MR::calcStarPointerStrokeRotateMoment(&rotate, mPosition, 200.0f, 0)) {
         _F0 += rotate * 0.055104f;
         f32 mag = _F0.length();
@@ -688,11 +688,11 @@ bool GCapture::tryAddVelocityReflectJumpCollision() {
 }
 
 bool GCapture::requestTarget(GCaptureTargetable* gCaptureTarget) {
-    TVec3f targetPos;
+    Vec3f targetPos;
     if (canRequestTarget()) {
-        TVec2f pointerPos = *MR::getStarPointerScreenPosition(PLAYER_1);
+        Vec2f pointerPos = *MR::getStarPointerScreenPosition(PLAYER_1);
         gCaptureTarget->getTargetPosition(&targetPos);
-        TVec2f screenPos;
+        Vec2f screenPos;
         MR::calcScreenPosition(&screenPos, targetPos);
         f32 dist = screenPos.distance(pointerPos);
         if (dist < _130) {
@@ -734,7 +734,7 @@ void GCapture::releaseTractTarget() {
 }
 
 void GCapture::updateCameraTargetMatrix() {
-    TPos3f pos;
+    Pos3f pos;
     pos.identity();
 
     if (_108 != nullptr) {

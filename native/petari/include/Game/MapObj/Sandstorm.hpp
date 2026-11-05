@@ -7,7 +7,7 @@ class NameObjArchiveListCollector;
 
 class SunakazeKunTrap : public ModelObj {
 public:
-    SunakazeKunTrap(LiveActor*, const TVec3f&);
+    SunakazeKunTrap(LiveActor*, const Vec3f&);
 
     virtual void init(const JMapInfoIter& rIter);
     virtual void attackSensor(HitSensor*, HitSensor*);
@@ -16,7 +16,7 @@ public:
 
 private:
     LiveActor* mHost;
-    TVec3f _94;
+    Vec3f _94;
 };
 
 class Sandstorm : public LiveActor {
@@ -62,8 +62,8 @@ public:
 private:
     ActorCameraInfo* _8C;
     LiveActor* mBindActor;
-    TVec3f _94;
-    TVec3f _A0;
+    Vec3f _94;
+    Vec3f _A0;
     s32 mType;
     f32 mSpiralRot;
     f32 mSpiralRadius;

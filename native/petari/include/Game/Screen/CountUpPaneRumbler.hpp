@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class LayoutActor;
 class RumbleCalculatorCosMultLinear;
@@ -20,5 +20,5 @@ public:
 
 private:
     RumbleCalculatorCosMultLinear* mRumbleCalculator;
-    TVec2f mPosition;
+    Vec2f mPosition;
 };

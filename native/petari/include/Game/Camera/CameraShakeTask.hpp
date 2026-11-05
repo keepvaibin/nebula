@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry.hpp>
+#include <nebula_geometry.hpp>
 
 class CameraShakePattern;
 
@@ -12,7 +12,7 @@ public:
     void startInfinity(u32);
     void endForce();
     void movement();
-    void getOffset(TVec2f*) const;
+    void getOffset(Vec2f*) const;
     bool isEnd() const;
     void startCommon(u32);
     void updatePattern();

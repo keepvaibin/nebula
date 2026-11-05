@@ -26,16 +26,16 @@ namespace NrvSunakazeKunTrap {
     NEW_NERVE(SunakazeKunTrapNrvTrap, SunakazeKunTrap, Trap);
 };  // namespace NrvSunakazeKunTrap
 
-SunakazeKunTrap::SunakazeKunTrap(LiveActor* pHost, const TVec3f& rParam2)
+SunakazeKunTrap::SunakazeKunTrap(LiveActor* pHost, const Vec3f& rParam2)
     : ModelObj("\203\130\203\151\203\112\203\133\227\160\203\147\203\211\203\142\203\166" /* スナカゼ用トラップ */, "SunakazeKunTrap", nullptr, -2, -2, -2, false), mHost(pHost), _94(rParam2) {
 }
 
 void SunakazeKunTrap::init(const JMapInfoIter& rIter) {
     initHitSensor(1);
-    MR::addHitSensorEnemyAttack(this, "attack", 4, 40.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemyAttack(this, "attack", 4, 40.0f, Vec3f(0.0f, 0.0f, 0.0f));
     MR::initShadowVolumeCylinder(this, 40.0f);
 
-    TVec3f up;
+    Vec3f up;
     MR::calcUpVec(&up, mHost);
     up.negate();
 
@@ -48,7 +48,7 @@ void SunakazeKunTrap::init(const JMapInfoIter& rIter) {
 }
 
 void SunakazeKunTrap::exeTrap() {
-    TVec3f axis = TVec3f(0.0f, 1.0f, 0.0f);
+    Vec3f axis = Vec3f(0.0f, 1.0f, 0.0f);
 
     MR::rotateVecDegree(&_94, axis, ::sTrapRotateSpeed);
     NebulaMtxMultVec(mHost->getBaseMtx(), &_94, &mPosition);
@@ -56,7 +56,7 @@ void SunakazeKunTrap::exeTrap() {
     f32 angle = MR::sinDegree(getNerveStep() * 5.0f);
 
     mPosition.scaleAdd(40.0f * value * angle, axis, mPosition);
-    TVec3f rotation(5.0f);
+    Vec3f rotation(5.0f);
     mRotation.add(rotation);
 }
 
@@ -109,7 +109,7 @@ void Sandstorm::init(const JMapInfoIter& rIter) {
     initSandstormParam();
     initHitSensor(2);
     MR::addHitSensorCallbackPriorBinder(this, "binder", 4, 0.0f);
-    MR::addHitSensorMapObjSimple(this, "star_piece", 4, mSensorHeight / 2.0f + 200.0f, TVec3f(0.0f, mSensorHeight / 2.0f + 200.0f, 0.0f));
+    MR::addHitSensorMapObjSimple(this, "star_piece", 4, mSensorHeight / 2.0f + 200.0f, Vec3f(0.0f, mSensorHeight / 2.0f + 200.0f, 0.0f));
     initEffectKeeper(0, nullptr, false);
     initSound(6, false);
     MR::initShadowVolumeCylinder(this, 100.0f);
@@ -260,11 +260,11 @@ void Sandstorm::control() {
 }
 
 void Sandstorm::calcAndSetBaseMtx() {
-    TVec3f vec;
+    Vec3f vec;
     MR::calcUpVec(&vec, this);
     vec.negate();
 
-    TPos3f mtx;
+    Pos3f mtx;
     MR::calcMtxFromGravityAndZAxis(&mtx, this, vec, _94);
     MR::setBaseTRMtx(this, mtx);
 }
@@ -299,7 +299,7 @@ bool Sandstorm::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* p
     }
 
     if (MR::isMsgStarPieceAttack(msg)) {
-        TVec3f up;
+        Vec3f up;
         MR::calcUpVec(&up, this);
 
         f32 verticalDistance = MR::calcDistanceVertical(this, pSender->mPosition, up);
@@ -356,10 +356,10 @@ bool Sandstorm::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceive
 }
 
 void Sandstorm::updateHitSensor(HitSensor* pSensor) {
-    TVec3f up;
+    Vec3f up;
     MR::calcUpVec(&up, this);
 
-    TVec3f vec;
+    Vec3f vec;
     vec.scaleAdd(mSensorHeight, up, mPosition);
 
     f32 val = MR::calcPerpendicFootToLineInside(&pSensor->mPosition, *MR::getPlayerCenterPos(), mPosition, vec);
@@ -399,8 +399,8 @@ void Sandstorm::initTrapModel() {
     mTrapModel = new SunakazeKunTrap*[2];
 
     for (s32 i = 0; i < 2; i++) {
-        TVec3f axis = TVec3f(0.0f, 1.0f, 0.0f);
-        TVec3f offset = TVec3f(0.0f, ::sTrapOffsetY, ::sTrapOffsetZ);
+        Vec3f axis = Vec3f(0.0f, 1.0f, 0.0f);
+        Vec3f offset = Vec3f(0.0f, ::sTrapOffsetY, ::sTrapOffsetZ);
         MR::rotateVecDegree(&offset, axis, i * 180.0f);
 
         mTrapModel[i] = new SunakazeKunTrap(this, offset);
@@ -410,17 +410,17 @@ void Sandstorm::initTrapModel() {
 
 void Sandstorm::updateBindActorMtx() {
     f32 dVar9;
-    TVec3f* pPosition;
+    Vec3f* pPosition;
 
     if (_C8 < 10) {
         pPosition = &mPosition;
-        TVec3f toPlayerCenter;
+        Vec3f toPlayerCenter;
         toPlayerCenter.sub(*MR::getPlayerCenterPos(), *pPosition);
 
-        TVec3f up;
+        Vec3f up;
         MR::calcUpVec(&up, this);
 
-        TVec3f vec;
+        Vec3f vec;
         vec.killElement(toPlayerCenter, up);
 
         f32 len = vec.length();
@@ -430,7 +430,7 @@ void Sandstorm::updateBindActorMtx() {
         dVar9 = _BC;
     }
 
-    TVec3f vec;
+    Vec3f vec;
     vec.x = dVar9 * MR::cos(_B8);
     vec.y = _C4;
     vec.z = dVar9 * MR::sin(_B8);
@@ -443,7 +443,7 @@ void Sandstorm::updateBindActorMtx() {
 
     pPosition = &mBindActor->mPosition;
     NebulaMtxMultVec(getBaseMtx(), &vec, pPosition);
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.set(mBindActor->getBaseMtx());
     mtx.setTrans(mBindActor->mPosition);
     MR::setBaseTRMtx(mBindActor, mtx);
@@ -453,7 +453,7 @@ void Sandstorm::endBind() {
     MR::tryRumblePadStrong(this, 0);
     MR::shakeCameraNormal();
 
-    TVec3f up;
+    Vec3f up;
     MR::calcUpVec(&up, this);
 
     MR::endBindAndPlayerJump(this, up, 0);
@@ -520,9 +520,9 @@ bool Sandstorm::tryStartBind(HitSensor* pSensor) {
     _C4 = 0.0f;
     _C8 = 0;
 
-    TVec3f toBindActor;
+    Vec3f toBindActor;
     toBindActor.sub(mBindActor->mPosition, mPosition);
-    TVec3f up;
+    Vec3f up;
     MR::calcUpVec(&up, this);
 
     _CC = mStepStorm * toBindActor.dot(up) / mBindHeight;

@@ -5,7 +5,7 @@
 void CamTranslatorCharmedVecRegTower::setParam(const CameraParamChunk* pChunk) {
     CameraGeneralParam* general = pChunk->mGeneralParam;
 
-    TVec3f axis = general->mAxis;
+    Vec3f axis = general->mAxis;
     MR::normalizeOrZero(&axis);
 
     if (MR::isNearZero(axis)) {

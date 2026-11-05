@@ -15,8 +15,8 @@ public:
     virtual void movement();
     virtual void draw() const;
 
-    bool isInWater(const TVec3f& rPos) const;
-    bool calcWaterInfo(const TVec3f& rPos, const TVec3f& rGravity, WaterInfo* pInfo) const;
+    bool isInWater(const Vec3f& rPos) const;
+    bool calcWaterInfo(const Vec3f& rPos, const Vec3f& rGravity, WaterInfo* pInfo) const;
     void initPoints();
     void updatePoints();
     void moveToLeft();
@@ -37,9 +37,9 @@ public:
         mPoints[x][y] = pPoint;
     }
 
-    TVec3f mSide;
-    TVec3f mUp;
-    TVec3f mFront;
+    Vec3f mSide;
+    Vec3f mUp;
+    Vec3f mFront;
     f32 mRadius;
     OceanBowlPoint* mPoints[25][25];
     f32 mWaveX;

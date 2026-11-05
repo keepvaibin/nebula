@@ -22,9 +22,9 @@ public:
 
     FloaterFloatingForceTypeSpring* mSpring;
     WaveFloatingForce* mForce;
-    TVec3f mRipplePos;
+    Vec3f mRipplePos;
     s32 mSoundDelay;
-    TVec3f mMapGroundUpper;
+    Vec3f mMapGroundUpper;
     f32 mOffset;
     bool mCanRipple;
 };

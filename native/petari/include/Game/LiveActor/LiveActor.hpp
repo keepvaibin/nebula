@@ -2,7 +2,7 @@
 
 #include "Game/LiveActor/LiveActorFlag.hpp"
 #include "Game/NameObj/NameObj.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class ActorAnimKeeper;
 class ActorLightCtrl;
@@ -105,19 +105,19 @@ public:
         return mBinder;
     }
 
-    const TVec3f* getGravity() const {
+    const Vec3f* getGravity() const {
         return &mGravity;
     }
 
-    const TVec3f* getVelocity() const {
+    const Vec3f* getVelocity() const {
         return &mVelocity;
     }
 
-    const TVec3f* getPosition() const {
+    const Vec3f* getPosition() const {
         return &mPosition;
     }
 
-    TVec3f* editPosition() {
+    Vec3f* editPosition() {
         return &mPosition;
     }
 
@@ -141,25 +141,25 @@ public:
     void initShadowControllerList(u32);
     void initActorCollisionParts(const char*, HitSensor*, ResourceHolder*, MtxPtr, bool, bool);
     void initStageSwitch(const JMapInfoIter& rIter);
-    void initActorStarPointerTarget(f32, const TVec3f*, MtxPtr, TVec3f);
+    void initActorStarPointerTarget(f32, const Vec3f*, MtxPtr, Vec3f);
     void initActorLightCtrl();
     void addToSoundObjHolder();
     void updateBinder();
 
     /// @brief The three-dimensional location vector.
-    TVec3f mPosition;
+    Vec3f mPosition;
 
     /// @brief The three-dimensional rotation vector, in degrees.
-    TVec3f mRotation;
+    Vec3f mRotation;
 
     /// @brief The three-dimensional scale vector.
-    TVec3f mScale;
+    Vec3f mScale;
 
     /// @brief The three-dimensional velocity vector, in units per step.
-    TVec3f mVelocity;
+    Vec3f mVelocity;
 
     /// @brief The three-dimensional gravity unit vector.
-    TVec3f mGravity;
+    Vec3f mGravity;
 
     /// @brief A pointer to a `ModelManager` instance, used for drawing a 3D model.
     ModelManager* mModelManager;

@@ -16,5 +16,5 @@ public:
     static s32 getMoveStartSignalTime();
     void initModelAndCollision(const JMapInfoIter&);
 
-    TVec3f _8C;
+    Vec3f _8C;
 };

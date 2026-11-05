@@ -34,7 +34,7 @@ void RosettaPictureBook::init(const JMapInfoIter& rIter) {
     initModelManagerWithAnm("RosettaPictureBook", nullptr, false);
     MR::connectToSceneMapObj(this);
     initHitSensor(1);
-    MR::addHitSensorMapObjSimple(this, "body", 8, 150.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorMapObjSimple(this, "body", 8, 150.0f, Vec3f(0.0f, 0.0f, 0.0f));
 
     mLayout = new PictureBookLayout(1, MR::getPictureBookChapterCanRead(), false);
     mLayout->initWithoutIter();

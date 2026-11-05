@@ -29,7 +29,7 @@ void MeteoContainer::init(const JMapInfoIter& rIter) {
     initModelManagerWithAnm(objName, nullptr, false);
     MR::connectToSceneEnemy(this);
     initHitSensor(1);
-    TVec3f sensorOffs;
+    Vec3f sensorOffs;
     sensorOffs.x = 0.0f;
     sensorOffs.y = 150.0f;
     sensorOffs.z = 0.0f;

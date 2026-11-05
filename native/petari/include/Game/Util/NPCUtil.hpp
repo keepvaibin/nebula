@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/System/NerveExecutor.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class JMapInfoIter;
 class LiveActor;
@@ -16,15 +16,15 @@ namespace MR {
     bool isNPCItemFileExist(const char*);
     void initDefaultPose(NPCActor*, const JMapInfoIter&);
     void turnPlayerToActor(const LiveActor*, f32);
-    void decidePose(NPCActor*, const TVec3f&, const TVec3f&, const TVec3f&, f32, f32, f32);
+    void decidePose(NPCActor*, const Vec3f&, const Vec3f&, const Vec3f&, f32, f32, f32);
     void setNPCActorPos(NPCActor*, const char*);
-    void setNPCActorPos(NPCActor*, const TVec3f&);
-    void setNPCActorPose(NPCActor*, const TVec3f&, const TVec3f&, const TVec3f&);
+    void setNPCActorPos(NPCActor*, const Vec3f&);
+    void setNPCActorPose(NPCActor*, const Vec3f&, const Vec3f&, const Vec3f&);
     void followRailPose(NPCActor*, f32, f32);
     void followRailPoseOnGround(NPCActor*, f32);
     void followRailPoseOnGround(NPCActor*, const LiveActor*, f32);
     void setDefaultPose(NPCActor*);
-    bool convertPosOnGround(TVec3f*, const TVec3f&);
+    bool convertPosOnGround(Vec3f*, const Vec3f&);
     void timeKeepDemoFadeIn();
     void timeKeepDemoFadeOut();
     void startNPCTalkCamera(const TalkMessageCtrl*, MtxPtr, f32, s32);
@@ -33,8 +33,8 @@ namespace MR {
     void initDefaultPosAndQuat(NPCActor*, const JMapInfoIter&);
     PartsModel* createNPCGoods(LiveActor*, const char*, const char*);
     PartsModel* createIndirectNPCGoods(LiveActor*, const char*, const char*);
-    bool calcPlayerFaceStareVector(TVec3f*, MtxPtr, MtxPtr);
-    bool calcPlayerFaceStarePos(TVec3f*, MtxPtr, MtxPtr);
+    bool calcPlayerFaceStareVector(Vec3f*, MtxPtr, MtxPtr);
+    bool calcPlayerFaceStarePos(Vec3f*, MtxPtr, MtxPtr);
     bool isActionContinuous(const LiveActor*);
     bool isActionLoopedOrStopped(const LiveActor*);
     void invalidateLodCtrl(const NPCActor*);

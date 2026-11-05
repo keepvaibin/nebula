@@ -4,7 +4,7 @@
 #include "Game/Util/JMapInfo.hpp"
 #include "Game/Util/TriangleFilter.hpp"
 #include <JSystem/J3DGraphBase/J3DStruct.hpp>
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class HitSensor;
 // this function does not belong in this header, but will put here for now
@@ -62,10 +62,10 @@ public:
     void appearFromGroup();
     void changeScale(f32);
     void exeFloating();
-    void appearHop(const TVec3f&, const TVec3f&);
+    void appearHop(const Vec3f&, const Vec3f&);
     void exeHop();
     void exeFall();
-    bool isTouchToTarget(TVec3f*, f32);
+    bool isTouchToTarget(Vec3f*, f32);
     bool isEffectLight();
     void exeToTarget();
     void exeSpinDrained();
@@ -77,14 +77,14 @@ public:
     void exeRailMove();
     void setFollowPlayerAndAppear();
     bool tryCalcGravity();
-    void trySetGravityAndFront(const TVec3f&);
-    bool throwToTarget(HitSensor*, const TVec3f&, const TVec3f&, f32);
-    bool throwToTargetCore(const TVec3f&, const TVec3f&, const TVec3f&, f32, bool);
-    void giftToTarget(StarPieceReceiverInfo*, u32, HitSensor*, const TVec3f&);
-    void goToPlayer(TVec3f);
-    void launch(const TVec3f&, f32, f32, bool, bool);
-    void launch(const TVec3f&, const TVec3f&, f32, f32, bool, bool);
-    void launch(const TVec3f&, const TVec3f&, bool, bool);
+    void trySetGravityAndFront(const Vec3f&);
+    bool throwToTarget(HitSensor*, const Vec3f&, const Vec3f&, f32);
+    bool throwToTargetCore(const Vec3f&, const Vec3f&, const Vec3f&, f32, bool);
+    void giftToTarget(StarPieceReceiverInfo*, u32, HitSensor*, const Vec3f&);
+    void goToPlayer(Vec3f);
+    void launch(const Vec3f&, f32, f32, bool, bool);
+    void launch(const Vec3f&, const Vec3f&, f32, f32, bool, bool);
+    void launch(const Vec3f&, const Vec3f&, bool, bool);
     f32 calcEffectScale(f32, f32, bool);
     f32 calcNearCameraScale();
     f32 calcDistToCamera();
@@ -95,19 +95,19 @@ public:
     bool setFall();
     bool isOnRailMove();
     bool isFloat();
-    void setReflect(const TVec3f&, const TVec3f&);
+    void setReflect(const Vec3f&, const Vec3f&);
     bool isIgnoreTriOnThrow(const Triangle*);
     bool touchPlayer();
     void setHostInfo(StarPieceHostInfo*);
 
-    TVec3f _8C;
+    Vec3f _8C;
 
     f32 _98;
     f32 _9C;
     f32 _A0;
     f32 _A4;
-    TVec3f _A8;
-    TVec3f _B4;
+    Vec3f _A8;
+    Vec3f _B4;
 
     TriangleFilterDelegator< StarPiece >* mDelegator;
     HitSensor* mTargetSensor;

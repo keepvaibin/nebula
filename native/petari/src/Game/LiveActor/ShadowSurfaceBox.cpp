@@ -4,8 +4,8 @@
 #include "Game/LiveActor/ShadowController.hpp"
 #include "Game/LiveActor/ShadowSurfaceDrawer.hpp"
 #include "Game/Util/DirectDraw.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
+
 #include <nebula_math.h>
 
 ShadowSurfaceBox::~ShadowSurfaceBox() {
@@ -14,7 +14,7 @@ ShadowSurfaceBox::~ShadowSurfaceBox() {
 ShadowSurfaceBox::ShadowSurfaceBox() : ShadowSurfaceDrawer("\211\145\225\140\211\346[\220\205\226\312\203\173\203\142\203\116\203\130]" /* 影描画[水面ボックス] */), mSize(100.0f) {
 }
 
-void ShadowSurfaceBox::setSize(const TVec3f& pSize) {
+void ShadowSurfaceBox::setSize(const Vec3f& pSize) {
     mSize.set(pSize);
 }
 
@@ -26,21 +26,21 @@ void ShadowSurfaceBox::draw() const {
         return;
     }
 
-    TPos3f modelMtx;
+    Pos3f modelMtx;
     baseMtx = controller->_18;
-    TVec3f side(baseMtx[0][0], baseMtx[1][0], baseMtx[2][0]);
-    TVec3f up(baseMtx[0][1], baseMtx[1][1], baseMtx[2][1]);
-    TVec3f front(baseMtx[0][2], baseMtx[1][2], baseMtx[2][2]);
-    TVec3f normal;
+    Vec3f side(baseMtx[0][0], baseMtx[1][0], baseMtx[2][0]);
+    Vec3f up(baseMtx[0][1], baseMtx[1][1], baseMtx[2][1]);
+    Vec3f front(baseMtx[0][2], baseMtx[1][2], baseMtx[2][2]);
+    Vec3f normal;
     controller->getProjectionNormal(&normal);
     f32 sideDot = normal.dot(side);
     f32 upDot = normal.dot(up);
     f32 frontDot = normal.dot(front);
-    TVec3f size(mSize);
-    TVec3f position;
+    Vec3f size(mSize);
+    Vec3f position;
 
     if (controller->isFollowHostScale()) {
-        TVec3f scale(controller->getHost()->mScale);
+        Vec3f scale(controller->getHost()->mScale);
         scale /= 2.0f;
         size *= scale;
     } else {

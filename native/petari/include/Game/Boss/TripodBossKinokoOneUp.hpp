@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class BenefitItemOneUp;
 
@@ -22,8 +22,8 @@ public:
     void exeActive();
     void exeEnd();
 
-    TPos3f _8C;
-    TPos3f _BC;
+    Pos3f _8C;
+    Pos3f _BC;
     BenefitItemOneUp* mOneUp;
     s32 mJointID;
 };

@@ -166,9 +166,9 @@ CameraMan* CameraDirector::pop() {
 
 void CameraDirector::backLastMtx() {
     if (mIsSubjectiveCalced) {
-        MR::setCameraViewMtx(mViewMtx, false, false, TVec3f(0.0f, 0.0f, 0.0f));
+        MR::setCameraViewMtx(mViewMtx, false, false, Vec3f(0.0f, 0.0f, 0.0f));
 
-        TVec3f invTrans;
+        Vec3f invTrans;
         MR::getCameraInvViewMtx().getTrans(invTrans);
     }
 }
@@ -243,11 +243,11 @@ void CameraDirector::calcSubjective() {
         return;
     }
 
-    TPos3f inv;
+    Pos3f inv;
     inv.set(MR::getCameraInvViewMtx());
     mCameraManSubjective->calc();
 
-    TPos3f viewMtx;
+    Pos3f viewMtx;
     calcViewMtxFromPoseParam(&viewMtx, mCameraManSubjective->mPoseParam);
 
     s32 posFrame = mSubjectiveFrame - ::sSubjectivePosInterpolateFrame;
@@ -263,10 +263,10 @@ void CameraDirector::calcSubjective() {
     }
 
     const CameraPoseParam* param = mCameraManSubjective->mPoseParam;
-    TVec3f localPos;
+    Vec3f localPos;
     inv.getTrans(localPos);
 
-    TVec3f newPos = localPos * (1.0f - posRate) + param->mPos * posRate;
+    Vec3f newPos = localPos * (1.0f - posRate) + param->mPos * posRate;
 
     s32 rotFrame = mSubjectiveFrame - ::sSubjectiveRotInterpolateFrame;
     if (rotFrame < 0) {
@@ -275,22 +275,22 @@ void CameraDirector::calcSubjective() {
 
     f32 rotRate = MR::cos(MR::pi() + rotFrame * MR::pi() / (::sSubjectiveInterpolateFrame - ::sSubjectiveRotInterpolateFrame)) * 0.5f + 0.5f;
 
-    TQuat4f invRot;
+    Quat4f invRot;
     inv.getQuat(invRot);
-    TQuat4f viewRot;
+    Quat4f viewRot;
     viewMtx.getQuat(viewRot);
 
-    TQuat4f newRot;
+    Quat4f newRot;
     newRot.slerp(invRot, viewRot, rotRate);
 
     viewMtx.makeQuat(newRot);
 
-    TVec3f front;
+    Vec3f front;
     viewMtx.getZDir(front);
     viewMtx.setTrans(newPos);
     viewMtx.invert(viewMtx);
 
-    MR::setCameraViewMtx(viewMtx, false, false, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::setCameraViewMtx(viewMtx, false, false, Vec3f(0.0f, 0.0f, 0.0f));
 }
 
 bool CameraDirector::isInterpolationOff() {
@@ -306,7 +306,7 @@ void CameraDirector::switchAntiOscillation() {
 }
 
 void CameraDirector::createViewMtx() {
-    TPos3f view;
+    Pos3f view;
     calcViewMtxFromPoseParam(&view, mPoseParam1);
 
     mViewInterpolator->updateCameraMtx(view, mPoseParam1->getWatchPos(), getTargetObj(), CameraLocalUtil::getFovy(getCurrentCameraMan()));
@@ -534,7 +534,7 @@ void CameraDirector::endStartAnimCamera() {
     MR::endEventCamera(&info, ::sStartAnimCameraName, true, 0);
 }
 
-void CameraDirector::startTalkCamera(const TVec3f& rPosition, const TVec3f& rUp, f32 axisX, f32 axisY, s32 frame) {
+void CameraDirector::startTalkCamera(const Vec3f& rPosition, const Vec3f& rUp, f32 axisX, f32 axisY, s32 frame) {
     CameraParamChunkEvent* chunk = getEventParameter(0, ::sTalkCameraName);
 
     if (chunk != nullptr) {
@@ -749,12 +749,12 @@ void CameraDirector::removeEndEventAtLanding(s32 zoneID, const char* pName) {
     }
 }
 
-void CameraDirector::calcViewMtxFromPoseParam(TPos3f* pMtx, const CameraPoseParam* pParam) {
-    TVec3f front = pParam->mWatchPos - pParam->mPos;
+void CameraDirector::calcViewMtxFromPoseParam(Pos3f* pMtx, const CameraPoseParam* pParam) {
+    Vec3f front = pParam->mWatchPos - pParam->mPos;
     MR::normalizeOrZero(&front);
-    TVec3f side = pParam->mUpVec.cross(front);
+    Vec3f side = pParam->mUpVec.cross(front);
     MR::normalizeOrZero(&side);
-    TVec3f up = front.cross(side);
+    Vec3f up = front.cross(side);
     MR::normalizeOrZero(&up);
 
     pMtx->setXDir(-side);
@@ -762,8 +762,8 @@ void CameraDirector::calcViewMtxFromPoseParam(TPos3f* pMtx, const CameraPosePara
     pMtx->setZDir(-front);
     pMtx->setTrans(pParam->mPos);
 
-    TPos3f rot;
-    rot.makeRotate(TVec3f(0.0f, 0.0f, 1.0f), pParam->mRoll);
+    Pos3f rot;
+    rot.makeRotate(Vec3f(0.0f, 0.0f, 1.0f), pParam->mRoll);
     pMtx->concat(*pMtx, rot);
 }
 
@@ -815,7 +815,7 @@ void CameraDirector::resetCameraMan() {
     target2 = mTargetHolder->get();
     target3 = mTargetHolder->get();
 
-    TVec3f newPos = target3->getPosition() - target2->getFrontVec() * 800.0f + target1->getUpVec() * 300.0f;
+    Vec3f newPos = target3->getPosition() - target2->getFrontVec() * 800.0f + target1->getUpVec() * 300.0f;
 
     CameraLocalUtil::setPos(man, newPos);
     CameraLocalUtil::setWatchPos(man, mTargetHolder->get()->getPosition());

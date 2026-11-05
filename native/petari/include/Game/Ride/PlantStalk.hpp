@@ -15,9 +15,9 @@ public:
     virtual void drawGrowUp() const;
 
     bool updateGrowUp();
-    void calcPosAndAxisY(TVec3f*, TVec3f*, f32) const;
+    void calcPosAndAxisY(Vec3f*, Vec3f*, f32) const;
 
-    void calcNearestPos(TVec3f*, const TVec3f&) const;
+    void calcNearestPos(Vec3f*, const Vec3f&) const;
     f32 calcPlayerCoord() const;
 
     s32 mNumPlantPoints;

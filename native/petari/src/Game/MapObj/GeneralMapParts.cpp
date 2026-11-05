@@ -159,7 +159,7 @@ void GeneralMapParts::calcAndSetBaseMtx() {
     if (!(isRailRotating || isRotating || isRailPostureWorking)) {
         LiveActor::calcAndSetBaseMtx();
     } else {
-        TPos3f mtx;
+        Pos3f mtx;
         mtx.identity();
 
         if (isRailPostureWorking) {

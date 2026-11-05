@@ -13,7 +13,7 @@ class JAUSoundMgr : public JAISoundStarter {
 public:
     JAUSoundMgr();
 
-    virtual bool startSound(JAISoundID id, JAISoundHandle* handlePtr, const TVec3f* posPtr);
+    virtual bool startSound(JAISoundID id, JAISoundHandle* handlePtr, const Vec3f* posPtr);
 
     void setAudience(JAIAudience*);
     void calc();

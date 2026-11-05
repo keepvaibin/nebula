@@ -16,7 +16,7 @@ public:
     void showNew(bool);
     void showOpen(bool);
     void show(const char16_t*, bool);
-    void setPos3D(const TVec3f&);
+    void setPos3D(const Vec3f&);
     void setShowBalloonNozzle(bool);
     void show(const char16_t*, s32, bool, bool);
 

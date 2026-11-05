@@ -5,7 +5,7 @@
 #include "Game/Util/JMapUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 namespace NrvCoinSpot {
     NEW_NERVE(CoinSpotNrvWait, CoinSpot, Wait);
@@ -40,7 +40,7 @@ void CoinSpot::init(const JMapInfoIter& rIter) {
 void CoinSpot::initSensor() {
     f32 scale = mScale.y;
     initHitSensor(1);
-    TVec3f offset(0.0f, 60.0f * scale, 0.0f);
+    Vec3f offset(0.0f, 60.0f * scale, 0.0f);
     MR::addHitSensorMapObj(this, "body", 32, offset.y, offset);
 }
 

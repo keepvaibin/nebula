@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class JMapIdInfo;
 class JMapInfoIter;
@@ -19,7 +19,7 @@ public:
     void endClipped();
     void updateDrawnClipped();
     bool isGroupClipping() const;
-    void setTypeToSphere(f32, const TVec3f*);
+    void setTypeToSphere(f32, const Vec3f*);
     void setGroupClippingNo(const JMapInfoIter&);
 
     void setFarClipLevel(s32 level) {
@@ -27,7 +27,7 @@ public:
     }
 
     LiveActor* mActor;
-    const TVec3f* _4;
+    const Vec3f* _4;
     f32 _8;
     JMapIdInfo* mInfo;
     s16 mFarClipLevel;

@@ -20,7 +20,7 @@ void SwitchBox::init(const JMapInfoIter& rIter) {
     initEffectKeeper(3, nullptr, false);
     f32 newScale = mScale.x * 90.0f;
     initHitSensor(2);
-    MR::addHitSensorMapObj(this, "body", 8, newScale, TVec3f(0.0f, newScale, 0.0f));
+    MR::addHitSensorMapObj(this, "body", 8, newScale, Vec3f(0.0f, newScale, 0.0f));
 
     s32 local_38 = 1;
 
@@ -39,7 +39,7 @@ void SwitchBox::init(const JMapInfoIter& rIter) {
     }
 
     if (_92) {
-        MR::initShadowVolumeBox(this, TVec3f(150.0f, 150.0f, 150.0f));
+        MR::initShadowVolumeBox(this, Vec3f(150.0f, 150.0f, 150.0f));
         MR::setShadowVolumeStartDropOffset(this, nullptr, 77.0f);
         MR::setShadowVolumeEndDropOffset(this, nullptr, 150.0f);
         MR::onShadowVolumeCutDropLength(this, nullptr);
@@ -120,7 +120,7 @@ void SwitchBox::doHit(HitSensor* pSender, HitSensor* pReceiver) {
 
     _8e = 30;
 
-    if (MR::isInWater(this, TVec3f(0.0f, 0.0f, 0.0f))) {
+    if (MR::isInWater(this, Vec3f(0.0f, 0.0f, 0.0f))) {
         MR::startSound(this, "SE_OJ_S_BLOCK_BREAK_W");
         MR::emitEffect(this, "BreakWater");
     } else {

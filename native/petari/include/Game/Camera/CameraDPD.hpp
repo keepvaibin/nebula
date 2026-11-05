@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/Camera/Camera.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class CameraDPD : public Camera {
 public:
@@ -30,9 +30,9 @@ public:
     }
 
     f32 mPointerDistance;
-    TVec2f mRealPointPos;
-    TVec2f mBlendPointPos;
-    TPos3f mMtx;
+    Vec2f mRealPointPos;
+    Vec2f mBlendPointPos;
+    Pos3f mMtx;
     bool mResetPointingPos;
     s32 mCameraType;
     f32 mDist;

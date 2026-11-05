@@ -1675,7 +1675,7 @@ void NebulaSettingsScreen::readPointer(const NebulaSettingsView& rView) {
         mSwipeFrames--;
     }
     if (swipe != 0 && mFrame > 1 && !mHome) {
-        TVec2f edge, top, bottom;
+        Vec2f edge, top, bottom;
         edge.x = 0.0f;
         edge.y = 0.0f;
         MR::convertScreenPosToLayoutPos(&top, edge);
@@ -1697,11 +1697,11 @@ void NebulaSettingsScreen::readPointer(const NebulaSettingsView& rView) {
         return;
     }
     // The player's pointer as StarPointerController maps it to the screen.
-    TVec2f screen;
+    Vec2f screen;
     MR::getPointerPastPos(&screen, 0, PLAYER_1);
     screen.x = (screen.x + 1.0f) * MR::getScreenWidth() * 0.5f;
     screen.y = (screen.y + 1.0f) * static_cast< s32 >(NebulaFrameClock::cScreenLines) * 0.5f;
-    TVec2f layout;
+    Vec2f layout;
     MR::convertScreenPosToLayoutPos(&layout, screen);
     const f32 x = layout.x / (mScaleX * mZoom);
     const f32 y = layout.y / mZoom - mMenu->mTranslate.y;

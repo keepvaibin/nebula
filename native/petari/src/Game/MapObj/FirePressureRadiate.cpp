@@ -33,8 +33,8 @@ void FirePressureRadiate::init(const JMapInfoIter& rIter) {
     initModelManagerWithAnm("FirePressure", nullptr, false);
     MR::connectToSceneNoShadowedMapObjStrongLight(this);
     initHitSensor(3);
-    MR::addHitSensorMapObj(this, "body", 8, 70.0f, TVec3f(0.0f, 30.0f, 0.0f));
-    MR::addHitSensorAtJointMapObj(this, "cannon", "Cannon1", 8, 70.0f, TVec3f(40.0f, 0.0f, 0.0f));
+    MR::addHitSensorMapObj(this, "body", 8, 70.0f, Vec3f(0.0f, 30.0f, 0.0f));
+    MR::addHitSensorAtJointMapObj(this, "cannon", "Cannon1", 8, 70.0f, Vec3f(40.0f, 0.0f, 0.0f));
     MR::addHitSensorCallbackEnemyAttack(this, "radiate", 8, 50.0f);
     MR::invalidateHitSensor(this, "radiate");
     initEffectKeeper(0, nullptr, false);
@@ -210,21 +210,21 @@ void FirePressureRadiate::startRelax() {
 }
 
 void FirePressureRadiate::updateHitSensor(HitSensor* pSensor) {
-    TVec3f direction;
+    Vec3f direction;
     mRadiateMtx.getXDir(direction);
-    TVec3f position;
+    Vec3f position;
     mRadiateMtx.getTrans(position);
-    TVec3f start;
+    Vec3f start;
     NebulaVecScaleAdd(&direction, &position, &start, 50.0f);
-    TVec3f end;
+    Vec3f end;
     NebulaVecScaleAdd(&direction, &start, &end, _D0 - 50.0f);
     MR::calcPerpendicFootToLineInside(&pSensor->mPosition, *MR::getPlayerPos(), start, end);
 }
 
 void FirePressureRadiate::calcRadiateEffectMtx() {
     MtxPtr jointMtx = MR::getJointMtx(this, "Cannon3");
-    TPos3f effectMtx(jointMtx);
-    TVec3f trans;
+    Pos3f effectMtx(jointMtx);
+    Vec3f trans;
     effectMtx.getTrans(trans);
     mRadiateMtx.set(effectMtx);
     mRadiateMtx.mMtx[0][3] = trans.x;
@@ -232,9 +232,9 @@ void FirePressureRadiate::calcRadiateEffectMtx() {
     mRadiateMtx.mMtx[2][3] = trans.z;
 }
 
-bool FirePressureRadiate::calcJointCannon(TPos3f* pOutPos, const JointControllerInfo&) {
-    TPos3f mtx;
-    TVec3f axis(0.0f, 0.0f, 1.0f);
+bool FirePressureRadiate::calcJointCannon(Pos3f* pOutPos, const JointControllerInfo&) {
+    Pos3f mtx;
+    Vec3f axis(0.0f, 0.0f, 1.0f);
     mtx.makeRotate(axis, MR::toRadian(mCannonRotation));
     pOutPos->concat(*pOutPos, mtx);
     return true;

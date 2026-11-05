@@ -21,16 +21,16 @@ public:
     void exeSetUp();
     void exeRailMove();
     void bindHole();
-    void initParabola(const TVec3f& rPosition);
+    void initParabola(const Vec3f& rPosition);
 
     BindCone* mCone;
     HitSensor* mBoundSensor;
     f32 mLaunchTime;
-    TVec3f mLaunchStart;
-    TVec3f mBindVelocity;
-    TVec3f mHoleGravity;
-    TVec3f mLaunchGravity;
-    TVec3f mLaunchDirection;
+    Vec3f mLaunchStart;
+    Vec3f mBindVelocity;
+    Vec3f mHoleGravity;
+    Vec3f mLaunchGravity;
+    Vec3f mLaunchDirection;
     u32 mLaunchDuration;
     f32 mLaunchDistance;
     f32 mLaunchQuadratic;

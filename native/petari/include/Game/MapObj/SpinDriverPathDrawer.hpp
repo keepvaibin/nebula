@@ -24,12 +24,12 @@ public:
     void setColorPink();
     void setMaskLength(f32);
     void setFadeScale(f32);
-    void sendPoint(const TVec3f&, f32, f32) const;
+    void sendPoint(const Vec3f&, f32, f32) const;
 
     SpinDriverShootPath* mShootPath;
-    TVec3f* _90;
-    TVec3f* _94;
-    TVec3f* _98;
+    Vec3f* _90;
+    Vec3f* _94;
+    Vec3f* _98;
     f32* _9C;
     s32 mPositionCount;
     u32 _A4;

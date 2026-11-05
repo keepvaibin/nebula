@@ -33,7 +33,7 @@ void TripodBossGuardWallPart::init(const JMapInfoIter& rIter) {
     MR::connectToScene(this, MR::MovementType_MapObjDecoration, MR::CalcAnimType_MapObjDecoration, MR::DrawBufferType_TripodBoss, MR::DrawType_None);
     initHitSensor(2);
     MR::initCollisionParts(this, "TripodBossGuardWall",
-                           MR::addHitSensor(this, "collision", ATYPE_TRIPODBOSS_GUARD_WALL, 0, 1000.0f, TVec3f(0.0f, 0.0f, 0.0f)), nullptr);
+                           MR::addHitSensor(this, "collision", ATYPE_TRIPODBOSS_GUARD_WALL, 0, 1000.0f, Vec3f(0.0f, 0.0f, 0.0f)), nullptr);
     initSound(4, false);
     initEffectKeeper(0, "TripodBoss", false);
     MR::invalidateClipping(this);
@@ -59,7 +59,7 @@ void TripodBossGuardWallPart::control() {
 }
 
 void TripodBossGuardWallPart::calcAndSetBaseMtx() {
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.identity();
     mtx.setEulerY(MR::toRadian(mPlacementAngle));
     mtx.concat(*mHostMtx, mtx);
@@ -136,7 +136,7 @@ void TripodBossGuardWallPart::exeRepair() {
     }
 }
 
-void TripodBossGuardWallPart::setHostMatrix(const TPos3f* pMtx) {
+void TripodBossGuardWallPart::setHostMatrix(const Pos3f* pMtx) {
     mHostMtx = pMtx;
 }
 

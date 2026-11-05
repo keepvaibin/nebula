@@ -303,16 +303,16 @@ void MarioActor::endRush(const RushEndInfo* pInfo) {
 
         mMario->_10._8 = pInfo->_20 >> 22;
         if (!_3D0) {
-            TPos3f base;
-            TVec3f front;
+            Pos3f base;
+            Vec3f front;
             NebulaMtxConcat(getBaseMtx(), _E3C, base);
             front.set< f32 >(base[0][2], base[1][2], base[2][2]);
             mMario->setFrontVecKeepUp(front);
         } else {
-            TPos3f base;
-            TVec3f front;
-            TVec3f side;
-            TVec3f up;
+            Pos3f base;
+            Vec3f front;
+            Vec3f side;
+            Vec3f up;
             NebulaMtxConcat(getBaseMtx(), _E3C, base);
             front.set< f32 >(base[0][2], base[1][2], base[2][2]);
             up.set< f32 >(base[0][1], base[1][1], base[2][1]);

@@ -248,10 +248,10 @@ void MoviePlayerSimple::drawCinemaFrame() const {
     MR::fillScreenSetup(::sCinemaFrameColor);
 
     s16 width = MR::getScreenWidth();
-    TBox2s top(0, 0, width, ::sCinemaFrameHeightTop);
+    Box2s top(0, 0, width, ::sCinemaFrameHeightTop);
     MR::fillScreenArea(top.i, top.f);
 
     s16 height = MR::getScreenHeight();
-    TBox2s bottom(0, ::sCinemaFrameHeightBottom, width, height);
+    Box2s bottom(0, ::sCinemaFrameHeightBottom, width, height);
     MR::fillScreenArea(bottom.i, bottom.f);
 }

@@ -66,7 +66,7 @@ void CameraShaker::createSinglyHorizontalTask() {
     for (u32 i = 0; i < NR_HORIZONTAL_TASKS; i++) {
         CameraShakePatternSingly* singly = new CameraShakePatternSingly(cSinglyIntensity[i]);
 
-        singly->setDirection(TVec2f(1.0f, 0.0f));
+        singly->setDirection(Vec2f(1.0f, 0.0f));
 
         CameraShakeTask* task = new CameraShakeTask(singly);
 
@@ -103,7 +103,7 @@ void CameraShaker::updateInfinityTask() {
 }
 
 void CameraShaker::setOffset() {
-    TVec2f offset = TVec2f(0.0f, 0.0f);
+    Vec2f offset = Vec2f(0.0f, 0.0f);
 
     addSinglyVerticalTaskOffset(&offset);
     addSinglyHorizontalTaskOffset(&offset);
@@ -112,10 +112,10 @@ void CameraShaker::setOffset() {
     MR::setShakeOffset(offset.x, offset.y);
 }
 
-void CameraShaker::addSinglyVerticalTaskOffset(TVec2f* pOffset) {
+void CameraShaker::addSinglyVerticalTaskOffset(Vec2f* pOffset) {
     for (u32 i = 0; i < NR_VERTICAL_TASKS; i++) {
         if (!mVerticalTasks[i]->isEnd()) {
-            TVec2f offset;
+            Vec2f offset;
             mVerticalTasks[i]->getOffset(&offset);
 
             pOffset->x += offset.x;
@@ -124,10 +124,10 @@ void CameraShaker::addSinglyVerticalTaskOffset(TVec2f* pOffset) {
     }
 }
 
-void CameraShaker::addSinglyHorizontalTaskOffset(TVec2f* pOffset) {
+void CameraShaker::addSinglyHorizontalTaskOffset(Vec2f* pOffset) {
     for (u32 i = 0; i < NR_HORIZONTAL_TASKS; i++) {
         if (!mHorizontalTasks[i]->isEnd()) {
-            TVec2f offset;
+            Vec2f offset;
             mHorizontalTasks[i]->getOffset(&offset);
 
             pOffset->x += offset.x;
@@ -136,10 +136,10 @@ void CameraShaker::addSinglyHorizontalTaskOffset(TVec2f* pOffset) {
     }
 }
 
-void CameraShaker::addInfinityTaskOffset(TVec2f* pOffset) {
+void CameraShaker::addInfinityTaskOffset(Vec2f* pOffset) {
     for (u32 i = 0; i < NR_INFINITY_TASKS; i++) {
         if (!mInfinityTasks[i]->isEnd()) {
-            TVec2f offset;
+            Vec2f offset;
             mInfinityTasks[i]->getOffset(&offset);
 
             pOffset->x += offset.x;
@@ -148,7 +148,7 @@ void CameraShaker::addInfinityTaskOffset(TVec2f* pOffset) {
     }
 }
 
-void CameraShaker::adjustOffsetToScreen(TVec2f* pOffset) {
+void CameraShaker::adjustOffsetToScreen(Vec2f* pOffset) {
     pOffset->y *= 30.0f / (s32)NebulaFrameClock::cScreenLines;
     pOffset->x *= 30.0f / MR::getScreenWidth();
 }

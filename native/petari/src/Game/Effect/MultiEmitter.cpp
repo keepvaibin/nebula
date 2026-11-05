@@ -12,9 +12,8 @@
 #include <algorithm>
 #include <cstring>
 
-template JGeometry::TVec3< s16 >::TVec3(s16, s16, s16);
 
-MultiEmitter::MultiEmitter(const char* pName, const TVec3f* pScale, const TVec3f* pRotation, const TVec3f* pTranslation, const TVec3f& rVec)
+MultiEmitter::MultiEmitter(const char* pName, const Vec3f* pScale, const Vec3f* pRotation, const Vec3f* pTranslation, const Vec3f& rVec)
     : mEmitters(), mCallBack(), mParticleCallBack(), _24(), _28(), _2C(), _30(), mHash(), mFlags() {
     mCallBack = new MultiEmitterCallBack(this, pScale, pRotation, pTranslation, rVec);
     mParticleCallBack = new MultiEmitterParticleCallBack();
@@ -22,7 +21,7 @@ MultiEmitter::MultiEmitter(const char* pName, const TVec3f* pScale, const TVec3f
     allocateEmitter(pName);
 }
 
-MultiEmitter::MultiEmitter(const char* pName, MtxPtr pMtx, const TVec3f& rVec)
+MultiEmitter::MultiEmitter(const char* pName, MtxPtr pMtx, const Vec3f& rVec)
     : mEmitters(), mCallBack(), mParticleCallBack(), _24(), _28(), _2C(), _30(), mHash(), mFlags() {
     mCallBack = new MultiEmitterCallBack(this, pMtx, rVec);
     mParticleCallBack = new MultiEmitterParticleCallBack();
@@ -30,7 +29,7 @@ MultiEmitter::MultiEmitter(const char* pName, MtxPtr pMtx, const TVec3f& rVec)
     allocateEmitter(pName);
 }
 
-MultiEmitter::MultiEmitter(const char* pName, MtxPtr pMtx, const TVec3f* pTranslation, const TVec3f& rVec)
+MultiEmitter::MultiEmitter(const char* pName, MtxPtr pMtx, const Vec3f* pTranslation, const Vec3f& rVec)
     : mEmitters(), mCallBack(), mParticleCallBack(), _24(), _28(), _2C(), _30(), mHash(), mFlags() {
     mCallBack = new MultiEmitterCallBack(this, pMtx, pTranslation, rVec);
     mParticleCallBack = new MultiEmitterParticleCallBack();
@@ -39,7 +38,7 @@ MultiEmitter::MultiEmitter(const char* pName, MtxPtr pMtx, const TVec3f* pTransl
 }
 
 MultiEmitter::MultiEmitter(const char* pName) : mEmitters(), mCallBack(), mParticleCallBack(), _24(), _28(), _2C(), _30(), mHash(), mFlags() {
-    mCallBack = new MultiEmitterCallBack(this, TVec3f(0.0f, 0.0f, 0.0f));
+    mCallBack = new MultiEmitterCallBack(this, Vec3f(0.0f, 0.0f, 0.0f));
     mParticleCallBack = new MultiEmitterParticleCallBack();
 
     allocateEmitter(pName);
@@ -125,7 +124,7 @@ bool MultiEmitter::isExistOneTimeEmitter() const {
     return false;
 }
 
-void MultiEmitter::setHostSRT(const TVec3f* pScale, const TVec3f* pRotation, const TVec3f* pTranslation) {
+void MultiEmitter::setHostSRT(const Vec3f* pScale, const Vec3f* pRotation, const Vec3f* pTranslation) {
     mCallBack->setHostSRT(pScale, pRotation, pTranslation);
 }
 
@@ -133,7 +132,7 @@ void MultiEmitter::setHostMtx(MtxPtr pMtx) {
     mCallBack->setHostMtx(pMtx);
 }
 
-void MultiEmitter::setOffset(const TVec3f& rOffset) {
+void MultiEmitter::setOffset(const Vec3f& rOffset) {
     mCallBack->_18.set(rOffset);
 }
 
@@ -269,8 +268,8 @@ namespace {
     }
 };  // namespace
 
-void MultiEmitter::setGlobalRotationDegree(const TVec3f& rRotation, s32 idx) {
-    setGlobalRotation(TVec3s(toS16(rRotation.x), toS16(rRotation.y), toS16(rRotation.z)), idx);
+void MultiEmitter::setGlobalRotationDegree(const Vec3f& rRotation, s32 idx) {
+    setGlobalRotation(Vec3s(toS16(rRotation.x), toS16(rRotation.y), toS16(rRotation.z)), idx);
 }
 
 void MultiEmitter::allocateEmitter(const char* pName) {

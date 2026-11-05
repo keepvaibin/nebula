@@ -58,7 +58,7 @@ namespace MR {
         MultiEmitter* pEmitter;
 
         pEmitter = emitEffect(pActor, pEffectName);
-        pEmitter->setGlobalScale(TVec3f(a3, a3, a3), a4);
+        pEmitter->setGlobalScale(Vec3f(a3, a3, a3), a4);
 
         return pEmitter;
     }
@@ -157,7 +157,7 @@ namespace MR {
         ::getEffectKeeper(pActor)->changeEffectName(pOldName, pNewName);
     }
 
-    void setEffectHostSRT(LiveActor* pActor, const char* pEffectName, const TVec3f* pScale, const TVec3f* pRotate, const TVec3f* pTranslate) {
+    void setEffectHostSRT(LiveActor* pActor, const char* pEffectName, const Vec3f* pScale, const Vec3f* pRotate, const Vec3f* pTranslate) {
         getEffect(pActor, pEffectName)->setHostSRT(pScale, pRotate, pTranslate);
     }
 
@@ -169,7 +169,7 @@ namespace MR {
         getEffect(pActor, pEffectName)->setBaseScale(scale);
     }
 
-    void setEffectLocalScale(LiveActor* pActor, const char* pEffectName, const TVec3f& rScaleVec) {
+    void setEffectLocalScale(LiveActor* pActor, const char* pEffectName, const Vec3f& rScaleVec) {
         getEffect(pActor, pEffectName)->setLocalScale(rScaleVec, -1);
     }
 
@@ -187,7 +187,7 @@ namespace MR {
         getEffect(pActor, pEffectName)->setGlobalEnvColor(color1, color2, color3, -1);
     }
 
-    void emitEffectHit(LiveActor* pActor, const TVec3f& rPosition, const char* pEffectName) {
+    void emitEffectHit(LiveActor* pActor, const Vec3f& rPosition, const char* pEffectName) {
         if (pEffectName == nullptr) {
             pEffectName = "HitMarkNormal";
         }
@@ -195,12 +195,12 @@ namespace MR {
         emitEffect(pActor, pEffectName)->setGlobalTranslation(rPosition, -1);
     }
 
-    void emitEffectHit(LiveActor* pActor, const TVec3f& rPosition, const TVec3f& rDirection, const char* pEffectName) {
+    void emitEffectHit(LiveActor* pActor, const Vec3f& rPosition, const Vec3f& rDirection, const char* pEffectName) {
         if (pEffectName == nullptr) {
             pEffectName = "HitMarkNormal";
         }
 
-        TPos3f mtx;
+        Pos3f mtx;
         makeMtxUpNoSupportPos(&mtx, rDirection, rPosition);
         emitEffect(pActor, pEffectName)->setGlobalSRTMatrix(mtx, -1);
     }
@@ -214,7 +214,7 @@ namespace MR {
     }
 
     void emitEffectHitBetweenSensors(LiveActor* pActor, const HitSensor* pSensor1, const HitSensor* pSensor2, f32 flt, const char* pEffectName) {
-        TVec3f vecBetween;
+        Vec3f vecBetween;
         calcPosBetweenSensors(&vecBetween, pSensor1, pSensor2, flt);
         emitEffectHit(pActor, vecBetween, pEffectName);
     }
@@ -227,7 +227,7 @@ namespace MR {
         ::getEffectKeeper(pActor)->updateFloorCode(pTriangle);
     }
 
-    void updateEffectFloorCodeLineToMap(LiveActor* pActor, const TVec3f& rPosition, const TVec3f& rDirection) {
+    void updateEffectFloorCodeLineToMap(LiveActor* pActor, const Vec3f& rPosition, const Vec3f& rDirection) {
         Triangle triangle = Triangle();
 
         if (getFirstPolyOnLineToMap(nullptr, &triangle, rPosition, rDirection)) {
@@ -238,8 +238,8 @@ namespace MR {
     }
 
     void updateEffectFloorCodeLineToMap(LiveActor* pActor, f32 a2, f32 a3) {
-        TVec3f gravity = pActor->mGravity;
-        TVec3f sumPosScaledGrav = pActor->mPosition + gravity * a3;
+        Vec3f gravity = pActor->mGravity;
+        Vec3f sumPosScaledGrav = pActor->mPosition + gravity * a3;
 
         updateEffectFloorCodeLineToMap(pActor, sumPosScaledGrav, gravity * (a2 - a3));
     }

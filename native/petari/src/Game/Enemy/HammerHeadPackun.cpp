@@ -18,10 +18,10 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
-#include <JSystem/JGeometry/TVec.hpp>
-#include <JSystem/JMath/JMATrigonometric.hpp>
-#include <JSystem/JMath/JMath.hpp>
+#include <nebula_geometry.hpp>
+
+
+
 #include <nebula_math.h>
 
 HammerHeadPackun::HammerHeadPackun(const char* pName) : LiveActor(pName) {
@@ -70,7 +70,7 @@ void HammerHeadPackun::init(const JMapInfoIter& rIter) {
     MR::useStageSwitchWriteDead(this, rIter);
     initShadow();
     initLeaf(rIter);
-    MR::initStarPointerTargetAtJoint(this, "Head", 169.0f, TVec3f(120.0f, 0.0f, 0.0f));
+    MR::initStarPointerTargetAtJoint(this, "Head", 169.0f, Vec3f(120.0f, 0.0f, 0.0f));
     MR::declareStarPiece(this, 9);
     mJointRumbler = new JointRumbler(this, "AllRoot", 8.0f, 0.06f, 60, true, 0);
     makeActorAppeared();
@@ -87,7 +87,7 @@ void HammerHeadPackun::kill() {
     }
 
     MR::startSound(this, "SE_EM_HHPACKUN_DEAD");
-    TVec3f pos;
+    Vec3f pos;
     MR::copyJointPos(this, "Head", &pos);
     MR::appearStarPiece(this, pos, 9, 10.0f, 40.0f, false);
     MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
@@ -111,7 +111,7 @@ void HammerHeadPackun::exeWait() {
 }
 
 void HammerHeadPackun::exeSearch() {
-    TVec3f dir;
+    Vec3f dir;
     if (calcPlayerDir(&dir) && !tryShiftNumb()) {
         turnTo(dir, 1.0f);
         if (isInFieldOfView(dir)) {
@@ -127,7 +127,7 @@ void HammerHeadPackun::exeAttack() {
         MR::startBck(mLeafModel, attack);
     }
 
-    TVec3f dir;
+    Vec3f dir;
     if (!tryShiftNumb()) {
         if (MR::isStep(this, 156)) {
             MR::shakeCameraNormalStrong();
@@ -305,8 +305,8 @@ void HammerHeadPackun::endNumb() {
 }
 
 void HammerHeadPackun::calcAndSetBaseMtx() {
-    TVec3f vec;
-    TPos3f mtx;
+    Vec3f vec;
+    Pos3f mtx;
     vec.cross(_94, _A0);
     mtx[0][0] = vec.x;
     mtx[1][0] = vec.y;
@@ -333,7 +333,7 @@ void HammerHeadPackun::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
         f32 recvRadius = pReceiver->mRadius;
         f32 sendRadius = pSender->mRadius;
         f32 temp = recvRadius / (sendRadius + recvRadius);
-        TVec3f hitMtx = pSender->mPosition * temp + (pReceiver->mPosition) * (1.0f - temp);
+        Vec3f hitMtx = pSender->mPosition * temp + (pReceiver->mPosition) * (1.0f - temp);
         MR::tryRumblePadMiddle(this, PLAYER_1);
         MR::emitEffectHit(this, hitMtx, nullptr);
         MR::stopScene(8);
@@ -374,7 +374,7 @@ bool HammerHeadPackun::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSe
         f32 sendRadius = pReceiver->mRadius;
         f32 recvRadius = pSender->mRadius;
         f32 temp = recvRadius / (recvRadius + sendRadius);
-        TVec3f hitMtx = pReceiver->mPosition * temp + (pSender->mPosition) * (1.0f - temp);
+        Vec3f hitMtx = pReceiver->mPosition * temp + (pSender->mPosition) * (1.0f - temp);
         MR::tryRumblePadMiddle(this, PLAYER_1);
         MR::emitEffectHit(this, hitMtx, nullptr);
         MR::stopScene(8);
@@ -408,7 +408,7 @@ bool HammerHeadPackun::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSen
         f32 sendRadius = pReceiver->mRadius;
         f32 recvRadius = pSender->mRadius;
         f32 temp = recvRadius / (recvRadius + sendRadius);
-        TVec3f hitMtx = pReceiver->mPosition * temp + (pSender->mPosition) * (1.0f - temp);
+        Vec3f hitMtx = pReceiver->mPosition * temp + (pSender->mPosition) * (1.0f - temp);
         MR::tryRumblePadMiddle(this, PLAYER_1);
         MR::emitEffectHit(this, hitMtx, nullptr);
         MR::stopScene(8);
@@ -419,7 +419,7 @@ bool HammerHeadPackun::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSen
 }
 
 void HammerHeadPackun::initPosture() {
-    TPos3f mtx;
+    Pos3f mtx;
     MR::makeMtxTR(mtx, this);
     mtx.getYDir(_94);
     mtx.getZDir(_A0);
@@ -427,12 +427,12 @@ void HammerHeadPackun::initPosture() {
 
 void HammerHeadPackun::initSensor() {
     initHitSensor(6);
-    MR::addHitSensorAtJointMapObj(this, "body", "Head", 32, 130.0f, TVec3f(120.0f, 0.0f, 0.0f));
-    MR::addHitSensorAtJointMapObj(this, "blow", "Spin1", 32, 120.0f, TVec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorAtJointMapObj(this, "push1", "Spin2", 8, 45.0f, TVec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorAtJointMapObj(this, "push2", "Spin2", 8, 45.0f, TVec3f(50.0f, 0.0f, 0.0f));
-    MR::addHitSensorAtJointMapObj(this, "push3", "Spin3", 8, 45.0f, TVec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorAtJointMapObj(this, "push4", "Spin3", 8, 60.0f, TVec3f(80.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointMapObj(this, "body", "Head", 32, 130.0f, Vec3f(120.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointMapObj(this, "blow", "Spin1", 32, 120.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointMapObj(this, "push1", "Spin2", 8, 45.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointMapObj(this, "push2", "Spin2", 8, 45.0f, Vec3f(50.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointMapObj(this, "push3", "Spin3", 8, 45.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointMapObj(this, "push4", "Spin3", 8, 60.0f, Vec3f(80.0f, 0.0f, 0.0f));
 }
 
 void HammerHeadPackun::initShadow() {
@@ -457,21 +457,21 @@ void HammerHeadPackun::initLeaf(const JMapInfoIter& rIter) {
     }
 
     if (arg > 0) {
-        mLeafModel->initFixedPosition(TVec3f(100.0f, 0.0f, 0.0f), TVec3f(0.0f, -90.0f, -90.0f), "Spin1");
+        mLeafModel->initFixedPosition(Vec3f(100.0f, 0.0f, 0.0f), Vec3f(0.0f, -90.0f, -90.0f), "Spin1");
     } else {
-        mLeafModel->initFixedPosition(TVec3f(0.0f, 0.0f, 0.0f), TVec3f(0.0f, -90.0f, -90.0f), "Spin1");
+        mLeafModel->initFixedPosition(Vec3f(0.0f, 0.0f, 0.0f), Vec3f(0.0f, -90.0f, -90.0f), "Spin1");
     }
 
     mLeafModel->initWithoutIter();
 }
 
 bool HammerHeadPackun::isTargetInRange() const {
-    TVec3f vec;
+    Vec3f vec;
     MR::getPlayerUpVec(&vec);
     MtxPtr baseMtx1 = getBaseMtx();
     MtxPtr baseMtx2 = getBaseMtx();
     MtxPtr baseMtx3 = getBaseMtx();
-    TVec3f a2(baseMtx3[0][1], baseMtx2[1][1], baseMtx1[2][1]);
+    Vec3f a2(baseMtx3[0][1], baseMtx2[1][1], baseMtx1[2][1]);
 
     if (vec.dot(a2) <= 0.0f) {
         return false;
@@ -482,7 +482,7 @@ bool HammerHeadPackun::isTargetInRange() const {
     return false;
 }
 
-bool HammerHeadPackun::isInFieldOfView(const TVec3f& rPos) const {
+bool HammerHeadPackun::isInFieldOfView(const Vec3f& rPos) const {
     f32 deg = 30.0f;
     if (30.0f < 0.0f) {
         deg = -30.0f;
@@ -513,7 +513,7 @@ bool HammerHeadPackun::isChance() const {
     return isChance;
 }
 
-bool HammerHeadPackun::calcPlayerDir(TVec3f* pPos) const {
+bool HammerHeadPackun::calcPlayerDir(Vec3f* pPos) const {
     pPos->set(*MR::getPlayerPos() - mPosition);
     pPos->orthogonalize2(_94);
     if (MR::isNearZero(*pPos)) {
@@ -524,21 +524,21 @@ bool HammerHeadPackun::calcPlayerDir(TVec3f* pPos) const {
     return true;
 }
 
-void HammerHeadPackun::turnTo(const TVec3f& rFrom, f32 rate) {
+void HammerHeadPackun::turnTo(const Vec3f& rFrom, f32 rate) {
     f32 absAngle = _A0.angle(rFrom);
     f32 ratio = 1.0f;
     f32 maxAngle = rate * MR::pi() / 180.0f;
     if (absAngle > maxAngle) {
         ratio = maxAngle / absAngle;
     }
-    TQuat4f quat;
+    Quat4f quat;
     quat.setRotate(_A0, rFrom, ratio);
     quat.transform(_A0);
     verticalizeFrontVec();
 }
 
 void HammerHeadPackun::turnToAttackVec(s32 rate) {
-    TQuat4f mtx;
+    Quat4f mtx;
     if (getNerveStep() <= rate) {
         f32 step = (f32)getNerveStep() / rate;
         if (step > 1.0f) {

@@ -34,7 +34,7 @@ void StarPieceSpot::init(const JMapInfoIter& rIter) {
         kill();
     } else {
         initHitSensor(1);
-        MR::addHitSensorMapObjSimple(this, "body", 8, 150.0f, TVec3f(0.0f, 0.0f, 0.0f));
+        MR::addHitSensorMapObjSimple(this, "body", 8, 150.0f, Vec3f(0.0f, 0.0f, 0.0f));
         appear();
     }
 }

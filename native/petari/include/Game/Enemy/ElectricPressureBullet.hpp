@@ -1,8 +1,8 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
+
 
 class ElectricPressureBullet : public LiveActor {
 public:
@@ -13,10 +13,10 @@ public:
     virtual void control();
     virtual void attackSensor(HitSensor*, HitSensor*);
 
-    void shotElectricBullet(LiveActor*, const TPos3f&, const f32&);
+    void shotElectricBullet(LiveActor*, const Pos3f&, const f32&);
     void exeFly();
 
-    TVec3f _8C;
+    Vec3f _8C;
     LiveActor* _98;
     f32 _9C;
 };

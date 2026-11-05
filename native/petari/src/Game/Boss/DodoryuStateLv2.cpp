@@ -4,8 +4,8 @@
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
-#include <JSystem/JMath/JMATrigonometric.hpp>
-#include <JSystem/JMath/JMath.hpp>
+#include <nebula_geometry.hpp>
+
 #include <cmath>
 #include "Game/System/NebulaHost.hpp"
 
@@ -446,12 +446,12 @@ void DodoryuStateLv2::exeFindPos() {
     if (MR::isGreaterEqualStep(this, 1)) {
         keepVerticalizedVelocity();
         addVelocity(false);
-        TVec3f offset;
+        Vec3f offset;
 
         if (mHost->keepOffFromClosedArea(&offset)) {
-            TPos3f mtx;
+            Pos3f mtx;
             mtx.set(mHost->mBaseMtx);
-            TVec3f trans;
+            Vec3f trans;
             mtx.getTrans(trans);
             trans += offset * 150.0f;
             mtx.setTrans(trans);
@@ -462,7 +462,7 @@ void DodoryuStateLv2::exeFindPos() {
     }
 
     if (MR::isGreaterEqualStep(this, mFindPosStep + 1)) {
-        TVec3f toPlayer;
+        Vec3f toPlayer;
         MR::calcVecToPlayerH(&toPlayer, mHost, nullptr);
         turnToward(toPlayer, 180.0f);
         mHost->mVelocity.zero();
@@ -494,8 +494,8 @@ void DodoryuStateLv2::exeChaseMoreStart() {
         mHost->stopHillForce();
         mHost->shiftMoveStateNull();
         MR::startSound(mHost, "SE_BM_DODORYU_JUMP_OUT");
-        TVec3f* playerPos = MR::getPlayerPos();
-        TVec3f toPlayer(mHost->mPosition);
+        Vec3f* playerPos = MR::getPlayerPos();
+        Vec3f toPlayer(mHost->mPosition);
         toPlayer.sub(*playerPos);
 
         if (MR::isNearZero(toPlayer)) {
@@ -516,7 +516,7 @@ void DodoryuStateLv2::exeChaseMoreStart() {
     keepVerticalizedVelocity();
     addVelocity(true);
 
-    TVec3f toPlayer;
+    Vec3f toPlayer;
     MR::calcVecToPlayerH(&toPlayer, mHost, nullptr);
     turnToward(toPlayer, 180.0f);
 
@@ -689,7 +689,7 @@ bool DodoryuStateLv2::catchPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* 
 
     if (NebulaHost::codePatch(NEBULA_PATCH_DODORYU_SHELL_ONLY, nullptr) ? MR::isMsgJetTurtleAttack(msg)
                                                                       : MR::isMsgPlayerHitAll(msg)) {
-        TVec3f attackDir = pReceiver->mPosition;
+        Vec3f attackDir = pReceiver->mPosition;
         attackDir.sub(pSender->mPosition);
         _A0.set(attackDir);
 
@@ -722,8 +722,8 @@ void DodoryuStateLv2::catchSendPlayerFlying(HitSensor* pSender, HitSensor* pRece
 }
 
 void DodoryuStateLv2::knockOver() {
-    TPos3f mtx(mHost->mBaseMtx);
-    TVec3f trans;
+    Pos3f mtx(mHost->mBaseMtx);
+    Vec3f trans;
     mtx.getTrans(trans);
     trans += (_A0 * ::sKnockSpeed);
     mtx.setTrans(trans);
@@ -832,16 +832,16 @@ void DodoryuStateLv2::updateDiveShake() {
 }
 
 void DodoryuStateLv2::calcRandomVelocity(s32 time) {
-    TVec3f frontVec;
+    Vec3f frontVec;
     MR::getPlayerFrontVec(&frontVec);
     f32 randomAngle = MR::getRandom() * 2.0f * MR::pi();
-    const TVec3f* gravityVec = MR::getPlayerGravity();
-    TPos3f rotateMtx;
+    const Vec3f* gravityVec = MR::getPlayerGravity();
+    Pos3f rotateMtx;
     rotateMtx.makeRotate(*gravityVec, randomAngle);
     rotateMtx.mult33(frontVec);
     f32 dist = MR::getRandom(mChaseParam->_84, mChaseParam->_88);
     f32 speed = dist / time;
-    TPos3f playerMtx;
+    Pos3f playerMtx;
     playerMtx.set(MR::getPlayerBaseMtx());
     mHost->setMtx(playerMtx);
     mHost->mVelocity.set(frontVec * speed);
@@ -849,13 +849,13 @@ void DodoryuStateLv2::calcRandomVelocity(s32 time) {
 
 void DodoryuStateLv2::keepVerticalizedVelocity() {
     f32 speed = mHost->mVelocity.length();
-    TVec3f velH = mHost->mVelocity.killElement(mHost->mGravity);
+    Vec3f velH = mHost->mVelocity.killElement(mHost->mGravity);
     velH.setLength(speed);
     mHost->mVelocity.set(velH);
 }
 
 void DodoryuStateLv2::attackStrongToDir(HitSensor* pSender, HitSensor* pReceiver) {
-    TVec3f dir;
+    Vec3f dir;
     calcAttackDir(&dir, pSender->mPosition, pReceiver->mPosition);
 
     if (MR::sendMsgEnemyAttackStrong(pReceiver, pSender)) {
@@ -890,8 +890,8 @@ bool DodoryuStateLv2::tryToShiftAppearSign() {
         return true;
     }
 
-    TPos3f mtx(mHost->mBaseMtx);
-    TVec3f zDir;
+    Pos3f mtx(mHost->mBaseMtx);
+    Vec3f zDir;
     mtx.getZDir(zDir);
 
     if (!MR::isFaceToPlayerHorizontalDegree(mHost, zDir, mChaseParam->_38)) {
@@ -911,14 +911,14 @@ void DodoryuStateLv2::determinChaseMoreBrakeCounter() {
     mChaseMoreCounter = MR::getRandom(mChaseParam->mChaseMoreBrakeCounterMin, mChaseParam->mChaseMoreBrakeCounterMax);
 }
 
-void DodoryuStateLv2::turnToward(const TVec3f& rDir, f32 rate) {
-    TVec3f yDir;
+void DodoryuStateLv2::turnToward(const Vec3f& rDir, f32 rate) {
+    Vec3f yDir;
     mHost->mBaseMtx.getYDir(yDir);
-    TVec3f zDir;
+    Vec3f zDir;
     mHost->mBaseMtx.getZDir(zDir);
-    TVec3f trans;
+    Vec3f trans;
     mHost->mBaseMtx.getTrans(trans);
-    TPos3f mtx;
+    Pos3f mtx;
     calcLimitedRotateMtx(&mtx, zDir, rDir, rate);
     mtx.concat(mHost->mBaseMtx);
     mtx.setTrans(trans);
@@ -926,8 +926,8 @@ void DodoryuStateLv2::turnToward(const TVec3f& rDir, f32 rate) {
 }
 
 void DodoryuStateLv2::addVelocity(bool snapToGround) {
-    TPos3f mtx(mHost->mBaseMtx);
-    TVec3f trans;
+    Pos3f mtx(mHost->mBaseMtx);
+    Vec3f trans;
     mtx.getTrans(trans);
     trans.add(mHost->mVelocity);
     mtx.setTrans(trans);
@@ -938,7 +938,7 @@ void DodoryuStateLv2::addVelocity(bool snapToGround) {
     }
 }
 
-void DodoryuStateLv2::calcLimitedRotateMtx(TPos3f* pMtx, const TVec3f& rFrom, const TVec3f& rTo, f32 rate) {
+void DodoryuStateLv2::calcLimitedRotateMtx(Pos3f* pMtx, const Vec3f& rFrom, const Vec3f& rTo, f32 rate) {
     f32 maxAngle = rate * MR::pi() / 180.0f;
     f32 absAngle = rFrom.angle(rTo);
     f32 ratio = 1.0f;
@@ -947,7 +947,7 @@ void DodoryuStateLv2::calcLimitedRotateMtx(TPos3f* pMtx, const TVec3f& rFrom, co
         ratio = maxAngle / absAngle;
     }
 
-    TQuat4f quat;
+    Quat4f quat;
     quat.setRotate(rFrom, rTo, ratio);
     pMtx->makeQuat(quat);
 }

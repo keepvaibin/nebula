@@ -4,7 +4,7 @@
 #include "Game/Util.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
-#include "JSystem/JGeometry/TVec.hpp"
+#include <nebula_geometry.hpp>
 #include "Game/System/NebulaInput.hpp"
 
 namespace NrvJumpStand {
@@ -25,7 +25,7 @@ void JumpStand::init(const JMapInfoIter& rIter) {
     MR::initLightCtrl(this);
     initHitSensor(2);
     MR::addBodyMessageSensorMapObj(this);
-    TVec3f binderOffs;
+    Vec3f binderOffs;
     binderOffs.set(0.0f, 100.0f, 0.0f);
     MR::addHitSensorPriorBinder(this, "binder", 4, 200.0f, binderOffs);
     MR::invalidateHitSensor(this, "binder");
@@ -96,7 +96,7 @@ void JumpStand::exeHipDropBound() {
 
     if (MR::isLessStep(this, 15) && mBindedActor != nullptr) {
         f32 v2 = (6.0f - MR::calcNerveEaseOutRate(this, 15));
-        TVec3f v3;
+        Vec3f v3;
         MR::calcUpVec(&v3, this);
         mBindedActor->mPosition.scaleAdd(-v2, v3, mBindedActor->mPosition);
     }
@@ -129,7 +129,7 @@ void JumpStand::exeStarPieceBound() {
 }
 
 void JumpStand::control() {
-    TVec3f pos;
+    Vec3f pos;
     MR::copyJointPos(this, "JumpStandJoint03", &pos);
     _90.setTrans(pos);
 }
@@ -208,9 +208,9 @@ bool JumpStand::tryToStartBind(HitSensor* pSensor) {
 }
 
 void JumpStand::updateBindActorMtx() {
-    TPos3f v6;
+    Pos3f v6;
     v6.identity();
-    TVec3f v5;
+    Vec3f v5;
     MR::calcPlayerWorldPadDir(&v5, MR::getMoveStickX(0), MR::getMoveStickY(0));
     MR::calcMtxFromGravityAndZAxis(&v6, mBindedActor, mGravity, v5);
     MR::blendMtxRotate(mBindedActor->getBaseMtx(), v6, 0.40f, v6);
@@ -219,7 +219,7 @@ void JumpStand::updateBindActorMtx() {
 }
 
 void JumpStand::endBindAndShootUp(f32 v1, JumpType type) {
-    TVec3f v28;
+    Vec3f v28;
 
     if (MR::isPlayerInRush()) {
         if (type == Jump_High) {
@@ -231,12 +231,12 @@ void JumpStand::endBindAndShootUp(f32 v1, JumpType type) {
         v28 *= v1;
         f32 stickLen = MR::sqrt(MR::getMoveStickX(PLAYER_1) * MR::getMoveStickX(PLAYER_1) +
                                 MR::getMoveStickY(PLAYER_1) * MR::getMoveStickY(PLAYER_1));
-        TVec3f v27;
+        Vec3f v27;
         if (stickLen > 0.1f) {
             MR::normalize(v28, &v27);
-            TVec3f v26;
+            Vec3f v26;
             MR::calcPlayerWorldPadDir(&v26, MR::getMoveStickX(PLAYER_1), MR::getMoveStickY(PLAYER_1));
-            TVec3f v25;
+            Vec3f v25;
             v25.scale(3.0f * stickLen, v26);
             v25.orthogonalize(v27);
             v28.add(v25);

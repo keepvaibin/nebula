@@ -21,17 +21,17 @@ void CameraCharmedVecReg::reset() {
 }
 
 CameraTargetObj* CameraCharmedVecReg::calc() {
-    TVec3f watchPoint;
+    Vec3f watchPoint;
     CameraLocalUtil::makeWatchPoint(&watchPoint, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
 
-    TVec3f watchOffs = watchPoint - CameraLocalUtil::getTarget(this)->getPosition();
+    Vec3f watchOffs = watchPoint - CameraLocalUtil::getTarget(this)->getPosition();
 
-    const TVec3f& vecReg = CameraLocalUtil::getVecReg(mName);
+    const Vec3f& vecReg = CameraLocalUtil::getVecReg(mName);
 
-    TVec3f basePos = CameraLocalUtil::getTarget(this)->getPosition() * (1.0f - mCamDistRatio) + vecReg * mCamDistRatio;
+    Vec3f basePos = CameraLocalUtil::getTarget(this)->getPosition() * (1.0f - mCamDistRatio) + vecReg * mCamDistRatio;
 
-    TVec3f up = -CameraLocalUtil::getTarget(this)->getGravityVector();
-    TVec3f front = CameraLocalUtil::getTarget(this)->getPosition() - vecReg;
+    Vec3f up = -CameraLocalUtil::getTarget(this)->getGravityVector();
+    Vec3f front = CameraLocalUtil::getTarget(this)->getPosition() - vecReg;
     MR::projectVecOnPlane(&front, front, up);
 
     if (MR::isNearZero(front)) {
@@ -39,24 +39,24 @@ CameraTargetObj* CameraCharmedVecReg::calc() {
     }
     MR::normalize(&front);
 
-    TVec3f side = up.cross(front);
+    Vec3f side = up.cross(front);
     if (MR::isNearZero(side)) {
         return nullptr;
     }
     MR::normalize(&side);
 
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.identity();
     mtx.setXYZDir(side, up, front);
 
-    TVec3f camDir = CameraLocalUtil::getPos(this) - CameraLocalUtil::getTarget(this)->getPosition();
+    Vec3f camDir = CameraLocalUtil::getPos(this) - CameraLocalUtil::getTarget(this)->getPosition();
     MR::projectVecOnPlane(&camDir, camDir, up);
     if (MR::isNearZero(camDir)) {
         return nullptr;
     }
     MR::normalize(&camDir);
 
-    TVec3f camUp = front.cross(camDir);
+    Vec3f camUp = front.cross(camDir);
     f32 angleDiff = camDir.angle(front);
     f32 angle = angleDiff;
     if (angle < mAngleYMin) {
@@ -71,16 +71,16 @@ CameraTargetObj* CameraCharmedVecReg::calc() {
     }
     angle = angleDiff * (1.0f - mCamAngleRate) + angle * mCamAngleRate;
 
-    TPos3f rotX;
-    rotX.makeRotate(TVec3f(1.0f, 0.0f, 0.0f), -mAngleX);
+    Pos3f rotX;
+    rotX.makeRotate(Vec3f(1.0f, 0.0f, 0.0f), -mAngleX);
 
-    TPos3f rotY;
-    rotY.makeRotate(TVec3f(0.0f, 1.0f, 0.0f), angle);
+    Pos3f rotY;
+    rotY.makeRotate(Vec3f(0.0f, 1.0f, 0.0f), angle);
 
     mtx.concat(rotY);
     mtx.concat(rotX);
 
-    TVec3f posOffs(0.0f, 0.0f, mDist);
+    Vec3f posOffs(0.0f, 0.0f, mDist);
     mtx.mult33(posOffs);
 
     CameraLocalUtil::setWatchPos(this, basePos + watchOffs);

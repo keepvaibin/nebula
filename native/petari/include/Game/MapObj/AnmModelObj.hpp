@@ -40,7 +40,7 @@ public:
     void exeMove();
     void exeDone();
 
-    TVec3f mJointPos;
+    Vec3f mJointPos;
 };
 
 class AnmModelSwitchMove : public AnmModelObj {

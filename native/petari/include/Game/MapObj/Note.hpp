@@ -9,7 +9,7 @@ class NoteFairy;
 /// @brief Class that represents a single note in a NoteFairy actor.
 class Note : public LiveActor {
 public:
-    Note(const char*, const TVec3f&, NoteFairy*);
+    Note(const char*, const Vec3f&, NoteFairy*);
 
     virtual void init(const JMapInfoIter&);
     virtual void control();
@@ -31,8 +31,8 @@ public:
     void exeFlyUp();
 
     NoteFairy* mParentFairy;  ///< The parent NoteFairy that this note was spawned from.
-    TVec3f _90;
-    TVec3f mRailDirection;
+    Vec3f _90;
+    Vec3f mRailDirection;
     int mCounter;  ///< The amount of steps it takes for the note to disappear.
     f32 _AC;
     bool mIsCountdown;

@@ -126,7 +126,7 @@ bool MapPartsRailRotator::isReachedTargetAngle() const {
     return mTargetAngle <= MR::abs(mAngle);
 }
 
-void MapPartsRailRotator::calcRotateAxisDir(AxisType axis, TVec3f* pDir) const {
+void MapPartsRailRotator::calcRotateAxisDir(AxisType axis, Vec3f* pDir) const {
     switch (axis) {
     case AxisType_X:
         _2C.getXDir(*pDir);
@@ -141,7 +141,7 @@ void MapPartsRailRotator::calcRotateAxisDir(AxisType axis, TVec3f* pDir) const {
 }
 
 void MapPartsRailRotator::updateRotateMtx(AxisType axis, f32 angle) {
-    TVec3f direction;
+    Vec3f direction;
     calcRotateAxisDir(axis, &direction);
     _5C.identity();
     _5C.makeRotate(direction, PI_180 * angle);

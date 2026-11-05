@@ -19,10 +19,10 @@
 #include "Game/Util/SoundUtil.hpp"
 
 namespace {
-    inline TVec3f calcAnkleShadowPosition(const TVec3f& rPosition, const TVec3f& rNormal) {
-        TVec3f offset(rNormal);
+    inline Vec3f calcAnkleShadowPosition(const Vec3f& rPosition, const Vec3f& rNormal) {
+        Vec3f offset(rNormal);
         offset *= 630.0f;
-        TVec3f position(rPosition);
+        Vec3f position(rPosition);
         position -= offset;
         return position;
     }
@@ -107,7 +107,7 @@ void TripodBossLeg::init(const JMapInfoIter& rIter) {
     initNerve(GET_NERVE(TripodBossLeg, TripodBossLegNrvHold));
     MR::invalidateClipping(this);
     initHitSensor(1);
-    MR::addHitSensorMtxMapObj(this, "body", 16, 1000.0f, mEndJointMtx, TVec3f(500.0f, 200.0f, 0.0f));
+    MR::addHitSensorMtxMapObj(this, "body", 16, 1000.0f, mEndJointMtx, Vec3f(500.0f, 200.0f, 0.0f));
     initSound(6, false);
     _25C = new AudAnmSoundObject(&_21C, 6, MR::getCurrentHeap());
     _260 = new AudAnmSoundObject(&mForceEndPoint, 6, MR::getCurrentHeap());
@@ -157,19 +157,19 @@ void TripodBossLeg::setMovableArea(TripodBossMovableArea* pArea) {
     mMoveArea = pArea;
 }
 
-void TripodBossLeg::setIKParam(f32 rootLength, f32 middleLength, const TVec3f& rA3, const TVec3f& rA4, const TVec3f& rA5) {
+void TripodBossLeg::setIKParam(f32 rootLength, f32 middleLength, const Vec3f& rA3, const Vec3f& rA4, const Vec3f& rA5) {
     mJoint->setRootBoneLength(rootLength);
     mJoint->setMiddleBoneLength(middleLength);
     mJoint->setFirstPose(rA4, rA5);
     _210 = rA3;
-    TVec3f v12(_210);
+    Vec3f v12(_210);
     v12.y = 0.0f;
     _A0.identity();
 
     if (!MR::isNearZero(v12)) {
         MR::normalize(&v12);
         _A0.setXDir(v12);
-        _A0.setZDir(TVec3f(-v12.z, 0.0f, v12.x));
+        _A0.setZDir(Vec3f(-v12.z, 0.0f, v12.x));
     }
 
     _A0.setTrans(_210);
@@ -186,7 +186,7 @@ void TripodBossLeg::setWait() {
     setNerve(GET_NERVE(TripodBossLeg, TripodBossLegNrvHold));
 }
 
-void TripodBossLeg::setForceEndPoint(const TVec3f& rPoint) {
+void TripodBossLeg::setForceEndPoint(const Vec3f& rPoint) {
     mForceEndPoint.set(rPoint);
 }
 
@@ -202,31 +202,31 @@ void TripodBossLeg::setDemoEffectTiming(bool timg) {
     }
 }
 
-const TPos3f& TripodBossLeg::getRootJointMatrix() const {
+const Pos3f& TripodBossLeg::getRootJointMatrix() const {
     return mJoint->_30;
 }
 
-const TPos3f& TripodBossLeg::getMiddleJointMatrix() const {
+const Pos3f& TripodBossLeg::getMiddleJointMatrix() const {
     return mJoint->_60;
 }
 
-const TPos3f& TripodBossLeg::getEndJointMatrix() const {
+const Pos3f& TripodBossLeg::getEndJointMatrix() const {
     return mEndJointMtx;
 }
 
-const TPos3f& TripodBossLeg::getRootLocalYMatrix() const {
+const Pos3f& TripodBossLeg::getRootLocalYMatrix() const {
     return mRootLocalYMtx;
 }
 
-const TPos3f& TripodBossLeg::getRootLocalYZMatrix() const {
+const Pos3f& TripodBossLeg::getRootLocalYZMatrix() const {
     return mRootLocalYZMtx;
 }
 
-const TPos3f& TripodBossLeg::getAnkleLocalXMatrix() const {
+const Pos3f& TripodBossLeg::getAnkleLocalXMatrix() const {
     return mAnkleLocalXMtx;
 }
 
-const TPos3f& TripodBossLeg::getAnkleLocalXZMatrix() const {
+const Pos3f& TripodBossLeg::getAnkleLocalXZMatrix() const {
     return mAnkleLocalXZMtx;
 }
 
@@ -320,7 +320,7 @@ void TripodBossLeg::exeDemo() {
 void TripodBossLeg::exeUp() {
     if (MR::isFirstStep(this)) {
         MR::startSoundObject(_260, "SE_BM_TRIPOD_LEG_UP");
-        TPos3f v5;
+        Pos3f v5;
         v5.identity();
         MR::makeMtxSideUp(&v5, -_94->mStepNormal, _94->mStepFront);
         v5.getQuat(_1F0);
@@ -338,7 +338,7 @@ void TripodBossLeg::exeUp() {
 void TripodBossLeg::exeLeaveOut() {
     if (MR::isFirstStep(this)) {
         MR::startSoundObject(_260, "SE_BM_TRIPOD_LEG_UP");
-        TPos3f v9;
+        Pos3f v9;
         v9.identity();
         MR::makeMtxSideUp(&v9, -_98->mStepNormal, _98->mStepFront);
         v9.getQuat(_1F0);
@@ -376,7 +376,7 @@ void TripodBossLeg::exeMove() {
 
 void TripodBossLeg::exeMoveToLandingPos() {
     if (MR::isFirstStep(this)) {
-        TVec3f v14 = _98->mStepPosition + _98->mStepNormal * 1000.0f;
+        Vec3f v14 = _98->mStepPosition + _98->mStepNormal * 1000.0f;
         _240 = v14;
     }
 
@@ -409,7 +409,7 @@ void TripodBossLeg::exeStampSign() {
     _234.z *= 0.9f;
 
     if (MR::isGreaterStep(this, ::sStampSignVibrationTime)) {
-        TVec3f v8(_98->mStepNormal);
+        Vec3f v8(_98->mStepNormal);
         mForceEndPoint += v8 * (MR::sin(getNerveStep() * TWO_PI / ::sStampSignVibrationCycle) * getStampVibrationAmplitude());
     }
 
@@ -428,16 +428,16 @@ void TripodBossLeg::exeLanding() {
         MR::startSoundObject(_260, "SE_BM_TRIPOD_FALL");
         _234.zero();
         mEndJointMtx.getQuat(_1F0);
-        TPos3f v18;
+        Pos3f v18;
         v18.identity();
         TripodBossStepPoint* point = _98;
         MR::makeMtxSideUp(&v18, -point->mStepNormal, point->mStepFront);
         v18.getQuat(_200);
-        TVec3f offset(mForceEndPoint - _98->mStepPosition);
+        Vec3f offset(mForceEndPoint - _98->mStepPosition);
         _250 = offset.dot(_98->mStepNormal);
     }
 
-    TVec3f v15(_240 - mForceEndPoint);
+    Vec3f v15(_240 - mForceEndPoint);
     MR::normalizeOrZero(&v15);
     _234 += v15.multInLine(1.0f);
     addIKLimitPower();
@@ -446,9 +446,9 @@ void TripodBossLeg::exeLanding() {
     _234.y *= 0.98f;
     _234.z *= 0.98f;
     updateIKPose();
-    TVec3f v12;
+    Vec3f v12;
     mEndJointMtx.getTrans(v12);
-    TVec3f endJointPos;
+    Vec3f endJointPos;
     mJoint->getEndJointPosition(&endJointPos);
     HitResult hitResult;
 
@@ -488,7 +488,7 @@ void TripodBossLeg::exeDamageVibration() {
         _240 = mForceEndPoint;
     }
 
-    TVec3f v5(_98->mStepNormal);
+    Vec3f v5(_98->mStepNormal);
     mForceEndPoint = _240 + v5 * (MR::sin(getNerveStep() * TWO_PI * getDamageVibrationCycle()) * getDamageVibrationAmplitude());
     updateIKPose();
 
@@ -519,8 +519,8 @@ void TripodBossLeg::exeHold() {
     updateIKPose();
 }
 
-void TripodBossLeg::addToTargetPower(const TVec3f& rA1, f32 a2) {
-    TVec3f v11(rA1 - mForceEndPoint);
+void TripodBossLeg::addToTargetPower(const Vec3f& rA1, f32 a2) {
+    Vec3f v11(rA1 - mForceEndPoint);
     f32 v7;
     MR::separateScalarAndDirection(&v7, &v11, v11);
     _234 += v11 * (a2 * MR::clamp(v7 / 300.0f, -1.0f, 1.0f));
@@ -531,9 +531,9 @@ void TripodBossLeg::addToTargetPower(const TVec3f& rA1, f32 a2) {
 }
 
 void TripodBossLeg::addIKLimitPower() {
-    TVec3f rootJoint;
+    Vec3f rootJoint;
     mJoint->getRootJointPosition(&rootJoint);
-    TVec3f v12(rootJoint - mForceEndPoint);
+    Vec3f v12(rootJoint - mForceEndPoint);
     f32 v8;
     MR::separateScalarAndDirection(&v8, &v12, v12);
     f32 maxDist = mJoint->getMaxLimitDistance();
@@ -559,7 +559,7 @@ void TripodBossLeg::addIKLimitPower() {
 }
 
 void TripodBossLeg::addAccelUpLeg(TripodBossStepPoint* pPoint, f32 a3) {
-    TVec3f v8(pPoint->mStepNormal);
+    Vec3f v8(pPoint->mStepNormal);
     _234 += v8 * a3;
     addIKLimitPower();
     mForceEndPoint += _234;
@@ -584,14 +584,14 @@ void TripodBossLeg::updatePose() {
 }
 
 void TripodBossLeg::updateIKPose() {
-    TPos3f bodyMtx;
+    Pos3f bodyMtx;
     mBoss->getBodyMatrix(&bodyMtx);
 
     switch (_24C) {
     case 0: {
-        TVec3f v4;
+        Vec3f v4;
         bodyMtx.mult(_210, v4);
-        TVec3f legUp;
+        Vec3f legUp;
         mBoss->calcLegUpVector(&legUp, mForceEndPoint);
         mJoint->updateByUpVector(v4, mForceEndPoint, legUp);
         break;
@@ -606,9 +606,9 @@ void TripodBossLeg::updateIKPose() {
 }
 
 bool TripodBossLeg::bindEndPosition() {
-    TVec3f v6;
+    Vec3f v6;
     mEndJointMtx.getTrans(v6);
-    TVec3f endJointPos;
+    Vec3f endJointPos;
     mJoint->getEndJointPosition(&endJointPos);
     HitResult hitResult;
     if (mMoveArea->collideSphere(&hitResult, v6, 0.0f, endJointPos - v6)) {
@@ -623,13 +623,13 @@ bool TripodBossLeg::bindEndPosition() {
     return false;
 }
 
-void TripodBossLeg::separateLocalAxisRootJoint(const TPos3f& rPos) {
-    TPos3f v5;
+void TripodBossLeg::separateLocalAxisRootJoint(const Pos3f& rPos) {
+    Pos3f v5;
     v5.set(rPos);
     v5.setTrans(0.0f, 0.0f, 0.0f);
     v5.concat(rPos, _A0);
     MR::separateMatrixRotateYZX(&mRootLocalYMtx, &mRootLocalYZMtx, v5, mJoint->_30);
-    TVec3f jointRootPos;
+    Vec3f jointRootPos;
     mJoint->getRootJointPosition(&jointRootPos);
     mRootLocalYMtx.setTrans(jointRootPos);
     mRootLocalYZMtx.setTrans(jointRootPos);
@@ -642,10 +642,10 @@ void TripodBossLeg::separateAnkleJointLocalAxis() {
 }
 
 void TripodBossLeg::updateAnkleUp(f32 angle) {
-    TPos3f v9;
-    TQuat4f quat;
-    TVec3f landingNormal;
-    TVec3f landingFront;
+    Pos3f v9;
+    Quat4f quat;
+    Vec3f landingNormal;
+    Vec3f landingFront;
 
     mMoveArea->calcLandingNormal(&landingNormal, mForceEndPoint);
     mMoveArea->calcLandingFront(&landingFront, mForceEndPoint);
@@ -661,14 +661,14 @@ void TripodBossLeg::updateAnkleUp(f32 angle) {
 }
 
 void TripodBossLeg::updateAnkleSlerpToBasePose() {
-    TQuat4f quat;
-    TQuat4f v5;
-    TVec3f landingNormal;
-    TVec3f landingFront;
+    Quat4f quat;
+    Quat4f v5;
+    Vec3f landingNormal;
+    Vec3f landingFront;
     mEndJointMtx.getQuat(quat);
     mMoveArea->calcLandingNormal(&landingNormal, mForceEndPoint);
     mMoveArea->calcLandingFront(&landingFront, mForceEndPoint);
-    TPos3f v7;
+    Pos3f v7;
     v7.identity();
     MR::makeMtxSideUp(&v7, -landingNormal, landingFront);
     v7.getQuat(v5);
@@ -678,19 +678,19 @@ void TripodBossLeg::updateAnkleSlerpToBasePose() {
 }
 
 void TripodBossLeg::updateAnkleLanding() {
-    TVec3f v6(mForceEndPoint - _98->mStepPosition);
+    Vec3f v6(mForceEndPoint - _98->mStepPosition);
     f32 v3 = v6.dot(_98->mStepNormal);
     f32 v4 = MR::normalize((v3 / _250), 0.15f, 1.0f);
-    TQuat4f quat;
+    Quat4f quat;
     quat.slerp(_1F0, _200, ((1.0f - v4) * ((1.0f - v4) * (1.0f - v4))));
     quat.normalize();
     mEndJointMtx.makeQuat(quat);
 }
 
 void TripodBossLeg::updateAnkleShadowMatrix() {
-    TVec3f landingPosition;
-    TVec3f landingNormal;
-    TVec3f v7, v8, v9;
+    Vec3f landingPosition;
+    Vec3f landingNormal;
+    Vec3f v7, v8, v9;
 
     mMoveArea->calcNearLandingPosition(&landingPosition, mForceEndPoint);
     mMoveArea->calcLandingNormal(&landingNormal, landingPosition);
@@ -703,11 +703,11 @@ void TripodBossLeg::updateAnkleShadowMatrix() {
 }
 
 namespace MR {
-    void separateMatrixRotateYZX(TPos3f* pA1, TPos3f* pA2, const TPos3f& rA3, const TPos3f& rA4) {
-        TPos3f v17;
+    void separateMatrixRotateYZX(Pos3f* pA1, Pos3f* pA2, const Pos3f& rA3, const Pos3f& rA4) {
+        Pos3f v17;
         v17.invert(rA3);
         v17.concat(v17, rA4);
-        TVec3f v16;
+        Vec3f v16;
         v17.getXDir(v16);
         f32 v10 = MR::sqrt((v16.x * v16.x) + (v16.z * v16.z));
 

@@ -17,5 +17,5 @@ public:
 
     const char* _8C;
     MapPartsFloatingForce* _90;
-    TVec3f _94;
+    Vec3f _94;
 };

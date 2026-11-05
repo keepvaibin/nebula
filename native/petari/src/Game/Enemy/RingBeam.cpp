@@ -18,7 +18,7 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <JSystem/JGeometry/TUtil.hpp>
+#include <nebula_geometry.hpp>
 
 namespace NrvRingBeam {
     NEW_NERVE(RingBeamNrvSpread, RingBeam, Spread);
@@ -30,21 +30,21 @@ RingBeamShadowDrawer::RingBeamShadowDrawer(const LiveActor* unk0) : ShadowVolume
 }
 
 void RingBeamShadowDrawer::drawShape() const {
-    TPos3f MtxList[32];
-    TPos3f baseMtxCopy;
+    Pos3f MtxList[32];
+    Pos3f baseMtxCopy;
     Mtx mtx;
-    TVec3f temp;
-    TVec3f temp2;
-    TVec3f temp3;
-    TVec3f listXDirScaledPos;
-    TVec3f XDirScaled;
-    TVec3f listXDirScaledNeg;
-    TVec3f negYDirScaled;
-    TVec3f XDir;
-    TVec3f YDir;
-    TVec3f Trans;
-    TVec3f listXDir;
-    TVec3f listYDir;
+    Vec3f temp;
+    Vec3f temp2;
+    Vec3f temp3;
+    Vec3f listXDirScaledPos;
+    Vec3f XDirScaled;
+    Vec3f listXDirScaledNeg;
+    Vec3f negYDirScaled;
+    Vec3f XDir;
+    Vec3f YDir;
+    Vec3f Trans;
+    Vec3f listXDir;
+    Vec3f listYDir;
     f32 f1 = 0.2026834f;
 
     baseMtxCopy.setInline(_1c->getBaseMtx());
@@ -162,12 +162,12 @@ void RingBeam::setLife(s32 life) {
 }
 
 void RingBeam::init(const JMapInfoIter& rIter) {
-    TPos3f mtx;
+    Pos3f mtx;
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("JumpBeamerBeam", nullptr, false);
     MR::connectToSceneIndirectEnemy(this);
     initHitSensor(1);
-    MR::addHitSensorEye(this, "Beam", 8, 0.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEye(this, "Beam", 8, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
     initEffectKeeper(1, nullptr, false);
     initSound(2, true);
     mSoundObject->setTrans(&_cc);
@@ -215,9 +215,9 @@ void RingBeam::startBrk(const char* pchar) {
 }
 
 void RingBeam::setRadius(f32 radius) {
-    TVec3f Ydir;
-    TVec3f temp2;
-    TVec3f temp6;
+    Vec3f Ydir;
+    Vec3f temp2;
+    Vec3f temp6;
 
     if (radius >= 2000.0f) {
         radius = 2000.0f;
@@ -251,18 +251,18 @@ void RingBeam::setRadius(f32 radius) {
 }
 
 void RingBeam::initPos(const LiveActor* actor) {
-    TRot3f actorBaseMtxCopy;
-    TVec3f baseMtxYdir;
+    Rot3f actorBaseMtxCopy;
+    Vec3f baseMtxYdir;
     actorBaseMtxCopy.setInline(actor->getBaseMtx());
     actorBaseMtxCopy.getYDir(baseMtxYdir);
     mPosition.set(actor->mPosition + baseMtxYdir * 75.0f);
 }
 
 void RingBeam::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
-    TRot3f mtx;
-    TVec3f temp;
-    TVec3f temp2;
-    TVec3f sensordiff = pReceiver->mPosition;
+    Rot3f mtx;
+    Vec3f temp;
+    Vec3f temp2;
+    Vec3f sensordiff = pReceiver->mPosition;
     sensordiff -= pSender->mPosition;
     MR::makeMtxTR((MtxPtr)&mtx, this);
     // this is 100% certainly an inline
@@ -273,7 +273,7 @@ void RingBeam::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     MR::vecKillElement(sensordiff, temp, &temp2);
     temp2.setLength(pSender->mRadius);
 
-    TVec3f temp3 = temp2;
+    Vec3f temp3 = temp2;
     temp3 -= sensordiff;
     f32 length = temp3.length();
     f32 receiverRadius = pReceiver->mRadius;
@@ -288,7 +288,7 @@ bool RingBeam::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pR
 }
 
 void RingBeam::exeSpread() {
-    TPos3f mtx;
+    Pos3f mtx;
 
     if (MR::isFirstStep(this)) {
         if (!MR::isPowerStarGetDemoActive()) {
@@ -302,19 +302,19 @@ void RingBeam::exeSpread() {
         if (_a4) {
             MR::setBrkFrameAndStop(_a4, 0.0f);
         }
-        TVec3f temp;
+        Vec3f temp;
         MR::extractMtxZDir(_8c->getBaseMtx(), &_a8);
         MR::extractMtxYDir(_8c->getBaseMtx(), &temp);
         _c0.set(_8c->mPosition + temp * 75.0f);
         MR::calcGravityVector(this, _c0, &_b4, nullptr, 0);
     }
 
-    TVec3f ec;
+    Vec3f ec;
     if (_9c) {
         MR::calcGravityVector(this, _c0 + _a8 * mSpeed, &_b4, nullptr, 0);
         MR::makeMtxUpFront(&mtx, -_b4, _a8);
         mtx.getZDir(_a8);
-        TVec3f temp7;
+        Vec3f temp7;
         MR::extractMtxYDir(_8c->getBaseMtx(), &temp7);
         MR::calcPerpendicFootToLine(&ec, _c0, _8c->mPosition + temp7, _8c->mPosition - temp7);
         mPosition = ec.copy();
@@ -326,13 +326,13 @@ void RingBeam::exeSpread() {
     setRadius((_c0 - ec).length());
 
     if (!MR::isPowerStarGetDemoActive()) {
-        TVec3f temp12 = MR::getCamPos() - ec;
+        Vec3f temp12 = MR::getCamPos() - ec;
         if (!MR::isNearZero(temp12)) {
             f32 radius;
             f32 float2;
-            TVec3f temp13;
+            Vec3f temp13;
             MR::extractMtxYDir(_8c->getBaseMtx(), &temp13);
-            TVec3f temp15 = temp12 - temp13 * (temp12.dot(temp13));
+            Vec3f temp15 = temp12 - temp13 * (temp12.dot(temp13));
             MR::normalizeOrZero(&temp15);
             MR::normalizeOrZero(&temp12);
             float2 = 1.0f - MR::abs(temp13.dot(temp12));

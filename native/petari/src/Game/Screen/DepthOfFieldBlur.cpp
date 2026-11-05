@@ -110,7 +110,7 @@ void DepthOfFieldBlur::drawZAlphaTex() const {
     J3DNativeView::setOrthographic(projectionMtx);
     MR::loadViewMtxFor2DModel();
 
-    TMtx34f posMtx;
+    Mtx34f posMtx;
     posMtx.identity();
     J3DNativeShape::setPosition(0, posMtx.toMtxPtr());
     J3DPass::positionMatrix(0);

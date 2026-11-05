@@ -6,7 +6,7 @@
 #include "Game/Util/MessageUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 namespace {
     const s32 cAppearReadyFrame = 40;
@@ -58,8 +58,8 @@ void GalaxyNamePlate::show(const char16_t* pName, bool a2) {
     show(pName, 2, a2, true);
 }
 
-void GalaxyNamePlate::setPos3D(const TVec3f& a1) {
-    TVec3f vec;
+void GalaxyNamePlate::setPos3D(const Vec3f& a1) {
+    Vec3f vec;
     MR::calcScreenPosition(&vec, a1);
     setTrans(vec);
     mDrawerEntry->mZ = -vec.z * MR::getFarZ();

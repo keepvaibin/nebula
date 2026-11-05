@@ -1,28 +1,28 @@
 #pragma once
 
-#include <JSystem/JGeometry.hpp>
+#include <nebula_geometry.hpp>
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 
 class Swinger {
 public:
-    Swinger(const TVec3f*, MtxPtr, f32, f32, f32, const TVec3f*);
+    Swinger(const Vec3f*, MtxPtr, f32, f32, f32, const Vec3f*);
 
     void update();
-    void accel(const TVec3f&);
-    void updateSwingMtx(const TVec3f&);
+    void accel(const Vec3f&);
+    void updateSwingMtx(const Vec3f&);
 
-    const TVec3f* _0;
-    TPos3f* _4;
-    TVec3f _8;
-    TVec3f mAcceleration;
-    TVec3f _20;
+    const Vec3f* _0;
+    Pos3f* _4;
+    Vec3f _8;
+    Vec3f mAcceleration;
+    Vec3f _20;
     f32 _2C;
     f32 _30;
     f32 _34;
-    const TVec3f* _38;
-    TVec3f _3C;
-    TVec3f _48;
-    TVec3f _54;
-    TPos3f _60;
+    const Vec3f* _38;
+    Vec3f _3C;
+    Vec3f _48;
+    Vec3f _54;
+    Pos3f _60;
 };

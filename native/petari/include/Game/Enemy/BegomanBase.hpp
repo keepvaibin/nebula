@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class AnimScaleController;
 class BegomanBaby;
@@ -31,11 +31,11 @@ public:
     virtual void control();
     virtual void calcAndSetBaseMtx();
     virtual u32 getKind() const = 0;
-    virtual bool onTouchElectric(const TVec3f&, const TVec3f&);
+    virtual bool onTouchElectric(const Vec3f&, const Vec3f&);
     virtual bool setNerveReturn() = 0;
     virtual void setNerveLaunch();
     virtual const Nerve* getNerveWait() = 0;
-    virtual void addVelocityOnPushedFromElectricRail(const TVec3f&, const TVec3f&);
+    virtual void addVelocityOnPushedFromElectricRail(const Vec3f&, const Vec3f&);
     virtual bool requestAttack();
     const BegomanSound* getSoundNormal();
     const BegomanSound* getSoundBoss();
@@ -50,8 +50,8 @@ public:
     void initSensor(s32, f32, f32, const char*);
     void initUseSwitchB(const JMapInfoIter&, const MR::FunctorBase&);
 
-    bool calcJointLocator1(TPos3f*, const JointControllerInfo&);
-    void calcAnimCore(TPos3f*);
+    bool calcJointLocator1(Pos3f*, const JointControllerInfo&);
+    void calcAnimCore(Pos3f*);
 
     void exeNoCalcWaitCore(f32, const Nerve*);
     void finishNoCalcWait();
@@ -70,48 +70,48 @@ public:
     void exeBindStarPointer();
     void finishBindStarPointer();
 
-    static void launchBegomanCore(LiveActor*, BegomanBase**, s32, f32, f32, f32, const TVec3f*);
-    static void launchBegoman(LiveActor*, BegomanBase**, s32, f32, f32, f32, const TVec3f*);
-    static void launchBegomanBabyFromGuarder(LiveActor*, BegomanBaby**, s32, f32, f32, f32, const TVec3f*);
-    static void launchBegomanBabyLauncher(LiveActor*, BegomanBaby**, s32, f32, f32, f32, const TVec3f*);
+    static void launchBegomanCore(LiveActor*, BegomanBase**, s32, f32, f32, f32, const Vec3f*);
+    static void launchBegoman(LiveActor*, BegomanBase**, s32, f32, f32, f32, const Vec3f*);
+    static void launchBegomanBabyFromGuarder(LiveActor*, BegomanBaby**, s32, f32, f32, f32, const Vec3f*);
+    static void launchBegomanBabyLauncher(LiveActor*, BegomanBaby**, s32, f32, f32, f32, const Vec3f*);
 
     void updateTargetVec();
     void updateRotateY(f32 speed, f32 tolerance = 0.005f);
     void addVelocityEscapeToSide(f32);
-    void calcDirectionAwayFromRail(TVec3f*, const TVec3f&, const TVec3f&);
-    void pushedFromElectricRail(HitSensor*, const TVec3f&, const TVec3f&, f32, f32, bool);
+    void calcDirectionAwayFromRail(Vec3f*, const Vec3f&, const Vec3f&);
+    void pushedFromElectricRail(HitSensor*, const Vec3f&, const Vec3f&, f32, f32, bool);
     bool checkTouchElectricRail(bool);
 
-    bool reboundPlaneWithEffect(const TVec3f&, f32, f32, const char*);
-    void reboundWallAndGround(TVec3f*, bool);
+    bool reboundPlaneWithEffect(const Vec3f&, f32, f32, const char*);
+    void reboundWallAndGround(Vec3f*, bool);
 
     void preventSwingby(f32);
     void preventSlopeBlow(f32);
     void dampingVerticalAndParallelVelocity(f32, f32);
-    void calcBlowReaction(const TVec3f&, const TVec3f&, f32, f32);
+    void calcBlowReaction(const Vec3f&, const Vec3f&, f32, f32);
 
     bool isNearInitPos() const;
     bool isFallNextMove(f32, f32);
     bool trySetReturnNerve();
     bool tryAndSetStarPointerBind(const Nerve*);
     bool incAndCheckTiredCounter();
-    bool isInWaterAndSetWaterNerve(const Nerve*, TPos3f*);
+    bool isInWaterAndSetWaterNerve(const Nerve*, Pos3f*);
 
     JointControlDelegator< BegomanBase >* mBaseDelegator;
 
-    TVec3f mFaceVec;
-    TVec3f mTargetVec;
+    Vec3f mFaceVec;
+    Vec3f mTargetVec;
 
-    TVec3f _A8;
-    TVec3f _B4;
+    Vec3f _A8;
+    Vec3f _B4;
 
-    TQuat4f _C0;
-    TQuat4f _D0;
+    Quat4f _C0;
+    Quat4f _D0;
 
     s32 mTiredCounter;
     s32 mElectricCounter;
 
-    TVec3f mInitPos;
+    Vec3f mInitPos;
 
     AnimScaleController* mScaleControler;
     WalkerStateBindStarPointer* mStarPointBind;

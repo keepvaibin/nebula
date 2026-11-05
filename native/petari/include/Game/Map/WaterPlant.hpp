@@ -12,16 +12,16 @@ public:
         /// @brief Creates a new `PlantData`.
         PlantData();
 
-        TVec3f mPosition;
-        TVec3f mRotation;
-        TVec3f mSpinSwingDir;
-        TVec3f mTempSpinSwingDir;
+        Vec3f mPosition;
+        Vec3f mRotation;
+        Vec3f mSpinSwingDir;
+        Vec3f mTempSpinSwingDir;
         f32 mSpinSwingStrength;
         s32 mSpinWaveSwingTimer;
         s32 mSpinWaveTimer;
-        TVec3f mSpinWaveSwingVec1;
-        TVec3f mSpinWaveSwingVec2;
-        TVec3f mSpinWaveSwingVec3;
+        Vec3f mSpinWaveSwingVec1;
+        Vec3f mSpinWaveSwingVec2;
+        Vec3f mSpinWaveSwingVec3;
         f32 mHeight1;
         f32 mHeight2;
         f32 mHeight3;

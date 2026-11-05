@@ -22,12 +22,12 @@ public:
         return 3;
     }
 
-    virtual bool onTouchElectric(const TVec3f&, const TVec3f&);
+    virtual bool onTouchElectric(const Vec3f&, const Vec3f&);
     virtual bool setNerveReturn();
     virtual const Nerve* getNerveWait();
 
     bool receiveMsgTrample(HitSensor*, HitSensor*);
-    void appearFromLaunch(const TVec3f&, const TVec3f&);
+    void appearFromLaunch(const Vec3f&, const Vec3f&);
     void appearFromGuarder();
     void killWithGenItem();
     void exeNoCalcWait();
@@ -52,10 +52,10 @@ public:
     void exeKeepDistance();
     void exeBindStarPointer();
     void endBindStarPointer();
-    bool calcHeadJoint(TPos3f*, const JointControllerInfo&);
+    bool calcHeadJoint(Pos3f*, const JointControllerInfo&);
 
     JointControlDelegator< BegomanBaby >* mBabyDelegator;
-    TPos3f mWaterColumnMatrix;
+    Pos3f mWaterColumnMatrix;
     NameObj* mHost;
     bool mAppearThreeStarPiece;
 };

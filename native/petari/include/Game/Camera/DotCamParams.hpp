@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/Util/JMapInfo.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 
@@ -17,7 +17,7 @@ public:
     virtual void nextToChunk() = 0;
     virtual bool getValueInt(const char*, s32*) = 0;
     virtual bool getValueFloat(const char*, f32*) = 0;
-    virtual bool getValueVec(const char*, TVec3f*) = 0;
+    virtual bool getValueVec(const char*, Vec3f*) = 0;
     virtual bool getValueString(const char*, const char**) = 0;
 };
 
@@ -31,7 +31,7 @@ public:
     virtual void nextToChunk();
     virtual bool getValueInt(const char*, s32*);
     virtual bool getValueFloat(const char*, f32*);
-    virtual bool getValueVec(const char*, TVec3f*);
+    virtual bool getValueVec(const char*, Vec3f*);
     virtual bool getValueString(const char*, const char**);
 
     void init(const void*);

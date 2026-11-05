@@ -14,9 +14,9 @@ public:
     void exeShooting();
     void exeWaitForNextShoot();
 
-    TVec3f mBasePos;
-    TVec3f mFallAxis;
-    TVec3f mGravityPreShoot;
+    Vec3f mBasePos;
+    Vec3f mFallAxis;
+    Vec3f mGravityPreShoot;
     s32 mNumBurstStarPiece;
     s32 mWaitForNextShootTime;
     f32 mFallHeight;

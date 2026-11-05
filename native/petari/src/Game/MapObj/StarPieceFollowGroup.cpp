@@ -13,7 +13,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "math_types.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 #include <nebula_math.h>
 
 namespace NrvStarPieceFollowGroup {
@@ -39,7 +39,7 @@ void StarPieceFollowGroup::init(const JMapInfoIter& rIter) {
     initNerve(GET_NERVE(StarPieceFollowGroup, HostTypeNrvFollowEnd));
 
     mPieces = new StarPiece*[mNumPiecesTotal];
-    _90 = new TVec3f[mNumPiecesTotal];
+    _90 = new Vec3f[mNumPiecesTotal];
     for (int i = 0; i < mNumPiecesTotal; i++) {
         mPieces[i] = new StarPiece("\203\164\203\110\203\215\201\133\203\130\203\136\201\133\203\163\201\133\203\130" /* フォロースターピース */);
         mPieces[i]->initWithoutIter();
@@ -88,16 +88,16 @@ bool StarPieceFollowGroup::beginFollowPieces() {
 }
 
 void StarPieceFollowGroup::placementPiece(s32 numPlace) {
-    TPos3f mtxTRS;
+    Pos3f mtxTRS;
     MR::makeMtxTRS(mtxTRS.toMtxPtr(), this);
 
-    TVec3f zDir;
-    TVec3f xDir;
+    Vec3f zDir;
+    Vec3f xDir;
 
     mtxTRS.getXDir(xDir);
     mtxTRS.getZDir(zDir);
 
-    TVec3f position(mPosition);
+    Vec3f position(mPosition);
     f32 currentAngle = 0.0f;
     f32 angleBetweenPieces = TWO_PI / numPlace;
     for (u32 i = 0; i < numPlace; i++) {
@@ -109,8 +109,8 @@ void StarPieceFollowGroup::placementPiece(s32 numPlace) {
     }
 }
 
-void StarPieceFollowGroup::updateAxises(const TVec3f& rVec1, const TVec3f& rVec2, const TVec3f& rVec3, f32 angle) {
-    TQuat4f quat;
+void StarPieceFollowGroup::updateAxises(const Vec3f& rVec1, const Vec3f& rVec2, const Vec3f& rVec3, f32 angle) {
+    Quat4f quat;
     quat.setRotate(mLocalXAxis, rVec1, angle);
     quat.rotate(mLocalXAxis);
 
@@ -122,9 +122,9 @@ void StarPieceFollowGroup::updateAxises(const TVec3f& rVec1, const TVec3f& rVec2
 }
 
 void StarPieceFollowGroup::followPieces() {
-    TVec3f playerSideVec;
-    TVec3f playerFrontVec;
-    TVec3f playerUpVec;
+    Vec3f playerSideVec;
+    Vec3f playerFrontVec;
+    Vec3f playerUpVec;
 
     MR::getPlayerSideVec(&playerSideVec);
     MR::getPlayerFrontVec(&playerFrontVec);
@@ -132,8 +132,8 @@ void StarPieceFollowGroup::followPieces() {
 
     updateAxises(playerSideVec, playerFrontVec, playerUpVec, 0.25f);
 
-    TVec3f playerPos(*MR::getPlayerPos());
-    TVec3f playerVelocity(*MR::getPlayerVelocity());
+    Vec3f playerPos(*MR::getPlayerPos());
+    Vec3f playerVelocity(*MR::getPlayerVelocity());
 
     playerPos.add(mLocalYAxis.multInLine(0.0f));
     playerPos.add(playerVelocity * 10.0f);
@@ -156,8 +156,8 @@ void StarPieceFollowGroup::followPieces() {
         f32 sin = MR::sin(currentAngle);
         f32 cos2 = 1.0f + 0.25f * MR::cos(3.0f * currentAngle);
 
-        TVec3f vec2(playerPos);
-        TVec3f vec(0.0f, 0.0f, 0.0f);
+        Vec3f vec2(playerPos);
+        Vec3f vec(0.0f, 0.0f, 0.0f);
 
         vec.add(mLocalXAxis * cos * mRadius);
         vec.add(mLocalZAxis * sin * mRadius);
@@ -226,7 +226,7 @@ void StarPieceFollowGroup::exeFollowEnd() {
             currentPiece->mVelocity += (_90[i] * SCALE);
         }
 
-        TVec3f vec2(*MR::getPlayerVelocity());
+        Vec3f vec2(*MR::getPlayerVelocity());
         MR::normalizeOrZero(&vec2);
         const f32 TEN = 10.0f;
         currentPiece->mVelocity += (vec2 * TEN);

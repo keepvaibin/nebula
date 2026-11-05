@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class ActorCameraInfo;
 class CameraTargetMtx;
@@ -28,7 +28,7 @@ public:
     void exeAttack();
     void exeAttackSuccess();
 
-    void calcBaseMtx(TPos3f*);
+    void calcBaseMtx(Pos3f*);
 
     bool updateWait();
     void updateHang();
@@ -54,15 +54,15 @@ public:
     bool mIsKinopioAttached;
     bool mIsKinopioTalkEnabled;
     bool mIsLastDamage;
-    const TVec3f* mBasePos;
-    const TVec3f* mNeutralPos;
-    const TVec3f* mUp;
-    TVec3f mPointerPos;
+    const Vec3f* mBasePos;
+    const Vec3f* mNeutralPos;
+    const Vec3f* mUp;
+    Vec3f mPointerPos;
     s32 mPadChannel;
     bool mPassThroughEnable;
-    TVec3f mAttackVelocity;
+    Vec3f mAttackVelocity;
     LiveActor* mRider;
-    TPos3f mBaseMtx;
+    Pos3f mBaseMtx;
     CameraTargetMtx* mCameraTargetMtx;
     ActorCameraInfo* mCameraInfo;
 };

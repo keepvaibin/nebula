@@ -13,7 +13,7 @@ ShadowVolumeBox::ShadowVolumeBox() : ShadowVolumeDrawer("\211\145\225\140\211\34
     }
 }
 
-void ShadowVolumeBox::setSize(const TVec3f& rSize) {
+void ShadowVolumeBox::setSize(const Vec3f& rSize) {
     mSize.set(rSize);
 }
 
@@ -27,11 +27,11 @@ void ShadowVolumeBox::makeVertexBuffer() const {
     MtxPtr mtx;
     ShadowController* controller = getController();
     mtx = controller->_18;
-    TVec3f side(mtx[0][0], mtx[1][0], mtx[2][0]);
-    TVec3f up(mtx[0][1], mtx[1][1], mtx[2][1]);
-    TVec3f front(mtx[0][2], mtx[1][2], mtx[2][2]);
+    Vec3f side(mtx[0][0], mtx[1][0], mtx[2][0]);
+    Vec3f up(mtx[0][1], mtx[1][1], mtx[2][1]);
+    Vec3f front(mtx[0][2], mtx[1][2], mtx[2][2]);
 
-    TVec3f pos, dir;
+    Vec3f pos, dir;
     calcBaseDropPosition(&pos);
     controller->getDropDir(&dir);
 
@@ -39,9 +39,9 @@ void ShadowVolumeBox::makeVertexBuffer() const {
     bool dirUp = dir.dot(up) >= 0.0f;
     bool dirFront = dir.dot(front) >= 0.0f;
 
-    TVec3f size = mSize;
+    Vec3f size = mSize;
     if (controller->isFollowHostScale()) {
-        TVec3f scale(controller->getHost()->mScale);
+        Vec3f scale(controller->getHost()->mScale);
         scale /= 2.0f;
         size *= scale;
     } else {

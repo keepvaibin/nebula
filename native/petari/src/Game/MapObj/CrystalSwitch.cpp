@@ -26,7 +26,7 @@ void CrystalSwitch::init(const JMapInfoIter& rIter) {
     initModelManagerWithAnm("CrystalSwitch", nullptr, false);
     MR::connectToSceneMapObj(this);
     initHitSensor(1);
-    TVec3f sensor_offs;
+    Vec3f sensor_offs;
     sensor_offs.x = 0.0f;
     sensor_offs.y = 100.0f;
     sensor_offs.z = 0.0f;

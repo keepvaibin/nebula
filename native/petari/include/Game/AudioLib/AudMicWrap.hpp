@@ -1,9 +1,9 @@
 #pragma once
 
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 namespace AudMicWrap {
     void setMicMtx(MtxPtr, s32);
     void setMicEnv();
-    const TVec3f& getMicPos();
+    const Vec3f& getMicPos();
 };  // namespace AudMicWrap

@@ -8,7 +8,7 @@
 #include "Game/Util/JMapUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 namespace {
     static const s32 sDefaultTimer = 300;
@@ -45,7 +45,7 @@ inline void TimerMoveWall::exeWait() {
 void TimerMoveWall::exeMove() {
     if (MR::isFirstStep(this)) {
         MR::invalidateClipping(this);
-        TVec3f frontVec;
+        Vec3f frontVec;
         MR::calcFrontVec(&frontVec, this);
 
         if (isNerve(GET_NERVE(TimerMoveWall, TimerMoveWallNrvMoveBack))) {

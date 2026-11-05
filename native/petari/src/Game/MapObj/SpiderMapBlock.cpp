@@ -48,10 +48,10 @@ void SpiderMapBlock::kill() {
     MR::startSound(this, "SE_OJ_ROCK_BREAK");
     MR::emitEffect(this, "Break");
     MtxPtr baseMtx = getBaseMtx();
-    TVec3f coinVel(baseMtx[0][1], baseMtx[1][1], 0.0f);
+    Vec3f coinVel(baseMtx[0][1], baseMtx[1][1], 0.0f);
     MR::normalizeOrZero(&coinVel);
     coinVel *= ::sCoinSpeed;
-    TVec3f coinPos(mPosition.x, mPosition.y, mPosZ);
+    Vec3f coinPos(mPosition.x, mPosition.y, mPosZ);
     MR::appearCoinToVelocity(this, coinPos, coinVel, 1);
     LiveActor::kill();
 }

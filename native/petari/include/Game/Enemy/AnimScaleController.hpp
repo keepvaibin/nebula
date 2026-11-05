@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/System/NerveExecutor.hpp"
-#include <JSystem/JGeometry.hpp>
+#include <nebula_geometry.hpp>
 
 class AnimScaleParam {
 public:
@@ -51,6 +51,6 @@ public:
     void exeCrush();
 
     AnimScaleParam* _8;
-    TVec3f _C;
+    Vec3f _C;
     f32 _18;
 };

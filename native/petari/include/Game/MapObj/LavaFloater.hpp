@@ -28,6 +28,6 @@ public:
     ProjmapEffectMtxSetter* mMtxSetter;
     LodCtrl* mLodCtrlPlanet;
     const char* mObjectName;
-    TVec3f _9C;
+    Vec3f _9C;
     f32 _A8;
 };

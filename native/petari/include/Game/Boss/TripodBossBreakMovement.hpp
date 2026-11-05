@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class SpringValue;
 
@@ -13,19 +13,19 @@ public:
 
     virtual void movement();
 
-    void start(const TPos3f&, s32);
+    void start(const Pos3f&, s32);
     void setBreakDownLevel(s32);
 
     void exeWait();
     void exeStartBreak();
     void exeBreak();
 
-    TPos3f _8C;
+    Pos3f _8C;
     SpringValue* mSpring;
-    TVec3f _C0;
-    TVec3f _CC;
-    TVec3f _D8;
-    TVec3f _E4;
+    Vec3f _C0;
+    Vec3f _CC;
+    Vec3f _D8;
+    Vec3f _E4;
     f32 _F0;
     f32 _F4;
     f32 _F8;

@@ -12,7 +12,7 @@ void CollisionBlocker::init(const JMapInfoIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initHitSensor(1);
 
-    MR::addHitSensorEye(this, "eye", 4, ::cRadius * mScale.x, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEye(this, "eye", 4, ::cRadius * mScale.x, Vec3f(0.0f, 0.0f, 0.0f));
     MR::connectToSceneMapObjMovement(this);
     MR::setClippingFar50m(this);
     makeActorAppeared();

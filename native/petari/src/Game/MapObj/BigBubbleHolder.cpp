@@ -55,7 +55,7 @@ void BigBubbleHolder::addMoveLimitter(BigBubbleMoveLimitter* pLimitter) {
     mLimitters.at(mNumLimitters++) = pLimitter;
 }
 
-BigBubble* BigBubbleHolder::generateBigBubble(LiveActor* pHost, const TVec3f& rPos, const TVec3f& rUp, f32 volume, bool isObstruct, s32 actionType,
+BigBubble* BigBubbleHolder::generateBigBubble(LiveActor* pHost, const Vec3f& rPos, const Vec3f& rUp, f32 volume, bool isObstruct, s32 actionType,
                                               s32 shapeType, s32 limitterID) {
     BigBubbleMoveLimitter* limitter = nullptr;
     if (limitterID >= 0) {
@@ -120,12 +120,12 @@ void MR::createBigBubbleHolder() {
     MR::createSceneObj(SceneObj_BigBubbleHolder);
 }
 
-BigBubble* MR::generateBigBubble(LiveActor* pHost, const TVec3f& rPos, const TVec3f& rUp, f32 volume, bool isObstruct, s32 actionType, s32 shapeType,
+BigBubble* MR::generateBigBubble(LiveActor* pHost, const Vec3f& rPos, const Vec3f& rUp, f32 volume, bool isObstruct, s32 actionType, s32 shapeType,
                                  s32 limitterID) {
     return ::getBigBubbleHolder()->generateBigBubble(pHost, rPos, rUp, volume, isObstruct, actionType, shapeType, limitterID);
 }
 
-void MR::limitBigBubblePosition(TVec3f* pPos, f32 f1, s32 limitterID) {
+void MR::limitBigBubblePosition(Vec3f* pPos, f32 f1, s32 limitterID) {
     ::getBigBubbleHolder()->getMoveLimitter(limitterID)->limitPosition(pPos, f1);
 }
 

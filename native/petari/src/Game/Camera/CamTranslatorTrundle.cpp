@@ -5,7 +5,7 @@
 void CamTranslatorTrundle::setParam(const CameraParamChunk* pChunk) {
     CameraGeneralParam* general = pChunk->mGeneralParam;
 
-    TVec3f axis = general->mAxis;
+    Vec3f axis = general->mAxis;
     if (MR::isNearZero(axis)) {
         return;
     }

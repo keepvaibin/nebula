@@ -4,7 +4,7 @@
 #include "Game/Enemy/KarikariDirector.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
-#include <JSystem/JGeometry/TUtil.hpp>
+#include <nebula_geometry.hpp>
 
 namespace {
     static const f32 sKarikariViewRate = 0.8f;
@@ -16,8 +16,8 @@ CamKarikariEffector::CamKarikariEffector() : mCounter(0) {
 }
 
 namespace {
-    inline TVec3f calcPlayerFocusPos(const TVec3f& rOffset) {
-        const TVec3f* pOffset = &rOffset;
+    inline Vec3f calcPlayerFocusPos(const Vec3f& rOffset) {
+        const Vec3f* pOffset = &rOffset;
 
         return *MR::getPlayerPos() + *pOffset;
     }
@@ -61,27 +61,27 @@ void CamKarikariEffector::update(CameraMan* pCameraMan) {
     t *= t;
     t = 1.0f - t;
 
-    TVec3f diffWatchPos = CameraLocalUtil::getWatchPos(pCameraMan) - CameraLocalUtil::getPos(pCameraMan);
-    TVec3f toWatchPos(diffWatchPos);
+    Vec3f diffWatchPos = CameraLocalUtil::getWatchPos(pCameraMan) - CameraLocalUtil::getPos(pCameraMan);
+    Vec3f toWatchPos(diffWatchPos);
     MR::normalize(&toWatchPos);
 
-    TVec3f playerUp;
+    Vec3f playerUp;
     MR::getPlayerUpVec(&playerUp);
-    TVec3f playerFocusPos = calcPlayerFocusPos(playerUp * ::sPlayerRadius);
+    Vec3f playerFocusPos = calcPlayerFocusPos(playerUp * ::sPlayerRadius);
 
-    TVec3f diffPlayerPos = playerFocusPos - CameraLocalUtil::getPos(pCameraMan);
-    TVec3f toPlayerPos(diffPlayerPos);
+    Vec3f diffPlayerPos = playerFocusPos - CameraLocalUtil::getPos(pCameraMan);
+    Vec3f toPlayerPos(diffPlayerPos);
     MR::normalize(&toPlayerPos);
 
     f32 rotRatio = MR::clamp((1.0f - MR::cos(mCounter * MR::pi() / ::sKarikariCounterMax)) * 0.5f, 0.0f, 1.0f);
-    TQuat4f rot;
+    Quat4f rot;
     rot.setRotate(toWatchPos, toPlayerPos, rotRatio);
     rot.transform(diffWatchPos);
 
     CameraLocalUtil::setPos(pCameraMan, CameraLocalUtil::getPos(pCameraMan));
     CameraLocalUtil::setWatchPos(pCameraMan, diffWatchPos + CameraLocalUtil::getPos(pCameraMan));
 
-    TVec3f camUp(CameraLocalUtil::getUpVec(pCameraMan));
+    Vec3f camUp(CameraLocalUtil::getUpVec(pCameraMan));
     rot.transform(camUp);
     CameraLocalUtil::setUpVec(pCameraMan, camUp);
 

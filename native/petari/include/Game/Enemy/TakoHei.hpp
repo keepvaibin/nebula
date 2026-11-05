@@ -81,12 +81,12 @@ public:
 
     AnimScaleController* _8C;
     WalkerStateBindStarPointer* _90;
-    TQuat4f _94;
-    TVec3f _A4;
-    TVec3f _B0;
-    TVec3f _BC;
-    TVec3f _C8;
-    TVec3f _D4;
+    Quat4f _94;
+    Vec3f _A4;
+    Vec3f _B0;
+    Vec3f _BC;
+    Vec3f _C8;
+    Vec3f _D4;
     u32 _E0;
     s32 _E4;
     u32 _E8;

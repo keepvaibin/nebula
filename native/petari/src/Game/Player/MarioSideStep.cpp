@@ -132,10 +132,10 @@ bool MarioSideStep::update() {
     if (getStickP() < 0.1f) {
         changeAnimation("\225\307\203\105\203\107\203\103\203\147" /* 壁ウエイト */);
     } else {
-        TVec3f direction(getWorldPadDir());
+        Vec3f direction(getWorldPadDir());
         MR::vecKillElement(direction, getPlayer()->getAirGravityVec(), &direction);
         MR::normalizeOrZero(&direction);
-        TVec3f side;
+        Vec3f side;
         f32 forward = MR::vecKillElement(direction, getPlayer()->getWallNorm(), &side);
         if (forward < -0.866f) {
             if (!isAnimationRun("\225\307\211\237\202\265" /* 壁押し */)) {

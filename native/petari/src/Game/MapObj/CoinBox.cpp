@@ -20,7 +20,7 @@ void CoinBox::init(const JMapInfoIter& rIter) {
     initSound(6, false);
     initNerve(GET_NERVE(CoinBox, CoinBoxNrvWait));
     initHitSensor(1);
-    TVec3f box;
+    Vec3f box;
     box.x = 0.0f;
     box.y = 0.0f;
     box.z = 0.0f;
@@ -42,10 +42,10 @@ void CoinBox::exeHit() {
     }
 
     if (getNerveStep() == 0xF) {
-        TVec3f axis_y;
+        Vec3f axis_y;
         MR::getRotatedAxisY(&axis_y, mRotation);
         MR::calcGravityOrZero(this);
-        TVec3f horiz;
+        Vec3f horiz;
         f32 val = MR::vecKillElement(axis_y, mGravity, &horiz);
         axis_y = (mGravity * val) * 30.0f + horiz * 10.0f;
         MR::appearCoinToVelocity(this, mPosition, axis_y, 1);

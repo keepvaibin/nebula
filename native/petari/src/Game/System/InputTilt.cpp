@@ -5,7 +5,7 @@
 InputTilt::InputTilt(const PlayerInput* pPad, u32 hand) : mPad(pPad), mHand(hand), mTilt(0.0f, 0.0f, 0.0f), mValid(false) {
 }
 
-bool InputTilt::getAcceleration(TVec3f* pOut) const {
+bool InputTilt::getAcceleration(Vec3f* pOut) const {
     if (!mValid) {
         pOut->zero();
         return false;

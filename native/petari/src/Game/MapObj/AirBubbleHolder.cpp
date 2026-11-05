@@ -10,7 +10,7 @@ namespace {
 AirBubbleHolder::AirBubbleHolder(const char* pName) : DeriveActorGroup< AirBubble >(pName, ::sCreateAirBubbleNum) {
 }
 
-void AirBubbleHolder::appearAirBubble(const TVec3f& rTrans, s32 lifeTime) {
+void AirBubbleHolder::appearAirBubble(const Vec3f& rTrans, s32 lifeTime) {
     AirBubble* pAirBubble = getDeadMember();
     if (pAirBubble == nullptr) {
         const s32 first = getObjNum();
@@ -29,7 +29,7 @@ namespace MR {
         return static_cast< AirBubbleHolder* >(MR::createSceneObj(SceneObj_AirBubbleHolder));
     }
 
-    void appearAirBubble(const TVec3f& rTrans, s32 lifeTime) {
+    void appearAirBubble(const Vec3f& rTrans, s32 lifeTime) {
         MR::getSceneObj< AirBubbleHolder >(SceneObj_AirBubbleHolder)->appearAirBubble(rTrans, lifeTime);
     }
 };  // namespace MR

@@ -42,10 +42,10 @@ void SkeletalFishBabyRailGroupNode::addChild(SkeletalFishBabyRail* pRail) {
 
 void SkeletalFishBabyRailGroupNode::tidy() {
     for (SkeletalFishBabyRailSetLinkNode* curLink = _18->_10; curLink != nullptr; curLink = curLink->_10) {
-        TVec3f endPointPos;
+        Vec3f endPointPos;
         MR::calcRailEndPointPos(&endPointPos, curLink->_0);
         SkeletalFishBabyRailSetLinkNode* v2 = curLink;
-        TVec3f nearestRailPos;
+        Vec3f nearestRailPos;
         MR::calcNearestRailPos(&nearestRailPos, curLink->_4, endPointPos);
         f32 totalDist = endPointPos.distance(nearestRailPos);
 

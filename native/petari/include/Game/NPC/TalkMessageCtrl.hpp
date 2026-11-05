@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/NameObj/NameObj.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class ActorCameraInfo;
 class LiveActor;
@@ -75,7 +75,7 @@ public:
 
 class TalkMessageCtrl : public NameObj {
 public:
-    TalkMessageCtrl(LiveActor*, const TVec3f&, MtxPtr);
+    TalkMessageCtrl(LiveActor*, const Vec3f&, MtxPtr);
 
     virtual ~TalkMessageCtrl();
 
@@ -109,7 +109,7 @@ public:
         mTagArg = rArg;
     }
 
-    void setMessageBallonFollowOffs(const TVec3f& rVec) {
+    void setMessageBallonFollowOffs(const Vec3f& rVec) {
         mMsgBalloonFollowOffs = rVec;
     }
 
@@ -121,9 +121,9 @@ public:
     TalkNodeCtrl* mNodeCtrl;
     s32 mZoneID;
     u32 _18;
-    TVec3f _1C;
+    Vec3f _1C;
     MtxPtr mMtx;
-    TVec3f mMsgBalloonFollowOffs;
+    Vec3f mMsgBalloonFollowOffs;
     f32 mTalkDistance;
     u32 _3C;
     u32 mAlreadyDoneFlags;

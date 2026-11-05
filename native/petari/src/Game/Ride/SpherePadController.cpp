@@ -2,15 +2,15 @@
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
-#include <JSystem/JGeometry/TQuat.hpp>
-#include <JSystem/JGeometry/TUtil.hpp>
+#include <nebula_geometry.hpp>
+
+
 #include "Game/System/NebulaInput.hpp"
 
 SpherePadController::SpherePadController() : SphereController() {
 }
 
-f32 SpherePadController::calcMoveVector(TVec3f* pMoveDir, const TVec3f& rGravity) {
+f32 SpherePadController::calcMoveVector(Vec3f* pMoveDir, const Vec3f& rGravity) {
     return calcDirSphereMove(pMoveDir, rGravity, 0);
 }
 
@@ -22,7 +22,7 @@ f32 SpherePadController::calcJumpPower() const {
     return 0.0f;
 }
 
-void SpherePadController::update(const TVec3f&) {
+void SpherePadController::update(const Vec3f&) {
 }
 
 void SpherePadController::clacXY(f32* pX, f32* pY) {
@@ -30,20 +30,20 @@ void SpherePadController::clacXY(f32* pX, f32* pY) {
     *pY = MR::getMoveStickY(PLAYER_1);
 }
 
-f32 SpherePadController::calcDirSphereMove(TVec3f* pMoveDir, const TVec3f& rBaseVec, u32 isFrontVec) {
+f32 SpherePadController::calcDirSphereMove(Vec3f* pMoveDir, const Vec3f& rBaseVec, u32 isFrontVec) {
     f32 x = 0.0f;
     f32 y = 0.0f;
     clacXY(&x, &y);
 
     f32 mag = x * x + y * y;
-    mag = JGeometry::TUtil< f32 >::sqrt(mag);
+    mag = FloatUtil::sqrt(mag);
 
     if (mag >= 0.0001f) {
-        TRot3f invMtx = MR::getCameraInvViewMtx();
+        Rot3f invMtx = MR::getCameraInvViewMtx();
 
-        TVec3f dirX;
-        TVec3f dirY;
-        TVec3f dirZ;
+        Vec3f dirX;
+        Vec3f dirY;
+        Vec3f dirZ;
 
         invMtx.getXDir(dirX);
         invMtx.getYDir(dirY);
@@ -59,7 +59,7 @@ f32 SpherePadController::calcDirSphereMove(TVec3f* pMoveDir, const TVec3f& rBase
             dirZ = -dirZ;
         }
 
-        TRot3f rotMtx;
+        Rot3f rotMtx;
         if (isFrontVec != 0) {
             rotMtx.setRotate(dirZ, rBaseVec);
             rotMtx.mult33(dirX);

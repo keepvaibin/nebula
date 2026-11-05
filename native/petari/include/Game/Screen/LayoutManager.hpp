@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 #include <nw4r/lyt/drawInfo.h>
 #include <nw4r/lyt/layout.h>
 #include <nw4r/lyt/pane.h>
@@ -47,13 +47,13 @@ public:
     s32 getIndexOfPane(const char*) const;
     bool isExistPaneCtrl(const char*) const;
     void addGroupCtrl(LayoutGroupCtrl*);
-    bool isPointing(const nw4r::lyt::Pane*, const TVec2f&) const;
+    bool isPointing(const nw4r::lyt::Pane*, const Vec2f&) const;
     LayoutGroupCtrl* createAndAddGroupCtrl(const char*, u32);
     s32 getIndexOfGroupCtrl(const char*) const;
     void createPaneMtxRef(const char*);
     MtxPtr getPaneMtxRef(const char*) const;
     bool isExistPaneMtxRef(const char*) const;
-    bool isPointing(const char*, const TVec2f&) const;
+    bool isPointing(const char*, const Vec2f&) const;
     nw4r::lyt::AnimTransform* getAnimTransform(const char*) const;
     void bindPaneCtrlAnim(LayoutPaneCtrl*, nw4r::lyt::AnimTransform*);
     void bindPaneCtrlAnimSub(u32&, nw4r::lyt::AnimTransform*);

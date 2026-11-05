@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class ModelObj;
 class MogucchiHill;
@@ -35,18 +35,18 @@ public:
     void updateStrollSpeed();
     void reflectStarPointer2P();
     void makeEulerRotation();
-    void calcAttackDir(TVec3f*, const TVec3f&, const TVec3f&) const;
+    void calcAttackDir(Vec3f*, const Vec3f&, const Vec3f&) const;
     bool receiveAttackBySpinSensor(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
     bool receiveAttackByBodySensor(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
-    void calcScatterVec(const TVec3f&, const TVec3f&);
+    void calcScatterVec(const Vec3f&, const Vec3f&);
 
     MogucchiHill* mHill;
     ModelObj* mHole;
-    TPos3f mNewHolePos;
-    TVec3f mRailGravity;
+    Pos3f mNewHolePos;
+    Vec3f mRailGravity;
     bool mGrounded;
     f32 mScatterPropulsionSpeed;
-    TVec3f mScatterNormal;
+    Vec3f mScatterNormal;
     f32 _E4;
     f32 mStrollSpeed;
     f32 mMaxStrollSpeed;

@@ -1,7 +1,7 @@
 #pragma once
 
-#include <JSystem/JGeometry.hpp>
-#include <JSystem/JGeometry/TBox.hpp>
+#include <nebula_geometry.hpp>
+
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 
@@ -17,14 +17,14 @@ namespace MR {
     s32 moveCoordAndCheckPassPointNo(LiveActor*, f32);
     s32 moveCoordAndFollowTransAndCheckPassPointNo(LiveActor*);
     void moveCoordToRailPoint(LiveActor*, s32);
-    void moveCoordToNearestPos(LiveActor*, const TVec3f&);
+    void moveCoordToNearestPos(LiveActor*, const Vec3f&);
     void moveCoordAndFollowTrans(LiveActor*, f32);
     void moveCoordAndFollowTrans(LiveActor*);
     void moveCoordToStartPos(LiveActor*);
     void moveCoordToEndPos(LiveActor*);
 
     void moveCoordAndTransToNearestRailPos(LiveActor*);
-    void moveCoordAndTransToNearestRailPos(LiveActor*, const TVec3f&);
+    void moveCoordAndTransToNearestRailPos(LiveActor*, const Vec3f&);
     void moveCoordAndTransToNearestRailPoint(LiveActor*);
     void moveCoordAndTransToNextPoint(LiveActor*);
     void moveCoordAndTransToRailStartPoint(LiveActor*);
@@ -32,41 +32,41 @@ namespace MR {
     void setRailDirectionToStart(LiveActor*);
     void setRailDirectionToEnd(LiveActor*);
     void setRailDirectionCloseToCoord(LiveActor*, f32);
-    void setRailDirectionCloseToNearestPos(LiveActor*, const TVec3f&);
+    void setRailDirectionCloseToNearestPos(LiveActor*, const Vec3f&);
     void reverseRailDirection(LiveActor*);
 
-    f32 calcMovingDirectionAlongRail(LiveActor*, TVec3f*, const TVec3f&, f32, bool, bool*);
-    f32 calcMovingDirectionAlongRailH(LiveActor*, TVec3f*, const TVec3f&, f32, bool*);
+    f32 calcMovingDirectionAlongRail(LiveActor*, Vec3f*, const Vec3f&, f32, bool, bool*);
+    f32 calcMovingDirectionAlongRailH(LiveActor*, Vec3f*, const Vec3f&, f32, bool*);
 
-    void calcRailClippingInfo(TVec3f*, f32*, const LiveActor*, f32, f32);
-    void initAndSetRailClipping(TVec3f*, LiveActor*, f32, f32);
+    void calcRailClippingInfo(Vec3f*, f32*, const LiveActor*, f32, f32);
+    void initAndSetRailClipping(Vec3f*, LiveActor*, f32, f32);
 
-    f32 calcNearestRailCoord(const LiveActor*, const TVec3f&);
-    f32 calcNearestRailPos(TVec3f*, const LiveActor*, const TVec3f&);
-    f32 calcNearestRailDirection(TVec3f*, const LiveActor*, const TVec3f&);
-    f32 calcNearestRailPosAndDirection(TVec3f*, TVec3f*, const LiveActor*, const TVec3f&);
-    f32 calcRailPosNearestPlayer(TVec3f*, const LiveActor*);
+    f32 calcNearestRailCoord(const LiveActor*, const Vec3f&);
+    f32 calcNearestRailPos(Vec3f*, const LiveActor*, const Vec3f&);
+    f32 calcNearestRailDirection(Vec3f*, const LiveActor*, const Vec3f&);
+    f32 calcNearestRailPosAndDirection(Vec3f*, Vec3f*, const LiveActor*, const Vec3f&);
+    f32 calcRailPosNearestPlayer(Vec3f*, const LiveActor*);
 
-    void calcBoundingBox(RailRider*, TBox3f*, f32);
-    void calcBoundingBox(const LiveActor*, TBox3f*, f32);
+    void calcBoundingBox(RailRider*, Box3f*, f32);
+    void calcBoundingBox(const LiveActor*, Box3f*, f32);
 
     f32 calcDifferenceRailCoord(const LiveActor*, f32, f32);
     f32 calcDifferenceRailCoord(const LiveActor*, f32);
     f32 calcDistanceHorizonToCurrentPos(const LiveActor*);
 
-    void calcRailPosAtCoord(TVec3f*, const LiveActor*, f32);
-    void calcRailPosFrontCoord(TVec3f*, const LiveActor*, f32);
-    void calcRailDirectionAtCoord(TVec3f*, const LiveActor*, f32);
-    void calcRailPosAndDirectionAtCoord(TVec3f*, TVec3f*, const LiveActor*, f32);
-    void calcRailStartPos(TVec3f*, const LiveActor*);
-    void calcRailEndPos(TVec3f*, const LiveActor*);
-    void calcRailPointPos(TVec3f*, const LiveActor*, int);
-    void calcRailStartPointPos(TVec3f*, const LiveActor*);
-    void calcRailEndPointPos(TVec3f*, const LiveActor*);
-    void calcRailStartPointDirection(TVec3f*, const LiveActor*);
-    void calcRailEndPointDirection(TVec3f*, const LiveActor*);
-    void calcRailStartPointPosAndDirection(TVec3f*, TVec3f*, const LiveActor*);
-    void calcRailEndPointPosAndDirection(TVec3f*, TVec3f*, const LiveActor*);
+    void calcRailPosAtCoord(Vec3f*, const LiveActor*, f32);
+    void calcRailPosFrontCoord(Vec3f*, const LiveActor*, f32);
+    void calcRailDirectionAtCoord(Vec3f*, const LiveActor*, f32);
+    void calcRailPosAndDirectionAtCoord(Vec3f*, Vec3f*, const LiveActor*, f32);
+    void calcRailStartPos(Vec3f*, const LiveActor*);
+    void calcRailEndPos(Vec3f*, const LiveActor*);
+    void calcRailPointPos(Vec3f*, const LiveActor*, int);
+    void calcRailStartPointPos(Vec3f*, const LiveActor*);
+    void calcRailEndPointPos(Vec3f*, const LiveActor*);
+    void calcRailStartPointDirection(Vec3f*, const LiveActor*);
+    void calcRailEndPointDirection(Vec3f*, const LiveActor*);
+    void calcRailStartPointPosAndDirection(Vec3f*, Vec3f*, const LiveActor*);
+    void calcRailEndPointPosAndDirection(Vec3f*, Vec3f*, const LiveActor*);
 
     void calcDistanceToNextRailPoint(const LiveActor*, f32*);
     void calcDistanceToCurrentAndNextRailPoint(const LiveActor*, f32*, f32*);
@@ -80,10 +80,10 @@ namespace MR {
     f32 getRailTotalLength(const LiveActor*);
     f32 getRailPartLength(const LiveActor*, int);
     f32 getRailPointCoord(const LiveActor*, int);
-    const TVec3f& getRailPos(const LiveActor*);
-    const TVec3f& getRailPointPosStart(const LiveActor*);
-    const TVec3f& getRailPointPosEnd(const LiveActor*);
-    const TVec3f& getRailDirection(const LiveActor*);
+    const Vec3f& getRailPos(const LiveActor*);
+    const Vec3f& getRailPointPosStart(const LiveActor*);
+    const Vec3f& getRailPointPosEnd(const LiveActor*);
+    const Vec3f& getRailDirection(const LiveActor*);
     f32 getRailCoord(const LiveActor*);
     f32 getRailCoordSpeed(const LiveActor*);
 

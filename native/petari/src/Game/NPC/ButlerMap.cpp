@@ -59,9 +59,9 @@ void ButlerMap::init(const JMapInfoIter& rIter) {
     MR::createSceneObj(SceneObj_GalaxyMapController);
     MR::tryRegisterDemoCast(this, rIter);
     MR::tryRegisterDemoCast(this, "\203\157\203\147\203\211\201\133\225\361\215\220" /* バトラー報告 */, rIter);
-    TVec3f vec;
+    Vec3f vec;
     const char* demoNameMapLecture = ::cDemoNameMapLecture;
-    vec.setPSZeroVec();
+    vec.setZeroVec();
     if (MR::tryInitDemoSheetTalkAnim(
             this, rIter, demoNameMapLecture, "DemoButlerMapLecture",
             MR::createTalkCtrlDirectOnRootNodeAutomatic(this, rIter, "AstroGalaxy_ButlerMap001", vec, MR::getJointMtx(this, "Body")))) {

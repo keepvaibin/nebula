@@ -8,11 +8,11 @@
 JointController::JointController() : mModel(), mJoint() {
 }
 
-bool JointController::calcJointMatrix(TPos3f* pMtx, const JointControllerInfo& rInfo) {
+bool JointController::calcJointMatrix(Pos3f* pMtx, const JointControllerInfo& rInfo) {
     return false;
 }
 
-bool JointController::calcJointMatrixAfterChild(TPos3f* pMtx, const JointControllerInfo& rInfo) {
+bool JointController::calcJointMatrixAfterChild(Pos3f* pMtx, const JointControllerInfo& rInfo) {
     return false;
 }
 
@@ -23,7 +23,7 @@ void JointController::registerCallBack() {
 
 void JointController::calcJointMatrixAndSetSystem(J3DJoint* pJoint) {
     MtxPtr pJointMtx = mModel->getAnmMtx(pJoint->getJntNo());
-    TPos3f mtx;
+    Pos3f mtx;
     NebulaMtxCopy(pJointMtx, mtx);
     JointControllerInfo info = {this, pJoint};
 
@@ -35,7 +35,7 @@ void JointController::calcJointMatrixAndSetSystem(J3DJoint* pJoint) {
 
 void JointController::calcJointMatrixAfterChildAndSetSystem(J3DJoint* pJoint) {
     MtxPtr pJointMtx = mModel->getAnmMtx(pJoint->getJntNo());
-    TPos3f mtx;
+    Pos3f mtx;
     NebulaMtxCopy(pJointMtx, mtx);
     JointControllerInfo info = {this, pJoint};
 

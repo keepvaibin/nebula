@@ -13,10 +13,10 @@ public:
 
     virtual f32 calcJumpPower() const;
     virtual bool doBrake() const;
-    virtual void update(const TVec3f&);
+    virtual void update(const Vec3f&);
     virtual void clacXY(f32*, f32*);
 
-    void getPadAcceleration(TVec3f*) const;
+    void getPadAcceleration(Vec3f*) const;
     bool testBrake() const;
 
     bool isMainHand() const {

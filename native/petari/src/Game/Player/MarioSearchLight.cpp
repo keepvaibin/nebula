@@ -21,7 +21,7 @@
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 #include "Game/System/NebulaArena.hpp"
 #include <nebula_math.h>
 
@@ -59,10 +59,10 @@ void MarioSearchLight::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
 }
 
 void MarioSearchLight::updateHitSensor(HitSensor* pSensor) {
-    TVec3f frontVec;
+    Vec3f frontVec;
     MR::calcFrontVec(&frontVec, this);
 
-    TVec3f frontPosition = mPosition + frontVec * _9C;
+    Vec3f frontPosition = mPosition + frontVec * _9C;
 
     pSensor->mPosition.x = frontPosition.x;
     pSensor->mPosition.y = frontPosition.y;
@@ -95,14 +95,14 @@ void MarioSearchLight::calcAndSetBaseMtx() {
     PartsModel::calcAndSetBaseMtx();
     MR::blendMtxRotateSlerp(baseMtx, getBaseMtx(), 0.1f, baseMtx);
 
-    TVec3f trans;
+    Vec3f trans;
     MR::extractMtxTrans(getBaseMtx(), &trans);
     MR::setMtxTrans(baseMtx, trans.x, trans.y, trans.z);
     MR::setBaseTRMtx(this, baseMtx);
 }
 
 void MarioActor::initThrowing() {
-    mSearchLightThrowPos = new FixedPosition(this, "HandR", TVec3f(13.19f, 41.57f, 19.02f), TVec3f(-3.63f, -41.69f, 15.76f));
+    mSearchLightThrowPos = new FixedPosition(this, "HandR", Vec3f(13.19f, 41.57f, 19.02f), Vec3f(-3.63f, -41.69f, 15.76f));
 }
 
 void MarioActor::updateSearchLight() {
@@ -157,10 +157,10 @@ void MarioActor::updateThrowing() {
         return;
     }
 
-    TVec3f trans;
+    Vec3f trans;
     mSearchLightThrowPos->mMtx.getTrans(trans);
 
-    TVec3f& position = mSearchLight->mPosition;
+    Vec3f& position = mSearchLight->mPosition;
     position = trans + mVelocity;
 
     mSearchLightThrowPos->copyRotate(&mSearchLight->mRotation);
@@ -220,17 +220,17 @@ void MarioActor::drawSearchLight() const {
         return;
     }
 
-    TVec3f throwVec;
+    Vec3f throwVec;
     getThrowVec(&throwVec);
 
-    TVec2f screenPos1;
+    Vec2f screenPos1;
     TDDraw::project2D(&screenPos1, mPosition);
 
-    TVec2f screenPos2;
+    Vec2f screenPos2;
     TDDraw::project2D(&screenPos2, mPosition + throwVec * 10000.0f);
 
-    TVec2f minimum;
-    TVec2f maximum;
+    Vec2f minimum;
+    Vec2f maximum;
     if (screenPos1.x >= screenPos2.x) {
         minimum.x = screenPos2.x;
         maximum.x = screenPos1.x;
@@ -247,8 +247,8 @@ void MarioActor::drawSearchLight() const {
         maximum.y = screenPos2.y;
     }
 
-    screenPos1 = minimum + TVec2f(-10.0f, -10.0f);
-    screenPos2 = maximum + TVec2f(10.0f, 10.0f);
+    screenPos1 = minimum + Vec2f(-10.0f, -10.0f);
+    screenPos2 = maximum + Vec2f(10.0f, 10.0f);
 
     // The light model with its own material and the passes over it (J3DNativeMaterial::override); setup's view only.
     NebulaNativeMaterial view;
@@ -328,11 +328,11 @@ void MarioActor::drawSearchLight() const {
     }
 }
 
-void MarioActor::getThrowVec(TVec3f* pVec) const {
-    TVec3f rotate;
+void MarioActor::getThrowVec(Vec3f* pVec) const {
+    Vec3f rotate;
     mSearchLightThrowPos->copyRotate(&rotate);
 
-    TVec3f dirZ(0.0f, 0.0f, 1.0f);
+    Vec3f dirZ(0.0f, 0.0f, 1.0f);
 
     Mtx trMtx;
     MR::makeMtxTR(trMtx, 0.0f, 0.0f, 0.0f, rotate.x, rotate.y, rotate.z);

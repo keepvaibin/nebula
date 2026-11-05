@@ -78,7 +78,7 @@ void Butterfly::init(const JMapInfoIter& rIter) {
     MR::setBrkFrameAndStop(this, mColorIndex);
 
     initHitSensor(1);
-    MR::addHitSensorMtxAnimal(this, "body", 8, ::sRadius, MR::getJointMtx(this, "buttBody"), TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorMtxAnimal(this, "body", 8, ::sRadius, MR::getJointMtx(this, "buttBody"), Vec3f(0.0f, 0.0f, 0.0f));
     initBinder(::sRadius, 0.0f, 0);
     initSound(2, false);
 
@@ -105,7 +105,7 @@ void Butterfly::init(const JMapInfoIter& rIter) {
 
 void Butterfly::initAfterPlacement() {
     if (MR::isEqualStageName("HeavensDoorGalaxy")) {
-        TVec3f gravity;
+        Vec3f gravity;
         MR::calcGravityVector(this, &gravity, nullptr, 0);
         MR::makeQuatUpNoSupport(&mQuat, -gravity);
     } else {
@@ -129,7 +129,7 @@ void Butterfly::control() {
 }
 
 void Butterfly::calcAndSetBaseMtx() {
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.setQT(mQuat, mPosition);
     MR::setBaseTRMtx(this, mtx);
 }
@@ -148,22 +148,22 @@ void Butterfly::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
 }
 
 void Butterfly::updatePosture() {
-    TVec3f gravity;
+    Vec3f gravity;
     MR::calcGravityVector(this, &gravity, nullptr, 0);
 
-    TVec3f up;
+    Vec3f up;
     mQuat.getYDir(up);
-    TVec3f forward;
+    Vec3f forward;
     mQuat.getZDir(forward);
 
     // Unused
     {
-        TVec3f tmp = -gravity;
-        TQuat4f quat;
+        Vec3f tmp = -gravity;
+        Quat4f quat;
         quat.setRotate(up, tmp, 1.0f);
     }
 
-    TVec3f vel = mVelocity;
+    Vec3f vel = mVelocity;
     if (vel.length() < ::sUpdatePostureMinVel) {
         mQuat.normalize();
         return;
@@ -176,12 +176,12 @@ void Butterfly::updatePosture() {
     }
 
     MR::normalize(&vel);
-    TVec3f targetForward = vel.killElement(up);
+    Vec3f targetForward = vel.killElement(up);
     MR::normalizeOrZero(&targetForward);
     if (!MR::isNearZero(targetForward)) {
-        TVec3f newForward;
+        Vec3f newForward;
         MR::turnVecToVecCos(&newForward, forward, targetForward, ::sTurnLimit, up);
-        TQuat4f tmp;
+        Quat4f tmp;
         tmp.setRotate(forward, newForward, 1.0f);
         mQuat.mult(tmp);
     }
@@ -189,22 +189,22 @@ void Butterfly::updatePosture() {
 }
 
 void Butterfly::addRunAwayVelocity() {
-    TVec2f pointerScreenPos;
+    Vec2f pointerScreenPos;
     pointerScreenPos.set(*MR::getStarPointerScreenPosition(*MR::getStarPointerLastPointedPort(this)));
-    TVec2f screenPos;
+    Vec2f screenPos;
     MR::calcScreenPosition(&screenPos, mPosition);
-    TVec2f runAwayDir = screenPos - pointerScreenPos;
+    Vec2f runAwayDir = screenPos - pointerScreenPos;
 
     if (!MR::isNearZero(runAwayDir)) {
         MR::normalize(&pointerScreenPos);
     }
 
-    TVec3f xDir = MR::getCamXdir();
-    TVec3f invYDir = -MR::getCamYdir();
+    Vec3f xDir = MR::getCamXdir();
+    Vec3f invYDir = -MR::getCamYdir();
 
-    TVec3f vel = xDir * runAwayDir.x + invYDir * runAwayDir.y;
+    Vec3f vel = xDir * runAwayDir.x + invYDir * runAwayDir.y;
 
-    TVec3f gravity;
+    Vec3f gravity;
     MR::calcGravityVector(this, &gravity, nullptr, 0);
 
     if (0.0f < vel.dot(gravity)) {
@@ -233,9 +233,9 @@ bool Butterfly::tryRunAway() {
         return false;
     }
 
-    TVec2f screenPos;
+    Vec2f screenPos;
     MR::calcScreenPosition(&screenPos, mPosition);
-    TVec2f pointerScreenPos;
+    Vec2f pointerScreenPos;
     pointerScreenPos.set(*MR::getStarPointerScreenPosition(port));
     if (MR::getStarPointerScreenVelocity(port)->dot(screenPos - pointerScreenPos) <= 0.0f) {
         return false;
@@ -260,8 +260,8 @@ bool Butterfly::tryHive() {
         return false;
     }
 
-    TVec2f screenPos;
-    TVec2f pointerScreenPos = *MR::getStarPointerScreenPosition(port);
+    Vec2f screenPos;
+    Vec2f pointerScreenPos = *MR::getStarPointerScreenPosition(port);
     MR::calcScreenPosition(&screenPos, mPosition);
     if (::sHiveRadius < pointerScreenPos.distance(screenPos)) {
         return false;
@@ -329,7 +329,7 @@ void Butterfly::exeWait() {
     mVelocity.y *= ::sBackToHomeAttenVel;
     mVelocity.z *= ::sBackToHomeAttenVel;
 
-    TVec3f backToHomeVel = mHomePos - mPosition;
+    Vec3f backToHomeVel = mHomePos - mPosition;
     if (MR::isNearZero(backToHomeVel)) {
         return;
     }
@@ -381,9 +381,9 @@ void Butterfly::exeHive() {
         return;
     }
 
-    TVec3f pos;
+    Vec3f pos;
     MR::calcStarPointerWorldPointingPos(&pos, mPosition, port);
-    TVec3f vel = pos - mPosition;
+    Vec3f vel = pos - mPosition;
     mVelocity += vel * ::sHiveAccel;
 
     if (::sHiveVelMax < mVelocity.length()) {
@@ -401,7 +401,7 @@ void Butterfly::exePerchOn() {
     } else {
         // PerchOn can only happen from Hive
         // This runs the Hive nerve until the perch target is near
-        TVec3f vel = mPerchTarget->getPosition() - mPosition;
+        Vec3f vel = mPerchTarget->getPosition() - mPosition;
         vel.setLength(::sHiveAccel);
         mVelocity += vel;
 
@@ -419,13 +419,13 @@ void Butterfly::exeGotoSleepingMario() {
         return;
     }
 
-    TPos3f jointMtx;
+    Pos3f jointMtx;
     MR::calcPlayerJointMtx(&jointMtx, "CapPosition");
 
-    TVec3f posOffset;
+    Vec3f posOffset;
     jointMtx.mult(::sMarioCapPosOffset, posOffset);
 
-    TVec3f vel = posOffset - mPosition;
+    Vec3f vel = posOffset - mPosition;
     // This can really only be ::sHiveAccel, but this nerve is only accessible by Wait
     vel.setLength(0.05f);
     mVelocity += vel;
@@ -441,10 +441,10 @@ void Butterfly::exeGotoSleepingMario() {
 }
 
 void Butterfly::exeReadyToPerchOnSleepingMario() {
-    TPos3f jointMtx;
+    Pos3f jointMtx;
     MR::calcPlayerJointMtx(&jointMtx, "CapPosition");
 
-    TVec3f posOffset;
+    Vec3f posOffset;
     jointMtx.mult(::sMarioCapPosOffset, posOffset);
     MR::vecBlend(mPosition, posOffset, &mPosition, ::sTransBlendRatio);
 
@@ -459,7 +459,7 @@ void Butterfly::exePerchOnSleepingMario() {
         MR::startBck(this, "Wait");
     }
 
-    TPos3f jointMtx;
+    Pos3f jointMtx;
     MR::calcPlayerJointMtx(&jointMtx, "CapPosition");
 
     jointMtx.mult(::sMarioCapPosOffset, mPosition);

@@ -102,7 +102,7 @@ namespace MR {
         return getScreenWidth() * 0.045f;
     }
 
-    void convertScreenPosToFrame(TVec2f* pFrame, const TVec2f& rScreenPos) {
+    void convertScreenPosToFrame(Vec2f* pFrame, const Vec2f& rScreenPos) {
         pFrame->set(rScreenPos.x / getScreenWidth(), rScreenPos.y / getScreenHeight());
     }
 
@@ -217,7 +217,7 @@ namespace MR {
         ::getSystemWipeHolder()->startGameScreenCapture();
     }
 
-    void setWipeCircleCenterPos(const TVec3f& rCenterPos) {
+    void setWipeCircleCenterPos(const Vec3f& rCenterPos) {
         ::getSystemWipeHolder()->setWipeRingCenter(rCenterPos);
     }
 

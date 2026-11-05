@@ -77,7 +77,7 @@ void Trapeze::init(const JMapInfoIter& rIter) {
     MR::connectToScene(this, MR::MovementType_Ride, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_Trapeze);
     MR::initDefaultPos(this, rIter);
 
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.identity();
     MR::makeMtxTR(mtx, this);
 
@@ -88,7 +88,7 @@ void Trapeze::init(const JMapInfoIter& rIter) {
     mRopeLength = mScale.y * 100.0f;
     mScale.set(1.0f, 1.0f, 1.0f);
 
-    TVec3f spawnPos(mPosition.x, mPosition.y - mRopeLength, mPosition.z);
+    Vec3f spawnPos(mPosition.x, mPosition.y - mRopeLength, mPosition.z);
     mStickPoint = new SwingRopePoint(spawnPos);
     mHangPoint = new SwingRopePoint(mPosition);
 
@@ -122,13 +122,13 @@ void Trapeze::draw() const {
         return;
     }
 
-    TVec3f left = mSide * -(::sStickLength / 2.0f);
-    TVec3f right = mSide * (::sStickLength / 2.0f);
+    Vec3f left = mSide * -(::sStickLength / 2.0f);
+    Vec3f right = mSide * (::sStickLength / 2.0f);
 
-    TVec3f grabLeft = left;
-    TVec3f grabRight = right;
-    TVec3f swingLeft = left;
-    TVec3f swingRight = right;
+    Vec3f grabLeft = left;
+    Vec3f grabRight = right;
+    Vec3f swingLeft = left;
+    Vec3f swingRight = right;
 
     left.add(mPosition);
     right.add(mPosition);
@@ -175,7 +175,7 @@ void Trapeze::exeFree() {
 
 void Trapeze::exeFreeInvalid() {
     exeFree();
-    TVec3f posDiffHoriz = *MR::getPlayerPos();
+    Vec3f posDiffHoriz = *MR::getPlayerPos();
     posDiffHoriz.sub(mStickPoint->mPosition);
     posDiffHoriz.y = 0.0f;
 
@@ -406,7 +406,7 @@ bool Trapeze::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver)
             return false;
         }
 
-        TVec3f posDiff = pSender->mHost->mPosition;
+        Vec3f posDiff = pSender->mHost->mPosition;
         posDiff.sub(pReceiver->mPosition);
 
         if (MR::abs(posDiff.dot(mFront)) > ::sDistanceStartBindZ) {
@@ -415,7 +415,7 @@ bool Trapeze::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver)
 
         mRider = pSender->mHost;
 
-        TVec3f grabPos = pSender->mHost->mPosition;
+        Vec3f grabPos = pSender->mHost->mPosition;
         grabPos.sub(mPosition);
 
         f32 dotUp = mUp.dot(grabPos);
@@ -427,7 +427,7 @@ bool Trapeze::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver)
         coord = MR::clamp(coord, 0.0f, mRopeLength);
         mGrabCoord = coord;
 
-        TVec3f frontVec;
+        Vec3f frontVec;
         MR::getPlayerFrontVec(&frontVec);
         if (frontVec.dot(mFront) < 0.0f) {
             mSwingReverse = true;
@@ -438,13 +438,13 @@ bool Trapeze::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver)
         f32 projGrabPointVel = mHangPoint->mVelocity.dot(mFront);
         f32 vel = MR::getPlayerVelocity()->dot(mFront);
 
-        TVec3f swingVel = mFront;
+        Vec3f swingVel = mFront;
         if (MR::abs(vel) < 3.0f && 3.0f < projGrabPointVel) {  // is this a bug??
             vel = projGrabPointVel;
         }
         swingVel.scale(vel);
 
-        TVec3f grabFront = mFront;
+        Vec3f grabFront = mFront;
         if (MR::abs(mPosition.y - grabPos.y) < ::sTransDiffMinY) {
             grabFront.set< f32 >(0.0f, -1.0f, 0.0f);
         }
@@ -470,13 +470,13 @@ bool Trapeze::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver)
     }
 
     if (MR::isMsgUpdateBaseMtx(msg)) {
-        TVec3f side = mHangPoint->mSide;
-        TVec3f front = mHangPoint->mFront;
+        Vec3f side = mHangPoint->mSide;
+        Vec3f front = mHangPoint->mFront;
         if (mSwingReverse) {
             side.scale(-1.0f);
             front.scale(-1.0f);
         }
-        TPos3f mtx;
+        Pos3f mtx;
         mtx.setXYZDir(side, mHangPoint->mUp, front);
         mtx.setTrans(mHangPoint->mPosition);
         MR::setBaseTRMtx(mRider, mtx);
@@ -495,17 +495,17 @@ bool Trapeze::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver)
 
 bool Trapeze::tryJump() {
     if (MR::isPressedJump(PLAYER_1) || MR::testSystemTriggerA()) {
-        TVec3f jumpVel = mHangPoint->mVelocity * ::sJumpSpeedRate;
+        Vec3f jumpVel = mHangPoint->mVelocity * ::sJumpSpeedRate;
         jumpVel.y = MR::clamp(jumpVel.y, ::sJumpSpeedMinY, ::sJumpSpeedMaxY);
 
-        TVec3f grabVel(jumpVel.x, 0.0f, jumpVel.z);
+        Vec3f grabVel(jumpVel.x, 0.0f, jumpVel.z);
         if (grabVel.squared() > 300.0f) {
             MR::normalize(&grabVel);
             grabVel.scale(::sJumpSpeedMaxXZ);
             jumpVel.x = grabVel.x;
             jumpVel.z = grabVel.z;
         } else if (grabVel.squared() < ::sJumpSpeedMinXZ * ::sJumpSpeedMinXZ && MR::isMoveStickOperated(PLAYER_1)) {
-            TVec3f stick(0.0f, 0.0f, 0.0f);
+            Vec3f stick(0.0f, 0.0f, 0.0f);
             MR::calcWorldStickDirectionXZ(&stick, PLAYER_1);
             if (stick.dot(mFront) > 0.0f) {
                 jumpVel.x = mFront.x * ::sJumpSpeedMinXZ;
@@ -516,7 +516,7 @@ bool Trapeze::tryJump() {
             }
         }
 
-        TVec3f frontDir = mFront;
+        Vec3f frontDir = mFront;
         if (mSwingReverse) {
             frontDir.scale(-1.0f);
         }
@@ -546,7 +546,7 @@ bool Trapeze::tryJump() {
     return false;
 }
 
-void Trapeze::updateStick(const TVec3f& rAnchor, f32 length) {
+void Trapeze::updateStick(const Vec3f& rAnchor, f32 length) {
     mStickPoint->addAccel(mGravity * ::sStickPointGravity);
     mStickPoint->strain(rAnchor, length);
     mStickPoint->updatePosAndAxis(mStickPoint->mFront, ::sStickPointFrictionRate);
@@ -569,9 +569,9 @@ void Trapeze::updateHangPoint() {
     mIsSwingBack = false;
 
     if (MR::isMoveStickOperated(PLAYER_1)) {
-        TVec3f stick(0.0f, 0.0f, 0.0f);
+        Vec3f stick(0.0f, 0.0f, 0.0f);
         MR::calcWorldStickDirectionXZ(&stick, PLAYER_1);
-        TVec3f frontAccel = mFront;
+        Vec3f frontAccel = mFront;
         if (stick.dot(mFront) < 0.0f) {
             frontAccel.scale(-1.0f);
         }
@@ -632,7 +632,7 @@ bool Trapeze::updateBind() {
         updateStick(mHangPoint->mPosition, mRopeLength - mGrabCoord);
     } else {
         mStickPoint->setPosAndAxis(mHangPoint->mPosition, mHangPoint->mSide, mHangPoint->mUp, mHangPoint->mFront);
-        TVec3f vel(0.0f, 0.0f, 0.0f);
+        Vec3f vel(0.0f, 0.0f, 0.0f);
         mStickPoint->mVelocity.set(vel);
     }
 
@@ -693,7 +693,7 @@ bool Trapeze::isStartSwingBack() const {
 }
 
 namespace {
-    void drawPolygon0(const TVec3f& rPosA, const TVec3f& rPosB, const TVec3f& rSide, const TVec3f& rFront, f32 x1, f32 y1, f32 x2, f32 y2, f32 texA,
+    void drawPolygon0(const Vec3f& rPosA, const Vec3f& rPosB, const Vec3f& rSide, const Vec3f& rFront, f32 x1, f32 y1, f32 x2, f32 y2, f32 texA,
                       f32 texB) {
         J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
         {
@@ -723,7 +723,7 @@ namespace {
         }
     }
 
-    void drawPolygon1(const TVec3f& rPosA, const TVec3f& rPosB, const TVec3f& rSide, const TVec3f& rFront, f32 x1, f32 y1, f32 x2, f32 y2, f32 texA,
+    void drawPolygon1(const Vec3f& rPosA, const Vec3f& rPosB, const Vec3f& rSide, const Vec3f& rFront, f32 x1, f32 y1, f32 x2, f32 y2, f32 texA,
                       f32 texB) {
         J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
         {
@@ -753,7 +753,7 @@ namespace {
         }
     }
 
-    void drawPolygon2(const TVec3f& rPosA, const TVec3f& rPosB, const TVec3f& rSide, const TVec3f& rFront, f32 x1, f32 y1, f32 x2, f32 y2, f32 texA,
+    void drawPolygon2(const Vec3f& rPosA, const Vec3f& rPosB, const Vec3f& rSide, const Vec3f& rFront, f32 x1, f32 y1, f32 x2, f32 y2, f32 texA,
                       f32 texB) {
         J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
         {
@@ -784,7 +784,7 @@ namespace {
     }
 };  // namespace
 
-void Trapeze::drawRope(const TVec3f& rPosA, const TVec3f& rPosB, const TVec3f& rSide, const TVec3f& rFront, f32 texA, f32 texB) const {
+void Trapeze::drawRope(const Vec3f& rPosA, const Vec3f& rPosB, const Vec3f& rSide, const Vec3f& rFront, f32 texA, f32 texB) const {
     ::drawPolygon0(rPosA, rPosB, rSide, rFront, ::sDrawWidthX + ::sDrawWidthShortOffsetX, ::sDrawWidthZ + ::sDrawWidthShortOffsetZ,
                    ::sDrawWidthX + ::sDrawWidthLongOffsetX, ::sDrawWidthZ + ::sDrawWidthShortOffsetZ, texA + ::sTexRateDiff0, texB + ::sTexRateDiff0);
 

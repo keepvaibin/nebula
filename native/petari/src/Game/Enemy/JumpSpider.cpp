@@ -17,8 +17,8 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
+
 
 namespace {
     // hCommonGravity
@@ -69,7 +69,7 @@ void JumpSpider::init(const JMapInfoIter& rIter) {
 
     initModelManagerWithAnm("JumpSpider", nullptr, false);
     MR::initFur(this);
-    TPos3f pos;
+    Pos3f pos;
     pos.setInline(getBaseMtx());
     pos.getZDir(_94);
     MR::connectToSceneEnemy(this);
@@ -77,13 +77,13 @@ void JumpSpider::init(const JMapInfoIter& rIter) {
     f32 scaleY = mScale.y;
     initBinder(scaleY * 100.0f, scaleY * 100.0f, 0);
     initHitSensor(1);
-    TVec3f offset1;
+    Vec3f offset1;
     offset1.set(0.0f, 60.0f * scaleY, 0.0f);
     MR::addHitSensorEnemy(this, "body", 32, scaleY * 100.0f, offset1);
     initEffectKeeper(0, nullptr, false);
     initSound(4, false);
     initNerve(GET_NERVE(JumpSpider, HostTypeNrvWait));
-    TVec3f offset2;
+    Vec3f offset2;
     offset2.x = 0.0f;
     offset2.y = 80.0f;
     offset2.z = 0.0f;
@@ -100,8 +100,8 @@ void JumpSpider::init(const JMapInfoIter& rIter) {
 
 void JumpSpider::initAfterPlacement() {
     MR::calcGravity(this);
-    TVec3f v15(mPosition - mGravity * 10.0f);
-    TVec3f v1, v2;
+    Vec3f v15(mPosition - mGravity * 10.0f);
+    Vec3f v1, v2;
 
     if (MR::getFirstPolyNormalOnLineToMap(&v1, v15, mGravity * 300.0f, &v2, nullptr)) {
         _A0.set(v2);
@@ -162,7 +162,7 @@ void JumpSpider::exePreJump() {
         mVelocity.zero();
     }
 
-    TVec3f heightVec;
+    Vec3f heightVec;
     MR::calcVecToPlayerH(&heightVec, this, nullptr);
     MR::turnVecToVecRadian(&_94, _94, heightVec, 0.05f, mGravity);
 
@@ -179,7 +179,7 @@ void JumpSpider::exeJump() {
     }
 
     MR::applyVelocityDampAndGravity(this, 0.3f, ::hGroundDamp, ::hAirDampH, ::hAirDampV, ::hJumpVelV);
-    TVec3f heightVec;
+    Vec3f heightVec;
     MR::calcVecToPlayerH(&heightVec, this, nullptr);
     MR::turnVecToVecRadian(&_94, _94, heightVec, 0.02f, mGravity);
 
@@ -218,7 +218,7 @@ void JumpSpider::exeHitToPlayer() {
     MR::killVelocityOnGroundH(this);
 
     if (MR::isGreaterStep(this, 58)) {
-        TVec3f heightVec;
+        Vec3f heightVec;
         MR::calcVecToPlayerH(&heightVec, this, nullptr);
         MR::turnVecToVecRadian(&_94, _94, heightVec, 0.05f, mGravity);
     }
@@ -463,7 +463,7 @@ bool JumpSpider::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiv
 }
 
 void JumpSpider::calcAndSetBaseMtx() {
-    TPos3f pos;
+    Pos3f pos;
     MR::calcMtxFromGravityAndZAxis(&pos, this, mGravity, _94);
     MR::setBaseTRMtx(this, pos);
     MR::setBaseScale(this, mScaleController->_C * mScale);

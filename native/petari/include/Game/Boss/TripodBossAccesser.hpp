@@ -47,12 +47,12 @@ namespace MR {
     bool tryDamageDemoTripodBoss();
     void requestEndDamageDemoTripodBoss();
     uintptr_t getTripodBossGravityHostID();
-    void setTripodBossJointAttachBaseMatrix(const TPos3f&, s32);
+    void setTripodBossJointAttachBaseMatrix(const Pos3f&, s32);
     void requestStartTripodBossStepSequence(s32);
     void addTripodBossStepPoint(TripodBossStepPoint*);
-    void getTripodBossJointMatrix(TPos3f*, s32);
-    void getTripodBossAttachJointMatrix(TPos3f*, s32);
-    void concatTripodBossAttachJointMatrix(TPos3f*, s32);
+    void getTripodBossJointMatrix(Pos3f*, s32);
+    void getTripodBossAttachJointMatrix(Pos3f*, s32);
+    void concatTripodBossAttachJointMatrix(Pos3f*, s32);
     bool isSteppingTripodBossLegID(s32);
     bool isSteppingTripodBossJointID(s32);
 };  // namespace MR

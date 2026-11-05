@@ -116,7 +116,7 @@ void SceneFunction::executeCalcAnimListOnPlayingMovie() {
 }
 
 void SceneFunction::executeCalcViewAndEntryList() {
-    TMtx34f mtx;
+    Mtx34f mtx;
     mtx.identity();
     NebulaMtxCopy(mtx, j3dSys.mViewMtx);
     CategoryList::entryDrawBuffer2D();
@@ -125,7 +125,7 @@ void SceneFunction::executeCalcViewAndEntryList() {
 }
 
 void SceneFunction::executeCalcViewAndEntryList2D() {
-    TMtx34f mtx;
+    Mtx34f mtx;
     mtx.identity();
     NebulaMtxCopy(mtx, j3dSys.mViewMtx);
     CategoryList::entryDrawBuffer2D();

@@ -19,7 +19,7 @@ public:
 
     void addBubble(BigBubble*);
 
-    TVec3f mTrans;
+    Vec3f mTrans;
     f32 mMeterCapacity;
     f32 mMeterDisplayAmount;
     f32 mMeterAmount;

@@ -14,7 +14,7 @@ GlaringLightArea::GlaringLightArea(int formType, const char* pName) : AreaObj(fo
 void GlaringLightArea::init(const JMapInfoIter& rIter) {
     AreaObj::init(rIter);
 
-    TVec3f pos;
+    Vec3f pos;
     MR::calcCylinderPos(&pos, this);
 
     mPos.x = pos.x;

@@ -16,7 +16,7 @@ public:
     void select();
     void notSelect();
     bool isAppearEnd() const;
-    void setup(s32, int, const TVec3f&, s32);
+    void setup(s32, int, const Vec3f&, s32);
     bool tryEndPointing();
     void updatePos();
     void exeAppear();
@@ -33,8 +33,8 @@ public:
     bool mIsPointing;
     f32 mRotateSpeed;
     s32 mRotateTime;
-    TVec3f mBasePos;
-    TVec3f mTranslationOnSelect;
+    Vec3f mBasePos;
+    Vec3f mTranslationOnSelect;
     int mAppearFrame;
     f32 mScaleOnSelect;
 };

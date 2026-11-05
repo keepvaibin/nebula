@@ -105,8 +105,8 @@ void MarioLauncher::init(const JMapInfoIter& rIter) {
     MR::connectToSceneMapObjStrongLight(this);
 
     initHitSensor(2);
-    MR::addHitSensor(this, "Bind", ATYPE_MARIO_LAUNCHER_BIND, 8, ::sSensorRadius, TVec3f(0.0f, ::sSensorOffsetY, 0.0f));
-    MR::addHitSensorMtxRide(this, "Shell", 8, ::sShellRadius, mShell->mBaseMtx, TVec3f(0.0f, ::sShellOffset, 0.0f));
+    MR::addHitSensor(this, "Bind", ATYPE_MARIO_LAUNCHER_BIND, 8, ::sSensorRadius, Vec3f(0.0f, ::sSensorOffsetY, 0.0f));
+    MR::addHitSensorMtxRide(this, "Shell", 8, ::sShellRadius, mShell->mBaseMtx, Vec3f(0.0f, ::sShellOffset, 0.0f));
     MR::invalidateHitSensor(this, "Shell");
 
     MR::initCollisionParts(this, "MarioLauncher", getSensor("Bind"), nullptr);
@@ -165,7 +165,7 @@ void MarioLauncher::exeReady() {
 
     MR::blendMtx(mPlayerBaseMtx, mLauncherBaseMtx, MR::calcNerveRate(this, maxFrame), mPlayerMtx);
 
-    TVec3f up;
+    Vec3f up;
     mLauncherBaseMtx.getYDir(up);
 
     if (MR::isBckStoppedPlayer()) {
@@ -200,7 +200,7 @@ void MarioLauncher::exePrep() {
         MR::startSound(this, "SE_OJ_MARIO_LAUNCHER_IN");
     }
 
-    TVec3f front;
+    Vec3f front;
     MR::calcFrontVec(&front, this);
 
     if (MR::isStep(this, ::sPrepFrame)) {
@@ -285,10 +285,10 @@ void MarioLauncher::exeKill() {
 }
 
 void MarioLauncherShell::calcBaseMtx() {
-    TQuat4f rot;
+    Quat4f rot;
 
-    TVec3f vel = mVelocity;
-    TVec3f grav = mGravity;
+    Vec3f vel = mVelocity;
+    Vec3f grav = mGravity;
     mReboundDir.set< f32 >(mPosition.x - mBaseMtx[0][3],   //
                            mPosition.y - mBaseMtx[1][3],   //
                            mPosition.z - mBaseMtx[2][3]);  //
@@ -296,9 +296,9 @@ void MarioLauncherShell::calcBaseMtx() {
     if (!MR::isNearZero(vel)) {
         MR::normalize(&vel);
 
-        TVec3f front;
+        Vec3f front;
         mBaseMtx.getYDir(front);
-        TVec3f down;
+        Vec3f down;
         mBaseMtx.getZDir(down);
 
         if (!MR::isNearZero(grav)) {
@@ -325,7 +325,7 @@ void MarioLauncherShell::calcBaseMtx() {
 }
 
 MtxPtr MarioLauncherShell::getBaseMtx() const {
-    return const_cast< TPos3f& >(mBaseMtx);
+    return const_cast< Pos3f& >(mBaseMtx);
 }
 
 void MarioLauncher::exeReject() {
@@ -338,9 +338,9 @@ void MarioLauncher::exeReject() {
     }
 
     if (MR::isStep(this, ::sRejectFrame)) {
-        TVec3f jumpY;
+        Vec3f jumpY;
         MR::extractMtxYDir(getBaseMtx(), &jumpY);
-        TVec3f jumpZ;
+        Vec3f jumpZ;
         MR::extractMtxZDir(getBaseMtx(), &jumpZ);
         MR::endBindAndPlayerJump(this, jumpY * ::sRejectJumpY - jumpZ * ::sRejectJumpZ, 0);
         MR::startSoundPlayer("SE_PV_JUMP_S");
@@ -430,7 +430,7 @@ bool MarioLauncher::doPrep() {
     MR::invalidateClipping(this);
     MR::invalidateClipping(mShell);
 
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.set(getBaseMtx());
     MR::addTransMtxLocalY(mtx, ::sCameraYOffset);
     if (mLauncherType == LauncherType_Front) {
@@ -481,7 +481,7 @@ bool MarioLauncher::doReject() {
         MR::offSwitchB(this);
     }
 
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.set(getBaseMtx());
     MR::addTransMtxLocalY(mtx, ::sCameraYOffset);
     MR::addTransMtxLocalZ(mtx, 0.0f);
@@ -508,14 +508,14 @@ bool MarioLauncher::doEject() {
         return false;
     }
 
-    TVec3f back;
+    Vec3f back;
     MR::calcUpVec(&back, this);
     if (mLauncherType == LauncherType_Up) {
         MR::calcFrontVec(&back, this);
         back *= -1.0f;
     }
 
-    TVec3f shootDir;
+    Vec3f shootDir;
     MR::calcWorldRayDirectionFromScreen(&shootDir, *MR::getStarPointerScreenPosition(PLAYER_1));
     MR::normalize(&shootDir);
 
@@ -554,14 +554,14 @@ bool MarioLauncher::doFlight() {
     MR::calcPlayerJointMtx(&mEffectMtxSmoke, "Center");
     mEffectMtxGravity = mEffectMtxSmoke;
 
-    TVec3f attract;
+    Vec3f attract;
     MR::calcAttractMarioLauncherOrZero(mShell, &attract, nullptr, 0);
 
     if (!MR::isNearZero(attract)) {
         isInAttractor = true;
     }
 
-    TVec3f currGrav;
+    Vec3f currGrav;
     currGrav = mShell->mGravity;
     attract *= (1.0f - ::sGravityRatio);
     currGrav *= ::sGravityRatio;
@@ -571,24 +571,24 @@ bool MarioLauncher::doFlight() {
         mIsInAttractor = isInAttractor;
     }
 
-    TQuat4f gravRot;
-    TVec3f grav = mShell->mGravity;
+    Quat4f gravRot;
+    Vec3f grav = mShell->mGravity;
 
     if (isInAttractor) {
         MR::normalizeOrZero(&grav);
 
-        TVec3f up, gravityEffectPos;
+        Vec3f up, gravityEffectPos;
 
         mEffectMtxGravity.getTrans(gravityEffectPos);
-        mEffectMtxGravity.setTrans(TVec3f(0.0f, 0.0f, 0.0f));
+        mEffectMtxGravity.setTrans(Vec3f(0.0f, 0.0f, 0.0f));
         mEffectMtxGravity.getYDir(up);
 
         gravRot.setRotate(-up, grav);
 
-        TPos3f gravRotMtx;
+        Pos3f gravRotMtx;
         gravRotMtx.setQuat(gravRot);
 
-        TPos3f rot;
+        Pos3f rot;
         rot.concat(gravRotMtx, mEffectMtxGravity);
         mEffectMtxGravity.set(rot);
         mEffectMtxGravity.setTrans(gravityEffectPos);

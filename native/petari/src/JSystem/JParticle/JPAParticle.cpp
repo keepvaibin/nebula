@@ -30,7 +30,7 @@ void JPABaseParticle::init_p(JPAEmitterWorkData* pWork) {
     mPosition.set< f32 >(mOffsetPosition.x + mLocalPosition.x * pWork->mPublicScale.x, mOffsetPosition.y + mLocalPosition.y * pWork->mPublicScale.y,
                          mOffsetPosition.z + mLocalPosition.z * pWork->mPublicScale.z);
 
-    JGeometry::TVec3< f32 > velOmni;
+    Vec3f velOmni;
 
     if (emtr->mAwayFromCenterSpeed) {
         velOmni.setLength(pWork->mVolumeCalcData.mVelOmni, emtr->mAwayFromCenterSpeed);
@@ -38,7 +38,7 @@ void JPABaseParticle::init_p(JPAEmitterWorkData* pWork) {
         velOmni.zero();
     }
 
-    JGeometry::TVec3< f32 > velAxis;
+    Vec3f velAxis;
 
     if (emtr->mAwayFromAxisSpeed) {
         velAxis.setLength(pWork->mVolumeCalcData.mVelAxis, emtr->mAwayFromAxisSpeed);
@@ -46,7 +46,7 @@ void JPABaseParticle::init_p(JPAEmitterWorkData* pWork) {
         velAxis.zero();
     }
 
-    JGeometry::TVec3< f32 > velDir;
+    Vec3f velDir;
 
     if (emtr->mDirSpeed) {
         Mtx mtx;
@@ -57,7 +57,7 @@ void JPABaseParticle::init_p(JPAEmitterWorkData* pWork) {
         velDir.zero();
     }
 
-    JGeometry::TVec3< f32 > velRndm;
+    Vec3f velRndm;
 
     if (emtr->mRndmDirSpeed) {
         f32 z = emtr->mRndm.get_rndm_zh();
@@ -134,7 +134,7 @@ void JPABaseParticle::init_c(JPAEmitterWorkData* pWork, JPABaseParticle* pParent
     f32 pos_rndm = csp->getPosRndm();
 
     if (pos_rndm != 0.0f) {
-        JGeometry::TVec3< f32 > rnd(emtr->mRndm.get_rndm_zh(), emtr->mRndm.get_rndm_zh(), emtr->mRndm.get_rndm_zh());
+        Vec3f rnd(emtr->mRndm.get_rndm_zh(), emtr->mRndm.get_rndm_zh(), emtr->mRndm.get_rndm_zh());
         rnd.setLength(pos_rndm * emtr->get_r_f());
         mLocalPosition.add(rnd);
     }
@@ -146,7 +146,7 @@ void JPABaseParticle::init_c(JPAEmitterWorkData* pWork, JPABaseParticle* pParent
     mOffsetPosition.set(pParent->mOffsetPosition);
 
     f32 base_speed = csp->getBaseVel() * (csp->getBaseVelRndm() * emtr->get_r_zp() + 1.0f);
-    JGeometry::TVec3< f32 > base_vel(emtr->get_r_zp(), emtr->get_r_zp(), emtr->get_r_zp());
+    Vec3f base_vel(emtr->get_r_zp(), emtr->get_r_zp(), emtr->get_r_zp());
     base_vel.setLength(base_speed);
     mVelType1.scaleAdd(csp->getVelInhRate(), pParent->mVelType1, base_vel);
     mVelType0.scale(csp->getVelInhRate(), pParent->mVelType2);

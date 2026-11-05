@@ -15,19 +15,19 @@
 void MarioActor::initBlackHoleOut() {
     mPosRelativeToBlackHole = mPosition - mBlackHolePosition;
 
-    TVec3f normalisedRelativePos(mPosRelativeToBlackHole);
-    TVec3f normalisedRelativeCameraPos = mCamPos - mBlackHolePosition;
+    Vec3f normalisedRelativePos(mPosRelativeToBlackHole);
+    Vec3f normalisedRelativeCameraPos = mCamPos - mBlackHolePosition;
 
     MR::normalizeOrZero(&normalisedRelativeCameraPos);
     MR::normalizeOrZero(&normalisedRelativePos);
 
     Mtx rotation;
-    TVec3f rotateAxis;
+    Vec3f rotateAxis;
 
     rotateAxis.cross(normalisedRelativeCameraPos, normalisedRelativePos);
 
     f32 mag = mPosRelativeToBlackHole.length();
-    TVec3f killed;
+    Vec3f killed;
     f32 flt = MR::vecKillElement(mCamPos - mPosition, mCamDirZ, &killed);
     flt *= mConst->getTable()->mBlackHoleFirstRadius;
 

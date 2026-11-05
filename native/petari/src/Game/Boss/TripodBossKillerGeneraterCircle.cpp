@@ -4,7 +4,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 struct SetUpData {
     const char* mName;
@@ -74,18 +74,18 @@ void TripodBossKillerGeneraterCircle::init(const JMapInfoIter& rIter) {
 
 void TripodBossKillerGeneraterCircle::placementGenerater() {
     for (s32 i = 0; i < mAngleNum; i++) {
-        TPos3f mtx;
+        Pos3f mtx;
         mtx.identity();
         mtx.setEulerX(-MR::toRadian(_3C));
         mtx.setTrans(0.0f, 0.0f, _34);
 
-        TPos3f mtx2;
+        Pos3f mtx2;
         mtx2.identity();
         mtx2.setRotate(-MR::toRadian(_38), MR::toRadian(mAngleTable[i]), 0.0f);
         mtx2.concat(mtx2, mtx);
-        MR::addTransMtx(mtx2, TVec3f(0.0f, _30, 0.0f));
+        MR::addTransMtx(mtx2, Vec3f(0.0f, _30, 0.0f));
 
-        TPos3f trMtx;
+        Pos3f trMtx;
         MR::makeMtxTR(trMtx, mPosition, mRotation);
         mtx2.concat(trMtx, mtx2);
 

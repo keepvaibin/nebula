@@ -23,7 +23,7 @@ ClipAreaHolder::ClipAreaHolder(const char* pName) : DeriveActorGroup< ClipArea >
 void ClipAreaHolder::init(const JMapInfoIter& rIter) {
 }
 
-bool ClipAreaHolder::isInArea(const TVec3f& rParam1, f32 param2) const {
+bool ClipAreaHolder::isInArea(const Vec3f& rParam1, f32 param2) const {
     if (!mIsActive) {
         return false;
     }
@@ -44,7 +44,7 @@ bool ClipAreaHolder::isInArea(const TVec3f& rParam1, f32 param2) const {
     return false;
 }
 
-ClipAreaCollisionFilter::ClipAreaCollisionFilter(const TVec3f* pParam1, f32 param2) : _04(pParam1), _08(param2) {
+ClipAreaCollisionFilter::ClipAreaCollisionFilter(const Vec3f* pParam1, f32 param2) : _04(pParam1), _08(param2) {
 }
 
 bool ClipAreaCollisionFilter::isInvalidParts(const CollisionParts* pParts) const {
@@ -74,7 +74,7 @@ namespace MR {
         ::getClipAreaHolder()->registerActor(pClipArea);
     }
 
-    bool isInClipArea(const TVec3f& rParam1, f32 param2) {
+    bool isInClipArea(const Vec3f& rParam1, f32 param2) {
         return ::getClipAreaHolder()->isInArea(rParam1, param2);
     }
 
@@ -90,7 +90,7 @@ namespace MR {
         ::getClipAreaHolder()->mIsActive = false;
     }
 
-    void setBinderExceptSensorType(LiveActor* actor, const TVec3f* pParam1, f32 param2) {
+    void setBinderExceptSensorType(LiveActor* actor, const Vec3f* pParam1, f32 param2) {
         setBinderCollisionPartsFilter(actor, new ClipAreaCollisionFilter(pParam1, param2));
     }
 };  // namespace MR

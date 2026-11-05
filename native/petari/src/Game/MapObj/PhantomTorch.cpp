@@ -49,7 +49,7 @@ void PhantomTorch::init(const JMapInfoIter& rIter) {
     mPullParticle = new SpinPullParticleCallBack();
     initSound(4, false);
     initHitSensor(1);
-    TVec3f vec;
+    Vec3f vec;
     vec.x = 0.0f;
     vec.y = 70.0f * x;
     vec.z = 0.0f;

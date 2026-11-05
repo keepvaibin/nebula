@@ -17,10 +17,10 @@ public:
     bool startJump();
     bool setStickSensor(const HitSensor*);
 
-    TVec3f _14;
-    TVec3f _20;
-    TVec3f _2C;
-    TVec3f _38;
+    Vec3f _14;
+    Vec3f _20;
+    Vec3f _2C;
+    Vec3f _38;
     f32 _44;
     Triangle* _48;
     u32 _4C;
@@ -28,8 +28,8 @@ public:
     u8 _51;
     u8 _52;
     u8 _53;
-    TVec3f _54;
-    TVec3f _60;
-    TVec3f _6C;
-    TVec3f _78;
+    Vec3f _54;
+    Vec3f _60;
+    Vec3f _6C;
+    Vec3f _78;
 };

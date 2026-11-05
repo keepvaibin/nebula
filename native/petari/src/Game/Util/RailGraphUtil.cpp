@@ -13,7 +13,7 @@ namespace {
         RailGraphEdge edge;
 
         for (s32 i = 0; i < pointCount; i++) {
-            TVec3f position;
+            Vec3f position;
             MR::getRailPointPos0(JMapInfoIter(pPoints, i), &position);
             s32 nearNode = MR::getNearNodeIndex(pGraph, position, 100.0f, nullptr);
             s32 node;
@@ -66,7 +66,7 @@ namespace MR {
         pIter->moveNodeNext();
     }
 
-    void moveNodeNearPosition(RailGraphIter* pRailGraphIter, const TVec3f& rPosition, f32 maxDistance, RailGraphNodeSelecter* pSelector) {
+    void moveNodeNearPosition(RailGraphIter* pRailGraphIter, const Vec3f& rPosition, f32 maxDistance, RailGraphNodeSelecter* pSelector) {
         pRailGraphIter->setNode(getNearNodeIndex(pRailGraphIter->mGraph, rPosition, maxDistance, pSelector));
     }
 
@@ -84,24 +84,24 @@ namespace MR {
         return pRailGraphIter->isWatchedPrevEdge();
     }
 
-    TVec3f* getCurrentNodePosition(const RailGraphIter* pGraph) {
+    Vec3f* getCurrentNodePosition(const RailGraphIter* pGraph) {
         return &pGraph->getCurrentNode()->_0;
     }
 
-    TVec3f* getNextNodePosition(const RailGraphIter* pIter) {
+    Vec3f* getNextNodePosition(const RailGraphIter* pIter) {
         return &pIter->getNextNode()->_0;
     }
 
-    void calcWatchEdgeVector(const RailGraphIter* pIter, TVec3f* pEdge) {
+    void calcWatchEdgeVector(const RailGraphIter* pIter, Vec3f* pEdge) {
         pEdge->set(pIter->getWatchNode()->_0 - pIter->getCurrentNode()->_0);
     }
 
-    void calcWatchEdgeDirection(const RailGraphIter* pRailGraphIter, TVec3f* pVec) {
+    void calcWatchEdgeDirection(const RailGraphIter* pRailGraphIter, Vec3f* pVec) {
         calcWatchEdgeVector(pRailGraphIter, pVec);
         MR::normalize(pVec);
     }
 
-    s32 getNearNodeIndex(const RailGraph* pGraph, const TVec3f& rPosition, f32 maxDistance, RailGraphNodeSelecter* pSelector) {
+    s32 getNearNodeIndex(const RailGraph* pGraph, const Vec3f& rPosition, f32 maxDistance, RailGraphNodeSelecter* pSelector) {
         if (maxDistance < 0.0f) {
             maxDistance = FLOAT_MAX;
         }

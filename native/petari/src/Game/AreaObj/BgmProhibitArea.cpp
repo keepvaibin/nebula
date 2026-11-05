@@ -45,7 +45,7 @@ void BgmProhibitArea::movement() {
         return;
     }
 
-    TVec3f playerPos = *MR::getPlayerPos();
+    Vec3f playerPos = *MR::getPlayerPos();
     f32 distToPlayer = playerPos.distance(_40);
 
     if (isInVolume(*MR::getPlayerPos())) {

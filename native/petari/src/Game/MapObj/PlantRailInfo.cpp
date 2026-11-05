@@ -29,7 +29,7 @@ PlantRailInfo::PlantRailInfo(const JMapInfoIter& rIter, f32 speed) : mRailSpeed(
     firstPoint->setAxisAndPos(lastPoint->mSide, lastPoint->mUp, lastPoint->mFront, firstPoint->mPosition);
 }
 
-void PlantRailInfo::calcPosAndAxisY(TVec3f* pPos, TVec3f* pAxisY, f32 coord) const {
+void PlantRailInfo::calcPosAndAxisY(Vec3f* pPos, Vec3f* pAxisY, f32 coord) const {
     f32 normalized = (coord / mRailRider->getTotalLength()) * mNumPlantPoints;
 
     s32 start = normalized;
@@ -58,7 +58,7 @@ void PlantRailInfo::calcPosAndAxisY(TVec3f* pPos, TVec3f* pAxisY, f32 coord) con
     MR::normalize(pAxisY);
 }
 
-void PlantRailInfo::calcNearestPointPos(TVec3f* pPointPos, const TVec3f& rPos, s32 cutoff) const {
+void PlantRailInfo::calcNearestPointPos(Vec3f* pPointPos, const Vec3f& rPos, s32 cutoff) const {
     s32 nearestIdx = 0;
     f32 closestMag = 10000000000.0f;
 

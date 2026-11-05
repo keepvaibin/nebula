@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TQuat.hpp>
+#include <nebula_geometry.hpp>
 
 class RevolvingWay : public LiveActor {
 public:
@@ -15,7 +15,7 @@ public:
     void exeWait();
     void addAccelMoment();
 
-    /* 0x0x8C */ TQuat4f mRotateQuat;
-    /* 0x0x9C */ TVec3f mFriction;
+    /* 0x0x8C */ Quat4f mRotateQuat;
+    /* 0x0x9C */ Vec3f mFriction;
     /* 0x0xA8 */ f32 mRadius;
 };

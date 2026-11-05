@@ -70,7 +70,7 @@ void Mario::checkStep() {
 
     if (_4D8->isValid() && !mMovementStates._8 && mMovementStates._1) {
         const f32 frontDot = mFrontVec.dot(*_4D8->getNormal(0));
-        TVec3f horizontal;
+        Vec3f horizontal;
         MR::vecKillElement(_50C - mPosition, -*getGravityVec(), &horizontal);
 
         if (horizontal.length() < 20.0f && MR::abs(frontDot) < 0.3926991f) {
@@ -95,7 +95,7 @@ void Mario::checkStep() {
         return;
     }
 
-    const TVec3f* worldPadDir = &getWorldPadDir();
+    const Vec3f* worldPadDir = &getWorldPadDir();
     if (!(worldPadDir->dot(*mFrontWallTriangle->getNormal(0)) < -0.5f)) {
         return;
     }
@@ -106,12 +106,12 @@ void Mario::checkStep() {
     }
 }
 
-void Mario::startStep(const TVec3f& rVec) {
+void Mario::startStep(const Vec3f& rVec) {
     if (getCurrentStatus() == 0x10) {
         return;
     }
 
-    TVec3f checkPos = rVec - *getGravityVec() * 80.0f;
+    Vec3f checkPos = rVec - *getGravityVec() * 80.0f;
     HitInfo hitInfo;
 
     if (MR::checkStrikePointToMap(checkPos, &hitInfo)) {
@@ -128,7 +128,7 @@ void Mario::startStep(const TVec3f& rVec) {
         return;
     }
 
-    TVec3f oldPos(mPosition);
+    Vec3f oldPos(mPosition);
     mPosition = rVec;
     const f32 ceilDist = calcDistToCeil(false);
     mPosition = oldPos;

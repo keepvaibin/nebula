@@ -9,19 +9,19 @@ void WireGravity::setPointListSize(u32 numPoints) {
     mPoints.clear();
 }
 
-void WireGravity::addPoint(const TVec3f& rPoint) {
+void WireGravity::addPoint(const Vec3f& rPoint) {
     mPoints.mArray.mArr[mPoints.mCount++] = rPoint;
 }
 
-bool WireGravity::calcOwnGravityVector(TVec3f* pDest, f32* pScalar, const TVec3f& rPos) const {
+bool WireGravity::calcOwnGravityVector(Vec3f* pDest, f32* pScalar, const Vec3f& rPos) const {
     f32 distance = -1.0f;
-    TVec3f pointOfAttraction;
+    Vec3f pointOfAttraction;
     for (s32 i = 0; i < mPoints.size() - 1; i++) {
         // unused
-        TVec3f wireBegin(mPoints[i]);
-        TVec3f wireEnd(mPoints[i + 1]);
+        Vec3f wireBegin(mPoints[i]);
+        Vec3f wireEnd(mPoints[i + 1]);
 
-        TVec3f positionProjectedOntoWire;
+        Vec3f positionProjectedOntoWire;
         MR::calcPerpendicFootToLineInside(&positionProjectedOntoWire, rPos, mPoints[i], mPoints[i + 1]);
 
         f32 squareDistance = rPos.squared(positionProjectedOntoWire);

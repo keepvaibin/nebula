@@ -354,7 +354,7 @@ void KoopaStateDamageEscape::exeEscapeFind() {
     mEscapeTime++;
 
     if (MR::isActionEnd(mHost)) {
-        TVec3f* front = KoopaFunction::getKoopaFrontPtr(mHost);
+        Vec3f* front = KoopaFunction::getKoopaFrontPtr(mHost);
         front->x *= -1.0f;
         front->y *= -1.0f;
         front->z *= -1.0f;
@@ -494,7 +494,7 @@ void KoopaStateDamageEscape::exeDown() {
 
     MR::addVelocityToGravity(mHost, ::sDownGravity);
 
-    TVec3f velocity = mHost->mVelocity;
+    Vec3f velocity = mHost->mVelocity;
     MR::vecKillElement(velocity, getHost()->mGravity, &velocity);
 
     if (!MR::isNearZero(velocity)) {

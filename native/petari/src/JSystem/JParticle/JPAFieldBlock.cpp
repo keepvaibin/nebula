@@ -5,7 +5,7 @@
 #include "JSystem/JParticle/JPAParticle.hpp"
 
 void JPAFieldBase::calcAffect(JPAFieldBlock* block, JPABaseParticle* ptcl) {
-    JGeometry::TVec3< f32 > vec = mAccel;
+    Vec3f vec = mAccel;
     if (!ptcl->checkStatus(4) && block->checkStatus(0x78)) {
         vec.scale(calcFadeAffect(block, ptcl->mTime));
     }
@@ -87,7 +87,7 @@ void JPAFieldNewton::calc(JPAEmitterWorkData* work, JPAFieldBlock* block, JPABas
 }
 
 void JPAFieldConvection::calc(JPAEmitterWorkData* work, JPAFieldBlock* block, JPABaseParticle* ptcl) {
-    JGeometry::TVec3< f32 > vec1, vec2, vec3;
+    Vec3f vec1, vec2, vec3;
     vec1.scale(field_0x10.dot(ptcl->mLocalPosition), field_0x10);
     vec3.scale(field_0x28.dot(ptcl->mLocalPosition), field_0x28);
     vec1.add(vec3);

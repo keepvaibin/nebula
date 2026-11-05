@@ -40,7 +40,7 @@ WalkerStateRunawayParam::WalkerStateRunawayParam() {
     mWallJumpPowerV = 15.0f;
 }
 
-WalkerStateRunaway::WalkerStateRunaway(LiveActor* pHost, TVec3f* pDirection, WalkerStateRunawayParam* pRunawayParam)
+WalkerStateRunaway::WalkerStateRunaway(LiveActor* pHost, Vec3f* pDirection, WalkerStateRunawayParam* pRunawayParam)
     : ActorStateBase< LiveActor >("\225\340\215\163\214\136\203\101\203\116\203\136\201\133\223\246\202\260" /* 歩行型アクター逃げ */, pHost), mRunawayParam(pRunawayParam), mDirection(pDirection), _18(0), mRunawaySpeed(1.0f) {
     if (mRunawayParam == nullptr) {
         mRunawayParam = &::sDefaultParam;
@@ -75,16 +75,16 @@ bool WalkerStateRunaway::tryWait() {
 
 bool WalkerStateRunaway::tryWallJump() {
     if (MR::isBindedWall(getHost()) && MR::calcHitPowerToWall(getHost()) > 0.0f) {
-        TVec3f horiz;
+        Vec3f horiz;
         MR::calcVecFromPlayerH(&horiz, getHost());
-        TVec3f wallNorml;
+        Vec3f wallNorml;
         MR::calcWallNormalHorizontal(&wallNorml, getHost());
 
         if (MR::isOppositeDirection(horiz, wallNorml)) {
             MR::addVelocityClockwiseToDirection(getHost(), wallNorml,
                                                 MR::isHalfProbability() ? mRunawayParam->mWallJumpPowerH : -mRunawayParam->mWallJumpPowerH);
         } else {
-            TVec3f dir;
+            Vec3f dir;
             dir.add(wallNorml, horiz);
             MR::addVelocityMoveToDirection(getHost(), dir, mRunawayParam->mWallJumpPowerH);
         }
@@ -116,9 +116,9 @@ void WalkerStateRunaway::exeRunaway() {
         MR::startAction(getHost(), mRunawayParam->mRunawayAction);
     }
 
-    TVec3f v13;
+    Vec3f v13;
     v13.scaleAdd(mRunawayParam->mPlayerFrontLineLength, *MR::getPlayerVelocity(), *MR::getPlayerPos());
-    TVec3f* actorPos = &mHost->mPosition;
+    Vec3f* actorPos = &mHost->mPosition;
     MR::calcPerpendicFootToLineInside(&v13, *actorPos, *MR::getPlayerPos(), v13);
     MR::turnDirectionFromTargetDegree(mHost, mDirection, v13,
                                       MR::calcNerveValue(mHost, mRunawayParam->mRunawayTurnTime, mRunawayParam->mRunawayTurnRateMaxDegree,

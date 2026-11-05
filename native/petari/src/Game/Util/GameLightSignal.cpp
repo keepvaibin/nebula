@@ -89,7 +89,7 @@ namespace GameLightSignal {
             }
         }
         if (sStarCore != nullptr && !MR::isDead(sStarCore)) {
-            const TVec3f& p = sStarCore->mPosition;
+            const Vec3f& p = sStarCore->mPosition;
             const f32 values[4] = {p.x, p.y, p.z, sStarCore->mScale.x};
             NebulaHost::gameLight(NEBULA_LIGHT_STAR_CORE, 0, values);
         }
@@ -108,8 +108,8 @@ namespace GameLightSignal {
         }
     }
 
-    void sun(const TVec3f& rPosition) {
-        const TVec3f camera = MR::getCamPos();
+    void sun(const Vec3f& rPosition) {
+        const Vec3f camera = MR::getCamPos();
         const f32 x = rPosition.x - camera.x;
         const f32 y = rPosition.y - camera.y;
         const f32 z = rPosition.z - camera.z;
@@ -147,7 +147,7 @@ namespace GameLightSignal {
 
     // LightPointCtrl blends its light with J3DNativeState::initLightDistAttn(15, brightness, J3D_FALLOFF_GENTLE): it halves at
     // 15 sqrt(b / (1 - b)).
-    void pointRequest(const LiveActor* pActor, const TVec3f& rPosition, Color8 color, f32 brightness) {
+    void pointRequest(const LiveActor* pActor, const Vec3f& rPosition, Color8 color, f32 brightness) {
         const f32 b = brightness >= 0.95f ? (brightness <= 0.999999f ? brightness : 0.999999f) : 0.95f;
         const f32 values[7] = {rPosition.x, rPosition.y,  rPosition.z, channel(color.r), channel(color.g), channel(color.b),
                                15.0f * __builtin_sqrtf(b / (1.0f - b))};

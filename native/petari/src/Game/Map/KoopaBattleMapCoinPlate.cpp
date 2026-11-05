@@ -35,7 +35,7 @@ void KoopaBattleMapCoinPlate::init(const JMapInfoIter& rIter) {
     MR::connectToSceneMapObj(this);
 
     initHitSensor(1);
-    MR::initCollisionParts(this, "KoopaPlateCoin", MR::addHitSensor(this, "Attack", ATYPE_KOOPA_COIN_PLATE, 8, 250.0f, TVec3f(0.0f, -150.0f, 0.0f)),
+    MR::initCollisionParts(this, "KoopaPlateCoin", MR::addHitSensor(this, "Attack", ATYPE_KOOPA_COIN_PLATE, 8, 250.0f, Vec3f(0.0f, -150.0f, 0.0f)),
                            mBaseMtx);
     initEffectKeeper(1, nullptr, false);
 
@@ -62,7 +62,7 @@ bool KoopaBattleMapCoinPlate::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSe
 
     MR::calcGravity(this);
 
-    TVec3f randomVec;
+    Vec3f randomVec;
     MR::calcRandomVec(&randomVec, -::sSideSpeed, ::sSideSpeed);
     MR::vecKillElement(randomVec, mGravity, &randomVec);
 

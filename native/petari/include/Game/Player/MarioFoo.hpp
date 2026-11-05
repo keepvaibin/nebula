@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/Player/MarioState.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class MarioActor;
 class AreaObj;
@@ -17,11 +17,11 @@ public:
     virtual bool close();
     virtual bool update();
     virtual bool notice();
-    virtual void hitWall(const TVec3f&, HitSensor*);
+    virtual void hitWall(const Vec3f&, HitSensor*);
     virtual bool passRing(const HitSensor*);
     virtual f32 getBlurOffset() const;
     virtual void draw3D() const;
-    virtual const TVec3f& getGravityVec() const;
+    virtual const Vec3f& getGravityVec() const;
 
     void setStartSpeed(f32 speed) {
         _28 = speed;
@@ -44,8 +44,8 @@ public:
     f32 _24;
     f32 _28;
     f32 _2C;
-    TVec3f _30;
-    TVec3f _3C;
+    Vec3f _30;
+    Vec3f _3C;
     AreaObj* _48;
     u16 _4C;
     u16 _4E;
@@ -56,16 +56,16 @@ public:
     u16 _5A;
     f32 _5C;
     u16 _60;
-    TVec3f _64;
+    Vec3f _64;
     f32 _70;
     f32 _74;
-    TMtx34f _78;
+    Mtx34f _78;
     u16 _A8;
     u16 _AA;
     u16 _AC;
     u8 _AE;
-    TVec3f _B0[64];
-    TVec3f _3B0[64];
+    Vec3f _B0[64];
+    Vec3f _3B0[64];
     u32 _6B0;
     u32 _6B4;
     JUTTexture* _6B8;

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/ActorStateBase.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class BossStinkBug;
 class HitSensor;
@@ -66,8 +66,8 @@ public:
     void startSoundFly(s32);
 
     SpringValue* mSpringValue;
-    TVec3f _14;
-    TVec3f _20;
+    Vec3f _14;
+    Vec3f _20;
     f32 _2C;
     f32 _30;
     f32 _34;

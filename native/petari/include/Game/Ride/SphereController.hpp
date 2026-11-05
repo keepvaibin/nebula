@@ -1,16 +1,16 @@
 #pragma once
 
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class SphereController {
 public:
     /// @brief Creates a new `SphereController`.
     SphereController();
 
-    virtual f32 calcMoveVector(TVec3f*, const TVec3f&);
+    virtual f32 calcMoveVector(Vec3f*, const Vec3f&);
     virtual f32 calcJumpPower() const;
     virtual bool doBrake() const;
-    virtual void update(const TVec3f&);
+    virtual void update(const Vec3f&);
     virtual void notifyActivate(){};
     virtual void notifyDeactivate(){};
 

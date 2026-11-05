@@ -25,7 +25,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include <JSystem/JMath/JMATrigonometric.hpp>
+#include <nebula_geometry.hpp>
 
 namespace {
     const MR::ActorMoveParam hReturnWaitParam = {0.0f, 1.0f, 0.95f, 0.0f};
@@ -138,7 +138,7 @@ void BegomanBase::initEffectAndStarPointerBind() {
     MR::calcModelBoundingRadius(&modelBoundingRadius, this);
 
     modelBoundingRadius *= 0.75f;
-    MR::initStarPointerTarget(this, modelBoundingRadius, TVec3f(0.0f, 0.5f * modelBoundingRadius, 0.0f));
+    MR::initStarPointerTarget(this, modelBoundingRadius, Vec3f(0.0f, 0.5f * modelBoundingRadius, 0.0f));
 
     mScaleControler = new AnimScaleController(nullptr);
     mScaleControler->setParamTight();
@@ -152,7 +152,7 @@ void BegomanBase::initAfterPlacement() {
 void BegomanBase::initShadow(f32 radius, const char* pJointName) {
     MR::initShadowVolumeSphere(this, radius);
 
-    TVec3f zeroVec = TVec3f(0.0f, 0.0f, 0.0f);
+    Vec3f zeroVec = Vec3f(0.0f, 0.0f, 0.0f);
     MR::setShadowDropPositionAtJoint(this, nullptr, pJointName, zeroVec);
 }
 
@@ -176,10 +176,10 @@ void BegomanBase::initSensor(s32 extraSensorNum, f32 radius, f32 pushedRailRadiu
     f32 yScale = mScale.y;
     initHitSensor(extraSensorNum + 3);
 
-    MR::addHitSensor(this, "check", ATYPE_EYE, 1, radius * yScale, TVec3f(0.0f, 0.5f * radius * yScale, 1.5f * radius * yScale));
-    MR::addHitSensorAtJoint(this, "body", pSensorJointName, ATYPE_BEGOMAN, 32, radius * yScale, TVec3f(0.0f, 0.5f * radius * yScale, 0.0f));
+    MR::addHitSensor(this, "check", ATYPE_EYE, 1, radius * yScale, Vec3f(0.0f, 0.5f * radius * yScale, 1.5f * radius * yScale));
+    MR::addHitSensorAtJoint(this, "body", pSensorJointName, ATYPE_BEGOMAN, 32, radius * yScale, Vec3f(0.0f, 0.5f * radius * yScale, 0.0f));
     MR::addHitSensorAtJoint(this, "pushed_rail", pSensorJointName, ATYPE_EYE, 32, pushedRailRadius * yScale,
-                            TVec3f(0.0f, 0.5f * pushedRailRadius * yScale, 0.0f));
+                            Vec3f(0.0f, 0.5f * pushedRailRadius * yScale, 0.0f));
 }
 
 void BegomanBase::initUseSwitchB(const JMapInfoIter& rIter, const MR::FunctorBase& rFunctor) {
@@ -214,11 +214,11 @@ void BegomanBase::control() {
 
     updateTargetVec();
 
-    TVec3f upVec;
+    Vec3f upVec;
     MR::calcUpVec(&upVec, this);
 
-    TVec3f blendVec;
-    TQuat4f yRotationQuat;
+    Vec3f blendVec;
+    Quat4f yRotationQuat;
 
     MR::vecBlend(upVec, -mGravity, &blendVec, ::hBlendGravityRate);
     MR::normalizeOrZero(&blendVec);
@@ -289,7 +289,7 @@ void BegomanBase::exeWaitCore(const MR::ActorMoveParam& rMoveParam, const Nerve*
         }
 
         if (!isFallNextMove(150.0f, 150.0f)) {
-            TVec3f touchRailVec;
+            Vec3f touchRailVec;
 
             if (!ElectricRailFunction::isTouchRail(getSensor("check"), &touchRailVec, nullptr)) {
                 if (requestAttack()) {
@@ -301,7 +301,7 @@ void BegomanBase::exeWaitCore(const MR::ActorMoveParam& rMoveParam, const Nerve*
                 }
             }
 
-            TVec3f touchRailToSensor(touchRailVec);
+            Vec3f touchRailToSensor(touchRailVec);
             touchRailToSensor.sub(getSensor("check")->mPosition);
             MR::normalizeOrZero(&touchRailToSensor);
 
@@ -480,7 +480,7 @@ void BegomanBase::exeProvokeCore(const MR::ActorMoveParam& rMoveParam, const Ner
     MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, rMoveParam._0, rMoveParam._4, rMoveParam._8, rMoveParam._C);
     reboundWallAndGround(&mFaceVec, false);
 
-    TVec3f* gravity;
+    Vec3f* gravity;
     gravity = &mGravity;
     mVelocity.scale(gravity->dot(mVelocity), *gravity);
 
@@ -573,7 +573,7 @@ void BegomanBase::exeKeepDistanceCore(const Nerve* pNerve1, const Nerve* pNerve2
 }
 
 void BegomanBase::addVelocityEscapeToSide(f32 velocity) {
-    TVec3f sideVec;
+    Vec3f sideVec;
     MR::calcSideVec(&sideVec, this);
 
     if (mInvertSideVec) {
@@ -644,9 +644,9 @@ bool BegomanBase::incAndCheckTiredCounter() {
 }
 
 void BegomanBase::launchBegomanCore(LiveActor* pActor, BegomanBase** pBegomanArray, s32 numBegoman, f32 radius, f32 velH, f32 velV,
-                                    const TVec3f* pVec) {
-    TVec3f vec2;
-    TVec3f vec1;
+                                    const Vec3f* pVec) {
+    Vec3f vec2;
+    Vec3f vec1;
     if (pVec == nullptr) {
         MR::calcFrontVec(&vec1, pActor);
         MR::calcSideVec(&vec2, pActor);
@@ -663,14 +663,14 @@ void BegomanBase::launchBegomanCore(LiveActor* pActor, BegomanBase** pBegomanArr
             continue;
         }
 
-        TVec3f directionFromLauncher(vec2);
+        Vec3f directionFromLauncher(vec2);
         directionFromLauncher.scale(MR::cos(angle));
 
         directionFromLauncher += (vec1 * MR::sin(angle));
 
-        TVec3f& rPosition = pBegomanArray[i]->mPosition;
+        Vec3f& rPosition = pBegomanArray[i]->mPosition;
         rPosition.set(*pActor->getPosition() + directionFromLauncher * radius);
-        TVec3f& rVelocity = pBegomanArray[i]->mVelocity;
+        Vec3f& rVelocity = pBegomanArray[i]->mVelocity;
         rVelocity.set(directionFromLauncher * velH - *pActor->getGravity() * velV);
         pBegomanArray[i]->mFaceVec.set(directionFromLauncher);
 
@@ -678,7 +678,7 @@ void BegomanBase::launchBegomanCore(LiveActor* pActor, BegomanBase** pBegomanArr
     }
 }
 
-void BegomanBase::launchBegoman(LiveActor* pActor, BegomanBase** pBegomanArray, s32 numBegoman, f32 radius, f32 velH, f32 velV, const TVec3f* pVec) {
+void BegomanBase::launchBegoman(LiveActor* pActor, BegomanBase** pBegomanArray, s32 numBegoman, f32 radius, f32 velH, f32 velV, const Vec3f* pVec) {
     launchBegomanCore(pActor, pBegomanArray, numBegoman, radius, velH, velV, pVec);
 
     for (int i = 0; i < numBegoman; i++) {
@@ -688,7 +688,7 @@ void BegomanBase::launchBegoman(LiveActor* pActor, BegomanBase** pBegomanArray, 
 }
 
 void BegomanBase::launchBegomanBabyFromGuarder(LiveActor* pActor, BegomanBaby** pBabyArray, s32 numBegoman, f32 radius, f32 velH, f32 velV,
-                                               const TVec3f* pVec) {
+                                               const Vec3f* pVec) {
     launchBegomanCore(pActor, (BegomanBase**)pBabyArray, numBegoman, radius, velH, velV, pVec);
 
     for (int i = 0; i < numBegoman; i++) {
@@ -697,7 +697,7 @@ void BegomanBase::launchBegomanBabyFromGuarder(LiveActor* pActor, BegomanBaby** 
 }
 
 void BegomanBase::launchBegomanBabyLauncher(LiveActor* pActor, BegomanBaby** pBabyArray, s32 numBegoman, f32 radius, f32 velH, f32 velV,
-                                            const TVec3f* pVec) {
+                                            const Vec3f* pVec) {
     launchBegomanCore(pActor, (BegomanBase**)pBabyArray, numBegoman, radius, velH, velV, pVec);
 
     for (int i = 0; i < numBegoman; i++) {
@@ -723,11 +723,11 @@ void BegomanBase::updateTargetVec() {
     MR::turnDirectionToGround(this, &mTargetVec);
 }
 
-bool BegomanBase::reboundPlaneWithEffect(const TVec3f& rVec, f32 f1, f32 f2, const char* pEffectName) {
+bool BegomanBase::reboundPlaneWithEffect(const Vec3f& rVec, f32 f1, f32 f2, const char* pEffectName) {
     bool reflected = MR::calcReflectionVector(&mVelocity, rVec, f1, f2);
 
     if (pEffectName != nullptr && reflected) {
-        TVec3f bodySensorPos(getSensor("body")->mPosition);
+        Vec3f bodySensorPos(getSensor("body")->mPosition);
 
         bodySensorPos.sub(rVec * getSensor("body")->mRadius);
         MR::emitEffectHit(this, bodySensorPos, pEffectName);
@@ -736,9 +736,9 @@ bool BegomanBase::reboundPlaneWithEffect(const TVec3f& rVec, f32 f1, f32 f2, con
     return reflected;
 }
 
-void BegomanBase::reboundWallAndGround(TVec3f* pOut, bool emitEffect) {
+void BegomanBase::reboundWallAndGround(Vec3f* pOut, bool emitEffect) {
     if (MR::isOnGround(this)) {
-        TVec3f groundNormal(*MR::getGroundNormal(this));
+        Vec3f groundNormal(*MR::getGroundNormal(this));
 
         if (emitEffect) {
             MR::calcReflectionVector(&mVelocity, groundNormal, 0.0f, 0.0f);
@@ -752,7 +752,7 @@ void BegomanBase::reboundWallAndGround(TVec3f* pOut, bool emitEffect) {
     }
 
     if (MR::isBindedWallOfMap(this)) {
-        TVec3f wallNormal(*MR::getWallNormal(this));
+        Vec3f wallNormal(*MR::getWallNormal(this));
         bool reboundWall = reboundPlaneWithEffect(wallNormal, 0.0f, 0.0f, "Spark");
         mVelocity.add(wallNormal * ::hReboundWallAddVel);
 
@@ -791,8 +791,8 @@ f32 BegomanBase::getRailPushJumpBoss() const {
     return ::hRailPushJumpBoss;
 }
 
-void BegomanBase::calcDirectionAwayFromRail(TVec3f* pOut, const TVec3f& rVec1, const TVec3f& rVec2) {
-    TVec3f vec1(rVec2);
+void BegomanBase::calcDirectionAwayFromRail(Vec3f* pOut, const Vec3f& rVec1, const Vec3f& rVec2) {
+    Vec3f vec1(rVec2);
 
     if (MR::isNearZero(vec1)) {
         vec1.set(-mFaceVec);
@@ -800,7 +800,7 @@ void BegomanBase::calcDirectionAwayFromRail(TVec3f* pOut, const TVec3f& rVec1, c
         MR::rotateVecDegree(&vec1, mGravity, 90.0f);
     }
 
-    TVec3f vec2(rVec1);
+    Vec3f vec2(rVec1);
     vec2.sub(getSensor("body")->mPosition);
 
     if (0.0f < vec2.dot(vec1)) {
@@ -812,8 +812,8 @@ void BegomanBase::calcDirectionAwayFromRail(TVec3f* pOut, const TVec3f& rVec1, c
     pOut->set(vec1);
 }
 
-void BegomanBase::addVelocityOnPushedFromElectricRail(const TVec3f& rVec1, const TVec3f& rVec2) {
-    TVec3f directionAwayFromRail;
+void BegomanBase::addVelocityOnPushedFromElectricRail(const Vec3f& rVec1, const Vec3f& rVec2) {
+    Vec3f directionAwayFromRail;
     calcDirectionAwayFromRail(&directionAwayFromRail, rVec1, rVec2);
 
     directionAwayFromRail.setLength(::hRailPushH);
@@ -822,14 +822,14 @@ void BegomanBase::addVelocityOnPushedFromElectricRail(const TVec3f& rVec1, const
 }
 
 bool BegomanBase::checkTouchElectricRail(bool notCheckPush) {
-    TVec3f vec1;
-    TVec3f vec2;
+    Vec3f vec1;
+    Vec3f vec2;
     bool ret = false;
 
     if (!notCheckPush) {
         if (ElectricRailFunction::isTouchRail(getSensor("pushed_rail"), &vec1, &vec2)) {
             pushedFromElectricRail(getSensor("pushed_rail"), vec1, vec2, 0.5f, 0.5f, true);
-            TVec3f sideVec;
+            Vec3f sideVec;
             MR::calcSideVec(&sideVec, this);
 
             if (mInvertSideVec) {
@@ -856,7 +856,7 @@ bool BegomanBase::checkTouchElectricRail(bool notCheckPush) {
     return ret;
 }
 
-bool BegomanBase::onTouchElectric(const TVec3f& rVec1, const TVec3f& rVec2) {
+bool BegomanBase::onTouchElectric(const Vec3f& rVec1, const Vec3f& rVec2) {
     mIsTouchElectricRail = true;
 
     if (mElectricCounter > ::hElectricTouchTime) {
@@ -871,11 +871,11 @@ bool BegomanBase::onTouchElectric(const TVec3f& rVec1, const TVec3f& rVec2) {
     }
 }
 
-void BegomanBase::pushedFromElectricRail(HitSensor* pSensor, const TVec3f& rVec1, const TVec3f& rVec2, f32 f1, f32 f2, bool limit) {
-    TVec3f directionAwayFromRail;
+void BegomanBase::pushedFromElectricRail(HitSensor* pSensor, const Vec3f& rVec1, const Vec3f& rVec2, f32 f1, f32 f2, bool limit) {
+    Vec3f directionAwayFromRail;
     calcDirectionAwayFromRail(&directionAwayFromRail, rVec1, rVec2);
 
-    TVec3f vec(pSensor->mPosition);
+    Vec3f vec(pSensor->mPosition);
 
     vec.sub(rVec1);
     MR::vecKillElement(vec, mGravity, &vec);
@@ -900,7 +900,7 @@ void BegomanBase::preventSwingby(f32 f1) {
 
 void BegomanBase::preventSlopeBlow(f32 f1) {
     if (MR::isOnGround(this)) {
-        TVec3f gravityMinusNormal(mGravity);
+        Vec3f gravityMinusNormal(mGravity);
         gravityMinusNormal.sub(-*MR::getGroundNormal(this));
 
         f32 mag = gravityMinusNormal.length();
@@ -910,11 +910,11 @@ void BegomanBase::preventSlopeBlow(f32 f1) {
 }
 
 void BegomanBase::dampingVerticalAndParallelVelocity(f32 f1, f32 f2) {
-    TVec3f* velocityPointer = &mVelocity;
-    TVec3f* gravityPointer = &mGravity;
+    Vec3f* velocityPointer = &mVelocity;
+    Vec3f* gravityPointer = &mGravity;
     // no reason to set these, as the values are overwritten anyway
-    TVec3f verticalVelocity(*velocityPointer);
-    TVec3f parallelVelocity(*velocityPointer);
+    Vec3f verticalVelocity(*velocityPointer);
+    Vec3f parallelVelocity(*velocityPointer);
 
     verticalVelocity.scale(gravityPointer->dot(*velocityPointer), *gravityPointer);
     MR::vecKillElement(*velocityPointer, *gravityPointer, &parallelVelocity);
@@ -927,7 +927,7 @@ void BegomanBase::dampingVerticalAndParallelVelocity(f32 f1, f32 f2) {
     mVelocity.set(verticalVelocity + parallelVelocity);
 }
 
-bool BegomanBase::isInWaterAndSetWaterNerve(const Nerve* pWaterNerve, TPos3f* pPos) {
+bool BegomanBase::isInWaterAndSetWaterNerve(const Nerve* pWaterNerve, Pos3f* pPos) {
     WaterInfo info;
     if (MR::getWaterAreaObj(&info, mPosition) != false) {
         MR::getWaterAreaInfo(&info, mPosition, mGravity, false);
@@ -940,9 +940,9 @@ bool BegomanBase::isInWaterAndSetWaterNerve(const Nerve* pWaterNerve, TPos3f* pP
     }
 }
 
-void BegomanBase::calcBlowReaction(const TVec3f& rVec1, const TVec3f& rVec2, f32 blowStrengthParallel, f32 blowStrengthVertical) {
-    TVec3f blowDirection(rVec2 - rVec1);
-    TVec3f effectVec(-blowDirection);
+void BegomanBase::calcBlowReaction(const Vec3f& rVec1, const Vec3f& rVec2, f32 blowStrengthParallel, f32 blowStrengthVertical) {
+    Vec3f blowDirection(rVec2 - rVec1);
+    Vec3f effectVec(-blowDirection);
     f32 sensorRadius = getSensor("body")->mRadius;
 
     effectVec.setLength(sensorRadius);
@@ -964,11 +964,11 @@ void BegomanBase::calcBlowReaction(const TVec3f& rVec1, const TVec3f& rVec2, f32
     mVelocity.set(blowDirection);
 }
 
-void BegomanBase::calcAnimCore(TPos3f* pPos) {
+void BegomanBase::calcAnimCore(Pos3f* pPos) {
     LiveActor::calcAnim();
     pPos->setInline(MR::getJointMtx(this, "Center"));
 
-    TVec3f yDir;
+    Vec3f yDir;
     pPos->getYDir(yDir);
 
     if (!MR::isSameDirection(yDir, mTargetVec)) {
@@ -976,9 +976,9 @@ void BegomanBase::calcAnimCore(TPos3f* pPos) {
     }
 }
 
-bool BegomanBase::calcJointLocator1(TPos3f* pPos, const JointControllerInfo& rJointInfo) {
-    TPos3f v9;
-    TQuat4f rotation(_D0);
+bool BegomanBase::calcJointLocator1(Pos3f* pPos, const JointControllerInfo& rJointInfo) {
+    Pos3f v9;
+    Quat4f rotation(_D0);
     v9.makeQuat(rotation);
     pPos->concat(*pPos, v9);
     return true;
@@ -988,7 +988,7 @@ void BegomanBase::calcAndSetBaseMtx() {
     MR::setBaseTRMtx(this, _C0);
 
     if (mScaleControler != nullptr) {
-        TVec3f scale;
+        Vec3f scale;
 
         scale.set(mScaleControler->_C);
         _B4.set(scale);

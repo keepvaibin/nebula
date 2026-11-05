@@ -23,7 +23,7 @@ static f32 mSensorRadiusSpinPull = 450.0f;
 static f32 mSensorRadiusSpinPullOnGround = 450.0f;
 
 inline bool MarioActor::cylinderPushCheck(HitSensor* pSensor, f32 radius, f32 width, f32 height) {
-    TVec3f offset(pSensor->mPosition - _2A0);
+    Vec3f offset(pSensor->mPosition - _2A0);
     return cylinderPushCheck(offset, radius, width, height);
 }
 void MarioActor::attackOrPushSensor(HitSensor* pSensor, f32 distance) {
@@ -93,7 +93,7 @@ void MarioActor::attackOrPushSensor(HitSensor* pSensor, f32 distance) {
 
         bool touching = false;
         if (mPlayerMode == PlayerMode_Teresa) {
-            TVec3f offset = _2A0 - pSensor->mPosition;
+            Vec3f offset = _2A0 - pSensor->mPosition;
             f32 separation = offset.length();
             if (separation < pSensor->getRadius() + mConst->getTable()->mTeresaBodyRadius) {
                 if (selectTeresaThru(pSensor)) {
@@ -163,7 +163,7 @@ void MarioActor::attackOrPushSensor(HitSensor* pSensor, f32 distance) {
         }
 
         f32 sensorRadius = pSensor->getRadius();
-        TVec3f offset = pSensor->mPosition - _2A0;
+        Vec3f offset = pSensor->mPosition - _2A0;
         f32 depth = MR::vecKillElement(offset, mCamDirZ, &offset);
         if (depth < 250.0f && depth > -250.0f && cylinderPushCheck(offset, sensorRadius, width, height) && tryGetItem(pSensor)) {
             return;
@@ -247,7 +247,7 @@ void MarioActor::attackOrPushSensorInDamage(HitSensor* pReceiver, f32 radius) {
     }
 
     f32 sensorRadius = pReceiver->mRadius;
-    TVec3f offset = pReceiver->mPosition - _2A0;
+    Vec3f offset = pReceiver->mPosition - _2A0;
     f32 depth = MR::vecKillElement(offset, mCamDirZ, &offset);
     if (depth < 250.0f && depth > -250.0f && cylinderPushCheck(offset, sensorRadius, width, height) && tryGetItem(pReceiver)) {
         return;
@@ -294,7 +294,7 @@ bool MarioActor::tryTornadoAttack(HitSensor* pSensor) {
 }
 
 bool MarioActor::isUnderTarget(HitSensor* pSensor) {
-    TVec3f down;
+    Vec3f down;
     if (mBeeWallWalk != 0) {
         down = _240;
     } else {
@@ -381,8 +381,8 @@ bool MarioActor::tryTrampleAttack(HitSensor* pSensor) {
 
 bool MarioActor::cylinderHorizontalCheck(HitSensor* pSensor) {
     f32 radius = pSensor->mRadius;
-    TVec3f diff = pSensor->mPosition - (_2A0 + mMario->_350 + mMario->_35C + mVelocity);
-    TVec3f vec;
+    Vec3f diff = pSensor->mPosition - (_2A0 + mMario->_350 + mMario->_35C + mVelocity);
+    Vec3f vec;
     MR::vecKillElement(diff, getGravityVector(), &vec);
 
     if (radius + _4B0 - vec.length() > 0.0f) {
@@ -471,7 +471,7 @@ bool MarioActor::tryGetItem(HitSensor* pSensor) {
         }
 
         bool moving = false;
-        TVec3f horizontal;
+        Vec3f horizontal;
         if (MR::vecKillElement(*getShadowPos() - pSensor->mPosition, getGravityVector(), &horizontal) > 100.0f) {
             moving = true;
         }
@@ -559,8 +559,8 @@ namespace {
     }
 };  // namespace
 
-bool MarioActor::cylinderPushCheck(const TVec3f& rOffset, f32 radius, f32 width, f32 height) {
-    TVec3f radial;
+bool MarioActor::cylinderPushCheck(const Vec3f& rOffset, f32 radius, f32 width, f32 height) {
+    Vec3f radial;
     f32 axial = MR::vecKillElement(rOffset, _4C4, &radial);
     if (axial > -radius) {
         f32 radialPenetration = radius + width - radial.length();

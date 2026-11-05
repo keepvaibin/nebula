@@ -29,11 +29,11 @@ void CameraFooFighter::reset() {
 }
 
 CameraTargetObj* CameraFooFighter::calc() {
-    TVec3f watchPoint;
+    Vec3f watchPoint;
     CameraLocalUtil::makeWatchPoint(&watchPoint, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
 
-    TVec3f gravUp = -CameraLocalUtil::getTarget(this)->getGravityVector();
-    TVec3f watchFront = watchPoint - CameraLocalUtil::getPos(this);
+    Vec3f gravUp = -CameraLocalUtil::getTarget(this)->getGravityVector();
+    Vec3f watchFront = watchPoint - CameraLocalUtil::getPos(this);
     f32 camDist = watchFront.length();
     f32 dist;
     if (MR::isNearZero(watchFront)) {
@@ -50,18 +50,18 @@ CameraTargetObj* CameraFooFighter::calc() {
     }
     MR::normalize(&watchFront);
 
-    TVec3f up = CameraLocalUtil::getUpVec(this);
-    TVec3f front = CameraLocalUtil::getWatchPos(this) - CameraLocalUtil::getPos(this);
+    Vec3f up = CameraLocalUtil::getUpVec(this);
+    Vec3f front = CameraLocalUtil::getWatchPos(this) - CameraLocalUtil::getPos(this);
     MR::normalize(&front);
-    TQuat4f rotFront;
+    Quat4f rotFront;
     rotFront.setRotate(front, watchFront);
 
-    TVec3f newFront, newUp;
+    Vec3f newFront, newUp;
     newFront.set(watchFront);
     newUp.set(up);
     rotFront.transform(newUp);
 
-    TVec3f newSide = newUp.cross(newFront);
+    Vec3f newSide = newUp.cross(newFront);
     newSide -= gravUp * gravUp.dot(newSide);
     MR::normalize(&newSide);
 
@@ -69,7 +69,7 @@ CameraTargetObj* CameraFooFighter::calc() {
     newSide.cross(newUp, newFront);
 
     if (gravUp.dot(newUp) < 0.0f) {
-        TQuat4f rotFrontUp;
+        Quat4f rotFrontUp;
         if (newFront.dot(gravUp) < 0.0f) {
             rotFrontUp.setRotate(newFront, -gravUp);
         } else {
@@ -82,25 +82,25 @@ CameraTargetObj* CameraFooFighter::calc() {
     }
 
     if (MR::isPlayerNeedBrakingCamera()) {
-        TPos3f mtx1;
+        Pos3f mtx1;
         mtx1.identity();
         mtx1.setXDir(CameraLocalUtil::getTarget(this)->getSideVec());
         mtx1.setYDir(-CameraLocalUtil::getTarget(this)->getFrontVec());
         mtx1.setZDir(CameraLocalUtil::getTarget(this)->getUpVec());
 
-        TQuat4f rot1;
+        Quat4f rot1;
         mtx1.getQuat(rot1);
 
-        TPos3f mtx2;
+        Pos3f mtx2;
         mtx2.identity();
         mtx2.setXDir(newSide);
         mtx2.setYDir(newUp);
         mtx2.setZDir(newFront);
 
-        TQuat4f rot2;
+        Quat4f rot2;
         mtx2.getQuat(rot2);
 
-        TQuat4f rotQ;
+        Quat4f rotQ;
         rotQ.slerp(rot2, rot1, ::sRateWhenBraking);
 
         mtx2.makeQuat(rotQ);
@@ -108,7 +108,7 @@ CameraTargetObj* CameraFooFighter::calc() {
         mtx2.getYDir(newUp);
         mtx2.getZDir(newFront);
     } else {
-        TVec3f targetSide = CameraLocalUtil::getTarget(this)->getSideVec();
+        Vec3f targetSide = CameraLocalUtil::getTarget(this)->getSideVec();
         targetSide -= gravUp * gravUp.dot(targetSide);
         MR::normalize(&targetSide);
 
@@ -118,11 +118,11 @@ CameraTargetObj* CameraFooFighter::calc() {
             mAngleXRate = rate;
         }
 
-        TQuat4f rot;
+        Quat4f rot;
         rot.setRotate(newSide, targetSide, rate);
         rot.transform(newFront);
         rot.transform(newUp);
-        TVec3f pos = watchPoint - newFront * dist;
+        Vec3f pos = watchPoint - newFront * dist;
 
         f32 lastMoveLen = CameraLocalUtil::getTarget(this)->getLastMove().length();
         if (lastMoveLen > ::sLastMoveLen) {

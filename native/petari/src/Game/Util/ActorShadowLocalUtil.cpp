@@ -152,7 +152,7 @@ namespace ActorShadow {
     ShadowSurfaceOval* createShadowSurfaceOvalFromCSV(LiveActor* pActor, const JMapInfoIter& rIter) {
         ShadowSurfaceOval* pShadow = ::createShadowDrawer< ShadowSurfaceOval >(pActor, rIter, true);
 
-        TVec3f size;
+        Vec3f size;
         size.set< f32 >(100.0f, 100.0f, 100.0f);
         MR::getJMapInfoV3f(rIter, "Size", &size);
         pShadow->setSize(size);
@@ -163,7 +163,7 @@ namespace ActorShadow {
     ShadowSurfaceBox* createShadowSurfaceBoxFromCSV(LiveActor* pActor, const JMapInfoIter& rIter) {
         ShadowSurfaceBox* pShadow = ::createShadowDrawer< ShadowSurfaceBox >(pActor, rIter, true);
 
-        TVec3f size;
+        Vec3f size;
         size.set< f32 >(100.0f, 100.0f, 100.0f);
         MR::getJMapInfoV3f(rIter, "Size", &size);
         pShadow->setSize(size);
@@ -186,7 +186,7 @@ namespace ActorShadow {
         ShadowVolumeOval* pShadow = ::createShadowDrawer< ShadowVolumeOval >(pActor, rIter, false);
         setUpShadowVolumeFromCSV(pShadow, rIter);
 
-        TVec3f size;
+        Vec3f size;
         size.set< f32 >(100.0f, 100.0f, 100.0f);
         MR::getJMapInfoV3f(rIter, "Size", &size);
         pShadow->setSize(size);
@@ -198,7 +198,7 @@ namespace ActorShadow {
         ShadowVolumeOvalPole* pShadow = ::createShadowDrawer< ShadowVolumeOvalPole >(pActor, rIter, false);
         setUpShadowVolumeFromCSV(pShadow, rIter);
 
-        TVec3f size;
+        Vec3f size;
         size.set< f32 >(100.0f, 100.0f, 100.0f);
         MR::getJMapInfoV3f(rIter, "Size", &size);
         pShadow->setSize(size);
@@ -221,7 +221,7 @@ namespace ActorShadow {
         ShadowVolumeBox* pShadow = ::createShadowDrawer< ShadowVolumeBox >(pActor, rIter, false);
         setUpShadowVolumeFromCSV(pShadow, rIter);
 
-        TVec3f size;
+        Vec3f size;
         size.set< f32 >(100.0f, 100.0f, 100.0f);
         MR::getJMapInfoV3f(rIter, "Size", &size);
         pShadow->setSize(size);
@@ -266,7 +266,7 @@ namespace ActorShadow {
     }
 
     void setUpShadowControlBaseMtxFromCSV(ShadowController* pCtrl, LiveActor* pActor, const JMapInfoIter& rIter) {
-        TVec3f dropOffset;
+        Vec3f dropOffset;
 
         if (!MR::getJMapInfoV3f(rIter, "DropOffset", &dropOffset)) {
             dropOffset.zero();

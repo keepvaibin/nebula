@@ -143,9 +143,9 @@ void Teresa::initFromJMapParam(const JMapInfoIter& rIter) {
 void Teresa::initSensor() {
     f32 scale_x = mScale.x;
     initHitSensor(2);
-    MR::addHitSensorEnemyAttack(this, "attack", 8, (70.0f * scale_x), TVec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorEnemy(this, "body", 8, (85.0f * scale_x), TVec3f(0.0f, 0.0f, 0.0f));
-    MR::initStarPointerTarget(this, (85.0f * scale_x), TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemyAttack(this, "attack", 8, (70.0f * scale_x), Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemy(this, "body", 8, (85.0f * scale_x), Vec3f(0.0f, 0.0f, 0.0f));
+    MR::initStarPointerTarget(this, (85.0f * scale_x), Vec3f(0.0f, 0.0f, 0.0f));
 }
 
 void Teresa::initBind() {
@@ -205,7 +205,7 @@ void Teresa::kill() {
 }
 
 namespace {
-    inline void blendTeresaQuat(TQuat4f* pQuat, const TVec3f& rGravity, const TVec3f& rFront) {
+    inline void blendTeresaQuat(Quat4f* pQuat, const Vec3f& rGravity, const Vec3f& rFront) {
         MR::blendQuatUpFront(pQuat, -rGravity, rFront, 0.1f, 0.2f);
     }
 };  // namespace
@@ -221,13 +221,13 @@ void Teresa::control() {
     _FE = 0;
 
     if (_F4 > 0.9f) {
-        MR::requestPointLight(this, TVec3f(mPosition), ::sPointLightColor, 1.0f, -1);
+        MR::requestPointLight(this, Vec3f(mPosition), ::sPointLightColor, 1.0f, -1);
     }
 }
 
 void Teresa::calcAndSetBaseMtx() {
     MR::setBaseTRMtx(this, _94);
-    TVec3f scale = _D4 * mScale;
+    Vec3f scale = _D4 * mScale;
     MR::setBaseScale(this, scale);
 }
 
@@ -252,7 +252,7 @@ bool Teresa::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
     }
 
     if (MR::isSensorEnemy(pSender)) {
-        TVec3f v9 = MR::getSensorPos(pReceiver) - MR::getSensorPos(pSender);
+        Vec3f v9 = MR::getSensorPos(pReceiver) - MR::getSensorPos(pSender);
         MR::normalizeOrZero(&v9);
         mVelocity.add(v9 * 0.1f);
         return true;
@@ -400,7 +400,7 @@ bool Teresa::tryRailTurnEnd() {
 
 bool Teresa::tryWalk() {
     if (MR::isGreaterStep(this, 192)) {
-        TVec3f v6;
+        Vec3f v6;
         MR::getRandomVector(&v6, 1.0f);
         MR::normalizeOrZero(&v6);
         v6.orthogonalize(mGravity);
@@ -556,11 +556,11 @@ bool Teresa::tryDriftEnd() {
 }
 
 bool Teresa::tryHideWater() {
-    TVec3f v4;
+    Vec3f v4;
     v4.scaleAdd(70.0f * mScale.y, mGravity, mPosition);
 
     if (isCheckWater() && MR::isInWater(v4)) {
-        TPos3f effectMtx;
+        Pos3f effectMtx;
         MR::makeMtxFrontNoSupportPos(&effectMtx, -mGravity, v4);
         MR::emitEffectHit(this, effectMtx, "HideWall");
         MR::invalidateClipping(this);
@@ -579,7 +579,7 @@ bool Teresa::tryHideWall() {
     if (MR::isBindedWall(this)) {
         mWallNormal.set(*MR::getWallNormal(this));
         mWallHitPos.set(*MR::getWallHitPos(this));
-        TPos3f frontMtx;
+        Pos3f frontMtx;
         MR::makeMtxFrontNoSupportPos(&frontMtx, mWallNormal, mWallHitPos);
         MR::emitEffectHit(this, frontMtx, "HideWall");
         MR::invalidateClipping(this);
@@ -631,20 +631,20 @@ void Teresa::endDrift() {
 }
 
 void Teresa::exeAppearFromWall() {
-    TVec3f v4;
+    Vec3f v4;
     _94.getZDir(v4);
 
     if (MR::isFirstStep(this)) {
         MR::showModel(this);
         MR::startAction(this, "AppearWall");
         MR::zeroVelocity(this);
-        TPos3f frontMtx;
+        Pos3f frontMtx;
         MR::makeMtxFrontNoSupportPos(&frontMtx, v4, mWallHitPos);
         MR::emitEffectHit(this, frontMtx, "Appear");
         MR::startSound(this, "SE_EM_TERESA_APPEAR");
     }
 
-    TVec3f v3(v4);
+    Vec3f v3(v4);
     v3 *= 0.2f;
     mVelocity.add(v3);
     MR::attenuateVelocity(this, 0.9f);
@@ -656,20 +656,20 @@ void Teresa::exeAppearFromWall() {
 }
 
 void Teresa::exeAppearFromGround() {
-    TVec3f v4;
+    Vec3f v4;
     _94.getYDir(v4);
 
     if (MR::isFirstStep(this)) {
         MR::showModel(this);
         MR::startAction(this, "AppearGround");
         MR::zeroVelocity(this);
-        TPos3f frontMtx;
+        Pos3f frontMtx;
         MR::makeMtxFrontNoSupportPos(&frontMtx, v4, mWallHitPos);
         MR::emitEffectHit(this, frontMtx, "Appear");
         MR::startSound(this, "SE_EM_TERESA_APPEAR");
     }
 
-    TVec3f v3(v4);
+    Vec3f v3(v4);
     v3 *= 0.2f;
     mVelocity.add(v3);
     MR::attenuateVelocity(this, 0.9f);
@@ -714,7 +714,7 @@ void Teresa::exeWalk() {
 }
 
 void Teresa::exeRailWalk() {
-    TVec3f v7;
+    Vec3f v7;
     v7.killElement(MR::getRailPos(this) - mPosition, mGravity);
 
     if (v7.length() < 10.0f) {
@@ -991,9 +991,9 @@ void Teresa::updateNormalVelocity() {
 
 void Teresa::addDriftVelocity() {
     if (MR::isLessEqualStep(this, 35)) {
-        TVec3f v5;
+        Vec3f v5;
         MR::calcPlayerSpinPullVelocity(&v5, mPosition);
-        TVec3f v4(v5);
+        Vec3f v4(v5);
         v4 *= 0.12f;
         mVelocity.add(v4);
     }
@@ -1002,7 +1002,7 @@ void Teresa::addDriftVelocity() {
 }
 
 void Teresa::updateDriftAnimScale() {
-    TVec3f v4;
+    Vec3f v4;
     _94.getXDir(v4);
     f32 v2 = v4.dot(mVelocity);
     f32 v3 = (1.0f + (0.30f * MR::normalize(MR::abs(v2), 3.0f, 53.0f)));
@@ -1098,8 +1098,8 @@ bool Teresa::isCheckWater() const {
 }
 
 namespace {
-    inline bool isFacingTeresa(const TVec3f& rPosition) {
-        TVec3f playerFront;
+    inline bool isFacingTeresa(const Vec3f& rPosition) {
+        Vec3f playerFront;
         MR::getPlayerFrontVec(&playerFront);
 
         return playerFront.dot(rPosition - *MR::getPlayerPos()) > 0.0f;

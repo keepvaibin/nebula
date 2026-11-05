@@ -63,19 +63,19 @@ public:
         }
 
         J3DTexMtx* mTexMtx;
-        TPos3f mInitEffectMtx;
+        Pos3f mInitEffectMtx;
     };
 
     ProjmapEffectMtxSetter(J3DModel*, const ResourceHolder*);
 
     virtual void update() override;
-    void getBaseTrans(TVec3f*) const;
+    void getBaseTrans(Vec3f*) const;
     void updateMtxUseBaseMtx();
-    void updateMtxUseBaseMtxWithLocalOffset(const TVec3f&);
+    void updateMtxUseBaseMtxWithLocalOffset(const Vec3f&);
 
     UpdateEffectMtxInfo* mUpdatingMtxInfo;
     s32 mNumUpdatingMtx;
-    TPos3f mEffectMtx;
+    Pos3f mEffectMtx;
 };
 
 class MirrorReflectionMtxSetter : public MaterialCtrl {

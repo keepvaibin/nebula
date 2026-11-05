@@ -17,7 +17,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <JSystem/JMath/JMath.hpp>
+#include <nebula_geometry.hpp>
 
 namespace NrvTicoEat {
     NEW_NERVE(TicoEatNrvEatPre, TicoEat, EatPre);
@@ -211,7 +211,7 @@ void TicoComet::init(const JMapInfoIter& rIter) {
     caps._6C = "Center";
     caps.mBinder = 0;
     initialize(rIter, caps);
-    MR::addHitSensorAtJointEye(this, "Mouth", "Mouth", 8, 30.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointEye(this, "Mouth", "Mouth", 8, 30.0f, Vec3f(0.0f, 0.0f, 0.0f));
     MR::getNPCItemData(&item, 0);
     equipment(item, true);
     MR::startAction(_94, "LeftRotate");

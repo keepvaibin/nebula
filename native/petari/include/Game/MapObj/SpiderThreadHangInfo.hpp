@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class LiveActor;
 class SpiderThreadPart;
@@ -9,7 +9,7 @@ class SpiderThreadHangInfo {
 public:
     SpiderThreadHangInfo();
 
-    void startBind(LiveActor*, const TVec3f*, SpiderThreadPart*, s32, const TVec3f&, s32);
+    void startBind(LiveActor*, const Vec3f*, SpiderThreadPart*, s32, const Vec3f&, s32);
     void endBind();
     void startHang();
     void endHang(bool);
@@ -17,7 +17,7 @@ public:
     void copyInfo(const SpiderThreadHangInfo*);
 
     LiveActor* mBindedActor;
-    const TVec3f* mPosition;
+    const Vec3f* mPosition;
     SpiderThreadPart* mThreadPart;
     s32 mHangIndex;
     bool mIsHanging;

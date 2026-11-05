@@ -17,21 +17,21 @@ void CameraCharmedFix::reset() {
 CameraTargetObj* CameraCharmedFix::calc() {
     CameraTargetObj* target = CameraLocalUtil::getTarget(this);
 
-    const TPos3f& zoneMtx = mZoneMatrix;
-    TVec3f watchPoint;
+    const Pos3f& zoneMtx = mZoneMatrix;
+    Vec3f watchPoint;
     CameraLocalUtil::makeWatchPoint(&watchPoint, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
 
-    TVec3f pos = mBasePos;
+    Vec3f pos = mBasePos;
     zoneMtx.mult(pos, pos);
-    TVec3f front = CameraLocalUtil::getTarget(this)->getPosition() - pos;
+    Vec3f front = CameraLocalUtil::getTarget(this)->getPosition() - pos;
     if (MR::isNearZero(front)) {
         return target;
     }
 
     MR::normalize(&front);
-    TVec3f up = mUp;
+    Vec3f up = mUp;
     zoneMtx.mult33(up, up);
-    TVec3f side = up.cross(front);
+    Vec3f side = up.cross(front);
     if (MR::isNearZero(side)) {
         return target;
     }
@@ -39,12 +39,12 @@ CameraTargetObj* CameraCharmedFix::calc() {
     MR::normalize(&side);
     up.cross(front, side);
 
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.identity();
     mtx.setXYZDir(side, up, front);
     mtx.setTrans(CameraLocalUtil::getTarget(this)->getPosition());
 
-    TVec3f watchPos = mWPoint;
+    Vec3f watchPos = mWPoint;
     mtx.mult(watchPos, watchPos);
     watchPoint = watchPos - front * mWPoint.z;
     CameraLocalUtil::setPos(this, watchPos);

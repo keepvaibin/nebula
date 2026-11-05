@@ -24,8 +24,8 @@ public:
     f32 mSideBlendRateMin;
     f32 mSideBlendRate;
     s32 mCollideCount;
-    TVec3f mLastMoveDir;
+    Vec3f mLastMoveDir;
     bool mIsRounding;
     s32 mRoundingFrame;
-    TVec3f mSide;
+    Vec3f mSide;
 };

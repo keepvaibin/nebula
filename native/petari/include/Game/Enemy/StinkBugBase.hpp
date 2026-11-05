@@ -17,9 +17,9 @@ public:
     bool isPlayerInTerritory(f32, f32, f32, f32) const;
     bool isHitHorn(HitSensor*, HitSensor*, f32) const;
 
-    TVec3f _8C;
-    TVec3f _98;
-    TVec3f _A4;
+    Vec3f _8C;
+    Vec3f _98;
+    Vec3f _A4;
     f32 _B0;
     f32 mRadius;
     bool _B8;

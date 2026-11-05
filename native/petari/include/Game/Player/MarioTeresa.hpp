@@ -33,14 +33,14 @@ public:
     void procDrop();
     void procControl();
     void addTeresaVerticalVelocity(f32);
-    void addTeresaHorizontalVelocity(const TVec3f&);
-    void doTeresaReflection(const TVec3f&, bool);
+    void addTeresaHorizontalVelocity(const Vec3f&);
+    void doTeresaReflection(const Vec3f&, bool);
 
-    TVec3f _14;
+    Vec3f _14;
     f32 _20;
     f32 _24;
-    TVec3f _28;
-    TVec3f _34;
+    Vec3f _28;
+    Vec3f _34;
     u16 _40;
     u16 _42;
     u16 _44;

@@ -33,27 +33,27 @@ void OnlyCamera::calcPose(CameraMan* pCameraMan) {
 }
 
 void OnlyCamera::calcStartPose(CameraMan* pCameraMan) {
-    TVec3f pos = CameraLocalUtil::getPos(pCameraMan);
-    TVec3f watchPos = CameraLocalUtil::getWatchPos(pCameraMan);
-    TVec3f up = CameraLocalUtil::getUpVec(pCameraMan);
+    Vec3f pos = CameraLocalUtil::getPos(pCameraMan);
+    Vec3f watchPos = CameraLocalUtil::getWatchPos(pCameraMan);
+    Vec3f up = CameraLocalUtil::getUpVec(pCameraMan);
 
-    TVec3f offset = watchPos - pos;
+    Vec3f offset = watchPos - pos;
     if (offset.length() < ::sBaseLength) {
         if (MR::isNearZero(offset)) {
-            watchPos.set(pos + TVec3f(0.0f, 0.0f, -1.0f));
+            watchPos.set(pos + Vec3f(0.0f, 0.0f, -1.0f));
         } else {
             MR::normalize(&offset);
             watchPos.set(pos + offset * ::sBaseLength);
         }
     }
 
-    TVec3f front = watchPos - pos;
+    Vec3f front = watchPos - pos;
     MR::normalize(&front);
     MR::normalizeOrZero(&up);
 
     if (MR::isNearZero(up) || MR::abs(front.dot(up)) > 0.98f) {
-        TQuat4f rot;
-        rot.setRotate(TVec3f(0.0f, 0.0f, -1.0f), front);
+        Quat4f rot;
+        rot.setRotate(Vec3f(0.0f, 0.0f, -1.0f), front);
         up.set< f32 >(0.0f, 1.0f, 0.0f);
         rot.transform(up, up);
     }
@@ -70,11 +70,11 @@ void OnlyCamera::calcStartPose(CameraMan* pCameraMan) {
 }
 
 void OnlyCamera::calcSafePose(CameraMan* pCameraMan) {
-    TVec3f pos = CameraLocalUtil::getPos(pCameraMan);
-    TVec3f watchPos = CameraLocalUtil::getWatchPos(pCameraMan);
-    TVec3f up = CameraLocalUtil::getUpVec(pCameraMan);
+    Vec3f pos = CameraLocalUtil::getPos(pCameraMan);
+    Vec3f watchPos = CameraLocalUtil::getWatchPos(pCameraMan);
+    Vec3f up = CameraLocalUtil::getUpVec(pCameraMan);
 
-    TVec3f offset = watchPos - pos;
+    Vec3f offset = watchPos - pos;
     f32 dist = offset.length();
     if (dist < ::sBaseLength) {
         if (dist < ::sMinDistance) {
@@ -88,17 +88,17 @@ void OnlyCamera::calcSafePose(CameraMan* pCameraMan) {
     moveToIdealPosition(&pos);
     mIsZeroFrameMoveOff = false;
 
-    TVec3f front = watchPos - pos;
+    Vec3f front = watchPos - pos;
     MR::normalize(&front);
     MR::normalizeOrZero(&up);
 
     if (MR::isNearZero(up) || MR::abs(front.dot(up)) > 0.98f) {
-        TVec3f poseFront = mPoseParam->mWatchPos - mPoseParam->mPos;
+        Vec3f poseFront = mPoseParam->mWatchPos - mPoseParam->mPos;
         MR::normalize(&poseFront);
         if (MR::abs(front.dot(poseFront)) > 0.98f) {
             up.set(mPoseParam->mUpVec);
         } else {
-            TQuat4f rot;
+            Quat4f rot;
             rot.setRotate(poseFront, front);
             rot.transform(mPoseParam->mUpVec, up);
         }
@@ -114,13 +114,13 @@ void OnlyCamera::calcSafePose(CameraMan* pCameraMan) {
     mPoseParam->mRoll = CameraLocalUtil::getRoll(pCameraMan);
 }
 
-void OnlyCamera::moveToIdealPosition(TVec3f* pPos) {
-    TVec3f pos = *pPos;
+void OnlyCamera::moveToIdealPosition(Vec3f* pPos) {
+    Vec3f pos = *pPos;
     if (mCalcIdeal) {
-        TVec3f diff = pos - mPos;
+        Vec3f diff = pos - mPos;
         pPos->set(mPoseParam->mPos + diff);
 
-        TVec3f offset = pos - *pPos;
+        Vec3f offset = pos - *pPos;
         f32 dist = offset.length();
 
         if (dist < mSpeed * 0.5f * (s32)mSpeed) {

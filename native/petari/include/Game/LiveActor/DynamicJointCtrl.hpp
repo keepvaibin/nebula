@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry.hpp>
+#include <nebula_geometry.hpp>
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 
@@ -55,12 +55,12 @@ public:
 
     void update(LiveActor*, const DynamicJointCtrlNode*);
     void reset();
-    bool updateJointMtxCallBack(TPos3f*, const JointControllerInfo&);
+    bool updateJointMtxCallBack(Pos3f*, const JointControllerInfo&);
 
     f32 _0;
-    TVec3f _4;
-    TVec3f _10;
-    TVec3f _1C;
+    Vec3f _4;
+    Vec3f _10;
+    Vec3f _1C;
     MtxPtr _28;
     JointController* mJointController;
     DynamicJointCtrlNode* mChild;

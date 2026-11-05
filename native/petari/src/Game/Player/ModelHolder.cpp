@@ -2,7 +2,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
 #include <JSystem/J3DGraphAnimator/J3DModel.hpp>
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 #include <nebula_math.h>
 
 ModelHolder::ModelHolder(const char* pName, bool b) : LiveActor(pName) {

@@ -65,7 +65,7 @@ void TripodBossKillerGenerater::init(const JMapInfoIter& rIter) {
 
     if (mHasCollision) {
         initHitSensor(1);
-        MR::addHitSensor(this, "body", ATYPE_TRIPODBOSS_KILLER_GENERATER, 0, 0.0f, TVec3f(0.0f, 0.0f, 0.0f));
+        MR::addHitSensor(this, "body", ATYPE_TRIPODBOSS_KILLER_GENERATER, 0, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
         MR::initCollisionParts(this, "TripodBossKillerCannon", getSensor("body"), nullptr);
     }
 
@@ -102,7 +102,7 @@ bool TripodBossKillerGenerater::receiveMsgEnemyAttack(u32 msg, HitSensor* pSende
     return false;
 }
 
-void TripodBossKillerGenerater::calcTripodLocalMatrix(TPos3f* pMtx) {
+void TripodBossKillerGenerater::calcTripodLocalMatrix(Pos3f* pMtx) {
     pMtx->set(_E4);
 }
 
@@ -127,7 +127,7 @@ void TripodBossKillerGenerater::activateTripodBoss() {
     _E1 = true;
 }
 
-void TripodBossKillerGenerater::setLocalMatrix(const TPos3f& rPMtx) {
+void TripodBossKillerGenerater::setLocalMatrix(const Pos3f& rPMtx) {
     _E4.set(rPMtx);
 }
 
@@ -148,15 +148,15 @@ bool TripodBossKillerGenerater::tryShootSetting() {
         return false;
     }
 
-    TVec3f trans;
+    Vec3f trans;
     _8C.getTrans(trans);
 
     if (MR::isDead(mKiller)) {
         if (MR::getPlayerPos()->distance(trans) < mCanShootSettingPlayerDistance) {
-            TVec3f front;
+            Vec3f front;
             MR::calcFrontVec(&front, this);
 
-            TVec3f trans;
+            Vec3f trans;
             _8C.getTrans(trans);
 
             mKiller->appear(trans, front);
@@ -293,10 +293,10 @@ void TripodBossKillerGenerater::exeReady() {
 void TripodBossKillerGenerater::exeShootSetting() {
     updateTripodMatrix();
 
-    TVec3f front;
+    Vec3f front;
     MR::calcFrontVec(&front, this);
 
-    TVec3f trans;
+    Vec3f trans;
     _8C.getTrans(trans);
 
     HomingKiller* killer = mKiller;

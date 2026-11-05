@@ -10,9 +10,9 @@ public:
     virtual void loadModelDrawMtx() const;
     virtual void drawShape() const;
 
-    void setSize(const TVec3f&);
+    void setSize(const Vec3f&);
     void makeVertexBuffer() const;
 
-    TVec3f mSize;
-    mutable TVec3f mPoints[14];
+    Vec3f mSize;
+    mutable Vec3f mPoints[14];
 };

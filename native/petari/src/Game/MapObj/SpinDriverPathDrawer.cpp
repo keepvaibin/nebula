@@ -106,10 +106,10 @@ void SpinDriverPathDrawer::init(const JMapInfoIter& rIter) {
 s32 SpinDriverPathDrawer::calcPositionCount(f32 f1, f32 f2) const {
     s32 totalSteps = mShootPath->getTotalLength() / f1;
 
-    TVec3f pos0;
+    Vec3f pos0;
     mShootPath->calcPosition(&pos0, 0.0f);
 
-    TVec3f dir0;
+    Vec3f dir0;
     mShootPath->calcDirection(&dir0, 0.0f, 0.01f);
 
     s32 count = 2;
@@ -117,10 +117,10 @@ s32 SpinDriverPathDrawer::calcPositionCount(f32 f1, f32 f2) const {
     for (s32 i = 1; i < totalSteps; i++) {
         f32 posStep = static_cast< f32 >(i) / totalSteps;
 
-        TVec3f posI;
+        Vec3f posI;
         mShootPath->calcPosition(&posI, posStep);
 
-        TVec3f pos;
+        Vec3f pos;
         pos.killElement(posI - pos0, dir0);
 
         if (pos.length() > f2) {
@@ -136,17 +136,17 @@ s32 SpinDriverPathDrawer::calcPositionCount(f32 f1, f32 f2) const {
 
 void SpinDriverPathDrawer::initPositionList(f32 f1, f32 f2) {
     mPositionCount = calcPositionCount(f1, f2);
-    _90 = new TVec3f[mPositionCount];
-    _94 = new TVec3f[mPositionCount];
-    _98 = new TVec3f[mPositionCount];
+    _90 = new Vec3f[mPositionCount];
+    _94 = new Vec3f[mPositionCount];
+    _98 = new Vec3f[mPositionCount];
     _9C = new f32[mPositionCount];
 
     s32 totalSteps = mShootPath->getTotalLength() / f1;
 
-    TVec3f pos0;
+    Vec3f pos0;
     mShootPath->calcPosition(&pos0, 0.0f);
 
-    TVec3f dir0;
+    Vec3f dir0;
     mShootPath->calcDirection(&dir0, 0.0f, 0.01f);
 
     _90[0] = pos0;
@@ -162,10 +162,10 @@ void SpinDriverPathDrawer::initPositionList(f32 f1, f32 f2) {
     for (s32 i = 1; i < totalSteps; i++) {
         f32 posStep = static_cast< f32 >(i) / totalSteps;
 
-        TVec3f posI;
+        Vec3f posI;
         mShootPath->calcPosition(&posI, posStep);
 
-        TVec3f pos;
+        Vec3f pos;
         pos.killElement(posI - pos0, dir0);
 
         if (pos.length() > f2) {
@@ -295,7 +295,7 @@ void SpinDriverPathDrawer::draw() const {
     f32 drawBaseCode = calcDrawBaseCode();
     f32 maskSteps = mShootPath->getTotalLength() / mMaskLength;
 
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.identity();
     mtx[1][1] = -maskSteps;
     mtx[1][3] = 0.5f + maskSteps * drawCode;
@@ -309,9 +309,9 @@ void SpinDriverPathDrawer::draw() const {
     J3DNativeShape::setTexture(0, mtx, 2);
 
     for (u32 i = 1; i < mPositionCount; i++) {
-        TVec3f prev90(_90[i - 1]), curr90(_90[i]);
-        TVec3f prev94(_94[i - 1] * 100.0f), curr94(_94[i] * 100.0f);
-        TVec3f prev98(_98[i - 1] * 100.0f), curr98(_98[i] * 100.0f);
+        Vec3f prev90(_90[i - 1]), curr90(_90[i]);
+        Vec3f prev94(_94[i - 1] * 100.0f), curr94(_94[i] * 100.0f);
+        Vec3f prev98(_98[i - 1] * 100.0f), curr98(_98[i] * 100.0f);
 
         f32 prevVal = _9C[i - 1];
         f32 val = _9C[i];
@@ -336,7 +336,7 @@ void SpinDriverPathDrawer::draw() const {
     }
 }
 
-void SpinDriverPathDrawer::sendPoint(const TVec3f& rA1, f32 a2, f32 a3) const {
+void SpinDriverPathDrawer::sendPoint(const Vec3f& rA1, f32 a2, f32 a3) const {
     J3DNativeDraw::position(rA1.x, rA1.y, rA1.z);
     J3DNativeDraw::texCoord(a2, a3);
 }

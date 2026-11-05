@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/NameObj/NameObj.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class Camera;
 class CameraPoseParam;
@@ -34,7 +34,7 @@ public:
     f32 calcOffset(f32);
     void chase();
     void updateHeightAndOffset();
-    const TVec3f& getGlobalAxis();
+    const Vec3f& getGlobalAxis();
 
     Camera* mCamera;
     bool mIsJumping;
@@ -60,7 +60,7 @@ public:
     s32 mDropTime;
     s32 mRiseEaseTime;
     bool mUpdateGlobalAxis;
-    TVec3f mGlobalAxis;
+    Vec3f mGlobalAxis;
     f32 mOffsetScale;
     f32 mOffsetScaleMax;
     f32 mFocalScaleUpper;
@@ -72,5 +72,5 @@ public:
     s32 mDropDelay;
     s32 mMaxRiseEaseTime;
     bool mVPanUse;
-    TVec3f mVPanAxis;
+    Vec3f mVPanAxis;
 };

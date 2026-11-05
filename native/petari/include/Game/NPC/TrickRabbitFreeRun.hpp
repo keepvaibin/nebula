@@ -43,8 +43,8 @@ public:
     void exePowerStarDemo();
     void exeGiveUp();
 
-    TQuat4f mRotateQuat;
-    TVec3f mFrontVec;
+    Quat4f mRotateQuat;
+    Vec3f mFrontVec;
     RabbitStateWaitStart* mStateWaitStart;
     WalkerStateRunaway* mStateRunaway;
     WalkerStateBlowDamage* mStateBlowDamage;

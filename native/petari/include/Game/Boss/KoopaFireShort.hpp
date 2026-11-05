@@ -28,7 +28,7 @@ public:
 
 private:
     const Koopa* mKoopa;
-    TVec3f mFront;
+    Vec3f mFront;
     f32 mSpeed;
     s32 mDuration;
     f32 mOffset;

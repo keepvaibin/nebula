@@ -100,16 +100,16 @@ void ChooChooTrain::init(const JMapInfoIter& rIter) {
 void ChooChooTrain::control() {
     MR::moveCoord(this, mRailSpeed);
     MR::moveTransToCurrentRailPos(this);
-    TVec3f stack_74(MR::getRailDirection(this));
+    Vec3f stack_74(MR::getRailDirection(this));
     MR::turnDirectionAndGravityH(this, stack_74, 0.5f, 1.0f);
     f32 railCoord = MR::getRailCoord(this);
-    TVec3f frontVec;
+    Vec3f frontVec;
     MR::calcFrontVec(&frontVec, this);
-    TVec3f stack_5C;
+    Vec3f stack_5C;
     stack_5C = mPosition - ((frontVec * 532.0f) * mScale.y);
     MR::reverseRailDirection(this);
 
-    TVec3f* vec;
+    Vec3f* vec;
 
     for (int i = 0; i < mModelArray.size(); i++) {
         MR::moveCoord(this, 1080.0f * mScale.y);

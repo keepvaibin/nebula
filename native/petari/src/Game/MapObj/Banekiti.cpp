@@ -15,7 +15,7 @@ Banekiti::Banekiti(const char* pName) : LiveActor(pName), mAnimScaleCtrl(), mBin
 }
 
 inline void Banekiti::initStarPointer() {
-    TVec3f offset;
+    Vec3f offset;
     offset.set(0.0f);
     MR::initStarPointerTarget(this, 120.0f, offset);
 }
@@ -26,9 +26,9 @@ void Banekiti::init(const JMapInfoIter& rIter) {
     MR::connectToSceneMapObjStrongLight(this);
     MR::initLightCtrl(this);
     initHitSensor(3);
-    MR::addHitSensorMapObjSimple(this, "body", 4, 80.0f, TVec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorMapObjSimple(this, "right", 4, 80.0f, TVec3f(-100.0f, 0.0f, 0.0f));
-    MR::addHitSensorMapObjSimple(this, "left", 4, 80.0f, TVec3f(100.0f, 0.0f, 0.0f));
+    MR::addHitSensorMapObjSimple(this, "body", 4, 80.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorMapObjSimple(this, "right", 4, 80.0f, Vec3f(-100.0f, 0.0f, 0.0f));
+    MR::addHitSensorMapObjSimple(this, "left", 4, 80.0f, Vec3f(100.0f, 0.0f, 0.0f));
     initEffectKeeper(1, nullptr, false);
     initSound(4, false);
     initRailRider(rIter);

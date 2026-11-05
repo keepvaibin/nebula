@@ -2,7 +2,7 @@
 
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/Color.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class OctahedronBezierSurface;
 class BigBubbleMoveLimitter;
@@ -29,7 +29,7 @@ public:
     }
 
     void initSensor();
-    void generate(const TVec3f&, const TVec3f&, f32, bool, s32, s32, const BigBubbleMoveLimitter*);
+    void generate(const Vec3f&, const Vec3f&, f32, bool, s32, s32, const BigBubbleMoveLimitter*);
     void setActionType(s32);
     void setShapeType(s32);
     f32 getBaseRadius() const;
@@ -59,7 +59,7 @@ public:
 
     void endCapture();
 
-    void addDeformVelocityOuter(const TVec3f&, bool);
+    void addDeformVelocityOuter(const Vec3f&, bool);
     void addDeformVelocityInternalOressure();
     void addDeformVelocityRebound();
     void addCoriolisAccel();
@@ -74,10 +74,10 @@ public:
     void updateMeshPoint();
     void updateCaptureReduceVolume();
     void updateCaptureWarningColor();
-    void calcMergePosition(TVec3f*, TVec3f*, const BigBubble*) const;
-    void calcLocalDirection(TVec3f*, s32) const;
-    s32 getNearAxisIndex(const TVec3f&) const;
-    s32 getMergeIndex(const TVec3f&) const;
+    void calcMergePosition(Vec3f*, Vec3f*, const BigBubble*) const;
+    void calcLocalDirection(Vec3f*, s32) const;
+    s32 getNearAxisIndex(const Vec3f&) const;
+    s32 getMergeIndex(const Vec3f&) const;
 
     bool isPushable() const;
     bool isBindMario() const;
@@ -106,19 +106,19 @@ public:
     LiveActor* mRider;
     BigBubble* mMergeBubble;
     BigBubble* mMergeBubbles[6];
-    TPos3f mEffectMtx;
-    TPos3f _E8;
-    TPos3f mBaseMtx;
-    TQuat4f mBubbleQuat;
-    TQuat4f mRiderQuat;
-    TVec3f mRiderBasePos;
-    TVec3f mRiderPos;
-    TVec3f mSpawnPosition;
-    TVec3f _18C;
-    TVec3f mPointerPos;
-    TVec3f mPushDirection;
-    TVec3f mMoment;
-    TVec3f mCoriolisAccel;
+    Pos3f mEffectMtx;
+    Pos3f _E8;
+    Pos3f mBaseMtx;
+    Quat4f mBubbleQuat;
+    Quat4f mRiderQuat;
+    Vec3f mRiderBasePos;
+    Vec3f mRiderPos;
+    Vec3f mSpawnPosition;
+    Vec3f _18C;
+    Vec3f mPointerPos;
+    Vec3f mPushDirection;
+    Vec3f mMoment;
+    Vec3f mCoriolisAccel;
     f32 mDeformCoeff[6];
     f32 mDeformSpeed[6];
     f32 mInterpolateRate;

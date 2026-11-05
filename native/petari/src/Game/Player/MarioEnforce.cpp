@@ -21,7 +21,7 @@ void Mario::checkEnforceMove() {
 
 void Mario::checkEnforceMoveInner() {
     mMovementStates._18 = 0;
-    TVec3f v15(_184);
+    Vec3f v15(_184);
     if (mMovementStates._1 != 0 || mMovementStates.jumping != 0) {
         _184.zero();
     }
@@ -54,7 +54,7 @@ void Mario::checkEnforceMoveInner() {
             addTrans(mVelocity, nullptr);
         } else {
             bool v11 = false;
-            TVec3f v14(mPosition);
+            Vec3f v14(mPosition);
 
             if (mMovementStates._A == 0) {
                 if (200.0f == _72C) {
@@ -83,8 +83,8 @@ void Mario::checkEnforceMoveInner() {
 
 void Mario::recordRelativePosition() {
     const Triangle* sameSensorFloor = nullptr;
-    const TVec3f* pPosition;
-    TVec3f strikeCenter(mActor->_2A0);
+    const Vec3f* pPosition;
+    Vec3f strikeCenter(mActor->_2A0);
     _8CC[0]->mIdx = -1;
     _8CC[1]->mIdx = -1;
 
@@ -210,7 +210,7 @@ void Mario::invalidateRelativePosition() {
     _8CC[1]->mIdx = -1;
 }
 
-TPos3f* Mario::getMoveBaseMtx() const {
+Pos3f* Mario::getMoveBaseMtx() const {
     if (_8C8->isValid()) {
         return _8C8->getBaseMtx();
     }
@@ -238,15 +238,15 @@ u32 Mario::moveRelativePosition(u32) {
         return 0;
     }
 
-    TVec3f movePos;
+    Vec3f movePos;
     NebulaMtxMultVec(*rTri->getBaseMtx(), &_8A4, &movePos);
     _184 = movePos - mPosition;
 
     if (isSwimming()) {
-        TVec3f dist(mActor->_2A0);
+        Vec3f dist(mActor->_2A0);
         dist -= movePos;
 
-        TVec3f normal(*rTri->getNormal(0));
+        Vec3f normal(*rTri->getNormal(0));
         if (dist.dot(normal) > 0.0f && dist.dot(_184) > 0.0f) {
             addVelocity(_184);
         }
@@ -267,7 +267,7 @@ u32 Mario::moveRelativePosition(u32) {
             _10._10 = 1;
         }
 
-        TVec3f rotAxis;
+        Vec3f rotAxis;
         MR::calcMtxRotAxis(&rotAxis, *rTri->getBaseMtx(), *rTri->getPrevBaseMtx());
         if (MR::isSameDirection(rotAxis, getAirGravityVec())) {
             _10._10 = 1;
@@ -295,11 +295,11 @@ u32 Mario::moveRelativePositionWall() {
             continue;
         }
 
-        const TVec3f* relPos = &mRelativeWallPos[i];
-        TVec3f movePos;
+        const Vec3f* relPos = &mRelativeWallPos[i];
+        Vec3f movePos;
         NebulaMtxMultVec(*tri->getBaseMtx(), relPos, &movePos);
 
-        TVec3f add(movePos);
+        Vec3f add(movePos);
         add -= mPosition;
 
         const f32 elem = MR::vecKillElement(add, *tri->getNormal(0), &add);
@@ -326,7 +326,7 @@ void Mario::recordLastGround() {
     NebulaMtxMultVec(*_474->getBaseInvMtx(), &mGroundPos, &_4BC);
 }
 
-void Mario::getLastGroundPos(TVec3f* pPos) const {
+void Mario::getLastGroundPos(Vec3f* pPos) const {
     if (_474->isValid()) {
         NebulaMtxMultVec(*_474->getBaseMtx(), &_4BC, pPos);
     } else {
@@ -334,24 +334,24 @@ void Mario::getLastGroundPos(TVec3f* pPos) const {
     }
 }
 
-const TVec3f* Mario::getLastGroundEdgeNrm(u32 idx) const {
+const Vec3f* Mario::getLastGroundEdgeNrm(u32 idx) const {
     return _474->getEdgeNormal(idx);
 }
 
-u32 Mario::getLastGroundEdgeIndex(const TVec3f& rPos, const TVec3f& rDir) const {
-    const TVec3f* edge0 = _474->calcAndGetEdgeNormal(0);
-    const TVec3f* edge1 = _474->calcAndGetEdgeNormal(1);
-    const TVec3f* edge2 = _474->calcAndGetEdgeNormal(2);
+u32 Mario::getLastGroundEdgeIndex(const Vec3f& rPos, const Vec3f& rDir) const {
+    const Vec3f* edge0 = _474->calcAndGetEdgeNormal(0);
+    const Vec3f* edge1 = _474->calcAndGetEdgeNormal(1);
+    const Vec3f* edge2 = _474->calcAndGetEdgeNormal(2);
 
     f32 score0 = rDir.dot(*edge0);
     f32 score1 = rDir.dot(*edge1);
     f32 score2 = rDir.dot(*edge2);
 
-    TVec3f centerAvg(*_474->calcAndGetPos(0) + *_474->calcAndGetPos(1) + *_474->calcAndGetPos(2));
+    Vec3f centerAvg(*_474->calcAndGetPos(0) + *_474->calcAndGetPos(1) + *_474->calcAndGetPos(2));
 
     centerAvg *= 1.0f / 3.0f;
 
-    TVec3f outDir(centerAvg - rPos);
+    Vec3f outDir(centerAvg - rPos);
     MR::normalizeOrZero(&outDir);
 
     const f32 add0 = outDir.dot(*edge0);
@@ -385,7 +385,7 @@ void Mario::pushedByReaction() {
     _928 *= _934;
 }
 
-void Mario::addReaction(const TVec3f& rReact) {
+void Mario::addReaction(const Vec3f& rReact) {
     _928 += rReact;
 }
 
@@ -396,14 +396,14 @@ void Mario::tryPushToVelocity() {
 
     if (!MR::isNearZero(_350)) {
         if (isSwimming()) {
-            TVec3f pushVec(_350);
+            Vec3f pushVec(_350);
             pushVec += _35C;
             _350.zero();
             _35C.zero();
             createAtField(true, pushVec.length());
 
             for (u32 i = 0; i < _578; i++) {
-                TVec3f projected;
+                Vec3f projected;
                 if (MR::vecKillElement(pushVec, *_57C[i]->getNormal(0), &projected) < 0.0f) {
                     pushVec = projected;
                 }
@@ -415,7 +415,7 @@ void Mario::tryPushToVelocity() {
                 closeStatus(mBury);
             } else {
                 if (mMovementStates.jumping && !mMovementStates._1) {
-                    TVec3f pushDir(_350);
+                    Vec3f pushDir(_350);
                     MR::normalizeOrZero(&pushDir);
 
                     if (mJumpVec.dot(_350) < 0.0f) {
@@ -441,12 +441,12 @@ void Mario::tryPushToVelocity() {
     _35C.zero();
 }
 
-void Mario::push(const TVec3f& rVec) {
+void Mario::push(const Vec3f& rVec) {
     _350 += rVec;
     _1C._15 = 1;
 }
 
-void Mario::push2(const TVec3f& rVec) {
+void Mario::push2(const Vec3f& rVec) {
     _35C += rVec;
     _1C._15 = 1;
 }
@@ -456,7 +456,7 @@ void Mario::powerAreaMove() {
 
     if (mMovementStates._1 && !mMovementStates.jumping && _960 == 28 && MR::calcAreaMoveVelocity(&_190, mPosition)) {
         if (mMovementStates._8 || mMovementStates._19 || mMovementStates._1A) {
-            const TVec3f* norm = &getWallNorm();
+            const Vec3f* norm = &getWallNorm();
             f32 dot = norm->dot(_190);
 
             if (dot < 0.0f) {
@@ -478,7 +478,7 @@ void Mario::powerRailMove() {
             return;
         }
 
-        TVec3f railDir;
+        Vec3f railDir;
         MR::calcNearestRailDirection(&railDir, host, mPosition);
 
         s32 arg = -1;
@@ -491,14 +491,14 @@ void Mario::powerRailMove() {
         MR::normalizeOrZero(&railDir);
 
         if (mMovementStates._8 || mMovementStates._19 || mMovementStates._1A) {
-            const TVec3f* wallNorm = &getWallNorm();
+            const Vec3f* wallNorm = &getWallNorm();
             if (wallNorm->dot(railDir) < 0.0f) {
                 MR::vecKillElement(railDir, *wallNorm, &railDir);
                 MR::vecKillElement(railDir, *getGravityVec(), &railDir);
             }
         }
 
-        TVec3f velocity(railDir);
+        Vec3f velocity(railDir);
         velocity.scale(speed);
         _19C = velocity;
         addVelocity(_19C);
@@ -535,7 +535,7 @@ void Mario::doEnforceJump(f32 param) {
 void Mario::pushedByWind() {
     f32 windMag = _91C.length();
 
-    TVec3f windDir(_91C);
+    Vec3f windDir(_91C);
     MR::normalizeOrZero(&windDir);
 
     if (MR::isNearZero(windDir)) {
@@ -573,7 +573,7 @@ void Mario::pushedByWind() {
         return;
     }
 
-    TVec3f scaled(windDir * windMag);
+    Vec3f scaled(windDir * windMag);
 
     if (mVelocity.dot(windDir) > 0.0f) {
         const MarioConstTable* table = mActor->getConst().getTable();
@@ -584,7 +584,7 @@ void Mario::pushedByWind() {
         return;
     }
 
-    TVec3f killed;
+    Vec3f killed;
     f32 element = MR::vecKillElement(scaled + mVelocity, windDir, &killed);
 
     const MarioConstTable* table = mActor->getConst().getTable();

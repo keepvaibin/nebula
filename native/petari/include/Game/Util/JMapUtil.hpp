@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/Util/JMapInfo.hpp"
-#include <JSystem/JGeometry.hpp>
+#include <nebula_geometry.hpp>
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 
@@ -11,9 +11,9 @@ namespace MR {
     bool getJMapInfoArgNoInit(const JMapInfoIter& rIter, const char* pFieldName, s32*);
     bool getJMapInfoArgNoInit(const JMapInfoIter& rIter, const char* pFieldName, f32*);
     bool getJMapInfoArgNoInit(const JMapInfoIter& rIter, const char* pFieldName, bool*);
-    bool getJMapInfoTrans(const JMapInfoIter& rIter, TVec3f*);
-    bool getJMapInfoRotate(const JMapInfoIter& rIter, TVec3f*);
-    bool getJMapInfoMatrixFromRT(const JMapInfoIter& rIter, TPos3f*);
+    bool getJMapInfoTrans(const JMapInfoIter& rIter, Vec3f*);
+    bool getJMapInfoRotate(const JMapInfoIter& rIter, Vec3f*);
+    bool getJMapInfoMatrixFromRT(const JMapInfoIter& rIter, Pos3f*);
     bool getJMapInfoArg0WithInit(const JMapInfoIter& rIter, s32*);
     bool getJMapInfoArg0WithInit(const JMapInfoIter& rIter, f32*);
     bool getJMapInfoArg0WithInit(const JMapInfoIter& rIter, bool*);
@@ -58,10 +58,10 @@ namespace MR {
     bool getObjectName(const char** pDest, const JMapInfoIter& rIter);
     bool isExistJMapArg(const JMapInfoIter& rIter);
     bool getJMapInfoShapeIdWithInit(const JMapInfoIter& rIter, s32*);
-    bool getJMapInfoTransLocal(const JMapInfoIter& rIter, TVec3f*);
-    bool getJMapInfoRotateLocal(const JMapInfoIter& rIter, TVec3f*);
-    bool getJMapInfoScale(const JMapInfoIter& rIter, TVec3f*);
-    bool getJMapInfoV3f(const JMapInfoIter& rIter, const char*, TVec3f*);
+    bool getJMapInfoTransLocal(const JMapInfoIter& rIter, Vec3f*);
+    bool getJMapInfoRotateLocal(const JMapInfoIter& rIter, Vec3f*);
+    bool getJMapInfoScale(const JMapInfoIter& rIter, Vec3f*);
+    bool getJMapInfoV3f(const JMapInfoIter& rIter, const char*, Vec3f*);
     bool getJMapInfoArg1WithInit(const JMapInfoIter& rIter, s32*);
     bool getJMapInfoArg2WithInit(const JMapInfoIter& rIter, s32*);
     bool getJMapInfoArg3WithInit(const JMapInfoIter& rIter, s32*);
@@ -88,9 +88,9 @@ namespace MR {
     const char* getDemoSheetName(const JMapInfoIter& rIter);
     bool getNextLinkRailID(const JMapInfoIter& rIter, s32*);
     bool isEqualRailUsage(const JMapInfoIter& rIter, const char*);
-    void getRailPointPos0(const JMapInfoIter& rIter, TVec3f*);
-    void getRailPointPos1(const JMapInfoIter& rIter, TVec3f*);
-    void getRailPointPos2(const JMapInfoIter& rIter, TVec3f*);
+    void getRailPointPos0(const JMapInfoIter& rIter, Vec3f*);
+    void getRailPointPos1(const JMapInfoIter& rIter, Vec3f*);
+    void getRailPointPos2(const JMapInfoIter& rIter, Vec3f*);
     bool isLoopRailPathIter(const JMapInfoIter& rIter);
 
     template < typename T >

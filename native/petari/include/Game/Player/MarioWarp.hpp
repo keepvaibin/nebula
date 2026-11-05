@@ -16,10 +16,10 @@ public:
     void updateJump();
 
     u8 _12;
-    TVec3f _14;
-    TVec3f _20;
-    TVec3f _2C;
-    TVec3f _38;
+    Vec3f _14;
+    Vec3f _20;
+    Vec3f _2C;
+    Vec3f _38;
     u8 _44;
     u8 _45;
     u32 _48;
@@ -29,9 +29,9 @@ public:
     u16 _54;
     u16 _56;
     u16 _58;
-    TVec3f _5C;
-    TVec3f _68;
-    TVec3f _74;
+    Vec3f _5C;
+    Vec3f _68;
+    Vec3f _74;
     f32 _80;
     f32 _84;
     s32 _88;

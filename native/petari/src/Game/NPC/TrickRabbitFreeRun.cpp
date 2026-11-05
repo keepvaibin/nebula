@@ -60,7 +60,7 @@ void TrickRabbitFreeRun::init(const JMapInfoIter& rIter) {
     initSensor();
     initBinder(::sBindRadius, ::sBindYOffset, 0);
 
-    mMsgCtrl = MR::createTalkCtrl(this, rIter, "TrickRabbit", TVec3f(0.0f, 120.0f, 0.0f), nullptr);
+    mMsgCtrl = MR::createTalkCtrl(this, rIter, "TrickRabbit", Vec3f(0.0f, 120.0f, 0.0f), nullptr);
 
     initState();
     initSound(4, false);
@@ -76,9 +76,9 @@ void TrickRabbitFreeRun::initAfterPlacement() {
 
 void TrickRabbitFreeRun::initSensor() {
     initHitSensor(2);
-    MR::addHitSensorAtJointEnemy(this, "Body", "Spine", 8, ::sBodyRadius, TVec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorAtJointEnemy(this, "Catch", "Spine", 8, ::sCatchRadius, TVec3f(0.0f, 0.0f, 0.0f));
-    MR::initStarPointerTargetAtJoint(this, "Spine", ::sBodyRadius, TVec3f(0.0f));
+    MR::addHitSensorAtJointEnemy(this, "Body", "Spine", 8, ::sBodyRadius, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointEnemy(this, "Catch", "Spine", 8, ::sCatchRadius, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::initStarPointerTargetAtJoint(this, "Spine", ::sBodyRadius, Vec3f(0.0f));
 }
 
 void TrickRabbitFreeRun::initState() {

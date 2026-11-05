@@ -151,7 +151,7 @@ void MarioEffect::updateFollowMtx(MovingFollowMtx* pFollow) {
         Mtx temp;
         NebulaMtxCopy(_24, temp);
 
-        const TVec3f& rTrans = getTrans();
+        const Vec3f& rTrans = getTrans();
         MR::setMtxTrans(temp, rTrans.x, rTrans.y, rTrans.z);
 
         if (pFollow->_64 == nullptr) {
@@ -474,8 +474,8 @@ void MarioActor::initCommonEffect() {
                     const char* effectName = effectList[variant];
                     const char* hostName = name + materialIndex;
                     mEffectKeeper->registerEffectWithoutSRT(effectName, hostName);
-                    const TVec3f* rot = &mRotation;
-                    const TVec3f* pos = &mPosition;
+                    const Vec3f* rot = &mRotation;
+                    const Vec3f* pos = &mPosition;
                     MR::setEffectHostSRT(this, hostName != nullptr ? hostName : effectName, pos, rot, nullptr);
                     break;
                 }
@@ -592,14 +592,14 @@ MultiEmitter* MarioActor::playCommonEffect(const char* pName) {
                     JPABaseEmitter* baseEmitter = mMarioEffect->addRequest(pName + materialIndex, tri->getBaseMtx()->toMtxPtr());
 
                     if (baseEmitter != nullptr) {
-                        baseEmitter->setGlobalScale(TVec3f(entry->mScale, entry->mScale, entry->mScale));
+                        baseEmitter->setGlobalScale(Vec3f(entry->mScale, entry->mScale, entry->mScale));
                     }
                 } else {
                     if (needsSRT) {
                         const u8 hostFlag = entry->mFlags.byte1();
-                        const TVec3f* hostPos = nullptr;
-                        const TVec3f* hostRot = nullptr;
-                        const TVec3f* hostScale = nullptr;
+                        const Vec3f* hostPos = nullptr;
+                        const Vec3f* hostRot = nullptr;
+                        const Vec3f* hostScale = nullptr;
 
                         if (hostFlag & 0x1) {
                             hostPos = &mPosition;
@@ -631,10 +631,10 @@ MultiEmitter* MarioActor::playCommonEffect(const char* pName) {
             }
 
             if (entry->mFlags.byte2() & 0x1) {
-                TVec3f dir(mMario->getWallNorm());
-                TPos3f mtx;
-                TVec3f rot;
-                MR::makeMtxUpNoSupportPos(&mtx, dir, TVec3f(0.0f, 0.0f, 0.0f));
+                Vec3f dir(mMario->getWallNorm());
+                Pos3f mtx;
+                Vec3f rot;
+                MR::makeMtxUpNoSupportPos(&mtx, dir, Vec3f(0.0f, 0.0f, 0.0f));
                 MR::makeRTFromMtxPtr(nullptr, &rot, mtx.toMtxPtr(), true);
 
                 if (emitter != nullptr) {
@@ -645,10 +645,10 @@ MultiEmitter* MarioActor::playCommonEffect(const char* pName) {
                     emitter->setGlobalTranslation(mPosition, -1);
                 }
             } else {
-                TVec3f dir(mMario->_368);
-                TPos3f mtx;
-                TVec3f rot;
-                MR::makeMtxUpNoSupportPos(&mtx, dir, TVec3f(0.0f, 0.0f, 0.0f));
+                Vec3f dir(mMario->_368);
+                Pos3f mtx;
+                Vec3f rot;
+                MR::makeMtxUpNoSupportPos(&mtx, dir, Vec3f(0.0f, 0.0f, 0.0f));
                 MR::makeRTFromMtxPtr(nullptr, &rot, mtx.toMtxPtr(), true);
                 NebulaMtxCopy(mtx.toMtxPtr(), mMarioEffect->_24.toMtxPtr());
 
@@ -662,7 +662,7 @@ MultiEmitter* MarioActor::playCommonEffect(const char* pName) {
             }
 
             if (entry->mFlags.byte2() & 0x2) {
-                TVec3f trans(mMario->_4E8);
+                Vec3f trans(mMario->_4E8);
                 if (emitter != nullptr) {
                     emitter->setGlobalTranslation(trans, -1);
                 }
@@ -805,9 +805,9 @@ void MarioActor::initEffect() {
         mEffectKeeper->registerEffect("CrestGetFlyC", _D1C.toMtxPtr(), groupName, nullptr);
     }
 
-    const TVec3f* scale = &mScale;
-    const TVec3f* rot = &mRotation;
-    const TVec3f* pos = &mPosition;
+    const Vec3f* scale = &mScale;
+    const Vec3f* rot = &mRotation;
+    const Vec3f* pos = &mPosition;
 
     {
         const char* groupName = "\203\130\203\103\203\223\203\117\203\164\203\211\203\103" /* スイングフライ */;
@@ -882,7 +882,7 @@ void MarioActor::initEffect() {
     obj->kill();
 }
 
-void MarioActor::emitEffectWaterColumn(const TVec3f& rDir, const TVec3f& rTrans) {
+void MarioActor::emitEffectWaterColumn(const Vec3f& rDir, const Vec3f& rTrans) {
     if (MR::isNearZero(rDir)) {
         return;
     }
@@ -891,9 +891,9 @@ void MarioActor::emitEffectWaterColumn(const TVec3f& rDir, const TVec3f& rTrans)
     MR::startBck(_BA8, "WaterColumn");
     MR::startBrk(_BA8, "WaterColumn");
 
-    TVec3f rot;
-    TPos3f mtx;
-    MR::makeMtxUpNoSupportPos(&mtx, rDir, TVec3f(0.0f, 0.0f, 0.0f));
+    Vec3f rot;
+    Pos3f mtx;
+    MR::makeMtxUpNoSupportPos(&mtx, rDir, Vec3f(0.0f, 0.0f, 0.0f));
     MR::makeRTFromMtxPtr(nullptr, &rot, mtx.toMtxPtr(), true);
 
     _BA8->mPosition = rTrans;
@@ -946,21 +946,21 @@ MultiEmitter* MarioActor::playEffect(const char* pName) {
     return MR::emitEffect(this, pName);
 }
 
-void MarioActor::playEffectTrans(const char* pName, const TVec3f& rTrans) {
+void MarioActor::playEffectTrans(const char* pName, const Vec3f& rTrans) {
     MultiEmitter* emitter = playEffect(pName);
     if (emitter != nullptr) {
         emitter->setGlobalTranslation(rTrans, -1);
     }
 }
 
-void MarioActor::playEffectRT(const char* pName, const TVec3f& rDir, const TVec3f& rTrans) {
+void MarioActor::playEffectRT(const char* pName, const Vec3f& rDir, const Vec3f& rTrans) {
     if (MR::isNearZero(rDir)) {
         return;
     }
 
-    TVec3f rot;
-    TPos3f mtx;
-    MR::makeMtxUpNoSupportPos(&mtx, rDir, TVec3f(0.0f, 0.0f, 0.0f));
+    Vec3f rot;
+    Pos3f mtx;
+    MR::makeMtxUpNoSupportPos(&mtx, rDir, Vec3f(0.0f, 0.0f, 0.0f));
     MR::makeRTFromMtxPtr(nullptr, &rot, mtx.toMtxPtr(), true);
 
     MultiEmitter* emitter = playEffect(pName);
@@ -971,14 +971,14 @@ void MarioActor::playEffectRT(const char* pName, const TVec3f& rDir, const TVec3
     }
 }
 
-void MarioActor::playEffectRTZ(const char* pName, const TVec3f& rDir, const TVec3f& rTrans) {
+void MarioActor::playEffectRTZ(const char* pName, const Vec3f& rDir, const Vec3f& rTrans) {
     if (MR::isNearZero(rDir)) {
         return;
     }
 
-    TVec3f rot;
-    TPos3f mtx;
-    MR::makeMtxUpNoSupportPos(&mtx, rDir, TVec3f(0.0f, 0.0f, 0.0f));
+    Vec3f rot;
+    Pos3f mtx;
+    MR::makeMtxUpNoSupportPos(&mtx, rDir, Vec3f(0.0f, 0.0f, 0.0f));
     MR::makeRTFromMtxPtr(nullptr, &rot, mtx.toMtxPtr(), true);
 
     MultiEmitter* emitter = playEffect(pName);
@@ -989,14 +989,14 @@ void MarioActor::playEffectRTZ(const char* pName, const TVec3f& rDir, const TVec
     }
 }
 
-void MarioActor::playEffectRTW(const char* pName, const TVec3f& rDir, const TVec3f& rTrans) {
+void MarioActor::playEffectRTW(const char* pName, const Vec3f& rDir, const Vec3f& rTrans) {
     if (MR::isNearZero(rDir)) {
         return;
     }
 
-    TVec3f rot;
-    TPos3f mtx;
-    MR::makeMtxUpNoSupportPos(&mtx, rDir, TVec3f(0.0f, 0.0f, 0.0f));
+    Vec3f rot;
+    Pos3f mtx;
+    MR::makeMtxUpNoSupportPos(&mtx, rDir, Vec3f(0.0f, 0.0f, 0.0f));
     MR::makeRTFromMtxPtr(nullptr, &rot, mtx.toMtxPtr(), true);
 
     _BB8 = rot;
@@ -1004,14 +1004,14 @@ void MarioActor::playEffectRTW(const char* pName, const TVec3f& rDir, const TVec
     playEffect(pName);
 }
 
-void MarioActor::playEffectSRT(const char* pName, f32 scale, const TVec3f& rDir, const TVec3f& rTrans) {
+void MarioActor::playEffectSRT(const char* pName, f32 scale, const Vec3f& rDir, const Vec3f& rTrans) {
     if (MR::isNearZero(rDir)) {
         return;
     }
 
-    TVec3f rot;
-    TPos3f mtx;
-    MR::makeMtxUpNoSupportPos(&mtx, rDir, TVec3f(0.0f, 0.0f, 0.0f));
+    Vec3f rot;
+    Pos3f mtx;
+    MR::makeMtxUpNoSupportPos(&mtx, rDir, Vec3f(0.0f, 0.0f, 0.0f));
     MR::makeRTFromMtxPtr(nullptr, &rot, mtx.toMtxPtr(), true);
 
     MultiEmitter* emitter = playEffect(pName);
@@ -1302,6 +1302,6 @@ MarioEffect::~MarioEffect() {
 }
 
 void MultiEmitter::setGlobalScale(f32 scale, s32 a2) {
-    TVec3f scaleVec(scale, scale, scale);
+    Vec3f scaleVec(scale, scale, scale);
     setGlobalScale(scaleVec, a2);
 }

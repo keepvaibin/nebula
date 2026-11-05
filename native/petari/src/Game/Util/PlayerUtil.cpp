@@ -60,19 +60,19 @@ namespace MR {
         return isInAreaObj(pName, MarioAccess::getPlayerActor()->mPosition);
     }
 
-    TVec3f* getPlayerPos() {
+    Vec3f* getPlayerPos() {
         return &MarioAccess::getPlayerActor()->mPosition;
     }
 
-    TVec3f* getPlayerCenterPos() {
+    Vec3f* getPlayerCenterPos() {
         return &MarioAccess::getPlayerActor()->_2A0;
     }
 
-    void getPlayerTakePos(TVec3f* pPos) {
+    void getPlayerTakePos(Vec3f* pPos) {
         return MarioAccess::getTakePos(pPos);
     }
 
-    void setPlayerPos(const TVec3f& rPos) {
+    void setPlayerPos(const Vec3f& rPos) {
         MarioAccess::setTrans(rPos, 0);
     }
 
@@ -80,23 +80,23 @@ namespace MR {
         MarioAccess::getPlayerActor()->setUpperRotateY(angle);
     }
 
-    TVec3f* getPlayerRotate() {
+    Vec3f* getPlayerRotate() {
         return &MarioAccess::getPlayerActor()->mRotation;
     }
 
-    TVec3f* getPlayerShadowRotate() {
+    Vec3f* getPlayerShadowRotate() {
         return &MarioAccess::getPlayerActor()->_A18;
     }
 
-    TVec3f* getPlayerVelocity() {
+    Vec3f* getPlayerVelocity() {
         return MarioAccess::getVelocity();
     }
 
-    TVec3f* getPlayerLastMove() {
+    Vec3f* getPlayerLastMove() {
         return MarioAccess::getLastMove();
     }
 
-    void setPlayerJumpVec(const TVec3f& rJumpVec) {
+    void setPlayerJumpVec(const Vec3f& rJumpVec) {
         MarioAccess::setJumpVec(rJumpVec);
     }
 
@@ -108,11 +108,11 @@ namespace MR {
         return MarioAccess::setWalkingResist(resist);
     }
 
-    const TVec3f* getPlayerGravity() {
+    const Vec3f* getPlayerGravity() {
         return &MarioAccess::getPlayerActor()->getGravityVec();
     }
 
-    void calcPlayerSpinPullVelocity(TVec3f* pVelocity, const TVec3f& rPos) {
+    void calcPlayerSpinPullVelocity(Vec3f* pVelocity, const Vec3f& rPos) {
         MarioAccess::calcSpinPullVelocity(pVelocity, rPos);
     }
 
@@ -124,39 +124,39 @@ namespace MR {
         return MarioAccess::getPlayerActor()->_1E1;
     }
 
-    f32 calcDistanceToPlayer(const TVec3f& rPos) {
+    f32 calcDistanceToPlayer(const Vec3f& rPos) {
         return getPlayerPos()->distance(rPos);
     }
 
-    void getPlayerUpVec(TVec3f* pVec) {
+    void getPlayerUpVec(Vec3f* pVec) {
         MarioAccess::getPlayerActor()->getUpVec(pVec);
     }
 
-    void getPlayerFrontVec(TVec3f* pVec) {
+    void getPlayerFrontVec(Vec3f* pVec) {
         MarioAccess::getPlayerActor()->getFrontVec(pVec);
     }
 
-    void getPlayerSideVec(TVec3f* pVec) {
+    void getPlayerSideVec(Vec3f* pVec) {
         MarioAccess::getPlayerActor()->getSideVec(pVec);
     }
 
-    void getPlayerThrowVec(TVec3f* pVec) {
+    void getPlayerThrowVec(Vec3f* pVec) {
         MarioAccess::getThrowVec(pVec);
     }
 
-    void getPlayerGroundPos(TVec3f* pPos) {
+    void getPlayerGroundPos(Vec3f* pPos) {
         MarioAccess::getPlayerActor()->getGroundPos(pPos);
     }
 
-    const TVec3f* getPlayerGroundNormal() {
+    const Vec3f* getPlayerGroundNormal() {
         return getPlayerGroundingPolygon()->getFaceNormal();
     }
 
-    void setPlayerFrontTargetVec(const TVec3f& rTarget, s32 param2) {
+    void setPlayerFrontTargetVec(const Vec3f& rTarget, s32 param2) {
         MarioAccess::setFrontVecTarget(rTarget, param2);
     }
 
-    void setPlayerFrontVec(const TVec3f& rVec, s32 param2) {
+    void setPlayerFrontVec(const Vec3f& rVec, s32 param2) {
         MarioAccess::setFrontVecKeepUp(rVec, param2);
     }
 
@@ -246,15 +246,15 @@ namespace MR {
         return MarioAccess::getPlayerActor()->getResourceTable();
     }
 
-    void jumpPlayer(const TVec3f& rParam1) {
+    void jumpPlayer(const Vec3f& rParam1) {
         MarioAccess::freeJump(rParam1, 0);
     }
 
-    void forceJumpPlayer(const TVec3f& rParam1) {
+    void forceJumpPlayer(const Vec3f& rParam1) {
         MarioAccess::forceJump(rParam1, 0);
     }
 
-    void forceFlyPlayer(const TVec3f& rParam1, const TVec3f& rParam2, s32 param3) {
+    void forceFlyPlayer(const Vec3f& rParam1, const Vec3f& rParam2, s32 param3) {
         MarioAccess::forceFly(rParam1, rParam2, param3);
     }
 
@@ -299,19 +299,19 @@ namespace MR {
     }
 
     void setPlayerPos(const char* pParam1) {
-        TPos3f mtx;
+        Pos3f mtx;
         mtx.identity();
 
         MR::findNamePos(pParam1, mtx.toMtxPtr());
         MarioAccess::setBaseMtx(mtx.toMtxPtr());
 
-        TVec3f trans;
+        Vec3f trans;
         MR::extractMtxTrans(mtx.toMtxPtr(), &trans);
 
         setPlayerPos(trans);
     }
 
-    void setPlayerPosAndWait(const TVec3f& rPos) {
+    void setPlayerPosAndWait(const Vec3f& rPos) {
         setPlayerPos(rPos);
         MarioAccess::getPlayerActor()->resetCondition();
         MarioAccess::setStateWait();
@@ -324,7 +324,7 @@ namespace MR {
     }
 
     void setPlayerLinkPosAndWait(const NameObj* pParam1, const char* pParam2) {
-        TPos3f mtx;
+        Pos3f mtx;
         mtx.identity();
 
         MR::findLinkNamePos(pParam1, pParam2, mtx.toMtxPtr());
@@ -334,7 +334,7 @@ namespace MR {
     }
 
     void setPlayerPosOnGround(const char* pParam1) {
-        TPos3f mtx;
+        Pos3f mtx;
         mtx.identity();
 
         MR::findNamePosOnGround(pParam1, mtx.toMtxPtr());
@@ -342,11 +342,11 @@ namespace MR {
     }
 
     void setPlayerPosOnGroundAndWait(const char* pParam1) {
-        TPos3f mtx;
+        Pos3f mtx;
         mtx.identity();
 
         // A name the stage has no position of, from a mod's cutscene: the player stays where they are.
-        TPos3f found;
+        Pos3f found;
         if (!MR::tryFindNamePos(pParam1, found.toMtxPtr())) {
             return;
         }
@@ -490,60 +490,60 @@ namespace MR {
     }
 
     void endBindAndPlayerWait(LiveActor* pActor) {
-        TVec3f velocity(0.0f, 0.0f, 0.0f);
+        Vec3f velocity(0.0f, 0.0f, 0.0f);
         RushEndInfo info(pActor, 0, velocity, false, 0);
 
         MarioAccess::endRush(&info);
     }
 
-    void endBindAndPlayerJump(LiveActor* pActor, const TVec3f& rParam2, u32 param3) {
+    void endBindAndPlayerJump(LiveActor* pActor, const Vec3f& rParam2, u32 param3) {
         RushEndInfo info = RushEndInfo(pActor, 2, rParam2, true, param3);
 
         MarioAccess::endRush(&info);
     }
 
-    void endBindAndPlayerForceJump(LiveActor* pActor, const TVec3f& rParam2, u32 param3) {
+    void endBindAndPlayerForceJump(LiveActor* pActor, const Vec3f& rParam2, u32 param3) {
         RushEndInfo info = RushEndInfo(pActor, 2, rParam2, true, param3);
         info._20 |= 0x40000000;
 
         MarioAccess::endRush(&info);
     }
 
-    void endBindAndPlayerWeakGravityJump(LiveActor* pActor, const TVec3f& rParam2) {
+    void endBindAndPlayerWeakGravityJump(LiveActor* pActor, const Vec3f& rParam2) {
         RushEndInfo info = RushEndInfo(pActor, 3, rParam2, true, 0);
 
         MarioAccess::endRush(&info);
     }
 
-    void endBindAndPlayerForceWeakGravityJump(LiveActor* pActor, const TVec3f& rParam2) {
+    void endBindAndPlayerForceWeakGravityJump(LiveActor* pActor, const Vec3f& rParam2) {
         RushEndInfo info = RushEndInfo(pActor, 3, rParam2, true, 0);
         info._20 |= 0x40000000;
 
         MarioAccess::endRush(&info);
     }
 
-    void endBindAndPlayerForceWeakGravityJumpInputOff(LiveActor* pActor, const TVec3f& rParam2) {
+    void endBindAndPlayerForceWeakGravityJumpInputOff(LiveActor* pActor, const Vec3f& rParam2) {
         RushEndInfo info = RushEndInfo(pActor, 3, rParam2, true, 0);
         info._20 |= 3u << 30;
 
         MarioAccess::endRush(&info);
     }
 
-    void endBindAndPlayerWeakGravityLimitJump(LiveActor* pActor, const TVec3f& rParam2) {
+    void endBindAndPlayerWeakGravityLimitJump(LiveActor* pActor, const Vec3f& rParam2) {
         RushEndInfo info = RushEndInfo(pActor, 3, rParam2, true, 0);
         info._20 |= 0x800000;
 
         MarioAccess::endRush(&info);
     }
 
-    void endBindAndSpinDriverJump(LiveActor* pActor, const TVec3f& rParam2) {
+    void endBindAndSpinDriverJump(LiveActor* pActor, const Vec3f& rParam2) {
         RushEndInfo info = RushEndInfo(pActor, 3, rParam2, true, 0);
         info._20 |= 3u << 30;
 
         MarioAccess::endRush(&info);
     }
 
-    void endBindAndPlayerDamage(LiveActor* pActor, const TVec3f& rParam2) {
+    void endBindAndPlayerDamage(LiveActor* pActor, const Vec3f& rParam2) {
         RushEndInfo info = RushEndInfo(pActor, 3, rParam2, true, 0);
         info._20 |= 3u << 30;
         info.mFlags.mDamageType = 1;
@@ -551,7 +551,7 @@ namespace MR {
         MarioAccess::endRush(&info);
     }
 
-    void endBindAndPlayerFlip(LiveActor* pActor, const TVec3f& rParam2) {
+    void endBindAndPlayerFlip(LiveActor* pActor, const Vec3f& rParam2) {
         RushEndInfo info = RushEndInfo(pActor, 3, rParam2, true, 0);
         info._20 |= 3u << 30;
         info.mFlags.mDamageType = 6;
@@ -559,7 +559,7 @@ namespace MR {
         MarioAccess::endRush(&info);
     }
 
-    void endBindAndPlayerJumpWithRollLanding(LiveActor* pActor, const TVec3f& rParam2, u32 param3) {
+    void endBindAndPlayerJumpWithRollLanding(LiveActor* pActor, const Vec3f& rParam2, u32 param3) {
         RushEndInfo info = RushEndInfo(pActor, 3, rParam2, true, param3);
         info._20 |= 0x400000;
 
@@ -567,10 +567,10 @@ namespace MR {
     }
 
     void endBindAndPlayerDamageMsg(LiveActor* pActor, u32 param2) {
-        endBindAndPlayerDamageMsg(pActor, param2, TVec3f(0.0f, 0.0f, 0.0f));
+        endBindAndPlayerDamageMsg(pActor, param2, Vec3f(0.0f, 0.0f, 0.0f));
     }
 
-    void endBindAndPlayerDamageMsg(LiveActor* pActor, u32 param2, const TVec3f& rParam3) {
+    void endBindAndPlayerDamageMsg(LiveActor* pActor, u32 param2, const Vec3f& rParam3) {
         switch (param2) {
         case 0x57:
         case 0x58:
@@ -607,7 +607,7 @@ namespace MR {
     }
 
     void endBindAndPlayerAcidDamage(LiveActor* pActor) {
-        RushEndInfo info = RushEndInfo(pActor, 3, TVec3f(0.0f, 0.0f, 0.0f), true, 0);
+        RushEndInfo info = RushEndInfo(pActor, 3, Vec3f(0.0f, 0.0f, 0.0f), true, 0);
         info._20 |= 3u << 30;
         info.mFlags.mDamageType = 4;
 
@@ -615,7 +615,7 @@ namespace MR {
     }
 
     void endBindAndPlayerFreezeDamage(LiveActor* pActor) {
-        RushEndInfo info = RushEndInfo(pActor, 3, TVec3f(0.0f, 0.0f, 0.0f), true, 0);
+        RushEndInfo info = RushEndInfo(pActor, 3, Vec3f(0.0f, 0.0f, 0.0f), true, 0);
         info._20 |= 3u << 30;
         info.mFlags.mDamageType = 3;
 
@@ -623,7 +623,7 @@ namespace MR {
     }
 
     void endBindAndPlayerFireDamage(LiveActor* pActor) {
-        RushEndInfo info = RushEndInfo(pActor, 3, TVec3f(0.0f, 0.0f, 0.0f), true, 0);
+        RushEndInfo info = RushEndInfo(pActor, 3, Vec3f(0.0f, 0.0f, 0.0f), true, 0);
         info._20 |= 3u << 30;
         info.mFlags.mDamageType = 2;
 
@@ -631,7 +631,7 @@ namespace MR {
     }
 
     void endBindAndPlayerElectricDamage(LiveActor* pActor) {
-        RushEndInfo info = RushEndInfo(pActor, 3, TVec3f(0.0f, 0.0f, 0.0f), true, 0);
+        RushEndInfo info = RushEndInfo(pActor, 3, Vec3f(0.0f, 0.0f, 0.0f), true, 0);
         info._20 |= 3u << 30;
         info.mFlags.mDamageType = 5;
 
@@ -830,7 +830,7 @@ namespace MR {
         requestMovementOn(MarioAccess::getPlayerActor());
     }
 
-    void calcPlayerJointMtx(TPos3f* pMtx, const char* pName) {
+    void calcPlayerJointMtx(Pos3f* pMtx, const char* pName) {
         pMtx->set(MarioAccess::getJointMtx(pName));
     }
 
@@ -838,11 +838,11 @@ namespace MR {
         return MarioAccess::isOnPress();
     }
 
-    void pushPlayer(const TVec3f& rAccel) {
+    void pushPlayer(const Vec3f& rAccel) {
         MarioAccess::addVelocity(rAccel);
     }
 
-    void pushPlayerFromArea(const TVec3f& rAccel) {
+    void pushPlayerFromArea(const Vec3f& rAccel) {
         MarioAccess::addVelocityFromArea(rAccel);
     }
 
@@ -858,7 +858,7 @@ namespace MR {
         return isPlayerElementMode(6);
     }
 
-    void calcPlayerWorldPadDir(TVec3f* pDir, f32 param2, f32 param3) {
+    void calcPlayerWorldPadDir(Vec3f* pDir, f32 param2, f32 param3) {
         MarioAccess::calcWorldPadDir(pDir, param2, param3);
     }
 

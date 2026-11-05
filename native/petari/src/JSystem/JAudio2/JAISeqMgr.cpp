@@ -47,7 +47,7 @@ void JAISeqMgr::freeDeadSeq_() {
     }
 }
 
-bool JAISeqMgr::startSound(JAISoundID id, JAISoundHandle* handle, const JGeometry::TVec3< f32 >* posPtr) {
+bool JAISeqMgr::startSound(JAISoundID id, JAISoundHandle* handle, const Vec3f* posPtr) {
     if (handle != nullptr && handle->isSoundAttached()) {
         (*handle)->stop();
     }

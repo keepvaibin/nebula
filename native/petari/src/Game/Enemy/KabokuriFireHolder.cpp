@@ -25,7 +25,7 @@ KabokuriFire* KabokuriFireHolderFunc::getDeadMember() {
     return MR::getSceneObj< KabokuriFireHolder >(SceneObj_KabokuriFireHolder)->getDeadMember();
 }
 
-bool KabokuriFireHolderFunc::generateFire(const TVec3f& rPosition, const TVec3f& rGravity, bool setGravity) {
+bool KabokuriFireHolderFunc::generateFire(const Vec3f& rPosition, const Vec3f& rGravity, bool setGravity) {
     KabokuriFire* deadMember = getDeadMember();
 
     if (deadMember == nullptr) {

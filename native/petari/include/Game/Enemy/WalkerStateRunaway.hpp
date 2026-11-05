@@ -34,7 +34,7 @@ public:
 
 class WalkerStateRunaway : public ActorStateBase< LiveActor > {
 public:
-    WalkerStateRunaway(LiveActor* pHost, TVec3f* pDirection, WalkerStateRunawayParam* pRunawayParam);
+    WalkerStateRunaway(LiveActor* pHost, Vec3f* pDirection, WalkerStateRunawayParam* pRunawayParam);
 
     virtual void appear();
 
@@ -60,7 +60,7 @@ public:
     }
 
     WalkerStateRunawayParam* mRunawayParam;
-    TVec3f* mDirection;
+    Vec3f* mDirection;
     s32 _18;
     f32 mRunawaySpeed;
 };

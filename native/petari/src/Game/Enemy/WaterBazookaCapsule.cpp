@@ -20,7 +20,7 @@ WaterBazookaCapsule::WaterBazookaCapsule(LiveActor* pActor, const char* pName)
 
 void WaterBazookaCapsule::init(const JMapInfoIter& rIter) {
     initHitSensor(1);
-    MR::addHitSensor(this, "body", ATYPE_WATER_BAZOOKA_CAPSULE, 4, 50.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensor(this, "body", ATYPE_WATER_BAZOOKA_CAPSULE, 4, 50.0f, Vec3f(0.0f, 0.0f, 0.0f));
 
     MR::initCollisionParts(this, "WaterBazookaCapsule", getSensor(nullptr), nullptr);
     initEffectKeeper(0, nullptr, false);

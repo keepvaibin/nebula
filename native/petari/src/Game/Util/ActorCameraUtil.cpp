@@ -249,7 +249,7 @@ namespace MR {
         return isEventCameraActive(pInfo, name);
     }
 
-    void setProgrammableCameraParam(const LiveActor* pActor, const TVec3f& rWPoint, const TVec3f& rPos, const TVec3f& rUpVec) {
+    void setProgrammableCameraParam(const LiveActor* pActor, const Vec3f& rWPoint, const Vec3f& rPos, const Vec3f& rUpVec) {
         setProgrammableCameraParam(pActor->getName(), rWPoint, rPos, rUpVec, true);
     }
 

@@ -20,7 +20,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/ValueControl.hpp"
-#include <JSystem/JMath/JMath.hpp>
+#include <nebula_geometry.hpp>
 
 namespace {
     NEW_NERVE(PukupukuStateLandingLandingMoveLand, PukupukuStateLanding, LandingMoveLand);
@@ -139,13 +139,13 @@ void PukupukuStateLanding::exeLandingJumpFromLand() {
 }
 
 void PukupukuStateLanding::updatePoseByJumpPath(f32 a1) {
-    TVec3f direction;
+    Vec3f direction;
     mPath->calcDirection(&direction, mValueCtrl->getValue(), 0.01f);
     MR::normalize(&direction);
-    TVec3f v7 = -mHost->mGravity;
+    Vec3f v7 = -mHost->mGravity;
     Pukupuku* pParent = mHost;
     if (!MR::isSameDirection(direction, v7)) {
-        TQuat4f quat;
+        Quat4f quat;
         MR::makeQuatFromVec(&quat, direction, v7);
         pParent->_A8.slerp(quat, a1);
     }
@@ -160,14 +160,14 @@ void PukupukuStateLanding::setNerveAfterJumpAccordingToNextPoint() {
 }
 
 void PukupukuStateLanding::setupJumping(f32 a1, f32 a2) {
-    TVec3f curPos;
+    Vec3f curPos;
     mHost->getCurrentRailPointPos(&curPos);
-    TVec3f nextPos;
+    Vec3f nextPos;
     mHost->getNextRailPointPos(&nextPos);
 
-    TVec3f v16(mHost->mPosition);
+    Vec3f v16(mHost->mPosition);
     v16.sub(curPos);
-    TVec3f v15 = -mHost->mGravity;
+    Vec3f v15 = -mHost->mGravity;
     f32 dot = v15.dot(v16);
 
     if (0.0f < dot) {
@@ -175,7 +175,7 @@ void PukupukuStateLanding::setupJumping(f32 a1, f32 a2) {
     }
 
     Pukupuku* pParent = mHost;
-    TVec3f v14 = -pParent->mGravity;
+    Vec3f v14 = -pParent->mGravity;
     mPath->initFromUpVectorAddHeight(pParent->mPosition, nextPos, v14, a1);
     f32 speed = mPath->calcPathSpeedFromAverageSpeed(a2);
     f32 v19 = (1.0f / speed);
@@ -184,7 +184,7 @@ void PukupukuStateLanding::setupJumping(f32 a1, f32 a2) {
 }
 
 void PukupukuStateLanding::updateJumping() {
-    TVec3f pos;
+    Vec3f pos;
     mPath->calcPosition(&pos, mValueCtrl->getValue());
     pos.sub(mHost->mPosition);
     mHost->mVelocity.set(pos);
@@ -192,11 +192,11 @@ void PukupukuStateLanding::updateJumping() {
 
 void PukupukuStateLanding::emitWaterColumIfNeed(bool a1, bool a2) {
     if (!_18) {
-        TVec3f centerJointPos;
+        Vec3f centerJointPos;
         MR::copyJointPos(mHost, "Center", &centerJointPos);
 
         if (a2 || a1 != MR::isInWater(centerJointPos)) {
-            TPos3f hitMtx;
+            Pos3f hitMtx;
             mHost->calcGroundHitMtx(&hitMtx);
             hitMtx.setTrans(centerJointPos);
             hitMtx.scaleXYZ(1.5f);
@@ -211,13 +211,13 @@ void PukupukuStateLanding::emitGroundHitEffect() {
         Triangle triangle;
         Pukupuku* pParent = mHost;
 
-        TVec3f poly;
+        Vec3f poly;
         if (MR::getFirstPolyOnLineToMap(&poly, &triangle, pParent->mPosition, mHost->mGravity * 100.0f)) {
             MR::updateEffectFloorCode(mHost, &triangle);
         }
     }
 
-    TPos3f hitMtx;
+    Pos3f hitMtx;
     mHost->calcGroundHitMtx(&hitMtx);
     MR::emitEffectHit(mHost, hitMtx, "Land");
     MR::startSound(mHost, "SE_EM_PUKUPUKU_LAND");
@@ -237,12 +237,12 @@ void Pukupuku::init(const JMapInfoIter& rIter) {
     MR::connectToSceneEnemy(this);
     MR::initLightCtrl(this);
     initHitSensor(1);
-    MR::addHitSensorAtJoint(this, "body", "Center", ATYPE_PUKUPUKU, 8, 60.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJoint(this, "body", "Center", ATYPE_PUKUPUKU, 8, 60.0f, Vec3f(0.0f, 0.0f, 0.0f));
     initBinder(70.0f, 0.0f, 0);
     MR::setBinderOffsetVec(this, &_9C, false);
     initRailRider(rIter);
     MR::moveCoordAndTransToNearestRailPos(this);
-    TRot3f mtx;
+    Rot3f mtx;
     MR::makeMtxTR(mtx, this);
     mtx.getQuat(_A8);
     updatePoseByRail();
@@ -263,7 +263,7 @@ void Pukupuku::init(const JMapInfoIter& rIter) {
 }
 
 void Pukupuku::kill() {
-    if (MR::isInWater(this, TVec3f(0.0f, 0.0f, 0.0f))) {
+    if (MR::isInWater(this, Vec3f(0.0f, 0.0f, 0.0f))) {
         MR::emitEffect(this, "DeathWater");
         MR::startSound(this, "SE_EM_EXPLODE_UNDER_WATER");
     } else {
@@ -279,7 +279,7 @@ void Pukupuku::kill() {
         MR::appearCoinPop(this, mPosition, 1);
     } else {
         MR::appearStarPiece(this, mPosition, 3, 10.0f, 40.0f, false);
-        if (MR::isInWater(this, TVec3f(0.0f, 0.0f, 0.0f))) {
+        if (MR::isInWater(this, Vec3f(0.0f, 0.0f, 0.0f))) {
             MR::startSound(this, "SE_OJ_STAR_PIECE_BURST_W");
         } else {
             MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
@@ -290,23 +290,23 @@ void Pukupuku::kill() {
 }
 
 void Pukupuku::updatePoseByRailIgnoreUpScale() {
-    TVec3f v4 = -mGravity;
-    const TVec3f* pRailDir = &MR::getRailDirection(this);
+    Vec3f v4 = -mGravity;
+    const Vec3f* pRailDir = &MR::getRailDirection(this);
     if (!MR::isSameDirection(*pRailDir, v4)) {
-        TQuat4f quat;
+        Quat4f quat;
         MR::makeQuatFromVec(&quat, *pRailDir, v4);
         _A8.slerp(quat, 0.08f);
     }
 }
 
 void Pukupuku::rotatePoseByLocalZ() {
-    TQuat4f rotZ;
+    Quat4f rotZ;
     rotZ.setEulerZ(MR::pi());
     _A8.mult(_A8, rotZ);
 }
 
-void Pukupuku::calcGroundHitMtx(TPos3f* pMtx) const {
-    TVec3f zDir;
+void Pukupuku::calcGroundHitMtx(Pos3f* pMtx) const {
+    Vec3f zDir;
     _A8.getZDir(zDir);
     MR::calcMtxFromGravityAndZAxis(pMtx, this, mGravity, zDir);
 }
@@ -322,7 +322,7 @@ inline bool Pukupuku::isDamaged() const {
 }
 
 void Pukupuku::exeWait() {
-    if (MR::isInWater(this, TVec3f(0.0f, 0.0f, 0.0f))) {
+    if (MR::isInWater(this, Vec3f(0.0f, 0.0f, 0.0f))) {
         setNerve(GET_NERVE_ANON(PukupukuMoveWater));
     } else {
         s32 pointNum = MR::getRailPointNum(this);
@@ -379,7 +379,7 @@ void Pukupuku::exeLanding() {
 
 void Pukupuku::exeTrampled() {
     if (MR::isFirstStep(this)) {
-        TPos3f hitMtx;
+        Pos3f hitMtx;
         calcGroundHitMtx(&hitMtx);
         hitMtx.getQuat(_A8);
         mVelocity.set(mGravity * 10.0f);
@@ -400,7 +400,7 @@ void Pukupuku::exeBlownOff() {
     if (MR::isFirstStep(this)) {
         startAnim("Rotate", "CloseEye");
 
-        if (MR::isInWater(this, TVec3f(0.0f, 0.0f, 0.0f))) {
+        if (MR::isInWater(this, Vec3f(0.0f, 0.0f, 0.0f))) {
             MR::emitEffect(this, "SpinDamageWater");
         } else {
             MR::emitEffect(this, "SpinDamage");
@@ -408,7 +408,7 @@ void Pukupuku::exeBlownOff() {
 
         MR::startBlowHitSound(this);
     } else if (!MR::isBinded(this)) {
-        TVec3f v11(mGravity);
+        Vec3f v11(mGravity);
         v11.scale(getBlownOffSpeedRate());
         mVelocity.add(v11);
     }
@@ -435,12 +435,12 @@ void Pukupuku::exeBindStarPointer() {
 }
 
 void Pukupuku::updatePoseByRail() {
-    TVec3f yDir;
+    Vec3f yDir;
     _A8.getYDir(yDir);
 
-    const TVec3f* pRailDir = &MR::getRailDirection(this);
+    const Vec3f* pRailDir = &MR::getRailDirection(this);
     if (!MR::isSameDirection(*pRailDir, yDir)) {
-        TQuat4f quat;
+        Quat4f quat;
         MR::makeQuatFromVec(&quat, *pRailDir, yDir);
         _A8.slerp(quat, 0.079999998f);
     }
@@ -499,7 +499,7 @@ void Pukupuku::exeMoveWaterCommon() {
 }
 
 f32 Pukupuku::getBlownOffSpeedRate() const {
-    if (MR::isInWater(this, TVec3f(0.0f, 0.0f, 0.0f))) {
+    if (MR::isInWater(this, Vec3f(0.0f, 0.0f, 0.0f))) {
         return 0.6f;
     } else {
         return 1.0f;
@@ -573,7 +573,7 @@ bool Pukupuku::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pRe
 
 void Pukupuku::calcAndSetBaseMtx() {
     MR::setBaseTRMtx(this, _A8);
-    TVec3f scale = mScale;
+    Vec3f scale = mScale;
     scale.mul(scale, mScaleCtrl->_C);
     MR::setBaseScale(this, scale);
 }

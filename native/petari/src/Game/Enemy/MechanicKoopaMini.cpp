@@ -22,7 +22,7 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 namespace NrvMechanicKoopaMini {
     NEW_NERVE(HostTypeNrvWait, MechanicKoopaMini, Wait);
@@ -56,7 +56,7 @@ namespace {
     static const MR::ActorMoveParam hJumpOnGroundParam = {0.0f, 1.2f, 0.8f, 0.0f};
     static const MR::ActorMoveParam hJumpAirParam = {0.5f, 2.0f, 0.95f, 0.0f};
     static const MR::ActorMoveParam hTurnParam = {0.0f, 2.0f, 0.8f, 2.0f};
-    static const TVec3f hBinderOffset(0.0f, 110.0f, 20.0f);
+    static const Vec3f hBinderOffset(0.0f, 110.0f, 20.0f);
     static const f32 hTrampleUpRangeSub = 80;
     static const f32 hPushUpRangeSub = 130;
 };  // namespace
@@ -117,11 +117,11 @@ void MechanicKoopaMini::init(const JMapInfoIter& rIter) {
     initNerve(GET_NERVE(MechanicKoopaMini, HostTypeNrvWalkOnRail));
     initHitSensor(3);
     f32 yScale = mScale.y;
-    MR::addHitSensorAtJointEnemy(this, "body", "JointRoot", 16, 130.0f * yScale, TVec3f(48.0f, 13.0f, 0.0f));
+    MR::addHitSensorAtJointEnemy(this, "body", "JointRoot", 16, 130.0f * yScale, Vec3f(48.0f, 13.0f, 0.0f));
     MR::addHitSensorCallbackEnemyAttack(this, "fire", 16, 29.0f * yScale);
     MR::initShadowFromCSV(this, "Shadow");
     MR::declareCoin(this, 1);
-    MR::initStarPointerTarget(this, 70.0f, TVec3f(0.0f, 35.0f, 0.0f));
+    MR::initStarPointerTarget(this, 70.0f, Vec3f(0.0f, 35.0f, 0.0f));
     MR::validateClipping(this);
     MR::tryRegisterDemoCast(this, rIter);
     mScaleController = new AnimScaleController(nullptr);
@@ -176,10 +176,10 @@ void MechanicKoopaMini::exeWalkOnRail() {
     bool canTurn = false;
     if (MR::isOnGround(this)) {
         MR::moveAndTurnAlongRail(this, 600.0f, ::hWalkParam._0, ::hWalkParam._4, ::hWalkParam._8, ::hWalkParam._C, &canTurn);
-        TVec3f frontVec;
+        Vec3f frontVec;
         MR::calcFrontVec(&frontVec, this);
         if (MR::isBindedWallOfMap(this)) {
-            TVec3f vecc(*MR::getWallNormal(this));
+            Vec3f vecc(*MR::getWallNormal(this));
             if (frontVec.dot(vecc) < -0.99f) {
                 setNerve(GET_NERVE(MechanicKoopaMini, HostTypeNrvJumpStart));
                 return;
@@ -206,14 +206,14 @@ void MechanicKoopaMini::exeTurn() {
         MR::startAction(this, "Turn");
     }
 
-    TVec3f railDir(MR::getRailDirection(this));
+    Vec3f railDir(MR::getRailDirection(this));
     if (MR::isOnGround(this)) {
         MR::moveAndTurnToDirection(this, railDir, ::hTurnParam._0, ::hTurnParam._4, ::hTurnParam._8, ::hTurnParam._C);
     } else {
         MR::moveAndTurnToDirection(this, railDir, ::hOnAirParam._0, ::hOnAirParam._4, ::hOnAirParam._8, ::hOnAirParam._C);
     }
 
-    TVec3f vec(mPosition);
+    Vec3f vec(mPosition);
     vec.add(railDir);
     if (MR::isFaceToTargetDegree(this, vec, 5.0f)) {
         setNerve(GET_NERVE(MechanicKoopaMini, HostTypeNrvWalkOnRail));
@@ -276,7 +276,7 @@ void MechanicKoopaMini::exeFind() {
 }
 
 void MechanicKoopaMini::exePursue() {
-    TVec3f frontVec;
+    Vec3f frontVec;
     if (MR::isFirstStep(this)) {
         MR::startAction(this, "Pursue");
         MR::invalidateClipping(this);
@@ -287,7 +287,7 @@ void MechanicKoopaMini::exePursue() {
         MR::moveAndTurnToPlayer(this, ::hPursueParam._0, ::hPursueParam._4, ::hPursueParam._8, ::hPursueParam._C);
         MR::calcFrontVec(&frontVec, this);
         if (MR::isBindedWall(this)) {
-            TVec3f vecc(*MR::getWallNormal(this));
+            Vec3f vecc(*MR::getWallNormal(this));
             if (frontVec.dot(vecc) < -0.99f) {
                 setNerve(GET_NERVE(MechanicKoopaMini, HostTypeNrvJumpStart));
             }
@@ -450,7 +450,7 @@ void MechanicKoopaMini::endBindStarPointer() {
 
 void MechanicKoopaMini::control() {
     mScaleController->updateNerve();
-    if (MR::isInDeath(this, TVec3f(0.0f, 0.0f, 0.0f)) || MR::isInWater(mPosition)) {
+    if (MR::isInDeath(this, Vec3f(0.0f, 0.0f, 0.0f)) || MR::isInWater(mPosition)) {
         kill();
     } else if ((isNerve(GET_NERVE(MechanicKoopaMini, HostTypeNrvFireAttack)) || isNerve(GET_NERVE(MechanicKoopaMini, HostTypeNrvPreFireAttack)) ||
                 isNerve(GET_NERVE(MechanicKoopaMini, HostTypeNrvWalkOnRail)) || isNerve(GET_NERVE(MechanicKoopaMini, HostTypeNrvPursue))) &&
@@ -467,7 +467,7 @@ void MechanicKoopaMini::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
             }
         } else if (MR::isSensorPlayer(pReceiver)) {
             if (!MR::isPlayerHipDropFalling()) {
-                TVec3f pos(pReceiver->mPosition);
+                Vec3f pos(pReceiver->mPosition);
                 pos -= pSender->mPosition;
                 f32 SenderRad = pSender->mRadius;
                 f32 ReceiverRad = pReceiver->mRadius;
@@ -496,7 +496,7 @@ bool MechanicKoopaMini::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitS
     }
 
     if (MR::isMsgPlayerTrample(msg)) {
-        TVec3f v16(pSender->mPosition);
+        Vec3f v16(pSender->mPosition);
         v16 -= pReceiver->mPosition;
         f32 ReceiverRad = pReceiver->mRadius;
         f32 SenderRad = pSender->mRadius;
@@ -559,7 +559,7 @@ bool MechanicKoopaMini::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver)
 }
 
 void MechanicKoopaMini::updateHitSensor(HitSensor* pSensor) {
-    TVec3f up, front;
+    Vec3f up, front;
     MR::calcUpVec(&up, this);
     MR::calcFrontVec(&front, this);
     f32 dot = front.dot(*MR::getPlayerCenterPos() - mPosition);

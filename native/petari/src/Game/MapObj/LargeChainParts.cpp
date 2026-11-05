@@ -12,7 +12,7 @@ void LargeChainParts::breakChainParts() {
     kill();
 }
 
-void LargeChainParts::initChainParts(TVec3f* pPos, TVec3f* pRot, TVec3f* pScale, bool isFixedPoint) {
+void LargeChainParts::initChainParts(Vec3f* pPos, Vec3f* pRot, Vec3f* pScale, bool isFixedPoint) {
     mPosition.set(*pPos);
     mRotation.set(*pRot);
     mScale.set(*pScale);

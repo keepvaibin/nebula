@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/Util/Color.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class JMapInfoIter;
 
@@ -34,7 +34,7 @@ public:
     bool mIsValidPrmColor;
     Color8 mEnvColor;
     bool mIsValidEnvColor;
-    TVec3f mOffset;
+    Vec3f mOffset;
     s32 mStartFrame;
     s32 mEndFrame;
     f32 mScaleValue;

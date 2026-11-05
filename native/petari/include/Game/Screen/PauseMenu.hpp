@@ -36,13 +36,13 @@ public:
 
     ButtonPaneController* _20;
     ButtonPaneController* _24;
-    TVec2f _28;
+    Vec2f _28;
     SysInfoWindow* _30;
     LuigiLetter* mLuigiLetter;
     ButtonPaneController* _38;
-    TVec2f mStageTitleOffset;
-    TVec2f mCoinNumPos;
-    TVec2f mStarPieceNumPos;
+    Vec2f mStageTitleOffset;
+    Vec2f mCoinNumPos;
+    Vec2f mStarPieceNumPos;
     bool _54;
     NebulaPauseSettingsButton* mSettingsButton;  // Nebula's settings menu, from the lower band
 };

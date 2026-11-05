@@ -23,8 +23,8 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <JSystem/JGeometry/TUtil.hpp>
-#include <JSystem/JMath/JMATrigonometric.hpp>
+#include <nebula_geometry.hpp>
+
 
 namespace NrvNPCActor {
     NEW_NERVE(NPCActorNrvReaction, NPCActor, Reaction);
@@ -265,11 +265,11 @@ void NPCActor::makeArchiveListDefault(NameObjArchiveListCollector* pCollector, c
     }
 }
 
-void NPCActor::setBaseMtx(const TPos3f& rPos) {
-    TVec3f trans;
+void NPCActor::setBaseMtx(const Pos3f& rPos) {
+    Vec3f trans;
     rPos.getTrans(trans);
 
-    TVec3f eulerXYZ;
+    Vec3f eulerXYZ;
     rPos.getEulerXYZ(eulerXYZ);
     MR::makeQuatRotateRadian(&_A0, eulerXYZ);
     _A0.normalize();
@@ -284,7 +284,7 @@ void NPCActor::setBaseMtx(const TPos3f& rPos) {
 }
 
 void NPCActor::setBaseMtx(MtxPtr pMtx) {
-    TPos3f pos;
+    Pos3f pos;
     pos.setInline(pMtx);
     setBaseMtx(pos);
 }
@@ -550,7 +550,7 @@ void NPCActor::control() {
     }
 }
 
-bool NPCActor::initTalkCtrl(const JMapInfoIter& rIter, const char* pChar, const TVec3f& rVec, MtxPtr pMtx) {
+bool NPCActor::initTalkCtrl(const JMapInfoIter& rIter, const char* pChar, const Vec3f& rVec, MtxPtr pMtx) {
     s32 messageID;
     MR::getJMapInfoMessageID(rIter, &messageID);
     if (messageID < 0) {
@@ -562,13 +562,13 @@ bool NPCActor::initTalkCtrl(const JMapInfoIter& rIter, const char* pChar, const 
     return true;
 }
 
-bool NPCActor::initTalkCtrlDirect(const JMapInfoIter& rIter, const char* pChar, const TVec3f& rVec, MtxPtr pMtx) {
+bool NPCActor::initTalkCtrlDirect(const JMapInfoIter& rIter, const char* pChar, const Vec3f& rVec, MtxPtr pMtx) {
     mMsgCtrl = MR::createTalkCtrlDirect(this, rIter, pChar, rVec, pMtx);
     MR::onRootNodeAutomatic(mMsgCtrl);
     return true;
 }
 
-bool NPCActor::calcJointScale(TPos3f* pPos, const JointControllerInfo&) {
+bool NPCActor::calcJointScale(Pos3f* pPos, const JointControllerInfo&) {
     MR::preScaleMtx(pPos->toMtxPtr(), mScaleController->_C);
     return true;
 }
@@ -578,16 +578,16 @@ bool NPCActor::turnToPlayer() {
 }
 
 namespace {
-    void calcVecToPlayer(TVec3f* pOut, const LiveActor* pActor) {
-        TVec3f playerTrans;
+    void calcVecToPlayer(Vec3f* pOut, const LiveActor* pActor) {
+        Vec3f playerTrans;
         MR::extractMtxTrans(MR::getPlayerBaseMtx(), &playerTrans);
         MR::normalizeOrZero(playerTrans - pActor->mPosition, pOut);
     }
 };  // namespace
 
 bool NPCActor::turnToPlayer(f32 f1) {
-    TVec3f zDir;
-    TVec3f toPlayer;
+    Vec3f zDir;
+    Vec3f toPlayer;
     ::calcVecToPlayer(&toPlayer, this);
     _A0.getZDir(zDir);
 
@@ -604,8 +604,8 @@ bool NPCActor::turnToPlayer(f32 f1, f32 f2, f32 f3) {
         return turned;
     }
 
-    TVec3f toPlayer;
-    TVec3f yDir;
+    Vec3f toPlayer;
+    Vec3f yDir;
     _B0.getYDir(yDir);
     ::calcVecToPlayer(&toPlayer, this);
 
@@ -613,17 +613,17 @@ bool NPCActor::turnToPlayer(f32 f1, f32 f2, f32 f3) {
         return false;
     }
 
-    TVec3f vec1;
-    TVec3f vec2;
+    Vec3f vec1;
+    Vec3f vec2;
     MR::makeAxisFrontUp(&vec1, &vec2, toPlayer, yDir);
     MR::clampVecAngleDeg(&vec2, yDir, f3);
     return MR::turnQuatYDirRad(&_A0, _A0, vec2, f2 * 0.017453292f) & turned;
 }
 
 bool NPCActor::turnToDefault(f32 f1) {
-    TVec3f zDir;
-    TVec3f zDir2;
-    TVec3f yDir;
+    Vec3f zDir;
+    Vec3f zDir2;
+    Vec3f yDir;
     _B0.getZDir(zDir);
     _B0.getYDir(yDir);
     _A0.getZDir(zDir2);
@@ -647,7 +647,7 @@ void NPCActor::setToDefault() {
     _A0 = _B0;
     _A0.normalize();
 
-    TVec3f euler;
+    Vec3f euler;
     _A0.getEuler(euler);
     euler = euler * 57.29578f;
     mRotation = euler;

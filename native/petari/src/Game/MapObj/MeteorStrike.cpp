@@ -41,10 +41,10 @@ MeteorStrike::MeteorStrike(const char* pName)
 }
 
 inline void MeteorStrike::initRailDirection() {
-    TVec3f pos0;
+    Vec3f pos0;
     MR::calcRailPointPos(&pos0, this, 0);
 
-    TVec3f pos1;
+    Vec3f pos1;
     MR::calcRailPointPos(&pos1, this, 1);
 
     mRailDir.sub(pos1, pos0);
@@ -59,7 +59,7 @@ void MeteorStrike::init(const JMapInfoIter& rIter) {
 
     if (mType != MeteorStrikeType_Environment) {
         initHitSensor(1);
-        MR::addHitSensorMapObj(this, "body", 8, ::cSensorRadius, TVec3f(0.0f, 0.0f, 0.0f));
+        MR::addHitSensorMapObj(this, "body", 8, ::cSensorRadius, Vec3f(0.0f, 0.0f, 0.0f));
     }
 
     initBinder(::cBinderRadius, 0.0f, 0);
@@ -85,10 +85,10 @@ void MeteorStrike::init(const JMapInfoIter& rIter) {
 }
 
 void MeteorStrike::initAfterPlacement() {
-    TVec3f pos0, pos1;
+    Vec3f pos0, pos1;
     MR::calcRailPointPos(&pos0, this, 0);
 
-    TVec3f gravityVec;
+    Vec3f gravityVec;
     MR::calcGravityVector(this, pos0, &gravityVec, nullptr, 0);
 
     gravityVec.scale(80.0f);
@@ -100,11 +100,11 @@ void MeteorStrike::initAfterPlacement() {
     gravityVec.scale(80.0f);
     pos1.add(gravityVec);
 
-    TVec3f toNextPos;
+    Vec3f toNextPos;
     toNextPos.sub(pos1, pos0);
 
     Triangle triangle = Triangle();
-    TVec3f nextPos;
+    Vec3f nextPos;
 
     if (!MR::getFirstPolyOnLineToMap(&nextPos, &triangle, pos0, toNextPos)) {
         nextPos.set(pos1);
@@ -122,7 +122,7 @@ void MeteorStrike::appear() {
 void MeteorStrike::appear(s32 step) {
     mStepsLeft = mTotalSteps - step;
 
-    TVec3f movedPos;
+    Vec3f movedPos;
     getMovedPos(&movedPos, step);
 
     mPosition.set(movedPos);
@@ -154,14 +154,14 @@ void MeteorStrike::kill() {
     MR::invalidateShadow(this, nullptr);
 }
 
-bool MeteorStrike::getMovedPos(TVec3f* pDst, s32 step) const {
+bool MeteorStrike::getMovedPos(Vec3f* pDst, s32 step) const {
     if (mTotalSteps < step) {
         return false;
     }
 
     MR::calcRailPointPos(pDst, this, 0);
 
-    TVec3f vec;
+    Vec3f vec;
     vec.scale(mStepSize * step, mRailDir);
     pDst->add(*pDst, vec);
 
@@ -175,8 +175,8 @@ f32 MeteorStrike::getSpeed(const JMapInfoIter& rIter) {
 }
 
 void MeteorStrike::calcAndSetBaseMtx() {
-    TPos3f mtx;
-    TVec3f negGravity;
+    Pos3f mtx;
+    Vec3f negGravity;
     negGravity.negate(mGravity);
 
     if (MR::isSameDirection(mRailDir, negGravity)) {
@@ -185,8 +185,8 @@ void MeteorStrike::calcAndSetBaseMtx() {
         MR::makeMtxFrontUpPos(&mtx, mRailDir, negGravity, mPosition);
     }
 
-    TPos3f rotateMtx;
-    rotateMtx.makeRotate(TVec3f(1.0f, 0.0f, 0.0f), MR::toRadian(mRotation.x));
+    Pos3f rotateMtx;
+    rotateMtx.makeRotate(Vec3f(1.0f, 0.0f, 0.0f), MR::toRadian(mRotation.x));
     mtx.concat(rotateMtx);
     MR::setBaseTRMtx(this, mtx);
 }
@@ -208,7 +208,7 @@ void MeteorStrike::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
         MR::sendMsgEnemyAttackExplosion(pReceiver, pSender);
     }
 
-    TVec3f negGravity;
+    Vec3f negGravity;
     negGravity.negate(mGravity);
     calcBreakPosture(negGravity, nullptr);
 
@@ -249,14 +249,14 @@ void MeteorStrike::initModel() {
     mBrokenModel->makeActorDead();
 }
 
-void MeteorStrike::calcBreakPosture(const TVec3f& rVec, TPos3f* pDst) {
-    TPos3f mtx;
+void MeteorStrike::calcBreakPosture(const Vec3f& rVec, Pos3f* pDst) {
+    Pos3f mtx;
 
     if (pDst == nullptr) {
         pDst = &mtx;
     }
 
-    TVec3f vec;
+    Vec3f vec;
     MR::normalize(rVec, &vec);
     MR::makeMtxUpNoSupportPos(pDst, vec, mPosition);
 
@@ -266,7 +266,7 @@ void MeteorStrike::calcBreakPosture(const TVec3f& rVec, TPos3f* pDst) {
 
     mBrokenModel->mPosition.set(mPosition);
 
-    TVec3f euler;
+    Vec3f euler;
     pDst->getEuler(euler);
     mBrokenModel->mRotation.x = ::toDegree(euler.x);
     mBrokenModel->mRotation.y = ::toDegree(euler.y);
@@ -274,7 +274,7 @@ void MeteorStrike::calcBreakPosture(const TVec3f& rVec, TPos3f* pDst) {
     mBrokenModel->mScale.set(mScale);
 }
 
-void MeteorStrike::emitEffectColumn(const TPos3f& rPos) {
+void MeteorStrike::emitEffectColumn(const Pos3f& rPos) {
     mLavaColumnPos.set(rPos);
     MR::emitEffect(this, "LavaColumn");
 }
@@ -286,8 +286,8 @@ void MeteorStrike::startRumble() {
 }
 
 bool MeteorStrike::isInScreen() const {
-    TVec3f vec2;
-    TVec3f vec(mRailDir * mStepSize);
+    Vec3f vec2;
+    Vec3f vec(mRailDir * mStepSize);
     vec2.add(mPosition, vec);
 
     return MR::isJudgedToClipFrustum(vec2, 200.0f) == false;
@@ -342,7 +342,7 @@ void MeteorStrike::exeMove() {
             return;
         }
 
-        TPos3f pos;
+        Pos3f pos;
         calcBreakPosture(*MR::getGroundNormal(this), &pos);
         emitEffectColumn(pos);
 

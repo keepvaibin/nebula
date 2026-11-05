@@ -15,21 +15,21 @@ void Mario::beeMarioOnGround() {
     }
 }
 
-void MarioActor::entryWallWalkMode(const TVec3f& position, const TVec3f& normal) {
+void MarioActor::entryWallWalkMode(const Vec3f& position, const Vec3f& normal) {
     if (mBeeWallWalk) {
         return;
     }
 
     if (!_9F2) {
         mBeeWallWalk = 5;
-        TVec3f gravity(-normal);
+        Vec3f gravity(-normal);
         _240 = gravity;
         mPosition = position;
         mMario->setTrans(position, nullptr);
         mMario->stopJump();
         mMario->stopAnimation(nullptr);
         mMario->stopWalk();
-        TVec3f front(mMario->mHeadVec);
+        Vec3f front(mMario->mHeadVec);
         mMario->setGravityVec(gravity);
         mMario->setHeadVec(-gravity);
         mMario->setFrontVecKeepUp(front, 1u);
@@ -65,7 +65,7 @@ bool Mario::beeMarioOnAir() {
     }
 
     if (getPlayerMode() == PlayerMode_Bee) {
-        TVec3f horizontal;
+        Vec3f horizontal;
         if (MR::vecKillElement(mJumpVec, getAirGravityVec(), &horizontal) > -5.0f || _76C) {
             if (!_774) {
                 f32 verticalSpeed = cutGravityElementFromJumpVec(true);
@@ -95,7 +95,7 @@ bool Mario::beeMarioOnAir() {
 
             s16 inhibitTime = mActor->getConst().getTable()->mBeeAirWalkInhibitTime;
             s16 powerTime = mActor->getConst().getTable()->mBeeGravityPowerTime;
-            TVec3f horizontalVelocity;
+            Vec3f horizontalVelocity;
             MR::vecKillElement(mJumpVec, getAirGravityVec(), &horizontalVelocity);
             if (horizontalVelocity.length() < 5.0f) {
                 inhibitTime = mActor->getConst().getTable()->mBeeAirWalkInhibitTimeV;
@@ -157,7 +157,7 @@ bool Mario::beeMarioOnAir() {
                     acceleration =
                         acceleration * mActor->getConst().getTable()->mBeeFlyRandomFactor - mActor->getConst().getTable()->mBeeFlyConstantFactor;
                     f32 verticalSpeed = cutGravityElementFromJumpVec(true);
-                    TVec3f velocity(mJumpVec);
+                    Vec3f velocity(mJumpVec);
                     f32 factor = 1.0f;
                     if (!MR::isNearZero(mStickPos.z)) {
                         velocity.dot(getWorldPadDir());

@@ -8,7 +8,7 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 CollisionArea::CollisionArea(int formType, const char* pName) : AreaObj(formType, pName) {
     _3C = 0;
@@ -82,7 +82,7 @@ void CollisionArea::movement() {
                 MR::invalidateCollisionParts(mPolygon->mParts);
             }
         } else {
-            TVec3f playerPos = *MR::getPlayerCenterPos();
+            Vec3f playerPos = *MR::getPlayerCenterPos();
             f32 radius = static_cast< f32 >(_5C);
 
             if (_5C == 0) {
@@ -93,8 +93,8 @@ void CollisionArea::movement() {
                 radius += 5.0f;
             }
 
-            TVec3f hitPos;
-            TVec3f hitNormal;
+            Vec3f hitPos;
+            Vec3f hitNormal;
 
             if (!hitCheck(playerPos, radius, &hitPos, &hitNormal)) {
                 if (_58) {
@@ -105,7 +105,7 @@ void CollisionArea::movement() {
                     }
                 }
             } else if (!_58 && _50 == -1) {
-                TVec3f push;
+                Vec3f push;
 
                 if (_3C == 0) {
                     push = hitNormal;
@@ -114,7 +114,7 @@ void CollisionArea::movement() {
                     push = playerPos - hitPos;
                     push.setLength(radius);
 
-                    TVec3f contact(hitPos + push);
+                    Vec3f contact(hitPos + push);
                     push = contact - playerPos;
                 }
 
@@ -126,16 +126,16 @@ void CollisionArea::movement() {
     }
 }
 
-bool CollisionArea::hitCheck(const TVec3f& rPos, f32 radius, TVec3f* pPoint, TVec3f* pNormal) {
+bool CollisionArea::hitCheck(const Vec3f& rPos, f32 radius, Vec3f* pPoint, Vec3f* pNormal) {
     AreaFormCube* pCube = static_cast< AreaFormCube* >(mForm);
     s32 surface = -1;
-    TPos3f matrix;
+    Pos3f matrix;
     pCube->calcWorldMtx(&matrix);
     pCube->calcWorldPos(&_44);
-    TVec3f localPoint;
-    TVec3f axisX;
-    TVec3f axisY;
-    TVec3f axisZ;
+    Vec3f localPoint;
+    Vec3f axisX;
+    Vec3f axisY;
+    Vec3f axisZ;
     matrix.getXDir(axisX);
     matrix.getYDir(axisY);
     matrix.getZDir(axisZ);
@@ -148,13 +148,13 @@ bool CollisionArea::hitCheck(const TVec3f& rPos, f32 radius, TVec3f* pPoint, TVe
     sizeX *= 0.5f * (pCube->mScale.x * pCube->getBaseSize());
     sizeY *= 0.5f * (pCube->mScale.y * pCube->getBaseSize());
     sizeZ *= 0.5f * (pCube->mScale.z * pCube->getBaseSize());
-    TVec3f expanded(sizeX + radius, sizeY + radius, sizeZ + radius);
-    TVec3f relative(rPos);
+    Vec3f expanded(sizeX + radius, sizeY + radius, sizeZ + radius);
+    Vec3f relative(rPos);
     relative.sub(_44);
     f32 x = relative.dot(axisX);
     f32 y = relative.dot(axisY);
     f32 z = relative.dot(axisZ);
-    TVec3f absolute;
+    Vec3f absolute;
     f32 absX = MR::abs(x);
     f32 absY = MR::abs(y);
     f32 absZ = MR::abs(z);
@@ -181,8 +181,8 @@ bool CollisionArea::hitCheck(const TVec3f& rPos, f32 radius, TVec3f* pPoint, TVe
     }
 
     _3C = count;
-    TVec3f corner;
-    TVec3f depth;
+    Vec3f corner;
+    Vec3f depth;
     if (count == 3) {
         corner.zero();
         if (x < 0.0f) {
@@ -312,7 +312,7 @@ bool CollisionArea::hitCheck(const TVec3f& rPos, f32 radius, TVec3f* pPoint, TVe
     return true;
 }
 
-void AreaPolygon::setMtx(MtxPtr pMatrix, const TVec3f& rSize, f32 offset) {
+void AreaPolygon::setMtx(MtxPtr pMatrix, const Vec3f& rSize, f32 offset) {
     _128 = pMatrix;
     _12C = rSize;
     _138 = offset;
@@ -327,7 +327,7 @@ void AreaPolygon::setSurfaceAndSync(s32 surface) {
 }
 
 void AreaPolygon::setSurface(s32 surface) {
-    TPos3f matrix;
+    Pos3f matrix;
     if (mForm != nullptr) {
         static_cast< AreaFormCube* >(mForm)->calcWorldMtx(&matrix);
         static_cast< AreaFormCube* >(mForm)->calcWorldPos(&mPosition);
@@ -336,9 +336,9 @@ void AreaPolygon::setSurface(s32 surface) {
         MR::extractMtxTrans(_128, &mPosition);
     }
 
-    TVec3f axisX;
-    TVec3f axisY;
-    TVec3f axisZ;
+    Vec3f axisX;
+    Vec3f axisY;
+    Vec3f axisZ;
     matrix.getXDir(axisX);
     matrix.getYDir(axisY);
     matrix.getZDir(axisZ);
@@ -458,14 +458,14 @@ void AreaPolygon::init(const JMapInfoIter& rIter) {
     mKCLFile = nullptr;
     mPositionNum = 4;
     _94 = 2;
-    mPositions = new TVec3f[mPositionNum];
+    mPositions = new Vec3f[mPositionNum];
     setSurface(0);
 
     initHitSensor(1);
-    MR::addHitSensorEye(this, "body", 8, 1.0f, TVec3f(0.0f));
+    MR::addHitSensorEye(this, "body", 8, 1.0f, Vec3f(0.0f));
 
     mIndices = new TriangleIndexing[_94];
-    _9C = new TVec3f[_94];
+    _9C = new Vec3f[_94];
 
     TriangleIndexing& rFirst = mIndices[0];
     rFirst.mIndex[0] = 0;

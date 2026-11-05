@@ -69,7 +69,7 @@ void LavaProminence::init(const JMapInfoIter& rIter) {
 
     MR::connectToSceneMapObj(this);
     initHitSensor(1);
-    TVec3f offset;
+    Vec3f offset;
     offset.set(0.0f);
     MR::addHitSensorMapObjSimple(this, "body", 8, 120.0f, offset);
     initRailRider(rIter);
@@ -111,8 +111,8 @@ void LavaProminence::kill() {
 }
 
 void LavaProminence::initAfterPlacement() {
-    TVec3f initPosVec(mPosition);
-    TVec3f upVec;
+    Vec3f initPosVec(mPosition);
+    Vec3f upVec;
 
     mPosition.set(mRailStartPos);
     MR::calcGravityVectorOrZero(this, &upVec, nullptr, 0);
@@ -159,7 +159,7 @@ void LavaProminence::moveOnRail() {
 void LavaProminence::setGravityAndMakeMtx() {
     MR::makeMtxUpNoSupportPos(&_18C, -mGravity, mPosition);
 
-    // TODO: TRot3f::setScale inline?
+    // TODO: Rot3f::setScale inline?
     f32 z = mScale.z;
     f32 y = mScale.y;
     f32 x = mScale.x;
@@ -322,10 +322,10 @@ void LavaProminence::exeMoveEndExtra() {
 }
 
 void LavaProminence::calcAndSetBaseMtx() {
-    TPos3f mtx;
-    TVec3f vec(mRailDir);
-    TVec3f front;
-    TQuat4f quat;
+    Pos3f mtx;
+    Vec3f vec(mRailDir);
+    Vec3f front;
+    Quat4f quat;
 
     MR::normalizeOrZero(&vec);
 

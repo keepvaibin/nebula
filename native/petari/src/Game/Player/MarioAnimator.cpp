@@ -18,7 +18,7 @@
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <JSystem/JMath/JMATrigonometric.hpp>
+#include <nebula_geometry.hpp>
 #include <cstring>
 
 MarioAnimator::MarioAnimator(MarioActor* pActor) : MarioModule(pActor) {
@@ -514,7 +514,7 @@ updatePrevState:
 }
 
 void MarioAnimator::setHand() {
-    TVec3f scale;
+    Vec3f scale;
     scale.x = getPlayer()->_3F0;
     scale.y = 1.0f;
     scale.z = 1.0f;
@@ -538,7 +538,7 @@ void MarioAnimator::setTilt() {
         tiltAngle = 1.0f - frontDot;
 
         if (tiltAngle > 0.001f) {
-            TVec3f cross = _60.cross(getFrontVec());
+            Vec3f cross = _60.cross(getFrontVec());
 
             f32 gravDot = cross.dot(*getPlayer()->getGravityVec());
             if (gravDot < 0.0f) {
@@ -584,7 +584,7 @@ void MarioAnimator::setTilt() {
     f32 f5 = vertAngle / 4.0f;
     _5C = 0.97f * f4 + 0.03f * f5;
 
-    TVec3f rotation(0.0f, _58, _5C);
+    Vec3f rotation(0.0f, _58, _5C);
     MR::orderRotateMtx(0, rotation, _28.toMtxPtr());
 
     XanimeCore* core = mXanimePlayer->mCore;
@@ -603,7 +603,7 @@ void MarioAnimator::resetTilt() {
 void MarioAnimator::setHoming() {
     f32 angleH = 0.0f;
     s32 hasTarget = 0;
-    TVec3f targetPos;
+    Vec3f targetPos;
     if (mActor->getLookTargetSensor()) {
         HitSensor* lookTarget = mActor->getLookTargetSensor();
         targetPos = lookTarget->mPosition;
@@ -618,7 +618,7 @@ void MarioAnimator::setHoming() {
     }
 
     if (hasTarget) {
-        TVec3f toTarget = targetPos - mActor->_2AC;
+        Vec3f toTarget = targetPos - mActor->_2AC;
 
         Mario* player = getPlayer();
         angleH = MR::vecKillElement(toTarget, player->_1FC, &toTarget);
@@ -630,7 +630,7 @@ void MarioAnimator::setHoming() {
             vAngle = 0.0f;
         } else {
             f32 dist2 = toTarget.length();
-            vAngle = JMAATan2(angleH, dist2);
+            vAngle = Angle::atan2Radian(angleH, dist2);
 
             if (isStatusActiveID(MarioStatus_Talk)) {
                 if (vAngle > 1.0f) {
@@ -657,7 +657,7 @@ void MarioAnimator::setHoming() {
             angleH = table->mLookMaxAngleH;
         }
 
-        TVec3f cross = toTarget.cross(getFrontVec());
+        Vec3f cross = toTarget.cross(getFrontVec());
         Mario* player2 = getPlayer();
         f32 gravDot = cross.dot(player2->_1FC);
         if (gravDot < 0.0f) {
@@ -665,7 +665,7 @@ void MarioAnimator::setHoming() {
         }
 
         Mtx rotMtx;
-        MR::orderRotateMtx(5, TVec3f(0.0f, angleH, -vAngle), rotMtx);
+        MR::orderRotateMtx(5, Vec3f(0.0f, angleH, -vAngle), rotMtx);
 
         MR::blendMtx(_7C.toMtxPtr(), rotMtx, 0.1f, _7C.toMtxPtr());
 
@@ -707,16 +707,16 @@ void MarioAnimator::setHoming() {
 }
 
 void MarioAnimator::setHipSlidingTilt(f32 stickX, f32 stickY) {
-    TVec2f input(stickX, stickY);
+    Vec2f input(stickX, stickY);
     f32 weights[4];
 
-    weights[0] = (TVec2f(0.0f, 1.0f) - input).length();
+    weights[0] = (Vec2f(0.0f, 1.0f) - input).length();
 
-    weights[1] = (TVec2f(0.0f, -1.0f) - input).length();
+    weights[1] = (Vec2f(0.0f, -1.0f) - input).length();
 
-    weights[2] = (TVec2f(-1.0f, 0.0f) - input).length();
+    weights[2] = (Vec2f(-1.0f, 0.0f) - input).length();
 
-    weights[3] = (TVec2f(1.0f, 0.0f) - input).length();
+    weights[3] = (Vec2f(1.0f, 0.0f) - input).length();
 
     const f32 maxDist = 1.414213f;
     for (s32 i = 0; i < 4; i++) {
@@ -750,7 +750,7 @@ void MarioAnimator::setHipSliderTilt() {
 }
 
 void MarioAnimator::setHipSlipTilt() {
-    TVec3f worldPadDir(getWorldPadDir());
+    Vec3f worldPadDir(getWorldPadDir());
     f32 frontDot = MR::vecKillElement(worldPadDir, getFrontVec(), &worldPadDir);
     Mario* player = getPlayer();
     f32 gravDot = MR::vecKillElement(worldPadDir, player->mSideVec, &worldPadDir);
@@ -802,7 +802,7 @@ void MarioAnimator::calc() {
     }
 
     Mario* player = getPlayer();
-    TVec3f playerPos(player->_13C);
+    Vec3f playerPos(player->_13C);
     XjointTransform* joint0 = mXanimePlayer->mCore->getJointTransform(0);
     joint0->_38 = playerPos;
     if (_6C) {
@@ -928,8 +928,8 @@ void MarioAnimator::updateJointRumble() {
     u32 newTimer = timer - 1;
     _74 = newTimer;
 
-    f32 t = (f32)newTimer * JMath::TAngleConstant_< f32 >::RADIAN_DEG360() / 30.0f;
-    f32 sineVal = JMASinRadian(t);
+    f32 t = (f32)newTimer * Angle::cRadian360 / 30.0f;
+    f32 sineVal = Angle::sinRadian(t);
 
     f32 power = -_70;
 
@@ -951,8 +951,8 @@ void MarioAnimator::updateJointRumble() {
 
     if (getPlayer()->mMovementStates._1 && !getPlayer()->mMovementStates._37 && getPlayer()->mTargetWalkSpeedIndex == 0 &&
         getPlayer()->calcAngleD(getPlayer()->_368) > 5.0f) {
-        TVec3f dir;
-        const TVec3f* airGrav = &getAirGravityVec();
+        Vec3f dir;
+        const Vec3f* airGrav = &getAirGravityVec();
         Mario* playerVec = getPlayer();
         MR::vecKillElement(playerVec->_368, *airGrav, &dir);
         MR::normalizeOrZero(&dir);
@@ -1041,7 +1041,7 @@ void MarioAnimator::clearAllJointTransform() {
         jt->_64 = nullptr;
     }
 
-    TVec3f zeroVec(0.0f, 0.0f, 0.0f);
+    Vec3f zeroVec(0.0f, 0.0f, 0.0f);
     XjointTransform* jt = mXanimePlayer->mCore->getJointTransform(0);
     jt->_38 = zeroVec;
 
@@ -1054,7 +1054,7 @@ bool MarioAnimator::isMirrorAnimation() {
         return false;
     }
 
-    TVec3f camDir = getCamDirX();
+    Vec3f camDir = getCamDirX();
     Mario* player = getPlayer();
     f32 dot = player->_1FC.dot(getCamDirY());
     if (dot < 0.0f) {
@@ -1063,7 +1063,7 @@ bool MarioAnimator::isMirrorAnimation() {
 
     if (isAnimationRun("\225\307\202\267\202\327\202\350" /* 壁すべり */) || isAnimationRun("\225\307\202\255\202\301\202\302\202\253" /* 壁くっつき */)) {
         if (!_10C) {
-            const TVec3f& wallNorm = getPlayer()->getWallNorm();
+            const Vec3f& wallNorm = getPlayer()->getWallNorm();
             f32 wallDot = camDir.dot(wallNorm);
             if (wallDot < -0.5f) {
                 _10D = true;
@@ -1111,7 +1111,7 @@ void MarioAnimator::switchMirrorMode() {
         u32* modelFlags = (u32*)&model->mFlags;
         *modelFlags |= 1;
         XjointTransform* jt = mXanimePlayer->mCore->getJointTransform(0);
-        TVec3f mirrorScale;
+        Vec3f mirrorScale;
         mirrorScale.x = scale;
         mirrorScale.y = scale;
         mirrorScale.z = -scale;
@@ -1130,7 +1130,7 @@ void MarioAnimator::switchMirrorMode() {
         u32* modelFlags = (u32*)&model->mFlags;
         *modelFlags &= ~1;
         XjointTransform* jt = mXanimePlayer->mCore->getJointTransform(0);
-        TVec3f normalScale;
+        Vec3f normalScale;
         normalScale.x = scale;
         normalScale.y = scale;
         normalScale.z = scale;

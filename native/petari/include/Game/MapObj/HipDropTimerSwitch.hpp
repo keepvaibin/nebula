@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class SpringValue;
 class MapObjConnector;
@@ -30,7 +30,7 @@ public:
     SpringValue* mSpring;
     MapObjConnector* mMapObjConnector;
     CollisionParts* mCollisionParts;
-    TPos3f _9C;
+    Pos3f _9C;
     s32 mTimerMax;      // In frames
     s32 mTimerSFXType;  // 0: A ticking, 1: B ticking
     u8 _D4;

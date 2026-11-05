@@ -2,7 +2,7 @@
 
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/MapPartsFunction.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class MapPartsRotatorBase : public MapPartsFunction {
 public:
@@ -11,7 +11,7 @@ public:
 
     virtual ~MapPartsRotatorBase();
 
-    virtual const TMtx34f& getRotateMtx() const = 0;
+    virtual const Mtx34f& getRotateMtx() const = 0;
 
     virtual bool isMoving() const {
         return false;
@@ -36,7 +36,7 @@ public:
     virtual bool isWorking() const;
     virtual void start();
     virtual void end();
-    virtual const TMtx34f& getRotateMtx() const {
+    virtual const Mtx34f& getRotateMtx() const {
         return mRotateMtx;
     }
     virtual bool isMoving() const;
@@ -57,7 +57,7 @@ public:
     void initRotateSpeed(const JMapInfoIter&);
     bool isReachedTargetAngle() const;
     void updateRotateMtx(AxisType, f32);
-    void calcRotateAxisDir(AxisType, TVec3f*) const;
+    void calcRotateAxisDir(AxisType, Vec3f*) const;
 
     void exeNeverMove();
     void exeWait();
@@ -83,8 +83,8 @@ public:
     s32 mRotateAccelType;
     s32 mRotateType;
     s32 mSignMotionType;
-    TPos3f mBaseHostMtx;
-    TPos3f mRotateMtx;
+    Pos3f mBaseHostMtx;
+    Pos3f mRotateMtx;
     f32 _A0;
     bool mIsOnReverse;
 };

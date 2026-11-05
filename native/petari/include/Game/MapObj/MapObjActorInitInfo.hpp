@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class Nerve;
 
@@ -14,11 +14,11 @@ public:
     void setupBinder(f32, f32);
     void setupEffect(const char*);
     void setupSound(s32);
-    void setupSoundPos(TVec3f*);
+    void setupSoundPos(Vec3f*);
     void setupNoAppearRiddleSE();
     void setupHitSensor();
     void setupHitSensorCallBack();
-    void setupHitSensorParam(u16, f32, const TVec3f&);
+    void setupHitSensorParam(u16, f32, const Vec3f&);
     void setupNerve(const Nerve*);
     void setupShadow(const char*);
     void setupGroupClipping(s32);
@@ -60,7 +60,7 @@ public:
     const char* mModelName;
     u16 _1C;
     f32 mSensorRadius;
-    TVec3f mSensorPosition;
+    Vec3f mSensorPosition;
     bool mHasHitSensorCB;
     u8 _31;
     u8 _32;
@@ -69,7 +69,7 @@ public:
     f32 mBinderCenterY;
     const char* mEffectName;
     s32 mSound;
-    TVec3f* mSoundPos;
+    Vec3f* mSoundPos;
     bool _48;
     const Nerve* mNerve;
     s32 mGroupClipping;

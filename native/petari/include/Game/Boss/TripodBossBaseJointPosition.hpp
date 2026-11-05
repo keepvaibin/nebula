@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class TripodBossBaseJointPosition : public LiveActor {
 public:
@@ -19,5 +19,5 @@ public:
     virtual void control();
 
     s32 mID;
-    TPos3f mMtx;
+    Pos3f mMtx;
 };

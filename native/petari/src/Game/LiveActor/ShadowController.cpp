@@ -130,7 +130,7 @@ void ShadowController::update() {
 }
 
 void ShadowController::updateFarClipping(f32 clip) {
-    TVec3f dropPos;
+    Vec3f dropPos;
     getDropPos(&dropPos);
     f32 cameraDistZ = MR::calcCameraDistanceZ(dropPos);
     _67 = cameraDistZ >= clip;
@@ -138,9 +138,9 @@ void ShadowController::updateFarClipping(f32 clip) {
 
 void ShadowController::updateDirection() {
     if (isCalcGravity()) {
-        TVec3f position;
+        Vec3f position;
         getDropPos(&position);
-        TVec3f previousDirection(_3C);
+        Vec3f previousDirection(_3C);
         if (!isCalcShadowGravity() || !MR::calcDropShadowVectorOrZero(mActor, position, &_3C, nullptr, 0)) {
             if (!MR::calcGravityVectorOrZero(mActor, position, &_3C, nullptr, 0)) {
                 _3C = previousDirection;
@@ -156,9 +156,9 @@ void ShadowController::updateDirection() {
 void ShadowController::updateProjection() {
     if (isCalcCollision()) {
         Triangle triangle;
-        TVec3f position;
+        Vec3f position;
         getDropPos(&position);
-        TVec3f direction;
+        Vec3f direction;
         getDropDir(&direction);
         position -= direction * mStartOffset;
 
@@ -198,7 +198,7 @@ void ShadowController::setShadowDrawer(ShadowDrawer* pDrawer) {
     pDrawer->setShadowController(this);
 }
 
-void ShadowController::getDropPos(TVec3f* pOut) const {
+void ShadowController::getDropPos(Vec3f* pOut) const {
     if (mDropPos) {
         pOut->set(*mDropPos);
     } else {
@@ -210,7 +210,7 @@ void ShadowController::getDropPos(TVec3f* pOut) const {
     }
 }
 
-void ShadowController::getDropDir(TVec3f* pOut) const {
+void ShadowController::getDropDir(Vec3f* pOut) const {
     if (mDropDir) {
         pOut->set(*mDropDir);
     } else {
@@ -222,7 +222,7 @@ f32 ShadowController::getDropLength() const {
     return mDropLength;
 }
 
-void ShadowController::getProjectionPos(TVec3f* pOut) const {
+void ShadowController::getProjectionPos(Vec3f* pOut) const {
     if (mProjPos) {
         pOut->set(*mProjPos);
     } else {
@@ -230,7 +230,7 @@ void ShadowController::getProjectionPos(TVec3f* pOut) const {
     }
 }
 
-void ShadowController::getProjectionNormal(TVec3f* pOut) const {
+void ShadowController::getProjectionNormal(Vec3f* pOut) const {
     if (mProjNorm) {
         pOut->set(*mProjNorm);
     } else {
@@ -243,11 +243,11 @@ f32 ShadowController::getProjectionLength() const {
         return -1.0f;
     }
 
-    TVec3f position;
+    Vec3f position;
     getDropPos(&position);
-    TVec3f direction;
+    Vec3f direction;
     getDropDir(&direction);
-    TVec3f difference(_48);
+    Vec3f difference(_48);
     difference -= position;
     f32 length = direction.dot(difference);
     if (length < 0.0f) {
@@ -320,30 +320,30 @@ void ShadowController::setGroupName(const char* pName) {
     mGroupName = pName;
 }
 
-void ShadowController::setDropPosPtr(const TVec3f* pDropPos) {
+void ShadowController::setDropPosPtr(const Vec3f* pDropPos) {
     mDropPos = pDropPos;
     _1C = 0;
 }
 
-void ShadowController::setDropPosMtxPtr(MtxPtr pMtx, const TVec3f& rOffset) {
+void ShadowController::setDropPosMtxPtr(MtxPtr pMtx, const Vec3f& rOffset) {
     _18 = pMtx;
     mDropPos = nullptr;
     _1C = pMtx;
     _30.set(rOffset);
 }
 
-void ShadowController::setDropPosFix(const TVec3f& rPos) {
+void ShadowController::setDropPosFix(const Vec3f& rPos) {
     _30.set(rPos);
     mDropPos = 0;
     _1C = 0;
 }
 
-void ShadowController::setDropDirPtr(const TVec3f* pDropDir) {
+void ShadowController::setDropDirPtr(const Vec3f* pDropDir) {
     mDropDir = pDropDir;
     _61 = 0;
 }
 
-void ShadowController::setProjectionPtr(const TVec3f* pPosition, const TVec3f* pNormal) {
+void ShadowController::setProjectionPtr(const Vec3f* pPosition, const Vec3f* pNormal) {
     mProjPos = pPosition;
     mProjNorm = pNormal;
     _60 = 0;
@@ -351,7 +351,7 @@ void ShadowController::setProjectionPtr(const TVec3f* pPosition, const TVec3f* p
     mProjectedSensor = nullptr;
 }
 
-void ShadowController::setDropDirFix(const TVec3f& rDirection) {
+void ShadowController::setDropDirFix(const Vec3f& rDirection) {
     _3C.set(rDirection);
     mDropDir = 0;
     _61 = 0;
@@ -373,7 +373,7 @@ void ShadowController::setDropTypeSurface() {
     _62 = 1;
 }
 
-void ShadowController::setProjectionFix(const TVec3f& rPosition, const TVec3f& rNormal, bool projected) {
+void ShadowController::setProjectionFix(const Vec3f& rPosition, const Vec3f& rNormal, bool projected) {
     _48.set(rPosition);
     _54.set(rNormal);
     _63 = projected;
@@ -394,14 +394,14 @@ void ShadowController::onCalcCollisionOneTime() {
 }
 
 void ShadowController::onCalcDropGravity() {
-    TVec3f vec(0.0f, 1.0f, 0.0f);
+    Vec3f vec(0.0f, 1.0f, 0.0f);
     _3C.set(vec);
     mDropDir = 0;
     _61 = 1;
 }
 
 void ShadowController::onCalcDropGravityOneTime() {
-    TVec3f vec(0.0f, 1.0f, 0.0f);
+    Vec3f vec(0.0f, 1.0f, 0.0f);
     _3C.set(vec);
     mDropDir = 0;
     _61 = 2;
@@ -413,14 +413,14 @@ void ShadowController::offCalcDropGravity() {
 }
 
 void ShadowController::onCalcDropPrivateGravity() {
-    TVec3f vec(0.0f, 1.0f, 0.0f);
+    Vec3f vec(0.0f, 1.0f, 0.0f);
     _3C.set(vec);
     mDropDir = 0;
     _61 = 4;
 }
 
 void ShadowController::onCalcDropPrivateGravityOneTime() {
-    TVec3f vec(0.0f, 1.0f, 0.0f);
+    Vec3f vec(0.0f, 1.0f, 0.0f);
     _3C.set(vec);
     mDropDir = 0;
     _61 = 5;

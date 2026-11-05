@@ -17,7 +17,7 @@ public:
     virtual bool postureCtrl(MtxPtr);
 
     void recordWallPolygon(const Triangle*);
-    void recordHangNorm(const TVec3f&);
+    void recordHangNorm(const Vec3f&);
     void forceDrop();
     void tryClimb(bool);
 
@@ -33,7 +33,7 @@ public:
     u8 _1F;
     Triangle* _20;
     Triangle* _24;
-    TVec3f _28;
-    TVec3f _34;
+    Vec3f _28;
+    Vec3f _34;
     HitSensor* mWallSensor;
 };

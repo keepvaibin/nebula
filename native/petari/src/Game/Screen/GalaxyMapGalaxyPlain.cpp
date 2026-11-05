@@ -46,13 +46,13 @@ void GalaxyMapGalaxyPlain::show(const char* pGalaxyName, const char* pPaneName) 
 }
 
 void GalaxyMapGalaxyPlain::adjustTransInScreen() {
-    TBox2f galaxyNameBox;
+    Box2f galaxyNameBox;
     MR::calcTextBoxRectRecursive(&galaxyNameBox, mNamePlate, "GalaxyName");
 
-    TVec2f paneTrans;
+    Vec2f paneTrans;
     MR::copyPaneTrans(&paneTrans, mHost, mPaneName);
 
-    TVec2f plateTrans(paneTrans);
+    Vec2f plateTrans(paneTrans);
 
     if (galaxyNameBox.i.x < MR::getScreenMargin()) {
         plateTrans.x += -(galaxyNameBox.i.x - MR::getScreenMargin());

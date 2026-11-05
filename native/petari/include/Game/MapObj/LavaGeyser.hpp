@@ -20,8 +20,8 @@ public:
 
     s32 mArg0;
     s32 mArg1;
-    TVec3f _94;
-    TVec3f _A0;
+    Vec3f _94;
+    Vec3f _A0;
     f32 _AC;
     f32 _B0;  // one of these may be a different data type
     f32 _B4;

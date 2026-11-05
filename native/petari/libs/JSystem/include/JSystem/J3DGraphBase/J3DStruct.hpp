@@ -1,7 +1,7 @@
 #pragma once
 
-#include "JSystem/JGeometry/TMatrix.hpp"
-#include "JSystem/JGeometry/TVec.hpp"
+#include <nebula_geometry.hpp>
+
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 

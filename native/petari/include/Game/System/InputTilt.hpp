@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class PlayerInput;
 
@@ -9,11 +9,11 @@ class InputTilt {
 public:
     InputTilt(const PlayerInput* pPad, u32 hand);
 
-    bool getAcceleration(TVec3f* pOut) const;
+    bool getAcceleration(Vec3f* pOut) const;
     void update();
 
     const PlayerInput* mPad;
     u32 mHand;
-    TVec3f mTilt;
+    Vec3f mTilt;
     bool mValid;
 };

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/NPC/TrickRabbitSnow.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class ActorCameraInfo;
 class BombTimerLayout;
@@ -44,7 +44,7 @@ public:
     void exeEnd();
 
 private:
-    TPos3f mBaseMtx;
+    Pos3f mBaseMtx;
     ActorCameraInfo* mCameraInfo;
     ModelObj* mPowerStarDemoModel;
     TalkMessageCtrl* mMsgCtrl;

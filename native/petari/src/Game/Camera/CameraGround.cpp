@@ -14,7 +14,7 @@ void CameraGround::reset() {
 }
 
 CameraTargetObj* CameraGround::calc() {
-    TVec3f watchPoint;
+    Vec3f watchPoint;
     CameraLocalUtil::makeWatchPoint(&watchPoint, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
 
     watchPoint = watchPoint - CameraLocalUtil::getTarget(this)->getPosition() + CameraLocalUtil::getTarget(this)->getGroundPos();
@@ -22,10 +22,10 @@ CameraTargetObj* CameraGround::calc() {
     if (mIsNotInitialized) {
         mIsNotInitialized = false;
     } else {
-        TVec3f prevDir = mLastWatchPoint - CameraLocalUtil::getTarget(this)->getPosition();
+        Vec3f prevDir = mLastWatchPoint - CameraLocalUtil::getTarget(this)->getPosition();
         f32 prevUp = CameraLocalUtil::getTarget(this)->getUpVec().dot(prevDir);
 
-        TVec3f watchDir = watchPoint - CameraLocalUtil::getTarget(this)->getPosition();
+        Vec3f watchDir = watchPoint - CameraLocalUtil::getTarget(this)->getPosition();
         f32 newUp = CameraLocalUtil::getTarget(this)->getUpVec().dot(watchDir);
 
         f32 length = newUp * 0.05f + prevUp * 0.95f;
@@ -35,7 +35,7 @@ CameraTargetObj* CameraGround::calc() {
 
     mLastWatchPoint.set(watchPoint);
 
-    TVec3f pos;
+    Vec3f pos;
     MR::polarToCross(watchPoint, &pos, mDist, mAngleA, mAngleB);
     CameraLocalUtil::setWatchPos(this, watchPoint);
     CameraLocalUtil::setPos(this, pos);

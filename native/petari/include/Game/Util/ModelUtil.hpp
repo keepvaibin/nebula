@@ -2,7 +2,7 @@
 
 #include <JSystem/J3DGraphAnimator/J3DModel.hpp>
 #include <JSystem/J3DGraphAnimator/J3DModelData.hpp>
-#include <JSystem/JGeometry/TBox.hpp>
+#include <nebula_geometry.hpp>
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 
@@ -48,7 +48,7 @@ namespace MR {
     void hideMaterial(const LiveActor*, const char*);
     void showMaterial(const J3DModel*, const char*);
     void showMaterial(const LiveActor*, const char*);
-    void calcFogStartEnd(TVec3f, f32, f32*, f32*);
+    void calcFogStartEnd(Vec3f, f32, f32*, f32*);
     bool isUseTex(J3DMaterial*, u16);
     bool isNormalTexMtx(J3DMaterial*);
     bool isUseTexMtx(J3DMaterial*, u32);
@@ -72,7 +72,7 @@ namespace MR {
     s32 getLightNum(J3DMaterial*);
     s32 getLightNumMax(const LiveActor*);
     s32 getLightNumMax(J3DModelData*);
-    void calcModelBoundingBox(TBox3f*, const LiveActor*);
+    void calcModelBoundingBox(Box3f*, const LiveActor*);
     void calcModelBoundingRadius(f32*, const LiveActor*);
     bool isExistCollisionResource(const LiveActor*, const char*);
     bool isExistModel(const char*);

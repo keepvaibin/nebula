@@ -14,10 +14,10 @@ public:
     virtual bool notice();
     virtual bool postureCtrl(MtxPtr);
 
-    TVec3f _14;
-    TVec3f _20;
-    TVec3f _2C;
-    TVec3f _38;
+    Vec3f _14;
+    Vec3f _20;
+    Vec3f _2C;
+    Vec3f _38;
     Triangle* _44;
     u16 _48;
     u8 _4A;

@@ -56,6 +56,6 @@ public:
     WalkerStateBindStarPointer* mStateBindStarPointer;
     ItemGenerator* mItemGenerator;
     KeySwitch* mKeySwitch;
-    TQuat4f _AC;
-    TVec3f _BC;
+    Quat4f _AC;
+    Vec3f _BC;
 };

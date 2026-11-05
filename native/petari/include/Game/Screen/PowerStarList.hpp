@@ -14,7 +14,7 @@ public:
         Separator();
 
         f32 _0;
-        TVec2f _4;
+        Vec2f _4;
     };
 
     /// @brief Creates a new `PowerStarList`.

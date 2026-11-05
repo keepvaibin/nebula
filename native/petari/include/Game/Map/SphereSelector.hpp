@@ -4,7 +4,7 @@
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/PlayerInputUtil.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class LiveActorGroup;
 class SphereSelectorHandle;
@@ -56,7 +56,7 @@ public:
     u32 _9C;
     LiveActor* mPointingTarget;
     s32 _A4;
-    TVec2f _A8;
+    Vec2f _A8;
     bool mIsPointingInvalid;
     bool _B1;  // Something for playing sounds the first time you click on a galaxy or cancel the selection
 };
@@ -89,9 +89,9 @@ public:
     static void invalidatePointing();
     static bool isValidPointing();
     static void setHandle(SphereSelectorHandle*);
-    static void calcHandledTrans(const TVec3f&, TVec3f*);
-    static void calcHandledRotateMtx(const TVec3f&, TPos3f*);
-    static TVec3f& getHandleTrans();
+    static void calcHandledTrans(const Vec3f&, Vec3f*);
+    static void calcHandledRotateMtx(const Vec3f&, Pos3f*);
+    static Vec3f& getHandleTrans();
     static f32 getHandleRotateSpeed();
     static bool isHandleHolding();
     static void registerPointingTarget(LiveActor*, HandlePointingPriority);
@@ -100,6 +100,6 @@ public:
     static bool isPointingTarget(const LiveActor*);
     static LiveActor* getPointingTarget();
     static LiveActor* getSelectedTarget();
-    static TVec3f& getSelectedActorTrans();
-    static void calcOffsetPos(TVec3f*, const TVec3f&, const TVec3f&, const TVec3f&, const TVec3f&);
+    static Vec3f& getSelectedActorTrans();
+    static void calcOffsetPos(Vec3f*, const Vec3f&, const Vec3f&, const Vec3f&, const Vec3f&);
 };

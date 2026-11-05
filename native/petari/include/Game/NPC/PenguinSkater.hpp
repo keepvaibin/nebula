@@ -49,6 +49,6 @@ public:
     NPCSupportRail* mRail;
     s32 mNumRails;
     s32 mCrossPoint;
-    TQuat4f mMarioQuat;
-    TVec3f mMarioPos;
+    Quat4f mMarioQuat;
+    Vec3f mMarioPos;
 };

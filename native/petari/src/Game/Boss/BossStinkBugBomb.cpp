@@ -24,8 +24,8 @@ void BossStinkBugBomb::init(const JMapInfoIter& rIter) {
     MR::onCalcGravity(this);
     initHitSensor(2);
 
-    MR::addHitSensorEnemy(this, "body", 8, 60.0f, TVec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorEnemyAttack(this, "bomb", 8, 280.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemy(this, "body", 8, 60.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemyAttack(this, "bomb", 8, 280.0f, Vec3f(0.0f, 0.0f, 0.0f));
     MR::invalidateHitSensor(this, "bomb");
 
     initBinder(60.0f, 0.0f, 0);
@@ -48,7 +48,7 @@ void BossStinkBugBomb::calcAndSetBaseMtx() {
     MR::setBaseScale(this, mScale);
 }
 
-void BossStinkBugBomb::start(const TVec3f& startPos, const TVec3f& startVelocity) {
+void BossStinkBugBomb::start(const Vec3f& startPos, const Vec3f& startVelocity) {
     mPosition.set(startPos);
     MR::showModel(this);
 

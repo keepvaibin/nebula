@@ -3,7 +3,7 @@
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include <JSystem/JGeometry/TUtil.hpp>
+#include <nebula_geometry.hpp>
 
 CameraCubePlanet::CameraCubePlanet(const char* pName)
     : Camera(pName), mDist(3000.0f), mAngleX(MR::pi() / 6.0f), mAngleY(0.35f), mUp(0.0f, 1.0f, 0.0f) {
@@ -14,28 +14,28 @@ void CameraCubePlanet::reset() {
 }
 
 CameraTargetObj* CameraCubePlanet::calc() {
-    TVec3f pos = CameraLocalUtil::getPos(mCameraMan);
-    TVec3f up = mUp;
+    Vec3f pos = CameraLocalUtil::getPos(mCameraMan);
+    Vec3f up = mUp;
 
-    TQuat4f upRot;
+    Quat4f upRot;
     upRot.setRotate(mUp, -CameraLocalUtil::getTarget(this)->getGravityVector(), CameraLocalUtil::isForceCameraChange() ? 1.0f : mAngleY);
     upRot.transform(up);
     mUp.set(up);
 
-    TVec3f watchPoint;
+    Vec3f watchPoint;
     CameraLocalUtil::makeWatchPointImm(&watchPoint, this, CameraLocalUtil::getTarget(this));
     CameraLocalUtil::setWatchPos(this, watchPoint);
     CameraLocalUtil::setWatchUpVec(this, up);
 
-    TVec3f toWatch = watchPoint - pos;
-    TVec3f front = toWatch - up * up.dot(toWatch);
+    Vec3f toWatch = watchPoint - pos;
+    Vec3f front = toWatch - up * up.dot(toWatch);
     if (MR::isNearZero(front)) {
         return nullptr;
     }
     MR::normalize(&front);
 
-    TVec3f side = up.cross(front);
-    TQuat4f rot;
+    Vec3f side = up.cross(front);
+    Quat4f rot;
     rot.setRotate(side, mAngleX);
     rot.transform(up);
     rot.transform(front);

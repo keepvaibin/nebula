@@ -73,7 +73,7 @@ bool JPABaseEmitter::processTermination() {
     return false;
 }
 
-void JPABaseEmitter::calcEmitterGlobalPosition(JGeometry::TVec3< f32 >* dst) const {
+void JPABaseEmitter::calcEmitterGlobalPosition(Vec3f* dst) const {
     Mtx mtx;
     NebulaMtxScale(mtx, mGlobalScl.x, mGlobalScl.y, mGlobalScl.z);
     NebulaMtxConcat(mGlobalRot, mtx, mtx);

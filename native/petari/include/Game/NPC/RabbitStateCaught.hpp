@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/ActorStateBase.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class LiveActor;
 class ModelObj;
@@ -23,10 +23,10 @@ public:
     void setCaughtStartMarioPose();
     void blendBaseMatrixToMario(f32) const;
 
-    TQuat4f mCaughtStartMarioQuat;
-    TVec3f mCaughtStartMarioTrans;
+    Quat4f mCaughtStartMarioQuat;
+    Vec3f mCaughtStartMarioTrans;
     TalkMessageCtrl* mTalkCtrl;
     ModelObj* mPowerStarModel;
-    TMtx34f mCaughtLandMarioBaseMtx;
+    Mtx34f mCaughtLandMarioBaseMtx;
     bool mUsePowerStarModel;
 };

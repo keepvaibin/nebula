@@ -44,7 +44,7 @@ void GravityLightRoad::init(const JMapInfoIter& rIter) {
 
     boundingRadius += 0.5f * mRadius;
 
-    TVec3f upVec;
+    Vec3f upVec;
     MR::calcUpVec(&upVec, this);
     upVec.negate();
 
@@ -77,7 +77,7 @@ void GravityLightRoad::exeDraw() {
         MR::startSoundPlayer("SE_PM_GRAV_LIGHT_DRAWN_ST");
     }
 
-    TVec3f upVec;
+    Vec3f upVec;
     MR::calcUpVec(&upVec, this);
 
     mSpeed += ::sAccel;
@@ -87,12 +87,12 @@ void GravityLightRoad::exeDraw() {
 
     mHost->mPosition.add(mHost->mVelocity);
 
-    TVec3f dir;
+    Vec3f dir;
     dir.sub(mPosition, *MR::getPlayerPos());
-    TVec3f fwdVec = upVec.getOrthogonal(dir);
+    Vec3f fwdVec = upVec.getOrthogonal(dir);
 
     if (!MR::isNearZero(fwdVec, ::sAccel)) {
-        TVec3f fwdDir;
+        Vec3f fwdDir;
         MR::normalize(fwdVec, &fwdDir);
         mHost->mPosition.scaleAdd(::sAccel, fwdDir, mHost->mPosition);
     }
@@ -130,21 +130,21 @@ bool GravityLightRoad::receiveOtherMsg(u32 msg, HitSensor* pReceiver, HitSensor*
 }
 
 void GravityLightRoad::updateHitSensor(HitSensor* pSensor) {
-    TVec3f upVec;
+    Vec3f upVec;
     MR::calcUpVec(&upVec, this);
     upVec.negate();
 
-    TVec3f vec;
+    Vec3f vec;
     vec.scaleAdd(mRadius, upVec, mPosition);
 
     MR::calcPerpendicFootToLineInside(&pSensor->mPosition, *MR::getPlayerCenterPos(), mPosition, vec);
 }
 
 void GravityLightRoad::updateBindActorMtx() {
-    TPos3f baseMtx;
+    Pos3f baseMtx;
     baseMtx.identity();
 
-    TVec3f upVec;
+    Vec3f upVec;
     MR::calcUpVec(&upVec, this);
     upVec.negate();
 
@@ -157,7 +157,7 @@ void GravityLightRoad::updateBindActorMtx() {
 }
 
 void GravityLightRoad::endBind() {
-    TVec3f upVec;
+    Vec3f upVec;
     MR::calcUpVec(&upVec, this);
     upVec.scale(::sAccel);
 
@@ -197,17 +197,17 @@ bool GravityLightRoad::tryStartBind(LiveActor* pActor) {
 }
 
 bool GravityLightRoad::isPlayerInCylinder() const {
-    TVec3f upVec;
+    Vec3f upVec;
     MR::calcUpVec(&upVec, this);
 
-    TVec3f dir;
+    Vec3f dir;
     dir.sub(*MR::getPlayerPos(), mPosition);
-    TVec3f fwdVec = upVec.getOrthogonal(dir);
+    Vec3f fwdVec = upVec.getOrthogonal(dir);
 
-    TVec3f lengthVec;
+    Vec3f lengthVec;
     lengthVec.scale(upVec.dot(dir), upVec);
 
-    TBox3f boundingBox;
+    Box3f boundingBox;
     MR::calcModelBoundingBox(&boundingBox, this);
 
     if (fwdVec.length() > boundingBox.f.x) {

@@ -17,8 +17,8 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/SpringValue.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
-#include <JSystem/JMath/JMath.hpp>
+#include <nebula_geometry.hpp>
+
 #include <nebula_math.h>
 
 namespace NrvDesertLandMoveSwitch {
@@ -71,11 +71,11 @@ void DesertLandMoveSwitch::initAfterPlacement() {
 void DesertLandMoveSwitch::calcAnim() {
     LiveActor::calcAnim();
     MtxPtr mtx = MR::getJointMtx(this, "Move");
-    TPos3f mtx2;
+    Pos3f mtx2;
     mtx2.setInline(mtx);
     f32 val = mSpringValue->mSpringValue;
     if (!MR::isNearZero(val)) {
-        TVec3f pos, up;
+        Vec3f pos, up;
         mtx2.getTrans(pos);
         MR::calcUpVec(&up, this);
         pos += up * val;
@@ -118,8 +118,8 @@ void DesertLandMoveSwitch::initModelAndCollision(const JMapInfoIter& rIter) {
     _A0 = pObjName;
     initModelManagerWithAnm(pObjName, 0, 0);
     initHitSensor(2);
-    HitSensor* sensorBody = MR::addHitSensorMapObj(this, "body", 8, 0.0f, TVec3f(0.0f, 0.0f, 0.0f));
-    HitSensor* sensorMove = MR::addHitSensorMapObj(this, "move", 8, 0.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    HitSensor* sensorBody = MR::addHitSensorMapObj(this, "body", 8, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    HitSensor* sensorMove = MR::addHitSensorMapObj(this, "move", 8, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
     MR::initCollisionParts(this, pObjName, sensorBody, 0);
     mCollisionParts = MR::createCollisionPartsFromLiveActor(this, "Move", sensorMove, MR::CollisionScaleType_Unk2);
     MR::validateCollisionParts(mCollisionParts);

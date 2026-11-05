@@ -3,7 +3,7 @@
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/ModelObj.hpp"
 #include "Game/Util/Array.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class CameraTargetDemoActor;
 class FixedPosition;
@@ -48,7 +48,7 @@ public:
     bool isDeadAllIce();
     bool isEnableThrow();
     ThrowingIce* getDeadWeaponAndAppear();
-    bool calcJoint(TPos3f*, const JointControllerInfo&);
+    bool calcJoint(Pos3f*, const JointControllerInfo&);
 
     FixedPosition* mFixedPos;
     ThrowingIce* mThrowingIce;
@@ -57,10 +57,10 @@ public:
     MR::Vector< MR::AssignableArray< ThrowingIce* > > mIce;
     LiveActor* _A8;
     LiveActor* _AC;
-    TVec3f _B0;
-    TVec3f _BC;
-    TVec3f _C8;
-    TVec3f _D4;
+    Vec3f _B0;
+    Vec3f _BC;
+    Vec3f _C8;
+    Vec3f _D4;
     s32 _E0;
     s32 _E4;
     u32 _E8;
@@ -69,8 +69,8 @@ public:
     Meramera** mModelArray;
     CameraTargetDemoActor* mCameraTarget;
     JointControlDelegator< IceMerameraKing >* mJointController;
-    TQuat4f _100;
-    TVec3f _110;
+    Quat4f _100;
+    Vec3f _110;
     f32 _11C;
     bool _120;
     bool _121;

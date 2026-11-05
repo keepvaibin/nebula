@@ -35,7 +35,7 @@ void ElectricBall::Ball::init(LiveActor* pActor) {
     MR::onCalcGravity(mHost);
 }
 
-void ElectricBall::Ball::updatePosition(const TPos3f& rPos) {
+void ElectricBall::Ball::updatePosition(const Pos3f& rPos) {
     rPos.mult(mPosition, mHost->mPosition);
 }
 
@@ -62,7 +62,7 @@ void ElectricBall::init(const JMapInfoIter& rIter) {
     MR::connectToSceneMapObjMovement(this);
 
     initHitSensor(1);
-    MR::addHitSensorPosMapObj(this, "body", 8, ::sSensorRadius, &mClosestBallPos, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorPosMapObj(this, "body", 8, ::sSensorRadius, &mClosestBallPos, Vec3f(0.0f, 0.0f, 0.0f));
 
     initSound(4, false);
     initBalls(rIter);
@@ -107,7 +107,7 @@ void ElectricBall::control() {
             }
         }
 
-        TPos3f mtx;
+        Pos3f mtx;
         mtx.identity();
         mtx.setEulerY(mAngularSpeed * PI_180);
         mBaseMtx.concat(mBaseMtx, mtx);
@@ -151,12 +151,12 @@ void ElectricBall::initBalls(const JMapInfoIter& rIter) {
         item.init(this);
     }
 
-    TVec3f vec(mRadius, 0.0f, 0.0f);
+    Vec3f vec(mRadius, 0.0f, 0.0f);
     f32 f1 = TWO_PI / mBalls.size();
 
     for (Ball* ball = mBalls.begin(); ball != mBalls.end(); ball++) {
         f32 angle = f1 * (ball - mBalls.begin());
-        MR::rotateVecRadian(&ball->mPosition, vec, TVec3f(0.0f, 1.0f, 0.0f), angle);
+        MR::rotateVecRadian(&ball->mPosition, vec, Vec3f(0.0f, 1.0f, 0.0f), angle);
     }
 }
 

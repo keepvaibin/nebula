@@ -32,27 +32,27 @@ CamTranslatorBase* CameraBehind::createTranslator() {
 }
 
 void CameraBehind::calcPosAndUp(f32 accel) {
-    TVec3f watchpos = CameraLocalUtil::getWatchPos(this);
+    Vec3f watchpos = CameraLocalUtil::getWatchPos(this);
 
-    TPos3f matrix;
+    Pos3f matrix;
     matrix.setZDir(-CameraLocalUtil::getTarget(this)->getFrontVec());
     matrix.setYDir(CameraLocalUtil::getTarget(this)->getUpVec());
     matrix.setXDir(-CameraLocalUtil::getTarget(this)->getSideVec());
     matrix.setTrans(CameraLocalUtil::getTarget(this)->getPosition());
 
-    TPos3f inv;
+    Pos3f inv;
     inv.invert(matrix);
 
-    TVec3f watchPoint;
+    Vec3f watchPoint;
     inv.mult(watchpos, watchPoint);
 
-    TVec3f pos;
+    Vec3f pos;
     MR::polarToCrossDegree(watchPoint, &pos, mDist, mAngleX, mAngleY);
 
     matrix.mult(pos, pos);
     pos = pos * accel + CameraLocalUtil::getPos(this) * (1.0f - accel);
 
     CameraLocalUtil::setPos(this, pos);
-    CameraLocalUtil::setWatchUpVec(this, TVec3f(0.0f, 1.0f, 0.0f));
-    CameraLocalUtil::setUpVec(this, TVec3f(0.0f, 1.0f, 0.0f));
+    CameraLocalUtil::setWatchUpVec(this, Vec3f(0.0f, 1.0f, 0.0f));
+    CameraLocalUtil::setUpVec(this, Vec3f(0.0f, 1.0f, 0.0f));
 }

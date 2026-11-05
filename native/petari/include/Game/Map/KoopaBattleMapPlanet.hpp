@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class LiveActorGroup;
 
@@ -25,8 +25,8 @@ public:
 
 private:
     const char* mModelName;
-    TPos3f mBaseMtx;
-    TVec3f _C0;
+    Pos3f mBaseMtx;
+    Vec3f _C0;
     LiveActorGroup* mDamagePlateGroup;
     LiveActorGroup* mCoinPlateGroup;
     LiveActorGroup* mPlateGroup;

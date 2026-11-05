@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/MapObj/MapPartsFunction.hpp"
-#include <JSystem/JGeometry.hpp>
+#include <nebula_geometry.hpp>
 
 class MapPartsRailPosture : public MapPartsFunction {
 public:
@@ -18,6 +18,6 @@ public:
     void exeDoNothing();
     void exeMove();
 
-    TPos3f _18;
+    Pos3f _18;
     s32 mMovePosture;
 };

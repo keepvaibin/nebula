@@ -22,8 +22,8 @@ namespace {
         return MR::getSceneObj< ElectricRailHolder >(SceneObj_ElectricRailHolder);
     }
 
-    bool isNearRail(const LiveActor* pActor, const HitSensor* pSensor, TVec3f* pRailPos, TVec3f* pRailDir) {
-        TVec3f railPos;
+    bool isNearRail(const LiveActor* pActor, const HitSensor* pSensor, Vec3f* pRailPos, Vec3f* pRailDir) {
+        Vec3f railPos;
         f32 coord = MR::calcNearestRailPos(&railPos, pActor, pSensor->mPosition);
 
         const f32 sensorRadius = pSensor->mRadius;
@@ -84,7 +84,7 @@ void ElectricRailHolder::draw() const {
     }
 }
 
-bool ElectricRailHolder::isTouchRail(const HitSensor* pSensor, TVec3f* pVec1, TVec3f* pVec2) const {
+bool ElectricRailHolder::isTouchRail(const HitSensor* pSensor, Vec3f* pVec1, Vec3f* pVec2) const {
     if (!mIsActive) {
         return false;
     }
@@ -142,7 +142,7 @@ void ElectricRailFunction::registerRail(const LiveActor* pActor, ElectricRailTyp
     ::getHolder()->registerRail(pActor, railType);
 }
 
-bool ElectricRailFunction::isTouchRail(const HitSensor* pSensor, TVec3f* pVec1, TVec3f* pVec2) {
+bool ElectricRailFunction::isTouchRail(const HitSensor* pSensor, Vec3f* pVec1, Vec3f* pVec2) {
     if (!MR::isExistSceneObj(SceneObj_ElectricRailHolder)) {
         return false;
     }

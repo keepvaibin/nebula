@@ -29,8 +29,8 @@ public:
     virtual bool close();
     virtual bool update();
     virtual bool notice();
-    virtual void hitWall(const TVec3f&, HitSensor*);
-    virtual void hitPoly(u8, const TVec3f&, HitSensor*);
+    virtual void hitWall(const Vec3f&, HitSensor*);
+    virtual void hitPoly(u8, const Vec3f&, HitSensor*);
     virtual bool passRing(const HitSensor*);
     virtual f32 getBlurOffset() const {
         return mBlurOffset;
@@ -38,9 +38,9 @@ public:
 
     virtual void draw3D() const;
     virtual f32 getStickY() const;
-    virtual const TVec3f& getGravityVec() const;
-    virtual void addVelocity(const TVec3f& rVelocity);
-    virtual void addVelocity(const TVec3f& rVelocity, f32);
+    virtual const Vec3f& getGravityVec() const;
+    virtual void addVelocity(const Vec3f& rVelocity);
+    virtual void addVelocity(const Vec3f& rVelocity, f32);
 
     bool checkWaterCube(bool);
     void onSurface();
@@ -57,18 +57,18 @@ public:
     void updateTilt();
     void jet();
     void pushedByWaterWall();
-    void setDamage(const TVec3f&, u16);
+    void setDamage(const Vec3f&, u16);
     void updateUnderWater();
     bool startJet(u32);
-    void addDamage(const TVec3f&);
-    void addFaint(const TVec3f&);
-    bool getWaterAreaInfo(WaterInfo*, const TVec3f&, TVec2f*);
+    void addDamage(const Vec3f&);
+    void addFaint(const Vec3f&);
+    bool getWaterAreaInfo(WaterInfo*, const Vec3f&, Vec2f*);
     void decOxygen(u16 amount);
     void incOxygen();
     void incLife();
     void decLife();
     f32 calcRingAcc();
-    void hitPunch(const TVec3f& rPunchDir);
+    void hitPunch(const Vec3f& rPunchDir);
     f32 getSurface() const;
     f32 getWaterEdgeDist() const {
         if (isOnWaterSurface()) {
@@ -87,7 +87,7 @@ public:
     void resetJet();
     void forceStopSpin();
     void resetAndFixPose();
-    f32 checkUnderWaterFull(const TVec3f&);
+    f32 checkUnderWaterFull(const Vec3f&);
     void hitHead(const HitInfo*);
 
     f32 calcWaterEdgeDist() const {
@@ -139,7 +139,7 @@ public:
         worthlesser = true;
     }
 
-    inline TVec3f getPlayer380() const {
+    inline Vec3f getPlayer380() const {
         return getPlayer()->_380;
     }
 
@@ -184,8 +184,8 @@ public:
     f32 mForwardSpeed;
     f32 mBuoyancySpeed;
     f32 mVerticalAngle;
-    TVec3f mFrontVec;
-    TVec3f mUpVec;
+    Vec3f mFrontVec;
+    Vec3f mUpVec;
     bool _78;
     u16 mSpinTimer;
     u16 mSpinDashTimer;
@@ -202,11 +202,11 @@ public:
     u8 _9D;
     u8 mNextAction;
     u8 mEffectState;
-    TVec3f mKnockbackVel;
+    Vec3f mKnockbackVel;
     u8 mDamageType;
     u8 _AD;
     u16 mKnockbackTimer;
-    TMtx34f mUpperBodyJointMtx;
+    Mtx34f mUpperBodyJointMtx;
     f32 mCurrentTiltX;
     f32 mCurrentTiltY;
     u16 mDrownTimer;
@@ -216,13 +216,13 @@ public:
     u16 mColdWaterDamageInterval;
     WaterInfo mWaterInfo;
     s32 mSwimState;
-    TVec3f _148;
-    TVec3f mAreaFollowMtxPos;
-    TVec3f mSurfacePos;
-    TVec3f mSurfaceNorm;
-    TVec3f _178;
-    TVec3f mWaterStreamVel;
-    TVec3f mWaterStreamDir;
+    Vec3f _148;
+    Vec3f mAreaFollowMtxPos;
+    Vec3f mSurfacePos;
+    Vec3f mSurfaceNorm;
+    Vec3f _178;
+    Vec3f mWaterStreamVel;
+    Vec3f mWaterStreamDir;
     f32 mWaterDepth;
     f32 _1A0;
     f32 mDistToFloor;

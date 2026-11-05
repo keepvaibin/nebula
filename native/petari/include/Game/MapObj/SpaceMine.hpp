@@ -22,7 +22,7 @@ public:
     }
 
     f32 mRotateSpeed;
-    TVec3f mClippingRange;
+    Vec3f mClippingRange;
     s32 mShadowType;
     u8 mIsPlayerNear;
 };

@@ -75,7 +75,7 @@ void SimpleMirrorObj::calcAndSetBaseMtx() {
     if (mMtx == nullptr) {
         MapObjActor::calcAndSetBaseMtx();
     } else {
-        TPos3f reflectionPos;
+        Pos3f reflectionPos;
         reflectionPos.set(mMtx);
         MR::setMirrorReflectionInfoFromMtxYUp(reflectionPos);
         f32 z = reflectionPos.mMtx[2][3];

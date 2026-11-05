@@ -88,7 +88,7 @@ bool BossStinkBugActionGround::receiveOtherMsg(u32 msg, HitSensor* pSender, HitS
         if (isNerve(GET_NERVE(BossStinkBugGroundBattle, BossStinkBugActionGroundNrvRun)) ||
             isNerve(GET_NERVE(BossStinkBugGroundBattle, BossStinkBugActionGroundNrvShakeOffRun))) {
             if (MR::isFaceToTargetDegree(getHost(), MR::getSensorPos(pSender), getHost()->_EC, 45.0f)) {
-                TVec3f railPosFrontCoord;
+                Vec3f railPosFrontCoord;
                 MR::calcRailPosFrontCoord(&railPosFrontCoord, getHost(), 2000.0f);
 
                 if (MR::sendMsgEnemyAttackMaximumToDir(pSender, pReceiver, railPosFrontCoord - getHost()->mPosition)) {

@@ -92,7 +92,7 @@ public:
     PartsModel* mFeet[2];
     OtaKingLongFoot* mLongFeet[4];
     OtaKingMagma* mMagma;
-    TPos3f mLongFootMtx;
+    Pos3f mLongFootMtx;
     CocoNutBall* mCocoNutBallArray;
     FireBall* mFireBallArray;
     FireBubble* mFireBubbleArray;
@@ -101,7 +101,7 @@ public:
     s32 _EC;
     f32 mTurnSpeed;
     AudAnmSoundObject* mSoundObj;
-    TVec3f mSoundObjPos;
+    Vec3f mSoundObjPos;
     FixedPosition* mBubbleAppearPos;
     CocoNutBall* mDownCocoNut;
     ActorCameraInfo* mAnimCamera;

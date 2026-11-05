@@ -45,10 +45,10 @@ AssemblyBlock::AssemblyBlock(const char* pName)
 }
 
 void AssemblyBlock::init(const JMapInfoIter& rIter) {
-    TVec3f stack_3C;
-    TVec3f stack_30;
-    TVec3f stack_24;
-    TVec3f stack_18;
+    Vec3f stack_3C;
+    Vec3f stack_30;
+    Vec3f stack_24;
+    Vec3f stack_18;
     char name[256];
 
     MR::initDefaultPos(this, rIter);
@@ -116,7 +116,7 @@ void AssemblyBlock::init(const JMapInfoIter& rIter) {
     }
 
     initSound(4, false);
-    MR::initStarPointerTarget(this, boundingRadius, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::initStarPointerTarget(this, boundingRadius, Vec3f(0.0f, 0.0f, 0.0f));
 
     if (MR::isEqualString(name, "AssemblyBlockPartsTimerA")) {
         mBloomModel = MR::createBloomModel(this, getBaseMtx());
@@ -143,7 +143,7 @@ void AssemblyBlock::exeWait() {
 
     f32 scalar = MR::sinDegree(getNerveStep());
 
-    TVec3f trans;
+    Vec3f trans;
     _8C.getTrans(trans);
     trans.scaleAdd(scalar, mGravity, trans);
     _8C.setTrans(trans);

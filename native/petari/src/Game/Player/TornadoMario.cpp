@@ -5,7 +5,7 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 TornadoMario::TornadoMario(const char* pName) : LiveActor(pName), mUp(0.0f, 1.0f, 0.0f) {
 }
@@ -40,7 +40,7 @@ void TornadoMario::calcAnim() {
     LiveActor::calcAnim();
 }
 
-void TornadoMario::setTrHeight(const TVec3f& rPos, const TVec3f& rFront, const TVec3f& rUp, const TVec3f& rShadowDir) {
+void TornadoMario::setTrHeight(const Vec3f& rPos, const Vec3f& rFront, const Vec3f& rUp, const Vec3f& rShadowDir) {
     mPosition = rPos;
     mUp = rUp;
     mFront = rFront;
@@ -48,7 +48,7 @@ void TornadoMario::setTrHeight(const TVec3f& rPos, const TVec3f& rFront, const T
 }
 
 void TornadoMario::calcAndSetBaseMtx() {
-    TPos3f pos;
+    Pos3f pos;
     MR::makeMtxUpFrontPos(&pos, mUp, mFront, mPosition);
     MR::setBaseTRMtx(this, pos);
 }

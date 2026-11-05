@@ -14,17 +14,17 @@ public:
     virtual void collectRailPointInfo();
     virtual s32 getNextPointNo() const;
     virtual s32 getLastPointNo() const;
-    virtual const TVec3f& getLastPointNormal() const;
-    virtual const TVec3f& getNextPointNormal() const;
+    virtual const Vec3f& getLastPointNormal() const;
+    virtual const Vec3f& getNextPointNormal() const;
     virtual void startMoveInner();
     virtual void updatePoseInner();
 
-    const TVec3f getLastPointPos() const;
-    const TVec3f getPivotPointPos() const;
-    const TVec3f getNextPointPos() const;
+    const Vec3f getLastPointPos() const;
+    const Vec3f getPivotPointPos() const;
+    const Vec3f getNextPointPos() const;
 
     s32 mCurNormal;
-    MR::AssignableArray< TVec3f > mNormals;
-    TQuat4f _110;
-    TQuat4f _120;
+    MR::AssignableArray< Vec3f > mNormals;
+    Quat4f _110;
+    Quat4f _120;
 };

@@ -26,7 +26,7 @@ SpringJetWater::SpringJetWater(const char* pName) : LiveActor(pName), mObjName()
 
 void SpringJetWater::init(const JMapInfoIter& rIter) {
     MR::initDefaultPos(this, rIter);
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.identity();
     mtx.setEuler(mRotation * (PI / 180.0f));
     mtx.getYDir(mUp);
@@ -36,7 +36,7 @@ void SpringJetWater::init(const JMapInfoIter& rIter) {
     initSound(4, false);
     initHitSensor(1);
 
-    MR::addHitSensorMapObj(this, "body", 0x10, ::sSensorRadius, TVec3f(0.0f, ::sSensorOffsetY, 0.0f));
+    MR::addHitSensorMapObj(this, "body", 0x10, ::sSensorRadius, Vec3f(0.0f, ::sSensorOffsetY, 0.0f));
     MR::setClippingTypeSphere(this, ::sClippingRadius);
     initNerve(GET_NERVE(SpringJetWater, HostTypeWait));
     MR::connectToSceneMapObjMovement(this);

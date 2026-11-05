@@ -31,7 +31,7 @@ PrizeRing::~PrizeRing() {
 void PrizeRing::init(const JMapInfoIter& rIter) {
     initNerve(GET_NERVE(PrizeRing, PrizeRingStart));
     initHitSensor(1);
-    TVec3f offset;
+    Vec3f offset;
     offset.x = 0.0f;
     offset.y = 0.0f;
     offset.z = 0.0f;

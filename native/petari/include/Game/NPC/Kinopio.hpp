@@ -16,7 +16,7 @@ public:
     virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
 
-    void faceToVector(const TVec3f&, f32);
+    void faceToVector(const Vec3f&, f32);
     void faceToPlayer(f32);
     void faceToDefault(f32);
     void setDefaultNerve();
@@ -44,7 +44,7 @@ public:
     s32 mBehavior;
     s32 mAppearBehavior;
     s32 mGoodsIndex;
-    TQuat4f _16C;
+    Quat4f _16C;
     MapObjConnector* _17C;
     TakeOutStar* mTakeOutStar;
     bool mIsSpawnPowerStarMode;

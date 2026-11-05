@@ -30,11 +30,11 @@ void CameraWaterFollow::reset() {
 }
 
 CameraTargetObj* CameraWaterFollow::calc() {
-    TVec3f watchPos;
+    Vec3f watchPos;
     CameraLocalUtil::makeWatchPoint(&watchPos, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
 
-    TVec3f gravUp = -CameraLocalUtil::getTarget(this)->getGravityVector();
-    TVec3f watchFront = watchPos - CameraLocalUtil::getPos(this);
+    Vec3f gravUp = -CameraLocalUtil::getTarget(this)->getGravityVector();
+    Vec3f watchFront = watchPos - CameraLocalUtil::getPos(this);
     f32 camDist = watchFront.length();
 
     f32 dist;
@@ -51,13 +51,13 @@ CameraTargetObj* CameraWaterFollow::calc() {
     }
     MR::normalize(&watchFront);
 
-    TVec3f camUp = CameraLocalUtil::getUpVec(this);
-    TVec3f camFront = CameraLocalUtil::getWatchPos(this) - CameraLocalUtil::getPos(this);
+    Vec3f camUp = CameraLocalUtil::getUpVec(this);
+    Vec3f camFront = CameraLocalUtil::getWatchPos(this) - CameraLocalUtil::getPos(this);
     MR::normalize(&camFront);
-    TQuat4f rotFront;
+    Quat4f rotFront;
     rotFront.setRotate(camFront, watchFront);
 
-    TVec3f front, up, side;
+    Vec3f front, up, side;
     front.set(watchFront);
     up.set(camUp);
     rotFront.transform(up);
@@ -69,7 +69,7 @@ CameraTargetObj* CameraWaterFollow::calc() {
     side.cross(up, front);
 
     if (gravUp.dot(up) < 0.0f) {
-        TQuat4f upsideDownRot;
+        Quat4f upsideDownRot;
         if (front.dot(gravUp) < 0.0f) {
             upsideDownRot.setRotate(front, -gravUp);
         } else {
@@ -80,7 +80,7 @@ CameraTargetObj* CameraWaterFollow::calc() {
         upsideDownRot.transform(up);
     }
 
-    TVec3f gravSide = CameraLocalUtil::getTarget(this)->getSideVec();
+    Vec3f gravSide = CameraLocalUtil::getTarget(this)->getSideVec();
     gravSide -= gravUp * gravUp.dot(gravSide);
     MR::normalize(&gravSide);
 
@@ -119,12 +119,12 @@ CameraTargetObj* CameraWaterFollow::calc() {
         }
     }
 
-    TQuat4f rot;
+    Quat4f rot;
     rot.setRotate(side, gravSide, mSideBlendRate);
     rot.transform(front);
     rot.transform(up);
 
-    TVec3f pos = watchPos - front * dist;
+    Vec3f pos = watchPos - front * dist;
     f32 lastMoveLen = CameraLocalUtil::getTarget(this)->getLastMove().length();
     if (lastMoveLen > ::sLastMoveLen) {
         mLastMoveDir.set(CameraLocalUtil::getTarget(this)->getLastMove());

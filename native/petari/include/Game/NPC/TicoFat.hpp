@@ -70,8 +70,8 @@ public:
     u8 _173;
     s32 _174;
     s32 _178;
-    TPos3f _17C;
-    TPos3f _1AC;
+    Pos3f _17C;
+    Pos3f _1AC;
     s32 _1DC;
     s32 _1E0;
     s32 _1E4;

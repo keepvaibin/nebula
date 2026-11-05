@@ -7,7 +7,7 @@ const f32 sSinRate2 = 0.003f;
 const f32 sHeight0 = 40.0f;
 const f32 sHeight1 = 30.0f;
 
-OceanBowlPoint::OceanBowlPoint(const TVec3f& rVec) : mVertexPosition(rVec), mPosition(rVec) {
+OceanBowlPoint::OceanBowlPoint(const Vec3f& rVec) : mVertexPosition(rVec), mPosition(rVec) {
     mAlpha = 255;
     mWaveScale = 1.0f;
 }
@@ -19,7 +19,7 @@ void OceanBowlPoint::updatePos(f32 a, f32 b) {
     f32 z = mPosition.z;
     f32 x = mPosition.x;
     f32 height = mWaveScale * calcHeightStatic(a, b, x, z);
-    mVertexPosition.set(TVec3f(0.0f, 1.0f, 0.0f));
+    mVertexPosition.set(Vec3f(0.0f, 1.0f, 0.0f));
     mVertexPosition *= height;
     mVertexPosition.add(mPosition);
 }
@@ -28,7 +28,7 @@ f32 OceanBowlPoint::calcHeightStatic(f32 a, f32 b, f32 c, f32 d) {
     return (MR::sin((a + (sSinRate1 * c)) + (sSinRate2 * d)) * sHeight1) + (MR::sin(b + (sSinRate0 * d)) * sHeight0);
 }
 
-void OceanBowlPoint::reset(const TVec3f& rVec, f32 f) {
+void OceanBowlPoint::reset(const Vec3f& rVec, f32 f) {
     mPosition.set(rVec);
     mVertexPosition.set(mPosition);
     mWaveScale = f;

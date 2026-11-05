@@ -68,7 +68,7 @@ void TreasureBoxCracked::init(const JMapInfoIter& rIter) {
 
     MR::connectToSceneMapObjStrongLight(this);
     initHitSensor(1);
-    MR::addHitSensor(this, "body", ATYPE_KILLER_TARGET_MAPOBJ, 8, 200.0f, TVec3f(0.0f, 50.0f, 0.0f));
+    MR::addHitSensor(this, "body", ATYPE_KILLER_TARGET_MAPOBJ, 8, 200.0f, Vec3f(0.0f, 50.0f, 0.0f));
     mTopMtx.set(MR::getJointMtx(this, "Top"));
     MR::initCollisionParts(this, "Top", getSensor("body"), mTopMtx.toMtxPtr());
     mBoxCollider = MR::createCollisionPartsFromLiveActor(this, "Box", getSensor("body"), MR::CollisionScaleType_Unk2);
@@ -107,14 +107,14 @@ void TreasureBoxCracked::exeWait() {
 }
 
 void TreasureBoxCracked::exeOpen() {
-    TVec3f up;
+    Vec3f up;
     MR::calcUpVec(&up, this);
 
     if (MR::isFirstStep(this)) {
         MR::startBck(this, "Open");
         MR::emitEffect(this, "Open");
 
-        if (MR::isInWater(this, TVec3f(0.0f, 0.0f, 0.0f))) {
+        if (MR::isInWater(this, Vec3f(0.0f, 0.0f, 0.0f))) {
             MR::startSound(this, "SE_OJ_TREASURE_BOX_OPEN_W");
         } else {
             MR::startSound(this, "SE_OJ_TREASURE_BOX_OPEN");
@@ -164,11 +164,11 @@ void TreasureBoxCracked::exeOpen() {
 }
 
 void TreasureBoxCracked::exeItemBound() {
-    TVec3f up;
+    Vec3f up;
     MR::calcUpVec(&up, this);
     f32 amplitude = ::sBoundSpeedMax - (::sBoundSpeedMax / ::sBoundTime) * getNerveStep();
     f32 height = amplitude * MR::sinDegree((720.0f / ::sBoundTime) * getNerveStep());
-    TVec3f position;
+    Vec3f position;
     position.scaleAdd(height, up, mItemTargetPos);
     mItem->mPosition.set(position);
 
@@ -207,7 +207,7 @@ void TreasureBoxCracked::exeAlwaysOpen() {
         MR::invalidateHitSensors(this);
         MR::startBck(this, "Open");
         MR::setBckFrameAndStop(this, MR::getBckCtrl(this)->getEnd());
-        TVec3f position;
+        Vec3f position;
         NebulaMtxMultVec(getBaseMtx(), &::sTopOpenEndOffset, &position);
         mTopMtx.setTrans(position);
     }
@@ -219,9 +219,9 @@ void TreasureBoxCracked::control() {
 
         if (!(frame >= ::sStepForCollisionMove)) {
             f32 rate = frame / ::sStepForCollisionMove;
-            TVec3f offset;
-            MR::vecBlend(TVec3f(::sTopOpenStartOffset), TVec3f(::sTopOpenEndOffset), &offset, rate);
-            TVec3f position;
+            Vec3f offset;
+            MR::vecBlend(Vec3f(::sTopOpenStartOffset), Vec3f(::sTopOpenEndOffset), &offset, rate);
+            Vec3f position;
             NebulaMtxMultVec(getBaseMtx(), &offset, &position);
             mTopMtx.setTrans(position);
 
@@ -234,10 +234,10 @@ void TreasureBoxCracked::control() {
 
 void TreasureBoxCracked::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     if (isHalfOpen() && MR::isSensorPlayerOrRide(pReceiver)) {
-        TVec3f direction;
+        Vec3f direction;
         direction.sub(pReceiver->mPosition, pSender->mPosition);
         MR::normalize(&direction);
-        TVec3f front;
+        Vec3f front;
         MR::calcFrontVec(&front, this);
 
         if (front.dot(direction) < 0.0f && !MR::isPlayerDamaging()) {
@@ -402,7 +402,7 @@ LiveActor* TreasureBoxCracked::initKinokoOneUp(const JMapInfoIter& rIter) {
 bool TreasureBoxCracked::checkItemPos() {
     f32 distance = mPosition.distance(mItem->mPosition);
     f32 targetDistance = mPosition.distance(mItemTargetPos);
-    TVec3f up;
+    Vec3f up;
     MR::calcUpVec(&up, this);
 
     if (mItemVelocity.dot(up) >= 0.0f) {

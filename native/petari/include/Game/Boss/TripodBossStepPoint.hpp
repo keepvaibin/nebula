@@ -11,13 +11,13 @@ public:
     virtual void init(const JMapInfoIter&);
     virtual void initAfterPlacement();
 
-    void setStepPosition(const TVec3f&);
-    void setStepNormal(const TVec3f&);
-    void setStepFront(const TVec3f&);
+    void setStepPosition(const Vec3f&);
+    void setStepNormal(const Vec3f&);
+    void setStepFront(const Vec3f&);
 
-    TVec3f mStepPosition;
-    TVec3f mStepNormal;
-    TVec3f mStepFront;
+    Vec3f mStepPosition;
+    Vec3f mStepNormal;
+    Vec3f mStepFront;
     s32 mLeg;
     s32 mSequencePriority;
     s32 mArg3;

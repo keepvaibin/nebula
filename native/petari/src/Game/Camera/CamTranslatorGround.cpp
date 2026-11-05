@@ -2,7 +2,7 @@
 #include "Game/Camera/CameraParamChunk.hpp"
 
 void CamTranslatorGround::setParam(const CameraParamChunk* pChunk) {
-    mCamera->setParam(TVec2f(pChunk->mGeneralParam->mAngleA, pChunk->mGeneralParam->mAngleB), pChunk->mGeneralParam->mDist,
+    mCamera->setParam(Vec2f(pChunk->mGeneralParam->mAngleA, pChunk->mGeneralParam->mAngleB), pChunk->mGeneralParam->mDist,
                       pChunk->mGeneralParam->mUp);
 }
 

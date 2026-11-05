@@ -3,7 +3,7 @@
 #include "Game/NPC/NPCActor.hpp"
 #include "Game/NPC/NPCActorItem.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 template MR::Vector< MR::FixedArray< NPCParameterBase*, 48 > >::~Vector();
 template MR::Vector< MR::FixedArray< NPCParameterBase*, 48 > >::Vector();
@@ -23,7 +23,7 @@ void NPCParameterBool::read(JMapInfo* pInfo, s32 a2) {
     pInfo->getValue(a2, mName, _8);
 }
 
-NPCParameterV3f::NPCParameterV3f(const char* pName, TVec3f* pVec, f32 f1, f32 f2) : NPCParameterBase(pName), _8(pVec), _C(f1), _10(f2) {
+NPCParameterV3f::NPCParameterV3f(const char* pName, Vec3f* pVec, f32 f1, f32 f2) : NPCParameterBase(pName), _8(pVec), _C(f1), _10(f2) {
 }
 
 void NPCParameterV3f::read(JMapInfo* pInfo, s32 a2) {

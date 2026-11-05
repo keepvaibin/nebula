@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/MapObj/MapPartsFunction.hpp"
-#include <JSystem/JGeometry.hpp>
+#include <nebula_geometry.hpp>
 
 class MapPartsRailPointPassChecker;
 
@@ -52,7 +52,7 @@ public:
     s32 mMoveConditionType;
     s32 mMoveStopType;
     s32 mSignMotionType;
-    TVec3f _28;
+    Vec3f _28;
     f32 _34;
     s32 mStopTime;
     f32 mSpeed;

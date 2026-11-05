@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class PartsModel;
 
@@ -22,12 +22,12 @@ public:
     bool tryStartAssemble();
     bool tryStartReturn();
 
-    TPos3f _8C;
-    TPos3f _BC;
-    TPos3f _EC;
+    Pos3f _8C;
+    Pos3f _BC;
+    Pos3f _EC;
     s32 mObjArg7;
     f32 mPlayerSearchDistance;
-    TVec3f _124;
+    Vec3f _124;
     f32 mFloatRotateSpeed;
     s32 mTimer;
     PartsModel* mBloomModel;

@@ -1,27 +1,27 @@
 #pragma once
 
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class SpiderThreadPoint {
 public:
-    SpiderThreadPoint(const TVec3f&, f32);
+    SpiderThreadPoint(const Vec3f&, f32);
 
     bool updateSpring();
-    void updateDrawVec(const TVec3f*, const TVec3f*);
+    void updateDrawVec(const Vec3f*, const Vec3f*);
     void updateWind(f32);
     void updatePos();
-    void restrict(const TVec3f*, f32);
-    void updateHang(const TVec3f&);
-    bool tryTouch(f32, const TVec3f&, s32);
-    bool tryPush(const TVec3f&, f32);
+    void restrict(const Vec3f*, f32);
+    void updateHang(const Vec3f&);
+    bool tryTouch(f32, const Vec3f&, s32);
+    bool tryPush(const Vec3f&, f32);
     void startThreadLevelSound();
 
-    inline void setPos(const TVec3f& rPos) {
+    inline void setPos(const Vec3f& rPos) {
         mPosition.set(rPos);
         mVelocity.zero();
     }
 
-    inline f32 getPosZDiff(const TVec3f& rPos) const {
+    inline f32 getPosZDiff(const Vec3f& rPos) const {
         return rPos.z - mPosition.z;
     }
 
@@ -30,12 +30,12 @@ public:
         return static_cast< s16 >((s32)(a)) << 16 | (static_cast< s16 >((s32)(b)) & 0xFFFF);
     }
 
-    TVec3f mBasePos;
-    TVec3f mPosition;
-    TVec3f mVelocity;
+    Vec3f mBasePos;
+    Vec3f mPosition;
+    Vec3f mVelocity;
     f32 mFriction;
-    TVec3f mUp;
-    TVec3f mFront;
+    Vec3f mUp;
+    Vec3f mFront;
     s32 mWindStartTime;
     s32 mWindTime;
     f32 mPrevStretchDist;

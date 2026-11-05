@@ -12,7 +12,7 @@
 #include <nebula_math.h>
 
 void Mario::mainMove() {
-    TVec3f vec1;
+    Vec3f vec1;
     MR::setNan(vec1);
 
     bool a1 = false;
@@ -333,7 +333,7 @@ void Mario::mainMove() {
 
     if (_3D0 == 0) {
         if (mMovementStates._4) {
-            TVec3f* frontVec = &mFrontVec;
+            Vec3f* frontVec = &mFrontVec;
             if (MR::diffAngleAbsHorizontal(getWorldPadDir(), *frontVec, *getGravityVec()) > MR::pi() * 90.0f / 180.0f) {
                 stopAnimation("\203\136\201\133\203\223\203\165\203\214\201\133\203\114" /* ターンブレーキ */);
                 setFrontVecKeepUp(-*frontVec);
@@ -388,8 +388,8 @@ void Mario::mainMove() {
     bool a4;
 
     if (!mMovementStates._4) {
-        TVec3f cross(_238.cross(_22C));
-        TVec3f stick;
+        Vec3f cross(_238.cross(_22C));
+        Vec3f stick;
         mActor->getStickValue(&stick.x, &stick.y);
         stick.z = 0.0f;
         NebulaVecCrossProduct(&_250, &stick, &cross);
@@ -409,9 +409,9 @@ void Mario::mainMove() {
 
             if (MR::isNearZero(_244) && a4) {
                 bool isEqual = false;
-                bool equalXY = JGeometry::TUtil< f32 >::epsilonEquals(_250.x, stick.x, JGeometry::TUtil< f32 >::epsilon()) &&
-                               JGeometry::TUtil< f32 >::epsilonEquals(_250.y, stick.y, JGeometry::TUtil< f32 >::epsilon());
-                if (equalXY && JGeometry::TUtil< f32 >::epsilonEquals(_250.z, stick.z, JGeometry::TUtil< f32 >::epsilon())) {
+                bool equalXY = FloatUtil::epsilonEquals(_250.x, stick.x, FloatUtil::epsilon()) &&
+                               FloatUtil::epsilonEquals(_250.y, stick.y, FloatUtil::epsilon());
+                if (equalXY && FloatUtil::epsilonEquals(_250.z, stick.z, FloatUtil::epsilon())) {
                     isEqual = true;
                 }
 
@@ -431,7 +431,7 @@ void Mario::mainMove() {
             }
 
             if (MR::isInRange(MR::diffAngleAbs(_214, _22C), 0.0f, 0.707f)) {
-                TVec3f cross2(_214.cross((_22C)));
+                Vec3f cross2(_214.cross((_22C)));
 
                 if (_274 != 0) {
                     if (cross2.dot(mHeadVec) > 0.0f) {
@@ -446,7 +446,7 @@ void Mario::mainMove() {
         _250 = stick;
 
         if (mMovementStates.turning) {
-            TVec3f cross3(_214.cross((_22C)));
+            Vec3f cross3(_214.cross((_22C)));
 
             if (cross3.dot(_3D8) < 0.0f) {
                 if (!(cross.dot(_244) > 0.0f) && !(_214.dot(_22C) < 0.0f)) {
@@ -491,7 +491,7 @@ void Mario::mainMove() {
             }
         }
 
-        TVec3f vec2;
+        Vec3f vec2;
 
         if (turnControl) {
             if (mMovementStates._37) {
@@ -549,7 +549,7 @@ void Mario::mainMove() {
                     }
 
                     if (diffAngleAbs > 2.5f && _3D4 == mActor->getConst().getTable()->mWeakTurnTime && !mDrawStates._D) {
-                        TVec3f cross3(_214.cross(vec2));
+                        Vec3f cross3(_214.cross(vec2));
                         _274 = cross3.dot(mHeadVec) > 0.0f;
                         _10._C = true;
                     }
@@ -573,7 +573,7 @@ void Mario::mainMove() {
         }
     } else {
         if (_3D0 == 0) {
-            TVec3f blendSphere;
+            Vec3f blendSphere;
             if (!MR::vecBlendSphere(_214, _22C, &blendSphere, turnAngleSpeed)) {
                 MR::vecRotAxis(_214, _22C, mHeadVec, &blendSphere, 22.5f * MR::pi() / 180.0f);
             }
@@ -603,11 +603,11 @@ void Mario::mainMove() {
         }
     }
 
-    TVec3f vec2;
+    Vec3f vec2;
 
     if (mMovementStates._34) {
-        TVec3f vec3(mFrontVec);
-        TVec3f vec4(mFrontVec);
+        Vec3f vec3(mFrontVec);
+        Vec3f vec4(mFrontVec);
         if (!MR::isNearZero(_16C)) {
             vec4 = _16C;
         }
@@ -644,7 +644,7 @@ void Mario::mainMove() {
 
     if (mMovementStates._32 && _4E0 > 120.0f) {
         if (mVelocity.dot(*mFrontWallTriangle->getNormal(0)) < 0.0f) {
-            TVec3f vec4;
+            Vec3f vec4;
             MR::vecKillElement(mPosition - _4E8, *mFrontWallTriangle->getNormal(0), &vec4);
             MR::vecKillElement(vec4, *getGravityVec(), &vec4);
             MR::vecKillElement(vec4, mFrontVec, &vec4);
@@ -661,12 +661,12 @@ void Mario::mainMove() {
         }
     }
 
-    TVec3f newVelocity(mVelocity);
+    Vec3f newVelocity(mVelocity);
     f32 speed = newVelocity.length();
 
     MR::normalizeOrZero(&newVelocity);
 
-    TVec3f cross4(_368.cross(newVelocity));
+    Vec3f cross4(_368.cross(newVelocity));
     MR::normalizeOrZero(&cross4);
 
     NebulaVecCrossProduct(&cross4, &_368, &newVelocity);
@@ -872,8 +872,8 @@ f32 Mario::decideInertiaOnSlip(f32 speed) {
     return inertia;
 }
 
-void Mario::calcShadowDir(const TVec3f& rInput, TVec3f* pShadowDir) {
-    TVec3f direction;
+void Mario::calcShadowDir(const Vec3f& rInput, Vec3f* pShadowDir) {
+    Vec3f direction;
     direction = rInput;
     if (!MR::isNormalize(direction)) {
         MR::normalizeOrZero(&direction);
@@ -884,19 +884,19 @@ void Mario::calcShadowDir(const TVec3f& rInput, TVec3f* pShadowDir) {
         return;
     }
 
-    TVec3f normal = -*getGravityVec();
+    Vec3f normal = -*getGravityVec();
     f32 dot = direction.dot(normal);
     direction.dot(mHeadVec);
     if (MR::abs(dot) > MR::abs(direction.dot(_368))) {
         normal = _368;
     }
 
-    TVec3f side = normal.cross(direction);
+    Vec3f side = normal.cross(direction);
     pShadowDir->cross(side, normal);
     MR::normalizeOrZero(pShadowDir);
 }
 
-bool Mario::retainMoveDir(f32 stickX, f32 stickY, TVec3f* pMoveDir) {
+bool Mario::retainMoveDir(f32 stickX, f32 stickY, Vec3f* pMoveDir) {
     f32 angle = MR::atan2(stickY, stickX);
     f32 difference = MR::diffAngleAbs(angle, _2B4);
     if (isAnimationRun("\202\273\202\314\217\352\221\253\223\245\202\335" /* その場足踏み */)) {
@@ -982,7 +982,7 @@ bool Mario::retainMoveDir(f32 stickX, f32 stickY, TVec3f* pMoveDir) {
     return false;
 }
 
-void Mario::calcMoveDir(float stickX, float stickY, TVec3f* pMoveDir, bool isDisableMove) {
+void Mario::calcMoveDir(float stickX, float stickY, Vec3f* pMoveDir, bool isDisableMove) {
     if (mMovementStates._37) {
         calcDir2D(stickX, stickY, pMoveDir);
     } else if (_10._15) {
@@ -990,14 +990,14 @@ void Mario::calcMoveDir(float stickX, float stickY, TVec3f* pMoveDir, bool isDis
     } else if (mMovementStates._3A) {
         calcMoveDir25D(stickX, stickY, pMoveDir);
     } else if (!isDisableMove || !retainMoveDir(stickX, stickY, pMoveDir)) {
-        const TVec3f& screenXDir = getCamDirX();
-        const TVec3f& screenYDir = getCamDirY();
-        TVec3f screenZDir = -getCamDirZ();
-        TVec3f groundXDir;
-        TVec3f groundYDir;
-        TVec3f groundYDirOrtho;
+        const Vec3f& screenXDir = getCamDirX();
+        const Vec3f& screenYDir = getCamDirY();
+        Vec3f screenZDir = -getCamDirZ();
+        Vec3f groundXDir;
+        Vec3f groundYDir;
+        Vec3f groundYDirOrtho;
 
-        TVec3f marioUpDir = -*getGravityVec();
+        Vec3f marioUpDir = -*getGravityVec();
         if (!MR::isNearZero(marioUpDir)) {
             float dot = _398.dot(marioUpDir);
             if (dot <= 0.0f) {
@@ -1046,7 +1046,7 @@ void Mario::calcMoveDir(float stickX, float stickY, TVec3f* pMoveDir, bool isDis
         *pMoveDir = groundXDir * stickX - groundYDir * stickY;
 
         if (_10._13) {
-            TVec3f radialDir = mPosition - _6F4;
+            Vec3f radialDir = mPosition - _6F4;
             MR::vecKillElement(radialDir, _700, &radialDir);
             MR::normalizeOrZero(&radialDir);
             MR::vecKillElement(*pMoveDir, _700, pMoveDir);
@@ -1079,10 +1079,10 @@ bool Mario::checkLockOnHoming() {
 }
 
 void Mario::doLockOnHoming() {
-    TVec3f direction;
+    Vec3f direction;
     direction.set(mActor->_470->mPosition - mPosition);
     MR::normalize(&direction);
-    TVec3f shadowDir;
+    Vec3f shadowDir;
     calcShadowDir(direction, &shadowDir);
     if (MR::diffAngleAbsHorizontal(mFrontVec, direction, mHeadVec) >= 0.05235988f) {
         if (getAnimator()->isAnimationStop()) {
@@ -1097,7 +1097,7 @@ void Mario::doLockOnHoming() {
 
 void Mario::fixPositionInTower() {
     if (_10._13) {
-        TVec3f offset = mPosition - _6F4;
+        Vec3f offset = mPosition - _6F4;
         f32 height = MR::vecKillElement(offset, _700, &offset);
         offset.setLength(_718 - 200.0f);
         offset += _700 * height;

@@ -20,7 +20,7 @@ void StarCounter::init(const JMapInfoIter& rIter) {
     initLayoutManager("StarCounter", 2);
     MR::createAndAddPaneCtrl(this, "Counter", 1);
 
-    mLayoutAppearer = new CounterLayoutAppearer(this, TVec2f(-50.0f, 0.0f));
+    mLayoutAppearer = new CounterLayoutAppearer(this, Vec2f(-50.0f, 0.0f));
     mPaneRumbler = new CountUpPaneRumbler(this, "Counter");
 
     MR::connectToSceneLayout(this);
@@ -28,7 +28,7 @@ void StarCounter::init(const JMapInfoIter& rIter) {
 }
 
 void StarCounter::appear() {
-    mLayoutAppearer->appear(TVec2f(0.0f, 0.0f));
+    mLayoutAppearer->appear(Vec2f(0.0f, 0.0f));
     mPaneRumbler->reset();
     MR::startAnim(this, "Wait", 1);
 

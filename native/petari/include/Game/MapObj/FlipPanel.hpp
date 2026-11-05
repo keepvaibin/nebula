@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/MapObj/MapObjActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 template < typename T >
 class JointControlDelegator;
@@ -23,7 +23,7 @@ public:
     void exeWait();
     void exeEndPrepare();
     void exeEnd();
-    bool calcJointMove(TPos3f*, const JointControllerInfo&);
+    bool calcJointMove(Pos3f*, const JointControllerInfo&);
     bool checkPlayerOnTop();
 
     JointControlDelegator< FlipPanel >* mDelegator;

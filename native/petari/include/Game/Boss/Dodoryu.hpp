@@ -2,7 +2,7 @@
 
 #include "Game/LiveActor/ModelObj.hpp"
 #include "Game/Util/Array.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class AnimScaleController;
 class AreaObj;
@@ -39,18 +39,18 @@ public:
 
     void snapToGround();
     bool snapToWall();
-    void setMtx(const TPos3f&);
+    void setMtx(const Pos3f&);
     void notifyOnSwitchA();
     void nextState();
     void pauseOff();
     void startPlayerCenterCamera();
     void endPlayerCenterCamera();
-    void getPlayerResetMtx(TPos3f*, u32) const;
+    void getPlayerResetMtx(Pos3f*, u32) const;
     bool checkWallWithVelocity();
     void reactJumpOutCommon() const;
     void startSpinOutCamera();
     void endSpinOutCamera();
-    bool keepOffFromClosedArea(TVec3f*);
+    bool keepOffFromClosedArea(Vec3f*);
     void tryRumblePad();
     void invalidateEyeSensor();
     void validateEyeSensor();
@@ -74,20 +74,20 @@ public:
     void appearBank();
     void leaveRabbit();
     void resetRabbit();
-    void calcRabbitDir(TVec3f*) const;
+    void calcRabbitDir(Vec3f*) const;
     void displayRabbitMessage();
     void initHitSensor();
     void initSwitch(const JMapInfoIter&);
     void createMogucchiHill();
     void createDodoryuBank();
-    void turnUpVecTo(const TVec3f&);
+    void turnUpVecTo(const Vec3f&);
     void checkHipDrop();
     void initState();
     void updateRumblePad();
     void updateCameraTarget();
 
-    TPos3f mBaseMtx;
-    TVec3f _BC;
+    Pos3f mBaseMtx;
+    Vec3f _BC;
     u8 _C8;
     u32 _CC;
     MR::Vector< MR::FixedArray< DodoryuStateBase*, 16 > > mState;
@@ -96,8 +96,8 @@ public:
     DodoryuLeadHill* mLeadHill;
     DodoryuBank* mBank;
     DodoryuRabbit* mRabbit;
-    TVec3f _128;
-    TVec3f _134;
+    Vec3f _128;
+    Vec3f _134;
     AreaObj* mClosedAreaObj;
     u8 _144;
     CameraTargetMtx* _148;
@@ -116,7 +116,7 @@ public:
 
     void exeAppear();
 
-    TMtx34f _90;
+    Mtx34f _90;
 };
 
 class DodoryuRabbit : public ModelObj {
@@ -143,7 +143,7 @@ public:
     void exePleasure();
 
     Dodoryu* mHost;
-    TPos3f _94;
+    Pos3f _94;
     f32 _C4;
     TalkMessageCtrl* mTalkCtrl;
     s32 _CC;
@@ -151,7 +151,7 @@ public:
     JointRumbler* _D4;
     JointRumbler* _D8;
     bool mIsDisplayMessage;
-    TPos3f _E0;
+    Pos3f _E0;
 };
 
 class DodoryuLeadHill : public LiveActor {
@@ -163,7 +163,7 @@ public:
     virtual void calcAndSetBaseMtx();
 
     void initJoint();
-    bool calcJoint(TPos3f*, const JointControllerInfo&);
+    bool calcJoint(Pos3f*, const JointControllerInfo&);
 
     MtxPtr mHostBaseMtx;
     f32 _90;

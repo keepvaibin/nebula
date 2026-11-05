@@ -55,7 +55,7 @@ public:
     PartsModel* mAirBubble;
     const char* mChipName;
     LiveActor* mHost;
-    TVec3f mClippingRange;
+    Vec3f mClippingRange;
     s32 mGroupID;
     s32 mChipType;
     bool _B4;

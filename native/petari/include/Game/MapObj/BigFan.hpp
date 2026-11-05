@@ -12,7 +12,7 @@ public:
     virtual void control();
 
     void initWindModel();
-    void calcWindInfo(TVec3f*, const TVec3f&);
+    void calcWindInfo(Vec3f*, const Vec3f&);
     void start();
 
     void exeStop();
@@ -22,7 +22,7 @@ public:
     bool isStartOrWait();
 
     ModelObj* mWindModel;
-    TVec3f mClippingCenter;
+    Vec3f mClippingCenter;
     f32 mWindLength;
     f32 mWindSpeed;
     bool mIsTeresaGalaxy;

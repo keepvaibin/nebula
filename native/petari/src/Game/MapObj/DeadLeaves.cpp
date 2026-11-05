@@ -17,7 +17,7 @@ void DeadLeaves::init(const JMapInfoIter& rIter) {
     MapObjActorInitInfo info;
     MapObjActorUtil::setupInitInfoSimpleMapObj(&info);
     info.setupHitSensor();
-    TVec3f sensor;
+    Vec3f sensor;
     sensor.x = 0.0f;
     sensor.y = 30.0f;
     sensor.z = 0.0f;

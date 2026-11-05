@@ -13,11 +13,11 @@ void CameraDead::reset() {
     mFovy = CameraLocalUtil::getFovy(mCameraMan);
     CameraLocalUtil::setWatchPos(this, CameraLocalUtil::getWatchPos(mCameraMan));
     CameraLocalUtil::setPos(this, CameraLocalUtil::getPos(mCameraMan));
-    TVec3f up = CameraLocalUtil::getUpVec(mCameraMan);
-    TVec3f front = CameraLocalUtil::getWatchPos(this) - CameraLocalUtil::getPos(this);
+    Vec3f up = CameraLocalUtil::getUpVec(mCameraMan);
+    Vec3f front = CameraLocalUtil::getWatchPos(this) - CameraLocalUtil::getPos(this);
     if (!MR::isNearZero(front)) {
         MR::normalize(&front);
-        TQuat4f rot;
+        Quat4f rot;
         rot.setRotate(front, -CameraLocalUtil::getRoll(mCameraMan));
         rot.transform(up);
     }
@@ -27,7 +27,7 @@ void CameraDead::reset() {
 
 CameraTargetObj* CameraDead::calc() {
     if (mDeadFrame <= mDeadTime) {
-        TVec3f watchPoint;
+        Vec3f watchPoint;
         CameraLocalUtil::makeWatchPointImm(&watchPoint, this, CameraLocalUtil::getTarget(this));
 
         if (mCameraType != CameraType_FixedPos) {

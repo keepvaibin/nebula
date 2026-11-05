@@ -3,7 +3,7 @@
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 
-bool WalkerStateFunction::isInSightPlayer(const LiveActor* pActor, const TVec3f& rDirection, const WalkerStateParam* pStateParam) {
+bool WalkerStateFunction::isInSightPlayer(const LiveActor* pActor, const Vec3f& rDirection, const WalkerStateParam* pStateParam) {
     return MR::isInSightFanPlayer(pActor, rDirection, pStateParam->mPlayerNearDistance, pStateParam->mPlayerSightFanDegreeH,
                                   pStateParam->mPlayerSightFanDegreeV);
 }

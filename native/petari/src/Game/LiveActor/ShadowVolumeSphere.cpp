@@ -32,7 +32,7 @@ void ShadowVolumeSphere::loadModelDrawMtx() const {
         radius *= controller->getHost()->mScale.x;
     }
 
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.identity();
     mtx.mMtx[0][0] = radius;
     mtx.mMtx[0][1] = 0.0f;
@@ -43,7 +43,7 @@ void ShadowVolumeSphere::loadModelDrawMtx() const {
     mtx.mMtx[2][0] = 0.0f;
     mtx.mMtx[2][1] = 0.0f;
     mtx.mMtx[2][2] = radius;
-    TVec3f position;
+    Vec3f position;
     controller->getProjectionPos(&position);
     mtx.setTrans(position);
 

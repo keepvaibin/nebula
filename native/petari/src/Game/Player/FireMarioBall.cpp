@@ -10,7 +10,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <JSystem/JMath/JMATrigonometric.hpp>
+#include <nebula_geometry.hpp>
 
 namespace {
     f32 cSensorRadius = 80.0f;
@@ -61,7 +61,7 @@ void FireMarioBall::kill() {
     LiveActor::kill();
 }
 
-void FireMarioBall::appearAndThrow(const TVec3f& v1, const TVec3f& v2) {
+void FireMarioBall::appearAndThrow(const Vec3f& v1, const Vec3f& v2) {
     mPosition.set(v1);
     mVelocity.set(v2 * ::cThrowSpeed);
     mRotation.set< f32 >(0.0f, MR::toDegree(MR::atan2(mVelocity.x, mVelocity.z)), 0.0f);
@@ -88,7 +88,7 @@ bool FireMarioBall::attackFire(HitSensor* pReceiver) {
 
 void FireMarioBall::initSensor() {
     initHitSensor(1);
-    MR::addHitSensorEnemy(this, "body", 8, ::cSensorRadius, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemy(this, "body", 8, ::cSensorRadius, Vec3f(0.0f, 0.0f, 0.0f));
 }
 
 HitSensor* FireMarioBall::isBindedAny() const {
@@ -142,15 +142,15 @@ void FireMarioBall::exeThrow() {
     }
     if (MR::isBindedGround(this)) {
         MR::startSound(this, "SE_OJ_MARIO_FIRE_BALL_BOUND");
-        const TVec3f* v1 = MR::getGroundNormal(this);
+        const Vec3f* v1 = MR::getGroundNormal(this);
         mVelocity += -*v1 * MR::vecKillElement(mVelocity, *v1, &mVelocity) * ::cBoundReduction;
 
     } else if (MR::isBindedRoof(this)) {
         MR::startSound(this, "SE_OJ_MARIO_FIRE_BALL_BOUND");
-        const TVec3f* v2 = MR::getRoofNormal(this);
+        const Vec3f* v2 = MR::getRoofNormal(this);
         mVelocity += -*v2 * MR::vecKillElement(mVelocity, *v2, &mVelocity) * ::cBoundReduction;
     } else {
-        TVec3f grav;
+        Vec3f grav;
         MR::calcGravityVector(this, &grav, nullptr, 0);
         mVelocity += grav * ::cGravityAcc;
     }

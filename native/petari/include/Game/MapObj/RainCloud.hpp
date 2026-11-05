@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class LodCtrl;
 class MapPartsRailMover;
@@ -35,11 +35,11 @@ public:
     static void makeArchiveList(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter);
 
     ModelObj* mCloudCylinder;
-    TPos3f mRainCylinderMtx;
-    TPos3f mSplashMtx;
+    Pos3f mRainCylinderMtx;
+    Pos3f mSplashMtx;
     MapPartsRailMover* mRailMover;
     LodCtrl* mLodCtrl;
-    TVec3f mClippingCenter;
+    Vec3f mClippingCenter;
     f32 mRainLength;
     f32 mShadowDropLength;
     bool mIsOnPlayer;

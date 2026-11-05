@@ -48,8 +48,8 @@ public:
     void appearControlPose();
     void appearNonActive();
     void appearFixTimer(s32, s32);
-    void appearMove(const TVec3f&, const TVec3f&, s32, s32);
-    void appearHop(const TVec3f&, const TVec3f&);
+    void appearMove(const Vec3f&, const Vec3f&, s32, s32);
+    void appearHop(const Vec3f&, const Vec3f&);
     bool requestActive();
     bool requestActiveWithGravity();
     bool requestDeactive();
@@ -71,8 +71,8 @@ public:
     CoinHostInfo* mHostInfo;
     FlashingCtrl* mFlashCtrl;
     PartsModel* mAirBubble;
-    TVec3f mDropPosition;
-    TVec3f mClippingRange;
+    Vec3f mDropPosition;
+    Vec3f mClippingRange;
     int _B0;
     s32 mCannotTime;
     bool mIsInWater;

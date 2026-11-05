@@ -58,7 +58,7 @@ namespace {
         MarioActor* pPlayer = MarioAccess::getPlayerActor();
         if (++frames == 300) {
             // The game's own calls, directly.
-            TVec3f at = pPlayer->mPosition;
+            Vec3f at = pPlayer->mPosition;
             at.x += 400.0f;
             const f32 where[3] = {at.x, at.y, at.z};
             game->spawn("Pulse", where);

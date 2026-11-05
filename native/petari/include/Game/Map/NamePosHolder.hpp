@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/NameObj/NameObj.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class JMapLinkInfo;
 
@@ -11,8 +11,8 @@ public:
     NamePosInfo();
 
     const char* mName;         ///< The name of the NamePos.
-    TVec3f mPosition;          ///< The position of the NamePos.
-    TVec3f mRotation;         ///< The rotation of the NamePos.
+    Vec3f mPosition;          ///< The position of the NamePos.
+    Vec3f mRotation;         ///< The rotation of the NamePos.
     JMapLinkInfo* mLinkInfo;  ///< The information to link this NamePos to other objects.
     const NameObj* _20;
 };
@@ -23,7 +23,7 @@ public:
     NamePosHolder();
 
     bool tryRegisterLinkObj(const NameObj*, const JMapInfoIter&);
-    bool find(const NameObj*, const char*, TVec3f*, TVec3f*) const;
+    bool find(const NameObj*, const char*, Vec3f*, Vec3f*) const;
 
     s32 mPosNum;           ///< The number of NamePosInfo instances.
     NamePosInfo* mInfos;  ///< The array of NamePosInfo instances.

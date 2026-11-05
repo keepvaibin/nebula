@@ -1,10 +1,10 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/VectorUtil.hpp"
-#include <JSystem/JMath/JMATrigonometric.hpp>
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
+
 
 namespace MR {
-    void crossToPolar(const TVec3f& rA, const TVec3f& rB, f32* pLength, f32* pAngleX, f32* pAngleY) {
+    void crossToPolar(const Vec3f& rA, const Vec3f& rB, f32* pLength, f32* pAngleX, f32* pAngleY) {
         f32 dx = rB.x - rA.x;
         f32 dy = rB.y - rA.y;
         f32 dz = rB.z - rA.z;
@@ -13,13 +13,13 @@ namespace MR {
         *pAngleY = MR::atan2(dx, dz);
     }
 
-    void polarToCross(const TVec3f& rSrc, TVec3f* pDst, f32 length, f32 angleX, f32 angleY) {
+    void polarToCross(const Vec3f& rSrc, Vec3f* pDst, f32 length, f32 angleX, f32 angleY) {
         pDst->x = rSrc.x + length * MR::cos(angleX) * MR::sin(angleY);
         pDst->y = rSrc.y + length * MR::sin(angleX);
         pDst->z = rSrc.z + length * MR::cos(angleX) * MR::cos(angleY);
     }
 
-    void polarToCrossDegree(const TVec3f& rSrc, TVec3f* pDst, f32 length, f32 angleX, f32 angleY) {
+    void polarToCrossDegree(const Vec3f& rSrc, Vec3f* pDst, f32 length, f32 angleX, f32 angleY) {
         pDst->x = rSrc.x + length * MR::cosDegree(angleX) * MR::sinDegree(angleY);
         pDst->y = rSrc.y + length * MR::sinDegree(angleX);
         pDst->z = rSrc.z + length * MR::cosDegree(angleX) * MR::cosDegree(angleY);
@@ -39,13 +39,13 @@ namespace MR {
         return diff;
     }
 
-    bool diffRadianAroundAxis(f32* pAngle, const TVec3f& rAxis, const TVec3f& rA, const TVec3f& rB) {
-        TVec3f dirA = rA.killElement(rAxis);
+    bool diffRadianAroundAxis(f32* pAngle, const Vec3f& rAxis, const Vec3f& rA, const Vec3f& rB) {
+        Vec3f dirA = rA.killElement(rAxis);
         if (MR::isNearZero(dirA)) {
             return false;
         }
 
-        TVec3f dirB = rB.killElement(rAxis);
+        Vec3f dirB = rB.killElement(rAxis);
         if (MR::isNearZero(dirB)) {
             return false;
         }
@@ -57,7 +57,7 @@ namespace MR {
         return true;
     }
 
-    void projectVecOnPlane(TVec3f* pDst, const TVec3f& rSrc, const TVec3f& rNorm) {
+    void projectVecOnPlane(Vec3f* pDst, const Vec3f& rSrc, const Vec3f& rNorm) {
         pDst->set(rSrc - rNorm * rNorm.dot(rSrc));
     }
 };  // namespace MR

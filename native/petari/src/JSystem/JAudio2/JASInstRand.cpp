@@ -1,8 +1,8 @@
 #include "JSystem/JAudio2/JASInstRand.hpp"
-#include "JSystem/JMath/random.hpp"
+#include <nebula_geometry.hpp>
 
 void JASInstRand::effect(int pitch, int velocity, JASInstParam* pParam) const {
-    static JMath::TRandom_fast_ oRandom(0);
+    static FastRandom oRandom(0);
 
     // TODO: this can be written better
     f32 randVal = (2.0f * oRandom.getRandF() - 0.9999999f);

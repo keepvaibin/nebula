@@ -1,7 +1,7 @@
 #pragma once
 
-#include <JSystem/JGeometry/TMatrix.hpp>
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
+
 #include <NebulaGpu.h>
 
 class J3DModelData;
@@ -24,7 +24,7 @@ namespace MR {
     void clearZBuffer();
     void clearStencil();
     void fillScreenSetup(const NebulaColor8&);
-    void fillScreenArea(const TVec2s&, const TVec2s&);
+    void fillScreenArea(const Vec2s&, const Vec2s&);
     void fillScreen(const NebulaColor8&);
     void setupShadowVolumeDraw();
     // The volume draws' colour (runtime/src/render/materials/flat_color.hlsl), their blending, depth, culling and
@@ -34,12 +34,12 @@ namespace MR {
     void fillSilhouetteColor();
     const JUTTexture* getMarioShadowTex();
     const JUTTexture* getMarioShadowTexForLoad();
-    const TVec3f& getMarioShadowVec();
+    const Vec3f& getMarioShadowVec();
     void setMarioShadowTex(const JUTTexture*);
-    void setMarioShadowVec(const TVec3f&);
+    void setMarioShadowVec(const Vec3f&);
     void loadTexProjectionMtx(u32);
     // The camera's projection to screen texture coordinates (s, t, q from a world position) loadTexProjectionMtx loads.
-    void calcTexProjectionMtx(TPos3f*);
+    void calcTexProjectionMtx(Pos3f*);
     void simpleDraw(J3DModel*, J3DMaterial*);
     void activateGameSceneDraw3D();
     void deactivateGameSceneDraw3D();

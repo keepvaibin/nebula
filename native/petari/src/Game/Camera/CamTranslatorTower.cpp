@@ -5,7 +5,7 @@
 void CamTranslatorTower::setParam(const CameraParamChunk* pChunk) {
     CameraGeneralParam* general = pChunk->mGeneralParam;
 
-    mCamera->setParam(general->mWPoint, general->mAxis, general->mDist, TVec2f(general->mAngleB, MR::pi() * (1.0f - general->mAngleA) * 0.5f));
+    mCamera->setParam(general->mWPoint, general->mAxis, general->mDist, Vec2f(general->mAngleB, MR::pi() * (1.0f - general->mAngleA) * 0.5f));
 }
 
 Camera* CamTranslatorTower::getCamera() const {

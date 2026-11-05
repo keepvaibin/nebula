@@ -21,6 +21,6 @@ public:
 
     FloaterFloatingForceTypeSpring* mFloatingForce;
     const char* mObjectName;
-    TVec3f mFloaterOffset;
+    Vec3f mFloaterOffset;
     s32 mRippleSeCounter;
 };

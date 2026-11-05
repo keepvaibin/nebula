@@ -19,8 +19,8 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
-#include <JSystem/JMath/JMATrigonometric.hpp>
+#include <nebula_geometry.hpp>
+
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include "Game/System/NebulaInput.hpp"
 
@@ -128,7 +128,7 @@ void StarPointerLayout::kill() {
     LayoutActor::kill();
 }
 
-bool StarPointerLayout::startCommandStream(const LiveActor* pActor, const TVec3f* pPos, bool b) {
+bool StarPointerLayout::startCommandStream(const LiveActor* pActor, const Vec3f* pPos, bool b) {
     if (mCommandStream->mWorldPos != nullptr) {
         return false;
     }
@@ -569,7 +569,7 @@ void StarPointerLayout::drawDecoration() const {
 void StarPointerLayout::control() {
     mAppearTime++;
     mNumber->movement();
-    MR::convertPaneLocalPosToScreenPos(&mPosition, MR::getRootPane(this), TVec2f(0.0f, 0.0f));
+    MR::convertPaneLocalPosToScreenPos(&mPosition, MR::getRootPane(this), Vec2f(0.0f, 0.0f));
 
     if (isNerve(GET_NERVE(StarPointerLayout, HostTypeNrvNotConnected))) {
         if (MR::isConnectedInput(mPadChannel)) {
@@ -664,31 +664,31 @@ void StarPointerLayout::control() {
 void StarPointerLayout::setPosition() {
     StarPointerController* controller = StarPointerFunction::getStarPointerDirector()->getStarPointerController(mPadChannel);
     // This frame's position (StarPointerController::updateDpdInfo has run). The 3D targeting keeps the previous frame's, which its depth peek belongs to.
-    TVec2f pos = controller->mInfo.mPos;
+    Vec2f pos = controller->mInfo.mPos;
     setTrans(pos);
     mNumber->setTrans(pos);
 }
 
 void StarPointerLayout::rotateTest() {
-    TVec2f horiz;
+    Vec2f horiz;
     MR::getPlayerInput(mPadChannel)->mPointer->getHorizonVec(&horiz);
     f32 angle = MR::normalizeAbs(MR::toDegree(MR::atan2(horiz.y, horiz.x)), ::sDegreeMin, 180.0f);
 
     if (mPointerKind == StarPointerKind_StarPointer) {
         angle *= ::sRotateMult;
-        TVec3f rotate;
+        Vec3f rotate;
         MR::copyPaneRotate(&rotate, this, "StarPointer");
         MR::setPaneRotate(this, rotate.x, rotate.y, -angle, "StarPointer");
     } else if (mPointerKind == StarPointerKind_StarPointerNozzle && mPadChannel == PLAYER_1) {
-        TVec2f targetScreenPos;
+        Vec2f targetScreenPos;
         MR::calcScreenPosition(&targetScreenPos, StarPointerFunction::getStarPointerDirector()->mNozzleAimPos);
-        TVec2f pointerPos = MR::getStarPointerScreenPositionOrEdge(mPadChannel);
+        Vec2f pointerPos = MR::getStarPointerScreenPositionOrEdge(mPadChannel);
         calcPoseNozzle(targetScreenPos, pointerPos);
     }
 }
 
-void StarPointerLayout::calcPoseNozzle(const TVec2f& rTargetPos, const TVec2f& rPointerPos) {
-    TVec2f diff = rPointerPos;
+void StarPointerLayout::calcPoseNozzle(const Vec2f& rTargetPos, const Vec2f& rPointerPos) {
+    Vec2f diff = rPointerPos;
     diff.sub(rTargetPos);
 
     if (MR::isScreen16Per9()) {
@@ -700,7 +700,7 @@ void StarPointerLayout::calcPoseNozzle(const TVec2f& rTargetPos, const TVec2f& r
         MR::separateScalarAndDirection(&dist, &diff, diff);
 
         f32 angle = MR::toDegree(MR::atan2(diff.x, diff.y));
-        TVec3f rotate;
+        Vec3f rotate;
         MR::copyPaneRotate(&rotate, this, "PicNozzle");
         MR::setPaneRotate(this, rotate.x, rotate.y, angle, "PicNozzle");
     }

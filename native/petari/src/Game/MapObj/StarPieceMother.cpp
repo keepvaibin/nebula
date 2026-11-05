@@ -71,7 +71,7 @@ void StarPieceMother::init(const JMapInfoIter& rIter) {
     if (isRailNotConnected) {
         initNerve(GET_NERVE(StarPieceMother, HostTypeNrvWait));
         initHitSensor(1);
-        MR::addHitSensorMapObj(this, "body", 8, 100.0f, TVec3f(0.0f, 0.0f, 0.0f));
+        MR::addHitSensorMapObj(this, "body", 8, 100.0f, Vec3f(0.0f, 0.0f, 0.0f));
         makeActorAppeared();
     } else {
         initNerve(GET_NERVE(StarPieceMother, HostTypeNrvMoveOnRail));
@@ -128,7 +128,7 @@ void StarPieceMother::exeMoveOnRail() {
 }
 
 void StarPieceMother::placementPieceOnRail(f32 distance) {
-    TVec3f railPos;
+    Vec3f railPos;
     MR::calcRailPosAtCoord(&railPos, this, distance);
     mStarPieceArray[0]->mPosition.set(railPos);
     _90[0] = distance;
@@ -170,7 +170,7 @@ void StarPieceMother::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
 
 void StarPieceMother::emitStarPieces() {
     for (u32 idx = 0; idx < _94; idx++) {
-        TVec3f position;
+        Vec3f position;
         position.set(*MR::getPlayerCenterPos());
         position.sub(mPosition);
         MR::normalizeOrZero(&position);

@@ -113,7 +113,7 @@ void KoopaDemoPowerUp::exeDemo() {
 
     MR::endDemo(mHost, "\203\160\203\217\201\133\203\101\203\142\203\166\203\146\203\202" /* パワーアップデモ */);
 
-    TVec3f gravity;
+    Vec3f gravity;
     gravity.negate(mHost->mGravity);
     MR::appearStarPieceToDirection(mHost, mHost->mPosition, gravity, 10, 50.0f, 60.0f, false);
 

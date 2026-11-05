@@ -8,8 +8,8 @@ public:
 
     virtual void init(const JMapInfoIter&);
     virtual void start();
-    virtual void updateHostTrans(TVec3f*) const;
-    virtual const TVec3f& getCurrentVelocity() const {
+    virtual void updateHostTrans(Vec3f*) const;
+    virtual const Vec3f& getCurrentVelocity() const {
         return mVelocity;
     }
 
@@ -24,6 +24,6 @@ public:
     f32 mRotateSpeed;
     f32 _40;
     f32 _44;
-    TVec3f mVelocity;
+    Vec3f mVelocity;
     f32 _54;
 };

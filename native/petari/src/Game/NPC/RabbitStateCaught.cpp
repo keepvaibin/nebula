@@ -90,7 +90,7 @@ void RabbitStateCaught::exeCaught() {
 }
 
 void RabbitStateCaught::exeCaughtLand() {
-    TMtx34f baseMtx;
+    Mtx34f baseMtx;
 
     if (MR::isFirstStep(this)) {
         baseMtx.set(mHost->getBaseMtx());
@@ -141,14 +141,14 @@ void RabbitStateCaught::exeCaughtEvent() {
 }
 
 void RabbitStateCaught::setCaughtStartMarioPose() {
-    TPos3f baseMtx(MR::getPlayerDemoActor()->getBaseMtx());
+    Pos3f baseMtx(MR::getPlayerDemoActor()->getBaseMtx());
     baseMtx.getQuat(mCaughtStartMarioQuat);
     baseMtx.getTrans(mCaughtStartMarioTrans);
 }
 
 void RabbitStateCaught::blendBaseMatrixToMario(f32 blendRate) const {
-    TMtx34f baseMtx;
-    TMtx34f finalBaseMtx;
+    Mtx34f baseMtx;
+    Mtx34f finalBaseMtx;
 
     if (blendRate >= 1.0f) {
         finalBaseMtx.set(mHost->getBaseMtx());

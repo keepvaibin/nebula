@@ -103,7 +103,7 @@ void SkeletalFishBaby::init(const JMapInfoIter& rIter) {
         mStarPieceTargets[i] = new LiveActor("StarPointerTargetDummy");
         mStarPieceTargets[i]->makeActorDead();
 
-        TVec3f ptrTarget(::sStarPointerTargetOffset[i]);
+        Vec3f ptrTarget(::sStarPointerTargetOffset[i]);
         MR::initStarPointerTargetAtMtx(mStarPieceTargets[i], ::sStarPointerTargetSize[i], MR::getJointMtx(this, ::sStarPointerTargetJoint[i]),
                                        ptrTarget);
     }
@@ -235,7 +235,7 @@ void SkeletalFishBaby::exeBreak() {
 
 void SkeletalFishBaby::exeDead() {
     if (MR::isFirstStep(this)) {
-        TVec3f jointPos;
+        Vec3f jointPos;
         MR::copyJointPos(this, "Center", &jointPos);
         MR::appearStarPiece(this, jointPos, ::sStarPieceNum, 10.0f, 40.0f, false);
         MR::startSound(this, "SE_OJ_STAR_PIECE_BURST_W_F");
@@ -243,7 +243,7 @@ void SkeletalFishBaby::exeDead() {
     }
 }
 
-bool SkeletalFishBaby::calcJoint(TPos3f* pJointPos, const JointControllerInfo& rInfo) {
+bool SkeletalFishBaby::calcJoint(Pos3f* pJointPos, const JointControllerInfo& rInfo) {
     if (mJointIndicies[rInfo.mJoint->getJntNo()] == -1) {
         return false;
     }
@@ -252,7 +252,7 @@ bool SkeletalFishBaby::calcJoint(TPos3f* pJointPos, const JointControllerInfo& r
     return true;
 }
 
-bool SkeletalFishBaby::damage(const TVec3f& rAirBubblePos, bool shakeCameraNormal) {
+bool SkeletalFishBaby::damage(const Vec3f& rAirBubblePos, bool shakeCameraNormal) {
     bool isDeadOrBroke = isNerve(GET_NERVE_ANON(SkeletalFishBabyNrvDead)) || isNerve(GET_NERVE_ANON(SkeletalFishBabyNrvBreak));
 
     if (!isDeadOrBroke) {
@@ -277,12 +277,12 @@ void SkeletalFishBaby::calcAndSetBaseMtx() {
             mControllers[i]->registerCallBack();
         }
 
-        TPos3f railMtx;
+        Pos3f railMtx;
         mRailControl->getMtx(&railMtx, 0.0f);
         MR::setBaseTRMtx(this, railMtx);
         _AC.set(railMtx);
         _AC.invert(_AC);
-        TVec3f scale = mScaleController->_C * mScale;
+        Vec3f scale = mScaleController->_C * mScale;
         MR::setBaseScale(this, scale);
     }
 }
@@ -313,10 +313,10 @@ void SkeletalFishBaby::initJoint() {
 
 void SkeletalFishBaby::initSensor() {
     initHitSensor(4);
-    MR::addHitSensorAtJointEnemy(this, "head", "Joint00", 16, ::sSensorRadius, TVec3f(0.0f, 20.0f, 100.0f));
-    MR::addHitSensorAtJointEnemy(this, "bust", "Joint01", 16, ::sBustSensorRadius, TVec3f(0.0f, 00.0f, 30.0f));
-    MR::addHitSensorAtJointEnemy(this, "waist", "Joint02", 16, ::sWaistSensorRadius, TVec3f(0.0f, 00.0f, 20.0f));
-    MR::addHitSensorAtJointEnemy(this, "tail", "Joint03", 16, ::sTailSensorRadius, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointEnemy(this, "head", "Joint00", 16, ::sSensorRadius, Vec3f(0.0f, 20.0f, 100.0f));
+    MR::addHitSensorAtJointEnemy(this, "bust", "Joint01", 16, ::sBustSensorRadius, Vec3f(0.0f, 00.0f, 30.0f));
+    MR::addHitSensorAtJointEnemy(this, "waist", "Joint02", 16, ::sWaistSensorRadius, Vec3f(0.0f, 00.0f, 20.0f));
+    MR::addHitSensorAtJointEnemy(this, "tail", "Joint03", 16, ::sTailSensorRadius, Vec3f(0.0f, 0.0f, 0.0f));
 }
 
 bool SkeletalFishBaby::isAttackable() const {

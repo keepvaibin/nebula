@@ -7,7 +7,7 @@
 #include "Game/Util/JointController.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
-#include <JSystem/JMath/JMath.hpp>
+#include <nebula_geometry.hpp>
 
 namespace NrvDinoPackunTailPart {
     NEW_NERVE(DinoPackunTailPartNrvWait, DinoPackunTailPart, Wait);
@@ -26,7 +26,7 @@ void DinoPackunTailPart::init(const JMapInfoIter& rIter) {
     initBinder(_D4, 0.0f, 0);
     MR::connectToSceneEnemyDecorationMovement(this);
     initHitSensor(1);
-    MR::addHitSensorEnemy(this, "body", 8, (1.25f + _D4), TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemy(this, "body", 8, (1.25f + _D4), Vec3f(0.0f, 0.0f, 0.0f));
     MR::invalidateClipping(this);
     makeActorAppeared();
 }
@@ -44,7 +44,7 @@ void DinoPackunTailPart::attackSensor(HitSensor* pSender, HitSensor* pReceiver) 
     mParent->attackSensorTail(pSender, pReceiver);
     bool push = MR::sendMsgPush(pReceiver, pSender);
     if (MR::isSensorPlayer(pReceiver) && push) {
-        TVec3f v16;
+        Vec3f v16;
         MR::calcSensorDirectionNormalize(&v16, pReceiver, pSender);
 
         if (mVelocity.dot(v16) < 3.0f) {

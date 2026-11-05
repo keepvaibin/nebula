@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/ActorStateBase.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class Koopa;
 class KoopaStateDamageEscape;
@@ -13,7 +13,7 @@ namespace MR {
 };  // namespace MR
 
 namespace MR {
-    void moveAndTurnToPlayer(LiveActor* pActor, TVec3f* pVec, const MR::ActorMoveParam& rMoveParam);
+    void moveAndTurnToPlayer(LiveActor* pActor, Vec3f* pVec, const MR::ActorMoveParam& rMoveParam);
 };  // namespace MR
 
 class KoopaBattleBase : public ActorStateBase< Koopa > {

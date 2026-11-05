@@ -1,18 +1,18 @@
 #pragma once
 
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class HitSphere {
 public:
     HitSphere() {
     }
 
-    HitSphere(const TVec3f& rPos, f32 radius) {
+    HitSphere(const Vec3f& rPos, f32 radius) {
         mPos.set(rPos);
         mRadius = radius;
     }
 
-    void set(const TVec3f& rPos, f32 radius) {
+    void set(const Vec3f& rPos, f32 radius) {
         mPos.set(rPos);
         mRadius = radius;
     }
@@ -22,7 +22,7 @@ public:
         return mPos.squared(other.mPos) <= rad * rad;
     }
 
-    TVec3f mPos;
+    Vec3f mPos;
     f32 mRadius;
 };
 
@@ -31,18 +31,18 @@ public:
     HitCylinder() {
     }
 
-    HitCylinder(const TVec3f& rPos, const TVec3f& axis) {
+    HitCylinder(const Vec3f& rPos, const Vec3f& axis) {
         mPos.set(rPos);
         mAxis.set(axis);
     }
 
-    void set(const TVec3f& rPos, const TVec3f& axis) {
+    void set(const Vec3f& rPos, const Vec3f& axis) {
         mPos.set(rPos);
         mAxis.set(axis);
     }
 
-    void getParams(const TVec3f& rPos, f32* proj, f32* ortho) {
-        TVec3f diff;
+    void getParams(const Vec3f& rPos, f32* proj, f32* ortho) {
+        Vec3f diff;
         diff.sub(rPos, mPos);
         f32 dist = diff.squared();
         f32 para = mAxis.squared();
@@ -50,9 +50,9 @@ public:
         f32 dot = mAxis.dot(diff);
 
         *proj = dot / para;
-        *ortho = JGeometry::TUtil< f32 >::sqrt((para * dist - dot * dot) / para);
+        *ortho = FloatUtil::sqrt((para * dist - dot * dot) / para);
     }
 
-    TVec3f mPos;
-    TVec3f mAxis;
+    Vec3f mPos;
+    Vec3f mAxis;
 };

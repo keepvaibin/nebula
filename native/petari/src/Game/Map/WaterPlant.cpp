@@ -8,7 +8,7 @@
 #include "Game/Util.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
 #include <JSystem/J3DGraphAnimator/J3DAnimation.hpp>
-#include <JSystem/JGeometry/TUtil.hpp>
+#include <nebula_geometry.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <nebula_game_api.h>
 #include <cstring>
@@ -34,7 +34,7 @@ namespace {
     // Texture coordinates.
     f32 cTexCoords[] = {0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.2f, 1.0f, 0.2f, 0.0f, 0.5f, 1.0f, 0.5f, 0.0f, 1.0f, 1.0f, 1.0f};
     static f32 sHeightTable[] = {150.0f, 200.0f, 300.0f, 250.0f};
-    static TVec3f sDrawVec(1.0f, 0.0f, 0.0f);
+    static Vec3f sDrawVec(1.0f, 0.0f, 0.0f);
     static f32 sSwingSpeed = 0.03f;
     static f32 sSwingWidth = 15.0f;
 
@@ -89,7 +89,7 @@ void WaterPlant::init(const JMapInfoIter& rIter) {
     mHeight = ::sHeightTable[mType];
     initPlant();
 
-    MR::setClippingTypeSphere(this, TVec2f(mAreaRadius, 2.0f * mHeight).length());
+    MR::setClippingTypeSphere(this, Vec2f(mAreaRadius, 2.0f * mHeight).length());
 
     makeActorAppeared();
 }
@@ -154,7 +154,7 @@ void WaterPlant::movement() {
             continue;
         }
 
-        TVec3f dirPlantToPlayer(mPlantDataArray[i].mPosition);
+        Vec3f dirPlantToPlayer(mPlantDataArray[i].mPosition);
         dirPlantToPlayer.sub(*MR::getPlayerPos());
         MR::normalizeOrZero(&dirPlantToPlayer);
 
@@ -193,16 +193,16 @@ WaterPlant::PlantData::PlantData() {
 
 void WaterPlant::initPlantAfterPlacement() {
     s32 index = 0;
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.identity();
     MR::makeMtxRotateY(mtx, 15.0f);
-    TVec3f vec(0.0f, 0.0f, 1.0f);
+    Vec3f vec(0.0f, 0.0f, 1.0f);
 
     int i = 0;
     if (mPlantNum > 0) {
         for (; i < mPlantNum; i++) {
             f32 randomBounds = mAreaRadius;
-            TVec3f* currentPlantPos = &mPlantDataArray[i].mPosition;
+            Vec3f* currentPlantPos = &mPlantDataArray[i].mPosition;
             for (int j = 0; j < ::sPlantAddTime; j++) {
                 currentPlantPos->set< f32 >(MR::getRandom(-randomBounds, randomBounds) + mPosition.x, 500.0f + mPosition.y,
                                             MR::getRandom(-randomBounds, randomBounds) + mPosition.z);
@@ -240,10 +240,10 @@ void WaterPlant::initPlantAfterPlacement() {
 
 void WaterPlant::drawDirect() const {
     for (int i = 0; i < mPlantNum; i++) {
-        TVec3f* position(&mPlantDataArray[i].mPosition);
-        TVec3f drawVec1(mPlantDataArray[i].mRotation);
-        TVec3f drawVec2(drawVec1);
-        TVec3f drawVec3(drawVec1);
+        Vec3f* position(&mPlantDataArray[i].mPosition);
+        Vec3f drawVec1(mPlantDataArray[i].mRotation);
+        Vec3f drawVec2(drawVec1);
+        Vec3f drawVec3(drawVec1);
         drawVec1.scale(*mPlantDataArray[i].mSwingStrength1);
         drawVec2.scale(*mPlantDataArray[i].mSwingStrength2);
         drawVec3.scale(*mPlantDataArray[i].mSwingStrength3);
@@ -325,7 +325,7 @@ void WaterPlantDrawInit::movement() {
         ::sSwingWidth = ::sSwingWidthMax;
     }
 
-    TPos3f inverseViewMtx;
+    Pos3f inverseViewMtx;
     NebulaMtxInverse(MR::getCameraViewMtx(), inverseViewMtx);
     // normal getXDir call here reverses float load order
     ::sDrawVec.set< f32 >(inverseViewMtx[0][0], inverseViewMtx[1][0], inverseViewMtx[2][0]);

@@ -15,7 +15,7 @@ public:
     void impact();
     void impactEffect();
 
-    TVec3f _14;
+    Vec3f _14;
     f32 _20;
     u8 _24;
     u16 _26;

@@ -77,7 +77,7 @@ void OceanBowl::init(const JMapInfoIter& rIter) {
     makeActorAppeared();
 }
 
-bool OceanBowl::isInWater(const TVec3f& rPos) const {
+bool OceanBowl::isInWater(const Vec3f& rPos) const {
     if (rPos.distance(mPosition) > mRadius) {
         return false;
     }
@@ -85,10 +85,10 @@ bool OceanBowl::isInWater(const TVec3f& rPos) const {
     return !(mUp.dot(rPos - mPosition) > 0.0f);
 }
 
-bool OceanBowl::calcWaterInfo(const TVec3f& rPos, const TVec3f& rGravity, WaterInfo* pInfo) const {
-    const TVec3f* pPosition = &mPosition;
+bool OceanBowl::calcWaterInfo(const Vec3f& rPos, const Vec3f& rGravity, WaterInfo* pInfo) const {
+    const Vec3f* pPosition = &mPosition;
     f32 B0 = mRadius;
-    TVec3f v(rPos);
+    Vec3f v(rPos);
     v.sub(*pPosition);
     f32 fa = MR::vecKillElement(v, mUp, &v);
     f32 fc = v.length() / B0;
@@ -102,7 +102,7 @@ bool OceanBowl::calcWaterInfo(const TVec3f& rPos, const TVec3f& rGravity, WaterI
     pInfo->mCamWaterDepth = -fa;
     pInfo->mWaveHeight = OceanBowlPoint::calcHeightStatic(mWaveX, mWaveZ, rPos.x, rPos.z);
 
-    TVec3f v2(rPos), v3;
+    Vec3f v2(rPos), v3;
     v2.sub(*pPosition);
     MR::normalizeOrZero(&v2);
 
@@ -111,8 +111,8 @@ bool OceanBowl::calcWaterInfo(const TVec3f& rPos, const TVec3f& rGravity, WaterI
     MR::vecKillElement(rPos - *pPosition, mUp, &v3);
     pInfo->mSurfacePos.set(*pPosition + v3);
 
-    TVec3f v5(rPos);
-    const TVec3f& rPosition1 = mPosition;
+    Vec3f v5(rPos);
+    const Vec3f& rPosition1 = mPosition;
     v5.sub(rPosition1);
 
     if (v5.y > 0.0f) {
@@ -121,15 +121,15 @@ bool OceanBowl::calcWaterInfo(const TVec3f& rPos, const TVec3f& rGravity, WaterI
 
     if (MR::isNearZero(v5)) {
         pInfo->mEdgeDistance = B0;
-        TVec3f v6(rGravity);
+        Vec3f v6(rGravity);
         v6.scale(B0);
-        const TVec3f& rPosition2 = mPosition;
+        const Vec3f& rPosition2 = mPosition;
         v6.add(rPosition2);
         pInfo->mEdgePos.set(v6);
     } else {
         MR::normalize(&v5);
         v5.scale(B0);
-        const TVec3f& rPosition3 = mPosition;
+        const Vec3f& rPosition3 = mPosition;
         v5.add(rPosition3);
         pInfo->mEdgeDistance = v5.distance(rPos);
         pInfo->mEdgePos.set(v5);
@@ -139,7 +139,7 @@ bool OceanBowl::calcWaterInfo(const TVec3f& rPos, const TVec3f& rGravity, WaterI
 }
 
 void OceanBowl::movement() {
-    const TVec3f* pPosition = &getPoint(12, 12)->mPosition;
+    const Vec3f* pPosition = &getPoint(12, 12)->mPosition;
     f32 distToPlayer = MR::calcDistanceToPlayer(mPosition);
 
     if ((MR::isCameraInWater() && WaterAreaFunction::getCameraWaterInfo()->mOceanBowl != this) || distToPlayer > ::sClippingDistance + mRadius) {
@@ -148,7 +148,7 @@ void OceanBowl::movement() {
     }
 
     mIsClipped = false;
-    TVec3f playerpos(*MR::getPlayerPos());
+    Vec3f playerpos(*MR::getPlayerPos());
     playerpos.sub(*pPosition);
     f32 dotA = mSide.dot(playerpos);
     f32 dotB = mFront.dot(playerpos);
@@ -179,11 +179,11 @@ void OceanBowl::movement() {
 void OceanBowl::initPoints() {
     for (s32 x = 0; x < 25; x++) {
         for (s32 y = 0; y < 25; y++) {
-            TVec3f vecA(mSide);
-            TVec3f vecB(mFront);
+            Vec3f vecA(mSide);
+            Vec3f vecB(mFront);
             vecA.scale(((static_cast< f32 >(y) * ::sPointInterval) - 2500.0f) + ::sPointIntervalHalf);
             vecB.scale(((static_cast< f32 >(x) * ::sPointInterval) - 2500.0f) + ::sPointIntervalHalf);
-            TVec3f finalpos(mPosition);
+            Vec3f finalpos(mPosition);
             finalpos.add(vecA);
             finalpos.add(vecB);
 
@@ -274,7 +274,7 @@ void OceanBowl::moveToLeft() {
 
         setPoint(x, 0, mLastPoint);
 
-        TVec3f resetvec(mSide);
+        Vec3f resetvec(mSide);
         resetvec.scale(-200.0f);
         resetvec.add(getPoint(x, 1)->mPosition);
         mLastPoint->reset(resetvec, MR::clamp((mRadius - getPosition()->distance(resetvec)) / ::sPointWaveRateDistMax, 0.0f, 1.0f));
@@ -297,7 +297,7 @@ void OceanBowl::moveToRight() {
 
         setPoint(x, 24, mLastPoint);
 
-        TVec3f resetvec(mSide);
+        Vec3f resetvec(mSide);
         resetvec.scale(::sPointInterval);
         resetvec.add(getPoint(x, 23)->mPosition);
         mLastPoint->reset(resetvec, MR::clamp((mRadius - getPosition()->distance(resetvec)) / ::sPointWaveRateDistMax, 0.0f, 1.0f));
@@ -320,7 +320,7 @@ void OceanBowl::moveToUpper() {
 
         setPoint(0, y, mLastPoint);
 
-        TVec3f resetvec(mFront);
+        Vec3f resetvec(mFront);
         resetvec.scale(-::sPointInterval);
         resetvec.add(getPoint(1, y)->mPosition);
         mLastPoint->reset(resetvec, MR::clamp((mRadius - getPosition()->distance(resetvec)) / ::sPointWaveRateDistMax, 0.0f, 1.0f));
@@ -343,7 +343,7 @@ void OceanBowl::moveToLower() {
 
         setPoint(24, y, mLastPoint);
 
-        TVec3f resetvec(mFront);
+        Vec3f resetvec(mFront);
         resetvec.scale(::sPointInterval);
         resetvec.add(getPoint(23, y)->mPosition);
         mLastPoint->reset(resetvec, MR::clamp((mRadius - getPosition()->distance(resetvec)) / ::sPointWaveRateDistMax, 0.0f, 1.0f));
@@ -418,7 +418,7 @@ void OceanBowl::loadMaterial() const {
     // The shore mask follows the player: its offset from the bowl's first point, over the mask's 4800 units.
     material.constants[14] = ((getPoint(0, 0)->mVertexPosition.z - MR::getPlayerPos()->z) + 2400.0f) / 4800.0f;
     material.constants[15] = ((getPoint(0, 0)->mVertexPosition.x - MR::getPlayerPos()->x) + 2400.0f) / 4800.0f;
-    TPos3f screen;
+    Pos3f screen;
     MR::calcTexProjectionMtx(&screen);
     for (u32 row = 0; row < 3; row++) {
         for (u32 column = 0; column < 4; column++) {

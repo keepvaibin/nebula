@@ -18,7 +18,7 @@ public:
     virtual u32 getKind() const {
         return 1;
     }
-    virtual bool onTouchElectric(const TVec3f&, const TVec3f&);
+    virtual bool onTouchElectric(const Vec3f&, const Vec3f&);
     virtual bool setNerveReturn();
     virtual void setNerveLaunch();
     virtual const Nerve* getNerveWait();
@@ -50,8 +50,8 @@ public:
     void endBindStarPointer();
     void exeBindStarPointer();
     BegomanHead* mHead;
-    TPos3f mHeadMatrix;
+    Pos3f mHeadMatrix;
     ModelObj* mBrokenModel;
-    TPos3f mWaterColumnMatrix;
+    Pos3f mWaterColumnMatrix;
     bool mTurnAfterBlow;
 };

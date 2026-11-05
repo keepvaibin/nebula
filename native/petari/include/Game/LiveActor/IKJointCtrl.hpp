@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class IKJoint;
 class JointController;
@@ -15,7 +15,7 @@ struct IKJointCtrlParam {
     f32 mNearLimitRate;
     f32 mFarLimitRate;
     f32 mEndDirMaxDegree;
-    TVec3f mEndLocalDir;
+    Vec3f mEndLocalDir;
 };
 
 class IKJointCtrl {
@@ -23,13 +23,13 @@ public:
     IKJointCtrl(LiveActor*);
 
     void init(const IKJointCtrlParam&);
-    void setEndPosition(const TVec3f&, f32);
-    void setEndDirection(const TVec3f&, f32);
+    void setEndPosition(const Vec3f&, f32);
+    void setEndDirection(const Vec3f&, f32);
     void endCtrl();
     void setCallBackFunction();
-    bool updateRootJointCallBack(TPos3f*, const JointControllerInfo&);
-    bool updateMiddleJointCallBack(TPos3f*, const JointControllerInfo&);
-    bool updateEndJointCallBack(TPos3f*, const JointControllerInfo&);
+    bool updateRootJointCallBack(Pos3f*, const JointControllerInfo&);
+    bool updateMiddleJointCallBack(Pos3f*, const JointControllerInfo&);
+    bool updateEndJointCallBack(Pos3f*, const JointControllerInfo&);
 
     void disableCallBack() {
         _B6 = false;
@@ -40,16 +40,16 @@ public:
     }
 
     const char* mName;
-    TMtx34f _4;
-    TMtx34f _34;
+    Mtx34f _4;
+    Mtx34f _34;
     LiveActor* mActor;
     IKJoint* mJoint;
     JointController* mRootCtrl;
     JointController* mMiddleCtrl;
     JointController* mEndCtrl;
-    TVec3f _78;
-    TVec3f mEndLocalDir;
-    TVec3f _90;
+    Vec3f _78;
+    Vec3f mEndLocalDir;
+    Vec3f _90;
     f32 mNearLimitRate;
     f32 mFarLimitRate;
     f32 mEndDirMaxDegree;
@@ -67,8 +67,8 @@ public:
 
     void addCtrl(const IKJointCtrlParam&);
 
-    void setEndPosition(const char*, const TVec3f&, f32);
-    void setEndDirection(const char*, const TVec3f&, f32);
+    void setEndPosition(const char*, const Vec3f&, f32);
+    void setEndDirection(const char*, const Vec3f&, f32);
 
     void startUpdate();
     void endUpdate();

@@ -3,7 +3,7 @@
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 MirrorReflectionModel::MirrorReflectionModel(const LiveActor* pActor, const char* pName, const char* pInternalName, MtxPtr mtx) : LiveActor(pName) {
     _8C = pActor;
@@ -11,7 +11,7 @@ MirrorReflectionModel::MirrorReflectionModel(const LiveActor* pActor, const char
     _94 = 0;
 
     if (mtx) {
-        TPos3f pos;
+        Pos3f pos;
         pos.set(mtx);
         pos.getTrans(mPosition);
     } else {
@@ -74,7 +74,7 @@ void MirrorReflectionModel::calcAndSetBaseMtx() {
     if (!_90) {
         LiveActor::calcAndSetBaseMtx();
     } else {
-        TPos3f pos;
+        Pos3f pos;
         pos.set(_90);
         pos.getTrans(mPosition);
         MR::setBaseTRMtx(this, _90);

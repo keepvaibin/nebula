@@ -16,7 +16,7 @@ void CameraTowerBase::reset() {
         mVPan->resetJump();
         mVPan->calcWatchPos(nullptr);
     } else {
-        TVec3f watchPoint;
+        Vec3f watchPoint;
         CameraLocalUtil::makeWatchPoint(&watchPoint, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
         CameraLocalUtil::setWatchPos(this, watchPoint);
     }
@@ -35,7 +35,7 @@ CameraTargetObj* CameraTowerBase::calc() {
         mVPan->updateJump();
         mVPan->calcWatchPos(nullptr);
     } else {
-        TVec3f watchPoint;
+        Vec3f watchPoint;
         CameraLocalUtil::makeWatchPoint(&watchPoint, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
         CameraLocalUtil::setWatchPos(this, watchPoint);
     }
@@ -52,7 +52,7 @@ CameraTargetObj* CameraTowerBase::calc() {
 }
 
 void CameraTowerBase::calcIdealPoseOfTowerBase() {
-    TVec3f watchPos = CameraLocalUtil::getWatchPos(this);
+    Vec3f watchPos = CameraLocalUtil::getWatchPos(this);
 
     if (MR::isNearZero(mAxis)) {
         mAxis.set(0.0f, 1.0f, 0.0f);
@@ -60,21 +60,21 @@ void CameraTowerBase::calcIdealPoseOfTowerBase() {
         mAxis.normalize();
     }
 
-    TVec3f front = watchPos - mWPoint;
+    Vec3f front = watchPos - mWPoint;
     front.set(front - mAxis * mAxis.dot(front));
     if (MR::isNearZero(front)) {
         return;
     }
     MR::normalize(&front);
 
-    TVec3f up(0.0f, 1.0f, 0.0f);
-    TVec3f side = front.cross(up);
+    Vec3f up(0.0f, 1.0f, 0.0f);
+    Vec3f side = front.cross(up);
 
-    TQuat4f rot;
+    Quat4f rot;
     rot.setRotate(side, mAngleX);
     rot.transform(front);
 
-    TVec3f pos = front * mDist + watchPos;
+    Vec3f pos = front * mDist + watchPos;
 
     CameraLocalUtil::setPos(this, pos);
     CameraLocalUtil::setWatchPos(this, watchPos);

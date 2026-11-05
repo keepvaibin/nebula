@@ -97,13 +97,13 @@ public:
 
     PartsModel* mDisplayModel;
     KeySwitch* mKeySwitch;
-    TQuat4f _94;
-    TVec3f mWallNormal;
-    TVec3f mWallHitPos;
-    TVec3f _BC;
-    TVec3f _C8;
-    TVec3f _D4;
-    TVec3f _E0;
+    Quat4f _94;
+    Vec3f mWallNormal;
+    Vec3f mWallHitPos;
+    Vec3f _BC;
+    Vec3f _C8;
+    Vec3f _D4;
+    Vec3f _E0;
     f32 _EC;
     f32 _F0;
     f32 _F4;

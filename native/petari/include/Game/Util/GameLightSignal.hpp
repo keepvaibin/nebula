@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/Util/Color.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 
@@ -18,13 +18,13 @@ namespace GameLightSignal {
     void frame();
 
     // BrightSun::control: the visible sun at `rPosition`, placed from the camera.
-    void sun(const TVec3f& rPosition);
+    void sun(const Vec3f& rPosition);
     // AstroCore::init: the Comet Observatory's star core.
     void registerStarCore(const LiveActor* pCore);
     // LightFunction::loadPointLightInfo: the game's one point light (LightPointCtrl's current one).
     void pointLight(const PointLightInfo* pInfo);
     // MR::requestPointLight: every actor asking for that light, with its brightness at the reference distance.
-    void pointRequest(const LiveActor* pActor, const TVec3f& rPosition, Color8 color, f32 brightness);
+    void pointRequest(const LiveActor* pActor, const Vec3f& rPosition, Color8 color, f32 brightness);
     // LightFunction::loadActorLightInfo: world-fixed lights far out (key lights of areas).
     void actorLight(const ActorLightInfo* pInfo);
 };  // namespace GameLightSignal

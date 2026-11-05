@@ -24,14 +24,14 @@ void SpinHitController::setParameter(const NameObj* pObj, s32 a2, s32 a3, s32 a4
     _1C = a8;
 }
 
-void SpinHitController::start(LiveActor* pActor, const TVec3f& a2, const TVec3f& a3) {
-    TVec3f v9(a3);
+void SpinHitController::start(LiveActor* pActor, const Vec3f& a2, const Vec3f& a3) {
+    Vec3f v9(a3);
     v9 -= a2;
     MR::vecKillElement(v9, pActor->mGravity, &v9);
     MR::normalizeOrZero(&v9);
     v9 *= _10;
     f32 val = _14;
-    TVec3f v8(pActor->mGravity);
+    Vec3f v8(pActor->mGravity);
     v8 *= val;
     v9 -= v8;
     pActor->mVelocity.x = v9.x;
@@ -40,7 +40,7 @@ void SpinHitController::start(LiveActor* pActor, const TVec3f& a2, const TVec3f&
     _18 = true;
 }
 
-void SpinHitController::startWithoutStopScene(LiveActor* pActor, const TVec3f& a2, const TVec3f& a3) {
+void SpinHitController::startWithoutStopScene(LiveActor* pActor, const Vec3f& a2, const Vec3f& a3) {
     start(pActor, a2, a3);
     _18 = false;
 }
@@ -55,7 +55,7 @@ bool SpinHitController::execute(LiveActor* pActor) {
     }
 
     f32 val = _C;
-    TVec3f v12(pActor->mGravity);
+    Vec3f v12(pActor->mGravity);
     v12 *= val;
     pActor->mVelocity.add(v12);
 

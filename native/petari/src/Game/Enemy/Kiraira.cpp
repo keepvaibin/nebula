@@ -57,9 +57,9 @@ void Kiraira::init(const JMapInfoIter& rIter) {
     initModelManagerWithAnm("Kiraira", nullptr, false);
     MR::connectToSceneEnemy(this);
     initHitSensor(3);
-    MR::addHitSensorEnemy(this, "body", 8, 120.0f, TVec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorEye(this, "eye", 16, ::sEyeHitSize, TVec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorEye(this, "mind_eye", 8, ::sMindEyeHitSize, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemy(this, "body", 8, 120.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEye(this, "eye", 16, ::sEyeHitSize, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEye(this, "mind_eye", 8, ::sMindEyeHitSize, Vec3f(0.0f, 0.0f, 0.0f));
     initEffectKeeper(0, nullptr, false);
     initSound(6, false);
     MR::initShadowVolumeSphere(this, 90.0f);
@@ -89,7 +89,7 @@ void Kiraira::init(const JMapInfoIter& rIter) {
 }
 
 void Kiraira::calcAndSetBaseMtx() {
-    TPos3f mtx;
+    Pos3f mtx;
     MR::calcMtxFromGravityAndZAxis(&mtx, this, mGravity, mFront);
     MR::setBaseTRMtx(this, mtx);
 }

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class DummyDisplayModel;
 class ModelObj;
@@ -28,15 +28,15 @@ public:
 
     s32 mCrystalCageType;
     ModelObj* mBreakObj;
-    TPos3f _94;
+    Pos3f _94;
     s32 _C4;
     s32 _C8;
     RumbleCalculatorCosMultLinear* mRumbleCalc;
-    TVec3f _D0;
-    TVec3f _DC;
-    TVec3f _E8;
+    Vec3f _D0;
+    Vec3f _DC;
+    Vec3f _E8;
     DummyDisplayModel* mDisplayModel;
-    TVec3f _F8;
+    Vec3f _F8;
     bool _104;
     u8 _105;
     u8 _106;
@@ -46,5 +46,5 @@ public:
     bool mPlayRiddleSFX;
     bool mHasBinding;
     u8 _10F;
-    TVec3f _110;
+    Vec3f _110;
 };

@@ -27,7 +27,7 @@ namespace {
     f32 cAppearThrowUpSpd2 = 15.0f;
     f32 cGravity = 0.5f;
     f32 cReflectWallX = 0.3f;
-    static f32 cSpdRotateY = JGeometry::TUtil< f32 >::PI() / 60.0f;
+    static f32 cSpdRotateY = FloatUtil::PI() / 60.0f;
     static u16 sVal = 0x0258;
 };  // namespace
 
@@ -65,7 +65,7 @@ void BenefitItemObj::initModelAndEfx() {
 
     initBinder(50.0f, 50.0f, 0);
     initHitSensor(1);
-    MR::addHitSensor(this, "body", ATYPE_KINOKO_ONEUP, 4, 50.0f, TVec3f(0.0f, 50.0f, 0.0f));
+    MR::addHitSensor(this, "body", ATYPE_KINOKO_ONEUP, 4, 50.0f, Vec3f(0.0f, 50.0f, 0.0f));
 }
 
 void BenefitItemObj::init(const JMapInfoIter& rIter) {
@@ -260,7 +260,7 @@ void BenefitItemObj::init(const JMapInfoIter& rIter) {
         MR::useStageSwitchSleep(this, rIter);
     }
 
-    TVec3f rotY;
+    Vec3f rotY;
     MR::getRotatedAxisY(&rotY, mRotation);
     _A4.set(rotY);
 
@@ -368,7 +368,7 @@ void BenefitItemObj::appearThrowUp() {
 
     runBck("Appear");
 
-    TVec3f rotY;
+    Vec3f rotY;
     MR::getRotatedAxisY(&rotY, mRotation);
     _A4.set(rotY);
 
@@ -383,7 +383,7 @@ void BenefitItemObj::appearThrowUp() {
     MR::invalidateClipping(this);
 }
 
-void BenefitItemObj::shoot(const TVec3f& rPosition, const TVec3f&, bool) {
+void BenefitItemObj::shoot(const Vec3f& rPosition, const Vec3f&, bool) {
     mPosition = rPosition;
 
     if (!_DD) {
@@ -415,7 +415,7 @@ void BenefitItemObj::control() {
         }
     }
 
-    TVec3f v9(mGravity);
+    Vec3f v9(mGravity);
     MR::calcGravityOrZero(this);
     calcAndSetBaseMtxInMovement();
 
@@ -441,7 +441,7 @@ void BenefitItemObj::control() {
         kill();
     }
 
-    if (!MR::isNearZero(mVelocity) && MR::isInDeath(this, TVec3f(0.0f, 0.0f, 0.0f))) {
+    if (!MR::isNearZero(mVelocity) && MR::isInDeath(this, Vec3f(0.0f, 0.0f, 0.0f))) {
         runEfx("Vanish");
         kill();
     }
@@ -488,7 +488,7 @@ void BenefitItemObj::exeShoot() {
         MR::onBind(this);
     }
 
-    TVec3f newVel(mVelocity);
+    Vec3f newVel(mVelocity);
     f32 verticalSpeed = MR::vecKillElement(newVel, mGravity, &newVel);
 
     if (MR::isBindedGround(this)) {
@@ -632,7 +632,7 @@ void BenefitItemObj::initEscape() {
     _B6 = 0;
     _B8 = 0;
 
-    TVec3f rotZ;
+    Vec3f rotZ;
     MR::getRotatedAxisZ(&rotZ, mRotation);
     _BC = rotZ * 7.0f;
 
@@ -654,7 +654,7 @@ void BenefitItemObj::doEscape() {
         _BC.setLength(length);
 
         if (val) {
-            TVec3f vec38(mPosition - *MR::getPlayerPos());
+            Vec3f vec38(mPosition - *MR::getPlayerPos());
             MR::vecKillElement(vec38, mGravity, &vec38);
             MR::normalizeOrZero(&vec38);
 
@@ -817,7 +817,7 @@ void BenefitItemObj::calcAndSetBaseMtxInMovement() {
         _A4 = *MR::getWallNormal(this);
     }
 
-    TVec3f stack_8(mVelocity);
+    Vec3f stack_8(mVelocity);
     MR::normalizeOrZero(&stack_8);
 
     if (isNerve(GET_NERVE(BenefitItemObj, HostTypeNrvPreEscape))) {
@@ -834,7 +834,7 @@ void BenefitItemObj::calcAndSetBaseMtxInMovement() {
         return;
     }
 
-    TPos3f pos;
+    Pos3f pos;
     MR::makeMtxUpFrontPos(&pos, _A4, stack_8, mPosition);
     MR::blendMtx(_F0, pos, 0.2f, _F0);
     MR::multMtx(getBaseMtx(), MR::tmpMtxRotYRad(_EC), _F0);
@@ -858,6 +858,6 @@ void BenefitItemObj::stopEfx(const char* pEfxName) {
     MR::deleteEffect(this, pEfxName);
 }
 
-void MR::setMtxTrans(MtxPtr pMtx, const TVec3f& rVec) {
+void MR::setMtxTrans(MtxPtr pMtx, const Vec3f& rVec) {
     setMtxTrans(pMtx, rVec.x, rVec.y, rVec.z);
 }

@@ -11,7 +11,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
-#include <JSystem/JMath/JMath.hpp>
+#include <nebula_geometry.hpp>
 
 namespace {
     static const s32 sStepForWait = 60;
@@ -50,7 +50,7 @@ void TicoRail::init(const JMapInfoIter& rIter) {
     initModelManagerWithAnm("Tico", nullptr, false);
     MR::connectToSceneNpc(this);
     initHitSensor(1);
-    MR::addHitSensorNpc(this, "body", 8, 50.0f, TVec3f(0.0f, 50.0f, 0.0f));
+    MR::addHitSensorNpc(this, "body", 8, 50.0f, Vec3f(0.0f, 50.0f, 0.0f));
     MR::initLightCtrl(this);
     initEffectKeeper(0, nullptr, false);
     MR::initShadowFromCSV(this, "Shadow");
@@ -91,7 +91,7 @@ void TicoRail::exeLookAround() {
         MR::tryStartBck(this, "Turn");
     }
 
-    TVec3f up;
+    Vec3f up;
     MR::calcUpVec(&up, this);
 
     f32 rotate = 0.0f;
@@ -158,13 +158,13 @@ void TicoRail::exeStop() {
 }
 
 void TicoRail::exeTalkStart() {
-    TVec3f diff;
+    Vec3f diff;
     diff.sub(_98->mPosition, mPosition);
     MR::normalize(&diff);
 
     if (MR::isFirstStep(this)) {
         MR::startBck(this, "Spin");
-        TVec3f v14 = MR::getRailDirection(this);
+        Vec3f v14 = MR::getRailDirection(this);
 
         if (diff.dot(v14) > 0.0f) {
             MR::reverseRailDirection(this);
@@ -214,7 +214,7 @@ void TicoRail::exeGoodBye() {
     if (MR::isFirstStep(this)) {
         MR::startBck(this, "CallBack");
 
-        TVec3f v3(MR::getRailDirection(this));
+        Vec3f v3(MR::getRailDirection(this));
 
         if (_8C.dot(v3) > 0.0f) {
             MR::reverseRailDirection(this);
@@ -243,7 +243,7 @@ void TicoRail::kill() {
 }
 
 void TicoRail::calcAndSetBaseMtx() {
-    TPos3f mtx;
+    Pos3f mtx;
     MR::calcMtxFromGravityAndZAxis(&mtx, this, mGravity, _8C);
     MR::setBaseTRMtx(this, mtx);
 }

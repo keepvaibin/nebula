@@ -3,7 +3,7 @@
 #include "Game/System/NebulaAtomic.hpp"
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class ActorCameraInfo;
 class ModelObj;
@@ -25,7 +25,7 @@ public:
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
 
     void requestAppear();
-    void setDemoAppearPos(const TVec3f&);
+    void setDemoAppearPos(const Vec3f&);
     bool isEndAppearDemo() const;
     void offAppearDemo();
     static void setupColor(LiveActor*, const NameObj*, s32);
@@ -43,11 +43,11 @@ public:
     void initShadow(const JMapInfoIter&);
     void initPosture();
     void endAppearDemo();
-    PowerStarAppearPoint* getNearestAppearPoint(const TVec3f&) const;
+    PowerStarAppearPoint* getNearestAppearPoint(const Vec3f&) const;
     LiveActor* getAppearCameraActor();
     ActorCameraInfo* getAppearCameraInfo() const;
     void requestAppearOrWait();
-    void calcAppearDemoRiseTrans(TVec3f*, f32) const;
+    void calcAppearDemoRiseTrans(Vec3f*, f32) const;
     void processWait(f32);
     void exeWaitStartAppear();
     void exeAppearDemoRise();
@@ -65,11 +65,11 @@ public:
 
     s32 mPowerStarId;
     bool mIsInDemo;
-    TVec3f mAppearPosition;
-    TVec3f mInitRotation;
-    TVec3f mInitPosition;
-    TPos3f _B8;
-    TPos3f mBaseMtx;
+    Vec3f mAppearPosition;
+    Vec3f mInitRotation;
+    Vec3f mInitPosition;
+    Pos3f _B8;
+    Pos3f mBaseMtx;
     ModelObj* mPowerStarModelObj;
     u8 _11C;
     u8 _11D;
@@ -89,6 +89,6 @@ public:
     ActorCameraInfo* mCameraInfo;
     PowerStarAppearPoint* mCameraActor;
     ModelObj* mLuigiNPC;
-    TMtx34f _134;
+    Mtx34f _134;
     bool _164;
 };

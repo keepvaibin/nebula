@@ -29,7 +29,7 @@ public:
     void exeBreak();
     void updateResetToInitPosCheck();
 
-    TVec3f _C4;
+    Vec3f _C4;
     s32 _D0;
     bool _D4;
 };

@@ -9,7 +9,7 @@
 #include <JSystem/JAudio2/JAISound.hpp>
 #include <JSystem/JGadget/hashcode.hpp>
 
-AudSoundObject::AudSoundObject(TVec3f* pPos, u8 numHandles, NebulaArena* pHeap)
+AudSoundObject::AudSoundObject(Vec3f* pPos, u8 numHandles, NebulaArena* pHeap)
     : JAUSoundObject(pPos, numHandles, pHeap), JKRDisposer(), mSeVersion(0), mMapCode(0), mMapCodeExtra(0), mHashDatas(nullptr), mNumSounds(0) {
     mNumHandles = numHandles;
     if (mNumHandles > 0) {
@@ -29,7 +29,7 @@ void AudSoundObject::addToSoundObjHolder() {
     AudWrap::getSoundObjHolder()->add(this);
 }
 
-void AudSoundObject::setTrans(TVec3f* pTrans) {
+void AudSoundObject::setTrans(Vec3f* pTrans) {
     mPos = pTrans;
 }
 

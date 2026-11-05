@@ -31,5 +31,5 @@ private:
     CounterLayoutAppearer* mLayoutAppearer;
     CountUpPaneRumbler* mPaneRumbler;
     bool mIsForceAppear;
-    TVec2f mFollowPos;
+    Vec2f mFollowPos;
 };

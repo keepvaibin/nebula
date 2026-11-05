@@ -50,5 +50,5 @@ public:
     void exeWait();
     void exeShot();
 
-    TVec3f mEffectMtx;
+    Vec3f mEffectMtx;
 };

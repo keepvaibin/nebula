@@ -3,7 +3,7 @@
 
 void CamTranslatorMtxRegParallel::setParam(const CameraParamChunk* pChunk) {
     CameraGeneralParam* general = pChunk->mGeneralParam;
-    mCamera->setParam(general->mString.getCharPtr(), general->mDist, TVec2f(general->mAngleB, general->mAngleA), general->mWPoint);
+    mCamera->setParam(general->mString.getCharPtr(), general->mDist, Vec2f(general->mAngleB, general->mAngleA), general->mWPoint);
 }
 
 Camera* CamTranslatorMtxRegParallel::getCamera() const {

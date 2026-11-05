@@ -2,7 +2,7 @@
 
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/MapObjActor.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class DriftWood : public MapObjActor {
 public:
@@ -17,8 +17,8 @@ public:
     void exeWait();
     void exeVibrate();
 
-    TVec3f mRailDirection;
-    TVec3f mRailClipping;
-    TVec3f mVibrateOffset;
+    Vec3f mRailDirection;
+    Vec3f mRailClipping;
+    Vec3f mVibrateOffset;
     s32 mWaveSoundTimer;
 };

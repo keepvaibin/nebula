@@ -8,7 +8,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_math.h>
-#include <JSystem/JMath/JMath.hpp>
+#include <nebula_geometry.hpp>
 
 namespace NrvRevolvingWay {
     NEW_NERVE(RevolvingWayNrvWait, RevolvingWay, Wait);
@@ -30,9 +30,9 @@ void RevolvingWay::init(const JMapInfoIter& rIter) {
     MR::connectToSceneMapObj(this);
     MR::makeQuatFromRotate(&mRotateQuat, this);
     initHitSensor(1);
-    MR::addHitSensorMapObj(this, "body", 0x10u, 0.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorMapObj(this, "body", 0x10u, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
     MR::initCollisionParts(this, "RevolvingWay", getSensor("body"), nullptr);
-    MR::initStarPointerTarget(this, mRadius, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::initStarPointerTarget(this, mRadius, Vec3f(0.0f, 0.0f, 0.0f));
     initNerve(GET_NERVE(RevolvingWay, RevolvingWayNrvWait));
     makeActorAppeared();
 }
@@ -57,7 +57,7 @@ void RevolvingWay::exeWait() {
 }
 
 void RevolvingWay::addAccelMoment() {
-    TVec3f rotateMoment;
+    Vec3f rotateMoment;
     if (MR::isStarPointerPointing(this, 0, true, "\216\343" /* 弱 */) && MR::isHeldFire(PLAYER_1) &&
         MR::calcStarPointerStrokeRotateMoment(&rotateMoment, mPosition, mRadius, 0)) {
         mFriction += rotateMoment * 0.04f;

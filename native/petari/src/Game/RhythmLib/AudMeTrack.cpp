@@ -7,7 +7,7 @@
 #include <JSystem/JAudio2/JASBank.hpp>
 #include <JSystem/JAudio2/JASChannel.hpp>
 #include "Game/System/GameThreads.hpp"
-#include <JSystem/JMath/random.hpp>
+#include <nebula_geometry.hpp>
 
 AudMeTrack::TList AudMeTrack::sTrackList = AudMeTrack::TList();
 
@@ -704,7 +704,7 @@ void AudMeTrack::modifyNoteRnd(s32 direction, s32 type, s32 range) {
 }
 
 u32 AudMeTrack::getRandom(u32 range) {
-    static JMath::TRandom_fast_ oRandom(0);
+    static FastRandom oRandom(0);
     return oRandom.getRand(range);
 }
 

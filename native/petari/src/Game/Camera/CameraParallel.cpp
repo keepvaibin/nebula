@@ -57,19 +57,19 @@ void CameraParallel::calcIdealPose() {
         mDist = 300.0f;
     }
 
-    TVec3f watchPos = CameraLocalUtil::getWatchPos(this);
+    Vec3f watchPos = CameraLocalUtil::getWatchPos(this);
 
-    TVec3f pos;
-    MR::polarToCrossDegree(TVec3f(0.0f, 0.0f, 0.0f), &pos, mDist, mAngleX, mAngleY - 90.0f);
+    Vec3f pos;
+    MR::polarToCrossDegree(Vec3f(0.0f, 0.0f, 0.0f), &pos, mDist, mAngleX, mAngleY - 90.0f);
 
-    TVec3f up;
+    Vec3f up;
     up.set< f32 >(0.0f, 1.0f, 0.0f);
     calcRound();
 
     f32 length, angleX, angleY;
-    MR::crossToPolar(TVec3f(0.0f, 0.0f, 0.0f), pos, &length, &angleX, &angleY);
+    MR::crossToPolar(Vec3f(0.0f, 0.0f, 0.0f), pos, &length, &angleX, &angleY);
     angleY += mRoundAngle;
-    MR::polarToCross(TVec3f(0.0f, 0.0f, 0.0f), &pos, length, angleX, angleY);
+    MR::polarToCross(Vec3f(0.0f, 0.0f, 0.0f), &pos, length, angleX, angleY);
 
     mZoneMatrix.mult33(pos);
     mZoneMatrix.mult33(up);

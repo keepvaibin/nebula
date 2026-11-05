@@ -1,7 +1,7 @@
 #include "Game/System/InputStick.hpp"
 #include "Game/System/PlayerInput.hpp"
 #include "Game/System/PlayerInputs.hpp"
-#include <JSystem/JGeometry/TUtil.hpp>
+#include <nebula_geometry.hpp>
 
 #define STICK_FLAG_NONE 0x0
 #define STICK_FLAG_UP 0x1
@@ -24,7 +24,7 @@ void InputStick::update() {
         return;
     }
 
-    TVec2f stickPrev(mStick);
+    Vec2f stickPrev(mStick);
     mStick.set(pSample->mStick.x, pSample->mStick.y);
     mSpeed = mStick.distance(stickPrev);
     u32 flagPrev = STICK_FLAG_NONE;

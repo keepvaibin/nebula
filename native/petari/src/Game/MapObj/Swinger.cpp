@@ -3,7 +3,7 @@
 #include "Game/Util.hpp"
 #include "Game/Util/MathUtil.hpp"
 
-Swinger::Swinger(const TVec3f* a1, MtxPtr a2, f32 a3, f32 a4, f32 a5, const TVec3f* a6)
+Swinger::Swinger(const Vec3f* a1, MtxPtr a2, f32 a3, f32 a4, f32 a5, const Vec3f* a6)
     : _0(a1), _4(0), _8(0.0f), mAcceleration(0.0f), _20(0.0f, -1.0f, 0.0f), _2C(a3), _30(a4), _34(a5), _38(a6), _3C(a2[0][0], a2[1][0], a2[2][0]),
       _48(a2[0][1], a2[1][1], a2[2][1]), _54(a2[0][2], a2[1][2], a2[2][2]) {
     _8.set(_0->x, (_0->y - _2C), _0->z);
@@ -12,12 +12,12 @@ Swinger::Swinger(const TVec3f* a1, MtxPtr a2, f32 a3, f32 a4, f32 a5, const TVec
     _60.setTrans(*_0);
 }
 
-void Swinger::accel(const TVec3f& a1) {
+void Swinger::accel(const Vec3f& a1) {
     mAcceleration.add(a1);
 }
 
 void Swinger::update() {
-    TVec3f v20;
+    Vec3f v20;
     if (_0 != nullptr) {
         v20.set(*_0);
     } else {
@@ -26,7 +26,7 @@ void Swinger::update() {
     mAcceleration.scale(_34);
 
     if (_38) {
-        TVec3f v19 = *_38;
+        Vec3f v19 = *_38;
         v19.scale(_30);
         mAcceleration.add(v19);
     } else {
@@ -54,12 +54,12 @@ void Swinger::update() {
     updateSwingMtx(v20);
 }
 
-void Swinger::updateSwingMtx(const TVec3f& a1) {
+void Swinger::updateSwingMtx(const Vec3f& a1) {
     _48.set(_20);
     _48.x *= -1.0f;
     _48.y *= -1.0f;
     _48.z *= -1.0f;
-    TVec3f v14(_3C);
+    Vec3f v14(_3C);
     _3C.cross(_48, _54);
     if (MR::isNearZero(_3C)) {
         _3C.set(v14);

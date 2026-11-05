@@ -81,7 +81,7 @@ void Kabokuri::init(const JMapInfoIter& rIter) {
     } else {
         MR::offCalcGravity(this);
 
-        TVec3f upVec;
+        Vec3f upVec;
         mRotationQuat.getYDir(upVec);
         mGravity.set(-upVec);
     }
@@ -92,7 +92,7 @@ void Kabokuri::init(const JMapInfoIter& rIter) {
     initSensor();
     MR::initShadowVolumeSphere(this, ::sShadowRadius);
     initNerve(GET_NERVE(Kabokuri, KabokuriNrvWait));
-    MR::initStarPointerTarget(this, 90.0f * mScale.y, TVec3f(0.0f, 90.0f * mScale.y, 0.0f));
+    MR::initStarPointerTarget(this, 90.0f * mScale.y, Vec3f(0.0f, 90.0f * mScale.y, 0.0f));
 
     mAnimeScale = new AnimScaleController(nullptr);
     mAnimeScale->setParamTight();
@@ -128,8 +128,8 @@ void Kabokuri::initSensor() {
 
     initHitSensor(2);
 
-    MR::addHitSensorEnemy(this, "body", 8, ::sBodyHitRadius * scale, TVec3f(0.0f, ::sBodyHitYOffset * scale, 0.0f));
-    MR::addHitSensorEnemyAttack(this, "attack", 8, ::sAttackHitRadius * scale, TVec3f(0.0f, ::sAttackHitYOffset * scale, 0.0f));
+    MR::addHitSensorEnemy(this, "body", 8, ::sBodyHitRadius * scale, Vec3f(0.0f, ::sBodyHitYOffset * scale, 0.0f));
+    MR::addHitSensorEnemyAttack(this, "attack", 8, ::sAttackHitRadius * scale, Vec3f(0.0f, ::sAttackHitYOffset * scale, 0.0f));
 }
 
 void Kabokuri::control() {
@@ -194,7 +194,7 @@ void Kabokuri::addVelocityToRailPoint(f32 speed) {
         }
     }
 
-    TVec3f velocity;
+    Vec3f velocity;
     MR::calcVelocityMoveToTarget(&velocity, this, MR::getRailPos(this), 1.0f);
     if (velocity.dot(mFrontVec) > 0.4f) {
         mVelocity.add(velocity * speed);

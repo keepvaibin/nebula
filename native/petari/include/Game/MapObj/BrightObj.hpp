@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 #include <nebula_game_api.h>
 
 class Sun;
@@ -11,14 +11,14 @@ public:
     /// @brief Creates a new `BrightInfo`.
     BrightInfo();
 
-    void write(const TVec2f&, const TVec2f&, f32);
+    void write(const Vec2f&, const Vec2f&, f32);
     void endRead();
     void reset();
 
     u32 mIndex;
     u32 mCurrIndex;
-    TVec2f mBrightnessCenter[3];
-    TVec2f mRealCenter[3];
+    Vec2f mBrightnessCenter[3];
+    Vec2f mRealCenter[3];
     f32 mBright[3];
 };
 
@@ -35,21 +35,21 @@ public:
     virtual ~BrightObjBase();
     virtual void calcBrightInfo(NebulaScreenProbe*) = 0;
     virtual f32 getBright() const;
-    virtual const TVec2f* getBrightCenter() const;
-    virtual const TVec2f* getCenter() const;
+    virtual const Vec2f* getBrightCenter() const;
+    virtual const Vec2f* getCenter() const;
     virtual void endRead();
-    virtual void getNowCenter(TVec2f*) const;
+    virtual void getNowCenter(Vec2f*) const;
 
     void checkVisibilityOfSphere(NebulaScreenProbe*);
-    void checkVisible(NebulaScreenProbe*, const TVec3f&, const TPos3f&, const TProj3f&);
+    void checkVisible(NebulaScreenProbe*, const Vec3f&, const Pos3f&, const Proj3f&);
     void setResult(const NebulaScreenProbe*);
 
     BrightInfo mInfo;
-    TVec2f mBrightCenter;
-    TVec2f mNowCenter;
+    Vec2f mBrightCenter;
+    Vec2f mNowCenter;
     f32 mBrightness;
     bool mIsNotVisible;
-    TVec3f mDrawPos;
+    Vec3f mDrawPos;
     f32 mDrawRadius;
 };
 
@@ -62,7 +62,7 @@ public:
     virtual void control();
 
     virtual void calcBrightInfo(NebulaScreenProbe*);
-    virtual void getNowCenter(TVec2f*) const;
+    virtual void getNowCenter(Vec2f*) const;
 
     f32 mRadius;
 };
@@ -76,7 +76,7 @@ public:
     virtual void control();
 
     virtual void calcBrightInfo(NebulaScreenProbe*);
-    virtual void getNowCenter(TVec2f*) const;
+    virtual void getNowCenter(Vec2f*) const;
 
     void controlSunModel();
 

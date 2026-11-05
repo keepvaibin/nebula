@@ -53,7 +53,7 @@ bool CollectCounter::tryEndShow() {
 
 void CollectCounter::setPosition() {
     f32 point_rad = MR::calcPointRadius2D(*MR::getPlayerCenterPos(), 75.0f);
-    TVec2f screen_pos;
+    Vec2f screen_pos;
     MR::calcScreenPosition(&screen_pos, *MR::getPlayerCenterPos());
     screen_pos.y -= point_rad;
     mFollowPosition.x = screen_pos.x;

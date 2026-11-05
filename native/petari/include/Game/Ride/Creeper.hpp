@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class ActorCameraInfo;
 class JUTTexture;
@@ -9,35 +9,35 @@ class PartsModel;
 
 class CreeperPoint {
 public:
-    CreeperPoint(const TVec3f&, const TVec3f&, const CreeperPoint*);
+    CreeperPoint(const Vec3f&, const Vec3f&, const CreeperPoint*);
 
     void updateFree();
-    void updateBend(bool, const TVec3f&, f32, f32);
+    void updateBend(bool, const Vec3f&, f32, f32);
     void updateLocalAxis();
 
-    const TVec3f& getPosition() const {
+    const Vec3f& getPosition() const {
         return mPosition;
     }
 
-    const TVec3f& getSide() const {
+    const Vec3f& getSide() const {
         return mSide;
     }
 
-    const TVec3f& getUp() const {
+    const Vec3f& getUp() const {
         return mUp;
     }
 
-    const TVec3f& getFront() const {
+    const Vec3f& getFront() const {
         return mFront;
     }
 
-    TVec3f mPosition;
-    TVec3f mNeutralPos;
-    TVec3f mVelocity;
-    TVec3f mSide;
-    TVec3f mUp;
-    TVec3f mFront;
-    TVec3f mProjection;
+    Vec3f mPosition;
+    Vec3f mNeutralPos;
+    Vec3f mVelocity;
+    Vec3f mSide;
+    Vec3f mUp;
+    Vec3f mFront;
+    Vec3f mProjection;
     const CreeperPoint* mPrevPoint;
 };
 
@@ -66,7 +66,7 @@ public:
     bool tryJump();
     bool updateHangUp(f32);
 
-    void calcAndGetCurrentInfo(TVec3f*, TVec3f*) const;
+    void calcAndGetCurrentInfo(Vec3f*, Vec3f*) const;
 
     void loadMaterial() const;
     const CreeperPoint* getHeadPoint() const {
@@ -80,19 +80,19 @@ public:
     s32 mNumPoints;
     CreeperPoint** mPoints;
     LiveActor* mRider;
-    TVec3f mFront;
-    TVec3f mUp;
+    Vec3f mFront;
+    Vec3f mUp;
     f32 mHangSpeed;
     f32 mCoord;
     f32 mBendRate;
     f32 mBendRateBee;
-    TVec3f mBendDirection;
+    Vec3f mBendDirection;
     f32 mJumpSpeedFront;
     f32 mJumpSpeedUp;
     ActorCameraInfo* mCameraInfo;
-    TVec3f mClippingCenter;
+    Vec3f mClippingCenter;
     JUTTexture* mTexture;
     PartsModel* mFlowerModel;
     PartsModel* mLeafModel;
-    TPos3f mTopMtx;
+    Pos3f mTopMtx;
 };

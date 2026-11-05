@@ -17,7 +17,7 @@ public:
     virtual bool receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
     virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 
-    virtual void launch(const TVec3f&, const TVec3f&);
+    virtual void launch(const Vec3f&, const Vec3f&);
 
     void initStarPointer();
     bool tryFreeze();
@@ -30,9 +30,9 @@ public:
     void exeDown();
     void exeFreeze();
 
-    TQuat4f _8C;
-    TVec3f _9C;
-    TVec3f _A8;
+    Quat4f _8C;
+    Vec3f _9C;
+    Vec3f _A8;
     s32 _B4;  // Freeze timing?
     bool _B8;
 };

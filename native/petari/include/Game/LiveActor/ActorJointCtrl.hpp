@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 
@@ -18,8 +18,8 @@ public:
     void resetDynamicCtrl();
     void startFaceCtrl(s32);
     void endFaceCtrl(s32);
-    void setIKEndPosition(const char*, const TVec3f&, f32);
-    void setIKEndDirection(const char*, const TVec3f&, f32);
+    void setIKEndPosition(const char*, const Vec3f&, f32);
+    void setIKEndDirection(const char*, const Vec3f&, f32);
     void endIKCtrlAll();
     void update();
     void startUpdate();

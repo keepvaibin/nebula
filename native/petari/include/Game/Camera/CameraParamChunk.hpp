@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/Camera/CameraParamString.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class CameraHolder;
 class CameraParamChunkID;
@@ -17,9 +17,9 @@ public:
     CameraGeneralParam& operator=(const CameraGeneralParam&);
 
     f32 mDist;
-    TVec3f mAxis;
-    TVec3f mWPoint;
-    TVec3f mUp;
+    Vec3f mAxis;
+    Vec3f mWPoint;
+    Vec3f mUp;
     f32 mAngleA;
     f32 mAngleB;
     s32 mNum1;
@@ -56,11 +56,11 @@ public:
             mVPanAxis.set(0.0f, 1.0f, 0.0f);
         }
 
-        void setWOffset(const TVec3f& rWOffset) {
+        void setWOffset(const Vec3f& rWOffset) {
             mWOffset.set(rWOffset);
         }
 
-        TVec3f mWOffset;
+        Vec3f mWOffset;
         f32 mLOffset;
         f32 mLOffsetV;
         f32 mRoll;
@@ -76,7 +76,7 @@ public:
         s32 mPushDelayLow;
         s32 mUDown;
         s32 mVPanUse;
-        TVec3f mVPanAxis;
+        Vec3f mVPanAxis;
     };
 
     CameraParamChunk(CameraHolder*, const CameraParamChunkID&);
@@ -95,7 +95,7 @@ public:
     bool isAntiBlurOff() const;
     bool isCollisionOff() const;
     bool isSubjectiveCameraOff() const;
-    void getVPanAxis(TVec3f*) const;
+    void getVPanAxis(Vec3f*) const;
 
     void setCameraType(const char*, const CameraHolder*);
     void setUseFovy(bool);

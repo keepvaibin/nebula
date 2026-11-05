@@ -28,8 +28,8 @@ public:
     void exePerchOnSleepingMario();
 
 private:
-    TVec3f mHomePos;
-    TQuat4f mQuat;
+    Vec3f mHomePos;
+    Quat4f mQuat;
     s32 mColorIndex;
     HitSensor* mPerchTarget;
     bool mStarPieceAppeared;

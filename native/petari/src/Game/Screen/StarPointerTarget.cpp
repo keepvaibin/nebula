@@ -8,34 +8,34 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <JSystem/JMath/JMATrigonometric.hpp>
+#include <nebula_geometry.hpp>
 #include <nebula_math.h>
 
 namespace {
     static const f32 hZCheckAddDepth = 60.0f;
 
-    inline void multProj(const TProj3f& rMtx, const TVec3f& rSrc, TVec3f& rDest) {
+    inline void multProj(const Proj3f& rMtx, const Vec3f& rSrc, Vec3f& rDest) {
         f32 w = -rSrc.z;
         s32 col = 3;
-        TVec4f pos(rSrc.x * rMtx.mMtx[0][0] + rSrc.z * rMtx.mMtx[0][2], rSrc.y * rMtx.mMtx[1][1] + rSrc.z * rMtx.mMtx[1][2],
+        Vec4f pos(rSrc.x * rMtx.mMtx[0][0] + rSrc.z * rMtx.mMtx[0][2], rSrc.y * rMtx.mMtx[1][1] + rSrc.z * rMtx.mMtx[1][2],
                    rSrc.z * rMtx.mMtx[2][2] + rMtx.mMtx[2][col], w);
-        rDest.scale(1.0f / pos.w, *pos.toTVec3());
+        rDest.scale(1.0f / pos.w, *pos.toVec3());
     }
 };  // namespace
 
-StarPointerTarget::StarPointerTarget(f32 radius, const TVec3f* pPosition, MtxPtr pMtx, TVec3f offset)
+StarPointerTarget::StarPointerTarget(f32 radius, const Vec3f* pPosition, MtxPtr pMtx, Vec3f offset)
     : mRadius3d(radius), mOffset(offset), mLastPointedChannel(PLAYER_1), mPosition(pPosition), mMtx(pMtx) {
 }
 
-bool StarPointerTarget::calcScreenPosition(TVec2f* pScreenPos) const {
-    TVec3f worldPos, viewPos;
+bool StarPointerTarget::calcScreenPosition(Vec2f* pScreenPos) const {
+    Vec3f worldPos, viewPos;
     calcPosition(&worldPos);
     NebulaMtxMultVec(MR::getStarPointerViewMtx(), &worldPos, &viewPos);
     return calcScreenPositionFromView(pScreenPos, viewPos);
 }
 
-bool StarPointerTarget::isPointing(const TVec2f& rPointerPos, f32 zMargin, f32 radiusMargin) const {
-    TVec3f worldPos, viewPos;
+bool StarPointerTarget::isPointing(const Vec2f& rPointerPos, f32 zMargin, f32 radiusMargin) const {
+    Vec3f worldPos, viewPos;
     calcPosition(&worldPos);
     NebulaMtxMultVec(MR::getStarPointerViewMtx(), &worldPos, &viewPos);
 
@@ -48,7 +48,7 @@ bool StarPointerTarget::isPointing(const TVec2f& rPointerPos, f32 zMargin, f32 r
     }
 
     f32 radius = calcRadius2d(mRadius3d, radiusMargin, -viewPos.z);
-    TVec2f screenPos;
+    Vec2f screenPos;
     if (!calcScreenPositionFromView(&screenPos, viewPos)) {
         return false;
     }
@@ -60,7 +60,7 @@ bool StarPointerTarget::isPointing(const TVec2f& rPointerPos, f32 zMargin, f32 r
     return false;
 }
 
-void StarPointerTarget::calcPosition(TVec3f* pWorldPos) const {
+void StarPointerTarget::calcPosition(Vec3f* pWorldPos) const {
     if (mMtx != nullptr) {
         if (mPosition != nullptr) {
             pWorldPos->set< f32 >(mPosition->x, mPosition->y, mPosition->z);
@@ -83,8 +83,8 @@ f32 StarPointerTarget::calcRadius2d(f32 radius3d, f32 margin, f32 z) const {
     return radius2d + margin;
 }
 
-bool StarPointerTarget::calcScreenCircle(TVec2f* pScreenPos, f32* pRadius) const {
-    TVec3f worldPos, viewPos;
+bool StarPointerTarget::calcScreenCircle(Vec2f* pScreenPos, f32* pRadius) const {
+    Vec3f worldPos, viewPos;
     calcPosition(&worldPos);
     NebulaMtxMultVec(MR::getStarPointerViewMtx(), &worldPos, &viewPos);
     if (-viewPos.z <= 0.0f || !calcScreenPositionFromView(pScreenPos, viewPos)) {
@@ -94,10 +94,10 @@ bool StarPointerTarget::calcScreenCircle(TVec2f* pScreenPos, f32* pRadius) const
     return true;
 }
 
-bool StarPointerTarget::calcScreenPositionFromView(TVec2f* pScreenPos, const TVec3f& rViewPos) const {
-    TProj3f mtx;
+bool StarPointerTarget::calcScreenPositionFromView(Vec2f* pScreenPos, const Vec3f& rViewPos) const {
+    Proj3f mtx;
     mtx.setInline(MR::getStarPointerProjMtx());
-    TVec3f pos;
+    Vec3f pos;
     multProj(mtx, rViewPos, pos);
     pos.y = -pos.y;
 
@@ -120,7 +120,7 @@ StarPointerLayoutTarget::StarPointerLayoutTarget(LayoutActor* pLayoutActor, cons
       mWidth(0.0f), mHeight(0.0f) {
 }
 
-bool StarPointerLayoutTarget::isPointing(const TVec2f& rPos) const {
+bool StarPointerLayoutTarget::isPointing(const Vec2f& rPos) const {
     switch (mType) {
     case TargetType_Circle:
         return isPointingCircle(rPos);
@@ -131,8 +131,8 @@ bool StarPointerLayoutTarget::isPointing(const TVec2f& rPos) const {
     }
 }
 
-bool StarPointerLayoutTarget::isPointingCircle(const TVec2f& rPos) const {
-    TVec2f pos;
+bool StarPointerLayoutTarget::isPointingCircle(const Vec2f& rPos) const {
+    Vec2f pos;
     calcBasePos(&pos);
     f32 r = mRadius;
     r *= r;
@@ -141,27 +141,27 @@ bool StarPointerLayoutTarget::isPointingCircle(const TVec2f& rPos) const {
 }
 
 namespace {
-    inline void setRectangle(TBox2f& rBox, f32 x, f32 y, f32 width, f32 height) {
+    inline void setRectangle(Box2f& rBox, f32 x, f32 y, f32 width, f32 height) {
         rBox.setInline(x, y, x + width, y + height);
     }
 };  // namespace
 
-bool StarPointerLayoutTarget::isPointingRectangle(const TVec2f& rPos) const {
-    TVec2f pos;
+bool StarPointerLayoutTarget::isPointingRectangle(const Vec2f& rPos) const {
+    Vec2f pos;
     calcBasePos(&pos);
 
-    TBox2f bounds;
+    Box2f bounds;
     setRectangle(bounds, pos.x, pos.y, mWidth, mHeight);
 
     return bounds.intersectsPoint(rPos);
 }
 
-void StarPointerLayoutTarget::calcBasePos(TVec2f* pPos) const {
+void StarPointerLayoutTarget::calcBasePos(Vec2f* pPos) const {
     if (mPaneName == nullptr) {
         pPos->y = 0.0f;
         pPos->x = 0.0f;
     } else {
-        MR::convertPaneLocalPosToScreenPos(pPos, MR::getPane(mLayout, mPaneName), TVec2f(0.0f, 0.0f));
+        MR::convertPaneLocalPosToScreenPos(pPos, MR::getPane(mLayout, mPaneName), Vec2f(0.0f, 0.0f));
     }
 
     pPos->x += mPosition.x;
@@ -173,7 +173,7 @@ StarPointerLayoutTargetKeeper::StarPointerLayoutTargetKeeper(int maxNumTargets) 
     memset(mTargets, 0, mMaxNumTargets * sizeof(StarPointerLayoutTarget*));
 }
 
-void StarPointerLayoutTargetKeeper::addTargetCircle(LayoutActor* pLayoutActor, const char* pLayoutName, f32 radius, const TVec2f& rPosition,
+void StarPointerLayoutTargetKeeper::addTargetCircle(LayoutActor* pLayoutActor, const char* pLayoutName, f32 radius, const Vec2f& rPosition,
                                                     const char* pPaneName) {
     StarPointerLayoutTarget* target = new StarPointerLayoutTarget(pLayoutActor, pLayoutName, pPaneName != nullptr ? pPaneName : pLayoutName);
     target->mType = StarPointerLayoutTarget::TargetType_Circle;

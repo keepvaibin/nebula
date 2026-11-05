@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class Koopa;
 class ModelObj;
@@ -24,11 +24,11 @@ public:
 private:
     Koopa* mKoopa;
     f32 mAngle;
-    TPos3f _94;
-    TVec3f mUp;
-    TVec3f mFront;
-    TPos3f mBaseMtx;
-    TPos3f mMtx;
+    Pos3f _94;
+    Vec3f mUp;
+    Vec3f mFront;
+    Pos3f mBaseMtx;
+    Pos3f mMtx;
     PartsModel* mPartsModel;
     ModelObj* mShadow;
 };

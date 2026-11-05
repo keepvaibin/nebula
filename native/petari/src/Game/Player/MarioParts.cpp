@@ -16,7 +16,7 @@ MarioParts::MarioParts(LiveActor* pActor, const char* pName, const char* pModelN
     }
 
     if (mtx1 != nullptr) {
-        initFixedPosition(mtx1, TVec3f(0.0f, 0.0f, 0.0f), TVec3f(0.0f, 0.0f, 0.0f));
+        initFixedPosition(mtx1, Vec3f(0.0f, 0.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
         offFixedPosNormalizeScale();
     }
 }

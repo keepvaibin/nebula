@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class ClipAreaShape;
 
@@ -16,12 +16,12 @@ public:
     virtual MtxPtr getBaseMtx() const {
         return (MtxPtr)&mBaseMtx;
     }
-    virtual bool isInArea(const TVec3f&, f32) const;
+    virtual bool isInArea(const Vec3f&, f32) const;
 
     void initBaseMatrix(const JMapInfoIter&);
     void setShape(ClipAreaShape*);
 
-    TPos3f mBaseMtx;
+    Pos3f mBaseMtx;
     ClipAreaShape* mShape;
 };
 

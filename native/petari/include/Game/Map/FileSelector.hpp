@@ -150,7 +150,7 @@ public:
     FileSelectCameraController* mCameraController;
     FileSelectSky* mSky;
     DeriveActorGroup< FileSelectItem >* mItems;
-    TVec3f* _98;
+    Vec3f* _98;
     FileSelectButton* mOperationButton;
     BackButton* mBackButton;
     BrosButton* mBrosButton;

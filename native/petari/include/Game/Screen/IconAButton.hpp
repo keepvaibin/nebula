@@ -24,7 +24,7 @@ public:
     void exeTerm();
     void updateFollowPos();
 
-    TVec2f mFollowPos;
+    Vec2f mFollowPos;
     LayoutActor* mFollowActor;
     char mFollowPaneName[24];
 };

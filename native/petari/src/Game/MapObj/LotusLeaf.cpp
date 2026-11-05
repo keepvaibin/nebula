@@ -95,7 +95,7 @@ void LotusLeaf::exeShake() {
     mShakePeriod += ::sShakePeriodSlowPitch;
     mShakeSpeed *= ::sShakeSpeedAtten;
 
-    TVec3f& rVelocity = mVelocity;
+    Vec3f& rVelocity = mVelocity;
     f32 accel = vel - rVelocity.y;
     rVelocity.y = vel;
 

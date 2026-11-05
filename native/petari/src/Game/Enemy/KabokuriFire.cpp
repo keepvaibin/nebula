@@ -28,12 +28,12 @@ void KabokuriFire::init(const JMapInfoIter& rIter) {
     initSound(2, false);
     initHitSensor(1);
 
-    MR::addHitSensorEnemy(this, "body", 8, ::sBodyHitSize, TVec3f(0.0f, ::sBodyHitYOffset, 0.0f));
+    MR::addHitSensorEnemy(this, "body", 8, ::sBodyHitSize, Vec3f(0.0f, ::sBodyHitYOffset, 0.0f));
     MR::invalidateClipping(this);
     makeActorDead();
 }
 
-void KabokuriFire::start(const TVec3f& rPosition, bool gravitySet) {
+void KabokuriFire::start(const Vec3f& rPosition, bool gravitySet) {
     mPosition.set(rPosition);
 
     if (!gravitySet) {

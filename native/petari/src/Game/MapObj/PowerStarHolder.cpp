@@ -21,7 +21,7 @@ void PowerStarHolder::registerPowerStar(PowerStar* pStar, int starNum) {
     mNumInfos++;
 }
 
-void PowerStarHolder::requestAppearPowerStar(int starNum, const TVec3f* pPos, bool forceAppear) {
+void PowerStarHolder::requestAppearPowerStar(int starNum, const Vec3f* pPos, bool forceAppear) {
     NebulaMods::fire(NEBULA_MOD_EVENT_POWER_STAR_APPEAR, starNum);
     PowerStarRequestInfo* info = findPowerStarRequestInfo(starNum);
     info->mIsAppear = true;

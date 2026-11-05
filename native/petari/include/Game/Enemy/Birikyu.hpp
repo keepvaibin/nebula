@@ -31,12 +31,12 @@ public:
     void exeStopPointing();
 
     const char* _8C;
-    TVec3f _90;
-    TVec3f _9C;
+    Vec3f _90;
+    Vec3f _9C;
     bool _A8;
     bool _A9;
-    TVec3f _AC;
-    TVec3f _B8;
+    Vec3f _AC;
+    Vec3f _B8;
     f32 _C4;
     f32 _C8;
 };

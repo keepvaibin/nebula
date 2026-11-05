@@ -2,7 +2,7 @@
 
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/TalkUtil.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class AnimScaleController;
 class JointController;
@@ -33,7 +33,7 @@ public:
     bool mMessage;
     bool _F;
     const char* _10;
-    TVec3f mMessageOffset;
+    Vec3f mMessageOffset;
     MtxPtr mTalkMtx;
     const char* mTalkJointName;
     bool mInterpole;
@@ -51,7 +51,7 @@ public:
     bool mSensor;
     const char* mSensorJoint;
     f32 mSensorSize;
-    TVec3f mSensorOffset;
+    Vec3f mSensorOffset;
     s32 mSensorMax;
     bool mShadow;
     bool mUseShadow;
@@ -65,7 +65,7 @@ public:
     bool mPointer;
     const char* _6C;
     const char* _70;
-    TVec3f mStarPointerOffs;
+    Vec3f mStarPointerOffs;
     f32 mPointerSize;
     s32 mSceneConnectionType;
     Nerve* mWaitNerve;
@@ -91,9 +91,9 @@ public:
     static void addArchive(NameObjArchiveListCollector*, const NPCActorItem&);
     static void makeArchiveListDefault(NameObjArchiveListCollector*, const JMapInfoIter&);
 
-    bool initTalkCtrl(const JMapInfoIter&, const char*, const TVec3f&, MtxPtr);
-    bool initTalkCtrlDirect(const JMapInfoIter&, const char*, const TVec3f&, MtxPtr);
-    bool calcJointScale(TPos3f*, const JointControllerInfo&);
+    bool initTalkCtrl(const JMapInfoIter&, const char*, const Vec3f&, MtxPtr);
+    bool initTalkCtrlDirect(const JMapInfoIter&, const char*, const Vec3f&, MtxPtr);
+    bool calcJointScale(Pos3f*, const JointControllerInfo&);
     bool turnToPlayer();
     bool turnToPlayer(f32);
     bool turnToPlayer(f32, f32, f32);
@@ -138,7 +138,7 @@ public:
 
     void equipment(const NPCActorItem&, bool);
 
-    void setBaseMtx(const TPos3f&);
+    void setBaseMtx(const Pos3f&);
     void setBaseMtx(MtxPtr);
 
     inline void setDefaults() {
@@ -212,10 +212,10 @@ public:
     PartsModel* _94;
     PartsModel* _98;
     s32 _9C;
-    TQuat4f _A0;
-    TQuat4f _B0;
-    TVec3f _C0;
-    TVec3f _CC;
+    Quat4f _A0;
+    Quat4f _B0;
+    Vec3f _C0;
+    Vec3f _CC;
     u8 _D8;
     u8 _D9;
     u8 _DA;

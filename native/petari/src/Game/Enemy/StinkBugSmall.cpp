@@ -45,7 +45,7 @@ void StinkBugSmall::init(const JMapInfoIter& rIter) {
     MR::getJMapInfoArg1NoInit(rIter, &mRadius);
     MR::getJMapInfoArg7NoInit(rIter, &_C4);
     initHitSensor(3);
-    TVec3f v9;
+    Vec3f v9;
     if (_C4) {
         v9.y = 10.0f * mScale.x;
         v9.x = 0.0f;
@@ -55,7 +55,7 @@ void StinkBugSmall::init(const JMapInfoIter& rIter) {
         MR::addBodyMessageSensorEnemy(this);
     }
 
-    TVec3f v8;
+    Vec3f v8;
     v8.y = -30.0f * mScale.x;
     v8.x = 0.0f;
     v8.z = 0.0f;
@@ -71,7 +71,7 @@ void StinkBugSmall::init(const JMapInfoIter& rIter) {
         MR::declareStarPiece(this, 3);
     }
 
-    TVec3f v7;
+    Vec3f v7;
     v7.y = 50.0f * mScale.x;
     v7.x = 0.0f;
     v7.z = 0.0f;
@@ -173,7 +173,7 @@ void StinkBugSmall::exeBack() {
         return;
     }
 
-    TVec3f tvf;
+    Vec3f tvf;
     tvf.sub(_98, mPosition);
     MR::normalize(&tvf);
     MR::turnVecToPlane(&tvf, tvf, mGravity);
@@ -310,11 +310,11 @@ void StinkBugSmall::kill() {
 }
 
 void StinkBugSmall::initAfterPlacement() {
-    TVec3f v8;
-    TVec3f v7;
+    Vec3f v8;
+    Vec3f v7;
     MR::calcUpVec(&v8, this);
     v7.scaleAdd(50.0f, v8, mPosition);
-    TVec3f up;
+    Vec3f up;
     MR::calcUpVec(&up, this);
     up.scale(-200.0f);
     HitSensor* pSensor = getSensor("body");
@@ -323,7 +323,7 @@ void StinkBugSmall::initAfterPlacement() {
 }
 
 void StinkBugSmall::control() {
-    if (MR::isInDeath(this, TVec3f(0.0f, 0.0f, 0.0f))) {
+    if (MR::isInDeath(this, Vec3f(0.0f, 0.0f, 0.0f))) {
         kill();
         return;
     }
@@ -347,22 +347,22 @@ void StinkBugSmall::control() {
             mGravity.set(mGravity);
         }
 
-        const TVec3f& rVelocity = mVelocity;
-        const TVec3f& rGravity = mGravity;
+        const Vec3f& rVelocity = mVelocity;
+        const Vec3f& rGravity = mGravity;
         mVelocity.killElement(rVelocity, rGravity);
         mVelocity.scaleAdd(2.0f, mGravity, mVelocity);
-        TVec3f a;
+        Vec3f a;
         a = _8C;
         MR::turnVecToPlane(&_8C, a, mGravity);
     }
 }
 
 void StinkBugSmall::calcAndSetBaseMtx() {
-    TPos3f mtx;
+    Pos3f mtx;
     MR::calcMtxFromGravityAndZAxis(&mtx, this, mGravity, _8C);
     MR::blendMtx(getBaseMtx(), mtx, 0.3f, mtx);
     MR::setBaseTRMtx(this, mtx);
-    TVec3f scale = mScaleController->_C * mScale;
+    Vec3f scale = mScaleController->_C * mScale;
     MR::setBaseScale(this, scale);
 }
 

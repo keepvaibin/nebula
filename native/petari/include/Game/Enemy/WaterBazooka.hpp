@@ -3,7 +3,7 @@
 #include "Game/Enemy/WaterBazookaCapsule.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class ActorCameraInfo;
 class CameraTargetDemoActor;
@@ -59,7 +59,7 @@ public:
     void switchShowOrHide();
     void updateElectricLeak();
     void damageBazooka(HitSensor*, HitSensor*);
-    bool calcJointCannon(TPos3f*, const JointControllerInfo&);
+    bool calcJointCannon(Pos3f*, const JointControllerInfo&);
     s32 getSmokeLevel() const;  // enum?
 
     bool tryWaitForBattle();
@@ -76,8 +76,8 @@ public:
     bool tryShotBullet();
     ElectricPressureBullet* selectBulletElectric();
     bool tryJumpBackPlayerFromBazooka() const;
-    void calcNearDropPoint(TVec3f*) const;
-    void calcGunPointFromCannon(TPos3f*);
+    void calcNearDropPoint(Vec3f*) const;
+    void calcGunPointFromCannon(Pos3f*);
     void setCameraTargetMtx();
 
     inline void startBrk(const char* pName) {
@@ -95,7 +95,7 @@ public:
     s32 mShotNum;
     CollisionParts* mCannonCollisionParts;
     JointController* mJointCtrl;
-    TPos3f mBaseMtx;
+    Pos3f mBaseMtx;
     bool mIsPinchBGMStarted;
     bool mHasPowerStar;
     bool mIsElectric;

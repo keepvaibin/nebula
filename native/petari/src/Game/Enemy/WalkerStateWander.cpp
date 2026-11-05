@@ -20,7 +20,7 @@ namespace NrvWalkerStateWander {
 WalkerStateWanderParam::WalkerStateWanderParam() : mWaitTime(120), mWalkTime(120), mSpeed(0.2f), mTurnMaxRateDegree(3.0f), mTargetDistance(20.0f) {
 }
 
-WalkerStateWander::WalkerStateWander(LiveActor* pHost, TVec3f* pDirection, WalkerStateParam* pStateParam, WalkerStateWanderParam* pWanderParam)
+WalkerStateWander::WalkerStateWander(LiveActor* pHost, Vec3f* pDirection, WalkerStateParam* pStateParam, WalkerStateWanderParam* pWanderParam)
     : ActorStateBase< LiveActor >("\203\116\203\212\203\173\201\133\214\136\202\244\202\353\202\302\202\253\217\363\221\324" /* クリボー型うろつき状態 */, pHost), mDirection(pDirection), mTerritoryMover(nullptr), mStateParam(pStateParam),
       mWanderParam(pWanderParam) {
     initNerve(GET_NERVE(WalkerStateWander, WalkerStateWanderNrvWait));
@@ -38,7 +38,7 @@ void WalkerStateWander::appear() {
     setNerve(GET_NERVE(WalkerStateWander, WalkerStateWanderNrvWait));
 }
 
-void WalkerStateWander::setWanderCenter(const TVec3f& rCenter) {
+void WalkerStateWander::setWanderCenter(const Vec3f& rCenter) {
     mTerritoryMover->setCenter(rCenter);
 }
 

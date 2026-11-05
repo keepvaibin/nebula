@@ -28,12 +28,12 @@ namespace {
     NEW_NERVE(FileSelectItemNrvChangeFellow, FileSelectItem, ChangeFellow);
     NEW_NERVE(FileSelectItemNrvChangeMii, FileSelectItem, ChangeMii);
 
-    bool checkCollisionOfPointAndCylinder(const TVec3f& rVec1, const TVec3f& rVec2, const TVec3f& rVec3, f32 f1) {
+    bool checkCollisionOfPointAndCylinder(const Vec3f& rVec1, const Vec3f& rVec2, const Vec3f& rVec3, f32 f1) {
         f32 length = rVec3.length();
-        TVec3f vecCopy(rVec3);
+        Vec3f vecCopy(rVec3);
         MR::normalize(&vecCopy);
 
-        TVec3f diff(rVec1 - rVec2);
+        Vec3f diff(rVec1 - rVec2);
 
         f32 dot = vecCopy.dot(diff);
         if (dot < 0.0f || dot > length) {
@@ -104,7 +104,7 @@ void FileSelectItem::init(const JMapInfoIter& rIter) {
     createFellows();
     createMii();
     createNumber();
-    MR::initStarPointerTarget(this, 1000.0f, TVec3f(0.0f, 900.0f, 0.0f));
+    MR::initStarPointerTarget(this, 1000.0f, Vec3f(0.0f, 900.0f, 0.0f));
     MR::invalidateClipping(this);
     initNerve(GET_NERVE_ANON(FileSelectItemNrvNewWait));
     MR::createCenterScreenBlur();
@@ -355,17 +355,17 @@ void FileSelectItem::control() {
     updatePointing();
     updateRotate();
 
-    TPos3f mtx;
+    Pos3f mtx;
     if (mRotation.x == 0.0f && mRotation.z == 0.0f) {
         MR::makeMtxTransRotateY(mtx, this);
     } else {
         MR::makeMtxTR(mtx, this);
     }
 
-    TVec3f yDir;
+    Vec3f yDir;
     mtx.getYDir(yDir);
 
-    TVec3f trans;
+    Vec3f trans;
     mtx.getTrans(trans);
     _A4.set(mtx);
     _A4.setTrans(trans + yDir * 30.0f * 30.0f);
@@ -385,8 +385,8 @@ void FileSelectItem::control() {
 
     mBlinkCtrl->updateNerve();
 
-    TVec3f newPos;
-    TVec3f screenPos;
+    Vec3f newPos;
+    Vec3f screenPos;
     newPos.add(mPosition, ::sDataInfoOffset);
     MR::calcScreenPosition(&screenPos, newPos);
     _A0->setTrans(screenPos);
@@ -412,7 +412,7 @@ void FileSelectItem::createMii() {
                                                                 MiiFaceRecipe(MiiDataSource_Official, mIconID->getMiiIndex(), MiiResolution_256, 33));
     }
 
-    mFaceParts->initFixedPosition(_104, TVec3f(0.0f, 0.0f, 0.0f), TVec3f(0.0f, 0.0f, 0.0f));
+    mFaceParts->initFixedPosition(_104, Vec3f(0.0f, 0.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
     mFaceParts->mScale.set(27.0f);
     mFaceParts->initEffectKeeper(0, "FileSelectDataMii", false);
     MR::invalidateClipping(mFaceParts);
@@ -448,15 +448,15 @@ void FileSelectItem::updatePointing() {
 
 namespace {
     struct PointerSweepTriangle {
-        TVec3f mVertexA;
-        TVec3f mVertexB;
-        TVec3f mVertexC;
-        TVec3f mEdgeAB;
-        TVec3f mEdgeBC;
-        TVec3f mEdgeCA;
-        TVec3f mNormal;
+        Vec3f mVertexA;
+        Vec3f mVertexB;
+        Vec3f mVertexC;
+        Vec3f mEdgeAB;
+        Vec3f mEdgeBC;
+        Vec3f mEdgeCA;
+        Vec3f mNormal;
 
-        void set(const TVec3f& rCameraPosition, const TVec3f& rCurrentPoint, const TVec3f& rPreviousPoint) {
+        void set(const Vec3f& rCameraPosition, const Vec3f& rCurrentPoint, const Vec3f& rPreviousPoint) {
             mVertexA = rCameraPosition;
             mVertexB = rCurrentPoint;
             mVertexC = rPreviousPoint;
@@ -468,13 +468,13 @@ namespace {
             MR::normalize(&mNormal);
         }
 
-        PointerSweepTriangle(const TVec3f& rA, const TVec3f& rB, const TVec3f& rC) {
+        PointerSweepTriangle(const Vec3f& rA, const Vec3f& rB, const Vec3f& rC) {
             set(rA, rB, rC);
         }
 
-        bool contains(const TVec3f& rPoint) const {
+        bool contains(const Vec3f& rPoint) const {
             bool containsPoint;
-            TVec3f cross;
+            Vec3f cross;
             cross.cross(rPoint - mVertexA, mEdgeAB);
 
             if (cross.dot(mNormal) < 0.0f) {
@@ -494,18 +494,18 @@ namespace {
             return containsPoint;
         }
 
-        void project(TVec3f* pResult, const TVec3f& rCenter, f32 distance) const {
-            TVec3f offset(mNormal);
+        void project(Vec3f* pResult, const Vec3f& rCenter, f32 distance) const {
+            Vec3f offset(mNormal);
             offset.scale(distance);
             *pResult = rCenter - offset;
         }
     };
 
-    inline bool checkCollisionOfPointAndTriangle(const TVec3f& rCenter, const TVec3f& rCameraPosition, const TVec3f& rCurrentPoint,
-                                                 const TVec3f& rPreviousPoint) {
+    inline bool checkCollisionOfPointAndTriangle(const Vec3f& rCenter, const Vec3f& rCameraPosition, const Vec3f& rCurrentPoint,
+                                                 const Vec3f& rPreviousPoint) {
         PointerSweepTriangle triangle(rCameraPosition, rCurrentPoint, rPreviousPoint);
 
-        TVec3f delta(rCenter - rCameraPosition);
+        Vec3f delta(rCenter - rCameraPosition);
         f32 planeDistance = triangle.mNormal.dot(delta);
 
         bool containsPoint;
@@ -514,7 +514,7 @@ namespace {
         if (MR::abs(planeDistance) >= 900.0f) {
             collides = false;
         } else {
-            TVec3f projected;
+            Vec3f projected;
             triangle.project(&projected, rCenter, planeDistance);
             containsPoint = triangle.contains(projected);
             if (containsPoint) {
@@ -572,8 +572,8 @@ void FileSelectItem::updateRotate() {
         pBlink->setNerve(GET_NERVE_DIRECT(FileSelectItemSub, BlinkControllerNrvOpen));
         return;
     } else if (MR::isStarPointerInScreen(0)) {
-        TVec3f center = mPosition + TVec3f(0.0f, 900.0f, 0.0f);
-        TVec2f screenPos(*MR::getStarPointerScreenPosition(0));
+        Vec3f center = mPosition + Vec3f(0.0f, 900.0f, 0.0f);
+        Vec2f screenPos(*MR::getStarPointerScreenPosition(0));
 
         if (_154) {
             _158 = screenPos;
@@ -581,24 +581,24 @@ void FileSelectItem::updateRotate() {
             _154 = 0;
         }
 
-        TVec3f cameraPosition = MR::getCamPos();
-        TVec3f cameraToCenter = center - cameraPosition;
+        Vec3f cameraPosition = MR::getCamPos();
+        Vec3f cameraToCenter = center - cameraPosition;
 
         f32 pointerDistance = (900.0f + cameraToCenter.length());
-        if (JGeometry::TUtil< f32 >::sqrt(screenPos.squareDist(_158)) < 2.0f) {
-            TVec3f pointerPosition;
+        if (FloatUtil::sqrt(screenPos.squareDist(_158)) < 2.0f) {
+            Vec3f pointerPosition;
             MR::calcWorldPositionFromScreen(&pointerPosition, screenPos, pointerDistance);
-            TVec3f pointerDirection = pointerPosition - cameraPosition;
+            Vec3f pointerDirection = pointerPosition - cameraPosition;
             MR::normalize(&pointerDirection);
-            TVec3f crossDirection = cameraToCenter.cross(pointerDirection);
+            Vec3f crossDirection = cameraToCenter.cross(pointerDirection);
 
             if (crossDirection.length() < 900.0f) {
                 _155 = 1;
             }
         } else {
-            TVec3f currentPoint;
+            Vec3f currentPoint;
             MR::calcWorldPositionFromScreen(&currentPoint, screenPos, pointerDistance);
-            TVec3f previousPoint;
+            Vec3f previousPoint;
             MR::calcWorldPositionFromScreen(&previousPoint, _158, pointerDistance);
             bool collides = ::checkCollisionOfPointAndTriangle(center, cameraPosition, currentPoint, previousPoint);
 
@@ -608,7 +608,7 @@ void FileSelectItem::updateRotate() {
         }
 
         if (_155) {
-            TVec2f delta = screenPos - _158;
+            Vec2f delta = screenPos - _158;
             _160 += 0.03f * delta.x / mScale.x;
             _160 = MR::clamp(_160, -25.0f, 25.0f);
         }

@@ -40,12 +40,12 @@ void KameckFireBall::init(const JMapInfoIter& rIter) {
     MR::connectToSceneEnemy(this);
     initNerve(GET_NERVE(BossKameckBeamFire, KameckFireBallNrvWait));
     initHitSensor(1);
-    TVec3f sensorOffs;
+    Vec3f sensorOffs;
     sensorOffs.x = 0.0f;
     sensorOffs.y = 0.0f;
     sensorOffs.z = 0.0f;
     MR::addHitSensorEnemyAttack(this, "attack", 8, ::sFireRadius, sensorOffs);
-    TVec3f pointerOffs;
+    Vec3f pointerOffs;
     pointerOffs.x = 0.0f;
     pointerOffs.y = 0.0f;
     pointerOffs.z = 0.0f;
@@ -78,7 +78,7 @@ void KameckFireBall::makeActorDead() {
 }
 
 void KameckFireBall::control() {
-    MR::requestPointLight(this, TVec3f(mPosition), ::sPointLightColor, 1.0f, -1);
+    MR::requestPointLight(this, Vec3f(mPosition), ::sPointLightColor, 1.0f, -1);
 }
 
 void KameckFireBall::calcAndSetBaseMtx() {
@@ -120,7 +120,7 @@ bool KameckFireBall::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pRe
     return false;
 }
 
-void KameckFireBall::appearDirection(const TVec3f& rDirection) {
+void KameckFireBall::appearDirection(const Vec3f& rDirection) {
     appear();
     MR::onCalcGravity(this);
     MR::calcGravity(this);

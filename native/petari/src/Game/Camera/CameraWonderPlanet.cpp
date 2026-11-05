@@ -20,20 +20,20 @@ CameraWonderPlanet::CameraWonderPlanet(const char* pName)
 }
 
 void CameraWonderPlanet::reset() {
-    TVec3f watchPosCameraMan = CameraLocalUtil::getWatchPos(mCameraMan);
-    TVec3f pos = CameraLocalUtil::getPos(mCameraMan);
-    TVec3f up;
+    Vec3f watchPosCameraMan = CameraLocalUtil::getWatchPos(mCameraMan);
+    Vec3f pos = CameraLocalUtil::getPos(mCameraMan);
+    Vec3f up;
     mCameraMan->mMatrix.getYDir(up);
 
-    TVec3f watchPos;
+    Vec3f watchPos;
     CameraLocalUtil::makeWatchPoint(&watchPos, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
 
-    TVec3f front = watchPosCameraMan - pos;
+    Vec3f front = watchPosCameraMan - pos;
     MR::normalize(&front);
-    TVec3f watchFront = watchPos - pos;
+    Vec3f watchFront = watchPos - pos;
     MR::normalize(&watchFront);
 
-    TQuat4f frontRot;
+    Quat4f frontRot;
     frontRot.setRotate(front, watchFront);
 
     CameraLocalUtil::setPos(this, pos);
@@ -47,44 +47,44 @@ void CameraWonderPlanet::reset() {
 
 CameraTargetObj* CameraWonderPlanet::calc() {
     // FIXME
-    TVec3f currWatchPos = CameraLocalUtil::getWatchPos(this);
-    TVec3f pos = CameraLocalUtil::getPos(this);
-    TVec3f up = CameraLocalUtil::getUpVec(this);
+    Vec3f currWatchPos = CameraLocalUtil::getWatchPos(this);
+    Vec3f pos = CameraLocalUtil::getPos(this);
+    Vec3f up = CameraLocalUtil::getUpVec(this);
 
-    TVec3f watchPos;
+    Vec3f watchPos;
     CameraLocalUtil::makeWatchPoint(&watchPos, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
 
-    TVec3f front = currWatchPos - pos;
+    Vec3f front = currWatchPos - pos;
     MR::normalize(&front);
 
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.setXDir(CameraLocalUtil::getTarget(this)->getSideVec());
     mtx.setYDir(-CameraLocalUtil::getTarget(this)->getGravityVector());
     mtx.setZDir(CameraLocalUtil::getTarget(this)->getFrontVec());
     mtx.setTrans(watchPos);
 
-    TPos3f inv = mtx;
+    Pos3f inv = mtx;
     inv.invert(inv);
     inv.mult(pos, pos);
 
     f32 length, angleX, angleY;
-    MR::crossToPolar(TVec3f(0.0f, 0.0f, 0.0f), pos, &length, &angleX, &angleY);
+    MR::crossToPolar(Vec3f(0.0f, 0.0f, 0.0f), pos, &length, &angleX, &angleY);
 
     if (angleX < mAngleX) {
         angleX += (mAngleX - angleX) * 0.05f;
-        MR::polarToCross(TVec3f(0.0f, 0.0f, 0.0f), &pos, length, angleX, angleY);
+        MR::polarToCross(Vec3f(0.0f, 0.0f, 0.0f), &pos, length, angleX, angleY);
     }
 
     mtx.mult(pos, pos);
 
-    TVec3f watchFront = watchPos - pos;
+    Vec3f watchFront = watchPos - pos;
     MR::normalize(&watchFront);
 
-    TQuat4f frontRot;
+    Quat4f frontRot;
     frontRot.setRotate(front, watchFront);
     frontRot.transform(up);
 
-    TVec3f offset = pos - watchPos;
+    Vec3f offset = pos - watchPos;
     f32 dist = offset.length();
 
     if (dist < mDistMin) {
@@ -131,8 +131,8 @@ void CameraWonderPlanet::checkReset() {
         return;
     }
 
-    TVec3f offset = CameraLocalUtil::getWatchPos(this) - CameraLocalUtil::getPos(this);
-    TVec3f front = offset.killElement(CameraLocalUtil::getTarget(this)->getGravityVector());
+    Vec3f offset = CameraLocalUtil::getWatchPos(this) - CameraLocalUtil::getPos(this);
+    Vec3f front = offset.killElement(CameraLocalUtil::getTarget(this)->getGravityVector());
     if (MR::isNearZero(front)) {
         return;
     }
@@ -140,18 +140,18 @@ void CameraWonderPlanet::checkReset() {
 
     // TODO: this is the first time this specific pattern has come up,
     // killElement and orthogonalize may need to be looked at again.
-    TVec3f targetFront = CameraLocalUtil::getTarget(this)->getGravityVector().getOrthogonal(CameraLocalUtil::getTarget(this)->getFrontVec());
+    Vec3f targetFront = CameraLocalUtil::getTarget(this)->getGravityVector().getOrthogonal(CameraLocalUtil::getTarget(this)->getFrontVec());
 
     if (MR::isNearZero(targetFront)) {
         return;
     }
     MR::normalize(&targetFront);
 
-    TQuat4f rot;
+    Quat4f rot;
     rot.setRotate(front, targetFront);
     rot.transform(offset);
 
-    TVec3f up = -CameraLocalUtil::getTarget(this)->getGravityVector();
+    Vec3f up = -CameraLocalUtil::getTarget(this)->getGravityVector();
     if (CameraLocalUtil::getUpVec(this).dot(-CameraLocalUtil::getTarget(this)->getGravityVector()) < 0.0f) {
         up.negate();
     }

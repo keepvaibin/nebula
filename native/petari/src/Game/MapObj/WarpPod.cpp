@@ -184,7 +184,7 @@ void WarpPod::init(const JMapInfoIter& rIter) {
 
     f32 scale = mScale.x;
     f32 radius = mVisibilityState == 0 ? scale * ::cSensorRadius0 : scale * ::cSensorRadius1;
-    MR::addHitSensorEye(this, "eye", 8, radius, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEye(this, "eye", 8, radius, Vec3f(0.0f, 0.0f, 0.0f));
 
     mDelay = 0;
     _A2 = 0;
@@ -458,29 +458,29 @@ void WarpPod::initDraw() {
         return;
     }
 
-    TVec3f side;
-    TVec3f normal;
-    TVec3f direction(mPairPod->mPosition - mPosition);
+    Vec3f side;
+    Vec3f normal;
+    Vec3f direction(mPairPod->mPosition - mPosition);
     f32 distance = direction.length();
-    TVec3f up;
+    Vec3f up;
     MR::calcUpVec(&up, this);
     side.cross(direction, -up);
     MR::normalizeOrZero(&side);
-    TVec3f center(mPosition + direction * 0.5f);
+    Vec3f center(mPosition + direction * 0.5f);
     normal.cross(side, direction);
     MR::normalizeOrZero(&normal);
 
     f32 halfAngle = PI / 4.0f;
     f32 radius = (0.5f * distance) / MR::sin(halfAngle);
     f32 height = MR::sqrt(radius * radius - 0.5f * (0.5f * distance * distance));
-    TVec3f axis(side);
-    TVec3f arcCenter(center + normal * height);
-    TVec3f arcStart = -normal * radius;
+    Vec3f axis(side);
+    Vec3f arcCenter(center + normal * height);
+    Vec3f arcStart = -normal * radius;
 
     f32 startAngle = -halfAngle;
     u16 count = 60;
     u16 remaining = count;
-    _C4 = new TVec3f[count];
+    _C4 = new Vec3f[count];
     _C8 = count;
 
     for (u32 i = 0; i < count; remaining--, i++) {
@@ -490,11 +490,11 @@ void WarpPod::initDraw() {
             blend = 1.0f - (remaining - 1) / static_cast< f32 >(count);
         }
 
-        TPos3f rotation;
+        Pos3f rotation;
         NebulaMtxRotAxisRad(rotation, axis, startAngle * (1.0f - blend) + halfAngle * blend);
-        TVec3f point;
+        Vec3f point;
         NebulaMtxMultVecSR(rotation, arcStart, point);
-        TVec3f position(arcCenter + point);
+        Vec3f position(arcCenter + point);
         _C4[i] = position + up * 200.0f;
     }
 
@@ -548,28 +548,28 @@ void WarpPod::drawCylinder(u32) const {
         val2 *= 1 - static_cast< f32 >(val1) / val3;
     }
 
-    TVec3f vec84, vec90, vec9C, vecA8, vecB4, vecC0, vecCC, vecD8, vecE4;
-    TVec2f currentTexCoords[2];
-    TVec2f previousTexCoords[2];
+    Vec3f vec84, vec90, vec9C, vecA8, vecB4, vecC0, vecCC, vecD8, vecE4;
+    Vec2f currentTexCoords[2];
+    Vec2f previousTexCoords[2];
 
     for (u32 i = 0; i < val2; i++) {
         if (i == 0) {
             u32 j;
 
             for (j = 1; j < val2; j++) {
-                TVec3f direction = _C4[j] - _C4[i];
-                TVec3f vec11C;
+                Vec3f direction = _C4[j] - _C4[i];
+                Vec3f vec11C;
                 MR::vecKillElement(direction, MR::getCamZdir(), &vec11C);
 
                 if (MR::normalizeOrZero(&vec11C)) {
                     continue;
                 }
 
-                TVec3f vec128;
+                Vec3f vec128;
                 vec128.cross(vec11C, MR::getCamZdir());
                 MR::normalizeOrZero(&vec128);
 
-                TVec3f vec134;
+                Vec3f vec134;
                 vec134.cross(vec128, vec11C);
                 MR::normalizeOrZero(&vec134);
 
@@ -605,19 +605,19 @@ void WarpPod::drawCylinder(u32) const {
         currentTexCoords[0].set(0.0f, val);
         currentTexCoords[1].set(1.0f, val);
 
-        TVec3f direction = _C4[i] - vecE4;
-        TVec3f vec14C;
+        Vec3f direction = _C4[i] - vecE4;
+        Vec3f vec14C;
         MR::vecKillElement(direction, MR::getCamZdir(), &vec14C);
 
         if (MR::normalizeOrZero(&vec14C)) {
             continue;
         }
 
-        TVec3f vec158;
+        Vec3f vec158;
         vec158.cross(vec14C, MR::getCamZdir());
         MR::normalizeOrZero(&vec158);
 
-        TVec3f vec164;
+        Vec3f vec164;
         vec164.cross(vec158, vec14C);
         MR::normalizeOrZero(&vec164);
 

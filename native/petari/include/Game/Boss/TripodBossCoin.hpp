@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/NameObj/NameObj.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class Coin;
 class Spine;
@@ -21,6 +21,6 @@ public:
 
     Coin* mCoin;
     Spine* mSpine;
-    TPos3f _14;
+    Pos3f _14;
     s32 mJointID;
 };

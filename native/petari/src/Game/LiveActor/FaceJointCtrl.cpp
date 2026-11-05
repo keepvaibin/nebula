@@ -55,13 +55,13 @@ void FaceJointCtrl::setCallBackFunction() {
     mJointController->registerCallBack();
 }
 
-bool FaceJointCtrl::updateJointMtxCallBack(TPos3f* pMtx, const JointControllerInfo& rInfo) {
+bool FaceJointCtrl::updateJointMtxCallBack(Pos3f* pMtx, const JointControllerInfo& rInfo) {
     pMtx->getXDir(_14);
     MR::normalize(&_14);
 
-    TVec3f position;
+    Vec3f position;
     pMtx->getTrans(position);
-    TVec3f direction(*MR::getPlayerPos());
+    Vec3f direction(*MR::getPlayerPos());
     direction.sub(position);
 
     if (MR::isNearZero(direction)) {

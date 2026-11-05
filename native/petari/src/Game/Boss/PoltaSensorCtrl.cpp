@@ -4,7 +4,7 @@
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 #include "Game/System/NebulaArena.hpp"
 
 namespace {
@@ -240,7 +240,7 @@ void PoltaSensorCtrl::initSensor() {
     for (int i = 0; i < getCoreSensorCount(); i++) {
         mCoreSensors[i] =
             MR::addHitSensorAtJointEnemy(mPoltaPtr, ::sCoreSensorList[i].mName, ::sCoreSensorList[i].mJointName, 8, ::sCoreSensorList[i].mRadius,
-                                         TVec3f(::sCoreSensorList[i].mOffsetX, ::sCoreSensorList[i].mOffsetY, ::sCoreSensorList[i].mOffsetZ));
+                                         Vec3f(::sCoreSensorList[i].mOffsetX, ::sCoreSensorList[i].mOffsetY, ::sCoreSensorList[i].mOffsetZ));
     }
 
     mBodySensors = new HitSensor*[getBodySensorCount()];
@@ -248,7 +248,7 @@ void PoltaSensorCtrl::initSensor() {
     for (int i = 0; i < getBodySensorCount(); i++) {
         mBodySensors[i] =
             MR::addHitSensorAtJointEnemy(mPoltaPtr, ::sBodySensorList[i].mName, ::sBodySensorList[i].mJointName, 8, ::sBodySensorList[i].mRadius,
-                                         TVec3f(::sBodySensorList[i].mOffsetX, ::sBodySensorList[i].mOffsetY, ::sBodySensorList[i].mOffsetZ));
+                                         Vec3f(::sBodySensorList[i].mOffsetX, ::sBodySensorList[i].mOffsetY, ::sBodySensorList[i].mOffsetZ));
     }
 
     mLeftArmSensors = new HitSensor*[getArmSensorCount()];
@@ -259,7 +259,7 @@ void PoltaSensorCtrl::initSensor() {
         const PoltaSensorListEntry* leftArmListEntry = &::sLeftArmSensorList[i];
         mLeftArmSensors[i] = MR::addHitSensorMtxEnemy(mPoltaPtr, leftArmListEntry->mName, 8, leftArmListEntry->mRadius,
                                                       MR::getJointMtx(poltaLeftArmTemp, leftArmListEntry->mJointName),
-                                                      TVec3f(leftArmListEntry->mOffsetX, leftArmListEntry->mOffsetY, leftArmListEntry->mOffsetZ));
+                                                      Vec3f(leftArmListEntry->mOffsetX, leftArmListEntry->mOffsetY, leftArmListEntry->mOffsetZ));
     }
 
     mRightArmSensors = new HitSensor*[getArmSensorCount()];
@@ -269,11 +269,11 @@ void PoltaSensorCtrl::initSensor() {
         PoltaArm* poltaRightArmTemp = mPoltaPtr->mRightArm;
         mRightArmSensors[i] = MR::addHitSensorMtxEnemy(mPoltaPtr, rightArmListEntry->mName, 8, rightArmListEntry->mRadius,
                                                        MR::getJointMtx(poltaRightArmTemp, rightArmListEntry->mJointName),
-                                                       TVec3f(rightArmListEntry->mOffsetX, rightArmListEntry->mOffsetY, rightArmListEntry->mOffsetZ));
+                                                       Vec3f(rightArmListEntry->mOffsetX, rightArmListEntry->mOffsetY, rightArmListEntry->mOffsetZ));
     }
 
-    mScreamSensor = MR::addHitSensorAtJointEnemy(mPoltaPtr, "Scream", "Tongue3", 64, 0.0f, TVec3f(0.0f, 0.0f, 0.0f));
-    mHeadSensor = MR::addHitSensorAtJointEnemy(mPoltaPtr, "Head", "Head5", 32, 200.0f, TVec3f(-50.0f, 0.0f, 0.0f));
+    mScreamSensor = MR::addHitSensorAtJointEnemy(mPoltaPtr, "Scream", "Tongue3", 64, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    mHeadSensor = MR::addHitSensorAtJointEnemy(mPoltaPtr, "Head", "Head5", 32, 200.0f, Vec3f(-50.0f, 0.0f, 0.0f));
 }
 
 bool PoltaSensorCtrl::isCoreSensor(const HitSensor* pSensor) const {

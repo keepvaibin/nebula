@@ -15,14 +15,14 @@ public:
     virtual void makeActorDead();
     virtual void calcAndSetBaseMtx();
 
-    void setInfo(const KoopaBattleMapStair*, const TVec3f*);
+    void setInfo(const KoopaBattleMapStair*, const Vec3f*);
     void exeFly();
     void exeBreak();
 
     bool mIsKoopaJr;
     const KoopaBattleMapStair* mStair;
-    TVec3f _94;
-    TVec3f _A0;
-    TVec3f _AC;
+    Vec3f _94;
+    Vec3f _A0;
+    Vec3f _AC;
     ModelObj* mBreakModel;
 };

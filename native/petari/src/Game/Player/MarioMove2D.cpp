@@ -14,7 +14,7 @@ void Mario::check2DMode() {
     if (area != nullptr) {
         mMovementStates._37 = true;
 
-        TVec3f rotate;
+        Vec3f rotate;
         MR::calcCubeRotate(area, &rotate);
         MR::makeMtxTR(_F4, 0.0f, 0.0f, 0.0f, rotate.x, rotate.y, rotate.z);
 
@@ -26,7 +26,7 @@ void Mario::check2DMode() {
     } else {
         area = MR::getAreaObj("PlaneCircularModeCube", mPosition);
         if (area != nullptr) {
-            TVec3f rotate;
+            Vec3f rotate;
             MR::calcCubeRotate(area, &rotate);
             NebulaMtxCopy(MR::tmpMtxRotYDeg(rotate.y), _F4);
             _10._15 = true;
@@ -46,22 +46,22 @@ void Mario::check2DMode() {
     }
 }
 
-void Mario::calcMoveDir2D(f32 a1, f32 a2, TVec3f* pOut) {
+void Mario::calcMoveDir2D(f32 a1, f32 a2, Vec3f* pOut) {
     if (a1 != 0.0f) {
         a2 = 0.0f;
     }
 
-    TVec3f stack_8C;
-    TVec3f stack_80;
-    TVec3f stack_74;
-    TVec3f stack_68;
-    TVec3f stack_5C;
+    Vec3f stack_8C;
+    Vec3f stack_80;
+    Vec3f stack_74;
+    Vec3f stack_68;
+    Vec3f stack_5C;
 
     stack_8C = mSide2D;
     stack_80 = mUp2D;
     stack_74 = mNormal2D;
 
-    TVec3f stack_50(_660);
+    Vec3f stack_50(_660);
     stack_68.cross(stack_74, stack_50);
     MR::normalize(&stack_68);
 
@@ -70,7 +70,7 @@ void Mario::calcMoveDir2D(f32 a1, f32 a2, TVec3f* pOut) {
     }
 
     stack_5C = -stack_80;
-    TVec3f stack_44(_398);
+    Vec3f stack_44(_398);
 
     if (_398.dot(stack_50) <= 0.0f) {
         _398 = stack_50;
@@ -87,7 +87,7 @@ void Mario::calcMoveDir2D(f32 a1, f32 a2, TVec3f* pOut) {
     *pOut = stack_68 * a1 - stack_5C * a2;
 }
 
-void Mario::calcShadowDir2D(const TVec3f& rVec, TVec3f* pOut) {
+void Mario::calcShadowDir2D(const Vec3f& rVec, Vec3f* pOut) {
     *pOut = rVec;
     MR::normalizeOrZero(pOut);
 }
@@ -109,11 +109,11 @@ void Mario::stick2Dadjust(f32& rStickX, f32& rStickY) {
     NebulaMtxMultVecSR(_F4, &mSide2D, &mSide2D);
     NebulaMtxMultVecSR(_F4, &mNormal2D, &mNormal2D);
 
-    TVec3f stack_38(0.0f, 1.0f, 0.0f);
-    TVec3f* camDirZ = &getCamDirZ();
+    Vec3f stack_38(0.0f, 1.0f, 0.0f);
+    Vec3f* camDirZ = &getCamDirZ();
     f32 angle = MR::diffAngleSignedHorizontal(getCamDirY(), stack_38, *camDirZ);
 
-    TVec3f stack_2C(1.0f, 0.0f, 0.0f);
+    Vec3f stack_2C(1.0f, 0.0f, 0.0f);
     camDirZ = &getCamDirZ();
     const f32 absHorizontal = MR::diffAngleAbsHorizontal(getCamDirX(), stack_2C, *camDirZ);
     if (absHorizontal >= 3.0415928f && MR::abs(angle) >= 3.0415928f) {
@@ -140,7 +140,7 @@ void Mario::stick2Dadjust(f32& rStickX, f32& rStickY) {
         if (MR::isNearZero(mStickPos.z)) {
             _66C = false;
         } else {
-            TVec3f stickVec(rStickX, rStickY, 0.0f);
+            Vec3f stickVec(rStickX, rStickY, 0.0f);
             const f32 diff = MR::diffAngleAbs(stickVec, _670);
 
             if (_670.x * rStickX < 0.0f) {
@@ -157,11 +157,11 @@ void Mario::stick2Dadjust(f32& rStickX, f32& rStickY) {
     }
 
     if (!_66C && !MR::isNearZero(mStickPos.z) && !_60E && !_60F) {
-        TVec3f stickVec(rStickX, rStickY, 0.0f);
+        Vec3f stickVec(rStickX, rStickY, 0.0f);
         NebulaMtxMultVecSR(_F4, &stickVec, &stickVec);
         NebulaMtxMultVecSR(rotMtx, &stickVec, &stickVec);
 
-        TVec3f invMove(-_660);
+        Vec3f invMove(-_660);
         const f32 diff = MR::diffAngleAbs(invMove, stickVec);
         f32 clamp = MR::clamp(1.0f - (mStickPos.z * mStickPos.z), 0.0f, 1.0f);
 

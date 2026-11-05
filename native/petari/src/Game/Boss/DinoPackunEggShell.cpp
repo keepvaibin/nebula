@@ -30,7 +30,7 @@ void DinoPackunEggShell::control() {
 }
 
 void DinoPackunEggShell::calcAndSetBaseMtx() {
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.setInline(_90);
     mtx.normalizeBasis();
     MR::setBaseTRMtx(this, mtx);

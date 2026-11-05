@@ -90,7 +90,7 @@ bool KinopioAstro::isDispLetterIcon() const {
 }
 
 void KinopioAstro::createLetterIcon(const JMapInfoIter& rIter) {
-    mLetterIconTalkCtrl = MR::createTalkCtrlDirect(this, rIter, "Common_Kinopio000", TVec3f(0.0f, 122.0f, 0.0f), nullptr);
+    mLetterIconTalkCtrl = MR::createTalkCtrlDirect(this, rIter, "Common_Kinopio000", Vec3f(0.0f, 122.0f, 0.0f), nullptr);
     MR::setDistanceToTalk(mLetterIconTalkCtrl, ::sMessangerTalkDistance);
 }
 
@@ -168,7 +168,7 @@ void KinopioAstro::init(const JMapInfoIter& rIter) {
 
     if (mObjArg0 == 2) {
         if (MR::isDemoCast(this, "\203\213\203\103\201\133\203\127\216\270\347\110\203\146\203\202" /* ルイージ失踪デモ */)) {
-            TVec3f followOffset(MR::getMessageBalloonFollowOffset(mMsgCtrl));
+            Vec3f followOffset(MR::getMessageBalloonFollowOffset(mMsgCtrl));
             TalkMessageCtrl* pMsgCtrl = MR::createTalkCtrlDirectOnRootNodeAutomatic(this, rIter, "AstroGalaxy_Kinopio100", followOffset, nullptr);
             MR::registerEventFunc(pMsgCtrl, TalkMessageFunc(this, &KinopioAstro::eventFunc));
             DemoFunction::registerDemoTalkMessageCtrlDirect(this, pMsgCtrl, "\203\213\203\103\201\133\203\127\216\270\347\110\203\146\203\202" /* ルイージ失踪デモ */);

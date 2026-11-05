@@ -43,7 +43,7 @@ public:
     void exeWait();
     void exeBindingCapture();
     void exeBindingShoot();
-    u32 calcNearestVtxIndex(const TVec3f&);
+    u32 calcNearestVtxIndex(const Vec3f&);
     void drawSelf() const;
 
     u32 _8C;  // NOTE: unused
@@ -51,7 +51,7 @@ public:
     u16 mNumFlags;
     u16 mNumSurfaces;
     u16 mNumVtxs;
-    TVec3f* mVtxs;
+    Vec3f* mVtxs;
     f32* mDeformCoeff;
     f32* mDeformSpeed;
     u8* _A8;  // NOTE: allocated but unused?
@@ -59,12 +59,12 @@ public:
     Surface* mLodSurfaces;
     u32 _B4;  // NOTE: unused
     JUTTexture* mTexture;
-    TVec2f* mTexST;
+    Vec2f* mTexST;
     s16* mVtxOverlap;
     u16 mNumDrawVtxs;
-    TVec3f* mDrawPos;
-    TVec3f* mDrawNorm;
-    TVec2f* mDrawTex;
+    Vec3f* mDrawPos;
+    Vec3f* mDrawNorm;
+    Vec2f* mDrawTex;
     f32* mDrawDeformCoeffs;
     bool mIsLod;
     u16 mCaptureVtx;

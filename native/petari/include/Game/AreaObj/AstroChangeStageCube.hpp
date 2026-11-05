@@ -10,7 +10,7 @@ public:
 
     virtual void init(const JMapInfoIter&);
     virtual void movement();
-    virtual bool isInVolume(const TVec3f&) const;
+    virtual bool isInVolume(const Vec3f&) const;
 
     u32 _3C;
     u32 _40;

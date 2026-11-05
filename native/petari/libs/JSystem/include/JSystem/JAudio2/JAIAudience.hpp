@@ -1,6 +1,6 @@
 #pragma once
 
-#include "JSystem/JGeometry/TVec.hpp"
+#include <nebula_geometry.hpp>
 
 class JAIAudible;
 class JAISoundID;
@@ -11,7 +11,7 @@ public:
     virtual ~JAIAudience();
 
     // TODO: Should all be pure virtual.
-    virtual JAIAudible* newAudible(const TVec3f&, JAISoundID, const TVec3f*, u32) = 0;
+    virtual JAIAudible* newAudible(const Vec3f&, JAISoundID, const Vec3f*, u32) = 0;
     virtual int getMaxChannels() = 0;
     virtual void deleteAudible(JAIAudible*) = 0;
     virtual u32 calcPriority(JAIAudible*) = 0;

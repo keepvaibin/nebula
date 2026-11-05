@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class SpringWaterFloaterSpot : public LiveActor {
 public:
@@ -30,12 +30,12 @@ public:
     f32 mHeight;
     f32 _A4;
     s32 mBoundStep;
-    TVec3f _AC;
-    TVec3f mInitialRotation;
+    Vec3f _AC;
+    Vec3f mInitialRotation;
     f32 mBoundSize;
     bool _C8;
     bool mNeedsBound;
     bool _CA;
-    TPos3f _CC;
+    Pos3f _CC;
     s32 mFloatTimer;
 };

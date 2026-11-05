@@ -18,7 +18,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include <JSystem/JMath/JMath.hpp>
+#include <nebula_geometry.hpp>
 
 namespace NrvTakobo {
     NEW_NERVE_ONEND(HostTypeNrvWait, Takobo, Wait, Wait);
@@ -62,12 +62,12 @@ void Takobo::init(const JMapInfoIter& rIter) {
     initModelManagerWithAnm("Takobo", nullptr, false);
     MR::connectToSceneEnemy(this);
 
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.set(getBaseMtx());
 
     mtx.getZDir(_90);
 
-    TVec3f stack_24;
+    Vec3f stack_24;
     mtx.getYDir(stack_24);
 
     mGravity.set(-stack_24);
@@ -114,7 +114,7 @@ void Takobo::init(const JMapInfoIter& rIter) {
     initNerve(GET_NERVE(Takobo, HostTypeNrvWait));
 
     mSpinController = new SpinHitController(this, 22, 21, 3, 1.5f, 20.0f, 35.0f, 3, false);
-    MR::initStarPointerTarget(this, 110.0f, TVec3f(0.0f, 80.0f, 0.0f));
+    MR::initStarPointerTarget(this, 110.0f, Vec3f(0.0f, 80.0f, 0.0f));
     mScaleController = new AnimScaleController(nullptr);
     MR::initLightCtrl(this);
     appear();
@@ -132,12 +132,12 @@ void Takobo::initAfterPlacement() {
 void Takobo::initSensor() {
     f32 yScale = mScale.y;
     initHitSensor(4);
-    TVec3f offs;
+    Vec3f offs;
     offs.x = 0.0f;
     offs.y = 70.0f * yScale;
     offs.z = 0.0f;
     MR::addHitSensor(this, "body", ATYPE_TAKOBO, 32, offs.y, offs);
-    MR::addHitSensorAtJointEnemyAttack(this, "attack", "Hear", 0x10, (80.0f * yScale), TVec3f(10.0f, 2.0f, 0.0f));
+    MR::addHitSensorAtJointEnemyAttack(this, "attack", "Hear", 0x10, (80.0f * yScale), Vec3f(10.0f, 2.0f, 0.0f));
 }
 
 void Takobo::kill() {
@@ -166,15 +166,15 @@ void Takobo::control() {
         HitInfo info;
         if (Collision::checkStrikePointToMap(mPosition, &info)) {
             if (MR::isGroundCodeDamageFire(&info.mParentTriangle)) {
-                TVec3f v7(*info.mParentTriangle.getFaceNormal());
+                Vec3f v7(*info.mParentTriangle.getFaceNormal());
                 v7 *= 28.0f;
-                TVec3f v6(mGravity);
+                Vec3f v6(mGravity);
                 v6 *= 28.0f;
                 v7 -= v6;
                 mVelocity = v7;
 
                 if (MR::isOnGround(this)) {
-                    TVec3f v5(*info.mParentTriangle.getFaceNormal());
+                    Vec3f v5(*info.mParentTriangle.getFaceNormal());
                     v5 *= 5.0f;
                     mPosition += v5;
                 }
@@ -201,7 +201,7 @@ bool Takobo::tryPress() {
 
 void Takobo::exeMove() {
     if (MR::isFirstStep(this)) {
-        TVec3f v21(mPosition);
+        Vec3f v21(mPosition);
         v21 -= _A4 - _B0 * _C4;
 
         if (!_BC) {
@@ -232,7 +232,7 @@ void Takobo::exeMove() {
         _BC = _BC == false;
         setNerve(GET_NERVE(Takobo, HostTypeNrvMove));
     } else {
-        TVec3f v20(*MR::getPlayerPos() - mPosition);
+        Vec3f v20(*MR::getPlayerPos() - mPosition);
         f32 mag = v20.length();
         MR::vecKillElement(v20, mGravity, &v20);
         MR::normalizeOrZero(&v20);
@@ -540,10 +540,10 @@ bool Takobo::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pRece
 }
 
 void Takobo::calcAndSetBaseMtx() {
-    TPos3f mtx;
+    Pos3f mtx;
     MR::calcMtxFromGravityAndZAxis(&mtx, this, mGravity, _90);
     MR::setBaseTRMtx(this, mtx);
-    TVec3f scale = mScaleController->_C * mScale;
+    Vec3f scale = mScaleController->_C * mScale;
     MR::setBaseScale(this, scale);
 }
 

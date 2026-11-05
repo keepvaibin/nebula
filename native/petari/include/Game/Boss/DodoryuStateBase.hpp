@@ -34,8 +34,8 @@ public:
     virtual void catchSendPlayerFlying(HitSensor*, HitSensor*) {
     }
 
-    void calcAttackDir(TVec3f*, const TVec3f&, const TVec3f&);
-    bool calcVerticalizedDir(TVec3f*, const TVec3f&);
+    void calcAttackDir(Vec3f*, const Vec3f&, const Vec3f&);
+    bool calcVerticalizedDir(Vec3f*, const Vec3f&);
 
     Dodoryu* mHost;
 };

@@ -29,12 +29,12 @@ namespace MR {
         NativeShader::setColor(layer, 0, 0, 0, 0, param3);
         NativeShader::setTexture(layer, 0, &texture);
         NativeShader::send(layer);
-        TDDraw::drawTexture(TVec2f(-param1, -param1), &texture, TVec2f(screenWidth + param1 * 2.0f, NebulaFrameClock::cScreenHeight + param1 * 2.0f));
+        TDDraw::drawTexture(Vec2f(-param1, -param1), &texture, Vec2f(screenWidth + param1 * 2.0f, NebulaFrameClock::cScreenHeight + param1 * 2.0f));
 
         NativeShader::setColor(layer, 0, 0, 0, 0, param4);
         NativeShader::setTexture(layer, 0, MR::getFullScreenBlurTexture());
         NativeShader::send(layer);
-        TDDraw::drawTexture(TVec2f(-param2, -param2), MR::getFullScreenBlurTexture(), TVec2f(screenWidth + param2 * 2.0f, NebulaFrameClock::cScreenHeight + param2 * 2.0f));
+        TDDraw::drawTexture(Vec2f(-param2, -param2), MR::getFullScreenBlurTexture(), Vec2f(screenWidth + param2 * 2.0f, NebulaFrameClock::cScreenHeight + param2 * 2.0f));
 
         // The next frame's blur: the screen shrunk into the blur texture, a pass into its own target.
         JUTTexture* pBlur = MR::getFullScreenBlurTexture();
@@ -43,7 +43,7 @@ namespace MR {
         TDDraw::setupNative(&shrink, 1, 1, 2);
         NativeShader::setTexture(shrink, 0, &texture);
         NativeShader::send(shrink);
-        TDDraw::drawTexture(TVec2f(0.0f, 0.0f), &texture, TVec2f(screenWidth, static_cast< f32 >(MR::getScreenHeight())));
+        TDDraw::drawTexture(Vec2f(0.0f, 0.0f), &texture, Vec2f(screenWidth, static_cast< f32 >(MR::getScreenHeight())));
         J3DNativeTarget::end(pBlur->mImage, NEBULA_TARGET_RGB);
         MR::loadProjectionMtx();
         MR::loadViewMtx();

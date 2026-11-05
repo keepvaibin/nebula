@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class LightCylinder;
 class MapPartsRailMover;
@@ -23,11 +23,11 @@ public:
     void exeWait() {
     }
 
-    TMtx34f mBaseMtx;
+    Mtx34f mBaseMtx;
     LightCylinder* mLightCylinder;
     MapPartsRailMover* mMapPartsRailMover;
     MapPartsRotator* mMapPartsRotator;
     f32 mRadius;
-    TVec3f mCenter;
+    Vec3f mCenter;
     bool _D8;
 };

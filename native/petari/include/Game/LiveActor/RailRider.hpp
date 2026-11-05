@@ -8,13 +8,13 @@ public:
     RailRider(s32, s32);
 
     void move();
-    void moveToNearestPos(const TVec3f&);
-    void moveToNearestPoint(const TVec3f&);
+    void moveToNearestPos(const Vec3f&);
+    void moveToNearestPoint(const Vec3f&);
     void moveToNextPoint();
     void reverse();
-    void calcPosAtCoord(TVec3f*, f32) const;
-    void calcDirectionAtCoord(TVec3f*, f32) const;
-    f32 calcNearestPos(const TVec3f&) const;
+    void calcPosAtCoord(Vec3f*, f32) const;
+    void calcDirectionAtCoord(Vec3f*, f32) const;
+    f32 calcNearestPos(const Vec3f&) const;
     f32 getTotalLength() const;
     f32 getPartLength(int) const;
     bool isLoop() const;
@@ -27,7 +27,7 @@ public:
     f32 getNextPointCoord() const;
     f32 getCurrentPointCoord() const;
     s32 getPointNum() const;
-    void copyPointPos(TVec3f*, s32) const;
+    void copyPointPos(Vec3f*, s32) const;
     f32 getPointCoord(s32) const;
     void initBezierRail(const JMapInfoIter&, const JMapInfo*);
     bool getPointArgS32NoInit(const char*, s32*, s32) const;
@@ -39,11 +39,11 @@ public:
     s32 getNextPointNo() const;
     void syncPosDir();
 
-    inline TVec3f getStartPos() {
+    inline Vec3f getStartPos() {
         return mStartPos;
     }
 
-    inline TVec3f getEndPos() {
+    inline Vec3f getEndPos() {
         return mEndPos;
     }
 
@@ -54,9 +54,9 @@ public:
     u8 _D;
     u8 _E;
     u8 _F;
-    TVec3f mCurPos;
-    TVec3f mCurDirection;
-    TVec3f mStartPos;
-    TVec3f mEndPos;
+    Vec3f mCurPos;
+    Vec3f mCurDirection;
+    Vec3f mStartPos;
+    Vec3f mEndPos;
     s32 mCurPoint;
 };

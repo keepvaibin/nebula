@@ -279,21 +279,21 @@ void LensFlareDirector::controlFlare(s32 area, bool hasBrightObj) {
         return;
     }
 
-    TVec2f position(_60 - _6C);
+    Vec2f position(_60 - _6C);
     position += _74;
-    TVec3f flarePos(position.x, -position.y, 0.0f);
+    Vec3f flarePos(position.x, -position.y, 0.0f);
     mRing->mPosition.set(flarePos);
     mGlow->mPosition.set(flarePos);
     mLine->mPosition.set(flarePos);
 
-    TVec2f screenCenter(MR::getScreenWidth() / 2.0f, static_cast< s32 >(NebulaFrameClock::cScreenLines) / 2.0f);
+    Vec2f screenCenter(MR::getScreenWidth() / 2.0f, static_cast< s32 >(NebulaFrameClock::cScreenLines) / 2.0f);
 
     f32 screenRadius = screenCenter.length();
-    TVec2f offset(screenCenter - position);
+    Vec2f offset(screenCenter - position);
     f32 distanceRate = offset.length() / screenRadius;
 
-    TVec3f rotation(0.0f, 0.0f, 0.0f);
-    TVec2f direction(offset.x, offset.y);
+    Vec3f rotation(0.0f, 0.0f, 0.0f);
+    Vec2f direction(offset.x, offset.y);
 
     if (MR::isNearZero(direction)) {
         rotation.z = 0.0f;

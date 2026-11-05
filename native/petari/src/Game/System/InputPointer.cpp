@@ -23,7 +23,7 @@ void InputPointer::update() {
     }
 }
 
-void InputPointer::getPointingPos(TVec2f* pOut) const {
+void InputPointer::getPointingPos(Vec2f* pOut) const {
     if (mIsPointInScreen) {
         pOut->set(mPos);
     } else {
@@ -31,7 +31,7 @@ void InputPointer::getPointingPos(TVec2f* pOut) const {
     }
 }
 
-void InputPointer::getHorizonVec(TVec2f* pOut) const {
+void InputPointer::getHorizonVec(Vec2f* pOut) const {
     if (mIsPointInScreen) {
         pOut->set(mHorizon);
     } else {
@@ -39,7 +39,7 @@ void InputPointer::getHorizonVec(TVec2f* pOut) const {
     }
 }
 
-void InputPointer::getPastPointingPos(TVec2f* pOut, s32) const {
+void InputPointer::getPastPointingPos(Vec2f* pOut, s32) const {
     pOut->set(mPos);
 }
 
@@ -47,7 +47,7 @@ s32 InputPointer::getEnablePastCount() const {
     return mIsPointInScreen ? 1 : 0;
 }
 
-void InputPointer::getPointingPosBasedOnScreen(TVec2f* pOut) const {
+void InputPointer::getPointingPosBasedOnScreen(Vec2f* pOut) const {
     pOut->x = (0.5f + (0.5f * mPos.x)) * static_cast< s32 >(MR::getScreenWidth());
     pOut->y = (0.5f + (0.5f * mPos.y)) * static_cast< s32 >(NebulaFrameClock::cScreenLines);
 }

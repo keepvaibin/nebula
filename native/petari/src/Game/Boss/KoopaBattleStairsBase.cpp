@@ -14,7 +14,7 @@ KoopaBattleStairsBase::KoopaBattleStairsBase(Koopa* pKoopa) : NerveExecutor("\20
     mStairsGroup->initWithoutIter();
 }
 
-void KoopaBattleStairsBase::calcFireStartPos(TVec3f* pVec, const char* pDemoName) const {
+void KoopaBattleStairsBase::calcFireStartPos(Vec3f* pVec, const char* pDemoName) const {
     if (pDemoName != nullptr) {
         KoopaFunction::setKoopaPos(mKoopa, pDemoName);
     }
@@ -38,8 +38,8 @@ bool KoopaBattleStairsBase::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, 
     return KoopaFunction::tryKoopaReflectStarPiece(msg, pSender, pReceiver);
 }
 
-s32 KoopaBattleStairsBase::calcFireAttackStep(KoopaBattleMapStair* pBattleMapStair, f32 myFloat, s32 myInt, const TVec3f& rVec) const {
-    TVec3f targetPos = TVec3f(0.0f, 0.0f, 0.0f);
+s32 KoopaBattleStairsBase::calcFireAttackStep(KoopaBattleMapStair* pBattleMapStair, f32 myFloat, s32 myInt, const Vec3f& rVec) const {
+    Vec3f targetPos = Vec3f(0.0f, 0.0f, 0.0f);
     f32 dist = pBattleMapStair->calcAndSetTargetPos(&targetPos, rVec);
 
     pBattleMapStair->_A8 = static_cast< s32 >(dist / myFloat) - static_cast< s32 >(::sFireRadius / myFloat);

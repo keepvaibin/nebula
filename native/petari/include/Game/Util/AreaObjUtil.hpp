@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/Map/LightZoneDataHolder.hpp"
-#include <JSystem/JGeometry/TBox.hpp>
+#include <nebula_geometry.hpp>
 
 class AreaObj;
 class AreaObjContainer;
@@ -10,37 +10,37 @@ class AreaCubeBoundingBox;
 class WaterInfo;
 
 namespace MR {
-    void calcSpherePos(TVec3f*, const AreaObj*);
+    void calcSpherePos(Vec3f*, const AreaObj*);
     f32 getSphereRadius(const AreaObj*);
     AreaObjMgr* getAreaObjManager(const char*);
-    AreaObj* getAreaObj(const char*, const TVec3f&);
-    bool isInAreaObj(const char*, const TVec3f&);
+    AreaObj* getAreaObj(const char*, const Vec3f&);
+    bool isInAreaObj(const char*, const Vec3f&);
     s32 getAreaObjArg(const AreaObj*, s32);
-    void tryToUpdatePlayerRestartIdInfo(const TVec3f&);
+    void tryToUpdatePlayerRestartIdInfo(const Vec3f&);
 
-    bool calcAreaMoveVelocity(TVec3f* pVelocity, const TVec3f& rPos);
+    bool calcAreaMoveVelocity(Vec3f* pVelocity, const Vec3f& rPos);
 
-    void calcCylinderPos(TVec3f*, const AreaObj*);
-    void calcCylinderCenterPos(TVec3f*, const AreaObj*);
+    void calcCylinderPos(Vec3f*, const AreaObj*);
+    void calcCylinderCenterPos(Vec3f*, const AreaObj*);
 
-    void calcCylinderUpVec(TVec3f*, const AreaObj*);
+    void calcCylinderUpVec(Vec3f*, const AreaObj*);
     f32 getCylinderRadius(const AreaObj*);
 
-    void calcCubeWorldBox(TDirBox3f* pBox, const AreaObj* pArea);
-    void calcCubePos(const AreaObj*, TVec3f*);
-    void calcCubeAxisZ(const AreaObj*, TVec3f*);
-    void calcCubeLocalPos(TVec3f*, const AreaObj*, const TVec3f&);
+    void calcCubeWorldBox(DirBox3f* pBox, const AreaObj* pArea);
+    void calcCubePos(const AreaObj*, Vec3f*);
+    void calcCubeAxisZ(const AreaObj*, Vec3f*);
+    void calcCubeLocalPos(Vec3f*, const AreaObj*, const Vec3f&);
 
-    void calcCubeRotate(const AreaObj*, TVec3f*);
+    void calcCubeRotate(const AreaObj*, Vec3f*);
 
-    bool calcWhirlPoolAccelInfo(const TVec3f&, TVec3f*);
+    bool calcWhirlPoolAccelInfo(const Vec3f&, Vec3f*);
 
-    TBox3f* getCubeLocalBox(const AreaObj*);
+    Box3f* getCubeLocalBox(const AreaObj*);
 
     AreaObj* getCurrentAstroOverlookAreaObj();
 
-    AreaObj* getAreaIn(const char*, const TVec3f&);
+    AreaObj* getAreaIn(const char*, const Vec3f&);
 
-    bool getWaterAreaObj(WaterInfo*, const TVec3f&);
-    bool getWaterAreaInfo(WaterInfo* pInfo, const TVec3f& rPos, const TVec3f& rGravity, bool skipConnectedArea);
+    bool getWaterAreaObj(WaterInfo*, const Vec3f&);
+    bool getWaterAreaInfo(WaterInfo* pInfo, const Vec3f& rPos, const Vec3f& rGravity, bool skipConnectedArea);
 };  // namespace MR

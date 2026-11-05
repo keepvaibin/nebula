@@ -242,7 +242,7 @@ const JMapInfo* AstroMapObjFunction::createAstroNamePlateParser() {
     return MR::createCsvParser(arcName, ::cAstroNamePlateFileName);
 }
 
-bool AstroMapObjFunction::trySetAndShowNamePlate(GalaxyNamePlate* pNamePlate, const JMapInfo* pInfo, const JGeometry::TVec3< float >& rPos,
+bool AstroMapObjFunction::trySetAndShowNamePlate(GalaxyNamePlate* pNamePlate, const JMapInfo* pInfo, const Vec3f& rPos,
                                                  const char* pObjName, s32 domeId, bool param6) {
     AreaObj* astroOverlookAreaObj = MR::getCurrentAstroOverlookAreaObj();
 
@@ -275,7 +275,7 @@ bool AstroMapObjFunction::trySetAndShowNamePlate(GalaxyNamePlate* pNamePlate, co
     bool upperFlag;
     MR::getCsvDataBool(&upperFlag, pInfo, upperFlagId, i);
 
-    TVec3f pos = rPos;
+    Vec3f pos = rPos;
     pos.y += offsetY;
 
     pNamePlate->setPos3D(pos);

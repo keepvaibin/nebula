@@ -25,8 +25,8 @@ void HitWallTimerSwitch::init(const JMapInfoIter& rIter) {
     initModelManagerWithAnm("HitWallTimerSwitch", nullptr, false);
     MR::connectToSceneMapObjDecoration(this);
     initHitSensor(2);
-    MR::addHitSensorMapObj(this, "body", 0x10, 0.0f, TVec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensor(this, "hit", ATYPE_SWITCH_BIND, 0x10, 50.f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorMapObj(this, "body", 0x10, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensor(this, "hit", ATYPE_SWITCH_BIND, 0x10, 50.f, Vec3f(0.0f, 0.0f, 0.0f));
     MR::initCollisionParts(this, "HitWallTimerSwitch", getSensor("body"), nullptr);
     _8C = MR::createCollisionPartsFromLiveActor(this, "Move", getSensor("hit"), MR::CollisionScaleType_Unk2);
     mConnector = new MapObjConnector(this);
@@ -44,7 +44,7 @@ void HitWallTimerSwitch::initAfterPlacement() {
 
 void HitWallTimerSwitch::calcAnim() {
     LiveActor::calcAnim();
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.setInline(MR::getJointMtx(this, "Move"));
     _8C->setMtx(mtx);
 }

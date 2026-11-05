@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class TombSpider;
 class TombSpiderGland;

@@ -150,8 +150,8 @@ void BombHei::init(const JMapInfoIter& rIter) {
 
     initHitSensor(2);
     f32 scl = mScale.y;
-    MR::addHitSensor(this, "body", ATYPE_BOMBHEI, 16, scl * 60.0f, TVec3f(0.0f, scl * 60.0f, 0.0f));
-    MR::addHitSensorEnemyAttack(this, "explode", 32, mExplodeRadius * scl, TVec3f(0.0f, scl * 200.0f, 0.0f));
+    MR::addHitSensor(this, "body", ATYPE_BOMBHEI, 16, scl * 60.0f, Vec3f(0.0f, scl * 60.0f, 0.0f));
+    MR::addHitSensorEnemyAttack(this, "explode", 32, mExplodeRadius * scl, Vec3f(0.0f, scl * 200.0f, 0.0f));
 
     if (mType == BOMB) {
         initNerve(GET_NERVE(BombHei, HostTypeNrvPhysics));
@@ -162,7 +162,7 @@ void BombHei::init(const JMapInfoIter& rIter) {
     MR::initShadowVolumeSphere(this, 60.0f);
     endCountdown();
     MR::validateClipping(this);
-    MR::initStarPointerTarget(this, 70.0f, TVec3f(0.0f, 35.0f, 0.0f));
+    MR::initStarPointerTarget(this, 70.0f, Vec3f(0.0f, 35.0f, 0.0f));
 
     mBodyJoint = MR::createJointDelegatorWithNullChildFunc(this, &BombHei::calcJoint, "Body");
 
@@ -224,7 +224,7 @@ void BombHei::exeLaunch() {
         mRotQuat.set< f32 >(0.0f, 0.0f, 0.0f, 1.0f);
     }
 
-    TVec3f velH(0, 0, 0);
+    Vec3f velH(0, 0, 0);
     MR::vecKillElement(mVelocity, mGravity, &velH);
     mTargetFront.set(velH);
     MR::normalizeOrZero(&mTargetFront);
@@ -302,7 +302,7 @@ void BombHei::exeWait() {
 void BombHei::exeWalk() {
     if (MR::isFirstStep(this)) {
         MR::startBck(this, "Walk");
-        TVec3f randDir;
+        Vec3f randDir;
         MR::getRandomVector(&randDir, 1.0f);
         MR::vecKillElement(randDir, mGravity, &randDir);
         MR::normalizeOrZero(&randDir);
@@ -431,7 +431,7 @@ void BombHei::exePhysics() {
         MR::invalidateExCollisionParts(this);
     }
 
-    TVec3f velH(0, 0, 0);
+    Vec3f velH(0, 0, 0);
     MR::vecKillElement(mVelocity, mGravity, &velH);
     mTargetFront.set(velH);
     MR::normalizeOrZero(&mTargetFront);
@@ -493,7 +493,7 @@ void BombHei::exeThrown() {
         MR::offCalcGravity(this);
     }
 
-    TVec3f velH(0, 0, 0);
+    Vec3f velH(0, 0, 0);
     MR::vecKillElement(mVelocity, mGravity, &velH);
     f32 radius = getSensor("body")->mRadius;
     MR::rotateQuatRollBall(&mRotQuat, velH * ::hMultVelAngle, mGravity, radius);
@@ -580,29 +580,29 @@ void BombHei::endBindStarPointer() {
 }
 
 void BombHei::calcAndSetBaseMtx() {
-    TPos3f mtx;
+    Pos3f mtx;
     MR::calcMtxFromGravityAndZAxis(&mtx, this, mGravity, mFront);
     MR::setBaseTRMtx(this, mtx);
-    TVec3f scale = mScaleController->_C * mScale;
+    Vec3f scale = mScaleController->_C * mScale;
     MR::setBaseScale(this, scale);
     mtx.getYDir(mBinderOffset);
     mBinderOffset.mult(::hTranslateHeight);
     mBodyJoint->registerCallBack();
 }
 
-bool BombHei::calcJoint(TPos3f* pMtx, const JointControllerInfo& rJointInfo) {
-    TPos3f mtx;
+bool BombHei::calcJoint(Pos3f* pMtx, const JointControllerInfo& rJointInfo) {
+    Pos3f mtx;
     mtx.makeQuat(mRotQuat);
 
     // interesting way to transpose a matrix
-    TPos3f mtx2;
-    TVec3f x, y, z;
+    Pos3f mtx2;
+    Vec3f x, y, z;
     mtx2.setInline(getBaseMtx());
     mtx2.getXYZDir(x, y, z);
-    TPos3f mtx3;
+    Pos3f mtx3;
     mtx3.setXYZDir2(x, y, z);
 
-    TVec3f t;
+    Vec3f t;
     pMtx->getTrans(t);
 
     pMtx->zeroTransInline2();
@@ -616,7 +616,7 @@ bool BombHei::calcJoint(TPos3f* pMtx, const JointControllerInfo& rJointInfo) {
 void BombHei::control() {
     mScaleController->updateNerve();
 
-    if (MR::isInDeath(this, TVec3f(0.0f, 0.0f, 0.0f)) && !isNerve(GET_NERVE(BombHei, HostTypeNrvExplode))) {
+    if (MR::isInDeath(this, Vec3f(0.0f, 0.0f, 0.0f)) && !isNerve(GET_NERVE(BombHei, HostTypeNrvExplode))) {
         setNerve(GET_NERVE(BombHei, HostTypeNrvExplode));
         return;
     }
@@ -701,7 +701,7 @@ void BombHei::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
 
     if (MR::isSensorNpc(pReceiver) || MR::isSensorEnemy(pReceiver)) {
         if (isNerve(GET_NERVE(BombHei, HostTypeNrvThrown))) {
-            TVec3f direction = pSender->mPosition;
+            Vec3f direction = pSender->mPosition;
             direction -= pReceiver->mPosition;
             MR::normalizeOrZero(&direction);
             MR::calcReflectionVector(&mVelocity, direction, ::hThrownReboundRate, ::hThrownReboundMin);
@@ -819,7 +819,7 @@ bool BombHei::receiveMsgThrow(HitSensor* pSender, HitSensor* pReceiver) {
 
     setNerve(GET_NERVE(BombHei, HostTypeNrvThrown));
     mCarrySensor = nullptr;
-    TVec3f throwVec;
+    Vec3f throwVec;
     MR::getPlayerThrowVec(&throwVec);
     mVelocity.set(throwVec.multInLine(::hThrowVelH));
     mVelocity.add(mGravity.multInLine2(-::hThrowVelV));

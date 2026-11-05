@@ -642,12 +642,12 @@ void StageDataHolder::createLocalStageDataHolder(const MR::AssignableArray< JMap
 }
 
 void StageDataHolder::calcPlacementMtx(const JMapInfoIter& rIter) {
-    TVec3f pos;
+    Vec3f pos;
     rIter.getValue< f32 >("pos_x", &pos.x);
     rIter.getValue< f32 >("pos_y", &pos.y);
     rIter.getValue< f32 >("pos_z", &pos.z);
 
-    TVec3f rot;
+    Vec3f rot;
     rIter.getValue< f32 >("dir_x", &rot.x);
     rIter.getValue< f32 >("dir_y", &rot.y);
     rIter.getValue< f32 >("dir_z", &rot.z);

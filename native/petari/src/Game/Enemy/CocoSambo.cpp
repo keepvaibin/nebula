@@ -5,7 +5,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/PlayerUtil.hpp"
-#include "JSystem/JGeometry/TVec.hpp"
+#include <nebula_geometry.hpp>
 
 namespace NrvCocoSamboHead {
     NEW_NERVE(CocoSamboHeadNrvHeadConnectedBody, CocoSamboHead, ConnectedBody);
@@ -84,13 +84,13 @@ CocoSamboHead::CocoSamboHead(LiveActor* pHost) : PartsModel(pHost, "\203\122\203
 }
 
 void CocoSamboHead::init(const JMapInfoIter& rIter) {
-    TVec3f sensorOffs(::cHeadSensorOffset);
+    Vec3f sensorOffs(::cHeadSensorOffset);
     sensorOffs.scale(mScale.x);
 
     initHitSensor(2);
     MR::addHitSensorAtJoint(this, "body", "Head", ATYPE_SAMBO_HEAD, 8, (::cHeadSensorRadius * mScale.x), sensorOffs);
     MR::addHitSensorAtJoint(this, "trample", "Head", ATYPE_SAMBO_HEAD, 8, (::cTrampleSensorRadius * mScale.x), sensorOffs);
-    initFixedPosition(TVec3f(0.0f, 0.0f, 0.0f), TVec3f(0.0f, -90.0f, -90.0f), "Head");
+    initFixedPosition(Vec3f(0.0f, 0.0f, 0.0f), Vec3f(0.0f, -90.0f, -90.0f), "Head");
     initNerve(GET_NERVE(CocoSamboHead, CocoSamboHeadNrvHeadConnectedBody));
     PartsModel::init(rIter);
 }
@@ -105,11 +105,11 @@ void CocoSamboHead::calcAndSetBaseMtx() {
     if (mIsCalcOwnMtx != false) {
         PartsModel::calcAndSetBaseMtx();
     } else {
-        TVec3f grav;
+        Vec3f grav;
         MR::calcGravityVector(this, &grav, nullptr, 0);
         grav.negate();
 
-        TPos3f mtx;
+        Pos3f mtx;
         if (MR::isSameDirection(mFrontVec, grav)) {
             MR::makeMtxUpNoSupportPos(&mtx, grav, mPosition);
         } else {
@@ -187,9 +187,9 @@ bool CocoSamboHead::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor
     return false;
 }
 
-void CocoSamboHead::updateFrontVecToPlayer(const TVec3f& rVec) {
-    TVec3f v5;
-    TVec3f v4 = -rVec;
+void CocoSamboHead::updateFrontVecToPlayer(const Vec3f& rVec) {
+    Vec3f v5;
+    Vec3f v4 = -rVec;
     v5.sub(*MR::getPlayerPos(), mPosition);
 
     if (MR::isNearZero(v5) || MR::isSameDirection(v4, v5)) {
@@ -206,8 +206,8 @@ void CocoSamboHead::updateFrontVecToPlayer(const TVec3f& rVec) {
 }
 
 void CocoSamboHead::exeFall() {
-    TVec3f gravity(mHost->mGravity);
-    TVec3f acceleration;
+    Vec3f gravity(mHost->mGravity);
+    Vec3f acceleration;
     acceleration.scale(2.0f, gravity);
 
     if (MR::isFirstStep(this)) {
@@ -217,13 +217,13 @@ void CocoSamboHead::exeFall() {
         MR::startBck(this, "Fall");
         updateFrontVecToPlayer(gravity);
 
-        TVec3f offset;
+        Vec3f offset;
         f32 fallFrame = ::cFallFrame;
         offset.sub(mHost->mPosition, mPosition);
-        TVec3f verticalOffset;
-        TVec3f horizontalVelocity;
-        TVec3f verticalVelocity;
-        TVec3f up = -gravity;
+        Vec3f verticalOffset;
+        Vec3f horizontalVelocity;
+        Vec3f verticalVelocity;
+        Vec3f up = -gravity;
         verticalOffset.scale(up.dot(offset), up);
         MR::vecKillElement(offset, up, &offset);
         horizontalVelocity.scale(1.0f / fallFrame, offset);
@@ -281,15 +281,15 @@ void CocoSamboHead::exeBlow() {
         MR::calcGravity(this);
         updateFrontVecToPlayer(mGravity);
 
-        TVec3f up = -mGravity;
-        TPos3f mtx;
+        Vec3f up = -mGravity;
+        Pos3f mtx;
         mtx.identity();
         MR::makeMtxUpFront(&mtx, up, mFrontVec);
-        mtx.mult33(TVec3f(::cBlowVelocity), mVelocity);
+        mtx.mult33(Vec3f(::cBlowVelocity), mVelocity);
         MR::startBck(this, "Blow");
     }
 
-    TVec3f result;
+    Vec3f result;
     result.scale(1.0f, mGravity);
     mVelocity.add(mVelocity, result);
 }
@@ -322,7 +322,7 @@ void CocoSambo::init(const JMapInfoIter& rIter) {
         mPointingActorArray[i]->initWithoutIter();
         MR::invalidateClipping(mPointingActorArray[i]);
         MR::initStarPointerTargetAtMtx(mPointingActorArray[i], 80.0f * mScale.x, MR::getJointMtx(this, ::cPointingJointName[i]),
-                                       TVec3f(mScale.x * 100.0f, 0.0f, 0.0f));
+                                       Vec3f(mScale.x * 100.0f, 0.0f, 0.0f));
         mPointingActorArray[i]->makeActorAppeared();
     }
 
@@ -397,7 +397,7 @@ void CocoSambo::control() {
 }
 
 void CocoSambo::calcAndSetBaseMtx() {
-    TPos3f mtx;
+    Pos3f mtx;
     MR::makeMtxUpFrontPos(&mtx, mUpVec, mFrontVec, mPosition);
     MR::setBaseTRMtx(this, mtx);
     MR::setBaseScale(this, mAnimScaleController->_C * mScale);
@@ -445,7 +445,7 @@ void CocoSambo::initMapToolInfo(const JMapInfoIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::getJMapInfoArg0NoInit(rIter, &mPlayerSearchDistance);
     MR::useStageSwitchWriteDead(this, rIter);
-    TRot3f mtx;
+    Rot3f mtx;
     MR::makeMtxRotate(mtx, mRotation);
     mtx.getYDir2(mUpVec);
     mtx.getZDir2(mFrontVec);
@@ -453,7 +453,7 @@ void CocoSambo::initMapToolInfo(const JMapInfoIter& rIter) {
 
 void CocoSambo::initSensor() {
     f32 f = mScale.x * 80.0f;
-    TVec3f offset(::cSensorOffset);
+    Vec3f offset(::cSensorOffset);
     offset.scale(mScale.x);
     initHitSensor(3);
     MR::addHitSensorMtx(this, "spine1", ATYPE_SAMBO_BODY, 8, f, MR::getJointMtx(this, "Spine1"), offset);
@@ -462,12 +462,12 @@ void CocoSambo::initSensor() {
 }
 
 void CocoSambo::dirToPlayer(f32 angle) {
-    TVec3f toPlayer;
+    Vec3f toPlayer;
     toPlayer.sub(*MR::getPlayerPos(), *getPosition());
 
     if (!MR::isNearZero(toPlayer) && !MR::isSameDirection(mUpVec, toPlayer)) {
-        TVec3f front;
-        TVec3f targetFront;
+        Vec3f front;
+        Vec3f targetFront;
         front.set(mFrontVec);
         MR::normalize(&toPlayer);
         MR::vecKillElement(toPlayer, mUpVec, &targetFront);

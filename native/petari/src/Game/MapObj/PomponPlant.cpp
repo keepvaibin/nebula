@@ -24,8 +24,8 @@ void PomponPlant::init(const JMapInfoIter& rIter) {
     initModelManagerWithAnm(modelName, nullptr, false);
     MR::connectToSceneMapObj(this);
     initHitSensor(1);
-    MR::addHitSensorMapObj(this, "body", 8, ::sSensorRadius, TVec3f(::sSensorOffset));
-    MR::initStarPointerTarget(this, ::sSensorRadius, TVec3f(::sSensorOffset));
+    MR::addHitSensorMapObj(this, "body", 8, ::sSensorRadius, Vec3f(::sSensorOffset));
+    MR::initStarPointerTarget(this, ::sSensorRadius, Vec3f(::sSensorOffset));
     initEffectKeeper(0, nullptr, false);
     initSound(2, false);
     MR::getJMapInfoArg0NoInit(rIter, &mItemType);

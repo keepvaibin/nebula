@@ -2,7 +2,7 @@
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/ShadowController.hpp"
 #include "Game/Util/DirectDraw.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 ShadowSurfaceCircle::~ShadowSurfaceCircle() {
 }
@@ -25,7 +25,7 @@ void ShadowSurfaceCircle::draw() const {
         radius *= controller->getHost()->mScale.x;
     }
 
-    TVec3f pos, normal;
+    Vec3f pos, normal;
     controller->getProjectionPos(&pos);
     controller->getProjectionNormal(&normal);
     TDDraw::resetViewMtx();

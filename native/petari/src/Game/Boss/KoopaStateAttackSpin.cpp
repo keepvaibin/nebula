@@ -44,7 +44,7 @@ KoopaStateAttackSpin::KoopaStateAttackSpin(Koopa* pKoopa)
 }
 
 void KoopaStateAttackSpin::init() {
-    MR::addHitSensor(mHost, "AttackSpin", ATYPE_KOOPA_ATTACK, 8, 250.0f, TVec3f(0.0f, 250.0f, 0.0f));
+    MR::addHitSensor(mHost, "AttackSpin", ATYPE_KOOPA_ATTACK, 8, 250.0f, Vec3f(0.0f, 250.0f, 0.0f));
 
     initNerve(GET_NERVE(KoopaStateAttackSpin, KoopaStateAttackSpinNrvStart));
 

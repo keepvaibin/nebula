@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class CollisionParts;
 
@@ -30,13 +30,13 @@ public:
     bool isHalfOpen() const;
 
     CollisionParts* mBoxCollider;
-    TPos3f mTopMtx;
+    Pos3f mTopMtx;
     s32 mBoxType;
     s32 mOpenCondition;
     LiveActor* mItem;
     s32 mItemType;
-    TVec3f mItemVelocity;
-    TVec3f mItemTargetPos;
+    Vec3f mItemVelocity;
+    Vec3f mItemTargetPos;
     bool mIsItemMoving;
     s32 mWaitForSwitchOn;
     s32 mPowerStarId;

@@ -74,7 +74,7 @@ namespace MR {
 
     void turnPlayerToActor(const LiveActor* pActor, f32 turnSpeed) {
         LiveActor* pPlayer = getPlayerDemoActor();
-        TPos3f playerMtx;
+        Pos3f playerMtx;
         playerMtx.set(getPlayerBaseMtx());
         if (isPlayerInWaterMode()) {
             if (isNearPlayer(pActor, 10.0f)) {
@@ -118,7 +118,7 @@ namespace MR {
             }
         }
 
-        TVec3f separation(*getPlayerCenterPos() - pActor->mPosition);
+        Vec3f separation(*getPlayerCenterPos() - pActor->mPosition);
         if (separation.length() < 100.0f && isOnGroundPlayer()) {
             vecKillElement(separation, *getPlayerGroundNormal(), &separation);
             if (!normalizeOrZero(&separation)) {
@@ -127,7 +127,7 @@ namespace MR {
         }
     }
 
-    void decidePose(NPCActor* pActor, const TVec3f& rUp, const TVec3f& rFront, const TVec3f& rPos, f32 upBlend, f32 frontBlend, f32 posBlend) {
+    void decidePose(NPCActor* pActor, const Vec3f& rUp, const Vec3f& rFront, const Vec3f& rPos, f32 upBlend, f32 frontBlend, f32 posBlend) {
         blendVec(&pActor->mPosition, pActor->mPosition, rPos, posBlend);
         if (upBlend == 1.0f && frontBlend == 1.0f) {
             makeQuatUpFront(&pActor->_A0, rUp, rFront);
@@ -137,7 +137,7 @@ namespace MR {
     }
 
     void setNPCActorPos(NPCActor* pActor, const char* pName) {
-        TPos3f mtx;
+        Pos3f mtx;
         mtx.identity();
         findNamePos(pName, mtx);
         pActor->setBaseMtx(mtx);
@@ -146,14 +146,14 @@ namespace MR {
         onCalcShadowOneTimeAll(pActor);
     }
 
-    void setNPCActorPos(NPCActor* pActor, const TVec3f& rPos) {
+    void setNPCActorPos(NPCActor* pActor, const Vec3f& rPos) {
         pActor->mPosition.set(rPos);
         resetPosition(pActor);
         onCalcShadowOneTimeAll(pActor);
     }
 
-    void setNPCActorPose(NPCActor* pActor, const TVec3f& rFront, const TVec3f& rUp, const TVec3f& rPos) {
-        TPos3f mtx;
+    void setNPCActorPose(NPCActor* pActor, const Vec3f& rFront, const Vec3f& rUp, const Vec3f& rPos) {
+        Pos3f mtx;
         makeMtxUpFrontPos(&mtx, rUp, rFront, rPos);
         pActor->setBaseMtx(mtx);
         pActor->mPosition.set(rPos);
@@ -170,10 +170,10 @@ namespace MR {
     }
 
     void followRailPoseOnGround(NPCActor* pActor, const LiveActor* pRailActor, f32 blend) {
-        TVec3f pos(getRailPos(pRailActor));
-        TVec3f gravity(pActor->mGravity);
+        Vec3f pos(getRailPos(pRailActor));
+        Vec3f gravity(pActor->mGravity);
         getFirstPolyOnLineToMap(&pos, nullptr, getRailPos(pRailActor) - gravity * 10.0f, gravity * 1000.0f);
-        const TVec3f& rDirection = getRailDirection(pRailActor);
+        const Vec3f& rDirection = getRailDirection(pRailActor);
         decidePose(pActor, -gravity, rDirection, pos, 1.0f, blend, 1.0f);
     }
 
@@ -181,9 +181,9 @@ namespace MR {
         pActor->setToDefault();
     }
 
-    bool convertPosOnGround(TVec3f* pPos, const TVec3f& rDirection) {
+    bool convertPosOnGround(Vec3f* pPos, const Vec3f& rDirection) {
         Triangle triangle;
-        TVec3f hitPos;
+        Vec3f hitPos;
         if (getFirstPolyOnLineToMap(&hitPos, &triangle, *pPos, rDirection)) {
             *pPos = hitPos;
             return true;
@@ -205,11 +205,11 @@ namespace MR {
     }
 
     void startNPCTalkCamera(const TalkMessageCtrl* pTalk, MtxPtr pActorMtx, MtxPtr pPlayerMtx, f32 distanceScale, s32 frames) {
-        TVec3f actorPos;
-        TVec3f up;
-        TVec3f side;
-        TVec3f playerPos;
-        TVec3f offset(getMessageBalloonFollowOffset(pTalk));
+        Vec3f actorPos;
+        Vec3f up;
+        Vec3f side;
+        Vec3f playerPos;
+        Vec3f offset(getMessageBalloonFollowOffset(pTalk));
         if (getMessageBalloonFollowMatrix(pTalk)) {
             pActorMtx = getMessageBalloonFollowMatrix(pTalk);
         }
@@ -271,14 +271,14 @@ namespace MR {
         return pGoods;
     }
 
-    bool calcPlayerFaceStareVector(TVec3f* pOut, MtxPtr pActorMtx, MtxPtr pBaseMtx) {
-        TPos3f mtx;
-        TVec3f facePos;
-        TVec3f actorPos;
-        TVec3f front;
-        TVec3f side;
-        TVec3f up;
-        TVec3f direction;
+    bool calcPlayerFaceStareVector(Vec3f* pOut, MtxPtr pActorMtx, MtxPtr pBaseMtx) {
+        Pos3f mtx;
+        Vec3f facePos;
+        Vec3f actorPos;
+        Vec3f front;
+        Vec3f side;
+        Vec3f up;
+        Vec3f direction;
         bool facing = true;
         calcPlayerJointMtx(&mtx, "Face0");
         mtx.getTrans(facePos);
@@ -299,8 +299,8 @@ namespace MR {
         return facing;
     }
 
-    bool calcPlayerFaceStarePos(TVec3f* pOut, MtxPtr pActorMtx, MtxPtr pBaseMtx) {
-        TVec3f pos;
+    bool calcPlayerFaceStarePos(Vec3f* pOut, MtxPtr pActorMtx, MtxPtr pBaseMtx) {
+        Vec3f pos;
         extractMtxTrans(pActorMtx, &pos);
         bool facing = calcPlayerFaceStareVector(pOut, pActorMtx, pBaseMtx);
         pOut->add(pos);
@@ -592,8 +592,8 @@ namespace MR {
         currentOffset -= 0.5f;
         currentOffset = currentOffset >= 0.0f ? currentOffset : 0.0f;
         if (pTalk && isTalkTalking(pTalk) && !isShortTalk(pTalk)) {
-            TVec3f up;
-            TVec3f direction(pActor->mPosition - *getPlayerPos());
+            Vec3f up;
+            Vec3f direction(pActor->mPosition - *getPlayerPos());
             getPlayerUpVec(&up);
             if (direction.dot(up) > 0.0f && direction.length() < 200.0f) {
                 f32 target = getLinerValueFromMinMax(direction.length(), 0.0f, 200.0f, maxOffset, 0.0f);
@@ -606,8 +606,8 @@ namespace MR {
     }
 
     void calcAndSetFloatBaseMtx(NPCActor* pActor, f32 offset) {
-        TVec3f up;
-        TVec3f pos(pActor->mPosition);
+        Vec3f up;
+        Vec3f pos(pActor->mPosition);
         pActor->_A0.getYDir(up);
         up.scale(offset);
         pActor->mPosition.add(up);
@@ -670,7 +670,7 @@ void TakeOutStar::exeAnim() {
     }
 
     if (MR::isGreaterStep(this, step)) {
-        if (MR::isInWater(mStarModel, TVec3f(0.0f, 0.0f, 0.0f))) {
+        if (MR::isInWater(mStarModel, Vec3f(0.0f, 0.0f, 0.0f))) {
             MR::startLevelSound(mStarModel, "SE_OJ_LV_POW_STAR_EXIST_W");
         } else {
             MR::startLevelSound(mStarModel, "SE_OJ_LV_POW_STAR_EXIST");
@@ -684,7 +684,7 @@ void TakeOutStar::exeAnim() {
 
 void TakeOutStar::exeDemo() {
     if (MR::isFirstStep(this)) {
-        TVec3f trans;
+        Vec3f trans;
         MR::extractMtxTrans(MR::getJointMtx(mStarModel, "PowerStar"), &trans);
         MR::appearPowerStarContinueCurrentDemo(mActor, trans);
         mStarModel->kill();

@@ -2,7 +2,7 @@
 
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/LiveActorGroup.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class DinoPackunTrackFire : public LiveActor {
 public:
@@ -17,11 +17,11 @@ public:
     virtual void attackSensor(HitSensor*, HitSensor*);
     virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
 
-    void appearAndSetPos(const TVec3f&);
+    void appearAndSetPos(const Vec3f&);
     void exeWait();
     void exeGround();
 
-    TPos3f _8C;
+    Pos3f _8C;
 };
 
 class DinoPackunTrackFireHolder : public DeriveActorGroup< DinoPackunTrackFire > {

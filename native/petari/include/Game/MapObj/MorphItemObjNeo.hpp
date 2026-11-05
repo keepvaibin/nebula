@@ -3,7 +3,7 @@
 #include "Game/Effect/SimpleEffectObj.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class NameObjArchiveListCollector;
 class ActorCameraInfo;
@@ -49,14 +49,14 @@ public:
     u8 _97;
     s8 mIsBind;      // Obj_arg1
     u8 mShadowType;  // Obj_arg4
-    TVec3f mZRotation;
+    Vec3f mZRotation;
     s32 mMorphType;
     f32 mAngle;
-    TVec3f mSpawnPosition;
+    Vec3f mSpawnPosition;
     ActorCameraInfo* mActorCameraInfo;
     ModelObj* mContainerModel;
     ModelObj* mContainerBreakModel;
-    TPos3f mBaseMtx;
+    Pos3f mBaseMtx;
     CameraTargetMtx* mCameraTargetMtx;
 };
 
@@ -157,8 +157,8 @@ public:
         return 50.0f;
     }
 
-    virtual TVec3f* getClippingCenterOffset() const {
-        static TVec3f sOffset;
+    virtual Vec3f* getClippingCenterOffset() const {
+        static Vec3f sOffset;
         sOffset.set(0.0f, 200.0f, 0.0f);
         return &sOffset;
     }
@@ -179,8 +179,8 @@ public:
     virtual f32 getFarClipDistance() const {
         return 50.0f;
     };
-    virtual TVec3f* getClippingCenterOffset() const {
-        static TVec3f sOffset;
+    virtual Vec3f* getClippingCenterOffset() const {
+        static Vec3f sOffset;
         sOffset.set(0.0f, 200.0f, 0.0f);
         return &sOffset;
     };
@@ -202,8 +202,8 @@ public:
         return 50.0f;
     }
 
-    virtual TVec3f* getClippingCenterOffset() const {
-        static TVec3f sOffset;
+    virtual Vec3f* getClippingCenterOffset() const {
+        static Vec3f sOffset;
         sOffset.set(0.0f, 580.0f, 0.0f);
         return &sOffset;
     }

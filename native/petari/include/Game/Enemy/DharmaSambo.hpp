@@ -46,7 +46,7 @@ public:
     bool isStarPointerPointingParts();
 
     const Nerve* mStarPointerBindEndNerve;
-    TVec3f mInitialPos;
+    Vec3f mInitialPos;
     s32 mHideTimer;
     s32 mPartsCount;
     MR::Vector< MR::AssignableArray< DharmaSamboParts* > > mParts;

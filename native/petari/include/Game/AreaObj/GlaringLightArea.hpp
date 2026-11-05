@@ -17,7 +17,7 @@ public:
     }
 
     AudSoundObject* mSoundObj;
-    TVec3f mPos;
+    Vec3f mPos;
 };
 
 class GlaringLightAreaMgr : public AreaObjMgr {

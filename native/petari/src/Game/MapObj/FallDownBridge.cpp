@@ -11,7 +11,7 @@
 #include "Game/Util/SoundUtil.hpp"
 
 namespace {
-    const TVec3f sBaseClipCentor = TVec3f(0.0f, 1250.0f, 0.0f);
+    const Vec3f sBaseClipCentor = Vec3f(0.0f, 1250.0f, 0.0f);
     // const f32 sBlockDepth = 0.0f;
     // const f32 sFallAccel = 0.0f;
     // const f32 sFallDegreeFreq = 0.0f;
@@ -45,7 +45,7 @@ void FallDownBridge::init(const JMapInfoIter& rIter) {
     MR::connectToSceneMapObj(this);
 
     initHitSensor(1);
-    MR::addHitSensorMapObj(this, "body", 16, 0.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorMapObj(this, "body", 16, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
 
     MR::initCollisionParts(this, pName, getSensor("body"), nullptr);
     initSound(4, false);
@@ -120,13 +120,13 @@ bool FallDownBridge::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pRe
             return false;
         }
 
-        TVec3f vec6C(*MR::getWallNormal(pHost));
+        Vec3f vec6C(*MR::getWallNormal(pHost));
         MR::normalizeOrZero(&vec6C);
 
-        TPos3f mtx60;
+        Pos3f mtx60;
         mtx60.set(getBaseMtx());
 
-        TVec3f vec78;
+        Vec3f vec78;
         mtx60.getXDir(vec78);
 
         f32 dot = vec78.dot(vec6C);
@@ -161,13 +161,13 @@ bool FallDownBridge::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pRe
 void FallDownBridge::calcAndSetBaseMtx() {
     LiveActor::calcAndSetBaseMtx();
 
-    TPos3f mtx58;
+    Pos3f mtx58;
     mtx58.set(getBaseMtx());
 
-    TPos3f mtx88;
+    Pos3f mtx88;
     mtx88.identity();
 
-    TVec3f vecC4;
+    Vec3f vecC4;
 
     if (_98 >= 0.0f) {
         vecC4.set< f32 >(0.0f, 0.0f, 0.0f);
@@ -177,9 +177,9 @@ void FallDownBridge::calcAndSetBaseMtx() {
 
     mtx88.setTrans(-vecC4);
 
-    TPos3f baseMtx;
+    Pos3f baseMtx;
     baseMtx.identity();
-    baseMtx.makeRotate(TVec3f(0, 0, 1), MR::toRadian(_98));
+    baseMtx.makeRotate(Vec3f(0, 0, 1), MR::toRadian(_98));
 
     baseMtx.concat(baseMtx, mtx88);
 

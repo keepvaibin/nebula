@@ -242,7 +242,7 @@ void LiveActor::calcAndSetBaseMtx() {
     if (MR::getTaken(this)) {
         MR::setBaseTRMtx(this, MR::getTaken(this)->mHost->getTakingMtx());
     } else {
-        TPos3f mtx;
+        Pos3f mtx;
 
         if (mRotation.x == 0.0f && mRotation.z == 0.0f) {
             MR::makeMtxTransRotateY(mtx, this);
@@ -438,7 +438,7 @@ void LiveActor::initActorCollisionParts(const char* pParam1, HitSensor* pParam2,
     }
 
     if (pParam3 != nullptr) {
-        TPos3f mtx;
+        Pos3f mtx;
 
         if (pParam4 != nullptr) {
             mtx.set(pParam4);
@@ -460,7 +460,7 @@ void LiveActor::initStageSwitch(const JMapInfoIter& rIter) {
     mStageSwitchCtrl = MR::createStageSwitchCtrl(this, rIter);
 }
 
-void LiveActor::initActorStarPointerTarget(f32 radius, const TVec3f* pTrans, MtxPtr pMtx, TVec3f offset) {
+void LiveActor::initActorStarPointerTarget(f32 radius, const Vec3f* pTrans, MtxPtr pMtx, Vec3f offset) {
     mStarPointerTarget = new StarPointerTarget(radius, pTrans, pMtx, offset);
 }
 

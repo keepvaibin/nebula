@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/NameObj/NameObj.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class CameraDirector;
 class CameraPoseParam;
@@ -57,5 +57,5 @@ public:
     CameraPoseParam* mPoseParam;
     bool mIsActivated;
     bool mRequestLOfsReset;
-    TPos3f mMatrix;
+    Pos3f mMatrix;
 };

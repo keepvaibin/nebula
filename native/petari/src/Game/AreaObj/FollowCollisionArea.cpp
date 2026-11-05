@@ -8,7 +8,7 @@
 FollowCollisionArea::~FollowCollisionArea() {
 }
 
-FollowCollisionArea::FollowCollisionArea(const TVec3f& rSize, MtxPtr pMatrix, f32 offset) : NameObj("\222\307\217\135\203\122\203\212\203\127\203\207\203\223\203\107\203\212\203\101" /* 追従コリジョンエリア */) {
+FollowCollisionArea::FollowCollisionArea(const Vec3f& rSize, MtxPtr pMatrix, f32 offset) : NameObj("\222\307\217\135\203\122\203\212\203\127\203\207\203\223\203\107\203\212\203\101" /* 追従コリジョンエリア */) {
     _38 = rSize;
     _34 = pMatrix;
     _44 = offset;
@@ -30,7 +30,7 @@ void FollowCollisionArea::movement() {
         _28 = true;
         _30->invalidate();
     } else {
-        TVec3f playerPos(*MR::getPlayerCenterPos());
+        Vec3f playerPos(*MR::getPlayerCenterPos());
         f32 radius = static_cast< f32 >(_2C);
         if (_2C == 0) {
             radius = MR::getPlayerHitRadius();
@@ -40,22 +40,22 @@ void FollowCollisionArea::movement() {
             radius += 5.0f;
         }
 
-        TVec3f hitPos;
-        TVec3f hitNormal;
+        Vec3f hitPos;
+        Vec3f hitNormal;
         if (!hitCheck(playerPos, radius, &hitPos, &hitNormal)) {
             if (_28) {
                 _28 = false;
                 _30->validate();
             }
         } else if (!_28 && _20 == -1) {
-            TVec3f push;
+            Vec3f push;
             if (_C == 0) {
                 push = hitNormal;
                 push.setLength(radius + _10);
             } else {
                 push = playerPos - hitPos;
                 push.setLength(radius);
-                TVec3f contact(hitPos + push);
+                Vec3f contact(hitPos + push);
                 push = contact - playerPos;
             }
 
@@ -66,15 +66,15 @@ void FollowCollisionArea::movement() {
     }
 }
 
-bool FollowCollisionArea::hitCheck(const TVec3f& rPos, f32 radius, TVec3f* pPoint, TVec3f* pNormal) {
+bool FollowCollisionArea::hitCheck(const Vec3f& rPos, f32 radius, Vec3f* pPoint, Vec3f* pNormal) {
     s32 surface = -1;
-    TPos3f matrix;
+    Pos3f matrix;
     NebulaMtxCopy(_34, matrix);
     MR::extractMtxTrans(_34, &_14);
-    TVec3f localPoint;
-    TVec3f axisX;
-    TVec3f axisY;
-    TVec3f axisZ;
+    Vec3f localPoint;
+    Vec3f axisX;
+    Vec3f axisY;
+    Vec3f axisZ;
     matrix.getXDir(axisX);
     matrix.getYDir(axisY);
     matrix.getZDir(axisZ);
@@ -89,13 +89,13 @@ bool FollowCollisionArea::hitCheck(const TVec3f& rPos, f32 radius, TVec3f* pPoin
     sizeX *= 0.5f * _38.x;
     sizeY *= 0.5f * _38.y;
     sizeZ *= 0.5f * _38.z;
-    TVec3f expanded(sizeX + radius, sizeY + radius, sizeZ + radius);
-    TVec3f relative(rPos);
+    Vec3f expanded(sizeX + radius, sizeY + radius, sizeZ + radius);
+    Vec3f relative(rPos);
     relative.sub(_14);
     f32 x = relative.dot(axisX);
     f32 y = relative.dot(axisY);
     f32 z = relative.dot(axisZ);
-    TVec3f absolute;
+    Vec3f absolute;
     f32 absX = MR::abs(x);
     f32 absY = MR::abs(y);
     f32 absZ = MR::abs(z);
@@ -122,8 +122,8 @@ bool FollowCollisionArea::hitCheck(const TVec3f& rPos, f32 radius, TVec3f* pPoin
     }
 
     _C = count;
-    TVec3f corner;
-    TVec3f depth;
+    Vec3f corner;
+    Vec3f depth;
     if (count == 3) {
         corner.zero();
         if (x < 0.0f) {

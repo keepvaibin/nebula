@@ -74,24 +74,24 @@ DynamicJointCtrlNode::DynamicJointCtrlNode(const DynamicJointCtrl* pControl, Mtx
 
 void DynamicJointCtrlNode::update(LiveActor* pActor, const DynamicJointCtrlNode* pParent) {
     _10.scale(mParentControl->mParams->mFriction);
-    TVec3f gravity(0.0f, 0.0f, 0.0f);
+    Vec3f gravity(0.0f, 0.0f, 0.0f);
     MR::calcGravityVector(pActor, &gravity, nullptr, 0);
     gravity.scale(mParentControl->mParams->mGravity);
     _10.add(gravity);
 
-    TVec3f targetPos(pParent->_1C);
+    Vec3f targetPos(pParent->_1C);
     targetPos.scale(_0);
     targetPos.add(pParent->_4);
-    TVec3f accel(targetPos);
+    Vec3f accel(targetPos);
     accel.sub(_4);
     accel.sub(_10);
     accel.scale(mParentControl->mParams->mAccelRatetoBckPos);
     _10.add(accel);
 
-    TVec3f offset(_4);
+    Vec3f offset(_4);
     offset.add(_10);
     offset.sub(pParent->_4);
-    TVec3f direction(offset);
+    Vec3f direction(offset);
 
     if (MR::isNearZero(direction)) {
         direction.set(pParent->_1C);
@@ -100,9 +100,9 @@ void DynamicJointCtrlNode::update(LiveActor* pActor, const DynamicJointCtrlNode*
     }
 
     if (offset.length() >= _0) {
-        TVec3f limitedOffset(direction);
+        Vec3f limitedOffset(direction);
         limitedOffset.scale(_0);
-        TVec3f correction(offset);
+        Vec3f correction(offset);
         correction.sub(limitedOffset);
         _10.sub(correction);
     }
@@ -115,8 +115,8 @@ void DynamicJointCtrlNode::reset() {
     _10.zero();
 }
 
-bool DynamicJointCtrlNode::updateJointMtxCallBack(TPos3f* pMtx, const JointControllerInfo& rInfo) {
-    TVec3f axis;
+bool DynamicJointCtrlNode::updateJointMtxCallBack(Pos3f* pMtx, const JointControllerInfo& rInfo) {
+    Vec3f axis;
     pMtx->getXDir(axis);
 
     if (MR::isNearZero(axis)) {
@@ -131,7 +131,7 @@ bool DynamicJointCtrlNode::updateJointMtxCallBack(TPos3f* pMtx, const JointContr
         return false;
     }
 
-    TVec3f direction(mChild->_4);
+    Vec3f direction(mChild->_4);
     direction.sub(_4);
 
     if (MR::isNearZero(direction)) {
@@ -159,7 +159,7 @@ void DynamicJointCtrl::init() {
     }
 
     mCtrlNodes = new DynamicJointCtrlNode*[_8];
-    TVec3f previousPos(0.0f, 0.0f, 0.0f);
+    Vec3f previousPos(0.0f, 0.0f, 0.0f);
     f32 length = 100.0f;
 
     for (s32 i = 0; i < _8; i++) {
@@ -169,7 +169,7 @@ void DynamicJointCtrl::init() {
         }
 
         if (i < _8 - 1) {
-            TVec3f pos(mtx[0][3], mtx[1][3], mtx[2][3]);
+            Vec3f pos(mtx[0][3], mtx[1][3], mtx[2][3]);
             if (i > 0) {
                 length = pos.distance(previousPos);
             }

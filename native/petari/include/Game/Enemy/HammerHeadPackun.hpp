@@ -2,7 +2,7 @@
 
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/JMapInfo.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class PartsModel;
 class JointRumbler;
@@ -38,11 +38,11 @@ public:
     void initShadow();
     void initLeaf(const JMapInfoIter&);
     bool isTargetInRange() const;
-    bool isInFieldOfView(const TVec3f&) const;
+    bool isInFieldOfView(const Vec3f&) const;
     bool isAttackSensorValid() const;
     bool isChance() const;
-    bool calcPlayerDir(TVec3f*) const;
-    void turnTo(const TVec3f&, f32);
+    bool calcPlayerDir(Vec3f*) const;
+    void turnTo(const Vec3f&, f32);
     void turnToAttackVec(s32);
     void verticalizeFrontVec();
     bool tryShiftNumb();
@@ -52,9 +52,9 @@ public:
 
     PartsModel* mLeafModel;
     s32 mImmunityTime;
-    TVec3f _94;
-    TVec3f _A0;
-    TVec3f _AC;
+    Vec3f _94;
+    Vec3f _A0;
+    Vec3f _AC;
     JointRumbler* mJointRumbler;
     s32 mNumbTime;
 };

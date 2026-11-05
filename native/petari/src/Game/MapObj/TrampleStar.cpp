@@ -54,7 +54,7 @@ void TrampleStar::init(const JMapInfoIter& rIter) {
     f32 scale = 500.0f;
     scale *= mScale.x;
     initHitSensor(1);
-    MR::addHitSensorPriorBinder(this, "body", 4, scale, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorPriorBinder(this, "body", 4, scale, Vec3f(0.0f, 0.0f, 0.0f));
 
     mNumSurfaces = 12;
     mNumVtxs = 24;
@@ -74,11 +74,11 @@ void TrampleStar::init(const JMapInfoIter& rIter) {
     }
 
     if (!isShareStar) {
-        mVtxs = new TVec3f[mNumVtxs * 256];
+        mVtxs = new Vec3f[mNumVtxs * 256];
         mSurfaces = new Surface[mNumSurfaces * 256];
         mLodSurfaces = new Surface[static_cast< u32 >(mNumSurfaces * 256) / 4];
         mVtxOverlap = new s16[mNumVtxs * 256];
-        mTexST = new TVec2f[mNumVtxs * 256];
+        mTexST = new Vec2f[mNumVtxs * 256];
 
         mVtxs[0].set(-500.0f, -500.0f, -500.0f);
         mVtxs[1].set(-500.0f, -500.0f, 500.0f);
@@ -167,9 +167,9 @@ void TrampleStar::init(const JMapInfoIter& rIter) {
 
     _A8 = new u8[mNumVtxs];
     mNumDrawVtxs = 0;
-    mDrawPos = new TVec3f[mNumSurfaces * 3];
-    mDrawNorm = new TVec3f[mNumSurfaces * 3];
-    mDrawTex = new TVec2f[mNumSurfaces * 3];
+    mDrawPos = new Vec3f[mNumSurfaces * 3];
+    mDrawNorm = new Vec3f[mNumSurfaces * 3];
+    mDrawTex = new Vec2f[mNumSurfaces * 3];
     mDrawDeformCoeffs = new f32[mNumSurfaces * 3];
 
     for (u32 vtx = 0; vtx < mNumVtxs; vtx++) {
@@ -252,7 +252,7 @@ void TrampleStar::divide() {
 }
 
 void TrampleStar::moveVtx(f32 deformRate, u32 vtxIdx, u32 /* unused */, f32 /* unused */, u32 /* unused */) {
-    TVec3f vtxPos(mVtxs[vtxIdx]);
+    Vec3f vtxPos(mVtxs[vtxIdx]);
 
     for (u32 vtx = 0; vtx < mNumVtxs; vtx++) {
         f32 dist = (mVtxs[vtx] - vtxPos).length();
@@ -309,10 +309,10 @@ void TrampleStar::calcSurface(bool calcDrawBuffers) {
                 mNumDrawVtxs++;
             } else {
                 u32 vtx = mSurfaces[surface].mVtxs[idx];
-                TVec3f pos = mVtxs[vtx];
-                TVec3f up = pos;
+                Vec3f pos = mVtxs[vtx];
+                Vec3f up = pos;
                 MR::normalizeOrZero(&up);
-                TVec2f texST = mTexST[vtx];
+                Vec2f texST = mTexST[vtx];
 
                 pos += mPosition - up * mDeformCoeff[vtx];
                 mDrawPos[mNumDrawVtxs] = pos;
@@ -331,10 +331,10 @@ void TrampleStar::calcLodSurface() {
     for (u32 surface = 0; surface < mNumSurfaces / 4; surface++) {
         for (u32 idx = 0; idx < 3; idx++) {
             u32 vtx = mLodSurfaces[surface].mVtxs[idx];
-            TVec3f pos = mVtxs[vtx];
-            TVec3f up = pos;
+            Vec3f pos = mVtxs[vtx];
+            Vec3f up = pos;
             MR::normalizeOrZero(&up);
-            TVec2f& texST = mTexST[vtx];
+            Vec2f& texST = mTexST[vtx];
 
             pos += mPosition;
             mDrawPos[mNumDrawVtxs] = pos;
@@ -375,7 +375,7 @@ void TrampleStar::exeBindingCapture() {
         MR::startSoundPlayer("SE_OJ_TRAMPOLINE_LAND_L");
     }
 
-    TVec3f down = -mVtxs[mCaptureVtx];
+    Vec3f down = -mVtxs[mCaptureVtx];
     MR::normalizeOrZero(&down);
     moveVtx(mDeformRate, mCaptureVtx, 8, 0.8f, 0);
     mDeformRate = 0.85f * mDeformRate;
@@ -418,7 +418,7 @@ void TrampleStar::exeBindingShoot() {
                 mSpringRate = 0.2f;
 
                 if (MR::isPlayerInBind()) {
-                    TVec3f up = mVtxs[mCaptureVtx];
+                    Vec3f up = mVtxs[mCaptureVtx];
                     MR::normalizeOrZero(&up);
 
                     if (MR::getPlayerHeldJump()) {
@@ -444,7 +444,7 @@ void TrampleStar::exeBindingShoot() {
 
     if (getNerveStep() == 120) {
         if (MR::isPlayerInBind()) {
-            TVec3f up = mVtxs[mCaptureVtx];
+            Vec3f up = mVtxs[mCaptureVtx];
             MR::normalizeOrZero(&up);
 
             if (MR::getPlayerHeldJump()) {
@@ -466,7 +466,7 @@ void TrampleStar::exeBindingShoot() {
     }
 }
 
-u32 TrampleStar::calcNearestVtxIndex(const TVec3f& rPos) {
+u32 TrampleStar::calcNearestVtxIndex(const Vec3f& rPos) {
     f32 nearestDistance = 5000.0f;
     u32 nearestIndex = 0;
 
@@ -522,12 +522,12 @@ bool TrampleStar::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pRecei
     }
 
     if (msg == ACTMES_UPDATE_BASEMTX) {
-        TVec3f side;
+        Vec3f side;
         MR::getPlayerSideVec(&side);
-        TVec3f capturePos = mVtxs[mCaptureVtx];
-        TVec3f down = -capturePos;
+        Vec3f capturePos = mVtxs[mCaptureVtx];
+        Vec3f down = -capturePos;
         down.normalize();
-        TPos3f mtx;
+        Pos3f mtx;
         capturePos += mPosition + down * mDeformCoeff[mCaptureVtx];
         MR::makeMtxUpSidePos(&mtx, -down, side, capturePos);
         MR::setPlayerBaseMtx(mtx);
@@ -553,13 +553,13 @@ void TrampleStar::drawSelf() const {
     }
 
     MR::ddSetVtxFormat(3);
-    TVec3f playerPos = *MR::getPlayerPos();
-    TVec3f diff = mPosition - playerPos;
-    TVec3f shadowPos = MR::getMarioShadowVec();
-    TPos3f mtx3;
-    TPos3f mtx;
-    TRot3f rot;
-    TPos3f mtx2;
+    Vec3f playerPos = *MR::getPlayerPos();
+    Vec3f diff = mPosition - playerPos;
+    Vec3f shadowPos = MR::getMarioShadowVec();
+    Pos3f mtx3;
+    Pos3f mtx;
+    Rot3f rot;
+    Pos3f mtx2;
 
     if (MR::vecKillElement(diff, shadowPos, &diff) > 0.0f) {
         NebulaMtxTrans(mtx, -playerPos.x, -playerPos.y, -playerPos.z);
@@ -571,7 +571,7 @@ void TrampleStar::drawSelf() const {
 
     NebulaMtxIdentity(mtx2);
 
-    TVec3f front;
+    Vec3f front;
     MR::getPlayerFrontVec(&front);
 
     if (MR::isNearZero(front)) {
@@ -590,7 +590,7 @@ void TrampleStar::drawSelf() const {
     NebulaMtxInverse(mtx2, mtx2);
 
     MR::multMtx(mtx3, mtx, mtx2);
-    TPos3f mtx4;
+    Pos3f mtx4;
 
     for (u32 idx = 0; idx < 12; idx++) {
         reinterpret_cast< f32* >(&mtx4)[idx] = 0;
@@ -623,9 +623,9 @@ void TrampleStar::drawSelf() const {
 
     J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLES, mNumDrawVtxs, MR::ddVtxAttributes());
     {
-        TVec3f* pos = mDrawPos;
-        TVec3f* norm = mDrawNorm;
-        TVec2f* tex = mDrawTex;
+        Vec3f* pos = mDrawPos;
+        Vec3f* norm = mDrawNorm;
+        Vec2f* tex = mDrawTex;
 
         for (u32 vtx = 0; vtx < mNumDrawVtxs; vtx++) {
             MR::ddSendVtxData(*pos, *norm, *tex);

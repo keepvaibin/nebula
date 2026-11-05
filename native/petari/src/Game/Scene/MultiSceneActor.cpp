@@ -44,7 +44,7 @@ void MultiSceneActor::calcAnim() {
         return;
     }
 
-    TMtx34f mtx;
+    Mtx34f mtx;
     mtx.identity();
 
     MR::makeMtxTR(mtx, mTranslation, mRotation);

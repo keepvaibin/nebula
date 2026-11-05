@@ -264,7 +264,7 @@ int JAISeMgr::getNumActiveSe() const {
     return num;
 }
 
-bool JAISeMgr::startSound(JAISoundID id, JAISoundHandle* handle, const TVec3f* posPtr) {
+bool JAISeMgr::startSound(JAISoundID id, JAISoundHandle* handle, const Vec3f* posPtr) {
     if (handle != nullptr && handle->isSoundAttached()) {
         (*handle)->stop();
     }

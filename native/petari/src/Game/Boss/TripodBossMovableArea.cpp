@@ -1,12 +1,12 @@
 #include "Game/Boss/TripodBossMovableArea.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 namespace {
     // unused
-    static TVec3f sTestHitPosition(0, 0, 0);
-    static TVec3f sTestHitVerocity(0, 0, 0);
-    static TVec3f sTestLandPosition(0, 0, 0);
+    static Vec3f sTestHitPosition(0, 0, 0);
+    static Vec3f sTestHitVerocity(0, 0, 0);
+    static Vec3f sTestLandPosition(0, 0, 0);
 };  // namespace
 
 HitResult::HitResult() {
@@ -34,16 +34,16 @@ TripodBossMovableArea::TripodBossMovableArea() {
     _30 = 1.0f;
 }
 
-void TripodBossMovableArea::setCenter(const TVec3f& rCenter) {
+void TripodBossMovableArea::setCenter(const Vec3f& rCenter) {
     mCenter = rCenter;
 }
 
-void TripodBossMovableArea::setBaseAxis(const TVec3f& rAxis) {
+void TripodBossMovableArea::setBaseAxis(const Vec3f& rAxis) {
     mBaseAxis = rAxis;
     MR::normalizeOrZero(&mBaseAxis);
 }
 
-void TripodBossMovableArea::setFrontVector(const TVec3f& rFront) {
+void TripodBossMovableArea::setFrontVector(const Vec3f& rFront) {
     mFront = rFront;
     MR::normalizeOrZero(&mBaseAxis);
 }
@@ -52,12 +52,12 @@ void TripodBossMovableArea::setRadius(f32 radius) {
     mRadius = radius;
 }
 
-bool TripodBossMovableArea::collideSphere(HitResult* pResult, const TVec3f& a2, f32 a3, const TVec3f& a4) const {
+bool TripodBossMovableArea::collideSphere(HitResult* pResult, const Vec3f& a2, f32 a3, const Vec3f& a4) const {
     pResult->_C = a2 + a4;
     f32 v10 = mRadius + a3;
-    TVec3f v29(a2);
+    Vec3f v29(a2);
     v29 -= mCenter;
-    TVec3f direction(a4);
+    Vec3f direction(a4);
     f32 scalar;
     MR::separateScalarAndDirection(&scalar, &direction, direction);
     f32 v11 = v29.dot(direction);
@@ -84,7 +84,7 @@ bool TripodBossMovableArea::collideSphere(HitResult* pResult, const TVec3f& a2, 
     }
 
     pResult->_0 = a2 + (direction * v15);
-    TVec3f v27(pResult->_0);
+    Vec3f v27(pResult->_0);
     v27 -= mCenter;
     f32 v17;
     MR::separateScalarAndDirection(&v17, &v27, v27);
@@ -97,7 +97,7 @@ bool TripodBossMovableArea::collideSphere(HitResult* pResult, const TVec3f& a2, 
     }
 
     pResult->_18 = v27;
-    TVec3f v26(pResult->_C);
+    Vec3f v26(pResult->_C);
     v26 -= pResult->_0;
     f32 v16 = v26.dot(pResult->_18);
     v26 -= pResult->_18 * v16;
@@ -105,9 +105,9 @@ bool TripodBossMovableArea::collideSphere(HitResult* pResult, const TVec3f& a2, 
     return true;
 }
 
-void TripodBossMovableArea::calcNearLandingPosition(TVec3f* pPos, const TVec3f& a2) const {
+void TripodBossMovableArea::calcNearLandingPosition(Vec3f* pPos, const Vec3f& a2) const {
     f32 v8, x, v7;
-    TVec3f v16(a2);
+    Vec3f v16(a2);
     v16 -= mCenter;
     MR::separateScalarAndDirection(&v8, &v16, v16);
 
@@ -127,8 +127,8 @@ void TripodBossMovableArea::calcNearLandingPosition(TVec3f* pPos, const TVec3f& 
             }
         }
 
-        // TVec3f v15 = v16.killElement2(mBaseAxis);
-        TVec3f v15 = v16;
+        // Vec3f v15 = v16.killElement2(mBaseAxis);
+        Vec3f v15 = v16;
         v15.killElement2(v16, mBaseAxis);
         if (MR::isNearZero(v15)) {
             v15.zero();
@@ -138,13 +138,13 @@ void TripodBossMovableArea::calcNearLandingPosition(TVec3f* pPos, const TVec3f& 
 
         MR::normalizeOrZero(&v15);
         v7 = MR::sqrt< f32 >((1.0f - (x * x)));
-        TVec3f sp48((mBaseAxis * x) + (v15 * v7));
+        Vec3f sp48((mBaseAxis * x) + (v15 * v7));
         pPos->set(sp48 * mRadius);
     }
 }
 
-void TripodBossMovableArea::calcLandingNormal(TVec3f* pNorm, const TVec3f& a2) const {
-    TVec3f norm = a2 - mCenter;
+void TripodBossMovableArea::calcLandingNormal(Vec3f* pNorm, const Vec3f& a2) const {
+    Vec3f norm = a2 - mCenter;
     MR::normalizeOrZero(&norm);
     if (MR::isNearZero(norm)) {
         norm = mBaseAxis;
@@ -153,10 +153,10 @@ void TripodBossMovableArea::calcLandingNormal(TVec3f* pNorm, const TVec3f& a2) c
     pNorm->set(norm);
 }
 
-void TripodBossMovableArea::calcLandingFront(TVec3f* pFront, const TVec3f& a2) const {
-    TVec3f v11 = a2 - mCenter;
+void TripodBossMovableArea::calcLandingFront(Vec3f* pFront, const Vec3f& a2) const {
+    Vec3f v11 = a2 - mCenter;
     MR::normalizeOrZero(&v11);
-    TVec3f v10 = (-mBaseAxis).killElement(v11);
+    Vec3f v10 = (-mBaseAxis).killElement(v11);
     MR::normalizeOrZero(&v10);
     if (MR::isNearZero(v10)) {
         v10.zero();

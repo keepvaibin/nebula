@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class SpiderThreadWindCtrl {
 public:
@@ -17,6 +17,6 @@ public:
     f32 mWindTargetSpeed;
     f32 mWindSpeed;
     f32 mWindAccel;
-    TVec3f mWindDirection;
-    TVec3f mWind;
+    Vec3f mWindDirection;
+    Vec3f mWind;
 };

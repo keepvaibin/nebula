@@ -19,7 +19,7 @@ MarioTalk::MarioTalk(MarioActor* pActor) : MarioState(pActor, MarioStatus_Talk),
 
 bool MarioTalk::update() {
     if (mIsUpdate) {
-        TVec3f vec;
+        Vec3f vec;
         MR::vecKillElement(_14->mPosition - getTrans(), getAirGravityVec(), &vec);
 
         if (!MR::normalizeOrZero(&vec)) {
@@ -72,6 +72,6 @@ bool MarioTalk::start() {
     return true;
 }
 
-void Mario::setLastNonFixMoveVec(const TVec3f& rVec) {
+void Mario::setLastNonFixMoveVec(const Vec3f& rVec) {
     _334 = rVec;
 }

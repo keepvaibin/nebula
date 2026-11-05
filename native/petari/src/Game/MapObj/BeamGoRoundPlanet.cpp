@@ -39,11 +39,11 @@ void BeamGoRoundBeam::draw() const {
 
 void BeamGoRoundBeam::updateHitSensor(HitSensor* pSensor) {
     f32 radius = pSensor->mRadius;
-    TVec3f up;
+    Vec3f up;
     MR::calcUpVec(&up, this);
-    TVec3f v7;
+    Vec3f v7;
     v7.scaleAdd(radius, up, mPosition);
-    TVec3f v6;
+    Vec3f v6;
     v6.scaleAdd(2700.0f - radius, up, v7);
     MR::calcPerpendicFootToLineInside(&pSensor->mPosition, *MR::getPlayerPos(), v7, v6);
 }

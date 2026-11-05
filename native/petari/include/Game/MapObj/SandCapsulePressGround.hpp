@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/MapObj/MapObjActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class SandCapsulePressGround : public MapObjActor {
 public:
@@ -30,7 +30,7 @@ public:
     void calcMoveVelocity();
     bool tryStop();
 
-    TVec3f _C4;
-    TVec3f _D0;
-    TPos3f _DC;
+    Vec3f _C4;
+    Vec3f _D0;
+    Pos3f _DC;
 };

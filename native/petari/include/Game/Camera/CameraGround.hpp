@@ -10,7 +10,7 @@ public:
     virtual CameraTargetObj* calc();
     virtual CamTranslatorBase* createTranslator();
 
-    void setParam(const TVec2f& angle, f32 dist, const TVec3f& rUp) {
+    void setParam(const Vec2f& angle, f32 dist, const Vec3f& rUp) {
         mAngleA = angle.x;
         mAngleB = angle.y;
         mDist = dist;
@@ -20,7 +20,7 @@ public:
     f32 mAngleA;
     f32 mAngleB;
     f32 mDist;
-    TVec3f mUp;
-    TVec3f mLastWatchPoint;
+    Vec3f mUp;
+    Vec3f mLastWatchPoint;
     bool mIsNotInitialized;
 };

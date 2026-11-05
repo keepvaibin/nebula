@@ -20,18 +20,18 @@ namespace {
     const static f32 sSunModelScale = 100.0f;
 
     // The depth of a point, 0 near to 1 far.
-    f32 calcDepth(const TVec3f& rTrans, const TPos3f& rViewMtx, const TProj3f& rProjMtx) {
-        TVec3f vec;
+    f32 calcDepth(const Vec3f& rTrans, const Pos3f& rViewMtx, const Proj3f& rProjMtx) {
+        Vec3f vec;
         rViewMtx.mult(rTrans, vec);
         return (vec.z * rProjMtx[2][2] + rProjMtx[2][3]) / -vec.z + 1.0f;
     }
 
-    bool calcScreenPosition(TVec2f* pDst, const TVec3f& rTrans, const TPos3f& rViewMtx, const TProj3f& rProjMtx) {
-        TVec3f newPos;
-        TVec3f screenPos;
+    bool calcScreenPosition(Vec2f* pDst, const Vec3f& rTrans, const Pos3f& rViewMtx, const Proj3f& rProjMtx) {
+        Vec3f newPos;
+        Vec3f screenPos;
         {
-            TVec4f clipPos;
-            TVec3f vec;
+            Vec4f clipPos;
+            Vec3f vec;
             rViewMtx.mult(rTrans, vec);
             f32 z = vec.z * rProjMtx[2][2] + rProjMtx[2][3];
             f32 w = -vec.z;
@@ -41,7 +41,7 @@ namespace {
             clipPos.y = y;
             clipPos.z = z;
             clipPos.w = w;
-            newPos.scale(1.0f / clipPos.w, *clipPos.toTVec3());
+            newPos.scale(1.0f / clipPos.w, *clipPos.toVec3());
         }
 
         bool ret;
@@ -67,7 +67,7 @@ BrightInfo::BrightInfo() {
     reset();
 }
 
-void BrightInfo::write(const TVec2f& rBrightnessCenter, const TVec2f& rRealCenter, f32 brightness) {
+void BrightInfo::write(const Vec2f& rBrightnessCenter, const Vec2f& rRealCenter, f32 brightness) {
     mBrightnessCenter[mIndex].set(rBrightnessCenter);
     mRealCenter[mIndex].set(rRealCenter);
     mBright[mIndex] = brightness;
@@ -114,11 +114,11 @@ BrightObjBase::BrightObjBase() : mInfo(), mBrightCenter(0.0f, 0.0f), mNowCenter(
 
 // The picture has been drawn with this frame's camera: the points of the sphere it shows are asked about with that camera.
 void BrightObjBase::checkVisibilityOfSphere(NebulaScreenProbe* pProbes) {
-    const TPos3f& rView = MR::getCameraViewMtx();
-    const TProj3f& rProj = MR::getCameraProjectionMtx();
-    TVec3f drawPos(mDrawPos);
-    TVec3f camDir(MR::getCamYdir());
-    TVec3f drawDir(MR::getCamPos() - drawPos);
+    const Pos3f& rView = MR::getCameraViewMtx();
+    const Proj3f& rProj = MR::getCameraProjectionMtx();
+    Vec3f drawPos(mDrawPos);
+    Vec3f camDir(MR::getCamYdir());
+    Vec3f drawDir(MR::getCamPos() - drawPos);
 
     for (u32 idx = 0; idx < cProbeCount; idx++) {
         pProbes[idx].x = -1.0f;
@@ -134,15 +134,15 @@ void BrightObjBase::checkVisibilityOfSphere(NebulaScreenProbe* pProbes) {
 
     MR::normalize(&drawDir);
 
-    TVec3f vec110;
+    Vec3f vec110;
     vec110.cross(camDir, drawDir);
     camDir.cross(drawDir, vec110);
 
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.setTR(vec110, camDir, drawDir, drawPos);
 
     // The first point is the centre: its screen position comes back as the flare's centre whether or not it shows.
-    TVec2f center;
+    Vec2f center;
     ::calcScreenPosition(&center, drawPos, rView, rProj);
     checkVisible(&pProbes[0], drawPos, rView, rProj);
     pProbes[0].user_x = center.x;
@@ -152,7 +152,7 @@ void BrightObjBase::checkVisibilityOfSphere(NebulaScreenProbe* pProbes) {
 
     for (u32 idx = 0; idx < 8; idx++) {
         f32 angle = idx * MR::pi() / 4.0f;
-        TVec3f vec11C(MR::cos(angle), MR::sin(angle), 0.0f);
+        Vec3f vec11C(MR::cos(angle), MR::sin(angle), 0.0f);
         vec11C.scale(mDrawRadius * 0.4f);
 
         mtx.mult(vec11C, vec11C);
@@ -163,7 +163,7 @@ void BrightObjBase::checkVisibilityOfSphere(NebulaScreenProbe* pProbes) {
 
     for (u32 idx = 0; idx < 8; idx++) {
         f32 angle = (idx + 0.5f) * MR::pi() / 4.0f;
-        TVec3f vec128(MR::cos(angle), MR::sin(angle), 0.0f);
+        Vec3f vec128(MR::cos(angle), MR::sin(angle), 0.0f);
         vec128.scale(mDrawRadius * 0.7f);
 
         mtx.mult(vec128, vec128);
@@ -173,11 +173,11 @@ void BrightObjBase::checkVisibilityOfSphere(NebulaScreenProbe* pProbes) {
     }
 }
 
-void BrightObjBase::checkVisible(NebulaScreenProbe* pProbe, const TVec3f& rTrans, const TPos3f& rViewMtx, const TProj3f& rProjMtx) {
-    TVec2f screenPos;
+void BrightObjBase::checkVisible(NebulaScreenProbe* pProbe, const Vec3f& rTrans, const Pos3f& rViewMtx, const Proj3f& rProjMtx) {
+    Vec2f screenPos;
 
     if (::calcScreenPosition(&screenPos, rTrans, rViewMtx, rProjMtx)) {
-        TVec2f frameBufferPos;
+        Vec2f frameBufferPos;
         MR::convertScreenPosToFrame(&frameBufferPos, screenPos);
         pProbe->x = frameBufferPos.x;
         pProbe->y = frameBufferPos.y;
@@ -189,20 +189,20 @@ void BrightObjBase::checkVisible(NebulaScreenProbe* pProbe, const TVec3f& rTrans
 // The points' answers: how many of the sphere's points nothing drawn so far stands in front of.
 void BrightObjBase::setResult(const NebulaScreenProbe* pProbes) {
     u32 bright = 0;
-    TVec2f objCenter(0.0f, 0.0f);
+    Vec2f objCenter(0.0f, 0.0f);
 
     for (u32 idx = 0; idx < cProbeCount; idx++) {
         if (pProbes[idx].x >= 0.0f && pProbes[idx].value >= pProbes[idx].user_z) {
             bright++;
-            objCenter += TVec2f(pProbes[idx].user_x, pProbes[idx].user_y);
+            objCenter += Vec2f(pProbes[idx].user_x, pProbes[idx].user_y);
         }
     }
 
-    const TVec2f center(pProbes[0].user_x, pProbes[0].user_y);
+    const Vec2f center(pProbes[0].user_x, pProbes[0].user_y);
     f32 ratio = static_cast< f32 >(bright) / cProbeCount;
 
     if (bright != 0) {
-        mBrightCenter.set(TVec2f(objCenter * (1.0f / bright)));
+        mBrightCenter.set(Vec2f(objCenter * (1.0f / bright)));
         mBrightness = ratio;
         mNowCenter.set(center);
         mIsNotVisible = false;
@@ -238,7 +238,7 @@ void BrightObj::calcBrightInfo(NebulaScreenProbe* pProbes) {
     BrightObjBase::checkVisibilityOfSphere(pProbes);
 }
 
-void BrightObj::getNowCenter(TVec2f* pDst) const {
+void BrightObj::getNowCenter(Vec2f* pDst) const {
     ::calcScreenPosition(pDst, mPosition, MR::getCameraViewMtx(), MR::getCameraProjectionMtx());
 }
 
@@ -246,13 +246,13 @@ BrightSun::BrightSun(const char* pName) : LiveActor(pName), BrightObjBase(), mSu
 }
 
 void BrightSun::control() {
-    TVec3f camPos = MR::getCamPos();
+    Vec3f camPos = MR::getCamPos();
 
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.identity33();
     mtx.setTrans(0.0f, 0.0f, 100000.0f);
 
-    TPos3f mtxTR;
+    Pos3f mtxTR;
     MR::makeMtxTR(mtxTR, camPos.x, camPos.y, camPos.z, mRotation.x, mRotation.y, mRotation.z);
 
     mtxTR.concat(mtx);
@@ -274,7 +274,7 @@ void BrightSun::calcBrightInfo(NebulaScreenProbe* pProbes) {
     checkVisibilityOfSphere(pProbes);
 }
 
-void BrightSun::getNowCenter(TVec2f* pDst) const {
+void BrightSun::getNowCenter(Vec2f* pDst) const {
     ::calcScreenPosition(pDst, mPosition, MR::getCameraViewMtx(), MR::getCameraProjectionMtx());
 }
 
@@ -282,15 +282,15 @@ void BrightSun::controlSunModel() {
     mSun->mPosition.set(mPosition);
     mSun->mScale.set(::sSunModelScale);
 
-    TVec3f camDir(MR::getCamPos() - mPosition);
+    Vec3f camDir(MR::getCamPos() - mPosition);
     MR::normalize(&camDir);
 
-    TVec3f fwdVec(0.0f, 0.0f, 1.0f);
-    TPos3f rotateMtx;
+    Vec3f fwdVec(0.0f, 0.0f, 1.0f);
+    Pos3f rotateMtx;
     rotateMtx.identity();
     rotateMtx.setRotate(fwdVec, camDir);
 
-    TVec3f rotation;
+    Vec3f rotation;
 
     if (fwdVec.dot(camDir) < -0.999f) {
         rotation.set< f32 >(0.0f, 180.0f, 0.0f);
@@ -315,11 +315,11 @@ void BrightObjBase::endRead() {
     mInfo.endRead();
 }
 
-const TVec2f* BrightObjBase::getCenter() const {
+const Vec2f* BrightObjBase::getCenter() const {
     return &mInfo.mRealCenter[mInfo.mCurrIndex];
 }
 
-const TVec2f* BrightObjBase::getBrightCenter() const {
+const Vec2f* BrightObjBase::getBrightCenter() const {
     return &mInfo.mBrightnessCenter[mInfo.mCurrIndex];
 }
 
@@ -327,7 +327,7 @@ f32 BrightObjBase::getBright() const {
     return mInfo.mBright[mInfo.mCurrIndex];
 }
 
-void BrightObjBase::getNowCenter(TVec2f* pDst) const {
+void BrightObjBase::getNowCenter(Vec2f* pDst) const {
     pDst->set(mNowCenter);
 }
 

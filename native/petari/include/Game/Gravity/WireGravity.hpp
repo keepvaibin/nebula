@@ -7,10 +7,10 @@ class WireGravity : public PlanetGravity {
 public:
     WireGravity();
 
-    virtual bool calcOwnGravityVector(TVec3f* pDest, f32* pScalar, const TVec3f& rPosition) const;
+    virtual bool calcOwnGravityVector(Vec3f* pDest, f32* pScalar, const Vec3f& rPosition) const;
 
     void setPointListSize(u32);
-    void addPoint(const TVec3f&);
+    void addPoint(const Vec3f&);
 
-    MR::Vector< MR::AssignableArray< TVec3f > > mPoints;
+    MR::Vector< MR::AssignableArray< Vec3f > > mPoints;
 };

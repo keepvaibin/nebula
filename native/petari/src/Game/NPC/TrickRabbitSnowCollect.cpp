@@ -73,7 +73,7 @@ void TrickRabbitSnowCollect::initRabbits(const JMapInfoIter& rIter) {
 }
 
 void TrickRabbitSnowCollect::initTalk(const JMapInfoIter& rIter) {
-    mMsgCtrl = MR::createTalkCtrl(this, rIter, "SnowRabbitCollect", TVec3f(0.0f, 120.0f, 0.0f), nullptr);
+    mMsgCtrl = MR::createTalkCtrl(this, rIter, "SnowRabbitCollect", Vec3f(0.0f, 120.0f, 0.0f), nullptr);
 }
 
 MtxPtr TrickRabbitSnowCollect::getBaseMtx() const {
@@ -350,7 +350,7 @@ void TrickRabbitSnowCollect::exeAppearPowerStar() {
     if (MR::isFirstStep(this)) {
         mPowerStarDemoModel->kill();
 
-        TVec3f jointPos;
+        Vec3f jointPos;
         MR::copyJointPos(mPowerStarDemoModel, "PowerStarC", &jointPos);
         MR::appearPowerStarContinueCurrentDemo(this, jointPos);
 

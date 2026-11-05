@@ -19,7 +19,7 @@
 #include "Game/Util.hpp"
 
 namespace MarioAccess {
-    void getTakePos(TVec3f* pOut) {
+    void getTakePos(Vec3f* pOut) {
         if (getPlayerActor()->_494 != nullptr) {
             getPlayerActor()->_494->calc();
             getPlayerActor()->_494->copyTrans(pOut);
@@ -192,20 +192,20 @@ namespace MarioAccess {
         getPlayerActor()->getMario()->_2D0 = walkingResist;
     }
 
-    void forceFly(const TVec3f& rVec1, const TVec3f& rVec2, s32 a3) {
+    void forceFly(const Vec3f& rVec1, const Vec3f& rVec2, s32 a3) {
         getPlayerActor()->getMario()->doPointWarp(rVec1, rVec2, a3);
     }
 
-    void setJumpVec(const TVec3f& rJumpVec) {
+    void setJumpVec(const Vec3f& rJumpVec) {
         getPlayerActor()->getMario()->mJumpVec = rJumpVec;
     }
 
-    void forceJump(const TVec3f& rVec, u32) {
+    void forceJump(const Vec3f& rVec, u32) {
         getPlayerActor()->getMario()->mMovementStates._21 = true;
         getPlayerActor()->getMario()->tryForceJumpDelay(rVec);
     }
 
-    void freeJump(const TVec3f& rVec, u32) {
+    void freeJump(const Vec3f& rVec, u32) {
         getPlayerActor()->getMario()->mMovementStates._21 = true;
         getPlayerActor()->getMario()->tryFreeJumpDelay(rVec);
     }
@@ -219,7 +219,7 @@ namespace MarioAccess {
     void tornadoJumpMini() {
         getPlayerActor()->getMario()->_544 = getPlayerActor()->getConst().getTable()->mTornadoTimeAir;
         getPlayerActor()->getMario()->tryTornadoJump();
-        TVec3f up(-*getPlayerActor()->getMario()->getGravityVec() * getPlayerActor()->getConst().getTable()->mTornadoBoostPower);
+        Vec3f up(-*getPlayerActor()->getMario()->getGravityVec() * getPlayerActor()->getConst().getTable()->mTornadoBoostPower);
         getPlayerActor()->getMario()->setRocketBooster(up, getPlayerActor()->getConst().getTable()->mTornadoBoostAttnMini,
                                                        getPlayerActor()->getConst().getTable()->mTornadoBoostTimerMini);
         getPlayerActor()->mMario->startTornadoCentering(getPlayerActor()->_928);
@@ -229,7 +229,7 @@ namespace MarioAccess {
         getPlayerActor()->getMario()->_430 = 0;
     }
 
-    void setFrontVecKeepUp(const TVec3f& rVec, u16) {
+    void setFrontVecKeepUp(const Vec3f& rVec, u16) {
         if (getPlayerActor()->getMario()->isStatusActive(MarioStatus_Hang)) {
             return;
         }
@@ -240,13 +240,13 @@ namespace MarioAccess {
         getPlayerActor()->_2E8 = getPlayerActor()->getMario()->mSideVec;
     }
 
-    void setFrontVecTarget(const TVec3f& rVec, u16 a2) {
+    void setFrontVecTarget(const Vec3f& rVec, u16 a2) {
         MarioActor* actor = getPlayerActor();
         actor->_3C4 = rVec;
         actor->_3D0 = a2;
     }
 
-    void getThrowVec(TVec3f* pOut) {
+    void getThrowVec(Vec3f* pOut) {
         if (getPlayerActor()->getMario()->isStatusActive(MarioStatus_Foo)) {
             *pOut = getPlayerActor()->getMario()->mHeadVec;
             return;
@@ -260,7 +260,7 @@ namespace MarioAccess {
         pOut->set(getPlayerActor()->_F3CVec[getPlayerActor()->_F40]);
     }
 
-    void setTrans(const TVec3f& rTrans, u16) {
+    void setTrans(const Vec3f& rTrans, u16) {
         MotionSignal::playerPlaced(getPlayerActor(), rTrans);
         getPlayerActor()->mPosition.set(rTrans);
         getPlayerActor()->getMario()->mPosition = rTrans;
@@ -330,7 +330,7 @@ namespace MarioAccess {
         return getPlayerActor()->getGlobalJointMtx(pName);
     }
 
-    TVec3f* getVelocity() {
+    Vec3f* getVelocity() {
         if (getPlayerActor()->_934) {
             return getLastMove();
         }
@@ -338,8 +338,8 @@ namespace MarioAccess {
         return &getPlayerActor()->getMario()->mVelocity;
     }
 
-    TVec3f* getLastMove() {
-        return const_cast< TVec3f* >(&getPlayerActor()->getLastMove());
+    Vec3f* getLastMove() {
+        return const_cast< Vec3f* >(&getPlayerActor()->getLastMove());
     }
 
     void hide() {
@@ -521,7 +521,7 @@ namespace MarioAccess {
         if (getPlayerActor()->_934) {
             getPlayerActor()->_924->receiveMessage(ACTMES_RUSH_CANCEL, getPlayerActor()->getSensor("body"));
             if (getPlayerActor()->_934) {
-                RushEndInfo endInfo(nullptr, 4, TVec3f(0.0f, 0.0f, 0.0f), false, 0);
+                RushEndInfo endInfo(nullptr, 4, Vec3f(0.0f, 0.0f, 0.0f), false, 0);
                 endRush(&endInfo);
             }
         }
@@ -559,7 +559,7 @@ namespace MarioAccess {
     }
 
     void setBaseMtx(MtxPtr mtx) {
-        MotionSignal::playerPlaced(getPlayerActor(), TVec3f(mtx[0][3], mtx[1][3], mtx[2][3]));
+        MotionSignal::playerPlaced(getPlayerActor(), Vec3f(mtx[0][3], mtx[1][3], mtx[2][3]));
         getPlayerActor()->forceSetBaseMtx(mtx);
     }
 
@@ -571,7 +571,7 @@ namespace MarioAccess {
         return getPlayerActor()->getBaseMtx();
     }
 
-    bool calcSpinPullVelocity(TVec3f* pOut, const TVec3f& rVec) {
+    bool calcSpinPullVelocity(Vec3f* pOut, const Vec3f& rVec) {
         getPlayerActor()->tryPullTrans(pOut, rVec);
         return true;
     }
@@ -583,7 +583,7 @@ namespace MarioAccess {
         getPlayerActor()->_6D0 = true;
     }
 
-    void addVelocity(const TVec3f& rVec) {
+    void addVelocity(const Vec3f& rVec) {
         if (getPlayerActor()->IsMarioSwimming() && getPlayerActor()->getMario()->mSwim->mJetTimer != 0) {
             return;
         }
@@ -603,7 +603,7 @@ namespace MarioAccess {
         }
     }
 
-    void addVelocityFromArea(const TVec3f& rVec) {
+    void addVelocityFromArea(const Vec3f& rVec) {
         if (getPlayerActor()->IsMarioSwimming() && getPlayerActor()->getMario()->mSwim->mJetTimer != 0) {
             return;
         }
@@ -627,7 +627,7 @@ namespace MarioAccess {
         return getPlayerActor()->isAnimationRun("\220\205\211\152\203\127\203\106\203\142\203\147" /* 水泳ジェット */);
     }
 
-    void calcWorldPadDir(TVec3f* pOut, f32 f1, f32 f2) {
+    void calcWorldPadDir(Vec3f* pOut, f32 f1, f32 f2) {
         getPlayerActor()->getMario()->calcWorldPadDir(pOut, f1, f2, false);
     }
 
@@ -695,7 +695,7 @@ namespace MarioAccess {
             }
 
             if (getPlayerActor()->_934) {
-                RushEndInfo endInfo(nullptr, 4, TVec3f(0.0f, 0.0f, 0.0f), false, 0);
+                RushEndInfo endInfo(nullptr, 4, Vec3f(0.0f, 0.0f, 0.0f), false, 0);
                 endRush(&endInfo);
             }
         }

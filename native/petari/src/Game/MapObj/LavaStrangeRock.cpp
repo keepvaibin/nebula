@@ -106,13 +106,13 @@ void LavaStrangeRock::control() {
 }
 
 void LavaStrangeRock::exeWait() {
-    TVec3f centerPos = *MR::getPlayerCenterPos();
+    Vec3f centerPos = *MR::getPlayerCenterPos();
     centerPos -= *MR::getPlayerVelocity();
 
-    TVec3f upVec;
+    Vec3f upVec;
     MR::calcUpVec(&upVec, this);
 
-    TVec3f hitOffset = upVec;
+    Vec3f hitOffset = upVec;
     f32 radius = 0.0f;
 
     switch (mRockType) {
@@ -152,7 +152,7 @@ void LavaStrangeRock::exeWait() {
 
         kill();
     } else if (_90 == 2) {
-        TVec3f hitCheckDir;
+        Vec3f hitCheckDir;
 
         if (MR::checkHitSegmentSphere(*MR::getPlayerCenterPos(), mPosition, mPosition + hitOffset, radius, &hitCheckDir)) {
             MR::pushPlayer(hitCheckDir * ::sPushVelocity);

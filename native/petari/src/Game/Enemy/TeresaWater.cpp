@@ -30,14 +30,14 @@ void TeresaWater::init(const JMapInfoIter& rIter) {
     initModelManagerWithAnm("TeresaWater", nullptr, false);
     MR::connectToSceneEnemy(this);
     initHitSensor(1);
-    TVec3f sensorOffset;
+    Vec3f sensorOffset;
     sensorOffset.x = 0.0f;
     sensorOffset.y = 0.0f;
     sensorOffset.z = 0.0f;
     MR::addHitSensorAtJointEnemySimple(this, "body", "SklRoot", 8, 60.0f, sensorOffset);
     initEffectKeeper(1, nullptr, false);
     initSound(4, false);
-    TVec3f ptrPos;
+    Vec3f ptrPos;
     ptrPos.set(0.0f, 0.0f, 0.0f);
     MR::initStarPointerTargetAtJoint(this, "SklRoot", 100.0f, ptrPos);
 
@@ -121,11 +121,11 @@ void TeresaWater::control() {
 }
 
 void TeresaWater::calcAndSetBaseMtx() {
-    TVec3f up;
+    Vec3f up;
     MR::calcUpVec(&up, this);
     up.negate();
 
-    TPos3f mtx;
+    Pos3f mtx;
     MR::calcMtxFromGravityAndZAxis(&mtx, this, up, _94);
     MR::setBaseTRMtx(this, mtx);
 

@@ -28,7 +28,7 @@ FluffWindEffect::FluffWindEffect(const char* pName) : LiveActor(pName), mEffectN
     mMtx.identity();
 }
 
-void FluffWindEffect::initEffectInfo(const TVec3f& rFront, const TVec3f& rUp, const TVec3f& rPos, const char* pEffectName, f32 radius) {
+void FluffWindEffect::initEffectInfo(const Vec3f& rFront, const Vec3f& rUp, const Vec3f& rPos, const char* pEffectName, f32 radius) {
     mPosition.set(rFront);
     MR::connectToSceneMapObjMovement(this);
     MR::makeMtxFrontUpPos(&mMtx, rUp, rPos, rFront);
@@ -86,12 +86,12 @@ void FluffWind::init(const JMapInfoIter& rIter) {
     mEffects = new FluffWindEffect*[mNumEffects];
     for (s32 i = 0; i < mNumEffects; i++) {
         f32 currentRailPos = i * stepDistance;
-        TVec3f pos;
-        TVec3f dir;
+        Vec3f pos;
+        Vec3f dir;
         MR::calcRailPosAndDirectionAtCoord(&pos, &dir, this, currentRailPos);
 
         FluffWindEffect* effect = new FluffWindEffect("\202\355\202\275\202\260\203\107\203\164\203\106\203\116\203\147" /* わたげエフェクト */);
-        effect->initEffectInfo(pos, dir, TVec3f(0.0f, 1.0f, 0.0f), "FluffWind", -1.0f);
+        effect->initEffectInfo(pos, dir, Vec3f(0.0f, 1.0f, 0.0f), "FluffWind", -1.0f);
         effect->initWithoutIter();
 
         mEffects[i] = effect;
@@ -114,19 +114,19 @@ void FluffWind::makeActorDead() {
 FluffWindHolder::FluffWindHolder() : LiveActorGroup("\202\355\202\275\202\260\225\227" /* わたげ風 */, 8) {
 }
 
-void FluffWindHolder::calcWindInfo(const TVec3f& rPosition, TVec3f* pWindDirection, f32* pWindDistance) const {
+void FluffWindHolder::calcWindInfo(const Vec3f& rPosition, Vec3f* pWindDirection, f32* pWindDistance) const {
     pWindDirection->zero();
     *pWindDistance = -1.0f;
 
     f32 bestDistance = 1000000.0f;
-    TVec3f bestDir(0.0f, 0.0f, 0.0f);
+    Vec3f bestDir(0.0f, 0.0f, 0.0f);
 
     LiveActor* pActor;
     for (s32 i = 0; i < getObjNum(); i++) {
         pActor = getActor(i);
 
-        TVec3f railDir(0.0f, 0.0f, 0.0f);
-        TVec3f nearestPos;
+        Vec3f railDir(0.0f, 0.0f, 0.0f);
+        Vec3f nearestPos;
         MR::calcNearestRailPosAndDirection(&nearestPos, &railDir, pActor, rPosition);
 
         f32 distance = nearestPos.distance(rPosition);
@@ -140,7 +140,7 @@ void FluffWindHolder::calcWindInfo(const TVec3f& rPosition, TVec3f* pWindDirecti
     *pWindDistance = bestDistance;
 }
 
-bool FluffFunction::calcFluffWindInfo(const TVec3f& rPosition, TVec3f* pWindDirection, f32* pWindDistance) {
+bool FluffFunction::calcFluffWindInfo(const Vec3f& rPosition, Vec3f* pWindDirection, f32* pWindDistance) {
     if (!MR::isExistSceneObj(SceneObj_FluffWindHolder)) {
         pWindDirection->zero();
         *pWindDistance = -1.0f;

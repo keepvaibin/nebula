@@ -27,10 +27,10 @@ CameraTargetObj* CameraTowerPos::calc() {
 }
 
 void CameraTowerPos::calcIdealPose(bool arrange) {
-    TVec3f watchPos;
+    Vec3f watchPos;
     CameraLocalUtil::makeWatchPoint(&watchPos, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
 
-    TPos3f inv;
+    Pos3f inv;
     inv.set(mZoneMatrix);
     inv.invert(inv);
     inv.mult(watchPos, watchPos);
@@ -41,21 +41,21 @@ void CameraTowerPos::calcIdealPose(bool arrange) {
         mAxis.normalize();
     }
 
-    TVec3f front = watchPos - mWPoint;
+    Vec3f front = watchPos - mWPoint;
     front.set(front - mAxis * mAxis.dot(front));
     if (MR::isNearZero(front)) {
         return;
     }
     MR::normalize(&front);
 
-    TVec3f up(0.0f, 1.0f, 0.0f);
-    TVec3f side = front.cross(up);
+    Vec3f up(0.0f, 1.0f, 0.0f);
+    Vec3f side = front.cross(up);
 
-    TQuat4f rot;
+    Quat4f rot;
     rot.setRotate(side, mAngleX);
     rot.transform(front);
 
-    TVec3f pos = front * mDist + watchPos;
+    Vec3f pos = front * mDist + watchPos;
 
     if (arrange) {
         arrangeHorizontalPose(watchPos, pos);
@@ -64,7 +64,7 @@ void CameraTowerPos::calcIdealPose(bool arrange) {
 
     mPos.set(pos);
 
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.set(mZoneMatrix);
     mtx.mult(watchPos, watchPos);
     mtx.mult(pos, pos);
@@ -79,9 +79,9 @@ CamTranslatorBase* CameraTowerPos::createTranslator() {
     return new CamTranslatorTowerPos(this);
 }
 
-void CameraTowerPos::arrangeHorizontalPose(const TVec3f& rWatchPos, TVec3f& rPos) {
-    TVec3f pos = rPos;
-    TVec3f idealPos = mPos;
+void CameraTowerPos::arrangeHorizontalPose(const Vec3f& rWatchPos, Vec3f& rPos) {
+    Vec3f pos = rPos;
+    Vec3f idealPos = mPos;
     idealPos.y = rWatchPos.y;
     pos.y = rWatchPos.y;
 
@@ -109,7 +109,7 @@ void CameraTowerPos::arrangeHorizontalPose(const TVec3f& rWatchPos, TVec3f& rPos
         }
     }
 
-    TVec3f newPos;
+    Vec3f newPos;
     f32 newAngleX = MR::blendAngle(angleX, idealAngleX, ::sAttenuation);
     f32 newLength = idealLength * (1.0f - ::sAttenuation) + length * ::sAttenuation;
     MR::polarToCross(rWatchPos, &newPos, newLength, newAngleX, newAngleY);
@@ -117,15 +117,15 @@ void CameraTowerPos::arrangeHorizontalPose(const TVec3f& rWatchPos, TVec3f& rPos
     rPos.set(newPos);
 }
 
-void CameraTowerPos::arrangeWatchPos(TVec3f& rWatchPos, const TVec3f& rPos) {
-    TVec3f offset = rWatchPos - rPos;
-    TVec3f idealOffset = mWPoint - rPos;
+void CameraTowerPos::arrangeWatchPos(Vec3f& rWatchPos, const Vec3f& rPos) {
+    Vec3f offset = rWatchPos - rPos;
+    Vec3f idealOffset = mWPoint - rPos;
 
-    TVec3f front = offset;
+    Vec3f front = offset;
     front.y = 0.0f;
     MR::normalizeOrZero(&front);
 
-    TVec3f idealFront = idealOffset;
+    Vec3f idealFront = idealOffset;
     idealFront.y = 0.0f;
 
     idealFront = front * front.dot(idealFront);
@@ -137,10 +137,10 @@ void CameraTowerPos::arrangeWatchPos(TVec3f& rWatchPos, const TVec3f& rPos) {
 
     if (angleDiff > fovAngle * mAngleXRate) {
         f32 length, angleX, angleY;
-        MR::crossToPolar(TVec3f(0.0f, 0.0f, 0.0f), offset, &length, &angleX, &angleY);
+        MR::crossToPolar(Vec3f(0.0f, 0.0f, 0.0f), offset, &length, &angleX, &angleY);
 
         f32 idealLength, idealAngleX, idealAngleY;
-        MR::crossToPolar(TVec3f(0.0f, 0.0f, 0.0f), idealOffset, &idealLength, &idealAngleX, &idealAngleY);
+        MR::crossToPolar(Vec3f(0.0f, 0.0f, 0.0f), idealOffset, &idealLength, &idealAngleX, &idealAngleY);
 
         if (angleDiff > fovAngle * mAngleXRate * 2.0f) {
             if (angleX > idealAngleX) {
@@ -156,7 +156,7 @@ void CameraTowerPos::arrangeWatchPos(TVec3f& rWatchPos, const TVec3f& rPos) {
             }
         }
 
-        MR::polarToCross(TVec3f(0.0f, 0.0f, 0.0f), &offset, length, angleX, angleY);
+        MR::polarToCross(Vec3f(0.0f, 0.0f, 0.0f), &offset, length, angleX, angleY);
         rWatchPos.set(offset + rPos);
     }
 }

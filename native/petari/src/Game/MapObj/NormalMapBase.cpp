@@ -178,8 +178,8 @@ void NormalMapBase::draw() const {
         MR::loadActorLight(this);
         MR::loadViewMtx();
         MR::loadProjectionMtx();
-        const TPos3f& rCameraViewMtx = MR::getCameraViewMtx();
-        TPos3f lightMtx;
+        const Pos3f& rCameraViewMtx = MR::getCameraViewMtx();
+        Pos3f lightMtx;
         Mtx mtx;
         NebulaMtxIdentity(mtx);
         MR::makeMtxTRS(mtx, this);
@@ -195,12 +195,12 @@ void NormalMapBase::draw() const {
 }
 
 void NormalMapBase::updateLightMtx(MtxPtr pMtx) const {
-    TPos3f inverse;
+    Pos3f inverse;
     f32 indMtx[2][3];
-    TVec3f lightA;
-    TVec3f lightB;
-    TVec3f localA;
-    TVec3f localB;
+    Vec3f lightA;
+    Vec3f lightB;
+    Vec3f localA;
+    Vec3f localB;
     switch (mLightAMode) {
     case 0:
         MR::calcLightPos0(&lightA, this);
@@ -234,7 +234,7 @@ void NormalMapBase::updateLightMtx(MtxPtr pMtx) const {
     NebulaMtxMultVecSR(inverse, &localA, &localA);
     NebulaMtxMultVecSR(inverse, &localB, &localB);
     if (pMtx) {
-        TVec3f light(localA * 0.5f);
+        Vec3f light(localA * 0.5f);
         light *= 1.0077f;
         indMtx[0][0] = light.x * pMtx[0][0] + light.y * pMtx[1][0] + light.z * pMtx[2][0];
         indMtx[0][1] = light.x * pMtx[0][1] + light.y * pMtx[1][1] + light.z * pMtx[2][1];
@@ -296,8 +296,8 @@ void NormalMapBase::shapeAnalyzeDraw(J3DModel* pModel) const {
 
                 if (pMaterial->mShape == pShape) {
                     setStageForObject_Material();
-                    TPos3f localMtx;
-                    TPos3f viewMtx;
+                    Pos3f localMtx;
+                    Pos3f viewMtx;
                     const J3DTransformInfo& rTransform = pJoint->getTransformInfo();
                     f32 rotationZ = rTransform.mRotation.z * (180.0f / 32768.0f);
                     f32 rotationY = rTransform.mRotation.y * (180.0f / 32768.0f);
@@ -307,12 +307,12 @@ void NormalMapBase::shapeAnalyzeDraw(J3DModel* pModel) const {
                     NebulaMtxConcat(_F4, localMtx, viewMtx);
                     if (pJoint->getMtxType() == 1) {
                         J3DCalcBBoardMtx(viewMtx);
-                        TPos3f inverse;
+                        Pos3f inverse;
                         NebulaMtxInverse(_F4, inverse);
                         NebulaMtxConcat(inverse, viewMtx, localMtx);
                     } else if (pJoint->getMtxType() == 2) {
                         J3DCalcYBBoardMtx(viewMtx);
-                        TPos3f inverse;
+                        Pos3f inverse;
                         NebulaMtxInverse(_F4, inverse);
                         NebulaMtxConcat(inverse, viewMtx, localMtx);
                     }
@@ -592,7 +592,7 @@ void NormalMapBase::swapColorGB(JUTTexture* pTexture) {
         const u32 levelHeight = pRecord->height >> level != 0 ? pRecord->height >> level : 1;
         for (u32 at = 0; at < levelWidth * levelHeight; at++, pTexel += 4) {
             const u32 color = pTexel[0] << 24 | pTexel[1] << 16 | pTexel[2] << 8 | pTexel[3];
-                TVec3f normal;
+                Vec3f normal;
                 normal.set(static_cast< s8 >((color & 0xFF) - 128) / 128.0f, static_cast< s8 >(((color >> 8) & 0xFF) - 128) / 128.0f,
                            static_cast< s8 >(((color >> 16) & 0xFF) - 128) / 128.0f);
                 u8 r = (s32)(128.0f + 127.0f * normal.x);

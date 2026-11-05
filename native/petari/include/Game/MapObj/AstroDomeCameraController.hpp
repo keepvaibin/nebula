@@ -12,20 +12,20 @@ public:
             mTarget.zero();
         }
 
-        void setEnd(const TVec3f& rEnd) {
+        void setEnd(const Vec3f& rEnd) {
             mStart.set(mTarget);
             mEnd.set(rEnd);
         }
 
-        void reset(const TVec3f& rVec) {
+        void reset(const Vec3f& rVec) {
             mStart.set(rVec);
             mEnd.set(rVec);
             mTarget.set(rVec);
         }
 
-        TVec3f mStart;
-        TVec3f mEnd;
-        TVec3f mTarget;
+        Vec3f mStart;
+        Vec3f mEnd;
+        Vec3f mTarget;
     };
 
     AstroDomeCameraController(const char*);
@@ -36,10 +36,10 @@ public:
     virtual void control();
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
 
-    void calcZoomOutPos(TVec3f*) const;
-    void calcZoomInPos(TVec3f*, const TVec3f&) const;
-    void calcZoomInTarget(TVec3f*, const TVec3f&) const;
-    void calcZoomInUp(TVec3f*) const;
+    void calcZoomOutPos(Vec3f*) const;
+    void calcZoomInPos(Vec3f*, const Vec3f&) const;
+    void calcZoomInTarget(Vec3f*, const Vec3f&) const;
+    void calcZoomInUp(Vec3f*) const;
 
     void exeGalaxySelectStart();
     void exeGalaxySelect();
@@ -47,10 +47,10 @@ public:
     void exeGalaxyConfirm();
     void exeGalaxyConfirmCancel();
 
-    TVec3f mStartPos;
+    Vec3f mStartPos;
     Position mZoomPos;
     Position mTargetPos;
     Position mUpPos;
     f32 mEaseRate;
-    TVec3f mZeroPos;
+    Vec3f mZeroPos;
 };

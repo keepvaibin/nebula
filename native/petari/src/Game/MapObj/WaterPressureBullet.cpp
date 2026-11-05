@@ -4,8 +4,8 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
-#include <JSystem/JMath/JMATrigonometric.hpp>
-#include <JSystem/JMath/JMath.hpp>
+#include <nebula_geometry.hpp>
+
 
 namespace NrvWaterPressureBullet {
     NEW_NERVE(WaterPressureBulletNrvFly, WaterPressureBullet, Fly);
@@ -32,12 +32,12 @@ void WaterPressureBullet::init(const JMapInfoIter& rIter) {
     initModelManagerWithAnm("WaterBullet", nullptr, false);
     MR::connectToSceneMapObjStrongLight(this);
     initHitSensor(2);
-    MR::addHitSensor(this, "body", ATYPE_WATER_PRESSURE_BULLET, 4, 100.0f, TVec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensor(this, "binder", ATYPE_WATER_PRESSURE_BULLET_BIND, 4, 100.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensor(this, "body", ATYPE_WATER_PRESSURE_BULLET, 4, 100.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensor(this, "binder", ATYPE_WATER_PRESSURE_BULLET_BIND, 4, 100.0f, Vec3f(0.0f, 0.0f, 0.0f));
     initBinder(100.0f, 0.0f, 0);
     initEffectKeeper(0, nullptr, false);
     initSound(6, false);
-    MR::initStarPointerTarget(this, 100.0f, TVec3f(0, 0, 0));
+    MR::initStarPointerTarget(this, 100.0f, Vec3f(0, 0, 0));
     MR::initShadowVolumeSphere(this, 75.0f);
     MR::setShadowDropLength(this, nullptr, 1500.0f);
     MR::registerDemoSimpleCastAll(this);
@@ -62,7 +62,7 @@ void WaterPressureBullet::control() {
     if (isNotBound() && MR::isStarPointerPointing2POnTriggerButton(this, "\216\343" /* 弱 */, true, false)) {
         kill();
     } else {
-        TVec3f stack_8;
+        Vec3f stack_8;
 
         if (MR::isNearZero(mVelocity)) {
             stack_8.set(*getGravity());
@@ -75,12 +75,12 @@ void WaterPressureBullet::control() {
 }
 
 void WaterPressureBullet::calcAndSetBaseMtx() {
-    TPos3f pos;
+    Pos3f pos;
     MR::makeMtxFrontSidePos(&pos, _8C, _98, mPosition);
     MR::setBaseTRMtx(this, pos);
 }
 
-void WaterPressureBullet::shotWaterBullet(LiveActor* pActor, const TPos3f& rPos, f32 a3, bool a4, bool a5, bool a6, ActorCameraInfo** pInfo) {
+void WaterPressureBullet::shotWaterBullet(LiveActor* pActor, const Pos3f& rPos, f32 a3, bool a4, bool a5, bool a6, ActorCameraInfo** pInfo) {
     _A8 = a3;
     _A4 = pActor;
     _B0 = a4;
@@ -135,14 +135,14 @@ void WaterPressureBullet::exeFly() {
 
     bool v2 = false;
 
-    if (MR::isBinded(this) || MR::isInWater(this, TVec3f(0.0f, 0.0f, 0.0f))) {
+    if (MR::isBinded(this) || MR::isInWater(this, Vec3f(0.0f, 0.0f, 0.0f))) {
         v2 = true;
     }
 
     if (v2) {
         if (_B1 && isBound() && MR::isBindedGroundSand(this)) {
-            const TVec3f& vel = mVelocity;
-            const TVec3f& grav = mGravity;
+            const Vec3f& vel = mVelocity;
+            const Vec3f& grav = mGravity;
             mVelocity.scaleAdd(-grav.dot(vel), grav, vel);
         } else {
             kill();
@@ -265,11 +265,11 @@ bool WaterPressureBullet::inviteMario(HitSensor* pSensor) {
 }
 
 void WaterPressureBullet::updateSuffererMtx() {
-    TPos3f pos;
+    Pos3f pos;
     pos.identity();
 
     if (isNerve(GET_NERVE(WaterPressureBullet, WaterPressureBulletNrvSpinKill))) {
-        TVec3f front;
+        Vec3f front;
         MR::calcFrontVec(&front, mHostActor);
         MR::calcMtxFromGravityAndZAxis(&pos, mHostActor, mGravity, front);
     } else {

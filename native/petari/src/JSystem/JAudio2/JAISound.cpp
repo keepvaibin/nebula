@@ -60,7 +60,7 @@ void JAISoundParams::mixOutAll(const JASSoundParams& inParams, JASSoundParams* o
 JAISound::JAISound() : mParams() {
 }
 
-void JAISound::start_JAISound_(JAISoundID id, const TVec3f* posPtr, JAIAudience* audience) {
+void JAISound::start_JAISound_(JAISoundID id, const Vec3f* posPtr, JAIAudience* audience) {
     mHandle = nullptr;
     mSoundID = id;
     mStatus.init();

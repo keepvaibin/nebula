@@ -102,14 +102,14 @@ void Fish::exeApproach() {
     }
 
     if (--mStepToMove <= 0) {
-        TVec3f front = mFollowPos;
+        Vec3f front = mFollowPos;
         front.sub(mPosition);
         MR::normalize(&front);
 
         if (mFront.dot(front) > ::sRotateDotMax) {
             mFront.set(front);
         } else {
-            TVec3f currFront = mFront;
+            Vec3f currFront = mFront;
             mFront.x = currFront.x * (1.0f - ::sRotateRate) + front.x * ::sRotateRate;
             mFront.y = currFront.y * (1.0f - ::sRotateRate) + front.y * ::sRotateRate;
             mFront.z = currFront.z * (1.0f - ::sRotateRate) + front.z * ::sRotateRate;
@@ -138,7 +138,7 @@ void Fish::exeEscape() {
     }
 
     if (--mStepToMove <= 0) {
-        TVec3f front = mPosition;
+        Vec3f front = mPosition;
         front.sub(*mEscapePos);
         MR::normalize(&front);
 
@@ -201,7 +201,7 @@ void Fish::control() {
 }
 
 void Fish::calcAndSetBaseMtx() {
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.identity();
     MR::makeMtxFrontUp(&mtx, mFront, mGroup->mUp);
     mtx.setTrans(mPosition);

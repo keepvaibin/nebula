@@ -1,7 +1,7 @@
 #pragma once
 
 #include <string.h>
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 #include <JSystem/J3DGraphAnimator/J3DModel.hpp>
 #include "Game/Player/MarioModelTint.hpp"
@@ -19,7 +19,7 @@ public:
     void viewCalc2();
     void viewCalc3(u32, MtxPtr);
     void viewCalcRef(u32, J3DModel*);
-    void viewCalcRefPos(u32, J3DModel*, const TVec3f&, const TVec3f&);
+    void viewCalcRefPos(u32, J3DModel*, const Vec3f&, const Vec3f&);
     bool simpleDrawSetup(J3DMaterial*);
     void simpleDrawShape(J3DMaterial*);
     // The drawing state flag `flag` of mFlags sets.

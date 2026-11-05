@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/Util/NativeMesh.hpp"
-#include <JSystem/JGeometry.hpp>
+#include <nebula_geometry.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <NebulaGpu.h>
 #include <nebula_math.h>
@@ -19,7 +19,7 @@ public:
     void drawDynamicBloom() const;
 
     const OceanRing* mOceanRing;
-    TVec3f mPosition;
+    Vec3f mPosition;
     int _10;
     int _14;
     bool _18;

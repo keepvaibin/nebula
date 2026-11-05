@@ -20,8 +20,8 @@ namespace {
     // sVelocityScale
     // sTestBindSphereRadius
 
-    static TVec3f sTestBindSpherePos(0, 0, 0);
-    static TVec3f sTestBindSphereVelocity(0, 0, 0);
+    static Vec3f sTestBindSpherePos(0, 0, 0);
+    static Vec3f sTestBindSphereVelocity(0, 0, 0);
 };  // namespace
 
 namespace NrvJumpHole {
@@ -33,7 +33,7 @@ namespace NrvJumpHole {
 
 JumpHole::JumpHole(const char* pName)
     : LiveActor(pName), mBoundSensor(), mLaunchStart(0, 0, 0), mBindVelocity(0, 0, 0), mHoleGravity(0, 0, 0), mSettledFrames() {
-    mCone = new BindCone(mPosition, TVec3f(0.0f, 1.0f, 0.0f), ::sHoleDepth, ::sHoleRadius);
+    mCone = new BindCone(mPosition, Vec3f(0.0f, 1.0f, 0.0f), ::sHoleDepth, ::sHoleRadius);
 }
 
 void JumpHole::init(const JMapInfoIter& rIter) {
@@ -42,7 +42,7 @@ void JumpHole::init(const JMapInfoIter& rIter) {
     MR::connectToSceneMapObj(this);
     initRailRider(rIter);
     initHitSensor(1);
-    MR::addHitSensor(this, "body", ATYPE_JUMP_HOLE, 8, ::sHoleRadius, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensor(this, "body", ATYPE_JUMP_HOLE, 8, ::sHoleRadius, Vec3f(0.0f, 0.0f, 0.0f));
     initSound(4, false);
     MR::initCollisionParts(this, "JumpHole", getSensor(nullptr), nullptr);
     mCone->setPosition(mPosition);
@@ -68,8 +68,8 @@ void JumpHole::control() {
 bool JumpHole::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
     if (msg == ACTMES_SPHERE_PLAYER_BINDED) {
         f32 radiusSquared = pReceiver->mRadius * pReceiver->mRadius;
-        TVec3f offset = pReceiver->mPosition - pSender->mPosition;
-        TVec3f lateral;
+        Vec3f offset = pReceiver->mPosition - pSender->mPosition;
+        Vec3f lateral;
         lateral.killElement2(offset, mHoleGravity);
 
         if (lateral.squared() <= radiusSquared && offset.squared(lateral) <= ::sLaunchValidHeight * ::sLaunchValidHeight) {
@@ -135,8 +135,8 @@ void JumpHole::exeRailMove() {
 
     f32 horizontal = mLaunchDistance * mLaunchTime;
     f32 vertical = mLaunchTime * (mLaunchLinear + mLaunchQuadratic * mLaunchTime);
-    TVec3f position = mLaunchStart + mLaunchGravity * vertical + mLaunchDirection * horizontal;
-    TVec3f previous(mBoundSensor->mHost->mPosition);
+    Vec3f position = mLaunchStart + mLaunchGravity * vertical + mLaunchDirection * horizontal;
+    Vec3f previous(mBoundSensor->mHost->mPosition);
     mBoundSensor->mHost->mPosition.set(position);
     mLaunchTime += 1.0f / mLaunchDuration;
 
@@ -151,8 +151,8 @@ void JumpHole::exeRailMove() {
 
 void JumpHole::bindHole() {
     f32 radius = mBoundSensor->mRadius;
-    TVec3f previous(mBoundSensor->mPosition);
-    TVec3f position(previous);
+    Vec3f previous(mBoundSensor->mPosition);
+    Vec3f position(previous);
     mBindVelocity += mHoleGravity * ::sGravityAcc;
 
     BindResult result;
@@ -160,9 +160,9 @@ void JumpHole::bindHole() {
     MR::bindSpereToCone(&result, mBindVelocity, sphere, *mCone);
     MR::updateBindPositionAndVelocity(&position, &mBindVelocity, result, ::sHoleRefrecRate);
 
-    TVec3f lateralVelocity;
+    Vec3f lateralVelocity;
     lateralVelocity.killElement2(mBindVelocity, mHoleGravity);
-    TVec3f lateralOffset;
+    Vec3f lateralOffset;
     lateralOffset.killElement2(position - mPosition, mHoleGravity);
     f32 limit = ::sHoleRadius - radius;
     if (lateralVelocity.dot(lateralOffset) > 0.0f && lateralOffset.squared() > limit * limit) {
@@ -170,7 +170,7 @@ void JumpHole::bindHole() {
         MR::separateScalarAndDirection(&distance, &lateralOffset, lateralOffset);
         position -= lateralOffset * (distance - limit);
 
-        TVec3f tangent = lateralVelocity - lateralOffset * lateralVelocity.dot(lateralOffset);
+        Vec3f tangent = lateralVelocity - lateralOffset * lateralVelocity.dot(lateralOffset);
         if (tangent.isZero()) {
             tangent = mHoleGravity;
         } else {
@@ -189,11 +189,11 @@ void JumpHole::bindHole() {
     }
 }
 
-void JumpHole::initParabola(const TVec3f& rPosition) {
+void JumpHole::initParabola(const Vec3f& rPosition) {
     MR::moveCoordToStartPos(this);
-    TVec3f start(MR::getRailPos(this));
+    Vec3f start(MR::getRailPos(this));
     MR::moveCoordToEndPos(this);
-    TVec3f end(MR::getRailPos(this));
+    Vec3f end(MR::getRailPos(this));
     MR::calcGravityVector(this, end, &mLaunchGravity, nullptr, 0);
 
     if (MR::isNearZero(mLaunchGravity)) {

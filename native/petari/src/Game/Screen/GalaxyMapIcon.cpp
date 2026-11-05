@@ -138,7 +138,7 @@ bool GalaxyMapIcon::isPointing() const {
         return false;
     }
 
-    TVec2f paneScale;
+    Vec2f paneScale;
 
     MR::copyPaneScale(&paneScale, this, nullptr);
 

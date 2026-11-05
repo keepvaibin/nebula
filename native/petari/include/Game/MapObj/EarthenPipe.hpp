@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class ActorCameraInfo;
 class PartsModel;
@@ -38,8 +38,8 @@ public:
     void processBgmPlayerIn();
     void processBgmPlayerOut();
 
-    TVec3f _8C;
-    TVec3f _98;
+    Vec3f _8C;
+    Vec3f _98;
     f32 _A4;
     bool mIsIgnoreGravity;
     bool _A9;
@@ -49,11 +49,11 @@ public:
     EarthenPipe* _B0;
     MtxPtr mTopJointMtx;
     MtxPtr mBottomJointMtx;
-    TPos3f _BC;
+    Pos3f _BC;
     LiveActor* mHostActor;
-    TPos3f _F0;
-    TMtx34f _120;
-    TPos3f _150;
+    Pos3f _F0;
+    Mtx34f _120;
+    Pos3f _150;
     f32 _180;
     f32 mHorizExitForce;
     f32 mVertExitForce;

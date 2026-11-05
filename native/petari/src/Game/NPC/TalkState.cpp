@@ -235,10 +235,10 @@ bool TalkStateNormal::prep(const TalkMessageCtrl* pArg1) {
 }
 
 void TalkStateNormal::updateButton() {
-    TVec3f camZ(MR::getCamZdir());
-    TVec3f camY(MR::getCamYdir());
-    TVec3f up;
-    TVec3f centerPlayer(*MR::getPlayerCenterPos());
+    Vec3f camZ(MR::getCamZdir());
+    Vec3f camY(MR::getCamYdir());
+    Vec3f up;
+    Vec3f centerPlayer(*MR::getPlayerCenterPos());
     MR::getPlayerUpVec(&up);
 
     f64 absolute = fabs(camZ.dot(up));  // TODO: look at fabs again
@@ -249,11 +249,11 @@ void TalkStateNormal::updateButton() {
     MR::calcNormalizedScreenPosition(&up, up * 1000.0f + centerPlayer);
     MR::calcNormalizedScreenPosition(&centerPlayer, centerPlayer);
     MR::normalize(up - centerPlayer, &up);
-    TVec2f playerScreenPos;
+    Vec2f playerScreenPos;
     MR::calcScreenPosition(&playerScreenPos, *MR::getPlayerCenterPos());
 
-    playerScreenPos.add(TVec2f(0.0f, -1.0f) * (40.0f * f1));
-    playerScreenPos.add(TVec2f(up.x, up.y) * (60.0f * f2));
+    playerScreenPos.add(Vec2f(0.0f, -1.0f) * (40.0f * f1));
+    playerScreenPos.add(Vec2f(up.x, up.y) * (60.0f * f2));
 
     mAButton->setTrans(playerScreenPos);
 }

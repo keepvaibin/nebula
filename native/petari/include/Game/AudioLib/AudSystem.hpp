@@ -8,7 +8,7 @@
 #include <JSystem/JAudio2/JAUStdSoundInfo.hpp>
 #include <JSystem/JAudio2/JASAudioReseter.hpp>
 #include <JSystem/JAudio2/JAUSoundMgr.hpp>
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class AudChordInfo;
 class AudEffector;
@@ -54,8 +54,8 @@ public:
 
     virtual void frameWork();
     virtual void calc();
-    virtual bool startSound(JAISoundID, JAISoundHandle*, const TVec3f*);
-    virtual bool startLevelSound(JAISoundID, JAISoundHandle*, const TVec3f*);
+    virtual bool startSound(JAISoundID, JAISoundHandle*, const Vec3f*);
+    virtual bool startLevelSound(JAISoundID, JAISoundHandle*, const Vec3f*);
 
     AudChordInfo* getChordInfo();
     void setSpeakerResource(AssetFolder*);
@@ -87,7 +87,7 @@ public:
     s32 getNumOfPlaying(JAISoundID);
     u32 getPlayCountMin(JAISoundID);
     void setMicMtx(MtxPtr, s32);
-    const TVec3f& getMicPos(s32);
+    const Vec3f& getMicPos(s32);
     void setFarCamera(bool);
     void setSeVolumeSet(s32, u32);
     void recoverSeVolumeSet(u32);
@@ -100,7 +100,7 @@ public:
     void clearAllLimitedSound();
     bool isRegisteredLimitedSound(JAISoundID);
     void updateLimitedSound();
-    bool isAlreadyPlayingSoundNear(JAISoundID, const TVec3f*, f32);
+    bool isAlreadyPlayingSoundNear(JAISoundID, const Vec3f*, f32);
     void setVolumeZeroForce(s32);
 
     void set830(u32 var) {

@@ -39,7 +39,7 @@ void OtaKingMagma::init(const JMapInfoIter& rIter) {
     _A4 = MR::initMaterialProjmapEffectMtxSetter(mBloomModel);
     MR::prepareMaterials(mBloomModel);
     mBloomModel->mPosition.set(mPosition);
-    TVec3f& rBloomPosition = mBloomModel->mPosition;
+    Vec3f& rBloomPosition = mBloomModel->mPosition;
     rBloomPosition.add(::cBloomModelOffset);
     mBloomModel->mRotation.set(mRotation);
     mBloomModel->mScale.set(mScale);
@@ -76,7 +76,7 @@ void OtaKingMagma::down() {
 
 void OtaKingMagma::control() {
     mBloomModel->mPosition.set(mPosition);
-    TVec3f& rBloomPosition = mBloomModel->mPosition;
+    Vec3f& rBloomPosition = mBloomModel->mPosition;
     rBloomPosition.add(::cBloomModelOffset);
 }
 

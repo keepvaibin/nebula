@@ -17,7 +17,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <JSystem/JMath.hpp>
+#include <nebula_geometry.hpp>
 #include <cstring>
 
 namespace {
@@ -108,7 +108,7 @@ void Pole::init(const JMapInfoIter& rIter) {
         mDisableHandstand = true;
     }
 
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.identity();
     MR::makeMtxTR(mtx.toMtxPtr(), this);
 
@@ -121,9 +121,9 @@ void Pole::init(const JMapInfoIter& rIter) {
     mPosMtx.zeroTrans();
 
     initHitSensor(3);
-    MR::addHitSensorBinder(this, "bind", 8, 60.0f, TVec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorRide(this, "ride", 8, 100.0f, TVec3f(0.0f, ::sSensorOffsetY, 0.0f));
-    MR::addHitSensorPush(this, "push", 8, 30.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorBinder(this, "bind", 8, 60.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorRide(this, "ride", 8, 100.0f, Vec3f(0.0f, ::sSensorOffsetY, 0.0f));
+    MR::addHitSensorPush(this, "push", 8, 30.0f, Vec3f(0.0f, 0.0f, 0.0f));
 
     if (!mNoModel) {
         initModelManagerWithAnm(name, nullptr, false);
@@ -416,14 +416,14 @@ void Pole::exeBindFallDown() {
     MR::startLevelSound(mRider, "SE_PM_LV_POLE_SLIDE");
 
     if ((!mIsSquare && mClimbCoord <= ::sLandingHeightMin) || (mIsSquare && mClimbCoord <= ::sLandingHeightMinSquare)) {
-        TPos3f mtx;
+        Pos3f mtx;
         calcGravityMtx(&mtx);
-        TVec3f front(0.0f, 0.0f, 0.0f);
-        front.x = JMASinDegree(mRotation.y);
-        front.z = JMACosDegree(mRotation.y);
+        Vec3f front(0.0f, 0.0f, 0.0f);
+        front.x = Angle::sinDegree(mRotation.y);
+        front.z = Angle::cosDegree(mRotation.y);
         mtx.mult(front, front);
 
-        TVec3f pos = front * -::sPlayerPosOffsetAtLanding;
+        Vec3f pos = front * -::sPlayerPosOffsetAtLanding;
         pos.add(mBasePos);
 
         MR::setPlayerPos(pos);
@@ -549,7 +549,7 @@ bool Pole::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
             return false;
         }
 
-        TVec3f velXZ = *MR::getPlayerVelocity();
+        Vec3f velXZ = *MR::getPlayerVelocity();
         MR::vecKillElement(velXZ, mUp, &velXZ);
         f32 speedXZ = velXZ.length();
         f32 speedY = mUp.dot(*MR::getPlayerVelocity());
@@ -557,7 +557,7 @@ bool Pole::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
             return false;
         }
 
-        TVec3f front = mPosition;
+        Vec3f front = mPosition;
         front.sub(*MR::getPlayerPos());
         MR::vecKillElement(front, mUp, &front);
         if (MR::isNearZero(front)) {
@@ -582,7 +582,7 @@ bool Pole::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
             mRotation.y = 90.0f * side;
         }
 
-        TVec3f climbProj = mPosition;
+        Vec3f climbProj = mPosition;
         climbProj.sub(mBasePos);
         mClimbCoord = climbProj.dot(mUp);
         f32 poleTop = mHeight;
@@ -617,8 +617,8 @@ bool Pole::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
     }
 
     if (MR::isMsgUpdateBaseMtx(msg)) {
-        TPos3f posMtx;
-        TRot3f rotMtx;
+        Pos3f posMtx;
+        Rot3f rotMtx;
         posMtx.identity();
         posMtx.setXYZDir(mSide, mUp, mFront);
 
@@ -645,19 +645,19 @@ bool Pole::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
 
 bool Pole::tryJump(bool handstand, f32 rotateSpeed) {
     if (MR::isPressedJump(PLAYER_1) || MR::testSystemTriggerA()) {
-        TPos3f pos;
+        Pos3f pos;
         calcGravityMtx(&pos);
 
         f32 frontAngle = MR::repeat(rotateSpeed + mRotation.y + 180.0f, 0.0f, 360.0f);
-        TVec3f jumpFront(0.0f, 0.0f, 0.0f);
-        jumpFront.x = JMASinDegree(frontAngle);
-        jumpFront.z = JMACosDegree(frontAngle);
+        Vec3f jumpFront(0.0f, 0.0f, 0.0f);
+        jumpFront.x = Angle::sinDegree(frontAngle);
+        jumpFront.z = Angle::cosDegree(frontAngle);
 
         if (handstand) {
             jumpFront.scale(-1.0f);
         }
 
-        TVec3f jumpVec;
+        Vec3f jumpVec;
         jumpVec.x = ::sJumpSpeedXZ * jumpFront.x;
         jumpVec.y = ::sJumpSpeedY;
         jumpVec.z = ::sJumpSpeedXZ * jumpFront.z;
@@ -676,7 +676,7 @@ bool Pole::tryJump(bool handstand, f32 rotateSpeed) {
         MR::endActorCamera(this, mCameraInfo, 1);
 
         if (mIsSquare) {
-            TVec3f jumpPos = jumpFront * ::sSquareJumpPosOffset;
+            Vec3f jumpPos = jumpFront * ::sSquareJumpPosOffset;
             jumpPos.add(*MR::getPlayerPos());
             MR::setPlayerPos(jumpPos);
         }
@@ -743,10 +743,10 @@ void Pole::updateBindTrans() {
     mPosition.add(mBasePos);
 }
 
-void Pole::calcGravityMtx(TPos3f* pos) {
+void Pole::calcGravityMtx(Pos3f* pos) {
     pos->identity();
     MR::calcGravity(this);
-    TVec3f up(-mGravity.x, -mGravity.y, -mGravity.z);
+    Vec3f up(-mGravity.x, -mGravity.y, -mGravity.z);
     MR::makeMtxUpFront(pos, up, mFront);
 }
 

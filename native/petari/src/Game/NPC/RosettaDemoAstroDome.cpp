@@ -32,7 +32,7 @@ namespace NrvRosettaDemoAstroDomeTalk {
 template < typename T >
 static void EntryDemo(T* caller, const char* pDemoName, const char* pRootName, const JMapInfoIter& rIter) {
     if (MR::isDemoExist(pDemoName)) {
-        TVec3f offset(MR::getMessageBalloonFollowOffset(caller->mRosetta->mMsgCtrl));
+        Vec3f offset(MR::getMessageBalloonFollowOffset(caller->mRosetta->mMsgCtrl));
         TalkMessageCtrl* ctrl = MR::createTalkCtrlDirectOnRootNodeAutomatic(caller->mRosetta, rIter, pRootName, offset, nullptr);
         MR::registerEventFunc(ctrl, TalkMessageFunc(caller->mRosetta, &Rosetta::eventFunc));
         DemoFunction::registerDemoTalkMessageCtrlDirect(caller->mRosetta, ctrl, pDemoName);

@@ -29,7 +29,7 @@ namespace {
         J3DNativeShape::setCurrentIdentity();
     }
 }  // namespace
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
 
 namespace {
@@ -66,11 +66,11 @@ void ScreenBlurEffect::drawBlur() const {
         return;
     }
 
-    TProj3f projectionMtx;
+    Proj3f projectionMtx;
     projectionMtx.makePerspective(MR::getRenderFovy(), MR::getAspect(), MR::getNearZ(), MR::getFarZ());
     J3DNativeView::setPerspective(projectionMtx);
 
-    TMtx34f posMtx;
+    Mtx34f posMtx;
     posMtx.identity();
     J3DNativeShape::setPosition(0, (MtxPtr)&posMtx);
     J3DPass::positionMatrix(0);

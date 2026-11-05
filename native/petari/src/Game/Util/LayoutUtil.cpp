@@ -26,8 +26,6 @@
 
 template nw4r::lyt::TextBox* nw4r::ut::DynamicCast< nw4r::lyt::TextBox*, nw4r::lyt::Pane >(nw4r::lyt::Pane*);
 
-template void JGeometry::TVec2< f32 >::set< f32 >(f32, f32);
-template void JGeometry::TBox2< f32 >::set(const TVec2f&, const TVec2f&);
 
 
 
@@ -306,7 +304,7 @@ void MR::hideScreen(LayoutActor* pActor) {
     pLayoutManager->mIsScreenHidden = true;
 }
 
-void MR::setFollowPos(const TVec2f* pFollowPos, const LayoutActor* pActor, const char* pPaneName) {
+void MR::setFollowPos(const Vec2f* pFollowPos, const LayoutActor* pActor, const char* pPaneName) {
     pActor->getLayoutManager()->getPaneCtrl(pPaneName)->mFollowPos = pFollowPos;
 }
 
@@ -320,7 +318,7 @@ void MR::setFollowTypeAdd(const LayoutActor* pActor, const char* pPaneName) {
     pCtrl->mFollowType = 1;
 }
 
-void MR::copyPaneTrans(TVec2f* pTrans, const LayoutActor* pActor, const char* pPaneName) {
+void MR::copyPaneTrans(Vec2f* pTrans, const LayoutActor* pActor, const char* pPaneName) {
     nw4r::lyt::Pane* pPane = getPane(pActor, pPaneName);
     pTrans->x = pPane->mGlbMtx._03;
     pTrans->y = pPane->mGlbMtx._13;
@@ -329,25 +327,25 @@ void MR::copyPaneTrans(TVec2f* pTrans, const LayoutActor* pActor, const char* pP
 
 f32 MR::getPaneTransX(const LayoutActor* pActor, const char* pPaneName) {
     nw4r::lyt::Pane* pPane = getPane(pActor, pPaneName);
-    TVec2f trans(pPane->mGlbMtx._03, pPane->mGlbMtx._13);
+    Vec2f trans(pPane->mGlbMtx._03, pPane->mGlbMtx._13);
     convertLayoutPosToScreenPos(&trans, trans);
     return trans.x;
 }
 
 f32 MR::getPaneTransY(const LayoutActor* pActor, const char* pPaneName) {
     nw4r::lyt::Pane* pPane = getPane(pActor, pPaneName);
-    TVec2f trans(pPane->mGlbMtx._03, pPane->mGlbMtx._13);
+    Vec2f trans(pPane->mGlbMtx._03, pPane->mGlbMtx._13);
     convertLayoutPosToScreenPos(&trans, trans);
     return trans.y;
 }
 
 void MR::setLayoutPosAtPaneTrans(LayoutActor* pActor, const LayoutActor* pFollowActor, const char* pPaneName) {
-    TVec2f trans;
+    Vec2f trans;
     copyPaneTrans(&trans, pFollowActor, pPaneName);
     pActor->setTrans(trans);
 }
 
-void MR::copyPaneScale(TVec2f* pScale, const LayoutActor* pActor, const char* pPaneName) {
+void MR::copyPaneScale(Vec2f* pScale, const LayoutActor* pActor, const char* pPaneName) {
     nw4r::lyt::Pane* pPane = getPane(pActor, pPaneName);
     pScale->set< f32 >(pPane->mScale.x, pPane->mScale.y);
 }
@@ -358,12 +356,12 @@ void MR::setPaneScale(const LayoutActor* pActor, f32 x, f32 y, const char* pPane
 }
 
 void MR::setLayoutScaleAtPaneScale(LayoutActor* pActor, const LayoutActor* pFollowActor, const char* pPaneName) {
-    TVec2f scale;
+    Vec2f scale;
     copyPaneScale(&scale, pFollowActor, pPaneName);
     setPaneScale(pActor, scale.x, scale.y, nullptr);
 }
 
-void MR::copyPaneRotate(TVec3f* pRotate, const LayoutActor* pActor, const char* pPaneName) {
+void MR::copyPaneRotate(Vec3f* pRotate, const LayoutActor* pActor, const char* pPaneName) {
     nw4r::lyt::Pane* pPane = getPane(pActor, pPaneName);
     pRotate->set< f32 >(pPane->mRotate.x, pPane->mRotate.y, pPane->mRotate.z);
 }
@@ -794,15 +792,15 @@ nw4r::lyt::Pane* MR::getRootPane(const LayoutActor* pActor) {
     return pActor->getLayoutManager()->getPane(nullptr);
 }
 
-void MR::calcTextBoxRectRecursive(TBox2f* pBox, const LayoutActor* pActor, const char* pPaneName) {
+void MR::calcTextBoxRectRecursive(Box2f* pBox, const LayoutActor* pActor, const char* pPaneName) {
     nw4r::lyt::Pane* pPane = getPane(pActor, pPaneName);
     nw4r::ut::Rect rect;
 
     if (::getTextDrawRectRecursive(&rect, pPane, false)) {
-        TVec2f min;
-        TVec2f max;
-        convertPaneLocalPosToScreenPos(&min, pPane, TVec2f(rect.left, rect.top));
-        convertPaneLocalPosToScreenPos(&max, pPane, TVec2f(rect.right, rect.bottom));
+        Vec2f min;
+        Vec2f max;
+        convertPaneLocalPosToScreenPos(&min, pPane, Vec2f(rect.left, rect.top));
+        convertPaneLocalPosToScreenPos(&max, pPane, Vec2f(rect.right, rect.bottom));
         pBox->set(min, max);
     } else {
         pBox->i.zero();

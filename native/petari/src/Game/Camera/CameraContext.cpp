@@ -13,7 +13,7 @@ CameraContext::CameraContext() : NameObj("\203\112\203\201\203\211\203\122\203\2
 }
 
 void CameraContext::initParams() {
-    mView.setPositionFromLookAt(TVec3f(0.0f, 0.0f, 3000.0f), TVec3f(0.0f, 1.0f, 0.0f), TVec3f(0.0f, 0.0f, 0.0f));
+    mView.setPositionFromLookAt(Vec3f(0.0f, 0.0f, 3000.0f), Vec3f(0.0f, 1.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
 
     mViewInv.set(mView);
     mViewInv.invert(mViewInv);
@@ -30,11 +30,11 @@ void CameraContext::initParams() {
     updateProjectionMtx();
 }
 
-const TPos3f& CameraContext::getViewMtx() const {
+const Pos3f& CameraContext::getViewMtx() const {
     return mView;
 }
 
-const TPos3f& CameraContext::getInvViewMtx() const {
+const Pos3f& CameraContext::getInvViewMtx() const {
     return mViewInv;
 }
 
@@ -63,7 +63,7 @@ f32 CameraContext::getRenderFovy() const {
     return mFovy;
 }
 
-void CameraContext::setViewMtx(const TPos3f& rMtx, bool b1, bool b2, const TVec3f& rVec) {
+void CameraContext::setViewMtx(const Pos3f& rMtx, bool b1, bool b2, const Vec3f& rVec) {
     mView.set(rMtx);
     mViewInv.invert(rMtx);
 }
@@ -86,7 +86,7 @@ void CameraContext::setShakeOffset(f32 x, f32 y) {
 void CameraContext::updateProjectionMtx() {
     mProjection.makePerspective(getRenderFovy(), getAspect(), mNearZ, mFarZ);
 
-    TProj3f trans;
+    Proj3f trans;
     trans.makeTrans(mShakeOffset.x, mShakeOffset.y);
 
     mProjection.concat(trans, mProjection);

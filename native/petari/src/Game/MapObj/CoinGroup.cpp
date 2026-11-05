@@ -98,7 +98,7 @@ void CoinGroup::appearCoinAllTimer() {
     }
 }
 
-void CoinGroup::setCoinTrans(s32 coinIndex, const TVec3f& rPos) {
+void CoinGroup::setCoinTrans(s32 coinIndex, const Vec3f& rPos) {
     Coin* coin = mCoinArray[coinIndex];
     coin->mPosition.x = rPos.x;
     coin->mPosition.y = rPos.y;

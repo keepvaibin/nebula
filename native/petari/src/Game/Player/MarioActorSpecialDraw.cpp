@@ -15,7 +15,7 @@
 #include "Game/Util.hpp"
 #include "Game/Util/DirectDraw.hpp"
 #include "Game/Util/FurMulti.hpp"
-#include <JSystem/JGeometry/TBox.hpp>
+#include <nebula_geometry.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <new>
 
@@ -44,22 +44,22 @@ void MarioActor::calcScreenBoxRange() {
         return;
     }
 
-    TVec3f position;
+    Vec3f position;
     position = _B18;
-    TVec2f center;
-    TVec2f x;
-    TVec2f y;
-    TVec2f z;
-    TVec2f minimum;
-    TVec2f maximum;
+    Vec2f center;
+    Vec2f x;
+    Vec2f y;
+    Vec2f z;
+    Vec2f minimum;
+    Vec2f maximum;
     MR::calcScreenPosition(&center, position);
-    MR::calcScreenPosition(&x, position + TVec3f(80.0f, 0.0f, 0.0f));
-    MR::calcScreenPosition(&y, position + TVec3f(0.0f, 80.0f, 0.0f));
-    MR::calcScreenPosition(&z, position + TVec3f(0.0f, 0.0f, 80.0f));
-    TVec3f radius((x - center).length(), (y - center).length(), (z - center).length());
+    MR::calcScreenPosition(&x, position + Vec3f(80.0f, 0.0f, 0.0f));
+    MR::calcScreenPosition(&y, position + Vec3f(0.0f, 80.0f, 0.0f));
+    MR::calcScreenPosition(&z, position + Vec3f(0.0f, 0.0f, 80.0f));
+    Vec3f radius((x - center).length(), (y - center).length(), (z - center).length());
     f32 range = radius.length();
-    minimum = center - TVec2f(range, range);
-    maximum = center + TVec2f(range, range);
+    minimum = center - Vec2f(range, range);
+    maximum = center + Vec2f(range, range);
     _B24 = minimum.x < maximum.x ? minimum.x : maximum.x;
     _B2C = minimum.x > maximum.x ? minimum.x : maximum.x;
     _B28 = minimum.y < maximum.y ? minimum.y : maximum.y;
@@ -81,10 +81,10 @@ void MarioActor::calcScreenBoxRange() {
     _B38 = top;
     _B3C = width;
     _B40 = height;
-    TBox2f capture(_B34, _B38, _B34 + _B3C, _B38 + _B40);
+    Box2f capture(_B34, _B38, _B34 + _B3C, _B38 + _B40);
     s32 screenHeight = MR::getScreenHeight();
-    TBox2f screen(0.0f, 0.0f, MR::getScreenWidth(), screenHeight);
-    TBox2f clipped(capture);
+    Box2f screen(0.0f, 0.0f, MR::getScreenWidth(), screenHeight);
+    Box2f clipped(capture);
 
     if (!clipped.intersect(screen)) {
         clipped.i.zero();
@@ -124,8 +124,8 @@ void MarioActor::writeBackScreenBox() const {
     J3DNativeTarget::end(_B44, NEBULA_TARGET_RGBA);
 
     J3DNativeTexObj texture;
-    TVec2f minimum;
-    TVec2f maximum;
+    Vec2f minimum;
+    Vec2f maximum;
     const f32 screenWidth = MR::getScreenWidth();
     const f32 screenHeight = MR::getScreenHeight();
     const f32 u0 = static_cast< s32 >(_B34) / screenWidth;
@@ -211,13 +211,13 @@ void MarioActor::calcFogLighting() {
         fog.mRGBA = _1B0.mRGBA;
 
         if (_1B5) {
-            fog.g = (s32)(255.0f * MR::sin(JGeometry::TUtil< f32 >::PI() * (_1AA / 20.0f)));
+            fog.g = (s32)(255.0f * MR::sin(FloatUtil::PI() * (_1AA / 20.0f)));
         }
 
-        _1A4 = _1AC * MR::sin((_1AA / static_cast< f32 >(getConst().getTable()->mStarPieceFogTime)) * JGeometry::TUtil< f32 >::PI());
+        _1A4 = _1AC * MR::sin((_1AA / static_cast< f32 >(getConst().getTable()->mStarPieceFogTime)) * FloatUtil::PI());
     } else if (mMario->_434) {
         fog.set(255, 255, 0, 0);
-        _1A4 = 0.8f * MR::sin(((mMario->_434 / static_cast< f32 >(getConst().getTable()->mItemDashTimer)) * JGeometry::TUtil< f32 >::PI()) / 2.0f);
+        _1A4 = 0.8f * MR::sin(((mMario->_434 / static_cast< f32 >(getConst().getTable()->mItemDashTimer)) * FloatUtil::PI()) / 2.0f);
     } else {
         resetFog();
     }
@@ -303,13 +303,13 @@ void MarioActor::drawScreenBlend() const {
     }
 
     if (mBeeWallWalk) {
-        TVec2f position;
-        TVec2f opposite;
-        TVec2f minimum;
-        TVec2f maximum;
+        Vec2f position;
+        Vec2f opposite;
+        Vec2f minimum;
+        Vec2f maximum;
         TDDraw::project2D(&position, mMario->mShadowPos);
-        opposite = position + TVec2f(100.0f, 100.0f);
-        position = position + TVec2f(-100.0f, -100.0f);
+        opposite = position + Vec2f(100.0f, 100.0f);
+        position = position + Vec2f(-100.0f, -100.0f);
 
         if (position.x >= opposite.x) {
             minimum.x = opposite.x;
@@ -327,8 +327,8 @@ void MarioActor::drawScreenBlend() const {
             maximum.y = opposite.y;
         }
 
-        position = minimum + TVec2f(-10.0f, -10.0f);
-        opposite = maximum + TVec2f(10.0f, 10.0f);
+        position = minimum + Vec2f(-10.0f, -10.0f);
+        opposite = maximum + Vec2f(10.0f, 10.0f);
         // Where the wall's shadow was marked: darkened, the mark going with it.
         NebulaNativeMaterial material;
         TDDraw::setupNative(&material, 0, 0, 2);
@@ -351,8 +351,8 @@ void MarioActor::drawScreenBlend() const {
         NebulaNativeMaterial material;
         TDDraw::setupNative(&material, 0, 1, 2);
         NativeShader::send(material);
-        TDDraw::drawFillBox(TVec3f(0.0f, 0.0f, 0.0f),
-                            TVec3f(static_cast< f32 >(MR::getScreenWidth()), static_cast< f32 >(MR::getScreenHeight()), 0.0f), color);
+        TDDraw::drawFillBox(Vec3f(0.0f, 0.0f, 0.0f),
+                            Vec3f(static_cast< f32 >(MR::getScreenWidth()), static_cast< f32 >(MR::getScreenHeight()), 0.0f), color);
         TDDraw::close();
     }
 }
@@ -388,13 +388,13 @@ void MarioActor::updateRandomTexture(f32 distance) {
 }
 
 namespace {
-    inline TVec3f subtractOffset(const TVec3f& rBase, const TVec3f& rOffset) {
-        const TVec3f* pOffset = &rOffset;
+    inline Vec3f subtractOffset(const Vec3f& rBase, const Vec3f& rOffset) {
+        const Vec3f* pOffset = &rOffset;
         return rBase - *pOffset;
     }
 };  // namespace
 
-void MarioActor::drawWallShade(const TVec3f& rPosition, const TVec3f& rNormal, f32 unused) const {
+void MarioActor::drawWallShade(const Vec3f& rPosition, const Vec3f& rNormal, f32 unused) const {
     f32 radius = 100.0f;
     NebulaNativeMaterial material;
     TDDraw::setupNative(&material, 1, 1, 0);
@@ -404,7 +404,7 @@ void MarioActor::drawWallShade(const TVec3f& rPosition, const TVec3f& rNormal, f
     NativeShader::setTexture(material, 0, mMaskTextures[_B88]);
     NativeShader::send(material);
     Mtx rotation;
-    TVec3f tangent(0.0f, rNormal.z, -rNormal.y);
+    Vec3f tangent(0.0f, rNormal.z, -rNormal.y);
 
     if (MR::isNearZero(tangent)) {
         tangent.set< f32 >(rNormal.z, 0.0f, rNormal.x);
@@ -418,11 +418,11 @@ void MarioActor::drawWallShade(const TVec3f& rPosition, const TVec3f& rNormal, f
     J3DNativeDraw::texCoord(0.0f, 0.0f);
 
     for (u32 i = 0; i <= 16; i++) {
-        f32 angle = 2.0f * ((i / 16.0f) * JGeometry::TUtil< f32 >::PI());
-        TVec3f point = subtractOffset(rPosition, rNormal * 5.0f) + tangent * radius;
+        f32 angle = 2.0f * ((i / 16.0f) * FloatUtil::PI());
+        Vec3f point = subtractOffset(rPosition, rNormal * 5.0f) + tangent * radius;
         J3DNativeDraw::position(point.x, point.y, point.z);
         J3DNativeDraw::color(1);
-        J3DNativeDraw::texCoord(10.0f * JMACosRadian(angle), 10.0f * MR::sin(angle));
+        J3DNativeDraw::texCoord(10.0f * Angle::cosRadian(angle), 10.0f * MR::sin(angle));
         NebulaMtxMultVecSR(rotation, &tangent, &tangent);
     }
 }
@@ -508,7 +508,7 @@ void MarioActor::drawRasterScroll(f32 amplitude, s16 period, f32 wavelength) con
         return;
     }
 
-    const f32 phase = (_37C * JMath::TAngleConstant_< f32 >::RADIAN_DEG360()) / period;
+    const f32 phase = (_37C * Angle::cRadian360) / period;
     drawFrameRipple(_1D8, amplitude, phase, TWO_PI / wavelength, 1.0f);
 }
 
@@ -570,14 +570,14 @@ void MarioActor::drawSpinEffect() const {
     TDDraw::setupNative(&material, 0, 2, 0);
     NativeShader::send(material);
     Mtx rotation;
-    TVec3f center = _2A0 + mMario->mHeadVec * _6D8;
-    TVec3f direction(mMario->mFrontVec);
-    TVec3f previous;
+    Vec3f center = _2A0 + mMario->mHeadVec * _6D8;
+    Vec3f direction(mMario->mFrontVec);
+    Vec3f previous;
     NebulaMtxRotAxisRad(rotation, &mMario->mHeadVec, 0.09817477f);
     J3DPass::lineWidth(6.0f);
 
     for (u32 i = 0; i <= 64; i++) {
-        TVec3f point(direction);
+        Vec3f point(direction);
         point.setLength(_6D4);
         point += mMario->mHeadVec * MR::getRandom() * 10.0f;
 
@@ -592,10 +592,10 @@ void MarioActor::drawSpinEffect() const {
     J3DPass::lineWidth(3.0f);
 
     for (u32 i = 0; i <= 64; i++) {
-        TVec3f point(direction);
+        Vec3f point(direction);
         point.setLength(_6D4);
         point += mMario->mHeadVec * MR::getRandom() * 10.0f;
-        f32 wave = MR::sin((((_37C + i) & 31) / 32.0f) * JGeometry::TUtil< f32 >::PI());
+        f32 wave = MR::sin((((_37C + i) & 31) / 32.0f) * FloatUtil::PI());
         f32 square = wave * wave;
         u32 alpha = 160.0f * (square * square);
 
@@ -621,7 +621,7 @@ void MarioActor::drawSphereMask() const {
     material.cull = NEBULA_CULL_FRONT;
     NativeShader::setDepth(material, true, NEBULA_COMPARE_GREATER, true);
     NativeShader::send(material);
-    TVec3f position;
+    Vec3f position;
     getRealPos("Spine1", &position);
     TDDraw::drawSphere3D(position, 180.0f, 0xFFFFFF30, 16);
     J3DNativeView::setZScaleOffset(1.0f, 0.0f);
@@ -673,13 +673,13 @@ bool MarioActor::drawDarkMask() const {
     NativeShader::setTexture(material, 0, mMaskTextures[_B88]);
     NativeShader::send(material);
     J3DPass::stencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ADD);
-    TVec3f spine;
-    TVec2f center;
-    TVec2f screenX;
-    TVec2f screenY;
-    TVec2f origin;
-    TVec2f minimum;
-    TVec2f maximum;
+    Vec3f spine;
+    Vec2f center;
+    Vec2f screenX;
+    Vec2f screenY;
+    Vec2f origin;
+    Vec2f minimum;
+    Vec2f maximum;
     getRealPos("Spine1", &spine);
     f32 radius = _1C4;
 
@@ -687,7 +687,7 @@ bool MarioActor::drawDarkMask() const {
         radius = 240.0f;
     }
 
-    TVec3f position(mPosition);
+    Vec3f position(mPosition);
     TDDraw::project2D(&center, position);
     TDDraw::project2D(&screenX, position + mCamDirX * radius);
     TDDraw::project2D(&screenY, position + mCamDirY * radius);
@@ -697,7 +697,7 @@ bool MarioActor::drawDarkMask() const {
     origin.x -= width / 2;
     origin.y -= width / 2;
     minimum = origin;
-    maximum = origin + TVec2f(width, height);
+    maximum = origin + Vec2f(width, height);
     J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
     J3DNativeDraw::position(minimum.x, minimum.y, 0.0f);
     J3DNativeDraw::texCoord(0.0f, 0.0f);

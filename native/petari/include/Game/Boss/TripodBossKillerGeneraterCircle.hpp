@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/NameObj/NameObj.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class TripodBossKillerGenerater;
 
@@ -17,8 +17,8 @@ public:
     void placementGenerater();
 
     TripodBossKillerGenerater* mGenerater;
-    TVec3f mPosition;
-    TVec3f mRotation;
+    Vec3f mPosition;
+    Vec3f mRotation;
     const f32* mAngleTable;
     s32 mAngleNum;
     f32 _30;

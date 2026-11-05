@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 #include "Game/Util/RenderSignals.hpp"
 
 class J3DMatPacket;
@@ -147,7 +147,7 @@ namespace MotionSignal {
     void newLife(LiveActor* pActor);
     void died(LiveActor* pActor);
     // MarioAccess::setTrans and setBaseMtx: a jump far from where the player is starts a new life.
-    void playerPlaced(LiveActor* pPlayer, const TVec3f& rTarget);
+    void playerPlaced(LiveActor* pPlayer, const Vec3f& rTarget);
     // JPABaseEmitter::init: a pooled emitter starts a new effect.
     void emitterInit(JPABaseEmitter* pEmitter);
     // CameraViewInterpolator::reduceOscillation took its target without blending: a camera cut.

@@ -8,9 +8,9 @@ PlanetGravity* GravityCreator::createFromJMap(const JMapInfoIter& rIter) {
     PlanetGravity* instance = createInstance();
 
     if (instance) {
-        TVec3f trans(0, 0, 0);
-        TVec3f rotate(0, 0, 0);
-        TVec3f scale(1, 1, 1);
+        Vec3f trans(0, 0, 0);
+        Vec3f rotate(0, 0, 0);
+        Vec3f scale(1, 1, 1);
         MR::getJMapInfoTrans(rIter, &trans);
         MR::getJMapInfoRotate(rIter, &rotate);
         MR::getJMapInfoScale(rIter, &scale);
@@ -39,14 +39,14 @@ PlanetGravity* CubeGravityCreator::createInstance() {
     return mGravityInstance;
 }
 
-void CubeGravityCreator::settingFromSRT(const TVec3f& rTrans, const TVec3f& rRotate, const TVec3f& rScale) {
+void CubeGravityCreator::settingFromSRT(const Vec3f& rTrans, const Vec3f& rRotate, const Vec3f& rScale) {
     // Calculate TR matrix
-    TPos3f mtx;
+    Pos3f mtx;
     MR::makeMtxTR(mtx.toMtxPtr(), rTrans, rRotate);
 
     // Get up vector and calculate scale
-    TVec3f upVec;
-    TVec3f scale;
+    Vec3f upVec;
+    Vec3f scale;
     scale.set(rScale * 500.0f);
     mtx.getYDir(upVec);
 
@@ -92,13 +92,13 @@ PlanetGravity* DiskGravityCreator::createInstance() {
     return mGravityInstance;
 }
 
-void DiskGravityCreator::settingFromSRT(const TVec3f& rTrans, const TVec3f& rRotate, const TVec3f& rScale) {
+void DiskGravityCreator::settingFromSRT(const Vec3f& rTrans, const Vec3f& rRotate, const Vec3f& rScale) {
     // Calculate TR matrix
-    TPos3f mtx;
+    Pos3f mtx;
     MR::makeMtxTR(mtx.toMtxPtr(), rTrans, rRotate);
 
     // Calculate side and up vectors
-    TVec3f sideVec, upVec;
+    Vec3f sideVec, upVec;
     mtx.getXDir(sideVec);
     mtx.getYDir(upVec);
 
@@ -133,13 +133,13 @@ PlanetGravity* DiskTorusGravityCreator::createInstance() {
     return mGravityInstance;
 }
 
-void DiskTorusGravityCreator::settingFromSRT(const TVec3f& rTrans, const TVec3f& rRotate, const TVec3f& rScale) {
+void DiskTorusGravityCreator::settingFromSRT(const Vec3f& rTrans, const Vec3f& rRotate, const Vec3f& rScale) {
     // Calculate TR matrix
-    TPos3f mtx;
+    Pos3f mtx;
     MR::makeMtxTR(mtx.toMtxPtr(), rTrans, rRotate);
 
     // Calculate side and up vectors
-    TVec3f upVec;
+    Vec3f upVec;
     mtx.getYDir(upVec);
 
     // Populate gravity attributes
@@ -181,9 +181,9 @@ PlanetGravity* ConeGravityCreator::createInstance() {
     return mGravityInstance;
 }
 
-void ConeGravityCreator::settingFromSRT(const TVec3f& rTrans, const TVec3f& rRotate, const TVec3f& rScale) {
+void ConeGravityCreator::settingFromSRT(const Vec3f& rTrans, const Vec3f& rRotate, const Vec3f& rScale) {
     // Calculate local matrix
-    TPos3f localMtx;
+    Pos3f localMtx;
     MR::makeMtxTRS(reinterpret_cast< MtxPtr >(&localMtx), rTrans, rRotate, rScale * 500.0f);
     mGravityInstance->setLocalMatrix(localMtx);
 }
@@ -205,13 +205,13 @@ PlanetGravity* PlaneGravityCreator::createInstance() {
     return mGravityInstance;
 }
 
-void PlaneGravityCreator::settingFromSRT(const TVec3f& rTrans, const TVec3f& rRotate, const TVec3f& rScale) {
+void PlaneGravityCreator::settingFromSRT(const Vec3f& rTrans, const Vec3f& rRotate, const Vec3f& rScale) {
     // Calculate rotate matrix
-    TPos3f mtx;
+    Pos3f mtx;
     MR::makeMtxRotate(mtx.toMtxPtr(), rRotate);
 
     // Set normal-form plane
-    TVec3f upVec;
+    Vec3f upVec;
     mtx.getYDir(upVec);
     mGravityInstance->setPlane(upVec, rTrans);
 }
@@ -226,14 +226,14 @@ PlanetGravity* PlaneInBoxGravityCreator::createInstance() {
     return mGravityInstance;
 }
 
-void PlaneInBoxGravityCreator::settingFromSRT(const TVec3f& rTrans, const TVec3f& rRotate, const TVec3f& rScale) {
+void PlaneInBoxGravityCreator::settingFromSRT(const Vec3f& rTrans, const Vec3f& rRotate, const Vec3f& rScale) {
     // Calculate scale and TR matrix
-    TPos3f mtx;
-    TVec3f scale = rScale * 500.0f;
+    Pos3f mtx;
+    Vec3f scale = rScale * 500.0f;
     MR::makeMtxTR(mtx.toMtxPtr(), rTrans, rRotate);
 
     // Get up vector
-    TVec3f upVec;
+    Vec3f upVec;
     mtx.getYDir(upVec);
 
     // Translate and scale matrix
@@ -280,13 +280,13 @@ PlanetGravity* PlaneInCylinderGravityCreator::getGravity() {
     return mGravityInstance;
 }
 
-void PlaneInCylinderGravityCreator::settingFromSRT(const TVec3f& rTrans, const TVec3f& rRotate, const TVec3f& rScale) {
+void PlaneInCylinderGravityCreator::settingFromSRT(const Vec3f& rTrans, const Vec3f& rRotate, const Vec3f& rScale) {
     // Calculate TR matrix
-    TPos3f mtx;
+    Pos3f mtx;
     MR::makeMtxTR(mtx.toMtxPtr(), rTrans, rRotate);
 
     // Set normal-form plane
-    TVec3f upVec;
+    Vec3f upVec;
     mtx.getYDir(upVec);
     mGravityInstance->setPlane(upVec, rTrans);
 
@@ -304,7 +304,7 @@ PlanetGravity* PointGravityCreator::createInstance() {
     return mGravityInstance;
 }
 
-void PointGravityCreator::settingFromSRT(const TVec3f& rTrans, const TVec3f& rRotate, const TVec3f& rScale) {
+void PointGravityCreator::settingFromSRT(const Vec3f& rTrans, const Vec3f& rRotate, const Vec3f& rScale) {
     mGravityInstance->mDistant = 500.0f * rScale.x;
     mGravityInstance->setOrig(rTrans);
 }
@@ -318,13 +318,13 @@ PlanetGravity* SegmentGravityCreator::createInstance() {
     return mGravityInstance;
 }
 
-void SegmentGravityCreator::settingFromSRT(const TVec3f& rTrans, const TVec3f& rRotate, const TVec3f& rScale) {
+void SegmentGravityCreator::settingFromSRT(const Vec3f& rTrans, const Vec3f& rRotate, const Vec3f& rScale) {
     // Calculate TRS matrix
-    TPos3f mtx;
+    Pos3f mtx;
     MR::makeMtxTRS(mtx.toMtxPtr(), rTrans, rRotate, rScale);
 
     // Get side and up vectors
-    TVec3f sideVec, upVec;
+    Vec3f sideVec, upVec;
     mtx.getXDir(sideVec);
     mtx.getYDir(upVec);
 

@@ -25,7 +25,7 @@ void MagicBell::init(const JMapInfoIter& rIter) {
     mSurface1Mtx = MR::getJointMtx(this, "polySurface1");
     MR::connectToSceneMapObjNoCalcAnim(this);
     initHitSensor(1);
-    MR::addHitSensorMapObj(this, "body", 8, 70.0f, TVec3f(0.0f, -80.0f, 0.0f));
+    MR::addHitSensorMapObj(this, "body", 8, 70.0f, Vec3f(0.0f, -80.0f, 0.0f));
     initEffectKeeper(1, nullptr, false);
     MR::addEffect(this, "StarWandHitMark");
     MR::setEffectHostSRT(this, "StarWandHitMark", &mHitMarkPosition, nullptr, nullptr);
@@ -33,8 +33,8 @@ void MagicBell::init(const JMapInfoIter& rIter) {
     initNerve(GET_NERVE(MagicBell, MagicBellNrvWait));
     MR::initShadowVolumeSphere(this, 100.0f);
     MR::useStageSwitchWriteA(this, rIter);
-    MR::initStarPointerTarget(this, 100.0f, TVec3f(0.0f, -80.0f, 0.0f));
-    TMtx34f mtx;
+    MR::initStarPointerTarget(this, 100.0f, Vec3f(0.0f, -80.0f, 0.0f));
+    Mtx34f mtx;
     mtx.identity();
     MR::makeMtxTR(mtx.toMtxPtr(), this);
     MR::calcGravity(this);
@@ -50,9 +50,9 @@ void MagicBell::exeWait() {
     if (!tryRing()) {
         NebulaMtxCopy(mBellSwinger->_60.toMtxPtr(), mSurface2Mtx);
         NebulaMtxCopy(mBellRodSwinger->_60.toMtxPtr(), mSurface1Mtx);
-        TVec3f v3(0.0f, 0.0f, 0.0f);
+        Vec3f v3(0.0f, 0.0f, 0.0f);
         MR::setMtxTrans(mSurface2Mtx, v3.x, v3.y, v3.z);
-        TVec3f v2(0.0f, 0.0f, 0.0f);
+        Vec3f v2(0.0f, 0.0f, 0.0f);
         MR::setMtxTrans(mSurface1Mtx, v2.x, v2.y, v2.z);
         NebulaMtxScaleApply(mSurface2Mtx, mSurface2Mtx, mScale.x, mScale.y, mScale.z);
         NebulaMtxScaleApply(mSurface1Mtx, mSurface1Mtx, mScale.x, mScale.y, mScale.z);
@@ -75,7 +75,7 @@ void MagicBell::exeRing() {
     mBellRodSwinger->update();
 
     if (mBellSwinger->_20.dot(mBellRodSwinger->_20) < 0.95f) {
-        TVec3f v17(mBellSwinger->_20);
+        Vec3f v17(mBellSwinger->_20);
         v17.sub(mBellRodSwinger->_20);
         f32 v3 = mBellRodSwinger->_20.dot(v17);
         v17.x -= v3 * mBellRodSwinger->_20.x;
@@ -98,9 +98,9 @@ void MagicBell::exeRing() {
     }
     NebulaMtxCopy(mBellSwinger->_60.toMtxPtr(), mSurface2Mtx);
     NebulaMtxCopy(mBellRodSwinger->_60.toMtxPtr(), mSurface1Mtx);
-    TVec3f v16(0.0f, 0.0f, 0.0f);
+    Vec3f v16(0.0f, 0.0f, 0.0f);
     MR::setMtxTrans(mSurface2Mtx, v16.x, v16.y, v16.z);
-    TVec3f v15(0.0f, 0.0f, 0.0f);
+    Vec3f v15(0.0f, 0.0f, 0.0f);
     MR::setMtxTrans(mSurface1Mtx, v15.x, v15.y, v15.z);
     NebulaMtxScaleApply(mSurface2Mtx, mSurface2Mtx, mScale.x, mScale.y, mScale.z);
     NebulaMtxScaleApply(mSurface1Mtx, mSurface1Mtx, mScale.x, mScale.y, mScale.z);
@@ -135,11 +135,11 @@ bool MagicBell::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* p
     }
 
     if (isNerve(GET_NERVE(MagicBell, MagicBellNrvWait)) || (isNerve(GET_NERVE(MagicBell, MagicBellNrvRing)) && MR::isGreaterStep(this, 10))) {
-        TVec3f v15(mPosition);
+        Vec3f v15(mPosition);
         v15.sub(*MR::getPlayerPos());
         v15.y += 100.0f;
         MR::normalizeOrZero(&v15);
-        TVec3f v14(v15 * -200.0f);
+        Vec3f v14(v15 * -200.0f);
         v14.add(mPosition);
         startRing(v15, v14);
         return true;
@@ -150,9 +150,9 @@ bool MagicBell::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* p
 
 bool MagicBell::tryRing() {
     if (!MR::isExecScenarioStarter() && MR::isStarPointerPointing(this, 0, 0, "\216\343" /* 弱 */)) {
-        TVec2f* v4(MR::getStarPointerScreenVelocity(0));
+        Vec2f* v4(MR::getStarPointerScreenVelocity(0));
         if (((v4->x * v4->x) + (v4->y * v4->y)) > 64.0f) {
-            TVec3f v12;
+            Vec3f v12;
             MR::getStarPointerWorldVelocityDirection(&v12, 0);
             if (MR::isNearZero(v12)) {
                 v12.set(MR::getRandom(-1.0f, 1.0f), MR::getRandom(-1.0f, 1.0f), MR::getRandom(-1.0f, 1.0f));
@@ -162,7 +162,7 @@ bool MagicBell::tryRing() {
                     MR::normalize(&v12);
                 }
             }
-            TVec3f v11;
+            Vec3f v11;
             MR::calcStarPointerWorldPointingPos(&v11, mPosition, 0);
             startRing(v12, v11);
             return true;
@@ -171,7 +171,7 @@ bool MagicBell::tryRing() {
     return false;
 }
 
-void MagicBell::startRing(const TVec3f& a1, const TVec3f& a2) {
+void MagicBell::startRing(const Vec3f& a1, const Vec3f& a2) {
     f32 v10 = mBellSwinger->mAcceleration.length();
     mBellSwinger->accel(mBellSwinger->mAcceleration * -1.0f);
     mBellSwinger->accel(a1 * (5.0f + v10));

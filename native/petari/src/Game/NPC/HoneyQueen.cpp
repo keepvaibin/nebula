@@ -199,7 +199,7 @@ void HoneyQueen::exeItch() {
         MR::tryStartBckAndBtp(this, "EventWait", nullptr);
     }
 
-    TVec3f vec;
+    Vec3f vec;
     _B0.getZDir(vec);
     MR::faceToVector(&_A0, vec, 0.2f);
     MR::tryTalkNearPlayer(mMsgCtrl);

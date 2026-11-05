@@ -5,8 +5,8 @@
 #include "Game/MapObj/DummyDisplayModel.hpp"
 #include "Game/Util.hpp"
 #include "math_types.hpp"
-#include <JSystem/JGeometry/TUtil.hpp>
-#include <JSystem/JMath.hpp>
+#include <nebula_geometry.hpp>
+
 
 namespace NrvCrystalCage {
     NEW_NERVE(CrystalCageNrvWait, CrystalCage, Wait);
@@ -30,7 +30,7 @@ void CrystalCage::init(const JMapInfoIter& rIter) {
     MR::connectToSceneCrystal(this);
     _E8.set(mPosition);
     initHitSensor(1);
-    MR::addHitSensorPosMapObj(this, "body", 8, (130.0f * mScale.x), &_E8, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorPosMapObj(this, "body", 8, (130.0f * mScale.x), &_E8, Vec3f(0.0f, 0.0f, 0.0f));
 
     if (mCrystalCageType) {
         MR::invalidateHitSensors(this);
@@ -52,12 +52,12 @@ void CrystalCage::init(const JMapInfoIter& rIter) {
     MR::setClippingTypeSphere(this, range * mScale.x);
     initSound(4, false);
 
-    TVec3f v23;
+    Vec3f v23;
     if (mCrystalCageType == 2) {
         f32 mult = mScale.x * 250.0f;
         _C4 = 2;
 
-        mDisplayModel = MR::createDummyDisplayModelCrystalItem(this, 7, TVec3f(0.0f, mult, 0.0f), TVec3f(0.0f, 0.0f, 0.0f));
+        mDisplayModel = MR::createDummyDisplayModelCrystalItem(this, 7, Vec3f(0.0f, mult, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
 
         if (_108 == -1) {
             MR::declarePowerStar(this);
@@ -71,7 +71,7 @@ void CrystalCage::init(const JMapInfoIter& rIter) {
             v23.set< f32 >(0.0f, 200.0f, 0.0f);
         }
 
-        mDisplayModel = MR::createDummyDisplayModelCrystalItem(this, rIter, v23, TVec3f(0.0f, 0.0f, 0.0f));
+        mDisplayModel = MR::createDummyDisplayModelCrystalItem(this, rIter, v23, Vec3f(0.0f, 0.0f, 0.0f));
 
         if (mDisplayModel) {
             switch (MR::getDummyDisplayModelId(rIter, -1)) {
@@ -122,9 +122,9 @@ void CrystalCage::init(const JMapInfoIter& rIter) {
 void CrystalCage::initAfterPlacement() {
     if (!mIsBreakObjVisible || mHasBinding) {
         f32 val = mCrystalCageType == 2 ? 1000.0f : 300.0f;
-        TVec3f up_vec;
-        TVec3f stack_2C;
-        TVec3f stack_20;
+        Vec3f up_vec;
+        Vec3f stack_2C;
+        Vec3f stack_20;
         MR::calcUpVec(&up_vec, this);
         // TODO: fix this during .scale pass
         stack_20.add(mPosition, up_vec * (val * mScale.x));
@@ -292,7 +292,7 @@ void CrystalCage::exeWait() {
     if (mRumbleCalc) {
         if (mRumbleCalc->_4 < mRumbleCalc->_8) {
             mRumbleCalc->calc();
-            TVec3f v9;
+            Vec3f v9;
             v9.scale(mRumbleCalc->_C.y, _D0);
             mPosition.add(_DC, v9);
         } else {
@@ -301,12 +301,12 @@ void CrystalCage::exeWait() {
     }
 
     if (mCrystalCageType == 0) {
-        TVec3f up_vec;
+        Vec3f up_vec;
         MR::calcUpVec(&up_vec, this);
-        TVec3f v6;
+        Vec3f v6;
         v6.scale(-40.0f, up_vec);
         v6.add(mPosition);
-        TVec3f v5;
+        Vec3f v5;
         v5.scale(140.0f, up_vec);
         v5.add(mPosition);
         MR::calcPerpendicFootToLineInside(&_E8, *MR::getPlayerPos(), v6, v5);

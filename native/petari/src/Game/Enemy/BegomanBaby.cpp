@@ -13,7 +13,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <JSystem/JMath/JMATrigonometric.hpp>
+#include <nebula_geometry.hpp>
 #include "Game/System/NebulaHost.hpp"
 
 namespace NrvBegomanBaby {
@@ -91,13 +91,13 @@ void BegomanBaby::appear() {
     MR::validateExCollisionParts(this);
 }
 
-void BegomanBaby::appearFromLaunch(const TVec3f& rVec1, const TVec3f& rVec2) {
+void BegomanBaby::appearFromLaunch(const Vec3f& rVec1, const Vec3f& rVec2) {
     BegomanBase::appear();
     MR::emitEffect(this, "Death");
     MR::startSound(this, "SE_EM_BEGOMAN_APPEAR");
     setNerve(GET_NERVE(BegomanBaby, HostTypeNrvAfterLaunch));
 
-    TVec3f vec(mPosition);
+    Vec3f vec(mPosition);
 
     vec -= rVec1;
     MR::turnVecToPlane(&vec, vec, rVec2);
@@ -120,8 +120,8 @@ void BegomanBaby::kill() {
 }
 
 void BegomanBaby::killWithGenItem() {
-    TVec3f minusGravity(-mGravity);
-    TVec3f starPieceAppearPos(minusGravity * 80.0f);
+    Vec3f minusGravity(-mGravity);
+    Vec3f starPieceAppearPos(minusGravity * 80.0f);
     starPieceAppearPos += mPosition;
 
     bool appearedStarPiece;
@@ -171,7 +171,7 @@ void BegomanBaby::control() {
         return;
     }
 
-    if (MR::isInDeath(this, TVec3f(0.0f, 0.0f, 0.0f))) {
+    if (MR::isInDeath(this, Vec3f(0.0f, 0.0f, 0.0f))) {
         kill();
         return;
     }
@@ -316,8 +316,8 @@ void BegomanBaby::exeAfterLaunch() {
 
     if (MR::isLessStep(this, 80)) {
         f32 f1 = 5.0f * MR::cos(getNerveStep() * (16 * PI) / 80.0f);
-        TVec3f& vel = mVelocity;
-        const TVec3f& gravity = mGravity;
+        Vec3f& vel = mVelocity;
+        const Vec3f& gravity = mGravity;
         vel.set(mFaceVec * 5.0f - gravity * f1);
     } else if (MR::isLessStep(this, 85)) {
         mVelocity.zero();
@@ -403,7 +403,7 @@ void BegomanBaby::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     bool msgResult = MR::sendArbitraryMsg(ACTMES_ENEMY_ATTACK_FLIP_ROT, pReceiver, pSender);
 
     if (msgResult) {
-        TVec3f dirFromSenderToReceiver(pSender->mPosition);
+        Vec3f dirFromSenderToReceiver(pSender->mPosition);
 
         dirFromSenderToReceiver -= pReceiver->mPosition;
         MR::normalizeOrZero(&dirFromSenderToReceiver);
@@ -431,7 +431,7 @@ bool BegomanBaby::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* 
     }
 
     if (MR::isMsgEnemyAttackElectric(msg)) {
-        TVec3f senderVelocity(pSender->mHost->mVelocity);
+        Vec3f senderVelocity(pSender->mHost->mVelocity);
 
         MR::vecKillElement(senderVelocity, mGravity, &senderVelocity);
         MR::normalizeOrZero(&senderVelocity);
@@ -455,7 +455,7 @@ bool BegomanBaby::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* 
     }
 
     if (MR::isSensorEnemy(pSender)) {
-        TVec3f dirFromReceiverToSender(pReceiver->mPosition);
+        Vec3f dirFromReceiverToSender(pReceiver->mPosition);
 
         dirFromReceiverToSender -= pSender->mPosition;
         MR::normalizeOrZero(&dirFromReceiverToSender);
@@ -549,7 +549,7 @@ bool BegomanBaby::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pRecei
     return MR::isMsgHitmarkEmit(msg);
 }
 
-bool BegomanBaby::onTouchElectric(const TVec3f& rVec1, const TVec3f& rVec2) {
+bool BegomanBaby::onTouchElectric(const Vec3f& rVec1, const Vec3f& rVec2) {
     if (isNerve(GET_NERVE(BegomanBaby, HostTypeNrvBlow)) || isNerve(GET_NERVE(BegomanBaby, HostTypeNrvInWater))) {
         return false;
     }
@@ -580,12 +580,12 @@ const Nerve* BegomanBaby::getNerveWait() {
     return GET_NERVE_ANON(NrvBegomanBaby::HostTypeNrvWait);
 }
 
-bool BegomanBaby::calcHeadJoint(TPos3f* pPos, const JointControllerInfo& rInfo) {
+bool BegomanBaby::calcHeadJoint(Pos3f* pPos, const JointControllerInfo& rInfo) {
     if (isNerve(GET_NERVE(BegomanBaby, HostTypeNrvBlow))) {
         return true;
     }
 
-    TVec3f yDir;
+    Vec3f yDir;
     pPos->getYDir(yDir);
 
     if (!MR::isSameDirection(yDir, mTargetVec)) {

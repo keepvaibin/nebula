@@ -19,7 +19,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 namespace {
     // hGravity
@@ -127,7 +127,7 @@ void Karon::init(const JMapInfoIter& rIter) {
     }
 
     initHitSensor(1);
-    TVec3f offset;
+    Vec3f offset;
     f32 yScale = mScale.y;
     offset.set(0.0f, 90.0f * yScale, 0.0f);
     MR::addHitSensorEnemy(this, "body", 16, 90.0f * yScale, offset);
@@ -138,7 +138,7 @@ void Karon::init(const JMapInfoIter& rIter) {
     MR::setGroupClipping(this, rIter, 32);
     mTerritoryMover = new TerritoryMover(500.0f);
     mTerritoryMover->mCenter.set(mPosition);
-    MR::initStarPointerTarget(this, 100.0f, TVec3f(0.0f, 50.0f, 0.0f));
+    MR::initStarPointerTarget(this, 100.0f, Vec3f(0.0f, 50.0f, 0.0f));
     mScaleController = new AnimScaleController(0);
     mStateStarPointer = new WalkerStateBindStarPointer(this, mScaleController);
     makeActorAppeared();
@@ -235,7 +235,7 @@ void Karon::exeTurn() {
     if (MR::calcDistanceToPlayer(this) < 700.0f && MR::isFaceToPlayerDegree(this, 80.0f)) {
         setNerve(GET_NERVE(Karon, HostTypeNrvPursue));
     } else {
-        TVec3f frontVec;
+        Vec3f frontVec;
         MR::calcFrontVec(&frontVec, this);
         if (MR::isGreaterStep(this, 10) && MR::isFaceToTargetHorizontalDegree(this, mTerritoryMover->mTarget, frontVec, ::hSearchParam._C * 2.0f)) {
             if (isFallNextMove(false)) {
@@ -300,17 +300,17 @@ void Karon::exeBroken() {
         MR::forceBindOnGround(this, 0.0f, 1.0f);
     }
 
-    TVec3f velVec(0, 0, 0);
+    Vec3f velVec(0, 0, 0);
     if (MR::calcVelocityAreaOrRailMoveOnGround(&velVec, this)) {
         MR::addVelocityLimit(this, velVec * 1.0f);
         MR::moveAndTurnToPlayer(this, ::hNoMoveNoTurnParam._0, ::hNoMoveNoTurnParam._4, ::hNoMoveNoTurnParam._8, ::hNoMoveNoTurnParam._C);
         MR::calcGravity(this);
     } else if (MR::isBinded(this)) {
-        const TVec3f* bindedVec = MR::getBindedNormal(this);
+        const Vec3f* bindedVec = MR::getBindedNormal(this);
         mVelocity.scale(bindedVec->dot(mVelocity), *bindedVec);
     } else {
         MR::forceBindOnGround(this, 1.0f, 0.8f);
-        TVec3f* gravity = &mGravity;
+        Vec3f* gravity = &mGravity;
         mVelocity.scale(gravity->dot(mVelocity), *gravity);
     }
 
@@ -330,16 +330,16 @@ void Karon::exeStepBroken() {
         MR::forceBindOnGround(this, 0.0f, 1.0f);
     }
 
-    TVec3f velVec(0, 0, 0);
+    Vec3f velVec(0, 0, 0);
     if (MR::calcVelocityAreaOrRailMoveOnGround(&velVec, this)) {
         MR::addVelocityLimit(this, velVec * 1.0f);
         MR::moveAndTurnToPlayer(this, ::hNoMoveNoTurnParam._0, ::hNoMoveNoTurnParam._4, ::hNoMoveNoTurnParam._8, ::hNoMoveNoTurnParam._C);
         MR::calcGravity(this);
     } else if (MR::isBinded(this)) {
-        const TVec3f* bindedVec = MR::getBindedNormal(this);
+        const Vec3f* bindedVec = MR::getBindedNormal(this);
         mVelocity.scale(bindedVec->dot(mVelocity), *bindedVec);
     } else {
-        TVec3f* gravity = &mGravity;
+        Vec3f* gravity = &mGravity;
         mVelocity.scale(gravity->dot(mVelocity), *gravity);
         MR::forceBindOnGround(this, 1.0f, 0.8f);
     }
@@ -358,7 +358,7 @@ void Karon::exeRecover() {
     }
 
     if (MR::isOnGround(this)) {
-        TVec3f* gravity = &mGravity;
+        Vec3f* gravity = &mGravity;
         mVelocity.scale(gravity->dot(mVelocity), *gravity);
     }
 
@@ -426,7 +426,7 @@ void Karon::exeSinkDown() {
     }
 
     if (MR::isOnGround(this)) {
-        TVec3f* gravity = &mGravity;
+        Vec3f* gravity = &mGravity;
         mVelocity.scale(gravity->dot(mVelocity), *gravity);
     }
 
@@ -454,13 +454,13 @@ void Karon::endBindStarPointer() {
 void Karon::control() {
     mScaleController->updateNerve();
 
-    if (MR::isInDeath(this, TVec3f(0.0f, 0.0f, 0.0f)) || MR::isInWater(mPosition) || MR::isInDarkMatter(mPosition)) {
+    if (MR::isInDeath(this, Vec3f(0.0f, 0.0f, 0.0f)) || MR::isInWater(mPosition) || MR::isInDarkMatter(mPosition)) {
         kill();
         return;
     }
 
     if (!isNerve(GET_NERVE(Karon, HostTypeNrvStepBroken)) && !isNerve(GET_NERVE(Karon, HostTypeNrvBroken))) {
-        TVec3f velVec(0, 0, 0);
+        Vec3f velVec(0, 0, 0);
         if (MR::calcVelocityAreaOrRailMoveOnGround(&velVec, this)) {
             MR::addVelocityLimit(this, velVec * 1.0f);
         }
@@ -486,7 +486,7 @@ bool Karon::isFallNextMove(bool a1) {
         return MR::isFallOrDangerNextMove(this, 150.0f, 140.0f, 150.0f);
     }
 
-    TVec3f frontVec;
+    Vec3f frontVec;
     MR::calcFrontVec(&frontVec, this);
     return MR::isFallOrDangerNextMove(mPosition, frontVec, mGravity, 150.0f, 140.0f, 150.0f);
 }
@@ -506,7 +506,7 @@ void Karon::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
             } else if (!isNerve(GET_NERVE(Karon, HostTypeNrvHitReaction)) && !isNerve(GET_NERVE(Karon, HostTypeNrvFixWait)) &&
                        !MR::isPlayerExistUp(this, getSensor("body")->mRadius, 0.25f) && MR::isOnGroundPlayer() && !MR::isPlayerHipDropFalling() &&
                        !MR::isPlayerHipDropLand() && MR::sendMsgEnemyAttack(pReceiver, pSender)) {
-                TVec3f v18(pSender->mPosition);
+                Vec3f v18(pSender->mPosition);
                 v18 -= pReceiver->mPosition;
                 MR::vecKillElement(v18, mGravity, &v18);
                 MR::normalizeOrZero(&v18);

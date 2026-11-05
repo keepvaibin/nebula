@@ -47,25 +47,25 @@ CamTranslatorBase* CameraInwardTower::createTranslator() {
 }
 
 void CameraInwardTower::calcIdealPose() {
-    TVec3f watchPos = CameraLocalUtil::getWatchPos(this);
-    TVec3f axis = mAxis;
+    Vec3f watchPos = CameraLocalUtil::getWatchPos(this);
+    Vec3f axis = mAxis;
     mZoneMatrix.mult33(axis, axis);
 
-    TVec3f wPoint = mWPoint;
+    Vec3f wPoint = mWPoint;
     mZoneMatrix.mult(wPoint, wPoint);
 
-    TVec3f outDir = watchPos - wPoint;
+    Vec3f outDir = watchPos - wPoint;
     outDir.set(outDir - axis * axis.dot(outDir));
     if (MR::isNearZero(outDir)) {
         return;
     }
     MR::normalize(&outDir);
 
-    TVec3f up = -CameraLocalUtil::getTarget(this)->getGravityVector();
-    TVec3f camFront = watchPos - mPos;
+    Vec3f up = -CameraLocalUtil::getTarget(this)->getGravityVector();
+    Vec3f camFront = watchPos - mPos;
     MR::normalizeOrZero(&camFront);
 
-    TVec3f camUp = outDir.cross(camFront);
+    Vec3f camUp = outDir.cross(camFront);
     f32 rate = camUp.length();
     if (camUp.dot(up) < 0.0f) {
         rate = -rate;
@@ -108,23 +108,23 @@ void CameraInwardTower::calcIdealPose() {
         }
     }
 
-    TPos3f rotY;
+    Pos3f rotY;
     rotY.makeRotate(up, mAngleY);
 
-    TVec3f front = outDir;
+    Vec3f front = outDir;
     rotY.mult(front, front);
-    TVec3f side = up;
+    Vec3f side = up;
     side.cross(side, front);
     if (MR::isNearZero(side)) {
         return;
     }
     MR::normalize(&side);
 
-    TPos3f rotX;
+    Pos3f rotX;
     rotX.makeRotate(side, mAngleX);
     rotX.mult(front, front);
 
-    TVec3f pos = watchPos - front * mDist;
+    Vec3f pos = watchPos - front * mDist;
     CameraLocalUtil::setPos(this, pos);
     CameraLocalUtil::setWatchPos(this, watchPos);
     CameraLocalUtil::setUpVecAndWatchUpVec(this, up);

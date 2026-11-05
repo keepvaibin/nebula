@@ -46,7 +46,7 @@ void CannonFortressBreakStep::exeFallStart() {
 }
 
 void CannonFortressBreakStep::exeFall() {
-    TVec3f upVec;
+    Vec3f upVec;
     MR::calcUpVec(&upVec, this);
     mVelocity.scale(-::sFallSpeed, upVec);
 

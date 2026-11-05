@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class AnimScaleController;
 class CocoNutBall;
@@ -55,7 +55,7 @@ private:
     FixedPosition* mFixedPosition;
     s32 mThrowCocoNutCounter;
     u32 mWaitFrame;
-    TPos3f _A4;
-    TVec3f _D4;
+    Pos3f _A4;
+    Vec3f _D4;
     AnimScaleController* mAnimScaleController;
 };

@@ -40,7 +40,7 @@ void PaneEffectKeeper::add(const char* pName1, const char* pName2, const char* p
         mHost->createPaneMtxRef(pName1);
     }
 
-    MultiEmitter* pEmitter = new MultiEmitter(pName2, mHost->getPaneMtxRef(pName1), TVec3f(0.0f, 0.0f, 0.0f));
+    MultiEmitter* pEmitter = new MultiEmitter(pName2, mHost->getPaneMtxRef(pName1), Vec3f(0.0f, 0.0f, 0.0f));
 
     registerEffect(pEmitter, pName3);
 }

@@ -9,11 +9,11 @@ SpinPullParticleCallBack::SpinPullParticleCallBack() : MultiEmitterParticleCallB
 }
 
 void SpinPullParticleCallBack::execute(JPABaseEmitter* pEmitter, JPABaseParticle* pParticle) {
-    TVec3f baseParticlePosition;
+    Vec3f baseParticlePosition;
     baseParticlePosition.set(pParticle->mPosition);
-    TVec3f pullvel;
+    Vec3f pullvel;
     MR::calcPlayerSpinPullVelocity(&pullvel, baseParticlePosition);
-    TVec3f baseParticleOffsetPosition;
+    Vec3f baseParticleOffsetPosition;
     baseParticleOffsetPosition.set(pParticle->mOffsetPosition);
 
     f32 time = pParticle->mTime;
@@ -21,11 +21,11 @@ void SpinPullParticleCallBack::execute(JPABaseEmitter* pEmitter, JPABaseParticle
 }
 
 void MerameraParticleCallBack::execute(JPABaseEmitter* pEmitter, JPABaseParticle* pParticle) {
-    TVec3f baseParticlePosition;
+    Vec3f baseParticlePosition;
     baseParticlePosition.set(pParticle->mPosition);
-    TVec3f pullvel;
+    Vec3f pullvel;
     MR::calcPlayerSpinPullVelocity(&pullvel, baseParticlePosition);
-    TVec3f baseParticleOffsetPosition;
+    Vec3f baseParticleOffsetPosition;
     baseParticleOffsetPosition.set(pParticle->mOffsetPosition);
     pParticle->mOffsetPosition.set(baseParticleOffsetPosition + (pullvel * _4));
 }

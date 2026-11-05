@@ -17,37 +17,37 @@ void CameraFixedPoint::reset() {
 }
 
 CameraTargetObj* CameraFixedPoint::calc() {
-    TVec3f prevWatchDir = CameraLocalUtil::getWatchPos(this) - CameraLocalUtil::getPos(this);
+    Vec3f prevWatchDir = CameraLocalUtil::getWatchPos(this) - CameraLocalUtil::getPos(this);
     MR::normalize(&prevWatchDir);
 
-    TVec3f watchPos;
+    Vec3f watchPos;
     CameraLocalUtil::makeWatchPoint(&watchPos, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
     CameraLocalUtil::setWatchPos(this, watchPos);
 
-    TVec3f pos = mPos;
+    Vec3f pos = mPos;
     mZoneMatrix.mult(pos, pos);
     CameraLocalUtil::setPos(this, pos);
 
-    TVec3f watchDir = CameraLocalUtil::getWatchPos(this) - CameraLocalUtil::getPos(this);
+    Vec3f watchDir = CameraLocalUtil::getWatchPos(this) - CameraLocalUtil::getPos(this);
     MR::normalize(&watchDir);
 
     switch (mCameraType) {
     case CameraType_ZoneUp: {
-        TVec3f up(0.0f, 1.0f, 0.0f);
+        Vec3f up(0.0f, 1.0f, 0.0f);
         mZoneMatrix.mult33(up, up);
         CameraLocalUtil::setUpVec(this, up);
         break;
     }
     case CameraType_TurnUp: {
-        TQuat4f rot;
+        Quat4f rot;
         rot.setRotate(prevWatchDir, watchDir);
-        TVec3f up = CameraLocalUtil::getUpVec(this);
+        Vec3f up = CameraLocalUtil::getUpVec(this);
         rot.transform(up);
         CameraLocalUtil::setUpVec(this, up);
         break;
     }
     case CameraType_PlayerUp: {
-        TVec3f up;
+        Vec3f up;
         MR::getPlayerUpVec(&up);
         CameraLocalUtil::setUpVec(this, up);
         break;
@@ -62,7 +62,7 @@ CamTranslatorBase* CameraFixedPoint::createTranslator() {
     return new CamTranslatorFixedPoint(this);
 }
 
-void CameraFixedPoint::setParam(const TVec3f& rPos, u32 cameraType) {
+void CameraFixedPoint::setParam(const Vec3f& rPos, u32 cameraType) {
     mPos.set(rPos);
     mCameraType = cameraType;
 }

@@ -106,7 +106,7 @@ s32 StarPieceDirector::getDeclareRemnantStarPieceCountNotExist(const NameObj* pN
     return hostInfo->_4 - hostInfo->_C - hostInfo->_8;
 }
 
-bool StarPieceDirector::hopPiece(const NameObj* pNameObj, const TVec3f& rVec1, const TVec3f& rVec2) {
+bool StarPieceDirector::hopPiece(const NameObj* pNameObj, const Vec3f& rVec1, const Vec3f& rVec2) {
     StarPieceHostInfo* hostInfo = findHostInfo(pNameObj);
 
     if (hostInfo == nullptr) {
@@ -129,7 +129,7 @@ bool StarPieceDirector::hopPiece(const NameObj* pNameObj, const TVec3f& rVec1, c
     return true;
 }
 
-bool StarPieceDirector::appearPiece(const NameObj* pNameObj, const TVec3f& rVec, s32 a1, f32 f1, f32 f2, bool a2, bool a3) {
+bool StarPieceDirector::appearPiece(const NameObj* pNameObj, const Vec3f& rVec, s32 a1, f32 f1, f32 f2, bool a2, bool a3) {
     StarPieceHostInfo* hostInfo = findHostInfo(pNameObj);
 
     if (hostInfo == nullptr) {
@@ -156,7 +156,7 @@ bool StarPieceDirector::appearPiece(const NameObj* pNameObj, const TVec3f& rVec,
     return appearedStarPiece;
 }
 
-bool StarPieceDirector::appearPieceToDirection(const NameObj* pNameObj, const TVec3f& rVec1, const TVec3f& rVec2, s32 a1, f32 f1, f32 f2, bool a2,
+bool StarPieceDirector::appearPieceToDirection(const NameObj* pNameObj, const Vec3f& rVec1, const Vec3f& rVec2, s32 a1, f32 f1, f32 f2, bool a2,
                                                bool a3) {
     StarPieceHostInfo* hostInfo = findHostInfo(pNameObj);
 
@@ -281,11 +281,11 @@ StarPiece* StarPieceDirector::getDeadStarPiece() {
     return deadStarPiece;
 }
 
-TVec3f StarPieceDirector::calcPosCameraShoot(s32 addOrSubXDir) {
-    TVec3f returnVec(MR::getCamPos());
-    TVec3f camXDir(MR::getCamXdir());
-    TVec3f camYDir(MR::getCamYdir());
-    TVec3f camZDir(MR::getCamZdir());
+Vec3f StarPieceDirector::calcPosCameraShoot(s32 addOrSubXDir) {
+    Vec3f returnVec(MR::getCamPos());
+    Vec3f camXDir(MR::getCamXdir());
+    Vec3f camYDir(MR::getCamYdir());
+    Vec3f camZDir(MR::getCamZdir());
 
     if (addOrSubXDir == 0) {
         returnVec.add(camXDir * 300.0f);
@@ -349,7 +349,7 @@ void StarPieceShooter::init(const JMapInfoIter& rIter) {
     MR::setEffectHostSRT(this, "Charge", &_A8, &_B4, nullptr);
 
     initHitSensor(1);
-    MR::addHitSensorEye(this, "search", 64, 5.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEye(this, "search", 64, 5.0f, Vec3f(0.0f, 0.0f, 0.0f));
     makeActorAppeared();
 }
 
@@ -394,8 +394,8 @@ void StarPieceShooter::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
 void StarPieceShooter::control() {
     tryShoot();
 
-    TVec3f playerCenterPos(*MR::getPlayerCenterPos());
-    TVec3f playerUpVec;
+    Vec3f playerCenterPos(*MR::getPlayerCenterPos());
+    Vec3f playerUpVec;
     MR::getPlayerUpVec(&playerUpVec);
 
     _A8.set(playerCenterPos);
@@ -421,10 +421,10 @@ bool StarPieceShooter::shoot() {
         pSensor = _98;
     }
 
-    TVec3f position = mPosition;
-    TVec3f vec;
-    TVec3f posCameraShoot = MR::getStarPieceDirector()->calcPosCameraShoot(_A0);
-    TVec3f negCameraPos = -MR::getCamPos();
+    Vec3f position = mPosition;
+    Vec3f vec;
+    Vec3f posCameraShoot = MR::getStarPieceDirector()->calcPosCameraShoot(_A0);
+    Vec3f negCameraPos = -MR::getCamPos();
 
     if (pSensor != nullptr) {
         negCameraPos.add(pSensor->mPosition);
@@ -524,26 +524,26 @@ bool StarPieceShooter::tryShoot() {
 }
 
 void StarPieceShooter::calcShootGoalUsingPointingDepth() {
-    TVec3f playerPos(*MR::getPlayerPos());
-    TVec3f starPointerWorldPos(*MR::getStarPointerWorldPosUsingDepth(_A0));
+    Vec3f playerPos(*MR::getPlayerPos());
+    Vec3f starPointerWorldPos(*MR::getStarPointerWorldPosUsingDepth(_A0));
 
     mGravity.set(*MR::getPlayerGravity());
 
-    TVec3f dir(starPointerWorldPos);
+    Vec3f dir(starPointerWorldPos);
     dir.sub(playerPos);
 
     f32 dirsquared = dir.squared();
     f32 new_8C = 400.0f;
 
     if (16000000.0f < dirsquared) {
-        TVec3f camPos(MR::getCamPos());
-        TVec3f dirToPlayer(playerPos);
+        Vec3f camPos(MR::getCamPos());
+        Vec3f dirToPlayer(playerPos);
         dirToPlayer.sub(camPos);
 
-        TVec2f pointingPos;
+        Vec2f pointingPos;
         MR::getPointerPosOnScreen(&pointingPos, _A0);
 
-        TVec3f worldPos;
+        Vec3f worldPos;
         MR::calcWorldPositionFromScreen(&worldPos, pointingPos, -1.0f);
         worldPos.sub(camPos);
         MR::normalize(&worldPos);

@@ -63,7 +63,7 @@ u16 CubeCameraArea::getCameraID() const {
     return mObjArg0;
 }
 
-bool CubeCameraArea::isInVolume(const TVec3f& rVec) const {
+bool CubeCameraArea::isInVolume(const Vec3f& rVec) const {
     return (_3C & sCubeCategory) != 0 && AreaObj::isInVolume(rVec);
 }
 

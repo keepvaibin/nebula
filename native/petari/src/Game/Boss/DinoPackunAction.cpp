@@ -5,14 +5,14 @@
 #include "Game/Util.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 DinoPackunAction::DinoPackunAction(const char* pName, DinoPackun* pParent) : ActorStateBase< DinoPackun >(pName, pParent) {
     _10 = 1.0f;
 }
 
 bool DinoPackunAction::sendBlowAttackMessage(HitSensor* pSender, HitSensor* pReceiver, bool a3) {
-    TVec3f direction;
+    Vec3f direction;
     MR::calcSensorDirection(&direction, pSender, pReceiver);
 
     if (mHost->mVelocity.dot(direction) >= 0.0f) {
@@ -47,9 +47,9 @@ bool DinoPackunAction::sendHitAttackMessage(HitSensor* pSender, HitSensor* pRece
 }
 
 bool DinoPackunAction::updateTurn(s32 turnTime, f32 turnSpeed) {
-    TVec3f side;
+    Vec3f side;
     MR::calcSideVec(&side, mHost);
-    TVec3f direction(side * _10);
+    Vec3f direction(side * _10);
     MR::turnDirectionDegree(mHost, &mHost->_E8, direction, turnSpeed);
     mHost->updateNormalVelocity();
     return MR::isGreaterStep(this, turnTime);

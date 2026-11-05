@@ -31,7 +31,7 @@ public:
 
 class MarblePlanetElectron : public LiveActor {
 public:
-    MarblePlanetElectron(LiveActor*, const TVec3f&, const TVec3f&, const char*);
+    MarblePlanetElectron(LiveActor*, const Vec3f&, const Vec3f&, const char*);
 
     virtual ~MarblePlanetElectron();
     virtual void init(const JMapInfoIter&);
@@ -46,17 +46,17 @@ public:
 
     MarblePlanet* mParentPlanet;
     MarblePlanetElectronShadow* mElectronShadow;
-    TVec3f _94;
+    Vec3f _94;
 };
 
 class MarblePlanetElectronShadow : public LiveActor {
 public:
-    MarblePlanetElectronShadow(LiveActor*, const TVec3f&, const char*);
+    MarblePlanetElectronShadow(LiveActor*, const Vec3f&, const char*);
 
     virtual ~MarblePlanetElectronShadow();
     virtual void init(const JMapInfoIter&);
     virtual void calcAndSetBaseMtx();
 
     MarblePlanetElectron* mParentElectron;
-    const TVec3f* _90;
+    const Vec3f* _90;
 };

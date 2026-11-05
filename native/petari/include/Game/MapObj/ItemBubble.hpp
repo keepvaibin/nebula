@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/PartsModel.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class StarPiece;
 
@@ -16,7 +16,7 @@ public:
 
     virtual void calcAndSetBaseMtx() {
         PartsModel::calcAndSetBaseMtx();
-        TRot3f mtx;
+        Rot3f mtx;
         mtx.identity();
 
         mtx.setRotateDegree(mRotation);
@@ -41,7 +41,7 @@ public:
     void exeWait();
     void exeBreak();
 
-    const TVec3f& getRotPartsPosition(int index) const {
+    const Vec3f& getRotPartsPosition(int index) const {
         return _90[index]->mPosition;
     }
 
@@ -54,10 +54,10 @@ public:
     StarPiece** _94;
     u16 mItemCount;
     u16 mItemType;
-    TPos3f _9C;
-    TPos3f _CC;
-    TVec3f _FC;
-    TVec3f _108;
+    Pos3f _9C;
+    Pos3f _CC;
+    Vec3f _FC;
+    Vec3f _108;
     f32 mRailSpeed;
     bool mUseRail;
 };

@@ -39,5 +39,5 @@ public:
     bool mPlaceAtPathPoints;
     s32 _A4;
     f32 mRailSpeed;
-    TVec3f _AC;
+    Vec3f _AC;
 };

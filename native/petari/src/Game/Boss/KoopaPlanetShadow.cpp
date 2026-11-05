@@ -26,8 +26,8 @@ void KoopaPlanetShadow::init(const JMapInfoIter& rIter) {
 }
 
 void KoopaPlanetShadow::calcAndSetBaseMtx() {
-    TVec3f vec(mHipMtx[0][3], mHipMtx[1][3], mHipMtx[2][3]);
-    TVec3f direction = vec - KoopaFunction::getPlanetCenterPos(mKoopa);
+    Vec3f vec(mHipMtx[0][3], mHipMtx[1][3], mHipMtx[2][3]);
+    Vec3f direction = vec - KoopaFunction::getPlanetCenterPos(mKoopa);
 
     if (MR::isNearZero(direction)) {
         return;
@@ -35,7 +35,7 @@ void KoopaPlanetShadow::calcAndSetBaseMtx() {
 
     MR::normalize(&direction);
 
-    TPos3f transform;
+    Pos3f transform;
     transform.identity();
 
     const Koopa* pKoopa = mKoopa;

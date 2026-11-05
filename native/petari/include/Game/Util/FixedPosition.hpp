@@ -1,32 +1,32 @@
 #pragma once
 
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class LiveActor;
 
 class FixedPosition {
 public:
-    FixedPosition(const LiveActor*, const char*, const TVec3f&, const TVec3f&);
-    FixedPosition(const LiveActor*, const TVec3f&, const TVec3f&);
-    FixedPosition(MtxPtr, const TVec3f&, const TVec3f&);
+    FixedPosition(const LiveActor*, const char*, const Vec3f&, const Vec3f&);
+    FixedPosition(const LiveActor*, const Vec3f&, const Vec3f&);
+    FixedPosition(MtxPtr, const Vec3f&, const Vec3f&);
     FixedPosition(const LiveActor*, const char*, const LiveActor*);
 
-    void init(MtxPtr, const TVec3f&, const TVec3f&);
+    void init(MtxPtr, const Vec3f&, const Vec3f&);
     void calc();
     void setBaseMtx(MtxPtr);
-    void setLocalTrans(const TVec3f&);
-    void copyTrans(TVec3f* pTrans) const {
+    void setLocalTrans(const Vec3f&);
+    void copyTrans(Vec3f* pTrans) const {
         mMtx.getTrans(*pTrans);
     }
 
-    void copyRotate(TVec3f* pRotate) const {
+    void copyRotate(Vec3f* pRotate) const {
         mMtx.getEuler(*pRotate);
         *pRotate = *pRotate * _180_PI;
     }
 
     MtxPtr mBaseMtx;
-    TVec3f mLocalTrans;
-    TVec3f mLocalRotate;
-    TPos3f mMtx;
+    Vec3f mLocalTrans;
+    Vec3f mLocalRotate;
+    Pos3f mMtx;
     bool mNormalizeScale;
 };

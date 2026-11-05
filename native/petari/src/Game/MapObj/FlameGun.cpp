@@ -56,7 +56,7 @@ void FlameGun::init(const JMapInfoIter& rIter) {
 void FlameGun::initSensor() {
     f32 scale = mScale.y;
     initHitSensor(2);
-    TVec3f offs;
+    Vec3f offs;
     offs.x = 0.0f;
     offs.y = 77.0f * scale;
     offs.z = 0.0f;
@@ -158,14 +158,14 @@ void FlameGun::exeRadiateOnly() {
 
 void FlameGun::updateHitSensor(HitSensor* pSensor) {
     f32 scale = mScale.y;
-    TVec3f playerOffset(*MR::getPlayerCenterPos());
+    Vec3f playerOffset(*MR::getPlayerCenterPos());
     playerOffset -= mPosition;
-    TPos3f baseMtx(getBaseMtx());
-    TVec3f side, up, front;
+    Pos3f baseMtx(getBaseMtx());
+    Vec3f side, up, front;
     baseMtx.getXDir(side);
     baseMtx.getYDir(up);
     baseMtx.getZDir(front);
-    TVec3f direction(front);
+    Vec3f direction(front);
     MR::normalizeOrZero(&direction);
 
     f32 distance = direction.dot(playerOffset);

@@ -65,7 +65,7 @@ void Onimasu::init(const JMapInfoIter& rIter) {
     initSound(4, false);
 
     initHitSensor(1);
-    MR::initCollisionParts(this, "Onimasu", MR::addHitSensor(this, "body", ATYPE_MAP_OBJ_PRESS, 8, ::sSensorRadius, TVec3f(0.0f, 0.0f, 0.0f)),
+    MR::initCollisionParts(this, "Onimasu", MR::addHitSensor(this, "body", ATYPE_MAP_OBJ_PRESS, 8, ::sSensorRadius, Vec3f(0.0f, 0.0f, 0.0f)),
                            nullptr);
 
     MR::initAndSetRailClipping(&_F8, this, 100.0f, 500.0f);
@@ -92,7 +92,7 @@ void Onimasu::initAfterPlacement() {
     MR::moveCoordAndTransToRailStartPoint(this);
     MR::setRailDirectionToEnd(this);
 
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.identity();
     MR::makeMtxTR(mtx.toMtxPtr(), this);
     MR::setBaseTRMtx(this, mtx);
@@ -115,13 +115,13 @@ void Onimasu::initAfterPlacement() {
 }
 
 void Onimasu::calcTargetPose() {
-    TQuat4f rotationChange;
+    Quat4f rotationChange;
     rotationChange.set(0.0f, 0.0f, 0.0f, 1.0f);
 
     if (MR::isSameDirection(getLastPointNormal(), getNextPointNormal())) {
         f32 turnDirection = 0.0f;
         if (calcTurnDirection(&turnDirection)) {
-            TPos3f mtx;
+            Pos3f mtx;
             mtx.identity();
             const f32 pi = MR::pi();
             mtx.makeRotate(getLastPointNormal(), pi * turnDirection);
@@ -129,22 +129,22 @@ void Onimasu::calcTargetPose() {
 
             MR::normalize(&_BC);
         } else {
-            TVec3f lastPointPos;
+            Vec3f lastPointPos;
             MR::calcRailPointPos(&lastPointPos, this, getLastPointNo());
 
-            TVec3f nextPointPos;
+            Vec3f nextPointPos;
             MR::calcRailPointPos(&nextPointPos, this, getNextPointNo());
 
-            TVec3f railDir(nextPointPos - lastPointPos);
+            Vec3f railDir(nextPointPos - lastPointPos);
             MR::normalize(&railDir);
 
-            TVec3f down;
+            Vec3f down;
             calcGravityDir(&down);
             _BC.cross(railDir, down);
             MR::normalize(&_BC);
         }
     } else {
-        TQuat4f normalRotation;
+        Quat4f normalRotation;
         normalRotation.set(0.0f, 0.0f, 0.0f, 1.0f);
         normalRotation.setRotate(getLastPointNormal(), getNextPointNormal());
         rotationChange.set(normalRotation);
@@ -154,20 +154,20 @@ void Onimasu::calcTargetPose() {
 
     _C8.set(_D8);
 
-    TQuat4f quarterTurn;
+    Quat4f quarterTurn;
     quarterTurn.set(0.0f, 0.0f, 0.0f, 1.0f);
     quarterTurn.setRotate(_BC, MR::pi() / 2.0f);
     rotationChange.mult(quarterTurn);
     _D8.mult(rotationChange);
 
-    TVec3f startFront;
+    Vec3f startFront;
     _C8.getZDir(startFront);
 
-    TVec3f targetFront;
+    Vec3f targetFront;
     _D8.getZDir(targetFront);
 
     if (MR::isSameDirection(startFront, targetFront)) {
-        TQuat4f adjustment;
+        Quat4f adjustment;
         adjustment.setRotate(_BC, MR::pi() * 0.001f);
         _C8.mult(adjustment);
     }
@@ -185,7 +185,7 @@ void Onimasu::updatePose() {
 }
 
 void Onimasu::calcAndSetBaseMtx() {
-    TPos3f baseMtx;
+    Pos3f baseMtx;
     baseMtx.identity();
     baseMtx.setQT(_E8, mPosition);
 
@@ -196,7 +196,7 @@ void Onimasu::land() {
     emitEffectLand();
     MR::startRumbleWithShakeCameraNormalWeak(this, "\222\206" /* 中 */, "\216\343" /* 弱 */, ::sCamShakeDistanceStrong, ::sCamShakeDistanceWeak);
 
-    TVec3f railPointPos;
+    Vec3f railPointPos;
     MR::calcRailPointPos(&railPointPos, this, getNextPointNo());
 
     mPosition.set(railPointPos);
@@ -234,12 +234,12 @@ bool Onimasu::calcTurnDirection(f32* pTurnDir) const {
 void Onimasu::updateStompVelocity() {
     f32 speed = getGravityScalar() * getTimeToNextPoint() * 0.5f;
 
-    TVec3f gravityDir;
+    Vec3f gravityDir;
     gravityDir.set(-getNextPointNormal());
     mVelocity.set(-gravityDir * speed);
 }
 
-void Onimasu::calcGravityDir(TVec3f* pDir) const {
+void Onimasu::calcGravityDir(Vec3f* pDir) const {
     pDir->set(-getNextPointNormal());
 }
 
@@ -258,7 +258,7 @@ s32 Onimasu::getWaitTime() const {
 }
 
 void Onimasu::emitEffectLand() {
-    TVec3f railPointPos;
+    Vec3f railPointPos;
     MR::calcRailPointPos(&railPointPos, this, getNextPointNo());
 
     railPointPos.add((-getNextPointNormal() * ::sSensorRadius) * 0.5f);
@@ -328,10 +328,10 @@ void Onimasu::exeStamp() {
         updateStompVelocity();
     }
 
-    TVec3f gravityDir;
+    Vec3f gravityDir;
     calcGravityDir(&gravityDir);
 
-    TVec3f& rVelocity = mVelocity;
+    Vec3f& rVelocity = mVelocity;
     rVelocity.add(gravityDir * getGravityScalar());
 
     if (MR::isStep(this, getTimeToNextPoint())) {
@@ -341,13 +341,13 @@ void Onimasu::exeStamp() {
 }
 
 namespace OnimasuFunction {
-    bool getPolygonOnRailPoint(TVec3f* pPosition, TVec3f* pNormal, const LiveActor* pActor, int pointNo) {
-        TVec3f railPosition;
+    bool getPolygonOnRailPoint(Vec3f* pPosition, Vec3f* pNormal, const LiveActor* pActor, int pointNo) {
+        Vec3f railPosition;
         MR::calcRailPointPos(&railPosition, pActor, pointNo);
 
-        TVec3f gravity(0.0f, 1.0f, 0.0f);
+        Vec3f gravity(0.0f, 1.0f, 0.0f);
         MR::calcGravityVector(pActor, railPosition, &gravity, nullptr, 0);
-        TVec3f direction(gravity);
+        Vec3f direction(gravity);
         gravity.setLength(2000.0f);
 
         Triangle triangle;

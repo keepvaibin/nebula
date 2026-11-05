@@ -4,8 +4,7 @@
 
 #include <nebula_math.h>
 
-/* 0 when the 3x3 part is singular (inv untouched), else 1 with inv = src's inverse. The console's reciprocal was
-   fres refined once; natively it is exact. */
+/* 0 when the 3x3 part is singular (inv untouched), else 1 with inv = src's inverse. */
 u32 NebulaMtxInverse(const Mtx src, Mtx inv) {
     const f32 m00 = src[0][0], m01 = src[0][1], m02 = src[0][2], m03 = src[0][3];
     const f32 m10 = src[1][0], m11 = src[1][1], m12 = src[1][2], m13 = src[1][3];
@@ -84,7 +83,7 @@ void NebulaMtxRotTrig(Mtx m, char axis, f32 sinA, f32 cosA) {
     }
 }
 
-/* A rotation of rad radians about axis, which is normalised first (the console's frsqrte refined once). */
+/* A rotation of rad radians about axis, which is normalised first. */
 void NebulaMtxRotAxisRad(Mtx m, const Vec* axis, f32 rad) {
     const f32 s = sinf(rad), c = cosf(rad), t = 1.0f - c;
     const f32 ax = axis->x, ay = axis->y, az = axis->z;
@@ -96,7 +95,7 @@ void NebulaMtxRotAxisRad(Mtx m, const Vec* axis, f32 rad) {
     m[2][0] = tx * z - s * y; m[2][1] = ty * z + s * x; m[2][2] = tz * z + c;     m[2][3] = 0.0f;
 }
 
-/* The rotation of a quaternion, normalised by 2/|q|^2 (the console's fres refined once). */
+/* The rotation of a quaternion, normalised by 2/|q|^2. */
 void NebulaMtxQuat(Mtx m, const Quaternion* q) {
     const f32 x = q->x, y = q->y, z = q->z, w = q->w;
     const f32 s = 2.0f / ((x * x + z * z) + (y * y + w * w));
@@ -107,7 +106,7 @@ void NebulaMtxQuat(Mtx m, const Quaternion* q) {
     m[2][0] = s * (xz - wy);        m[2][1] = s * (yz + wx);        m[2][2] = 1.0f - s * (xx + yy); m[2][3] = 0.0f;
 }
 
-/* dst[i] = m * (src[i], 0) for count vectors (count >= 1 on the console's loop). */
+/* dst[i] = m * (src[i], 0) for count vectors. */
 void NebulaMtxMultVecArraySR(const Mtx m, const Vec* src, Vec* dst, u32 count) {
     for (u32 i = 0; i < count; i++) {
         NebulaMtxMultVecSR(m, &src[i], &dst[i]);
@@ -258,7 +257,7 @@ void NebulaQuatFromMtx(Quaternion* r, const Mtx m) {
     }
 }
 
-/* The console computes the angle terms in double (acos, sin) and rounds; so does this. */
+/* The angle terms are computed in double (acos, sin) and rounded. */
 void NebulaQuatSlerp(const Quaternion* p, const Quaternion* q, Quaternion* r, f32 t) {
     f32 theta, sin_th, cos_th, tp, tq, sin_1mtth, sin_tth;
 

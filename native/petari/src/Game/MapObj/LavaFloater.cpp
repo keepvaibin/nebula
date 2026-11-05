@@ -15,8 +15,8 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "math_types.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
+
 
 namespace {
     const char* const cEffectName = "LavaBubble";
@@ -72,7 +72,7 @@ void LavaFloater::init(const JMapInfoIter& rIter) {
 }
 
 void LavaFloater::initAfterPlacement() {
-    TVec3f v6(mGravity);
+    Vec3f v6(mGravity);
     v6 *= 1000.0f;
 
     if (!MR::getFirstPolyOnLineToMap(&_9C, nullptr, mPosition, v6)) {
@@ -86,8 +86,8 @@ void LavaFloater::initAfterPlacement() {
     }
 
     if (mMtxSetter != nullptr) {
-        TVec3f uselessVec(0.0f, _A8, 0.0f);
-        mMtxSetter->updateMtxUseBaseMtxWithLocalOffset(TVec3f(0.0f, _A8, 0.0f));
+        Vec3f uselessVec(0.0f, _A8, 0.0f);
+        mMtxSetter->updateMtxUseBaseMtxWithLocalOffset(Vec3f(0.0f, _A8, 0.0f));
     }
 
     MR::offCalcGravity(this);
@@ -133,8 +133,8 @@ void LavaFloater::endClipped() {
 }
 
 f32 LavaFloater::getCurrentSinkDepth() const {
-    TPos3f depthMtx;
-    TVec3f v1, v2;
+    Pos3f depthMtx;
+    Vec3f v1, v2;
     depthMtx.set(getBaseMtx());
     depthMtx.getTrans(v1);
     depthMtx.getYDir(v2);

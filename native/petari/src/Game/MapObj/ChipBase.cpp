@@ -74,7 +74,7 @@ void ChipBase::initModel(const JMapInfoIter& rIter) {
 
     if (isNeedBubble(rIter)) {
         mAirBubble = MR::createPartsModelNoSilhouettedMapObj(this, "\203\101\203\217" /* アワ */, "AirBubble", 0);
-        mAirBubble->initFixedPosition(TVec3f(0.0f, 0.0f, 0.0f), TVec3f(0.0f, 0.0f, 0.0f), 0);
+        mAirBubble->initFixedPosition(Vec3f(0.0f, 0.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f), 0);
         MR::startBck(mAirBubble, "Move");
     }
 }
@@ -91,7 +91,7 @@ void ChipBase::initSensor() {
         radius = ::sBodyHitRadius;
     }
 
-    MR::addHitSensorEnemy(this, "body", 8, radius * scale, TVec3f(0.0f, ::sBodyHitYOffset, 0.0f));
+    MR::addHitSensorEnemy(this, "body", 8, radius * scale, Vec3f(0.0f, ::sBodyHitYOffset, 0.0f));
 }
 
 void ChipBase::initShadow(const JMapInfoIter& rIter) {

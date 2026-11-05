@@ -38,19 +38,19 @@
 
 namespace {
     template < bool IsRight >
-    inline void addDinoFootPrint(DinoPackun* pActor, const TVec3f& rStart) {
-        TVec3f position;
-        TVec3f normal;
-        TVec3f ray = pActor->mGravity * 200.0f;
+    inline void addDinoFootPrint(DinoPackun* pActor, const Vec3f& rStart) {
+        Vec3f position;
+        Vec3f normal;
+        Vec3f ray = pActor->mGravity * 200.0f;
         if (MR::getFirstPolyNormalOnLineToMap(&normal, rStart, ray, &position, nullptr)) {
             pActor->mFootPrint->addPrint(position, pActor->_E8, normal, IsRight);
         }
     }
 
-    static TVec3f sHeadHitOffset = TVec3f(140.0f, -110.0f, 0.0f);
-    static TVec3f sBodyHitOffset = TVec3f(0.0f, 200.0f, 0.0f);
-    static TVec3f sEggHitOffset = TVec3f(0.0f, 200.0f, 0.0f);
-    static TVec3f sMarioSetLocalPos = TVec3f(0.0f, -550.0f, 800.0f);
+    static Vec3f sHeadHitOffset = Vec3f(140.0f, -110.0f, 0.0f);
+    static Vec3f sBodyHitOffset = Vec3f(0.0f, 200.0f, 0.0f);
+    static Vec3f sEggHitOffset = Vec3f(0.0f, 200.0f, 0.0f);
+    static Vec3f sMarioSetLocalPos = Vec3f(0.0f, -550.0f, 800.0f);
     static const char* sEventCameraName = "\203\137\203\201\201\133\203\127" /* ダメージ */;
 
     static const char* sJointName[7] = {"Tail1", "Tail2", "Tail3", "Tail4", "Tail5", "Tail6", "Tail7"};
@@ -267,9 +267,9 @@ bool DinoPackun::isHitReaction(s32 a1) const {
     return false;
 }
 
-bool DinoPackun::hitScaleJoint(TPos3f* pA1, const JointControllerInfo& rA2) {
-    TVec3f v5(_B8->_C);
-    TVec3f v4;
+bool DinoPackun::hitScaleJoint(Pos3f* pA1, const JointControllerInfo& rA2) {
+    Vec3f v5(_B8->_C);
+    Vec3f v4;
     v4.x = v5.y;
     v4.y = v5.z;
     v4.z = v5.x;
@@ -385,7 +385,7 @@ void DinoPackun::updatePose() {
 }
 
 void DinoPackun::updateFootPrintNerve(s32 a2, s32 a3) {
-    TVec3f side;
+    Vec3f side;
     _BC.getXDir(side);
     if (!(a2 % a3)) {
         addDinoFootPrint< false >(this, mPosition + side * -100.0f + mGravity * -100.0f);
@@ -399,13 +399,13 @@ void DinoPackun::updateFootPrintNerve(s32 a2, s32 a3) {
 void DinoPackun::updateCameraInfo() {
     if (_F4 != -1) {
         _108 = MR::clamp01(_108 + _104);
-        TVec3f v6(0, 0, 0);
-        TVec3f v5;
+        Vec3f v6(0, 0, 0);
+        Vec3f v5;
         _BC.getYDir(v5);
         v6.scaleAdd(300.0f, v5, mPosition);
 
         if (_108 > 0.0f) {
-            TVec3f v4;
+            Vec3f v4;
             mTail->getEndTailPosition(&v4);
             MR::vecBlend(v6, v4, &v6, (0.60f * _108));
         }
@@ -432,7 +432,7 @@ void DinoPackun::updateRunVelocity() {
 }
 
 void DinoPackun::appearStarPiece(s32 num) {
-    TVec3f pos;
+    Vec3f pos;
     MR::copyJointPos(this, "Head", &pos);
     MR::appearStarPieceToDirection(this, pos, -mGravity, num, 50.0f, 60.0f, false);
     MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
@@ -448,27 +448,27 @@ void DinoPackun::resetPosition() {
     MR::resetPosition(this, _DC);
     MR::zeroVelocity(this);
 
-    TPos3f v28;
+    Pos3f v28;
     v28.setQT(_BC, mPosition);
-    TVec3f v27;
+    Vec3f v27;
     v28.mult(::sMarioSetLocalPos, v27);
-    TVec3f v26;
+    Vec3f v26;
     MR::calcGravityVector(this, v27, &v26, nullptr, 0);
 
-    TVec3f v25;
+    Vec3f v25;
     v25 = mPosition - v27;
     MR::makeMtxUpFrontPos(&v28, -v26, v25, v27);
     MR::setPlayerBaseMtx(v28);
 }
 
-void DinoPackun::adjustTailRootPosition(const TVec3f& rDir, f32 ratio) {
-    TVec3f newPos;
+void DinoPackun::adjustTailRootPosition(const Vec3f& rDir, f32 ratio) {
+    Vec3f newPos;
     _BC.transform(rDir, newPos);
     newPos.add(mPosition);
-    TVec3f currPos;
+    Vec3f currPos;
     currPos = mTail->getNode(1)->mPosition;
     DinoPackunTailNode* node = mTail->getNode(1);
-    TVec3f pos = newPos * ratio + currPos * (1.0f - ratio);
+    Vec3f pos = newPos * ratio + currPos * (1.0f - ratio);
     node->mPosition.set(pos);
 }
 

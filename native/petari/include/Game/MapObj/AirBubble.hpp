@@ -16,16 +16,16 @@ public:
     virtual bool receiveMsgPush(HitSensor*, HitSensor*);
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
 
-    void appearMove(const TVec3f&, s32);
+    void appearMove(const Vec3f&, s32);
     void exeWait();
     void exeMove();
     void exeBreak();
     void exeKillWait();
     bool canSpinGet() const;
 
-    TVec3f _8C;
+    Vec3f _8C;
     u8 _98[0xC];
-    TVec3f _A4;
+    Vec3f _A4;
     f32 _B0;
     u8 _B4[0xC];
     f32 mRailMoveSpeed;

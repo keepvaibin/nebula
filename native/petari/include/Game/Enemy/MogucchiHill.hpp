@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class Mogucchi;
 class MogucchiHill;
@@ -34,7 +34,7 @@ public:
     const char* mModelName;
     const char* mJointName;
     const char* mAutoEffectName;
-    TPos3f _9C;
+    Pos3f _9C;
     bool _CC;
     bool _CD;
     bool mHasLightCtrl;
@@ -76,7 +76,7 @@ public:
     MogucchiHillPiece* _90;
     s32 _94;
     s32 _98;
-    TPos3f mReserveMtx;
+    Pos3f mReserveMtx;
     bool _CC;
     f32 _D0;
     f32 _D4;

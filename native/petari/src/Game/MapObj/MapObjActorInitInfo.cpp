@@ -41,7 +41,7 @@ void MapObjActorInitInfo::setupSound(s32 id) {
     mSound = id;
 }
 
-void MapObjActorInitInfo::setupSoundPos(TVec3f* pPos) {
+void MapObjActorInitInfo::setupSoundPos(Vec3f* pPos) {
     mSoundPos = pPos;
 }
 
@@ -58,7 +58,7 @@ void MapObjActorInitInfo::setupHitSensorCallBack() {
     mHasHitSensorCB = true;
 }
 
-void MapObjActorInitInfo::setupHitSensorParam(u16 a1, f32 radius, const TVec3f& rPosition) {
+void MapObjActorInitInfo::setupHitSensorParam(u16 a1, f32 radius, const Vec3f& rPosition) {
     _1C = a1;
     mSensorRadius = radius;
     mSensorPosition.set(rPosition);
@@ -190,7 +190,7 @@ void MapObjActorUtil::setupInitInfoTypical(MapObjActorInitInfo* pInitInfo, const
 
     if (MR::isEqualString("DangerSignBoard", pName)) {
         pInitInfo->setupHitSensor();
-        pInitInfo->setupHitSensorParam(4, 200.0f, TVec3f(0.0f, 200.0f, 0.0f));
+        pInitInfo->setupHitSensorParam(4, 200.0f, Vec3f(0.0f, 200.0f, 0.0f));
     }
 }
 

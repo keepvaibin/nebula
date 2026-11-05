@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class CameraTargetMtx;
 class ModelObj;
@@ -42,7 +42,7 @@ private:
     ModelObj* mScenery;
     ModelObj* mMarioPosDummyModel;
     CameraTargetMtx* mCameraTarget;
-    TMtx34f _A0;
+    Mtx34f _A0;
     bool _D0;
 };
 

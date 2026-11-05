@@ -107,7 +107,7 @@ bool LuigiNPC::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pR
 }
 
 inline void LuigiNPC::setShadowDrop(const char* const hitSensor) {
-    TVec3f offset(0.0f, 0.0f, ::sShadowOffset);
+    Vec3f offset(0.0f, 0.0f, ::sShadowOffset);
     MR::setShadowDropPositionAtJoint(this, nullptr, hitSensor, offset);
 }
 
@@ -189,8 +189,8 @@ void LuigiNPC::initAfterPlacement() {
         return;
     }
 
-    TVec3f front;
-    TVec3f result;
+    Vec3f front;
+    Vec3f result;
     Triangle poly;
 
     MR::calcFrontVec(&front, this);
@@ -386,7 +386,7 @@ void LuigiNPC::exeOnTreeTouch() {
 
 void LuigiNPC::exeOnTreeFall() {
     if (MR::isFirstStep(this)) {
-        TVec3f front;
+        Vec3f front;
 
         MR::onBind(this);
         MR::startAction(this, "TreeHit");
@@ -394,7 +394,7 @@ void LuigiNPC::exeOnTreeFall() {
         MR::calcFrontVec(&front, this);
         MR::addVelocityMoveToDirection(this, front, -::sHitMove);
         MR::addVelocityJump(this, ::sHitJump);
-        TVec3f offset(0.0f, 0.0f, 0.0f);
+        Vec3f offset(0.0f, 0.0f, 0.0f);
         MR::setShadowDropPositionAtJoint(this, nullptr, "Center", offset);
         MR::startSound(this, "SE_SV_LUIGI_FALL");
     }

@@ -62,7 +62,7 @@ void WatchTowerRotateStep::exeMoveStart() {
     MR::startLevelSound(this, "SE_OJ_LV_WATCH_TOWER_ROTATE");
 
     f32 degree = MR::getEaseInValue(getNerveStep(), 0.0f, ::sRotateSpeed, 180.0f);
-    TVec3f upVec;
+    Vec3f upVec;
     MR::calcFrontVec(&upVec, this);
     MR::rotateVecDegree(&mRotateVec, upVec, degree);
 
@@ -74,7 +74,7 @@ void WatchTowerRotateStep::exeMoveStart() {
 }
 
 void WatchTowerRotateStep::exeMove() {
-    TVec3f frontVec;
+    Vec3f frontVec;
     MR::calcFrontVec(&frontVec, this);
     MR::rotateVecDegree(&mRotateVec, frontVec, ::sRotateSpeed);
 
@@ -83,10 +83,10 @@ void WatchTowerRotateStep::exeMove() {
 }
 
 void WatchTowerRotateStep::calcAndSetBaseMtx() {
-    TVec3f frontVec;
+    Vec3f frontVec;
     MR::calcFrontVec(&frontVec, this);
 
-    TPos3f baseMtx;
+    Pos3f baseMtx;
     MR::makeMtxFrontUpPos(&baseMtx, frontVec, mRotateVec, mPosition);
     MR::setBaseTRMtx(this, baseMtx);
 }
@@ -101,7 +101,7 @@ void WatchTowerRotateStep::initLift(const JMapInfoIter& rIter) {
         mLift[i]->mIsCalcOwnMtx = false;
 
         MR::initCollisionParts(mLift[i], "WatchTowerRotateStepLift", getSensor(nullptr), nullptr);
-        MR::initShadowVolumeBox(mLift[i], TVec3f(600.0f, 200.0f, 400.0f), mLift[i]->getBaseMtx());
+        MR::initShadowVolumeBox(mLift[i], Vec3f(600.0f, 200.0f, 400.0f), mLift[i]->getBaseMtx());
         MR::setShadowVolumeStartDropOffset(mLift[i], "WatchTowerRotateStepLift", 300.0f);
         MR::setShadowDropLength(mLift[i], "WatchTowerRotateStepLift", 370.0f);
 
@@ -115,10 +115,10 @@ void WatchTowerRotateStep::initLift(const JMapInfoIter& rIter) {
 
 void WatchTowerRotateStep::attachLift() {
     for (s32 i = 0; i < LIFT_NUM; i++) {
-        TPos3f mtx;
+        Pos3f mtx;
         mtx.set(MR::getJointMtx(this, i + 1));
 
-        TVec3f pos;
+        Vec3f pos;
         mtx.getTrans(pos);
 
         mLift[i]->mPosition.set(pos);

@@ -7,7 +7,7 @@
 #include "Game/Player/MarioSwim.hpp"
 #include "Game/Util/MathUtil.hpp"
 
-bool Mario::doFlipWeak(const TVec3f& rVec) {
+bool Mario::doFlipWeak(const Vec3f& rVec) {
     if (mMovementStates._1B) {
         return false;
     }
@@ -28,7 +28,7 @@ bool Mario::doFlipWeak(const TVec3f& rVec) {
     return false;
 }
 
-bool Mario::faint(const TVec3f& rVec) {
+bool Mario::faint(const Vec3f& rVec) {
     _7C4 = rVec;
     if (!isEnableAddDamage()) {
         return false;
@@ -57,7 +57,7 @@ MarioFaint::MarioFaint(MarioActor* pActor) : MarioState(pActor, MarioStatus_Fain
     mTookDamage = false;
 }
 
-void MarioFaint::setVec(const TVec3f& rVec) {
+void MarioFaint::setVec(const Vec3f& rVec) {
     MR::vecKillElement(rVec, mActor->_240, &_18);
     _18.setLength(mActor->getConst().getTable()->mSlideDistFaint);
     mTimer = 0;

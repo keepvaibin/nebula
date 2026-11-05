@@ -7,7 +7,7 @@ FloaterFloatingForce::~FloaterFloatingForce() {
 }
 
 FloaterFloatingForce::FloaterFloatingForce(LiveActor* pHost, const char* pName) : MapPartsFunction(pHost, "\225\202\227\315" /* 浮力 */), _18(pName), _1C(gZeroVec) {
-    _28 = TVec3f(0.0f, 1.0f, 0.0f);
+    _28 = Vec3f(0.0f, 1.0f, 0.0f);
     mMoveConditionType = 0.0f;
 }
 
@@ -20,7 +20,7 @@ void FloaterFloatingForce::init(const JMapInfoIter& rIter) {
 void FloaterFloatingForce::start() {
     _1C.set(mHost->mPosition);
 
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.set(mHost->getBaseMtx());
     mtx.getYDir(_28);
     MR::normalize(&_28);

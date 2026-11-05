@@ -31,7 +31,7 @@ JAIStream::JAIStream(JAIStreamMgr* streamMgr_, JAISoundStrategyMgr< JAIStream >*
     inner_.mStream.mNebulaOwner = this;
 }
 
-void JAIStream::JAIStreamMgr_startID_(JAISoundID id, s32 streamFileEntry, const TVec3f* posPtr, JAIAudience* audience, int category) {
+void JAIStream::JAIStreamMgr_startID_(JAISoundID id, s32 streamFileEntry, const Vec3f* posPtr, JAIAudience* audience, int category) {
     mCategory = category;
     mStreamFileEntry = streamFileEntry;
     start_JAISound_(id, posPtr, audience);

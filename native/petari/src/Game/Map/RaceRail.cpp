@@ -56,7 +56,7 @@ bool PlayerRacer::updateRacer(const RaceManager* pRaceManager) {
     mPrevPosition.set(mCurrPosition);
     mCurrPosition.set(*MR::getPlayerCenterPos());
 
-    TVec3f railPos;
+    Vec3f railPos;
     MR::calcNearestRailPos(&railPos, racer, *MR::getPlayerCenterPos());
 
     if ((railPos - *MR::getPlayerCenterPos()).length() > ::sRaceJudgeLength) {
@@ -117,16 +117,16 @@ void PlayerRacer::prepRacer(const RaceManager* pRaceManager) {
     MR::moveCoordToStartPos(this);
     MR::moveTransToCurrentRailPos(this);
 
-    TVec3f grav;
+    Vec3f grav;
     MR::calcGravityVector(this, mPosition, &grav, nullptr, 0);
 
-    TPos3f mtx;
-    TVec3f pos;
+    Pos3f mtx;
+    Vec3f pos;
 
     switch (pRaceManager->mCurrentRace) {
     case RaceID_Penguin: {
-        TVec3f s = mPosition - grav * 500.f;
-        TVec3f pos(mPosition);
+        Vec3f s = mPosition - grav * 500.f;
+        Vec3f pos(mPosition);
         MR::getFirstPolyOnLineToWaterSurface(&pos, nullptr, s, grav * 1000.0f);
         pos -= grav * 15.0f;
         MR::makeMtxFrontUpPos(&mtx, MR::getRailDirection(this), -grav, pos);

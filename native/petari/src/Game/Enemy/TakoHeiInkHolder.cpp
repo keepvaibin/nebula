@@ -21,7 +21,7 @@ namespace MR {
         createSceneObj(SceneObj_TakoHeiInkHolder);
     }
 
-    bool spurtTakoHeiInk(const TVec3f& rTrans, const TVec3f& rVelocity) {
+    bool spurtTakoHeiInk(const Vec3f& rTrans, const Vec3f& rVelocity) {
         TakoHeiInk* pInk = MR::getSceneObj< TakoHeiInkHolder >(SceneObj_TakoHeiInkHolder)->getDeadMember();
 
         if (pInk == nullptr) {

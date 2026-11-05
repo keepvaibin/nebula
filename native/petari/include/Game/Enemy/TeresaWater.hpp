@@ -27,8 +27,8 @@ public:
 
     AnimScaleController* _8C;
     WalkerStateBindStarPointer* _90;
-    TVec3f _94;
-    TVec3f _A0;
-    TVec3f _AC;
-    TVec3f* _B8;
+    Vec3f _94;
+    Vec3f _A0;
+    Vec3f _AC;
+    Vec3f* _B8;
 };

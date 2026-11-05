@@ -96,8 +96,8 @@ void JetTurtle::init2(const JMapInfoIter& rIter, s32 param2) {
     MR::connectToSceneNoSilhouettedMapObjStrongLight(this);
 
     initHitSensor(2);
-    MR::addHitSensor(this, "body", ATYPE_JET_TURTLE, 8, 50.0f, TVec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorEye(this, "eye", 8, 1000.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensor(this, "body", ATYPE_JET_TURTLE, 8, 50.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEye(this, "eye", 8, 1000.0f, Vec3f(0.0f, 0.0f, 0.0f));
 
     if (shellType < JETTURTLETYPE_GOLD) {
         MR::startBrk(this, "Koura");
@@ -252,7 +252,7 @@ void JetTurtle::exeWait() {
 
     if (isNerve(GET_NERVE(JetTurtle, JetTurtleNrvTakenReserve))) {
         if (getNerveStep() >= 120) {
-            TVec3f direction = *MR::getPlayerCenterPos() - mPosition;
+            Vec3f direction = *MR::getPlayerCenterPos() - mPosition;
             f32 rate = MR::clamp((getNerveStep() - 120) / 120.0f, 0.0f, 1.0f);
             direction.setLength(mVelocity.length());
             MR::vecBlendSphere(mVelocity, direction, &mVelocity, rate);
@@ -306,9 +306,9 @@ void JetTurtle::appear() {
 
     if (_E1 != 0) {
         if (_92 == 0) {
-            TVec3f gravityVec;
-            TVec3f gravityVec2;
-            TVec3f frontVec;
+            Vec3f gravityVec;
+            Vec3f gravityVec2;
+            Vec3f frontVec;
             MR::calcGravityVectorOrZero(this, mPosition, &gravityVec, nullptr, 0);
             MR::calcFrontVec(&frontVec, this);
             MR::calcGravityVectorOrZero(this, mPosition + frontVec * 100.0f, &gravityVec2, nullptr, 0);
@@ -329,13 +329,13 @@ void JetTurtle::appear() {
 }
 
 void JetTurtle::bound() {
-    TVec3f v24;
+    Vec3f v24;
     MR::calcGravityVector(this, &v24, nullptr, 0);
-    TVec3f v23;
+    Vec3f v23;
     MR::vecKillElement(mVelocity, v24, &v23);
 
     if (MR::isBindedGround(this)) {
-        TVec3f v22;
+        Vec3f v22;
         f32 v3 = MR::vecKillElement(_9C, *MR::getGroundNormal(this), &v22);
 
         if (v3 < 0.0f) {
@@ -344,7 +344,7 @@ void JetTurtle::bound() {
     }
 
     if (MR::isBindedWall(this)) {
-        TVec3f v21;
+        Vec3f v21;
         f32 v6 = MR::vecKillElement(_9C, *MR::getWallNormal(this), &v21);
 
         if (v6 < 0.0f) {
@@ -353,7 +353,7 @@ void JetTurtle::bound() {
     }
 
     if (MR::isBindedRoof(this)) {
-        TVec3f v21;
+        Vec3f v21;
         f32 v6 = MR::vecKillElement(_9C, *MR::getRoofNormal(this), &v21);
 
         if (v6 < 0.0f) {
@@ -375,7 +375,7 @@ void JetTurtle::reset(u32 reason) {
     MR::stopSound(this, "SE_OJ_TURTLE_JET_LAUNCH_W");
     MR::stopSound(this, "SE_OJ_TURTLE_JET_LAUNCH_L");
 
-    if (MR::isInWater(this, TVec3f(0.0f, 0.0f, 0.0f))) {
+    if (MR::isInWater(this, Vec3f(0.0f, 0.0f, 0.0f))) {
         MR::emitEffect(this, "WaterExplosion");
     } else if (reason != 0) {
         MR::emitEffect(this, "Star");
@@ -393,7 +393,7 @@ void JetTurtle::reset(u32 reason) {
         }
     }
 
-    if (MR::isInWater(this, TVec3f(0.0f, 0.0f, 0.0f))) {
+    if (MR::isInWater(this, Vec3f(0.0f, 0.0f, 0.0f))) {
         MR::startSound(this, "SE_OJ_TURTLE_JET_BREAK_W");
         MR::releaseSoundHandle(this, "SE_OJ_TURTLE_JET_BREAK_W");
     } else {
@@ -417,9 +417,9 @@ void JetTurtle::reset(u32 reason) {
 }
 
 void JetTurtle::boundDrop() {
-    TVec3f gravity;
+    Vec3f gravity;
     MR::calcGravityVector(this, &gravity, nullptr, 0);
-    TVec3f horizontal;
+    Vec3f horizontal;
     f32 vertical = MR::vecKillElement(mVelocity, gravity, &horizontal);
 
     if (MR::isBindedGround(this) && vertical > 0.0f) {
@@ -449,7 +449,7 @@ void JetTurtle::exeThrowing() {
             MR::validateHitSensors(this);
             MR::emitEffect(this, "Ignition");
 
-            if (MR::isInWater(this, TVec3f(0.0f, 0.0f, 0.0f))) {
+            if (MR::isInWater(this, Vec3f(0.0f, 0.0f, 0.0f))) {
                 MR::startSound(this, "SE_OJ_TURTLE_JET_LAUNCH_W");
                 MR::startBck(this, "BulletWater");
                 MR::emitEffect(this, "WaterBlur");
@@ -482,18 +482,18 @@ void JetTurtle::exeThrowing() {
             return;
         }
 
-        TVec3f v22;
+        Vec3f v22;
 
         if (_98 != nullptr) {
             if (!_98->mValidByHost) {
                 _98 = nullptr;
             } else {
-                TVec3f v21 = _98->mPosition - mPosition;
+                Vec3f v21 = _98->mPosition - mPosition;
                 MR::normalizeOrZero(&v21);
                 MR::vecBlendSphere(_9C, v21, &_9C, 0.2f);
 
                 if (MR::isBckOneTimeAndStopped(this)) {
-                    if (MR::isInWater(this, TVec3f(0.0f, 0.0f, 0.0f))) {
+                    if (MR::isInWater(this, Vec3f(0.0f, 0.0f, 0.0f))) {
                         MR::startBck(this, "BulletWater");
                     } else {
                         MR::startBck(this, "Bullet");
@@ -545,8 +545,8 @@ void JetTurtle::exeThrowing() {
         }
 
         MtxPtr jointMtx = MR::getJointMtx(this, 0);
-        TVec3f v20(jointMtx[0][1], jointMtx[1][1], jointMtx[2][1]);
-        TVec3f grav;
+        Vec3f v20(jointMtx[0][1], jointMtx[1][1], jointMtx[2][1]);
+        Vec3f grav;
         MR::calcGravityVector(this, &grav, nullptr, 0);
 
         if (MR::isNearZero(grav)) {
@@ -567,11 +567,11 @@ void JetTurtle::exeThrowing() {
             _CC = grav;
         }
 
-        TVec3f v18 = mVelocity.cross(v20);
+        Vec3f v18 = mVelocity.cross(v20);
         v20.cross(v18, mVelocity);
 
         if (!MR::isNearZero(mVelocity)) {
-            TPos3f frontUp;
+            Pos3f frontUp;
             MR::makeMtxFrontUp(&frontUp, mVelocity, v20);
             frontUp.getEulerXYZ(mRotation);
             mRotation.mult(57.295776f);
@@ -602,7 +602,7 @@ void JetTurtle::exeTakenReserve() {
         v2 = 0.25f;
     }
 
-    TVec3f takePos;
+    Vec3f takePos;
     MR::getPlayerTakePos(&takePos);
     mPosition = mPosition * (1.0f - v2) + takePos * v2;
 
@@ -623,7 +623,7 @@ void JetTurtle::exeTakenStart() {
     if (MR::sendMsgTaken(_94, getSensor("body"))) {
         MR::startSystemSE("SE_SY_GET_TURTLE_JET");
 
-        if (!MR::isInWater(this, TVec3f(0.0f, 0.0f, 0.0f))) {
+        if (!MR::isInWater(this, Vec3f(0.0f, 0.0f, 0.0f))) {
             MR::startSoundPlayer("SE_PV_CATCH");
         }
 
@@ -696,7 +696,7 @@ void JetTurtle::exeDrop() {
     MR::deleteEffect(this, "BrakeLamp");
 
     if (MR::isFirstStep(this)) {
-        TVec3f front;
+        Vec3f front;
         MR::calcFrontVec(&front, this);
         mVelocity = -mGravity * 10.0f;
         mVelocity += front * 10.0f;
@@ -732,7 +732,7 @@ void JetTurtle::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     if (isNerve(GET_NERVE(JetTurtle, JetTurtleNrvThrowing)) && !MR::isSensorItem(pReceiver)) {
         if (MR::isSensorEye(pSender)) {
             if (_98 == nullptr && mShellType != 0 && MR::isExistInAttributeGroupSearchTurtle(pReceiver->mHost)) {
-                TVec3f difference = pReceiver->mPosition - pSender->mPosition;
+                Vec3f difference = pReceiver->mPosition - pSender->mPosition;
 
                 if (MR::diffAngleAbs(mVelocity, difference) < 0.5235988f) {
                     MR::normalizeOrZero(&difference);

@@ -17,7 +17,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 #include "Game/System/NebulaArena.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <NebulaGpuTypes.h>
@@ -28,7 +28,7 @@ namespace {
     // runtime/src/render/materials/water_camera.hlsl: the screen (texture 1) warped by the filter texture (texture 0,
     // turned by `rFilterMtx`) 0.05 screen texels per indirect step, less the water's colour; blended by the filter's
     // alpha where above zero, depth neither tested nor written.
-    void sendFilterMaterial(JUTTexture* pFilter, JUTTexture* pScreen, const TMtx34f& rFilterMtx, const Color8& rWater) {
+    void sendFilterMaterial(JUTTexture* pFilter, JUTTexture* pScreen, const Mtx34f& rFilterMtx, const Color8& rWater) {
         NebulaNativeMaterial material;
         NativeShader::init(material, NEBULA_SHADER_WATER_CAMERA, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
                            NEBULA_CULL_NONE);
@@ -123,10 +123,10 @@ void WaterCameraFilter::draw() const {
 
     J3DNativeTarget::take(mScreenTex->mImage);
     loadMaterial();
-    TVec2f pos;
+    Vec2f pos;
     pos.x = 0.0f;
     pos.y = 0.0f;
-    TVec3f* pPlayerCenter = MR::getPlayerCenterPos();
+    Vec3f* pPlayerCenter = MR::getPlayerCenterPos();
     MR::calcScreenPosition(&pos, *pPlayerCenter);
     pos.x /= MR::getScreenWidth();
     pos.y /= MR::getScreenHeight();
@@ -165,28 +165,28 @@ void WaterCameraFilter::loadMaterial() const {
     s32 height = MR::getScreenHeight();
     NebulaMtxOrtho(projection, 0.0f, height, 0.0f, MR::getScreenWidth(), -10000.0f, 10000.0f);
     J3DNativeView::setOrthographic(projection);
-    TMtx34f modelView;
+    Mtx34f modelView;
     modelView.identity();
     J3DNativeShape::setPosition(0, modelView);
     J3DPass::positionMatrix(0);
-    TVec2f screenPos;
+    Vec2f screenPos;
     screenPos.x = 0.0f;
     screenPos.y = 0.0f;
     MR::calcScreenPosition(&screenPos, *MR::getPlayerCenterPos());
     screenPos.x /= MR::getScreenWidth();
     screenPos.y /= MR::getScreenHeight();
-    TVec3f screenPosNorm;
+    Vec3f screenPosNorm;
     MR::calcNormalizedScreenPosition(&screenPosNorm, *MR::getPlayerCenterPos());
-    TMtx34f textureMtx;
+    Mtx34f textureMtx;
     textureMtx.identity();
-    TPos3f translation;
+    Pos3f translation;
     translation.identity();
-    translation.setTrans(TVec3f(-0.5f, -0.5f, 0.0f));
-    TPos3f rotation;
+    translation.setTrans(Vec3f(-0.5f, -0.5f, 0.0f));
+    Pos3f rotation;
     rotation.identity();
     MR::makeMtxRotate(rotation, 0.0f, 0.0f, mWavePhase);
     MR::multMtx(textureMtx, translation, rotation);
-    translation.setTrans(TVec3f(0.5f, 0.5f, 0.0f));
+    translation.setTrans(Vec3f(0.5f, 0.5f, 0.0f));
     MR::multMtx(textureMtx, textureMtx, translation);
     sendFilterMaterial(mFilterTex, mScreenTex, textureMtx,
                        Color8(mWaterColor.r, mWaterColor.g, mWaterColor.b, (s32)(mWaterAlpha)));

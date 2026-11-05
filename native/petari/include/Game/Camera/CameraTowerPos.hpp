@@ -14,7 +14,7 @@ public:
     }
     virtual CamTranslatorBase* createTranslator();
 
-    void setParam(const TVec3f& wPoint, const TVec3f& axis, f32 dist, const TVec2f& angle, f32 angleXRate) {
+    void setParam(const Vec3f& wPoint, const Vec3f& axis, f32 dist, const Vec2f& angle, f32 angleXRate) {
         mWPoint.set(wPoint);
         mAxis.set(axis);
         mDist = dist;
@@ -24,14 +24,14 @@ public:
     }
 
     void calcIdealPose(bool);
-    void arrangeHorizontalPose(const TVec3f&, TVec3f&);
-    void arrangeWatchPos(TVec3f&, const TVec3f&);
+    void arrangeHorizontalPose(const Vec3f&, Vec3f&);
+    void arrangeWatchPos(Vec3f&, const Vec3f&);
 
-    TVec3f mWPoint;
-    TVec3f mAxis;
+    Vec3f mWPoint;
+    Vec3f mAxis;
     f32 mAngleYMaxSpeed;
     f32 mAngleX;
     f32 mDist;
     f32 mAngleXRate;
-    TVec3f mPos;
+    Vec3f mPos;
 };

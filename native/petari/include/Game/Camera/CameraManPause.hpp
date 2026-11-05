@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/Camera/CameraMan.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class CameraManPause : public CameraMan {
 public:
@@ -21,6 +21,6 @@ public:
 
     f32 mDistBase;
     f32 mDistOffset;
-    TVec2f mAngle;
-    TVec3f mBasePos;
+    Vec2f mAngle;
+    Vec3f mBasePos;
 };

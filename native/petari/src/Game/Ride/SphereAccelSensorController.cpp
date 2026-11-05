@@ -1,8 +1,8 @@
 #include "Game/Ride/SphereAccelSensorController.hpp"
 #include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include <JSystem/JMath/JMATrigonometric.hpp>
-#include <JSystem/JMath/JMath.hpp>
+#include <nebula_geometry.hpp>
+
 #include "Game/System/NebulaInput.hpp"
 
 namespace {
@@ -26,7 +26,7 @@ namespace {
     static const f32 sSubAccelDegreeRangeY = 22.5f;
 };  // namespace
 
-inline f32 diffAngleAbs(const TVec2f& rV1, const TVec2f& rV2) {
+inline f32 diffAngleAbs(const Vec2f& rV1, const Vec2f& rV2) {
     f32 orientation = rV1.y * rV2.x - rV1.x * rV2.y;
     f32 angle = MR::acos(rV1.dot(rV2));
     if (orientation < 0.0f) {
@@ -41,7 +41,7 @@ SphereAccelSensorController::SphereAccelSensorController()
       _AC(1.0f), _B0(), _B4(), mPad() {
 }
 
-void SphereAccelSensorController::getPadAcceleration(TVec3f* pAccel) const {
+void SphereAccelSensorController::getPadAcceleration(Vec3f* pAccel) const {
     if (mPad == Pad_Core) {
         MR::getMainTilt(pAccel, PLAYER_1);
     } else {
@@ -65,7 +65,7 @@ bool SphereAccelSensorController::doBrake() const {
     return testBrake();
 }
 
-void SphereAccelSensorController::update(const TVec3f&) {
+void SphereAccelSensorController::update(const Vec3f&) {
 }
 
 void SphereAccelSensorController::clacXY(f32* pX, f32* pY) {
@@ -74,21 +74,21 @@ void SphereAccelSensorController::clacXY(f32* pX, f32* pY) {
     f32 accelRangeY = isMainHand() ? MR::toRadian(::sCoreAccelDegreeRangeY) : MR::toRadian(::sSubAccelDegreeRangeY);
     f32 baseAngleYZ = isMainHand() ? MR::toRadian(::sCoreBaseDegreeYZ) : MR::toRadian(::sSubBaseDegreeYZ);
 
-    TVec3f padAccel;
+    Vec3f padAccel;
     getPadAcceleration(&padAccel);
 
     f32 angleXY = 0.0f;
-    TVec2f accelXY(padAccel.x, MR::abs(padAccel.y));
+    Vec2f accelXY(padAccel.x, MR::abs(padAccel.y));
     if (!accelXY.isZero()) {
         MR::normalizeOrZero(&accelXY);
         angleXY = MR::asin(accelXY.x);
     }
 
     f32 angleYZ = 0.0f;
-    TVec2f accelYZ(-padAccel.y, padAccel.z);
+    Vec2f accelYZ(-padAccel.y, padAccel.z);
     if (!accelYZ.isZero()) {
         MR::normalizeOrZero(&accelYZ);
-        angleYZ = diffAngleAbs(accelYZ, TVec2f(MR::cos(baseAngleYZ), MR::sin(baseAngleYZ)));
+        angleYZ = diffAngleAbs(accelYZ, Vec2f(MR::cos(baseAngleYZ), MR::sin(baseAngleYZ)));
     }
 
     if (MR::abs(angleXY) < accelMargine) {

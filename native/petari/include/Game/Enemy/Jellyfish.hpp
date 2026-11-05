@@ -39,10 +39,10 @@ public:
     AnimScaleController* mController;
     WalkerStateBindStarPointer* mBindStarPtr;
     s32 _94;
-    TVec3f _98;
+    Vec3f _98;
     bool mIsConnectedRail;
     f32 _A8;
     s32 _AC;
     bool _B0;
-    TVec3f _B4;
+    Vec3f _B4;
 };

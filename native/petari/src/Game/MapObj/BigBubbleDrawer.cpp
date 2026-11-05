@@ -4,7 +4,7 @@
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <nebula_game_api.h>
 #include <cstring>
@@ -14,7 +14,7 @@ namespace {
     static Color8 sStageColor0(0xE0E0E0FF);
     Color8 sStageColor1(0xFF000000);
     NebulaNativeMaterial sMaterial;
-    TVec3f sEnvMatTrans(1.0f, 1.0f, 1.5f);
+    Vec3f sEnvMatTrans(1.0f, 1.0f, 1.5f);
 };  // namespace
 
 BigBubbleDrawer::BigBubbleDrawer() {
@@ -51,7 +51,7 @@ void BigBubbleDrawer::setUpStage() const {
                        NEBULA_CULL_BACK);
     NativeShader::setColor(material, 0, ::sStageColor0.r, ::sStageColor0.g, ::sStageColor0.b, ::sStageColor0.a);
     NativeShader::setColor(material, 4, ::sStageColor1.r, ::sStageColor1.g, ::sStageColor1.b, ::sStageColor1.a);
-    TPos3f env;
+    Pos3f env;
     env.set(MR::getCameraViewMtx());
     env.setTrans(::sEnvMatTrans);
     for (u32 row = 0; row < 3; row++) {

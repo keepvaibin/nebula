@@ -9,7 +9,7 @@
 #include "Game/Util/ScreenUtil.hpp"
 
 namespace {
-    const TVec3f sNoOffset(0.0f, 0.0f, 0.0f);
+    const Vec3f sNoOffset(0.0f, 0.0f, 0.0f);
 }  // namespace
 
 namespace MR {
@@ -57,20 +57,20 @@ namespace MR {
         pCtrl->setMessageArg(arg);
     }
 
-    TalkMessageCtrl* createTalkCtrl(LiveActor* pActor, const JMapInfoIter& rIter, const char* pMessageID, const TVec3f& rOffset, MtxPtr pMtx) {
+    TalkMessageCtrl* createTalkCtrl(LiveActor* pActor, const JMapInfoIter& rIter, const char* pMessageID, const Vec3f& rOffset, MtxPtr pMtx) {
         TalkMessageCtrl* pCtrl = new TalkMessageCtrl(pActor, rOffset, pMtx);
         pCtrl->createMessage(rIter, pMessageID);
         return pCtrl;
     }
 
-    TalkMessageCtrl* createTalkCtrlDirect(LiveActor* pActor, const JMapInfoIter& rIter, const char* pMessageID, const TVec3f& rOffset, MtxPtr pMtx) {
+    TalkMessageCtrl* createTalkCtrlDirect(LiveActor* pActor, const JMapInfoIter& rIter, const char* pMessageID, const Vec3f& rOffset, MtxPtr pMtx) {
         TalkMessageCtrl* pCtrl = new TalkMessageCtrl(pActor, rOffset, pMtx);
         pCtrl->createMessageDirect(rIter, pMessageID);
         return pCtrl;
     }
 
     TalkMessageCtrl* createTalkCtrlDirectOnRootNodeAutomatic(LiveActor* pActor, const JMapInfoIter& rIter, const char* pMessageID,
-                                                             const TVec3f& rOffset, MtxPtr pMtx) {
+                                                             const Vec3f& rOffset, MtxPtr pMtx) {
         TalkMessageCtrl* pCtrl = createTalkCtrlDirect(pActor, rIter, pMessageID, rOffset, pMtx);
         onRootNodeAutomatic(pCtrl);
         return pCtrl;
@@ -314,14 +314,14 @@ namespace MR {
         return pCtrl->mMtx;
     }
 
-    const TVec3f& getMessageBalloonFollowOffset(const TalkMessageCtrl* pCtrl) {
+    const Vec3f& getMessageBalloonFollowOffset(const TalkMessageCtrl* pCtrl) {
         if (pCtrl == nullptr) {
             return sNoOffset;
         }
         return pCtrl->mMsgBalloonFollowOffs;
     }
 
-    void setMessageBalloonFollowOffset(TalkMessageCtrl* pCtrl, const TVec3f& rOffs) {
+    void setMessageBalloonFollowOffset(TalkMessageCtrl* pCtrl, const Vec3f& rOffs) {
         if (pCtrl == nullptr) {
             return;
         }

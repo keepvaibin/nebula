@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/Util/Array.hpp"
-#include <JSystem/JGeometry.hpp>
+#include <nebula_geometry.hpp>
 
 namespace nw4r {
     namespace lyt {
@@ -31,5 +31,5 @@ public:
     s32 mPaneIndex;
     MR::AssignableArray< LayoutAnmPlayer* > mAnmPlayerArray;
     s32 mFollowType;
-    const TVec2f* mFollowPos;
+    const Vec2f* mFollowPos;
 };

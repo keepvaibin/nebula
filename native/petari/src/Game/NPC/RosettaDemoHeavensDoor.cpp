@@ -23,7 +23,7 @@ RosettaDemoHeavensDoor1::RosettaDemoHeavensDoor1(Rosetta* pHost, const JMapInfoI
 
     mLightDomeModel = MR::createPartsModelNpc(mHost, "\203\211\203\103\203\147\203\150\201\133\203\200" /* ライトドーム */, "LightDome", nullptr);
     mLightDomeModel->makeActorAppeared();
-    mLightDomeModel->initFixedPosition(TVec3f(0.0f, -13.0f, -30.0f), TVec3f(0.0f, 0.0f, 0.0f), "Center");
+    mLightDomeModel->initFixedPosition(Vec3f(0.0f, -13.0f, -30.0f), Vec3f(0.0f, 0.0f, 0.0f), "Center");
     MR::startBrk(mLightDomeModel, "LightDome");
     MR::startBck(mLightDomeModel, "Appear");
 
@@ -35,7 +35,7 @@ RosettaDemoHeavensDoor1::RosettaDemoHeavensDoor1(Rosetta* pHost, const JMapInfoI
     DemoFunction::registerDemoTalkMessageCtrl(mHost, mHost->mMsgCtrl);
 
     mLightHaloModel = MR::createPartsModelNpc(mHost, "\203\211\203\103\203\147\214\343\214\365" /* ライト後光 */, "DomeHalo", nullptr);
-    mLightHaloModel->initFixedPosition(TVec3f(0.0f, 25.14f, -6.16f), TVec3f(0.0f, 0.0f, 0.0f), "Center");
+    mLightHaloModel->initFixedPosition(Vec3f(0.0f, 25.14f, -6.16f), Vec3f(0.0f, 0.0f, 0.0f), "Center");
     mLightHaloModel->makeActorAppeared();
 
     if (MR::isDemoCast(mHost, nullptr)) {

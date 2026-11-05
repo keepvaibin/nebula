@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/Util/Array.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class EffectSystem;
 class ModelManager;
@@ -13,7 +13,7 @@ public:
     MultiSceneEffectKeeper(const char*, ModelManager*, int, const char*);
 
     void init(const MultiSceneActor*, const EffectSystem*);
-    void add(const char*, const TVec3f*, const TVec3f*, const TVec3f*, const char*);
+    void add(const char*, const Vec3f*, const Vec3f*, const Vec3f*, const char*);
     void add(const char*, MtxPtr, const char*);
     MultiEmitter* create(const char*, EffectSystem*);
     void deleteAll();

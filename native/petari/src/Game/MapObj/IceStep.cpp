@@ -29,7 +29,7 @@ void IceStep::init(const JMapInfoIter& rIter) {
 
     f32 radius = 90.0f * mScale.x;
     initHitSensor(1);
-    MR::addHitSensorMapObj(this, "body", 8, radius, TVec3f(0.0f, radius, 0.0f));
+    MR::addHitSensorMapObj(this, "body", 8, radius, Vec3f(0.0f, radius, 0.0f));
 
     NebulaMtxIdentity(_8C);
 
@@ -84,7 +84,7 @@ void IceStep::exeHit() {
     }
 }
 
-void IceStep::setOn(u32 a1, const TVec3f& rPosition, const TVec3f& rRotation) {
+void IceStep::setOn(u32 a1, const Vec3f& rPosition, const Vec3f& rRotation) {
     mPosition = rPosition;
     mRotation = rRotation;
 
@@ -96,10 +96,10 @@ void IceStep::setOn(u32 a1, const TVec3f& rPosition, const TVec3f& rRotation) {
         scale -= 10;
     }
 
-    TVec3f upVec;
+    Vec3f upVec;
     MR::calcUpVec(&upVec, this);
 
-    TVec3f offset = upVec * static_cast< f32 >(scale) * 0.2f;
+    Vec3f offset = upVec * static_cast< f32 >(scale) * 0.2f;
     mPosition = rPosition + offset;
 
     MR::startBck(this, "Start");

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/NameObj/NameObj.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class CameraShakeTask;
 
@@ -35,10 +35,10 @@ public:
     void updateSinglyHorizontalTask();
     void updateInfinityTask();
     void setOffset();
-    void addSinglyVerticalTaskOffset(TVec2f*);
-    void addSinglyHorizontalTaskOffset(TVec2f*);
-    void addInfinityTaskOffset(TVec2f*);
-    void adjustOffsetToScreen(TVec2f*);  // TODO
+    void addSinglyVerticalTaskOffset(Vec2f*);
+    void addSinglyHorizontalTaskOffset(Vec2f*);
+    void addInfinityTaskOffset(Vec2f*);
+    void adjustOffsetToScreen(Vec2f*);  // TODO
     void startInfinity(u32, f32, f32);
 
     CameraShakeTask* mVerticalTasks[NR_VERTICAL_TASKS];

@@ -6,13 +6,13 @@
 #include "Game/Player/MarioState.hpp"
 #include "Game/Util/MathUtil.hpp"
 
-bool Mario::doFlipJump(const TVec3f& rVec) {
+bool Mario::doFlipJump(const Vec3f& rVec) {
     if (isAnimationRun("\225\307\202\315\202\266\202\253" /* 壁はじき */)) {
         return false;
     }
 
     stopWalk();
-    TVec3f vec(rVec);
+    Vec3f vec(rVec);
     vec.setLength(mActor->mConst->getTable()->mWallSpinFlipGround);
     vec -= getGravityVec()->scaleInline(mActor->mConst->getTable()->mWallSpinHopGround);
     tryForcePowerJump(vec, true);
@@ -27,8 +27,8 @@ bool Mario::doFlipJump(const TVec3f& rVec) {
     return true;
 }
 
-bool Mario::doFlipBackRoll(const TVec3f& rVec) {
-    TVec3f vec20;
+bool Mario::doFlipBackRoll(const Vec3f& rVec) {
+    Vec3f vec20;
     MR::vecKillElement(rVec, getAirGravityVec(), &vec20);
 
     if (doFlipLarge(vec20)) {
@@ -37,7 +37,7 @@ bool Mario::doFlipBackRoll(const TVec3f& rVec) {
 
         mDamage->setStrings("\214\343\223\135\202\323\202\301\202\306\202\321\213\363\222\206" /* 後転ふっとび空中 */, "\214\343\223\135\202\323\202\301\202\306\202\321\222\205\222\156" /* 後転ふっとび着地 */);
 
-        TVec3f vec28;
+        Vec3f vec28;
         MR::vecKillElement(rVec, getAirGravityVec(), &vec28);
         setFrontVecKeepUp(-vec28, static_cast< u32 >(12));
 
@@ -71,8 +71,8 @@ bool MarioFlip::update() {
     }
 
     _12++;
-    TVec3f velocity(_18);
-    TVec3f direction(_18);
+    Vec3f velocity(_18);
+    Vec3f direction(_18);
     MR::normalizeOrZero(&direction);
     f32 control;
     if (_12 < 30) {
@@ -81,7 +81,7 @@ bool MarioFlip::update() {
         control = 1.0f;
     }
 
-    TVec3f lateral;
+    Vec3f lateral;
     f32 along = MR::vecKillElement(getWorldPadDir(), direction, &lateral);
     if (along <= 0.0f) {
         _18 += direction * mActor->mConst->getTable()->mFlipFriction3 * along * control;
@@ -139,8 +139,8 @@ bool MarioFlip::update() {
     _24 = MR::normalizeAngleAbs(_24);
     setYangleOffset(_24);
     if (getPlayer()->mMovementStates._8 || getPlayer()->mMovementStates._1A || getPlayer()->mMovementStates._19) {
-        TVec3f normal(getPlayer()->getWallNorm());
-        TVec3f tangent;
+        Vec3f normal(getPlayer()->getWallNorm());
+        Vec3f tangent;
         f32 incoming = MR::vecKillElement(_18, normal, &tangent);
         if (incoming < 0.0f) {
             stopAnimation(nullptr);
@@ -165,7 +165,7 @@ bool MarioFlip::update() {
     return true;
 }
 
-bool Mario::doFlipRot(const TVec3f& rVec) {
+bool Mario::doFlipRot(const Vec3f& rVec) {
     getCurrentStatus();
     if (getCurrentStatus() == MarioStatus_FireDamage) {
         return false;
@@ -186,7 +186,7 @@ bool Mario::doFlipRot(const TVec3f& rVec) {
     return true;
 }
 
-bool Mario::doFlipLarge(const TVec3f& rVec) {
+bool Mario::doFlipLarge(const Vec3f& rVec) {
     if (getCurrentStatus() == MarioStatus_Damage) {
         return false;
     }
@@ -212,7 +212,7 @@ MarioFlip::MarioFlip(MarioActor* pActor) : MarioState(pActor, MarioStatus_Flip),
     _28 = 0.0f;
 }
 
-void MarioFlip::setVec(const TVec3f& rVec) {
+void MarioFlip::setVec(const Vec3f& rVec) {
     MR::vecKillElement(rVec, mActor->_240, &_18);
 
     if (mActor->_3E5) {

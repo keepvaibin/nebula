@@ -37,11 +37,11 @@ JumpBeamer::JumpBeamer(const char* pName) : JumpEmitter(pName) {
 
 void JumpBeamer::control() {
     PartsModel* head = mHeadModel;
-    TMtx34f mtx;
+    Mtx34f mtx;
     mtx.identity();
-    MR::makeMtxTRS(mtx, TVec3f(0.0f, 0.0f, 0.0f), head->mRotation, head->mScale);
+    MR::makeMtxTRS(mtx, Vec3f(0.0f, 0.0f, 0.0f), head->mRotation, head->mScale);
     _90.setInline(mBodyJointMtx);
-    TMtx34f v5;
+    Mtx34f v5;
     v5.concat(_90, mtx);
     _90.setInline(v5);
     updateEventCamera();
@@ -55,8 +55,8 @@ void JumpBeamer::init(const JMapInfoIter& rIter) {
     MR::connectToSceneEnemy(this);
     MR::initLightCtrl(this);
     initHitSensor(2);
-    MR::addHitSensorMtx(this, "Jump", ATYPE_PLAYER_AUTO_JUMP, 8, 145.0f, MR::getJointMtx(mHeadModel, "SpringJoint3"), TVec3f(0.0f, -100.0f, 0.0f));
-    MR::addHitSensorMtxEnemy(this, "Body", 8, 145.0f, MR::getJointMtx(this, "Body"), TVec3f(0.0f, 35.0f, 0.0f));
+    MR::addHitSensorMtx(this, "Jump", ATYPE_PLAYER_AUTO_JUMP, 8, 145.0f, MR::getJointMtx(mHeadModel, "SpringJoint3"), Vec3f(0.0f, -100.0f, 0.0f));
+    MR::addHitSensorMtxEnemy(this, "Body", 8, 145.0f, MR::getJointMtx(this, "Body"), Vec3f(0.0f, 35.0f, 0.0f));
     getSensor("Body")->setType(ATYPE_BEGOMAN);
     getSensor("Body")->validate();
     getSensor("Jump")->invalidate();
@@ -106,7 +106,7 @@ void JumpBeamer::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
 bool JumpBeamer::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
     if (MR::isMsgPlayerTrample(msg)) {
         if (pReceiver->isType(ATYPE_PLAYER_AUTO_JUMP)) {
-            TVec3f up;
+            Vec3f up;
             MR::calcUpVec(&up, this);
             MR::setPlayerJumpVec(up);
             startEventCamera();

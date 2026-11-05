@@ -1,7 +1,7 @@
-/* The native math library: 3x4 and 4x4 matrices, vectors and quaternions (requirement C-08). The small functions are
-   inline here, so the game's ~1,000 call sites pay no call; the rest are in nebula_math.c. Each keeps the console's
-   results: the same operations grouped as the console grouped them, every input read before any output is written
-   (an output may be an input). Square roots and their reciprocals are exact: the same bits on every CPU. */
+/* 3x4 and 4x4 matrices, vectors and quaternions. The small functions are inline here, so the game's ~1,000 call sites
+   pay no call; the rest are in nebula_math.c. Operations keep their grouping, since positions depend on the bits, and
+   read every input before writing any output (an output may be an input). Square roots and their reciprocals are
+   exact: the same bits on every CPU. */
 #ifndef NEBULA_MATH_H
 #define NEBULA_MATH_H
 
@@ -57,7 +57,7 @@ void NebulaMtxPerspective(Mtx44 m, f32 fovY, f32 aspect, f32 n, f32 f);
 void NebulaMtxOrtho(Mtx44 m, f32 t, f32 b, f32 l, f32 r, f32 n, f32 f);
 void NebulaQuatFromMtx(Quaternion* r, const Mtx m);
 void NebulaQuatSlerp(const Quaternion* p, const Quaternion* q, Quaternion* r, f32 t);
-/* A rotation about the x, y or z axis by the game's own sine and cosine tables (JMath; defined with the game). */
+/* A rotation about the x, y or z axis by the game's own sine and cosine tables (defined with the game). */
 void NebulaMtxRotRad(Mtx m, char axis, f32 rad);
 
 static inline void NebulaMtxIdentity(Mtx m) {
@@ -104,11 +104,69 @@ static inline void NebulaMtxConcat(const Mtx a, const Mtx b, Mtx ab) {
     f32 r[3][4];
     for (int i = 0; i < 3; i++) {
         for (int j = 0; j < 4; j++) {
-            r[i][j] = (a[i][0] * b[0][j] + a[i][1] * b[1][j]) + a[i][2] * b[2][j];
+            r[i][j] = (a[i][0] * b[0][j] + a[i][1] * b[1][j]) + a[i][2] * b[2][j] + (j == 3 ? a[i][3] : 0.0f);
         }
-        r[i][3] += a[i][3];
     }
     __builtin_memcpy(ab, r, sizeof(r));
+#endif
+}
+
+/* ab[i] = a * b[i] for count consecutive 3x4 matrices. Each product is complete before it is stored, so ab may be b.
+   Only the translation column adds a's translation: a sum of -0 stays -0 in the other three. */
+static inline void NebulaMtxArrayConcat(const Mtx a, const f32 (*b)[4], f32 (*ab)[4], u32 count) {
+#if defined(__SSE2__)
+    __m128 ax[3], ay[3], az[3], at[3];
+    for (int i = 0; i < 3; i++) {
+        const __m128 row = _mm_loadu_ps(a[i]);
+        ax[i] = _mm_shuffle_ps(row, row, 0x00);
+        ay[i] = _mm_shuffle_ps(row, row, 0x55);
+        az[i] = _mm_shuffle_ps(row, row, 0xAA);
+        at[i] = _mm_shuffle_ps(row, row, 0xFF);
+    }
+    const __m128 lane3 = _mm_castsi128_ps(_mm_set_epi32(-1, 0, 0, 0));
+    for (u32 n = 0; n < count; n++, b += 3, ab += 3) {
+        const __m128 b0 = _mm_loadu_ps(b[0]), b1 = _mm_loadu_ps(b[1]), b2 = _mm_loadu_ps(b[2]);
+        __m128 r[3];
+        for (int i = 0; i < 3; i++) {
+            __m128 t = _mm_mul_ps(ax[i], b0);
+            t = _mm_add_ps(t, _mm_mul_ps(ay[i], b1));
+            t = _mm_add_ps(t, _mm_mul_ps(az[i], b2));
+            r[i] = _mm_or_ps(_mm_andnot_ps(lane3, t), _mm_and_ps(lane3, _mm_add_ps(t, at[i])));
+        }
+        _mm_storeu_ps(ab[0], r[0]);
+        _mm_storeu_ps(ab[1], r[1]);
+        _mm_storeu_ps(ab[2], r[2]);
+    }
+#elif defined(NEBULA_MATH_NEON)
+    float32x4_t row[3];
+    for (int i = 0; i < 3; i++) {
+        row[i] = vld1q_f32(a[i]);
+    }
+    const uint32x4_t lane3 = vsetq_lane_u32(0xFFFFFFFFu, vdupq_n_u32(0u), 3);
+    for (u32 n = 0; n < count; n++, b += 3, ab += 3) {
+        const float32x4_t b0 = vld1q_f32(b[0]), b1 = vld1q_f32(b[1]), b2 = vld1q_f32(b[2]);
+        float32x4_t r[3];
+        for (int i = 0; i < 3; i++) {
+            float32x4_t t = vmulq_laneq_f32(b0, row[i], 0);
+            t = vaddq_f32(t, vmulq_laneq_f32(b1, row[i], 1));
+            t = vaddq_f32(t, vmulq_laneq_f32(b2, row[i], 2));
+            r[i] = vbslq_f32(lane3, vaddq_f32(t, vdupq_laneq_f32(row[i], 3)), t);
+        }
+        vst1q_f32(ab[0], r[0]);
+        vst1q_f32(ab[1], r[1]);
+        vst1q_f32(ab[2], r[2]);
+    }
+#else
+    for (u32 n = 0; n < count; n++, b += 3, ab += 3) {
+        f32 r[3][4];
+        for (int i = 0; i < 3; i++) {
+            for (int j = 0; j < 4; j++) {
+                r[i][j] = (a[i][0] * b[0][j] + a[i][1] * b[1][j]) + a[i][2] * b[2][j];
+            }
+            r[i][3] += a[i][3];
+        }
+        __builtin_memcpy(ab, r, sizeof(r));
+    }
 #endif
 }
 
@@ -258,7 +316,7 @@ static inline f32 NebulaVecSquareDistance(const Vec* a, const Vec* b) {
     return (dx * dx + dy * dy) + dz * dz;
 }
 
-/* No zero test, as on the console: a zero vector normalises to NaN. */
+/* No zero test: a zero vector normalises to NaN. */
 static inline void NebulaVecNormalize(const Vec* src, Vec* dst) {
     const f32 x = src->x, y = src->y, z = src->z;
     const f32 r = 1.0f / sqrtf((x * x + z * z) + y * y);

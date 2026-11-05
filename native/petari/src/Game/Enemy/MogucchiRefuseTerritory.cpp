@@ -10,6 +10,6 @@ void MogucchiRefuseTerritory::init(const JMapInfoIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::connectToSceneEnemyMovement(this);
     initHitSensor(1);
-    MR::addHitSensor(this, "body", 0x20, 8, (100.0f * mScale.x), TVec3f(0.0f));
+    MR::addHitSensor(this, "body", 0x20, 8, (100.0f * mScale.x), Vec3f(0.0f));
     makeActorAppeared();
 }

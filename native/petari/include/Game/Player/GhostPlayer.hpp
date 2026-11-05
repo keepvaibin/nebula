@@ -16,8 +16,8 @@ class XanimePlayer;
 f32 getShiftRatio(s8 shiftValue);
 
 namespace MR {
-    void convToFloat(TVec3s&, s8, TVec3f*);
-    void convToFloat(TVec3Sc&, s8, TVec3f*);
+    void convToFloat(Vec3s&, s8, Vec3f*);
+    void convToFloat(Vec3Sc&, s8, Vec3f*);
     void convToFloat(s16, s8, f32*);
     void convToFloat(s8, s8, f32*);
 };  // namespace MR
@@ -57,10 +57,10 @@ public:
     XanimePlayer* mXanimePlayerUpper;
     Mtx mTargetRotationMtx;
     f32 mAnimTrackWeights[4];
-    TVec3f mStartPos;
+    Vec3f mStartPos;
     u32 _EC[3];  // unused
-    TVec3f mTargetRotation;
-    TVec3f mInitialDirection;
+    Vec3f mTargetRotation;
+    Vec3f mInitialDirection;
     bool mIsHidden;
     bool mWaitingToStart;
     bool _112;

@@ -38,7 +38,7 @@ namespace NrvTamakoroTutorial {
 };  // namespace NrvTamakoroTutorial
 
 namespace {
-    static const TVec3f hRaiseAcc = TVec3f(0.0f, -1.0f, 0.0f);
+    static const Vec3f hRaiseAcc = Vec3f(0.0f, -1.0f, 0.0f);
     static const f32 hRaiseCheckDegree = 30.0f;
     static const f32 hDistToStartTutorial = 400.0f;
 };  // namespace
@@ -52,7 +52,7 @@ void TamakoroTutorial::init(const JMapInfoIter& rIter) {
     initModelManagerWithAnm("SignBoard", nullptr, false);
     MR::connectToSceneNpc(this);
     initHitSensor(2);
-    MR::addHitSensorEnemy(this, "body", 16, 100.0f, TVec3f(0.0f, 100.0f, 0.0f));
+    MR::addHitSensorEnemy(this, "body", 16, 100.0f, Vec3f(0.0f, 100.0f, 0.0f));
     MR::addHitSensorCallbackMapObjSimple(this, "push", 16, 200.0f);
     initEffectKeeper(1, nullptr, false);
     MR::addEffectHitNormal(this, nullptr);
@@ -66,13 +66,13 @@ void TamakoroTutorial::init(const JMapInfoIter& rIter) {
     MR::getJMapInfoArg0NoInit(rIter, &omitTutorial);
 
     if (omitTutorial == -1) {
-        mTalkCtrl = MR::createTalkCtrlDirect(this, rIter, "Common_TamakoroTutorial000", TVec3f(0.0f, 0.0f, 0.0f), nullptr);
+        mTalkCtrl = MR::createTalkCtrlDirect(this, rIter, "Common_TamakoroTutorial000", Vec3f(0.0f, 0.0f, 0.0f), nullptr);
 
         initNerve(GET_NERVE(TamakoroTutorial, HostTypeNrvFirst));
 
         _A5 = false;
     } else {
-        mTalkCtrl = MR::createTalkCtrl(this, rIter, "SignBoard", TVec3f(0.0f, 0.0f, 0.0f), nullptr);
+        mTalkCtrl = MR::createTalkCtrl(this, rIter, "SignBoard", Vec3f(0.0f, 0.0f, 0.0f), nullptr);
 
         initNerve(GET_NERVE(TamakoroTutorial, HostTypeNrvWait));
 
@@ -82,11 +82,11 @@ void TamakoroTutorial::init(const JMapInfoIter& rIter) {
         mHost->startRide();
     }
 
-    mTalkCtrlAutomatic = MR::createTalkCtrlDirectOnRootNodeAutomatic(this, rIter, "Common_TamakoroTutorial007", TVec3f(0.0f, 0.0f, 0.0f), nullptr);
+    mTalkCtrlAutomatic = MR::createTalkCtrlDirectOnRootNodeAutomatic(this, rIter, "Common_TamakoroTutorial007", Vec3f(0.0f, 0.0f, 0.0f), nullptr);
 
-    MR::setMessageBalloonFollowOffset(mTalkCtrl, TVec3f(0.0f, 180.0f, 0.0f));
+    MR::setMessageBalloonFollowOffset(mTalkCtrl, Vec3f(0.0f, 180.0f, 0.0f));
     MR::setDistanceToTalk(mTalkCtrl, ::hDistToStartTutorial);
-    MR::setMessageBalloonFollowOffset(mTalkCtrlAutomatic, TVec3f(0.0f, 180.0f, 0.0f));
+    MR::setMessageBalloonFollowOffset(mTalkCtrlAutomatic, Vec3f(0.0f, 180.0f, 0.0f));
     MR::setDistanceToTalk(mTalkCtrlAutomatic, ::hDistToStartTutorial);
     MR::calcGravity(this);
 }
@@ -330,9 +330,9 @@ bool TamakoroTutorial::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSe
 
         if (isNerve(GET_NERVE(TamakoroTutorial, HostTypeNrvWait)) || isNerve(GET_NERVE(TamakoroTutorial, HostTypeNrvRecoverFront)) ||
             isNerve(GET_NERVE(TamakoroTutorial, HostTypeNrvRecoverBack))) {
-            TVec3f v1 = pSender->mPosition;
+            Vec3f v1 = pSender->mPosition;
             v1 -= pReceiver->mPosition;
-            TVec3f v2;
+            Vec3f v2;
 
             MR::calcFrontVec(&v2, this);
 
@@ -358,9 +358,9 @@ bool TamakoroTutorial::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSe
 }
 
 void TamakoroTutorial::updateHitSensor(HitSensor* pSensor) {
-    TVec3f upVec;
+    Vec3f upVec;
     MR::calcUpVec(&upVec, this);
-    TVec3f vHostToPlayer(*MR::getPlayerCenterPos());
+    Vec3f vHostToPlayer(*MR::getPlayerCenterPos());
     vHostToPlayer -= mHost->mPosition;
 
     f32 dot = upVec.dot(vHostToPlayer);

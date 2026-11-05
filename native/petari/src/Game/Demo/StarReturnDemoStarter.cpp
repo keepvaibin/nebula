@@ -268,9 +268,9 @@ void StarReturnDemoStarter::exeFlyWaitGrandStar() {
 }
 
 void StarReturnDemoStarter::exeFall() {
-    TVec3f down = TVec3f(0.0f, -1.0f, 0.0f);
+    Vec3f down = Vec3f(0.0f, -1.0f, 0.0f);
 
-    TVec3f position;
+    Vec3f position;
     mTransform.getTrans(position);
 
     if (MR::isFirstStep(this)) {
@@ -278,12 +278,12 @@ void StarReturnDemoStarter::exeFall() {
         MR::startBckPlayer("Fall");
         mPowerStar->kill();
 
-        TVec3f scaled;
+        Vec3f scaled;
         scaled.scale(3000.0f, down);
         MR::getFirstPolyOnLineToMap(&mPosition, nullptr, position, scaled);
     }
 
-    TVec3f offset;
+    Vec3f offset;
     offset.scale(1.8f * getNerveStep(), down);
 
     offset.y = MR::max(offset.y, -35.0f);

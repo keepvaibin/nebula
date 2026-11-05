@@ -91,12 +91,12 @@ CameraTargetObj* CameraRailFollow::calc() {
     mRailRider->setCoord(mRailCoord);
     CameraLocalUtil::setPos(this, mRailRider->mCurPos);
 
-    TVec3f watchPoint;
+    Vec3f watchPoint;
     CameraLocalUtil::makeWatchPoint(&watchPoint, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
     CameraLocalUtil::setWatchPos(this, watchPoint);
 
-    TPos3f mtx = mZoneMatrix;
-    TVec3f up(0.0f, 1.0f, 0.0f);
+    Pos3f mtx = mZoneMatrix;
+    Vec3f up(0.0f, 1.0f, 0.0f);
     mtx.mult33(up);
     CameraLocalUtil::setUpVecAndWatchUpVec(this, up);
 

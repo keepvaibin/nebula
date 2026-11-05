@@ -40,6 +40,6 @@ public:
 
     SpinHitController* mSpinHitController;
     AnimScaleController* mScaleController;
-    TVec3f _94;
-    TVec3f _A0;
+    Vec3f _94;
+    Vec3f _A0;
 };

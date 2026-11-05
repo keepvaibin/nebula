@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 
@@ -38,20 +38,20 @@ namespace MR {
     void onEmitEffectSyncClipping(LiveActor*, const char*);
     void onForceDeleteEffectSyncClipping(LiveActor*, const char*);
     void setEffectName(LiveActor*, const char*, const char*);
-    void setEffectHostSRT(LiveActor*, const char*, const TVec3f*, const TVec3f*, const TVec3f*);
+    void setEffectHostSRT(LiveActor*, const char*, const Vec3f*, const Vec3f*, const Vec3f*);
     void setEffectHostMtx(LiveActor*, const char*, MtxPtr);
     void setEffectBaseScale(LiveActor*, const char*, f32);
-    void setEffectLocalScale(LiveActor*, const char*, const TVec3f&);
+    void setEffectLocalScale(LiveActor*, const char*, const Vec3f&);
     void setEffectColor(LiveActor*, const char*, u8, u8, u8, u8, u8, u8);
     void setEffectPrmColor(LiveActor*, const char*, u8, u8, u8);
     void setEffectEnvColor(LiveActor*, const char*, u8, u8, u8);
-    void emitEffectHit(LiveActor*, const TVec3f&, const char*);
-    void emitEffectHit(LiveActor*, const TVec3f&, const TVec3f&, const char*);
+    void emitEffectHit(LiveActor*, const Vec3f&, const char*);
+    void emitEffectHit(LiveActor*, const Vec3f&, const Vec3f&, const char*);
     void emitEffectHit(LiveActor*, MtxPtr, const char*);
     void emitEffectHitBetweenSensors(LiveActor*, const HitSensor*, const HitSensor*, f32, const char*);
     void initEffectAfterPlacement(LiveActor*);
     void updateEffectFloorCode(LiveActor*, const Triangle*);
-    void updateEffectFloorCodeLineToMap(LiveActor*, const TVec3f&, const TVec3f&);
+    void updateEffectFloorCodeLineToMap(LiveActor*, const Vec3f&, const Vec3f&);
     void updateEffectFloorCodeLineToMap(LiveActor*, f32, f32);
     void initEffectSyncBck(LiveActor*, const char*, const char* const*);
     void addEffectHitNormal(LiveActor*, const char*);

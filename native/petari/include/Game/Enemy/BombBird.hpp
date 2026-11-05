@@ -50,7 +50,7 @@ public:
 
     MR::FixedArray< BombBirdBomb*, 3 > mBombs;
     BombBirdBomb* mHeldBomb;
-    TVec3f mFront;
+    Vec3f mFront;
     bool mSearchPlayer;
     bool mHoldBomb;
     FixedPosition* mFixedPos;

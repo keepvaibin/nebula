@@ -599,10 +599,10 @@ BezierSurface::BezierSurface(s32 divideLevel, u32 a1)
     s32 numPoints = ::sTrianglePatchTableGroup[mDivideLevel].mNumPoints;
 
     if ((a1 & 4) != 0) {
-        mTrianglePatchVertices = new TVec3f[numPoints];
+        mTrianglePatchVertices = new Vec3f[numPoints];
 
         if ((a1 & 1) != 0) {
-            mTrianglePatchNormals = new TVec3f[numPoints];
+            mTrianglePatchNormals = new Vec3f[numPoints];
         }
     }
 
@@ -628,7 +628,7 @@ BezierSurface::BezierSurface(s32 divideLevel, u32 a1)
     }
 }
 
-void BezierSurface::setST(const TVec2f& rST0, const TVec2f& rST1, const TVec2f& rST2) {
+void BezierSurface::setST(const Vec2f& rST0, const Vec2f& rST1, const Vec2f& rST2) {
     mSTPoints[0].set(rST0);
     mSTPoints[1].set(rST1);
     mSTPoints[2].set(rST2);
@@ -666,8 +666,8 @@ void BezierSurface::draw() const {
     }
 }
 
-void BezierSurface::calcTrianglePatchVertix(TVec3f* pVertexPatch) const {
-    JGeometry::TVec2< s32 > index(0, 0);
+void BezierSurface::calcTrianglePatchVertix(Vec3f* pVertexPatch) const {
+    Vec2< s32 > index(0, 0);
     s32 numPoints = ::sTrianglePatchTableGroup[mDivideLevel].mNumPoints;
     TrianglePatchCoefs* coefTable = ::sTrianglePatchTableGroup[mDivideLevel].mCoefTable;
 
@@ -684,15 +684,15 @@ void BezierSurface::calcTrianglePatchVertix(TVec3f* pVertexPatch) const {
     }
 }
 
-void BezierSurface::calcTrianglePatchNormal(TVec3f* pNormalPatch) const {
-    JGeometry::TVec2< s32 > index;
+void BezierSurface::calcTrianglePatchNormal(Vec3f* pNormalPatch) const {
+    Vec2< s32 > index;
     s32 numPoints = ::sTrianglePatchTableGroup[mDivideLevel].mNumPoints;
     TrianglePatchCoefs* tangentSTable = ::sTrianglePatchTableGroup[mDivideLevel].mCoefTangentSTable;
     TrianglePatchCoefs* tangentTTable = ::sTrianglePatchTableGroup[mDivideLevel].mCoefTangentTTable;
 
     for (index.y = 0; index.y < numPoints; index.y++) {
-        TVec3f tangentT(0.0f, 0.0f, 0.0f);
-        TVec3f tangentS(0.0f, 0.0f, 0.0f);
+        Vec3f tangentT(0.0f, 0.0f, 0.0f);
+        Vec3f tangentS(0.0f, 0.0f, 0.0f);
 
         for (index.x = 0; index.x < 13; index.x++) {
             f32 scaleS = tangentSTable[index.y][index.x];
@@ -714,12 +714,12 @@ void BezierSurface::calcTrianglePatchNormal(TVec3f* pNormalPatch) const {
 }
 
 void BezierSurface::drawTrianglePatchPos() const {
-    TVec3f vertexBuffer[36];
+    Vec3f vertexBuffer[36];
 
     const u16* vertexOrder = ::sTrianglePatchTableGroup[mDivideLevel].mTriangleStripOrder;
     s32 numPoints = ::sTrianglePatchTableGroup[mDivideLevel].mNumTriangleStripPoints;
 
-    TVec3f* vertices = mTrianglePatchVertices;
+    Vec3f* vertices = mTrianglePatchVertices;
 
     if (vertices == nullptr) {
         calcTrianglePatchVertix(vertexBuffer);
@@ -735,20 +735,20 @@ void BezierSurface::drawTrianglePatchPos() const {
 }
 
 void BezierSurface::drawTrianglePatchPosNorm() const {
-    TVec3f vertexBuffer[36];
-    TVec3f normalBuffer[36];
+    Vec3f vertexBuffer[36];
+    Vec3f normalBuffer[36];
 
     const u16* vertexOrder = ::sTrianglePatchTableGroup[mDivideLevel].mTriangleStripOrder;
     s32 numPoints = ::sTrianglePatchTableGroup[mDivideLevel].mNumTriangleStripPoints;
 
-    TVec3f* vertices = mTrianglePatchVertices;
+    Vec3f* vertices = mTrianglePatchVertices;
 
     if (vertices == nullptr) {
         calcTrianglePatchVertix(vertexBuffer);
         vertices = vertexBuffer;
     }
 
-    TVec3f* normal = mTrianglePatchNormals;
+    Vec3f* normal = mTrianglePatchNormals;
 
     if (normal == nullptr) {
         calcTrianglePatchNormal(normalBuffer);
@@ -765,13 +765,13 @@ void BezierSurface::drawTrianglePatchPosNorm() const {
 }
 
 void BezierSurface::drawTrianglePatchPosST() const {
-    TVec3f vertexBuffer[36];
+    Vec3f vertexBuffer[36];
 
     const u16* vertexOrder = ::sTrianglePatchTableGroup[mDivideLevel].mTriangleStripOrder;
     s32 numPoints = ::sTrianglePatchTableGroup[mDivideLevel].mNumTriangleStripPoints;
     const Vec* triangleST = ::sTrianglePatchTableGroup[mDivideLevel].mTriangleST;
 
-    TVec3f* vertices = mTrianglePatchVertices;
+    Vec3f* vertices = mTrianglePatchVertices;
 
     if (vertices == nullptr) {
         calcTrianglePatchVertix(vertexBuffer);
@@ -785,27 +785,27 @@ void BezierSurface::drawTrianglePatchPosST() const {
         u16 vertexIndex = vertexOrder[idx];
         J3DNativeDraw::position(vertices[vertexIndex].x, vertices[vertexIndex].y, vertices[vertexIndex].z);
         vec = &triangleST[vertexIndex];
-        TVec2f texCoord(mSTPoints[0] * vec->x + mSTPoints[1] * vec->y + mSTPoints[2] * vec->z);
+        Vec2f texCoord(mSTPoints[0] * vec->x + mSTPoints[1] * vec->y + mSTPoints[2] * vec->z);
         J3DNativeDraw::texCoord(texCoord.x, texCoord.y);
     }
 }
 
 void BezierSurface::drawTrianglePatchPosNormST() const {
-    TVec3f vertexBuffer[36];
-    TVec3f normalBuffer[36];
+    Vec3f vertexBuffer[36];
+    Vec3f normalBuffer[36];
 
     const u16* vertexOrder = ::sTrianglePatchTableGroup[mDivideLevel].mTriangleStripOrder;
     s32 numPoints = ::sTrianglePatchTableGroup[mDivideLevel].mNumTriangleStripPoints;
     const Vec* triangleST = ::sTrianglePatchTableGroup[mDivideLevel].mTriangleST;
 
-    TVec3f* vertices = mTrianglePatchVertices;
+    Vec3f* vertices = mTrianglePatchVertices;
 
     if (vertices == nullptr) {
         calcTrianglePatchVertix(vertexBuffer);
         vertices = vertexBuffer;
     }
 
-    TVec3f* normal = mTrianglePatchNormals;
+    Vec3f* normal = mTrianglePatchNormals;
 
     if (normal == nullptr) {
         calcTrianglePatchNormal(normalBuffer);
@@ -818,7 +818,7 @@ void BezierSurface::drawTrianglePatchPosNormST() const {
         u16 vertexIndex = vertexOrder[idx];
         J3DNativeDraw::position(vertices[vertexIndex].x, vertices[vertexIndex].y, vertices[vertexIndex].z);
         J3DNativeDraw::normal(normal[vertexIndex].x, normal[vertexIndex].y, normal[vertexIndex].z);
-        TVec2f texCoord =
+        Vec2f texCoord =
             (mSTPoints[0] * triangleST[vertexIndex].x + mSTPoints[1] * triangleST[vertexIndex].y + mSTPoints[2] * triangleST[vertexIndex].z);
         J3DNativeDraw::texCoord(texCoord.x, texCoord.y);
     }

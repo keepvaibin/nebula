@@ -22,9 +22,9 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
-#include <JSystem/JGeometry/TVec.hpp>
-#include <JSystem/JMath/JMath.hpp>
+#include <nebula_geometry.hpp>
+
+
 
 namespace {
     // sSpeedMax
@@ -95,8 +95,8 @@ void Metbo::init(const JMapInfoIter& rIter) {
     initModelManagerWithAnm("Metbo", nullptr, false);
     MR::connectToSceneEnemy(this);
     initHitSensor(2);
-    MR::addHitSensorEnemy(this, "body", 8, 100.0f, TVec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorEnemyAttack(this, "attack", 8, 80.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemy(this, "body", 8, 100.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemyAttack(this, "attack", 8, 80.0f, Vec3f(0.0f, 0.0f, 0.0f));
     initBinder(100.0f, 100.0f, 0);
     MR::initLightCtrl(this);
     initEffectKeeper(2, nullptr, false);
@@ -179,7 +179,7 @@ void Metbo::exeWalkAround() {
     if (isNear || MR::isBindedWallOfMoveLimit(this) || MR::isFallNextMove(mPosition, _A4, mGravity, 200.0f, 100.0f, 300.0f, nullptr)) {
         _B0.sub(_98, mPosition);
     } else if (!(getNerveStep() % 10)) {
-        TVec3f upVec;
+        Vec3f upVec;
         f32 angle;
         MR::calcUpVec(&upVec, this);
         if (MR::getRandom(0, 2)) {
@@ -190,7 +190,7 @@ void Metbo::exeWalkAround() {
         MR::rotateVecDegree(&_B0, upVec, (::sWalkAroundTurn * angle));
     }
 
-    TVec3f v;
+    Vec3f v;
     v.add(_B0, mPosition);
     moveOrFall(::sWalkAroundParam, &v);
     if (!trySearch() && MR::isStep(this, ::sStepForWalkAround)) {
@@ -397,16 +397,16 @@ void Metbo::kill() {
 }
 
 void Metbo::calcAndSetBaseMtx() {
-    TPos3f mtx;
+    Pos3f mtx;
     MR::calcMtxFromGravityAndZAxis(&mtx, this, mGravity, _A4);
     MR::blendMtx(getBaseMtx(), mtx, 0.3f, mtx);
     MR::setBaseTRMtx(this, mtx);
-    TVec3f scale = mAnimScaleController->_C * mScale;
+    Vec3f scale = mAnimScaleController->_C * mScale;
     MR::setBaseScale(this, scale);
 }
 
 void Metbo::control() {
-    if (MR::isInDeath(this, TVec3f(0.0f, 0.0f, 0.0f)) || MR::isInDarkMatter(mPosition) || MR::isInWater(this, TVec3f(0.0f, 0.0f, 0.0f))) {
+    if (MR::isInDeath(this, Vec3f(0.0f, 0.0f, 0.0f)) || MR::isInDarkMatter(mPosition) || MR::isInWater(this, Vec3f(0.0f, 0.0f, 0.0f))) {
         kill();
         return;
     }
@@ -443,7 +443,7 @@ bool Metbo::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
     }
 
     if ((MR::isSensorEnemy(pSender) || MR::isSensorMapObj(pSender))) {
-        TVec3f v;
+        Vec3f v;
         v.sub(mPosition, pSender->mHost->mPosition);
         MR::normalizeOrZero(&v);
         mVelocity.scaleAdd(::sReceivePushPower, v, mVelocity);
@@ -539,8 +539,8 @@ bool Metbo::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
     return false;
 }
 
-void Metbo::moveOrFall(const MR::ActorMoveParam& a1, const TVec3f* a2) {
-    TVec3f v;
+void Metbo::moveOrFall(const MR::ActorMoveParam& a1, const Vec3f* a2) {
+    Vec3f v;
     v = a2 ? *a2 : *MR::getPlayerPos();
     if (MR::isBindedGround(this)) {
         MR::moveAndTurnToTarget(this, &_A4, v, a1._0, a1._4, a1._8, a1._C);
@@ -550,7 +550,7 @@ void Metbo::moveOrFall(const MR::ActorMoveParam& a1, const TVec3f* a2) {
 }
 
 void Metbo::startSwoon(bool isFromPlayer) {
-    TVec3f v;
+    Vec3f v;
     v.sub(mPosition, *MR::getPlayerPos());
     v.setLength(0.4f);
     v.add(-mGravity);
@@ -580,8 +580,8 @@ bool Metbo::trySearch() {
         return false;
     }
 
-    TVec3f* sensorPos = &getSensor("body")->mPosition;
-    TVec3f v3;
+    Vec3f* sensorPos = &getSensor("body")->mPosition;
+    Vec3f v3;
     v3.sub(*MR::getPlayerCenterPos(), *sensorPos);
     if (MR::isExistMapCollision(*sensorPos, v3)) {
         return false;
@@ -590,7 +590,7 @@ bool Metbo::trySearch() {
     if (MR::isExistMoveLimitCollision(*sensorPos, v3)) {
         return false;
     }
-    TVec3f v4;
+    Vec3f v4;
     v4.sub(*MR::getPlayerPos(), mPosition);
     MR::normalize(&v4);
 
@@ -641,8 +641,8 @@ inline bool Metbo::isNrvSwoon() const {
            isNerve(GET_NERVE(Metbo, MetboNrvSwoonSpin)) || isNerve(GET_NERVE(Metbo, MetboNrvSwoonWait));
 }
 
-inline TVec3f makeZeroVec() {
-    TVec3f v;
+inline Vec3f makeZeroVec() {
+    Vec3f v;
     v.set(0.0f, 0.0f, 0.0f);
     return v;
 }

@@ -42,7 +42,7 @@ void ScrewSwitchReverse::init(const JMapInfoIter& rIter) {
 
     initHitSensor(2);
     MR::addBodyMessageSensorMapObj(this);
-    TVec3f offset;
+    Vec3f offset;
     offset.scale(-130.0f, mGravity);
     MR::addHitSensorAtJoint(this, "binder", "Screw", ATYPE_BINDER, 8, 120.0f, offset);
 
@@ -55,8 +55,8 @@ void ScrewSwitchReverse::init(const JMapInfoIter& rIter) {
     MR::getJMapInfoArg7NoInit(rIter, &arg7);
 
     if (arg7 > 0.0f) {
-        TVec3f pos(mPosition);
-        pos.add(TVec3f(0.0f, 10.0f, 0.0f));
+        Vec3f pos(mPosition);
+        pos.add(Vec3f(0.0f, 10.0f, 0.0f));
         MR::initShadowVolumeCylinder(this, 100.0f);
         MR::setShadowDropPosition(this, nullptr, pos);
         MR::setShadowDropLength(this, nullptr, arg7);
@@ -136,16 +136,16 @@ bool ScrewSwitchReverse::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor*
 }
 
 void ScrewSwitchReverse::updateBindActorMtx() {
-    TPos3f baseMtx = mHost->getBaseMtx();
+    Pos3f baseMtx = mHost->getBaseMtx();
     baseMtx.setTrans(getSensor("binder")->mPosition);
     MR::setBaseTRMtx(mHost, baseMtx);
 }
 
 void ScrewSwitchReverse::endBind() {
-    TVec3f upVec;
+    Vec3f upVec;
     MR::calcUpVec(&upVec, this);
 
-    TVec3f jumpVec;
+    Vec3f jumpVec;
     jumpVec.scale(::sJumpPower, upVec);
 
     if (mIsForceJump) {

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class CubeCameraArea;
 class GravityInfo;
@@ -18,13 +18,13 @@ public:
 
     virtual void movement() = 0;
 
-    virtual const TVec3f& getPosition() const = 0;
-    virtual const TVec3f& getUpVec() const = 0;
-    virtual const TVec3f& getFrontVec() const = 0;
-    virtual const TVec3f& getSideVec() const = 0;
-    virtual const TVec3f& getLastMove() const = 0;
-    virtual const TVec3f& getGroundPos() const = 0;
-    virtual const TVec3f& getGravityVector() const = 0;
+    virtual const Vec3f& getPosition() const = 0;
+    virtual const Vec3f& getUpVec() const = 0;
+    virtual const Vec3f& getFrontVec() const = 0;
+    virtual const Vec3f& getSideVec() const = 0;
+    virtual const Vec3f& getLastMove() const = 0;
+    virtual const Vec3f& getGroundPos() const = 0;
+    virtual const Vec3f& getGravityVector() const = 0;
 
     virtual f32 getRadius() const {
         return 150.0f;
@@ -101,7 +101,7 @@ public:
         return false;
     }
 
-    virtual TPos3f* getMapBaseMtx() const {
+    virtual Pos3f* getMapBaseMtx() const {
         return nullptr;
     }
 
@@ -117,13 +117,13 @@ public:
 
     virtual void movement();
 
-    virtual const TVec3f& getPosition() const;
-    virtual const TVec3f& getUpVec() const;
-    virtual const TVec3f& getFrontVec() const;
-    virtual const TVec3f& getSideVec() const;
-    virtual const TVec3f& getLastMove() const;
-    virtual const TVec3f& getGroundPos() const;
-    virtual const TVec3f& getGravityVector() const;
+    virtual const Vec3f& getPosition() const;
+    virtual const Vec3f& getUpVec() const;
+    virtual const Vec3f& getFrontVec() const;
+    virtual const Vec3f& getSideVec() const;
+    virtual const Vec3f& getLastMove() const;
+    virtual const Vec3f& getGroundPos() const;
+    virtual const Vec3f& getGravityVector() const;
 
     virtual f32 getRadius() const {
         return 150.0f;
@@ -133,9 +133,9 @@ public:
     virtual Triangle* getGroundTriangle() const;
 
     const LiveActor* mActor;
-    TVec3f mUp;
-    TVec3f mFront;
-    TVec3f mSide;
+    Vec3f mUp;
+    Vec3f mFront;
+    Vec3f mSide;
     CubeCameraArea* mCameraArea;
 };
 
@@ -145,13 +145,13 @@ public:
 
     virtual void movement();
 
-    virtual const TVec3f& getPosition() const;
-    virtual const TVec3f& getUpVec() const;
-    virtual const TVec3f& getFrontVec() const;
-    virtual const TVec3f& getSideVec() const;
-    virtual const TVec3f& getLastMove() const;
-    virtual const TVec3f& getGroundPos() const;
-    virtual const TVec3f& getGravityVector() const;
+    virtual const Vec3f& getPosition() const;
+    virtual const Vec3f& getUpVec() const;
+    virtual const Vec3f& getFrontVec() const;
+    virtual const Vec3f& getSideVec() const;
+    virtual const Vec3f& getLastMove() const;
+    virtual const Vec3f& getGroundPos() const;
+    virtual const Vec3f& getGravityVector() const;
 
     virtual bool isTurning() const;
     virtual bool isJumping() const;
@@ -167,14 +167,14 @@ public:
     virtual Triangle* getGroundTriangle() const;
     virtual GravityInfo* getGravityInfo() const;
     virtual bool isDebugMode() const;
-    virtual TPos3f* getMapBaseMtx() const;
+    virtual Pos3f* getMapBaseMtx() const;
 
     const MarioActor* mActor;
-    TVec3f mSide;
-    TVec3f mUp;
-    TVec3f mFront;
-    TVec3f mGravity;
-    TVec3f mGroundPos;
+    Vec3f mSide;
+    Vec3f mUp;
+    Vec3f mFront;
+    Vec3f mGravity;
+    Vec3f mGroundPos;
     CubeCameraArea* mCameraArea;
     Triangle* mGroundTriangle;
     u16 mPlayerMovementTimer;
@@ -192,5 +192,5 @@ public:
 
     void setTargetMtx(MtxPtr);
 
-    TPos3f mMtx;
+    Pos3f mMtx;
 };

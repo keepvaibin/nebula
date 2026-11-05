@@ -39,9 +39,9 @@ void QuestionCoin::init(const JMapInfoIter& rIter) {
     initFromJMapInfoArg(rIter);
 
     if (mPoseType == 0) {
-        TPos3f rotation;
+        Pos3f rotation;
         MR::makeMtxTR(rotation.toMtxPtr(), mPosition, mRotation);
-        TVec3f front;
+        Vec3f front;
         rotation.getZDir(front);
         MR::normalize(&front);
         MR::makeMtxUpFrontPos(&mBaseMtx, -mGravity, front, mPosition);
@@ -55,7 +55,7 @@ void QuestionCoin::init(const JMapInfoIter& rIter) {
     initEffectKeeper(0, nullptr, false);
     initHitSensor(1);
     f32 radius = ::sHitRadius * mScale.x;
-    HitSensor* sensor = MR::addHitSensor(this, "binder", ATYPE_QUESTION_COIN_BIND, 16, radius, TVec3f(0.0f, ::sOffsetY * mScale.y, 0.0f));
+    HitSensor* sensor = MR::addHitSensor(this, "binder", ATYPE_QUESTION_COIN_BIND, 16, radius, Vec3f(0.0f, ::sOffsetY * mScale.y, 0.0f));
     MR::setClippingTypeSphere(this, 2.0f * radius, &sensor->mPosition);
     initShadow();
     MR::initActorCamera(this, rIter, &mCameraInfo);
@@ -75,13 +75,13 @@ void QuestionCoin::initAfterPlacement() {
         getSensor("binder")->mRadius = ::sInWaterScale * getSensor("binder")->mRadius;
     }
 
-    TPos3f rotation;
+    Pos3f rotation;
     rotation.setEuler(mRotation * (MR::pi() / 180.0f));
-    TVec3f up;
+    Vec3f up;
     rotation.getYDir(up);
-    TVec3f side;
+    Vec3f side;
     rotation.getXDir(side);
-    TPos3f launchMtx;
+    Pos3f launchMtx;
     launchMtx.identity();
     MR::makeMtxUpSide(&launchMtx, up, side);
     launchMtx.getQuat(mLaunchQuat);
@@ -94,7 +94,7 @@ void QuestionCoin::initAfterPlacement() {
         dropLength = 2000.0f;
     }
 
-    TVec3f gravity(gZeroVec);
+    Vec3f gravity(gZeroVec);
     MR::calcGravityAndDropShadowVectorOrZero(this, &gravity, nullptr, 0);
 
     if (MR::isNearZero(gravity)) {
@@ -129,7 +129,7 @@ void QuestionCoin::kill() {
 }
 
 void QuestionCoin::calcAndSetBaseMtx() {
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.identity();
 
     if (isNerve(GET_NERVE(QuestionCoin, HostTypeWait))) {
@@ -206,15 +206,15 @@ void QuestionCoin::updateActorMtx() {
         rate = MR::calcNerveRate(this, ::sBindStartBlendFrame);
     }
 
-    TQuat4f startQuat;
+    Quat4f startQuat;
     mActorMtx.getQuat(startQuat);
-    TQuat4f quat = static_cast< TVec4f >(startQuat);
+    Quat4f quat = static_cast< Vec4f >(startQuat);
     quat.slerp(mLaunchQuat, rate);
-    TVec3f startPos;
+    Vec3f startPos;
     mActorMtx.getTrans(startPos);
-    TVec3f position;
+    Vec3f position;
     position.lerp(startPos, getSensor("binder")->getPosition(), rate);
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.setQT(quat, position);
     MR::setBaseTRMtx(mBoundActor, mtx);
 }
@@ -234,9 +234,9 @@ void QuestionCoin::exeThrowActor() {
     }
 
     if (MR::isStep(this, ::sBindAnimFrame)) {
-        TPos3f rotation;
+        Pos3f rotation;
         MR::makeMtxRotate(rotation.toMtxPtr(), mRotation);
-        TVec3f velocity;
+        Vec3f velocity;
         rotation.getYDir(velocity);
         velocity.setLength(mLaunchSpeed);
         mBoundActor->mVelocity.set(velocity);

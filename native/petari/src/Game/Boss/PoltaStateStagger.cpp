@@ -8,7 +8,7 @@
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 namespace NrvPoltaStateStagger {
     NEW_NERVE(PoltaStateStaggerNrvWait, PoltaStateStagger, Wait);
@@ -34,7 +34,7 @@ void PoltaStateStagger::exeWait() {
         MR::zeroVelocity(getHost());
         PoltaFunction::startBckBody(getHost(), mActionName);
     }
-    TVec3f v2;
+    Vec3f v2;
 
     f32 v17;
     MR::separateScalarAndDirection(&v17, &v2, getHost()->_E0 - getHost()->mPosition);

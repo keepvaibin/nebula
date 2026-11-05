@@ -7,7 +7,7 @@ LightAreaHolder::LightAreaHolder(s32 maxNum, const char* pName) : AreaObjMgr(max
     LightFunction::registerLightAreaHolder(this);
 }
 
-bool LightAreaHolder::tryFindLightID(const TVec3f& rArea, ZoneLightID* pLightID) const {
+bool LightAreaHolder::tryFindLightID(const Vec3f& rArea, ZoneLightID* pLightID) const {
     AreaObj* pArea = find_in(rArea);
 
     if (pArea == nullptr) {

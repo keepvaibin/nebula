@@ -124,7 +124,7 @@ void DemoKoopaJrShip::exeFlyAway() {
 }
 
 void DemoKoopaJrShip::control() {
-    TMtx34f jointMtx;
+    Mtx34f jointMtx;
     jointMtx.setInline(MR::getJointMtx(this, ::sJointNameKoopaJrPos));
 
     MR::faceToPoint(jointMtx, *MR::getPlayerPos(), 5.0f);

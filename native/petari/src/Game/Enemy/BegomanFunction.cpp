@@ -1,6 +1,6 @@
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
-void dummy(const TQuat4f& rRotation, TVec3f& rVector) {
-    void (TQuat4f::*rotate)(TVec3f&) const = &TQuat4f::rotate;
+void dummy(const Quat4f& rRotation, Vec3f& rVector) {
+    void (Quat4f::*rotate)(Vec3f&) const = &Quat4f::rotate;
     (rRotation.*rotate)(rVector);
 }

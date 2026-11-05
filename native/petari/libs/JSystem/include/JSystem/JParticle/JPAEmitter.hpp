@@ -1,6 +1,6 @@
 #pragma once
 
-#include "JSystem/JGeometry/TVec.hpp"
+#include <nebula_geometry.hpp>
 #include "JSystem/JParticle/JPADynamicsBlock.hpp"
 #include "JSystem/JParticle/JPAEmitterCallBack.hpp"
 #include "JSystem/JParticle/JPAList.hpp"
@@ -17,9 +17,9 @@ class JPAParticleCallBack;
 
 struct JPAEmitterWorkData {
     struct JPAVolumeCalcData {
-        JGeometry::TVec3< f32 > mVolumePos;
-        JGeometry::TVec3< f32 > mVelOmni;
-        JGeometry::TVec3< f32 > mVelAxis;
+        Vec3f mVolumePos;
+        Vec3f mVelOmni;
+        Vec3f mVelAxis;
     };
 
     JPAEmitterWorkData() : mRndm(0) {
@@ -39,13 +39,13 @@ struct JPAEmitterWorkData {
     Mtx mRotationMtx;
     Mtx mGlobalRot;
     Mtx mGlobalSR;
-    JGeometry::TVec3< f32 > mEmitterPos;
-    JGeometry::TVec3< f32 > mGlobalScl;
-    JGeometry::TVec3< f32 > mGlobalEmtrDir;
-    JGeometry::TVec3< f32 > mPublicScale;
-    JGeometry::TVec3< f32 > mGlobalPos;
-    JGeometry::TVec2< f32 > mGlobalPtclScl;
-    JGeometry::TVec2< f32 > mPivot;
+    Vec3f mEmitterPos;
+    Vec3f mGlobalScl;
+    Vec3f mGlobalEmtrDir;
+    Vec3f mPublicScale;
+    Vec3f mGlobalPos;
+    Vec2f mGlobalPtclScl;
+    Vec2f mPivot;
     Mtx mYBBCamMtx;
     Mtx mPosCamMtx;
     Mtx mPrjMtx;
@@ -83,7 +83,7 @@ public:
     void init(JPAEmitterManager*, JPAResource*);
     bool processTillStartFrame();
     bool processTermination();
-    void calcEmitterGlobalPosition(JGeometry::TVec3< f32 >*) const;
+    void calcEmitterGlobalPosition(Vec3f*) const;
     void deleteAllParticle();
     JPABaseParticle* createChild(JPABaseParticle*);
     JPABaseParticle* createParticle();
@@ -141,25 +141,25 @@ public:
     void setGlobalTranslation(f32 x, f32 y, f32 z) {
         mGlobalTrs.set(x, y, z);
     }
-    void setGlobalTranslation(const JGeometry::TVec3< f32 >& trs) {
+    void setGlobalTranslation(const Vec3f& trs) {
         mGlobalTrs.set(trs);
     }
-    void getLocalTranslation(JGeometry::TVec3< f32 >& vec) {
+    void getLocalTranslation(Vec3f& vec) {
         vec.set(mLocalTrs);
     }
-    void getLocalTranslation(JGeometry::TVec3< f32 >* vec) const {
+    void getLocalTranslation(Vec3f* vec) const {
         vec->set(mLocalTrs);
     }
-    void setGlobalRotation(const JGeometry::TVec3< s16 >& rot) {
+    void setGlobalRotation(const Vec3< s16 >& rot) {
         JPAGetXYZRotateMtx(rot.x, rot.y, rot.z, mGlobalRot);
     }
-    void getGlobalTranslation(JGeometry::TVec3< f32 >* out) const {
+    void getGlobalTranslation(Vec3f* out) const {
         out->set(mGlobalTrs);
     }
-    void setGlobalDynamicsScale(const JGeometry::TVec3< f32 >& i_scale) {
+    void setGlobalDynamicsScale(const Vec3f& i_scale) {
         mGlobalScl.set(i_scale);
     }
-    void getGlobalDynamicsScale(JGeometry::TVec3< f32 >* i_scale) const {
+    void getGlobalDynamicsScale(Vec3f* i_scale) const {
         i_scale->set(mGlobalScl);
     }
     void setGlobalAlpha(u8 alpha) {
@@ -199,10 +199,10 @@ public:
     void setSpread(f32 i_spread) {
         mSpread = i_spread;
     }
-    void setLocalTranslation(const JGeometry::TVec3< f32 >& i_trans) {
+    void setLocalTranslation(const Vec3f& i_trans) {
         mLocalTrs.set(i_trans);
     }
-    void setLocalRotation(const JGeometry::TVec3< s16 >& i_rot) {
+    void setLocalRotation(const Vec3< s16 >& i_rot) {
         mLocalRot.set((s32)(i_rot.x * 0.005493248f), (s32)(i_rot.y * 0.005493248f), (s32)(i_rot.z * 0.005493248f));
     }
     void setRateStep(u8 i_step) {
@@ -212,13 +212,13 @@ public:
     void setGlobalParticleHeightScale(f32 height) {
         mGlobalPScl.y = height;
     }
-    void setGlobalParticleScale(const JGeometry::TVec3< f32 >& scale) {
+    void setGlobalParticleScale(const Vec3f& scale) {
         mGlobalPScl.set(scale.x, scale.y);
     }
     void setGlobalParticleScale(f32 scaleX, f32 scaleY) {
         mGlobalPScl.set(scaleX, scaleY);
     }
-    void getGlobalParticleScale(JGeometry::TVec3< f32 >& scale) const {
+    void getGlobalParticleScale(Vec3f& scale) const {
         //       in dPa_gen_b_light8PcallBack::draw on GCN (where the call to set would normally be
         //       inlined).
 #if PLATFORM_GCN
@@ -229,7 +229,7 @@ public:
         scale.set(mGlobalPScl.x, mGlobalPScl.y, 1.0f);
 #endif
     }
-    void getGlobalParticleScale(JGeometry::TVec3< f32 >* scale) const {
+    void getGlobalParticleScale(Vec3f* scale) const {
         //       in dPa_gen_b_light8PcallBack::draw on GCN (where the call to set would normally be
         //       inlined).
 #if PLATFORM_GCN
@@ -240,15 +240,15 @@ public:
         scale->set(mGlobalPScl.x, mGlobalPScl.y, 1.0f);
 #endif
     }
-    void setGlobalScale(const JGeometry::TVec3< f32 >& scale) {
+    void setGlobalScale(const Vec3f& scale) {
         mGlobalScl.set(scale);
         mGlobalPScl.set(scale.x, scale.y);
     }
-    void setDirection(const JGeometry::TVec3< f32 >& direction) {
+    void setDirection(const Vec3f& direction) {
         mLocalDir.set(direction);
     }
 
-    void setLocalScale(const JGeometry::TVec3< f32 >& scale) {
+    void setLocalScale(const Vec3f& scale) {
         mLocalScl.set(scale);
     }
 
@@ -338,9 +338,9 @@ public:
     }
 
 public:
-    JGeometry::TVec3< f32 > mLocalScl;
-    JGeometry::TVec3< f32 > mLocalTrs;
-    JGeometry::TVec3< f32 > mLocalDir;
+    Vec3f mLocalScl;
+    Vec3f mLocalTrs;
+    Vec3f mLocalDir;
     s32 mMaxFrame;
     f32 mRate;
     f32 mVolumeSweep;
@@ -351,15 +351,15 @@ public:
     f32 mSpread;
     f32 mRndmDirSpeed;
     f32 mAirResist;
-    JGeometry::TVec3< s16 > mLocalRot;
+    Vec3< s16 > mLocalRot;
     s16 mLifeTime;
     u16 mVolumeSize;
     u8 mRateStep;
     JSULink< JPABaseEmitter > mLink;
     Mtx mGlobalRot;
-    JGeometry::TVec3< f32 > mGlobalScl;
-    JGeometry::TVec3< f32 > mGlobalTrs;
-    JGeometry::TVec2< f32 > mGlobalPScl;
+    Vec3f mGlobalScl;
+    Vec3f mGlobalTrs;
+    Vec2f mGlobalPScl;
     NebulaColor8 mGlobalPrmClr;
     NebulaColor8 mGlobalEnvClr;
     uintptr_t mpUserWork;  // a pointer natively too (EffectSystemUtil's SingleEmitter)

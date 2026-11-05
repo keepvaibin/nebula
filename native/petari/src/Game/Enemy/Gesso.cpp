@@ -67,7 +67,7 @@ void Gesso::init(const JMapInfoIter& rIter) {
     MR::connectToSceneEnemy(this);
     MR::initLightCtrl(this);
     initHitSensor(1);
-    TVec3f sensorOffset;
+    Vec3f sensorOffset;
     sensorOffset.x = 0.0f;
     sensorOffset.y = 0.0f;
     sensorOffset.z = 0.0f;
@@ -76,7 +76,7 @@ void Gesso::init(const JMapInfoIter& rIter) {
     initEffectKeeper(2, nullptr, false);
     MR::addEffectHitNormal(this, nullptr);
     initSound(4, false);
-    TVec3f pointerOffset;
+    Vec3f pointerOffset;
     pointerOffset.x = 0.0f;
     pointerOffset.y = 0.0f;
     pointerOffset.z = 0.0f;
@@ -122,13 +122,13 @@ void Gesso::control() {
         return;
     }
 
-    TVec3f playerDirection;
-    TVec3f up;
-    TVec3f offset;
+    Vec3f playerDirection;
+    Vec3f up;
+    Vec3f offset;
     MR::normalize(*MR::getPlayerPos() - mPosition, &playerDirection);
     MR::turnVecToVecCosOnPlane(&_AC, _B8, _A0, MR::cosDegree(0.5f));
     if (mVelocity.dot(_C8) < 0.0f) {
-        const TVec3f& rVelocity = mVelocity;
+        const Vec3f& rVelocity = mVelocity;
         mVelocity.scaleAdd(-_C8.dot(rVelocity), _C8, rVelocity);
     }
 
@@ -141,16 +141,16 @@ void Gesso::control() {
     up.negate(mGravity);
     offset.scale(50.0f, up);
     if (!MR::isInWater(this, offset) && mVelocity.dot(up) > 0.0f) {
-        const TVec3f& rVelocity = mVelocity;
+        const Vec3f& rVelocity = mVelocity;
         mVelocity.scaleAdd(-up.dot(rVelocity), up, rVelocity);
     }
 }
 
 void Gesso::calcAndSetBaseMtx() {
-    TPos3f mtx;
+    Pos3f mtx;
     MR::makeMtxUpFrontPos(&mtx, _AC, _A0, mPosition);
     MR::setBaseTRMtx(this, mtx);
-    TVec3f scale = mScaleController->_C * mScale;
+    Vec3f scale = mScaleController->_C * mScale;
     MR::setBaseScale(this, scale);
 }
 
@@ -324,8 +324,8 @@ void Gesso::exeComeBack() {
             setNerve(GET_NERVE(Gesso, GessoNrvWait));
         } else {
             MR::turnDirectionToTargetDegree(this, &_A0, *MR::getPlayerPos(), 1.5f);
-            TVec3f stack_14;
-            TVec3f diff = _94 - mPosition;
+            Vec3f stack_14;
+            Vec3f diff = _94 - mPosition;
             MR::normalize(diff, &stack_14);
             mVelocity.scale(3.0f, stack_14);
             if (MR::isNear(this, _94, 100.0f)) {
@@ -359,8 +359,8 @@ void Gesso::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     if (!isNerve(GET_NERVE(Gesso, GessoNrvPunchDown)) && MR::isSensorEnemy(pSender) && MR::isSensorPlayer(pReceiver) &&
         !isNerve(GET_NERVE(Gesso, GessoNrvDPDSwoon)) && MR::sendMsgEnemyAttackStrong(pReceiver, pSender)) {
         MR::emitEffectHitBetweenSensors(this, pSender, pReceiver, 0.0f, nullptr);
-        TVec3f stack_14;
-        TVec3f diff = pSender->mPosition - pReceiver->mPosition;
+        Vec3f stack_14;
+        Vec3f diff = pSender->mPosition - pReceiver->mPosition;
         MR::normalize(diff, &stack_14);
         mVelocity.scale(25.0f, stack_14);
         setNerve(GET_NERVE(Gesso, GessoNrvAttack));
@@ -409,7 +409,7 @@ bool Gesso::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pRecei
 
 bool Gesso::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
     if (MR::isSensorEnemy(pSender) || MR::isSensorMapObj(pSender)) {
-        TVec3f stack_08;
+        Vec3f stack_08;
         stack_08.sub(mPosition, pSender->mHost->mPosition);
         MR::normalizeOrZero(&stack_08);
         _C8.scaleAdd(0.2f, _C8, stack_08);
@@ -432,8 +432,8 @@ void Gesso::selectNextNerve() {
 }
 
 void Gesso::knockOut(HitSensor* pSender, HitSensor* pReceiver) {
-    TVec3f stack_14;
-    TVec3f diff = pReceiver->mPosition - pSender->mPosition;
+    Vec3f stack_14;
+    Vec3f diff = pReceiver->mPosition - pSender->mPosition;
     MR::normalize(diff, &stack_14);
     mVelocity.scale(30.0f, stack_14);
     MR::turnDirectionToTarget(this, &_A0, pSender->mPosition, -1.0f);
@@ -471,9 +471,9 @@ bool Gesso::calcWalkMove(s32 step) {
 
     if (mIsHighSpeedMode) {
         verticalSpeed = MR::cosDegree(angle);
-        TVec3f* vel = &mVelocity;
-        TVec3f upVec;
-        TVec3f sideVec;
+        Vec3f* vel = &mVelocity;
+        Vec3f upVec;
+        Vec3f sideVec;
         verticalSpeed = 7.0f * verticalSpeed;
         MR::calcUpVec(&upVec, this);
         MR::calcSideVec(&sideVec, this);
@@ -482,9 +482,9 @@ bool Gesso::calcWalkMove(s32 step) {
         vel->scaleAdd(2.3f, _A0, *vel);
     } else {
         verticalSpeed = MR::cosDegree(angle);
-        TVec3f* vel = &mVelocity;
-        TVec3f upVec;
-        TVec3f sideVec;
+        Vec3f* vel = &mVelocity;
+        Vec3f upVec;
+        Vec3f sideVec;
         verticalSpeed = 7.0f * verticalSpeed;
         MR::calcUpVec(&upVec, this);
         MR::calcSideVec(&sideVec, this);
@@ -524,9 +524,9 @@ bool Gesso::calcSinkMove(s32 step) {
     }
 
     verticalSpeed = MR::cosDegree(angle) * 3.0f;
-    TVec3f* vel = &mVelocity;
-    TVec3f upVec;
-    TVec3f sideVec;
+    Vec3f* vel = &mVelocity;
+    Vec3f upVec;
+    Vec3f sideVec;
     MR::calcUpVec(&upVec, this);
     MR::calcSideVec(&sideVec, this);
 
@@ -540,9 +540,9 @@ bool Gesso::calcSinkMove(s32 step) {
 }
 
 void Gesso::calcAndSetVelocity(f32 f1, f32 f2, f32 f3) {
-    TVec3f* vel = &mVelocity;
-    TVec3f sideVec;
-    TVec3f upVec;
+    Vec3f* vel = &mVelocity;
+    Vec3f sideVec;
+    Vec3f upVec;
     MR::calcUpVec(&upVec, this);
     MR::calcSideVec(&sideVec, this);
     mVelocity.scale(f2, upVec);
@@ -562,19 +562,19 @@ void Gesso::calcAndSetUpVecTarget(f32 f1, f32 f2, f32 f3) {
 }
 
 bool Gesso::isMarioUp() const {
-    TVec3f* pos = MR::getPlayerPos();
-    TVec3f playerDist;
+    Vec3f* pos = MR::getPlayerPos();
+    Vec3f playerDist;
     playerDist.sub(*pos, mPosition);
-    TVec3f upVec;
+    Vec3f upVec;
     upVec.negate(mGravity);
     return playerDist.dot(upVec) > 0.0f;
 }
 
 bool Gesso::isMarioLeft() const {
-    TVec3f* pos = MR::getPlayerPos();
-    TVec3f playerDist;
+    Vec3f* pos = MR::getPlayerPos();
+    Vec3f playerDist;
     playerDist.sub(*pos, mPosition);
-    TVec3f sideVec;
+    Vec3f sideVec;
     MR::calcSideVec(&sideVec, this);
     return playerDist.dot(sideVec) > 0.0f;
 }

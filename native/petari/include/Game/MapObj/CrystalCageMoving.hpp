@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/MapObj/MapObjActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class ActorCameraInfo;
 class ModelObj;
@@ -33,8 +33,8 @@ public:
     bool isNerveTypeEnd() const;
 
     ModelObj* mTicoModel;
-    TPos3f _C8;
+    Pos3f _C8;
     ActorCameraInfo* mCameraInfo;
-    TVec3f _FC;
+    Vec3f _FC;
     u8 _108;
 };

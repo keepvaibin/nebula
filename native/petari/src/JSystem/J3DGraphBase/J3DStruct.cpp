@@ -1,5 +1,5 @@
 #include "JSystem/J3DGraphBase/J3DStruct.hpp"
-#include "JSystem/JMath/JMath.hpp"
+#include <nebula_geometry.hpp>
 
 namespace {
     extern const f32 kIdentityW;
@@ -9,13 +9,13 @@ namespace {
 void J3DTexMtxInfo::operator=(J3DTexMtxInfo const& param_0) {
     mProjection = param_0.mProjection;
     mInfo = param_0.mInfo;
-    JMath::copyFloats3(&mCenter, &param_0.mCenter);
+    copyFloats3(&mCenter, &param_0.mCenter);
     mSRT = param_0.mSRT;
-    JMath::copyFloats16(&mEffectMtx, &param_0.mEffectMtx);
+    copyFloats16(&mEffectMtx, &param_0.mEffectMtx);
 }
 
 void J3DTexMtxInfo::setEffectMtx(Mtx param_0) {
-    JMath::copyFloats12(&mEffectMtx, param_0);
+    copyFloats12(&mEffectMtx, param_0);
     mEffectMtx[3][0] = kIdentityZero;
     mEffectMtx[3][1] = kIdentityZero;
     mEffectMtx[3][2] = kIdentityZero;
@@ -23,7 +23,7 @@ void J3DTexMtxInfo::setEffectMtx(Mtx param_0) {
 }
 
 J3DIndTexMtxInfo& J3DIndTexMtxInfo::operator=(J3DIndTexMtxInfo const& param_0) {
-    JMath::copyFloats6(field_0x0, param_0.field_0x0);
+    copyFloats6(field_0x0, param_0.field_0x0);
     field_0x18 = param_0.field_0x18;
     return *this;
 }

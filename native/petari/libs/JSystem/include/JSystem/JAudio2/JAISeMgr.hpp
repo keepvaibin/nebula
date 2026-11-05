@@ -111,7 +111,7 @@ public:
     JAISe* newSe_(int category, u32 priority);
     void calc();
     void mixOut();
-    bool startSound(JAISoundID id, JAISoundHandle* handle, const TVec3f* posPtr);
+    bool startSound(JAISoundID id, JAISoundHandle* handle, const Vec3f* posPtr);
     int getNumActiveSe() const;
 
     virtual bool isUsingSeqData(const JAISeqDataRegion& seqDataRegion);

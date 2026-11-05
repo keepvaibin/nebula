@@ -20,8 +20,8 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include "JSystem/JGeometry/TVec.hpp"
-#include "JSystem/JMath/JMath.hpp"
+#include <nebula_geometry.hpp>
+
 
 namespace NrvPackunPetit {
     NEW_NERVE_ONEND(PackunPetitNrvNonActive, PackunPetit, NonActive, NonActive);
@@ -48,7 +48,7 @@ PackunPetit::PackunPetit(const char* pName)
 }
 
 inline void PackunPetit::initStarPointer(const char* hitSensor) {
-    TVec3f offs;
+    Vec3f offs;
     offs.set(0.0f);
     MR::initStarPointerTargetAtJoint(this, hitSensor, 100.0f, offs);
 }
@@ -58,9 +58,9 @@ void PackunPetit::init(const JMapInfoIter& rIter) {
     initModelManagerWithAnm("PackunPetit", nullptr, false);
     MR::connectToSceneEnemy(this);
     initHitSensor(3);
-    MR::addHitSensorAtJointMapObj(this, "body", "Head", 8, 90.0f, TVec3f(50.0f, 0.0f, 0.0f));
-    MR::addHitSensorAtJointEnemyAttack(this, "attack", "Head", 8, 50.0f, TVec3f(50.0f, 0.0f, 0.0f));
-    MR::addHitSensorMapObj(this, "stalk", 8, 100.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointMapObj(this, "body", "Head", 8, 90.0f, Vec3f(50.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointEnemyAttack(this, "attack", "Head", 8, 50.0f, Vec3f(50.0f, 0.0f, 0.0f));
+    MR::addHitSensorMapObj(this, "stalk", 8, 100.0f, Vec3f(0.0f, 0.0f, 0.0f));
     initEffectKeeper(2, nullptr, false);
     MR::addEffectHitNormal(this, nullptr);
     initSound(4, false);
@@ -136,7 +136,7 @@ void PackunPetit::exeThreat() {
             return;
         }
 
-        TVec3f* pos = MR::getPlayerPos();
+        Vec3f* pos = MR::getPlayerPos();
         MR::turnDirectionToTargetUseGroundNormalDegree(this, &_94, *pos, 2.0f);
     }
 
@@ -161,7 +161,7 @@ void PackunPetit::exeTurn() {
     if (step < 2.0f) {
         step = 2.0f;
     }
-    TVec3f* pos = MR::getPlayerPos();
+    Vec3f* pos = MR::getPlayerPos();
     MR::turnDirectionToTargetUseGroundNormalDegree(this, &_94, *pos, step);
     if (MR::isBckStopped(this)) {
         setNerve(GET_NERVE(PackunPetit, PackunPetitNrvThreat));
@@ -316,13 +316,13 @@ void PackunPetit::kill() {
 }
 
 void PackunPetit::calcAndSetBaseMtx() {
-    TVec3f up;
+    Vec3f up;
     MR::calcUpVec(&up, this);
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.identity();
     MR::makeMtxUpFrontPos(&mtx, up, _94, mPosition);
     MR::setBaseTRMtx(this, mtx);
-    TVec3f scale = mScaleController->_C * mScale;
+    Vec3f scale = mScaleController->_C * mScale;
     MR::setBaseScale(this, scale);
 }
 
@@ -461,12 +461,12 @@ void PackunPetit::initBlowModel() {
 }
 
 void PackunPetit::punchDown(HitSensor* pSender, HitSensor* pReceiver) {
-    TVec3f v6;
+    Vec3f v6;
     v6.sub(pReceiver->mPosition, pSender->mPosition);
     v6.orthogonalize(mGravity);
     MR::normalize(&v6);
 
-    TVec3f v5;
+    Vec3f v5;
     v5.scale(20.0f, v6);
     v5.scaleAdd(-40.0f, mGravity, v5);
     mBlownModel->mVelocity.set(v5);
@@ -500,9 +500,9 @@ bool PackunPetit::tryTurn() {
     if (MR::isFaceToPlayerHorizontalDegree(this, _94, 90.0f)) {
         return false;
     }
-    TVec3f playerDist;
+    Vec3f playerDist;
     playerDist.sub(*MR::getPlayerPos(), mPosition);
-    TVec3f sideVec;
+    Vec3f sideVec;
     MR::calcSideVec(&sideVec, this);
 
     if (playerDist.dot(sideVec) > 0.0f) {

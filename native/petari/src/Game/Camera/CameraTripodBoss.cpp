@@ -13,10 +13,10 @@ CamTranslatorBase* CameraTripodBoss::createTranslator() {
 }
 
 void CameraTripodBoss::arrangeRound() {
-    TVec3f offset = CameraLocalUtil::getPos(this) - CameraLocalUtil::getWatchPos(this);
+    Vec3f offset = CameraLocalUtil::getPos(this) - CameraLocalUtil::getWatchPos(this);
 
-    TQuat4f rot;
-    rot.setRotate(TVec3f(0.0f, 1.0f, 0.0f), mAngleY);
+    Quat4f rot;
+    rot.setRotate(Vec3f(0.0f, 1.0f, 0.0f), mAngleY);
     rot.transform(offset);
 
     CameraLocalUtil::setPos(this, CameraLocalUtil::getWatchPos(this) + offset);

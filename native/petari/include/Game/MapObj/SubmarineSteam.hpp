@@ -15,5 +15,5 @@ public:
     void exeSteam();
     void exeWaitForSwitchOn();
 
-    TVec3f mUp;
+    Vec3f mUp;
 };

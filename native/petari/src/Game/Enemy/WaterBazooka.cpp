@@ -31,8 +31,8 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "math_types.hpp"
-#include <JSystem/JMath/JMATrigonometric.hpp>
-#include <JSystem/JMath/JMath.hpp>
+#include <nebula_geometry.hpp>
+
 #include <nebula_math.h>
 #include "Game/System/NebulaHost.hpp"
 
@@ -411,8 +411,8 @@ void WaterBazooka::exeDemoCrackCapsule() {
     }
 
     if (!MR::isDemoActiveRegistered(this)) {
-        TVec3f starPieceSpawnPos;
-        TVec3f up;
+        Vec3f starPieceSpawnPos;
+        Vec3f up;
         MR::calcUpVec(&up, this);
         starPieceSpawnPos.scaleAdd(600.0f, up, mPosition);
         MR::appearStarPiece(this, starPieceSpawnPos, 8, 25.0f, 40.0f, false);
@@ -456,8 +456,8 @@ void WaterBazooka::exeDemoAnger() {
             mElectricTime = 0;
         }
 
-        TVec3f starPieceSpawnPos;
-        TVec3f up;
+        Vec3f starPieceSpawnPos;
+        Vec3f up;
         MR::calcUpVec(&up, this);
         starPieceSpawnPos.scaleAdd(600.0f, up, mPosition);
         MR::appearStarPiece(this, starPieceSpawnPos, 16, 25.0f, 40.0f, false);
@@ -526,7 +526,7 @@ void WaterBazooka::exeDemoBreakExplosion() {
 
     if (MR::isStep(this, 53)) {
         if (mHasPowerStar) {
-            TVec3f spawnPos;
+            Vec3f spawnPos;
             MR::copyJointPos(this, "Cockpit", &spawnPos);
             MR::startAfterBossBGM();
             MR::requestAppearPowerStar(this, spawnPos);
@@ -595,8 +595,8 @@ void WaterBazooka::exeStorm() {
         MR::emitEffect(this, "Spin");
     }
 
-    TVec3f pos;
-    TVec3f side;
+    Vec3f pos;
+    Vec3f side;
     mBaseMtx.getTrans(pos);
     mBaseMtx.getXDir(side);
 
@@ -700,22 +700,22 @@ bool WaterBazooka::aimAtMario() {
         return true;
     }
 
-    TVec3f side;
-    TVec3f cannonPos;
+    Vec3f side;
+    Vec3f cannonPos;
     mBaseMtx.getXDir(side);
     mBaseMtx.getTrans(cannonPos);
 
-    TVec3f aimPos;
+    Vec3f aimPos;
     aimPos.scaleAdd(100.0f, -mGravity, *MR::getPlayerPos());
 
-    TVec3f aim;
+    Vec3f aim;
     aim.sub(aimPos, cannonPos);
     MR::normalize(&aim);
     const f32 turnCos = MR::cosDegree(1.2f);
-    const TVec3f& rGravity = mGravity;
+    const Vec3f& rGravity = mGravity;
     MR::turnVecToVecCos(&side, side, aim, turnCos, rGravity);
 
-    TVec3f v1;
+    Vec3f v1;
     MR::turnVecToPlane(&v1, side, -mGravity);
     MR::clampVecAngleDeg(&side, v1, 15.0f);
 
@@ -725,7 +725,7 @@ bool WaterBazooka::aimAtMario() {
 
     MR::makeMtxSideUpPos(&mBaseMtx, side, -mGravity, cannonPos);
 
-    TVec3f side2;
+    Vec3f side2;
     mBaseMtx.getXDir(side2);
     return side2.angle(aim) * _180_PI <= 2.0f;
 }
@@ -791,7 +791,7 @@ void WaterBazooka::damageBazooka(HitSensor* pSender, HitSensor* pReceiver) {
     mLife--;
 }
 
-bool WaterBazooka::calcJointCannon(TPos3f* pMtx, const JointControllerInfo& rJointInfo) {
+bool WaterBazooka::calcJointCannon(Pos3f* pMtx, const JointControllerInfo& rJointInfo) {
     pMtx->setInline(mBaseMtx);
     return true;
 }
@@ -932,7 +932,7 @@ bool WaterBazooka::tryShotBullet() {
         return false;
     }
 
-    TPos3f posMtx;
+    Pos3f posMtx;
     calcGunPointFromCannon(&posMtx);
     if (mIsElectric) {
         static_cast< ElectricPressureBullet* >(bullet)->shotElectricBullet(this, posMtx, ::sElectricBulletSpeed);
@@ -962,13 +962,13 @@ bool WaterBazooka::tryJumpBackPlayerFromBazooka() const {
         return false;
     }
 
-    TVec3f dropPoint;
+    Vec3f dropPoint;
     calcNearDropPoint(&dropPoint);
-    TVec3f jumpDir;
+    Vec3f jumpDir;
     jumpDir.sub(dropPoint, *MR::getPlayerPos());
-    TVec3f rej;
+    Vec3f rej;
     rej.killElement(jumpDir, mGravity);
-    TVec3f rej2 = -rej;
+    Vec3f rej2 = -rej;
 
     MR::offBind(MR::getPlayerDemoActor());
     MR::unlockPlayerAnimation();
@@ -976,11 +976,11 @@ bool WaterBazooka::tryJumpBackPlayerFromBazooka() const {
     return true;
 }
 
-void WaterBazooka::calcNearDropPoint(TVec3f* pPos) const {
+void WaterBazooka::calcNearDropPoint(Vec3f* pPos) const {
     f32 nearestDistance = FLOAT_MAX;
-    TVec3f nearestPoint;
+    Vec3f nearestPoint;
     for (u32 idx = 0; idx < 4; idx++) {
-        TVec3f pos;
+        Vec3f pos;
         if (MR::tryFindNamePos(::sDropPointStringTable[idx], &pos, nullptr) && MR::isNearPlayer(pos, nearestDistance)) {
             nearestPoint.set(pos);
             nearestDistance = MR::calcDistanceToPlayer(nearestPoint);
@@ -992,7 +992,7 @@ void WaterBazooka::calcNearDropPoint(TVec3f* pPos) const {
         return;
     }
 
-    TVec3f toPlayer;
+    Vec3f toPlayer;
     toPlayer.sub(*MR::getPlayerPos(), mPosition);
     toPlayer.orthogonalize(mGravity);
     MR::normalizeOrZero(&toPlayer);
@@ -1005,28 +1005,28 @@ void WaterBazooka::calcNearDropPoint(TVec3f* pPos) const {
     pPos->scaleAdd(800.0f, toPlayer, mPosition);
 }
 
-void WaterBazooka::calcGunPointFromCannon(TPos3f* pMtx) {
-    TPos3f mtx(MR::getJointMtx(this, "Cannon1"));
-    TVec3f side;
+void WaterBazooka::calcGunPointFromCannon(Pos3f* pMtx) {
+    Pos3f mtx(MR::getJointMtx(this, "Cannon1"));
+    Vec3f side;
     mtx.getXDir(side);
-    TVec3f pos;
+    Vec3f pos;
     mtx.getTrans(pos);
     pos.scaleAdd(550.0f, side, pos);
     pMtx->setInline(mtx);
-    TVec3f up;
+    Vec3f up;
     mtx.getYDir(up);
-    TVec3f front;
+    Vec3f front;
     mtx.getZDir(front);
     MR::makeMtxFrontUpPos(pMtx, side, up, pos);
 }
 
 void WaterBazooka::setCameraTargetMtx() {
-    TPos3f mtx(mShooter->getBaseMtx());
+    Pos3f mtx(mShooter->getBaseMtx());
 
     mtx.setTrans(mPosition);
-    TVec3f up;
+    Vec3f up;
     MR::calcUpVec(&up, this);
-    TVec3f front;
+    Vec3f front;
     mtx.getZDir(front);
     MR::makeMtxUpFrontPos(&mtx, up, front, mPosition);
     mDemoActor->setTargetMtx(mtx);

@@ -14,8 +14,8 @@
 #include "Game/Util/StarPointerUtil.hpp"
 
 namespace {
-    inline void calcFollowPosW(const MeterLayout* pLayout, TVec2f* pFollowPosW, TVec2f* pBasePos) {
-        TVec2f headPos;
+    inline void calcFollowPosW(const MeterLayout* pLayout, Vec2f* pFollowPosW, Vec2f* pBasePos) {
+        Vec2f headPos;
 
         pLayout->calcMarioHeadPosition(&headPos);
         pLayout->calcPowerUpMeterBasePosition(pBasePos);
@@ -271,7 +271,7 @@ void MeterLayout::exeWait() {
 }
 
 void MeterLayout::exePowerUp() {
-    TVec2f basePos;
+    Vec2f basePos;
 
     mFollowPos.y = 0.0f;
     mFollowPos.x = 0.0f;
@@ -424,8 +424,8 @@ void MeterLayout::exeZeroMeterBreak() {
     }
 }
 
-void MeterLayout::calcMarioHeadPosition(TVec2f* pHeadPosition) const {
-    TVec2f screenPos;
+void MeterLayout::calcMarioHeadPosition(Vec2f* pHeadPosition) const {
+    Vec2f screenPos;
     MR::calcScreenPosition(&screenPos, *MR::getPlayerCenterPos());
     f32 radius = MR::calcPointRadius2D(*MR::getPlayerCenterPos(), 120.0f);
 
@@ -437,7 +437,7 @@ void MeterLayout::calcMarioHeadPosition(TVec2f* pHeadPosition) const {
     pHeadPosition->y = screenPos.y;
 }
 
-void MeterLayout::calcPowerUpMeterBasePosition(TVec2f* pBasePosition) const {
+void MeterLayout::calcPowerUpMeterBasePosition(Vec2f* pBasePosition) const {
     pBasePosition->x = MR::getPaneTransX(this, "MoveMeterW");
     pBasePosition->y = MR::getPaneTransY(this, "MoveMeterW");
 }

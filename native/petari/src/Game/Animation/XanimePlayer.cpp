@@ -465,7 +465,7 @@ void XanimePlayer::updateInterpoleRatio() {
     _20->_14 = 0;
 }
 
-void XanimePlayer::getMainAnimationTrans(u32 arg1, TVec3f* pOut) const {
+void XanimePlayer::getMainAnimationTrans(u32 arg1, Vec3f* pOut) const {
     XanimeTrack* pTracks = mCore->mTrackList;
     const u8 trackCount = mCore->mTrackCount;
     u8 index = 0;

@@ -60,18 +60,18 @@ void OceanRingPipeOutside::draw() const {
 void OceanRingPipeOutside::loadMaterial() const {
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
     J3DNativeShape::setNormal(0, MR::getCameraViewMtx());
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.identity();
     mtx.mMtx[0][2] = mTexU;
     mtx.mMtx[1][2] = 0.0f;
     J3DNativeShape::setTexture(0, mtx.toMtxPtr(), 2);
 
-    TPos3f mtx2;
+    Pos3f mtx2;
     mtx2.identity();
     mtx2.set(MR::getCameraViewMtx());
     mtx2.zeroTrans();
 
-    TPos3f scaleMtx;
+    Pos3f scaleMtx;
     scaleMtx.identity();
     scaleMtx.scale(::sEnvMapScale);
 

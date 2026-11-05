@@ -9,7 +9,7 @@ public:
     virtual void loadModelDrawMtx() const;
     virtual bool isDraw() const;
 
-    void setSize(const TVec3f&);
+    void setSize(const Vec3f&);
 
-    TVec3f mSize;
+    Vec3f mSize;
 };

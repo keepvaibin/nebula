@@ -33,7 +33,7 @@ void PunchBox::init(const JMapInfoIter& rIter) {
 
     f32 radius = mScale.x * 90.0f;
     initHitSensor(1);
-    TVec3f offset(0.0f, radius, 0.0f);
+    Vec3f offset(0.0f, radius, 0.0f);
     MR::addHitSensorMapObj(this, "body", 8, radius, offset);
 
     MR::initCollisionParts(this, "PunchBox", getSensor("body"), nullptr);
@@ -70,7 +70,7 @@ void PunchBox::init(const JMapInfoIter& rIter) {
     appear();
 
     if (mHasShadow) {
-        MR::initShadowVolumeBox(this, TVec3f(150.0f, 150.0f, 150.0f));
+        MR::initShadowVolumeBox(this, Vec3f(150.0f, 150.0f, 150.0f));
         MR::setShadowVolumeStartDropOffset(this, nullptr, 77.0f);
         MR::setShadowVolumeEndDropOffset(this, nullptr, 150.0f);
         MR::onShadowVolumeCutDropLength(this, nullptr);
@@ -108,7 +108,7 @@ void PunchBox::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
         return;
     }
 
-    TVec3f distance(pReceiver->mPosition - pSender->mPosition);
+    Vec3f distance(pReceiver->mPosition - pSender->mPosition);
 
     if (distance.length() < 410.0f) {
         _96 = true;
@@ -195,7 +195,7 @@ void PunchBox::doHit(HitSensor* pSender, HitSensor* pReceiver) {
 
     _90 = 30;
 
-    if (MR::isInWater(this, TVec3f(0.0f, 0.0f, 0.0f))) {
+    if (MR::isInWater(this, Vec3f(0.0f, 0.0f, 0.0f))) {
         MR::emitEffect(this, "BreakWater");
         MR::startSound(this, "SE_OJ_PUNCH_BOX_BREAK_W");
     } else {

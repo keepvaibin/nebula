@@ -36,8 +36,8 @@ void ShockWaveGenerator::init(const JMapInfoIter& rIter) {
     MR::connectToSceneIndirectMapObj(this);
     initHitSensor(3);
     MR::addBodyMessageSensorMapObj(this);
-    MR::addHitSensorMapObjSimple(this, "spin", 8, ::sHitCylinderRadius, TVec3f(0.0f, 200.0f, 0.0f));
-    MR::addHitSensorEnemyAttack(this, "shock", 16, 1000.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorMapObjSimple(this, "spin", 8, ::sHitCylinderRadius, Vec3f(0.0f, 200.0f, 0.0f));
+    MR::addHitSensorEnemyAttack(this, "shock", 16, 1000.0f, Vec3f(0.0f, 0.0f, 0.0f));
     MR::initCollisionParts(this, "ShockWaveGenerator", getSensor("body"), nullptr);
 
     if (!MR::initActorCamera(this, rIter, &mCameraInfo)) {
@@ -161,10 +161,10 @@ void ShockWaveGenerator::sendMsgShockWaveToNearEnemy() {
 }
 
 bool ShockWaveGenerator::isHitCylinder(HitSensor* pSender, HitSensor* pReceiver) const {
-    TVec3f diff;
+    Vec3f diff;
     diff.sub(pSender->mPosition, pReceiver->mPosition);
-    TVec3f up;
+    Vec3f up;
     MR::calcUpVec(&up, this);
-    TVec3f horiz = diff.killElement(up);
+    Vec3f horiz = diff.killElement(up);
     return horiz.length() <= pSender->getRadius() + 140.0f;
 }

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class ActorCameraInfo;
 class PowerStar;
@@ -17,9 +17,9 @@ public:
     virtual void control();
 
     void updateRailMoveEndDir();
-    void calcOffsetStarToCore(TVec3f*) const;
+    void calcOffsetStarToCore(Vec3f*) const;
     void emitEffectRush();
-    void updateRushStarPos(const TVec3f&, s32);
+    void updateRushStarPos(const Vec3f&, s32);
     void tryStartStageResult(const char*);
 
     void exeMove();
@@ -32,10 +32,10 @@ public:
 
     ReturnDemoRailMove* mReturnDemoRailMove;
     StageResultInformer* mStageResultInformer;
-    TPos3f mPrevTransform;
-    TPos3f mTransform;
+    Pos3f mPrevTransform;
+    Pos3f mTransform;
     PowerStar* mPowerStar;
-    TVec3f mDistanceToCore;
-    TVec3f mPowerStarPosition;
+    Vec3f mDistanceToCore;
+    Vec3f mPowerStarPosition;
     ActorCameraInfo* mActorCameraInfo;
 };

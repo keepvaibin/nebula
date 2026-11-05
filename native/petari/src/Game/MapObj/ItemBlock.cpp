@@ -45,7 +45,7 @@ void ItemBlock::init(const JMapInfoIter& rIter) {
     initNerve(GET_NERVE(ItemBlock, ItemBlockNrvStandby));
     s32 arg = -1;
     MR::getJMapInfoArg4NoInit(rIter, &arg);
-    MR::initShadowVolumeBox(this, TVec3f(150.0f, 150.0f, 150.0f));
+    MR::initShadowVolumeBox(this, Vec3f(150.0f, 150.0f, 150.0f));
     MR::setShadowVolumeStartDropOffset(this, 0, 77.0f);
 
     if (arg != -1) {
@@ -62,7 +62,7 @@ void ItemBlock::init(const JMapInfoIter& rIter) {
     }
 
     if (MR::isZeroGravity(this)) {
-        TVec3f upVec;
+        Vec3f upVec;
         MR::calcUpVec(&upVec, this);
         MR::setShadowDropDirection(this, 0, -upVec);
     } else {
@@ -144,8 +144,8 @@ void ItemBlock::initBlock() {
     case 4:
     case 5:
         initModelManagerWithAnm("CoinBlock", nullptr, false);
-        TPos3f mtx;
-        MR::addHitSensorMtxMapObj(this, "body", 8, 100.0f, MR::getJointMtx(this, "CoinBlock"), TVec3f(0.0f, 100.0f, 0.0f));
+        Pos3f mtx;
+        MR::addHitSensorMtxMapObj(this, "body", 8, 100.0f, MR::getJointMtx(this, "CoinBlock"), Vec3f(0.0f, 100.0f, 0.0f));
         MR::initCollisionPartsAutoEqualScale(this, "CoinBlock", getSensor("body"), MR::getJointMtx(this, "CoinBlock"));
     }
 }
@@ -171,7 +171,7 @@ void ItemBlock::kill() {
 }
 
 void ItemBlock::control() {
-    TVec3f upVec;
+    Vec3f upVec;
     MR::calcUpVec(&upVec, this);
     MR::requestPointLight(this, mPosition + upVec * ::hPointLightOffsetY, ::hPointLight, ::hBrightness, -1);
 }
@@ -249,8 +249,8 @@ void ItemBlock::exeAppearItem() {
     }
 
     if (MR::isStep(this, ::cAppearItemStep)) {
-        TVec3f gravVec;
-        TVec3f position = mPosition;
+        Vec3f gravVec;
+        Vec3f position = mPosition;
         MR::calcGravityVector(this, &gravVec, nullptr, 0);
         position -= gravVec * ::cAppearItemOffsetY;
 

@@ -37,10 +37,10 @@ void DinoPackunFire::init(const JMapInfoIter& rIter) {
     initModelManagerWithAnm("DinoPackunFireBall", nullptr, false);
     MR::connectToSceneEnemy(this);
     initHitSensor(1);
-    TVec3f attackOffs;
+    Vec3f attackOffs;
     attackOffs.set(0.0f, 0.0f, 0.0f);
     MR::addHitSensorEnemyAttack(this, "attack", 8, 150.0f, attackOffs);
-    TVec3f starOffs;
+    Vec3f starOffs;
     starOffs.set(0.0f);
     MR::initStarPointerTarget(this, 150.0f, starOffs);
     initBinder(150.0f, 0.0f, 0);
@@ -74,7 +74,7 @@ void DinoPackunFire::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     MR::sendMsgEnemyAttackFire(pReceiver, pSender);
 }
 
-void DinoPackunFire::appearShot(const TVec3f& rPos, const TVec3f& rVelocity) {
+void DinoPackunFire::appearShot(const Vec3f& rPos, const Vec3f& rVelocity) {
     mPosition.x = rPos.x;
     mPosition.y = rPos.y;
     mPosition.z = rPos.z;

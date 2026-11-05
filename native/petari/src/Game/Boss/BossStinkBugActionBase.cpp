@@ -13,7 +13,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/SpringValue.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 #include <nebula_math.h>
 
 BossStinkBugActionBase::BossStinkBugActionBase(const char* pName, BossStinkBug* pStinkBug)

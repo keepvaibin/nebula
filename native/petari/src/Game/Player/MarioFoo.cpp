@@ -21,10 +21,10 @@
 namespace {
     f32 cTurnMotionSpeed = 5.0f;
     f32 cWidth = 70.0f;
-    f32 cLimitAngleSink = JGeometry::TUtil< f32 >::PI() / 1.0001f;
-    f32 cNeutralAngleWait = JGeometry::TUtil< f32 >::PI() / 2.0f - JGeometry::TUtil< f32 >::PI() / 6.0f;
-    f32 cLimitAngleWait = JGeometry::TUtil< f32 >::PI() / 1.0001f;
-    f32 cUpperAngleWait = JGeometry::TUtil< f32 >::PI() / 100.0f;
+    f32 cLimitAngleSink = FloatUtil::PI() / 1.0001f;
+    f32 cNeutralAngleWait = FloatUtil::PI() / 2.0f - FloatUtil::PI() / 6.0f;
+    f32 cLimitAngleWait = FloatUtil::PI() / 1.0001f;
+    f32 cUpperAngleWait = FloatUtil::PI() / 100.0f;
 };  // namespace
 
 void Mario::tryStartFoo() {
@@ -144,9 +144,9 @@ bool MarioFoo::update() {
         }
     } else {
         _B0[_6B4] = getTrans();
-        TVec3f leftHand;
-        TVec3f rightHand;
-        TVec3f handDirection;
+        Vec3f leftHand;
+        Vec3f rightHand;
+        Vec3f handDirection;
         mActor->getRealPos("HandL", &leftHand);
         mActor->getRealPos("HandR", &rightHand);
         handDirection = rightHand - leftHand;
@@ -268,21 +268,21 @@ bool MarioFoo::update() {
     MR::rotAxisVecRad(_30, -_3C, &_30, turnRatio * (_24 * mActor->mConst->getTable()->mSwimRotSpeedZ));
     MR::vecKillElement(_30, _3C, &_30);
     MR::normalize(&_30);
-    TVec3f side = _3C.cross(_30);
+    Vec3f side = _3C.cross(_30);
     MR::normalize(&side);
     getPlayer()->setSideVec(side);
-    TVec3f front;
+    Vec3f front;
     MR::rotAxisVecRad(_30, side, &front, _2C);
-    TVec3f head(getPlayer()->mHeadVec);
-    TVec3f oldFront(getFrontVec());
-    TVec3f blendedFront;
+    Vec3f head(getPlayer()->mHeadVec);
+    Vec3f oldFront(getFrontVec());
+    Vec3f blendedFront;
     MR::vecBlendSphere(oldFront, front, &blendedFront, 0.1f);
     getPlayer()->setFrontVecKeepSide(blendedFront);
     spin();
 
-    TVec3f direction;
+    Vec3f direction;
     direction = getPlayer()->_1FC;
-    TVec3f velocity = direction * _28;
+    Vec3f velocity = direction * _28;
     f32 vertical = MR::vecKillElement(velocity, _3C, &velocity);
     f32 ratio;
     if (_1A > 25) {
@@ -315,10 +315,10 @@ bool MarioFoo::update() {
     updateTilt();
 
     if (_48 != nullptr) {
-        TVec3f center;
+        Vec3f center;
         MR::calcSpherePos(&center, _48);
         f32 radius = MR::getSphereRadius(_48);
-        TVec3f distance = getTrans() - center;
+        Vec3f distance = getTrans() - center;
         if (!_1E && distance.length() > radius) {
             _1E = 30;
             hitWall(-distance, nullptr);
@@ -362,7 +362,7 @@ bool MarioFoo::close() {
         break;
     case 3:
         changeAnimation("\203\164\201\133\203\164\203\100\203\103\203\136\201\133\211\360\217\234" /* フーファイター解除 */);
-        getPlayer()->mJumpVec = TVec3f(0.0f, 0.0f, 0.0f);
+        getPlayer()->mJumpVec = Vec3f(0.0f, 0.0f, 0.0f);
         getPlayer()->_10._21 = true;
         break;
     }
@@ -386,7 +386,7 @@ bool MarioFoo::close() {
     return true;
 }
 
-const TVec3f& MarioFoo::getGravityVec() const {
+const Vec3f& MarioFoo::getGravityVec() const {
     return MarioModule::getGravityVec();
 }
 
@@ -478,32 +478,32 @@ void MarioFoo::jet() {
 void MarioFoo::updateTilt() {
     f32 sideTilt;
     f32 blend = 0.1f;
-    sideTilt = getStickX() * JGeometry::TUtil< f32 >::PI() / 5.0f;
+    sideTilt = getStickX() * FloatUtil::PI() / 5.0f;
     f32 frontTilt = 0.0f;
     if (!_1C) {
-        frontTilt = getStickY() * JGeometry::TUtil< f32 >::PI() / 12.0f;
+        frontTilt = getStickY() * FloatUtil::PI() / 12.0f;
         if (getStickY() > 0.0f && _2C <= 2.0943952f) {
-            frontTilt = getStickY() * JGeometry::TUtil< f32 >::PI() / 8.0f;
+            frontTilt = getStickY() * FloatUtil::PI() / 8.0f;
         }
     } else if (getStickY() < 0.0f) {
-        frontTilt = getStickY() * JGeometry::TUtil< f32 >::PI() / mActor->getConst().getTable()->mSwimTiltZup;
+        frontTilt = getStickY() * FloatUtil::PI() / mActor->getConst().getTable()->mSwimTiltZup;
     } else if (getStickY() > 0.0f) {
-        frontTilt = getStickY() * JGeometry::TUtil< f32 >::PI() / mActor->getConst().getTable()->mSwimTiltZdown;
+        frontTilt = getStickY() * FloatUtil::PI() / mActor->getConst().getTable()->mSwimTiltZdown;
     } else if (_1C) {
         f32 ratio = _1C / 120.0f;
         if (ratio > 1.0f) {
             ratio = 1.0f;
         }
 
-        frontTilt -= (JGeometry::TUtil< f32 >::PI() / 10.0f) * ratio;
+        frontTilt -= (FloatUtil::PI() / 10.0f) * ratio;
     } else {
         frontTilt = 0.0f;
     }
 
     _70 = blend * sideTilt + (1.0f - blend) * _70;
     _74 = 0.1f * frontTilt + 0.9f * _74;
-    TMtx34f sideMtx;
-    TMtx34f frontMtx;
+    Mtx34f sideMtx;
+    Mtx34f frontMtx;
     NebulaMtxRotRad(sideMtx, 'X', _70);
     NebulaMtxRotRad(frontMtx, 'Z', _74);
     NebulaMtxConcat(sideMtx, frontMtx, _78);
@@ -511,7 +511,7 @@ void MarioFoo::updateTilt() {
     setJointGlobalMtx(upperJoint, _78);
 }
 
-void MarioFoo::hitWall(const TVec3f& rNormal, HitSensor* pSensor) {
+void MarioFoo::hitWall(const Vec3f& rNormal, HitSensor* pSensor) {
     if (sendPunch(pSensor, false) != true) {
         _11 = 1;
         if (MR::diffAngleAbs(rNormal, -getGravityVec()) <= 0.7853982f) {
@@ -559,7 +559,7 @@ void MarioFoo::spin() {
 }
 
 bool MarioFoo::passRing(const HitSensor* pSensor) {
-    const TVec3f& center = pSensor->mPosition;
+    const Vec3f& center = pSensor->mPosition;
     if (!_4E) {
         _50 = mActor->getConst().getTable()->mSwimRingDashChargeTime;
         changeAnimation("\203\212\203\223\203\117\203\137\203\142\203\126\203\205\217\200\224\365" /* リングダッシュ準備 */);
@@ -623,11 +623,11 @@ f32 MarioFoo::calcRingAcc() {
 }
 
 void MarioFoo::draw3D() const {
-    TVec3f beamVertices[4];
-    TVec3f leftEdge[2];
-    TVec3f rightEdge[2];
-    TVec3f nextLeftEdge[2];
-    TVec3f nextRightEdge[2];
+    Vec3f beamVertices[4];
+    Vec3f leftEdge[2];
+    Vec3f rightEdge[2];
+    Vec3f nextLeftEdge[2];
+    Vec3f nextRightEdge[2];
 
     if (getPlayer()->_1C._9) {
         NebulaNativeMaterial material;
@@ -642,13 +642,13 @@ void MarioFoo::draw3D() const {
         NativeShader::setColor(material, 4, color1.r, color1.g, color1.b, color1.a);
         NativeShader::send(material);
 
-        TVec3f center = mActor->_2A0 + getPlayer()->getUpVec() * 50.0f;
-        TVec3f back = -getPlayer()->getUpVec();
-        TVec3f side(getPlayer()->mSideVec);
-        TVec3f up;
+        Vec3f center = mActor->_2A0 + getPlayer()->getUpVec() * 50.0f;
+        Vec3f back = -getPlayer()->getUpVec();
+        Vec3f side(getPlayer()->mSideVec);
+        Vec3f up;
         up.cross(back, side);
         MR::normalizeOrZero(&up);
-        TVec3f front = -back;
+        Vec3f front = -back;
         f32 length = (64 - _6B0) / 64.0f;
 
         beamVertices[0] = center - side * 70.0f;
@@ -656,20 +656,20 @@ void MarioFoo::draw3D() const {
         beamVertices[2] = center - side * 50.0f + front * 2000.0f * length;
         beamVertices[3] = center - side * 50.0f;
         J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, MR::ddVtxAttributes());
-        MR::ddSendVtxData(beamVertices[0], TVec2f(0.0f, 0.0f));
-        MR::ddSendVtxData(beamVertices[1], TVec2f(0.5f, 0.0f));
-        MR::ddSendVtxData(beamVertices[2], TVec2f(0.5f, 1.0f));
-        MR::ddSendVtxData(beamVertices[3], TVec2f(0.0f, 1.0f));
+        MR::ddSendVtxData(beamVertices[0], Vec2f(0.0f, 0.0f));
+        MR::ddSendVtxData(beamVertices[1], Vec2f(0.5f, 0.0f));
+        MR::ddSendVtxData(beamVertices[2], Vec2f(0.5f, 1.0f));
+        MR::ddSendVtxData(beamVertices[3], Vec2f(0.0f, 1.0f));
 
         beamVertices[0] = center + side * 70.0f;
         beamVertices[1] = center + side * 70.0f + front * 2000.0f * length;
         beamVertices[2] = center + side * 50.0f + front * 2000.0f * length;
         beamVertices[3] = center + side * 50.0f;
         J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, MR::ddVtxAttributes());
-        MR::ddSendVtxData(beamVertices[0], TVec2f(0.0f, 0.0f));
-        MR::ddSendVtxData(beamVertices[1], TVec2f(0.5f, 0.0f));
-        MR::ddSendVtxData(beamVertices[2], TVec2f(0.5f, 1.0f));
-        MR::ddSendVtxData(beamVertices[3], TVec2f(0.0f, 1.0f));
+        MR::ddSendVtxData(beamVertices[0], Vec2f(0.0f, 0.0f));
+        MR::ddSendVtxData(beamVertices[1], Vec2f(0.5f, 0.0f));
+        MR::ddSendVtxData(beamVertices[2], Vec2f(0.5f, 1.0f));
+        MR::ddSendVtxData(beamVertices[3], Vec2f(0.0f, 1.0f));
     }
 
     const Color8 color2(255, 64, 64, 255);
@@ -684,9 +684,9 @@ void MarioFoo::draw3D() const {
         u32 midpoint;
         u32 count = _6B0;
         midpoint = count / 2;
-        TVec3f previous;
-        TVec2f nextTexCoords[2];
-        TVec2f texCoords[2];
+        Vec3f previous;
+        Vec2f nextTexCoords[2];
+        Vec2f texCoords[2];
         for (u32 i = 0; i < count; i++) {
             u8 alpha;
             if (i > midpoint) {
@@ -703,11 +703,11 @@ void MarioFoo::draw3D() const {
             if (i == 0) {
                 u32 j;
                 for (j = 1; j < count; j++) {
-                    TVec3f direction = _B0[(_6B4 + 127 - j) % 64] - _B0[index];
-                    TVec3f horizontal;
+                    Vec3f direction = _B0[(_6B4 + 127 - j) % 64] - _B0[index];
+                    Vec3f horizontal;
                     MR::vecKillElement(direction, MR::getCamZdir(), &horizontal);
                     if (!MR::normalizeOrZero(&horizontal)) {
-                        TVec3f width;
+                        Vec3f width;
                         width.cross(horizontal, MR::getCamZdir());
                         width.scale(10.0f);
                         leftEdge[0] = _B0[index] + width - _3B0[index] * ::cWidth;
@@ -729,8 +729,8 @@ void MarioFoo::draw3D() const {
                 f32 textureY = static_cast< f32 >(i + 1) / static_cast< f32 >(count);
                 nextTexCoords[0].set(0.0f, textureY);
                 nextTexCoords[1].set(1.0f, textureY);
-                const TVec3f& rPosition = _B0[index];
-                TVec3f width(_3B0[index]);
+                const Vec3f& rPosition = _B0[index];
+                Vec3f width(_3B0[index]);
                 width.setLength(10.0f);
                 nextLeftEdge[0] = rPosition + width - _3B0[index] * ::cWidth;
                 nextLeftEdge[1] = rPosition - width - _3B0[index] * ::cWidth;

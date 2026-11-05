@@ -118,7 +118,7 @@ bool ClippingActorInfo::isGroupClipping() const {
     return mInfo;
 }
 
-void ClippingActorInfo::setTypeToSphere(f32 radius, const TVec3f* pCenter) {
+void ClippingActorInfo::setTypeToSphere(f32 radius, const Vec3f* pCenter) {
     _8 = radius;
     if (!pCenter) {
         _4 = &mActor->mPosition;

@@ -858,8 +858,8 @@ namespace {
         if (!MR::isStarPointerInScreen(PLAYER_1)) {
             return false;
         }
-        TVec2f screen = MR::getStarPointerScreenPositionOrEdge(PLAYER_1);
-        TVec2f layout;
+        Vec2f screen = MR::getStarPointerScreenPositionOrEdge(PLAYER_1);
+        Vec2f layout;
         MR::convertScreenPosToLayoutPos(&layout, screen);
         *pX = layout.x / p->mScaleX;
         *pY = layout.y - p->mBoard->mTranslate.y;

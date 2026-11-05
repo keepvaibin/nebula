@@ -49,7 +49,7 @@ void Mario::tryJump() {
     bool isMudFloorJump = false;
     bool useStickJumpAnim = false;
 
-    TVec3f stickTotal(_190 + _19C);
+    Vec3f stickTotal(_190 + _19C);
 
     if (mMovementStates.jumping) {
         return;
@@ -392,7 +392,7 @@ void Mario::tryTurnJump() {
     _430 = 0x4;
 
     if (_3D2 != 0) {
-        TVec3f horizontal;
+        Vec3f horizontal;
         MR::vecKillElement(_3E4, getAirGravityVec(), &horizontal);
         MR::normalizeOrZero(&horizontal);
 
@@ -402,7 +402,7 @@ void Mario::tryTurnJump() {
         setFrontVecKeepUp(-_3E4);
         _220 = _3E4;
     } else {
-        TVec3f horizontal;
+        Vec3f horizontal;
         MR::vecKillElement(_220, getAirGravityVec(), &horizontal);
         MR::normalizeOrZero(&horizontal);
 
@@ -444,7 +444,7 @@ void Mario::trySquatJump() {
 
     mJumpVec = getAirFrontVec() * mActor->getConst().getTable()->mSquatJumpFrontSpeed;
 
-    TVec3f stickVec(_190 + _19C);
+    Vec3f stickVec(_190 + _19C);
     if (!MR::isNearZero(stickVec)) {
         addVelocity(-stickVec);
 
@@ -461,7 +461,7 @@ void Mario::trySquatJump() {
     if (mDrawStates._B) {
         recordJumpEnforceMove();
 
-        TVec3f moveKeep;
+        Vec3f moveKeep;
         f32 gravityMove = MR::vecKillElement(_184, getAirGravityVec(), &moveKeep);
 
         f32 enforceScale = 1.0f - (MR::diffAngleAbs(mFrontVec, moveKeep) / 1.5707964f);
@@ -590,7 +590,7 @@ void Mario::startTornadoCentering(HitSensor* pSensor) {
 
 bool Mario::taskOnTornadoCentering(u32 a1) {
     if (_A34 != 0) {
-        TVec3f sensorOffset(reinterpret_cast< HitSensor* >(_A38)->mHost->mPosition - mPosition);
+        Vec3f sensorOffset(reinterpret_cast< HitSensor* >(_A38)->mHost->mPosition - mPosition);
         MR::vecKillElement(sensorOffset, *getGravityVec(), &sensorOffset);
 
         f32 mag = sensorOffset.length();
@@ -687,17 +687,17 @@ void Mario::trySpinJump(u8 a1) {
     }
 }
 
-void Mario::tryForceJumpDelay(const TVec3f& rVec) {
+void Mario::tryForceJumpDelay(const Vec3f& rVec) {
     mMovementStates._2D = true;
     _304 = rVec;
 }
 
-void Mario::tryFreeJumpDelay(const TVec3f& rVec) {
+void Mario::tryFreeJumpDelay(const Vec3f& rVec) {
     mMovementStates._2E = true;
     _304 = rVec;
 }
 
-void Mario::tryForceJump(const TVec3f& rVec, bool a2) {
+void Mario::tryForceJump(const Vec3f& rVec, bool a2) {
     if (rVec.dot(*getGravityVec()) > 0.0f) {
         mMovementStates._20 = true;
     }
@@ -732,7 +732,7 @@ void Mario::tryForceJump(const TVec3f& rVec, bool a2) {
     return;
 }
 
-void Mario::tryForceFreeJump(const TVec3f& rVec) {
+void Mario::tryForceFreeJump(const Vec3f& rVec) {
     mMovementStates._6 = false;
     _430 = 0xC;
     mMovementStates._2A = true;
@@ -751,7 +751,7 @@ void Mario::tryForceFreeJump(const TVec3f& rVec) {
     return;
 }
 
-void Mario::tryForcePowerJump(const TVec3f& rVec, bool a2) {
+void Mario::tryForcePowerJump(const Vec3f& rVec, bool a2) {
     mMovementStates._6 = false;
     _430 = 0xD;
     mMovementStates._2A = true;
@@ -775,7 +775,7 @@ void Mario::tryForcePowerJump(const TVec3f& rVec, bool a2) {
     return;
 }
 
-void Mario::tryFreeJump(const TVec3f& rVec, bool a2) {
+void Mario::tryFreeJump(const Vec3f& rVec, bool a2) {
     _430 = 0;
 
     if (rVec.dot(*getGravityVec()) > 0.0f) {
@@ -805,7 +805,7 @@ void Mario::tryFreeJump(const TVec3f& rVec, bool a2) {
     return;
 }
 
-void Mario::tryWallJump(const TVec3f& rVec, bool a2) {
+void Mario::tryWallJump(const Vec3f& rVec, bool a2) {
     _430 = 0x7;
 
     mMovementStates.jumping = true;
@@ -853,7 +853,7 @@ void Mario::tryWallJump(const TVec3f& rVec, bool a2) {
     return;
 }
 
-void Mario::tryStickJump(const TVec3f& rVec) {
+void Mario::tryStickJump(const Vec3f& rVec) {
     stopJump();
     initJumpParam();
 
@@ -899,9 +899,9 @@ void Mario::trySlipUpJump() {
     mJumpVec = -getAirGravityVec() * mActor->getConst().getTable()->mSlipUpHeight;
 
     f32 ratio = 1.0f;
-    TVec3f predictPos(mPosition - *getGravityVec() * 100.0f);
+    Vec3f predictPos(mPosition - *getGravityVec() * 100.0f);
 
-    TVec3f frontVec;
+    Vec3f frontVec;
     MR::vecKillElement(mJumpVec, mFrontVec, &frontVec);
     MR::vecKillElement(frontVec, *getGravityVec(), &frontVec);
     frontVec += mFrontVec * mActor->getConst().getTable()->mSlipUpFront;
@@ -909,7 +909,7 @@ void Mario::trySlipUpJump() {
 
     f32 step = 50.0f;
     u32 hitCount;
-    TVec3f hitPos;
+    Vec3f hitPos;
     for (hitCount = 0; hitCount < 10; hitCount++) {
         Triangle* pTmpPolygon = getTmpPolygon();
         predictPos += frontVec * step;
@@ -962,7 +962,7 @@ void Mario::tryHangSlipUp() {
 
 void Mario::tryDrop() {
     if ((mMovementStates._8) && !mDrawStates._B) {
-        TVec3f horizontal;
+        Vec3f horizontal;
         MR::vecKillElement(_4E8 - mGroundPos, *getGravityVec(), &horizontal);
 
         if (horizontal.dot(*mFrontWallTriangle->getNormal(0)) < 0.0f && horizontal.length() < 80.0f) {
@@ -973,7 +973,7 @@ void Mario::tryDrop() {
     }
 
     if ((mMovementStates._1A) && !mDrawStates._B) {
-        TVec3f horizontal;
+        Vec3f horizontal;
         MR::vecKillElement(_500 - mGroundPos, *getGravityVec(), &horizontal);
 
         if (horizontal.dot(*mSideWallTriangle->getNormal(0)) < 0.0f && horizontal.length() < 80.0f) {
@@ -989,7 +989,7 @@ void Mario::tryDrop() {
     mJumpVec = mFrontVec * mWalkSpeed * ::cDropFrontSpeed;
 
     if (MR::isNearZero(_8F8) && (mMovementStates._23)) {
-        TVec3f side;
+        Vec3f side;
         side.cross(getAirGravityVec(), _368);
         MR::normalizeOrZero(&side);
         _8F8.cross(_368, side);
@@ -1013,11 +1013,11 @@ void Mario::tryDrop() {
         }
     }
 
-    TVec3f carryVec(_184);
+    Vec3f carryVec(_184);
     MR::vecKillElement(carryVec, *getGravityVec(), &carryVec);
     invalidateRelativePosition();
 
-    TVec3f groundDeltaNoGravity;
+    Vec3f groundDeltaNoGravity;
     MR::vecKillElement(mGroundPos - mPosition, *getGravityVec(), &groundDeltaNoGravity);
 
     if (carryVec.dot(groundDeltaNoGravity) > 0.0f) {
@@ -1409,7 +1409,7 @@ void Mario::procJump(bool a1) {
     decideSlipUp();
 
     if (_430 != 0xD || !mMovementStates._20) {
-        TVec3f side;
+        Vec3f side;
         const f32 dropSpeed = MR::vecKillElement(mJumpVec, *getGravityVec(), &side);
 
         f32 maxDrop = mActor->getConst().getTable()->mMaxDropSpeed[mActor->getGravityLevel() & 0xFF];
@@ -1470,7 +1470,7 @@ void Mario::checkWallJumpHit() {
 
             blown(mJumpVec * 0.2f);
 
-            TVec3f horizontal;
+            Vec3f horizontal;
             MR::vecKillElement(mJumpVec, *getGravityVec(), &horizontal);
             MR::normalizeOrZero(&horizontal);
             if (!MR::isNearZero(horizontal)) {
@@ -1523,7 +1523,7 @@ void Mario::decideSlipUp() {
 
         bool slipFront = false;
         if (isStickOn()) {
-            const TVec3f& worldPadDir = getWorldPadDir();
+            const Vec3f& worldPadDir = getWorldPadDir();
             if (worldPadDir.dot(getWallNorm()) < -0.8f) {
                 slipFront = true;
             }
@@ -1553,8 +1553,8 @@ void Mario::decideSlipUp() {
 }
 
 void Mario::moveWallSlide(f32 a1) {
-    TVec3f crossVec;
-    const TVec3f& wallNorm = getWallNorm();
+    Vec3f crossVec;
+    const Vec3f& wallNorm = getWallNorm();
     crossVec.cross(*getGravityVec(), wallNorm);
 
     if (!MR::normalizeOrZero(&crossVec) && isStickOn()) {
@@ -1814,7 +1814,7 @@ void Mario::procHipDrop() {
     }
 
 PROC_HIP_DROP_MOVE:
-    TVec3f moveVec(mJumpVec);
+    Vec3f moveVec(mJumpVec);
     if (moveVec.length() >= mVerticalSpeed) {
         moveVec.setLength(mVerticalSpeed);
     }
@@ -1858,7 +1858,7 @@ PROC_HIP_DROP_MOVE:
                 const HitInfo* strikeInfo = Collision::getStrikeInfoMap(i);
 
                 if (mActor->selectHomingInSuperHipDrop(strikeInfo->mParentTriangle.mSensor->mHost->mName)) {
-                    TVec3f sensorPos(strikeInfo->mParentTriangle.mSensor->mPosition);
+                    Vec3f sensorPos(strikeInfo->mParentTriangle.mSensor->mPosition);
 
                     if (MR::diffAngleAbs(sensorPos - mActor->_2A0, *getGravityVec()) < maxAngle) {
                         homingSensor = strikeInfo->mParentTriangle.mSensor;
@@ -1871,10 +1871,10 @@ PROC_HIP_DROP_MOVE:
             }
 
             if (homingSensor != nullptr) {
-                TVec3f targetJump(homingSensor->mPosition - mActor->_2A0);
+                Vec3f targetJump(homingSensor->mPosition - mActor->_2A0);
                 targetJump.setLength(mJumpVec.length());
 
-                TVec3f lastMove;
+                Vec3f lastMove;
                 mActor->getLastMove(&lastMove);
                 if (lastMove.dot(mJumpVec) < 0.0f) {
                     const f32 hitGravity = cutGravityElementFromJumpVec(true);
@@ -1929,8 +1929,8 @@ void Mario::doAirWalk() {
     }
 
     f32 speedKiller;
-    TVec3f moveDir;
-    TVec3f sideMove;
+    Vec3f moveDir;
+    Vec3f sideMove;
     calcMoveDir(mStickPos.x, mStickPos.y, &moveDir, true);
 
     if (mActor->_334 != 0) {
@@ -1939,14 +1939,14 @@ void Mario::doAirWalk() {
 
     if (mDrawStates._D) {
         if (MR::diffAngleAbs(getAirGravityVec(), _2EC) > 0.7853982f) {
-            TVec3f sideVec;
+            Vec3f sideVec;
             sideVec.cross(mFrontVec, getAirGravityVec());
             MR::normalizeOrZero(&sideVec);
 
             Mtx rotMtx;
             NebulaMtxRotAxisRad(rotMtx, &sideVec, MR::diffAngleSignedHorizontal(_2EC, getAirGravityVec(), sideVec));
 
-            TVec3f frontRot;
+            Vec3f frontRot;
             NebulaMtxMultVecSR(rotMtx, &_2E0, &frontRot);
             if (frontRot.dot(mFrontVec) < 0.0f) {
                 moveDir = -mFrontVec;
@@ -2019,10 +2019,10 @@ void Mario::doAirWalk() {
         }
     }
 
-    TVec3f moveNorm(moveDir);
+    Vec3f moveNorm(moveDir);
     MR::normalizeOrZero(&moveNorm);
 
-    TVec3f jumpNorm(mJumpVec);
+    Vec3f jumpNorm(mJumpVec);
     MR::normalizeOrZero(&jumpNorm);
 
     if (!inhibitFrontAdjust) {
@@ -2050,7 +2050,7 @@ void Mario::doAirWalk() {
                 frontGravity = -frontGravity;
             }
 
-            TVec3f normJump(mJumpVec);
+            Vec3f normJump(mJumpVec);
             if (!MR::normalizeOrZero(&normJump)) {
                 f32 alignment = normJump.dot(mFrontVec);
                 alignment += 1.0f;
@@ -2151,7 +2151,7 @@ void Mario::cancelTornadoJump() {
     _426 = 0;
 }
 
-void Mario::setRocketBooster(const TVec3f& rVec, f32 a2, u16 a3) {
+void Mario::setRocketBooster(const Vec3f& rVec, f32 a2, u16 a3) {
     _426 = a3;
     _454 = a2;
     _448 = rVec;
@@ -2182,7 +2182,7 @@ bool Mario::isSoftLandingFloor() const {
 
 void Mario::checkAndTryForceJump() {
     bool doForceJump = false;
-    TVec3f forceJumpVec;
+    Vec3f forceJumpVec;
 
     if ((getMovementStates()._1 && !mMovementStates.jumping) || isAnimationRun(_728)) {
         switch (_960) {
@@ -2482,7 +2482,7 @@ void Mario::doLanding() {
         }
 
         if (_10._17 && _8D8 == _45C->mSensor) {
-            TVec3f jumpDelta(mJumpVec - _8DC);
+            Vec3f jumpDelta(mJumpVec - _8DC);
             if (jumpDelta.dot(mJumpVec) < 0.0f) {
                 mJumpVec.zero();
             } else {
@@ -2615,7 +2615,7 @@ void Mario::doLanding() {
 
 POST_LANDING:
     if (mDrawStates._C) {
-        TVec3f jumpNoGrav;
+        Vec3f jumpNoGrav;
         MR::vecKillElement(mJumpVec, *getGravityVec(), &jumpNoGrav);
 
         if (jumpNoGrav.dot(*mGroundPolygon->getNormal(0)) > 0.0f) {

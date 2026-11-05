@@ -20,16 +20,16 @@ public:
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
 
     void initMember(s32, const JMapInfoIter&);
-    s32 placeOnCollisionFormCircle(TVec3f*, const TVec3f&, const TVec3f&, const TVec3f&);
-    f32 calcBoundingSphereRadius(const TVec3f&);
+    s32 placeOnCollisionFormCircle(Vec3f*, const Vec3f&, const Vec3f&, const Vec3f&);
+    f32 calcBoundingSphereRadius(const Vec3f&);
     void emitHintEffect();
 
     PlantMember** mMembers;
     s32 mMemberCount;
     s32 mPlantType;
     bool mIsStarPiece;
-    TVec3f mHintPosition;
-    TVec3f mHintRotation;
+    Vec3f mHintPosition;
+    Vec3f mHintRotation;
     s32 mHintTimer;
     s32 mHintIndex;
 };
@@ -51,7 +51,7 @@ public:
     bool generateItem(PlantGroup*);
     void initPosture();
     bool tryShake(HitSensor*);
-    bool tryPush(const TVec3f&, f32, s32);
+    bool tryPush(const Vec3f&, f32, s32);
     void animControl(PlantGroup*);
 
     f32 _90;

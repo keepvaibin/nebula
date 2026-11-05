@@ -13,7 +13,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 
 namespace MR {
-    inline AreaObj* getAreaIn(const char* pName, const TVec3f& rPos) {
+    inline AreaObj* getAreaIn(const char* pName, const Vec3f& rPos) {
         return getAreaObjContainer()->getAreaObj(pName, rPos);
     }
 
@@ -21,11 +21,11 @@ namespace MR {
         return MR::getAreaObjContainer()->getManager(pMgrName);
     }
 
-    AreaObj* getAreaObj(const char* pAreaName, const TVec3f& rVec) {
+    AreaObj* getAreaObj(const char* pAreaName, const Vec3f& rVec) {
         return MR::getAreaObjContainer()->getAreaObj(pAreaName, rVec);
     }
 
-    bool isInAreaObj(const char* pAreaName, const TVec3f& rVec) {
+    bool isInAreaObj(const char* pAreaName, const Vec3f& rVec) {
         return MR::getAreaObjContainer()->getAreaObj(pAreaName, rVec);
     }
 
@@ -52,7 +52,7 @@ namespace MR {
         }
     }
 
-    bool getWaterAreaInfo(WaterInfo* pInfo, const TVec3f& rPos, const TVec3f& rGravity, bool skipConnectedArea) {
+    bool getWaterAreaInfo(WaterInfo* pInfo, const Vec3f& rPos, const Vec3f& rGravity, bool skipConnectedArea) {
         if (pInfo->mOceanBowl != nullptr) {
             return pInfo->mOceanBowl->calcWaterInfo(rPos, rGravity, pInfo);
         }
@@ -71,29 +71,29 @@ namespace MR {
         switch (pArea->mFormType) {
         case AreaForm::Type_Cube1:
         case AreaForm::Type_Cube2: {
-            TPos3f worldMtx;
-            TRot3f rotationMtx;
-            TVec3f up;
-            TVec3f top;
-            TVec3f localPos;
+            Pos3f worldMtx;
+            Rot3f rotationMtx;
+            Vec3f up;
+            Vec3f top;
+            Vec3f localPos;
             pArea->getForm< AreaFormCube >()->calcLocalPos(&localPos, rPos);
             up.set< f32 >(0.0f, 1.0f, 0.0f);
-            top = TVec3f(0.0f, pArea->getForm< AreaFormCube >()->mBounding.f.y, 0.0f);
-            TVec3f fromTop = localPos - top;
-            TVec3f fromBottom(localPos);
+            top = Vec3f(0.0f, pArea->getForm< AreaFormCube >()->mBounding.f.y, 0.0f);
+            Vec3f fromTop = localPos - top;
+            Vec3f fromBottom(localPos);
             pInfo->mCamWaterDepth = MR::abs(MR::vecKillElement(fromTop, up, &fromTop));
             pInfo->_4 = MR::abs(MR::vecKillElement(fromBottom, up, &fromBottom));
             pInfo->mSurfacePos.set(top + fromTop);
             pArea->getForm< AreaFormCube >()->calcWorldMtx(&worldMtx);
             NebulaMtxMultVec(worldMtx, &pInfo->mSurfacePos, &pInfo->mSurfacePos);
-            TVec3f rotation;
+            Vec3f rotation;
             pArea->getForm< AreaFormCube >()->calcWorldRotate(&rotation);
             MR::makeMtxRotate(rotationMtx, rotation.x, rotation.y, rotation.z);
             rotationMtx.getYDir2(up);
             pInfo->mSurfaceNormal.set(up);
 
             if (pArea->mObjArg0 > 0) {
-                TVec3f streamDir(0.0f, 0.0f, 1.0f);
+                Vec3f streamDir(0.0f, 0.0f, 1.0f);
                 MR::calcCubeAxisZ(pArea, &streamDir);
                 pInfo->mStreamVec.set(streamDir);
                 pInfo->mStreamVec.scale(pArea->mObjArg0);
@@ -102,10 +102,10 @@ namespace MR {
             break;
         }
         case AreaForm::Type_Sphere: {
-            TVec3f center(0.0f, 0.0f, 0.0f);
+            Vec3f center(0.0f, 0.0f, 0.0f);
             pArea->getForm< AreaFormSphere >()->calcPos(&center);
             f32 radius = pArea->getForm< AreaFormSphere >()->mRadius;
-            TVec3f radial = rPos - center;
+            Vec3f radial = rPos - center;
             f32 height = MR::vecKillElement(radial, -rGravity, &radial);
             f32 distanceRate = radial.length() / radius;
             f32 angle = distanceRate;
@@ -115,7 +115,7 @@ namespace MR {
             f32 surfaceHeight = radius * MR::cos(theta);
             pInfo->mCamWaterDepth = surfaceHeight - height;
             pInfo->_4 = surfaceHeight + height;
-            TVec3f normal = rPos - center;
+            Vec3f normal = rPos - center;
             MR::normalizeOrZero(&normal);
             pInfo->mSurfaceNormal.set(normal);
             pInfo->mSurfacePos.set(center + normal * radius);
@@ -126,20 +126,20 @@ namespace MR {
             break;
         }
         case AreaForm::Type_Cylinder: {
-            TVec3f center(0.0f, 0.0f, 0.0f);
-            TVec3f up(0.0f, 0.0f, 1.0f);
+            Vec3f center(0.0f, 0.0f, 0.0f);
+            Vec3f up(0.0f, 0.0f, 1.0f);
             pArea->getForm< AreaFormCylinder >()->calcPos(&center);
             pArea->getForm< AreaFormCylinder >()->calcUpVec(&up);
 
             if (MR::abs(up.dot(rGravity)) > 0.707f) {
-                TVec3f radial;
+                Vec3f radial;
                 f32 height = MR::vecKillElement(rPos - center, up, &radial);
                 depth = pArea->getForm< AreaFormCylinder >()->mHeight - height;
                 pInfo->_4 = height;
                 pInfo->mCamWaterDepth = depth;
                 pInfo->mSurfacePos.set(rPos + up * depth);
             } else {
-                TVec3f radial;
+                Vec3f radial;
                 MR::vecKillElement(rPos - center, up, &radial);
                 f32 distance = radial.length();
                 f32 radius = pArea->getForm< AreaFormCylinder >()->mRadius;
@@ -152,7 +152,7 @@ namespace MR {
             pInfo->mSurfaceNormal.set(-rGravity);
 
             if (pArea->mObjArg0 > 0) {
-                TVec3f streamDir(0.0f, 0.0f, 0.0f);
+                Vec3f streamDir(0.0f, 0.0f, 0.0f);
                 pArea->getForm< AreaFormCylinder >()->calcUpVec(&streamDir);
                 pInfo->mStreamVec.set(streamDir);
                 pInfo->mStreamVec.scale(pArea->mObjArg0);
@@ -163,7 +163,7 @@ namespace MR {
         }
 
         if (!skipConnectedArea) {
-            TVec3f checkPos(pInfo->getSurfacePos() - rGravity * 5.0f);
+            Vec3f checkPos(pInfo->getSurfacePos() - rGravity * 5.0f);
             WaterInfo nextInfo;
             MR::getWaterAreaObj(&nextInfo, checkPos);
 
@@ -178,39 +178,39 @@ namespace MR {
         return pArea->isInVolume(rPos);
     }
 
-    bool calcWhirlPoolAccelInfo(const TVec3f& rVec, TVec3f* pVec) {
+    bool calcWhirlPoolAccelInfo(const Vec3f& rVec, Vec3f* pVec) {
         return WaterAreaFunction::tryInWhirlPoolAccelerator(rVec, pVec);
     }
 
-    void calcCubePos(const AreaObj* pArea, TVec3f* pPos) {
+    void calcCubePos(const AreaObj* pArea, Vec3f* pPos) {
         pArea->getForm< AreaFormCube >()->calcWorldPos(pPos);
     }
 
-    void calcCubeRotate(const AreaObj* pArea, TVec3f* pPos) {
+    void calcCubeRotate(const AreaObj* pArea, Vec3f* pPos) {
         pArea->getForm< AreaFormCube >()->calcWorldRotate(pPos);
     }
 
-    void calcCubeAxisZ(const AreaObj* pArea, TVec3f* pPos) {
-        TVec3f rotate;
+    void calcCubeAxisZ(const AreaObj* pArea, Vec3f* pPos) {
+        Vec3f rotate;
         pArea->getForm< AreaFormCube >()->calcWorldRotate(&rotate);
-        TRot3f rotation;
+        Rot3f rotation;
         MR::makeMtxRotate(rotation, rotate.x, rotate.y, rotate.z);
         rotation.getZDir2(*pPos);
     }
 
-    void calcCubeWorldBox(TDirBox3f* pBox, const AreaObj* pArea) {
+    void calcCubeWorldBox(DirBox3f* pBox, const AreaObj* pArea) {
         pArea->getForm< AreaFormCube >()->calcWorldBox(pBox);
     }
 
-    TBox3f* getCubeLocalBox(const AreaObj* pArea) {
+    Box3f* getCubeLocalBox(const AreaObj* pArea) {
         return &pArea->getForm< AreaFormCube >()->mBounding;
     }
 
-    void calcCubeLocalPos(TVec3f* pVec, const AreaObj* pArea, const TVec3f& rVec) {
+    void calcCubeLocalPos(Vec3f* pVec, const AreaObj* pArea, const Vec3f& rVec) {
         pArea->getForm< AreaFormCube >()->calcLocalPos(pVec, rVec);
     }
 
-    void calcSpherePos(TVec3f* pVec, const AreaObj* pArea) {
+    void calcSpherePos(Vec3f* pVec, const AreaObj* pArea) {
         pArea->getForm< AreaFormSphere >()->calcPos(pVec);
     }
 
@@ -218,15 +218,15 @@ namespace MR {
         return pArea->getForm< AreaFormSphere >()->mRadius;
     }
 
-    void calcCylinderPos(TVec3f* pVec, const AreaObj* pArea) {
+    void calcCylinderPos(Vec3f* pVec, const AreaObj* pArea) {
         pArea->getForm< AreaFormCylinder >()->calcPos(pVec);
     }
 
-    void calcCylinderCenterPos(TVec3f* pVec, const AreaObj* pArea) {
+    void calcCylinderCenterPos(Vec3f* pVec, const AreaObj* pArea) {
         pArea->getForm< AreaFormCylinder >()->calcCenterPos(pVec);
     }
 
-    void calcCylinderUpVec(TVec3f* pVec, const AreaObj* pArea) {
+    void calcCylinderUpVec(Vec3f* pVec, const AreaObj* pArea) {
         pArea->getForm< AreaFormCylinder >()->calcUpVec(pVec);
     }
 
@@ -234,7 +234,7 @@ namespace MR {
         return pArea->getForm< AreaFormCylinder >()->mRadius;
     }
 
-    void tryToUpdatePlayerRestartIdInfo(const TVec3f& rVec) {
+    void tryToUpdatePlayerRestartIdInfo(const Vec3f& rVec) {
         RestartCube* pCube = MR::getAreaObj< RestartCube >("RestartCube", rVec);
 
         if (pCube != nullptr) {
@@ -242,7 +242,7 @@ namespace MR {
         }
     }
 
-    bool getWaterAreaObj(WaterInfo* pInfo, const TVec3f& rPos) {
+    bool getWaterAreaObj(WaterInfo* pInfo, const Vec3f& rPos) {
         pInfo->clear();
         WaterArea* pArea = getAreaObj< WaterArea >("Water", rPos);
 
@@ -254,7 +254,7 @@ namespace MR {
         return WaterAreaFunction::tryInOceanArea(rPos, pInfo);
     }
 
-    bool calcAreaMoveVelocity(TVec3f* pVelocity, const TVec3f& rPos) {
+    bool calcAreaMoveVelocity(Vec3f* pVelocity, const Vec3f& rPos) {
         AreaObj* pArea = MR::getAreaObj("AreaMoveSphere", rPos);
 
         if (pArea == nullptr) {
@@ -262,11 +262,11 @@ namespace MR {
             return false;
         }
 
-        TVec3f center;
+        Vec3f center;
         pArea->getForm< AreaFormSphere >()->calcPos(&center);
-        TVec3f up;
+        Vec3f up;
         pArea->getForm< AreaFormSphere >()->calcUpVec(&up);
-        TVec3f radial = center - rPos;
+        Vec3f radial = center - rPos;
         MR::normalizeOrZero(&radial);
         MR::vecKillElement(up, radial, &up);
         MR::normalizeOrZero(&up);

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class ActorCameraInfo;
 
@@ -18,7 +18,7 @@ public:
     virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
 
-    void shotWaterBullet(LiveActor*, const TPos3f&, f32, bool, bool, bool, ActorCameraInfo**);
+    void shotWaterBullet(LiveActor*, const Pos3f&, f32, bool, bool, bool, ActorCameraInfo**);
 
     bool isBound() const {
         return mHostActor != nullptr;
@@ -39,8 +39,8 @@ public:
     bool inviteMario(HitSensor*);
     void updateSuffererMtx();
 
-    TVec3f _8C;
-    TVec3f _98;
+    Vec3f _8C;
+    Vec3f _98;
     LiveActor* _A4;
     f32 _A8;
     LiveActor* mHostActor;

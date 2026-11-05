@@ -23,7 +23,7 @@ public:
     }
     void calcNrmMtx2();
     void calcDrawMtx2(u32, const Vec&, const Mtx&, J3DMtxBuffer*);
-    void calcDrawMtx3(u32, const Vec&, const Mtx&, J3DMtxBuffer*, const TVec3f&, const TVec3f&);
+    void calcDrawMtx3(u32, const Vec&, const Mtx&, J3DMtxBuffer*, const Vec3f&, const Vec3f&);
 };
 
 class J3DShapeX : public J3DShape {};
@@ -81,7 +81,7 @@ void J3DModelX::viewCalcRef(u32 view, J3DModel* model) {
     prepareShapePackets();
 }
 
-void J3DModelX::viewCalcRefPos(u32 view, J3DModel* model, const TVec3f& pos, const TVec3f& normal) {
+void J3DModelX::viewCalcRefPos(u32 view, J3DModel* model, const Vec3f& pos, const Vec3f& normal) {
     J3DMtxBuffer2* buffer = static_cast< J3DMtxBuffer2* >(mMtxBuffer);
     buffer->rotationMtx(*mExtraMtxBuffer[view + _DC]);
     buffer->calcDrawMtx3(getMtxCalcMode(), mBaseScale, mBaseTransformMtx, model->getMtxBuffer(), pos, normal);
@@ -106,21 +106,21 @@ void J3DMtxBuffer2::calcDrawMtx2(u32 mode, const Vec& scale, const Mtx& base, J3
     }
 
     if (mJointTree->getDrawMtxNum() > mJointTree->getDrawFullWgtMtxNum()) {
-        J3DPSMtxArrayConcat(viewBase, buffer->getWeightAnmMtx(0), *getDrawMtx(mJointTree->getDrawFullWgtMtxNum()), mJointTree->getWEvlpMtxNum());
+        NebulaMtxArrayConcat(viewBase, buffer->getWeightAnmMtx(0), *getDrawMtx(mJointTree->getDrawFullWgtMtxNum()), mJointTree->getWEvlpMtxNum());
     }
 }
 
-void J3DMtxBuffer2::calcDrawMtx3(u32 mode, const Vec& scale, const Mtx& base, J3DMtxBuffer* buffer, const TVec3f& pos, const TVec3f& normal) {
+void J3DMtxBuffer2::calcDrawMtx3(u32 mode, const Vec& scale, const Mtx& base, J3DMtxBuffer* buffer, const Vec3f& pos, const Vec3f& normal) {
     Mtx viewBase;
     J3DCalcViewBaseMtx(j3dSys.getViewMtx(), scale, base, viewBase);
     u16 count = mJointTree->getDrawFullWgtMtxNum();
 
     for (u16 i = 0; i < count; i++) {
         Mtx jointMtx;
-        TPos3f orientation;
+        Pos3f orientation;
         Mtx flatten;
-        TVec3f trans;
-        TVec3f planar;
+        Vec3f trans;
+        Vec3f planar;
 
         MR::extractMtxTrans(buffer->getAnmMtx(mJointTree->getDrawMtxIndex(i)), &trans);
         MR::vecKillElement(trans - pos, normal, &planar);
@@ -128,7 +128,7 @@ void J3DMtxBuffer2::calcDrawMtx3(u32 mode, const Vec& scale, const Mtx& base, J3
 
         NebulaMtxCopy(buffer->getAnmMtx(mJointTree->getDrawMtxIndex(i)), jointMtx);
         MR::setMtxTrans(jointMtx, 0.0f, 0.0f, 0.0f);
-        MR::makeMtxUpNoSupportPos(&orientation, normal, TVec3f(0.0f, 0.0f, 0.0f));
+        MR::makeMtxUpNoSupportPos(&orientation, normal, Vec3f(0.0f, 0.0f, 0.0f));
         NebulaMtxConcat(orientation.toMtxPtr(), jointMtx, jointMtx);
         NebulaMtxScale(flatten, 1.0f, 0.1f, 1.0f);
         NebulaMtxConcat(flatten, jointMtx, jointMtx);
@@ -193,7 +193,7 @@ void J3DModelX::drawIn(J3DMaterial* material, bool fog, MtxPtr base, J3DModel* m
     J3DNativeMaterial::sendOwn(packet->mpMaterial, matPacket->getMaterial());
 
     if (fog) {
-        TVec3f pos;
+        Vec3f pos;
         MR::extractMtxTrans(mBaseTransformMtx, &pos);
         TDDraw::mixFogColor(pos, _1D4, _1D8);
     }

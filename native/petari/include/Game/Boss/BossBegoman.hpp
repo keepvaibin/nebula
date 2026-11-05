@@ -31,10 +31,10 @@ public:
     virtual u32 getKind() const {
         return 0;
     };
-    virtual bool onTouchElectric(const TVec3f&, const TVec3f&);
+    virtual bool onTouchElectric(const Vec3f&, const Vec3f&);
     virtual bool setNerveReturn();
     virtual const Nerve* getNerveWait();
-    virtual void addVelocityOnPushedFromElectricRail(const TVec3f&, const TVec3f&);
+    virtual void addVelocityOnPushedFromElectricRail(const Vec3f&, const Vec3f&);
     virtual bool requestAttack();
 
     void setStepBackNerve();
@@ -87,7 +87,7 @@ public:
     FollowerKind mFollowerKind;
     ParabolicPath* mPath;
     BossBegomanHead* mHead;
-    TPos3f mHeadMtx;
+    Pos3f mHeadMtx;
     s32 mHealth;
     f32 _150;
     ActorCameraInfo* mOpeningDemoInfo;

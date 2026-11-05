@@ -4,16 +4,16 @@
 
 class StarPointerCommandStream : public LayoutActor {
 public:
-    StarPointerCommandStream(const TVec2f*);
+    StarPointerCommandStream(const Vec2f*);
 
     virtual void init(const JMapInfoIter& rIter);
     virtual void control();
 
-    void start(const TVec3f*, bool);
+    void start(const Vec3f*, bool);
     void show();
     void hide();
     void clear();
-    void calcPose(const TVec2f&, const TVec2f&);
+    void calcPose(const Vec2f&, const Vec2f&);
 
     void exeWait();
     void exeSignal();
@@ -27,9 +27,9 @@ public:
     bool _20;
     s32 mOffScreenTime;
     f32 _28;
-    const TVec2f* mScreenPos;
-    const TVec3f* mWorldPos;
-    TVec2f mFollowPos;
+    const Vec2f* mScreenPos;
+    const Vec3f* mWorldPos;
+    Vec2f mFollowPos;
     s32 mPadChannel;
     const NebulaColor8* mColor;
 };

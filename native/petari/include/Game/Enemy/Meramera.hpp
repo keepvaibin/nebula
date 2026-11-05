@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class Triangle;
 class AnimScaleController;
@@ -90,17 +90,17 @@ public:
     bool isPushMoved() const;
     bool isEnableFireball() const;
     bool isEnableChase() const;
-    void addToTargetMovingAccel(const TVec3f&, f32, f32);
-    void addMovingAccel(const TVec3f&, f32, f32);
+    void addToTargetMovingAccel(const Vec3f&, f32, f32);
+    void addMovingAccel(const Vec3f&, f32, f32);
     void addRunawayJumpPower();
-    void addOverWallAccel(const TVec3f&);
+    void addOverWallAccel(const Vec3f&);
     void updatePose();
     void updateExtinguishMtx();
     bool checkDirectDivingPoint();
     bool checkDivingPoint(f32, f32);
     bool checkDivingPointMore(f32);
     bool isHitRecover() const;
-    bool findDivingPoint(TVec3f, const TVec3f&);
+    bool findDivingPoint(Vec3f, const Vec3f&);
     void resetAppear();
     void emitEffectHead(s32);
     void deleteEffectHead(bool);
@@ -113,24 +113,24 @@ public:
 
     inline bool isSensor(const HitSensor*, const char*) const;
     inline bool isActionDisabled() const;
-    inline TVec3f getDistanceToPlayer() const;
+    inline Vec3f getDistanceToPlayer() const;
 
     AnimScaleController* mAnimScaleController;
     WalkerStateBindStarPointer* mWalkerStateBindStarPointer;
     ParabolicPath* mParabolicPath;
-    TPos3f _98;
-    TPos3f mExtinguishMtx;
-    TPos3f _F8;
-    TQuat4f _128;
-    TVec3f _138;
-    TVec3f _144;
-    TVec3f mHomePosition;
-    TVec3f _15C;
-    TVec3f mPlayerPosition;
-    TVec3f _174;
-    TVec3f _180;
-    TVec3f _18C;
-    TVec3f _198;
+    Pos3f _98;
+    Pos3f mExtinguishMtx;
+    Pos3f _F8;
+    Quat4f _128;
+    Vec3f _138;
+    Vec3f _144;
+    Vec3f mHomePosition;
+    Vec3f _15C;
+    Vec3f mPlayerPosition;
+    Vec3f _174;
+    Vec3f _180;
+    Vec3f _18C;
+    Vec3f _198;
     f32 _1A4;
     f32 mChaseDistance;
     s32 mAppearStatus;  // Obj_arg0

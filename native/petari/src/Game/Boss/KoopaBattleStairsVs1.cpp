@@ -18,7 +18,7 @@
 
 namespace {
     inline KoopaFireStairs* emitFireStairs(Koopa* pKoopa, const KoopaBattleMapStair* pStair) {
-        TVec3f jointPos(0.0f, 0.0f, 0.0f);
+        Vec3f jointPos(0.0f, 0.0f, 0.0f);
         MR::copyJointPos(pKoopa, "Tongue2", &jointPos);
         return KoopaFunction::emitFireStairsToTarget(pKoopa, pStair, jointPos, false);
     }
@@ -70,7 +70,7 @@ s32 KoopaBattleStairsVs1::registerStair(KoopaBattleMapStair* pBattleMapStair) {
 
     mStairsGroup->registerActor(pBattleMapStair);
 
-    const TVec3f* vec = &mJumpPos0;
+    const Vec3f* vec = &mJumpPos0;
 
     if (pBattleMapStair->mArg1 == 1) {
         vec = &mJumpPos1;
@@ -202,7 +202,7 @@ void KoopaBattleStairsVs1::exeJumpToNextPosLoop() {
 
         mOldPosition.set(mKoopa->mPosition);
         mJumpIdx++;
-        TVec3f namePos = TVec3f(0.0f, 0.0f, 0.0f);
+        Vec3f namePos = Vec3f(0.0f, 0.0f, 0.0f);
 
         if (mJumpIdx == 1) {
             MR::findNamePos(::sKoopaPosName1, &mNewPosition, &namePos);

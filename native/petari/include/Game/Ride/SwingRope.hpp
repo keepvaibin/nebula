@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class ActorCameraInfo;
 class JUTTexture;
@@ -32,8 +32,8 @@ public:
     f32 calcFriction(s32) const;
 
     void addPointGravity();
-    void restrictPointToTail(s32, const TVec3f*, f32 length = 0.0f);
-    void restrictPointToHead(s32, const TVec3f&, f32 length = 0.0f);
+    void restrictPointToTail(s32, const Vec3f*, f32 length = 0.0f);
+    void restrictPointToHead(s32, const Vec3f&, f32 length = 0.0f);
 
     bool isAllPointsStop() const;
     bool isStretched() const;
@@ -53,11 +53,11 @@ public:
     void drawFree() const;
     void drawBind() const;
 
-    const TVec3f& getBasePos() const {
+    const Vec3f& getBasePos() const {
         return mBasePos;
     }
 
-    TVec3f mBasePos;
+    Vec3f mBasePos;
     f32 mRopeLength;
     bool mIsStretched;
     s32 mStretchTime;  // Time since start of stretch condition
@@ -65,7 +65,7 @@ public:
     s32 mNumPoints;
     SwingRopePoint** mPoints;
     LiveActor* mRider;
-    TPos3f mRideMtx;
+    Pos3f mRideMtx;
     f32 mGrabCoord;
     f32 mGrabPointNum;
     f32 mSlideSpeed;
@@ -74,8 +74,8 @@ public:
     f32 mFootCoord;
     f32 mFootPointNum;
     f32 mGrabToFootDist;
-    TVec3f mFootPos;
-    TVec3f mShadowDropPos;
+    Vec3f mFootPos;
+    Vec3f mShadowDropPos;
     f32 mShadowDropOffset;
     s32 mPrevSoundLvl;
 };

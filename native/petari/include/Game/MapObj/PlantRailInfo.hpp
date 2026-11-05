@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/Util/JMapInfo.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class PlantPoint;
 class RailRider;
@@ -10,8 +10,8 @@ class PlantRailInfo {
 public:
     PlantRailInfo(const JMapInfoIter&, f32);
 
-    void calcPosAndAxisY(TVec3f*, TVec3f*, f32) const;
-    void calcNearestPointPos(TVec3f*, const TVec3f&, s32) const;
+    void calcPosAndAxisY(Vec3f*, Vec3f*, f32) const;
+    void calcNearestPointPos(Vec3f*, const Vec3f&, s32) const;
 
     inline PlantPoint* getPlantPoint(s32 idx) {
         return mPlantPoints[idx];

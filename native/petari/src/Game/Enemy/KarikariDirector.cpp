@@ -26,14 +26,14 @@ KarikariDirector::KarikariDirector(const char* pName)
     : LiveActorGroup(pName, 128), mClingNum(0), mClingJointMtxs(nullptr), mClingPositions(nullptr), mClingingKarikari(nullptr),
       mReleaseKarikari(nullptr), mReleaseVel(0.0f, 0.0f), mLowestReleaseDist(999999.0f), mNoReleaseTime(0) {
     MR::connectToSceneEnemyMovement(this);
-    mClingJointMtxs = new TPos3f[5];
+    mClingJointMtxs = new Pos3f[5];
     mClingPositions = new FixedPosition*[::hKarikariHoldingMax];
     mClingingKarikari = new Karikari*[::hKarikariHoldingMax];
 
     for (s32 idx = 0; idx < ::hKarikariHoldingMax; idx++) {
         mClingingKarikari[idx] = nullptr;
-        mClingPositions[idx] = new FixedPosition(getClingMtx(idx), TVec3f(cling_data[idx].mPos.x, cling_data[idx].mPos.y, cling_data[idx].mPos.z),
-                                                 TVec3f(cling_data[idx].mRotDegree.x, cling_data[idx].mRotDegree.y, cling_data[idx].mRotDegree.z));
+        mClingPositions[idx] = new FixedPosition(getClingMtx(idx), Vec3f(cling_data[idx].mPos.x, cling_data[idx].mPos.y, cling_data[idx].mPos.z),
+                                                 Vec3f(cling_data[idx].mRotDegree.x, cling_data[idx].mRotDegree.y, cling_data[idx].mRotDegree.z));
     }
 }
 
@@ -51,7 +51,7 @@ void KarikariDirector::removeAllClingingKarikari() {
     }
 }
 
-void KarikariDirector::blowOutAllClingingKarikari(const TVec3f& rPos) {
+void KarikariDirector::blowOutAllClingingKarikari(const Vec3f& rPos) {
     for (s32 idx = 0; idx < ::hKarikariHoldingMax; idx++) {
         Karikari* karikari = mClingingKarikari[idx];
         if (karikari != nullptr) {
@@ -108,7 +108,7 @@ void KarikariDirector::clearScratchInfo() {
     mNoReleaseTime = ::sNoReleaseTime;
 }
 
-bool KarikariDirector::requestRelease(Karikari* pReleaseKarikari, TVec2f releaseVel, f32 dist) {
+bool KarikariDirector::requestRelease(Karikari* pReleaseKarikari, Vec2f releaseVel, f32 dist) {
     if (mNoReleaseTime > 0) {
         return false;
     }

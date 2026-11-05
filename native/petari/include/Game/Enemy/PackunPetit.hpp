@@ -49,7 +49,7 @@ public:
 
     AnimScaleController* mScaleController;
     WalkerStateBindStarPointer* mStarPointerState;
-    TVec3f _94;
+    Vec3f _94;
     ModelObj* mBlownModel;
     bool mDontTurn;
 };

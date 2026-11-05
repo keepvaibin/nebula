@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/PartsModel.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 template < typename T >
 class JointControlDelegator;
@@ -29,7 +29,7 @@ public:
     void exeSwitchOff();
     void exeTurn();
     void exeTurnEnd();
-    bool calcJointEdge(TPos3f*, const JointControllerInfo&);
+    bool calcJointEdge(Pos3f*, const JointControllerInfo&);
 
 private:
     f32 mAngle;

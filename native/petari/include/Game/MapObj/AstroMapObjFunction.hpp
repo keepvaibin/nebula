@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class GalaxyNamePlate;
 class JMapInfo;
@@ -23,7 +23,7 @@ public:
     static s32 getDomeIdFromArg0(const JMapInfoIter&);
     static const char* getModelName(const char*, s32);
     static const JMapInfo* createAstroNamePlateParser();
-    static bool trySetAndShowNamePlate(GalaxyNamePlate*, const JMapInfo*, const TVec3f&, const char*, s32, bool);
+    static bool trySetAndShowNamePlate(GalaxyNamePlate*, const JMapInfo*, const Vec3f&, const char*, s32, bool);
     static bool tryRegisterMultiDemoAndFunction(const char*, LiveActor*, const JMapInfoIter&, const MR::FunctorBase&);
     static void initilizePeculiar(const char*, LiveActor*, const JMapInfoIter&);
 };

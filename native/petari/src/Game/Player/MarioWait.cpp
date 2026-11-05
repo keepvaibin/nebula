@@ -12,7 +12,7 @@ void MarioAnimator::controlWaitAnimation() {
         return;
     }
 
-    TVec3f side;
+    Vec3f side;
     Mario* player = getPlayer();
     side.cross(getFrontVec(), player->_368);
     MR::normalizeOrZero(&side);
@@ -20,7 +20,7 @@ void MarioAnimator::controlWaitAnimation() {
         return;
     }
 
-    TVec3f front;
+    Vec3f front;
     front.cross(getPlayer()->_368, side);
     MR::normalizeOrZero(&front);
     f32 sideSlope = side.dot(getPlayer()->getAirGravityVec());
@@ -306,7 +306,7 @@ MarioWait::MarioWait(MarioActor* pActor) : MarioState(pActor, MarioStatus_Wait) 
     _14 = 0;
 }
 
-void MarioState::hitPoly(u8, const TVec3f&, HitSensor*) {
+void MarioState::hitPoly(u8, const Vec3f&, HitSensor*) {
 }
 
 bool MarioState::keep() {

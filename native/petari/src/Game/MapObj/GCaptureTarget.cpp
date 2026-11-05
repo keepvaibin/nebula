@@ -16,7 +16,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 namespace NrvGCaptureTarget {
     NEW_NERVE(GCaptureTargetNrvTryDemoAppear, GCaptureTarget, TryDemoAppear);
@@ -48,14 +48,14 @@ void GCaptureTarget::init(const JMapInfoIter& rIter) {
 
     if (MR::isConnectedWithRail(rIter)) {
         initHitSensor(1);
-        MR::addHitSensorMapObj(this, "body", 8, 0.0f, TVec3f(0.0f, 0.0f, 0.0f));
+        MR::addHitSensorMapObj(this, "body", 8, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
         MR::invalidateHitSensor(this, "body");
         initRailRider(rIter);
         mRailMover = new MapPartsRailMover(this);
         mRailMover->init(rIter);
     }
 
-    MR::initStarPointerTarget(this, 200.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::initStarPointerTarget(this, 200.0f, Vec3f(0.0f, 0.0f, 0.0f));
 
     if (MR::tryRegisterDemoCast(this, rIter)) {
         makeActorDead();
@@ -310,7 +310,7 @@ bool GCaptureTarget::isReleaseForce() const {
     return MR::isDead(this);
 }
 
-void GCaptureTarget::getTargetPosition(TVec3f* a1) {
+void GCaptureTarget::getTargetPosition(Vec3f* a1) {
     a1->set(mPosition);
 }
 

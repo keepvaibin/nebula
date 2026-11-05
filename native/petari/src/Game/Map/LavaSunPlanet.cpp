@@ -25,7 +25,7 @@ void LavaSunPlanet::calcAndSetBaseMtx() {
     if (mRotator == nullptr) {
         LiveActor::calcAndSetBaseMtx();
     } else {
-        TPos3f mtx;
+        Pos3f mtx;
         mtx.set(mRotator->getRotateMtx());
         mtx.setTrans(mPosition);
         MR::setBaseTRMtx(this, mtx);

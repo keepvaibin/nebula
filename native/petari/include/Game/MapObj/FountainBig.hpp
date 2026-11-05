@@ -17,6 +17,6 @@ public:
     void exeSpout();
     void exeSpoutEnd();
 
-    TVec3f mClippingRadius;
+    Vec3f mClippingRadius;
     s32 mSpoutTimer;
 };

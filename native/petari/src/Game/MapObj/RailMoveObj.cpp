@@ -31,7 +31,7 @@ namespace NrvRailMoveObj {
 };  // namespace NrvRailMoveObj
 
 RailMoveObj::RailMoveObj(const char* pName) : MapObjActor(pName) {
-    _C4.setPSZeroVec();
+    _C4.setZeroVec();
     _D0 = 0;
 }
 
@@ -74,7 +74,7 @@ void RailMoveObj::init(const JMapInfoIter& rIter) {
     }
 }
 
-TVec3f* RailMoveObj::getSoundCalcPos() {
+Vec3f* RailMoveObj::getSoundCalcPos() {
     return 0;
 }
 

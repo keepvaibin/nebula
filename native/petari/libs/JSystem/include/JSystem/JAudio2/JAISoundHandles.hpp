@@ -1,7 +1,7 @@
 #pragma once
 
 #include "JSystem/JAudio2/JAISound.hpp"
-#include "JSystem/JGeometry/TVec.hpp"
+#include <nebula_geometry.hpp>
 
 struct JAISeqDataUser;
 
@@ -31,7 +31,7 @@ public:
     JAISoundHandle* getHandleSoundID(JAISoundID);
     JAISoundHandle* getHandleUserData(uintptr_t);
 
-    void setPos(const TVec3f&);
+    void setPos(const Vec3f&);
 
     JAISoundHandle* mHandles;
     int mNumHandles;

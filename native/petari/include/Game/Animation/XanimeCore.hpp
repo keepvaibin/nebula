@@ -1,7 +1,7 @@
 #pragma once
 
 #include <JSystem/J3DGraphAnimator/J3DJoint.hpp>
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class J3DModelData;
 class J3DAnmTransform;
@@ -10,8 +10,8 @@ class XtransformInfo {
 public:
     XtransformInfo();
 
-    TVec3f _0;
-    TVec3f _C;
+    Vec3f _0;
+    Vec3f _C;
     Quaternion mRotation;
 };
 
@@ -25,11 +25,11 @@ public:
 
     J3DJoint* _0;
     u16 _4;
-    TVec3f mScale;
-    TVec3f _14;
-    TVec3f _20;
-    TVec3f _2C;
-    TVec3f _38;
+    Vec3f mScale;
+    Vec3f _14;
+    Vec3f _20;
+    Vec3f _2C;
+    Vec3f _38;
     J3DTransformInfo _44;
     MtxPtr _64;
     uintptr_t _68;
@@ -42,7 +42,7 @@ public:
 
     XtransformInfo _0;
     XtransformInfo _28;
-    TVec3f _50;
+    Vec3f _50;
     f32 _5C;
     f32 _60;
 };
@@ -81,19 +81,19 @@ public:
     void shareJointTransform(const XanimeCore*);
     void doFreeze();
     void setBck(u32, J3DAnmTransform*);
-    void calcBlend(TVec3f*, TVec3f*);
-    void calcSingle(TVec3f*, TVec3f*);
+    void calcBlend(Vec3f*, Vec3f*);
+    void calcSingle(Vec3f*, Vec3f*);
     void calcBlendSpecial();
-    void calcScaleBlendMaya(const TVec3f&, const TVec3f&);
-    void calcScaleBlendMayaNoTransform(const TVec3f&, const TVec3f&);
-    void calcScaleBlendSI(const TVec3f&, const TVec3f&);
-    void calcScaleBlendBasic(const TVec3f&, const TVec3f&);
+    void calcScaleBlendMaya(const Vec3f&, const Vec3f&);
+    void calcScaleBlendMayaNoTransform(const Vec3f&, const Vec3f&);
+    void calcScaleBlendSI(const Vec3f&, const Vec3f&);
+    void calcScaleBlendBasic(const Vec3f&, const Vec3f&);
     void calcScaleBlendSpecial();
     void freezeCopy(J3DModelData*, XanimeCore*, u32, u32);
     void initT(J3DModelData*);
     void reconfigJointTransform(J3DModelData*);
     void updateFrame();
-    void fixT(TVec3f*);
+    void fixT(Vec3f*);
 
     void enableJointTransform(J3DModelData*);
 

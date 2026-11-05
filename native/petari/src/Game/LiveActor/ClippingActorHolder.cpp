@@ -69,7 +69,7 @@ void ClippingActorHolder::initViewGroupTable() {
 // The smallest planet whose clipping sphere (it holds the model) has the actor in or just above it.
 const ClippingActorInfo* ClippingActorHolder::findGround(const ClippingActorInfo* pInfo) const {
     const ClippingActorInfo* ground = nullptr;
-    const TVec3f& pos = pInfo->mActor->mPosition;
+    const Vec3f& pos = pInfo->mActor->mPosition;
     for (s32 i = 0; i < mPlanetNum; i++) {
         const ClippingActorInfo* planet = mPlanets[i];
         if (planet == pInfo) {
@@ -179,7 +179,7 @@ ClippingActorInfo* ClippingActorHolder::startGroupClipping(LiveActor* pActor, co
     return pActorInfo;
 }
 
-void ClippingActorHolder::setTypeToSphere(LiveActor* pActor, f32 range, const TVec3f* pCenter) {
+void ClippingActorHolder::setTypeToSphere(LiveActor* pActor, f32 range, const Vec3f* pCenter) {
     find(pActor)->setTypeToSphere(range, pCenter);
 }
 

@@ -85,12 +85,12 @@ public:
     void doJumpStart();
     void doJump();
     void tearDownWait();
-    bool checkDivingThicket(const TVec3f& rVec1, const TVec3f& rVec2);
+    bool checkDivingThicket(const Vec3f& rVec1, const Vec3f& rVec2);
     bool selectEdgeStartEvent(RailGraphIter* pIter);
-    void selectEdgeRunnaway(RailGraphIter* pIter, const TVec3f& rVec, f32 f);
+    void selectEdgeRunnaway(RailGraphIter* pIter, const Vec3f& rVec, f32 f);
     void startRouteLevelControl(s32 l1, s32 l2);
     void controlRouteLevel();
-    void addMovingAccel(const TVec3f& rVec, f32 f);
+    void addMovingAccel(const Vec3f& rVec, f32 f);
     void addKeepRouteRange(f32 f1, f32 f2, f32 f3);
     void updateFootPrint();
     bool isCaughtable() const;
@@ -105,8 +105,8 @@ public:
     void initTimer();
     void updateTime();
 
-    TQuat4f _8C;
-    TVec3f _9C;
+    Quat4f _8C;
+    Vec3f _9C;
     RabbitStateWaitStart* mRabbitStateWaitStart;
     RabbitStateCaught* mRabbitStateCaught;
     MultiEventCamera* mMultiEventCamera;

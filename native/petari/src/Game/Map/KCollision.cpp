@@ -25,8 +25,8 @@ void KCollisionServer::setData(void* pData) {
         NEBULA_PANIC("KCollisionServer: a collision file not in host order (the importer cooks it)");
     }
     u8* pBase = static_cast< u8* >(pData);
-    mModel.mPos = reinterpret_cast< TVec3f* >(pBase + pHeader->mPosOffset);
-    mModel.mNorms = reinterpret_cast< TVec3f* >(pBase + pHeader->mNormOffset);
+    mModel.mPos = reinterpret_cast< Vec3f* >(pBase + pHeader->mPosOffset);
+    mModel.mNorms = reinterpret_cast< Vec3f* >(pBase + pHeader->mNormOffset);
     mModel.mPrisms = reinterpret_cast< KC_PrismData* >(pBase + pHeader->mPrismOffset);
     mModel.mOctree = pBase + pHeader->mOctreeOffset;
     mModel.mTriangleNum = static_cast< s32 >((pHeader->mOctreeOffset - pHeader->mPrismOffset) / sizeof(KC_PrismData)) - 1;
@@ -73,7 +73,7 @@ bool KCollisionServer::calcFarthestVertexDistance() {
             prism->mHeight = -MR::abs(prism->mHeight);
         } else {
             for (s32 j = 0; j < 3; j++) {
-                TVec3f pos = getPos(prism, j);
+                Vec3f pos = getPos(prism, j);
                 f32 distSq = pos.squared();
 
                 if (maxDistance < distSq) {
@@ -118,32 +118,32 @@ KC_PrismData* KCollisionServer::checkPoint(Fxyz* pPoint, f32 param, f32* pDist) 
             continue;
         }
 
-        TVec3f* vtx = &mFile->mPos[prism->mPositionIndex];
+        Vec3f* vtx = &mFile->mPos[prism->mPositionIndex];
 
         Fxyz dir;
         dir.x = pPoint->x - vtx->x;
         dir.y = pPoint->y - vtx->y;
         dir.z = pPoint->z - vtx->z;
 
-        TVec3f& edgeNormal0 = mFile->mNorms[prism->mEdgeIndices[0]];
+        Vec3f& edgeNormal0 = mFile->mNorms[prism->mEdgeIndices[0]];
 
         if (dir.x * edgeNormal0.x + dir.y * edgeNormal0.y + dir.z * edgeNormal0.z > 0.0f) {
             continue;
         }
 
-        TVec3f& edgeNormal1 = mFile->mNorms[prism->mEdgeIndices[1]];
+        Vec3f& edgeNormal1 = mFile->mNorms[prism->mEdgeIndices[1]];
 
         if (dir.x * edgeNormal1.x + dir.y * edgeNormal1.y + dir.z * edgeNormal1.z > 0.0f) {
             continue;
         }
 
-        TVec3f& edgeNormal2 = mFile->mNorms[prism->mEdgeIndices[2]];
+        Vec3f& edgeNormal2 = mFile->mNorms[prism->mEdgeIndices[2]];
 
         if (dir.x * edgeNormal2.x + dir.y * edgeNormal2.y + dir.z * edgeNormal2.z > height) {
             continue;
         }
 
-        TVec3f& faceNormal = mFile->mNorms[prism->mNormalIndex];
+        Vec3f& faceNormal = mFile->mNorms[prism->mNormalIndex];
         f32 dist = -dir.x * faceNormal.x - dir.y * faceNormal.y - dir.z * faceNormal.z;
 
         if (dist < 0.0f) {
@@ -177,9 +177,9 @@ u32 KCollisionServer::checkArea3D(Fxyz* pMin, Fxyz* pMax, KC_PrismData** pOut, u
 
     V3u pointMin;
     V3u pointMax;
-    TVec3f queryMax;
-    TVec3f queryMin;
-    MR::createBoundingBox((TVec3f*)box, 2, &queryMin, &queryMax);
+    Vec3f queryMax;
+    Vec3f queryMin;
+    MR::createBoundingBox((Vec3f*)box, 2, &queryMin, &queryMax);
 
     if (queryMin.x == queryMax.x) {
         queryMin.x -= 1.0f;
@@ -253,13 +253,13 @@ u32 KCollisionServer::checkArea3D(Fxyz* pMin, Fxyz* pMax, KC_PrismData** pOut, u
                             continue;
                         }
 
-                        TVec3f verts[3];
+                        Vec3f verts[3];
                         verts[0] = getPos(prism, 0);
                         verts[1] = getPos(prism, 1);
                         verts[2] = getPos(prism, 2);
 
-                        TVec3f prismMin;
-                        TVec3f prismMax;
+                        Vec3f prismMin;
+                        Vec3f prismMax;
                         MR::createBoundingBox(verts, 3, &prismMin, &prismMax);
 
                         if (prismMax.x < queryMin.x) {
@@ -321,8 +321,8 @@ u32 KCollisionServer::checkSphere(Fxyz* pCenter, f32 radius, f32 param, u32 maxC
 
     V3u pointMin;
     V3u pointMax;
-    TVec3f boxMax;
-    TVec3f boxMin;
+    Vec3f boxMax;
+    Vec3f boxMin;
     u32 x;
     u32 y;
     u32 z;
@@ -435,8 +435,8 @@ u32 KCollisionServer::checkSphereWithThickness(Fxyz* pCenter, f32 radius, f32 pa
 
     V3u pointMin;
     V3u pointMax;
-    TVec3f boxMax;
-    TVec3f boxMin;
+    Vec3f boxMax;
+    Vec3f boxMin;
     u32 x;
     u32 y;
     u32 z;
@@ -535,14 +535,14 @@ u32 KCollisionServer::checkSphereWithThickness(Fxyz* pCenter, f32 radius, f32 pa
     return foundCount;
 }
 
-KC_PrismData* KCollisionServer::checkArrow(const TVec3f& rOrigin, const TVec3f& rDir, f32* pDists, u8* pFlags, u32* pCount, KC_PrismData** pOut,
+KC_PrismData* KCollisionServer::checkArrow(const Vec3f& rOrigin, const Vec3f& rDir, f32* pDists, u8* pFlags, u32* pCount, KC_PrismData** pOut,
                                            u32 maxCount) const {
     if (rDir.x == 0.0f && rDir.y == 0.0f && rDir.z == 0.0f) {
         return nullptr;
     }
 
     f32 length;
-    TVec3f dir(rDir);
+    Vec3f dir(rDir);
     f32 startT = 0.0f;
     MR::separateScalarAndDirection(&length, &dir, dir);
 
@@ -550,9 +550,9 @@ KC_PrismData* KCollisionServer::checkArrow(const TVec3f& rOrigin, const TVec3f& 
         return nullptr;
     }
 
-    TVec3f hitPoint;
+    Vec3f hitPoint;
     V3u cell;
-    TVec3f start(rOrigin);
+    Vec3f start(rOrigin);
     start.x -= mFile->mMin.x;
     start.y -= mFile->mMin.y;
     start.z -= mFile->mMin.z;
@@ -562,7 +562,7 @@ KC_PrismData* KCollisionServer::checkArrow(const TVec3f& rOrigin, const TVec3f& 
     if (isInsideMinMaxInLocalSpace(cell)) {
         hitPoint.set(start);
     } else {
-        TVec3f boxMax;
+        Vec3f boxMax;
         boxMax.x = (f32)(u32)~mFile->mXMask;
         boxMax.y = (f32)(u32)~mFile->mYMask;
         boxMax.z = (f32)(u32)~mFile->mZMask;
@@ -572,7 +572,7 @@ KC_PrismData* KCollisionServer::checkArrow(const TVec3f& rOrigin, const TVec3f& 
             startT = (edge - start.x) / dir.x;
 
             if (0.0f <= startT && startT <= length) {
-                TVec3f step(dir);
+                Vec3f step(dir);
                 step.scale(startT);
                 hitPoint.set(step);
                 hitPoint += start;
@@ -588,7 +588,7 @@ KC_PrismData* KCollisionServer::checkArrow(const TVec3f& rOrigin, const TVec3f& 
             startT = (edge - start.y) / dir.y;
 
             if (0.0f <= startT && startT <= length) {
-                TVec3f step(dir);
+                Vec3f step(dir);
                 step.scale(startT);
                 hitPoint.set(step);
                 hitPoint += start;
@@ -604,7 +604,7 @@ KC_PrismData* KCollisionServer::checkArrow(const TVec3f& rOrigin, const TVec3f& 
             startT = (edge - start.z) / dir.z;
 
             if (0.0f <= startT && startT <= length) {
-                TVec3f step(dir);
+                Vec3f step(dir);
                 step.scale(startT);
                 hitPoint.set(step);
                 hitPoint += start;
@@ -756,7 +756,7 @@ searchStart:
             break;
         }
 
-        TVec3f step(dir);
+        Vec3f step(dir);
         step.scale(tMin);
         hitPoint += step;
         accumT += tMin;
@@ -780,7 +780,7 @@ bool KCollisionServer::KCHitSphere(KC_PrismData* pPrism, Fxyz* pCenter, f32 radi
     f32 threshold = mFile->mThickness * param;
     *pFlag = 0;
 
-    TVec3f* v0 = &mFile->mPos[pPrism->mPositionIndex];
+    Vec3f* v0 = &mFile->mPos[pPrism->mPositionIndex];
 
     Fxyz dir;
     f32 distances[4];
@@ -788,28 +788,28 @@ bool KCollisionServer::KCHitSphere(KC_PrismData* pPrism, Fxyz* pCenter, f32 radi
     dir.y = pCenter->y - v0->y;
     dir.z = pCenter->z - v0->z;
 
-    TVec3f* n0 = &mFile->mNorms[pPrism->mEdgeIndices[0]];
+    Vec3f* n0 = &mFile->mNorms[pPrism->mEdgeIndices[0]];
     distances[1] = dir.x * n0->x + dir.y * n0->y + dir.z * n0->z;
 
     if (distances[1] >= radius) {
         return false;
     }
 
-    TVec3f* n1 = &mFile->mNorms[pPrism->mEdgeIndices[1]];
+    Vec3f* n1 = &mFile->mNorms[pPrism->mEdgeIndices[1]];
     distances[2] = dir.x * n1->x + dir.y * n1->y + dir.z * n1->z;
 
     if (distances[2] >= radius) {
         return false;
     }
 
-    TVec3f* n2 = &mFile->mNorms[pPrism->mEdgeIndices[2]];
+    Vec3f* n2 = &mFile->mNorms[pPrism->mEdgeIndices[2]];
     distances[3] = dir.x * n2->x + dir.y * n2->y + dir.z * n2->z - pPrism->mHeight;
 
     if (distances[3] >= radius) {
         return false;
     }
 
-    TVec3f* faceNormal = &mFile->mNorms[pPrism->mNormalIndex];
+    Vec3f* faceNormal = &mFile->mNorms[pPrism->mNormalIndex];
     distances[0] = dir.x * faceNormal->x + dir.y * faceNormal->y + dir.z * faceNormal->z;
     *pDist = radius - distances[0];
 
@@ -1001,7 +1001,7 @@ bool KCollisionServer::KCHitSphereWithThickness(KC_PrismData* pPrism, Fxyz* pCen
     f32 threshold = thickness * param;
     *pFlag = 0;
 
-    TVec3f* v0 = &mFile->mPos[pPrism->mPositionIndex];
+    Vec3f* v0 = &mFile->mPos[pPrism->mPositionIndex];
 
     Fxyz dir;
     f32 distances[4];
@@ -1009,28 +1009,28 @@ bool KCollisionServer::KCHitSphereWithThickness(KC_PrismData* pPrism, Fxyz* pCen
     dir.y = pCenter->y - v0->y;
     dir.z = pCenter->z - v0->z;
 
-    TVec3f* n0 = &mFile->mNorms[pPrism->mEdgeIndices[0]];
+    Vec3f* n0 = &mFile->mNorms[pPrism->mEdgeIndices[0]];
     distances[1] = dir.x * n0->x + dir.y * n0->y + dir.z * n0->z;
 
     if (distances[1] >= radius) {
         return false;
     }
 
-    TVec3f* n1 = &mFile->mNorms[pPrism->mEdgeIndices[1]];
+    Vec3f* n1 = &mFile->mNorms[pPrism->mEdgeIndices[1]];
     distances[2] = dir.x * n1->x + dir.y * n1->y + dir.z * n1->z;
 
     if (distances[2] >= radius) {
         return false;
     }
 
-    TVec3f* n2 = &mFile->mNorms[pPrism->mEdgeIndices[2]];
+    Vec3f* n2 = &mFile->mNorms[pPrism->mEdgeIndices[2]];
     distances[3] = dir.x * n2->x + dir.y * n2->y + dir.z * n2->z - pPrism->mHeight;
 
     if (distances[3] >= radius) {
         return false;
     }
 
-    TVec3f* faceNormal = &mFile->mNorms[pPrism->mNormalIndex];
+    Vec3f* faceNormal = &mFile->mNorms[pPrism->mNormalIndex];
     distances[0] = dir.x * faceNormal->x + dir.y * faceNormal->y + dir.z * faceNormal->z;
     *pDist = radius - distances[0];
 
@@ -1214,9 +1214,9 @@ success:
 }
 
 bool KCollisionServer::isNearParallelNormal(const KC_PrismData* pPrism) const {
-    TVec3f edge0 = mFile->mNorms[pPrism->mEdgeIndices[0]];
-    TVec3f edge1 = mFile->mNorms[pPrism->mEdgeIndices[1]];
-    TVec3f edge2 = mFile->mNorms[pPrism->mEdgeIndices[2]];
+    Vec3f edge0 = mFile->mNorms[pPrism->mEdgeIndices[0]];
+    Vec3f edge1 = mFile->mNorms[pPrism->mEdgeIndices[1]];
+    Vec3f edge2 = mFile->mNorms[pPrism->mEdgeIndices[2]];
 
     bool isNear = false;
 
@@ -1227,11 +1227,11 @@ bool KCollisionServer::isNearParallelNormal(const KC_PrismData* pPrism) const {
     return isNear;
 }
 
-bool KCollisionServer::KCHitArrow(KC_PrismData* pPrism, const TVec3f& rOrigin, const TVec3f& rDir, f32* pDist, u8* pFlag) const {
-    TVec3f* v0 = &mFile->mPos[pPrism->mPositionIndex];
-    TVec3f* faceNormal = &mFile->mNorms[pPrism->mNormalIndex];
+bool KCollisionServer::KCHitArrow(KC_PrismData* pPrism, const Vec3f& rOrigin, const Vec3f& rDir, f32* pDist, u8* pFlag) const {
+    Vec3f* v0 = &mFile->mPos[pPrism->mPositionIndex];
+    Vec3f* faceNormal = &mFile->mNorms[pPrism->mNormalIndex];
 
-    TVec3f rel;
+    Vec3f rel;
     NebulaVecSubtract(rOrigin, v0, rel);
 
     f32 t = NebulaVecDotProduct(rel, faceNormal);
@@ -1250,7 +1250,7 @@ bool KCollisionServer::KCHitArrow(KC_PrismData* pPrism, const TVec3f& rOrigin, c
 
     t = t / -dirDotFace;
 
-    TVec3f hit = rDir * t;
+    Vec3f hit = rDir * t;
     hit += rel;
 
     bool onEdge0 = false;
@@ -1329,23 +1329,23 @@ s32 KCollisionServer::toIndex(const KC_PrismData* pPrism) const {
     return pPrism - (mFile->mPrisms + 1);
 }
 
-TVec3f* KCollisionServer::getFaceNormal(const KC_PrismData* pPrism) const {
+Vec3f* KCollisionServer::getFaceNormal(const KC_PrismData* pPrism) const {
     return &mFile->mNorms[pPrism->mNormalIndex];
 }
 
-TVec3f* KCollisionServer::getEdgeNormal1(const KC_PrismData* pPrism) const {
+Vec3f* KCollisionServer::getEdgeNormal1(const KC_PrismData* pPrism) const {
     return &mFile->mNorms[pPrism->mEdgeIndices[0]];
 }
 
-TVec3f* KCollisionServer::getEdgeNormal2(const KC_PrismData* pPrism) const {
+Vec3f* KCollisionServer::getEdgeNormal2(const KC_PrismData* pPrism) const {
     return &mFile->mNorms[pPrism->mEdgeIndices[1]];
 }
 
-TVec3f* KCollisionServer::getEdgeNormal3(const KC_PrismData* pPrism) const {
+Vec3f* KCollisionServer::getEdgeNormal3(const KC_PrismData* pPrism) const {
     return &mFile->mNorms[pPrism->mEdgeIndices[2]];
 }
 
-TVec3f* KCollisionServer::getNormal(u32 index) const {
+Vec3f* KCollisionServer::getNormal(u32 index) const {
     return &mFile->mNorms[index];
 }
 
@@ -1355,12 +1355,12 @@ void KCollisionServer::calXvec(const Fxyz* pVecA, const Fxyz* pVecB, Fxyz* pDst)
     pDst->z = pVecA->y * pVecB->x - pVecA->x * pVecB->y;
 }
 
-TVec3f KCollisionServer::getPos(const KC_PrismData* pPrism, int vertexIndex) const {
+Vec3f KCollisionServer::getPos(const KC_PrismData* pPrism, int vertexIndex) const {
     switch (vertexIndex) {
     case 0: {
-        TVec3f* pos = &mFile->mPos[pPrism->mPositionIndex];
+        Vec3f* pos = &mFile->mPos[pPrism->mPositionIndex];
 
-        return TVec3f(pos->x, pos->y, pos->z);
+        return Vec3f(pos->x, pos->y, pos->z);
     }
     case 1: {
         Fxyz* pos = reinterpret_cast< Fxyz* >(&mFile->mPos[pPrism->mPositionIndex]);
@@ -1377,7 +1377,7 @@ TVec3f KCollisionServer::getPos(const KC_PrismData* pPrism, int vertexIndex) con
         finalPos.y = pos->y + sideLength * finalPos.y;
         finalPos.z = pos->z + sideLength * finalPos.z;
 
-        return TVec3f(finalPos.x, finalPos.y, finalPos.z);
+        return Vec3f(finalPos.x, finalPos.y, finalPos.z);
     }
     case 2: {
         Fxyz* pos = reinterpret_cast< Fxyz* >(&mFile->mPos[pPrism->mPositionIndex]);
@@ -1394,10 +1394,10 @@ TVec3f KCollisionServer::getPos(const KC_PrismData* pPrism, int vertexIndex) con
         finalPos.y = pos->y + sideLength * finalPos.y;
         finalPos.z = pos->z + sideLength * finalPos.z;
 
-        return TVec3f(finalPos.x, finalPos.y, finalPos.z);
+        return Vec3f(finalPos.x, finalPos.y, finalPos.z);
     }
     default:
-        return TVec3f(0.0f, 0.0f, 0.0f);
+        return Vec3f(0.0f, 0.0f, 0.0f);
     }
 }
 
@@ -1438,7 +1438,7 @@ s32* KCollisionServer::searchBlock(s32* pShift, const u32& rX, const u32& rY, co
     return reinterpret_cast< s32* >(octree + (offset & 0x7FFFFFFF));
 }
 
-void KCollisionServer::V3u::setUsingCast(const TVec3f& rPos) {
+void KCollisionServer::V3u::setUsingCast(const Vec3f& rPos) {
     x = static_cast< s32 >(rPos.x);
     y = static_cast< s32 >(rPos.y);
     z = static_cast< s32 >(rPos.z);

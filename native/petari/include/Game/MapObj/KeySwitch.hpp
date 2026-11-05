@@ -17,7 +17,7 @@ public:
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
 
     void initKeySwitchByOwner(const JMapInfoIter&);
-    void appearKeySwitch(const TVec3f&);
+    void appearKeySwitch(const Vec3f&);
     void exeDemoStart();
     void exeAppear();
     void exeWait();

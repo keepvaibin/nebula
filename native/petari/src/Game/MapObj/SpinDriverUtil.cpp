@@ -3,11 +3,11 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
 
-void SpinDriverUtil::setShadowAndClipping(LiveActor* pActor, TVec3f* pClippingCenter, f32 dropLength, f32 heightMargin, f32* pClippingRadius) {
-    TVec3f dropPosition;
-    TVec3f position(pActor->mPosition);
-    TVec3f gravity(pActor->mGravity);
-    TVec3f dropEnd;
+void SpinDriverUtil::setShadowAndClipping(LiveActor* pActor, Vec3f* pClippingCenter, f32 dropLength, f32 heightMargin, f32* pClippingRadius) {
+    Vec3f dropPosition;
+    Vec3f position(pActor->mPosition);
+    Vec3f gravity(pActor->mGravity);
+    Vec3f dropEnd;
     dropPosition.set(position - gravity * heightMargin);
 
     if (dropLength < 0.0f) {

@@ -2,7 +2,7 @@
 
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/LiveActorGroup.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class FluffWindEffect : public LiveActor {
 public:
@@ -12,12 +12,12 @@ public:
     virtual void makeActorDead();
     virtual void startClipped();
 
-    void initEffectInfo(const TVec3f&, const TVec3f&, const TVec3f&, const char*, f32);
+    void initEffectInfo(const Vec3f&, const Vec3f&, const Vec3f&, const char*, f32);
 
     void exeBrowWind();
 
     const char* mEffectName;
-    TPos3f mMtx;
+    Pos3f mMtx;
     s32 mTimer;
 };
 
@@ -36,9 +36,9 @@ class FluffWindHolder : public LiveActorGroup {
 public:
     FluffWindHolder();
 
-    void calcWindInfo(const TVec3f& rPosition, TVec3f* pWindDirection, f32* pWindStrength) const;
+    void calcWindInfo(const Vec3f& rPosition, Vec3f* pWindDirection, f32* pWindStrength) const;
 };
 
 namespace FluffFunction {
-    bool calcFluffWindInfo(const TVec3f& rPosition, TVec3f* pWindDirection, f32* pWindStrength);
+    bool calcFluffWindInfo(const Vec3f& rPosition, Vec3f* pWindDirection, f32* pWindStrength);
 };  // namespace FluffFunction

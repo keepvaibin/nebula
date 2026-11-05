@@ -48,8 +48,8 @@ public:
     ModelObj* mBreakModel;
     AnimScaleController* mAnimeScale;
     WalkerStateBindStarPointer* mStateBindStartPointer;
-    TQuat4f mRotationQuat;
-    TVec3f mFrontVec;
+    Quat4f mRotationQuat;
+    Vec3f mFrontVec;
     s32 _B8;
     bool mIsFloating;
 

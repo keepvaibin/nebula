@@ -24,6 +24,6 @@ public:
     u8 _1D;
     u8 _1E;
     f32 _20;
-    TVec3f _24;
-    TVec3f _30;
+    Vec3f _24;
+    Vec3f _30;
 };

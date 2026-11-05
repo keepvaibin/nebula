@@ -69,7 +69,7 @@ namespace LayoutCoreUtil {
 };  // namespace LayoutCoreUtil
 
 namespace MR {
-    void convertScreenPosToLayoutPos(TVec2f* pLayoutPos, const TVec2f& rScreenPos) {
+    void convertScreenPosToLayoutPos(Vec2f* pLayoutPos, const Vec2f& rScreenPos) {
         // The layout canvas setupDrawForNW4RLayout projects (pointer hit tests, panes following screen positions).
         if (MR::isScreen16Per9() && MR::getDisplay().wide) {
             const NebulaDisplay& display = MR::getDisplay();
@@ -82,7 +82,7 @@ namespace MR {
         pLayoutPos->y = -(rScreenPos.y * MR::getScreenHeight() / MR::getScreenHeight() - (MR::getScreenHeight() * 0.5f));
     }
 
-    void convertLayoutPosToScreenPos(TVec2f* pScreenPos, const TVec2f& rLayoutPos) {
+    void convertLayoutPosToScreenPos(Vec2f* pScreenPos, const Vec2f& rLayoutPos) {
         if (MR::isScreen16Per9() && MR::getDisplay().wide) {
             const NebulaDisplay& display = MR::getDisplay();
             pScreenPos->x = rLayoutPos.x * MR::getScreenWidth() / display.layout_width + MR::getScreenWidth() * 0.5f;
@@ -94,9 +94,9 @@ namespace MR {
         pScreenPos->y = MR::getScreenHeight() * 0.5f + -rLayoutPos.y * MR::getScreenHeight() / MR::getScreenHeight();
     }
 
-    void convertPaneLocalPosToScreenPos(TVec2f* pScreenPos, const nw4r::lyt::Pane* pPane, const TVec2f& rLocalPos) {
-        TVec3f pos(rLocalPos);
-        TVec3f layoutPos;
+    void convertPaneLocalPosToScreenPos(Vec2f* pScreenPos, const nw4r::lyt::Pane* pPane, const Vec2f& rLocalPos) {
+        Vec3f pos(rLocalPos);
+        Vec3f layoutPos;
         NebulaMtxMultVec(pPane->mGlbMtx, pos, layoutPos);
         convertLayoutPosToScreenPos(pScreenPos, layoutPos);
     }

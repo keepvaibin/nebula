@@ -33,7 +33,7 @@ void SpaceMine::init(const JMapInfoIter& rIter) {
     info.setupNerve(GET_NERVE(SpaceMine, HostTypeWait));
     info.setupRailMover();
     info.setupHitSensor();
-    TVec3f sensorOffs;
+    Vec3f sensorOffs;
     sensorOffs.x = 0.0f;
     sensorOffs.y = 0.0f;
     sensorOffs.z = 0.0f;

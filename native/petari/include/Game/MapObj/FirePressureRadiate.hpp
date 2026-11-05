@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class JointController;
 struct JointControllerInfo;
@@ -29,10 +29,10 @@ public:
     void startWait();
     void startRelax();
     void calcRadiateEffectMtx();
-    bool calcJointCannon(TPos3f*, const JointControllerInfo&);
+    bool calcJointCannon(Pos3f*, const JointControllerInfo&);
 
     JointController* mJointController;
-    TPos3f mRadiateMtx;
+    Pos3f mRadiateMtx;
     f32 mCannonRotation;
     s32 mWaitTime;
     s32 mShootTime;

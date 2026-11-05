@@ -91,9 +91,9 @@ void KoopaBattleMapPlanet::createPlate() {
 
     for (s32 idx = 0; idx < 6; idx++) {
         f32 angles[6][2] = {{0.0f, 0.0f}, {180.0f, 0.0f}, {90.0f, 0.0f}, {270.0f, 0.0f}, {0.0f, 90.0f}, {0.0f, 270.0f}};
-        TVec3f vec(0.0f, 1180.0f, 0.0f);
-        MR::rotateVecDegree(&vec, TVec3f(0.0f, 0.0f, 1.0f), angles[idx][0]);
-        MR::rotateVecDegree(&vec, TVec3f(1.0f, 0.0f, 0.0f), angles[idx][1]);
+        Vec3f vec(0.0f, 1180.0f, 0.0f);
+        MR::rotateVecDegree(&vec, Vec3f(0.0f, 0.0f, 1.0f), angles[idx][0]);
+        MR::rotateVecDegree(&vec, Vec3f(1.0f, 0.0f, 0.0f), angles[idx][1]);
 
         mBaseMtx.mult(vec, vec);
 
@@ -119,9 +119,9 @@ void KoopaBattleMapPlanet::createPlate() {
 
     for (s32 idx = 0; idx < 4; idx++) {
         f32 angles[4][2] = {{55.0f, 45.0f}, {125.0f, 135.0f}, {55.0f, 225.0f}, {125.0f, 315.0f}};
-        TVec3f vec(0.0f, 1200.0f, 0.0f);
-        MR::rotateVecDegree(&vec, TVec3f(0.0f, 0.0f, 1.0f), angles[idx][0]);
-        MR::rotateVecDegree(&vec, TVec3f(0.0f, 1.0f, 0.0f), angles[idx][1]);
+        Vec3f vec(0.0f, 1200.0f, 0.0f);
+        MR::rotateVecDegree(&vec, Vec3f(0.0f, 0.0f, 1.0f), angles[idx][0]);
+        MR::rotateVecDegree(&vec, Vec3f(0.0f, 1.0f, 0.0f), angles[idx][1]);
 
         mBaseMtx.mult(vec, vec);
 
@@ -137,9 +137,9 @@ void KoopaBattleMapPlanet::createPlate() {
 
     for (s32 idx = 0; idx < 4; idx++) {
         f32 angles[4][2] = {{125.0f, 45.0f}, {55.0f, 135.0f}, {125.0f, 225.0f}, {55.0f, 315.0f}};
-        TVec3f vec(0.0f, 1230.0f, 0.0f);
-        MR::rotateVecDegree(&vec, TVec3f(0.0f, 0.0f, 1.0f), angles[idx][0]);
-        MR::rotateVecDegree(&vec, TVec3f(0.0f, 1.0f, 0.0f), angles[idx][1]);
+        Vec3f vec(0.0f, 1230.0f, 0.0f);
+        MR::rotateVecDegree(&vec, Vec3f(0.0f, 0.0f, 1.0f), angles[idx][0]);
+        MR::rotateVecDegree(&vec, Vec3f(0.0f, 1.0f, 0.0f), angles[idx][1]);
 
         mBaseMtx.mult(vec, vec);
 

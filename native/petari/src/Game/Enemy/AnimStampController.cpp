@@ -4,11 +4,11 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 void dummy() {
-    // to emit TVec3f init
-    TVec3f a(0, 0, 0);
+    // to emit Vec3f init
+    Vec3f a(0, 0, 0);
 }
 
 namespace NrvAnimStampController {
@@ -32,14 +32,14 @@ void AnimStampController::init(s32 a1, f32 a2, f32 a3, f32 a4, f32 a5, f32 a6, f
     initNerve(GET_NERVE(AnimStampController, HostNrvAnimEnd));
 }
 
-void AnimStampController::startAnim(const TVec3f& rVec) {
+void AnimStampController::startAnim(const Vec3f& rVec) {
     _8.set(rVec);
     setNerve(GET_NERVE(AnimStampController, HostNrvAnim));
     _14.identity();
 }
 
 void AnimStampController::exeAnim() {
-    TVec3f vib = TVec3f(_14[3][2], _14[3][1], _14[3][2]);
+    Vec3f vib = Vec3f(_14[3][2], _14[3][1], _14[3][2]);
     if (MR::isLessStep(this, _44)) {
         vib.x = MR::getReduceVibrationValue(getNerveStep(), _44, _14[3][2], _14[4][1], _14[4][2]);
         vib.y = MR::getReduceVibrationValue(getNerveStep(), _44, _14[3][1], _14[3][3], _14[4][0]);

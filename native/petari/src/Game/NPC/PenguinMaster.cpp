@@ -18,15 +18,15 @@ void PenguinMaster::init(const JMapInfoIter& rIter) {
     caps.setDefault();
     caps.mSensor = false;
     caps.mShadowSize = 130.0f;
-    caps.mMessageOffset = TVec3f(0.0f, 430.0f, 0.0f);
+    caps.mMessageOffset = Vec3f(0.0f, 430.0f, 0.0f);
     caps.mPointerSize = 180.0f;
     caps.mStarPointerOffs.x = 0.0f;
     caps.mStarPointerOffs.y = 200.0f;
     caps.mStarPointerOffs.z = 80.0f;
     caps.mWaitNerve = GET_NERVE(PenguinMaster, PenguinMasterNrvWait);
     LiveActor::initHitSensor(2);
-    MR::addHitSensorPush(this, "body", 8, 150.0f, TVec3f(0.0f, 100.0f, 0.0f));
-    MR::addHitSensorPush(this, "head", 8, 150.0f, TVec3f(0.0f, 260.0f, 100.0f));
+    MR::addHitSensorPush(this, "body", 8, 150.0f, Vec3f(0.0f, 100.0f, 0.0f));
+    MR::addHitSensorPush(this, "head", 8, 150.0f, Vec3f(0.0f, 260.0f, 100.0f));
     initialize(rIter, caps);
     const char* talk = "Talk";
     mParam._14 = "Wait";

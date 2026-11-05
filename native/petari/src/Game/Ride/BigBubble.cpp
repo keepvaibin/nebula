@@ -10,7 +10,7 @@
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/OctahedronBezierSurface.hpp"
-#include <JSystem/JMath/JMATrigonometric.hpp>
+#include <nebula_geometry.hpp>
 #include <nebula_math.h>
 
 namespace {
@@ -126,7 +126,7 @@ void BigBubble::init(const JMapInfoIter& rIter) {
     initSound(6, false);
     MR::onCalcGravity(this);
     MR::initShadowVolumeSphere(this, getBaseRadius() * 0.8f);
-    MR::initStarPointerTarget(this, getBaseRadius(), TVec3f(0.0f, 0.0f, 0.0f));
+    MR::initStarPointerTarget(this, getBaseRadius(), Vec3f(0.0f, 0.0f, 0.0f));
     if (MR::isValidInfo(rIter))
         makeActorAppeared();
     else
@@ -136,9 +136,9 @@ void BigBubble::init(const JMapInfoIter& rIter) {
 
 void BigBubble::initSensor() {
     initHitSensor(3);
-    MR::addHitSensorRide(this, "ride", 16, getBaseRadius(), TVec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensor(this, "body", ATYPE_BIG_BUBBLE, 16, getBaseRadius(), TVec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorBinder(this, "bind", 16, getBaseRadius(), TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorRide(this, "ride", 16, getBaseRadius(), Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensor(this, "body", ATYPE_BIG_BUBBLE, 16, getBaseRadius(), Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorBinder(this, "bind", 16, getBaseRadius(), Vec3f(0.0f, 0.0f, 0.0f));
 }
 
 void BigBubble::makeActorAppeared() {
@@ -230,7 +230,7 @@ void BigBubble::draw() const {
     }
 }
 
-void BigBubble::generate(const TVec3f& rPos, const TVec3f& rUp, f32 volume, bool isObstruct, s32 actionType, s32 shapeType,
+void BigBubble::generate(const Vec3f& rPos, const Vec3f& rUp, f32 volume, bool isObstruct, s32 actionType, s32 shapeType,
                          const BigBubbleMoveLimitter* pLimitter) {
     setShapeType(shapeType);
     setActionType(actionType);
@@ -311,7 +311,7 @@ void BigBubble::setHost(LiveActor* mActor) {
 
 void BigBubble::setScale(f32 scale) {
     f32 radius = getBaseRadius();
-    mScale.set(TVec3f(scale, scale, scale));
+    mScale.set(Vec3f(scale, scale, scale));
     MR::setStarPointerTargetRadius3d(this, radius * scale);
     MR::setShadowVolumeSphereRadius(this, nullptr, 0.8f * radius * scale);
     mBinderRadius = radius * scale * 0.95f;
@@ -339,7 +339,7 @@ void BigBubble::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
 
 bool BigBubble::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
     if (MR::isMsgStarPieceReflect(msg)) {
-        TVec3f sensorDir;
+        Vec3f sensorDir;
         MR::calcSensorDirectionNormalize(&sensorDir, pSender, pReceiver);
         addDeformVelocityOuter(sensorDir * ::sStarPieceDeformPower, false);
         return true;
@@ -370,7 +370,7 @@ bool BigBubble::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pR
 bool BigBubble::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
     if (pSender->isType(ATYPE_BIG_BUBBLE)) {
         if (isNerve(GET_NERVE(BigBubble, BigBubbleNrvWait)) || isNerve(GET_NERVE(BigBubble, BigBubbleNrvCapture))) {
-            TVec3f dir = pReceiver->mPosition - pSender->mPosition;
+            Vec3f dir = pReceiver->mPosition - pSender->mPosition;
             f32 dist = dir.length();
             f32 sumRadii = pReceiver->getRadius() + pSender->getRadius();
             f32 pushMoveRate = sumRadii * ::sNeedPushMoveMinRate - dist;
@@ -381,7 +381,7 @@ bool BigBubble::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
             }
 
             if (pushMoveRate > 0.0f) {
-                TVec3f moveRate = dir * (pushMoveRate / getSize());
+                Vec3f moveRate = dir * (pushMoveRate / getSize());
                 mVelocity.add(moveRate * ::sPushedAccel);
             }
 
@@ -441,7 +441,7 @@ bool BigBubble::requestBind(HitSensor* pSensor) {
     mRiderBasePos = mRiderPos;
     mInterpolateRate = 0.0f;
 
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.set(mRider->getBaseMtx());
     mtx.getQuat(mRiderQuat);
 
@@ -468,15 +468,15 @@ bool BigBubble::requestMerged(HitSensor* pSender, HitSensor* pReceiver) {
 
 bool BigBubble::requestAssimilate(HitSensor* pSender, HitSensor* pReceiver) {
     f32 scale = pReceiver->mHost->mScale.x;
-    TVec3f dir;
+    Vec3f dir;
     MR::calcSensorDirectionNormalize(&dir, pSender, pReceiver);
     if (MR::isNearZero(dir)) {
         dir.set(mGravity);
     }
 
-    TVec3f pos;
+    Vec3f pos;
     pos.set(mPosition + dir * getSize());
-    TPos3f mtx;
+    Pos3f mtx;
     MR::makeMtxUpNoSupportPos(&mtx, dir, pos);
     MR::emitEffectHit(this, mtx, "Merge");
 
@@ -736,7 +736,7 @@ void BigBubble::exeMerged() {
         mMoment.zero();
     }
 
-    TVec3f mergePos, mergeDir;
+    Vec3f mergePos, mergeDir;
     mMergeBubble->calcMergePosition(&mergePos, &mergeDir, this);
 
     f32 mergeSize = getSize();
@@ -755,9 +755,9 @@ void BigBubble::exeMerged() {
     addDeformVelocityRebound();
     updateDeformVelocity();
 
-    TVec3f localDir;
+    Vec3f localDir;
     calcLocalDirection(&localDir, mMergeIndex);
-    TQuat4f rot;
+    Quat4f rot;
     rot.setRotate(localDir, -mergeDir, ::sMergeRotateRate);
     mBubbleQuat.mult(rot);
     calcLocalDirection(&localDir, mMergeIndex);
@@ -806,8 +806,8 @@ void BigBubble::exeEscape() {
     mInterpolateRate = MR::calcNerveRate(this, ::sEscapeTime);
     MR::calcGravity(this);
     updateNormalVelocity();
-    TQuat4f rot;
-    TVec3f up;
+    Quat4f rot;
+    Vec3f up;
     mRiderQuat.getYDir(up);
     rot.setRotate(up, mGravity, ::sMaxSpinSpeed);
     mRiderQuat.mult(rot);
@@ -833,8 +833,8 @@ void BigBubble::endCapture() {
     mPointAccel = 0.0f;
 }
 
-void BigBubble::addDeformVelocityOuter(const TVec3f& rDir, bool reverse) {
-    TVec3f side, up, front;
+void BigBubble::addDeformVelocityOuter(const Vec3f& rDir, bool reverse) {
+    Vec3f side, up, front;
     mBaseMtx.getXDir(side);
     mBaseMtx.getYDir(up);
     mBaseMtx.getZDir(front);
@@ -917,7 +917,7 @@ void BigBubble::addCoriolisAccel() {
 }
 
 void BigBubble::addAccelMoment(s32 padChannel) {
-    TVec3f rotateMoment;
+    Vec3f rotateMoment;
     if (MR::calcStarPointerStrokeRotateMoment(&rotateMoment, mPosition, getSize(), padChannel)) {
         mMoment.add(rotateMoment * ::sSpinStartScreenSpeed);
         f32 spinSpeed = mMoment.length();
@@ -956,7 +956,7 @@ bool BigBubble::addAccelPointing(s32 padChannel) {
     mPointAccel = mPointAccel * (::sPointAccelMax - ::sPointAccelMin) + ::sPointAccelMin;
     MR::startSystemLevelSE("SE_SY_LV_BIG_BUBBLE_WIND", mPointAccel * 100.0f);
 
-    TVec3f accelDir;
+    Vec3f accelDir;
     MR::normalizeOrZero(mPosition - mPointerPos, &accelDir);
     MR::addVelocity(this, accelDir * mPointAccel);
     addDeformVelocityOuter(accelDir * ::sPointAccelDeformPowerRate, false);
@@ -983,7 +983,7 @@ void BigBubble::updatePose() {
     }
 
     addDeformVelocityOuter(-mGravity * ::sBuoyancyAccel * mScale.x, false);
-    TVec3f deformVel;
+    Vec3f deformVel;
     MR::clampLength(&deformVel, -mVelocity, ::sMaxDeformSpeed);
     addDeformVelocityOuter(deformVel * (1.0f / ::sMaxDeformSpeed), false);
     addDeformVelocityInternalOressure();
@@ -999,7 +999,7 @@ void BigBubble::updateBindActorMatrix() {
         mRiderPos.set(mPosition);
     }
 
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.setQT(mRiderQuat, mRiderPos);
     MR::setBaseTRMtx(mRider, mtx);
 }
@@ -1011,7 +1011,7 @@ void BigBubble::updateNormalVelocity() {
     // result of the calculation from BigFan, not BigFanFunction.
     // The value returned by calcWindInfo makes more sense as "windForce".
     // Is this a case of these consts not being used here, or is this a deeper issue?
-    TVec3f windDir;
+    Vec3f windDir;
     f32 windDistance;
     BigFanFunction::calcWindInfo(&windDir, mPosition, &windDistance);
     windDistance = MR::normalize(windDistance, ::sWindMinDistance, ::sWindMaxDistance);
@@ -1039,7 +1039,7 @@ void BigBubble::updateDeformVelocity() {
 }
 
 void BigBubble::updateMeshPoint() {
-    TVec3f side, up, front;
+    Vec3f side, up, front;
     mBaseMtx.getXDir(side);
     mBaseMtx.getYDir(up);
     mBaseMtx.getZDir(front);
@@ -1096,7 +1096,7 @@ void BigBubble::updateCaptureWarningColor() {
     }
 }
 
-void BigBubble::calcMergePosition(TVec3f* pPos, TVec3f* pDir, const BigBubble* pBubble) const {
+void BigBubble::calcMergePosition(Vec3f* pPos, Vec3f* pDir, const BigBubble* pBubble) const {
     s32 mergeIndex = -1;
     for (s32 idx = 0; idx < 6; idx++) {
         if (mMergeBubbles[idx] == pBubble) {
@@ -1113,8 +1113,8 @@ void BigBubble::calcMergePosition(TVec3f* pPos, TVec3f* pDir, const BigBubble* p
     calcLocalDirection(pDir, mergeIndex);
 }
 
-void BigBubble::calcLocalDirection(TVec3f* pDir, s32 mergeIndex) const {
-    TVec3f dir;
+void BigBubble::calcLocalDirection(Vec3f* pDir, s32 mergeIndex) const {
+    Vec3f dir;
     switch (mergeIndex) {
     case Side_Top:
         mBubbleQuat.getYDir(dir);
@@ -1142,12 +1142,12 @@ void BigBubble::calcLocalDirection(TVec3f* pDir, s32 mergeIndex) const {
     pDir->set(dir);
 }
 
-s32 BigBubble::getNearAxisIndex(const TVec3f& rPos) const {
-    TPos3f mtx;
+s32 BigBubble::getNearAxisIndex(const Vec3f& rPos) const {
+    Pos3f mtx;
     mtx.set(getBaseMtx());
     mtx.invert(mtx);
 
-    TVec3f axis;
+    Vec3f axis;
     mtx.mult(rPos, axis);
     s32 index = MR::getMaxAbsElementIndex(axis);
 
@@ -1182,7 +1182,7 @@ s32 BigBubble::getNearAxisIndex(const TVec3f& rPos) const {
     }
 }
 
-s32 BigBubble::getMergeIndex(const TVec3f& rPos) const {
+s32 BigBubble::getMergeIndex(const Vec3f& rPos) const {
     s32 index = getNearAxisIndex(rPos);
     if (mMergeBubbles[index] == nullptr) {
         return index;

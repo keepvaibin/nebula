@@ -13,15 +13,15 @@ public:
     virtual void draw() const;
 
     void reset();
-    void lengthen(const TVec3f&, const TVec3f&);
-    void shorten(const TVec3f&, const TVec3f&);
+    void lengthen(const Vec3f&, const Vec3f&);
+    void shorten(const Vec3f&, const Vec3f&);
     void updateAxis();
     f32 calcLineWidth() const;
 
     JUTTexture* mTexture;
-    TVec3f _90[0x40];
-    TVec3f _390[0x40];
-    TVec3f _690[0x40];
+    Vec3f _90[0x40];
+    Vec3f _390[0x40];
+    Vec3f _690[0x40];
     s32 _990;
     s32 _994;
 };

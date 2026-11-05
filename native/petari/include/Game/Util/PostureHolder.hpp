@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class LiveActor;
 
@@ -12,7 +12,7 @@ public:
     void restore(LiveActor* pActor);
 
 private:
-    TVec3f mScale;
-    TVec3f mRotation;
-    TVec3f mPosition;
+    Vec3f mScale;
+    Vec3f mRotation;
+    Vec3f mPosition;
 };

@@ -10,7 +10,7 @@
 #include <JSystem/JAudio2/JAUSoundAnimator.hpp>
 #include "Game/System/NebulaArena.hpp"
 
-AudAnmSoundObject::AudAnmSoundObject(TVec3f* pPos, u8 numHandles, NebulaArena* pHeap) : AudSoundObject(pPos, numHandles, pHeap), JAUSoundAnimator(this) {
+AudAnmSoundObject::AudAnmSoundObject(Vec3f* pPos, u8 numHandles, NebulaArena* pHeap) : AudSoundObject(pPos, numHandles, pHeap), JAUSoundAnimator(this) {
 }
 
 void AudAnmSoundObject::update(f32 time) {
@@ -28,7 +28,7 @@ void AudAnmSoundObject::modifySoundParams(JASSoundParams* pParams, const JAUSoun
     JAUSoundAnimator::modifySoundParams(pParams, pSound, speed);
 }
 
-bool AudAnmSoundObject::playsSound(const JAUSoundAnimationSound* pSound, const TVec3f& rPos, f32 speed) {
+bool AudAnmSoundObject::playsSound(const JAUSoundAnimationSound* pSound, const Vec3f& rPos, f32 speed) {
     if (!JAUSoundAnimator::playsSound(pSound, rPos, speed)) {
         return false;
     }
@@ -36,7 +36,7 @@ bool AudAnmSoundObject::playsSound(const JAUSoundAnimationSound* pSound, const T
     return !isLimitedSound(getSoundID(pSound, rPos, speed));
 }
 
-u32 AudAnmSoundObject::getSoundID(const JAUSoundAnimationSound* pSound, const TVec3f& rPos, f32 speed) {
+u32 AudAnmSoundObject::getSoundID(const JAUSoundAnimationSound* pSound, const Vec3f& rPos, f32 speed) {
     switch (pSound->getSoundID()) {
     case SE_EM_KANINA_STEP: {
         if (mSeVersion != Kanina::SeVersion_NORMAL) {
@@ -167,7 +167,7 @@ void AudAnmSoundObject::setStartPos(f32 time) {
     }
 }
 
-void AudAnmSoundObject::updateAnimSound(f32 time, const TVec3f& rPos, JAISoundStarter* pStarter) {
+void AudAnmSoundObject::updateAnimSound(f32 time, const Vec3f& rPos, JAISoundStarter* pStarter) {
     JAISoundHandles* handles = getAnimatorHandles();
     for (s32 index = 0; index < handles->getNumHandles(); index++) {
         JAISound* sound = handles->getSound(index);
@@ -222,7 +222,7 @@ void AudAnmSoundObject::updateAnimSound(f32 time, const TVec3f& rPos, JAISoundSt
     mLifeTime = time;
 }
 
-void AudAnmSoundObject::startAnimSound(const TVec3f& rPos, f32 speed, JAISoundStarter* pStarter) {
+void AudAnmSoundObject::startAnimSound(const Vec3f& rPos, f32 speed, JAISoundStarter* pStarter) {
     const JAUSoundAnimationSound* sound = mSoundAnimation->getSound(mLoopSoundIndex);
     if (mIsReversed) {
         mLoopSoundIndex--;

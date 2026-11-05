@@ -11,6 +11,6 @@ public:
     virtual void control();
     virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);
 
-    void start(const TVec3f&, const TVec3f&, bool);
+    void start(const Vec3f&, const Vec3f&, bool);
     void exeWait();
 };

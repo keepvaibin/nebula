@@ -29,7 +29,7 @@ enum { Status_Runaway, Status_Float };
 namespace {
     const char* sElementArcName[] = {"Meramera", "IceMeramera", "ChildMeramera", "ChildIceMeramera"};
     s32 sElementList[] = {ElementType_Fire, ElementType_Ice, ElementType_Fire, ElementType_Ice};
-    const TVec3f sAttackHitOffset = TVec3f(50.0f, 0.0f, 0.0f);
+    const Vec3f sAttackHitOffset = Vec3f(50.0f, 0.0f, 0.0f);
 
     static const f32 sBodyHitRadius = 55.0f;
     static const f32 sBreakHitRadius = 10.0f;
@@ -107,8 +107,8 @@ inline bool Meramera::isActionDisabled() const {
            isNerve(GET_NERVE(Meramera, MerameraNrvDiving)) || isNerve(GET_NERVE(Meramera, MerameraNrvBindStarPointerNoFire));
 }
 
-inline TVec3f Meramera::getDistanceToPlayer() const {
-    TVec3f playerPos(*MR::getPlayerPos());
+inline Vec3f Meramera::getDistanceToPlayer() const {
+    Vec3f playerPos(*MR::getPlayerPos());
     playerPos -= mPosition;
     return playerPos;
 }
@@ -183,14 +183,14 @@ void Meramera::initSensor() {
 
     LiveActor::initHitSensor(3);
 
-    MR::addHitSensorEnemy(this, "body", 8, scale * ::sBodyHitRadius, TVec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorEnemy(this, "break", 8, scale * ::sBreakHitRadius, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemy(this, "body", 8, scale * ::sBodyHitRadius, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemy(this, "break", 8, scale * ::sBreakHitRadius, Vec3f(0.0f, 0.0f, 0.0f));
 
     MR::addHitSensorAtJointEnemy(this, "attack", "JointRoot", 8, scale * ::sAttackHitRadius, ::sAttackHitOffset * scale);
 
     MR::invalidateHitSensor(this, "break");
 
-    MR::initStarPointerTarget(this, scale * 55.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::initStarPointerTarget(this, scale * 55.0f, Vec3f(0.0f, 0.0f, 0.0f));
 }
 
 void Meramera::initBind() {
@@ -299,7 +299,7 @@ bool Meramera::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
 
     if (MR::isSensorEnemy(pSender) || MR::isSensorPlayer(pSender)) {
         if (isPushMoved()) {
-            TVec3f dir;
+            Vec3f dir;
             MR::calcSensorDirectionNormalize(&dir, pSender, pReceiver);
             MR::vecScaleAdd(&mVelocity, &dir, 0.5f);
         }
@@ -434,7 +434,7 @@ bool Meramera::requestDownForce(HitSensor* pSender, HitSensor* pReceiver) {
 
     MR::emitEffectHitBetweenSensors(this, pSender, pReceiver, 0.0f, "HitMark");
 
-    TVec3f horizon;
+    Vec3f horizon;
     MR::calcSensorHorizonNormalize(&horizon, mGravity, pSender, pReceiver);
 
     if (!MR::isNearZero(horizon)) {
@@ -507,7 +507,7 @@ bool Meramera::sendMsgElementAttack(HitSensor* pSender, HitSensor* pReceiver) {
 
 bool Meramera::tryWalk() {
     if (getNerveStep() > ::sWalkTime) {
-        TVec3f randomVec;
+        Vec3f randomVec;
         MR::getRandomVector(&randomVec, 1.0f);
         MR::normalizeOrZero(&randomVec);
         randomVec.killElement(randomVec, mGravity);
@@ -941,9 +941,9 @@ void Meramera::exeRunaway() {
 
     if (MR::isGreaterStep(this, 70)) {
         if (MR::isBindedGround(this)) {
-            TVec3f vec;
-            TVec3f& vec1 = mVelocity;
-            TVec3f& vec2 = mGravity;
+            Vec3f vec;
+            Vec3f& vec1 = mVelocity;
+            Vec3f& vec2 = mGravity;
             vec.scaleAdd(-vec2.dot(vec1), vec2, vec1);  // Looks like killElement but I can't make it match
 
             f32 scalar;
@@ -1021,9 +1021,9 @@ void Meramera::exeDiving() {
         MR::startSound(this, "SE_EM_MERAMERA_JUMP");
     }
 
-    TVec3f pos;
+    Vec3f pos;
     mParabolicPath->calcPosition(&pos, getNerveStep() / 40.0f);
-    const TVec3f& vel = pos - mPosition;
+    const Vec3f& vel = pos - mPosition;
     mVelocity.set(vel);
 
     MR::turnVecToVecDegree(&_144, _144, -mGravity, 180.0f, _138);
@@ -1252,13 +1252,13 @@ bool Meramera::isEnableChase() const {
     return MR::isNearPlayer(this, mChaseDistance) && mHomePosition.distance(mPosition) <= 3000.0f;
 }
 
-void Meramera::addToTargetMovingAccel(const TVec3f& rVec, f32 velocityAccel, f32 gravityAccel) {
+void Meramera::addToTargetMovingAccel(const Vec3f& rVec, f32 velocityAccel, f32 gravityAccel) {
     addMovingAccel(rVec - mPosition, velocityAccel, gravityAccel);
 }
 
-void Meramera::addMovingAccel(const TVec3f& rVec, f32 velocityAccel, f32 gravityAccel) {
-    TVec3f vec(mGravity);
-    TVec3f vec2;
+void Meramera::addMovingAccel(const Vec3f& rVec, f32 velocityAccel, f32 gravityAccel) {
+    Vec3f vec(mGravity);
+    Vec3f vec2;
     vec2.killElement(rVec, vec);
 
     MR::separateScalarAndDirection(&_1A4, &vec2, vec2);
@@ -1275,12 +1275,12 @@ void Meramera::addMovingAccel(const TVec3f& rVec, f32 velocityAccel, f32 gravity
 }
 
 void Meramera::addRunawayJumpPower() {
-    TVec3f vec;
+    Vec3f vec;
     f32 val = 1.0f;
     if (mCanDive) {
         vec.set(_180 - mPosition);
 
-        TVec3f vec2;
+        Vec3f vec2;
         vec2.killElement(vec, mGravity);
 
         val = MR::normalize(vec2.length(), 10.0f, 500.0f);
@@ -1300,11 +1300,11 @@ void Meramera::addRunawayJumpPower() {
     mVelocity -= mGravity * val;
 }
 
-void Meramera::addOverWallAccel(const TVec3f& rVec) {
-    TVec3f gravity;
+void Meramera::addOverWallAccel(const Vec3f& rVec) {
+    Vec3f gravity;
     gravity.set(mGravity);
 
-    TVec3f vec;
+    Vec3f vec;
     vec.killElement(rVec, gravity);
     MR::normalizeOrZero(&vec);
 
@@ -1324,15 +1324,15 @@ void Meramera::updatePose() {
 void Meramera::updateExtinguishMtx() {
     turnFireDirectionToSpin(10.0f);
 
-    TVec3f trans;
+    Vec3f trans;
     mExtinguishMtx.getTrans(trans);
 
-    TVec3f pullVelocity;
+    Vec3f pullVelocity;
     MR::calcPlayerSpinPullVelocity(&pullVelocity, trans);
 
     trans += pullVelocity * 0.9f;
 
-    TVec3f vec48;
+    Vec3f vec48;
     vec48.set(*MR::getPlayerPos() - trans);
     f32 length = vec48.length();
 
@@ -1368,26 +1368,26 @@ bool Meramera::checkDivingPoint(f32 f1, f32 accel) {
         return true;
     }
 
-    TVec3f vec3C(mPosition);
-    TVec3f vec48(_138 * f1);
+    Vec3f vec3C(mPosition);
+    Vec3f vec48(_138 * f1);
     MR::rotateVecDegree(&vec48, mGravity, accel);
     vec3C += vec48;
     vec3C -= mGravity * 100.0f;
 
-    TVec3f vec2(mGravity * 600.0f + vec48);
+    Vec3f vec2(mGravity * 600.0f + vec48);
     mCanDive = findDivingPoint(vec3C, vec2);
 
     return mCanDive;
 }
 
 bool Meramera::checkDivingPointMore(f32 f1) {
-    TVec3f vec30;
+    Vec3f vec30;
     vec30.set(_180);
     vec30 += _18C * f1;
 
     vec30 -= mGravity * 100.0f;
 
-    TVec3f vec2(mGravity * 600.0f + _18C * f1);
+    Vec3f vec2(mGravity * 600.0f + _18C * f1);
     return findDivingPoint(vec30, vec2);
 }
 
@@ -1409,9 +1409,9 @@ bool Meramera::isHitRecover() const {
     return false;
 }
 
-bool Meramera::findDivingPoint(TVec3f vec, const TVec3f& rVec) {
+bool Meramera::findDivingPoint(Vec3f vec, const Vec3f& rVec) {
     Triangle triangle = Triangle();
-    TVec3f vec84;
+    Vec3f vec84;
 
     bool myBool = false;
 
@@ -1563,10 +1563,10 @@ void Meramera::emitEffectColdBody() {
 }
 
 void Meramera::turnFireDirectionToSpin(f32 f1) {
-    TVec3f jointPos;
+    Vec3f jointPos;
     MR::copyJointPos(this, "Sin", &jointPos);
 
-    TVec3f pullVelocity;
+    Vec3f pullVelocity;
     MR::calcPlayerSpinPullVelocity(&pullVelocity, jointPos);
 
     if (MR::isNearZero(pullVelocity)) {

@@ -11,7 +11,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <JSystem/JMath/JMath.hpp>
+#include <nebula_geometry.hpp>
 #include <nebula_math.h>
 
 struct SinCosPair {
@@ -38,7 +38,7 @@ void DriftWood::init(const JMapInfoIter& rIter) {
     info.setupDefaultPos();
     info.setupConnectToScene();
     info.setupHitSensor();
-    info.setupHitSensorParam(8, 300.0f, TVec3f(0.0f, -60.0f, 0.0f));
+    info.setupHitSensorParam(8, 300.0f, Vec3f(0.0f, -60.0f, 0.0f));
     info.setupEffect(nullptr);
     info.setupSound(4);
     info.setupNerve(GET_NERVE(DriftWood, DriftWoodNrvWait));
@@ -103,20 +103,20 @@ void DriftWood::connectToScene(const MapObjActorInitInfo&) {
 }
 
 void DriftWood::calcAndSetBaseMtx() {
-    TPos3f mtx;
+    Pos3f mtx;
     MR::calcMtxFromGravityAndZAxis(&mtx, this, mGravity, mRailDirection);
     MR::setBaseTRMtx(this, mtx);
 }
 
 void DriftWood::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     if (MR::isSensorPlayer(pReceiver)) {
-        TVec3f delta;
+        Vec3f delta;
         delta.sub(pSender->mPosition, pReceiver->mPosition);
 
-        TVec3f upVec;
+        Vec3f upVec;
         MR::calcUpVec(&upVec, this);
 
-        TVec3f result = delta.killElement(upVec);
+        Vec3f result = delta.killElement(upVec);
 
         f32 radius = pReceiver->mRadius;
         f32 magnitude = result.length();
@@ -126,7 +126,7 @@ void DriftWood::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
         } else {
             LiveActor* mHost = pReceiver->mHost;
 
-            if (!MR::isInWater(mHost, TVec3f(0.0f, 0.0f, 0.0f))) {
+            if (!MR::isInWater(mHost, Vec3f(0.0f, 0.0f, 0.0f))) {
                 MR::sendMsgEnemyAttackFlip(pReceiver, pSender);
                 MR::startSound(this, "SE_OJ_DRIFT_WOOD_ATTACK");
             }

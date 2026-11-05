@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/Util/Array.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class AutoEffectInfo;
 class EffectSystem;
@@ -16,9 +16,9 @@ class XanimePlayer;
 
 class MultiEmitter {
 public:
-    MultiEmitter(const char*, const TVec3f*, const TVec3f*, const TVec3f*, const TVec3f&);
-    MultiEmitter(const char*, MtxPtr, const TVec3f&);
-    MultiEmitter(const char*, MtxPtr, const TVec3f*, const TVec3f&);
+    MultiEmitter(const char*, const Vec3f*, const Vec3f*, const Vec3f*, const Vec3f&);
+    MultiEmitter(const char*, MtxPtr, const Vec3f&);
+    MultiEmitter(const char*, MtxPtr, const Vec3f*, const Vec3f&);
     MultiEmitter(const char*);
 
     void createEmitter();
@@ -33,9 +33,9 @@ public:
     bool isValid() const;
     bool isExistOneTimeEmitter() const;
 
-    void setHostSRT(const TVec3f*, const TVec3f*, const TVec3f*);
+    void setHostSRT(const Vec3f*, const Vec3f*, const Vec3f*);
     void setHostMtx(MtxPtr);
-    void setOffset(const TVec3f&);
+    void setOffset(const Vec3f&);
     void setBaseScale(f32);
     void setName(const char*);
     bool isEqualName(u16) const;
@@ -61,7 +61,7 @@ public:
 
     void addChildEmitter(MultiEmitter*);
 
-    void setGlobalRotationDegree(const TVec3f&, s32);
+    void setGlobalRotationDegree(const Vec3f&, s32);
 
     void allocateEmitter(const char*);
     SingleEmitter* getValidEmitter(s32, bool);
@@ -69,13 +69,13 @@ public:
     void createForeverEmitter();
 
     // In MultiEmitterAccess
-    void setGlobalRotation(const TVec3s&, s32);
-    void setGlobalTranslation(const TVec3f&, s32);
-    void setGlobalScale(const TVec3f&, s32);
+    void setGlobalRotation(const Vec3s&, s32);
+    void setGlobalTranslation(const Vec3f&, s32);
+    void setGlobalScale(const Vec3f&, s32);
     void setGlobalSRTMatrix(const Mtx, s32);
     void setGlobalPrmColor(u8, u8, u8, s32);
     void setGlobalEnvColor(u8, u8, u8, s32);
-    void setLocalScale(const TVec3f&, s32);
+    void setLocalScale(const Vec3f&, s32);
     void setDirectionalSpeed(f32, s32);
     void setRate(f32, s32);
     void stopCalcEmitter(s32);

@@ -373,7 +373,7 @@ namespace MR {
 
     void initDemoSheetTalkAnimWithMessageName(LiveActor* pActor, const JMapInfoIter& rIter, const char* pParam3, const char* pParam4,
                                               const char* pParam5) {
-        TalkMessageCtrl* talkCtrl = MR::createTalkCtrl(pActor, rIter, pParam5, TVec3f(0.0f, 0.0f, 0.0f), nullptr);
+        TalkMessageCtrl* talkCtrl = MR::createTalkCtrl(pActor, rIter, pParam5, Vec3f(0.0f, 0.0f, 0.0f), nullptr);
 
         MR::onRootNodeAutomatic(talkCtrl);
         MR::tryInitDemoSheetTalkAnim(pActor, rIter, pParam3, pParam4, talkCtrl);
@@ -390,7 +390,7 @@ namespace MR {
                                   TalkMessageCtrl* pTalkCtrl) {
         if (tryRegisterDemoCast(pActor, pParam3, rIter)) {
             if (pTalkCtrl == nullptr) {
-                pTalkCtrl = MR::createTalkCtrl(pActor, rIter, pParam4, TVec3f(0.0f, 0.0f, 0.0f), nullptr);
+                pTalkCtrl = MR::createTalkCtrl(pActor, rIter, pParam4, Vec3f(0.0f, 0.0f, 0.0f), nullptr);
 
                 MR::onRootNodeAutomatic(pTalkCtrl);
             }

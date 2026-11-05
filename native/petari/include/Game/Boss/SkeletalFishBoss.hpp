@@ -50,8 +50,8 @@ public:
     virtual void control();
     virtual void calcAndSetBaseMtx();
 
-    bool calcJoint(TPos3f*, const JointControllerInfo&);
-    void damage(const HitSensor*, const TVec3f&);
+    bool calcJoint(Pos3f*, const JointControllerInfo&);
+    void damage(const HitSensor*, const Vec3f&);
     void exeSwim();
     void exeOpen();
     void exeOpenWait();
@@ -83,12 +83,12 @@ public:
     void initCamera();
     void validateCollision();
     void invalidateCollision();
-    void getMouthSensorCenterPos(TVec3f&, f32) const;
+    void getMouthSensorCenterPos(Vec3f&, f32) const;
     void updateCollision();
     void powerUp();
     void startDamageAnim();
     void calcPlanetCenterPosition();
-    bool calcGravityCenter(TVec3f*, const TVec3f&, const TVec3f&);
+    bool calcGravityCenter(Vec3f*, const Vec3f&, const Vec3f&);
     void resetRail();
     void updateBgm();
     LiveActor* getCurrentBossRail();
@@ -115,16 +115,16 @@ public:
     SkeletalFishBossScarFlash* mScarFlash;
     ModelObj* mBreakModel;
     const HitSensor* _D4;
-    TPos3f _D8;
+    Pos3f _D8;
     SkeletalFishRailControl* mRailControl;
     SkeletalFishBossBattleDirector* mBossDirector;
     s32 _110;
     s32 _114;
     u32 _118;
     CameraTargetMtx* mCameraTargetMtx;
-    TPos3f _120;
-    TPos3f _150;
-    TVec3f _180;
+    Pos3f _120;
+    Pos3f _150;
+    Vec3f _180;
     SceneFunc mSceneFunc;
     const char* mCurScene;
     const Nerve* mSceneNerve;
@@ -163,9 +163,9 @@ public:
     void updateCollisionMtx();
     void createSubModel();
 
-    TMtx34f _9C;
+    Mtx34f _9C;
     CollisionParts* _CC;
-    TMtx34f _D0;
+    Mtx34f _D0;
     CollisionParts* _100;
     ModelObj* mLightModels[2];
     ModelObj* mBloomModels[2];

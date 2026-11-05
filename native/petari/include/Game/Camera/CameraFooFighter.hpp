@@ -21,5 +21,5 @@ public:
     f32 mAngleXRateMin;
     f32 mAngleXRate;
     s32 mCollideCount;
-    TVec3f mTargetLastMoveDir;
+    Vec3f mTargetLastMoveDir;
 };

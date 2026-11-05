@@ -25,8 +25,8 @@ CocoNutBall::CocoNutBall(const char* pName)
 
 inline void CocoNutBall::initSensors(const char* const hit1, const char* const hit2) {
     initHitSensor(2);
-    MR::addHitSensor(this, hit1, ATYPE_COCO_NUT, 8, 40.0f, TVec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensor(this, hit2, ATYPE_COCO_NUT, 8, 500.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensor(this, hit1, ATYPE_COCO_NUT, 8, 40.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensor(this, hit2, ATYPE_COCO_NUT, 8, 500.0f, Vec3f(0.0f, 0.0f, 0.0f));
 
 }
 
@@ -37,7 +37,7 @@ void CocoNutBall::init(const JMapInfoIter& rIter) {
     initSensors("body", "bind");
     initBinder(60.0f, 0.0f, 0);
     initEffectKeeper(0, "CocoNut", false);
-    MR::initStarPointerTarget(this, 150.0f, TVec3f(0, 0, 0));
+    MR::initStarPointerTarget(this, 150.0f, Vec3f(0, 0, 0));
     initSound(4, false);
     MR::initShadowVolumeCylinder(this, 60.0f);
     MR::invalidateClipping(this);
@@ -65,7 +65,7 @@ void CocoNutBall::kill() {
     MR::emitEffect(this, CocoNut::getBreakEffectName());
 }
 
-void CocoNutBall::appearAndThrow(const TVec3f& rAppearPos, f32 f1) {
+void CocoNutBall::appearAndThrow(const Vec3f& rAppearPos, f32 f1) {
     mPosition.set(rAppearPos);
     MR::calcGravity(this);
     _C8.negate(mGravity);
@@ -88,12 +88,12 @@ void CocoNutBall::hitBackToPlayer() {
     setNerve(GET_NERVE(CocoNutBall, CocoNutBallNrvHitBackToPlayer));
 }
 
-void CocoNutBall::demoBreak(const TVec3f& rPos) {
+void CocoNutBall::demoBreak(const Vec3f& rPos) {
     mPosition.set(rPos);
     mRotation.zero();
     mVelocity.zero();
 
-    TPos3f TRMtx;
+    Pos3f TRMtx;
     MR::makeMtxTR(TRMtx.toMtxPtr(), this);
     MR::setBaseTRMtx(this, TRMtx);
 
@@ -104,9 +104,9 @@ void CocoNutBall::demoBreak(const TVec3f& rPos) {
 
 void CocoNutBall::calcAndSetBaseMtx() {
     if (!MR::isNearZero(mVelocity)) {
-        TVec3f velocityDirection;
+        Vec3f velocityDirection;
         MR::normalize(mVelocity, &velocityDirection);
-        TPos3f baseTRMtx;
+        Pos3f baseTRMtx;
         MR::makeMtxFrontUpPos(&baseTRMtx, velocityDirection, _C8, mPosition);
         MR::setBaseTRMtx(this, baseTRMtx);
     }
@@ -190,13 +190,13 @@ bool CocoNutBall::isValidReceivePunch() const {
 void CocoNutBall::calcHitBackVelocitAndGravity() {
     bool hitBackRight = isHitBackRight();
     bool hitBackFront = isHitBackFront();
-    TVec3f hitBackDstPos;
+    Vec3f hitBackDstPos;
     calcHitBackDstPos(&hitBackDstPos, hitBackRight, hitBackFront);
 
-    TVec3f dir;
+    Vec3f dir;
     dir.sub(hitBackDstPos, mPosition);
-    TVec3f cross;
-    TVec3f scaled;
+    Vec3f cross;
+    Vec3f scaled;
     scaled.scale(_C8.dot(dir), _C8);
     MR::vecKillElement(dir, _C8, &dir);
     f32 f1 = dir.length() / 42.0f;
@@ -204,15 +204,15 @@ void CocoNutBall::calcHitBackVelocitAndGravity() {
     cross.cross(_C8, dir);
     MR::normalize(&cross);
     _90.scale(2.2f, mGravity);
-    TVec3f scaled2;
+    Vec3f scaled2;
     scaled2.scale(42.0f, dir);
-    TVec3f verticalVelocity;
+    Vec3f verticalVelocity;
     verticalVelocity = (scaled.scaleInline(2.0f) - _90.scaleInline(f1).scaleInline(f1)).scaleInline(1.0f / (2.0f * f1));
     mVelocity.add(scaled2, verticalVelocity);
 
     if (!hitBackFront) {
         f32 scaleFactor = (hitBackRight ? 1.2f : -1.2f);
-        TVec3f scaled4;
+        Vec3f scaled4;
         scaled4.scale(scaleFactor * f1 * f1 / (f1 * 2.0f), cross);
         mVelocity.add(scaled4);
         scaled4.scale(scaleFactor, cross);
@@ -223,10 +223,10 @@ void CocoNutBall::calcHitBackVelocitAndGravity() {
 }
 
 bool CocoNutBall::isHitBackRight() const {
-    TVec3f vec1;
+    Vec3f vec1;
     vec1.sub(_8C->mPosition, *MR::getPlayerPos());
 
-    TVec3f vec2;
+    Vec3f vec2;
     vec2.sub(mPosition, *MR::getPlayerPos());
 
     MR::vecKillElement(vec1, _C8, &vec1);
@@ -235,16 +235,16 @@ bool CocoNutBall::isHitBackRight() const {
     MR::normalize(&vec1);
     MR::normalize(&vec2);
 
-    TVec3f cross = vec1.cross(vec2);
+    Vec3f cross = vec1.cross(vec2);
 
     return 0.0f < _C8.dot(cross);
 }
 
 bool CocoNutBall::isHitBackFront() const {
-    TVec3f vec1;
+    Vec3f vec1;
     vec1.sub(*MR::getPlayerPos(), _8C->mPosition);
 
-    TVec3f vec2;
+    Vec3f vec2;
     vec2.sub(mPosition, *MR::getPlayerPos());
 
     MR::vecKillElement(vec1, _C8, &vec1);
@@ -256,11 +256,11 @@ bool CocoNutBall::isHitBackFront() const {
     return vec1.dot(vec2) < -0.95f;
 }
 
-void CocoNutBall::calcHitBackDstPos(TVec3f* pOut, bool a1, bool a2) {
-    TVec3f vec1(0.0f, 0.0f, 0.0f);
+void CocoNutBall::calcHitBackDstPos(Vec3f* pOut, bool a1, bool a2) {
+    Vec3f vec1(0.0f, 0.0f, 0.0f);
     if (!a2) {
-        TVec3f cross;
-        TVec3f vec2;
+        Vec3f cross;
+        Vec3f vec2;
 
         vec2.sub(_8C->mPosition, *MR::getPlayerPos());
 
@@ -274,7 +274,7 @@ void CocoNutBall::calcHitBackDstPos(TVec3f* pOut, bool a1, bool a2) {
         vec1.scale(a1 ? 150.0f : -150.0f, cross);
     }
 
-    TVec3f scaled;
+    Vec3f scaled;
 
     scaled.scale(100.0f, _C8);
     vec1.add(scaled);
@@ -303,7 +303,7 @@ bool CocoNutBall::tryToKill(bool alwaysKill) {
 }
 
 void CocoNutBall::setVelocityToPlayer(f32 f1, f32 f2) {
-    TVec3f vec1;
+    Vec3f vec1;
 
     if (!_BE) {
         vec1.scale(120.0f, _C8);
@@ -312,9 +312,9 @@ void CocoNutBall::setVelocityToPlayer(f32 f1, f32 f2) {
         vec1.set(*MR::getPlayerPos());
     }
 
-    TPos3f rotate;
+    Pos3f rotate;
     rotate.makeRotate(_C8, MR::toRadian(f2));
-    TVec3f vec2;
+    Vec3f vec2;
     vec2.sub(vec1, mPosition);
     rotate.mult33(vec2);
     vec1.add(mPosition, vec2);
@@ -455,10 +455,10 @@ void CocoNutBall::exeRebound() {
         MR::deleteEffect(this, "CocoNutBlur");
         MR::deleteEffect(this, "CocoNutLight");
 
-        TVec3f vec1;
+        Vec3f vec1;
         vec1.sub(mPosition, *MR::getPlayerPos());
 
-        TPos3f pos;
+        Pos3f pos;
         pos.identity();
 
         MR::makeMtxUpFront(&pos, _C8, vec1);
@@ -468,7 +468,7 @@ void CocoNutBall::exeRebound() {
         pos.mult33(mVelocity);
     }
 
-    TVec3f twoGravity;
+    Vec3f twoGravity;
     twoGravity.scale(2.0f, mGravity);
     mVelocity.add(twoGravity);
 
@@ -497,7 +497,7 @@ void CocoNutBall::exeFreeze() {
 
     f32 scaleFactor = ((7.5f * cos) * (20 - getNerveStep())) / 20.0f;
 
-    TVec3f camXDirScaled;
+    Vec3f camXDirScaled;
     camXDirScaled.set(MR::getCamXdir());
     camXDirScaled.scale(scaleFactor);
     mPosition.add(_A4, camXDirScaled);

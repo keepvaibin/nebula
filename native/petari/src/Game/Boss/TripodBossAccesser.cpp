@@ -164,7 +164,7 @@ namespace MR {
         return reinterpret_cast< uintptr_t >(getTripodBossAccesser());
     }
 
-    void setTripodBossJointAttachBaseMatrix(const TPos3f& rPos, s32 id) {
+    void setTripodBossJointAttachBaseMatrix(const Pos3f& rPos, s32 id) {
         getTripodBossAccesser()->getTriPodBoss()->setJointAttachBaseMatrix(rPos, ::convertBoneIDToIndex(id));
     }
 
@@ -176,17 +176,17 @@ namespace MR {
         getTripodBossAccesser()->getTriPodBoss()->addStepPoint(pPoint);
     }
 
-    void getTripodBossJointMatrix(TPos3f* pMtx, s32 id) {
+    void getTripodBossJointMatrix(Pos3f* pMtx, s32 id) {
         getTripodBossAccesser()->getTriPodBoss()->getJointMatrix(pMtx, ::convertBoneIDToIndex(id));
     }
 
-    void getTripodBossAttachJointMatrix(TPos3f* pMtx, s32 id) {
+    void getTripodBossAttachJointMatrix(Pos3f* pMtx, s32 id) {
         getTripodBossAccesser()->getTriPodBoss()->getJointAttachMatrix(pMtx, ::convertBoneIDToIndex(id));
     }
 
-    void concatTripodBossAttachJointMatrix(TPos3f* pMtx, s32 id) {
+    void concatTripodBossAttachJointMatrix(Pos3f* pMtx, s32 id) {
         if (MR::isCreatedTripodBoss()) {
-            TPos3f mtx;
+            Pos3f mtx;
             MR::getTripodBossAttachJointMatrix(&mtx, id);
             pMtx->concat(mtx, *pMtx);
         }

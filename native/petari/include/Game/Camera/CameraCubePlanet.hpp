@@ -19,5 +19,5 @@ public:
     f32 mDist;
     f32 mAngleX;
     f32 mAngleY;
-    TVec3f mUp;
+    Vec3f mUp;
 };

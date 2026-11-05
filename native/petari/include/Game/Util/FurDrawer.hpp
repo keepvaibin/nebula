@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 
@@ -55,7 +55,7 @@ public:
     u8 mAlphaRef;
     Mtx mFurTexMtx;
     Mtx mIndirectTexMtx;
-    TVec3f mFogPosition;
+    Vec3f mFogPosition;
     f32 mFogWidth;
     u8 mUseDensityMap;
 };

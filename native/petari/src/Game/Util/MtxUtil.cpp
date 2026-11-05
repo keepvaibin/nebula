@@ -1,7 +1,7 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include <JSystem/JMath/JMATrigonometric.hpp>
-#include <JSystem/JMath/JMath.hpp>
+#include <nebula_geometry.hpp>
+
 
 static Mtx mtrans_org = {{1.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, 0.0f}};
 
@@ -16,9 +16,9 @@ static Mtx tmpmtx_rz = {{1.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f, 0.0f}, {0.0
 namespace MR {
     void makeMtxRotate(MtxPtr pMtx, s16 rx, s16 ry, s16 rz) {
         f32 sinX, sinY, sinZ, cosX, cosY, cosZ;
-        JMASSinCos(rx, &sinX, &cosX);
-        JMASSinCos(ry, &sinY, &cosY);
-        JMASSinCos(rz, &sinZ, &cosZ);
+        Angle::sinCosShort(rx, &sinX, &cosX);
+        Angle::sinCosShort(ry, &sinY, &cosY);
+        Angle::sinCosShort(rz, &sinZ, &cosZ);
 
         pMtx[0][0] = cosZ * cosY;
         pMtx[1][0] = sinZ * cosY;
@@ -44,14 +44,14 @@ namespace MR {
         makeMtxRotate(pMtx, angleX, angleY, angleZ);
     }
 
-    void makeMtxRotate(MtxPtr pMtx, const TVec3f& rVec) {
+    void makeMtxRotate(MtxPtr pMtx, const Vec3f& rVec) {
         makeMtxRotate(pMtx, rVec.x, rVec.y, rVec.z);
     }
 
     void makeMtxRotateY(MtxPtr pMtx, f32 ry) {
         s16 angle = (s16)(s32)((ry * DEGREE_TO_S16));
         f32 sinY, cosY;
-        JMASSinCos(angle, &sinY, &cosY);
+        Angle::sinCosShort(angle, &sinY, &cosY);
 
         pMtx[0][0] = cosY;
         pMtx[1][0] = 0.0f;
@@ -68,12 +68,12 @@ namespace MR {
     }
 
     void makeMtxTR(MtxPtr pMtx, f32 tx, f32 ty, f32 tz, f32 rx, f32 ry, f32 rz) {
-        f32 sinX = JMASinDegree(rx);
-        f32 sinY = JMASinDegree(ry);
-        f32 sinZ = JMASinDegree(rz);
-        f32 cosX = JMACosDegree(rx);
-        f32 cosY = JMACosDegree(ry);
-        f32 cosZ = JMACosDegree(rz);
+        f32 sinX = Angle::sinDegree(rx);
+        f32 sinY = Angle::sinDegree(ry);
+        f32 sinZ = Angle::sinDegree(rz);
+        f32 cosX = Angle::cosDegree(rx);
+        f32 cosY = Angle::cosDegree(ry);
+        f32 cosZ = Angle::cosDegree(rz);
 
         pMtx[0][0] = cosZ * cosY;
         pMtx[1][0] = sinZ * cosY;
@@ -92,7 +92,7 @@ namespace MR {
         pMtx[2][3] = tz;
     }
 
-    void makeMtxTR(MtxPtr pMtx, const TVec3f& rTrans, const TVec3f& rRot) {
+    void makeMtxTR(MtxPtr pMtx, const Vec3f& rTrans, const Vec3f& rRot) {
         makeMtxTR(pMtx, rTrans.x, rTrans.y, rTrans.z, rRot.x, rRot.y, rRot.z);
     }
 
@@ -104,8 +104,8 @@ namespace MR {
     }
 
     void rotateMtxLocalX(MtxPtr pMtx, f32 rad) {
-        f32 cosAngle = JMACosRadian(rad);
-        f32 sinAngle = JMASinRadian(rad);
+        f32 cosAngle = Angle::cosRadian(rad);
+        f32 sinAngle = Angle::sinRadian(rad);
         f32 a0 = cosAngle * pMtx[0][1] - sinAngle * pMtx[0][2];
         f32 a1 = cosAngle * pMtx[1][1] - sinAngle * pMtx[1][2];
         f32 a2 = cosAngle * pMtx[2][1] - sinAngle * pMtx[2][2];
@@ -121,8 +121,8 @@ namespace MR {
     }
 
     void rotateMtxLocalY(MtxPtr pMtx, f32 rad) {
-        f32 cosAngle = JMACosRadian(rad);
-        f32 sinAngle = JMASinRadian(rad);
+        f32 cosAngle = Angle::cosRadian(rad);
+        f32 sinAngle = Angle::sinRadian(rad);
         f32 a0 = cosAngle * pMtx[0][0] - sinAngle * pMtx[0][2];
         f32 a1 = cosAngle * pMtx[1][0] - sinAngle * pMtx[1][2];
         f32 a2 = cosAngle * pMtx[2][0] - sinAngle * pMtx[2][2];
@@ -138,8 +138,8 @@ namespace MR {
     }
 
     void rotateMtxLocalZ(MtxPtr pMtx, f32 rad) {
-        f32 cosAngle = JMACosRadian(rad);
-        f32 sinAngle = JMASinRadian(rad);
+        f32 cosAngle = Angle::cosRadian(rad);
+        f32 sinAngle = Angle::sinRadian(rad);
         f32 a0 = cosAngle * pMtx[0][0] - sinAngle * pMtx[0][1];
         f32 a1 = cosAngle * pMtx[1][0] - sinAngle * pMtx[1][1];
         f32 a2 = cosAngle * pMtx[2][0] - sinAngle * pMtx[2][1];
@@ -170,7 +170,7 @@ namespace MR {
         preScaleMtx(pMtx, scale, scale, scale);
     }
 
-    void preScaleMtx(MtxPtr pMtx, const TVec3f& rScale) {
+    void preScaleMtx(MtxPtr pMtx, const Vec3f& rScale) {
         preScaleMtx(pMtx, rScale.x, rScale.y, rScale.z);
     }
 
@@ -186,13 +186,13 @@ namespace MR {
         pMtx[2][2] *= sz;
     }
 
-    void scaleMtxToLocalMtx(MtxPtr pDst, MtxPtr pSrc, MtxPtr pBase, const TVec3f& rScale) {
-        TPos3f baseCopy;
+    void scaleMtxToLocalMtx(MtxPtr pDst, MtxPtr pSrc, MtxPtr pBase, const Vec3f& rScale) {
+        Pos3f baseCopy;
         baseCopy.setInline(pBase);
-        TVec3f srcTrans;
-        baseCopy.setTrans(TVec3f(0.0f, 0.0f, 0.0f));
+        Vec3f srcTrans;
+        baseCopy.setTrans(Vec3f(0.0f, 0.0f, 0.0f));
 
-        TPos3f invMtx;
+        Pos3f invMtx;
         invMtx.invert(baseCopy);
         preScaleMtx(baseCopy, rScale.x, rScale.y, rScale.z);
 
@@ -202,17 +202,17 @@ namespace MR {
         setMtxTrans(pDst, srcTrans.x, srcTrans.y, srcTrans.z);
     }
 
-    void scaleMtxToLocalMtx(MtxPtr pDst, MtxPtr pSrc, const TVec3f& rScale) {
+    void scaleMtxToLocalMtx(MtxPtr pDst, MtxPtr pSrc, const Vec3f& rScale) {
         scaleMtxToLocalMtx(pDst, pDst, pSrc, rScale);
     }
 
-    void scaleMtxToDir(TPos3f* pDst, const TVec3f& rDir, const TVec3f& rScale) {
-        TVec3f axisX, axisY;
+    void scaleMtxToDir(Pos3f* pDst, const Vec3f& rDir, const Vec3f& rScale) {
+        Vec3f axisX, axisY;
         MR::makeAxisCrossPlane(&axisX, &axisY, rDir);
 
-        TPos3f tmp1;
+        Pos3f tmp1;
         tmp1.identity();
-        TPos3f tmp2;
+        Pos3f tmp2;
         tmp2.identity();
 
         tmp1.setXYZDir(axisX, rDir, axisY);
@@ -234,12 +234,12 @@ namespace MR {
     }
 
     void makeMtxTRS(MtxPtr pMtx, f32 tx, f32 ty, f32 tz, f32 rx, f32 ry, f32 rz, f32 sx, f32 sy, f32 sz) {
-        f32 sinX = JMASinDegree(rx);
-        f32 sinY = JMASinDegree(ry);
-        f32 sinZ = JMASinDegree(rz);
-        f32 cosX = JMACosDegree(rx);
-        f32 cosY = JMACosDegree(ry);
-        f32 cosZ = JMACosDegree(rz);
+        f32 sinX = Angle::sinDegree(rx);
+        f32 sinY = Angle::sinDegree(ry);
+        f32 sinZ = Angle::sinDegree(rz);
+        f32 cosX = Angle::cosDegree(rx);
+        f32 cosY = Angle::cosDegree(ry);
+        f32 cosZ = Angle::cosDegree(rz);
 
         pMtx[0][0] = sx * (cosZ * cosY);
         pMtx[1][0] = sx * (sinZ * cosY);
@@ -258,11 +258,11 @@ namespace MR {
         pMtx[2][3] = tz;
     }
 
-    void makeMtxTRS(MtxPtr pMtx, const TVec3f& rTrans, const TVec3f& rRot, const TVec3f& rScale) {
+    void makeMtxTRS(MtxPtr pMtx, const Vec3f& rTrans, const Vec3f& rRot, const Vec3f& rScale) {
         makeMtxTRS(pMtx, rTrans.x, rTrans.y, rTrans.z, rRot.x, rRot.y, rRot.z, rScale.x, rScale.y, rScale.z);
     }
 
-    void setMtxAxisXYZ(MtxPtr pMtx, const TVec3f& rAxisX, const TVec3f& rAxisY, const TVec3f& rAxisZ) {
+    void setMtxAxisXYZ(MtxPtr pMtx, const Vec3f& rAxisX, const Vec3f& rAxisY, const Vec3f& rAxisZ) {
         pMtx[0][0] = rAxisX.x;
         pMtx[1][0] = rAxisX.y;
         pMtx[2][0] = rAxisX.z;
@@ -274,8 +274,8 @@ namespace MR {
         pMtx[2][2] = rAxisZ.z;
     }
 
-    void flattenMtx(MtxPtr pDst, MtxPtr pSrc, const TVec3f& rNormal) {
-        TVec3f axisX, axisY, axisZ;
+    void flattenMtx(MtxPtr pDst, MtxPtr pSrc, const Vec3f& rNormal) {
+        Vec3f axisX, axisY, axisZ;
         MR::extractMtxXDir(pSrc, &axisX);
         MR::extractMtxYDir(pSrc, &axisY);
         MR::extractMtxZDir(pSrc, &axisZ);
@@ -287,7 +287,7 @@ namespace MR {
         MR::setMtxAxisXYZ(pDst, axisX, axisY, axisZ);
     }
 
-    void flattenMtx(MtxPtr pMtx, const TVec3f& rNormal) {
+    void flattenMtx(MtxPtr pMtx, const Vec3f& rNormal) {
         flattenMtx(pMtx, pMtx, rNormal);
     }
 
@@ -308,7 +308,7 @@ namespace MR {
     }
 
     void blendMtx(MtxPtr pMtxA, MtxPtr pMtxB, f32 blend, MtxPtr pDst) {
-        TVec3f transA, transB, transR;
+        Vec3f transA, transB, transR;
         extractMtxTrans(pMtxA, &transA);
         extractMtxTrans(pMtxB, &transB);
 
@@ -318,11 +318,11 @@ namespace MR {
         setMtxTrans(pDst, transR.x, transR.y, transR.z);
     }
 
-    void makeMtxWithoutScale(TPos3f* pDst, const TPos3f& rSrc) {
-        TVec3f trans;
+    void makeMtxWithoutScale(Pos3f* pDst, const Pos3f& rSrc) {
+        Vec3f trans;
         rSrc.getTrans(trans);
 
-        TVec3f axisX, axisY, axisZ;
+        Vec3f axisX, axisY, axisZ;
         rSrc.getXYZDir(axisX, axisY, axisZ);
 
         pDst->setTrans(trans);
@@ -334,8 +334,8 @@ namespace MR {
         pDst->setXYZDir(axisX, axisY, axisZ);
     }
 
-    void makeRTFromMtxPtr(TVec3f* pOutTrans, TVec3f* pOutRot, MtxPtr pSrc, bool toDegree) {
-        TPos3f* pMtx = reinterpret_cast< TPos3f* >(pSrc);
+    void makeRTFromMtxPtr(Vec3f* pOutTrans, Vec3f* pOutRot, MtxPtr pSrc, bool toDegree) {
+        Pos3f* pMtx = reinterpret_cast< Pos3f* >(pSrc);
         if (pOutTrans != nullptr) {
             pMtx->getTrans(*pOutTrans);
         }
@@ -349,8 +349,8 @@ namespace MR {
         }
     }
 
-    void makeMtxSideUp(TPos3f* pDst, const TVec3f& rSide, const TVec3f& rUp) {
-        TVec3f axisZ, axisY, axisX;
+    void makeMtxSideUp(Pos3f* pDst, const Vec3f& rSide, const Vec3f& rUp) {
+        Vec3f axisZ, axisY, axisX;
         MR::normalize(rSide, &axisX);
 
         axisZ.cross(axisX, rUp);
@@ -361,13 +361,13 @@ namespace MR {
         pDst->setXYZDir(axisX, axisY, axisZ);
     }
 
-    void makeMtxSideUpPos(TPos3f* pDst, const TVec3f& rSide, const TVec3f& rUp, const TVec3f& rPos) {
+    void makeMtxSideUpPos(Pos3f* pDst, const Vec3f& rSide, const Vec3f& rUp, const Vec3f& rPos) {
         makeMtxSideUp(pDst, rSide, rUp);
         pDst->setTrans(rPos);
     }
 
-    void makeMtxSideFront(TPos3f* pDst, const TVec3f& rSide, const TVec3f& rFront) {
-        TVec3f axisZ, axisY, axisX;
+    void makeMtxSideFront(Pos3f* pDst, const Vec3f& rSide, const Vec3f& rFront) {
+        Vec3f axisZ, axisY, axisX;
         MR::normalize(rSide, &axisX);
 
         axisY.cross(rFront, axisX);
@@ -378,8 +378,8 @@ namespace MR {
         pDst->setXYZDir(axisX, axisY, axisZ);
     }
 
-    void makeMtxUpSide(TPos3f* pDst, const TVec3f& rUp, const TVec3f& rSide) {
-        TVec3f axisZ, axisY, axisX;
+    void makeMtxUpSide(Pos3f* pDst, const Vec3f& rUp, const Vec3f& rSide) {
+        Vec3f axisZ, axisY, axisX;
         MR::normalize(rUp, &axisY);
 
         axisZ.cross(rSide, axisY);
@@ -390,13 +390,13 @@ namespace MR {
         pDst->setXYZDir(axisX, axisY, axisZ);
     }
 
-    void makeMtxUpSidePos(TPos3f* pDst, const TVec3f& rUp, const TVec3f& rSide, const TVec3f& rPos) {
+    void makeMtxUpSidePos(Pos3f* pDst, const Vec3f& rUp, const Vec3f& rSide, const Vec3f& rPos) {
         makeMtxUpSide(pDst, rUp, rSide);
         pDst->setTrans(rPos);
     }
 
-    void makeMtxUpFront(TPos3f* pDst, const TVec3f& rUp, const TVec3f& rFront) {
-        TVec3f axisZ, axisY, axisX;
+    void makeMtxUpFront(Pos3f* pDst, const Vec3f& rUp, const Vec3f& rFront) {
+        Vec3f axisZ, axisY, axisX;
         MR::normalize(rUp, &axisY);
 
         axisX.cross(axisY, rFront);
@@ -407,13 +407,13 @@ namespace MR {
         pDst->setXYZDir(axisX, axisY, axisZ);
     }
 
-    void makeMtxUpFrontPos(TPos3f* pDst, const TVec3f& rUp, const TVec3f& rFront, const TVec3f& rPos) {
+    void makeMtxUpFrontPos(Pos3f* pDst, const Vec3f& rUp, const Vec3f& rFront, const Vec3f& rPos) {
         makeMtxUpFront(pDst, rUp, rFront);
         pDst->setTrans(rPos);
     }
 
-    void makeMtxFrontSidePos(TPos3f* pDst, const TVec3f& rFront, const TVec3f& rSide, const TVec3f& rPos) {
-        TVec3f axisX, axisY, axisZ;
+    void makeMtxFrontSidePos(Pos3f* pDst, const Vec3f& rFront, const Vec3f& rSide, const Vec3f& rPos) {
+        Vec3f axisX, axisY, axisZ;
         MR::normalize(rFront, &axisZ);
 
         axisY.cross(axisZ, rSide);
@@ -425,8 +425,8 @@ namespace MR {
         pDst->setTrans(rPos);
     }
 
-    void makeMtxFrontUp(TPos3f* pDst, const TVec3f& rFront, const TVec3f& rUp) {
-        TVec3f axisZ, axisY, axisX;
+    void makeMtxFrontUp(Pos3f* pDst, const Vec3f& rFront, const Vec3f& rUp) {
+        Vec3f axisZ, axisY, axisX;
         MR::normalize(rFront, &axisZ);
 
         axisX.cross(rUp, axisZ);
@@ -437,20 +437,20 @@ namespace MR {
         pDst->setXYZDir(axisX, axisY, axisZ);
     }
 
-    void makeMtxFrontUpPos(TPos3f* pDst, const TVec3f& rFront, const TVec3f& rUp, const TVec3f& rPos) {
+    void makeMtxFrontUpPos(Pos3f* pDst, const Vec3f& rFront, const Vec3f& rUp, const Vec3f& rPos) {
         makeMtxFrontUp(pDst, rFront, rUp);
         pDst->setTrans(rPos);
     }
 
-    void makeMtxUpNoSupport(TPos3f* pDst, const TVec3f& rUp) {
-        TVec3f support;
+    void makeMtxUpNoSupport(Pos3f* pDst, const Vec3f& rUp) {
+        Vec3f support;
         if (MR::getMaxAbsElementIndex(rUp) == 2) {
             support.set< f32 >(0.0f, 1.0f, 0.0f);
         } else {
             support.set< f32 >(0.0f, 0.0f, 1.0f);
         }
 
-        TVec3f axisX, axisY, axisZ;
+        Vec3f axisX, axisY, axisZ;
         MR::normalize(rUp, &axisY);
 
         axisX.cross(axisY, support);
@@ -461,8 +461,8 @@ namespace MR {
         pDst->setXYZDir(axisX, axisY, axisZ);
     }
 
-    void makeMtxUpNoSupportPos(TPos3f* pDst, const TVec3f& rUp, const TVec3f& rPos) {
-        TVec3f support;
+    void makeMtxUpNoSupportPos(Pos3f* pDst, const Vec3f& rUp, const Vec3f& rPos) {
+        Vec3f support;
         if (MR::getMaxAbsElementIndex(rUp) == 2) {
             support.set< f32 >(0.0f, 1.0f, 0.0f);
         } else {
@@ -472,15 +472,15 @@ namespace MR {
         MR::makeMtxUpFrontPos(pDst, rUp, support, rPos);
     }
 
-    void makeMtxFrontNoSupport(TPos3f* pDst, const TVec3f& rFront) {
-        TVec3f support;
+    void makeMtxFrontNoSupport(Pos3f* pDst, const Vec3f& rFront) {
+        Vec3f support;
         if (MR::getMaxAbsElementIndex(rFront) == 1) {
             support.set< f32 >(1.0f, 0.0f, 0.0f);
         } else {
             support.set< f32 >(0.0f, 1.0f, 0.0f);
         }
 
-        TVec3f axisX, axisY, axisZ;
+        Vec3f axisX, axisY, axisZ;
         MR::normalize(rFront, &axisZ);
 
         axisX.cross(support, axisZ);
@@ -491,8 +491,8 @@ namespace MR {
         pDst->setXYZDir(axisX, axisY, axisZ);
     }
 
-    void makeMtxFrontNoSupportPos(TPos3f* pDst, const TVec3f& rFront, const TVec3f& rPos) {
-        TVec3f support;
+    void makeMtxFrontNoSupportPos(Pos3f* pDst, const Vec3f& rFront, const Vec3f& rPos) {
+        Vec3f support;
         if (MR::getMaxAbsElementIndex(rFront) == 1) {
             support.set< f32 >(1.0f, 0.0f, 0.0f);
         } else {
@@ -502,13 +502,13 @@ namespace MR {
         MR::makeMtxFrontUpPos(pDst, rFront, support, rPos);
     }
 
-    void orthogonalize(TPos3f* pMtx) {
-        TVec3f axisZ, axisY, axisX;
+    void orthogonalize(Pos3f* pMtx) {
+        Vec3f axisZ, axisY, axisX;
 
         pMtx->getXYZDir(axisX, axisY, axisZ);
 
-        TVec3f* pZ;
-        TVec3f* pY;
+        Vec3f* pZ;
+        Vec3f* pY;
         pY = &axisY;
         pZ = &axisZ;
 
@@ -520,27 +520,27 @@ namespace MR {
 
         pMtx->setXYZDir(axisX, *pY, *pZ);
 
-        TVec3f zDir;
+        Vec3f zDir;
         pMtx->getZDir(zDir);
 
-        JGeometry::TUtil< f32 >::sqrt((pMtx->get(0, 0) * pMtx->get(0, 0)) + (pMtx->get(1, 0) * pMtx->get(1, 0)) + (pMtx->get(2, 0) * pMtx->get(2, 0)) +
+        FloatUtil::sqrt((pMtx->get(0, 0) * pMtx->get(0, 0)) + (pMtx->get(1, 0) * pMtx->get(1, 0)) + (pMtx->get(2, 0) * pMtx->get(2, 0)) +
                                       (pMtx->get(0, 1) * pMtx->get(0, 1)) + (pMtx->get(1, 1) * pMtx->get(1, 1)) + (pMtx->get(2, 1) * pMtx->get(2, 1)) +
                                       (pMtx->get(0, 2) * pMtx->get(0, 2)) + (pMtx->get(1, 2) * pMtx->get(1, 2)) + (pMtx->get(2, 2) * pMtx->get(2, 2)));
 
         if (pMtx != nullptr) {
-            f32 invLenX = JGeometry::TUtil< f32 >::inv_sqrt((pMtx->get(0, 0) * pMtx->get(0, 0)) + (pMtx->get(1, 0) * pMtx->get(1, 0)) +
+            f32 invLenX = FloatUtil::inv_sqrt((pMtx->get(0, 0) * pMtx->get(0, 0)) + (pMtx->get(1, 0) * pMtx->get(1, 0)) +
                                                             (pMtx->get(2, 0) * pMtx->get(2, 0)));
             pMtx->mMtx[0][0] = invLenX * pMtx->get(0, 0);
             pMtx->mMtx[1][0] = invLenX * pMtx->get(1, 0);
             pMtx->mMtx[2][0] = invLenX * pMtx->get(2, 0);
 
-            f32 invLenY = JGeometry::TUtil< f32 >::inv_sqrt((pMtx->get(0, 1) * pMtx->get(0, 1)) + (pMtx->get(1, 1) * pMtx->get(1, 1)) +
+            f32 invLenY = FloatUtil::inv_sqrt((pMtx->get(0, 1) * pMtx->get(0, 1)) + (pMtx->get(1, 1) * pMtx->get(1, 1)) +
                                                             (pMtx->get(2, 1) * pMtx->get(2, 1)));
             pMtx->mMtx[0][1] = invLenY * pMtx->get(0, 1);
             pMtx->mMtx[1][1] = invLenY * pMtx->get(1, 1);
             pMtx->mMtx[2][1] = invLenY * pMtx->get(2, 1);
 
-            f32 invLenZ = JGeometry::TUtil< f32 >::inv_sqrt((pMtx->get(0, 2) * pMtx->get(0, 2)) + (pMtx->get(1, 2) * pMtx->get(1, 2)) +
+            f32 invLenZ = FloatUtil::inv_sqrt((pMtx->get(0, 2) * pMtx->get(0, 2)) + (pMtx->get(1, 2) * pMtx->get(1, 2)) +
                                                             (pMtx->get(2, 2) * pMtx->get(2, 2)));
             pMtx->mMtx[0][2] = invLenZ * pMtx->get(0, 2);
             pMtx->mMtx[1][2] = invLenZ * pMtx->get(1, 2);
@@ -552,67 +552,67 @@ namespace MR {
         pMtx->mMtx[2][2] = zDir.z;
     }
 
-    void turnMtxToXDirRate(TPos3f* pMtx, const TVec3f& rDir, f32 rate) {
-        TQuat4f quat;
+    void turnMtxToXDirRate(Pos3f* pMtx, const Vec3f& rDir, f32 rate) {
+        Quat4f quat;
         pMtx->getQuat(quat);
         MR::turnQuatXDirRate(&quat, quat, rDir, rate);
         pMtx->setQuat(quat);
     }
 
-    void turnMtxToXDirDegree(TPos3f* pMtx, const TVec3f& rDir, f32 degree) {
-        TQuat4f quat;
+    void turnMtxToXDirDegree(Pos3f* pMtx, const Vec3f& rDir, f32 degree) {
+        Quat4f quat;
         pMtx->getQuat(quat);
         MR::turnQuatXDirRad(&quat, quat, rDir, PI_180 * degree);
         pMtx->setQuat(quat);
     }
 
-    void turnMtxToYDirRate(TPos3f* pMtx, const TVec3f& rDir, f32 rate) {
-        TQuat4f quat;
+    void turnMtxToYDirRate(Pos3f* pMtx, const Vec3f& rDir, f32 rate) {
+        Quat4f quat;
         pMtx->getQuat(quat);
         MR::turnQuatYDirRate(&quat, quat, rDir, rate);
         pMtx->setQuat(quat);
     }
 
-    void turnMtxToYDirDegree(TPos3f* pMtx, const TVec3f& rDir, f32 degree) {
-        TQuat4f quat;
+    void turnMtxToYDirDegree(Pos3f* pMtx, const Vec3f& rDir, f32 degree) {
+        Quat4f quat;
         pMtx->getQuat(quat);
         MR::turnQuatYDirRad(&quat, quat, rDir, PI_180 * degree);
         pMtx->setQuat(quat);
     }
 
-    void turnMtxToLocalDirDegree(TPos3f* pMtx, const TVec3f& rLocalAxis, const TVec3f& rDir, f32 degree) {
-        TVec3f worldAxis;
+    void turnMtxToLocalDirDegree(Pos3f* pMtx, const Vec3f& rLocalAxis, const Vec3f& rDir, f32 degree) {
+        Vec3f worldAxis;
         pMtx->mult33(rLocalAxis, worldAxis);
 
-        TQuat4f quat;
+        Quat4f quat;
         pMtx->getQuat(quat);
         MR::turnQuat(&quat, quat, worldAxis, rDir, PI_180 * degree);
         pMtx->setQuat(quat);
     }
 
-    void makeMtxMoment(TPos3f* pMtx, const TVec3f& rMoment) {
+    void makeMtxMoment(Pos3f* pMtx, const Vec3f& rMoment) {
         pMtx->identity();
 
         if (!rMoment.isZero()) {
-            TVec3f dir(rMoment);
+            Vec3f dir(rMoment);
             f32 mag;
             MR::separateScalarAndDirection(&mag, &dir, dir);
             pMtx->makeRotate(dir, mag);
         }
     }
 
-    void rotateMtxMoment(TPos3f* pDst, const TPos3f& rSrc, const TVec3f& rMoment) {
+    void rotateMtxMoment(Pos3f* pDst, const Pos3f& rSrc, const Vec3f& rMoment) {
         if (rMoment.isZero()) {
             *pDst = rSrc;
         } else {
-            TVec3f dir(rMoment);
+            Vec3f dir(rMoment);
             f32 mag;
             MR::separateScalarAndDirection(&mag, &dir, dir);
 
-            TVec3f trans;
+            Vec3f trans;
             rSrc.getTrans(trans);
 
-            TPos3f rotMtx;
+            Pos3f rotMtx;
             rotMtx.makeRotate(dir, mag);
             rotMtx.concat(rotMtx, rSrc);
             orthogonalize(&rotMtx);
@@ -621,7 +621,7 @@ namespace MR {
         }
     }
 
-    void rotateMtxMoment(TPos3f* pMtx, const TVec3f& rMoment) {
+    void rotateMtxMoment(Pos3f* pMtx, const Vec3f& rMoment) {
         rotateMtxMoment(pMtx, *pMtx, rMoment);
     }
 
@@ -631,13 +631,13 @@ namespace MR {
         pMtx[2][3] = z;
     }
 
-    void addTransMtx(MtxPtr pMtx, const TVec3f& rVec) {
+    void addTransMtx(MtxPtr pMtx, const Vec3f& rVec) {
         pMtx[0][3] += rVec.x;
         pMtx[1][3] += rVec.y;
         pMtx[2][3] += rVec.z;
     }
 
-    void addTransMtxLocal(MtxPtr pMtx, const TVec3f& rVec) {
+    void addTransMtxLocal(MtxPtr pMtx, const Vec3f& rVec) {
         addTransMtxLocalX(pMtx, rVec.x);
         addTransMtxLocalY(pMtx, rVec.y);
         addTransMtxLocalZ(pMtx, rVec.z);
@@ -661,31 +661,31 @@ namespace MR {
         pMtx[2][3] = pMtx[2][3] + (pMtx[2][2] * z_coord);
     }
 
-    void extractMtxXDir(MtxPtr pMtx, TVec3f* pOut) {
+    void extractMtxXDir(MtxPtr pMtx, Vec3f* pOut) {
         pOut->x = pMtx[0][0];
         pOut->y = pMtx[1][0];
         pOut->z = pMtx[2][0];
     }
 
-    void extractMtxYDir(MtxPtr pMtx, TVec3f* pOut) {
+    void extractMtxYDir(MtxPtr pMtx, Vec3f* pOut) {
         pOut->x = pMtx[0][1];
         pOut->y = pMtx[1][1];
         pOut->z = pMtx[2][1];
     }
 
-    void extractMtxZDir(MtxPtr pMtx, TVec3f* pOut) {
+    void extractMtxZDir(MtxPtr pMtx, Vec3f* pOut) {
         pOut->x = pMtx[0][2];
         pOut->y = pMtx[1][2];
         pOut->z = pMtx[2][2];
     }
 
-    void extractMtxXYZDir(MtxPtr pMtx, TVec3f* pOutX, TVec3f* pOutY, TVec3f* pOutZ) {
+    void extractMtxXYZDir(MtxPtr pMtx, Vec3f* pOutX, Vec3f* pOutY, Vec3f* pOutZ) {
         MR::extractMtxXDir(pMtx, pOutX);
         MR::extractMtxYDir(pMtx, pOutY);
         MR::extractMtxZDir(pMtx, pOutZ);
     }
 
-    void extractMtxTrans(MtxPtr pMtx, TVec3f* pOut) {
+    void extractMtxTrans(MtxPtr pMtx, Vec3f* pOut) {
         pOut->x = pMtx[0][3];
         pOut->y = pMtx[1][3];
         pOut->z = pMtx[2][3];
@@ -724,31 +724,31 @@ namespace MR {
     }
 
     bool isRotAxisY(MtxPtr pMtxA, MtxPtr pMtxB) {
-        TVec3f yDirA, yDirB;
-        ((TRot3f*)pMtxA)->getYDir(yDirA);
-        ((TRot3f*)pMtxB)->getYDir(yDirB);
+        Vec3f yDirA, yDirB;
+        ((Rot3f*)pMtxA)->getYDir(yDirA);
+        ((Rot3f*)pMtxB)->getYDir(yDirB);
         bool result = false;
 
-        if (JGeometry::TUtil< f32 >::epsilonEquals(yDirA.x, yDirB.x, JGeometry::TUtil< f32 >::epsilon()) &&
-            JGeometry::TUtil< f32 >::epsilonEquals(yDirA.y, yDirB.y, JGeometry::TUtil< f32 >::epsilon()) &&
-            JGeometry::TUtil< f32 >::epsilonEquals(yDirA.z, yDirB.z, JGeometry::TUtil< f32 >::epsilon())) {
+        if (FloatUtil::epsilonEquals(yDirA.x, yDirB.x, FloatUtil::epsilon()) &&
+            FloatUtil::epsilonEquals(yDirA.y, yDirB.y, FloatUtil::epsilon()) &&
+            FloatUtil::epsilonEquals(yDirA.z, yDirB.z, FloatUtil::epsilon())) {
             result = true;
         }
 
         return result;
     }
 
-    void calcMtxRotAxis(TVec3f* pOut, MtxPtr pMtxA, MtxPtr pMtxB) {
-        TVec3f localY(0.0f, 1.0f, 0.0f);
+    void calcMtxRotAxis(Vec3f* pOut, MtxPtr pMtxA, MtxPtr pMtxB) {
+        Vec3f localY(0.0f, 1.0f, 0.0f);
 
         Mtx invA;
         NebulaMtxInverse(pMtxA, invA);
 
-        TVec3f axisYA, axisYB;
+        Vec3f axisYA, axisYB;
         NebulaMtxMultVecSR(invA, &localY, &axisYA);
         NebulaMtxMultVecSR(pMtxB, &axisYA, &axisYB);
 
-        TVec3f cross = localY.cross(axisYB);
+        Vec3f cross = localY.cross(axisYB);
 
         if (MR::normalizeOrZero(&cross)) {
             *pOut = localY;
@@ -757,7 +757,7 @@ namespace MR {
         }
     }
 
-    MtxPtr tmpMtxTrans(const TVec3f& rVec) {
+    MtxPtr tmpMtxTrans(const Vec3f& rVec) {
         setMtxTrans(mtrans_org, rVec.x, rVec.y, rVec.z);
         return mtrans_org;
     }
@@ -770,8 +770,8 @@ namespace MR {
     }
 
     MtxPtr tmpMtxRotXRad(f32 rad) {
-        f32 cosX = JMACosRadian(rad);
-        f32 sinX = JMASinRadian(rad);
+        f32 cosX = Angle::cosRadian(rad);
+        f32 sinX = Angle::sinRadian(rad);
         tmpmtx_rx[1][1] = cosX;
         tmpmtx_rx[2][1] = sinX;
         tmpmtx_rx[1][2] = -sinX;
@@ -780,8 +780,8 @@ namespace MR {
     }
 
     MtxPtr tmpMtxRotYRad(f32 rad) {
-        f32 cosY = JMACosRadian(rad);
-        f32 sinY = JMASinRadian(rad);
+        f32 cosY = Angle::cosRadian(rad);
+        f32 sinY = Angle::sinRadian(rad);
         tmpmtx_ry[0][0] = cosY;
         tmpmtx_ry[0][2] = sinY;
         tmpmtx_ry[2][0] = -sinY;
@@ -790,8 +790,8 @@ namespace MR {
     }
 
     MtxPtr tmpMtxRotZRad(f32 rad) {
-        f32 cosZ = JMACosRadian(rad);
-        f32 sinZ = JMASinRadian(rad);
+        f32 cosZ = Angle::cosRadian(rad);
+        f32 sinZ = Angle::sinRadian(rad);
         tmpmtx_rz[0][0] = cosZ;
         tmpmtx_rz[1][0] = sinZ;
         tmpmtx_rz[0][1] = -sinZ;
@@ -800,8 +800,8 @@ namespace MR {
     }
 
     MtxPtr tmpMtxRotXDeg(f32 deg) {
-        f32 cosX = JMACosDegree(deg);
-        f32 sinX = JMASinDegree(deg);
+        f32 cosX = Angle::cosDegree(deg);
+        f32 sinX = Angle::sinDegree(deg);
         tmpmtx_rx[1][1] = cosX;
         tmpmtx_rx[2][1] = sinX;
         tmpmtx_rx[1][2] = -sinX;
@@ -810,8 +810,8 @@ namespace MR {
     }
 
     MtxPtr tmpMtxRotYDeg(f32 deg) {
-        f32 cosY = JMACosDegree(deg);
-        f32 sinY = JMASinDegree(deg);
+        f32 cosY = Angle::cosDegree(deg);
+        f32 sinY = Angle::sinDegree(deg);
         tmpmtx_ry[0][0] = cosY;
         tmpmtx_ry[0][2] = sinY;
         tmpmtx_ry[2][0] = -sinY;
@@ -820,8 +820,8 @@ namespace MR {
     }
 
     MtxPtr tmpMtxRotZDeg(f32 deg) {
-        f32 cosZ = JMACosDegree(deg);
-        f32 sinZ = JMASinDegree(deg);
+        f32 cosZ = Angle::cosDegree(deg);
+        f32 sinZ = Angle::sinDegree(deg);
         tmpmtx_rz[0][0] = cosZ;
         tmpmtx_rz[1][0] = sinZ;
         tmpmtx_rz[0][1] = -sinZ;
@@ -829,8 +829,8 @@ namespace MR {
         return tmpmtx_rz;
     }
 
-    void orderRotateMtx(s16 order, const TVec3f& rRad, MtxPtr pDst) {
-        const TVec3f* pRad = &rRad;
+    void orderRotateMtx(s16 order, const Vec3f& rRad, MtxPtr pDst) {
+        const Vec3f* pRad = &rRad;
         MtxPtr mtxX = tmpMtxRotXRad(pRad->x);
         MtxPtr mtxY = tmpMtxRotYRad(pRad->y);
         MtxPtr mtxZ = tmpMtxRotZRad(pRad->z);
@@ -840,7 +840,7 @@ namespace MR {
         MR::multMtx(pDst, pDst, order == 5 ? mtxX : mtxZ);
     }
 
-    void rotAxisVecRad(const TVec3f& rAxis, const TVec3f& rVec, TVec3f* pOut, f32 rad) {
+    void rotAxisVecRad(const Vec3f& rAxis, const Vec3f& rVec, Vec3f* pOut, f32 rad) {
         Mtx rot;
         NebulaMtxRotAxisRad(rot, &rVec, rad);
         NebulaMtxMultVec(rot, &rAxis, pOut);

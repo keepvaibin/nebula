@@ -54,7 +54,7 @@ void SkeletalFishGuard::init(const JMapInfoIter& rIter) {
     initBinder(120.0f, 0.0f, 0);
     MR::invalidateClipping(this);
     MR::setBinderExceptActor(this, mFishBoss->getHeadActor());
-    MR::initStarPointerTargetAtJoint(this, "Joint00", 170.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::initStarPointerTargetAtJoint(this, "Joint00", 170.0f, Vec3f(0.0f, 0.0f, 0.0f));
     MR::declareStarPiece(this, 128);
 }
 
@@ -95,7 +95,7 @@ void SkeletalFishGuard::control() {
     but the layers of inlines are extremely complex
 */
 void SkeletalFishGuard::exeAppear() {
-    TVec3f v32;
+    Vec3f v32;
     if (MR::isFirstStep(this)) {
         MR::showModel(this);
         MR::startBck(this, "Swim");
@@ -111,21 +111,21 @@ void SkeletalFishGuard::exeAppear() {
     }
 
     MR::calcGravityVector(this, _10C, &v32, nullptr, false);
-    TVec3f v31 = _10C - v32 * 1000.0f;
+    Vec3f v31 = _10C - v32 * 1000.0f;
     calcTarget(&_E8, &_F4, &_100, 300 - getNerveStep());
-    TVec3f v30 = _DC;
+    Vec3f v30 = _DC;
     v30.orthogonalize(v32);
     MR::normalizeOrZero(&v30);
     v31 += v30 * 500.0f;
-    v30 += TVec3f(0.0f, 1.0f, 0.0f);
+    v30 += Vec3f(0.0f, 1.0f, 0.0f);
     MR::normalize(&v30);
-    TVec3f v29 = mPosition;
+    Vec3f v29 = mPosition;
 
     if (getNerveStep() < 99) {
         s32 v7 = getNerveStep();
         s32 max = 0x63;
         f32 scaled = v7 / (f32)max;
-        mPosition.cubic(_10C, TVec3f(0.0f, 1.0f, 0.0f) * 0.0f * (f32)max, v30 * 10.0f * (f32)max, v31, scaled);
+        mPosition.cubic(_10C, Vec3f(0.0f, 1.0f, 0.0f) * 0.0f * (f32)max, v30 * 10.0f * (f32)max, v31, scaled);
     } else {
         f32 v9 = (getNerveStep() - 0x63);
         s32 max = 0xC9;
@@ -134,7 +134,7 @@ void SkeletalFishGuard::exeAppear() {
         mPosition.cubic(v31, v30 * 10.0f * (f32)max, _100 * v11 * (f32)max, _F4, scaled);
     }
 
-    TVec3f v28 = mPosition - v29;
+    Vec3f v28 = mPosition - v29;
 
     if (!MR::isNearZero(v28)) {
         _D0 = v28;
@@ -161,7 +161,7 @@ void SkeletalFishGuard::exeNormal() {
 
 void SkeletalFishGuard::exeApart() {
     if (MR::isFirstStep(this)) {
-        TVec3f v15 = _A4.killElement(mGravity);
+        Vec3f v15 = _A4.killElement(mGravity);
         _B0 = mGravity.dot(_A4 - v15);
         _A4.set(v15);
         MR::startBck(this, "Turn");
@@ -170,7 +170,7 @@ void SkeletalFishGuard::exeApart() {
     }
 
     f32 v3 = (f32)getNerveStep() / 80.0f;
-    TVec3f v14 = _A4;
+    Vec3f v14 = _A4;
 
     if (!MR::isNearZero(v14)) {
         MR::normalize(&v14);
@@ -185,9 +185,9 @@ void SkeletalFishGuard::exeApart() {
     }
 
     f32 v7 = _B0 * v3;
-    TVec3f grav(mGravity);
+    Vec3f grav(mGravity);
     MR::calcGravity(this);
-    TQuat4f quat;
+    Quat4f quat;
     quat.setRotate(grav, mGravity);
     quat.transform(_D0);
     quat.transform(_A4);
@@ -320,39 +320,39 @@ void SkeletalFishGuard::waitAttack(s32 time) {
 }
 
 void SkeletalFishGuard::calcAndSetBaseMtx() {
-    TVec3f scale = mScaleController->_C * mScale;
+    Vec3f scale = mScaleController->_C * mScale;
     MR::setBaseScale(this, scale);
 
     if (isNerve(GET_NERVE_ANON(SkeletalFishGuardNrvAppear))) {
-        TVec3f gravityVec;
+        Vec3f gravityVec;
         MR::calcGravityVector(this, _F4, &gravityVec, nullptr, 0);
         gravityVec.negate();
-        TVec3f stack_4C = gravityVec.cross(_100);
+        Vec3f stack_4C = gravityVec.cross(_100);
         MR::normalize(&stack_4C);
         gravityVec.cross(_100, stack_4C);
-        TQuat4f quat;
+        Quat4f quat;
         quat.setRotate(_100, _D0);
         quat.transform(gravityVec);
         quat.transform(stack_4C);
-        TPos3f stack_D0;
+        Pos3f stack_D0;
         stack_D0.setXDir(stack_4C);
         stack_D0.setYDir(gravityVec);
         stack_D0.setZDir(_D0);
         stack_D0.setTrans(mPosition);
         MR::setBaseTRMtx(this, stack_D0);
     } else {
-        TVec3f stack_30 = -mGravity;
-        TVec3f stack_24 = stack_30.cross(_D0);
+        Vec3f stack_30 = -mGravity;
+        Vec3f stack_24 = stack_30.cross(_D0);
 
         if (MR::isNearZero(stack_24)) {
             MtxPtr mtx = getBaseMtx();
-            TPos3f stack_A0;
+            Pos3f stack_A0;
             stack_A0.setInline(mtx);
             stack_A0.getXDir(stack_24);
             stack_A0.getYDir(stack_30);
-            TVec3f stack_18;
+            Vec3f stack_18;
             stack_A0.getZDir(stack_18);
-            TQuat4f stack_8;
+            Quat4f stack_8;
             stack_8.setRotate(stack_18, _D0);
             stack_8.transform(stack_24);
             stack_8.transform(stack_30);
@@ -361,7 +361,7 @@ void SkeletalFishGuard::calcAndSetBaseMtx() {
             stack_30.cross(_D0, stack_24);
         }
 
-        TPos3f stack_70;
+        Pos3f stack_70;
         stack_70.setXDir(stack_24);
         stack_70.setYDir(stack_30);
         stack_70.setZDir(_D0);
@@ -409,8 +409,8 @@ bool SkeletalFishGuard::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitS
 
 void SkeletalFishGuard::initSensor() {
     initHitSensor(2);
-    MR::addHitSensorAtJointEnemy(this, "head", "Joint00", 16, 120.0f, TVec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorAtJointEnemy(this, "body", "Joint02", 16, 120.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointEnemy(this, "head", "Joint00", 16, 120.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointEnemy(this, "body", "Joint02", 16, 120.0f, Vec3f(0.0f, 0.0f, 0.0f));
 }
 
 void SkeletalFishGuard::calcTransAndFront() {
@@ -420,13 +420,13 @@ void SkeletalFishGuard::calcTransAndFront() {
     mPosition.set(_F4);
 }
 
-void SkeletalFishGuard::rotateHorizontal(const TVec3f& rA2, f32 scalar) {
-    TVec3f v10 = rA2.killElement(mGravity);
+void SkeletalFishGuard::rotateHorizontal(const Vec3f& rA2, f32 scalar) {
+    Vec3f v10 = rA2.killElement(mGravity);
     if (!MR::isNearZero(v10)) {
         MR::normalize(&v10);
-        TVec3f* v11 = &_D0;
-        TVec3f* g = &mGravity;
-        TVec3f v9 = _D0.killElement(*g);
+        Vec3f* v11 = &_D0;
+        Vec3f* g = &mGravity;
+        Vec3f v9 = _D0.killElement(*g);
         if (!MR::isNearZero(v9)) {
             MR::normalize(&v9);
             turn(v11, v9, v10, scalar);
@@ -434,8 +434,8 @@ void SkeletalFishGuard::rotateHorizontal(const TVec3f& rA2, f32 scalar) {
     }
 }
 
-void SkeletalFishGuard::rotateVertical(const TVec3f& rA2, f32 a3) {
-    TVec3f v12 = mGravity.cross(_D0);
+void SkeletalFishGuard::rotateVertical(const Vec3f& rA2, f32 a3) {
+    Vec3f v12 = mGravity.cross(_D0);
 
     if (!MR::isNearZero(v12)) {
         MR::normalize(&v12);
@@ -452,7 +452,7 @@ void SkeletalFishGuard::rotateVertical(const TVec3f& rA2, f32 a3) {
             }
         }
 
-        TQuat4f v10;
+        Quat4f v10;
         v10.setRotate(v12, v7);
         v10.transform(_D0);
     }
@@ -499,8 +499,8 @@ bool SkeletalFishGuard::tryShiftKill() {
     return true;
 }
 
-void SkeletalFishGuard::turn(TVec3f* pA1, const TVec3f& rA2, const TVec3f& rA3, f32 a4) {
-    TQuat4f quat;
+void SkeletalFishGuard::turn(Vec3f* pA1, const Vec3f& rA2, const Vec3f& rA3, f32 a4) {
+    Quat4f quat;
 
     f32 angle = rA2.angle(rA3);
     f32 v10 = 1.0f;
@@ -514,7 +514,7 @@ void SkeletalFishGuard::turn(TVec3f* pA1, const TVec3f& rA2, const TVec3f& rA3, 
 }
 
 void SkeletalFishGuard::lookToPlayer(f32 a2, f32 a3) {
-    TVec3f pos(*MR::getPlayerCenterPos());
+    Vec3f pos(*MR::getPlayerCenterPos());
     pos -= mPosition;
 
     if (!MR::isNearZero(pos)) {
@@ -525,29 +525,29 @@ void SkeletalFishGuard::lookToPlayer(f32 a2, f32 a3) {
 }
 
 // functionally equiv. just needs stack work
-void SkeletalFishGuard::calcTarget(TVec3f* pA1, TVec3f* pA2, TVec3f* pA3, s32 a4) {
+void SkeletalFishGuard::calcTarget(Vec3f* pA1, Vec3f* pA2, Vec3f* pA3, s32 a4) {
     f32 v11 = MR::getRailCoord(mFishBoss->getCurrentRail());
     f32 speed = MR::getRailCoordSpeed(mFishBoss->getCurrentRail());
     f32 v13 = (_94.z + (v11 + (speed * a4)));
     MR::calcRailPosAtCoord(pA1, mFishBoss->getCurrentRail(), v13);
     MR::calcRailDirectionAtCoord(pA3, mFishBoss->getCurrentRail(), v13);
-    TVec3f v22;
+    Vec3f v22;
     MR::calcGravityVector(this, *pA1, &v22, nullptr, 0);
-    TVec3f v21 = pA3->cross(v22);
+    Vec3f v21 = pA3->cross(v22);
     MR::normalizeOrZero(&v21);
     pA2->add(*pA1, v21 * _94.x + v22 * -_94.y);
 }
 
 bool SkeletalFishGuard::isInScreen() const {
-    TVec2f screen;
+    Vec2f screen;
     return MR::calcScreenPosition(&screen, mPosition);
 }
 
 // this is the only way I could match this
 // TODO fix
 bool SkeletalFishGuard::isPlayerInAttackRange() const {
-    const TVec3f& rPosition = mPosition;
-    TVec3f v7 = *MR::getPlayerCenterPos() - rPosition;
+    const Vec3f& rPosition = mPosition;
+    Vec3f v7 = *MR::getPlayerCenterPos() - rPosition;
 
     if (v7.length() > 5000.0f) {
         return false;
@@ -559,7 +559,7 @@ bool SkeletalFishGuard::isPlayerInAttackRange() const {
 
     MR::normalize(&v7);
     f32 minCos = MR::cosDegree(180.0f);
-    const TVec3f& rFront = _D0;
+    const Vec3f& rFront = _D0;
     if (v7.dot(rFront) < minCos) {
         return false;
     }
@@ -568,7 +568,7 @@ bool SkeletalFishGuard::isPlayerInAttackRange() const {
 }
 
 bool SkeletalFishGuard::isLineOfSightClear() const {
-    TVec3f v12 = *MR::getPlayerCenterPos() - mPosition;
+    Vec3f v12 = *MR::getPlayerCenterPos() - mPosition;
 
     if (Collision::checkStrikeLineToMap(mPosition, v12, 0, nullptr, nullptr)) {
         return false;
@@ -578,7 +578,7 @@ bool SkeletalFishGuard::isLineOfSightClear() const {
         return false;
     }
 
-    TVec3f v11 = _E8 - mPosition;
+    Vec3f v11 = _E8 - mPosition;
     v11.orthogonalize2(_100);
     v12.orthogonalize2(_100);
 

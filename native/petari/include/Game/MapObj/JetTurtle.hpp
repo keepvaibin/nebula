@@ -50,11 +50,11 @@ public:
     u16 _92;
     HitSensor* _94;
     HitSensor* _98;
-    TVec3f _9C;
-    TVec3f _A8;
-    TVec3f _B4;
-    TVec3f _C0;
-    TVec3f _CC;
+    Vec3f _9C;
+    Vec3f _A8;
+    Vec3f _B4;
+    Vec3f _C0;
+    Vec3f _CC;
     u16 _D8;
     u16 _DA;
     u32 _DC;

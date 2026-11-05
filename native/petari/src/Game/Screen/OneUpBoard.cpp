@@ -39,7 +39,7 @@ void OneUpBoard::appear() {
 }
 
 void OneUpBoard::calcPos() {
-    TVec2f pos;
+    Vec2f pos;
 
     MR::calcScreenPosition(&pos, *MR::getPlayerCenterPos());
 

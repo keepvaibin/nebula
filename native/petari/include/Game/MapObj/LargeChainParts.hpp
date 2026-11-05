@@ -9,5 +9,5 @@ public:
     virtual void kill();
 
     void breakChainParts();
-    void initChainParts(TVec3f*, TVec3f*, TVec3f*, bool);
+    void initChainParts(Vec3f*, Vec3f*, Vec3f*, bool);
 };

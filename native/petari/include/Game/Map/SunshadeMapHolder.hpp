@@ -1,17 +1,17 @@
 #pragma once
 
 #include "Game/NameObj/NameObj.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class SunshadeMapHolder : public NameObj {
 public:
     /// @brief Creates a new `SunshadeMapHolder`.
     SunshadeMapHolder();
 
-    TVec3f _C;
+    Vec3f _C;
 };
 
 namespace MR {
-    bool isInShadeFromTheSun(const TVec3f&, f32);
+    bool isInShadeFromTheSun(const Vec3f&, f32);
     void createSunshadeMapHolder();
 };  // namespace MR

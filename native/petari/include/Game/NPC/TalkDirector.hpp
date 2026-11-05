@@ -21,8 +21,8 @@ public:
     static const u32 cReadbackChannel = 2;
 
     f32 _8;  // the depth at the balloon's point, 0 near to 1 far
-    TVec2f mScreenPos;
-    TVec3f _14;
+    Vec2f mScreenPos;
+    Vec3f _14;
     f32 _20;
     u8 _pad[0x18];
     f32 _3C;

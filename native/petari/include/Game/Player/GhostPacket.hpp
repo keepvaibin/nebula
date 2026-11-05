@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class GhostPacket {
 public:
@@ -11,8 +11,8 @@ public:
     void read(s16*);
     void read(char**);
     void read(s8*);
-    void read(TVec3Sc*);
-    void read(TVec3s*);
+    void read(Vec3Sc*);
+    void read(Vec3s*);
 
     u32 _0;
     u8* mDataPtr;

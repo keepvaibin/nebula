@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class LiveActor;
 class SensorGroup;
@@ -18,7 +18,7 @@ public:
     void invalidateBySystem();
     void addHitSensor(HitSensor* pSensor);
 
-    const TVec3f& getPosition() const {
+    const Vec3f& getPosition() const {
         return mPosition;
     }
 
@@ -31,7 +31,7 @@ public:
     }
 
     u32 mType;
-    TVec3f mPosition;
+    Vec3f mPosition;
     f32 mRadius;
     u16 mSensorCount;
     u16 mGroupSize;

@@ -37,7 +37,7 @@ void SnowplowSwitch::init(const JMapInfoIter& rIter) {
     MR::connectToSceneMapObjMovement(this);
     MR::invalidateClipping(this);
     initHitSensor(1);
-    MR::addHitSensorEnemy(this, "Body", 8, ::sSensorRadius, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemy(this, "Body", 8, ::sSensorRadius, Vec3f(0.0f, 0.0f, 0.0f));
     MR::needStageSwitchWriteA(this, rIter);
 
     if (MR::useStageSwitchReadAppear(this, rIter)) {

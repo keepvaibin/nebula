@@ -4,7 +4,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include <JSystem/JParticle/JPAEmitter.hpp>
 
-void MultiEmitter::setGlobalRotation(const TVec3s& rRotation, s32 idx) {
+void MultiEmitter::setGlobalRotation(const Vec3s& rRotation, s32 idx) {
     if (idx == -1) {
         for (s32 i = 0; i < mEmitters.size(); i++) {
             SingleEmitter* pEmitter = getValidEmitter(i, false);
@@ -22,7 +22,7 @@ void MultiEmitter::setGlobalRotation(const TVec3s& rRotation, s32 idx) {
     }
 }
 
-void MultiEmitter::setGlobalTranslation(const TVec3f& rTranslation, s32 idx) {
+void MultiEmitter::setGlobalTranslation(const Vec3f& rTranslation, s32 idx) {
     if (idx == -1) {
         for (s32 i = 0; i < mEmitters.size(); i++) {
             SingleEmitter* pEmitter = getValidEmitter(i, false);
@@ -40,7 +40,7 @@ void MultiEmitter::setGlobalTranslation(const TVec3f& rTranslation, s32 idx) {
     }
 }
 
-void MultiEmitter::setGlobalScale(const TVec3f& rScale, s32 idx) {
+void MultiEmitter::setGlobalScale(const Vec3f& rScale, s32 idx) {
     if (idx == -1) {
         for (s32 i = 0; i < mEmitters.size(); i++) {
             SingleEmitter* pEmitter = getValidEmitter(i, false);
@@ -124,7 +124,7 @@ void MultiEmitter::setGlobalEnvColor(u8 r, u8 g, u8 b, s32 idx) {
     }
 }
 
-void MultiEmitter::setLocalScale(const TVec3f& rScale, s32 idx) {
+void MultiEmitter::setLocalScale(const Vec3f& rScale, s32 idx) {
     if (idx == -1) {
         for (s32 i = 0; i < mEmitters.size(); i++) {
             SingleEmitter* pEmitter = getValidEmitter(i, false);
@@ -286,11 +286,11 @@ void MultiEmitter::pauseOff(s32 idx) {
     }
 }
 
-void ParticleEmitter::setGlobalRotation(const TVec3s& rRotation) {
+void ParticleEmitter::setGlobalRotation(const Vec3s& rRotation) {
     mEmitter->setGlobalRotation(rRotation);
 }
 
-void ParticleEmitter::setGlobalScale(const TVec3f& rScale) {
+void ParticleEmitter::setGlobalScale(const Vec3f& rScale) {
     mEmitter->setGlobalScale(rScale);
 }
 

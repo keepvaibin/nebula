@@ -41,7 +41,7 @@ namespace {
 };  // namespace
 
 inline void endBindAndPlayerNoJump(LiveActor* pActor) {
-    TVec3f jumpVec(0.0f, 0.0f, 0.0f);
+    Vec3f jumpVec(0.0f, 0.0f, 0.0f);
     MR::endBindAndPlayerJump(pActor, jumpVec, 0);
 }
 
@@ -74,7 +74,7 @@ void SlingShooter::init(const JMapInfoIter& rIter) {
     initHitSensor(3);
     MR::addHitSensorCallbackBinder(this, "bind", 8, 80.0f);
     MR::addHitSensorCallback(this, "npc", ATYPE_SPRING_ATTACKER_KINOPIO_BIND, 8, 150.0f);
-    MR::addHitSensor(this, "attack", ATYPE_SPRING_ATTACKER, 8, 100.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensor(this, "attack", ATYPE_SPRING_ATTACKER, 8, 100.0f, Vec3f(0.0f, 0.0f, 0.0f));
 
     initBinder(50.0f, 50.0f, 8);
     MR::offBind(this);
@@ -91,7 +91,7 @@ void SlingShooter::init(const JMapInfoIter& rIter) {
     MR::calcGravity(this);
     MR::initShadowVolumeSphere(this, 100.0f);
 
-    MR::initStarPointerTarget(this, 210.0f, TVec3f(0.0f, 50.0f, 0.0f));
+    MR::initStarPointerTarget(this, 210.0f, Vec3f(0.0f, 50.0f, 0.0f));
 
     initNerve(GET_NERVE(SlingShooter, SlingShooterNrvFree));
 
@@ -107,7 +107,7 @@ void SlingShooter::init(const JMapInfoIter& rIter) {
 }
 
 void SlingShooter::initAfterPlacement() {
-    MR::startActorBindToSpiderThread(this, &mBasePos, &mNeutralPos, &mUp, mPosition, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::startActorBindToSpiderThread(this, &mBasePos, &mNeutralPos, &mUp, mPosition, Vec3f(0.0f, 0.0f, 0.0f));
 }
 
 void SlingShooter::calcAnim() {
@@ -292,13 +292,13 @@ void SlingShooter::updateHitSensor(HitSensor* pSensor) {
 }
 
 void SlingShooter::emitNullEffect(HitSensor* pSender, HitSensor* pReceiver) {
-    TVec3f vecBetween;
+    Vec3f vecBetween;
     MR::calcPosBetweenSensors(&vecBetween, pSender, pReceiver, 0.0f);
     MR::emitEffectHit(this, vecBetween, nullptr);
 }
 
 void SlingShooter::emitHitEffect(HitSensor* pSender, HitSensor* pReceiver) {
-    TVec3f vecBetween;
+    Vec3f vecBetween;
     MR::calcPosBetweenSensors(&vecBetween, pSender, pReceiver, 0.0f);
     MR::emitEffectHit(this, vecBetween, "InvalidHitMark");
 }
@@ -339,7 +339,7 @@ void SlingShooter::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
             MR::startBckPlayer("WallHit");
             MR::endEventCamera(mCameraInfo, "\203\166\203\214\201\133\203\204\201\133\216\313\217\157\216\322[\215\125\214\202\222\206]" /* プレーヤー射出者[攻撃中] */, true);
 
-            TVec3f jumpVec(0.0f, 0.0f, 0.0f);
+            Vec3f jumpVec(0.0f, 0.0f, 0.0f);
             MR::endBindAndPlayerJump(this, jumpVec, 0);
             endBind();
         } else {
@@ -374,7 +374,7 @@ bool SlingShooter::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor*
 
             MR::emitEffect(this, "Stick");
 
-            TVec3f jumpVec(0.0f, 0.0f, 0.0f);
+            Vec3f jumpVec(0.0f, 0.0f, 0.0f);
             MR::endBindAndPlayerDamage(this, jumpVec);
             endBind();
         }
@@ -470,16 +470,16 @@ void SlingShooter::calcAndSetBaseMtx() {
         return;
     }
 
-    TPos3f mtx;
+    Pos3f mtx;
     calcBaseMtx(&mtx);
     MR::setBaseTRMtx(this, mtx);
 }
 
-void SlingShooter::calcBaseMtx(TPos3f* pBaseMtx) {
-    TVec3f up = *mUp * -1.0f;
+void SlingShooter::calcBaseMtx(Pos3f* pBaseMtx) {
+    Vec3f up = *mUp * -1.0f;
     MR::normalize(&up);
-    TVec3f front(0.0f, 0.0f, -1.0f);
-    TVec3f side = up.cross(front);
+    Vec3f front(0.0f, 0.0f, -1.0f);
+    Vec3f side = up.cross(front);
     MR::normalize(&side);
     front.cross(side, up);
     MR::normalize(&front);
@@ -513,7 +513,7 @@ bool SlingShooter::updateWait() {
             return false;
         }
 
-        MR::calcStarPointerPosOnPlane(&mPointerPos, *mNeutralPos, TVec3f(0.0f, 0.0f, 1.0f), mPadChannel, false);
+        MR::calcStarPointerPosOnPlane(&mPointerPos, *mNeutralPos, Vec3f(0.0f, 0.0f, 1.0f), mPadChannel, false);
 
         if (!mIsKinopioAttached) {
             MR::endEventCamera(mCameraInfo, "\203\166\203\214\201\133\203\204\201\133\216\313\217\157\216\322[\203\105\203\106\203\103\203\147]" /* プレーヤー射出者[ウェイト] */, true);
@@ -532,10 +532,10 @@ void SlingShooter::updateHang() {
     f32 dist = mPosition.distance(*mNeutralPos);
 
     if (MR::isStarPointerInScreen(mPadChannel)) {
-        MR::calcStarPointerPosOnPlane(&mPointerPos, *mNeutralPos, TVec3f(0.0f, 0.0f, 1.0f), mPadChannel, false);
+        MR::calcStarPointerPosOnPlane(&mPointerPos, *mNeutralPos, Vec3f(0.0f, 0.0f, 1.0f), mPadChannel, false);
     }
 
-    TVec3f followPos = mPointerPos;
+    Vec3f followPos = mPointerPos;
 
     if (followPos.distance(*mNeutralPos) > ::sAimDistanceMax) {
         followPos.set(mPointerPos);
@@ -545,7 +545,7 @@ void SlingShooter::updateHang() {
         followPos.add(*mNeutralPos);
     }
 
-    TVec3f pos = followPos * ::sAimFollowRate + mPosition * (1.0f - ::sAimFollowRate);
+    Vec3f pos = followPos * ::sAimFollowRate + mPosition * (1.0f - ::sAimFollowRate);
 
     mVelocity = pos - mPosition;
 
@@ -584,7 +584,7 @@ void SlingShooter::updateActorMtx() {
         return;
     }
 
-    TVec3f up;
+    Vec3f up;
     if (isNerve(GET_NERVE(SlingShooter, SlingShooterNrvLand)) || isNerve(GET_NERVE(SlingShooter, SlingShooterNrvWait))) {
         up.set(*mUp);
         up.scale(-1.0f);
@@ -595,9 +595,9 @@ void SlingShooter::updateActorMtx() {
 
     if (!MR::isNearZero(up)) {
         MR::normalize(&up);
-        TVec3f front;
+        Vec3f front;
         mBaseMtx.getZDir(front);
-        TVec3f side = up.cross(front);
+        Vec3f side = up.cross(front);
         MR::normalize(&side);
         up.cross(front, side);
         MR::normalize(&up);
@@ -653,13 +653,13 @@ bool SlingShooter::tryRelease() {
 
     MR::normalize(&mVelocity);
 
-    TVec3f up = mVelocity;
+    Vec3f up = mVelocity;
     mVelocity.mult(::sBindAttackSpeed);
     up.scale(-1.0f);
 
-    TVec3f front;
+    Vec3f front;
     mBaseMtx.getZDir(front);
-    TVec3f side = up.cross(front);
+    Vec3f side = up.cross(front);
     MR::normalize(&side);
     mBaseMtx.setXYZDir(side, up, front);
 
@@ -740,7 +740,7 @@ void SlingShooter::startBind(LiveActor* pRider) {
     MR::invalidateClipping(this);
 
     if (!mIsKinopioAttached) {
-        TPos3f mtx;
+        Pos3f mtx;
         mtx.identity();
         calcBaseMtx(&mtx);
         mCameraTargetMtx->mMatrix.setInline(mtx);
@@ -763,7 +763,7 @@ void SlingShooter::startCancelWait() {
     mPosition.z = mPlayerZ;
     f32 y = MR::getPlayerPos()->y;
     f32 x = MR::getPlayerPos()->x;
-    MR::setPlayerPos(TVec3f(x, y, mPosition.z));
+    MR::setPlayerPos(Vec3f(x, y, mPosition.z));
 
     endBindAndPlayerNoJump(this);
     endBind();
@@ -775,7 +775,7 @@ void SlingShooter::startCancelAim() {
 
     f32 y = MR::getPlayerPos()->y;
     f32 x = MR::getPlayerPos()->x;
-    MR::setPlayerPos(TVec3f(x, y, mPosition.z));
+    MR::setPlayerPos(Vec3f(x, y, mPosition.z));
 
     MR::sendMsgToSpiderThread(ACTMES_SLING_SHOOT_ACTOR_HANG_END, getSensor("bind"));
     endCommandStream();

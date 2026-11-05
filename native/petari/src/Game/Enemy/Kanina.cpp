@@ -150,8 +150,8 @@ void Kanina::init(const JMapInfoIter& rIter) {
     MR::initLightCtrl(this);
     initSound(4, false);
     initHitSensor(2);
-    MR::addHitSensorMtxEnemy(this, "body", 8, ::sSensorRadius, MR::getJointMtx(this, "Body"), TVec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorMtxEnemyAttack(this, "attack", 8, ::sSensorRadiusAttack, MR::getJointMtx(this, "Body"), TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorMtxEnemy(this, "body", 8, ::sSensorRadius, MR::getJointMtx(this, "Body"), Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorMtxEnemyAttack(this, "attack", 8, ::sSensorRadiusAttack, MR::getJointMtx(this, "Body"), Vec3f(0.0f, 0.0f, 0.0f));
     initBinder(::sBinderRadius, ::sBinderOffsetY, 8);
     initEffectKeeper(1, "Kanina", false);
     MR::addEffectHitNormal(this, nullptr);
@@ -263,9 +263,9 @@ bool Kanina::tryPushEach(HitSensor* pSender, HitSensor* pReceiver) {
         return false;
     }
 
-    TVec3f diff(pSender->mPosition - pReceiver->mPosition);
+    Vec3f diff(pSender->mPosition - pReceiver->mPosition);
     MR::normalizeOrZero(&diff);
-    TVec3f upVec;
+    Vec3f upVec;
     MR::calcUpVec(&upVec, this);
     MR::vecKillElement(diff, upVec, &diff);
 
@@ -352,7 +352,7 @@ bool Kanina::receivePunch(HitSensor* pSender, HitSensor* pReceiver) {
 
     if (!isNerve(GET_NERVE(Kanina, HostTypeAttack))) {
         if (!isStateDamageNoFireBall()) {
-            TVec3f vec;
+            Vec3f vec;
             MR::calcVecFromTargetPosH(&vec, this, pSender->mPosition, nullptr);
             mVelocity.add(vec * ::sPunchAccel);
             setNerve(GET_NERVE(Kanina, HostTypeGuard));
@@ -375,7 +375,7 @@ bool Kanina::receiveFireBall(HitSensor* pSender, HitSensor* pReceiver) {
 void Kanina::doDamageFireBall(HitSensor* pSender, HitSensor* pReceiver) {
     MR::setVelocityBlowAttack(this, pSender, pReceiver, ::sPunchDamageVelocity, ::sPunchUpperVec, 4);
     MR::isNearZero(mVelocity);
-    TVec3f vec;
+    Vec3f vec;
     MR::vecKillElement(mVelocity, -mGravity, &vec);
     MR::normalizeOrZero(&vec);
     _D0.set(-vec);
@@ -392,20 +392,20 @@ void Kanina::startRun() {
 
     MR::setBckRate(this, ::sAnimRateRunAway);
 
-    TVec3f upVec;
+    Vec3f upVec;
     MR::calcUpVec(&upVec, this);
 
-    TVec3f vecFromPlayerH;
+    Vec3f vecFromPlayerH;
     MR::calcVecFromPlayerH(&vecFromPlayerH, this);
 
     f32 BC = _BC;
     f32 angle = -1.0f * BC * getFloatDependentType(::sRunAwayDirectionAngleRed, ::sRunAwayDirectionAngle);
 
-    TPos3f rotate;
+    Pos3f rotate;
     rotate.identity();
     rotate.makeRotate(upVec, MR::toRadian(angle));
 
-    TVec3f multVec(vecFromPlayerH);
+    Vec3f multVec(vecFromPlayerH);
     rotate.mult(multVec, multVec);
 
     if (mType == KaninaType_Red) {
@@ -419,13 +419,13 @@ void Kanina::startRun() {
     f32 faceAngle = -1.0f * BC *
                     (getFloatDependentType(::sRunAwayDirectionAngleRed, ::sRunAwayDirectionAngle) +
                      getFloatDependentType(::sRunAwayFaceAngleRed, ::sRunAwayFaceAngle));
-    TPos3f rotate2;
+    Pos3f rotate2;
     rotate2.identity();
     rotate2.makeRotate(upVec, MR::toRadian(faceAngle));
-    TVec3f multVec2(vecFromPlayerH);
+    Vec3f multVec2(vecFromPlayerH);
     rotate2.mult(multVec2, multVec2);
 
-    TQuat4f quat;
+    Quat4f quat;
     MR::makeQuatSideUp(&quat, multVec2 * BC, upVec);
     quat.getZDir(_D0);
 
@@ -461,8 +461,8 @@ bool Kanina::receiveInvincibleAttack(HitSensor* pSender, HitSensor* pReceiver) {
 }
 
 void Kanina::calcAndSetBaseMtx() {
-    TPos3f baseMtx(getBaseMtx());
-    TQuat4f quat;
+    Pos3f baseMtx(getBaseMtx());
+    Quat4f quat;
     baseMtx.getQuat(quat);
 
     if (isNerve(GET_NERVE(Kanina, HostTypeDamageFireBall))) {
@@ -479,7 +479,7 @@ void Kanina::control() {
     MR::blendQuatFromGroundAndFront(&_A4, this, _D0, ::sUpVecBlendRate, ::sFrontVecBlendRate);
     updateMovement();
 
-    if (MR::isInWater(this, TVec3f(0.0f, 0.0f, 0.0f))) {
+    if (MR::isInWater(this, Vec3f(0.0f, 0.0f, 0.0f))) {
         MR::setSeVersion(this, SeVersion_WATER);
     } else {
         MR::setSeVersion(this, SeVersion_NORMAL);
@@ -523,7 +523,7 @@ void Kanina::initForType(const JMapInfoIter& rIter, KaninaType type) {
 }
 
 bool Kanina::isPlayerBackward(f32 angle) const {
-    TVec3f frontVec;
+    Vec3f frontVec;
     MR::calcFrontVec(&frontVec, this);
     angle = angle * 2.0f;
     return MR::isInSightFanPlayer(this, -frontVec, ::sSafetyDistance, angle, 30.0f);
@@ -601,7 +601,7 @@ bool Kanina::tryFindPlayer() {
         return false;
     }
 
-    TVec3f front;
+    Vec3f front;
     MR::calcFrontVec(&front, this);
     if (!MR::isInSightFanPlayer(this, front, ::sSearchRadius, 180.0f, 30.0f)) {
         return false;
@@ -688,15 +688,15 @@ void Kanina::exeWait() {
 }
 
 namespace {
-    inline void calcWalkDirection(TVec3f* pDirection, const LiveActor* pActor) {
-        TVec3f front;
-        TVec3f up;
+    inline void calcWalkDirection(Vec3f* pDirection, const LiveActor* pActor) {
+        Vec3f front;
+        Vec3f up;
         MR::calcFrontVec(&front, pActor);
         MR::calcUpVec(&up, pActor);
 
         f32 angle = MR::getRandom(-HALF_PI, HALF_PI);
 
-        TPos3f rotate;
+        Pos3f rotate;
         rotate.identity();
         rotate.makeRotate(up, angle);
         rotate.mult(front, front);
@@ -711,13 +711,13 @@ void Kanina::exeWalk() {
         _DC++;
         MR::startBck(this, "Walk");
 
-        TVec3f temp;
+        Vec3f temp;
         ::calcWalkDirection(&temp, this);
         _D0.set(temp);
 
         MR::blendQuatFromGroundAndFront(&_A4, this, _D0, ::sUpVecBlendRate, ::sFrontVecBlendRate);
 
-        TVec3f quatX;
+        Vec3f quatX;
         _A4.getXDir(quatX);
         mVelocity.set(quatX * (::sWalkSpeed * MR::getSignHalfProbability()));
     }
@@ -754,9 +754,9 @@ void Kanina::exeRunAwayReboundDirection() {
     if (MR::isFirstStep(this)) {
         MR::startBck(this, "Run");
         MR::setBckRate(this, ::sAnimRateRunAway);
-        TVec3f up;
+        Vec3f up;
         MR::calcUpVec(&up, this);
-        TVec3f vec(_C0);
+        Vec3f vec(_C0);
         MR::vecKillElement(vec, up, &vec);
         MR::normalizeOrZero(&vec);
         mVelocity.set(vec * getFloatDependentType(::sWalkSpeedRunAwayRed, ::sWalkSpeedRunAway));
@@ -820,10 +820,10 @@ void Kanina::exeVauntAttackSuccess() {
 void Kanina::exeHitWall() {
     if (MR::isFirstStep(this)) {
         mJointRumbler->start();
-        TVec3f up;
+        Vec3f up;
         MR::calcUpVec(&up, this);
         mVelocity.set(_C0 * ::sWallHitReboundAcc + up * ::sWallHitReboundAccY);
-        TVec3f vec(_C0);
+        Vec3f vec(_C0);
         MR::vecKillElement(vec, up, &vec);
         MR::normalizeOrZero(&vec);
         MR::makeQuatSideUp(&_A4, vec, up);

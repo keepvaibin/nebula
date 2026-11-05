@@ -20,7 +20,7 @@ public:
     void linkMsgCtrl();
     void noticeAppearRabbit(RunawayRabbit* pRabbit);
     void noticeCaughtRabbit(RunawayRabbit* pRabbit);
-    void appearTico(RunawayTico* pTico, const TVec3f& rPos);
+    void appearTico(RunawayTico* pTico, const Vec3f& rPos);
 
     void exeWait();
     void exeActive();

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class BckCtrlData;
 class CubeCameraArea;
@@ -11,7 +11,7 @@ class RushEndInfo;
 class Triangle;
 
 namespace MarioAccess {
-    void getTakePos(TVec3f*);
+    void getTakePos(Vec3f*);
     bool isOnActor(const LiveActor*);
     bool isOnGround(u32);
     bool isHipDropFalling();
@@ -36,25 +36,25 @@ namespace MarioAccess {
     void stopFpView();
     void noticeDashChance();
     void setWalkingResist(f32);
-    void forceFly(const TVec3f&, const TVec3f&, s32);
-    void setJumpVec(const TVec3f&);
-    void forceJump(const TVec3f&, u32);
-    void freeJump(const TVec3f&, u32);
+    void forceFly(const Vec3f&, const Vec3f&, s32);
+    void setJumpVec(const Vec3f&);
+    void forceJump(const Vec3f&, u32);
+    void freeJump(const Vec3f&, u32);
     void tornadoJump();
     void tornadoJumpMini();
     void becomeNormalJumpStatus();
-    void setFrontVecKeepUp(const TVec3f&, u16);
-    void setFrontVecTarget(const TVec3f&, u16);
-    void getThrowVec(TVec3f*);
-    void setTrans(const TVec3f&, u16);
+    void setFrontVecKeepUp(const Vec3f&, u16);
+    void setFrontVecTarget(const Vec3f&, u16);
+    void getThrowVec(Vec3f*);
+    void setTrans(const Vec3f&, u16);
     void endRush(const RushEndInfo*);
     void incLife(u32);
     bool isConfrontDeath();
     void addStarPiece();
     void getStarPieceDirect();
     MtxPtr getJointMtx(const char*);
-    TVec3f* getVelocity();
-    TVec3f* getLastMove();
+    Vec3f* getVelocity();
+    Vec3f* getLastMove();
     void hide();
     void show();
     HitSensor* getTakingSensor();
@@ -80,12 +80,12 @@ namespace MarioAccess {
     void onFollowDemo();
     void setBaseMtx(MtxPtr);
     MtxPtr getBaseMtx();
-    bool calcSpinPullVelocity(TVec3f*, const TVec3f&);
+    bool calcSpinPullVelocity(Vec3f*, const Vec3f&);
     void tryCoinPull();
-    void addVelocity(const TVec3f&);
-    void addVelocityFromArea(const TVec3f&);
+    void addVelocity(const Vec3f&);
+    void addVelocityFromArea(const Vec3f&);
     bool isOnWaterSurface();
-    void calcWorldPadDir(TVec3f*, f32, f32);
+    void calcWorldPadDir(Vec3f*, f32, f32);
     void preventRush();
     MarioActor* getPlayerActor();
     void validateSensor();

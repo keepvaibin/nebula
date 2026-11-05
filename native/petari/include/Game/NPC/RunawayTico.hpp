@@ -15,11 +15,11 @@ public:
 
     static void makeArchiveList(NameObjArchiveListCollector*, const JMapInfoIter&);
 
-    void appearBushComment(const TVec3f&);
-    void appearHoleComment(const TVec3f&);
-    void appearPipeComment(const TVec3f&);
-    void appearMamaComment(const TVec3f&);
-    void setPosAfterCaught(const TVec3f&);
+    void appearBushComment(const Vec3f&);
+    void appearHoleComment(const Vec3f&);
+    void appearPipeComment(const Vec3f&);
+    void appearMamaComment(const Vec3f&);
+    void setPosAfterCaught(const Vec3f&);
     void setPosAllCaught();
     bool isStartRunaway() const;
     void startRunaway();

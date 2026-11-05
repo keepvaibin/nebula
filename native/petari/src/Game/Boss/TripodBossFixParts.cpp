@@ -74,7 +74,7 @@ void TripodBossFixParts::init(const JMapInfoIter& rIter) {
     }
 
     if (MR::isEqualString(objName, "TriPodBossBodyA")) {
-        setClippingSphere(TVec3f(250.0f, 1000.0f, 0.0f), 3750.0f);
+        setClippingSphere(Vec3f(250.0f, 1000.0f, 0.0f), 3750.0f);
     } else {
         initClippingSphere();
     }

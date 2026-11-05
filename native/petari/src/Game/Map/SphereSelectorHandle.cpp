@@ -75,8 +75,8 @@ void SphereSelectorHandle::appear() {
     _10C = 0;
     clearPointerVelocity();
     mRotation.zero();
-    _DC.cross(TVec3f(0.0f, 1.0f, 0.0f), _C0);
-    MR::rotateVecDegree(&_E8, TVec3f(0.0f, 1.0f, 0.0f), _DC, ::cRotateAppearX);
+    _DC.cross(Vec3f(0.0f, 1.0f, 0.0f), _C0);
+    MR::rotateVecDegree(&_E8, Vec3f(0.0f, 1.0f, 0.0f), _DC, ::cRotateAppearX);
     MR::normalize(&_E8);
     MR::setStageBGMState(::cBgmAppearState, ::cBgmAppearFrames);
     setNerve(GET_NERVE(SphereSelectorHandle, SphereSelectorHandleNrvWait));
@@ -181,7 +181,7 @@ void SphereSelectorHandle::stackPointerVelocity() {
     _F4[0].set(*MR::getStarPointerScreenVelocity(PLAYER_1));
 }
 
-TVec2f* SphereSelectorHandle::getPointerVelocity() {
+Vec2f* SphereSelectorHandle::getPointerVelocity() {
     u32 max = 0;
     for (u32 i = 1; i < ARRAY_SIZE(_F4); i++) {
         if (_F4[max].length() < _F4[i].length()) {
@@ -213,10 +213,10 @@ void SphereSelectorHandle::rotateAxisX() {
     MR::rotateVecDegree(&_E8, _DC, _D4);
     MR::normalize(&_E8);
 
-    TVec3f rotateMinUp;
-    MR::rotateVecDegree(&rotateMinUp, TVec3f(0.0f, 1.0f, 0.0f), _DC, ::cRotateMinX);
-    TVec3f rotateMaxUp;
-    MR::rotateVecDegree(&rotateMaxUp, TVec3f(0.0f, 1.0f, 0.0f), _DC, ::cRotateMaxX);
+    Vec3f rotateMinUp;
+    MR::rotateVecDegree(&rotateMinUp, Vec3f(0.0f, 1.0f, 0.0f), _DC, ::cRotateMinX);
+    Vec3f rotateMaxUp;
+    MR::rotateVecDegree(&rotateMaxUp, Vec3f(0.0f, 1.0f, 0.0f), _DC, ::cRotateMaxX);
 
     if (_E8.dot(_C0) < rotateMinUp.dot(_C0)) {
         _E8.set(rotateMinUp);
@@ -226,11 +226,11 @@ void SphereSelectorHandle::rotateAxisX() {
 }
 
 void SphereSelectorHandle::updateBaseMtx() {
-    TPos3f mtx;
+    Pos3f mtx;
     MR::makeMtxUpFront(&mtx, _E8, _C0);
     mtx.zeroTrans();
-    TPos3f mtx2;
-    mtx2.makeRotate(TVec3f(0.0f, 1.0f, 0.0f), MR::toRadian(mRotation.y));
+    Pos3f mtx2;
+    mtx2.makeRotate(Vec3f(0.0f, 1.0f, 0.0f), MR::toRadian(mRotation.y));
     _90.concat(mtx, mtx2);
     _90.setTrans(mPosition);
 }
@@ -372,7 +372,7 @@ void SphereSelectorHandle::exeGalaxyConfirmCancel() {
         MR::setStageBGMState(::cBgmNotConfirmState, ::cBgmNotConfirmFrames);
     }
 
-    mPosition.lerp(_110, TVec3f(0.0f, 0.0f, 0.0f), MR::calcNerveEaseInRate(this, confirmStartCancelFrame));
+    mPosition.lerp(_110, Vec3f(0.0f, 0.0f, 0.0f), MR::calcNerveEaseInRate(this, confirmStartCancelFrame));
     MR::setNerveAtStep(this, GET_NERVE(SphereSelectorHandle, SphereSelectorHandleNrvWait), confirmStartCancelFrame);
 }
 

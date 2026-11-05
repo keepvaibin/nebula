@@ -254,7 +254,7 @@ void CameraManEvent::setVPanParam() {
         vPan->mMaxRiseEaseTime = mChunk->mExParam.mUDown;
         vPan->mVPanUse = mChunk->mExParam.mVPanUse != 0;
 
-        TVec3f axis;
+        Vec3f axis;
         mChunk->getVPanAxis(&axis);
 
         vPan->mVPanAxis.set(axis);
@@ -272,11 +272,11 @@ void CameraManEvent::resetCameraIfRequested() {
 }
 
 void CameraManEvent::setSafePose() {
-    TVec3f pos = CameraLocalUtil::getPos(mCamera);
-    TVec3f watchPos = CameraLocalUtil::getWatchPos(mCamera);
-    TVec3f up = CameraLocalUtil::getUpVec(mCamera);
+    Vec3f pos = CameraLocalUtil::getPos(mCamera);
+    Vec3f watchPos = CameraLocalUtil::getWatchPos(mCamera);
+    Vec3f up = CameraLocalUtil::getUpVec(mCamera);
 
-    TVec3f watchOffset = watchPos - pos;
+    Vec3f watchOffset = watchPos - pos;
     f32 dist = watchOffset.length();
     if (dist < ::sMinDistance) {
         if (dist < 1.0f) {
@@ -287,17 +287,17 @@ void CameraManEvent::setSafePose() {
         }
     }
 
-    TVec3f camWatchDir = watchPos - pos;
+    Vec3f camWatchDir = watchPos - pos;
     MR::normalize(&camWatchDir);
     MR::normalizeOrZero(&up);
 
     if (MR::isNearZero(up) || MR::abs(camWatchDir.dot(up)) > 0.98f) {
-        TVec3f watchDir = CameraLocalUtil::getWatchPos(this) - CameraLocalUtil::getPos(this);
+        Vec3f watchDir = CameraLocalUtil::getWatchPos(this) - CameraLocalUtil::getPos(this);
         MR::normalize(&watchDir);
         if (MR::abs(camWatchDir.dot(watchDir)) > 0.98f) {
             up.set(CameraLocalUtil::getUpVec(this));
         } else {
-            TQuat4f rot;
+            Quat4f rot;
             rot.setRotate(watchDir, camWatchDir);
             rot.transform(CameraLocalUtil::getUpVec(this), up);
         }

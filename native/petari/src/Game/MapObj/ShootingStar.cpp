@@ -64,7 +64,7 @@ void ShootingStar::init(const JMapInfoIter& rIter) {
     initEffectKeeper(0, "ShootingStar", false);
     initSound(4, false);
     initHitSensor(1);
-    MR::addHitSensorMapObj(this, "message", 1, 0.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorMapObj(this, "message", 1, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
     MR::initShadowVolumeSphere(this, 30.0f);
 
     if (MR::useStageSwitchReadAppear(this, rIter)) {
@@ -75,7 +75,7 @@ void ShootingStar::init(const JMapInfoIter& rIter) {
     }
 
     LiveActor::calcAndSetBaseMtx();
-    TPos3f matrix = getBaseMtx();
+    Pos3f matrix = getBaseMtx();
     matrix.getYDir(mFallAxis);
     MR::startBpk(this, "ShootingStar");
 }

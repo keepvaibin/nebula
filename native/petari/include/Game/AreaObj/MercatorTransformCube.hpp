@@ -10,7 +10,7 @@ public:
     inline DivideMercatorRailPosInfo() {
     }
 
-    virtual void setPosition(s32, const TVec3f&) = 0;
+    virtual void setPosition(s32, const Vec3f&) = 0;
 };
 
 class MercatorTransformCube : public AreaObj {
@@ -21,22 +21,22 @@ public:
 
     virtual void init(const JMapInfoIter&);
 
-    void convertTransAndRotate(TVec3f*, TPos3f*, const TVec3f&, bool) const;
+    void convertTransAndRotate(Vec3f*, Pos3f*, const Vec3f&, bool) const;
     f32 getSphereRadius() const;
-    f32 calcLocalHeight(const TVec3f& rPos) const;
-    void calcUV(TVec2f*, const TVec3f&) const;
-    void calcLocalBoxSize(TVec3f*) const;
+    f32 calcLocalHeight(const Vec3f& rPos) const;
+    void calcUV(Vec2f*, const Vec3f&) const;
+    void calcLocalBoxSize(Vec3f*) const;
 
-    TMtx34f _3C;
+    Mtx34f _3C;
 };
 
 namespace MR {
-    void convertMercatorPlaneToSphereTransAndRotate(TVec3f*, TPos3f*, const TVec3f&, bool);
-    void convertMercatorPlaneToSphereTransAndRotate(TVec3f*, TVec3f*, const TVec3f&, bool);
+    void convertMercatorPlaneToSphereTransAndRotate(Vec3f*, Pos3f*, const Vec3f&, bool);
+    void convertMercatorPlaneToSphereTransAndRotate(Vec3f*, Vec3f*, const Vec3f&, bool);
     void initDefaultPosForMercator(LiveActor*, const JMapInfoIter&, bool);
-    void calcNearestRailPosForMercator(TVec3f*, const LiveActor*, f32);
-    void calcRailClippingInfoForMercator(TVec3f*, f32*, LiveActor*, f32, f32);
-    void initAndSetRailClippingForMercator(TVec3f*, LiveActor*, f32, f32);
+    void calcNearestRailPosForMercator(Vec3f*, const LiveActor*, f32);
+    void calcRailClippingInfoForMercator(Vec3f*, f32*, LiveActor*, f32, f32);
+    void initAndSetRailClippingForMercator(Vec3f*, LiveActor*, f32, f32);
     f32 calcRailTotalLengthForMercator(const LiveActor*, f32);
     void getDivideMercatorRailPosition(DivideMercatorRailPosInfo*, const LiveActor*, u32, f32, u32);
     MapPartsRailMover* createMapPartsRailMoverForMercator(LiveActor*, const JMapInfoIter&, bool);

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class CollisionParts;
 class Color8;
@@ -11,37 +11,37 @@ namespace MR {
     void initShadowFromCSV(LiveActor*, const char*);
     void initShadowSurfaceCircle(LiveActor*, f32);
     void initShadowVolumeSphere(LiveActor*, f32);
-    void initShadowVolumeOval(LiveActor*, const TVec3f&);
+    void initShadowVolumeOval(LiveActor*, const Vec3f&);
     void initShadowVolumeCylinder(LiveActor*, f32);
-    void initShadowVolumeBox(LiveActor*, const TVec3f&);
+    void initShadowVolumeBox(LiveActor*, const Vec3f&);
     void initShadowVolumeFlatModel(LiveActor*, const char*);
     void initShadowController(LiveActor*, u32);
     void addShadowSurfaceCircle(LiveActor*, const char*, f32);
     void addShadowVolumeSphere(LiveActor*, const char*, f32);
-    void addShadowVolumeOval(LiveActor*, const char*, const TVec3f&, MtxPtr);
+    void addShadowVolumeOval(LiveActor*, const char*, const Vec3f&, MtxPtr);
     void addShadowVolumeCylinder(LiveActor*, const char*, f32);
-    void addShadowVolumeBox(LiveActor*, const char*, const TVec3f&);
-    void addShadowVolumeBox(LiveActor*, const char*, const TVec3f&, MtxPtr);
+    void addShadowVolumeBox(LiveActor*, const char*, const Vec3f&);
+    void addShadowVolumeBox(LiveActor*, const char*, const Vec3f&, MtxPtr);
     void addShadowVolumeLine(LiveActor*, const char*, LiveActor*, const char*, f32, LiveActor*, const char*, f32);
     void addShadowVolumeFlatModel(LiveActor*, const char*, const char*);
     void addShadowVolumeFlatModel(LiveActor*, const char*, const char*, MtxPtr);
-    void initShadowVolumeBox(LiveActor*, const TVec3f&, MtxPtr);
+    void initShadowVolumeBox(LiveActor*, const Vec3f&, MtxPtr);
     void initShadowVolumeFlatModel(LiveActor*, const char*, MtxPtr);
-    void setShadowDropPositionPtr(LiveActor*, const char*, const TVec3f*);
-    void setShadowDropPositionMtxPtr(LiveActor*, const char*, MtxPtr, const TVec3f&);
-    void setShadowDropPositionAtJoint(LiveActor*, const char*, const char*, const TVec3f&);
-    void setShadowDropDirectionPtr(LiveActor*, const char*, const TVec3f*);
-    void setShadowProjectionPtr(LiveActor*, const char*, const TVec3f*, const TVec3f*);
-    void setShadowDropPosition(LiveActor*, const char*, const TVec3f&);
-    void setShadowDropDirection(LiveActor*, const char*, const TVec3f&);
+    void setShadowDropPositionPtr(LiveActor*, const char*, const Vec3f*);
+    void setShadowDropPositionMtxPtr(LiveActor*, const char*, MtxPtr, const Vec3f&);
+    void setShadowDropPositionAtJoint(LiveActor*, const char*, const char*, const Vec3f&);
+    void setShadowDropDirectionPtr(LiveActor*, const char*, const Vec3f*);
+    void setShadowProjectionPtr(LiveActor*, const char*, const Vec3f*, const Vec3f*);
+    void setShadowDropPosition(LiveActor*, const char*, const Vec3f&);
+    void setShadowDropDirection(LiveActor*, const char*, const Vec3f&);
     void setShadowDropLength(LiveActor*, const char*, f32);
     void setShadowDropStartOffset(LiveActor*, const char*, f32);
-    void setShadowProjection(LiveActor*, const char*, const TVec3f&, const TVec3f&, bool);
+    void setShadowProjection(LiveActor*, const char*, const Vec3f&, const Vec3f&, bool);
     void setShadowSurfaceOvalColor(LiveActor*, const char*, Color8);
     void setShadowSurfaceOvalAlpha(LiveActor*, const char*, u8);
     void setShadowVolumeSphereRadius(LiveActor*, const char*, f32);
     void setShadowVolumeCylinderRadius(LiveActor*, const char*, f32);
-    void setShadowVolumeBoxSize(LiveActor*, const char*, const TVec3f&);
+    void setShadowVolumeBoxSize(LiveActor*, const char*, const Vec3f&);
     void setShadowVolumeStartDropOffset(LiveActor*, const char*, f32);
     void setShadowVolumeEndDropOffset(LiveActor*, const char*, f32);
     void onShadowVolumeCutDropLength(LiveActor*, const char*);
@@ -71,11 +71,11 @@ namespace MR {
     void offShadowVisibleSyncHostAll(LiveActor*);
     void onShadowFollowHostScale(LiveActor*, const char*);
     void onShadowFollowHostScaleAll(LiveActor*);
-    bool calcClippingRangeIncludeShadow(TVec3f*, f32*, const LiveActor*, f32);
-    void setClippingRangeIncludeShadow(LiveActor*, TVec3f*, f32);
+    bool calcClippingRangeIncludeShadow(Vec3f*, f32*, const LiveActor*, f32);
+    void setClippingRangeIncludeShadow(LiveActor*, Vec3f*, f32);
     bool isShadowProjected(const LiveActor*, const char*);
-    void getShadowProjectionPos(const LiveActor*, const char*, TVec3f*);
-    void getShadowProjectionNormal(const LiveActor*, const char*, TVec3f*);
+    void getShadowProjectionPos(const LiveActor*, const char*, Vec3f*);
+    void getShadowProjectionNormal(const LiveActor*, const char*, Vec3f*);
     f32 getShadowProjectionLength(const LiveActor*, const char*);
     HitSensor* getShadowProjectedSensor(const LiveActor*, const char*);
     bool isShadowProjectedAny(const LiveActor*);

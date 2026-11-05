@@ -28,7 +28,7 @@ public:
     LodCtrl* mLODCtrl;                // _90
     ModelObj* mModel;                 // _94
     MapPartsRailMover* mRailMover;    // _98
-    TVec3f _9C;
+    Vec3f _9C;
     f32 _A8;
     s32 _AC;
     bool _B0;

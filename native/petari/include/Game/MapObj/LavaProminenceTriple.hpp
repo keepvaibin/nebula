@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry.hpp>
+#include <nebula_geometry.hpp>
 
 class PartsModel;
 
@@ -22,11 +22,11 @@ public:
     void calcAngle(f32*);
 
     PartsModel* mBloomModel;
-    TPos3f mBloomMtx;
-    TQuat4f mBaseRot;
-    TQuat4f mCurrRot;
-    TVec3f mSide;
-    TVec3f mFront;
+    Pos3f mBloomMtx;
+    Quat4f mBaseRot;
+    Quat4f mCurrRot;
+    Vec3f mSide;
+    Vec3f mFront;
     f32 mRotateVel;
     bool mIsAppearDrop1;
     bool mIsAppearDrop2;

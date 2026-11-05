@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/MapObj/MapObjActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class AnimScaleController;
 class JointController;
@@ -22,7 +22,7 @@ public:
     void exeCollapse();
     void exeDPDStop();
     void exeEnd();
-    bool calcJointPlane(TPos3f*, const JointControllerInfo&);
+    bool calcJointPlane(Pos3f*, const JointControllerInfo&);
     bool tryDPDStop();
 
     AnimScaleController* mScaleController;

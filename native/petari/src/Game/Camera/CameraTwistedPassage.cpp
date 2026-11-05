@@ -28,7 +28,7 @@ CameraTargetObj* CameraTwistedPassage::calc() {
         return nullptr;
     }
 
-    TVec3f watchPos;
+    Vec3f watchPos;
     CameraLocalUtil::makeWatchPoint(&watchPos, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
     CameraLocalUtil::setWatchPos(this, watchPos);
 
@@ -74,7 +74,7 @@ CameraTargetObj* CameraTwistedPassage::calc() {
     }
 
     CameraLocalUtil::setPos(this, mRailRider->mCurPos);
-    TVec3f up = CameraLocalUtil::getUpVec(this) * ::sUpVecBlend - CameraLocalUtil::getTarget(this)->getGravityVector() * (1.0f - ::sUpVecBlend);
+    Vec3f up = CameraLocalUtil::getUpVec(this) * ::sUpVecBlend - CameraLocalUtil::getTarget(this)->getGravityVector() * (1.0f - ::sUpVecBlend);
     CameraLocalUtil::setUpVecAndWatchUpVec(this, up);
 
     return CameraLocalUtil::getTarget(this);
@@ -99,7 +99,7 @@ void CameraTwistedPassage::initStartPos() {
     }
 }
 
-f32 CameraTwistedPassage::calcNearestCoord(const TVec3f& rPos) const {
+f32 CameraTwistedPassage::calcNearestCoord(const Vec3f& rPos) const {
     f32 nearCoord = mRailRider->calcNearestPos(rPos);
 
     f32 coordHi1 = nearCoord;
@@ -119,13 +119,13 @@ f32 CameraTwistedPassage::calcNearestCoord(const TVec3f& rPos) const {
     return coordHi2;
 }
 
-f32 CameraTwistedPassage::calcNearestCoordBetweenTwoRailCoord(f32 coordA, f32 coordB, const TVec3f& rPos) const {
-    TVec3f posA;
+f32 CameraTwistedPassage::calcNearestCoordBetweenTwoRailCoord(f32 coordA, f32 coordB, const Vec3f& rPos) const {
+    Vec3f posA;
     mRailRider->calcPosAtCoord(&posA, coordA);
-    TVec3f posB;
+    Vec3f posB;
     mRailRider->calcPosAtCoord(&posB, coordB);
 
-    TVec3f diff = posB - posA;
+    Vec3f diff = posB - posA;
     f32 dist = diff.length();
     MR::normalizeOrZero(&diff);
     f32 dot = diff.dot(rPos - posA);

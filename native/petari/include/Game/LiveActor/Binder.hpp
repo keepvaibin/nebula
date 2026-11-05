@@ -7,7 +7,7 @@ class CollisionPartsFilterBase;
 
 class Binder {
 public:
-    Binder(MtxPtr, const TVec3f*, const TVec3f*, f32, f32, u32);
+    Binder(MtxPtr, const Vec3f*, const Vec3f*, f32, f32, u32);
 
     void setTriangleFilter(TriangleFilterBase*);
     void setCollisionPartsFilter(CollisionPartsFilterBase*);
@@ -25,12 +25,12 @@ public:
     const HitInfo* getPlane(int) const;
     u32 copyPlaneArrayAndSortingSensor(HitInfo**, u32);
     static bool compSensor(const HitInfo*, const HitInfo*);
-    const TVec3f bind(const TVec3f&);
-    void moveAlongHittedPlanes(TVec3f*, TVec3f*, TVec3f*, const TVec3f&, const TVec3f&, HitInfo*, u32, bool*);
-    u32 findBindedPos(TVec3f*, TVec3f*, bool*, HitInfo*, u32, bool, bool);
-    bool moveWithCollisionParts(TVec3f*, TVec3f*);
+    const Vec3f bind(const Vec3f&);
+    void moveAlongHittedPlanes(Vec3f*, Vec3f*, Vec3f*, const Vec3f&, const Vec3f&, HitInfo*, u32, bool*);
+    u32 findBindedPos(Vec3f*, Vec3f*, bool*, HitInfo*, u32, bool, bool);
+    bool moveWithCollisionParts(Vec3f*, Vec3f*);
     u32 storeCurrentHitInfo(HitInfo*, u32, bool);
-    void obtainMomentFixReaction(HitInfo*, u32, TVec3f*, u32);
+    void obtainMomentFixReaction(HitInfo*, u32, Vec3f*, u32);
     void storeContactPlane(HitInfo*, u32);
 
     inline bool isBindedGround() const {
@@ -49,15 +49,15 @@ public:
     CollisionPartsFilterBase* mCollisionPartsFilter;
     CollisionParts* mExCollisionParts;
     MtxPtr _C;
-    const TVec3f* _10;
-    const TVec3f* _14;
+    const Vec3f* _10;
+    const Vec3f* _14;
     f32 mRadius;
     f32 mOffsetY;
-    const TVec3f* mOffsetVec;
+    const Vec3f* mOffsetVec;
     u32 _24;
     u32 mPlaneNum;
     HitInfo* mPlane;
-    TVec3f mFixReactionVector;
+    Vec3f mFixReactionVector;
     HitInfo mGroundInfo;
     f32 _C8;
     HitInfo mWallInfo;

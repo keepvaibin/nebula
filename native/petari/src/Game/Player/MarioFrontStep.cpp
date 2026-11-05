@@ -56,7 +56,7 @@ bool Mario::doFrontStep() {
 
     Triangle triangle = Triangle();
     MarioActor* pMario = mActor;
-    TVec3f* vec = &pMario->_2A0;
+    Vec3f* vec = &pMario->_2A0;
     if (!MR::getFirstPolyOnLineToMap(nullptr, &triangle, *vec, mFrontVec * 200.0f)) {
         return false;
     }
@@ -95,18 +95,18 @@ bool MarioFrontStep::update() {
     }
 
     MarioActor* pMario = mActor;
-    TVec3f* vec = &pMario->_2A0;
+    Vec3f* vec = &pMario->_2A0;
     if (!MR::isExistMapCollision(*vec, getFrontVec() * 200.0f)) {
         return false;
     }
 
     if (!(getStickP() < 0.1f)) {
-        TVec3f worldDir(getWorldPadDir());
+        Vec3f worldDir(getWorldPadDir());
         MR::vecKillElement(worldDir, getPlayer()->getAirGravityVec(), &worldDir);
 
         MR::normalizeOrZero(&worldDir);
 
-        TVec3f vec;
+        Vec3f vec;
         f32 val = MR::vecKillElement(worldDir, -getPlayer()->mFrontVec, &vec);
         if (!(val < -0.866f) && val > 0.0f) {
             return false;
@@ -145,14 +145,14 @@ bool MarioFrontStep::close() {
 }
 
 bool MarioFrontStep::postureCtrl(MtxPtr pMtx) {
-    TVec3f blendVec;
+    Vec3f blendVec;
     if (MR::vecBlendSphere(-getPlayer()->getAirGravityVec(), -getPlayer()->mFrontVec, &blendVec, 0.25f)) {
         MR::normalizeOrZero(&blendVec);
     } else {
         blendVec = -getPlayer()->getAirGravityVec();
     }
 
-    MR::makeMtxUpFront(reinterpret_cast< TPos3f* >(pMtx), blendVec, getPlayer()->mFrontVec);
+    MR::makeMtxUpFront(reinterpret_cast< Pos3f* >(pMtx), blendVec, getPlayer()->mFrontVec);
 
     return true;
 }

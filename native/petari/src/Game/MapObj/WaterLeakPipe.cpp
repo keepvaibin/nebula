@@ -61,7 +61,7 @@ WaterLeakPipe::WaterLeakPipe(const char* pName)
 }
 
 void WaterLeakPipe::init(const JMapInfoIter& rIter) {
-    TVec3f upVec;
+    Vec3f upVec;
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("WaterLeakPipe", nullptr, false);
     mTopMtx = MR::getJointMtx(this, "Top");
@@ -70,7 +70,7 @@ void WaterLeakPipe::init(const JMapInfoIter& rIter) {
     initPipeHeight();
     MR::connectToSceneMapObjNoCalcAnim(this);
     initHitSensor(1);
-    MR::addHitSensorAtJointMapObj(this, "ice", "Top", 8, 120.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointMapObj(this, "ice", "Top", 8, 120.0f, Vec3f(0.0f, 0.0f, 0.0f));
     initEffectKeeper(0, nullptr, false);
     initSound(4, false);
     MR::calcUpVec(&upVec, this);
@@ -117,9 +117,9 @@ bool WaterLeakPipe::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSenso
     }
 
     if (MR::isMsgPlayerTrample(msg) || MR::isMsgPlayerHipDrop(msg)) {
-        TVec3f upVec;
+        Vec3f upVec;
         MR::calcUpVec(&upVec, this);
-        TVec3f v8;
+        Vec3f v8;
         v8.sub(*MR::getPlayerPos(), mPosition);
 
         if (v8.dot(upVec) < 0.0f) {
@@ -138,11 +138,11 @@ bool WaterLeakPipe::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSenso
 }
 
 void WaterLeakPipe::initPipeHeight() {
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.set(mTopMtx);
-    TVec3f upVec;
+    Vec3f upVec;
     MR::calcUpVec(&upVec, this);
-    TVec3f v10;
+    Vec3f v10;
     v10.scaleAdd(mPipeHeight, upVec, mPosition);
     mtx.setTrans(v10);
     NebulaMtxCopy(mtx, mTopMtx);

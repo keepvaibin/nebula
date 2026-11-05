@@ -43,7 +43,7 @@ void KameckTurtle::init(const JMapInfoIter& rIter) {
     initHitSensor(1);
     MR::initShadowVolumeSphere(this, 60.0f);
     MR::invalidateClipping(this);
-    MR::addHitSensorEnemyAttack(this, "attack", 8, 50.0f, TVec3f(0.0f));
+    MR::addHitSensorEnemyAttack(this, "attack", 8, 50.0f, Vec3f(0.0f));
     initEffectKeeper(0, "BossKameckBeam", false);
     initNerve(GET_NERVE(KameckTurtle, KameckTurtleNrvWait));
     makeActorAppeared();
@@ -127,7 +127,7 @@ bool KameckTurtle::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pRece
     return false;
 }
 
-void KameckTurtle::appearDirection(const TVec3f& rDir) {
+void KameckTurtle::appearDirection(const Vec3f& rDir) {
     MR::calcGravity(this);
     mVelocity.set(rDir);
     _B0.killElement(rDir, mGravity);
@@ -171,7 +171,7 @@ void KameckTurtle::exeRun() {
     MR::attenuateVelocity(this, ::sRunFric);
 
     if (MR::isBindedWall(this) && MR::calcReboundVelocity(&mVelocity, *MR::getWallNormal(this), 0.5f)) {
-        TVec3f dir = MR::getVelocityHorizon(this);
+        Vec3f dir = MR::getVelocityHorizon(this);
 
         if (!MR::normalizeOrZero(&dir)) {
             _B0.set(dir);

@@ -20,7 +20,7 @@ public:
     void impact();
 
     f32 _14;
-    TVec3f _18;
+    Vec3f _18;
     u8 _24;
     u8 _25;
     u8 _26;
@@ -28,7 +28,7 @@ public:
     u8 _28;
     u16 _2A;
     Mtx _2C;
-    TVec3f _5C;
+    Vec3f _5C;
     u8 _68;
     u8 _69;
     u8 _6A;

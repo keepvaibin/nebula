@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/NameObj/NameObj.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class CoinRotater : public NameObj {
 public:
@@ -12,14 +12,14 @@ public:
     f32 _C;
     f32 _10;
     f32 _14;
-    TMtx34f mRotateYMtx;
-    TMtx34f mHiSpeedRotateYMtx;
-    TMtx34f mWaterRotateMtx;
+    Mtx34f mRotateYMtx;
+    Mtx34f mHiSpeedRotateYMtx;
+    Mtx34f mWaterRotateMtx;
 };
 
 namespace MR {
     void createCoinRotater();
-    TMtx34f& getCoinRotateYMatrix();
-    TMtx34f& getCoinHiSpeedRotateYMatrix();
-    TMtx34f& getCoinInWaterRotateYMatrix();
+    Mtx34f& getCoinRotateYMatrix();
+    Mtx34f& getCoinHiSpeedRotateYMatrix();
+    Mtx34f& getCoinInWaterRotateYMatrix();
 };  // namespace MR

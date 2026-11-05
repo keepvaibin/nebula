@@ -86,9 +86,9 @@ void CShader::calc(J3DModel* pModel) {
 
             length = mLengthMap.refer(u, v);
 
-            TVec3f position;
-            TVec3f normal;
-            TVec3f result;
+            Vec3f position;
+            Vec3f normal;
+            Vec3f result;
 
             const f32* pNormal = static_cast< const f32* >(pNormals) + normalOffset;
             normal.set< f32 >(pNormal[0], pNormal[1], pNormal[2]);

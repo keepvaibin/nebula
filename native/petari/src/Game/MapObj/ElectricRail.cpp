@@ -56,7 +56,7 @@ void ElectricRailPoint::init(const JMapInfoIter& rIter) {
     }
 
     initHitSensor(1);
-    MR::addHitSensorMapObj(this, "body", 8, 35.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorMapObj(this, "body", 8, 35.0f, Vec3f(0.0f, 0.0f, 0.0f));
 
     makeActorAppeared();
 }
@@ -72,14 +72,14 @@ void ElectricRailPoint::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
 ElectricRailSeparator::ElectricRailSeparator() : _0(gZeroVec), mSide(gZeroVec), mUp(gZeroVec), mFront(gZeroVec), _30(gZeroVec) {
 }
 
-void ElectricRailSeparator::setup(const TVec3f& rVec1, const TVec3f& rVec2, const TVec3f& rVec3) {
+void ElectricRailSeparator::setup(const Vec3f& rVec1, const Vec3f& rVec2, const Vec3f& rVec3) {
     _30.set(rVec3);
     _0.set(rVec1);
     mFront.set(rVec2);
 
     mFront.negate();
 
-    TVec3f upVec = -rVec3;
+    Vec3f upVec = -rVec3;
 
     if (MR::isSameDirection(upVec, mFront)) {
         MR::makeAxisCrossPlane(&mSide, &mUp, mFront);
@@ -112,7 +112,7 @@ void ElectricRailShadowDrawer::drawShadowVolumeShape(NativeMesh& rMesh, Electric
     rMesh.begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, val * 4 + 2);
 
     ElectricRailSeparator* separator;
-    TVec3f vec24, vec30, vec3C, vec48;
+    Vec3f vec24, vec30, vec3C, vec48;
 
     for (s32 i = 0; i < val; i++) {
         separator = &pSeparator[i];
@@ -332,10 +332,10 @@ void ElectricRail::initMapToolInfo(const JMapInfoIter& rIter) {
 void ElectricRail::initSensor() {
     initHitSensor(mRailHeight);
 
-    _94 = new TVec3f[mRailHeight];
+    _94 = new Vec3f[mRailHeight];
 
     for (s32 i = 0; i < mRailHeight; i++) {
-        MR::addHitSensorPosMapObj(this, ::cSensorNameTable[i], 8, ElectricRailFunction::getHitSensorRadius(), &_94[i], TVec3f(0.0f, 0.0f, 0.0f));
+        MR::addHitSensorPosMapObj(this, ::cSensorNameTable[i], 8, ElectricRailFunction::getHitSensorRadius(), &_94[i], Vec3f(0.0f, 0.0f, 0.0f));
     }
 
     updateHitSensorPos();
@@ -373,13 +373,13 @@ void ElectricRail::initPoints() {
 
         if (!ret) {
             point = &mPoints[curPointIdx];
-            TVec3f pos;
+            Vec3f pos;
             MR::calcRailPointPos(&pos, this, curRailPoint);
             point->mPosition.set(pos);
             curPointIdx++;
 
             if (mRailHeight > 1) {
-                TVec3f outGrav;
+                Vec3f outGrav;
                 calcGravity(&outGrav, pos);
                 outGrav.scale(-100.0f);
 
@@ -411,7 +411,7 @@ void ElectricRail::initSeparators() {
     mSeparatorCount = static_cast< s32 >(MR::getRailTotalLength(this) / 200.0f) + 1;
     mSeparators = new ElectricRailSeparator[mSeparatorCount];
 
-    TVec3f railPos, gravity;
+    Vec3f railPos, gravity;
 
     for (s32 i = 0; i < mSeparatorCount - 1; i++) {
         MR::setRailCoord(this, i * 200.0f);
@@ -455,19 +455,19 @@ void ElectricRail::drawRail(f32 a1) const {
 }
 
 void ElectricRail::drawPlane(NativeMesh& rMesh, f32 a1, f32 a2, f32 a3, f32 a4) const {
-    const TVec3f* pUp;
+    const Vec3f* pUp;
 
     for (s32 i = 0; i < mRailHeight; i++) {
         rMesh.begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 2 * mSeparatorCount);
 
         for (s32 j = 0; j < mSeparatorCount; j++) {
             ElectricRailSeparator* s = &mSeparators[j];
-            TVec3f v21(s->_0);
+            Vec3f v21(s->_0);
 
             f32 v15 = 0.5f * j;
 
             pUp = &s->mUp;
-            TVec3f v20(*pUp);
+            Vec3f v20(*pUp);
             v20.scale(100.0f * i);
             v21.add(v21, v20);
 
@@ -485,18 +485,18 @@ void ElectricRail::drawPlane(NativeMesh& rMesh, f32 a1, f32 a2, f32 a3, f32 a4) 
 }
 
 void ElectricRail::drawPlaneGX(f32 a1, f32 a2, f32 a3, f32 a4) const {
-    const TVec3f* pUp;
+    const Vec3f* pUp;
 
     for (s32 i = 0; i < mRailHeight; i++) {
         J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 2 * mSeparatorCount, NEBULA_SHAPE_TEXCOORD0);
 
         for (s32 j = 0; j < mSeparatorCount; j++) {
             ElectricRailSeparator* s = &mSeparators[j];
-            TVec3f v21(s->_0);
+            Vec3f v21(s->_0);
             f32 v15 = 0.5f * j;
 
             pUp = &s->mUp;
-            TVec3f v20(*pUp);
+            Vec3f v20(*pUp);
             v20.scale(100.0f * i);
             v21.add(v21, v20);
 
@@ -539,10 +539,10 @@ void ElectricRail::initShadow(const JMapInfoIter& rIter) {
     MR::addShadowVolumeCylinder(this, "start", 20.0);
     MR::addShadowVolumeCylinder(this, "end", 20.0);
 
-    TVec3f startPos;
+    Vec3f startPos;
     MR::calcRailStartPos(&startPos, this);
 
-    TVec3f endPos;
+    Vec3f endPos;
     MR::calcRailEndPos(&endPos, this);
 
     MR::setShadowDropPosition(this, "start", startPos);
@@ -568,7 +568,7 @@ void ElectricRail::updateHitSensorPos() {
         return;
     }
 
-    TVec3f gravity;
+    Vec3f gravity;
     calcGravity(&gravity, *_94);
     gravity.scale(-100.0);
 
@@ -577,7 +577,7 @@ void ElectricRail::updateHitSensorPos() {
     }
 }
 
-void ElectricRail::calcGravity(TVec3f* pOut, const TVec3f& rA2) const {
+void ElectricRail::calcGravity(Vec3f* pOut, const Vec3f& rA2) const {
     if (mIsCalcGravity) {
         pOut->set(mGravity);
     } else if (!MR::calcGravityVectorOrZero(this, rA2, pOut, nullptr, 0)) {

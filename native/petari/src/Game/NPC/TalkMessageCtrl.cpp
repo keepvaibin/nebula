@@ -22,11 +22,11 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
+
 #include <nebula_math.h>
 
-TalkMessageCtrl::TalkMessageCtrl(LiveActor* pHost, const TVec3f& rArg2, MtxPtr pArg3)
+TalkMessageCtrl::TalkMessageCtrl(LiveActor* pHost, const Vec3f& rArg2, MtxPtr pArg3)
     : NameObj("\211\357\230\142\220\247\214\344" /* 会話制御 */), mHostActor(pHost), mNodeCtrl(), mZoneID(-1), _1C(0.0f, 0.0f, 0.0f), mMsgBalloonFollowOffs(rArg2), mTalkDistance(240.0f),
       _3C(), mIsOnReadNodeAuto(true), mAlreadyDoneFlags(), mIsStartOnlyFront(), mCameraInfo(), mBranchFunc(), mEventFunc(), mAnimeFunc(), mKillFunc(),
       mMtx(pArg3), mIsOnRootNodeAuto(), _18(), mTagArg(nullptr, CustomTagArg::Type_Uninitialized) {
@@ -46,7 +46,7 @@ bool TalkMessageCtrl::inMessageArea() const {
         return false;
     }
 
-    TVec3f* playerPos = MR::getPlayerCenterPos();
+    Vec3f* playerPos = MR::getPlayerCenterPos();
     MessageArea* areaObj = (MessageArea*)MR::getAreaObj("MessageArea", *playerPos);
     if (areaObj != nullptr && messageInfoEnum == areaObj->mObjArg0 && zoneID == areaObj->mZoneID) {
         return true;
@@ -338,14 +338,14 @@ bool TalkMessageCtrl::endTalk() {
 }
 
 bool TalkMessageCtrl::isNearPlayer(const TalkMessageCtrl* pCtrl) {
-    TVec3f* hostPos;
-    TVec3f* ctrlHostPos;
+    Vec3f* hostPos;
+    Vec3f* ctrlHostPos;
 
     if (pCtrl == nullptr) {
         return true;
     }
 
-    TVec3f* playerPos = MR::getPlayerPos();
+    Vec3f* playerPos = MR::getPlayerPos();
     hostPos = &mHostActor->mPosition;
     ctrlHostPos = &pCtrl->mHostActor->mPosition;
 
@@ -489,24 +489,24 @@ bool TalkMessageCtrl::isNearPlayer(f32 distance) const {
         }
     }
 
-    TVec3f v2(mHostActor->mPosition);
+    Vec3f v2(mHostActor->mPosition);
     if (mMtx != nullptr) {
         v2.set< f32 >(mMtx[0][3], mMtx[1][3], mMtx[2][3]);
     }
 
-    TVec3f v3;
+    Vec3f v3;
     f32 f2 = MR::vecKillElement(v2 - *MR::getPlayerCenterPos(), mHostActor->mGravity, &v3);
 
     if (!(MR::abs(f2) > distance) && v3.squared() < distance * distance) {
         TalkMessageInfo* info = &mNodeCtrl->mMessageInfo;
         if (mIsStartOnlyFront || info->isBalloonSign()) {
-            TPos3f pos;
+            Pos3f pos;
             pos.set(mHostActor->getBaseMtx());
 
-            TVec3f v3;  // 0x2C
+            Vec3f v3;  // 0x2C
             pos.getZDir(v3);
 
-            TVec3f v4;  // 0x20
+            Vec3f v4;  // 0x20
             pos.getTrans(v4);
             v4 = *MR::getPlayerPos() - v4;
 
@@ -524,20 +524,20 @@ bool TalkMessageCtrl::isNearPlayer(f32 distance) const {
 }
 
 void TalkMessageCtrl::updateBalloonPos() {
-    TMtx34f pos;
+    Mtx34f pos;
     pos.set(mHostActor->getBaseMtx());
 
     if (mMtx != nullptr) {
         pos.set(mMtx);
     }
 
-    TPos3f tPos = MR::getCameraInvViewMtx();
-    TVec3f v3;
-    TVec3f nullVec(0.0f, 0.0f, 0.0f);
+    Pos3f tPos = MR::getCameraInvViewMtx();
+    Vec3f v3;
+    Vec3f nullVec(0.0f, 0.0f, 0.0f);
     MR::setMtxTrans(tPos, nullVec.x, nullVec.y, nullVec.z);
     MR::addTransMtxLocal(tPos, mMsgBalloonFollowOffs);
 
     v3.set< f32 >(pos[0][3], pos[1][3], pos[2][3]);
-    v3.add(TVec3f(tPos[0][3], tPos[1][3], tPos[2][3]));
+    v3.add(Vec3f(tPos[0][3], tPos[1][3], tPos[2][3]));
     MR::calcScreenPosition(&_1C, v3);
 }

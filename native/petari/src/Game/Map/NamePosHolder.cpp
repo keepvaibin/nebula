@@ -33,7 +33,7 @@ bool NamePosHolder::tryRegisterLinkObj(const NameObj* pObj, const JMapInfoIter& 
     return false;
 }
 
-bool NamePosHolder::find(const NameObj* pObj, const char* pName, TVec3f* pPos, TVec3f* pRot) const {
+bool NamePosHolder::find(const NameObj* pObj, const char* pName, Vec3f* pPos, Vec3f* pRot) const {
     for (s32 idx = 0; idx < mPosNum; idx++) {
         NamePosInfo* pInfo = &mInfos[idx];
 

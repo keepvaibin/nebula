@@ -5,7 +5,7 @@
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
-#include <JSystem/JMath/JMath.hpp>
+#include <nebula_geometry.hpp>
 
 namespace {
     const Vec sDummyModelOffset = {0.0f, -150.0f, 0.0f};
@@ -43,7 +43,7 @@ void CrystalCageMoving::init(const JMapInfoIter& rIter) {
     info.setupRailMover();
     info.setupHitSensorCallBack();
 
-    TVec3f vec;
+    Vec3f vec;
     vec.x = 0.0f;
     vec.y = 0.0f;
     vec.z = 0.0f;
@@ -103,11 +103,11 @@ void CrystalCageMoving::exeDemoTicoMove() {
         MR::startSound(mTicoModel, "SE_SM_TICO_SPIN");
     }
 
-    TVec3f stack_14;
+    Vec3f stack_14;
     stack_14.sub(_FC, mPosition);
 
     f32 nerveRate = MR::calcNerveRate(this, 30);
-    TVec3f stack_8;
+    Vec3f stack_8;
     stack_8.scaleAdd(nerveRate, stack_14, mPosition);
     _C8.setTrans(stack_8);
 
@@ -156,7 +156,7 @@ void CrystalCageMoving::control() {
     if (!isNerveTypeEnd()) {
         MapObjActor::control();
         _C8.set(MR::getJointMtx(this, 0));
-        TVec3f trans;
+        Vec3f trans;
         NebulaMtxMultVec(_C8.toMtxPtr(), &::sDummyModelOffset, &trans);
         _C8.setTrans(trans);
     }
@@ -199,13 +199,13 @@ void CrystalCageMoving::updateHitSensor(HitSensor* pSensor) {
         pSensor->mPosition.set(mPosition);
     } else {
         f32 radius = pSensor->mRadius;
-        TPos3f joint_mtx;
+        Pos3f joint_mtx;
         joint_mtx.set(MR::getJointMtx(this, nullptr));
-        TVec3f up;
+        Vec3f up;
         joint_mtx.getYDir(up);
-        TVec3f stack_14;
+        Vec3f stack_14;
         stack_14.scaleAdd(-450.0f + radius, up, mPosition);
-        TVec3f stack_8;
+        Vec3f stack_8;
         stack_8.scaleAdd(450.0f - radius, up, mPosition);
         MR::calcPerpendicFootToLineInside(&pSensor->mPosition, *MR::getPlayerPos(), stack_14, stack_8);
     }
@@ -219,7 +219,7 @@ void CrystalCageMoving::connectToScene(const MapObjActorInitInfo& rInfo) {
 
 void CrystalCageMoving::initDummyModel(const JMapInfoIter& rIter) {
     _C8.set(MR::getJointMtx(this, 0));
-    TVec3f stack_8;
+    Vec3f stack_8;
     NebulaMtxMultVec(_C8.toMtxPtr(), &::sDummyModelOffset, &stack_8);
     _C8.setTrans(stack_8);
     mTicoModel = new ModelObj("\223\256\202\255\203\116\203\212\203\130\203\136\203\213\203\120\201\133\203\127\222\206\220\147" /* 動くクリスタルケージ中身 */, "Tico", _C8.toMtxPtr(), MR::DrawBufferType_CrystalItem, -2, -2, false);

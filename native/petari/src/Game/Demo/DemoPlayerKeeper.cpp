@@ -36,7 +36,7 @@ void DemoPlayerKeeper::update() {
 bool DemoPlayerKeeper::isExistPosName() const {
     for (int i = 0; i < mNumPlayerInfos; i++) {
         // A mod's cutscene may name a position the stage doesn't have.
-        TPos3f found;
+        Pos3f found;
         if (mPlayerInfos[i].mPosName != nullptr && MR::tryFindNamePos(mPlayerInfos[i].mPosName, found.toMtxPtr())) {
             return true;
         }

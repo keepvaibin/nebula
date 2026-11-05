@@ -15,7 +15,7 @@
 #include "Game/Util/SoundUtil.hpp"
 
 namespace {
-    static TVec3f sEggOutPosition = TVec3f(0.0f, 60.0f, -320.0f);
+    static Vec3f sEggOutPosition = Vec3f(0.0f, 60.0f, -320.0f);
 };  // namespace
 
 namespace NrvDinoPackunBattleEgg {

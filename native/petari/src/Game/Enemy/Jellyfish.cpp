@@ -53,7 +53,7 @@ void Jellyfish::init(const JMapInfoIter& rIter) {
     MR::addToAttributeGroupSearchTurtle(this);
 
     initHitSensor(1);
-    TVec3f offset;
+    Vec3f offset;
     offset.set(0.0f, 30.0f, 0.0f);
     MR::addHitSensor(this, "body", ATYPE_KILLER_TARGET_ENEMY, 8, 100.0f, offset);
 
@@ -73,7 +73,7 @@ void Jellyfish::init(const JMapInfoIter& rIter) {
 
     MR::declareCoin(this, 1);
 
-    MR::initStarPointerTarget(this, 100.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::initStarPointerTarget(this, 100.0f, Vec3f(0.0f, 0.0f, 0.0f));
 
     mController = new AnimScaleController(nullptr);
     mBindStarPtr = new WalkerStateBindStarPointer(this, mController);
@@ -109,8 +109,8 @@ void Jellyfish::kill() {
 }
 
 void Jellyfish::control() {
-    const TVec3f& rPosition = mPosition;
-    MR::requestPointLight(this, TVec3f(rPosition), ::sPointLightColor, 0.9999f, -1);
+    const Vec3f& rPosition = mPosition;
+    MR::requestPointLight(this, Vec3f(rPosition), ::sPointLightColor, 0.9999f, -1);
 
     mController->updateNerve();
 
@@ -124,7 +124,7 @@ void Jellyfish::control() {
         }
 
         f32 wave = MR::sinDegree(_94 + 45);
-        const TVec3f& rGravity = mGravity;
+        const Vec3f& rGravity = mGravity;
         mVelocity.scale(wave, rGravity);
 
         _94++;
@@ -135,10 +135,10 @@ void Jellyfish::control() {
 }
 
 void Jellyfish::calcAndSetBaseMtx() {
-    TPos3f baseMtx;
+    Pos3f baseMtx;
     MR::makeMtxFrontUpPos(&baseMtx, _98, -mGravity, mPosition);
     MR::setBaseTRMtx(this, baseMtx);
-    TVec3f baseScale(mController->_C * mScale);
+    Vec3f baseScale(mController->_C * mScale);
     MR::setBaseScale(this, baseScale);
 }
 
@@ -315,20 +315,20 @@ void Jellyfish::threatTurn() {
 }
 
 bool Jellyfish::faceToMario() {
-    TVec3f v13;
-    const TVec3f& rPosition = mPosition;
+    Vec3f v13;
+    const Vec3f& rPosition = mPosition;
     v13.sub(*MR::getPlayerPos(), rPosition);
     MR::normalizeOrZero(&v13);
-    TVec3f v12;
+    Vec3f v12;
     MR::calcSideVec(&v12, this);
 
     if (!MR::isNearZero(v13)) {
         MR::turnVecToVecCosOnPlane(&_98, v13, v12, MR::cosDegree(0.5f));
-        TVec3f v11;
-        TVec3f v10;
-        const TVec3f& rGravity = mGravity;
+        Vec3f v11;
+        Vec3f v10;
+        const Vec3f& rGravity = mGravity;
         v10.negate(rGravity);
-        const TVec3f& rUp = v10;
+        const Vec3f& rUp = v10;
         MR::turnVecToPlane(&v11, _98, rUp);
         MR::clampVecAngleDeg(&_98, v11, 30.0f);
     }
@@ -343,10 +343,10 @@ bool Jellyfish::faceToMario() {
             v8 = -1.0f;
         }
 
-        TVec3f v9;
-        const TVec3f& rGravity = mGravity;
+        Vec3f v9;
+        const Vec3f& rGravity = mGravity;
         v9.negate(rGravity);
-        const TVec3f& rUp = v9;
+        const Vec3f& rUp = v9;
         MR::rotateVecDegree(&_98, rUp, (v8 * (1.5f * v7)));
     }
 
@@ -354,7 +354,7 @@ bool Jellyfish::faceToMario() {
 }
 
 void Jellyfish::knockOut(HitSensor* pSender, HitSensor* pReceiver) {
-    TVec3f toReceiverDir;
+    Vec3f toReceiverDir;
     MR::normalize(pReceiver->mPosition - pSender->mPosition, &toReceiverDir);
 
     mVelocity.scale(40.0f, toReceiverDir);
@@ -402,14 +402,14 @@ bool Jellyfish::selectNerveThreat() {
         return true;
     }
 
-    TVec3f vec2C;
+    Vec3f vec2C;
     vec2C.sub(*MR::getPlayerPos(), mPosition);
     MR::normalizeOrZero(&vec2C);
 
-    TVec3f vec38;
+    Vec3f vec38;
     MR::turnVecToPlane(&vec38, vec2C, mGravity);
 
-    TVec3f vec44;
+    Vec3f vec44;
     MR::turnVecToPlane(&vec44, _98, mGravity);
 
     if (vec44.angle(vec38) * _180_PI < 35.0f) {
@@ -419,10 +419,10 @@ bool Jellyfish::selectNerveThreat() {
 
         setNerve(GET_NERVE(Jellyfish, JellyfishNrvThreat));
     } else {
-        TVec3f vec50;
+        Vec3f vec50;
         vec50.sub(*MR::getPlayerPos(), mPosition);
 
-        TVec3f sideVec;
+        Vec3f sideVec;
         MR::calcSideVec(&sideVec, this);
 
         if (vec50.dot(sideVec) > 0.0f) {

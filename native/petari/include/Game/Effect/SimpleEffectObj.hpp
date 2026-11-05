@@ -19,9 +19,9 @@ public:
         return 50.0f;
     };
 
-    virtual TVec3f* getClippingCenterOffset() const {
+    virtual Vec3f* getClippingCenterOffset() const {
         // A zero offset.
-        static TVec3f vec;
+        static Vec3f vec;
         vec.set(0.0f, 0.0f, 0.0f);
         return &vec;
     };
@@ -38,7 +38,7 @@ public:
     void exeMove();
 
     const char* _8C;
-    TVec3f _90;
+    Vec3f _90;
 };
 
 typedef struct {

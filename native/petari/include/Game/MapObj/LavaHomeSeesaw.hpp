@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include "JSystem/JGeometry/TVec.hpp"
+#include <nebula_geometry.hpp>
 
 class LavaHomeSeesawRotator;
 class ProjmapEffectMtxSetter;
@@ -17,6 +17,6 @@ public:
 
     LavaHomeSeesawRotator* mSeesawRotator;
     ProjmapEffectMtxSetter* mMtxSetter;
-    TVec3f _94;
+    Vec3f _94;
     f32 mYOffset;
 };

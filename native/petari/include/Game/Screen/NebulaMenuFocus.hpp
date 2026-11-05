@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class ButtonPaneController;
 
@@ -32,7 +32,7 @@ namespace NebulaMenuFocus {
 
     void update();                                        // GameSystem::update, once a frame, before the menus run
     void offer(ButtonPaneController* pButton);            // a button its menu takes input on this frame
-    void offerTarget(const void* pKey, const TVec2f& rScreenPos);  // anything else, where it is on screen this frame
+    void offerTarget(const void* pKey, const Vec2f& rScreenPos);  // anything else, where it is on screen this frame
     bool isActive();                                      // the D-pad or stick moved the highlight after the pointer
     bool isFocused(const ButtonPaneController* pButton);  // the button the D-pad or stick highlights
     bool isTargetFocused(const void* pKey);               // the target the D-pad or stick highlights

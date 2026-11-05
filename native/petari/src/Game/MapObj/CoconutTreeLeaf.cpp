@@ -27,7 +27,7 @@ namespace {
     const s32 sStepWindMax = 30;
 };  // namespace
 
-CoconutTreeLeaf::CoconutTreeLeaf(const CoconutTreeLeafGroup* pGroup, MtxPtr pJointMtx, const TVec3f* pWindDirection)
+CoconutTreeLeaf::CoconutTreeLeaf(const CoconutTreeLeafGroup* pGroup, MtxPtr pJointMtx, const Vec3f* pWindDirection)
     : LiveActor("\203\204\203\126\202\314\226\330\202\314\227\164" /* ヤシの木の葉 */), mGroup(pGroup), mTipPosition(0.0f), mRestTipPosition(0.0f),
       mRestUp(pJointMtx[0][1], pJointMtx[1][1], pJointMtx[2][1]), mAxisX(pJointMtx[0][0], pJointMtx[1][0], pJointMtx[2][0]),
       mAxisY(pJointMtx[0][1], pJointMtx[1][1], pJointMtx[2][1]), mAxisZ(pJointMtx[0][2], pJointMtx[1][2], pJointMtx[2][2]), mJointMtx(pJointMtx),
@@ -72,7 +72,7 @@ void CoconutTreeLeaf::update(f32 windAccel, f32 windRandomAccel) {
             mWindAccel.set(*mWindDirection);
             mWindAccel.scale(windAccel);
 
-            TVec3f randomAccel(mRestUp);
+            Vec3f randomAccel(mRestUp);
             randomAccel.scale(windRandomAccel * MR::getRandom(-1.0f, 1.0f));
             mWindAccel.add(randomAccel);
 
@@ -80,11 +80,11 @@ void CoconutTreeLeaf::update(f32 windAccel, f32 windRandomAccel) {
         }
     }
 
-    TVec3f gravityAccel(mRestUp);
+    Vec3f gravityAccel(mRestUp);
     gravityAccel.scale(-gravity);
     mVelocity.add(gravityAccel);
 
-    TVec3f springAccel(mRestTipPosition);
+    Vec3f springAccel(mRestTipPosition);
     springAccel.sub(mTipPosition);
     f32 lean = -springAccel.dot(*mWindDirection);
     springAccel.scale(springAccelRate);
@@ -92,7 +92,7 @@ void CoconutTreeLeaf::update(f32 windAccel, f32 windRandomAccel) {
     mVelocity.scale(friction);
     mTipPosition.add(mVelocity);
 
-    TVec3f axisZ(mTipPosition);
+    Vec3f axisZ(mTipPosition);
     axisZ.sub(mPosition);
 
     if (!MR::isNearZero(mAxisZ)) {
@@ -107,11 +107,11 @@ void CoconutTreeLeaf::update(f32 windAccel, f32 windRandomAccel) {
         lean = 0.0f;
     }
 
-    TVec3f up(*mWindDirection);
+    Vec3f up(*mWindDirection);
     up.scale(::sAxisLeanRateY * lean);
     up.add(mRestUp);
 
-    TVec3f axisX(mAxisX);
+    Vec3f axisX(mAxisX);
     axisX.cross(up, mAxisZ);
 
     if (!MR::isNearZero(mAxisX)) {
@@ -138,7 +138,7 @@ void CoconutTreeLeaf::update(f32 windAccel, f32 windRandomAccel) {
 
 bool CoconutTreeLeaf::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
     if (MR::isMsgPlayerHipDropFloor(msg)) {
-        TVec3f accel(mRestUp);
+        Vec3f accel(mRestUp);
         accel.scale(-::sHipDropAccel);
         mVelocity.add(accel);
         return true;

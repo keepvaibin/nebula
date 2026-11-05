@@ -24,7 +24,7 @@ void MercatorFixParts::init(const JMapInfoIter& rIter) {
     initModelManagerWithAnm(objectName, nullptr, false);
     MR::connectToSceneMapObj(this);
     initHitSensor(1);
-    MR::addHitSensorMapObj(this, "body", 4, 0.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorMapObj(this, "body", 4, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
     MR::initCollisionParts(this, objectName, getSensor("body"), nullptr);
 
     mAppearController = new MapPartsAppearController(this);

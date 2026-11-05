@@ -26,6 +26,6 @@ public:
     AnimScaleController* mAnimScaleController;
     const Nerve* mNerveBeforeBind;
     s32 mNotBoundStep;
-    TQuat4f mQuat;
+    Quat4f mQuat;
     f32 mRotateAngle;
 };

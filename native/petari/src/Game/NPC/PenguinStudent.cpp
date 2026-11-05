@@ -35,11 +35,11 @@ void PenguinStudent::init(const JMapInfoIter& rIter) {
     MR::connectToSceneNpc(this);
     MR::initLightCtrl(this);
     initHitSensor(1);
-    MR::addHitSensorPush(this, "push", 8, 50.0f, TVec3f(0.0f, 50.0f, 0.0f));
+    MR::addHitSensorPush(this, "push", 8, 50.0f, Vec3f(0.0f, 50.0f, 0.0f));
     initEffectKeeper(0, nullptr, false);
     initSound(4, false);
     MR::initShadowVolumeSphere(this, 50.0f);
-    NPCActor::initTalkCtrl(rIter, "PenguinStudent", TVec3f(0.0f, 150.0f, 0.0f), nullptr);
+    NPCActor::initTalkCtrl(rIter, "PenguinStudent", Vec3f(0.0f, 150.0f, 0.0f), nullptr);
     NPCActorCaps caps = "";
     caps.mLodCtrl = 1;
     caps.mNerve = false;
@@ -115,7 +115,7 @@ void PenguinStudent::exeSwim() {
     MR::setRailCoord(this, MR::getRailCoord(mActor) - _168);
     MR::moveCoordAndFollowTrans(this);
     MR::followRailPose(this, _114, 1.0f);
-    TVec3f v19, v20, v21;
+    Vec3f v19, v20, v21;
     MR::calcUpVec(&v20, this);
     MR::calcFrontVec(&v19, this);
     MR::rotAxisVecRad(v20, v19, &v21, 0.017453292f * (getNerveStep() % 360));

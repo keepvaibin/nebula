@@ -113,13 +113,13 @@ void SkeletalFishRailControl::getRailInfo(SkeletalFishRailInfo* pOutInfo, f32 a2
     }
 }
 
-void SkeletalFishRailControl::getPos(TVec3f* pOut, f32 a2) {
+void SkeletalFishRailControl::getPos(Vec3f* pOut, f32 a2) {
     SkeletalFishRailInfo info;
     getRailInfo(&info, a2);
 
     if (info._4 < 0.0f && !MR::isLoopRail(info._0)) {
         MR::calcRailPosAtCoord(pOut, info._0, 0.0f);
-        TVec3f railDir;
+        Vec3f railDir;
         MR::calcRailDirectionAtCoord(&railDir, info._0, 0.0f);
         railDir.scale(info._4);
         pOut->add(railDir);
@@ -129,16 +129,16 @@ void SkeletalFishRailControl::getPos(TVec3f* pOut, f32 a2) {
     }
 }
 
-void SkeletalFishRailControl::getMtx(TPos3f* pOut, f32 a2) {
+void SkeletalFishRailControl::getMtx(Pos3f* pOut, f32 a2) {
     SkeletalFishRailInfo normalRailInfo;
     SkeletalFishRailInfo distRailInfo;
     getRailInfo(&normalRailInfo, a2);
     getRailInfo(&distRailInfo, a2 - 1000.0f);
 
-    TVec3f railPos;
-    TVec3f railDir;
-    TVec3f gravityVec;
-    TVec3f stack_3C;
+    Vec3f railPos;
+    Vec3f railDir;
+    Vec3f gravityVec;
+    Vec3f stack_3C;
 
     if (normalRailInfo._4 < 0.0f && !MR::isLoopRail(normalRailInfo._0)) {
         MR::calcRailPosAtCoord(&railPos, normalRailInfo._0, 0.0f);
@@ -154,8 +154,8 @@ void SkeletalFishRailControl::getMtx(TPos3f* pOut, f32 a2) {
     MR::normalizeOrZero(&railDir);
     MR::calcGravityVector(normalRailInfo._0, railPos, &gravityVec, nullptr, 0);
 
-    TVec3f v15 = (-gravityVec).cross(railDir);
-    TVec3f v14 = railDir.cross(v15);
+    Vec3f v15 = (-gravityVec).cross(railDir);
+    Vec3f v14 = railDir.cross(v15);
 
     MR::normalizeOrZero(&v15);
     MR::normalizeOrZero(&v14);

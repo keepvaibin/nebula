@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class LodCtrl;
 class MapPartsRailMover;
@@ -23,10 +23,10 @@ public:
     void exeHardTouch();
     void exeRecover();
 
-    TMtx34f _8C;
+    Mtx34f _8C;
     f32 _BC;
     LodCtrl* mLodCtrlPlanet;
     MapPartsRailMover* mRailMover;
     MapPartsRailPosture* mRailPosture;
-    TVec3f _CC;
+    Vec3f _CC;
 };

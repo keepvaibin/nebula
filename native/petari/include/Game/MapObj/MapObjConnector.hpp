@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class MapObjConnector {
 public:
@@ -9,11 +9,11 @@ public:
 
     bool attachToUnder();
     bool attachToBack();
-    bool attach(const TVec3f&);
+    bool attach(const Vec3f&);
     void connect();
     void connect(LiveActor*);
 
     LiveActor* mHost;
     CollisionParts* mParts;
-    TMtx34f _8;
+    Mtx34f _8;
 };

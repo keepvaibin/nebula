@@ -41,20 +41,20 @@ public:
     void exeInTornado();
     void exePress();
 
-    bool tryBlowOut(const TVec3f&, bool);
+    bool tryBlowOut(const Vec3f&, bool);
     bool tryElectricKill();
     bool tryHipDropRelease();
-    bool tryDPDRelease(const TVec2f&);
+    bool tryDPDRelease(const Vec2f&);
     bool tryDPDAttacked();
 
-    void setVelocityFromCursorMove(const TVec2f&);
+    void setVelocityFromCursorMove(const Vec2f&);
     void generateItem(s32 numStarPieces);
 
-    void tryTurnToDirection(const TVec3f& rDir, f32 turnRatio);
+    void tryTurnToDirection(const Vec3f& rDir, f32 turnRatio);
 
     bool inClingNerve() const;
 
-    TVec3f mFront;
+    Vec3f mFront;
     FixedPosition* mClingPosition;
     bool mIsReadyToLandTornado;
     bool _9D;

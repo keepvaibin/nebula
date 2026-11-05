@@ -97,7 +97,7 @@ MeteorStrike* MeteorStrikeLauncher::getUnusedMeteorStrike() {
     return nullptr;
 }
 
-bool isNotJudgedToClipFrustum(const TVec3f& pVec) {
+bool isNotJudgedToClipFrustum(const Vec3f& pVec) {
     return !MR::isJudgedToClipFrustum(pVec, 200.0f);
 }
 
@@ -114,7 +114,7 @@ bool MeteorStrikeLauncher::create() {
     }
 
     if (mIsValidMultiMeteor) {
-        TVec3f movedPos;
+        Vec3f movedPos;
         pUnusedStrike->getMovedPos(&movedPos, 0);
 
         if (!isNotJudgedToClipFrustum(movedPos)) {
@@ -125,7 +125,7 @@ bool MeteorStrikeLauncher::create() {
     }
 
     for (; mCreateStep >= 0; mCreateStep -= mIntervalStep) {
-        TVec3f movedPos;
+        Vec3f movedPos;
         if (!pUnusedStrike->getMovedPos(&movedPos, mCreateStep)) {
             continue;
         }

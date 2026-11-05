@@ -2,7 +2,7 @@
 
 #include "Game/MapObj/MapObjActor.hpp"
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class DesertMovingLand : public MapObjActor {
 public:
@@ -22,9 +22,9 @@ public:
     void exeMoveSign();
     void exeStop();
 
-    TVec3f _C4;
-    TVec3f _D0;
+    Vec3f _C4;
+    Vec3f _D0;
     s32 _DC;
     s32 _E0;
-    TMtx34f _E4;
+    Mtx34f _E4;
 };

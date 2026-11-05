@@ -114,20 +114,20 @@ void Polta::initCamera(const JMapInfoIter& rIter) {
     MR::initAnimCamera(this, mCameraInfo, "DownDemo");
 }
 
-void Polta::appearBreakModelFirst(const TVec3f& rVec) {
+void Polta::appearBreakModelFirst(const Vec3f& rVec) {
     appearBreakModel(rVec, "BreakFirst");
 }
 
-void Polta::appearBreakModelMiddle(const TVec3f& rVec) {
+void Polta::appearBreakModelMiddle(const Vec3f& rVec) {
     appearBreakModel(rVec, "BreakSecond");
 }
 
-void Polta::appearBreakModelLast(const TVec3f& rVec) {
+void Polta::appearBreakModelLast(const Vec3f& rVec) {
     appearBreakModel(rVec, "BreakThird");
 }
 
 void Polta::appearStarPiece(s32 appearNum) {
-    TVec3f head3JointPos;
+    Vec3f head3JointPos;
     MR::copyJointPos(this, "Head3", &head3JointPos);
     MR::appearStarPieceToDirection(this, head3JointPos, -mGravity, appearNum, 50.0f, 60.0f, false);
     MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
@@ -158,7 +158,7 @@ void Polta::initBombTeresaHolder() {
     mGroundRockHolder = new PoltaGroundRockHolder();
 }
 
-void Polta::appearBreakModel(const TVec3f&, const char* pName) {
+void Polta::appearBreakModel(const Vec3f&, const char* pName) {
     mBreakModel->makeActorAppeared();
     MR::invalidateClipping(mBreakModel);
     MR::startAction(mBreakModel, pName);
@@ -184,7 +184,7 @@ f32 Polta::calcToPlayerRotateSpeed() const {
     if (MR::isFaceToPlayerHorizontalDegree(this, _C4, 10.0f)) {
         speed *= ::sTurnBreakFric;
     } else {
-        TVec3f sideVec;
+        Vec3f sideVec;
         MR::calcSideVec(&sideVec, this);
 
         if (sideVec.dot(*MR::getPlayerPos() - mPosition) < 0.0f) {

@@ -152,7 +152,7 @@ void RunawayRabbitCollect::noticeCaughtRabbit(RunawayRabbit* pRabbit) {
 
     for (s32 i = 0; i < mTicoNum; i++) {
         if (mTico[i]->mDemoCastID == pRabbit->getGroupId()) {
-            TVec3f jointPos;
+            Vec3f jointPos;
             MR::copyJointPos(pRabbit, "Spine", &jointPos);
             mTico[i]->setPosAfterCaught(jointPos);
             break;
@@ -187,7 +187,7 @@ void RunawayRabbitCollect::exeWait() {
     }
 }
 
-void RunawayRabbitCollect::appearTico(RunawayTico* pTico, const TVec3f& rPos) {
+void RunawayRabbitCollect::appearTico(RunawayTico* pTico, const Vec3f& rPos) {
     mIsAppearTico[pTico->mDemoCastID] = true;
 
     for (s32 i = 0; i < ARRAY_SIZE(mIsAppearTico); i++) {
@@ -237,7 +237,7 @@ void RunawayRabbitCollect::exeActive() {
 
                 for (s32 j = 0; j < mTicoNum; j++) {
                     if (mTico[j]->mDemoCastID == mRabbit[i]->getGroupId()) {
-                        TVec3f jointPos;
+                        Vec3f jointPos;
                         MR::copyJointPos(mRabbit[i], "Spine", &jointPos);
                         appearTico(mTico[j], jointPos);
                     }

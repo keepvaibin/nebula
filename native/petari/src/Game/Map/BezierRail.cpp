@@ -4,7 +4,7 @@
 #include "Game/Util/JMapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 #include <nebula_math.h>
 
 inline void getCsvDataStr(const char** pOut, const JMapInfo* pMapInfo, const char* pKey, s32 idx) {
@@ -26,7 +26,7 @@ inline int adjustNextIndex(int index, int pointNum) {
 }
 
 namespace {
-    void calcRailDirection(TVec3f* pOut, const RailPart* pRailPart, f32 t) {
+    void calcRailDirection(Vec3f* pOut, const RailPart* pRailPart, f32 t) {
         pRailPart->calcVelocity(pOut, t);
 
         f32 v8;
@@ -39,7 +39,7 @@ namespace {
                 t = t - 0.01f;
             }
 
-            TVec3f pos;
+            Vec3f pos;
             pRailPart->calcPos(&pos, t);
             pRailPart->calcPos(pOut, v8);
 
@@ -50,30 +50,30 @@ namespace {
     }
 };  // namespace
 
-void BezierRailPart::set(const TVec3f& rPoint1, const TVec3f& rPoint1Ctrl, const TVec3f& rPoint2Ctrl, const TVec3f& rPoint2) {
-    TVec3f v21, v20, v19, v18, v17, v16;
+void BezierRailPart::set(const Vec3f& rPoint1, const Vec3f& rPoint1Ctrl, const Vec3f& rPoint2Ctrl, const Vec3f& rPoint2) {
+    Vec3f v21, v20, v19, v18, v17, v16;
 
-    TVec3f v15(rPoint1Ctrl);
+    Vec3f v15(rPoint1Ctrl);
     v15.sub(rPoint1);
 
     v21 = v15;
-    TVec3f v14(rPoint2Ctrl);
+    Vec3f v14(rPoint2Ctrl);
     v14.sub(rPoint1Ctrl);
 
     v20 = v14;
-    TVec3f v13(rPoint2);
+    Vec3f v13(rPoint2);
     v13.sub(rPoint2Ctrl);
 
     v19 = v13;
-    TVec3f v12(v20);
+    Vec3f v12(v20);
     v12.sub(v21);
 
     v18 = v12;
-    TVec3f v11(v19);
+    Vec3f v11(v19);
     v11.sub(v20);
 
     v17 = v11;
-    TVec3f v10(v17);
+    Vec3f v10(v17);
     v10.sub(v18);
 
     v16 = v10;
@@ -85,14 +85,14 @@ void BezierRailPart::set(const TVec3f& rPoint1, const TVec3f& rPoint1Ctrl, const
     mLength = getLength(0.0f, 1.0f, 10);
 }
 
-void BezierRailPart::calcPos(TVec3f* pOut, f32 t) const {
+void BezierRailPart::calcPos(Vec3f* pOut, f32 t) const {
     f32 v7 = 3.0f * t;
     f32 v10 = 3.0f * t * t;
     f32 v9 = t * t * t;
 
-    TVec3f v16(mCtrlDegree1);
-    TVec3f v15(mCtrlDegree2);
-    TVec3f v14(mCtrlDegree3);
+    Vec3f v16(mCtrlDegree1);
+    Vec3f v15(mCtrlDegree2);
+    Vec3f v14(mCtrlDegree3);
 
     v16.scale(v7);
     v15.scale(v10);
@@ -104,12 +104,12 @@ void BezierRailPart::calcPos(TVec3f* pOut, f32 t) const {
     pOut->add(v14);
 }
 
-void BezierRailPart::calcVelocity(TVec3f* pOut, f32 t) const {
+void BezierRailPart::calcVelocity(Vec3f* pOut, f32 t) const {
     f32 v5 = t * t;
     f32 v7 = 2.0f * t;
 
-    TVec3f v12(mCtrlDegree3);
-    TVec3f v11(mCtrlDegree2);
+    Vec3f v12(mCtrlDegree3);
+    Vec3f v11(mCtrlDegree2);
     v12.scale(v5);
     v11.scale(v7);
 
@@ -162,7 +162,7 @@ f32 BezierRailPart::getParam(f32 t) const {
     f32 length = railLength;
     for (s32 count = 0; count < 5; count++) {
         f32 mag = getVelocityLength(param);
-        param = JGeometry::TUtil< f32 >::clamp(param + (t - length) / mag, 0.0f, 1.0f);
+        param = FloatUtil::clamp(param + (t - length) / mag, 0.0f, 1.0f);
         length = getLength(0.0f, param, 10);
 
         f32 limit = 0.01f;
@@ -172,18 +172,18 @@ f32 BezierRailPart::getParam(f32 t) const {
     }
 
     if (length < 0.0f || 1.0f < param) {
-        param = JGeometry::TUtil< f32 >::clamp(param, 0.0f, 1.0f);
+        param = FloatUtil::clamp(param, 0.0f, 1.0f);
     }
 
     return param;
 }
 
-f32 BezierRailPart::getNearestParam(const TVec3f& rPos, f32 delta) const {
+f32 BezierRailPart::getNearestParam(const Vec3f& rPos, f32 delta) const {
     f32 nearestParam = -1.0f;
     f32 nearestMag = FLOAT_MAX;
 
     for (f32 t = 0.0f; t <= 1.0f; t += delta) {
-        TVec3f pos;
+        Vec3f pos;
         calcPos(&pos, t);
         f32 mag = pos.squared(rPos);
         if (mag < nearestMag) {
@@ -206,7 +206,7 @@ f32 BezierRail::normalizePos(f32 t, int direction) const {
         }
         return pos;
     } else {
-        return JGeometry::TUtil< f32 >::clamp(t, 0.0f, getTotalLength());
+        return FloatUtil::clamp(t, 0.0f, getTotalLength());
     }
 }
 
@@ -218,7 +218,7 @@ f32 BezierRail::getPartLength(int idx) const {
     return mRailParts[idx].getTotalLength();
 }
 
-void BezierRail::calcPos(TVec3f* pOut, f32 t) const {
+void BezierRail::calcPos(Vec3f* pOut, f32 t) const {
     const RailPart* part;
     f32 param;
 
@@ -226,7 +226,7 @@ void BezierRail::calcPos(TVec3f* pOut, f32 t) const {
     part->calcPos(pOut, part->getParam(param));
 }
 
-void BezierRail::calcDirection(TVec3f* pOut, f32 t) const {
+void BezierRail::calcDirection(Vec3f* pOut, f32 t) const {
     const RailPart* part;
     f32 param;
 
@@ -234,7 +234,7 @@ void BezierRail::calcDirection(TVec3f* pOut, f32 t) const {
     ::calcRailDirection(pOut, part, part->getParam(param));
 }
 
-void BezierRail::calcPosDir(TVec3f* pPos, TVec3f* pDir, f32 t) const {
+void BezierRail::calcPosDir(Vec3f* pPos, Vec3f* pDir, f32 t) const {
     const RailPart* part;
     f32 param;
 
@@ -244,14 +244,14 @@ void BezierRail::calcPosDir(TVec3f* pPos, TVec3f* pDir, f32 t) const {
     ::calcRailDirection(pDir, part, val);
 }
 
-f32 BezierRail::getNearestRailPosCoord(const TVec3f& rPos) const {
+f32 BezierRail::getNearestRailPosCoord(const Vec3f& rPos) const {
     RailPart* part = mRailParts;
     int idx = 0;
 
     f32 length = part->getTotalLength();
     f32 nearestParam = part->getNearestParam(rPos, 100.0f / length);
 
-    TVec3f pos;
+    Vec3f pos;
     part->calcPos(&pos, nearestParam);
     pos.sub(rPos);
 
@@ -341,7 +341,7 @@ void BezierRail::getIncludedSection(const RailPart** pRailParts, f32* pPos, f32 
 
     RailPart* part = getRailPart(idx);
     pRailParts[0] = part;
-    *pPos = JGeometry::TUtil< f32 >::clamp(partPos, 0.0f, part->getTotalLength());
+    *pPos = FloatUtil::clamp(partPos, 0.0f, part->getTotalLength());
 }
 
 int BezierRail::getCurrentCtrlPointIndex(f32 t, bool forward) const {
@@ -405,10 +405,10 @@ BezierRail::BezierRail(const JMapInfoIter& rIter, const JMapInfo* pInfo) {
         JMapInfoIter iterPoint1 = JMapInfoIter(pInfo, i);
         JMapInfoIter iterPoint2 = JMapInfoIter(pInfo, adjustNextIndex(i, mPointNum));
 
-        TVec3f point1;
-        TVec3f point2;
-        TVec3f point1Ctrl;
-        TVec3f point2Ctrl;
+        Vec3f point1;
+        Vec3f point2;
+        Vec3f point1Ctrl;
+        Vec3f point2Ctrl;
 
         MR::getRailPointPos0(iterPoint1, &point1);
         MR::getRailPointPos2(iterPoint1, &point1Ctrl);

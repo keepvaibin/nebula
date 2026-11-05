@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/ActorStateBase.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class BossKameck;
 class BossKameckBattlePattarn;
@@ -49,7 +49,7 @@ public:
     BossKameckBattlePattarn* mBattlePattarn;
     KameckBeam* mBeam;
     KameckBeamEventListener* mBeamEventListener;
-    TVec3f _20;
+    Vec3f _20;
     s32 _2C;
     s32 _30;
     s32 _34;

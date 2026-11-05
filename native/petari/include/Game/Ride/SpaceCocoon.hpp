@@ -2,7 +2,7 @@
 
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/Color.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class ActorCameraInfo;
 class CameraTargetMtx;
@@ -44,7 +44,7 @@ public:
     bool tryAttackMap();
     bool isKinopioAttached() const;
 
-    void endBind(const TVec3f&, bool);
+    void endBind(const Vec3f&, bool);
     void endCommandStream();
 
     void drawPlane(f32, f32, f32, f32, Color8, Color8, f32, f32) const;
@@ -53,28 +53,28 @@ public:
     /// @note if the next use of the SpaceCocoon should signal the associated camera area to stop focusing on this SpaceCocoon (for use when Kinipio
     /// is not yet launched from SpaceCocoon)
     bool mIsKinopioCameraFocused;
-    TVec3f mNeutralPos;
-    TVec3f mBasePos;
-    TVec3f mSide;
-    TVec3f mUp;
-    TVec3f mFront;
+    Vec3f mNeutralPos;
+    Vec3f mBasePos;
+    Vec3f mSide;
+    Vec3f mUp;
+    Vec3f mFront;
     f32 mHeight;
-    TVec3f mPointerPos;
+    Vec3f mPointerPos;
     s32 mPadChannel;
-    TVec3f mCocoonPos;
-    TVec3f mSpringVel;
+    Vec3f mCocoonPos;
+    Vec3f mSpringVel;
 
     /// @note objArg0: number of frames in "attack mode" in the air before regaining control
     s32 mAttackTime;
     s32 mTouchTime;
     LiveActor* mRider;
 
-    TPos3f mBaseMtx;
+    Pos3f mBaseMtx;
     s32 mNumPoints;
     PlantPoint** mPlantPoints;
     CameraTargetMtx* mCameraTargetMtx;
     ActorCameraInfo* mCameraInfo;
     PartsModel* mCocoonModel;
-    TPos3f mTopMtx;
+    Pos3f mTopMtx;
     JUTTexture* mTexture;
 };

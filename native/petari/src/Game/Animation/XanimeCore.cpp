@@ -4,7 +4,7 @@
 #include <JSystem/J3DGraphAnimator/J3DAnimation.hpp>
 #include <JSystem/J3DGraphAnimator/J3DModel.hpp>
 #include <JSystem/J3DGraphAnimator/J3DMtxBuffer.hpp>
-#include <JSystem/JMath/JMath.hpp>
+#include <nebula_geometry.hpp>
 
 void XanimeTrack::init() {
     _0 = nullptr;
@@ -148,7 +148,7 @@ void XanimeCore::setWeight(u8 idx, f32 weight) {
     mTrackList[idx].mWeight = weight;
 }
 
-void XanimeCore::calcBlend(TVec3f* pScale, TVec3f* pTranslate) {
+void XanimeCore::calcBlend(Vec3f* pScale, Vec3f* pTranslate) {
     u16 joint = getJoint()->getJntNo();
     MtxPtr pMtx = getMtxBuffer()->getAnmMtx(joint);
     J3DTransformInfo transform;
@@ -190,11 +190,11 @@ void XanimeCore::calcBlend(TVec3f* pScale, TVec3f* pTranslate) {
         if (pTrack->_0 != nullptr && pTrack->mWeight != 0.0f) {
             pTrack->_0->getTransform(joint, &transform);
             Quaternion trackRotation;
-            JMAEulerToQuat(transform.mRotation.x, transform.mRotation.y, transform.mRotation.z, &trackRotation);
+            eulerToQuat(transform.mRotation.x, transform.mRotation.y, transform.mRotation.z, &trackRotation);
 
             weight = inverseWeight * pTrack->mWeight;
-            *pScale += reinterpret_cast< const TVec3f& >(transform.mScale) * weight;
-            *pTranslate += reinterpret_cast< const TVec3f& >(transform.mTranslate) * weight;
+            *pScale += reinterpret_cast< const Vec3f& >(transform.mScale) * weight;
+            *pTranslate += reinterpret_cast< const Vec3f& >(transform.mTranslate) * weight;
             accumulatedWeight += weight;
             NebulaQuatLerp(&rotation, &trackRotation, weight / accumulatedWeight, &rotation);
         }
@@ -208,8 +208,8 @@ void XanimeCore::calcBlend(TVec3f* pScale, TVec3f* pTranslate) {
     f32 blend = _1C;
 
     if (blend < 1.0f) {
-        const TVec3f* pFrozenScale = &mJointList[joint]._0._0;
-        const TVec3f* pFrozenTranslate = &mJointList[joint]._0._C;
+        const Vec3f* pFrozenScale = &mJointList[joint]._0._0;
+        const Vec3f* pFrozenTranslate = &mJointList[joint]._0._C;
         XjointInfo& rJoint = mJointList[joint];
         *pScale = *pFrozenScale * (1.0f - blend) + *pScale * blend;
         *pTranslate = *pFrozenTranslate * (1.0f - blend) + *pTranslate * blend;
@@ -217,8 +217,8 @@ void XanimeCore::calcBlend(TVec3f* pScale, TVec3f* pTranslate) {
     }
 
     if (_20 != 1.0f) {
-        TVec3f* pPreviousScale = &mJointList[joint]._28._0;
-        TVec3f* pPreviousTranslate = &mJointList[joint]._28._C;
+        Vec3f* pPreviousScale = &mJointList[joint]._28._0;
+        Vec3f* pPreviousTranslate = &mJointList[joint]._28._C;
         XjointInfo& rJoint = mJointList[joint];
         *pScale = *pPreviousScale * (1.0f - _20) + *pScale * _20;
         *pTranslate = *pPreviousTranslate * (1.0f - _20) + *pTranslate * _20;
@@ -231,7 +231,7 @@ void XanimeCore::calcBlend(TVec3f* pScale, TVec3f* pTranslate) {
     NebulaMtxQuat(pMtx, &rotation);
 }
 
-void XanimeCore::calcSingle(TVec3f* pScale, TVec3f* pTranslate) {
+void XanimeCore::calcSingle(Vec3f* pScale, Vec3f* pTranslate) {
     u16 joint = getJoint()->getJntNo();
     MtxPtr pMtx = getMtxBuffer()->getAnmMtx(joint);
     J3DTransformInfo transform;
@@ -245,9 +245,9 @@ void XanimeCore::calcSingle(TVec3f* pScale, TVec3f* pTranslate) {
     }
 
     mTrackList[0]._0->getTransform(joint, &transform);
-    JMAEulerToQuat(transform.mRotation.x, transform.mRotation.y, transform.mRotation.z, &rotation);
-    *pScale = reinterpret_cast< const TVec3f& >(transform.mScale);
-    *pTranslate = reinterpret_cast< const TVec3f& >(transform.mTranslate);
+    eulerToQuat(transform.mRotation.x, transform.mRotation.y, transform.mRotation.z, &rotation);
+    *pScale = reinterpret_cast< const Vec3f& >(transform.mScale);
+    *pTranslate = reinterpret_cast< const Vec3f& >(transform.mTranslate);
 
     if (_29 != 0) {
         mJointList[joint]._0 = mJointList[joint]._28;
@@ -273,8 +273,8 @@ void XanimeCore::calcBlendSpecial() {
     u16 joint = getJoint()->getJntNo();
     J3DTransformInfo transform;
     Quaternion rotation;
-    TVec3f scale(0.0f, 0.0f, 0.0f);
-    TVec3f translate(0.0f, 0.0f, 0.0f);
+    Vec3f scale(0.0f, 0.0f, 0.0f);
+    Vec3f translate(0.0f, 0.0f, 0.0f);
     f32 inverseWeight;
     f32 weight;
     f32 accumulatedWeight = 0.0f;
@@ -303,11 +303,11 @@ void XanimeCore::calcBlendSpecial() {
         if (pTrack->_0 != nullptr && pTrack->mWeight != 0.0f) {
             pTrack->_0->getTransform(joint, &transform);
             Quaternion trackRotation;
-            JMAEulerToQuat(transform.mRotation.x, transform.mRotation.y, transform.mRotation.z, &trackRotation);
+            eulerToQuat(transform.mRotation.x, transform.mRotation.y, transform.mRotation.z, &trackRotation);
 
             weight = inverseWeight * pTrack->mWeight;
-            scale += reinterpret_cast< const TVec3f& >(transform.mScale) * weight;
-            translate += reinterpret_cast< const TVec3f& >(transform.mTranslate) * weight;
+            scale += reinterpret_cast< const Vec3f& >(transform.mScale) * weight;
+            translate += reinterpret_cast< const Vec3f& >(transform.mTranslate) * weight;
             accumulatedWeight += weight;
             NebulaQuatLerp(&rotation, &trackRotation, weight / accumulatedWeight, &rotation);
         }
@@ -327,8 +327,8 @@ void XanimeCore::calcBlendSpecial() {
     }
 
     if (blend < 1.0f) {
-        const TVec3f* pFrozenScale = &mJointList[joint]._0._0;
-        const TVec3f* pFrozenTranslate = &mJointList[joint]._0._C;
+        const Vec3f* pFrozenScale = &mJointList[joint]._0._0;
+        const Vec3f* pFrozenTranslate = &mJointList[joint]._0._C;
         XjointInfo& rJoint = mJointList[joint];
         scale = *pFrozenScale * (1.0f - blend) + scale * blend;
         translate = *pFrozenTranslate * (1.0f - blend) + translate * blend;
@@ -336,8 +336,8 @@ void XanimeCore::calcBlendSpecial() {
     }
 
     if (_20 != 1.0f) {
-        TVec3f* pPreviousScale = &mJointList[joint]._28._0;
-        TVec3f* pPreviousTranslate = &mJointList[joint]._28._C;
+        Vec3f* pPreviousScale = &mJointList[joint]._28._0;
+        Vec3f* pPreviousTranslate = &mJointList[joint]._28._C;
         XjointInfo& rJoint = mJointList[joint];
         scale = *pPreviousScale * (1.0f - _20) + scale * _20;
         translate = *pPreviousTranslate * (1.0f - _20) + translate * _20;
@@ -369,7 +369,7 @@ void XanimeCore::updateFrame() {
     }
 }
 
-void XanimeCore::calcScaleBlendMaya(const TVec3f& rScale, const TVec3f& rTranslate) {
+void XanimeCore::calcScaleBlendMaya(const Vec3f& rScale, const Vec3f& rTranslate) {
     J3DJoint* pJoint = getJoint();
     u16 joint = pJoint->getJntNo();
     J3DMtxBuffer* pMtxBuffer = getMtxBuffer();
@@ -401,7 +401,7 @@ void XanimeCore::calcScaleBlendMaya(const TVec3f& rScale, const TVec3f& rTransla
         pMtx[2][3] += mTransformList[joint]._2C.z;
     }
 
-    TVec3f scale(rScale);
+    Vec3f scale(rScale);
 
     if (mTransformList != nullptr) {
         scale.x *= mTransformList[joint].mScale.x * mTransformList[joint]._14.x;
@@ -465,7 +465,7 @@ void XanimeCore::calcScaleBlendMaya(const TVec3f& rScale, const TVec3f& rTransla
     NebulaMtxConcat(J3DSys::mCurrentMtx, pMtx, J3DSys::mCurrentMtx);
 
     if (mTransformList != nullptr && mTransformList[joint]._6C != nullptr) {
-        TVec3f translate;
+        Vec3f translate;
         MR::extractMtxTrans(J3DSys::mCurrentMtx, &translate);
         MR::setMtxTrans(J3DSys::mCurrentMtx, 0.0f, 0.0f, 0.0f);
         NebulaMtxConcat(mTransformList[joint]._6C, J3DSys::mCurrentMtx, J3DSys::mCurrentMtx);
@@ -491,7 +491,7 @@ void XanimeCore::calcScaleBlendMaya(const TVec3f& rScale, const TVec3f& rTransla
     J3DSys::mParentS.z = rScale.z;
 }
 
-void XanimeCore::calcScaleBlendMayaNoTransform(const TVec3f& rScale, const TVec3f& rTranslate) {
+void XanimeCore::calcScaleBlendMayaNoTransform(const Vec3f& rScale, const Vec3f& rTranslate) {
     J3DJoint* pJoint = getJoint();
     u16 joint = pJoint->getJntNo();
     J3DMtxBuffer* pMtxBuffer = getMtxBuffer();
@@ -501,7 +501,7 @@ void XanimeCore::calcScaleBlendMayaNoTransform(const TVec3f& rScale, const TVec3
     pMtx[1][3] = rTranslate.y;
     pMtx[2][3] = rTranslate.z;
 
-    TVec3f scale(rScale);
+    Vec3f scale(rScale);
 
     if (scale.x == 1.0f && scale.y == 1.0f && scale.z == 1.0f) {
         pMtxBuffer->setScaleFlag(joint, 1);
@@ -541,7 +541,7 @@ void XanimeCore::calcScaleBlendMayaNoTransform(const TVec3f& rScale, const TVec3
     J3DSys::mParentS.z = rScale.z;
 }
 
-void XanimeCore::calcScaleBlendSI(const TVec3f& rScale, const TVec3f& rTranslate) {
+void XanimeCore::calcScaleBlendSI(const Vec3f& rScale, const Vec3f& rTranslate) {
     Vec& rCurrentScale = J3DSys::mCurrentS;
     J3DJoint* pJoint = getJoint();
     u16 joint = pJoint->getJntNo();
@@ -558,7 +558,7 @@ void XanimeCore::calcScaleBlendSI(const TVec3f& rScale, const TVec3f& rTranslate
         }
     }
 
-    TVec3f scale(rScale);
+    Vec3f scale(rScale);
 
     if (mTransformList != nullptr) {
         scale.x *= mTransformList[joint].mScale.x * mTransformList[joint]._14.x;
@@ -653,13 +653,13 @@ void XanimeCore::calcScaleBlendSI(const TVec3f& rScale, const TVec3f& rTranslate
     }
 }
 
-void XanimeCore::calcScaleBlendBasic(const TVec3f& rScale, const TVec3f& rTranslate) {
+void XanimeCore::calcScaleBlendBasic(const Vec3f& rScale, const Vec3f& rTranslate) {
     J3DJoint* pJoint = getJoint();
     u16 joint = pJoint->getJntNo();
     J3DMtxBuffer* pMtxBuffer = getMtxBuffer();
     MtxPtr pMtx = pMtxBuffer->getAnmMtx(joint);
 
-    TVec3f& rCurrentScale = reinterpret_cast< TVec3f& >(J3DSys::mCurrentS);
+    Vec3f& rCurrentScale = reinterpret_cast< Vec3f& >(J3DSys::mCurrentS);
     pMtx[0][3] = rTranslate.x;
     pMtx[1][3] = rTranslate.y;
     pMtx[2][3] = rTranslate.z;
@@ -682,8 +682,8 @@ void XanimeCore::calcScaleBlendBasic(const TVec3f& rScale, const TVec3f& rTransl
 void XanimeCore::calcScaleBlendSpecial() {
     u16 joint = getJoint()->getJntNo();
     MtxPtr pMtx = getMtxBuffer()->getAnmMtx(joint);
-    TVec3f scale;
-    TVec3f translate;
+    Vec3f scale;
+    Vec3f translate;
     scale = mJointList[joint]._28._0;
     translate = mJointList[joint]._28._C;
     NebulaMtxQuat(pMtx, &mJointList[joint]._28.mRotation);
@@ -721,9 +721,9 @@ void XanimeCore::initT(J3DModelData* pModelData) {
     for (u32 i = 0; i < mJointCount; i++) {
         const J3DTransformInfo& rTransform = pModelData->getJointNodePointer(i)->getTransformInfo();
         Quaternion rotation;
-        JMAEulerToQuat(rTransform.mRotation.x, rTransform.mRotation.y, rTransform.mRotation.z, &rotation);
-        mJointList[i]._0._0 = reinterpret_cast< const TVec3f& >(rTransform.mScale);
-        mJointList[i]._0._C = reinterpret_cast< const TVec3f& >(rTransform.mTranslate);
+        eulerToQuat(rTransform.mRotation.x, rTransform.mRotation.y, rTransform.mRotation.z, &rotation);
+        mJointList[i]._0._0 = reinterpret_cast< const Vec3f& >(rTransform.mScale);
+        mJointList[i]._0._C = reinterpret_cast< const Vec3f& >(rTransform.mTranslate);
         mJointList[i]._0.mRotation = rotation;
         mJointList[i]._28._0 = mJointList[i]._0._0;
         mJointList[i]._28._C = mJointList[i]._0._C;
@@ -731,12 +731,12 @@ void XanimeCore::initT(J3DModelData* pModelData) {
     }
 }
 
-void XanimeCore::fixT(TVec3f* pTranslate) {
+void XanimeCore::fixT(Vec3f* pTranslate) {
     u16 joint = getJoint()->getJntNo();
     J3DModelData* pModelData = j3dSys.getModel()->getModelData();
 
     if (joint != 0 && joint != _C) {
-        *pTranslate = reinterpret_cast< const TVec3f& >(pModelData->getJointNodePointer(joint)->getTransformInfo().mTranslate);
+        *pTranslate = reinterpret_cast< const Vec3f& >(pModelData->getJointNodePointer(joint)->getTransformInfo().mTranslate);
     }
 }
 
@@ -765,8 +765,8 @@ void XanimeCore::calc() {
         return;
     }
 
-    TVec3f scale;
-    TVec3f translate;
+    Vec3f scale;
+    Vec3f translate;
 
     if (mTrackCount == 1) {
         calcSingle(&scale, &translate);

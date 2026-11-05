@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/Util/Array.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class Binder;
 class HashSortTable;
@@ -20,9 +20,9 @@ public:
     void initAfterPlacementForAttributeEffect(MtxPtr);
     void setBinder(const Binder*);
     void addEffect(const char*, LiveActor*);
-    void registerEffect(const char*, const TVec3f*, const TVec3f*, const TVec3f*, const char*);
+    void registerEffect(const char*, const Vec3f*, const Vec3f*, const Vec3f*, const char*);
     void registerEffect(const char*, MtxPtr, const char*, const char*);
-    void registerEffect(const char*, MtxPtr, const TVec3f*, const char*, const char*);
+    void registerEffect(const char*, MtxPtr, const Vec3f*, const char*, const char*);
     void registerEffectWithoutSRT(const char*, const char*);
     void registerSyncBckEffect(XanimePlayer*, const char*, const char*, s32, f32, f32, bool);
     MultiEmitter* createEmitter(const char*);

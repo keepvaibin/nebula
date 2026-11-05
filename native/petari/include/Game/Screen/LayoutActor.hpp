@@ -2,7 +2,7 @@
 
 #include "Game/NameObj/NameObj.hpp"
 #include "Game/Screen/LayoutActorFlag.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class EffectSystem;
 class LayoutManager;
@@ -30,8 +30,8 @@ public:
     void setNerve(const Nerve*) const;
     bool isNerve(const Nerve*) const;
     s32 getNerveStep() const;
-    TVec2f getTrans() const;
-    void setTrans(const TVec2f&);
+    Vec2f getTrans() const;
+    void setTrans(const Vec2f&);
     LayoutManager* getLayoutManager() const;
     void createPaneMtxRef(const char*);
     MtxPtr getPaneMtxRef(const char*);

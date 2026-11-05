@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/Boss/DodoryuStateBase.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 struct DodoryuAnimSet {
     const char* mBckName;
@@ -117,9 +117,9 @@ public:
     bool tryToShiftAppearSign();
     void determinChaseMoreAccelCounter();
     void determinChaseMoreBrakeCounter();
-    void turnToward(const TVec3f&, f32);
+    void turnToward(const Vec3f&, f32);
     void addVelocity(bool);
-    void calcLimitedRotateMtx(TPos3f*, const TVec3f&, const TVec3f&, f32);
+    void calcLimitedRotateMtx(Pos3f*, const Vec3f&, const Vec3f&, f32);
     bool isReflectSpinAttack() const;
     void shiftChaseUnderground();
     void shiftChaseExposingHead();
@@ -167,16 +167,16 @@ public:
     void exeChaseMoreEnd();
 
     u32 _90;
-    TVec3f _94;
-    TVec3f _A0;
-    TVec3f _AC;
+    Vec3f _94;
+    Vec3f _A0;
+    Vec3f _AC;
     s32 mReadyAppearStep;
     s32 mChaseAppearStep;
     s32 mChaseAppearEndCounter;
     u32 _C4;
     s32 _C8;
     s32 _CC;
-    TVec3f _D0;
+    Vec3f _D0;
     s32 mFindPosStep;
     s32 mChaseMoreCounter;
     bool mIsChaseMoreBrake;

@@ -64,7 +64,7 @@ void SandUpDownEffectObj::init(const JMapInfoIter& rIter) {
     MR::makeMtxTR(_A0.toMtxPtr(), this);
     MR::setEffectHostMtx(this, "BurySmoke", _A0.toMtxPtr());
 
-    TVec3f yDir;
+    Vec3f yDir;
     _A0.getYDir(yDir);
     mGravity.negate(yDir);
 
@@ -160,9 +160,9 @@ void SandUpDownEffectObj::startMoveDown() {
 }
 
 bool SandUpDownEffectObj::checkSandHit() {
-    TVec3f vec1;
-    TVec3f vec2;
-    TVec3f hitPos;
+    Vec3f vec1;
+    Vec3f vec2;
+    Vec3f hitPos;
 
     vec1.scaleAdd(-_8C, mGravity, mPosition);
     vec2.scale(_90, mGravity);

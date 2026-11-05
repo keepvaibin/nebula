@@ -2,7 +2,7 @@
 
 #include "Game/NameObj/NameObj.hpp"
 #include "Game/Util/Array.hpp"
-#include <JSystem/JGeometry.hpp>
+#include <nebula_geometry.hpp>
 
 class AssetFolder;
 class JMapIdInfo;
@@ -78,7 +78,7 @@ public:
     MR::GrowTable< StageDataHolder*, 0x18 > mStageDataArray;
     AssetFolder* mArchive;
     const char* _A8;
-    TPos3f mPlacementMtx;
+    Pos3f mPlacementMtx;
     s32 mZoneID;
     u8 _E0;
     u8 _E1;

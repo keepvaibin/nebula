@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/NameObj/NameObj.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class ClippingActorInfo;
 class ClippingActorInfoList;
@@ -25,7 +25,7 @@ public:
     void addToClippingTarget(LiveActor*);
     void removeFromClippingTarget(LiveActor*);
     ClippingActorInfo* startGroupClipping(LiveActor*, const JMapInfoIter&);
-    void setTypeToSphere(LiveActor*, f32, const TVec3f*);
+    void setTypeToSphere(LiveActor*, f32, const Vec3f*);
     void setFarClipLevel(LiveActor*, s32);
     ClippingActorInfo* find(const LiveActor*) const;
     const ClippingActorInfo* findGround(const ClippingActorInfo*) const;

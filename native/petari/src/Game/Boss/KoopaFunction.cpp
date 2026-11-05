@@ -69,10 +69,10 @@ s32 KoopaFunction::registerBattleMapStair(KoopaBattleMapStair* pMapStair) {
 }
 
 void KoopaFunction::setKoopaPos(Koopa* pKoopa, const char* pDemoName) {
-    TPos3f transform;
+    Pos3f transform;
     MR::findNamePos(pDemoName, transform);
 
-    TVec3f yDir;
+    Vec3f yDir;
     transform.getYDir(yDir);
 
     pKoopa->mGravity.set(-yDir);
@@ -88,7 +88,7 @@ void KoopaFunction::setKoopaPos(Koopa* pKoopa, const char* pDemoName) {
     }
 }
 
-TVec3f& KoopaFunction::getPlanetCenterPos(const Koopa* pKoopa) {
+Vec3f& KoopaFunction::getPlanetCenterPos(const Koopa* pKoopa) {
     return pKoopa->mParts->getPlanetPos();
 }
 
@@ -96,11 +96,11 @@ f32 KoopaFunction::getPlanetRadius(const Koopa* pKoopa) {
     return pKoopa->mParts->getPlanetRadius();
 }
 
-const TVec3f& KoopaFunction::getKoopaFront(const Koopa* pKoopa) {
+const Vec3f& KoopaFunction::getKoopaFront(const Koopa* pKoopa) {
     return pKoopa->mFront;
 }
 
-TVec3f* KoopaFunction::getKoopaFrontPtr(Koopa* pKoopa) {
+Vec3f* KoopaFunction::getKoopaFrontPtr(Koopa* pKoopa) {
     return &pKoopa->mFront;
 }
 
@@ -200,7 +200,7 @@ void KoopaFunction::emitKoopaFireLongTime(Koopa* pKoopa) {
     pKoopa->mParts->emitFireLongTime();
 }
 
-KoopaFireStairs* KoopaFunction::emitFireStairsToTarget(Koopa* pKoopa, const KoopaBattleMapStair* pMapStair, const TVec3f& rPosition, bool useFront) {
+KoopaFireStairs* KoopaFunction::emitFireStairsToTarget(Koopa* pKoopa, const KoopaBattleMapStair* pMapStair, const Vec3f& rPosition, bool useFront) {
     return pKoopa->mParts->emitFireStairsToPos(pMapStair, rPosition, useFront);
 }
 

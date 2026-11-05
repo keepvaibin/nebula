@@ -23,7 +23,7 @@ void TombSpiderThreadAttacher::init(const JMapInfoIter& rIter) {
 }
 
 void TombSpiderThreadAttacher::exeFree() {
-    TVec3f pos(mJointMtx[0][3], mJointMtx[1][3], mJointMtx[2][3] - mZOffset);
+    Vec3f pos(mJointMtx[0][3], mJointMtx[1][3], mJointMtx[2][3] - mZOffset);
     MR::tryPushSpiderThread(pos, mRadius);
 }
 

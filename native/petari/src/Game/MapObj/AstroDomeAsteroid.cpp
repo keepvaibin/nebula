@@ -42,12 +42,12 @@ void AstroDomeAsteroid::exeWait() {
 }
 
 void AstroDomeAsteroid::control() {
-    SphereSelectorFunction::calcHandledTrans(TVec3f(0.0f, 0.0f, 0.0f), &mPosition);
-    SphereSelectorFunction::calcHandledRotateMtx(TVec3f(0.0f, 0.0f, 0.0f), &mBaseMtx);
+    SphereSelectorFunction::calcHandledTrans(Vec3f(0.0f, 0.0f, 0.0f), &mPosition);
+    SphereSelectorFunction::calcHandledRotateMtx(Vec3f(0.0f, 0.0f, 0.0f), &mBaseMtx);
 }
 
 void AstroDomeAsteroid::calcAndSetBaseMtx() {
-    TPos3f mtx;
+    Pos3f mtx;
     mtx = mBaseMtx;
     mtx.setTrans(mPosition);
     MR::setBaseTRMtx(this, mtx);

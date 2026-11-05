@@ -9,7 +9,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include <JSystem/JMath/JMath.hpp>
+#include <nebula_geometry.hpp>
 
 namespace NrvElectricPressureBullet {
     NEW_NERVE(ElectricPressureBulletNrvFly, ElectricPressureBullet, Fly);
@@ -22,11 +22,11 @@ void ElectricPressureBullet::init(const JMapInfoIter& rIter) {
     initModelManagerWithAnm("ElectricBullet", nullptr, false);
     MR::connectToSceneEnemy(this);
     initHitSensor(1);
-    MR::addHitSensorEnemyAttack(this, "body", 8, 100.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemyAttack(this, "body", 8, 100.0f, Vec3f(0.0f, 0.0f, 0.0f));
     initBinder(100.0f, 0.0f, 0);
     initEffectKeeper(0, nullptr, false);
     initSound(1, false);
-    MR::initStarPointerTarget(this, 100.0f, TVec3f(0, 0, 0));
+    MR::initStarPointerTarget(this, 100.0f, Vec3f(0, 0, 0));
     MR::initShadowVolumeCylinder(this, 75.0f);
     initNerve(GET_NERVE(ElectricPressureBullet, ElectricPressureBulletNrvFly));
     makeActorDead();
@@ -38,7 +38,7 @@ void ElectricPressureBullet::kill() {
     LiveActor::kill();
 }
 
-void ElectricPressureBullet::shotElectricBullet(LiveActor* actor, const TPos3f& pos, const f32& value) {
+void ElectricPressureBullet::shotElectricBullet(LiveActor* actor, const Pos3f& pos, const f32& value) {
     _98 = actor;
     _9C = value;
     pos.getZDir(_8C);
@@ -65,10 +65,10 @@ void ElectricPressureBullet::exeFly() {
         if (MR::isLessStep(this, 150)) {
             s32 v2 = getNerveStep();
             if (!(v2 % 5)) {
-                TVec3f v3;
+                Vec3f v3;
                 v3.sub(*MR::getPlayerCenterPos(), mPosition);
                 MR::normalize(&v3);
-                MR::turnVecToVecDegree(&_8C, _8C, v3, 4.0f, TVec3f(0, 1, 0));
+                MR::turnVecToVecDegree(&_8C, _8C, v3, 4.0f, Vec3f(0, 1, 0));
                 mVelocity.scale(_9C, _8C);
             }
         }

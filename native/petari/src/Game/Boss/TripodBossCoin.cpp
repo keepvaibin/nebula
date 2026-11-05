@@ -40,12 +40,12 @@ void TripodBossCoin::exeNonActive() {
 }
 
 void TripodBossCoin::exeActive() {
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.set(_14);
 
     MR::concatTripodBossAttachJointMatrix(&mtx, mJointID);
 
-    TVec3f coinTrans;
+    Vec3f coinTrans;
     mtx.getTrans(coinTrans);
 
     mCoin->mPosition.set(coinTrans);

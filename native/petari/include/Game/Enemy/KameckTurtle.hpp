@@ -21,7 +21,7 @@ public:
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
 
     void initJetTurtle();
-    void appearDirection(const TVec3f&);
+    void appearDirection(const Vec3f&);
     void exeRun();
     void exeWait();
     bool isEnableAttack() const;
@@ -29,7 +29,7 @@ public:
 
     SmallKameckBeamEventListener* mEventListener;
     JetTurtle* mTurtle;
-    TQuat4f mRotateQuat;
-    TVec3f _A4;
-    TVec3f _B0;
+    Quat4f mRotateQuat;
+    Vec3f _A4;
+    Vec3f _B0;
 };

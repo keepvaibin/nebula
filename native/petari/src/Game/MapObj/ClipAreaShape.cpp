@@ -8,15 +8,15 @@ ClipAreaShape::ClipAreaShape(const char* pName) : mModelData() {
     mModelData = MR::getJ3DModelData(pName);
 }
 
-bool ClipAreaShape::isInArea(const TVec3f& rPosition, f32 radius, const TPos3f& rMtx, const TVec3f& rScale) const {
+bool ClipAreaShape::isInArea(const Vec3f& rPosition, f32 radius, const Pos3f& rMtx, const Vec3f& rScale) const {
     if (MR::isNearZero(rScale.x) || (MR::isNearZero(rScale.y) || MR::isNearZero(rScale.z))) {
         return false;
     }
 
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.identity();
     mtx.invert(rMtx);
-    TVec3f srcVec;
+    Vec3f srcVec;
     mtx.mult(rPosition, srcVec);
 
     srcVec.x = (srcVec.x / rScale.x);
@@ -25,13 +25,13 @@ bool ClipAreaShape::isInArea(const TVec3f& rPosition, f32 radius, const TPos3f& 
     return isInArea(srcVec);
 }
 
-void ClipAreaShape::calcVolumeMatrix(TPos3f* pVolMtx, const TPos3f& rSrcMtx, const TVec3f& rScale) const {
+void ClipAreaShape::calcVolumeMatrix(Pos3f* pVolMtx, const Pos3f& rSrcMtx, const Vec3f& rScale) const {
     pVolMtx->set(rSrcMtx);
     MR::preScaleMtx(pVolMtx->toMtxPtr(), rScale);
 }
 
-void ClipAreaShape::drawVolumeShape(const TPos3f& rMtx, const TVec3f& rPos) const {
-    TPos3f volMtx;
+void ClipAreaShape::drawVolumeShape(const Pos3f& rMtx, const Vec3f& rPos) const {
+    Pos3f volMtx;
     volMtx.identity();
     calcVolumeMatrix(&volMtx, rMtx, rPos);
     MR::multMtx(volMtx, volMtx, MR::getCameraViewMtx());
@@ -39,19 +39,19 @@ void ClipAreaShape::drawVolumeShape(const TPos3f& rMtx, const TVec3f& rPos) cons
     MR::drawSimpleModel(mModelData);
 }
 
-bool ClipAreaShapeSphere::isInArea(const TVec3f& rVec) const {
+bool ClipAreaShapeSphere::isInArea(const Vec3f& rVec) const {
     return rVec.squared() < mRadius * mRadius;
 }
 
-void ClipAreaShapeSphere::calcVolumeMatrix(TPos3f* pPos, const TPos3f& rPos, const TVec3f& rVec) const {
+void ClipAreaShapeSphere::calcVolumeMatrix(Pos3f* pPos, const Pos3f& rPos, const Vec3f& rVec) const {
     pPos->set(rPos);
 
-    TVec3f stack_14 = (TVec3f(rVec.scaleInline(mRadius)));
+    Vec3f stack_14 = (Vec3f(rVec.scaleInline(mRadius)));
     stack_14.scale(0.0099999998f);
     MR::preScaleMtx(pPos->toMtxPtr(), stack_14);
 }
 
-bool ClipAreaShapeBox::isInArea(const TVec3f& rVec) const {
+bool ClipAreaShapeBox::isInArea(const Vec3f& rVec) const {
     switch (_C) {
     case 0:
         return (MR::isInRange(rVec.x, -mRadius, mRadius) && MR::isInRange(rVec.y, -mRadius, mRadius) && MR::isInRange(rVec.z, -mRadius, mRadius));
@@ -62,7 +62,7 @@ bool ClipAreaShapeBox::isInArea(const TVec3f& rVec) const {
     return false;
 }
 
-void ClipAreaShapeBox::calcVolumeMatrix(TPos3f* pPos, const TPos3f& rPos, const TVec3f& rVec) const {
+void ClipAreaShapeBox::calcVolumeMatrix(Pos3f* pPos, const Pos3f& rPos, const Vec3f& rVec) const {
     pPos->set(rPos);
 
     if (_C == 1) {
@@ -78,7 +78,7 @@ ClipAreaShapeCone::ClipAreaShapeCone(s32 a1) : ClipAreaShape("ClipVolumeSphere")
     _10 = a1;
 }
 
-bool ClipAreaShapeCone::isInArea(const TVec3f& rVec) const {
+bool ClipAreaShapeCone::isInArea(const Vec3f& rVec) const {
     f32 v3 = (rVec.y / _C);
 
     if (!MR::isInRange(v3, 0.0f, 1.0f)) {
@@ -94,7 +94,7 @@ bool ClipAreaShapeCone::isInArea(const TVec3f& rVec) const {
     return v23 < v24;
 }
 
-bool ClipAreaShape::isInArea(const TVec3f&) const {
+bool ClipAreaShape::isInArea(const Vec3f&) const {
     return false;
 }
 

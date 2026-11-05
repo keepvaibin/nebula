@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/Screen/WipeHolderBase.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class SystemWipeHolder : public WipeHolderBase {
 public:
@@ -20,7 +20,7 @@ public:
     virtual void calcAnim();
     virtual void updateWipe(const char*);
 
-    void setWipeRingCenter(const TVec3f&);
+    void setWipeRingCenter(const Vec3f&);
     void startGameScreenCapture();
     void drawGameScreenCapture() const;
 

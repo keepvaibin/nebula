@@ -75,7 +75,7 @@ void SphereSelector::registerPointingTarget(LiveActor* pActor, HandlePointingPri
         distance = 0;
         break;
     default:
-        TVec3f viewPos;
+        Vec3f viewPos;
         MR::getCameraViewMtx().mult(pActor->mPosition, viewPos);
         if (0.0f < viewPos.z) {
             return;
@@ -110,7 +110,7 @@ void SphereSelector::sendMsgToAllActor(u32 msg) {
 }
 
 bool SphereSelector::isMoveClickedPos() const {
-    return 80.0f < JGeometry::TUtil< f32 >::sqrt(_A8.squareDist(MR::getStarPointerScreenPositionOrEdge(0)));
+    return 80.0f < FloatUtil::sqrt(_A8.squareDist(MR::getStarPointerScreenPositionOrEdge(0)));
 }
 
 void SphereSelector::playSelectedME() {
@@ -230,7 +230,7 @@ void SphereSelector::exeConfirmCancel() {
 }
 
 namespace {
-    void getHandleMtx(TPos3f* pPos) {
+    void getHandleMtx(Pos3f* pPos) {
         pPos->identity();
 
         if (MR::isExistSceneObj(SceneObj_SphereSelector)) {
@@ -385,21 +385,21 @@ void SphereSelectorFunction::setHandle(SphereSelectorHandle* pHandle) {
     ::getSphereSelector()->mHandle = pHandle;
 }
 
-void SphereSelectorFunction::calcHandledTrans(const TVec3f& rSrc, TVec3f* pDst) {
-    TPos3f mtx;
+void SphereSelectorFunction::calcHandledTrans(const Vec3f& rSrc, Vec3f* pDst) {
+    Pos3f mtx;
     ::getHandleMtx(&mtx);
     mtx.mult(rSrc, *pDst);
 }
 
-void SphereSelectorFunction::calcHandledRotateMtx(const TVec3f& rSrc, TPos3f* pDst) {
-    TPos3f mtx;
+void SphereSelectorFunction::calcHandledRotateMtx(const Vec3f& rSrc, Pos3f* pDst) {
+    Pos3f mtx;
     ::getHandleMtx(&mtx);
-    TMtx34f mtx2;
+    Mtx34f mtx2;
     MR::makeMtxRotate(mtx2, rSrc);
     pDst->concat(mtx, mtx2);
 }
 
-TVec3f& SphereSelectorFunction::getHandleTrans() {
+Vec3f& SphereSelectorFunction::getHandleTrans() {
     return ::getSphereSelector()->mHandle->mPosition;
 }
 
@@ -440,13 +440,13 @@ LiveActor* SphereSelectorFunction::getSelectedTarget() {
     return ::getSphereSelector()->mSelectedTarget;
 }
 
-TVec3f& SphereSelectorFunction::getSelectedActorTrans() {
+Vec3f& SphereSelectorFunction::getSelectedActorTrans() {
     return getSelectedTarget()->mPosition;
 }
 
-void SphereSelectorFunction::calcOffsetPos(TVec3f* pDst, const TVec3f& rVec2, const TVec3f& rVec3, const TVec3f& rVec4, const TVec3f& rVec5) {
-    TVec3f vec(rVec4);
-    TPos3f mtx;
+void SphereSelectorFunction::calcOffsetPos(Vec3f* pDst, const Vec3f& rVec2, const Vec3f& rVec3, const Vec3f& rVec4, const Vec3f& rVec5) {
+    Vec3f vec(rVec4);
+    Pos3f mtx;
 
     if (MR::normalizeOrZero(&vec) || MR::isSameDirection(rVec5, vec)) {
         vec.set< f32 >(0.0f, 0.0f, 1.0f);

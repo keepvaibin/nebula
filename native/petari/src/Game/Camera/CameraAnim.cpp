@@ -10,13 +10,13 @@ void CamAnmDataAccessor::set(void* pInfo, void* pValues) {
     mValues = reinterpret_cast< f32* >(pValues);
 }
 
-void CamAnmDataAccessor::getPos(TVec3f* pPos, f32 key) const {
+void CamAnmDataAccessor::getPos(Vec3f* pPos, f32 key) const {
     pPos->set< f32 >(get(key, mInfo->mPosX.mOffset, mInfo->mPosX.mCount),  //
                      get(key, mInfo->mPosY.mOffset, mInfo->mPosY.mCount),  //
                      get(key, mInfo->mPosZ.mOffset, mInfo->mPosZ.mCount));
 }
 
-void CamAnmDataAccessor::getWatchPos(TVec3f* pWatchPos, f32 key) const {
+void CamAnmDataAccessor::getWatchPos(Vec3f* pWatchPos, f32 key) const {
     pWatchPos->set< f32 >(get(key, mInfo->mWatchPosX.mOffset, mInfo->mWatchPosX.mCount),
                           get(key, mInfo->mWatchPosY.mOffset, mInfo->mWatchPosY.mCount),
                           get(key, mInfo->mWatchPosZ.mOffset, mInfo->mWatchPosZ.mCount));
@@ -53,13 +53,13 @@ void KeyCamAnmDataAccessor::set(void* pInfo, void* pValues) {
     mValues = reinterpret_cast< f32* >(pValues);
 }
 
-void KeyCamAnmDataAccessor::getPos(TVec3f* pPos, f32 key) const {
+void KeyCamAnmDataAccessor::getPos(Vec3f* pPos, f32 key) const {
     pPos->set< f32 >(get(key, mInfo->mPosX.mOffset, mInfo->mPosX.mCount, mInfo->mPosX.mType),
                      get(key, mInfo->mPosY.mOffset, mInfo->mPosY.mCount, mInfo->mPosY.mType),
                      get(key, mInfo->mPosZ.mOffset, mInfo->mPosZ.mCount, mInfo->mPosZ.mType));
 }
 
-void KeyCamAnmDataAccessor::getWatchPos(TVec3f* pWatchPos, f32 key) const {
+void KeyCamAnmDataAccessor::getWatchPos(Vec3f* pWatchPos, f32 key) const {
     pWatchPos->set< f32 >(get(key, mInfo->mWatchPosX.mOffset, mInfo->mWatchPosX.mCount, mInfo->mWatchPosX.mType),
                           get(key, mInfo->mWatchPosY.mOffset, mInfo->mWatchPosY.mCount, mInfo->mWatchPosY.mType),
                           get(key, mInfo->mWatchPosZ.mOffset, mInfo->mWatchPosZ.mCount, mInfo->mWatchPosZ.mType));
@@ -121,7 +121,7 @@ f32 KeyCamAnmDataAccessor::get4f(f32 key, u32 offset, u32 count) const {
 }
 
 f32 KeyCamAnmDataAccessor::calcHermite(f32 key, f32 tA, f32 pA, f32 mA, f32 tB, f32 pB, f32 mB) const {
-    return JMAHermiteInterpolation(key, tA, pA, mA / 30.0f, tB, pB, mB / 30.0f);
+    return hermiteInterpolation(key, tA, pA, mA / 30.0f, tB, pB, mB / 30.0f);
 }
 
 CameraAnim::CameraAnim(const char* pName)
@@ -139,7 +139,7 @@ void CameraAnim::reset() {
 }
 
 CameraTargetObj* CameraAnim::calc() {
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.identity();
     mtx.setXDir(CameraLocalUtil::getTarget(this)->getSideVec());
     mtx.setYDir(CameraLocalUtil::getTarget(this)->getUpVec());
@@ -147,17 +147,17 @@ CameraTargetObj* CameraAnim::calc() {
     mtx.setTrans(CameraLocalUtil::getTarget(this)->getPosition());
 
     if (mNrFrames != 0 && mNrFrames > mCurrentFrame) {
-        TVec3f pos;
+        Vec3f pos;
         mFileDataAccessor->getPos(&pos, mCurrentFrame);
         mtx.mult(pos, pos);
         CameraLocalUtil::setPos(this, pos);
 
-        TVec3f watchPos;
+        Vec3f watchPos;
         mFileDataAccessor->getWatchPos(&watchPos, mCurrentFrame);
         mtx.mult(watchPos, watchPos);
         CameraLocalUtil::setWatchPos(this, watchPos);
 
-        TVec3f up;
+        Vec3f up;
         mtx.getYDir(up);
         CameraLocalUtil::setUpVec(this, up);
         CameraLocalUtil::setWatchUpVec(this, up);

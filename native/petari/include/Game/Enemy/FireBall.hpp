@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class FireBall : public LiveActor {
 public:
@@ -16,7 +16,7 @@ public:
     virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
 
     void initHitSensors(const char*);
-    void appearAndThrow(const TVec3f&, f32, f32);
+    void appearAndThrow(const Vec3f&, f32, f32);
     HitSensor* isBindedAny() const;
     void setVelocityToPlayer(f32);
     void calcReflectVelocity();
@@ -26,5 +26,5 @@ public:
     void exeReflect();
 
     LiveActor* mHost;
-    TVec3f mUp;
+    Vec3f mUp;
 };

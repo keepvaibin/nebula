@@ -9,8 +9,8 @@ MercatorRotateParts::MercatorRotateParts(const char* pName) : LiveActor(pName) {
 }
 
 void MercatorRotateParts::initAfterPlacement() {
-    TVec3f trans;
-    TPos3f rotate;
+    Vec3f trans;
+    Pos3f rotate;
     MR::convertMercatorPlaneToSphereTransAndRotate(&trans, &rotate, mLocalTrans, false);
     mPosition.x = trans.x;
     mPosition.y = trans.y;
@@ -27,10 +27,10 @@ void MercatorRotateParts::control() {
 }
 
 void MercatorRotateParts::calcAndSetBaseMtx() {
-    TVec3f trans;
-    TPos3f rotate;
-    TMtx34f mtx;
-    TPos3f baseMtx;
+    Vec3f trans;
+    Pos3f rotate;
+    Mtx34f mtx;
+    Pos3f baseMtx;
     baseMtx.identity();
     MR::makeMtxRotate(mtx.toMtxPtr(), mLocalRotate.x, mLocalRotate.y, mLocalRotate.z);
     baseMtx.concat(mRotator->getRotateMtx(), mtx);
@@ -51,7 +51,7 @@ void MercatorRotateParts::init(const JMapInfoIter& rIter) {
     initModelManagerWithAnm(objName, nullptr, false);
     MR::connectToSceneMapObj(this);
     initHitSensor(1);
-    MR::addHitSensorMapObj(this, "body", 4, 0.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorMapObj(this, "body", 4, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
     MR::initCollisionParts(this, objName, getSensor("body"), nullptr);
     mRotator = new MapPartsRotator(this);
     mRotator->init(rIter);

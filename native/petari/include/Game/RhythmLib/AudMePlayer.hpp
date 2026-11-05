@@ -2,7 +2,7 @@
 
 #include <JSystem/JAudio2/JASGlobal.hpp>
 #include <JSystem/JAudio2/JASHeapCtrl.hpp>
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 #include <JSystem/JSupport/JSUList.hpp>
 
 class AudMeHandle;
@@ -76,7 +76,7 @@ public:
     AudMeHandle* mHandle;
     AudMeTrack* mTrack;
     u32 _18;
-    const TVec3f* mPos;
+    const Vec3f* mPos;
     s32 mMeId;
     s32 _24;     // mStopTime
     u32 mTimer;  // mTimer
@@ -113,7 +113,7 @@ public:
 
     void setMeSeq(void*);
     void setMeTable(void*);
-    bool startMe(u32, AudMeHandle*, const TVec3f*);
+    bool startMe(u32, AudMeHandle*, const Vec3f*);
     void freeDeadMe();
     void updateEachMe();
     void stopAll(s32);

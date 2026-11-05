@@ -12,11 +12,11 @@ public:
     virtual bool close();
     virtual bool update();
 
-    void setVec(const TVec3f&);
+    void setVec(const Vec3f&);
 
     u16 _12;
     u16 _14;
-    TVec3f _18;
+    Vec3f _18;
     f32 _24;
     f32 _28;
 };

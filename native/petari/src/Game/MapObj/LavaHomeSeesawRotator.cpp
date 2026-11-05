@@ -8,7 +8,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <JSystem/JMath/JMATrigonometric.hpp>
+#include <nebula_geometry.hpp>
 
 namespace {
     const f32 sAngularVelocityFric = 0.99f;
@@ -58,7 +58,7 @@ void LavaHomeSeesawRotator::init(const JMapInfoIter& rIter) {
     MR::getMapPartsArgRotateStopTime(&rotateStopTime, rIter);
     mRestoreForce = rotateStopTime;
 
-    TPos3f baseMtx;
+    Pos3f baseMtx;
     baseMtx.set(mHost->getBaseMtx());
     baseMtx.getYDir(mInitialUp);
     MR::normalize(&mInitialUp);
@@ -67,7 +67,7 @@ void LavaHomeSeesawRotator::init(const JMapInfoIter& rIter) {
 void LavaHomeSeesawRotator::start() {
     mRotateMtx.setRotateDegree(mHost->mRotation);
 
-    TPos3f baseMtx;
+    Pos3f baseMtx;
     baseMtx.identity();
     baseMtx.set(mHost->getBaseMtx());
     baseMtx.getZDir(mRotateAxis);
@@ -77,13 +77,13 @@ void LavaHomeSeesawRotator::start() {
     calcRotatedAngle(&angle, mRotateMtx);
 
     if (isAngleLimited() && mRotateAngle < angle) {
-        TRot3f reboundMtx;
+        Rot3f reboundMtx;
         reboundMtx.identity();
         reboundMtx.setRotate(mRotateAxis, 1.05f * MR::toRadian(angle - mRotateAngle));
         mRotateMtx.concat(reboundMtx);
     }
 
-    TVec3f euler;
+    Vec3f euler;
     mRotateMtx.getEulerXYZ(euler);
     mRotateQuat.setEuler(euler);
 
@@ -116,7 +116,7 @@ void LavaHomeSeesawRotator::exeWait() {
 
 void LavaHomeSeesawRotator::exeMoveStart() {
     if (isFirstStep()) {
-        TRot3f baseMtx;
+        Rot3f baseMtx;
         baseMtx.identity();
         baseMtx.set(mHost->getBaseMtx());
 
@@ -177,7 +177,7 @@ void LavaHomeSeesawRotator::updateRotateMtx() {
             }
         }
 
-        TQuat4f rotate;
+        Quat4f rotate;
         rotate.set(0.0f, 0.0f, 0.0f, 1.0f);
         rotate.setRotate(mRotateAxis, MR::toRadian(deltaAngle));
 
@@ -189,11 +189,11 @@ void LavaHomeSeesawRotator::updateRotateMtx() {
 
 void LavaHomeSeesawRotator::updateVelocity() {
     if (MR::isOnPlayer(MR::getBodySensor(mHost))) {
-        TVec3f gravity;
+        Vec3f gravity;
         MR::calcGravityVector(mHost, &gravity, nullptr, 0);
 
-        TVec3f playerDir(*MR::getPlayerPos() - mHost->mPosition);
-        TVec3f torque;
+        Vec3f playerDir(*MR::getPlayerPos() - mHost->mPosition);
+        Vec3f torque;
         torque.cross(playerDir, gravity);
 
         f32 direction = MR::sign(torque.dot(mRotateAxis));
@@ -212,14 +212,14 @@ void LavaHomeSeesawRotator::updateVelocity() {
 }
 
 void LavaHomeSeesawRotator::updateRestoreForce() {
-    TRot3f baseMtx;
+    Rot3f baseMtx;
     baseMtx.identity();
     baseMtx.set(mHost->getBaseMtx());
-    TVec3f up;
+    Vec3f up;
     baseMtx.getYDir(up);
 
     MR::normalize(&up);
-    TVec3f torque;
+    Vec3f torque;
     torque.cross(up, mInitialUp);
 
     f32 dot = torque.dot(mRotateAxis);
@@ -233,26 +233,26 @@ void LavaHomeSeesawRotator::clampAngularSpeed() {
 }
 
 f32 LavaHomeSeesawRotator::getDistanceFromRotAxis() const {
-    TVec3f position(mHost->mPosition);
-    TVec3f offset(*MR::getPlayerPos() - position);
+    Vec3f position(mHost->mPosition);
+    Vec3f offset(*MR::getPlayerPos() - position);
 
-    TPos3f baseMtx;
+    Pos3f baseMtx;
     baseMtx.identity();
     baseMtx.set(mHost->getBaseMtx());
-    TVec3f axis;
+    Vec3f axis;
     baseMtx.getXDir(axis);
 
-    TVec3f projection;
+    Vec3f projection;
     projection.scale(axis.dot(offset), axis);
     return 0.001f * projection.length();
 }
 
 void LavaHomeSeesawRotator::addForceHipDrop() {
-    TVec3f gravity;
+    Vec3f gravity;
     MR::calcGravityVector(mHost, &gravity, nullptr, 0);
 
-    TVec3f offset(*MR::getPlayerPos() - mHost->mPosition);
-    TVec3f torque;
+    Vec3f offset(*MR::getPlayerPos() - mHost->mPosition);
+    Vec3f torque;
     torque.cross(offset, gravity);
 
     f32 direction = MR::sign(torque.dot(mRotateAxis));
@@ -269,7 +269,7 @@ bool LavaHomeSeesawRotator::isGoingToReachTargetAngle() const {
         return false;
     }
 
-    TPos3f rotation;
+    Pos3f rotation;
     rotation.identity();
     rotation.setRotate(mRotateAxis, PI_180 * mAngularVelocity);
     rotation.concat(rotation, mRotateMtx);
@@ -279,23 +279,23 @@ bool LavaHomeSeesawRotator::isGoingToReachTargetAngle() const {
     return mRotateAngle <= angle;
 }
 
-void LavaHomeSeesawRotator::calcRotatedAngle(f32* pAngle, const TPos3f& rMtx) const {
-    TVec3f up;
+void LavaHomeSeesawRotator::calcRotatedAngle(f32* pAngle, const Pos3f& rMtx) const {
+    Vec3f up;
     rMtx.getYDir(up);
     MR::normalize(&up);
-    TVec3f gravityUp;
-    TVec3f gravity;
+    Vec3f gravityUp;
+    Vec3f gravity;
     MR::calcGravityVector(mHost, &gravity, nullptr, 0);
 
     if (!gravity.isZero()) {
-        TVec3f negGravity(-gravity);
+        Vec3f negGravity(-gravity);
         gravityUp.set(negGravity);
     } else {
         gravityUp.set< f32 >(0.0f, 1.0f, 0.0f);
     }
 
     MR::normalize(&gravityUp);
-    TVec3f normal(gravityUp);
+    Vec3f normal(gravityUp);
     f32 cosine = up.dot(normal);
 
     if (MR::isNearZero(1.0f - cosine)) {
@@ -329,15 +329,15 @@ bool LavaHomeSeesawRotator::tryStay() {
     }
 
     if (MR::abs(mAngularVelocity) < ::sAngularSpeedMin) {
-        TRot3f baseMtx;
+        Rot3f baseMtx;
         baseMtx.identity();
         baseMtx.set(mHost->getBaseMtx());
 
-        TVec3f up;
+        Vec3f up;
         baseMtx.getYDir(up);
         MR::normalize(&up);
 
-        TVec3f crossVec;
+        Vec3f crossVec;
         crossVec.cross(up, mInitialUp);
         f32 dot = crossVec.dot(mRotateAxis);
 

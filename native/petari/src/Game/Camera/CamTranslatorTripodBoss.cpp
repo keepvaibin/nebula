@@ -8,7 +8,7 @@ void CamTranslatorTripodBoss::setParam(const CameraParamChunk* pChunk) {
     f32 angleB = general->mUp.y;
     f32 angleA = general->mUp.x;
 
-    camera->setParam(general->mWPoint, general->mAxis, general->mDist, TVec2f(angleA, angleB));
+    camera->setParam(general->mWPoint, general->mAxis, general->mDist, Vec2f(angleA, angleB));
     camera->mAngleY = general->mUp.z;
 }
 

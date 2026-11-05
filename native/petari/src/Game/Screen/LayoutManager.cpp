@@ -294,13 +294,13 @@ void LayoutManager::addGroupCtrl(LayoutGroupCtrl* pGroupCtrl) {
     }
 }
 
-bool LayoutManager::isPointing(const nw4r::lyt::Pane* pPane, const TVec2f& rPos) const {
+bool LayoutManager::isPointing(const nw4r::lyt::Pane* pPane, const Vec2f& rPos) const {
     Mtx inverse;
     NebulaMtxInverse(pPane->mGlbMtx, inverse);
     s32 horizontalPosition = static_cast< u8 >(pPane->mBasePosition % 3);
     s32 verticalPosition = static_cast< u8 >(pPane->mBasePosition / 3);
-    TVec3f pos(0.0f, 0.0f, 0.0f);
-    MR::convertScreenPosToLayoutPos(reinterpret_cast< TVec2f* >(&pos), rPos);
+    Vec3f pos(0.0f, 0.0f, 0.0f);
+    MR::convertScreenPosToLayoutPos(reinterpret_cast< Vec2f* >(&pos), rPos);
     NebulaMtxMultVec(inverse, &pos, &pos);
 
     switch (horizontalPosition) {
@@ -395,7 +395,7 @@ bool LayoutManager::isExistPaneMtxRef(const char* pName) const {
     return mPaneInfoList[index].mMtxRef != nullptr;
 }
 
-bool LayoutManager::isPointing(const char* pName, const TVec2f& rPos) const {
+bool LayoutManager::isPointing(const char* pName, const Vec2f& rPos) const {
     return isPointing(findPaneByName(pName), rPos);
 }
 

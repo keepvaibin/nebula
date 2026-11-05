@@ -16,7 +16,7 @@ void PhantomShipHandle::control() {
 }
 
 void PhantomShipHandle::calcAndSetBaseMtx() {
-    TPos3f baseMtx;
+    Pos3f baseMtx;
     baseMtx.identity();
 
     baseMtx.set(mRotator->getRotateMtx());

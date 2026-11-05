@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util/SystemUtil.hpp"
 
@@ -19,7 +19,7 @@ namespace MR {
     // What a plate keeps from the screen's sides.
     s32 getScreenMargin();
     // A point of the screen as fractions of the frame.
-    void convertScreenPosToFrame(TVec2f*, const TVec2f&);
+    void convertScreenPosToFrame(Vec2f*, const Vec2f&);
     void startToCaptureScreen(const char*);
     void endToCaptureScreen(const char*);
     void captureScreenIfAllow(const char*);
@@ -46,7 +46,7 @@ namespace MR {
     bool isSystemWipeActive();
     void closeSystemWipeCircleWithCaptureScreen(s32 frame = -1);
     void closeSystemWipeFadeWithCaptureScreen(s32 frame = -1);
-    void setWipeCircleCenterPos(const TVec3f&);
+    void setWipeCircleCenterPos(const Vec3f&);
     void requestMovementOnImageEffect();
     void setImageEffectControlAuto();
     void turnOffDOFInSubjective();

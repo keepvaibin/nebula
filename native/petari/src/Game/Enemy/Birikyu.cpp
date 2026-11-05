@@ -39,7 +39,7 @@ void Birikyu::init(const JMapInfoIter& rIter) {
     MR::setGroupClipping(this, rIter, 64);
     MR::joinToGroupArray(this, rIter, nullptr, 64);
     initSound(4, false);
-    TVec3f offset;
+    Vec3f offset;
     offset.x = 0.0f;
     offset.y = 0.0f;
     offset.z = 0.0f;
@@ -59,7 +59,7 @@ void Birikyu::initAfterPlacement() {
         MR::moveCoordAndTransToNearestRailPos(this);
     } else {
         _9C.set(mPosition);
-        TPos3f matrix;
+        Pos3f matrix;
         matrix.identity();
         MR::makeMtxRotate(matrix.toMtxPtr(), mRotation);
         matrix.getYDir(_AC);
@@ -150,7 +150,7 @@ void Birikyu::initRail(const JMapInfoIter& rIter) {
 
 void Birikyu::initCollision() {
     initHitSensor(1);
-    TVec3f offset(0.0f, 0.0f, 0.0f);
+    Vec3f offset(0.0f, 0.0f, 0.0f);
     f32 radius = getHitRadius();
     radius *= mScale.x;
     MR::addHitSensorAtJointEnemy(this, "body", getCenterJointName(), 16, radius, offset);
@@ -211,12 +211,12 @@ void Birikyu::exeMoveCircle() {
     MR::startLevelSound(this, "SE_OJ_LV_BIRIKYU_MOVE");
     if (!tryStopPointing()) {
         _C4 = MR::repeat(_C4 + (_C8 / 400.0f), 0.0f, TWO_PI);
-        TPos3f matrix;
+        Pos3f matrix;
         matrix.identity();
         matrix.makeRotate(_AC, _C4);
-        TVec3f temp = _B8 * 400.0f;
+        Vec3f temp = _B8 * 400.0f;
         matrix.mult(temp, temp);
-        TVec3f matrix2 = (_9C + temp);
+        Vec3f matrix2 = (_9C + temp);
         mPosition.set(matrix2);
     }
 }
@@ -280,10 +280,10 @@ void BirikyuWithFace::init(const JMapInfoIter& rIter) {
 }
 
 void BirikyuWithFace::calcAndSetBaseMtx() {
-    TPos3f vec3;
+    Pos3f vec3;
     vec3.identity();
     if (_A9) {
-        TVec3f vec(MR::getRailDirection(this));
+        Vec3f vec(MR::getRailDirection(this));
         if (_CC) {
             vec.negate();
         }
@@ -292,7 +292,7 @@ void BirikyuWithFace::calcAndSetBaseMtx() {
             vec.negate();
         }
 
-        TVec3f vec2(_AC);
+        Vec3f vec2(_AC);
         if (MR::isSameDirection(vec2, vec)) {
             MR::makeMtxSideFront(&vec3, vec, _B8);
         } else {

@@ -20,30 +20,30 @@ void CameraTalk::reset() {
 }
 
 CameraTargetObj* CameraTalk::calc() {
-    TQuat4f rotUp;
+    Quat4f rotUp;
     rotUp.setRotate(mUp, -CameraLocalUtil::getTarget(this)->getGravityVector(), ::sRate);
 
-    TVec3f up = mUp;
+    Vec3f up = mUp;
     rotUp.transform(up);
 
-    TVec3f pos = CameraLocalUtil::getTarget(this)->getPosition() * (1.0f - ::sRate) + mPos * ::sRate;
-    TVec3f front = CameraLocalUtil::getTarget(this)->getPosition() - mPos;
+    Vec3f pos = CameraLocalUtil::getTarget(this)->getPosition() * (1.0f - ::sRate) + mPos * ::sRate;
+    Vec3f front = CameraLocalUtil::getTarget(this)->getPosition() - mPos;
     if (!MR::isNearZero(front)) {
         MR::normalize(&front);
     } else {
         front.set< f32 >(0.0f, 0.0f, 1.0f);
     }
 
-    TVec3f side = up.cross(front);
+    Vec3f side = up.cross(front);
     if (MR::isNearZero(side)) {
         return nullptr;
     }
     MR::normalize(&side);
     front.cross(side, up);
 
-    TVec3f posDiff = CameraLocalUtil::getPos(this) - CameraLocalUtil::getTarget(this)->getPosition();
+    Vec3f posDiff = CameraLocalUtil::getPos(this) - CameraLocalUtil::getTarget(this)->getPosition();
 
-    TVec3f orientCross = posDiff.cross(front);
+    Vec3f orientCross = posDiff.cross(front);
     f32 orientation = orientCross.dot(up);
     if (orientation >= 0.0f) {
         mAxisReversed = true;
@@ -51,29 +51,29 @@ CameraTargetObj* CameraTalk::calc() {
         mAxisReversed = false;
     }
 
-    TPos3f transMtx;
+    Pos3f transMtx;
     transMtx.makeTrans(0.0f, 0.0f, mDist);
 
-    TPos3f rotX;
-    rotX.makeRotate(TVec3f(-1.0f, 0.0f, 0.0f), ::sAngleX);
+    Pos3f rotX;
+    rotX.makeRotate(Vec3f(-1.0f, 0.0f, 0.0f), ::sAngleX);
 
-    TPos3f rotY;
+    Pos3f rotY;
     if (front.dot(posDiff) >= 0.0f) {
         if (orientation >= 0.0f) {
-            rotY.makeRotate(TVec3f(0.0f, 1.0f, 0.0f), -::sAngleY);
+            rotY.makeRotate(Vec3f(0.0f, 1.0f, 0.0f), -::sAngleY);
         } else {
-            rotY.makeRotate(TVec3f(0.0f, 1.0f, 0.0f), ::sAngleY);
+            rotY.makeRotate(Vec3f(0.0f, 1.0f, 0.0f), ::sAngleY);
         }
 
     } else {
         if (orientation >= 0.0f) {
-            rotY.makeRotate(TVec3f(0.0f, 1.0f, 0.0f), -MR::pi() / 2.0f);
+            rotY.makeRotate(Vec3f(0.0f, 1.0f, 0.0f), -MR::pi() / 2.0f);
         } else {
-            rotY.makeRotate(TVec3f(0.0f, 1.0f, 0.0f), MR::pi() / 2.0f);
+            rotY.makeRotate(Vec3f(0.0f, 1.0f, 0.0f), MR::pi() / 2.0f);
         }
     }
 
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.identity();
     mtx.setXDir(side);
     mtx.setYDir(up);
@@ -84,7 +84,7 @@ CameraTargetObj* CameraTalk::calc() {
     mtx.concat(mtx, rotX);
     mtx.concat(mtx, transMtx);
 
-    TVec3f basePos;
+    Vec3f basePos;
     mtx.getTrans(basePos);
 
     CameraLocalUtil::setWatchPos(this, pos + up * mHeight);
@@ -95,7 +95,7 @@ CameraTargetObj* CameraTalk::calc() {
     return CameraLocalUtil::getTarget(this);
 }
 
-void CameraTalk::setParam(const TVec3f& pos, const TVec3f& up, f32 height, f32 dist) {
+void CameraTalk::setParam(const Vec3f& pos, const Vec3f& up, f32 height, f32 dist) {
     mPos.set(pos);
     mUp.set(up);
     mHeight = height;

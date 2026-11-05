@@ -5,10 +5,10 @@
 namespace {
     static const s32 sCoefTableDivideNum = 6;
 
-    void calcBezierHandlePoint(TVec3f* pHandle1, TVec3f* pHandle2, const TVec3f& rPointA, const TVec3f& rPointB, const TVec3f& rPointC,
+    void calcBezierHandlePoint(Vec3f* pHandle1, Vec3f* pHandle2, const Vec3f& rPointA, const Vec3f& rPointB, const Vec3f& rPointC,
                                f32 diagonalRate) {
-        TVec3f v1(rPointA - rPointB);
-        TVec3f v2(rPointC - rPointB);
+        Vec3f v1(rPointA - rPointB);
+        Vec3f v2(rPointC - rPointB);
         f32 distAB = v1.length();
         f32 distCB = v2.length();
 
@@ -18,7 +18,7 @@ namespace {
             // no return??
         }
 
-        TVec3f v3;
+        Vec3f v3;
         v3.set(v1 * (distCB / distAB) - v2);
         MR::normalizeOrZero(&v3);
 
@@ -39,22 +39,22 @@ OctahedronBezierSurface::OctahedronBezierSurface(u32 a1) : mDiagonalRate(0.6f) {
         mSurfaces[idx] = new BezierSurface(::sCoefTableDivideNum, a1);
     }
 
-    mSurfaces[0]->setST(TVec2f(0.25f, 0.5f), TVec2f(0.0f, 0.0f), TVec2f(0.0f, 1.0f));
-    mSurfaces[1]->setST(TVec2f(0.25f, 0.5f), TVec2f(0.0f, 1.0f), TVec2f(0.5f, 1.0f));
-    mSurfaces[2]->setST(TVec2f(0.25f, 0.5f), TVec2f(0.5f, 1.0f), TVec2f(0.5f, 0.0f));
-    mSurfaces[3]->setST(TVec2f(0.25f, 0.5f), TVec2f(0.5f, 0.0f), TVec2f(0.0f, 0.0f));
-    mSurfaces[4]->setST(TVec2f(0.75f, 0.5f), TVec2f(1.0f, 1.0f), TVec2f(1.0f, 0.0f));
-    mSurfaces[5]->setST(TVec2f(0.75f, 0.5f), TVec2f(1.0f, 0.0f), TVec2f(0.5f, 0.0f));
-    mSurfaces[6]->setST(TVec2f(0.75f, 0.5f), TVec2f(0.5f, 0.0f), TVec2f(0.5f, 1.0f));
-    mSurfaces[7]->setST(TVec2f(0.75f, 0.5f), TVec2f(0.5f, 1.0f), TVec2f(1.0f, 1.0f));
+    mSurfaces[0]->setST(Vec2f(0.25f, 0.5f), Vec2f(0.0f, 0.0f), Vec2f(0.0f, 1.0f));
+    mSurfaces[1]->setST(Vec2f(0.25f, 0.5f), Vec2f(0.0f, 1.0f), Vec2f(0.5f, 1.0f));
+    mSurfaces[2]->setST(Vec2f(0.25f, 0.5f), Vec2f(0.5f, 1.0f), Vec2f(0.5f, 0.0f));
+    mSurfaces[3]->setST(Vec2f(0.25f, 0.5f), Vec2f(0.5f, 0.0f), Vec2f(0.0f, 0.0f));
+    mSurfaces[4]->setST(Vec2f(0.75f, 0.5f), Vec2f(1.0f, 1.0f), Vec2f(1.0f, 0.0f));
+    mSurfaces[5]->setST(Vec2f(0.75f, 0.5f), Vec2f(1.0f, 0.0f), Vec2f(0.5f, 0.0f));
+    mSurfaces[6]->setST(Vec2f(0.75f, 0.5f), Vec2f(0.5f, 0.0f), Vec2f(0.5f, 1.0f));
+    mSurfaces[7]->setST(Vec2f(0.75f, 0.5f), Vec2f(0.5f, 1.0f), Vec2f(1.0f, 1.0f));
     calcControlPoint();
 }
 
-const TVec3f& OctahedronBezierSurface::getVertex(s32 index) const {
+const Vec3f& OctahedronBezierSurface::getVertex(s32 index) const {
     return mVertices[index];
 }
 
-TVec3f* OctahedronBezierSurface::getVertexPtr(s32 index) {
+Vec3f* OctahedronBezierSurface::getVertexPtr(s32 index) {
     return &mVertices[index];
 }
 
@@ -105,7 +105,7 @@ void OctahedronBezierSurface::calcControlPoint() {
     mSurfaces[7]->mCtrlPts[9].set(mVertices[3]);
     mSurfaces[7]->mCtrlPts[12].set(mVertices[2]);
 
-    TVec3f handle1, handle2;
+    Vec3f handle1, handle2;
     ::calcBezierHandlePoint(&handle1, &handle2, mVertices[1], mVertices[0], mVertices[3], mDiagonalRate);
     mSurfaces[0]->mCtrlPts[1].set(handle1);
     mSurfaces[3]->mCtrlPts[4].set(handle1);

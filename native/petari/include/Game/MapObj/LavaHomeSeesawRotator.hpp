@@ -15,7 +15,7 @@ public:
     virtual void start();
     virtual void end();
     virtual bool receiveMsg(u32);
-    virtual const TMtx34f& getRotateMtx() const {
+    virtual const Mtx34f& getRotateMtx() const {
         return mRotateMtx;
     }
 
@@ -32,7 +32,7 @@ public:
     void addForceHipDrop();
     bool isAngleLimited() const;
     bool isGoingToReachTargetAngle() const;
-    void calcRotatedAngle(f32*, const TPos3f&) const;
+    void calcRotatedAngle(f32*, const Pos3f&) const;
     bool tryHipDrop();
     bool tryStay();
     bool tryRebound();
@@ -42,12 +42,12 @@ public:
     f32 mInertia;
     f32 mRotateAngle;
     f32 mRestoreForce;
-    TPos3f mRotateMtx;
-    TQuat4f mRotateQuat;
+    Pos3f mRotateMtx;
+    Quat4f mRotateQuat;
     bool mIsHipDropped;
-    TVec3f mRotateAxis;
+    Vec3f mRotateAxis;
     f32 mAngularVelocity;
-    TVec3f mInitialUp;
+    Vec3f mInitialUp;
     const char* mMoveSound;
     f32 mMoveSoundSpeed;
 };

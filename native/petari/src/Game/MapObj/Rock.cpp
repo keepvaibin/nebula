@@ -19,7 +19,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "math_types.hpp"
-#include <JSystem/JMath/JMATrigonometric.hpp>
+#include <nebula_geometry.hpp>
 
 namespace {
     inline f32 toDegree(f32 angle) {
@@ -111,7 +111,7 @@ void Rock::init(const JMapInfoIter& rIter) {
     initRailRider(rIter);
     initEffect();
 
-    MR::initStarPointerTarget(this, ::cStarWandRadius3d * getRadius(), TVec3f(0, 0, 0));
+    MR::initStarPointerTarget(this, ::cStarWandRadius3d * getRadius(), Vec3f(0, 0, 0));
     initSound(5, false);
 
     f32 shadowDrop;
@@ -213,7 +213,7 @@ void Rock::control() {
 
     bool updateFront;
     bool hasMoved = false;
-    TVec3f front;
+    Vec3f front;
     front.sub(mPosition, mPrevPos);
 
     if (!MR::isNearZero(front)) {
@@ -243,7 +243,7 @@ void Rock::control() {
         MR::showModel(this);
 
         if (updateFront) {
-            TVec3f v2(mFront);
+            Vec3f v2(mFront);
             MR::turnVecToVecCos(&mFront, v2, front, ::cRotateCosineMax, mGravity);
         }
     }
@@ -257,7 +257,7 @@ void Rock::control() {
     }
 
     MR::vecKillElement(MR::getRailPos(this) - mPosition, mGravity, &mVelocity);
-    TVec3f grav(mGravity);
+    Vec3f grav(mGravity);
     grav *= mGravityRate;
     mFallVelocity.add(grav);
     mVelocity.add(mFallVelocity);
@@ -268,14 +268,14 @@ void Rock::control() {
 }
 
 void Rock::calcAndSetBaseMtx() {
-    TVec3f grav(mGravity);
-    TPos3f mtx;
+    Vec3f grav(mGravity);
+    Pos3f mtx;
     calcBaseMtx(&mtx);
     MR::setBaseTRMtx(this, mtx);
 
     if (isNerve(GET_NERVE(Rock, RockNrvAppearMoveInvalidBind)) || (isNerve(GET_NERVE(Rock, RockNrvMove)) && MR::isOnGround(this)) ||
         isNerve(GET_NERVE(Rock, RockNrvMoveInvalidBind))) {
-        TVec3f up;
+        Vec3f up;
 
         if (isNerve(GET_NERVE(Rock, RockNrvMove))) {
             up.set(*MR::getGroundNormal(this));
@@ -283,7 +283,7 @@ void Rock::calcAndSetBaseMtx() {
             up.negate(grav);
         }
 
-        TVec3f pos;
+        Vec3f pos;
         pos.sub(mPosition, up * mRadius);
 
         if (MR::isSameDirection(up, mFront)) {
@@ -404,7 +404,7 @@ void Rock::initMapToolInfo(const JMapInfoIter& rIter) {
     if (!MR::isZeroGravity(this)) {
         MR::onCalcGravity(this);
     } else {
-        TPos3f mtx;
+        Pos3f mtx;
         MR::makeMtxTR(mtx, this);
         mtx.getYDir(mGravity);
         mGravity.negate();
@@ -455,11 +455,11 @@ void Rock::initSensor() {
         sensorType = ATYPE_WANWAN;
     }
 
-    MR::addHitSensor(this, "body", sensorType, 16, ::cSensorRadius * (mRockType == WanwanRollingMini ? 0.3f : mScale.x), TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensor(this, "body", sensorType, 16, ::cSensorRadius * (mRockType == WanwanRollingMini ? 0.3f : mScale.x), Vec3f(0.0f, 0.0f, 0.0f));
 
     if (mRockType == NormalRock) {
         MR::addHitSensor(this, "weak", sensorType, 16, ::cWeakSensorRadius * (mRockType == WanwanRollingMini ? 0.3f : mScale.x),
-                         static_cast< TVec3f >(::cWeakSensorOffset) * (mRockType == WanwanRollingMini ? 0.3f : mScale.x));
+                         static_cast< Vec3f >(::cWeakSensorOffset) * (mRockType == WanwanRollingMini ? 0.3f : mScale.x));
     }
 }
 
@@ -476,7 +476,7 @@ void Rock::initEffect() {
 
 bool Rock::isBreakByWall() const {
     if (MR::isBindedWall(this)) {
-        const TVec3f& dir = MR::getRailDirection(this);
+        const Vec3f& dir = MR::getRailDirection(this);
         return dir.dot(*MR::getWallNormal(this)) < ::cWallBreakDot;
     }
 
@@ -512,8 +512,8 @@ bool Rock::move(f32 speed) {
     return true;
 }
 
-void Rock::calcBaseMtx(TPos3f* pMtx) const {
-    TVec3f up = -mGravity;
+void Rock::calcBaseMtx(Pos3f* pMtx) const {
+    Vec3f up = -mGravity;
 
     if (MR::isSameDirection(up, mFront)) {
         MR::makeMtxUpNoSupportPos(pMtx, up, mPosition);
@@ -521,8 +521,8 @@ void Rock::calcBaseMtx(TPos3f* pMtx) const {
         MR::makeMtxUpFrontPos(pMtx, up, mFront, mPosition);
     }
 
-    TPos3f mtx;
-    mtx.makeRotate(TVec3f(1.0f, 0.0f, 0.0f), getAngle());
+    Pos3f mtx;
+    mtx.makeRotate(Vec3f(1.0f, 0.0f, 0.0f), getAngle());
     pMtx->concat(*pMtx, mtx);
 }
 
@@ -643,7 +643,7 @@ void Rock::updateRotateX(f32 angle) {
 }
 
 void Rock::appearStarPiece() {
-    TVec3f pieceDir = mGravity;
+    Vec3f pieceDir = mGravity;
     pieceDir.negate();
 
     if (MR::appearStarPieceToDirection(mCreator, mPosition, pieceDir, getAppearStarPieceNum(mRockType), 10.0f, 40.0f, false)) {
@@ -656,7 +656,7 @@ void Rock::moveOnRail(f32 speed, f32 rotateSpeed, bool isValidBind) {
     updateRotateX(mRotation.x + rotateSpeed);
 
     if (isValidBind) {
-        TVec3f pos;
+        Vec3f pos;
 
         if (MR::getFirstPolyOnLineToMap(&pos, nullptr, mPosition, mGravity * (mRadius * 2.0f))) {
             mPosition.add(pos, mGravity * (-mRadius));
@@ -885,14 +885,14 @@ void Rock::exeBreak() {
 
         mBreakModel->mPosition.set(mPosition);
 
-        TPos3f mtx;
+        Pos3f mtx;
         calcBaseMtx(&mtx);
 
-        TPos3f rotMtx;
+        Pos3f rotMtx;
         rotMtx.makeRotate(mGravity, MR::getRandom(0.0f, TWO_PI));
         mtx.concat(rotMtx, mtx);
 
-        TVec3f rot;
+        Vec3f rot;
         mtx.getEulerXYZ(rot);
         mBreakModel->mRotation.x = ::toDegree(rot.x);
         mBreakModel->mRotation.y = ::toDegree(rot.y);
@@ -956,7 +956,7 @@ void Rock::exeFreeze() {
     f32 rumbleOffset = ::cFreezeRumbleWidth * MR::cosDegree(MR::repeatDegree(mFreezeTime * ::cFreezeRumbleSpeed)) *
                        static_cast< f32 >(::cFreezeFrame - getNerveStep()) / ::cFreezeFrame;
 
-    TVec3f v1;
+    Vec3f v1;
     v1.set(MR::getCamXdir());
     v1 *= rumbleOffset;
     mPosition.add(mFreezePos, v1);

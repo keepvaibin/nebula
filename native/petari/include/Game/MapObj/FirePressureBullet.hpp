@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class FirePressureBullet : public LiveActor {
 public:
@@ -13,11 +13,11 @@ public:
     virtual void calcAndSetBaseMtx();
     virtual void attackSensor(HitSensor*, HitSensor*);
 
-    void shotFireBullet(LiveActor*, const TPos3f&, const f32&, bool, bool);
+    void shotFireBullet(LiveActor*, const Pos3f&, const f32&, bool, bool);
     void exeFly();
     bool isCrash() const;
 
-    TVec3f _8C;
+    Vec3f _8C;
     LiveActor* mFirePressure;
     f32 _9C;
     bool _A0;

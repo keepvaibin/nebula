@@ -1,16 +1,16 @@
 #include "Game/Ride/SwingRopePoint.hpp"
 #include "Game/Util/MathUtil.hpp"
 
-SwingRopePoint::SwingRopePoint(const TVec3f& rPos)
+SwingRopePoint::SwingRopePoint(const Vec3f& rPos)
     : mPosition(rPos), mVelocity(0.0f, 0.0f, 0.0f), mSide(1.0f, 0.0f, 0.0f), mUp(0.0f, 1.0f, 0.0f), mFront(0.0f, 0.0f, 1.0f) {
 }
 
-void SwingRopePoint::addAccel(const TVec3f& rAccel) {
+void SwingRopePoint::addAccel(const Vec3f& rAccel) {
     mVelocity.add(rAccel);
 }
 
-bool SwingRopePoint::restrict(const TVec3f& rAnchor, f32 length, const TVec3f* pVel) {
-    TVec3f nextPosDiff(mPosition);
+bool SwingRopePoint::restrict(const Vec3f& rAnchor, f32 length, const Vec3f* pVel) {
+    Vec3f nextPosDiff(mPosition);
     nextPosDiff.add(mVelocity);
     nextPosDiff.sub(rAnchor);
 
@@ -18,7 +18,7 @@ bool SwingRopePoint::restrict(const TVec3f& rAnchor, f32 length, const TVec3f* p
         nextPosDiff.sub(*pVel);
     }
 
-    TVec3f v2 = nextPosDiff;
+    Vec3f v2 = nextPosDiff;
     if (MR::isNearZero(v2)) {
         v2.set(mUp);
         v2.scale(-1.0f);
@@ -29,7 +29,7 @@ bool SwingRopePoint::restrict(const TVec3f& rAnchor, f32 length, const TVec3f* p
     }
 
     if (nextPosDiff.squared() >= length * length) {
-        TVec3f restriction = v2 * length;
+        Vec3f restriction = v2 * length;
         mVelocity.x -= nextPosDiff.x - restriction.x;
         mVelocity.y -= nextPosDiff.y - restriction.y;
         mVelocity.z -= nextPosDiff.z - restriction.z;
@@ -39,12 +39,12 @@ bool SwingRopePoint::restrict(const TVec3f& rAnchor, f32 length, const TVec3f* p
     return false;
 }
 
-void SwingRopePoint::strain(const TVec3f& rAnchor, f32 length) {
-    TVec3f nextPosDiff = mPosition;
+void SwingRopePoint::strain(const Vec3f& rAnchor, f32 length) {
+    Vec3f nextPosDiff = mPosition;
     nextPosDiff.add(mVelocity);
     nextPosDiff.sub(rAnchor);
 
-    TVec3f v2 = nextPosDiff;
+    Vec3f v2 = nextPosDiff;
     if (MR::isNearZero(v2)) {
         v2.set(mUp);
         v2.scale(-1.0f);
@@ -54,7 +54,7 @@ void SwingRopePoint::strain(const TVec3f& rAnchor, f32 length) {
         mUp.mult(-1.0f);
     }
 
-    TVec3f restriction = v2 * length;
+    Vec3f restriction = v2 * length;
     mVelocity.x -= nextPosDiff.x - restriction.x;
     mVelocity.y -= nextPosDiff.y - restriction.y;
     mVelocity.z -= nextPosDiff.z - restriction.z;
@@ -65,8 +65,8 @@ void SwingRopePoint::updatePos(f32 friction) {
     mVelocity.scale(friction);
 }
 
-void SwingRopePoint::updateAxis(const TVec3f& rAxis) {
-    TVec3f side = mSide;
+void SwingRopePoint::updateAxis(const Vec3f& rAxis) {
+    Vec3f side = mSide;
     mSide.cross(mUp, rAxis);
     if (MR::isNearZero(mSide)) {
         mSide.set(side);
@@ -74,7 +74,7 @@ void SwingRopePoint::updateAxis(const TVec3f& rAxis) {
         MR::normalize(&mSide);
     }
 
-    TVec3f front = mFront;
+    Vec3f front = mFront;
     mFront.cross(mSide, mUp);
     if (MR::isNearZero(mFront)) {
         mFront.set(front);
@@ -83,7 +83,7 @@ void SwingRopePoint::updateAxis(const TVec3f& rAxis) {
     }
 }
 
-void SwingRopePoint::updatePosAndAxis(const TVec3f& rAxis, f32 friction) {
+void SwingRopePoint::updatePosAndAxis(const Vec3f& rAxis, f32 friction) {
     updatePos(friction);
     updateAxis(rAxis);
 }
@@ -92,10 +92,10 @@ void SwingRopePoint::stop() {
     mVelocity.zero();
 }
 
-void SwingRopePoint::setInfo(const TVec3f& rTarget, const TVec3f& rVelocity, const TVec3f& rAnchor, f32 length) {
+void SwingRopePoint::setInfo(const Vec3f& rTarget, const Vec3f& rVelocity, const Vec3f& rAnchor, f32 length) {
     mVelocity.set(rVelocity);
 
-    TVec3f direction(rTarget);
+    Vec3f direction(rTarget);
     direction.sub(rAnchor);
 
     if (MR::isNearZero(direction)) {
@@ -118,14 +118,14 @@ void SwingRopePoint::setInfo(const TVec3f& rTarget, const TVec3f& rVelocity, con
     MR::normalize(&mSide);
 }
 
-void SwingRopePoint::setPosAndAxis(const TVec3f& rPos, const TVec3f& rSide, const TVec3f& rUp, const TVec3f& rFront) {
+void SwingRopePoint::setPosAndAxis(const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rUp, const Vec3f& rFront) {
     mPosition.set(rPos);
     mSide.set(rSide);
     mUp.set(rUp);
     mFront.set(rFront);
 }
 
-void SwingRopePoint::setAndUpdatePosAndAxis(const TVec3f& rPos, const TVec3f& rUp, const TVec3f& rAxis) {
+void SwingRopePoint::setAndUpdatePosAndAxis(const Vec3f& rPos, const Vec3f& rUp, const Vec3f& rAxis) {
     mPosition.set(rPos);
     mVelocity.zero();
     mUp.set(rUp);

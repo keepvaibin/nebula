@@ -484,9 +484,9 @@ void RaceManager::entry(PlayerRacer* pRacer) {
     MR::getRailArg0WithInit(pRacer, &mCurrentRace);
     mBestTime = MR::getRaceBestTime(mCurrentRace);
     mPlayerRacer = pRacer;
-    TVec3f endDir, endPos;
+    Vec3f endDir, endPos;
     MR::calcRailEndPointPosAndDirection(&endPos, &endDir, pRacer);
-    MR::makeMtxFrontUp(&_FC, endDir, TVec3f(0.0f, 1.0f, 0.0f));
+    MR::makeMtxFrontUp(&_FC, endDir, Vec3f(0.0f, 1.0f, 0.0f));
     MR::setMtxTrans(_FC, endPos.x, endPos.y, endPos.z);
     _FC.invert(_FC);
     entry(static_cast< AbstractRacer* >(pRacer));
@@ -501,7 +501,7 @@ void RaceManager::entry(AbstractAudience* pAudience) {
 }
 
 bool RaceManager::isGoal(const AbstractRacer* pRacer) const {
-    TVec3f currInnProd, prevInnProd;
+    Vec3f currInnProd, prevInnProd;
     _FC.mult(pRacer->mCurrPosition, currInnProd);
     _FC.mult(pRacer->mPrevPosition, prevInnProd);
     return prevInnProd.z < 0.0f && currInnProd.z > 0.0f;

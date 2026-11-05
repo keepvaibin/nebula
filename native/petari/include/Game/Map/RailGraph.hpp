@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JGeometry.hpp>
+#include <nebula_geometry.hpp>
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 
@@ -12,7 +12,7 @@ class RailGraph {
 public:
     RailGraph();
 
-    s32 addNode(const TVec3f&);
+    s32 addNode(const Vec3f&);
     void connectNodeTwoWay(s32, s32, const RailGraphEdge*);
     RailGraphNode* getNode(s32) const;
     RailGraphEdge* getEdge(s32) const;

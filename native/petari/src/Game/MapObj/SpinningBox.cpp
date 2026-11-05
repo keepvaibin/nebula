@@ -14,7 +14,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include <JSystem/JGeometry/TUtil.hpp>
+#include <nebula_geometry.hpp>
 
 namespace {
     static const f32 hForceBindOffset = 65.0f;
@@ -87,7 +87,7 @@ void SpinningBox::init(const JMapInfoIter& rIter) {
 
     f32 scale = getScale();
     initHitSensor(2);
-    MR::addHitSensorMapObj(this, "body", 32, scale * 160.0f, TVec3f(0.0f, -40.0f, 0.0f));
+    MR::addHitSensorMapObj(this, "body", 32, scale * 160.0f, Vec3f(0.0f, -40.0f, 0.0f));
 
     if (mIsIceBox) {
         MR::initCollisionParts(this, "IceBox", getSensor("body"), nullptr);
@@ -102,7 +102,7 @@ void SpinningBox::init(const JMapInfoIter& rIter) {
     initSound(6, false);
 
     MR::onCalcGravity(this);
-    MR::initShadowVolumeBox(this, TVec3f(::sShadowSize, -70.0f, ::sShadowSize) * scale, getBaseMtx());
+    MR::initShadowVolumeBox(this, Vec3f(::sShadowSize, -70.0f, ::sShadowSize) * scale, getBaseMtx());
     MR::excludeCalcShadowToMyCollision(this, nullptr);
 
     if (MR::isValidInfo(rIter)) {
@@ -110,7 +110,7 @@ void SpinningBox::init(const JMapInfoIter& rIter) {
     }
 
     MR::addToAttributeGroupReflectSpinningBox(this);
-    MR::initStarPointerTarget(this, 110.0f, TVec3f(0.0f, 80.0f, 0.0f));
+    MR::initStarPointerTarget(this, 110.0f, Vec3f(0.0f, 80.0f, 0.0f));
     MR::declareStarPiece(this, 3);
     if (mIsIceBox) {
         makeActorDead();
@@ -129,7 +129,7 @@ void SpinningBox::kill() {
 }
 
 void SpinningBox::control() {
-    if (MR::isInDeath(this, TVec3f(0.0f, 0.0f, 0.0f)) || MR::isInWater(mPosition)) {
+    if (MR::isInDeath(this, Vec3f(0.0f, 0.0f, 0.0f)) || MR::isInWater(mPosition)) {
         kill();
         return;
     }
@@ -139,8 +139,8 @@ void SpinningBox::control() {
         return;
     }
 
-    TVec3f slideDir = mSlideDir;
-    TVec3f norm;
+    Vec3f slideDir = mSlideDir;
+    Vec3f norm;
     if (MR::isBindedGround(this)) {
         norm.set(*MR::getGroundNormal(this));
         calcPlanarProjectedVec(&slideDir, norm, mGravity);
@@ -154,9 +154,9 @@ void SpinningBox::control() {
         mSlideDir.set(slideDir);
     }
 
-    TVec3f up;
+    Vec3f up;
     mRotate.getYDir(up);
-    TQuat4f rotY;
+    Quat4f rotY;
     rotY.setRotate(up, norm, ::hTurnYDirRatio);
     mRotate.mult(rotY);
     mRotate.getYDir(up);
@@ -194,7 +194,7 @@ void SpinningBox::exeWait() {
         return;
     }
 
-    TVec3f originalGravity = mGravity;
+    Vec3f originalGravity = mGravity;
     if (MR::isOnGround(this)) {
         mIsOnGround = true;
         mGravity.set(-*MR::getGroundNormal(this));
@@ -247,7 +247,7 @@ void SpinningBox::exeSliding() {
         MR::forceBindOnGround(this, ::hForceBindOffset, ::hForceBindMul);
     }
 
-    TVec3f norm;
+    Vec3f norm;
     if (MR::isBindedWallOrSlopeGround(this, ::hGroundCosine, &norm)) {
         MR::startSound(this, "SE_OJ_SPIN_BOX_BOUND");
         MR::calcReflectionVector(&mSlideDir, norm, 1.0f, 0.0f);
@@ -337,12 +337,12 @@ void SpinningBox::endPointed() {
     MR::deleteEffect(this, "Touch");
 }
 
-void SpinningBox::calcPlanarProjectedVec(TVec3f* pProj, const TVec3f& rNorm, const TVec3f& rGrav) {
+void SpinningBox::calcPlanarProjectedVec(Vec3f* pProj, const Vec3f& rNorm, const Vec3f& rGrav) {
     pProj->add(rGrav * (-rNorm.dot(*pProj) / rNorm.dot(rGrav)));
 }
 
-void SpinningBox::calcHitDirection(const TVec3f& rPos) {
-    TVec3f hitDir = mPosition - rPos;
+void SpinningBox::calcHitDirection(const Vec3f& rPos) {
+    Vec3f hitDir = mPosition - rPos;
     MR::vecKillElement(hitDir, mGravity, &hitDir);
     MR::normalizeOrZero(&hitDir);
 
@@ -350,7 +350,7 @@ void SpinningBox::calcHitDirection(const TVec3f& rPos) {
         return;
     }
 
-    TVec3f velDir = mVelocity;
+    Vec3f velDir = mVelocity;
     MR::normalizeOrZero(&velDir);
     velDir.add(hitDir);
     MR::normalizeOrZero(&velDir);
@@ -364,15 +364,15 @@ void SpinningBox::calcHitDirection(const TVec3f& rPos) {
 void SpinningBox::generateIceBox(HitSensor* pSender, HitSensor* pReceiver) {
     appear();
     mPosition.set(pReceiver->mHost->mPosition);
-    TPos3f mtx = pReceiver->mHost->getBaseMtx();
-    TVec3f up, front;
+    Pos3f mtx = pReceiver->mHost->getBaseMtx();
+    Vec3f up, front;
     mtx.getYDir(up);
     mtx.getZDir(front);
 
     MR::makeQuatFromVec(&mRotate, front, up);
 
-    TVec3f grav = pReceiver->mHost->mGravity;
-    TVec3f dir = pReceiver->mPosition - pSender->mPosition;
+    Vec3f grav = pReceiver->mHost->mGravity;
+    Vec3f dir = pReceiver->mPosition - pSender->mPosition;
     MR::vecKillElement(dir, grav, &dir);
     dir.setLength(::hIceInitBlowVelH);
     dir.add((-grav) * (::hIceInitBlowVelV));
@@ -496,7 +496,7 @@ bool SpinningBox::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor*
 bool SpinningBox::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
     if (MR::isExistInAttributeGroupReflectSpinningBox(pSender->mHost)) {
         if (!isNerve(GET_NERVE(SpinningBox, HostTypeNrvSpinning)) && !isNerve(GET_NERVE(SpinningBox, HostTypeNrvSliding))) {
-            TVec3f dir = mPosition - pSender->mPosition;
+            Vec3f dir = mPosition - pSender->mPosition;
             MR::normalizeOrZero(&dir);
             MR::vecKillElement(pSender->mHost->mVelocity, dir, &dir);
             MR::separateScalarAndDirection(&mSlideSpeed, &mSlideDir, dir);
@@ -512,7 +512,7 @@ bool SpinningBox::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* 
 }
 
 void SpinningBox::hitReflection(HitSensor* pSender, HitSensor* pReceiver) {
-    TVec3f dir = pReceiver->mPosition - pSender->mPosition;
+    Vec3f dir = pReceiver->mPosition - pSender->mPosition;
     MR::normalizeOrZero(&dir);
     if (MR::isNearZero(dir)) {
         return;
@@ -524,7 +524,7 @@ void SpinningBox::hitReflection(HitSensor* pSender, HitSensor* pReceiver) {
 }
 
 void SpinningBox::calcAndSetBaseMtx() {
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.makeQuat(mRotate);
     mtx.setTrans(mPosition);
     MR::setBaseTRMtx(this, mtx);

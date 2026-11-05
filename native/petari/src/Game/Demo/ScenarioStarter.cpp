@@ -50,7 +50,7 @@ void ScenarioStarter::init(const JMapInfoIter& rIter) {
     mSpinDriverCamera->init(rIter, this);
 
     initHitSensor(1);
-    MR::addHitSensor(this, "body", ACTMES_GROUP_LOD_LOW, 8, 200.0f, TVec3f(0.0f));
+    MR::addHitSensor(this, "body", ACTMES_GROUP_LOD_LOW, 8, 200.0f, Vec3f(0.0f));
     MR::invalidateClipping(this);
     mWelcomeLayout = MR::createSimpleLayout("Welcome\225\134\216\246" /* Welcome表示 */, "Welcome", 1);
     mWelcomeLayout->kill();
@@ -94,7 +94,7 @@ void ScenarioStarter::exeRailMove() {
         mPosition.set(MR::getRailPointPosStart(this));
         MR::endStartPosCamera();
         mSpinDriverCamera->start(_C0, _CC, mPosition);
-        TPos3f rotMtx;
+        Pos3f rotMtx;
         _EC = 0.0f;
         MR::makeMtxUpFront(&rotMtx, _C0, _CC);
         rotMtx.getQuat(_A8);
@@ -198,8 +198,8 @@ void ScenarioStarter::initShootPath(const JMapInfoIter& rIter) {
 }
 
 void ScenarioStarter::updateBindPosition() {
-    TVec3f pathPos;
-    TVec3f pathDir;
+    Vec3f pathPos;
+    Vec3f pathDir;
     f32 nerveRate = MR::calcNerveRate(this, mFlightTime);
     _B8->calcPosition(&pathPos, nerveRate);
     _B8->calcDirection(&pathDir, nerveRate, 0.01f);
@@ -214,22 +214,22 @@ void ScenarioStarter::updateBindPosition() {
 
 void ScenarioStarter::updateBindActorMtx() {
     if (isNerve(GET_NERVE(ScenarioStarter, ScenarioStarterRailMove))) {
-        TPos3f rotateY;
+        Pos3f rotateY;
         rotateY.identity();
         rotateY.setEulerY(_E4);
         rotateY.zeroTrans();
 
-        TPos3f rotateX;
+        Pos3f rotateX;
         rotateX.identity();
         rotateX.setEulerX(_EC);
 
-        TPos3f mtx;
+        Pos3f mtx;
         mtx.setQT(_A8, mPosition);
         mtx.concat(mtx, rotateX);
         mtx.concat(mtx, rotateY);
         MR::setBaseTRMtx(_8C, mtx);
     } else {
-        TPos3f mtx;
+        Pos3f mtx;
         MR::makeMtxTR(mtx, _10C, _118);
         MR::setBaseTRMtx(_8C, mtx);
     }
@@ -255,11 +255,11 @@ void ScenarioStarter::updateShootMotion() {
     }
 }
 
-void ScenarioStarter::turnBindHead(const TVec3f& rHead, f32 rate) {
+void ScenarioStarter::turnBindHead(const Vec3f& rHead, f32 rate) {
     MR::turnQuatYDirRad(&_A8, _A8, _90, PI);
-    TVec3f head;
+    Vec3f head;
     _A8.getYDir(head);
-    TQuat4f rotation;
+    Quat4f rotation;
     rotation.setRotate(head, rHead, rate);
     _A8.mult(rotation);
     _A8.normalize();

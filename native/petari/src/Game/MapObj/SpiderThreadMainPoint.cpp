@@ -21,7 +21,7 @@ SpiderThreadPointNearInfo::SpiderThreadPointNearInfo()
     : mMainPoint(nullptr), mPartPoint(nullptr), mDistToPoint(0.0f), mSpringFactor(0.0f), mThreadPart(nullptr) {
 }
 
-void SpiderThreadPointNearInfo::setInfo(f32 springFactor, SpiderThreadPart* pThreadPart, const TVec3f& rVec) {
+void SpiderThreadPointNearInfo::setInfo(f32 springFactor, SpiderThreadPart* pThreadPart, const Vec3f& rVec) {
     mSpringFactor = springFactor;
     mThreadPart = pThreadPart;
 
@@ -42,7 +42,7 @@ void SpiderThreadPointNearInfo::clear() {
     mDistToPoint = 0.0f;
 }
 
-const TVec3f* SpiderThreadPointNearInfo::getPos() const {
+const Vec3f* SpiderThreadPointNearInfo::getPos() const {
     if (mMainPoint != nullptr) {
         return &mMainPoint->mPosition;
     }
@@ -54,7 +54,7 @@ const TVec3f* SpiderThreadPointNearInfo::getPos() const {
     return nullptr;
 }
 
-SpiderThreadMainPoint::SpiderThreadMainPoint(const TVec3f& rPos, int nearInfoBufferSize)
+SpiderThreadMainPoint::SpiderThreadMainPoint(const Vec3f& rPos, int nearInfoBufferSize)
     : SpiderThreadPoint(rPos, ::sFrictionRate), mRadialLine(nullptr), mNearInfoBufferSize(nearInfoBufferSize), mNumNearInfos(0), mNearInfos(nullptr) {
     mNearInfos = new SpiderThreadPointNearInfo[nearInfoBufferSize];
 }
@@ -127,10 +127,10 @@ void SpiderThreadMainPoint::cutNearPoints(s32* numCutPoints, SpiderThreadMainPoi
 void SpiderThreadMainPoint::updateVelocity() {
     updateWind(::sWindFrictionRate);
 
-    TVec3f springBack(mBasePos);
+    Vec3f springBack(mBasePos);
     springBack.sub(mPosition);
 
-    TVec3f diff(springBack);
+    Vec3f diff(springBack);
 
     if (springBack.length() > ::sBasePosDiffMin) {
         MR::normalizeOrZero(&springBack);
@@ -145,7 +145,7 @@ void SpiderThreadMainPoint::updateVelocity() {
 
 void SpiderThreadMainPoint::closeToNearPoint(const SpiderThreadPointNearInfo* pNearInfo) {
     if (pNearInfo->getPos() != nullptr) {
-        TVec3f springBack(*pNearInfo->getPos());
+        Vec3f springBack(*pNearInfo->getPos());
         springBack.sub(mPosition);
         f32 dist = springBack.length();
 

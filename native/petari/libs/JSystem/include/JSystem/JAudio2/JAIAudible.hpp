@@ -1,6 +1,6 @@
 #pragma once
 
-#include "JSystem/JGeometry/TVec.hpp"
+#include <nebula_geometry.hpp>
 
 struct JASSoundParams;
 
@@ -10,12 +10,12 @@ public:
     virtual JASSoundParams* getOuterParams(int) = 0;
     virtual void calc() = 0;
 
-    TVec3f& getPos() {
+    Vec3f& getPos() {
         return mPos;
     }
-    void setPos(const TVec3f& other) {
+    void setPos(const Vec3f& other) {
         mPos.set(other);
     }
 
-    TVec3f mPos;
+    Vec3f mPos;
 };

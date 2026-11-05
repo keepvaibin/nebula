@@ -10,11 +10,11 @@ public:
     virtual CameraTargetObj* calc();
     virtual CamTranslatorBase* createTranslator();
 
-    void setParam(s32, TVec3f, const TVec3f&, const TVec2f&);
+    void setParam(s32, Vec3f, const Vec3f&, const Vec2f&);
 
     s32 mJointId;
-    TVec3f mUp;
-    TVec3f mWPoint;
+    Vec3f mUp;
+    Vec3f mWPoint;
     f32 mAngleX;
     f32 mAngleY;
 };

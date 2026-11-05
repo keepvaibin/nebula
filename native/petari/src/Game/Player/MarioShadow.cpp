@@ -83,8 +83,8 @@ CollisionShadow::CollisionShadow(f32 radius, f32 length) : NameObj("\223\212\211
     initCaptureTex();
     _58 = 128;
     _5A = 3;
-    _60 = new TVec3f[_58 * _5A];
-    _64 = new TVec2f[_58 * _5A];
+    _60 = new Vec3f[_58 * _5A];
+    _64 = new Vec2f[_58 * _5A];
     _68 = new u16[_58 * _5A];
     _5C = new u8[_58];
     _6C = 0;
@@ -109,10 +109,10 @@ CollisionShadow::CollisionShadow(f32 radius, f32 length) : NameObj("\223\212\211
 
 }
 
-void CollisionShadow::create(const TVec3f& rPosition, const TVec3f& rDirection, const TVec3f& rUp) {
-    TVec3f corners[8];
-    TVec3f blended;
-    TVec3f vertical(rUp);
+void CollisionShadow::create(const Vec3f& rPosition, const Vec3f& rDirection, const Vec3f& rUp) {
+    Vec3f corners[8];
+    Vec3f blended;
+    Vec3f vertical(rUp);
     bool success = MR::vecBlendSphere(_24, rDirection, &blended, 0.1f);
     if (MR::isNearZero(_24) || !success || _305) {
         blended = rDirection;
@@ -134,7 +134,7 @@ void CollisionShadow::create(const TVec3f& rPosition, const TVec3f& rDirection, 
     }
 
     _E++;
-    TVec3f side;
+    Vec3f side;
     side.cross(vertical, blended);
     if (MR::isNearZero(side)) {
         return;
@@ -162,8 +162,8 @@ void CollisionShadow::create(const TVec3f& rPosition, const TVec3f& rDirection, 
         }
     }
 
-    TVec3f minimum;
-    TVec3f maximum;
+    Vec3f minimum;
+    Vec3f maximum;
     MR::createBoundingBox(corners, 8, &minimum, &maximum);
     _314 = minimum;
     _320 = maximum;
@@ -194,7 +194,7 @@ void CollisionShadow::create(const TVec3f& rPosition, const TVec3f& rDirection, 
     u32 polygonCount = 0;
     _6E = 0;
     for (u32 i = 0; i < count; i++) {
-        TVec3f normal(*_32C[i].getNormal(0));
+        Vec3f normal(*_32C[i].getNormal(0));
         f32 facing = normal.dot(_24);
         if (facing > 0.0f) {
             continue;
@@ -222,7 +222,7 @@ void CollisionShadow::create(const TVec3f& rPosition, const TVec3f& rDirection, 
     s32 index = 0;
     for (u32 i = 0; i < _54; i++) {
         for (u32 j = 0; j < _5A; j++) {
-            const TVec3f& point = *_32C[_5C[i]].getPos(j);
+            const Vec3f& point = *_32C[_5C[i]].getPos(j);
             u32 k;
             for (k = 0; k < _6C; k++) {
                 if (MR::abs(_60[k].x - point.x) < tolerance && MR::abs(_60[k].y - point.y) < tolerance && MR::abs(_60[k].z - point.z) < tolerance) {
@@ -231,7 +231,7 @@ void CollisionShadow::create(const TVec3f& rPosition, const TVec3f& rDirection, 
             }
 
             if (k == _6C) {
-                const TVec3f& normal = *_32C[_5C[i]].getNormal(0);
+                const Vec3f& normal = *_32C[_5C[i]].getNormal(0);
                 _60[_6C] = point + normal * _310;
                 _6C++;
             }
@@ -245,7 +245,7 @@ void CollisionShadow::create(const TVec3f& rPosition, const TVec3f& rDirection, 
     register f32 texScale = 0.0033333334f;
 
     for (u32 i = 0; i < _6C; i++) {
-        TVec3f relative(_60[i] - rPosition);
+        Vec3f relative(_60[i] - rPosition);
         f32 s = relative.dot(side);
         f32 t = relative.dot(_30);
 
@@ -307,11 +307,11 @@ void CollisionShadow::sendVtx() const {
         J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLES, vertexCount, NEBULA_SHAPE_TEXCOORD0);
     }
 
-    const TVec2f* pTex;
+    const Vec2f* pTex;
     u32 index = 0;
     for (u32 i = 0; i < _54; i++) {
         for (u32 j = 0; j < _5A; j++) {
-            const TVec3f& point = getDrawPos(index);
+            const Vec3f& point = getDrawPos(index);
             pTex = &_64[_68[index]];
             index++;
             J3DNativeDraw::position(point.x, point.y, point.z);
@@ -328,11 +328,11 @@ void CollisionShadow::sendZsortedVtx(bool offset) const {
         J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLES, vertexCount, NEBULA_SHAPE_TEXCOORD0);
     }
 
-    TVec3f shift(-_24 * 5.0f);
+    Vec3f shift(-_24 * 5.0f);
     for (u32 i = 0; i < _54; i++) {
         for (u32 j = 0; j < _5A; j++) {
-            const TVec3f& point = getDrawPos(i, j);
-            const TVec2f& tex = getDrawTx(i, j);
+            const Vec3f& point = getDrawPos(i, j);
+            const Vec2f& tex = getDrawTx(i, j);
             if (offset) {
                 J3DNativeDraw::position(point.x + shift.x, point.y + shift.y, point.z + shift.z);
             } else {
@@ -358,12 +358,12 @@ void CollisionShadow::initCaptureTex() {
     _300->init();
 }
 
-void CollisionShadow::setViewMtx(const TVec3f& rDirection) {
-    TVec3f normal = rDirection;
+void CollisionShadow::setViewMtx(const Vec3f& rDirection) {
+    Vec3f normal = rDirection;
     MR::normalize(&normal);
-    TVec3f eye = _2F0 - normal * 10000.0f;
+    Vec3f eye = _2F0 - normal * 10000.0f;
 
-    TPos3f matrix;
+    Pos3f matrix;
     matrix.identity();
     matrix.setPositionFromLookAt(eye, _30, _2F0);
     NebulaMtxCopy(matrix, j3dSys.mViewMtx);
@@ -382,7 +382,7 @@ void CollisionShadow::calcView(J3DModelX* pModel, u32 view, J3DModelX* pReferenc
         return;
     }
 
-    const TVec3f& rDirection = _24;
+    const Vec3f& rDirection = _24;
     _304 = 0;
     _306 = 1;
     if (_C == 3) {
@@ -405,7 +405,7 @@ void CollisionShadow::calcView(J3DModelX* pModel, u32 view, J3DModelX* pReferenc
     }
 }
 
-void CollisionShadow::drawAndCaptureTex(J3DModelX* pModel, const TVec3f& rPosition) {
+void CollisionShadow::drawAndCaptureTex(J3DModelX* pModel, const Vec3f& rPosition) {
     if (!_306) {
         return;
     }
@@ -471,9 +471,9 @@ void CollisionShadow::drawAndCaptureTex(J3DModelX* pModel, const TVec3f& rPositi
     TDDraw::cameraInit3D();
 }
 
-void CollisionShadow::drawVolumeBox(const TVec3f& rPosition, const TVec3f& rDepth) const {
-    TVec3f up(_3C);
-    TVec3f side;
+void CollisionShadow::drawVolumeBox(const Vec3f& rPosition, const Vec3f& rDepth) const {
+    Vec3f up(_3C);
+    Vec3f side;
     side.cross(_24, up);
     MR::normalizeOrZero(&side);
     // The box's faces in the stencil, depth tested: what its front faces reach and its back faces do not.
@@ -517,7 +517,7 @@ void CollisionShadow::draw3() const {
         return;
     }
 
-    TVec3f position(_2F0 - _24 * _30C);
+    Vec3f position(_2F0 - _24 * _30C);
     drawVolumeBox(position, _24 * _20);
     // Where the shadow's texture is clear, unmarked; and the faces in front of the volume.
     NebulaNativeMaterial material;
@@ -539,7 +539,7 @@ void CollisionShadow::draw3() const {
         J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLES, _6E * 3, NEBULA_SHAPE_TEXCOORD0);
         for (u32 i = 0; i < _6E; i++) {
             for (u32 j = 0; j < 3; j++) {
-                const TVec3f& point = *_32C[_70[i]].getPos(j);
+                const Vec3f& point = *_32C[_70[i]].getPos(j);
                 J3DNativeDraw::position(point.x, point.y, point.z);
                 J3DNativeDraw::texCoord(-1.0f, -1.0f);
             }
@@ -561,8 +561,8 @@ void CollisionShadow::draw3() const {
         }
 
         for (u32 j = 0; j < _5A; j++) {
-            const TVec3f& point = getDrawPos(i, j);
-            const TVec2f& tex = getDrawTx(i, j);
+            const Vec3f& point = getDrawPos(i, j);
+            const Vec2f& tex = getDrawTx(i, j);
             J3DNativeDraw::position(point.x, point.y, point.z);
             J3DNativeDraw::texCoord(tex.x, tex.y);
         }
@@ -575,8 +575,8 @@ void CollisionShadow::draw3() const {
     wipe.blend_op = NEBULA_BLEND_REPLACE;
     NativeShader::send(wipe);
     J3DPass::stencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ZERO);
-    TVec3f up(_3C);
-    TVec3f side;
+    Vec3f up(_3C);
+    Vec3f side;
     side.cross(_24, up);
     MR::normalizeOrZero(&side);
     TDDraw::drawFillBox3D(position, _24 * _20 * 2.0f, side * _1C, up * _18, 0xFFFFFF01);
@@ -587,11 +587,11 @@ void CollisionShadow::doSortPolygons() {
     f32 distances[128];
     f32 inverseVertexCount = 0.33333334f;
     for (u32 i = 0; i < _54; i++) {
-        TVec3f center(getDrawPos(0));
+        Vec3f center(getDrawPos(0));
         center += getDrawPos(1);
         center += getDrawPos(2);
         center.scale(inverseVertexCount);
-        TVec3f relative(center);
+        Vec3f relative(center);
         relative.sub(_2F0);
         distances[i] = relative.dot(_24);
     }
@@ -599,14 +599,14 @@ void CollisionShadow::doSortPolygons() {
     MR::sortSmall(_54, distances, _F0);
 }
 
-const TVec3f& CollisionShadow::getDrawPos(u32 index) const {
+const Vec3f& CollisionShadow::getDrawPos(u32 index) const {
     return _60[_68[index]];
 }
 
-const TVec3f& CollisionShadow::getDrawPos(u32 polygon, u32 vertex) const {
+const Vec3f& CollisionShadow::getDrawPos(u32 polygon, u32 vertex) const {
     return _60[_68[vertex + _5A * _F0[polygon]]];
 }
 
-const TVec2f& CollisionShadow::getDrawTx(u32 polygon, u32 vertex) const {
+const Vec2f& CollisionShadow::getDrawTx(u32 polygon, u32 vertex) const {
     return _64[_68[vertex + _5A * _F0[polygon]]];
 }

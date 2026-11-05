@@ -30,8 +30,8 @@ public:
     void doSwingAction(f32, bool);
     void reactDPD();
     void reactStringForce();
-    bool isOverStringLength(TVec3f*, f32*);
-    TVec3f calcToRootVector();
+    bool isOverStringLength(Vec3f*, f32*);
+    Vec3f calcToRootVector();
     void calcPosture(f32, bool);
     void tearDownDpdGripped();
     void extendString();
@@ -60,13 +60,13 @@ public:
     AnimStampController* mStampController;
     StringSpiderString* mString;
     FixedPosition* mFixedPos;
-    TQuat4f _A0;
+    Quat4f _A0;
     f32 _B0;
     f32 _B4;
     bool _B8;
     s32 _BC;
-    TVec3f* _C0;
-    TVec3f* _C4;
+    Vec3f* _C0;
+    Vec3f* _C4;
 };
 
 class StringSpiderString : public LiveActor {
@@ -75,6 +75,6 @@ public:
 
     virtual void calcAndSetBaseMtx();
 
-    TQuat4f _8C;
-    TVec3f _9C;
+    Quat4f _8C;
+    Vec3f _9C;
 };

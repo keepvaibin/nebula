@@ -15,7 +15,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <JSystem/JMath/JMATrigonometric.hpp>
+#include <nebula_geometry.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <nebula_game_api.h>
 #include <cstring>
@@ -113,7 +113,7 @@ void Flag::init(const JMapInfoIter& rIter) {
         } else if (MR::isEqualString(mObjName, "FlagRaceA")) {
             mDisableSound = true;
         }
-        TVec3f front;
+        Vec3f front;
         MR::calcActorAxis(&front, &mUp, &mSide, this);
     }
 
@@ -125,14 +125,14 @@ void Flag::init(const JMapInfoIter& rIter) {
     mFixPoints = new FixPoints[mNumPointsV];
 
     for (s32 idxV = 0; idxV < mNumPointsV; idxV++) {
-        TVec3f pos = mUp;
+        Vec3f pos = mUp;
         pos.scale(mStickLength + mPointIntervalV * ((mNumPointsV - 1) - idxV));
         pos.add(mPosition);
         mFixPoints[idxV].mPos.set(pos);
 
         mFixPoints[idxV].mPoints = new SwingRopePoint*[mNumPointsU];
         for (s32 idxU = 0; idxU < mNumPointsU; idxU++) {
-            TVec3f posU = pos;
+            Vec3f posU = pos;
             if (mIsVerticalFlag) {
                 posU.add(mGravity * (mPointIntervalU * (idxU + 1)));
             }
@@ -202,7 +202,7 @@ void Flag::appear() {
     MR::startSound(this, "SE_OJ_FLAG_APPEAR");
 }
 
-void Flag::setInfoPos(const char* pObjName, const TVec3f* pPos, const TVec3f& rSide, f32 stickLength, f32 width, f32 height, s32 numPointsU,
+void Flag::setInfoPos(const char* pObjName, const Vec3f* pPos, const Vec3f& rSide, f32 stickLength, f32 width, f32 height, s32 numPointsU,
                       s32 numPointsV, f32 /* unused */) {
     mObjName = pObjName;
     mBasePos = pPos;
@@ -275,7 +275,7 @@ void Flag::updateFlag() {
     if (mBasePos != nullptr) {
         mPosition.set(*mBasePos);
         for (s32 idxV = 0; idxV < mNumPointsV; idxV++) {
-            TVec3f pos = mUp;
+            Vec3f pos = mUp;
             pos.scale(mStickLength + mPointIntervalV * ((mNumPointsV - 1) - idxV));
             pos.add(*getPosition());
             mFixPoints[idxV].mPos.set(pos);
@@ -287,7 +287,7 @@ void Flag::updateFlag() {
         mBaseMtx->getYDir2(mUp);
 
         for (s32 idxV = 0; idxV < mNumPointsV; idxV++) {
-            TVec3f pos = mUp;
+            Vec3f pos = mUp;
             pos.scale(mStickLength + mPointIntervalV * ((mNumPointsV - 1) - idxV));
             pos.add(*getPosition());
             mFixPoints[idxV].mPos.set(pos);
@@ -295,14 +295,14 @@ void Flag::updateFlag() {
     }
 
     // Add gravity and side wind
-    TVec3f grav = *getGravity();
+    Vec3f grav = *getGravity();
     grav.scale(mGravityScale);
     for (s32 idxV = 0; idxV < mNumPointsV; idxV++) {
         for (s32 idxU = 0; idxU < mNumPointsU; idxU++) {
             SwingRopePoint* point = mFixPoints[idxV].mPoints[idxU];
             point->addAccel(grav);
 
-            TVec3f side = mSide;
+            Vec3f side = mSide;
             f32 wave = MR::sinDegree(mWavePhase + ::sWindPosRateU * idxU + ::sWindPosRateV * idxV);
             if (wave < 0.0f) {
                 wave *= -1.0f;
@@ -317,7 +317,7 @@ void Flag::updateFlag() {
             // Add random wind accel at single point
             s32 pointV = MR::getRandom(0, mNumPointsV);
             s32 pointU = MR::getRandom(0, mNumPointsU);
-            TVec3f wind(MR::getRandom(-1.0f, 1.0f), 0.0f, MR::getRandom(-1.0f, 1.0f));
+            Vec3f wind(MR::getRandom(-1.0f, 1.0f), 0.0f, MR::getRandom(-1.0f, 1.0f));
             MR::vecKillElement(wind, mUp, &wind);
             wind.scale(MR::getRandom(mRandomWindAccelMin, mRandomWindAccelMax));
             mFixPoints[pointV].mPoints[pointU]->addAccel(wind);
@@ -329,7 +329,7 @@ void Flag::updateFlag() {
     } else {
         // Add random wind accel across whole flag
         for (s32 idxV = 0; idxV < mNumPointsV; idxV++) {
-            TVec3f wind(MR::getRandom(-1.0f, 1.0f), 0.0f, MR::getRandom(-1.0f, 1.0f));
+            Vec3f wind(MR::getRandom(-1.0f, 1.0f), 0.0f, MR::getRandom(-1.0f, 1.0f));
             wind.scale(MR::getRandom(mRandomWindAccelMin, mRandomWindAccelMax));
             mFixPoints[idxV].mPoints[0]->addAccel(wind);
         }
@@ -337,8 +337,8 @@ void Flag::updateFlag() {
 
     // restrict in horizontal direction
     for (s32 idxU = 0; idxU < mNumPointsU; idxU++) {
-        TVec3f* pos = &mFixPoints[0].mPoints[idxU]->mPosition;
-        TVec3f* vel = &mFixPoints[0].mPoints[idxU]->mVelocity;
+        Vec3f* pos = &mFixPoints[0].mPoints[idxU]->mPosition;
+        Vec3f* vel = &mFixPoints[0].mPoints[idxU]->mVelocity;
         for (s32 idxV = 1; idxV < mNumPointsV; idxV++) {
             SwingRopePoint* point = mFixPoints[idxV].mPoints[idxU];
             point->restrict(*pos, mPointIntervalV, vel);
@@ -349,7 +349,7 @@ void Flag::updateFlag() {
 
     // restrict in vertical direction
     for (s32 idxV = 0; idxV < mNumPointsV; idxV++) {
-        TVec3f* pos = &mFixPoints[idxV].mPos;
+        Vec3f* pos = &mFixPoints[idxV].mPos;
         for (s32 idxU = 0; idxU < mNumPointsU; idxU++) {
             SwingRopePoint* point = mFixPoints[idxV].mPoints[idxU];
             point->restrict(*pos, mPointIntervalU, nullptr);
@@ -384,8 +384,8 @@ void Flag::draw() const {
     u8 indexA = 0;
     u8 indexB = mNumPointsU + 1;
     for (s32 idxV = 0; idxV < mNumPointsV - 1; idxV++) {
-        const TVec3f& posA = mFixPoints[idxV + 0].mPos;
-        const TVec3f& posB = mFixPoints[idxV + 1].mPos;
+        const Vec3f& posA = mFixPoints[idxV + 0].mPos;
+        const Vec3f& posB = mFixPoints[idxV + 1].mPos;
         // Each vertex's colour and texture coordinate are its entries of mColors and mTexST.
         J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, (mNumPointsU + 1) * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
         {
@@ -397,8 +397,8 @@ void Flag::draw() const {
             indexA++;
 
             for (s32 idxU = 0; idxU < mNumPointsU; idxU++) {
-                const TVec3f& posA = mFixPoints[idxV].mPoints[idxU]->mPosition;
-                const TVec3f& posB = mFixPoints[idxV + 1].mPoints[idxU]->mPosition;
+                const Vec3f& posA = mFixPoints[idxV].mPoints[idxU]->mPosition;
+                const Vec3f& posB = mFixPoints[idxV + 1].mPoints[idxU]->mPosition;
                 J3DNativeDraw::position(posB.x, posB.y, posB.z);
                 sendEntry(indexB);
                 J3DNativeDraw::position(posA.x, posA.y, posA.z);
@@ -411,24 +411,24 @@ void Flag::draw() const {
     }
 
     if (mStickLength > 0.0f) {
-        TVec3f pos(mPosition.x, mPosition.y, mPosition.z);
+        Vec3f pos(mPosition.x, mPosition.y, mPosition.z);
 
-        const TVec2f stickCoords[] = {{1.0f, 0.0f}, {0.0f, 1.0f}, {-1.0f, 0.0f}, {1.0f, 0.0f}};
+        const Vec2f stickCoords[] = {{1.0f, 0.0f}, {0.0f, 1.0f}, {-1.0f, 0.0f}, {1.0f, 0.0f}};
 
         // The stick's colours are ::sStickColors' entries, its texture coordinate mTexST's first.
         J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 8, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
 
         f32 length = mStickLength + mPointIntervalV * (mNumPointsV - 1);
         for (s32 idx = 0; idx < 4; idx++) {
-            TVec3f v1(stickCoords[idx].x, 0.0f, stickCoords[idx].y);
-            TVec3f v2(stickCoords[idx].x, 0.0f, stickCoords[idx].y);
+            Vec3f v1(stickCoords[idx].x, 0.0f, stickCoords[idx].y);
+            Vec3f v2(stickCoords[idx].x, 0.0f, stickCoords[idx].y);
             v1.scale(::sStickWidth);
             v2.scale(::sStickWidth);
-            TVec3f posA = mUp * length;
+            Vec3f posA = mUp * length;
             posA.add(v1);
             posA.add(v2);
             posA.add(mPosition);
-            TVec3f posB = mPosition;
+            Vec3f posB = mPosition;
             posB.add(v1);
             posB.add(v2);
 

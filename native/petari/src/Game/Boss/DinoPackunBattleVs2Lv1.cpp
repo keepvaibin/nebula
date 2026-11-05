@@ -19,7 +19,7 @@
 #include "Game/Util/SoundUtil.hpp"
 
 namespace {
-    static TVec3f sShotMouthFireOffset = TVec3f(150.0f, 150.0f, 0.0f);
+    static Vec3f sShotMouthFireOffset = Vec3f(150.0f, 150.0f, 0.0f);
 };  // namespace
 
 namespace NrvDinoPackunBattleVs2Lv1 {
@@ -383,11 +383,11 @@ bool DinoPackunBattleVs2Lv1::emitFireMouth() {
         return false;
     }
 
-    TPos3f v17;
+    Pos3f v17;
     v17.set(MR::getJointMtx(getHost(), "DownMouth1"));
-    TVec3f v16;
+    Vec3f v16;
     v17.mult(::sShotMouthFireOffset, v16);
-    TVec3f v15;
+    Vec3f v15;
     v17.getXDir(v15);
     MR::normalizeOrZero(&v15);
     fire->appearShot(v16, v15 * 50.0f);
@@ -404,7 +404,7 @@ bool DinoPackunBattleVs2Lv1::emitFireTail() {
     DinoPackunTrackFire* fire = mTrackFireHolder->getDeadMember();
 
     if (fire != nullptr) {
-        TVec3f v7(getHost()->mBall->mPosition);
+        Vec3f v7(getHost()->mBall->mPosition);
         if (_28.distance(v7) >= 120.0f) {
             _28 = v7;
             fire->appearAndSetPos(v7);

@@ -22,7 +22,7 @@ public:
     f32 mDistMax;
     f32 mDistMin;
     f32 mDistBase;
-    TVec3f mVelocity;
-    TVec3f mPos;
-    TVec3f mGravityCenter;
+    Vec3f mVelocity;
+    Vec3f mPos;
+    Vec3f mGravityCenter;
 };

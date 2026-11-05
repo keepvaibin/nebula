@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class MapObjConnector;
 
@@ -24,7 +24,7 @@ public:
     void updateBindActorMtx();
 
     LiveActor* _8C;
-    TPos3f _90;
+    Pos3f _90;
     MapObjConnector* mObjConnector;
     bool _C4;
 };

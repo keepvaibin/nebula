@@ -39,7 +39,7 @@ public:
     void startTrack_(const JASSoundParams& params);
     void JAISeCategoryMgr_mixOut_(bool, const JASSoundParams& params, JAISoundActivity activity);
     void JAISeCategoryMgr_calc_();
-    void JAISeMgr_startID_(JAISoundID id, const TVec3f* posPtr, JAIAudience* audience);
+    void JAISeMgr_startID_(JAISoundID id, const Vec3f* posPtr, JAIAudience* audience);
     bool prepare_getSeqData_();
     void prepare_();
 

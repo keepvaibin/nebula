@@ -57,8 +57,8 @@ void BasaBasa::init(const JMapInfoIter& rIter) {
     initModelManagerWithAnm(objName, nullptr, false);
     MR::connectToSceneEnemy(this);
     initHitSensor(2);
-    MR::addHitSensorAtJointEnemy(this, "body", "JointRoot", 8, 90.0f, TVec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorAtJointEnemyAttack(this, "attack", "JointRoot", 8, 60.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointEnemy(this, "body", "JointRoot", 8, 90.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointEnemyAttack(this, "attack", "JointRoot", 8, 60.0f, Vec3f(0.0f, 0.0f, 0.0f));
     initBinder(110.0f, 0.0f, 0);
     MR::initLightCtrl(this);
     initEffectKeeper(1, nullptr, false);
@@ -76,7 +76,7 @@ void BasaBasa::init(const JMapInfoIter& rIter) {
     MR::declareStarPiece(this, 3);
     MR::declareCoin(this, 1);
     MR::onCalcGravity(this);
-    MR::initStarPointerTarget(this, 100.0f, TVec3f(0.0f));
+    MR::initStarPointerTarget(this, 100.0f, Vec3f(0.0f));
     mScaleController = new AnimScaleController(nullptr);
     mStampController = new AnimStampController();
     mSpinHitController = new SpinHitController(this, 20, 20, 5, 0.0f, 20.0f, 10.0f, 3, false);
@@ -161,12 +161,12 @@ void BasaBasa::exeChase() {
         MR::onBind(this);
     }
 
-    TVec3f v5;
+    Vec3f v5;
     v5.sub(*_B4, mPosition);
     v5.orthogonalize(mGravity);
     MR::normalizeOrZero(&v5);
     if (!MR::isNearZero(v5)) {
-        TVec3f v4;
+        Vec3f v4;
         v4 = v5;
         MR::rotateVecDegree(&v4, mGravity, _B8);
         MR::turnDirectionDegree(this, &_9C, v4, 1.7f);
@@ -243,7 +243,7 @@ void BasaBasa::exeAttackStart() {
     }
 
     MR::turnDirectionToTargetDegree(this, &_9C, *_B4, 2.55f);
-    TVec3f v3;
+    Vec3f v3;
     v3.scaleAdd(2.0f, _9C, mGravity);
     v3.negate();
     MR::normalizeOrZero(&v3);
@@ -263,23 +263,23 @@ void BasaBasa::exeAttack() {
     if (MR::isFirstStep(this)) {
         MR::startBck(this, "Attack");
         MR::startSound(this, "SE_EV_BASABASA_ATTACK");
-        TVec3f playerUp;
+        Vec3f playerUp;
         MR::getPlayerUpVec(&playerUp);
         _BC.scaleAdd(100.0f, playerUp, *MR::getPlayerPos());
     }
 
     MR::startLevelSound(this, "SE_EM_LV_BASABASA_ATTACK");
-    TVec3f v9;
+    Vec3f v9;
     v9.sub(_BC, mPosition);
     if (mIsIceModel) {
-        TVec3f v8;
+        Vec3f v8;
         MR::calcUpVec(&v8, this);
-        TVec3f v7 = v9.killElement(v8);
-        TVec3f v6;
+        Vec3f v7 = v9.killElement(v8);
+        Vec3f v6;
         v6.scale(v8.dot(v9), v8);
         v9.scaleAdd(5.0f, v6, v7);
     }
-    TVec3f v5;
+    Vec3f v5;
     MR::normalize(v9, &v5);
     MR::turnDirectionToTargetDegree(this, &_9C, _BC, 2.55f);
     mVelocity.scaleAdd(10.0f, v5, mVelocity);
@@ -311,7 +311,7 @@ void BasaBasa::exeAttackEndRecover() {
         mVelocity.zero();
     }
 
-    TVec3f v3;
+    Vec3f v3;
     v3.scaleAdd(-0.5f, _9C, mGravity);
     v3.negate();
     MR::normalize(&v3);
@@ -335,7 +335,7 @@ void BasaBasa::exeHitBack() {
     }
 
     if (MR::isLessEqualStep(this, 5)) {
-        TVec3f v3;
+        Vec3f v3;
         v3.add(_9C, mGravity);
         v3.negate();
         MR::normalizeOrZero(&v3);
@@ -399,7 +399,7 @@ void BasaBasa::exeAttachCelling() {
         mVelocity.zero();
         MR::resetPosition(this, _CC);
     } else {
-        TVec3f v2;
+        Vec3f v2;
         v2.sub(_CC, mPosition);
         mVelocity.scale(5.0f, v2);
     }
@@ -449,9 +449,9 @@ void BasaBasa::exeStun() {
 
 void BasaBasa::initAfterPlacement() {
     MR::trySetMoveLimitCollision(this);
-    TVec3f v4;
+    Vec3f v4;
     v4.scaleAdd(20.0f, mGravity, mPosition);
-    TVec3f v3;
+    Vec3f v3;
     v3.scale(-30.0f, mGravity);
     _EC = MR::getFirstPolyOnLineToMap(&mPosition, nullptr, v4, v3);
     if (_EC) {
@@ -481,9 +481,9 @@ void BasaBasa::control() {
 }
 
 void BasaBasa::calcAndSetBaseMtx() {
-    TPos3f v11;
+    Pos3f v11;
     MR::calcMtxFromGravityAndZAxis(&v11, this, mGravity, _9C);
-    TPos3f v10;
+    Pos3f v10;
     v10 = mStampController->_14;
     v11.concat(v10, v11);
     v11.mMtx[0][3] = mPosition.x;
@@ -530,11 +530,11 @@ void BasaBasa::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     } else if (MR::isSensorEnemy(pSender)) {
         if (MR::isSensorEnemy(pReceiver)) {
             MR::sendMsgPush(pReceiver, pSender);
-            TVec3f v10;
+            Vec3f v10;
             v10.sub(mPosition, pReceiver->mHost->mPosition);
             MR::normalizeOrZero(&v10);
             if (mVelocity.dot(v10) < 0.0f) {
-                const TVec3f& vel = mVelocity;
+                const Vec3f& vel = mVelocity;
                 mVelocity.scaleAdd(-v10.dot(vel), v10, vel);
             }
         }
@@ -598,7 +598,7 @@ bool BasaBasa::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
     }
 
     if (MR::isSensorEnemy(pSender) || MR::isSensorMapObj(pSender)) {
-        TVec3f v7;
+        Vec3f v7;
         v7.sub(mPosition, pSender->mHost->mPosition);
         MR::normalizeOrZero(&v7);
         mVelocity.scaleAdd(1.5f, v7, mVelocity);
@@ -722,13 +722,13 @@ void BasaBasa::controlVelocity() {
         return;
     }
 
-    TVec3f v15;
+    Vec3f v15;
     MR::calcSideVec(&v15, this);
     f32 v3 = v15.dot(mVelocity);
-    TVec3f v14;
+    Vec3f v14;
     v14.scale(v3, v15);
     v14.scale(0.5f);
-    const TVec3f& vel = mVelocity;
+    const Vec3f& vel = mVelocity;
     mVelocity.scaleAdd(-v15.dot(vel), v15, vel);
     mVelocity.add(v14);
     f32 v5 = 0.95f;
@@ -763,10 +763,10 @@ void BasaBasa::controlVelocity() {
 
 void BasaBasa::tuneHeight() {
     if (MR::isShadowProjected(this, nullptr)) {
-        TVec3f v5;
+        Vec3f v5;
         if (isNearTarget(_AC)) {
             v5.sub(*_B4, mPosition);
-            TVec3f* gravityPtr = &mGravity;
+            Vec3f* gravityPtr = &mGravity;
             v5.scale(gravityPtr->dot(v5), *gravityPtr);
         } else {
             v5.scale(MR::getShadowProjectionLength(this, nullptr) - (_AC - 350.0f), mGravity);
@@ -775,7 +775,7 @@ void BasaBasa::tuneHeight() {
         if (v5.length() < 2.0f) {
             return;
         } else {
-            TVec3f v4;
+            Vec3f v4;
             v4.set(v5);
             MR::normalize(&v4);
             mVelocity.scaleAdd(2.0f, v4, mVelocity);

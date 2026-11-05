@@ -14,8 +14,8 @@ public:
     virtual void collectRailPointInfo();
     virtual s32 getNextPointNo() const;
     virtual s32 getLastPointNo() const;
-    virtual const TVec3f& getLastPointNormal() const;
-    virtual const TVec3f& getNextPointNormal() const;
+    virtual const Vec3f& getLastPointNormal() const;
+    virtual const Vec3f& getNextPointNormal() const;
     virtual void startMoveInner();
     virtual void updatePoseInner();
 
@@ -23,5 +23,5 @@ public:
 
 private:
     s32 mCurNormal;
-    MR::AssignableArray< TVec3f > mNormals;
+    MR::AssignableArray< Vec3f > mNormals;
 };

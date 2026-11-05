@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class HipDropMoveObj : public LiveActor {
 public:
@@ -34,5 +34,5 @@ public:
     virtual void moveStart();
     virtual void moving();
 
-    TMtx34f mMtx;
+    Mtx34f mMtx;
 };

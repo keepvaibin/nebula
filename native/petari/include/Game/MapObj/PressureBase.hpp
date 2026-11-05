@@ -49,12 +49,12 @@ public:
     void exeShot();
     void startWait();
     void startRelax();
-    bool calcJointCannonV(TPos3f*, const JointControllerInfo&);
+    bool calcJointCannonV(Pos3f*, const JointControllerInfo&);
     bool isShotTypeOnGravity() const;
     bool isShotTypeFollow() const;
 
     JointControlDelegator< PressureBase >* mJointController;
-    TVec3f mFront;
+    Vec3f mFront;
     f32 mRelaxAngle;
     f32 mBaseAngle;
     s32 mWaitTime;

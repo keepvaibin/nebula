@@ -19,7 +19,7 @@ public:
     bool isRequestAttackVs1() const;
     s32 calcRemainTimeToBreak() const;
     bool isRequestAttackVs3() const;
-    f32 calcAndSetTargetPos(TVec3f* pPos, const TVec3f& rReferencePos);
+    f32 calcAndSetTargetPos(Vec3f* pPos, const Vec3f& rReferencePos);
     f32 calcTimeRate() const;
     bool isBreak() const;
     bool isTypeNormal() const;
@@ -43,7 +43,7 @@ public:
     bool mIsTurn;
     bool _A6;
     s32 _A8;
-    TVec3f _AC;
+    Vec3f _AC;
     s32 mWaitFallStep;  // Obj_arg3
     s32 mFallStep;      // Obj_arg4
 };

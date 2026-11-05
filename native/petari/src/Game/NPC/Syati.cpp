@@ -8,7 +8,7 @@
 #include "Game/Util.hpp"
 #include "Game/Util/JointController.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include <JSystem/JMath/JMATrigonometric.hpp>
+#include <nebula_geometry.hpp>
 
 namespace {
     const char* cBckForRipple[] = {"WaitReverse", "Talk", "StartWait", "StartTalk", "Delight", nullptr};
@@ -82,9 +82,9 @@ void Syati::init(const JMapInfoIter& rIter) {
     initTalking(rIter);
     MR::connectToSceneNoSilhouettedMapObj(this);
     initHitSensor(3);
-    MR::addHitSensorAtJointEnemySimple(this, "head", "Jaw", 4, 200.0f, TVec3f(0.0f, -60.0f, 0.0f));
-    MR::addHitSensorEnemySimple(this, "body", 4, 230.0f, TVec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorAtJointEnemySimple(this, "tail", "Spin2", 4, 150.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointEnemySimple(this, "head", "Jaw", 4, 200.0f, Vec3f(0.0f, -60.0f, 0.0f));
+    MR::addHitSensorEnemySimple(this, "body", 4, 230.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointEnemySimple(this, "tail", "Spin2", 4, 150.0f, Vec3f(0.0f, 0.0f, 0.0f));
     MR::calcModelBoundingRadius(&mClippingRange, this);
     MR::setClippingTypeSphere(this, mClippingRange);
     MR::validateClipping(this);
@@ -166,11 +166,11 @@ void PlayerPoseSetterInWater::update() {
     _1C = (_1C + 90) % 90;
 
 
-    TPos3f syatiMtx;
+    Pos3f syatiMtx;
     syatiMtx.setQuat(_C);
     syatiMtx.setTrans(_0);
 
-    TVec3f offsetPos;
+    Vec3f offsetPos;
     offsetPos.zero();
     if (_20 != nullptr) {
         offsetPos.set(*_20);
@@ -178,18 +178,18 @@ void PlayerPoseSetterInWater::update() {
 
     syatiMtx.mult(offsetPos, offsetPos);
 
-    TVec3f forward = _0;
-    TVec3f syatiUp;
+    Vec3f forward = _0;
+    Vec3f syatiUp;
     syatiMtx.getYDir(syatiUp);
     syatiUp.scale(450.0f);
     forward.add(syatiUp);
     forward.sub(offsetPos);
 
-    TVec3f offset;
+    Vec3f offset;
     offset.zero();
 
-    TPos3f baseMtx;
-    const TVec3f& pos = offsetPos + offset;
+    Pos3f baseMtx;
+    const Vec3f& pos = offsetPos + offset;
     MR::makeMtxUpFrontPos(&baseMtx, forward, *MR::getPlayerGravity(), pos);
     MR::setPlayerBaseMtx(baseMtx);
 }
@@ -220,7 +220,7 @@ void Syati::exeFadeinBeforeTalk() {
 
 void Syati::exeTalkStartMission() {
     if (MR::isFirstStep(this)) {
-        setupBalloonFollowMtx(TVec3f(mSwimMode == 0 ? ::sTalkOffsetDeepSea : ::sTalkOffset));
+        setupBalloonFollowMtx(Vec3f(mSwimMode == 0 ? ::sTalkOffsetDeepSea : ::sTalkOffset));
     }
 
     updateBlink();
@@ -316,7 +316,7 @@ void Syati::exeWaitStarAppeared() {
         MR::startBtk(this, "Normal");
         calcAnim();
 
-        TVec3f starPosition;
+        Vec3f starPosition;
         MR::copyJointPos(this, "Head", &starPosition);
         MR::requestAppearPowerStar(this, mStarSpawnType, starPosition);
     }
@@ -353,7 +353,7 @@ void Syati::exeWaitAllRingDisappear() {
 
 void Syati::exeTalkRetryMission() {
     if (MR::isFirstStep(this)) {
-        setupBalloonFollowMtx(TVec3f(mSwimMode == 0 ? ::sTalkOffsetDeepSea : ::sTalkOffset));
+        setupBalloonFollowMtx(Vec3f(mSwimMode == 0 ? ::sTalkOffsetDeepSea : ::sTalkOffset));
         MR::startBck(this, "Failure");
         MR::startBtk(this, "Failure");
 
@@ -386,7 +386,7 @@ void Syati::exeHideOnShore() {
 
         const Vec* pVec = mSwimMode == 0 ? &::sTalkOffsetDelightDeepSea : &::sTalkOffsetOnShore;
 
-        setupBalloonFollowMtx(TVec3f(*pVec));
+        setupBalloonFollowMtx(Vec3f(*pVec));
     }
 
     switch (mHideOnShoreMode) {
@@ -462,7 +462,7 @@ void Syati::initRings(const JMapInfoIter& rIter) {
     }
 }
 
-PlayerPoseSetterInWater::PlayerPoseSetterInWater(const TVec3f& rVec, Syati* pSyati)
+PlayerPoseSetterInWater::PlayerPoseSetterInWater(const Vec3f& rVec, Syati* pSyati)
     : _0(rVec), _C(pSyati->_8C), _1C(), _20(&pSyati->mMarioMoveLocalOffsetVec) {
 }
 
@@ -472,7 +472,7 @@ void Syati::initPose() {
 }
 
 void Syati::initTalking(const JMapInfoIter& rIter) {
-    mTalkMessageCtrl = MR::createTalkCtrl(this, rIter, "SyatiRing", TVec3f(0.0f, 0.0f, 0.0f), mBalloonFollowMtx);
+    mTalkMessageCtrl = MR::createTalkCtrl(this, rIter, "SyatiRing", Vec3f(0.0f, 0.0f, 0.0f), mBalloonFollowMtx);
     MR::setDistanceToTalk(mTalkMessageCtrl, 2500.0f);
     mActorCameraInfo = MR::createActorCameraInfo(rIter);
     MR::initMultiActorCamera(this, rIter, &mActorCameraInfo, "\211\357\230\142" /* 会話 */);
@@ -505,16 +505,16 @@ void Syati::updateSwimCommon() {
 }
 
 void Syati::updatePoseByRail() {
-    TVec3f direction;
+    Vec3f direction;
     MR::calcRailPosAtCoord(&direction, this, 600.0f + MR::getRailCoord(this));
-    TVec3f railPosition;
+    Vec3f railPosition;
     MR::calcRailPosAtCoord(&railPosition, this, MR::getRailCoord(this));
     direction.sub(railPosition);
 
-    TVec3f railDirectionOnPlane(MR::getRailDirection(this));
+    Vec3f railDirectionOnPlane(MR::getRailDirection(this));
     MR::vecKillElement(railDirectionOnPlane, mGravity, &railDirectionOnPlane);
     MR::normalizeOrZero(&railDirectionOnPlane);
-    TVec3f directionOnPlane(direction);
+    Vec3f directionOnPlane(direction);
     MR::vecKillElement(directionOnPlane, mGravity, &directionOnPlane);
 
     if (!MR::isNearZero(directionOnPlane)) {
@@ -524,11 +524,11 @@ void Syati::updatePoseByRail() {
     }
 
     MR::vecBlend(_9C, directionOnPlane, &_9C, 0.04f);
-    TVec3f turnAxis = railDirectionOnPlane.cross(_9C);
+    Vec3f turnAxis = railDirectionOnPlane.cross(_9C);
     MR::normalizeOrZero(&turnAxis);
-    TQuat4f roll;
+    Quat4f roll;
     roll.set(0.0f, 0.0f, 0.0f, 1.0f);
-    TVec3f up = -mGravity;
+    Vec3f up = -mGravity;
     f32 dot = railDirectionOnPlane.dot(_9C);
     f32 rad = MR::acos(dot);
 
@@ -542,7 +542,7 @@ void Syati::updatePoseByRail() {
     }
 
     if (!MR::isSameDirection(direction, up)) {
-        TQuat4f rotation;
+        Quat4f rotation;
         MR::makeQuatFromVec(&rotation, direction, up);
         rotation.mult(rotation, roll);
         _8C.slerp(rotation, 0.04);
@@ -660,17 +660,17 @@ void Syati::killAllRings() {
 
 void Syati::emitRing() {
     PrizeRing* pPrizeRing = static_cast< PrizeRing* >(mPrizeRingGroup->getDeadActor());
-    TVec3f position;
+    Vec3f position;
     f32 coord = MR::getRailCoord(this);
     coord += 600.0f;
     MR::calcRailPosAtCoord(&position, this, coord);
     pPrizeRing->mPosition.set(position);
-    TVec3f direction;
+    Vec3f direction;
     MR::calcRailDirectionAtCoord(&direction, this, coord);
-    TPos3f mtx;
+    Pos3f mtx;
     MR::calcMtxFromGravityAndZAxis(&mtx, this, mGravity, direction);
 
-    TVec3f rotation;
+    Vec3f rotation;
     mtx.getEuler(rotation);
     pPrizeRing->mRotation.set< f32 >(rotation.x * 57.29578f, rotation.y * 57.29578f, rotation.z * 57.29578f);
     pPrizeRing->appear();
@@ -683,16 +683,16 @@ void Syati::emitRing() {
     mCurrentRailPointNo = MR::getCurrentRailPointNo(this);
 }
 
-void Syati::setupBalloonFollowMtx(const TVec3f& rVec) {
+void Syati::setupBalloonFollowMtx(const Vec3f& rVec) {
     mBalloonFollowMtx.setQuat(_8C);
     mBalloonFollowMtx.setTrans(mPosition);
 
-    TVec3f position = rVec;
+    Vec3f position = rVec;
     mBalloonFollowMtx.mult(position, position);
     mBalloonFollowMtx.setTrans(position);
 }
 
-bool Syati::calcHeadJoint(TPos3f* pPos, const JointControllerInfo& rInfo) {
+bool Syati::calcHeadJoint(Pos3f* pPos, const JointControllerInfo& rInfo) {
     bool nrv = false;
     nrv = isNerve(GET_NERVE(Syati, SyatiWaitOnShore)) || isNerve(GET_NERVE(Syati, SyatiWaitTalkNormal)) || isNerve(GET_NERVE(Syati, SyatiTalkNormal));
 
@@ -700,8 +700,8 @@ bool Syati::calcHeadJoint(TPos3f* pPos, const JointControllerInfo& rInfo) {
         return false;
     }
 
-    TPos3f mtx;
-    TVec3f playerDirection(*MR::getPlayerPos());
+    Pos3f mtx;
+    Vec3f playerDirection(*MR::getPlayerPos());
     playerDirection.sub(mPosition);
     MR::normalizeOrZero(&playerDirection);
 
@@ -709,7 +709,7 @@ bool Syati::calcHeadJoint(TPos3f* pPos, const JointControllerInfo& rInfo) {
         return false;
     }
 
-    TVec3f playerDirectionOnPlane(playerDirection);
+    Vec3f playerDirectionOnPlane(playerDirection);
     playerDirectionOnPlane.y = 0.0f;
     MR::normalizeOrZero(&playerDirectionOnPlane);
 
@@ -717,10 +717,10 @@ bool Syati::calcHeadJoint(TPos3f* pPos, const JointControllerInfo& rInfo) {
         return false;
     }
 
-    TVec3f front;
+    Vec3f front;
     _8C.getZDir(front);
     MR::normalize(&front);
-    TQuat4f rotation;
+    Quat4f rotation;
     rotation.set(0.0f, 0.0f, 0.0f, 1.0f);
     MR::turnQuat(&rotation, rotation, front, playerDirectionOnPlane, PI / 6);
     mtx.setQuat(rotation);

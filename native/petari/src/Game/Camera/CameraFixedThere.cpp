@@ -24,8 +24,8 @@ void CameraFixedThere::reset() {
 }
 
 CameraTargetObj* CameraFixedThere::calc() {
-    TVec3f eyeDir;
-    TVec3f watchPos;
+    Vec3f eyeDir;
+    Vec3f watchPos;
     CameraLocalUtil::makeWatchPoint(&watchPos, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
     CameraLocalUtil::setWatchPos(this, watchPos);
 
@@ -46,17 +46,17 @@ CamTranslatorBase* CameraFixedThere::createTranslator() {
 }
 
 void CameraFixedThere::copyStatusFromPrevCamera() {
-    const TPos3f& mtx = mCameraMan->mMatrix;
+    const Pos3f& mtx = mCameraMan->mMatrix;
 
-    TVec3f zoneFront;
-    TVec3f pos;
+    Vec3f zoneFront;
+    Vec3f pos;
     mtx.getZDir(zoneFront);
     zoneFront.negate();
 
     mtx.getTrans(pos);
     CameraLocalUtil::setPos(this, pos);
 
-    TVec3f front = CameraLocalUtil::getWatchPos(mCameraMan) - pos;
+    Vec3f front = CameraLocalUtil::getWatchPos(mCameraMan) - pos;
     if (MR::isNearZero(front)) {
         front = zoneFront;
     } else {
@@ -64,9 +64,9 @@ void CameraFixedThere::copyStatusFromPrevCamera() {
     }
     mAxis.set(front);
 
-    TQuat4f rot;
+    Quat4f rot;
     rot.setRotate(zoneFront, front);
-    TVec3f up;
+    Vec3f up;
     mtx.getYDir(up);
     rot.transform(up);
     CameraLocalUtil::setUpVec(this, up);
@@ -77,7 +77,7 @@ void CameraFixedThere::copyStatusFromPrevCamera() {
     CameraLocalUtil::setWatchUpVec(this, CameraLocalUtil::getTarget(this)->getUpVec());
 }
 
-bool CameraFixedThere::calcEyeDir(TVec3f* pDir) {
+bool CameraFixedThere::calcEyeDir(Vec3f* pDir) {
     pDir->set(CameraLocalUtil::getWatchPos(this) - CameraLocalUtil::getPos(this));
     if (MR::isNearZero(*pDir)) {
         return false;
@@ -110,14 +110,14 @@ void CameraFixedThere::makeAxisAndRoll() {
     }
 }
 
-void CameraFixedThere::updateUpVec(const TVec3f& rAxis) {
+void CameraFixedThere::updateUpVec(const Vec3f& rAxis) {
     switch (mCameraType) {
     case CameraType_GravityUp: {
         updateNormalUpVec(rAxis);
         break;
     }
     default: {
-        TQuat4f rot;
+        Quat4f rot;
         rot.setRotate(mAxis, rAxis);
         rot.transform(mUp);
         CameraLocalUtil::setUpVec(this, mUp);
@@ -126,15 +126,15 @@ void CameraFixedThere::updateUpVec(const TVec3f& rAxis) {
     mAxis.set(rAxis);
 }
 
-void CameraFixedThere::updateNormalUpVec(const TVec3f& rFront) {
-    // FIXME: TRot3f::setRotate
-    TVec3f up = mUp;
-    TVec3f side = up.cross(rFront);
+void CameraFixedThere::updateNormalUpVec(const Vec3f& rFront) {
+    // FIXME: Rot3f::setRotate
+    Vec3f up = mUp;
+    Vec3f side = up.cross(rFront);
     up.cross(mAxis, side);
 
     MR::normalize(&up);
 
-    TPos3f rot;
+    Pos3f rot;
     rot.makeRotate(rFront, -mRoll);
     rot.mult33(up, up);
     CameraLocalUtil::setUpVec(this, up);

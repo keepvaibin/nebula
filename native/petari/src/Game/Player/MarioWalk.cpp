@@ -582,12 +582,12 @@ void Mario::updateWalkSpeed() {
         if (_95C->getCode(_4C8) == 29) {
             press = true;
         } else if (MR::isSensorPressObj(_730)) {
-            TVec3f result;
+            Vec3f result;
             if (MR::vecKillElement(_184, *getGravityVec(), &result) < -0.5f) {
                 press = true;
             } else {
-                TVec3f collisionTrans;
-                TVec3f collisionPrevTrans;
+                Vec3f collisionTrans;
+                Vec3f collisionPrevTrans;
                 MR::extractMtxTrans(_730->mHost->mCollisionParts->mBaseMatrix, &collisionTrans);
                 MR::extractMtxTrans(_730->mHost->mCollisionParts->mPrevBaseMatrix, &collisionPrevTrans);
                 if (MR::vecKillElement(collisionTrans - collisionPrevTrans, *getGravityVec(), &result) < -0.5f) {
@@ -719,9 +719,9 @@ void Mario::updateOnSand() {
                     mSinkTimer = MR::clamp(static_cast< s32 >(mSinkTimer) + 3, 0, 255);
 
                     if (getAirGravityVec().dot(_368) > -0.99f) {
-                        TVec3f vec1;
+                        Vec3f vec1;
                         MR::vecKillElement(_368, getAirGravityVec(), &vec1);
-                        TVec3f vec2;
+                        Vec3f vec2;
                         vec2.cross(vec1, _368);
                         MR::normalize(&vec2);
                         vec1.cross(_368, vec2);

@@ -15,7 +15,7 @@ public:
     void drawBloom() const;
     void setup(s32);
     void moveCoord();
-    void calcGalaxyPos(TVec3f*) const;
+    void calcGalaxyPos(Vec3f*) const;
     void initDraw(const Color8&) const;
     void drawCelling(f32, bool, f32) const;
     void drawSide(f32, bool, f32) const;

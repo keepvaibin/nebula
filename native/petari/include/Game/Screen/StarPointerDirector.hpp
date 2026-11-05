@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/Screen/StarPointerGuidance.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class StarPointerController;
 class StarPointerLayout;
@@ -31,8 +31,8 @@ public:
         return mFovy;
     }
 
-    TPos3f mViewMtx;
-    TProj3f mProjMtx;
+    Pos3f mViewMtx;
+    Proj3f mProjMtx;
     f32 mFovy;
     f32 mFocalLength;
 };
@@ -77,18 +77,18 @@ public:
     StarPointerPeekZ* mPeekZ;
     StarPointerGuidance* mGuidance;
     s32 _18;
-    TVec3f mNozzleAimPos;
+    Vec3f mNozzleAimPos;
 };
 
 namespace StarPointerFunction {
-    bool forceOutsideScreenEdge(TVec2f*, const TVec2f&, const TVec2f&, f32, f32);
-    bool isInScreen(const TVec2f&, f32, f32);
-    bool forceInsideScreenEdge(TVec2f*);
+    bool forceOutsideScreenEdge(Vec2f*, const Vec2f&, const Vec2f&, f32, f32);
+    bool isInScreen(const Vec2f&, f32, f32);
+    bool forceInsideScreenEdge(Vec2f*);
     StarPointerDirector* getStarPointerDirector();
     s32 getNumStarPointer();
     s32 getPastPointNum(s32);
-    const TVec2f& getPastPosition(s32, s32);
-    const TVec2f& getNextPastPosition(s32, s32);
+    const Vec2f& getPastPosition(s32, s32);
+    const Vec2f& getNextPastPosition(s32, s32);
     s32 getNextPastPointNum(s32);
     bool canShoot(s32);
 };  // namespace StarPointerFunction

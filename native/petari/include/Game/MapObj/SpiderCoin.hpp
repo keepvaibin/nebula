@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class PartsModel;
 
@@ -17,18 +17,18 @@ public:
     void exeWait();
     void exeTouch();
     void exeTouchAndApart();
-    bool tryRub(s32, TVec2f*);
+    bool tryRub(s32, Vec2f*);
 
-    const TVec3f* mPointPos;
-    const TVec3f* mNeutralPos;
-    const TVec3f* mUp;
+    const Vec3f* mPointPos;
+    const Vec3f* mNeutralPos;
+    const Vec3f* mUp;
     u32 _98;
     u32 _9C;
     u32 _A0;
     f32 mThreadZ;
-    TVec2f mPad0Velocity;
-    TVec2f mPad1Velocity;
+    Vec2f mPad0Velocity;
+    Vec2f mPad1Velocity;
     PartsModel* mCocoonModel;
 
-    TPos3f mBaseMtx;
+    Pos3f mBaseMtx;
 };

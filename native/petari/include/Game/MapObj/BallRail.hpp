@@ -6,10 +6,10 @@ class BallRailPoint {
 public:
     BallRailPoint();
 
-    TVec3f _0;
-    TVec3f _C;
-    TVec3f _18;
-    TVec3f _24;
+    Vec3f _0;
+    Vec3f _C;
+    Vec3f _18;
+    Vec3f _24;
 };
 
 class BallRail : public LiveActor {
@@ -29,7 +29,7 @@ public:
 
     BallRailPoint* mRailPoints;
     HitSensor* _90;
-    TVec3f _94;
+    Vec3f _94;
     s32 mNumPoints;
     f32 mAcceleration;
     f32 mDeceleration;

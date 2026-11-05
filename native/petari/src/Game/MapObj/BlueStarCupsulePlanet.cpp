@@ -17,8 +17,8 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
-#include <JSystem/JMath/JMath.hpp>
+#include <nebula_geometry.hpp>
+
 
 namespace {
     static const f32 sPointableRange = 3400.0f;
@@ -58,9 +58,9 @@ void BlueStarCupsulePlanet::init(const JMapInfoIter& rIter) {
     initNerve(GET_NERVE(BlueStarCupsulePlanet, BlueStarCupsulePlanetNrvWait));
     initHitSensor(1);
 
-    TVec3f offset, vec;
-    TPos3f mtx;
-    MR::addHitSensorMapObj(this, "body", 16, 0.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    Vec3f offset, vec;
+    Pos3f mtx;
+    MR::addHitSensorMapObj(this, "body", 16, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
     MR::initCollisionParts(this, mName, getSensor("body"), nullptr);
     MR::copyJointPos(this, "Root", &vec);
     mtx.set(getBaseMtx());
@@ -152,7 +152,7 @@ void BlueStarCupsulePlanet::releasedTarget() {
     }
 }
 
-void BlueStarCupsulePlanet::getTargetPosition(TVec3f* pPos) {
+void BlueStarCupsulePlanet::getTargetPosition(Vec3f* pPos) {
     MR::copyJointPos(this, "Root", pPos);
 }
 
@@ -236,7 +236,7 @@ void BlueStarCupsulePlanet::exeActive() {
 
 void BlueStarCupsulePlanet::calcAndSetBaseMtx() {
     if (mRotator != nullptr && mRotator->isWorking()) {
-        TPos3f mtx;
+        Pos3f mtx;
         mtx.identity();
         mtx.set(mRotator->getRotateMtx());
         mtx.setTrans(mPosition);
@@ -247,7 +247,7 @@ void BlueStarCupsulePlanet::calcAndSetBaseMtx() {
 }
 
 bool BlueStarCupsulePlanet::isPointable() const {
-    TVec3f pos, up;
+    Vec3f pos, up;
     MR::copyJointPos(this, "Root", &pos);
     f32 distance = pos.distance(*MR::getPlayerPos());
 

@@ -82,27 +82,27 @@ bool MarioActor::isCameraStateOn(SPECIAL_STATUS_FOR_CAMERA status) const {
     return false;
 }
 
-void MarioActor::getFrontVec(TVec3f* pVec) const {
+void MarioActor::getFrontVec(Vec3f* pVec) const {
     *pVec = mMario->mFrontVec;
 }
 
-void MarioActor::getSideVec(TVec3f* pVec) const {
+void MarioActor::getSideVec(Vec3f* pVec) const {
     *pVec = mMario->mSideVec;
 }
 
-void MarioActor::getUpVec(TVec3f* pVec) const {
+void MarioActor::getUpVec(Vec3f* pVec) const {
     *pVec = mUpVec;
 }
 
-void MarioActor::getLastMove(TVec3f* pVec) const {
+void MarioActor::getLastMove(Vec3f* pVec) const {
     *pVec = mLastMove;
 }
 
-const TVec3f& MarioActor::getLastMove() const {
+const Vec3f& MarioActor::getLastMove() const {
     return mLastMove;
 }
 
-const TVec3f& MarioActor::getTransForCamera() const {
+const Vec3f& MarioActor::getTransForCamera() const {
     return mCameraTrans;
 }
 
@@ -121,7 +121,7 @@ void MarioActor::updateTransForCamera() {
         return;
     }
 
-    mCameraTrans = mPosition + TVec3f(mMario->_13C);  // matches now. result of getter?
+    mCameraTrans = mPosition + Vec3f(mMario->_13C);  // matches now. result of getter?
 
     if (mMario->isSwimming() && mMario->mSwim->isOnWaterSurface()) {
         if (_332 < 100) {

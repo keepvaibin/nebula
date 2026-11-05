@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TVec.hpp>
+#include <nebula_geometry.hpp>
 
 class PalmIsland : public LiveActor {
 public:
@@ -14,6 +14,6 @@ public:
     void exeWait();
 
     s32 _8C;
-    TVec3f _90;
+    Vec3f _90;
     s32 _9C;
 };

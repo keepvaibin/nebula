@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class AnimScaleController;
 class JointController;
@@ -31,8 +31,8 @@ public:
     void endBind();
     void exeBreak();
     void exeDead();
-    bool calcJoint(TPos3f*, const JointControllerInfo&);
-    bool damage(const TVec3f&, bool);
+    bool calcJoint(Pos3f*, const JointControllerInfo&);
+    bool damage(const Vec3f&, bool);
     void initRail(const JMapInfoIter&);
     void initJoint();
     void initSensor();
@@ -44,7 +44,7 @@ public:
     f32 mSpeedMax;
     f32 mSpeed;
     SkeletalFishRailControl* mRailControl;
-    TPos3f _AC;
+    Pos3f _AC;
     f32 mObjArg1;
     AnimScaleController* mScaleController;
     LiveActor* mStarPieceTargets[4];

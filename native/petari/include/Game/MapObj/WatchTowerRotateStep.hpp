@@ -20,6 +20,6 @@ public:
     void exeMoveStart();
     void exeMove();
 
-    TVec3f mRotateVec;
+    Vec3f mRotateVec;
     PartsModel** mLift;
 };

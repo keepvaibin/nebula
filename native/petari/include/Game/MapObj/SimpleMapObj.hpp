@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/MapObj/MapObjActor.hpp"
-#include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_geometry.hpp>
 
 class NameObjArchiveListCollector;
 
@@ -69,7 +69,7 @@ public:
     virtual void init(const JMapInfoIter&);
     virtual void control();
 
-    TMtx34f _C4;
+    Mtx34f _C4;
 };
 
 class SimpleMirrorObj : public MapObjActor {

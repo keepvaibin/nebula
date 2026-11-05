@@ -20,13 +20,13 @@ class ElectricRailSeparator {
 public:
     ElectricRailSeparator();
 
-    void setup(const TVec3f&, const TVec3f&, const TVec3f&);
+    void setup(const Vec3f&, const Vec3f&, const Vec3f&);
 
-    TVec3f _0;
-    TVec3f mSide;
-    TVec3f mUp;
-    TVec3f mFront;
-    TVec3f _30;
+    Vec3f _0;
+    Vec3f mSide;
+    Vec3f mUp;
+    Vec3f mFront;
+    Vec3f _30;
 };
 
 class ElectricRailShadowDrawer : public ShadowVolumeDrawer {
@@ -66,7 +66,7 @@ public:
     void drawPlaneGX(f32, f32, f32, f32) const;
     void initShadow(const JMapInfoIter&);
     void updateHitSensorPos();
-    void calcGravity(TVec3f*, const TVec3f&) const;
+    void calcGravity(Vec3f*, const Vec3f&) const;
 
     void exeDisappear();
     void exeWait();
@@ -74,7 +74,7 @@ public:
 
     ElectricRailPoint* mPoints;
     s32 mPointCount;
-    TVec3f* _94;
+    Vec3f* _94;
     ElectricRailSeparator* mSeparators;
     s32 mSeparatorCount;
     // The rail as the renderer draws it while it waits.

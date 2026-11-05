@@ -29,22 +29,22 @@ void CameraMtxRegParallel::calcIdealPose() {
         mDist = 300.0f;
     }
 
-    TVec3f watchPoint;
+    Vec3f watchPoint;
     CameraLocalUtil::makeWatchPoint(&watchPoint, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
 
-    TPos3f mtx;
+    Pos3f mtx;
     mtx.set(CameraLocalUtil::getMtxReg(mString));
 
-    TVec3f pos;
-    MR::polarToCross(TVec3f(0.0f, 0.0f, 0.0f), &pos, mDist, mAngleX, mAngleY - MR::pi() / 2.0f);
+    Vec3f pos;
+    MR::polarToCross(Vec3f(0.0f, 0.0f, 0.0f), &pos, mDist, mAngleX, mAngleY - MR::pi() / 2.0f);
 
     mtx.mult33(pos);
     pos.add(watchPoint);
 
-    TVec3f up;
+    Vec3f up;
     mtx.getYDir(up);
 
-    TVec3f wPoint = mWPoint;
+    Vec3f wPoint = mWPoint;
     mtx.mult33(wPoint);
 
     watchPoint.add(wPoint);
