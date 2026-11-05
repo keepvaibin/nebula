@@ -1,19 +1,30 @@
 // J3D material 275 (tools/dev/gen_j3d_materials.py from the game's material set; E-04)
+// constants 0x301602a0
+struct MaterialConstants {
+    float4 kcolor2;
+    float4 mat_color0;
+    float4 amb_color0;
+    float4 fog;
+    float4 fog_color;
+    float4 tex_scale0;
+    float4 ovr;
+    float4 ovr_coord;
+};
 #include "j3d_material.hlsli"
 
 void j3d_channels(float3 eye, float3 nrm, float4 vtx0, float4 vtx1, out float4 lit0, out float4 lit1) {
     lit0 = vtx0;
     lit1 = vtx1;
-    lit0.rgb = material.mat_color[0].rgb;
-    lit0.a = material.mat_color[0].a * saturate((material.amb_color[0].a * 255.0 + j3d_light(0u, 2u, 2u, eye, nrm).a) / 255.0);
+    lit0.rgb = material.mat_color0.rgb;
+    lit0.a = material.mat_color0.a * saturate((material.amb_color0.a * 255.0 + j3d_light(0u, 2u, 2u, eye, nrm).a) / 255.0);
     lit1 = vtx1;
 }
 #if NATIVE_PIXEL_LIT
 void j3d_channels_enhanced(float3 eye, float3 nrm, float4 vtx0, float4 vtx1, out float4 lit0, out float4 lit1) {
     lit0 = vtx0;
     lit1 = vtx1;
-    lit0.rgb = material.mat_color[0].rgb;
-    lit0.a = material.mat_color[0].a * saturate((material.amb_color[0].a * 255.0 + j3d_light(0u, 2u, 2u, eye, nrm).a) / 255.0);
+    lit0.rgb = material.mat_color0.rgb;
+    lit0.a = material.mat_color0.a * saturate((material.amb_color0.a * 255.0 + j3d_light(0u, 2u, 2u, eye, nrm).a) / 255.0);
     lit1 = vtx1;
 }
 #endif
@@ -91,39 +102,33 @@ float4 material_color(NativeVaryings i) {
     j3d_pixel_channels(i);
 #endif
     [branch] if (material.ovr.x != 0.0) {
-        const float4 t = tex[0].Sample(samp[0], j3d_texel(i.uv[0], 0u) / material.tex_scale[0].zw);
+        const float4 t = tex[0].Sample(samp[0], (j3d_coord(i.uv[0]) * material.tex_scale0.xy) / material.tex_scale0.zw);
         const float4 ras = float4(0.0, 0.0, 0.0, 0.0);
-        const float4 prev = material.reg[0];
-        const float4 r0 = material.reg[1];
-        const float4 r1 = material.reg[2];
-        const float4 r2 = material.reg[3];
-        const float ka = material.kcolor[2].r;
-        return j3d_override(t, i.color, material.kcolor[2].r, saturate((0.0 + lerp(ka, 0.0, ras.a))), i.pos);
+        const float4 prev = float4(1.0, 1.0, 1.0, 1.0);
+        const float ka = material.kcolor2.r;
+        return j3d_override(t, i.color, material.kcolor2.r, saturate((0.0 + lerp(ka, 0.0, ras.a))), i.pos);
     }
-    float4 prev = material.reg[0];
-    float4 r0 = material.reg[1];
-    float4 r1 = material.reg[2];
-    float4 r2 = material.reg[3];
+    float4 prev = float4(1.0, 1.0, 1.0, 1.0);
     float2 tevcoord = float2(0.0, 0.0);
-    const float3 ind0 = round(tex[1].Sample(samp[1], j3d_texel(i.uv[1], 1u) / float2(1.0, 1.0) / material.tex_scale[1].zw).abg * 255.0);
+    const float3 ind0 = round(tex[1].Sample(samp[1], j3d_coord(i.uv[1]) / float2(1.0, 1.0)).abg * 255.0);
     {  // stage 0
-        float2 texel = j3d_texel(i.uv[0], 0u);
+        float2 texel = (j3d_coord(i.uv[0]) * material.tex_scale0.xy);
         float3 sv = floor(ind0 / 1.0);
         sv.x += -128.0;
         sv.y += -128.0;
         sv.z += -128.0;
         const float2 off = texel * sv.x / 256.0;
         tevcoord = texel + off;
-        const float4 t = tex[0].Sample(samp[0], tevcoord / material.tex_scale[0].zw).rgba;
+        const float4 t = tex[0].Sample(samp[0], tevcoord / material.tex_scale0.zw).rgba;
         const float4 ras = i.color.rgba;
-        const float ka = material.kcolor[2].r;
+        const float ka = material.kcolor2.r;
         const float3 rc = saturate((float3(0.0, 0.0, 0.0) + lerp(float3(0.0, 0.0, 0.0), ras.rgb, t.rgb)));
         const float ra = saturate((0.0 + lerp(ka, 0.0, ras.a)));
         prev.rgb = rc;
         prev.a = ra;
     }
     {  // stage 1
-        const float4 t = tex[2].Sample(samp[2], j3d_texel(i.uv[2], 2u) / material.tex_scale[2].zw).rgba;
+        const float4 t = tex[2].Sample(samp[2], j3d_coord(i.uv[2])).rgba;
         const float4 ras = i.color.rgba;
         const float3 rc = saturate((prev.rgb + lerp(float3(0.0, 0.0, 0.0), float3(1.0, 1.0, 1.0), t.rgb)));
         const float ra = (0.0 + lerp(ras.a, 0.0, 0.0));

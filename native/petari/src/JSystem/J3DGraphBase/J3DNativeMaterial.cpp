@@ -20,6 +20,24 @@ extern "C" void nebula_log(const char* format, ...);
 // A material: its program and its values (nebula_game_api.h).
 
 namespace {
+    // A J3D material's values, whatever its shader reads of them. Slots (tools/dev/j3d_compact.py SLOTS): where each
+    // lies in these, four floats each. Its shader's constants are the slots its layout names, in order.
+    const u32 cSlotCount = 30;
+    const u8 cSlotAt[cSlotCount] = {4,  8,  12, 16, 20, 24, 28, 32, 36, 40,  44,  48,  52,  56,  60,
+                                    64, 68, 72, 76, 80, 84, 88, 92, 96, 100, 104, 108, 112, 116, 120};
+    enum {
+        SLOT_REGISTER1 = 0,
+        SLOT_MAT_COLOR0 = 7,
+        SLOT_AMB_COLOR0 = 9,
+        SLOT_FOG = 17,
+        SLOT_FOG_COLOR = 18,
+        SLOT_TEX_SCALE0 = 20,
+        SLOT_OVR = 28,
+        SLOT_OVR_COORD = 29,
+    };
+    f32 sValues[124];
+    u32 sLayout = 0;
+
     // The ambient colours now: a material with its own sets them, an actor's light sets them after that.
     f32 sAmbient[2][4];
 
@@ -141,6 +159,30 @@ namespace {
         watchMaterial(NULL);
     }
 
+    u32 layoutOf(u32 shader) {
+        const NebulaHostServices* pHost = nebula_host();
+        return pHost->material_layout(pHost->user, shader);
+    }
+
+    // The material's constants from its values, by its shader's layout.
+    void packConstants(u32 shader) {
+        sLayout = layoutOf(shader);
+        f32* pOut = sCurrent.constants;
+        for (u32 k = 0; k < cSlotCount; k++) {
+            if ((sLayout & (1u << k)) != 0) {
+                memcpy(pOut, sValues + cSlotAt[k], 4 * sizeof(f32));
+                pOut += 4;
+            }
+        }
+    }
+
+    // Slot `slot` of the current material's values into its constants, if its shader reads it.
+    void packSlot(u32 slot) {
+        if ((sLayout & (1u << slot)) != 0) {
+            memcpy(sCurrent.constants + 4 * __builtin_popcount(sLayout & ((1u << slot) - 1u)), sValues + cSlotAt[slot], 4 * sizeof(f32));
+        }
+    }
+
     // The draw's native material from the list's program and values (j3d_material.hlsli's constants).
     void sendNative(const J3DMaterialSetup& rSetup, const J3DMaterialValues& rValues, u32 shader,
                     bool keepDepthCull = false, const NebulaCookedMaterial* cooked = NULL, bool own = false) {
@@ -180,17 +222,19 @@ namespace {
             material.blend_op = NEBULA_NATIVE_KEPT;
             material.depth_test = NEBULA_NATIVE_KEPT;
         }
-        fillConstants(material.constants, rSetup, rValues);
+        memset(sValues, 0, sizeof(sValues));
+        fillConstants(sValues, rSetup, rValues);
         // Each coordinate's scale and each map's size (j3d_material.hlsli tex_scale): a sample reads coordinate c
         // of map m at c's scale over m's size.
         for (u32 k = 0; k < 8; k++) {
-            f32* pScale = material.constants + 84 + k * 4;
+            f32* pScale = sValues + 84 + k * 4;
             const NebulaMaterialTexture& rTex = rValues.texture[k];
             pScale[2] = rTex.width != 0 ? rTex.width : 1.0f;
             pScale[3] = rTex.height != 0 ? rTex.height : 1.0f;
             pScale[0] = rValues.tex_coord_scale[k].scale_s != 0 ? rValues.tex_coord_scale[k].scale_s : pScale[2];
             pScale[1] = rValues.tex_coord_scale[k].scale_t != 0 ? rValues.tex_coord_scale[k].scale_t : pScale[3];
         }
+        packConstants(shader);
         for (u32 map = 0; map < 8; map++) {
             const NebulaMaterialTexture& rTex = rValues.texture[map];
             if (rTex.image == 0) {
@@ -401,23 +445,24 @@ namespace J3DNativeMaterial {
         if (sCurrentKind != CURRENT_J3D) {
             return false;
         }
-        // j3d_material.hlsli MaterialConstants::ovr, after the register file and the coordinate scales.
-        f32* pOverride = sCurrent.constants + 84 + 32;
+        f32* pOverride = sValues + cSlotAt[SLOT_OVR];
         pOverride[0] = static_cast< f32 >(mode);
         pOverride[1] = a0;
         pOverride[2] = a1;
         pOverride[3] = ref;
+        packSlot(SLOT_OVR);
         sCurrent.constants_only = 1;
         J3DNativeState::sendMaterial(&sCurrent);
         return true;
     }
 
     void overrideAlpha(f32 alpha) {
-        f32* pOverride = sCurrent.constants + 84 + 32;
+        f32* pOverride = sValues + cSlotAt[SLOT_OVR];
         if (sCurrentKind != CURRENT_J3D || pOverride[0] != 5.0f) {
             return;
         }
         pOverride[1] = alpha;
+        packSlot(SLOT_OVR);
         sCurrent.constants_only = 1;
         J3DNativeState::sendMaterial(&sCurrent);
     }
@@ -435,11 +480,13 @@ namespace J3DNativeMaterial {
         if (sCurrentKind != CURRENT_J3D) {
             return false;
         }
-        // j3d_material.hlsli MaterialConstants::ovr_coord, after ovr; coordinate 0's scale as the new map's size.
-        sCurrent.constants[84 + 32 + 4] = 1.0f;
-        f32* pScale = sCurrent.constants + 84;
+        // Coordinate 0's scale as the new map's size.
+        sValues[cSlotAt[SLOT_OVR_COORD]] = 1.0f;
+        packSlot(SLOT_OVR_COORD);
+        f32* pScale = sValues + cSlotAt[SLOT_TEX_SCALE0];
         pScale[0] = pScale[2] = width;
         pScale[1] = pScale[3] = height;
+        packSlot(SLOT_TEX_SCALE0);
         memset(&sCurrent.textures[0], 0, sizeof(sCurrent.textures[0]));
         sCurrent.textures[0].image = keyOf(pImage);
         sCurrent.textures[0].repeat_s = 1;
@@ -478,8 +525,10 @@ namespace J3DNativeMaterial {
         }
         sCurrent.shader = NEBULA_SHADER_J3D_FIRST + id - 1;
         if ((pass & (NEBULA_PASS_PLAYER_OPACITY | NEBULA_PASS_LIGHT_MASK | NEBULA_PASS_SHADOW_VOLUME)) != 0) {
-            sCurrent.constants[80] = sCurrent.constants[81] = 0;
+            sValues[80] = sValues[81] = 0;
         }
+        memset(sCurrent.constants, 0, sizeof(sCurrent.constants));
+        packConstants(sCurrent.shader);
         sCurrent.constants_only = 0;
         J3DNativeState::sendMaterial(&sCurrent);
         watchMaterial(&sCurrent);
@@ -489,7 +538,8 @@ namespace J3DNativeMaterial {
         setColor8(sAmbient[channel & 1], color);
         // An actor's light outranks a material's own: the material the draws use now takes it.
         if (sCurrentKind == CURRENT_J3D) {
-            setColor8(sCurrent.constants + 40 + (channel & 1) * 4, color);
+            setColor8(sValues + 40 + (channel & 1) * 4, color);
+            packSlot(SLOT_AMB_COLOR0 + (channel & 1));
             sCurrent.constants_only = 1;
             J3DNativeState::sendMaterial(&sCurrent);
         }
@@ -501,7 +551,10 @@ namespace J3DNativeMaterial {
 
     void setCurrentRegister(u32 index, NebulaColor8 color) {
         if (sCurrentKind == CURRENT_J3D) {
-            setColor8(sCurrent.constants + (index & 3) * 4, color);
+            setColor8(sValues + (index & 3) * 4, color);
+            if ((index & 3) != 0) {
+                packSlot(SLOT_REGISTER1 + (index & 3) - 1);
+            }
             sCurrent.constants_only = 1;
             J3DNativeState::sendMaterial(&sCurrent);
         }
@@ -509,7 +562,8 @@ namespace J3DNativeMaterial {
 
     void setCurrentMaterialColor(u32 channel, NebulaColor8 color) {
         if (sCurrentKind == CURRENT_J3D) {
-            setColor8(sCurrent.constants + 32 + (channel & 1) * 4, color);
+            setColor8(sValues + 32 + (channel & 1) * 4, color);
+            packSlot(SLOT_MAT_COLOR0 + (channel & 1));
             sCurrent.constants_only = 1;
             J3DNativeState::sendMaterial(&sCurrent);
         }
@@ -517,19 +571,20 @@ namespace J3DNativeMaterial {
 
     void setCurrentAmbient(u32 channel, NebulaColor8 color) {
         if (sCurrentKind == CURRENT_J3D) {
-            setColor8(sCurrent.constants + 40 + (channel & 1) * 4, color);
+            setColor8(sValues + 40 + (channel & 1) * 4, color);
+            packSlot(SLOT_AMB_COLOR0 + (channel & 1));
             sCurrent.constants_only = 1;
             J3DNativeState::sendMaterial(&sCurrent);
         }
     }
 
     const f32* currentRegister(u32 index) {
-        return sCurrent.constants + (index & 3) * 4;
+        return sValues + (index & 3) * 4;
     }
 
     void setCurrentFog(f32 start, f32 end, f32 nearZ, f32 farZ, NebulaColor8 color) {
         if (sCurrentKind == CURRENT_J3D) {
-            f32* const pC = sCurrent.constants;
+            f32* const pC = sValues;
             pC[72] = start;
             pC[73] = end;
             pC[74] = nearZ;
@@ -538,6 +593,8 @@ namespace J3DNativeMaterial {
             pC[77] = color.g / 255.0f;
             pC[78] = color.b / 255.0f;
             pC[79] = 2.0f;  // j3d_material.hlsli j3d_fog: linear
+            packSlot(SLOT_FOG);
+            packSlot(SLOT_FOG_COLOR);
             sCurrent.constants_only = 1;
             J3DNativeState::sendMaterial(&sCurrent);
         }

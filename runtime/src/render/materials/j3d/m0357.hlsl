@@ -1,4 +1,13 @@
 // J3D material 357 (tools/dev/gen_j3d_materials.py from the game's material set; E-04)
+// constants 0x30060009
+struct MaterialConstants {
+    float4 reg1;
+    float4 kcolor0;
+    float4 fog;
+    float4 fog_color;
+    float4 ovr;
+    float4 ovr_coord;
+};
 #include "j3d_material.hlsli"
 
 void material_vertex(NativeVertex v, inout NativeVaryings o) {
@@ -45,21 +54,17 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
 }
 float4 material_color(NativeVaryings i) {
     [branch] if (material.ovr.x != 0.0) {
-        const float4 t = tex[0].Sample(samp[0], j3d_texel(i.uv[0], 0u) / material.tex_scale[0].zw);
+        const float4 t = tex[0].Sample(samp[0], j3d_coord(i.uv[0]));
         const float4 ras = float4(0.0, 0.0, 0.0, 0.0);
-        const float4 prev = material.reg[0];
-        const float4 r0 = material.reg[1];
-        const float4 r1 = material.reg[2];
-        const float4 r2 = material.reg[3];
-        const float ka = material.kcolor[0].a;
-        return j3d_override(t, i.color, material.kcolor[0].a, saturate((t.a + lerp(ras.a, j3d_in(r0.a), j3d_in(r0.a))) * 0.5), i.pos);
+        const float4 prev = float4(1.0, 1.0, 1.0, 1.0);
+        const float4 r0 = material.reg1;
+        const float ka = material.kcolor0.a;
+        return j3d_override(t, i.color, material.kcolor0.a, saturate((t.a + lerp(ras.a, j3d_in(r0.a), j3d_in(r0.a))) * 0.5), i.pos);
     }
-    float4 prev = material.reg[0];
-    float4 r0 = material.reg[1];
-    float4 r1 = material.reg[2];
-    float4 r2 = material.reg[3];
+    float4 prev = float4(1.0, 1.0, 1.0, 1.0);
+    float4 r0 = material.reg1;
     {  // stage 0
-        const float4 t = tex[0].Sample(samp[0], j3d_texel(i.uv[0], 0u) / material.tex_scale[0].zw).rgba;
+        const float4 t = tex[0].Sample(samp[0], j3d_coord(i.uv[0])).rgba;
         const float4 ras = i.color.rgba;
         const float3 rc = saturate((r0.rgb + lerp(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0))));
         const float ra = saturate((t.a + lerp(ras.a, j3d_in(r0.a), j3d_in(r0.a))) * 0.5);
@@ -67,7 +72,7 @@ float4 material_color(NativeVaryings i) {
         prev.a = ra;
     }
     {  // stage 1
-        const float4 t = tex[1].Sample(samp[1], j3d_texel(i.uv[1], 1u) / material.tex_scale[1].zw).rgba;
+        const float4 t = tex[1].Sample(samp[1], j3d_coord(i.uv[1])).rgba;
         const float4 ras = i.color.rgba;
         const float3 rc = saturate((prev.rgb + lerp(float3(0.0, 0.0, 0.0), t.rgb, t.rgb)));
         const float ra = (prev.a + lerp(0.0, 0.0, 0.0));

@@ -2548,6 +2548,15 @@ void svc_texture_coordinate(void*, uint32_t coord, uint32_t from, uint32_t matri
 #endif
 }
 
+std::uint32_t svc_material_layout(void*, std::uint32_t shader) {
+#if defined(NEBULA_HOST_RENDERER)
+    return galaxy::render::native_material_layout(shader);
+#else
+    (void)shader;
+    return 0u;
+#endif
+}
+
 void svc_native_material(void*, const NebulaNativeMaterial* native) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::render::shapes;
@@ -4352,6 +4361,7 @@ int main(int argc, char** argv) {
     services.shape_draw = svc_shape_draw;
     services.shape_palette = svc_shape_palette;
     services.native_material = svc_native_material;
+    services.material_layout = svc_material_layout;
     services.test_frame_step = deterministic_mode() ? svc_test_frame_step : nullptr;
     services.view_projection = svc_view_projection;
     services.view_viewport = svc_view_viewport;

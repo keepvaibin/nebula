@@ -1,4 +1,14 @@
 // J3D material 675 (tools/dev/gen_j3d_materials.py from the game's material set; E-04)
+// constants 0x30060089
+struct MaterialConstants {
+    float4 reg1;
+    float4 kcolor0;
+    float4 mat_color0;
+    float4 fog;
+    float4 fog_color;
+    float4 ovr;
+    float4 ovr_coord;
+};
 #include "j3d_material.hlsli"
 
 void material_vertex(NativeVertex v, inout NativeVaryings o) {
@@ -9,8 +19,8 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
     o.lit_eye = v.eye;
     o.lit_nrm = nrm;
 #endif
-    o.color.rgb = material.mat_color[0].rgb;
-    o.color.a = material.mat_color[0].a;
+    o.color.rgb = material.mat_color0.rgb;
+    o.color.a = material.mat_color0.a;
     o.color1 = v.color1;
     {  // coordinate 0: kind 0, projective 0, row 1
         const float4 c = float4(v.nrm, 1.0);
@@ -74,21 +84,16 @@ float4 material_color(NativeVaryings i) {
     if (j3d_enhanced()) enh_key_highlight(g_enh, i.lit_eye);
 #endif
     [branch] if (material.ovr.x != 0.0) {
-        const float4 t = J3D_ENV(tex[0].Sample(samp[0], j3d_texel(i.uv[0], 0u) / material.tex_scale[0].zw));
+        const float4 t = J3D_ENV(tex[0].Sample(samp[0], j3d_coord(i.uv[0])));
         const float4 ras = float4(0.0, 0.0, 0.0, 0.0);
-        const float4 prev = material.reg[0];
-        const float4 r0 = material.reg[1];
-        const float4 r1 = material.reg[2];
-        const float4 r2 = material.reg[3];
-        const float ka = material.kcolor[0].a;
-        return j3d_override(t, i.color, material.kcolor[0].a, (0.0 + lerp(0.0, t.a, ras.a)), i.pos);
+        const float4 prev = float4(1.0, 1.0, 1.0, 1.0);
+        const float ka = material.kcolor0.a;
+        return j3d_override(t, i.color, material.kcolor0.a, (0.0 + lerp(0.0, t.a, ras.a)), i.pos);
     }
-    float4 prev = material.reg[0];
-    float4 r0 = material.reg[1];
-    float4 r1 = material.reg[2];
-    float4 r2 = material.reg[3];
+    float4 prev = float4(1.0, 1.0, 1.0, 1.0);
+    float4 r0 = material.reg1;
     {  // stage 0
-        const float4 t = J3D_ENV(tex[0].Sample(samp[0], j3d_texel(i.uv[0], 0u) / material.tex_scale[0].zw).rgba);
+        const float4 t = J3D_ENV(tex[0].Sample(samp[0], j3d_coord(i.uv[0])).rgba);
         const float4 ras = i.color.rgba;
         const float3 k = float4(float3(64.0 / 255.0, 64.0 / 255.0, 64.0 / 255.0), 0.0).rgb;
         const float3 rc = saturate((r0.rgb + lerp(float3(0.0, 0.0, 0.0), t.rgb, k.rgb)));
@@ -97,7 +102,7 @@ float4 material_color(NativeVaryings i) {
         prev.a = ra;
     }
     {  // stage 1
-        const float4 t = J3D_ENV(tex[1].Sample(samp[1], j3d_texel(i.uv[1], 1u) / material.tex_scale[1].zw).rgba);
+        const float4 t = J3D_ENV(tex[1].Sample(samp[1], j3d_coord(i.uv[1])).rgba);
         const float4 ras = i.color.rgba;
         const float3 k = float4(float3(1.0, 1.0, 1.0), 0.0).rgb;
         const float3 rc = saturate((prev.rgb + lerp(float3(0.0, 0.0, 0.0), k.rgb, t.rgb)));
@@ -106,9 +111,9 @@ float4 material_color(NativeVaryings i) {
         prev.a = ra;
     }
     {  // stage 2
-        const float4 t = tex[2].Sample(samp[2], j3d_texel(i.uv[2], 2u) / material.tex_scale[2].zw).rgba;
+        const float4 t = tex[2].Sample(samp[2], j3d_coord(i.uv[2])).rgba;
         const float4 ras = i.color.rgba;
-        const float3 k = float4(material.kcolor[0].aaa, 0.0).rgb;
+        const float3 k = float4(material.kcolor0.aaa, 0.0).rgb;
         const float3 rc = saturate((prev.rgb - lerp(float3(0.0, 0.0, 0.0), k.rgb, t.rgb)));
         const float ra = (0.0 + lerp(ras.a, 0.0, 0.0));
         prev.rgb = rc;

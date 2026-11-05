@@ -58,7 +58,7 @@ void materials_in(const fs::path& file, std::set<std::uint32_t>& found) {
     }
     std::uint32_t count = 0u;
     std::memcpy(&count, bytes.data() + 12, 4);
-    if (56u + std::uint64_t{count} * 24u > bytes.size()) {
+    if (56u + std::uint64_t{count} * 28u > bytes.size()) {
         return;
     }
     for (std::uint32_t i = 0u; i < count; ++i) {
@@ -82,7 +82,7 @@ void put64(std::string& out, std::size_t at, std::uint64_t value) {
     std::memcpy(out.data() + at, &value, 8);
 }
 
-std::string file_of(const std::map<std::uint32_t, std::vector<Stage>>& materials) {
+std::string file_of(const std::map<std::uint32_t, std::vector<Stage>>& materials, const std::map<std::uint32_t, std::uint32_t>& layouts) {
     struct Row {
         std::uint32_t id;
         std::uint8_t variant;
@@ -99,9 +99,9 @@ std::string file_of(const std::map<std::uint32_t, std::vector<Stage>>& materials
             }
         }
     }
-    std::string out(56u + rows.size() * 24u, '\0');
+    std::string out(56u + rows.size() * 28u, '\0');
     std::memcpy(out.data(), "NBSHADER", 8);
-    put32(out, 8, 1u);
+    put32(out, 8, 2u);
     put32(out, 12, static_cast<std::uint32_t>(rows.size()));
     std::memcpy(out.data() + 16, native_shader_interface(), 40);
     std::map<std::tuple<std::uint32_t, std::uint8_t, bool>, std::pair<std::uint64_t, std::uint64_t>> places;
@@ -119,6 +119,7 @@ std::string file_of(const std::map<std::uint32_t, std::vector<Stage>>& materials
         put32(out, at, row.id);
         out[at + 4u] = static_cast<char>(row.variant);
         out[at + 5u] = row.pixel ? 1 : 0;
+        put32(out, 56u + rows.size() * 24u + i * 4u, layouts.at(row.id));
         put64(out, at + 8u, offset);
         put64(out, at + 16u, size);
     }
@@ -202,7 +203,11 @@ ModShaderBuild build_missing_mod_shaders(const std::filesystem::path& sources, c
     result.built = static_cast<unsigned>(built.size());
     if (!built.empty()) {
         std::ofstream out(output, std::ios::binary);
-        const std::string bytes = file_of(built);
+        std::map<std::uint32_t, std::uint32_t> layouts;
+        for (const Job& job : jobs) {
+            layouts[job.id] = material_layout_of_source(job.source);
+        }
+        const std::string bytes = file_of(built, layouts);
         out.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
     }
     return result;
