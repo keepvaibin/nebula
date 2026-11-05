@@ -251,9 +251,9 @@ void J3DModelX::drawIn(J3DMaterial* material, bool fog, MtxPtr base, J3DModel* m
         material.cull = NEBULA_NATIVE_KEPT;
         const OverrideColor& rColor = kOverrideColors[override];
         if (rColor.a == 2) {
-            const f32* pRegisters = J3DNativeMaterial::registers();
+            const f32* pRegister = J3DNativeMaterial::currentRegister(1);
             for (u32 c = 0; c < 4; c++) {
-                material.constants[c] = pRegisters[4 + c];
+                material.constants[c] = pRegister[c];
             }
         } else {
             material.constants[0] = rColor.r / 255.0f;
@@ -395,8 +395,7 @@ void MarioModelTint::send() const {
     J3DNativeShape::flushState();
     switch (kind) {
     case Kind_Alpha:
-        J3DNativeMaterial::setColorRegister(3, color0);
-        J3DNativeMaterial::sendRegisters();
+        J3DNativeMaterial::setCurrentRegister(3, color0);
         J3DPass::blend(NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_INV_SRC_ALPHA);
         J3DPass::cull(NEBULA_CULL_BACK);
         J3DNativeMaterial::applyPass(NEBULA_PASS_PLAYER_OPACITY);
@@ -405,22 +404,19 @@ void MarioModelTint::send() const {
         J3DNativeMaterial::overrideAlpha(alpha / 255.0f);
         break;
     case Kind_ReflectAlpha:
-        J3DNativeMaterial::setColorRegister(3, color0);
-        J3DNativeMaterial::sendRegisters();
+        J3DNativeMaterial::setCurrentRegister(3, color0);
         J3DNativeMaterial::applyPass(NEBULA_PASS_REFLECTION_ALPHA);
         break;
     case Kind_Light:
-        J3DNativeMaterial::setLightAmbient(0, color0);
-        J3DNativeMaterial::setLightMaterial(0, color1);
+        J3DNativeMaterial::setCurrentAmbient(0, color0);
+        J3DNativeMaterial::setCurrentMaterialColor(0, color1);
         if (hasFog) {
-            J3DNativeMaterial::setFog(2, fogStart, fogEnd, fogNear, fogFar, fogColor);
+            J3DNativeMaterial::setCurrentFog(fogStart, fogEnd, fogNear, fogFar, fogColor);
         }
-        J3DNativeMaterial::sendRegisters();
         J3DNativeMaterial::applyPass(NEBULA_PASS_PLAYER_LIGHT);
         break;
     case Kind_Ghost:
-        J3DNativeMaterial::setColorRegister(1, color0);
-        J3DNativeMaterial::sendRegisters();
+        J3DNativeMaterial::setCurrentRegister(1, color0);
         break;
     default:
         break;

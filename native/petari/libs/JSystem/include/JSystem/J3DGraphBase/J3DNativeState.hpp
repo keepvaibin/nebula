@@ -14,14 +14,6 @@ enum J3DLightFalloff {
 
 // What the draws that follow do to the target, in the host's values (nebula_game_api.h).
 #ifdef __cplusplus
-// The four colour registers a material's stages read and write (J3DMaterialValues order).
-enum J3DRegister {
-    J3D_REGISTER_OUTPUT = 0,
-    J3D_REGISTER_0 = 1,
-    J3D_REGISTER_1 = 2,
-    J3D_REGISTER_2 = 3,
-};
-
 namespace J3DPass {
     void depth(bool test, u8 compare, bool write);  // NEBULA_COMPARE_*
     void stencil(u8 test, u8 op);                   // NEBULA_STENCIL_*
@@ -33,23 +25,9 @@ namespace J3DPass {
     void writeColor(bool write);
     void writeAlpha(bool write);
     void positionMatrix(u8 index);          // the place vertices without one of their own use
-    // A pixel is kept when the two comparisons with their references, joined by `op` (cAlpha*), pass.
-    const u8 cAlphaAnd = 0;
-    const u8 cAlphaOr = 1;
-    void alphaCompare(u8 compare0, u8 reference0, u8 op, u8 compare1, u8 reference1);
-    void noAlphaTest();
-    void alphaTest(u8 compare, u8 reference);  // NEBULA_COMPARE_*
-    void noFog();
-    void linearFog(f32 start, f32 end, f32 nearZ, f32 farZ, NebulaColor8 color);
     // Pixels across; `spreadTexture`: texture coordinates 0-2 run 0 to 1 across the width of the line or the point.
     void lineWidth(f32 pixels, bool spreadTexture = false);
     void pointSize(f32 pixels, bool spreadTexture = false);
-    void registerColor(J3DRegister reg, NebulaColor8 color);
-    void registerColorWide(J3DRegister reg, const NebulaColor16& rColor);
-    void constantColor(u8 index, NebulaColor8 color);
-    void lightMaterial(u8 channel, NebulaColor8 color);
-    void lightAmbient(u8 channel, NebulaColor8 color);
-    void indirectMatrix(u8 index, const f32 offset[2][3], s8 scaleExp);
     void textureMatrix(u8 coord, u8 matrix);  // coordinate `coord` is texture coordinate 0 through texture matrix `matrix`
     void textureIdentity(u8 coord);           // coordinate `coord` is its own texture coordinate
 };  // namespace J3DPass
@@ -62,8 +40,6 @@ void J3DPassCull(u8 faces);
 void J3DPassWriteColor(int write);
 void J3DPassWriteAlpha(int write);
 void J3DPassPositionMatrix(u8 index);
-void J3DPassAlphaTest(u8 compare, u8 reference);
-void J3DPassNoFog(void);
 #ifdef __cplusplus
 }
 #endif

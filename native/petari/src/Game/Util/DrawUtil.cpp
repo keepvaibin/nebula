@@ -80,7 +80,6 @@ namespace MR {
         NebulaMtxIdentity(identity);
         J3DNativeShape::setPosition(0, identity);
         J3DNativeShape::setCurrentIdentity();
-        J3DPass::alphaTest(NEBULA_COMPARE_GREATER, 0);
         J3DPass::depth(false, NEBULA_COMPARE_LEQUAL, false);
         J3DPass::cull(NEBULA_CULL_NONE);
         J3DPass::positionMatrix(0);
@@ -174,7 +173,6 @@ namespace MR {
         mtxImm.identity();
         J3DNativeShape::setPosition(0, mtxImm);
         J3DPass::positionMatrix(0);
-        J3DPass::noAlphaTest();
         J3DPass::noBlend();
         J3DPass::writeAlpha(false);
         J3DPass::depth(true, NEBULA_COMPARE_ALWAYS, true);

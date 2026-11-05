@@ -1,3 +1,4 @@
+#include <JSystem/J3DGraphBase/J3DNativeMaterial.hpp>
 #include "Game/Map/LightFunction.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include "Game/Util/GameLightSignal.hpp"
@@ -196,7 +197,7 @@ void LightFunction::loadActorLightInfo(const ActorLightInfo* pInfo) {
     u8 alpha = pInfo->mAlpha2;
     NebulaColor8 c = {0, 0, 0, alpha};
     ::loadLightDiffuse(c, TVec3f(0.0f, 0.0f, 0.0f), 2);
-    J3DPass::lightAmbient(0, NebulaColor8(pInfo->mColor));
+    J3DNativeMaterial::setLightAmbient(0, NebulaColor8(pInfo->mColor));
 }
 
 void LightFunction::loadLightInfoCoin(const LightInfoCoin* pInfo) {

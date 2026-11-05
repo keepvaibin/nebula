@@ -157,7 +157,6 @@ namespace J3DNativeState {
 
     void initDefaults() {
         const NebulaColor8 black = {0, 0, 0, 0};
-        const NebulaColor8 white = {255, 255, 255, 255};
 
         for (u8 i = 0; i < 8; i++) {
             J3DPass::textureIdentity(i);
@@ -178,14 +177,11 @@ namespace J3DNativeState {
         J3DPass::cull(NEBULA_CULL_BACK);
         J3DNativeView::setScissor(0.0f, 0.0f, 1.0f, 1.0f);
         for (u8 channel = 0; channel < 2; channel++) {
-            J3DPass::lightAmbient(channel, black);
-            J3DPass::lightMaterial(channel, white);
+            J3DNativeMaterial::setLightAmbient(channel, black);
         }
 
         J3DNativeTexture::registerRecord(&sDefaultTexData);
 
-        J3DPass::noAlphaTest();
-        J3DPass::noFog();
         J3DPass::noBlend();
         J3DPass::writeColor(true);
         J3DPass::writeAlpha(true);
@@ -218,9 +214,6 @@ void J3DNativeStateSendLight(const J3DNativeLight* pLight, u8 index) {
 
 namespace J3DPass {
     namespace {
-        // The numbers of j3d_material.hlsli j3d_fog.
-        const u32 cFogNone = 0;
-        const u32 cFogLinear = 2;
         const u8 cFirstTextureSlot = 10;
         const u8 cIdentitySlot = 20;
 
@@ -283,33 +276,6 @@ namespace J3DPass {
         J3DNativeShape::setCurrentPosition(index % 10);
     }
 
-    void alphaCompare(u8 compare0, u8 reference0, u8 op, u8 compare1, u8 reference1) {
-        J3DNativeShape::flushState();
-        J3DNativeMaterial::setAlphaTest(compare0, reference0, op, compare1, reference1);
-        J3DNativeMaterial::sendRegisters();
-    }
-
-    void noAlphaTest() {
-        alphaCompare(NEBULA_COMPARE_ALWAYS, 0, cAlphaOr, NEBULA_COMPARE_ALWAYS, 0);
-    }
-
-    void alphaTest(u8 compare, u8 reference) {
-        alphaCompare(compare, reference, cAlphaOr, NEBULA_COMPARE_NEVER, 0);
-    }
-
-    void noFog() {
-        const NebulaColor8 none = {0, 0, 0, 0};
-        J3DNativeShape::flushState();
-        J3DNativeMaterial::setFog(cFogNone, 0.0f, 0.0f, 0.0f, 0.0f, none);
-        J3DNativeMaterial::sendRegisters();
-    }
-
-    void linearFog(f32 start, f32 end, f32 nearZ, f32 farZ, NebulaColor8 color) {
-        J3DNativeShape::flushState();
-        J3DNativeMaterial::setFog(cFogLinear, start, end, nearZ, farZ, color);
-        J3DNativeMaterial::sendRegisters();
-    }
-
     void lineWidth(f32 pixels, bool spreadTexture) {
         J3DNativeShape::flushState();
         sPass.line_width = pixels * (NEBULA_FRAME_UNITS / 456.0f);  // authored for a picture this many lines tall
@@ -322,42 +288,6 @@ namespace J3DPass {
         sPass.point_size = pixels * (NEBULA_FRAME_UNITS / 456.0f);  // authored for a picture this many lines tall
         sPass.point_divisor = spreadTexture ? 1 : 0;
         sPass.point_offsets = spreadTexture ? 7 : 0;
-    }
-
-    void registerColor(J3DRegister reg, NebulaColor8 color) {
-        J3DNativeShape::flushState();
-        J3DNativeMaterial::setColorRegister(reg, color);
-        J3DNativeMaterial::sendRegisters();
-    }
-
-    void registerColorWide(J3DRegister reg, const NebulaColor16& rColor) {
-        J3DNativeShape::flushState();
-        J3DNativeMaterial::setColorRegisterWide(reg, rColor);
-        J3DNativeMaterial::sendRegisters();
-    }
-
-    void constantColor(u8 index, NebulaColor8 color) {
-        J3DNativeShape::flushState();
-        J3DNativeMaterial::setConstantColor(index, color);
-        J3DNativeMaterial::sendRegisters();
-    }
-
-    void lightMaterial(u8 channel, NebulaColor8 color) {
-        J3DNativeShape::flushState();
-        J3DNativeMaterial::setLightMaterial(channel, color);
-        J3DNativeMaterial::sendRegisters();
-    }
-
-    void lightAmbient(u8 channel, NebulaColor8 color) {
-        J3DNativeShape::flushState();
-        J3DNativeMaterial::setLightAmbient(channel, color);
-        J3DNativeMaterial::sendRegisters();
-    }
-
-    void indirectMatrix(u8 index, const f32 offset[2][3], s8 scaleExp) {
-        J3DNativeShape::flushState();
-        J3DNativeMaterial::setIndirectMatrix(index, offset, scaleExp);
-        J3DNativeMaterial::sendRegisters();
     }
 
     void textureMatrix(u8 coord, u8 matrix) {
@@ -387,11 +317,5 @@ void J3DPassWriteAlpha(int write) {
 }
 void J3DPassPositionMatrix(u8 index) {
     J3DPass::positionMatrix(index);
-}
-void J3DPassAlphaTest(u8 compare, u8 reference) {
-    J3DPass::alphaTest(compare, reference);
-}
-void J3DPassNoFog(void) {
-    J3DPass::noFog();
 }
 }

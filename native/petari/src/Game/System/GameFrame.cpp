@@ -22,7 +22,6 @@ namespace {
         NebulaMtxIdentity(identity);
         J3DNativeShape::setPosition(0, identity);
         J3DPass::positionMatrix(0);
-        J3DPass::noAlphaTest();
         J3DPass::noBlend();
         J3DPass::depth(true, NEBULA_COMPARE_ALWAYS, true);
         J3DPass::cull(NEBULA_CULL_BACK);

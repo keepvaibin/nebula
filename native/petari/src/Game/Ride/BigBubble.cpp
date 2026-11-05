@@ -1,3 +1,4 @@
+#include "Game/MapObj/BigBubbleDrawer.hpp"
 #include "Game/Ride/BigBubble.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include "Game/AreaObj/BigBubbleGoalArea.hpp"
@@ -224,7 +225,7 @@ void BigBubble::calcAnim() {
 
 void BigBubble::draw() const {
     if (isDraw()) {
-        J3DPass::registerColor(J3D_REGISTER_1, mWarningColor);
+        BigBubbleDrawer::setWarningColor(mWarningColor);
         mSurface->draw();
     }
 }

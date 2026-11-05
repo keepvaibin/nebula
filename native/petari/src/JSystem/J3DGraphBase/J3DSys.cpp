@@ -1,4 +1,5 @@
 #include "JSystem/J3DGraphBase/J3DSys.hpp"
+#include "JSystem/J3DGraphBase/J3DNativeMaterial.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include "JSystem/J3DGraphBase/J3DNativeShape.hpp"
@@ -22,15 +23,11 @@ static Mtx j3dIdentityMtx = {
     {1.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, 0.0f},
 };
 
-static Mtx23 IndMtx = {
-    {0.5f, 0.0f, 0.0f}, {0.0f, 0.5f, 0.0f},
-};
 
 u32 j3dDefaultViewNo;
 
 static NebulaColor8 ColorBlack = {0x00, 0x00, 0x00, 0x00};
 
-static NebulaColor8 ColorWhite = {0xFF, 0xFF, 0xFF, 0xFF};
 
 J3DSys::J3DSys() {
 
@@ -75,7 +72,6 @@ void J3DSys::drawInit() {
     J3DPass::cull(NEBULA_CULL_BACK);
     J3DPass::writeColor(true);
     J3DPass::blend(NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_INV_SRC_ALPHA);
-    J3DPass::noAlphaTest();
     J3DPass::depth(true, NEBULA_COMPARE_LEQUAL, true);
 
     reinitTexture();
@@ -83,23 +79,6 @@ void J3DSys::drawInit() {
     for (u32 i = 0; i < 10; i++)
         J3DNativeShape::setTexture(i, j3dIdentityMtx, 3);
 
-    Mtx23 indTexMtx = {
-        {0.5f, 0.0f, 0.0f},
-        {0.0f, 0.5f, 0.0f},
-    };
-
-    u8 i;
-    for (i = 0; i < 3; i++)
-        J3DPass::indirectMatrix(i, indTexMtx, 1);
-
-    J3DPass::lightMaterial(0, j3dDefaultColInfo);
-    J3DPass::lightMaterial(1, j3dDefaultColInfo);
-
-    for (i = 0; i < 4; i++)
-        J3DPass::constantColor(i, j3dDefaultConstantColor);
-
-    for (i = 0; i < 4; i++)
-        J3DPass::registerColorWide(static_cast< J3DRegister >(i), j3dDefaultRegisterColor);
 
 
 }
@@ -109,16 +88,12 @@ void J3DSys::resetDrawState() {
     reinitLighting();
     reinitTransform();
     reinitTexture();
-    reinitStageStages();
-    reinitIndStages();
     reinitPixelProc();
 }
 
 void J3DSys::reinitLighting() {
-    J3DPass::lightAmbient(0, ColorBlack);
-    J3DPass::lightAmbient(1, ColorBlack);
-    J3DPass::lightMaterial(0, ColorWhite);
-    J3DPass::lightMaterial(1, ColorWhite);
+    J3DNativeMaterial::setLightAmbient(0, ColorBlack);
+    J3DNativeMaterial::setLightAmbient(1, ColorBlack);
 }
 
 void J3DSys::reinitTransform() {
@@ -129,29 +104,10 @@ void J3DSys::reinitTexture() {
     J3DNativeTexture::registerRecord(&sNullTexture);
 }
 
-void J3DSys::reinitStageStages() {
-    J3DPass::registerColor(J3D_REGISTER_0, ColorWhite);
-    J3DPass::registerColor(J3D_REGISTER_1, ColorWhite);
-    J3DPass::registerColor(J3D_REGISTER_2, ColorWhite);
-    J3DPass::constantColor(0, ColorWhite);
-    J3DPass::constantColor(1, ColorWhite);
-    J3DPass::constantColor(2, ColorWhite);
-    J3DPass::constantColor(3, ColorWhite);
-
-    J3DPass::noAlphaTest();
-}
-
-void J3DSys::reinitIndStages() {
-    J3DPass::indirectMatrix(0, IndMtx, 1);
-    J3DPass::indirectMatrix(1, IndMtx, 1);
-    J3DPass::indirectMatrix(2, IndMtx, 1);
-}
-
 void J3DSys::reinitPixelProc() {
     J3DPass::noBlend();
     J3DPass::writeColor(true);
     // SMG1 change -- false to true
     J3DPass::writeAlpha(true);
-    J3DPass::noFog();
     J3DPass::depth(true, NEBULA_COMPARE_LEQUAL, true);
 }

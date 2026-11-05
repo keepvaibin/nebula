@@ -3,9 +3,15 @@
 
 class JUTTexture;
 
+#include "Game/Util/Color.hpp"
+
 class BigBubbleDrawer {
 public:
     BigBubbleDrawer();
+
+    // The warning colour over the bubble drawn next (the material setUpStage sent).
+    static void setWarningColor(const Color8& rColor);
+
 
     void setUpDraw() const;
     void setUpVertexFormat() const;

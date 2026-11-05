@@ -167,7 +167,6 @@ namespace nw4r {
             writer.SetColorMapping(minCol, maxCol);
             writer.Setup();
 
-            J3DPass::noAlphaTest();
             writer.SetCursor(textRect.left, textRect.top);
             writer.Print(mTextBuf, mTextLen);
         }

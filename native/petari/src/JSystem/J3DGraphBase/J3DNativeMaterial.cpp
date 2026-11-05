@@ -27,10 +27,8 @@ struct NebulaMaterialParts {
 };
 
 namespace {
-    // The register file as the J3D materials' constants lay it out (j3d_material.hlsli MaterialConstants): what the
-    // J3D materials and the game's state changes set last. A native J3D material takes the parts its program does not
-    // load from here (the output register always: J3D loads registers 1-3).
-    f32 sRegisters[84];
+    // The ambient colours now: a material with its own sets them, an actor's light sets them after that.
+    f32 sAmbient[2][4];
 
     // The native material the draws use now (J3D: sCurrent, its program and values; or a site's own), and the state
     // changes made since it was sent (replayed should the old path take over its draws).
@@ -40,12 +38,10 @@ namespace {
         CURRENT_SITE,
     };
     CurrentKind sCurrentKind = CURRENT_NONE;
-    // A site's material whose constants begin with the register file (constants_only bit 1): its copy, resent with
-    // the register file's values when the game changes one.
-    NebulaNativeMaterial sSiteRegisters;
-    bool sSiteFollows = false;
     NebulaNativeMaterial sCurrent;
     const J3DMaterialSetup* sCurrentSetup = NULL;
+    // The whole material last sent, an instance's values go over it.
+    const NebulaMaterialParts* sCurrentParts = NULL;
     const NebulaCookedMaterial* sCurrentCooked = NULL;
     u8 sCurrentPass = 0;
 
@@ -62,53 +58,51 @@ namespace {
         }
     }
 
-    // The parts `rSetup` loads (J3D_LOADS_*), into the register file. An instance's differed list
-    // (diff_flags) loads only the parts its flags name, as J3D's list does and the drawing state takes it
-    // (draw_state.cpp set_material): register and constant colours under StageColor, material colours under MatColor, fog under
-    // Fog; never the ambient colours, indirect matrices or alpha references, which stay as the shared list and the
-    // state changes since left them (an actor's light loader sets the ambient colour between the two lists).
-    void loadRegisters(const J3DMaterialSetup& rSetup, const J3DMaterialValues& rValues) {
-        f32* pC = sRegisters;
-        const u32 diff = rSetup.diff_flags;
-        const bool whole = diff == 0;
+    const f32 cDefaultIndirect[2][3] = {{1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}};
+
+    // A material's constants (j3d_material.hlsli MaterialConstants) from its values. What a material has none of is the
+    // neutral value: white colours, no fog, the plain indirect matrix.
+    void fillConstants(f32* pC, const J3DMaterialSetup& rSetup, const J3DMaterialValues& rValues) {
         const u16 loads = rSetup.loads;
-        if ((whole || (diff & J3DDiffFlag_StageColor) != 0) && (loads & J3D_LOADS_REGISTER_COLOR) != 0) {
-            for (u32 r = 0; r < 3; r++) {
-                for (u32 c = 0; c < 4; c++) {
-                    pC[4 + r * 4 + c] = rValues.register_color[r][c] / 255.0f;
-                }
+        for (u32 c = 0; c < 4; c++) {
+            pC[c] = 1.0f;
+        }
+        for (u32 r = 0; r < 3; r++) {
+            for (u32 c = 0; c < 4; c++) {
+                pC[4 + r * 4 + c] = (loads & J3D_LOADS_REGISTER_COLOR) != 0 ? rValues.register_color[r][c] / 255.0f : 1.0f;
             }
         }
-        if ((whole || (diff & J3DDiffFlag_StageColor) != 0) && (loads & J3D_LOADS_KONST_COLOR) != 0) {
-            for (u32 k = 0; k < 4; k++) {
-                setColor(pC + 16 + k * 4, rValues.konst_color[k], 4);
+        for (u32 k = 0; k < 4; k++) {
+            for (u32 c = 0; c < 4; c++) {
+                pC[16 + k * 4 + c] = (loads & J3D_LOADS_KONST_COLOR) != 0 ? rValues.konst_color[k][c] / 255.0f : 1.0f;
             }
         }
         for (u32 ch = 0; ch < 2; ch++) {
-            if ((whole || (diff & J3DDiffFlag_MatColor) != 0) && (loads & J3D_LOADS_CHANNELS) != 0) {
-                setColor(pC + 32 + ch * 4, rValues.material_color[ch], 4);
-            }
-            if (whole && (loads & J3D_LOADS_AMBIENT) != 0) {
-                setColor(pC + 40 + ch * 4, rValues.ambient_color[ch], 4);
-            }
-        }
-        if (whole && (loads & J3D_LOADS_INDIRECT) != 0) {
-            for (u32 m = 0; m < 3; m++) {
-                f32 scale = 1.0f;
-                for (s32 e = rValues.ind_matrix[m].scale; e > 0; e--) {
-                    scale *= 2.0f;
+            for (u32 c = 0; c < 4; c++) {
+                pC[32 + ch * 4 + c] = (loads & J3D_LOADS_CHANNELS) != 0 ? rValues.material_color[ch][c] / 255.0f : 1.0f;
+                if ((loads & J3D_LOADS_AMBIENT) != 0) {
+                    sAmbient[ch][c] = rValues.ambient_color[ch][c] / 255.0f;
                 }
-                for (s32 e = rValues.ind_matrix[m].scale; e < 0; e++) {
-                    scale *= 0.5f;
-                }
-                for (u32 row = 0; row < 2; row++) {
-                    for (u32 c = 0; c < 3; c++) {
-                        pC[48 + (m * 2 + row) * 4 + c] = rValues.ind_matrix[m].m[row][c] * scale;
-                    }
-                }
+                pC[40 + ch * 4 + c] = sAmbient[ch][c];
             }
         }
-        if ((whole || (diff & J3DDiffFlag_Fog) != 0) && (loads & J3D_LOADS_FOG) != 0) {
+        for (u32 m = 0; m < 3; m++) {
+            f32 scale = 1.0f;
+            for (s32 e = rValues.ind_matrix[m].scale; e > 0; e--) {
+                scale *= 2.0f;
+            }
+            for (s32 e = rValues.ind_matrix[m].scale; e < 0; e++) {
+                scale *= 0.5f;
+            }
+            for (u32 row = 0; row < 2; row++) {
+                for (u32 c = 0; c < 3; c++) {
+                    pC[48 + (m * 2 + row) * 4 + c] =
+                        (loads & J3D_LOADS_INDIRECT) != 0 ? rValues.ind_matrix[m].m[row][c] * scale : cDefaultIndirect[row][c];
+                }
+                pC[48 + (m * 2 + row) * 4 + 3] = 0.0f;
+            }
+        }
+        if ((loads & J3D_LOADS_FOG) != 0) {
             pC[72] = rValues.fog.start;
             pC[73] = rValues.fog.end;
             pC[74] = rValues.fog.near_z;
@@ -116,10 +110,8 @@ namespace {
             setColor(pC + 76, rValues.fog.color, 3);
             pC[79] = rSetup.fog_type;
         }
-        if (whole) {
-            pC[80] = rValues.alpha_ref[0] / 255.0f;
-            pC[81] = rValues.alpha_ref[1] / 255.0f;
-        }
+        pC[80] = rValues.alpha_ref[0] / 255.0f;
+        pC[81] = rValues.alpha_ref[1] / 255.0f;
     }
 
     // The current material ends: the draws that follow have none (the host draws nothing without one) until the next.
@@ -139,10 +131,6 @@ namespace {
         sCurrentKind = pNative == NULL || pNative->shader == NEBULA_SHADER_NONE ? CURRENT_NONE
                        : pNative == &sCurrent                                   ? CURRENT_J3D
                                                                                 : CURRENT_SITE;
-        sSiteFollows = sCurrentKind == CURRENT_SITE && (pNative->constants_only & 2) != 0;
-        if (sSiteFollows) {
-            sSiteRegisters = *pNative;
-        }
     }
 
     u8 nativeFactor(u8 stored, bool source) {
@@ -192,14 +180,6 @@ namespace {
             }
         }
         NebulaNativeMaterial& material = sCurrent;
-        // An instance's differed list loads only the textures it changes (diffTexNo); the others stay as the shared
-        // list that drew just before loaded them: their images and coordinate scales carry over.
-        static NebulaNativeMaterial sShared;
-        const bool keepTextures = differed && sCurrentKind == CURRENT_J3D && sCurrent.shader == shader;
-        if (keepTextures) {
-            memcpy(sShared.textures, material.textures, sizeof(material.textures));
-            memcpy(sShared.constants + 84, material.constants + 84, 32 * sizeof(f32));
-        }
         memset(&material, 0, sizeof(material));
         material.shader = shader;
         material.blend_op = rSetup.blend.type;  // NEBULA_BLEND_*
@@ -226,17 +206,12 @@ namespace {
                 material.depth_test = NEBULA_NATIVE_KEPT;
             }
         }
-        loadRegisters(rSetup, rValues);
-        memcpy(material.constants, sRegisters, sizeof(sRegisters));
+        fillConstants(material.constants, rSetup, rValues);
         // Each coordinate's scale and each map's size (j3d_material.hlsli tex_scale): a sample reads coordinate c
         // of map m at c's scale over m's size.
         for (u32 k = 0; k < 8; k++) {
             f32* pScale = material.constants + 84 + k * 4;
             const NebulaMaterialTexture& rTex = rValues.texture[k];
-            if (keepTextures && rTex.image == 0) {
-                memcpy(pScale, sShared.constants + 84 + k * 4, 4 * sizeof(f32));
-                continue;
-            }
             pScale[2] = rTex.width != 0 ? rTex.width : 1.0f;
             pScale[3] = rTex.height != 0 ? rTex.height : 1.0f;
             pScale[0] = rValues.tex_coord_scale[k].scale_s != 0 ? rValues.tex_coord_scale[k].scale_s : pScale[2];
@@ -245,9 +220,6 @@ namespace {
         for (u32 map = 0; map < 8; map++) {
             const NebulaMaterialTexture& rTex = rValues.texture[map];
             if (rTex.image == 0) {
-                if (keepTextures) {
-                    material.textures[map] = sShared.textures[map];
-                }
                 continue;
             }
             material.textures[map].image = rTex.image;
@@ -333,6 +305,59 @@ namespace {
         const J3DTexCoordScaleInfo& rInfo = J3DSys::sTexCoordScaleTable[map & 7];
         pOut->tex_coord_scale[coord & 7].scale_s = rInfo.field_0x00;
         pOut->tex_coord_scale[coord & 7].scale_t = rInfo.field_0x02;
+    }
+}  // namespace
+
+namespace {
+    // `rWhole` with what an instance's differed list `rList` names over it: textures it has, colours under the flags that
+    // change them, blending and depth under Blend, texture matrices and lights under theirs.
+    void composeInstance(NebulaMaterialParts& rOut, const NebulaMaterialParts& rWhole, const NebulaMaterialParts& rList) {
+        rOut = rWhole;
+        rOut.setup.loads = static_cast< u16 >(rOut.setup.loads & ~J3D_LOADS_AMBIENT);
+        const u32 diff = rList.setup.diff_flags;
+        rOut.setup.diff_flags = diff;
+        const J3DMaterialValues& rNew = rList.values;
+        J3DMaterialValues& rTo = rOut.values;
+        const u16 loads = rList.setup.loads;
+        if ((diff & J3DDiffFlag_StageColor) != 0) {
+            if ((loads & J3D_LOADS_REGISTER_COLOR) != 0) {
+                memcpy(rTo.register_color, rNew.register_color, sizeof(rTo.register_color));
+                rOut.setup.loads |= J3D_LOADS_REGISTER_COLOR;
+            }
+            if ((loads & J3D_LOADS_KONST_COLOR) != 0) {
+                memcpy(rTo.konst_color, rNew.konst_color, sizeof(rTo.konst_color));
+                rOut.setup.loads |= J3D_LOADS_KONST_COLOR;
+            }
+        }
+        if ((diff & J3DDiffFlag_MatColor) != 0 && (loads & J3D_LOADS_CHANNELS) != 0) {
+            memcpy(rTo.material_color, rNew.material_color, sizeof(rTo.material_color));
+            rOut.setup.loads |= J3D_LOADS_CHANNELS;
+        }
+        if ((diff & J3DDiffFlag_Fog) != 0 && (loads & J3D_LOADS_FOG) != 0) {
+            rTo.fog = rNew.fog;
+            rOut.setup.fog_type = rList.setup.fog_type;
+            rOut.setup.loads |= J3D_LOADS_FOG;
+        }
+        for (u32 k = 0; k < 8; k++) {
+            if (rNew.texture[k].image != 0) {
+                rTo.texture[k] = rNew.texture[k];
+                rTo.tex_coord_scale[k] = rNew.tex_coord_scale[k];
+            }
+        }
+        memcpy(rOut.setup.texture_matrix, rList.setup.texture_matrix, sizeof(rOut.setup.texture_matrix));
+        memcpy(rTo.texture_matrix, rNew.texture_matrix, sizeof(rTo.texture_matrix));
+        memcpy(rOut.setup.tex_gen_post, rList.setup.tex_gen_post, sizeof(rOut.setup.tex_gen_post));
+        rOut.setup.tex_gens = rList.setup.tex_gens;
+        if ((diff & J3DDiffFlag_Blend) != 0) {
+            rOut.setup.blend.type = rList.setup.blend.type;
+            rOut.setup.blend.source = rList.setup.blend.source;
+            rOut.setup.blend.destination = rList.setup.blend.destination;
+            rOut.setup.z_mode = rList.setup.z_mode;
+            rOut.setup.z_compare_location = rList.setup.z_compare_location;
+        }
+        rTo.light_mask = rNew.light_mask;
+        memcpy(rTo.light, rNew.light, sizeof(rTo.light));
+        rOut.setup.loads = static_cast< u16 >((rOut.setup.loads & ~J3D_LOADS_LIGHTS) | (loads & J3D_LOADS_LIGHTS));
     }
 }  // namespace
 
@@ -540,6 +565,7 @@ namespace J3DNativeMaterial {
             const NebulaMaterialParts& rParts = *pList->mpNebulaMaterial;
             if (rParts.nativeShader != 0) {
                 sendNative(rParts.setup, rParts.values, rParts.nativeShader, false, rParts.cooked);
+                sCurrentParts = &rParts;
                 return;
             }
             notDrawn(rParts.nativeShader, keyOf(pList));
@@ -550,6 +576,7 @@ namespace J3DNativeMaterial {
         const u32 shader = cookedShaderOf(pMaterial);
         if (shader != 0) {
             sendNative(sParts.setup, sParts.values, shader, false, sParts.cooked);
+            sCurrentParts = &sParts;
             return;
         }
         notDrawn(shader, keyOf(pMaterial));
@@ -561,15 +588,18 @@ namespace J3DNativeMaterial {
         }
         const NebulaMaterialParts& rParts = *pList->mpNebulaMaterial;
         if (rParts.nativeShader != 0) {
-            sendNative(rParts.setup, rParts.values, rParts.nativeShader, false, rParts.cooked);
+            if (sCurrentParts == NULL) {
+                sendNative(rParts.setup, rParts.values, rParts.nativeShader, false, rParts.cooked);
+                return;
+            }
+            // The whole material just sent with this instance's animated values over it.
+            static NebulaMaterialParts sInstance;
+            composeInstance(sInstance, *sCurrentParts, rParts);
+            sendNative(sInstance.setup, sInstance.values, rParts.nativeShader, false, rParts.cooked);
             return;
         }
         J3DNativeShape::flushState();
         notDrawn(rParts.nativeShader, keyOf(pList));
-    }
-
-    const f32* registers() {
-        return sRegisters;
     }
 
     void watch(const NebulaNativeMaterial* pNative) {
@@ -631,6 +661,7 @@ namespace J3DNativeMaterial {
     }
 
     void sendWhole(u32 shader, const J3DMaterialSetup& rSetup, const J3DMaterialValues& rValues) {
+        sCurrentParts = NULL;
         if (shader != 0) {
             sendNative(rSetup, rValues, shader, true);
             return;
@@ -656,9 +687,7 @@ namespace J3DNativeMaterial {
             return;
         }
         sCurrent.shader = NEBULA_SHADER_J3D_FIRST + id - 1;
-        memcpy(sCurrent.constants, sRegisters, sizeof(sRegisters));
         if ((pass & (NEBULA_PASS_PLAYER_OPACITY | NEBULA_PASS_LIGHT_MASK | NEBULA_PASS_SHADOW_VOLUME)) != 0) {
-            sRegisters[80] = sRegisters[81] = 0;
             sCurrent.constants[80] = sCurrent.constants[81] = 0;
         }
         sCurrent.constants_only = 0;
@@ -666,76 +695,59 @@ namespace J3DNativeMaterial {
         watchMaterial(&sCurrent);
     }
 
-    void setColorRegister(u32 index, NebulaColor8 color) {
-        setColor8(sRegisters + (index & 3) * 4, color);
-    }
-
-    void setColorRegisterWide(u32 index, const NebulaColor16& rColor) {
-        f32* pRegister = sRegisters + (index & 3) * 4;
-        pRegister[0] = rColor.r / 255.0f;
-        pRegister[1] = rColor.g / 255.0f;
-        pRegister[2] = rColor.b / 255.0f;
-        pRegister[3] = rColor.a / 255.0f;
-    }
-
-    void setConstantColor(u32 index, NebulaColor8 color) {
-        setColor8(sRegisters + 16 + (index & 3) * 4, color);
-    }
-
-    void setLightMaterial(u32 channel, NebulaColor8 color) {
-        setColor8(sRegisters + 32 + (channel & 1) * 4, color);
-    }
-
     void setLightAmbient(u32 channel, NebulaColor8 color) {
-        setColor8(sRegisters + 40 + (channel & 1) * 4, color);
-    }
-
-    void setIndirectMatrix(u32 index, const f32 offset[2][3], s8 scaleExp) {
-        f32 scale = 1.0f;
-        for (s32 e = scaleExp; e > 0; e--) {
-            scale *= 2.0f;
-        }
-        for (s32 e = scaleExp; e < 0; e++) {
-            scale *= 0.5f;
-        }
-        for (u32 column = 0; column < 3; column++) {
-            for (u32 row = 0; row < 2; row++) {
-                sRegisters[48 + (index * 2 + row) * 4 + column] = offset[row][column] * scale;
-            }
-        }
-    }
-
-    void setFog(u32 type, f32 start, f32 end, f32 nearZ, f32 farZ, NebulaColor8 color) {
-        f32* pC = sRegisters;
-        pC[72] = start;
-        pC[73] = end;
-        pC[74] = nearZ;
-        pC[75] = farZ;
-        pC[76] = color.r / 255.0f;
-        pC[77] = color.g / 255.0f;
-        pC[78] = color.b / 255.0f;
-        pC[79] = static_cast< f32 >(type);  // j3d_material.hlsli j3d_fog
-    }
-
-    void setAlphaTest(u8 compare0, u8 reference0, u8 op, u8 compare1, u8 reference1) {
-        // Comparisons other than the current J3D material's: its shader does not compute them, so it ends.
-        if (sCurrentKind == CURRENT_J3D &&
-            (compare0 != sCurrentSetup->alpha_compare.comp0 || op != sCurrentSetup->alpha_compare.op ||
-             compare1 != sCurrentSetup->alpha_compare.comp1)) {
-            endCurrent();
-        }
-        sRegisters[80] = reference0 / 255.0f;
-        sRegisters[81] = reference1 / 255.0f;
-    }
-
-    void sendRegisters() {
-        if (sCurrentKind == CURRENT_SITE && sSiteFollows) {
-            memcpy(sSiteRegisters.constants, sRegisters, sizeof(sRegisters));
-            sSiteRegisters.constants_only = 3;
-            J3DNativeState::sendMaterial(&sSiteRegisters);
-        }
+        setColor8(sAmbient[channel & 1], color);
+        // An actor's light outranks a material's own: the material the draws use now takes it.
         if (sCurrentKind == CURRENT_J3D) {
-            memcpy(sCurrent.constants, sRegisters, sizeof(sRegisters));
+            setColor8(sCurrent.constants + 40 + (channel & 1) * 4, color);
+            sCurrent.constants_only = 1;
+            J3DNativeState::sendMaterial(&sCurrent);
+        }
+    }
+
+    const f32* lightAmbient(u32 channel) {
+        return sAmbient[channel & 1];
+    }
+
+    void setCurrentRegister(u32 index, NebulaColor8 color) {
+        if (sCurrentKind == CURRENT_J3D) {
+            setColor8(sCurrent.constants + (index & 3) * 4, color);
+            sCurrent.constants_only = 1;
+            J3DNativeState::sendMaterial(&sCurrent);
+        }
+    }
+
+    void setCurrentMaterialColor(u32 channel, NebulaColor8 color) {
+        if (sCurrentKind == CURRENT_J3D) {
+            setColor8(sCurrent.constants + 32 + (channel & 1) * 4, color);
+            sCurrent.constants_only = 1;
+            J3DNativeState::sendMaterial(&sCurrent);
+        }
+    }
+
+    void setCurrentAmbient(u32 channel, NebulaColor8 color) {
+        if (sCurrentKind == CURRENT_J3D) {
+            setColor8(sCurrent.constants + 40 + (channel & 1) * 4, color);
+            sCurrent.constants_only = 1;
+            J3DNativeState::sendMaterial(&sCurrent);
+        }
+    }
+
+    const f32* currentRegister(u32 index) {
+        return sCurrent.constants + (index & 3) * 4;
+    }
+
+    void setCurrentFog(f32 start, f32 end, f32 nearZ, f32 farZ, NebulaColor8 color) {
+        if (sCurrentKind == CURRENT_J3D) {
+            f32* const pC = sCurrent.constants;
+            pC[72] = start;
+            pC[73] = end;
+            pC[74] = nearZ;
+            pC[75] = farZ;
+            pC[76] = color.r / 255.0f;
+            pC[77] = color.g / 255.0f;
+            pC[78] = color.b / 255.0f;
+            pC[79] = 2.0f;  // j3d_material.hlsli j3d_fog: linear
             sCurrent.constants_only = 1;
             J3DNativeState::sendMaterial(&sCurrent);
         }

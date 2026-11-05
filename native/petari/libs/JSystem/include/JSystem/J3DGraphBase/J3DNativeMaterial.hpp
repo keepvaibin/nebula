@@ -69,21 +69,16 @@ namespace J3DNativeMaterial {
     // An instance's differed list (a shape packet's: the material with that instance's animated values), when it has
     // been made.
     void sendDiffered(J3DMaterialSnapshot* pList);
-    // The values every material takes (the register file): each setter changes it, sendRegisters gives the current
-    // material the new values.
-    void setColorRegister(u32 index, NebulaColor8 color);
-    void setColorRegisterWide(u32 index, const NebulaColor16& rColor);
-    void setConstantColor(u32 index, NebulaColor8 color);
-    void setLightMaterial(u32 channel, NebulaColor8 color);
+    // The light environment's ambient colour: materials with none of their own take it, the current one at once.
     void setLightAmbient(u32 channel, NebulaColor8 color);
-    void setIndirectMatrix(u32 index, const f32 offset[2][3], s8 scaleExp);
-    void setFog(u32 type, f32 start, f32 end, f32 nearZ, f32 farZ, NebulaColor8 color);
-    void setAlphaTest(u8 compare0, u8 reference0, u8 op, u8 compare1, u8 reference1);
-    void sendRegisters();
+    const f32* lightAmbient(u32 channel);
+    // The current J3D material's stage colour `index` (0 the output, 1-3 the others), and its fog.
+    void setCurrentRegister(u32 index, NebulaColor8 color);
+    const f32* currentRegister(u32 index);
+    void setCurrentMaterialColor(u32 channel, NebulaColor8 color);
+    void setCurrentAmbient(u32 channel, NebulaColor8 color);
+    void setCurrentFog(f32 start, f32 end, f32 nearZ, f32 farZ, NebulaColor8 color);
     void applyPass(u8 pass);
-    // The register file (j3d_material.hlsli MaterialConstants' first 84 floats: colour registers, constant colours, material and
-    // ambient colours, indirect matrices, fog, alpha references) as the materials and state changes left it.
-    const f32* registers();
     // A material another part of the game sends (NativeShader::send; NULL a drawing-state one: a registered program's
     // values): the draws after it no longer use the current J3D material.
     void watch(const NebulaNativeMaterial* pNative);

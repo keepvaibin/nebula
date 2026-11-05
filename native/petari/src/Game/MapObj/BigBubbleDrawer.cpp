@@ -13,6 +13,7 @@
 namespace {
     static Color8 sStageColor0(0xE0E0E0FF);
     Color8 sStageColor1(0xFF000000);
+    NebulaNativeMaterial sMaterial;
     TVec3f sEnvMatTrans(1.0f, 1.0f, 1.5f);
 };  // namespace
 
@@ -28,6 +29,13 @@ void BigBubbleDrawer::setUpDraw() const {
     setUpMaterial();
 }
 
+void BigBubbleDrawer::setWarningColor(const Color8& rColor) {
+    NativeShader::setColor(sMaterial, 4, rColor.r, rColor.g, rColor.b, rColor.a);
+    sMaterial.constants_only = 1;
+    NativeShader::send(sMaterial);
+    sMaterial.constants_only = 0;
+}
+
 void BigBubbleDrawer::setUpVertexFormat() const {
 }
 
@@ -38,7 +46,7 @@ void BigBubbleDrawer::setUpStage() const {
     // runtime/src/render/materials/big_bubble.hlsl: the rainbow (texture 0) with sStageColor0 mixed in by the bubble
     // environment map's alpha (texture 1, by the eye-space normal through the camera's rotation offset by
     // sEnvMatTrans), sStageColor1 over it by its alpha; blended by alpha, depth tested and not written, back faces culled.
-    NebulaNativeMaterial material;
+    NebulaNativeMaterial& material = sMaterial;
     NativeShader::init(material, NEBULA_SHADER_BIG_BUBBLE, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, false,
                        NEBULA_CULL_BACK);
     NativeShader::setColor(material, 0, ::sStageColor0.r, ::sStageColor0.g, ::sStageColor0.b, ::sStageColor0.a);

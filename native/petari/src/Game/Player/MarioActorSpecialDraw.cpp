@@ -709,7 +709,6 @@ bool MarioActor::drawDarkMask() const {
     J3DNativeDraw::texCoord(0.0f, 4.0f);
     J3DPass::stencil(NEBULA_STENCIL_OFF, NEBULA_STENCIL_KEEP);
     J3DPass::writeColor(true);
-    J3DPass::noAlphaTest();
     TDDraw::close();
     return true;
 }
