@@ -229,11 +229,13 @@ float2 j3d_coord(float4 uv) {
 
 // Coordinate 0 replaced over the material's own stages (J3DNativeMaterial::overrideCoordinate): 1 the vertex's normal
 // (the normal through the identity, 2x4, normalized: J3DModelX list 6, the ghost's shell over the screen's copy).
-// The vertex's normal in eye space, unit length or zero: what an environment map reads.
+// What an environment map reads: the normal turned into eye space and not normalized. The model's scale stays in it,
+// and maps are authored with it: a large model repeats its map. A skinned vertex takes its normal matrix.
 float3 j3d_eye_normal(NativeVertex v) {
-    const float3 n = float3(dot(native_normal_row(v.pn_row).xyz, v.nrm), dot(native_normal_row(v.pn_row + 1u).xyz, v.nrm),
-                            dot(native_normal_row(v.pn_row + 2u).xyz, v.nrm));
-    return dot(n, n) > 0.0 ? normalize(n) : n;
+    const uint r = v.pn_row;
+    return (draw_counts.z & 1u) != 0u
+        ? float3(dot(native_normal_row(r).xyz, v.nrm), dot(native_normal_row(r + 1u).xyz, v.nrm), dot(native_normal_row(r + 2u).xyz, v.nrm))
+        : float3(dot(native_position_row(r).xyz, v.nrm), dot(native_position_row(r + 1u).xyz, v.nrm), dot(native_position_row(r + 2u).xyz, v.nrm));
 }
 
 void j3d_vertex_override(NativeVertex v, inout NativeVaryings o) {
