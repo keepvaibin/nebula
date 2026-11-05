@@ -144,8 +144,8 @@ public:
     void entryTexMtxAnimator(J3DAnmTextureSRTKey* anm) {
         mMaterialTable.entryTexMtxAnimator(anm);
     }
-    int entryTevRegAnimator(J3DAnmTevRegKey* anm) {
-        return mMaterialTable.entryTevRegAnimator(anm);
+    int entryStageColorAnimator(J3DAnmStageColorKey* anm) {
+        return mMaterialTable.entryStageColorAnimator(anm);
     }
     void entryTexNoAnimator(J3DAnmTexPattern* anm) {
         mMaterialTable.entryTexNoAnimator(anm);
@@ -156,8 +156,8 @@ public:
     int removeTexMtxAnimator(J3DAnmTextureSRTKey* anm) {
         return mMaterialTable.removeTexMtxAnimator(anm);
     }
-    int removeTevRegAnimator(J3DAnmTevRegKey* anm) {
-        return mMaterialTable.removeTevRegAnimator(anm);
+    int removeStageColorAnimator(J3DAnmStageColorKey* anm) {
+        return mMaterialTable.removeStageColorAnimator(anm);
     }
     int removeMatColorAnimator(J3DAnmColor* anm) {
         return mMaterialTable.removeMatColorAnimator(anm);

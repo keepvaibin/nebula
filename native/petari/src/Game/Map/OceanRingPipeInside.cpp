@@ -26,8 +26,8 @@ namespace {
     const f32 sTexSpeedV0 = 0.0f;
     const f32 sTexSpeedV1 = 0.0f;
 
-    static NebulaColor8 sTevReg0 = {0x00, 0x1C, 0x00, 0xFF};
-    static NebulaColor8 sTevReg1 = {0x78, 0xA0, 0xF6, 0xFF};
+    static NebulaColor8 sStageColor0 = {0x00, 0x1C, 0x00, 0xFF};
+    static NebulaColor8 sStageColor1 = {0x78, 0xA0, 0xF6, 0xFF};
 };  // namespace
 
 OceanRingPipeInside::OceanRingPipeInside(const OceanRingPipe* pPipe)
@@ -80,13 +80,13 @@ void OceanRingPipeInside::loadMaterial() const {
     J3DNativeShape::setTexture(1, mtx.toMtxPtr(), 2);
 
     // runtime/src/render/materials/ocean_ring_pipe_inside.hlsl: the texture warped by itself (sIndirectScale texels a
-    // step), sTevReg0 toward sTevReg1 by its colour, its alpha squared, both times four; blended by alpha, depth tested
+    // step), sStageColor0 toward sStageColor1 by its colour, its alpha squared, both times four; blended by alpha, depth tested
     // and not written, back faces culled, no fog.
     NebulaNativeMaterial material;
     NativeShader::init(material, NEBULA_SHADER_OCEAN_RING_PIPE_INSIDE, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL,
                        false, NEBULA_CULL_BACK);
-    NativeShader::setColor(material, 0, ::sTevReg0.r, ::sTevReg0.g, ::sTevReg0.b, ::sTevReg0.a);
-    NativeShader::setColor(material, 4, ::sTevReg1.r, ::sTevReg1.g, ::sTevReg1.b, ::sTevReg1.a);
+    NativeShader::setColor(material, 0, ::sStageColor0.r, ::sStageColor0.g, ::sStageColor0.b, ::sStageColor0.a);
+    NativeShader::setColor(material, 4, ::sStageColor1.r, ::sStageColor1.g, ::sStageColor1.b, ::sStageColor1.a);
     material.constants[8] = ::sIndirectScale;
     material.constants[10] = static_cast< f32 >(mWaterPipeInsideTex->getWidth());
     material.constants[11] = static_cast< f32 >(mWaterPipeInsideTex->getHeight());

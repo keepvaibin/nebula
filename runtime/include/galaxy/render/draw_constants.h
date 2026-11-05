@@ -10,7 +10,7 @@
 
 namespace galaxy::render {
 
-inline constexpr unsigned kMaxTevStages = 16;
+inline constexpr unsigned kMaxStageStages = 16;
 inline constexpr unsigned kMaxTextureMaps = 8;
 inline constexpr unsigned kMaxTexGens = 8;
 inline constexpr unsigned kMaxColorChannels = 2;

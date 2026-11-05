@@ -34,7 +34,7 @@ static s16 width = 0x100;
 static s16 height = 0x100;
 
 namespace {
-    // The object's native material (runtime/src/render/materials/normal_map.hlsl): drawSetting and setTevForObject
+    // The object's native material (runtime/src/render/materials/normal_map.hlsl): drawSetting and setStageForObject
     // set its program, each normal-mapped shape its textures, colours and indirect matrix (drawMaterialSetting).
     NebulaNativeMaterial sNormalMap;
 }  // namespace
@@ -77,20 +77,20 @@ void NormalMapBase::initNormalMap() {
 }
 
 void NormalMapBase::setupLighting() {
-    mTevColor0.r = 0;
-    mTevColor0.g = 0;
-    mTevColor0.b = 0;
-    mTevColor0.a = 0;
-    mTevColor1.r = 0;
-    mTevColor1.g = 0;
-    mTevColor1.b = 0;
-    mTevColor1.a = 0;
+    mStageColor0.r = 0;
+    mStageColor0.g = 0;
+    mStageColor0.b = 0;
+    mStageColor0.a = 0;
+    mStageColor1.r = 0;
+    mStageColor1.g = 0;
+    mStageColor1.b = 0;
+    mStageColor1.a = 0;
     _138 = 0;
     mLightAMode = 0;
     mLightBMode = 1;
     mHardLightColorMask = 0;
     mHardLightAlphaMask = 4;
-    mUseModelTevReg = 0;
+    mUseModelStageColor = 0;
     mUseModelLightReg = 0;
     mLightingHighLevel = 255;
     mLightingLowLevel = 0;
@@ -295,7 +295,7 @@ void NormalMapBase::shapeAnalyzeDraw(J3DModel* pModel) const {
                 }
 
                 if (pMaterial->mShape == pShape) {
-                    setTevForObject_Material();
+                    setStageForObject_Material();
                     TPos3f localMtx;
                     TPos3f viewMtx;
                     const J3DTransformInfo& rTransform = pJoint->getTransformInfo();
@@ -436,10 +436,10 @@ void NormalMapBase::drawMaterialSetting(J3DMaterial* pMaterial) const {
 
     NativeShader::setColor(sNormalMap, 0, material.r, material.g, material.b, material.a);
     NativeShader::setColor(sNormalMap, 4, ambient.r, ambient.g, ambient.b, ambient.a);
-    const NebulaColor16& rColor0 = mUseModelTevReg ? static_cast< const NebulaColor16& >(*pMaterial->getRegisterBlock()->getRegisterColor(0))
-                                                : static_cast< const NebulaColor16& >(mTevColor0);
-    const NebulaColor16& rColor1 = mUseModelTevReg ? static_cast< const NebulaColor16& >(*pMaterial->getRegisterBlock()->getRegisterColor(1))
-                                                : static_cast< const NebulaColor16& >(mTevColor1);
+    const NebulaColor16& rColor0 = mUseModelStageColor ? static_cast< const NebulaColor16& >(*pMaterial->getRegisterBlock()->getRegisterColor(0))
+                                                : static_cast< const NebulaColor16& >(mStageColor0);
+    const NebulaColor16& rColor1 = mUseModelStageColor ? static_cast< const NebulaColor16& >(*pMaterial->getRegisterBlock()->getRegisterColor(1))
+                                                : static_cast< const NebulaColor16& >(mStageColor1);
     // C0 and C1 as the combiner takes a register (its low 8 bits).
     sNormalMap.constants[8] = static_cast< u8 >(rColor0.r) / 255.0f;
     sNormalMap.constants[9] = static_cast< u8 >(rColor0.g) / 255.0f;
@@ -477,18 +477,18 @@ void NormalMapBase::drawSetting(MtxPtr pMtx) const {
     sNormalMap.constants[24] = static_cast< f32 >(mHardLightColorMask & 0xFF);
     sNormalMap.constants[25] = static_cast< f32 >(mHardLightAlphaMask & 0xFF);
     sNormalMap.constants[26] = static_cast< f32 >(sources);
-    setTevForObject();
+    setStageForObject();
     loadDiffuseGradTex(1);
 }
 
 // Coordinate 0 through the BTK's matrix (texture matrix 0) when it plays, else the vertex's.
-void NormalMapBase::setTevForObject_Material() const {
+void NormalMapBase::setStageForObject_Material() const {
     sNormalMap.constants[32] = mBtkPlayer && _150 ? 1.0f : 0.0f;
 }
 
 // The stages' selections (normal_map.hlsl): light A and B's colours, the raster, light B's alpha, the back-light mode.
-void NormalMapBase::setTevForObject() const {
-    setTevForObject_Material();
+void NormalMapBase::setStageForObject() const {
+    setStageForObject_Material();
 
     // Light A: one, none where the colour mask leaves light 0 out, the gradient for modes 0 and 1. Light B: one, none
     // where the mask leaves light 1 out, stage 0's alpha for mode 1.
@@ -657,7 +657,7 @@ void NormalMapBase::loadData(const char* pData, u32 size) {
         MR::scan8(line, "mLightAMode", &mLightAMode);
         MR::scan8(line, "mLightBMode", &mLightBMode);
         MR::scan16(line, "mUseModelLightReg", &mUseModelLightReg);
-        MR::scan16(line, "mUseModelTevReg", &mUseModelTevReg);
+        MR::scan16(line, "mUseModelTevReg", &mUseModelStageColor);
         MR::scan16(line, "mHardLightColorMask", &mHardLightColorMask);
         MR::scan16(line, "mHardLightAlphaMask", &mHardLightAlphaMask);
         MR::scan8(line, "mBackLightMode", &mBackLightMode);
@@ -666,8 +666,8 @@ void NormalMapBase::loadData(const char* pData, u32 size) {
         MR::scan8(line, "mMatColor", &mMatColor);
         MR::scan8(line, "mAmbAlpha", &mAmbAlpha);
         MR::scan8(line, "mMatAlpha", &mMatAlpha);
-        MR::scans16x4(line, "mTevColor0", reinterpret_cast< s16* >(&mTevColor0));
-        MR::scans16x4(line, "mTevColor1", reinterpret_cast< s16* >(&mTevColor1));
+        MR::scans16x4(line, "mTevColor0", reinterpret_cast< s16* >(&mStageColor0));
+        MR::scans16x4(line, "mTevColor1", reinterpret_cast< s16* >(&mStageColor1));
     }
 }
 

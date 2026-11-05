@@ -960,8 +960,8 @@ namespace {
         material.depth_test = NEBULA_NATIVE_KEPT;
         material.cull = NEBULA_NATIVE_KEPT;
         material.early_depth = pShape->getZCompLoc() ? 1 : 0;
-        material.constants[84] = static_cast< f32 >(pShape->getTevColorMode());
-        material.constants[85] = static_cast< f32 >(pShape->getTevAlphaMode());
+        material.constants[84] = static_cast< f32 >(pShape->getStageColorMode());
+        material.constants[85] = static_cast< f32 >(pShape->getStageAlphaMode());
         material.constants[86] = static_cast< f32 >(flags);
         material.constants[88] = static_cast< f32 >(pShape->getAlphaCmp0());
         material.constants[89] = static_cast< f32 >(pShape->getAlphaCmp1());

@@ -19,8 +19,8 @@ public:
     virtual void control();
     virtual void drawSetting(MtxPtr) const;
     virtual void drawMaterialSetting(J3DMaterial*) const;
-    virtual void setTevForObject() const;
-    virtual void setTevForObject_Material() const;
+    virtual void setStageForObject() const;
+    virtual void setStageForObject_Material() const;
 
     void setup(const char*);
     void initNormalMap();
@@ -59,8 +59,8 @@ public:
     u8 _125;
     u8 _126;
     u8 _127;
-    Color10 mTevColor0;
-    Color10 mTevColor1;
+    Color10 mStageColor0;
+    Color10 mStageColor1;
     u16 _138;
     u16 _13A;
     u8 mLightAMode;
@@ -72,7 +72,7 @@ public:
     u8 mAmbAlpha;
     u8 mMatAlpha;
     u16 mUseModelLightReg;
-    u16 mUseModelTevReg;
+    u16 mUseModelStageColor;
     u8 mLightingHighLevel;
     u8 mLightingLowLevel;
     BtkPlayer* mBtkPlayer;

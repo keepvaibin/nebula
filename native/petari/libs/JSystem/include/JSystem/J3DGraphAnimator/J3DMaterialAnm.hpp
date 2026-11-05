@@ -117,21 +117,21 @@ private:
     J3DAnmTexPattern* mAnmTexPattern;
 };
 
-class J3DTevColorAnm {
+class J3DStageColorAnm {
 public:
-    ~J3DTevColorAnm() {
+    ~J3DStageColorAnm() {
     }
-    J3DTevColorAnm() : field_0x0(0), mAnmFlag(1), mAnmTevReg(NULL) {
+    J3DStageColorAnm() : field_0x0(0), mAnmFlag(1), mAnmStageColor(NULL) {
     }
 
-    J3DTevColorAnm(u16 param_1, J3DAnmTevRegKey* pTevRegKey) {
+    J3DStageColorAnm(u16 param_1, J3DAnmStageColorKey* pStageColorKey) {
         field_0x0 = param_1;
         mAnmFlag = 1;
-        mAnmTevReg = pTevRegKey;
+        mAnmStageColor = pStageColorKey;
     }
 
-    void operator=(J3DTevColorAnm const& other) {
-        mAnmTevReg = other.mAnmTevReg;
+    void operator=(J3DStageColorAnm const& other) {
+        mAnmStageColor = other.mAnmStageColor;
         field_0x0 = other.field_0x0;
         mAnmFlag = other.mAnmFlag;
     }
@@ -144,30 +144,30 @@ public:
     }
 
     void calc(NebulaColor16* pColor) const {
-        mAnmTevReg->getTevColorReg(field_0x0, pColor);
+        mAnmStageColor->getStageColorReg(field_0x0, pColor);
     }
 
 private:
     u16 field_0x0;
     u16 mAnmFlag;
-    J3DAnmTevRegKey* mAnmTevReg;
+    J3DAnmStageColorKey* mAnmStageColor;
 };
 
-class J3DTevKColorAnm {
+class J3DStageConstantAnm {
 public:
-    ~J3DTevKColorAnm() {
+    ~J3DStageConstantAnm() {
     }
-    J3DTevKColorAnm() : field_0x0(0), mAnmFlag(1), mAnmTevReg(NULL) {
+    J3DStageConstantAnm() : field_0x0(0), mAnmFlag(1), mAnmStageColor(NULL) {
     }
 
-    J3DTevKColorAnm(u16 param_1, J3DAnmTevRegKey* pTevRegKey) {
+    J3DStageConstantAnm(u16 param_1, J3DAnmStageColorKey* pStageColorKey) {
         field_0x0 = param_1;
         mAnmFlag = 1;
-        mAnmTevReg = pTevRegKey;
+        mAnmStageColor = pStageColorKey;
     }
 
-    void operator=(J3DTevKColorAnm const& other) {
-        mAnmTevReg = other.mAnmTevReg;
+    void operator=(J3DStageConstantAnm const& other) {
+        mAnmStageColor = other.mAnmStageColor;
         field_0x0 = other.field_0x0;
         mAnmFlag = other.mAnmFlag;
     }
@@ -180,13 +180,13 @@ public:
     }
 
     void calc(NebulaColor8* pColor) const {
-        mAnmTevReg->getTevKonstReg(field_0x0, pColor);
+        mAnmStageColor->getStageKonstReg(field_0x0, pColor);
     }
 
 private:
     u16 field_0x0;
     u16 mAnmFlag;
-    J3DAnmTevRegKey* mAnmTevReg;
+    J3DAnmStageColorKey* mAnmStageColor;
 };
 
 class J3DMaterialAnm {
@@ -203,8 +203,8 @@ public:
     void setMatColorAnm(int, J3DMatColorAnm*);
     void setTexMtxAnm(int, J3DTexMtxAnm*);
     void setTexNoAnm(int, J3DTexNoAnm*);
-    void setTevColorAnm(int, J3DTevColorAnm*);
-    void setTevKColorAnm(int, J3DTevKColorAnm*);
+    void setStageColorAnm(int, J3DStageColorAnm*);
+    void setStageConstantAnm(int, J3DStageConstantAnm*);
 
     virtual ~J3DMaterialAnm() {
     }
@@ -218,6 +218,6 @@ private:
     J3DMatColorAnm mMatColorAnm[2];
     J3DTexMtxAnm mTexMtxAnm[8];
     J3DTexNoAnm mTexNoAnm[8];
-    J3DTevColorAnm mTevColorAnm[4];
-    J3DTevKColorAnm mTevKColorAnm[4];
+    J3DStageColorAnm mStageColorAnm[4];
+    J3DStageConstantAnm mStageConstantAnm[4];
 };

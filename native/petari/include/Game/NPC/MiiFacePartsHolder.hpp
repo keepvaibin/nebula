@@ -28,8 +28,8 @@ public:
     static MiiFaceParts* createPartsFromDefault(const char*, u16);
     void drawEachActor(DrawPartsFuncPtr, const MiiDrawCoreSetting*) const;
     void drawExtra() const;
-    void setTevOpa() const;
-    void setTevXlu() const;
+    void setStageOpa() const;
+    void setStageXlu() const;
 
     MiiDatabase* _34;
     MiiErrcode _38;

@@ -8,8 +8,8 @@ class J3DAnmColorFull;
 struct J3DAnmColorFullData;
 class J3DAnmColorKey;
 struct J3DAnmColorKeyData;
-class J3DAnmTevRegKey;
-struct J3DAnmTevRegKeyData;
+class J3DAnmStageColorKey;
+struct J3DAnmStageColorKeyData;
 class J3DAnmTexPattern;
 struct J3DAnmTexPatternFullData;
 class J3DAnmTextureSRTKey;
@@ -83,8 +83,8 @@ public:
     void setAnmColor(J3DAnmColorKey*, J3DAnmColorKeyData const*);
     void readAnmCluster(J3DAnmClusterKeyData const*);
     void setAnmCluster(J3DAnmClusterKey*, J3DAnmClusterKeyData const*);
-    void readAnmTevReg(J3DAnmTevRegKeyData const*);
-    void setAnmTevReg(J3DAnmTevRegKey*, J3DAnmTevRegKeyData const*);
+    void readAnmStageColor(J3DAnmStageColorKeyData const*);
+    void setAnmStageColor(J3DAnmStageColorKey*, J3DAnmStageColorKeyData const*);
     void readAnmVtxColor(J3DAnmVtxColorKeyData const*);
     void setAnmVtxColor(J3DAnmVtxColorKey*, J3DAnmVtxColorKeyData const*);
 

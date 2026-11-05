@@ -61,8 +61,8 @@ namespace {
     static const f32 sDistanceToLow = 10000.0f;
     static const f32 sTexSpeedU2 = 0.0f;
 
-    static NebulaColor8 sTevColor1 = {0x28, 0x28, 0x28, 0x14};
-    static NebulaColor8 sTevColor2 = {0x55, 0x96, 0xBE, 0xFF};
+    static NebulaColor8 sStageColor1 = {0x28, 0x28, 0x28, 0x14};
+    static NebulaColor8 sStageColor2 = {0x55, 0x96, 0xBE, 0xFF};
 
     inline s32 calcNumDrawLinePoints(WaterRoad* pRoad, f32 dotPointCreate) {
         MR::moveCoordToStartPos(pRoad);
@@ -383,8 +383,8 @@ namespace {
         NebulaNativeMaterial material;
         NativeShader::init(material, NEBULA_SHADER_WATER_ROAD, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, true,
                            NEBULA_CULL_NONE);
-        NativeShader::setColor(material, 0, ::sTevColor1.r, ::sTevColor1.g, ::sTevColor1.b, ::sTevColor1.a);
-        NativeShader::setColor(material, 4, ::sTevColor2.r, ::sTevColor2.g, ::sTevColor2.b, ::sTevColor2.a);
+        NativeShader::setColor(material, 0, ::sStageColor1.r, ::sStageColor1.g, ::sStageColor1.b, ::sStageColor1.a);
+        NativeShader::setColor(material, 4, ::sStageColor2.r, ::sStageColor2.g, ::sStageColor2.b, ::sStageColor2.a);
         material.constants[8] = high ? 1.0f : 0.0f;
         material.constants[9] = ::sIndirectScale;
         material.constants[10] = alpha / 255.0f;

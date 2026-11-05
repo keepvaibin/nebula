@@ -1097,7 +1097,7 @@ private:
     bool texture_bindings_dirty_ = true;
     std::uint8_t current_texture_map_mask_ = 0;
     // sampled_texture_map_mask(draw_state_) reads DrawCounts, the material order, indirect-command and IND_REF registers,
-    // all of which set kDirtyTev; invalidated wherever the state resets.
+    // all of which set kDirtyStage; invalidated wherever the state resets.
     bool current_texture_map_mask_valid_ = false;
 
     struct TextureBindingKey {

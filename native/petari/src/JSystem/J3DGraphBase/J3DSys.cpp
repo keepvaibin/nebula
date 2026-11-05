@@ -109,7 +109,7 @@ void J3DSys::resetDrawState() {
     reinitLighting();
     reinitTransform();
     reinitTexture();
-    reinitTevStages();
+    reinitStageStages();
     reinitIndStages();
     reinitPixelProc();
 }
@@ -129,7 +129,7 @@ void J3DSys::reinitTexture() {
     J3DNativeTexture::registerRecord(&sNullTexture);
 }
 
-void J3DSys::reinitTevStages() {
+void J3DSys::reinitStageStages() {
     J3DPass::registerColor(J3D_REGISTER_0, ColorWhite);
     J3DPass::registerColor(J3D_REGISTER_1, ColorWhite);
     J3DPass::registerColor(J3D_REGISTER_2, ColorWhite);

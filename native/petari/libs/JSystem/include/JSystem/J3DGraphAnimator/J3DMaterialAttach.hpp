@@ -2,7 +2,7 @@
 
 
 class J3DAnmColor;
-class J3DAnmTevRegKey;
+class J3DAnmStageColorKey;
 class J3DAnmTexPattern;
 class J3DAnmTextureSRTKey;
 class J3DMaterial;
@@ -19,12 +19,12 @@ public:
     int removeMatColorAnimator(J3DAnmColor*);
     int removeTexNoAnimator(J3DAnmTexPattern*);
     int removeTexMtxAnimator(J3DAnmTextureSRTKey*);
-    int removeTevRegAnimator(J3DAnmTevRegKey*);
+    int removeStageColorAnimator(J3DAnmStageColorKey*);
     int createTexMtxForAnimator(J3DAnmTextureSRTKey*);
     int entryMatColorAnimator(J3DAnmColor*);
     int entryTexNoAnimator(J3DAnmTexPattern*);
     int entryTexMtxAnimator(J3DAnmTextureSRTKey*);
-    int entryTevRegAnimator(J3DAnmTevRegKey*);
+    int entryStageColorAnimator(J3DAnmStageColorKey*);
 
     u16 getMaterialNum() const {
         return mMaterialNum;

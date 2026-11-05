@@ -22,10 +22,10 @@ enum J3DDiffFlag {
     J3DDiffFlag_ColorChan = 0x2,
     J3DDiffFlag_AmbColor = 0x4,
     J3DDiffFlag_TexGen = 0x1000,
-    J3DDiffFlag_TevReg = 0x1000000,
+    J3DDiffFlag_StageColor = 0x1000000,
     J3DDiffFlag_KonstColor = 0x2000000,  // is this right?
     J3DDiffFlag_TexCoordScale = 0x4000000,
-    J3DDiffFlag_TevStageIndirect = 0x8000000,
+    J3DDiffFlag_StageStageIndirect = 0x8000000,
     J3DDiffFlag_Fog = 0x10000000,
     J3DDiffFlag_Blend = 0x20000000,
     J3DDiffFlag_Unk40000000 = 0x40000000,

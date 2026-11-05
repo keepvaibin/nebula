@@ -9,8 +9,8 @@
 #include "Game/Util/NativeShader.hpp"
 #include <nebula_game_api.h>
 
-NebulaColor8 sWhirlPoolAcceleratorTevReg1 = {0x00, 0x34, 0x52, 0xFF};
-NebulaColor8 sWhirlPoolAcceleratorTevReg2 = {0x7C, 0xA9, 0xBD, 0xFF};
+NebulaColor8 sWhirlPoolAcceleratorStageColor1 = {0x00, 0x34, 0x52, 0xFF};
+NebulaColor8 sWhirlPoolAcceleratorStageColor2 = {0x7C, 0xA9, 0xBD, 0xFF};
 
 namespace {
     extern const f32 sAlphaPointNum;
@@ -176,8 +176,8 @@ void WhirlPoolAccelerator::loadMaterial() const {
     NebulaNativeMaterial material;
     NativeShader::init(material, NEBULA_SHADER_WHIRLPOOL_ACCELERATOR, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL,
                        true, NEBULA_CULL_NONE);
-    const NebulaColor8& rLow = sWhirlPoolAcceleratorTevReg1;
-    const NebulaColor8& rHigh = sWhirlPoolAcceleratorTevReg2;
+    const NebulaColor8& rLow = sWhirlPoolAcceleratorStageColor1;
+    const NebulaColor8& rHigh = sWhirlPoolAcceleratorStageColor2;
     NativeShader::setColor(material, 0, rLow.r, rLow.g, rLow.b, rLow.a);
     NativeShader::setColor(material, 4, rHigh.r, rHigh.g, rHigh.b, rHigh.a);
     NativeShader::setTexture(material, 0, mTexture);

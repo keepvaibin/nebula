@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Mii faces (MiiLib MiiModel.c MiiDrawOpaCore / MiiDrawXluCore, and the stages the game adds for its Mii NPCs:
-// Game/NPC/MiiFacePartsHolder.cpp setTevOpa / setTevXlu). Stage 0 is the part's own form; the chain after it is Mii's
+// Game/NPC/MiiFacePartsHolder.cpp setStageOpa / setStageXlu). Stage 0 is the part's own form; the chain after it is Mii's
 // lit stage or the NPC holder's two stages, in the same form. Texture 0 at the part's own coordinates.
 //   form (params.x): 0 the constant colour (beard, nose, forehead, hair); 1 the cap, (K + K tex) / 2; 2 the face
 //     texture over the faceline colour, lerp(K, tex.rab, tex.g) (swap table N + 1: R, A, B, G); 3 the mask, tex;

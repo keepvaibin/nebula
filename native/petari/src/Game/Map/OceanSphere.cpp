@@ -19,18 +19,18 @@
 #include "Game/System/NebulaArena.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
 
-NebulaColor8 sOceanSphereTevReg0Face = {0x48, 0x80, 0xBE, 0x1C};
-NebulaColor8 sOceanSphereTevReg1FrontDefault = {0x00, 0x51, 0x70, 0x6F};
-NebulaColor8 sOceanSphereTevReg1FrontTear = {0x00, 0x64, 0xFF, 0x6F};
-NebulaColor8 sOceanSphereTevReg2Face = {0xFF, 0xFF, 0xFF, 0xFF};
+NebulaColor8 sOceanSphereStageColor0Face = {0x48, 0x80, 0xBE, 0x1C};
+NebulaColor8 sOceanSphereStageColor1FrontDefault = {0x00, 0x51, 0x70, 0x6F};
+NebulaColor8 sOceanSphereStageColor1FrontTear = {0x00, 0x64, 0xFF, 0x6F};
+NebulaColor8 sOceanSphereStageColor2Face = {0xFF, 0xFF, 0xFF, 0xFF};
 NebulaColor8 sOceanSphereKColor0Face = {0x78, 0xFF, 0xFF, 0x00};
-NebulaColor8 sOceanSphereTevReg0Back = {0x48, 0x80, 0xBE, 0x1C};
-NebulaColor8 sOceanSphereTevReg1BackDefault = {0x00, 0x51, 0x70, 0x6F};
-NebulaColor8 sOceanSphereTevReg1BackTear = {0x00, 0xC3, 0xFF, 0x6F};
-NebulaColor8 sOceanSphereTevReg2Back = {0xFF, 0xFF, 0xFF, 0xFF};
+NebulaColor8 sOceanSphereStageColor0Back = {0x48, 0x80, 0xBE, 0x1C};
+NebulaColor8 sOceanSphereStageColor1BackDefault = {0x00, 0x51, 0x70, 0x6F};
+NebulaColor8 sOceanSphereStageColor1BackTear = {0x00, 0xC3, 0xFF, 0x6F};
+NebulaColor8 sOceanSphereStageColor2Back = {0xFF, 0xFF, 0xFF, 0xFF};
 NebulaColor8 sOceanSphereKColor0Back = {0x78, 0xFF, 0xFF, 0x00};
-NebulaColor8 sOceanSphereTevReg0Env = {0x00, 0x69, 0xB8, 0x14};
-NebulaColor8 sOceanSphereTevReg1Env = {0x00, 0x00, 0x00, 0xFF};
+NebulaColor8 sOceanSphereStageColor0Env = {0x00, 0x69, 0xB8, 0x14};
+NebulaColor8 sOceanSphereStageColor1Env = {0x00, 0x00, 0x00, 0xFF};
 
 namespace NrvOceanSphere {
     NEW_NERVE(OceanSphereNrvRiseUp, OceanSphere, RiseUp);
@@ -139,11 +139,11 @@ OceanSphere::OceanSphere(const char* pName)
     : LiveActor(pName), mRadius(), mRadiusTarget(), mPointCount(), mAxisPointPX(), mAxisPointNX(), mAxisPointPY(), mAxisPointNY(), mAxisPointPZ(),
       mAxisPointNZ(), mPlaneLeftUpper(), mPlaneRightUpper(), mPlaneLeftLower(), mPlaneRightLower(), mEdge0(), mEdge1(), mEdge2(), mEdge3(), mEdge4(),
       mEdge5(), mEdge6(), mEdge7(), mWaveTime1(), mWaveTime2(), mTexOffs0X(), mTexOffs0Y(), mTexOffs1X(), mTexOffs1Y(), mWaterTex(), mWaterEnvTex() {
-    NebulaColor8 front = sOceanSphereTevReg1FrontDefault;
-    mTevReg1Front = front;
+    NebulaColor8 front = sOceanSphereStageColor1FrontDefault;
+    mStageColor1Front = front;
 
-    NebulaColor8 back = sOceanSphereTevReg1BackDefault;
-    mTevReg1Back = back;
+    NebulaColor8 back = sOceanSphereStageColor1BackDefault;
+    mStageColor1Back = back;
 
     mUseMesh = false;
     mAlwaysUseRealDrawing = false;
@@ -181,13 +181,13 @@ void OceanSphere::init(const JMapInfoIter& rIter) {
         mIsStartPosCamera = false;
         NebulaColor8 front;
         NebulaColor8 back;
-        NebulaColor8 frontTear = sOceanSphereTevReg1FrontTear;
+        NebulaColor8 frontTear = sOceanSphereStageColor1FrontTear;
         front = frontTear;
-        mTevReg1Front = front;
+        mStageColor1Front = front;
 
-        NebulaColor8 backTear = sOceanSphereTevReg1BackTear;
+        NebulaColor8 backTear = sOceanSphereStageColor1BackTear;
         back = backTear;
-        mTevReg1Back = back;
+        mStageColor1Back = back;
     }
 
     if (MR::tryRegisterDemoCast(this, rIter)) {
@@ -582,7 +582,7 @@ void OceanSphere::draw() const {
 
     if (mIsStartPosCamera) {
         if (mIsCameraInside) {
-            sendFaceMaterial(mWaterTex, sOceanSphereTevReg0Face, mTevReg1Front, sOceanSphereTevReg2Face,
+            sendFaceMaterial(mWaterTex, sOceanSphereStageColor0Face, mStageColor1Front, sOceanSphereStageColor2Face,
                              sOceanSphereKColor0Face, NEBULA_CULL_FRONT);
         }
 
@@ -595,7 +595,7 @@ void OceanSphere::draw() const {
         return;
     }
 
-    sendFaceMaterial(mWaterTex, sOceanSphereTevReg0Face, mTevReg1Front, sOceanSphereTevReg2Face, sOceanSphereKColor0Face,
+    sendFaceMaterial(mWaterTex, sOceanSphereStageColor0Face, mStageColor1Front, sOceanSphereStageColor2Face, sOceanSphereKColor0Face,
                      NEBULA_CULL_FRONT);
     drawSphere(false, nullptr);
 
@@ -603,7 +603,7 @@ void OceanSphere::draw() const {
         return;
     }
 
-    sendFaceMaterial(mWaterTex, sOceanSphereTevReg0Back, mTevReg1Back, sOceanSphereTevReg2Back, sOceanSphereKColor0Back,
+    sendFaceMaterial(mWaterTex, sOceanSphereStageColor0Back, mStageColor1Back, sOceanSphereStageColor2Back, sOceanSphereKColor0Back,
                      NEBULA_CULL_BACK);
     drawSphere(false, nullptr);
 }
@@ -613,7 +613,7 @@ void OceanSphere::loadMaterialFace() const {
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
     J3DNativeShape::setNormal(0, MR::getCameraViewMtx());
     J3DNativeShape::setCurrentIdentity();
-    sendFaceMaterial(mWaterTex, sOceanSphereTevReg0Face, mTevReg1Front, sOceanSphereTevReg2Face, sOceanSphereKColor0Face,
+    sendFaceMaterial(mWaterTex, sOceanSphereStageColor0Face, mStageColor1Front, sOceanSphereStageColor2Face, sOceanSphereKColor0Face,
                      NEBULA_CULL_BACK);
 }
 
@@ -627,13 +627,13 @@ void OceanSphere::loadMaterialBack() const {
     static const u8 kPlaces[8] = {0, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture,
                                   J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture};
     J3DNativeShape::setCurrent(0, kPlaces);
-    // runtime/src/render/materials/ocean_sphere_env.hlsl: the environment map by the normal from sOceanSphereTevReg0Env
-    // toward sOceanSphereTevReg1Env; opaque, depth tested and written, front faces culled, no fog.
+    // runtime/src/render/materials/ocean_sphere_env.hlsl: the environment map by the normal from sOceanSphereStageColor0Env
+    // toward sOceanSphereStageColor1Env; opaque, depth tested and written, front faces culled, no fog.
     NebulaNativeMaterial material;
     NativeShader::init(material, NEBULA_SHADER_OCEAN_SPHERE_ENV, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_LEQUAL, true,
                        NEBULA_CULL_FRONT);
-    const NebulaColor8& rLow = sOceanSphereTevReg0Env;
-    const NebulaColor8& rHigh = sOceanSphereTevReg1Env;
+    const NebulaColor8& rLow = sOceanSphereStageColor0Env;
+    const NebulaColor8& rHigh = sOceanSphereStageColor1Env;
     NativeShader::setColor(material, 0, rLow.r, rLow.g, rLow.b, rLow.a);
     NativeShader::setColor(material, 4, rHigh.r, rHigh.g, rHigh.b, rHigh.a);
     NativeShader::setTexture(material, 0, mWaterEnvTex);
