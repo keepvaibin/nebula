@@ -17,10 +17,12 @@ The list is the only order. Scene boundaries are records too.
 
 | Thing | How |
 |---|---|
-| Models | Cooked meshes: float arrays, corners, triangles (`cook/mesh.rs`). Vertices expand once and stay in the resident vertex buffer |
+| Models | Cooked meshes: float arrays, corners, triangles (`cook/mesh.rs`). Vertices expand once and stay in the resident vertex buffer, in two streams: 44 bytes every vertex has, 92 more only for meshes with tangents or further coordinates |
+| A model's matrices | One block a view (`shape_palette`): twelve floats a position matrix, then twelve a normal matrix. Vertices name a row; interpolation moves the block |
 | Materials | A shader compiled at build (`NebulaShaderId`) with its constants, textures and state (`NebulaNativeMaterial`). J3D materials come from `tools/dev/gen_j3d_materials.py`, sites and layouts from `runtime/src/render/materials` |
 | Draw state | `NebulaPassState` on every draw: blend, depth, cull, writes, position matrix, line and point sizes |
-| Vertices the game makes | `immediate`, written into the frame's pool. Consecutive quads with nothing changing between them are one draw; an emitter's particles are one draw |
+| Vertices the game makes | `immediate`, written into the frame's pool. Consecutive quads with nothing changing between them are one draw |
+| Particles | An emitter's corners, in the world, with the camera as the draw's matrix; each knows where it was a game frame ago (`NebulaParticleCorner`). The vertex stage places them at the presented frame's time |
 | Lines and points | Four corners each, made by the host (`widen_lines_points`), moved by the vertex stage. No geometry stage |
 | Passes into textures | `target_begin` and `target_end`: the texture is the renderer's, at the scene's scale |
 | Reading the frame | `target_capture` copies a rectangle to a texture (a grab pass). `screen_probe` reads named points a frame or two later (lens flare, star pointer, talk balloon) |
@@ -35,13 +37,14 @@ the address of its image; a texture leaves when its scene's heap goes (`shape_fo
 
 ## Resolution
 
-The scene renders at the window's exact size. The game counts viewports, 2D and effect passes in its 640x456 canvas; `FrameMap`
-maps the canvas to pixels at any size, non-integer and non-uniform.
+The scene renders at the window's exact size. Viewports and scissors are fractions of the pass's target (`NEBULA_FRAME_UNITS` across);
+targets have their own pixels (`FrameMap`), at a share of the frame or an exact size. 2D has one space: the screen's width by 456 lines.
 
 ## Precision
 
-Colour is float through the shader: no 6-bit alpha, no 8-bit rounding, no dither. Depth is reversed. Rows of differences this made are in
-the project's look-change list.
+Colour is float through the shader and blends at 10 bits a channel, in gamma as the art was made; texture targets are 8. The last write to
+an 8-bit window adds triangular noise of one level to pixels between two levels, so a gradient has no steps (`FinalWrite`, `post_process.hlsl`).
+Depth is reversed. Rows of differences this made are in the project's look-change list.
 
 ## Pipelines
 
