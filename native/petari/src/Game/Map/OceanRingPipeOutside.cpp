@@ -92,9 +92,8 @@ void OceanRingPipeOutside::loadMaterial() const {
     material.constants[4] = ::sIndirectScale;
     material.constants[6] = static_cast< f32 >(mWaterPipeHighLightTex->getWidth());
     material.constants[7] = static_cast< f32 >(mWaterPipeHighLightTex->getHeight());
-    const f32* pRegisters = J3DNativeMaterial::registers();
-    material.constants[8] = pRegisters[35];
-    material.constants[9] = pRegisters[43];
+    material.constants[8] = 1.0f;
+    material.constants[9] = J3DNativeMaterial::lightAmbient(0)[3];
     NativeShader::setTexture(material, 0, mWaterPipeIndirectTex);
     NativeShader::setTexture(material, 1, mWaterPipeHighLightTex);
     NativeShader::send(material);

@@ -928,11 +928,9 @@ namespace {
         pOut[3] = rColor.a / 255.0f;
     }
 
-    // The material with the game's register file in its first constants (fog), then its own values over it: prm and
-    // env (register slots 1 and 2), the indirect matrix (rows 0-1), the alpha test's references.
+    // The material with its own values: prm and env, the indirect matrix (rows 0-1), the alpha test's references.
     void sendParticle(bool constantsOnly) {
         NebulaNativeMaterial& rMaterial = sParticle;
-        memcpy(rMaterial.constants, J3DNativeMaterial::registers(), 84 * sizeof(f32));
         putColor(rMaterial.constants + 4, sPrm);
         putColor(rMaterial.constants + 8, sEnv);
         for (u32 row = 0; row < 2; row++) {
@@ -942,7 +940,7 @@ namespace {
         }
         rMaterial.constants[80] = rMaterial.constants[88 + 4] / 255.0f;
         rMaterial.constants[81] = rMaterial.constants[88 + 5] / 255.0f;
-        rMaterial.constants_only = constantsOnly ? 3 : 2;
+        rMaterial.constants_only = constantsOnly ? 1 : 0;
         J3DNativeShape::flushState();
         J3DNativeMaterial::watch(&rMaterial);
     J3DNativeState::sendMaterial(&rMaterial);

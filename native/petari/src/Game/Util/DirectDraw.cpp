@@ -1,3 +1,4 @@
+#include <JSystem/J3DGraphBase/J3DNativeMaterial.hpp>
 #include "Game/Util/DirectDraw.hpp"
 #include "Game/Util/NativeShader.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
@@ -437,7 +438,7 @@ namespace TDDraw {
         f32 start;
         f32 end;
         MR::calcFogStartEnd(position, radius, &start, &end);
-        J3DPass::linearFog(start, end, nearZ, farZ, color);
+        J3DNativeMaterial::setCurrentFog(start, end, nearZ, farZ, color);
     }
 
     void invProject(TVec3f* pDest, const TVec3f& rScreen, MtxPtr pView, const f32* pProjection, const f32* pViewport, bool normalizedZ) {

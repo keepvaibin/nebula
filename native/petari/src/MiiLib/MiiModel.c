@@ -257,7 +257,6 @@ NebulaColor8 Mii_GetFacelineColor(const Mii_CharInfo* info) {
 }
 
 void MiiLoadDrawSetting(const MiiDrawSetting* setting) {
-    J3DPassAlphaTest(NEBULA_COMPARE_GREATER, 0);
     J3DPassBlend(NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_INV_SRC_ALPHA);
     J3DPassDepth(1, NEBULA_COMPARE_LEQUAL, 1);
     J3DPassWriteColor(1);

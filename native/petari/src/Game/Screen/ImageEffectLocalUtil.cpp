@@ -92,7 +92,6 @@ void ImageEffectLocalUtil::setupDrawTexture() {
     J3DPass::writeColor(true);
     J3DPass::writeAlpha(false);
     J3DPass::depth(false, NEBULA_COMPARE_ALWAYS, false);
-    J3DPass::noAlphaTest();
     sMode = 0;
 }
 

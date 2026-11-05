@@ -147,7 +147,6 @@ void FurCtrl::drawFur() {
     }
 
     mModel->mShapePacket[mShapeIndex].setModel(mModel);
-    J3DPass::noFog();
 }
 
 void FurCtrl::createFurMap() {

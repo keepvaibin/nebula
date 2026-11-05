@@ -66,8 +66,6 @@ public:
     void reinitLighting();
     void reinitTransform();
     void reinitTexture();
-    void reinitStageStages();
-    void reinitIndStages();
     void reinitPixelProc();
 
     MtxPtr getViewMtx() {

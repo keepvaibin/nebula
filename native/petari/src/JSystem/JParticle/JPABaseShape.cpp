@@ -1054,5 +1054,4 @@ const u8 JPABaseShape::st_c[8] = {
 void JPABaseShape::setPass(JPAEmitterWorkData* work) const {
     J3DPass::blendState(getBlendMode(), getBlendSrc(), getBlendDst());
     J3DPass::depth(getZEnable(), getZCmp(), getZUpd());
-    J3DPass::alphaCompare(getAlphaCmp0(), getAlphaRef0(), getAlphaOp(), getAlphaCmp1(), getAlphaRef1());
 }

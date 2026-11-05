@@ -146,11 +146,9 @@ void MiiFacePartsHolder::drawExtra() const {
 
     MR::loadLight(1);
     setStageOpa();
-    J3DPass::alphaTest(NEBULA_COMPARE_NEQUAL, 255);
     J3DPass::blend(NEBULA_FACTOR_ONE, NEBULA_FACTOR_ZERO);
     drawEachActor(&MiiFaceParts::drawOpa, &setting);
     setStageXlu();
-    J3DPass::alphaTest(NEBULA_COMPARE_GREATER, 0);
     J3DPass::blend(NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_INV_SRC_ALPHA);
     drawEachActor(&MiiFaceParts::drawXlu, &setting);
 }
