@@ -9,13 +9,14 @@ class HeapMemoryWatcher {
 public:
     HeapMemoryWatcher();
 
-    NebulaArena* getAudSystemHeap() const {
-        return mAudSystemHeap;
+    // What lasts as long as the game: the sound system's, the files every scene shares, saves.
+    NebulaArena* getPermanentHeap() const {
+        return mPermanent;
     }
 
     void createFileCacheHeapOnGameHeap();
     void createSceneHeapOnGameHeap();
-    void setCurrentHeapToStationedHeap();
+    void setCurrentHeapToPermanent();
     void setCurrentHeapToGameHeap();
     void setCurrentHeapToSceneHeap();
     void destroySceneHeap();
@@ -23,14 +24,8 @@ public:
     void createHeaps();
     void createGameHeap();
 
-    // used in GameSystemObjHolder::initAudio()
-    NebulaArena* getAudSystemHeap() {
-        return mAudSystemHeap;
-    }
-
-    NebulaArena* mStationedHeap;
+    NebulaArena* mPermanent;
     NebulaArena* mGameHeap;
     NebulaArena* mFileCacheHeap;
     NebulaArena* mSceneHeap;
-    NebulaArena* mAudSystemHeap;
 };

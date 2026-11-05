@@ -69,11 +69,11 @@ SaveDataHandler::SaveDataHandler(const UserFile* pUserFile)
     const u32 needed = pUserFile->makeGameDataBinary(pProbe, cProbeRoom);
     delete[] pProbe;
     mMakeRoom = needed * 2 + 0x1000;
-    mMake = new (MR::getStationedHeap(), 0) u8[mMakeRoom];
+    mMake = new (MR::getPermanentHeap(), 0) u8[mMakeRoom];
     mBufferRoom = (mMakeRoom + cRowSize) * cUserFiles * cKindNum + cHeaderSize;
-    mBuffer = new (MR::getStationedHeap(), 0) u8[mBufferRoom];
+    mBuffer = new (MR::getPermanentHeap(), 0) u8[mBufferRoom];
 
-    mFiles = new (MR::getStationedHeap(), 0) File[cUserFiles * cKindNum];
+    mFiles = new (MR::getPermanentHeap(), 0) File[cUserFiles * cKindNum];
     for (u32 user = 0; user < cUserFiles; user++) {
         for (u32 kind = 0; kind < cKindNum; kind++) {
             File& rFile = mFiles[user * cKindNum + kind];
@@ -220,7 +220,7 @@ void SaveDataHandler::setFile(const char* pName, const u8* pData, u32 size) {
 
     if (size > pFile->mRoom) {
         delete[] pFile->mData;
-        pFile->mData = new (MR::getStationedHeap(), 0) u8[size];
+        pFile->mData = new (MR::getPermanentHeap(), 0) u8[size];
         pFile->mRoom = size;
     }
 
@@ -272,7 +272,7 @@ void SaveDataHandler::requestSaveSaveData() {
     if (total > mBufferRoom) {
         delete[] mBuffer;
         mBufferRoom = total;
-        mBuffer = new (MR::getStationedHeap(), 0) u8[mBufferRoom];
+        mBuffer = new (MR::getPermanentHeap(), 0) u8[mBufferRoom];
     }
 
     writeU32(mBuffer, cMagic);
@@ -304,7 +304,7 @@ bool SaveDataHandler::isDone() {
         const u32 length = mReadLength;
         delete[] mBuffer;
         mBufferRoom = length;
-        mBuffer = new (MR::getStationedHeap(), 0) u8[mBufferRoom];
+        mBuffer = new (MR::getPermanentHeap(), 0) u8[mBufferRoom];
         requestLoadSaveData(mReadIndex);
         return false;
     }
