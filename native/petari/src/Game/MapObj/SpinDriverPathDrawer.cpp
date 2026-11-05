@@ -56,7 +56,6 @@ void SpinDriverPathDrawInit::initDraw() {
     TDDraw::cameraInit3D();
 
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-    J3DPass::positionMatrix(0);
     sendPathMaterial(mOrangeTexture, mMaskTexture);
 }
 

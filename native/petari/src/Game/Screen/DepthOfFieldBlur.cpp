@@ -113,9 +113,6 @@ void DepthOfFieldBlur::drawZAlphaTex() const {
     TMtx34f posMtx;
     posMtx.identity();
     J3DNativeShape::setPosition(0, posMtx.toMtxPtr());
-    J3DPass::positionMatrix(0);
-    J3DPass::writeColor(true);
-    J3DPass::writeAlpha(false);
     sendZAlphaMaterial();
 
     // The ramp's stops along the whole texture.

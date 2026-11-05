@@ -68,12 +68,6 @@ void J3DSys::loadNrmMtxIndx(int addr, u16 indx) const {
 }
 
 void J3DSys::drawInit() {
-    J3DPass::positionMatrix(0);
-    J3DPass::cull(NEBULA_CULL_BACK);
-    J3DPass::writeColor(true);
-    J3DPass::blend(NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_INV_SRC_ALPHA);
-    J3DPass::depth(true, NEBULA_COMPARE_LEQUAL, true);
-
     reinitTexture();
 
     for (u32 i = 0; i < 10; i++)
@@ -84,11 +78,8 @@ void J3DSys::drawInit() {
 }
 
 void J3DSys::resetDrawState() {
-    J3DPass::cull(NEBULA_CULL_BACK);
     reinitLighting();
-    reinitTransform();
     reinitTexture();
-    reinitPixelProc();
 }
 
 void J3DSys::reinitLighting() {
@@ -96,18 +87,7 @@ void J3DSys::reinitLighting() {
     J3DNativeMaterial::setLightAmbient(1, ColorBlack);
 }
 
-void J3DSys::reinitTransform() {
-    J3DPass::positionMatrix(0);
-}
-
 void J3DSys::reinitTexture() {
     J3DNativeTexture::registerRecord(&sNullTexture);
 }
 
-void J3DSys::reinitPixelProc() {
-    J3DPass::noBlend();
-    J3DPass::writeColor(true);
-    // SMG1 change -- false to true
-    J3DPass::writeAlpha(true);
-    J3DPass::depth(true, NEBULA_COMPARE_LEQUAL, true);
-}

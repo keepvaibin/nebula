@@ -30,9 +30,7 @@ extern "C" void Mii_NativeTexturePart(const J3DNativeTexObj* pTexture) {
     NebulaNativeMaterial material;
     NativeShader::init(material, NEBULA_SHADER_MII_TEXTURE, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
                        NEBULA_CULL_NONE);
-    material.blend_op = NEBULA_NATIVE_KEPT;
-    material.depth_test = NEBULA_NATIVE_KEPT;
-    material.cull = NEBULA_NATIVE_KEPT;
+    NativeShader::takeState(material, *J3DNativeState::pass());
     NativeShader::setColor(material, 0, sTextureC0.r, sTextureC0.g, sTextureC0.b, sTextureC0.a);
     NativeShader::setColor(material, 4, sTextureC1.r, sTextureC1.g, sTextureC1.b, sTextureC1.a);
     material.constants[8] = static_cast< f32 >(sTextureForm);
@@ -59,8 +57,9 @@ extern "C" void Mii_NativePart(u32 form, NebulaColor8 color, u8 cull, const J3DN
                        cull == J3D_CULL_FRONT  ? NEBULA_CULL_FRONT
                        : cull == J3D_CULL_BACK ? NEBULA_CULL_BACK
                                               : NEBULA_CULL_NONE);
-    material.blend_op = NEBULA_NATIVE_KEPT;
-    material.depth_test = NEBULA_NATIVE_KEPT;
+    const u8 partCull = material.cull;
+    NativeShader::takeState(material, *J3DNativeState::pass());
+    material.cull = partCull;
     NativeShader::setColor(material, 0, color.r, color.g, color.b, color.a);
     material.constants[4] = static_cast< f32 >(form);
     material.constants[5] = static_cast< f32 >(sChain);

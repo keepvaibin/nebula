@@ -35,8 +35,8 @@ namespace NativeShader {
         rMaterial.depth_func = depthFunc;
         rMaterial.depth_write = depthWrite ? 1 : 0;
         rMaterial.cull = cull;
-        rMaterial.color_write = 2;  // as it was (0 off, 1 on, 2 kept)
-        rMaterial.alpha_write = 2;
+        rMaterial.color_write = 1;
+        rMaterial.alpha_write = 2;  // the pass's
         for (u32 i = 0; i < 8; i++) {
             rMaterial.texgen_post[i] = 61;  // the identity post-transform 
         }
@@ -96,6 +96,25 @@ namespace NativeShader {
         rMaterial.blend_op = NEBULA_BLEND_ADD;
         rMaterial.blend_src = src;
         rMaterial.blend_dst = dst;
+    }
+
+    // Stencil: tested by `test` (NEBULA_STENCIL_*), `op` on what passes. A material that names none takes the pass's.
+    inline void setStencil(NebulaNativeMaterial& rMaterial, u8 test, u8 op) {
+        rMaterial.stencil = static_cast< u8 >(0x80 | test << 4 | op);
+    }
+
+    // The state a draw has now, for a material drawn in its place.
+    inline void takeState(NebulaNativeMaterial& rMaterial, const J3DDrawState& rState) {
+        rMaterial.blend_op = rState.blend_op;
+        rMaterial.blend_src = rState.blend_src;
+        rMaterial.blend_dst = rState.blend_dst;
+        rMaterial.depth_test = rState.depth_test;
+        rMaterial.depth_func = rState.depth_func;
+        rMaterial.depth_write = rState.depth_write;
+        rMaterial.cull = rState.cull;
+        rMaterial.color_write = rState.color_write;
+        rMaterial.alpha_write = rState.alpha_write;
+        setStencil(rMaterial, rState.stencil_func, rState.stencil_op);
     }
 
     inline void send(const NebulaNativeMaterial& rMaterial) {

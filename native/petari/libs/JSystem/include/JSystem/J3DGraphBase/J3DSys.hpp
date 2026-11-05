@@ -64,9 +64,7 @@ public:
     void resetDrawState();
     void reinitGenMode();
     void reinitLighting();
-    void reinitTransform();
     void reinitTexture();
-    void reinitPixelProc();
 
     MtxPtr getViewMtx() {
         return mViewMtx;

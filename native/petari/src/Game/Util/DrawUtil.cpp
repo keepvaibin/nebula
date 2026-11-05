@@ -43,7 +43,6 @@ namespace MR {
 
     void resetDrawState() {
         j3dSys.resetDrawState();
-        J3DPass::writeAlpha(false);
     }
 
     void loadViewMtxFor2DModel() {
@@ -54,7 +53,6 @@ namespace MR {
 
     void drawInitFor2DModel() {
         MR::resetDrawState();
-        J3DPass::depth(false, NEBULA_COMPARE_ALWAYS, false);
 
         Mtx44 projMtx;
         NebulaMtxOrtho(projMtx, 0.0f, -MR::getScreenHeight(), 0.0f, MR::getScreenWidth(), ::cNearZ, ::cFarZ);
@@ -80,9 +78,6 @@ namespace MR {
         NebulaMtxIdentity(identity);
         J3DNativeShape::setPosition(0, identity);
         J3DNativeShape::setCurrentIdentity();
-        J3DPass::depth(false, NEBULA_COMPARE_LEQUAL, false);
-        J3DPass::cull(NEBULA_CULL_NONE);
-        J3DPass::positionMatrix(0);
     }
 
     // runtime/src/render/materials/vertex_color.hlsl: the colour over the screen, blended by its alpha.
@@ -157,8 +152,6 @@ namespace MR {
         Mtx44 projMtx;
         NebulaMtxOrtho(projMtx, height, -height, -halfWidth, halfWidth, -1000.0f, 1000.0f);
         J3DNativeView::setOrthographic(projMtx);
-        J3DPass::cull(NEBULA_CULL_NONE);
-        J3DPass::depth(false, NEBULA_COMPARE_NEVER, false);
     }
 
     // The frame's depth cleared to far, with the view, matrix and pixel state the next draws start from.
@@ -172,13 +165,7 @@ namespace MR {
         TMtx34f mtxImm;
         mtxImm.identity();
         J3DNativeShape::setPosition(0, mtxImm);
-        J3DPass::positionMatrix(0);
-        J3DPass::noBlend();
-        J3DPass::writeAlpha(false);
-        J3DPass::depth(true, NEBULA_COMPARE_ALWAYS, true);
-        J3DPass::cull(NEBULA_CULL_BACK);
         J3DNativeTarget::clearFrame(0, NEBULA_CLEAR_DEPTH);
-        J3DPass::writeColor(true);
     }
 
     // The stencil zero over the whole screen.
@@ -188,7 +175,6 @@ namespace MR {
         Mtx44 projection;
         NebulaMtxOrtho(projection, 0.0f, ::getScreenHeightInline(), 0.0f, getScreenWidth(), -1.0f, 1.0f);
         J3DNativeView::setOrthographic(projection);
-        J3DPass::positionMatrix(0);
         Mtx matrix;
         NebulaMtxIdentity(matrix);
         J3DNativeShape::setPosition(0, matrix);
@@ -198,8 +184,8 @@ namespace MR {
         material.color_write = 0;
         material.alpha_write = 0;
         NativeShader::setColor(material, 0, 0, 0, 0, 0);
+        NativeShader::setStencil(material, NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ZERO);
         NativeShader::send(material);
-        J3DPass::stencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ZERO);
         J3DNativeShape::setCurrentIdentity();
 
         J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 4, 0);
@@ -207,24 +193,20 @@ namespace MR {
         J3DNativeDraw::position(width, 0.0f, 0.0f);
         J3DNativeDraw::position(0.0f, height, 0.0f);
         J3DNativeDraw::position(width, height, 0.0f);
-
-        J3DPass::stencil(NEBULA_STENCIL_OFF, NEBULA_STENCIL_KEEP);
     }
 
-    void fillScreenSetup(const NebulaColor8& rColor) {
+    void fillScreenSetup(const NebulaColor8& rColor, bool opaque) {
         TMtx34f mtxImm;
         mtxImm.identity();
         J3DNativeShape::setPosition(0, mtxImm);
-        J3DPass::positionMatrix(0);
         Mtx44 projMtx;
         NebulaMtxOrtho(projMtx, 0.0f, ::getScreenHeightInline(), 0.0f, MR::getScreenWidth(), -1.0f, 1.0f);
         J3DNativeView::setOrthographic(projMtx);
         // runtime/src/render/materials/flat_color.hlsl in the colour, depth off, no culling; the blending and writes
         // the drawing state has (its callers set them).
         NebulaNativeMaterial material;
-        NativeShader::init(material, NEBULA_SHADER_FLAT_COLOR, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
+        NativeShader::init(material, NEBULA_SHADER_FLAT_COLOR, opaque ? NativeShader::BLEND_OPAQUE : NativeShader::BLEND_ALPHA, NEBULA_COMPARE_ALWAYS, false,
                            NEBULA_CULL_NONE);
-        material.blend_op = NEBULA_NATIVE_KEPT;
         NativeShader::setColor(material, 0, rColor.r, rColor.g, rColor.b, rColor.a);
         NativeShader::send(material);
         J3DNativeShape::setCurrentIdentity();
@@ -245,27 +227,22 @@ namespace MR {
         }
     }
 
-    void fillScreen(const NebulaColor8& color) {
-        fillScreenSetup(color);
+    void fillScreen(const NebulaColor8& color, bool opaque) {
+        fillScreenSetup(color, opaque);
         u16 width = getScreenWidth();
         u16 height = getScreenHeight();
         fillScreenArea(TVec2s(0, 0), TVec2s(width, height));
     }
 
-    void setupShadowVolumeDraw() {
-        // The volumes draw in a flat colour each sets (setShadowVolumeColor).
-        J3DPass::depth(true, NEBULA_COMPARE_GEQUAL, false);
-    }
-
-    void setShadowVolumeColor(const NebulaColor8& rColor) {
-        NebulaNativeMaterial material;
-        NativeShader::init(material, NEBULA_SHADER_FLAT_COLOR, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
-                           NEBULA_CULL_NONE);
-        material.blend_op = NEBULA_NATIVE_KEPT;
-        material.depth_test = NEBULA_NATIVE_KEPT;
-        material.cull = NEBULA_NATIVE_KEPT;
-        NativeShader::setColor(material, 0, rColor.r, rColor.g, rColor.b, rColor.a);
-        NativeShader::send(material);
+    // The material of a shadow volume: a flat colour behind what is drawn, nothing but the stencil written.
+    void initShadowVolumeMaterial(NebulaNativeMaterial& rMaterial, const NebulaColor8& rColor) {
+        NativeShader::init(rMaterial, NEBULA_SHADER_FLAT_COLOR, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_GEQUAL, false, NEBULA_CULL_NONE);
+        rMaterial.depth_test = 1;
+        rMaterial.blend_src = 0;
+        rMaterial.blend_dst = 0;
+        rMaterial.color_write = 0;
+        rMaterial.alpha_write = 0;
+        NativeShader::setColor(rMaterial, 0, rColor.r, rColor.g, rColor.b, rColor.a);
     }
 
     void drawSimpleModel(J3DModelData* pModelData) {
@@ -293,8 +270,8 @@ namespace MR {
                            NEBULA_CULL_NONE);
         material.color_write = 1;
         NativeShader::setColor(material, 0, 0, 0, 0, 0x80);
+        NativeShader::setStencil(material, NEBULA_STENCIL_IF_SET, NEBULA_STENCIL_ZERO);
         NativeShader::send(material);
-        J3DPass::stencil(NEBULA_STENCIL_IF_SET, NEBULA_STENCIL_ZERO);
         J3DNativeShape::setCurrentIdentity();
 
         const f32 width = MR::getScreenWidth();
@@ -305,8 +282,6 @@ namespace MR {
         J3DNativeDraw::position(0.0f, height, 0.0f);
         J3DNativeDraw::position(width, height, 0.0f);
 
-        J3DPass::stencil(NEBULA_STENCIL_OFF, NEBULA_STENCIL_KEEP);
-        J3DPass::writeAlpha(false);
     }
 
     const JUTTexture* getMarioShadowTex() {

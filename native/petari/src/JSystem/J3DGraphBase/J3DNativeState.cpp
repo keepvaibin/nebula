@@ -12,7 +12,9 @@ extern "C" const NebulaHostServices* nebula_host(void);
 
 namespace {
     NebulaPassState sPass;
-
+    bool sPassAlpha = false;
+    u8 sPassStencilTest = NEBULA_STENCIL_OFF;
+    u8 sPassStencilOp = NEBULA_STENCIL_KEEP;
 }  // namespace
 
 namespace J3DNativeState {
@@ -21,29 +23,53 @@ namespace J3DNativeState {
         return &sPass;
     }
 
-    void sendMaterial(const NebulaNativeMaterial* pMaterial) {
+    void use(const J3DDrawState& rState) {
         J3DNativeShape::flushState();
-        // Its state comes with the material except when only its constants change, or where it keeps what was set.
-        if ((pMaterial->constants_only & 1) == 0 && pMaterial->shader != NEBULA_SHADER_NONE) {
-            if (pMaterial->blend_op != NEBULA_NATIVE_KEPT) {
-                sPass.blend_op = pMaterial->blend_op;
-                sPass.blend_src = pMaterial->blend_src <= 9 ? pMaterial->blend_src : 0;
-                sPass.blend_dst = pMaterial->blend_dst <= 9 ? pMaterial->blend_dst : 0;
-            }
-            if (pMaterial->color_write != 2) {
-                sPass.color_write = pMaterial->color_write != 0;
-            }
-            if (pMaterial->alpha_write != 2) {
-                sPass.alpha_write = pMaterial->alpha_write != 0;
-            }
-            if (pMaterial->depth_test != NEBULA_NATIVE_KEPT) {
-                sPass.depth_test = pMaterial->depth_test != 0;
-                sPass.depth_func = pMaterial->depth_func & 7;
-                sPass.depth_write = pMaterial->depth_write != 0;
-            }
-            if (pMaterial->cull != NEBULA_NATIVE_KEPT) {
-                sPass.cull = pMaterial->cull <= 2 ? pMaterial->cull : 0;
-            }
+        sPass = rState;
+    }
+
+    void setPassAlpha(bool write) {
+        J3DNativeShape::flushState();
+        sPassAlpha = write;
+        sPass.alpha_write = write;
+    }
+
+    void setPassStencil(u8 test, u8 op) {
+        J3DNativeShape::flushState();
+        sPassStencilTest = test;
+        sPassStencilOp = op;
+        sPass.stencil_func = test;
+        sPass.stencil_op = op;
+    }
+
+    void lineWidth(f32 pixels, bool spreadTexture) {
+        J3DNativeShape::flushState();
+        sPass.line_width = pixels * (NEBULA_FRAME_UNITS / 456.0f);  // authored for a picture this many lines tall
+        sPass.line_divisor = spreadTexture ? 1 : 0;
+        sPass.line_offsets = spreadTexture ? 7 : 0;
+    }
+
+    void pointSize(f32 pixels, bool spreadTexture) {
+        J3DNativeShape::flushState();
+        sPass.point_size = pixels * (NEBULA_FRAME_UNITS / 456.0f);  // authored for a picture this many lines tall
+        sPass.point_divisor = spreadTexture ? 1 : 0;
+        sPass.point_offsets = spreadTexture ? 7 : 0;
+    }
+
+    void sendMaterial(const NebulaNativeMaterial* pMaterial, bool takeState) {
+        J3DNativeShape::flushState();
+        if (takeState && (pMaterial->constants_only & 1) == 0 && pMaterial->shader != NEBULA_SHADER_NONE) {
+            sPass.blend_op = pMaterial->blend_op;
+            sPass.blend_src = pMaterial->blend_src <= 9 ? pMaterial->blend_src : 0;
+            sPass.blend_dst = pMaterial->blend_dst <= 9 ? pMaterial->blend_dst : 0;
+            sPass.color_write = pMaterial->color_write != 0;
+            sPass.alpha_write = pMaterial->alpha_write == 2 ? sPassAlpha : pMaterial->alpha_write != 0;
+            sPass.depth_test = pMaterial->depth_test != 0;
+            sPass.depth_func = pMaterial->depth_func & 7;
+            sPass.depth_write = pMaterial->depth_write != 0;
+            sPass.cull = pMaterial->cull <= 2 ? pMaterial->cull : 0;
+            sPass.stencil_func = pMaterial->stencil != 0 ? (pMaterial->stencil >> 4) & 7 : sPassStencilTest;
+            sPass.stencil_op = pMaterial->stencil != 0 ? pMaterial->stencil & 15 : sPassStencilOp;
         }
         const NebulaHostServices* pHost = nebula_host();
         pHost->native_material(pHost->user, pMaterial);
@@ -161,20 +187,18 @@ namespace J3DNativeState {
         for (u8 i = 0; i < 8; i++) {
             J3DPass::textureIdentity(i);
         }
-        J3DPass::lineWidth(1.0f);
-        J3DPass::pointSize(1.0f);
+        lineWidth(1.0f);
+        pointSize(1.0f);
 
         Mtx identity;
         NebulaMtxIdentity(identity);
         J3DNativeShape::setPosition(0, identity);
         J3DNativeShape::setNormal(0, identity);
-        J3DPass::positionMatrix(0);
         J3DNativeShape::setTexture(J3DNativeShape::kIdentityTexture, identity, 3);
         J3DNativeShape::setPostTexture(J3DNativeShape::kIdentityPost, identity);
         J3DNativeView::setViewport(0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f);
         J3DNativeView::setProjectionv(sDefaultProjection);
 
-        J3DPass::cull(NEBULA_CULL_BACK);
         J3DNativeView::setScissor(0.0f, 0.0f, 1.0f, 1.0f);
         for (u8 channel = 0; channel < 2; channel++) {
             J3DNativeMaterial::setLightAmbient(channel, black);
@@ -182,10 +206,6 @@ namespace J3DNativeState {
 
         J3DNativeTexture::registerRecord(&sDefaultTexData);
 
-        J3DPass::noBlend();
-        J3DPass::writeColor(true);
-        J3DPass::writeAlpha(true);
-        J3DPass::depth(true, NEBULA_COMPARE_LEQUAL, true);
     }
 
     void showFrame() {
@@ -224,72 +244,6 @@ namespace J3DPass {
         }
     }  // namespace
 
-    void depth(bool test, u8 compare, bool write) {
-        J3DNativeShape::flushState();
-        sPass.depth_test = test;
-        sPass.depth_func = compare & 7;
-        sPass.depth_write = write;
-    }
-
-    void stencil(u8 test, u8 op) {
-        J3DNativeShape::flushState();
-        sPass.stencil_func = test;
-        sPass.stencil_op = op;
-    }
-
-    void blendState(u8 op, u8 source, u8 destination) {
-        J3DNativeShape::flushState();
-        sPass.blend_op = op;
-        sPass.blend_src = source <= 9 ? source : 0;
-        sPass.blend_dst = destination <= 9 ? destination : 0;
-    }
-
-    void blend(u8 source, u8 destination) {
-        blendState(NEBULA_BLEND_ADD, source, destination);
-    }
-
-    void noBlend() {
-        blendState(NEBULA_BLEND_REPLACE, 0, 0);
-    }
-
-    void subtractBlend() {
-        blendState(NEBULA_BLEND_SUBTRACT, 0, 0);
-    }
-
-    void cull(u8 faces) {
-        J3DNativeShape::flushState();
-        sPass.cull = faces & 3;
-    }
-
-    void writeColor(bool write) {
-        J3DNativeShape::flushState();
-        sPass.color_write = write;
-    }
-
-    void writeAlpha(bool write) {
-        J3DNativeShape::flushState();
-        sPass.alpha_write = write;
-    }
-
-    void positionMatrix(u8 index) {
-        J3DNativeShape::flushState();
-        J3DNativeShape::setCurrentPosition(index % 10);
-    }
-
-    void lineWidth(f32 pixels, bool spreadTexture) {
-        J3DNativeShape::flushState();
-        sPass.line_width = pixels * (NEBULA_FRAME_UNITS / 456.0f);  // authored for a picture this many lines tall
-        sPass.line_divisor = spreadTexture ? 1 : 0;
-        sPass.line_offsets = spreadTexture ? 7 : 0;
-    }
-
-    void pointSize(f32 pixels, bool spreadTexture) {
-        J3DNativeShape::flushState();
-        sPass.point_size = pixels * (NEBULA_FRAME_UNITS / 456.0f);  // authored for a picture this many lines tall
-        sPass.point_divisor = spreadTexture ? 1 : 0;
-        sPass.point_offsets = spreadTexture ? 7 : 0;
-    }
-
     void textureMatrix(u8 coord, u8 matrix) {
         sendCoordinate(coord, 0, static_cast< u8 >(cFirstTextureSlot + matrix));
     }
@@ -300,22 +254,15 @@ namespace J3DPass {
 };  // namespace J3DPass
 
 extern "C" {
-void J3DPassDepth(int test, u8 compare, int write) {
-    J3DPass::depth(test != 0, compare, write != 0);
-}
-void J3DPassBlend(u8 source, u8 destination) {
-    J3DPass::blend(source, destination);
-}
-void J3DPassCull(u8 faces) {
-    J3DPass::cull(faces);
-}
-void J3DPassWriteColor(int write) {
-    J3DPass::writeColor(write != 0);
-}
-void J3DPassWriteAlpha(int write) {
-    J3DPass::writeAlpha(write != 0);
-}
-void J3DPassPositionMatrix(u8 index) {
-    J3DPass::positionMatrix(index);
+void J3DNativeStateUse(u8 source, u8 destination, int depthTest, u8 compare, int depthWrite, u8 cull, int colorWrite, int alphaWrite) {
+    J3DDrawState state = *J3DNativeState::pass();
+    J3DNativeState::setBlend(state, source, destination);
+    J3DNativeState::setDepth(state, depthTest != 0, compare, depthWrite != 0);
+    state.cull = cull;
+    state.color_write = colorWrite != 0;
+    state.alpha_write = alphaWrite == 2 ? sPassAlpha : alphaWrite != 0;
+    state.stencil_func = sPassStencilTest;
+    state.stencil_op = sPassStencilOp;
+    J3DNativeState::use(state);
 }
 }

@@ -133,7 +133,6 @@ void ElectricRailHolder::control() {
 
 void ElectricRailHolder::initDraw() const {
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-    J3DPass::positionMatrix(0);
     J3DPass::textureMatrix(0, 0);
 }
 

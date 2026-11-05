@@ -954,9 +954,12 @@ namespace {
         NebulaNativeMaterial& material = sParticle;
         NativeShader::init(material, NEBULA_SHADER_PARTICLE, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
                            NEBULA_CULL_NONE);
-        material.blend_op = NEBULA_NATIVE_KEPT;
-        material.depth_test = NEBULA_NATIVE_KEPT;
-        material.cull = NEBULA_NATIVE_KEPT;
+        material.blend_op = pShape->getBlendMode();
+        material.blend_src = pShape->getBlendSrc();
+        material.blend_dst = pShape->getBlendDst();
+        material.depth_test = pShape->getZEnable();
+        material.depth_func = pShape->getZCmp();
+        material.depth_write = pShape->getZUpd();
         material.early_depth = pShape->getZCompLoc() ? 1 : 0;
         material.constants[84] = static_cast< f32 >(pShape->getStageColorMode());
         material.constants[85] = static_cast< f32 >(pShape->getStageAlphaMode());

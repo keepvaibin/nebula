@@ -1,4 +1,5 @@
 #include "Game/MapObj/ClipArea.hpp"
+#include "Game/Util/NativeShader.hpp"
 #include "Game/Util/DrawUtil.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include "Game/MapObj/ClipAreaHolder.hpp"
@@ -32,18 +33,16 @@ void ClipArea::draw() const {
         return;
     }
 
-    MR::setShadowVolumeColor(::sShapeColor);
-    J3DPass::writeColor(false);
-    J3DPass::writeAlpha(false);
-    J3DPass::noBlend();
-    J3DPass::stencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ADD);
-    J3DPass::cull(NEBULA_CULL_FRONT);
+    NebulaNativeMaterial material;
+    MR::initShadowVolumeMaterial(material, ::sShapeColor);
+    NativeShader::setStencil(material, NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ADD);
+    material.cull = NEBULA_CULL_FRONT;
+    NativeShader::send(material);
     mShape->drawVolumeShape(mBaseMtx, mScale);
-    J3DPass::stencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_TAKE);
-    J3DPass::cull(NEBULA_CULL_BACK);
+    NativeShader::setStencil(material, NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_TAKE);
+    material.cull = NEBULA_CULL_BACK;
+    NativeShader::send(material);
     mShape->drawVolumeShape(mBaseMtx, mScale);
-    J3DPass::stencil(NEBULA_STENCIL_OFF, NEBULA_STENCIL_KEEP);
-    J3DPass::writeColor(true);
 }
 
 void ClipArea::setShape(ClipAreaShape* pShape) {

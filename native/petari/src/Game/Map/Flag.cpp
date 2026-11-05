@@ -450,7 +450,6 @@ void Flag::sendEntry(u8 index) const {
 
 void Flag::loadMaterial() const {
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-    J3DPass::positionMatrix(0);
 
     // runtime/src/render/materials/tex_modulate.hlsl: the texture times the vertex colour, its alpha times mAlpha;
     // blended by alpha where above zero, depth tested (written when opaque), no culling, no fog.

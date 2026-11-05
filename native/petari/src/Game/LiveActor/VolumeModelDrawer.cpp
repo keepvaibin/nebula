@@ -1,4 +1,5 @@
 #include "Game/LiveActor/VolumeModelDrawer.hpp"
+#include "Game/Util/NativeShader.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include "Game/Scene/SceneFunction.hpp"
@@ -11,7 +12,6 @@
 #include <cstdio>
 
 VolumeModelDrawInit::VolumeModelDrawInit() : NameObj("\203\173\203\212\203\205\201\133\203\200\203\202\203\146\203\213\225\140\211\346\217\211\212\372\211\273" /* ボリュームモデル描画初期化 */) {
-    MR::registerPreDrawFunction(MR::Functor(&MR::setupShadowVolumeDraw), MR::DrawType_VolumeModel);
 }
 
 VolumeModelDrawer::VolumeModelDrawer(const char* pName, const char* pFileName, MtxPtr mtx)
@@ -29,38 +29,36 @@ VolumeModelDrawer::VolumeModelDrawer(const char* pName, const char* pFileName, M
 void VolumeModelDrawer::draw() const {
     MR::loadProjectionMtx();
     loadModelDrawMtx();
-    J3DPass::positionMatrix(0);
-    J3DPass::writeColor(false);
-    J3DPass::writeAlpha(false);
-    J3DPass::noBlend();
 
     const u32 strength = mColor.a;
     NebulaColor8 color = mColor;
     color.a = static_cast< u8 >(strength * strength / 255);
-    MR::setShadowVolumeColor(color);
+    NebulaNativeMaterial material;
+    MR::initShadowVolumeMaterial(material, color);
 
-    J3DPass::cull(NEBULA_CULL_NONE);
-    J3DPass::depth(false, NEBULA_COMPARE_ALWAYS, false);
-    J3DPass::stencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ZERO);
+    material.cull = NEBULA_CULL_NONE;
+    NativeShader::setDepth(material, false, NEBULA_COMPARE_ALWAYS, false);
+    NativeShader::setStencil(material, NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ZERO);
+    NativeShader::send(material);
     MR::drawSimpleModel(mModelData);
 
-    J3DPass::depth(true, NEBULA_COMPARE_GEQUAL, false);
-    J3DPass::cull(NEBULA_CULL_FRONT);
-    J3DPass::stencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ADD);
+    NativeShader::setDepth(material, true, NEBULA_COMPARE_GEQUAL, false);
+    material.cull = NEBULA_CULL_FRONT;
+    NativeShader::setStencil(material, NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ADD);
+    NativeShader::send(material);
     MR::drawSimpleModel(mModelData);
-    J3DPass::cull(NEBULA_CULL_BACK);
-    J3DPass::stencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ZERO);
-    MR::drawSimpleModel(mModelData);
-
-    J3DPass::cull(NEBULA_CULL_NONE);
-    J3DPass::depth(false, NEBULA_COMPARE_ALWAYS, false);
-    J3DPass::writeColor(true);
-    J3DPass::blend(NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_ONE);
-    J3DPass::stencil(NEBULA_STENCIL_IF_SET, NEBULA_STENCIL_ZERO);
+    material.cull = NEBULA_CULL_BACK;
+    NativeShader::setStencil(material, NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ZERO);
+    NativeShader::send(material);
     MR::drawSimpleModel(mModelData);
 
-    J3DPass::stencil(NEBULA_STENCIL_OFF, NEBULA_STENCIL_KEEP);
-    J3DPass::noBlend();
+    material.cull = NEBULA_CULL_NONE;
+    NativeShader::setDepth(material, false, NEBULA_COMPARE_ALWAYS, false);
+    material.color_write = 1;
+    NativeShader::setBlend(material, NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_ONE);
+    NativeShader::setStencil(material, NEBULA_STENCIL_IF_SET, NEBULA_STENCIL_ZERO);
+    NativeShader::send(material);
+    MR::drawSimpleModel(mModelData);
 }
 
 void VolumeModelDrawer::loadModelDrawMtx() const {

@@ -576,7 +576,4 @@ void MarioActor::drawSilhouette() const {
     pModel->mFlags._1C = true;
     pModel->directDraw(nullptr);
     pModel->mFlags._1C = false;
-    J3DPass::stencil(NEBULA_STENCIL_OFF, NEBULA_STENCIL_KEEP);
-    J3DPass::writeAlpha(true);
-    J3DPass::writeColor(true);
 }

@@ -136,7 +136,6 @@ void RingBeamShadowDrawer::drawShape() const {
 
 void RingBeamShadowDrawer::loadModelDrawMtx() const {
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-    J3DPass::positionMatrix(0);
 };
 
 bool RingBeamShadowDrawer::isDraw() const {

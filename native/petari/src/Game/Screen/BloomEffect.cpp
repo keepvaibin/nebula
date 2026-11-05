@@ -63,7 +63,6 @@ void BloomEffect::postDraw() const {
     NebulaRender::bloomMarker(NebulaRender::kBloomNormal, _20 | tap1 << 8 | tap2 << 16 | static_cast< u32 >(intensity) << 24,
                               floatBits(1.0f / MR::getAspect()));
     initDraw();
-    J3DPass::blend(NEBULA_FACTOR_ONE, NEBULA_FACTOR_ONE);
 }
 
 u8 BloomEffect::getIntensity1Default() const {
@@ -80,7 +79,6 @@ bool BloomEffect::isForEachModel() const {
 
 void BloomEffect::initDraw() const {
     MR::resetDrawState();
-    J3DPass::depth(false, NEBULA_COMPARE_ALWAYS, false);
 
     Mtx44 projectionMtx;
     NebulaMtxOrtho(projectionMtx, 0.0f, MR::getScreenHeight(), 0.0f, MR::getScreenWidth(), -10000.0f, 10000.0f);
@@ -91,10 +89,4 @@ void BloomEffect::initDraw() const {
     TMtx34f posMtx;
     posMtx.identity();
     J3DNativeShape::setPosition(0, posMtx.toMtxPtr());
-    J3DPass::positionMatrix(0);
-
-    J3DPass::cull(NEBULA_CULL_NONE);
-    J3DPass::writeColor(true);
-    J3DPass::writeAlpha(false);
-    J3DPass::depth(false, NEBULA_COMPARE_ALWAYS, false);
 }

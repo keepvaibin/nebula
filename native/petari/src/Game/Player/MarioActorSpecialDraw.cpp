@@ -108,8 +108,7 @@ void MarioActor::captureScreenBox() const {
 
     // The model's own target, the frame's size: its alpha is what the box composites by.
     J3DNativeTarget::begin(_B44, 1.0f, 1.0f, 0);
-    J3DPass::writeColor(true);
-    J3DPass::writeAlpha(false);
+    J3DNativeState::setPassAlpha(false);
 }
 
 void MarioActor::writeBackScreenBox() const {
@@ -333,10 +332,9 @@ void MarioActor::drawScreenBlend() const {
         NebulaNativeMaterial material;
         TDDraw::setupNative(&material, 0, 0, 2);
         NativeShader::setBlend(material, NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_INV_SRC_ALPHA);
+        NativeShader::setStencil(material, NEBULA_STENCIL_IF_SET, NEBULA_STENCIL_ZERO);
         NativeShader::send(material);
-        J3DPass::stencil(NEBULA_STENCIL_IF_SET, NEBULA_STENCIL_ZERO);
         TDDraw::drawFillBox(position, opposite, 0x00000040);
-        J3DPass::stencil(NEBULA_STENCIL_OFF, NEBULA_STENCIL_KEEP);
         MR::loadProjectionMtx();
         MR::loadViewMtx();
     }
@@ -460,7 +458,6 @@ namespace {
         J3DNativeDraw::texCoord(1.0f, 1.0f);
         J3DNativeDraw::position(MR::getScreenWidth(), 0.0f, 0.0f);
         J3DNativeDraw::texCoord(1.0f, 0.0f);
-        J3DPass::writeAlpha(false);
     }
 }  // namespace
 
@@ -574,7 +571,7 @@ void MarioActor::drawSpinEffect() const {
     TVec3f direction(mMario->mFrontVec);
     TVec3f previous;
     NebulaMtxRotAxisRad(rotation, &mMario->mHeadVec, 0.09817477f);
-    J3DPass::lineWidth(6.0f);
+    J3DNativeState::lineWidth(6.0f);
 
     for (u32 i = 0; i <= 64; i++) {
         TVec3f point(direction);
@@ -589,7 +586,7 @@ void MarioActor::drawSpinEffect() const {
         NebulaMtxMultVecSR(rotation, &direction, &direction);
     }
 
-    J3DPass::lineWidth(3.0f);
+    J3DNativeState::lineWidth(3.0f);
 
     for (u32 i = 0; i <= 64; i++) {
         TVec3f point(direction);
@@ -671,8 +668,8 @@ bool MarioActor::drawDarkMask() const {
     material.alpha_write = 0;
     material.constants[4] = 1.0f;
     NativeShader::setTexture(material, 0, mMaskTextures[_B88]);
+    NativeShader::setStencil(material, NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ADD);
     NativeShader::send(material);
-    J3DPass::stencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ADD);
     TVec3f spine;
     TVec2f center;
     TVec2f screenX;
@@ -707,8 +704,6 @@ bool MarioActor::drawDarkMask() const {
     J3DNativeDraw::texCoord(4.0f, 4.0f);
     J3DNativeDraw::position(minimum.x, maximum.y, 0.0f);
     J3DNativeDraw::texCoord(0.0f, 4.0f);
-    J3DPass::stencil(NEBULA_STENCIL_OFF, NEBULA_STENCIL_KEEP);
-    J3DPass::writeColor(true);
     TDDraw::close();
     return true;
 }

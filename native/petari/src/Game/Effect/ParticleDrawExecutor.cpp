@@ -50,8 +50,6 @@ void ParticleDrawExecutor::draw2D() const {
         Mtx44 projection;
         NebulaMtxOrtho(projection, height, -height, -width, width, -1000.0f, 1000.0f);
         J3DNativeView::setOrthographic(projection);
-        J3DPass::cull(NEBULA_CULL_NONE);
-        J3DPass::depth(false, NEBULA_COMPARE_NEVER, false);
         NebulaMtxLightOrtho(drawInfo.mPrjMtx, height, -height, -width, width, 0.5f, 0.5f, 0.5f, 0.5f);
         mHost->mEmitterManager->draw(&drawInfo, 6);
         mHost->mEmitterManager->draw(&drawInfo, 7);

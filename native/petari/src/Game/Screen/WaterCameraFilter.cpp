@@ -155,7 +155,6 @@ void WaterCameraFilter::draw() const {
         J3DNativeDraw::texCoord(1.0f, 1.0f);
     }
 
-    J3DPass::writeAlpha(false);
     MR::loadProjectionMtx();
     MR::loadViewMtx();
 }
@@ -168,7 +167,6 @@ void WaterCameraFilter::loadMaterial() const {
     TMtx34f modelView;
     modelView.identity();
     J3DNativeShape::setPosition(0, modelView);
-    J3DPass::positionMatrix(0);
     TVec2f screenPos;
     screenPos.x = 0.0f;
     screenPos.y = 0.0f;

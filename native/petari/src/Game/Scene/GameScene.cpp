@@ -480,15 +480,14 @@ void GameScene::drawMirror() const {
         NebulaMtxCopy(MR::getMirrorCameraViewMtx(), j3dSys.mViewMtx);
         MR::loadProjectionMtx();
         CategoryList::entryDrawBufferMirror();
-        J3DPass::writeAlpha(false);
-        J3DPass::writeColor(true);
+        J3DNativeState::setPassAlpha(false);
         CategoryList::drawOpa(MR::DrawBufferType_MirrorMapObj);
         CategoryList::drawXlu(MR::DrawBufferType_MirrorMapObj);
         CategoryList::execute(MR::DrawType_CaptureScreenIndirect);
         MotionSignal::mirror(false);
         MR::clearZBuffer();
         NebulaColor8 c = {0, 0, 255, 0};
-        MR::fillScreen(c);
+        MR::fillScreen(c, true);
     }
 }
 
@@ -516,24 +515,21 @@ void GameScene::draw3D() const {
     MR::loadViewMtx();
     MR::loadProjectionMtx();
     MR::setDefaultViewportAndScissor();
-    J3DPass::writeColor(true);
-    J3DPass::writeAlpha(true);
+    J3DNativeState::setPassAlpha(true);
     CategoryList::drawOpa(MR::DrawBufferType_ClippedMapParts);
     CategoryList::execute(MR::DrawType_ClipArea);
     CategoryList::execute(MR::DrawType_FallOutFieldDraw);
     SceneFunction::executeDrawBufferListNormalOpaBeforeVolumeShadow();
-    J3DPass::writeAlpha(true);
     CategoryList::execute(MR::DrawType_ShadowVolume);
-    J3DPass::writeColor(true);
     // What is drawn after the volumes is not in their shadow.
-    J3DPass::stencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ZERO);
+    J3DNativeState::setPassStencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ZERO);
     SceneFunction::executeDrawBufferListNormalOpaBeforeSilhouette();
-    J3DPass::stencil(NEBULA_STENCIL_OFF, NEBULA_STENCIL_KEEP);
+    J3DNativeState::setPassStencil(NEBULA_STENCIL_OFF, NEBULA_STENCIL_KEEP);
     CategoryList::execute(MR::DrawType_0x28);
     SceneFunction::executeDrawSilhouetteAndFillShadow();
     SceneFunction::executeDrawAlphaShadow();
     MR::setLensFlareDrawSyncToken();
-    J3DPass::writeAlpha(false);
+    J3DNativeState::setPassAlpha(false);
     SceneFunction::executeDrawBufferListNormalOpa();
     SceneFunction::executeDrawListOpa();
     CategoryList::drawOpa(MR::DrawBufferType_UNK_0x18);

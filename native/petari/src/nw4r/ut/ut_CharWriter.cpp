@@ -8,15 +8,15 @@
 
 namespace {
     // The writer's native material (runtime/src/render/materials/font_text.hlsl) as Setup set it; each glyph sheet
-    // LoadTexture binds sends it. Blended by alpha; depth, culling and writes as the drawing state has them.
+    // LoadTexture binds sends it. Blended by alpha, no depth, no culling.
     NebulaNativeMaterial sMaterial;
 
     void SetupMaterial(nw4r::ut::Color min, nw4r::ut::Color max, bool intensity, bool letters = true) {
         const nw4r::ut::Color fog = 0;
         NativeShader::init(sMaterial, NEBULA_SHADER_FONT_TEXT, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_ALWAYS, false,
                            NEBULA_CULL_NONE);
-        sMaterial.depth_test = NEBULA_NATIVE_KEPT;
-        sMaterial.cull = NEBULA_NATIVE_KEPT;
+        sMaterial.depth_test = 0;
+        sMaterial.depth_func = NEBULA_COMPARE_NEVER;
         NativeShader::setColor(sMaterial, 0, min.r, min.g, min.b, min.a);
         NativeShader::setColor(sMaterial, 4, max.r, max.g, max.b, max.a);
         sMaterial.constants[8] = intensity ? 1.0f : 0.0f;

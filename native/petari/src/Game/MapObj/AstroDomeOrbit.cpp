@@ -106,7 +106,6 @@ void AstroDomeOrbit::initDraw(const Color8& rColor) const {
     SphereSelectorFunction::calcHandledRotateMtx(mRotation, &rotateMtx);
     rotateMtx.concat(MR::getCameraViewMtx(), rotateMtx);
     J3DNativeShape::setPosition(0, rotateMtx);
-    J3DPass::positionMatrix(0);
     // runtime/src/render/materials/flat_color.hlsl: the colour added to the frame, depth tested and not written, back
     // faces culled.
     NebulaNativeMaterial material;

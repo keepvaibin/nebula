@@ -37,9 +37,6 @@ namespace MovieDraw {
         Mtx identity;
         NebulaMtxIdentity(identity);
         J3DNativeShape::setPosition(0, identity);
-        J3DPass::positionMatrix(0);
-        J3DPass::writeColor(true);
-        J3DPass::writeAlpha(false);
 
         // The frame's planes, decoded into these buffers since the last frame as rows of texels (nebula_cooked_texture.h).
         const u16 chromaWidth = static_cast< u16 >(textureWidth >> 1);

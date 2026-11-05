@@ -485,9 +485,7 @@ u32 TrampleStar::calcNearestVtxIndex(const TVec3f& rPos) {
 void TrampleStar::draw() const {
     if (!MR::isDead(this)) {
         drawSelf();
-        J3DPass::depth(true, NEBULA_COMPARE_LEQUAL, true);
         MR::resetDrawState();
-        J3DPass::writeAlpha(true);
     }
 }
 

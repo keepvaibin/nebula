@@ -599,9 +599,6 @@ void GhostPlayer::draw() const {
     if (mHasJetTurtle) {
         mJetTurtleShadow->drawType1();
     }
-
-    J3DPass::writeAlpha(false);
-    J3DPass::writeColor(true);
 }
 
 u32 GhostPlayer::receiveGhostPacket(GhostPacket* pPacket) {

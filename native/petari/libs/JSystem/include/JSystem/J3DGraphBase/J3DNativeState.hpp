@@ -12,34 +12,19 @@ enum J3DLightFalloff {
     J3D_FALLOFF_STEEP,
 };
 
-// What the draws that follow do to the target, in the host's values (nebula_game_api.h).
+// What a draw does to the target, whole: nothing carries over from the draw before.
+typedef NebulaPassState J3DDrawState;
+
 #ifdef __cplusplus
 namespace J3DPass {
-    void depth(bool test, u8 compare, bool write);  // NEBULA_COMPARE_*
-    void stencil(u8 test, u8 op);                   // NEBULA_STENCIL_*
-    void blend(u8 source, u8 destination);          // source * source + target * destination, NEBULA_FACTOR_*
-    void blendState(u8 op, u8 source, u8 destination);  // NEBULA_BLEND_*, NEBULA_FACTOR_*
-    void noBlend();
-    void subtractBlend();
-    void cull(u8 faces);  // NEBULA_CULL_*
-    void writeColor(bool write);
-    void writeAlpha(bool write);
-    void positionMatrix(u8 index);          // the place vertices without one of their own use
-    // Pixels across; `spreadTexture`: texture coordinates 0-2 run 0 to 1 across the width of the line or the point.
-    void lineWidth(f32 pixels, bool spreadTexture = false);
-    void pointSize(f32 pixels, bool spreadTexture = false);
     void textureMatrix(u8 coord, u8 matrix);  // coordinate `coord` is texture coordinate 0 through texture matrix `matrix`
     void textureIdentity(u8 coord);           // coordinate `coord` is its own texture coordinate
 };  // namespace J3DPass
 
 extern "C" {
 #endif
-void J3DPassDepth(int test, u8 compare, int write);
-void J3DPassBlend(u8 source, u8 destination);
-void J3DPassCull(u8 faces);
-void J3DPassWriteColor(int write);
-void J3DPassWriteAlpha(int write);
-void J3DPassPositionMatrix(u8 index);
+// The state of the draws that follow, whole (alphaWrite 2: the pass's).
+void J3DNativeStateUse(u8 source, u8 destination, int depthTest, u8 compare, int depthWrite, u8 cull, int colorWrite, int alphaWrite);
 #ifdef __cplusplus
 }
 #endif
@@ -48,11 +33,34 @@ void J3DPassPositionMatrix(u8 index);
 // as a state record in their place in the stream (nebula_game_api.h state).
 #ifdef __cplusplus
 namespace J3DNativeState {
-    // What a draw does to the target: the blend, depth, culling and writes last set or last brought by a material. Each
-    // draw carries them; the host keeps none.
+    // The state the draws that follow carry: the last use or material's. The host keeps none.
     const NebulaPassState* pass();
-    // A material to the host; its blend, depth, culling and writes become the current ones.
-    void sendMaterial(const NebulaNativeMaterial* pMaterial);
+    void use(const J3DDrawState& rState);
+    // A material to the host; with `takeState`, its blend, depth, culling, writes and stencil are the state from here.
+    void sendMaterial(const NebulaNativeMaterial* pMaterial, bool takeState = true);
+    // What belongs to the pass the draws are in: whether they write the target's alpha (a material asks for the pass's
+    // with alpha_write 2) and the stencil of a material that names none.
+    void setPassAlpha(bool write);
+    void setPassStencil(u8 test, u8 op);
+    // Lines and points of the draws that follow: pixels across; `spreadTexture`: texture coordinates 0-2 run 0 to 1
+    // across the width of the line or the point.
+    void lineWidth(f32 pixels, bool spreadTexture = false);
+    void pointSize(f32 pixels, bool spreadTexture = false);
+    inline void setBlend(J3DDrawState& rState, u8 source, u8 destination) {
+        rState.blend_op = NEBULA_BLEND_ADD;
+        rState.blend_src = source;
+        rState.blend_dst = destination;
+    }
+    inline void setNoBlend(J3DDrawState& rState) {
+        rState.blend_op = NEBULA_BLEND_REPLACE;
+        rState.blend_src = 0;
+        rState.blend_dst = 0;
+    }
+    inline void setDepth(J3DDrawState& rState, bool test, u8 compare, bool write) {
+        rState.depth_test = test;
+        rState.depth_func = compare & 7;
+        rState.depth_write = write;
+    }
     // Lights:
     void initLightColor(J3DNativeLight* pObj, NebulaColor8 color);
     void initLightPos(J3DNativeLight* pObj, f32 x, f32 y, f32 z);

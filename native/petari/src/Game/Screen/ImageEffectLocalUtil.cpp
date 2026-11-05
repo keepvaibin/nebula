@@ -30,6 +30,10 @@ void MR::connectToSceneImageEffectMovement(NameObj* pObj) {
 
 
 namespace {
+    // What the effects' draws write (setWrites).
+    bool sWriteColor = true;
+    bool sWriteAlpha = false;
+
     // The draws' mode (runtime/src/render/materials/image_effect.hlsl params.x) and the colours the fall-out passes give.
     u32 sMode = 0;
     NebulaColor8 sEdge = {0, 0, 0, 0};
@@ -55,6 +59,8 @@ namespace {
         NativeShader::setColor(material, 4, sEdge.r, sEdge.g, sEdge.b, sEdge.a);
         material.constants[8] = static_cast< f32 >(sMode);
         NativeShader::setTexture(material, 0, pTexture);
+        material.color_write = sWriteColor;
+        material.alpha_write = sWriteAlpha;
         NativeShader::send(material);
     }
 
@@ -67,6 +73,8 @@ namespace {
         material.constants[2] = width;
         material.constants[3] = alphaGain;
         NativeShader::setTexture(material, 0, pTexture);
+        material.color_write = sWriteColor;
+        material.alpha_write = sWriteAlpha;
         NativeShader::send(material);
     }
 }  // namespace
@@ -86,13 +94,14 @@ void ImageEffectLocalUtil::setupDrawTexture() {
     TMtx34f posMtx;
     posMtx.identity();
     J3DNativeShape::setPosition(0, posMtx.toMtxPtr());
-    J3DPass::positionMatrix(0);
 
-    J3DPass::cull(NEBULA_CULL_NONE);
-    J3DPass::writeColor(true);
-    J3DPass::writeAlpha(false);
-    J3DPass::depth(false, NEBULA_COMPARE_ALWAYS, false);
+    setWrites(true, false);
     sMode = 0;
+}
+
+void ImageEffectLocalUtil::setWrites(bool color, bool alpha) {
+    sWriteColor = color;
+    sWriteAlpha = alpha;
 }
 
 void ImageEffectLocalUtil::drawTexture(JUTTexture* pTexture, u8 intensity, ETexDrawType texDrawType) {
@@ -117,6 +126,7 @@ void ImageEffectLocalUtil::drawFrameDepth(JUTTexture* pTarget, JUTTexture* pDept
     NativeShader::init(material, NEBULA_SHADER_FRAME_DEPTH, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
                        NEBULA_CULL_NONE);
     NativeShader::setTexture(material, 0, pDepthKey);
+    material.alpha_write = 0;
     NativeShader::send(material);
     sendTextureVertex();
     J3DNativeTarget::end(pTarget->mImage, NEBULA_TARGET_RED);

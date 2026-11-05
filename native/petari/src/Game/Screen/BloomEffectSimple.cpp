@@ -32,5 +32,4 @@ void BloomEffectSimple::draw() const {
                           verticalBits);
     MR::resetDrawState();
     ImageEffectLocalUtil::setupDrawTexture();
-    J3DPass::blend(NEBULA_FACTOR_ONE, NEBULA_FACTOR_ONE);
 }

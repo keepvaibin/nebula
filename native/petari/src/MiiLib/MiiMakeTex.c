@@ -9,17 +9,9 @@
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 #include <math.h>
 
-// The drawing state a Mii texture is drawn with.
-void Mii_SetupTextureDraw(void) {
-    J3DPassWriteColor(1);
-    J3DPassWriteAlpha(1);
-    J3DPassDepth(1, NEBULA_COMPARE_LEQUAL, 1);
-}
-
 // A Mii texture drawn into `buffer` (E-07): a target pass `width` x `height` cleared to `clearRgba` (R << 24 | G << 16 | B << 8 | A); the texture is
 // the renderer's picture of the pass (J3DNativeTargetEnd), sampled where the game names `buffer`.
 void Mii_BeginTexture(void* buffer, u16 width, u16 height, u32 clearRgba) {
-    Mii_SetupTextureDraw();
     // Twice the texels the parts are laid out in, whatever the frame's size.
     J3DNativeTargetBeginPixels(buffer, width * 2u, height * 2u, clearRgba);
 }
@@ -335,7 +327,6 @@ void Mii_MakeTexture(const Mii_CharInfo* info, u8** buffers, MiiResolution resol
         }
     }
 
-    Mii_SetupTextureDraw();
 
     J3DNativeViewGetScissor(&sx, &sy, &sw, &sh);
     for (i = 0; i < MiiExp_Max; i++) {
@@ -450,9 +441,6 @@ void Mii_Setup2DCameraAndParam(f32 size) {
     J3DNativeViewSetOrthographic(proj);
     J3DNativeViewSetViewport(0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f);
     J3DNativeViewSetZScaleOffset(1.0f, 0.0f);
-    J3DPassCull(NEBULA_CULL_BACK);
-    J3DPassDepth(0, NEBULA_COMPARE_LEQUAL, 0);
-    J3DPassWriteAlpha(1);
 }
 
 // The parts' forms (runtime/src/render/materials/mii_texture.hlsl), with their colours.
@@ -581,8 +569,7 @@ void Mii_Capture(u8* buffer, const Mii_CharInfo* info, Mii_FaceParts* face, MII_
     J3DNativeViewGetViewportv(vp);
     Mii_Setup2DCameraAndParam((f32)resolution);
 
-    J3DPassBlend(NEBULA_FACTOR_INV_DST_ALPHA, NEBULA_FACTOR_DST_ALPHA);
-    J3DPassWriteColor(1);
+    J3DNativeStateUse(NEBULA_FACTOR_INV_DST_ALPHA, NEBULA_FACTOR_DST_ALPHA, 0, NEBULA_COMPARE_LEQUAL, 0, NEBULA_CULL_BACK, 1, 1);
 
     Mii_SetStage4Mustache(info->beard.color);
     Mii_DrawFaceParts(&face->mustacheR);
@@ -603,9 +590,8 @@ void Mii_Capture(u8* buffer, const Mii_CharInfo* info, Mii_FaceParts* face, MII_
     Mii_DrawFaceParts(&face->mole);
 
     // The parts' colours stay; their alpha is drawn again on a cleared alpha channel.
-    J3DPassWriteColor(0);
     J3DNativeTargetClear(0x00000000, 2u | 4u);
-    J3DPassBlend(NEBULA_FACTOR_INV_DST_ALPHA, NEBULA_FACTOR_ONE);
+    J3DNativeStateUse(NEBULA_FACTOR_INV_DST_ALPHA, NEBULA_FACTOR_ONE, 0, NEBULA_COMPARE_LEQUAL, 0, NEBULA_CULL_BACK, 0, 1);
 
     Mii_SetStage4Mustache(info->beard.color);
     Mii_DrawFaceParts(&face->mustacheR);
@@ -625,7 +611,6 @@ void Mii_Capture(u8* buffer, const Mii_CharInfo* info, Mii_FaceParts* face, MII_
     Mii_SetStage4Mole();
     Mii_DrawFaceParts(&face->mole);
 
-    J3DPassWriteColor(1);
     J3DNativeViewSetViewport(vp[0], vp[1], vp[2], vp[3], vp[4], vp[5]);
 }
 
@@ -649,7 +634,6 @@ void Mii_DrawQuad(f32 x, f32 y, f32 width, f32 height, f32 rotZ, MII_ORIGIN orig
     NebulaMtxTransApply(pos, pos, x, y, 0.0f);
 
     J3DNativeShapeSetPosition(0, pos);
-    J3DPassPositionMatrix(0);
 
     switch (origin) {
     case MII_ORIGIN_CENTER:

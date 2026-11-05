@@ -119,25 +119,16 @@ void Mii_MakeIcon(void* buf, Mii_CharInfo* info, MiiExpression expression, const
     MiiLoadDrawSetting(&drawSetting);
 
     if (!setting->drawXluOnly) {
-        J3DPassWriteColor(1);
-        J3DPassWriteAlpha(1);
-        J3DPassBlend(NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_INV_SRC_ALPHA);
+        J3DNativeStateUse(NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_INV_SRC_ALPHA, 1, NEBULA_COMPARE_LEQUAL, 1, NEBULA_CULL_NONE, 1, 1);
         MiiDrawOpa(&model);
     }
 
-    J3DPassDepth(1, NEBULA_COMPARE_LEQUAL, 0);
-    J3DPassBlend(NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_INV_SRC_ALPHA);
-    J3DPassWriteColor(1);
-    J3DPassWriteAlpha(0);
+    J3DNativeStateUse(NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_INV_SRC_ALPHA, 1, NEBULA_COMPARE_LEQUAL, 0, NEBULA_CULL_NONE, 1, 0);
     MiiDrawXlu(&model);
 
-    J3DPassBlend(NEBULA_FACTOR_ONE, NEBULA_FACTOR_INV_SRC_ALPHA);
-    J3DPassWriteAlpha(1);
-    J3DPassWriteColor(0);
+    J3DNativeStateUse(NEBULA_FACTOR_ONE, NEBULA_FACTOR_INV_SRC_ALPHA, 1, NEBULA_COMPARE_LEQUAL, 0, NEBULA_CULL_NONE, 0, 1);
     MiiDrawXlu(&model);
 
-    J3DPassDepth(1, NEBULA_COMPARE_LEQUAL, 1);
-    J3DPassWriteColor(1);
     J3DNativeTargetEnd(buf);
 
     Mii_Free(modelBuf);

@@ -73,10 +73,7 @@ void ScreenBlurEffect::drawBlur() const {
     TMtx34f posMtx;
     posMtx.identity();
     J3DNativeShape::setPosition(0, (MtxPtr)&posMtx);
-    J3DPass::positionMatrix(0);
 
-    J3DPass::writeColor(true);
-    J3DPass::writeAlpha(false);
     sendBlurMaterial(_14, _18, static_cast< u8 >(static_cast< s32 >(get_10() * 220.0f * mIntensity)));
 
     f32 y = MR::tanDegree(MR::getRenderFovy() * 0.5f) * mScale;

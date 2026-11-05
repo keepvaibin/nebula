@@ -23,13 +23,12 @@ namespace MR {
     void setupDrawForNW4RLayout(f32, bool);
     void clearZBuffer();
     void clearStencil();
-    void fillScreenSetup(const NebulaColor8&);
+    void fillScreenSetup(const NebulaColor8&, bool opaque = false);
     void fillScreenArea(const TVec2s&, const TVec2s&);
-    void fillScreen(const NebulaColor8&);
-    void setupShadowVolumeDraw();
+    void fillScreen(const NebulaColor8&, bool opaque = false);
     // The volume draws' colour (runtime/src/render/materials/flat_color.hlsl), their blending, depth, culling and
     // writes as the drawing state has them (each pass sets them).
-    void setShadowVolumeColor(const NebulaColor8& rColor);
+    void initShadowVolumeMaterial(NebulaNativeMaterial& rMaterial, const NebulaColor8& rColor);
     void drawSimpleModel(J3DModelData*);
     void fillSilhouetteColor();
     const JUTTexture* getMarioShadowTex();

@@ -628,8 +628,6 @@ void MR::calcAnimLayoutWithDrawInfo(const LayoutActor* pActor, const nw4r::lyt::
 
 void MR::drawLayoutWithDrawInfoWithoutProjectionSetup(const LayoutActor* pActor, const nw4r::lyt::DrawInfo& rDrawInfo) {
     if (isExecuteDrawLayout(pActor)) {
-        J3DPass::cull(NEBULA_CULL_NONE);
-        J3DPass::depth(false, NEBULA_COMPARE_NEVER, false);
         pActor->getLayoutManager()->mLayout->Draw(rDrawInfo);
     }
 }

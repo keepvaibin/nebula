@@ -359,8 +359,9 @@ typedef struct NebulaNativeMaterial {
     uint32_t shader;           /* NebulaShaderId */
     uint8_t blend_op, blend_src, blend_dst;
     uint8_t depth_test, depth_func, depth_write, early_depth; /* depth_func NEBULA_COMPARE_* */
-    uint8_t cull, color_write, alpha_write; /* writes: 0 off, 1 on, 2 as they were */
+    uint8_t cull, color_write, alpha_write; /* writes: 0 off, 1 on; alpha_write 2 the pass's (J3DNativeState::setPassAlpha) */
     uint8_t light_mask;        /* the lights below the material sets (the others keep what was set before) */
+    uint8_t stencil;           /* 0x80 | test << 4 | op (NEBULA_STENCIL_*); 0 the pass's */
     float constants[128];
     struct {
         uint64_t image;        /* the texture: its record's address (or a capture's key); the record has its size */

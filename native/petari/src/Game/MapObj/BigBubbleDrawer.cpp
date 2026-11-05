@@ -65,8 +65,6 @@ void BigBubbleDrawer::setUpStage() const {
 }
 
 void BigBubbleDrawer::setUpPixelFormat() const {
-    J3DPass::writeColor(true);
-    J3DPass::writeAlpha(false);
 }
 
 void BigBubbleDrawer::setUpMaterial() const {
@@ -79,6 +77,5 @@ void BigBubbleDrawer::setUpMaterial() const {
     Mtx normalMtx;
     NebulaMtxIdentity(normalMtx);
     J3DNativeShape::setNormal(0, normalMtx);
-    J3DPass::positionMatrix(0);
     MR::loadProjectionMtx();
 }

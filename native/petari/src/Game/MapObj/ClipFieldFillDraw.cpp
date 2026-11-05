@@ -41,10 +41,6 @@ void ClipFieldFillDraw::setUpFillScreen() const {
     TMtx34f posMtx;
     posMtx.identity();
     J3DNativeShape::setPosition(0, (MtxPtr)&posMtx);
-    J3DPass::positionMatrix(0);
-
-    J3DPass::writeColor(true);
-    J3DPass::writeAlpha(false);
 }
 
 void ClipFieldFillDraw::sendFillScreen(NebulaColor8 color) const {
@@ -56,8 +52,9 @@ void ClipFieldFillDraw::sendFillScreen(NebulaColor8 color) const {
     material.blend_src = mFillSrcFactor;
     material.blend_dst = mFillDstFactor;
     NativeShader::setColor(material, 0, color.r, color.g, color.b, color.a);
+    material.alpha_write = 0;
+    NativeShader::setStencil(material, _25 ? NEBULA_STENCIL_IF_SET : NEBULA_STENCIL_IF_ZERO, NEBULA_STENCIL_KEEP);
     NativeShader::send(material);
-    J3DPass::stencil(_25 ? NEBULA_STENCIL_IF_SET : NEBULA_STENCIL_IF_ZERO, NEBULA_STENCIL_KEEP);
     J3DNativeShape::setCurrentIdentity();
 
     J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 4, NEBULA_SHAPE_TEXCOORD0);
@@ -88,8 +85,6 @@ void ClipFieldFillDraw::draw() const {
     MR::clearStencil();
     MR::loadViewMtx();
     MR::loadProjectionMtx();
-    J3DPass::writeAlpha(false);
-    J3DPass::writeColor(true);
 
     if (_24) {
         NebulaNativeMaterial material;

@@ -289,10 +289,9 @@ void CollisionShadow::draw1() const {
     NativeShader::setDepth(material, true, NEBULA_COMPARE_GEQUAL, false);
     material.color_write = 0;
     material.alpha_write = 0;
+    NativeShader::setStencil(material, NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ADD);
     NativeShader::send(material);
-    J3DPass::stencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ADD);
     sendVtx();
-    J3DPass::stencil(NEBULA_STENCIL_OFF, NEBULA_STENCIL_KEEP);
 }
 
 void CollisionShadow::sendVtx() const {
@@ -465,8 +464,6 @@ void CollisionShadow::drawAndCaptureTex(J3DModelX* pModel, const TVec3f& rPositi
 
     J3DNativeTarget::end(destination, NEBULA_TARGET_ALPHA);
 
-    J3DPass::writeAlpha(false);
-    J3DPass::writeColor(true);
     MR::setDefaultViewportAndScissor();
     TDDraw::cameraInit3D();
 }
@@ -488,14 +485,13 @@ void CollisionShadow::drawVolumeBox(const TVec3f& rPosition, const TVec3f& rDept
     material.blend_src = NEBULA_FACTOR_ONE;
     material.blend_dst = NEBULA_FACTOR_ZERO;
     material.cull = NEBULA_CULL_BACK;
+    NativeShader::setStencil(material, NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ADD);
     NativeShader::send(material);
-    J3DPass::stencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ADD);
     TDDraw::drawFillBox3D(rPosition, rDepth * 2.0f, side * _1C, up * _18, 0xFFFFFF01);
     material.cull = NEBULA_CULL_FRONT;
+    NativeShader::setStencil(material, NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_TAKE);
     NativeShader::send(material);
-    J3DPass::stencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_TAKE);
     TDDraw::drawFillBox3D(rPosition, rDepth * 2.0f, side * _1C, up * _18, 0xFFFFFF01);
-    J3DPass::stencil(NEBULA_STENCIL_OFF, NEBULA_STENCIL_KEEP);
 }
 
 void CollisionShadow::draw() const {
@@ -506,9 +502,6 @@ void CollisionShadow::draw() const {
     } else {
         draw3();
     }
-
-    J3DPass::writeColor(true);
-    J3DPass::writeAlpha(false);
 }
 
 // On the ground: the shadow's polygons inside its box, each pixel darkened once.
@@ -528,8 +521,8 @@ void CollisionShadow::draw3() const {
     material.blend_op = NEBULA_BLEND_REPLACE;
     material.blend_src = NEBULA_FACTOR_ONE;
     material.blend_dst = NEBULA_FACTOR_ZERO;
+    NativeShader::setStencil(material, NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ZERO);
     NativeShader::send(material);
-    J3DPass::stencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ZERO);
     sendZsortedVtx(true);
     if (_6E) {
         NebulaNativeMaterial clear = material;
@@ -551,8 +544,8 @@ void CollisionShadow::draw3() const {
     material.color_write = 1;
     NativeShader::setDepth(material, false, NEBULA_COMPARE_ALWAYS, false);
     NativeShader::setBlend(material, NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_INV_SRC_ALPHA);
+    NativeShader::setStencil(material, NEBULA_STENCIL_IF_SET, NEBULA_STENCIL_ZERO);
     NativeShader::send(material);
-    J3DPass::stencil(NEBULA_STENCIL_IF_SET, NEBULA_STENCIL_ZERO);
     for (u32 i = 0; i < _54; i++) {
         if (_5A == 4) {
             J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, _5A, NEBULA_SHAPE_TEXCOORD0);
@@ -573,14 +566,13 @@ void CollisionShadow::draw3() const {
     wipe.shader = NEBULA_SHADER_FLAT_COLOR;
     wipe.color_write = 0;
     wipe.blend_op = NEBULA_BLEND_REPLACE;
+    NativeShader::setStencil(wipe, NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ZERO);
     NativeShader::send(wipe);
-    J3DPass::stencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ZERO);
     TVec3f up(_3C);
     TVec3f side;
     side.cross(_24, up);
     MR::normalizeOrZero(&side);
     TDDraw::drawFillBox3D(position, _24 * _20 * 2.0f, side * _1C, up * _18, 0xFFFFFF01);
-    J3DPass::stencil(NEBULA_STENCIL_OFF, NEBULA_STENCIL_KEEP);
 }
 
 void CollisionShadow::doSortPolygons() {

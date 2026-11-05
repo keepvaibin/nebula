@@ -170,7 +170,6 @@ void WhirlPoolAccelerator::drawPlane(f32 x0, f32 y0, f32 x1, f32 y1, f32 u0, f32
 
 void WhirlPoolAccelerator::loadMaterial() const {
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-    J3DPass::positionMatrix(0);
     // runtime/src/render/materials/whirlpool_accelerator.hlsl: the two colours mixed by the texture at the vertex
     // alpha; drawn where above zero and blended by it, depth tested and written, no culling.
     NebulaNativeMaterial material;

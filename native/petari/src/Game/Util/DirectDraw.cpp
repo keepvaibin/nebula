@@ -43,11 +43,10 @@ namespace TDDraw {
     void close() {
         MR::loadProjectionMtx();
         MR::loadViewMtx();
-        J3DPass::depth(true, NEBULA_COMPARE_LEQUAL, true);
     }
 
     void setupNative(NebulaNativeMaterial* pMaterial, u32 drawMode, u32 blendMode, u8 viewMode) {
-        J3DPass::lineWidth(1.0f);
+        J3DNativeState::lineWidth(1.0f);
 
         Mtx mtx;
         NebulaMtxIdentity(mtx);

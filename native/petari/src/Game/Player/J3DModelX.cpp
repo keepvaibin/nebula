@@ -244,9 +244,7 @@ void J3DModelX::drawIn(J3DMaterial* material, bool fog, MtxPtr base, J3DModel* m
         NebulaNativeMaterial material;
         NativeShader::init(material, NEBULA_SHADER_FLAT_COLOR, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS,
                            false, NEBULA_CULL_NONE);
-        material.blend_op = NEBULA_NATIVE_KEPT;
-        material.depth_test = NEBULA_NATIVE_KEPT;
-        material.cull = NEBULA_NATIVE_KEPT;
+        NativeShader::takeState(material, *J3DNativeState::pass());
         const OverrideColor& rColor = kOverrideColors[override];
         if (rColor.a == 2) {
             const f32* pRegister = J3DNativeMaterial::currentRegister(1);
@@ -306,85 +304,88 @@ void J3DModelX::simpleDrawShape(J3DMaterial* material) {
 }
 
 void J3DModelX::sendFlagState(u32 flag) {
-    using namespace J3DPass;
+    J3DDrawState state = *J3DNativeState::pass();
     switch (flag) {
     case 0:
-        cull(NEBULA_CULL_FRONT);
+        state.cull = NEBULA_CULL_FRONT;
         break;
     // Flags 1, 3, 4, 5, 8, 9 and 13 replace the material's program with a flat colour (kOverrideColors, drawn by drawIn
     // as a native material): their fixed state here.
     case 1:
-        depth(false, NEBULA_COMPARE_ALWAYS, false);
-        cull(NEBULA_CULL_BACK);
-        noBlend();
-        writeColor(false);
-        writeAlpha(true);
+        J3DNativeState::setDepth(state, false, NEBULA_COMPARE_ALWAYS, false);
+        state.cull = NEBULA_CULL_BACK;
+        J3DNativeState::setNoBlend(state);
+        state.color_write = false;
+        state.alpha_write = true;
         break;
     // Texture 0 at alpha 1/4 added (J3DNativeMaterial::override mode 1).
     case 2:
-        cull(NEBULA_CULL_FRONT);
-        depth(true, NEBULA_COMPARE_LEQUAL, true);
-        blend(NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_ONE);
-        writeColor(true);
-        writeAlpha(false);
+        state.cull = NEBULA_CULL_FRONT;
+        J3DNativeState::setDepth(state, true, NEBULA_COMPARE_LEQUAL, true);
+        J3DNativeState::setBlend(state, NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_ONE);
+        state.color_write = true;
+        state.alpha_write = false;
         break;
     // Where the model is behind a surface: marked, and the fill darkens it.
     case 3:
-        depth(true, NEBULA_COMPARE_GEQUAL, false);
-        cull(NEBULA_CULL_BACK);
-        noBlend();
-        writeColor(false);
-        writeAlpha(false);
-        stencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ADD);
+        J3DNativeState::setDepth(state, true, NEBULA_COMPARE_GEQUAL, false);
+        state.cull = NEBULA_CULL_BACK;
+        J3DNativeState::setNoBlend(state);
+        state.color_write = false;
+        state.alpha_write = false;
+        state.stencil_func = NEBULA_STENCIL_ALWAYS;
+        state.stencil_op = NEBULA_STENCIL_ADD;
         break;
     case 4:
-        depth(true, NEBULA_COMPARE_LEQUAL, false);
-        cull(NEBULA_CULL_FRONT);
-        blend(NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_INV_SRC_ALPHA);
-        writeColor(true);
-        writeAlpha(false);
+        J3DNativeState::setDepth(state, true, NEBULA_COMPARE_LEQUAL, false);
+        state.cull = NEBULA_CULL_FRONT;
+        J3DNativeState::setBlend(state, NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_INV_SRC_ALPHA);
+        state.color_write = true;
+        state.alpha_write = false;
         break;
     case 5:
-        depth(true, NEBULA_COMPARE_ALWAYS, true);
-        cull(NEBULA_CULL_FRONT);
-        noBlend();
-        writeColor(false);
-        writeAlpha(false);
+        J3DNativeState::setDepth(state, true, NEBULA_COMPARE_ALWAYS, true);
+        state.cull = NEBULA_CULL_FRONT;
+        J3DNativeState::setNoBlend(state);
+        state.color_write = false;
+        state.alpha_write = false;
         break;
     // The reflection model: its program (one stage: texture 0 halved, stage 0's alpha above 0x20, no channels) is
     // J3DNativeMaterial::override mode 5.
     case 11:
-        depth(true, NEBULA_COMPARE_LEQUAL, true);
-        cull(NEBULA_CULL_FRONT);
-        noBlend();
-        writeColor(true);
-        writeAlpha(true);
+        J3DNativeState::setDepth(state, true, NEBULA_COMPARE_LEQUAL, true);
+        state.cull = NEBULA_CULL_FRONT;
+        J3DNativeState::setNoBlend(state);
+        state.color_write = true;
+        state.alpha_write = true;
         break;
     // The blur ghosts in colour 0 (the ghost's tint sets it).
     case 12:
-        depth(true, NEBULA_COMPARE_LEQUAL, false);
-        cull(NEBULA_CULL_BACK);
-        blend(NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_ONE);
-        writeColor(true);
-        writeAlpha(false);
+        J3DNativeState::setDepth(state, true, NEBULA_COMPARE_LEQUAL, false);
+        state.cull = NEBULA_CULL_BACK;
+        J3DNativeState::setBlend(state, NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_ONE);
+        state.color_write = true;
+        state.alpha_write = false;
         break;
     case 13:
-        depth(true, NEBULA_COMPARE_GEQUAL, false);
-        cull(NEBULA_CULL_BACK);
-        blend(NEBULA_FACTOR_ONE, NEBULA_FACTOR_SRC_ALPHA);
-        writeColor(true);
-        writeAlpha(false);
+        J3DNativeState::setDepth(state, true, NEBULA_COMPARE_GEQUAL, false);
+        state.cull = NEBULA_CULL_BACK;
+        J3DNativeState::setBlend(state, NEBULA_FACTOR_ONE, NEBULA_FACTOR_SRC_ALPHA);
+        state.color_write = true;
+        state.alpha_write = false;
         break;
     // Only where the dark mask did not mark.
     case 15:
-        noBlend();
-        writeColor(true);
-        writeAlpha(false);
-        stencil(NEBULA_STENCIL_IF_ZERO, NEBULA_STENCIL_KEEP);
+        J3DNativeState::setNoBlend(state);
+        state.color_write = true;
+        state.alpha_write = false;
+        state.stencil_func = NEBULA_STENCIL_IF_ZERO;
+        state.stencil_op = NEBULA_STENCIL_KEEP;
         break;
     default:
         break;
     }
+    J3DNativeState::use(state);
 }
 
 void MarioModelTint::send() const {
@@ -392,8 +393,12 @@ void MarioModelTint::send() const {
     switch (kind) {
     case Kind_Alpha:
         J3DNativeMaterial::setCurrentRegister(3, color0);
-        J3DPass::blend(NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_INV_SRC_ALPHA);
-        J3DPass::cull(NEBULA_CULL_BACK);
+        {
+            J3DDrawState state = *J3DNativeState::pass();
+            J3DNativeState::setBlend(state, NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_INV_SRC_ALPHA);
+            state.cull = NEBULA_CULL_BACK;
+            J3DNativeState::use(state);
+        }
         J3DNativeMaterial::applyPass(NEBULA_PASS_PLAYER_OPACITY);
         break;
     case Kind_ConstantAlpha:

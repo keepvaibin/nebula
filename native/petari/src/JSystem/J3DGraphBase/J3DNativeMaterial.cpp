@@ -52,6 +52,7 @@ namespace {
     NebulaNativeMaterial sCurrent;
     const NebulaCookedMaterial* sCurrentCooked = NULL;
     u8 sCurrentPass = 0;
+    bool sCurrentOwn = false;
 
     void setColor8(f32* pOut, NebulaColor8 color) {
         pOut[0] = color.r / 255.0f;
@@ -185,7 +186,7 @@ namespace {
 
     // The draw's native material from the list's program and values (j3d_material.hlsli's constants).
     void sendNative(const J3DMaterialSetup& rSetup, const J3DMaterialValues& rValues, u32 shader,
-                    bool keepDepthCull = false, const NebulaCookedMaterial* cooked = NULL, bool own = false) {
+                    bool layout = false, const NebulaCookedMaterial* cooked = NULL, bool own = false) {
         // Texture matrices into their places (as the material's data has them).
         for (u32 i = 0; i < 8; i++) {
             const u8 id = rSetup.texture_matrix[i].id;
@@ -210,17 +211,13 @@ namespace {
         material.depth_write = rSetup.z_mode.update;
         material.early_depth = rSetup.z_compare_location;
         material.cull = rSetup.cull == NEBULA_CULL_ALL ? NEBULA_CULL_NONE : rSetup.cull;  // NEBULA_CULL_*
-        material.color_write = 2;
+        material.color_write = 1;
         material.alpha_write = 2;
-        if (keepDepthCull) {
-            material.depth_test = NEBULA_NATIVE_KEPT;
-            material.cull = NEBULA_NATIVE_KEPT;
-        }
-        if (own) {
-            // A model's own copy changes values, not how it draws: a site's state changes since stay.
-            material.cull = NEBULA_NATIVE_KEPT;
-            material.blend_op = NEBULA_NATIVE_KEPT;
-            material.depth_test = NEBULA_NATIVE_KEPT;
+        if (layout) {
+            material.depth_test = 0;
+            material.depth_func = NEBULA_COMPARE_NEVER;
+            material.depth_write = 0;
+            material.cull = NEBULA_CULL_NONE;
         }
         memset(sValues, 0, sizeof(sValues));
         fillConstants(sValues, rSetup, rValues);
@@ -266,7 +263,9 @@ namespace {
             memcpy(material.light, rValues.light, sizeof(material.light));
         }
         J3DNativeShape::flushState();
-        J3DNativeState::sendMaterial(&material);
+        // A model's own copy changes values, not how it draws: a site's state changes since stay.
+        sCurrentOwn = own;
+        J3DNativeState::sendMaterial(&material, !own);
         watchMaterial(&material);
         sCurrentCooked = cooked;
         sCurrentPass = 0;
@@ -473,7 +472,7 @@ namespace J3DNativeMaterial {
         }
         sCurrent.textures[map].image = keyOf(pImage);
         sCurrent.constants_only = 0;
-        J3DNativeState::sendMaterial(&sCurrent);
+        J3DNativeState::sendMaterial(&sCurrent, !sCurrentOwn);
     }
 
     bool overrideCoordinate(const void* pImage, u16 width, u16 height) {
@@ -494,7 +493,7 @@ namespace J3DNativeMaterial {
         sCurrent.textures[0].mag_linear = 1;
         sCurrent.textures[0].min_linear = 1;
         sCurrent.constants_only = 0;
-        J3DNativeState::sendMaterial(&sCurrent);
+        J3DNativeState::sendMaterial(&sCurrent, !sCurrentOwn);
         return true;
     }
 
@@ -530,7 +529,7 @@ namespace J3DNativeMaterial {
         memset(sCurrent.constants, 0, sizeof(sCurrent.constants));
         packConstants(sCurrent.shader);
         sCurrent.constants_only = 0;
-        J3DNativeState::sendMaterial(&sCurrent);
+        J3DNativeState::sendMaterial(&sCurrent, !sCurrentOwn);
         watchMaterial(&sCurrent);
     }
 

@@ -347,6 +347,5 @@ void WaterPlantDrawInit::updateSwingPos() {
 
 void WaterPlantDrawInit::initDraw() const {
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-    J3DPass::positionMatrix(0);
     sendPlantMaterial(mPlantATex, ::sFogStartZ, ::sFogEndZ);
 }

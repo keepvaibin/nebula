@@ -368,7 +368,6 @@ SpiderThreadHangInfo* SpiderThread::findHangInfo(LiveActor* pActor) const {
 
 void SpiderThread::initDraw() const {
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-    J3DPass::positionMatrix(0);
     // runtime/src/render/materials/spider_thread.hlsl: the thread (texture 0) times the vertex colour, its lookup moved
     // by the indirect texture (1) at sIndirectScaleX/Y thread texels a step; blended by its alpha where above zero,
     // depth tested and not written, no culling.
