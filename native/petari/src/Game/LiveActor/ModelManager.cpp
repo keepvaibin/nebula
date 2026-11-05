@@ -53,7 +53,7 @@ void ModelManager::update() {
 
 void ModelManager::calcAnim() {
     calc();
-    updateList(true);
+    updateList();
 }
 
 void ModelManager::calcView() {
@@ -64,58 +64,35 @@ void ModelManager::entry() {
     getJ3DModel()->entry();
 }
 
-void ModelManager::newDifferedMaterials() {
-    mMaterialUpdater->newDifferedSnapshot();
+void ModelManager::prepareMaterials() {
+    mMaterialUpdater->prepareMaterials();
 }
 
-void ModelManager::updateList(bool isDiffMaterials) {
+void ModelManager::updateList() {
     (MR::MutexHolder< 0 >::sMutex).lock();
 
-    bool isUpdateMaterials = mMaterialUpdater != nullptr && mMaterialUpdater->isValidDiff();
-
-    if (isUpdateMaterials) {
+    J3DModel* pModel = getJ3DModel();
+    if (mMaterialUpdater != nullptr) {
         mMaterialUpdater->update();
 
         if (mBtkPlayer != nullptr) {
-            mBtkPlayer->beginDiff();
+            mBtkPlayer->applyFrame(pModel);
         }
 
         if (mBrkPlayer != nullptr) {
-            mBrkPlayer->beginDiff();
+            mBrkPlayer->applyFrame(pModel);
         }
 
         if (mBtpPlayer != nullptr) {
-            mBtpPlayer->beginDiff();
+            mBtpPlayer->applyFrame(pModel);
         }
 
         if (mBpkPlayer != nullptr) {
-            mBpkPlayer->beginDiff();
+            mBpkPlayer->applyFrame(pModel);
         }
     }
 
-    getJ3DModel()->calcMaterial();
-
-    if (isUpdateMaterials) {
-        if (isDiffMaterials) {
-            mMaterialUpdater->diff();
-        }
-
-        if (mBtkPlayer != nullptr) {
-            mBtkPlayer->endDiff();
-        }
-
-        if (mBrkPlayer != nullptr) {
-            mBrkPlayer->endDiff();
-        }
-
-        if (mBtpPlayer != nullptr) {
-            mBtpPlayer->endDiff();
-        }
-
-        if (mBpkPlayer != nullptr) {
-            mBpkPlayer->endDiff();
-        }
-    }
+    pModel->calcMaterial();
 
     (MR::MutexHolder< 0 >::sMutex).unlock();
 }
@@ -135,25 +112,21 @@ void ModelManager::startBckWithInterpole(const char* pBckName, s32 interpole) {
 void ModelManager::startBtk(const char* pBtkName) {
     stopBtk();
     mBtkPlayer->start(pBtkName);
-    mMaterialUpdater->onCurFlagBtk(mBtkPlayer->mAnmRes);
 }
 
 void ModelManager::startBrk(const char* pBrkName) {
     stopBrk();
     mBrkPlayer->start(pBrkName);
-    mMaterialUpdater->onCurFlagBrk(mBrkPlayer->mAnmRes);
 }
 
 void ModelManager::startBtp(const char* pBtpName) {
     stopBtp();
     mBtpPlayer->start(pBtpName);
-    mMaterialUpdater->onCurFlagBtp(mBtpPlayer->mAnmRes);
 }
 
 void ModelManager::startBpk(const char* pBpkName) {
     stopBpk();
     mBpkPlayer->start(pBpkName);
-    mMaterialUpdater->onCurFlagBpk(mBpkPlayer->mAnmRes);
 }
 
 void ModelManager::startBva(const char* pBvaName) {
@@ -163,28 +136,24 @@ void ModelManager::startBva(const char* pBvaName) {
 
 void ModelManager::stopBtk() {
     if (mBtkPlayer->mAnmRes != nullptr) {
-        mMaterialUpdater->offCurFlagBtk(mBtkPlayer->mAnmRes);
         mBtkPlayer->stop();
     }
 }
 
 void ModelManager::stopBrk() {
     if (mBrkPlayer->mAnmRes != nullptr) {
-        mMaterialUpdater->offCurFlagBrk(mBrkPlayer->mAnmRes);
         mBrkPlayer->stop();
     }
 }
 
 void ModelManager::stopBtp() {
     if (mBtpPlayer->mAnmRes != nullptr) {
-        mMaterialUpdater->offCurFlagBtp(mBtpPlayer->mAnmRes);
         mBtpPlayer->stop();
     }
 }
 
 void ModelManager::stopBpk() {
     if (mBpkPlayer->mAnmRes != nullptr) {
-        mMaterialUpdater->offCurFlagBpk(mBpkPlayer->mAnmRes);
         mBpkPlayer->stop();
     }
 }
@@ -338,8 +307,8 @@ void ModelManager::initMaterialAnm() {
     ResourceHolder* pResourceHolder = getResourceHolder();
     J3DModelData* pModelData = getJ3DModelData();
 
-    if (pResourceHolder->mMaterialBuf == nullptr) {
-        pResourceHolder->newMaterialAnmBuffer(pModelData);
+    if (!pResourceHolder->mMaterialBound) {
+        pResourceHolder->bindMaterialAnimations(pModelData);
     }
 
     if (pResourceHolder->mBtkResTable->mCount != 0) {
@@ -415,22 +384,17 @@ void ModelManager::init(const char* pModelName, const char* pAnimationName, bool
     }
 
     bool hasMaterialAnm = animationHolder->isExistMaterialAnm();
-    bool hasDiffMaterial = MaterialUpdater::isExistDiffMaterial(static_cast< J3DModelData* >(modelHolder->mModelResTable->getRes(pModelName)));
-    J3DMdlFlag flags = J3DMdlFlag_UseSharedSnapshot;
-    if (deferMaterials || hasMaterialAnm || hasDiffMaterial) {
-        flags = static_cast< J3DMdlFlag >(flags | J3DMdlFlag_DifferedSnapshots);
-    }
-
-    initModelAndAnimation(modelHolder, pModelName, animationHolder, flags);
+    bool hasMovingMaterial = MaterialUpdater::hasMovingMaterial(static_cast< J3DModelData* >(modelHolder->mModelResTable->getRes(pModelName)));
+    initModelAndAnimation(modelHolder, pModelName, animationHolder, J3DMdlFlag_None);
     initVisibilityAnm();
     if (hasMaterialAnm) {
         initMaterialAnm();
     }
 
-    if (flags & J3DMdlFlag_DifferedSnapshots) {
+    if (deferMaterials || hasMaterialAnm || hasMovingMaterial) {
         mMaterialUpdater = new MaterialUpdater(getJ3DModel(), getResourceHolder());
         if (!deferMaterials) {
-            mMaterialUpdater->newDifferedSnapshot();
+            mMaterialUpdater->prepareMaterials();
         }
     }
 }

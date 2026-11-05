@@ -11,11 +11,6 @@
 #include <cstdio>
 #include <cstring>
 
-J3DError J3DMaterialSnapshot::newSnapshot() {
-    mpNebulaMaterial = J3DNativeMaterial::create();
-    return kJ3DError_Success;
-}
-
 int J3DPacket::entry(J3DDrawBuffer* pBuffer) {
     return 1;
 }
@@ -31,20 +26,9 @@ void J3DPacket::addChildPacket(J3DPacket* pPacket) {
 
 J3DDrawPacket::J3DDrawPacket() {
     mFlags = 0;
-    mpSnapshot = NULL;
-    mpTexMtxObj = NULL;
 }
 
 J3DDrawPacket::~J3DDrawPacket() {
-}
-
-J3DError J3DDrawPacket::newSnapshot() {
-    mpSnapshot = new J3DMaterialSnapshot();
-
-    if (mpSnapshot == NULL)
-        return kJ3DError_Alloc;
-
-    return mpSnapshot->newSnapshot();
 }
 
 void J3DDrawPacket::draw() {
@@ -54,9 +38,7 @@ J3DMatPacket::J3DMatPacket() {
     mpShapePacket = NULL;
     mpInitShapePacket = NULL;
     mpMaterial = NULL;
-    mDiffFlag = 0xFFFFFFFF;
-    mpTexture = NULL;
-    mpMaterialAnm = NULL;
+    mMaterialID = 0xFFFFFFFF;
 }
 
 J3DMatPacket::~J3DMatPacket() {
@@ -72,21 +54,18 @@ void J3DMatPacket::addShapePacket(J3DShapePacket* pShape) {
 }
 
 bool J3DMatPacket::isSame(J3DMatPacket* pOther) const {
-    return mDiffFlag == pOther->mDiffFlag && (mDiffFlag >> 31) == 0;
+    return mMaterialID == pOther->mMaterialID && (mMaterialID >> 31) == 0;
 }
 
 void J3DMatPacket::draw() {
     mpMaterial->load();
-    J3DNativeMaterial::send(mpMaterial, mpTexture, mpSnapshot);
+    J3DNativeMaterial::send(mpMaterial);
 
     J3DShapePacket* packet = getShapePacket();
     packet->getShape()->loadPreDrawSetting();
 
     while (packet != NULL) {
-        if (packet->getSnapshot() != NULL) {
-            J3DNativeMaterial::sendDiffered(packet->getSnapshot());
-        }
-
+        J3DNativeMaterial::sendOwn(packet->mpMaterial, mpMaterial);
         packet->drawFast();
         packet = (J3DShapePacket*)packet->getNextPacket();
     }
@@ -98,24 +77,13 @@ J3DShapePacket::J3DShapePacket() {
     mpShape = NULL;
     mpMtxBuffer = NULL;
     mpBaseMtxPtr = NULL;
-    mDiffFlag = 0;
     mpModel = NULL;
+    mpMaterial = NULL;
 }
 
 J3DShapePacket::~J3DShapePacket() {
 }
 
-
-J3DError J3DShapePacket::newDifferedSnapshot(u32 diffFlags) {
-    mDiffFlag = diffFlags;
-
-    J3DError ret = newSnapshot();
-    if (ret != kJ3DError_Success) {
-        return ret;
-    }
-
-    return kJ3DError_Success;
-}
 
 void J3DShapePacket::prepareDraw() const {
     MotionSignal::drawMaterial(this);
@@ -140,18 +108,7 @@ void J3DShapePacket::prepareDraw() const {
 void J3DShapePacket::draw() {
     if (!checkFlag(J3DShpFlag_Hidden) && mpShape != NULL) {
         prepareDraw();
-
-        if (mpTexMtxObj != NULL) {
-            J3DDifferedTexMtx::sTexGenBlock = mpShape->getMaterial()->getTexGenBlock();
-            J3DDifferedTexMtx::sTexMtxObj = getTexMtxObj();
-        } else {
-            J3DDifferedTexMtx::sTexGenBlock = NULL;
-        }
-
-        if (mpSnapshot != NULL) {
-            J3DNativeMaterial::sendDiffered(mpSnapshot);
-        }
-
+        J3DNativeMaterial::sendOwn(mpMaterial, mpShape->getMaterial());
         mpShape->draw();
     }
 }
@@ -159,14 +116,6 @@ void J3DShapePacket::draw() {
 void J3DShapePacket::drawFast() {
     if (!checkFlag(J3DShpFlag_Hidden) && mpShape != NULL) {
         prepareDraw();
-
-        if (mpTexMtxObj != NULL) {
-            J3DDifferedTexMtx::sTexGenBlock = mpShape->getMaterial()->getTexGenBlock();
-            J3DDifferedTexMtx::sTexMtxObj = getTexMtxObj();
-        } else {
-            J3DDifferedTexMtx::sTexGenBlock = NULL;
-        }
-
         mpShape->drawFast();
     }
 }

@@ -361,7 +361,7 @@ void MiniatureGalaxy::initPartsModel() {
 
     mShadowModel = ::createGalaxyPart("\211\145\203\202\203\146\203\213" /* 影モデル */, "MiniatureGalaxyShadow", mShadowBaseMtx, true);
     mProjmapEffectMtxSetter = MR::initMaterialProjmapEffectMtxSetter(mShadowModel);
-    MR::newDifferedMaterials(mShadowModel);
+    MR::prepareMaterials(mShadowModel);
     ::initGalaxyPart(mShadowModel);
 
     mSelectModel = ::createGalaxyPart("\221\111\221\360\216\236\203\202\203\146\203\213" /* 選択時モデル */, "MiniatureGalaxySelect", mPosMtx, false);
@@ -390,7 +390,7 @@ void MiniatureGalaxy::initPartsModel() {
     mOnesTexMtx.mTexMtxInfo.mSRT.mTranslationY = powerStarNum % 10 * 0.1f;
     mTensTexMtx.mTexMtxInfo.mSRT.mTranslationY = powerStarNum / 10 * 0.1f;
 
-    MR::newDifferedMaterials(mStarPlateModel);
+    MR::prepareMaterials(mStarPlateModel);
     ::initGalaxyPart(mStarPlateModel);
 }
 

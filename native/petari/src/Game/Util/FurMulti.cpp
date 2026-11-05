@@ -154,7 +154,7 @@ namespace MR {
 
         pMulti = new FurMulti(pActor, count);
         DynamicFurParam dynamicParam;
-        dynamicParam.mFogCtrl = new FogCtrl(pModelData, true);
+        dynamicParam.mFogCtrl = new FogCtrl(MR::getJ3DModel(pActor), true);
         dynamicParam.mLightParam = new FurLightParam;
         dynamicParam.mLightParam->mLightType = lightType;
         u32 layer = 0;

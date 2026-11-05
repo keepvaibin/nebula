@@ -90,7 +90,7 @@ void J3DShape::drawFast() const {
         mCurrentMtx.load();
 
     setArrayAndBindPipeline();
-    if (mNebulaWhole && !checkFlag(J3DShpFlag_NoMtx) && J3DDifferedTexMtx::sTexGenBlock == nullptr &&
+    if (mNebulaWhole && !checkFlag(J3DShpFlag_NoMtx) &&
         sTexMtxLoadTypeIsPlain()) {
         mShapeMtx[0]->load();
         J3DNativeShape::drawWhole(this);

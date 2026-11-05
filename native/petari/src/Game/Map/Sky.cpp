@@ -130,6 +130,6 @@ void ProjectionMapSky::initModel(const char* pName) {
     initModelManagerWithAnm(pName, 0, true);
 
     mProjmapEffectMtxSetter = MR::initMaterialProjmapEffectMtxSetter(this);
-    MR::newDifferedMaterials(this);
+    MR::prepareMaterials(this);
     mProjmapEffectMtxSetter->updateMtxUseBaseMtx();
 }

@@ -3,6 +3,7 @@
 #include <JSystem/J3DGraphAnimator/J3DAnimation.hpp>
 
 class J3DAnmBase;
+class J3DModel;
 class J3DModelData;
 class ResTable;
 class ResourceHolder;
@@ -32,11 +33,10 @@ class MaterialAnmPlayerBase : public AnmPlayerBase {
 public:
     MaterialAnmPlayerBase(const ResTable*, J3DModelData*);
 
-    virtual void attach(J3DAnmBase*, J3DModelData*) = 0;
-    virtual void detach(J3DAnmBase*, J3DModelData*) = 0;
+    // The animation's values at its frame into the model's own materials.
+    virtual void apply(J3DAnmBase*, J3DModel*) = 0;
 
-    void beginDiff();
-    void endDiff();
+    void applyFrame(J3DModel*);
 
     J3DModelData* mModelData;
 };

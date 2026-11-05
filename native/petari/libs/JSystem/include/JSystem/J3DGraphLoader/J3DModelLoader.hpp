@@ -184,6 +184,7 @@ public:
 
     J3DModelData* mpModelData;
     J3DMaterialTable* mpMaterialTable;
+    void finishMaterials();
     const J3DShapeBlock* mpShapeBlock;
     const J3DMaterialBlock* mpMaterialBlock;
     J3DModelHierarchy* mpModelHierarchy;

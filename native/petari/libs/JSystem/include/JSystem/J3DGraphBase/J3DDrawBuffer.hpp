@@ -43,7 +43,6 @@ public:
     void initialize();
     void frameInit();
     int entryMatSort(J3DMatPacket*);
-    int entryMatAnmSort(J3DMatPacket*);
     int entryZSort(J3DMatPacket*);
     int entryModelSort(J3DMatPacket*);
     int entryInvalidSort(J3DMatPacket*);

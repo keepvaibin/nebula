@@ -124,7 +124,7 @@
                         J3DMaterial* pEditable = pData->getMaterialNodePointer(m);
                         for (u32 c = 0; c < pEditable->getTexGenNum(); ++c) {
                             J3DTexCoord* pCoord = pEditable->getTexCoord(c);
-                            J3DTexMtx* pMtx = pEditable->mTexGenBlock->getTexMtx(c);
+                            J3DTexMtx* pMtx = pEditable->getTexMtx(c);
                             JUTNativeLog("test: coordinate %u %u type %u source %u matrix %u info %u projection %u used %u\n", m, c,
                                          pCoord->getTexGenType(), pCoord->getTexGenSrc(), pCoord->getTexGenMtx(),
                                          pMtx != nullptr ? pMtx->getTexMtxInfo().mInfo : 255u,

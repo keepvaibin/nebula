@@ -13,26 +13,6 @@ J3DModelData::J3DModelData() {
     clear();
 }
 
-s32 J3DModelData::newSharedSnapshot(u32 mdlFlags) {
-    u16 matNum = getMaterialNum();
-
-    for (u16 i = 0; i < matNum; i++) {
-        s32 ret;
-        if (mdlFlags & J3DMdlFlag_UseSingleSnapshot) {
-            ret = getMaterialNodePointer(i)->newSharedSnapshot();
-            if (ret != kJ3DError_Success)
-                return ret;
-        } else {
-            ret = getMaterialNodePointer(i)->newSharedSnapshot();
-            if (ret != kJ3DError_Success)
-                return ret;
-        }
-    }
-
-    return kJ3DError_Success;
-}
-
-
 void J3DModelData::syncJ3DSysFlags() const {
     if (checkFlag(0x20)) {
         j3dSys.onFlag(J3DSysFlag_PostTexMtx);

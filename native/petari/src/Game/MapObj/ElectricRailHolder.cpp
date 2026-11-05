@@ -77,11 +77,8 @@ void ElectricRailHolder::draw() const {
         }
 
         J3DMatPacket* pPacket = pItem->mMatPacket;
-        J3DNativeMaterial::send(pItem->mMatPacket->getMaterial(), pItem->mMatPacket->mpTexture, pItem->mMatPacket->getSnapshot());
-
-        if (pPacket->mpShapePacket->mpSnapshot != nullptr) {
-            J3DNativeMaterial::sendDiffered(pPacket->mpShapePacket->mpSnapshot);
-        }
+        J3DNativeMaterial::send(pPacket->getMaterial());
+        J3DNativeMaterial::sendOwn(pPacket->mpShapePacket->mpMaterial, pPacket->getMaterial());
 
         pItem->mHost->draw();
     }

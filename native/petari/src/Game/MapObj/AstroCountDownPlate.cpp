@@ -34,7 +34,7 @@ void AstroCountDownPlate::init(const JMapInfoIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("AstroCountDownPlate", nullptr, true);
     initTextureAtNumLeftStar();
-    MR::newDifferedMaterials(this);
+    MR::prepareMaterials(this);
     MR::connectToSceneMapObj(this);
     initEffectKeeper(0, nullptr, false);
     initSound(2, false);

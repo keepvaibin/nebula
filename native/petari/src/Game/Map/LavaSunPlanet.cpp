@@ -37,7 +37,7 @@ void LavaSunPlanet::init(const JMapInfoIter& rIter) {
     MR::getObjectName(&mObjName, rIter);
     initModelManagerWithAnm(mObjName, nullptr, true);
     ProjmapEffectMtxSetter* planetEffect = MR::initMaterialProjmapEffectMtxSetter(this);
-    MR::newDifferedMaterials(this);
+    MR::prepareMaterials(this);
     MR::connectToScenePlanet(this);
     initHitSensor(1);
     MR::initCollisionParts(this, mObjName, MR::addBodyMessageSensorMapObj(this), nullptr);

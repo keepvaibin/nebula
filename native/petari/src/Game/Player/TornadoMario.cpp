@@ -15,7 +15,7 @@ void TornadoMario::init(const JMapInfoIter& rIter) {
     initSound(4, false);
     MR::connectToScene(this, MR::MovementType_Player, MR::CalcAnimType_Player, MR::DrawBufferType_PlayerDecoration, MR::DrawType_None);
     MR::initMaterialFog(this, true);
-    MR::newDifferedMaterials(this);
+    MR::prepareMaterials(this);
     MR::initJointTransform(this);
     MR::initShadowVolumeCylinder(this, 80.0f);
     MR::setShadowDropLength(this, nullptr, 3000.0f);

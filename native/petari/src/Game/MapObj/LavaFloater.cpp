@@ -45,7 +45,7 @@ void LavaFloater::init(const JMapInfoIter& rIter) {
     if (MR::isExistString(pName, names, ARRAY_SIZE(names))) {
         initModelManagerWithAnm(mObjectName, nullptr, true);
         mMtxSetter = MR::initMaterialProjmapEffectMtxSetter(this);
-        MR::newDifferedMaterials(this);
+        MR::prepareMaterials(this);
     } else {
         initModelManagerWithAnm(mObjectName, nullptr, false);
     }

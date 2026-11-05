@@ -156,10 +156,10 @@ void GameSystemStationedArchiveLoader::createAndAddPlayerArchives(bool isDataMar
     ResourceHolder* pMarioAnimeHolder = MR::createAndAddResourceHolder("MarioAnime.arc");
 
     if (isDataMario) {
-        pMarioAnimeHolder->newMaterialAnmBuffer(
+        pMarioAnimeHolder->bindMaterialAnimations(
             static_cast< J3DModelData* >(MR::createAndAddResourceHolder("Mario.arc")->mModelResTable->getRes("mario")));
     } else {
-        pMarioAnimeHolder->newMaterialAnmBuffer(
+        pMarioAnimeHolder->bindMaterialAnimations(
             static_cast< J3DModelData* >(MR::createAndAddResourceHolder("Luigi.arc")->mModelResTable->getRes("luigi")));
     }
 }

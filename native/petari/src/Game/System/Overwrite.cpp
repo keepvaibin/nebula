@@ -58,7 +58,7 @@ void J3DShapeMtx::loadMtxIndx_PNGP(int slot, u16 index) const {
     j3dSys.loadNrmMtxIndx(slot, index);
     ShapePacketUserData* pData = MR::getJ3DShapePacketUserData(j3dSys.getShapePacket());
     if (pData != nullptr) {
-        pData->loadTexMtx(j3dSys.getShapePacket()->getShape()->getMaterial(), slot, index);
+        pData->loadTexMtx(j3dSys.getShapePacket()->mpMaterial, slot, index);
     }
 }
 

@@ -104,7 +104,7 @@ void ItemBubble::init(const JMapInfoIter& rIter) {
             _94[i]->initWithoutIter();
             _90[i] = new RotPartsModel(this, "\203\130\203\136\201\133\203\163\201\133\203\130" /* スターピース */, "StarPiece", nullptr, 13, true);
             MR::initMaterialColor0(_90[i], "StarPiece1_v", &_94[i]->mColor);
-            MR::newDifferedMaterials(_90[i]);
+            MR::prepareMaterials(_90[i]);
             _90[i]->initWithoutIter();
 
             switch (itemCount) {

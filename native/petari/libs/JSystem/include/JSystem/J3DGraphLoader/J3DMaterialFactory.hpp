@@ -1,6 +1,6 @@
 #pragma once
 
-#include "JSystem/J3DGraphBase/J3DMatBlock.hpp"
+#include "JSystem/J3DGraphBase/J3DMaterial.hpp"
 #include "JSystem/J3DGraphLoader/J3DModelLoader.hpp"
 struct NebulaCookedMaterial;
 
@@ -87,7 +87,6 @@ public:
     J3DColor newAmbColor(int, int) const;
     u32 newTexGenNum(int) const;
     J3DTexCoord newTexCoord(int, int) const;
-    J3DTexMtx* newTexMtx(int, int) const;
     u8 newCullMode(int) const;
     u16 newTexNo(int, int) const;
     J3DColorWide newRegisterColor(int, int) const;

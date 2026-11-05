@@ -23,7 +23,7 @@ namespace {
 OtaKingMagma::OtaKingMagma(LiveActor* pHost, s32 drawBufferType)
     : PartsModel(pHost, "\203\111\203\136\203\114\203\223\203\117\203\175\203\117\203\175" /* オタキングマグマ */, "OtaKingMagma", nullptr, drawBufferType, true), mBloomModel(), _A0(), _A4() {
     _A0 = MR::initMaterialProjmapEffectMtxSetter(this);
-    MR::newDifferedMaterials(this);
+    MR::prepareMaterials(this);
 }
 
 void OtaKingMagma::init(const JMapInfoIter& rIter) {
@@ -37,7 +37,7 @@ void OtaKingMagma::init(const JMapInfoIter& rIter) {
 
     mBloomModel = new PartsModel(mHost, "\203\111\203\136\203\114\203\223\203\117\203\175\203\117\203\175\203\165\203\213\201\133\203\200" /* オタキングマグマブルーム */, "OtaKingMagmaBloom", nullptr, MR::DrawBufferType_BloomModel, true);
     _A4 = MR::initMaterialProjmapEffectMtxSetter(mBloomModel);
-    MR::newDifferedMaterials(mBloomModel);
+    MR::prepareMaterials(mBloomModel);
     mBloomModel->mPosition.set(mPosition);
     TVec3f& rBloomPosition = mBloomModel->mPosition;
     rBloomPosition.add(::cBloomModelOffset);

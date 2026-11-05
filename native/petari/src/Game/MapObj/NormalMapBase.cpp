@@ -321,7 +321,7 @@ void NormalMapBase::shapeAnalyzeDraw(J3DModel* pModel) const {
                     J3DNativeShape::setNormal(0, viewMtx);
                     MR::normalize(&localMtx);
                     updateLightMtx(localMtx);
-                    drawMaterialSetting(pMaterial);
+                    drawMaterialSetting(pModel->getMaterial(pMaterial->mIndex));
                     pMaterial->mCurrentMtx.load();
                     found = true;
                     break;
@@ -392,16 +392,8 @@ void NormalMapBase::loadNormalTex(const JUTTexture* pTex, u32 slot) const {
 }
 
 void NormalMapBase::loadTexture1(J3DMaterial* pMaterial) const {
-    J3DRegisterBlock* pBlock = pMaterial->getRegisterBlock();
-    const u32 count = pBlock->getTexCapacity();
-
-    u16 textures[8];
-    for (u32 i = 0; i < count; i++) {
-        textures[i] = pBlock->getTexNo(i);
-    }
-
-    NativeShader::setTexture(sNormalMap, 2, mTextures[textures[0]]);
-    loadNormalTex(mTextures[textures[1]], 0);
+    NativeShader::setTexture(sNormalMap, 2, mTextures[pMaterial->getTexNo(0)]);
+    loadNormalTex(mTextures[pMaterial->getTexNo(1)], 0);
 }
 
 void NormalMapBase::drawMaterialSetting(J3DMaterial* pMaterial) const {
@@ -413,32 +405,32 @@ void NormalMapBase::drawMaterialSetting(J3DMaterial* pMaterial) const {
     ambient.set(mAmbColor, mAmbColor, mAmbColor, mAmbAlpha);
     material.set(mMatColor, mMatColor, mMatColor, mMatAlpha);
     if (mUseModelLightReg & 1) {
-        NebulaColor8* pColor = pMaterial->getColorBlock()->getAmbColor(0);
+        NebulaColor8* pColor = pMaterial->getAmbColor(0);
         ambient.r = pColor->r;
         ambient.g = pColor->g;
         ambient.b = pColor->b;
     }
 
     if (mUseModelLightReg & 2) {
-        ambient.a = pMaterial->getColorBlock()->getAmbColor(0)->a;
+        ambient.a = pMaterial->getAmbColor(0)->a;
     }
 
     if (mUseModelLightReg & 4) {
-        NebulaColor8* pColor = pMaterial->getColorBlock()->getMatColor(0);
+        NebulaColor8* pColor = pMaterial->getMatColor(0);
         material.r = pColor->r;
         material.g = pColor->g;
         material.b = pColor->b;
     }
 
     if (mUseModelLightReg & 8) {
-        material.a = pMaterial->getColorBlock()->getMatColor(0)->a;
+        material.a = pMaterial->getMatColor(0)->a;
     }
 
     NativeShader::setColor(sNormalMap, 0, material.r, material.g, material.b, material.a);
     NativeShader::setColor(sNormalMap, 4, ambient.r, ambient.g, ambient.b, ambient.a);
-    const NebulaColor16& rColor0 = mUseModelStageColor ? static_cast< const NebulaColor16& >(*pMaterial->getRegisterBlock()->getRegisterColor(0))
+    const NebulaColor16& rColor0 = mUseModelStageColor ? static_cast< const NebulaColor16& >(*pMaterial->getRegisterColor(0))
                                                 : static_cast< const NebulaColor16& >(mStageColor0);
-    const NebulaColor16& rColor1 = mUseModelStageColor ? static_cast< const NebulaColor16& >(*pMaterial->getRegisterBlock()->getRegisterColor(1))
+    const NebulaColor16& rColor1 = mUseModelStageColor ? static_cast< const NebulaColor16& >(*pMaterial->getRegisterColor(1))
                                                 : static_cast< const NebulaColor16& >(mStageColor1);
     // C0 and C1 as the combiner takes a register (its low 8 bits).
     sNormalMap.constants[8] = static_cast< u8 >(rColor0.r) / 255.0f;

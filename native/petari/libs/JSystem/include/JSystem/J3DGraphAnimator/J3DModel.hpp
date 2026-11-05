@@ -15,9 +15,6 @@ enum J3DMdlFlag {
     J3DMdlFlag_None = 0x0,
     J3DMdlFlag_Unk1 = 0x1,
     J3DMdlFlag_UseDefaultJ3D = 0x2,
-    J3DMdlFlag_UseSharedSnapshot = 0x20000,
-    J3DMdlFlag_UseSingleSnapshot = 0x40000,
-    J3DMdlFlag_DifferedSnapshots = 0x80000,
 };
 
 typedef void (*J3DCalcCallBack)(J3DModel*, u32 timing);
@@ -36,11 +33,9 @@ public:
     void initialize();
     s32 entryModelData(J3DModelData*, u32, u32);
     s32 createShapePacket(J3DModelData*);
-    s32 createMatPacket(J3DModelData*, u32);
-    s32 newDifferedSnapshot(u32);
+    s32 createMatPacket(J3DModelData*);
     void lock();
     void unlock();
-    void diff();
     void calcAnmMtx();
     void calcWeightEnvelopeMtx();
     inline void calcNrmMtx();
@@ -48,12 +43,12 @@ public:
     void calcBBoardMtx();
     void prepareShapePackets();
     void ptrToIndex();
-    void makeMesh();
+    // Every material's matrices, once when the model is made.
+    void calcAllMaterials();
     virtual void update();
     virtual void entry();
     virtual void calc();
     virtual void calcMaterial();
-    virtual void calcDiffTexMtx();
     virtual void viewCalc();
     virtual ~J3DModel() {
     }
@@ -97,6 +92,13 @@ public:
     J3DShapePacket* getShapePacket(u16 idx) const {
         return &mShapePacket[idx];
     }
+
+    // The material this model draws: the model data's, or its own copy once it has one.
+    J3DMaterial* getMaterial(u16 idx) const {
+        return mMaterials[idx];
+    }
+    // This model's own copy of a material: animation and controllers write it, other models never see it.
+    J3DMaterial* ownMaterial(u16 idx);
 
     J3DMtxBuffer* getMtxBuffer() {
         return mMtxBuffer;
@@ -173,6 +175,7 @@ public:
     J3DVertexBuffer mVertexBuffer;
     J3DMatPacket* mMatPacket;
     J3DShapePacket* mShapePacket;
+    J3DMaterial** mMaterials;
     J3DVtxShader* mUnkCalc1;
     u16 mMotionEpoch;  // counts the model's lives (MotionSignal)
 };

@@ -1,5 +1,4 @@
 #include "JSystem/J3DGraphLoader/J3DMaterialFactory.hpp"
-#include "JSystem/J3DGraphBase/J3DMatBlock.hpp"
 #include "JSystem/J3DGraphBase/J3DMaterial.hpp"
 #include "JSystem/JSupport/JSupport.hpp"
 #include <nebula_cooked_material.h>
@@ -105,13 +104,23 @@ J3DMaterial* J3DMaterialFactory::create(J3DMaterial* i_material, MaterialType i_
     return i_material;
 }
 
+namespace {
+    u8 nativeFactor(u8 stored, bool source) {
+        // The file's colour factors name the other side's colour (a source factor 2 is the destination's colour).
+        if (stored == 2 || stored == 3) {
+            return source ? static_cast< u8 >(stored == 2 ? NEBULA_FACTOR_DST_COLOR : NEBULA_FACTOR_INV_DST_COLOR)
+                          : static_cast< u8 >(stored == 2 ? NEBULA_FACTOR_SRC_COLOR : NEBULA_FACTOR_INV_SRC_COLOR);
+        }
+        return stored;
+    }
+}  // namespace
+
 J3DMaterial* J3DMaterialFactory::createNormalMaterial(J3DMaterial* i_material, int i_idx, u32 i_flags) const {
     const u32 stages = countStages(i_idx);
     u32 stage_count = getMdlDataFlag_StageCount(i_flags);
     u32 stage_count_max = (stages > stage_count ? stages : stage_count);
     u32 tex_num = stage_count_max > 8 ? 8 : stage_count_max;
     u32 texgens = countTexGens(i_idx);
-    u32 texgen_flag = texgens > 4 ? getMdlDataFlag_TexGenFlag(0) : getMdlDataFlag_TexGenFlag(i_flags);
     u32 color_flag = getMdlDataFlag_ColorFlag(i_flags);
     u32 output_flag = getMdlDataFlag_OutputFlag(i_flags);
     BOOL ind_flag = (i_flags & 0x1000000) ? TRUE : FALSE;
@@ -119,64 +128,94 @@ J3DMaterial* J3DMaterialFactory::createNormalMaterial(J3DMaterial* i_material, i
         i_material = new J3DMaterial();
     }
 
-    i_material->mColorBlock = J3DMaterial::createColorBlock(color_flag);
-    i_material->mTexGenBlock = J3DMaterial::createTexGenBlock(texgen_flag);
-    i_material->mRegisterBlock = J3DMaterial::createRegisterBlock((u16)stage_count_max);
-    i_material->mIndBlock = J3DMaterial::createIndBlock(ind_flag);
-    i_material->mOutputBlock = J3DMaterial::createOutputBlock(output_flag, getMaterialMode(i_idx));
+    const u32 mode = getMaterialMode(i_idx);
     i_material->mIndex = i_idx;
     i_material->mNativeMaterial = mpNativeMaterials != nullptr ? mpNativeMaterials + i_idx : nullptr;
-    i_material->mMaterialMode = getMaterialMode(i_idx);
-    i_material->mColorBlock->setColorChanNum(newColorChanNum(i_idx));
-    i_material->mColorBlock->setCullMode(newCullMode(i_idx));
-    i_material->mTexGenBlock->setTexGenNum(newTexGenNum(i_idx));
-    i_material->mTexGenBlock->setNBTScale(newNBTScale(i_idx));
-    i_material->mOutputBlock->setFog(newFog(i_idx));
-    i_material->mOutputBlock->setAlphaComp(newAlphaComp(i_idx));
-    i_material->mOutputBlock->setBlend(newBlend(i_idx));
-    i_material->mOutputBlock->setZMode(newZMode(i_idx));
-    i_material->mOutputBlock->setZCompLoc(newZCompLoc(i_idx));
+    i_material->mMaterialMode = mode;
+    i_material->mHasAmbient = color_flag != 0;
+    i_material->mHasStageColors = stage_count_max >= 2;
+    i_material->mHasIndirect = ind_flag != FALSE;
+    i_material->mHasFog = output_flag == 0x10000000;
+    i_material->mColorChanNum = newColorChanNum(i_idx);
+    {
+        const u8 cull = newCullMode(i_idx);
+        i_material->mCull = cull == J3D_CULL_BACK ? NEBULA_CULL_BACK : cull == J3D_CULL_FRONT ? NEBULA_CULL_FRONT : NEBULA_CULL_NONE;
+    }
+    i_material->mTexGenNum = newTexGenNum(i_idx);
+    i_material->mNBTScale = newNBTScale(i_idx);
+    if (i_material->mHasFog) {
+        i_material->mFog.setFogInfo(newFog(i_idx).getFogInfo());
+    }
+
+    // A preset's modes come from the material's mode (opaque, edge, translucent), the others from the file.
+    if (output_flag == 0) {
+        const bool edge = (mode & 1) == 0 && (mode & 2) != 0;
+        const bool xlu = (mode & 3) == 0 && (mode & 4) != 0;
+        i_material->mAlphaCompare.comp0 = edge ? NEBULA_COMPARE_GEQUAL : NEBULA_COMPARE_ALWAYS;
+        i_material->mAlphaCompare.ref0 = edge ? 0x80 : 0;
+        i_material->mAlphaCompare.op = J3D_AOP_AND;
+        i_material->mAlphaCompare.comp1 = edge ? NEBULA_COMPARE_LEQUAL : NEBULA_COMPARE_ALWAYS;
+        i_material->mAlphaCompare.ref1 = edge ? 0xFF : 0;
+        i_material->mBlend.type = xlu ? NEBULA_BLEND_ADD : NEBULA_BLEND_REPLACE;
+        i_material->mBlend.source = xlu ? NEBULA_FACTOR_SRC_ALPHA : NEBULA_FACTOR_ONE;
+        i_material->mBlend.destination = xlu ? NEBULA_FACTOR_INV_SRC_ALPHA : NEBULA_FACTOR_ZERO;
+        i_material->mDepth.enable = 1;
+        i_material->mDepth.func = NEBULA_COMPARE_LEQUAL;
+        i_material->mDepth.update = xlu ? 0 : 1;
+        i_material->mEarlyDepth = edge ? 0 : 1;
+    } else {
+        const J3DAlphaComp alpha = newAlphaComp(i_idx);
+        i_material->mAlphaCompare.comp0 = alpha.getComp0();
+        i_material->mAlphaCompare.ref0 = alpha.getRef0();
+        i_material->mAlphaCompare.op = alpha.getOp();
+        i_material->mAlphaCompare.comp1 = alpha.getComp1();
+        i_material->mAlphaCompare.ref1 = alpha.getRef1();
+        const J3DBlend blend = newBlend(i_idx);
+        i_material->mBlend.type = blend.mType == J3D_BM_BLEND ? NEBULA_BLEND_ADD : blend.mType == J3D_BM_SUBTRACT ? NEBULA_BLEND_SUBTRACT : NEBULA_BLEND_REPLACE;
+        i_material->mBlend.source = nativeFactor(blend.mSrcFactor, true);
+        i_material->mBlend.destination = nativeFactor(blend.mDstFactor, false);
+        const J3DZMode depth = newZMode(i_idx);
+        i_material->mDepth.enable = depth.getCompareEnable();
+        i_material->mDepth.func = depth.getFunc();
+        i_material->mDepth.update = depth.getUpdateEnable();
+        i_material->mEarlyDepth = newZCompLoc(i_idx);
+    }
+
     for (u8 i = 0; i < tex_num; i++) {
-        i_material->mRegisterBlock->setTexNo(i, newTexNo(i_idx, i));
+        i_material->mTexNo[i] = newTexNo(i_idx, i);
     }
-
-    for (u8 i = 0; i < 4; i++) {
-        i_material->mRegisterBlock->setConstantColor(i, newConstantColor(i_idx, i));
-    }
-
-    for (u8 i = 0; i < 4; i++) {
-        i_material->mRegisterBlock->setRegisterColor(i, newRegisterColor(i_idx, i));
-    }
-
-    for (u8 i = 0; i < 2; i++) {
-        i_material->mColorBlock->setAmbColor(i, newAmbColor(i_idx, i));
-    }
-
-    for (u8 i = 0; i < 2; i++) {
-        i_material->mColorBlock->setMatColor(i, newMatColor(i_idx, i));
-    }
-
-    for (u8 i = 0; i < 4; i++) {
-        J3DColorChan color_chan = newColorChan(i_idx, i);
-        i_material->mColorBlock->setColorChan(i, color_chan);
-    }
-
-    for (u8 i = 0; i < texgens; i++) {
-        J3DTexCoord tex_coord = newTexCoord(i_idx, i);
-        i_material->mTexGenBlock->setTexCoord(i, &tex_coord);
-    }
-
-    for (u8 i = 0; i < 8; i++) {
-        i_material->mTexGenBlock->setTexMtx(i, newTexMtx(i_idx, i));
-    }
-
-    if (mpIndInitData != nullptr) {
-        u8 ind_tex_stage_num = newIndTexStageNum(i_idx);
-        i_material->mIndBlock->setIndTexStageNum(newIndTexStageNum(i_idx));
-        for (u8 i = 0; i < ind_tex_stage_num; i++) {
-            i_material->mIndBlock->setIndTexMtx(i, newIndTexMtx(i_idx, i));
+    if (i_material->mHasStageColors) {
+        for (u8 i = 0; i < 4; i++) {
+            i_material->mConstantColor[i] = newConstantColor(i_idx, i);
+            i_material->mRegisterColor[i] = newRegisterColor(i_idx, i);
         }
-
+    }
+    if (i_material->mHasAmbient) {
+        for (u8 i = 0; i < 2; i++) {
+            i_material->mAmbColor[i] = newAmbColor(i_idx, i);
+        }
+    }
+    for (u8 i = 0; i < 2; i++) {
+        i_material->mMatColor[i] = newMatColor(i_idx, i);
+    }
+    for (u8 i = 0; i < 4; i++) {
+        i_material->mColorChan[i] = newColorChan(i_idx, i);
+    }
+    for (u8 i = 0; i < texgens; i++) {
+        i_material->mTexCoord[i] = newTexCoord(i_idx, i);
+    }
+    for (u8 i = 0; i < 8; i++) {
+        J3DMaterialInitData* mtl_init_data = &mpMaterialInitData[mpMaterialID[i_idx]];
+        if (mtl_init_data->mTexMtxIdx[i] != 0xffff) {
+            i_material->setTexMtx(i, J3DTexMtx(mpTexMtxInfo[mtl_init_data->mTexMtxIdx[i]]));
+        }
+    }
+    if (mpIndInitData != nullptr && i_material->mHasIndirect) {
+        const u8 ind_tex_stage_num = newIndTexStageNum(i_idx);
+        i_material->mIndTexStageNum = ind_tex_stage_num;
+        for (u8 i = 0; i < ind_tex_stage_num; i++) {
+            i_material->mIndTexMtx[i] = newIndTexMtx(i_idx, i);
+        }
     }
 
     return i_material;
@@ -236,16 +275,6 @@ J3DTexCoord J3DMaterialFactory::newTexCoord(int i_idx, int i_no) const {
     } else {
         return J3DTexCoord();
     }
-}
-
-J3DTexMtx* J3DMaterialFactory::newTexMtx(int i_idx, int i_no) const {
-    J3DTexMtx* tex_mtx = nullptr;
-    J3DMaterialInitData* mtl_init_data = &mpMaterialInitData[mpMaterialID[i_idx]];
-    if (mtl_init_data->mTexMtxIdx[i_no] != 0xffff) {
-        tex_mtx = new J3DTexMtx(mpTexMtxInfo[mtl_init_data->mTexMtxIdx[i_no]]);
-    }
-
-    return tex_mtx;
 }
 
 u8 J3DMaterialFactory::newCullMode(int i_idx) const {
