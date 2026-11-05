@@ -15,7 +15,6 @@
 #include "Game/System/NebulaArena.hpp"
 
 namespace {
-    NEW_NERVE(GameSystemStationedArchiveLoaderLoadAudio1stWaveData, GameSystemStationedArchiveLoader, LoadAudio1stWaveData);
     NEW_NERVE(GameSystemStationedArchiveLoaderLoadStationedArchivePlayer, GameSystemStationedArchiveLoader, LoadStationedArchivePlayer);
     NEW_NERVE(GameSystemStationedArchiveLoaderLoadStationedArchiveOthers, GameSystemStationedArchiveLoader, LoadStationedArchiveOthers);
     NEW_NERVE(GameSystemStationedArchiveLoaderInitializeGameData, GameSystemStationedArchiveLoader, InitializeGameData);
@@ -65,7 +64,7 @@ void PlayerHeapHolder::setIsDataMario(bool isDataMario) {
 }
 
 GameSystemStationedArchiveLoader::GameSystemStationedArchiveLoader() : NerveExecutor("\217\355\222\223\203\146\201\133\203\136\217\211\212\372\211\273" /* 常駐データ初期化 */), mHeapHolder() {
-    initNerve(GET_NERVE_ANON(GameSystemStationedArchiveLoaderLoadAudio1stWaveData));
+    initNerve(GET_NERVE_ANON(GameSystemStationedArchiveLoaderLoadStationedArchiveOthers));
 }
 
 void GameSystemStationedArchiveLoader::update() {
@@ -97,16 +96,6 @@ void GameSystemStationedArchiveLoader::requestChangeArchivePlayer(bool isDataMar
 
     mHeapHolder->setIsDataMario(isDataMario);
     setNerve(GET_NERVE_ANON(GameSystemStationedArchiveLoaderChangeArchivePlayer));
-}
-
-void GameSystemStationedArchiveLoader::exeLoadAudio1stWaveData() {
-    if (MR::isFirstStep(this)) {
-        GameSystemFunction::loadAudioStaticWaveData();
-    }
-
-    if (GameSystemFunction::isLoadedAudioStaticWaveData()) {
-        setNerve(GET_NERVE_ANON(GameSystemStationedArchiveLoaderLoadStationedArchiveOthers));
-    }
 }
 
 void GameSystemStationedArchiveLoader::exeLoadStationedArchivePlayer() {

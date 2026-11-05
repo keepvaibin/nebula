@@ -28,17 +28,6 @@ public:
     u32 field_0xc;
 };
 
-class JAUBankTableLink : public JSULink< JAUBankTable >, public JAUBankTable {
-public:
-    JAUBankTableLink(u32 param_0, JASBank** param_1, u32 param_2)
-        : JSULink< JAUBankTable >(static_cast< JAUBankTable* >(this)), JAUBankTable(param_0, param_1, param_2) {
-    }
-};
-
-struct JAUBankTableDictionary : JSUList< JAUBankTable > {
-    void appendBankTable(JSULink< JAUBankTable >*);
-};
-
 class JASWaveBank;
 
 class JAUWaveBankTable : private JASPtrArray< JASWaveBank, 255 > {

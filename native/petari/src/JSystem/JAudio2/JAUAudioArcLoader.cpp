@@ -1,10 +1,9 @@
 #include "JSystem/JAudio2/JAUAudioArcLoader.hpp"
 #include "JSystem/JAudio2/JAISeMgr.hpp"
-#include "JSystem/JAudio2/JAUSectionHeap.hpp"
+#include "JSystem/JAudio2/JAUAudioData.hpp"
 
-
-JAUAudioArcLoader::JAUAudioArcLoader(JAUSection* pSection) {
-    mSection = pSection;
+JAUAudioArcLoader::JAUAudioArcLoader(JAUAudioData* pData) {
+    mData = pData;
 }
 
 bool JAUAudioArcLoader::load(void const* pData) {
@@ -12,77 +11,62 @@ bool JAUAudioArcLoader::load(void const* pData) {
 }
 
 bool JAUAudioArcLoader::load(char const* pFileName) {
-    void const* data = mSection->loadStoreFile(pFileName, true);
+    void const* data = mData->loadStoreFile(pFileName);
     return data != nullptr && load(data);
 }
 
-void JAUAudioArcLoader::readWS(u32 param_0, void const* pData, u32 param_2) {
-    mSection->newWaveBank(param_0, pData);
-    if (param_2 != 0) {
-        mSection->loadWaveArc(param_0, param_2);
-    }
+void JAUAudioArcLoader::readWS(u32 bankNo, void const* pData, u32) {
+    mData->newWaveBank(bankNo, pData);
 }
 
-void JAUAudioArcLoader::readBNK(u32 param_0, void const* pData) {
-    mSection->newBank(pData, param_0);
+void JAUAudioArcLoader::readBNK(u32 waveBankNo, void const* pData) {
+    mData->newBank(pData, waveBankNo);
 }
 
-void JAUAudioArcLoader::readBSC(void const* pData, u32 param_1) {
-    mSection->newSeSeqCollection(pData, param_1);
+void JAUAudioArcLoader::readBSC(void const* pData, u32) {
+    mData->newSeSeqCollection(pData);
 }
 
-void JAUAudioArcLoader::readBST(void const* pData, u32 param_1) {
-    mSection->newSoundTable(pData, param_1, true);
+void JAUAudioArcLoader::readBST(void const* pData, u32) {
+    mData->newSoundTable(pData);
 }
 
-void JAUAudioArcLoader::readBSTN(void const* pData, u32 param_1) {
-    mSection->newSoundNameTable(pData, param_1, true);
+void JAUAudioArcLoader::readBSTN(void const* pData, u32) {
+    mData->newSoundNameTable(pData);
 }
 
-void JAUAudioArcLoader::readBMS(u32 param_0, void const* pData, u32 param_2) {
-    mSection->newStaticSeqData(param_0, pData, param_2);
+void JAUAudioArcLoader::readBMS(u32 id, void const* pData, u32) {
+    mData->newStaticSeqData(id, pData);
 }
 
-void JAUAudioArcLoader::readBMS_fromArchive(u32 param_0) {
-    mSection->newStaticSeqData(param_0);
+// In the sequence archive, where any sequence is found.
+void JAUAudioArcLoader::readBMS_fromArchive(u32) {
 }
 
-void JAUAudioArcLoader::newVoiceBank(u32 param_0, u32 param_1) {
-    mSection->newVoiceBank(param_1, param_0);
+void JAUAudioArcLoader::newVoiceBank(u32 waveBankNo, u32 bankNo) {
+    mData->newVoiceBank(bankNo, waveBankNo);
 }
 
-void JAUAudioArcLoader::newDynamicSeqBlock(u32 param_0) {
-    JAUSectionHeap* sectionHeap = mSection->asSectionHeap();
-    sectionHeap->newDynamicSeqBlock(param_0);
+// The sequences need no blocks of memory to load into.
+void JAUAudioArcLoader::newDynamicSeqBlock(u32) {
 }
 
 void JAUAudioArcLoader::readBSFT(void const* pData) {
-    mSection->newStreamFileTable(pData, true);
+    mData->newStreamFileTable(pData);
 }
 
-void JAUAudioArcLoader::beginBNKList(u32 param_0, u32 param_1) {
-    mSection->beginNewBankTable(param_0, param_1);
+void JAUAudioArcLoader::beginBNKList(u32 id, u32 count) {
+    mData->beginNewBankTable(id, count);
 }
 
 void JAUAudioArcLoader::endBNKList() {
-    mSection->endNewBankTable();
+    mData->endNewBankTable();
 }
 
 void JAUAudioArcLoader::readMaxSeCategory(int category, int maxActiveSe, int maxInactiveSe) {
-    {
-        JAISeMgr* seMgr = JASGlobalInstance< JAISeMgr >::getInstance();
-        if (seMgr != nullptr) {
-            seMgr->getCategory(category)->setMaxActiveSe(maxActiveSe);
-            seMgr->getCategory(category)->setMaxInactiveSe(maxInactiveSe);
-        }
+    JAISeMgr* seMgr = JASGlobalInstance< JAISeMgr >::getInstance();
+    if (seMgr != nullptr) {
+        seMgr->getCategory(category)->setMaxActiveSe(maxActiveSe);
+        seMgr->getCategory(category)->setMaxInactiveSe(maxInactiveSe);
     }
 }
-
-void JAUAudioArcLoader_withoutCopy::beginBNKList(u32 param_0, u32 param_1) {
-    mSection->beginNewBankTable(param_0, param_1);
-}
-
-void JAUAudioArcLoader_withoutCopy::endBNKList() {
-    mSection->endNewBankTable();
-}
-

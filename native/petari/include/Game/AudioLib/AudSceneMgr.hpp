@@ -1,14 +1,6 @@
 #pragma once
 
-
-class JAUSectionHeap;
-
-struct AudSceneSoundInfo {
-    const char* mSceneName;
-    const char* mStageName;
-    s8 mStageId;
-    s8 mScenarioId;
-};
+class JAUAudioData;
 
 class AudSceneMgr {
 public:
@@ -17,29 +9,13 @@ public:
         PlayerMode_Luigi = 2,
     };
 
-    AudSceneMgr(JAUSectionHeap*);
+    // The bank of the player's voices: a group for each player, with the same waves.
+    static const u32 cPlayerVoiceBank = 34;
 
-    bool isLoadDoneSystemInit();
-    void loadStaticResource();
-    bool isLoadDoneStaticResource();
-    void loadStageResource(const char*, const char*);
-    void loadStageResource(const AudSceneSoundInfo*);
-    bool isLoadDoneStageResource();
-    void loadScenarioResource(const char*, const char*, s32);
-    void loadScenarioResource(const AudSceneSoundInfo*, s32);
-    bool isLoadDoneScenarioResource();
+    explicit AudSceneMgr(JAUAudioData*);
+
     void startScene();
-    const AudSceneSoundInfo* findSceneSoundInfo(const char*, const char*);
-    void eraseLastBgmWaveSet();
-    void eraseLastSeWaveSet();
-    void eraseLastSeScenarioWaveSet();
-    void loadWaveSet(const s8*, s32);
-    void loadWaveSetOnce(const s8*, s32);
-    bool isKeptWave(s32) const;
-    void setPlayerModeMario();
-    void setPlayerModeLuigi();
-    bool loadPlayerResource();
-    bool isPlayerResourceLoaded();
+    void setPlayerLuigi(bool isLuigi);
 
     bool isPlayerModeMario() {
         return mPlayerMode == PlayerMode_Mario;
@@ -49,13 +25,8 @@ public:
         return mPlayerMode == PlayerMode_Luigi;
     }
 
-    JAUSectionHeap* mSectionHeap;
+    JAUAudioData* mAudioData;
     u32 _4;
-    s32 mSeWaveSetId;
-    s32 mSeScenarioWaveSetId;
-    s32 mBgmWaveSetId;
     s32 mPlayerMode;
-    s32 mPrevPlayerMode;
-    bool mIsNewPlayerMode;
     bool _1D;
 };

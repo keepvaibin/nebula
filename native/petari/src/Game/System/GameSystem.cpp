@@ -117,7 +117,7 @@ void GameSystem::exeInitializeAudio() {
 
     updateSceneController();
 
-    if (mObjHolder->mAudioSystem->isLoadDoneWaveDataAtSystemInit()) {
+    if (mObjHolder->mAudioSystem->isCreated()) {
         setNerve(GET_NERVE(GameSystem, GameSystemInitializeBootScene));
     }
 }

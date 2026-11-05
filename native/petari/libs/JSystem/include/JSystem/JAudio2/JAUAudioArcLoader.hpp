@@ -2,11 +2,11 @@
 
 #include "JSystem/JAudio2/JAUAudioArcInterpreter.hpp"
 
-class JAUSection;
+class JAUAudioData;
 
 class JAUAudioArcLoader : public JAUAudioArcInterpreter {
 public:
-    JAUAudioArcLoader(JAUSection*);
+    explicit JAUAudioArcLoader(JAUAudioData*);
     bool load(void const*);
     bool load(char const*);
     virtual void readWS(u32, void const*, u32);
@@ -25,14 +25,5 @@ public:
     virtual ~JAUAudioArcLoader() {
     }
 
-    JAUSection* mSection;
-};
-
-class JAUAudioArcLoader_withoutCopy : public JAUAudioArcInterpreter {
-    virtual void beginBNKList(u32, u32);
-    virtual void endBNKList();
-    virtual ~JAUAudioArcLoader_withoutCopy() {
-    }
-
-    JAUSection* mSection;
+    JAUAudioData* mData;
 };

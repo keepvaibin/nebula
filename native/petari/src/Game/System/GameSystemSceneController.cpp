@@ -37,7 +37,7 @@ namespace {
 namespace NrvGameSystemSceneController {
     NEW_NERVE(GameSystemSceneControllerNotInitialized, GameSystemSceneController, NotInitialized);
     NEW_NERVE(GameSystemSceneControllerNormal, GameSystemSceneController, Normal);
-    NEW_NERVE(GameSystemSceneControllerChangeWaveBank, GameSystemSceneController, ChangeWaveBank);
+    NEW_NERVE(GameSystemSceneControllerChoosePlayerVoices, GameSystemSceneController, ChoosePlayerVoices);
     NEW_NERVE(GameSystemSceneControllerInitializeScene, GameSystemSceneController, InitializeScene);
     NEW_NERVE(GameSystemSceneControllerInvalidateSystemWipe, GameSystemSceneController, InvalidateSystemWipe);
     NEW_NERVE(GameSystemSceneControllerWaitDrawDoneScene, GameSystemSceneController, WaitDrawDoneScene);
@@ -108,7 +108,7 @@ void GameSystemSceneController::checkRequestAndChangeScene() {
 
     mSpine->update();
     // A load's steps follow each other within the frame: the screen is black and nothing waits for them.
-    while (mNextNerve == GET_NERVE(GameSystemSceneController, GameSystemSceneControllerChangeWaveBank) ||
+    while (mNextNerve == GET_NERVE(GameSystemSceneController, GameSystemSceneControllerChoosePlayerVoices) ||
            mNextNerve == GET_NERVE(GameSystemSceneController, GameSystemSceneControllerInitializeScene) ||
            mNextNerve == GET_NERVE(GameSystemSceneController, GameSystemSceneControllerInvalidateSystemWipe) ||
            mNextNerve == GET_NERVE(GameSystemSceneController, GameSystemSceneControllerReadyToStartScene)) {
@@ -334,14 +334,6 @@ bool GameSystemSceneController::isScenarioDecided() const {
     return mCurrSceneControlInfo.mScenarioNo > 0;
 }
 
-void GameSystemSceneController::loadScenarioWaveData() {
-    ::getAudioSystemWrapper()->loadScenarioWaveData(mCurrSceneControlInfo.mScene, mCurrSceneControlInfo.mStage, mCurrSceneControlInfo.mScenarioNo);
-}
-
-bool GameSystemSceneController::isLoadDoneScenarioWaveData() const {
-    return ::getAudioSystemWrapper()->isLoadDoneScenarioWaveData();
-}
-
 void GameSystemSceneController::exeNotInitialized() {
     if (mSpine->mStep == 0) {
         mIntermissionScene->setCurrentSceneControllerState("[system setup]");
@@ -358,7 +350,7 @@ void GameSystemSceneController::exeWaitDrawDoneScene() {
         if (mScene != nullptr) {
             pNerve = GET_NERVE(GameSystemSceneController, GameSystemSceneControllerDestroyScene);
         } else {
-            pNerve = GET_NERVE(GameSystemSceneController, GameSystemSceneControllerChangeWaveBank);
+            pNerve = GET_NERVE(GameSystemSceneController, GameSystemSceneControllerChoosePlayerVoices);
         }
     } else if (mScene != nullptr) {
         pNerve = GET_NERVE(GameSystemSceneController, GameSystemSceneControllerDestroySceneForDestroy);
@@ -374,7 +366,7 @@ void GameSystemSceneController::exeDestroyScene() {
         mIntermissionScene->setCurrentSceneControllerState("[destroy Scene: %s]", mCurrSceneControlInfo.mScene);
         destroyScene();
 
-        const Nerve* pNerve = GET_NERVE(GameSystemSceneController, GameSystemSceneControllerChangeWaveBank);
+        const Nerve* pNerve = GET_NERVE(GameSystemSceneController, GameSystemSceneControllerChoosePlayerVoices);
 
         if (isCurrentNerve(GET_NERVE(GameSystemSceneController, GameSystemSceneControllerDestroySceneForDestroy))) {
             pNerve = GET_NERVE(GameSystemSceneController, GameSystemSceneControllerDestroyed);
@@ -384,18 +376,9 @@ void GameSystemSceneController::exeDestroyScene() {
     }
 }
 
-void GameSystemSceneController::exeChangeWaveBank() {
-    if (mSpine->mStep == 0) {
-        mIntermissionScene->setCurrentSceneControllerState("[change Wave Data]");
-
-        bool isPlayerLuigi = GameSystemFunction::isCreatedGameDataHolder() ? MR::isPlayerLuigi() : false;
-
-        ::getAudioSystemWrapper()->loadStageWaveData(mNextSceneControlInfo.mScene, mNextSceneControlInfo.mStage, isPlayerLuigi);
-    }
-
-    if (::getAudioSystemWrapper()->isLoadDoneStageWaveData()) {
-        requestChangeNerve(GET_NERVE(GameSystemSceneController, GameSystemSceneControllerInitializeScene));
-    }
+void GameSystemSceneController::exeChoosePlayerVoices() {
+    ::getAudioSystemWrapper()->setPlayerLuigi(GameSystemFunction::isCreatedGameDataHolder() ? MR::isPlayerLuigi() : false);
+    requestChangeNerve(GET_NERVE(GameSystemSceneController, GameSystemSceneControllerInitializeScene));
 }
 
 void GameSystemSceneController::exeInitializeScene() {
@@ -516,7 +499,7 @@ const Nerve* GameSystemSceneController::getNextNerveOnResetProcessing() const {
         isCurrentNerve(GET_NERVE(GameSystemSceneController, GameSystemSceneControllerDestroySceneForDestroy)) ||
         isCurrentNerve(GET_NERVE(GameSystemSceneController, GameSystemSceneControllerDestroyed))) {
     } else if (isCurrentNerve(GET_NERVE(GameSystemSceneController, GameSystemSceneControllerDestroyScene)) ||
-               isCurrentNerve(GET_NERVE(GameSystemSceneController, GameSystemSceneControllerChangeWaveBank)) ||
+               isCurrentNerve(GET_NERVE(GameSystemSceneController, GameSystemSceneControllerChoosePlayerVoices)) ||
                isCurrentNerve(GET_NERVE(GameSystemSceneController, GameSystemSceneControllerNotInitialized))) {
         nextNerve = GET_NERVE(GameSystemSceneController, GameSystemSceneControllerDestroyed);
     } else if (isCurrentNerve(GET_NERVE(GameSystemSceneController, GameSystemSceneControllerWaitDrawDoneScene)) ||

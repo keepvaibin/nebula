@@ -21,7 +21,6 @@ public:
     bool isDone() const;
     void waitDone();
     void requestChangeArchivePlayer(bool);
-    void exeLoadAudio1stWaveData();
     void exeLoadStationedArchivePlayer();
     void exeLoadStationedArchiveOthers();
     void exeInitializeGameData();

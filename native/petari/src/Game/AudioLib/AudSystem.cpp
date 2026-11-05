@@ -29,7 +29,7 @@
 #include <JSystem/JAudio2/JASSoundParams.hpp>
 #include <JSystem/JAudio2/JAUAudioArcLoader.hpp>
 #include <JSystem/JAudio2/JAUInitializer.hpp>
-#include <JSystem/JAudio2/JAUSectionHeap.hpp>
+#include <JSystem/JAudio2/JAUAudioData.hpp>
 #include <JSystem/JAudio2/JAUSoundMgr.hpp>
 #include <JSystem/JAudio2/JAUStdSoundInfo.hpp>
 #include <JSystem/JGeometry/TVec.hpp>
@@ -49,7 +49,7 @@ const char sJaiSeqResArc[] = "/AudioRes/JaiSeq.arc";
 
 AudSystem* AudSystem::msBasic;
 
-AudSystem* AudNewAudSystem_(JAUSectionHeap* pHeap, AssetFolder* pChordArchive, AssetFolder* pMeArchive, AssetFolder* pRemixArchive, int maxChannels) {
+AudSystem* AudNewAudSystem_(JAUAudioData* pHeap, AssetFolder* pChordArchive, AssetFolder* pMeArchive, AssetFolder* pRemixArchive, int maxChannels) {
     AudSystem* system = new AudSystem(pHeap, pChordArchive, pMeArchive, pRemixArchive);
     system->mAudience.mMaxChannels = maxChannels;
     return system;
@@ -81,83 +81,49 @@ namespace {
     }
 };  // namespace
 
-namespace {
-    // A sequence block holds the largest of them.
-    u32 largestSequence(const AssetFolder* pArchive) {
-        u32 largest = 0;
-        AssetFolder::Item item;
-        for (u32 i = 0; pArchive->getItem(pArchive->getEntry(), i, &item); i++) {
-            if (item.mSize > largest) {
-                largest = item.mSize;
-            }
-        }
-
-        return largest;
-    }
-}  // namespace
-
 AudSystem* AudNewAudSystem(NebulaArena* pHeap, void* pV, AssetFolder* pSeqArchive, AssetFolder* pChordArchive, AssetFolder* pMeArchive,
                            AssetFolder* pRemixArchive) {
     NebulaArena* currHeap = NebulaArena::getCurrentHeap();
-    int maxNumSeq = ::init_JAS_JAI_(pHeap);
-    JAUSectionHeap* newHeap = JAUNewSectionHeap(true);
-    newHeap->getHeap()->becomeCurrentHeap();
+    ::init_JAS_JAI_(pHeap);
+    NebulaArena* soundHeap = NebulaArena::create(JASDram);
+    JAUAudioData* audioData = new (soundHeap, 0) JAUAudioData(soundHeap);
+    soundHeap->becomeCurrentHeap();
 
     if (pV == nullptr) {
         if (GameAssets::find(sAudioResFile) >= 0) {
-            JAUAudioArcLoader loader(newHeap);
+            JAUAudioArcLoader loader(audioData);
             loader.load(sAudioResFile);
         }
     } else {
-        JAUAudioArcLoader loader(newHeap);
+        JAUAudioArcLoader loader(audioData);
         loader.load(pV);
     }
+    audioData->loadAllWaves(AudSceneMgr::cPlayerVoiceBank);
 
-    u32 maxSeqDataSize = 0;
-    if (pSeqArchive == nullptr) {
-        if (GameAssets::find(sJaiSeqArc) >= 0) {
-            AssetFolder* seqArc = AssetFolder::mount(sJaiSeqArc, currHeap);
-            newHeap->setSeqDataArchive(seqArc);
-            maxSeqDataSize = largestSequence(seqArc);
-        } else {
-            maxNumSeq = 0;
-        }
-    } else {
-        newHeap->setSeqDataArchive(pSeqArchive);
-        maxSeqDataSize = largestSequence(pSeqArchive);
+    if (pSeqArchive == nullptr && GameAssets::find(sJaiSeqArc) >= 0) {
+        pSeqArchive = AssetFolder::mount(sJaiSeqArc, currHeap);
     }
+    audioData->setSeqArchive(pSeqArchive);
 
     if (pChordArchive == nullptr) {
-        pChordArchive = AssetFolder::mount(sJaiChordArc, newHeap->getHeap());
+        pChordArchive = AssetFolder::mount(sJaiChordArc, soundHeap);
     }
 
     if (pMeArchive == nullptr) {
-        pMeArchive = AssetFolder::mount(sJaiMeArc, newHeap->getHeap());
+        pMeArchive = AssetFolder::mount(sJaiMeArc, soundHeap);
     }
 
-    AudSystem* system = AudNewAudSystem_(newHeap, pChordArchive, pMeArchive, pRemixArchive, 1);
-    if (maxSeqDataSize != 0) {
-        newHeap->newDynamicSeqBlocks(maxSeqDataSize, maxNumSeq);
-    }
-
+    AudSystem* system = AudNewAudSystem_(audioData, pChordArchive, pMeArchive, pRemixArchive, 1);
     currHeap->becomeCurrentHeap();
-    newHeap->finishBuild();
 
     return system;
 }
 
-static JAUStdSoundInfo* newSoundInfo(JAUSection* pSection) {
-    JAUSection* heap = pSection;
-    NebulaArena* prevHeap = heap->getHeap_()->becomeCurrentHeap();
-
-    JAUDisposerObject_< JAUStdSoundInfo >* soundInfo = new JAUDisposerObject_< JAUStdSoundInfo >(true);
-
-    heap->get_C4().append(soundInfo);
-    prevHeap->becomeCurrentHeap();
-    return soundInfo;
+static JAUStdSoundInfo* newSoundInfo(JAUAudioData* pAudioData) {
+    return new (pAudioData->getHeap(), 0) JAUStdSoundInfo(true);
 }
 
-AudSystem::AudSystem(JAUSectionHeap* pSectionHeap, AssetFolder* pChordArchive, AssetFolder* pMeArchive, AssetFolder* pRemixArchive)
+AudSystem::AudSystem(JAUAudioData* pSectionHeap, AssetFolder* pChordArchive, AssetFolder* pMeArchive, AssetFolder* pRemixArchive)
     : mIsResetReady(), mIsReset(), mStopThreads(), _828(), mIsPaused(), _82A(), _82B(), _82C(), _830(-1), mSoundInfo(), mSectionHeap(pSectionHeap),
       mAudible(), mSystemSeObject(), mSystemMeObject(), mSceneMgr(), mRhythmMeSystem(), mRemixMgr(), mAudEffector(),
       mSeStrategyMgr(), mVolumeController(), mHomeButtonMenuState(), mHomeButtonToggleTime(-1), mPauseMenuState(), mPauseMenuToggleTime(-1),
@@ -171,7 +137,7 @@ AudSystem::AudSystem(JAUSectionHeap* pSectionHeap, AssetFolder* pChordArchive, A
         getSeMgr().setSeqDataMgr(seSeqDataMgr);
     }
 
-    JAISeqDataMgr* seqSeqDataMgr = pSectionHeap->getSeqSeqDataMgr();
+    JAISeqDataMgr* seqSeqDataMgr = pSectionHeap;
     if (seqSeqDataMgr != nullptr) {
         getSeqMgr().setSeqDataMgr(seqSeqDataMgr);
     }

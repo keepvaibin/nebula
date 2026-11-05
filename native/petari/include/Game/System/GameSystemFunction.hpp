@@ -1,8 +1,6 @@
 #pragma once
 
 namespace GameSystemFunction {
-    void loadAudioStaticWaveData();
-    bool isLoadedAudioStaticWaveData();
     void initAfterStationedResourceLoaded();
     void setSceneNameObjHolderToNameObjRegister();
     bool isCreatedGameDataHolder();
