@@ -556,7 +556,218 @@ pub fn material_source(record: &[u8]) -> Result<String> {
     let mut lines = Vec::new();
     emit_vertex(&p, &mut lines)?;
     emit_pixel(&p, &mut lines)?;
-    Ok(pixel_lit(format!("#include \"j3d_material.hlsli\"\n\n{}\n", lines.join("\n"))))
+    compact(&pixel_lit(format!("#include \"j3d_material.hlsli\"\n\n{}\n", lines.join("\n"))))
+}
+
+const SLOTS: [&str; 30] = [
+    "reg1", "reg2", "reg3", "kcolor0", "kcolor1", "kcolor2", "kcolor3", "mat_color0", "mat_color1", "amb_color0", "amb_color1",
+    "ind_mtx0", "ind_mtx1", "ind_mtx2", "ind_mtx3", "ind_mtx4", "ind_mtx5", "fog", "fog_color", "alpha_ref", "tex_scale0",
+    "tex_scale1", "tex_scale2", "tex_scale3", "tex_scale4", "tex_scale5", "tex_scale6", "tex_scale7", "ovr", "ovr_coord",
+];
+const WHITE: &str = "float4(1.0, 1.0, 1.0, 1.0)";
+const REGISTERS: [&str; 4] = ["prev", "r0", "r1", "r2"];
+
+fn has_word(line: &str, word: &str) -> bool {
+    let is_name = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
+    let bytes = line.as_bytes();
+    let mut from = 0;
+    while let Some(found) = line[from..].find(word) {
+        let at = from + found;
+        let end = at + word.len();
+        if (at == 0 || !is_name(bytes[at - 1])) && (end == bytes.len() || !is_name(bytes[end])) {
+            return true;
+        }
+        from = end;
+    }
+    false
+}
+
+/// A register's declaration: its name.
+fn register_declaration(line: &str) -> Option<&'static str> {
+    let rest = line.trim_start();
+    let rest = rest.strip_prefix("const ").unwrap_or(rest).strip_prefix("float4 ")?;
+    let (name, value) = rest.split_once(" = material.reg[")?;
+    let value = value.strip_suffix("];")?;
+    if value.len() != 1 || !value.as_bytes()[0].is_ascii_digit() {
+        return None;
+    }
+    REGISTERS.iter().find(|r| **r == name).copied()
+}
+
+/// Register declarations no line of their scope reads: the replacing pass's block, then the rest.
+fn drop_unused_registers(lines: Vec<&str>) -> Vec<&str> {
+    let begin = lines.iter().position(|x| x.contains("if (material.ovr.x != 0.0) {"));
+    let end = begin.and_then(|b| (b..lines.len()).find(|&n| lines[n].trim() == "}"));
+    let mut out = Vec::with_capacity(lines.len());
+    for (n, line) in lines.iter().enumerate() {
+        if let Some(name) = register_declaration(line) {
+            let scope: &[&str] = match (begin, end) {
+                (Some(b), Some(e)) if b < n && n < e => &lines[b..e],
+                (_, Some(e)) => &lines[e..],
+                _ => &lines[..],
+            };
+            if scope.iter().filter(|x| has_word(x, name)).count() <= 1 {
+                continue;
+            }
+        }
+        out.push(*line);
+    }
+    out
+}
+
+/// At `text`: `j3d_texel(i.uv[C], Cu)`: its coordinate and length.
+fn texel_call(text: &str) -> Option<(char, usize)> {
+    let rest = text.strip_prefix("j3d_texel(i.uv[")?;
+    let coord = rest.chars().next()?;
+    let end = rest.find("u)")?;
+    Some((coord, "j3d_texel(i.uv[".len() + end + 2))
+}
+
+/// After a texel call: ` / float2(A, B)` if it has one, then ` / material.tex_scale[M].zw`: that first part, the map and
+/// the whole length.
+fn sample_tail(text: &str) -> Option<(&str, char, usize)> {
+    let mut at = 0;
+    if let Some(rest) = text.strip_prefix(" / float2(") {
+        at = " / float2(".len() + rest.find(')')? + 1;
+    }
+    let rest = text[at..].strip_prefix(" / material.tex_scale[")?;
+    let map = rest.chars().next()?;
+    let rest = rest[map.len_utf8()..].strip_prefix("].zw")?;
+    Some((&text[..at], map, text.len() - rest.len()))
+}
+
+/// A coordinate's scale over the size of the one map it samples cancels: a plain coordinate. The others in texels.
+fn cancel_scales(text: &str) -> String {
+    let mut maps: std::collections::BTreeMap<char, std::collections::BTreeSet<char>> = Default::default();
+    let mut texels = std::collections::BTreeSet::new();
+    let mut from = 0;
+    while let Some(found) = text[from..].find("j3d_texel(") {
+        let at = from + found;
+        let Some((coord, len)) = texel_call(&text[at..]) else {
+            from = at + 1;
+            continue;
+        };
+        match sample_tail(&text[at + len..]) {
+            Some((_, map, _)) => {
+                maps.entry(coord).or_default().insert(map);
+            }
+            None => {
+                texels.insert(coord);
+            }
+        }
+        from = at + len;
+    }
+    let mut out = String::with_capacity(text.len());
+    let mut from = 0;
+    while let Some(found) = text[from..].find("j3d_texel(") {
+        let at = from + found;
+        out.push_str(&text[from..at]);
+        let Some((coord, len)) = texel_call(&text[at..]) else {
+            out.push_str("j3d_texel(");
+            from = at + "j3d_texel(".len();
+            continue;
+        };
+        from = at + len;
+        if let Some((part, _, whole)) = sample_tail(&text[from..]) {
+            if !texels.contains(&coord) && maps[&coord].len() == 1 {
+                out.push_str(&format!("j3d_coord(i.uv[{coord}]){part}"));
+                from += whole;
+                continue;
+            }
+        }
+        out.push_str(&format!("(j3d_coord(i.uv[{coord}]) * material.tex_scale[{coord}].xy)"));
+    }
+    out.push_str(&text[from..]);
+    out
+}
+
+/// A register read through its low 8 bits needs that only if it can hold more: whether a clamped stage wrote it.
+fn drop_wraps(text: &str) -> String {
+    let mut in_range: std::collections::BTreeMap<String, bool> = Default::default();
+    for (name, value) in [("prev", true), ("r0", false), ("r1", false), ("r2", false)] {
+        in_range.insert(format!("{name}.rgb"), value);
+        in_range.insert(format!("{name}.a"), value);
+    }
+    let (mut rc_clamped, mut ra_clamped) = (false, false);
+    let mut main = false;
+    let mut out = Vec::new();
+    for line in text.split('\n') {
+        let s = line.trim();
+        let mut line = line.to_string();
+        if s == format!("float4 prev = {WHITE};") {
+            main = true;
+        }
+        if main {
+            let reads = s.starts_with("const float3 rc = ") || s.starts_with("const float ra = ");
+            if reads {
+                for name in REGISTERS {
+                    for (field, part) in [("rgb", "rgb"), ("aaa", "a"), ("a", "a")] {
+                        if in_range[&format!("{name}.{part}")] {
+                            line = line.replace(&format!("j3d_in({name}.{field})"), &format!("{name}.{field}"));
+                        }
+                    }
+                }
+            }
+            if s.starts_with("const float3 rc = ") {
+                rc_clamped = s.starts_with("const float3 rc = saturate(");
+            }
+            if s.starts_with("const float ra = ") {
+                ra_clamped = s.starts_with("const float ra = saturate(");
+            }
+            if let Some(name) = REGISTERS.iter().find(|r| s == format!("{r}.rgb = rc;")) {
+                in_range.insert(format!("{name}.rgb"), rc_clamped);
+            }
+            if let Some(name) = REGISTERS.iter().find(|r| s == format!("{r}.a = ra;")) {
+                in_range.insert(format!("{name}.a"), ra_clamped);
+            }
+            if let Some(rest) = s.strip_prefix("prev = j3d_out(float4(").and_then(|r| r.strip_suffix("));")) {
+                if let Some((color, alpha)) = rest.split_once(", ") {
+                    if in_range.get(color) == Some(&true) && in_range.get(alpha) == Some(&true) {
+                        line = line.replace("j3d_out(float4(", "(float4(");
+                    }
+                }
+            }
+            if s == "prev = j3d_out(prev);" {
+                line = line.replace("j3d_out(prev)", "prev");
+            }
+        }
+        out.push(line);
+    }
+    out.join("\n")
+}
+
+/// The constants a material reads, from its text: `material.kcolor[2]` becomes `material.kcolor2`.
+fn name_constants(text: &str) -> String {
+    let mut out = text.to_string();
+    for (array, count) in [("reg", 4), ("kcolor", 4), ("mat_color", 2), ("amb_color", 2), ("ind_mtx", 6), ("tex_scale", 8)] {
+        for i in 0..count {
+            out = out.replace(&format!("material.{array}[{i}]"), &format!("material.{array}{i}"));
+        }
+    }
+    out
+}
+
+/// A generated material reduced to the constants it reads, with its own MaterialConstants (tools/dev/j3d_compact.py is the
+/// same in Python): coordinates lose the scale that cancels, registers the wrap they cannot need.
+fn compact(text: &str) -> Result<String> {
+    let text = text.replace("material.reg[0]", WHITE);
+    let text = drop_unused_registers(text.split('\n').collect()).join("\n");
+    let text = drop_wraps(&cancel_scales(&text));
+    let text = name_constants(&text);
+    let mut mask = 0u32;
+    let mut members = String::new();
+    for (n, slot) in SLOTS.iter().enumerate() {
+        let always = matches!(*slot, "fog" | "fog_color" | "ovr" | "ovr_coord");
+        if always || has_word(&text, &format!("material.{slot}")) {
+            mask |= 1 << n;
+            members.push_str(&format!("    float4 {slot};\n"));
+        }
+    }
+    const INCLUDE: &str = "#include \"j3d_material.hlsli\"";
+    if !text.contains(INCLUDE) {
+        bail!("a material without the framework");
+    }
+    Ok(text.replacen(INCLUDE, &format!("// constants 0x{mask:08x}\nstruct MaterialConstants {{\n{members}}};\n{INCLUDE}"), 1))
 }
 
 #[cfg(test)]
@@ -583,7 +794,9 @@ mod tests {
     #[test]
     fn a_plain_material_has_its_vertex_and_pixel_stage() {
         let text = material_source(&record()).unwrap();
-        assert!(text.starts_with("#include \"j3d_material.hlsli\"\n\nvoid material_vertex("));
+        assert!(text.starts_with("// constants 0x"));
+        assert!(text.contains("#include \"j3d_material.hlsli\"\n\nvoid material_vertex("));
+        assert!(text.contains("float4 fog_color;"));
         assert!(text.contains("const float4 c = float4(v.uv[0], 1.0, 1.0);"));
         assert!(text.contains("const float3 rc = (float3(0.0, 0.0, 0.0) + lerp(float3(0.0, 0.0, 0.0), t.rgb, ras.rgb));"));
         assert!(text.contains("prev.rgb = j3d_fog(prev.rgb, i.pos);"));

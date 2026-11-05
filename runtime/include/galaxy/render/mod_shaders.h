@@ -4,7 +4,7 @@
 // number past the built-in set is answered from here. One file per graphics interface, compiled when the mod was converted.
 //   Header: "NBSHADER", version u32, count u32, the shader interface it was compiled for (40 hexadecimal digits). Entry:
 //   material number u32 (as a cooked file holds it), variant u8, stage u8 (0 vertex, 1 pixel), 2 reserved, offset u64 from
-//   the file's start, size u64.
+//   the file's start, size u64. Then one u32 per entry: the material's constants (j3d_compact.py's slots).
 
 #include "galaxy/render/native_shaders.h"
 
@@ -21,6 +21,10 @@ enum class ModShadersResult { Loaded, Unreadable, OtherInterface };
 // interface differs (the headers changed since): the mod must be converted again.
 ModShadersResult load_mod_shaders(const std::filesystem::path& file);
 [[nodiscard]] NativeShaderBytes mod_shader_bytes(std::uint32_t shader, unsigned variant, bool pixel) noexcept;
+// A J3D material's constants: the built-in set's or a mod's (tools/dev/j3d_compact.py SLOTS). 0 when none is known.
+[[nodiscard]] std::uint32_t native_material_layout(std::uint32_t shader) noexcept;
+// The same from a material's source: the members of its struct MaterialConstants.
+[[nodiscard]] std::uint32_t material_layout_of_source(const std::string& source);
 // What building a mod's missing shaders came to.
 struct ModShaderBuild {
     unsigned wanted = 0;  // materials none of `brought` holds for this build

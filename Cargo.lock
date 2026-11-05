@@ -487,6 +487,7 @@ name = "nebula-import"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "encoding_rs",
  "jni-sys",
  "lewton",
  "nod",

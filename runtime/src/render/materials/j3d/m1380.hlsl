@@ -1,19 +1,30 @@
 // J3D material 1380 (tools/dev/gen_j3d_materials.py from the game's material set; E-04)
+// constants 0x30060289
+struct MaterialConstants {
+    float4 reg1;
+    float4 kcolor0;
+    float4 mat_color0;
+    float4 amb_color0;
+    float4 fog;
+    float4 fog_color;
+    float4 ovr;
+    float4 ovr_coord;
+};
 #include "j3d_material.hlsli"
 
 void j3d_channels(float3 eye, float3 nrm, float4 vtx0, float4 vtx1, out float4 lit0, out float4 lit1) {
     lit0 = vtx0;
     lit1 = vtx1;
-    lit0.rgb = material.mat_color[0].rgb;
-    lit0.a = material.mat_color[0].a * saturate((material.amb_color[0].a * 255.0 + j3d_light(2u, 3u, 1u, eye, nrm).a) / 255.0);
+    lit0.rgb = material.mat_color0.rgb;
+    lit0.a = material.mat_color0.a * saturate((material.amb_color0.a * 255.0 + j3d_light(2u, 3u, 1u, eye, nrm).a) / 255.0);
     lit1 = vtx1;
 }
 #if NATIVE_PIXEL_LIT
 void j3d_channels_enhanced(float3 eye, float3 nrm, float4 vtx0, float4 vtx1, out float4 lit0, out float4 lit1) {
     lit0 = vtx0;
     lit1 = vtx1;
-    lit0.rgb = material.mat_color[0].rgb;
-    lit0.a = material.mat_color[0].a * saturate((material.amb_color[0].a * 255.0 + j3d_light(2u, 3u, 1u, eye, nrm).a) / 255.0);
+    lit0.rgb = material.mat_color0.rgb;
+    lit0.a = material.mat_color0.a * saturate((material.amb_color0.a * 255.0 + j3d_light(2u, 3u, 1u, eye, nrm).a) / 255.0);
     lit1 = vtx1;
 }
 #endif
@@ -39,21 +50,17 @@ float4 material_color(NativeVaryings i) {
     [branch] if (material.ovr.x != 0.0) {
         const float4 t = float4(0.0, 0.0, 0.0, 0.0);
         const float4 ras = float4(0.0, 0.0, 0.0, 0.0);
-        const float4 prev = material.reg[0];
-        const float4 r0 = material.reg[1];
-        const float4 r1 = material.reg[2];
-        const float4 r2 = material.reg[3];
-        const float ka = material.kcolor[0].a;
-        return j3d_override(t, i.color, material.kcolor[0].a, saturate((r0.a + lerp(ras.a, ka, ras.a)) * 2.0), i.pos);
+        const float4 prev = float4(1.0, 1.0, 1.0, 1.0);
+        const float4 r0 = material.reg1;
+        const float ka = material.kcolor0.a;
+        return j3d_override(t, i.color, material.kcolor0.a, saturate((r0.a + lerp(ras.a, ka, ras.a)) * 2.0), i.pos);
     }
-    float4 prev = material.reg[0];
-    float4 r0 = material.reg[1];
-    float4 r1 = material.reg[2];
-    float4 r2 = material.reg[3];
+    float4 prev = float4(1.0, 1.0, 1.0, 1.0);
+    float4 r0 = material.reg1;
     {  // stage 0
         const float4 t = float4(0.0, 0.0, 0.0, 0.0);
         const float4 ras = i.color.rgba;
-        const float ka = material.kcolor[0].a;
+        const float ka = material.kcolor0.a;
         const float3 rc = saturate((float3(0.0, 0.0, 0.0) + lerp(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0))));
         const float ra = saturate((r0.a + lerp(ras.a, ka, ras.a)) * 2.0);
         prev.rgb = rc;
@@ -62,13 +69,13 @@ float4 material_color(NativeVaryings i) {
     {  // stage 1
         const float4 t = float4(0.0, 0.0, 0.0, 0.0);
         const float4 ras = i.color.rgba;
-        const float3 k = float4(material.kcolor[0].rgb, 0.0).rgb;
-        const float3 rc = saturate((float3(0.0, 0.0, 0.0) + lerp(float3(0.0, 0.0, 0.0), k.rgb, j3d_in(prev.aaa))) * 2.0);
-        const float ra = saturate((0.0 + lerp(j3d_in(prev.a), 0.0, 0.0)) * 4.0);
+        const float3 k = float4(material.kcolor0.rgb, 0.0).rgb;
+        const float3 rc = saturate((float3(0.0, 0.0, 0.0) + lerp(float3(0.0, 0.0, 0.0), k.rgb, prev.aaa)) * 2.0);
+        const float ra = saturate((0.0 + lerp(prev.a, 0.0, 0.0)) * 4.0);
         prev.rgb = rc;
         prev.a = ra;
     }
-    prev = j3d_out(float4(prev.rgb, prev.a));
+    prev = (float4(prev.rgb, prev.a));
 #if NATIVE_PIXEL_LIT
     if (j3d_enhanced()) prev.rgb = enh_finish(prev.rgb, g_enh);
 #endif
