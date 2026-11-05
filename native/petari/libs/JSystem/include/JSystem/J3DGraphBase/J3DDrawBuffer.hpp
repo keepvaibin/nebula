@@ -31,21 +31,16 @@ enum J3DDrawBufSortMode {
     J3DDrawBufSortMode_MAX,
 };
 
+// A frame's material packets as a flat list, as long as it needs to be, in the order the sort mode asks for when drawn.
 class J3DDrawBuffer {
 public:
     typedef int (J3DDrawBuffer::*sortFunc)(J3DMatPacket*);
-    typedef void (J3DDrawBuffer::*drawFunc)() const;
 
     J3DDrawBuffer() {
         initialize();
     }
-    inline J3DDrawBuffer(u32 bufferSize) {
-        initialize();
-        allocBuffer(bufferSize);
-    }
     ~J3DDrawBuffer();
     void initialize();
-    int allocBuffer(u32);
     void frameInit();
     int entryMatSort(J3DMatPacket*);
     int entryMatAnmSort(J3DMatPacket*);
@@ -53,19 +48,12 @@ public:
     int entryModelSort(J3DMatPacket*);
     int entryInvalidSort(J3DMatPacket*);
     int entryNonSort(J3DMatPacket*);
-    int entryImm(J3DPacket* pPacket, u16 index);
-    void draw() const;
-    void drawHead() const;
-    void drawTail() const;
+    void draw();
 
-    u32 getEntryTableSize() {
-        return mEntryTableSize;
-    }
     int getSortMode() {
         return mSortMode;
     }
 
-    inline void calcZRatio();
     void setNonSort() {
         mSortMode = J3DDrawBufSortMode_Non;
     }
@@ -76,17 +64,25 @@ public:
         mpZMtx = mtx;
     }
 
-    J3DPacket** mpBuffer;
-    u32 mEntryTableSize;
+    struct Entry {
+        u64 mKey;
+        J3DMatPacket* mPacket;
+    };
+
     u32 mDrawMode;
     u32 mSortMode;
-    f32 mZNear;
-    f32 mZFar;
-    f32 mZRatio;
     MtxPtr mpZMtx;
     J3DPacket* mpCallBackPacket;
 
     static sortFunc sortFuncTable[6];
-    static drawFunc drawFuncTable[2];
     static int entryNum;
+
+private:
+    void add(u64 key, J3DMatPacket* pPacket);
+    void sort();
+
+    Entry* mEntries;
+    Entry* mScratch;
+    u32 mEntryCount;
+    u32 mEntryRoom;
 };
