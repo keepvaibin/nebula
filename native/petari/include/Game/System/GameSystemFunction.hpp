@@ -21,7 +21,6 @@ namespace GameSystemFunction {
     void resetCurrentScenarioNo();
     bool isPrepareResetSaveDataHandleSequence();
     void restoreFromResetSaveDataHandleSequence();
-    bool isPermitToResetAudioSystem();
     void prepareResetAudioSystem();
     void requestResetAudioSystem(bool);
     bool isDoneResetAudioSystem();

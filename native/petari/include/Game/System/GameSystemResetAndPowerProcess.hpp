@@ -26,20 +26,18 @@ public:
     bool isActive() const;
     void setResetOperationApplicationReset();
     void setResetOperationQuit();
-    void requestReset(bool);
-    void requestQuitGame(bool);
+    void requestReset(bool isImmediate);
+    void requestQuitGame(bool isImmediate);
+    void beginFadeOut(bool isImmediate);
     void exeIdle();
-    void exeWaitResetPermitted();
     void exePrepareReset();
     void exeReset();
     void exeWaitPrepareFadein();
     void exeFadein();
     void exitApplication();
     bool tryPermitReset();
-    bool isResetAcceptAudio() const;
 
     ValueControl* mFadeinoutControl;
     NebulaAtomic< s32 > mResetOperation;
     bool _5C;
-    bool _5E;
 };
