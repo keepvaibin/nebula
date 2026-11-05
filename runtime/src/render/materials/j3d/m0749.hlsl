@@ -17,7 +17,7 @@ struct MaterialConstants {
 
 void material_vertex(NativeVertex v, inout NativeVaryings o) {
 #if NATIVE_PIXEL_LIT
-    const uint nq = v.pn_row & 31u;
+    const uint nq = v.pn_row;
     const float3 nt = float3(dot(native_normal_row(nq).xyz, v.nrm), dot(native_normal_row(nq + 1u).xyz, v.nrm), dot(native_normal_row(nq + 2u).xyz, v.nrm));
     const float3 nrm = dot(nt, nt) > 0.0 ? normalize(nt) : nt;
     o.lit_eye = v.eye;

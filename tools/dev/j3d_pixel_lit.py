@@ -12,7 +12,7 @@ import sys
 CHANNEL = re.compile(r"^    o\.color1?(?:\.[a-z]+)? = .*;$", re.M)
 LIT = re.compile(r"^    o\.color\.rgb = (.*?) \* saturate\(\((.*?) \* 255\.0 \+ (.*?)\) / 255\.0\);$")
 LIGHT = re.compile(r"j3d_light\((\d+)u, (\d+)u, (\d+)u, v\.eye, nrm\)\.rgb")
-NORMAL_ROWS = """    const uint nq = v.pn_row & 31u;
+NORMAL_ROWS = """    const uint nq = v.pn_row;
     const float3 nt = float3(dot(native_normal_row(nq).xyz, v.nrm), dot(native_normal_row(nq + 1u).xyz, v.nrm), dot(native_normal_row(nq + 2u).xyz, v.nrm));
     const float3 nrm = dot(nt, nt) > 0.0 ? normalize(nt) : nt;
 """

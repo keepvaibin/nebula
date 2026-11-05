@@ -34,7 +34,7 @@ float2 normal_map_coord(NativeVertex v, uint i) {
 }
 
 void material_vertex(NativeVertex v, inout NativeVaryings o) {
-    const uint nq = v.pn_row & 31u;
+    const uint nq = v.pn_row;
     const float3 nt = float3(dot(native_normal_row(nq).xyz, v.nrm), dot(native_normal_row(nq + 1u).xyz, v.nrm),
                              dot(native_normal_row(nq + 2u).xyz, v.nrm));
     const float3 nrm = dot(nt, nt) > 0.0 ? normalize(nt) : nt;

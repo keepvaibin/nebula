@@ -120,7 +120,7 @@ fn emit_channels(p: &Program, out: &mut Vec<String>) {
     let chans = p.channels();
     let lit_any = (0..2 * chans.min(2)).any(|k| p.channel(k)[0] != 0);
     if lit_any {
-        out.push("    const uint nq = v.pn_row & 31u;".into());
+        out.push("    const uint nq = v.pn_row;".into());
         out.push("    const float3 nt = float3(dot(native_normal_row(nq).xyz, v.nrm), dot(native_normal_row(nq + 1u).xyz, v.nrm), dot(native_normal_row(nq + 2u).xyz, v.nrm));".into());
         out.push("    const float3 nrm = dot(nt, nt) > 0.0 ? normalize(nt) : nt;".into());
     }
@@ -376,7 +376,7 @@ fn emit_pixel(p: &Program, out: &mut Vec<String>) -> Result<()> {
     Ok(())
 }
 
-const CHANNEL_NORMAL_ROWS: &str = "    const uint nq = v.pn_row & 31u;\n    const float3 nt = float3(dot(native_normal_row(nq).xyz, v.nrm), dot(native_normal_row(nq + 1u).xyz, v.nrm), dot(native_normal_row(nq + 2u).xyz, v.nrm));\n    const float3 nrm = dot(nt, nt) > 0.0 ? normalize(nt) : nt;\n";
+const CHANNEL_NORMAL_ROWS: &str = "    const uint nq = v.pn_row;\n    const float3 nt = float3(dot(native_normal_row(nq).xyz, v.nrm), dot(native_normal_row(nq + 1u).xyz, v.nrm), dot(native_normal_row(nq + 2u).xyz, v.nrm));\n    const float3 nrm = dot(nt, nt) > 0.0 ? normalize(nt) : nt;\n";
 
 fn is_channel_line(line: &str) -> bool {
     let Some(rest) = line.strip_prefix("    o.color") else {

@@ -265,7 +265,7 @@ def emit_channels(p, out):
     chans = p["channels"]
     lit_any = any(p["channel"][k][0] for k in range(2 * min(chans, 2)))
     if lit_any:
-        out.append("    const uint nq = v.pn_row & 31u;")
+        out.append("    const uint nq = v.pn_row;")
         out.append("    const float3 nt = float3(dot(native_normal_row(nq).xyz, v.nrm), dot(native_normal_row(nq + 1u).xyz,"
                    " v.nrm), dot(native_normal_row(nq + 2u).xyz, v.nrm));")
         out.append("    const float3 nrm = dot(nt, nt) > 0.0 ? normalize(nt) : nt;")
