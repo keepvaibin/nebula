@@ -126,15 +126,6 @@ void J3DModel::unlock() {
     }
 }
 
-void J3DModel::calcAllMaterials() {
-    j3dSys.setModel(this);
-    u16 matNum = mModelData->getMaterialNum();
-    for (u16 i = 0; i < matNum; i++) {
-        J3DMaterial* material = mMaterials[i];
-        material->calc();
-    }
-}
-
 void J3DModel::calcMaterial() {
     j3dSys.setModel(this);
     u16 matNum = mModelData->getMaterialNum();

@@ -44,7 +44,6 @@ public:
     void prepareShapePackets();
     void ptrToIndex();
     // Every material's matrices, once when the model is made.
-    void calcAllMaterials();
     virtual void update();
     virtual void entry();
     virtual void calc();

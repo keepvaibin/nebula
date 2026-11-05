@@ -447,7 +447,6 @@ namespace MR {
         (MR::MutexHolder< 0 >::sMutex).lock();
         NebulaMtxCopy(mtx, j3dSys.mViewMtx);
         newModel->calc();
-        newModel->calcAllMaterials();
         newModel->viewCalc();
         newModel->viewCalc();
         (MR::MutexHolder< 0 >::sMutex).unlock();

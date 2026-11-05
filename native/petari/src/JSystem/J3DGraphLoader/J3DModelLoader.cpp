@@ -399,6 +399,7 @@ void J3DModelLoader_v26::readMaterial(J3DMaterialBlock const* i_block, u32 i_fla
 void J3DModelLoader::finishMaterials() {
     for (u16 i = 0; i < mpMaterialTable->mMaterialNum; i++) {
         mpMaterialTable->mMaterialNodePointer[i]->mTexture = mpMaterialTable->mTexture;
+        mpMaterialTable->mMaterialNodePointer[i]->calc();
     }
 }
 
