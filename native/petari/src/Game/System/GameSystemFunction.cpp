@@ -40,14 +40,6 @@ namespace {
 };  // namespace
 
 namespace GameSystemFunction {
-    void loadAudioStaticWaveData() {
-        ::getAudSystemWrapper()->loadStaticWaveData();
-    }
-
-    bool isLoadedAudioStaticWaveData() {
-        return ::getAudSystemWrapper()->isLoadDoneStaticWaveData();
-    }
-
     void initAfterStationedResourceLoaded() {
         SingletonHolder< GameSystem >::get()->initAfterStationedResourceLoaded();
     }

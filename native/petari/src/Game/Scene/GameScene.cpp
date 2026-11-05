@@ -207,7 +207,6 @@ void GameScene::initAfterScenarioChosen() {
         SceneFunction::startActorPlacement();
         // Nebula's Achievement Luma joins the Observatory's own actors.
         NebulaAchievementLuma::tryCreate();
-        GameSceneFunction::loadScenarioWaveData();
         MR::createStarPiece();
         MR::completeCameraParameters();
         MR::initStarPointerGameScene();

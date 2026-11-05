@@ -17,13 +17,10 @@ public:
     void updateRhythm();
     void movement();
     void stopAllSound(u32);
-    bool isLoadDoneWaveDataAtSystemInit() const;
-    void loadStaticWaveData();
-    bool isLoadDoneStaticWaveData() const;
-    void loadStageWaveData(const char*, const char*, bool);
-    bool isLoadDoneStageWaveData() const;
-    void loadScenarioWaveData(const char*, const char*, s32);
-    bool isLoadDoneScenarioWaveData() const;
+    void setPlayerLuigi(bool);
+    bool isCreated() const {
+        return mAudSystem != nullptr;
+    }
     bool isPermitToReset() const;
     void prepareReset();
     void requestReset(bool);
