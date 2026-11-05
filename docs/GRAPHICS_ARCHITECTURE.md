@@ -48,7 +48,7 @@ Depth is reversed. Rows of differences this made are in the project's look-chang
 
 ## Pipelines
 
-810 known pipelines (`pipeline_seeds.inc`, from tours by `tools/dev/pipeline_seed.py`) are built on two background threads at start
+748 known pipelines (`pipeline_seeds.inc`, from tours by `tools/dev/pipeline_seed.py`) are built on two background threads at start
 (`[pipelines] N prepared at T ms`). Anything else is created at its first draw, synchronously, on the render thread.
 
 ## Failure
