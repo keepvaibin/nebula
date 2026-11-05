@@ -289,6 +289,10 @@ namespace MR {
             }
 
             J3DShape* shape = material->getShape();
+            if (isUseEnvMap) {
+                shape->mNormalAsTexture = true;
+            }
+
             for (u32 idx = 0; idx < 8; idx++) {
                 J3DTexCoord* texCoord = material->getTexCoord(idx);
                 if (texCoord->getTexGenSrc() == 1) {

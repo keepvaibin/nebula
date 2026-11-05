@@ -31,6 +31,7 @@ void J3DShape::initialize() {
     mCurrentViewNo = &j3dDefaultViewNo;
     mHasNBT = false;
     mHasPNMTXIdx = false;
+    mNormalAsTexture = false;
     mNebulaRegistered = false;
     mNebulaWhole = false;
 }
@@ -104,7 +105,11 @@ void J3DShape::drawGroups(void (*pCallback)(J3DShape*)) const {
     }
     for (u16 n = mMtxGroupNum, i = 0; i < n; i++) {
         if (mShapeDraw[i] != nullptr) {
-            J3DNativeShape::setPalette(palette, mShapeMtx[i] != nullptr && !mShapeMtx[i]->isMulti() ? mShapeMtx[i]->getUseMtxIndex(0) : 0);
+            const bool single = mShapeMtx[i] != nullptr && !mShapeMtx[i]->isMulti();
+            J3DNativeShape::setPalette(palette, single ? mShapeMtx[i]->getUseMtxIndex(0) : 0);
+            if (single && mNormalAsTexture) {
+                J3DNativeShape::setNormal33Texture(0, mNrmMtx[*mCurrentViewNo][mShapeMtx[i]->getUseMtxIndex(0)]);
+            }
             mShapeDraw[i]->draw();
         }
     }

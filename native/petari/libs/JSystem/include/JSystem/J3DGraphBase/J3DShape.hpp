@@ -215,6 +215,7 @@ public:
     J3DShapeDraw** mShapeDraw;
     J3DCurrentMtx mCurrentMtx;
     bool mHasPNMTXIdx;
+    bool mNormalAsTexture;
     J3DVertexData* mVertexData;
     J3DDrawMtxData* mDrawMtxData;
     Mtx** mDrawMtx;
