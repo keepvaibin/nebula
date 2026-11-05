@@ -58,8 +58,6 @@ public:
 
     J3DSys();
 
-    void loadPosMtxIndx(int, u16) const;
-    void loadNrmMtxIndx(int, u16) const;
     void drawInit();
     void resetDrawState();
     void reinitGenMode();

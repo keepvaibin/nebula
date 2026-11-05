@@ -298,7 +298,7 @@ namespace J3DNativeShape {
         for (u16 g = 0; g < pShape->mMtxGroupNum; g++) {
             const J3DShapeDraw* pDraw = pShape->mShapeDraw[g];
             const J3DShapeMtx* pMtx = pShape->mShapeMtx[g];
-            if (pDraw == nullptr || pMtx == nullptr || pMtx->getType() != 'SMMC') {
+            if (pDraw == nullptr || pMtx == nullptr || !pMtx->isMulti()) {
                 continue;
             }
             const u32 used = pMtx->getUseMtxNum();

@@ -17,11 +17,9 @@ enum J3DModelLoaderFlagTypes {
     J3DMLF_MtxTypeMask =
         J3DMLF_MtxSoftImageCalc | J3DMLF_MtxMayaCalc | J3DMLF_MtxBasicCalc | J3DMLF_04,  // 0 - 2 (0 = Basic, 1 = SoftImage, 2 = Maya)
 
-    J3DMLF_UseImmediateMtx = 0x00000010,
     J3DMLF_UsePostTexMtx = 0x00000020,
     J3DMLF_07 = 0x00000040,
     J3DMLF_08 = 0x00000080,
-    J3DMLF_NoMatrixTransform = 0x00000100,
     J3DMLF_10 = 0x00000200,
     J3DMLF_11 = 0x00000400,
     J3DMLF_12 = 0x00000800,
@@ -228,6 +226,3 @@ static inline u32 getMdlDataFlag_OutputFlag(u32 flags) {
     return flags & 0x30000000;
 }
 
-static inline u32 getMdlDataFlag_MtxLoadType(u32 flags) {
-    return flags & 0x10;
-}

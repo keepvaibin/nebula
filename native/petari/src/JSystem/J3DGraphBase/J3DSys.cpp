@@ -58,15 +58,6 @@ J3DSys::J3DSys() {
     }
 }
 
-// The model's draw and normal matrices `indx` into matrix slot `addr` (the next shape draw carries them).
-void J3DSys::loadPosMtxIndx(int addr, u16 indx) const {
-    J3DNativeShape::setPosition(addr, mModelDrawMtx[indx], indx + 1);
-}
-
-void J3DSys::loadNrmMtxIndx(int addr, u16 indx) const {
-    J3DNativeShape::setNormal33(addr, mModelNrmMtx[indx], indx + 1);
-}
-
 void J3DSys::drawInit() {
     reinitTexture();
 

@@ -1,11 +1,14 @@
 #include "JSystem/J3DGraphBase/J3DShape.hpp"
 #include "JSystem/J3DGraphBase/J3DNativeShape.hpp"
 #include "JSystem/J3DGraphBase/J3DShapeMtx.hpp"
+#include "JSystem/J3DGraphAnimator/J3DModel.hpp"
 #include "JSystem/J3DGraphBase/J3DPacket.hpp"
 #include "JSystem/J3DGraphBase/J3DShapeDraw.hpp"
 #include "JSystem/J3DGraphBase/J3DSys.hpp"
 #include "JSystem/J3DGraphBase/J3DVertex.hpp"
+#include "JSystem/J3DGraphBase/J3DTransform.hpp"
 #include <stdint.h>
+#include <string.h>
 
 void J3DShape::initialize() {
     mMaterial = nullptr;
@@ -23,7 +26,6 @@ void J3DShape::initialize() {
     mShapeDraw = nullptr;
     mVertexData = nullptr;
     mDrawMtxData = nullptr;
-    mScaleFlagArray = nullptr;
     mDrawMtx = nullptr;
     mNrmMtx = nullptr;
     mCurrentViewNo = &j3dDefaultViewNo;
@@ -49,9 +51,18 @@ void J3DShape::addTexMtxIndex(u32 coord, u32 valueBase) {
     }
 }
 
-void J3DShape::calcNBTScale(const Vec& param_0, f32 (*param_1)[3][3], f32 (*param_2)[3][3]) {
-    for (u16 i = 0; i < mMtxGroupNum; i++)
-        mShapeMtx[i]->calcNBTScale(param_0, param_1, param_2);
+// The normal matrices this shape reads, scaled for its bump map, into `pBump`.
+void J3DShape::calcNBTScale(const Vec& rScale, f32 (*pNormal)[3][3], f32 (*pBump)[3][3]) {
+    for (u16 g = 0; g < mMtxGroupNum; g++) {
+        const J3DShapeMtx* pMtx = mShapeMtx[g];
+        for (u16 k = 0; k < pMtx->getUseMtxNum(); k++) {
+            const u16 index = pMtx->getUseMtxIndex(k);
+            if (index != 0xFFFF) {
+                memcpy(pBump[index], pNormal[index], sizeof(pBump[index]));
+                J3DScaleNrmMtx33(pBump[index], rScale);
+            }
+        }
+    }
 }
 
 u16 J3DShape::countBumpMtxNum() const {
@@ -75,40 +86,32 @@ void J3DShape::loadPreDrawSetting() const {
     mCurrentMtx.load();
 }
 
-void J3DShape::setArrayAndBindPipeline() const {
-    j3dSys.setModelDrawMtx(mDrawMtx[*mCurrentViewNo]);
-    j3dSys.setModelNrmMtx(mNrmMtx[*mCurrentViewNo]);
-    J3DShapeMtx::sCurrentScaleFlag = mScaleFlagArray;
-    J3DShapeMtx::sNBTFlag = mHasNBT;
-    sEnvelopeFlag = mHasPNMTXIdx;
-    J3DShapeMtx::sTexMtxLoadType = getTexMtxLoadType();
-}
-
-void J3DShape::drawFast() const {
+void J3DShape::drawGroups(void (*pCallback)(J3DShape*)) const {
     prepareGeometry();
     if (sEnvelopeFlag != 0 && !mHasPNMTXIdx)
         mCurrentMtx.load();
-
-    setArrayAndBindPipeline();
-    if (mNebulaWhole && !checkFlag(J3DShpFlag_NoMtx) &&
-        sTexMtxLoadTypeIsPlain()) {
-        mShapeMtx[0]->load();
+    sEnvelopeFlag = mHasPNMTXIdx;
+    loadPacketMatrices();
+    J3DShape* pSelf = const_cast< J3DShape* >(this);
+    const u32 palette = j3dSys.getModel()->drawPalette(mDrawMtx[*mCurrentViewNo], mNrmMtx[*mCurrentViewNo]);
+    if (pCallback != nullptr) {
+        pCallback(pSelf);
+    }
+    if (mNebulaWhole) {
+        J3DNativeShape::setPalette(palette, 0);
         J3DNativeShape::drawWhole(this);
-    } else if (!checkFlag(J3DShpFlag_NoMtx)) {
-        for (u16 n = mMtxGroupNum, i = 0; i < n; i++) {
-            if (mShapeMtx[i] != nullptr)
-                mShapeMtx[i]->load();
-            if (mShapeDraw[i] != nullptr)
-                mShapeDraw[i]->draw();
-        }
-    } else {
-        J3DNativeShape::setPosition(0, *j3dSys.getShapePacket()->getBaseMtxPtr());
-        J3DNativeShape::setNormal(0, *j3dSys.getShapePacket()->getBaseMtxPtr());
-        for (u16 n = mMtxGroupNum, i = 0; i < n; i++) {
-            if (mShapeDraw[i] != nullptr)
-                mShapeDraw[i]->draw();
+        return;
+    }
+    for (u16 n = mMtxGroupNum, i = 0; i < n; i++) {
+        if (mShapeDraw[i] != nullptr) {
+            J3DNativeShape::setPalette(palette, mShapeMtx[i] != nullptr && !mShapeMtx[i]->isMulti() ? mShapeMtx[i]->getUseMtxIndex(0) : 0);
+            mShapeDraw[i]->draw();
         }
     }
+}
+
+void J3DShape::drawFast() const {
+    drawGroups();
 }
 
 void J3DShape::draw() const {

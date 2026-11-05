@@ -131,11 +131,6 @@ J3DModelData* J3DModelLoader::load(void const* i_data, u32 i_flags) {
     mpModelData->makeHierarchy(NULL, &hierarchy);
     mpModelData->getJointTree().findImportantMtxIndex();
     setupBBoardInfo();
-    if (mpModelData->getFlag() & 0x100) {
-        for (u16 shape_no = 0; shape_no < mpModelData->getShapeNum(); shape_no++) {
-            mpModelData->getShapeNodePointer(shape_no)->onFlag(0x200);
-        }
-    }
     return mpModelData;
 }
 

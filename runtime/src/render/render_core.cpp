@@ -1482,6 +1482,9 @@ void RenderCore::take_attached_shape_records(FrameChunk& chunk) {
         chunk.record_pool.matrices.swap(producer_record_pool_.matrices);
         chunk.record_pool.ops.swap(producer_record_pool_.ops);
         chunk.record_pool.natives.swap(producer_record_pool_.natives);
+        const std::size_t palette_rows = producer_record_pool_.palette_rows.size();
+        chunk.record_pool.palette_rows.swap(producer_record_pool_.palette_rows);
+        producer_record_pool_.palette_rows.reserve(palette_rows);
         producer_record_pool_.matrices.reserve(matrices);
         producer_record_pool_.ops.reserve(ops);
         producer_record_pool_.natives.reserve(natives);
@@ -1507,6 +1510,10 @@ void RenderCore::take_attached_shape_records(FrameChunk& chunk) {
     chunk.record_pool.probes.insert(chunk.record_pool.probes.end(), producer_record_pool_.probes.begin(), producer_record_pool_.probes.end());
     producer_record_pool_.probes.clear();
     chunk.record_pool.natives.insert(chunk.record_pool.natives.end(), producer_record_pool_.natives.begin(), producer_record_pool_.natives.end());
+    const auto first_palette_row = static_cast<std::uint32_t>(chunk.record_pool.palette_rows.size());
+    chunk.record_pool.palette_rows.insert(chunk.record_pool.palette_rows.end(), producer_record_pool_.palette_rows.begin(),
+                                          producer_record_pool_.palette_rows.end());
+    producer_record_pool_.palette_rows.clear();
     producer_record_pool_.matrices.clear();
     producer_record_pool_.ops.clear();
     producer_record_pool_.natives.clear();
@@ -1514,6 +1521,7 @@ void RenderCore::take_attached_shape_records(FrameChunk& chunk) {
     for (shapes::Record& record : producer_shape_records_) {
         record.matrix_first += first_matrix;
         record.op_first += first_op;
+        record.palette_first += first_palette_row;
         record.vertex_first += record.kind == shapes::Record::Kind::Readback ? first_probe
                                : (record.attributes & shapes::kReadyCorners) != 0u ? first_corner
                                                                                    : first_vertex;
@@ -5212,7 +5220,7 @@ void RenderCore::draw_record_shape(const shapes::Record& record) {
             shape.object_slots.clear();
             if (shapes::expand(geometry, arrays, position_matrix, shape.curved.get(), expand_scratch_)) {
                 for (const RenderVertex& v : expand_scratch_) {
-                    const std::uint32_t row = v.mtx_indices[0] & 0xFFu;
+                    const std::uint32_t row = v.mtx_indices[0];
                     auto slot = std::find_if(shape.object_slots.begin(), shape.object_slots.end(),
                                              [row](const ao::ObjectSlot& s) { return s.row == row; });
                     if (slot == shape.object_slots.end()) {
@@ -5230,8 +5238,12 @@ void RenderCore::draw_record_shape(const shapes::Record& record) {
                 }
             }
         }
-        ao_objects_.add(keys[0], shape.object_slots,
-                        [this](std::uint32_t row, std::uint32_t column) { return matrices_.matrix_value(row, column); });
+        // Its position matrices: in its model's block, a shape of one matrix naming it per draw.
+        const std::uint32_t block_row = (geometry.attributes & (shapes::kModelMatrices | shapes::kPositionMatrix)) != 0u ? 0u : draw_palette_row_;
+        ao_objects_.add(keys[0], shape.object_slots, [this, block_row](std::uint32_t row, std::uint32_t column) {
+            return draw_palette_ != nullptr ? model_palette_rows_[draw_palette_->first + (block_row + row) * 4u + column]
+                                            : matrices_.matrix_value(row, column);
+        });
     }
 
     RecordVertexInputs inputs;

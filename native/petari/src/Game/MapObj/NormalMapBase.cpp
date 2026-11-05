@@ -347,16 +347,8 @@ void NormalMapBase::drawShape(J3DModel* pModel, J3DShape* pShape) const {
     for (u16 i = 0; i < groupCount; i++) {
         if (pShape->getShapeDraw(i)) {
             J3DShapeMtx* pShapeMtx = pShape->getShapeMtx(i);
-            u16 count = pShapeMtx->getUseMtxNum();
-            for (u16 j = 0; j < count; j++) {
-                u16 index = pShapeMtx->getUseMtxIndex(j);
-                if (index != 0xFFFF) {
-                    MtxPtr pMtx = pModel->getDrawMtx(index);
-                    J3DNativeShape::setPosition(j, pMtx);
-                    J3DNativeShape::setNormal(j, pMtx);
-                }
-            }
-
+            J3DNativeShape::setPalette(pModel->drawPalette(pModel->getDrawMtxPtr(), pModel->getNrmMtxPtr()),
+                                       pShapeMtx->isMulti() ? 0 : pShapeMtx->getUseMtxIndex(0));
             pShape->getShapeDraw(i)->draw();
         }
     }

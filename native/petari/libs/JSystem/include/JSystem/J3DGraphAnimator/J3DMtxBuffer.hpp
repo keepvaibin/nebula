@@ -18,7 +18,6 @@ public:
     s32 create(J3DModelData*, u32);
     J3DError createAnmMtx(J3DModelData*);
     s32 createWeightEnvelopeMtx(J3DModelData*);
-    s32 setNoUseDrawMtx();
     s32 createDoubleDrawMtx(J3DModelData*, u32);
     s32 createBumpMtxArray(J3DModelData*, u32);
     void calcWeightEnvelopeMtx();
@@ -105,11 +104,6 @@ public:
         mpNrmMtxArr[0][mCurrentViewNo] = mpNrmMtxArr[1][mCurrentViewNo];
         mpNrmMtxArr[1][mCurrentViewNo] = tmp;
     }
-
-    static Mtx sNoUseDrawMtx;
-    static Mtx33 sNoUseNrmMtx;
-    static Mtx* sNoUseDrawMtxPtr;
-    static Mtx33* sNoUseNrmMtxPtr;
 
     J3DJointTree* mJointTree;
     u8* mpScaleFlagArr;

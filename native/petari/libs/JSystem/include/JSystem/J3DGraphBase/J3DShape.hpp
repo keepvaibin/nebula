@@ -14,7 +14,6 @@ enum J3DShpFlag {
     J3DShpFlag_Visible = 0x0001,
     J3DShpFlag_Hidden = 0x0010,
     J3DShpFlag_EnableLod = 0x0100,
-    J3DShpFlag_NoMtx = 0x0200,
 };
 
 class J3DCurrentMtxInfo {
@@ -65,38 +64,24 @@ public:
     u8 mTexture[8];
 };
 
-typedef void (J3DShapeMtx::*J3DShapeMtx_LoadFunc)(int, u16) const;
-
+// The matrix of a group of one, in its model's draw matrices.
 class J3DShapeMtx {
 public:
     J3DShapeMtx(u16 useMtxIndex) : mUseMtxIndex(useMtxIndex) {
     }
 
-    void loadMtxIndx_PNGP(int, u16) const;
-    void loadMtxIndx_PCPU(int, u16) const;
-    void loadMtxIndx_NCPU(int, u16) const;
-    void loadMtxIndx_PNCPU(int, u16) const;
-
     virtual ~J3DShapeMtx() {
     }
 
-    virtual u32 getType() const {
-        return 'SMTX';
+    virtual bool isMulti() const {
+        return false;
     }
-
     virtual u16 getUseMtxNum() const {
         return 1;
     }
     virtual u16 getUseMtxIndex(u16) const {
         return mUseMtxIndex;
     }
-    virtual void load() const;
-    virtual void calcNBTScale(Vec const&, f32 (*)[3][3], f32 (*)[3][3]);
-
-    static u8* sCurrentScaleFlag;
-    static bool sNBTFlag;
-    static u32 sTexMtxLoadType;
-
 
 protected:
     u16 mUseMtxIndex;
@@ -117,7 +102,10 @@ public:
     u16 countBumpMtxNum() const;
     void initVtxAttr();
     void loadPreDrawSetting() const;
-    void setArrayAndBindPipeline() const;
+    // The packet's: what its user data loads before the draw (the post-transform of a skinned shape's coordinates).
+    void loadPacketMatrices() const;
+    // The draw itself once its material is sent: from its model's block of matrices. `pCallback`: called before the draw.
+    void drawGroups(void (*pCallback)(J3DShape*) = nullptr) const;
 
     virtual void draw() const;
     virtual void drawFast() const;
@@ -172,18 +160,11 @@ public:
         return mCurrentMtx;
     }
 
-    void setScaleFlagArray(u8* pScaleFlagArray) {
-        mScaleFlagArray = pScaleFlagArray;
-    }
-
     void setDrawMtx(Mtx** pDrawMtx) {
         mDrawMtx = pDrawMtx;
     }
     void setNrmMtx(Mtx33** pNrmMtx) {
         mNrmMtx = pNrmMtx;
-    }
-    void setTexMtxLoadType(u32 type) {
-        mFlags = (mFlags & 0xFFFF0FFF) | type;
     }
     bool getNBTFlag() const {
         return mHasNBT;
@@ -199,12 +180,6 @@ public:
     }
     u16 getIndex() const {
         return mIndex;
-    }
-    bool sTexMtxLoadTypeIsPlain() const {
-        return getTexMtxLoadType() != 0x2000;
-    }
-    u32 getTexMtxLoadType() const {
-        return mFlags & 0xF000;
     }
     u32 getMtxGroupNum() const {
         return mMtxGroupNum;
@@ -242,7 +217,6 @@ public:
     bool mHasPNMTXIdx;
     J3DVertexData* mVertexData;
     J3DDrawMtxData* mDrawMtxData;
-    u8* mScaleFlagArray;
     Mtx** mDrawMtx;
     Mtx33** mNrmMtx;
     u32* mCurrentViewNo;

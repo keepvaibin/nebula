@@ -31,6 +31,7 @@ class J3DShapeX : public J3DShape {};
 class J3DShapePacketX : public J3DShapePacket {};
 
 void J3DModelX::viewCalc2() {
+    mNebulaGeneration++;
     J3DMtxBuffer2* buffer = static_cast< J3DMtxBuffer2* >(mMtxBuffer);
     buffer->swapDrawMtx();
     buffer->swapNrmMtx();
@@ -55,6 +56,7 @@ void J3DModelX::copyAnmMtxBuffer(const J3DModelX* model) {
 }
 
 void J3DModelX::viewCalc3(u32 view, MtxPtr mtx) {
+    mNebulaGeneration++;
     J3DMtxBuffer2* buffer = static_cast< J3DMtxBuffer2* >(mMtxBuffer);
     buffer->rotationMtx(*mExtraMtxBuffer[view + _DC]);
 
@@ -75,6 +77,7 @@ void J3DModelX::viewCalc3(u32 view, MtxPtr mtx) {
 }
 
 void J3DModelX::viewCalcRef(u32 view, J3DModel* model) {
+    mNebulaGeneration++;
     J3DMtxBuffer2* buffer = static_cast< J3DMtxBuffer2* >(mMtxBuffer);
     buffer->rotationMtx(*mExtraMtxBuffer[view + _DC]);
     buffer->calcDrawMtx2(getMtxCalcMode(), mBaseScale, mBaseTransformMtx, model->getMtxBuffer());
@@ -82,6 +85,7 @@ void J3DModelX::viewCalcRef(u32 view, J3DModel* model) {
 }
 
 void J3DModelX::viewCalcRefPos(u32 view, J3DModel* model, const TVec3f& pos, const TVec3f& normal) {
+    mNebulaGeneration++;
     J3DMtxBuffer2* buffer = static_cast< J3DMtxBuffer2* >(mMtxBuffer);
     buffer->rotationMtx(*mExtraMtxBuffer[view + _DC]);
     buffer->calcDrawMtx3(getMtxCalcMode(), mBaseScale, mBaseTransformMtx, model->getMtxBuffer(), pos, normal);
@@ -461,36 +465,7 @@ void J3DModelX::shapePacketDrawFast(J3DShapePacketX* packet) const {
 }
 
 void J3DModelX::shapeDrawFast(J3DShapeX* shape) const {
-    shape->prepareGeometry();
-    if (J3DShape::sEnvelopeFlag && !shape->mHasPNMTXIdx) {
-        shape->mCurrentMtx.load();
-    }
-
-    shape->setArrayAndBindPipeline();
-
-    if (!(shape->mFlags & 0x200)) {
-        u16 count = shape->mMtxGroupNum;
-        for (u16 i = 0; i < count; i++) {
-            if (shape->mShapeMtx[i]) {
-                shape->mShapeMtx[i]->load();
-            }
-            if (mShapeCallback) {
-                mShapeCallback(shape);
-            }
-            if (shape->mShapeDraw[i]) {
-                shape->mShapeDraw[i]->draw();
-            }
-        }
-    } else {
-        J3DNativeShape::setPosition(0, *j3dSys.getShapePacket()->getBaseMtxPtr());
-        J3DNativeShape::setNormal(0, *j3dSys.getShapePacket()->getBaseMtxPtr());
-        u16 count = shape->mMtxGroupNum;
-        for (u16 i = 0; i < count; i++) {
-            if (shape->mShapeDraw[i]) {
-                shape->mShapeDraw[i]->draw();
-            }
-        }
-    }
+    shape->drawGroups(mShapeCallback);
 }
 
 J3DModelX::~J3DModelX() {

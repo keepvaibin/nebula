@@ -93,7 +93,6 @@ void J3DShapePacket::prepareDraw() const {
     j3dSys.setShapePacket((J3DShapePacket*)this);
 
     mpShape->setCurrentViewNoPtr(mpMtxBuffer->getCurrentViewNoPtr());
-    mpShape->setScaleFlagArray(mpMtxBuffer->getScaleFlagArray());
     mpShape->setDrawMtx(mpMtxBuffer->getDrawMtxPtrPtr());
 
     if (!mpShape->getNBTFlag()) {

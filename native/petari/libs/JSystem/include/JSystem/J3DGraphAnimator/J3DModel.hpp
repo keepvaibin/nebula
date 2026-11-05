@@ -145,16 +145,18 @@ public:
     MtxPtr getAnmMtx(int jointNo) {
         return mMtxBuffer->getAnmMtx(jointNo);
     }
-    // The blocks of draw matrices last sent (J3DShapeMtxConcatView::loadPalette), a view each, and a count of the
-    // changes to the matrices since.
+    // The block of draw and normal matrices draws read: sent the first time a frame's draw reads this pair, and again after
+    // the matrices changed. A block of each pair (a view, a bump scale's normals) is kept.
+    u32 drawPalette(Mtx* pDraw, Mtx33* pNormal);
     struct NebulaPalette {
         u32 mId;
         u32 mFrame;
         u32 mGeneration;
-        f32 mBase[12];
-        Vec mScale;
+        const void* mDraw;
+        const void* mNormal;
     };
-    NebulaPalette mNebulaPalette[2] = {};
+    enum { cNebulaPalettes = 4 };
+    NebulaPalette mNebulaPalette[cNebulaPalettes] = {};
     u32 mNebulaGeneration = 0;
     u8 mNebulaPaletteNext = 0;
 

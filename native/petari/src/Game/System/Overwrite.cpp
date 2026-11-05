@@ -53,12 +53,10 @@ extern "C" void NebulaMtxRotRad(Mtx pMtx, char axis, f32 radians) {
     NebulaMtxRotTrig(pMtx, axis, sin, cos);
 }
 
-void J3DShapeMtx::loadMtxIndx_PNGP(int slot, u16 index) const {
-    j3dSys.loadPosMtxIndx(slot, index);
-    j3dSys.loadNrmMtxIndx(slot, index);
+void J3DShape::loadPacketMatrices() const {
     ShapePacketUserData* pData = MR::getJ3DShapePacketUserData(j3dSys.getShapePacket());
     if (pData != nullptr) {
-        pData->loadTexMtx(j3dSys.getShapePacket()->mpMaterial, slot, index);
+        pData->loadPostMatrices(j3dSys.getShapePacket()->mpMaterial);
     }
 }
 

@@ -2,6 +2,10 @@
 #include "JSystem/J3DGraphAnimator/J3DJoint.hpp"
 #include "JSystem/J3DGraphBase/J3DMaterial.hpp"
 #include "JSystem/J3DGraphBase/J3DShapeMtx.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
+#include <nebula_game_api.h>
+
+extern "C" const NebulaHostServices* nebula_host(void);
 
 void J3DModel::initialize() {
     mModelData = NULL;
@@ -153,9 +157,7 @@ void J3DModel::calcAnmMtx() {
 
 void J3DModel::calcWeightEnvelopeMtx() {
     if (getModelData()->getWEvlpMtxNum() != 0) {
-        if (!getModelData()->checkFlag(0x100)) {
-            mMtxBuffer->calcWeightEnvelopeMtx();
-        }
+        mMtxBuffer->calcWeightEnvelopeMtx();
     }
 }
 
@@ -204,16 +206,10 @@ void J3DModel::viewCalc() {
     mMtxBuffer->swapDrawMtx();
     mMtxBuffer->swapNrmMtx();
 
-    if (getModelData()->checkFlag(0x10)) {
-        if (getMtxCalcMode() == 2) {
-            J3DCalcViewBaseMtx(j3dSys.getViewMtx(), mBaseScale, mBaseTransformMtx, (MtxPtr)&mInternalView);
-        }
-    } else {
-        mMtxBuffer->calcDrawMtx(getMtxCalcMode(), mBaseScale, mBaseTransformMtx);
-        calcNrmMtx();
-        calcBBoardMtx();
-        calcBumpMtx();
-    }
+    mMtxBuffer->calcDrawMtx(getMtxCalcMode(), mBaseScale, mBaseTransformMtx);
+    calcNrmMtx();
+    calcBBoardMtx();
+    calcBumpMtx();
 
     prepareShapePackets();
 }
@@ -264,4 +260,37 @@ Mtx33* J3DModel::getBumpMtxPtr(int idx) {
 
 inline void J3DModel::calcNrmMtx() {
     mMtxBuffer->calcNrmMtx();
+}
+
+u32 J3DModel::drawPalette(Mtx* pDraw, Mtx33* pNormal) {
+    const u32 frame = NebulaFrameClock::count();
+    for (u32 i = 0; i < cNebulaPalettes; i++) {
+        const NebulaPalette& rKept = mNebulaPalette[i];
+        if (rKept.mId != 0 && rKept.mFrame == frame && rKept.mGeneration == mNebulaGeneration && rKept.mDraw == pDraw &&
+            rKept.mNormal == pNormal) {
+            return rKept.mId;
+        }
+    }
+    const u32 count = mModelData->getDrawMtxNum();
+    f32* pRows = nullptr;
+    const NebulaHostServices* pHost = nebula_host();
+    const u32 id = pHost->shape_palette(pHost->user, static_cast< u64 >(reinterpret_cast< uintptr_t >(this)), count, frame, &pRows);
+    memcpy(pRows, pDraw, count * sizeof(Mtx));
+    f32* pOut = pRows + 12 * count;
+    for (u32 k = 0; k < count; k++, pOut += 12) {
+        for (u32 r = 0; r < 3; r++) {
+            pOut[r * 4 + 0] = pNormal[k][r][0];
+            pOut[r * 4 + 1] = pNormal[k][r][1];
+            pOut[r * 4 + 2] = pNormal[k][r][2];
+            pOut[r * 4 + 3] = 0.0f;
+        }
+    }
+    NebulaPalette& rSlot = mNebulaPalette[mNebulaPaletteNext];
+    mNebulaPaletteNext = static_cast< u8 >((mNebulaPaletteNext + 1) % cNebulaPalettes);
+    rSlot.mId = id;
+    rSlot.mFrame = frame;
+    rSlot.mGeneration = mNebulaGeneration;
+    rSlot.mDraw = pDraw;
+    rSlot.mNormal = pNormal;
+    return id;
 }

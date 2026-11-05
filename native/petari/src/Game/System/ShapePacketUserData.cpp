@@ -52,16 +52,9 @@ void ShapePacketUserData::load() const {
     }
 }
 
-void ShapePacketUserData::loadTexMtx(J3DMaterial* pMaterial, int slot, u16 index) const {
-    TPos3f mtx;
+void ShapePacketUserData::loadPostMatrices(J3DMaterial* pMaterial) const {
     for (u32 i = 0; i < mTexGenNum; i++) {
         if (mTexMtxInfo[i].mType != 0) {
-            if (mTexMtxInfo[i].mType == 2) {
-                mtx.set(j3dSys.getModelDrawMtx(index));
-                mtx.setTrans(0.0f, 0.0f, 0.0f);
-                J3DNativeShape::setTexture(slot, mtx, pMaterial->getTexCoord(i)->getTexGenType() == J3D_MTX2x4 ? 2 : 3);
-            }
-
             J3DTexMtx* const pTexMtx = pMaterial->getTexMtx(i);
             pTexMtx->calcPostTexMtx(MR::getCameraInvViewMtx());
             J3DNativeShape::setPostTexture((mTexMtxInfo[i].mPostMtx - J3D_PTTEXMTX0) / 3, pTexMtx->getMtx());

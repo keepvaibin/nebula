@@ -7,10 +7,6 @@
 #include <stdint.h>
 
 enum {
-    J3DMdlDataFlag_ConcatView = 0x10,
-};
-
-enum {
     J3DShapeMtxType_Mtx = 0x00,
     J3DShapeMtxType_BBoard = 0x01,
     J3DShapeMtxType_YBBoard = 0x02,
@@ -45,48 +41,12 @@ J3DShape* J3DShapeFactory::create(int no, u32 flag) {
 }
 
 J3DShapeMtx* J3DShapeFactory::newShapeMtx(u32 flag, int shapeNo, int mtxGroupNo) const {
-    J3DShapeMtx* ret = NULL;
     J3DShapeInitData& shapeInitData = mShapeInitData[mIndexTable[shapeNo]];
     J3DShapeMtxInitData& mtxInitData = (&mMtxInitData[shapeInitData.mMtxInitDataIndex])[mtxGroupNo];
-
-    switch (getMdlDataFlag_MtxLoadType(flag)) {
-    case J3DMdlDataFlag_ConcatView:
-        switch (shapeInitData.mShapeMtxType) {
-        case J3DShapeMtxType_Mtx:
-            ret = new J3DShapeMtxConcatView(mtxInitData.mUseMtxIndex);
-            break;
-        case J3DShapeMtxType_BBoard:
-            ret = new J3DShapeMtxBBoardConcatView(mtxInitData.mUseMtxIndex);
-            break;
-        case J3DShapeMtxType_YBBoard:
-            ret = new J3DShapeMtxYBBoardConcatView(mtxInitData.mUseMtxIndex);
-            break;
-        case J3DShapeMtxType_Multi:
-            ret = new J3DShapeMtxMultiConcatView(mtxInitData.mUseMtxIndex, mtxInitData.mUseMtxCount, &mMtxTable[mtxInitData.mFirstUseMtxIndex]);
-            break;
-        default:
-            break;
-        }
-        break;
-
-    case 0:
-    default:
-        switch (shapeInitData.mShapeMtxType) {
-        case J3DShapeMtxType_Mtx:
-        case J3DShapeMtxType_BBoard:
-        case J3DShapeMtxType_YBBoard:
-            ret = new J3DShapeMtx(mtxInitData.mUseMtxIndex);
-            break;
-        case J3DShapeMtxType_Multi:
-            ret = new J3DShapeMtxMulti(mtxInitData.mUseMtxIndex, mtxInitData.mUseMtxCount, &mMtxTable[mtxInitData.mFirstUseMtxIndex]);
-            break;
-        default:
-            break;
-        }
-        break;
+    if (shapeInitData.mShapeMtxType == J3DShapeMtxType_Multi) {
+        return new J3DShapeMtxMulti(mtxInitData.mUseMtxIndex, mtxInitData.mUseMtxCount, &mMtxTable[mtxInitData.mFirstUseMtxIndex]);
     }
-
-    return ret;
+    return new J3DShapeMtx(mtxInitData.mUseMtxIndex);
 }
 
 J3DShapeDraw* J3DShapeFactory::newShapeDraw(int shapeNo, int mtxGroupNo) const {

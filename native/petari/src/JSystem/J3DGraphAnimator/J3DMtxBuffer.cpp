@@ -4,11 +4,6 @@
 #include "JSystem/J3DGraphLoader/J3DModelLoader.hpp"
 #include "Game/System/NebulaArena.hpp"
 
-Mtx J3DMtxBuffer::sNoUseDrawMtx;
-Mtx33 J3DMtxBuffer::sNoUseNrmMtx;
-Mtx* J3DMtxBuffer::sNoUseDrawMtxPtr = &J3DMtxBuffer::sNoUseDrawMtx;
-Mtx33* J3DMtxBuffer::sNoUseNrmMtxPtr = &J3DMtxBuffer::sNoUseNrmMtx;
-
 void J3DMtxBuffer::initialize() {
     mJointTree = NULL;
     mpScaleFlagArr = NULL;
@@ -26,11 +21,6 @@ void J3DMtxBuffer::initialize() {
     mpUserAnmMtx = NULL;
 }
 
-enum {
-    J3DMdlDataFlag_ConcatView = 0x10,
-    J3DMdlDataFlag_NoAnimation = 0x100,
-};
-
 s32 J3DMtxBuffer::create(J3DModelData* pModelData, u32 mtxNum) {
     s32 ret = kJ3DError_Success;
     mMtxNum = mtxNum;
@@ -44,34 +34,11 @@ s32 J3DMtxBuffer::create(J3DModelData* pModelData, u32 mtxNum) {
     if (ret != kJ3DError_Success)
         return ret;
 
-    if (pModelData->checkFlag(J3DMdlDataFlag_NoAnimation)) {
-        setNoUseDrawMtx();
-    } else {
-        u32 loadType = getMdlDataFlag_MtxLoadType(pModelData->getFlag());
-        switch (loadType) {
-        case J3DMdlDataFlag_ConcatView:
-            ret = setNoUseDrawMtx();
-            break;
-        case 0:
-        default:
-            ret = createDoubleDrawMtx(pModelData, mtxNum);
-            break;
-        }
-    }
-
+    ret = createDoubleDrawMtx(pModelData, mtxNum);
     if (ret != kJ3DError_Success)
         return ret;
 
-    if (pModelData->getFlag() & J3DMdlDataFlag_ConcatView) {
-        pModelData->setBumpFlag(0);
-    } else {
-        ret = createBumpMtxArray(pModelData, mtxNum);
-
-        if (ret != kJ3DError_Success)
-            return ret;
-    }
-
-    return ret;
+    return createBumpMtxArray(pModelData, mtxNum);
 }
 
 J3DError J3DMtxBuffer::createAnmMtx(J3DModelData* pModelData) {
@@ -90,13 +57,6 @@ s32 J3DMtxBuffer::createWeightEnvelopeMtx(J3DModelData* pModelData) {
         mpWeightEvlpMtx = new Mtx[pModelData->getWEvlpMtxNum()];
     }
 
-    return kJ3DError_Success;
-}
-
-s32 J3DMtxBuffer::setNoUseDrawMtx() {
-    mpDrawMtxArr[0] = mpDrawMtxArr[1] = &sNoUseDrawMtxPtr;
-    mpNrmMtxArr[0] = mpNrmMtxArr[1] = &sNoUseNrmMtxPtr;
-    mpBumpMtxArr[0] = mpBumpMtxArr[1] = NULL;
     return kJ3DError_Success;
 }
 

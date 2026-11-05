@@ -14,7 +14,8 @@ public:
     void init(J3DMaterial* pMaterial);
     // The texture coordinates and current matrices its material generates differently, for the next draw.
     void load() const;
-    void loadTexMtx(J3DMaterial* pMaterial, int slot, u16 index) const;
+    // The post-transform matrix of each coordinate that goes through one.
+    void loadPostMatrices(J3DMaterial* pMaterial) const;
 
     struct TexMtxInfo {
         TexMtxInfo() : mType(), mPostMtx(J3D_PTIDENTITY) {
