@@ -386,7 +386,7 @@ public:
             in.depth == nullptr || in.motion == nullptr || in.output == nullptr) {
             return false;
         }
-        // A second evaluation before the present (an interpolated sub-frame, a second scene) takes a new frame
+        // A second evaluation before the present (an interpolated generated frame, a second scene) takes a new frame
         // token: Streamline rejects different common constants under one token and fails the evaluation.
         static std::uint32_t evaluated = 0xFFFFFFFFu;
         if (streamline::frame_index() == evaluated) {

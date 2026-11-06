@@ -1,6 +1,6 @@
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Screen/LensFlare.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeView.hpp>
+#include "Game/Render/FrameList.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/BrightObj.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
@@ -212,7 +212,7 @@ void LensFlareDirector::setDrawSyncToken() {
         mProbeCapacity = count;
     }
     NebulaScreenProbe* const probes = mProbes;
-    const u32 done = J3DNativeView::screenProbeResults(BrightObjBase::cReadbackChannel, probes, count);
+    const u32 done = Frame::screenProbeResults(BrightObjBase::cReadbackChannel, probes, count);
     for (u32 i = 0; i < mBrightObjCount && (i + 1) * BrightObjBase::cProbeCount <= done; i++) {
         const NebulaScreenProbe* pProbes = &probes[i * BrightObjBase::cProbeCount];
         if (pProbes->x != BrightObjBase::cNoProbes) {
@@ -223,7 +223,7 @@ void LensFlareDirector::setDrawSyncToken() {
     for (u32 i = 0; i < mBrightObjCount; i++) {
         mBrightObjArray[i]->calcBrightInfo(&probes[i * BrightObjBase::cProbeCount]);
     }
-    J3DNativeView::probeScreen(BrightObjBase::cReadbackChannel, probes, count);
+    Frame::probeScreen(BrightObjBase::cReadbackChannel, probes, count);
 }
 
 s32 LensFlareDirector::checkArea() {

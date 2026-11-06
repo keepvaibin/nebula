@@ -133,7 +133,7 @@ namespace nw4r {
 
         struct ChanCtrl {
             ChanCtrl() : reserve1(0), reserve2(0) {
-                Set(J3D_SRC_VTX, J3D_SRC_VTX);
+                Set(MODEL_FILE_SRC_VTX, MODEL_FILE_SRC_VTX);
             }
 
             ChanCtrl(u8 colSrc, u8 alpSrc) : reserve1(0), reserve2(0) {
@@ -167,7 +167,7 @@ namespace nw4r {
 
         struct TexCoordGen {
             TexCoordGen() : reserve(0) {
-                Set(J3D_TG_MTX2x4, J3D_TG_TEX0, J3D_IDENTITY);
+                Set(MODEL_FILE_TG_MTX2x4, MODEL_FILE_TG_TEX0, MODEL_FILE_IDENTITY);
             }
 
             TexCoordGen(u8 aTexGenType, u8 aTexGenSrc, u32 aTexMtx)
@@ -203,7 +203,7 @@ namespace nw4r {
 
         struct AlphaCompare {
             AlphaCompare() {
-                Set(NEBULA_COMPARE_ALWAYS, 0, J3D_AOP_AND, NEBULA_COMPARE_ALWAYS, 0);
+                Set(NEBULA_COMPARE_ALWAYS, 0, MODEL_FILE_AOP_AND, NEBULA_COMPARE_ALWAYS, 0);
             }
 
             AlphaCompare(u8 aComp0, u8 aRef0, u8 aOp, u8 aComp1, u8 aRef1) {
@@ -245,7 +245,7 @@ namespace nw4r {
 
         struct BlendMode {
             BlendMode() {
-                Set(J3D_BM_BLEND, J3D_BL_SRCALPHA, J3D_BL_INVSRCALPHA, 0);
+                Set(MODEL_FILE_BM_BLEND, MODEL_FILE_BL_SRCALPHA, MODEL_FILE_BL_INVSRCALPHA, 0);
             }
 
             BlendMode(u8 aType, u8 aSrcFactor, u8 aDstFactor, u8 aOp) {

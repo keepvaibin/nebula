@@ -1,8 +1,9 @@
 #pragma once
 
+#include "Game/Util/Color.hpp"
+
 #include "Game/Animation/AnmPlayer.hpp"
 #include "Game/Util/JMapInfo.hpp"
-#include <JSystem/J3DGraphBase/J3DStruct.hpp>
 #include <nebula_geometry.hpp>
 
 #include <NebulaGpu.h>
@@ -121,7 +122,7 @@ namespace MR {
 
     void prepareMaterials(LiveActor*);
     void initMaterialFog(LiveActor*, bool);
-    void initMaterialColor0(LiveActor*, const char*, const J3DColor*);
+    void initMaterialColor0(LiveActor*, const char*, const Color8*);
     TexMtxCtrl* initMaterialTexMtx(LiveActor*, const char*);
 
     void startAction(const LiveActor*, const char*);
@@ -215,12 +216,12 @@ namespace MR {
 
     bool isBckPlaying(const LiveActor*, const char*);
 
-    J3DFrameCtrl* getBckCtrl(const LiveActor*);
-    J3DFrameCtrl* getBtkCtrl(const LiveActor*);
-    J3DFrameCtrl* getBrkCtrl(const LiveActor*);
-    J3DFrameCtrl* getBtpCtrl(const LiveActor*);
-    J3DFrameCtrl* getBpkCtrl(const LiveActor*);
-    J3DFrameCtrl* getBvaCtrl(const LiveActor*);
+    FrameCtrl* getBckCtrl(const LiveActor*);
+    FrameCtrl* getBtkCtrl(const LiveActor*);
+    FrameCtrl* getBrkCtrl(const LiveActor*);
+    FrameCtrl* getBtpCtrl(const LiveActor*);
+    FrameCtrl* getBpkCtrl(const LiveActor*);
+    FrameCtrl* getBvaCtrl(const LiveActor*);
 
     void updateMaterial(LiveActor*);
     void setMirrorReflectionInfoFromMtxYUp(const Pos3f&);

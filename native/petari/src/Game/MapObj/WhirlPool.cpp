@@ -1,11 +1,11 @@
 #include "Game/MapObj/WhirlPool.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/Map/WaterAreaHolder.hpp"
 #include "Game/Map/WhirlPoolAccelerator.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/NativeShader.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
 
 NebulaColor8 sWhirlPoolStageColor1 = {0x28, 0x28, 0x28, 0x14};
@@ -73,46 +73,47 @@ void WhirlPool::initPoints() {
 }
 
 void WhirlPool::draw() const {
-    loadMaterial();
+    const SiteMaterial material = loadMaterial();
+    TypedDraw site(material, nullptr, MR::getCameraViewMtx());
     f32 u0 = mTexOffsetU0;
     f32 nextU0 = 1.0f / 6.0f + u0;
     f32 u1 = mTexOffsetU1;
     f32 nextU1 = 1.0f / 6.0f + u1;
 
-    drawPlane(0.5f, 0.70710677f, -0.5f, 0.70710677f, u0, nextU0, u1, nextU1);
+    drawPlane(site, 0.5f, 0.70710677f, -0.5f, 0.70710677f, u0, nextU0, u1, nextU1);
     u0 = nextU0;
     nextU0 += 1.0f / 6.0f;
     u1 = nextU1;
     nextU1 += 1.0f / 6.0f;
 
-    drawPlane(-0.5f, 0.70710677f, -1.0f, 0.0f, u0, nextU0, u1, nextU1);
+    drawPlane(site, -0.5f, 0.70710677f, -1.0f, 0.0f, u0, nextU0, u1, nextU1);
     u0 = nextU0;
     nextU0 += 1.0f / 6.0f;
     u1 = nextU1;
     nextU1 += 1.0f / 6.0f;
 
-    drawPlane(-1.0f, 0.0f, -0.5f, -0.70710677f, u0, nextU0, u1, nextU1);
+    drawPlane(site, -1.0f, 0.0f, -0.5f, -0.70710677f, u0, nextU0, u1, nextU1);
     u0 = nextU0;
     nextU0 += 1.0f / 6.0f;
     u1 = nextU1;
     nextU1 += 1.0f / 6.0f;
 
-    drawPlane(-0.5f, -0.70710677f, 0.5f, -0.70710677f, u0, nextU0, u1, nextU1);
+    drawPlane(site, -0.5f, -0.70710677f, 0.5f, -0.70710677f, u0, nextU0, u1, nextU1);
     u0 = nextU0;
     nextU0 += 1.0f / 6.0f;
     u1 = nextU1;
     nextU1 += 1.0f / 6.0f;
 
-    drawPlane(0.5f, -0.70710677f, 1.0f, 0.0f, u0, nextU0, u1, nextU1);
+    drawPlane(site, 0.5f, -0.70710677f, 1.0f, 0.0f, u0, nextU0, u1, nextU1);
     u0 = nextU0;
     nextU0 += 1.0f / 6.0f;
     u1 = nextU1;
     nextU1 += 1.0f / 6.0f;
 
-    drawPlane(1.0f, 0.0f, 0.5f, 0.70710677f, u0, nextU0, u1, nextU1);
+    drawPlane(site, 1.0f, 0.0f, 0.5f, 0.70710677f, u0, nextU0, u1, nextU1);
 }
 
-void WhirlPool::drawPlane(f32 x0, f32 y0, f32 x1, f32 y1, f32 u0, f32 u1, f32 u2, f32 u3) const {
+void WhirlPool::drawPlane(TypedDraw& rDraw, f32 x0, f32 y0, f32 x1, f32 y1, f32 u0, f32 u1, f32 u2, f32 u3) const {
     f32 v0 = mTexOffsetV0;
     f32 v1 = mTexOffsetV1;
     f32 v2 = mTexOffsetV2;
@@ -123,7 +124,7 @@ void WhirlPool::drawPlane(f32 x0, f32 y0, f32 x1, f32 y1, f32 u0, f32 u1, f32 u2
     MR::makeMtxRotate(rotation, 0.0f, mRotation, 0.0f);
     rotation.mult(offset, offset);
     MR::makeMtxRotate(rotation, 0.0f, 25.0f, 0.0f);
-    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, mPointCount * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1 | NEBULA_SHAPE_TEXCOORD0 << 2);
+    VertexPCT3* vtx = rDraw.vertices< VertexPCT3 >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, mPointCount * 2);
     const WhirlPoolPoint* pPoint;
 
     for (s32 i = 0; i < mPointCount; i++) {
@@ -136,35 +137,26 @@ void WhirlPool::drawPlane(f32 x0, f32 y0, f32 x1, f32 y1, f32 u0, f32 u1, f32 u2
         position.add(offset);
         rotation.mult(offset, offset);
 
-        J3DNativeDraw::position(position.x + side.x * x0 + normal.x * y0, position.y + side.y * x0 + normal.y * y0, position.z + side.z * x0 + normal.z * y0);
-        J3DNativeDraw::color(0xFF, 0xFF, 0xFF, mPoints[i]->mAlpha);
-        J3DNativeDraw::texCoord(u0 + pPoint->mTexCoord, v0);
-        J3DNativeDraw::texCoord(u2 + pPoint->mTexCoord, v1);
-        J3DNativeDraw::texCoord(u0 + pPoint->mTexCoord, v2);
+        *vtx++ = {position.x + side.x * x0 + normal.x * y0, position.y + side.y * x0 + normal.y * y0, position.z + side.z * x0 + normal.z * y0, Rgba8(0xFF, 0xFF, 0xFF, mPoints[i]->mAlpha), u0 + pPoint->mTexCoord, v0, u2 + pPoint->mTexCoord, v1, u0 + pPoint->mTexCoord, v2};
 
-        J3DNativeDraw::position(position.x + side.x * x1 + normal.x * y1, position.y + side.y * x1 + normal.y * y1, position.z + side.z * x1 + normal.z * y1);
-        J3DNativeDraw::color(0xFF, 0xFF, 0xFF, mPoints[i]->mAlpha);
-        J3DNativeDraw::texCoord(u1 + pPoint->mTexCoord, v0);
+        *vtx++ = {position.x + side.x * x1 + normal.x * y1, position.y + side.y * x1 + normal.y * y1, position.z + side.z * x1 + normal.z * y1, Rgba8(0xFF, 0xFF, 0xFF, mPoints[i]->mAlpha), u1 + pPoint->mTexCoord, v0, u3 + pPoint->mTexCoord, v1, u1 + pPoint->mTexCoord, v2};
         v0 += 0.01f;
-        J3DNativeDraw::texCoord(u3 + pPoint->mTexCoord, v1);
         v1 += 0.01f;
-        J3DNativeDraw::texCoord(u1 + pPoint->mTexCoord, v2);
         v2 += 0.01f;
     }
 }
 
-void WhirlPool::loadMaterial() const {
+SiteMaterial WhirlPool::loadMaterial() const {
     // runtime/src/render/materials/whirlpool.hlsl: the swirl (texture 0) over the screen behind (texture 1) warped by
     // the indirect texture (texture 2); blended by its alpha where above zero, depth tested and written.
-    J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-    J3DNativeShape::setCurrentIdentity();
+    
     JUTTexture screenTexture(MR::getScreenResTIMG());
-    NebulaNativeMaterial material;
-    NativeShader::init(material, NEBULA_SHADER_WHIRLPOOL, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, true,
+    SiteMaterial material;
+    material.init(NEBULA_SHADER_WHIRLPOOL, SiteMaterial::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, true,
                        NEBULA_CULL_NONE);
-    NativeShader::setColor(material, 0, sWhirlPoolStageColor1.r, sWhirlPoolStageColor1.g, sWhirlPoolStageColor1.b,
+    material.setColor(0, sWhirlPoolStageColor1.r, sWhirlPoolStageColor1.g, sWhirlPoolStageColor1.b,
                            sWhirlPoolStageColor1.a);
-    NativeShader::setColor(material, 4, sWhirlPoolStageColor2.r, sWhirlPoolStageColor2.g, sWhirlPoolStageColor2.b,
+    material.setColor(4, sWhirlPoolStageColor2.r, sWhirlPoolStageColor2.g, sWhirlPoolStageColor2.b,
                            sWhirlPoolStageColor2.a);
     Pos3f screen;
     MR::calcTexProjectionMtx(&screen);
@@ -176,10 +168,10 @@ void WhirlPool::loadMaterial() const {
     // The warp: 0.2 screen texels per indirect step.
     material.constants[20] = 0.2f / screenTexture.getWidth();
     material.constants[21] = 0.2f / screenTexture.getHeight();
-    NativeShader::setTexture(material, 0, mTexture);
-    NativeShader::setTexture(material, 1, &screenTexture);
-    NativeShader::setTexture(material, 2, mIndirectTexture);
-    NativeShader::send(material);
+    material.setTexture(0, mTexture);
+    material.setTexture(1, &screenTexture);
+    material.setTexture(2, mIndirectTexture);
+    return material;
 }
 
 WhirlPool::~WhirlPool() {

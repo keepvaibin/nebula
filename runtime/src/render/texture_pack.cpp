@@ -43,11 +43,13 @@ bool parse_hex64(std::string_view text, std::uint64_t& out) noexcept {
 }
 
 bool parse_uint(std::string_view text, std::uint32_t limit, std::uint32_t& out) noexcept {
-    if (text.empty() || text.size() > 5u) return false;
+    if (text.empty()) return false;
     std::uint32_t value = 0;
     for (const char c : text) {
         if (c < '0' || c > '9') return false;
-        value = value * 10u + static_cast<std::uint32_t>(c - '0');
+        const auto digit = static_cast<std::uint32_t>(c - '0');
+        if (digit > limit || value > (limit - digit) / 10u) { return false; }
+        value = value * 10u + digit;
     }
     if (value > limit) return false;
     out = value;
@@ -80,12 +82,12 @@ std::optional<TexturePackName> parse_texture_pack_name(std::string_view stem) no
         const std::string_view size = parts[at++];
         const std::size_t x = size.find('x');
         std::uint32_t w = 0, h = 0;
-        if (x == std::string_view::npos || !parse_uint(size.substr(0, x), 1024u, w) ||
-            !parse_uint(size.substr(x + 1u), 1024u, h) || w == 0u || h == 0u) {
+        if (x == std::string_view::npos || !parse_uint(size.substr(0, x), UINT32_MAX, w) ||
+            !parse_uint(size.substr(x + 1u), UINT32_MAX, h) || w == 0u || h == 0u) {
             return std::nullopt;
         }
-        name.width = static_cast<std::uint16_t>(w);
-        name.height = static_cast<std::uint16_t>(h);
+        name.width = static_cast<std::uint32_t>(w);
+        name.height = static_cast<std::uint32_t>(h);
     }
     if (at < count && parts[at] == "m") {
         name.mipmapped = true;
@@ -124,7 +126,7 @@ std::optional<TexturePackName> parse_texture_pack_name(std::string_view stem) no
     if (at < count) {
         const std::string_view tail = parts[at++];
         std::uint32_t level = 0;
-        if (tail.size() > 3u && tail.substr(0, 3u) == "mip" && parse_uint(tail.substr(3u), 15u, level) &&
+        if (tail.size() > 3u && tail.substr(0, 3u) == "mip" && parse_uint(tail.substr(3u), NEBULA_TEXTURE_MAX_LEVELS - 1u, level) &&
             level != 0u) {
             name.level = static_cast<std::uint8_t>(level);
         } else {
@@ -243,7 +245,7 @@ bool parse_dds(std::span<const std::uint8_t> file, DdsLayout& out) noexcept {
     if (format == DdsFormat::Unknown || width == 0u || height == 0u || width > 16384u || height > 16384u || depth > 1u) {
         return false;
     }
-    levels = std::clamp<std::uint32_t>(levels, 1u, 16u);
+    levels = std::clamp<std::uint32_t>(levels, 1u, NEBULA_TEXTURE_MAX_LEVELS);
     levels = std::min(levels, static_cast<std::uint32_t>(std::bit_width(std::max(width, height))));
     out = DdsLayout{};
     out.format = format;
@@ -301,17 +303,12 @@ std::string display(const std::filesystem::path& path) {
 
 }  // namespace
 
-std::uint64_t TexturePacks::size_key(std::uint32_t width, std::uint32_t height, std::uint32_t format) noexcept {
-    return (static_cast<std::uint64_t>(width) << 32u) | (static_cast<std::uint64_t>(height) << 8u) | format;
+TexturePacks::SizeKey TexturePacks::size_key(std::uint32_t width, std::uint32_t height, std::uint32_t format) noexcept {
+    return {width, height, format};
 }
 
-std::uint64_t TexturePacks::name_key(std::uint64_t size, std::uint64_t hash, std::uint64_t palette, bool mipmapped) noexcept {
-    // _m (the game samples the texture with its own mipmaps) names another file than the same texture without.
-    size |= static_cast<std::uint64_t>(mipmapped) << 63u;
-    std::uint64_t key = hash;
-    key ^= (palette + 0x9E3779B97F4A7C15ull + (key << 6u) + (key >> 2u));
-    key ^= (size + 0x9E3779B97F4A7C15ull + (key << 6u) + (key >> 2u));
-    return key;
+TexturePacks::NameKey TexturePacks::name_key(SizeKey size, std::uint64_t hash, std::uint64_t palette, bool mipmapped) noexcept {
+    return {size, hash, palette, mipmapped};
 }
 
 void TexturePacks::start_workers() {
@@ -430,7 +427,7 @@ std::shared_ptr<TexturePacks::Index> TexturePacks::build_index(std::span<const s
         std::filesystem::path path;
         TexturePackName name;
         bool dds;
-        std::size_t folder;  // priority: a later folder (and within one, a later pack by name) wins a name
+        std::pair<std::size_t, std::size_t> folder;  // priority: a later folder (and within one, a later pack by name) wins a name
     };
     std::vector<Found> found;
     for (std::size_t f = 0; f < packs.size(); ++f) {
@@ -469,7 +466,7 @@ std::shared_ptr<TexturePacks::Index> TexturePacks::build_index(std::span<const s
         std::sort(games.begin(), games.end());
         for (std::size_t g = 0; g < games.size(); ++g) {
             const std::filesystem::path& game = games[g];
-            const std::size_t priority = f * 65536u + std::min<std::size_t>(g, 65535u);
+            const auto priority = std::pair{f, g};
             for (auto it = std::filesystem::recursive_directory_iterator(
                      game, std::filesystem::directory_options::skip_permission_denied, error);
                  !error && it != std::filesystem::recursive_directory_iterator(); it.increment(error)) {
@@ -504,9 +501,9 @@ std::shared_ptr<TexturePacks::Index> TexturePacks::build_index(std::span<const s
     });
     for (const Found& f : found) {
         if (f.name.level != 0u) continue;
-        const std::uint64_t size = size_key(f.name.width, f.name.height, f.name.format);
+        const auto size = size_key(f.name.width, f.name.height, f.name.format);
         auto& map = f.name.any_palette ? index->any_palette : index->exact;
-        const std::uint64_t key = name_key(size, f.name.hash, f.name.any_palette ? 0u : f.name.palette, f.name.mipmapped);
+        const auto key = name_key(size, f.name.hash, f.name.any_palette ? 0u : f.name.palette, f.name.mipmapped);
         if (map.find(key) != map.end()) {
             ++index->shadowed;
             continue;
@@ -522,7 +519,7 @@ std::shared_ptr<TexturePacks::Index> TexturePacks::build_index(std::span<const s
     // Custom lower levels (PNG): _mip<n> beside a PNG base of the same folder.
     for (const Found& f : found) {
         if (f.name.level == 0u || f.dds) continue;
-        const std::uint64_t size = size_key(f.name.width, f.name.height, f.name.format);
+        const auto size = size_key(f.name.width, f.name.height, f.name.format);
         auto& map = f.name.any_palette ? index->any_palette : index->exact;
         const auto it = map.find(name_key(size, f.name.hash, f.name.any_palette ? 0u : f.name.palette, f.name.mipmapped));
         if (it == map.end()) continue;
@@ -546,7 +543,7 @@ bool TexturePacks::may_match(std::uint32_t width, std::uint32_t height, TextureP
 std::uint32_t TexturePacks::find(std::uint32_t width, std::uint32_t height, TexturePackFormat format, std::uint64_t hash,
                                  std::uint64_t palette, bool mipmapped) const {
     if (!may_match(width, height, format)) return kNone;
-    const std::uint64_t size = size_key(width, height, static_cast<std::uint32_t>(format));
+    const auto size = size_key(width, height, static_cast<std::uint32_t>(format));
     const auto matches = [&](std::uint32_t slot, bool any, bool mip) {
         const TexturePackName& name = index_->records[slot].name;
         return name.width == width && name.height == height && name.format == static_cast<std::uint8_t>(format) &&
@@ -821,13 +818,13 @@ void TexturePacks::make_resident(std::uint32_t slot, TextureReplacement&& replac
         return;
     }
     s.replacement = std::move(replacement);
-    // The scale over the source size the name gives: the samplers' LOD shift (pack_sampler_key).
+    // The scale over the source size the name gives: the samplers' LOD shift (make_sampler_key).
     const std::uint32_t source_width = index_ && slot < index_->records.size() ? index_->records[slot].name.width : 0u;
-    s.replacement.lod_shift_x16 = 0u;
+    s.replacement.lod_shift = 0u;
     s.replacement.arbitrary = index_ && slot < index_->records.size() && index_->records[slot].name.arbitrary;
     if (source_width != 0u && s.replacement.width > source_width) {
         const double scale = static_cast<double>(s.replacement.width) / static_cast<double>(source_width);
-        s.replacement.lod_shift_x16 = static_cast<std::uint8_t>(std::clamp(std::lround(16.0 * std::log2(scale)), 0l, 128l));
+        s.replacement.lod_shift = static_cast<float>(std::max(0.0, std::log2(scale)));
     }
     s.state = SlotState::Resident;
     s.last_use = frame_;

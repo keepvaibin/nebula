@@ -1,12 +1,12 @@
 #include "Game/Util/DrawUtil.hpp"
 #include "Game/LiveActor/MaterialUpdater.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeView.hpp>
+#include "Game/Render/FrameList.hpp"
+#include "Game/Render/FrameList.hpp"
 #include "Game/LiveActor/ModelManager.hpp"
 #include "Game/MapObj/CollectCounter.hpp"
 #include "Game/MapObj/IceStep.hpp"
 #include "Game/Player/DrawAdaptor.hpp"
-#include "Game/Player/J3DModelX.hpp"
+#include "Game/Player/PlayerModel.hpp"
 #include "Game/Player/MarioActor.hpp"
 #include "Game/Player/MarioAnimator.hpp"
 #include "Game/Player/MarioParts.hpp"
@@ -28,10 +28,9 @@
 #include "Game/Util/MotionSignal.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
-#include <JSystem/J3DGraphAnimator/J3DJoint.hpp>
-#include <JSystem/J3DGraphAnimator/J3DModelData.hpp>
-#include <JSystem/J3DGraphBase/J3DMaterial.hpp>
-#include <JSystem/J3DGraphBase/J3DTexture.hpp>
+#include "Game/Render/ModelData.hpp"
+#include "Game/Render/ModelData.hpp"
+#include "Game/Render/Material.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include "Game/System/NebulaMods.hpp"
 #include <JSystem/JUtility/JUTNameTab.hpp>
@@ -39,21 +38,13 @@
 #include <cstring>
 
 namespace MR {
-    void showMaterial(J3DModel*, const char*);
+    void showMaterial(Model*, const char*);
 };  // namespace MR
 
 class JetTurtleShadow : public LiveActor {
 public:
     void drawType0() const;
 };
-
-namespace {
-    inline void initExtraMtxBuffer(J3DModelX* pModel) {
-        for (u32 i = 0; i < pModel->_DD; i++) {
-            pModel->mExtraMtxBuffer[i] = new Mtx[0xC00 / sizeof(Mtx)];
-        }
-    }
-};  // namespace
 
 void MarioActor::initDrawAndModel() {
     _218 = new DrawAdaptor(MR::Functor(this, &MarioActor::drawShadow), MR::DrawType_AlphaShadow);
@@ -68,10 +59,10 @@ void MarioActor::initDrawAndModel() {
         initModelManagerWithAnm("Mario", "MarioAnime", true);
     }
 
-    J3DModelX* baseModel = static_cast< J3DModelX* >(MR::getJ3DModel(this));
+    PlayerModel* baseModel = static_cast< PlayerModel* >(MR::getModel(this));
     baseModel->_DD = 8;
 
-    ::initExtraMtxBuffer(baseModel);
+    baseModel->initExtraPoses(baseModel->_DD);
 
     MR::initMaterialFog(this, true);
     MR::prepareMaterials(this);
@@ -147,7 +138,7 @@ void MarioActor::initDrawAndModel() {
 }
 
 void MarioActor::initBeeMario() {
-    J3DModelX* model;
+    PlayerModel* model;
     const char* modelName;
     const char* archiveName;
     if (gIsLuigi) {
@@ -171,8 +162,8 @@ void MarioActor::initBeeMario() {
     _9E4 = new ModelHolder(modelName, true);
     _9E4->initWithoutIter();
 
-    model = static_cast< J3DModelX* >(MR::getJ3DModel(_9E4));
-    model->copyExtraMtxBuffer(mModels[0]);
+    model = static_cast< PlayerModel* >(MR::getModel(_9E4));
+    model->copyExtraPoses(mModels[0]);
 
     MR::initMaterialFog(_9E4, true);
     MR::prepareMaterials(_9E4);
@@ -194,7 +185,7 @@ void MarioActor::initBeeMario() {
 }
 
 void MarioActor::initHopperMario() {
-    J3DModelX* model;
+    PlayerModel* model;
     const char* modelName;
     const char* archiveName;
     if (gIsLuigi) {
@@ -214,8 +205,8 @@ void MarioActor::initHopperMario() {
     _A00 = new ModelHolder(modelName, true);
     _A00->initWithoutIter();
 
-    model = static_cast< J3DModelX* >(MR::getJ3DModel(_A00));
-    model->copyExtraMtxBuffer(mModels[0]);
+    model = static_cast< PlayerModel* >(MR::getModel(_A00));
+    model->copyExtraPoses(mModels[0]);
 
     MR::initMaterialFog(_A00, true);
     MR::prepareMaterials(_A00);
@@ -228,7 +219,7 @@ void MarioActor::initHopperMario() {
 }
 
 void MarioActor::initIceMario() {
-    J3DModelX* model;
+    PlayerModel* model;
     const char* modelName;
     const char* archiveName;
     if (gIsLuigi) {
@@ -248,8 +239,8 @@ void MarioActor::initIceMario() {
     _9C0 = new ModelHolder(modelName, true);
     _9C0->initWithoutIter();
 
-    model = static_cast< J3DModelX* >(MR::getJ3DModel(_9C0));
-    model->copyExtraMtxBuffer(mModels[0]);
+    model = static_cast< PlayerModel* >(MR::getModel(_9C0));
+    model->copyExtraPoses(mModels[0]);
     model->copyAnmMtxBuffer(mModels[0]);
 
     MR::initMaterialFog(_9C0, true);
@@ -271,7 +262,7 @@ void MarioActor::initIceMario() {
 }
 
 void MarioActor::initInvincibleMario() {
-    J3DModelX* model;
+    PlayerModel* model;
     const char* modelName;
     const char* archiveName;
     if (gIsLuigi) {
@@ -291,8 +282,8 @@ void MarioActor::initInvincibleMario() {
     _9C8 = new ModelHolder(modelName, true);
     _9C8->initWithoutIter();
 
-    model = static_cast< J3DModelX* >(MR::getJ3DModel(_9C8));
-    model->copyExtraMtxBuffer(mModels[0]);
+    model = static_cast< PlayerModel* >(MR::getModel(_9C8));
+    model->copyExtraPoses(mModels[0]);
     model->copyAnmMtxBuffer(mModels[0]);
 
     MR::initMaterialFog(_9C8, true);
@@ -348,8 +339,8 @@ void MarioActor::initBoneMario() {
     _A04 = new ModelHolder(modelName, true);
     _A04->initWithoutIter();
 
-    J3DModelX* model = static_cast< J3DModelX* >(MR::getJ3DModel(_A04));
-    model->copyExtraMtxBuffer(mModels[0]);
+    PlayerModel* model = static_cast< PlayerModel* >(MR::getModel(_A04));
+    model->copyExtraPoses(mModels[0]);
 
     MR::initMaterialFog(_A04, true);
     MR::prepareMaterials(_A04);
@@ -375,8 +366,8 @@ void MarioActor::initModPowerUpModels() {
         MR::createAndAddResourceHolder(archive);
         ModelHolder* pHolder = new ModelHolder(pName, true);
         pHolder->initWithoutIter();
-        J3DModelX* pModel = static_cast< J3DModelX* >(MR::getJ3DModel(pHolder));
-        pModel->copyExtraMtxBuffer(mModels[0]);
+        PlayerModel* pModel = static_cast< PlayerModel* >(MR::getModel(pHolder));
+        pModel->copyExtraPoses(mModels[0]);
         pModel->copyAnmMtxBuffer(mModels[0]);
         MR::initMaterialFog(pHolder, true);
         MR::prepareMaterials(pHolder);
@@ -406,7 +397,7 @@ void MarioActor::changeDisplayMode(u8 mode) {
 void MarioActor::calcViewAndEntry() {
     decideShadowMode();
 
-    J3DModelX* model = getJ3DModel();
+    PlayerModel* model = getModel();
     model->mFlags._1C = false;
     model->swapDrawBuffer(4);
     getSimpleModel()->swapDrawBuffer(4);
@@ -509,7 +500,7 @@ void MarioActor::drawMarioModel() const {
     drawSphereMask();
     bool res = drawDarkMask();
 
-    J3DModelX* model = mModels[mCurrModel];
+    PlayerModel* model = mModels[mCurrModel];
 
     if (res) {
         model->mFlags._10 = true;
@@ -537,11 +528,11 @@ void MarioActor::drawMarioModel() const {
 
         // Mario is in front of the wall's shadow: his pixels lose its mark.
         if (mBeeWallWalk != 0) {
-            J3DPass::stencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ZERO);
+            Frame::setPassStencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ZERO);
         }
 
         model->setDrawView(0);
-        model->directDraw(nullptr);
+        model->directDraw();
         model->mFlags.clear();
     }
 
@@ -554,18 +545,17 @@ void MarioActor::drawMarioModel() const {
     drawHand();
 
     if (!MR::isHiddenModel(_A5C)) {
-        J3DModelX* cool = static_cast< J3DModelX* >(MR::getJ3DModel(_A5C));
+        PlayerModel* cool = static_cast< PlayerModel* >(MR::getModel(_A5C));
         cool->setDynamicList(&mLightTint);
-        cool->directDraw(nullptr);
+        cool->directDraw();
     }
 
     if (mBeeWallWalk != 0) {
-        J3DPass::stencil(NEBULA_STENCIL_OFF, NEBULA_STENCIL_KEEP);
+        Frame::setPassStencil(NEBULA_STENCIL_OFF, NEBULA_STENCIL_KEEP);
     }
 
     // The dark mask has done its work.
     if (res) {
-        J3DPass::stencil(NEBULA_STENCIL_OFF, NEBULA_STENCIL_KEEP);
         MR::clearStencil();
         MR::loadViewMtx();
         MR::loadProjectionMtx();
@@ -582,8 +572,8 @@ bool MarioActor::isAllHidden() const {
 }
 
 void MarioActor::swapTextureInit() {
-    J3DModelData* actorData = MR::getJ3DModelData(this);
-    const u32 textureCount = actorData->mMaterialTable.mTexture->getNum();
+    ModelData* actorData = MR::getModelData(this);
+    const u32 textureCount = actorData->getTextureNum();
     _B60 = textureCount;
     _B64 = new ResTIMG*[textureCount];
     _B6A = 0;
@@ -594,10 +584,10 @@ void MarioActor::swapTextureInit() {
 
     _B6C = new const void*[12]();
 
-    u16 texNo = 0;
-    for (u16 i = 0; i < textureCount; i++) {
-        J3DModelData* modelData = MR::getJ3DModelData(this);
-        const char* texName = modelData->mMaterialTable.mTextureName->getName(i);
+    u32 texNo = 0;
+    for (u32 i = 0; i < textureCount; i++) {
+        ModelData* modelData = MR::getModelData(this);
+        const char* texName = modelData->getTextureName(i);
         if (strcmp(texName, "mario_eyeLid.0") == 0) {
             texNo = i;
             break;
@@ -611,12 +601,12 @@ void MarioActor::swapTextureInit() {
     _B6C[3] = _B64[texNo + 3]->image();
 
     if (_9E4 != nullptr) {
-        J3DModelData* beeData = MR::getJ3DModelData(_9E4);
-        const u32 textureNum = beeData->mMaterialTable.mTexture->getNum();
+        ModelData* beeData = MR::getModelData(_9E4);
+        const u32 textureNum = beeData->getTextureNum();
 
-        for (u16 i = 0; i < textureNum; i++) {
-            J3DModelData* modelData = MR::getJ3DModelData(_9E4);
-            const char* texName = modelData->mMaterialTable.mTextureName->getName(i);
+        for (u32 i = 0; i < textureNum; i++) {
+            ModelData* modelData = MR::getModelData(_9E4);
+            const char* texName = modelData->getTextureName(i);
             if (strcmp(texName, "mario_eyeLid.0") == 0) {
                 texNo = i;
                 break;
@@ -634,12 +624,12 @@ void MarioActor::swapTextureInit() {
     }
 
     if (_A00 != nullptr) {
-        J3DModelData* hopperData = MR::getJ3DModelData(_A00);
-        const u32 textureNum = hopperData->mMaterialTable.mTexture->getNum();
+        ModelData* hopperData = MR::getModelData(_A00);
+        const u32 textureNum = hopperData->getTextureNum();
 
-        for (u16 i = 0; i < textureNum; i++) {
-            J3DModelData* modelData = MR::getJ3DModelData(_A00);
-            const char* texName = modelData->mMaterialTable.mTextureName->getName(i);
+        for (u32 i = 0; i < textureNum; i++) {
+            ModelData* modelData = MR::getModelData(_A00);
+            const char* texName = modelData->getTextureName(i);
             if (strcmp(texName, "mario_eyeLid.0") == 0) {
                 texNo = i;
                 break;
@@ -673,11 +663,10 @@ void MarioActor::initFace() {
     MR::initMaterialFog(_A5C, true);
     MR::prepareMaterials(_A5C);
 
-    MR::getJ3DModelData(_A5C)->mMaterialTable.mTexture = MR::getJ3DModelData(this)->mMaterialTable.mTexture;
-    MR::getJ3DModelData(_A5C)->mMaterialTable.mTextureName = MR::getJ3DModelData(this)->mMaterialTable.mTextureName;
+    MR::getModelData(_A5C)->useTexturesOf(MR::getModelData(this));
 
     for (u32 i = 0; i < _A5B; i++) {
-        copyMaterial(MR::getJ3DModel(_A5C), MR::getJointIndex(this, "Face0"), i);
+        copyMaterial(MR::getModel(_A5C), MR::getJointIndex(this, "Face0"), i);
     }
 }
 
@@ -715,8 +704,8 @@ void MarioActor::updateFace() {
 
     _A60 = MR::clamp(static_cast< s32 >(0.49f + partsControl.x / 10.0f), 0, _A5B - 1);
 
-    for (u16 i = 0; i < _A5B; i++) {
-        J3DJoint* eyeJoint = MR::getJoint(_A5C, i + 1);
+    for (u32 i = 0; i < _A5B; i++) {
+        Joint* eyeJoint = MR::getJoint(_A5C, i + 1);
         if (_A60 == i) {
             MR::showJoint(eyeJoint);
         } else {
@@ -726,23 +715,9 @@ void MarioActor::updateFace() {
 }
 
 void MarioActor::initBlur() {
-    _B14 = 0;
-    for (u32 i = 0; i < 64; i++) {
-        if (mModels[i] != nullptr) {
-            const u16 jointNum = mModels[i]->mModelData->getDrawMtxNum();
-            if (jointNum > _B14) {
-                _B14 = jointNum;
-            }
-        }
-    }
-
     for (u32 i = 0; i < 2; i++) {
         for (u32 j = 0; j < 8; j++) {
-            mBlurMatrices[i][j] = new Mtx[_B14];
-
-            for (u32 k = 0; k < _B14; k++) {
-                NebulaMtxIdentity(mBlurMatrices[i][j][k]);
-            }
+            Model::initPose(&mBlurPoses[i][j]);
         }
     }
 
@@ -751,20 +726,20 @@ void MarioActor::initBlur() {
     _B10 = 0;
 }
 
-J3DModelX* MarioActor::getJ3DModel() const {
+PlayerModel* MarioActor::getModel() const {
     return mModels[mCurrModel];
 }
 
-J3DModelData* MarioActor::getModelData() const {
-    return getJ3DModel()->mModelData;
+ModelData* MarioActor::getModelData() const {
+    return getModel()->mModelData;
 }
 
-J3DModelX* MarioActor::getSimpleModel() const {
+PlayerModel* MarioActor::getSimpleModel() const {
     return _A14;
 }
 
 void MarioActor::calcViewMainModel() {
-    J3DModelX* model = mModels[mCurrModel];
+    PlayerModel* model = mModels[mCurrModel];
     if (mFlag.mIsNoCalcView) {
         return;
     }
@@ -845,7 +820,7 @@ void MarioActor::drawIndirectModel() const {
 
     drawSpinInhibit();
 
-    J3DModelX* model = getJ3DModel();
+    PlayerModel* model = getModel();
     if (!mFlag.mIsHiddenModel) {
         model->mFlags._1C = false;
         if (mMario->isStatusActive(MarioStatus_FpView)) {
@@ -860,7 +835,7 @@ void MarioActor::drawIndirectModel() const {
 
         MR::showJoint(model, "Face0");
         model->setDrawView(0);
-        model->directDraw(nullptr);
+        model->directDraw();
         model->mFlags.clear();
     }
 
@@ -888,7 +863,7 @@ void MarioActor::drawReflectModel() const {
         captureScreenBox();
     }
 
-    J3DModelX* model = getJ3DModel();
+    PlayerModel* model = getModel();
 
     MR::showJoint(model, "HandR0");
     MR::showJoint(model, "HandL0");
@@ -900,7 +875,7 @@ void MarioActor::drawReflectModel() const {
 
     if ((_468 == 0 ? nullptr : _428[0]) != nullptr) {
         if (isUseScreenBox()) {
-            static_cast< J3DModelX* >(MR::getJ3DModel(_9A0))->setDynamicList(&mAlphaTint);
+            static_cast< PlayerModel* >(MR::getModel(_9A0))->setDynamicList(&mAlphaTint);
         }
 
         _9A0->drawType0();
@@ -909,10 +884,10 @@ void MarioActor::drawReflectModel() const {
     model->mFlags.clear();
 
     if (_A08 == 2) {
-        J3DNativeView::setZScaleOffset(1.0f, 0.00001f);
+        Frame::setZScaleOffset(1.0f, 0.00001f);
         model->mFlags._1A = true;
         model->setDrawView(3);
-        model->directDraw(nullptr);
+        model->directDraw();
         model->mFlags._1A = false;
         model->mFlags._1D = true;
         model->setDynamicList(&mAlphaTint);
@@ -924,9 +899,9 @@ void MarioActor::drawReflectModel() const {
         model->mFlags._14 = true;
     }
 
-    J3DNativeView::setZScaleOffset(1.0f, 0.0f);
+    Frame::setZScaleOffset(1.0f, 0.0f);
     model->setDrawView(3);
-    model->directDraw(nullptr);
+    model->directDraw();
     model->mFlags.clear();
 
     MR::hideJoint(model, "HandR0");
@@ -950,7 +925,7 @@ void MarioActor::drawModelBlur() const {
         return;
     }
 
-    J3DModelX* model = getJ3DModel();
+    PlayerModel* model = getModel();
     if (!model->_1E4) {
         model->_1E5 = true;
         return;
@@ -968,17 +943,16 @@ void MarioActor::drawModelBlur() const {
     MR::multMtx(inv, inv, MR::getCameraViewMtx());
     for (u32 i = 1; i < 8; i++) {
         const u32 idx = static_cast< u32 >(i + _B12) & 7;
-        model->setDrawViewBuffer(mBlurMatrices[_B10][idx][0]);
-
+        ModelPose& rPose = const_cast< MarioActor* >(this)->mBlurPoses[_B10][idx];
         if (!_1C1) {
-            for (u32 joint = 0; joint < getModelData()->getDrawMtxNum(); joint++) {
-                MR::multMtx(mBlurMatrices[_B10][idx][joint], mBlurMatrices[1 - _B10][idx][joint], inv);
-            }
+            Model::copyPose(&rPose, mBlurPoses[1 - _B10][idx]);
+            Model::movePoseView(&rPose, inv);
         }
+        model->setDrawPose(&rPose);
 
 
         model->setDynamicList(&mGhostTints[idx + ((i - 1) << 3)]);
-        model->directDraw(nullptr);
+        model->directDraw();
     }
 
     model->mFlags._13 = false;
@@ -1004,59 +978,38 @@ void MarioActor::swapTexture(const char* pMaterialName, u8 texNo) const {
         }
     }
 
-    J3DModelData* modelData = MR::getJ3DModelData(this);
-    u16 materialNo = MR::getMaterialNo(modelData, pMaterialName);
+    ModelData* modelData = MR::getModelData(this);
+    u32 materialNo = MR::getMaterialNo(modelData, pMaterialName);
 
     mModels[mCurrModel]->_1C8[materialNo] = _B6C[texNo];
 }
 
-void MarioActor::copyMaterial(J3DModel* pModel, u16 materialNo, s32 packetIndex) {
-    J3DModelData* modelData = getJ3DModel()->getModelData();
-    J3DMaterial* material = modelData->getJointNodePointer(materialNo)->getMesh();
+void MarioActor::copyMaterial(Model* pModel, u32 materialNo, s32 packetIndex) {
+    ModelData* modelData = getModel()->getModelData();
+    Material* material = modelData->getJointNodePointer(materialNo)->getMesh();
     if (material == nullptr) {
         return;
     }
 
-    u16 materialIndex = material->mIndex;
+    u32 materialIndex = material->mIndex;
 
-    u16 start;
-    u16 end;
+    u32 start;
+    u32 end;
 
     if (packetIndex == -1) {
         start = 0;
         end = 7;
     } else {
-        start = static_cast< u16 >(packetIndex);
-        end = static_cast< u16 >(packetIndex);
+        start = static_cast< u32 >(packetIndex);
+        end = static_cast< u32 >(packetIndex);
     }
 
-    for (u16 i = start; i <= end; i++) {
-        J3DMatPacket* matPacket = pModel->getMatPacket(i);
-        matPacket->mpMaterial = modelData->getMaterialNodePointer(materialIndex);
-        J3DShapePacket* shapePacket = &pModel->mShapePacket[i];
-        matPacket->mpInitShapePacket = shapePacket;
-        matPacket->addShapePacket(shapePacket);
-        shapePacket->mpMaterial = matPacket->mpMaterial;
+    for (u32 i = start; i <= end; i++) {
+        MaterialEntry* matPacket = pModel->getMatPacket(i);
+        matPacket->mMaterial = modelData->getMaterialNodePointer(materialIndex);
+        ShapeEntry* shapePacket = pModel->getShapePacket(i);
+        matPacket->mInitShapeEntry = shapePacket;
+        matPacket->addShapeEntry(shapePacket);
+        shapePacket->mMaterial = matPacket->mMaterial;
     }
-}
-
-void J3DModelX::copyExtraMtxBuffer(const J3DModelX* pModel) {
-    _DD = pModel->_DD;
-
-    for (u32 i = 0; i < _DD; i++) {
-        mExtraMtxBuffer[i] = pModel->mExtraMtxBuffer[i];
-    }
-}
-
-void J3DModelX::swapDrawBuffer(u32 drawBuffer) {
-    if (_DC == drawBuffer) {
-        _DC = 0;
-        return;
-    }
-
-    _DC = drawBuffer;
-}
-
-void J3DModelX::setDynamicList(const MarioModelTint* pTint) {
-    _1B8 = pTint;
 }

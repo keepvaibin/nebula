@@ -1,7 +1,7 @@
 #include "Game/Screen/FullScreenBlur.hpp"
-#include "Game/Util/NativeShader.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeTarget.hpp>
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/FrameList.hpp"
+#include "Game/Render/FrameList.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/Color.hpp"
 #include "Game/Util/DirectDraw.hpp"
@@ -23,28 +23,27 @@ namespace MR {
 
         // The two layers (runtime/src/render/materials/tex_const_alpha.hlsl): the screen and last frame's blur, each at
         // its constant alpha, blended by it over the 2D view (TDDraw's draw mode 1, blend 1, view 2).
-        NebulaNativeMaterial layer;
+        SiteMaterial layer;
         TDDraw::setupNative(&layer, 1, 1, 2);
-        layer.shader = NEBULA_SHADER_TEX_CONST_ALPHA;
-        NativeShader::setColor(layer, 0, 0, 0, 0, param3);
-        NativeShader::setTexture(layer, 0, &texture);
-        NativeShader::send(layer);
-        TDDraw::drawTexture(Vec2f(-param1, -param1), &texture, Vec2f(screenWidth + param1 * 2.0f, NebulaFrameClock::cScreenHeight + param1 * 2.0f));
+        layer.mShader = NEBULA_SHADER_TEX_CONST_ALPHA;
+        layer.setColor(0, 0, 0, 0, param3);
+        layer.setTexture(0, &texture);
+        TypedDraw site = TDDraw::site(layer, 2);
+        TDDraw::drawTexture(site, Vec2f(-param1, -param1), &texture, Vec2f(screenWidth + param1 * 2.0f, NebulaFrameClock::cScreenHeight + param1 * 2.0f));
 
-        NativeShader::setColor(layer, 0, 0, 0, 0, param4);
-        NativeShader::setTexture(layer, 0, MR::getFullScreenBlurTexture());
-        NativeShader::send(layer);
-        TDDraw::drawTexture(Vec2f(-param2, -param2), MR::getFullScreenBlurTexture(), Vec2f(screenWidth + param2 * 2.0f, NebulaFrameClock::cScreenHeight + param2 * 2.0f));
+        layer.setColor(0, 0, 0, 0, param4);
+        layer.setTexture(0, MR::getFullScreenBlurTexture());
+        TDDraw::drawTexture(site, Vec2f(-param2, -param2), MR::getFullScreenBlurTexture(), Vec2f(screenWidth + param2 * 2.0f, NebulaFrameClock::cScreenHeight + param2 * 2.0f));
 
         // The next frame's blur: the screen shrunk into the blur texture, a pass into its own target.
         JUTTexture* pBlur = MR::getFullScreenBlurTexture();
-        J3DNativeTarget::begin(pBlur->mImage, pBlur->mShareAcross, pBlur->mShareDown, 0);
-        NebulaNativeMaterial shrink;
+        Frame::targetBegin(pBlur->mImage, pBlur->mShareAcross, pBlur->mShareDown, 0);
+        SiteMaterial shrink;
         TDDraw::setupNative(&shrink, 1, 1, 2);
-        NativeShader::setTexture(shrink, 0, &texture);
-        NativeShader::send(shrink);
-        TDDraw::drawTexture(Vec2f(0.0f, 0.0f), &texture, Vec2f(screenWidth, static_cast< f32 >(MR::getScreenHeight())));
-        J3DNativeTarget::end(pBlur->mImage, NEBULA_TARGET_RGB);
+        shrink.setTexture(0, &texture);
+        TypedDraw site2 = TDDraw::site(shrink, 2);
+        TDDraw::drawTexture(site2, Vec2f(0.0f, 0.0f), &texture, Vec2f(screenWidth, static_cast< f32 >(MR::getScreenHeight())));
+        Frame::targetEnd(pBlur->mImage, NEBULA_TARGET_RGB);
         MR::loadProjectionMtx();
         MR::loadViewMtx();
     }

@@ -4,15 +4,15 @@
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 
-class J3DJoint;
-class J3DModel;
+class Joint;
+class Model;
 class LiveActor;
 
 class JointController;
 
 struct JointControllerInfo {
     JointController* mController;
-    J3DJoint* mJoint;
+    Joint* mJoint;
 };
 
 class JointController {
@@ -23,12 +23,12 @@ public:
     virtual bool calcJointMatrixAfterChild(Pos3f*, const JointControllerInfo&);
 
     void registerCallBack();
-    void calcJointMatrixAndSetSystem(J3DJoint*);
-    void calcJointMatrixAfterChildAndSetSystem(J3DJoint*);
-    static int staticCallBack(J3DJoint*, int);
+    void calcJointMatrixAndSetSystem(Joint*);
+    void calcJointMatrixAfterChildAndSetSystem(Joint*);
+    static int staticCallBack(Joint*, int);
 
-    J3DModel* mModel;
-    J3DJoint* mJoint;
+    Model* mModel;
+    Joint* mJoint;
 };
 
 template < typename T >
@@ -74,7 +74,7 @@ public:
 
 namespace MR {
     void setJointControllerParam(JointController*, const LiveActor*, const char*);
-    void setJointControllerParam(JointController*, const LiveActor*, u16);
+    void setJointControllerParam(JointController*, const LiveActor*, u32);
 
     template < class T >
     JointController* createJointController(T* pHost, const LiveActor* pActor, const char* pJointName,
@@ -86,7 +86,7 @@ namespace MR {
     }
 
     template < class T >
-    JointController* createJointController(T* pHost, const LiveActor* pActor, u16 jointIndex,
+    JointController* createJointController(T* pHost, const LiveActor* pActor, u32 jointIndex,
                                            bool (T::*calcFunc)(Pos3f*, const JointControllerInfo&),
                                            bool (T::*calcChild)(Pos3f*, const JointControllerInfo&)) {
         JointControlDelegator< T >* controller = new JointControlDelegator< T >(pHost, calcFunc, calcChild);

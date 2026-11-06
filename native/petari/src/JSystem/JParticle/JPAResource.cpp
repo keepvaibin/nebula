@@ -1,11 +1,11 @@
 #define JPA_LIST_DEFER_INLINE
 #define JPA_FIELD_BLOCK_DEFER_INLINE
 #include "JSystem/JParticle/JPAResource.hpp"
-#include "Game/Util/NativeShader.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include "JSystem/JParticle/JPANativeColor.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeMaterial.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include "Game/Render/Material.hpp"
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/FrameList.hpp"
 #include "Game/Util/MotionSignal.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include "JSystem/JParticle/JPABaseShape.hpp"
@@ -775,7 +775,7 @@ void JPAResource::draw(JPAEmitterWorkData* work, JPABaseEmitter* emtr) {
 }
 
 void JPAResource::drawP(JPAEmitterWorkData* work) {
-    MotionSignal::drawEmitter(this, work->mpEmtr, false);
+    JPAParticleBatch::setSource(MotionSignal::drawEmitter(this, work->mpEmtr, false));
     work->mpEmtr->clearStatus(0x80);
 
     work->mGlobalPtclScl.x = work->mpEmtr->mGlobalPScl.x * mpBaseShape->getBaseSizeX();
@@ -841,7 +841,7 @@ void JPAResource::drawP(JPAEmitterWorkData* work) {
 }
 
 void JPAResource::drawC(JPAEmitterWorkData* work) {
-    MotionSignal::drawEmitter(this, work->mpEmtr, true);
+    JPAParticleBatch::setSource(MotionSignal::drawEmitter(this, work->mpEmtr, true));
     work->mpEmtr->setStatus(0x80);
 
     if (mpChildShape->isScaleInherited()) {
@@ -912,10 +912,10 @@ namespace {
     // shape and the manager set; the register file it reads follows the per-emitter and per-particle colours.
     // The particle material in use and the colours the emitter and particle functions set (JPANativeColor): prm and
     // env carry over from one emitter to the next.
-    NebulaNativeMaterial sParticle;
+    SiteMaterial sParticle;
     bool sParticleSent = false;
     // The textures the emitter's functions chose, by slot.
-    const J3DNativeTexObj* sParticleTextures[4] = {nullptr, nullptr, nullptr, nullptr};
+    const SiteTexture* sParticleTextures[4] = {nullptr, nullptr, nullptr, nullptr};
     NebulaColor8 sPrm = {0, 0, 0, 0};
     NebulaColor8 sEnv = {0, 0, 0, 0};
     // The indirect matrix the emitter's extra texture shape gives (its rows scaled by 2^exponent), or none.
@@ -929,8 +929,8 @@ namespace {
     }
 
     // The material with its own values: prm and env, the indirect matrix (rows 0-1), the alpha test's references.
-    void sendParticle(bool constantsOnly) {
-        NebulaNativeMaterial& rMaterial = sParticle;
+    void sendParticle() {
+        SiteMaterial& rMaterial = sParticle;
         putColor(rMaterial.constants + 4, sPrm);
         putColor(rMaterial.constants + 8, sEnv);
         for (u32 row = 0; row < 2; row++) {
@@ -940,10 +940,6 @@ namespace {
         }
         rMaterial.constants[80] = rMaterial.constants[88 + 4] / 255.0f;
         rMaterial.constants[81] = rMaterial.constants[88 + 5] / 255.0f;
-        rMaterial.constants_only = constantsOnly ? 1 : 0;
-        J3DNativeShape::flushState();
-        J3DNativeMaterial::watch(&rMaterial);
-    J3DNativeState::sendMaterial(&rMaterial);
     }
 
     // runtime/src/render/materials/particle.hlsl for the emitter's draws: the base shape's modes and alpha test, the
@@ -951,13 +947,15 @@ namespace {
     // shape and the manager set; its colours from JPANativeColor.
     void sendParticleMaterial(const JPABaseShape* pShape, u32 flags) {
         JPAParticleBatch::begin((flags & 7) != 0);
-        NebulaNativeMaterial& material = sParticle;
-        NativeShader::init(material, NEBULA_SHADER_PARTICLE, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
+        SiteMaterial& material = sParticle;
+        material.init(NEBULA_SHADER_PARTICLE, SiteMaterial::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
                            NEBULA_CULL_NONE);
-        material.blend_op = NEBULA_NATIVE_KEPT;
-        material.depth_test = NEBULA_NATIVE_KEPT;
-        material.cull = NEBULA_NATIVE_KEPT;
-        material.early_depth = pShape->getZCompLoc() ? 1 : 0;
+        material.mState.blend_op = pShape->getBlendMode();
+        material.mState.blend_src = pShape->getBlendSrc();
+        material.mState.blend_dst = pShape->getBlendDst();
+        material.mState.depth_test = pShape->getZEnable();
+        material.mState.depth_func = pShape->getZCmp();
+        material.mState.depth_write = pShape->getZUpd();
         material.constants[84] = static_cast< f32 >(pShape->getStageColorMode());
         material.constants[85] = static_cast< f32 >(pShape->getStageAlphaMode());
         material.constants[86] = static_cast< f32 >(flags);
@@ -969,11 +967,11 @@ namespace {
         material.constants[93] = static_cast< f32 >(pShape->getAlphaRef1());
         for (u32 slot = 0; slot < 4; slot++) {
             if (sParticleTextures[slot] != nullptr) {
-                NativeShader::setTexObj(material, slot, sParticleTextures[slot]);
+                material.setTexture(slot, *sParticleTextures[slot]);
             }
         }
         sParticleSent = true;
-        sendParticle(false);
+        sendParticle();
     }
 
     void setIndirect(const f32 (*pMtx)[3], s8 scaleExp) {
@@ -995,15 +993,29 @@ namespace {
 }  // namespace
 
 namespace JPANativeColor {
-    void texture(u32 slot, const J3DNativeTexObj* pTexture) {
+    const SiteMaterial& material() {
+        return sParticle;
+    }
+
+    void lineWidth(f32 pixels) {
+        sParticle.mState.line_width = pixels;
+        sParticle.mState.spread_lines = true;
+    }
+
+    void pointSize(f32 pixels) {
+        sParticle.mState.point_size = pixels;
+        sParticle.mState.spread_points = true;
+    }
+
+    void texture(u32 slot, const SiteTexture* pTexture) {
         if (sParticleTextures[slot] == pTexture) {
             return;
         }
         JPAParticleBatch::flush();
         sParticleTextures[slot] = pTexture;
-        NativeShader::setTexObj(sParticle, slot, pTexture);
+        sParticle.setTexture(slot, *pTexture);
         if (sParticleSent) {
-            sendParticle(false);
+            sendParticle();
         }
     }
 

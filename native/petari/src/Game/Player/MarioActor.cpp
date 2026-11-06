@@ -10,7 +10,7 @@
 #include "Game/Map/CollisionParts.hpp"
 #include "Game/Map/HitInfo.hpp"
 #include "Game/Map/WaterInfo.hpp"
-#include "Game/Player/J3DModelX.hpp"
+#include "Game/Player/PlayerModel.hpp"
 #include "Game/Player/MarioAnimator.hpp"
 #include "Game/Player/MarioConst.hpp"
 #include "Game/Player/MarioEffect.hpp"
@@ -1697,7 +1697,7 @@ void MarioActor::getRealPos(const char* pName, Vec3f* pVec) const {
 }
 
 MtxPtr MarioActor::getGlobalJointMtx(const char* pName) {
-    u16 idx = MR::getJointIndex(this, pName);
+    u32 idx = MR::getJointIndex(this, pName);
     getRealMtx(_C28[idx], pName);
     return _C28[idx];
 }
@@ -2079,17 +2079,17 @@ void MarioActor::calcAnim() {
     }
 
     if (mCurrModel != 0) {
-        NebulaMtxCopy(MR::getJointMtx(getJ3DModel(), "HandL0"), MR::getJointMtx(mModels[0], "HandL0"));
-        NebulaMtxCopy(MR::getJointMtx(getJ3DModel(), "HandR0"), MR::getJointMtx(mModels[0], "HandR0"));
-        NebulaMtxCopy(MR::getJointMtx(getJ3DModel(), "FootL"), MR::getJointMtx(mModels[0], "FootL"));
-        NebulaMtxCopy(MR::getJointMtx(getJ3DModel(), "FootR"), MR::getJointMtx(mModels[0], "FootR"));
-        NebulaMtxCopy(MR::getJointMtx(getJ3DModel(), "Center"), MR::getJointMtx(mModels[0], "Center"));
-        NebulaMtxCopy(MR::getJointMtx(getJ3DModel(), "All_Root"), MR::getJointMtx(mModels[0], "All_Root"));
-        NebulaMtxCopy(MR::getJointMtx(getJ3DModel(), "Spine1"), MR::getJointMtx(mModels[0], "Spine1"));
-        NebulaMtxCopy(MR::getJointMtx(getJ3DModel(), "Hip"), MR::getJointMtx(mModels[0], "Hip"));
-        NebulaMtxCopy(MR::getJointMtx(getJ3DModel(), "Face0"), MR::getJointMtx(mModels[0], "Face0"));
+        NebulaMtxCopy(MR::getJointMtx(getModel(), "HandL0"), MR::getJointMtx(mModels[0], "HandL0"));
+        NebulaMtxCopy(MR::getJointMtx(getModel(), "HandR0"), MR::getJointMtx(mModels[0], "HandR0"));
+        NebulaMtxCopy(MR::getJointMtx(getModel(), "FootL"), MR::getJointMtx(mModels[0], "FootL"));
+        NebulaMtxCopy(MR::getJointMtx(getModel(), "FootR"), MR::getJointMtx(mModels[0], "FootR"));
+        NebulaMtxCopy(MR::getJointMtx(getModel(), "Center"), MR::getJointMtx(mModels[0], "Center"));
+        NebulaMtxCopy(MR::getJointMtx(getModel(), "All_Root"), MR::getJointMtx(mModels[0], "All_Root"));
+        NebulaMtxCopy(MR::getJointMtx(getModel(), "Spine1"), MR::getJointMtx(mModels[0], "Spine1"));
+        NebulaMtxCopy(MR::getJointMtx(getModel(), "Hip"), MR::getJointMtx(mModels[0], "Hip"));
+        NebulaMtxCopy(MR::getJointMtx(getModel(), "Face0"), MR::getJointMtx(mModels[0], "Face0"));
 
-        NebulaMtxCopy(getJ3DModel()->getBaseTRMtx(), mModels[0]->getBaseTRMtx());
+        NebulaMtxCopy(getModel()->getBaseTRMtx(), mModels[0]->getBaseTRMtx());
     }
 
     updateRasterScroll();
@@ -2106,7 +2106,7 @@ void MarioActor::calcAndSetBaseMtx() {
     _1C0 = false;
 
     Mtx34f mtx;
-    mtx.set(getJ3DModel()->getBaseTRMtx());
+    mtx.set(getModel()->getBaseTRMtx());
 
     bool b1 = false;
     if (_934) {
@@ -2407,8 +2407,8 @@ void MarioActor::calcAndSetBaseMtx() {
         scaleMtx(mtx2);
     }
 
-    NebulaMtxCopy(mtx2, getJ3DModel()->mBaseTransformMtx);
-    getJ3DModel()->mBaseScale = mScale;
+    NebulaMtxCopy(mtx2, getModel()->mBaseTransformMtx);
+    getModel()->mBaseScale = mScale;
 
     _EA5 = false;
 }

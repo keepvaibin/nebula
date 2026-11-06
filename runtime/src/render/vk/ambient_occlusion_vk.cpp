@@ -308,12 +308,4 @@ void AmbientOcclusionVk::finish(VkCommandBuffer commands, VkRenderPass pass, uns
     vkCmdDraw(commands, 3, 1, 0, 0);
 }
 
-void AmbientOcclusionVk::hold(std::vector<std::shared_ptr<Texture>>& held) const {
-    for (const std::shared_ptr<Texture>* target : {&distance_, &raw_, &denoised_, &scale_}) {
-        if (*target) {
-            held.push_back(*target);
-        }
-    }
-}
-
 }  // namespace galaxy::render::vk

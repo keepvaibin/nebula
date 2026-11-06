@@ -17,47 +17,6 @@
 
 namespace galaxy::render {
 
-DisplaySerialAccountingEvent account_display_present_serial(
-    DisplaySerialAccountingState& state,
-    std::uint64_t& texture_accounted_serial,
-    std::uint64_t copy_serial) noexcept {
-    DisplaySerialAccountingEvent event{};
-    const bool first_for_texture = texture_accounted_serial != copy_serial;
-    if (!state.has_presented) {
-        state.has_presented = true;
-        state.highest_presented_serial = copy_serial;
-        state.last_presented_serial = copy_serial;
-        texture_accounted_serial = copy_serial;
-        event.first_presentation = true;
-        return event;
-    }
-
-    if (first_for_texture) {
-        event.first_presentation = true;
-        texture_accounted_serial = copy_serial;
-        if (copy_serial > state.highest_presented_serial) {
-            event.delta_one =
-                copy_serial - state.highest_presented_serial == 1u;
-            event.delta_multi = !event.delta_one;
-            state.highest_presented_serial = copy_serial;
-        } else {
-            event.below_high_water =
-                copy_serial < state.highest_presented_serial;
-        }
-        state.last_presented_serial = copy_serial;
-        state.current_nonfirst_run = 0;
-        return event;
-    }
-
-    event.adjacent_repeat = copy_serial == state.last_presented_serial;
-    event.not_first_presentation = true;
-    event.below_high_water = copy_serial < state.highest_presented_serial;
-    state.last_presented_serial = copy_serial;
-    ++state.current_nonfirst_run;
-    event.nonfirst_run = state.current_nonfirst_run;
-    return event;
-}
-
 namespace {
 
 constexpr std::size_t kMaxIdleDisplayTextures = 8u;
@@ -79,7 +38,7 @@ void DisplayPictures::shutdown() {
     has_latest_ = false;
     latest_slot_ = 0;
     next_slot_ = 0;
-    next_copy_serial_ = 1;
+    next_picture_number_ = 1;
     map_ = FrameMap{};
     device_.Reset();
 }
@@ -131,8 +90,8 @@ void DisplayPictures::recycle_retired_textures(unsigned frame_slot) {
 }
 
 gpu::TextureRef DisplayPictures::acquire_idle_texture(
-    std::uint16_t width,
-    std::uint16_t height) {
+    std::uint32_t width,
+    std::uint32_t height) {
     for (auto it = idle_textures_.begin(); it != idle_textures_.end(); ++it) {
         if (it->texture && it->width == width && it->height == height) {
             auto texture = std::move(it->texture);
@@ -146,8 +105,8 @@ gpu::TextureRef DisplayPictures::acquire_idle_texture(
 // A capture's size at the frame scale, within the largest texture the device makes.
 FrameExtent frame_pass_extent(const FrameMap& map) noexcept {
     constexpr unsigned kMaxTextureDimension = gpu::kMaxTexture2DDimension;
-    return FrameExtent{static_cast<std::uint16_t>(std::min(map.width, kMaxTextureDimension)),
-                       static_cast<std::uint16_t>(std::min(map.height, kMaxTextureDimension))};
+    return FrameExtent{static_cast<std::uint32_t>(std::min(map.width, kMaxTextureDimension)),
+                       static_cast<std::uint32_t>(std::min(map.height, kMaxTextureDimension))};
 }
 
 FramePassGeometry frame_pass_geometry(
@@ -167,8 +126,8 @@ DisplayTexture* DisplayPictures::acquire_display(
     const std::uint32_t slot = next_slot_;
 
     const FrameExtent extent = frame_pass_extent(map_);
-    const std::uint16_t wanted_w = extent.width;
-    const std::uint16_t wanted_h = extent.height;
+    const std::uint32_t wanted_w = extent.width;
+    const std::uint32_t wanted_h = extent.height;
 
     auto it = registry_.find(slot);
     if (it != registry_.end()) {
@@ -196,7 +155,7 @@ DisplayTexture* DisplayPictures::acquire_display(
     entry.width       = wanted_w;
     entry.height      = wanted_h;
     entry.frame_stamp = frame_index;
-    entry.copy_serial = 0;
+    entry.picture_number = 0;
     entry.presentable = false;
     entry.rtv = {};
     entry.rtv_valid = false;
@@ -225,11 +184,11 @@ void DisplayPictures::adopt_picture(DisplayTexture& display_picture, gpu::Textur
     display_picture.rtv_valid = false;
 }
 
-gpu::TextureRef DisplayPictures::take_idle_texture(std::uint16_t width, std::uint16_t height) {
+gpu::TextureRef DisplayPictures::take_idle_texture(std::uint32_t width, std::uint32_t height) {
     return acquire_idle_texture(width, height);
 }
 
-void DisplayPictures::release_texture(gpu::TextureRef texture, std::uint16_t width, std::uint16_t height) {
+void DisplayPictures::release_texture(gpu::TextureRef texture, std::uint32_t width, std::uint32_t height) {
     if (!texture || retired_textures_.empty()) {
         return;
     }
@@ -244,7 +203,7 @@ void DisplayPictures::mark_display_copied(
     DisplayTexture& texture,
     std::uint64_t frame_index) {
     texture.frame_stamp = frame_index;
-    texture.copy_serial = next_copy_serial_++;
+    texture.picture_number = next_picture_number_++;
     texture.presentable = true;
     latest_slot_ = texture.slot;
     next_slot_ = (texture.slot + 1u) % kPictures;
@@ -283,10 +242,9 @@ TextureRef create_render_texture(Device* device, std::uint32_t width, std::uint3
     desc.SampleDesc.Count   = 1;
     desc.SampleDesc.Quality = 0;
     desc.Layout             = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-    // ALLOW_RENDER_TARGET so copy_scene_to_display can blit into it.
+    // A frame's last pass writes into it.
     desc.Flags              = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
-    // Initial state is PIXEL_SHADER_RESOURCE: the present blit reads it before the first scene target
-    // copy transitions it to RENDER_TARGET.
+    // Starts readable: a present can come before the first frame writes it.
     const D3D12_RESOURCE_STATES initial_state = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
     // An optimized clear value avoids debug-layer warnings on the first RTV clear.
     D3D12_CLEAR_VALUE clear_val{};

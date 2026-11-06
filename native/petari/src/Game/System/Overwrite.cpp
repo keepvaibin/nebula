@@ -1,9 +1,8 @@
 #include "JSystem/JParticle/JPANativeColor.hpp"
-#include "Game/System/ShapePacketUserData.hpp"
 #include "Game/System/GameThreads.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
+#include "Game/Render/FrameList.hpp"
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/System/PlayerInput.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MotionSignal.hpp"
@@ -16,9 +15,8 @@
 #include <JSystem/JSupport/JSUInputStream.hpp>
 #include <JSystem/JSupport/JSUOutputStream.hpp>
 
-#include <JSystem/J3DGraphBase/J3DPacket.hpp>
-#include <JSystem/J3DGraphBase/J3DShapeMtx.hpp>
-#include <JSystem/J3DGraphBase/J3DSys.hpp>
+#include "Game/Render/Model.hpp"
+#include "Game/Render/Model.hpp"
 
 #include <JSystem/JParticle/JPABaseShape.hpp>
 #include <JSystem/JParticle/JPAEmitter.hpp>
@@ -51,15 +49,6 @@ extern "C" void NebulaMtxRotRad(Mtx pMtx, char axis, f32 radians) {
     f32 sin = Angle::sinRadian(radians);
     f32 cos = Angle::cosRadian(radians);
     NebulaMtxRotTrig(pMtx, axis, sin, cos);
-}
-
-void J3DShapeMtx::loadMtxIndx_PNGP(int slot, u16 index) const {
-    j3dSys.loadPosMtxIndx(slot, index);
-    j3dSys.loadNrmMtxIndx(slot, index);
-    ShapePacketUserData* pData = MR::getJ3DShapePacketUserData(j3dSys.getShapePacket());
-    if (pData != nullptr) {
-        pData->loadTexMtx(j3dSys.getShapePacket()->mpMaterial, slot, index);
-    }
 }
 
 namespace {

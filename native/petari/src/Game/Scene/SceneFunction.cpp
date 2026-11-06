@@ -92,7 +92,6 @@ void CategoryList::execute(MR::CalcAnimType type) {
 }
 
 void CategoryList::execute(MR::DrawType type) {
-    MotionSignal::drawType(type);
     NameObjListExecutor* pListExecutor = SingletonHolder< GameSystem >::get()->mSceneController->getNameObjListExecutor();
 
     pListExecutor->executeDraw(type);
@@ -117,14 +116,12 @@ void CategoryList::entryDrawBufferMirror() {
 }
 
 void CategoryList::drawOpa(MR::DrawBufferType type) {
-    MotionSignal::drawBufferOpa(type);
     NameObjListExecutor* pListExecutor = SingletonHolder< GameSystem >::get()->mSceneController->getNameObjListExecutor();
 
     pListExecutor->drawOpa(type);
 }
 
 void CategoryList::drawXlu(MR::DrawBufferType type) {
-    MotionSignal::drawBufferXlu(type);
     NameObjListExecutor* pListExecutor = SingletonHolder< GameSystem >::get()->mSceneController->getNameObjListExecutor();
 
     pListExecutor->drawXlu(type);

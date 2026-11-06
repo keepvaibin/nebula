@@ -1,58 +1,58 @@
 #pragma once
 
+#include "Game/Util/Color.hpp"
+
 #include "Game/Util/Array.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <JSystem/J3DGraphAnimator/J3DModel.hpp>
-#include <JSystem/J3DGraphAnimator/J3DModelData.hpp>
-#include <JSystem/J3DGraphBase/J3DMaterial.hpp>
-#include <JSystem/J3DGraphBase/J3DStruct.hpp>
-#include <JSystem/J3DGraphBase/J3DTexture.hpp>
-#include <JSystem/JUtility/JUTNameTab.hpp>
+#include "Game/Render/Model.hpp"
+#include "Game/Render/ModelData.hpp"
+#include "Game/Render/Material.hpp"
 #include <NebulaGpu.h>
+#include <nebula_geometry.hpp>
 #include <nebula_math.h>
 
-class J3DTexMtx;
+class CoordMatrix;
 class ResourceHolder;
 
 class MaterialCtrl {
 public:
-    MaterialCtrl(J3DModel*, const char*);
+    MaterialCtrl(Model*, const char*);
 
     virtual void update();
-    virtual void updateMaterial(J3DMaterial*);
+    virtual void updateMaterial(Material*);
 
-    J3DModel* mModel;
-    J3DMaterial* mMaterial;
+    Model* mModel;
+    Material* mMaterial;
 };
 
 class FogCtrl : public MaterialCtrl {
 public:
-    FogCtrl(J3DModel*, bool);
+    FogCtrl(Model*, bool);
 
     virtual void update() override;
 
-    J3DFogInfo mFogInfo;
+    FogInfo mFogInfo;
     s32 mNumMaterials;
-    J3DMaterial** mMaterials;
+    Material** mMaterials;
 };
 
 class MatColorCtrl : public MaterialCtrl {
 public:
-    MatColorCtrl(J3DModel*, const char*, u32, const J3DColor*);
+    MatColorCtrl(Model*, const char*, u32, const Color8*);
 
-    virtual void updateMaterial(J3DMaterial*) override;
+    virtual void updateMaterial(Material*) override;
 
     u32 mColorChoice;
-    const J3DColor* mColor;
+    const Color8* mColor;
 };
 
 class ViewProjmapEffectMtxSetter : public MaterialCtrl {
 public:
-    ViewProjmapEffectMtxSetter(J3DModel*);
+    ViewProjmapEffectMtxSetter(Model*);
 
     virtual void update() override;
 
-    J3DTexMtxInfo** mMatricies;
+    CoordMatrixInfo** mMatricies;
     s32 mNumMatricies;
 };
 
@@ -62,11 +62,11 @@ public:
         UpdateEffectMtxInfo() {
         }
 
-        J3DTexMtx* mTexMtx;
+        CoordMatrix* mTexMtx;
         Pos3f mInitEffectMtx;
     };
 
-    ProjmapEffectMtxSetter(J3DModel*, const ResourceHolder*);
+    ProjmapEffectMtxSetter(Model*, const ResourceHolder*);
 
     virtual void update() override;
     void getBaseTrans(Vec3f*) const;
@@ -80,31 +80,31 @@ public:
 
 class MirrorReflectionMtxSetter : public MaterialCtrl {
 public:
-    MirrorReflectionMtxSetter(J3DModel*, const ResourceHolder*);
+    MirrorReflectionMtxSetter(Model*, const ResourceHolder*);
 
-    void addUpdatingTexMtxFromName(J3DModel* pModel) {
-        J3DModelData* pModelData = pModel->getModelData();
-        u16 textureNum = pModelData->getTexture()->getNum();
-        for (u16 i = 0; i < textureNum; i++) {
-            if (MR::isEqualString(pModelData->getTextureName()->getName(i), sMirrorTextureName)) {
+    void addUpdatingTexMtxFromName(Model* pModel) {
+        ModelData* pModelData = pModel->getModelData();
+        u32 textureNum = pModelData->getTextureNum();
+        for (u32 i = 0; i < textureNum; i++) {
+            if (MR::isEqualString(pModelData->getTextureName(i), sMirrorTextureName)) {
                 addUpdatingTexMtxFromTexNo(pModel, i);
             }
         }
     }
-    void addUpdatingTexMtxFromTexNo(J3DModel*, u16);
-    void addUpdatingTexMtxFromTexCoord(J3DMaterial*);
-    void addUpdatingTexMtx(J3DTexMtx*);
+    void addUpdatingTexMtxFromTexNo(Model*, u32);
+    void addUpdatingTexMtxFromTexCoord(Material*);
+    void addUpdatingTexMtx(CoordMatrix*);
     virtual void update() override;
 
     static char sMirrorTextureName[];
 
-    MR::GrowTable< J3DTexMtx*, 8 > mUpdatingTexMtx;
+    MR::GrowTable< CoordMatrix*, 8 > mUpdatingTexMtx;
     s32 mNumUpdatingTexMtx;
 };
 
 class MarioShadowProjmapMtxSetter : public MaterialCtrl {
 public:
-    MarioShadowProjmapMtxSetter(J3DModel*, const ResourceHolder*);
+    MarioShadowProjmapMtxSetter(Model*, const ResourceHolder*);
 
     virtual void update() override;
 
@@ -113,10 +113,10 @@ public:
 
 class TexMtxCtrl : public MaterialCtrl {
 public:
-    TexMtxCtrl(J3DModel*, const char*);
+    TexMtxCtrl(Model*, const char*);
 
-    void setTexMtx(u32, J3DTexMtx*);
-    virtual void updateMaterial(J3DMaterial*) override;
+    void setTexMtx(u32, CoordMatrix*);
+    virtual void updateMaterial(Material*) override;
 
-    J3DTexMtx* mMatricies[8];
+    CoordMatrix* mMatricies[NEBULA_MATERIAL_SLOTS];
 };

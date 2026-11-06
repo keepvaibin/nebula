@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Game/Render/TypedDraw.hpp"
+
 #include "Game/LiveActor/ShadowDrawer.hpp"
 
 class ShadowSurfaceDrawInit : public NameObj {
@@ -11,7 +13,8 @@ public:
     static void initDraw();
     // The surface shadows' material (runtime/src/render/materials/flat_color.hlsl) in `rColor`: blended by alpha,
     // back faces culled, depth tested.
-    static void sendColor(const NebulaColor8& rColor);
+    static void sendColor(const Color8& rColor);
+    static const SiteMaterial& material();
 };
 
 class ShadowSurfaceDrawer : public ShadowDrawer {

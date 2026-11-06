@@ -36,7 +36,7 @@ void LayoutActor::calcAnim() {
 
 void LayoutActor::draw() const {
     if (MR::isExecuteDrawLayout(this)) {
-        MotionSignal::layoutActor(this);
+        MotionSignal::drawObject(mDrawSlot, mMotionEpoch);
         mLayoutManager->draw();
     }
 }

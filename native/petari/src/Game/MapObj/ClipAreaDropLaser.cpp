@@ -1,6 +1,6 @@
 #include "Game/MapObj/ClipAreaDropLaser.hpp"
-#include "Game/Util/NativeShader.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/FrameList.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/ClipAreaDropHolder.hpp"
 #include "Game/Scene/SceneFunction.hpp"
@@ -48,11 +48,10 @@ void ClipAreaDropLaser::control() {
 
 void ClipAreaDropLaser::draw() const {
     TDDraw::cameraInit3D();
-    NebulaNativeMaterial material;
+    SiteMaterial material;
     TDDraw::setupNative(&material, 0, 2, 0);
-    J3DPass::lineWidth(20.0f / 6.0f);
-    NativeShader::setDepth(material, true, NEBULA_COMPARE_LEQUAL, false);
-    NativeShader::send(material);
+    material.mState.line_width = 20.0f / 6.0f;
+    material.setDepth(true, NEBULA_COMPARE_LEQUAL, false);
 
     for (int r29 = 1; r29 < mNumPointsToDraw; r29++) {
         int u1 = mDrawCount - (r29 - 1);
@@ -64,7 +63,8 @@ void ClipAreaDropLaser::draw() const {
             u2 += 0x40;
 
         if (u1 != mPointIndexToSkipDraw) {
-            TDDraw::drawLine(mPoints[u1], mPoints[u2], 0x40F080);
+            TypedDraw site = TDDraw::site(material, 0);
+            TDDraw::drawLine(site, mPoints[u1], mPoints[u2], 0x40F080);
         }
     }
 }

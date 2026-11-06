@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 
 class JUTTexture;
@@ -23,8 +24,8 @@ public:
     void moveToRight();
     void moveToUpper();
     void moveToLower();
-    void loadMaterial() const;
-    void loadMaterialBloom() const;
+    SiteMaterial loadMaterial() const;
+    SiteMaterial loadMaterialBloom() const;
     // void drawDebug();
 
     // getPoint__9OceanBowlCFii from the debug maps, always inlined

@@ -64,11 +64,10 @@ bool UploadRing::initialize(
     ++epoch_;
     frame_spill_ = 0u;
     high_water_ = 0u;
+    requested_ = 0u;
     active_slot_ = 0u;
     frame_ready_ = false;
     segment_allocation_pending_ = true;
-    reused_bytes_ = copied_bytes_ = 0u;
-    immutable_upload_calls_ = 0u;
     peak_bytes_per_frame_ = 0u;
     return true;
 }
@@ -80,7 +79,6 @@ bool UploadRing::resegment(std::size_t bytes_per_frame, unsigned frames_in_fligh
     }
     bytes_per_frame_ = bytes_per_frame;
     frames_in_flight_ = frames_in_flight;
-    // A new identity: no immutable-upload token of the old segmentation matches.
     resource_identity_ = g_upload_ring_identity.fetch_add(1, std::memory_order_relaxed);
     slot_generations_.assign(frames_in_flight, 0u);
     segment_base_ = cursor_ = 0u;
@@ -90,8 +88,6 @@ bool UploadRing::resegment(std::size_t bytes_per_frame, unsigned frames_in_fligh
     active_slot_ = 0u;
     frame_ready_ = false;
     segment_allocation_pending_ = true;
-    reused_bytes_ = copied_bytes_ = 0u;
-    immutable_upload_calls_ = 0u;
     peak_bytes_per_frame_ = 0u;
     return true;
 }
@@ -103,9 +99,6 @@ void UploadRing::begin_frame(unsigned frame_slot) {
     active_slot_ = frame_slot;
     ++epoch_;
     segment_allocation_pending_ = true;
-    reused_bytes_ = 0;
-    copied_bytes_ = 0;
-    immutable_upload_calls_ = 0;
     segment_base_ = static_cast<std::size_t>(frame_slot) * bytes_per_frame_;
     cursor_       = segment_base_;
     frame_spill_ = 0u;
@@ -160,36 +153,14 @@ UploadRing::Allocation UploadRing::allocate(std::size_t size, std::size_t alignm
     };
 }
 
-UploadRing::Allocation UploadRing::upload_immutable(
-    const void* source, std::size_t size, std::size_t alignment,
-    ImmutableUploadToken& token) {
-    const Allocation result = allocate(size, alignment);
-    ++immutable_upload_calls_;
-    if (token.slots.size() != frames_in_flight_) {
-        token.slots.assign(frames_in_flight_, {});
-    }
-    auto& previous = token.slots[active_slot_];
-    const std::uint64_t generation = slot_generations_[active_slot_];
-    // Allocation within a segment is monotonic, so nothing written earlier this frame overlaps. Requiring the
-    // slot's previous generation rules out a use in between that overwrote the bytes.
-    const bool reuse = generation > 1 &&
-        previous.resource_identity == resource_identity_ &&
-        previous.generation == generation - 1 &&
-        previous.offset == result.offset && previous.size == size;
-    if (reuse) {
-        reused_bytes_ += size;
-    } else {
-        std::memcpy(result.cpu, source, size);
-        copied_bytes_ += size;
-    }
-    previous = {resource_identity_, generation, result.offset, size};
-    return result;
-}
-
 }  // namespace galaxy::render
 
 #if !defined(NEBULA_GPU_VULKAN)
 namespace galaxy::render::gpu {
+
+bool device_removed(Device* device) noexcept {
+    return device != nullptr && device->GetDeviceRemovedReason() != S_OK;
+}
 
 UploadMemory create_upload_memory(Device* device, std::size_t bytes, const char* name) {
     UploadMemory out;

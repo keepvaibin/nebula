@@ -1,53 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 
-// Frame interpolation's renderer-facing records (RendererD3D12 replays them; render_core fills them for either
-// renderer).
-
-#include "galaxy/render/interp_gpu.h"
+// Frame interpolation's renderer-facing records (render_core fills them for either
 
 #include <array>
 #include <cstdint>
-#include <span>
 
 namespace galaxy::render {
-
-// One recorded game frame's replay: the evaluation program and where each record's constants come from.
-struct ReplaySequence {
-    interp_gpu::Layout layout{};
-    std::span<const std::int32_t> record_vs_slot;       // per scene record, -1 none
-    std::span<const std::int32_t> record_palette_slot;  // per scene record, -1 none
-    // Per palette slot: its source draw's blocks (float4 offsets in the matrix ring: positions, textures, normals,
-    // post-transform matrices, lights).
-    std::span<const std::array<std::uint32_t, 5>> palette_source;
-    // The models' blocks: rows from the matrix ring into the output.
-    std::span<const interp_gpu::Copy> model_copies;
-    const interp_gpu::Program* program = nullptr;
-};
-
-// A presented frame of the sequence: t, the t of the frame presented before it (motion vectors) and its jitter in
-// render pixels (temporal upscaling).
-struct SubframeTime {
-    float t = 0.0f;
-    float t_prev = 0.0f;
-    float jitter_x = 0.0f;
-    float jitter_y = 0.0f;
-    bool reset = false;  // the upscaler's history starts again (cut, gap)
-    // The scene camera's projection this frame draws with, as the game sets it (A, B, C, D, E, F, without the
-    // jitter: the two scenes' interpolated at t, as the evaluation interpolates its records'), and the viewport's size
-    // in scene target pixels its jitter is relative to. The renderer adds the jitter; the ray tracer's composites rebuild this
-    // frame's points from its depth with it (projection_known: the scene was traced).
-    std::array<float, 6> projection{};
-    float viewport_width = 0.0f;
-    float viewport_height = 0.0f;
-    bool projection_known = false;
-};
-
-struct CopyRedirectStats {
-    std::uint64_t redirected = 0;
-    std::uint64_t patched_tables = 0;
-    std::uint64_t snapshots = 0;
-    std::uint64_t fallback_logs = 0;
-};
 
 }  // namespace galaxy::render

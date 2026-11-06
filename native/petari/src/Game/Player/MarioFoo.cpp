@@ -1,7 +1,7 @@
 #include "Game/Player/MarioFoo.hpp"
-#include "Game/Util/NativeShader.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/FrameList.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/MapObj/DashRing.hpp"
 #include "Game/Player/Mario.hpp"
@@ -11,7 +11,6 @@
 #include "Game/Util/AreaObjUtil.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DirectDraw.hpp"
-#include "Game/Util/DirectDrawUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
@@ -347,7 +346,7 @@ bool MarioFoo::close() {
     playEffect("\203\164\201\133\203\175\203\212\203\111\211\360\217\234\211\105" /* フーマリオ解除右 */);
     stopAnimationUpper(nullptr);
     setYangleOffset(0.0f);
-    u16 upperJoint = getAnimator()->getUpperJointID();
+    u32 upperJoint = getAnimator()->getUpperJointID();
     setJointGlobalMtx(upperJoint, nullptr);
 
     switch (_59) {
@@ -507,7 +506,7 @@ void MarioFoo::updateTilt() {
     NebulaMtxRotRad(sideMtx, 'X', _70);
     NebulaMtxRotRad(frontMtx, 'Z', _74);
     NebulaMtxConcat(sideMtx, frontMtx, _78);
-    u16 upperJoint = getAnimator()->getUpperJointID();
+    u32 upperJoint = getAnimator()->getUpperJointID();
     setJointGlobalMtx(upperJoint, _78);
 }
 
@@ -622,6 +621,12 @@ f32 MarioFoo::calcRingAcc() {
     return 1.0f;
 }
 
+namespace {
+    void sendVertex(VertexPT*& rVtx, const Vec3f& rPosition, const Vec2f& rCoord) {
+        *rVtx++ = {rPosition.x, rPosition.y, rPosition.z, rCoord.x, rCoord.y};
+    }
+}  // namespace
+
 void MarioFoo::draw3D() const {
     Vec3f beamVertices[4];
     Vec3f leftEdge[2];
@@ -630,17 +635,15 @@ void MarioFoo::draw3D() const {
     Vec3f nextRightEdge[2];
 
     if (getPlayer()->_1C._9) {
-        NebulaNativeMaterial material;
+        SiteMaterial material;
         TDDraw::setupNative(&material, 1, 2, 0);
-        MR::ddSetVtxFormat(2);
-        material.shader = NEBULA_SHADER_TEX_ALPHA_LERP;
+        material.mShader = NEBULA_SHADER_TEX_ALPHA_LERP;
         material.constants[9] = 2.0f;
-        NativeShader::setTexture(material, 0, _6B8);
+        material.setTexture(0, _6B8);
         const Color8 color0(255, 32, 32, 128);
-        NativeShader::setColor(material, 0, color0.r, color0.g, color0.b, color0.a);
+        material.setColor(0, color0.r, color0.g, color0.b, color0.a);
         const Color8 color1(255, 64, 64, 255);
-        NativeShader::setColor(material, 4, color1.r, color1.g, color1.b, color1.a);
-        NativeShader::send(material);
+        material.setColor(4, color1.r, color1.g, color1.b, color1.a);
 
         Vec3f center = mActor->_2A0 + getPlayer()->getUpVec() * 50.0f;
         Vec3f back = -getPlayer()->getUpVec();
@@ -655,31 +658,31 @@ void MarioFoo::draw3D() const {
         beamVertices[1] = center - side * 70.0f + front * 2000.0f * length;
         beamVertices[2] = center - side * 50.0f + front * 2000.0f * length;
         beamVertices[3] = center - side * 50.0f;
-        J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, MR::ddVtxAttributes());
-        MR::ddSendVtxData(beamVertices[0], Vec2f(0.0f, 0.0f));
-        MR::ddSendVtxData(beamVertices[1], Vec2f(0.5f, 0.0f));
-        MR::ddSendVtxData(beamVertices[2], Vec2f(0.5f, 1.0f));
-        MR::ddSendVtxData(beamVertices[3], Vec2f(0.0f, 1.0f));
+        TypedDraw site(material, nullptr, MR::getCameraViewMtx());
+        VertexPT* vtx = site.vertices< VertexPT >(NEBULA_PRIMITIVE_QUADS, 4);
+        sendVertex(vtx, beamVertices[0], Vec2f(0.0f, 0.0f));
+        sendVertex(vtx, beamVertices[1], Vec2f(0.5f, 0.0f));
+        sendVertex(vtx, beamVertices[2], Vec2f(0.5f, 1.0f));
+        sendVertex(vtx, beamVertices[3], Vec2f(0.0f, 1.0f));
 
         beamVertices[0] = center + side * 70.0f;
         beamVertices[1] = center + side * 70.0f + front * 2000.0f * length;
         beamVertices[2] = center + side * 50.0f + front * 2000.0f * length;
         beamVertices[3] = center + side * 50.0f;
-        J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, MR::ddVtxAttributes());
-        MR::ddSendVtxData(beamVertices[0], Vec2f(0.0f, 0.0f));
-        MR::ddSendVtxData(beamVertices[1], Vec2f(0.5f, 0.0f));
-        MR::ddSendVtxData(beamVertices[2], Vec2f(0.5f, 1.0f));
-        MR::ddSendVtxData(beamVertices[3], Vec2f(0.0f, 1.0f));
+        vtx = site.vertices< VertexPT >(NEBULA_PRIMITIVE_QUADS, 4);
+        sendVertex(vtx, beamVertices[0], Vec2f(0.0f, 0.0f));
+        sendVertex(vtx, beamVertices[1], Vec2f(0.5f, 0.0f));
+        sendVertex(vtx, beamVertices[2], Vec2f(0.5f, 1.0f));
+        sendVertex(vtx, beamVertices[3], Vec2f(0.0f, 1.0f));
     }
 
     const Color8 color2(255, 64, 64, 255);
     if (_6B0) {
-        NebulaNativeMaterial material;
+        SiteMaterial material;
         TDDraw::setupNative(&material, 1, 2, 0);
-        MR::ddSetVtxFormat(2);
-        material.shader = NEBULA_SHADER_TEX_ALPHA_LERP;
+        material.mShader = NEBULA_SHADER_TEX_ALPHA_LERP;
         material.constants[9] = 2.0f;
-        NativeShader::setTexture(material, 0, _6B8);
+        material.setTexture(0, _6B8);
 
         u32 midpoint;
         u32 count = _6B0;
@@ -696,9 +699,10 @@ void MarioFoo::draw3D() const {
             }
 
             const Color8 color3(255, 0, 0, alpha);
-            NativeShader::setColor(material, 0, color3.r, color3.g, color3.b, color3.a);
-            NativeShader::setColor(material, 4, color2.r, color2.g, color2.b, color2.a);
-            NativeShader::send(material);
+            material.setColor(0, color3.r, color3.g, color3.b, color3.a);
+            material.setColor(4, color2.r, color2.g, color2.b, color2.a);
+            TypedDraw site(material, nullptr, MR::getCameraViewMtx());
+            VertexPT* vtx;
             u32 index = (_6B4 + 127 - i) % 64;
             if (i == 0) {
                 u32 j;
@@ -734,19 +738,19 @@ void MarioFoo::draw3D() const {
                 width.setLength(10.0f);
                 nextLeftEdge[0] = rPosition + width - _3B0[index] * ::cWidth;
                 nextLeftEdge[1] = rPosition - width - _3B0[index] * ::cWidth;
-                J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, MR::ddVtxAttributes());
-                MR::ddSendVtxData(leftEdge[0], texCoords[0]);
-                MR::ddSendVtxData(nextLeftEdge[0], nextTexCoords[0]);
-                MR::ddSendVtxData(nextLeftEdge[1], nextTexCoords[1]);
-                MR::ddSendVtxData(leftEdge[1], texCoords[1]);
+                vtx = site.vertices< VertexPT >(NEBULA_PRIMITIVE_QUADS, 4);
+                sendVertex(vtx, leftEdge[0], texCoords[0]);
+                sendVertex(vtx, nextLeftEdge[0], nextTexCoords[0]);
+                sendVertex(vtx, nextLeftEdge[1], nextTexCoords[1]);
+                sendVertex(vtx, leftEdge[1], texCoords[1]);
 
                 nextRightEdge[0] = rPosition + width + _3B0[index] * ::cWidth;
                 nextRightEdge[1] = rPosition - width + _3B0[index] * ::cWidth;
-                J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, MR::ddVtxAttributes());
-                MR::ddSendVtxData(rightEdge[0], texCoords[0]);
-                MR::ddSendVtxData(nextRightEdge[0], nextTexCoords[0]);
-                MR::ddSendVtxData(nextRightEdge[1], nextTexCoords[1]);
-                MR::ddSendVtxData(rightEdge[1], texCoords[1]);
+                vtx = site.vertices< VertexPT >(NEBULA_PRIMITIVE_QUADS, 4);
+                sendVertex(vtx, rightEdge[0], texCoords[0]);
+                sendVertex(vtx, nextRightEdge[0], nextTexCoords[0]);
+                sendVertex(vtx, nextRightEdge[1], nextTexCoords[1]);
+                sendVertex(vtx, rightEdge[1], texCoords[1]);
 
                 leftEdge[0] = nextLeftEdge[0];
                 texCoords[0] = nextTexCoords[0];

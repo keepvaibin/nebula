@@ -1,5 +1,5 @@
 #include "Game/Util/CameraUtil.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeView.hpp>
+#include "Game/Render/FrameList.hpp"
 #include "Game/Camera/CameraAnim.hpp"
 #include "Game/Camera/CameraCalc.hpp"
 #include "Game/Camera/CameraContext.hpp"
@@ -17,10 +17,9 @@
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/PlayerUtil.hpp"
-#include "Game/Util/RenderSignals.hpp"
 #include "Game/Util/ScreenUtil.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeView.hpp>
-#include <JSystem/J3DGraphBase/J3DSys.hpp>
+#include "Game/Render/FrameList.hpp"
+#include "Game/Render/Model.hpp"
 #include <cstdio>
 
 
@@ -123,16 +122,16 @@ namespace MR {
 
     void sceneOpaqueEnd() {
         f32 view[3][4];
-        J3DNativeView::hostView(::getCameraContext()->mProjection, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f, &view[0][0]);
-        NebulaRender::sceneMarker(NEBULA_SCENE_3D_OPAQUE_END, view);
+        Frame::hostView(::getCameraContext()->mProjection, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f, &view[0][0]);
+        Frame::opaqueEnd(view);
     }
 
     void loadProjectionMtx() {
-        J3DNativeView::setPerspective(::getCameraContext()->mProjection);
+        Frame::setPerspective(::getCameraContext()->mProjection);
     }
 
     void loadViewMtx() {
-        NebulaMtxCopy(::getCameraContext()->getViewMtx(), j3dSys.mViewMtx);
+        NebulaMtxCopy(::getCameraContext()->getViewMtx(), ModelSys::mViewMtx);
     }
 
     const Pos3f& getCameraViewMtx() {

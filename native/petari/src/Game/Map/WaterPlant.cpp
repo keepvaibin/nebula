@@ -1,13 +1,14 @@
+#include "Game/Util/CameraUtil.hpp"
 #include "Game/Map/WaterPlant.hpp"
-#include "Game/Util/NativeShader.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/FrameList.hpp"
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
-#include <JSystem/J3DGraphAnimator/J3DAnimation.hpp>
+#include "Game/Render/Clip.hpp"
 #include <nebula_geometry.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <nebula_game_api.h>
@@ -18,16 +19,16 @@ extern "C" const NebulaHostServices* nebula_host(void);
 namespace {
     // runtime/src/render/materials/water_plant.hlsl: the plant texture where its alpha is above 50, blended by it,
     // depth tested and written, no culling, fogged linearly toward the water's blue between `fogStart` and `fogEnd`.
-    void sendPlantMaterial(JUTTexture* pTexture, f32 fogStart, f32 fogEnd) {
-        NebulaNativeMaterial material;
-        NativeShader::init(material, NEBULA_SHADER_WATER_PLANT, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, true,
+    SiteMaterial plantMaterial(JUTTexture* pTexture, f32 fogStart, f32 fogEnd) {
+        SiteMaterial material;
+        material.init(NEBULA_SHADER_WATER_PLANT, SiteMaterial::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, true,
                            NEBULA_CULL_NONE);
         material.constants[0] = fogStart;
         material.constants[1] = fogEnd;
-        NativeShader::setColor(material, 4, 0x32, 0x32, 0x96, 0xFF);
-        NativeShader::setTexture(material, 0, pTexture);
-        NativeShader::send(material);
-        J3DNativeShape::setCurrentIdentity();
+        material.setColor(4, 0x32, 0x32, 0x96, 0xFF);
+        material.setTexture(0, pTexture);
+        
+        return material;
     }
 }  // namespace
 namespace {
@@ -179,8 +180,9 @@ void WaterPlant::draw() const {
         return;
     }
 
-    ::getWaterPlantDrawInit()->loadTex(mType);
-    drawDirect();
+    const SiteMaterial material = ::getWaterPlantDrawInit()->material(mType);
+    TypedDraw site(material, nullptr, MR::getCameraViewMtx());
+    drawDirect(site);
 }
 
 void WaterPlant::initPlant() {
@@ -238,7 +240,7 @@ void WaterPlant::initPlantAfterPlacement() {
     }
 }
 
-void WaterPlant::drawDirect() const {
+void WaterPlant::drawDirect(TypedDraw& rDraw) const {
     for (int i = 0; i < mPlantNum; i++) {
         Vec3f* position(&mPlantDataArray[i].mPosition);
         Vec3f drawVec1(mPlantDataArray[i].mRotation);
@@ -265,23 +267,15 @@ void WaterPlant::drawDirect() const {
         f32 drawOffsetX = mHalfWidth * ::sDrawVec.x;
         f32 drawOffsetZ = mHalfWidth * ::sDrawVec.z;
         // Each vertex's texture coordinate is its entry of ::cTexCoords.
-        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 8, NEBULA_SHAPE_TEXCOORD0);
-        J3DNativeDraw::position(drawVec3.x - drawOffsetX, drawVec3.y, drawVec3.z - drawOffsetZ);
-        J3DNativeDraw::texCoord(::cTexCoords[2 * 0], ::cTexCoords[2 * 0 + 1]);
-        J3DNativeDraw::position(drawVec3.x + drawOffsetX, drawVec3.y, drawVec3.z + drawOffsetZ);
-        J3DNativeDraw::texCoord(::cTexCoords[2 * 1], ::cTexCoords[2 * 1 + 1]);
-        J3DNativeDraw::position(drawVec2.x - drawOffsetX, drawVec2.y, drawVec2.z - drawOffsetZ);
-        J3DNativeDraw::texCoord(::cTexCoords[2 * 2], ::cTexCoords[2 * 2 + 1]);
-        J3DNativeDraw::position(drawVec2.x + drawOffsetX, drawVec2.y, drawVec2.z + drawOffsetZ);
-        J3DNativeDraw::texCoord(::cTexCoords[2 * 3], ::cTexCoords[2 * 3 + 1]);
-        J3DNativeDraw::position(drawVec1.x - drawOffsetX, drawVec1.y, drawVec1.z - drawOffsetZ);
-        J3DNativeDraw::texCoord(::cTexCoords[2 * 4], ::cTexCoords[2 * 4 + 1]);
-        J3DNativeDraw::position(drawVec1.x + drawOffsetX, drawVec1.y, drawVec1.z + drawOffsetZ);
-        J3DNativeDraw::texCoord(::cTexCoords[2 * 5], ::cTexCoords[2 * 5 + 1]);
-        J3DNativeDraw::position(position->x - drawOffsetX, position->y, position->z - drawOffsetZ);
-        J3DNativeDraw::texCoord(::cTexCoords[2 * 6], ::cTexCoords[2 * 6 + 1]);
-        J3DNativeDraw::position(position->x + drawOffsetX, position->y, position->z + drawOffsetZ);
-        J3DNativeDraw::texCoord(::cTexCoords[2 * 7], ::cTexCoords[2 * 7 + 1]);
+        VertexPT* vtx = rDraw.vertices< VertexPT >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 8);
+        *vtx++ = {drawVec3.x - drawOffsetX, drawVec3.y, drawVec3.z - drawOffsetZ, ::cTexCoords[2 * 0], ::cTexCoords[2 * 0 + 1]};
+        *vtx++ = {drawVec3.x + drawOffsetX, drawVec3.y, drawVec3.z + drawOffsetZ, ::cTexCoords[2 * 1], ::cTexCoords[2 * 1 + 1]};
+        *vtx++ = {drawVec2.x - drawOffsetX, drawVec2.y, drawVec2.z - drawOffsetZ, ::cTexCoords[2 * 2], ::cTexCoords[2 * 2 + 1]};
+        *vtx++ = {drawVec2.x + drawOffsetX, drawVec2.y, drawVec2.z + drawOffsetZ, ::cTexCoords[2 * 3], ::cTexCoords[2 * 3 + 1]};
+        *vtx++ = {drawVec1.x - drawOffsetX, drawVec1.y, drawVec1.z - drawOffsetZ, ::cTexCoords[2 * 4], ::cTexCoords[2 * 4 + 1]};
+        *vtx++ = {drawVec1.x + drawOffsetX, drawVec1.y, drawVec1.z + drawOffsetZ, ::cTexCoords[2 * 5], ::cTexCoords[2 * 5 + 1]};
+        *vtx++ = {position->x - drawOffsetX, position->y, position->z - drawOffsetZ, ::cTexCoords[2 * 6], ::cTexCoords[2 * 6 + 1]};
+        *vtx++ = {position->x + drawOffsetX, position->y, position->z + drawOffsetZ, ::cTexCoords[2 * 7], ::cTexCoords[2 * 7 + 1]};
     }
 }
 
@@ -293,8 +287,6 @@ WaterPlantDrawInit::WaterPlantDrawInit()
     mPlantBTex = new JUTTexture(MR::loadTexFromArc("WaterPlant.arc", "WaterPlantB.bti"));
     mPlantCTex = new JUTTexture(MR::loadTexFromArc("WaterPlant.arc", "WaterPlantC.bti"));
     mPlantDTex = new JUTTexture(MR::loadTexFromArc("WaterPlant.arc", "WaterPlantD.bti"));
-
-    MR::registerPreDrawFunction(MR::Functor(this, &WaterPlantDrawInit::initDraw), MR::DrawType_WaterPlant);
 
     mSwingPosTable = new f32[::sSwingPosTableSize];
     updateSwingPos();
@@ -331,9 +323,9 @@ void WaterPlantDrawInit::movement() {
     ::sDrawVec.set< f32 >(inverseViewMtx[0][0], inverseViewMtx[1][0], inverseViewMtx[2][0]);
 }
 
-void WaterPlantDrawInit::loadTex(int tex) {
+SiteMaterial WaterPlantDrawInit::material(int tex) const {
     JUTTexture* pTexture = tex == 1 ? mPlantBTex : tex == 2 ? mPlantCTex : tex == 3 ? mPlantDTex : mPlantATex;
-    sendPlantMaterial(pTexture, ::sFogStartZ, ::sFogEndZ);
+    return plantMaterial(pTexture, ::sFogStartZ, ::sFogEndZ);
 }
 
 void WaterPlantDrawInit::updateSwingPos() {
@@ -343,10 +335,4 @@ void WaterPlantDrawInit::updateSwingPos() {
         mSwingPosTable[i] = ::sSwingWidth * MR::sin(mAngleOffset + angle);
         angle += 0.2f;
     }
-}
-
-void WaterPlantDrawInit::initDraw() const {
-    J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-    J3DPass::positionMatrix(0);
-    sendPlantMaterial(mPlantATex, ::sFogStartZ, ::sFogEndZ);
 }

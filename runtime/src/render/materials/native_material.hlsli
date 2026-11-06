@@ -1,41 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The native materials' framework (E-04): each runtime/src/render/materials/<name>.hlsl includes this, defines
-// MaterialConstants (its NebulaNativeMaterial::constants, floats in order), `void material_vertex(NativeVertex v,
-// inout NativeVaryings o)` (its texture coordinates) and `float4 material_color(NativeVaryings i)` (its colour, alpha
-// tested by the material itself), and is compiled at build for D3D12 (DXIL) and Vulkan (SPIR-V) in the output variants
-// below. Bindings are the draw's: b0 the draw constants (draw_constants.h VertexConstants, the fields read here), b1
-// the material's constants, t0-t7/s0-s7 its textures, t3 space1 the matrix rows.
-//
-// Output variants (defines): NATIVE_REACTIVE (SV_Target1: the reactive mask), NATIVE_LAYER (with NATIVE_REACTIVE: the
-// effects layer's colour and transmission at SV_Target2-3), NATIVE_MOTION (SV_Target1: the motion vector), NATIVE_SAMPLE
-// (inputs per sample: an alpha test decides each sample of a multisampled target), NATIVE_PIXEL_LIT (the eye position and
-// normal reach the pixel stage, which lights: j3d_material.hlsli). NATIVE_PARTICLE: the material's corners place themselves
-// by the presented frame's time (NebulaParticleCorner).
+// A written material: runtime/src/render/materials/<name>.hlsl includes this, defines MaterialConstants (its site's
+// SiteMaterial::constants, floats in order), `void material_vertex(NativeVertex v, inout NativeVaryings o)` (its texture
+// coordinates) and `float4 material_color(NativeVaryings i)` (its colour, alpha tested by the material itself). Bindings
+// and output variants are every program's (program.hlsli); b1 holds the material in both stages. NATIVE_WIDE: the vertices
+// are corners a site's line or point became. NATIVE_PARTICLE: the corners place themselves by the presented frame's time.
 
-cbuffer NativeDraw : register(b0) {
-    row_major float4x4 projection : packoffset(c0);  // row-major, as every draw constant (VertexConstants)
-    uint4 draw_rows[3] : packoffset(c4);      // the draw's matrix rows: [0].x position, then coordinate i's at 1 + i
-    uint4 draw_counts : packoffset(c7);       // num_texgens, num_chans, flags, pos_base
-    uint4 draw_indices : packoffset(c8);      // zw: sky_up, sky_up_known
-    float4 line_point_raster : packoffset(c9);   // the viewport's width and height in pixels (xy), the half line
-                                                 // width and half point size (zw, native_lines.hlsl)
-    uint4 line_point_tex_offsets : packoffset(c10);  // lines' and points' texture coordinate offsets (native_lines.hlsl)
-    uint4 vs_header : packoffset(c11);           // y: the frame scale; w: the shape's per-vertex texture matrix indices
-                                                 // (texgen n's bit)
-    uint4 vs_post[2] : packoffset(c12);          // texgen i's post-transform row (61 the identity), | 0x100 normalize
-    uint4 row_bases : packoffset(c14);
-    float4 motion_prev_proj[2] : packoffset(c15);
-    float4 motion_prev_pos[3] : packoffset(c17);
-    float4 motion_params : packoffset(c20);
-    uint4 motion_ctrl : packoffset(c21);
-};
+#include "program.hlsli"
 
-cbuffer MaterialBlock : register(b1) {
+cbuffer MaterialBlock : register(b2) {
     MaterialConstants material;
 };
-
-Texture2D tex[8] : register(t0);
-SamplerState samp[8] : register(s0);
 
 // How much of this pixel lies on the contour where `value` rounds to `level` (both 0-255): a line of the same share of the
 // picture at every resolution, its edge antialiased.
@@ -43,53 +17,12 @@ float level_line(float value, float level) {
     return saturate((0.5 - abs(value - level)) / max(abs(ddx_fine(value)) + abs(ddy_fine(value)), 0.001) + 0.5);
 }
 
-// The draw's matrix rows (draw_matrices.h): position rows from pos_base (place k at 3k), texture rows from
-// row_bases.y (rows 30-63), normal rows from row_bases.x, light n's four rows at row_bases.w + 4n.
-StructuredBuffer<float4> mtx_rows : register(t3, space1);
-float4 native_position_row(uint r) { return mtx_rows[draw_counts.w + r]; }
-// A texture coordinate's matrix row: a texture place's, or (native_tex_matrix) the vertex's position or normal matrix's.
-float4 native_matrix_row(uint r) {
-    if (r >= 0x40000u) return mtx_rows[row_bases.x + (r - 0x40000u)];
-    if (r >= 0x20000u) return mtx_rows[draw_counts.w + (r - 0x20000u)];
-    return mtx_rows[r < 30u ? draw_counts.w + r : row_bases.y + (r - 30u)];
-}
-float4 native_normal_row(uint q) { return mtx_rows[row_bases.x + q]; }
-float4 native_light_row(uint n, uint w) { return mtx_rows[row_bases.w + 4u * n + w]; }
-
-// Light n's contribution to a lit channel, in 0-255 units (rgb, and a for an alpha channel): its colour by its
-// attenuation (1 specular, 2 directional, 3 spot) and diffuse function (0 none, 1 signed, 2 clamped), at the eye-space
-// position and normal. The light rows hold the colour (raw RGBA8 in row 0's w), the cosine and distance attenuation
-// coefficients, the position and direction.
-float4 j3d_light(uint n, uint atten, uint diffuse, float3 pos, float3 nrm) {
-    const uint lcw = asuint(native_light_row(n, 0u).w);
-    const float4 le1 = native_light_row(n, 1u);
-    const float4 le2 = native_light_row(n, 2u);
-    const float4 le3 = native_light_row(n, 3u);
-    const float3 lpos = float3(le2.z, le2.w, le3.x);
-    const float3 ldvec = float3(le3.y, le3.z, le3.w);
-    const float3 cos_a = le1.xyz;
-    const float3 dist_a = float3(le1.w, le2.x, le2.y);
-    const float4 lcol = float4((lcw >> 24u) & 255u, (lcw >> 16u) & 255u, (lcw >> 8u) & 255u, lcw & 255u);
-    const float3 delta = lpos - pos;
-    const float dd = dot(delta, delta);
-    float3 ldir = dd > 0.0 ? delta * rsqrt(dd) : nrm;
-    float attn = 1.0;
-    if (atten == 1u) {
-        attn = dot(nrm, ldir) >= 0.0 ? min(max(0.0, dot(nrm, ldvec)), 1.0e18) : 0.0;
-        const float dad = dot(dist_a, dist_a);
-        const float3 dist_attn = diffuse == 0u ? dist_a : (dad > 0.0 ? dist_a * rsqrt(dad) : dist_a);
-        const float denom = dot(dist_attn, float3(1.0, attn, attn * attn));
-        attn = denom != 0.0 ? max(0.0, dot(cos_a, float3(1.0, attn, attn * attn))) / denom : 0.0;
-    } else if (atten == 3u) {
-        const float dist = min(sqrt(dd), 1.0e18);
-        const float dist2 = min(dd, 1.0e36);
-        ldir = dist > 0.0 ? delta / dist : nrm;
-        attn = min(max(0.0, dot(ldir, ldvec)), 1.0e18);
-        const float denom = dot(dist_a, float3(1.0, dist, dist2));
-        attn = denom != 0.0 ? max(0.0, cos_a.x + cos_a.y * attn + cos_a.z * attn * attn) / denom : 0.0;
-    }
-    const float facing = diffuse == 1u ? dot(ldir, nrm) : diffuse == 2u ? max(0.0, dot(ldir, nrm)) : 1.0;
-    return attn * facing * lcol;
+static uint g_light_base;
+float4 native_position_row(uint r) { return rows[r]; }
+float4 native_normal_row(uint r) { return rows[r + 3u]; }
+float4 native_light_row(uint n, uint w) { return rows[g_light_base + 4u * n + w]; }
+float4 channel_light(uint n, uint atten, uint diffuse, float3 pos, float3 nrm) {
+    return light_term(g_light_base, n, atten, diffuse, pos, nrm);
 }
 
 // fog over the colour, from its values (fog: start, end, near, far; fog_color: rgb, w the fog type): its type (fog_color.w: perspective 2-7 by the eye depth, orthographic 10-15
@@ -110,28 +43,24 @@ float3 native_fog(float3 c, float4 pos, float4 fog, float4 fog_color) {
     }
     return lerp(c, fog_color.rgb, f);
 }
-float4 native_post_row(uint q) { return mtx_rows[row_bases.z + q]; }
-uint native_post(uint i) { return vs_post[i >> 2u][i & 3u]; }
-// Texture coordinate i's own matrix row r, and its post-transform matrix row r, named 3i + r.
-float4 native_tex_row(uint k) {
-    const uint i = k / 3u + 1u;
-    return native_matrix_row(min(draw_rows[i >> 2u][i & 3u], 61u) + k % 3u);
-}
-float4 native_coord_post_row(uint k) {
-    return native_post_row(((native_post(k / 3u) & 0x3Fu) + k % 3u) & 0x3Fu);
-}
-
 struct NativeVertexIn {
     float3 pos : POSITION;
     float3 nrm : NORMAL;
+#if NATIVE_WIDE
+    float3 other : TANGENT;    // a widened line corner's other end
+    uint widen : BLENDINDICES1; // 1 a point, 2 a line; 4 its right edge, 8 its bottom edge
+#else
     float3 tangent : TANGENT;
+#endif
     float3 binormal : BINORMAL;
-    uint color0 : COLOR0;
-    uint color1 : COLOR1;
-    float2 uv[8] : TEXCOORD;
-    uint mtx_row : BLENDINDICES0;  // the position matrix's first row
-    uint2 mtx_more : BLENDINDICES1; // each coordinate's matrix (a nibble); flags
-    uint other_row : BEND;         // a widened line corner's other end's position row
+    float4 color0 : COLOR0;
+    float4 color1 : COLOR1;
+    float2 uv[NEBULA_MATERIAL_SLOTS] : TEXCOORD;
+    uint draw_matrix : BLENDINDICES0;
+#if NATIVE_MOTION
+    float3 before : POSITION1;  // where the vertex was a frame ago
+#endif
+    uint instance : SV_InstanceID;
 };
 
 // What a material's vertex function sees: the vertex in the space its draw sent it (object), its position in the eye
@@ -145,191 +74,101 @@ struct NativeVertex {
     float3 binormal;
     float4 color0;
     float4 color1;
-    float2 uv[8];
-    uint3 mtx_idx;
+    float2 uv[NEBULA_MATERIAL_SLOTS];
     uint pn_row;     // the position matrix's first row
 };
 
-#if NATIVE_MOTION
-#define NATIVE_MOTION_MEMBERS float4 mv_cur : TEXCOORD12; float4 mv_prev : TEXCOORD13;
-#else
-#define NATIVE_MOTION_MEMBERS
-#endif
-#if NATIVE_SAMPLE
-#define NATIVE_PER_SAMPLE sample
-#else
-#define NATIVE_PER_SAMPLE
-#endif
-#if NATIVE_PIXEL_LIT
-#define NATIVE_PIXEL_LIT_MEMBERS NATIVE_PER_SAMPLE float3 lit_eye : TEXCOORD8; NATIVE_PER_SAMPLE float3 lit_nrm : TEXCOORD9;
-#else
-#define NATIVE_PIXEL_LIT_MEMBERS
-#endif
 #define NATIVE_VARYING_MEMBERS \
-    NATIVE_PIXEL_LIT_MEMBERS \
-    float4 pos : SV_Position; NATIVE_PER_SAMPLE float4 color : COLOR0; NATIVE_PER_SAMPLE float4 color1 : COLOR1; NATIVE_PER_SAMPLE float4 uv[8] : TEXCOORD; \
-    NATIVE_MOTION_MEMBERS
+    float4 pos : SV_Position; PER_SAMPLE float4 color : COLOR0; PER_SAMPLE float4 color1 : COLOR1; PER_SAMPLE float4 uv[NEBULA_MATERIAL_SLOTS] : TEXCOORD0; \
+    VARYINGS_MOTION
 
 // What the vertex stage writes and the pixel stage reads.
 struct NativeVaryings {
     NATIVE_VARYING_MEMBERS
 };
 
-float4 native_unpack_color(uint c) {
-    return float4((c >> 24u) & 0xFFu, (c >> 16u) & 0xFFu, (c >> 8u) & 0xFFu, c & 0xFFu) / 255.0;
-}
-
 void material_vertex(NativeVertex v, inout NativeVaryings o);
 
-// Texture coordinate i's matrix: the vertex's own index where the shape carries one (vs_header.w bit i: skinned
-// shapes' per-vertex texture matrices), else the draw's (draw_rows: the rows the shape loads, as
-// the draw names); its rows through native_matrix_row (60: the identity).
-uint native_tex_matrix(NativeVertex v, uint i) {
-    if (((vs_header.w >> i) & 1u) == 0u) {
-        return draw_rows[(i + 1u) >> 2u][(i + 1u) & 3u];
-    }
-    const uint code = (v.mtx_idx.y >> (4u * i)) & 15u;
-    return code == 15u ? 0x20000u + v.pn_row : code == 14u ? 0x40000u + v.pn_row : 30u + 3u * code;
-}
 float4 material_color(NativeVaryings i);
 
-// The texture coordinates `mask` names moved by 1 / divisor in x (and in y when `bottom`).
-void native_texcoord_offset(inout NativeVaryings v, uint mask, uint divisor, bool right, bool bottom) {
-    if (divisor == 0u) {
-        return;
-    }
-    const float offset = 1.0 / float(divisor);
-    [unroll] for (uint i = 0u; i < 8u; ++i) {
-        if ((mask & (1u << i)) != 0u) {
-            v.uv[i].x += right ? offset : 0.0;
-            v.uv[i].y += bottom ? offset : 0.0;
-        }
+#if NATIVE_WIDE
+// A spreading line's or point's texture coordinates move a whole texel-space unit on its far edges.
+void native_texcoord_spread(inout NativeVaryings v, bool right, bool bottom) {
+    [unroll] for (uint i = 0u; i < 3u; ++i) {
+        v.uv[i].x += right ? 1.0 : 0.0;
+        v.uv[i].y += bottom ? 1.0 : 0.0;
     }
 }
+#endif
 
 NativeVaryings native_vs(NativeVertexIn input) {
     NativeVertex v;
     v.pos = input.pos;
     v.nrm = input.nrm;
-    v.tangent = input.tangent;
     v.binormal = input.binormal;
-    v.mtx_idx = uint3(input.mtx_row, input.mtx_more);
-    // The position matrix: the vertex's place where it carries one (flags bit 0, skinned and multi-matrix models),
-    // else the draw's.
+#if !NATIVE_WIDE
+    v.tangent = input.tangent;
+#else
+    v.tangent = float3(0.0, 0.0, 0.0);
+#endif
 #if NATIVE_PARTICLE
     // A particle's corner: where it was a game frame ago (in the normal's place) and where it is, at this frame's time.
-    const float4 p = float4(lerp(input.nrm, input.pos, asfloat(draw_rows[2].y)), 1.0);
-    const float4 p_prev = float4(lerp(input.nrm, input.pos, asfloat(draw_rows[2].z)), 1.0);
+    const float3 here = lerp(input.nrm, input.pos, view_scale.y);
+    const float3 before = lerp(input.nrm, input.pos, view_scale.z);
+#elif NATIVE_SHELL && !NATIVE_WIDE
+    // Fur: a shell's corner along its growth, by its length; a corner with no fur sinks under the skin.
+    const float3 here = input.pos + input.binormal * (input.tangent.x == 0.0 ? -1.0 : material.shell.x * input.tangent.x);
+    const float3 before = here;
 #else
-    const float4 p = float4(input.pos, 1.0);
-    const float4 p_prev = p;
+    const float3 here = input.pos;
+#if NATIVE_MOTION
+    const float3 before = input.before;
+#else
+    const float3 before = input.pos;
 #endif
-    v.pn_row = (draw_counts.z & 1u) != 0u ? input.mtx_row : draw_rows[0].x;
-    const float4 m0 = native_position_row(v.pn_row);
-    const float4 m1 = native_position_row(v.pn_row + 1u);
-    const float4 m2 = native_position_row(v.pn_row + 2u);
-    v.eye = float3(dot(m0, p), dot(m1, p), dot(m2, p));
-    const float3 n = float3(dot(m0.xyz, input.nrm), dot(m1.xyz, input.nrm), dot(m2.xyz, input.nrm));
+#endif
+    const Place place = native_place_moved(here, before, input.draw_matrix, input.instance);
+    g_light_base = place.light;
+    v.pn_row = place.row;
+    v.eye = place.eye;
+    const float3 n = row_times_direction(place.row, input.nrm);
     v.eye_nrm = dot(n, n) > 0.0 ? normalize(n) : n;
-    v.color0 = native_unpack_color(input.color0);
-    v.color1 = native_unpack_color(input.color1);
-    [unroll] for (uint i = 0u; i < 8u; ++i) {
+    v.color0 = input.color0;
+    v.color1 = input.color1;
+    [unroll] for (uint i = 0u; i < NEBULA_MATERIAL_SLOTS; ++i) {
         v.uv[i] = input.uv[i];
     }
     NativeVaryings o = (NativeVaryings)0;
-    o.pos = mul(projection, float4(v.eye, 1.0));
-#if NATIVE_MOTION
-    // Motion vectors (temporal scenes): this frame's clip position without the jitter, and the previous frame's (the
-    // camera delta applied to the eye position).
-    float3 prev_eye;
-    if (motion_ctrl.x == 0u) {
-        // The position rows of the previous frame (motion_ctrl.y: their base, or kMotionOwnRows).
-        const uint base = motion_ctrl.y;
-        const uint r = v.pn_row;
-        prev_eye = float3(dot(base == 0xFFFFFFFFu ? native_position_row(r) : mtx_rows[base + r], p_prev),
-                          dot(base == 0xFFFFFFFFu ? native_position_row(r + 1u) : mtx_rows[base + r + 1u], p_prev),
-                          dot(base == 0xFFFFFFFFu ? native_position_row(r + 2u) : mtx_rows[base + r + 2u], p_prev));
-    } else {
-        // The camera's move applied to the eye position (palette draws), or the previous position matrix (inline).
-        const float4 q = (draw_counts.z & 1u) != 0u ? float4(v.eye, 1.0) : p_prev;
-        prev_eye = float3(dot(motion_prev_pos[0], q), dot(motion_prev_pos[1], q), dot(motion_prev_pos[2], q));
-    }
-    const float4 pp0 = motion_prev_proj[0];
-    const float3 prev_clip = motion_prev_proj[1].z == 0.0
-        ? float3(pp0.x * prev_eye.x + pp0.y * prev_eye.z, pp0.z * prev_eye.y + pp0.w * prev_eye.z, -prev_eye.z)
-        : float3(pp0.x * prev_eye.x + pp0.y, pp0.z * prev_eye.y + pp0.w, 1.0);
-    o.mv_cur = float4(o.pos.xy - motion_params.xy * o.pos.w, motion_params.z, o.pos.w);
-    o.mv_prev = float4(prev_clip.xy, motion_params.w, prev_clip.z);  // .w the previous clip w
-#endif
+    PLACE_OUT(o, place);
     material_vertex(v, o);
-    // A corner of a widened point or line (render_vertex.h kVertexWiden*): moved out by the draw's size in pixels. A line
-    // widens across its major axis (a steep one across x, a flat one across y); the second edge's coordinates move.
-    const uint widen = (input.mtx_more.y >> 8u) & 15u;
-    if (widen != 0u) {
-        const bool right = (widen & 4u) != 0u;
-        const bool bottom = (widen & 8u) != 0u;
-        if ((widen & 1u) != 0u) {
-            const float2 signs = float2(right ? 1.0 : -1.0, bottom ? -1.0 : 1.0);
-            o.pos.xy += signs * line_point_raster.ww / line_point_raster.xy * o.pos.w;
-            native_texcoord_offset(o, line_point_tex_offsets.y, line_point_tex_offsets.w, right, bottom);
-        } else {
-            const float4 q = float4(input.tangent, 1.0);
-            float4 other_eye;
-            if ((draw_counts.z & 1u) != 0u) {
-                const uint r = input.other_row;
-                other_eye = float4(dot(native_position_row(r), q), dot(native_position_row(r + 1u), q),
-                                   dot(native_position_row(r + 2u), q), 1.0);
-            } else {
-                other_eye = float4(dot(m0, q), dot(m1, q), dot(m2, q), 1.0);
-            }
-            const float4 other = mul(projection, other_eye);
-            const float2 delta = abs(o.pos.xy / o.pos.w - other.xy / other.w);
-            const bool tall = line_point_raster.y * delta.y > line_point_raster.x * delta.x;
-            const float2 offset = tall ? float2(line_point_raster.z / line_point_raster.x, 0.0)
-                                       : float2(0.0, -line_point_raster.z / line_point_raster.y);
-            o.pos.xy += (right ? offset : -offset) * o.pos.w;
-            native_texcoord_offset(o, line_point_tex_offsets.x, line_point_tex_offsets.z, right, false);
+#if NATIVE_WIDE
+    // A corner of a widened point or line: moved out by the draw's size in pixels. A line widens across its major axis
+    // (a steep one across x, a flat one across y); the second edge's coordinates move.
+    const bool right = (input.widen & 4u) != 0u;
+    const bool bottom = (input.widen & 8u) != 0u;
+    if ((input.widen & 1u) != 0u) {
+        const float2 signs = float2(right ? 1.0 : -1.0, bottom ? -1.0 : 1.0);
+        o.pos.xy += signs * draw_half_point / line_point_raster.xy * o.pos.w;
+        if ((draw_flags & 2u) != 0u) {
+            native_texcoord_spread(o, right, bottom);
+        }
+    } else {
+        const float4 other = mul(projection, float4(row_times_point(place.row, float4(input.other, 1.0)), 1.0));
+        const float2 delta = abs(o.pos.xy / o.pos.w - other.xy / other.w);
+        const bool tall = line_point_raster.y * delta.y > line_point_raster.x * delta.x;
+        const float2 offset = tall ? float2(draw_half_line / line_point_raster.x, 0.0)
+                                   : float2(0.0, -draw_half_line / line_point_raster.y);
+        o.pos.xy += (right ? offset : -offset) * o.pos.w;
+        if ((draw_flags & 1u) != 0u) {
+            native_texcoord_spread(o, right, false);
         }
     }
+#endif
     return o;
 }
 
-#if NATIVE_LAYER
-struct NativeOut { float4 color : SV_Target0; float reactive : SV_Target1; float4 layer : SV_Target2;
-                   float4 trans : SV_Target3; };
-#elif NATIVE_REACTIVE
-struct NativeOut { float4 color : SV_Target0; float reactive : SV_Target1; };
-#elif NATIVE_MOTION
-struct NativeOut { float4 color : SV_Target0; float2 motion : SV_Target1; };
-#else
-struct NativeOut { float4 color : SV_Target0; };
-#endif
-
 NativeOut native_ps(NativeVaryings i) {
     // The material's colour as it is; the target rounds it once.
-#if NATIVE_PIXEL_LIT
-    // A wide scene target keeps what the enhanced lighting adds past white; an 8-bit one rounds it to white.
-    const float4 lit_color = material_color(i);
-    const float4 c0 = float4(max(lit_color.rgb, 0.0), saturate(lit_color.a));
-#else
-    const float4 c0 = saturate(material_color(i));
-#endif
-    const float4 c = c0;
-    NativeOut o;
-    o.color = c;
-#if NATIVE_REACTIVE
-    o.reactive = min(saturate(c.a), 0.9);
-#endif
-#if NATIVE_LAYER
-    o.layer = c;
-    o.trans = c;
-#endif
-#if NATIVE_MOTION
-    // The move since the previous frame in pixels (mv_cur.z and mv_prev.z: the half viewport).
-    o.motion = float2(0.0, 0.0);
-    if (i.mv_cur.w > 0.0 && i.mv_prev.w > 0.0) {
-        o.motion = (i.mv_prev.xy / i.mv_prev.w - i.mv_cur.xy / i.mv_cur.w) * float2(i.mv_cur.z, i.mv_prev.z);
-    }
-#endif
-    return o;
+    const float4 c = saturate(material_color(i));
+    PROGRAM_RETURN(c);
 }

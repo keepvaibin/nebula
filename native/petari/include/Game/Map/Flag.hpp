@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include <nebula_geometry.hpp>
 
 class Color8;
@@ -30,9 +31,9 @@ public:
     void setInfoPos(const char* pObjName, const Vec3f* pPos, const Vec3f& rSide, f32 stickLength, f32 width, f32 height, s32 numPointsU,
                     s32 numPointsV, f32);
     void updateFlag();
-    void loadMaterial() const;
+    SiteMaterial loadMaterial() const;
     // Vertex `index`'s colour and texture coordinate (its mColors and mTexST entries) for the draw being sent.
-    void sendEntry(u8 index) const;
+    VertexPCT vertexOf(const Vec3f& rPos, u8 index) const;
 
     s32 getNumPointsU() const {
         return mNumPointsU;

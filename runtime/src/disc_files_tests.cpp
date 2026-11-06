@@ -106,6 +106,12 @@ int main() {
         {"StageData/EggStarGalaxy/EggStarGalaxy.arc", "EggStarGalaxy.arc", 0x2000, 1000, 4, false},
     };
     const std::vector<std::uint8_t> bytes = store_of(items);
+    std::vector<std::uint8_t> previous = bytes;
+    const std::uint32_t previous_version = 3u;
+    std::memcpy(previous.data() + 8, &previous_version, sizeof(previous_version));
+    AssetStore old_table;
+    passed &= expect(!old_table.load(previous.data(), previous.size()) && !old_table.find("/"),
+                     "a store with the old model and clip layouts needs importing again");
     AssetStore table;
     passed &= expect(table.load(bytes.data(), bytes.size()), "the store loads");
     passed &= expect(table.game_id() == "RMGE01" && table.revision() == 2, "the game id and revision");

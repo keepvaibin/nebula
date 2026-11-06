@@ -21,7 +21,7 @@ namespace galaxy::render::vk {
 
 class PostProcessorVk {
 public:
-    // The renderer's descriptor sets for one draw (its frame pool, or a replay list's while one is recorded).
+    // The renderer's descriptor sets for one draw.
     using SetAllocator = std::function<VkDescriptorSet(VkDescriptorSetLayout)>;
 
     PostProcessorVk() = default;
@@ -54,10 +54,6 @@ public:
                            unsigned display_height, const SetAllocator& allocate);
     void finish_scene_aa(VkCommandBuffer commands, AaRun pass, unsigned width, unsigned height,
                          const SetAllocator& allocate, VkRenderPass scene_pass, unsigned samples_log2);
-    // The targets recorded scene AA reads, for a command buffer submitted again later (the interpolation replay):
-    // it keeps them alive.
-    void hold_scene_targets(std::vector<std::shared_ptr<Texture>>& held) const;
-
     // The scaling chain from `source` (shader-readable) to a `target_width` x `target_height` picture: prepare
     // records the passes outside the target's render pass (into the window-sized intermediate); finish draws the
     // last one in the target's pass (the present pass when `present`, else the RGBA8 pass, dithered either way) at `viewport`, whose

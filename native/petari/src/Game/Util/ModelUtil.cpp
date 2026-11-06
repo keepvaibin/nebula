@@ -1,33 +1,21 @@
+#include "Game/Util/Color.hpp"
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/System/GameThreads.hpp"
 #include "Game/Animation/XanimePlayer.hpp"
 #include "Game/Animation/XanimeResource.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/ModelManager.hpp"
-#include "Game/Player/J3DModelX.hpp"
+#include "Game/Player/PlayerModel.hpp"
 #include "Game/System/ResourceHolder.hpp"
-#include "Game/System/ShapePacketUserData.hpp"
 #include "Game/Util.hpp"
-#include <JSystem/J3DGraphAnimator/J3DJoint.hpp>
+#include "Game/Render/ModelData.hpp"
 #include <cstdio>
-#include <nebula_cooked_material.h>
-
-namespace {
-    inline bool isUseLightChanNo(J3DMaterial* pMaterial, int channel, int index) {
-        const J3DColorChan* pChan = pMaterial->getColorChan(channel);
-        if (pChan->getEnable() == 0) {
-            return false;
-        }
-
-        return pChan->getLightMask() & (1 << index);
-    }
-};  // namespace
 
 namespace MR {
 
-    XanimePlayer* newXanimePlayer(const ResourceHolder* pModelResourceHolder, const char* pChar, const ResourceHolder* pUnused, J3DMdlFlag mdlFlag,
+    XanimePlayer* newXanimePlayer(const ResourceHolder* pModelResourceHolder, const char* pChar, const ResourceHolder* pUnused, ModelFlag mdlFlag,
                                   XanimeResourceTable* pAnimeResourceTable) {
-        J3DModel* newModel = newJ3DModel(pModelResourceHolder, pChar, mdlFlag);
+        Model* newModel = createModel(pModelResourceHolder, pChar, mdlFlag);
         return new XanimePlayer(newModel, pAnimeResourceTable);
     }
 
@@ -49,52 +37,52 @@ namespace MR {
         pAnimePlayer->updateAfterMovement();
     }
 
-    void invalidateMtxCalc(J3DModelData* pModelData) {
-        u16 jointNum = pModelData->getJointNum();
-        for (u16 i = 0; i < jointNum; i++) {
+    void invalidateMtxCalc(ModelData* pModelData) {
+        u32 jointNum = pModelData->getJointNum();
+        for (u32 i = 0; i < jointNum; i++) {
             pModelData->getJointNodePointer(i)->setMtxCalc(nullptr);
         }
     }
 
-    void invalidateJointCallback(J3DModelData* pModelData) {
-        u16 jointNum = pModelData->getJointNum();
-        for (u16 i = 0; i < jointNum; i++) {
+    void invalidateJointCallback(ModelData* pModelData) {
+        u32 jointNum = pModelData->getJointNum();
+        for (u32 i = 0; i < jointNum; i++) {
             pModelData->getJointNodePointer(i)->setCallBack(nullptr);
         }
     }
 
-    J3DModel* getJ3DModel(const LiveActor* pActor) {
+    Model* getModel(const LiveActor* pActor) {
         if (pActor->mModelManager == nullptr) {
             return nullptr;
         }
 
-        return pActor->mModelManager->getJ3DModel();
+        return pActor->mModelManager->getModel();
     }
 
-    void calcJ3DModel(LiveActor* pActor) {
+    void calcModel(LiveActor* pActor) {
         (MR::MutexHolder< 0 >::sMutex).lock();
-        getJ3DModel(pActor)->calc();
+        getModel(pActor)->calc();
         (MR::MutexHolder< 0 >::sMutex).unlock();
     }
 
-    J3DModelData* getJ3DModelData(const LiveActor* pActor) {
+    ModelData* getModelData(const LiveActor* pActor) {
         if (pActor->mModelManager == nullptr) {
             return nullptr;
         }
 
-        return pActor->mModelManager->getJ3DModelData();
+        return pActor->mModelManager->getModelData();
     }
 
-    s16 getBckFrameMax(const LiveActor* pActor, const char* pBckName) {
-        return static_cast< J3DAnmBase* >(getResourceHolder(pActor)->mMotionResTable->getRes(pBckName))->mFrameMax;
+    s32 getBckFrameMax(const LiveActor* pActor, const char* pBckName) {
+        return static_cast< Clip* >(getResourceHolder(pActor)->mMotionResTable->getRes(pBckName))->mFrameMax;
     }
 
-    s16 getBrkFrameMax(const LiveActor* pActor, const char* pBrkName) {
-        return static_cast< J3DAnmBase* >(getResourceHolder(pActor)->mBrkResTable->getRes(pBrkName))->mFrameMax;
+    s32 getBrkFrameMax(const LiveActor* pActor, const char* pBrkName) {
+        return static_cast< Clip* >(getResourceHolder(pActor)->mBrkResTable->getRes(pBrkName))->mFrameMax;
     }
 
-    s16 getBvaFrameMax(const LiveActor* pActor, const char* pBvaName) {
-        return static_cast< J3DAnmBase* >(getResourceHolder(pActor)->mBvaResTable->getRes(pBvaName))->mFrameMax;
+    s32 getBvaFrameMax(const LiveActor* pActor, const char* pBvaName) {
+        return static_cast< Clip* >(getResourceHolder(pActor)->mBvaResTable->getRes(pBvaName))->mFrameMax;
     }
 
     bool isBckPlaying(XanimePlayer* pAnimePlayer, const char* pBckName) {
@@ -113,68 +101,63 @@ namespace MR {
         return false;
     }
 
-    u16 getMaterialNo(J3DModelData* pModelData, const char* pMaterialName) {
-        return pModelData->getMaterialName()->getIndex(pMaterialName);
+    u32 getMaterialNo(ModelData* pModelData, const char* pMaterialName) {
+        return pModelData->findMaterial(pMaterialName);
     }
 
-    u16 getMaterialNo(J3DModel* pModel, const char* pMaterialName) {
-        JUTNameTab* materialName = pModel->getModelData()->getMaterialName();
-        return materialName->getIndex(pMaterialName);
+    u32 getMaterialNo(Model* pModel, const char* pMaterialName) {
+        return pModel->getModelData()->findMaterial(pMaterialName);
     }
 
-    J3DMaterial* getMaterial(J3DModelData* pModelData, const char* pMaterialName) {
+    Material* getMaterial(ModelData* pModelData, const char* pMaterialName) {
         return pModelData->getMaterialNodePointer(getMaterialNo(pModelData, pMaterialName));
     }
 
-    J3DMaterial* getMaterial(J3DModelData* pModelData, int idx) {
+    Material* getMaterial(ModelData* pModelData, int idx) {
         return pModelData->getMaterialNodePointer(idx);
     }
 
-    J3DMaterial* getMaterial(J3DModel* pModel, int idx) {
+    Material* getMaterial(Model* pModel, int idx) {
         return pModel->mModelData->getMaterialNodePointer(idx);
     }
 
-    J3DMaterial* getMaterial(const LiveActor* pActor, int idx) {
-        return getJ3DModelData(pActor)->getMaterialNodePointer(idx);
+    Material* getMaterial(const LiveActor* pActor, int idx) {
+        return getModelData(pActor)->getMaterialNodePointer(idx);
     }
 
-    s32 getMaterialNum(J3DModel* pModel) {
+    s32 getMaterialNum(Model* pModel) {
         return pModel->mModelData->getMaterialNum();
     }
 
-    const char* getMaterialName(const J3DModelData* pModelData, int idx) {
-        return pModelData->getMaterialName()->getName(idx);
+    const char* getMaterialName(const ModelData* pModelData, int idx) {
+        return pModelData->getMaterialName(idx);
     }
 
     void updateModelDiffMaterials(LiveActor* pActor) {
         pActor->mModelManager->updateList();
     }
 
-    bool isEnvelope(J3DMaterial* pMaterial) {
-        return pMaterial->getShape()->mHasPNMTXIdx;
-    }
-
-    void hideMaterial(J3DModel* pModel, const char* pMaterialName) {
-        J3DShapePacket* pckt = pModel->getMatPacket(getMaterialNo(pModel, pMaterialName))->getShapePacket();
+    void hideMaterial(Model* pModel, const char* pMaterialName) {
+        ShapeEntry* pckt = pModel->getMatPacket(getMaterialNo(pModel, pMaterialName))->getShapeEntry();
         pckt->mFlags |= 0x10;
     }
 
     void hideMaterial(const LiveActor* pActor, const char* pMaterialName) {
-        hideMaterial(getJ3DModel(pActor), pMaterialName);
+        hideMaterial(getModel(pActor), pMaterialName);
     }
 
-    void showMaterial(J3DModel* pModel, const char* pMaterialName) {
-        J3DShapePacket* pckt = pModel->getMatPacket(getMaterialNo(pModel, pMaterialName))->getShapePacket();
+    void showMaterial(Model* pModel, const char* pMaterialName) {
+        ShapeEntry* pckt = pModel->getMatPacket(getMaterialNo(pModel, pMaterialName))->getShapeEntry();
         pckt->mFlags &= ~0x10;
     }
 
     void showMaterial(const LiveActor* pActor, const char* pMaterialName) {
-        showMaterial(getJ3DModel(pActor), pMaterialName);
+        showMaterial(getModel(pActor), pMaterialName);
     }
 
     void calcFogStartEnd(Vec3f vec, f32 f1, f32* pFogStart, f32* pFogEnd) {
         Vec multVec;
-        NebulaMtxMultVec(j3dSys.mViewMtx, vec, &multVec);
+        NebulaMtxMultVec(ModelSys::mViewMtx, vec, &multVec);
 
         f32 flt = -multVec.z;
         if (f1 == 0.0f) {
@@ -194,10 +177,9 @@ namespace MR {
         *pFogEnd = fogEnd;
     }
 
-    bool isUseTex(J3DMaterial* pMaterial, u16 a2) {
-        const NebulaCookedMaterial* pCooked = pMaterial->mNativeMaterial;
-        for (u32 idx = 0; pCooked != nullptr && idx < 8; idx++) {
-            if (pMaterial->getTexNo(idx) == a2 && (pCooked->used_maps & (1u << idx)) != 0) {
+    bool isUseTex(Material* pMaterial, u32 a2) {
+        for (u32 idx = 0; idx < NEBULA_MATERIAL_SLOTS; idx++) {
+            if (pMaterial->getTexNo(idx) == a2 && pMaterial->usesMap(idx)) {
                 return true;
             }
         }
@@ -205,9 +187,9 @@ namespace MR {
         return false;
     }
 
-    bool isNormalTexMtx(J3DMaterial* pMaterial) {
-        for (u32 idx = 0; idx < 8; idx++) {
-            J3DTexMtx* texMtx = pMaterial->getTexMtx(idx);
+    bool isNormalTexMtx(Material* pMaterial) {
+        for (u32 idx = 0; idx < NEBULA_MATERIAL_SLOTS; idx++) {
+            CoordMatrix* texMtx = pMaterial->getTexMtx(idx);
 
             if (texMtx != nullptr && (texMtx->getTexMtxInfo().mInfo & 0x3F) != 0 && isUseTexMtx(pMaterial, idx)) {
                 return false;
@@ -217,14 +199,12 @@ namespace MR {
         return true;
     }
 
-    bool isUseTexMtx(J3DMaterial* pMaterial, u32 idx) {
-        const NebulaCookedMaterial* pCooked = pMaterial->mNativeMaterial;
-        return pMaterial->getTexMtx(idx) != nullptr && pCooked != nullptr &&
-               (pCooked->used_coords & (1u << idx)) != 0;
+    bool isUseTexMtx(Material* pMaterial, u32 idx) {
+        return pMaterial->getTexMtx(idx) != nullptr && pMaterial->usesCoord(idx);
     }
 
-    bool isExistEffectTexMtx(J3DModelData* pModelData) {
-        for (u16 i = 0; i < pModelData->getMaterialNum(); i++) {
+    bool isExistEffectTexMtx(ModelData* pModelData) {
+        for (u32 i = 0; i < pModelData->getMaterialNum(); i++) {
             if (!isNormalTexMtx(pModelData->getMaterialNodePointer(i))) {
                 return true;
             }
@@ -234,85 +214,15 @@ namespace MR {
     }
 
     bool isExistEffectTexMtx(LiveActor* pActor) {
-        return isExistEffectTexMtx(getJ3DModelData(pActor));
-    }
-
-    bool isUseTexMtxEnvMap(J3DMaterial* pMaterial) {
-        for (u32 idx = 0; idx < 8; idx++) {
-            J3DTexMtx* texMtx = pMaterial->getTexMtx(idx);
-            if (texMtx == nullptr) {
-                continue;
-            }
-
-            u32 temp = texMtx->getTexMtxInfo().mInfo & 0x3F;
-            if (temp == 1 || temp == 6 || temp == 7) {
-                if (!isUseTexMtx(pMaterial, idx)) {
-                    return false;
-                }
-
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    bool isUseTexMtxProjMap(J3DMaterial* pMaterial) {
-        for (u32 idx = 0; idx < 8; idx++) {
-            J3DTexMtx* texMtx = pMaterial->getTexMtx(idx);
-            if (texMtx == nullptr) {
-                continue;
-            }
-
-            u32 temp = texMtx->getTexMtxInfo().mInfo & 0x3F;
-            if (temp == 2 || temp == 3 || temp == 8 || temp == 9) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    void initEnvelopeAndEnvMapOrProjMapModelData(J3DModelData* pModelData) {
-
-
-        for (int i = 0; i < pModelData->getMaterialNum(); i++) {
-            J3DMaterial* material = pModelData->getMaterialNodePointer(i);
-            if (!isEnvelope(material)) {
-                continue;
-            }
-
-            bool isUseEnvMap = isUseTexMtxEnvMap(material);
-            bool isUseProjMap = isUseTexMtxProjMap(material);
-            if (!isUseEnvMap && !isUseProjMap) {
-                continue;
-            }
-
-            J3DShape* shape = material->getShape();
-            if (isUseEnvMap) {
-                shape->setTexMtxLoadType(0x2000);
-            }
-
-            for (u32 idx = 0; idx < 8; idx++) {
-                J3DTexCoord* texCoord = material->getTexCoord(idx);
-                if (texCoord->getTexGenSrc() == 1) {
-                    shape->addTexMtxIndex(idx, 30);
-                } else if (texCoord->getTexGenSrc() == 0) {
-                    // In a material with indirect stages: texture place 0, as v1 and the original draw it (the manta ray's body,
-                    // runs s4_rC against s4_g5 and v1). Otherwise the corner's position (Rosalina's fade, ros_rc1).
-                    const bool isIndirect = material->getIndTexStageNum() != 0;
-                    shape->addTexMtxIndex(idx, isIndirect ? J3DShape::cTexMtxBasePlaceZero : 0);
-                }
-            }
-        }
+        return isExistEffectTexMtx(getModelData(pActor));
     }
 
     ResTIMG* getResTIMG(const LiveActor* pActor, int idx) {
-        return getResTIMG(getJ3DModelData(pActor), idx);
+        return getResTIMG(getModelData(pActor), idx);
     }
 
-    ResTIMG* getResTIMG(const J3DModelData* pModelData, int idx) {
-        return pModelData->mMaterialTable.getTexture()->getResTIMG(idx);
+    ResTIMG* getResTIMG(const ModelData* pModelData, int idx) {
+        return pModelData->getTexture(idx);
     }
 
     ResTIMG* getTexture(ResourceHolder* pResourceHolder, const char* pTextureName) {
@@ -320,71 +230,32 @@ namespace MR {
     }
 
     const char* getTextureName(const LiveActor* pActor, int idx) {
-        return getJ3DModelData(pActor)->getTextureName()->getName(idx);
+        return getModelData(pActor)->getTextureName(idx);
     }
 
-    int findPosNrmMtxIndexFromModel(J3DModelData* pModelData, u16 a2) {
-        u16 jointNum = pModelData->getJointNum();
-
-        for (u16 i = 0; i < jointNum; i++) {
-            J3DMaterial* mesh = pModelData->getJointNodePointer(i)->getMesh();
-            while (mesh != nullptr) {
-                int idx = findPosNrmMtxIndexFromShape(mesh->getShape(), a2);
-                if (idx != -1) {
-                    return idx;
-                }
-
-                mesh = mesh->mNext;
-            }
-        }
-
-        return -1;
-    }
-
-    int findPosNrmMtxIndexFromShape(J3DShape* pShape, u16 a2) {
-        u16 mtxGroupNum = pShape->getMtxGroupNum();
-        for (u16 i = 0; i < mtxGroupNum; i++) {
-            J3DShapeMtx* shapeMtx = pShape->getShapeMtx(i);
-            u16 useMtxnum = shapeMtx->getUseMtxNum();
-
-            for (u16 j = 0; j < useMtxnum; j++) {
-                if (shapeMtx->getUseMtxIndex(j) == a2) {
-                    return j * 3;
-                }
-            }
-        }
-
-        return -1;
-    }
-
-    void copyJointAnimation(J3DModel* pCopyTo, J3DModel* pCopyFrom) {
-        u16 jointNum = pCopyTo->getModelData()->getJointNum();
-        for (u16 i = 0; i < jointNum; i++) {
+    void copyJointAnimation(Model* pCopyTo, Model* pCopyFrom) {
+        u32 jointNum = pCopyTo->getModelData()->getJointNum();
+        for (u32 i = 0; i < jointNum; i++) {
             pCopyTo->setAnmMtx(i, pCopyFrom->getAnmMtx(i));
-        }
-
-        u16 wEvlpMtxNum = pCopyTo->getModelData()->getWEvlpMtxNum();
-        for (u16 i = 0; i < wEvlpMtxNum; i++) {
-            pCopyTo->setWeightAnmMtx(i, pCopyFrom->getWeightAnmMtx(i));
         }
     }
 
     void copyJointAnimation(LiveActor* pCopyTo, const LiveActor* pCopyFrom) {
-        return copyJointAnimation(getJ3DModel(pCopyTo), getJ3DModel(pCopyFrom));
+        return copyJointAnimation(getModel(pCopyTo), getModel(pCopyFrom));
     }
 
-    void syncMaterialAnimation(J3DModel* pModel1, J3DModel* pModel2) {
-        u16 materialNum = pModel1->getModelData()->getMaterialNum();
-        u16 i;
-        u16 j;
-        u16 idx;
+    void syncMaterialAnimation(Model* pModel1, Model* pModel2) {
+        u32 materialNum = pModel1->getModelData()->getMaterialNum();
+        u32 i;
+        u32 j;
+        u32 idx;
         for (i = 0; i < materialNum; i++) {
-            J3DShapePacket* shapePacketModel2 = pModel2->getShapePacket(i);
+            ShapeEntry* shapePacketModel2 = pModel2->getShapePacket(i);
             idx = shapePacketModel2->getShape()->getMaterial()->getIndex();
             for (j = 0; j < materialNum; j++) {
-                J3DShapePacket* shapePacketModel1 = pModel1->getShapePacket(j);
+                ShapeEntry* shapePacketModel1 = pModel1->getShapePacket(j);
                 if (shapePacketModel1->getShape()->getMaterial()->getIndex() == idx) {
-                    shapePacketModel1->mpMaterial = shapePacketModel2->mpMaterial;
+                    shapePacketModel1->mMaterial = shapePacketModel2->mMaterial;
                     break;
                 }
             }
@@ -392,32 +263,32 @@ namespace MR {
     }
 
     void syncMaterialAnimation(LiveActor* pActor1, const LiveActor* pActor2) {
-        return syncMaterialAnimation(getJ3DModel(pActor1), getJ3DModel(pActor2));
+        return syncMaterialAnimation(getModel(pActor1), getModel(pActor2));
     }
 
-    void getLightNum(J3DMaterial* pMaterial, s32* pChan1, s32* pChan2, s32* pChan3, s32* pChan4) {
+    void getLightNum(Material* pMaterial, s32* pChan1, s32* pChan2, s32* pChan3, s32* pChan4) {
         for (int i = 0; i < 8; i++) {
-            if (::isUseLightChanNo(pMaterial, 0, i)) {
+            if (pMaterial->usesLight(0, i)) {
                 *pChan1 = *pChan1 + 1;
             }
 
-            if (::isUseLightChanNo(pMaterial, 1, i)) {
+            if (pMaterial->usesLight(1, i)) {
                 *pChan2 = *pChan2 + 1;
             }
         }
 
         for (int i = 0; i < 8; i++) {
-            if (::isUseLightChanNo(pMaterial, 2, i)) {
+            if (pMaterial->usesLight(2, i)) {
                 *pChan3 = *pChan3 + 1;
             }
 
-            if (::isUseLightChanNo(pMaterial, 3, i)) {
+            if (pMaterial->usesLight(3, i)) {
                 *pChan4 = *pChan4 + 1;
             }
         }
     }
 
-    s32 getLightNum(J3DMaterial* pMaterial) {
+    s32 getLightNum(Material* pMaterial) {
         s32 chan1 = 0;
         s32 chan2 = 0;
         s32 chan3 = 0;
@@ -427,13 +298,13 @@ namespace MR {
     }
 
     s32 getLightNumMax(const LiveActor* pActor) {
-        return getLightNumMax(getJ3DModelData(pActor));
+        return getLightNumMax(getModelData(pActor));
     }
 
-    s32 getLightNumMax(J3DModelData* pModelData) {
+    s32 getLightNumMax(ModelData* pModelData) {
         int maxNum = 0;
-        for (int i = 0; i < pModelData->mMaterialTable.mMaterialNum; i++) {
-            int currentNum = getLightNum(pModelData->mMaterialTable.mMaterialNodePointer[static_cast< u16 >(i)]);
+        for (int i = 0; i < pModelData->getMaterialNum(); i++) {
+            int currentNum = getLightNum(pModelData->getMaterialNodePointer(i));
 
             if (maxNum < currentNum) {
                 maxNum = currentNum;
@@ -445,10 +316,10 @@ namespace MR {
 
     void calcModelBoundingBox(Box3f* pOut, const LiveActor* pActor) {
         s32 jointNum = getJointNum(pActor);
-        for (u16 i = 0; i < jointNum; i++) {
+        for (u32 i = 0; i < jointNum; i++) {
             Pos3f jointMtx;
             Box3f bounds;
-            J3DJoint* pJoint = getJoint(pActor, i);
+            Joint* pJoint = getJoint(pActor, i);
             Vec3f jointMin(*pJoint->getMin());
             Vec3f jointMax(*pJoint->getMax());
             jointMtx.setInline(getJointMtx(pActor, i));
@@ -483,13 +354,13 @@ namespace MR {
         *pOut = max.length();
     }
 
-    J3DModel* newJ3DModel(const ResourceHolder* pResourceHolder, const char* pChar, J3DMdlFlag mdlFlag) {
-        J3DModelData* modelData = static_cast< J3DModelData* >(pResourceHolder->mModelResTable->getRes(pChar));
-        J3DModel* newModel;
+    Model* createModel(const ResourceHolder* pResourceHolder, const char* pChar, ModelFlag mdlFlag) {
+        ModelData* modelData = static_cast< ModelData* >(pResourceHolder->mModelResTable->getRes(pChar));
+        Model* newModel;
         invalidateMtxCalc(modelData);
         invalidateJointCallback(modelData);
 
-        for (u16 i = 0; i < modelData->getShapeNum(); i++) {
+        for (u32 i = 0; i < modelData->getShapeNum(); i++) {
             modelData->getShapeNodePointer(i)->mFlags &= ~0x1;
         }
 
@@ -504,27 +375,23 @@ namespace MR {
             strstr(pChar, "FlexibleSphere") || strstr(pChar, "FlexibleSandPlanetParts") || MR::isEqualString(pChar, "ScaleDownRelayPlanet") ||
             MR::isEqualString(pChar, "GhostMario") || MR::isEqualString(pChar, "GhostLuigi") || MR::isEqualString(pChar, "Koura")) {
             (MR::MutexHolder< 0 >::sMutex).lock();
-            newModel = static_cast< J3DModel* >(new J3DModelX(modelData, mdlFlag, 1));
+            newModel = static_cast< Model* >(new PlayerModel(modelData, mdlFlag, 1));
             (MR::MutexHolder< 0 >::sMutex).unlock();
         } else {
             (MR::MutexHolder< 0 >::sMutex).lock();
-            newModel = new J3DModel(modelData, mdlFlag, 1);
+            newModel = new Model(modelData, mdlFlag, 1);
             (MR::MutexHolder< 0 >::sMutex).unlock();
         }
 
-        initJ3DShapePacketUserData(newModel);
         Mtx mtx;
         NebulaMtxIdentity(mtx);
-        newModel->unlock();
         (MR::MutexHolder< 0 >::sMutex).lock();
-        NebulaMtxCopy(mtx, j3dSys.mViewMtx);
+        NebulaMtxCopy(mtx, ModelSys::mViewMtx);
         newModel->calc();
-        newModel->calcAllMaterials();
         newModel->viewCalc();
         newModel->viewCalc();
         (MR::MutexHolder< 0 >::sMutex).unlock();
 
-        newModel->lock();
         return newModel;
     }
 
@@ -546,10 +413,10 @@ namespace MR {
         return isExistModel(buff);
     }
 
-    J3DModelData* getJ3DModelData(const char* pName) {
+    ModelData* getModelData(const char* pName) {
         char buff[0x100];
         nebula_snprintf(buff, sizeof(buff), "%s.arc", pName);
-        return static_cast< J3DModelData* >(createAndAddResourceHolder(buff)->mModelResTable->getRes(pName));
+        return static_cast< ModelData* >(createAndAddResourceHolder(buff)->mModelResTable->getRes(pName));
     }
 
 };  // namespace MR

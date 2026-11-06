@@ -1,6 +1,6 @@
 #include "Game/Effect/ParticleDrawExecutor.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeView.hpp>
+#include "Game/Render/FrameList.hpp"
+#include "Game/Render/FrameList.hpp"
 #include "Game/Effect/EffectSystem.hpp"
 #include "Game/NameObj/NameObjAdaptor.hpp"
 #include "Game/Scene/SceneFunction.hpp"
@@ -9,7 +9,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
-#include <JSystem/J3DGraphBase/J3DSys.hpp>
+#include "Game/Render/Model.hpp"
 #include <JSystem/JParticle/JPAEmitterManager.hpp>
 #include "Game/System/NebulaFrameClock.hpp"
 
@@ -49,9 +49,7 @@ void ParticleDrawExecutor::draw2D() const {
 
         Mtx44 projection;
         NebulaMtxOrtho(projection, height, -height, -width, width, -1000.0f, 1000.0f);
-        J3DNativeView::setOrthographic(projection);
-        J3DPass::cull(NEBULA_CULL_NONE);
-        J3DPass::depth(false, NEBULA_COMPARE_NEVER, false);
+        Frame::setOrthographic(projection);
         NebulaMtxLightOrtho(drawInfo.mPrjMtx, height, -height, -width, width, 0.5f, 0.5f, 0.5f, 0.5f);
         mHost->mEmitterManager->draw(&drawInfo, 6);
         mHost->mEmitterManager->draw(&drawInfo, 7);
@@ -60,7 +58,7 @@ void ParticleDrawExecutor::draw2D() const {
 
 void ParticleDrawExecutor::drawIndirect() const {
     if (_20) {
-        JPADrawInfo drawInfo(j3dSys.getViewMtx(), MR::getRenderFovy(), MR::getAspect());
+        JPADrawInfo drawInfo(ModelSys::getViewMtx(), MR::getRenderFovy(), MR::getAspect());
         mHost->mEmitterManager->draw(&drawInfo, 2);
     }
 }
@@ -71,7 +69,7 @@ void ParticleDrawExecutor::drawAfterIndirect() const {
 
 void ParticleDrawExecutor::drawFor2DModel() const {
     if (_20) {
-        JPADrawInfo drawInfo(j3dSys.getViewMtx());
+        JPADrawInfo drawInfo(ModelSys::getViewMtx());
         mHost->mEmitterManager->draw(&drawInfo, 8);
     }
 }

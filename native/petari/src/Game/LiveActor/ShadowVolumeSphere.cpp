@@ -1,5 +1,5 @@
 #include "Game/LiveActor/ShadowVolumeSphere.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include <NebulaGpu.h>
@@ -25,7 +25,7 @@ bool ShadowVolumeSphere::isDraw() const {
     return controller->isProjected() && controller->isDraw();
 }
 
-void ShadowVolumeSphere::loadModelDrawMtx() const {
+void ShadowVolumeSphere::loadModelDrawMtx(TypedDraw& rDraw) const {
     ShadowController* controller = getController();
     f32 radius = mRadius / ::sModelScale;
     if (controller->isFollowHostScale()) {
@@ -47,6 +47,5 @@ void ShadowVolumeSphere::loadModelDrawMtx() const {
     controller->getProjectionPos(&position);
     mtx.setTrans(position);
 
-    NebulaMtxConcat(MR::getCameraViewMtx(), mtx, mtx);
-    J3DNativeShape::setPosition(0, mtx);
+    rDraw.setWorld(mtx);
 }

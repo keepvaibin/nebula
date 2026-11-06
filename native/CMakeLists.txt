@@ -162,6 +162,8 @@ endif()
 option(NEBULA_RELEASE "Leave the test hooks out" OFF)
 if(NEBULA_RELEASE)
     target_compile_definitions(smg_game PRIVATE NEBULA_RELEASE=1)
+else()
+    target_compile_definitions(smg_game PRIVATE NEBULA_DEV=1)
 endif()
 
 option(NEBULA_PGO "Build the game with ThinLTO and its profile" OFF)

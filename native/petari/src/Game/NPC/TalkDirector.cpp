@@ -1,5 +1,5 @@
 #include "Game/NPC/TalkDirector.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeView.hpp>
+#include "Game/Render/FrameList.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/NPC/TalkBalloon.hpp"
@@ -48,13 +48,13 @@ TalkPeekZ::TalkPeekZ() {
 }
 
 void TalkPeekZ::setDrawSyncToken() {
-    J3DNativeView::getProjectionv(&_20);
-    J3DNativeView::getViewportv(&_3C);
+    Frame::getProjectionv(&_20);
+    Frame::getViewportv(&_3C);
 
     // The depth at the balloon's point asked last; then the picture drawn so far, at its point now.
     NebulaScreenProbe probe;
     _8 = 0.0f;
-    if (J3DNativeView::screenProbeResults(cReadbackChannel, &probe, 1) == 1 && probe.x >= 0.0f) {
+    if (Frame::screenProbeResults(cReadbackChannel, &probe, 1) == 1 && probe.x >= 0.0f) {
         _8 = probe.value;
         TDDraw::invProject(&_14, Vec3f(probe.user_x, probe.user_y, _8), const_cast< MtxPtr >(MR::getCameraViewMtx().mMtx), &_20,
                            &_3C, true);
@@ -71,7 +71,7 @@ void TalkPeekZ::setDrawSyncToken() {
         probe.x = pos.x;
         probe.y = pos.y;
     }
-    J3DNativeView::probeScreen(cReadbackChannel, &probe, 1);
+    Frame::probeScreen(cReadbackChannel, &probe, 1);
 }
 
 TalkDirector::TalkDirector(const char* pName)

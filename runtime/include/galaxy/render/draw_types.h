@@ -89,7 +89,7 @@ struct ScissorRect {
     std::int32_t x0, y0, x1, y1;    // inclusive, screen pixel space
 };
 
-// A texture coordinate's generation (J3DNativeTexGen): its kind, the input row it reads (position, normal, binormal,
+// A texture coordinate's generation: its kind, the input row it reads (position, normal, binormal,
 // tangent, coordinates), and for an emboss coordinate the coordinate it offsets and the light.
 struct TexGen {
     TexGenType type;
@@ -108,7 +108,7 @@ struct PostTexGen {
     [[nodiscard]] bool operator==(const PostTexGen&) const = default;
 };
 
-// A colour channel's lighting (J3DNativeChannel).
+// A colour channel's lighting.
 struct ChannelControl {
     bool material_from_vertex;
     bool lighting_enable;

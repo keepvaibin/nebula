@@ -2,7 +2,7 @@
 
 #include "Game/NameObj/NameObj.hpp"
 #include "Game/Util/Color.hpp"
-#include <JSystem/J3DGraphAnimator/J3DModelData.hpp>
+#include "Game/Render/ModelData.hpp"
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 
@@ -12,10 +12,9 @@ public:
 
     virtual void draw() const;
 
-    void loadModelDrawMtx() const;
 
     MtxPtr mMtx;
-    J3DModelData* mModelData;
+    ModelData* mModelData;
     Color8 mColor;
 };
 

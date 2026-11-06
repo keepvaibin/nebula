@@ -29,7 +29,7 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
     if (chain == 0u) {
         return;
     }
-    const uint nq = v.pn_row & 31u;
+    const uint nq = v.pn_row;
     const float3 nt = float3(dot(native_normal_row(nq).xyz, v.nrm), dot(native_normal_row(nq + 1u).xyz, v.nrm),
                              dot(native_normal_row(nq + 2u).xyz, v.nrm));
     const float3 nrm = dot(nt, nt) > 0.0 ? normalize(nt) : nt;
@@ -39,12 +39,12 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
     float3 sum = float3(0.0, 0.0, 0.0);
     [unroll] for (uint n = 0u; n < 8u; ++n) {
         if ((mask & (1u << n)) != 0u) {
-            sum += j3d_light(n, atten, diffuse, v.eye, nrm).rgb;
+            sum += channel_light(n, atten, diffuse, v.eye, nrm).rgb;
         }
     }
     o.color.rgb = material.mat_color.rgb * saturate((material.amb_color.rgb * 255.0 + sum) / 255.0);
     if (chain == 2u) {
-        o.color.a = material.mat_color.a * saturate((material.amb_color.a * 255.0 + j3d_light(2u, 2u, 1u, v.eye, nrm).a) / 255.0);
+        o.color.a = material.mat_color.a * saturate((material.amb_color.a * 255.0 + channel_light(2u, 2u, 1u, v.eye, nrm).a) / 255.0);
     }
 }
 

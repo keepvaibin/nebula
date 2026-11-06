@@ -1,6 +1,6 @@
 #include "Game/Util/FootPrint.hpp"
-#include "Game/Util/NativeShader.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/FrameList.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util/Color.hpp"
 #include "Game/Util/DirectDraw.hpp"
@@ -125,10 +125,10 @@ void FootPrint::draw() const {
         return;
     }
 
-    NebulaNativeMaterial material;
+    SiteMaterial material;
     TDDraw::setupNative(&material, 2, 1, 0);
-    NativeShader::setDepth(material, true, NEBULA_COMPARE_LEQUAL, false);
-    NativeShader::setTexture(material, 0, _C);
+    material.setDepth(true, NEBULA_COMPARE_LEQUAL, false);
+    material.setTexture(0, _C);
 
     Color8 color(0, 0, 0, 255);
 
@@ -138,8 +138,7 @@ void FootPrint::draw() const {
         }
 
         color.a = (s32)(255.0f * MR::normalize(mPrints[i].mTimeLeft, 0.0f, ::sFadeOutTime));
-        NativeShader::setColor(material, 0, color.r, color.g, color.b, color.a);
-        NativeShader::send(material);
+        material.setColor(0, color.r, color.g, color.b, color.a);
 
         Vec3f cross = mPrints[i]._C.cross(mPrints[i]._18);
         Vec3f v1;
@@ -151,7 +150,8 @@ void FootPrint::draw() const {
 
         v1 += mPrints[i]._18 * 5.0f;
 
-        TDDraw::drawTexture3D(v1, mPrints[i]._18, mPrints[i]._C, _34, _30, nullptr, mPrints[i]._29 != false, false);
+        TypedDraw site = TDDraw::site(material, 0);
+        TDDraw::drawTexture3D(site, v1, mPrints[i]._18, mPrints[i]._C, _34, _30, nullptr, mPrints[i]._29 != false, false);
     }
 
     TDDraw::close();

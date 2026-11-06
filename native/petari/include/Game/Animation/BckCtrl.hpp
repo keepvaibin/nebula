@@ -11,11 +11,11 @@ public:
     }
 
     const char* mName;
-    s16 mPlayFrame;
-    s16 mStartFrame;
-    s16 mEndFrame;
-    s16 mRepeatFrame;
-    s16 mInterpole;
+    s32 mPlayFrame;
+    s32 mStartFrame;
+    s32 mEndFrame;
+    s32 mRepeatFrame;
+    s32 mInterpole;
     u8 mLoopMode;
     u8 _F;
     u8 _10;

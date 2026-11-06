@@ -158,6 +158,7 @@ void PlacedTextureAllocator::shutdown() noexcept {
     // Live placed resources keep the state (and through it their heap) alive.
     std::lock_guard lock(state_->mutex);
     state_->device.Reset();
+    state_->heaps.clear();
 }
 
 HRESULT PlacedTextureAllocator::create(const D3D12_RESOURCE_DESC& desc,

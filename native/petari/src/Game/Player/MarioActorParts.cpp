@@ -177,7 +177,7 @@ void MarioActor::updateTakingPosition() {
             if (_B92 == -2)
                 frame = mMarioAnim->getFrame();
             NebulaMtxConcat(getBaseMtx(), _E3C.toMtxPtr(), base);
-            J3DModel* model = MR::getJ3DModel(mNullAnimation);
+            Model* model = MR::getModel(mNullAnimation);
             NebulaMtxCopy(base, model->getBaseTRMtx());
             if (mNullAnimation->getFramePos(frame, &position, &rotation)) {
                 clearNullAnimation(-3);

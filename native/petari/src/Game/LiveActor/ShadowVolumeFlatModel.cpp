@@ -1,20 +1,20 @@
 #include "Game/LiveActor/ShadowVolumeFlatModel.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
-#include <JSystem/J3DGraphAnimator/J3DJoint.hpp>
-#include <JSystem/J3DGraphAnimator/J3DModelData.hpp>
+#include "Game/Render/ModelData.hpp"
+#include "Game/Render/ModelData.hpp"
 
 ShadowVolumeFlatModel::ShadowVolumeFlatModel(const char* pModelName)
-    : ShadowVolumeModel("\224\302\217\363\203\126\203\203\203\150\203\105\203\173\203\212\203\205\201\133\203\200\225\140\211\346" /* 板状シャドウボリューム描画 */), mBaseMtx(), mRootDrawMtxIndex(-1), mDropDrawMtxIndex(-1) {
+    : ShadowVolumeModel("\224\302\217\363\203\126\203\203\203\150\203\105\203\173\203\212\203\205\201\133\203\200\225\140\211\346" /* 板状シャドウボリューム描画 */), mBaseMtx(), mRootJoint(-1), mDropJoint(-1) {
     initVolumeModel(pModelName);
     initJointDrawMtxResister();
 }
 
 ShadowVolumeFlatModel::ShadowVolumeFlatModel()
-    : ShadowVolumeModel("\224\302\217\363\203\126\203\203\203\150\203\105\203\173\203\212\203\205\201\133\203\200\225\140\211\346" /* 板状シャドウボリューム描画 */), mBaseMtx(), mRootDrawMtxIndex(-1), mDropDrawMtxIndex(-1) {
+    : ShadowVolumeModel("\224\302\217\363\203\126\203\203\203\150\203\105\203\173\203\212\203\205\201\133\203\200\225\140\211\346" /* 板状シャドウボリューム描画 */), mBaseMtx(), mRootJoint(-1), mDropJoint(-1) {
 }
 
 void ShadowVolumeFlatModel::setBaseMatrixPtr(MtxPtr pMtx) {
@@ -27,11 +27,9 @@ void ShadowVolumeFlatModel::initModel(const char* pModelName) {
 }
 
 void ShadowVolumeFlatModel::initJointDrawMtxResister() {
-    J3DJoint* root = mModelData->getJointTree().getRootNode();
-    u16 rootIndex = root->getJntNo();
-    u16 dropIndex = root->getChild()->getJntNo();
-    mRootDrawMtxIndex = MR::findPosNrmMtxIndexFromModel(mModelData, rootIndex);
-    mDropDrawMtxIndex = MR::findPosNrmMtxIndexFromModel(mModelData, dropIndex);
+    Joint* root = mModelData->getRootNode();
+    mRootJoint = root->getJntNo();
+    mDropJoint = root->getChild()->getJntNo();
 }
 
 void ShadowVolumeFlatModel::draw() const {
@@ -40,7 +38,7 @@ void ShadowVolumeFlatModel::draw() const {
     }
 }
 
-void ShadowVolumeFlatModel::loadModelDrawMtx() const {
+void ShadowVolumeFlatModel::loadModelDrawMtx(TypedDraw& rDraw) const {
     ShadowController* controller = getController();
     Pos3f rootMtx;
     Pos3f dropMtx;
@@ -52,15 +50,15 @@ void ShadowVolumeFlatModel::loadModelDrawMtx() const {
         MR::preScaleMtx(rootMtx, controller->getHost()->mScale);
     }
 
-    NebulaMtxConcat(MR::getCameraViewMtx(), rootMtx, rootMtx);
-    J3DNativeShape::setPosition(mRootDrawMtxIndex / 3, rootMtx);
     calcDropJoint(&dropMtx, displacement);
     if (controller->isFollowHostScale()) {
         MR::preScaleMtx(dropMtx, controller->getHost()->mScale);
     }
 
-    NebulaMtxConcat(MR::getCameraViewMtx(), dropMtx, dropMtx);
-    J3DNativeShape::setPosition(mDropDrawMtxIndex / 3, dropMtx);
+    f32 (*pJoints)[4] = static_cast< f32 (*)[4] >(Frame::arena(mModelData->getJointNum() * sizeof(Mtx), 16));
+    memcpy(pJoints[mRootJoint * 3], rootMtx.mMtx, sizeof(Mtx));
+    memcpy(pJoints[mDropJoint * 3], dropMtx.mMtx, sizeof(Mtx));
+    rDraw.setModelJoints(mModelData, pJoints);
 }
 
 void ShadowVolumeFlatModel::calcRootJoint(Pos3f* pMtx, const Vec3f& rDisplacement) const {

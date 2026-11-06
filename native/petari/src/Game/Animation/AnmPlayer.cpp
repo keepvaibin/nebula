@@ -1,8 +1,8 @@
 #include "Game/Animation/AnmPlayer.hpp"
 #include "Game/System/ResourceInfo.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <JSystem/J3DGraphAnimator/J3DModel.hpp>
-#include <JSystem/J3DGraphAnimator/J3DModelData.hpp>
+#include "Game/Render/Model.hpp"
+#include "Game/Render/ModelData.hpp"
 #include <nebula_geometry.hpp>
 
 AnmPlayerBase::AnmPlayerBase(const ResTable* pResTable) : mResTable(pResTable), mAnmRes(), mFrameCtrl() {
@@ -21,7 +21,7 @@ void AnmPlayerBase::reflectFrame() {
 }
 
 void AnmPlayerBase::start(const char* pResName) {
-    J3DAnmBase* pAnmRes = reinterpret_cast< J3DAnmBase* >(mResTable->getRes(pResName));
+    Clip* pAnmRes = reinterpret_cast< Clip* >(mResTable->getRes(pResName));
 
     if (pAnmRes != mAnmRes) {
         changeAnimation(pAnmRes);
@@ -49,17 +49,17 @@ bool AnmPlayerBase::isPlaying(const char* pAnimName) const {
     return false;
 }
 
-MaterialAnmPlayerBase::MaterialAnmPlayerBase(const ResTable* pResTable, J3DModelData* pModelData) : AnmPlayerBase(pResTable), mModelData(pModelData) {
+MaterialAnmPlayerBase::MaterialAnmPlayerBase(const ResTable* pResTable, ModelData* pModelData) : AnmPlayerBase(pResTable), mModelData(pModelData) {
 }
 
-void MaterialAnmPlayerBase::applyFrame(J3DModel* pModel) {
+void MaterialAnmPlayerBase::applyFrame(Model* pModel) {
     if (mAnmRes != nullptr) {
         reflectFrame();
         apply(mAnmRes, pModel);
     }
 }
 
-void AnmPlayerBase::changeAnimation(J3DAnmBase*) {
+void AnmPlayerBase::changeAnimation(Clip*) {
 }
 
 void AnmPlayerBase::stopAnimation() {

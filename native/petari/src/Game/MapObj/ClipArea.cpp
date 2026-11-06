@@ -1,6 +1,7 @@
 #include "Game/MapObj/ClipArea.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/Util/DrawUtil.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include "Game/Render/FrameList.hpp"
 #include "Game/MapObj/ClipAreaHolder.hpp"
 #include "Game/MapObj/ClipAreaShape.hpp"
 #include "Game/Scene/SceneFunction.hpp"
@@ -32,18 +33,16 @@ void ClipArea::draw() const {
         return;
     }
 
-    MR::setShadowVolumeColor(::sShapeColor);
-    J3DPass::writeColor(false);
-    J3DPass::writeAlpha(false);
-    J3DPass::noBlend();
-    J3DPass::stencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ADD);
-    J3DPass::cull(NEBULA_CULL_FRONT);
-    mShape->drawVolumeShape(mBaseMtx, mScale);
-    J3DPass::stencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_TAKE);
-    J3DPass::cull(NEBULA_CULL_BACK);
-    mShape->drawVolumeShape(mBaseMtx, mScale);
-    J3DPass::stencil(NEBULA_STENCIL_OFF, NEBULA_STENCIL_KEEP);
-    J3DPass::writeColor(true);
+    SiteMaterial material;
+    MR::initShadowVolumeMaterial(material, ::sShapeColor);
+    material.setStencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ADD);
+    material.mState.cull = NEBULA_CULL_FRONT;
+    TypedDraw site(material, nullptr, MR::getCameraViewMtx());
+    mShape->drawVolumeShape(site, mBaseMtx, mScale);
+    material.setStencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_TAKE);
+    material.mState.cull = NEBULA_CULL_BACK;
+    site.setMaterial(material);
+    mShape->drawVolumeShape(site, mBaseMtx, mScale);
 }
 
 void ClipArea::setShape(ClipAreaShape* pShape) {

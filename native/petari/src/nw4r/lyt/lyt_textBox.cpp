@@ -1,6 +1,6 @@
 #include "Game/Util/TextString.hpp"
 #include "nw4r/lyt/drawInfo.h"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include "Game/Render/FrameList.hpp"
 #include "nw4r/lyt/layout.h"
 #include "nw4r/lyt/resourceAccessor.h"
 #include "nw4r/lyt/textBox.h"

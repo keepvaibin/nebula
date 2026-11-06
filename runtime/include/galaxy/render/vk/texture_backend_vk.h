@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// TextureCache's Vulkan side (gpu_texture_backend.h): image views by srv_index, mapped staging buffers, RGBA8 images and
+// TextureStore's Vulkan side (gpu_texture_backend.h): image views by srv_index, mapped staging buffers, RGBA8 images and
 // the recorded upload of their levels.
 #pragma once
 
@@ -8,6 +8,7 @@
 #include "galaxy/render/vk/vk_context.h"
 
 #include <cstdint>
+#include <algorithm>
 #include <memory>
 #include <vector>
 
@@ -37,7 +38,8 @@ public:
     [[nodiscard]] bool ready() const noexcept { return !views_.empty(); }
 
     void write_view(std::uint32_t index, vk::Texture* texture, unsigned levels);
-    void write_view(std::uint32_t index, VkImageView view) noexcept { views_[index] = view; }
+    void ensure_view(std::uint32_t index) { if (index >= views_.size()) { views_.resize(std::max<std::size_t>(std::size_t{index} + 1u, views_.size() * 2u), VK_NULL_HANDLE); } }
+    void write_view(std::uint32_t index, VkImageView view) { ensure_view(index); views_[index] = view; }
     [[nodiscard]] UploadChunk create_upload_chunk(std::uint64_t size);
     static void release_upload_chunk(UploadChunk& chunk) noexcept;
     // RGBA8, or one byte per texel whose view repeats it in every channel (`grey`, a movie plane).
@@ -58,10 +60,10 @@ public:
 
     // The renderer writes these views into its frame descriptor sets.
     [[nodiscard]] VkImageView view(std::uint32_t index) const noexcept { return views_[index]; }
-    [[nodiscard]] VkImageView null_view() const noexcept { return views_.back(); }
+    [[nodiscard]] VkImageView null_view() const noexcept { return null_texture_->view; }
 
 private:
-    std::vector<VkImageView> views_;  // view_capacity slots, then the null view
+    std::vector<VkImageView> views_;
     std::shared_ptr<vk::Texture> null_texture_;
     VkCommandBuffer upload_list_ = VK_NULL_HANDLE;
 };

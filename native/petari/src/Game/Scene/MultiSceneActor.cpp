@@ -8,8 +8,8 @@
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
-#include <JSystem/J3DGraphAnimator/J3DAnimation.hpp>
-#include <JSystem/J3DGraphAnimator/J3DModel.hpp>
+#include "Game/Render/Clip.hpp"
+#include "Game/Render/Model.hpp"
 
 MultiSceneActor::MultiSceneActor(const char* pName, const char* pModelName, bool param3)
     : NameObj(pName), mTranslation(0.0f, 0.0f, 0.0f), mRotation(0.0f, 0.0f, 0.0f), mScale(1.0f, 1.0f, 1.0f), _30(true), mModelManager(nullptr),
@@ -48,9 +48,9 @@ void MultiSceneActor::calcAnim() {
     mtx.identity();
 
     MR::makeMtxTR(mtx, mTranslation, mRotation);
-    NebulaMtxCopy(mtx, mModelManager->getJ3DModel()->mBaseTransformMtx);
+    NebulaMtxCopy(mtx, mModelManager->getModel()->mBaseTransformMtx);
 
-    J3DModel* pModel = mModelManager->getJ3DModel();
+    Model* pModel = mModelManager->getModel();
     pModel->mBaseScale.x = mScale.x;
     pModel->mBaseScale.y = mScale.y;
     pModel->mBaseScale.z = mScale.z;
@@ -223,7 +223,7 @@ namespace MultiScene {
     }
 
     MtxPtr getJointMtx(const MultiSceneActor* pActor, const char* pParam2) {
-        return MR::getJointMtx(pActor->getModelManager()->getJ3DModel(), (const char*)pParam2);
+        return MR::getJointMtx(pActor->getModelManager()->getModel(), (const char*)pParam2);
     }
 };  // namespace MultiScene
 

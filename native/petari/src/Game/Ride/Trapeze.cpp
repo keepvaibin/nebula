@@ -1,8 +1,8 @@
 #include "Game/Ride/Trapeze.hpp"
-#include "Game/Util/NativeShader.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/FrameList.hpp"
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/PartsModel.hpp"
 #include "Game/Ride/SwingRopePoint.hpp"
@@ -122,6 +122,8 @@ void Trapeze::draw() const {
         return;
     }
 
+    TypedDraw site(MR::getSceneObj< TrapezeRopeDrawInit >(SceneObj_TrapezeRopeDrawInit)->mMaterial, nullptr, MR::getCameraViewMtx());
+
     Vec3f left = mSide * -(::sStickLength / 2.0f);
     Vec3f right = mSide * (::sStickLength / 2.0f);
 
@@ -138,16 +140,16 @@ void Trapeze::draw() const {
     swingRight.add(mStickPoint->mPosition);
 
     if (mRider != nullptr) {
-        drawRope(left, grabLeft, mHangPoint->mSide, mHangPoint->mFront, 0.0f, mGrabCoord * ::sTexRate);
-        drawRope(right, grabRight, mHangPoint->mSide, mHangPoint->mFront, 0.0f, mGrabCoord * ::sTexRate);
+        drawRope(site, left, grabLeft, mHangPoint->mSide, mHangPoint->mFront, 0.0f, mGrabCoord * ::sTexRate);
+        drawRope(site, right, grabRight, mHangPoint->mSide, mHangPoint->mFront, 0.0f, mGrabCoord * ::sTexRate);
 
         if (mGrabCoord < mRopeLength) {
-            drawRope(grabLeft, swingLeft, mStickPoint->mSide, mStickPoint->mFront, mGrabCoord * ::sTexRate, mRopeLength * ::sTexRate);
-            drawRope(grabRight, swingRight, mStickPoint->mSide, mStickPoint->mFront, mGrabCoord * ::sTexRate, mRopeLength * ::sTexRate);
+            drawRope(site, grabLeft, swingLeft, mStickPoint->mSide, mStickPoint->mFront, mGrabCoord * ::sTexRate, mRopeLength * ::sTexRate);
+            drawRope(site, grabRight, swingRight, mStickPoint->mSide, mStickPoint->mFront, mGrabCoord * ::sTexRate, mRopeLength * ::sTexRate);
         }
     } else {
-        drawRope(left, swingLeft, mStickPoint->mSide, mStickPoint->mFront, 0.0f, mRopeLength * ::sTexRate);
-        drawRope(right, swingRight, mStickPoint->mSide, mStickPoint->mFront, 0.0f, mRopeLength * ::sTexRate);
+        drawRope(site, left, swingLeft, mStickPoint->mSide, mStickPoint->mFront, 0.0f, mRopeLength * ::sTexRate);
+        drawRope(site, right, swingRight, mStickPoint->mSide, mStickPoint->mFront, 0.0f, mRopeLength * ::sTexRate);
     }
 }
 
@@ -693,106 +695,58 @@ bool Trapeze::isStartSwingBack() const {
 }
 
 namespace {
-    void drawPolygon0(const Vec3f& rPosA, const Vec3f& rPosB, const Vec3f& rSide, const Vec3f& rFront, f32 x1, f32 y1, f32 x2, f32 y2, f32 texA,
+    void drawPolygon0(TypedDraw& rDraw, const Vec3f& rPosA, const Vec3f& rPosB, const Vec3f& rSide, const Vec3f& rFront, f32 x1, f32 y1, f32 x2, f32 y2, f32 texA,
                       f32 texB) {
-        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
+        VertexPCT* vtx = rDraw.vertices< VertexPCT >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 4);
         {
-            J3DNativeDraw::position(rPosA.x - x1 * rSide.x + y1 * rFront.x,   //
-                           rPosA.y - x1 * rSide.y + y1 * rFront.y,   //
-                           rPosA.z - x1 * rSide.z + y1 * rFront.z);  //
-            J3DNativeDraw::color(::sColorPlusZ);
-            J3DNativeDraw::texCoord(0.0f, texA);
+            *vtx++ = {rPosA.x - x1 * rSide.x + y1 * rFront.x, rPosA.y - x1 * rSide.y + y1 * rFront.y, rPosA.z - x1 * rSide.z + y1 * rFront.z, Rgba8(::sColorPlusZ), 0.0f, texA};
 
-            J3DNativeDraw::position(rPosA.x + x2 * rSide.x - y2 * rFront.x,   //
-                           rPosA.y + x2 * rSide.y - y2 * rFront.y,   //
-                           rPosA.z + x2 * rSide.z - y2 * rFront.z);  //
-            J3DNativeDraw::color(::sColorPlusX);
-            J3DNativeDraw::texCoord(1.0f, texA);
+            *vtx++ = {rPosA.x + x2 * rSide.x - y2 * rFront.x, rPosA.y + x2 * rSide.y - y2 * rFront.y, rPosA.z + x2 * rSide.z - y2 * rFront.z, Rgba8(::sColorPlusX), 1.0f, texA};
 
-            J3DNativeDraw::position(rPosB.x - x1 * rSide.x + y1 * rFront.x,   //
-                           rPosB.y - x1 * rSide.y + y1 * rFront.y,   //
-                           rPosB.z - x1 * rSide.z + y1 * rFront.z);  //
-            J3DNativeDraw::color(::sColorPlusZ);
-            J3DNativeDraw::texCoord(0.0f, texB);
+            *vtx++ = {rPosB.x - x1 * rSide.x + y1 * rFront.x, rPosB.y - x1 * rSide.y + y1 * rFront.y, rPosB.z - x1 * rSide.z + y1 * rFront.z, Rgba8(::sColorPlusZ), 0.0f, texB};
 
-            J3DNativeDraw::position(rPosB.x + x2 * rSide.x - y2 * rFront.x,   //
-                           rPosB.y + x2 * rSide.y - y2 * rFront.y,   //
-                           rPosB.z + x2 * rSide.z - y2 * rFront.z);  //
-            J3DNativeDraw::color(::sColorPlusX);
-            J3DNativeDraw::texCoord(1.0f, texB);
+            *vtx++ = {rPosB.x + x2 * rSide.x - y2 * rFront.x, rPosB.y + x2 * rSide.y - y2 * rFront.y, rPosB.z + x2 * rSide.z - y2 * rFront.z, Rgba8(::sColorPlusX), 1.0f, texB};
         }
     }
 
-    void drawPolygon1(const Vec3f& rPosA, const Vec3f& rPosB, const Vec3f& rSide, const Vec3f& rFront, f32 x1, f32 y1, f32 x2, f32 y2, f32 texA,
+    void drawPolygon1(TypedDraw& rDraw, const Vec3f& rPosA, const Vec3f& rPosB, const Vec3f& rSide, const Vec3f& rFront, f32 x1, f32 y1, f32 x2, f32 y2, f32 texA,
                       f32 texB) {
-        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
+        VertexPCT* vtx = rDraw.vertices< VertexPCT >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 4);
         {
-            J3DNativeDraw::position(rPosA.x - x1 * rSide.x - y1 * rFront.x,   //
-                           rPosA.y - x1 * rSide.y - y1 * rFront.y,   //
-                           rPosA.z - x1 * rSide.z - y1 * rFront.z);  //
-            J3DNativeDraw::color(::sColorMinusX);
-            J3DNativeDraw::texCoord(0.0f, texA);
+            *vtx++ = {rPosA.x - x1 * rSide.x - y1 * rFront.x, rPosA.y - x1 * rSide.y - y1 * rFront.y, rPosA.z - x1 * rSide.z - y1 * rFront.z, Rgba8(::sColorMinusX), 0.0f, texA};
 
-            J3DNativeDraw::position(rPosA.x + x2 * rSide.x + y2 * rFront.x,   //
-                           rPosA.y + x2 * rSide.y + y2 * rFront.y,   //
-                           rPosA.z + x2 * rSide.z + y2 * rFront.z);  //
-            J3DNativeDraw::color(::sColorPlusZ);
-            J3DNativeDraw::texCoord(1.0f, texA);
+            *vtx++ = {rPosA.x + x2 * rSide.x + y2 * rFront.x, rPosA.y + x2 * rSide.y + y2 * rFront.y, rPosA.z + x2 * rSide.z + y2 * rFront.z, Rgba8(::sColorPlusZ), 1.0f, texA};
 
-            J3DNativeDraw::position(rPosB.x - x1 * rSide.x - y1 * rFront.x,   //
-                           rPosB.y - x1 * rSide.y - y1 * rFront.y,   //
-                           rPosB.z - x1 * rSide.z - y1 * rFront.z);  //
-            J3DNativeDraw::color(::sColorMinusX);
-            J3DNativeDraw::texCoord(0.0f, texB);
+            *vtx++ = {rPosB.x - x1 * rSide.x - y1 * rFront.x, rPosB.y - x1 * rSide.y - y1 * rFront.y, rPosB.z - x1 * rSide.z - y1 * rFront.z, Rgba8(::sColorMinusX), 0.0f, texB};
 
-            J3DNativeDraw::position(rPosB.x + x2 * rSide.x + y2 * rFront.x,   //
-                           rPosB.y + x2 * rSide.y + y2 * rFront.y,   //
-                           rPosB.z + x2 * rSide.z + y2 * rFront.z);  //
-            J3DNativeDraw::color(::sColorPlusZ);
-            J3DNativeDraw::texCoord(1.0f, texB);
+            *vtx++ = {rPosB.x + x2 * rSide.x + y2 * rFront.x, rPosB.y + x2 * rSide.y + y2 * rFront.y, rPosB.z + x2 * rSide.z + y2 * rFront.z, Rgba8(::sColorPlusZ), 1.0f, texB};
         }
     }
 
-    void drawPolygon2(const Vec3f& rPosA, const Vec3f& rPosB, const Vec3f& rSide, const Vec3f& rFront, f32 x1, f32 y1, f32 x2, f32 y2, f32 texA,
+    void drawPolygon2(TypedDraw& rDraw, const Vec3f& rPosA, const Vec3f& rPosB, const Vec3f& rSide, const Vec3f& rFront, f32 x1, f32 y1, f32 x2, f32 y2, f32 texA,
                       f32 texB) {
-        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
+        VertexPCT* vtx = rDraw.vertices< VertexPCT >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 4);
         {
-            J3DNativeDraw::position(rPosA.x + x1 * rSide.x - y1 * rFront.x,   //
-                           rPosA.y + x1 * rSide.y - y1 * rFront.y,   //
-                           rPosA.z + x1 * rSide.z - y1 * rFront.z);  //
-            J3DNativeDraw::color(::sColorPlusX);
-            J3DNativeDraw::texCoord(0.0f, texA);
+            *vtx++ = {rPosA.x + x1 * rSide.x - y1 * rFront.x, rPosA.y + x1 * rSide.y - y1 * rFront.y, rPosA.z + x1 * rSide.z - y1 * rFront.z, Rgba8(::sColorPlusX), 0.0f, texA};
 
-            J3DNativeDraw::position(rPosA.x - x2 * rSide.x - y2 * rFront.x,   //
-                           rPosA.y - x2 * rSide.y - y2 * rFront.y,   //
-                           rPosA.z - x2 * rSide.z - y2 * rFront.z);  //
-            J3DNativeDraw::color(::sColorMinusX);
-            J3DNativeDraw::texCoord(1.0f, texA);
+            *vtx++ = {rPosA.x - x2 * rSide.x - y2 * rFront.x, rPosA.y - x2 * rSide.y - y2 * rFront.y, rPosA.z - x2 * rSide.z - y2 * rFront.z, Rgba8(::sColorMinusX), 1.0f, texA};
 
-            J3DNativeDraw::position(rPosB.x + x1 * rSide.x - y1 * rFront.x,   //
-                           rPosB.y + x1 * rSide.y - y1 * rFront.y,   //
-                           rPosB.z + x1 * rSide.z - y1 * rFront.z);  //
-            J3DNativeDraw::color(::sColorPlusX);
-            J3DNativeDraw::texCoord(0.0f, texB);
+            *vtx++ = {rPosB.x + x1 * rSide.x - y1 * rFront.x, rPosB.y + x1 * rSide.y - y1 * rFront.y, rPosB.z + x1 * rSide.z - y1 * rFront.z, Rgba8(::sColorPlusX), 0.0f, texB};
 
-            J3DNativeDraw::position(rPosB.x - x2 * rSide.x - y2 * rFront.x,   //
-                           rPosB.y - x2 * rSide.y - y2 * rFront.y,   //
-                           rPosB.z - x2 * rSide.z - y2 * rFront.z);  //
-            J3DNativeDraw::color(::sColorMinusX);
-            J3DNativeDraw::texCoord(1.0f, texB);
+            *vtx++ = {rPosB.x - x2 * rSide.x - y2 * rFront.x, rPosB.y - x2 * rSide.y - y2 * rFront.y, rPosB.z - x2 * rSide.z - y2 * rFront.z, Rgba8(::sColorMinusX), 1.0f, texB};
         }
     }
 };  // namespace
 
-void Trapeze::drawRope(const Vec3f& rPosA, const Vec3f& rPosB, const Vec3f& rSide, const Vec3f& rFront, f32 texA, f32 texB) const {
-    ::drawPolygon0(rPosA, rPosB, rSide, rFront, ::sDrawWidthX + ::sDrawWidthShortOffsetX, ::sDrawWidthZ + ::sDrawWidthShortOffsetZ,
+void Trapeze::drawRope(TypedDraw& rDraw, const Vec3f& rPosA, const Vec3f& rPosB, const Vec3f& rSide, const Vec3f& rFront, f32 texA, f32 texB) const {
+    ::drawPolygon0(rDraw, rPosA, rPosB, rSide, rFront, ::sDrawWidthX + ::sDrawWidthShortOffsetX, ::sDrawWidthZ + ::sDrawWidthShortOffsetZ,
                    ::sDrawWidthX + ::sDrawWidthLongOffsetX, ::sDrawWidthZ + ::sDrawWidthShortOffsetZ, texA + ::sTexRateDiff0, texB + ::sTexRateDiff0);
 
-    ::drawPolygon1(rPosA, rPosB, rSide, rFront, ::sDrawWidthX + ::sDrawWidthLongOffsetX, ::sDrawWidthZ + ::sDrawWidthShortOffsetZ,
+    ::drawPolygon1(rDraw, rPosA, rPosB, rSide, rFront, ::sDrawWidthX + ::sDrawWidthLongOffsetX, ::sDrawWidthZ + ::sDrawWidthShortOffsetZ,
                    ::sDrawWidthX + ::sDrawWidthShortOffsetX, ::sDrawWidthZ + ::sDrawWidthShortOffsetZ, texA + ::sTexRateDiff1,
                    texB + ::sTexRateDiff1);
 
-    ::drawPolygon2(rPosA, rPosB, rSide, rFront, ::sDrawWidthX + ::sDrawWidthLongOffsetX, ::sDrawWidthShortOffsetZ,
+    ::drawPolygon2(rDraw, rPosA, rPosB, rSide, rFront, ::sDrawWidthX + ::sDrawWidthLongOffsetX, ::sDrawWidthShortOffsetZ,
                    ::sDrawWidthX + ::sDrawWidthLongOffsetX, ::sDrawWidthShortOffsetZ, texA + ::sTexRateDiff2, texB + ::sTexRateDiff2);
 }
 
@@ -800,20 +754,17 @@ TrapezeRopeDrawInit::TrapezeRopeDrawInit(const char* pName) : NameObj(pName) {
     mTexture = nullptr;
     mTexture = new JUTTexture(MR::loadTexFromArc("Trapeze.arc", "TrapezeRope.bti"));
 
-    MR::registerPreDrawFunction(MR::Functor(this, &TrapezeRopeDrawInit::initDraw), MR::DrawType_Trapeze);
+    mMaterial = makeMaterial();
 }
 
-void TrapezeRopeDrawInit::initDraw() const {
-    J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
+SiteMaterial TrapezeRopeDrawInit::makeMaterial() const {
     // runtime/src/render/materials/tex_modulate.hlsl: the texture times the vertex colour, its alpha the texture's; drawn where
     // the alpha is above 0, depth tested and written, no culling.
-    NebulaNativeMaterial material;
-    NativeShader::init(material, NEBULA_SHADER_TEX_MODULATE, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, true,
+    SiteMaterial material;
+    material.init(NEBULA_SHADER_TEX_MODULATE, SiteMaterial::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, true,
                        NEBULA_CULL_NONE);
-    material.early_depth = 0;
     material.constants[0] = 1.0f;
     material.constants[1] = 0.0f;
-    NativeShader::setTexture(material, 0, mTexture);
-    NativeShader::send(material);
-    J3DNativeShape::setCurrentIdentity();
+    material.setTexture(0, mTexture);
+    return material;
 }

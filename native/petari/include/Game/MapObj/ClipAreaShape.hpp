@@ -1,8 +1,10 @@
 #pragma once
 
+#include "Game/Render/TypedDraw.hpp"
+
 #include <nebula_geometry.hpp>
 
-class J3DModelData;
+class ModelData;
 
 class ClipAreaShape {
 public:
@@ -12,9 +14,9 @@ public:
     virtual void calcVolumeMatrix(Pos3f*, const Pos3f&, const Vec3f&) const;
 
     bool isInArea(const Vec3f&, f32, const Pos3f&, const Vec3f&) const;
-    void drawVolumeShape(const Pos3f&, const Vec3f&) const;
+    void drawVolumeShape(TypedDraw& rDraw, const Pos3f&, const Vec3f&) const;
 
-    J3DModelData* mModelData;
+    ModelData* mModelData;
 };
 
 class ClipAreaShapeSphere : public ClipAreaShape {

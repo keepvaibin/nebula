@@ -1,5 +1,6 @@
+#include "Game/Render/Material.hpp"
 #include "Game/Ride/Plant.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/Camera/CameraTargetArg.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -25,7 +26,6 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <JSystem/J3DGraphBase/J3DShapeDraw.hpp>
 #include <nebula_math.h>
 #include "Game/System/NebulaInput.hpp"
 
@@ -84,7 +84,7 @@ namespace NrvPlant {
 };  // namespace NrvPlant
 
 Plant::Plant(const char* pName)
-    : LiveActor(pName), mSeedPartsModel(), mStalk(), mTopPartsModel(), mNumLeaves(), mLeaves(), mShapeDraw(), mRider(), mRailCoord(),
+    : LiveActor(pName), mSeedPartsModel(), mStalk(), mTopPartsModel(), mNumLeaves(), mLeaves(), mRider(), mRailCoord(),
       mUp(0.0f, 1.0f, 0.0f), mFront(0.0f, 0.0f, 1.0f), mRideVelocity(), mAccelTimer(), mJumpSpeed(::sDefaultJumpSpeed),
       mJumpSpeedOffsetY(::sDefaultJumpSpeedOffsetY), mClippingCenter(0.0f, 0.0f, 0.0f), mCameraInfo(), mPlayAppearDemo(), mGrabbedTop() {
     mSeedMtx.identity();
@@ -95,7 +95,6 @@ void Plant::init(const JMapInfoIter& pMapInfoIter) {
     MR::createSceneObj(SceneObj_PlantStalkDrawInit);
     MR::createSceneObj(SceneObj_PlantLeafDrawInit);
 
-    mShapeDraw = MR::getSceneObj< PlantLeafDrawInit >(SceneObj_PlantLeafDrawInit)->mShapeDraw;
 
     MR::connectToScene(this, MR::MovementType_Ride, MR::CalcAnimType_Ride, MR::DrawBufferType_None, MR::DrawType_Plant);
 
@@ -408,10 +407,6 @@ void Plant::calcAnim() {
         return;
     }
 
-    for (s32 leaf = 0; leaf < mNumLeaves; leaf++) {
-        MtxPtr mtx = mLeaves[leaf]->getPosMtx();
-        MR::multMtx(mtx, mLeaves[leaf]->getBaseMtx(), MR::getCameraViewMtx());
-    }
 }
 
 void Plant::startClipped() {
@@ -718,9 +713,11 @@ void Plant::draw() const {
         return;
     }
 
+    PlantLeafDrawInit* pInit = MR::getSceneObj< PlantLeafDrawInit >(SceneObj_PlantLeafDrawInit);
+    MaterialDraw material(pInit->mMaterial);
+    TypedDraw site(material, nullptr, MR::getCameraViewMtx());
     for (s32 leaf = 0; leaf < mNumLeaves; leaf++) {
-        J3DNativeShape::setPosition(0, mLeaves[leaf]->mPosMtx);
-        J3DNativeShape::setNormal(0, mLeaves[leaf]->mPosMtx);
-        mShapeDraw->draw();
+        site.setWorld(mLeaves[leaf]->getBaseMtx());
+        material.drawUnder(site, pInit->mShape);
     }
 }

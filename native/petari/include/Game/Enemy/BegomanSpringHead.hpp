@@ -22,7 +22,7 @@ public:
     virtual void init(const JMapInfoIter& rIter);
 
     bool isSpringHop();
-    s16 getHopEndBckFrameMax();
+    s32 getHopEndBckFrameMax();
     void tryHopStart();
     void tryHopEnd();
     void tryHopJump();

@@ -283,6 +283,7 @@ bool AmbientOcclusion::record(ID3D12GraphicsCommandList* list, DescriptorRing& r
     const UINT groups_y = (height + 7u) / 8u;
     transition(list, distance_, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     list->SetPipelineState(distance_pass_.Get());
+    { ID3D12DescriptorHeap* heap = ring.heap_for(table.gpu); list->SetDescriptorHeaps(1, &heap); }
     list->SetComputeRootDescriptorTable(1, gpu(0));
     list->SetComputeRootDescriptorTable(2, gpu(9));
     list->Dispatch(groups_x, groups_y, 1);

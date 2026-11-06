@@ -1,12 +1,13 @@
 #pragma once
 
+#include "Game/Util/Color.hpp"
+
 #include "Game/Util/Array.hpp"
 
 class FogCtrl;
-class J3DAnmBase;
-struct J3DColor;
-class J3DModel;
-class J3DModelData;
+class Clip;
+class Model;
+class ModelData;
 class MarioShadowProjmapMtxSetter;
 class MatColorCtrl;
 class MaterialCtrl;
@@ -18,13 +19,13 @@ class ViewProjmapEffectMtxSetter;
 
 class MaterialUpdater {
 public:
-    MaterialUpdater(J3DModel*, const ResourceHolder*);
+    MaterialUpdater(Model*, const ResourceHolder*);
 
     void update();
     // The copies the model's materials ask for by what they are (a matrix that follows the model or the view).
     void prepareMaterials();
     FogCtrl* addFogCtrl(bool);
-    MatColorCtrl* addMatColorCtrl(const char*, u32, const J3DColor*);
+    MatColorCtrl* addMatColorCtrl(const char*, u32, const Color8*);
     TexMtxCtrl* addTexMtxCtrl(const char*);
     ProjmapEffectMtxSetter* addProjmapEffectMtxSetter();
     MirrorReflectionMtxSetter* addMirrorReflectionMtxSetter();
@@ -34,10 +35,10 @@ public:
     ViewProjmapEffectMtxSetter* addViewProjmapEffectMtxSetter();
     MarioShadowProjmapMtxSetter* addMarioShadowProjmapMtxSetter();
     void checkTexture();
-    static bool hasMovingMaterial(const J3DModelData*);
+    static bool hasMovingMaterial(const ModelData*);
 
     MR::Vector< MR::AssignableArray< MaterialCtrl* > > mMaterialCtrl;
-    J3DModel* mModel;
+    Model* mModel;
     FogCtrl* mFogCtrl;
     const ResourceHolder* mResHolder;
 };

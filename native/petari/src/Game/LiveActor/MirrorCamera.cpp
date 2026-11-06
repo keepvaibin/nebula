@@ -3,7 +3,7 @@
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/MtxUtil.hpp"
-#include <JSystem/J3DGraphAnimator/J3DModelData.hpp>
+#include "Game/Render/ModelData.hpp"
 #include <nebula_geometry.hpp>
 
 MirrorCamera::MirrorCamera(const char* pName) : NameObj(pName), _C(0.0f, 0.0f, 0.0f), _18(0.0f, 1.0f, 0.0f), _24() {
@@ -21,12 +21,12 @@ void MirrorCamera::setMirrorMapInfo(const Vec3f& rNormal, const Vec3f& rPosition
     _24 = -NebulaVecDotProduct(_18, _C);
 }
 
-void MirrorCamera::setMirrorMapInfo(J3DModelData* pModelData) {
+void MirrorCamera::setMirrorMapInfo(ModelData* pModelData) {
     Vec3f position;
     Vec3f normal;
-    const f32* pPositions = static_cast< const f32* >(pModelData->getVtxPosArray());
+    const f32* pPositions = pModelData->getFirstPosition();
     position.set< f32 >(pPositions[0], pPositions[1], pPositions[2]);
-    const f32* pNormals = static_cast< const f32* >(pModelData->getVtxNrmArray());
+    const f32* pNormals = pModelData->getFirstNormal();
     normal.set< f32 >(pNormals[0], pNormals[1], pNormals[2]);
 
     setMirrorMapInfo(normal, position);

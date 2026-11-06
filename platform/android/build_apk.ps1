@@ -94,19 +94,6 @@ foreach ($abi in $Abis -split ",") {
         "$Work\cargo\$triple\release\libnebula_import.so" $dest -Force
 }
 
-# The pipelines the whole game uses (platform/android/vk_seed_keys.bin, captured by the PC's galaxy tour):
-# GameActivity installs them beside the pipeline cache, which builds them from the first launch. -SeedTool also ships
-# their SPIR-V (vk_seed_shaders.bin); the device uses it only when its compiler is the tool's (compiler_identity), so a
-# tool built against another glslang build than the app's adds size and nothing else.
-New-Item -ItemType Directory -Force (Join-Path $Work "assets") | Out-Null
-$seedKeys = Join-Path $root "platform\android\vk_seed_keys.bin"
-Copy-Item $seedKeys (Join-Path $Work "assets\vk_seed_keys.bin") -Force
-Remove-Item (Join-Path $Work "assets\vk_seed_shaders.bin") -ErrorAction SilentlyContinue
-if ($SeedTool) {
-    & $SeedTool $seedKeys (Join-Path $Work "assets\vk_seed_shaders.bin")
-    if ($LASTEXITCODE -ne 0) { throw "vk_shader_seed failed" }
-}
-
 # The license texts the About screen opens (assets/licenses; the list is app/src/main/kotlin/.../Licenses.kt).
 $licenses = Join-Path $Work "assets\licenses"
 New-Item -ItemType Directory -Force $licenses | Out-Null

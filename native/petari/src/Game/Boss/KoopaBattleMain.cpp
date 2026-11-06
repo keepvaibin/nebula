@@ -348,7 +348,7 @@ bool KoopaBattleMain::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSen
     return false;
 }
 
-#if !defined(NEBULA_RELEASE)
+#if defined(NEBULA_DEV)
 void KoopaBattleMain::testHit(HitSensor* pPlayer) {
     if (isNerve(GET_NERVE(KoopaBattleMain, KoopaBattleMainNrvDamageEscape))) {
         receiveMsgPlayerAttack(ACTMES_PLAYER_PUNCH, pPlayer, mHost->getSensor("DamageEscapeBody"));

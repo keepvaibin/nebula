@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 
 class PlantPoint;
@@ -12,7 +13,7 @@ public:
 
     virtual void init(const JMapInfoIter&);
     virtual void draw() const;
-    virtual void drawGrowUp() const;
+    virtual void drawGrowUp(TypedDraw& rDraw) const;
 
     bool updateGrowUp();
     void calcPosAndAxisY(Vec3f*, Vec3f*, f32) const;
@@ -34,7 +35,9 @@ class PlantStalkDrawInit : public NameObj {
 public:
     PlantStalkDrawInit(const char*);
 
-    virtual void initDraw() const;
+    virtual SiteMaterial makeMaterial() const;
+    // What its objects draw with.
+    SiteMaterial mMaterial;
 
     JUTTexture* mTexture;
 };

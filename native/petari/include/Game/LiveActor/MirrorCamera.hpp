@@ -3,7 +3,7 @@
 #include "Game/NameObj/NameObj.hpp"
 #include <nebula_geometry.hpp>
 
-class J3DModelData;
+class ModelData;
 
 class MirrorCamera : public NameObj {
 public:
@@ -15,7 +15,7 @@ public:
     virtual void movement() override;
 
     void setMirrorMapInfo(const Vec3f&, const Vec3f&);
-    void setMirrorMapInfo(J3DModelData*);
+    void setMirrorMapInfo(ModelData*);
     void updateViewMtx();
     void updateModelTexMtx();
     f32 getDistance(const Vec3f&) const;

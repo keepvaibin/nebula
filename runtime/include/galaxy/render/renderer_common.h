@@ -4,6 +4,9 @@
 // What both renderers share (renderer_d3d12.h, vk/renderer_vk.h): frame and ring counts, the scene target's logical
 // size, one resolved draw, clear values, the scene target conversion shader and its constants, and the sampler-table cache.
 
+#include <nebula_game_api.h>
+#include <nebula_limits.h>
+#include "galaxy/render/texture_sampler.h"
 #include "galaxy/render/frame_pass.h"
 #include "galaxy/render/gpu_types.h"
 #include "galaxy/render/render_config.h"
@@ -18,6 +21,17 @@
 
 namespace galaxy::render {
 
+using ScreenProbe = ::NebulaScreenProbe;
+// Probe tiles fit every supported device; batches and readbacks grow independently.
+inline constexpr std::uint32_t kScreenProbeTile = 256u;
+// Textures one draw can read.
+inline constexpr std::uint32_t kTableTextures = NEBULA_MATERIAL_SLOTS;
+
+// A scene target kind, as a pipeline is built for it: log2 samples, then these bits.
+inline constexpr std::uint8_t kSceneVariantSamplesMask = 3u;
+inline constexpr std::uint8_t kSceneVariantHdr = 4u;
+inline constexpr std::uint8_t kSceneVariantTarget = 8u;
+
 // The picture channel each sampled channel reads (0-3: R, G, B, A) for a target pass's NebulaTargetChannels
 // (E-07): RGBA, INTENSITY_ALPHA (R R R A), ALPHA (A A A A), RED, GREEN, BLUE (that channel in all four), RGB
 // (alpha one: 4).
@@ -28,18 +42,18 @@ namespace galaxy::render {
 }
 
 inline constexpr unsigned kFramesInFlight = 2;
-// Matrix-ring segments in temporal mode (see RendererD3D12::begin_frame):
-// two more than the frames in flight.
+// The vertex and matrix rings' segments: a frame reads the rows and vertices of the walk before it.
 inline constexpr unsigned kRingSegments = kFramesInFlight + 2u;
-// Interpolation mode: one segment of every ring, the descriptor ring and the
-// sampler heaps per game frame, for the frame being recorded, the completed
-// log waiting for its present and the log whose sub-frames play. A segment
-// is reused only after its fence (the oldest log is then invalidated).
-inline constexpr unsigned kInterpSegments = 3u;
+inline constexpr std::size_t kVertexRingBytes = 32u * 1024u * 1024u;
+inline constexpr std::size_t kIndexRingBytes = 12u * 1024u * 1024u;
+inline constexpr std::size_t kConstantRingBytes = 12u * 1024u * 1024u;
+inline constexpr std::size_t kMatrixRingBytes = 32u * 1024u * 1024u;
 inline constexpr unsigned kSamplerHeapSlots = 2048;
+inline constexpr unsigned kSamplerTableSlots = NEBULA_MATERIAL_SLOTS;
 
 struct SamplerTableKey {
-    std::array<std::uint32_t, 8> samplers{};
+    std::array<SamplerKey, kSamplerTableSlots> samplers{};
+    std::uint32_t count = 0;
     std::uint32_t config = 0;
     bool operator==(const SamplerTableKey&) const = default;
 };
@@ -48,47 +62,23 @@ struct SamplerTableKeyHasher {
 };
 // The render settings sampler tables depend on (anisotropy, LOD bias).
 [[nodiscard]] std::uint32_t sampler_config_key(const RenderConfig& cfg) noexcept;
-[[nodiscard]] SamplerTableKey make_sampler_table_key(
-    const std::uint32_t keys[8], const RenderConfig& cfg) noexcept;
+[[nodiscard]] SamplerTableKey make_sampler_table_key(const std::array<SamplerKey, kSamplerTableSlots>& keys, unsigned count,
+                                                     const RenderConfig& cfg) noexcept;
 
-// One cache describes one physical sampler heap. reset(config) starts a new
-// frame only after that heap's GPU fence completes. Unchanged tables survive;
-// every lookup pins its index for this frame, including pending draw batches.
-// At capacity, only a table not used this frame may be replaced. Thus history
-// cannot exhaust a legal frame, and no recorded draw's descriptors are changed.
-// A replacement reports created=true so the caller writes all eight samplers.
-// Configuration changes and unconditional reset invalidate all retained tables.
+// The tables written in one sampler heap: each takes only the slots it uses. Written once; the renderer starts again between
+// frames, with the GPU idle, when the heap is nearly full.
 class SamplerTableCache {
 public:
     struct Allocation { unsigned index; bool created; };
     [[nodiscard]] Allocation get_or_allocate(const SamplerTableKey& key);
-    void reset(std::uint32_t config_key) noexcept {
-        if (config_key != config_key_ || frame_ == UINT64_MAX) {
-            reset();
-            config_key_ = config_key;
-        }
-        ++frame_;
-    }
-    // Unconditional clear for teardown paths, where the heap contents must not
-    // be assumed valid again.
+    [[nodiscard]] bool nearly_full() const noexcept { return cursor_ + kSamplerHeapSlots / 4u > kSamplerHeapSlots; }
     void reset() noexcept {
         tables_.clear();
-        cursor_ = 8u;
-        config_key_ = 0u;
-        frame_ = 0u;
-        eviction_cursor_ = 0u;
+        cursor_ = kSamplerTableSlots;
     }
 private:
     std::unordered_map<SamplerTableKey, unsigned, SamplerTableKeyHasher> tables_;
-    unsigned cursor_ = 8u;
-    std::uint32_t config_key_ = 0u;
-    static constexpr unsigned kDynamicTables = (kSamplerHeapSlots - 8u) / 8u;
-    // A bounded clock scan avoids repeatedly scanning all previously pinned
-    // entries for each miss. Reverse keys allow exception-safe map replacement.
-    std::array<SamplerTableKey, kDynamicTables> slot_keys_{};
-    std::array<std::uint64_t, kDynamicTables> slot_frames_{};
-    std::uint64_t frame_ = 0u;
-    unsigned eviction_cursor_ = 0u;
+    unsigned cursor_ = kSamplerTableSlots;
 };
 
 
@@ -120,9 +110,6 @@ struct SceneConversionShaderConstants {
 [[nodiscard]] std::string_view clear_pixel_shader_source() noexcept;
 // Depth clear as a draw (Vulkan drivers whose vkCmdClearAttachments races with draws): writes clear_value.x.
 [[nodiscard]] std::string_view clear_depth_pixel_shader_source() noexcept;
-// The depth carry by texel loads, for a depth format the device cannot filter linearly.
-[[nodiscard]] std::string_view depth_carry_load_pixel_shader_source() noexcept;
-[[nodiscard]] std::string_view depth_carry_pixel_shader_source() noexcept;
 [[nodiscard]] std::string_view ui_textured_quad_vertex_shader_source() noexcept;
 [[nodiscard]] std::string_view ui_textured_quad_pixel_shader_source() noexcept;
 [[nodiscard]] std::string_view ui_solid_quad_vertex_shader_source() noexcept;
@@ -203,11 +190,6 @@ struct DrawCall {
     // Render target 1 in temporal scenes: 1 the motion target (opaque
     // motion writers), 2 the reactive mask (blended draws), 0 none.
     std::uint8_t aux_target = 0;
-    // Interpolated redraw: the scene transform record whose VS constants a
-    // sub-frame replaces, -1 for draws outside the 3D scene.
-    std::int32_t replay_record = -1;
-    // Interpolated redraw: the scene's pixel-constant record, -1 for none.
-    std::int32_t ps_record = -1;
 };
 
 }  // namespace galaxy::render

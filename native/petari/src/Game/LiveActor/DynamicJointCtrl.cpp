@@ -1,6 +1,6 @@
 #include "Game/LiveActor/DynamicJointCtrl.hpp"
 #include "Game/Util.hpp"
-#include <JSystem/J3DGraphAnimator/J3DJoint.hpp>
+#include "Game/Render/ModelData.hpp"
 
 template const bool JMapInfo::getValue< f32 >(int, const char*, f32*) const;
 
@@ -9,7 +9,7 @@ namespace {
     const s32 sDefaultCtrlTime = 10;
     const char* sTextOutFileName = "DynamicJointCtrl";
 
-    s32 calcJointChildNum(J3DJoint* pJoint) {
+    s32 calcJointChildNum(Joint* pJoint) {
         if (pJoint->mChild == nullptr) {
             return 0;
         } else {
@@ -151,7 +151,7 @@ DynamicJointCtrl::DynamicJointCtrl(LiveActor* pActor, const char* pName, const D
 
 void DynamicJointCtrl::init() {
     MR::getJointMtx(mActor, mName);
-    J3DJoint* joint = MR::getJoint(mActor, mName);
+    Joint* joint = MR::getJoint(mActor, mName);
     if (mParams->mCtrlJointNumMax > 0) {
         _8 = mParams->mCtrlJointNumMax;
     } else {

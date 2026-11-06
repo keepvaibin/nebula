@@ -1,8 +1,8 @@
 #include "Game/Map/OceanRingPipeOutside.hpp"
-#include "Game/Util/NativeShader.hpp"
-#include "JSystem/J3DGraphBase/J3DNativeMaterial.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/Material.hpp"
+#include "Game/Render/FrameList.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/Map/OceanRingPipe.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util/CameraUtil.hpp"
@@ -41,9 +41,7 @@ void OceanRingPipeOutside::movement() {
 }
 
 void OceanRingPipeOutside::initMesh() {
-    mMesh.init(NEBULA_SHAPE_NORMAL | NEBULA_SHAPE_TEXCOORD0, 2 * mRingPipe->_98 * (mRingPipe->_9C - 1));
-    mMesh.useArray(NativeMesh::SLOT_POSITION, mRingPipe->_A0);
-    mMesh.useArray(NativeMesh::SLOT_NORMAL, mRingPipe->_A4);
+    mMesh.init(2 * mRingPipe->_98 * (mRingPipe->_9C - 1));
     sendGD();
     mMesh.send();
 }
@@ -52,19 +50,18 @@ void OceanRingPipeOutside::draw() const {
     if (!MR::isValidDraw(mRingPipe))
         return;
 
-    loadMaterial();
-    mMesh.draw();
+    const SiteMaterial material = loadMaterial();
+    TypedDraw site(material, nullptr, MR::getCameraViewMtx());
+    mMesh.draw(site);
 }
 
 
-void OceanRingPipeOutside::loadMaterial() const {
-    J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-    J3DNativeShape::setNormal(0, MR::getCameraViewMtx());
+SiteMaterial OceanRingPipeOutside::loadMaterial() const {
+    
     Pos3f mtx;
     mtx.identity();
     mtx.mMtx[0][2] = mTexU;
     mtx.mMtx[1][2] = 0.0f;
-    J3DNativeShape::setTexture(0, mtx.toMtxPtr(), 2);
 
     Pos3f mtx2;
     mtx2.identity();
@@ -79,27 +76,25 @@ void OceanRingPipeOutside::loadMaterial() const {
 
     MR::multMtx(mtx2, scaleMtx, mtx2);
     MR::multMtx(mtx2, qMtx2, mtx2);
-    J3DNativeShape::setTexture(1, mtx2, 2);
 
     // runtime/src/render/materials/ocean_ring_pipe_outside.hlsl: the highlight texture (1) by the normal, warped by
     // the indirect texture (0) at sIndirectScale texels a step, over sStageColor0 with light 2's rim; opaque, depth tested
     // and written, back faces culled (or none). The alpha channel's material and ambient alphas are the drawing
     // state's (the site never sets them).
-    NebulaNativeMaterial material;
-    NativeShader::init(material, NEBULA_SHADER_OCEAN_RING_PIPE_OUTSIDE, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_LEQUAL,
+    SiteMaterial material;
+    material.init(NEBULA_SHADER_OCEAN_RING_PIPE_OUTSIDE, SiteMaterial::BLEND_OPAQUE, NEBULA_COMPARE_LEQUAL,
                        true, mRingPipe->_90 ? NEBULA_CULL_BACK : NEBULA_CULL_NONE);
-    NativeShader::setColor(material, 0, ::sStageColor0.r, ::sStageColor0.g, ::sStageColor0.b, ::sStageColor0.a);
+    material.setMatrix(3, 0, mtx.toMtxPtr());
+    material.setMatrix(3, 1, mtx2);
+    material.setColor(0, ::sStageColor0.r, ::sStageColor0.g, ::sStageColor0.b, ::sStageColor0.a);
     material.constants[4] = ::sIndirectScale;
     material.constants[6] = static_cast< f32 >(mWaterPipeHighLightTex->getWidth());
     material.constants[7] = static_cast< f32 >(mWaterPipeHighLightTex->getHeight());
     material.constants[8] = 1.0f;
-    material.constants[9] = J3DNativeMaterial::lightAmbient(0)[3];
-    NativeShader::setTexture(material, 0, mWaterPipeIndirectTex);
-    NativeShader::setTexture(material, 1, mWaterPipeHighLightTex);
-    NativeShader::send(material);
-    static const u8 kPlaces[8] = {0, 1, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture,
-                                  J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture};
-    J3DNativeShape::setCurrent(0, kPlaces);
+    material.constants[9] = MaterialAmbient::get(0)[3];
+    material.setTexture(0, mWaterPipeIndirectTex);
+    material.setTexture(1, mWaterPipeHighLightTex);
+    return material;
 }
 
 void OceanRingPipeOutside::sendGD() {
@@ -113,20 +108,18 @@ void OceanRingPipeOutside::sendGD() {
     for (s32 i = 0; i < mRingPipe->_9C - 1; i++) {
         f32 f27 = 0.0f;
         vv = mRingPipe->_98;
-        mMesh.begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, (u16)(vv << 1));
+        VertexPNT* vtx = mMesh.strip((u16)(vv << 1));
         for (s32 j = 0; j < mRingPipe->_98; j++) {
             v = j * mRingPipe->_9C;
             u16 cl2 = i + v + 1;
             u16 cl = i + v;
-            mMesh.index(NativeMesh::SLOT_POSITION, cl2);
-            mMesh.index(NativeMesh::SLOT_NORMAL, cl2);
-            mMesh.texCoord(0, f27, f29);
-            mMesh.corner();
-
-            mMesh.index(NativeMesh::SLOT_POSITION, cl);
-            mMesh.index(NativeMesh::SLOT_NORMAL, cl);
-            mMesh.texCoord(0, f27, f28);
-            mMesh.corner();
+            const auto vertex = [this](u16 at, f32 s, f32 t) {
+                const Vec3f& rPlace = mRingPipe->_A0[at];
+                const Vec3s& rNormal = mRingPipe->_A4[at];
+                return VertexPNT{rPlace.x, rPlace.y, rPlace.z, rNormal.x / 16384.0f, rNormal.y / 16384.0f, rNormal.z / 16384.0f, s, t};
+            };
+            *vtx++ = vertex(cl2, f27, f29);
+            *vtx++ = vertex(cl, f27, f28);
 
             f27 += ::sTexRateU;
         }

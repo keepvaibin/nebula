@@ -11,6 +11,8 @@ add_compile_definitions(NEBULA_VERSION="${nebula_version}")
 option(NEBULA_RELEASE "Leave the test hooks out" OFF)
 if(NEBULA_RELEASE)
     add_compile_definitions(NEBULA_RELEASE=1)
+else()
+    add_compile_definitions(NEBULA_DEV=1)
 endif()
 
 set(CMAKE_CXX_STANDARD 20)
@@ -62,7 +64,7 @@ set_target_properties(galaxy_native_spirv PROPERTIES IMPORTED_LOCATION "${NEBULA
 add_executable(galaxy_utility_spirv IMPORTED)
 set_target_properties(galaxy_utility_spirv PROPERTIES IMPORTED_LOCATION "${NEBULA_HOST_TOOLS}/galaxy_utility_spirv${CMAKE_HOST_EXECUTABLE_SUFFIX}")
 include("${nebula_root}/cmake/native_materials.cmake")
-galaxy_native_material_sources(galaxy_native_spirv_sources spirv)
+galaxy_program_blob(galaxy_programs_spirv spirv)
 set(galaxy_utility_spirv_dir "${CMAKE_CURRENT_BINARY_DIR}/generated/utility_spirv")
 file(MAKE_DIRECTORY "${galaxy_utility_spirv_dir}")
 add_custom_command(OUTPUT "${galaxy_utility_spirv_dir}/utility_spirv_data.h"
@@ -87,23 +89,24 @@ add_library(galaxy_render_vk STATIC
     ${rt}/render/texture_pack.cpp
     ${rt}/render/texture_pack_codecs.cpp
     ${rt}/render/movie_replacement.cpp
-    ${rt}/render/curved_surfaces.cpp
-    ${rt}/render/native_shapes.cpp
-    ${rt}/render/native_material.cpp
-    ${rt}/render/drawing_state.cpp
-    ${rt}/render/draw_matrices.cpp
-    ${rt}/render/render_state_key.cpp
     ${rt}/render/frame_pass.cpp
-    ${rt}/render/line_point_params.cpp
     ${rt}/render/post_process_settings.cpp
-    ${rt}/render/transform_history.cpp
     ${rt}/render/render_core.cpp
+    ${rt}/render/affine.cpp
+    ${rt}/render/core/compose.cpp
+    ${rt}/render/core/draw_walker.cpp
+    ${rt}/render/core/inspector.cpp
+    ${rt}/render/core/pairing.cpp
+    ${rt}/render/core/pipelines.cpp
+    ${rt}/render/core/program_table.cpp
+    ${rt}/render/core/registries.cpp
+    ${rt}/render/core/pipelines_vk.cpp
+    ${rt}/render/core/encoder_vk.cpp
     ${rt}/render/game_lights.cpp
     ${rt}/render/galaxy_select.cpp
     ${rt}/render/frame_interpolation.cpp
-    ${rt}/render/interp_gpu.cpp
     ${rt}/render/rt_materials.cpp
-    ${rt}/frame_telemetry.cpp
+    $<$<NOT:$<BOOL:${NEBULA_RELEASE}>>:${rt}/frame_telemetry.cpp>
     ${rt}/perf_hint.cpp
     ${rt}/render/game_asset_extract.cpp
     ${rt}/render/vk/vk_context.cpp
@@ -111,12 +114,10 @@ add_library(galaxy_render_vk STATIC
     ${rt}/render/vk/vk_libraries.cpp
     ${rt}/render/vk/utility_spirv.cpp
     ${rt}/render/vk/texture_backend_vk.cpp
-    ${rt}/render/vk/pipeline_cache_vk.cpp
     ${rt}/render/mod_shaders.cpp
     ${rt}/render/mod_shader_build.cpp
     ${rt}/render/vk/mod_shader_compile_vk.cpp
     ${rt}/render/vk/shader_compile_vk.cpp
-    ${rt}/render/pipeline_seed.cpp
     ${rt}/render/vk/compile_journal.cpp
     ${rt}/render/vk/renderer_vk.cpp
     ${rt}/render/vk/ambient_occlusion_vk.cpp
@@ -124,12 +125,10 @@ add_library(galaxy_render_vk STATIC
     ${rt}/render/vk/ffx_vk_forward.cpp
     ${rt}/render/vk/fsr_frame_generation_vk.cpp
     ${rt}/render/vk/scene_camera_vk.cpp
-    ${rt}/render/vk/renderer_vk_scene.cpp
-    ${rt}/render/vk/renderer_vk_replay.cpp
+    ${rt}/render/vk/renderer_vk_frame.cpp
     ${rt}/render/vk/post_process_vk.cpp
     ${rt}/render/vk/game_bloom_vk.cpp
     "${galaxy_utility_spirv_dir}/utility_spirv_data.h"
-    ${galaxy_native_spirv_sources}
     ${rt}/frame_cadence_diagnostics.cpp
     ${rt}/runtime_settings.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../tools/test_driver/run_options.cpp
@@ -176,8 +175,9 @@ if(NOT ANDROID AND NOT IOS)
     target_sources(galaxy_render_vk PRIVATE ${rt}/mod_import.cpp)
     target_link_libraries(galaxy_render_vk PUBLIC nebula_archive)
 endif()
+target_include_directories(galaxy_render_vk PUBLIC "${nebula_root}/runtime/src")
 target_include_directories(galaxy_render_vk PUBLIC "${nebula_root}/runtime/include")
-target_include_directories(galaxy_render_vk PRIVATE "${nebula_root}/third_party/smaa" "${nebula_root}/native/include" "${galaxy_native_include_dir_spirv}" "${galaxy_utility_spirv_dir}")
+target_include_directories(galaxy_render_vk PRIVATE "${nebula_root}/third_party/smaa" "${nebula_root}/native/include" "${galaxy_utility_spirv_dir}")
 # vk_mem_alloc.h leaves pointer nullability unannotated.
 target_compile_options(galaxy_render_vk PRIVATE -Wno-nullability-completeness)
 target_link_libraries(galaxy_render_vk PUBLIC nebula_vulkan_deps)
@@ -216,6 +216,7 @@ else()
     add_executable(main ${host_sources})
     set_target_properties(main PROPERTIES OUTPUT_NAME nebula)
 endif()
+target_sources(main PRIVATE ${galaxy_programs_spirv})
 target_include_directories(main PRIVATE "${nebula_root}/native/include" "${nebula_root}/runtime/include")
 target_compile_definitions(main PRIVATE NEBULA_HOST_RENDERER=1 NEBULA_HOST_SDL=1)
 target_include_directories(main PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")

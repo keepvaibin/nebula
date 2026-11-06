@@ -20,7 +20,7 @@ namespace galaxy::render {
 
 class DescriptorRing;
 
-// The game's two blooms (galaxy/motion_signals.h kMarkerBloom) as one operator on the scene target (game_bloom.hlsl). The game
+// The game's two blooms (NEBULA_PASS_BLOOM_*) as one operator on the scene target (game_bloom.hlsl). The game
 // draws them through scene target copies at fixed sizes: BloomEffect draws its glowing models over black, takes their colour
 // where its intensity passes a threshold at a quarter of the frame, blurs it with two rings of 6 taps (level 1), blurs
 // that at an eighth with three rings of 12 (level 2) and adds both to the scene it kept; BloomEffectSimple takes the

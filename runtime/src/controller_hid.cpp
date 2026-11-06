@@ -2456,13 +2456,6 @@ void ensure_controller_hid_started() noexcept {
         if (h.stop_event.get() == nullptr || h.rescan_event.get() == nullptr || h.rumble_event.get() == nullptr) {
             return;
         }
-        static const bool exit_hook = [] {
-            // Orderly exits also stop the motors in prepare_for_process_exit
-            // (ExitProcess skips atexit).
-            std::atexit([] { stop_all_rumble(); });
-            return true;
-        }();
-        (void)exit_hook;
         CM_NOTIFY_FILTER filter{};
         filter.cbSize = sizeof(filter);
         filter.FilterType = CM_NOTIFY_FILTER_TYPE_DEVICEINTERFACE;

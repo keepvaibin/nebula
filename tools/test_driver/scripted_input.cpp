@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Scripted and replayed input for test runs. Not in a release: controls_engine.cpp answers with nothing.
-#if !defined(NEBULA_RELEASE)
+#if defined(NEBULA_DEV)
 #include "galaxy/input/controls_engine.h"
 #include "switches.h"
 #include "galaxy/host_env.h"

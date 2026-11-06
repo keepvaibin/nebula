@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include <nebula_geometry.hpp>
 
@@ -49,9 +50,9 @@ public:
     void updateHangLowerPoints();
     void updateHangLowerPointPos(s32);
 
-    void drawStop() const;
-    void drawFree() const;
-    void drawBind() const;
+    void drawStop(TypedDraw& rDraw) const;
+    void drawFree(TypedDraw& rDraw) const;
+    void drawBind(TypedDraw& rDraw) const;
 
     const Vec3f& getBasePos() const {
         return mBasePos;
@@ -84,7 +85,9 @@ class SwingRopeGroup : public NameObj {
 public:
     SwingRopeGroup(const char*);
 
-    virtual void initDraw() const;
+    virtual SiteMaterial makeMaterial() const;
+    // What its objects draw with.
+    SiteMaterial mMaterial;
 
     JUTTexture* mTexture;
 };

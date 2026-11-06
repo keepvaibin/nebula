@@ -1,0 +1,2388 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// The Vulkan renderer's scene target (renderer_vk.h): its targets, draws, clears, copies, screen probes and test captures.
+
+#include "renderer_vk_internal.h"
+#include "galaxy/render/vk/renderer_vk.h"
+
+#include "render/core/frame_core.h"
+#include <nebula_frame_list.h>
+
+#include "galaxy/content_viewport.h"
+#include "galaxy/experimental_ultrawide_aspect.h"
+#include "galaxy/render/host_window.h"
+#include "galaxy/render/render_config.h"
+#include "galaxy/render/temporal_dump.h"
+#include "galaxy/render/vk/streamline_vk.h"
+#if defined(_WIN32)
+#include "galaxy/render/streamline_bridge.h"
+#endif
+#include "galaxy/platform_time.h"
+#include "galaxy/render/texture_store.h"
+
+#include <span>
+#include <tuple>
+#include <vk_mem_alloc.h>
+
+#include <algorithm>
+#include <bit>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <fstream>
+#include <functional>
+#include <iostream>
+#include <span>
+#include <stdexcept>
+#include <thread>
+
+namespace galaxy::render {
+
+namespace {
+
+using namespace vk_detail;
+
+// A test capture's pixels as a binary PPM, written off the render thread.
+void write_ppm_async(std::string path, std::vector<std::uint8_t> rgb, unsigned width, unsigned height) {
+    std::thread([path = std::move(path), rgb = std::move(rgb), width, height] {
+        std::ofstream out(path, std::ios::binary | std::ios::trunc);
+        out << "P6\n" << width << ' ' << height << "\n255\n";
+        out.write(reinterpret_cast<const char*>(rgb.data()), static_cast<std::streamsize>(rgb.size()));
+    }).detach();
+}
+
+}  // namespace
+
+// An scene target set at `scale`: targets in their attachment layouts, the framebuffer, and the conversion inputs (allocated
+// once per set; rewriting them needs a GPU that no longer reads the old views, which callers ensure).
+bool RendererVk::create_scene_set(SceneSet& set, const FrameMap& map, unsigned samples, unsigned set_width,
+                                unsigned set_height, bool target) {
+    vk::Context& context = vk::Context::get();
+    const VkDevice device = context.device();
+    const std::uint32_t width = static_cast<std::uint32_t>(std::lround(static_cast<double>(set_width) * map.sx));
+    const std::uint32_t height = static_cast<std::uint32_t>(std::lround(static_cast<double>(set_height) * map.sy));
+    gpu::TextureRef color = context.create_texture(
+        width, height, 1u, target ? vk::kTargetColorFormat : vk::kSceneColorFormat,
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+            VK_IMAGE_USAGE_TRANSFER_DST_BIT | (scene_set_storage_ ? VK_IMAGE_USAGE_STORAGE_BIT : 0u),
+        true, "scene target color");
+    gpu::TextureRef depth = context.create_texture(
+        width, height, 1u, depth_format_,
+        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+        true, "scene target depth");
+    if (!color || !depth) {
+        std::cerr << "[Renderer] scene target " << width << 'x' << height << " allocation failed\n";
+        return false;
+    }
+    gpu::TextureRef ms_color;
+    gpu::TextureRef ms_depth;
+    if (samples > 1u) {
+        const auto count = static_cast<VkSampleCountFlagBits>(samples);
+        ms_color = context.create_texture(width, height, 1u, vk::kSceneColorFormat,
+                                          VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, true, "scene target color MSAA", count);
+        ms_depth = context.create_texture(width, height, 1u, depth_format_,
+                                          VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                                          true, "scene target depth MSAA", count);
+        if (!ms_color || !ms_depth) {
+            std::cerr << "[Renderer] scene target MSAA " << samples << "x allocation failed; single-sample\n";
+            ms_color.reset();
+            ms_depth.reset();
+            samples = 1u;
+        }
+    }
+    const auto make_framebuffer = [&](VkRenderPass pass, std::span<const VkImageView> views) {
+        VkFramebufferCreateInfo info{VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
+        info.renderPass = pass;
+        info.attachmentCount = static_cast<std::uint32_t>(views.size());
+        info.pAttachments = views.data();
+        info.width = width;
+        info.height = height;
+        info.layers = 1;
+        VkFramebuffer framebuffer = VK_NULL_HANDLE;
+        vk::check(vkCreateFramebuffer(device, &info, nullptr, &framebuffer), "scene target framebuffer");
+        return framebuffer;
+    };
+    const VkImageView single[2] = {color->target_view, depth->target_view};
+    VkFramebuffer framebuffer = VK_NULL_HANDLE;
+    VkFramebuffer resolve_framebuffer = VK_NULL_HANDLE;
+    if (samples > 1u) {
+        const VkImageView multi[3] = {ms_color->target_view, ms_depth->target_view, color->target_view};
+        framebuffer = make_framebuffer(draw_layout_.pass_for(static_cast<unsigned>(std::countr_zero(samples)), false),
+                                       multi);
+        resolve_framebuffer = make_framebuffer(draw_layout_.scene_pass, single);
+    } else {
+        framebuffer = make_framebuffer(target ? draw_layout_.target_pass : draw_layout_.scene_pass, single);
+    }
+    // The new targets enter their attachment layouts now, so every later submission finds them so.
+    run_one_time([&](VkCommandBuffer commands) {
+        for (const vk::Texture* target : {color.get(), ms_color.get()}) {
+            if (target == nullptr) continue;
+            image_barrier(commands, target->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0,
+                          VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                          VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+        }
+        for (const vk::Texture* target : {depth.get(), ms_depth.get()}) {
+            if (target == nullptr) continue;
+            image_barrier(commands, target->image, depth_aspects(depth_format_), VK_IMAGE_LAYOUT_UNDEFINED,
+                          VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0,
+                          VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+                          VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
+        }
+    });
+    set.color = std::move(color);
+    set.depth = std::move(depth);
+    set.framebuffer = framebuffer;
+    set.resolve_framebuffer = resolve_framebuffer;
+    set.ms_color = std::move(ms_color);
+    set.ms_depth = std::move(ms_depth);
+    set.samples = samples;
+    set.depth_dirty = false;
+    set.turned = false;
+    set.depth_serial = ++scene_depth_serial_;
+    for (VkDescriptorSet* source : {&set.color_source, &set.depth_source}) {
+        if (*source == VK_NULL_HANDLE) {
+            *source = allocate_persistent_set(conversion_set_layout_);
+        }
+    }
+    if (samples > 1u) {
+        if (set.ms_depth_source == VK_NULL_HANDLE) {
+            set.ms_depth_source = allocate_persistent_set(utility_set_layout_);
+        }
+        const VkDescriptorImageInfo ms_info{VK_NULL_HANDLE, set.ms_depth->view, kDepthSampleLayout};
+        VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+        write.dstSet = set.ms_depth_source;
+        write.dstBinding = 0;
+        write.descriptorCount = 1;
+        write.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+        write.pImageInfo = &ms_info;
+        vkUpdateDescriptorSets(device, 1, &write, 0, nullptr);
+    }
+    const VkDescriptorImageInfo color_info{VK_NULL_HANDLE, set.color->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+    const VkDescriptorImageInfo depth_info{VK_NULL_HANDLE, set.depth->view, kDepthSampleLayout};
+    // The conversion's filtering sampler: nearest for a depth format the device cannot filter linearly.
+    const VkDescriptorImageInfo color_sampler{linear_clamp_, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_UNDEFINED};
+    const VkDescriptorImageInfo depth_sampler{depth_linear_ ? linear_clamp_ : point_clamp_, VK_NULL_HANDLE,
+                                              VK_IMAGE_LAYOUT_UNDEFINED};
+    VkWriteDescriptorSet writes[4]{};
+    for (unsigned i = 0; i < 4u; ++i) {
+        const bool is_color = (i & 1u) == 0u;
+        writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[i].dstSet = is_color ? set.color_source : set.depth_source;
+        writes[i].dstBinding = i < 2u ? 0u : 1u;
+        writes[i].descriptorCount = 1;
+        writes[i].descriptorType = i < 2u ? VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE : VK_DESCRIPTOR_TYPE_SAMPLER;
+        writes[i].pImageInfo = i < 2u ? (is_color ? &color_info : &depth_info)
+                                      : (is_color ? &color_sampler : &depth_sampler);
+    }
+    vkUpdateDescriptorSets(device, 4, writes, 0, nullptr);
+    return true;
+}
+
+// Releases a set's targets and framebuffer once the GPU is past the commands recorded so far (its conversion inputs
+// stay allocated for the next create_scene_set).
+void RendererVk::destroy_scene_set(SceneSet& set) {
+    const VkDevice device = vk::Context::get().device();
+    for (VkFramebuffer* framebuffer : {&set.framebuffer, &set.resolve_framebuffer}) {
+        if (*framebuffer != VK_NULL_HANDLE) {
+            const VkFramebuffer retired = *framebuffer;
+            vk::Context::get().defer([device, retired] { vkDestroyFramebuffer(device, retired, nullptr); });
+            *framebuffer = VK_NULL_HANDLE;
+        }
+    }
+    retire(std::move(set.color));
+    retire(std::move(set.depth));
+    retire(std::move(set.ms_color));
+    retire(std::move(set.ms_depth));
+    set.samples = 1u;
+}
+
+bool RendererVk::create_scene_targets(const FrameMap& map, unsigned samples) {
+    SceneSet made;
+    made.color_source = scene_.color_source;
+    made.depth_source = scene_.depth_source;
+    made.ms_depth_source = scene_.ms_depth_source;
+    if (!create_scene_set(made, map, samples)) {
+        return false;
+    }
+    if (scene_.framebuffer != VK_NULL_HANDLE) {
+        destroy_scene_set(scene_);
+    }
+    scene_ = std::move(made);
+    scene_map_ = map;
+    if (scene_.samples > 1u) {
+        std::cout << "[Renderer] scene target MSAA " << scene_.samples << "x\n";
+    }
+    return true;
+}
+
+unsigned RendererVk::wanted_msaa_samples() const {
+    // A temporal upscaler antialiases the scene itself.
+    if (temporal_mode()) {
+        return 1u;
+    }
+    return std::min(std::bit_floor(std::clamp(get_render_config().msaa_samples, 1u, 8u)), msaa_max_samples_);
+}
+
+void RendererVk::resolve_scene_depth(VkCommandBuffer commands) {
+    SceneSet& set = scene_;
+    if (set.samples <= 1u || !set.depth_dirty || depth_resolve_pipeline_ == VK_NULL_HANDLE) {
+        return;
+    }
+    const GpuPassScope pass{*this, GpuPass::Resolve};
+    image_barrier(commands, set.ms_depth->image, depth_aspects(depth_format_),
+                  VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, kDepthSampleLayout,
+                  VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                  VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT);
+    const std::uint32_t width = scene_map_.width;
+    const std::uint32_t height = scene_map_.height;
+    VkRenderPassBeginInfo begin{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
+    begin.renderPass = draw_layout_.scene_pass;
+    begin.framebuffer = set.resolve_framebuffer;
+    begin.renderArea = {{0, 0}, {width, height}};
+    vkCmdBeginRenderPass(commands, &begin, VK_SUBPASS_CONTENTS_INLINE);
+    const VkViewport viewport{0.0f, static_cast<float>(height), static_cast<float>(width),
+                              -static_cast<float>(height), 0.0f, 1.0f};
+    const VkRect2D scissor{{0, 0}, {width, height}};
+    vkCmdSetViewport(commands, 0, 1, &viewport);
+    vkCmdSetScissor(commands, 0, 1, &scissor);
+    vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, depth_resolve_pipeline_);
+    vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, utility_layout_, 0, 1, &set.ms_depth_source,
+                            0, nullptr);
+    vkCmdDraw(commands, 3, 1, 0, 0);
+    vkCmdEndRenderPass(commands);
+    image_barrier(commands, set.ms_depth->image, depth_aspects(depth_format_), kDepthSampleLayout,
+                  VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
+                  VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+                  VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
+    if (commands == commands_) {
+        // Another command buffer resolves what the frame submitted before it; the frame's own draws since stay due.
+        set.depth_dirty = false;
+        reset_draw_bindings();
+    }
+}
+
+void RendererVk::run_one_time(const std::function<void(VkCommandBuffer)>& record) {
+    vk::Context& context = vk::Context::get();
+    const VkDevice device = context.device();
+    VkCommandBufferAllocateInfo alloc{VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
+    alloc.commandPool = utility_pool_;
+    alloc.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    alloc.commandBufferCount = 1;
+    VkCommandBuffer commands = VK_NULL_HANDLE;
+    vk::check(vkAllocateCommandBuffers(device, &alloc, &commands), "vkAllocateCommandBuffers");
+    VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+    begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    vk::check(vkBeginCommandBuffer(commands, &begin), "vkBeginCommandBuffer");
+    record(commands);
+    vk::check(vkEndCommandBuffer(commands), "vkEndCommandBuffer");
+    const bool done = context.wait(context.submit(commands), 10'000'000'000ull);
+    vkFreeCommandBuffers(device, utility_pool_, 1, &commands);
+    if (!done) {
+        throw std::runtime_error("one-time GPU work timed out or the device was lost");
+    }
+}
+
+// The scale-dependent memory a new internal resolution adds must fit 90% of the device's budget (RendererD3D12's
+// rule): scene target colour and depth (8 bytes per pixel) and, at most, the display picture pair plus one full-picture copy (12 bytes per
+// pixel of the picture).
+bool RendererVk::scene_fits_memory(const FrameMap& map) const {
+    std::uint64_t usage = 0u;
+    std::uint64_t budget = 0u;
+    if (!vk::Context::get().device_memory_budget(usage, budget)) {
+        return true;
+    }
+    const auto bytes = [](const FrameMap& m) { return (8.0 + 12.0) * m.width * m.height; };
+    const double needed = bytes(map) - bytes(scene_map_);
+    return static_cast<double>(usage) + needed <= 0.9 * static_cast<double>(budget);
+}
+
+// A changed internal resolution, between frames: the GPU finishes with the old targets and every scaled copy.
+void RendererVk::apply_window_size() {
+    if (scene_.wide) {
+        return;
+    }
+    // An edge drag resizes every frame: settle first, then re-create once.
+    if (host_window::move_size_active.load(std::memory_order_acquire)) {
+        return;
+    }
+    // The picture's exact size on the screen, square pixels.
+    const auto aspect = galaxy::experimental_effective_host_aspect();
+    const galaxy::ContentViewport content = galaxy::fit_content_viewport(
+        static_cast<int>(host_window::backbuffer_width), static_cast<int>(host_window::backbuffer_height),
+        aspect ? aspect->content_aspect : galaxy::kDesignContentAspect);
+    if (content.width <= 0 || content.height <= 0) {
+        return;
+    }
+    FrameMap wanted(static_cast<unsigned>(content.width), static_cast<unsigned>(content.height));
+    upscale_output_ = wanted;
+    const float render_fraction = host_window::upscaler_render_fraction(get_render_config(), wanted.width, wanted.height);
+    if (render_fraction < 1.0f) {
+        wanted = FrameMap(std::max(static_cast<unsigned>(std::lround(wanted.width * render_fraction)), 1u),
+                          std::max(static_cast<unsigned>(std::lround(wanted.height * render_fraction)), 1u));
+    }
+    const unsigned samples = wanted_msaa_samples();
+    // Not while the output scene target holds the scene target's place (its scale is the window's).
+    if ((wanted == scene_map_ && samples == scene_.samples) || !scene_.color || output_scene_active_) {
+        return;
+    }
+    if (wanted.width * wanted.height > scene_map_.width * scene_map_.height && !scene_fits_memory(wanted)) {
+        if (galaxy::steady_ms() >= window_size_refused_ms_) {
+            window_size_refused_ms_ = galaxy::steady_ms() + 10'000u;
+            std::cerr << "[Renderer] " << wanted.width << "x" << wanted.height << " exceeds the video-memory budget; staying at "
+                      << scene_map_.width << "x" << scene_map_.height << '\n';
+        }
+        return;
+    }
+    wait_for_gpu_idle();
+    frame_pass_targets_.clear();
+    for (Frame& frame : frames_) {
+        frame.retired.clear();
+        frame.retired_buffers.clear();
+    }
+    const FrameMap previous = scene_map_;
+    if (!create_scene_targets(wanted, samples)) {
+        return;
+    }
+    reset_draw_bindings();
+    std::cout << "[Renderer] internal resolution " << previous.width << "x" << previous.height << " -> " << wanted.width
+              << "x" << wanted.height << '\n';
+}
+
+void RendererVk::begin_scene_pass(const SceneClearValues* clear) {
+    begin_scene_pass_with(0u, clear);
+}
+
+void RendererVk::begin_scene_pass_with(unsigned aux, const SceneClearValues* clear) {
+    if (scene_pass_open_) {
+        if (scene_pass_aux_ == aux) {
+            return;
+        }
+        end_scene_pass();
+    }
+    const VkCommandBuffer commands = commands_;
+    VkRenderPassBeginInfo begin{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
+    begin.renderPass = aux != 0u ? draw_layout_.aux_pass_for(scene_variant(), aux)
+                                 : draw_layout_.pass_for(scene_variant(), clear != nullptr);
+    begin.framebuffer = aux != 0u ? motion_framebuffer(aux) : scene_framebuffer();
+    scene_pass_aux_ = aux;
+    scene_.depth_dirty = scene_.samples > 1u;
+    // The set's own size: the scene target, or a target pass's smaller target (E-07).
+    begin.renderArea = {{0, 0}, {scene_.color->width, scene_.color->height}};
+    VkClearValue values[2]{};
+    if (clear != nullptr) {
+        std::memcpy(values[0].color.float32, clear->color.data(), sizeof(float) * 4u);
+        values[1].depthStencil = {clear->reversed_depth, 0u};  // reversed-Z, as clear_scene's
+        begin.clearValueCount = 2;
+        begin.pClearValues = values;
+    }
+    vkCmdBeginRenderPass(commands, &begin, VK_SUBPASS_CONTENTS_INLINE);
+    scene_pass_open_ = true;
+    ++gpu_window_.passes;
+    encoder_.forget_rects();
+    // Dynamic state and bindings outlive the pass, but the renderer's own passes in between changed them.
+    if (bound_.viewport_valid) {
+        vkCmdSetViewport(commands, 0, 1, &bound_.viewport);
+    }
+    if (bound_.scissor_valid) {
+        vkCmdSetScissor(commands, 0, 1, &bound_.scissor);
+    }
+}
+
+void RendererVk::end_scene_pass() {
+    if (!scene_pass_open_) {
+        return;
+    }
+    vkCmdEndRenderPass(commands_);
+    scene_pass_open_ = false;
+}
+
+void RendererVk::reset_draw_bindings() noexcept {
+    bound_ = Bound{};
+    encoder_.reset();
+}
+
+void RendererVk::bind_scene() {
+    const float x = 0.0f, y = 0.0f;
+    const float w = static_cast<float>(scene_.color->width);
+    const float h = static_cast<float>(scene_.color->height);
+    bound_.viewport = VkViewport{x, y + h, w, -h, 0.0f, 1.0f};
+    bound_.viewport_valid = true;
+    bound_.scissor = VkRect2D{{0, 0}, {scene_.color->width, scene_.color->height}};
+    bound_.scissor_valid = true;
+    if (scene_pass_open_) {
+        const VkCommandBuffer commands = commands_;
+        vkCmdSetViewport(commands, 0, 1, &bound_.viewport);
+        vkCmdSetScissor(commands, 0, 1, &bound_.scissor);
+    }
+}
+
+void RendererVk::clear_scene(std::uint32_t clear_rgba,
+                           bool color_enable, bool alpha_enable, bool depth_enable, unsigned rect_x, unsigned rect_y,
+                           unsigned rect_w, unsigned rect_h, std::uint8_t pixel_format) {
+    const std::int32_t scene_w = static_cast<std::int32_t>(scene_.color->width);
+    const std::int32_t scene_h = static_cast<std::int32_t>(scene_.color->height);
+    VkRect2D rect{{0, 0}, {static_cast<std::uint32_t>(scene_w), static_cast<std::uint32_t>(scene_h)}};
+    if (rect_w != 0u && rect_h != 0u) {
+        const ScaledSceneRect scaled = rect_pixels(
+            static_cast<std::int32_t>(rect_x), static_cast<std::int32_t>(rect_y),
+            static_cast<std::int32_t>(rect_x + rect_w), static_cast<std::int32_t>(rect_y + rect_h), scene_map_);
+        if (scaled.right <= scaled.left || scaled.bottom <= scaled.top) {
+            return;
+        }
+        rect = VkRect2D{{scaled.left, scaled.top},
+                        {static_cast<std::uint32_t>(scaled.right - scaled.left),
+                         static_cast<std::uint32_t>(scaled.bottom - scaled.top)}};
+    }
+    const SceneClearValues clear = make_scene_clear_values(clear_rgba, pixel_format);
+    // The whole scene target, every channel, while the pass is closed (a copy-clear): the pass begins cleared.
+    const bool has_alpha = pixel_format == 1u;
+    if (!scene_pass_open_ && color_enable && (alpha_enable || !has_alpha) && depth_enable && rect.offset.x == 0 &&
+        rect.offset.y == 0 && rect.extent.width == static_cast<std::uint32_t>(scene_w) &&
+        rect.extent.height == static_cast<std::uint32_t>(scene_h)) {
+        begin_scene_pass(&clear);
+        return;
+    }
+    begin_scene_pass();
+    const VkCommandBuffer commands = commands_;
+    const VkClearRect clear_rect{rect, 0, 1};
+    if (color_enable || alpha_enable) {
+        if (!has_alpha) {
+            alpha_enable = true;
+        }
+        const VkPipeline rgba = scene_utility_pipeline(SceneUtility::ClearRgba);
+        if (color_enable && alpha_enable && rgba != VK_NULL_HANDLE) {
+            // Drawn: vkCmdClearAttachments races with draws on this driver (DeviceQuirks::clear_with_draw).
+            const VkViewport viewport{0.0f, static_cast<float>(scene_h), static_cast<float>(scene_w),
+                                      -static_cast<float>(scene_h), 0.0f, 1.0f};
+            vkCmdSetViewport(commands, 0, 1, &viewport);
+            vkCmdSetScissor(commands, 0, 1, &rect);
+            vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, rgba);
+            vkCmdPushConstants(commands, utility_layout_, kPushStages, 0, sizeof(float) * 4u, clear.color.data());
+            vkCmdDraw(commands, 3, 1, 0, 0);
+            reset_draw_bindings();
+            bind_scene();
+        } else if (color_enable && alpha_enable) {
+            VkClearAttachment attachment{};
+            attachment.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            attachment.colorAttachment = 0;
+            std::memcpy(attachment.clearValue.color.float32, clear.color.data(), sizeof(float) * 4u);
+            vkCmdClearAttachments(commands, 1, &attachment, 1, &clear_rect);
+        } else {
+            // One channel group only: a full-target quad with that write mask, clipped to the rectangle.
+            const VkViewport viewport{0.0f, static_cast<float>(scene_h), static_cast<float>(scene_w),
+                                      -static_cast<float>(scene_h), 0.0f, 1.0f};
+            vkCmdSetViewport(commands, 0, 1, &viewport);
+            vkCmdSetScissor(commands, 0, 1, &rect);
+            vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                              scene_utility_pipeline(color_enable ? SceneUtility::ClearRgb : SceneUtility::ClearAlpha));
+            vkCmdPushConstants(commands, utility_layout_, kPushStages, 0, sizeof(float) * 4u, clear.color.data());
+            vkCmdDraw(commands, 3, 1, 0, 0);
+            reset_draw_bindings();
+            bind_scene();
+        }
+    }
+    const VkPipeline depth_clear = depth_enable ? scene_utility_pipeline(SceneUtility::ClearDepth) : VK_NULL_HANDLE;
+    if (depth_clear != VK_NULL_HANDLE) {
+        const VkViewport viewport{0.0f, static_cast<float>(scene_h), static_cast<float>(scene_w),
+                                  -static_cast<float>(scene_h), 0.0f, 1.0f};
+        const float value[4] = {clear.reversed_depth, 0.0f, 0.0f, 0.0f};
+        vkCmdSetViewport(commands, 0, 1, &viewport);
+        vkCmdSetScissor(commands, 0, 1, &rect);
+        vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, depth_clear);
+        vkCmdPushConstants(commands, utility_layout_, kPushStages, 0, sizeof(value), value);
+        vkCmdDraw(commands, 3, 1, 0, 0);
+        reset_draw_bindings();
+        bind_scene();
+    } else if (depth_enable) {
+        // Reversed-Z: the game's farthest (0xFFFFFF) clears to about 0.
+        VkClearAttachment attachment{};
+        attachment.aspectMask = depth_aspects(depth_format_);
+        attachment.clearValue.depthStencil = {clear.reversed_depth, 0u};
+        vkCmdClearAttachments(commands, 1, &attachment, 1, &clear_rect);
+    }
+}
+
+VkDescriptorSet RendererVk::allocate_frame_set(VkDescriptorSetLayout layout) {
+    Frame& frame = *frame_;
+    const VkDevice device = vk::Context::get().device();
+    VkDescriptorSetAllocateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+    info.descriptorPool = frame.overflow_descriptors.empty() ? frame.descriptors : frame.overflow_descriptors.back();
+    info.descriptorSetCount = 1;
+    info.pSetLayouts = &layout;
+    VkDescriptorSet set = VK_NULL_HANDLE;
+    VkResult result = vkAllocateDescriptorSets(device, &info, &set);
+    if (result == VK_ERROR_OUT_OF_POOL_MEMORY || result == VK_ERROR_FRAGMENTED_POOL) {
+        // A frame with more distinct tables than the pool holds: another pool, freed with the slot.
+        const VkDescriptorPoolSize sizes[] = {{VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 4096u * 8u},
+                                              {VK_DESCRIPTOR_TYPE_SAMPLER, 256u},
+                                              {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, vk_detail::kPassStorageImages}};
+        VkDescriptorPoolCreateInfo pool_info{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
+        pool_info.maxSets = 4096u;
+        pool_info.poolSizeCount = static_cast<std::uint32_t>(std::size(sizes));
+        pool_info.pPoolSizes = sizes;
+        VkDescriptorPool pool = VK_NULL_HANDLE;
+        vk::check(vkCreateDescriptorPool(device, &pool_info, nullptr, &pool), "overflow descriptor pool");
+        frame.overflow_descriptors.push_back(pool);
+        info.descriptorPool = pool;
+        result = vkAllocateDescriptorSets(device, &info, &set);
+    }
+    vk::check(result, "vkAllocateDescriptorSets");
+    return set;
+}
+
+FrameMap RendererVk::output_frame_for_window() const {
+    const auto aspect = galaxy::experimental_effective_host_aspect();
+    const galaxy::ContentViewport content = galaxy::fit_content_viewport(
+        static_cast<int>(host_window::backbuffer_width), static_cast<int>(host_window::backbuffer_height),
+        aspect ? aspect->content_aspect : galaxy::kDesignContentAspect);
+    if (content.width <= 0 || content.height <= 0) {
+        return FrameMap{};
+    }
+    return FrameMap(static_cast<unsigned>(content.width), static_cast<unsigned>(content.height));
+}
+
+// The scene target and the output scene target trade places: targets, scale and their copy sources.
+void RendererVk::swap_scene_sets() {
+    end_scene_pass();
+    std::swap(scene_, alt_scene_);
+    std::swap(scene_map_, alt_scene_map_);
+    output_scene_active_ = !output_scene_active_;
+    reset_draw_bindings();
+}
+
+// The scene target and the target passes' set trade places (begin_target_pass): targets and scale, the output scene target's state kept.
+void RendererVk::swap_target_set() {
+    end_scene_pass();
+    std::swap(scene_, target_scene_);
+    std::swap(scene_map_, target_scene_map_);
+    target_pass_active_ = !target_pass_active_;
+    reset_draw_bindings();
+}
+
+bool RendererVk::begin_target_pass(std::uint64_t key, std::uint32_t width, std::uint32_t height) {
+    if (target_pass_active_ || width == 0u || height == 0u) {
+        return false;
+    }
+    TargetSlot& slot = target_slots_[key];
+    if (slot.set.color_source == VK_NULL_HANDLE && !target_free_sources_.empty()) {
+        slot.set.color_source = target_free_sources_.back().first;
+        slot.set.depth_source = target_free_sources_.back().second;
+        target_free_sources_.pop_back();
+    }
+    const FrameMap map(width, height);
+    const bool kept = slot.set.color && slot.map == map;
+    if (!kept) {
+        if (slot.set.color || slot.set.depth) {
+            destroy_scene_set(slot.set);
+        }
+        // A new set enters its attachment layouts (create_scene_set); the pass's first clear (RenderCore) fills it.
+        if (!create_scene_set(slot.set, map, 1u, kFrameUnits, kFrameUnits, true)) {
+            if (slot.set.color_source != VK_NULL_HANDLE) {
+                target_free_sources_.push_back({slot.set.color_source, slot.set.depth_source});
+            }
+            target_slots_.erase(key);
+            return false;
+        }
+        slot.set.color->layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        slot.map = map;
+        slot.width = width;
+        slot.height = height;
+    }
+    slot.used = frame_index_;
+    target_key_ = key;
+    std::swap(target_scene_, slot.set);
+    target_scene_map_ = slot.map;
+    swap_target_set();
+    if (kept) {
+        // Sampled since its last pass: drawn into again, after those reads.
+        image_barrier(commands_, scene_.color->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
+                      VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                      VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+        scene_.color->layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    }
+    bind_scene();
+    return true;
+}
+
+void RendererVk::end_target_pass(std::uint8_t channels, TextureStore& textures) {
+    if (!target_pass_active_) {
+        return;
+    }
+    swap_target_set();
+    if (frame_pass_color_key_ != 0u || frame_pass_depth_key_ != 0u) {
+        close_frame_for_pass(textures);
+    }
+    // The picture is sampled until the key's next pass.
+    vk::Texture& picture = *target_scene_.color;
+    image_barrier(commands_, picture.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                  VK_ACCESS_SHADER_READ_BIT);
+    picture.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    TargetSlot& slot = target_slots_[target_key_];
+    std::swap(slot.set, target_scene_);
+    slot.map = target_scene_map_;
+    target_scene_map_ = FrameMap{};
+    (void)publish_picture(target_key_, slot.width, slot.height, slot.set.color, channels, textures);
+    // Keys unused for kTargetIdleFrames frames give back their render resources (their pictures stay).
+    for (auto it = target_slots_.begin(); it != target_slots_.end();) {
+        TargetSlot& idle = it->second;
+        if (idle.used + kTargetIdleFrames >= frame_index_) {
+            ++it;
+            continue;
+        }
+        destroy_scene_set(idle.set);
+        target_free_sources_.push_back({idle.set.color_source, idle.set.depth_source});
+        it = target_slots_.erase(it);
+    }
+    bind_scene();
+}
+
+bool RendererVk::target_picture(std::uint64_t key, TextureHandle& out) const {
+    if (pictures_.empty()) {
+        return false;
+    }
+    const auto it = pictures_.find(key);
+    if (it == pictures_.end()) {
+        return false;
+    }
+    out = TextureHandle{};
+    out.resource = gpu::raw(it->second.viewed);
+    out.srv_index = it->second.view;
+    out.width = static_cast<std::uint32_t>(it->second.viewed->width);
+    out.height = static_cast<std::uint32_t>(it->second.viewed->height);
+    out.mip_levels = 1u;
+    return true;
+}
+
+bool RendererVk::publish_picture(std::uint64_t key, std::uint32_t width, std::uint32_t height, gpu::TextureRef texture,
+                                 std::uint8_t channels, TextureStore& textures) {
+    const VkDevice device = vk::Context::get().device();
+    Picture& picture = pictures_[key];
+    if (picture.view != ~0u && picture.viewed == texture && picture.channels == channels && picture.width == width &&
+        picture.height == height) {
+        return false;
+    }
+    if (picture.view != ~0u) {
+        textures.retire_view(picture.view, std::move(picture.viewed));
+    }
+    picture.view = textures.allocate_view();
+    picture.viewed = std::move(texture);
+    picture.width = width;
+    picture.height = height;
+    picture.channels = channels;
+    const std::array<std::uint8_t, 4> swizzle = target_channel_swizzle(channels);
+    if (picture.sampled != VK_NULL_HANDLE) {
+        const VkImageView old = picture.sampled;
+        vk::Context::get().defer([device, old] { vkDestroyImageView(device, old, nullptr); });
+        picture.sampled = VK_NULL_HANDLE;
+    }
+    if (swizzle != std::array<std::uint8_t, 4>{0, 1, 2, 3}) {
+        static constexpr VkComponentSwizzle kChannel[5] = {VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G,
+                                                         VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A,
+                                                         VK_COMPONENT_SWIZZLE_ONE};
+        VkImageViewCreateInfo info{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+        info.image = picture.viewed->image;
+        info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        info.format = picture.viewed->format;
+        info.components = {kChannel[swizzle[0]], kChannel[swizzle[1]], kChannel[swizzle[2]], kChannel[swizzle[3]]};
+        info.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u};
+        vk::check(vkCreateImageView(device, &info, nullptr, &picture.sampled), "vkCreateImageView (picture channels)");
+    }
+    textures.backend().write_view(picture.view, picture.sampled != VK_NULL_HANDLE ? picture.sampled
+                                                                                 : picture.viewed->view);
+    return true;
+}
+
+bool RendererVk::publish_frame_pass(const FramePassRequest& params, gpu::TextureRef texture, TextureStore& textures) {
+    const FrameExtent size = frame_pass_extent(scene_map_);
+    return publish_picture(params.key, size.width, size.height, std::move(texture), 0u, textures);
+}
+
+bool RendererVk::temporal_mode() const {
+    const unsigned upscaler = get_render_config().upscaler;
+#if defined(_WIN32)
+    if (upscaler == 3u && streamline::dlss_supported()) {
+        return true;
+    }
+#endif
+    return (upscaler == 2u && fsr3_available() && vk::Context::get().temporal_upscaling()) ||
+           (upscaler == 4u && vk::Context::get().xess_upscaling());
+}
+
+void RendererVk::prepare_temporal_upscaler() {
+    const FrameMap render_map = output_scene_active_ ? alt_scene_map_ : scene_map_;
+    const FrameMap output_map = upscale_output_;
+    if (!temporal_mode() || output_map.empty() || render_map.width > output_map.width) {
+        if (temporal_) {
+            wait_for_gpu_idle();
+            temporal_.reset();
+        }
+        temporal_pending_ = {};
+        temporal_render_w_ = temporal_render_h_ = 0u;
+        temporal_output_w_ = temporal_output_h_ = 0u;
+        temporal_history_valid_ = false;
+        return;
+    }
+    const unsigned rw = render_map.width;
+    const unsigned rh = render_map.height;
+    const unsigned ow = output_map.width;
+    const unsigned oh = output_map.height;
+    const RenderConfig cfg = get_render_config();
+    const unsigned kind = cfg.upscaler;
+    const unsigned quality = std::min(cfg.temporal_quality, 4u);
+    // A failed creation is not retried until its sizes or mode change.
+    if (rw == temporal_render_w_ && rh == temporal_render_h_ && ow == temporal_output_w_ && oh == temporal_output_h_ &&
+        kind == temporal_kind_ && (kind < 3u || quality == temporal_quality_)) {
+        if (temporal_pending_.valid() &&
+            temporal_pending_.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+            temporal_ = temporal_pending_.get();
+            temporal_history_valid_ = false;
+            if (temporal_) {
+                std::cout << "[Renderer] " << temporal_->name() << " " << rw << "x" << rh << " -> " << ow << "x" << oh << "\n";
+            }
+        }
+        return;
+    }
+    if (temporal_) {
+        wait_for_gpu_idle();
+        temporal_.reset();
+    }
+    // A creation still running for older sizes is waited for and dropped.
+    temporal_pending_ = {};
+    temporal_history_valid_ = false;
+    temporal_render_w_ = rw;
+    temporal_render_h_ = rh;
+    temporal_output_w_ = ow;
+    temporal_output_h_ = oh;
+    temporal_kind_ = kind;
+    temporal_quality_ = quality;
+#if defined(_WIN32)
+    if (kind == 3u) {
+        temporal_ = vk::streamline_vk::create_dlss_upscaler(rw, rh, ow, oh, quality);
+        if (temporal_) {
+            std::cout << "[Renderer] " << temporal_->name() << " " << rw << "x" << rh << " -> " << ow << "x" << oh << "\n";
+        }
+        return;
+    }
+#endif
+    const vk::Context& context = vk::Context::get();
+    // Until it is ready the scene renders at the render scale without the upscale.
+    temporal_pending_ = std::async(std::launch::async, [instance = context.instance(), device = context.device(),
+                                                        physical = context.physical_device(), rw, rh, ow, oh, kind, quality] {
+        return kind == 4u ? vk::create_xess_upscaler(instance, physical, device, ow, oh, quality)
+                          : vk::create_fsr3_upscaler(device, physical, rw, rh, ow, oh);
+    });
+}
+
+bool RendererVk::scene_temporal_begin(float& jitter_x, float& jitter_y) {
+    jitter_x = 0.0f;
+    jitter_y = 0.0f;
+    scene_temporal_ = false;
+    scene_motion_ = false;
+    const unsigned rw = scene_map_.width;
+    const unsigned ow = temporal_output_w_;
+    // The context is replaced only by begin_frame (prepare_temporal_upscaler).
+    if (!temporal_ || !temporal_mode() || output_scene_active_ || target_pass_active_ || rw != temporal_render_w_ ||
+        scene_map_.height != temporal_render_h_) {
+        temporal_history_valid_ = false;
+        return false;
+    }
+    const unsigned phases = std::max(temporal_->jitter_phase_count(rw, ow), 1u);
+    temporal_->jitter_offset(temporal_frame_ % phases, phases, jitter_x, jitter_y);
+    ++temporal_frame_;
+    scene_jitter_[0] = jitter_x;
+    scene_jitter_[1] = jitter_y;
+    scene_temporal_ = true;
+    scene_motion_ = true;
+    return true;
+}
+
+void RendererVk::destroy_motion_framebuffers() {
+    const VkDevice device = vk::Context::get().device();
+    for (VkFramebuffer& framebuffer : motion_.framebuffers) {
+        if (framebuffer != VK_NULL_HANDLE) {
+            const VkFramebuffer retired = framebuffer;
+            vk::Context::get().defer([device, retired] { vkDestroyFramebuffer(device, retired, nullptr); });
+            framebuffer = VK_NULL_HANDLE;
+        }
+    }
+    motion_.framebuffer_color = VK_NULL_HANDLE;
+    motion_.framebuffer_depth = VK_NULL_HANDLE;
+}
+
+bool RendererVk::ensure_motion_targets() {
+    if (motion_.motion && motion_.map == scene_map_) {
+        return true;
+    }
+    destroy_motion_framebuffers();
+    retire(std::move(motion_.motion));
+    retire(std::move(motion_.reactive));
+    motion_.map = FrameMap{};
+    vk::Context& context = vk::Context::get();
+    const std::uint32_t width = scene_.color->width;
+    const std::uint32_t height = scene_.color->height;
+    const VkImageUsageFlags usage =
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    gpu::TextureRef motion = context.create_texture(width, height, 1u, VK_FORMAT_R16G16_SFLOAT, usage, true, "motion vectors");
+    gpu::TextureRef reactive = context.create_texture(width, height, 1u, VK_FORMAT_R8_UNORM, usage, true, "reactive mask");
+    if (!motion || !reactive) {
+        std::cerr << "[Renderer] motion targets " << width << 'x' << height << " allocation failed\n";
+        return false;
+    }
+    run_one_time([&](VkCommandBuffer commands) {
+        for (const vk::Texture* target : {motion.get(), reactive.get()}) {
+            image_barrier(commands, target->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0,
+                          VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                          VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+        }
+    });
+    motion_.motion = std::move(motion);
+    motion_.reactive = std::move(reactive);
+    motion_.map = scene_map_;
+    return true;
+}
+
+VkFramebuffer RendererVk::motion_framebuffer(unsigned aux) {
+    const VkImageView color = scene_.color->target_view;
+    const VkImageView depth = scene_.depth->target_view;
+    if (motion_.framebuffer_color != color || motion_.framebuffer_depth != depth) {
+        destroy_motion_framebuffers();
+        motion_.framebuffer_color = color;
+        motion_.framebuffer_depth = depth;
+    }
+    VkFramebuffer& framebuffer = motion_.framebuffers[aux - 1u];
+    if (framebuffer == VK_NULL_HANDLE) {
+        const VkImageView views[3] = {color, depth, aux == 1u ? motion_.motion->target_view : motion_.reactive->target_view};
+        VkFramebufferCreateInfo info{VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
+        info.renderPass = draw_layout_.aux_pass_for(scene_variant(), aux);
+        info.attachmentCount = 3;
+        info.pAttachments = views;
+        info.width = scene_.color->width;
+        info.height = scene_.color->height;
+        info.layers = 1;
+        vk::check(vkCreateFramebuffer(vk::Context::get().device(), &info, nullptr, &framebuffer), "temporal scene framebuffer");
+    }
+    return framebuffer;
+}
+
+bool RendererVk::begin_motion_scene() {
+    if (!scene_motion_ || !ensure_motion_targets()) {
+        return false;
+    }
+    clear_motion_targets();
+    return true;
+}
+
+void RendererVk::clear_motion_targets() {
+    end_scene_pass();
+    const VkClearColorValue zero{};
+    const VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u};
+    for (const vk::Texture* target : {motion_.motion.get(), motion_.reactive.get()}) {
+        image_barrier(commands_, target->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                      VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                      VK_ACCESS_TRANSFER_WRITE_BIT);
+        vkCmdClearColorImage(commands_, target->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &zero, 1u, &range);
+        image_barrier(commands_, target->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
+                      VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                      VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+    }
+}
+
+bool RendererVk::ensure_output_set(const FrameMap& output, bool storage) {
+    if (alt_scene_.color && alt_scene_map_ == output && (alt_scene_storage_ || !storage)) {
+        return true;
+    }
+    if (alt_scene_.color) {
+        destroy_scene_set(alt_scene_);
+    }
+    scene_set_storage_ = storage;
+    const bool made = create_scene_set(alt_scene_, output);
+    scene_set_storage_ = false;
+    if (!made) {
+        alt_scene_map_ = FrameMap{};
+        return false;
+    }
+    alt_scene_map_ = output;
+    alt_scene_storage_ = storage;
+    return true;
+}
+
+vk::TemporalUpscaleInputs RendererVk::temporal_inputs(const vk::Texture& color, const vk::Texture& depth, const vk::Texture& motion,
+                                                       const vk::Texture& reactive, const vk::Texture& output) const {
+    const auto image = [](const vk::Texture& texture, VkFormat format, VkImageUsageFlags usage) {
+        return vk::TemporalImage{texture.image, texture.view, VK_IMAGE_ASPECT_COLOR_BIT, format, texture.width, texture.height, usage};
+    };
+    constexpr VkImageUsageFlags kColor = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    vk::TemporalUpscaleInputs in{};
+    in.color = image(color, color.format, kColor);
+    in.depth = image(depth, depth_format_, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
+    in.depth.barrier_aspects = depth_aspects(depth_format_);
+    in.motion = image(motion, VK_FORMAT_R16G16_SFLOAT, kColor | VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
+    in.reactive = image(reactive, VK_FORMAT_R8_UNORM, kColor);
+    in.output = image(output, output.format, kColor | VK_IMAGE_USAGE_STORAGE_BIT);
+    in.output.view = output.target_view;
+    in.camera_near = scene_lens_[0];
+    in.camera_far = scene_lens_[1];
+    in.fov_y = scene_lens_[2];
+    in.view = scene_view_;
+    in.view_known = scene_view_known_;
+    return in;
+}
+
+// GALAXY_TEST_MOTION_DUMP (temporal_dump.h): this frame's inputs copied out; the frame before's written.
+void RendererVk::dump_temporal_inputs(const vk::Texture& color, const vk::Texture& motion, std::uint64_t index) {
+#if !defined(NEBULA_DEV)
+    (void)color, (void)motion, (void)index;
+#else
+    struct Pending {
+        const char* name;
+        std::uint64_t frame;
+        unsigned width, height;
+        gpu::BufferRef buffer;
+    };
+    static const temporal_dump::Plan plan = temporal_dump::read_plan();
+    static std::vector<Pending> pending;
+    if (plan.every == 0u) {
+        return;
+    }
+    if (!pending.empty()) {
+        vkQueueWaitIdle(vk::Context::get().queue());
+        for (Pending& p : pending) {
+            vk::Context::get().invalidate(*p.buffer);
+            temporal_dump::write(plan, p.name, p.frame, p.width, p.height, 4u, p.buffer->mapped, p.width * 4u);
+        }
+        pending.clear();
+    }
+    if (!plan.wanted(index)) {
+        return;
+    }
+    const auto copy = [&](const vk::Texture& image, const char* name) {
+        gpu::BufferRef buffer = vk::Context::get().create_readback_buffer(image.width * image.height * 4u, "motion dump");
+        image_barrier(commands_, image.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                      VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                      VK_ACCESS_TRANSFER_READ_BIT);
+        VkBufferImageCopy region{};
+        region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 0u, 1u};
+        region.imageExtent = {image.width, image.height, 1u};
+        vkCmdCopyImageToBuffer(commands_, image.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, buffer->buffer, 1u, &region);
+        image_barrier(commands_, image.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                      VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                      VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+        pending.push_back({name, index, image.width, image.height, std::move(buffer)});
+    };
+    copy(color, "color");
+    copy(motion, "motion");
+#endif
+}
+
+bool RendererVk::record_temporal_upscale(const FrameMap& output) {
+    end_scene_pass();
+    const GpuPassScope pass{*this, GpuPass::Upscale};
+    if (!temporal_ || !motion_.motion || !scene_.color || !alt_scene_.color || scene_map_.width != temporal_render_w_ ||
+        scene_map_.height != temporal_render_h_ || output.width != temporal_output_w_ || output.height != temporal_output_h_ ||
+        scene_.wide) {
+        temporal_history_valid_ = false;
+        return false;
+    }
+    dump_temporal_inputs(*scene_.color, *motion_.motion, frame_index_);
+#if defined(NEBULA_DEV)
+    if (inspect_query_pool_ != VK_NULL_HANDLE) {
+        const vk::Texture& motion = *motion_.motion;
+        if (inspect_motion_buffer_) {
+            frames_[frame_slot_].retired_buffers.push_back(std::move(inspect_motion_buffer_));
+        }
+        inspect_motion_buffer_ = vk::Context::get().create_readback_buffer(std::uint64_t{motion.width} * motion.height * 4u, "inspector motion");
+        inspect_motion_width_ = motion.width;
+        inspect_motion_height_ = motion.height;
+        image_barrier(commands_, motion.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                      VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                      VK_ACCESS_TRANSFER_READ_BIT);
+        VkBufferImageCopy region{};
+        region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 0u, 1u};
+        region.imageExtent = {motion.width, motion.height, 1u};
+        vkCmdCopyImageToBuffer(commands_, motion.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, inspect_motion_buffer_->buffer, 1u, &region);
+        image_barrier(commands_, motion.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                      VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                      VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+    }
+#endif
+    vk::TemporalUpscaleInputs in = temporal_inputs(*scene_.color, *scene_.depth, *motion_.motion, *motion_.reactive, *alt_scene_.color);
+    in.commands = commands_;
+    in.render_width = scene_map_.width;
+    in.render_height = scene_map_.height;
+    in.output_width = output.width;
+    in.output_height = output.height;
+    in.jitter_x = scene_jitter_[0];
+    in.jitter_y = scene_jitter_[1];
+    // The time since the last upscale, as measured.
+    const std::int64_t now_us = std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
+    in.frame_ms = temporal_last_upscale_us_ != 0 ? static_cast<float>(now_us - temporal_last_upscale_us_) * 0.001f : 0.0f;
+    temporal_last_upscale_us_ = now_us;
+    in.reset = !temporal_history_valid_;
+    const bool recorded = temporal_->evaluate(in);
+    if (recorded && swapchain_fsr_) {
+        const unsigned width = swapchain_.image.width;
+        const unsigned height = swapchain_.image.height;
+        bool ready = fsr_generation_.matches(in.render_width, in.render_height, width, height);
+        if (!ready) {
+            vkDeviceWaitIdle(vk::Context::get().device());
+            fsr_generation_.destroy(swapchain_.handle);
+            ready = fsr_generation_.create(in.render_width, in.render_height, width, height, swapchain_.format);
+        }
+        if (ready) {
+            (void)fsr_generation_.prepare(commands_, in);
+        }
+    } else if (recorded && frame_generation_running()) {
+        // Back in their attachment layouts (temporal_barriers).
+        vk::streamline_vk::tag_generation_inputs(commands_, in.depth, in.motion, in.render_width, in.render_height,
+                                                 VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    }
+    // The upscaler binds its own pipelines and descriptor sets.
+    reset_draw_bindings();
+    temporal_history_valid_ = recorded;
+    return recorded;
+}
+
+namespace {
+void write_conversion_input(VkDescriptorSet set, VkImageView view, VkSampler sampler);
+}  // namespace
+
+// DLSS Frame Generation's HUD-less picture: the output scene right after the upscale, before the 2D layer draws into it.
+void RendererVk::take_fg_hudless_scene() {
+    fg_hudless_scene_ = false;
+    if (!frame_generation_running() || !scene_.color) {
+        return;
+    }
+    vk::Context& context = vk::Context::get();
+    const vk::Texture& color = *scene_.color;
+    if (!fg_hudless_scene_color_ || fg_hudless_scene_color_->width != color.width || fg_hudless_scene_color_->height != color.height) {
+        vkDeviceWaitIdle(context.device());
+        fg_hudless_scene_color_ = context.create_texture(color.width, color.height, 1u, color.format,
+                                                         VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, true,
+                                                         "frame generation scene");
+        if (!fg_hudless_scene_color_) {
+            return;
+        }
+    }
+    const VkCommandBuffer commands = commands_;
+    image_barrier(commands, color.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                  VK_ACCESS_TRANSFER_READ_BIT);
+    image_barrier(commands, fg_hudless_scene_color_->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                  VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0u, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT);
+    VkImageCopy region{};
+    region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 0u, 1u};
+    region.dstSubresource = region.srcSubresource;
+    region.extent = {color.width, color.height, 1u};
+    vkCmdCopyImage(commands, color.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, fg_hudless_scene_color_->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                   1u, &region);
+    image_barrier(commands, color.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                  VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                  VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+    image_barrier(commands, fg_hudless_scene_color_->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
+                  VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT);
+    fg_hudless_scene_color_->layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    fg_hudless_scene_ = true;
+}
+
+// The display copy of the taken scene: the same copy into the HUD-less display picture.
+void RendererVk::copy_fg_hudless_display(const DisplayTexture& dest) {
+    const FramePassGeometry sampling = frame_pass_geometry(dest.width, dest.height, scene_map_);
+    const bool taken = fg_hudless_scene_;
+    fg_hudless_scene_ = false;
+    if (!taken || !dest.texture || !fg_hudless_scene_color_) {
+        return;
+    }
+    vk::Context& context = vk::Context::get();
+    if (!fg_hudless_display_ || fg_hudless_display_->width != dest.width || fg_hudless_display_->height != dest.height) {
+        vkDeviceWaitIdle(context.device());
+        fg_hudless_display_ = context.create_texture(dest.width, dest.height, 1u, vk::kSceneColorFormat,
+                                                     VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, true,
+                                                     "frame generation display picture");
+        if (!fg_hudless_display_) {
+            return;
+        }
+    }
+    const VkCommandBuffer commands = commands_;
+    end_scene_pass();
+    VkRenderPassBeginInfo begin{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
+    begin.renderPass = color_pass_;
+    begin.framebuffer = framebuffer_for(*fg_hudless_display_);
+    begin.renderArea = {{0, 0}, {dest.width, dest.height}};
+    vkCmdBeginRenderPass(commands, &begin, VK_SUBPASS_CONTENTS_INLINE);
+    const VkViewport viewport{0.0f, static_cast<float>(dest.height), static_cast<float>(dest.width), -static_cast<float>(dest.height), 0.0f, 1.0f};
+    const VkRect2D scissor{{0, 0}, {dest.width, dest.height}};
+    vkCmdSetViewport(commands, 0, 1, &viewport);
+    vkCmdSetScissor(commands, 0, 1, &scissor);
+    const bool display_filter = sampling.step_x == 1.0f && sampling.step_y == 1.0f && display_filter_pipeline_ != VK_NULL_HANDLE;
+    vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, display_filter ? display_filter_pipeline_ : conversion_pipeline_);
+    const VkDescriptorSet source = allocate_frame_set(conversion_set_layout_);
+    write_conversion_input(source, fg_hudless_scene_color_->view, linear_clamp_);
+    vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, conversion_layout_, 0, 1, &source, 0, nullptr);
+    const SceneConversionShaderConstants constants =
+        make_scene_conversion_constants(false, kCopyLayoutDisplay, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y);
+    vkCmdPushConstants(commands, conversion_layout_, kPushStages, 0, sizeof(constants.values), constants.values.data());
+    vkCmdDraw(commands, 3, 1, 0, 0);
+    vkCmdEndRenderPass(commands);
+    fg_hudless_display_->layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    reset_draw_bindings();
+    bind_scene();
+    fg_hudless_taken_ = true;
+    fg_hudless_slot_ = dest.slot;
+}
+
+// The HUD-less display picture of the presented copy, drawn as the frame is into a swap-chain-sized target that frame
+// generation reads at the present; without one this frame, no HUD-less tag.
+void RendererVk::present_fg_hudless(const DisplayTexture& source, const galaxy::ContentViewport& content) {
+    vk::Context& context = vk::Context::get();
+    const VkCommandBuffer commands = commands_;
+    const bool ready = fg_hudless_display_ && fg_hudless_taken_ && fg_hudless_slot_ == source.slot && fg_hudless_display_->width == source.width &&
+                       fg_hudless_display_->height == source.height && post_.ready() && !present_black_;
+    fg_hudless_taken_ = false;
+    if (!ready) {
+        vk::streamline_vk::tag_hudless(commands, nullptr);
+        return;
+    }
+    const std::uint32_t width = swapchain_.image.width;
+    const std::uint32_t height = swapchain_.image.height;
+    constexpr VkImageUsageFlags kUsage =
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    if (!fg_hudless_target_ || fg_hudless_target_->width != width || fg_hudless_target_->height != height) {
+        vkDeviceWaitIdle(context.device());
+        fg_hudless_target_ = context.create_texture(width, height, 1u, VK_FORMAT_R8G8B8A8_UNORM, kUsage, true, "frame generation HUD-less");
+        if (!fg_hudless_target_) {
+            vk::streamline_vk::tag_hudless(commands, nullptr);
+            return;
+        }
+    }
+    const auto allocate = [this](VkDescriptorSetLayout layout) { return allocate_frame_set(layout); };
+    const vk::PostProcessorVk::PresentStep step =
+        post_.prepare_present(commands, *fg_hudless_display_, fg_hudless_display_->width, fg_hudless_display_->height,
+                              static_cast<std::uint32_t>(content.width), static_cast<std::uint32_t>(content.height), false, allocate);
+    if (step.pipeline == VK_NULL_HANDLE) {
+        vk::streamline_vk::tag_hudless(commands, nullptr);
+        return;
+    }
+    VkRenderPassBeginInfo begin{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
+    begin.renderPass = rgba8_pass_;
+    begin.framebuffer = framebuffer_for(*fg_hudless_target_);
+    begin.renderArea = {{0, 0}, {width, height}};
+    vkCmdBeginRenderPass(commands, &begin, VK_SUBPASS_CONTENTS_INLINE);
+    VkClearValue clear{};
+    clear.color = {{0.0f, 0.0f, 0.0f, 1.0f}};
+    const VkClearAttachment attachment{VK_IMAGE_ASPECT_COLOR_BIT, 0, clear};
+    const VkClearRect rect{{{0, 0}, {width, height}}, 0, 1};
+    vkCmdClearAttachments(commands, 1, &attachment, 1, &rect);
+    const VkRect2D area{{content.left, content.top}, {static_cast<std::uint32_t>(content.width), static_cast<std::uint32_t>(content.height)}};
+    const VkViewport viewport{static_cast<float>(area.offset.x), static_cast<float>(area.offset.y) + static_cast<float>(area.extent.height),
+                              static_cast<float>(area.extent.width), -static_cast<float>(area.extent.height), 0.0f, 1.0f};
+    vkCmdSetViewport(commands, 0, 1, &viewport);
+    vkCmdSetScissor(commands, 0, 1, &area);
+    post_.finish_present(commands, step, area, allocate);
+    vkCmdEndRenderPass(commands);
+    fg_hudless_target_->layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    reset_draw_bindings();
+    vk::TemporalImage picture{fg_hudless_target_->image, fg_hudless_target_->view, VK_IMAGE_ASPECT_COLOR_BIT, VK_FORMAT_R8G8B8A8_UNORM, width, height, kUsage};
+    vk::streamline_vk::tag_hudless(commands, &picture);
+    fg_hudless_ready_ = true;
+}
+
+bool RendererVk::begin_output_scene() {
+    const bool temporal = scene_temporal_;
+    scene_temporal_ = false;
+    if (output_scene_active_) {
+        return false;
+    }
+    if (temporal) {
+        const FrameMap upscaled_map(temporal_output_w_, temporal_output_h_);
+        if (!upscaled_map.empty() && upscaled_map.width >= scene_map_.width &&
+            ensure_output_set(upscaled_map, true) && record_temporal_upscale(upscaled_map)) {
+            swap_scene_sets();
+            take_fg_hudless_scene();
+            bind_scene();
+            clear_scene(0u, false, false, true);
+            return true;
+        }
+        temporal_history_valid_ = false;
+    }
+    const FrameMap output = temporal && !upscale_output_.empty() ? upscale_output_ : output_frame_for_window();
+    // Nebula's screens with small text are drawn at the window's resolution whatever the HUD's (RendererD3D12::begin_output_scene).
+    const bool full = temporal || get_render_config().hud_output_resolution || sharp_2d_requested();
+    if (!full || output.empty() || output.width < scene_map_.width ||
+        (!temporal && output.width == scene_map_.width)) {
+        return false;
+    }
+
+    return enter_output_scene(output);
+}
+
+// The whole scene scene target resampled into the output scene target with the display copy's identity settings (no filter, gamma 1.0,
+// alpha kept), which then takes the scene target's place with its depth cleared to the far plane.
+bool RendererVk::enter_output_scene(const FrameMap& output) {
+    if (!ensure_output_set(output, false)) {
+        return false;
+    }
+    const unsigned width = output.width;
+    const unsigned height = output.height;
+    const FramePassGeometry sampling = frame_pass_geometry(width, height, scene_map_);
+    record_conversion_blit(*alt_scene_.color, width, height, kCopyLayoutDisplay, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y);
+    end_scene_pass();
+    image_barrier(commands_, alt_scene_.color->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                  VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                  VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+    alt_scene_.color->layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    swap_scene_sets();
+    bind_scene();
+    clear_scene(0u, false, false, true);
+    return true;
+}
+
+void RendererVk::end_output_scene() {
+    if (!output_scene_active_) {
+        return;
+    }
+
+    swap_scene_sets();
+    bind_scene();
+}
+
+void RendererVk::record_scene_aa() {
+    if (!post_.ready() || !scene_.color || post_.settings().aa == PostProcessSettings::Aa::kOff) {
+        return;
+    }
+    const GpuPassScope pass{*this, GpuPass::SceneAa};
+
+    // The picture the display copy takes, against its size on screen, decides AUTO.
+    const auto aspect = galaxy::experimental_effective_host_aspect();
+    const galaxy::ContentViewport content = galaxy::fit_content_viewport(
+        static_cast<int>(host_window::backbuffer_width), static_cast<int>(host_window::backbuffer_height),
+        aspect ? aspect->content_aspect : galaxy::kDesignContentAspect);
+    end_scene_pass();
+    const vk::Texture& color = *scene_.color;
+    const auto allocate = [this](VkDescriptorSetLayout layout) { return allocate_frame_set(layout); };
+    const AaRun ran = post_.prepare_scene_aa(
+        commands_, color, color.width, color.height, scene_map_.width, scene_map_.height,
+        static_cast<unsigned>(std::max(content.width, 1)), static_cast<unsigned>(std::max(content.height, 1)),
+        allocate);
+    begin_scene_pass();
+    post_.finish_scene_aa(commands_, ran, color.width, color.height, allocate,
+                          draw_layout_.pass_for(scene_samples_log2(), false), scene_samples_log2());
+    reset_draw_bindings();
+}
+
+// The occlusion of the opaque scene: the scene target pass ends for its compute passes, which read the depth, and the
+// multiply draws in it again.
+void RendererVk::record_scene_ao() {
+    if (!ao_.ready() || !scene_.color || !scene_.depth) {
+        return;
+    }
+    const GpuPassScope pass{*this, GpuPass::SceneAo};
+
+    end_scene_pass();
+    if (scene_.samples > 1u) {
+        resolve_scene_depth(commands_);
+    }
+    const VkImageAspectFlags aspects = depth_aspects(depth_format_);
+    image_barrier(commands_, scene_.depth->image, aspects, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                  kDepthSampleLayout, VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+                  VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                  VK_ACCESS_SHADER_READ_BIT);
+    const auto allocate = [this](VkDescriptorSetLayout layout) { return allocate_frame_set(layout); };
+    const bool made = ao_.prepare(commands_, *scene_.depth, kDepthSampleLayout, scene_ao_view_, get_render_config().ambient_occlusion_ssao,
+                                  scene_ao_objects_, matrix_ring_, allocate);
+    image_barrier(commands_, scene_.depth->image, aspects, kDepthSampleLayout,
+                  VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0,
+                  VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+                  VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
+    begin_scene_pass();
+    if (made) {
+        ao_.finish(commands_, draw_layout_.pass_for(scene_variant(), false), scene_samples_log2(), allocate);
+    }
+    reset_draw_bindings();
+}
+
+// The wide colour targets for the live scene target's size and samples, over its depth; its resolve framebuffer too, since
+// the depth resolve writes depth alone. False when the device cannot make them: the scene stays in the scene target.
+bool RendererVk::ensure_wide_set(SceneSet& set) {
+    if (set.color && set.depth_serial == scene_.depth_serial && set.samples == scene_.samples) {
+        set.resolve_framebuffer = scene_.resolve_framebuffer;
+        return true;
+    }
+    vk::Context& context = vk::Context::get();
+    const VkDevice device = context.device();
+    const std::uint32_t width = scene_.color->width;
+    const std::uint32_t height = scene_.color->height;
+    if (set.framebuffer != VK_NULL_HANDLE) {
+        const VkFramebuffer retired = set.framebuffer;
+        context.defer([device, retired] { vkDestroyFramebuffer(device, retired, nullptr); });
+        set.framebuffer = VK_NULL_HANDLE;
+    }
+    retire(std::move(set.color));
+    retire(std::move(set.ms_color));
+    gpu::TextureRef color = context.create_texture(
+        width, height, 1u, VK_FORMAT_R16G16B16A16_SFLOAT,
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, true, "wide scene color");
+    gpu::TextureRef ms_color;
+    if (scene_.samples > 1u) {
+        ms_color = context.create_texture(width, height, 1u, VK_FORMAT_R16G16B16A16_SFLOAT,
+                                          VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, true,
+                                          "wide scene color MSAA", static_cast<VkSampleCountFlagBits>(scene_.samples));
+    }
+    if (!color || (scene_.samples > 1u && !ms_color)) {
+        std::cerr << "[scene-camera] wide scene " << width << 'x' << height << " allocation failed\n";
+        return false;
+    }
+    const unsigned samples_log2 = scene_samples_log2();
+    const VkImageView single[2] = {color->target_view, scene_.depth->target_view};
+    const VkImageView multi[3] = {scene_.samples > 1u ? ms_color->target_view : VK_NULL_HANDLE,
+                                  scene_.samples > 1u ? scene_.ms_depth->target_view : VK_NULL_HANDLE, color->target_view};
+    VkFramebufferCreateInfo info{VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
+    info.renderPass = draw_layout_.pass_for(samples_log2 | kSceneVariantHdr, false);
+    info.attachmentCount = scene_.samples > 1u ? 3u : 2u;
+    info.pAttachments = scene_.samples > 1u ? multi : single;
+    info.width = width;
+    info.height = height;
+    info.layers = 1;
+    vk::check(vkCreateFramebuffer(device, &info, nullptr, &set.framebuffer), "wide scene framebuffer");
+    run_one_time([&](VkCommandBuffer commands) {
+        for (const vk::Texture* target : {color.get(), ms_color.get()}) {
+            if (target == nullptr) continue;
+            image_barrier(commands, target->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0,
+                          VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                          VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+        }
+    });
+    set.color = std::move(color);
+    set.ms_color = std::move(ms_color);
+    set.depth = scene_.depth;
+    set.ms_depth = scene_.ms_depth;
+    set.ms_depth_source = scene_.ms_depth_source;
+    set.resolve_framebuffer = scene_.resolve_framebuffer;
+    set.samples = scene_.samples;
+    set.depth_serial = scene_.depth_serial;
+    set.wide = true;
+    set.wide_read = false;
+    set.turned = false;
+    if (set.color_source == VK_NULL_HANDLE) {
+        set.color_source = allocate_persistent_set(conversion_set_layout_);
+    }
+    set.depth_source = scene_.depth_source;
+    const VkDescriptorImageInfo color_info{VK_NULL_HANDLE, set.color->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+    const VkDescriptorImageInfo color_sampler{linear_clamp_, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_UNDEFINED};
+    VkWriteDescriptorSet writes[2]{};
+    for (unsigned i = 0; i < 2u; ++i) {
+        writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[i].dstSet = set.color_source;
+        writes[i].dstBinding = i;
+        writes[i].descriptorCount = 1;
+        writes[i].descriptorType = i == 0u ? VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE : VK_DESCRIPTOR_TYPE_SAMPLER;
+        writes[i].pImageInfo = i == 0u ? &color_info : &color_sampler;
+    }
+    vkUpdateDescriptorSets(device, 2, writes, 0, nullptr);
+    return true;
+}
+
+void RendererVk::begin_wide_scene(bool wanted) {
+    if (!wanted || scene_.wide || !scene_camera_.ready() || !scene_.color || output_scene_active_ || target_pass_active_) {
+        return;
+    }
+    end_scene_pass();
+    if (!ensure_wide_set(wide_scene_)) {
+        return;
+    }
+
+    record_wide_begin();
+}
+
+// What the scene target holds (its pass end resolved a multisampled one) goes on under the scene.
+void RendererVk::record_wide_begin() {
+    const GpuPassScope pass{*this, GpuPass::Camera};
+    end_scene_pass();
+    SceneSet& set = wide_scene_;
+    if (set.wide_read) {
+        for (const vk::Texture* target : {set.color.get(), set.ms_color.get()}) {
+            if (target == nullptr) continue;
+            image_barrier(commands_, target->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
+                          VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                          VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+        }
+        set.wide_read = false;
+    }
+    gpu::TextureRef picture = scene_.color;
+    image_barrier(commands_, picture->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT);
+    set.depth_dirty = scene_.depth_dirty;
+    std::swap(scene_, set);
+    begin_scene_pass();
+    const auto allocate = [this](VkDescriptorSetLayout layout) { return allocate_frame_set(layout); };
+    scene_camera_.widen(commands_, draw_layout_.pass_for(scene_variant(), false), scene_samples_log2(), *picture, allocate);
+    // The scene target's colour goes back to its attachment layout: the depth resolve's framebuffer holds it.
+    end_scene_pass();
+    image_barrier(commands_, picture->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                  VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
+                  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                  VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+    reset_draw_bindings();
+}
+
+void RendererVk::end_wide_scene() {
+    if (!scene_.wide) {
+        return;
+    }
+    end_scene_pass();
+
+    record_wide_end();
+}
+
+void RendererVk::record_wide_end() {
+    if (!scene_.wide) {
+        return;
+    }
+    const GpuPassScope pass{*this, GpuPass::Camera};
+    end_scene_pass();
+    SceneSet& set = wide_scene_;
+    const bool per_sample = scene_.samples > 1u && vk::Context::get().sample_rate_shading();
+    gpu::TextureRef wide = scene_.color;
+    gpu::TextureRef wide_ms = scene_.ms_color;
+    for (const vk::Texture* target : {wide.get(), wide_ms.get()}) {
+        if (target == nullptr) continue;
+        image_barrier(commands_, target->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                      VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                      VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                      VK_ACCESS_SHADER_READ_BIT);
+    }
+    const auto allocate = [this](VkDescriptorSetLayout layout) { return allocate_frame_set(layout); };
+    const auto now = std::chrono::steady_clock::now();
+    const float seconds = std::chrono::duration<float>(now - camera_metered_).count();
+    camera_metered_ = now;
+    if (scene_.samples > 1u) {
+        resolve_scene_depth(commands_);
+    }
+    const VkImageAspectFlags aspects = depth_aspects(depth_format_);
+    image_barrier(commands_, scene_.depth->image, aspects, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, kDepthSampleLayout,
+                  VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                  VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT);
+    // After a load or a long pause the eye starts open.
+    scene_camera_.meter(commands_, *wide, *scene_.depth, kDepthSampleLayout, seconds > 1.0f ? -1.0f : seconds, allocate);
+    image_barrier(commands_, scene_.depth->image, aspects, kDepthSampleLayout, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                  VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+                  VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
+    const bool depth_dirty = scene_.depth_dirty;
+    std::swap(scene_, set);
+    set.wide_read = true;
+    scene_.depth_dirty = depth_dirty;
+    begin_scene_pass();
+    scene_camera_.draw(commands_, draw_layout_.pass_for(scene_variant(), false), scene_samples_log2(),
+                       per_sample ? *wide_ms : *wide, per_sample, allocate);
+    reset_draw_bindings();
+}
+
+// The game's bloom (game_bloom_vk.h) at this point of the stream: the scene target pass ends for the passes that copy or read
+// the scene, and the composite is drawn in it again.
+void RendererVk::game_bloom(std::uint32_t kind, std::uint32_t a, std::uint32_t b) {
+    if (!bloom_.ready() || !scene_.color) {
+        return;
+    }
+    const GpuPassScope pass{*this, GpuPass::Bloom};
+    end_scene_pass();
+    vk::GameBloomVk::Inputs in{};
+    in.color = scene_.color.get();
+    in.scale = static_cast<float>(scene_map_.height / kAuthoredLines);
+    in.frame_width = std::min(scene_map_.width, scene_.color->width);
+    in.frame_height = std::min(scene_map_.height, scene_.color->height);
+    const auto allocate = [this](VkDescriptorSetLayout layout) { return allocate_frame_set(layout); };
+    end_scene_pass();
+    if (kind == NEBULA_PASS_BLOOM_HOLD) {
+        if (scene_.samples <= 1u && !scene_.wide) {
+            // The scene and the bloom's image trade places instead of the scene being copied. The game draws the
+            // bloom's objects on black into the new target, over the same depth.
+            bloom_.keep_picture(swap_scene_color(bloom_.take_kept_image()));
+            clear_scene(0u, true, true, false);
+            return;
+        }
+        static_cast<void>(bloom_.keep(commands_, in));
+    } else {
+        vk::GameBloomVk::Params p{};
+        p.threshold = a & 0xFFu;
+        p.intensity = a >> 24u;
+        if (kind == NEBULA_PASS_BLOOM_NORMAL) {
+            p.kind = vk::GameBloomVk::Kind::Normal;
+            p.tap1 = (a >> 8u) & 0xFFu;
+            p.tap2 = (a >> 16u) & 0xFFu;
+            p.ring_x = std::bit_cast<float>(b);
+        } else {
+            p.kind = vk::GameBloomVk::Kind::Simple;
+            p.channel = (a >> 8u) & 0xFFu;
+            p.tap1 = (a >> 16u) & 0xFFu;
+            p.ring_y = std::bit_cast<float>(b);
+        }
+        if (!(p.ring_x > 0.0f && p.ring_x < 16.0f) || !(p.ring_y > 0.0f && p.ring_y < 16.0f)) {
+            p.ring_x = p.ring_y = 1.0f;
+        }
+        p.strength = static_cast<float>(std::min(get_render_config().bloom, kMaxBloom)) / 100.0f;
+        if (bloom_.prepare(commands_, in, p, allocate)) {
+            begin_scene_pass();
+            bloom_.finish(commands_, draw_layout_.pass_for(scene_variant(), false), scene_samples_log2(), allocate);
+        }
+    }
+    reset_draw_bindings();
+}
+
+// A texture the GPU may still read: released once the submissions that can name it completed.
+void RendererVk::retire(gpu::TextureRef texture) {
+    if (!texture) {
+        return;
+    }
+    frames_[frame_slot_].retired.push_back(std::move(texture));
+}
+
+VkDescriptorSet RendererVk::allocate_persistent_set(VkDescriptorSetLayout layout) {
+    const VkDevice device = vk::Context::get().device();
+    VkDescriptorSetAllocateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+    info.descriptorPool = persistent_overflow_.empty() ? persistent_pool_ : persistent_overflow_.back();
+    info.descriptorSetCount = 1;
+    info.pSetLayouts = &layout;
+    VkDescriptorSet set = VK_NULL_HANDLE;
+    VkResult result = vkAllocateDescriptorSets(device, &info, &set);
+    if (result == VK_ERROR_OUT_OF_POOL_MEMORY || result == VK_ERROR_FRAGMENTED_POOL) {
+        const VkDescriptorPool pool =
+            vk_detail::create_pool(device, vk_detail::kPersistentSets, vk_detail::kPersistentPool);
+        persistent_overflow_.push_back(pool);
+        info.descriptorPool = pool;
+        result = vkAllocateDescriptorSets(device, &info, &set);
+    }
+    vk::check(result, "vkAllocateDescriptorSets");
+    return set;
+}
+
+void RendererVk::attach_texture_uploads(TextureStore& cache) {
+    const VkCommandBuffer uploads = frames_[frame_slot_].uploads;
+    cache.backend().set_upload_list(uploads);
+    cache.backend().prepare_null_view(uploads);
+}
+
+void RendererVk::write_table(VkDescriptorSet set, const TextureHandle* handles, unsigned count, const TextureStore& cache) {
+    std::array<VkDescriptorImageInfo, kTableTextures> images{};
+    for (unsigned m = 0; m < kTableTextures; ++m) {
+        const bool bound = m < count && handles[m].resource != nullptr;
+        images[m] = {VK_NULL_HANDLE, bound ? cache.backend().view(handles[m].srv_index) : cache.backend().null_view(),
+                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+    }
+    VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    write.dstSet = set;
+    write.dstBinding = 0;
+    write.descriptorCount = kTableTextures;
+    write.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    write.pImageInfo = images.data();
+    vkUpdateDescriptorSets(vk::Context::get().device(), 1, &write, 0, nullptr);
+}
+
+gpu::Table RendererVk::texture_table_for(const TextureHandle* handles, unsigned count, const TextureStore& cache) {
+    const VkDescriptorSet set = allocate_frame_set(draw_layout_.sets[1]);
+    write_table(set, handles, count, cache);
+    return gpu::Table{reinterpret_cast<std::uint64_t>(set)};
+}
+
+gpu::Table RendererVk::persistent_texture_table(const TextureHandle* handles, unsigned count, const TextureStore& cache, gpu::Table old) {
+    const std::uint64_t completed = completed_fence_value();
+    std::erase_if(retired_tables_, [&](const RetiredTable& retired) {
+        if (retired.fence > completed) {
+            return false;
+        }
+        free_tables_.push_back(retired.set);
+        return true;
+    });
+    if (old.ptr != 0u) {
+        retire_texture_table(old);
+    }
+    VkDescriptorSet set = VK_NULL_HANDLE;
+    if (!free_tables_.empty()) {
+        set = free_tables_.back();
+        free_tables_.pop_back();
+    } else {
+        set = allocate_persistent_set(draw_layout_.sets[1]);
+    }
+    write_table(set, handles, count, cache);
+    return gpu::Table{reinterpret_cast<std::uint64_t>(set)};
+}
+
+void RendererVk::retire_texture_table(gpu::Table table) {
+    retired_tables_.push_back({reinterpret_cast<VkDescriptorSet>(table.ptr), last_submitted_ + 1u});
+}
+
+void RendererVk::free_target(std::uint32_t id, TextureStore& textures) {
+    const VkDevice device = vk::Context::get().device();
+    for (auto it = pictures_.begin(); it != pictures_.end();) {
+        if (static_cast<std::uint32_t>(it->first) == id) {
+            textures.retire_view(it->second.view, std::move(it->second.viewed));
+            if (it->second.sampled != VK_NULL_HANDLE) {
+                const VkImageView old = it->second.sampled;
+                vk::Context::get().defer([device, old] { vkDestroyImageView(device, old, nullptr); });
+            }
+            it = pictures_.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    for (auto it = frame_pass_targets_.begin(); it != frame_pass_targets_.end();) {
+        if (static_cast<std::uint32_t>(it->first) == id) {
+            retire(std::move(it->second.texture));
+            it = frame_pass_targets_.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
+gpu::TextureRef RendererVk::take_frame_picture(gpu::TextureRef fresh) {
+    if (scene_.wide) {
+        end_wide_scene();
+    }
+    end_scene_pass();
+    return swap_scene_color(std::move(fresh));
+}
+
+void RendererVk::set_draw_aux(unsigned aux) {
+    // The effects layer is not on this renderer: a layer draw writes the reactive mask.
+    const unsigned wanted = aux > 2u ? 2u : aux;
+    if (scene_pass_open_ && scene_pass_aux_ == wanted) {
+        return;
+    }
+    begin_scene_pass_with(wanted, nullptr);
+}
+
+gpu::Address RendererVk::zero_stream(std::uint32_t bytes) {
+    if (bytes > zero_stream_bytes_) {
+        // Frames in flight read the old one: it goes with them.
+        if (zero_vertices_) {
+            frames_[frame_slot_].retired_buffers.push_back(std::move(zero_vertices_));
+        }
+        zero_stream_bytes_ = std::max(bytes, 1u << 16u);
+        UploadBuffer memory = gpu::create_upload_memory(device(), zero_stream_bytes_, "zero stream");
+        std::memset(memory.cpu, 0, zero_stream_bytes_);
+        zero_vertices_ = std::move(memory.buffer);
+        zero_stream_address_ = memory.gpu;
+    }
+    return zero_stream_address_;
+}
+
+// The sampler a key describes (layout: make_sampler_key in render_core.cpp; the D3D12 renderer's
+// build_sampler_desc_from_key).
+VkSampler RendererVk::sampler_for(const SamplerKey& key, const RenderConfig& cfg) {
+    const SamplerCacheKey cache_key{key, sampler_config_key(cfg)};
+    if (const auto it = samplers_.find(cache_key); it != samplers_.end()) {
+        return it->second;
+    }
+    const vk::Context& context = vk::Context::get();
+    const auto wrap = [](std::uint32_t wrap) {
+        switch (wrap) {
+        case 0: return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        case 2: return VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+        default: return VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        }
+    };
+    const float cfg_bias = static_cast<float>(std::clamp(cfg.texture_lod_bias, 0u, 8u)) * 0.5f;
+    const unsigned anisotropy = std::clamp(cfg.anisotropic_filtering, 1u, 16u);
+    const bool mag_linear = (key.filter & 16u) != 0u;
+    const std::uint32_t minf = (key.filter >> 5u) & 7u;
+    const float lod_bias = key.lod_bias;
+    const float min_lod = key.min_lod, max_lod = key.max_lod;
+    // The minified filter (texture_sampler.h min_filter_code): 4 linear, plus 1 the nearest level or 2 between levels.
+    const bool min_linear = minf >= 4u;
+    // 3: linear without anisotropy (make_sampler_key's arbitrary levels).
+    const bool no_anisotropy = (minf & 3u) == 3u;
+    const unsigned mip_mode = no_anisotropy ? 2u : minf & 3u;
+    VkSamplerCreateInfo info{VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
+    info.magFilter = mag_linear ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
+    info.minFilter = min_linear ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
+    info.addressModeU = wrap(key.filter & 3u);
+    info.addressModeV = wrap((key.filter >> 2u) & 3u);
+    info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    const float max_bias = context.properties().limits.maxSamplerLodBias;
+    info.mipLodBias = std::clamp(lod_bias + cfg_bias, -max_bias, max_bias);
+    const bool use_anisotropic = anisotropy > 1u && mip_mode != 0u && min_linear && mag_linear &&
+        !no_anisotropy && context.sampler_anisotropy();
+    info.anisotropyEnable = use_anisotropic ? VK_TRUE : VK_FALSE;
+    // D3D12_FILTER_ANISOTROPIC (the D3D12 renderer's) filters between mips linearly.
+    info.mipmapMode = mip_mode == 2u || use_anisotropic ? VK_SAMPLER_MIPMAP_MODE_LINEAR : VK_SAMPLER_MIPMAP_MODE_NEAREST;
+    info.maxAnisotropy = use_anisotropic
+        ? std::min(static_cast<float>(anisotropy), context.properties().limits.maxSamplerAnisotropy)
+        : 1.0f;
+    if (mip_mode == 0u) {
+        info.minLod = 0.0f;
+        info.maxLod = 0.0f;
+    } else {
+        info.minLod = min_lod;
+        info.maxLod = max_lod > min_lod ? max_lod : min_lod;
+    }
+    VkSampler sampler = VK_NULL_HANDLE;
+    vk::check(vkCreateSampler(context.device(), &info, nullptr, &sampler), "sampler");
+    samplers_.emplace(cache_key, sampler);
+    return sampler;
+}
+
+namespace {
+constexpr SamplerKey kDefaultSamplerKey{1u | (1u << 2u) | (1u << 4u) | (5u << 5u), 0.0f, 32.0f, 0.0f};
+}  // namespace
+
+gpu::Table RendererVk::sampler_table_for(const std::array<SamplerKey, kSamplerTableSlots>& keys, unsigned count) {
+    if (count == 0u) {
+        return default_sampler_table_;
+    }
+    const RenderConfig cfg = get_render_config();
+    const SamplerTableKey table_key = make_sampler_table_key(keys, count, cfg);
+    if (const auto it = sampler_tables_.find(table_key); it != sampler_tables_.end()) {
+        return gpu::Table{reinterpret_cast<std::uint64_t>(it->second)};
+    }
+    const VkDescriptorSet set = allocate_persistent_set(draw_layout_.sets[2]);
+    std::array<VkDescriptorImageInfo, kTableTextures> samplers{};
+    for (unsigned i = 0; i < kTableTextures; ++i) {
+        samplers[i] = {sampler_for(i < count ? keys[i] : kDefaultSamplerKey, cfg), VK_NULL_HANDLE, VK_IMAGE_LAYOUT_UNDEFINED};
+    }
+    VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    write.dstSet = set;
+    write.dstBinding = 0;
+    write.descriptorCount = kTableTextures;
+    write.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
+    write.pImageInfo = samplers.data();
+    vkUpdateDescriptorSets(vk::Context::get().device(), 1, &write, 0, nullptr);
+    sampler_tables_.emplace(table_key, set);
+    return gpu::Table{reinterpret_cast<std::uint64_t>(set)};
+}
+
+// The table of draws without samplers of their own: wrap, linear, mip point, every level; rebuilt when the sampler settings
+// change, which also makes the walker ask for its tables again.
+void RendererVk::refresh_default_sampler_table() {
+    const std::uint32_t config = sampler_config_key(get_render_config());
+    if (default_sampler_table_.ptr != 0u && config == sampler_config_) {
+        return;
+    }
+    std::array<SamplerKey, kSamplerTableSlots> keys{};
+    keys.fill(kDefaultSamplerKey);
+    default_sampler_table_ = sampler_table_for(keys, kSamplerTableSlots);
+    sampler_config_ = config;
+    ++sampler_generation_;
+}
+
+namespace {
+// A material's constants as a binding sees them: the most any program declares.
+constexpr VkDeviceSize kMaterialConstantBytes = 1024u;
+}  // namespace
+
+VkDescriptorSet RendererVk::constants_set(const VkBuffer* buffers, gpu::Address rows, gpu::Address instances) {
+    for (const ConstantsKey& key : constants_sets_) {
+        if (key.rows == rows && key.instances == instances && key.buffers[0] == buffers[0] && key.buffers[1] == buffers[1] &&
+            key.buffers[2] == buffers[2]) {
+            return key.set;
+        }
+    }
+    const VkDevice device = vk::Context::get().device();
+    const VkDescriptorSet set = allocate_frame_set(draw_layout_.sets[0]);
+    const vk::Context::BufferOffset rows_at = vk::Context::get().resolve(rows);
+    const vk::Context::BufferOffset instances_at = vk::Context::get().resolve(instances);
+    // A dynamic binding's range must fit at every offset: the upload memory has room past its end.
+    const VkDescriptorBufferInfo infos[5] = {
+        {buffers[0], 0u, sizeof(core::ViewRows)},
+        {buffers[1], 0u, kMaterialConstantBytes},
+        {buffers[2], 0u, kMaterialConstantBytes},
+        {rows_at.buffer, rows_at.offset, VK_WHOLE_SIZE},
+        {instances_at.buffer, instances_at.offset, VK_WHOLE_SIZE},
+    };
+    VkWriteDescriptorSet writes[5]{};
+    for (std::uint32_t i = 0; i < 5u; ++i) {
+        writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[i].dstSet = set;
+        writes[i].dstBinding = i;
+        writes[i].descriptorCount = 1u;
+        writes[i].descriptorType = i < 3u ? VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        writes[i].pBufferInfo = &infos[i];
+    }
+    vkUpdateDescriptorSets(device, 5u, writes, 0u, nullptr);
+    constants_sets_.push_back({{buffers[0], buffers[1], buffers[2]}, rows, instances, set});
+    return set;
+}
+
+VkFramebuffer RendererVk::framebuffer_for(vk::Texture& texture) {
+    if (texture.framebuffer == VK_NULL_HANDLE) {
+        VkFramebufferCreateInfo info{VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
+        info.renderPass = texture.format == vk::kSceneColorFormat ? color_pass_ : rgba8_pass_;
+        info.attachmentCount = 1;
+        info.pAttachments = &texture.target_view;
+        info.width = texture.width;
+        info.height = texture.height;
+        info.layers = 1;
+        vk::check(vkCreateFramebuffer(vk::Context::get().device(), &info, nullptr, &texture.framebuffer),
+                  "copy framebuffer");
+    }
+    return texture.framebuffer;
+}
+
+void RendererVk::transition_scene_for_sampling(VkCommandBuffer commands, bool depth, VkImage color_image) {
+    if (depth) {
+        resolve_scene_depth(commands);
+        image_barrier(commands, scene_.depth->image, depth_aspects(depth_format_),
+                      VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, kDepthSampleLayout,
+                      VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                      VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT);
+    } else {
+        image_barrier(commands, color_image != VK_NULL_HANDLE ? color_image : scene_.color->image,
+                      VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                      VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                      VK_ACCESS_SHADER_READ_BIT);
+    }
+}
+
+void RendererVk::transition_scene_to_attachment(VkCommandBuffer commands, bool depth, VkImage color_image) {
+    if (depth) {
+        image_barrier(commands, scene_.depth->image, depth_aspects(depth_format_), kDepthSampleLayout,
+                      VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
+                      VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+                      VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
+    } else {
+        image_barrier(commands, color_image != VK_NULL_HANDLE ? color_image : scene_.color->image,
+                      VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
+                      VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                      VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+    }
+}
+
+// The conversion blit (scene_conversion_shader_source): a full-screen triangle into `dest`, sampling the scene target colour
+// or depth. The scene target leaves its attachment layout for the read and returns; `dest` ends shader-readable.
+void RendererVk::record_conversion_blit(vk::Texture& dest, unsigned dest_w, unsigned dest_h,
+                                        std::uint8_t copy_format, float src_x, float src_y, float step_x, float step_y) {
+    end_scene_pass();
+    const VkCommandBuffer commands = commands_;
+    transition_scene_for_sampling(commands, false);
+    VkRenderPassBeginInfo begin{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
+    begin.renderPass = color_pass_;
+    begin.framebuffer = framebuffer_for(dest);
+    begin.renderArea = {{0, 0}, {dest_w, dest_h}};
+    vkCmdBeginRenderPass(commands, &begin, VK_SUBPASS_CONTENTS_INLINE);
+    const VkViewport viewport{0.0f, static_cast<float>(dest_h), static_cast<float>(dest_w),
+                              -static_cast<float>(dest_h), 0.0f, 1.0f};
+    const VkRect2D scissor{{0, 0}, {dest_w, dest_h}};
+    vkCmdSetViewport(commands, 0, 1, &viewport);
+    vkCmdSetScissor(commands, 0, 1, &scissor);
+    // A display copy one scene target pixel to one display picture pixel without gamma: its filter alone (display_filter_shader_source).
+    const bool display_filter = copy_format == kCopyLayoutDisplay &&
+                                step_x == 1.0f && step_y == 1.0f &&
+                                display_filter_pipeline_ != VK_NULL_HANDLE;
+    vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                      display_filter ? display_filter_pipeline_ : conversion_pipeline_);
+    const VkDescriptorSet source = scene_color_source();
+    vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, conversion_layout_, 0, 1, &source, 0, nullptr);
+    const SceneConversionShaderConstants constants =
+        make_scene_conversion_constants(false, copy_format, src_x, src_y, step_x, step_y);
+    vkCmdPushConstants(commands, conversion_layout_, kPushStages, 0, sizeof(constants.values),
+                       constants.values.data());
+    vkCmdDraw(commands, 3, 1, 0, 0);
+    vkCmdEndRenderPass(commands);
+    dest.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    transition_scene_to_attachment(commands, false);
+    reset_draw_bindings();
+    bind_scene();
+}
+
+bool RendererVk::can_take_scene() const noexcept {
+    return !frame_generation_running() && scene_.color &&
+           !output_scene_active_ && !target_pass_active_ &&
+           scene_.samples <= 1u && !scene_.wide;
+}
+
+bool RendererVk::take_scene(std::uint64_t key, gpu::TextureRef fresh, TextureStore& textures, gpu::TextureRef& released) {
+    end_scene_pass();
+    if (const auto it = pictures_.find(key); it != pictures_.end()) {
+        released = it->second.viewed;
+    }
+    gpu::TextureRef picture = swap_scene_color(std::move(fresh));
+    const FrameExtent size = frame_pass_extent(scene_map_);
+    return publish_picture(key, size.width, size.height, std::move(picture), 0u, textures);
+}
+
+void RendererVk::open_frame_for_pass(std::uint64_t color_key, std::uint8_t channels, std::uint64_t depth_key,
+                                     TextureStore& textures) {
+    end_scene_pass();
+    const VkCommandBuffer commands = commands_;
+    const FrameExtent size = frame_pass_extent(scene_map_);
+    if (color_key != 0u) {
+        transition_scene_for_sampling(commands, false);
+        (void)publish_picture(color_key, size.width, size.height, scene_.color, channels, textures);
+    }
+    if (depth_key != 0u) {
+        // Materials read their textures in the shader-read layout (TextureBackend).
+        resolve_scene_depth(commands);
+        image_barrier(commands, scene_.depth->image, depth_aspects(depth_format_),
+                      VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                      VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                      VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT);
+        (void)publish_picture(depth_key, size.width, size.height, scene_.depth, 0u, textures);
+    }
+    frame_pass_color_key_ = color_key;
+    frame_pass_depth_key_ = depth_key;
+}
+
+void RendererVk::close_frame_for_pass(TextureStore& textures) {
+    const VkDevice device = vk::Context::get().device();
+    const VkCommandBuffer commands = commands_;
+    for (const std::uint64_t key : {frame_pass_color_key_, frame_pass_depth_key_}) {
+        if (key == 0u) {
+            continue;
+        }
+        if (const auto it = pictures_.find(key); it != pictures_.end()) {
+            textures.retire_view(it->second.view, std::move(it->second.viewed));
+            if (it->second.sampled != VK_NULL_HANDLE) {
+                const VkImageView old = it->second.sampled;
+                vk::Context::get().defer([device, old] { vkDestroyImageView(device, old, nullptr); });
+            }
+            pictures_.erase(it);
+        }
+    }
+    if (frame_pass_color_key_ != 0u) {
+        transition_scene_to_attachment(commands, false);
+    }
+    if (frame_pass_depth_key_ != 0u) {
+        image_barrier(commands, scene_.depth->image, depth_aspects(depth_format_), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                      VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
+                      VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+                      VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
+    }
+    frame_pass_color_key_ = 0u;
+    frame_pass_depth_key_ = 0u;
+    reset_draw_bindings();
+}
+
+gpu::TextureRef RendererVk::swap_scene_color(gpu::TextureRef fresh) {
+    const GpuPassScope pass{*this, GpuPass::DisplayCopy};
+    end_scene_pass();
+    vk::Texture& picture = *scene_.color;
+    if (fresh && (fresh->width != picture.width || fresh->height != picture.height ||
+                  fresh->format != picture.format || fresh->target_view == VK_NULL_HANDLE)) {
+        retire(std::move(fresh));
+    }
+    if (!fresh) {
+        fresh = vk::Context::get().create_texture(
+            picture.width, picture.height, 1u, picture.format,
+            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+                VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+            true, "scene target color");
+        if (!fresh) {
+            throw std::runtime_error("scene target colour unavailable");
+        }
+    }
+    const VkCommandBuffer commands = commands_;
+    // The frame becomes a picture: shader-readable, as presentation reads it.
+    image_barrier(commands, picture.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                  VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
+                  VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_TRANSFER_READ_BIT);
+    picture.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    // The idle picture becomes the scene target's colour after the reads of its last presents.
+    image_barrier(commands, fresh->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                  VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                  VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+                  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                  VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+    fresh->layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    gpu::TextureRef handed = std::move(scene_.color);
+    scene_.color = std::move(fresh);
+    scene_.turned = true;
+    turn_source_ = VK_NULL_HANDLE;
+    reset_draw_bindings();
+    bind_scene();
+    return handed;
+}
+
+VkFramebuffer RendererVk::scene_framebuffer() {
+    if (!scene_.turned) {
+        return scene_.framebuffer;
+    }
+    vk::Texture& color = *scene_.color;
+    if (color.scene_framebuffer != VK_NULL_HANDLE && color.scene_depth_serial == scene_.depth_serial) {
+        return color.scene_framebuffer;
+    }
+    const VkDevice device = vk::Context::get().device();
+    if (color.scene_framebuffer != VK_NULL_HANDLE) {
+        // Made with an earlier depth target (an internal-resolution or MSAA change since).
+        const VkFramebuffer old = color.scene_framebuffer;
+        vk::Context::get().defer([device, old] { vkDestroyFramebuffer(device, old, nullptr); });
+        color.scene_framebuffer = VK_NULL_HANDLE;
+    }
+    const VkImageView views[2] = {color.target_view, scene_.depth->target_view};
+    VkFramebufferCreateInfo info{VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
+    info.renderPass = draw_layout_.scene_pass;
+    info.attachmentCount = 2;
+    info.pAttachments = views;
+    info.width = color.width;
+    info.height = color.height;
+    info.layers = 1;
+    vk::check(vkCreateFramebuffer(device, &info, nullptr, &color.scene_framebuffer), "scene target framebuffer (handed over)");
+    color.scene_depth_serial = scene_.depth_serial;
+    return color.scene_framebuffer;
+}
+
+namespace {
+
+// A conversion input (conversion_set_layout_): `view` through the linear clamp sampler, as create_scene_set writes.
+void write_conversion_input(VkDescriptorSet set, VkImageView view, VkSampler sampler) {
+    const VkDescriptorImageInfo image{VK_NULL_HANDLE, view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+    const VkDescriptorImageInfo filter{sampler, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_UNDEFINED};
+    VkWriteDescriptorSet writes[2]{};
+    for (unsigned i = 0; i < 2u; ++i) {
+        writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[i].dstSet = set;
+        writes[i].dstBinding = i;
+        writes[i].descriptorCount = 1;
+        writes[i].descriptorType = i == 0u ? VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE : VK_DESCRIPTOR_TYPE_SAMPLER;
+        writes[i].pImageInfo = i == 0u ? &image : &filter;
+    }
+    vkUpdateDescriptorSets(vk::Context::get().device(), 2, writes, 0, nullptr);
+}
+
+}  // namespace
+
+VkDescriptorSet RendererVk::scene_color_source() {
+    if (!scene_.turned) {
+        return scene_.color_source;
+    }
+    if (turn_source_ == VK_NULL_HANDLE || turn_source_image_ != scene_.color.get() || turn_source_frame_ != frame_index_ ||
+        frame_ != &frames_[frame_slot_]) {
+        turn_source_ = allocate_frame_set(conversion_set_layout_);
+        write_conversion_input(turn_source_, scene_.color->view, linear_clamp_);
+        turn_source_image_ = scene_.color.get();
+        turn_source_frame_ = frame_index_;
+    }
+    return turn_source_;
+}
+
+bool RendererVk::draw_frame_pass(const FramePassRequest& params, TextureStore& textures) {
+    const GpuPassScope pass{*this, GpuPass::FramePass};
+    ++gpu_window_.copies;
+    const FrameExtent extent = frame_pass_extent(scene_map_);
+    const unsigned w = extent.width;
+    const unsigned h = extent.height;
+    if (w == 0u || h == 0u) {
+        return false;
+    }
+    // Keyed by the texture and its channels.
+    const std::uint64_t dest_key = static_cast<std::uint64_t>(params.key) |
+        (static_cast<std::uint64_t>(params.channels) << 48u);
+    FramePassTarget& dest = frame_pass_targets_[dest_key];
+    if (!dest.texture || dest.width != w || dest.height != h) {
+        if (dest.texture) {
+            retire(std::move(dest.texture));
+        }
+        dest.texture = vk::Context::get().create_texture(
+            w, h, 1u, vk::kSceneColorFormat,
+            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+                VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+            true, nullptr);
+        if (!dest.texture) {
+            frame_pass_targets_.erase(dest_key);
+            static std::atomic<unsigned> reported{0u};
+            if (reported.fetch_add(1u, std::memory_order_relaxed) < 8u) {
+                std::cerr << "[frame-pass] destination allocation failed size=" << w << 'x' << h
+                          << "; copy skipped\n";
+            }
+            return false;
+        }
+        dest.width = w;
+        dest.height = h;
+    }
+    FramePassTarget& current = dest;
+    vk::Texture& texture = *current.texture;
+    const FramePassGeometry sampling = frame_pass_geometry(w, h, scene_map_);
+    record_conversion_blit(texture, w, h, params.channels, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y);
+    return publish_frame_pass(params, current.texture, textures);
+}
+
+void RendererVk::create_first_use_resources() {
+    vk::Context& context = vk::Context::get();
+    probe_target_ = context.create_texture(kScreenProbeTile, 1u, 1u, VK_FORMAT_R8G8B8A8_UNORM,
+                                           VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+                                           true, "screen probes");
+    if (!probe_target_) throw std::runtime_error("screen probe target unavailable");
+}
+
+bool RendererVk::record_screen_probes(std::size_t slot, std::span<const ScreenProbe> probes) {
+    if (slot >= probe_slots_.size()) probe_slots_.resize(slot + 1u);
+    Readback& out = probe_slots_[slot];
+    if (out.fence != 0u) {
+        return false;
+    }
+    const std::uint64_t bytes = ((probes.size() + kScreenProbeTile - 1u) / kScreenProbeTile) * kScreenProbeTile * 4ull;
+    if (!out.buffer || out.buffer->size < bytes) {
+        out.buffer = vk::Context::get().create_readback_buffer(bytes, "screen probe readback");
+        if (!out.buffer) throw std::runtime_error("screen probe readback unavailable");
+    }
+    end_scene_pass();
+    const VkCommandBuffer commands = commands_;
+    vk::Texture& target = *probe_target_;
+    transition_scene_for_sampling(commands, true);
+    for (std::size_t first = 0; first < probes.size(); first += kScreenProbeTile) {
+        VkRenderPassBeginInfo begin{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
+        begin.renderPass = rgba8_pass_;
+        begin.framebuffer = framebuffer_for(target);
+        begin.renderArea = {{0, 0}, {kScreenProbeTile, 1u}};
+        vkCmdBeginRenderPass(commands, &begin, VK_SUBPASS_CONTENTS_INLINE);
+        vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, probe_pipeline_);
+        const VkDescriptorSet source = scene_.depth_source;
+        vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, conversion_layout_, 0, 1, &source, 0, nullptr);
+        for (std::size_t i = 0; i < std::min<std::size_t>(kScreenProbeTile, probes.size() - first); ++i) {
+            if (probes[first + i].x < 0.0f || probes[first + i].y < 0.0f) {
+                continue;
+            }
+            const VkViewport viewport{static_cast<float>(i), 1.0f, 1.0f, -1.0f, 0.0f, 1.0f};
+            const VkRect2D scissor{{static_cast<std::int32_t>(i), 0}, {1u, 1u}};
+            vkCmdSetViewport(commands, 0, 1, &viewport);
+            vkCmdSetScissor(commands, 0, 1, &scissor);
+            const SceneConversionShaderConstants constants = make_screen_probe_constants(probes[first + i].x, probes[first + i].y, scene_map_, true);
+            vkCmdPushConstants(commands, conversion_layout_, kPushStages, 0, sizeof(constants.values), constants.values.data());
+            vkCmdDraw(commands, 3, 1, 0, 0);
+        }
+        vkCmdEndRenderPass(commands);
+        image_barrier(commands, target.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                      VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
+                      VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_READ_BIT);
+        VkBufferImageCopy region{};
+        region.bufferOffset = first * 4ull;
+        region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+        region.imageExtent = {kScreenProbeTile, 1u, 1u};
+        VkImage copy_source = target.image;
+        if (vk::Context::get().quirks().linear_readback) {
+            // Through a linear image the size of the target.
+            if (!probe_target_linear_) {
+                probe_target_linear_ = vk::Context::get().create_linear_image(target.width, target.height, target.format, "screen probes linear");
+            }
+            if (probe_target_linear_) {
+                image_barrier(commands, probe_target_linear_->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                              VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                              VK_ACCESS_TRANSFER_READ_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT);
+                VkImageCopy copy{};
+                copy.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+                copy.dstSubresource = copy.srcSubresource;
+                copy.extent = {kScreenProbeTile, 1u, 1u};
+                vkCmdCopyImage(commands, target.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, probe_target_linear_->image,
+                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
+                image_barrier(commands, probe_target_linear_->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                              VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                              VK_ACCESS_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_READ_BIT);
+                copy_source = probe_target_linear_->image;
+            }
+        }
+        vkCmdCopyImageToBuffer(commands, copy_source, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, out.buffer->buffer, 1, &region);
+        target.layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    }
+    transition_scene_to_attachment(commands, true);
+    VkBufferMemoryBarrier host{VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER};
+    host.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    host.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
+    host.srcQueueFamilyIndex = host.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    host.buffer = out.buffer->buffer;
+    host.size = VK_WHOLE_SIZE;
+    vkCmdPipelineBarrier(commands, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0, 0, nullptr, 1, &host,
+                         0, nullptr);
+    target.layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    reset_draw_bindings();
+    bind_scene();
+    out.fence = kProbesInFrame;  // fenced at end_frame
+    return true;
+}
+
+const std::uint8_t* RendererVk::screen_probes_finished(std::size_t slot) {
+    Readback& out = probe_slots_[slot];
+    if (out.fence == 0u || out.fence == kProbesInFrame || completed_fence_value() < out.fence) {
+        return nullptr;
+    }
+    vk::Context::get().invalidate(*out.buffer);
+    out.fence = 0u;
+    return reinterpret_cast<const std::uint8_t*>(out.buffer->mapped);
+}
+
+void RendererVk::set_debug_capture_paths(std::string scene_ppm_path, std::string backbuffer_ppm_path) {
+    scene_capture_path_ = std::move(scene_ppm_path);
+    backbuffer_capture_path_ = std::move(backbuffer_ppm_path);
+}
+
+bool RendererVk::debug_copy_scene_to_readback() {
+    debug_log_readback();
+    if (scene_capture_path_.empty() || !scene_capture_pending_path_.empty()) {
+        return false;
+    }
+    vk::Context& context = vk::Context::get();
+    const unsigned w = scene_map_.width;
+    const unsigned h = scene_map_.height;
+    const std::uint64_t bytes = static_cast<std::uint64_t>(w) * h * 4u;
+    if (!scene_capture_.buffer || scene_capture_.buffer->size < bytes) {
+        scene_capture_.buffer = context.create_readback_buffer(bytes, "scene target capture");
+        if (!scene_capture_.buffer) {
+            return false;
+        }
+    }
+    end_scene_pass();
+    const VkCommandBuffer commands = commands_;
+    image_barrier(commands, scene_.color->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                  VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_READ_BIT);
+    VkBufferImageCopy region{};
+    region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+    region.imageExtent = {w, h, 1};
+    vkCmdCopyImageToBuffer(commands, scene_.color->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                           scene_capture_.buffer->buffer, 1, &region);
+    image_barrier(commands, scene_.color->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                  VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+                  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                  VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+    scene_capture_.fence = 0u;
+    scene_capture_pending_path_ = scene_capture_path_;
+    scene_capture_width_ = w;
+    scene_capture_height_ = h;
+    reset_draw_bindings();
+    bind_scene();
+    return true;
+}
+
+void RendererVk::debug_log_readback() {
+    if (scene_capture_pending_path_.empty() || scene_capture_.fence == 0u ||
+        completed_fence_value() < scene_capture_.fence) {
+        return;
+    }
+    vk::Context::get().invalidate(*scene_capture_.buffer);
+    std::vector<std::uint8_t> rgba(static_cast<std::size_t>(scene_capture_width_) * scene_capture_height_ * 4u);
+    ten_bit_to_rgba8(reinterpret_cast<const std::uint8_t*>(scene_capture_.buffer->mapped), rgba.data(),
+                     scene_capture_width_, scene_capture_height_, scene_capture_width_ * 4u, scene_capture_width_ * 4u);
+    std::vector<std::uint8_t> rgb(static_cast<std::size_t>(scene_capture_width_) * scene_capture_height_ * 3u);
+    for (std::size_t i = 0, n = rgb.size() / 3u; i < n; ++i) {
+        rgb[i * 3u] = rgba[i * 4u];
+        rgb[i * 3u + 1u] = rgba[i * 4u + 1u];
+        rgb[i * 3u + 2u] = rgba[i * 4u + 2u];
+    }
+    write_ppm_async(std::move(scene_capture_pending_path_), std::move(rgb), scene_capture_width_, scene_capture_height_);
+    scene_capture_pending_path_.clear();
+    scene_capture_.fence = 0u;
+}
+
+void RendererVk::debug_log_backbuffer_readback() {
+    if (backbuffer_capture_pending_path_.empty() || backbuffer_capture_.fence == 0u ||
+        completed_fence_value() < backbuffer_capture_.fence) {
+        return;
+    }
+    vk::Context::get().invalidate(*backbuffer_capture_.buffer);
+    const auto* pixels = reinterpret_cast<const std::uint8_t*>(backbuffer_capture_.buffer->mapped);
+    const unsigned red = backbuffer_capture_bgra_ ? 2u : 0u;
+    const unsigned blue = backbuffer_capture_bgra_ ? 0u : 2u;
+    std::vector<std::uint8_t> rgb(static_cast<std::size_t>(backbuffer_capture_width_) * backbuffer_capture_height_ *
+                                  3u);
+    for (std::size_t i = 0, n = rgb.size() / 3u; i < n; ++i) {
+        rgb[i * 3u] = pixels[i * 4u + red];
+        rgb[i * 3u + 1u] = pixels[i * 4u + 1u];
+        rgb[i * 3u + 2u] = pixels[i * 4u + blue];
+    }
+    write_ppm_async(std::move(backbuffer_capture_pending_path_), std::move(rgb), backbuffer_capture_width_,
+                    backbuffer_capture_height_);
+    backbuffer_capture_pending_path_.clear();
+    backbuffer_capture_.fence = 0u;
+}
+
+#if defined(NEBULA_DEV)
+void RendererVk::inspect_mark(const char* name) {
+    if (vkCmdInsertDebugUtilsLabelEXT != nullptr) {
+        VkDebugUtilsLabelEXT label{};
+        label.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT;
+        label.pLabelName = name;
+        vkCmdInsertDebugUtilsLabelEXT(commands_, &label);
+    }
+}
+
+void RendererVk::inspect_queries_open(std::uint32_t count) {
+    inspect_queries_reset_ = true;
+    if (count <= inspect_query_capacity_) {
+        return;
+    }
+    wait_for_gpu_idle();
+    const VkDevice device = vk::Context::get().device();
+    if (inspect_query_pool_ != VK_NULL_HANDLE) {
+        vkDestroyQueryPool(device, inspect_query_pool_, nullptr);
+    }
+    VkQueryPoolCreateInfo info{};
+    info.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
+    info.queryType = VK_QUERY_TYPE_OCCLUSION;
+    info.queryCount = count;
+    vk::check(vkCreateQueryPool(device, &info, nullptr, &inspect_query_pool_), "Create inspector queries");
+    inspect_query_capacity_ = count;
+}
+
+void RendererVk::inspect_query_begin(std::uint32_t index) {
+    vkCmdBeginQuery(commands_, inspect_query_pool_, index, 0u);
+}
+
+void RendererVk::inspect_query_end(std::uint32_t index) {
+    vkCmdEndQuery(commands_, inspect_query_pool_, index);
+}
+
+// A query no draw reached stays unavailable and reads as no samples.
+void RendererVk::inspect_queries_read(std::uint32_t count, std::uint64_t* out) {
+    std::memset(out, 0, std::size_t{count} * 8u);
+    if (count != 0u) {
+        (void)vkGetQueryPoolResults(vk::Context::get().device(), inspect_query_pool_, 0u, count, std::size_t{count} * 8u, out, 8u, VK_QUERY_RESULT_64_BIT);
+    }
+}
+
+bool RendererVk::inspect_motion_pixel(unsigned x, unsigned y, std::uint16_t* out) {
+    if (!inspect_motion_buffer_ || x >= inspect_motion_width_ || y >= inspect_motion_height_) {
+        return false;
+    }
+    vk::Context::get().invalidate(*inspect_motion_buffer_);
+    const auto* row = static_cast<const std::byte*>(inspect_motion_buffer_->mapped) + std::size_t{y} * inspect_motion_width_ * 4u;
+    std::memcpy(out, row + std::size_t{x} * 4u, 4u);
+    return true;
+}
+#endif
+
+bool RendererVk::interpolation_mode() const {
+    const RenderConfig cfg = get_render_config();
+    const double rate = present_frame_rate(presented_max_fps(cfg), cfg.vsync_interval, display_refresh_hz_);
+    if (temporal_mode() && temporal_interp_suspended_) {
+        return false;
+    }
+    return interpolated_frames_per_game_frame(rate) != 0u;
+}
+
+void RendererVk::suspend_temporal_interpolation(double ms_per_frame) {
+    if (temporal_interp_suspended_) {
+        return;
+    }
+    temporal_interp_suspended_ = true;
+    temporal_interp_key_ = temporal_interp_key();
+    std::cerr << "[interp] temporal upscaling of generated frames off: " << ms_per_frame
+              << " ms GPU per presented frame\n";
+}
+
+RendererVk::TemporalInterpKey RendererVk::temporal_interp_key() const {
+    const RenderConfig cfg = get_render_config();
+    TemporalInterpKey key{};
+    key.upscaler = cfg.upscaler;
+    key.quality = cfg.temporal_quality;
+    key.scene_map = output_scene_active_ ? alt_scene_map_ : scene_map_;
+    key.output_map = upscale_output_;
+    key.max_fps = presented_max_fps(cfg);
+    key.vsync = cfg.vsync_interval;
+    key.refresh_hz = display_refresh_hz_;
+    return key;
+}
+
+}  // namespace galaxy::render

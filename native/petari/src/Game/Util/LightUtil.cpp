@@ -35,7 +35,7 @@ namespace MR {
     }
 
     void loadLightPlayer() {
-        MotionSignal::playerLight();
+        Frame::setLightFollowsCamera(0);
         MR::getSceneObj< LightDirector >(SceneObj_LightDirector)->loadLightPlayer();
     }
 

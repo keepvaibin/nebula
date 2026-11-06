@@ -228,7 +228,7 @@ in::PlayerInput native_game_input(std::uint64_t frame, std::int32_t star_pointer
         s_grab_armed_end = !captured && touch_target_under(state, state.finger_land_x, state.finger_land_y, s_grab_target)
             ? frame + kGrabArmFrames : 0u;
     }
-#if !defined(NEBULA_RELEASE)
+#if defined(NEBULA_DEV)
     {
         static std::uint32_t s_logged_targets = 0xffffffffu;
         std::lock_guard<std::mutex> lock(g_touch_targets_mutex);

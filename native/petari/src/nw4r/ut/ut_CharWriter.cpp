@@ -1,24 +1,24 @@
 #include "nw4r/ut/CharWriter.h"
-#include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
+#include "Game/Render/RenderTexture.hpp"
 #include "Game/Screen/NebulaIcons.hpp"
-#include "Game/Util/NativeShader.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/FrameList.hpp"
+#include "nw4r/lyt/common.h"
 #include "nw4r/ut/Font.h"
 
 namespace {
     // The writer's native material (runtime/src/render/materials/font_text.hlsl) as Setup set it; each glyph sheet
-    // LoadTexture binds sends it. Blended by alpha; depth, culling and writes as the drawing state has them.
-    NebulaNativeMaterial sMaterial;
+    // LoadTexture binds sends it. Blended by alpha, no depth, no culling.
+    SiteMaterial sMaterial;
 
     void SetupMaterial(nw4r::ut::Color min, nw4r::ut::Color max, bool intensity, bool letters = true) {
         const nw4r::ut::Color fog = 0;
-        NativeShader::init(sMaterial, NEBULA_SHADER_FONT_TEXT, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_ALWAYS, false,
+        sMaterial.init(NEBULA_SHADER_FONT_TEXT, SiteMaterial::BLEND_ALPHA, NEBULA_COMPARE_ALWAYS, false,
                            NEBULA_CULL_NONE);
-        sMaterial.depth_test = NEBULA_NATIVE_KEPT;
-        sMaterial.cull = NEBULA_NATIVE_KEPT;
-        NativeShader::setColor(sMaterial, 0, min.r, min.g, min.b, min.a);
-        NativeShader::setColor(sMaterial, 4, max.r, max.g, max.b, max.a);
+        sMaterial.mState.depth_test = 0;
+        sMaterial.mState.depth_func = NEBULA_COMPARE_NEVER;
+        sMaterial.setColor(0, min.r, min.g, min.b, min.a);
+        sMaterial.setColor(4, max.r, max.g, max.b, max.a);
         sMaterial.constants[8] = intensity ? 1.0f : 0.0f;
         sMaterial.constants[9] = letters ? 1.0f : 0.0f;
     }
@@ -46,13 +46,12 @@ namespace nw4r {
             loadInfo.filter = mFilter;
 
             if (loadInfo != mLoadingTexture) {
-                J3DNativeTexObj tobj;
+                SiteTexture tobj;
 
                 NebulaIcons::noteDrawn(glyph.pTexture);
-                J3DNativeTexture::init(&tobj, const_cast< void* >(glyph.pTexture), glyph.texWidth, glyph.texHeight, NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP);
-                J3DNativeTexture::setFilter(&tobj, mFilter.atSmall, mFilter.atLarge, 0, 0, 0, false, 0);
-                NativeShader::setTexObj(sMaterial, slot - 0, &tobj);
-                NativeShader::send(sMaterial);
+                SiteTextures::init(&tobj, const_cast< void* >(glyph.pTexture), glyph.texWidth, glyph.texHeight, NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP);
+                SiteTextures::setFilter(&tobj, mFilter.atSmall, mFilter.atLarge, 0, 0, 0, false, 0);
+                sMaterial.setTexture(slot - 0, tobj);
 
                 mLoadingTexture = loadInfo;
             }
@@ -175,23 +174,16 @@ namespace nw4r {
 
             LoadTexture(glyph, 0);
 
-            J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
+            TypedDraw site = TypedDraw::eyeSpace(sMaterial, lyt::detail::GetDrawMtx());
+            VertexPCT* vtx = site.vertices< VertexPCT >(NEBULA_PRIMITIVE_QUADS, 4);
             {
-                J3DNativeDraw::position(posLeft, posTop, posZ);
-                J3DNativeDraw::color(mVertexColor.lu);
-                J3DNativeDraw::texCoord(texLeft / static_cast< f32 >(1 << TEXTURE_COODINATE_FRACTION_BITS), texTop / static_cast< f32 >(1 << TEXTURE_COODINATE_FRACTION_BITS));
+                *vtx++ = {posLeft, posTop, posZ, Rgba8(mVertexColor.lu), texLeft / static_cast< f32 >(1 << TEXTURE_COODINATE_FRACTION_BITS), texTop / static_cast< f32 >(1 << TEXTURE_COODINATE_FRACTION_BITS)};
 
-                J3DNativeDraw::position(posRight, posTop, posZ);
-                J3DNativeDraw::color(mVertexColor.ru);
-                J3DNativeDraw::texCoord(texRight / static_cast< f32 >(1 << TEXTURE_COODINATE_FRACTION_BITS), texTop / static_cast< f32 >(1 << TEXTURE_COODINATE_FRACTION_BITS));
+                *vtx++ = {posRight, posTop, posZ, Rgba8(mVertexColor.ru), texRight / static_cast< f32 >(1 << TEXTURE_COODINATE_FRACTION_BITS), texTop / static_cast< f32 >(1 << TEXTURE_COODINATE_FRACTION_BITS)};
 
-                J3DNativeDraw::position(posRight, posBottom, posZ);
-                J3DNativeDraw::color(mVertexColor.rd);
-                J3DNativeDraw::texCoord(texRight / static_cast< f32 >(1 << TEXTURE_COODINATE_FRACTION_BITS), texBottom / static_cast< f32 >(1 << TEXTURE_COODINATE_FRACTION_BITS));
+                *vtx++ = {posRight, posBottom, posZ, Rgba8(mVertexColor.rd), texRight / static_cast< f32 >(1 << TEXTURE_COODINATE_FRACTION_BITS), texBottom / static_cast< f32 >(1 << TEXTURE_COODINATE_FRACTION_BITS)};
 
-                J3DNativeDraw::position(posLeft, posBottom, posZ);
-                J3DNativeDraw::color(mVertexColor.ld);
-                J3DNativeDraw::texCoord(texLeft / static_cast< f32 >(1 << TEXTURE_COODINATE_FRACTION_BITS), texBottom / static_cast< f32 >(1 << TEXTURE_COODINATE_FRACTION_BITS));
+                *vtx++ = {posLeft, posBottom, posZ, Rgba8(mVertexColor.ld), texLeft / static_cast< f32 >(1 << TEXTURE_COODINATE_FRACTION_BITS), texBottom / static_cast< f32 >(1 << TEXTURE_COODINATE_FRACTION_BITS)};
             }
         }
 

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// TextureCache's D3D12 side (gpu_texture_backend.h): the view heap, upload staging, placed textures and upload copies.
+// TextureStore's D3D12 side (gpu_texture_backend.h): the view heap, upload staging, placed textures and upload copies.
 
 #include "galaxy/render/gpu_texture_backend.h"
 
@@ -13,7 +13,7 @@ namespace {
 
 [[noreturn]] void d3d_fail(HRESULT hr, const char* label) {
     std::ostringstream ss;
-    ss << "[TextureCache] " << label
+    ss << "[TextureStore] " << label
        << " HRESULT=0x" << std::hex << std::uppercase
        << std::bit_cast<std::uint32_t>(static_cast<std::int32_t>(hr));
     throw std::runtime_error(ss.str());
@@ -27,6 +27,8 @@ void d3d_check(HRESULT hr, const char* label) {
 
 bool TextureBackend::initialize(gpu::Device* device, std::uint32_t view_capacity) {
     device_ = device;
+    views_per_page_ = view_capacity;
+    srv_pages_.clear();
     texture_heap_.initialize(device);
 
     D3D12_DESCRIPTOR_HEAP_DESC dhd{};
@@ -53,11 +55,33 @@ bool TextureBackend::initialize(gpu::Device* device, std::uint32_t view_capacity
 }
 
 void TextureBackend::shutdown() {
+    texture_heap_.shutdown();
     srv_heap_.Reset();
+    srv_pages_.clear();
+    views_per_page_ = 0;
     srv_cpu_base_ = {};
     srv_stride_ = 0u;
     null_srv_ = {};
     device_.Reset();
+}
+
+void TextureBackend::ensure_view(std::uint32_t index) {
+    const std::size_t page = index / views_per_page_;
+    while (page > srv_pages_.size()) {
+        D3D12_DESCRIPTOR_HEAP_DESC desc{};
+        desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+        desc.NumDescriptors = views_per_page_;
+        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> next;
+        d3d_check(device_->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&next)), "create texture view page");
+        srv_pages_.push_back(std::move(next));
+    }
+}
+
+D3D12_CPU_DESCRIPTOR_HANDLE TextureBackend::srv_cpu(std::uint32_t index) const noexcept {
+    const auto page = index / views_per_page_;
+    auto cpu = page == 0 ? srv_cpu_base_ : srv_pages_[page - 1]->GetCPUDescriptorHandleForHeapStart();
+    cpu.ptr += static_cast<SIZE_T>(index % views_per_page_) * srv_stride_;
+    return cpu;
 }
 
 void TextureBackend::write_view(std::uint32_t index, ID3D12Resource* texture, unsigned levels) {
@@ -73,8 +97,8 @@ void TextureBackend::write_view(std::uint32_t index, ID3D12Resource* texture, un
     srv_desc.Texture2D.MostDetailedMip     = 0;
     srv_desc.Texture2D.PlaneSlice          = 0;
     srv_desc.Texture2D.ResourceMinLODClamp = 0.0f;
-    D3D12_CPU_DESCRIPTOR_HANDLE cpu = srv_cpu_base_;
-    cpu.ptr += static_cast<SIZE_T>(index) * srv_stride_;
+    ensure_view(index);
+    const auto cpu = srv_cpu(index);
     device_->CreateShaderResourceView(texture, &srv_desc, cpu);
 }
 

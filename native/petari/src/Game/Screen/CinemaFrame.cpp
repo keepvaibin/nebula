@@ -3,7 +3,7 @@
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
-#include <JSystem/J3DGraphAnimator/J3DAnimation.hpp>
+#include "Game/Render/Clip.hpp"
 
 namespace NrvCinemaFrame {
     NEW_NERVE(CinemaFrameNrvScreen, CinemaFrame, Screen);

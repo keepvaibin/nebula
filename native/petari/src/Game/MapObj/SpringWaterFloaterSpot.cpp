@@ -14,7 +14,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <JSystem/J3DGraphAnimator/J3DJoint.hpp>
+#include "Game/Render/ModelData.hpp"
 
 namespace {
     // static const sRisingSpeed;
@@ -273,8 +273,8 @@ void SpringWaterFloaterSpot::floatFloater() {
 }
 
 bool SpringWaterFloaterSpot::isModelLongSide() {
-    J3DJoint* joint = MR::getJoint(this, static_cast< u16 >(0));
-    return (joint->mMax.x + joint->mMax.z) / 2.0f > joint->mMax.y;
+    Joint* joint = MR::getJoint(this, static_cast< u16 >(0));
+    return (joint->getMax()->x + joint->getMax()->z) / 2.0f > joint->getMax()->y;
 }
 
 bool SpringWaterFloaterSpot::isNeedsForBound() {

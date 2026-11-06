@@ -1,6 +1,6 @@
 #include "Game/AreaObj/BigBubbleGoalArea.hpp"
-#include "Game/Util/NativeShader.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/FrameList.hpp"
 #include "Game/Ride/BigBubble.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util/AreaObjUtil.hpp"
@@ -65,16 +65,16 @@ void BigBubbleGoalArea::draw() const {
         return;
     }
 
-    NebulaNativeMaterial material;
+    SiteMaterial material;
     TDDraw::setupNative(&material, 0, 1, 0);
-    NativeShader::setDepth(material, true, NEBULA_COMPARE_LEQUAL, true);
-    material.cull = NEBULA_CULL_BACK;
-    NativeShader::send(material);
+    material.setDepth(true, NEBULA_COMPARE_LEQUAL, true);
+    material.mState.cull = NEBULA_CULL_BACK;
 
     f32 f = TWO_PI * (mMeterDisplayAmount / mMeterCapacity);
 
-    TDDraw::drawFillFan(mTrans, MR::getCamZdir(), MR::getCamYdir() * 150.0f, 0xFFFF00FF, 0.0f, f, 16);
-    TDDraw::drawFillFan(mTrans, MR::getCamZdir(), MR::getCamYdir() * 150.0f, 0x80FF, f, TWO_PI, 16);
+    TypedDraw site = TDDraw::site(material, 0);
+    TDDraw::drawFillFan(site, mTrans, MR::getCamZdir(), MR::getCamYdir() * 150.0f, 0xFFFF00FF, 0.0f, f, 16);
+    TDDraw::drawFillFan(site, mTrans, MR::getCamZdir(), MR::getCamYdir() * 150.0f, 0x80FF, f, TWO_PI, 16);
 }
 
 namespace MR {

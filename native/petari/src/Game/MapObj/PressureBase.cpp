@@ -75,7 +75,7 @@ void PressureBase::init(const JMapInfoIter& rIter) {
     MR::getJMapInfoArg0NoInit(rIter, &mBaseAngle);
     MR::getJMapInfoArg1NoInit(rIter, &mWaitTime);
 
-    s16 frame = MR::getBckFrameMax(this, "ShotStart");
+    s32 frame = MR::getBckFrameMax(this, "ShotStart");
     mIsShortShot = (mWaitTime < frame);
 
     initBullet(rIter);

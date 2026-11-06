@@ -1,8 +1,8 @@
 #include "Game/Ride/Creeper.hpp"
-#include "Game/Util/NativeShader.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/FrameList.hpp"
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/LiveActor/PartsModel.hpp"
 #include "Game/Scene/SceneFunction.hpp"
@@ -468,16 +468,14 @@ void Creeper::calcAndGetCurrentInfo(Vec3f* pPosition, Vec3f* pUp) const {
 }
 
 namespace {
-    void sendVertex(const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 x, f32 y, u32 color, f32 texX, f32 texY) {
-        J3DNativeDraw::position(rPos.x + rSide.x * x + rFront.x * y, rPos.y + rSide.y * x + rFront.y * y, rPos.z + rSide.z * x + rFront.z * y);
-        J3DNativeDraw::color(color);
-        J3DNativeDraw::texCoord(texX, texY);
+    void sendVertex(VertexPCT*& rVtx, const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 x, f32 y, u32 color, f32 texX, f32 texY) {
+        *rVtx++ = {rPos.x + rSide.x * x + rFront.x * y, rPos.y + rSide.y * x + rFront.y * y, rPos.z + rSide.z * x + rFront.z * y, Rgba8(color), texX, texY};
     }
 
-    void drawPolygon(const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 x1, f32 y1, f32 x2, f32 y2, u32 color1, u32 color2,
+    void drawPolygon(VertexPCT*& rVtx, const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 x1, f32 y1, f32 x2, f32 y2, u32 color1, u32 color2,
                      f32 texY) {
-        ::sendVertex(rPos, rSide, rFront, x1, y1, color1, 1.0f, texY);
-        ::sendVertex(rPos, rSide, rFront, x2, y2, color2, 0.0f, texY);
+        ::sendVertex(rVtx, rPos, rSide, rFront, x1, y1, color1, 1.0f, texY);
+        ::sendVertex(rVtx, rPos, rSide, rFront, x2, y2, color2, 0.0f, texY);
     }
 };  // namespace
 
@@ -486,42 +484,40 @@ void Creeper::draw() const {
         return;
     }
 
-    loadMaterial();
+    const SiteMaterial material = loadMaterial();
+    TypedDraw site(material, nullptr, MR::getCameraViewMtx());
 
     f32 delta = 1.0f / (mNumPoints - 1);
 
-    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, mNumPoints * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
+    VertexPCT* vtx = site.vertices< VertexPCT >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, mNumPoints * 2);
     for (s32 i = 0; i < mNumPoints; i++) {
-        ::drawPolygon(mPoints[i]->getPosition(), mPoints[i]->getSide(), mPoints[i]->getFront(), ::sDrawWidthX, -::sDrawWidthZ, 0.0f, ::sDrawWidthZ,
+        ::drawPolygon(vtx, mPoints[i]->getPosition(), mPoints[i]->getSide(), mPoints[i]->getFront(), ::sDrawWidthX, -::sDrawWidthZ, 0.0f, ::sDrawWidthZ,
                       ::sColorPlusX, ::sColorPlusZ, delta * ((mNumPoints - 1) - i));
     }
 
-    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, mNumPoints * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
+    vtx = site.vertices< VertexPCT >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, mNumPoints * 2);
     for (s32 i = 0; i < mNumPoints; i++) {
-        ::drawPolygon(mPoints[i]->getPosition(), mPoints[i]->getSide(), mPoints[i]->getFront(), 0.0f, ::sDrawWidthZ, -::sDrawWidthX, -::sDrawWidthZ,
+        ::drawPolygon(vtx, mPoints[i]->getPosition(), mPoints[i]->getSide(), mPoints[i]->getFront(), 0.0f, ::sDrawWidthZ, -::sDrawWidthX, -::sDrawWidthZ,
                       ::sColorPlusZ, ::sColorMinusX, delta * ((mNumPoints - 1) - i));
     }
 
-    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, mNumPoints * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
+    vtx = site.vertices< VertexPCT >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, mNumPoints * 2);
     for (s32 i = 0; i < mNumPoints; i++) {
-        ::drawPolygon(mPoints[i]->getPosition(), mPoints[i]->getSide(), mPoints[i]->getFront(), -::sDrawWidthX, -::sDrawWidthZ, ::sDrawWidthX,
+        ::drawPolygon(vtx, mPoints[i]->getPosition(), mPoints[i]->getSide(), mPoints[i]->getFront(), -::sDrawWidthX, -::sDrawWidthZ, ::sDrawWidthX,
                       -::sDrawWidthZ, ::sColorMinusX, ::sColorPlusX, delta * ((mNumPoints - 1) - i));
     }
 }
 
-void Creeper::loadMaterial() const {
-    J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
+SiteMaterial Creeper::loadMaterial() const {
     // runtime/src/render/materials/tex_modulate.hlsl: the texture times the vertex colour, its alpha the texture's; drawn where
     // the alpha is above 0, depth tested and written, back faces culled.
-    NebulaNativeMaterial material;
-    NativeShader::init(material, NEBULA_SHADER_TEX_MODULATE, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, true,
+    SiteMaterial material;
+    material.init(NEBULA_SHADER_TEX_MODULATE, SiteMaterial::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, true,
                        NEBULA_CULL_BACK);
-    material.early_depth = 1;
     material.constants[0] = 1.0f;
     material.constants[1] = 0.0f;
-    NativeShader::setTexture(material, 0, mTexture);
-    NativeShader::send(material);
-    J3DNativeShape::setCurrentIdentity();
+    material.setTexture(0, mTexture);
+    return material;
 }
 
 Creeper::~Creeper() {

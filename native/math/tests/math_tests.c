@@ -156,6 +156,30 @@ int main(void) {
         sFailures++;
     }
 
+    /* Finite radians retain their periodic meaning across the full binary32 range. */
+    for (unsigned i = 0; i < 100000; ++i) {
+        sSeed = sSeed * 1664525u + 1013904223u;
+        union { unsigned u; float f; } angle = {sSeed};
+        if (!isfinite(angle.f)) { continue; }
+        float s, c;
+        NebulaSinCos(angle.f, &s, &c);
+        close_to("finite-radian sine", s, sin((double)angle.f), 2.0e-7);
+        close_to("finite-radian cosine", c, cos((double)angle.f), 2.0e-7);
+    }
+
+    /* SIMD agrees with the scalar path, including mixed full-range lanes. */
+    for (unsigned i = 0; i < 100000; ++i) {
+        float angles[3], ss[3], cc[3];
+        for (unsigned k = 0; k < 3; ++k) angles[k] = rnd() * 127.0f;
+        if ((i & 15u) == 0u) angles[1] = 3.0e35f;
+        NebulaSinCos3(angles[0], angles[1], angles[2], ss, cc);
+        for (unsigned k = 0; k < 3; ++k) {
+            float sn, cn; NebulaSinCos(angles[k], &sn, &cn);
+            close_to("SIMD radian sine", ss[k], sn, 1.0e-7);
+            close_to("SIMD radian cosine", cc[k], cn, 1.0e-7);
+        }
+    }
+
     /* Cost of the hot calls (inline, so the loop is what the game's call sites compile to). */
     {
         enum { N = 20000000 };

@@ -1,7 +1,7 @@
 #include "Game/MapObj/WarpPod.hpp"
-#include "Game/Util/NativeShader.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/FrameList.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/LiveActor/ActorCameraInfo.hpp"
 #include "Game/LiveActor/LiveActorGroup.hpp"
 #include "Game/Scene/SceneFunction.hpp"
@@ -11,7 +11,6 @@
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/DirectDraw.hpp"
-#include "Game/Util/DirectDrawUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/EventUtil.hpp"
 #include "Game/Util/JMapIdInfo.hpp"
@@ -452,6 +451,12 @@ void WarpPod::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
+namespace {
+    void sendVertex(VertexPT*& rVtx, const Vec3f& rPosition, const Vec2f& rCoord) {
+        *rVtx++ = {rPosition.x, rPosition.y, rPosition.z, rCoord.x, rCoord.y};
+    }
+}  // namespace
+
 // FIXME: big tvec mess
 void WarpPod::initDraw() {
     if (!mArg7) {
@@ -523,17 +528,15 @@ void WarpPod::drawCylinder(u32) const {
 
     // runtime/src/render/materials/tex_alpha_lerp.hlsl: the glow colour to white by the texture's alpha, opaque
     // added; depth tested.
-    NebulaNativeMaterial material;
+    SiteMaterial material;
     TDDraw::setupNative(&material, 1, 2, 0);
-    MR::ddSetVtxFormat(2);
-    material.shader = NEBULA_SHADER_TEX_ALPHA_LERP;
-    NativeShader::setDepth(material, true, NEBULA_COMPARE_LEQUAL, false);
+    material.mShader = NEBULA_SHADER_TEX_ALPHA_LERP;
+    material.setDepth(true, NEBULA_COMPARE_LEQUAL, false);
     const NebulaColor8& glow = ::gGlowEffectEnvColor[mGlowColorIndex];
-    NativeShader::setColor(material, 0, glow.r, glow.g, glow.b, glow.a);
-    NativeShader::setColor(material, 4, 255, 255, 255, 255);
+    material.setColor(0, glow.r, glow.g, glow.b, glow.a);
+    material.setColor(4, 255, 255, 255, 255);
     material.constants[10] = 1.0f;
-    NativeShader::setTexture(material, 0, _D4);
-    NativeShader::send(material);
+    material.setTexture(0, _D4);
 
     s32 val1 = _A6;
     u32 val2 = _C8;
@@ -548,6 +551,8 @@ void WarpPod::drawCylinder(u32) const {
         val2 *= 1 - static_cast< f32 >(val1) / val3;
     }
 
+    TypedDraw site(material, nullptr, MR::getCameraViewMtx());
+    VertexPT* vtx;
     Vec3f vec84, vec90, vec9C, vecA8, vecB4, vecC0, vecCC, vecD8, vecE4;
     Vec2f currentTexCoords[2];
     Vec2f previousTexCoords[2];
@@ -629,16 +634,16 @@ void WarpPod::drawCylinder(u32) const {
         vecC0 = _C4[i] + vec164;
         vecB4 = _C4[i] - vec164;
 
-        J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 8, MR::ddVtxAttributes());
+        vtx = site.vertices< VertexPT >(NEBULA_PRIMITIVE_QUADS, 8);
 
-        MR::ddSendVtxData(vecA8, previousTexCoords[0]);
-        MR::ddSendVtxData(vecD8, currentTexCoords[0]);
-        MR::ddSendVtxData(vecCC, currentTexCoords[1]);
-        MR::ddSendVtxData(vec9C, previousTexCoords[1]);
-        MR::ddSendVtxData(vec90, previousTexCoords[0]);
-        MR::ddSendVtxData(vecC0, currentTexCoords[0]);
-        MR::ddSendVtxData(vecB4, currentTexCoords[1]);
-        MR::ddSendVtxData(vec84, previousTexCoords[1]);
+        sendVertex(vtx, vecA8, previousTexCoords[0]);
+        sendVertex(vtx, vecD8, currentTexCoords[0]);
+        sendVertex(vtx, vecCC, currentTexCoords[1]);
+        sendVertex(vtx, vec9C, previousTexCoords[1]);
+        sendVertex(vtx, vec90, previousTexCoords[0]);
+        sendVertex(vtx, vecC0, currentTexCoords[0]);
+        sendVertex(vtx, vecB4, currentTexCoords[1]);
+        sendVertex(vtx, vec84, previousTexCoords[1]);
 
         vecA8 = vecD8;
         previousTexCoords[0] = currentTexCoords[0];
@@ -667,12 +672,12 @@ void WarpPod::draw() const {
         return;
     }
 
-    NebulaNativeMaterial material;
+    SiteMaterial material;
     TDDraw::setupNative(&material, 0, 1, 0);
-    NativeShader::setDepth(material, true, NEBULA_COMPARE_LEQUAL, false);
-    NativeShader::send(material);
+    material.setDepth(true, NEBULA_COMPARE_LEQUAL, false);
 
     for (u32 i = 0; i < _C8; i++) {
-        TDDraw::drawCylinder(_C4[i], _C4[i + 1] - _C4[i], 100.0f, 0x40406040, 0x40406040, 8);
+        TypedDraw site = TDDraw::site(material, 0);
+        TDDraw::drawCylinder(site, _C4[i], _C4[i + 1] - _C4[i], 100.0f, 0x40406040, 0x40406040, 8);
     }
 }

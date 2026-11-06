@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include <nebula_geometry.hpp>
 
@@ -68,7 +69,7 @@ public:
 
     void calcAndGetCurrentInfo(Vec3f*, Vec3f*) const;
 
-    void loadMaterial() const;
+    SiteMaterial loadMaterial() const;
     const CreeperPoint* getHeadPoint() const {
         return getPoint(mNumPoints - 1);
     }

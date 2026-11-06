@@ -1,6 +1,6 @@
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/MapObj/BrightObj.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeView.hpp>
+#include "Game/Render/FrameList.hpp"
 #include "Game/Util/GameLightSignal.hpp"
 #include "Game/MapObj/Sun.hpp"
 #include "Game/Scene/SceneFunction.hpp"

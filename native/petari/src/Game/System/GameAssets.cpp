@@ -1,3 +1,5 @@
+#include "Game/Render/ModelData.hpp"
+#include "Game/Render/RenderTexture.hpp"
 #include "Game/System/GameAssets.hpp"
 #include "Game/System/NebulaAtomic.hpp"
 #include "Game/System/GameThreads.hpp"
@@ -70,6 +72,9 @@ namespace GameAssets {
             nebula_fatal("read outside file %d (length %u): %d bytes at %d", pFile->mEntry, pFile->mLength, size, offset);
         }
 
+        // An image read over is a new image.
+        const uintptr_t at = reinterpret_cast< uintptr_t >(pDst);
+        RenderTexture::forget(at, at + static_cast< uintptr_t >(size));
         const NebulaHostServices* const host = nebula_host();
         return host->asset_read(host->user, pFile->mEntry, static_cast< u64 >(offset), static_cast< u32 >(size), pDst);
     }
@@ -93,7 +98,7 @@ namespace GameAssets {
         void release(const Mapped& rMapped) {
             const NebulaHostServices* const host = nebula_host();
             const uintptr_t start = reinterpret_cast< uintptr_t >(rMapped.mData);
-            host->shape_forget(host->user, start, start + rMapped.mSize);
+            ModelDataList::forget(start, start + rMapped.mSize);
             host->asset_unmap(host->user, rMapped.mData, rMapped.mSize);
         }
 

@@ -1,7 +1,7 @@
 #include "Game/Screen/WipeKoopa.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/LayoutUtil.hpp"
-#include <JSystem/J3DGraphAnimator/J3DAnimation.hpp>
+#include "Game/Render/Clip.hpp"
 
 namespace {
     static const s32 sAnimFrame = 90;

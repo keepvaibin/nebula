@@ -7,7 +7,7 @@
 #include <nebula_math.h>
 
 class IconAButton;
-class J3DFrameCtrl;
+class FrameCtrl;
 class LayoutActor;
 class LayoutHolder;
 class Nerve;
@@ -206,8 +206,8 @@ namespace MR {
     s16 getAnimFrameMax(const LayoutActor*, u32);
     s16 getPaneAnimFrameMax(const LayoutActor*, const char*, u32);
     s16 getAnimFrameMax(const LayoutActor*, const char*);
-    J3DFrameCtrl* getAnimCtrl(const LayoutActor*, u32);
-    J3DFrameCtrl* getPaneAnimCtrl(const LayoutActor*, const char*, u32);
+    FrameCtrl* getAnimCtrl(const LayoutActor*, u32);
+    FrameCtrl* getPaneAnimCtrl(const LayoutActor*, const char*, u32);
     void emitEffect(LayoutActor*, const char*);
     void deleteEffect(LayoutActor*, const char*);
     void forceDeleteEffect(LayoutActor*, const char*);

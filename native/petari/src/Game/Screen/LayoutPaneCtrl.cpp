@@ -108,7 +108,7 @@ void LayoutPaneCtrl::reflectFollowPos() {
     recalcChildGlobalMtx(mPane);
 }
 
-J3DFrameCtrl* LayoutPaneCtrl::getFrameCtrl(u32 layer) const {
+FrameCtrl* LayoutPaneCtrl::getFrameCtrl(u32 layer) const {
     return &mAnmPlayerArray[layer]->mFrameCtrl;
 }
 

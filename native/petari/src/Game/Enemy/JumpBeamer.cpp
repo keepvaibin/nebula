@@ -179,7 +179,7 @@ void JumpBeamer::exeUp() {
         MR::validateShadow(this, nullptr);
     }
 
-    s16 end = MR::getBckCtrl(this)->getEnd();
+    s32 end = MR::getBckCtrl(this)->getEnd();
     f32 frame = MR::getBckFrame(this);
     MR::setShadowVolumeSphereRadius(this, nullptr, (110.0f + (30.0f * (frame / (end)))));
 
@@ -209,7 +209,7 @@ void JumpBeamer::exeDown() {
         MR::startSound(this, "SE_EM_JGUARDER_HIDE");
     }
 
-    s16 end = MR::getBckCtrl(this)->getEnd();
+    s32 end = MR::getBckCtrl(this)->getEnd();
     f32 frame = MR::getBckFrame(this);
     MR::setShadowVolumeSphereRadius(this, nullptr, (110.0f + (30.0f * (1.0f - frame / (end)))));
     if (MR::isBckStopped(this)) {

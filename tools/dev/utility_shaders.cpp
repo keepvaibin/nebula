@@ -2,8 +2,6 @@
 // bytecode arrays, with the flags the renderer used at run time: the same compiler, so the same bytes.
 // utility_shaders <output header>
 
-#include "galaxy/render/curved_surfaces.h"
-#include "galaxy/render/interp_eval.h"
 #include "galaxy/render/renderer_common.h"
 
 #include <d3dcompiler.h>

@@ -161,6 +161,20 @@ inline void eulerToQuat(s16 x, s16 y, s16 z, Quaternion* quat) {
     quat->z = sinZ * (cosX * cosY) - cosZ * (sinX * sinY);
 }
 
+inline void eulerRadiansToQuat(f32 x, f32 y, f32 z, Quaternion* quat) {
+    f32 sine[3], cosine[3];
+    NebulaSinCos3(x * 0.5f, y * 0.5f, z * 0.5f, sine, cosine);
+    const f32 sinX = sine[0], sinY = sine[1], sinZ = sine[2];
+    const f32 cosX = cosine[0], cosY = cosine[1], cosZ = cosine[2];
+
+    f32 cyz = cosY * cosZ;
+    f32 syz = sinY * sinZ;
+    quat->w = cosX * (cyz) + sinX * (syz);
+    quat->x = sinX * (cyz)-cosX * (syz);
+    quat->y = cosZ * (cosX * sinY) + sinZ * (sinX * cosY);
+    quat->z = sinZ * (cosX * cosY) - cosZ * (sinX * sinY);
+}
+
 inline f32 hermiteInterpolation(f32 p1, f32 p2, f32 p3, f32 p4, f32 p5, f32 p6, f32 p7) {
     const f32 ff31 = p1 - p2;
     const f32 t = ff31 / (p5 - p2);

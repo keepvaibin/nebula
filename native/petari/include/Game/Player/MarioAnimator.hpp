@@ -34,7 +34,7 @@ public:
     void entryCallback(const char*);
     f32 getFrame() const;
     f32 getUpperFrame() const;
-    u16 getUpperJointID() const;
+    u32 getUpperJointID() const;
     void setBlendWeight(const f32*, f32);
     void targetWeight(f32*, f32, f32);
     void setWalkWeight(const f32*);

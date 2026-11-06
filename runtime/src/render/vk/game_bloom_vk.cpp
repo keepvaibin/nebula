@@ -553,14 +553,4 @@ void GameBloomVk::finish(VkCommandBuffer commands, VkRenderPass pass, unsigned s
     vkCmdDraw(commands, 3, 1, 0, 0);
 }
 
-void GameBloomVk::hold(std::vector<std::shared_ptr<Texture>>& held) const {
-    for (const std::shared_ptr<Texture>* t : {&dummy_, &keep_, &source_, &work_, &box_tmp_, &mask_, &level1_,
-                                              &level2_in_, &level2_, &blur_h_[0], &blur_h_[1], &blur_h_[2],
-                                              &blur2_h_[0], &blur2_h_[1], &blur2_h_[2]}) {
-        if (*t && std::find(held.begin(), held.end(), *t) == held.end()) {
-            held.push_back(*t);
-        }
-    }
-}
-
 }  // namespace galaxy::render::vk

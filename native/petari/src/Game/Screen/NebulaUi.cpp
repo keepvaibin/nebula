@@ -1,7 +1,7 @@
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Screen/NebulaUi.hpp"
 #include <nebula_cooked_texture.h>
-#include <JSystem/J3DGraphBase/J3DNativeView.hpp>
+#include "Game/Render/FrameList.hpp"
 
 #include "Game/Screen/LayoutCoreUtil.hpp"
 #include "Game/Screen/NebulaPaneKit.hpp"
@@ -527,8 +527,8 @@ namespace NebulaUi {
         if (x1 <= x0 || y1 <= y0) {
             return;
         }
-        J3DNativeView::setScissor(x0, y0, x1 - x0, y1 - y0);
+        Frame::setScissor(x0, y0, x1 - x0, y1 - y0);
         pPane->Draw(rDrawInfo);
-        J3DNativeView::setScissor(0.0f, 0.0f, 1.0f, 1.0f);
+        Frame::setScissor(0.0f, 0.0f, 1.0f, 1.0f);
     }
 };  // namespace NebulaUi

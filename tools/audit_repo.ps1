@@ -10,10 +10,7 @@ $ForbiddenExtensions = @(
     ".iso", ".rso", ".rvz", ".szs", ".thp", ".wad", ".wbfs", ".wia",
     ".bin", ".pak", ".nds", ".sel", ".brres", ".bmg", ".rarc"
 )
-# The Android build's shader seed: pipeline keys (hashes of pipeline state) the PC's galaxy tour captured, no game data.
-$AllowedBinaries = @(
-    "platform/android/vk_seed_keys.bin"
-)
+$AllowedBinaries = @()
 $ForbiddenBuildExtensions = @(
     ".dll", ".exe", ".exp", ".ilk", ".lib", ".obj", ".pdb"
 )

@@ -2,6 +2,8 @@
 
 #include <nebula_geometry.hpp>
 
+class TypedDraw;
+
 class BezierSurface {
 public:
     BezierSurface(s32, u32);
@@ -9,13 +11,13 @@ public:
     void setST(const Vec2f&, const Vec2f&, const Vec2f&);
     void setDivideLevel(s32);
     void calcBuffer();
-    void draw() const;
+    void draw(TypedDraw& rDraw) const;
     void calcTrianglePatchVertix(Vec3f*) const;
     void calcTrianglePatchNormal(Vec3f*) const;
-    void drawTrianglePatchPos() const;
-    void drawTrianglePatchPosNorm() const;
-    void drawTrianglePatchPosST() const;
-    void drawTrianglePatchPosNormST() const;
+    void drawTrianglePatchPos(TypedDraw& rDraw) const;
+    void drawTrianglePatchPosNorm(TypedDraw& rDraw) const;
+    void drawTrianglePatchPosST(TypedDraw& rDraw) const;
+    void drawTrianglePatchPosNormST(TypedDraw& rDraw) const;
 
     Vec3f mCtrlPts[13];
     Vec3f* mTrianglePatchVertices;  // array

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include <nebula_geometry.hpp>
@@ -42,7 +43,7 @@ public:
     bool isStartSwingFront() const;
     bool isStartSwingBack() const;
 
-    void drawRope(const Vec3f&, const Vec3f&, const Vec3f&, const Vec3f&, f32, f32) const;
+    void drawRope(TypedDraw&, const Vec3f&, const Vec3f&, const Vec3f&, const Vec3f&, f32, f32) const;
 
     Vec3f mSide;
     Vec3f mUp;
@@ -68,7 +69,9 @@ class TrapezeRopeDrawInit : public NameObj {
 public:
     TrapezeRopeDrawInit(const char*);
 
-    virtual void initDraw() const;
+    virtual SiteMaterial makeMaterial() const;
+    // What its objects draw with.
+    SiteMaterial mMaterial;
 
     JUTTexture* mTexture;
 };

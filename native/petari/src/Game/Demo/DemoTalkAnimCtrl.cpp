@@ -196,7 +196,7 @@ void DemoTalkAnimCtrl::startCamera() {
 }
 
 void DemoTalkAnimCtrl::updateAnim(const BckCtrlData& rBck) {
-    J3DFrameCtrl* ctrls[5];
+    FrameCtrl* ctrls[5];
 
     ctrls[0] = mHaveBtk ? MR::getBtkCtrl(mActor) : nullptr;
     ctrls[1] = mHaveBpk ? MR::getBpkCtrl(mActor) : nullptr;
@@ -205,7 +205,7 @@ void DemoTalkAnimCtrl::updateAnim(const BckCtrlData& rBck) {
     ctrls[4] = mHaveBva ? MR::getBvaCtrl(mActor) : nullptr;
 
     for (int i = 0; i < 5; i++) {
-        J3DFrameCtrl* ctrl = ctrls[i];
+        FrameCtrl* ctrl = ctrls[i];
         if (ctrl != nullptr) {
             ctrl->mAttribute = rBck.mLoopMode;
             ctrl->mStart = rBck.mStartFrame;

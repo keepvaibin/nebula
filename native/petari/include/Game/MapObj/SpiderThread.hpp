@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 
 class JUTTexture;
@@ -37,7 +38,7 @@ public:
     void tryTouchPoint(s32);
     void findNearestPointPos(const Vec3f**, const Vec3f**, s32*, s32*, const Vec3f&) const;
     SpiderThreadHangInfo* findHangInfo(LiveActor*) const;
-    void initDraw() const;
+    SiteMaterial loadMaterial() const;
 
     SpiderThreadRadialLine* getMainRadialLine(int idx) const {
         return mRadialLines[idx];

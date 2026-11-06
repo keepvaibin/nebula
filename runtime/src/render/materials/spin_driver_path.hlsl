@@ -3,7 +3,7 @@
 // times the mask texture's (1), each through its own texture matrix of the draw (places 0 and 1); drawn where above
 // zero.
 struct MaterialConstants {
-    float4 unused;
+    float4 coord[6];  // the colour's matrix and the mask's, three rows each
 };
 
 #include "native_material.hlsli"
@@ -11,8 +11,8 @@ struct MaterialConstants {
 void material_vertex(NativeVertex v, inout NativeVaryings o) {
     const float4 c = float4(v.uv[0], 1.0, 1.0);
     o.color = float4(1.0, 1.0, 1.0, 1.0);
-    o.uv[0] = float4(dot(c, native_tex_row(0)), dot(c, native_tex_row(1)),
-                     dot(c, native_tex_row(3)), dot(c, native_tex_row(4)));
+    o.uv[0] = float4(dot(c, material.coord[0]), dot(c, material.coord[1]),
+                     dot(c, material.coord[3]), dot(c, material.coord[4]));
 }
 
 float4 material_color(NativeVaryings i) {

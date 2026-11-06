@@ -26,7 +26,7 @@ void LayoutAnmPlayer::start(const char* pAnimName) {
 
     u32 frameSize = mAnimTransform->GetFrameSize();
 
-    mFrameCtrl.init(static_cast< s16 >(frameSize));
+    mFrameCtrl.init(static_cast< s32 >(frameSize));
 
     if (mAnimTransform->IsLoopData()) {
         mFrameCtrl.setAttribute(2);

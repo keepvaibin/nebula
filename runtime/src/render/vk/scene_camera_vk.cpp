@@ -249,10 +249,4 @@ void SceneCameraVk::draw(VkCommandBuffer commands, VkRenderPass pass, unsigned s
     }
 }
 
-void SceneCameraVk::hold(std::vector<std::shared_ptr<Texture>>& held) const {
-    if (exposure_) {
-        held.push_back(exposure_);
-    }
-}
-
 }  // namespace galaxy::render::vk

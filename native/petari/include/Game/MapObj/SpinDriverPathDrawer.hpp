@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Game/Render/TypedDraw.hpp"
+
 #include "Game/LiveActor/LiveActor.hpp"
 
 class JUTTexture;
@@ -24,7 +26,7 @@ public:
     void setColorPink();
     void setMaskLength(f32);
     void setFadeScale(f32);
-    void sendPoint(const Vec3f&, f32, f32) const;
+    void sendPoint(VertexPT*&, const Vec3f&, f32, f32) const;
 
     SpinDriverShootPath* mShootPath;
     Vec3f* _90;

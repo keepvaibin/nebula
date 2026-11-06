@@ -1,0 +1,208 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// What every program shares: the view, the composed rows, the instance table, lights, fog's forms and the output variants.
+// A program is one stage: programs/v*.hlsl and p*.hlsl (crates/nebula-import/src/cook/programs.rs) and the written ones
+// beside this file. Bindings: b0 the view, b1 a generated vertex stage's material constants, b2 a generated pixel stage's
+// and both stages' of a written program, b3 the draw's
+// root constants, t0-t15 and s0-s15 the material's textures, t16 the composed rows, t17 the instance table.
+//
+// Output variants (defines): NATIVE_REACTIVE (SV_Target1: the reactive mask), NATIVE_LAYER (with NATIVE_REACTIVE: the
+// effects layer's colour and transmission at SV_Target2-3), NATIVE_MOTION (SV_Target1: the motion vector), NATIVE_SAMPLE
+// (inputs per sample: an alpha test decides each sample of a multisampled target).
+
+#ifndef PROGRAM_HLSLI
+#define PROGRAM_HLSLI
+
+#include "nebula_limits.hlsli"
+
+cbuffer View : register(b0) {
+    row_major float4x4 projection;
+    float4 motion_prev_proj[2];
+    float4 motion_params;      // xy the jitter, z this frame's half viewport, w last frame's
+    float4 line_point_raster;  // the viewport's width and height in pixels, the half line width and half point size
+    uint4 view_light;          // z: sky up in eye space, octahedral; w: bit 0 sky up known, bit 1 enhanced, bit 2 wide target
+    float4 view_scale;         // x: the frame scale; y: particles' time in this frame; z: their time in the frame before
+};
+
+cbuffer Draw : register(b3) {
+    uint draw_first_instance;
+    uint draw_flags;
+    float draw_half_line;   // a widened line's half width in pixels
+    float draw_half_point;  // a widened point's half size in pixels
+};
+
+StructuredBuffer<float4> rows : register(t16);
+StructuredBuffer<uint4> instances : register(t17);  // row base, last frame's row base, light base, world row base
+
+Texture2D tex[NEBULA_MATERIAL_SLOTS] : register(t0);
+SamplerState samp[NEBULA_MATERIAL_SLOTS] : register(s0);
+
+// A draw matrix is six rows: three of its place, three of its normal.
+struct Place {
+    uint row;        // this vertex's matrix in the composed rows
+    uint world_row;  // the same in the world rows, for coordinates generated in world space
+    uint light;      // this draw's light set
+    float3 eye;
+    float4 clip;
+#if NATIVE_MOTION
+    float4 mv_cur;
+    float4 mv_prev;
+#endif
+};
+
+float3 row_times_point(uint r, float4 p) {
+    return float3(dot(rows[r], p), dot(rows[r + 1u], p), dot(rows[r + 2u], p));
+}
+
+float3 row_times_direction(uint r, float3 n) {
+    return float3(dot(rows[r].xyz, n), dot(rows[r + 1u].xyz, n), dot(rows[r + 2u].xyz, n));
+}
+
+Place native_place_moved(float3 pos, float3 before, uint draw_matrix, uint instance) {
+    const uint4 draw = instances[draw_first_instance + instance];
+    Place p;
+    p.row = draw.x + draw_matrix * 6u;
+    p.world_row = draw.w + draw_matrix * 6u;
+    p.light = draw.z;
+    const float4 at = float4(pos, 1.0);
+    p.eye = row_times_point(p.row, at);
+    p.clip = mul(projection, float4(p.eye, 1.0));
+#if NATIVE_MOTION
+    const float3 prev_eye = row_times_point(draw.y + draw_matrix * 6u, float4(before, 1.0));
+    const float4 pp0 = motion_prev_proj[0];
+    const float3 prev_clip = motion_prev_proj[1].z == 0.0
+        ? float3(pp0.x * prev_eye.x + pp0.y * prev_eye.z, pp0.z * prev_eye.y + pp0.w * prev_eye.z, -prev_eye.z)
+        : float3(pp0.x * prev_eye.x + pp0.y, pp0.z * prev_eye.y + pp0.w, 1.0);
+    p.mv_cur = float4(p.clip.xy - motion_params.xy * p.clip.w, motion_params.z, p.clip.w);
+    p.mv_prev = float4(prev_clip.xy, motion_params.w, prev_clip.z);
+#endif
+    return p;
+}
+
+Place native_place(float3 pos, uint draw_matrix, uint instance) {
+    return native_place_moved(pos, pos, draw_matrix, instance);
+}
+
+// The vertex's normal for lighting: through the matrix's normal rows, unit length or zero.
+float3 lit_normal(Place p, float3 nrm) {
+    const float3 n = row_times_direction(p.row + 3u, nrm);
+    return dot(n, n) > 0.0 ? normalize(n) : n;
+}
+
+// What an environment map reads: the normal turned into eye space and not normalized. The model's scale stays in it, and
+// maps are authored with it: a large model repeats its map. A vertex with its own matrix takes the normal rows.
+float3 eye_normal_rigid(Place p, float3 nrm) { return row_times_direction(p.row, nrm); }
+float3 eye_normal_skinned(Place p, float3 nrm) { return row_times_direction(p.row + 3u, nrm); }
+float3 world_position(Place p, float3 pos) { return row_times_point(p.world_row, float4(pos, 1.0)); }
+float3 world_normal_rigid(Place p, float3 nrm) { return row_times_direction(p.world_row, nrm); }
+float3 world_normal_skinned(Place p, float3 nrm) { return row_times_direction(p.world_row + 3u, nrm); }
+
+// Light n's contribution to a lit channel, in 0-255 units (rgb, and a for an alpha channel): its colour by its attenuation
+// (1 specular, 2 directional, 3 spot) and diffuse function (0 none, 1 signed, 2 clamped), at the eye-space position and
+// normal. Four rows: colour; cosine attenuation, distance attenuation x; distance y and z, position x and y; position z,
+// direction.
+float4 light_term(uint base, uint n, uint atten, uint diffuse, float3 pos, float3 nrm) {
+    const uint at = base + 4u * n;
+    const float4 lcol = rows[at];
+    const float4 le1 = rows[at + 1u];
+    const float4 le2 = rows[at + 2u];
+    const float4 le3 = rows[at + 3u];
+    const float3 lpos = float3(le2.z, le2.w, le3.x);
+    const float3 ldvec = float3(le3.y, le3.z, le3.w);
+    const float3 cos_a = le1.xyz;
+    const float3 dist_a = float3(le1.w, le2.x, le2.y);
+    const float3 delta = lpos - pos;
+    const float dd = dot(delta, delta);
+    float3 ldir = dd > 0.0 ? delta * rsqrt(dd) : nrm;
+    float attn = 1.0;
+    if (atten == 1u) {
+        attn = dot(nrm, ldir) >= 0.0 ? min(max(0.0, dot(nrm, ldvec)), 1.0e18) : 0.0;
+        const float dad = dot(dist_a, dist_a);
+        const float3 dist_attn = diffuse == 0u ? dist_a : (dad > 0.0 ? dist_a * rsqrt(dad) : dist_a);
+        const float denom = dot(dist_attn, float3(1.0, attn, attn * attn));
+        attn = denom != 0.0 ? max(0.0, dot(cos_a, float3(1.0, attn, attn * attn))) / denom : 0.0;
+    } else if (atten == 3u) {
+        const float dist = min(sqrt(dd), 1.0e18);
+        const float dist2 = min(dd, 1.0e36);
+        ldir = dist > 0.0 ? delta / dist : nrm;
+        attn = min(max(0.0, dot(ldir, ldvec)), 1.0e18);
+        const float denom = dot(dist_a, float3(1.0, dist, dist2));
+        attn = denom != 0.0 ? max(0.0, cos_a.x + cos_a.y * attn + cos_a.z * attn * attn) / denom : 0.0;
+    }
+    const float facing = diffuse == 1u ? dot(ldir, nrm) : diffuse == 2u ? max(0.0, dot(ldir, nrm)) : 1.0;
+    return attn * facing * lcol;
+}
+
+// A stage takes a register as an operand a, b or c through its low 8 bits: a value an unclamped stage left past 1 or below
+// 0 wraps.
+float low8(float x) { return x - floor(x * 255.0 / 256.0) * 256.0 / 255.0; }
+float3 low8(float3 x) { return x - floor(x * 255.0 / 256.0) * 256.0 / 255.0; }
+float4 low8(float4 x) { return x - floor(x * 255.0 / 256.0) * 256.0 / 255.0; }
+
+// Fog curves over how far into the range a pixel is. Linear is 2, 3 and their orthographic forms.
+float fog_amount(float ze, float start, float end) { return saturate((ze - start) / max(end - start, 1.0e-6)); }
+float fog_exp(float f) { return 1.0 - exp2(-8.0 * f); }
+float fog_exp2(float f) { return 1.0 - exp2(-8.0 * f * f); }
+float fog_rev_exp(float f) { return exp2(-8.0 * (1.0 - f)); }
+float fog_rev_exp2(float f) { const float g = 1.0 - f; return exp2(-8.0 * g * g); }
+
+#if NATIVE_MOTION
+#define NEBULA_TEXCOORD_IMPL(n) TEXCOORD##n
+#define NEBULA_TEXCOORD(n) NEBULA_TEXCOORD_IMPL(n)
+#define VARYINGS_MOTION float4 mv_cur : NEBULA_TEXCOORD(NEBULA_MOTION_CURRENT_INDEX); float4 mv_prev : NEBULA_TEXCOORD(NEBULA_MOTION_PREVIOUS_INDEX);
+#define PLACE_OUT(o, p) o.pos = p.clip; o.mv_cur = p.mv_cur; o.mv_prev = p.mv_prev
+#else
+#define VARYINGS_MOTION
+#define PLACE_OUT(o, p) o.pos = p.clip
+#endif
+#if NATIVE_SAMPLE
+#define PER_SAMPLE sample
+#else
+#define PER_SAMPLE
+#endif
+
+#if NATIVE_LAYER
+struct NativeOut { float4 color : SV_Target0; float reactive : SV_Target1; float4 layer : SV_Target2;
+                   float4 trans : SV_Target3; };
+#elif NATIVE_REACTIVE
+struct NativeOut { float4 color : SV_Target0; float reactive : SV_Target1; };
+#elif NATIVE_MOTION
+struct NativeOut { float4 color : SV_Target0; float2 motion : SV_Target1; };
+#else
+struct NativeOut { float4 color : SV_Target0; };
+#endif
+
+// The colour as it is; the target rounds it once.
+NativeOut native_out_of(float4 c) {
+    NativeOut o;
+    o.color = c;
+#if NATIVE_REACTIVE
+    o.reactive = min(saturate(c.a), 0.9);
+#endif
+#if NATIVE_LAYER
+    o.layer = c;
+    o.trans = c;
+#endif
+#if NATIVE_MOTION
+    o.motion = float2(0.0, 0.0);
+#endif
+    return o;
+}
+
+#if NATIVE_MOTION
+// The move since the previous frame in pixels (mv_cur.z and mv_prev.z: the half viewport).
+#define PROGRAM_RETURN(c) { NativeOut out_ = native_out_of(c); \
+    if (i.mv_cur.w > 0.0 && i.mv_prev.w > 0.0) { \
+        out_.motion = (i.mv_prev.xy / i.mv_prev.w - i.mv_cur.xy / i.mv_cur.w) * float2(i.mv_cur.z, i.mv_prev.z); \
+    } return out_; }
+#else
+#define PROGRAM_RETURN(c) return native_out_of(c)
+#endif
+
+// The inspector's picture of one stage (GALAXY_INSPECT_SHOW=stage-N); nothing otherwise.
+#if defined(NATIVE_SHOW_STAGE)
+#define NATIVE_STAGE(n, value) if (n == NATIVE_SHOW_STAGE) { PROGRAM_RETURN(value); }
+#else
+#define NATIVE_STAGE(n, value)
+#endif
+
+#endif  // PROGRAM_HLSLI

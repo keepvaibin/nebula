@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// RendererVk's helpers shared by its sources (renderer_vk.cpp, renderer_vk_scene.cpp, renderer_vk_replay.cpp).
+// RendererVk's helpers shared by its sources (renderer_vk.cpp, renderer_vk_frame.cpp).
 #pragma once
 
 #include <volk.h>
@@ -18,7 +18,7 @@ inline constexpr std::uint32_t kFrameSets = 4096u;
 inline constexpr std::uint32_t kFrameUtilitySamplers = 256u;
 
 // Vertex blending's verdicts (one per draw pair; the last for stripes), then the presented frame's values (t, the t
-// of the frame before, jitter) a sub-frame's draws read, then a zero element the game frames' draws read.
+// of the frame before, jitter) a generated frame's draws read, then a zero element the game frames' draws read.
 inline constexpr std::uint32_t kMaxBlendPairs = 8192u;
 inline constexpr std::uint32_t kStripeVerdict = kMaxBlendPairs - 1u;
 inline constexpr std::uint32_t kFrameValuesElement = kMaxBlendPairs;
@@ -53,7 +53,7 @@ struct PoolSizes {
     std::uint32_t storage = 0;
     std::uint32_t storage_images = 0;
 };
-// The storage images a frame's (or a replay list's) renderer passes take: the game's bloom (GameBloomVk).
+// The storage images a frame's renderer passes take: the game's bloom (GameBloomVk).
 inline constexpr std::uint32_t kPassStorageImages = 64u;
 // The storage buffers they take: the ambient occlusion's objects and tiles, per set of its passes.
 inline constexpr std::uint32_t kPassStorageBuffers = 128u;

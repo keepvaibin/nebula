@@ -1,12 +1,11 @@
-#include <JSystem/J3DGraphBase/J3DNativeChannel.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeTexGen.hpp>
 #include "nw4r/lyt/animation.h"
-#include <JSystem/J3DGraphBase/J3DNativeMaterial.hpp>
+#include "Game/Render/Material.hpp"
 #include <nebula_game_api.h>
+#include <nebula_module.h>
 #include <string.h>
-#include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
-#include "Game/Util/NativeShader.hpp"
+#include "Game/Render/RenderTexture.hpp"
+#include "Game/Render/FrameList.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include "nw4r/lyt/layout.h"
 #include "nw4r/lyt/material.h"
 #include "nw4r/lyt/resourceAccessor.h"
@@ -22,6 +21,45 @@ const NebulaColor16 DefaultBlackColor = {0, 0, 0, 0};
 namespace nw4r {
     namespace lyt {
         namespace {
+            // The values a form's rows read.
+            struct LayoutValues {
+                f32 registers[3][4];
+                f32 constants[4][4];
+                f32 material_color[4];
+                f32 warp[3][2][3];
+                f32 coord[8][12];
+                f32 map_size[8][2];
+                f32 coord_size[8][2];
+                f32 alpha_ref[2];
+            };
+
+            void layoutRow(u32 row, const LayoutValues& rValues, f32* pOut) {
+                pOut[0] = pOut[1] = pOut[2] = pOut[3] = 0.0f;
+                if (row >= NEBULA_ROW_COORD) {
+                    const u32 index = row - NEBULA_ROW_COORD;
+                    memcpy(pOut, rValues.coord[index / 3] + (index % 3) * 4, 4 * sizeof(f32));
+                } else if (row >= NEBULA_ROW_WARP) {
+                    const u32 index = row - NEBULA_ROW_WARP;
+                    memcpy(pOut, rValues.warp[index / 2][index % 2], 3 * sizeof(f32));
+                } else if (row >= NEBULA_ROW_SCALE) {
+                    const u32 index = row - NEBULA_ROW_SCALE;
+                    pOut[0] = rValues.coord_size[index][0];
+                    pOut[1] = rValues.coord_size[index][1];
+                    pOut[2] = rValues.map_size[index][0];
+                    pOut[3] = rValues.map_size[index][1];
+                } else if (row == NEBULA_ROW_ALPHA_REF) {
+                    pOut[0] = rValues.alpha_ref[0];
+                    pOut[1] = rValues.alpha_ref[1];
+                } else if (row == NEBULA_ROW_MATERIAL_COLOR) {
+                    memcpy(pOut, rValues.material_color, sizeof(rValues.material_color));
+                } else if (row >= NEBULA_ROW_CONSTANT && row < NEBULA_ROW_MATERIAL_COLOR) {
+                    memcpy(pOut, rValues.constants[row - NEBULA_ROW_CONSTANT], 4 * sizeof(f32));
+                } else if (row < NEBULA_ROW_CONSTANT) {
+                    memcpy(pOut, rValues.registers[row], 4 * sizeof(f32));
+                }
+                // The second material colour, ambient, fog and the replacing forms' values: none in a layout.
+            }
+
             bool IsWhiteColor(const NebulaColor16& color) {
                 return color.r == 255 && color.g == 255 && color.b == 255 && color.a == 255;
             }
@@ -78,11 +116,7 @@ namespace nw4r {
             }
 
             inline u32 GetTexMtxIdx(u32 mtx) {
-                return (mtx - J3D_TEXMTX0) / 3;
-            }
-
-            inline u32 GetTexMtx(u32 idx) {
-                return J3D_TEXMTX0 + idx * 3;
+                return (mtx - MODEL_FILE_TEXMTX0) / 3;
             }
 
             void SetColorComponentValue(nw4r::ut::Color* pColor, u32 idx, s16 value) {
@@ -261,9 +295,9 @@ namespace nw4r {
             }
             const u8* native = detail::ConvertOffsToPtr<u8>(pRes, resOffs);
             if (memcmp(native, "NSID", 4) == 0) {
-                memcpy(mNativeShaders, native + 4, sizeof(mNativeShaders));
-                memcpy(mCoordMap, native + 4 + sizeof(mNativeShaders), sizeof(mCoordMap));
-                mHasStages = native[4 + sizeof(mNativeShaders) + sizeof(mCoordMap)] != 0;
+                mNativeForms = reinterpret_cast< const detail::LayoutForm* >(native + 4);
+                memcpy(mCoordMap, native + 4 + 4 * sizeof(detail::LayoutForm), sizeof(mCoordMap));
+                mHasStages = native[4 + 4 * sizeof(detail::LayoutForm) + sizeof(mCoordMap)] != 0;
             }
         }
 
@@ -279,7 +313,7 @@ namespace nw4r {
             mbUserAllocated = false;
 
             mpStorage = 0;
-            memset(mNativeShaders, 0, sizeof(mNativeShaders));
+            mNativeForms = nullptr;
             // A material without its own stages: each texture by its own coordinate.
             for (u32 i = 0; i < 8; i++) {
                 mCoordMap[i] = static_cast< u8 >(i);
@@ -495,44 +529,41 @@ namespace nw4r {
         }
 
         bool Material::Setup(bool modulate, u8 alpha) {
-            // A picture made in code has no material in a layout file, so no shader from the cook: J2DPicture's own.
-            if (mNativeShaders[0] == 0 && mNum.texMap != 0) {
-                J3DNativeTexObj texObj;
+            // A picture made in code has no material in a layout file, so no form from the cook: a written shader.
+            if (mNativeForms == nullptr) {
+                if (mNum.texMap == 0) {
+                    detail::SetDrawNothing();
+                    return false;
+                }
+                SiteTexture texObj;
                 GetTexMapAry()[0].Get(&texObj);
-                NebulaNativeMaterial material;
-                NativeShader::init(material, NEBULA_SHADER_J2D_PICTURE, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_ALWAYS,
-                                   false, NEBULA_CULL_NONE);
-                NativeShader::setColor(material, 12, 255, 255, 255, 255);
+                SiteMaterial material;
+                material.init(NEBULA_SHADER_J2D_PICTURE, SiteMaterial::BLEND_ALPHA, NEBULA_COMPARE_ALWAYS, false, NEBULA_CULL_NONE);
+                material.setColor(12, 255, 255, 255, 255);
                 material.constants[16] = 1.0f;
                 material.constants[17] = 1.0f;
-                material.textures[0].image = reinterpret_cast< uintptr_t >(texObj.mImage);
-                material.textures[0].repeat_s = texObj.mWrapS;
-                material.textures[0].repeat_t = texObj.mWrapT;
-                material.textures[0].mag_linear = 1;
-                material.textures[0].min_linear = 1;
-                NativeShader::send(material);
+                material.setTexture(0, texObj);
+                material.mTextures[0].mip_filter = 0;
+                material.mTextures[0].anisotropy = 0;
+                material.mTextures[0].lod_bias = 0.0f;
+                material.mTextures[0].min_lod = 0.0f;
+                material.mTextures[0].max_lod = 0.0f;
+                material.mTextures[0].mag_linear = 1;
+                material.mTextures[0].min_linear = 1;
+                detail::SetDrawPicture(material);
                 return true;
             }
 
-            // The material's setup and values, drawn by the shader the cook chose (mNativeShaders). Stored until the next
-            // material.
-            static J3DMaterialSetup sSetup;
-            static J3DMaterialValues sValues;
-            J3DMaterialSetup& rSetup = sSetup;
-            J3DMaterialValues& rValues = sValues;
-            memset(&rSetup, 0, sizeof(rSetup));
-            memset(&rValues, 0, sizeof(rValues));
-            rSetup.loads = J3D_LOADS_REGISTER_COLOR | J3D_LOADS_KONST_COLOR | J3D_LOADS_AMBIENT | J3D_LOADS_CHANNELS | J3D_LOADS_INDIRECT;
-            rSetup.cull = NEBULA_CULL_NONE;
+            LayoutValues values;
+            memset(&values, 0, sizeof(values));
             bool useVtxColor = true;
             bool useMatColor = false;
 
-            // Channel 0 unlit: its colour and alpha from the material colour or the vertex (the channel's material
-            // source; the ambient source the register).
+            // Channel 0 unlit: its colour and alpha from the material colour or the vertex.
             if (IsChanCtrlCap()) {
                 const ChanCtrl* const pChanCtrl = GetChanCtrlAry();
-                useVtxColor = pChanCtrl->GetColorSrc() == J3D_SRC_VTX || pChanCtrl->GetAlphaSrc() == J3D_SRC_VTX;
-                useMatColor = pChanCtrl->GetColorSrc() == J3D_SRC_REG || pChanCtrl->GetAlphaSrc() == J3D_SRC_REG;
+                useVtxColor = pChanCtrl->GetColorSrc() == MODEL_FILE_SRC_VTX || pChanCtrl->GetAlphaSrc() == MODEL_FILE_SRC_VTX;
+                useMatColor = pChanCtrl->GetColorSrc() == MODEL_FILE_SRC_REG || pChanCtrl->GetAlphaSrc() == MODEL_FILE_SRC_REG;
             }
 
             bool useRasStage = false;
@@ -549,15 +580,14 @@ namespace nw4r {
                 }
 
                 matColor = detail::MultipleAlpha(matColor, alpha);
-                rValues.material_color[0][0] = matColor.r;
-                rValues.material_color[0][1] = matColor.g;
-                rValues.material_color[0][2] = matColor.b;
-                rValues.material_color[0][3] = matColor.a;
+                values.material_color[0] = matColor.r / 255.0f;
+                values.material_color[1] = matColor.g / 255.0f;
+                values.material_color[2] = matColor.b / 255.0f;
+                values.material_color[3] = matColor.a / 255.0f;
 
                 useRasStage = useRasStage || matColor != ut::Color::WHITE;
             } else {
-                rValues.material_color[0][0] = rValues.material_color[0][1] = rValues.material_color[0][2] =
-                    rValues.material_color[0][3] = 255;
+                values.material_color[0] = values.material_color[1] = values.material_color[2] = values.material_color[3] = 1.0f;
             }
 
             bool setTexMtx = false;
@@ -567,23 +597,22 @@ namespace nw4r {
                 useTexMtx[i] = false;
             }
 
-            u8 places[8] = {J3D_IDENTITY, J3D_IDENTITY, J3D_IDENTITY, J3D_IDENTITY,
-                            J3D_IDENTITY, J3D_IDENTITY, J3D_IDENTITY, J3D_IDENTITY};
-            rSetup.tex_gens = mNum.texCoordGen;
+            u8 places[8] = {MODEL_FILE_IDENTITY, MODEL_FILE_IDENTITY, MODEL_FILE_IDENTITY, MODEL_FILE_IDENTITY,
+                            MODEL_FILE_IDENTITY, MODEL_FILE_IDENTITY, MODEL_FILE_IDENTITY, MODEL_FILE_IDENTITY};
+            for (u32 c = 0; c < 8; c++) {
+                values.coord[c][0] = values.coord[c][5] = values.coord[c][10] = 1.0f;
+            }
             if (mNum.texCoordGen > 0) {
                 const TexCoordGen* const pTexCoordGen = GetTexCoordGenAry();
 
                 for (int i = 0; i < mNum.texCoordGen; i++) {
                     u32 texMtx = pTexCoordGen[i].GetTexMtx();
 
-                    if (pTexCoordGen[i].GetTexGenType() == J3D_TG_MTX2x4 && texMtx != J3D_IDENTITY) {
+                    if (pTexCoordGen[i].GetTexGenType() == MODEL_FILE_TG_MTX2x4 && texMtx != MODEL_FILE_IDENTITY) {
                         useTexMtx[GetTexMtxIdx(texMtx)] = true;
                         setTexMtx = true;
                     }
 
-                    if (i < 8) {
-                        rSetup.tex_gen_post[i] = static_cast< u8 >(J3D_PTIDENTITY);
-                    }
                     if (i < 8) {
                         places[i] = static_cast< u8 >(texMtx);
                     }
@@ -593,61 +622,49 @@ namespace nw4r {
             if (setTexMtx) {
                 const TexSRT* const pTexSrt = GetTexSRTAry();
 
-                for (u8 i = 0; i < mNum.texSRT; i++) {
-                    if (!useTexMtx[i]) {
+                for (u8 c = 0; c < 8; c++) {
+                    if (places[c] == MODEL_FILE_IDENTITY || GetTexMtxIdx(places[c]) >= mNum.texSRT || !useTexMtx[GetTexMtxIdx(places[c])]) {
                         continue;
                     }
 
                     math::MTX34 mtx;
-                    CalcTextureMtx(&mtx, pTexSrt[i]);
-                    J3DNativeShape::setTexture((GetTexMtx(i) - J3D_TEXMTX0) / 3, mtx, 2);
+                    CalcTextureMtx(&mtx, pTexSrt[GetTexMtxIdx(places[c])]);
+                    memcpy(values.coord[c], &mtx, sizeof(values.coord[c]));
                 }
             }
 
+            SiteTexture maps[8];
+            bool mapUsed[8] = {false, false, false, false, false, false, false, false};
             if (mNum.texMap > 0) {
                 const TexMap* const pTexMap = GetTexMapAry();
 
                 for (int i = 0; i < mNum.texMap && i < 8; i++) {
-                    J3DNativeTexObj texObj;
-                    pTexMap[i].Get(&texObj);
-                    NebulaMaterialTexture& rTex = rValues.texture[i];
-                    const u8 minFilter = texObj.mMinFilter;
-                    rTex.image = reinterpret_cast< uintptr_t >(texObj.mImage);
-                    rTex.width = texObj.mWidth;
-                    rTex.height = texObj.mHeight;
-                    rTex.wrap_s = texObj.mWrapS;
-                    rTex.wrap_t = texObj.mWrapT;
-                    rTex.min_linear = minFilter == 1 || minFilter == 3 || minFilter == 5;
-                    rTex.mag_linear = texObj.mMagFilter != NEBULA_FILTER_NEAREST;
-                    rTex.mip_filter = minFilter < 2 ? 0 : minFilter < 4 ? 1 : 2;
-                    rTex.edge_lod = texObj.mEdgeLod;
-                    rTex.anisotropy = texObj.mMaxAniso;
-                    rTex.min_lod = texObj.mMinLod;
-                    rTex.max_lod = texObj.mMaxLod;
-                    rTex.lod_bias = texObj.mLodBias;
+                    pTexMap[i].Get(&maps[i]);
+                    mapUsed[i] = maps[i].mImage != nullptr;
                 }
             }
 
             for (u32 r = 0; r < 3; r++) {
-                rValues.register_color[r][0] = mRegisterColors[r].r;
-                rValues.register_color[r][1] = mRegisterColors[r].g;
-                rValues.register_color[r][2] = mRegisterColors[r].b;
-                rValues.register_color[r][3] = mRegisterColors[r].a;
+                values.registers[r][0] = mRegisterColors[r].r / 255.0f;
+                values.registers[r][1] = mRegisterColors[r].g / 255.0f;
+                values.registers[r][2] = mRegisterColors[r].b / 255.0f;
+                values.registers[r][3] = mRegisterColors[r].a / 255.0f;
             }
             for (u32 k = 0; k < 4; k++) {
-                rValues.konst_color[k][0] = mConstantColors[k].r;
-                rValues.konst_color[k][1] = mConstantColors[k].g;
-                rValues.konst_color[k][2] = mConstantColors[k].b;
-                rValues.konst_color[k][3] = mConstantColors[k].a;
+                values.constants[k][0] = mConstantColors[k].r / 255.0f;
+                values.constants[k][1] = mConstantColors[k].g / 255.0f;
+                values.constants[k][2] = mConstantColors[k].b / 255.0f;
+                values.constants[k][3] = mConstantColors[k].a / 255.0f;
             }
 
-            // Each coordinate's scale: the size of the texture the cook found it samples.
-            for (u32 coord = 0; coord < 8; coord++) {
-                const u32 map = mCoordMap[coord];
-                if (map < 8 && rValues.texture[map].image != 0) {
-                    rValues.tex_coord_scale[coord].scale_s = rValues.texture[map].width;
-                    rValues.tex_coord_scale[coord].scale_t = rValues.texture[map].height;
-                }
+            // Each map's size, and each coordinate's scale: the size of the map the cook found it samples.
+            for (u32 k = 0; k < 8; k++) {
+                values.map_size[k][0] = mapUsed[k] && maps[k].mWidth != 0 ? maps[k].mWidth : 1.0f;
+                values.map_size[k][1] = mapUsed[k] && maps[k].mHeight != 0 ? maps[k].mHeight : 1.0f;
+                const u32 map = mCoordMap[k];
+                const bool known = map < 8 && mapUsed[map];
+                values.coord_size[k][0] = known && maps[map].mWidth != 0 ? maps[map].mWidth : values.map_size[k][0];
+                values.coord_size[k][1] = known && maps[map].mHeight != 0 ? maps[map].mHeight : values.map_size[k][1];
             }
             if (mHasStages || mNum.texMap == 0) {
                 useRasStage = true;
@@ -657,54 +674,65 @@ namespace nw4r {
                 const TexSRT* const pIndTexSrt = GetIndTexSRTAry();
 
                 for (int i = 0; i < mNum.indSRT && i < 3; i++) {
-                    f32 mtx[2][3];
-                    CalcIndTexMtx(mtx, pIndTexSrt[i]);
-                    for (u32 row = 0; row < 2; row++) {
-                        for (u32 c = 0; c < 3; c++) {
-                            rValues.ind_matrix[i].m[row][c] = mtx[row][c];
-                        }
-                    }
+                    CalcIndTexMtx(values.warp[i], pIndTexSrt[i]);
                 }
             }
 
             if (IsAlphaCompareCap()) {
                 const AlphaCompare* const pAlphaComp = GetAlphaComparePtr();
-
-                rSetup.alpha_compare.comp0 = pAlphaComp->GetComp0();
-                rSetup.alpha_compare.op = pAlphaComp->GetOp();
-                rSetup.alpha_compare.comp1 = pAlphaComp->GetComp1();
-                rValues.alpha_ref[0] = pAlphaComp->GetRef0();
-                rValues.alpha_ref[1] = pAlphaComp->GetRef1();
-            } else {
-                rSetup.alpha_compare.comp0 = NEBULA_COMPARE_ALWAYS;
-                rSetup.alpha_compare.op = J3D_AOP_AND;
-                rSetup.alpha_compare.comp1 = NEBULA_COMPARE_ALWAYS;
+                values.alpha_ref[0] = pAlphaComp->GetRef0() / 255.0f;
+                values.alpha_ref[1] = pAlphaComp->GetRef1() / 255.0f;
             }
 
+            PassState state = PassStates::plain();
+            state.depth_func = NEBULA_COMPARE_NEVER;
             if (IsBlendModeCap()) {
                 const BlendMode* const pBlendMode = GetBlendModePtr();
-
-                {
-                    const u8 type = pBlendMode->GetType();
-                    rSetup.blend.type = type == J3D_BM_BLEND ? NEBULA_BLEND_ADD : type == J3D_BM_SUBTRACT ? NEBULA_BLEND_SUBTRACT : NEBULA_BLEND_REPLACE;
-                }
-                {
-                    // NEBULA_FACTOR_*: source colour factors 2 and 3 are the destination's colour.
-                    const u8 src = pBlendMode->GetSrcFactor();
-                    rSetup.blend.source = src == J3D_BL_DSTCLR ? NEBULA_FACTOR_DST_COLOR
-                                            : src == J3D_BL_INVDSTCLR ? NEBULA_FACTOR_INV_DST_COLOR : src;
-                }
-                rSetup.blend.destination = pBlendMode->GetDstFactor();
+                const u8 type = pBlendMode->GetType();
+                // NEBULA_FACTOR_*: source colour factors 2 and 3 are the destination's colour.
+                const u8 src = pBlendMode->GetSrcFactor();
+                state.blend_op = type == MODEL_FILE_BM_BLEND ? NEBULA_BLEND_ADD : type == MODEL_FILE_BM_SUBTRACT ? NEBULA_BLEND_SUBTRACT : NEBULA_BLEND_REPLACE;
+                state.blend_src = src == MODEL_FILE_BL_DSTCLR ? NEBULA_FACTOR_DST_COLOR : src == MODEL_FILE_BL_INVDSTCLR ? NEBULA_FACTOR_INV_DST_COLOR : src;
+                state.blend_dst = pBlendMode->GetDstFactor();
             } else {
-                rSetup.blend.type = NEBULA_BLEND_ADD;
-                rSetup.blend.source = NEBULA_FACTOR_SRC_ALPHA;
-                rSetup.blend.destination = NEBULA_FACTOR_INV_SRC_ALPHA;
+                state.blend_op = NEBULA_BLEND_ADD;
+                state.blend_src = NEBULA_FACTOR_SRC_ALPHA;
+                state.blend_dst = NEBULA_FACTOR_INV_SRC_ALPHA;
             }
 
             const bool remap = mRegisterColors[0] != DefaultBlackColor || !IsWhiteColor(mRegisterColors[1]);
-            const u32 shader = mNativeShaders[(useRasStage ? 1 : 0) | (remap ? 2 : 0)];
-            J3DNativeMaterial::sendWhole(shader != 0 ? NEBULA_SHADER_J3D_FIRST + shader - 1 : 0, rSetup, rValues);
-            J3DNativeShape::setCurrentFromFile(0, places);
+            const detail::LayoutForm* pForm = mNativeForms + ((useRasStage ? 1 : 0) | (remap ? 2 : 0));
+
+            const u32 rowCount = static_cast< u32 >(pForm->vertex_rows) + pForm->pixel_rows;
+            f32 (*pRows)[4] = static_cast< f32 (*)[4] >(Frame::arena(rowCount * 16, 16));
+            DrawMatrixRows coordRows;
+            for (u32 i = 0; i < rowCount; i++) {
+                const u32 row = pForm->rows[i];
+                layoutRow(row, values, pRows[i]);
+                if (row >= NEBULA_ROW_COORD && i < pForm->vertex_rows) {
+                    if ((row - NEBULA_ROW_COORD) % 3 == 0) { coordRows.add(i); }
+                }
+            }
+            const u32 constants = Frame::addConstants(NEBULA_NONE32, pForm->vertex_rows, pForm->pixel_rows, pRows, coordRows.data(), coordRows.count());
+
+            NebulaFrameTexture list[NEBULA_MATERIAL_SLOTS];
+            for (u32 i = 0; i < pForm->texture_count; i++) {
+                const u32 map = pForm->textures[i];
+                if (map < 8 && mapUsed[map]) {
+                    SiteTextures::toFrame(maps[map], &list[i]);
+                } else {
+                    memset(&list[i], 0, sizeof(list[i]));
+                }
+            }
+            const NebulaHostServices* pHost = nebula_host();
+            const u32 table = pForm->texture_count != 0 ? pHost->texture_table(pHost->user, list, pForm->texture_count) : 0;
+
+            // A layout material is the last word on ambient: models after it that keep the ambient in force read black.
+            const NebulaColor8 black = {0, 0, 0, 0};
+            MaterialAmbient::set(0, black);
+            MaterialAmbient::set(1, black);
+
+            detail::SetDrawForm(pForm, constants, table, state.word());
 
             return useRasStage && useVtxColor;
         }

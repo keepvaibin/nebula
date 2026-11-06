@@ -1,9 +1,9 @@
 #include "Game/Screen/StarPointerBlur.hpp"
-#include "Game/Util/NativeShader.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/System/NebulaInput.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
+#include "Game/Render/FrameList.hpp"
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/Screen/StarPointerDirector.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
@@ -135,7 +135,8 @@ void StarPointerBlur::draw() const {
         return;
     }
 
-    initDraw();
+    const SiteMaterial material = loadMaterial();
+    TypedDraw site = TypedDraw::eyeSpace(material, cIdentityMtx);
     switch (::sDrawMode) {
     case 0:
         draw0((NebulaColor8){0, 0, 0, 0});  // NOTE: indicated by debug symbols, color is a dummy
@@ -144,7 +145,7 @@ void StarPointerBlur::draw() const {
         draw1();  // NOTE: indicated by debug symbols
         break;
     case 2:
-        draw2();
+        draw2(site);
         break;
     }
 }
@@ -152,7 +153,7 @@ void StarPointerBlur::draw() const {
 void StarPointerBlur::draw1() const {
 }
 
-void StarPointerBlur::draw2() const {
+void StarPointerBlur::draw2(TypedDraw& rDraw) const {
     u16 start, end;
 
     Vec2f dir(0.0f, 1.0f);
@@ -165,14 +166,12 @@ void StarPointerBlur::draw2() const {
             continue;
         }
 
-        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, range * 2, NEBULA_SHAPE_TEXCOORD0);
+        VertexPT* vtx = rDraw.vertices< VertexPT >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, range * 2);
         for (s32 point = start; point < end; point++) {
             const Vec2f& pos = mBlurPoints[point].mPos;
             const Vec2f& offset = dir * mBlurThicks[point];
-            J3DNativeDraw::position(pos.x - offset.x, pos.y - offset.y, 0.0f);
-            J3DNativeDraw::texCoord(0.0f, mBlurTexCoords[point]);
-            J3DNativeDraw::position(pos.x + offset.x, pos.y + offset.y, 0.0f);
-            J3DNativeDraw::texCoord(1.0f, mBlurTexCoords[point]);
+            *vtx++ = {pos.x - offset.x, pos.y - offset.y, 0.0f, 0.0f, mBlurTexCoords[point]};
+            *vtx++ = {pos.x + offset.x, pos.y + offset.y, 0.0f, 1.0f, mBlurTexCoords[point]};
         }
 
         start = end;
@@ -188,32 +187,26 @@ void StarPointerBlur::draw2() const {
             continue;
         }
 
-        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, range * 2, NEBULA_SHAPE_TEXCOORD0);
+        VertexPT* vtx = rDraw.vertices< VertexPT >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, range * 2);
         for (s32 point = start; point < end; point++) {
             const Vec2f& pos = mBlurPoints[point].mPos;
             const Vec2f& offset = dir * mBlurThicks[point];
-            J3DNativeDraw::position(pos.x - offset.x, pos.y - offset.y, 0.0f);
-            J3DNativeDraw::texCoord(0.0f, mBlurTexCoords[point]);
-            J3DNativeDraw::position(pos.x + offset.x, pos.y + offset.y, 0.0f);
-            J3DNativeDraw::texCoord(1.0f, mBlurTexCoords[point]);
+            *vtx++ = {pos.x - offset.x, pos.y - offset.y, 0.0f, 0.0f, mBlurTexCoords[point]};
+            *vtx++ = {pos.x + offset.x, pos.y + offset.y, 0.0f, 1.0f, mBlurTexCoords[point]};
         }
 
         start = end;
     }
 }
 
-void StarPointerBlur::initDraw() const {
-    Pos3f mtx;
-    mtx.identity();
-    J3DNativeShape::setPosition(0, mtx);
-    J3DNativeShape::setCurrentIdentity();
+SiteMaterial StarPointerBlur::loadMaterial() const {
     // runtime/src/render/materials/color_tex_alpha.hlsl: mMainColor at the trail texture's alpha, added by it; depth
     // tested and written, no culling.
-    NebulaNativeMaterial material;
-    NativeShader::init(material, NEBULA_SHADER_COLOR_TEX_ALPHA, NativeShader::BLEND_ADD_ALPHA, NEBULA_COMPARE_LEQUAL, true,
+    SiteMaterial material;
+    material.init(NEBULA_SHADER_COLOR_TEX_ALPHA, SiteMaterial::BLEND_ADD_ALPHA, NEBULA_COMPARE_LEQUAL, true,
                        NEBULA_CULL_NONE);
-    NativeShader::setColor(material, 0, mMainColor->r, mMainColor->g, mMainColor->b, mMainColor->a);
+    material.setColor(0, mMainColor->r, mMainColor->g, mMainColor->b, mMainColor->a);
     material.constants[4] = -1.0f;
-    NativeShader::setTexture(material, 0, mTexture);
-    NativeShader::send(material);
+    material.setTexture(0, mTexture);
+    return material;
 }

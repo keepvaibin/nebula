@@ -442,7 +442,7 @@ public:
         if (!streamline::dlss_supported() || in.commands == VK_NULL_HANDLE) {
             return false;
         }
-        // A second evaluation before the present (an interpolated sub-frame, a second scene) takes a new frame
+        // A second evaluation before the present (an interpolated generated frame, a second scene) takes a new frame
         // token: Streamline rejects different constants under one.
         if (evaluated_ && g_generation.frame_index() == evaluated_index_) {
             g_generation.next_frame_index();

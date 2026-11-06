@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Game/Render/TypedDraw.hpp"
+
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/Color.hpp"
 
@@ -17,7 +19,7 @@ public:
     void exeWaterToAir();
     void exeWater();
     void exeAir();
-    void loadMaterial() const;
+    SiteMaterial loadMaterial() const;
 
     inline void initScreenTex();
 

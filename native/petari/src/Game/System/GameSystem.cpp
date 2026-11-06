@@ -4,7 +4,7 @@
 #include "Game/System/NebulaLoadTrace.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include "Game/System/GameThreads.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include "Game/Render/FrameList.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/NameObj/NameObjRegister.hpp"
 #include "Game/Screen/HomeButtonLayout.hpp"
@@ -33,7 +33,7 @@
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 #include "Game/Screen/NebulaMenuFocus.hpp"
-#include "Game/Screen/NebulaRtPrepare.hpp"
+#include "Game/Screen/NebulaPrepare.hpp"
 #include "Game/Screen/NebulaSettingsMenu.hpp"
 #include "Game/Screen/NebulaIcons.hpp"
 #include "Game/System/NebulaCutsceneSkip.hpp"
@@ -77,12 +77,13 @@ GameSystem::GameSystem()
 
 void GameSystem::init() {
     nebula_host()->mods_start(nebula_host()->user);
+    Frame::registerPipelineList();
     mObjHolder = new GameSystemObjHolder();
     mFontHolder = new GameSystemFontHolder();
     mFontHolder->createFontFromEmbeddedData();
     initNerve(GET_NERVE(GameSystem, GameSystemInitializeAudio));
     mSequenceDirector = new GameSequenceDirector();
-    J3DNativeState::initDefaults();
+    Frame::initDefaults();
     mSceneController = new GameSystemSceneController();
     mObjHolder->init();
     mErrorWatcher = new GameSystemErrorWatcher();
@@ -153,7 +154,7 @@ void GameSystem::initAfterStationedResourceLoaded() {
     NebulaIcons::init();
     NebulaCutsceneSkip::init();
     NebulaSettingsMenu::init();
-    NebulaRtPrepare::init();
+    NebulaPrepare::init();
     mSceneController->initAfterStationedResourceLoaded();
     mSequenceDirector->initAfterResourceLoaded();
 }
@@ -197,7 +198,7 @@ void GameSystem::draw() {
 
     mErrorWatcher->draw();
     mSceneController->drawSceneOverlay();
-    NebulaRtPrepare::draw();
+    NebulaPrepare::draw();
     if (isSettingsShown) {
         NebulaSettingsMenu::draw();
         mObjHolder->drawStarPointer();
@@ -210,7 +211,7 @@ void GameSystem::update() {
     mSceneController->checkRequestAndChangeScene();
     mObjHolder->update();
     NebulaMenuFocus::update();
-    NebulaRtPrepare::update();
+    NebulaPrepare::update();
     NebulaMods::fire(NEBULA_MOD_EVENT_FRAME);
     NebulaSettingsMenu::update();
     NebulaIcons::update();

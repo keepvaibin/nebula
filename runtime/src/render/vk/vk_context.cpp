@@ -658,7 +658,14 @@ void Context::shutdown() noexcept {
             vkDestroyFence(device_, fence, nullptr);
         }
         pending_.clear();
+        completed_ = submitted_.load(std::memory_order_acquire);
         free_fences_.clear();
+    }
+    {
+        std::lock_guard<std::mutex> lock(address_mutex_);
+        for (auto& page : address_pages_) delete page.exchange(nullptr, std::memory_order_relaxed);
+        free_address_ids_.clear();
+        next_address_id_ = 1u;
     }
     if (allocator_ != nullptr) {
         vmaDestroyAllocator(allocator_);
@@ -1012,23 +1019,30 @@ std::uint64_t Context::register_address(VkBuffer buffer) {
     if (!free_address_ids_.empty()) {
         id = free_address_ids_.back();
         free_address_ids_.pop_back();
-    } else if (next_address_id_ < kAddressSlots) {
+    } else if (next_address_id_ < kAddressIds) {
         id = next_address_id_++;
     } else {
-        std::fprintf(stderr, "[vulkan] buffer address space exhausted (%zu buffers)\n", kAddressSlots - 1u);
-        return 0u;
+        throw std::runtime_error("Vulkan buffer address ID representation exhausted");
     }
-    address_slots_[id].store(buffer, std::memory_order_release);
+    auto& entry = address_pages_[id >> kAddressPageBits];
+    AddressPage* page = entry.load(std::memory_order_relaxed);
+    if (!page) {
+        page = new AddressPage{};
+        entry.store(page, std::memory_order_release);
+    }
+    page->slots[id & (kAddressPageSize - 1u)].store(buffer, std::memory_order_release);
     return static_cast<std::uint64_t>(id) << kAddressShift;
 }
 
 void Context::release_address(std::uint64_t address) noexcept {
     const std::uint64_t id = address >> kAddressShift;
-    if (id == 0u || id >= kAddressSlots) {
+    if (id == 0u || id >= kAddressIds) {
         return;
     }
     std::lock_guard<std::mutex> lock(address_mutex_);
-    address_slots_[id].store(VK_NULL_HANDLE, std::memory_order_release);
+    AddressPage* page = address_pages_[id >> kAddressPageBits].load(std::memory_order_relaxed);
+    if (!page) return;
+    page->slots[id & (kAddressPageSize - 1u)].store(VK_NULL_HANDLE, std::memory_order_release);
     free_address_ids_.push_back(static_cast<std::uint32_t>(id));
 }
 
@@ -1055,14 +1069,22 @@ Resource* raw(const BufferRef& buffer) noexcept {
     return buffer != nullptr ? buffer->buffer : VK_NULL_HANDLE;
 }
 
+// Room past a buffer's end for a binding's fixed range at the last offset.
+constexpr std::size_t kBindingRoom = 4096u;
+
+bool device_removed(Device*) noexcept {
+    return false;
+}
+
 UploadMemory create_upload_memory(Device*, std::size_t bytes, const char* name) {
     vk::Context& context = vk::Context::get();
     if (!context.ready() || bytes == 0u) {
         return {};
     }
-    // One buffer serves any ring: vertices, indices, constants (uniform) and matrix palettes (storage).
+    // One buffer serves any ring: vertices, indices, constants (uniform) and rows (storage). A binding's whole range must
+    // lie in its buffer at any offset an allocation can have, hence the room past the end.
     std::shared_ptr<vk::Buffer> buffer = context.create_buffer(
-        bytes,
+        bytes + kBindingRoom,
         VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT |
             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         name);

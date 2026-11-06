@@ -7,7 +7,7 @@
 struct JPATextureData {
     char field_0x00[0x0C];
     char mName[0x14];
-    ResTIMG mResTIMG;
+    CookedResTIMG mResTIMG;
 };
 
 class JPATexture {

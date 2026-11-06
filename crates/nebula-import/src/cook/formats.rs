@@ -37,7 +37,7 @@ const RES_TIMG: usize = 0x20;
 const RGBA8: u8 = 0x6;
 
 /// One texture's image as a record, for a ResTIMG at `header` in `bytes` (offsets from the header).
-fn timg_record(bytes: &[u8], header: usize, stats: &mut Stats) -> Result<Vec<u8>> {
+pub fn timg_record(bytes: &[u8], header: usize, stats: &mut Stats) -> Result<Vec<u8>> {
     let code = bytes[header];
     let format = Format::from_code(code as u32).with_context(|| format!("texture format {code:#x}"))?;
     let width = be16(bytes, header + 2)? as u32;
@@ -76,6 +76,7 @@ fn point_timg(out: &mut [u8], header: usize, record_at: usize) {
 
 /// A BTI file: its ResTIMG, then the record.
 pub fn bti(bytes: &[u8], stats: &mut Stats) -> Result<Vec<u8>> {
+    if bytes.starts_with(b"NBTI") { return Ok(bytes.to_vec()); }
     if bytes.len() < RES_TIMG {
         bail!("a texture file shorter than its header");
     }
@@ -341,7 +342,7 @@ pub fn font(bytes: &[u8], stats: &mut Stats) -> Result<Vec<u8>> {
                 .collect::<Result<_>>()?;
             let mut wide = 1u8; // L8
             for image in &images {
-                let l = texture::layout(image)?;
+                let l = texture::sheet_layout(image)?;
                 if l == 0 || (l == 2 && wide == 1) {
                     wide = l;
                 }
@@ -349,7 +350,7 @@ pub fn font(bytes: &[u8], stats: &mut Stats) -> Result<Vec<u8>> {
             let mut stride = 0;
             for image in &images {
                 stats.note(image);
-                let mut record = texture::cook_widened(image, wide)?;
+                let mut record = texture::cook_sheet(image, wide)?;
                 record.resize((record.len() + 31) & !31, 0);
                 stride = record.len();
                 out.extend_from_slice(&record);

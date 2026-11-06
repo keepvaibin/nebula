@@ -1,11 +1,10 @@
-#include <JSystem/J3DGraphBase/J3DNativeMaterial.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
-#include <nebula_cooked_material.h>
+#include "Game/Render/Material.hpp"
+#include "Game/Render/FrameList.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/MapObj/FlexibleSphere.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
-#include "Game/Player/J3DModelX.hpp"
+#include "Game/Render/FrameList.hpp"
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Player/PlayerModel.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
@@ -18,22 +17,21 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <JSystem/J3DGraphBase/J3DShape.hpp>
+#include "Game/Render/ModelData.hpp"
 #include <nebula_math.h>
 
 #define GROW true
 #define SHRINK false
 
 f32 scale = 1.0f;
-void shapeCallBack(J3DShape* pShape) {
+static void flexibleCoordinates(MaterialDraw& rDraw) {
     Mtx mtx;
     NebulaMtxScale(mtx, scale, scale, 0.0f);
-    J3DNativeShape::setTexture(0, mtx, 2);
-    J3DNativeShape::flushState();
-    J3DNativeMaterial::applyPass(NEBULA_PASS_FLEXIBLE_COORDINATES);
-    J3DPass::textureMatrix(0, 0);
-    J3DPass::textureMatrix(1, 0);
-    J3DPass::textureMatrix(2, 0);
+
+    rDraw.applyPass(NEBULA_FORM_PASS_FLEXIBLE_COORDINATES);
+    rDraw.setCoordinate(0, mtx);
+    rDraw.setCoordinate(1, mtx);
+    rDraw.setCoordinate(2, mtx);
 }
 
 FlexibleSphere::FlexibleSphere(const char* pName) : LiveActor(pName), mTimer() {
@@ -64,8 +62,8 @@ void FlexibleSphere::init(const JMapInfoIter& rIter) {
     MR::setClippingTypeSphere(this, 3000.0f);
     MR::setClippingFarMax(this);
 
-    J3DModelX* model = static_cast< J3DModelX* >(MR::getJ3DModel(this));
-    model->mShapeCallback = shapeCallBack;
+    PlayerModel* model = static_cast< PlayerModel* >(MR::getModel(this));
+    model->setDrawHook(flexibleCoordinates);
 
     if (MR::isValidInfo(rIter)) {
         MR::useStageSwitchReadA(this, rIter);
@@ -233,10 +231,10 @@ void FlexibleSphere::control() {
 
 void FlexibleSphere::draw() const {
     if (!MR::isDead(this)) {
-        J3DModelX* model = static_cast< J3DModelX* >(MR::getJ3DModel(this));
+        PlayerModel* model = static_cast< PlayerModel* >(MR::getModel(this));
         model->viewCalc2();
         scale = 0.05f / mScale.x + 0.95f;
-        model->directDraw(nullptr);
+        model->directDraw();
     }
 }
 

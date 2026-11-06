@@ -1,6 +1,6 @@
 #include "nw4r/lyt/animation.h"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
+#include "Game/Render/FrameList.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/Util/MotionSignal.hpp"
 #include "nw4r/lyt/common.h"
 #include "nw4r/lyt/drawInfo.h"
@@ -256,7 +256,7 @@ namespace nw4r {
                 return;
             }
 
-            MotionSignal::layoutPane(this);
+            MotionSignal::drawObject(mDrawSlot, 0);
             DrawSelf(rInfo);
             for (PaneList::Iterator it = mChildList.GetBeginIter(); it != mChildList.GetEndIter(); ++it) {
                 it->Draw(rInfo);
@@ -364,8 +364,7 @@ namespace nw4r {
                 pMtx = &mGlbMtx;
             }
 
-            J3DNativeShape::setPosition(0, *pMtx);
-            J3DPass::positionMatrix(0);
+            detail::SetDrawMtx(*pMtx);
         }
 
         const math::VEC2 Pane::GetVtxPos() const {

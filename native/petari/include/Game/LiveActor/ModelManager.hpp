@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/J3DGraphAnimator/J3DModel.hpp>
+#include "Game/Render/Model.hpp"
 
 class BpkPlayer;
 class BrkPlayer;
@@ -8,9 +8,9 @@ class BtkPlayer;
 class BtpPlayer;
 class BvaPlayer;
 class MaterialUpdater;
-class J3DFrameCtrl;
-class J3DModel;
-class J3DModelData;
+class FrameCtrl;
+class Model;
+class ModelData;
 class ResourceHolder;
 class XanimePlayer;
 class XanimeResourceTable;
@@ -39,12 +39,12 @@ public:
     void stopBtp();
     void stopBpk();
     void stopBva();
-    J3DFrameCtrl* getBckCtrl() const;
-    J3DFrameCtrl* getBtkCtrl() const;
-    J3DFrameCtrl* getBrkCtrl() const;
-    J3DFrameCtrl* getBtpCtrl() const;
-    J3DFrameCtrl* getBpkCtrl() const;
-    J3DFrameCtrl* getBvaCtrl() const;
+    FrameCtrl* getBckCtrl() const;
+    FrameCtrl* getBtkCtrl() const;
+    FrameCtrl* getBrkCtrl() const;
+    FrameCtrl* getBtpCtrl() const;
+    FrameCtrl* getBpkCtrl() const;
+    FrameCtrl* getBvaCtrl() const;
     bool isBckStopped() const;
     bool isBtkStopped() const;
     bool isBrkStopped() const;
@@ -60,10 +60,10 @@ public:
     XjointTransform* getJointTransform(const char*);
     ResourceHolder* getResourceHolder() const;
     ResourceHolder* getModelResourceHolder() const;
-    J3DModel* getJ3DModel() const;
-    J3DModelData* getJ3DModelData() const;
+    Model* getModel() const;
+    ModelData* getModelData() const;
     const char* getPlayingBckName() const;
-    void initModelAndAnimation(ResourceHolder*, const char*, ResourceHolder*, J3DMdlFlag);
+    void initModelAndAnimation(ResourceHolder*, const char*, ResourceHolder*, ModelFlag);
     void initMaterialAnm();
     void initVisibilityAnm();
     void calc();
@@ -77,7 +77,7 @@ public:
     BvaPlayer* mBvaPlayer;
     XanimeResourceTable* mXanimeResourceTable;
     XanimePlayer* mXanimePlayer;
-    J3DModel* mModel;
+    Model* mModel;
     ResourceHolder* mModelResourceHolder;
     MaterialUpdater* mMaterialUpdater;
 };

@@ -100,62 +100,6 @@ int main() {
     passed &= test_scaled_display_resource_allocation();
 
     {
-        galaxy::render::DisplaySerialAccountingState state{};
-        std::uint64_t texture_a = ~std::uint64_t{0};
-        std::uint64_t texture_b = ~std::uint64_t{0};
-        const auto first_100 =
-            galaxy::render::account_display_present_serial(state, texture_a, 100u);
-        const auto first_101 =
-            galaxy::render::account_display_present_serial(state, texture_b, 101u);
-        const auto replay_100 =
-            galaxy::render::account_display_present_serial(state, texture_a, 100u);
-        const auto replay_101 =
-            galaxy::render::account_display_present_serial(state, texture_b, 101u);
-        const auto repeat_101 =
-            galaxy::render::account_display_present_serial(state, texture_b, 101u);
-        const auto first_102 =
-            galaxy::render::account_display_present_serial(state, texture_a, 102u);
-
-        passed &= expect(
-            first_100.first_presentation &&
-                first_101.first_presentation && first_101.delta_one &&
-                first_102.first_presentation && first_102.delta_one,
-            "monotonically newer copy serials are counted on first presentation");
-        passed &= expect(
-            !replay_100.first_presentation &&
-                replay_100.not_first_presentation &&
-                !replay_101.first_presentation &&
-                replay_101.not_first_presentation,
-            "an A/B replay below the serial high-water mark is never counted as new");
-        passed &= expect(
-            replay_100.nonfirst_run == 1u &&
-                replay_101.nonfirst_run == 2u &&
-                repeat_101.adjacent_repeat &&
-                repeat_101.nonfirst_run == 3u,
-            "alternating stale serials extend the non-fresh run instead of resetting it");
-    }
-
-    {
-        galaxy::render::DisplaySerialAccountingState state{};
-        std::uint64_t texture_10 = ~std::uint64_t{0};
-        std::uint64_t texture_12 = ~std::uint64_t{0};
-        std::uint64_t texture_11 = ~std::uint64_t{0};
-        static_cast<void>(
-            galaxy::render::account_display_present_serial(
-                state, texture_10, 10u));
-        const auto first_12 =
-            galaxy::render::account_display_present_serial(state, texture_12, 12u);
-        const auto late_11 =
-            galaxy::render::account_display_present_serial(state, texture_11, 11u);
-        passed &= expect(
-            first_12.first_presentation && first_12.delta_multi,
-            "a skipped serial is reported as a multi-serial production gap");
-        passed &= expect(
-            late_11.first_presentation && late_11.below_high_water,
-            "a late serial below the diagnostic high-water mark is still counted exactly on first presentation");
-    }
-
-    {
         const galaxy::render::FrameMap frame(1280u, 912u);
         const galaxy::render::FrameExtent whole = galaxy::render::frame_pass_extent(frame);
         passed &= expect(whole.width == 1280u && whole.height == 912u, "a capture is the frame's size");

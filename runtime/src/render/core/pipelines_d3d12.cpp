@@ -1,0 +1,378 @@
+// SPDX-License-Identifier: GPL-3.0-only
+#include "render/core/pipelines.h"
+
+#include "galaxy/render/program_table.h"
+#include "galaxy/render/render_config.h"
+#include "galaxy/render/renderer_d3d12.h"
+
+#include <nebula_model.h>
+
+#include <array>
+#include <cstdio>
+#include <cwchar>
+#include <filesystem>
+#include <fstream>
+#include <mutex>
+#include <vector>
+
+namespace galaxy::render::core {
+namespace {
+
+// The driver's compiled pipelines, kept between runs. A blob from another driver or device fails to open and starts over.
+struct DriverCache {
+    Microsoft::WRL::ComPtr<ID3D12PipelineLibrary> library;
+    std::vector<char> blob;  // the library reads it for as long as it lives
+    std::filesystem::path file;
+    std::mutex lock;
+    bool opened = false;
+    bool changed = false;
+};
+DriverCache gCache;
+
+ID3D12PipelineLibrary* driver_cache(gpu::Device* device) {
+    std::lock_guard guard(gCache.lock);
+    if (gCache.opened) {
+        return gCache.library.Get();
+    }
+    gCache.opened = true;
+    Microsoft::WRL::ComPtr<ID3D12Device1> device1;
+    if (FAILED(device->QueryInterface(IID_PPV_ARGS(&device1)))) {
+        return nullptr;
+    }
+    gCache.file = shader_cache_directory() / "d3d12_pipelines.bin";
+    if (std::ifstream in(gCache.file, std::ios::binary | std::ios::ate); in) {
+        gCache.blob.resize(static_cast<std::size_t>(in.tellg()));
+        in.seekg(0);
+        in.read(gCache.blob.data(), static_cast<std::streamsize>(gCache.blob.size()));
+    }
+    if (gCache.blob.empty() || FAILED(device1->CreatePipelineLibrary(gCache.blob.data(), gCache.blob.size(), IID_PPV_ARGS(&gCache.library)))) {
+        gCache.blob.clear();
+        if (FAILED(device1->CreatePipelineLibrary(nullptr, 0u, IID_PPV_ARGS(&gCache.library)))) {
+            gCache.library.Reset();
+        }
+    }
+    return gCache.library.Get();
+}
+
+// The library is thread-safe, so the workers and draws keep storing while a copy goes out; one writer at a time.
+std::size_t write_driver_cache() noexcept {
+    static std::mutex writing;
+    std::lock_guard one(writing);
+    std::vector<char> bytes;
+    std::filesystem::path file;
+    {
+        std::lock_guard guard(gCache.lock);
+        if (gCache.library == nullptr || !gCache.changed) {
+            return 0u;
+        }
+        bytes.resize(gCache.library->GetSerializedSize());
+        if (bytes.empty() || FAILED(gCache.library->Serialize(bytes.data(), bytes.size()))) {
+            return 0u;
+        }
+        gCache.changed = false;
+        file = gCache.file;
+    }
+    if (!replace_file(file, bytes.data(), bytes.size())) {
+        std::lock_guard guard(gCache.lock);
+        gCache.changed = true;
+        return 0u;
+    }
+    return bytes.size();
+}
+
+void release_driver_cache() noexcept {
+    write_driver_cache();
+    std::lock_guard guard(gCache.lock);
+    gCache.library.Reset();
+    gCache.blob.clear();
+    gCache.opened = false;
+    gCache.changed = false;
+}
+
+// A pipeline's name in the library: every field of its description, and the programs' bytes by their hash.
+std::array<wchar_t, 40> cache_name(const NebulaPipelineDesc& desc, unsigned program, unsigned variant, unsigned aux) noexcept {
+    std::uint64_t hash = 14695981039346656037ull;
+    const auto* bytes = reinterpret_cast<const unsigned char*>(&desc);
+    for (std::size_t i = 0; i < sizeof(desc); ++i) {
+        hash = (hash ^ bytes[i]) * 1099511628211ull;
+    }
+    for (const unsigned value : {program, variant, aux}) {
+        hash = (hash ^ value) * 1099511628211ull;
+    }
+    std::array<wchar_t, 40> name{};
+    std::swprintf(name.data(), name.size(), L"%016llx", static_cast<unsigned long long>(hash));
+    return name;
+}
+
+D3D12_BLEND blend_factor(std::uint32_t f) noexcept {
+    switch (f) {
+    case NEBULA_FACTOR_ZERO: return D3D12_BLEND_ZERO;
+    case NEBULA_FACTOR_SRC_COLOR: return D3D12_BLEND_SRC_COLOR;
+    case NEBULA_FACTOR_INV_SRC_COLOR: return D3D12_BLEND_INV_SRC_COLOR;
+    case NEBULA_FACTOR_SRC_ALPHA: return D3D12_BLEND_SRC_ALPHA;
+    case NEBULA_FACTOR_INV_SRC_ALPHA: return D3D12_BLEND_INV_SRC_ALPHA;
+    case NEBULA_FACTOR_DST_ALPHA: return D3D12_BLEND_DEST_ALPHA;
+    case NEBULA_FACTOR_INV_DST_ALPHA: return D3D12_BLEND_INV_DEST_ALPHA;
+    case NEBULA_FACTOR_DST_COLOR: return D3D12_BLEND_DEST_COLOR;
+    case NEBULA_FACTOR_INV_DST_COLOR: return D3D12_BLEND_INV_DEST_COLOR;
+    default: return D3D12_BLEND_ONE;
+    }
+}
+
+// Colour factors are invalid on the alpha channel.
+D3D12_BLEND alpha_factor(D3D12_BLEND b) noexcept {
+    switch (b) {
+    case D3D12_BLEND_SRC_COLOR: return D3D12_BLEND_SRC_ALPHA;
+    case D3D12_BLEND_INV_SRC_COLOR: return D3D12_BLEND_INV_SRC_ALPHA;
+    case D3D12_BLEND_DEST_COLOR: return D3D12_BLEND_DEST_ALPHA;
+    case D3D12_BLEND_INV_DEST_COLOR: return D3D12_BLEND_INV_DEST_ALPHA;
+    default: return b;
+    }
+}
+
+// Two positions, two matrix indices, normal, tangent, binormal, two colours and every shared coordinate slot.
+constexpr UINT kInputs = 9u + NEBULA_MATERIAL_SLOTS;
+static_assert(kInputs <= D3D12_IA_VERTEX_INPUT_STRUCTURE_ELEMENT_COUNT);
+
+struct InputList {
+    D3D12_INPUT_ELEMENT_DESC elements[kInputs]{};
+    UINT count = 0u;
+    void add(const char* name, UINT index, DXGI_FORMAT format, UINT slot, UINT offset) noexcept {
+        if (count < kInputs) {
+            elements[count++] = {name, index, format, slot, offset, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0u};
+        }
+    }
+    [[nodiscard]] bool has(const char* name, UINT index) const noexcept {
+        for (UINT i = 0; i < count; ++i) {
+            if (elements[i].SemanticIndex == index && std::strcmp(elements[i].SemanticName, name) == 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+};
+
+DXGI_FORMAT input_format(std::uint32_t format) noexcept {
+    switch (format) {
+    case 0: return DXGI_FORMAT_R32G32B32_FLOAT;
+    case 1: return DXGI_FORMAT_R32G32_FLOAT;
+    case 2: return DXGI_FORMAT_R8G8B8A8_UNORM;
+    default: return DXGI_FORMAT_R32_UINT;
+    }
+}
+
+void fill_inputs(const NebulaPipelineDesc& desc, bool motion, InputList& list) noexcept {
+    const bool site = (desc.vertex & NEBULA_PROGRAM_SITE) != 0u;
+    const bool wide = site && (desc.vertex & 1u) != 0u;
+    list.add("POSITION", 0u, DXGI_FORMAT_R32G32B32_FLOAT, gpu::kStreamPosition, 0u);
+    if (desc.position_stride == 0u) {
+        list.add("BLENDINDICES", 0u, DXGI_FORMAT_R32_UINT, gpu::kStreamMatrix, 0u);
+    }
+    if (site && motion) {
+        list.add("POSITION", 1u, DXGI_FORMAT_R32G32B32_FLOAT, gpu::kStreamBefore, 0u);
+    }
+    for (std::uint32_t i = 0; i < desc.input_count; ++i) {
+        const NebulaLayoutInput& input = desc.inputs[i];
+        const UINT slot = input.stream == NEBULA_STREAM_ZERO ? UINT{gpu::kStreamZero} : UINT{input.stream};
+        const DXGI_FORMAT format = input_format(input.format);
+        switch (input.semantic) {
+        case NEBULA_INPUT_NORMAL: list.add("NORMAL", 0u, format, slot, input.offset); break;
+        case NEBULA_INPUT_COLOR0: list.add("COLOR", 0u, format, slot, input.offset); break;
+        case NEBULA_INPUT_COLOR1: list.add("COLOR", 1u, format, slot, input.offset); break;
+        case NEBULA_INPUT_TANGENT: list.add("TANGENT", 0u, format, slot, input.offset); break;
+        case NEBULA_INPUT_BINORMAL: list.add("BINORMAL", 0u, format, slot, input.offset); break;
+        case NEBULA_INPUT_WIDEN: list.add("BLENDINDICES", 1u, format, slot, input.offset); break;
+        case NEBULA_INPUT_MATRIX: list.add("BLENDINDICES", 0u, format, slot, input.offset); break;
+        default:
+            if (input.semantic >= NEBULA_INPUT_COORD0) {
+                list.add("TEXCOORD", input.semantic - NEBULA_INPUT_COORD0, format, slot, input.offset);
+            }
+            break;
+        }
+    }
+    const auto zero = [&](const char* name, UINT index, DXGI_FORMAT format) {
+        if (!list.has(name, index)) {
+            list.add(name, index, format, gpu::kStreamZero, 0u);
+        }
+    };
+    // A ring's vertices name no matrix: every one is the item's first.
+    zero("BLENDINDICES", 0u, DXGI_FORMAT_R32_UINT);
+    if (!site) {
+        return;
+    }
+    // A written shader's vertex declares everything: what this site doesn't send reads zero.
+    zero("NORMAL", 0u, DXGI_FORMAT_R32G32B32_FLOAT);
+    zero("TANGENT", 0u, DXGI_FORMAT_R32G32B32_FLOAT);
+    if (wide) {
+        zero("BLENDINDICES", 1u, DXGI_FORMAT_R32_UINT);
+    }
+    zero("BINORMAL", 0u, DXGI_FORMAT_R32G32B32_FLOAT);
+    zero("COLOR", 0u, DXGI_FORMAT_R8G8B8A8_UNORM);
+    zero("COLOR", 1u, DXGI_FORMAT_R8G8B8A8_UNORM);
+    for (UINT i = 0; i < NEBULA_MATERIAL_SLOTS; ++i) {
+        zero("TEXCOORD", i, DXGI_FORMAT_R32G32_FLOAT);
+    }
+}
+
+}  // namespace
+
+gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, unsigned aux) {
+    const NebulaPipelineDesc& desc = entry.desc;
+    const unsigned samples_log2 = variant & kSceneVariantSamplesMask;
+    const unsigned program = program_variant(desc.pixel, aux, samples_log2);
+    const ProgramBytes vs = program_bytes(desc.vertex, program, false);
+    const ProgramBytes ps = program_bytes(desc.pixel, program, true);
+    if (vs.size == 0u || ps.size == 0u) {
+        std::fprintf(stderr, "[pipelines] no program %llx %llx variant %u\n", static_cast<unsigned long long>(desc.vertex),
+                     static_cast<unsigned long long>(desc.pixel), program);
+        return nullptr;
+    }
+
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC pd{};
+    pd.pRootSignature = root_;
+    pd.VS = {vs.data, vs.size};
+    pd.PS = {ps.data, ps.size};
+    InputList inputs;
+    fill_inputs(desc, aux == 1u, inputs);
+    pd.InputLayout = {inputs.elements, inputs.count};
+
+    const std::uint32_t state = desc.state;
+    const bool target = (variant & kSceneVariantTarget) != 0u;
+    D3D12_RENDER_TARGET_BLEND_DESC& rt = pd.BlendState.RenderTarget[0];
+    rt.RenderTargetWriteMask = static_cast<UINT8>(
+        ((state & NEBULA_STATE_COLOR_WRITE) != 0u
+             ? D3D12_COLOR_WRITE_ENABLE_RED | D3D12_COLOR_WRITE_ENABLE_GREEN | D3D12_COLOR_WRITE_ENABLE_BLUE
+             : 0) |
+        ((state & (NEBULA_STATE_ALPHA_WRITE | NEBULA_STATE_ALPHA_PASS)) != 0u && target ? D3D12_COLOR_WRITE_ENABLE_ALPHA : 0));
+    const std::uint32_t op = state & 3u;
+    if (op != NEBULA_BLEND_REPLACE) {
+        rt.BlendEnable = TRUE;
+        if (op == NEBULA_BLEND_SUBTRACT) {
+            rt.SrcBlend = D3D12_BLEND_ONE;
+            rt.DestBlend = D3D12_BLEND_ONE;
+            rt.BlendOp = D3D12_BLEND_OP_REV_SUBTRACT;
+        } else {
+            rt.SrcBlend = blend_factor((state >> 2u) & 15u);
+            rt.DestBlend = blend_factor((state >> 6u) & 15u);
+            rt.BlendOp = D3D12_BLEND_OP_ADD;
+            if (!target) {
+                // No destination alpha in the scene: it reads as one.
+                if (rt.SrcBlend == D3D12_BLEND_DEST_ALPHA) rt.SrcBlend = D3D12_BLEND_ONE;
+                else if (rt.SrcBlend == D3D12_BLEND_INV_DEST_ALPHA) rt.SrcBlend = D3D12_BLEND_ZERO;
+                if (rt.DestBlend == D3D12_BLEND_DEST_ALPHA) rt.DestBlend = D3D12_BLEND_ONE;
+                else if (rt.DestBlend == D3D12_BLEND_INV_DEST_ALPHA) rt.DestBlend = D3D12_BLEND_ZERO;
+            }
+        }
+        rt.SrcBlendAlpha = alpha_factor(rt.SrcBlend);
+        rt.DestBlendAlpha = alpha_factor(rt.DestBlend);
+        rt.BlendOpAlpha = rt.BlendOp;
+    }
+
+    pd.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+    // Culling all has no state: the walker draws nothing.
+    switch ((state >> 15u) & 3u) {
+    case NEBULA_CULL_BACK: pd.RasterizerState.CullMode = D3D12_CULL_MODE_BACK; break;
+    case NEBULA_CULL_FRONT: pd.RasterizerState.CullMode = D3D12_CULL_MODE_FRONT; break;
+    default: pd.RasterizerState.CullMode = D3D12_CULL_MODE_NONE; break;
+    }
+    pd.RasterizerState.FrontCounterClockwise = FALSE;
+    pd.RasterizerState.DepthClipEnable = TRUE;
+
+    // Depth is reversed: the game's less is greater.
+    static constexpr D3D12_COMPARISON_FUNC kDepth[8] = {
+        D3D12_COMPARISON_FUNC_NEVER,         D3D12_COMPARISON_FUNC_GREATER,   D3D12_COMPARISON_FUNC_EQUAL,
+        D3D12_COMPARISON_FUNC_GREATER_EQUAL, D3D12_COMPARISON_FUNC_LESS,      D3D12_COMPARISON_FUNC_NOT_EQUAL,
+        D3D12_COMPARISON_FUNC_LESS_EQUAL,    D3D12_COMPARISON_FUNC_ALWAYS,
+    };
+    if ((state & (1u << 10u)) != 0u) {
+        pd.DepthStencilState.DepthEnable = TRUE;
+        pd.DepthStencilState.DepthFunc = kDepth[(state >> 11u) & 7u];
+        pd.DepthStencilState.DepthWriteMask = (state & (1u << 14u)) != 0u ? D3D12_DEPTH_WRITE_MASK_ALL : D3D12_DEPTH_WRITE_MASK_ZERO;
+    }
+    if (const std::uint32_t test = (state >> 20u) & 3u; test != 0u) {
+        static constexpr D3D12_COMPARISON_FUNC kStencilTest[4] = {D3D12_COMPARISON_FUNC_ALWAYS, D3D12_COMPARISON_FUNC_ALWAYS,
+                                                                  D3D12_COMPARISON_FUNC_EQUAL, D3D12_COMPARISON_FUNC_NOT_EQUAL};
+        static constexpr D3D12_STENCIL_OP kStencilOp[4] = {D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_INCR_SAT, D3D12_STENCIL_OP_DECR_SAT,
+                                                           D3D12_STENCIL_OP_ZERO};
+        pd.DepthStencilState.StencilEnable = TRUE;
+        pd.DepthStencilState.StencilReadMask = 0xFFu;
+        pd.DepthStencilState.StencilWriteMask = 0xFFu;
+        D3D12_DEPTH_STENCILOP_DESC face{};
+        face.StencilFailOp = D3D12_STENCIL_OP_KEEP;
+        face.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
+        face.StencilPassOp = kStencilOp[(state >> 22u) & 3u];
+        face.StencilFunc = kStencilTest[test];
+        pd.DepthStencilState.FrontFace = face;
+        pd.DepthStencilState.BackFace = face;
+    }
+
+    pd.SampleMask = UINT_MAX;
+    pd.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    pd.NumRenderTargets = 1u;
+    pd.RTVFormats[0] = target ? kTargetColorFormat : (variant & kSceneVariantHdr) != 0u ? kSceneHdrColorFormat : kSceneColorFormat;
+    if (aux == 1u) {
+        pd.NumRenderTargets = 2u;
+        pd.RTVFormats[1] = kMotionVectorFormat;
+    } else if (aux >= 2u) {
+        pd.NumRenderTargets = 2u;
+        pd.RTVFormats[1] = kReactiveMaskFormat;
+        pd.BlendState.IndependentBlendEnable = TRUE;
+        D3D12_RENDER_TARGET_BLEND_DESC& mask = pd.BlendState.RenderTarget[1];
+        mask.BlendEnable = TRUE;
+        mask.SrcBlend = D3D12_BLEND_ONE;
+        mask.DestBlend = D3D12_BLEND_ONE;
+        mask.BlendOp = D3D12_BLEND_OP_MAX;
+        mask.SrcBlendAlpha = D3D12_BLEND_ONE;
+        mask.DestBlendAlpha = D3D12_BLEND_ONE;
+        mask.BlendOpAlpha = D3D12_BLEND_OP_MAX;
+        mask.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_RED;
+        if (aux == 3u) {
+            pd.NumRenderTargets = 4u;
+            pd.RTVFormats[2] = kLayerFormat;
+            pd.RTVFormats[3] = kLayerFormat;
+            D3D12_RENDER_TARGET_BLEND_DESC& color = pd.BlendState.RenderTarget[2];
+            color = rt;
+            color.LogicOpEnable = FALSE;
+            color.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_RED | D3D12_COLOR_WRITE_ENABLE_GREEN | D3D12_COLOR_WRITE_ENABLE_BLUE;
+            D3D12_RENDER_TARGET_BLEND_DESC& through = pd.BlendState.RenderTarget[3];
+            through = color;
+            through.SrcBlend = D3D12_BLEND_ZERO;
+            through.BlendOp = D3D12_BLEND_OP_ADD;
+            through.DestBlend = rt.BlendOp == D3D12_BLEND_OP_ADD ? rt.DestBlend : D3D12_BLEND_ONE;
+        }
+    }
+    pd.DSVFormat = kSceneDepthFormat;
+    pd.SampleDesc.Count = 1u << samples_log2;
+
+    gpu::PipelineRef pipeline;
+    ID3D12PipelineLibrary* cache = driver_cache(device_);
+    const std::array<wchar_t, 40> name = cache_name(desc, program, variant, aux);
+    HRESULT hr = cache != nullptr ? cache->LoadGraphicsPipeline(name.data(), &pd, IID_PPV_ARGS(&pipeline)) : E_FAIL;
+    if (FAILED(hr)) {
+        hr = device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&pipeline));
+        if (SUCCEEDED(hr) && cache != nullptr) {
+            std::lock_guard guard(gCache.lock);
+            gCache.changed = SUCCEEDED(cache->StorePipeline(name.data(), pipeline.Get())) || gCache.changed;
+        }
+    }
+    if (FAILED(hr)) {
+        std::fprintf(stderr, "[pipelines] create failed %08lx: %llx %llx state %08x variant %u aux %u\n", static_cast<unsigned long>(hr),
+                     static_cast<unsigned long long>(desc.vertex), static_cast<unsigned long long>(desc.pixel), state, variant, aux);
+        return nullptr;
+    }
+    gpu::Pipeline* raw = pipeline.Get();
+    std::lock_guard guard(lock_);
+    owned_.push_back(std::move(pipeline));
+    return raw;
+}
+
+void Pipelines::destroy_all() noexcept {
+    owned_.clear();
+    release_driver_cache();
+}
+
+std::size_t Pipelines::save_cache() noexcept {
+    return write_driver_cache();
+}
+
+}  // namespace galaxy::render::core

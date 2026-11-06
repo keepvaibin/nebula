@@ -53,3 +53,9 @@ void MapPartsBreaker::exeBreak() {
     }
 }
 
+// TODO: this SHOULD NOT be here, however moving this to its proper place causes linkage issues since
+// Vec2f::squared is not used in this file... at all.
+template <>
+f32 Vec2f::squared(const Vec2f& rOther) const {
+    return (x - rOther.x) * (x - rOther.x) + (y - rOther.y) * (y - rOther.y);
+}

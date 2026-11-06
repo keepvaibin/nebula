@@ -12,6 +12,7 @@ crate-type = ["cdylib", "rlib"]
 [features]
 # A build that takes extracted game folders only: no disc image is read.
 folders-only = []
+proof-tools = []
 
 [dependencies]
 anyhow.workspace = true

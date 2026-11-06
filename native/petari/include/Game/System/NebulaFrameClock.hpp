@@ -7,7 +7,7 @@
 #include <nebula_game_api.h>
 
 namespace NebulaFrameClock {
-    // The game's 2D coordinates are this tall, and MR::getScreenWidth wide; nothing renders at this size. J3DNativeView's rectangles are fractions.ractions of
+    // The game's 2D coordinates are this tall, and MR::getScreenWidth wide; nothing renders at this size. View rectangles are fractions.ractions of
     const u16 cScreenLines = 456;
     // The same height as a float, and the width the layout files are authored for.
     const f32 cScreenHeight = 456.0f;

@@ -1,126 +1,51 @@
 #include "Game/Util/MotionSignal.hpp"
+#include "Game/Effect/ParticleResourceHolder.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/ModelManager.hpp"
-#include "Game/Map/LightDataHolder.hpp"
-#include "Game/NameObj/NameObj.hpp"
 #include "Game/Player/MarioActor.hpp"
 #include "Game/Player/MarioHolder.hpp"
+#include "Game/Render/Model.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util/CameraUtil.hpp"
-#include "Game/Screen/LayoutActor.hpp"
-#include "JSystem/J3DGraphAnimator/J3DModel.hpp"
-#include "JSystem/J3DGraphAnimator/J3DModelData.hpp"
-#include "JSystem/J3DGraphBase/J3DMaterial.hpp"
-#include "JSystem/J3DGraphBase/J3DShape.hpp"
-#include "JSystem/JUtility/JUTNameTab.hpp"
-#include "JSystem/J3DGraphBase/J3DPacket.hpp"
+#include "Game/Util/SystemUtil.hpp"
 #include "JSystem/JParticle/JPAEmitter.hpp"
 #include "JSystem/JParticle/JPAEmitterManager.hpp"
-#include "JSystem/JParticle/JPAParticle.hpp"
 #include "JSystem/JParticle/JPAResource.hpp"
-#include "Game/Effect/ParticleResourceHolder.hpp"
-#include "Game/Util/SystemUtil.hpp"
-#include <nebula_game_api.h>
-#include <nw4r/lyt/pane.h>
-#include "Game/Util/RenderSignals.hpp"
-#include "Game/System/NebulaHost.hpp"
+
+extern "C" const NebulaHostServices* nebula_host(void);
 
 namespace {
-    // Host marker kinds and flags (galaxy/motion_signals.h).
-    enum {
-        Kind_ShapePacket = 1,
-        Kind_NameObj = 2,
-        Kind_Emitter = 3,
-        Kind_Particle = 4,
-        Kind_Category = 5,
-        Kind_Scene = 6,
-        Kind_Pass = 7,
-        Kind_Light = 8,
-        Kind_LayoutPane = 9,
-        Kind_LayoutActor = 10,
-        Kind_StarPointer = 11,
-        Kind_Material = 12,
-        Kind_Effect = 13,
-    };
-
-    enum {
-        Layout_In2D = 1,
-        Layout_StarPointerDirector = 2,
-        Scene_CameraCut = 1,
-        Pass_MirrorBegin = 1,
-        Pass_MirrorEnd = 2,
-    };
-
-    enum {
-        LightSite_ActorLightInfo,
-        LightSite_Coin,
-        LightSite_PointLight,
-        LightSite_AllWhite,
-        LightSite_Player,
-    };
-
     // MarioAccess::setTrans and setBaseMtx also carry the player every frame (demos, carriers, the dome's galaxy
     // map); only a jump farther than this from the player's position is a new life. Walking moves ~15 units a frame.
     const f32 cPlayerTeleportDistance = 500.0f;
 
     u32 sCameraCuts;
-    bool sCameraCutPending;
-    u32 sObjectEvents;
-    bool s2DOpen;
 
-    // An epoch rides above the pass bit of a marker's aux.
-    u16 auxEpoch(u16 epoch) {
-        return static_cast< u16 >(epoch << 1);
+    void bump(u32& rEpoch) {
+        ++rEpoch;
     }
 
-    void bump(u16& rEpoch) {
-        rEpoch = static_cast< u16 >((rEpoch + 1) & 0x7FFF);
-        sObjectEvents++;
-    }
-
-    u64 id(const void* pObj) {
-        return NebulaHost::objectId(pObj);
-    }
-
-    u16 layoutAux() {
-        return s2DOpen ? Layout_In2D : 0;
-    }
-
-    // FNV-1a over lower-case ASCII (rt_materials.cpp rt_material_identity hashes the table's names the same way).
-    u32 hashName(u32 hash, const char* pName, bool stopAtDot) {
-        for (const char* c = pName; *c != '\0' && !(stopAtDot && *c == '.'); ++c) {
+    // FNV-1a over lower-case ASCII.
+    u32 hashName(u32 hash, const char* pName) {
+        for (const char* c = pName; *c != '\0'; ++c) {
             const u8 v = static_cast< u8 >(*c >= 'A' && *c <= 'Z' ? *c + ('a' - 'A') : *c);
             hash = (hash ^ v) * 16777619u;
         }
         return hash;
     }
 
-    // The models' resource names' hashes ("model/" so far), by model data: open addressing, linear probing. Scene heaps
-    // are freed whole (no model data is deleted alone), so addresses come back with new models, which register again
-    // over them; a full table lets a new model take its home slot.
-    const u32 cModelNames = 16384;
-    struct ModelName {
-        const J3DModelData* mData;
-        u32 mHash;
-    };
-    ModelName sModelNames[cModelNames];
+    u32* sEffectNames;
+    u32 sEffectRoom;
 
-    u32 modelSlot(const J3DModelData* pData) {
-        const u32 key = static_cast< u32 >(reinterpret_cast< uintptr_t >(pData) >> 4);
-        return (key * 2654435761u) & (cModelNames - 1);
-    }
-
-    // The particle effects' identities ("Effect/<ParticleNames.bcsv name>", hashed as the material table hashes its
-    // `material` names), by the resource's user index; 0: not yet named.
-    const u32 cEffectNames = 4096;
-    u32 sEffectNames[cEffectNames];
-
-    // An emitter's effect identity: its resource's name in the game's particle archive (Effect.arc), whose
-    // resource manager the emitter draws from; 0 for another archive's resources or an unknown index.
-    u32 effectIdentity(const JPAResource* pResource, const JPABaseEmitter* pEmitter) {
+    // "Effect/<ParticleNames.bcsv name>" of an emitter in the game's particle archive; 0 for another archive's.
+    u32 effectName(const JPAResource* pResource, const JPABaseEmitter* pEmitter) {
         const u16 index = pResource->getUsrIdx();
-        if (index >= cEffectNames) {
-            return 0;
+        if (index >= sEffectRoom) {
+            const u32 room = index + 1 > sEffectRoom * 2 ? index + 1 : sEffectRoom * 2;
+            const NebulaHostServices* pHost = nebula_host();
+            auto* pNames = static_cast< u32* >(pHost->heap_realloc(pHost->user, sEffectNames, room * sizeof(u32)));
+            memset(pNames + sEffectRoom, 0, (room - sEffectRoom) * sizeof(u32));
+            sEffectNames = pNames; sEffectRoom = room;
         }
         const ParticleResourceHolder* pHolder = MR::getParticleResourceHolder();
         if (pHolder == nullptr || pEmitter->mpEmtrMgr == nullptr ||
@@ -132,7 +57,7 @@ namespace {
             if (pName == nullptr) {
                 return 0;
             }
-            const u32 hash = hashName(hashName(hashName(2166136261u, "Effect", false), "/", false), pName, false);
+            const u32 hash = hashName(hashName(hashName(2166136261u, "Effect"), "/"), pName);
             sEffectNames[index] = hash != 0 ? hash : 1;
         }
         return sEffectNames[index];
@@ -140,152 +65,14 @@ namespace {
 };  // namespace
 
 namespace MotionSignal {
-    // The model (the instance) and the shape name the draw: objects drawn as instances of one model re-point the
-    // model's shape packets at each instance's model before its draw.
-    void drawShapePacketImpl(const J3DShapePacket* pPacket) {
-        const J3DModel* pModel = pPacket->getModel();
-        NebulaRender::hostMarker(Kind_ShapePacket, pModel != nullptr ? auxEpoch(pModel->mMotionEpoch) : 0,
-                             pModel != nullptr ? id(pModel) : id(pPacket), id(pPacket->getShape()));
-    }
-
-    void modelResource(const J3DModelData* pData, const char* pName) {
-        if (pData == nullptr || pName == nullptr) {
-            return;
+    u32 drawEmitter(const JPAResource* pResource, JPABaseEmitter* pEmitter, bool child) {
+        if (pEmitter->mDrawSlot == 0) {
+            // Two numbers: the emitter's particles and its children's.
+            pEmitter->mDrawSlot = Frame::newSlot();
+            Frame::newSlot();
         }
-        const char* base = pName;
-        for (const char* c = pName; *c != '\0'; ++c) {
-            if (*c == '/' || *c == '\\') {
-                base = c + 1;
-            }
-        }
-        const u32 hash = hashName(hashName(2166136261u, base, true), "/", false);
-        for (u32 i = 0, slot = modelSlot(pData); i < cModelNames; ++i, slot = (slot + 1) & (cModelNames - 1)) {
-            if (sModelNames[slot].mData == nullptr || sModelNames[slot].mData == pData) {
-                sModelNames[slot].mData = pData;
-                sModelNames[slot].mHash = hash;
-                return;
-            }
-        }
-        sModelNames[modelSlot(pData)].mData = pData;
-        sModelNames[modelSlot(pData)].mHash = hash;
-    }
-
-    void drawMaterialImpl(const J3DShapePacket* pPacket) {
-        J3DShape* pShape = pPacket->getShape();
-        J3DMaterial* pMaterial = pShape != nullptr ? pShape->getMaterial() : nullptr;
-        J3DModel* pModel = const_cast< J3DModel* >(pPacket->getModel());
-        J3DModelData* pData = pModel != nullptr ? pModel->getModelData() : nullptr;
-        u32 key = 0;
-        if (pMaterial != nullptr && pData != nullptr && pData->getMaterialName() != nullptr) {
-            const char* pName = pData->getMaterialName()->getName(pMaterial->getIndex());
-            for (u32 i = 0, slot = modelSlot(pData); pName != nullptr && i < cModelNames;
-                 ++i, slot = (slot + 1) & (cModelNames - 1)) {
-                if (sModelNames[slot].mData == pData) {
-                    key = hashName(sModelNames[slot].mHash, pName, false);
-                    break;
-                }
-                if (sModelNames[slot].mData == nullptr) {
-                    break;
-                }
-            }
-        }
-        NebulaRender::hostMarker(Kind_Material, 0, key, 0);
-    }
-
-    void drawNameObjImpl(const NameObj* pObj) {
-        NebulaRender::hostMarker(Kind_NameObj, auxEpoch(pObj->mMotionEpoch), id(pObj), id(*reinterpret_cast< void* const* >(pObj)));
-    }
-
-    void drawEmitterImpl(const JPAResource* pResource, const JPABaseEmitter* pEmitter, bool child) {
-        NebulaRender::hostMarker(Kind_Emitter, static_cast< u16 >(auxEpoch(pEmitter->mMotionEpoch) | (child ? 1 : 0)), id(pEmitter),
-                             id(pResource));
-        // The effect its particles belong to, for the material table's effect rows (a fire's light, by its name).
-        NebulaRender::hostMarker(Kind_Effect, 0, effectIdentity(pResource, pEmitter), 0);
-    }
-
-    // Particles come from a pool: the particle, its pass and its lifetime name it, and its age must continue from the
-    // previous frame for the renderer to take it for the same particle.
-    void drawParticleImpl(const JPABaseParticle* pParticle, bool child) {
-        NebulaRender::hostMarker(Kind_Particle, child ? 1 : 0, id(pParticle),
-                             static_cast< u32 >(static_cast< u16 >(pParticle->mAge)) << 16 |
-                                 static_cast< u16 >(pParticle->mLifeTime));
-    }
-
-    void categoryImpl(u16 source, u32 type) {
-        NebulaRender::hostMarker(Kind_Category, source, type, 0);
-    }
-
-    void mirror(bool begin) {
-        NebulaRender::hostMarker(Kind_Pass, begin ? Pass_MirrorBegin : Pass_MirrorEnd, 0, 0);
-    }
-
-    void lightImpl(u16 site, const void* pInfo, u32 followCamera) {
-        NebulaRender::hostMarker(Kind_Light, site, pInfo != nullptr ? id(pInfo) : 0, followCamera);
-    }
-
-    // Bit 0: light A follows the camera; bit 1: light B. The renderer moves those lights
-    // with the camera under ray tracing.
-    void actorLight(const ActorLightInfo* pInfo) {
-        if (NebulaRender::sDrawIdentities != 0) {
-            lightImpl(LightSite_ActorLightInfo, pInfo, (pInfo->mInfo0.mIsFollowCamera ? 1 : 0) | (pInfo->mInfo1.mIsFollowCamera ? 2 : 0));
-        }
-    }
-
-    void coinLight(const LightInfoCoin* pInfo) {
-        if (NebulaRender::sDrawIdentities != 0) {
-            lightImpl(LightSite_Coin, pInfo, pInfo->base.mIsFollowCamera ? 1 : 0);
-        }
-    }
-
-    void pointLight(const PointLightInfo* pInfo) {
-        if (NebulaRender::sDrawIdentities != 0) {
-            lightImpl(LightSite_PointLight, pInfo, 0);
-        }
-    }
-
-    void allLightWhite() {
-        if (NebulaRender::sDrawIdentities != 0) {
-            lightImpl(LightSite_AllWhite, nullptr, 0);
-        }
-    }
-
-    void playerLight() {
-        if (NebulaRender::sDrawIdentities != 0) {
-            lightImpl(LightSite_Player, nullptr, 0);
-        }
-    }
-
-    void scene2D(bool begin) {
-        NebulaRender::sceneMarker(begin ? NEBULA_SCENE_2D_BEGIN : NEBULA_SCENE_2D_END, nullptr);
-        s2DOpen = begin;
-    }
-
-    void layoutImpl(u8 kind, u16 aux, const void* pObj, const void* pTag) {
-        NebulaRender::hostMarker(kind, aux, id(pObj), pTag != nullptr ? id(pTag) : 0);
-    }
-
-    void layoutPane(const nw4r::lyt::Pane* pPane) {
-        if (NebulaRender::sDrawIdentities != 0) {
-            layoutImpl(Kind_LayoutPane, layoutAux(), pPane, pPane->GetParent());
-        }
-    }
-
-    void layoutActor(const LayoutActor* pActor) {
-        if (NebulaRender::sDrawIdentities != 0) {
-            layoutImpl(Kind_LayoutActor, layoutAux(), pActor, *reinterpret_cast< void* const* >(pActor));
-        }
-    }
-
-    void starPointerLayout(const LayoutActor* pLayout) {
-        if (NebulaRender::sDrawIdentities != 0) {
-            layoutImpl(Kind_StarPointer, layoutAux(), pLayout, *reinterpret_cast< void* const* >(pLayout));
-        }
-    }
-
-    void starPointerDirector(const void* pDirector) {
-        if (NebulaRender::sDrawIdentities != 0) {
-            layoutImpl(Kind_StarPointer, static_cast< u16 >(layoutAux() | Layout_StarPointerDirector), pDirector, nullptr);
-        }
+        Frame::setObject(child ? pEmitter->mDrawSlot + 1 : pEmitter->mDrawSlot, pEmitter->mMotionEpoch);
+        return effectName(pResource, pEmitter);
     }
 
     void sceneCamera(f32 (*pOut)[4]) {
@@ -307,16 +94,10 @@ namespace MotionSignal {
         }
     }
 
-    void sceneBegin() {
-        NebulaRender::hostMarker(Kind_Scene, sCameraCutPending ? Scene_CameraCut : 0, sCameraCuts, sObjectEvents);
-        sCameraCutPending = false;
-        sObjectEvents = 0;
-    }
-
     void newLife(LiveActor* pActor) {
         bump(pActor->mMotionEpoch);
         if (pActor->mModelManager != nullptr) {
-            J3DModel* pModel = pActor->mModelManager->getJ3DModel();
+            Model* pModel = pActor->mModelManager->getModel();
             if (pModel != nullptr) {
                 bump(pModel->mMotionEpoch);
             }
@@ -345,7 +126,6 @@ namespace MotionSignal {
     }
 
     void cameraCut() {
-        sCameraCuts++;
-        sCameraCutPending = true;
+        Frame::cameraCut(++sCameraCuts);
     }
 };  // namespace MotionSignal

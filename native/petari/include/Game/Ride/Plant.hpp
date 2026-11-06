@@ -4,7 +4,6 @@
 #include <nebula_geometry.hpp>
 
 class ActorCameraInfo;
-class J3DShapeDraw;
 class PartsModel;
 class PlantStalk;
 class PlantLeaf;
@@ -58,7 +57,6 @@ public:
     Pos3f mTopMtx;
     s32 mNumLeaves;
     PlantLeaf** mLeaves;
-    J3DShapeDraw* mShapeDraw;
     LiveActor* mRider;
     f32 mRailCoord;
     Vec3f mUp;

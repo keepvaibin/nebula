@@ -1,0 +1,247 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* A model as the store keeps it: one flat block in host order, used in place. Every *_at is a byte offset from the
+   block's start. crates/nebula-import/src/cook/model_write.rs writes this layout. */
+#pragma once
+
+#include <stdint.h>
+#include "nebula_limits.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#define NEBULA_MODEL_MAGIC 0x4C444D4Eu /* "NMDL" */
+#define NEBULA_MODEL_VERSION 3u
+#define NEBULA_MODEL_NONE NEBULA_NONE32
+
+enum { NEBULA_SCALE_BASIC = 0, NEBULA_SCALE_SOFTIMAGE = 1, NEBULA_SCALE_MAYA = 2 };
+
+/* NebulaModelHeader.flags, above the scale mode in the low 4 bits. */
+enum {
+    NEBULA_MODEL_HAS_BILLBOARD = 1u << 4,
+    NEBULA_MODEL_MATERIALS_ONLY = 1u << 5, /* a material table for another model: no joints or meshes */
+};
+
+/* A pipeline's fixed state as one word, in one canonical form: what does nothing is zero. NEBULA_BLEND_*, NEBULA_FACTOR_*,
+   NEBULA_COMPARE_*, NEBULA_CULL_*, NEBULA_STENCIL_*. */
+#define NEBULA_STATE_BLEND(op, src, dst) ((uint32_t)(op) | (uint32_t)(op != 1 ? 0u : (uint32_t)(src)) << 2 | (uint32_t)(op != 1 ? 0u : (uint32_t)(dst)) << 6)
+#define NEBULA_STATE_DEPTH(test, func, write) ((test) ? 1u << 10 | (uint32_t)(func) << 11 : 0u) | ((write) ? 1u << 14 : 0u)
+#define NEBULA_STATE_CULL(cull) ((uint32_t)(cull) << 15)
+#define NEBULA_STATE_COLOR_WRITE (1u << 17)
+#define NEBULA_STATE_ALPHA_WRITE (1u << 18)
+#define NEBULA_STATE_ALPHA_PASS (1u << 19) /* writes alpha where the pass's target keeps it */
+#define NEBULA_STATE_STENCIL(func, op) ((uint32_t)(func) << 20 | (uint32_t)((func) != 0 ? (op) : 0) << 22)
+#define NEBULA_STATE_STENCIL_OWN (1u << 24) /* its stencil, not the pass's; gone from the state a pipeline takes */
+
+typedef struct NebulaModelHeader {
+    uint32_t magic, version, size, flags;
+    uint32_t joint_count, step_count, joint_mesh_count;
+    uint32_t draw_matrix_count, full_weight_count, envelope_count, mix_count;
+    uint32_t mesh_count, material_count, texture_count;
+    uint32_t source_vertex_count; /* the shared positions the file had: a game that rewrites them writes this many */
+    uint32_t joints_at, steps_at, joint_meshes_at;
+    uint32_t draw_matrices_at, envelopes_at, mixes_at, inverse_binds_at, important_at;
+    uint32_t meshes_at, materials_at, textures_at;
+    uint32_t geometry_at, geometry_size; /* every stream, for one copy to the GPU */
+} NebulaModelHeader;
+
+/* Joints by number, the number animation tracks and the game use. */
+typedef struct NebulaModelJoint {
+    float scale[3];
+    float rotation[3];
+    uint32_t parent;
+    float translation[3];
+    float radius, min[3], max[3];
+    uint32_t child, younger; /* NEBULA_MODEL_NONE when there is none */
+    uint32_t first_mesh, mesh_count; /* in joint_meshes: materials in entry order */
+    uint8_t kind, scale_compensate, billboard, reserved;
+    uint32_t name_at, name_hash;
+} NebulaModelJoint;
+
+/* The walk Skeleton::evaluate takes: enter a joint, later leave it, parents before children. */
+enum { NEBULA_STEP_ENTER = 0, NEBULA_STEP_LEAVE = 1 };
+typedef struct NebulaModelStep {
+    uint32_t joint, op;
+} NebulaModelStep;
+
+typedef struct NebulaModelDrawMatrix {
+    uint32_t weighted; /* 0: index names a joint; 1: index names an envelope */
+    uint32_t index;
+} NebulaModelDrawMatrix;
+
+typedef struct NebulaModelEnvelope {
+    uint32_t first_mix, mix_count;
+} NebulaModelEnvelope;
+
+typedef struct NebulaModelMix {
+    uint32_t joint;
+    float weight;
+} NebulaModelMix;
+
+/* NebulaModelMesh.attributes */
+enum {
+    NEBULA_MESH_NORMAL = 1u << 0,
+    NEBULA_MESH_COLOR0 = 1u << 1,
+    NEBULA_MESH_COLOR1 = 1u << 2,
+    NEBULA_MESH_TANGENTS = 1u << 3,
+    NEBULA_MESH_COORD0 = 1u << 8, /* bit n: coordinate n, 24 bits' worth */
+};
+
+/* Stream 0: position, 3 floats. Stream 1: normal 3 floats, colour word, first coordinate 2 floats (24 bytes).
+   Stream 2: draw matrix number, u32, present when single_matrix is NEBULA_MODEL_NONE. Stream 3: further coordinates,
+   2 floats each in ascending order, then colour 1, then tangent and binormal. */
+typedef struct NebulaModelMesh {
+    float min[3], max[3], radius;
+    uint32_t vertex_count, index_count;
+    uint32_t positions_at, attributes_at, matrices_at, further_at, indices_at;
+    uint32_t attributes;
+    uint32_t further_stride;
+    uint32_t single_matrix;
+    uint32_t material;
+    uint8_t index_bytes, billboard, reserved[2];
+    /* Its bending triangles refined: the streams hold refined_vertex_count vertices, vertex_count of them the plain mesh's;
+       refined_index_count indices at refined_indices_at draw it round, 0 when it has no bending triangles. */
+    uint32_t refined_vertex_count, refined_index_count, refined_indices_at;
+    uint32_t flats_at; /* a bit per vertex: a flat solid's corner shaded soft, ray tracing shades its face. 0: none */
+} NebulaModelMesh;
+
+/* What a constant row of a program holds: the material fills its rows by these. */
+enum {
+    NEBULA_ROW_REGISTER = 0,       /* registers 1 to 3 of the stages */
+    NEBULA_ROW_CONSTANT = 3,       /* constant colours 0 to 3 */
+    NEBULA_ROW_MATERIAL_COLOR = 7, /* 2 */
+    NEBULA_ROW_AMBIENT_COLOR = 9,  /* 2 */
+    NEBULA_ROW_FOG = 11,           /* start, end, near, far */
+    NEBULA_ROW_FOG_COLOR = 12,
+    NEBULA_ROW_ALPHA_REF = 13,
+    NEBULA_ROW_OVERRIDE = 14,      /* the replacing forms' values */
+    NEBULA_ROW_SCALE = 32,         /* per texture number: xy its coordinate's scale, zw its size */
+    NEBULA_ROW_WARP = 64,          /* two per warp matrix */
+    NEBULA_ROW_COORD = 128,        /* three per coordinate */
+};
+
+/* A form's vertex inputs after position and matrix. */
+enum {
+    NEBULA_INPUT_NORMAL = 0,
+    NEBULA_INPUT_COLOR0 = 1,
+    NEBULA_INPUT_COLOR1 = 2,
+    NEBULA_INPUT_TANGENT = 3,
+    NEBULA_INPUT_BINORMAL = 4,
+    NEBULA_INPUT_WIDEN = 5, /* a site's widened corner: one uint, which corner */
+    NEBULA_INPUT_MATRIX = 6, /* a site's vertex carrying its draw matrix: one uint */
+    NEBULA_INPUT_COORD0 = 16, /* + the mesh's coordinate number */
+};
+
+/* NebulaModelForm.flags */
+enum {
+    NEBULA_FORM_NORMAL_COORD = 1u << 0, /* coordinate 0 is the normal through the identity */
+    NEBULA_FORM_LIT = 1u << 1,          /* lit at the pixel */
+    NEBULA_FORM_ALPHA_TEST = 1u << 2,
+    NEBULA_FORM_FOG_LINEAR = 1u << 3,   /* linear fog over a material cooked without any */
+};
+
+/* NebulaModelForm.pass: an edit of the material the programs were written from. */
+enum {
+    NEBULA_FORM_PASS_PLAYER_LIGHT = 1,
+    NEBULA_FORM_PASS_REFLECTION_ALPHA = 2,
+    NEBULA_FORM_PASS_PLAYER_OPACITY = 16,
+    NEBULA_FORM_PASS_FLEXIBLE_COORDINATES = 32,
+};
+
+/* One way a material can draw: two programs, named by their texts' hashes, and what their constants and textures are. */
+typedef struct NebulaModelForm {
+    uint64_t vertex, pixel;
+    uint32_t vertex_rows_at, pixel_rows_at; /* u32 rows, NEBULA_ROW_* */
+    uint32_t textures_at, inputs_at;        /* u8 material texture numbers; u8 NEBULA_INPUT_* */
+    uint32_t vertex_row_count, pixel_row_count;
+    uint32_t texture_count, input_count;
+    uint8_t replace, flags; /* replace: 0 the material's stages, else the replacing pass */
+    uint8_t pass, reserved[13];
+} NebulaModelForm;
+
+typedef struct NebulaModelChannel {
+    uint8_t enable, material_source, ambient_source, light_mask, diffuse, attenuation;
+} NebulaModelChannel;
+
+typedef struct NebulaModelCoord {
+    uint8_t type, source, reserved[2];
+    uint32_t matrix;
+} NebulaModelCoord;
+
+typedef struct NebulaModelCoordMatrix {
+    uint32_t slot; /* which of the material's matrices */
+    uint8_t projection, info, reserved[2];
+    float center[3];
+    float scale[2];
+    float rotation;
+    float translation[2];
+    float effect[4][4];
+} NebulaModelCoordMatrix;
+
+typedef struct NebulaModelWarp {
+    float rows[2][3];
+} NebulaModelWarp;
+
+typedef struct NebulaModelFog {
+    uint8_t type, reserved[3];
+    float start, end, near_z, far_z;
+    uint8_t color[4];
+} NebulaModelFog;
+
+/* NebulaModelMaterial.flags */
+enum {
+    NEBULA_MATERIAL_HAS_AMBIENT = 1u << 0,
+    NEBULA_MATERIAL_HAS_STAGE_COLORS = 1u << 1,
+    NEBULA_MATERIAL_HAS_INDIRECT = 1u << 2,
+    NEBULA_MATERIAL_HAS_FOG = 1u << 3,
+    NEBULA_MATERIAL_ON_BILLBOARD = 1u << 4, /* its joint turns to the eye; eye-space coordinates read world rows */
+};
+
+typedef struct NebulaModelMaterial {
+    uint32_t name_at, name_hash;
+    uint32_t same_as; /* materials of a model with one value are the same in everything */
+    uint32_t mesh, joint;
+    uint8_t mode, cull, flags, early_depth;
+    uint32_t channel_count, coord_count, warp_count, texture_count;
+    uint32_t matrix_count, form_count;
+    uint16_t used_maps, used_coords; /* a bit per map and coordinate the stages use */
+    uint8_t coord_map[NEBULA_MATERIAL_SLOTS]; /* the map each coordinate's scale comes from, 255 none */
+    uint8_t material_color[2][4], ambient_color[2][4];
+    int16_t registers[4][4];
+    uint8_t constants[4][4];
+    NebulaModelChannel channels[4];
+    uint8_t alpha_comp0, alpha_op, alpha_comp1, alpha_ref0, alpha_ref1;
+    uint8_t blend_type, blend_src, blend_dst;
+    uint8_t depth_test, depth_func, depth_write, has_scale;
+    float normal_scale[3];
+    NebulaModelFog fog;
+    uint32_t state; /* its pipeline state, NEBULA_STATE_* */
+    uint32_t coords_at, textures_at, matrices_at, warps_at, forms_at;
+} NebulaModelMaterial;
+
+typedef struct NebulaModelTexture {
+    uint32_t name_at, record_at;
+    uint32_t width, height;
+    uint8_t format, wrap_s, wrap_t, mipmap;
+    uint8_t anisotropy, min_filter, mag_filter, reserved;
+    uint32_t levels;
+    float min_lod, max_lod, lod_bias;
+} NebulaModelTexture;
+
+#ifdef __cplusplus
+}
+static_assert(NEBULA_ROW_SCALE + NEBULA_MATERIAL_SLOTS <= NEBULA_ROW_WARP);
+static_assert(NEBULA_ROW_COORD + 3 * NEBULA_MATERIAL_SLOTS <= 256);
+static_assert(sizeof(NebulaModelCoord) == 8);
+static_assert(sizeof(NebulaModelStep) == 8);
+static_assert(sizeof(NebulaModelDrawMatrix) == 8);
+static_assert(sizeof(NebulaModelHeader) == 28 * 4);
+static_assert(sizeof(NebulaModelJoint) == 96);
+static_assert(sizeof(NebulaModelMesh) == 92);
+static_assert(sizeof(NebulaModelForm) == 64);
+static_assert(sizeof(NebulaModelMaterial) == 228);
+static_assert(sizeof(NebulaModelTexture) == 40);
+static_assert(sizeof(NebulaModelCoordMatrix) == 104);
+static_assert(sizeof(NebulaModelWarp) == 24);
+static_assert(sizeof(NebulaModelFog) == 24);
+#endif

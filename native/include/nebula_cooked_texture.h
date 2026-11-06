@@ -5,7 +5,7 @@
    The cooker (crates/nebula-import) writes one where a disc file held a texture's image: the image's offset in the
    file (ResTIMG, TPL, a font's sheets) then points at this record, colour-indexed images come with their palette
    applied, and the levels are what the renderer samples. Images the game makes while it runs are records too
-   (NEBULA_TEXTURE_LINEAR_*). The renderer takes a record whole (texture_image, NEBULA_TEXTURE_IMAGE) and never decodes. */
+   (NEBULA_TEXTURE_LINEAR_*). The renderer takes a record whole (texture_register, NEBULA_TEXTURE_IMAGE) and never decodes. */
 #pragma once
 
 #include <stdint.h>
@@ -16,10 +16,10 @@ extern "C" {
 #endif
 
 #define NEBULA_TEXTURE_MAGIC "NbTextur"
-#define NEBULA_TEXTURE_VERSION 1u
+#define NEBULA_TEXTURE_VERSION 3u
 #define NEBULA_TEXTURE_HEADER 64u
-#define NEBULA_TEXTURE_MAX_LEVELS 11u
-/* NebulaTextureImage.format of a record handed over whole (texture_image). */
+#define NEBULA_TEXTURE_MAX_LEVELS 32u
+/* NebulaTextureImage.format of a record handed over whole (texture_register). */
 #define NEBULA_TEXTURE_IMAGE 0x40u
 /* NebulaTextureImage.format of texels the game wrote, one level in rows from the top, packed, laid out as
    NEBULA_TEXTURE_L8 / _LA8 / _RGBA8 (nebula_texture_linear_layout): the host keeps them as a record. */
@@ -33,7 +33,7 @@ enum {
     NEBULA_TEXTURE_RGBA8 = 0, /* r, g, b, a */
     NEBULA_TEXTURE_L8 = 1,    /* l: r = g = b = a = l */
     NEBULA_TEXTURE_LA8 = 2,   /* l, a: r = g = b = l */
-    /* 4x4 blocks in rows, ceil(width / 4) across, 8 bytes each: two RGB565 colours c0, c1 (little-endian), then 16 2-bit
+    /* Opaque, whole blocks only (anything else cooks as RGBA8). 4x4 blocks in rows, ceil(width / 4) across, 8 bytes each: two RGB565 colours c0, c1 (little-endian), then 16 2-bit
        indices (little-endian; texel (x, y) of the block at bit 2 * (4y + x)) - BC1's block. Index 0 is c0, 1 is c1;
        with c0 > c1, 2 and 3 are (5 c0 + 3 c1) / 8 and (3 c0 + 5 c1) / 8 per channel (5- and 6-bit channels widened by
        bit replication first), else 2 is (c0 + c1) / 2 and 3 that colour with alpha 0. The disc's CMPR textures. */
@@ -41,11 +41,8 @@ enum {
 };
 
 enum {
-    /* The renderer runs its grain-checker filters on each level as it uploads it (the game's own images: the filters
-       ran on every image before textures were cooked, and the cooker has already run them on the disc's). */
-    NEBULA_TEXTURE_FILTER_AT_UPLOAD = 1u << 0,
-    /* NEBULA_TEXTURE_BLOCK4 whose blocks use no transparent colour, whose size is whole blocks. */
-    NEBULA_TEXTURE_OPAQUE_BLOCKS = 1u << 1,
+    /* Levels below the first were made by the cook from the first: only the enhanced-mipmaps option samples them. */
+    NEBULA_TEXTURE_GENERATED_LEVELS = 1u << 0,
 };
 
 /* The layout of texels handed over as NEBULA_TEXTURE_LINEAR_L8 / _LA8 / _RGBA8. */
@@ -63,24 +60,39 @@ static inline uint8_t nebula_texture_linear_code(uint8_t layout) {
                                           : (uint8_t)NEBULA_TEXTURE_LINEAR_RGBA8;
 }
 
+/* Standalone native texture metadata. The image record follows at image_at.
+   Particle and Mii source headers are migrated with their own batches. */
+#define NEBULA_TEXTURE_INFO_MAGIC 0x4954424Eu /* NBTI */
+#define NEBULA_TEXTURE_INFO_VERSION 1u
+typedef struct NebulaTextureInfo {
+    uint32_t magic, version, width, height;
+    uint32_t levels, image_at;
+    float min_lod, max_lod, lod_bias;
+    uint8_t format, transparency, wrap_s, wrap_t;
+    uint8_t mipmap, anisotropy, min_filter, mag_filter;
+    uint8_t reserved[20];
+} NebulaTextureInfo;
+
 typedef struct NebulaTexture {
     char magic[8];          /* NEBULA_TEXTURE_MAGIC, no terminator */
     uint32_t version;       /* NEBULA_TEXTURE_VERSION */
     uint32_t size;          /* the whole record, header included */
-    uint16_t width, height; /* level 0, in texels */
-    uint8_t levels;         /* 1 .. NEBULA_TEXTURE_MAX_LEVELS */
+    uint32_t width, height; /* level 0, in texels */
+    uint32_t levels;         /* 1 .. NEBULA_TEXTURE_MAX_LEVELS */
     uint8_t layout;         /* NEBULA_TEXTURE_RGBA8, _L8 or _LA8 */
     uint8_t disc_format;    /* the format the disc stored it in (texture-pack names), NEBULA_TEXTURE_MADE (the host
                                names one by nebula_texture_linear_code and its level-0 texels) */
-    uint8_t flags;          /* NEBULA_TEXTURE_FILTER_AT_UPLOAD */
+    uint8_t flags;          /* NEBULA_TEXTURE_GENERATED_LEVELS */
     /* Texture packs name a texture by these: xxh64 of the disc's level-0 bytes, and of the
        palette entries a colour-indexed one used (0 for the others). 0 and 0 for an image the game makes. */
+    uint8_t reserved_byte;
     uint64_t pack_hash;
     uint64_t pack_palette_hash;
-    uint8_t reserved[24];
+    uint8_t reserved[16];
 } NebulaTexture;
 
 #ifdef __cplusplus
+static_assert(sizeof(NebulaTextureInfo) == 64);
 static_assert(sizeof(NebulaTexture) == NEBULA_TEXTURE_HEADER, "the texture header is 64 bytes");
 #else
 _Static_assert(sizeof(NebulaTexture) == NEBULA_TEXTURE_HEADER, "the texture header is 64 bytes");
@@ -118,7 +130,7 @@ static inline uint32_t nebula_texture_level_bytes(uint32_t width, uint32_t heigh
 /* The header of a one-level record the game keeps in static memory (an image it made): `{header, texels}`. */
 #define NEBULA_TEXTURE_STATIC(width, height, layout, texel_bytes)                                                  \
     {{'N', 'b', 'T', 'e', 'x', 't', 'u', 'r'}, NEBULA_TEXTURE_VERSION, NEBULA_TEXTURE_HEADER + (texel_bytes), (width), \
-     (height), 1, (layout), NEBULA_TEXTURE_MADE, 0, 0, 0, {0}}
+     (height), 1, (layout), NEBULA_TEXTURE_MADE, 0, 0, 0, 0, {0}}
 
 /* The record at `p`, or NULL when `p` holds none (or one of another version). */
 static inline const NebulaTexture* nebula_texture_record(const void* p) {
@@ -130,7 +142,7 @@ static inline const NebulaTexture* nebula_texture_record(const void* p) {
 }
 
 /* Writes a record's header at `p` for an image the game makes; its levels follow at p + NEBULA_TEXTURE_HEADER. */
-static inline void nebula_texture_init(void* p, uint16_t width, uint16_t height, uint8_t levels, uint8_t layout,
+static inline void nebula_texture_init(void* p, uint32_t width, uint32_t height, uint32_t levels, uint8_t layout,
                                        uint8_t flags) {
     NebulaTexture* t = (NebulaTexture*)p;
     memset(t, 0, sizeof(*t));

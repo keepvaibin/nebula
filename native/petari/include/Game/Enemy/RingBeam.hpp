@@ -44,8 +44,8 @@ public:
     RingBeamShadowDrawer(const LiveActor*);
 
     virtual ~RingBeamShadowDrawer() {};
-    virtual void loadModelDrawMtx() const;
-    virtual void drawShape() const;
+    virtual void loadModelDrawMtx(TypedDraw& rDraw) const;
+    virtual void drawShape(TypedDraw& rDraw) const;
     virtual bool isDraw() const;
 
     const LiveActor* _1c;

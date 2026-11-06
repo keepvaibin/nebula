@@ -1,8 +1,8 @@
 #include "Game/Ride/SpaceCocoon.hpp"
-#include "Game/Util/NativeShader.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/FrameList.hpp"
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/Camera/CameraTargetArg.hpp"
 #include "Game/Camera/CameraTargetMtx.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
@@ -791,77 +791,71 @@ void SpaceCocoon::endCommandStream() {
 }
 
 void SpaceCocoon::draw() const {
-    initDraw();
+    const SiteMaterial material = loadMaterial();
+    TypedDraw site(material, nullptr, MR::getCameraViewMtx());
 
     f32 texU2 = ::sTexStartU;
     f32 texU1 = texU2 + ::sTexDiffU;
 
-    drawPlane(::sDrawScaleX, -::sDrawScaleZ0, 0.0f, -::sDrawScaleZ1, ::sColor, ::sColor, texU1, texU2);
+    drawPlane(site, ::sDrawScaleX, -::sDrawScaleZ0, 0.0f, -::sDrawScaleZ1, ::sColor, ::sColor, texU1, texU2);
     texU2 = texU1;
     texU1 += ::sTexDiffU;
-    drawPlane(::sDrawScaleX, ::sDrawScaleZ0, ::sDrawScaleX, -::sDrawScaleZ0, ::sColor, ::sColor, texU1, texU2);
+    drawPlane(site, ::sDrawScaleX, ::sDrawScaleZ0, ::sDrawScaleX, -::sDrawScaleZ0, ::sColor, ::sColor, texU1, texU2);
     texU2 = texU1;
     texU1 += ::sTexDiffU;
-    drawPlane(0.0f, ::sDrawScaleZ1, ::sDrawScaleX, ::sDrawScaleZ0, ::sColor, ::sColor, texU1, texU2);
+    drawPlane(site, 0.0f, ::sDrawScaleZ1, ::sDrawScaleX, ::sDrawScaleZ0, ::sColor, ::sColor, texU1, texU2);
     texU2 = texU1;
     texU1 += ::sTexDiffU;
-    drawPlane(-::sDrawScaleX, ::sDrawScaleZ0, 0.0f, ::sDrawScaleZ1, ::sColor, ::sColor, texU1, texU2);
+    drawPlane(site, -::sDrawScaleX, ::sDrawScaleZ0, 0.0f, ::sDrawScaleZ1, ::sColor, ::sColor, texU1, texU2);
     texU2 = texU1;
     texU1 += ::sTexDiffU;
-    drawPlane(-::sDrawScaleX, -::sDrawScaleZ0, -::sDrawScaleX, ::sDrawScaleZ0, ::sColor, ::sColor, texU1, texU2);
+    drawPlane(site, -::sDrawScaleX, -::sDrawScaleZ0, -::sDrawScaleX, ::sDrawScaleZ0, ::sColor, ::sColor, texU1, texU2);
     texU2 = texU1;
     texU1 += ::sTexDiffU;
-    drawPlane(0.0f, -::sDrawScaleZ1, -::sDrawScaleX, -::sDrawScaleZ0, ::sColor, ::sColor, texU1, texU2);
+    drawPlane(site, 0.0f, -::sDrawScaleZ1, -::sDrawScaleX, -::sDrawScaleZ0, ::sColor, ::sColor, texU1, texU2);
 }
 
 namespace {
-    void drawPoints(const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 thickness, f32 x1, f32 y1, f32 x2, f32 y2, Color8 color1,
+    void drawPoints(VertexPCT*& rVtx, const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 thickness, f32 x1, f32 y1, f32 x2, f32 y2, Color8 color1,
                     Color8 color2, f32 texX1, f32 texX2, f32 texY) {
         Vec3f side = rSide;
         Vec3f front = rFront;
         side.scale(thickness);
         front.scale(thickness);
 
-        J3DNativeDraw::position(rPos.x + side.x * x1 + front.x * y1, rPos.y + side.y * x1 + front.y * y1, rPos.z + side.z * x1 + front.z * y1);
-        J3DNativeDraw::color(color1);
-        J3DNativeDraw::texCoord(texX1, texY);
+        *rVtx++ = {rPos.x + side.x * x1 + front.x * y1, rPos.y + side.y * x1 + front.y * y1, rPos.z + side.z * x1 + front.z * y1, Rgba8(color1), texX1, texY};
 
-        J3DNativeDraw::position(rPos.x + side.x * x2 + front.x * y2, rPos.y + side.y * x2 + front.y * y2, rPos.z + side.z * x2 + front.z * y2);
-        J3DNativeDraw::color(color2);
-        J3DNativeDraw::texCoord(texX2, texY);
+        *rVtx++ = {rPos.x + side.x * x2 + front.x * y2, rPos.y + side.y * x2 + front.y * y2, rPos.z + side.z * x2 + front.z * y2, Rgba8(color2), texX2, texY};
     }
 };  // namespace
 
-void SpaceCocoon::drawPlane(f32 x1, f32 y1, f32 x2, f32 y2, Color8 color1, Color8 color2, f32 texX1, f32 texX2) const {
+void SpaceCocoon::drawPlane(TypedDraw& rDraw, f32 x1, f32 y1, f32 x2, f32 y2, Color8 color1, Color8 color2, f32 texX1, f32 texX2) const {
     s32 numPoints = mNumPoints + 2;
     f32 delta = 1.0f / numPoints;
 
-    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, numPoints * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
+    VertexPCT* vtx = rDraw.vertices< VertexPCT >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, numPoints * 2);
     {
-        ::drawPoints(mCocoonPos, mSide, mFront, ::sWidthBottom, x1, y1, x2, y2, color1, color2, texX1, texX2, 0.0f);
+        ::drawPoints(vtx, mCocoonPos, mSide, mFront, ::sWidthBottom, x1, y1, x2, y2, color1, color2, texX1, texX2, 0.0f);
 
         for (s32 idx = 0; idx < mNumPoints; idx++) {
             f32 thickness = mPlantPoints[idx]->mThickness;
 
-            ::drawPoints(mPlantPoints[idx]->mPosition, mPlantPoints[idx]->mSide, mPlantPoints[idx]->mFront, thickness, x1, y1, x2, y2, color1, color2,
+            ::drawPoints(vtx, mPlantPoints[idx]->mPosition, mPlantPoints[idx]->mSide, mPlantPoints[idx]->mFront, thickness, x1, y1, x2, y2, color1, color2,
                          texX1, texX2, (idx + 1) * delta);
         }
 
-        ::drawPoints(mBasePos, mSide, mFront, ::sWidthTop, x1, y1, x2, y2, color1, color2, texX1, texX2, 1.0f);
+        ::drawPoints(vtx, mBasePos, mSide, mFront, ::sWidthTop, x1, y1, x2, y2, color1, color2, texX1, texX2, 1.0f);
     }
 }
 
-void SpaceCocoon::initDraw() const {
-    J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
+SiteMaterial SpaceCocoon::loadMaterial() const {
     // runtime/src/render/materials/tex_modulate.hlsl: the texture times the vertex colour, opaque; drawn where
     // the alpha is above 0, depth tested and written, back faces culled.
-    NebulaNativeMaterial material;
-    NativeShader::init(material, NEBULA_SHADER_TEX_MODULATE, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_LEQUAL, true,
+    SiteMaterial material;
+    material.init(NEBULA_SHADER_TEX_MODULATE, SiteMaterial::BLEND_OPAQUE, NEBULA_COMPARE_LEQUAL, true,
                        NEBULA_CULL_BACK);
-    material.early_depth = 1;
     material.constants[0] = 1.0f;
     material.constants[1] = 1.0f;
-    NativeShader::setTexture(material, 0, mTexture);
-    NativeShader::send(material);
-    J3DNativeShape::setCurrentIdentity();
+    material.setTexture(0, mTexture);
+    return material;
 }

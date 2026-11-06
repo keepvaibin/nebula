@@ -230,7 +230,7 @@ static void parse_ini(FILE* f, RenderConfig& cfg) {
     }
 }
 
-#if defined(NEBULA_RELEASE)
+#if !defined(NEBULA_DEV)
 static void apply_env_overrides(RenderConfig&) {}
 #else
 #include "../../../tools/test_driver/render_config_env.inc"
@@ -265,7 +265,7 @@ static void clamp_unimplemented_features(RenderConfig& cfg) {
     cfg.rt_shadow_quality = 0;
     cfg.rt_quality = std::min(cfg.rt_quality, 2u);
     cfg.rt_ao_enabled = false;
-#if defined(NEBULA_RELEASE)
+#if !defined(NEBULA_DEV)
     // What is not built natively yet stays off whatever an older settings file says. Each line goes with its feature.
     cfg.ray_tracing_enabled = false;
 #endif

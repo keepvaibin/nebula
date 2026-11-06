@@ -68,10 +68,10 @@ typedef struct Mii_CharModelRes {
     s16 glassesVtxNrm[1 * VTX_COORDS_IN_NRM];
     s16 glassesVtxTxc[4 * VTX_COORDS_IN_TXC];
 
-    J3DNativeTexObj faceTexObj;
-    J3DNativeTexObj capTexObj;
-    J3DNativeTexObj noseTexObj;
-    J3DNativeTexObj glassesTexObj;
+    SiteTexture faceTexObj;
+    SiteTexture capTexObj;
+    SiteTexture noseTexObj;
+    SiteTexture glassesTexObj;
 
     s16* hairVtxPos;
     s16* hairVtxNrm;
@@ -131,7 +131,7 @@ typedef struct Mii_CharModel {
     MiiExpression expression;
     MiiResolution resolution;
     Mii_CharModelRes* res;
-    J3DNativeTexObj* maskTexObj[MiiExp_Max];
+    SiteTexture* maskTexObj[MiiExp_Max];
 } Mii_CharModel;
 
 extern Mii_CoordinateData coordinateData;
@@ -150,7 +150,7 @@ void Mii_InitCharModel(MiiCharModel* model, Mii_CharInfo* info, void* work,
 NebulaColor8 Mii_GetFacelineColor(const Mii_CharInfo* info);
 void Mii_InitCharModelRes(Mii_CharModelRes* res, const Mii_CharInfo* info);
 void Mii_InitShapeRes(Mii_ShapeRes* shape);
-void Mii_InitTexRes(J3DNativeTexObj* texObj, Mii_PartsShpTex part, u16 file,
+void Mii_InitTexRes(SiteTexture* texObj, Mii_PartsShpTex part, u16 file,
                     void* buffer);
 void Mii_TransformCoordinate(s16* to, const s16* from);
 

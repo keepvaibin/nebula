@@ -2,33 +2,33 @@
 
 #include "Game/LiveActor/LiveActor.hpp"
 
-class J3DMaterial;
-class J3DMatPacket;
-class J3DModelData;
-class J3DModel;
-class J3DShapePacket;
+class Material;
+class MaterialEntry;
+class ModelData;
+class Model;
+class ShapeEntry;
 // class LiveActor;
 class ActorLightCtrl;
 
 struct PacketInfo {
-    J3DShapePacket* mShapePacket;
+    ShapeEntry* mShapePacket;
     ActorLightCtrl* mLightLoader;
     ActorLightCtrl* mLightCtrl;
 };
 
 class DrawBufferShapeDrawer {
 public:
-    DrawBufferShapeDrawer(J3DMaterial*, J3DMatPacket*);
+    DrawBufferShapeDrawer(Material*, MaterialEntry*);
 
     void init(s32);
     void swap(DrawBufferShapeDrawer*);
     void draw() const;
-    void add(const J3DShapePacket*, const ActorLightCtrl*);
-    void remove(const J3DShapePacket*);
+    void add(const ShapeEntry*, const ActorLightCtrl*);
+    void remove(const ShapeEntry*);
     void resetLightSort(const ActorLightCtrl*);
     s32 findLightSortIndex(const ActorLightCtrl*, bool*) const;
 
-    J3DShapePacket* getShapePacket(int index) const {
+    ShapeEntry* getShapePacket(int index) const {
         return mPackets[index]->mShapePacket;
     }
 
@@ -36,8 +36,8 @@ public:
         return mPackets[index]->mLightLoader;
     }
 
-    J3DMaterial* mMaterial;
-    J3DMatPacket* mMatPacket;
+    Material* mMaterial;
+    MaterialEntry* mMatPacket;
     s32 _8;
     s32 mMaxPackets;
     s32 mNumPackets;
@@ -46,7 +46,7 @@ public:
 
 class DrawBuffer {
 public:
-    DrawBuffer(J3DModel* pModel);
+    DrawBuffer(Model* pModel);
 
     void init(int);
     void add(const LiveActor*);
@@ -65,8 +65,8 @@ public:
         return mShapeDrawers[index];
     }
 
-    J3DModelData* mModelData;
-    J3DModel* mModel;
+    ModelData* mModelData;
+    Model* mModel;
     u32 _8;
     s32 mNumActors;
     u32 _10;

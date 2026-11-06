@@ -1,10 +1,10 @@
-#include <JSystem/J3DGraphBase/J3DNativeMaterial.hpp>
+#include "Game/Render/Material.hpp"
 #include "Game/Util/DirectDraw.hpp"
-#include "Game/Util/NativeShader.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeView.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/FrameList.hpp"
+#include "Game/Render/FrameList.hpp"
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DrawUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -16,94 +16,46 @@
 #include "math_types.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
 
-namespace {
-    static Mtx mViewMtx;
-
-};  // namespace
-
 namespace TDDraw {
-    void setViewMtx(MtxPtr pMtx) {
-        NebulaMtxCopy(pMtx, ::mViewMtx);
-    }
-
-    void loadViewMtx(MtxPtr pMtx) {
-        J3DNativeShape::setPosition(0, pMtx);
-    }
-
-    void setModelMtx(MtxPtr pMtx) {
-        MR::multMtx(::mViewMtx, pMtx, MR::getCameraViewMtx());
-        J3DNativeShape::setPosition(0, ::mViewMtx);
-    }
-
-    void resetViewMtx() {
-        NebulaMtxCopy(MR::getCameraViewMtx(), ::mViewMtx);
-        J3DNativeShape::setPosition(0, ::mViewMtx);
-    }
-
     void close() {
         MR::loadProjectionMtx();
         MR::loadViewMtx();
-        J3DPass::depth(true, NEBULA_COMPARE_LEQUAL, true);
     }
 
-    void setupNative(NebulaNativeMaterial* pMaterial, u32 drawMode, u32 blendMode, u8 viewMode) {
-        J3DPass::lineWidth(1.0f);
-
-        Mtx mtx;
-        NebulaMtxIdentity(mtx);
-
-        switch (viewMode) {
-        case 0:
-            NebulaMtxCopy(MR::getCameraViewMtx(), ::mViewMtx);
-            J3DNativeShape::setPosition(0, ::mViewMtx);
-            NebulaMtxCopy(::mViewMtx, mtx);
-            break;
-        case 1:
+    void setupNative(SiteMaterial* pMaterial, u32 drawMode, u32 blendMode, u8 viewMode) {
+        if (viewMode == 1) {
             MR::loadProjectionMtx();
-            J3DNativeShape::setPosition(0, ::mViewMtx);
-            break;
-        case 2:
+        } else if (viewMode == 2) {
             cameraInit2D();
-            NebulaMtxTrans(mtx, -MR::getScreenWidth() / 2.0f, MR::getScreenHeight() / 2.0f, 0.0f);
-            mtx[1][1] = -1.0f;
-            J3DNativeShape::setPosition(0, mtx);
-            break;
         }
-
-        J3DNativeShape::setNormal(0, mtx);
-        J3DNativeShape::setCurrentIdentity();
-
-        static const NebulaShaderId kShaders[3] = {NEBULA_SHADER_VERTEX_COLOR, NEBULA_SHADER_DD_TEXTURE,
-                                                   NEBULA_SHADER_DD_TEXTURE_COLOR};
-        static const NativeShader::Blend kBlends[3] = {NativeShader::BLEND_OPAQUE, NativeShader::BLEND_ALPHA,
-                                                       NativeShader::BLEND_ADD_ALPHA};
-        NativeShader::init(*pMaterial, kShaders[drawMode], kBlends[blendMode], NEBULA_COMPARE_ALWAYS, false,
-                           NEBULA_CULL_NONE);
-        pMaterial->color_write = 1;
-        pMaterial->alpha_write = 0;
+        static const NebulaShaderId cShaders[3] = {NEBULA_SHADER_VERTEX_COLOR, NEBULA_SHADER_DD_TEXTURE, NEBULA_SHADER_DD_TEXTURE_COLOR};
+        static const SiteMaterial::Blend cBlends[3] = {SiteMaterial::BLEND_OPAQUE, SiteMaterial::BLEND_ALPHA, SiteMaterial::BLEND_ADD_ALPHA};
+        pMaterial->init(cShaders[drawMode], cBlends[blendMode], NEBULA_COMPARE_ALWAYS, false, NEBULA_CULL_NONE);
+        pMaterial->mState.color_write = 1;
+        pMaterial->mState.alpha_write = 0;
+        pMaterial->mState.line_width = 1.0f;
         pMaterial->constants[4] = -1.0f;
     }
 
-    void sendPoint(const Vec3f& rPoint, u32 color) {
-        J3DNativeDraw::position(rPoint.x, rPoint.y, rPoint.z);
-        J3DNativeDraw::color(color);
+    TypedDraw site(const SiteMaterial& rMaterial, u8 viewMode) {
+        if (viewMode == 2) {
+            Mtx mtx;
+            NebulaMtxTrans(mtx, -MR::getScreenWidth() / 2.0f, MR::getScreenHeight() / 2.0f, 0.0f);
+            mtx[1][1] = -1.0f;
+            return TypedDraw::eyeSpace(rMaterial, mtx);
+        }
+        return TypedDraw(rMaterial, nullptr, MR::getCameraViewMtx());
     }
 
-    void sendPoint(const Vec3f& rVec) {
-        J3DNativeDraw::position(rVec.x, rVec.y, rVec.z);
-    }
-
-    void drawLine(const Vec3f& rStart, const Vec3f& rEnd, u32 color) {
-        J3DNativeDraw::begin(NEBULA_PRIMITIVE_LINES, 2, NEBULA_SHAPE_COLOR0);
+    void drawLine(TypedDraw& rDraw, const Vec3f& rStart, const Vec3f& rEnd, u32 color) {
+        VertexPC* vtx = rDraw.vertices< VertexPC >(NEBULA_PRIMITIVE_LINES, 2);
         {
-            J3DNativeDraw::position(rStart.x, rStart.y, rStart.z);
-            J3DNativeDraw::color(color);
-            J3DNativeDraw::position(rEnd.x, rEnd.y, rEnd.z);
-            J3DNativeDraw::color(color);
+            *vtx++ = {rStart.x, rStart.y, rStart.z, Rgba8(color)};
+            *vtx++ = {rEnd.x, rEnd.y, rEnd.z, Rgba8(color)};
         }
     }
 
-    void drawCircle(const Vec3f& rCenter, const Vec3f& rNormal, f32 radius, u32 color, u32 segments) {
+    void drawCircle(TypedDraw& rDraw, const Vec3f& rCenter, const Vec3f& rNormal, f32 radius, u32 color, u32 segments) {
         Vec3f axis;
 
         if (rNormal.x != 0.0f) {
@@ -113,39 +65,36 @@ namespace TDDraw {
         }
 
         MR::normalizeOrZero(&axis);
-        drawCircle(rCenter, rNormal, axis, radius, color, segments);
+        drawCircle(rDraw, rCenter, rNormal, axis, radius, color, segments);
     }
 
-    void drawCircle(const Vec3f& rCenter, const Vec3f& rNormal, const Vec3f& rAxis, f32 radius, u32 color, u32 segments) {
+    void drawCircle(TypedDraw& rDraw, const Vec3f& rCenter, const Vec3f& rNormal, const Vec3f& rAxis, f32 radius, u32 color, u32 segments) {
         Vec3f axis(rAxis);
         Mtx rotation;
         NebulaMtxRotAxisRad(rotation, rNormal, 6.2831855f / segments);
 
-        J3DNativeDraw::begin(NEBULA_PRIMITIVE_LINE_STRIP, segments + 1, NEBULA_SHAPE_COLOR0);
+        VertexPC* vtx = rDraw.vertices< VertexPC >(NEBULA_PRIMITIVE_LINE_STRIP, segments + 1);
         for (u32 i = 0; i <= segments; i++) {
             Vec3f point(rCenter + axis * radius);
-            J3DNativeDraw::position(point.x, point.y, point.z);
-            J3DNativeDraw::color(color);
+            *vtx++ = {point.x, point.y, point.z, Rgba8(color)};
             NebulaMtxMultVec(rotation, axis, axis);
         }
     }
 
-    void drawFillCircle(const Vec3f& rCenter, f32 radius, u32 centerColor, u32 edgeColor, u32 segments) {
+    void drawFillCircle(TypedDraw& rDraw, const Vec3f& rCenter, f32 radius, u32 centerColor, u32 edgeColor, u32 segments) {
         Vec3f point;
         point.z = rCenter.z;
-        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_FAN, segments + 2, NEBULA_SHAPE_COLOR0);
-        J3DNativeDraw::position(rCenter.x, rCenter.y, rCenter.z);
-        J3DNativeDraw::color(centerColor);
+        VertexPC* vtx = rDraw.vertices< VertexPC >(NEBULA_PRIMITIVE_TRIANGLE_FAN, segments + 2);
+        *vtx++ = {rCenter.x, rCenter.y, rCenter.z, Rgba8(centerColor)};
 
         for (u32 i = 0; i <= segments; i++) {
             point.x = rCenter.x - radius * MR::cos(2.0f * ((static_cast< f32 >(i) / segments) * FloatUtil::PI()));
             point.y = rCenter.y + radius * MR::sin(2.0f * ((static_cast< f32 >(i) / segments) * FloatUtil::PI()));
-            J3DNativeDraw::position(point.x, point.y, point.z);
-            J3DNativeDraw::color(edgeColor);
+            *vtx++ = {point.x, point.y, point.z, Rgba8(edgeColor)};
         }
     }
 
-    void drawFillCircle(const Vec3f& rCenter, const Vec3f& rNormal, f32 radius, u32 color, u32 segments) {
+    void drawFillCircle(TypedDraw& rDraw, const Vec3f& rCenter, const Vec3f& rNormal, f32 radius, u32 color, u32 segments) {
         Vec3f axis;
         if (rNormal.x != 0.0f) {
             axis.set< f32 >(rNormal.y, -rNormal.x, 0.0f);
@@ -157,21 +106,19 @@ namespace TDDraw {
         Mtx rotation;
         NebulaMtxRotAxisRad(rotation, rNormal, (6.2831855f / segments));
 
-        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_FAN, segments + 2, NEBULA_SHAPE_COLOR0);
+        VertexPC* vtx = rDraw.vertices< VertexPC >(NEBULA_PRIMITIVE_TRIANGLE_FAN, segments + 2);
         {
-            J3DNativeDraw::position(rCenter.x, rCenter.y, rCenter.z);
-            J3DNativeDraw::color(color);
+            *vtx++ = {rCenter.x, rCenter.y, rCenter.z, Rgba8(color)};
 
             for (u32 i = 0; i <= segments; i++) {
                 Vec3f point(rCenter + axis * radius);
                 NebulaMtxMultVec(rotation, axis, axis);
-                J3DNativeDraw::position(point.x, point.y, point.z);
-                J3DNativeDraw::color(color);
+                *vtx++ = {point.x, point.y, point.z, Rgba8(color)};
             }
         }
     }
 
-    void drawFillFan(const Vec3f& rCenter, const Vec3f& rNormal, const Vec3f& rAxis, u32 color, f32 startAngle, f32 endAngle, u32 segments) {
+    void drawFillFan(TypedDraw& rDraw, const Vec3f& rCenter, const Vec3f& rNormal, const Vec3f& rAxis, u32 color, f32 startAngle, f32 endAngle, u32 segments) {
         Mtx startRotation;
         NebulaMtxRotAxisRad(startRotation, rNormal, startAngle);
         Mtx stepRotation;
@@ -179,22 +126,20 @@ namespace TDDraw {
         Vec3f axis;
         NebulaMtxMultVec(startRotation, rAxis, axis);
 
-        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_FAN, segments + 2, NEBULA_SHAPE_COLOR0);
+        VertexPC* vtx = rDraw.vertices< VertexPC >(NEBULA_PRIMITIVE_TRIANGLE_FAN, segments + 2);
         {
-            J3DNativeDraw::position(rCenter.x, rCenter.y, rCenter.z);
-            J3DNativeDraw::color(color);
+            *vtx++ = {rCenter.x, rCenter.y, rCenter.z, Rgba8(color)};
 
             for (u32 i = 0; i <= segments; i++) {
                 Vec3f point(axis);
                 point += rCenter;
-                J3DNativeDraw::position(point.x, point.y, point.z);
-                J3DNativeDraw::color(color);
+                *vtx++ = {point.x, point.y, point.z, Rgba8(color)};
                 NebulaMtxMultVec(stepRotation, axis, axis);
             }
         }
     }
 
-    void drawCylinder(const Vec3f& rBase, const Vec3f& rHeight, f32 radius, u32 baseColor, u32 topColor, u32 segments) {
+    void drawCylinder(TypedDraw& rDraw, const Vec3f& rBase, const Vec3f& rHeight, f32 radius, u32 baseColor, u32 topColor, u32 segments) {
         Vec3f axis;
 
         if (rHeight.x != 0.0f) {
@@ -213,19 +158,17 @@ namespace TDDraw {
         Mtx rotation;
         NebulaMtxRotAxisRad(rotation, rHeight, (TWO_PI / segments));
 
-        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 2 * (segments + 1), NEBULA_SHAPE_COLOR0);
+        VertexPC* vtx = rDraw.vertices< VertexPC >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 2 * (segments + 1));
         for (u32 i = 0; i <= segments; i++) {
             Vec3f basePoint(rBase + axis * radius);
             Vec3f topPoint(top + axis * radius);
-            J3DNativeDraw::position(basePoint.x, basePoint.y, basePoint.z);
-            J3DNativeDraw::color(baseColor);
-            J3DNativeDraw::position(topPoint.x, topPoint.y, topPoint.z);
-            J3DNativeDraw::color(topColor);
+            *vtx++ = {basePoint.x, basePoint.y, basePoint.z, Rgba8(baseColor)};
+            *vtx++ = {topPoint.x, topPoint.y, topPoint.z, Rgba8(topColor)};
             NebulaMtxMultVec(rotation, axis, axis);
         }
     }
 
-    void drawSpherePart(const Pos3f& rMtx, f32 radius, f32 startAzimuth, f32 endAzimuth, f32 startPolar, f32 endPolar, u32 color,
+    void drawSpherePart(TypedDraw& rDraw, const Pos3f& rMtx, f32 radius, f32 startAzimuth, f32 endAzimuth, f32 startPolar, f32 endPolar, u32 color,
                         u32 azimuthSegments, u32 polarSegments) {
         Vec3f side;
         side.set< f32 >(rMtx(0, 0), rMtx(1, 0), rMtx(2, 0));
@@ -246,7 +189,7 @@ namespace TDDraw {
             azimuthCos = MR::cos(azimuth);
             Vec3f radial((side * azimuthCos + up * azimuthSin) * radius);
 
-            J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 2 * (polarSegments + 1), NEBULA_SHAPE_COLOR0);
+            VertexPC* vtx = rDraw.vertices< VertexPC >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 2 * (polarSegments + 1));
             for (u32 j = 0; j <= polarSegments; j++) {
                 f32 polar = (startPolar + (static_cast< f32 >(j) / polarSegments) * (endPolar - startPolar));
                 f32 polarSin = MR::sin(polar);
@@ -258,47 +201,40 @@ namespace TDDraw {
                 point *= polarSin;
                 previousPoint += ringCenter;
                 point += ringCenter;
-                J3DNativeDraw::position(previousPoint.x, previousPoint.y, previousPoint.z);
-                J3DNativeDraw::color(color);
-                J3DNativeDraw::position(point.x, point.y, point.z);
-                J3DNativeDraw::color(color);
+                *vtx++ = {previousPoint.x, previousPoint.y, previousPoint.z, Rgba8(color)};
+                *vtx++ = {point.x, point.y, point.z, Rgba8(color)};
             }
-
 
             previousRadial = radial;
         }
     }
 
-    void drawSphere(const Vec3f& rCenter, f32 radius, u32 color, u32 segments) {
+    void drawSphere(TypedDraw& rDraw, const Vec3f& rCenter, f32 radius, u32 color, u32 segments) {
         Vec3f normal;
         normal = MR::getCamZdir();
-        drawFillCircle(rCenter, normal, radius, color, segments);
+        drawFillCircle(rDraw, rCenter, normal, radius, color, segments);
     }
 
-    void drawSphere3D(Vec3f center, f32 radius, u32 color, u32 segments) {
+    void drawSphere3D(TypedDraw& rDraw, Vec3f center, f32 radius, u32 color, u32 segments) {
         Pos3f mtx;
         mtx.identity();
         mtx.setTrans(center);
-        drawSpherePart(mtx, radius, 0.0f, TWO_PI, 0.0f, PI, color, segments, segments);
+        drawSpherePart(rDraw, mtx, radius, 0.0f, TWO_PI, 0.0f, PI, color, segments, segments);
     }
 
     // The site's native material holds the texture (`pTexture` as it set it).
-    void drawTexture(const Vec2f& rPosition, JUTTexture* pTexture, const Vec2f& rSize) {
+    void drawTexture(TypedDraw& rDraw, const Vec2f& rPosition, JUTTexture* pTexture, const Vec2f& rSize) {
 
-        J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
+        VertexPT* vtx = rDraw.vertices< VertexPT >(NEBULA_PRIMITIVE_QUADS, 4);
         {
-            J3DNativeDraw::position(rPosition.x, rPosition.y, 0.0f);
-            J3DNativeDraw::texCoord(0.0f, 0.0f);
-            J3DNativeDraw::position(rPosition.x + rSize.x, rPosition.y, 0.0f);
-            J3DNativeDraw::texCoord(1.0f, 0.0f);
-            J3DNativeDraw::position(rPosition.x + rSize.x, rPosition.y + rSize.y, 0.0f);
-            J3DNativeDraw::texCoord(1.0f, 1.0f);
-            J3DNativeDraw::position(rPosition.x, rPosition.y + rSize.y, 0.0f);
-            J3DNativeDraw::texCoord(0.0f, 1.0f);
+            *vtx++ = {rPosition.x, rPosition.y, 0.0f, 0.0f, 0.0f};
+            *vtx++ = {rPosition.x + rSize.x, rPosition.y, 0.0f, 1.0f, 0.0f};
+            *vtx++ = {rPosition.x + rSize.x, rPosition.y + rSize.y, 0.0f, 1.0f, 1.0f};
+            *vtx++ = {rPosition.x, rPosition.y + rSize.y, 0.0f, 0.0f, 1.0f};
         }
     }
 
-    void drawTexture3D(const Vec3f& rCenter, const Vec3f& rNormal, const Vec3f& rUp, f32 width, f32 height, JUTTexture* pTexture, bool flipX,
+    void drawTexture3D(TypedDraw& rDraw, const Vec3f& rCenter, const Vec3f& rNormal, const Vec3f& rUp, f32 width, f32 height, JUTTexture* pTexture, bool flipX,
                        bool flipY) {
         Vec3f p3;
         Vec3f p2;
@@ -320,46 +256,34 @@ namespace TDDraw {
         f32 rightTex = flipX ? 0.0f : 1.0f;
         f32 top = flipY ? 1.0f : 0.0f;
         f32 bottom = flipY ? 0.0f : 1.0f;
-        J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
-        J3DNativeDraw::position(p0.x, p0.y, p0.z);
-        J3DNativeDraw::texCoord(left, top);
-        sendPoint(p1);
-        J3DNativeDraw::texCoord(rightTex, top);
-        sendPoint(p2);
-        J3DNativeDraw::texCoord(rightTex, bottom);
-        sendPoint(p3);
-        J3DNativeDraw::texCoord(left, bottom);
+        VertexPT* vtx = rDraw.vertices< VertexPT >(NEBULA_PRIMITIVE_QUADS, 4);
+        *vtx++ = {p0.x, p0.y, p0.z, left, top};
+        *vtx++ = {p1.x, p1.y, p1.z, rightTex, top};
+        *vtx++ = {p2.x, p2.y, p2.z, rightTex, bottom};
+        *vtx++ = {p3.x, p3.y, p3.z, left, bottom};
     }
 
-    void drawFillBox(const Vec3f& rMin, const Vec3f& rMax, u32 color) {
-        J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_COLOR0);
+    void drawFillBox(TypedDraw& rDraw, const Vec3f& rMin, const Vec3f& rMax, u32 color) {
+        VertexPC* vtx = rDraw.vertices< VertexPC >(NEBULA_PRIMITIVE_QUADS, 4);
         {
-            J3DNativeDraw::position(rMin.x, rMin.y, rMin.z);
-            J3DNativeDraw::color(color);
-            J3DNativeDraw::position(rMax.x, rMin.y, rMin.z);
-            J3DNativeDraw::color(color);
-            J3DNativeDraw::position(rMax.x, rMax.y, rMax.z);
-            J3DNativeDraw::color(color);
-            J3DNativeDraw::position(rMin.x, rMax.y, rMax.z);
-            J3DNativeDraw::color(color);
+            *vtx++ = {rMin.x, rMin.y, rMin.z, Rgba8(color)};
+            *vtx++ = {rMax.x, rMin.y, rMin.z, Rgba8(color)};
+            *vtx++ = {rMax.x, rMax.y, rMax.z, Rgba8(color)};
+            *vtx++ = {rMin.x, rMax.y, rMax.z, Rgba8(color)};
         }
     }
 
-    void drawFillBox(const Vec2f& rMin, const Vec2f& rMax, u32 color) {
-        J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_COLOR0);
+    void drawFillBox(TypedDraw& rDraw, const Vec2f& rMin, const Vec2f& rMax, u32 color) {
+        VertexPC* vtx = rDraw.vertices< VertexPC >(NEBULA_PRIMITIVE_QUADS, 4);
         {
-            J3DNativeDraw::position(rMin.x, rMin.y, 0.0f);
-            J3DNativeDraw::color(color);
-            J3DNativeDraw::position(rMax.x, rMin.y, 0.0f);
-            J3DNativeDraw::color(color);
-            J3DNativeDraw::position(rMax.x, rMax.y, 0.0f);
-            J3DNativeDraw::color(color);
-            J3DNativeDraw::position(rMin.x, rMax.y, 0.0f);
-            J3DNativeDraw::color(color);
+            *vtx++ = {rMin.x, rMin.y, 0.0f, Rgba8(color)};
+            *vtx++ = {rMax.x, rMin.y, 0.0f, Rgba8(color)};
+            *vtx++ = {rMax.x, rMax.y, 0.0f, Rgba8(color)};
+            *vtx++ = {rMin.x, rMax.y, 0.0f, Rgba8(color)};
         }
     }
 
-    void drawFillBox3D(const Vec3f& rCenter, const Vec3f& rHeight, const Vec3f& rSide, const Vec3f& rFront, u32 color) {
+    void drawFillBox3D(TypedDraw& rDraw, const Vec3f& rCenter, const Vec3f& rHeight, const Vec3f& rSide, const Vec3f& rFront, u32 color) {
         Vec3f p7, p6, p5, p4, p3, p2, p1, p0;
         p0 = rCenter + rSide - rFront;
         p1 = rCenter - rSide - rFront;
@@ -370,44 +294,41 @@ namespace TDDraw {
         p6 = p2 + rHeight;
         p7 = p3 + rHeight;
 
-        J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_COLOR0);
-        J3DNativeDraw::position(p0.x, p0.y, p0.z);
-        J3DNativeDraw::color(color);
-        sendPoint(p1, color);
-        sendPoint(p2, color);
-        sendPoint(p3, color);
+        VertexPC* vtx = rDraw.vertices< VertexPC >(NEBULA_PRIMITIVE_QUADS, 4);
+        *vtx++ = {p0.x, p0.y, p0.z, Rgba8(color)};
+        *vtx++ = {p1.x, p1.y, p1.z, Rgba8(color)};
+        *vtx++ = {p2.x, p2.y, p2.z, Rgba8(color)};
+        *vtx++ = {p3.x, p3.y, p3.z, Rgba8(color)};
 
-        J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_COLOR0);
-        sendPoint(p7, color);
-        sendPoint(p4, color);
-        J3DNativeDraw::position(p0.x, p0.y, p0.z);
-        J3DNativeDraw::color(color);
-        sendPoint(p3, color);
+        vtx = rDraw.vertices< VertexPC >(NEBULA_PRIMITIVE_QUADS, 4);
+        *vtx++ = {p7.x, p7.y, p7.z, Rgba8(color)};
+        *vtx++ = {p4.x, p4.y, p4.z, Rgba8(color)};
+        *vtx++ = {p0.x, p0.y, p0.z, Rgba8(color)};
+        *vtx++ = {p3.x, p3.y, p3.z, Rgba8(color)};
 
-        J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_COLOR0);
-        sendPoint(p6, color);
-        sendPoint(p2, color);
-        sendPoint(p1, color);
-        sendPoint(p5, color);
+        vtx = rDraw.vertices< VertexPC >(NEBULA_PRIMITIVE_QUADS, 4);
+        *vtx++ = {p6.x, p6.y, p6.z, Rgba8(color)};
+        *vtx++ = {p2.x, p2.y, p2.z, Rgba8(color)};
+        *vtx++ = {p1.x, p1.y, p1.z, Rgba8(color)};
+        *vtx++ = {p5.x, p5.y, p5.z, Rgba8(color)};
 
-        J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_COLOR0);
-        J3DNativeDraw::position(p0.x, p0.y, p0.z);
-        J3DNativeDraw::color(color);
-        sendPoint(p4, color);
-        sendPoint(p5, color);
-        sendPoint(p1, color);
+        vtx = rDraw.vertices< VertexPC >(NEBULA_PRIMITIVE_QUADS, 4);
+        *vtx++ = {p0.x, p0.y, p0.z, Rgba8(color)};
+        *vtx++ = {p4.x, p4.y, p4.z, Rgba8(color)};
+        *vtx++ = {p5.x, p5.y, p5.z, Rgba8(color)};
+        *vtx++ = {p1.x, p1.y, p1.z, Rgba8(color)};
 
-        J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_COLOR0);
-        sendPoint(p6, color);
-        sendPoint(p7, color);
-        sendPoint(p3, color);
-        sendPoint(p2, color);
+        vtx = rDraw.vertices< VertexPC >(NEBULA_PRIMITIVE_QUADS, 4);
+        *vtx++ = {p6.x, p6.y, p6.z, Rgba8(color)};
+        *vtx++ = {p7.x, p7.y, p7.z, Rgba8(color)};
+        *vtx++ = {p3.x, p3.y, p3.z, Rgba8(color)};
+        *vtx++ = {p2.x, p2.y, p2.z, Rgba8(color)};
 
-        J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_COLOR0);
-        sendPoint(p6, color);
-        sendPoint(p5, color);
-        sendPoint(p4, color);
-        sendPoint(p7, color);
+        vtx = rDraw.vertices< VertexPC >(NEBULA_PRIMITIVE_QUADS, 4);
+        *vtx++ = {p6.x, p6.y, p6.z, Rgba8(color)};
+        *vtx++ = {p5.x, p5.y, p5.z, Rgba8(color)};
+        *vtx++ = {p4.x, p4.y, p4.z, Rgba8(color)};
+        *vtx++ = {p7.x, p7.y, p7.z, Rgba8(color)};
     }
 
     void cameraInit3D() {
@@ -426,19 +347,8 @@ namespace TDDraw {
         height = MR::getScreenHeight() / 2;
         Mtx44 projection;
         NebulaMtxOrtho(projection, height, -height, -width, width, nearZ, -farZ);
-        J3DNativeView::setOrthographic(projection);
+        Frame::setOrthographic(projection);
         MR::setDefaultViewportAndScissor();
-    }
-
-    void mixFogColor(Vec3f position, f32 radius, u32 packedColor) {
-        f32 nearZ = MR::getNearZ();
-        f32 farZ = MR::getFarZ();
-        NebulaColor8 color;
-        setColor8(packedColor, &color);
-        f32 start;
-        f32 end;
-        MR::calcFogStartEnd(position, radius, &start, &end);
-        J3DNativeMaterial::setCurrentFog(start, end, nearZ, farZ, color);
     }
 
     void invProject(Vec3f* pDest, const Vec3f& rScreen, MtxPtr pView, const f32* pProjection, const f32* pViewport, bool normalizedZ) {
@@ -475,7 +385,7 @@ namespace TDDraw {
         // The point in the camera's view, its perspective projection, then the viewport (left, top, width, height,
         // near, far).
         f32 viewport[6];
-        J3DNativeView::getViewportv(viewport);
+        Frame::getViewportv(viewport);
         const Proj3f& rProjection = MR::getCameraProjectionMtx();
         const Pos3f& rView = MR::getCameraViewMtx();
         const f32 eyeX = rView.mMtx[0][0] * rPosition.x + rView.mMtx[0][1] * rPosition.y + rView.mMtx[0][2] * rPosition.z + rView.mMtx[0][3];

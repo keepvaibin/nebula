@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Game/Render/TypedDraw.hpp"
 #include <nebula_geometry.hpp>
 
 
@@ -13,7 +14,7 @@ public:
     void cut(SpiderThreadMainPoint*, SpiderThreadMainPoint*);
     void updatePointerPos();
     void update();
-    void draw() const;
+    void draw(TypedDraw& rDraw) const;
     void startHang(s32);
     void updateHang(const Vec3f&, s32);
     void endHang(s32);
@@ -32,8 +33,8 @@ public:
     void updateCutPoints();
     void updateDrawVec();
 
-    void drawLine() const;
-    void drawPoints() const;
+    void drawLine(TypedDraw& rDraw) const;
+    void drawPoints(TypedDraw& rDraw) const;
 
     inline void padBox(f32 padAmount) {
         Vec3f padding(padAmount);

@@ -38,6 +38,8 @@ public:
 };
 
 class StarPointerDirector {
+    mutable u32 mDrawSlot = 0;
+
 public:
     StarPointerDirector();
 

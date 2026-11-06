@@ -217,7 +217,7 @@ private:
         d.minMaxLuminance[0] = in.minMaxLuminance[0];
         d.minMaxLuminance[1] = in.minMaxLuminance[1];
         result |= ffxFrameInterpolationDispatch(&interpolation_, &d);
-#if !defined(NEBULA_RELEASE)
+#if defined(NEBULA_DEV)
         if (dump_generated != nullptr) {
             dump_generated(in.commandList, in.presentColor, in.outputs[0], generated_);
         }

@@ -1,5 +1,6 @@
+#include "Game/Util/CameraUtil.hpp"
 #include "Game/LiveActor/ShadowSurfaceBox.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/ShadowController.hpp"
 #include "Game/LiveActor/ShadowSurfaceDrawer.hpp"
@@ -56,39 +57,27 @@ void ShadowSurfaceBox::draw() const {
     modelMtx.setXYZDir(side, up, front);
     controller->getProjectionPos(&position);
     modelMtx.setTrans(position + normal);
-    TDDraw::setModelMtx(modelMtx.toMtxPtr());
+    TypedDraw rDraw(ShadowSurfaceDrawInit::material(), modelMtx.toMtxPtr(), MR::getCameraViewMtx());
 
     sideDot = sideDot >= 0.0f ? 1.0f : -1.0f;
     upDot = upDot >= 0.0f ? 1.0f : -1.0f;
     frontDot = frontDot >= 0.0f ? 1.0f : -1.0f;
 
-    J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_COLOR0);
-    J3DNativeDraw::position(sideDot, -sideDot, -1.0f);
-    J3DNativeDraw::color(0x80);
-    J3DNativeDraw::position(sideDot, -sideDot, 1.0f);
-    J3DNativeDraw::color(0x80);
-    J3DNativeDraw::position(sideDot, sideDot, 1.0f);
-    J3DNativeDraw::color(0x80);
-    J3DNativeDraw::position(sideDot, sideDot, -1.0f);
-    J3DNativeDraw::color(0x80);
+    VertexPC* vtx = rDraw.vertices< VertexPC >(NEBULA_PRIMITIVE_QUADS, 4);
+    *vtx++ = {sideDot, -sideDot, -1.0f, Rgba8(0x80)};
+    *vtx++ = {sideDot, -sideDot, 1.0f, Rgba8(0x80)};
+    *vtx++ = {sideDot, sideDot, 1.0f, Rgba8(0x80)};
+    *vtx++ = {sideDot, sideDot, -1.0f, Rgba8(0x80)};
 
-    J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_COLOR0);
-    J3DNativeDraw::position(-1.0f, upDot, -upDot);
-    J3DNativeDraw::color(0x80);
-    J3DNativeDraw::position(1.0f, upDot, -upDot);
-    J3DNativeDraw::color(0x80);
-    J3DNativeDraw::position(1.0f, upDot, upDot);
-    J3DNativeDraw::color(0x80);
-    J3DNativeDraw::position(-1.0f, upDot, upDot);
-    J3DNativeDraw::color(0x80);
+    vtx = rDraw.vertices< VertexPC >(NEBULA_PRIMITIVE_QUADS, 4);
+    *vtx++ = {-1.0f, upDot, -upDot, Rgba8(0x80)};
+    *vtx++ = {1.0f, upDot, -upDot, Rgba8(0x80)};
+    *vtx++ = {1.0f, upDot, upDot, Rgba8(0x80)};
+    *vtx++ = {-1.0f, upDot, upDot, Rgba8(0x80)};
 
-    J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_COLOR0);
-    J3DNativeDraw::position(-frontDot, -1.0f, frontDot);
-    J3DNativeDraw::color(0x80);
-    J3DNativeDraw::position(-frontDot, 1.0f, frontDot);
-    J3DNativeDraw::color(0x80);
-    J3DNativeDraw::position(frontDot, 1.0f, frontDot);
-    J3DNativeDraw::color(0x80);
-    J3DNativeDraw::position(frontDot, -1.0f, frontDot);
-    J3DNativeDraw::color(0x80);
+    vtx = rDraw.vertices< VertexPC >(NEBULA_PRIMITIVE_QUADS, 4);
+    *vtx++ = {-frontDot, -1.0f, frontDot, Rgba8(0x80)};
+    *vtx++ = {-frontDot, 1.0f, frontDot, Rgba8(0x80)};
+    *vtx++ = {frontDot, 1.0f, frontDot, Rgba8(0x80)};
+    *vtx++ = {frontDot, -1.0f, frontDot, Rgba8(0x80)};
 }

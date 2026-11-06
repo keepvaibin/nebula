@@ -61,14 +61,14 @@ struct DisplayTexture {
     gpu::TextureRef texture;  // RGBA8
     std::uint32_t slot = 0;  // place in the picture ring
     // GPU dimensions after scene target scaling; the copy's rectangle stays in game units.
-    std::uint16_t width = 0;
-    std::uint16_t height = 0;       // after logical y-scale and scene target scale
+    std::uint32_t width = 0;
+    std::uint32_t height = 0;       // after logical y-scale and scene target scale
     std::uint64_t frame_stamp = 0;  // frame index of the last copy into it
     PointerResponseStamp pointer_response{};
     bool prerecorded_movie{};
-    std::uint64_t copy_serial = 0;  // monotonically published copy order
+    std::uint64_t picture_number = 0;  // monotonically published copy order
     // Render thread only: the serial last counted as presented, so each copy's first presentation counts once.
-    mutable std::uint64_t last_accounted_present_serial =
+    mutable std::uint64_t last_shown_number =
         ~std::uint64_t{0};
     gpu::CpuDescriptor rtv{};
     bool presentable = false;
@@ -77,33 +77,10 @@ struct DisplayTexture {
 
 // Presentation accounting of scene target -> display picture copy serials. A first presentation is decided by the texture's own
 // accounted serial; the high-water mark is diagnostic only.
-struct DisplaySerialAccountingState {
-    bool has_presented = false;
-    std::uint64_t highest_presented_serial = 0;
-    std::uint64_t last_presented_serial = 0;
-    std::uint64_t current_nonfirst_run = 0;
-};
-
-struct DisplaySerialAccountingEvent {
-    bool first_presentation = false;
-    bool adjacent_repeat = false;
-    bool not_first_presentation = false;
-    bool below_high_water = false;
-    bool delta_one = false;
-    bool delta_multi = false;
-    std::uint64_t nonfirst_run = 0;
-};
-
-[[nodiscard]] DisplaySerialAccountingEvent account_display_present_serial(
-    DisplaySerialAccountingState& state,
-    std::uint64_t& texture_accounted_serial,
-    std::uint64_t copy_serial) noexcept;
-
-
 // A capture's size in pixels: the whole frame, or half of it.
 struct FrameExtent {
-    std::uint16_t width = 0;
-    std::uint16_t height = 0;
+    std::uint32_t width = 0;
+    std::uint32_t height = 0;
 };
 
 [[nodiscard]] FrameExtent frame_pass_extent(const FrameMap& map) noexcept;
@@ -218,9 +195,9 @@ public:
     // display picture) becomes the display picture's; the one it had is released as a copied display picture's would be.
     void adopt_picture(DisplayTexture& display_picture, gpu::TextureRef texture);
     // A released texture of this size no frame in flight still reads (a handed-over scene target's replacement), or null.
-    [[nodiscard]] gpu::TextureRef take_idle_texture(std::uint16_t width, std::uint16_t height);
+    [[nodiscard]] gpu::TextureRef take_idle_texture(std::uint32_t width, std::uint32_t height);
     // A picture back into the pool, once no frame in flight reads it.
-    void release_texture(gpu::TextureRef texture, std::uint16_t width, std::uint16_t height);
+    void release_texture(gpu::TextureRef texture, std::uint32_t width, std::uint32_t height);
 
     // The newest finished picture; nullptr before the first frame end.
     [[nodiscard]] const DisplayTexture* latest() const;
@@ -231,18 +208,18 @@ public:
 private:
     struct PooledTexture {
         gpu::TextureRef texture;
-        std::uint16_t width = 0;
-        std::uint16_t height = 0;
+        std::uint32_t width = 0;
+        std::uint32_t height = 0;
     };
     void retire_texture(DisplayTexture& texture);
     void recycle_retired_textures(unsigned frame_slot);
     [[nodiscard]] gpu::TextureRef
-        acquire_idle_texture(std::uint16_t width, std::uint16_t height);
+        acquire_idle_texture(std::uint32_t width, std::uint32_t height);
 
     std::unordered_map<std::uint32_t, DisplayTexture> registry_;
     std::uint32_t latest_slot_ = 0;
     std::uint32_t next_slot_ = 0;
-    std::uint64_t next_copy_serial_ = 1;
+    std::uint64_t next_picture_number_ = 1;
     bool has_latest_ = false;
     gpu::DeviceRef device_;
     std::vector<std::vector<PooledTexture>> retired_textures_;

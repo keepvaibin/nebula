@@ -1,30 +1,29 @@
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
-#include <JSystem/J3DGraphAnimator/J3DJoint.hpp>
-#include <JSystem/J3DGraphAnimator/J3DModel.hpp>
-#include <JSystem/J3DGraphAnimator/J3DModelData.hpp>
-#include <JSystem/J3DGraphAnimator/J3DMtxBuffer.hpp>
-#include <JSystem/J3DGraphBase/J3DMaterial.hpp>
-#include <JSystem/J3DGraphBase/J3DShape.hpp>
+#include "Game/Render/ModelData.hpp"
+#include "Game/Render/Model.hpp"
+#include "Game/Render/ModelData.hpp"
+#include "Game/Render/Material.hpp"
+#include "Game/Render/ModelData.hpp"
 #include <nebula_geometry.hpp>
 #include <JSystem/JUtility/JUTNameTab.hpp>
 
 namespace MR {
-    J3DJoint* getJoint(J3DModel* pModel, const char* pName) {
-        return pModel->mModelData->mJointTree.mJointNodePointer[(u16)pModel->mModelData->mJointTree.mJointName->getIndex(pName)];
+    Joint* getJoint(Model* pModel, const char* pName) {
+        return pModel->mModelData->getJointNodePointer((u32)pModel->mModelData->findJoint(pName));
     }
 
-    J3DJoint* getJoint(const LiveActor* pActor, const char* pName) {
-        return MR::getJoint(MR::getJ3DModel(pActor), pName);
+    Joint* getJoint(const LiveActor* pActor, const char* pName) {
+        return MR::getJoint(MR::getModel(pActor), pName);
     }
 
-    J3DJoint* getJoint(const LiveActor* pActor, u16 idx) {
-        return MR::getJ3DModelData(pActor)->mJointTree.mJointNodePointer[idx];
+    Joint* getJoint(const LiveActor* pActor, u32 idx) {
+        return MR::getModelData(pActor)->getJointNodePointer(idx);
     }
 
-    MtxPtr getJointMtx(J3DModel* pModel, const char* pName) {
-        s32 idx = pModel->mModelData->mJointTree.mJointName->getIndex(pName);
-        return pModel->mMtxBuffer->mpAnmMtx[idx];
+    MtxPtr getJointMtx(Model* pModel, const char* pName) {
+        s32 idx = pModel->mModelData->findJoint(pName);
+        return pModel->getAnmMtx(idx);
     }
 
     MtxPtr getJointMtx(const LiveActor* pActor, const char* pName) {
@@ -32,41 +31,41 @@ namespace MR {
     }
 
     MtxPtr getJointMtx(const LiveActor* pActor, int idx) {
-        return MR::getJ3DModel(pActor)->mMtxBuffer->mpAnmMtx[idx];
+        return MR::getModel(pActor)->getAnmMtx(idx);
     }
 
-    u16 getJointIndex(const LiveActor* pActor, const char* pName) {
-        return MR::getJ3DModelData(pActor)->mJointTree.mJointName->getIndex(pName);
+    u32 getJointIndex(const LiveActor* pActor, const char* pName) {
+        return MR::getModelData(pActor)->findJoint(pName);
     }
 
     const char* getJointName(const LiveActor* pActor, int idx) {
-        return MR::getJ3DModelData(pActor)->mJointTree.mJointName->getName(idx);
+        return MR::getModelData(pActor)->getJointName(idx);
     }
 
     s32 getJointNum(const LiveActor* pActor) {
-        return MR::getJ3DModelData(pActor)->mJointTree.mJointNum;
+        return MR::getModelData(pActor)->getJointNum();
     }
 
     bool isExistJoint(const LiveActor* pActor, const char* pName) {
-        return MR::getJ3DModelData(pActor)->mJointTree.mJointName->getIndex(pName) != -1;
+        return MR::getModelData(pActor)->findJoint(pName) != -1;
     }
 
-    void copyJointPos(J3DModel* pModel, const char* pName, Vec3f* pPos) {
+    void copyJointPos(Model* pModel, const char* pName, Vec3f* pPos) {
         MtxPtr jointMtx = MR::getJointMtx(pModel, pName);
         pPos->set< f32 >(jointMtx[0][3], jointMtx[1][3], jointMtx[2][3]);
     }
 
     void copyJointPos(const LiveActor* pActor, const char* pName, Vec3f* pPos) {
-        copyJointPos(MR::getJ3DModel(pActor), pName, pPos);
+        copyJointPos(MR::getModel(pActor), pName, pPos);
     }
 
-    void copyJointPos(J3DModel* pModel, int idx, Vec3f* pPos) {
-        MtxPtr jointMtx = pModel->mMtxBuffer->mpAnmMtx[idx];
+    void copyJointPos(Model* pModel, int idx, Vec3f* pPos) {
+        MtxPtr jointMtx = pModel->getAnmMtx(idx);
         pPos->set< f32 >(jointMtx[0][3], jointMtx[1][3], jointMtx[2][3]);
     }
 
     void copyJointPos(const LiveActor* pActor, int idx, Vec3f* pPos) {
-        copyJointPos(MR::getJ3DModel(pActor), idx, pPos);
+        copyJointPos(MR::getModel(pActor), idx, pPos);
     }
 
     void copyJointScale(const LiveActor* pActor, const char* pName, Vec3f* pScale) {
@@ -77,24 +76,24 @@ namespace MR {
         pScale->z = FloatUtil::sqrt(mtx(2, 2) * mtx(2, 2) + (mtx(0, 2) * mtx(0, 2) + mtx(1, 2) * mtx(1, 2)));
     }
 
-    void hideJoint(J3DJoint* pJoint) {
-        for (J3DMaterial* mat = pJoint->mMesh; mat != nullptr; mat = mat->mNext) {
-            mat->mShape->mFlags |= 1;
+    void hideJoint(Joint* pJoint) {
+        for (Material* mat = pJoint->getMesh(); mat != nullptr; mat = mat->mNext) {
+            mat->getShape()->hide();
         }
     }
 
-    void hideJoint(J3DModel* pModel, const char* pName) {
+    void hideJoint(Model* pModel, const char* pName) {
         MR::hideJoint(MR::getJoint(pModel, pName));
     }
 
     void hideJoint(const LiveActor* pActor, const char* pName) {
-        hideJoint(MR::getJ3DModel(pActor), pName);
+        hideJoint(MR::getModel(pActor), pName);
     }
 
-    void hideJointAndChildren(J3DJoint* pJoint) {
+    void hideJointAndChildren(Joint* pJoint) {
         MR::hideJoint(pJoint);
 
-        J3DJoint *j, *i;
+        Joint *j, *i;
         for (i = pJoint->mChild; i != nullptr; i = i->mChild) {
             for (j = i; j != nullptr; j = j->mYounger) {
                 MR::hideJointAndChildren(j);
@@ -102,32 +101,32 @@ namespace MR {
         }
     }
 
-    void hideJointAndChildren(J3DModel* pModel, const char* pName) {
+    void hideJointAndChildren(Model* pModel, const char* pName) {
         MR::hideJointAndChildren(MR::getJoint(pModel, pName));
     }
 
     void hideJointAndChildren(const LiveActor* pActor, const char* pName) {
-        hideJointAndChildren(MR::getJ3DModel(pActor), pName);
+        hideJointAndChildren(MR::getModel(pActor), pName);
     }
 
-    void showJoint(J3DJoint* pJoint) {
-        for (J3DMaterial* mat = pJoint->mMesh; mat != nullptr; mat = mat->mNext) {
-            mat->mShape->mFlags &= ~1;
+    void showJoint(Joint* pJoint) {
+        for (Material* mat = pJoint->getMesh(); mat != nullptr; mat = mat->mNext) {
+            mat->getShape()->show();
         }
     }
 
-    void showJoint(J3DModel* pModel, const char* pName) {
+    void showJoint(Model* pModel, const char* pName) {
         MR::showJoint(MR::getJoint(pModel, pName));
     }
 
     void showJoint(const LiveActor* pActor, const char* pName) {
-        showJoint(MR::getJ3DModel(pActor), pName);
+        showJoint(MR::getModel(pActor), pName);
     }
 
-    void showJointAndChildren(J3DJoint* pJoint) {
+    void showJointAndChildren(Joint* pJoint) {
         MR::showJoint(pJoint);
 
-        J3DJoint *j, *i;
+        Joint *j, *i;
         for (i = pJoint->mChild; i != nullptr; i = i->mChild) {
             for (j = i; j != nullptr; j = j->mYounger) {
                 MR::showJointAndChildren(j);
@@ -135,36 +134,36 @@ namespace MR {
         }
     }
 
-    void showJointAndChildren(J3DModel* pModel, const char* pName) {
+    void showJointAndChildren(Model* pModel, const char* pName) {
         MR::showJointAndChildren(MR::getJoint(pModel, pName));
     }
 
     void showJointAndChildren(const LiveActor* pActor, const char* pName) {
-        showJointAndChildren(MR::getJ3DModel(pActor), pName);
+        showJointAndChildren(MR::getModel(pActor), pName);
     }
 
-    f32 getJointTransX(const J3DJoint* pJoint) {
+    f32 getJointTransX(const Joint* pJoint) {
         return pJoint->mTransformInfo.mTranslate.x;
     }
 
-    f32 getJointTransY(const J3DJoint* pJoint) {
+    f32 getJointTransY(const Joint* pJoint) {
         return pJoint->mTransformInfo.mTranslate.y;
     }
 
-    f32 getJointTransZ(const J3DJoint* pJoint) {
+    f32 getJointTransZ(const Joint* pJoint) {
         return pJoint->mTransformInfo.mTranslate.z;
     }
 
-    J3DJoint* searchChildJoint(J3DJoint* pRoot, J3DJoint* pJoint) {
+    Joint* searchChildJoint(Joint* pRoot, Joint* pJoint) {
         if (pRoot == nullptr) {
             return nullptr;
         }
 
         if (pRoot == pJoint) {
-            return reinterpret_cast< J3DJoint* >(-1);
+            return reinterpret_cast< Joint* >(-1);
         }
 
-        J3DJoint* pChild = pRoot->mChild;
+        Joint* pChild = pRoot->mChild;
         if (pChild == pJoint) {
             return pRoot;
         }
@@ -176,7 +175,7 @@ namespace MR {
             }
         }
 
-        J3DJoint* pParent = searchChildJoint(pRoot->mYounger, pJoint);
+        Joint* pParent = searchChildJoint(pRoot->mYounger, pJoint);
         if (pParent != nullptr) {
             return pParent;
         }
@@ -184,17 +183,17 @@ namespace MR {
         return searchChildJoint(pRoot->mChild, pJoint);
     }
 
-    J3DJoint* getParentJoint(J3DModelData* pModelData, J3DJoint* pJoint) {
-        J3DJoint* pParent = searchChildJoint(pModelData->mJointTree.mJointNodePointer[0], pJoint);
-        if (pParent == reinterpret_cast< J3DJoint* >(-1)) {
+    Joint* getParentJoint(ModelData* pModelData, Joint* pJoint) {
+        Joint* pParent = searchChildJoint(pModelData->getJointNodePointer(0), pJoint);
+        if (pParent == reinterpret_cast< Joint* >(-1)) {
             return nullptr;
         }
 
         return pParent;
     }
 
-    J3DJoint* getParentJoint(const LiveActor* pActor, J3DJoint* pJoint) {
-        return getParentJoint(getJ3DModelData(pActor), pJoint);
+    Joint* getParentJoint(const LiveActor* pActor, Joint* pJoint) {
+        return getParentJoint(getModelData(pActor), pJoint);
     }
 };  // namespace MR
 

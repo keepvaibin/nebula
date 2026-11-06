@@ -262,16 +262,11 @@ void MarioActor::initMember() {
     _A68 = 0.0f;
     _A6C = 0;
     _A6E = 0;
-    for (int i = 0; i < ARRAY_SIZE(_A70); i++) {
-        _A70[i] = nullptr;
-        _A90[i] = nullptr;
-    }
 
     NebulaMtxIdentity(_AB0.toMtxPtr());
     NebulaMtxIdentity(_AE0.toMtxPtr());
     _B10 = 0;
     _B12 = 0;
-    _B14 = 0;
     _B18.zero();
     _B28 = 0.0f;
     _B24 = 0.0f;

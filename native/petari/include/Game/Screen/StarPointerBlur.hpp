@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/NameObj/NameObj.hpp"
 #include "Game/Util/Color.hpp"
 #include <nebula_geometry.hpp>
@@ -31,8 +32,8 @@ public:
     u16 findDrawPointRange(u16*, u16*) const;
     void draw0(NebulaColor8) const;
     void draw1() const;
-    void draw2() const;
-    void initDraw() const;
+    void draw2(TypedDraw& rDraw) const;
+    SiteMaterial loadMaterial() const;
 
     void setPortAndColor(s32 padChannel, const NebulaColor8* pMainColor, const NebulaColor8* pSubColor) {
         mPadChannel = padChannel;

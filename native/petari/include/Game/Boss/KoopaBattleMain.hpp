@@ -33,7 +33,7 @@ public:
     bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
     bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 
-#if !defined(NEBULA_RELEASE)
+#if defined(NEBULA_DEV)
     void testHit(HitSensor* pPlayer);
 #endif
     void startMainAttack();

@@ -55,9 +55,9 @@ public:
     f32 mEndDirMaxDegree;
     f32 _A8;
     f32 _AC;
-    u16 _B0;
-    u16 _B2;
-    u16 _B4;
+    u32 _B0;
+    u32 _B2;
+    u32 _B4;
     u8 _B6;
 };
 

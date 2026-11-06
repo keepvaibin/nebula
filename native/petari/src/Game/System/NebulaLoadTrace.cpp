@@ -2,7 +2,7 @@
 // (tools/verify/loads.py). Not in a release.
 #include "Game/System/NebulaLoadTrace.hpp"
 
-#if !defined(NEBULA_RELEASE)
+#if defined(NEBULA_DEV)
 #include <JSystem/JUtility/JUTNativeLog.hpp>
 #include <cstdlib>
 
@@ -18,7 +18,7 @@
 
 namespace {
     bool enabled() {
-#if defined(NEBULA_RELEASE)
+#if !defined(NEBULA_DEV)
         static const bool sEnabled = false;
 #else
         static s32 sEnabled = -1;

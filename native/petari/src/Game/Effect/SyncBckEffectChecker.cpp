@@ -43,7 +43,7 @@ bool SyncBckEffectChecker::isCreate(const SyncBckEffectInfo* pInfo, bool checkFr
     }
 
     const f32 frame = pInfo->mStartFrame;
-    const J3DFrameCtrl* pFrameCtrl = mPlayer->getFrameCtrl();
+    const FrameCtrl* pFrameCtrl = mPlayer->getFrameCtrl();
 
     if (mIsReset && 0.0f != pFrameCtrl->getRate() && MR::isNearZero(frame + pFrameCtrl->getRate() - pFrameCtrl->getFrame())) {
         return true;
@@ -89,10 +89,10 @@ bool SyncBckEffectChecker::checkPass(f32 frame) const {
 }
 
 bool SyncBckEffectChecker::checkPassIfRate0(f32 frame) const {
-    const J3DFrameCtrl* pFrameCtrl = mPlayer->getFrameCtrl();
+    const FrameCtrl* pFrameCtrl = mPlayer->getFrameCtrl();
     const f32 currentFrame = pFrameCtrl->getFrame();
 
-    if (pFrameCtrl->getAttribute() == J3DFrameCtrl::EMode_LOOP && currentFrame < mPrevFrame) {
+    if (pFrameCtrl->getAttribute() == FrameCtrl::EMode_LOOP && currentFrame < mPrevFrame) {
         if ((mPrevFrame <= frame && frame < pFrameCtrl->getEnd()) || (pFrameCtrl->getLoop() <= frame && frame < currentFrame)) {
             return true;
         }

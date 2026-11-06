@@ -1,7 +1,7 @@
 #include "Game/LiveActor/HitSensor.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include "Game/Render/FrameList.hpp"
 #include "Game/Map/HitInfo.hpp"
-#include "Game/Player/J3DModelX.hpp"
+#include "Game/Player/PlayerModel.hpp"
 #include "Game/Player/JetTurtleShadow.hpp"
 #include "Game/Player/Mario.hpp"
 #include "Game/Player/MarioActor.hpp"
@@ -19,7 +19,7 @@
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
-#include <JSystem/J3DGraphBase/J3DSys.hpp>
+#include "Game/Render/Model.hpp"
 
 void MarioActor::initShadow() {
     _A08 = 1;
@@ -32,20 +32,16 @@ void MarioActor::initShadow() {
 
     _A10->initWithoutIter();
 
-    _A14 = reinterpret_cast< J3DModelX* >(MR::getJ3DModel(_A10));
-    J3DModelX* pSource = mModels[0];
-    J3DModelX* pShadow = _A14;
-    pShadow->_DD = pSource->_DD;
-
-    for (u32 idx = 0; idx < pShadow->_DD; idx++) {
-        pShadow->mExtraMtxBuffer[idx] = pSource->mExtraMtxBuffer[idx];
-    }
+    _A14 = reinterpret_cast< PlayerModel* >(MR::getModel(_A10));
+    PlayerModel* pSource = mModels[0];
+    PlayerModel* pShadow = _A14;
+    pShadow->copyExtraPoses(pSource);
 }
 
 void MarioActor::calcViewReflectionModel() {
-    J3DModelX* pModel = getJ3DModel();
+    PlayerModel* pModel = getModel();
     Pos3f matrix;
-    NebulaMtxCopy(getJ3DModel()->getBaseTRMtx(), matrix.toMtxPtr());
+    NebulaMtxCopy(getModel()->getBaseTRMtx(), matrix.toMtxPtr());
     Pos3f offset;
     NebulaMtxIdentity(offset.toMtxPtr());
     f32 factor;
@@ -189,7 +185,7 @@ void MarioActor::calcViewReflectionModel() {
 
     NebulaMtxConcat(_BC8.mMtx, offset.toMtxPtr(), offset.toMtxPtr());
     NebulaMtxConcat(matrix.toMtxPtr(), offset.toMtxPtr(), matrix.toMtxPtr());
-    NebulaMtxConcat(j3dSys.mViewMtx, matrix.toMtxPtr(), j3dSys.mViewMtx);
+    NebulaMtxConcat(ModelSys::mViewMtx, matrix.toMtxPtr(), ModelSys::mViewMtx);
     pModel->viewCalc3(3, nullptr);
     MR::loadViewMtx();
 }
@@ -260,8 +256,8 @@ void MarioActor::calcViewWallShadowModel() {
     updateRandomTexture(_208);
     Vec3f normal(direction);
     MR::normalizeOrZero(&normal);
-    J3DModelX* pModel = getJ3DModel();
-    J3DModelX* pSimple = getSimpleModel();
+    PlayerModel* pModel = getModel();
+    PlayerModel* pSimple = getSimpleModel();
     NebulaMtxCopy(pModel->getBaseTRMtx(), pSimple->getBaseTRMtx());
     Pos3f& matrix = *reinterpret_cast< Pos3f* >(pSimple->getBaseTRMtx());
     Vec3f x;
@@ -315,12 +311,12 @@ void MarioActor::drawShadow() const {
         return;
     }
 
-    J3DModelX* pSimple = getSimpleModel();
+    PlayerModel* pSimple = getSimpleModel();
     Pos3f matrix;
     NebulaMtxScale(matrix.toMtxPtr(), mScale.x, mScale.y, mScale.z);
     NebulaMtxConcat(matrix.toMtxPtr(), _BC8.mMtx, matrix.toMtxPtr());
-    NebulaMtxConcat(getJ3DModel()->getBaseTRMtx(), matrix.toMtxPtr(), pSimple->getBaseTRMtx());
-    _214->calcView(pSimple, 2, getJ3DModel());
+    NebulaMtxConcat(getModel()->getBaseTRMtx(), matrix.toMtxPtr(), pSimple->getBaseTRMtx());
+    _214->calcView(pSimple, 2, getModel());
     if (mMario->mSinkTimer > 180) {
         return;
     }
@@ -406,8 +402,8 @@ void MarioActor::decideShadowMode() {
 }
 
 void MarioActor::calcViewSilhouetteModel() {
-    J3DModelX* pModel = getJ3DModel();
-    J3DModelX* pSimple = getSimpleModel();
+    PlayerModel* pModel = getModel();
+    PlayerModel* pSimple = getSimpleModel();
     Vec3f direction(mPosition - mCamPos);
     MR::normalizeOrZero(&direction);
     NebulaMtxCopy(pModel->getBaseTRMtx(), pSimple->getBaseTRMtx());
@@ -465,7 +461,7 @@ f32 MarioActor::calcCylinderToCenter(const AreaObj* pAreaObj, Vec3f* pVec) {
 }
 
 void MarioActor::calcViewBlurModel() {
-    J3DModelX* pModel = getJ3DModel();
+    PlayerModel* pModel = getModel();
     if (pModel->_1E5) {
         if (_A6E == 1) {
             _A6E = 2;
@@ -497,19 +493,15 @@ void MarioActor::calcViewBlurModel() {
 
     if (_A6E == 2) {
         for (u32 i = 0; i < 8; i++) {
-            for (u32 j = 0; j < getModelData()->getDrawMtxNum(); j++) {
-                NebulaMtxCopy(pModel->getDrawMtx(j), _A70[i][j]);
-                NebulaMtxCopy(pModel->getDrawMtx(j), _A90[i][j]);
-            }
+            Model::copyPose(&mBlurPoses[0][i], *pModel->getDrawPose());
+            Model::copyPose(&mBlurPoses[1][i], *pModel->getDrawPose());
         }
 
         _B12 = 0;
         _A6E = 1;
     } else if (_37C % 3 == 0) {
         _B12 = (_B12 + 1) & 7;
-        for (u32 j = 0; j < getModelData()->getDrawMtxNum(); j++) {
-            NebulaMtxCopy(pModel->getDrawMtx(j), mBlurMatrices[1 - _B10][_B12][j]);
-        }
+        Model::copyPose(&mBlurPoses[1 - _B10][_B12], *pModel->getDrawPose());
     }
 
     _B10 = 1 - _B10;
@@ -570,13 +562,10 @@ void MarioActor::drawSilhouette() const {
         return;
     }
 
-    J3DModelX* pModel = getSimpleModel();
+    PlayerModel* pModel = getSimpleModel();
     pModel->setDrawView(1);
     pModel->mFlags.clear();
     pModel->mFlags._1C = true;
-    pModel->directDraw(nullptr);
+    pModel->directDraw();
     pModel->mFlags._1C = false;
-    J3DPass::stencil(NEBULA_STENCIL_OFF, NEBULA_STENCIL_KEEP);
-    J3DPass::writeAlpha(true);
-    J3DPass::writeColor(true);
 }

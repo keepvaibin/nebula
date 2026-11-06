@@ -63,7 +63,7 @@ FfxDevice ffx_device() {
     return ffxGetDeviceVK(&g_device_context);
 }
 
-#if !defined(NEBULA_RELEASE)
+#if defined(NEBULA_DEV)
 VkImageLayout vk_layout(FfxResourceStates state) {
     switch (state) {
     case FFX_RESOURCE_STATE_UNORDERED_ACCESS: return VK_IMAGE_LAYOUT_GENERAL;
@@ -194,7 +194,7 @@ bool FsrFrameGenerationVk::create(unsigned render_width, unsigned render_height,
         return false;
     }
     FsrGenerationCore& core = s.core;
-#if !defined(NEBULA_RELEASE)
+#if defined(NEBULA_DEV)
     core.dump_generated = dump_generated_frame;
 #endif
     const VkPhysicalDevice physical = Context::get().physical_device();

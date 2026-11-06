@@ -482,10 +482,10 @@ mod tests {
     }
 
     #[test]
-    fn a_column_the_table_lacks_is_named() {
+    fn a_column_the_table_lacks_sets_nothing() {
         let rows = read_rows(br#"{ "rows": [ { "nope": 1 } ] }"#).unwrap();
-        let error = add_rows(&table(), &rows).unwrap_err();
-        assert!(format!("{error:#}").contains("no column nope"), "{error:#}");
+        let grown = add_rows(&table(), &rows).unwrap();
+        assert_eq!(le32(&grown, 0).unwrap(), 2);
     }
 
     /// A cooked particle file of resources (user index, the texture it names) and textures (bytes).

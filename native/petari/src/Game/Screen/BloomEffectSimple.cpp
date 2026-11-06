@@ -1,12 +1,11 @@
 #include "Game/Screen/BloomEffectSimple.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include "Game/Render/FrameList.hpp"
 #include "Game/Screen/ImageEffectLocalUtil.hpp"
 #include "Game/Screen/ImageEffectSystemHolder.hpp"
 #include "Game/Util/DrawUtil.hpp"
 #include "Game/Util/Color.hpp"
 #include "Game/Util/SystemUtil.hpp"
 #include <nebula_game_api.h>
-#include "Game/Util/RenderSignals.hpp"
 #include "Game/System/NebulaHost.hpp"
 
 BloomEffectSimple::BloomEffectSimple()
@@ -27,10 +26,9 @@ void BloomEffectSimple::draw() const {
     const f32 vertical = MR::isScreen16Per9() ? 1.333f : 1.0f;
     u32 verticalBits;
     __builtin_memcpy(&verticalBits, &vertical, sizeof(verticalBits));
-    NebulaRender::bloomMarker(NebulaRender::kBloomSimple,
+    Frame::bloom(NEBULA_PASS_BLOOM_SIMPLE,
                           mThreshold | static_cast< u32 >(mMaskFilter & 0xFF) << 8 | tap << 16 | static_cast< u32 >(alpha) << 24,
                           verticalBits);
     MR::resetDrawState();
     ImageEffectLocalUtil::setupDrawTexture();
-    J3DPass::blend(NEBULA_FACTOR_ONE, NEBULA_FACTOR_ONE);
 }

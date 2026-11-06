@@ -15,17 +15,20 @@ struct MaterialConstants {
     float4 params2;  // x: the indirect scale, y: the alpha reference (0-255), zw: texture 1's size (texels)
     float4 fog;      // start, end, near, far
     float4 fog_color;  // rgb; w: the fog type
+    float4 coord[9];  // texture matrices, three rows each
+    float4 shell;     // x: how far this shell reaches
 };
 
+#define NATIVE_SHELL 1
 #include "native_material.hlsli"
 
 float2 fur_coord(NativeVertex v, uint i) {
     const float4 c = float4(v.uv[0], 1.0, 1.0);
-    return float2(dot(c, native_tex_row(3u * i)), dot(c, native_tex_row(3u * i + 1u)));
+    return float2(dot(c, material.coord[3u * i]), dot(c, material.coord[3u * i + 1u]));
 }
 
 void material_vertex(NativeVertex v, inout NativeVaryings o) {
-    const uint nq = v.pn_row & 31u;
+    const uint nq = v.pn_row;
     const float3 nt = float3(dot(native_normal_row(nq).xyz, v.nrm), dot(native_normal_row(nq + 1u).xyz, v.nrm),
                              dot(native_normal_row(nq + 2u).xyz, v.nrm));
     const float3 nrm = dot(nt, nt) > 0.0 ? normalize(nt) : nt;
@@ -36,10 +39,10 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
     float3 lit1 = float3(0.0, 0.0, 0.0);
     for (uint n = 0u; n < 8u; ++n) {
         if (((mask0 >> n) & 1u) != 0u) {
-            lit0 += j3d_light(n, 2u, 2u, v.eye, nrm).rgb;
+            lit0 += channel_light(n, 2u, 2u, v.eye, nrm).rgb;
         }
         if (((mask1 >> n) & 1u) != 0u) {
-            lit1 += j3d_light(n, 1u, 0u, v.eye, nrm).rgb;
+            lit1 += channel_light(n, 1u, 0u, v.eye, nrm).rgb;
         }
     }
     const float3 amb0 = (src & 1u) != 0u ? v.color0.rgb : material.amb0.rgb;

@@ -1,5 +1,7 @@
 #pragma once
 
+class TypedDraw;
+
 #include "Game/LiveActor/LiveActor.hpp"
 
 class JUTTexture;
@@ -23,7 +25,7 @@ public:
     f32 doMove(Vec2f, Vec2f, f32, f32);
     void doErase(Vec2f, f32, f32);
     void createTexture();
-    void drawLayer(s32) const;
+    void drawLayer(TypedDraw&, s32) const;
 
     u8 _8C[12];
     Vec3f mRight;

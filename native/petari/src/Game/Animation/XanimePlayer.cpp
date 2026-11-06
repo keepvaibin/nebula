@@ -1,21 +1,21 @@
 #include "Game/Animation/XanimePlayer.hpp"
 #include "Game/Animation/XanimeCore.hpp"
 #include "Game/Animation/XanimeResource.hpp"
-#include <JSystem/J3DGraphAnimator/J3DAnimation.hpp>
-#include <JSystem/J3DGraphAnimator/J3DJoint.hpp>
-#include <JSystem/J3DGraphAnimator/J3DModel.hpp>
-#include <JSystem/J3DGraphAnimator/J3DMtxCalc.hpp>
+#include "Game/Render/Clip.hpp"
+#include "Game/Render/ModelData.hpp"
+#include "Game/Render/Model.hpp"
+#include "Game/Render/Model.hpp"
 
 namespace {
     const char* dummy_name = "NULL";
 };  // namespace
 
-XanimePlayer::XanimePlayer(J3DModel* pModel, XanimeResourceTable* pRessource) {
+XanimePlayer::XanimePlayer(Model* pModel, XanimeResourceTable* pRessource) {
     init();
 
     mModel = pModel;
     mModelData = pModel->mModelData;
-    u8 flags = pModel->mModelData->mFlags & 0xF;
+    u8 flags = pModel->mModelData->getScaleMode();
     mResourceTable = pRessource;
 
     _0C = 0.0f;
@@ -24,7 +24,7 @@ XanimePlayer::XanimePlayer(J3DModel* pModel, XanimeResourceTable* pRessource) {
     mCurrentAnimation = nullptr;
     _68 = nullptr;
 
-    mCore = new XanimeCore(mResourceTable->mMaxGroupInfoTableSize, mModelData->mJointTree.mJointNum, flags);
+    mCore = new XanimeCore(mResourceTable->mMaxGroupInfoTableSize, mModelData->getJointNum(), flags);
 
     mWeights[0] = 0.0f;
     for (u32 i = 1; i < mResourceTable->mMaxGroupInfoTableSize; i++) {
@@ -47,7 +47,7 @@ XanimePlayer::XanimePlayer(J3DModel* pModel, XanimeResourceTable* pRessource) {
     mCore->initT(mModelData);
 }
 
-XanimePlayer::XanimePlayer(J3DModel* pModel, XanimeResourceTable* pRessource, XanimePlayer* pPlayer) {
+XanimePlayer::XanimePlayer(Model* pModel, XanimeResourceTable* pRessource, XanimePlayer* pPlayer) {
     init();
     mModel = pModel;
     mModelData = pModel->mModelData;
@@ -163,7 +163,7 @@ void XanimePlayer::changeTrackAnimation(u8 arg1, u32 index) {
         return;
     }
 
-    J3DAnmTransform* resMotion = static_cast< J3DAnmTransform* >(mResourceTable->findResMotion(mResourceTable->mBckTables[index].mFileName));
+    Clip* resMotion = static_cast< Clip* >(mResourceTable->findResMotion(mResourceTable->mBckTables[index].mFileName));
     if (resMotion != nullptr) {
         mCore->setBck(arg1, resMotion);
     }
@@ -174,7 +174,7 @@ void XanimePlayer::changeAnimationBck(const char* pName) {
 }
 
 bool XanimePlayer::changeSimpleBck(const char* pName) {
-    J3DAnmTransform* resMotion = static_cast< J3DAnmTransform* >(mResourceTable->findResMotion(pName));
+    Clip* resMotion = static_cast< Clip* >(mResourceTable->findResMotion(pName));
     if (resMotion == nullptr) {
         mCurrentBckName = nullptr;
         return false;
@@ -215,7 +215,7 @@ void XanimePlayer::swapFrameCtrl(const XanimeGroupInfo* pInfo) {
     _55 = 1 - _54;
 
     _20 = &_24[_55];
-    _20->init(reinterpret_cast< J3DAnmTransform* >(pInfo->_20[0])->getFrameMax());
+    _20->init(reinterpret_cast< Clip* >(pInfo->_20[0])->getFrameMax());
     _20->setRate(pInfo->mRate);
     _20->setStart((s32)(pInfo->mStart));
     _20->setFrame(pInfo->mStart);
@@ -254,7 +254,7 @@ void XanimePlayer::prepareAnimation(const XanimeGroupInfo* pInfo) {
     runNextAnimation();
 }
 
-void XanimePlayer::setModel(J3DModel* pModel) {
+void XanimePlayer::setModel(Model* pModel) {
     mModel = pModel;
     mModelData = pModel->mModelData;
     mCore->reconfigJointTransform(mModelData);
@@ -270,7 +270,7 @@ void XanimePlayer::runNextAnimation() {
     const XanimeGroupInfo* curAnim = mCurrentAnimation;
     u32 i;
     for (i = 0; i < curAnim->mBckTableVariant; i++) {
-        mCore->setBck(i & 0xFF, static_cast< J3DAnmTransform* >(curAnim->_20[i]));
+        mCore->setBck(i & 0xFF, static_cast< Clip* >(curAnim->_20[i]));
         mWeights[i] = curAnim->mWeights[i];
     }
 
@@ -297,7 +297,7 @@ void XanimePlayer::runNextAnimation() {
     }
 }
 
-void XanimePlayer::changeAnimationSimple(J3DAnmTransform* pAnm) {
+void XanimePlayer::changeAnimationSimple(Clip* pAnm) {
     _68 = nullptr;
 
     if (_54 != _55) {
@@ -316,7 +316,7 @@ void XanimePlayer::changeAnimationSimple(J3DAnmTransform* pAnm) {
 
     XanimeGroupInfo* info = getSimpleGroup();
     info->_20[0] = pAnm;
-    J3DAnmTransform* transform = static_cast< J3DAnmTransform* >(info->_20[0]);
+    Clip* transform = static_cast< Clip* >(info->_20[0]);
     _20->init(transform->getFrameMax());
     _20->setAttribute(transform->getAttribute());
     _20->setFrame(0.0f);
@@ -362,7 +362,7 @@ bool XanimePlayer::changeTrackWeight(u32 track, f32 weight) {
     return true;
 }
 
-void XanimePlayer::calcAnm(u16 arg) {
+void XanimePlayer::calcAnm(u32 arg) {
     if (!_80) {
         f32 currentFrame;
         if (_20->checkState(1) != 0) {
@@ -374,8 +374,8 @@ void XanimePlayer::calcAnm(u16 arg) {
         }
 
         if (mCurrentAnimation != nullptr && mCurrentAnimation->_20[0] != nullptr) {
-            s16 maxFrame = static_cast< J3DAnmTransform* >(mCurrentAnimation->_20[0])->getFrameMax();
-            if (static_cast< J3DAnmTransform* >(mCurrentAnimation->_20[0])->getFrameMax() == 0) {
+            s32 maxFrame = static_cast< Clip* >(mCurrentAnimation->_20[0])->getFrameMax();
+            if (static_cast< Clip* >(mCurrentAnimation->_20[0])->getFrameMax() == 0) {
                 maxFrame = 1;
             }
 
@@ -384,24 +384,24 @@ void XanimePlayer::calcAnm(u16 arg) {
     }
 
     mCore->updateFrame();
-    mModelData->mJointTree.mJointNodePointer[arg]->mMtxCalc = mCore;
+    mModelData->getJointNodePointer(arg)->mMtxCalc = mCore;
     _88 = false;
 }
 
-void XanimePlayer::overWriteMtxCalc(u16 arg) {
-    mModelData->mJointTree.mJointNodePointer[arg]->mMtxCalc = mCore;
+void XanimePlayer::overWriteMtxCalc(u32 arg) {
+    mModelData->getJointNodePointer(arg)->mMtxCalc = mCore;
 }
 
-void XanimePlayer::clearMtxCalc(u16 arg) {
-    mModelData->mJointTree.mJointNodePointer[arg]->mMtxCalc = nullptr;
+void XanimePlayer::clearMtxCalc(u32 arg) {
+    mModelData->getJointNodePointer(arg)->mMtxCalc = nullptr;
 }
 
-void XanimePlayer::clearAnm(u16 arg) {
+void XanimePlayer::clearAnm(u32 arg) {
     if (!_7C) {
         return;
     }
 
-    mModelData->mJointTree.mJointNodePointer[arg]->mMtxCalc = nullptr;
+    mModelData->getJointNodePointer(arg)->mMtxCalc = nullptr;
 }
 
 void XanimePlayer::updateBeforeMovement() {
@@ -483,7 +483,7 @@ void XanimePlayer::getMainAnimationTrans(u32 arg1, Vec3f* pOut) const {
         return;
     }
 
-    J3DTransformInfo info;
+    TransformInfo info;
     pTracks[index]._0->getTransform(arg1, &info);
     pOut->set(info.mTranslate);
 }

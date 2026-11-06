@@ -157,10 +157,10 @@ void GameSystemStationedArchiveLoader::createAndAddPlayerArchives(bool isDataMar
 
     if (isDataMario) {
         pMarioAnimeHolder->bindMaterialAnimations(
-            static_cast< J3DModelData* >(MR::createAndAddResourceHolder("Mario.arc")->mModelResTable->getRes("mario")));
+            static_cast< ModelData* >(MR::createAndAddResourceHolder("Mario.arc")->mModelResTable->getRes("mario")));
     } else {
         pMarioAnimeHolder->bindMaterialAnimations(
-            static_cast< J3DModelData* >(MR::createAndAddResourceHolder("Luigi.arc")->mModelResTable->getRes("luigi")));
+            static_cast< ModelData* >(MR::createAndAddResourceHolder("Luigi.arc")->mModelResTable->getRes("luigi")));
     }
 }
 

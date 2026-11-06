@@ -1,0 +1,29 @@
+#include "program.hlsli"
+struct Varyings {
+    float4 pos : SV_Position;
+    PER_SAMPLE float2 uv0 : TEXCOORD0;
+    PER_SAMPLE float2 uv1 : TEXCOORD1;
+    VARYINGS_MOTION
+};
+NativeOut program_ps(Varyings i) {
+    float4 prev = float4(1.0, 1.0, 1.0, 1.0);
+    {
+        const float4 t = tex[0].Sample(samp[0], i.uv0).rgba;
+        const float ka = 1.0;
+        const float3 rc = (float3(0.0, 0.0, 0.0) + lerp(float3(0.0, 0.0, 0.0), t.rgb, float3(1.0, 1.0, 1.0)));
+        const float ra = (0.0 + lerp(0.0, ka, t.a));
+        prev.rgb = rc;
+        prev.a = ra;
+        NATIVE_STAGE(0, float4(rc, ra))
+    }
+    {
+        const float4 t = tex[1].Sample(samp[1], i.uv1).rgba;
+        const float3 rc = saturate((prev.rgb + lerp(t.rgb, float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0))));
+        const float ra = saturate((prev.a + lerp(0.0, 0.0, 0.0)));
+        prev.rgb = rc;
+        prev.a = ra;
+        NATIVE_STAGE(1, float4(rc, ra))
+    }
+    prev = float4(prev.rgb, prev.a);
+    PROGRAM_RETURN(saturate(prev));
+}

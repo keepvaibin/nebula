@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The guard that keeps a test run off a player's data (host_env.h). Not in a release.
-#if !defined(NEBULA_RELEASE) && defined(_WIN32)
+#if defined(NEBULA_DEV) && defined(_WIN32)
 #include "galaxy/host_env.h"
 #include "galaxy/test_data_paths.h"
 #include "switches.h"

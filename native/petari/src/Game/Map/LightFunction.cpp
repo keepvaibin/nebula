@@ -1,6 +1,6 @@
-#include <JSystem/J3DGraphBase/J3DNativeMaterial.hpp>
+#include "Game/Render/Material.hpp"
 #include "Game/Map/LightFunction.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include "Game/Render/FrameList.hpp"
 #include "Game/Util/GameLightSignal.hpp"
 #include "Game/Util/MotionSignal.hpp"
 #include "Game/AreaObj/LightAreaHolder.hpp"
@@ -19,15 +19,15 @@ void LightFunction::initLightRegisterAll() {
     Color8 c(255, 255, 255, 255);
 
     for (s32 i = 0; i < 8; i++) {
-        J3DNativeLight obj;
-        J3DNativeState::initLightColor(&obj, c);
-        J3DNativeState::initLightPos(&obj, 0.0f, 0.0f, 0.0f);
-        J3DNativeState::initLightDir(&obj, 0.0f, -1.0f, 0.0f);
-        J3DNativeState::initLightAttn(&obj, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f);
-        J3DNativeState::initSpecularDir(&obj, 0.0f, -1.0f, 0.0f);
-        J3DNativeState::initSpecularDirHA(&obj, 0.0f, -1.0f, 0.0f, 0.0f, -1.0f, 0.0f);
-        J3DNativeState::initLightAttn(&obj, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f);
-        J3DNativeState::sendLight(&obj, i);
+        NebulaLight obj = {};
+        LightValues::color(&obj, c);
+        LightValues::pos(&obj, 0.0f, 0.0f, 0.0f);
+        LightValues::dir(&obj, 0.0f, -1.0f, 0.0f);
+        LightValues::attn(&obj, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f);
+        LightValues::specularDir(&obj, 0.0f, -1.0f, 0.0f);
+        LightValues::specularDirHA(&obj, 0.0f, -1.0f, 0.0f, 0.0f, -1.0f, 0.0f);
+        LightValues::attn(&obj, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f);
+        Frame::setLight(i, obj);
     }
 }
 
@@ -162,14 +162,14 @@ void LightFunction::blendActorLightInfo(ActorLightInfo* pResult, const ActorLigh
 
 namespace {
     void loadLightDiffuse(NebulaColor8 color, const Vec3f& rPos, u8 light) {
-        J3DNativeLight lightObj;
+        NebulaLight lightObj = {};
 
-        J3DNativeState::initLightPos(&lightObj, rPos.x, rPos.y, rPos.z);
-        J3DNativeState::initLightAttn(&lightObj, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f);
+        LightValues::pos(&lightObj, rPos.x, rPos.y, rPos.z);
+        LightValues::attn(&lightObj, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f);
 
         NebulaColor8 new_color(color);
-        J3DNativeState::initLightColor(&lightObj, new_color);
-        J3DNativeState::sendLight(&lightObj, light);
+        LightValues::color(&lightObj, new_color);
+        Frame::setLight(light, lightObj);
     }
 
     inline void loadCameraLight(const LightInfo& rInfo, u8 light) {
@@ -189,7 +189,7 @@ namespace {
 };  // namespace
 
 void LightFunction::loadActorLightInfo(const ActorLightInfo* pInfo) {
-    MotionSignal::actorLight(pInfo);
+    Frame::setLightFollowsCamera((pInfo->mInfo0.mIsFollowCamera ? 1 : 0) | (pInfo->mInfo1.mIsFollowCamera ? 2 : 0));
     GameLightSignal::actorLight(pInfo);
     ::loadLightInfoDiffuse(pInfo->mInfo0, 0);
     ::loadLightInfoDiffuse(pInfo->mInfo1, 1);
@@ -197,44 +197,44 @@ void LightFunction::loadActorLightInfo(const ActorLightInfo* pInfo) {
     u8 alpha = pInfo->mAlpha2;
     NebulaColor8 c = {0, 0, 0, alpha};
     ::loadLightDiffuse(c, Vec3f(0.0f, 0.0f, 0.0f), 2);
-    J3DNativeMaterial::setLightAmbient(0, NebulaColor8(pInfo->mColor));
+    MaterialAmbient::set(0, NebulaColor8(pInfo->mColor));
 }
 
 void LightFunction::loadLightInfoCoin(const LightInfoCoin* pInfo) {
-    MotionSignal::coinLight(pInfo);
+    Frame::setLightFollowsCamera(pInfo->base.mIsFollowCamera ? 1 : 0);
     ::loadLightInfoDiffuse(pInfo->base, 0);
     Vec3f v7(0.0f, 0.0f, -1.0f);
-    J3DNativeLight obj;
+    NebulaLight obj = {};
     f32 v = pInfo->_18;
-    J3DNativeState::initLightColor(&obj, NebulaColor8(pInfo->_14));
-    J3DNativeState::initSpecularDir(&obj, v7.x, v7.y, v7.z);
-    J3DNativeState::initLightAttn(&obj, 0.0f, 0.0f, 1.0f, (v / 2.0f), 0.0f, (1.0f - (v / 2.0f)));
-    J3DNativeState::sendLight(&obj, 3);
+    LightValues::color(&obj, NebulaColor8(pInfo->_14));
+    LightValues::specularDir(&obj, v7.x, v7.y, v7.z);
+    LightValues::attn(&obj, 0.0f, 0.0f, 1.0f, (v / 2.0f), 0.0f, (1.0f - (v / 2.0f)));
+    Frame::setLight(3, obj);
 }
 
 void LightFunction::loadPointLightInfo(const PointLightInfo* pInfo) {
-    MotionSignal::pointLight(pInfo);
+    Frame::setLightFollowsCamera(0);
     GameLightSignal::pointLight(pInfo);
     Vec3f v7(pInfo->mPos);
     MR::getCameraViewMtx().mult(v7, v7);
-    J3DNativeLight obj;
-    J3DNativeState::initLightPos(&obj, v7.x, v7.y, v7.z);
-    J3DNativeState::initLightDistAttn(&obj, pInfo->mRefDistance, pInfo->mRefBrightness, pInfo->mDistAttnFn);
-    J3DNativeState::initLightNoSpot(&obj);
-    J3DNativeState::initLightColor(&obj, pInfo->mColor);
-    J3DNativeState::sendLight(&obj, 4);
+    NebulaLight obj = {};
+    LightValues::pos(&obj, v7.x, v7.y, v7.z);
+    LightValues::distAttn(&obj, pInfo->mRefDistance, pInfo->mRefBrightness, pInfo->mDistAttnFn);
+    LightValues::noSpot(&obj);
+    LightValues::color(&obj, pInfo->mColor);
+    Frame::setLight(4, obj);
 }
 
 void LightFunction::loadAllLightWhite() {
-    MotionSignal::allLightWhite();
+    Frame::setLightFollowsCamera(0);
 
     for (u32 i = 0; i < 8; i++) {
-        J3DNativeLight lightObj;
-        J3DNativeState::initLightPos(&lightObj, 0.0f, 0.0f, 0.0f);
+        NebulaLight lightObj = {};
+        LightValues::pos(&lightObj, 0.0f, 0.0f, 0.0f);
 
         NebulaColor8 color = {255, 255, 255, 255};
-        J3DNativeState::initLightColor(&lightObj, color);
-        J3DNativeState::sendLight(&lightObj, i);
+        LightValues::color(&lightObj, color);
+        Frame::setLight(i, lightObj);
     }
 }
 

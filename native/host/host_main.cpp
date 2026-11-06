@@ -36,9 +36,13 @@
 #include "galaxy/render/host_window.h"
 #include "galaxy/mod_plugins.h"
 #include "galaxy/render/mod_shaders.h"
+#include "galaxy/render/program_table.h"
 #if defined(NEBULA_HOST_RENDERER)
 #include "galaxy/experimental_ultrawide_aspect.h"
 #include "galaxy/frame_timeline.h"
+#if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
+#include "galaxy/controller_hid.h"
+#endif
 #include "galaxy/render_api.h"
 #include "galaxy/native_audio.h"
 #include "galaxy/game_paths.h"
@@ -61,10 +65,13 @@
 #include "galaxy/wiimote_hid.h"
 #endif
 #include "galaxy/runtime_settings.h"
-#include "galaxy/render/curved_surfaces.h"
-#include "galaxy/render/native_shapes.h"
 #include "galaxy/render/galaxy_select.h"
 #include "galaxy/render/render_config.h"
+#include "galaxy/render/texture_store.h"
+#if defined(NEBULA_HOST_RENDERER)
+#include "render/core/frame_core.h"
+#endif
+#include <nebula_frame_list.h>
 #include "galaxy/render/rt_materials.h"
 #include "galaxy/render/texture_pack.h"
 #if defined(NEBULA_HOST_D3D12)
@@ -205,6 +212,9 @@ std::filesystem::path gCodeCrashFile;
 
 void gather_crash_facts(galaxy::crash::Facts::Kind kind, const char* text, bool in_game = false,
                         bool stack_overflow = false) noexcept {
+#if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
+    galaxy::host::stop_all_rumble();
+#endif
     if (!gCodeCrashFile.empty()) {
         std::filesystem::path file;
         file.swap(gCodeCrashFile);
@@ -476,36 +486,8 @@ void load_module(const fs::path& path) {
 }
 
 #if defined(NEBULA_HOST_RENDERER)
-void svc_memory_rewritten(void*, const void* address, uint32_t size);
 
-#if defined(NEBULA_HOST_RENDERER)
-// The images handed to the renderer (texture_image), by address: one handed over again unchanged needs no
-// new record. Any write over one forgets it, as the renderer drops its copy then: the game handing the same bytes over
-// after reloading a file must reach the renderer again.
-std::mutex gHandedLock;
-std::map<uint64_t, std::shared_ptr<const std::vector<std::byte>>> gHanded;
 
-void forget_handed(uint64_t physical, uint32_t size) {
-    const std::lock_guard guard(gHandedLock);
-    auto it = gHanded.lower_bound(physical + size);
-    while (it != gHanded.begin()) {
-        --it;
-        if (it->first + it->second->size() <= physical) {
-            break;
-        }
-        it = gHanded.erase(it);
-    }
-}
-#endif
-
-// Host writes into game memory (disc DMA): images handed over there must be handed over again.
-void mark_written(const void* dst, uint32_t size) {
-#if defined(NEBULA_HOST_RENDERER)
-    forget_handed(reinterpret_cast<uint64_t>(dst), size);
-#else
-    (void)dst, (void)size;
-#endif
-}
 #endif
 
 // The game: Setup's game.pak, the asset store (galaxy/disc_files.h).
@@ -516,10 +498,16 @@ struct Pak {
 };
 Pak gPak;
 
-void open_pak(const fs::path& path) {
+bool open_pak(const fs::path& path) {
     gPak.store_file = path;
     if (!gPak.store.open(path)) {
-        die("%s is not a game store: import the game again", utf8_of(path.filename()).c_str());
+        log_line("import:", "The game files need importing again. Open Nebula Setup and import the game.");
+#if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
+        if (::galaxy::run_options().hide_window == nullptr) {
+            MessageBoxW(nullptr, L"Open Nebula Setup and import the game again.", L"Nebula", MB_OK | MB_ICONINFORMATION);
+        }
+#endif
+        return false;
     }
     // The releases the module plays (NebulaRegion.hpp): North America, Europe and Japan.
     std::snprintf(gPak.id, sizeof(gPak.id), "%.6s", std::string(gPak.store.game_id()).c_str());
@@ -527,6 +515,7 @@ void open_pak(const fs::path& path) {
         std::strcmp(gPak.id, "RMGJ01") != 0) {
         die("%s holds %.6s, not Super Mario Galaxy for North America, Europe or Japan", utf8_of(path.filename()).c_str(), gPak.id);
     }
+    return true;
 }
 
 // The calling thread's name, as profilers, debuggers and the CPU report show it.
@@ -1117,6 +1106,16 @@ LONG CALLBACK crash_handler(EXCEPTION_POINTERS* info) {
             std::snprintf(line, sizeof(line), "thrown: %s (thread %lu)", text + std::strlen("uncaught "),
                           GetCurrentThreadId());
             log_line("exception:", line);
+#if defined(NEBULA_DEV)
+            void* frames[16];
+            const USHORT count = RtlCaptureStackBackTrace(1, 16, frames, nullptr);
+            const auto exe = reinterpret_cast<std::uintptr_t>(GetModuleHandleW(nullptr));
+            for (USHORT f = 0; f < count; ++f) {
+                const auto at = reinterpret_cast<std::uintptr_t>(frames[f]);
+                std::snprintf(line, sizeof(line), "NebulaNative.exe+0x%llx", static_cast<unsigned long long>(at - exe));
+                log_line("thrown from:", line);
+            }
+#endif
         }
         return EXCEPTION_CONTINUE_SEARCH;
     }
@@ -1336,47 +1335,16 @@ void svc_fatal(void*, const char* text) {
 // The renderer: the game's records reach it in frames (render_frame at the game's frame end and, while the start runs
 // ahead, at the frame, which also presents). All of this runs on the simulation thread, where the game makes these
 // calls.
-using galaxy::RenderLogLevel;
-using galaxy::RenderServices;
-
-RenderServices gNative{};
 std::atomic<uint64_t> gSubmissions{0};  // render_frame calls with commands: the renderer's frame index
-
-void native_log(void*, RenderLogLevel, const char* text) {
-    log_line("renderer:", text);
-}
 
 galaxy::host::NativeGameAudio* gAudio = nullptr;
 
 void submit_frame_unchecked(bool present, bool black) {
-    galaxy::render::render_frame(&gNative, present, black);
+    galaxy::render::render_frame(present, black);
     gSubmissions.fetch_add(1, std::memory_order_relaxed);
 }
 
 [[noreturn]] void finish_and_exit(bool restart);
-
-// The graphics driver reset the card (E-18): a new process starts the game again from its save, twice in a row at most;
-// the third time is a fault to report.
-bool restart_after_gpu_loss(const char* what) {
-#if defined(_WIN32)
-    if (!galaxy::crash::is_gpu_lost(what)) {
-        return false;
-    }
-    const char* before = std::getenv("NEBULA_GPU_RESTARTS");
-    const int count = before != nullptr ? std::atoi(before) : 0;
-    if (count >= 2) {
-        return false;
-    }
-    char text[16];
-    std::snprintf(text, sizeof(text), "%d", count + 1);
-    _putenv_s("NEBULA_GPU_RESTARTS", text);
-    log_line("host: the graphics card was reset:", what);
-    return true;
-#else
-    (void)what;
-    return false;
-#endif
-}
 
 // The card has no memory free at the start: another program holds it for a moment. A new process tries again, up to
 // five times, two seconds apart; after that it is a fault to report.
@@ -1409,9 +1377,6 @@ void submit_frame(bool present, bool black) {
     try {
         submit_frame_unchecked(present, black);
     } catch (const std::exception& error) {
-        if (restart_after_gpu_loss(error.what())) {
-            finish_and_exit(true);
-        }
         char text[1024];
         std::snprintf(text, sizeof(text), "the renderer stopped: %s", error.what());
         svc_fatal(nullptr, text);
@@ -1419,7 +1384,7 @@ void submit_frame(bool present, bool black) {
 }
 #endif
 
-// The stage the game reports before each 3D scene (game_stage); the scene's begin marker carries it.
+// The stage the game reports before each 3D scene (game_stage): a crash report names it.
 
 void svc_game_stage(void*, const char* name) {
     if (name != nullptr && gSceneStage != name) {
@@ -1558,7 +1523,8 @@ void copy_settings_text(char (&field)[N], const std::string& text) {
 #endif
 
 #if defined(NEBULA_HOST_RENDERER)
-static_assert(static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::Leave) == NEBULA_SETTINGS_STATUS_LEAVE &&
+static_assert(static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::Preparing) == NEBULA_SETTINGS_STATUS_PREPARING &&
+              static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::Leave) == NEBULA_SETTINGS_STATUS_LEAVE &&
               static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::ModsRestartAsk) == NEBULA_SETTINGS_STATUS_MODS_RESTART_ASK &&
               static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::KeepDisplay) == NEBULA_SETTINGS_STATUS_KEEP_DISPLAY &&
               static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::JoyCon) == NEBULA_SETTINGS_STATUS_JOYCON &&
@@ -1660,39 +1626,12 @@ void svc_sharp_2d(void*, uint32_t on) {
 #endif
 }
 
-void svc_movie_frame(void*, const char* name, int32_t frame, float frame_rate, const void* y, const void* u, const void* v,
+void svc_movie_frame(void*, const char* name, int32_t frame, float frame_rate, uint32_t y, uint32_t u, uint32_t v,
                      uint32_t width, uint32_t height) {
 #if defined(NEBULA_HOST_RENDERER)
-    galaxy::render::attach_movie_frame(name, frame, frame_rate, reinterpret_cast<uint64_t>(y), reinterpret_cast<uint64_t>(u),
-                                   reinterpret_cast<uint64_t>(v), width, height);
+    galaxy::render::attach_movie_frame(name, frame, frame_rate, y, u, v, width, height);
 #else
     (void)name, (void)frame, (void)frame_rate, (void)y, (void)u, (void)v, (void)width, (void)height;
-#endif
-}
-
-void svc_scene_marker(void*, uint32_t marker, const float* view) {
-    if (marker == NEBULA_SCENE_3D_BEGIN) {
-        gSceneBegins.fetch_add(1, std::memory_order_relaxed);
-        end_boot_fast("first 3D scene");
-    }
-#if defined(NEBULA_HOST_RENDERER)
-    if (marker == NEBULA_SCENE_3D_BEGIN && view != nullptr) {
-        galaxy::render::attach_scene_view(view, view[15] != 0.0f ? view + 12 : nullptr,
-                                      gSceneStage.empty() ? nullptr : gSceneStage.c_str());
-    }
-    if (marker == NEBULA_SCENE_3D_OPAQUE_END && view != nullptr) {
-        galaxy::render::attach_scene_opaque(view);
-    }
-    static constexpr galaxy::render::SceneMarker kMarkers[] = {
-        galaxy::render::SceneMarker::SceneBegin, galaxy::render::SceneMarker::SceneEnd,
-        galaxy::render::SceneMarker::Scene2DBegin, galaxy::render::SceneMarker::Scene2DEnd,
-        galaxy::render::SceneMarker::SceneOpaqueEnd};
-    if (marker < std::size(kMarkers)) {
-        galaxy::render::attach_scene_marker(kMarkers[marker]);
-    }
-#else
-    (void)marker;
-    (void)view;
 #endif
 }
 
@@ -1800,321 +1739,96 @@ int svc_galaxy_select_names_wanted(void*) { return 0; }
 void svc_galaxy_select_name(void*, uint32_t, uint32_t, const uint16_t*) {}
 #endif
 
-// A loaded model's triangles: the analysis its curved surfaces are rounded by, kept by its position array's address
-// (galaxy/render/curved_surfaces.h).
-void svc_curved_surface(void*, uint64_t key, const float* positions, uint32_t position_count, const float* normals,
-                        uint32_t normal_count, const uint16_t* corners, uint32_t triangle_count) {
+// What the game draws from, registered once. A service reads what it is given before it returns.
 #if defined(NEBULA_HOST_RENDERER)
-    namespace curved = galaxy::render::curved;
-    if (positions == nullptr || normals == nullptr || corners == nullptr || triangle_count == 0u) {
-        return;
+uint32_t svc_model_register(void*, const void* file, uint32_t* first_mesh) {
+    return galaxy::render::registries().model_register(file, first_mesh);
+}
+void svc_model_free(void*, uint32_t model) {
+    galaxy::render::registries().model_free(model);
+}
+uint32_t svc_mesh_register(void*, const NebulaFrameMesh* mesh) {
+    return galaxy::render::registries().mesh_register(*mesh);
+}
+void svc_mesh_free(void*, uint32_t mesh) {
+    galaxy::render::registries().mesh_free(mesh);
+}
+uint32_t svc_texture_register(void*, const NebulaTextureImage* image) {
+    return galaxy::render::textures().register_image(*image);
+}
+void svc_texture_update(void*, uint32_t texture, const void* bytes, uint32_t size) {
+    galaxy::render::textures().update_image(texture, bytes, size);
+}
+void svc_texture_free(void*, uint32_t texture) {
+    galaxy::render::textures().free_image(texture);
+}
+uint32_t svc_texture_target(void*) {
+    return galaxy::render::textures().new_target();
+}
+uint32_t svc_texture_table(void*, const NebulaFrameTexture* list, uint32_t count) {
+    return galaxy::render::registries().texture_table(list, count);
+}
+uint32_t svc_material_register(void*, const float (*rows)[4], uint32_t vertex_rows, uint32_t pixel_rows) {
+    return galaxy::render::registries().material_register(rows, vertex_rows, pixel_rows);
+}
+uint32_t svc_pipeline_register(void*, const NebulaPipelineDesc* desc) {
+    return galaxy::render::registries().pipeline_register(*desc);
+}
+void svc_texture_hd(void*, uint32_t texture, const void* hd) {
+    galaxy::render::textures().set_built_in(texture, hd);
+}
+void svc_submit_frame(void*, NebulaFrameList* list) {
+    if ((list->flags & NEBULA_FRAME_HAS_SCENE) != 0u) {
+        gSceneBegins.fetch_add(1, std::memory_order_relaxed);
+        end_boot_fast("first 3D scene");
     }
-    std::vector<curved::Vec3> p(position_count);
-    std::vector<curved::Vec3> n(normal_count);
-    std::vector<curved::Corner> c(static_cast<std::size_t>(triangle_count) * 3u);
-    std::memcpy(p.data(), positions, p.size() * sizeof(curved::Vec3));
-    std::memcpy(n.data(), normals, n.size() * sizeof(curved::Vec3));
-    for (std::size_t i = 0; i < c.size(); ++i) {
-        c[i] = curved::Corner{corners[2u * i], corners[2u * i + 1u]};
-    }
-    curved::register_model_later(key, std::move(p), std::move(n), std::move(c));
+    galaxy::render::attach_frame_list(list);
+    submit_frame(false, false);
+}
+uint32_t svc_probe_results(void*, uint32_t channel, NebulaScreenProbe* probes, uint32_t capacity) {
+    static_assert(sizeof(NebulaScreenProbe) == sizeof(galaxy::render::ScreenProbe));
+    return galaxy::render::screen_probe_results(channel, reinterpret_cast<galaxy::render::ScreenProbe*>(probes), capacity);
+}
 #else
-    (void)key, (void)positions, (void)position_count, (void)normals, (void)normal_count, (void)corners,
-        (void)triangle_count;
-#endif
+// With no renderer nothing is drawn: every id is 0 and a list is read by nobody.
+uint32_t svc_model_register(void*, const void*, uint32_t* first_mesh) {
+    *first_mesh = 0u;
+    return 0u;
 }
-
-#if defined(NEBULA_HOST_RENDERER)
-// Native shape arrays and groups (galaxy/render/native_shapes.h): the game registers them from its loading threads too,
-// so they wait here and join the stream ahead of the next draw record (which the game makes after them).
-std::mutex gShapeLock;
-std::vector<galaxy::render::shapes::Record> gShapePending;
-std::atomic<bool> gShapePendingAny{false};
-
-void queue_shape_record(galaxy::render::shapes::Record record) {
-    std::lock_guard guard(gShapeLock);
-    gShapePending.push_back(std::move(record));
-    gShapePendingAny.store(true, std::memory_order_release);
+void svc_model_free(void*, uint32_t) {}
+uint32_t svc_mesh_register(void*, const NebulaFrameMesh*) {
+    return 0u;
 }
-#endif
-
-void svc_shape_array(void*, const NebulaShapeArray* array) {
-#if defined(NEBULA_HOST_RENDERER)
-    namespace shapes = galaxy::render::shapes;
-    if (array == nullptr || (array->values == nullptr && array->count != 0u)) {
-        return;
-    }
-    auto values = std::make_shared<shapes::Array>();
-    values->count = array->count;
-    std::size_t floats = 0;
-    switch (array->kind) {
-    case NEBULA_SHAPE_ARRAY_POSITION: values->kind = shapes::ArrayKind::Position; floats = 3u; break;
-    case NEBULA_SHAPE_ARRAY_NORMAL: values->kind = shapes::ArrayKind::Normal; floats = 3u; break;
-    case NEBULA_SHAPE_ARRAY_NBT: values->kind = shapes::ArrayKind::Nbt; floats = 9u; break;
-    case NEBULA_SHAPE_ARRAY_TEXCOORD: values->kind = shapes::ArrayKind::TexCoord; floats = 2u; break;
-    case NEBULA_SHAPE_ARRAY_COLOR: values->kind = shapes::ArrayKind::Color; break;
-    default: die("a shape array of unknown kind %u", array->kind);
-    }
-    if (values->kind == shapes::ArrayKind::Color) {
-        const auto* colors = static_cast<const uint32_t*>(array->values);
-        values->colors.assign(colors, colors + array->count);
-    } else {
-        const auto* f = static_cast<const float*>(array->values);
-        values->floats.assign(f, f + static_cast<std::size_t>(array->count) * floats);
-    }
-    shapes::Record record;
-    record.kind = shapes::Record::Kind::Array;
-    record.key = array->key;
-    record.array = std::move(values);
-    queue_shape_record(std::move(record));
-#else
-    (void)array;
-#endif
+void svc_mesh_free(void*, uint32_t) {}
+uint32_t svc_texture_register(void*, const NebulaTextureImage*) {
+    return 0u;
 }
-
-void svc_shape_forget(void*, uint64_t start, uint64_t end) {
-#if defined(NEBULA_HOST_RENDERER)
-    namespace shapes = galaxy::render::shapes;
-    forget_handed(start, static_cast<uint32_t>(end - start));
-    shapes::Record record;
-    record.kind = shapes::Record::Kind::Forget;
-    record.key = start;
-    record.position = end;
-    queue_shape_record(std::move(record));
-#else
-    (void)start, (void)end;
-#endif
+void svc_texture_update(void*, uint32_t, const void*, uint32_t) {}
+void svc_texture_free(void*, uint32_t) {}
+uint32_t svc_texture_target(void*) {
+    return 0u;
 }
-
-void svc_shape_geometry(void*, const NebulaShapeGeometry* geometry) {
-#if defined(NEBULA_HOST_RENDERER)
-    namespace shapes = galaxy::render::shapes;
-    if (geometry == nullptr || (geometry->corner_count != 0u && geometry->corners == nullptr) ||
-        (geometry->index_count != 0u && geometry->indices == nullptr)) {
-        return;
-    }
-    auto g = std::make_shared<shapes::Geometry>();
-    g->attributes = geometry->attributes;
-    for (std::size_t i = 0; i < g->arrays.size(); ++i) {
-        g->arrays[i] = geometry->arrays[i];
-    }
-    g->corners.resize(geometry->corner_count);
-    for (uint32_t i = 0; i < geometry->corner_count; ++i) {
-        const NebulaShapeCorner& in = geometry->corners[i];
-        shapes::Corner& out = g->corners[i];
-        out.position = in.position;
-        out.normal = in.normal;
-        out.tangent = in.tangent;
-        out.binormal = in.binormal;
-        out.color = {in.color[0], in.color[1]};
-        for (unsigned k = 0; k < 8u; ++k) {
-            out.texcoord[k] = in.texcoord[k];
-            out.texture_matrix[k] = in.texture_matrix[k];
-        }
-        out.position_matrix = in.position_matrix;
-        out.model_matrix = in.model_matrix;
-    }
-    g->indices.assign(geometry->indices, geometry->indices + geometry->index_count);
-    for (const uint16_t index : g->indices) {
-        if (index >= geometry->corner_count) {
-            die("a shape group's triangle names corner %u of %u", index, geometry->corner_count);
-        }
-    }
-    shapes::Record record;
-    record.kind = shapes::Record::Kind::Geometry;
-    record.key = geometry->key;
-    record.geometry = std::move(g);
-    queue_shape_record(std::move(record));
-#else
-    (void)geometry;
-#endif
+uint32_t svc_texture_table(void*, const NebulaFrameTexture*, uint32_t) {
+    return 0u;
 }
-
-#if defined(NEBULA_HOST_RENDERER)
-// A record the game makes now runs in the order the game makes it, after the arrays and groups it registered before it
-// (which join the records here).
-void attach_pending_records() {
-    if (gShapePendingAny.load(std::memory_order_acquire)) {
-        std::vector<galaxy::render::shapes::Record> pending;
-        {
-            std::lock_guard guard(gShapeLock);
-            pending.swap(gShapePending);
-            gShapePendingAny.store(false, std::memory_order_relaxed);
-        }
-        for (galaxy::render::shapes::Record& record : pending) {
-            galaxy::render::attach_shape_record(std::move(record));
-        }
-    }
+uint32_t svc_material_register(void*, const float (*)[4], uint32_t, uint32_t) {
+    return 0u;
 }
-
-#endif
-
-// A group drawn.
-#if defined(NEBULA_HOST_RENDERER)
-// A draw's matrices (NebulaDrawMatrix) as the renderer's records hold them.
-void copy_draw_matrices(const NebulaDrawMatrix* matrices, uint32_t count, galaxy::render::shapes::Record& record) {
-    namespace shapes = galaxy::render::shapes;
-    const uint32_t total = matrices != nullptr ? count : 0u;
-    shapes::Matrix* out = galaxy::render::reserve_record_matrices(record, total);
-    for (uint32_t i = 0; i < total; ++i) {
-        const NebulaDrawMatrix& in = matrices[i];
-        if (in.kind > NEBULA_DRAW_MATRIX_POST_TEXTURE) {
-            die("a draw's matrix of unknown kind %u", in.kind);
-        }
-        const unsigned places = in.kind <= NEBULA_DRAW_MATRIX_NORMAL ? 10u
-                                : in.kind == NEBULA_DRAW_MATRIX_POST_TEXTURE ? 21u : 11u;
-        if (in.place >= places) {
-            die("a draw's matrix of kind %u at place %u", in.kind, in.place);
-        }
-        shapes::Matrix& m = out[i];
-        m.kind = static_cast<shapes::MatrixKind>(in.kind);
-        m.place = in.place;
-        m.model_matrix = in.model_matrix;
-        std::memcpy(m.values.data(), in.values, sizeof(in.values));
+uint32_t svc_pipeline_register(void*, const NebulaPipelineDesc*) {
+    return 0u;
+}
+void svc_texture_hd(void*, uint32_t, const void*) {}
+void svc_submit_frame(void*, NebulaFrameList* list) {
+    if ((list->flags & NEBULA_FRAME_HAS_SCENE) != 0u) {
+        gSceneBegins.fetch_add(1, std::memory_order_relaxed);
+        end_boot_fast("first 3D scene");
     }
+    list->released = 1u;
+}
+uint32_t svc_probe_results(void*, uint32_t, NebulaScreenProbe*, uint32_t) {
+    return 0u;
 }
 #endif
-
-void svc_shape_draw(void*, uint64_t shape, uint64_t position, uint64_t normal, uint64_t color,
-                    const NebulaDrawMatrix* matrices, uint32_t matrix_count, const NebulaShapeCurrent* current,
-                    const NebulaShapeTexGen* texgens, uint32_t texgen_count, const NebulaPassState* pass,
-                    uint32_t palette, uint32_t palette_matrix) {
-#if defined(NEBULA_HOST_RENDERER)
-    namespace shapes = galaxy::render::shapes;
-    attach_pending_records();
-    shapes::Record record;
-    record.kind = shapes::Record::Kind::Draw;
-    record.palette = palette;
-    record.palette_matrix = palette_matrix;
-    std::memcpy(&record.pass, pass, sizeof(record.pass));
-    record.key = shape;
-    record.position = position;
-    record.normal = normal;
-    record.color = color;
-    copy_draw_matrices(matrices, matrix_count, record);
-    for (uint32_t i = 0; texgens != nullptr && i < texgen_count; ++i) {
-        const NebulaShapeTexGen& g = texgens[i];
-        if (record.texgen_count < record.texgens.size()) {
-            record.texgens[record.texgen_count++] = {g.coord, g.type, g.source, g.normalize, g.post_matrix};
-        }
-    }
-    if (current != nullptr) {
-        record.has_current = true;
-        record.current[0] = current->position;
-        std::memcpy(record.current.data() + 1, current->texture, 8);
-    }
-    galaxy::render::attach_shape_record(std::move(record));
-#else
-    (void)shape, (void)position, (void)normal, (void)color, (void)matrices, (void)matrix_count,
-        (void)current, (void)texgens, (void)texgen_count, (void)pass, (void)palette, (void)palette_matrix;
-#endif
-}
-
-// A model's draw matrices for a view: a record in draw order and the rows, written by the game, in the frame's pool.
-uint32_t svc_shape_palette(void*, uint64_t key, uint32_t count, uint32_t frame, float** rows) {
-#if defined(NEBULA_HOST_RENDERER)
-    namespace shapes = galaxy::render::shapes;
-    static uint32_t next_id = 0u;
-    attach_pending_records();
-    shapes::Record record;
-    record.kind = shapes::Record::Kind::Palette;
-    record.key = key;
-    record.palette = ++next_id;
-    record.palette_matrix = frame;
-    *rows = galaxy::render::reserve_palette_rows(record, count);
-    galaxy::render::attach_shape_record(std::move(record));
-    return next_id;
-#else
-    static float scratch[24u * 4096u];
-    (void)key, (void)count, (void)frame;
-    *rows = scratch;
-    return 1u;
-#endif
-}
-
-// An image the game hands over, named by its address in the game's memory.
-void svc_texture_image(void*, const NebulaTextureImage* image) {
-#if defined(NEBULA_HOST_RENDERER)
-    namespace shapes = galaxy::render::shapes;
-    if (image == nullptr || image->bytes == nullptr || image->size == 0u) {
-        return;
-    }
-    const auto* first = static_cast<const std::byte*>(image->bytes);
-    const uint64_t address = reinterpret_cast<uint64_t>(image->bytes);
-    // The copies the renderer has (gHanded): an image handed over again unchanged needs nothing. Loading threads hand
-    // images over too, so the record joins the stream ahead of the next one, as shape registrations do.
-    std::shared_ptr<const std::vector<std::byte>> copy;
-    // Linear texels the game wrote (nebula_cooked_texture.h): kept as a texture record, its header first.
-    const bool linear = image->format >= NEBULA_TEXTURE_LINEAR_L8 && image->format <= NEBULA_TEXTURE_LINEAR_RGBA8;
-    const std::size_t header = linear ? NEBULA_TEXTURE_HEADER : 0u;
-    // A record the game made (NEBULA_TEXTURE_MADE) in rows of texels: named below by them, as linear texels are; its
-    // header in our copy differs from the game's, so only its texels are compared.
-    const NebulaTexture* made = image->format == NEBULA_TEXTURE_IMAGE ? nebula_texture_record(image->bytes) : nullptr;
-    if (made != nullptr && (made->disc_format != NEBULA_TEXTURE_MADE || made->layout == NEBULA_TEXTURE_BLOCK4 ||
-                            image->size < NEBULA_TEXTURE_HEADER)) {
-        made = nullptr;
-    }
-    const std::size_t same_from = made != nullptr ? NEBULA_TEXTURE_HEADER : 0u;
-    {
-        std::lock_guard guard(gHandedLock);
-        auto& last = gHanded[address];
-        if (last != nullptr && last->size() == header + image->size &&
-            std::memcmp(last->data() + header + same_from, first + same_from, image->size - same_from) == 0) {
-            return;
-        }
-        auto bytes = std::make_shared<std::vector<std::byte>>(header + image->size);
-        if (linear) {
-            nebula_texture_init(bytes->data(), image->width, image->height, 1u,
-                                nebula_texture_linear_layout(image->format),
-                                NEBULA_TEXTURE_FILTER_AT_UPLOAD);
-        }
-        std::memcpy(bytes->data() + header, first, image->size);
-        if (linear) {
-            // Texture packs name it by its own texels.
-            auto* record = reinterpret_cast<NebulaTexture*>(bytes->data());
-            record->disc_format = image->format;
-            record->pack_hash = galaxy::render::texture_pack_hash(reinterpret_cast<const uint8_t*>(first), image->size);
-        } else if (made != nullptr) {
-            auto* record = reinterpret_cast<NebulaTexture*>(bytes->data());
-            record->disc_format = nebula_texture_linear_code(made->layout);
-            record->pack_hash = galaxy::render::texture_pack_hash(
-                reinterpret_cast<const uint8_t*>(first + NEBULA_TEXTURE_HEADER),
-                std::min<std::size_t>(image->size - NEBULA_TEXTURE_HEADER,
-                                      nebula_texture_level_bytes(made->width, made->height, 1u, made->layout)));
-        }
-        last = std::move(bytes);
-        copy = last;
-    }
-    shapes::Record record;
-    record.kind = shapes::Record::Kind::TextureImage;
-    record.key = address;
-    record.image = std::move(copy);
-    queue_shape_record(std::move(record));
-#else
-    (void)image;
-#endif
-}
-
-void svc_texture_hd(void*, const void* image, const void* hd) {
-#if defined(NEBULA_HOST_RENDERER)
-    namespace shapes = galaxy::render::shapes;
-    if (image == nullptr) {
-        return;
-    }
-    shapes::Record record;
-    record.kind = shapes::Record::Kind::TextureHd;
-    record.key = reinterpret_cast<uint64_t>(image);
-    if (const NebulaTexture* picture = nebula_texture_record(hd)) {
-        const auto* first = static_cast<const std::byte*>(hd);
-        record.image = std::make_shared<const std::vector<std::byte>>(first, first + picture->size);
-    }
-    queue_shape_record(std::move(record));
-#else
-    (void)image;
-    (void)hd;
-#endif
-}
-
 
 // The Mii library's file (mii_import.h) in the data folder; a save folder's database (or an earlier Nebula's) is
 // where it starts the first time, so the Miis it holds stay in their slots. The game reads the slots as typed records.
@@ -2190,394 +1904,6 @@ int32_t svc_mii_record(void*, uint32_t slot, NebulaMii* mii) {
     return 1;
 }
 
-void svc_immediate(void*, const NebulaImmediate* draw) {
-#if defined(NEBULA_HOST_RENDERER)
-    namespace shapes = galaxy::render::shapes;
-    if (draw == nullptr || draw->count == 0u || (draw->position == nullptr && draw->corners == nullptr)) {
-        return;
-    }
-    const uint32_t n = draw->count;
-    static_assert(sizeof(NebulaParticleCorner) == sizeof(galaxy::render::RenderVertexCore) &&
-                  offsetof(NebulaParticleCorner, before) == offsetof(galaxy::render::RenderVertexCore, normal) &&
-                  offsetof(NebulaParticleCorner, prm) == offsetof(galaxy::render::RenderVertexCore, color0) &&
-                  offsetof(NebulaParticleCorner, s) == offsetof(galaxy::render::RenderVertexCore, uv0));
-    static_assert(shapes::kQuads == NEBULA_PRIMITIVE_QUADS && shapes::kPoints == NEBULA_PRIMITIVE_POINTS &&
-                  shapes::kTriangleFan == NEBULA_PRIMITIVE_TRIANGLE_FAN && shapes::kLineStrip == NEBULA_PRIMITIVE_LINE_STRIP);
-    shapes::Record record;
-    record.kind = shapes::Record::Kind::Immediate;
-    static_assert(sizeof(record.pass) == sizeof(draw->pass));
-    std::memcpy(&record.pass, &draw->pass, sizeof(record.pass));
-    record.primitive = draw->primitive;
-    copy_draw_matrices(draw->matrices, draw->matrix_count, record);
-    attach_pending_records();
-    if (draw->corners != nullptr) {
-        record.attributes = static_cast<uint32_t>(NEBULA_SHAPE_NORMAL | NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_COLOR1 |
-                                                  NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_OWN_POSITIONS);
-        std::memcpy(galaxy::render::reserve_record_corners(record, n), draw->corners, n * sizeof(NebulaParticleCorner));
-        galaxy::render::attach_shape_record(std::move(record));
-        return;
-    }
-    // Its values are its own: geometry the game builds as it draws.
-    const bool has_normal = (draw->attributes & NEBULA_SHAPE_NORMAL) != 0u && draw->normal != nullptr;
-    const bool has_color[2] = {(draw->attributes & NEBULA_SHAPE_COLOR0) != 0u && draw->color[0] != nullptr,
-                               (draw->attributes & NEBULA_SHAPE_COLOR1) != 0u && draw->color[1] != nullptr};
-    uint32_t attributes = (draw->attributes & ~static_cast<uint32_t>(NEBULA_SHAPE_POSITION_MATRIX)) |
-                          (draw->position_matrix != nullptr ? static_cast<uint32_t>(NEBULA_SHAPE_POSITION_MATRIX) : 0u) |
-                          NEBULA_SHAPE_OWN_POSITIONS;
-    if (!has_normal) {
-        attributes &= ~static_cast<uint32_t>(NEBULA_SHAPE_NORMAL);
-    }
-    if (!has_color[0]) {
-        attributes &= ~static_cast<uint32_t>(NEBULA_SHAPE_COLOR0);
-    }
-    if (!has_color[1]) {
-        attributes &= ~static_cast<uint32_t>(NEBULA_SHAPE_COLOR1);
-    }
-    bool has_uv[8];
-    for (unsigned t = 0; t < 8u; ++t) {
-        const uint32_t bit = static_cast<uint32_t>(NEBULA_SHAPE_TEXCOORD0) << t;
-        has_uv[t] = (draw->attributes & bit) != 0u && draw->texcoord[t] != nullptr;
-        if (!has_uv[t]) {
-            attributes &= ~bit;
-        }
-    }
-    record.attributes = attributes;
-    // Lines and points become four corners each (the vertex stage widens them): made here, then widened into the pool.
-    const uint32_t widened = shapes::widened_count(draw->primitive, n);
-    static thread_local std::vector<galaxy::render::RenderVertex> gLinePointVertices;
-    if (widened != 0u) {
-        gLinePointVertices.resize(n);
-    }
-    galaxy::render::RenderVertex* out = widened != 0u ? gLinePointVertices.data() : galaxy::render::reserve_record_vertices(record, n);
-    std::memset(out, 0, sizeof(galaxy::render::RenderVertex) * n);
-    for (uint32_t i = 0; i < n; ++i) {
-        galaxy::render::RenderVertex& v = out[i];
-        std::memcpy(v.position, draw->position + static_cast<size_t>(i) * 3u, sizeof(v.position));
-        if (has_normal) {
-            std::memcpy(v.normal, draw->normal + static_cast<size_t>(i) * 3u, sizeof(v.normal));
-        }
-        if (has_color[0]) {
-            v.color0 = draw->color[0][i];
-        }
-        if (has_color[1]) {
-            v.color1 = draw->color[1][i];
-        }
-        for (unsigned t = 0; t < 8u; ++t) {
-            if (has_uv[t]) {
-                v.uv[t][0] = draw->texcoord[t][static_cast<size_t>(i) * 2u];
-                v.uv[t][1] = draw->texcoord[t][static_cast<size_t>(i) * 2u + 1u];
-            }
-        }
-        // Vertices without a place of their own take the draw's.
-        v.mtx_indices[0] = 3u * (draw->position_matrix != nullptr ? draw->position_matrix[i] : draw->pass.position_matrix % 10u) & 0xFFu;
-    }
-    if (widened != 0u) {
-        shapes::widen_lines_points(draw->primitive, n, out, galaxy::render::reserve_record_vertices(record, widened));
-        record.primitive = shapes::kWideQuads;
-        record.pass.cull = NEBULA_CULL_NONE;  // culling is for polygons
-    }
-    galaxy::render::attach_shape_record(std::move(record));
-#else
-    (void)draw;
-#endif
-}
-
-void svc_screen_probe(void*, uint32_t channel, const NebulaScreenProbe* probes, uint32_t count) {
-#if defined(NEBULA_HOST_RENDERER)
-    static_assert(sizeof(NebulaScreenProbe) == sizeof(galaxy::render::ScreenProbe) &&
-                  NEBULA_SCREEN_PROBES_MAX == galaxy::render::kScreenProbesMax);
-    namespace shapes = galaxy::render::shapes;
-    shapes::Record record;
-    record.kind = shapes::Record::Kind::Readback;
-    attach_pending_records();
-    record.key = channel;
-    std::memcpy(galaxy::render::reserve_record_probes(record, std::min(count, NEBULA_SCREEN_PROBES_MAX)), probes,
-                std::min(count, NEBULA_SCREEN_PROBES_MAX) * sizeof(NebulaScreenProbe));
-    galaxy::render::attach_shape_record(std::move(record));
-#else
-    (void)channel, (void)probes, (void)count;
-#endif
-}
-
-void svc_marker(void*, uint32_t kind, uint32_t aux, uint64_t a, uint64_t b) {
-#if defined(NEBULA_HOST_RENDERER)
-    namespace shapes = galaxy::render::shapes;
-    shapes::Record record;
-    record.kind = shapes::Record::Kind::Marker;
-    attach_pending_records();
-    record.key = kind;
-    record.marker_aux = aux;
-    record.marker = {a, b};
-    galaxy::render::attach_shape_record(std::move(record));
-#else
-    (void)kind, (void)aux, (void)a, (void)b;
-#endif
-}
-
-// The game's frame end: the renderer takes the frame's records.
-void svc_frame_end(void*) {
-#if defined(NEBULA_HOST_RENDERER)
-    submit_frame(false, false);
-#endif
-}
-
-uint32_t svc_screen_probe_results(void*, uint32_t channel, NebulaScreenProbe* probes, uint32_t capacity) {
-#if defined(NEBULA_HOST_RENDERER)
-    return galaxy::render::screen_probe_results(channel, reinterpret_cast<galaxy::render::ScreenProbe*>(probes), capacity);
-#else
-    (void)channel, (void)probes, (void)capacity;
-    return 0;
-#endif
-}
-
-// A pass into a texture target (E-07): its start and end as records in draw order.
-void svc_target_begin_over_frame(void*, uint64_t key, uint32_t width, uint32_t height, uint32_t clear_rgba, uint64_t frame_key,
-                                 uint32_t frame_channels, uint64_t depth_key) {
-#if defined(NEBULA_HOST_RENDERER)
-    namespace shapes = galaxy::render::shapes;
-    shapes::Record record;
-    record.kind = shapes::Record::Kind::TargetBegin;
-    record.key = key;
-    record.target_width = width;
-    record.target_height = height;
-    record.target_clear_rgba = clear_rgba;
-    record.target_frame_key = frame_key;
-    record.target_channels = static_cast<std::uint8_t>(frame_channels);
-    record.target_depth_key = depth_key;
-    attach_pending_records();
-    galaxy::render::attach_shape_record(std::move(record));
-#else
-    (void)key, (void)width, (void)height, (void)clear_rgba, (void)frame_key, (void)frame_channels, (void)depth_key;
-#endif
-}
-
-void svc_target_begin(void*, uint64_t key, uint32_t width, uint32_t height, uint32_t clear_rgba) {
-#if defined(NEBULA_HOST_RENDERER)
-    namespace shapes = galaxy::render::shapes;
-    shapes::Record record;
-    record.kind = shapes::Record::Kind::TargetBegin;
-    record.key = key;
-    record.target_width = width;
-    record.target_height = height;
-    record.target_clear_rgba = clear_rgba;
-    attach_pending_records();
-    galaxy::render::attach_shape_record(std::move(record));
-#else
-    (void)key, (void)width, (void)height, (void)clear_rgba;
-#endif
-}
-
-void svc_target_begin_pixels(void*, uint64_t key, uint32_t width, uint32_t height, uint32_t clear_rgba) {
-#if defined(NEBULA_HOST_RENDERER)
-    namespace shapes = galaxy::render::shapes;
-    shapes::Record record;
-    record.kind = shapes::Record::Kind::TargetBegin;
-    record.key = key;
-    record.target_width = width;
-    record.target_height = height;
-    record.target_clear_rgba = clear_rgba;
-    record.target_pixels = true;
-    attach_pending_records();
-    galaxy::render::attach_shape_record(std::move(record));
-#else
-    (void)key, (void)width, (void)height, (void)clear_rgba;
-#endif
-}
-
-void svc_target_end(void*, uint64_t key, uint32_t channels) {
-#if defined(NEBULA_HOST_RENDERER)
-    namespace shapes = galaxy::render::shapes;
-    shapes::Record record;
-    record.kind = shapes::Record::Kind::TargetEnd;
-    record.key = key;
-    record.target_channels = static_cast<std::uint8_t>(channels);
-    attach_pending_records();
-    galaxy::render::attach_shape_record(std::move(record));
-#else
-    (void)key, (void)channels;
-#endif
-}
-
-void svc_target_clear(void*, uint32_t clear_rgba, uint32_t channels) {
-#if defined(NEBULA_HOST_RENDERER)
-    namespace shapes = galaxy::render::shapes;
-    shapes::Record record;
-    record.kind = shapes::Record::Kind::TargetClear;
-    record.target_clear_rgba = clear_rgba;
-    record.target_channels = static_cast<std::uint8_t>(channels & 7u);
-    attach_pending_records();
-    galaxy::render::attach_shape_record(std::move(record));
-#else
-    (void)clear_rgba, (void)channels;
-#endif
-}
-
-void svc_frame_pass(void*, uint64_t key) {
-#if defined(NEBULA_HOST_RENDERER)
-    namespace shapes = galaxy::render::shapes;
-    shapes::Record record;
-    record.kind = shapes::Record::Kind::FramePass;
-    record.key = key;
-    record.target_channels = NEBULA_TARGET_RGB;
-    attach_pending_records();
-    galaxy::render::attach_shape_record(std::move(record));
-#else
-    (void)key;
-#endif
-}
-
-void svc_frame_take(void*, uint64_t key) {
-#if defined(NEBULA_HOST_RENDERER)
-    namespace shapes = galaxy::render::shapes;
-    shapes::Record record;
-    record.kind = shapes::Record::Kind::FrameTake;
-    record.key = key;
-    attach_pending_records();
-    galaxy::render::attach_shape_record(std::move(record));
-#else
-    (void)key;
-#endif
-}
-
-// A clear of the frame's rectangle.
-void svc_frame_clear(void*, uint32_t clear_rgba, uint32_t channels) {
-#if defined(NEBULA_HOST_RENDERER)
-    namespace shapes = galaxy::render::shapes;
-    shapes::Record record;
-    record.kind = shapes::Record::Kind::FrameClear;
-    record.target_clear_rgba = clear_rgba;
-    record.target_channels = static_cast<std::uint8_t>(channels & 7u);
-    attach_pending_records();
-    galaxy::render::attach_shape_record(std::move(record));
-#else
-    (void)clear_rgba, (void)channels;
-#endif
-}
-
-// The frame shown (its display copy, host-made).
-void svc_frame_show(void*) {
-#if defined(NEBULA_HOST_RENDERER)
-    namespace shapes = galaxy::render::shapes;
-    shapes::Record record;
-    record.kind = shapes::Record::Kind::FrameShow;
-    attach_pending_records();
-    galaxy::render::attach_shape_record(std::move(record));
-#endif
-}
-
-#if defined(NEBULA_HOST_RENDERER)
-void attach_state_ops(const galaxy::render::state::Op* ops, uint32_t count) {
-    namespace shapes = galaxy::render::shapes;
-    shapes::Record record;
-    record.kind = shapes::Record::Kind::State;
-    attach_pending_records();
-    std::memcpy(galaxy::render::reserve_record_ops(record, count), ops, sizeof(galaxy::render::state::Op) * count);
-    galaxy::render::attach_shape_record(std::move(record));
-}
-#endif
-
-void svc_view_projection(void*, int orthographic, const float terms[6]) {
-#if defined(NEBULA_HOST_RENDERER)
-    galaxy::render::state::Op op{};
-    op.kind = galaxy::render::state::kProjection;
-    op.a[0] = orthographic != 0 ? 1u : 0u;
-    std::memcpy(op.f, terms, sizeof(op.f));
-    attach_state_ops(&op, 1u);
-#else
-    (void)orthographic, (void)terms;
-#endif
-}
-
-void svc_view_viewport(void*, const float viewport[6]) {
-#if defined(NEBULA_HOST_RENDERER)
-    galaxy::render::state::Op op{};
-    op.kind = galaxy::render::state::kViewport;
-    std::memcpy(op.f, viewport, sizeof(op.f));
-    attach_state_ops(&op, 1u);
-#else
-    (void)viewport;
-#endif
-}
-
-void svc_view_scissor(void*, float left, float top, float width, float height) {
-#if defined(NEBULA_HOST_RENDERER)
-    galaxy::render::state::Op op{};
-    op.kind = galaxy::render::state::kScissor;
-    op.f[0] = left;
-    op.f[1] = top;
-    op.f[2] = width;
-    op.f[3] = height;
-    attach_state_ops(&op, 1u);
-#else
-    (void)left, (void)top, (void)width, (void)height;
-#endif
-}
-
-void svc_light(void*, uint32_t index, const NebulaLight* light) {
-#if defined(NEBULA_HOST_RENDERER)
-    galaxy::render::state::Op ops[2]{};
-    ops[0].kind = galaxy::render::state::kLightAttenuation;
-    ops[0].a[0] = static_cast<std::uint8_t>(index & 7u);
-    std::memcpy(ops[0].a + 1, light->color, 4u);
-    ops[1].kind = galaxy::render::state::kLightPosition;
-    ops[1].a[0] = static_cast<std::uint8_t>(index & 7u);
-    for (unsigned i = 0u; i < 3u; ++i) {
-        ops[0].f[i] = light->angle[i];
-        ops[0].f[3u + i] = light->distance[i];
-        ops[1].f[i] = light->position[i];
-        ops[1].f[3u + i] = light->direction[i];
-    }
-    attach_state_ops(ops, 2u);
-#else
-    (void)index, (void)light;
-#endif
-}
-
-void svc_texture_coordinate(void*, uint32_t coord, uint32_t from, uint32_t matrix_slot) {
-#if defined(NEBULA_HOST_RENDERER)
-    galaxy::render::state::Op op{};
-    op.kind = galaxy::render::state::kTexCoordGen;
-    op.a[0] = static_cast<std::uint8_t>(coord);
-    op.a[2] = static_cast<std::uint8_t>((5u + from) | 5u << 4u);  // source row 5 + n, no emboss source
-    op.a[4] = 61u;                                                // the identity post-transform
-    op.a[5] = 1u;
-    op.a[6] = static_cast<std::uint8_t>(matrix_slot);
-    attach_state_ops(&op, 1u);
-#else
-    (void)coord, (void)from, (void)matrix_slot;
-#endif
-}
-
-std::uint32_t svc_material_layout(void*, std::uint32_t shader) {
-#if defined(NEBULA_HOST_RENDERER)
-    return galaxy::render::native_material_layout(shader);
-#else
-    (void)shader;
-    return 0u;
-#endif
-}
-
-void svc_native_material(void*, const NebulaNativeMaterial* native) {
-#if defined(NEBULA_HOST_RENDERER)
-    namespace shapes = galaxy::render::shapes;
-    static_assert(sizeof(NebulaNativeMaterial) == sizeof(galaxy::render::material::Native),
-                  "the renderer's copy of NebulaNativeMaterial");
-    if (native == nullptr || (native->shader >= NEBULA_SHADER_COUNT && native->shader < NEBULA_SHADER_J3D_FIRST)) {
-        return;
-    }
-    // NEBULA_SHADER_NONE: the draws that follow go back to the drawing state (a record without a material).
-    shapes::Record record;
-    record.kind = shapes::Record::Kind::NativeMaterial;
-    attach_pending_records();
-    if (native->shader != NEBULA_SHADER_NONE) {
-        record.native_index = galaxy::render::reserve_record_native(native, sizeof(NebulaNativeMaterial));
-    }
-    galaxy::render::attach_shape_record(std::move(record));
-#else
-    (void)native;
-#endif
-}
-
 // The wheel's turn the window gathered since the game last asked.
 int32_t svc_pointer_wheel(void*) {
 #if defined(NEBULA_HOST_RENDERER)
@@ -2618,15 +1944,6 @@ void svc_game_context(void*, uint32_t what, int32_t value) {
         galaxy::host::note_touch_target(static_cast<std::uint32_t>(value));
 #endif
     }
-}
-
-void svc_memory_rewritten(void*, const void* address, uint32_t size) {
-#if defined(NEBULA_HOST_RENDERER)
-    forget_handed(reinterpret_cast<uint64_t>(address), size);
-#else
-    (void)address;
-    (void)size;
-#endif
 }
 
 const galaxy::disc::AssetStore& disc_table() {
@@ -2883,10 +2200,6 @@ int32_t svc_asset_read(void*, int32_t file, uint64_t file_offset, uint32_t size,
         !gPak.store.read(entry->position + file_offset, size, dst)) {
         return -1;
     }
-#if defined(NEBULA_HOST_RENDERER)
-    // A read writes memory the GPU sees.
-    mark_written(dst, size);
-#endif
     return static_cast<int32_t>(size);
 }
 
@@ -3002,8 +2315,11 @@ void svc_game_light(void*, uint32_t kind, uint64_t id, const float* v) {
 #endif
 }
 
-// While their files cook at the start: the phase NEBULA_OPTION_RT_PREPARATION reports, and where the cooker says how far it is.
+// While their files cook at the start: the phase NEBULA_OPTION_PREPARATION reports, and where the cooker says how far it is.
 std::atomic<uint32_t> gModsPreparing{0u};
+#if defined(NEBULA_HOST_RENDERER)
+bool gPipelinesPrepared = false;
+#endif
 fs::path gModsProgressFile;
 
 uint32_t svc_option(void*, uint32_t what) {
@@ -3014,9 +2330,12 @@ uint32_t svc_option(void*, uint32_t what) {
 #else
         return 1;
 #endif
-    case NEBULA_OPTION_DRAW_IDENTITIES:
+    case NEBULA_OPTION_PIXEL_LIT:
 #if defined(NEBULA_HOST_RENDERER)
-        return galaxy::render::draw_identity_wanted() ? 1u : 0u;
+    {
+        const galaxy::render::RenderConfig render = galaxy::render::get_render_config();
+        return render.per_pixel_lighting || render.enhanced_lighting ? 1u : 0u;
+    }
 #else
         return 0;
 #endif
@@ -3059,14 +2378,32 @@ uint32_t svc_option(void*, uint32_t what) {
 #else
         return 0;
 #endif
-    case NEBULA_OPTION_MODS_PREPARING:
-        return gModsPreparing.load(std::memory_order_acquire) != 0u ? 1u : 0u;
-    case NEBULA_OPTION_RT_PREPARATION:
-        // The ray tracer is parked: only mods' files bring the game's preparation screen.
-        return gModsPreparing.load(std::memory_order_acquire);
-    case NEBULA_OPTION_RT_PREPARE_PROGRESS: {
+    case NEBULA_OPTION_PREPARE_KIND:
+        return gModsPreparing.load(std::memory_order_acquire) != 0u ? 1u : 2u;
+    case NEBULA_OPTION_PREPARATION: {
+        const uint32_t mods = gModsPreparing.load(std::memory_order_acquire);
+        if (mods != 0u) {
+            return mods;
+        }
+#if defined(NEBULA_HOST_RENDERER)
+        // The title waits once for the pipeline list; what a later settings change adds prepares behind the game.
+        if (!gPipelinesPrepared) {
+            gPipelinesPrepared = galaxy::render::pipeline_progress().left == 0u;
+        }
+        return gPipelinesPrepared ? 0u : 2u;
+#else
+        return 0u;
+#endif
+    }
+    case NEBULA_OPTION_PREPARE_PROGRESS: {
         if (gModsPreparing.load(std::memory_order_acquire) == 0u) {
-            return 0;
+#if defined(NEBULA_HOST_RENDERER)
+            const galaxy::render::PipelineProgress progress = galaxy::render::pipeline_progress();
+            const uint64_t all = uint64_t{progress.done} + progress.left;
+            return all != 0u ? static_cast<uint32_t>(progress.done * uint64_t{10000u} / all) : 0u;
+#else
+            return 0u;
+#endif
         }
         std::ifstream in(gModsProgressFile);
         uint64_t done = 0;
@@ -3634,7 +2971,7 @@ HANDLE gHostWake = nullptr;
 #endif
 
 int svc_test_scene_frame(void*, NebulaTestAction* action) {
-#if defined(NEBULA_RELEASE)
+#if !defined(NEBULA_DEV)
     (void)action;
     return 0;
 #else
@@ -3673,6 +3010,11 @@ bool one_game_at_a_time() {
 #endif
 
 [[noreturn]] void finish_and_exit(bool restart) {
+#if defined(NEBULA_DEV)
+    if (const char* list = ::galaxy::run_options().pipeline_list_out; list != nullptr && list[0] != 0) {
+        galaxy::render::registries().write_pipeline_list(list);
+    }
+#endif
     log_line("host:", restart ? "restart" : "the game ended");
     for (int waited = 0; gSavesPending.load(std::memory_order_acquire) != 0 && waited < 500; waited++) {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -3711,6 +3053,13 @@ bool one_game_at_a_time() {
     }
 #else
     (void)restart;
+#endif
+#if defined(_WIN32)
+#if defined(NEBULA_HOST_RENDERER)
+    galaxy::host::stop_all_rumble();
+#endif
+    // Saves and logs are out. No library's detach runs: Streamline's faults on state from before a lost card.
+    TerminateProcess(GetCurrentProcess(), 0);
 #endif
     std::_Exit(0);
 }
@@ -3862,7 +3211,7 @@ void prepare_mod_files(const fs::path& settings_folder, const std::string& game_
     }
     for (const fs::path& folder : plan.luma_folders) {
         std::error_code shaders_error;
-        const fs::path shaders = folder / "shaders" / galaxy::render::native_shader_file_name();
+        const fs::path shaders = folder / "shaders" / galaxy::render::program_file_name();
         if (fs::is_regular_file(shaders, shaders_error)) {
             const galaxy::render::ModShadersResult loaded = galaxy::render::load_mod_shaders(shaders);
             if (loaded == galaxy::render::ModShadersResult::OtherInterface) {
@@ -3882,7 +3231,7 @@ void cook_mod_files(const galaxy::mods::DiscPlan& plan, const fs::path& settings
     const fs::path overlay = folder / "mods.pak";
     const fs::path signature_file = folder / "mods.signature";
     // Another build's shader interface means their shaders are built again.
-    const std::string signature = galaxy::mods::plan_signature(plan, game_id) + galaxy::render::native_shader_interface() + "\n";
+    const std::string signature = galaxy::mods::plan_signature(plan, game_id) + galaxy::render::program_interface() + "\n";
     std::error_code error;
     fs::create_directories(folder, error);
     std::string kept;
@@ -3946,7 +3295,7 @@ void cook_mod_files(const galaxy::mods::DiscPlan& plan, const fs::path& settings
             // What their materials need and they didn't bring.
             std::vector<fs::path> brought;
             for (const fs::path& mod : plan.luma_folders) {
-                brought.push_back(mod / "shaders" / galaxy::render::native_shader_file_name());
+                brought.push_back(mod / "shaders" / galaxy::render::program_file_name());
             }
             fs::path sources = overlay;
             sources.replace_extension("sources");
@@ -4205,7 +3554,7 @@ int main(int argc, char** argv) {
         if (key == "--pak") {
             pak = arg_path(i + 1);
         } else if (key == "--saves"
-#if !defined(NEBULA_RELEASE)
+#if defined(NEBULA_DEV)
                    || key == "--nand"
 #endif
         ) {
@@ -4234,7 +3583,7 @@ int main(int argc, char** argv) {
     }
     gSaveRoot = saves;
     std::error_code error;
-    open_pak(pak);
+    if (!open_pak(pak)) return 2;
     boot_mark("disc opened");
     load_module(module);
     boot_mark("game module loaded");
@@ -4337,7 +3686,6 @@ int main(int argc, char** argv) {
         static thread_local void* slots[NEBULA_THREAD_SLOTS];
         return slots;
     };
-    services.scene_marker = svc_scene_marker;
     services.movie_frame = svc_movie_frame;
     services.presence = svc_presence;
     services.achievement = svc_achievement;
@@ -4354,37 +3702,22 @@ int main(int argc, char** argv) {
     services.galaxy_select_stage = svc_galaxy_select_stage;
     services.galaxy_select_names_wanted = svc_galaxy_select_names_wanted;
     services.galaxy_select_name = svc_galaxy_select_name;
-    services.curved_surface = svc_curved_surface;
-    services.shape_array = svc_shape_array;
-    services.shape_geometry = svc_shape_geometry;
-    services.shape_forget = svc_shape_forget;
-    services.shape_draw = svc_shape_draw;
-    services.shape_palette = svc_shape_palette;
-    services.native_material = svc_native_material;
-    services.material_layout = svc_material_layout;
     services.test_frame_step = deterministic_mode() ? svc_test_frame_step : nullptr;
-    services.view_projection = svc_view_projection;
-    services.view_viewport = svc_view_viewport;
-    services.view_scissor = svc_view_scissor;
-    services.light = svc_light;
-    services.texture_coordinate = svc_texture_coordinate;
-    services.immediate = svc_immediate;
-    services.target_begin = svc_target_begin;
-    services.target_begin_pixels = svc_target_begin_pixels;
-    services.target_begin_over_frame = svc_target_begin_over_frame;
-    services.target_end = svc_target_end;
-    services.target_clear = svc_target_clear;
-    services.frame_pass = svc_frame_pass;
-    services.frame_take = svc_frame_take;
-    services.texture_image = svc_texture_image;
     services.texture_hd = svc_texture_hd;
+    services.model_register = svc_model_register;
+    services.model_free = svc_model_free;
+    services.mesh_register = svc_mesh_register;
+    services.mesh_free = svc_mesh_free;
+    services.texture_register = svc_texture_register;
+    services.texture_update = svc_texture_update;
+    services.texture_free = svc_texture_free;
+    services.texture_target = svc_texture_target;
+    services.texture_table = svc_texture_table;
+    services.material_register = svc_material_register;
+    services.pipeline_register = svc_pipeline_register;
+    services.submit_frame = svc_submit_frame;
+    services.probe_results = svc_probe_results;
     services.mii_record = svc_mii_record;
-    services.screen_probe = svc_screen_probe;
-    services.screen_probe_results = svc_screen_probe_results;
-    services.frame_clear = svc_frame_clear;
-    services.frame_show = svc_frame_show;
-    services.frame_end = svc_frame_end;
-    services.marker = svc_marker;
     services.clock_ns = svc_clock_ns;
     services.calendar_ns = svc_calendar_ns;
     services.code_patch = svc_code_patch;
@@ -4426,7 +3759,6 @@ int main(int argc, char** argv) {
     services.sound_clock = svc_audio_control;
     services.hbm = svc_hbm;
     services.movie_video_decode = svc_movie_video_decode;
-    services.memory_rewritten = svc_memory_rewritten;
     services.game_context = svc_game_context;
     services.app_exit = svc_app_exit;
     services.app_restart = svc_app_restart;
@@ -4454,7 +3786,6 @@ int main(int argc, char** argv) {
     // the whole environment block, 100 reports a second).
     galaxy::host::set_env_flag_cache_enabled(true);
     const galaxy::render::RenderConfig render_config = galaxy::render::get_render_config();
-    gNative.log = native_log;
     if (!galaxy::render::initialize(static_cast<int>(render_config.window_width),
                                     static_cast<int>(render_config.window_height))) {
         const std::string reason = galaxy::render::startup_failure();

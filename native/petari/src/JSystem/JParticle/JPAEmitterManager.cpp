@@ -3,7 +3,7 @@
 #define JSU_LIST_DEFER_INLINE
 #include "JSystem/JParticle/JPANativeColor.hpp"
 #include "JSystem/JParticle/JPAEmitterManager.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include "Game/Render/FrameList.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include "JSystem/JParticle/JPAEmitter.hpp"
 #include "JSystem/JParticle/JPAParticle.hpp"
@@ -96,7 +96,6 @@ void JPAEmitterManager::draw(JPADrawInfo const* drawInfo, u8 group_id) {
     drawInfo->getPrjMtx(pWd->mPrjMtx);
     calcYBBCam();
     JPAParticleBatch::camera(pWd->mPosCamMtx);
-    J3DPass::cull(NEBULA_CULL_NONE);
 
     for (JSULink< JPABaseEmitter >* pLink = pEmtrUseList[group_id].getFirst(); pLink != pEmtrUseList[group_id].getEnd(); pLink = pLink->getNext()) {
         JPABaseEmitter* emtr = pLink->getObject();

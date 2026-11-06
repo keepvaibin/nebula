@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Game/Render/TypedDraw.hpp"
+
 #include <NebulaGpuTypes.h>
 
 class BloomEffect;
@@ -32,8 +34,12 @@ namespace ImageEffectLocalUtil {
     };
     void setMode(EMode mode, const NebulaColor8& rEdge);
     void setupDrawTexture();
+    // What the draws that follow write: until the next setupDrawTexture, colour and not alpha.
+    void setWrites(bool color, bool alpha);
     void drawTexture(JUTTexture* pTexture, u8 intensity, ETexDrawType texDrawType);
-    void sendTextureVertex();
+    void sendTextureVertex(TypedDraw& rDraw);
+    // The material over the whole of the target.
+    void drawQuad(const SiteMaterial& rMaterial);
     // A small texture whose key stands for the frame or its depth in a pass that samples them.
     JUTTexture* createFrameKey();
     // The frame's depth into `pTarget`, half the screen; `pDepthKey` from createFrameKey. Leaves setupDrawTexture's state.

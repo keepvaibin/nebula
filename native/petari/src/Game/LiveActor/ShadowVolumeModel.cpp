@@ -6,9 +6,9 @@ ShadowVolumeModel::ShadowVolumeModel(const char* pName) : ShadowVolumeDrawer(pNa
 }
 
 void ShadowVolumeModel::initVolumeModel(const char* pModelName) {
-    mModelData = MR::getJ3DModelData(pModelName);
+    mModelData = MR::getModelData(pModelName);
 }
 
-void ShadowVolumeModel::drawShape() const {
-    MR::drawSimpleModel(mModelData);
+void ShadowVolumeModel::drawShape(TypedDraw& rDraw) const {
+    rDraw.drawModelFile(mModelData);
 }

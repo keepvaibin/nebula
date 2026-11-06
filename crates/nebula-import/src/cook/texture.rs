@@ -102,15 +102,15 @@ pub struct Image<'a> {
 }
 
 const MAGIC: &[u8; 8] = b"NbTextur";
-const VERSION: u32 = 1;
+const VERSION: u32 = 3;
 pub const HEADER: usize = 64;
-const MAX_LEVELS: u32 = 11;
+const MAX_LEVELS: u32 = 32;
 const LAYOUT_RGBA8: u8 = 0;
 const LAYOUT_L8: u8 = 1;
 const LAYOUT_LA8: u8 = 2;
 const LAYOUT_BLOCK4: u8 = 3;
-/// No block uses a transparent colour (nebula_cooked_texture.h NEBULA_TEXTURE_OPAQUE_BLOCKS).
-const OPAQUE_BLOCKS: u8 = 2;
+/// Levels below the first were made here (nebula_cooked_texture.h NEBULA_TEXTURE_GENERATED_LEVELS).
+const GENERATED_LEVELS: u8 = 1;
 
 fn expand5(v: u16) -> u8 {
     let v = (v & 0x1F) as u8;
@@ -326,7 +326,7 @@ fn palette_hash(format: Format, level0: &[u8], palette: &[u8]) -> u64 {
 /// The levels a disc image holds (at most `image.levels`, the full chain and what its bytes cover).
 pub fn held_levels(image: &Image) -> u32 {
     let mut chain = 1;
-    while (image.width >> chain) | (image.height >> chain) != 0 {
+    while chain < 32 && ((image.width >> chain) | (image.height >> chain)) != 0 {
         chain += 1;
     }
     let wanted = image.levels.clamp(1, chain.min(MAX_LEVELS));
@@ -343,9 +343,22 @@ pub fn held_levels(image: &Image) -> u32 {
     levels
 }
 
+fn texel_count(width: u32, height: u32) -> Result<usize> {
+    let count = u64::from(width) * u64::from(height);
+    if width == 0 || height == 0 || count > (u32::MAX as u64 - HEADER as u64) / 4 {
+        bail!("a {width}x{height} image exceeds the native texture block");
+    }
+    Ok(count as usize)
+}
+
 /// The texture record of a disc image.
 pub fn cook(image: &Image) -> Result<Vec<u8>> {
-    cook_widened(image, LAYOUT_L8)
+    cook_with(image, LAYOUT_L8, true)
+}
+
+/// The record of one sheet of a font in at least layout `wider`: glyphs read it at its own size, so one level.
+pub fn cook_sheet(image: &Image, wider: u8) -> Result<Vec<u8>> {
+    cook_with(image, wider, false)
 }
 
 /// How wide a layout's texels are (L8 < LA8 < RGBA8).
@@ -357,16 +370,13 @@ fn rank(layout: u8) -> u8 {
     }
 }
 
-/// The layout a record of `image` takes (font sheets share the widest of theirs).
-pub fn layout(image: &Image) -> Result<u8> {
-    Ok(cook(image)?[21])
+/// The layout a font sheet's record takes (a font's sheets share the widest of theirs).
+pub fn sheet_layout(image: &Image) -> Result<u8> {
+    Ok(cook_sheet(image, LAYOUT_L8)?[28])
 }
 
-/// The texture record of a disc image in at least layout `wider` (a layout of `layout`).
-pub fn cook_widened(image: &Image, wider: u8) -> Result<Vec<u8>> {
-    if image.width == 0 || image.height == 0 || image.width > 1024 || image.height > 1024 {
-        bail!("a {}x{} texture", image.width, image.height);
-    }
+fn cook_with(image: &Image, wider: u8, minified: bool) -> Result<Vec<u8>> {
+    texel_count(image.width, image.height)?;
     let levels = held_levels(image);
     if levels == 0 {
         bail!("a {}x{} {:?} texture whose file holds less than its first level", image.width, image.height, image.format);
@@ -394,54 +404,96 @@ pub fn cook_widened(image: &Image, wider: u8) -> Result<Vec<u8>> {
         let (w, h) = ((image.width >> l).max(1) as usize, (image.height >> l).max(1) as usize);
         filtered |= flatten_texel_checker(level, w, h) || remove_texel_checker(level, w, h);
     }
-    let all = texels.iter().flatten();
-    let fits = if all.clone().all(|t| t[0] == t[1] && t[1] == t[2] && t[2] == t[3]) {
-        LAYOUT_L8
-    } else if all.clone().all(|t| t[0] == t[1] && t[1] == t[2]) {
-        LAYOUT_LA8
-    } else {
-        LAYOUT_RGBA8
-    };
-    // CMPR stays 4 bits a texel: its blocks in row order (block4_level), expanded by the renderer as it uploads.
-    let layout = if image.format == Format::Cmpr && !filtered {
-        LAYOUT_BLOCK4
-    } else if rank(wider) > rank(fits) {
-        wider
-    } else {
-        fits
-    };
+    // A colour image with one level, large enough for its minification to show: its lower levels, for the
+    // enhanced-mipmaps option.
+    let generate = minified && levels == 1 && matches!(image.format as u8, 4 | 5 | 6 | 8 | 9 | 10 | 14) && (image.width >= 64 || image.height >= 64);
+    if generate {
+        add_generated_levels(&mut texels, image.width, image.height);
+    }
+    let fits = fitting_layout(&texels);
+    // CMPR stays 4 bits a texel when the GPU can sample its blocks as they are: opaque, whole blocks.
     let mut blocks = Vec::new();
-    if layout == LAYOUT_BLOCK4 {
+    if image.format == Format::Cmpr && !filtered && image.width % 4 == 0 && image.height % 4 == 0 {
         let mut at = 0usize;
         for l in 0..levels {
             let (w, h) = ((image.width >> l).max(1), (image.height >> l).max(1));
             block4_level(&image.data[at..], w, h, &mut blocks);
             at += image.format.level_bytes(w, h);
         }
+        if !blocks_opaque(&blocks) {
+            blocks.clear();
+        }
     }
-    let flags = if layout == LAYOUT_BLOCK4 && image.width % 4 == 0 && image.height % 4 == 0 && blocks_opaque(&blocks) {
-        OPAQUE_BLOCKS
+    let layout = if !blocks.is_empty() {
+        for l in levels..texels.len() as u32 {
+            encode_blocks(&texels[l as usize], (image.width >> l).max(1) as usize, (image.height >> l).max(1) as usize, &mut blocks);
+        }
+        LAYOUT_BLOCK4
+    } else if rank(wider) > rank(fits) {
+        wider
     } else {
-        0
+        fits
     };
+    let flags = if generate { GENERATED_LEVELS } else { 0 };
     let level0 = &image.data[..image.format.level_bytes(image.width, image.height)];
     let pack_hash = xxh64(level0);
     let pack_palette_hash = image.palette.map_or(0, |(bytes, _)| palette_hash(image.format, level0, bytes));
 
+    record_of(image.width, image.height, image.format as u8, flags, layout, [pack_hash, pack_palette_hash], &blocks, &texels)
+}
+
+/// The record of an image that was never in a disc format (a mod's PNG): its levels as they are.
+pub fn cook_rgba(width: u32, height: u32, rgba: &[u8]) -> Result<Vec<u8>> {
+    let pixels = texel_count(width, height)?;
+    if rgba.len() != pixels * 4 { bail!("the RGBA image length does not match its dimensions"); }
+    let mut texels = vec![rgba.chunks_exact(4).map(|p| [p[0], p[1], p[2], p[3]]).collect::<Vec<_>>()];
+    let generate = width >= 64 || height >= 64;
+    if generate {
+        add_generated_levels(&mut texels, width, height);
+    }
+    let layout = fitting_layout(&texels);
+    let flags = if generate { GENERATED_LEVELS } else { 0 };
+    record_of(width, height, Format::Rgba8 as u8, flags, layout, [xxh64(rgba), 0], &[], &texels)
+}
+
+fn add_generated_levels(texels: &mut Vec<Vec<[u8; 4]>>, width: u32, height: u32) {
+    let chain = 32 - width.max(height).leading_zeros();
+    for l in 1..chain.min(MAX_LEVELS) {
+        let source = (((width >> (l - 1)).max(1)) as usize, ((height >> (l - 1)).max(1)) as usize);
+        let size = (((width >> l).max(1)) as usize, ((height >> l).max(1)) as usize);
+        let next = generated_level(texels.last().unwrap(), source, size);
+        texels.push(next);
+    }
+}
+
+fn fitting_layout(texels: &[Vec<[u8; 4]>]) -> u8 {
+    let all = texels.iter().flatten();
+    if all.clone().all(|t| t[0] == t[1] && t[1] == t[2] && t[2] == t[3]) {
+        LAYOUT_L8
+    } else if all.clone().all(|t| t[0] == t[1] && t[1] == t[2]) {
+        LAYOUT_LA8
+    } else {
+        LAYOUT_RGBA8
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn record_of(width: u32, height: u32, format: u8, flags: u8, layout: u8, hashes: [u64; 2], blocks: &[u8], texels: &[Vec<[u8; 4]>]) -> Result<Vec<u8>> {
     let mut record = Vec::with_capacity(HEADER + texels.iter().map(|t| t.len() * 4).sum::<usize>());
     record.extend_from_slice(MAGIC);
     record.extend_from_slice(&VERSION.to_le_bytes());
     record.extend_from_slice(&0u32.to_le_bytes()); // size, below
-    record.extend_from_slice(&(image.width as u16).to_le_bytes());
-    record.extend_from_slice(&(image.height as u16).to_le_bytes());
-    record.push(levels as u8);
+    record.extend_from_slice(&width.to_le_bytes());
+    record.extend_from_slice(&height.to_le_bytes());
+    record.extend_from_slice(&(texels.len() as u32).to_le_bytes());
     record.push(layout);
-    record.push(image.format as u8);
+    record.push(format);
     record.push(flags);
-    record.extend_from_slice(&pack_hash.to_le_bytes());
-    record.extend_from_slice(&pack_palette_hash.to_le_bytes());
+    record.push(0);
+    record.extend_from_slice(&hashes[0].to_le_bytes());
+    record.extend_from_slice(&hashes[1].to_le_bytes());
     record.resize(HEADER, 0);
-    record.extend_from_slice(&blocks);
+    record.extend_from_slice(blocks);
     for level in texels.iter().filter(|_| layout != LAYOUT_BLOCK4) {
         for t in level {
             match layout {
@@ -451,10 +503,132 @@ pub fn cook_widened(image: &Image, wider: u8) -> Result<Vec<u8>> {
             }
         }
     }
-    let size = record.len() as u32;
+    let size = u32::try_from(record.len()).map_err(|_| anyhow::anyhow!("native texture block exceeds u32 byte offsets"))?;
     record[12..16].copy_from_slice(&size.to_le_bytes());
-    dump(image, levels, &record);
     Ok(record)
+}
+
+/// One level below `source`: a premultiplied-alpha 2x2 box filter with fixed rounding.
+fn generated_level(source: &[[u8; 4]], (sw, sh): (usize, usize), (w, h): (usize, usize)) -> Vec<[u8; 4]> {
+    let mut out = vec![[0u8; 4]; w * h];
+    for y in 0..h {
+        for x in 0..w {
+            let (sx, sy) = (x * 2, y * 2);
+            if sx + 1 < sw && sy + 1 < sh {
+                let top = sy * sw + sx;
+                let (p0, p1, p2, p3) = (source[top], source[top + 1], source[top + sw], source[top + sw + 1]);
+                if p0[3] == p1[3] && p0[3] == p2[3] && p0[3] == p3[3] {
+                    // Equal alpha cancels; fully transparent texels keep zero colour.
+                    if p0[3] != 0 {
+                        let mean = |c: usize| ((p0[c] as u32 + p1[c] as u32 + p2[c] as u32 + p3[c] as u32 + 2) >> 2) as u8;
+                        out[y * w + x] = [mean(0), mean(1), mean(2), p0[3]];
+                    }
+                    continue;
+                }
+            }
+            let (mut premul, mut alpha, mut count) = ([0u32; 3], 0u32, 0u32);
+            for dy in 0..2 {
+                for dx in 0..2 {
+                    if sy + dy >= sh || sx + dx >= sw {
+                        continue;
+                    }
+                    let t = source[(sy + dy) * sw + sx + dx];
+                    for c in 0..3 {
+                        premul[c] += t[c] as u32 * t[3] as u32;
+                    }
+                    alpha += t[3] as u32;
+                    count += 1;
+                }
+            }
+            let divisor = if alpha == 0 { count } else { alpha };
+            out[y * w + x] = [
+                ((premul[0] + divisor / 2) / divisor) as u8,
+                ((premul[1] + divisor / 2) / divisor) as u8,
+                ((premul[2] + divisor / 2) / divisor) as u8,
+                ((alpha + count / 2) / count) as u8,
+            ];
+        }
+    }
+    out
+}
+
+/// An opaque level as four-colour blocks: end points along the block's main axis of colour.
+fn encode_blocks(level: &[[u8; 4]], w: usize, h: usize, out: &mut Vec<u8>) {
+    let to565 = |c: [f32; 3]| -> u16 {
+        let q = |v: f32, max: f32| ((v / 255.0 * max + 0.5) as u16).min(max as u16);
+        (q(c[0], 31.0) << 11) | (q(c[1], 63.0) << 5) | q(c[2], 31.0)
+    };
+    let from565 = |c: u16| -> [f32; 3] { [expand5(c >> 11) as f32, expand6(c >> 5) as f32, expand5(c) as f32] };
+    for by in (0..h).step_by(4) {
+        for bx in (0..w).step_by(4) {
+            let mut texels = [[0f32; 3]; 16];
+            let mut mean = [0f32; 3];
+            for i in 0..16 {
+                let t = level[(by + i / 4).min(h - 1) * w + (bx + i % 4).min(w - 1)];
+                texels[i] = [t[0] as f32, t[1] as f32, t[2] as f32];
+                for c in 0..3 {
+                    mean[c] += texels[i][c] / 16.0;
+                }
+            }
+            let mut cov = [0f32; 6];
+            for t in &texels {
+                let d = [t[0] - mean[0], t[1] - mean[1], t[2] - mean[2]];
+                for (slot, (a, b)) in cov.iter_mut().zip([(0, 0), (0, 1), (0, 2), (1, 1), (1, 2), (2, 2)]) {
+                    *slot += d[a] * d[b];
+                }
+            }
+            let mut axis = [1f32, 1.0, 1.0];
+            for _ in 0..4 {
+                let next = [
+                    cov[0] * axis[0] + cov[1] * axis[1] + cov[2] * axis[2],
+                    cov[1] * axis[0] + cov[3] * axis[1] + cov[4] * axis[2],
+                    cov[2] * axis[0] + cov[4] * axis[1] + cov[5] * axis[2],
+                ];
+                let scale = next.iter().fold(0f32, |m, v| m.max(v.abs()));
+                if scale <= f32::EPSILON {
+                    break;
+                }
+                axis = [next[0] / scale, next[1] / scale, next[2] / scale];
+            }
+            let along = |t: &[f32; 3]| t[0] * axis[0] + t[1] * axis[1] + t[2] * axis[2];
+            let (mut low, mut high) = (texels[0], texels[0]);
+            for t in &texels {
+                if along(t) < along(&low) {
+                    low = *t;
+                }
+                if along(t) > along(&high) {
+                    high = *t;
+                }
+            }
+            let (mut c0, mut c1) = (to565(high), to565(low));
+            if c0 < c1 {
+                std::mem::swap(&mut c0, &mut c1);
+            }
+            let mut indices = 0u32;
+            if c0 != c1 {
+                let (a, b) = (from565(c0), from565(c1));
+                let palette = [
+                    a,
+                    b,
+                    [(2.0 * a[0] + b[0]) / 3.0, (2.0 * a[1] + b[1]) / 3.0, (2.0 * a[2] + b[2]) / 3.0],
+                    [(a[0] + 2.0 * b[0]) / 3.0, (a[1] + 2.0 * b[1]) / 3.0, (a[2] + 2.0 * b[2]) / 3.0],
+                ];
+                for (i, t) in texels.iter().enumerate() {
+                    let distance = |p: &[f32; 3]| (t[0] - p[0]).powi(2) + (t[1] - p[1]).powi(2) + (t[2] - p[2]).powi(2);
+                    let mut best = 0u32;
+                    for (n, p) in palette.iter().enumerate() {
+                        if distance(p) < distance(&palette[best as usize]) {
+                            best = n as u32;
+                        }
+                    }
+                    indices |= best << (2 * i);
+                }
+            }
+            out.extend_from_slice(&c0.to_le_bytes());
+            out.extend_from_slice(&c1.to_le_bytes());
+            out.extend_from_slice(&indices.to_le_bytes());
+        }
+    }
 }
 
 /// Whether no block's texel takes the transparent colour of a three-colour block.
@@ -569,38 +743,9 @@ fn block4_level(src: &[u8], width: u32, height: u32, out: &mut Vec<u8>) {
     }
 }
 
-/// With NEBULA_COOK_DUMP=<file>, each cooked image is appended to the file for the cook check
-/// (runtime/src/render/texture_cache_cook_check.cpp): format, width, height, levels, palette format (0xFF: none),
-/// palette length, image length, record length (u32 LE each), then the palette, image and record bytes.
-fn dump(image: &Image, levels: u32, record: &[u8]) {
-    use std::io::Write;
-    use std::sync::Mutex;
-    static FILE: Mutex<Option<std::fs::File>> = Mutex::new(None);
-    let Some(path) = std::env::var_os("NEBULA_COOK_DUMP") else { return };
-    let mut file = FILE.lock().unwrap();
-    if file.is_none() {
-        *file = std::fs::OpenOptions::new().create(true).append(true).open(path).ok();
-    }
-    let Some(file) = file.as_mut() else { return };
-    let mut bytes_used = 0usize;
-    for l in 0..levels {
-        bytes_used += image.format.level_bytes((image.width >> l).max(1), (image.height >> l).max(1));
-    }
-    let (palette, palette_format) = image.palette.map_or((&[][..], 0xFFu32), |(p, f)| (p, f as u32));
-    let mut head = Vec::new();
-    for v in [image.format as u32, image.width, image.height, levels, palette_format, palette.len() as u32,
-              bytes_used as u32, record.len() as u32] {
-        head.extend_from_slice(&v.to_le_bytes());
-    }
-    let _ = file.write_all(&head);
-    let _ = file.write_all(palette);
-    let _ = file.write_all(&image.data[..bytes_used]);
-    let _ = file.write_all(record);
-}
-
 /// Whether `bytes` start with a texture record (an already cooked file).
 pub fn is_record(bytes: &[u8]) -> bool {
-    bytes.len() >= HEADER && &bytes[..8] == MAGIC
+    bytes.len() >= HEADER && &bytes[..8] == MAGIC && u32::from_le_bytes(bytes[8..12].try_into().unwrap()) == VERSION
 }
 
 /// The RGBA texels of a record's level 0 (tests and the cook check).
@@ -608,9 +753,9 @@ pub fn record_level0(record: &[u8]) -> Option<(u32, u32, Vec<[u8; 4]>)> {
     if !is_record(record) {
         return None;
     }
-    let w = u16::from_le_bytes([record[16], record[17]]) as u32;
-    let h = u16::from_le_bytes([record[18], record[19]]) as u32;
-    let layout = record[21];
+    let w = u32::from_le_bytes(record[16..20].try_into().ok()?);
+    let h = u32::from_le_bytes(record[20..24].try_into().ok()?);
+    let layout = record[28];
     let texels = &record[HEADER..];
     let n = (w * h) as usize;
     let out = match layout {
@@ -656,6 +801,17 @@ mod tests {
     use super::*;
 
     #[test]
+    fn native_texture_dimensions_do_not_stop_at_source_or_short_limits() {
+        let rgba = [255, 0, 127, 255].repeat(70000);
+        let record = cook_rgba(70000, 1, &rgba).unwrap();
+        let (width, height, values) = record_level0(&record).unwrap();
+        assert_eq!((width, height), (70000, 1));
+        assert_eq!(values.len(), 70000);
+        assert_eq!(values[69999], [255, 0, 127, 255]);
+        assert!(cook_rgba(70000, 1, &rgba[..rgba.len()-4]).is_err());
+    }
+
+    #[test]
     fn xxh64_matches_the_reference_values() {
         // python-xxhash 3.x, xxh64(data, seed=0) (texture_pack_tests.cpp).
         assert_eq!(xxh64(b""), 0xef46db3751d8e999);
@@ -668,7 +824,7 @@ mod tests {
         let data: Vec<u8> = (0..32).collect();
         let image = Image { format: Format::I8, width: 8, height: 4, levels: 1, data: &data, palette: None };
         let record = cook(&image).unwrap();
-        assert_eq!(record[21], LAYOUT_L8);
+        assert_eq!(record[28], LAYOUT_L8);
         assert_eq!(&record[HEADER..HEADER + 32], &data[..]);
         assert_eq!(u32::from_le_bytes(record[12..16].try_into().unwrap()) as usize, record.len());
     }
@@ -707,7 +863,7 @@ mod tests {
         let record = cook(&image).unwrap();
         let (_, _, t) = record_level0(&record).unwrap();
         assert_eq!(t[0], [255, 0, 0, 255]);
-        assert_eq!(u64::from_le_bytes(record[32..40].try_into().unwrap()), xxh64(&palette[6..12]));
+        assert_eq!(u64::from_le_bytes(record[40..48].try_into().unwrap()), xxh64(&palette[6..12]));
     }
 
     #[test]

@@ -2,6 +2,7 @@
 
 
 class JUTTexture;
+struct SiteMaterial;
 
 #include "Game/Util/Color.hpp"
 
@@ -11,6 +12,7 @@ public:
 
     // The warning colour over the bubble drawn next (the material setUpStage sent).
     static void setWarningColor(const Color8& rColor);
+    static const SiteMaterial& material();
 
 
     void setUpDraw() const;

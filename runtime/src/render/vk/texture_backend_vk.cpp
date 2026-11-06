@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// TextureCache's Vulkan side (gpu_texture_backend.h).
+// TextureStore's Vulkan side (gpu_texture_backend.h).
 
 #include "galaxy/render/gpu_texture_backend.h"
 
@@ -60,6 +60,7 @@ void TextureBackend::prepare_null_view(VkCommandBuffer commands) {
 }
 
 void TextureBackend::write_view(std::uint32_t index, vk::Texture* texture, unsigned) {
+    ensure_view(index);
     views_[index] = texture->view;
 }
 
@@ -67,7 +68,7 @@ TextureBackend::UploadChunk TextureBackend::create_upload_chunk(std::uint64_t si
     UploadChunk chunk{};
     chunk.resource = vk::Context::get().create_buffer(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, "texture upload arena");
     if (!chunk.resource) {
-        throw std::runtime_error("[TextureCache] create texture upload arena failed");
+        throw std::runtime_error("[TextureStore] create texture upload arena failed");
     }
     chunk.cpu_base = reinterpret_cast<std::uint8_t*>(chunk.resource->mapped);
     chunk.size = size;
@@ -92,7 +93,7 @@ gpu::TextureRef TextureBackend::create_texture(
     auto texture = vk::Context::get().create_texture(
         width, height, levels, vk_format, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, false, nullptr);
     if (!texture) {
-        throw std::runtime_error("[TextureCache] create default texture failed");
+        throw std::runtime_error("[TextureStore] create default texture failed");
     }
     if (format == TexelFormat::R8 || format == TexelFormat::Rg8) {
         // The value in every colour channel, alpha the value or the second byte.
@@ -106,7 +107,7 @@ gpu::TextureRef TextureBackend::create_texture(
         view_info.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, levels, 0, 1};
         VkImageView view = VK_NULL_HANDLE;
         if (vkCreateImageView(device, &view_info, nullptr, &view) != VK_SUCCESS) {
-            throw std::runtime_error("[TextureCache] create texture view failed");
+            throw std::runtime_error("[TextureStore] create texture view failed");
         }
         vkDestroyImageView(device, texture->view, nullptr);
         texture->view = view;
@@ -136,8 +137,8 @@ void TextureBackend::record_upload(vk::Texture* texture, bool reused, const Uplo
     transition(upload_list_, *texture, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                reused ? VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0,
                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT);
-    VkBufferImageCopy regions[16];
-    const unsigned count = std::min(levels, 16u);
+    std::vector<VkBufferImageCopy> regions(levels);
+    const unsigned count = levels;
     for (unsigned l = 0; l < count; ++l) {
         VkBufferImageCopy& region = regions[l];
         region = {};
@@ -152,7 +153,7 @@ void TextureBackend::record_upload(vk::Texture* texture, bool reused, const Uplo
         region.imageExtent = {std::max<std::uint32_t>(1u, width >> l), std::max<std::uint32_t>(1u, height >> l), 1};
     }
     vkCmdCopyBufferToImage(upload_list_, staging.resource->buffer, texture->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                           count, regions);
+                           count, regions.data());
     transition(upload_list_, *texture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT,
                VK_ACCESS_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT);
 }

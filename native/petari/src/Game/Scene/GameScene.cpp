@@ -4,7 +4,7 @@
 #include "JSystem/JAudio2/JASWaveArcLoader.hpp"
 #include "Game/System/GameThreads.hpp"
 #include <JSystem/JUtility/JUTNativeLog.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include "Game/Render/FrameList.hpp"
 #include "Game/Util/GameLightSignal.hpp"
 #include "Game/Util/MotionSignal.hpp"
 #include "Game/System/GameDataFunction.hpp"
@@ -74,14 +74,13 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Screen/GameSceneLayoutHolder.hpp"
-#if !defined(NEBULA_RELEASE)
+#if defined(NEBULA_DEV)
 #include "Game/Boss/Koopa.hpp"
 #include "Game/Boss/KoopaSequencer.hpp"
 #include "Game/Util/ModelUtil.hpp"
-#include "JSystem/J3DGraphAnimator/J3DModelData.hpp"
-#include "JSystem/J3DGraphBase/J3DMaterial.hpp"
+#include "Game/Render/ModelData.hpp"
+#include "Game/Render/Material.hpp"
 #include "JSystem/JUtility/JUTNameTab.hpp"
-#include <nebula_cooked_material.h>
 #include "Game/Player/MarioAccess.hpp"
 #include "Game/Player/MarioActor.hpp"
 #include "Game/Map/StageSwitch.hpp"
@@ -97,8 +96,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
-#include <JSystem/J3DGraphBase/J3DSys.hpp>
-#include "Game/Util/RenderSignals.hpp"
+#include "Game/Render/Model.hpp"
 #include "Game/System/NebulaHost.hpp"
 
 namespace {
@@ -125,7 +123,7 @@ namespace NrvGameScene {
 };  // namespace NrvGameScene
 
 namespace {
-#if !defined(NEBULA_RELEASE)
+#if defined(NEBULA_DEV)
 #include "../../../../../tools/test_driver/game_scene_walk.inc"
 #endif
 }  // namespace
@@ -294,7 +292,7 @@ void GameScene::draw() const {
         const f32 depth = MR::isCameraInWater() ? WaterAreaFunction::getCameraWaterDepth() : -1.0f;
         NebulaHost::gameContext(NEBULA_CONTEXT_CAMERA_WATER, depth < 0.0f ? 0 : static_cast< s32 >(depth) + 1);
     }
-#if !defined(NEBULA_RELEASE)
+#if defined(NEBULA_DEV)
 #include "../../../../../tools/test_driver/game_scene_draw_start.inc"
 #endif
     // The settings' galaxy select (its ADVANCED page) names its galaxies and stars in the game's own words, asked once.
@@ -309,10 +307,9 @@ void GameScene::draw() const {
             }
         }
     }
-#if !defined(NEBULA_RELEASE)
+#if defined(NEBULA_DEV)
 #include "../../../../../tools/test_driver/game_scene_actions.inc"
 #endif
-    MR::drawInit();
     LightFunction::initLightRegisterAll();
     CategoryList::execute(MR::DrawType_MiiFaceIcon);
     CategoryList::execute(MR::DrawType_MiiFaceNew);
@@ -476,19 +473,18 @@ void GameScene::initEffect() {
 
 void GameScene::drawMirror() const {
     if (isDrawMirror()) {
-        MotionSignal::mirror(true);
-        NebulaMtxCopy(MR::getMirrorCameraViewMtx(), j3dSys.mViewMtx);
+        Frame::mirror(true);
+        NebulaMtxCopy(MR::getMirrorCameraViewMtx(), ModelSys::mViewMtx);
         MR::loadProjectionMtx();
         CategoryList::entryDrawBufferMirror();
-        J3DPass::writeAlpha(false);
-        J3DPass::writeColor(true);
+        Frame::setPassAlpha(false);
         CategoryList::drawOpa(MR::DrawBufferType_MirrorMapObj);
         CategoryList::drawXlu(MR::DrawBufferType_MirrorMapObj);
         CategoryList::execute(MR::DrawType_CaptureScreenIndirect);
-        MotionSignal::mirror(false);
+        Frame::mirror(false);
         MR::clearZBuffer();
         NebulaColor8 c = {0, 0, 255, 0};
-        MR::fillScreen(c);
+        MR::fillScreen(c, true);
     }
 }
 
@@ -509,31 +505,27 @@ void GameScene::draw3D() const {
     f32 sceneCamera[4][4];
     MotionSignal::sceneCamera(sceneCamera);
     NebulaHost::gameStage(MR::getCurrentStageName());
-    NebulaRender::sceneMarker(NEBULA_SCENE_3D_BEGIN, sceneCamera);
-    MotionSignal::sceneBegin();
+    Frame::sceneBegin(sceneCamera);
     GameLightSignal::frame();
     CategoryList::execute(MR::DrawType_AstroDomeSkyClear);
     MR::loadViewMtx();
     MR::loadProjectionMtx();
     MR::setDefaultViewportAndScissor();
-    J3DPass::writeColor(true);
-    J3DPass::writeAlpha(true);
+    Frame::setPassAlpha(true);
     CategoryList::drawOpa(MR::DrawBufferType_ClippedMapParts);
     CategoryList::execute(MR::DrawType_ClipArea);
     CategoryList::execute(MR::DrawType_FallOutFieldDraw);
     SceneFunction::executeDrawBufferListNormalOpaBeforeVolumeShadow();
-    J3DPass::writeAlpha(true);
     CategoryList::execute(MR::DrawType_ShadowVolume);
-    J3DPass::writeColor(true);
     // What is drawn after the volumes is not in their shadow.
-    J3DPass::stencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ZERO);
+    Frame::setPassStencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ZERO);
     SceneFunction::executeDrawBufferListNormalOpaBeforeSilhouette();
-    J3DPass::stencil(NEBULA_STENCIL_OFF, NEBULA_STENCIL_KEEP);
+    Frame::setPassStencil(NEBULA_STENCIL_OFF, NEBULA_STENCIL_KEEP);
     CategoryList::execute(MR::DrawType_0x28);
     SceneFunction::executeDrawSilhouetteAndFillShadow();
     SceneFunction::executeDrawAlphaShadow();
     MR::setLensFlareDrawSyncToken();
-    J3DPass::writeAlpha(false);
+    Frame::setPassAlpha(false);
     SceneFunction::executeDrawBufferListNormalOpa();
     SceneFunction::executeDrawListOpa();
     CategoryList::drawOpa(MR::DrawBufferType_UNK_0x18);
@@ -559,12 +551,12 @@ void GameScene::draw3D() const {
     MR::loadLightPlayer();
     CategoryList::execute(MR::DrawType_0x24);
     CategoryList::execute(MR::DrawType_0x3B);
-    NebulaRender::sceneMarker(NEBULA_SCENE_3D_END, nullptr);
+    Frame::sceneEnd();
     MR::clearZBuffer();
 }
 
 void GameScene::draw2D() const {
-    MotionSignal::scene2D(true);
+    Frame::scene2D(true);
     if (isPlayMovie()) {
         SceneFunction::executeDrawList2DMovie();
     } else {
@@ -582,7 +574,7 @@ void GameScene::draw2D() const {
     if (isNerve(GET_NERVE(GameScene, GameSceneNebulaBoard))) {
         MR::getGameSceneLayoutHolder()->mAchievementBoard->drawOnTop();
     }
-    MotionSignal::scene2D(false);
+    Frame::scene2D(false);
 }
 
 void GameScene::drawOverlay() const {

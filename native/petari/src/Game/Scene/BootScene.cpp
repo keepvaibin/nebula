@@ -7,7 +7,7 @@
 #include "Game/System/GameFrame.hpp"
 #include "Game/Util/DrawUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
-#include "Game/Screen/NebulaRtPrepare.hpp"
+#include "Game/Screen/NebulaPrepare.hpp"
 
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -16,7 +16,7 @@
 
 namespace {
     NEW_NERVE(BootSceneMountGameData, BootScene, MountGameData);
-    NEW_NERVE(BootSceneWaitRayTracing, BootScene, WaitRayTracing);
+    NEW_NERVE(BootSceneWaitPreparation, BootScene, WaitPreparation);
     NEW_NERVE(BootSceneWaitReadDoneSystemArchive, BootScene, WaitReadDoneSystemArchive);
     NEW_NERVE(BootSceneDeactive, BootScene, Deactive);
 };  // namespace
@@ -48,7 +48,6 @@ void BootScene::calcAnim() {
 }
 
 void BootScene::draw() const {
-    MR::drawInit();
 
     NebulaColor8 color;
     color.r = 0;
@@ -84,12 +83,12 @@ void BootScene::exeMountGameData() {
         return;
     }
 
-    setNerve(GET_NERVE_ANON(BootSceneWaitRayTracing));
+    setNerve(GET_NERVE_ANON(BootSceneWaitPreparation));
 }
 
-// Ray tracing's shaders compile before the title (NebulaRtPrepare): the title waits for them and their screen.
-void BootScene::exeWaitRayTracing() {
-    if (!NebulaRtPrepare::isHolding()) {
+// What's prepared before the title (NebulaPrepare): the title waits for it and its screen.
+void BootScene::exeWaitPreparation() {
+    if (!NebulaPrepare::isHolding()) {
         setNerve(GET_NERVE_ANON(BootSceneDeactive));
     }
 }

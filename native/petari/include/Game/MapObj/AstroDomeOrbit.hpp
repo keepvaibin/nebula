@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 
 class Color8;
@@ -16,9 +17,9 @@ public:
     void setup(s32);
     void moveCoord();
     void calcGalaxyPos(Vec3f*) const;
-    void initDraw(const Color8&) const;
-    void drawCelling(f32, bool, f32) const;
-    void drawSide(f32, bool, f32) const;
+    SiteMaterial loadMaterial(const Color8&) const;
+    void drawCelling(TypedDraw&, f32, bool, f32) const;
+    void drawSide(TypedDraw&, f32, bool, f32) const;
     f32 calcRepeatedRotateCoord(f32) const;
 
     f32 mOrbitRadius;

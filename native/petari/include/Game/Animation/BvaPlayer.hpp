@@ -2,17 +2,17 @@
 
 #include "Game/Animation/AnmPlayer.hpp"
 
-class J3DAnmVisibilityFull;
-class J3DModel;
+class Clip;
+class Model;
 class ResTable;
 
 class BvaPlayer : public AnmPlayerBase {
 public:
-    BvaPlayer(const ResTable*, J3DModel*);
+    BvaPlayer(const ResTable*, Model*);
 
     void calc();
-    J3DAnmVisibilityFull* getAnmVisibility();
+    Clip* getAnmVisibility();
 
 private:
-    J3DModel* mModel;
+    Model* mModel;
 };

@@ -246,7 +246,7 @@ void MarioModule::stopAnimation(const char* pAnim, u32 index) {
     }
 }
 
-void MarioModule::setJointGlobalMtx(u16 a1, MtxPtr mtx) {
+void MarioModule::setJointGlobalMtx(u32 a1, MtxPtr mtx) {
     XjointTransform* pTransform = mActor->mMarioAnim->mXanimePlayer->mCore->mTransformList;
     if (pTransform == 0) {
         pTransform = 0;

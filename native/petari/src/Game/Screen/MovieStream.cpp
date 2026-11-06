@@ -1,6 +1,7 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Screen/MovieStream.hpp"
 #include "Game/Screen/MovieDraw.hpp"
+#include "Game/Render/RenderTexture.hpp"
 #include "Game/System/NebulaClock.hpp"
 #include "Game/System/GameThreads.hpp"
 #include "Game/System/NebulaSystemSettings.hpp"
@@ -15,7 +16,7 @@ namespace {
     // The open movie's disc path, for the host's replacement videos (one movie plays at a time).
     char sMovieName[256];
 
-    void movieFrame(const char* pName, s32 frame, f32 frameRate, const void* pY, const void* pU, const void* pV, u32 width, u32 height) {
+    void movieFrame(const char* pName, s32 frame, f32 frameRate, u32 pY, u32 pU, u32 pV, u32 width, u32 height) {
         const NebulaHostServices* const host = nebula_host();
         host->movie_frame(host->user, pName, frame, frameRate, pY, pU, pV, width, height);
     }
@@ -28,7 +29,7 @@ namespace {
 
 MovieStream::MovieStream()
     : mOpen(false), mPlaying(false), mLoop(false), mData(nullptr), mCurOffset(0), mFrameSize(0), mFrame(0), mPlaneY(nullptr),
-      mSoundOffset(0), mSoundFrameSize(0), mSoundFrame(0), mSoundFed(0), mPicturesTaken(0), mPlaneU(nullptr), mPlaneV(nullptr), mPlanesFrame(-1) {
+      mSoundOffset(0), mSoundFrameSize(0), mSoundFrame(0), mSoundFed(0), mPicturesTaken(0), mPlaneU(nullptr), mPlaneV(nullptr), mPlanesFrame(-1), mPlanesUploaded(-1) {
     mFile.mEntry = -1;
     mFile.mLength = 0;
     MR::zeroMemory(&mHeader, sizeof(mHeader));
@@ -46,7 +47,7 @@ bool MovieStream::open(const char* pName) {
 
     strncpy(sMovieName, pName, sizeof(sMovieName) - 1);
     sMovieName[sizeof(sMovieName) - 1] = '\0';
-    movieFrame(sMovieName, NEBULA_MOVIE_OPENING, 0.0f, nullptr, nullptr, nullptr, 0, 0);
+    movieFrame(sMovieName, NEBULA_MOVIE_OPENING, 0.0f, 0, 0, 0, 0, 0);
 
     mData = static_cast< const u8* >(GameAssets::map(mFile.mEntry));
     if (mData == nullptr) {
@@ -65,6 +66,7 @@ bool MovieStream::open(const char* pName) {
     mSoundFed = 0;
     mPicturesTaken = 0;
     mPlanesFrame = -1;
+    mPlanesUploaded = -1;
     mPlaying = false;
     mLoop = false;
     mOpen = true;
@@ -98,7 +100,7 @@ bool MovieStream::close() {
 
     mOpen = false;
     movieAudioControl(NEBULA_MOVIE_AUDIO_CLOSE, 0, 0);
-    movieFrame(nullptr, NEBULA_MOVIE_NONE, 0.0f, nullptr, nullptr, nullptr, 0, 0);
+    movieFrame(nullptr, NEBULA_MOVIE_NONE, 0.0f, 0, 0, 0, 0, 0);
     return true;
 }
 
@@ -138,6 +140,7 @@ void MovieStream::stop() {
 
     mPlaying = false;
     mPlanesFrame = -1;
+    mPlanesUploaded = -1;
     rewind();
     rewindSound();
     mSoundFed = 0;
@@ -268,8 +271,12 @@ s32 MovieStream::drawCurrentFrame(u32 x, u32 y, u32 polyW, u32 polyH) {
         return -1;
     }
 
-    movieFrame(sMovieName, mHeader.mFrames > 0 ? mPlanesFrame % static_cast< s32 >(mHeader.mFrames) : mPlanesFrame, mHeader.mFrameRate, mPlaneY, mPlaneU,
-               mPlaneV, mVideoInfo.mWidth, mVideoInfo.mHeight);
+    if (mPlanesUploaded != mPlanesFrame) {
+        MovieDraw::uploadPlanes(mPlaneY, mPlaneU, mPlaneV, mVideoInfo.mWidth, mVideoInfo.mHeight);
+        mPlanesUploaded = mPlanesFrame;
+    }
+    movieFrame(sMovieName, mHeader.mFrames > 0 ? mPlanesFrame % static_cast< s32 >(mHeader.mFrames) : mPlanesFrame, mHeader.mFrameRate,
+               RenderTexture::idOf(mPlaneY), RenderTexture::idOf(mPlaneU), RenderTexture::idOf(mPlaneV), mVideoInfo.mWidth, mVideoInfo.mHeight);
     MovieDraw::drawFrame(MR::getScreenWidth(), MR::getScreenHeight(), mPlaneY, mPlaneU, mPlaneV, x, y, mVideoInfo.mWidth,
                          mVideoInfo.mHeight, polyW, polyH);
 

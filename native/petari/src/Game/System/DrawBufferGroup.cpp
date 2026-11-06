@@ -4,7 +4,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <JSystem/J3DGraphBase/J3DSys.hpp>
+#include "Game/Render/Model.hpp"
 #include <algorithm>
 
 DrawBufferGroup::DrawBufferGroup() : mExecutors(), mActiveExecutors(), mDrawCameraType(0), mLightType(-1), mLightLoadType(-1) {
@@ -20,7 +20,7 @@ s32 DrawBufferGroup::registerDrawBuffer(LiveActor* pActor) {
     s32 idx = findExecuterIndex(pModelName);
 
     if (idx < 0) {
-        DrawBufferExecuter* exec = new DrawBufferExecuter(pModelName, MR::getJ3DModel(pActor), 0x10);
+        DrawBufferExecuter* exec = new DrawBufferExecuter(pModelName, MR::getModel(pActor), 0x10);
 
         idx = mExecutors.size();
         mExecutors.push_back(exec);
@@ -84,7 +84,6 @@ void DrawBufferGroup::entry() {
 
 void DrawBufferGroup::drawOpa() const {
     if (mActiveExecutors.size() != 0) {
-        j3dSys.mDrawMode = 3;
         if (mLightLoadType != -1) {
             MR::loadLight(mLightLoadType);
         }
@@ -96,7 +95,6 @@ void DrawBufferGroup::drawOpa() const {
 
 void DrawBufferGroup::drawXlu() const {
     if (mActiveExecutors.size() != 0) {
-        j3dSys.mDrawMode = 4;
         if (mLightLoadType != -1) {
             MR::loadLight(mLightLoadType);
         }

@@ -6,6 +6,7 @@
 
 class DynamicFurParam;
 class JUTTexture;
+struct SiteMaterial;
 struct ResTIMG;
 
 class FurDrawer {
@@ -27,6 +28,8 @@ public:
     void update();
     void setupMaterial(DynamicFurParam*) const;
     void setupLayerMaterial(s32) const;
+    // What setupMaterial and setupLayerMaterial have set.
+    const SiteMaterial& material() const;
     void createFurMap();
 
     JUTTexture* mBodyTexture;
@@ -34,6 +37,7 @@ public:
     JUTTexture* mIndirectTexture;
     s32 mNumLayers;
     CLayerParam mLength;
+    f32* mShells;  // each layer's reach
     CLayerParam mIndirect;
     CLayerParam mBrightness;
     CLayerParam mAlpha;
