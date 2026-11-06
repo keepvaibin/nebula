@@ -1,7 +1,7 @@
 #include "Game/MapObj/AstroDomeOrbit.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
+#include "Game/Render/FrameList.hpp"
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/Map/SphereSelector.hpp"
 #include "Game/MapObj/MiniatureGalaxyHolder.hpp"
 #include "Game/Scene/SceneFunction.hpp"
@@ -10,7 +10,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
-#include "Game/Util/NativeShader.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include <nebula_game_api.h>
 
 namespace {
@@ -47,13 +47,16 @@ void AstroDomeOrbit::draw() const {
         return;
     }
 
-    initDraw(::cColor);
+    Pos3f rotateMtx;
+    SphereSelectorFunction::calcHandledRotateMtx(mRotation, &rotateMtx);
+    const SiteMaterial material = loadMaterial(::cColor);
+    TypedDraw site(material, rotateMtx, MR::getCameraViewMtx());
 
-    drawCelling(::cWidth, true, ::cHeight);
-    drawCelling(::cWidth, false, ::cHeight);
+    drawCelling(site, ::cWidth, true, ::cHeight);
+    drawCelling(site, ::cWidth, false, ::cHeight);
 
-    drawSide(::cWidth, true, ::cHeight);
-    drawSide(::cWidth, false, ::cHeight);
+    drawSide(site, ::cWidth, true, ::cHeight);
+    drawSide(site, ::cWidth, false, ::cHeight);
 }
 
 void AstroDomeOrbit::drawBloom() const {
@@ -61,13 +64,16 @@ void AstroDomeOrbit::drawBloom() const {
         return;
     }
 
-    initDraw(::cBloomColor);
+    Pos3f rotateMtx;
+    SphereSelectorFunction::calcHandledRotateMtx(mRotation, &rotateMtx);
+    const SiteMaterial material = loadMaterial(::cBloomColor);
+    TypedDraw site(material, rotateMtx, MR::getCameraViewMtx());
 
-    drawCelling(::cBloomWidth, true, ::cBloomHeight);
-    drawCelling(::cBloomWidth, false, ::cBloomHeight);
+    drawCelling(site, ::cBloomWidth, true, ::cBloomHeight);
+    drawCelling(site, ::cBloomWidth, false, ::cBloomHeight);
 
-    drawSide(::cBloomWidth, true, ::cBloomHeight);
-    drawSide(::cBloomWidth, false, ::cBloomHeight);
+    drawSide(site, ::cBloomWidth, true, ::cBloomHeight);
+    drawSide(site, ::cBloomWidth, false, ::cBloomHeight);
 }
 
 void AstroDomeOrbit::setup(s32 radiusIdx) {
@@ -101,22 +107,17 @@ void AstroDomeOrbit::calcGalaxyPos(Vec3f* pPos) const {
     rotateMtx.mult(*pPos, *pPos);
 }
 
-void AstroDomeOrbit::initDraw(const Color8& rColor) const {
-    Pos3f rotateMtx;
-    SphereSelectorFunction::calcHandledRotateMtx(mRotation, &rotateMtx);
-    rotateMtx.concat(MR::getCameraViewMtx(), rotateMtx);
-    J3DNativeShape::setPosition(0, rotateMtx);
-    J3DPass::positionMatrix(0);
+SiteMaterial AstroDomeOrbit::loadMaterial(const Color8& rColor) const {
     // runtime/src/render/materials/flat_color.hlsl: the colour added to the frame, depth tested and not written, back
     // faces culled.
-    NebulaNativeMaterial material;
-    NativeShader::init(material, NEBULA_SHADER_FLAT_COLOR, NativeShader::BLEND_ADD, NEBULA_COMPARE_LEQUAL, false,
+    SiteMaterial material;
+    material.init(NEBULA_SHADER_FLAT_COLOR, SiteMaterial::BLEND_ADD, NEBULA_COMPARE_LEQUAL, false,
                        NEBULA_CULL_BACK);
-    NativeShader::setColor(material, 0, rColor.r, rColor.g, rColor.b, rColor.a);
-    NativeShader::send(material);
+    material.setColor(0, rColor.r, rColor.g, rColor.b, rColor.a);
+    return material;
 }
 
-void AstroDomeOrbit::drawCelling(f32 width, bool isAddHeight, f32 height) const {
+void AstroDomeOrbit::drawCelling(TypedDraw& rDraw, f32 width, bool isAddHeight, f32 height) const {
     Vec3f handleTrans;
     handleTrans.set(SphereSelectorFunction::getHandleTrans());
 
@@ -126,7 +127,7 @@ void AstroDomeOrbit::drawCelling(f32 width, bool isAddHeight, f32 height) const 
         handleTrans.y -= (0.5f * height);
     }
 
-    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 130, 0);
+    VertexP* vtx = rDraw.vertices< VertexP >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 130);
 
     for (s32 i = 0; i < ::cDevideNum + 1; i++) {
         f32 angle = TWO_PI * i / ::cDevideNum;
@@ -143,16 +144,16 @@ void AstroDomeOrbit::drawCelling(f32 width, bool isAddHeight, f32 height) const 
         posVec.add(handleTrans);
 
         if (isAddHeight) {
-            J3DNativeDraw::position(negVec.x, negVec.y, negVec.z);
-            J3DNativeDraw::position(posVec.x, posVec.y, posVec.z);
+            *vtx++ = {negVec.x, negVec.y, negVec.z};
+            *vtx++ = {posVec.x, posVec.y, posVec.z};
         } else {
-            J3DNativeDraw::position(posVec.x, posVec.y, posVec.z);
-            J3DNativeDraw::position(negVec.x, negVec.y, negVec.z);
+            *vtx++ = {posVec.x, posVec.y, posVec.z};
+            *vtx++ = {negVec.x, negVec.y, negVec.z};
         }
     }
 }
 
-void AstroDomeOrbit::drawSide(f32 width, bool isAddWidth, f32 height) const {
+void AstroDomeOrbit::drawSide(TypedDraw& rDraw, f32 width, bool isAddWidth, f32 height) const {
     Vec3f handleTrans;
     handleTrans.set(SphereSelectorFunction::getHandleTrans());
     handleTrans.y += 0.5f * height;
@@ -164,7 +165,7 @@ void AstroDomeOrbit::drawSide(f32 width, bool isAddWidth, f32 height) const {
         scale = mOrbitRadius - (0.5f * width);
     }
 
-    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, (::cDevideNum + 1) * 2, 0);
+    VertexP* vtx = rDraw.vertices< VertexP >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, (::cDevideNum + 1) * 2);
 
     for (s32 i = 0; i < ::cDevideNum + 1; i++) {
         f32 angle = TWO_PI * i / ::cDevideNum;
@@ -181,11 +182,11 @@ void AstroDomeOrbit::drawSide(f32 width, bool isAddWidth, f32 height) const {
         v15.y -= height;
 
         if (isAddWidth) {
-            J3DNativeDraw::position(v16.x, v16.y, v16.z);
-            J3DNativeDraw::position(v15.x, v15.y, v15.z);
+            *vtx++ = {v16.x, v16.y, v16.z};
+            *vtx++ = {v15.x, v15.y, v15.z};
         } else {
-            J3DNativeDraw::position(v15.x, v15.y, v15.z);
-            J3DNativeDraw::position(v16.x, v16.y, v16.z);
+            *vtx++ = {v15.x, v15.y, v15.z};
+            *vtx++ = {v16.x, v16.y, v16.z};
         }
     }
 }

@@ -1,8 +1,9 @@
+#include "Game/Util/CameraUtil.hpp"
 #include "Game/MapObj/TrampleStar.hpp"
-#include "Game/Util/NativeShader.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/FrameList.hpp"
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/LiveActor/AllLiveActorGroup.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -485,9 +486,7 @@ u32 TrampleStar::calcNearestVtxIndex(const Vec3f& rPos) {
 void TrampleStar::draw() const {
     if (!MR::isDead(this)) {
         drawSelf();
-        J3DPass::depth(true, NEBULA_COMPARE_LEQUAL, true);
         MR::resetDrawState();
-        J3DPass::writeAlpha(true);
     }
 }
 
@@ -552,7 +551,6 @@ void TrampleStar::drawSelf() const {
         return;
     }
 
-    MR::ddSetVtxFormat(3);
     Vec3f playerPos = *MR::getPlayerPos();
     Vec3f diff = mPosition - playerPos;
     Vec3f shadowPos = MR::getMarioShadowVec();
@@ -603,32 +601,28 @@ void TrampleStar::drawSelf() const {
     mtx4[1][3] = debug5;
     MR::multMtx(mtx3, mtx3, mtx4);
 
-    J3DNativeShape::setTexture(1, mtx3, 3);
     // runtime/src/render/materials/trample_star.hlsl: blended by alpha, depth tested early and written, no culling.
-    NebulaNativeMaterial material;
+    SiteMaterial material;
     TDDraw::setupNative(&material, 0, 1, 0);
-    material.shader = NEBULA_SHADER_TRAMPLE_STAR;
-    NativeShader::setDepth(material, true, NEBULA_COMPARE_LEQUAL, true);
-    material.early_depth = 1;
-    NativeShader::setColor(material, 0, 0xCC, 0xCC, 0xCC, 0xFF);
-    NativeShader::setColor(material, 4, 0x7F, 0x7F, 0x93, 0xC3);
+    material.mShader = NEBULA_SHADER_TRAMPLE_STAR;
+    material.setDepth(true, NEBULA_COMPARE_LEQUAL, true);
+    material.setMatrix(3, 0, mtx3);
+    material.setColor(0, 0xCC, 0xCC, 0xCC, 0xFF);
+    material.setColor(4, 0x7F, 0x7F, 0x93, 0xC3);
     material.constants[8] = 0xB4 / 255.0f;
     material.constants[9] = MR::getPlayerShadowHeight() < MR::calcDistanceToPlayer(this) ? 0.0f : 1.0f;
-    NativeShader::setTexture(material, 0, mTexture);
-    NativeShader::setTexture(material, 1, MR::getMarioShadowTexForLoad());
-    NativeShader::send(material);
-    static const u8 kPlaces[8] = {J3DNativeShape::kIdentityTexture, 1, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture,
-                                  J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture};
-    J3DNativeShape::setCurrent(0, kPlaces);
+    material.setTexture(0, mTexture);
+    material.setTexture(1, MR::getMarioShadowTexForLoad());
 
-    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLES, mNumDrawVtxs, MR::ddVtxAttributes());
+    TypedDraw site(material, nullptr, MR::getCameraViewMtx());
+    VertexPNT* pOut = site.vertices< VertexPNT >(NEBULA_PRIMITIVE_TRIANGLES, mNumDrawVtxs);
     {
         Vec3f* pos = mDrawPos;
         Vec3f* norm = mDrawNorm;
         Vec2f* tex = mDrawTex;
 
         for (u32 vtx = 0; vtx < mNumDrawVtxs; vtx++) {
-            MR::ddSendVtxData(*pos, *norm, *tex);
+            *pOut++ = {pos->x, pos->y, pos->z, norm->x, norm->y, norm->z, tex->x, tex->y};
             pos++;
             norm++;
             tex++;

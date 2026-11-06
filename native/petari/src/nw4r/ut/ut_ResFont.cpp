@@ -1,5 +1,5 @@
 #include "nw4r/ut/ResFont.h"
-#include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
+#include "Game/Render/RenderTexture.hpp"
 #include "nw4r/ut/binaryFileFormat.h"
 #include <stdint.h>
 
@@ -104,7 +104,6 @@ namespace nw4r {
                     FontTextureGlyph* glyph = reinterpret_cast< FontTextureGlyph* >(reinterpret_cast< u8* >(blockHeader) + sizeof(*blockHeader));
                     ResolveOffset(glyph->sheetImage, fileHeader);
                     for (u32 sheet = 0; sheet < glyph->sheetNum; sheet++) {
-                        J3DNativeTexture::registerRecord(glyph->sheetImage + sheet * glyph->sheetSize);
                     }
                 } break;
 

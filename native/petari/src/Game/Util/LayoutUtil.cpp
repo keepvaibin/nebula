@@ -1,6 +1,6 @@
 #include "Game/Util/TextString.hpp"
 #include "Game/Util/LayoutUtil.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include "Game/Render/FrameList.hpp"
 #include "Game/Effect/MultiEmitter.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Screen/CustomTagProcessor.hpp"
@@ -17,7 +17,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <JSystem/J3DGraphAnimator/J3DAnimation.hpp>
+#include "Game/Render/Clip.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <nw4r/lyt/layout.h>
 #include <nw4r/lyt/material.h>
@@ -56,7 +56,7 @@ namespace {
         }
     }
 
-    void initFrameCtrlReverse(J3DFrameCtrl* pFrameCtrl) {
+    void initFrameCtrlReverse(FrameCtrl* pFrameCtrl) {
         pFrameCtrl->setAttribute(pFrameCtrl->EMode_RESET);
         pFrameCtrl->setRate(-pFrameCtrl->mRate);
         pFrameCtrl->setFrame(pFrameCtrl->mEnd);
@@ -458,7 +458,7 @@ void MR::startAnimAndSetFrameAndStop(LayoutActor* pActor, const char* pAnimName,
 }
 
 void MR::setAnimFrameAndStop(LayoutActor* pActor, f32 animFrame, u32 animLayer) {
-    J3DFrameCtrl* pFrameCtrl = getAnimCtrl(pActor, animLayer);
+    FrameCtrl* pFrameCtrl = getAnimCtrl(pActor, animLayer);
 
     pFrameCtrl->setFrame(animFrame);
     pFrameCtrl->setRate(0.0f);
@@ -483,7 +483,7 @@ void MR::setAnimFrameAndStopAdjustTextHeight(LayoutActor* pActor, const char* pP
 }
 
 void MR::setPaneAnimFrameAndStop(LayoutActor* pActor, const char* pPaneName, f32 animFrame, u32 animLayer) {
-    J3DFrameCtrl* pFrameCtrl = getPaneAnimCtrl(pActor, pPaneName, animLayer);
+    FrameCtrl* pFrameCtrl = getPaneAnimCtrl(pActor, pPaneName, animLayer);
 
     pFrameCtrl->setFrame(animFrame);
     pFrameCtrl->setRate(0.0f);
@@ -545,11 +545,11 @@ s16 MR::getAnimFrameMax(const LayoutActor* pActor, const char* pAnimName) {
     return pActor->getLayoutManager()->getAnimTransform(pAnimName)->GetFrameSize();
 }
 
-J3DFrameCtrl* MR::getAnimCtrl(const LayoutActor* pActor, u32 animLayer) {
+FrameCtrl* MR::getAnimCtrl(const LayoutActor* pActor, u32 animLayer) {
     return pActor->getLayoutManager()->getPaneCtrl(nullptr)->getFrameCtrl(animLayer);
 }
 
-J3DFrameCtrl* MR::getPaneAnimCtrl(const LayoutActor* pActor, const char* pPaneName, u32 animLayer) {
+FrameCtrl* MR::getPaneAnimCtrl(const LayoutActor* pActor, const char* pPaneName, u32 animLayer) {
     return pActor->getLayoutManager()->getPaneCtrl(pPaneName)->getFrameCtrl(animLayer);
 }
 
@@ -626,8 +626,6 @@ void MR::calcAnimLayoutWithDrawInfo(const LayoutActor* pActor, const nw4r::lyt::
 
 void MR::drawLayoutWithDrawInfoWithoutProjectionSetup(const LayoutActor* pActor, const nw4r::lyt::DrawInfo& rDrawInfo) {
     if (isExecuteDrawLayout(pActor)) {
-        J3DPass::cull(NEBULA_CULL_NONE);
-        J3DPass::depth(false, NEBULA_COMPARE_NEVER, false);
         pActor->getLayoutManager()->mLayout->Draw(rDrawInfo);
     }
 }

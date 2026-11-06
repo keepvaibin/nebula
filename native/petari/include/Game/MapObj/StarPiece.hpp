@@ -1,9 +1,10 @@
 #pragma once
 
+#include "Game/Util/Color.hpp"
+
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/JMapInfo.hpp"
 #include "Game/Util/TriangleFilter.hpp"
-#include <JSystem/J3DGraphBase/J3DStruct.hpp>
 #include <nebula_geometry.hpp>
 
 class HitSensor;
@@ -115,7 +116,7 @@ public:
     s32 mGettableDelayCounter;
     s32 mFallKillTimer;
 
-    J3DColor mColor;
+    Color8 mColor;
 
     groupType mGroupType;
     StarPieceHostInfo* mHostInfo;

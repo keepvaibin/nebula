@@ -1,4 +1,6 @@
 #pragma once
+
+class TypedDraw;
 #include "Game/Util/Array.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 class JUTTexture;
@@ -24,7 +26,7 @@ public:
     void addCheckList(HitSensor*);
     void updateCheckList();
     f32 calcCoverSnow(const Vec2f&, f32);
-    void drawLayer(s32) const;
+    void drawLayer(TypedDraw&, s32) const;
     f32 mHalfLength;
     f32 mHalfAngle;
     f32 mRadius;

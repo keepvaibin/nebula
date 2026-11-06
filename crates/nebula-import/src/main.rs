@@ -34,6 +34,21 @@ fn main() -> ExitCode {
 
 fn run(arguments: &[OsString]) -> Result<ExitCode> {
     match arguments {
+        #[cfg(feature = "proof-tools")]
+        [command, input, output] if command == "model-census" => {
+            cook::model_census::run(Path::new(input), Path::new(output))?;
+            Ok(ExitCode::SUCCESS)
+        }
+        #[cfg(feature = "proof-tools")]
+        [command, input, output] if command == "clip-census" => {
+            cook::clip_census::run(Path::new(input), Path::new(output))?;
+            Ok(ExitCode::SUCCESS)
+        }
+        #[cfg(feature = "proof-tools")]
+        [command, input, output] if command == "curve-proof" => {
+            cook::model_census::run_curves(Path::new(input), Path::new(output))?;
+            Ok(ExitCode::SUCCESS)
+        }
         [command, input] if command == "identify" => {
             let identity = identify_input(Path::new(input))?;
             println!("{}", identity.to_json());
@@ -54,48 +69,16 @@ fn run(arguments: &[OsString]) -> Result<ExitCode> {
             println!("game.pak: {size} bytes");
             Ok(ExitCode::SUCCESS)
         }
-        [command, records, option, output] if command == "shader-source" && option == "--output" => {
-            // One line a record: its shader's text on one line with its newlines as \u{1}, or "! why".
-            let bytes = std::fs::read(records)?;
-            let mut text = String::new();
-            for record in bytes.chunks_exact(756) {
-                match cook::shader_source::material_source(record) {
-                    Ok(source) => text.push_str(&source.replace('\n', "\u{1}")),
-                    Err(error) => text.push_str(&format!("! {error}")),
-                }
-                text.push('\n');
-            }
-            std::fs::write(output, text)?;
-            Ok(ExitCode::SUCCESS)
-        }
-        [command, plan, option, output] if command == "mod-materials" && option == "--output" => {
-            // The materials a plan's models need that this build has no shader for, as records for
-            // tools/dev/gen_j3d_materials.py append.
-            *cook::material::NOTE_MISSING.lock().unwrap() = Some(Vec::new());
-            *cook::material::NOTE_PASSES.lock().unwrap() = Some(Vec::new());
-            let scratch = Path::new(output).with_extension("scratch");
-            cook::overlay::cook_plan(Path::new(plan), &scratch)?;
-            let _ = std::fs::remove_file(&scratch);
-            let noted = cook::material::NOTE_MISSING.lock().unwrap().take().unwrap_or_default();
-            let passes = cook::material::NOTE_PASSES.lock().unwrap().take().unwrap_or_default();
-            println!("{} materials without a shader, {} pass variants", noted.len(), passes.len());
-            std::fs::write(output, noted.concat())?;
-            let mut records = Vec::new();
-            for (pass, program) in passes {
-                records.push(pass);
-                records.extend_from_slice(&program);
-            }
-            let mut name = output.clone();
-            name.push(".passes");
-            std::fs::write(name, records)?;
-            Ok(ExitCode::SUCCESS)
-        }
         [command, plan, option, output] if command == "overlay" && option == "--output" => {
             let (stats, failed) = cook::overlay::cook_plan(Path::new(plan), Path::new(output))?;
             for (path, reason) in &failed {
                 println!("LEFT OUT {path}: {reason}");
             }
             println!("{}", stats.summary());
+            Ok(ExitCode::SUCCESS)
+        }
+        [command, input, output] if command == "programs" => {
+            cook::programs::write_set(Path::new(input), Path::new(output))?;
             Ok(ExitCode::SUCCESS)
         }
         [command, input, option, output] if command == "cook" && option == "--output" => {

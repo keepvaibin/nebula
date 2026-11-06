@@ -7,6 +7,7 @@
 // (a constants-only resend) and the next emitter's material starts from them, as colours carry over.
 // An emitter's particles as one draw (JPABaseShape.cpp): begin at its material, flush when it ends.
 class JPABaseParticle;
+struct SiteMaterial;
 
 namespace JPAParticleBatch {
     // The camera the emitters that follow are seen through.
@@ -14,6 +15,8 @@ namespace JPAParticleBatch {
     // `extras`: the shape reads coordinates 1 and 2 (a second map, an indirect map, a projection).
     void begin(bool extras);
     void flush();
+    // The name the drawn effect's items carry.
+    void setSource(u32 source);
     // What the vertices that follow are drawn as: a strip stands alone; others join the same kind.
     void primitive(u8 primitive);
     // The particle being drawn: where it was a frame ago comes from it.
@@ -26,8 +29,12 @@ namespace JPAParticleBatch {
 }  // namespace JPAParticleBatch
 
 namespace JPANativeColor {
+    const SiteMaterial& material();
+    // In lines of a 456-line picture; the texture spreads by a texel across the width.
+    void lineWidth(f32 pixels);
+    void pointSize(f32 pixels);
     // The texture in the particle material's slot: 0 the shape, 1 a child's, 2 the indirect map, 3 the second.
-    void texture(u32 slot, const J3DNativeTexObj* pTexture);
+    void texture(u32 slot, const SiteTexture* pTexture);
     // The colours as R << 24 | G << 16 | B << 8 | A: they travel on the particle's vertices.
     u32 prmWord();
     u32 envWord();

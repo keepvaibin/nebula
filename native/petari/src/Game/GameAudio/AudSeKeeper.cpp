@@ -4,7 +4,7 @@
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <JSystem/J3DGraphAnimator/J3DJoint.hpp>
+#include "Game/Render/ModelData.hpp"
 
 AudSeKeeperBox::AudSeKeeperBox() : mSoundObj(nullptr), mJoint(nullptr), mHash(0) {
 }
@@ -23,7 +23,7 @@ void AudSeKeeperBox::update() {
     }
 }
 
-void AudSeKeeperBox::add(J3DJoint* pJoint, u16 hash) {
+void AudSeKeeperBox::add(Joint* pJoint, u16 hash) {
     mJoint = pJoint;
     mHash = hash;
     updateJointPos();
@@ -55,7 +55,7 @@ void AudSeKeeper::makeBox(const char* pJointName, const char* pJointName2) {
         return;
     }
 
-    J3DJoint* joint = MR::getJoint(mActor, pJointName);
+    Joint* joint = MR::getJoint(mActor, pJointName);
 
     u16 hash;
     if (pJointName2 != nullptr) {

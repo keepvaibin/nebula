@@ -16,6 +16,7 @@ namespace galaxy::render::gpu {
 // Handles keep D3D12's field names where the shared code reads them, so one RenderCore compiles for both.
 using Device = VkDevice_T;
 using Pipeline = VkPipeline_T;
+using PipelineRef = VkPipeline;
 using Resource = VkBuffer_T;
 // A 64-bit address in the renderer's own buffer address space: each buffer the old path binds owns a range, and the
 // renderer turns an address back into (buffer, offset) when it binds it. Arithmetic on it works as on D3D12's.
@@ -134,6 +135,7 @@ using TextureObject = ID3D12Resource;
 using CpuDescriptor = D3D12_CPU_DESCRIPTOR_HANDLE;
 inline constexpr unsigned kMaxTexture2DDimension = D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION;
 using Pipeline = ID3D12PipelineState;
+using PipelineRef = Microsoft::WRL::ComPtr<ID3D12PipelineState>;
 using Resource = ID3D12Resource;
 // A GPU address a draw binds (constants, matrix palette, vertex and index data).
 using Address = D3D12_GPU_VIRTUAL_ADDRESS;
@@ -193,5 +195,7 @@ struct UploadMemory {
 
 // `bytes` of upload memory, mapped for its lifetime; empty when it cannot be created.
 [[nodiscard]] UploadMemory create_upload_memory(Device* device, std::size_t bytes, const char* name);
+// The device reports itself lost, where the API can say so without a failed call.
+[[nodiscard]] bool device_removed(Device* device) noexcept;
 
 }  // namespace galaxy::render::gpu

@@ -5,6 +5,8 @@
 // and anisotropy.
 
 #include <cstdint>
+#include <bit>
+#include <cstddef>
 
 namespace galaxy::render {
 
@@ -16,7 +18,7 @@ struct TextureSampler {
     bool mag_linear = false;
     bool min_linear = false;
     std::uint8_t mip = 0u;         // 0 the first level only, 1 the nearest level, 2 between levels
-    std::uint8_t anisotropy = 0u;  // 0 off, 1 two, 2 four samples
+    std::uint8_t anisotropy = 0u;  // sample count; the host setting selects the final device anisotropy
     float lod_bias = 0.0f;
     float min_lod = 0.0f;
     float max_lod = 0.0f;
@@ -24,14 +26,32 @@ struct TextureSampler {
     [[nodiscard]] bool operator==(const TextureSampler&) const = default;
 };
 
-// The GPU sampler key's fixed point (pack_sampler_key): LODs in sixteenths of a level, the bias in thirty-seconds, and
-// the minified filter as a three-bit code (linear 4, plus 1 the nearest level or 2 between levels).
-[[nodiscard]] inline std::uint8_t lod_x16(float lod) noexcept {
-    return static_cast<std::uint8_t>(static_cast<std::int32_t>(16.0f * lod));
-}
-[[nodiscard]] inline std::int8_t lod_bias_x32(float bias) noexcept {
-    return static_cast<std::int8_t>(static_cast<std::int32_t>(32.0f * bias));
-}
+// Cache identity preserves the authored floating-point LOD values.
+struct SamplerKey {
+    std::uint32_t filter = 0;
+    float min_lod = 0.0f, max_lod = 0.0f, lod_bias = 0.0f;
+    bool operator==(const SamplerKey&) const = default;
+};
+struct SamplerKeyHasher {
+    std::size_t operator()(const SamplerKey& key) const noexcept {
+        const auto bits = [](float f) { return f == 0.0f ? 0u : std::bit_cast<std::uint32_t>(f); };
+        std::uint64_t h = key.filter;
+        h = (h ^ bits(key.min_lod)) * 0x100000001B3ull;
+        h = (h ^ bits(key.max_lod)) * 0x100000001B3ull;
+        return static_cast<std::size_t>((h ^ bits(key.lod_bias)) * 0x100000001B3ull);
+    }
+};
+struct SamplerCacheKey {
+    SamplerKey sampler;
+    std::uint32_t config;
+    bool operator==(const SamplerCacheKey&) const = default;
+};
+struct SamplerCacheKeyHasher {
+    std::size_t operator()(const SamplerCacheKey& key) const noexcept {
+        return SamplerKeyHasher{}(key.sampler) ^ (std::size_t{key.config} * 0x9E3779B9u);
+    }
+};
+
 [[nodiscard]] inline std::uint32_t min_filter_code(const TextureSampler& s) noexcept {
     return (s.min_linear ? 4u : 0u) | (s.mip > 2u ? 2u : s.mip);
 }

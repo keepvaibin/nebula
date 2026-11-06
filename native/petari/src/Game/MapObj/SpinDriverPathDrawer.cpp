@@ -1,7 +1,7 @@
 #include "Game/MapObj/SpinDriverPathDrawer.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
+#include "Game/Render/FrameList.hpp"
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/MapObj/SpinDriverShootPath.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
@@ -13,23 +13,22 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include "Game/Util/NativeShader.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include <nebula_game_api.h>
 
 namespace {
     // runtime/src/render/materials/spin_driver_path.hlsl: the path's colour texture (0) at its alpha times the mask's
     // (1), through texture matrices 0 and 1; added by source alpha where above zero, depth tested and not written, no
     // culling.
+    SiteMaterial sPathMaterial;
+
     void sendPathMaterial(JUTTexture* pColor, JUTTexture* pMask) {
-        NebulaNativeMaterial material;
-        NativeShader::init(material, NEBULA_SHADER_SPIN_DRIVER_PATH, NativeShader::BLEND_ADD_ALPHA, NEBULA_COMPARE_LEQUAL,
+        SiteMaterial& material = sPathMaterial;
+        material.init(NEBULA_SHADER_SPIN_DRIVER_PATH, SiteMaterial::BLEND_ADD_ALPHA, NEBULA_COMPARE_LEQUAL,
                            false, NEBULA_CULL_NONE);
-        NativeShader::setTexture(material, 0, pColor);
-        NativeShader::setTexture(material, 1, pMask);
-        NativeShader::send(material);
-        static const u8 kPlaces[8] = {0, 1, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture,
-                                      J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture};
-        J3DNativeShape::setCurrent(0, kPlaces);
+        material.setTexture(0, pColor);
+        material.setTexture(1, pMask);
+    
     }
 }  // namespace
 
@@ -55,8 +54,6 @@ SpinDriverPathDrawer::SpinDriverPathDrawer(SpinDriverShootPath* pShootPath)
 void SpinDriverPathDrawInit::initDraw() {
     TDDraw::cameraInit3D();
 
-    J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-    J3DPass::positionMatrix(0);
     sendPathMaterial(mOrangeTexture, mMaskTexture);
 }
 
@@ -300,14 +297,15 @@ void SpinDriverPathDrawer::draw() const {
     mtx[1][1] = -maskSteps;
     mtx[1][3] = 0.5f + maskSteps * drawCode;
 
-    J3DNativeShape::setTexture(1, mtx, 2);
+    sPathMaterial.setMatrix(0, 1, mtx);
 
     mtx.identity();
     mtx[1][1] = 1.0f / mFadeScale;
     mtx[1][3] = 1.0f - drawBaseCode * mtx[1][1];
 
-    J3DNativeShape::setTexture(0, mtx, 2);
+    sPathMaterial.setMatrix(0, 0, mtx);
 
+    TypedDraw site(sPathMaterial, nullptr, MR::getCameraViewMtx());
     for (u32 i = 1; i < mPositionCount; i++) {
         Vec3f prev90(_90[i - 1]), curr90(_90[i]);
         Vec3f prev94(_94[i - 1] * 100.0f), curr94(_94[i] * 100.0f);
@@ -316,27 +314,26 @@ void SpinDriverPathDrawer::draw() const {
         f32 prevVal = _9C[i - 1];
         f32 val = _9C[i];
 
-        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 6, NEBULA_SHAPE_TEXCOORD0);
+        VertexPT* vtx = site.vertices< VertexPT >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 6);
 
-        sendPoint(prev90 - prev98, 0.0f, prevVal);
-        sendPoint(curr90 - curr98, 0.0f, val);
-        sendPoint(prev90, 0.5f, prevVal);
-        sendPoint(curr90, 0.5f, val);
-        sendPoint(prev90 + prev98, 1.0f, prevVal);
-        sendPoint(curr90 + curr98, 1.0f, val);
+        sendPoint(vtx, prev90 - prev98, 0.0f, prevVal);
+        sendPoint(vtx, curr90 - curr98, 0.0f, val);
+        sendPoint(vtx, prev90, 0.5f, prevVal);
+        sendPoint(vtx, curr90, 0.5f, val);
+        sendPoint(vtx, prev90 + prev98, 1.0f, prevVal);
+        sendPoint(vtx, curr90 + curr98, 1.0f, val);
 
-        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 6, NEBULA_SHAPE_TEXCOORD0);
+        vtx = site.vertices< VertexPT >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 6);
 
-        sendPoint(prev90 - prev94, 0.0f, prevVal);
-        sendPoint(curr90 - curr94, 0.0f, val);
-        sendPoint(prev90, 0.5f, prevVal);
-        sendPoint(curr90, 0.5f, val);
-        sendPoint(prev90 + prev94, 1.0f, prevVal);
-        sendPoint(curr90 + curr94, 1.0f, val);
+        sendPoint(vtx, prev90 - prev94, 0.0f, prevVal);
+        sendPoint(vtx, curr90 - curr94, 0.0f, val);
+        sendPoint(vtx, prev90, 0.5f, prevVal);
+        sendPoint(vtx, curr90, 0.5f, val);
+        sendPoint(vtx, prev90 + prev94, 1.0f, prevVal);
+        sendPoint(vtx, curr90 + curr94, 1.0f, val);
     }
 }
 
-void SpinDriverPathDrawer::sendPoint(const Vec3f& rA1, f32 a2, f32 a3) const {
-    J3DNativeDraw::position(rA1.x, rA1.y, rA1.z);
-    J3DNativeDraw::texCoord(a2, a3);
+void SpinDriverPathDrawer::sendPoint(VertexPT*& rVtx, const Vec3f& rA1, f32 a2, f32 a3) const {
+    *rVtx++ = {rA1.x, rA1.y, rA1.z, a2, a3};
 }

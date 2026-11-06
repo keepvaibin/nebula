@@ -1,6 +1,6 @@
 #include "Game/Scene/ScenarioSelectScene.hpp"
 #include "Game/System/GameThreads.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeView.hpp>
+#include "Game/Render/FrameList.hpp"
 #include "Game/Camera/CameraContext.hpp"
 #include "Game/Effect/EffectSystem.hpp"
 #include "Game/Effect/EffectSystemUtil.hpp"
@@ -17,8 +17,8 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
-#include <JSystem/J3DGraphBase/J3DDrawBuffer.hpp>
-#include <JSystem/J3DGraphBase/J3DSys.hpp>
+#include "Game/Render/Model.hpp"
+#include "Game/Render/Model.hpp"
 
 namespace NrvScenarioSelectScene {
     NEW_NERVE(ScenarioSelectSceneNrvDeactive, ScenarioSelectScene, Deactive);
@@ -34,8 +34,8 @@ namespace NrvScenarioSelectScene {
 };  // namespace NrvScenarioSelectScene
 
 namespace {
-    J3DDrawBuffer* createDrawBuffer() {
-        J3DDrawBuffer* buffer = new J3DDrawBuffer();
+    ItemBuffer* createDrawBuffer() {
+        ItemBuffer* buffer = new ItemBuffer();
         buffer->mSortMode = 5;
         return buffer;
     }
@@ -115,8 +115,8 @@ void ScenarioSelectScene::calcViewAndEntry() {
     if (res) {
         (MR::MutexHolder< 0 >::sMutex).lock();
         setupCameraMtx();
-        j3dSys.mDrawBuffer[0] = _20;
-        j3dSys.mDrawBuffer[1] = _24;
+        ModelSys::mDrawBuffer[0] = _20;
+        ModelSys::mDrawBuffer[1] = _24;
         mScenarioLayout->calcViewAndEntryStarModel();
         (MR::MutexHolder< 0 >::sMutex).unlock();
     }
@@ -128,11 +128,8 @@ void ScenarioSelectScene::draw() const {
     if (res) {
         (MR::MutexHolder< 0 >::sMutex).lock();
         setupCameraMtx();
-        j3dSys.drawInit();
-        j3dSys.mDrawMode = 3;
         _20->draw();
         _20->frameInit();
-        j3dSys.mDrawMode = 4;
         _24->draw();
         _24->frameInit();
         (MR::MutexHolder< 0 >::sMutex).unlock();
@@ -204,8 +201,8 @@ bool ScenarioSelectScene::isResetEnd() const {
 }
 
 void ScenarioSelectScene::setupCameraMtx() const {
-    NebulaMtxCopy(mCameraContext->getViewMtx(), j3dSys.mViewMtx);
-    J3DNativeView::setPerspective(mCameraContext->mProjection);
+    NebulaMtxCopy(mCameraContext->getViewMtx(), ModelSys::mViewMtx);
+    Frame::setPerspective(mCameraContext->mProjection);
 }
 
 bool ScenarioSelectScene::trySetCurrentScenarioNo() const {

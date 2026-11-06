@@ -7,7 +7,7 @@ public:
     ShadowVolumeCylinder();
 
     virtual ~ShadowVolumeCylinder();
-    virtual void loadModelDrawMtx() const;
+    virtual void loadModelDrawMtx(TypedDraw& rDraw) const;
 
     void setRadius(f32);
 

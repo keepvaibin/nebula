@@ -1,3 +1,4 @@
+#include "Game/Util/CameraUtil.hpp"
 #include "Game/LiveActor/ShadowSurfaceCircle.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/ShadowController.hpp"
@@ -28,6 +29,6 @@ void ShadowSurfaceCircle::draw() const {
     Vec3f pos, normal;
     controller->getProjectionPos(&pos);
     controller->getProjectionNormal(&normal);
-    TDDraw::resetViewMtx();
-    TDDraw::drawFillCircle(pos + normal * 1.0f, -normal, radius, 128, 20);
+    TypedDraw site(ShadowSurfaceDrawInit::material(), nullptr, MR::getCameraViewMtx());
+    TDDraw::drawFillCircle(site, pos + normal * 1.0f, -normal, radius, 128, 20);
 }

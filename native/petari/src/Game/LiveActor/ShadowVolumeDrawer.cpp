@@ -1,7 +1,9 @@
 #include "Game/LiveActor/ShadowVolumeDrawer.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/FrameList.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
+#include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DrawUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 
@@ -11,7 +13,6 @@ namespace {
 };  // namespace
 
 ShadowVolumeDrawInit::ShadowVolumeDrawInit() : NameObj("\203\126\203\203\203\150\203\105\203\173\203\212\203\205\201\133\203\200\225\140\211\346\217\211\212\372\211\273" /* シャドウボリューム描画初期化 */) {
-    MR::registerPreDrawFunction(MR::Functor(&MR::setupShadowVolumeDraw), MR::DrawType_ShadowVolume);
 }
 
 ShadowVolumeDrawer::ShadowVolumeDrawer(const char* pName) : ShadowDrawer(pName) {
@@ -69,10 +70,10 @@ f32 ShadowVolumeDrawer::calcBaseDropLength(const ShadowController* pController) 
     return length;
 }
 
-void ShadowVolumeDrawer::loadModelDrawMtx() const {
+void ShadowVolumeDrawer::loadModelDrawMtx(TypedDraw& rDraw) const {
 }
 
-void ShadowVolumeDrawer::drawShape() const {
+void ShadowVolumeDrawer::drawShape(TypedDraw& rDraw) const {
 }
 
 bool ShadowVolumeDrawer::isDraw() const {
@@ -81,21 +82,18 @@ bool ShadowVolumeDrawer::isDraw() const {
 
 void ShadowVolumeDrawer::draw() const {
     if (isDraw()) {
-        loadModelDrawMtx();
-        NebulaColor8 shapeColor = reinterpret_cast< NebulaColor8& >(::sShapeColor);
-        MR::setShadowVolumeColor(shapeColor);
-        J3DPass::writeColor(false);
-        J3DPass::writeAlpha(false);
-        J3DPass::noBlend();
-        J3DPass::stencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ADD);
-        J3DPass::cull(NEBULA_CULL_FRONT);
-        drawShape();
-        J3DPass::stencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_TAKE);
-        J3DPass::cull(NEBULA_CULL_BACK);
-        drawShape();
-        J3DPass::stencil(NEBULA_STENCIL_OFF, NEBULA_STENCIL_KEEP);
-        J3DPass::cull(NEBULA_CULL_NONE);
-        J3DPass::writeColor(true);
+        NebulaColor8 shapeColor = ::sShapeColor;
+        SiteMaterial material;
+        MR::initShadowVolumeMaterial(material, shapeColor);
+        material.setStencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ADD);
+        material.mState.cull = NEBULA_CULL_FRONT;
+        TypedDraw site(material, nullptr, MR::getCameraViewMtx());
+        loadModelDrawMtx(site);
+        drawShape(site);
+        material.setStencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_TAKE);
+        material.mState.cull = NEBULA_CULL_BACK;
+        site.setMaterial(material);
+        drawShape(site);
     }
 }
 

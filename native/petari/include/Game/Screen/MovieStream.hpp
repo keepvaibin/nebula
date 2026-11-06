@@ -83,4 +83,5 @@ private:
     u8* mPlaneU;
     u8* mPlaneV;
     s32 mPlanesFrame;
+    s32 mPlanesUploaded;
 };

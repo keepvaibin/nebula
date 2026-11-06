@@ -40,7 +40,17 @@ struct RunOptions {
     const char* test_window_off_desktop = nullptr;
     const char* log_to_console = nullptr;
     const char* movie_dir = nullptr;
-    const char* pipeline_seed_out = nullptr;
+    const char* inspect_dir = nullptr;
+    const char* inspect_dump = nullptr;
+    const char* inspect_includes = nullptr;
+    const char* inspect_motion = nullptr;
+    const char* inspect_names = nullptr;
+    const char* inspect_pixel = nullptr;
+    const char* inspect_programs = nullptr;
+    const char* inspect_show = nullptr;
+    const char* inspect_solo = nullptr;
+    const char* inspect_views = nullptr;
+    const char* pipeline_list_out = nullptr;
     const char* present_snapshot_dir = nullptr;
     const char* present_snapshot_every = nullptr;
     const char* present_snapshot_first = nullptr;
@@ -93,7 +103,7 @@ struct RunOptions {
 #endif
 };
 
-#if defined(NEBULA_RELEASE)
+#if !defined(NEBULA_DEV)
 [[nodiscard]] inline const RunOptions& run_options() noexcept {
     static constexpr RunOptions kNothing{};
     return kNothing;

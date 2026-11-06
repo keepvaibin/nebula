@@ -2,8 +2,6 @@
 // post_programs_vk.inc) into a header of SPIR-V arrays: the program ships no shader compiler.
 // utility_spirv <output header>
 
-#include "galaxy/render/curved_surfaces.h"
-#include "galaxy/render/interp_eval.h"
 #include "galaxy/render/renderer_common.h"
 #include "galaxy/render/vk/shader_compile_vk.h"
 #include "../../runtime/src/render/vk/utility_spirv_sources.h"

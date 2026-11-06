@@ -1,9 +1,9 @@
 #include "Game/Screen/WaterCameraFilter.hpp"
-#include "JSystem/J3DGraphBase/J3DNativeTarget.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeView.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
+#include "Game/Render/FrameList.hpp"
+#include "Game/Render/FrameList.hpp"
+#include "Game/Render/FrameList.hpp"
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Map/WaterAreaHolder.hpp"
 #include "Game/Scene/SceneFunction.hpp"
@@ -21,19 +21,19 @@
 #include "Game/System/NebulaArena.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <NebulaGpuTypes.h>
-#include "Game/Util/NativeShader.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include <nebula_game_api.h>
 
 namespace {
     // runtime/src/render/materials/water_camera.hlsl: the screen (texture 1) warped by the filter texture (texture 0,
     // turned by `rFilterMtx`) 0.05 screen texels per indirect step, less the water's colour; blended by the filter's
     // alpha where above zero, depth neither tested nor written.
-    void sendFilterMaterial(JUTTexture* pFilter, JUTTexture* pScreen, const Mtx34f& rFilterMtx, const Color8& rWater) {
-        NebulaNativeMaterial material;
-        NativeShader::init(material, NEBULA_SHADER_WATER_CAMERA, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
+    SiteMaterial filterMaterial(JUTTexture* pFilter, JUTTexture* pScreen, const Mtx34f& rFilterMtx, const Color8& rWater) {
+        SiteMaterial material;
+        material.init(NEBULA_SHADER_WATER_CAMERA, SiteMaterial::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
                            NEBULA_CULL_NONE);
-        material.alpha_write = 1;
-        NativeShader::setColor(material, 0, rWater.r, rWater.g, rWater.b, rWater.a);
+        material.mState.alpha_write = 1;
+        material.setColor(0, rWater.r, rWater.g, rWater.b, rWater.a);
         for (u32 row = 0; row < 2; row++) {
             for (u32 column = 0; column < 4; column++) {
                 material.constants[4 + row * 4 + column] = rFilterMtx.mMtx[row][column];
@@ -41,9 +41,9 @@ namespace {
         }
         material.constants[12] = 0.05f / pScreen->getWidth();
         material.constants[13] = 0.05f / pScreen->getHeight();
-        NativeShader::setTexture(material, 0, pFilter);
-        NativeShader::setTexture(material, 1, pScreen);
-        NativeShader::send(material);
+        material.setTexture(0, pFilter);
+        material.setTexture(1, pScreen);
+        return material;
     }
 }  // namespace
 
@@ -121,8 +121,9 @@ void WaterCameraFilter::draw() const {
         return;
     }
 
-    J3DNativeTarget::take(mScreenTex->mImage);
-    loadMaterial();
+    Frame::takeFrame(mScreenTex->mImage);
+    const SiteMaterial material = loadMaterial();
+    TypedDraw site = TypedDraw::eyeSpace(material, cIdentityMtx);
     Vec2f pos;
     pos.x = 0.0f;
     pos.y = 0.0f;
@@ -135,40 +136,27 @@ void WaterCameraFilter::draw() const {
     f32 centerU = 1.0f - pos.x;
     f32 centerV = 1.0f - pos.y;
 
-    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 4, NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1);
+    VertexPT2* vtx = site.vertices< VertexPT2 >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 4);
     {
-        J3DNativeDraw::position(0.0f, 0.0f, 0.0f);
-        J3DNativeDraw::texCoord(centerU - halfSize, centerV - halfSize);
-        J3DNativeDraw::texCoord(0.0f, 0.0f);
+        *vtx++ = {0.0f, 0.0f, 0.0f, centerU - halfSize, centerV - halfSize, 0.0f, 0.0f};
 
-        J3DNativeDraw::position(static_cast< f32 >(static_cast< u16 >(MR::getScreenWidth())), 0.0f, 0.0f);
-        J3DNativeDraw::texCoord(centerU + halfSize, centerV - halfSize);
-        J3DNativeDraw::texCoord(1.0f, 0.0f);
+        *vtx++ = {static_cast< f32 >(static_cast< u16 >(MR::getScreenWidth())), 0.0f, 0.0f, centerU + halfSize, centerV - halfSize, 1.0f, 0.0f};
 
-        J3DNativeDraw::position(0.0f, static_cast< f32 >(static_cast< u16 >(MR::getScreenHeight())), 0.0f);
-        J3DNativeDraw::texCoord(centerU - halfSize, centerV + halfSize);
-        J3DNativeDraw::texCoord(0.0f, 1.0f);
+        *vtx++ = {0.0f, static_cast< f32 >(static_cast< u16 >(MR::getScreenHeight())), 0.0f, centerU - halfSize, centerV + halfSize, 0.0f, 1.0f};
 
         s32 height = MR::getScreenHeight();
-        J3DNativeDraw::position(static_cast< f32 >(static_cast< u16 >(MR::getScreenWidth())), static_cast< f32 >(static_cast< u16 >(height)), 0.0f);
-        J3DNativeDraw::texCoord(centerU + halfSize, centerV + halfSize);
-        J3DNativeDraw::texCoord(1.0f, 1.0f);
+        *vtx++ = {static_cast< f32 >(static_cast< u16 >(MR::getScreenWidth())), static_cast< f32 >(static_cast< u16 >(height)), 0.0f, centerU + halfSize, centerV + halfSize, 1.0f, 1.0f};
     }
 
-    J3DPass::writeAlpha(false);
     MR::loadProjectionMtx();
     MR::loadViewMtx();
 }
 
-void WaterCameraFilter::loadMaterial() const {
+SiteMaterial WaterCameraFilter::loadMaterial() const {
     Mtx44 projection;
     s32 height = MR::getScreenHeight();
     NebulaMtxOrtho(projection, 0.0f, height, 0.0f, MR::getScreenWidth(), -10000.0f, 10000.0f);
-    J3DNativeView::setOrthographic(projection);
-    Mtx34f modelView;
-    modelView.identity();
-    J3DNativeShape::setPosition(0, modelView);
-    J3DPass::positionMatrix(0);
+    Frame::setOrthographic(projection);
     Vec2f screenPos;
     screenPos.x = 0.0f;
     screenPos.y = 0.0f;
@@ -188,8 +176,8 @@ void WaterCameraFilter::loadMaterial() const {
     MR::multMtx(textureMtx, translation, rotation);
     translation.setTrans(Vec3f(0.5f, 0.5f, 0.0f));
     MR::multMtx(textureMtx, textureMtx, translation);
-    sendFilterMaterial(mFilterTex, mScreenTex, textureMtx,
-                       Color8(mWaterColor.r, mWaterColor.g, mWaterColor.b, (s32)(mWaterAlpha)));
+    return filterMaterial(mFilterTex, mScreenTex, textureMtx,
+                          Color8(mWaterColor.r, mWaterColor.g, mWaterColor.b, (s32)(mWaterAlpha)));
 }
 
 void WaterCameraFilter::exeWater() {

@@ -4,11 +4,11 @@
 #include "Game/Util/StringUtil.hpp"
 
 SyncBckEffectInfo::BckResourceInfo::BckResourceInfo(const XanimePlayer* pPlayer, const char* pName) : mName(pName), mResource() {
-    mResource = static_cast< J3DAnmTransform* >(pPlayer->mResourceTable->findResMotion(pName));
+    mResource = static_cast< Clip* >(pPlayer->mResourceTable->findResMotion(pName));
 }
 
 bool SyncBckEffectInfo::BckResourceInfo::isLoop() const {
-    return mResource->getAttribute() == J3DFrameCtrl::EMode_LOOP || mResource->getAttribute() == J3DFrameCtrl::EMode_LOOP_REVERSE;
+    return mResource->getAttribute() == FrameCtrl::EMode_LOOP || mResource->getAttribute() == FrameCtrl::EMode_LOOP_REVERSE;
 }
 
 SyncBckEffectInfo::SyncBckEffectInfo(const XanimePlayer* pPlayer, const char* pName, s32 capacity, f32 startFrame, f32 endFrame, bool continueAnimEnd)

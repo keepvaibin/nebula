@@ -4,8 +4,8 @@
 
 class FurCtrl;
 class FurParam;
-class J3DModel;
-class J3DModelData;
+class Model;
+class ModelData;
 class LiveActor;
 struct ResTIMG;
 
@@ -21,13 +21,13 @@ public:
     u8 mAddedToManager;
     u8 _1;
     u8 mCount;
-    u8* mShapeIndices;
+    u32* mShapeIndices;
     u8* mDrawOrders;
     u32 _C;
     u32 _10;
     u32 _14;
     LiveActor* mActor;
-    J3DModel* mModel;
+    Model* mModel;
     FurCtrl** mFurCtrls;
 };
 
@@ -36,7 +36,7 @@ public:
     FurBank() : mCount() {
     }
 
-    FurMulti* check(J3DModelData*, u32);
+    FurMulti* check(ModelData*, u32);
     void regist(FurMulti*, u32);
 
     u32 mCount;

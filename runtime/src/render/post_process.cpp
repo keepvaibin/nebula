@@ -528,6 +528,7 @@ void PostProcessor::draw(ID3D12GraphicsCommandList* list, DescriptorRing& srv_ri
     }
     list->SetPipelineState(pipeline);
     list->SetGraphicsRoot32BitConstants(0, sizeof(Constants) / 4u, &constants, 0);
+    { ID3D12DescriptorHeap* heap = srv_ring.heap_for(table.gpu); list->SetDescriptorHeaps(1, &heap); }
     list->SetGraphicsRootDescriptorTable(1, table.gpu);
     const D3D12_RECT full{
         static_cast<LONG>(viewport.TopLeftX), static_cast<LONG>(viewport.TopLeftY),

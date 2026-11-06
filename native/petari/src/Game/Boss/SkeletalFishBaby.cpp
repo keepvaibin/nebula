@@ -18,7 +18,7 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include <JSystem/J3DGraphAnimator/J3DJoint.hpp>
+#include "Game/Render/ModelData.hpp"
 #include <cstdio>
 #include "Game/System/NebulaHost.hpp"
 

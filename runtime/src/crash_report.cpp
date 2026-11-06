@@ -49,7 +49,7 @@ bool gpu_lost(std::string_view text) noexcept {
     // DXGI_ERROR_DEVICE_REMOVED, _HUNG, _RESET, _DRIVER_INTERNAL_ERROR; Vulkan's device loss.
     return has(text, "887A0005") || has(text, "887A0006") || has(text, "887A0007") || has(text, "887A0020") ||
            has(text, "DEVICE REMOVED") || has(text, "DEVICE_REMOVED") || has(text, "DEVICE_HUNG") ||
-           has(text, "DEVICE_LOST") || has(text, "device lost") || has(text, "device removed") || has(text, "VkResult -4");
+           has(text, "DEVICE_LOST") || has(text, "device lost") || has(text, "device was lost") || has(text, "device removed") || has(text, "VkResult -4");
 }
 
 bool renderer_error(std::string_view text) noexcept {

@@ -1,6 +1,6 @@
 #include "Game/NPC/MiiFacePartsHolder.hpp"
 #include "MiiNative.h"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include "Game/Render/FrameList.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/NPC/MiiDatabase.hpp"
 #include "Game/NPC/MiiFaceParts.hpp"
@@ -146,10 +146,10 @@ void MiiFacePartsHolder::drawExtra() const {
 
     MR::loadLight(1);
     setStageOpa();
-    J3DPass::blend(NEBULA_FACTOR_ONE, NEBULA_FACTOR_ZERO);
+    Mii_NativeState(PassStates::use(NEBULA_FACTOR_ONE, NEBULA_FACTOR_ZERO, 1, NEBULA_COMPARE_LEQUAL, 1, NEBULA_CULL_NONE, 1, 2));
     drawEachActor(&MiiFaceParts::drawOpa, &setting);
     setStageXlu();
-    J3DPass::blend(NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_INV_SRC_ALPHA);
+    Mii_NativeState(PassStates::use(NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_INV_SRC_ALPHA, 1, NEBULA_COMPARE_LEQUAL, 1, NEBULA_CULL_NONE, 1, 2));
     drawEachActor(&MiiFaceParts::drawXlu, &setting);
 }
 
@@ -159,13 +159,11 @@ void MiiFacePartsHolder::drawExtra() const {
 void MiiFacePartsHolder::setStageOpa() const {
     const NebulaColor8 material = {165, 165, 165, 255};
     const NebulaColor8 ambient = {128, 128, 128, 128};
-    Mii_NativeChain(MII_I_NATIVE_CHAIN_NPC_OPA, J3D_LIGHT0 | J3D_LIGHT1, J3D_DF_CLAMP, J3D_AF_NONE, ambient, material, 1);
-    J3DPass::depth(true, NEBULA_COMPARE_LEQUAL, true);
+    Mii_NativeChain(MII_I_NATIVE_CHAIN_NPC_OPA, MODEL_FILE_LIGHT0 | MODEL_FILE_LIGHT1, MODEL_FILE_DF_CLAMP, MODEL_FILE_AF_NONE, ambient, material, 1);
 }
 
 void MiiFacePartsHolder::setStageXlu() const {
     const NebulaColor8 material = {165, 165, 165, 255};
     const NebulaColor8 ambient = {128, 128, 128, 128};
-    Mii_NativeChain(MII_I_NATIVE_CHAIN_NPC_XLU, J3D_LIGHT0 | J3D_LIGHT1, J3D_DF_CLAMP, J3D_AF_NONE, ambient, material, 0);
-    J3DPass::depth(true, NEBULA_COMPARE_LEQUAL, true);
+    Mii_NativeChain(MII_I_NATIVE_CHAIN_NPC_XLU, MODEL_FILE_LIGHT0 | MODEL_FILE_LIGHT1, MODEL_FILE_DF_CLAMP, MODEL_FILE_AF_NONE, ambient, material, 0);
 }

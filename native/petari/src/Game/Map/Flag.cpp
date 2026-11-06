@@ -1,8 +1,8 @@
 #include "Game/Map/Flag.hpp"
-#include "Game/Util/NativeShader.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/FrameList.hpp"
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/Ride/SwingRopePoint.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
@@ -379,7 +379,8 @@ void Flag::draw() const {
         return;
     }
 
-    loadMaterial();
+    const SiteMaterial material = loadMaterial();
+    TypedDraw site(material, nullptr, MR::getCameraViewMtx());
 
     u8 indexA = 0;
     u8 indexB = mNumPointsU + 1;
@@ -387,22 +388,18 @@ void Flag::draw() const {
         const Vec3f& posA = mFixPoints[idxV + 0].mPos;
         const Vec3f& posB = mFixPoints[idxV + 1].mPos;
         // Each vertex's colour and texture coordinate are its entries of mColors and mTexST.
-        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, (mNumPointsU + 1) * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
+        VertexPCT* vtx = site.vertices< VertexPCT >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, (mNumPointsU + 1) * 2);
         {
-            J3DNativeDraw::position(posB.x, posB.y, posB.z);
-            sendEntry(indexB);
-            J3DNativeDraw::position(posA.x, posA.y, posA.z);
-            sendEntry(indexA);
+            *vtx++ = vertexOf(posB, indexB);
+            *vtx++ = vertexOf(posA, indexA);
             indexB++;
             indexA++;
 
             for (s32 idxU = 0; idxU < mNumPointsU; idxU++) {
                 const Vec3f& posA = mFixPoints[idxV].mPoints[idxU]->mPosition;
                 const Vec3f& posB = mFixPoints[idxV + 1].mPoints[idxU]->mPosition;
-                J3DNativeDraw::position(posB.x, posB.y, posB.z);
-                sendEntry(indexB);
-                J3DNativeDraw::position(posA.x, posA.y, posA.z);
-                sendEntry(indexA);
+                *vtx++ = vertexOf(posB, indexB);
+                *vtx++ = vertexOf(posA, indexA);
 
                 indexB++;
                 indexA++;
@@ -416,7 +413,7 @@ void Flag::draw() const {
         const Vec2f stickCoords[] = {{1.0f, 0.0f}, {0.0f, 1.0f}, {-1.0f, 0.0f}, {1.0f, 0.0f}};
 
         // The stick's colours are ::sStickColors' entries, its texture coordinate mTexST's first.
-        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 8, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
+        VertexPCT* vtx = site.vertices< VertexPCT >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 8);
 
         f32 length = mStickLength + mPointIntervalV * (mNumPointsV - 1);
         for (s32 idx = 0; idx < 4; idx++) {
@@ -432,33 +429,24 @@ void Flag::draw() const {
             posB.add(v1);
             posB.add(v2);
 
-            J3DNativeDraw::position(posA.x, posA.y, posA.z);
-            J3DNativeDraw::color(::sStickColors[idx].r, ::sStickColors[idx].g, ::sStickColors[idx].b, ::sStickColors[idx].a);
-            J3DNativeDraw::texCoord(mTexST[0], mTexST[1]);
-            J3DNativeDraw::position(posB.x, posB.y, posB.z);
-            J3DNativeDraw::color(::sStickColors[idx].r, ::sStickColors[idx].g, ::sStickColors[idx].b, ::sStickColors[idx].a);
-            J3DNativeDraw::texCoord(mTexST[0], mTexST[1]);
+            *vtx++ = {posA.x, posA.y, posA.z, Rgba8(::sStickColors[idx].r, ::sStickColors[idx].g, ::sStickColors[idx].b, ::sStickColors[idx].a), mTexST[0], mTexST[1]};
+            *vtx++ = {posB.x, posB.y, posB.z, Rgba8(::sStickColors[idx].r, ::sStickColors[idx].g, ::sStickColors[idx].b, ::sStickColors[idx].a), mTexST[0], mTexST[1]};
         }
     }
 }
 
-void Flag::sendEntry(u8 index) const {
-    const Color8& rColor = mColors[index];
-    J3DNativeDraw::color(rColor.r, rColor.g, rColor.b, rColor.a);
-    J3DNativeDraw::texCoord(mTexST[2 * index], mTexST[2 * index + 1]);
+VertexPCT Flag::vertexOf(const Vec3f& rPos, u8 index) const {
+    return VertexPCT{rPos.x, rPos.y, rPos.z, Rgba8(mColors[index]), mTexST[2 * index], mTexST[2 * index + 1]};
 }
 
-void Flag::loadMaterial() const {
-    J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-    J3DPass::positionMatrix(0);
+SiteMaterial Flag::loadMaterial() const {
 
     // runtime/src/render/materials/tex_modulate.hlsl: the texture times the vertex colour, its alpha times mAlpha;
     // blended by alpha where above zero, depth tested (written when opaque), no culling, no fog.
-    NebulaNativeMaterial material;
-    NativeShader::init(material, NEBULA_SHADER_TEX_MODULATE, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL,
+    SiteMaterial material;
+    material.init(NEBULA_SHADER_TEX_MODULATE, SiteMaterial::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL,
                        mAlpha == 0xFF, NEBULA_CULL_NONE);
     material.constants[0] = mAlpha / 255.0f;
-    NativeShader::setTexture(material, 0, mTexture);
-    NativeShader::send(material);
-    J3DNativeShape::setCurrentIdentity();
+    material.setTexture(0, mTexture);
+    return material;
 }

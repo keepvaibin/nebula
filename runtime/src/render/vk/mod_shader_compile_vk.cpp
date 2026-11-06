@@ -18,7 +18,7 @@ std::vector<std::uint8_t> compile_mod_shader_stage(const std::string& source, co
         const std::size_t open = at + 10u;
         const std::size_t close = text.find('"', open);
         if (close == std::string::npos) {
-            problem = "a material's include has no end";
+            problem = "a program's include has no end";
             return {};
         }
         const std::string name = text.substr(open, close - open);
@@ -39,7 +39,7 @@ std::vector<std::uint8_t> compile_mod_shader_stage(const std::string& source, co
         head += std::string("#define ") + define + " 1\n";
     }
     namespace vk = galaxy::render::vk;
-    head += pixel ? "#define native_ps main\n" : "#define native_vs main\n";
+    head += pixel ? "#define program_ps main\n" : "#define program_vs main\n";
     const std::vector<std::uint32_t> spirv =
         vk::compile_hlsl(vk::annotate(head + text, vk::draw_bindings()), pixel ? vk::ShaderStage::Fragment : vk::ShaderStage::Vertex, "main", {}, problem,
                          {false, false});

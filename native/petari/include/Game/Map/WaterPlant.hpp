@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Game/Render/TypedDraw.hpp"
+
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 
@@ -46,7 +48,7 @@ public:
 
     void initPlant();
     void initPlantAfterPlacement();
-    void drawDirect() const;
+    void drawDirect(TypedDraw& rDraw) const;
 
     PlantData* getData(int i) {
         return &mPlantDataArray[i];
@@ -68,9 +70,8 @@ public:
 
     virtual void movement();
 
-    virtual void initDraw() const;
 
-    void loadTex(int);
+    SiteMaterial material(int) const;
     void updateSwingPos();
 
     f32 mAngleOffset;

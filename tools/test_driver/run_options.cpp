@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // A test run's options, read from its environment (galaxy/run_options.h). Not in a release.
-#if !defined(NEBULA_RELEASE)
+#if defined(NEBULA_DEV)
 #include "galaxy/run_options.h"
 #include "switches.h"
 
@@ -68,7 +68,17 @@ RunOptions read_options() {
     o.test_window_off_desktop = nebula_switch::test_window_off_desktop();
     o.log_to_console = nebula_switch::log_to_console();
     o.movie_dir = nebula_switch::movie_dir();
-    o.pipeline_seed_out = nebula_switch::pipeline_seed_out();
+    o.inspect_dir = nebula_switch::inspect_dir();
+    o.inspect_dump = nebula_switch::inspect_dump();
+    o.inspect_includes = nebula_switch::inspect_includes();
+    o.inspect_motion = nebula_switch::inspect_motion();
+    o.inspect_names = nebula_switch::inspect_names();
+    o.inspect_pixel = nebula_switch::inspect_pixel();
+    o.inspect_programs = nebula_switch::inspect_programs();
+    o.inspect_show = nebula_switch::inspect_show();
+    o.inspect_solo = nebula_switch::inspect_solo();
+    o.inspect_views = nebula_switch::inspect_views();
+    o.pipeline_list_out = nebula_switch::pipeline_list_out();
     o.present_snapshot_dir = nebula_switch::present_snapshot_dir();
     o.present_snapshot_every = nebula_switch::present_snapshot_every();
     o.present_snapshot_first = nebula_switch::present_snapshot_first();

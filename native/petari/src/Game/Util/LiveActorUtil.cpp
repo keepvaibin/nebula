@@ -1,3 +1,4 @@
+#include "Game/Util/Color.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Animation/BckCtrl.hpp"
 #include "Game/Animation/XanimeCore.hpp"
@@ -232,7 +233,7 @@ namespace {
 namespace MR {
     bool isExistIndirectTexture(const LiveActor* pActor) {
         const char* name = "IndDummy";
-        return MR::getJ3DModelData(pActor)->mMaterialTable.mTextureName->getIndex(name) != -1;
+        return MR::getModelData(pActor)->findTexture(name) != -1;
     }
 
     void initMirrorReflection(LiveActor* pActor) {
@@ -732,22 +733,22 @@ namespace MR {
     }
 
     void setBaseTRMtx(LiveActor* pActor, MtxPtr pMtx) {
-        NebulaMtxCopy(pMtx, (MtxPtr)&getJ3DModel(pActor)->mBaseTransformMtx);
+        NebulaMtxCopy(pMtx, (MtxPtr)&getModel(pActor)->mBaseTransformMtx);
     }
 
     void setBaseTRMtx(LiveActor* pActor, const Pos3f& rMtx) {
-        NebulaMtxCopy((MtxPtr)rMtx.mMtx, (MtxPtr)&getJ3DModel(pActor)->mBaseTransformMtx);
+        NebulaMtxCopy((MtxPtr)rMtx.mMtx, (MtxPtr)&getModel(pActor)->mBaseTransformMtx);
     }
 
     void setBaseTRMtx(LiveActor* pActor, const Quat4f& rQuat) {
         Pos3f mtx;
         mtx.setQT(rQuat, pActor->mPosition);
 
-        NebulaMtxCopy((MtxPtr)mtx.mMtx, (MtxPtr)&getJ3DModel(pActor)->mBaseTransformMtx);
+        NebulaMtxCopy((MtxPtr)mtx.mMtx, (MtxPtr)&getModel(pActor)->mBaseTransformMtx);
     }
 
     void setBaseScale(LiveActor* pActor, const Vec3f& rScale) {
-        J3DModel* pModel = getJ3DModel(pActor);
+        Model* pModel = getModel(pActor);
         pModel->mBaseScale.x = rScale.x;
         pModel->mBaseScale.y = rScale.y;
         pModel->mBaseScale.z = rScale.z;
@@ -770,8 +771,8 @@ namespace MR {
     }
 
     ResTIMG* getTexFromModel(const char* pName, const LiveActor* pActor) {
-        s32 texIndex = getJ3DModelData(pActor)->mMaterialTable.getTextureName()->getIndex(pName);
-        return getJ3DModelData(pActor)->mMaterialTable.getTexture()->getResTIMG(texIndex);
+        s32 texIndex = getModelData(pActor)->findTexture(pName);
+        return getModelData(pActor)->getTexture(texIndex);
     }
 
     ResTIMG* getTexFromArc(const char* pName, const LiveActor* pActor) {
@@ -855,7 +856,7 @@ namespace MR {
     }
 
     bool isExistTexture(const LiveActor* pActor, const char* pName) {
-        return getJ3DModelData(pActor)->mMaterialTable.getTextureName()->getIndex(pName) != -1;
+        return getModelData(pActor)->findTexture(pName) != -1;
     }
 
     void prepareMaterials(LiveActor* pActor) {
@@ -866,7 +867,7 @@ namespace MR {
         pActor->mModelManager->mMaterialUpdater->addFogCtrl(enable);
     }
 
-    void initMaterialColor0(LiveActor* pActor, const char* pMatName, const J3DColor* pColor) {
+    void initMaterialColor0(LiveActor* pActor, const char* pMatName, const Color8* pColor) {
         pActor->mModelManager->mMaterialUpdater->addMatColorCtrl(pMatName, 0, pColor);
     }
 
@@ -1532,25 +1533,25 @@ namespace MR {
     }
 
     void setBckRate(const LiveActor* pActor, f32 rate) {
-        J3DFrameCtrl* pCtrl = getBckCtrl(pActor);
+        FrameCtrl* pCtrl = getBckCtrl(pActor);
         f32 scale = 1.0f;
         pCtrl->setRate(rate * scale);
     }
 
     void setBtkRate(const LiveActor* pActor, f32 rate) {
-        J3DFrameCtrl* pCtrl = getBtkCtrl(pActor);
+        FrameCtrl* pCtrl = getBtkCtrl(pActor);
         f32 scale = 1.0f;
         pCtrl->setRate(rate * scale);
     }
 
     void setBrkRate(const LiveActor* pActor, f32 rate) {
-        J3DFrameCtrl* pCtrl = getBrkCtrl(pActor);
+        FrameCtrl* pCtrl = getBrkCtrl(pActor);
         f32 scale = 1.0f;
         pCtrl->setRate(rate * scale);
     }
 
     void setBvaRate(const LiveActor* pActor, f32 rate) {
-        J3DFrameCtrl* pCtrl = getBvaCtrl(pActor);
+        FrameCtrl* pCtrl = getBvaCtrl(pActor);
         f32 scale = 1.0f;
         pCtrl->setRate(rate * scale);
     }
@@ -1583,27 +1584,27 @@ namespace MR {
         return MR::isBckPlaying(pActor->mModelManager->mXanimePlayer, pBckName);
     }
 
-    J3DFrameCtrl* getBckCtrl(const LiveActor* pActor) {
+    FrameCtrl* getBckCtrl(const LiveActor* pActor) {
         return pActor->mModelManager->getBckCtrl();
     }
 
-    J3DFrameCtrl* getBtkCtrl(const LiveActor* pActor) {
+    FrameCtrl* getBtkCtrl(const LiveActor* pActor) {
         return pActor->mModelManager->getBtkCtrl();
     }
 
-    J3DFrameCtrl* getBrkCtrl(const LiveActor* pActor) {
+    FrameCtrl* getBrkCtrl(const LiveActor* pActor) {
         return pActor->mModelManager->getBrkCtrl();
     }
 
-    J3DFrameCtrl* getBtpCtrl(const LiveActor* pActor) {
+    FrameCtrl* getBtpCtrl(const LiveActor* pActor) {
         return pActor->mModelManager->getBtpCtrl();
     }
 
-    J3DFrameCtrl* getBpkCtrl(const LiveActor* pActor) {
+    FrameCtrl* getBpkCtrl(const LiveActor* pActor) {
         return pActor->mModelManager->getBpkCtrl();
     }
 
-    J3DFrameCtrl* getBvaCtrl(const LiveActor* pActor) {
+    FrameCtrl* getBvaCtrl(const LiveActor* pActor) {
         return pActor->mModelManager->getBvaCtrl();
     }
 
@@ -1620,21 +1621,21 @@ namespace MR {
     }
 
     void setMirrorReflectionInfoFromModel(LiveActor* pActor) {
-        J3DModelData* pModelData = MR::getJ3DModelData(pActor);
+        ModelData* pModelData = MR::getModelData(pActor);
         MR::getMirrorCamera()->setMirrorMapInfo(pModelData);
     }
 
     void changeModelDataTexAll(LiveActor* pActor, const char* pTexName, const ResTIMG& rTimg) {
-        J3DModelData* pModelData = MR::getJ3DModelData(pActor);
+        ModelData* pModelData = MR::getModelData(pActor);
 
-        for (u16 texIndex = 0; texIndex < pModelData->mMaterialTable.getTexture()->getNum(); texIndex++) {
-            const char* name = pModelData->mMaterialTable.getTextureName()->getName(texIndex);
+        for (u32 texIndex = 0; texIndex < pModelData->getTextureNum(); texIndex++) {
+            const char* name = pModelData->getTextureName(texIndex);
 
             if (strcmp(name, pTexName) != 0) {
                 continue;
             }
 
-            pModelData->mMaterialTable.getTexture()->setResTIMG(texIndex, rTimg);
+            pModelData->setTexture(texIndex, rTimg);
         }
     }
 

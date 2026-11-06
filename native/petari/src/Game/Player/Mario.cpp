@@ -1,5 +1,5 @@
 #include "Game/Player/Mario.hpp"
-#include "Game/Util/NativeShader.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/Animation/XanimeCore.hpp"
 #include "Game/Enemy/KarikariDirector.hpp"
 #include "Game/LiveActor/Binder.hpp"
@@ -1214,10 +1214,10 @@ void Mario::forceSetHeadVecKeepSide(const Vec3f& rVec) {
 void Mario::draw() const {
     if (mDrawStates._1) {
         TDDraw::cameraInit3D();
-        NebulaNativeMaterial material;
+        SiteMaterial material;
         TDDraw::setupNative(&material, 0, 1, 0);
-        NativeShader::send(material);
-        TDDraw::drawCylinder(mPosition, mShadowPos - mActor->_2A0, 32.0f, 0xffff0010, 0xff000004, 8);
+        TypedDraw site = TDDraw::site(material, 0);
+        TDDraw::drawCylinder(site, mPosition, mShadowPos - mActor->_2A0, 32.0f, 0xffff0010, 0xff000004, 8);
         Vec3f diff2A0_31C(mActor->_2A0 - mShadowPos);
         f32 diffMag = diff2A0_31C.length();
         MR::normalize(&diff2A0_31C);
@@ -1225,7 +1225,7 @@ void Mario::draw() const {
         _31CPlusStuff += diff2A0_31C * diffMag * 0.125f * (mActor->_37C % 0xa) * 0.1f;
         f32 one_eighth = 0.125f;
         for (u32 i = 0; i < 8; i++) {
-            TDDraw::drawCircle(_31CPlusStuff, diff2A0_31C, 100.0f, 0xffffff70, 0x10);
+            TDDraw::drawCircle(site, _31CPlusStuff, diff2A0_31C, 100.0f, 0xffffff70, 0x10);
             _31CPlusStuff += diff2A0_31C * diffMag * one_eighth;
         }
     }

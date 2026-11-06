@@ -1,9 +1,11 @@
 #pragma once
 
+class TypedDraw;
+
 #include "Game/NameObj/NameObj.hpp"
 #include <nebula_geometry.hpp>
 
-class J3DModelX;
+class PlayerModel;
 class Triangle;
 class JUTTexture;
 
@@ -16,12 +18,12 @@ public:
 
     void setMode(u32);
     void create(const Vec3f&, const Vec3f&, const Vec3f&);
-    void calcView(J3DModelX*, u32, J3DModelX*);
-    void drawAndCaptureTex(J3DModelX*, const Vec3f&);
+    void calcView(PlayerModel*, u32, PlayerModel*);
+    void drawAndCaptureTex(PlayerModel*, const Vec3f&);
     void setUpdateFlag();
     void draw1() const;
-    void sendVtx() const;
-    void sendZsortedVtx(bool) const;
+    void sendVtx(TypedDraw& rDraw) const;
+    void sendZsortedVtx(TypedDraw& rDraw, bool) const;
     void initCaptureTex();
     void setViewMtx(const Vec3f&);
     void drawVolumeBox(const Vec3f&, const Vec3f&) const;

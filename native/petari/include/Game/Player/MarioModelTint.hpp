@@ -2,6 +2,8 @@
 
 #include <NebulaGpu.h>
 
+class MaterialDraw;
+
 // What a Mario model's materials take for one draw: an opacity, its lighting or a blur ghost's colour.
 struct MarioModelTint {
     enum Kind {
@@ -19,7 +21,7 @@ struct MarioModelTint {
         fogColor = color0;
     }
 
-    void send() const;
+    void send(MaterialDraw& rDraw) const;
 
     u8 kind;
     u8 alpha;

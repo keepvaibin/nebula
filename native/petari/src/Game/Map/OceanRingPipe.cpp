@@ -1,4 +1,3 @@
-#include "Game/Util/NativeMesh.hpp"
 #include "Game/Map/OceanRingPipe.hpp"
 #include "Game/Map/Flag.hpp"
 #include "Game/Map/OceanRing.hpp"
@@ -143,14 +142,4 @@ void OceanRingPipe::initPoints() {
         MR::moveCoord(this, length);
     }
 
-    // The points and normals as the renderer reads them (the normals: 1.14 fixed point).
-    NativeMesh::sendArray(_A0, NEBULA_SHAPE_ARRAY_POSITION, _94, _A0);
-    f32* pNormals = new f32[3 * _94];
-    for (s32 i = 0; i < _94; i++) {
-        pNormals[3 * i] = _A4[i].x / 16384.0f;
-        pNormals[3 * i + 1] = _A4[i].y / 16384.0f;
-        pNormals[3 * i + 2] = _A4[i].z / 16384.0f;
-    }
-    NativeMesh::sendArray(_A4, NEBULA_SHAPE_ARRAY_NORMAL, _94, pNormals);
-    delete[] pNormals;
 }

@@ -3,7 +3,7 @@
 #include "Game/System/ResourceInfo.hpp"
 #include "Game/Util/HashUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <JSystem/J3DGraphAnimator/J3DAnimation.hpp>
+#include "Game/Render/Clip.hpp"
 #include <cstring>
 
 static bool unknownByte;
@@ -192,8 +192,8 @@ u32 XanimeResourceTable::initGroupInfo(ResourceHolder* pResourceHolder, XanimeGr
             entry->mLoop = 0.0f;
             entry->mAttribute = 0;
         } else {
-            // A J3DAnmBase (ResourceHolder loads every .bck): its fields, read through the class.
-            const J3DAnmBase* pAnm = static_cast< const J3DAnmBase* >(entry->_20[0]);
+            // A Clip (ResourceHolder loads every .bck): its fields, read through the class.
+            const Clip* pAnm = static_cast< const Clip* >(entry->_20[0]);
             entry->mAttribute = pAnm->getAttribute();
             entry->mLoop = 0.0f;
             entry->mEnd = static_cast< f32 >(pAnm->getFrameMax());

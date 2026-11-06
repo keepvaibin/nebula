@@ -40,11 +40,6 @@ fn be32(bytes: &[u8], at: usize) -> Result<u32> {
     Ok(u32::from_be_bytes(bytes.get(at..at + 4).context("a field past the data's end")?.try_into().unwrap()))
 }
 
-fn turn(bytes: &mut [u8], at: usize, width: usize) -> Result<()> {
-    bytes.get_mut(at..at + width).context("a field past the data's end")?.reverse();
-    Ok(())
-}
-
 /// 16-bit samples turned in place.
 fn turn_samples(samples: &mut [u8]) {
     for s in samples.chunks_exact_mut(2) {

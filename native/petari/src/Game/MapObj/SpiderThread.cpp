@@ -1,7 +1,7 @@
 #include "Game/MapObj/SpiderThread.hpp"
-#include "Game/Util/NativeShader.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/FrameList.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/SpiderThreadHangInfo.hpp"
@@ -134,14 +134,15 @@ void SpiderThread::movement() {
 
 void SpiderThread::draw() const {
     if (MR::isValidDraw(this)) {
-        initDraw();
+        const SiteMaterial material = loadMaterial();
+        TypedDraw site(material, nullptr, MR::getCameraViewMtx());
 
         for (s32 idx = 0; idx < mNumRadialParts; idx++) {
-            getRadialPart(idx)->draw();
+            getRadialPart(idx)->draw(site);
         }
 
         for (s32 idx = 0; idx < mNumCircleParts; idx++) {
-            getCirclePart(idx)->draw();
+            getCirclePart(idx)->draw(site);
         }
     }
 }
@@ -366,23 +367,20 @@ SpiderThreadHangInfo* SpiderThread::findHangInfo(LiveActor* pActor) const {
     return getActorHangInfo(0);
 }
 
-void SpiderThread::initDraw() const {
-    J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-    J3DPass::positionMatrix(0);
+SiteMaterial SpiderThread::loadMaterial() const {
     // runtime/src/render/materials/spider_thread.hlsl: the thread (texture 0) times the vertex colour, its lookup moved
     // by the indirect texture (1) at sIndirectScaleX/Y thread texels a step; blended by its alpha where above zero,
     // depth tested and not written, no culling.
-    NebulaNativeMaterial material;
-    NativeShader::init(material, NEBULA_SHADER_SPIDER_THREAD, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, false,
+    SiteMaterial material;
+    material.init(NEBULA_SHADER_SPIDER_THREAD, SiteMaterial::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, false,
                        NEBULA_CULL_NONE);
     material.constants[0] = ::sIndirectScaleX;
     material.constants[1] = ::sIndirectScaleY;
     material.constants[2] = static_cast< f32 >(mThreadTexture->getWidth());
     material.constants[3] = static_cast< f32 >(mThreadTexture->getHeight());
-    NativeShader::setTexture(material, 0, mThreadTexture);
-    NativeShader::setTexture(material, 1, mIndirectTexture);
-    NativeShader::send(material);
-    J3DNativeShape::setCurrentIdentity();
+    material.setTexture(0, mThreadTexture);
+    material.setTexture(1, mIndirectTexture);
+    return material;
 }
 
 namespace {

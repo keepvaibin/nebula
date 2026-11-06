@@ -4,7 +4,7 @@
 #include <JSystem/JKernel/JKRDisposer.hpp>
 
 class AudSoundObject;
-class J3DJoint;
+class Joint;
 
 class AudSeKeeperBox {
 public:
@@ -12,11 +12,11 @@ public:
 
     ~AudSeKeeperBox();
     void update();
-    void add(J3DJoint*, u16);
+    void add(Joint*, u16);
     void updateJointPos();
 
     AudSoundObject* mSoundObj;
-    J3DJoint* mJoint;
+    Joint* mJoint;
     Vec3f mPos;
     u16 mHash;
 };

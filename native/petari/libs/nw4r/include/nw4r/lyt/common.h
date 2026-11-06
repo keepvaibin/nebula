@@ -5,6 +5,8 @@
 #include "nw4r/ut/Color.h"
 #include "nw4r/ut/inlines.h"
 
+struct SiteMaterial;
+
 namespace nw4r {
     namespace lyt {
         class Material;
@@ -21,6 +23,28 @@ namespace nw4r {
             bool IsModulateVertexColor(ut::Color*, u8);
             const ut::Color MultipleAlpha(const ut::Color, u8);
             void MultipleAlpha(ut::Color*, const ut::Color*, u8);
+            // A material's form as the cook wrote it, in the layout file (not aligned).
+            struct __attribute__((packed)) LayoutForm {
+                u64 vertex;
+                u64 pixel;
+                u16 vertex_rows;
+                u16 pixel_rows;
+                u8 texture_count;
+                u8 input_count;
+                u8 flags;
+                u8 reserved;
+                u16 rows[64];
+                u8 textures[16];
+                u8 inputs[24];
+            };
+
+            // What the pane draws with next: its eye matrix, and a written shader or a form with its values.
+            void SetDrawMtx(const f32 (*pMtx)[4]);
+            const f32 (*GetDrawMtx())[4];
+            void SetDrawNothing();
+            void SetDrawPicture(const SiteMaterial& rMaterial);
+            void SetDrawForm(const LayoutForm* pForm, u32 constants, u32 table, u32 state);
+
             void DrawQuad(const math::VEC2&, const Size&, u8, const math::VEC2 (*)[4], const ut::Color*);
             void DrawQuad(const math::VEC2&, const Size&, u8, const math::VEC2 (*)[4], const ut::Color*, u8);
 

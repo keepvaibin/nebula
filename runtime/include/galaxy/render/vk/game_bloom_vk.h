@@ -17,7 +17,7 @@ namespace galaxy::render::vk {
 
 class GameBloomVk {
 public:
-    // The renderer's descriptor sets for one pass (its frame pool, or a replay list's while one is recorded).
+    // The renderer's descriptor sets for one pass.
     using SetAllocator = std::function<VkDescriptorSet(VkDescriptorSetLayout)>;
 
     GameBloomVk() = default;
@@ -63,9 +63,6 @@ public:
     // The composite prepare() set up, in the open scene target pass `pass` of 2^samples_log2 samples (RGB; the game's alpha
     // stays).
     void finish(VkCommandBuffer commands, VkRenderPass pass, unsigned samples_log2, const SetAllocator& allocate);
-    // The images recorded passes read, for a command buffer submitted again later (the interpolation replay).
-    void hold(std::vector<std::shared_ptr<Texture>>& held) const;
-
 private:
     // game_bloom.hlsl's BloomConstants (pushed).
     struct Constants {

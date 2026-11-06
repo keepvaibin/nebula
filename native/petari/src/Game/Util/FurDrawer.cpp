@@ -1,14 +1,13 @@
 #include "Game/Util/FurDrawer.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
+#include "Game/Render/RenderTexture.hpp"
+#include "Game/Render/FrameList.hpp"
 #include "Game/LiveActor/MaterialCtrl.hpp"
 #include "Game/Util/DirectDraw.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/FurParam.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
-#include "Game/Util/NativeShader.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <cmath>
@@ -16,8 +15,12 @@
 
 FurDrawer::FurDrawer(u32 numLayers, ResTIMG* pBody, ResTIMG* pIndirect)
     : mBodyTexture(), mFurTexture(), mIndirectTexture(), mNumLayers(numLayers), mLength(3.0f, 1.0f), mIndirect(0.2f, 1.5f), mBrightness(40.0f, 4.5f),
-      mAlpha(210.0f, 1.8f), mFurUVScale(1.0f), mBodyUVScale(1.0f), mColorBlend(0.0f, 1.0f), mCullMode(J3D_CULL_BACK), mMatIntensity(255),
+      mAlpha(210.0f, 1.8f), mFurUVScale(1.0f), mBodyUVScale(1.0f), mColorBlend(0.0f, 1.0f), mCullMode(MODEL_FILE_CULL_BACK), mMatIntensity(255),
       mAmbIntensity(50), mUseIndirect(1), mZCompLoc(), mZWrite(), mAdditive(), mAlphaRef(32) {
+    mShells = new f32[numLayers];
+    for (u32 layer = 0; layer < numLayers; layer++) {
+        mShells[layer] = 0.0f;
+    }
     mBodyTexture = new JUTTexture(pBody);
 
     if (mIndirectTexture) {
@@ -27,16 +30,15 @@ FurDrawer::FurDrawer(u32 numLayers, ResTIMG* pBody, ResTIMG* pIndirect)
         mUseIndirect = 0;
     }
 
-    u32 size = J3DNativeTexture::linearSize(NEBULA_TEXTURE_LINEAR_LA8, 32, 32, 1);
+    u32 size = RenderTexture::linearSize(NEBULA_TEXTURE_LINEAR_LA8, 32, 32, 1);
     ResTIMG* pImage = reinterpret_cast< ResTIMG* >(new u8[size + sizeof(ResTIMG)]);
+    pImage->mFormat = NEBULA_TEXTURE_LINEAR_LA8;
     pImage->mWidth = 32;
     pImage->mHeight = 32;
     pImage->mWrapS = NEBULA_WRAP_REPEAT;
     pImage->mWrapT = NEBULA_WRAP_REPEAT;
     pImage->mImage = nullptr;
     pImage->mMipmap = false;
-    pImage->mDoEdgeLod = false;
-    pImage->mBiasClamp = false;
     pImage->mMaxAnisotropy = 0;
     pImage->mMinType = NEBULA_FILTER_LINEAR;
     pImage->mMagType = NEBULA_FILTER_LINEAR;
@@ -84,7 +86,7 @@ f32 FurDrawer::CLayerParam::calcValue(s32 layer, s32 numLayers) const {
 namespace {
     // The fur's native material (runtime/src/render/materials/fur.hlsl) as setupMaterial set it; each shell sends it
     // with its own brightness, alphas and indirect scale.
-    NebulaNativeMaterial sMaterial;
+    SiteMaterial sMaterial;
 
     void setChannelColor(f32* pOut, u8 intensity) {
         pOut[0] = pOut[1] = pOut[2] = intensity / 255.0f;
@@ -100,19 +102,18 @@ void FurDrawer::setupMaterial(DynamicFurParam* pParam) const {
         useSpecular = true;
     }
 
-    NativeShader::init(sMaterial, NEBULA_SHADER_FUR, mAdditive ? NativeShader::BLEND_ADD_ALPHA : NativeShader::BLEND_ALPHA,
+    sMaterial.init(NEBULA_SHADER_FUR, mAdditive ? SiteMaterial::BLEND_ADD_ALPHA : SiteMaterial::BLEND_ALPHA,
                        NEBULA_COMPARE_LEQUAL, mZWrite != 0,
-                       mCullMode == J3D_CULL_BACK ? NEBULA_CULL_BACK : mCullMode == J3D_CULL_FRONT ? NEBULA_CULL_FRONT
-                       : mCullMode == J3D_CULL_ALL ? NEBULA_CULL_BACK : NEBULA_CULL_NONE);
-    sMaterial.early_depth = mZCompLoc != 0 ? 1 : 0;
-    sMaterial.color_write = 1;
-    sMaterial.alpha_write = 0;
+                       mCullMode == MODEL_FILE_CULL_BACK ? NEBULA_CULL_BACK : mCullMode == MODEL_FILE_CULL_FRONT ? NEBULA_CULL_FRONT
+                       : mCullMode == MODEL_FILE_CULL_ALL ? NEBULA_CULL_BACK : NEBULA_CULL_NONE);
+    sMaterial.mState.color_write = 1;
+    sMaterial.mState.alpha_write = 0;
 
     // The fog (start, end, near, far; colour; type): the fog control's, or TDDraw's mixed fog (linear over the
     // sphere around the fog position, colour 0xFF000080), or none.
     f32* pFog = sMaterial.constants + 32;
     if (pParam->mFogCtrl) {
-        const J3DFogInfo& rFog = pParam->mFogCtrl->mFogInfo;
+        const FogInfo& rFog = pParam->mFogCtrl->mFogInfo;
         pFog[0] = rFog.mStartZ;
         pFog[1] = rFog.mEndZ;
         pFog[2] = rFog.mNearZ;
@@ -128,9 +129,9 @@ void FurDrawer::setupMaterial(DynamicFurParam* pParam) const {
         pFog[4] = 1.0f;
         pFog[5] = 0.0f;
         pFog[6] = 0.0f;
-        pFog[7] = J3D_FOG_PERSP_LIN;
+        pFog[7] = MODEL_FILE_FOG_PERSP_LIN;
     } else {
-        pFog[7] = J3D_FOG_NONE;
+        pFog[7] = MODEL_FILE_FOG_NONE;
     }
 
     Mtx bodyMtx;
@@ -145,12 +146,9 @@ void FurDrawer::setupMaterial(DynamicFurParam* pParam) const {
     }
 
     NebulaMtxScale(bodyMtx, mBodyUVScale, mBodyUVScale, 1.0f);
-    J3DNativeShape::setTexture(0, bodyMtx, 2);
-    J3DNativeShape::setTexture(1, furMtx, 2);
-
-    if (mUseIndirect) {
-        J3DNativeShape::setTexture(2, indirectMtx, 2);
-    }
+    sMaterial.setMatrix(10, 0, bodyMtx);
+    sMaterial.setMatrix(10, 1, furMtx);
+    sMaterial.setMatrix(10, 2, indirectMtx);
 
 
     u32 sources;
@@ -184,11 +182,11 @@ void FurDrawer::setupMaterial(DynamicFurParam* pParam) const {
     sMaterial.constants[30] = static_cast< f32 >(mFurTexture->getWidth());
     sMaterial.constants[31] = static_cast< f32 >(mFurTexture->getHeight());
 
-    NativeShader::setTexture(sMaterial, 0, mBodyTexture);
-    NativeShader::setTexture(sMaterial, 1, mFurTexture);
+    sMaterial.setTexture(0, mBodyTexture);
+    sMaterial.setTexture(1, mFurTexture);
 
     if (mUseIndirect && mIndirectTexture) {
-        NativeShader::setTexture(sMaterial, 2, mIndirectTexture);
+        sMaterial.setTexture(2, mIndirectTexture);
     }
 }
 
@@ -201,9 +199,13 @@ void FurDrawer::setupLayerMaterial(s32 layer) const {
     sMaterial.constants[17] = static_cast< u8 >((s32)(brightness)) / 255.0f;
     sMaterial.constants[18] = static_cast< u8 >((s32)(blend)) / 255.0f;
     sMaterial.constants[19] = 1.0f;
-    NativeShader::setColor(sMaterial, 20, mColor.r, mColor.g, mColor.b, 255);
+    sMaterial.setColor(20, mColor.r, mColor.g, mColor.b, 255);
     sMaterial.constants[28] = mUseIndirect ? mIndirect.calcValue(layer, mNumLayers) : 0.0f;
-    NativeShader::send(sMaterial);
+    sMaterial.constants[76] = mShells[layer];
+}
+
+const SiteMaterial& FurDrawer::material() const {
+    return sMaterial;
 }
 
 void FurDrawer::createFurMap() {
@@ -247,5 +249,5 @@ void FurDrawer::createFurMap() {
         }
     }
 
-    J3DNativeTexture::registerLinear(pTexels, NEBULA_TEXTURE_LINEAR_LA8, width, height, 1);
+    RenderTexture::linear(pTexels, NEBULA_TEXTURE_LINEAR_LA8, width, height, 1);
 }

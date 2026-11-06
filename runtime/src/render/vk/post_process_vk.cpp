@@ -655,15 +655,6 @@ VkPipeline PostProcessorVk::scene_pass_pipeline(bool smaa, VkRenderPass pass, un
     return out;
 }
 
-void PostProcessorVk::hold_scene_targets(std::vector<std::shared_ptr<Texture>>& held) const {
-    for (const Target* target : {&antialiased_, &edges_, &weights_, &stencil_}) {
-        if (target->texture &&
-            std::find(held.begin(), held.end(), target->texture) == held.end()) {
-            held.push_back(target->texture);
-        }
-    }
-}
-
 PostProcessorVk::PresentStep PostProcessorVk::prepare_present(VkCommandBuffer commands, const Texture& source,
                                                               unsigned source_width, unsigned source_height,
                                                               unsigned target_width, unsigned target_height,

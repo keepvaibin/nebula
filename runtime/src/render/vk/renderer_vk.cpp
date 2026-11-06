@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The Vulkan renderer (renderer_vk.h): device, swapchain, frames, present and the overlay. The scene target, draws,
-// copies and screen probes are renderer_vk_scene.cpp.
+// copies and screen probes are renderer_vk_frame.cpp.
 
 #include "renderer_vk_internal.h"
 #include "galaxy/run_options.h"
@@ -113,22 +113,20 @@ VkSampler create_sampler(VkDevice device, VkFilter filter, VkSamplerMipmapMode m
 
 }  // namespace
 
-std::size_t RendererVk::ConstantsSetKeyHash::operator()(const ConstantsSetKey& key) const noexcept {
-    std::uint64_t hash = mix64(reinterpret_cast<std::uint64_t>(key.b0));
-    hash = combine64(hash, reinterpret_cast<std::uint64_t>(key.b1));
-    return static_cast<std::size_t>(combine64(hash, reinterpret_cast<std::uint64_t>(key.rows)));
-}
-
 bool RendererVk::initialize(int window_width, int window_height, const FrameMap& frame) {
     scene_map_ = frame;
     frame_slot_ = 0;
     frame_index_ = 0;
-    const host_window::OpenedWindow opened = host_window::open_game_window(window_owner_, window_width, window_height);
-    if (opened.window == nullptr) {
-        return false;
+    if (window_ != nullptr) {
+        window_shown_ = true;
+    } else {
+        const host_window::OpenedWindow opened = host_window::open_game_window(*window_owner_, window_width, window_height);
+        if (opened.window == nullptr) {
+            return false;
+        }
+        window_ = opened.window;
+        window_shown_ = opened.shown;
     }
-    window_ = opened.window;
-    window_shown_ = opened.shown;
     try {
         if (!create_surface_and_device() || !create_layouts() || !create_swapchain()) {
             shutdown();
@@ -171,10 +169,6 @@ bool RendererVk::initialize(int window_width, int window_height, const FrameMap&
             query_info.queryCount = kFramesInFlight * 2u;
             vk::check(vkCreateQueryPool(device, &query_info, nullptr, &timestamps_), "vkCreateQueryPool");
             timestamp_period_ns_ = vk::Context::get().properties().limits.timestampPeriod;
-            if (::galaxy::run_option_flag(::galaxy::run_options().gpu_draws, false)) {
-                query_info.queryCount = kFramesInFlight * kGpuDrawSlots;
-                vk::check(vkCreateQueryPool(device, &query_info, nullptr, &draw_queries_), "vkCreateQueryPool");
-            }
             if (::galaxy::run_option_flag(::galaxy::run_options().gpu_passes, false)) {
                 query_info.queryCount = kFramesInFlight * (kGpuPassSlots + 2u);
                 vk::check(vkCreateQueryPool(device, &query_info, nullptr, &pass_queries_), "vkCreateQueryPool");
@@ -191,18 +185,29 @@ bool RendererVk::initialize(int window_width, int window_height, const FrameMap&
                 }
             }
         }
-        // The rings are Vulkan buffers with GPU addresses; their sizes follow the D3D12 renderer's. Every segmentation
-        // shares one buffer per ring.
-        const auto ring = [&](UploadRing& target, const char* name, std::size_t bytes) {
-            return target.initialize(device, name, UploadRing::budget(bytes, kFramesInFlight), kFramesInFlight,
-                                     bytes);
+        // The rings are Vulkan buffers with GPU addresses; their sizes follow the D3D12 renderer's. The vertex and row rings
+        // keep the last frame readable for motion.
+        const auto ring = [&](UploadRing& target, const char* name, std::size_t bytes, unsigned segments) {
+            return target.initialize(device, name, UploadRing::budget(bytes, segments), segments, bytes);
         };
-        if (!ring(vertex_ring_, "vertex", 32u << 20u) || !ring(index_ring_, "index", 12u << 20u) ||
-            !ring(constant_ring_, "constant", 12u << 20u) || !ring(matrix_ring_, "matrix", 8u << 20u)) {
+        if (!ring(vertex_ring_, "vertex", kVertexRingBytes, kRingSegments) || !ring(index_ring_, "index", kIndexRingBytes, kFramesInFlight) ||
+            !ring(constant_ring_, "constant", kConstantRingBytes, kFramesInFlight) || !ring(matrix_ring_, "matrix", kMatrixRingBytes, kRingSegments)) {
             std::cerr << "[Renderer] upload rings unavailable\n";
             shutdown();
             return false;
         }
+        gpu::Encoder::Layout encoding{};
+        encoding.layout = draw_layout_.layout;
+        encoding.constants_set = [](void* renderer, const VkBuffer* buffers, gpu::Address rows, gpu::Address instances) {
+            return static_cast<RendererVk*>(renderer)->constants_set(buffers, rows, instances);
+        };
+        encoding.resolve = [](void*, gpu::Address address, VkBuffer& buffer, VkDeviceSize& offset) {
+            const vk::Context::BufferOffset resolved = vk::Context::get().resolve(address);
+            buffer = resolved.buffer;
+            offset = resolved.offset;
+        };
+        encoding.renderer = this;
+        encoder_.configure(encoding);
         refresh_default_sampler_table();
         // The game's bloom, compiled on a worker; the game draws its own chains until it is ready.
         bloom_.initialize();
@@ -273,20 +278,21 @@ bool RendererVk::create_layouts() {
 
     const VkShaderStageFlags stage_passes = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
     {
-        // Set 0: b0, b1, the matrix rows.
+        // Set 0: b0, b1, b2, the composed rows, the instance table.
         const VkDescriptorSetLayoutBinding bindings[] = {
             {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1, stage_passes, nullptr},
-            // b1: the pixel constants, or a native material's constants (both stages read those).
-            {1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
-            {5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, stage_passes, nullptr},  // the rows the row table names
+            {1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1, stage_passes, nullptr},
+            {2, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1, stage_passes, nullptr},
+            {3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, stage_passes, nullptr},
+            {4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, stage_passes, nullptr},
         };
         VkDescriptorSetLayoutCreateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-        info.bindingCount = 3;
+        info.bindingCount = 5;
         info.pBindings = bindings;
         vk::check(vkCreateDescriptorSetLayout(device, &info, nullptr, &draw_layout_.sets[0]), "set 0 layout");
     }
     {
-        const VkDescriptorSetLayoutBinding binding{0, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 8,
+        const VkDescriptorSetLayoutBinding binding{0, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, kTableTextures,
                                                    VK_SHADER_STAGE_FRAGMENT_BIT, nullptr};
         VkDescriptorSetLayoutCreateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
         info.bindingCount = 1;
@@ -294,7 +300,7 @@ bool RendererVk::create_layouts() {
         vk::check(vkCreateDescriptorSetLayout(device, &info, nullptr, &draw_layout_.sets[1]), "set 1 layout");
     }
     {
-        const VkDescriptorSetLayoutBinding binding{0, VK_DESCRIPTOR_TYPE_SAMPLER, 8, VK_SHADER_STAGE_FRAGMENT_BIT,
+        const VkDescriptorSetLayoutBinding binding{0, VK_DESCRIPTOR_TYPE_SAMPLER, kTableTextures, VK_SHADER_STAGE_FRAGMENT_BIT,
                                                    nullptr};
         VkDescriptorSetLayoutCreateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
         info.bindingCount = 1;
@@ -303,8 +309,12 @@ bool RendererVk::create_layouts() {
     }
     {
         VkPipelineLayoutCreateInfo info{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+        // b3: the draw's first instance, flags and identity.
+        const VkPushConstantRange constants{stage_passes, 0u, 16u};
         info.setLayoutCount = 3;
         info.pSetLayouts = draw_layout_.sets.data();
+        info.pushConstantRangeCount = 1;
+        info.pPushConstantRanges = &constants;
         vk::check(vkCreatePipelineLayout(device, &info, nullptr, &draw_layout_.layout), "draw pipeline layout");
     }
     linear_clamp_ = create_sampler(device, VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_NEAREST);
@@ -954,12 +964,6 @@ bool RendererVk::create_utility_pipelines() {
     ui_textured_pipeline_ = create_utility_pipeline(
         present_pass_, utility_layout_, vk::UtilitySpirv::UiTexturedVs,
         vk::UtilitySpirv::UiTexturedPs, kAll, true, true, false);
-    depth_carry_pipeline_ = create_utility_pipeline(
-        draw_layout_.scene_pass, utility_layout_, vk::UtilitySpirv::BlitVs,
-        depth_linear_ ? vk::UtilitySpirv::DepthCarryPs : vk::UtilitySpirv::DepthCarryLoadPs, 0u, false, false,
-        true);
-    color_carry_pipeline_ = create_utility_pipeline(draw_layout_.scene_pass, utility_layout_, vk::UtilitySpirv::BlitVs,
-                                                    vk::UtilitySpirv::BlitPs, kAll, false, false, false);
     return true;
 }
 
@@ -997,11 +1001,28 @@ VkPipeline RendererVk::scene_utility_pipeline(SceneUtility kind) {
     return pipeline;
 }
 
+RendererVk::Kept RendererVk::take_apart_lost_device() {
+    keep_window_ = true;
+    try {
+        shutdown();
+    } catch (const std::exception& error) {
+        std::cerr << "[RendererVk] the lost device's shutdown: " << error.what() << "\n";
+    }
+    return Kept{window_};
+}
+
 void RendererVk::shutdown() {
     vk::Context& context = vk::Context::get();
     const VkDevice device = context.device();
     if (device != VK_NULL_HANDLE) {
         vkDeviceWaitIdle(device);
+#if defined(NEBULA_DEV)
+        if (inspect_query_pool_ != VK_NULL_HANDLE) {
+            vkDestroyQueryPool(device, inspect_query_pool_, nullptr);
+            inspect_query_pool_ = VK_NULL_HANDLE;
+        }
+        inspect_motion_buffer_.reset();
+#endif
         if (swapchain_fsr_) {
             fsr_generation_.destroy(swapchain_.handle);
         }
@@ -1011,14 +1032,12 @@ void RendererVk::shutdown() {
         fg_hudless_scene_color_.reset();
         fg_hudless_display_.reset();
         fg_hudless_target_.reset();
-        scene_owed_.reset();
-        scene_submitted_color_.reset();
-        scene_shown_image_ = VK_NULL_HANDLE;
         turn_source_ = VK_NULL_HANDLE;
-        release_replay_resources();
+        zero_vertices_.reset();
         frame_pass_targets_.clear();
         for (Frame& frame : frames_) {
             frame.retired.clear();
+    frame.retired_buffers.clear();
             if (frame.pool != VK_NULL_HANDLE) vkDestroyCommandPool(device, frame.pool, nullptr);
             if (frame.descriptors != VK_NULL_HANDLE) vkDestroyDescriptorPool(device, frame.descriptors, nullptr);
             for (VkDescriptorPool pool : frame.overflow_descriptors) vkDestroyDescriptorPool(device, pool, nullptr);
@@ -1028,8 +1047,6 @@ void RendererVk::shutdown() {
         if (utility_pool_ != VK_NULL_HANDLE) vkDestroyCommandPool(device, utility_pool_, nullptr);
         utility_pool_ = VK_NULL_HANDLE;
         output_scene_active_ = false;
-        scene_carry_color_.reset();
-        scene_carry_depth_.reset();
         corner_texture_.reset();
         probe_target_.reset();
         probe_target_linear_.reset();
@@ -1050,8 +1067,6 @@ void RendererVk::shutdown() {
         pass_queries_ = VK_NULL_HANDLE;
         if (stats_queries_ != VK_NULL_HANDLE) vkDestroyQueryPool(device, stats_queries_, nullptr);
         stats_queries_ = VK_NULL_HANDLE;
-        if (draw_queries_ != VK_NULL_HANDLE) vkDestroyQueryPool(device, draw_queries_, nullptr);
-        draw_queries_ = VK_NULL_HANDLE;
         destroy_swapchain();
         for (VkRenderPass pass :
              {present_pass_, color_pass_, rgba8_pass_, draw_layout_.scene_pass, draw_layout_.scene_pass_clear,
@@ -1098,12 +1113,61 @@ void RendererVk::shutdown() {
     surface_ = VK_NULL_HANDLE;
     context.shutdown();
     present_pacer_.reset();
-    host_window::close_game_window(window_owner_);
-    window_ = nullptr;
-    window_shown_ = false;
+    if (!keep_window_) {
+        host_window::close_game_window(*window_owner_);
+        window_ = nullptr;
+        window_shown_ = false;
+    }
 }
 
-void RendererVk::drain_gpu() {
+void RendererVk::grow_rings() {
+    if (ring_growth_failed_ || (!vertex_ring_.wants_growth() && !index_ring_.wants_growth() && !constant_ring_.wants_growth() &&
+                                !matrix_ring_.wants_growth())) {
+        return;
+    }
+    wait_for_gpu_idle();
+    const VkDevice device = vk::Context::get().device();
+    const auto place = [&](UploadRing& ring, const char* name, unsigned segments) {
+        const std::size_t had = ring.capacity();
+        std::size_t capacity = ring.grown_capacity(segments);
+        if (capacity == 0u) {
+            ring_growth_failed_ = true;
+            capacity = had;
+        }
+        if (capacity == had) {
+            return ring.resegment(UploadRing::budget(capacity, segments), segments);
+        }
+        std::cerr << "[gpu-rings] grow " << name << " frame-high-water-kb=" << (ring.high_water() >> 10u)
+                  << " mb=" << (had >> 20u) << "->" << (capacity >> 20u) << '\n';
+        ring.reset();
+        if (ring.initialize(device, name, UploadRing::budget(capacity, segments), segments, capacity)) {
+            return true;
+        }
+        ring_growth_failed_ = true;
+        std::cerr << "[gpu-rings] grow " << name << " failed\n";
+        return ring.initialize(device, name, UploadRing::budget(had, segments), segments, had);
+    };
+    if (!place(vertex_ring_, "vertex", kRingSegments) || !place(index_ring_, "index", kFramesInFlight) ||
+        !place(constant_ring_, "constant", kFramesInFlight) || !place(matrix_ring_, "matrix", kRingSegments)) {
+        throw std::runtime_error("upload ring resize failed");
+    }
+    history_segment_ = 0u;
+    history_segment_fence_.fill(0u);
+    history_used_ = true;
+}
+
+void RendererVk::trace_rings() const {
+    const auto line = [](const char* name, const UploadRing& ring) {
+        std::cerr << "[memory] ring " << name << ' ' << static_cast<double>(ring.capacity()) / (1024.0 * 1024.0)
+                  << " MB, a frame took at most " << static_cast<double>(ring.high_water()) / (1024.0 * 1024.0) << " MB\n";
+    };
+    line("vertex", vertex_ring_);
+    line("index", index_ring_);
+    line("constant", constant_ring_);
+    line("matrix", matrix_ring_);
+}
+
+void RendererVk::wait_for_gpu_idle() {
     const VkDevice device = vk::Context::get().device();
     if (device != VK_NULL_HANDLE) {
         vkDeviceWaitIdle(device);
@@ -1119,23 +1183,6 @@ UploadBuffer RendererVk::create_upload_buffer(std::size_t bytes, const char* nam
     return gpu::create_upload_memory(device(), bytes, name);
 }
 
-UploadBuffer RendererVk::create_resident_vertices(std::size_t bytes, const char* name) {
-    std::shared_ptr<vk::Buffer> buffer = vk::Context::get().create_buffer(
-        bytes,
-        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT |
-            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        name, vk::BufferPlace::DeviceMapped);
-    if (!buffer) {
-        return {};
-    }
-    UploadBuffer out;
-    out.cpu = buffer->mapped;
-    resident_mapped_ = out.cpu;
-    out.gpu = buffer->address;
-    out.buffer = std::move(buffer);
-    return out;
-}
-
 std::uint64_t RendererVk::completed_fence_value() const {
     return vk::Context::get().completed_value();
 }
@@ -1149,7 +1196,7 @@ void RendererVk::wait_for_fence_value(std::uint64_t fence_value) {
     }
 }
 
-void RendererVk::begin_frame(bool) {
+void RendererVk::begin_frame() {
     host_window::poll_render_config_file();
     if (!streamline_frame_open_) {
         vk::streamline_vk::open_frame(swapchain_fsr_);
@@ -1157,9 +1204,12 @@ void RendererVk::begin_frame(bool) {
     }
     follow_window_and_resize();
     apply_window_size();
-    update_ring_mode();
-    temporal_interp_ = ring_mode_ == RingMode::Interp && temporal_mode();
+    grow_rings();
     prepare_temporal_upscaler();
+    if (temporal_interp_suspended_ && temporal_interp_key() != temporal_interp_key_) {
+        // The settings changed: decided again.
+        temporal_interp_suspended_ = false;
+    }
     sync_post_process();
     bloom_.poll_ready();
 
@@ -1168,24 +1218,20 @@ void RendererVk::begin_frame(bool) {
     frame_ = &frame;
     vk::Context& context = vk::Context::get();
     const VkDevice device = context.device();
-    const bool collect_timing = trace_present_stats_enabled();
-    const auto wait_start = collect_timing ? std::chrono::steady_clock::now()
-                                           : std::chrono::steady_clock::time_point{};
     if (frame.fence != 0u) {
         wait_for_fence_value(frame.fence);
     }
-    if (collect_timing) {
-        last_frame_slot_wait_us_ = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(
-            std::chrono::steady_clock::now() - wait_start).count());
-    }
-    const auto reset_start = collect_timing ? std::chrono::steady_clock::now()
-                                            : std::chrono::steady_clock::time_point{};
     if (timestamp_pending_[frame_slot_] && timestamps_ != VK_NULL_HANDLE) {
         std::uint64_t ticks[2]{};
         if (vkGetQueryPoolResults(device, timestamps_, frame_slot_ * 2u, 2u, sizeof(ticks), ticks,
                                   sizeof(std::uint64_t), VK_QUERY_RESULT_64_BIT) == VK_SUCCESS &&
             ticks[1] >= ticks[0]) {
             const double gpu_ms = static_cast<double>(ticks[1] - ticks[0]) * timestamp_period_ns_ / 1'000'000.0;
+            if (frame_generated_[frame_slot_]) {
+                generated_gpu_ms_ += gpu_ms;
+                ++generated_gpu_samples_;
+                generated_gpu_ema_ms_ = generated_gpu_ema_ms_ == 0.0 ? gpu_ms : generated_gpu_ema_ms_ * 0.9 + gpu_ms * 0.1;
+            }
             stats_.gpu_ms += gpu_ms;
             ++stats_.gpu_samples;
             gpu_window_.ms += gpu_ms;
@@ -1197,6 +1243,7 @@ void RendererVk::begin_frame(bool) {
     read_gpu_passes();
     context.collect();
     frame.retired.clear();
+    frame.retired_buffers.clear();
     refresh_default_sampler_table();
     vk::check(vkResetCommandPool(device, frame.pool, 0), "vkResetCommandPool");
     vk::check(vkResetDescriptorPool(device, frame.descriptors, 0), "vkResetDescriptorPool");
@@ -1209,6 +1256,12 @@ void RendererVk::begin_frame(bool) {
     vk::check(vkBeginCommandBuffer(frame.uploads, &begin), "vkBeginCommandBuffer");
     vk::check(vkBeginCommandBuffer(frame.commands, &begin), "vkBeginCommandBuffer");
     commands_ = frame.commands;
+#if defined(NEBULA_DEV)
+    if (inspect_queries_reset_) {
+        vkCmdResetQueryPool(commands_, inspect_query_pool_, 0u, inspect_query_capacity_);
+        inspect_queries_reset_ = false;
+    }
+#endif
     if (timestamps_ != VK_NULL_HANDLE) {
         vkCmdResetQueryPool(frame.commands, timestamps_, frame_slot_ * 2u, 2u);
         vkCmdWriteTimestamp(frame.commands, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, timestamps_, frame_slot_ * 2u);
@@ -1224,56 +1277,30 @@ void RendererVk::begin_frame(bool) {
         vkCmdResetQueryPool(frame.commands, stats_queries_, frame_slot_, 1u);
         vkCmdBeginQuery(frame.commands, stats_queries_, frame_slot_, 0);
     }
-    if (draw_queries_ != VK_NULL_HANDLE) {
-        vkCmdResetQueryPool(frame.commands, draw_queries_, frame_slot_ * kGpuDrawSlots, kGpuDrawSlots);
-        pass_recording_ = true;
-    }
-    if (ring_mode_ == RingMode::Interp) {
-        // One segment per game frame: its frames (chunks) append to it, so its draws stay replayable until the
-        // segment comes round again.
-        if (ring_advance_pending_) {
-            advance_ring_segment();
+    // A frame that wrote neither keeps appending, so the last walk's stay readable across present-only frames.
+    if (history_used_) {
+        history_segment_ = (history_segment_ + 1u) % kRingSegments;
+        if (history_segment_fence_[history_segment_] != 0u) {
+            wait_for_fence_value(history_segment_fence_[history_segment_]);
         }
-    } else {
-        vertex_ring_.begin_frame(frame_slot_);
-        index_ring_.begin_frame(frame_slot_);
-        constant_ring_.begin_frame(frame_slot_);
-        if (matrix_segments_ == kFramesInFlight) {
-            matrix_ring_.begin_frame(frame_slot_);
-        } else {
-            // Temporal mode: a frame that wrote no palette keeps appending to the current segment, so the previous scene's
-            // palettes stay addressable across present and utility frames. The segment taken was written kFramesInFlight
-            // advances ago at least: its frame has finished (this slot's fence).
-            matrix_segment_used_ = matrix_segment_started_ && matrix_ring_.cursor() != matrix_begin_cursor_;
-            if (matrix_segment_used_ || !matrix_segment_started_) {
-                matrix_segment_ = (matrix_segment_ + 1u) % matrix_segments_;
-                matrix_ring_.begin_frame(matrix_segment_);
-                matrix_segment_started_ = true;
-            }
-            matrix_begin_cursor_ = matrix_ring_.cursor();
-        }
+        vertex_ring_.begin_frame(history_segment_);
+        matrix_ring_.begin_frame(history_segment_);
     }
+    history_begin_vertex_ = vertex_ring_.cursor();
+    history_begin_matrix_ = matrix_ring_.cursor();
+    index_ring_.begin_frame(frame_slot_);
+    constant_ring_.begin_frame(frame_slot_);
+    constants_sets_.clear();
+    encoder_.attach(frame.commands);
     reset_draw_bindings();
     scene_pass_open_ = false;
     swap_image_ = UINT32_MAX;
-    if (scene_carry_color_ || scene_carry_depth_) {
-        carry_over_scene_contents();
-    }
-    if (collect_timing) {
-        last_begin_reset_us_ = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(
-            std::chrono::steady_clock::now() - reset_start).count());
-    }
 }
 
 std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback on_submitted,
-                                    void* submission_context) {
+                                    void* submission_context, bool generated) {
     Frame& frame = frames_[frame_slot_];
     end_scene_pass();
-    // A picture still owed stays owed across the submission: the next frame's clear normally covers it. Until then
-    // separate submissions read it as it is (shader-readable), where presentation reads it too.
-    scene_submitted_color_ = scene_owed_;
-    scene_turned_in_frame_ = scene_owed_ != nullptr;
-    scene_shown_image_ = scene_owed_ ? scene_owed_->image : VK_NULL_HANDLE;
     if (timestamps_ != VK_NULL_HANDLE) {
         vkCmdWriteTimestamp(frame.commands, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, timestamps_,
                             frame_slot_ * 2u + 1u);
@@ -1303,9 +1330,9 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
     }
     frame.fence = fence;
     last_submitted_ = fence;
-    if (ring_mode_ == RingMode::Interp) {
-        segments_[ring_segment_].fence = std::max(segments_[ring_segment_].fence, fence);
-    }
+    history_used_ = vertex_ring_.cursor() != history_begin_vertex_ || matrix_ring_.cursor() != history_begin_matrix_;
+    history_segment_fence_[history_segment_] = fence;
+    frame_generated_[frame_slot_] = generated;
     timestamp_pending_[frame_slot_] = timestamps_ != VK_NULL_HANDLE;
     for (Readback& readback : probe_slots_) {
         if (readback.fence == kProbesInFrame) {
@@ -1348,22 +1375,17 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
         if (gpu_window_.frames != 0u) {
             const double frames = static_cast<double>(gpu_window_.frames);
             std::fprintf(stderr, "[vk-gpu] frame %.2f ms average, %.2f ms longest; %.1f scene target passes and %.1f scene target copies a "
-                         "frame; scene target %ux%u, swap chain %ux%u; %llu display copies handed over, owed pictures %llu "
-                         "cleared, %llu banded, %llu copied back\n", gpu_window_.ms / frames, gpu_window_.max_ms,
+                         "frame; scene target %ux%u, swap chain %ux%u\n", gpu_window_.ms / frames, gpu_window_.max_ms,
                          static_cast<double>(gpu_window_.passes) / 600.0,
                          static_cast<double>(gpu_window_.copies) / 600.0, scene_map_.width,
-                         scene_map_.height, swapchain_.image.width, swapchain_.image.height,
-                         static_cast<unsigned long long>(gpu_window_.handovers),
-                         static_cast<unsigned long long>(gpu_window_.owed_free),
-                         static_cast<unsigned long long>(gpu_window_.owed_banded),
-                         static_cast<unsigned long long>(gpu_window_.owed_restored));
+                         scene_map_.height, swapchain_.image.width, swapchain_.image.height);
         }
         gpu_window_ = GpuWindow{};
     }
     return fence;
 }
 
-// Presents the acquired image after the submission that draws it (end_frame's and a sub-frame's), paced to the
+// Presents the acquired image after the submission that draws it (end_frame's and a generated frame's), paced to the
 // frame rate, on Android at the display slot it was meant for (VK_GOOGLE_display_timing).
 void RendererVk::present_swapchain_image() {
     vk::Context& context = vk::Context::get();
@@ -1396,7 +1418,7 @@ void RendererVk::present_swapchain_image() {
         // Interpolating, slots step by one presented frame: the game's retrace period times 60 / the present rate
         // (90 Hz: 1.5 presents per retrace).
         const double rate = present_frame_rate(presented_max_fps(cfg), cfg.vsync_interval, display_refresh_hz_);
-        const std::int64_t step = ring_mode_ == RingMode::Interp && rate > 61.0
+        const std::int64_t step = rate > 61.0
             ? std::llround(static_cast<double>(period) * 60.0 / rate)
             : period;
         // The slot after the previous frame's, on the grid of the latest retrace; two retraces after that retrace
@@ -1552,15 +1574,15 @@ void RendererVk::report_present_stats() {
     if (seconds < 2.0) {
         return;
     }
-    static std::uint64_t first_serial_start = 0;
-    static std::uint64_t copies_start = 0;
+    static std::uint64_t new_pictures_start = 0;
+    static std::uint64_t pictures_made_start = 0;
     const DisplayPresentStats progress = display_present_stats();
-    const std::uint64_t copies = display_copy_count();
+    const std::uint64_t copies = pictures_made();
     const double presents = static_cast<double>(stats_.presents);
     std::ostringstream message;
-    message << "[present-stats] fps=" << presents / seconds << " new-serial-hz="
-            << static_cast<double>(progress.first_serial_presentations - first_serial_start) / seconds
-            << " display-production-hz=" << static_cast<double>(copies - copies_start) / seconds
+    message << "[present-stats] fps=" << presents / seconds << " new-picture-hz="
+            << static_cast<double>(progress.new_pictures_shown - new_pictures_start) / seconds
+            << " pictures-made-hz=" << static_cast<double>(copies - pictures_made_start) / seconds
             << " frame-ms(avg/max)=" << (stats_.intervals != 0u ? stats_.interval_ms / stats_.intervals : 0.0)
             << '/' << stats_.interval_max_ms << " pace-wait-ms(avg/max)=" << stats_.pace_wait_ms / presents << '/'
             << stats_.pace_wait_max_ms << " present-ms(avg/max)=" << stats_.present_ms / presents << '/'
@@ -1588,25 +1610,9 @@ void RendererVk::report_present_stats() {
         stats_sum_.fill(0.0);
     }
     message << " api=vulkan\n";
-    if (!draw_cost_.empty()) {
-        std::vector<std::pair<gpu::Pipeline*, GpuDrawCost>> costs(draw_cost_.begin(), draw_cost_.end());
-        std::sort(costs.begin(), costs.end(), [](const auto& a, const auto& b) { return a.second.ms > b.second.ms; });
-        double total = 0.0;
-        for (const auto& cost : costs) {
-            total += cost.second.ms;
-        }
-        message << "[gpu-draws] total-ms=" << total / presents << " pipelines=" << costs.size() << '\n';
-        for (std::size_t i = 0; i < costs.size() && i < 24u; ++i) {
-            message << "[gpu-draws] pso=" << static_cast<const void*>(costs[i].first)
-                    << " ms=" << costs[i].second.ms / presents
-                    << " draws=" << static_cast<double>(costs[i].second.draws) / presents
-                    << " tris=" << static_cast<double>(costs[i].second.triangles) / presents << '\n';
-        }
-        draw_cost_.clear();
-    }
     std::cerr << message.str();
-    first_serial_start = progress.first_serial_presentations;
-    copies_start = copies;
+    new_pictures_start = progress.new_pictures_shown;
+    pictures_made_start = copies;
     stats_ = PresentStats{};
     stats_.window_start_qpc = now;
     stats_.last_present_qpc = now;
@@ -1631,23 +1637,6 @@ void RendererVk::gpu_pass(GpuPass pass) {
 void RendererVk::read_gpu_passes() {
     const VkDevice device = vk::Context::get().device();
     const double ms_per_tick = timestamp_period_ns_ / 1'000'000.0;
-    std::vector<GpuDrawMark>& draws = draw_marks_[frame_slot_];
-    if (!draws.empty()) {
-        std::vector<std::uint64_t> stamps(2u * draws.size());
-        if (vkGetQueryPoolResults(device, draw_queries_, frame_slot_ * kGpuDrawSlots,
-                                  static_cast<std::uint32_t>(stamps.size()), stamps.size() * sizeof(std::uint64_t),
-                                  stamps.data(), sizeof(std::uint64_t), VK_QUERY_RESULT_64_BIT) == VK_SUCCESS) {
-            for (std::size_t i = 0; i < draws.size(); ++i) {
-                GpuDrawCost& cost = draw_cost_[draws[i].pipeline];
-                if (stamps[2u * i + 1u] >= stamps[2u * i]) {
-                    cost.ms += static_cast<double>(stamps[2u * i + 1u] - stamps[2u * i]) * ms_per_tick;
-                }
-                ++cost.draws;
-                cost.triangles += draws[i].triangles;
-            }
-        }
-        draws.clear();
-    }
     if (pass_queries_ == VK_NULL_HANDLE) {
         return;
     }
@@ -1836,7 +1825,7 @@ bool RendererVk::present(const DisplayTexture* source, bool capture_backbuffer, 
 
     // The post chain's passes before the swap chain's: the picture scaled (and sharpened) to its size on screen. A
     // turned swap chain takes it through `oriented_` and the blit, which turns it.
-    const auto allocate = [this](VkDescriptorSetLayout layout) { return allocate_post_set(layout); };
+    const auto allocate = [this](VkDescriptorSetLayout layout) { return allocate_frame_set(layout); };
     vk::PostProcessorVk::PresentStep step{};
     const vk::Texture* picture = shown;
     if (post_.ready() && !present_black_) {

@@ -214,8 +214,8 @@ void OctahedronBezierSurface::calcControlPoint() {
     mSurfaces[7]->mCtrlPts[7].set((mSurfaces[7]->mCtrlPts[11] + mSurfaces[7]->mCtrlPts[8]) - mVertices[2]);
 }
 
-void OctahedronBezierSurface::draw() const {
+void OctahedronBezierSurface::draw(TypedDraw& rDraw) const {
     for (s32 idx = 0; idx < 8; idx++) {
-        mSurfaces[idx]->draw();
+        mSurfaces[idx]->draw(rDraw);
     }
 }

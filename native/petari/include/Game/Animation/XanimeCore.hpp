@@ -1,10 +1,11 @@
 #pragma once
 
-#include <JSystem/J3DGraphAnimator/J3DJoint.hpp>
+#include "Game/Render/Model.hpp"
+#include "Game/Render/ModelData.hpp"
 #include <nebula_geometry.hpp>
 
-class J3DModelData;
-class J3DAnmTransform;
+class ModelData;
+class Clip;
 
 class XtransformInfo {
 public:
@@ -23,14 +24,14 @@ public:
         mScale.set(scale);
     }
 
-    J3DJoint* _0;
-    u16 _4;
+    Joint* _0;
+    u32 _4;
     Vec3f mScale;
     Vec3f _14;
     Vec3f _20;
     Vec3f _2C;
     Vec3f _38;
-    J3DTransformInfo _44;
+    TransformInfo _44;
     MtxPtr _64;
     uintptr_t _68;
     MtxPtr _6C;
@@ -62,13 +63,13 @@ public:
         return mWeight;
     }
 
-    J3DAnmTransform* _0;
+    Clip* _0;
     f32 mWeight;
     f32 _8;
     u8 _C;
 };
 
-class XanimeCore : public J3DMtxCalc {
+class XanimeCore : public MtxCalc {
 public:
     XanimeCore(u32, u32, u8);
     XanimeCore(u32, XanimeCore*);
@@ -80,7 +81,7 @@ public:
 
     void shareJointTransform(const XanimeCore*);
     void doFreeze();
-    void setBck(u32, J3DAnmTransform*);
+    void setBck(u32, Clip*);
     void calcBlend(Vec3f*, Vec3f*);
     void calcSingle(Vec3f*, Vec3f*);
     void calcBlendSpecial();
@@ -89,13 +90,13 @@ public:
     void calcScaleBlendSI(const Vec3f&, const Vec3f&);
     void calcScaleBlendBasic(const Vec3f&, const Vec3f&);
     void calcScaleBlendSpecial();
-    void freezeCopy(J3DModelData*, XanimeCore*, u32, u32);
-    void initT(J3DModelData*);
-    void reconfigJointTransform(J3DModelData*);
+    void freezeCopy(ModelData*, XanimeCore*, u32, u32);
+    void initT(ModelData*);
+    void reconfigJointTransform(ModelData*);
     void updateFrame();
     void fixT(Vec3f*);
 
-    void enableJointTransform(J3DModelData*);
+    void enableJointTransform(ModelData*);
 
     void initMember(u32);
 

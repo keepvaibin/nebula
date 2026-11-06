@@ -1,5 +1,5 @@
 #include "Game/Util/FurCtrl.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include "Game/Render/FrameList.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
@@ -12,15 +12,15 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <JSystem/J3DGraphAnimator/J3DModel.hpp>
-#include <JSystem/J3DGraphAnimator/J3DModelData.hpp>
-#include <JSystem/J3DGraphBase/J3DShape.hpp>
+#include "Game/Render/Model.hpp"
+#include "Game/Render/ModelData.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include <cmath>
 #include <cstdio>
 #include <cstring>
 
-FurMulti* FurBank::check(J3DModelData* pModelData, u32 layer) {
+FurMulti* FurBank::check(ModelData* pModelData, u32 layer) {
     for (u32 i = 0; i < mCount; i++) {
         if (mEntries[i]->mModel->getModelData() == pModelData && ((1 << layer) & mLayerMasks[i])) {
             return mEntries[i];
@@ -58,8 +58,7 @@ FurCtrl::FurCtrl(LiveActor* pActor, FurParam* pParam, bool addToManager, u8 draw
     mShapeIndex = -1;
     mNumLayers = 0;
     mDrawer = nullptr;
-    mShader = nullptr;
-    mLayerModels = nullptr;
+    mMesh = nullptr;
     mLengthMap = nullptr;
     mBodyMap = nullptr;
     mIndirectMap = nullptr;
@@ -69,8 +68,6 @@ FurCtrl::FurCtrl(LiveActor* pActor, FurParam* pParam, bool addToManager, u8 draw
 }
 
 void FurCtrl::calcLayerForm() {
-    f32 rate = 1.0f;
-
     mDrawer->mFurUVScale = mParam->mFurUVScale;
     mDrawer->mBodyUVScale = mParam->mBodyUVScale;
     mDrawer->mLength.mTip = mParam->mLength;
@@ -83,23 +80,19 @@ void FurCtrl::calcLayerForm() {
     }
 
     for (s32 i = 0; i < mDrawer->mNumLayers; i++) {
-        const FurDrawer* pDrawer = mDrawer;
-        f32 length = pDrawer->mLength.calcValue(i, pDrawer->mNumLayers);
-        mShader->_8 = pow(rate * i / mDrawer->mNumLayers, 4.0);
-        mLayerModels[i]->mVertexBuffer.frameInit();
-        mShader->_1C = length;
-        mShader->calc(mLayerModels[i]);
+        mDrawer->mShells[i] = mDrawer->mLength.calcValue(i, mDrawer->mNumLayers);
     }
 }
 
 void FurCtrl::drawFur() {
-    J3DModelData* pModelData = mModel->getModelData();
+    ModelData* pModelData = mModel->getModelData();
 
-    if (MR::getJ3DModel(mActor)->getShapePacket(mShapeIndex)->checkFlag(0x10)) {
+    if (MR::getModel(mActor)->getShapePacket(mShapeIndex)->checkFlag(0x10)) {
         return;
     }
 
-    if (pModelData->getShapeNodePointer(mShapeIndex)->checkFlag(1)) {
+    Mesh* pShape = pModelData->getShapeNodePointer(mShapeIndex);
+    if (pShape->isHidden()) {
         return;
     }
 
@@ -133,20 +126,13 @@ void FurCtrl::drawFur() {
         mDrawer->mMixFog--;
     }
 
-    J3DShape* pShape = pModelData->getShapeNodePointer(mShapeIndex);
-    pShape->mCurrentMtx.setCurrentTexMtx(J3D_TEXMTX0, J3D_TEXMTX1, J3D_TEXMTX2, J3D_IDENTITY, J3D_IDENTITY, J3D_IDENTITY,
-                                         J3D_IDENTITY, J3D_IDENTITY);
-    J3DShapePacket* pPacket;
-
+    TypedDraw site(mDrawer->material(), nullptr);
+    site.setModelBlock(pModelData, mModel->block(pShape->getMaterial()));
     for (s32 i = 0; i < mDrawer->mNumLayers; i++) {
         mDrawer->setupLayerMaterial(i);
-        pPacket = &mLayerModels[i]->mShapePacket[mShapeIndex];
-        pPacket->setModel(mLayerModels[i]);
-        pPacket->prepareDraw();
-        pPacket->getShape()->drawFast();
+        site.setMaterial(mDrawer->material());
+        mMesh->drawJointed(site);
     }
-
-    mModel->mShapePacket[mShapeIndex].setModel(mModel);
 }
 
 void FurCtrl::createFurMap() {
@@ -179,52 +165,30 @@ FurDrawManager::FurDrawManager(u8 capacity) : NameObj("\203\164\203\100\201\133\
     MR::connectToScene(this, MR::MovementType_None, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_Fur);
 }
 
-void FurCtrl::setupFur(J3DModel* pModel, ResTIMG* pLength, ResTIMG* pIndirect, ResTIMG* pBody, u16 shape, u8 numLayers) {
-    J3DModelData* pData = pModel->getModelData();
+void FurCtrl::setupFur(Model* pModel, ResTIMG* pLength, ResTIMG* pIndirect, ResTIMG* pBody, u32 shape, u32 numLayers) {
+    ModelData* pData = pModel->getModelData();
     mModel = pModel;
     mLengthMap = pLength;
     mBodyMap = pBody;
     mIndirectMap = pIndirect;
     mShapeIndex = shape;
-    mShader = new CShader(pData, pLength);
-    mShader->makeIndexData(pData->getShapeNodePointer(shape));
-    mShader->checkBorderVtx(pData, shape);
+    mMesh = createFurMesh(pData, shape, pLength);
     mDrawer = new FurDrawer(numLayers, pBody, pIndirect);
-    const s32 componentSize = sizeof(f32);
-
     mNumLayers = numLayers;
-    mLayerModels = new J3DModel*[numLayers];
-
-    for (s32 i = 0; i < mNumLayers; i++) {
-        char name[16];
-        nebula_sprintf(name, "\203\214\203\103\203\204 %d" /* レイヤ %d */, i);
-        J3DModel2* pLayer = new J3DModel2(mModel);
-        pLayer->setVtxShader(mShader, componentSize);
-        mLayerModels[i] = pLayer;
-    }
 
     mVisible = 1;
 }
 
-void FurCtrl::setupFurClone(J3DModel* pModel, FurCtrl* pOther) {
+void FurCtrl::setupFurClone(Model* pModel, FurCtrl* pOther) {
     mModel = pModel;
     mIsClone = 1;
     mLengthMap = pOther->mLengthMap;
     mBodyMap = pOther->mBodyMap;
     mIndirectMap = pOther->mIndirectMap;
     mShapeIndex = pOther->mShapeIndex;
-    mShader = nullptr;
+    mMesh = pOther->mMesh;
     mDrawer = pOther->mDrawer;
     mNumLayers = pOther->mNumLayers;
-    mLayerModels = new J3DModel*[mNumLayers];
-
-    for (u32 i = 0; i < mNumLayers; i++) {
-        char name[32];
-        nebula_sprintf(name, "\203\214\203\103\203\204(\203\122\203\163\201\133) %d" /* レイヤ(コピー) %d */, i);
-        J3DModel2* pLayer = new J3DModel2(mModel);
-        *pLayer->getVertexBuffer() = *pOther->mLayerModels[i]->getVertexBuffer();
-        mLayerModels[i] = pLayer;
-    }
 
     mVisible = 1;
 }
@@ -317,18 +281,6 @@ namespace MR {
         }
     }
 };  // namespace MR
-
-J3DModel2::J3DModel2(J3DModel* pModel) {
-    mModelData = pModel->mModelData;
-    mMtxBuffer = pModel->mMtxBuffer;
-    mShapePacket = pModel->mShapePacket;
-    mMatPacket = pModel->mMatPacket;
-    mVertexBuffer.setVertexData(&mModelData->mVertexData);
-    mFlags |= J3DMdlFlag_UseDefaultJ3D;
-}
-
-J3DModel2::~J3DModel2() {
-}
 
 FurDrawManager::~FurDrawManager() {
 }

@@ -1,3 +1,4 @@
+#include "Game/Render/ModelData.hpp"
 #include "Game/System/NebulaArena.hpp"
 
 #include <JSystem/JUtility/JUTNativeLog.hpp>
@@ -167,8 +168,7 @@ void NebulaArena::destroy(NebulaArena* pArena) {
     }
 
     // What the renderer and the file views hold from this arena go with it.
-    const NebulaHostServices* const host = nebula_host();
-    host->shape_forget(host->user, reinterpret_cast< uintptr_t >(pArena->mStart), reinterpret_cast< uintptr_t >(pArena->mNext));
+    ModelDataList::forget(reinterpret_cast< uintptr_t >(pArena->mStart), reinterpret_cast< uintptr_t >(pArena->mNext));
     GameAssets::unloadHeap(pArena);
 
     removeFromList(pArena);
@@ -246,7 +246,7 @@ void* NebulaArena::alloc(u32 size, int alignment) {
     u8* const pBlock = static_cast< u8* >(takeBlock(bytes));
     unlock();
 
-#if !defined(NEBULA_RELEASE)
+#if defined(NEBULA_DEV)
     // Tests (GALAXY_TEST_ARENA_FILL=a5): every block starts as this byte, so what reads a field left unset shows in a picture.
     static u32 sFill = 0;
     static bool sFillRead = false;
@@ -293,10 +293,10 @@ void NebulaArena::freeAll() {
         destroy(mFirstChild);
     }
 
-    const NebulaHostServices* const host = nebula_host();
-    host->shape_forget(host->user, reinterpret_cast< uintptr_t >(mStart), reinterpret_cast< uintptr_t >(mNext));
+    ModelDataList::forget(reinterpret_cast< uintptr_t >(mStart), reinterpret_cast< uintptr_t >(mNext));
     GameAssets::unloadHeap(this);
 
+    const NebulaHostServices* host = nebula_host();
     lock();
     UNPOISON_BLOCK(mStart, mCommitted - mStart);
     host->memory_decommit(host->user, mStart, mCommitted - mStart);

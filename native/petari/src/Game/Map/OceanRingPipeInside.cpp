@@ -1,7 +1,7 @@
 #include "Game/Map/OceanRingPipeInside.hpp"
-#include "Game/Util/NativeShader.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/FrameList.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/Map/OceanRingPipe.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util/CameraUtil.hpp"
@@ -50,8 +50,7 @@ void OceanRingPipeInside::movement() {
 }
 
 void OceanRingPipeInside::initMesh() {
-    mMesh.init(NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1, 2 * mRingPipe->_98 * (mRingPipe->_9C - 1));
-    mMesh.useArray(NativeMesh::SLOT_POSITION, mRingPipe->_A0);
+    mMesh.init(2 * mRingPipe->_98 * (mRingPipe->_9C - 1));
     sendGD();
     mMesh.send();
 }
@@ -61,40 +60,34 @@ void OceanRingPipeInside::draw() const {
         return;
     }
 
-    loadMaterial();
-    mMesh.draw();
+    const SiteMaterial material = loadMaterial();
+    TypedDraw site(material, nullptr, MR::getCameraViewMtx());
+    mMesh.draw(site);
 }
 
-void OceanRingPipeInside::loadMaterial() const {
-    J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-    J3DNativeShape::setNormal(0, MR::getCameraViewMtx());
-    J3DPass::positionMatrix(0);
-
-    Mtx34f mtx;
-    mtx.identity();
-    mtx.mMtx[0][2] = mTexU0;
-    mtx.mMtx[1][2] = mTexV0;
-    J3DNativeShape::setTexture(0, mtx.toMtxPtr(), 2);
-    mtx.mMtx[0][2] = mTexU1;
-    mtx.mMtx[1][2] = mTexV1;
-    J3DNativeShape::setTexture(1, mtx.toMtxPtr(), 2);
+SiteMaterial OceanRingPipeInside::loadMaterial() const {
 
     // runtime/src/render/materials/ocean_ring_pipe_inside.hlsl: the texture warped by itself (sIndirectScale texels a
     // step), sStageColor0 toward sStageColor1 by its colour, its alpha squared, both times four; blended by alpha, depth tested
     // and not written, back faces culled, no fog.
-    NebulaNativeMaterial material;
-    NativeShader::init(material, NEBULA_SHADER_OCEAN_RING_PIPE_INSIDE, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL,
+    SiteMaterial material;
+    material.init(NEBULA_SHADER_OCEAN_RING_PIPE_INSIDE, SiteMaterial::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL,
                        false, NEBULA_CULL_BACK);
-    NativeShader::setColor(material, 0, ::sStageColor0.r, ::sStageColor0.g, ::sStageColor0.b, ::sStageColor0.a);
-    NativeShader::setColor(material, 4, ::sStageColor1.r, ::sStageColor1.g, ::sStageColor1.b, ::sStageColor1.a);
+    Mtx34f mtx;
+    mtx.identity();
+    mtx.mMtx[0][2] = mTexU0;
+    mtx.mMtx[1][2] = mTexV0;
+    material.setMatrix(3, 0, mtx.toMtxPtr());
+    mtx.mMtx[0][2] = mTexU1;
+    mtx.mMtx[1][2] = mTexV1;
+    material.setMatrix(3, 1, mtx.toMtxPtr());
+    material.setColor(0, ::sStageColor0.r, ::sStageColor0.g, ::sStageColor0.b, ::sStageColor0.a);
+    material.setColor(4, ::sStageColor1.r, ::sStageColor1.g, ::sStageColor1.b, ::sStageColor1.a);
     material.constants[8] = ::sIndirectScale;
     material.constants[10] = static_cast< f32 >(mWaterPipeInsideTex->getWidth());
     material.constants[11] = static_cast< f32 >(mWaterPipeInsideTex->getHeight());
-    NativeShader::setTexture(material, 0, mWaterPipeInsideTex);
-    NativeShader::send(material);
-    static const u8 kPlaces[8] = {0, 1, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture,
-                                  J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture};
-    J3DNativeShape::setCurrent(0, kPlaces);
+    material.setTexture(0, mWaterPipeInsideTex);
+    return material;
 }
 
 void OceanRingPipeInside::sendGD() {
@@ -117,18 +110,13 @@ void OceanRingPipeInside::sendGD() {
         f32 f24 = 0.0f;
         f32 f23 = 0.0f;
         vv = mRingPipe->_98;
-        mMesh.begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, (u16)(vv << 1));
+        VertexPT2* vtx = mMesh.strip((u16)(vv << 1));
         for (s32 j = 0; j < mRingPipe->_98; j++) {
             v = j * mRingPipe->_9C;
-            mMesh.index(NativeMesh::SLOT_POSITION, i + v);
-            mMesh.texCoord(0, f24, f26);
-            mMesh.texCoord(1, f23, f25);
-            mMesh.corner();
-
-            mMesh.index(NativeMesh::SLOT_POSITION, i + (v + 1));
-            mMesh.texCoord(0, f24, f28);
-            mMesh.texCoord(1, f23, f27);
-            mMesh.corner();
+            const Vec3f& rNear = mRingPipe->_A0[i + v];
+            const Vec3f& rFar = mRingPipe->_A0[i + (v + 1)];
+            *vtx++ = {rNear.x, rNear.y, rNear.z, f24, f26, f23, f25};
+            *vtx++ = {rFar.x, rFar.y, rFar.z, f24, f28, f23, f27};
 
             f24 += f29;
             f23 += f30;

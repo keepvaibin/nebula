@@ -1,5 +1,5 @@
 #include "Game/Map/Air.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include "Game/Render/FrameList.hpp"
 #include "Game/Util/MotionSignal.hpp"
 #include "Game/MapObj/SpiderThread.hpp"
 #include "Game/MapObj/SpinDriverPathDrawer.hpp"
@@ -12,7 +12,7 @@
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DrawUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
-#include <JSystem/J3DGraphBase/J3DSys.hpp>
+#include "Game/Render/Model.hpp"
 
 void SceneFunction::movementStopSceneController() {
     MR::getSceneObj< StopSceneController >(SceneObj_StopSceneController)->movement();
@@ -118,7 +118,7 @@ void SceneFunction::executeCalcAnimListOnPlayingMovie() {
 void SceneFunction::executeCalcViewAndEntryList() {
     Mtx34f mtx;
     mtx.identity();
-    NebulaMtxCopy(mtx, j3dSys.mViewMtx);
+    NebulaMtxCopy(mtx, ModelSys::mViewMtx);
     CategoryList::entryDrawBuffer2D();
     MR::loadViewMtx();
     CategoryList::entryDrawBuffer3D();
@@ -127,12 +127,12 @@ void SceneFunction::executeCalcViewAndEntryList() {
 void SceneFunction::executeCalcViewAndEntryList2D() {
     Mtx34f mtx;
     mtx.identity();
-    NebulaMtxCopy(mtx, j3dSys.mViewMtx);
+    NebulaMtxCopy(mtx, ModelSys::mViewMtx);
     CategoryList::entryDrawBuffer2D();
 }
 
 void SceneFunction::executeDrawBufferListNormalOpaBeforeVolumeShadow() {
-    MotionSignal::phase(MotionSignal::ScenePhase_OpaBeforeVolumeShadow);
+    Frame::phase(MotionSignal::ScenePhase_OpaBeforeVolumeShadow);
     CategoryList::drawOpa(MR::DrawBufferType_CrystalItem);
     CategoryList::drawXlu(MR::DrawBufferType_CrystalItem);
     CategoryList::drawOpa(MR::DrawBufferType_Crystal);
@@ -165,13 +165,13 @@ void SceneFunction::executeDrawBufferListNormalOpaBeforeVolumeShadow() {
 }
 
 void SceneFunction::executeDrawBufferListNormalOpaBeforeSilhouette() {
-    MotionSignal::phase(MotionSignal::ScenePhase_OpaBeforeSilhouette);
+    Frame::phase(MotionSignal::ScenePhase_OpaBeforeSilhouette);
     CategoryList::drawOpa(MR::DrawBufferType_NoShadowedMapObj);
     CategoryList::drawOpa(MR::DrawBufferType_NoShadowedMapObjStrongLight);
 }
 
 void SceneFunction::executeDrawBufferListNormalOpa() {
-    MotionSignal::phase(MotionSignal::ScenePhase_Opa);
+    Frame::phase(MotionSignal::ScenePhase_Opa);
     CategoryList::drawOpa(MR::DrawBufferType_NoSilhouettedMapObj);
     CategoryList::drawOpa(MR::DrawBufferType_NoSilhouettedMapObjWeakLight);
     CategoryList::drawOpa(MR::DrawBufferType_NoSilhouettedMapObjStrongLight);
@@ -192,7 +192,7 @@ void SceneFunction::executeDrawBufferListNormalOpa() {
 }
 
 void SceneFunction::executeDrawBufferListNormalXlu() {
-    MotionSignal::phase(MotionSignal::ScenePhase_Xlu);
+    Frame::phase(MotionSignal::ScenePhase_Xlu);
     CategoryList::drawXlu(MR::DrawBufferType_Planet);
     CategoryList::drawXlu(MR::DrawBufferType_PlanetLow);
     CategoryList::drawXlu(MR::DrawBufferType_Environment);
@@ -214,7 +214,7 @@ void SceneFunction::executeDrawBufferListNormalXlu() {
 }
 
 void SceneFunction::executeDrawListOpa() {
-    MotionSignal::phase(MotionSignal::ScenePhase_ListOpa);
+    Frame::phase(MotionSignal::ScenePhase_ListOpa);
     CategoryList::execute(MR::DrawType_0x3);
     MR::resetDrawState();
     CategoryList::execute(MR::DrawType_0x52);
@@ -244,7 +244,7 @@ void SceneFunction::executeDrawListOpa() {
 }
 
 void SceneFunction::executeDrawListXlu() {
-    MotionSignal::phase(MotionSignal::ScenePhase_ListXlu);
+    Frame::phase(MotionSignal::ScenePhase_ListXlu);
     MR::resetDrawState();
     CategoryList::execute(MR::DrawType_VolumeModel);
     CategoryList::execute(MR::DrawType_0x30);
@@ -257,20 +257,20 @@ void SceneFunction::executeDrawListXlu() {
 }
 
 void SceneFunction::executeDrawSilhouetteAndFillShadow() {
-    MotionSignal::phase(MotionSignal::ScenePhase_SilhouetteAndFillShadow);
+    Frame::phase(MotionSignal::ScenePhase_SilhouetteAndFillShadow);
     MR::fillSilhouetteColor();
     MR::loadViewMtx();
     MR::loadProjectionMtx();
 }
 
 void SceneFunction::executeDrawAlphaShadow() {
-    MotionSignal::phase(MotionSignal::ScenePhase_AlphaShadow);
+    Frame::phase(MotionSignal::ScenePhase_AlphaShadow);
     CategoryList::execute(MR::DrawType_AlphaShadow);
     MR::loadViewMtx();
 }
 
 void SceneFunction::executeDrawAfterIndirect() {
-    MotionSignal::phase(MotionSignal::ScenePhase_AfterIndirect);
+    Frame::phase(MotionSignal::ScenePhase_AfterIndirect);
     CategoryList::drawOpa(MR::DrawBufferType_IndirectPlanet);
     CategoryList::drawOpa(MR::DrawBufferType_IndirectMapObj);
     CategoryList::drawOpa(MR::DrawBufferType_IndirectMapObjStrongLight);
@@ -303,7 +303,7 @@ void SceneFunction::executeDrawAfterIndirect() {
 }
 
 void SceneFunction::executeDrawImageEffect() {
-    MotionSignal::phase(MotionSignal::ScenePhase_ImageEffect);
+    Frame::phase(MotionSignal::ScenePhase_ImageEffect);
     if (MR::isNormalBloomOn()) {
         MR::resetDrawState();
         CategoryList::execute(MR::DrawType_BloomEffectPreDraw);

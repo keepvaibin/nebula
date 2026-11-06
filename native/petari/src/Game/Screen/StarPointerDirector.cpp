@@ -1,5 +1,5 @@
 #include "Game/Screen/StarPointerDirector.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeView.hpp>
+#include "Game/Render/FrameList.hpp"
 #include "Game/Util/MotionSignal.hpp"
 #include "Game/Screen/LayoutCoreUtil.hpp"
 #include "Game/Screen/StarPointerController.hpp"
@@ -66,7 +66,7 @@ void StarPointerDirector::update() {
 }
 
 void StarPointerDirector::draw() {
-    MotionSignal::starPointerDirector(this);
+    MotionSignal::drawObject(mDrawSlot, 0);
     if (mGuidance != nullptr) {
         mGuidance->draw();
     }
@@ -159,12 +159,12 @@ StarPointerPeekZ::StarPointerPeekZ() {
 }
 
 void StarPointerPeekZ::setDrawSyncToken() {
-    J3DNativeView::getProjectionv(mProjectionParameters);
-    J3DNativeView::getViewportv(mViewportParameters);
+    Frame::getProjectionv(mProjectionParameters);
+    Frame::getViewportv(mViewportParameters);
     // The depth under each pointer: what was asked last, and the picture drawn so far at where they are now.
     NebulaScreenProbe probes[2];
     const u32 count = StarPointerFunction::getNumStarPointer();
-    const u32 done = J3DNativeView::screenProbeResults(cReadbackChannel, probes, count);
+    const u32 done = Frame::screenProbeResults(cReadbackChannel, probes, count);
     for (u32 channel = 0; channel < count; channel++) {
         if (MR::isInRange(mInfos[channel]->mPos.x, 0.0f, MR::getScreenWidth() - 1) &&
             MR::isInRange(mInfos[channel]->mPos.y, 0.0f, MR::getScreenHeight() - 1)) {
@@ -180,7 +180,7 @@ void StarPointerPeekZ::setDrawSyncToken() {
             probes[channel].y = -1.0f;
         }
     }
-    J3DNativeView::probeScreen(cReadbackChannel, probes, count);
+    Frame::probeScreen(cReadbackChannel, probes, count);
 }
 
 namespace StarPointerFunction {

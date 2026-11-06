@@ -548,7 +548,7 @@ void StarPointerLayout::draw() const {
         }
     }
 
-    MotionSignal::starPointerLayout(this);
+    MotionSignal::drawObject(mDrawSlot, mMotionEpoch);
     drawDecoration();
     LayoutActor::draw();
     mNumber->draw();

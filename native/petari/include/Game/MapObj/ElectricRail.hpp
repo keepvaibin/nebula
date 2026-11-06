@@ -2,7 +2,8 @@
 
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/ShadowVolumeDrawer.hpp"
-#include "Game/Util/NativeMesh.hpp"
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/MapObj/ElectricRailHolder.hpp"
 
 class ElectricRailPoint : public LiveActor {
 public:
@@ -33,24 +34,24 @@ class ElectricRailShadowDrawer : public ShadowVolumeDrawer {
 public:
     ElectricRailShadowDrawer(const LiveActor*, ElectricRailSeparator*, s32);
 
-    virtual void loadModelDrawMtx() const;
-    virtual void drawShape() const;
+    virtual void loadModelDrawMtx(TypedDraw& rDraw) const;
+    virtual void drawShape(TypedDraw& rDraw) const;
     virtual bool isDraw() const;
 
-    void drawShadowVolumeShape(NativeMesh&, ElectricRailSeparator*, s32) const;
+    void writeShadowVolumeShape(ElectricRailSeparator*, s32);
 
     const LiveActor* mHost;
     // The shadow volume as the renderer draws it.
-    NativeMesh mMesh;
+    SiteMesh< VertexP > mMesh;
 };
 
-class ElectricRail : public LiveActor {
+class ElectricRail : public ElectricRailDrawn {
 public:
     ElectricRail(const char*);
 
     virtual void init(const JMapInfoIter&);
     virtual void initAfterPlacement();
-    virtual void draw() const;
+    virtual void drawWith(MaterialDraw& rMaterial) const;
     virtual void makeActorAppeared();
     virtual void makeActorDead();
     virtual void attackSensor(HitSensor*, HitSensor*);
@@ -61,9 +62,9 @@ public:
     void initPoints();
     void initSeparators();
     void initMesh();
-    void drawRail(f32) const;
-    void drawPlane(NativeMesh&, f32, f32, f32, f32) const;
-    void drawPlaneGX(f32, f32, f32, f32) const;
+    void drawRail(TypedDraw& rDraw, f32) const;
+    void drawPlane(f32, f32, f32, f32);
+    void drawPlaneGX(TypedDraw&, f32, f32, f32, f32) const;
     void initShadow(const JMapInfoIter&);
     void updateHitSensorPos();
     void calcGravity(Vec3f*, const Vec3f&) const;
@@ -78,7 +79,7 @@ public:
     ElectricRailSeparator* mSeparators;
     s32 mSeparatorCount;
     // The rail as the renderer draws it while it waits.
-    NativeMesh mMesh;
+    SiteMesh< VertexPT > mMesh;
     s32 mRailHeight;  // Obj_arg0
     f32 mEaseIn;
     ElectricRailShadowDrawer* mShadowDrawer;

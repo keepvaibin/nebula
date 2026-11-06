@@ -189,17 +189,22 @@ public:
     };
     [[nodiscard]] BufferOffset resolve(std::uint64_t address) const noexcept {
         const std::uint64_t id = address >> kAddressShift;
-        if (id == 0u || id >= kAddressSlots) {
+        if (id == 0u) {
             return {};
         }
-        return {address_slots_[id].load(std::memory_order_acquire),
+        const AddressPage* page = address_pages_[id >> kAddressPageBits].load(std::memory_order_acquire);
+        return {page ? page->slots[id & (kAddressPageSize - 1u)].load(std::memory_order_acquire) : VK_NULL_HANDLE,
                 address & ((std::uint64_t{1} << kAddressShift) - 1u)};
     }
     // Frees a buffer's address once nothing recorded can name it (the buffer's deferred destruction).
     void release_address(std::uint64_t address) noexcept;
 
 private:
-    static constexpr std::size_t kAddressSlots = 4096;
+    // Sparse pages cover every buffer ID in the 24/40-bit address partition.
+    static constexpr unsigned kAddressPageBits = 12;
+    static constexpr std::size_t kAddressPageSize = std::size_t{1} << kAddressPageBits;
+    static constexpr std::uint32_t kAddressIds = std::uint32_t{1} << (64u - kAddressShift);
+    struct AddressPage { std::array<std::atomic<VkBuffer>, kAddressPageSize> slots{}; };
     [[nodiscard]] std::uint64_t register_address(VkBuffer buffer);
     struct Deferred {
         std::uint64_t value;
@@ -246,7 +251,7 @@ private:
     std::uint32_t waiters_ = 0;  // wait() calls between reading a fence and waiting on it
     std::mutex deferred_mutex_;
     std::vector<Deferred> deferred_;
-    std::array<std::atomic<VkBuffer>, kAddressSlots> address_slots_{};
+    std::array<std::atomic<AddressPage*>, kAddressIds / kAddressPageSize> address_pages_{};
     std::mutex address_mutex_;
     std::vector<std::uint32_t> free_address_ids_;
     std::uint32_t next_address_id_ = 1;  // 0 is the null address

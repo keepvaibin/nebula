@@ -200,7 +200,7 @@ namespace MR {
         return MarioAccess::getAnimationFrameMax();
     }
 
-    s16 getBckFrameMaxPlayer(const char* pName) {
+    s32 getBckFrameMaxPlayer(const char* pName) {
         return MR::getBckFrameMax(MarioAccess::getPlayerActor(), pName);
     }
 

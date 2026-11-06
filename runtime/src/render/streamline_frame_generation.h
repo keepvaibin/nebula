@@ -97,7 +97,7 @@ public:
     [[nodiscard]] bool vsync() const noexcept { return vsync_; }
     [[nodiscard]] unsigned presented() const noexcept { return presented_; }
     [[nodiscard]] std::uint32_t frame_index() const noexcept { return frame_index_; }
-    // A second evaluation before the present (an interpolated sub-frame, a second scene): Streamline rejects different
+    // A second evaluation before the present (an interpolated generated frame, a second scene): Streamline rejects different
     // common constants under one token.
     void next_frame_index() noexcept { ++frame_index_; }
 

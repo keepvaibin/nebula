@@ -6,6 +6,8 @@ add_compile_definitions(NEBULA_VERSION="${PROJECT_VERSION}")
 option(NEBULA_RELEASE "Leave the test hooks out" OFF)
 if(NEBULA_RELEASE)
     add_compile_definitions(NEBULA_RELEASE=1)
+else()
+    add_compile_definitions(NEBULA_DEV=1)
 endif()
 
 # The Windows build: NebulaNative (D3D12) and, with NEBULA_VULKAN, NebulaNativeVk. The game module is
@@ -346,13 +348,12 @@ if(NOT GALAXY_DXC)
     find_program(GALAXY_DXC dxc REQUIRED)
 endif()
 
-# The native materials' shaders (E-04), compiled by dxc at build (cmake/native_materials.cmake).
+# The programs, compiled by dxc at build into one file (cmake/native_materials.cmake).
 include(cmake/native_materials.cmake)
-galaxy_native_material_sources(galaxy_native_dxil dxil)
+galaxy_program_blob(galaxy_programs_dxil dxil)
 
 # The renderer's utility shaders, compiled at build (E-19): the player's machine compiles nothing.
-add_executable(galaxy_utility_shaders tools/dev/utility_shaders.cpp runtime/src/render/renderer_common.cpp
-    runtime/src/render/curved_surfaces.cpp)
+add_executable(galaxy_utility_shaders tools/dev/utility_shaders.cpp runtime/src/render/renderer_common.cpp)
 target_include_directories(galaxy_utility_shaders PRIVATE runtime/include)
 target_compile_features(galaxy_utility_shaders PRIVATE cxx_std_20)
 target_link_libraries(galaxy_utility_shaders PRIVATE d3dcompiler)
@@ -388,19 +389,10 @@ runtime/src/render/host_window_win32.cpp
     runtime/src/render/movie_replacement.cpp
     runtime/src/render/gpu_texture_backend_d3d12.cpp
     runtime/src/render/gpu_placed_textures.cpp
-    runtime/src/render/curved_surfaces.cpp
-    runtime/src/render/native_shapes.cpp
-    runtime/src/render/native_material.cpp
-    runtime/src/render/drawing_state.cpp
-    runtime/src/render/draw_matrices.cpp
-    runtime/src/render/render_state_key.cpp
     runtime/src/render/frame_pass.cpp
-    runtime/src/render/line_point_params.cpp
     runtime/src/render/mod_shaders.cpp
     runtime/src/render/mod_shader_build.cpp
     runtime/src/render/mod_shader_compile_d3d12.cpp
-    runtime/src/render/pipeline_cache.cpp
-    runtime/src/render/pipeline_seed.cpp
     runtime/src/render/post_process.cpp
     runtime/src/render/post_process_settings.cpp
     ${galaxy_post_headers}
@@ -417,17 +409,23 @@ runtime/src/render/host_window_win32.cpp
     runtime/src/render/rt_materials.cpp
     runtime/src/render/streamline_bridge.cpp
     runtime/src/render/fsr_frame_generation.cpp
-    runtime/src/render/transform_history.cpp
     runtime/src/render/frame_interpolation.cpp
-    runtime/src/render/interp_gpu.cpp
     runtime/src/render/display_modes.cpp
     runtime/src/render/render_core.cpp
-    runtime/src/frame_telemetry.cpp
+    runtime/src/render/affine.cpp
+    runtime/src/render/core/compose.cpp
+    runtime/src/render/core/draw_walker.cpp
+    runtime/src/render/core/inspector.cpp
+    runtime/src/render/core/pairing.cpp
+    runtime/src/render/core/pipelines.cpp
+    runtime/src/render/core/program_table.cpp
+    runtime/src/render/core/registries.cpp
+    runtime/src/render/core/pipelines_d3d12.cpp
+    $<$<NOT:$<BOOL:${NEBULA_RELEASE}>>:runtime/src/frame_telemetry.cpp>
     runtime/src/perf_hint.cpp
     runtime/src/render/game_asset_extract.cpp
-    ${galaxy_native_dxil}
 )
-target_include_directories(galaxy_render PRIVATE "${galaxy_native_include_dir_dxil}")
+target_include_directories(galaxy_render PUBLIC runtime/src)
 target_include_directories(galaxy_render PRIVATE "${galaxy_utility_shader_dir}" runtime/src/render)
 # AMD FSR 3 (cmake/fidelityfx.cmake).
 include(cmake/fidelityfx.cmake)
@@ -478,6 +476,7 @@ if(WIN32)
 endif()
 include(cmake/nebula_file_details.cmake)
 nebula_file_details(NebulaNative NebulaNative.exe "Super Mario Galaxy on PC" ICON "${CMAKE_CURRENT_SOURCE_DIR}/installer/assets/nebula.ico")
+target_sources(NebulaNative PRIVATE ${galaxy_programs_dxil})
 target_include_directories(NebulaNative PRIVATE native/include runtime/include)
 target_compile_definitions(NebulaNative PRIVATE NEBULA_HOST_RENDERER=1 NEBULA_HOST_D3D12=1 _CRT_SECURE_NO_WARNINGS)
 target_compile_features(NebulaNative PRIVATE cxx_std_20)
@@ -526,8 +525,6 @@ endfunction()
 set(rt runtime/src)
 galaxy_test(galaxy_atomic_file_tests SOURCES ${rt}/atomic_file_tests.cpp LIBS galaxy_atomic_file)
 galaxy_test(galaxy_save_files_tests SOURCES ${rt}/save_files_tests.cpp LIBS galaxy_save_files)
-galaxy_test(galaxy_cooked_material_tests SOURCES native/tests/cooked_material_tests.cpp)
-target_include_directories(galaxy_cooked_material_tests PRIVATE native/include)
 galaxy_test(galaxy_save_format_tests SOURCES ${rt}/save_format_tests.cpp)
 target_include_directories(galaxy_save_format_tests PRIVATE native/petari/include)
 galaxy_test(galaxy_disc_files_tests SOURCES ${rt}/disc_files_tests.cpp LIBS galaxy_disc_files)
@@ -561,7 +558,6 @@ galaxy_test(galaxy_host_pointer_events_tests SOURCES ${rt}/host_pointer_events_t
 galaxy_test(galaxy_audio_mixer_tests SOURCES ${rt}/audio_mixer_tests.cpp LIBS galaxy_audio_mixer)
 galaxy_test(galaxy_movie_video_tests SOURCES ${rt}/movie_video_tests.cpp ${rt}/movie_video.cpp)
 galaxy_test(galaxy_windows_power_tests SOURCES ${rt}/windows_power_tests.cpp)
-galaxy_test(galaxy_motion_signals_tests SOURCES ${rt}/motion_signals_tests.cpp)
 galaxy_test(galaxy_frame_phase_tests SOURCES ${rt}/frame_phase_tests.cpp ${rt}/frame_phase.cpp)
 galaxy_test(galaxy_frame_telemetry_tests SOURCES ${rt}/frame_telemetry_tests.cpp ${rt}/frame_telemetry.cpp)
 galaxy_test(galaxy_mii_import_tests SOURCES ${rt}/mii_import_tests.cpp ${rt}/mii_import.cpp ${rt}/mii_formats.cpp
@@ -598,28 +594,17 @@ set(render_src runtime/src/render)
 galaxy_test(galaxy_game_asset_extract_tests SOURCES ${render_src}/game_asset_extract_tests.cpp ${render_src}/game_asset_extract.cpp)
 target_include_directories(galaxy_game_asset_extract_tests PRIVATE native/include)
 target_link_libraries(galaxy_game_asset_extract_tests PRIVATE galaxy_disc_files)
-galaxy_test(galaxy_transform_history_tests SOURCES ${render_src}/transform_history_tests.cpp ${render_src}/transform_history.cpp)
 galaxy_test(galaxy_frame_interpolation_tests SOURCES ${render_src}/frame_interpolation_tests.cpp
-    ${render_src}/frame_interpolation.cpp ${render_src}/transform_history.cpp)
-galaxy_test(galaxy_interp_gpu_tests SOURCES ${render_src}/interp_gpu_tests.cpp ${render_src}/interp_gpu.cpp
-    ${render_src}/frame_interpolation.cpp ${render_src}/transform_history.cpp)
+    ${render_src}/frame_interpolation.cpp ${render_src}/affine.cpp)
 galaxy_test(galaxy_window_owner_tests SOURCES ${render_src}/window_owner_tests.cpp ${render_src}/window_owner.cpp)
 set_tests_properties(galaxy_window_owner_tests PROPERTIES TIMEOUT 20)
 # Tests of the renderer library.
-foreach(name curved_surfaces native_shapes draw_constants_fill render_config
-        gpu_sampler rt_materials texture_pack movie_replacement
-        frame_pass line_point_params post_process
-        warp_capture_store native_material)
+foreach(name render_config gpu_sampler rt_materials texture_pack movie_replacement frame_pass post_process
+        render_core_host)
     galaxy_test(galaxy_${name}_tests SOURCES ${render_src}/${name}_tests.cpp LIBS galaxy_render)
 endforeach()
 # The tests compile their own small shaders; the program itself never compiles any.
 target_link_libraries(galaxy_frame_pass_tests PRIVATE d3dcompiler)
-target_link_libraries(galaxy_warp_capture_store_tests PRIVATE d3dcompiler)
-# Texture records (nebula_cooked_texture.h) in the texture cache's suite.
-target_include_directories(galaxy_warp_capture_store_tests PRIVATE native/include)
-foreach(mode content-key-hash oversized-content-cache decoded-allocation-budget)
-    add_test(NAME galaxy_warp_capture_store_tests_${mode} COMMAND galaxy_warp_capture_store_tests --${mode})
-endforeach()
 
 if(MSVC)
     foreach(target galaxy_render galaxy_runtime_settings galaxy_atomic_file galaxy_frame_cadence_diagnostics
@@ -641,11 +626,11 @@ if(NEBULA_VULKAN)
     target_include_directories(galaxy_native_spirv PRIVATE runtime/include)
     target_compile_features(galaxy_native_spirv PRIVATE cxx_std_20)
     target_link_libraries(galaxy_native_spirv PRIVATE nebula_vulkan_deps nebula_shader_compiler)
-    galaxy_native_material_sources(galaxy_native_spirv_sources spirv)
+    galaxy_program_blob(galaxy_programs_spirv spirv)
 
     # The renderer's other shaders' SPIR-V (E-19; tools/dev/utility_spirv.cpp).
     add_executable(galaxy_utility_spirv tools/dev/utility_spirv.cpp runtime/src/render/vk/shader_compile_vk.cpp
-        runtime/src/render/renderer_common.cpp runtime/src/render/curved_surfaces.cpp ${galaxy_post_embed_cpp})
+        runtime/src/render/renderer_common.cpp ${galaxy_post_embed_cpp})
     target_include_directories(galaxy_utility_spirv PRIVATE runtime/include)
     target_compile_features(galaxy_utility_spirv PRIVATE cxx_std_20)
     target_link_libraries(galaxy_utility_spirv PRIVATE nebula_vulkan_deps nebula_shader_compiler)
@@ -677,25 +662,26 @@ runtime/src/render/host_window_win32.cpp
         runtime/src/render/texture_pack.cpp
         runtime/src/render/texture_pack_codecs.cpp
         runtime/src/render/movie_replacement.cpp
-        runtime/src/render/curved_surfaces.cpp
-        runtime/src/render/native_shapes.cpp
-        runtime/src/render/native_material.cpp
-        runtime/src/render/drawing_state.cpp
-        runtime/src/render/draw_matrices.cpp
-        runtime/src/render/render_state_key.cpp
         runtime/src/render/frame_pass.cpp
-        runtime/src/render/line_point_params.cpp
         runtime/src/render/post_process_settings.cpp
-        runtime/src/render/transform_history.cpp
         runtime/src/render/display_modes.cpp
             runtime/src/render/render_core.cpp
+        runtime/src/render/affine.cpp
+        runtime/src/render/core/compose.cpp
+        runtime/src/render/core/draw_walker.cpp
+        runtime/src/render/core/inspector.cpp
+        runtime/src/render/core/pairing.cpp
+        runtime/src/render/core/pipelines.cpp
+        runtime/src/render/core/program_table.cpp
+        runtime/src/render/core/registries.cpp
+        runtime/src/render/core/pipelines_vk.cpp
+        runtime/src/render/core/encoder_vk.cpp
         runtime/src/render/game_lights.cpp
         runtime/src/render/galaxy_select.cpp
         runtime/src/render/frame_interpolation.cpp
-        runtime/src/render/interp_gpu.cpp
         runtime/src/render/rt_materials.cpp
         runtime/src/render/streamline_bridge.cpp
-        runtime/src/frame_telemetry.cpp
+        $<$<NOT:$<BOOL:${NEBULA_RELEASE}>>:runtime/src/frame_telemetry.cpp>
         runtime/src/perf_hint.cpp
         runtime/src/render/game_asset_extract.cpp
         runtime/src/render/vk/vk_context.cpp
@@ -704,16 +690,13 @@ runtime/src/render/host_window_win32.cpp
         runtime/src/render/vk/utility_spirv.cpp
         "${galaxy_utility_spirv_dir}/utility_spirv_data.h"
         runtime/src/render/vk/texture_backend_vk.cpp
-        runtime/src/render/vk/pipeline_cache_vk.cpp
         runtime/src/render/mod_shaders.cpp
         runtime/src/render/mod_shader_build.cpp
         runtime/src/render/vk/mod_shader_compile_vk.cpp
         runtime/src/render/vk/shader_compile_vk.cpp
-        runtime/src/render/pipeline_seed.cpp
         runtime/src/render/vk/compile_journal.cpp
         runtime/src/render/vk/renderer_vk.cpp
-        runtime/src/render/vk/renderer_vk_scene.cpp
-        runtime/src/render/vk/renderer_vk_replay.cpp
+        runtime/src/render/vk/renderer_vk_frame.cpp
         runtime/src/render/vk/post_process_vk.cpp
         runtime/src/render/vk/game_bloom_vk.cpp
         runtime/src/render/vk/ambient_occlusion_vk.cpp
@@ -723,10 +706,10 @@ runtime/src/render/host_window_win32.cpp
         runtime/src/render/vk/fsr_frame_generation_vk.cpp
         runtime/src/render/xess_library.cpp
         runtime/src/render/vk/scene_camera_vk.cpp
-        ${galaxy_native_spirv_sources}
         runtime/src/render/vk/surface_win32.cpp)
     target_include_directories(galaxy_render_vk PUBLIC runtime/include)
-    target_include_directories(galaxy_render_vk PRIVATE "${galaxy_native_include_dir_spirv}" "${galaxy_utility_spirv_dir}")
+    target_include_directories(galaxy_render_vk PUBLIC runtime/src)
+    target_include_directories(galaxy_render_vk PRIVATE "${galaxy_utility_spirv_dir}")
     target_include_directories(galaxy_render_vk PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/third_party/smaa"
         "${CMAKE_CURRENT_SOURCE_DIR}/native/include")
     target_compile_features(galaxy_render_vk PUBLIC cxx_std_20)
@@ -755,6 +738,7 @@ runtime/src/render/host_window_win32.cpp
 
     add_executable(NebulaNativeVk native/host/host_main.cpp runtime/src/frame_phase.cpp runtime/src/movie_video.cpp)
     nebula_file_details(NebulaNativeVk NebulaNative.exe "Super Mario Galaxy on PC" ICON "${CMAKE_CURRENT_SOURCE_DIR}/installer/assets/nebula.ico")
+    target_sources(NebulaNativeVk PRIVATE ${galaxy_programs_spirv})
     target_include_directories(NebulaNativeVk PRIVATE native/include runtime/include)
     target_compile_definitions(NebulaNativeVk PRIVATE NEBULA_HOST_RENDERER=1 _CRT_SECURE_NO_WARNINGS)
     target_link_libraries(NebulaNativeVk PRIVATE dwmapi galaxy_render_vk galaxy_save_files galaxy_disc_files)

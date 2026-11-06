@@ -1,7 +1,8 @@
 #include "Game/MapObj/ElectricRailHolder.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
-#include "JSystem/J3DGraphBase/J3DNativeMaterial.hpp"
+#include "Game/Render/FrameList.hpp"
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/Material.hpp"
+#include "Game/Render/Model.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/ModelObj.hpp"
 #include "Game/MapObj/ElectricRailMoving.hpp"
@@ -67,8 +68,6 @@ void ElectricRailHolder::draw() const {
         return;
     }
 
-    initDraw();
-
     for (s32 i = 0; i < mRailItems.size(); i++) {
         RailItem* pItem = mRailItems[i];
 
@@ -76,11 +75,11 @@ void ElectricRailHolder::draw() const {
             continue;
         }
 
-        J3DMatPacket* pPacket = pItem->mMatPacket;
-        J3DNativeMaterial::send(pPacket->getMaterial());
-        J3DNativeMaterial::sendOwn(pPacket->mpShapePacket->mpMaterial, pPacket->getMaterial());
+        MaterialEntry* pPacket = pItem->mMatPacket;
+        MaterialDraw material(pPacket->getMaterial());
+        material.sendOwn(pPacket->getShapeEntry()->mMaterial, pPacket->getMaterial());
 
-        pItem->mHost->draw();
+        pItem->mHost->drawWith(material);
     }
 }
 
@@ -97,7 +96,7 @@ bool ElectricRailHolder::isTouchRail(const HitSensor* pSensor, Vec3f* pVec1, Vec
         }
 
         if (pItem->mRailType == ElectricRail_RedMoving || pItem->mRailType == ElectricRail_YellowMoving) {
-            if (pItem->mHost->isTouchRail(pSensor, pVec1, pVec2)) {
+            if (static_cast< const ElectricRailMoving* >(pItem->mHost)->isTouchRail(pSensor, pVec1, pVec2)) {
                 return true;
             }
         } else {
@@ -131,11 +130,6 @@ void ElectricRailHolder::control() {
     }
 }
 
-void ElectricRailHolder::initDraw() const {
-    J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-    J3DPass::positionMatrix(0);
-    J3DPass::textureMatrix(0, 0);
-}
 
 void ElectricRailFunction::registerRail(const LiveActor* pActor, ElectricRailType railType) {
     MR::createSceneObj(SceneObj_ElectricRailHolder);
@@ -174,10 +168,10 @@ void ElectricRailHolder::registerRail(const LiveActor* pActor, ElectricRailType 
     RailItem* pItem = new RailItem();
     (*mRailItems.end()) = pItem;
     (*mRailItems.end())->mRailType = railType;
-    (*mRailItems.end())->mHost = static_cast< const ElectricRailMoving* >(pActor);
+    (*mRailItems.end())->mHost = static_cast< const ElectricRailDrawn* >(pActor);
 
-    J3DModel* pModel = MR::getJ3DModel(mRailModels[railType]);
-    J3DMatPacket* pPacket = pModel->getMatPacket(MR::getMaterialNo(pModel, "SparkMat"));
+    Model* pModel = MR::getModel(mRailModels[railType]);
+    MaterialEntry* pPacket = pModel->getMatPacket(MR::getMaterialNo(pModel, "SparkMat"));
     (*mRailItems.end())->mMatPacket = pPacket;
 
     mRailItems.mCount++;

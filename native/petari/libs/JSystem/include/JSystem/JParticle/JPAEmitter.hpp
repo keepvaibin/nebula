@@ -383,7 +383,8 @@ public:
     u8 mTexAnmIdx;
     u8 mGroupID;
     u8 mResMgrID;
-    u16 mMotionEpoch;  // counts the pooled emitter's effects (MotionSignal)
+    u32 mDrawSlot;  // names its draws from frame to frame
+    u32 mMotionEpoch;  // counts the pooled emitter's effects (MotionSignal)
 };
 
 enum {

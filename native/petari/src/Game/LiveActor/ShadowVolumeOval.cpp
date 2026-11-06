@@ -1,5 +1,5 @@
 #include "Game/LiveActor/ShadowVolumeOval.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -16,7 +16,7 @@ bool ShadowVolumeOval::isDraw() const {
     return controller->isProjected() && controller->isDraw();
 }
 
-void ShadowVolumeOval::loadModelDrawMtx() const {
+void ShadowVolumeOval::loadModelDrawMtx(TypedDraw& rDraw) const {
     MtxPtr dropMtx;
     ShadowController* controller = getController();
     dropMtx = controller->_18;
@@ -74,8 +74,7 @@ void ShadowVolumeOval::loadModelDrawMtx() const {
 
     mtx.setXDir(side);
     mtx.setZDir(front);
-    NebulaMtxConcat(MR::getCameraViewMtx(), mtx, mtx);
-    J3DNativeShape::setPosition(0, mtx);
+    rDraw.setWorld(mtx);
 }
 
 void ShadowVolumeOval::setSize(const Vec3f& rSize) {

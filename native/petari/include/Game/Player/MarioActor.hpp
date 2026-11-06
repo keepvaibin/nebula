@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Game/Render/Model.hpp"
 #include "Game/Player/MarioModelTint.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Player/Mario.hpp"
@@ -16,10 +17,10 @@ class FurMulti;
 class HashSortTable;
 class IceStep;
 class FireMarioBall;
-class J3DAnmTexPattern;
-class J3DModel;
-class J3DModelData;
-class J3DModelX;
+class Clip;
+class Model;
+class ModelData;
+class PlayerModel;
 class JAIAudible;
 class JUTTexture;
 class JetTurtleShadow;
@@ -247,11 +248,11 @@ public:
     void entryWallWalkMode(const Vec3f&, const Vec3f&);
 
     HitSensor* getLookTargetSensor() const;
-    J3DModelX* getJ3DModel() const;
-    J3DModelData* getModelData() const;
-    J3DModelX* getSimpleModel() const;
+    PlayerModel* getModel() const;
+    ModelData* getModelData() const;
+    PlayerModel* getSimpleModel() const;
     void swapTexture(const char*, u8) const;
-    void copyMaterial(J3DModel*, u16, s32);
+    void copyMaterial(Model*, u32, s32);
 
     void settingRush();
 
@@ -803,11 +804,11 @@ public:
     u8 _A0B;
     u8 _A0C;
     ModelHolder* _A10;
-    J3DModelX* _A14;
+    PlayerModel* _A14;
     Vec3f _A18;
     u8 _A24;
     u8 _A25;
-    J3DModelX* mModels[64];  // the game's six, then a mod's power-ups' whole-body models
+    PlayerModel* mModels[64];  // the game's six, then a mod's power-ups' whole-body models
     ModelHolder* mModPowerUpModels[58];
     ModelHolder* _A40;
     ModelHolder* _A44;
@@ -827,18 +828,11 @@ public:
     f32 _A68;
     u16 _A6C;
     u8 _A6E;
-    union {
-        struct {
-            Mtx* _A70[8];
-            Mtx* _A90[8];
-        };
-        Mtx* mBlurMatrices[2][8];
-    };
+    ModelPose mBlurPoses[2][8];
     Mtx34f _AB0;
     Mtx34f _AE0;
     u16 _B10;
     u16 _B12;
-    u16 _B14;
     Vec3f _B18;
     union {
         Vec2f mScreenBoxMin;
@@ -873,15 +867,15 @@ public:
     IceStep** _B4C;
     u16 _B50;  // _B4C count
     FireMarioBall* _B54[3];
-    u16 _B60;
+    u32 _B60;
     ResTIMG** _B64;
     u8 _B68;
     u16 _B6A;
     const void** _B6C;
-    u16 _B70;
+    u32 _B70;
     u8 _B72;
     u16 _B74;
-    J3DAnmTexPattern* mEyeRes;
+    Clip* mEyeRes;
     JUTTexture* _B7C;
     union {
         JUTTexture* mMaskTextures[2];

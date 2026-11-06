@@ -1,11 +1,11 @@
 #include "Game/LiveActor/HitSensor.hpp"
-#include "Game/Util/NativeShader.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeTarget.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeView.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
-#include "Game/Player/J3DModelX.hpp"
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/RenderTexture.hpp"
+#include "Game/Render/FrameList.hpp"
+#include "Game/Render/FrameList.hpp"
+#include "Game/Render/FrameList.hpp"
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Player/PlayerModel.hpp"
 #include "Game/Player/MarioActor.hpp"
 #include "Game/Player/MarioConst.hpp"
 #include "Game/Player/MarioParts.hpp"
@@ -107,9 +107,8 @@ void MarioActor::captureScreenBox() const {
     }
 
     // The model's own target, the frame's size: its alpha is what the box composites by.
-    J3DNativeTarget::begin(_B44, 1.0f, 1.0f, 0);
-    J3DPass::writeColor(true);
-    J3DPass::writeAlpha(false);
+    Frame::targetBegin(_B44, 1.0f, 1.0f, 0);
+    Frame::setPassAlpha(false);
 }
 
 void MarioActor::writeBackScreenBox() const {
@@ -121,9 +120,9 @@ void MarioActor::writeBackScreenBox() const {
         return;
     }
 
-    J3DNativeTarget::end(_B44, NEBULA_TARGET_RGBA);
+    Frame::targetEnd(_B44, NEBULA_TARGET_RGBA);
 
-    J3DNativeTexObj texture;
+    SiteTexture texture;
     Vec2f minimum;
     Vec2f maximum;
     const f32 screenWidth = MR::getScreenWidth();
@@ -132,24 +131,20 @@ void MarioActor::writeBackScreenBox() const {
     const f32 v0 = static_cast< s32 >(_B38) / screenHeight;
     const f32 u1 = (static_cast< s32 >(_B34) + static_cast< s32 >(_B3C)) / screenWidth;
     const f32 v1 = (static_cast< s32 >(_B38) + static_cast< s32 >(_B40)) / screenHeight;
-    J3DNativeTexture::init(&texture, _B44, JUTTexture::cAuthoredAcross, JUTTexture::cAuthoredDown, NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP);
+    SiteTextures::init(&texture, _B44, JUTTexture::cAuthoredAcross, JUTTexture::cAuthoredDown, NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP);
     minimum = mScreenBoxPos;
     maximum = mScreenBoxPos + mScreenBoxSize;
-    NebulaNativeMaterial material;
+    SiteMaterial material;
     TDDraw::setupNative(&material, 1, 0, 2);
-    NativeShader::setBlend(material, NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_INV_SRC_ALPHA);
-    NativeShader::setDepth(material, true, NEBULA_COMPARE_ALWAYS, true);
-    NativeShader::setTexObj(material, 0, &texture);
-    NativeShader::send(material);
-    J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
-    J3DNativeDraw::position(minimum.x, minimum.y, 0.9999f);
-    J3DNativeDraw::texCoord(u0, v0);
-    J3DNativeDraw::position(maximum.x, minimum.y, 0.9999f);
-    J3DNativeDraw::texCoord(u1, v0);
-    J3DNativeDraw::position(maximum.x, maximum.y, 0.9999f);
-    J3DNativeDraw::texCoord(u1, v1);
-    J3DNativeDraw::position(minimum.x, maximum.y, 0.9999f);
-    J3DNativeDraw::texCoord(u0, v1);
+    material.setBlend(NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_INV_SRC_ALPHA);
+    material.setDepth(true, NEBULA_COMPARE_ALWAYS, true);
+    material.setTexture(0, texture);
+    TypedDraw site = TDDraw::site(material, 2);
+    VertexPT* vtx = site.vertices< VertexPT >(NEBULA_PRIMITIVE_QUADS, 4);
+    *vtx++ = {minimum.x, minimum.y, 0.9999f, u0, v0};
+    *vtx++ = {maximum.x, minimum.y, 0.9999f, u1, v0};
+    *vtx++ = {maximum.x, maximum.y, 0.9999f, u1, v1};
+    *vtx++ = {minimum.x, maximum.y, 0.9999f, u0, v1};
     TDDraw::close();
 }
 
@@ -330,13 +325,12 @@ void MarioActor::drawScreenBlend() const {
         position = minimum + Vec2f(-10.0f, -10.0f);
         opposite = maximum + Vec2f(10.0f, 10.0f);
         // Where the wall's shadow was marked: darkened, the mark going with it.
-        NebulaNativeMaterial material;
+        SiteMaterial material;
         TDDraw::setupNative(&material, 0, 0, 2);
-        NativeShader::setBlend(material, NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_INV_SRC_ALPHA);
-        NativeShader::send(material);
-        J3DPass::stencil(NEBULA_STENCIL_IF_SET, NEBULA_STENCIL_ZERO);
-        TDDraw::drawFillBox(position, opposite, 0x00000040);
-        J3DPass::stencil(NEBULA_STENCIL_OFF, NEBULA_STENCIL_KEEP);
+        material.setBlend(NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_INV_SRC_ALPHA);
+        material.setStencil(NEBULA_STENCIL_IF_SET, NEBULA_STENCIL_ZERO);
+        TypedDraw site = TDDraw::site(material, 2);
+        TDDraw::drawFillBox(site, position, opposite, 0x00000040);
         MR::loadProjectionMtx();
         MR::loadViewMtx();
     }
@@ -348,10 +342,10 @@ void MarioActor::drawScreenBlend() const {
             color = 0x00004020;
         }
 
-        NebulaNativeMaterial material;
+        SiteMaterial material;
         TDDraw::setupNative(&material, 0, 1, 2);
-        NativeShader::send(material);
-        TDDraw::drawFillBox(Vec3f(0.0f, 0.0f, 0.0f),
+        TypedDraw site2 = TDDraw::site(material, 2);
+        TDDraw::drawFillBox(site2, Vec3f(0.0f, 0.0f, 0.0f),
                             Vec3f(static_cast< f32 >(MR::getScreenWidth()), static_cast< f32 >(MR::getScreenHeight()), 0.0f), color);
         TDDraw::close();
     }
@@ -384,7 +378,7 @@ void MarioActor::updateRandomTexture(f32 distance) {
         }
     }
 
-    J3DNativeTexture::registerLinear(image, NEBULA_TEXTURE_LINEAR_LA8, 8, 8, 1);
+    RenderTexture::linear(image, NEBULA_TEXTURE_LINEAR_LA8, 8, 8, 1);
 }
 
 namespace {
@@ -396,13 +390,12 @@ namespace {
 
 void MarioActor::drawWallShade(const Vec3f& rPosition, const Vec3f& rNormal, f32 unused) const {
     f32 radius = 100.0f;
-    NebulaNativeMaterial material;
+    SiteMaterial material;
     TDDraw::setupNative(&material, 1, 1, 0);
-    material.shader = NEBULA_SHADER_TEX_VERTEX_ALPHA;
+    material.mShader = NEBULA_SHADER_TEX_VERTEX_ALPHA;
     material.constants[0] = 0.0f;
-    NativeShader::setDepth(material, true, NEBULA_COMPARE_GREATER, false);
-    NativeShader::setTexture(material, 0, mMaskTextures[_B88]);
-    NativeShader::send(material);
+    material.setDepth(true, NEBULA_COMPARE_GREATER, false);
+    material.setTexture(0, mMaskTextures[_B88]);
     Mtx rotation;
     Vec3f tangent(0.0f, rNormal.z, -rNormal.y);
 
@@ -412,17 +405,14 @@ void MarioActor::drawWallShade(const Vec3f& rPosition, const Vec3f& rNormal, f32
 
     MR::normalizeOrZero(&tangent);
     NebulaMtxRotAxisRad(rotation, &rNormal, 0.3926991f);
-    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_FAN, 18, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
-    J3DNativeDraw::position(rPosition.x - 5.0f * rNormal.x, rPosition.y - 5.0f * rNormal.y, rPosition.z - 5.0f * rNormal.z);
-    J3DNativeDraw::color(128);
-    J3DNativeDraw::texCoord(0.0f, 0.0f);
+    TypedDraw site = TDDraw::site(material, 0);
+    VertexPCT* vtx = site.vertices< VertexPCT >(NEBULA_PRIMITIVE_TRIANGLE_FAN, 18);
+    *vtx++ = {rPosition.x - 5.0f * rNormal.x, rPosition.y - 5.0f * rNormal.y, rPosition.z - 5.0f * rNormal.z, Rgba8(128), 0.0f, 0.0f};
 
     for (u32 i = 0; i <= 16; i++) {
         f32 angle = 2.0f * ((i / 16.0f) * FloatUtil::PI());
         Vec3f point = subtractOffset(rPosition, rNormal * 5.0f) + tangent * radius;
-        J3DNativeDraw::position(point.x, point.y, point.z);
-        J3DNativeDraw::color(1);
-        J3DNativeDraw::texCoord(10.0f * Angle::cosRadian(angle), 10.0f * MR::sin(angle));
+        *vtx++ = {point.x, point.y, point.z, Rgba8(1), 10.0f * Angle::cosRadian(angle), 10.0f * MR::sin(angle)};
         NebulaMtxMultVecSR(rotation, &tangent, &tangent);
     }
 }
@@ -433,34 +423,29 @@ void MarioActor::drawSpinInhibit() const {
 namespace {
     // runtime/src/render/materials/frame_ripple.hlsl over the whole screen: the frame's rows moved by the wave.
     void drawFrameRipple(const void* pFrame, f32 amplitude, f32 phase, f32 perRow, f32 kind) {
-        J3DNativeTexObj texture;
+        SiteTexture texture;
         const u16 height = MR::getScreenHeight();
-        NebulaNativeMaterial material;
+        SiteMaterial material;
         TDDraw::setupNative(&material, 1, 0, 2);
-        NativeShader::init(material, NEBULA_SHADER_FRAME_RIPPLE, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
+        material.init(NEBULA_SHADER_FRAME_RIPPLE, SiteMaterial::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
                            NEBULA_CULL_NONE);
-        J3DNativeTexture::init(&texture, const_cast< void* >(pFrame), JUTTexture::cAuthoredAcross, JUTTexture::cAuthoredDown, NEBULA_WRAP_CLAMP,
+        SiteTextures::init(&texture, const_cast< void* >(pFrame), JUTTexture::cAuthoredAcross, JUTTexture::cAuthoredDown, NEBULA_WRAP_CLAMP,
                                NEBULA_WRAP_CLAMP);
-        J3DNativeTarget::take(pFrame);
-        material.alpha_write = 1;
-        NativeShader::setTexObj(material, 0, &texture);
+        Frame::takeFrame(pFrame);
+        material.mState.alpha_write = 1;
+        material.setTexture(0, texture);
         material.constants[0] = amplitude;
         material.constants[1] = height;
         material.constants[2] = MR::getScreenWidth();
         material.constants[3] = kind;
         material.constants[4] = phase;
         material.constants[5] = perRow;
-        NativeShader::send(material);
-        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 4, NEBULA_SHAPE_TEXCOORD0);
-        J3DNativeDraw::position(0.0f, height, 0.0f);
-        J3DNativeDraw::texCoord(0.0f, 1.0f);
-        J3DNativeDraw::position(0.0f, 0.0f, 0.0f);
-        J3DNativeDraw::texCoord(0.0f, 0.0f);
-        J3DNativeDraw::position(MR::getScreenWidth(), height, 0.0f);
-        J3DNativeDraw::texCoord(1.0f, 1.0f);
-        J3DNativeDraw::position(MR::getScreenWidth(), 0.0f, 0.0f);
-        J3DNativeDraw::texCoord(1.0f, 0.0f);
-        J3DPass::writeAlpha(false);
+        TypedDraw site = TDDraw::site(material, 2);
+    VertexPT* vtx = site.vertices< VertexPT >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 4);
+        *vtx++ = {0.0f, height, 0.0f, 0.0f, 1.0f};
+        *vtx++ = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+        *vtx++ = {MR::getScreenWidth(), height, 0.0f, 1.0f, 1.0f};
+        *vtx++ = {MR::getScreenWidth(), 0.0f, 0.0f, 1.0f, 0.0f};
     }
 }  // namespace
 
@@ -566,15 +551,15 @@ void MarioActor::drawSpinEffect() const {
         return;
     }
 
-    NebulaNativeMaterial material;
+    SiteMaterial material;
     TDDraw::setupNative(&material, 0, 2, 0);
-    NativeShader::send(material);
     Mtx rotation;
     Vec3f center = _2A0 + mMario->mHeadVec * _6D8;
     Vec3f direction(mMario->mFrontVec);
     Vec3f previous;
     NebulaMtxRotAxisRad(rotation, &mMario->mHeadVec, 0.09817477f);
-    J3DPass::lineWidth(6.0f);
+    material.mState.line_width = 6.0f;
+    TypedDraw site3 = TDDraw::site(material, 0);
 
     for (u32 i = 0; i <= 64; i++) {
         Vec3f point(direction);
@@ -582,14 +567,15 @@ void MarioActor::drawSpinEffect() const {
         point += mMario->mHeadVec * MR::getRandom() * 10.0f;
 
         if (i) {
-            TDDraw::drawLine(center + previous, center + point, 0xFFFFFF20);
+            TDDraw::drawLine(site3, center + previous, center + point, 0xFFFFFF20);
         }
 
         previous = point;
         NebulaMtxMultVecSR(rotation, &direction, &direction);
     }
 
-    J3DPass::lineWidth(3.0f);
+    material.mState.line_width = 3.0f;
+    site3.setMaterial(material);
 
     for (u32 i = 0; i <= 64; i++) {
         Vec3f point(direction);
@@ -600,7 +586,7 @@ void MarioActor::drawSpinEffect() const {
         u32 alpha = 160.0f * (square * square);
 
         if (i) {
-            TDDraw::drawLine(center + previous, center + point, alpha | 0x40FF00 | (alpha << 24));
+            TDDraw::drawLine(site3, center + previous, center + point, alpha | 0x40FF00 | (alpha << 24));
         }
 
         previous = point;
@@ -615,16 +601,16 @@ void MarioActor::drawSphereMask() const {
         return;
     }
 
-    NebulaNativeMaterial material;
+    SiteMaterial material;
     TDDraw::setupNative(&material, 0, 2, 0);
-    J3DNativeView::setZScaleOffset(1.0f, 0.00001f);
-    material.cull = NEBULA_CULL_FRONT;
-    NativeShader::setDepth(material, true, NEBULA_COMPARE_GREATER, true);
-    NativeShader::send(material);
+    Frame::setZScaleOffset(1.0f, 0.00001f);
+    material.mState.cull = NEBULA_CULL_FRONT;
+    material.setDepth(true, NEBULA_COMPARE_GREATER, true);
     Vec3f position;
     getRealPos("Spine1", &position);
-    TDDraw::drawSphere3D(position, 180.0f, 0xFFFFFF30, 16);
-    J3DNativeView::setZScaleOffset(1.0f, 0.0f);
+    TypedDraw site4 = TDDraw::site(material, 0);
+    TDDraw::drawSphere3D(site4, position, 180.0f, 0xFFFFFF30, 16);
+    Frame::setZScaleOffset(1.0f, 0.0f);
 }
 
 void MarioActor::initDarkMask() {
@@ -634,7 +620,7 @@ void MarioActor::initDarkMask() {
         for (u32 i = 0; i < 8 * 8 * 2; i++) {
             image[i] = 0;
         }
-        J3DNativeTexture::registerLinear(image, NEBULA_TEXTURE_LINEAR_LA8, 8, 8, 1);
+        RenderTexture::linear(image, NEBULA_TEXTURE_LINEAR_LA8, 8, 8, 1);
     }
 
     _1C3 = true;
@@ -656,7 +642,7 @@ void MarioActor::updateDarkMask(u16 unused) {
     image[index + 1] = 255;
     previous[index] = 0;
     previous[index + 1] = 255;
-    J3DNativeTexture::registerLinear(image, NEBULA_TEXTURE_LINEAR_LA8, 8, 8, 1);
+    RenderTexture::linear(image, NEBULA_TEXTURE_LINEAR_LA8, 8, 8, 1);
     _1C4++;
 }
 
@@ -665,14 +651,13 @@ bool MarioActor::drawDarkMask() const {
         return false;
     }
 
-    NebulaNativeMaterial material;
+    SiteMaterial material;
     TDDraw::setupNative(&material, 1, 0, 2);
-    material.color_write = 0;
-    material.alpha_write = 0;
+    material.mState.color_write = 0;
+    material.mState.alpha_write = 0;
     material.constants[4] = 1.0f;
-    NativeShader::setTexture(material, 0, mMaskTextures[_B88]);
-    NativeShader::send(material);
-    J3DPass::stencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ADD);
+    material.setTexture(0, mMaskTextures[_B88]);
+    material.setStencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ADD);
     Vec3f spine;
     Vec2f center;
     Vec2f screenX;
@@ -698,17 +683,12 @@ bool MarioActor::drawDarkMask() const {
     origin.y -= width / 2;
     minimum = origin;
     maximum = origin + Vec2f(width, height);
-    J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
-    J3DNativeDraw::position(minimum.x, minimum.y, 0.0f);
-    J3DNativeDraw::texCoord(0.0f, 0.0f);
-    J3DNativeDraw::position(maximum.x, minimum.y, 0.0f);
-    J3DNativeDraw::texCoord(4.0f, 0.0f);
-    J3DNativeDraw::position(maximum.x, maximum.y, 0.0f);
-    J3DNativeDraw::texCoord(4.0f, 4.0f);
-    J3DNativeDraw::position(minimum.x, maximum.y, 0.0f);
-    J3DNativeDraw::texCoord(0.0f, 4.0f);
-    J3DPass::stencil(NEBULA_STENCIL_OFF, NEBULA_STENCIL_KEEP);
-    J3DPass::writeColor(true);
+    TypedDraw site = TDDraw::site(material, 2);
+    VertexPT* vtx = site.vertices< VertexPT >(NEBULA_PRIMITIVE_QUADS, 4);
+    *vtx++ = {minimum.x, minimum.y, 0.0f, 0.0f, 0.0f};
+    *vtx++ = {maximum.x, minimum.y, 0.0f, 4.0f, 0.0f};
+    *vtx++ = {maximum.x, maximum.y, 0.0f, 4.0f, 4.0f};
+    *vtx++ = {minimum.x, maximum.y, 0.0f, 0.0f, 4.0f};
     TDDraw::close();
     return true;
 }
@@ -724,7 +704,7 @@ void MarioActor::showBeeFur() {
     }
 
     if (mMario->isPlayerModeInvincible()) {
-        MR::showJoint(getJ3DModel(), "Face0");
+        MR::showJoint(getModel(), "Face0");
         _A6E = 2;
         playEffect("\226\263\223\107\222\206" /* 無敵中 */);
     }

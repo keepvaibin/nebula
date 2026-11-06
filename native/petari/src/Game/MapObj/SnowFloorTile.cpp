@@ -1,8 +1,9 @@
+#include "Game/Util/CameraUtil.hpp"
 #include "Game/MapObj/SnowFloorTile.hpp"
-#include "Game/Util/NativeShader.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/RenderTexture.hpp"
+#include "Game/Render/FrameList.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Color.hpp"
@@ -391,7 +392,7 @@ void SnowFloorTile::createTexture() {
         }
 
         // The depths as rows of texels (nebula_cooked_texture.h): the renderer reads them as they are.
-        J3DNativeTexture::registerLinear(mImage, NEBULA_TEXTURE_LINEAR_L8, mTextureSize, mTextureSize, 1);
+        RenderTexture::linear(mImage, NEBULA_TEXTURE_LINEAR_L8, mTextureSize, mTextureSize, 1);
     }
 }
 
@@ -416,12 +417,12 @@ void SnowFloorTile::draw() const {
     MR::resetDrawState();
     // runtime/src/render/materials/color_tex_alpha.hlsl: each layer its colour at the snow texture's alpha, drawn
     // where that is above the layer's threshold; blended by alpha, back faces culled, depth tested and written.
-    NebulaNativeMaterial material;
+    SiteMaterial material;
     TDDraw::setupNative(&material, 1, 1, false);
-    material.shader = NEBULA_SHADER_COLOR_TEX_ALPHA;
-    material.cull = NEBULA_CULL_BACK;
-    NativeShader::setDepth(material, true, NEBULA_COMPARE_LEQUAL, true);
-    NativeShader::setTexture(material, 0, mTexture);
+    material.mShader = NEBULA_SHADER_COLOR_TEX_ALPHA;
+    material.mState.cull = NEBULA_CULL_BACK;
+    material.setDepth(true, NEBULA_COMPARE_LEQUAL, true);
+    material.setTexture(0, mTexture);
 
     for (u32 i = 0; i < static_cast< u32 >(::sLayerCount); i++) {
         u8 threshold = i * (240 / ::sLayerCount) + 1;
@@ -435,13 +436,13 @@ void SnowFloorTile::draw() const {
         MR::clamp(static_cast< s32 >(b), 0, 255);
         MR::clamp(static_cast< s32 >(a), 0, 255);
         Color8 color(r, g, b, a);
-        NativeShader::setColor(material, 0, color.r, color.g, color.b, color.a);
-        NativeShader::send(material);
-        drawLayer(i);
+        material.setColor(0, color.r, color.g, color.b, color.a);
+        TypedDraw site(material, nullptr, MR::getCameraViewMtx());
+        drawLayer(site, i);
     }
 }
 
-void SnowFloorTile::drawLayer(s32 layer) const {
+void SnowFloorTile::drawLayer(TypedDraw& rDraw, s32 layer) const {
     Vec3f p3, p2, p1, p0;
     p0 = -mRight * mTextureSize * mCellSize - mForward * mTextureSize * mCellSize;
     p1 = mRight * mTextureSize * mCellSize - mForward * mTextureSize * mCellSize;
@@ -450,14 +451,10 @@ void SnowFloorTile::drawLayer(s32 layer) const {
 
     for (u32 i = 0; i < ::sStripCount; i++) {
         Vec3f center(mPosition + mUp * (5.0f + ::sLayerHeight * layer));
-        J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
-        TDDraw::sendPoint(center + p0);
-        J3DNativeDraw::texCoord(0.0f, 0.0f);
-        TDDraw::sendPoint(center + p1);
-        J3DNativeDraw::texCoord(1.0f, 0.0f);
-        TDDraw::sendPoint(center + p2);
-        J3DNativeDraw::texCoord(1.0f, 1.0f);
-        TDDraw::sendPoint(center + p3);
-        J3DNativeDraw::texCoord(0.0f, 1.0f);
+        VertexPT* vtx = rDraw.vertices< VertexPT >(NEBULA_PRIMITIVE_QUADS, 4);
+        *vtx++ = {center.x + p0.x, center.y + p0.y, center.z + p0.z, 0.0f, 0.0f};
+        *vtx++ = {center.x + p1.x, center.y + p1.y, center.z + p1.z, 1.0f, 0.0f};
+        *vtx++ = {center.x + p2.x, center.y + p2.y, center.z + p2.z, 1.0f, 1.0f};
+        *vtx++ = {center.x + p3.x, center.y + p3.y, center.z + p3.z, 0.0f, 1.0f};
     }
 }

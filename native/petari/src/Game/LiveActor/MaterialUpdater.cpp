@@ -1,14 +1,15 @@
+#include "Game/Util/Color.hpp"
 #include "Game/LiveActor/MaterialUpdater.hpp"
 #include "Game/LiveActor/MaterialCtrl.hpp"
 #include "Game/System/ResourceHolder.hpp"
 #include "Game/Util.hpp"
-#include <JSystem/J3DGraphAnimator/J3DAnimation.hpp>
-#include <JSystem/J3DGraphAnimator/J3DModel.hpp>
-#include <JSystem/J3DGraphBase/J3DMaterial.hpp>
-#include <JSystem/J3DGraphBase/J3DSys.hpp>
+#include "Game/Render/Clip.hpp"
+#include "Game/Render/Model.hpp"
+#include "Game/Render/Material.hpp"
+#include "Game/Render/Model.hpp"
 #include <algorithm>
 
-MaterialUpdater::MaterialUpdater(J3DModel* pModel, const ResourceHolder* pResHolder) : mModel(pModel), mFogCtrl(), mResHolder(pResHolder) {
+MaterialUpdater::MaterialUpdater(Model* pModel, const ResourceHolder* pResHolder) : mModel(pModel), mFogCtrl(), mResHolder(pResHolder) {
     mMaterialCtrl.init(mModel->getModelData()->getMaterialNum() * 4);
 }
 
@@ -29,7 +30,7 @@ FogCtrl* MaterialUpdater::addFogCtrl(bool useAllMaterials) {
     return fog;
 }
 
-MatColorCtrl* MaterialUpdater::addMatColorCtrl(const char* pName, u32 color, const J3DColor* pColor) {
+MatColorCtrl* MaterialUpdater::addMatColorCtrl(const char* pName, u32 color, const Color8* pColor) {
     MatColorCtrl* ctrl = new MatColorCtrl(mModel, pName, color, pColor);
     push(ctrl);
     return ctrl;
@@ -60,22 +61,16 @@ void MaterialUpdater::push(MaterialCtrl* pCtrl) {
 void MaterialUpdater::checkMaterial() {
     checkTexture();
 
-    for (u16 i = 0; i < mModel->getModelData()->getMaterialNum(); i++) {
-        if (!MR::isNormalTexMtx(mModel->getModelData()->getMaterialNodePointer(i))) {
-            mModel->ownMaterial(i);
-        }
-    }
-
     checkViewProjmapEffectMtx();
 }
 
 void MaterialUpdater::checkViewProjmapEffectMtx() {
-    J3DMaterial* material;
-    for (u16 i = 0; i < mModel->getModelData()->getMaterialNum(); i++) {
+    Material* material;
+    for (u32 i = 0; i < mModel->getModelData()->getMaterialNum(); i++) {
         material = mModel->getModelData()->getMaterialNodePointer(i);
-        for (u32 j = 0; j < 8; j++) {
-            J3DTexMtx* texMtx = material->getTexMtx(j);
-            if (texMtx && (texMtx->getTexMtxInfo().mInfo & 0x3FU) == J3DTexMtxMode_ViewProjmap && MR::isUseTexMtx(material, j)) {
+        for (u32 j = 0; j < NEBULA_MATERIAL_SLOTS; j++) {
+            CoordMatrix* texMtx = material->getTexMtx(j);
+            if (texMtx && (texMtx->getTexMtxInfo().mInfo & 0x3FU) == CoordMatrixMode_ViewProjmap && MR::isUseTexMtx(material, j)) {
                 addViewProjmapEffectMtxSetter();
                 return;
             }
@@ -97,15 +92,15 @@ MarioShadowProjmapMtxSetter* MaterialUpdater::addMarioShadowProjmapMtxSetter() {
 
 void MaterialUpdater::checkTexture() {
     bool hasShadowSetter = false;
-    for (u16 i = 0; i < mModel->getModelData()->getTexture()->getNum(); i++) {
-        const char* name = mModel->getModelData()->getTextureName()->getName(i);
+    for (u32 i = 0; i < mModel->getModelData()->getTextureNum(); i++) {
+        const char* name = mModel->getModelData()->getTextureName(i);
         if (MR::isEqualString(name, "IndDummy")) {
-            mModel->getModelData()->getTexture()->setResTIMG(i, *MR::getScreenResTIMG());
+            mModel->getModelData()->setTexture(i, *MR::getScreenResTIMG());
         }
 
         if (MR::isEqualString(name, "ShadowProjDummy")) {
             const JUTTexture* texture = MR::getMarioShadowTex();
-            mModel->getModelData()->getTexture()->setResTIMG(i, *texture->getTexInfo());
+            mModel->getModelData()->setTexture(i, *texture->getTexInfo());
 
             if (!hasShadowSetter) {
                 addMarioShadowProjmapMtxSetter();
@@ -115,16 +110,16 @@ void MaterialUpdater::checkTexture() {
     }
 }
 
-bool MaterialUpdater::hasMovingMaterial(const J3DModelData* pModelData) {
-    if (pModelData->getTextureName()->getIndex("IndDummy") != -1) {
+bool MaterialUpdater::hasMovingMaterial(const ModelData* pModelData) {
+    if (pModelData->findTexture("IndDummy") >= 0) {
         return true;
     }
 
-    if (pModelData->getTextureName()->getIndex("ShadowDummy") != -1) {
+    if (pModelData->findTexture("ShadowDummy") >= 0) {
         return true;
     }
 
-    for (u16 i = 0; i < pModelData->getMaterialNum(); i++) {
+    for (u32 i = 0; i < pModelData->getMaterialNum(); i++) {
         if (!MR::isNormalTexMtx(pModelData->getMaterialNodePointer(i))) {
             return true;
         }

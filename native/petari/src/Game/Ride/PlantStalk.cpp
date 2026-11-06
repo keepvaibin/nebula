@@ -1,8 +1,9 @@
+#include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Ride/PlantStalk.hpp"
-#include "Game/Util/NativeShader.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/FrameList.hpp"
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/MapObj/PlantPoint.hpp"
 #include "Game/MapObj/PlantRailInfo.hpp"
 #include "Game/Scene/SceneFunction.hpp"
@@ -74,7 +75,8 @@ void PlantStalk::init(const JMapInfoIter& rIter) {
 
 void PlantStalk::draw() const {
     if (MR::isValidDraw(this)) {
-        drawGrowUp();
+        TypedDraw site(MR::getSceneObj< PlantStalkDrawInit >(SceneObj_PlantStalkDrawInit)->mMaterial, nullptr, MR::getCameraViewMtx());
+        drawGrowUp(site);
     }
 }
 
@@ -159,8 +161,8 @@ f32 PlantStalk::calcPlayerCoord() const {
     }
 }
 
-void PlantStalk::drawGrowUp() const {
-    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, mGrownPlantPoints * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
+void PlantStalk::drawGrowUp(TypedDraw& rDraw) const {
+    VertexPCT* vtx = rDraw.vertices< VertexPCT >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, mGrownPlantPoints * 2);
     for (s32 idx = 0; idx < mGrownPlantPoints; idx++) {
         PlantPoint* point = mPlantPoints[idx];
         Vec3f side(mPlantPoints[idx]->mSide);
@@ -168,20 +170,12 @@ void PlantStalk::drawGrowUp() const {
         side.scale(mPlantPoints[idx]->mThickness);
         front.scale(mPlantPoints[idx]->mThickness);
 
-        J3DNativeDraw::position(point->mPosition.x + ::sDrawWidthLongOffsetX * front.x, point->mPosition.y + ::sDrawWidthLongOffsetX * front.y,
-                       point->mPosition.z + ::sDrawWidthLongOffsetX * front.z);
-        J3DNativeDraw::color(::sColorPlusZ);
-        J3DNativeDraw::texCoord(0.0f, idx * ::sTexRate);
+        *vtx++ = {point->mPosition.x + ::sDrawWidthLongOffsetX * front.x, point->mPosition.y + ::sDrawWidthLongOffsetX * front.y, point->mPosition.z + ::sDrawWidthLongOffsetX * front.z, Rgba8(::sColorPlusZ), 0.0f, idx * ::sTexRate};
 
-        J3DNativeDraw::position(point->mPosition.x + ::sDrawWidthShortOffsetX * side.x - ::sDrawWidthShortOffsetZ * front.x,
-                       point->mPosition.y + ::sDrawWidthShortOffsetX * side.y - ::sDrawWidthShortOffsetZ * front.y,
-                       point->mPosition.z + ::sDrawWidthShortOffsetX * side.z - ::sDrawWidthShortOffsetZ * front.z);
-        J3DNativeDraw::color(::sColorPlusX);
-        J3DNativeDraw::texCoord(1.0f, idx * ::sTexRate);
+        *vtx++ = {point->mPosition.x + ::sDrawWidthShortOffsetX * side.x - ::sDrawWidthShortOffsetZ * front.x, point->mPosition.y + ::sDrawWidthShortOffsetX * side.y - ::sDrawWidthShortOffsetZ * front.y, point->mPosition.z + ::sDrawWidthShortOffsetX * side.z - ::sDrawWidthShortOffsetZ * front.z, Rgba8(::sColorPlusX), 1.0f, idx * ::sTexRate};
     }
 
-
-    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, mGrownPlantPoints * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
+    vtx = rDraw.vertices< VertexPCT >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, mGrownPlantPoints * 2);
     for (s32 idx = 0; idx < mGrownPlantPoints; idx++) {
         PlantPoint* point = mPlantPoints[idx];
         Vec3f side(mPlantPoints[idx]->mSide);
@@ -189,20 +183,12 @@ void PlantStalk::drawGrowUp() const {
         side.scale(mPlantPoints[idx]->mThickness);
         front.scale(mPlantPoints[idx]->mThickness);
 
-        J3DNativeDraw::position(point->mPosition.x - ::sDrawWidthShortOffsetX * side.x - ::sDrawWidthShortOffsetZ * front.x,
-                       point->mPosition.y - ::sDrawWidthShortOffsetX * side.y - ::sDrawWidthShortOffsetZ * front.y,
-                       point->mPosition.z - ::sDrawWidthShortOffsetX * side.z - ::sDrawWidthShortOffsetZ * front.z);
-        J3DNativeDraw::color(::sColorMinusX);
-        J3DNativeDraw::texCoord(0.0f, idx * ::sTexRate);
+        *vtx++ = {point->mPosition.x - ::sDrawWidthShortOffsetX * side.x - ::sDrawWidthShortOffsetZ * front.x, point->mPosition.y - ::sDrawWidthShortOffsetX * side.y - ::sDrawWidthShortOffsetZ * front.y, point->mPosition.z - ::sDrawWidthShortOffsetX * side.z - ::sDrawWidthShortOffsetZ * front.z, Rgba8(::sColorMinusX), 0.0f, idx * ::sTexRate};
 
-        J3DNativeDraw::position(point->mPosition.x + ::sDrawWidthLongOffsetX * front.x, point->mPosition.y + ::sDrawWidthLongOffsetX * front.y,
-                       point->mPosition.z + ::sDrawWidthLongOffsetX * front.z);
-        J3DNativeDraw::color(::sColorPlusZ);
-        J3DNativeDraw::texCoord(1.0f, idx * ::sTexRate);
+        *vtx++ = {point->mPosition.x + ::sDrawWidthLongOffsetX * front.x, point->mPosition.y + ::sDrawWidthLongOffsetX * front.y, point->mPosition.z + ::sDrawWidthLongOffsetX * front.z, Rgba8(::sColorPlusZ), 1.0f, idx * ::sTexRate};
     }
 
-
-    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, mGrownPlantPoints * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
+    vtx = rDraw.vertices< VertexPCT >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, mGrownPlantPoints * 2);
     for (s32 idx = 0; idx < mGrownPlantPoints; idx++) {
         PlantPoint* point = mPlantPoints[idx];
         Vec3f side(mPlantPoints[idx]->mSide);
@@ -210,17 +196,9 @@ void PlantStalk::drawGrowUp() const {
         side.scale(mPlantPoints[idx]->mThickness);
         front.scale(mPlantPoints[idx]->mThickness);
 
-        J3DNativeDraw::position(point->mPosition.x + ::sDrawWidthShortOffsetX * side.x - ::sDrawWidthShortOffsetZ * front.x,
-                       point->mPosition.y + ::sDrawWidthShortOffsetX * side.y - ::sDrawWidthShortOffsetZ * front.y,
-                       point->mPosition.z + ::sDrawWidthShortOffsetX * side.z - ::sDrawWidthShortOffsetZ * front.z);
-        J3DNativeDraw::color(::sColorPlusX);
-        J3DNativeDraw::texCoord(0.0f, idx * ::sTexRate);
+        *vtx++ = {point->mPosition.x + ::sDrawWidthShortOffsetX * side.x - ::sDrawWidthShortOffsetZ * front.x, point->mPosition.y + ::sDrawWidthShortOffsetX * side.y - ::sDrawWidthShortOffsetZ * front.y, point->mPosition.z + ::sDrawWidthShortOffsetX * side.z - ::sDrawWidthShortOffsetZ * front.z, Rgba8(::sColorPlusX), 0.0f, idx * ::sTexRate};
 
-        J3DNativeDraw::position(point->mPosition.x - ::sDrawWidthShortOffsetX * side.x - ::sDrawWidthShortOffsetZ * front.x,
-                       point->mPosition.y - ::sDrawWidthShortOffsetX * side.y - ::sDrawWidthShortOffsetZ * front.y,
-                       point->mPosition.z - ::sDrawWidthShortOffsetX * side.z - ::sDrawWidthShortOffsetZ * front.z);
-        J3DNativeDraw::color(::sColorMinusX);
-        J3DNativeDraw::texCoord(1.0f, idx * ::sTexRate);
+        *vtx++ = {point->mPosition.x - ::sDrawWidthShortOffsetX * side.x - ::sDrawWidthShortOffsetZ * front.x, point->mPosition.y - ::sDrawWidthShortOffsetX * side.y - ::sDrawWidthShortOffsetZ * front.y, point->mPosition.z - ::sDrawWidthShortOffsetX * side.z - ::sDrawWidthShortOffsetZ * front.z, Rgba8(::sColorMinusX), 1.0f, idx * ::sTexRate};
     }
 }
 
@@ -228,20 +206,17 @@ PlantStalkDrawInit::PlantStalkDrawInit(const char* pName) : NameObj(pName) {
     mTexture = nullptr;
     mTexture = new JUTTexture(MR::loadTexFromArc("Plant.arc", "PlantStalk.bti"));
 
-    MR::registerPreDrawFunction(MR::Functor(this, &PlantStalkDrawInit::initDraw), MR::DrawType_PlantStalk);
+    mMaterial = makeMaterial();
 }
 
-void PlantStalkDrawInit::initDraw() const {
-    J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
+SiteMaterial PlantStalkDrawInit::makeMaterial() const {
     // runtime/src/render/materials/tex_modulate.hlsl: the texture times the vertex colour, its alpha the texture's; drawn where
     // the alpha is above 0, depth tested and written, back faces culled.
-    NebulaNativeMaterial material;
-    NativeShader::init(material, NEBULA_SHADER_TEX_MODULATE, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, true,
+    SiteMaterial material;
+    material.init(NEBULA_SHADER_TEX_MODULATE, SiteMaterial::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, true,
                        NEBULA_CULL_BACK);
-    material.early_depth = 0;
     material.constants[0] = 1.0f;
     material.constants[1] = 0.0f;
-    NativeShader::setTexture(material, 0, mTexture);
-    NativeShader::send(material);
-    J3DNativeShape::setCurrentIdentity();
+    material.setTexture(0, mTexture);
+    return material;
 }

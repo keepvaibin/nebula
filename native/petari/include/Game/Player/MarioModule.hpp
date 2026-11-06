@@ -55,7 +55,7 @@ public:
     void changeAnimation(const char*, u32);
     bool isAnimationRun(const char*, u32);
     void stopAnimation(const char*, u32);
-    void setJointGlobalMtx(u16, MtxPtr);
+    void setJointGlobalMtx(u32, MtxPtr);
     void setYangleOffset(f32);
     bool isStickOn() const;
     bool isStickFull() const;

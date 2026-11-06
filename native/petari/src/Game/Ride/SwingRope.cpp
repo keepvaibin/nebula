@@ -1,8 +1,8 @@
 #include "Game/Ride/SwingRope.hpp"
-#include "Game/Util/NativeShader.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/FrameList.hpp"
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Ride/SledRopePoint.hpp"
@@ -130,12 +130,13 @@ void SwingRope::draw() const {
         return;
     }
 
+    TypedDraw site(MR::getSceneObj< SwingRopeGroup >(SceneObj_SwingRopeGroup)->mMaterial, nullptr, MR::getCameraViewMtx());
     if (isNerve(GET_NERVE(SwingRope, SwingRopeNrvStop))) {
-        drawStop();
+        drawStop(site);
     } else if (isNerve(GET_NERVE(SwingRope, SwingRopeNrvFree)) || isNerve(GET_NERVE(SwingRope, SwingRopeNrvFreeInvalid))) {
-        drawFree();
+        drawFree(site);
     } else {
-        drawBind();
+        drawBind(site);
     }
 }
 
@@ -677,32 +678,30 @@ void SwingRope::updateHangLowerPointPos(s32 index) {
 }
 
 namespace {
-    void sendPoint(const Vec3f& pos, const Vec3f& side, const Vec3f& front, f32 x, f32 y, u32 color, f32 texX, f32 texY) {
-        J3DNativeDraw::position(pos.x + side.x * x + front.x * y, pos.y + side.y * x + front.y * y, pos.z + side.z * x + front.z * y);
-        J3DNativeDraw::color(color);
-        J3DNativeDraw::texCoord(texX, texY);
+    void sendPoint(VertexPCT*& rVtx, const Vec3f& pos, const Vec3f& side, const Vec3f& front, f32 x, f32 y, u32 color, f32 texX, f32 texY) {
+        *rVtx++ = {pos.x + side.x * x + front.x * y, pos.y + side.y * x + front.y * y, pos.z + side.z * x + front.z * y, Rgba8(color), texX, texY};
     }
 
-    void drawPolygon(const Vec3f& posA, const Vec3f& posB, const Vec3f& side, const Vec3f& front, f32 x1, f32 y1, f32 x2, f32 y2, u32 color1,
+    void drawPolygon(TypedDraw& rDraw, const Vec3f& posA, const Vec3f& posB, const Vec3f& side, const Vec3f& front, f32 x1, f32 y1, f32 x2, f32 y2, u32 color1,
                      u32 color2, f32 texY1, f32 texY2) {
-        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
+        VertexPCT* vtx = rDraw.vertices< VertexPCT >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 4);
         {
-            sendPoint(posA, side, front, x1, y1, color1, 0.0f, texY1);
-            sendPoint(posA, side, front, x2, y2, color2, 1.0f, texY1);
-            sendPoint(posB, side, front, x1, y1, color1, 0.0f, texY2);
-            sendPoint(posB, side, front, x2, y2, color2, 1.0f, texY2);
+            sendPoint(vtx, posA, side, front, x1, y1, color1, 0.0f, texY1);
+            sendPoint(vtx, posA, side, front, x2, y2, color2, 1.0f, texY1);
+            sendPoint(vtx, posB, side, front, x1, y1, color1, 0.0f, texY2);
+            sendPoint(vtx, posB, side, front, x2, y2, color2, 1.0f, texY2);
         }
     }
 
-    void drawLine(const SwingRope* pRope, u32 color1, u32 color2, f32 x1, f32 y1, f32 x2, f32 y2) {
-        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, (pRope->mNumPoints + 1) * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
+    void drawLine(TypedDraw& rDraw, const SwingRope* pRope, u32 color1, u32 color2, f32 x1, f32 y1, f32 x2, f32 y2) {
+        VertexPCT* vtx = rDraw.vertices< VertexPCT >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, (pRope->mNumPoints + 1) * 2);
         {
             const Vec3f& front = pRope->mPoints[0]->getFront();
             const Vec3f& side = pRope->mPoints[0]->getSide();
             const Vec3f& pos = pRope->getBasePos();
 
-            sendPoint(pos, side, front, x1, y1, color1, 0.0f, 0.0f);
-            sendPoint(pos, side, front, x2, y2, color2, 1.0f, 0.0f);
+            sendPoint(vtx, pos, side, front, x1, y1, color1, 0.0f, 0.0f);
+            sendPoint(vtx, pos, side, front, x2, y2, color2, 1.0f, 0.0f);
 
             SwingRopePoint* point;
             for (s32 idx = 0; idx < pRope->mNumPoints; idx++) {
@@ -711,21 +710,21 @@ namespace {
                 const Vec3f& side = point->getSide();
                 const Vec3f& pos = point->getPosition();
 
-                sendPoint(pos, side, front, x1, y1, color1, 0.0f, ::sTexRate * (idx + 1));
-                sendPoint(pos, side, front, x2, y2, color2, 1.0f, ::sTexRate * (idx + 1));
+                sendPoint(vtx, pos, side, front, x1, y1, color1, 0.0f, ::sTexRate * (idx + 1));
+                sendPoint(vtx, pos, side, front, x2, y2, color2, 1.0f, ::sTexRate * (idx + 1));
             }
         }
     }
 
-    void drawLineAtHanging(const SwingRope* pRope, u32 color1, u32 color2, f32 texY1, f32 texY2, f32 x1, f32 y1, f32 x2, f32 y2) {
-        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, (pRope->mNumPoints + 1) * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
+    void drawLineAtHanging(TypedDraw& rDraw, const SwingRope* pRope, u32 color1, u32 color2, f32 texY1, f32 texY2, f32 x1, f32 y1, f32 x2, f32 y2) {
+        VertexPCT* vtx = rDraw.vertices< VertexPCT >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, (pRope->mNumPoints + 1) * 2);
         {
             const Vec3f& front = pRope->mPoints[0]->getFront();
             const Vec3f& side = pRope->mPoints[0]->getSide();
             const Vec3f& pos = pRope->getBasePos();
 
-            sendPoint(pos, side, front, x1, y1, color1, 0.0f, 0.0f);
-            sendPoint(pos, side, front, x2, y2, color2, 1.0f, 0.0f);
+            sendPoint(vtx, pos, side, front, x1, y1, color1, 0.0f, 0.0f);
+            sendPoint(vtx, pos, side, front, x2, y2, color2, 1.0f, 0.0f);
 
             SwingRopePoint* point;
             for (s32 idx = 0; idx < pRope->mNumPoints; idx++) {
@@ -734,47 +733,47 @@ namespace {
                 const Vec3f& side = point->getSide();
                 const Vec3f& pos = point->getPosition();
 
-                sendPoint(pos, side, front, x1, y1, color1, 0.0f, ::sTexRate * (idx + 1));
-                sendPoint(pos, side, front, x2, y2, color2, 1.0f, ::sTexRate * (idx + 1));
+                sendPoint(vtx, pos, side, front, x1, y1, color1, 0.0f, ::sTexRate * (idx + 1));
+                sendPoint(vtx, pos, side, front, x2, y2, color2, 1.0f, ::sTexRate * (idx + 1));
             }
         }
     }
 };  // namespace
 
-void SwingRope::drawStop() const {
+void SwingRope::drawStop(TypedDraw& rDraw) const {
     Vec3f bottom(mBasePos.x, mBasePos.y - mRopeLength, mBasePos.z);
     const Vec3f& side = mPoints[0]->getSide();
     const Vec3f& front = mPoints[0]->getFront();
 
     f32 texY = (mRopeLength / ::sPointInterval) * ::sTexRate;
 
-    ::drawPolygon(mBasePos, bottom, side, front, -::sDrawWidthX, (::sDrawWidthZ + ::sDrawWidthShortOffsetZ), ::sDrawWidthX + ::sDrawWidthShortOffsetX,
+    ::drawPolygon(rDraw, mBasePos, bottom, side, front, -::sDrawWidthX, (::sDrawWidthZ + ::sDrawWidthShortOffsetZ), ::sDrawWidthX + ::sDrawWidthShortOffsetX,
                   -(::sDrawWidthZ + ::sDrawWidthShortOffsetZ), ::sColorPlusZ, ::sColorPlusX, 0.0f, texY);
 
-    ::drawPolygon(mBasePos, bottom, side, front, -(::sDrawWidthX + ::sDrawWidthShortOffsetX), -(::sDrawWidthZ + ::sDrawWidthShortOffsetZ),
+    ::drawPolygon(rDraw, mBasePos, bottom, side, front, -(::sDrawWidthX + ::sDrawWidthShortOffsetX), -(::sDrawWidthZ + ::sDrawWidthShortOffsetZ),
                   ::sDrawWidthX, (::sDrawWidthZ + ::sDrawWidthShortOffsetZ), ::sColorMinusX, ::sColorPlusZ, 0.0f, texY);
 
-    ::drawPolygon(mBasePos, bottom, side, front, ::sDrawWidthX + ::sDrawWidthLongOffsetX, -::sDrawWidthShortOffsetZ,
+    ::drawPolygon(rDraw, mBasePos, bottom, side, front, ::sDrawWidthX + ::sDrawWidthLongOffsetX, -::sDrawWidthShortOffsetZ,
                   -(::sDrawWidthX + ::sDrawWidthLongOffsetX), -::sDrawWidthShortOffsetZ, ::sColorPlusX, ::sColorMinusX, 0.0f, texY);
 }
 
-void SwingRope::drawFree() const {
-    ::drawLine(this, ::sColorPlusZ, ::sColorPlusX, -::sDrawWidthX, (::sDrawWidthZ + ::sDrawWidthShortOffsetZ),
+void SwingRope::drawFree(TypedDraw& rDraw) const {
+    ::drawLine(rDraw, this, ::sColorPlusZ, ::sColorPlusX, -::sDrawWidthX, (::sDrawWidthZ + ::sDrawWidthShortOffsetZ),
                ::sDrawWidthX + ::sDrawWidthShortOffsetX, -(::sDrawWidthZ + ::sDrawWidthShortOffsetZ));
-    ::drawLine(this, ::sColorMinusX, ::sColorPlusZ, -(::sDrawWidthX + ::sDrawWidthShortOffsetX), -(::sDrawWidthZ + ::sDrawWidthShortOffsetZ),
+    ::drawLine(rDraw, this, ::sColorMinusX, ::sColorPlusZ, -(::sDrawWidthX + ::sDrawWidthShortOffsetX), -(::sDrawWidthZ + ::sDrawWidthShortOffsetZ),
                ::sDrawWidthX, (::sDrawWidthZ + ::sDrawWidthShortOffsetZ));
-    ::drawLine(this, ::sColorMinusX, ::sColorPlusZ, ::sDrawWidthX + ::sDrawWidthLongOffsetX, -::sDrawWidthShortOffsetZ,
+    ::drawLine(rDraw, this, ::sColorMinusX, ::sColorPlusZ, ::sDrawWidthX + ::sDrawWidthLongOffsetX, -::sDrawWidthShortOffsetZ,
                -(::sDrawWidthX + ::sDrawWidthLongOffsetX), -::sDrawWidthShortOffsetZ);
 }
 
-void SwingRope::drawBind() const {
+void SwingRope::drawBind(TypedDraw& rDraw) const {
     f32 texYGrab = (mGrabPointNum + 1.0f) * ::sTexRate;
     f32 texYFoot = (calcPointNo(mFootCoord) + 1.0f) * ::sTexRate;
-    ::drawLineAtHanging(this, ::sColorPlusZ, ::sColorPlusX, texYGrab, texYFoot, -::sDrawWidthX, (::sDrawWidthZ + ::sDrawWidthShortOffsetZ),
+    ::drawLineAtHanging(rDraw, this, ::sColorPlusZ, ::sColorPlusX, texYGrab, texYFoot, -::sDrawWidthX, (::sDrawWidthZ + ::sDrawWidthShortOffsetZ),
                         ::sDrawWidthX + ::sDrawWidthShortOffsetX, -(::sDrawWidthZ + ::sDrawWidthShortOffsetZ));
-    ::drawLineAtHanging(this, ::sColorMinusX, ::sColorPlusZ, texYGrab, texYFoot, -(::sDrawWidthX + ::sDrawWidthShortOffsetX),
+    ::drawLineAtHanging(rDraw, this, ::sColorMinusX, ::sColorPlusZ, texYGrab, texYFoot, -(::sDrawWidthX + ::sDrawWidthShortOffsetX),
                         -(::sDrawWidthZ + ::sDrawWidthShortOffsetZ), ::sDrawWidthX, (::sDrawWidthZ + ::sDrawWidthShortOffsetZ));
-    ::drawLineAtHanging(this, ::sColorMinusX, ::sColorPlusZ, texYGrab, texYFoot, ::sDrawWidthX + ::sDrawWidthLongOffsetX, -::sDrawWidthShortOffsetZ,
+    ::drawLineAtHanging(rDraw, this, ::sColorMinusX, ::sColorPlusZ, texYGrab, texYFoot, ::sDrawWidthX + ::sDrawWidthLongOffsetX, -::sDrawWidthShortOffsetZ,
                         -(::sDrawWidthX + ::sDrawWidthLongOffsetX), -::sDrawWidthShortOffsetZ);
 }
 
@@ -782,20 +781,17 @@ SwingRopeGroup::SwingRopeGroup(const char* pName) : NameObj(pName) {
     mTexture = nullptr;
     mTexture = new JUTTexture(MR::loadTexFromArc("SwingRope.arc", "SwingRope.bti"));
 
-    MR::registerPreDrawFunction(MR::Functor(this, &SwingRopeGroup::initDraw), MR::DrawType_SwingRope);
+    mMaterial = makeMaterial();
 }
 
-void SwingRopeGroup::initDraw() const {
-    J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
+SiteMaterial SwingRopeGroup::makeMaterial() const {
     // runtime/src/render/materials/tex_modulate.hlsl: the texture times the vertex colour, its alpha the texture's; drawn where
     // the alpha is above 0, depth tested and written, no culling.
-    NebulaNativeMaterial material;
-    NativeShader::init(material, NEBULA_SHADER_TEX_MODULATE, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, true,
+    SiteMaterial material;
+    material.init(NEBULA_SHADER_TEX_MODULATE, SiteMaterial::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, true,
                        NEBULA_CULL_NONE);
-    material.early_depth = 0;
     material.constants[0] = 1.0f;
     material.constants[1] = 0.0f;
-    NativeShader::setTexture(material, 0, mTexture);
-    NativeShader::send(material);
-    J3DNativeShape::setCurrentIdentity();
+    material.setTexture(0, mTexture);
+    return material;
 }

@@ -2,7 +2,7 @@
 
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/JMapInfo.hpp"
-#include "Game/Util/NativeMesh.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include <nebula_geometry.hpp>
 
 class JUTTexture;
@@ -62,12 +62,13 @@ public:
 
     void initPoints(WaterRoad*);
     void initMesh();
-    void sendGD();
     void drawGD() const;
     void drawDirect(const WaterRoad*) const;
     s32 calcDemoDrawPointNum(const WaterRoad*) const;
-    void loadMaterialHigh(const WaterRoad*) const;
-    void loadMaterialLow() const;
+    SiteMaterial loadMaterialHigh(const WaterRoad*) const;
+    SiteMaterial loadMaterialLow() const;
+    template < class T >
+    void writeMesh(SiteMesh< T >& rMesh);
 
     s32 calcPointIndex(int i, int j) const {
         return j + i * mNumLoopPoints;
@@ -81,7 +82,8 @@ public:
     Vec3s* mNormals;
     f32* mRailCoords;
     // The tube as the renderer draws it (its points and normals by index, texture coordinates its own).
-    NativeMesh mMesh;
+    SiteMesh< VertexPNT3 > mMeshHigh;
+    SiteMesh< VertexPNT2 > mMeshLow;
     // The road whose textures it draws with.
     const WaterRoad* mRoad;
 };

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include "Game/Util/NativeMesh.hpp"
+#include "Game/Render/TypedDraw.hpp"
 
 class OceanRingPipe;
 class JUTTexture;
@@ -16,7 +16,7 @@ public:
     virtual void draw() const;
 
     void initMesh();
-    void loadMaterial() const;
+    SiteMaterial loadMaterial() const;
     void sendGD();
 
     const OceanRingPipe* mRingPipe;
@@ -24,5 +24,5 @@ public:
     JUTTexture* mWaterPipeIndirectTex;
     JUTTexture* mWaterPipeHighLightTex;
     // The pipe's surface as the renderer draws it.
-    NativeMesh mMesh;
+    SiteMesh< VertexPNT > mMesh;
 };

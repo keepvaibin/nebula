@@ -4,8 +4,6 @@
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 
-class FastRandom;
-
 class AudSystemWrapper;
 class CaptureScreenDirector;
 class MessageHolder;

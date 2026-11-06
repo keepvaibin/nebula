@@ -35,8 +35,6 @@ public:
                  bool ssao, std::span<const ao::ObjectOccluder> objects, UploadRing& ring, const SetAllocator& allocate);
     // Inside a scene target pass of 2^samples_log2 samples: the multiply.
     void finish(VkCommandBuffer commands, VkRenderPass pass, unsigned samples_log2, const SetAllocator& allocate);
-    // What the frame's commands read stays alive with its submission (recorded frames that replay).
-    void hold(std::vector<std::shared_ptr<Texture>>& held) const;
 
 private:
     enum Pass : unsigned { kDistance, kOcclusion, kDenoise, kUpsample, kSsao, kPassCount };

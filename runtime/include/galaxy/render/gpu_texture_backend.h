@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 
-// TextureCache's GPU side: shader views by slot, mapped upload staging, textures, and the recorded upload of a
+// TextureStore's GPU side: shader views by slot, mapped upload staging, textures, and the recorded upload of a
 // texture's levels. The cache's logic (keys, maps, aliases, eviction, retirement) is shared; each API implements
 // this class (gpu_texture_backend_d3d12.cpp, vk/texture_backend_vk.cpp).
 
@@ -9,6 +9,7 @@
 #include "galaxy/render/texel_format.h"
 
 #include <cstdint>
+#include <vector>
 
 #if defined(NEBULA_GPU_VULKAN)
 #include "galaxy/render/vk/texture_backend_vk.h"
@@ -28,7 +29,7 @@ public:
     static constexpr std::uint64_t kPlacementAlignment = D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT;
     static constexpr std::uint32_t kPitchAlignment = D3D12_TEXTURE_DATA_PITCH_ALIGNMENT;
 
-    // `view_capacity` slots, then the permanent null view.
+    // Initial view-page size; later pages grow independently of live descriptors.
     bool initialize(gpu::Device* device, std::uint32_t view_capacity);
     void shutdown();
     [[nodiscard]] bool ready() const noexcept { return device_ != nullptr && srv_heap_ != nullptr; }
@@ -54,14 +55,16 @@ public:
     [[nodiscard]] bool has_upload_list() const noexcept { return upload_list_ != nullptr; }
     [[nodiscard]] PlacedTextureAllocator::Stats heap_stats() const { return texture_heap_.stats(); }
 
-    [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE srv_cpu_base() const noexcept { return srv_cpu_base_; }
-    [[nodiscard]] UINT srv_descriptor_stride() const noexcept { return srv_stride_; }
+    void ensure_view(std::uint32_t index);
+    [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE srv_cpu(std::uint32_t index) const noexcept;
     [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE null_srv() const noexcept { return null_srv_; }
 
 private:
     PlacedTextureAllocator texture_heap_{D3D12_HEAP_FLAG_ALLOW_ONLY_NON_RT_DS_TEXTURES, 64ull << 20};
     Microsoft::WRL::ComPtr<ID3D12Device> device_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> srv_heap_;
+    std::vector<Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>> srv_pages_;
+    std::uint32_t views_per_page_ = 0;
     D3D12_CPU_DESCRIPTOR_HANDLE srv_cpu_base_{};
     UINT srv_stride_ = 0u;
     D3D12_CPU_DESCRIPTOR_HANDLE null_srv_{};

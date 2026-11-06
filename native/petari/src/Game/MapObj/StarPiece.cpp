@@ -22,7 +22,6 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/TriangleFilter.hpp"
-#include <JSystem/J3DGraphBase/J3DStruct.hpp>
 #include <nebula_geometry.hpp>
 
 #include <NebulaGpuTypes.h>

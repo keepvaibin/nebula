@@ -1,5 +1,5 @@
 #include "Game/Util/GameLightSignal.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include "Game/Render/FrameList.hpp"
 #include "Game/LiveActor/ActorLightCtrl.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Map/LightDataHolder.hpp"
@@ -129,13 +129,13 @@ namespace GameLightSignal {
     void pointLight(const PointLightInfo* pInfo) {
         const f32 reference = pInfo->mRefDistance;
         const f32 brightness = pInfo->mRefBrightness;
-        const J3DLightFalloff function = pInfo->mDistAttnFn;
+        const LightFalloff function = pInfo->mDistAttnFn;
         f32 half = 0.0f;
-        if (reference > 0.0f && brightness > 0.0f && brightness < 1.0f && function != J3D_FALLOFF_NONE) {
+        if (reference > 0.0f && brightness > 0.0f && brightness < 1.0f && function != LIGHT_FALLOFF_NONE) {
             const f32 q = (1.0f - brightness) / brightness;
-            const f32 k1 = function == J3D_FALLOFF_GENTLE ? q / reference : function == J3D_FALLOFF_MEDIUM ? 0.5f * q / reference : 0.0f;
-            const f32 k2 = function == J3D_FALLOFF_STEEP    ? q / (reference * reference)
-                           : function == J3D_FALLOFF_MEDIUM ? 0.5f * q / (reference * reference)
+            const f32 k1 = function == LIGHT_FALLOFF_GENTLE ? q / reference : function == LIGHT_FALLOFF_MEDIUM ? 0.5f * q / reference : 0.0f;
+            const f32 k2 = function == LIGHT_FALLOFF_STEEP    ? q / (reference * reference)
+                           : function == LIGHT_FALLOFF_MEDIUM ? 0.5f * q / (reference * reference)
                                                       : 0.0f;
             half = k2 > 0.0f ? (-k1 + __builtin_sqrtf(k1 * k1 + 4.0f * k2)) / (2.0f * k2) : 1.0f / k1;
         }
@@ -145,7 +145,7 @@ namespace GameLightSignal {
         NebulaHost::gameLight(NEBULA_LIGHT_POINT, NebulaHost::objectId(pInfo), values);
     }
 
-    // LightPointCtrl blends its light with J3DNativeState::initLightDistAttn(15, brightness, J3D_FALLOFF_GENTLE): it halves at
+    // LightPointCtrl blends its light with LightValues::distAttn(15, brightness, LIGHT_FALLOFF_GENTLE): it halves at
     // 15 sqrt(b / (1 - b)).
     void pointRequest(const LiveActor* pActor, const Vec3f& rPosition, Color8 color, f32 brightness) {
         const f32 b = brightness >= 0.95f ? (brightness <= 0.999999f ? brightness : 0.999999f) : 0.95f;

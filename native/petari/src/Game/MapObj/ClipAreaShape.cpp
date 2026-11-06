@@ -1,11 +1,11 @@
 #include "Game/MapObj/ClipAreaShape.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/MtxUtil.hpp"
 
 ClipAreaShape::ClipAreaShape(const char* pName) : mModelData() {
-    mModelData = MR::getJ3DModelData(pName);
+    mModelData = MR::getModelData(pName);
 }
 
 bool ClipAreaShape::isInArea(const Vec3f& rPosition, f32 radius, const Pos3f& rMtx, const Vec3f& rScale) const {
@@ -30,13 +30,12 @@ void ClipAreaShape::calcVolumeMatrix(Pos3f* pVolMtx, const Pos3f& rSrcMtx, const
     MR::preScaleMtx(pVolMtx->toMtxPtr(), rScale);
 }
 
-void ClipAreaShape::drawVolumeShape(const Pos3f& rMtx, const Vec3f& rPos) const {
+void ClipAreaShape::drawVolumeShape(TypedDraw& rDraw, const Pos3f& rMtx, const Vec3f& rPos) const {
     Pos3f volMtx;
     volMtx.identity();
     calcVolumeMatrix(&volMtx, rMtx, rPos);
-    MR::multMtx(volMtx, volMtx, MR::getCameraViewMtx());
-    J3DNativeShape::setPosition(0, volMtx);
-    MR::drawSimpleModel(mModelData);
+    rDraw.setWorld(volMtx);
+    rDraw.drawModelFile(mModelData);
 }
 
 bool ClipAreaShapeSphere::isInArea(const Vec3f& rVec) const {

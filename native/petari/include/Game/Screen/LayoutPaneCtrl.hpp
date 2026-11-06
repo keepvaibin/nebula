@@ -9,7 +9,7 @@ namespace nw4r {
     };  // namespace lyt
 };  // namespace nw4r
 
-class J3DFrameCtrl;
+class FrameCtrl;
 class LayoutAnmPlayer;
 class LayoutManager;
 
@@ -23,7 +23,7 @@ public:
     void stop(u32 layer);
     bool isAnimStopped(u32 layer) const;
     void reflectFollowPos();
-    J3DFrameCtrl* getFrameCtrl(u32 layer) const;
+    FrameCtrl* getFrameCtrl(u32 layer) const;
     void recalcChildGlobalMtx(nw4r::lyt::Pane* pPane);
 
     LayoutManager* mHost;

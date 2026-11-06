@@ -4,7 +4,7 @@
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util/FixedPosition.hpp"
 #include "Game/Util/MtxUtil.hpp"
-#include <JSystem/J3DGraphBase/J3DSys.hpp>
+#include "Game/Render/Model.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include <MiiLib.h>
 
@@ -42,7 +42,7 @@ void MiiFaceParts::calcViewAndEntry() {
         return;
     }
 
-    MR::multMtx(viewMtx, _98, j3dSys.mViewMtx);
+    MR::multMtx(viewMtx, _98, ModelSys::mViewMtx);
     MiiSetMtx(mCharModel, viewMtx);
 }
 

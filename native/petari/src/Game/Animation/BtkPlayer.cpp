@@ -1,31 +1,31 @@
 #include "Game/Animation/BtkPlayer.hpp"
 #include "Game/System/ResourceHolder.hpp"
-#include <JSystem/J3DGraphAnimator/J3DModel.hpp>
-#include <JSystem/J3DGraphBase/J3DMaterial.hpp>
-#include <JSystem/J3DGraphAnimator/J3DModelData.hpp>
+#include "Game/Render/Model.hpp"
+#include "Game/Render/Material.hpp"
+#include "Game/Render/ModelData.hpp"
 
-BtkPlayer::BtkPlayer(const ResourceHolder* pResourceHolder, J3DModelData* pModelData)
+BtkPlayer::BtkPlayer(const ResourceHolder* pResourceHolder, ModelData* pModelData)
     : MaterialAnmPlayerBase(pResourceHolder->mBtkResTable, pModelData) {
 }
 
-void BtkPlayer::apply(J3DAnmBase* pAnmRes, J3DModel* pModel) {
-    J3DAnmTextureSRTKey* pAnm = static_cast< J3DAnmTextureSRTKey* >(pAnmRes);
-    const u16 num = pAnm->getUpdateMaterialNum();
-    for (u16 no = 0; no < num; no++) {
-        const u8 texMtxID = pAnm->getUpdateTexMtxID(no);
-        if (!pAnm->isValidUpdateMaterialID(no) || texMtxID == 0xFF) {
+void BtkPlayer::apply(Clip* pClip, Model* pModel) {
+    const u32 num = pClip->getEntryCount();
+    for (u32 no = 0; no < num; no++) {
+        const u8 texMtxID = pClip->getSlot(no);
+        if (!pClip->hasMaterial(no) || texMtxID == 0xFF) {
             continue;
         }
-        J3DMaterial* pMaterial = pModel->ownMaterial(pAnm->getUpdateMaterialID(no));
+        Material* pMaterial = pModel->ownMaterial(pClip->getMaterial(no));
         if (pMaterial->getTexMtx(texMtxID) == nullptr) {
-            pMaterial->setTexMtx(texMtxID, J3DTexMtx());
+            pMaterial->setTexMtx(texMtxID, CoordMatrix());
         }
-        pMaterial->getTexCoord(texMtxID)->setTexGenMtx(static_cast< u8 >(texMtxID * 3 + 30));
-        J3DTexMtxInfo& rInfo = pMaterial->getTexMtx(texMtxID)->getTexMtxInfo();
-        rInfo.mInfo = (rInfo.mInfo & 0x3f) | (pAnm->getTexMtxCalcType() << 7);
-        rInfo.mCenter.x = pAnm->getSRTCenter(no)->x;
-        rInfo.mCenter.y = pAnm->getSRTCenter(no)->y;
-        rInfo.mCenter.z = pAnm->getSRTCenter(no)->z;
-        pAnm->getTransform(no, &rInfo.mSRT);
+        pMaterial->getTexCoord(texMtxID)->setTexGenMtx(texMtxID);
+        CoordMatrixInfo& rInfo = pMaterial->getTexMtx(texMtxID)->getTexMtxInfo();
+        rInfo.mInfo = (rInfo.mInfo & 0x3f) | (pClip->getCoordMode() << 7);
+        const f32* pCenter = pClip->getCenter(no);
+        rInfo.mCenter.x = pCenter[0];
+        rInfo.mCenter.y = pCenter[1];
+        rInfo.mCenter.z = pCenter[2];
+        pClip->getTextureTransform(no, &rInfo.mSRT);
     }
 }

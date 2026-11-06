@@ -159,7 +159,7 @@ namespace MR {
 
     void initMapPartsClipping(LiveActor* pActor, const JMapInfoIter& rIter, Vec3f* pCenter, bool ignoreRail) {
         f32 radius = 0.0f;
-        if (getJ3DModel(pActor)) {
+        if (getModel(pActor)) {
             calcModelBoundingRadius(&radius, pActor);
             if (isNearZero(radius)) {
                 radius = getCollisionBoundingSphereRange(pActor);

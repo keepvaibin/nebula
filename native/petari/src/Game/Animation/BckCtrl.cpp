@@ -152,7 +152,7 @@ BckCtrlData* BckCtrl::find(const char* pName) const {
     return nullptr;
 }
 
-inline f32 calcPlayRate(const J3DFrameCtrl& rCtrl, s32 playFrame, f32 baseRate = 1.0f) {
+inline f32 calcPlayRate(const FrameCtrl& rCtrl, s32 playFrame, f32 baseRate = 1.0f) {
     return baseRate * (static_cast< f32 >(rCtrl.getEnd() - rCtrl.getStart()) / playFrame);
 }
 

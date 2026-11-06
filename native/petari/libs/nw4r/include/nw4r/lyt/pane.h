@@ -131,6 +131,7 @@ namespace nw4r {
             char mName[17];
             char mUserData[9];
             u8 mbUserAllocated;
+            mutable u32 mDrawSlot = 0;
             u8 mPadding;
         };
     };  // namespace lyt

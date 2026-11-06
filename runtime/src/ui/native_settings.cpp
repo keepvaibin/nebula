@@ -3499,6 +3499,10 @@ void draw_native_settings_overlay(UiCanvas& renderer) {
     case NativeSettingsStatus::Applied:
         status = "APPLIED";
         break;
+    case NativeSettingsStatus::Preparing:
+        std::snprintf(line, sizeof(line), "PREPARING GRAPHICS: %d%%", view.status_number);
+        status = line;
+        break;
     case NativeSettingsStatus::LanguageRestart:
         status = "THE NEW LANGUAGE APPLIES WHEN NEBULA RESTARTS";
         break;
@@ -3715,6 +3719,9 @@ NativeSettingsView build_native_settings_view() {
         view.status_number = static_cast<int>(pending);
     } else if (s_settings_applied_ms != 0u && now_ms - s_settings_applied_ms < 2500u) {
         view.status = NativeSettingsStatus::Applied;
+    } else if (const PipelineProgress pipelines = pipeline_progress(); pipelines.left != 0u) {
+        view.status = NativeSettingsStatus::Preparing;
+        view.status_number = static_cast<int>(std::uint64_t{pipelines.done} * 100u / (std::uint64_t{pipelines.done} + pipelines.left));
     } else if (GameLanguage running{}; tab == 4u && running_game_language(running) &&
                                        running != galaxy::game_language_resolved(row_runtime.language)) {
         view.status = NativeSettingsStatus::LanguageRestart;

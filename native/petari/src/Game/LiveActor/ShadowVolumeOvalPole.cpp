@@ -1,5 +1,5 @@
 #include "Game/LiveActor/ShadowVolumeOvalPole.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -20,7 +20,7 @@ ShadowVolumeOvalPole::ShadowVolumeOvalPole() : ShadowVolumeModel("\211\145\225\1
     initVolumeModel("ShadowVolumeCylinder");
 }
 
-void ShadowVolumeOvalPole::loadModelDrawMtx() const {
+void ShadowVolumeOvalPole::loadModelDrawMtx(TypedDraw& rDraw) const {
     ShadowController* controller = getController();
     MtxPtr dropMtx = controller->_18;
     Pos3f scaledMtx;
@@ -75,8 +75,7 @@ void ShadowVolumeOvalPole::loadModelDrawMtx() const {
     mtx.setXDir(side);
     mtx.setYDir(up);
     mtx.setZDir(front);
-    NebulaMtxConcat(MR::getCameraViewMtx(), mtx, mtx);
-    J3DNativeShape::setPosition(0, mtx);
+    rDraw.setWorld(mtx);
 }
 
 void ShadowVolumeOvalPole::setSize(const Vec3f& rSize) {

@@ -1,4 +1,4 @@
 #pragma once
 
-#include <J3DFileNumbers.h>
+#include <ModelFileNumbers.h>
 #include <NebulaGpuTypes.h>

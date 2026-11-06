@@ -1,5 +1,5 @@
 #include "Game/LiveActor/ShadowVolumeCylinder.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
@@ -21,7 +21,7 @@ void ShadowVolumeCylinder::setRadius(f32 radius) {
     mRadius = radius;
 }
 
-void ShadowVolumeCylinder::loadModelDrawMtx() const {
+void ShadowVolumeCylinder::loadModelDrawMtx(TypedDraw& rDraw) const {
     ShadowController* controller = getController();
     Vec3f position;
     calcBaseDropPosition(&position);
@@ -38,6 +38,5 @@ void ShadowVolumeCylinder::loadModelDrawMtx() const {
 
     Vec3f scale(radius, calcBaseDropLength() / ::sModelScale, radius);
     MR::preScaleMtx(mtx, scale);
-    NebulaMtxConcat(MR::getCameraViewMtx(), mtx, mtx);
-    J3DNativeShape::setPosition(0, mtx);
+    rDraw.setWorld(mtx);
 }

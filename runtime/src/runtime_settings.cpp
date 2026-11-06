@@ -282,7 +282,7 @@ void parse_settings_file(RuntimeSettings& settings, input::ControlsConfig& contr
     migrate_settings_file(controls, controls_version);
 }
 
-#if defined(NEBULA_RELEASE)
+#if !defined(NEBULA_DEV)
 void apply_env_overrides(RuntimeSettings&) {}
 #else
 #include "../../tools/test_driver/runtime_settings_env.inc"

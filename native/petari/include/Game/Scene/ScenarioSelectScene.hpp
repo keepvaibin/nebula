@@ -5,7 +5,7 @@
 class CameraContext;
 class CinemaFrame;
 class EffectSystem;
-class J3DDrawBuffer;
+class ItemBuffer;
 class ScenarioSelectLayout;
 
 class ScenarioSelectScene : public Scene {
@@ -47,8 +47,8 @@ public:
     u8 _17;
     ScenarioSelectLayout* mScenarioLayout;
     CinemaFrame* mCinemaFrame;
-    J3DDrawBuffer* _20;
-    J3DDrawBuffer* _24;
+    ItemBuffer* _20;
+    ItemBuffer* _24;
     u8 _28;
     u8 _29;
     u8 _2A;

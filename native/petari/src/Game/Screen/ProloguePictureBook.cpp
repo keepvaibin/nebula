@@ -6,7 +6,7 @@
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <JSystem/J3DGraphAnimator/J3DAnimation.hpp>
+#include "Game/Render/Clip.hpp"
 
 namespace {
     static const s32 sBookPageInfo[] = {0, 350, 700, 1050, 1400, 1748, -1};
@@ -52,7 +52,7 @@ void ProloguePictureBook::exeActive() {
 }
 
 void ProloguePictureBook::exePlaying() {
-    J3DFrameCtrl* animCtrl = MR::getAnimCtrl(this, 0);
+    FrameCtrl* animCtrl = MR::getAnimCtrl(this, 0);
 
     if (MR::isAnimStopped(this, 0)) {
         setNerve(GET_NERVE(ProloguePictureBook, ProloguePictureBookEnd));
@@ -76,7 +76,7 @@ void ProloguePictureBook::exePlaying() {
 }
 
 void ProloguePictureBook::exeKeyWait() {
-    J3DFrameCtrl* animCtrl = MR::getAnimCtrl(this, 0);
+    FrameCtrl* animCtrl = MR::getAnimCtrl(this, 0);
 
     if (MR::isFirstStep(this)) {
         mIconAButton->openWithoutMessage();

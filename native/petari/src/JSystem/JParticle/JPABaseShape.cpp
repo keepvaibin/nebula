@@ -1,8 +1,7 @@
 #include "JSystem/JParticle/JPABaseShape.hpp"
 #include "JSystem/JParticle/JPANativeColor.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
+#include "Game/Render/FrameList.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include <nebula_geometry.hpp>
 #include "JSystem/JParticle/JPAEmitter.hpp"
@@ -17,13 +16,14 @@
 // image or size ends the draw.
 namespace {
     const u32 cBatchVertices = 16384;
-    NebulaParticleCorner sBatch[cBatchVertices];
+    VertexCorner sBatch[cBatchVertices];
     // For shapes that read them: coordinate 1 (the corner's own) and 2 (its projection's q).
     f32 sBatchUv1[cBatchVertices * 2];
     f32 sBatchQ[cBatchVertices * 2];
     bool sBatchExtras = false;
     u32 sBatchCount = 0;
     u8 sBatchPrimitive = NEBULA_PRIMITIVE_QUADS;
+    u32 sSource = 0;
 
     // A move beyond this in one game frame is a jump, not motion: nothing draws the way between.
     const f32 cJumpSquared = 2000.0f * 2000.0f;
@@ -79,16 +79,15 @@ namespace {
             JPAParticleBatch::flush();
         }
         const u32 v = sBatchCount++;
-        NebulaParticleCorner& rCorner = sBatch[v];
-        rCorner.position[0] = pNow[0];
-        rCorner.position[1] = pNow[1];
-        rCorner.position[2] = pNow[2];
-        rCorner.before[0] = pBefore[0];
-        rCorner.before[1] = pBefore[1];
-        rCorner.before[2] = pBefore[2];
-        rCorner.prm = JPANativeColor::prmWord();
-        rCorner.env = JPANativeColor::envWord();
-        rCorner.reserved = 0;
+        VertexCorner& rCorner = sBatch[v];
+        rCorner.x = pNow[0];
+        rCorner.y = pNow[1];
+        rCorner.z = pNow[2];
+        rCorner.bx = pBefore[0];
+        rCorner.by = pBefore[1];
+        rCorner.bz = pBefore[2];
+        rCorner.prm = Rgba8(JPANativeColor::prmWord());
+        rCorner.env = Rgba8(JPANativeColor::envWord());
         f32 u = s;
         f32 w = t;
         f32 q = 1.0f;
@@ -123,13 +122,6 @@ namespace {
         };
         addCorner(now, before, x, y, z, s, t);
     }
-
-    // Lines, points and shapes that read further coordinates go as arrays.
-    f32 sArrayPos[cBatchVertices * 3];
-    f32 sArrayBefore[cBatchVertices * 3];
-    f32 sArrayUv0[cBatchVertices * 2];
-    u32 sArrayPrm[cBatchVertices];
-    u32 sArrayEnv[cBatchVertices];
 }  // namespace
 
 namespace JPAParticleBatch {
@@ -188,37 +180,29 @@ namespace JPAParticleBatch {
         sBatchImage = -1;
     }
 
+    void setSource(u32 source) {
+        sSource = source;
+    }
+
     void flush() {
         if (sBatchCount == 0) {
             return;
         }
-        J3DNativeShape::setPosition(0, sCamera);
-        J3DNativeShape::setCurrentIdentity();
-        if (!sBatchExtras && (sBatchPrimitive == NEBULA_PRIMITIVE_QUADS || sBatchPrimitive == NEBULA_PRIMITIVE_TRIANGLE_STRIP)) {
-            J3DNativeDraw::drawCorners(sBatchPrimitive, sBatchCount, sBatch);
-            sBatchCount = 0;
-            return;
-        }
-        for (u32 v = 0; v < sBatchCount; v++) {
-            const NebulaParticleCorner& rCorner = sBatch[v];
-            memcpy(&sArrayPos[v * 3], rCorner.position, sizeof(rCorner.position));
-            memcpy(&sArrayBefore[v * 3], rCorner.before, sizeof(rCorner.before));
-            sArrayUv0[v * 2] = rCorner.s;
-            sArrayUv0[v * 2 + 1] = rCorner.t;
-            sArrayPrm[v] = rCorner.prm;
-            sArrayEnv[v] = rCorner.env;
-            if (!sBatchExtras) {
-                sBatchUv1[v * 2] = 0.0f;
-                sBatchUv1[v * 2 + 1] = 0.0f;
-                sBatchQ[v * 2] = 1.0f;
-                sBatchQ[v * 2 + 1] = 0.0f;
+        TypedDraw site(JPANativeColor::material(), nullptr, sCamera);
+        site.setSource(sSource);
+        site.setFlags(NEBULA_ITEM_PARTICLE);
+        const NebulaPrimitive primitive = static_cast< NebulaPrimitive >(sBatchPrimitive);
+        if (!sBatchExtras) {
+            memcpy(site.vertices< VertexCorner >(primitive, sBatchCount), sBatch, sBatchCount * sizeof(VertexCorner));
+        } else {
+            VertexCornerExtras* pOut = site.vertices< VertexCornerExtras >(primitive, sBatchCount);
+            for (u32 v = 0; v < sBatchCount; v++) {
+                const VertexCorner& rCorner = sBatch[v];
+                pOut[v] = {rCorner.x,  rCorner.y,  rCorner.z,  rCorner.bx,      rCorner.by,          rCorner.bz,
+                           rCorner.prm, rCorner.env, rCorner.s, rCorner.t,       sBatchUv1[v * 2],    sBatchUv1[v * 2 + 1],
+                           sBatchQ[v * 2], sBatchQ[v * 2 + 1]};
             }
         }
-        const u32* const pColors[2] = {sArrayPrm, sArrayEnv};
-        const f32* const pTexCoords[8] = {sArrayUv0, sBatchUv1, sBatchQ, nullptr, nullptr, nullptr, nullptr, nullptr};
-        J3DNativeDraw::drawArrays(sBatchPrimitive, NEBULA_SHAPE_NORMAL | NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_COLOR1 | NEBULA_SHAPE_TEXCOORD0 |
-                                                       (NEBULA_SHAPE_TEXCOORD0 << 1) | (NEBULA_SHAPE_TEXCOORD0 << 2),
-                                  sBatchCount, sArrayPos, pColors, pTexCoords, sArrayBefore);
         sBatchCount = 0;
     }
 }  // namespace JPAParticleBatch
@@ -228,22 +212,22 @@ static const f32 cParticleSizePixels = 25.0f / 6.0f;
 
 void JPASetPointSize(JPAEmitterWorkData* work) {
     JPAParticleBatch::flush();
-    J3DPass::pointSize(cParticleSizePixels * work->mGlobalPtclScl.x, true);
+    JPANativeColor::pointSize(cParticleSizePixels * work->mGlobalPtclScl.x);
 }
 
 void JPASetLineWidth(JPAEmitterWorkData* work) {
     JPAParticleBatch::flush();
-    J3DPass::lineWidth(cParticleSizePixels * work->mGlobalPtclScl.x, true);
+    JPANativeColor::lineWidth(cParticleSizePixels * work->mGlobalPtclScl.x);
 }
 
 void JPASetPointSize(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
     JPAParticleBatch::flush();
-    J3DPass::pointSize(ptcl->mParticleScaleX * cParticleSizePixels * work->mGlobalPtclScl.x, true);
+    JPANativeColor::pointSize(ptcl->mParticleScaleX * cParticleSizePixels * work->mGlobalPtclScl.x);
 }
 
 void JPASetLineWidth(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
     JPAParticleBatch::flush();
-    J3DPass::lineWidth(ptcl->mParticleScaleX * cParticleSizePixels * work->mGlobalPtclScl.x, true);
+    JPANativeColor::lineWidth(ptcl->mParticleScaleX * cParticleSizePixels * work->mGlobalPtclScl.x);
 }
 
 void JPARegistPrm(JPAEmitterWorkData* work) {
@@ -1052,6 +1036,4 @@ const u8 JPABaseShape::st_c[8] = {
 // file the particle material reads); its colour and alpha modes and compares go into the particle material
 // (JPAResource::sendMaterial).
 void JPABaseShape::setPass(JPAEmitterWorkData* work) const {
-    J3DPass::blendState(getBlendMode(), getBlendSrc(), getBlendDst());
-    J3DPass::depth(getZEnable(), getZCmp(), getZUpd());
 }

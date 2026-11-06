@@ -180,7 +180,7 @@ bool KoopaSequencerVs1::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* 
     return false;
 }
 
-#if !defined(NEBULA_RELEASE)
+#if defined(NEBULA_DEV)
 void KoopaSequencerVs1::testHit(HitSensor* pPlayer) {
     if (isNerve(GET_NERVE(KoopaSequencerVs1, KoopaSequencerVs1NrvBattleStairs))) {
         MR::onSwitchA(mKoopa);

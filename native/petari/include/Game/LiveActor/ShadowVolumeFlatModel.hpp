@@ -3,7 +3,7 @@
 #include "Game/LiveActor/ShadowVolumeModel.hpp"
 #include <nebula_geometry.hpp>
 
-class J3DModelData;
+class ModelData;
 
 class ShadowVolumeFlatModel : public ShadowVolumeModel {
 public:
@@ -12,7 +12,7 @@ public:
 
     inline virtual ~ShadowVolumeFlatModel();
     virtual void draw() const;
-    virtual void loadModelDrawMtx() const;
+    virtual void loadModelDrawMtx(TypedDraw& rDraw) const;
 
     void initModel(const char*);
     void setBaseMatrixPtr(MtxPtr);
@@ -21,6 +21,6 @@ public:
     void calcDropJoint(Pos3f*, const Vec3f&) const;
 
     MtxPtr mBaseMtx;
-    s32 mRootDrawMtxIndex;
-    s32 mDropDrawMtxIndex;
+    u32 mRootJoint;
+    u32 mDropJoint;
 };

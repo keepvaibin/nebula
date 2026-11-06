@@ -188,7 +188,7 @@ bool PrizeRing::isOnTriggerTimeoutFlash() const {
         return false;
     }
 
-    J3DFrameCtrl* brkCtrl = MR::getBrkCtrl(this);
+    FrameCtrl* brkCtrl = MR::getBrkCtrl(this);
     for (s32 i = 0; i < 9; i++) {
         f32 frame;
         f32 rate;

@@ -4,7 +4,7 @@
 #include "Game/Util/Color.hpp"
 #include <nebula_geometry.hpp>
 
-class J3DModelData;
+class ModelData;
 
 class ShadowSurfaceOval : public ShadowSurfaceDrawer {
 public:
@@ -18,7 +18,7 @@ public:
     void setColor(Color8);
     void setAlpha(u8);
 
-    J3DModelData* mModelData;
+    ModelData* mModelData;
     Vec3f mSize;
     Color8 mColor;
 };

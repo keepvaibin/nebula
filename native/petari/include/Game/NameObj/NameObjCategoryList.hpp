@@ -30,7 +30,7 @@ namespace {
     // The draw list is the only one of const methods: each NameObj's draws are named after it.
     template <>
     inline void NameObjRealDelegator< NameObjMethodConst >::operator()(NameObj* pNameObj) {
-        MotionSignal::drawNameObj(pNameObj);
+        MotionSignal::drawObject(pNameObj->mDrawSlot, pNameObj->mMotionEpoch);
         (pNameObj->*mNameObjFunc)();
     }
 };  // namespace

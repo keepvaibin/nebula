@@ -1,7 +1,7 @@
 #pragma once
 
+#include "Game/Render/Material.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
-#include <JSystem/J3DGraphBase/J3DTexture.hpp>
 #include <nebula_geometry.hpp>
 
 enum MiniatureGalaxyType {
@@ -75,8 +75,8 @@ public:
     const char* mGalaxyName;
     s32 mCanZoomIn;
     s32 mZoomLevel;
-    J3DTexMtx mOnesTexMtx;
-    J3DTexMtx mTensTexMtx;
+    CoordMatrix mOnesTexMtx;
+    CoordMatrix mTensTexMtx;
     AstroDomeOrbit* mOrbit;
     GalaxyNamePlate* mNamePlate;
 };

@@ -5,8 +5,9 @@
 // palettes), over upload memory from gpu::create_upload_memory.
 
 #include "galaxy/render/gpu_types.h"
-#include "galaxy/render/immutable_upload.h"
 
+#include <algorithm>
+#include <limits>
 #include <cstddef>
 #include <cstdint>
 #include <vector>
@@ -34,28 +35,18 @@ public:
         unsigned frames_in_flight,
         std::size_t capacity = 0);
     // A new segmentation inside the existing buffer (the caller has retired every GPU
-    // reference to its contents); false when it does not fit. Immutable uploads start over.
+    // reference to its contents); false when it does not fit.
     bool resegment(std::size_t bytes_per_frame, unsigned frames_in_flight);
     void begin_frame(unsigned frame_slot);
+    // Called before the frame starts: a new list can be larger than every
+    // previous frame, so growth cannot depend only on yesterday's high water.
+    void require_frame_bytes(std::size_t bytes) noexcept { requested_ = std::max(requested_, bytes); }
 
     // Bump-allocates in the current frame's segment, then in the spill region behind the segments (the capacity
     // past them), which only a resegment or initialize rewinds: spilled() asks the caller to grow the ring at the
     // next frame boundary. `alignment` must be a nonzero power of two. Exhausting both throws rather than dropping
     // geometry. A rejected request consumes nothing.
     Allocation allocate(std::size_t size, std::size_t alignment);
-
-    // Allocates `size` bytes and copies `source` into them, unless `token` records the same allocation in this
-    // slot's previous use, whose bytes are still in place.
-    Allocation upload_immutable(
-        const void* source, std::size_t size, std::size_t alignment,
-        ImmutableUploadToken& token);
-    [[nodiscard]] std::uint64_t reused_bytes() const { return reused_bytes_; }
-    [[nodiscard]] std::uint64_t copied_bytes() const { return copied_bytes_; }
-    // Number of upload_immutable() calls this frame; separates a frame that never took that path from one that
-    // copied every byte.
-    [[nodiscard]] std::uint64_t immutable_upload_calls() const {
-        return immutable_upload_calls_;
-    }
 
     // The peak since the last call (diagnostics windows).
     [[nodiscard]] std::size_t take_peak_bytes_per_frame() noexcept {
@@ -69,13 +60,15 @@ public:
         return capacity / (segments + 1u) & ~std::size_t{0xFFFFu};
     }
     // A frame took over half the budget (or spilled): grow at the next frame boundary, to grown_capacity().
-    [[nodiscard]] bool wants_growth() const { return mapped_ != nullptr && high_water_ > bytes_per_frame_ / 2u; }
+    [[nodiscard]] bool wants_growth() const { return mapped_ != nullptr && std::max(high_water_, requested_) > bytes_per_frame_ / 2u; }
     // The capacity whose budget for `segments` is twice the high-water mark: the current one when it suffices, 0
-    // past the 32-bit offsets the rings' consumers use.
+    // when the host address space cannot represent the allocation.
     [[nodiscard]] std::size_t grown_capacity(unsigned segments) const {
+        const std::size_t needed = std::max(high_water_, requested_);
+        if (needed > std::numeric_limits<std::size_t>::max() / 2u || capacity_ == 0u) { return 0u; }
         std::size_t capacity = capacity_;
-        while (budget(capacity, segments) < 2u * high_water_) {
-            if (capacity >= (std::size_t{1} << 31u)) {
+        while (budget(capacity, segments) < needed * 2u) {
+            if (capacity > std::numeric_limits<std::size_t>::max() / 2u) {
                 return 0u;
             }
             capacity *= 2u;
@@ -102,6 +95,7 @@ public:
 
     [[nodiscard]] gpu::Resource* resource() const { return gpu::raw(buffer_); }
     [[nodiscard]] gpu::Address gpu_base() const { return gpu_base_; }
+    [[nodiscard]] const std::byte* cpu_base() const { return mapped_; }
     // The persistent mapping (the whole resource, all segments).
     [[nodiscard]] std::byte* mapped() const { return mapped_; }
 
@@ -122,15 +116,13 @@ private:
     // Spill bytes the current frame took.
     std::size_t frame_spill_ = 0;
     std::size_t high_water_ = 0;
+    std::size_t requested_ = 0;
     unsigned frames_in_flight_ = 0;
     unsigned active_slot_ = 0;
     bool frame_ready_ = false;
     bool segment_allocation_pending_ = true;
     std::uint64_t resource_identity_ = 0;
     std::vector<std::uint64_t> slot_generations_;
-    std::uint64_t reused_bytes_ = 0;
-    std::uint64_t copied_bytes_ = 0;
-    std::uint64_t immutable_upload_calls_ = 0;
     std::size_t peak_bytes_per_frame_ = 0;
 };
 

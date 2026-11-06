@@ -2,45 +2,45 @@
 
 #include <nebula_geometry.hpp>
 
-class J3DJoint;
-class J3DModel;
-class J3DModelData;
+class Joint;
+class Model;
+class ModelData;
 class LiveActor;
 
 namespace MR {
-    J3DJoint* getJoint(J3DModel*, const char*);
-    J3DJoint* getJoint(const LiveActor*, const char*);
-    J3DJoint* getJoint(const LiveActor*, u16);
-    MtxPtr getJointMtx(J3DModel*, const char*);
+    Joint* getJoint(Model*, const char*);
+    Joint* getJoint(const LiveActor*, const char*);
+    Joint* getJoint(const LiveActor*, u32);
+    MtxPtr getJointMtx(Model*, const char*);
     MtxPtr getJointMtx(const LiveActor*, const char*);
     MtxPtr getJointMtx(const LiveActor*, int);
-    u16 getJointIndex(const LiveActor*, const char*);
+    u32 getJointIndex(const LiveActor*, const char*);
     const char* getJointName(const LiveActor*, int);
     s32 getJointNum(const LiveActor*);
     bool isExistJoint(const LiveActor*, const char*);
-    void copyJointPos(J3DModel*, const char*, Vec3f*);
+    void copyJointPos(Model*, const char*, Vec3f*);
     void copyJointPos(const LiveActor*, const char*, Vec3f*);
-    void copyJointPos(J3DModel*, int, Vec3f*);
+    void copyJointPos(Model*, int, Vec3f*);
     void copyJointPos(const LiveActor*, int, Vec3f*);
     void copyJointScale(const LiveActor*, const char*, Vec3f*);
-    void hideJoint(J3DJoint*);
-    void hideJoint(J3DModel*, const char*);
+    void hideJoint(Joint*);
+    void hideJoint(Model*, const char*);
     void hideJoint(const LiveActor*, const char*);
-    void hideJointAndChildren(J3DJoint*);
-    void hideJointAndChildren(J3DModel*, const char*);
+    void hideJointAndChildren(Joint*);
+    void hideJointAndChildren(Model*, const char*);
     void hideJointAndChildren(const LiveActor*, const char*);
-    void showJoint(J3DJoint*);
-    void showJoint(J3DModel*, const char*);
+    void showJoint(Joint*);
+    void showJoint(Model*, const char*);
     void showJoint(const LiveActor*, const char*);
-    void showJointAndChildren(J3DJoint*);
-    void showJointAndChildren(J3DModel*, const char*);
+    void showJointAndChildren(Joint*);
+    void showJointAndChildren(Model*, const char*);
     void showJointAndChildren(const LiveActor*, const char*);
-    f32 getJointTransX(const J3DJoint*);
-    f32 getJointTransY(const J3DJoint*);
-    f32 getJointTransZ(const J3DJoint*);
-    J3DJoint* searchChildJoint(J3DJoint* pRoot, J3DJoint* pJoint);
-    J3DJoint* getParentJoint(J3DModelData*, J3DJoint*);
-    J3DJoint* getParentJoint(const LiveActor*, J3DJoint*);
+    f32 getJointTransX(const Joint*);
+    f32 getJointTransY(const Joint*);
+    f32 getJointTransZ(const Joint*);
+    Joint* searchChildJoint(Joint* pRoot, Joint* pJoint);
+    Joint* getParentJoint(ModelData*, Joint*);
+    Joint* getParentJoint(const LiveActor*, Joint*);
 
     inline Vec3f getJointPos(const LiveActor* pActor, const char* pJointName) {
         Vec3f jointPos;

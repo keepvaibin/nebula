@@ -1,6 +1,7 @@
+#include "Game/Util/CameraUtil.hpp"
 #include "Game/LiveActor/ShadowSurfaceDrawer.hpp"
-#include "Game/Util/NativeShader.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/FrameList.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util/Color.hpp"
@@ -11,20 +12,24 @@ ShadowSurfaceDrawInit::ShadowSurfaceDrawInit(const char* pName) : NameObj(pName)
     MR::registerPreDrawFunction(MR::Functor(&ShadowSurfaceDrawInit::initDraw), MR::DrawType_ShadowSurface);
 }
 
-void ShadowSurfaceDrawInit::sendColor(const NebulaColor8& rColor) {
-    NebulaNativeMaterial material;
-    NativeShader::init(material, NEBULA_SHADER_FLAT_COLOR, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, false,
-                       NEBULA_CULL_BACK);
-    material.color_write = 1;
-    material.alpha_write = 1;
-    NativeShader::setColor(material, 0, rColor.r, rColor.g, rColor.b, rColor.a);
-    NativeShader::send(material);
+namespace {
+    SiteMaterial sSurface;
+}
+
+void ShadowSurfaceDrawInit::sendColor(const Color8& rColor) {
+    sSurface.init(NEBULA_SHADER_FLAT_COLOR, SiteMaterial::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, false, NEBULA_CULL_BACK);
+    sSurface.mState.color_write = 1;
+    sSurface.mState.alpha_write = 1;
+    sSurface.setColor(0, rColor.r, rColor.g, rColor.b, rColor.a);
+}
+
+const SiteMaterial& ShadowSurfaceDrawInit::material() {
+    return sSurface;
 }
 
 void ShadowSurfaceDrawInit::initDraw() {
-    NebulaNativeMaterial view;
-    TDDraw::setupNative(&view, 0, 1, 1);
-    sendColor(Color8(128));
+    MR::loadProjectionMtx();
+    sendColor(Color8(0x80u));
 }
 
 ShadowSurfaceDrawer::ShadowSurfaceDrawer(const char* pName) : ShadowDrawer(pName) {

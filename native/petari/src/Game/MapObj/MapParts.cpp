@@ -63,7 +63,7 @@ void MapParts::initModelAndCollision(const JMapInfoIter& rIter) {
     }
 
     f32 sensorRange;
-    if (MR::getJ3DModel(this)) {
+    if (MR::getModel(this)) {
         Box3f box;
         MR::calcModelBoundingBox(&box, this);
         dist.sub(box.f, box.i);

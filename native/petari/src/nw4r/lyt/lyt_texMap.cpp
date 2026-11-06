@@ -1,18 +1,19 @@
+#include "Game/Render/TypedDraw.hpp"
 #include "nw4r/lyt/common.h"
-#include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
+#include "Game/Render/RenderTexture.hpp"
 #include "nw4r/lyt/texMap.h"
 #include <NebulaGpuTypes.h>
 #include <string.h>
 
 namespace nw4r {
     namespace lyt {
-        void TexMap::Get(J3DNativeTexObj* pTexObj) const {
-            J3DNativeTexture::init(pTexObj, mImage, mWidth, mHeight, GetWrapModeS(), GetWrapModeT());
-            J3DNativeTexture::setFilter(pTexObj, GetMinFilter(), GetMagFilter(), GetMinLOD(), GetMaxLOD(), GetLODBias(),
+        void TexMap::Get(SiteTexture* pTexObj) const {
+            SiteTextures::init(pTexObj, mImage, mWidth, mHeight, GetWrapModeS(), GetWrapModeT());
+            SiteTextures::setFilter(pTexObj, GetMinFilter(), GetMagFilter(), GetMinLOD(), GetMaxLOD(), GetLODBias(),
                                         IsEdgeLODEnable(), GetAnisotropy());
         }
 
-        void TexMap::Set(const J3DNativeTexObj& texObj) {
+        void TexMap::Set(const SiteTexture& texObj) {
             mImage = const_cast< void* >(texObj.mImage);
             SetSize(texObj.mWidth, texObj.mHeight);
             SetTexelFormat(TEXEL_I4);
@@ -22,7 +23,7 @@ namespace nw4r {
             SetLOD(texObj.mMinLod, texObj.mMaxLod);
             SetLODBias(texObj.mLodBias);
             SetBiasClampEnable(false);
-            SetEdgeLODEnable(texObj.mEdgeLod != 0);
+            SetEdgeLODEnable(false);
             mBits.anisotropy = texObj.mMaxAniso;
         }
 
@@ -59,7 +60,6 @@ namespace nw4r {
             const u32 format = read32(header + 4);
             void* const image = const_cast< u8* >(file + read32(header + 8));
             mImage = image;
-            J3DNativeTexture::registerRecord(image);
             SetSize(width, height);
             mBits.textureFormat = format;
         }

@@ -1,7 +1,7 @@
 #include "Game/MapObj/GCaptureRibbon.hpp"
-#include "Game/Util/NativeShader.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/FrameList.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/LiveActor/ActorLightCtrl.hpp"
 #include "Game/Util/DirectDraw.hpp"
 #include "Game/Util/JMapInfo.hpp"
@@ -17,38 +17,34 @@ GCaptureRibbon::GCaptureRibbon(const char* pName) : LiveActor(pName), mTexture()
 void GCaptureRibbon::draw() const {
     if (_990 >= 2) {
         TDDraw::cameraInit3D();
-        NebulaNativeMaterial material;
+        SiteMaterial material;
         TDDraw::setupNative(&material, 1, 2, 0);
         f32 width = calcLineWidth();
-        NativeShader::setTexture(material, 0, mTexture);
-        NativeShader::setDepth(material, true, NEBULA_COMPARE_LEQUAL, false);
-        NativeShader::send(material);
+        material.setTexture(0, mTexture);
+        material.setDepth(true, NEBULA_COMPARE_LEQUAL, false);
 
-        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 2 * _990, NEBULA_SHAPE_TEXCOORD0);
+        TypedDraw site = TDDraw::site(material, 0);
+    VertexPT* vtx = site.vertices< VertexPT >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 2 * _990);
         {
             for (s32 i = 0; i < _990; i++) {
                 f32 v2 = i / (_990 - 1.0f);
 
                 Vec3f v1 = _690[i] * width;
 
-                J3DNativeDraw::position(v1.x + _90[i].x, v1.y + _90[i].y, v1.z + _90[i].z);
-                J3DNativeDraw::texCoord(0.0f, v2);
-                J3DNativeDraw::position(_90[i].x - v1.x, _90[i].y - v1.y, _90[i].z - v1.z);
-                J3DNativeDraw::texCoord(1.0f, v2);
+                *vtx++ = {v1.x + _90[i].x, v1.y + _90[i].y, v1.z + _90[i].z, 0.0f, v2};
+                *vtx++ = {_90[i].x - v1.x, _90[i].y - v1.y, _90[i].z - v1.z, 1.0f, v2};
             }
         }
 
-        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 2 * _990, NEBULA_SHAPE_TEXCOORD0);
+        vtx = site.vertices< VertexPT >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 2 * _990);
         {
             for (s32 j = 0; j < _990; j++) {
                 f32 v2 = j / (_990 - 1.0f);
 
                 Vec3f v1 = _390[j] * width;
 
-                J3DNativeDraw::position(v1.x + _90[j].x, v1.y + _90[j].y, v1.z + _90[j].z);
-                J3DNativeDraw::texCoord(0.0f, v2);
-                J3DNativeDraw::position(_90[j].x - v1.x, _90[j].y - v1.y, _90[j].z - v1.z);
-                J3DNativeDraw::texCoord(1.0f, v2);
+                *vtx++ = {v1.x + _90[j].x, v1.y + _90[j].y, v1.z + _90[j].z, 0.0f, v2};
+                *vtx++ = {_90[j].x - v1.x, _90[j].y - v1.y, _90[j].z - v1.z, 1.0f, v2};
             }
         }
     }

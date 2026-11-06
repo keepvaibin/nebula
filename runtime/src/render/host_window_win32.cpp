@@ -105,7 +105,6 @@ std::atomic<std::uint64_t> pending_resize_extent{0};
 std::atomic<bool> surface_withdrawn{false};
 std::timed_mutex surface_use;
 // RendererD3D12::suspend_temporal_interpolation (the FRAME RATE row says so).
-std::atomic<bool> temporal_interp_suspended{false};
 
 }  // namespace host_window
 
@@ -563,7 +562,7 @@ OpenedWindow open_game_window(WindowOwner& owner, int window_width, int window_h
         // No pointer seed from this thread: the window thread publishes geometry and input through WM_SIZE and
         // WM_SETFOCUS, and the first real message or cursor poll places the pointer.
         opened.shown = !hidden_window;
-#if !defined(NEBULA_RELEASE)
+#if defined(NEBULA_DEV)
         // GALAXY_TEST_WINDOW_OFF_DESKTOP: shown, one column of pixels on the desktop, behind everything: what runs only for a shown
         // window runs, and nothing appears.
         if (hidden_window && ::galaxy::run_options().test_window_off_desktop) {

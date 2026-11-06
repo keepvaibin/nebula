@@ -1,16 +1,16 @@
-#include <JSystem/J3DGraphBase/J3DNativeTarget.hpp>
+#include "Game/Render/FrameList.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include "Game/MapObj/FallOutFieldDraw.hpp"
-#include "Game/Util/NativeShader.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeMaterial.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/Material.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <nebula_game_api.h>
 #include <cstring>
 
 extern "C" const NebulaHostServices* nebula_host(void);
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeView.hpp>
+#include "Game/Render/FrameList.hpp"
+#include "Game/Render/FrameList.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Map/StageSwitch.hpp"
 #include "Game/MapObj/ClipAreaHolder.hpp"
@@ -60,14 +60,15 @@ FallOutFieldDraw::FallOutFieldDraw(const char* pName) : NameObj(pName), _C() {
 
 namespace {
     // A flat colour over the screen where the stencil says, depth always passing and written.
-    void sendFlat(const Color8& rColor, bool writeColor) {
-        NebulaNativeMaterial material;
-        NativeShader::init(material, NEBULA_SHADER_FLAT_COLOR, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, true,
+    SiteMaterial flatMaterial(const Color8& rColor, bool writeColor, u8 stencil) {
+        SiteMaterial material;
+        material.init(NEBULA_SHADER_FLAT_COLOR, SiteMaterial::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, true,
                            NEBULA_CULL_NONE);
-        material.color_write = writeColor ? 1 : 0;
-        material.alpha_write = 0;
-        NativeShader::setColor(material, 0, rColor.r, rColor.g, rColor.b, rColor.a);
-        NativeShader::send(material);
+        material.mState.color_write = writeColor ? 1 : 0;
+        material.mState.alpha_write = 0;
+        material.setColor(0, rColor.r, rColor.g, rColor.b, rColor.a);
+        material.setStencil(stencil, NEBULA_STENCIL_KEEP);
+        return material;
     }
 }  // namespace
 
@@ -107,51 +108,41 @@ void FallOutFieldDraw::draw() const {
     // What the field fills, by the volumes' stencil (arg 0: inside them, else outside), marked in the depth with the
     // nearest value there is, which nothing in the map reaches. The fill below writes the depth again.
     const u8 filled = _C ? NEBULA_STENCIL_IF_SET : NEBULA_STENCIL_IF_ZERO;
-    sendFlat(::sFillColor, false);
-    J3DNativeView::setZScaleOffset(0.0f, 0.0f);
-    J3DPass::stencil(filled, NEBULA_STENCIL_KEEP);
-    ImageEffectLocalUtil::sendTextureVertex();
-    J3DPass::stencil(NEBULA_STENCIL_OFF, NEBULA_STENCIL_KEEP);
+    Frame::setZScaleOffset(0.0f, 0.0f);
+    ImageEffectLocalUtil::drawQuad(flatMaterial(::sFillColor, false, filled));
 
     // The mark as a half-size mask (arg 0: a pixel with any mark under it, else one with all marked), halved again and
     // blurred, each into its own texture, for the glow along the edge.
-    J3DPass::writeColor(false);
-    J3DPass::writeAlpha(true);
-    J3DNativeTarget::beginOverFrame(mMask->mImage, mMask->mShareAcross, mMask->mShareDown, 0, nullptr, NEBULA_TARGET_RGBA, mDepthKey->mImage);
-    NebulaNativeMaterial mask;
-    NativeShader::init(mask, NEBULA_SHADER_FRAME_DEPTH, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false, NEBULA_CULL_NONE);
+    ImageEffectLocalUtil::setWrites(false, true);
+    Frame::targetBeginOverFrame(mMask->mImage, mMask->mShareAcross, mMask->mShareDown, 0, nullptr, NEBULA_TARGET_RGBA, mDepthKey->mImage);
+    SiteMaterial mask;
+    mask.init(NEBULA_SHADER_FRAME_DEPTH, SiteMaterial::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false, NEBULA_CULL_NONE);
+    mask.mState.color_write = 0;
+    mask.mState.alpha_write = 1;
     mask.constants[0] = _C ? 1.0f : 2.0f;
-    NativeShader::setTexture(mask, 0, mDepthKey);
-    NativeShader::send(mask);
-    ImageEffectLocalUtil::sendTextureVertex();
-    J3DNativeTarget::end(mMask->mImage, NEBULA_TARGET_ALPHA);
+    mask.setTexture(0, mDepthKey);
+    ImageEffectLocalUtil::drawQuad(mask);
+    Frame::targetEnd(mMask->mImage, NEBULA_TARGET_ALPHA);
 
     ImageEffectLocalUtil::setMode(ImageEffectLocalUtil::Mode_Alpha, ::sEdgeColor);
-    J3DNativeTarget::begin(mEdge->mImage, mEdge->mShareAcross, mEdge->mShareDown, 0);
+    Frame::targetBegin(mEdge->mImage, mEdge->mShareAcross, mEdge->mShareDown, 0);
     ImageEffectLocalUtil::drawTexture(mMask, 255, ImageEffectLocalUtil::TexDrawType_0);
-    J3DNativeTarget::end(mEdge->mImage, NEBULA_TARGET_ALPHA);
+    Frame::targetEnd(mEdge->mImage, NEBULA_TARGET_ALPHA);
 
     ImageEffectLocalUtil::blurTexture(mEdge, mBlurScratch, mEdgeBlurred, 0.004f, NEBULA_TARGET_ALPHA, 5.0f);
 
     // The glow, then the fill over it and the depth behind everything.
-    J3DPass::writeColor(true);
-    J3DPass::writeAlpha(false);
+    ImageEffectLocalUtil::setWrites(true, false);
     ImageEffectLocalUtil::setMode(ImageEffectLocalUtil::Mode_Edge, ::sEdgeColor);
     ImageEffectLocalUtil::drawTexture(mEdgeBlurred, 255, ImageEffectLocalUtil::TexDrawType_2);
 
-    sendFlat(::sFillColor, true);
-    J3DNativeView::setZScaleOffset(0.0f, 1.0f);
-    J3DPass::stencil(filled, NEBULA_STENCIL_KEEP);
-    ImageEffectLocalUtil::sendTextureVertex();
-    J3DPass::stencil(NEBULA_STENCIL_OFF, NEBULA_STENCIL_KEEP);
-    J3DNativeView::setZScaleOffset(1.0f, 0.0f);
+    Frame::setZScaleOffset(0.0f, 1.0f);
+    ImageEffectLocalUtil::drawQuad(flatMaterial(::sFillColor, true, filled));
+    Frame::setZScaleOffset(1.0f, 0.0f);
 
     MR::clearStencil();
     MR::loadViewMtx();
     MR::loadProjectionMtx();
-
-    J3DPass::writeColor(true);
-    J3DPass::writeAlpha(true);
 }
 
 namespace MR {

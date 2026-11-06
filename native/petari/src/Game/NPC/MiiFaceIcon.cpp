@@ -55,7 +55,7 @@ void MiiFaceIcon::createImageBuffer() {
     u16 height;
     u32 imageBufferSize = mWidth * mHeight * 2 + sizeof(ResTIMG);
 
-    mImageBuffer = new (sizeof(ResTIMG)) u8[imageBufferSize];
+    mImageBuffer = new (32) u8[imageBufferSize];
     MR::zeroMemory(mImageBuffer, imageBufferSize);
 
     height = mHeight;
@@ -68,8 +68,6 @@ void MiiFaceIcon::createImageBuffer() {
     pImageBuffer->mWrapT = NEBULA_WRAP_CLAMP;
     pImageBuffer->mImage = nullptr;
     pImageBuffer->mMipmap = false;
-    pImageBuffer->mDoEdgeLod = false;
-    pImageBuffer->mBiasClamp = false;
     pImageBuffer->mMaxAnisotropy = 0;
     pImageBuffer->mMinType = NEBULA_FILTER_LINEAR;
     pImageBuffer->mMagType = NEBULA_FILTER_LINEAR;

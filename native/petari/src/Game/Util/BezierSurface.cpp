@@ -1,5 +1,5 @@
 #include "Game/Util/BezierSurface.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include <nebula_math.h>
 
@@ -648,20 +648,20 @@ void BezierSurface::calcBuffer() {
     }
 }
 
-void BezierSurface::draw() const {
+void BezierSurface::draw(TypedDraw& rDraw) const {
     // what?
 
     if (_C4 != 0) {
         if (_C4 != 0) {
-            drawTrianglePatchPosNormST();
+            drawTrianglePatchPosNormST(rDraw);
         } else {
-            drawTrianglePatchPosNorm();
+            drawTrianglePatchPosNorm(rDraw);
         }
     } else {
         if (_C4 != 0) {
-            drawTrianglePatchPosST();
+            drawTrianglePatchPosST(rDraw);
         } else {
-            drawTrianglePatchPos();
+            drawTrianglePatchPos(rDraw);
         }
     }
 }
@@ -713,7 +713,7 @@ void BezierSurface::calcTrianglePatchNormal(Vec3f* pNormalPatch) const {
     }
 }
 
-void BezierSurface::drawTrianglePatchPos() const {
+void BezierSurface::drawTrianglePatchPos(TypedDraw& rDraw) const {
     Vec3f vertexBuffer[36];
 
     const u16* vertexOrder = ::sTrianglePatchTableGroup[mDivideLevel].mTriangleStripOrder;
@@ -726,15 +726,15 @@ void BezierSurface::drawTrianglePatchPos() const {
         vertices = vertexBuffer;
     }
 
-    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, numPoints, 0);
+    VertexP* vtx = rDraw.vertices< VertexP >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, numPoints);
 
     for (s32 idx = 0; idx < numPoints; idx++) {
         u16 vertexIndex = vertexOrder[idx];
-        J3DNativeDraw::position(vertices[vertexIndex].x, vertices[vertexIndex].y, vertices[vertexIndex].z);
+        *vtx++ = {vertices[vertexIndex].x, vertices[vertexIndex].y, vertices[vertexIndex].z};
     }
 }
 
-void BezierSurface::drawTrianglePatchPosNorm() const {
+void BezierSurface::drawTrianglePatchPosNorm(TypedDraw& rDraw) const {
     Vec3f vertexBuffer[36];
     Vec3f normalBuffer[36];
 
@@ -755,16 +755,15 @@ void BezierSurface::drawTrianglePatchPosNorm() const {
         normal = normalBuffer;
     }
 
-    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, numPoints, NEBULA_SHAPE_NORMAL);
+    VertexPN* vtx = rDraw.vertices< VertexPN >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, numPoints);
 
     for (s32 idx = 0; idx < numPoints; idx++) {
         u16 vertexIndex = vertexOrder[idx];
-        J3DNativeDraw::position(vertices[vertexIndex].x, vertices[vertexIndex].y, vertices[vertexIndex].z);
-        J3DNativeDraw::normal(normal[vertexIndex].x, normal[vertexIndex].y, normal[vertexIndex].z);
+        *vtx++ = {vertices[vertexIndex].x, vertices[vertexIndex].y, vertices[vertexIndex].z, normal[vertexIndex].x, normal[vertexIndex].y, normal[vertexIndex].z};
     }
 }
 
-void BezierSurface::drawTrianglePatchPosST() const {
+void BezierSurface::drawTrianglePatchPosST(TypedDraw& rDraw) const {
     Vec3f vertexBuffer[36];
 
     const u16* vertexOrder = ::sTrianglePatchTableGroup[mDivideLevel].mTriangleStripOrder;
@@ -779,18 +778,17 @@ void BezierSurface::drawTrianglePatchPosST() const {
     }
 
     const Vec* vec;
-    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, numPoints, NEBULA_SHAPE_TEXCOORD0);
+    VertexPT* vtx = rDraw.vertices< VertexPT >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, numPoints);
 
     for (s32 idx = 0; idx < numPoints; idx++) {
         u16 vertexIndex = vertexOrder[idx];
-        J3DNativeDraw::position(vertices[vertexIndex].x, vertices[vertexIndex].y, vertices[vertexIndex].z);
         vec = &triangleST[vertexIndex];
         Vec2f texCoord(mSTPoints[0] * vec->x + mSTPoints[1] * vec->y + mSTPoints[2] * vec->z);
-        J3DNativeDraw::texCoord(texCoord.x, texCoord.y);
+        *vtx++ = {vertices[vertexIndex].x, vertices[vertexIndex].y, vertices[vertexIndex].z, texCoord.x, texCoord.y};
     }
 }
 
-void BezierSurface::drawTrianglePatchPosNormST() const {
+void BezierSurface::drawTrianglePatchPosNormST(TypedDraw& rDraw) const {
     Vec3f vertexBuffer[36];
     Vec3f normalBuffer[36];
 
@@ -812,14 +810,12 @@ void BezierSurface::drawTrianglePatchPosNormST() const {
         normal = normalBuffer;
     }
 
-    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, numPoints, NEBULA_SHAPE_NORMAL | NEBULA_SHAPE_TEXCOORD0);
+    VertexPNT* vtx = rDraw.vertices< VertexPNT >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, numPoints);
 
     for (s32 idx = 0; idx < numPoints; idx++) {
         u16 vertexIndex = vertexOrder[idx];
-        J3DNativeDraw::position(vertices[vertexIndex].x, vertices[vertexIndex].y, vertices[vertexIndex].z);
-        J3DNativeDraw::normal(normal[vertexIndex].x, normal[vertexIndex].y, normal[vertexIndex].z);
         Vec2f texCoord =
             (mSTPoints[0] * triangleST[vertexIndex].x + mSTPoints[1] * triangleST[vertexIndex].y + mSTPoints[2] * triangleST[vertexIndex].z);
-        J3DNativeDraw::texCoord(texCoord.x, texCoord.y);
+        *vtx++ = {vertices[vertexIndex].x, vertices[vertexIndex].y, vertices[vertexIndex].z, normal[vertexIndex].x, normal[vertexIndex].y, normal[vertexIndex].z, texCoord.x, texCoord.y};
     }
 }

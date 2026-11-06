@@ -1,15 +1,15 @@
 #pragma once
 
-#include <JSystem/J3DGraphAnimator/J3DAnimation.hpp>
+#include "Game/Render/Clip.hpp"
 #include <nebula_geometry.hpp>
 
-class J3DAnmTransform;
-class J3DModel;
+class Clip;
+class Model;
 class XanimeCore;
 class XanimeGroupInfo;
 class XanimeResourceTable;
 
-class XanimeFrameCtrl : public J3DFrameCtrl {
+class XanimeFrameCtrl : public FrameCtrl {
 public:
     /// @brief Creates a new `XanimeFrameCtrl`.
     XanimeFrameCtrl();
@@ -19,8 +19,8 @@ public:
 
 class XanimePlayer {
 public:
-    XanimePlayer(J3DModel*, XanimeResourceTable*);
-    XanimePlayer(J3DModel*, XanimeResourceTable*, XanimePlayer*);
+    XanimePlayer(Model*, XanimeResourceTable*);
+    XanimePlayer(Model*, XanimeResourceTable*, XanimePlayer*);
 
     void init();
     void stopAnimation();
@@ -35,15 +35,15 @@ public:
     void changeAnimation(const XanimeGroupInfo*);
     void prepareAnimation(const XanimeGroupInfo*);
     void runNextAnimation();
-    void changeAnimationSimple(J3DAnmTransform*);
+    void changeAnimationSimple(Clip*);
     void changeSpeed(f32);
     void changeInterpoleFrame(s32);
     bool changeTrackWeight(u32, f32);
-    void calcAnm(u16);
-    void setModel(J3DModel*);
-    void overWriteMtxCalc(u16);
-    void clearMtxCalc(u16);
-    void clearAnm(u16);
+    void calcAnm(u32);
+    void setModel(Model*);
+    void overWriteMtxCalc(u32);
+    void clearMtxCalc(u32);
+    void clearAnm(u32);
     void updateBeforeMovement();
     void updateAfterMovement();
     void updateInterpoleRatio();
@@ -74,8 +74,8 @@ public:
         return _20->getRate();
     }
 
-    J3DModel* mModel;
-    J3DModelData* mModelData;
+    Model* mModel;
+    ModelData* mModelData;
     f32 _08;
     f32 _0C;
     f32 mWeights[4];

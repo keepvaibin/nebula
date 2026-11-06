@@ -1,6 +1,6 @@
 #include "Game/AreaObj/WarpCube.hpp"
-#include "Game/Util/NativeShader.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/FrameList.hpp"
 #include "Game/LiveActor/ActorCameraInfo.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util/AreaObjUtil.hpp"
@@ -84,10 +84,9 @@ void WarpCube::movement() {
 }
 
 void WarpCube::draw() const {
-    NebulaNativeMaterial material;
+    SiteMaterial material;
     TDDraw::setupNative(&material, 0, 1, 0);
-    NativeShader::setDepth(material, true, NEBULA_COMPARE_LEQUAL, false);
-    NativeShader::send(material);
+    material.setDepth(true, NEBULA_COMPARE_LEQUAL, false);
 
     Vec3f cubeRotate;
     Vec3f up(0.0f, 1.0f, 0.0f);
@@ -105,7 +104,8 @@ void WarpCube::draw() const {
         flags = 0x1FCF0010;
     }
 
-    TDDraw::drawSphere(cubePos + up * 120.0f, 120.0f, flags, 16);
+    TypedDraw site = TDDraw::site(material, 0);
+    TDDraw::drawSphere(site, cubePos + up * 120.0f, 120.0f, flags, 16);
 }
 
 void WarpCube::init(const JMapInfoIter& rIter) {

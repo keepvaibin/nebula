@@ -1,7 +1,100 @@
 #include "nw4r/lyt/common.h"
-#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
+#include "Game/Render/TypedDraw.hpp"
 #include "nw4r/lyt/layout.h"
 #include <cstdio>
+#include <string.h>
+
+// A pane's quad: position, colour, as many coordinates as its material reads.
+template < u32 N >
+struct LayoutQuadVertex {
+    f32 x, y, z;
+    Rgba8 color;
+    f32 uv[N + (N == 0 ? 1 : 0)][2];
+};
+
+template < u32 N >
+struct VertexLayout< LayoutQuadVertex< N > > {
+    static constexpr u32 count = 1 + N;
+    static constexpr u16 cStride = sizeof(LayoutQuadVertex< N >);
+    static const NebulaLayoutInput* inputs() {
+        static constexpr NebulaLayoutInput list[9] = {
+            {NEBULA_INPUT_COLOR0, 0, 2, 0, 12, cStride},
+            {NEBULA_INPUT_COORD0, 0, 1, 0, 16, cStride},
+            {NEBULA_INPUT_COORD0 + 1, 0, 1, 0, 24, cStride},
+            {NEBULA_INPUT_COORD0 + 2, 0, 1, 0, 32, cStride},
+            {NEBULA_INPUT_COORD0 + 3, 0, 1, 0, 40, cStride},
+            {NEBULA_INPUT_COORD0 + 4, 0, 1, 0, 48, cStride},
+            {NEBULA_INPUT_COORD0 + 5, 0, 1, 0, 56, cStride},
+            {NEBULA_INPUT_COORD0 + 6, 0, 1, 0, 64, cStride},
+            {NEBULA_INPUT_COORD0 + 7, 0, 1, 0, 72, cStride},
+        };
+        return list;
+    }
+};
+
+namespace {
+    enum DrawKind { Draw_Nothing, Draw_Picture, Draw_Form };
+    DrawKind sDrawKind = Draw_Nothing;
+    Mtx sDrawMtx;
+    SiteMaterial sDrawPicture;
+    const nw4r::lyt::detail::LayoutForm* sDrawForm = nullptr;
+    u32 sDrawConstants = 0;
+    u32 sDrawTable = 0;
+    u32 sDrawState = 0;
+
+    template < u32 N >
+    void writeQuadOf(TypedDraw& rSite, const nw4r::math::VEC2& rBase, const nw4r::lyt::Size& rSize, const nw4r::math::VEC2 (*pCoords)[4],
+                     const nw4r::ut::Color* pColors) {
+        LayoutQuadVertex< N >* pOut = rSite.template vertices< LayoutQuadVertex< N > >(NEBULA_PRIMITIVE_QUADS, 4);
+        // Corners in the quad's order; a pane's arrays hold them left to right, top to bottom.
+        constexpr u8 cCorner[4] = {0, 1, 3, 2};
+        for (u32 i = 0; i < 4; i++) {
+            const u32 corner = cCorner[i];
+            LayoutQuadVertex< N >& rOut = pOut[i];
+            rOut.x = rBase.x + ((corner & 1) != 0 ? rSize.width : 0.0f);
+            rOut.y = rBase.y + ((corner & 2) != 0 ? rSize.height : 0.0f);
+            rOut.z = 0.0f;
+            rOut.color = pColors != nullptr ? Rgba8(pColors[corner]) : Rgba8(0, 0, 0, 0);
+            for (u32 c = 0; c < N; c++) {
+                rOut.uv[c][0] = pCoords[c][corner].x;
+                rOut.uv[c][1] = pCoords[c][corner].y;
+            }
+        }
+    }
+
+    void writeQuad(TypedDraw& rSite, const nw4r::math::VEC2& rBase, const nw4r::lyt::Size& rSize, u8 num, const nw4r::math::VEC2 (*pCoords)[4],
+                   const nw4r::ut::Color* pColors) {
+        switch (num) {
+        case 0:
+            writeQuadOf< 0 >(rSite, rBase, rSize, pCoords, pColors);
+            break;
+        case 1:
+            writeQuadOf< 1 >(rSite, rBase, rSize, pCoords, pColors);
+            break;
+        case 2:
+            writeQuadOf< 2 >(rSite, rBase, rSize, pCoords, pColors);
+            break;
+        case 3:
+            writeQuadOf< 3 >(rSite, rBase, rSize, pCoords, pColors);
+            break;
+        case 4:
+            writeQuadOf< 4 >(rSite, rBase, rSize, pCoords, pColors);
+            break;
+        case 5:
+            writeQuadOf< 5 >(rSite, rBase, rSize, pCoords, pColors);
+            break;
+        case 6:
+            writeQuadOf< 6 >(rSite, rBase, rSize, pCoords, pColors);
+            break;
+        case 7:
+            writeQuadOf< 7 >(rSite, rBase, rSize, pCoords, pColors);
+            break;
+        default:
+            writeQuadOf< 8 >(rSite, rBase, rSize, pCoords, pColors);
+            break;
+        }
+    }
+}  // namespace
 
 namespace nw4r {
     namespace lyt {
@@ -103,48 +196,47 @@ namespace nw4r {
                 }
             }
 
+            void SetDrawMtx(const f32 (*pMtx)[4]) {
+                memcpy(sDrawMtx, pMtx, sizeof(sDrawMtx));
+            }
+
+            const f32 (*GetDrawMtx())[4] {
+                return sDrawMtx;
+            }
+
+            void SetDrawNothing() {
+                sDrawKind = Draw_Nothing;
+            }
+
+            void SetDrawPicture(const SiteMaterial& rMaterial) {
+                sDrawKind = Draw_Picture;
+                sDrawPicture = rMaterial;
+            }
+
+            void SetDrawForm(const LayoutForm* pForm, u32 constants, u32 table, u32 state) {
+                sDrawKind = Draw_Form;
+                sDrawForm = pForm;
+                sDrawConstants = constants;
+                sDrawTable = table;
+                sDrawState = state;
+            }
+
             void DrawQuad(const math::VEC2& basePt, const Size& size, u8 num, const math::VEC2 (*texCoords)[4], const ut::Color* vtxColors) {
-                J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4,
-                                     (vtxColors ? NEBULA_SHAPE_COLOR0 : 0) | ((1u << num) - 1u) * NEBULA_SHAPE_TEXCOORD0);
-                J3DNativeDraw::position(basePt.x, basePt.y, 0.0f);
-
-                if (vtxColors) {
-                    J3DNativeDraw::color(vtxColors[0]);
+                if (sDrawKind == Draw_Nothing) {
+                    return;
                 }
-
-                for (int i = 0; i < num; i++) {
-                    J3DNativeDraw::texCoord(texCoords[i][0].x, texCoords[i][0].y);
+                if (sDrawKind == Draw_Picture) {
+                    TypedDraw site = TypedDraw::eyeSpace(sDrawPicture, sDrawMtx);
+                    writeQuad(site, basePt, size, num, texCoords, vtxColors);
+                    return;
                 }
-
-                J3DNativeDraw::position(basePt.x + size.width, basePt.y, 0.0f);
-
-                if (vtxColors) {
-                    J3DNativeDraw::color(vtxColors[1]);
-                }
-
-                for (int i = 0; i < num; i++) {
-                    J3DNativeDraw::texCoord(texCoords[i][1].x, texCoords[i][1].y);
-                }
-
-                J3DNativeDraw::position(basePt.x + size.width, basePt.y + size.height, 0.0f);
-
-                if (vtxColors) {
-                    J3DNativeDraw::color(vtxColors[3]);
-                }
-
-                for (int i = 0; i < num; i++) {
-                    J3DNativeDraw::texCoord(texCoords[i][3].x, texCoords[i][3].y);
-                }
-
-                J3DNativeDraw::position(basePt.x, basePt.y + size.height, 0.0f);
-
-                if (vtxColors) {
-                    J3DNativeDraw::color(vtxColors[2]);
-                }
-
-                for (int i = 0; i < num; i++) {
-                    J3DNativeDraw::texCoord(texCoords[i][2].x, texCoords[i][2].y);
-                }
+                TypedDraw site = TypedDraw::eyeSpace(sDrawMtx);
+                u64 vertex;
+                u64 pixel;
+                memcpy(&vertex, &sDrawForm->vertex, sizeof(vertex));
+                memcpy(&pixel, &sDrawForm->pixel, sizeof(pixel));
+                site.setForm(vertex, pixel, sDrawForm->inputs, sDrawForm->input_count, sDrawConstants, sDrawTable, sDrawState);
+                writeQuad(site, basePt, size, num, texCoords, vtxColors);
             }
 
             void DrawQuad(const math::VEC2& basePt, const Size& size, u8 num, const math::VEC2 (*texCoords)[4], const ut::Color* vtxColors,

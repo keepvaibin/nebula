@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include "Game/Util/NativeMesh.hpp"
+#include "Game/Render/TypedDraw.hpp"
 
 class JUTTexture;
 class OceanSpherePoint;
@@ -52,10 +52,15 @@ public:
     OceanSpherePoint* getPlanePointRightUpper(int row, int col) const;
     OceanSpherePoint* getPlanePointLeftLower(int row, int col) const;
     OceanSpherePoint* getPlanePointRightLower(int row, int col) const;
-    void loadMaterialFace() const;
-    void loadMaterialBack() const;
-    void drawSphere(bool useEnvMap, NativeMesh* pMesh) const;
-    void sendVertex(const OceanSpherePoint* pPoint, bool useEnvMap, NativeMesh* pMesh) const;
+    SiteMaterial loadMaterialFace() const;
+    SiteMaterial loadMaterialBack() const;
+    // Every corner of the sphere in order, through `begin(count)` for each strip.
+    template < class T, class Begin >
+    void writeSphere(Begin begin) const;
+    void writeVertex(const OceanSpherePoint* pPoint, VertexPN*& rVtx) const;
+    void writeVertex(const OceanSpherePoint* pPoint, VertexPNT2*& rVtx) const;
+    void drawFace(TypedDraw& rDraw) const;
+    void drawBack(TypedDraw& rDraw) const;
 
     f32 mRadius;
     f32 mRadiusTarget;
@@ -93,8 +98,8 @@ public:
     u8 _10A;
     u8 _10B;
     // The sphere's face and back as the renderer draws them.
-    NativeMesh mMeshFace;
-    NativeMesh mMeshBack;
+    SiteMesh< VertexPNT2 > mMeshFace;
+    SiteMesh< VertexPN > mMeshBack;
     bool mAlwaysUseRealDrawing;
     bool mIsCameraInside;
     bool mIsStartPosCamera;

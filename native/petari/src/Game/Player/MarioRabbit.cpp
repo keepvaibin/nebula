@@ -291,9 +291,9 @@ bool MarioRabbit::update() {
     MR::normalizeOrZero(&_5C);
     switch (_68) {
     case 0:
-        setJointGlobalMtx(static_cast< u8 >(MR::getJointIndex(mActor, "Hip")), _2C);
+        setJointGlobalMtx(static_cast< u32 >(MR::getJointIndex(mActor, "Hip")), _2C);
     case 1:
-        setJointGlobalMtx(static_cast< u8 >(MR::getJointIndex(mActor, "Spine1")), _2C);
+        setJointGlobalMtx(static_cast< u32 >(MR::getJointIndex(mActor, "Spine1")), _2C);
         break;
     }
 
@@ -308,7 +308,7 @@ bool MarioRabbit::close() {
         stopAnimation(nullptr, "\212\356\226\173" /* 基本 */);
     }
 
-    setJointGlobalMtx(static_cast< u8 >(MR::getJointIndex(mActor, "Hip")), nullptr);
-    setJointGlobalMtx(static_cast< u8 >(MR::getJointIndex(mActor, "Spine1")), nullptr);
+    setJointGlobalMtx(static_cast< u32 >(MR::getJointIndex(mActor, "Hip")), nullptr);
+    setJointGlobalMtx(static_cast< u32 >(MR::getJointIndex(mActor, "Spine1")), nullptr);
     return true;
 }

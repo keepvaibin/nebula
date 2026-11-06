@@ -1,0 +1,582 @@
+// SPDX-License-Identifier: GPL-3.0-only
+#include "galaxy/render/ambient_occlusion_objects.h"
+#include "galaxy/render/program_table.h"
+#include "render/core/frame_core.h"
+
+#include <algorithm>
+#include <cstring>
+#include <fstream>
+#include <map>
+#include <iterator>
+#include <stdexcept>
+#include <unordered_set>
+#include <utility>
+
+namespace galaxy::render::core {
+
+namespace {
+
+constexpr std::size_t kArenaPage = 64ull << 20u;
+constexpr std::size_t kSlotPage = 1ull << 20u;
+constexpr std::size_t kSlotAlign = 256u;
+
+template <typename T>
+const T* at(const void* file, std::uint32_t offset) noexcept {
+    return reinterpret_cast<const T*>(static_cast<const std::byte*>(file) + offset);
+}
+
+std::uint64_t hash_bytes(const void* data, std::size_t size, std::uint64_t hash = 14695981039346656037ull) noexcept {
+    const auto* p = static_cast<const std::uint8_t*>(data);
+    for (std::size_t i = 0; i < size; ++i) {
+        hash = (hash ^ p[i]) * 1099511628211ull;
+    }
+    return hash;
+}
+
+// A mesh's bounds under each of its draw matrices, for the occluders.
+void object_slots_of(const NebulaModelMesh& mesh, const std::byte* positions, const std::byte* matrices,
+                     std::vector<ao::ObjectSlot>& out, std::uint32_t& first, std::uint32_t& count) {
+    first = static_cast<std::uint32_t>(out.size());
+    if (mesh.vertex_count == 0u) {
+        count = 0u;
+        return;
+    }
+    std::map<std::uint32_t, ao::ObjectSlot> slots;
+    for (std::uint32_t v = 0; v < mesh.vertex_count; ++v) {
+        std::uint32_t matrix = mesh.single_matrix;
+        if (mesh.single_matrix == NEBULA_MODEL_NONE) {
+            std::memcpy(&matrix, matrices + 4u * v, 4u);
+        }
+        float p[3];
+        std::memcpy(p, positions + 12u * v, sizeof(p));
+        const auto [it, fresh] = slots.try_emplace(matrix * kRowsPerMatrix);
+        ao::ObjectSlot& slot = it->second;
+        if (fresh) {
+            slot.row = matrix * kRowsPerMatrix;
+            std::copy_n(p, 3u, slot.min);
+            std::copy_n(p, 3u, slot.max);
+        } else {
+            for (unsigned c = 0; c < 3u; ++c) {
+                slot.min[c] = std::min(slot.min[c], p[c]);
+                slot.max[c] = std::max(slot.max[c], p[c]);
+            }
+        }
+    }
+    for (const auto& [row, slot] : slots) {
+        out.push_back(slot);
+    }
+    count = static_cast<std::uint32_t>(out.size()) - first;
+}
+
+}  // namespace
+
+std::uint64_t Registries::memory_bytes() noexcept {
+    const std::lock_guard guard(lock_);
+    std::uint64_t bytes = 0u;
+    for (const Arena& arena : arenas_) {
+        bytes += arena.bytes;
+    }
+    return bytes + slot_bytes_;
+}
+
+void Registries::initialize(gpu::Device* device, DeviceGate& gate) {
+    device_ = device;
+    gate_ = &gate;
+    arenas_.clear();
+    meshes_.assign(1u, GpuMesh{});
+    models_.assign(1u, GpuModel{});
+    tables_.clear();
+    tables_.resize(1u);
+    slot_page_ = {};
+    slot_page_used_ = 0u;
+    slot_page_capacity_ = 0u;
+    slot_bytes_ = 0u;
+}
+
+void Registries::shutdown() noexcept {
+    arenas_.clear();
+    meshes_.clear();
+    models_.clear();
+    tables_.clear();
+    slot_pages_.clear();
+    slot_page_ = {};
+    device_ = nullptr;
+}
+
+Registries::Placed Registries::place(std::size_t bytes) {
+    bytes = (bytes + 255u) & ~std::size_t{255u};
+    for (std::uint32_t i = 0; i < arenas_.size(); ++i) {
+        Arena& arena = arenas_[i];
+        if (arena.memory && arena.bytes - arena.used >= bytes) {
+            const Placed placed{arena.memory.cpu + arena.used, arena.memory.gpu + arena.used, i};
+            arena.used += bytes;
+            ++arena.live;
+            return placed;
+        }
+    }
+    const auto index = static_cast<std::uint32_t>(arenas_.size());
+    Arena& arena = arenas_.emplace_back();
+    arena.bytes = std::max(bytes, kArenaPage);
+    arena.memory = gpu::create_upload_memory(device_, arena.bytes, "Nebula Meshes");
+    if (!arena.memory) {
+        throw std::runtime_error("no memory for meshes");
+    }
+    arena.used = bytes;
+    arena.live = 1u;
+    return {arena.memory.cpu, arena.memory.gpu, index};
+}
+
+std::uint32_t Registries::take_mesh_ids(std::uint32_t count) {
+    if (count != 0u) {
+        const auto run = free_mesh_runs_.find(count);
+        if (run != free_mesh_runs_.end() && !run->second.empty()) {
+            const std::uint32_t first = run->second.back();
+            run->second.pop_back();
+            return first;
+        }
+    }
+    const std::uint32_t first = next_mesh_;
+    next_mesh_ += count;
+    return first;
+}
+
+namespace {
+
+// What a model's file says, with no device involved.
+void read_model(const void* file, GpuModel& model, std::vector<GpuMesh>& meshes) {
+    const auto& header = *static_cast<const NebulaModelHeader*>(file);
+    if (header.draw_matrix_count != 0u) {
+        const auto* draw = at<NebulaModelDrawMatrix>(file, header.draw_matrices_at);
+        model.draw_matrices.assign(draw, draw + header.draw_matrix_count);
+    }
+    if (header.envelope_count != 0u) {
+        const auto* envelopes = at<NebulaModelEnvelope>(file, header.envelopes_at);
+        model.envelopes.assign(envelopes, envelopes + header.envelope_count);
+    }
+    if (header.mix_count != 0u) {
+        const auto* mixes = at<NebulaModelMix>(file, header.mixes_at);
+        model.mixes.assign(mixes, mixes + header.mix_count);
+    }
+    if (header.joint_count != 0u) {
+        const auto* joints = at<NebulaModelJoint>(file, header.joints_at);
+        model.joints.assign(joints, joints + header.joint_count);
+        if (header.envelope_count != 0u) {
+            const auto* binds = at<float>(file, header.inverse_binds_at);
+            model.inverse_binds.assign(binds, binds + 12u * header.joint_count);
+        }
+    }
+    model.tables.draw_matrix_count = header.draw_matrix_count;
+    model.tables.joint_count = header.joint_count;
+    model.tables.has_billboard = (header.flags & NEBULA_MODEL_HAS_BILLBOARD) != 0u;
+    model.mesh_count = header.mesh_count;
+
+    meshes.resize(header.mesh_count);
+    const auto* file_meshes = at<NebulaModelMesh>(file, header.meshes_at);
+    for (std::uint32_t m = 0; m < header.mesh_count; ++m) {
+        const NebulaModelMesh& mesh = file_meshes[m];
+        GpuMesh& gpu_mesh = meshes[m];
+        gpu_mesh.vertex_count = mesh.vertex_count;
+        gpu_mesh.refined_vertex_count = mesh.refined_vertex_count;
+        gpu_mesh.index_count = mesh.index_count;
+        gpu_mesh.refined_index_count = mesh.refined_index_count;
+        gpu_mesh.further_stride = mesh.further_stride;
+        gpu_mesh.single_matrix = mesh.single_matrix;
+        gpu_mesh.index_bytes = mesh.index_bytes;
+        std::copy_n(mesh.min, 3u, gpu_mesh.min);
+        std::copy_n(mesh.max, 3u, gpu_mesh.max);
+        object_slots_of(mesh, at<std::byte>(file, mesh.positions_at),
+                        mesh.matrices_at != 0u ? at<std::byte>(file, mesh.matrices_at) : nullptr, model.object_slots,
+                        gpu_mesh.object_slots_first, gpu_mesh.object_slots_count);
+    }
+}
+
+}  // namespace
+
+void Registries::place_model(std::uint32_t id, const LiveModel& live, GpuModel model, std::vector<GpuMesh>& meshes, const Placed& placed) {
+    const auto& header = *static_cast<const NebulaModelHeader*>(live.file);
+    const auto* file_meshes = at<NebulaModelMesh>(live.file, header.meshes_at);
+    model.first_mesh = live.first_mesh;
+    model.arena = placed.arena;
+    const auto stream = [&](std::uint32_t offset) -> gpu::Address {
+        return offset != 0u ? placed.gpu + (offset - header.geometry_at) : gpu::Address{0u};
+    };
+    for (std::uint32_t m = 0; m < header.mesh_count; ++m) {
+        const NebulaModelMesh& mesh = file_meshes[m];
+        GpuMesh& gpu_mesh = meshes[m];
+        gpu_mesh.positions = stream(mesh.positions_at);
+        gpu_mesh.attributes = stream(mesh.attributes_at);
+        gpu_mesh.matrices = stream(mesh.matrices_at);
+        gpu_mesh.further = stream(mesh.further_at);
+        gpu_mesh.indices = stream(mesh.indices_at);
+        gpu_mesh.refined_indices = stream(mesh.refined_indices_at);
+        gpu_mesh.arena = placed.arena;
+        gpu_mesh.model = id;
+        incoming_.meshes.emplace_back(live.first_mesh + m, gpu_mesh);
+    }
+    incoming_.models.emplace_back(id, std::move(model));
+}
+
+std::uint32_t Registries::model_register(const void* file, std::uint32_t* first_mesh) {
+    return gate_->use([&] {
+        const auto& header = *static_cast<const NebulaModelHeader*>(file);
+        GpuModel model;
+        std::vector<GpuMesh> meshes;
+        read_model(file, model, meshes);
+
+        Placed placed{};
+        std::uint32_t id;
+        {
+            const std::lock_guard guard(lock_);
+            placed = header.geometry_size != 0u ? place(header.geometry_size) : Placed{};
+            if (!free_models_.empty()) {
+                id = free_models_.back();
+                free_models_.pop_back();
+            } else {
+                id = next_model_++;
+            }
+            const LiveModel live{file, take_mesh_ids(header.mesh_count)};
+            live_models_[id] = live;
+            place_model(id, live, std::move(model), meshes, placed);
+            if (first_mesh != nullptr) {
+                *first_mesh = live.first_mesh;
+            }
+        }
+        if (header.geometry_size != 0u) {
+            std::memcpy(placed.cpu, at<std::byte>(file, header.geometry_at), header.geometry_size);
+        }
+        return id;
+    });
+}
+
+void Registries::model_free(std::uint32_t model) {
+    const auto hold = gate_->hold();
+    const std::lock_guard guard(lock_);
+    live_models_.erase(model);
+    incoming_.freed_models.push_back(model);
+}
+
+void Registries::place_mesh(std::uint32_t id, const LiveMesh& live) {
+    const std::size_t bytes = std::size_t{live.vertex_bytes} + std::size_t{live.index_count} * 4u;
+    const Placed placed = place(bytes);
+    std::memcpy(placed.cpu, live.bytes.get(), bytes);
+    GpuMesh gpu_mesh;
+    gpu_mesh.positions = placed.gpu;
+    gpu_mesh.indices = live.index_count != 0u ? placed.gpu + live.vertex_bytes : gpu::Address{0u};
+    gpu_mesh.vertex_count = live.stride != 0u ? live.vertex_bytes / live.stride : 0u;
+    gpu_mesh.index_count = live.index_count;
+    gpu_mesh.site_stride = live.stride;
+    gpu_mesh.arena = placed.arena;
+    incoming_.meshes.emplace_back(id, gpu_mesh);
+}
+
+std::uint32_t Registries::mesh_register(const NebulaFrameMesh& mesh) {
+    return gate_->use([&] {
+        const std::size_t index_bytes = std::size_t{mesh.index_count} * 4u;
+        LiveMesh live;
+        live.bytes = std::make_unique<std::byte[]>(std::size_t{mesh.vertex_bytes} + index_bytes);
+        std::memcpy(live.bytes.get(), mesh.vertices, mesh.vertex_bytes);
+        if (mesh.index_count != 0u) {
+            std::memcpy(live.bytes.get() + mesh.vertex_bytes, mesh.indices, index_bytes);
+        }
+        live.vertex_bytes = mesh.vertex_bytes;
+        live.stride = mesh.stride;
+        live.index_count = mesh.index_count;
+        const std::lock_guard guard(lock_);
+        const std::uint32_t id = take_mesh_ids(1u);
+        place_mesh(id, live);
+        live_meshes_[id] = std::move(live);
+        return id;
+    });
+}
+
+void Registries::mesh_free(std::uint32_t mesh) {
+    const auto hold = gate_->hold();
+    const std::lock_guard guard(lock_);
+    live_meshes_.erase(mesh);
+    incoming_.freed_meshes.push_back(mesh);
+}
+
+void Registries::place_slot(const float (*rows)[4], std::uint32_t vertex_rows, std::uint32_t pixel_rows) {
+    const auto take = [this](std::size_t bytes) {
+        bytes = (std::max<std::size_t>(bytes, 16u) + kSlotAlign - 1u) & ~(kSlotAlign - 1u);
+        if (!slot_page_ || slot_page_used_ + bytes > slot_page_capacity_) {
+            slot_page_capacity_ = std::max(bytes, kSlotPage);
+            slot_page_ = gpu::create_upload_memory(device_, slot_page_capacity_, "Nebula Material Slots");
+            if (!slot_page_) {
+                throw std::runtime_error("no memory for material slots");
+            }
+            slot_pages_.push_back(slot_page_);
+            slot_page_used_ = 0u;
+            slot_bytes_ += slot_page_capacity_;
+        }
+        const std::size_t at = slot_page_used_;
+        slot_page_used_ += bytes;
+        return at;
+    };
+    const std::size_t vertex_at = take(std::size_t{vertex_rows} * 16u);
+    gpu::UploadMemory vertex_page = slot_page_;
+    std::memcpy(vertex_page.cpu + vertex_at, rows, std::size_t{vertex_rows} * 16u);
+    const std::size_t pixel_at = take(std::size_t{pixel_rows} * 16u);
+    std::memcpy(slot_page_.cpu + pixel_at, rows + vertex_rows, std::size_t{pixel_rows} * 16u);
+
+    StaticSlot slot;
+    slot.vertex_rows = vertex_page.gpu + vertex_at;
+    slot.pixel_rows = slot_page_.gpu + pixel_at;
+    incoming_.slots.push_back(slot);
+}
+
+void Registries::lose_device() noexcept {
+    const std::lock_guard guard(lock_);
+    arenas_.clear();
+    retired_.clear();
+    slot_pages_.clear();
+    slot_page_ = {};
+    slot_page_used_ = 0u;
+    slot_page_capacity_ = 0u;
+    slot_bytes_ = 0u;
+    incoming_ = RegistryOps{};
+    no_table_ = TextureTable{};
+    device_ = nullptr;
+}
+
+void Registries::restart(gpu::Device* device) {
+    const std::lock_guard guard(lock_);
+    device_ = device;
+    meshes_.assign(1u, GpuMesh{});
+    models_.assign(1u, GpuModel{});
+    slots_.clear();
+    pipelines_.clear();
+    tables_.clear();
+    tables_.resize(1u);
+
+    for (const auto& [id, live] : live_models_) {
+        const auto& header = *static_cast<const NebulaModelHeader*>(live.file);
+        GpuModel model;
+        std::vector<GpuMesh> meshes;
+        read_model(live.file, model, meshes);
+        const Placed placed = header.geometry_size != 0u ? place(header.geometry_size) : Placed{};
+        place_model(id, live, std::move(model), meshes, placed);
+        if (header.geometry_size != 0u) {
+            std::memcpy(placed.cpu, at<std::byte>(live.file, header.geometry_at), header.geometry_size);
+        }
+    }
+    for (const auto& [id, live] : live_meshes_) {
+        place_mesh(id, live);
+    }
+
+    // Slots, pipelines and tables take their places in id order.
+    std::vector<const SlotRecord*> records(next_slot_, nullptr);
+    for (const auto& [hash, bucket] : slot_by_hash_) {
+        for (const SlotRecord& record : bucket) {
+            records[record.id] = &record;
+        }
+    }
+    for (const SlotRecord* record : records) {
+        place_slot(reinterpret_cast<const float (*)[4]>(record->cpu.get()), record->vertex_rows, record->pixel_rows);
+    }
+    for (const NebulaPipelineDesc& desc : all_pipelines_) {
+        incoming_.pipelines.push_back(PipelineEntry{desc, program_reads_world(desc.vertex), program_lit(desc.pixel)});
+    }
+    std::vector<const TableKey*> keys(next_table_, nullptr);
+    for (const auto& [hash, bucket] : table_by_hash_) {
+        for (const TableKey& key : bucket) {
+            keys[key.id] = &key;
+        }
+    }
+    for (std::uint32_t id = 1u; id < next_table_; ++id) {
+        TextureTable& table = incoming_.tables.emplace_back();
+        if (keys[id] != nullptr) {
+            table.count = keys[id]->count;
+            table.list = keys[id]->list;
+        }
+    }
+}
+
+std::uint32_t Registries::material_register(const float (*rows)[4], std::uint32_t vertex_rows, std::uint32_t pixel_rows) {
+    return gate_->use([&] { return material_register_locked(rows, vertex_rows, pixel_rows); });
+}
+
+std::uint32_t Registries::material_register_locked(const float (*rows)[4], std::uint32_t vertex_rows, std::uint32_t pixel_rows) {
+    const std::size_t count = std::size_t{vertex_rows} + pixel_rows;
+    const std::uint64_t hash = hash_bytes(rows, count * 16u, (std::uint64_t{vertex_rows} << 32u) ^ pixel_rows);
+    const std::lock_guard guard(lock_);
+    auto& bucket = slot_by_hash_[hash];
+    for (const SlotRecord& record : bucket) {
+        if (record.vertex_rows == vertex_rows && record.pixel_rows == pixel_rows &&
+            std::memcmp(record.cpu.get(), rows, count * 16u) == 0) {
+            return record.id;
+        }
+    }
+    place_slot(rows, vertex_rows, pixel_rows);
+    const std::uint32_t id = next_slot_++;
+    // Compares read the rows back from the mapped page's copy kept here: the page is write-combined.
+    SlotRecord record;
+    record.vertex_rows = vertex_rows;
+    record.pixel_rows = pixel_rows;
+    record.id = id;
+    record.cpu = std::make_unique<float[]>(count * 4u);
+    std::memcpy(record.cpu.get(), rows, count * 16u);
+#if defined(NEBULA_DEV)
+    slot_rows_.resize(std::max<std::size_t>(slot_rows_.size(), id + 1u));
+    slot_rows_[id] = record.cpu.get();
+#endif
+    bucket.push_back(std::move(record));
+    return id;
+}
+
+std::uint32_t Registries::pipeline_register(const NebulaPipelineDesc& desc) {
+    const std::uint64_t hash = hash_bytes(&desc, sizeof(desc));
+    const std::lock_guard guard(lock_);
+    auto& bucket = pipeline_by_hash_[hash];
+    for (const std::uint32_t id : bucket) {
+        if (std::memcmp(&all_pipelines_[id], &desc, sizeof(desc)) == 0) {
+            return id;
+        }
+    }
+    const std::uint32_t id = static_cast<std::uint32_t>(all_pipelines_.size());
+    all_pipelines_.push_back(desc);
+    incoming_.pipelines.push_back(PipelineEntry{desc, program_reads_world(desc.vertex), program_lit(desc.pixel)});
+    bucket.push_back(id);
+    return id;
+}
+
+void Registries::write_pipeline_list(const char* path) {
+    std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    const std::lock_guard guard(lock_);
+    out.write(reinterpret_cast<const char*>(all_pipelines_.data()),
+              static_cast<std::streamsize>(all_pipelines_.size() * sizeof(NebulaPipelineDesc)));
+}
+
+std::uint32_t Registries::texture_table(const NebulaFrameTexture* list, std::uint32_t count) {
+    count = std::min(count, kTableTextures);
+    const std::uint64_t hash = hash_bytes(list, count * sizeof(NebulaFrameTexture), count);
+    const std::lock_guard guard(lock_);
+    auto& bucket = table_by_hash_[hash];
+    for (const TableKey& key : bucket) {
+        if (key.count == count && std::memcmp(key.list.data(), list, count * sizeof(NebulaFrameTexture)) == 0) {
+            return key.id;
+        }
+    }
+    const std::uint32_t id = next_table_++;
+    TableKey& key = bucket.emplace_back();
+    key.id = id;
+    key.count = count;
+    std::copy_n(list, count, key.list.begin());
+    TextureTable& table = incoming_.tables.emplace_back();
+    table.count = count;
+    std::copy_n(list, count, table.list.begin());
+    return id;
+}
+
+RegistryOps Registries::take_ops() {
+    const std::lock_guard guard(lock_);
+    return std::exchange(incoming_, RegistryOps{});
+}
+
+void Registries::apply(RegistryOps& ops, std::uint64_t submitted_fence) {
+    for (auto& [id, model] : ops.models) {
+        if (models_.size() <= id) {
+            models_.resize(id + 1u);
+        }
+        GpuModel& placed = models_[id];
+        placed = std::move(model);
+        placed.tables.joints = placed.joints.data();
+        placed.tables.draw_matrices = placed.draw_matrices.data();
+        placed.tables.envelopes = placed.envelopes.data();
+        placed.tables.mixes = placed.mixes.data();
+        placed.tables.inverse_binds = reinterpret_cast<const float (*)[4]>(placed.inverse_binds.data());
+    }
+    for (const auto& [id, mesh] : ops.meshes) {
+        if (meshes_.size() <= id) {
+            meshes_.resize(id + 1u);
+        }
+        meshes_[id] = mesh;
+    }
+    slots_.insert(slots_.end(), ops.slots.begin(), ops.slots.end());
+    pipelines_.insert(pipelines_.end(), ops.pipelines.begin(), ops.pipelines.end());
+    for (const TextureTable& table : ops.tables) {
+        tables_.push_back(std::make_unique<TextureTable>(table));
+    }
+    for (const std::uint32_t id : ops.freed_models) {
+        const GpuModel& model = models_[id];
+        retired_.push_back({submitted_fence, model.arena, id, model.first_mesh, model.mesh_count, model.mesh_count != 0u});
+    }
+    for (const std::uint32_t id : ops.freed_meshes) {
+        retired_.push_back({submitted_fence, meshes_[id].arena, 0u, id, 1u, true});
+    }
+    ops = RegistryOps{};
+}
+
+void Registries::reclaim(std::uint64_t completed_fence) {
+    if (retired_.empty()) {
+        return;
+    }
+    const std::lock_guard guard(lock_);
+    std::erase_if(retired_, [&](const Retired& retired) {
+        if (retired.fence > completed_fence) {
+            return false;
+        }
+        if (retired.has_geometry) {
+            Arena& arena = arenas_[retired.arena];
+            if (--arena.live == 0u) {
+                arena.used = 0u;
+                if (arena.bytes != kArenaPage) {
+                    arena.memory = {};
+                    arena.bytes = 0u;
+                }
+            }
+        }
+        for (std::uint32_t m = 0; m < retired.mesh_count; ++m) {
+            meshes_[retired.first_mesh + m] = GpuMesh{};
+        }
+        if (retired.mesh_count != 0u) {
+            free_mesh_runs_[retired.mesh_count].push_back(retired.first_mesh);
+        }
+        if (retired.model != 0u) {
+            models_[retired.model] = GpuModel{};
+            free_models_.push_back(retired.model);
+        }
+        return true;
+    });
+}
+
+void Registries::forget_textures(std::span<const std::uint32_t> freed, std::vector<gpu::Table>& retired) {
+    if (freed.empty()) {
+        return;
+    }
+    const std::unordered_set<std::uint32_t> gone(freed.begin(), freed.end());
+    std::vector<std::uint32_t> dropped;
+    {
+        const std::lock_guard guard(lock_);
+        for (auto it = table_by_hash_.begin(); it != table_by_hash_.end();) {
+            std::erase_if(it->second, [&](const TableKey& key) {
+                for (std::uint32_t i = 0; i < key.count; ++i) {
+                    if (gone.contains(key.list[i].texture)) {
+                        dropped.push_back(key.id);
+                        return true;
+                    }
+                }
+                return false;
+            });
+            it = it->second.empty() ? table_by_hash_.erase(it) : std::next(it);
+        }
+    }
+    for (const std::uint32_t id : dropped) {
+        if (id < tables_.size() && tables_[id] != nullptr) {
+            if (!tables_[id]->has_target && tables_[id]->textures.ptr != 0u) {
+                retired.push_back(tables_[id]->textures);
+            }
+            tables_[id].reset();
+        }
+    }
+}
+
+std::span<const ao::ObjectSlot> Registries::object_slots(const GpuMesh& mesh) const noexcept {
+    if (mesh.object_slots_count == 0u) {
+        return {};
+    }
+    return std::span<const ao::ObjectSlot>(models_[mesh.model].object_slots)
+        .subspan(mesh.object_slots_first, mesh.object_slots_count);
+}
+
+}  // namespace galaxy::render::core

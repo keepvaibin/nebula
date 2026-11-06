@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/Color.hpp"
 #include <nebula_geometry.hpp>
@@ -47,8 +48,8 @@ public:
     void endBind(const Vec3f&, bool);
     void endCommandStream();
 
-    void drawPlane(f32, f32, f32, f32, Color8, Color8, f32, f32) const;
-    void initDraw() const;
+    void drawPlane(TypedDraw&, f32, f32, f32, f32, Color8, Color8, f32, f32) const;
+    SiteMaterial loadMaterial() const;
 
     /// @note if the next use of the SpaceCocoon should signal the associated camera area to stop focusing on this SpaceCocoon (for use when Kinipio
     /// is not yet launched from SpaceCocoon)

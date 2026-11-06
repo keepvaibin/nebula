@@ -1,4 +1,4 @@
-#include "Game/Player/J3DModelX.hpp"
+#include "Game/Player/PlayerModel.hpp"
 #include "Game/Player/MarioActor.hpp"
 #include "Game/Player/MarioAnimator.hpp"
 #include "Game/Player/MarioState.hpp"
@@ -69,8 +69,8 @@ void MarioActor::initHand() {
     }
 
     for (u32 idx = 0; idx < MR::getJointNum(_A48) - 1; idx++) {
-        copyMaterial(MR::getJ3DModel(_A48), MR::getJointIndex(this, "HandL0"), idx);
-        copyMaterial(MR::getJ3DModel(_A4C), MR::getJointIndex(this, "HandR0"), idx);
+        copyMaterial(MR::getModel(_A48), MR::getJointIndex(this, "HandL0"), idx);
+        copyMaterial(MR::getModel(_A4C), MR::getJointIndex(this, "HandR0"), idx);
     }
 
     updateHandAtMorph();
@@ -169,8 +169,8 @@ void MarioActor::drawHand() const {
     }
 
     if (mPlayerMode == 1) {
-        reinterpret_cast< J3DModelX* >(MR::getJ3DModel(_A50))->directDraw(nullptr);
-        reinterpret_cast< J3DModelX* >(MR::getJ3DModel(_A54))->directDraw(nullptr);
+        reinterpret_cast< PlayerModel* >(MR::getModel(_A50))->directDraw();
+        reinterpret_cast< PlayerModel* >(MR::getModel(_A54))->directDraw();
 
         return;
     }
@@ -179,13 +179,13 @@ void MarioActor::drawHand() const {
         return;
     }
 
-    J3DModelX* model = reinterpret_cast< J3DModelX* >(MR::getJ3DModel(_A48));
+    PlayerModel* model = reinterpret_cast< PlayerModel* >(MR::getModel(_A48));
     model->setDynamicList(&mLightTint);
-    model->directDraw(nullptr);
+    model->directDraw();
 
-    model = reinterpret_cast< J3DModelX* >(MR::getJ3DModel(_A4C));
+    model = reinterpret_cast< PlayerModel* >(MR::getModel(_A4C));
     model->setDynamicList(&mLightTint);
-    model->directDraw(nullptr);
+    model->directDraw();
 }
 
 void MarioActor::drawIndirectHand() const {
@@ -197,16 +197,16 @@ void MarioActor::drawIndirectHand() const {
         return;
     }
 
-    J3DModelX* model = reinterpret_cast< J3DModelX* >(MR::getJ3DModel(_A40));
+    PlayerModel* model = reinterpret_cast< PlayerModel* >(MR::getModel(_A40));
 
     if (mPlayerMode != 3) {
         return;
     }
 
     model->setDynamicList(&mLightTint);
-    model->directDraw(nullptr);
+    model->directDraw();
 
-    model = reinterpret_cast< J3DModelX* >(MR::getJ3DModel(_A44));
+    model = reinterpret_cast< PlayerModel* >(MR::getModel(_A44));
     model->setDynamicList(&mLightTint);
-    model->directDraw(nullptr);
+    model->directDraw();
 }

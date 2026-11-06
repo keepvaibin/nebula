@@ -1,14 +1,13 @@
 #include "Game/System/DrawBuffer.hpp"
-#include "JSystem/J3DGraphBase/J3DNativeMaterial.hpp"
+#include "Game/Render/Material.hpp"
 #include "Game/LiveActor/ActorLightCtrl.hpp"
-#include "Game/System/ShapePacketUserData.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
-#include <JSystem/J3DGraphAnimator/J3DModel.hpp>
-#include <JSystem/J3DGraphBase/J3DMaterial.hpp>
+#include "Game/Render/Model.hpp"
+#include "Game/Render/Material.hpp"
 #include <cstring>
 
-DrawBufferShapeDrawer::DrawBufferShapeDrawer(J3DMaterial* pMaterial, J3DMatPacket* pMatPacket)
+DrawBufferShapeDrawer::DrawBufferShapeDrawer(Material* pMaterial, MaterialEntry* pMatPacket)
     : mMaterial(pMaterial), mMatPacket(pMatPacket), _8(1), mMaxPackets(0), mNumPackets(0), mPackets(nullptr) {
 }
 
@@ -26,8 +25,8 @@ void DrawBufferShapeDrawer::init(s32 a1) {
 }
 
 void DrawBufferShapeDrawer::swap(DrawBufferShapeDrawer* pOther) {
-    J3DMaterial* material = mMaterial;
-    J3DMatPacket* matPacket = mMatPacket;
+    Material* material = mMaterial;
+    MaterialEntry* matPacket = mMatPacket;
     s32 __8 = _8;
 
     mMaterial = pOther->mMaterial;
@@ -40,39 +39,33 @@ void DrawBufferShapeDrawer::swap(DrawBufferShapeDrawer* pOther) {
 }
 
 void DrawBufferShapeDrawer::draw() const {
-    J3DMaterial* pShared = mMatPacket->getMaterial();
-    J3DNativeMaterial::send(pShared);
-
-    J3DShapePacket* firstPacket = mPackets[0]->mShapePacket;
-    firstPacket->mpShape->loadPreDrawSetting();
-    if (MR::getJ3DShapePacketUserData(firstPacket) != nullptr) {
-        MR::getJ3DShapePacketUserData(firstPacket)->load();
-    }
+    Material* pShared = mMatPacket->getMaterial();
+    MaterialDraw draw(pShared);
 
     for (s32 idx = 0; idx < mNumPackets; idx++) {
-        J3DShapePacket* packet = mPackets[idx]->mShapePacket;
+        ShapeEntry* packet = mPackets[idx]->mShapePacket;
 
         if (getLightLoader(idx) != nullptr) {
             getLightLoader(idx)->loadLight();
         }
 
-        if ((packet->mpShape->mFlags & 1) == 0) {
-            if (packet->mpMaterial != pShared) {
-                J3DNativeMaterial::sendOwn(packet->mpMaterial, pShared);
-                packet->mpMaterial->setCurrentMtx();
-                packet->mpShape->loadPreDrawSetting();
+        if (!packet->mMesh->isHidden()) {
+            if (packet->mMaterial != pShared) {
+                draw.sendOwn(packet->mMaterial, pShared);
             }
-            packet->drawFast();
+            if (!packet->checkFlag(ShapeEntry::Flag_Hidden)) {
+                draw.draw(packet->mModel, packet->mMesh);
+            }
         }
     }
 }
 
-void DrawBufferShapeDrawer::add(const J3DShapePacket* pShapePacket, const ActorLightCtrl* pLightCtrl) {
+void DrawBufferShapeDrawer::add(const ShapeEntry* pShapePacket, const ActorLightCtrl* pLightCtrl) {
     bool setLightLoader = false;
     s32 index = findLightSortIndex(pLightCtrl, &setLightLoader);
 
     PacketInfo* packet = mPackets[mNumPackets];
-    packet->mShapePacket = const_cast< J3DShapePacket* >(pShapePacket);
+    packet->mShapePacket = const_cast< ShapeEntry* >(pShapePacket);
     packet->mLightCtrl = const_cast< ActorLightCtrl* >(pLightCtrl);
 
     if (setLightLoader) {
@@ -89,7 +82,7 @@ void DrawBufferShapeDrawer::add(const J3DShapePacket* pShapePacket, const ActorL
     mNumPackets++;
 }
 
-void DrawBufferShapeDrawer::remove(const J3DShapePacket* pShapePacket) {
+void DrawBufferShapeDrawer::remove(const ShapeEntry* pShapePacket) {
     PacketInfo* packet;
     for (s32 removeIdx = 0; removeIdx < mNumPackets; removeIdx++) {
         packet = mPackets[removeIdx];
@@ -112,7 +105,7 @@ void DrawBufferShapeDrawer::resetLightSort(const ActorLightCtrl* pLightCtrl) {
     for (s32 idx = 0; idx < mNumPackets; idx++) {
         packet = mPackets[idx];
         if (packet->mLightCtrl == pLightCtrl) {
-            J3DShapePacket* shapePacket = packet->mShapePacket;
+            ShapeEntry* shapePacket = packet->mShapePacket;
             remove(shapePacket);
             add(shapePacket, pLightCtrl);
             return;
@@ -151,7 +144,7 @@ s32 DrawBufferShapeDrawer::findLightSortIndex(const ActorLightCtrl* pLightCtrl, 
     return mNumPackets;
 }
 
-DrawBuffer::DrawBuffer(J3DModel* pModel)
+DrawBuffer::DrawBuffer(Model* pModel)
     : mModelData(pModel->mModelData), mModel(pModel), _8(0), mNumActors(0), mNumMaterials(0), mMaterialNos(nullptr), mNumShapeDrawers(0),
       mNumOpaShapeDrawers(0), mShapeDrawers(nullptr) {
 }
@@ -162,20 +155,20 @@ void DrawBuffer::init(int a1) {
 }
 
 void DrawBuffer::add(const LiveActor* pActor) {
-    J3DModel* model = MR::getJ3DModel(pActor);
+    Model* model = MR::getModel(pActor);
     ActorLightCtrl* lightCtrl = MR::getLightCtrl(pActor);
 
     for (s32 idx = 0; idx < mNumMaterials; idx++) {
-        getShapeDrawerByMatNo(idx)->add(model->getShapePacket(mModelData->mMaterialTable.getMaterialNodePointer(idx)->getShape()->mIndex), lightCtrl);
+        getShapeDrawerByMatNo(idx)->add(model->getShapePacket(mModelData->getMaterialNodePointer(idx)->getShape()->mIndex), lightCtrl);
     }
     mNumActors++;
 }
 
 void DrawBuffer::remove(const LiveActor* pActor) {
-    J3DModel* model = MR::getJ3DModel(pActor);
+    Model* model = MR::getModel(pActor);
 
     for (s32 idx = 0; idx < mNumMaterials; idx++) {
-        getShapeDrawerByMatNo(idx)->remove(model->getShapePacket(mModelData->mMaterialTable.getMaterialNodePointer(idx)->getShape()->mIndex));
+        getShapeDrawerByMatNo(idx)->remove(model->getShapePacket(mModelData->getMaterialNodePointer(idx)->getShape()->mIndex));
     }
     mNumActors--;
 }
@@ -204,8 +197,8 @@ void DrawBuffer::drawXlu() const {
 }
 
 namespace {
-    s32 getSortedMaterialIndex(int materialIndex, J3DModel* pModel) {
-        J3DMaterial* material;
+    s32 getSortedMaterialIndex(int materialIndex, Model* pModel) {
+        Material* material;
         material = MR::getMaterial(pModel, materialIndex);
         for (s32 idx = 0; idx < materialIndex; idx++) {
             if (MR::getMaterial(pModel, idx)->getID() == material->getID()) {
@@ -218,14 +211,14 @@ namespace {
 
 void DrawBuffer::initTable() {
     mNumMaterials = MR::getMaterialNum(mModel);
-    mNumShapeDrawers = mModelData->mMaterialTable.mUniqueMatNum;
-
-    J3DModel* model = mModel;
+    Model* model = mModel;
     s32 idx, numOpaMaterials;
     numOpaMaterials = 0;
+    mNumShapeDrawers = 0;
     for (idx = 0; idx < MR::getMaterialNum(model); idx++) {
-        if (!MR::getMaterial(model, idx)->isDrawModeOpaTexEdge()) {
-            if (::getSortedMaterialIndex(idx, model) < 0) {
+        if (::getSortedMaterialIndex(idx, model) < 0) {
+            mNumShapeDrawers++;
+            if (!MR::getMaterial(model, idx)->isDrawModeOpaTexEdge()) {
                 numOpaMaterials++;
             }
         }
@@ -246,7 +239,7 @@ void DrawBuffer::initTable() {
     s32 opaIndex = 0;
     s32 xluIndex = 0;
     for (s32 idx = 0; idx < mNumMaterials; idx++) {
-        J3DMaterial* material = MR::getMaterial(mModel, idx);
+        Material* material = MR::getMaterial(mModel, idx);
         s32 index = ::getSortedMaterialIndex(idx, mModel);
 
         if (index >= 0) {

@@ -2,18 +2,18 @@
 
 #include "Game/LiveActor/ShadowVolumeDrawer.hpp"
 
-class J3DModelData;
+class ModelData;
 
 class ShadowVolumeModel : public ShadowVolumeDrawer {
 public:
     ShadowVolumeModel(const char*);
 
     virtual ~ShadowVolumeModel();
-    virtual void drawShape() const;
+    virtual void drawShape(TypedDraw& rDraw) const;
 
     void initVolumeModel(const char*);
 
-    J3DModelData* mModelData;
+    ModelData* mModelData;
 };
 
 inline ShadowVolumeModel::~ShadowVolumeModel() {

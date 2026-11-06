@@ -4,9 +4,9 @@
 #include "Game/Util/Color.hpp"
 
 class BtkPlayer;
-class J3DMaterial;
-class J3DModel;
-class J3DShape;
+class Material;
+class Model;
+class Mesh;
 class JUTTexture;
 
 class NormalMapBase : public LiveActor {
@@ -18,7 +18,7 @@ public:
     virtual void calcAnim();
     virtual void control();
     virtual void drawSetting(MtxPtr) const;
-    virtual void drawMaterialSetting(J3DMaterial*) const;
+    virtual void drawMaterialSetting(Material*) const;
     virtual void setStageForObject() const;
     virtual void setStageForObject_Material() const;
 
@@ -28,14 +28,14 @@ public:
     void setupTexture();
 
     void updateBtkMtx();
-    void loadTexMtxBtk(J3DMaterial*) const;
+    void loadTexMtxBtk(Material*) const;
     void updateLightMtx(MtxPtr) const;
     bool isNormalMapMaterial(const char*) const;
-    void standardDraw(J3DModel*) const;
-    void shapeAnalyzeDraw(J3DModel*) const;
+    void standardDraw(Model*) const;
+    void shapeAnalyzeDraw(Model*) const;
 
-    void drawShape(J3DModel*, J3DShape*) const;
-    void loadTexture1(J3DMaterial*) const;
+    void drawShape(Model*, Mesh*) const;
+    void loadTexture1(Material*) const;
     void createGradTexture();
     void swapColorGB(JUTTexture*);
     void loadData(const char*, u32);

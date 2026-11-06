@@ -9,7 +9,7 @@
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <JSystem/J3DGraphAnimator/J3DAnimation.hpp>
+#include "Game/Render/Clip.hpp"
 #include <MiiLib.h>
 
 namespace {
@@ -237,7 +237,7 @@ void MiiSelect::control() {
         _20[i]->update();
     }
 
-    J3DFrameCtrl* pAnimCtrl;
+    FrameCtrl* pAnimCtrl;
 
     if (_20[0]->isFirstStepWait() && !_20[1]->isFirstStepWait() && _20[1]->isWait()) {
         pAnimCtrl = MR::getPaneAnimCtrl(this, _20[0]->mPaneName, 0);

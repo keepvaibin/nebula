@@ -1,7 +1,7 @@
 #include "Game/Enemy/KirairaChain.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/LiveActor/ModelObj.hpp"
-#include "Game/LiveActor/SimpleJ3DModelDrawer.hpp"
+#include "Game/LiveActor/SimpleModelDrawer.hpp"
 #include "Game/Ride/SwingRopePoint.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util/CameraUtil.hpp"
@@ -10,7 +10,6 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
-#include <JSystem/J3DGraphBase/J3DShapeDraw.hpp>
 
 KirairaChain::~KirairaChain() {
 }
@@ -86,7 +85,8 @@ void KirairaChain::initPoints() {
 }
 
 void KirairaChain::draw() const {
-    mModelDrawer->initDraw();
+    MaterialDraw material(mModelDrawer->mMaterial);
+    TypedDraw site(material, nullptr, MR::getCameraViewMtx());
 
     Pos3f mtx;
     mtx.identity();
@@ -98,10 +98,8 @@ void KirairaChain::draw() const {
 
         mtx.setTrans(point->mPosition);
 
-        NebulaMtxConcat(MR::getCameraViewMtx(), mtx, mtx);
-        J3DNativeShape::setPosition(0, mtx);
-        J3DNativeShape::setNormal(0, mtx);
-        mModelDrawer->mShapeDraw->draw();
+        site.setWorld(mtx);
+        material.drawUnder(site, mModelDrawer->mShape);
     }
 }
 
@@ -211,7 +209,7 @@ void KirairaChain::init(const JMapInfoIter& rIter) {
     MR::connectToScene(this, MR::MovementType_MapObj, -1, -1, MR::DrawType_KirairaChain);
     initPoints();
 
-    mModelDrawer = new SimpleJ3DModelDrawer(this, "\203\114\203\211\203\103\203\211\202\314\215\275\225\140\211\346" /* キライラの鎖描画 */, "KirairaChain", -1);
+    mModelDrawer = new SimpleModelDrawer(this, "\203\114\203\211\203\103\203\211\202\314\215\275\225\140\211\346" /* キライラの鎖描画 */, "KirairaChain", -1);
     mModelDrawer->initWithoutIter();
 
     mFixPointTop = MR::createModelObjEnemy("\203\114\203\211\203\103\203\211\202\314\214\305\222\350\223\137[Top]" /* キライラの固定点[Top] */, "KirairaFixPointTop", mFixPointTopMtx.toMtxPtr());

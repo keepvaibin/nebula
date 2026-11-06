@@ -1,5 +1,5 @@
 #include "Game/Screen/CaptureScreenDirector.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include "Game/Render/FrameList.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"

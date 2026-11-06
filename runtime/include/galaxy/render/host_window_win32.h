@@ -52,7 +52,6 @@ extern std::atomic<bool> display_changed;
 [[nodiscard]] RECT windowed_rect_on_monitor(const MonitorInfo& monitor, unsigned width, unsigned height);
 
 // The settings the D3D12 renderer reads (temporal upscaling and interpolation, ray tracing).
-extern std::atomic<bool> temporal_interp_suspended;  // RendererD3D12::suspend_temporal_interpolation
 LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
 
 }  // namespace galaxy::render::host_window

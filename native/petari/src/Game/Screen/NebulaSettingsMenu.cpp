@@ -1420,6 +1420,9 @@ __attribute__((noinline)) void NebulaSettingsScreen::fillTexts(const NebulaSetti
     case NEBULA_SETTINGS_STATUS_APPLIED:
         pStatusId = "SettingsApplied";
         break;
+    case NEBULA_SETTINGS_STATUS_PREPARING:
+        pStatusId = "SettingsPreparing";
+        break;
     case NEBULA_SETTINGS_STATUS_LANGUAGE_RESTART:
         pStatusId = "SettingsLanguageRestart";
         break;

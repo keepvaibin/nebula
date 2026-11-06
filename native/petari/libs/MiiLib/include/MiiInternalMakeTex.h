@@ -25,7 +25,7 @@ typedef enum {
 typedef struct Mii_TexObj {
     struct Mii_Texture* texture;
     u8* image;
-    J3DNativeTexObj tobj;
+    SiteTexture tobj;
 } Mii_TexObj;
 
 typedef struct Mii_Part {

@@ -1,6 +1,8 @@
+#include "Game/Util/CameraUtil.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/MapObj/BigBubbleDrawer.hpp"
 #include "Game/Ride/BigBubble.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include "Game/Render/FrameList.hpp"
 #include "Game/AreaObj/BigBubbleGoalArea.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -226,7 +228,8 @@ void BigBubble::calcAnim() {
 void BigBubble::draw() const {
     if (isDraw()) {
         BigBubbleDrawer::setWarningColor(mWarningColor);
-        mSurface->draw();
+        TypedDraw site(BigBubbleDrawer::material(), nullptr, MR::getCameraViewMtx());
+        mSurface->draw(site);
     }
 }
 

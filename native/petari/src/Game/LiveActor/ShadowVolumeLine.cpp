@@ -1,7 +1,7 @@
 #include "Game/LiveActor/ShadowVolumeLine.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
+#include "Game/Render/FrameList.hpp"
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DirectDraw.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -13,12 +13,11 @@ ShadowVolumeLine::ShadowVolumeLine() : ShadowVolumeDrawer("\211\145\225\140\211\
     mToWidth = 100.0f;
 }
 
-void ShadowVolumeLine::loadModelDrawMtx() const {
-    J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-    J3DPass::positionMatrix(0);
+void ShadowVolumeLine::loadModelDrawMtx(TypedDraw& rDraw) const {
+    rDraw.setWorld(nullptr);
 }
 
-void ShadowVolumeLine::drawShape() const {
+void ShadowVolumeLine::drawShape(TypedDraw& rDraw) const {
     const ShadowController* fromController = mFromShadowController;
     const ShadowController* toController = mToShadowController;
     Vec3f points[8];
@@ -61,29 +60,29 @@ void ShadowVolumeLine::drawShape() const {
     points[6].scaleAdd(toLength, toDrop, points[4]);
     points[7].scaleAdd(toLength, toDrop, points[5]);
 
-    J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, 0);
-    TDDraw::sendPoint(points[1]);
-    TDDraw::sendPoint(points[5]);
-    TDDraw::sendPoint(points[7]);
-    TDDraw::sendPoint(points[3]);
+    VertexP* vtx = rDraw.vertices< VertexP >(NEBULA_PRIMITIVE_QUADS, 4);
+    *vtx++ = {points[1].x, points[1].y, points[1].z};
+    *vtx++ = {points[5].x, points[5].y, points[5].z};
+    *vtx++ = {points[7].x, points[7].y, points[7].z};
+    *vtx++ = {points[3].x, points[3].y, points[3].z};
 
-    J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, 0);
-    TDDraw::sendPoint(points[0]);
-    TDDraw::sendPoint(points[2]);
-    TDDraw::sendPoint(points[6]);
-    TDDraw::sendPoint(points[4]);
+    vtx = rDraw.vertices< VertexP >(NEBULA_PRIMITIVE_QUADS, 4);
+    *vtx++ = {points[0].x, points[0].y, points[0].z};
+    *vtx++ = {points[2].x, points[2].y, points[2].z};
+    *vtx++ = {points[6].x, points[6].y, points[6].z};
+    *vtx++ = {points[4].x, points[4].y, points[4].z};
 
-    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 10, 0);
-    TDDraw::sendPoint(points[0]);
-    TDDraw::sendPoint(points[1]);
-    TDDraw::sendPoint(points[2]);
-    TDDraw::sendPoint(points[3]);
-    TDDraw::sendPoint(points[6]);
-    TDDraw::sendPoint(points[7]);
-    TDDraw::sendPoint(points[4]);
-    TDDraw::sendPoint(points[5]);
-    TDDraw::sendPoint(points[0]);
-    TDDraw::sendPoint(points[1]);
+    vtx = rDraw.vertices< VertexP >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 10);
+    *vtx++ = {points[0].x, points[0].y, points[0].z};
+    *vtx++ = {points[1].x, points[1].y, points[1].z};
+    *vtx++ = {points[2].x, points[2].y, points[2].z};
+    *vtx++ = {points[3].x, points[3].y, points[3].z};
+    *vtx++ = {points[6].x, points[6].y, points[6].z};
+    *vtx++ = {points[7].x, points[7].y, points[7].z};
+    *vtx++ = {points[4].x, points[4].y, points[4].z};
+    *vtx++ = {points[5].x, points[5].y, points[5].z};
+    *vtx++ = {points[0].x, points[0].y, points[0].z};
+    *vtx++ = {points[1].x, points[1].y, points[1].z};
 }
 
 void ShadowVolumeLine::setFromShadowController(const ShadowController* pController) {

@@ -1,3 +1,4 @@
+#include "Game/Util/CameraUtil.hpp"
 #include "Game/LiveActor/ShadowSurfaceOval.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/ShadowController.hpp"
@@ -14,7 +15,7 @@ ShadowSurfaceOval::~ShadowSurfaceOval() {
 }
 
 ShadowSurfaceOval::ShadowSurfaceOval() : ShadowSurfaceDrawer("\211\145\225\140\211\346[\220\205\226\312\221\310\211\176\211\145]" /* 影描画[水面楕円影] */), mModelData(), mSize(100.0f, 100.0f, 200.0f), mColor(0, 0, 0, 64) {
-    mModelData = MR::getJ3DModelData("ShadowVolumeSphere");
+    mModelData = MR::getModelData("ShadowVolumeSphere");
 }
 
 void ShadowSurfaceOval::setColor(Color8 color) {
@@ -52,13 +53,13 @@ void ShadowSurfaceOval::draw() const {
     MR::preScaleMtx(mtx, size);
     MR::flattenMtx(mtx, normal);
     mtx.setTrans(pos);
-    TDDraw::setModelMtx(mtx.toMtxPtr());
-    MR::drawSimpleModel(mModelData);
+    TypedDraw site(ShadowSurfaceDrawInit::material(), mtx.toMtxPtr(), MR::getCameraViewMtx());
+    site.drawModelFile(mModelData);
     MR::preScaleMtx(mtx, 0.9f);
-    TDDraw::setModelMtx(mtx.toMtxPtr());
-    MR::drawSimpleModel(mModelData);
+    site.setWorld(mtx.toMtxPtr());
+    site.drawModelFile(mModelData);
     MR::preScaleMtx(mtx.toMtxPtr(), 0.9f);
-    TDDraw::setModelMtx(mtx.toMtxPtr());
-    MR::drawSimpleModel(mModelData);
+    site.setWorld(mtx.toMtxPtr());
+    site.drawModelFile(mModelData);
     ShadowSurfaceDrawInit::sendColor(Color8(128));
 }

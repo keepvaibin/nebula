@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// Camera, transform, palette, light and colour interpolation between two game frames (frame_interpolation.h).
+// Camera, transform and light motion between two game frames (frame_interpolation.h).
 #include "galaxy/render/frame_interpolation.h"
 
 #include <algorithm>
-#include <bit>
 #include <cmath>
 #include <cstring>
 
@@ -12,9 +11,7 @@ namespace {
 
 constexpr float kPi = 3.14159265358979f;
 
-float word_float(std::uint32_t w) noexcept { return std::bit_cast<float>(w); }
 
-std::uint32_t float_word(float f) noexcept { return std::bit_cast<std::uint32_t>(f); }
 // Unit quaternion (x, y, z, w) of an orthonormal 3x3 (row-major, Affine34
 // layout); false when the matrix is not a rotation within tolerance.
 bool rotation_quaternion(const Affine34& m, float q[4]) noexcept {
@@ -96,41 +93,14 @@ bool finite(const Affine34& m) noexcept {
     return true;
 }
 
-Affine34 load_matrix(const std::uint32_t* words) noexcept {
-    Affine34 m{};
-    for (unsigned i = 0; i < 12u; ++i) m[i] = word_float(words[i]);
-    return m;
-}
+}  // namespace
 
-void store_matrix(const Affine34& m, std::uint32_t* words) noexcept {
-    for (unsigned i = 0; i < 12u; ++i) words[i] = float_word(m[i]);
-}
-// Normal matrices are 3x3 (9 words, row-major) without translation.
-Affine34 load_normal(const std::uint32_t* words) noexcept {
-    Affine34 m{};
-    for (unsigned row = 0; row < 3u; ++row) {
-        for (unsigned col = 0; col < 3u; ++col) {
-            m[row * 4u + col] = word_float(words[row * 4u + col]);
-        }
-    }
-    return m;
-}
-
-void store_normal(const Affine34& m, std::uint32_t* words) noexcept {
-    for (unsigned row = 0; row < 3u; ++row) {
-        for (unsigned col = 0; col < 3u; ++col) {
-            words[row * 4u + col] = float_word(m[row * 4u + col]);
-        }
-    }
-}
 // One frame of an object's motion: its origin moved less than half its
 // distance from the eye plus 200 units, no axis scaled by more than 2x, and
 // it turned less than 150 degrees (a teleport, a respawn or a reused slot
 // otherwise). A scale step up to 8x is motion (pulsing, popping effects). A
 // larger turn alone is a flip of an object that stays (a sprite spun by a
 // random angle): its rotation shows b, the rest still moves.
-enum class Plausibility : std::uint8_t { motion, flip, teleport };
-
 Plausibility plausibility(const AffineMotion& m, float eye_distance) noexcept {
     float moved = 0.0f;
     for (unsigned r = 0; r < 3u; ++r) {
@@ -158,8 +128,6 @@ void take_rotation_of_b(AffineMotion& m) noexcept {
     m.inv_sin_theta = 0.0f;
     m.cos_turn = 1.0f;
 }
-
-}  // namespace
 
 void camera_motion(const Affine34* a, const Affine34* b, float previous_move,
                    const CameraCutLimits& limits, CameraMotion& out) noexcept {
@@ -299,35 +267,6 @@ Affine34 eye_at(const EyeMotion& m, const CameraMotion& camera, const Affine34& 
     const Affine34 world = m.still ? m.world.b : affine_motion_at(m.world, t);
     return affine_multiply(camera_t, world);
 }
-void normal_motion(const Affine34* a, const Affine34& b, const CameraMotion& camera,
-                   NormalMotion& out) noexcept {
-    out = NormalMotion{};
-    if ((camera.known && camera.cut) || (a != nullptr && equal_words(*a, b))) {
-        affine_motion(b, b, out.world);
-        out.still = true;
-        return;
-    }
-    out.split = camera.known;
-    if (!out.split) {
-        const Affine34& from = a != nullptr ? *a : b;
-        out.still = equal_words(from, b);
-        affine_motion(from, b, out.world);
-        return;
-    }
-    const Affine34 world_b = affine_multiply(rotation_only(camera.b_inverse), b);
-    if (a == nullptr) {
-        affine_motion(world_b, world_b, out.world);
-        out.still = true;
-        return;
-    }
-    const Affine34 world_a = affine_multiply(rotation_only(camera.a_inverse), *a);
-    out.still = equal_words(world_a, world_b);
-    affine_motion(world_a, world_b, out.world);
-    if (!out.still && out.world.cos_turn < 0.2588190f) {
-        affine_motion(world_b, world_b, out.world);
-        out.still = true;
-    }
-}
 
 void tex_matrix_at(const float* a, const float* b, bool spatial, float t, float* out) noexcept {
     bool finite = true;
@@ -361,24 +300,11 @@ void tex_matrix_at(const float* a, const float* b, bool spatial, float t, float*
     }
     for (unsigned i = 0; i < 12u; ++i) out[i] = a[i] * (1.0f - t) + to[i] * t;
 }
-Affine34 normal_at(const NormalMotion& m, const CameraMotion& camera, const Affine34& camera_t,
-                   float t) noexcept {
-    (void)camera;
-    Affine34 n = m.still ? m.world.b : affine_motion_at(m.world, t);
-    n[3] = n[7] = n[11] = 0.0f;
-    if (!m.split) {
-        return n;
-    }
-    Affine34 out = affine_multiply(rotation_only(camera_t), n);
-    out[3] = out[7] = out[11] = 0.0f;
-    return out;
-}
-void light_at(const std::uint32_t* a, const std::uint32_t* b, const CameraMotion& camera,
-              const Affine34& camera_t, float t, bool split, std::uint32_t* out) noexcept {
-    constexpr unsigned kColor = draw_rows::kLightColorWord, kAngle = draw_rows::kLightAngleWord,
-                       kPosition = draw_rows::kLightPositionWord, kDirection = draw_rows::kLightDirectionWord;
-    static_assert(kAngle + 6u == kPosition);  // the angle and distance terms, then position and direction
-    for (unsigned i = 0; i < draw_rows::kLightWords; ++i) out[i] = b[i];
+
+void light_at(const float* a, const float* b, const CameraMotion& camera, const Affine34& camera_t, float t, bool split,
+              float* out) noexcept {
+    constexpr unsigned kColor = 0u, kAngle = 4u, kPosition = 10u, kDirection = 13u;
+    for (unsigned i = 0; i < 16u; ++i) out[i] = b[i];
     if (camera.known && camera.cut) {
         return;
     }
@@ -391,24 +317,17 @@ void light_at(const std::uint32_t* a, const std::uint32_t* b, const CameraMotion
         }
         a = b;
     }
-    // Color: RGBA8 per byte.
-    std::uint32_t color = 0u;
-    for (unsigned shift = 0; shift < 32u; shift += 8u) {
-        const float ca = static_cast<float>((a[kColor] >> shift) & 0xFFu);
-        const float cb = static_cast<float>((b[kColor] >> shift) & 0xFFu);
-        const float c = std::clamp(ca + (cb - ca) * t, 0.0f, 255.0f);
-        color |= static_cast<std::uint32_t>(std::lround(c)) << shift;
+    for (unsigned i = kColor; i < kColor + 4u; ++i) {
+        out[i] = std::clamp(a[i] + (b[i] - a[i]) * t, 0.0f, 255.0f);
     }
-    out[kColor] = color;
     // Angle and distance attenuation.
     for (unsigned i = kAngle; i < kAngle + 6u; ++i) {
-        const float fa = word_float(a[i]), fb = word_float(b[i]);
-        if (std::isfinite(fa) && std::isfinite(fb)) out[i] = float_word(fa + (fb - fa) * t);
+        if (std::isfinite(a[i]) && std::isfinite(b[i])) out[i] = a[i] + (b[i] - a[i]) * t;
     }
-    const float pa[3]{word_float(a[kPosition]), word_float(a[kPosition + 1u]), word_float(a[kPosition + 2u])};
-    const float pb[3]{word_float(b[kPosition]), word_float(b[kPosition + 1u]), word_float(b[kPosition + 2u])};
-    const float da[3]{word_float(a[kDirection]), word_float(a[kDirection + 1u]), word_float(a[kDirection + 2u])};
-    const float db[3]{word_float(b[kDirection]), word_float(b[kDirection + 1u]), word_float(b[kDirection + 2u])};
+    const float* pa = a + kPosition;
+    const float* pb = b + kPosition;
+    const float* da = a + kDirection;
+    const float* db = b + kDirection;
     for (unsigned i = 0; i < 3u; ++i) {
         if (!std::isfinite(pa[i]) || !std::isfinite(pb[i]) || !std::isfinite(da[i]) ||
             !std::isfinite(db[i])) {
@@ -448,212 +367,9 @@ void light_at(const std::uint32_t* a, const std::uint32_t* b, const CameraMotion
         for (float& v : d) v *= scale;
     }
     for (unsigned i = 0; i < 3u; ++i) {
-        out[kPosition + i] = float_word(p[i]);
-        out[kDirection + i] = float_word(d[i]);
-    }
-}
-namespace {
-// Row numbers of the palette's parts (words / 4).
-constexpr unsigned kNormalRow = kNormalBase / 4u;
-constexpr unsigned kTexRow = 30u;
-constexpr unsigned kPostRow = kPostBase / 4u;
-constexpr unsigned kLightRow = kLightBase / 4u;
-
-constexpr std::array<std::uint32_t, draw_rows::kRows> identity_table() noexcept {
-    std::array<std::uint32_t, draw_rows::kRows> table{};
-    for (std::uint32_t r = 0; r < draw_rows::kRows; ++r) table[r] = r;
-    return table;
-}
-constexpr std::array<std::uint32_t, draw_rows::kRows> kIdentityTable = identity_table();
-}  // namespace
-
-RowView::RowView(const std::uint32_t* words) noexcept
-    : table(words != nullptr ? kIdentityTable.data() : nullptr), rows(words) {}
-
-void RowView::gather(unsigned first, unsigned count, std::uint32_t* out) const noexcept {
-    for (unsigned r = 0; r < count; ++r) std::memcpy(out + 4u * r, row(first + r), 16u);
-}
-
-bool same_rows(RowView a, RowView b, unsigned first, unsigned count) noexcept {
-    for (unsigned r = first; r < first + count; ++r) {
-        const std::uint32_t* x = a.row(r);
-        const std::uint32_t* y = b.row(r);
-        if (x != y && std::memcmp(x, y, 16u) != 0) return false;
-    }
-    return true;
-}
-
-void palette_motion(RowView a, RowView b, const CameraMotion& camera,
-                    bool orthographic, PaletteMotion& out, std::uint16_t position_mask,
-                    std::uint16_t normal_mask, std::uint8_t light_mask) noexcept {
-    out = PaletteMotion{};
-    out.split = camera.known && !camera.cut && !orthographic;
-    const bool camera_moves = camera.known && !camera.cut && !equal_words(camera.a, camera.b);
-    std::uint32_t wa[12], wb[12];
-    for (unsigned k = 0; k < 10u; ++k) {
-        if ((position_mask & (1u << k)) == 0u) continue;
-        const bool differs = !a.empty() && !same_rows(a, b, 3u * k, 3u);
-        if (!differs && !(camera_moves && !orthographic)) continue;
-        b.gather(3u * k, 3u, wb);
-        const Affine34 mb = load_matrix(wb);
-        if (!finite(mb)) continue;
-        Affine34 ma{};
-        const Affine34* pa = nullptr;
-        if (!a.empty()) {
-            a.gather(3u * k, 3u, wa);
-            ma = load_matrix(wa);
-            if (finite(ma)) pa = &ma;
-        }
-        eye_motion(pa, mb, camera, orthographic, out.position[k]);
-        out.position_changed[k] = 1u;
-        out.snapped += out.position[k].snapped ? 1u : 0u;
-        out.any_changed = true;
-    }
-    // Orthographic palettes do not use the scene camera: their normals move
-    // only with their own matrices.
-    const CameraMotion screen{};
-    const CameraMotion& normal_camera = orthographic ? screen : camera;
-    for (unsigned k = 0; k < 10u; ++k) {
-        if ((normal_mask & (1u << k)) == 0u) continue;
-        // A position matrix snapped to b or taking b's rotation (a flip) takes b's normals with it.
-        if (out.position_changed[k] != 0u && (out.position[k].snapped || out.position[k].flipped)) continue;
-        const bool differs = !a.empty() && !same_rows(a, b, kNormalRow + 3u * k, 3u);
-        if (!differs && !(camera_moves && !orthographic)) continue;
-        b.gather(kNormalRow + 3u * k, 3u, wb);
-        const Affine34 nb = load_normal(wb);
-        if (!finite(nb)) continue;
-        Affine34 na{};
-        const Affine34* pa = nullptr;
-        if (!a.empty()) {
-            a.gather(kNormalRow + 3u * k, 3u, wa);
-            na = load_normal(wa);
-            if (finite(na)) pa = &na;
-        }
-        normal_motion(pa, nb, normal_camera, out.normal[k]);
-        out.normal_changed[k] = 1u;
-        out.any_changed = true;
-    }
-    if (a.empty() && camera_moves && !orthographic && light_mask != 0u) {
-        // Lights without a previous snapshot stay where they are in the world.
-        out.light_changed = light_mask;
-        out.any_changed = true;
-    }
-    if (!a.empty()) {
-        out.tex_changed = !same_rows(a, b, kTexRow, (256u - 120u) / 4u);
-        out.post_changed = !same_rows(a, b, kPostRow, (kLightBase - kPostBase) / 4u);
-        for (unsigned light = 0; light < 8u; ++light) {
-            if ((light_mask & (1u << light)) != 0u &&
-                ((camera_moves && !orthographic) || !same_rows(a, b, kLightRow + 4u * light, 4u))) {
-                out.light_changed |= static_cast<std::uint8_t>(1u << light);
-            }
-        }
-        out.any_changed = out.any_changed || out.tex_changed || out.post_changed ||
-                          out.light_changed != 0u;
+        out[kPosition + i] = p[i];
+        out[kDirection + i] = d[i];
     }
 }
 
-void model_motion(const std::uint32_t* a, const std::uint32_t* b, std::uint32_t count, const CameraMotion& camera,
-                  bool orthographic, ModelMotion& out) {
-    out.position.resize(count);
-    out.normal.resize(count);
-    out.position_changed.assign(count, 0u);
-    out.normal_changed.assign(count, 0u);
-    out.snapped = 0u;
-    const bool camera_moves = camera.known && !camera.cut && !equal_words(camera.a, camera.b) && !orthographic;
-    const CameraMotion screen{};
-    const CameraMotion& normal_camera = orthographic ? screen : camera;
-    for (std::uint32_t k = 0; k < count; ++k) {
-        const std::uint32_t* wb = b + 12u * k;
-        const std::uint32_t* wa = a != nullptr ? a + 12u * k : nullptr;
-        if (camera_moves || (wa != nullptr && std::memcmp(wa, wb, 48u) != 0)) {
-            const Affine34 mb = load_matrix(wb);
-            if (finite(mb)) {
-                Affine34 ma{};
-                const Affine34* pa = nullptr;
-                if (wa != nullptr) {
-                    ma = load_matrix(wa);
-                    if (finite(ma)) pa = &ma;
-                }
-                eye_motion(pa, mb, camera, orthographic, out.position[k]);
-                out.position_changed[k] = 1u;
-                out.snapped += out.position[k].snapped ? 1u : 0u;
-            }
-        }
-        // A position matrix snapped to b or taking b's rotation (a flip) takes b's normals with it.
-        if (out.position_changed[k] != 0u && (out.position[k].snapped || out.position[k].flipped)) continue;
-        const std::uint32_t* nb = b + 12u * count + 12u * k;
-        const std::uint32_t* na = a != nullptr ? a + 12u * count + 12u * k : nullptr;
-        if (camera_moves || (na != nullptr && std::memcmp(na, nb, 48u) != 0)) {
-            const Affine34 mb = load_normal(nb);
-            if (finite(mb)) {
-                Affine34 ma{};
-                const Affine34* pa = nullptr;
-                if (na != nullptr) {
-                    ma = load_normal(na);
-                    if (finite(ma)) pa = &ma;
-                }
-                normal_motion(pa, mb, normal_camera, out.normal[k]);
-                out.normal_changed[k] = 1u;
-            }
-        }
-    }
-}
-
-void palette_at(const PaletteMotion& m, RowView a, RowView b,
-                const CameraMotion& camera, const Affine34& camera_t, float t,
-                std::uint32_t* out) noexcept {
-    b.gather(0u, draw_rows::kRows, out);
-    for (unsigned k = 0; k < 10u; ++k) {
-        if (m.position_changed[k] != 0u) {
-            store_matrix(eye_at(m.position[k], camera, camera_t, t), out + k * 12u);
-        }
-        if (m.normal_changed[k] != 0u) {
-            store_normal(normal_at(m.normal[k], camera, camera_t, t), out + kNormalBase + k * 12u);
-        }
-    }
-    std::uint32_t la[16], lb[16];
-    if (a.empty()) {
-        for (unsigned light = 0; light < 8u; ++light) {
-            if ((m.light_changed & (1u << light)) != 0u) {
-                b.gather(kLightRow + 4u * light, 4u, lb);
-                light_at(nullptr, lb, camera, camera_t, t, m.split, out + kLightBase + light * 16u);
-            }
-        }
-        return;
-    }
-    // Texture matrices TEXMTX0-9 (rows 30-59) and post matrices 0-19 by
-    // block. The texgen source of an indexed matrix is not known here: a
-    // block whose rotation or scale changes is taken as spatial.
-    const auto blocks = [&](unsigned first_row, unsigned count) {
-        std::uint32_t xa[12], xb[12];
-        for (unsigned k = 0; k < count; ++k) {
-            const unsigned row = first_row + 3u * k;
-            if (same_rows(a, b, row, 3u)) continue;
-            a.gather(row, 3u, xa);
-            b.gather(row, 3u, xb);
-            float fa[12], fb[12], fo[12];
-            bool spatial = false;
-            for (unsigned i = 0; i < 12u; ++i) {
-                fa[i] = word_float(xa[i]);
-                fb[i] = word_float(xb[i]);
-                spatial = spatial || ((i & 3u) != 3u && fa[i] != fb[i]);
-            }
-            tex_matrix_at(fa, fb, spatial, t, fo);
-            for (unsigned i = 0; i < 12u; ++i) out[4u * row + i] = float_word(fo[i]);
-        }
-    };
-    if (m.tex_changed) {
-        blocks(kTexRow, 10u);
-    }
-    if (m.post_changed) {
-        blocks(kPostRow, 20u);
-    }
-    for (unsigned light = 0; light < 8u; ++light) {
-        if ((m.light_changed & (1u << light)) != 0u) {
-            a.gather(kLightRow + 4u * light, 4u, la);
-            b.gather(kLightRow + 4u * light, 4u, lb);
-            light_at(la, lb, camera, camera_t, t, m.split, out + kLightBase + light * 16u);
-        }
-    }
-}
 }  // namespace galaxy::render

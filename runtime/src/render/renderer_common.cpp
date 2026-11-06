@@ -18,6 +18,7 @@
 #endif
 
 #include <algorithm>
+#include <bit>
 #include <cmath>
 #include <cstring>
 
@@ -198,20 +199,9 @@ float4 main() : SV_Target { return color; }
 constexpr char kClearPs[] =
     "cbuffer C:register(b0){float4 clear_color;};"
     "float4 main():SV_Target{return clear_color;}";
-constexpr char kDepthCarryLoadPs[] =
-    "Texture2D t:register(t0);SamplerState s:register(s0);"
-    "struct V{float4 p:SV_Position;float2 uv:TEXCOORD0;};"
-    "float main(V v):SV_Depth{float2 d;t.GetDimensions(d.x,d.y);"
-    "return t.Load(int3(min(int2(v.uv*d),int2(d)-1),0)).r;}";
 constexpr char kClearDepthPs[] =
     "cbuffer C:register(b0){float4 clear_value;};"
     "float main():SV_Depth{return clear_value.x;}";
-constexpr char kDepthCarryPs[] =
-    "Texture2D<float> t:register(t0);"
-    "SamplerState s:register(s0);"
-    "struct V{float4 p:SV_Position;float2 uv:TEXCOORD0;};"
-    "float main(V v):SV_Depth{return t.SampleLevel(s,v.uv,0);}";
-
 // The depth resolve: each pixel's first sample.
 constexpr char kDepthResolvePs[] = R"HLSL(
 Texture2DMS<float> depth_samples : register(t0);
@@ -265,16 +255,8 @@ std::string_view clear_pixel_shader_source() noexcept {
     return {kClearPs, sizeof(kClearPs) - 1u};
 }
 
-std::string_view depth_carry_load_pixel_shader_source() noexcept {
-    return {kDepthCarryLoadPs, sizeof(kDepthCarryLoadPs) - 1u};
-}
-
 std::string_view clear_depth_pixel_shader_source() noexcept {
     return {kClearDepthPs, sizeof(kClearDepthPs) - 1u};
-}
-
-std::string_view depth_carry_pixel_shader_source() noexcept {
-    return {kDepthCarryPs, sizeof(kDepthCarryPs) - 1u};
 }
 
 std::string_view scene_conversion_shader_source() noexcept {
@@ -331,57 +313,43 @@ std::size_t SamplerTableKeyHasher::operator()(const SamplerTableKey& key) const 
             hash *= 0x100000001B3ull;
         }
     };
-    for (const auto sampler : key.samplers) mix(sampler);
+    for (const auto& sampler : key.samplers) {
+        mix(sampler.filter);
+        const auto bits = [](float f) { return f == 0.0f ? 0u : std::bit_cast<std::uint32_t>(f); };
+        mix(bits(sampler.min_lod)); mix(bits(sampler.max_lod)); mix(bits(sampler.lod_bias));
+    }
+    mix(key.count);
     mix(key.config);
     return static_cast<std::size_t>(hash);
 }
 
 std::uint32_t sampler_config_key(const RenderConfig& cfg) noexcept {
-    return ((std::clamp(cfg.anisotropic_filtering, 1u, 16u) & 0x1fu) << 8u) |
+    return (cfg.enhanced_mipmaps ? 1u << 16u : 0u) | ((std::clamp(cfg.anisotropic_filtering, 1u, 16u) & 0x1fu) << 8u) |
         (std::clamp(cfg.texture_lod_bias, 0u, 8u) & 0xfu);
 }
 
-SamplerTableKey make_sampler_table_key(const std::uint32_t keys[8], const RenderConfig& cfg) noexcept {
+SamplerTableKey make_sampler_table_key(const std::array<SamplerKey, kSamplerTableSlots>& keys, unsigned count,
+                                       const RenderConfig& cfg) noexcept {
     SamplerTableKey key{};
-    std::copy_n(keys, key.samplers.size(), key.samplers.begin());
+    key.count = std::min(count, kSamplerTableSlots);
+    std::copy_n(keys.begin(), key.count, key.samplers.begin());
     key.config = sampler_config_key(cfg);
     return key;
 }
 
 SamplerTableCache::Allocation SamplerTableCache::get_or_allocate(const SamplerTableKey& key) {
     if (const auto it = tables_.find(key); it != tables_.end()) {
-        slot_frames_[(it->second - 8u) / 8u] = frame_;
         return {it->second, false};
     }
-    const bool fresh_slot = cursor_ + 8u <= kSamplerHeapSlots;
-    unsigned slot = fresh_slot ? (cursor_ - 8u) / 8u : eviction_cursor_;
-    if (!fresh_slot) {
-        unsigned checked = 0u;
-        while (checked < kDynamicTables && slot_frames_[slot] == frame_) {
-            slot = (slot + 1u) % kDynamicTables;
-            ++checked;
-        }
-        if (checked == kDynamicTables) {
-            throw std::runtime_error(
-                "[Renderer] sampler heap exhausted: more than 255 distinct "
-                "sampler configurations used within one frame");
-        }
+    // A descriptor table never straddles a physical heap. Further pages grow
+    // without substituting a default sampler for a requested material.
+    if (cursor_ % kSamplerHeapSlots + kSamplerTableSlots > kSamplerHeapSlots) {
+        cursor_ += kSamplerHeapSlots - cursor_ % kSamplerHeapSlots;
     }
-    const unsigned index = 8u + slot * 8u;
-    // Insert before retiring the old mapping: an allocation failure leaves
-    // all resident descriptors discoverable. Do not hold a victim iterator
-    // across insertion, which may rehash the map.
-    const auto [it, inserted] = tables_.emplace(key, index);
-    if (inserted) {
-        if (fresh_slot) cursor_ += 8u;
-        else {
-            tables_.erase(slot_keys_[slot]);
-            eviction_cursor_ = (slot + 1u) % kDynamicTables;
-        }
-        slot_keys_[slot] = key;
-        slot_frames_[slot] = frame_;
-    }
-    return {it->second, inserted};
+    const unsigned index = cursor_;
+    cursor_ += key.count;
+    tables_.emplace(key, index);
+    return {index, true};
 }
 
 PresentPacer::PresentPacer() noexcept : frequency_(galaxy::qpc_frequency()) {}

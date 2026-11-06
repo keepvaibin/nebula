@@ -54,7 +54,8 @@ public:
     const char* mName;  ///< A string to identify the NameObj.
     u16 mFlag;          ///< Flags in relation to movement.
     s16 mExecutorIdx;   ///< The index into the NameObjExecuteInfo array.
-    u16 mMotionEpoch;  ///< Counts the object's lives (MotionSignal), in the padding after mExecutorIdx.
+    mutable u32 mDrawSlot;  ///< Names its draws from frame to frame
+    u32 mMotionEpoch;  ///< Counts the object's lives (MotionSignal)
 };
 
 /// @brief Contains static functions to begin and end movement in a NameObj.

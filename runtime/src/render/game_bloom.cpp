@@ -316,6 +316,7 @@ bool GameBloom::apply(ID3D12GraphicsCommandList* list, DescriptorRing& ring, con
         uavs.ptr += 3u * static_cast<UINT64>(increment);
         list->SetPipelineState(pipeline);
         list->SetComputeRoot32BitConstants(0, sizeof(Constants) / 4u, &c, 0);
+    { ID3D12DescriptorHeap* heap = ring.heap_for(gpu); list->SetDescriptorHeaps(1, &heap); }
         list->SetComputeRootDescriptorTable(1, gpu);
         list->SetComputeRootDescriptorTable(2, uavs);
         list->Dispatch((width + 7u) / 8u, (height + 7u) / 8u, 1u);
@@ -509,6 +510,7 @@ void GameBloom::draw_composite(ID3D12GraphicsCommandList* list, DescriptorRing& 
               {scene.format, first.format, second.format}, {nullptr, nullptr, nullptr});
     list->SetGraphicsRootSignature(root_signature_.Get());
     list->SetGraphicsRoot32BitConstants(0, sizeof(Constants) / 4u, &c, 0);
+    { ID3D12DescriptorHeap* heap = ring.heap_for(gpu); list->SetDescriptorHeaps(1, &heap); }
     list->SetGraphicsRootDescriptorTable(1, gpu);
     list->SetPipelineState(pipeline);
     list->OMSetRenderTargets(1, &in.rtv, FALSE, nullptr);

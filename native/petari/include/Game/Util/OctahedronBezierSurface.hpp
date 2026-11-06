@@ -4,13 +4,15 @@
 
 class BezierSurface;
 
+class TypedDraw;
+
 class OctahedronBezierSurface {
 public:
     OctahedronBezierSurface(u32);
 
     virtual void movement();
     virtual void calcAnim();
-    virtual void draw() const;
+    void draw(TypedDraw& rDraw) const;
 
     const Vec3f& getVertex(s32) const;
     Vec3f* getVertexPtr(s32);

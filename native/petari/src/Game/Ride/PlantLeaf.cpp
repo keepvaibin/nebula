@@ -4,10 +4,10 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
-#include <JSystem/J3DGraphAnimator/J3DModelData.hpp>
-#include <JSystem/J3DGraphBase/J3DMaterial.hpp>
-#include <JSystem/J3DGraphBase/J3DShape.hpp>
-#include <JSystem/J3DGraphBase/J3DSys.hpp>
+#include "Game/Render/ModelData.hpp"
+#include "Game/Render/Material.hpp"
+#include "Game/Render/ModelData.hpp"
+#include "Game/Render/Model.hpp"
 #include <nebula_geometry.hpp>
 
 namespace {
@@ -30,17 +30,13 @@ PlantLeaf::PlantLeaf(f32 leafCoord, const Vec3f& rPosition, const Vec3f& rGrowDi
     mBaseMtx.setXYZDir(mSide, mUp, mFront);
     mBaseMtx.scale(mLeafSize * ::sScaleMin);
     mBaseMtx.setTrans(mPosition);
-    mPosMtx.identity();
 }
 
-PlantLeafDrawInit::PlantLeafDrawInit(const char* pName) : LiveActor(pName), mMaterial(), mShape(), mShapeDraw() {
-    MR::registerPreDrawFunction(MR::Functor(this, &PlantLeafDrawInit::initDraw), MR::DrawType_Plant);
-
+PlantLeafDrawInit::PlantLeafDrawInit(const char* pName) : LiveActor(pName), mMaterial(), mShape() {
     initModelManagerWithAnm("PlantLeaf", 0, false);
-    J3DModelData* pModelData = MR::getJ3DModelData(this);
+    ModelData* pModelData = MR::getModelData(this);
     mMaterial = MR::getMaterial(pModelData, 0);
-    mShape = mMaterial->mShape;
-    mShapeDraw = *mShape->mShapeDraw;
+    mShape = mMaterial->getShape();
 }
 
 void PlantLeaf::init(const JMapInfoIter&) {
@@ -110,13 +106,4 @@ bool PlantLeaf::updateSpring(f32 growthPercent) {
 void PlantLeafDrawInit::init(const JMapInfoIter& rIter) {
     MR::invalidateClipping(this);
     makeActorDead();
-}
-
-void PlantLeafDrawInit::initDraw() const {
-    J3DModelData* pModelData = MR::getJ3DModelData(this);
-    j3dSys.mVtxPos = pModelData->mVertexData.mVtxPosArray;
-    j3dSys.mVtxNrm = pModelData->mVertexData.mVtxNrmArray;
-    j3dSys.mVtxCol = pModelData->mVertexData.mVtxColorArray[0];
-    mMaterial->useForDraw();
-    mShape->loadPreDrawSetting();
 }

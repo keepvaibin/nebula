@@ -1,10 +1,10 @@
 #include "Game/Player/MarioSearchLight.hpp"
-#include "Game/Util/NativeShader.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeMaterial.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/Material.hpp"
+#include "Game/Render/FrameList.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/Player/DrawAdaptor.hpp"
-#include "Game/Player/J3DModelX.hpp"
+#include "Game/Player/PlayerModel.hpp"
 #include "Game/Player/Mario.hpp"
 #include "Game/Player/MarioActor.hpp"
 #include "Game/Player/MarioConst.hpp"
@@ -122,14 +122,8 @@ void MarioActor::updateSearchLight() {
 }
 
 namespace {
-    inline J3DModelX* getModelX(LiveActor* pActor) {
-        return static_cast< J3DModelX* >(MR::getJ3DModel(pActor));
-    }
-
-    inline void initExtraMtxBuffer(J3DModelX* pModel, s32 num) {
-        for (u32 i = 0; i < pModel->_DD; i++) {
-            pModel->mExtraMtxBuffer[i] = new Mtx[num];
-        }
+    inline PlayerModel* getModelX(LiveActor* pActor) {
+        return static_cast< PlayerModel* >(MR::getModel(pActor));
     }
 };  // namespace
 
@@ -137,11 +131,8 @@ void MarioActor::initSearchLight() {
     mSearchLight = new MarioSearchLight(this);
     mSearchLight->initWithoutIter();
     mSearchLight->makeActorDead();
-    J3DModelX* model = static_cast< J3DModelX* >(MR::getJ3DModel(mSearchLight));
-    model->_DD = 16;
-
-    s32 drawMtxNum = model->getModelData()->getDrawMtxNum();
-    ::initExtraMtxBuffer(model, drawMtxNum);
+    PlayerModel* model = static_cast< PlayerModel* >(MR::getModel(mSearchLight));
+    model->initExtraPoses(16);
 
     mDrawSearchLight = new DrawAdaptor(MR::Functor(this, &MarioActor::drawSearchLight), MR::DrawType_0x33);
 }
@@ -174,11 +165,11 @@ void MarioActor::calcViewSearchLight() {
     }
 
     if (!MR::isDead(mSearchLight)) {
-        J3DModelX* model = ::getModelX(mSearchLight);
+        PlayerModel* model = ::getModelX(mSearchLight);
 
         // The search light is has three scaled cone "shells" to fake a blur effect.
         Mtx modelMdx;
-        MR::multMtx(modelMdx, model->getBaseTRMtx(), j3dSys.getViewMtx());
+        MR::multMtx(modelMdx, model->getBaseTRMtx(), ModelSys::getViewMtx());
 
         Mtx invBaseMtx;
         NebulaMtxInverse(model->getBaseTRMtx(), invBaseMtx);
@@ -191,7 +182,7 @@ void MarioActor::calcViewSearchLight() {
             NebulaMtxScale(scaledMtx, scale, scale, scale);
 
             MR::multMtx(scaledMtx, scaledMtx, modelMdx);
-            MR::multMtx(j3dSys.getViewMtx(), invBaseMtx, scaledMtx);
+            MR::multMtx(ModelSys::getViewMtx(), invBaseMtx, scaledMtx);
 
             model->viewCalc3(i + 1, nullptr);
         }
@@ -250,17 +241,14 @@ void MarioActor::drawSearchLight() const {
     screenPos1 = minimum + Vec2f(-10.0f, -10.0f);
     screenPos2 = maximum + Vec2f(10.0f, 10.0f);
 
-    // The light model with its own material and the passes over it (J3DNativeMaterial::override); setup's view only.
-    NebulaNativeMaterial view;
+    // The light model with its own material and the passes over it; setup's view only.
+    SiteMaterial view;
     TDDraw::setupNative(&view, 0, 1, 1);
 
-    J3DModelX* model = static_cast< J3DModelX* >(MR::getJ3DModel(mSearchLight));
-    J3DMaterial* const material = model->getModelData()->getMaterialNodePointer(0);
-    if (model->simpleDrawSetup(material)) {
-        J3DPass::depth(true, NEBULA_COMPARE_LEQUAL, false);
-        J3DPass::writeAlpha(false);
-        J3DPass::writeColor(false);
-
+    PlayerModel* model = static_cast< PlayerModel* >(MR::getModel(mSearchLight));
+    Material* const material = model->getModelData()->getMaterialNodePointer(0);
+    MaterialDraw draw;
+    if (model->simpleDrawSetup(material, &draw)) {
         // Gradually fade in the search light.
         f32 lightBrightness = 1.0f;
         if (mSearchLightTimer < 30) {
@@ -271,46 +259,54 @@ void MarioActor::drawSearchLight() const {
 
         // The channel colour at alpha A0.
         const u8 volumeAlpha = (u8)(s32)((lightBrightness * mConst->getTable()->mSearchLightColor[3]));
-        // (The light's model is a native J3D material: J3DNativeMaterial::override draws the pass over it.)
-        J3DNativeMaterial::override(2, volumeAlpha / 255.0f, 0.0f, -1.0f);
+        draw.override(2, volumeAlpha / 255.0f, 0.0f, -1.0f);
 
         // Render intersection of light cone with the scene by subtracting
         // visible back faces from front faces.
-        J3DPass::noBlend();
-        J3DPass::stencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ADD);
-        J3DPass::cull(NEBULA_CULL_BACK);
+        PassState state = PassStates::fromWord(draw.getState());
+        PassStates::setDepth(state, true, NEBULA_COMPARE_LEQUAL, false);
+        state.alpha_write = false;
+        state.color_write = false;
+        PassStates::setNoBlend(state);
+        state.stencil_func = NEBULA_STENCIL_ALWAYS;
+        state.stencil_op = NEBULA_STENCIL_ADD;
+        state.cull = NEBULA_CULL_BACK;
+        draw.setState(state.word());
         model->setDrawView(0);
-        model->simpleDrawShape(material);
+        model->simpleDrawShape(material, draw);
 
-        J3DPass::stencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_TAKE);
-        J3DPass::cull(NEBULA_CULL_FRONT);
-        model->simpleDrawShape(material);
+        state.stencil_op = NEBULA_STENCIL_TAKE;
+        state.cull = NEBULA_CULL_FRONT;
+        draw.setState(state.word());
+        model->simpleDrawShape(material, draw);
 
         // The light's colour added over the box where the cone was marked, at its strength; the mark goes with it.
-        NebulaNativeMaterial fill;
-        TDDraw::setupNative(&fill, 0, 1, 2);
-        NativeShader::setBlend(fill, NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_ONE);
-        NativeShader::send(fill);
-        J3DPass::stencil(NEBULA_STENCIL_IF_SET, NEBULA_STENCIL_ZERO);
+        TDDraw::setupNative(&view, 0, 1, 2);
+        view.setBlend(NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_ONE);
+        view.setStencil(NEBULA_STENCIL_IF_SET, NEBULA_STENCIL_ZERO);
 
         u8* col = mConst->getTable()->mSearchLightColor;
-        TDDraw::drawFillBox(screenPos1, screenPos2, col[0] << 24 | col[1] << 16 | col[2] << 8 | volumeAlpha);
-
-        J3DPass::stencil(NEBULA_STENCIL_OFF, NEBULA_STENCIL_KEEP);
+        {
+            TypedDraw site = TDDraw::site(view, 2);
+            TDDraw::drawFillBox(site, screenPos1, screenPos2, col[0] << 24 | col[1] << 16 | col[2] << 8 | volumeAlpha);
+        }
 
         TDDraw::setupNative(&view, 0, 1, 1);
-        J3DPass::depth(true, NEBULA_COMPARE_LEQUAL, false);
-        bool res = model->simpleDrawSetup(material);
+        bool res = model->simpleDrawSetup(material, &draw);
 
-        J3DPass::blend(NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_ONE);
+        state = PassStates::fromWord(draw.getState());
+        PassStates::setDepth(state, true, NEBULA_COMPARE_LEQUAL, false);
+        PassStates::setBlend(state, NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_ONE);
+        state.alpha_write = false;
+        draw.setState(state.word());
 
         // Colour of the light cone: the channel colour at alpha RASA - K(1 - A0), drawn above 4.
         const u8 coneAlpha = (u8)(s32)((lightBrightness * mConst->getTable()->mSearchLightAlphaLevel));
-        J3DNativeMaterial::override(3, coneAlpha / 255.0f, 0.0f, 4.0f);
+        draw.override(3, coneAlpha / 255.0f, 0.0f, 4.0f);
 
         if (res) {
             // Draw central light cone.
-            model->simpleDrawShape(material);
+            model->simpleDrawShape(material, draw);
         } else {
             return;
         }
@@ -321,9 +317,9 @@ void MarioActor::drawSearchLight() const {
 
             // Cone falloff colour (A0) and end cap falloff colour (A1): the channel colour at (A1 + (A0 - A1) RASA) / 2.
             const u8 blurAlpha = (u8)(s32)((lightBrightness * mConst->getTable()->mSearchLightBlurAlpha[i]));
-            J3DNativeMaterial::override(4, blurAlpha / 255.0f, 4.0f / 255.0f, 4.0f);
+            draw.override(4, blurAlpha / 255.0f, 4.0f / 255.0f, 4.0f);
 
-            model->simpleDrawShape(material);
+            model->simpleDrawShape(material, draw);
         }
     }
 }

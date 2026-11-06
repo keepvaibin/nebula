@@ -1,8 +1,8 @@
-#include <JSystem/J3DGraphBase/J3DNativeMaterial.hpp>
+#include "Game/Render/Material.hpp"
 #include "Game/MapObj/ElectricRailMoving.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
+#include "Game/Render/FrameList.hpp"
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/AudioLib/AudAnmSoundObject.hpp"
 #include "Game/Gravity/GravityInfo.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
@@ -50,7 +50,7 @@ void ElectricRailMovingPoint::attackSensor(HitSensor* pSender, HitSensor* pRecei
 }
 
 ElectricRailMoving::ElectricRailMoving(const char* pName)
-    : LiveActor(pName), mSegmentNum(10), mMovementSpeed(10.0f), mSegmentLength(500.0f), mStackHeight(1), _CC(0x80), mSensorOffsets(),
+    : ElectricRailDrawn(pName), mSegmentNum(10), mMovementSpeed(10.0f), mSegmentLength(500.0f), mStackHeight(1), _CC(0x80), mSensorOffsets(),
       _E4(), _E8(), _EC(), _F0(30.0f) {
     _9C.identity();
 }
@@ -73,16 +73,16 @@ void ElectricRailMoving::init(const JMapInfoIter& rIter) {
     makeActorAppeared();
 }
 
-void ElectricRailMoving::draw() const {
+void ElectricRailMoving::drawWith(MaterialDraw& rMaterial) const {
     if (MR::isValidDraw(this)) {
-        J3DPass::textureMatrix(1, 1);
-        J3DNativeShape::setTexture(1, _9C, 2);
-        J3DNativeMaterial::setCurrentRegister(1, Color8(0xFF, 0xFF, 0xFF, _CC));
+        rMaterial.setCoordinate(1, _9C);
+        rMaterial.setRegister(1, Color8(0xFF, 0xFF, 0xFF, _CC));
+        TypedDraw site(rMaterial, nullptr, MR::getCameraViewMtx());
 
         if (isNerve(GET_NERVE(ElectricRailMoving, ElectricRailMovingNrvWait))) {
-            mMesh.draw();
+            mMesh.draw(site);
         } else {
-            drawRail(_F0);
+            drawRail(site, _F0);
         }
     }
 }
@@ -227,38 +227,38 @@ void ElectricRailMoving::initPoints() {
 }
 
 void ElectricRailMoving::initMesh() {
-    mMesh.init(NEBULA_SHAPE_TEXCOORD0, _E4 * 4 * mStackHeight);
-    drawPlane(mMesh, 30.0f, 30.0f, -30.0f, -30.0f);
-    drawPlane(mMesh, -30.0f, 30.0f, 30.0f, -30.0f);
+    mMesh.init(_E4 * 4 * mStackHeight);
+    drawPlane(30.0f, 30.0f, -30.0f, -30.0f);
+    drawPlane(-30.0f, 30.0f, 30.0f, -30.0f);
     mMesh.send();
 }
 
-void ElectricRailMoving::drawRail(f32 a1) const {
-    drawPlaneGX(a1, a1, -a1, -a1);
-    drawPlaneGX(-a1, a1, a1, -a1);
+void ElectricRailMoving::drawRail(TypedDraw& rDraw, f32 a1) const {
+    drawPlaneGX(rDraw, a1, a1, -a1, -a1);
+    drawPlaneGX(rDraw, -a1, a1, a1, -a1);
 }
 
-void ElectricRailMoving::drawPlane(NativeMesh& rMesh, f32 a2, f32 a3, f32 a4, f32 a5) const {
+void ElectricRailMoving::drawPlane(f32 a2, f32 a3, f32 a4, f32 a5) {
     for (s32 i = 0; i < mStackHeight; i++) {
-        rMesh.begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, (2 * _E4) & 0xFFFE);
+        VertexPT* vtx = mMesh.strip((2 * _E4) & 0xFFFE);
 
         for (s32 j = 0; j < _E4; j++) {
-            setVertexAttribute(j, i, a2, a3, a4, a5, &rMesh);
+            setVertexAttribute(j, i, a2, a3, a4, a5, vtx);
         }
     }
 }
 
-void ElectricRailMoving::drawPlaneGX(f32 a1, f32 a2, f32 a3, f32 a4) const {
+void ElectricRailMoving::drawPlaneGX(TypedDraw& rDraw, f32 a1, f32 a2, f32 a3, f32 a4) const {
     for (s32 i = 0; i < mStackHeight; i++) {
-        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, _E4 * 2, NEBULA_SHAPE_TEXCOORD0);
+        VertexPT* vtx = rDraw.vertices< VertexPT >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, _E4 * 2);
 
         for (s32 j = 0; j < _E4; j++) {
-            setVertexAttribute(j, i, a1, a2, a3, a4, nullptr);
+            setVertexAttribute(j, i, a1, a2, a3, a4, vtx);
         }
     }
 }
 
-void ElectricRailMoving::setVertexAttribute(int a2, int a3, f32 a4, f32 a5, f32 a6, f32 a7, NativeMesh* pMesh) const {
+void ElectricRailMoving::setVertexAttribute(int a2, int a3, f32 a4, f32 a5, f32 a6, f32 a7, VertexPT*& rVtx) const {
     f32 railLength = MR::getRailTotalLength(this);
 
     if (100.0f * a2 < railLength) {
@@ -297,19 +297,8 @@ void ElectricRailMoving::setVertexAttribute(int a2, int a3, f32 a4, f32 a5, f32 
     const f32 x1 = position.x + axis1.x * a6 + axis2.x * a7;
     const f32 y1 = position.y + axis1.y * a6 + axis2.y * a7;
     const f32 z1 = position.z + axis1.z * a6 + axis2.z * a7;
-    if (pMesh != nullptr) {
-        pMesh->position(x0, y0, z0);
-        pMesh->texCoord(0, texCoord, 0.0f);
-        pMesh->corner();
-        pMesh->position(x1, y1, z1);
-        pMesh->texCoord(0, texCoord, 1.0f);
-        pMesh->corner();
-    } else {
-        J3DNativeDraw::position(x0, y0, z0);
-        J3DNativeDraw::texCoord(texCoord, 0.0f);
-        J3DNativeDraw::position(x1, y1, z1);
-        J3DNativeDraw::texCoord(texCoord, 1.0f);
-    }
+    *rVtx++ = {x0, y0, z0, texCoord, 0.0f};
+    *rVtx++ = {x1, y1, z1, texCoord, 1.0f};
 }
 
 void ElectricRailMoving::updateHitSensorPos() {

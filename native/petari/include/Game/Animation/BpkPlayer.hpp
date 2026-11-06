@@ -4,7 +4,7 @@
 
 class BpkPlayer : public MaterialAnmPlayerBase {
 public:
-    BpkPlayer(const ResourceHolder*, J3DModelData*);
+    BpkPlayer(const ResourceHolder*, ModelData*);
 
-    virtual void apply(J3DAnmBase*, J3DModel*);
+    virtual void apply(Clip*, Model*);
 };

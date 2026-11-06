@@ -17,10 +17,6 @@ fn be16(bytes: &[u8], at: usize) -> Result<u16> {
     Ok(u16::from_be_bytes(bytes.get(at..at + 2).context("a field past the data's end")?.try_into().unwrap()))
 }
 
-fn put32(bytes: &mut [u8], at: usize, value: u32) {
-    bytes[at..at + 4].copy_from_slice(&value.to_be_bytes());
-}
-
 pub fn is_compressed(bytes: &[u8]) -> bool {
     matches!(be32(bytes, 0), Ok(YAZ0) | Ok(YAY0)) && bytes.len() >= 16
 }

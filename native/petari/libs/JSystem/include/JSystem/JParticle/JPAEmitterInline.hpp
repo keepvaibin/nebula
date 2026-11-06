@@ -2,6 +2,7 @@
 #define JPA_EMITTER_INLINE_HPP
 
 inline JPABaseEmitter::JPABaseEmitter() : mLink(this), mRndm(0) {
+    mDrawSlot = 0;
     mMotionEpoch = 0;
 }
 

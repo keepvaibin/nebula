@@ -13,10 +13,20 @@ pub mod formats;
 pub mod material;
 pub mod kcl;
 pub mod merge;
-pub mod mesh;
+pub mod clip;
+#[cfg(feature = "proof-tools")]
+mod proof_tests;
+#[cfg(feature = "proof-tools")]
+pub use proof_tests::{clip_census, model_census};
+pub mod programs;
+pub mod curves;
+pub mod mesh_order;
+pub mod model_ir;
+pub mod limits;
+pub mod model_write;
+pub mod pipeline_list;
 pub mod native_data;
 pub mod overlay;
-pub mod shader_source;
 pub mod store;
 pub mod texture;
 pub mod thp;
@@ -168,13 +178,14 @@ pub fn cook_file(name: &str, bytes: Vec<u8>, stats: &mut Stats) -> Result<Option
     if archive::is_archive(&bytes) {
         bail!("{name} is an archive");
     }
-    let cooked = if bytes.starts_with(b"J3D2bmd3") || bytes.starts_with(b"J3D2bdl4") {
-        let textured = formats::j3d_model(&bytes, stats).with_context(|| format!("{name}: model"))?;
-        Some(material::cook_model(&textured).with_context(|| format!("{name}: native model materials"))?)
-    } else if native_data::is_j3d_model(&bytes) {
-        Some(material::cook_model(&bytes).with_context(|| format!("{name}: native material table"))?)
-    } else if native_data::is_j3d_animation(&bytes) {
-        Some(native_data::j3d_animation(&bytes).with_context(|| format!("{name}: animation"))?)
+    let cooked = if native_data::is_model_file(&bytes) {
+        let source = model_ir::Source::of(&bytes);
+        let ir = model_ir::read_file(&bytes, source, stats).with_context(|| format!("{name}: model"))?;
+        let stem = name.rsplit('/').next().unwrap_or(name);
+        let stem = stem.split('.').next().unwrap_or(stem);
+        Some(model_write::write(&ir, stem, &programs::written_or_unknown()).with_context(|| format!("{name}: native model"))?)
+    } else if native_data::is_animation_file(&bytes) {
+        Some(clip::write(&clip::read(&bytes).with_context(|| format!("{name}: animation"))?))
     } else if bytes.starts_with(b"JPAC2-10") {
         let textured = formats::jpc(&bytes, stats).with_context(|| format!("{name}: particles"))?;
         Some(native_data::jpc_host(&textured).with_context(|| format!("{name}: particles (host order)"))?)
@@ -363,6 +374,8 @@ pub fn write_cooked_pak(
     let layout = audio_data::layout_text(&waves).into_bytes();
     let item = StoreItem { path: String::new(), order: 0, bytes: Some(layout) };
     placed.extend(place(&mut pak, &mut at, overlay::WAVE_LAYOUT, vec![item], stats)?);
+    let item = StoreItem { path: String::new(), order: 0, bytes: Some(pipeline_list::bytes()) };
+    placed.extend(place(&mut pak, &mut at, pipeline_list::PATH, vec![item], stats)?);
     let at = store::write_index(&mut pak, at, &placed, system.bytes[..8].try_into().unwrap())?;
     pak.set_len(at)?;
     pak.sync_all().context("game.pak cannot be flushed to storage")?;
@@ -421,6 +434,7 @@ pub fn cook_content(input: &Path, output: &Path, progress: &mut dyn FnMut(u64, u
     if output.exists() {
         bail!("{} already exists", output.display());
     }
+    programs::prepare_written(input)?;
     let source = input.join("game.pak");
     let mut pak = File::open(&source).with_context(|| format!("{} cannot be opened", source.display()))?;
     let system = pak_system_area(&mut pak)?;

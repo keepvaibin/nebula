@@ -21,7 +21,7 @@ void apply_tilt_accel(galaxy::input::PlayerInput& input,
     input.pointer_on = input.pointer_on && galaxy::input::remote_faces_screen(input.gravity);
 }
 
-#if defined(NEBULA_RELEASE)
+#if !defined(NEBULA_DEV)
 NativeInputScriptOverlay build_native_input_script_overlay(std::uint64_t, const ScriptServices&) {
     return {};
 }

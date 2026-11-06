@@ -4,7 +4,7 @@
 #include <nebula_geometry.hpp>
 
 class ModelObj;
-class SimpleJ3DModelDrawer;
+class SimpleModelDrawer;
 class SwingRopePoint;
 
 class KirairaChain : public LiveActor {
@@ -44,7 +44,7 @@ public:
     s32 mAccelTimer;
     Vec3f mAccel;
     Vec3f mClippingCenter;
-    SimpleJ3DModelDrawer* mModelDrawer;
+    SimpleModelDrawer* mModelDrawer;
     ModelObj* mFixPointTop;
     ModelObj* mFixPointBottom;
 };

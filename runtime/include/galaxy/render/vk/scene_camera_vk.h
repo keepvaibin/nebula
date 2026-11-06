@@ -33,7 +33,6 @@ public:
     // `wide` is the wide colour, sampled: the multisampled target when `per_sample`, else the resolved one.
     void draw(VkCommandBuffer commands, VkRenderPass pass, unsigned samples_log2, const Texture& wide, bool per_sample,
               const SetAllocator& allocate);
-    void hold(std::vector<std::shared_ptr<Texture>>& held) const;
 
 private:
     enum Kind : unsigned { kWiden, kCamera, kCameraSamples, kKinds };

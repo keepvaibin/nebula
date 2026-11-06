@@ -1,5 +1,5 @@
 #include "Game/MapObj/SpiderThreadPart.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/LiveActor/PartsModel.hpp"
 #include "Game/MapObj/SpiderThreadMainPoint.hpp"
@@ -181,17 +181,17 @@ void SpiderThreadPart::update() {
     }
 }
 
-void SpiderThreadPart::draw() const {
+void SpiderThreadPart::draw(TypedDraw& rDraw) const {
     if (mIsFree) {
         return;
     }
 
     if (mIsStill) {
-        drawLine();
+        drawLine(rDraw);
         return;
     }
 
-    drawPoints();
+    drawPoints(rDraw);
 }
 
 void SpiderThreadPart::startHang(s32 index) {
@@ -495,135 +495,137 @@ void SpiderThreadPart::updateDrawVec() {
 
 namespace {
     // this is extremely hacky, and I'm not sure I like this. However, this matches.
-    inline void upperPoint1(const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 x, f32 y) {
-        J3DNativeDraw::position(rPos.x - x * rSide.x + y * rFront.x, rPos.y - x * rSide.y + y * rFront.y, rPos.z - x * rSide.z + y * rFront.z);
+    inline Vec3f upperPoint1(const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 x, f32 y) {
+        return Vec3f(rPos.x - x * rSide.x + y * rFront.x, rPos.y - x * rSide.y + y * rFront.y, rPos.z - x * rSide.z + y * rFront.z);
     }
-    inline void upperPoint2(const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 x, f32 y) {
-        J3DNativeDraw::position(rPos.x + x * rSide.x + y * rFront.x, rPos.y + x * rSide.y + y * rFront.y, rPos.z + x * rSide.z + y * rFront.z);
-    }
-
-    inline void rightLowerPoint1(const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 x, f32 y) {
-        J3DNativeDraw::position(rPos.x + x * rSide.x + y * rFront.x, rPos.y + x * rSide.y + y * rFront.y, rPos.z + x * rSide.z + y * rFront.z);
-    }
-    inline void rightLowerPoint2(const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 x, f32 y) {
-        J3DNativeDraw::position(rPos.x - x * rSide.x - y * rFront.x, rPos.y - x * rSide.y - y * rFront.y, rPos.z - x * rSide.z - y * rFront.z);
+    inline Vec3f upperPoint2(const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 x, f32 y) {
+        return Vec3f(rPos.x + x * rSide.x + y * rFront.x, rPos.y + x * rSide.y + y * rFront.y, rPos.z + x * rSide.z + y * rFront.z);
     }
 
-    inline void leftLowerPoint1(const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 x, f32 y) {
-        J3DNativeDraw::position(rPos.x + x * rSide.x - y * rFront.x, rPos.y + x * rSide.y - y * rFront.y, rPos.z + x * rSide.z - y * rFront.z);
+    inline Vec3f rightLowerPoint1(const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 x, f32 y) {
+        return Vec3f(rPos.x + x * rSide.x + y * rFront.x, rPos.y + x * rSide.y + y * rFront.y, rPos.z + x * rSide.z + y * rFront.z);
     }
-    inline void leftLowerPoint2(const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 x, f32 y) {
-        J3DNativeDraw::position(rPos.x - x * rSide.x + y * rFront.x, rPos.y - x * rSide.y + y * rFront.y, rPos.z - x * rSide.z + y * rFront.z);
-    }
-
-    void sendPointsUpper(const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 texY1, f32 texY2) {
-        upperPoint1(rPos, rSide, rFront, 18.0f, 3.0f);
-        J3DNativeDraw::color(sColorMinusX);
-        J3DNativeDraw::texCoord(0.0f, texY1);
-        J3DNativeDraw::texCoord(0.0f, texY2);
-
-        upperPoint2(rPos, rSide, rFront, 18.0f, 3.0f);
-        J3DNativeDraw::color(sColorPlusX);
-        J3DNativeDraw::texCoord(1.0f, texY1);
-        J3DNativeDraw::texCoord(1.0f, texY2);
+    inline Vec3f rightLowerPoint2(const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 x, f32 y) {
+        return Vec3f(rPos.x - x * rSide.x - y * rFront.x, rPos.y - x * rSide.y - y * rFront.y, rPos.z - x * rSide.z - y * rFront.z);
     }
 
-    void sendPointsRightLower(const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 texY1, f32 texY2) {
-        rightLowerPoint1(rPos, rSide, rFront, 18.0f, 18.0f);
-        J3DNativeDraw::color(sColorPlusX);
-        J3DNativeDraw::texCoord(0.0f, texY1);
-        J3DNativeDraw::texCoord(0.0f, texY2);
-
-        rightLowerPoint2(rPos, rSide, rFront, 15.0f, 18.0f);
-        J3DNativeDraw::color(sColorMinusY);
-        J3DNativeDraw::texCoord(1.0f, texY1);
-        J3DNativeDraw::texCoord(1.0f, texY2);
+    inline Vec3f leftLowerPoint1(const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 x, f32 y) {
+        return Vec3f(rPos.x + x * rSide.x - y * rFront.x, rPos.y + x * rSide.y - y * rFront.y, rPos.z + x * rSide.z - y * rFront.z);
+    }
+    inline Vec3f leftLowerPoint2(const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 x, f32 y) {
+        return Vec3f(rPos.x - x * rSide.x + y * rFront.x, rPos.y - x * rSide.y + y * rFront.y, rPos.z - x * rSide.z + y * rFront.z);
     }
 
-    void sendPointsLeftLower(const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 texY1, f32 texY2) {
-        leftLowerPoint1(rPos, rSide, rFront, 15.0f, 18.0f);
-        J3DNativeDraw::color(sColorMinusY);
-        J3DNativeDraw::texCoord(0.0f, texY1);
-        J3DNativeDraw::texCoord(0.0f, texY2);
+    void sendPointsUpper(VertexPCT2*& rVtx, const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 texY1, f32 texY2) {
+        {
+            const Vec3f at = upperPoint1(rPos, rSide, rFront, 18.0f, 3.0f);
+            *rVtx++ = {at.x, at.y, at.z, Rgba8(sColorMinusX), 0.0f, texY1, 0.0f, texY2};
+        }
 
-        leftLowerPoint2(rPos, rSide, rFront, 18.0f, 18.0f);
-        J3DNativeDraw::color(sColorMinusX);
-        J3DNativeDraw::texCoord(1.0f, texY1);
-        J3DNativeDraw::texCoord(1.0f, texY2);
+        {
+            const Vec3f at = upperPoint2(rPos, rSide, rFront, 18.0f, 3.0f);
+            *rVtx++ = {at.x, at.y, at.z, Rgba8(sColorPlusX), 1.0f, texY1, 1.0f, texY2};
+        }
+    }
+
+    void sendPointsRightLower(VertexPCT2*& rVtx, const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 texY1, f32 texY2) {
+        {
+            const Vec3f at = rightLowerPoint1(rPos, rSide, rFront, 18.0f, 18.0f);
+            *rVtx++ = {at.x, at.y, at.z, Rgba8(sColorPlusX), 0.0f, texY1, 0.0f, texY2};
+        }
+
+        {
+            const Vec3f at = rightLowerPoint2(rPos, rSide, rFront, 15.0f, 18.0f);
+            *rVtx++ = {at.x, at.y, at.z, Rgba8(sColorMinusY), 1.0f, texY1, 1.0f, texY2};
+        }
+    }
+
+    void sendPointsLeftLower(VertexPCT2*& rVtx, const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 texY1, f32 texY2) {
+        {
+            const Vec3f at = leftLowerPoint1(rPos, rSide, rFront, 15.0f, 18.0f);
+            *rVtx++ = {at.x, at.y, at.z, Rgba8(sColorMinusY), 0.0f, texY1, 0.0f, texY2};
+        }
+
+        {
+            const Vec3f at = leftLowerPoint2(rPos, rSide, rFront, 18.0f, 18.0f);
+            *rVtx++ = {at.x, at.y, at.z, Rgba8(sColorMinusX), 1.0f, texY1, 1.0f, texY2};
+        }
     }
 };  // namespace
 
-void SpiderThreadPart::drawLine() const {
-    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1);
+void SpiderThreadPart::drawLine(TypedDraw& rDraw) const {
+    VertexPCT2* vtx;
+    vtx = rDraw.vertices< VertexPCT2 >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 4);
     {
-        ::sendPointsUpper(mPointA->mPosition, mSide, mUp, 0.0f, mTextureOffset);
-        ::sendPointsUpper(mPointB->mPosition, mSide, mUp, mDistBetweenMainPoints * ::sTexRateV,
+        ::sendPointsUpper(vtx, mPointA->mPosition, mSide, mUp, 0.0f, mTextureOffset);
+        ::sendPointsUpper(vtx, mPointB->mPosition, mSide, mUp, mDistBetweenMainPoints * ::sTexRateV,
                           mTextureOffset + mDistBetweenMainPoints * ::sIndirectTexRateV);
     }
 
-    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1);
+    vtx = rDraw.vertices< VertexPCT2 >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 4);
     {
-        ::sendPointsRightLower(mPointA->mPosition, mSide, mUp, 0.0f, mTextureOffset);
-        ::sendPointsRightLower(mPointB->mPosition, mSide, mUp, mDistBetweenMainPoints * ::sTexRateV,
+        ::sendPointsRightLower(vtx, mPointA->mPosition, mSide, mUp, 0.0f, mTextureOffset);
+        ::sendPointsRightLower(vtx, mPointB->mPosition, mSide, mUp, mDistBetweenMainPoints * ::sTexRateV,
                                mTextureOffset + mDistBetweenMainPoints * ::sIndirectTexRateV);
     }
 
-    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1);
+    vtx = rDraw.vertices< VertexPCT2 >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 4);
     {
-        ::sendPointsLeftLower(mPointA->mPosition, mSide, mUp, 0.0f, mTextureOffset);
-        ::sendPointsLeftLower(mPointB->mPosition, mSide, mUp, mDistBetweenMainPoints * ::sTexRateV,
+        ::sendPointsLeftLower(vtx, mPointA->mPosition, mSide, mUp, 0.0f, mTextureOffset);
+        ::sendPointsLeftLower(vtx, mPointB->mPosition, mSide, mUp, mDistBetweenMainPoints * ::sTexRateV,
                               mTextureOffset + mDistBetweenMainPoints * ::sIndirectTexRateV);
     }
 }
 
-void SpiderThreadPart::drawPoints() const {
+void SpiderThreadPart::drawPoints(TypedDraw& rDraw) const {
+    VertexPCT2* vtx;
     f32 offset2, offset1;
     f32 delta1 = (mDistBetweenMainPoints * ::sTexRateV) / (mNumPoints + 1);
     f32 delta2 = (mDistBetweenMainPoints * ::sIndirectTexRateV) / (mNumPoints + 1);
 
-    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, (mNumPoints + 2) * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1);
+    vtx = rDraw.vertices< VertexPCT2 >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, (mNumPoints + 2) * 2);
     {
-        ::sendPointsUpper(mPointA->mPosition, mSide, mUp, 0.0f, mTextureOffset);
+        ::sendPointsUpper(vtx, mPointA->mPosition, mSide, mUp, 0.0f, mTextureOffset);
 
         offset1 = delta1;
         offset2 = delta2 + mTextureOffset;
         for (s32 idx = 0; idx < mNumPoints; idx++) {
-            ::sendPointsUpper(getPoint(idx)->mPosition, mSide, getPoint(idx)->mUp, offset1, offset2);
+            ::sendPointsUpper(vtx, getPoint(idx)->mPosition, mSide, getPoint(idx)->mUp, offset1, offset2);
             offset1 += delta1;
             offset2 += delta2;
         }
 
-        ::sendPointsUpper(mPointB->mPosition, mSide, getPoint(mNumPoints - 1)->mUp, mDistBetweenMainPoints * ::sTexRateV,
+        ::sendPointsUpper(vtx, mPointB->mPosition, mSide, getPoint(mNumPoints - 1)->mUp, mDistBetweenMainPoints * ::sTexRateV,
                           mTextureOffset + mDistBetweenMainPoints * ::sIndirectTexRateV);
     }
 
-    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, (mNumPoints + 2) * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1);
+    vtx = rDraw.vertices< VertexPCT2 >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, (mNumPoints + 2) * 2);
     {
-        ::sendPointsRightLower(mPointA->mPosition, mSide, mUp, 0.0f, mTextureOffset);
+        ::sendPointsRightLower(vtx, mPointA->mPosition, mSide, mUp, 0.0f, mTextureOffset);
         offset1 = delta1;
         offset2 = delta2 + mTextureOffset;
         for (s32 idx = 0; idx < mNumPoints; idx++) {
-            ::sendPointsRightLower(getPoint(idx)->mPosition, mSide, getPoint(idx)->mUp, offset1, offset2);
+            ::sendPointsRightLower(vtx, getPoint(idx)->mPosition, mSide, getPoint(idx)->mUp, offset1, offset2);
             offset1 += delta1;
             offset2 += delta2;
         }
 
-        ::sendPointsRightLower(mPointB->mPosition, mSide, getPoint(mNumPoints - 1)->mUp, mDistBetweenMainPoints * ::sTexRateV,
+        ::sendPointsRightLower(vtx, mPointB->mPosition, mSide, getPoint(mNumPoints - 1)->mUp, mDistBetweenMainPoints * ::sTexRateV,
                                mTextureOffset + mDistBetweenMainPoints * ::sIndirectTexRateV);
     }
 
-    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, (mNumPoints + 2) * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1);
+    vtx = rDraw.vertices< VertexPCT2 >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, (mNumPoints + 2) * 2);
     {
-        ::sendPointsLeftLower(mPointA->mPosition, mSide, mUp, 0.0f, mTextureOffset);
+        ::sendPointsLeftLower(vtx, mPointA->mPosition, mSide, mUp, 0.0f, mTextureOffset);
         offset1 = delta1;
         offset2 = delta2 + mTextureOffset;
         for (s32 idx = 0; idx < mNumPoints; idx++) {
-            ::sendPointsLeftLower(getPoint(idx)->mPosition, mSide, getPoint(idx)->mUp, offset1, offset2);
+            ::sendPointsLeftLower(vtx, getPoint(idx)->mPosition, mSide, getPoint(idx)->mUp, offset1, offset2);
             offset1 += delta1;
             offset2 += delta2;
         }
 
-        ::sendPointsLeftLower(mPointB->mPosition, mSide, getPoint(mNumPoints - 1)->mUp, mDistBetweenMainPoints * ::sTexRateV,
+        ::sendPointsLeftLower(vtx, mPointB->mPosition, mSide, getPoint(mNumPoints - 1)->mUp, mDistBetweenMainPoints * ::sTexRateV,
                               mTextureOffset + mDistBetweenMainPoints * ::sIndirectTexRateV);
     }
 }

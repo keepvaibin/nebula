@@ -32,7 +32,7 @@ GROUPS = {
     "sjis": r'"(?:\\[0-7]{3}){2,}',
     "offsets": r"\bfield_0x|\b_[0-9A-Fa-f]{2,3}\b(?!\w)",
 }
-CLOSED = {"math"}
+CLOSED = {"math", "j3d"}
 CASE_FREE = {"j3d", "jsystem", "nw4r"}
 
 compiled = {k: re.compile(v, re.I if k in CASE_FREE else 0) for k, v in GROUPS.items()}

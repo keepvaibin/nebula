@@ -7,7 +7,7 @@ public:
     ShadowVolumeSphere();
 
     virtual ~ShadowVolumeSphere();
-    virtual void loadModelDrawMtx() const;
+    virtual void loadModelDrawMtx(TypedDraw& rDraw) const;
     virtual bool isDraw() const;
 
     void setRadius(f32);

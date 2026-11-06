@@ -22,7 +22,7 @@ namespace galaxy::render {
 
 bool fsr_frame_generation_compiled() noexcept { return true; }
 
-#if !defined(NEBULA_RELEASE)
+#if defined(NEBULA_DEV)
 namespace {
 
 D3D12_RESOURCE_STATES d3d_state(FfxResourceStates state) {
@@ -157,7 +157,7 @@ bool FsrFrameGeneration::create(ID3D12Device* device, unsigned render_width, uns
         return false;
     }
     FsrGenerationCore& core = s.core;
-#if !defined(NEBULA_RELEASE)
+#if defined(NEBULA_DEV)
     core.dump_generated = dump_generated_frame;
 #endif
     try {

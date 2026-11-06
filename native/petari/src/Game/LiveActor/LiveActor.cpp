@@ -24,7 +24,7 @@
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <JSystem/J3DGraphAnimator/J3DModel.hpp>
+#include "Game/Render/Model.hpp"
 
 LiveActor::LiveActor(const char* pName)
     : NameObj(pName), mPosition(0.0f, 0.0f, 0.0f), mRotation(0.0f, 0.0f, 0.0f), mScale(1.0f, 1.0f, 1.0f), mVelocity(0.0f, 0.0f, 0.0f),
@@ -181,7 +181,7 @@ void LiveActor::calcAnmMtx() {
         return;
     }
 
-    MR::getJ3DModel(this)->setBaseScale(mScale);
+    MR::getModel(this)->setBaseScale(mScale);
     calcAndSetBaseMtx();
     mModelManager->calcAnim();
 }
@@ -279,8 +279,8 @@ HitSensor* LiveActor::getSensor(const char* pName) const {
 }
 
 MtxPtr LiveActor::getBaseMtx() const {
-    if (MR::getJ3DModel(this) != nullptr) {
-        return MR::getJ3DModel(this)->mBaseTransformMtx;
+    if (MR::getModel(this) != nullptr) {
+        return MR::getModel(this)->mBaseTransformMtx;
     }
 
     return nullptr;
@@ -350,7 +350,7 @@ void LiveActor::endClipped() {
 void LiveActor::prepareDrawClipped() {
     if (!mFlag.mHasPose && mModelManager != nullptr) {
         LiveActor::calcAndSetBaseMtx();
-        MR::calcJ3DModel(this);
+        MR::calcModel(this);
     }
 
     if (mActorLightCtrl != nullptr) {
@@ -367,9 +367,9 @@ void LiveActor::initModelManagerWithAnm(const char* pModelName, const char* pAni
     }
     mModelManager->init(pModelName, pAnimName, a3);
 
-    MR::getJ3DModel(this)->setBaseScale(mScale);
+    MR::getModel(this)->setBaseScale(mScale);
     LiveActor::calcAndSetBaseMtx();
-    MR::calcJ3DModel(this);
+    MR::calcModel(this);
 
     mAnimKeeper = ActorAnimKeeper::tryCreate(this);
     mCameraCtrl = ActorPadAndCameraCtrl::tryCreate(mModelManager, &mPosition);

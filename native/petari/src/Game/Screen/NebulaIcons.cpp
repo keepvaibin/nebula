@@ -1,6 +1,6 @@
 #include "Game/Screen/NebulaIcons.hpp"
 #include <JSystem/JUtility/JUTNativeLog.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
+#include "Game/Render/RenderTexture.hpp"
 
 #include "Game/Screen/LayoutActor.hpp"
 #include "Game/Screen/LayoutManager.hpp"
@@ -32,7 +32,6 @@ namespace {
     // Glyph sheets (texture records) handed to the renderer after they are painted, one image each.
     void handOverSheets(const u8* pFirst, s32 count, s32 sheetBytes, s32 width, s32 height) {
         for (s32 i = 0; i < count; i++) {
-            J3DNativeTexture::registerRecord(pFirst + i * sheetBytes);
         }
     }
 
@@ -1240,7 +1239,7 @@ namespace {
     // A picture of ours: a texture record (one level of RGBA8 rows) `width` x `height`, its texels cleared.
     void initRecord(u8* pRecord, s32 width, s32 height) {
         nebula_texture_init(pRecord, static_cast< u16 >(width), static_cast< u16 >(height), 1, NEBULA_TEXTURE_RGBA8,
-                            NEBULA_TEXTURE_FILTER_AT_UPLOAD);
+                            0);
         memset(pRecord + NEBULA_TEXTURE_HEADER, 0, static_cast< size_t >(width) * height * 4);
     }
 
@@ -1563,7 +1562,7 @@ namespace {
         if (sheet < cHdSheets) {
             sHdWanted[sheet] = false;
             if (sHdDone[sheet]) {
-                NebulaHost::textureHd(sFont.mSheets + sheet * sFont.mSheetBytes, nullptr);
+                NebulaHost::textureHd(RenderTexture::idOf(sFont.mSheets + sheet * sFont.mSheetBytes), nullptr);
             }
             sHdDone[sheet] = false;
             if (sHd.mSheet == sheet) {
@@ -1638,7 +1637,7 @@ namespace {
                 sHd.mBand = static_cast< Rgba* >(malloc(sizeof(Rgba) * sFont.mGlyphWidth * cHdScale * cHdBandRows));
             }
             nebula_texture_init(sHd.mRecord, static_cast< u16 >(width), static_cast< u16 >(height), cHdLevels, NEBULA_TEXTURE_RGBA8,
-                                NEBULA_TEXTURE_FILTER_AT_UPLOAD);
+                                0);
             memset(sHd.mRecord + NEBULA_TEXTURE_HEADER, 0, nebula_texture_level_bytes(width, height, cHdLevels, NEBULA_TEXTURE_RGBA8));
             sHd.mCell = 0;
             sHd.mRow = 0;
@@ -1665,7 +1664,7 @@ namespace {
             return;
         }
         makeHdLevels(sHd.mRecord, width, height);
-        NebulaHost::textureHd(sFont.mSheets + sHd.mSheet * sFont.mSheetBytes, sHd.mRecord);
+        NebulaHost::textureHd(RenderTexture::idOf(sFont.mSheets + sHd.mSheet * sFont.mSheetBytes), sHd.mRecord);
         sHdDone[sHd.mSheet] = true;
         sHd.mSheet = -1;
     }
@@ -1804,7 +1803,6 @@ namespace {
         }
         initRecord(sPictures[k].mRecord, cPictureSizes[k], cPictureSizes[k]);
         paintInto(canvas, sPictures[k].mRecord, cPictureSizes[k], 0, 0);
-        J3DNativeTexture::registerRecord(sPictures[k].mRecord);
     }
 
     // GALAXY_EXPORT_ART: each family's sheets and A bubbles at the game's size and eight times it, and each icon alone.
@@ -2222,7 +2220,6 @@ namespace {
         if (rSet.mRow < rSet.mHeight) {
             return;
         }
-        J3DNativeTexture::registerRecord(pRecord);
         nw4r::lyt::TexMap& rMap = rSet.mMaps[half][look];
         rMap.SetImage(pRecord);
         rMap.SetSize(static_cast< u16 >(rSet.mWidth), static_cast< u16 >(rSet.mHeight));

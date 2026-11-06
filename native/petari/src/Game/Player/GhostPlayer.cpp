@@ -1,5 +1,5 @@
 #include "Game/Player/GhostPlayer.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include "Game/Render/FrameList.hpp"
 #include "Game/Animation/XanimeCore.hpp"
 #include "Game/Animation/XanimePlayer.hpp"
 #include "Game/Camera/CameraTargetArg.hpp"
@@ -10,7 +10,7 @@
 #include "Game/Map/RaceManager.hpp"
 #include "Game/NameObj/NameObjArchiveListCollector.hpp"
 #include "Game/Player/GhostPacket.hpp"
-#include "Game/Player/J3DModelX.hpp"
+#include "Game/Player/PlayerModel.hpp"
 #include "Game/Player/JetTurtleShadow.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util/ActorCameraUtil.hpp"
@@ -486,10 +486,10 @@ void GhostPlayer::calcAndSetBaseMtx() {
         return;
     }
 
-    MtxPtr baseMtx = MR::getJ3DModel(this)->getBaseTRMtx();
+    MtxPtr baseMtx = MR::getModel(this)->getBaseTRMtx();
     MR::blendMtxRotate(getBaseMtx(), mTargetRotationMtx, 0.2f, baseMtx);
     MR::setMtxTrans(baseMtx, mPosition.x, mPosition.y, mPosition.z);
-    MR::getJ3DModel(this)->setBaseScale(mScale);
+    MR::getModel(this)->setBaseScale(mScale);
 
     if (mHasJetTurtle) {
         mHandRPos->calc();
@@ -505,12 +505,12 @@ void GhostPlayer::initAnimation() {
     mAnimTrackWeights[2] = 0.0f;
     mAnimTrackWeights[3] = 1.0f;
 
-    mXanimePlayer = new XanimePlayer(MR::getJ3DModel(this), pResource);
+    mXanimePlayer = new XanimePlayer(MR::getModel(this), pResource);
     mXanimePlayer->duplicateSimpleGroup();
     mModelManager->mXanimePlayer = mXanimePlayer;
     mXanimePlayer->setDefaultAnimation("\212\356\226\173" /* 基本 */);
-    mXanimePlayer->getCore()->enableJointTransform(MR::getJ3DModelData(this));
-    mXanimePlayerUpper = new XanimePlayer(MR::getJ3DModel(this), pResource, mXanimePlayer);
+    mXanimePlayer->getCore()->enableJointTransform(MR::getModelData(this));
+    mXanimePlayerUpper = new XanimePlayer(MR::getModel(this), pResource, mXanimePlayer);
     mXanimePlayerUpper->changeAnimation("\212\356\226\173" /* 基本 */);
 }
 
@@ -592,16 +592,13 @@ void GhostPlayer::draw() const {
         return;
     }
 
-    J3DModelX* model = reinterpret_cast< J3DModelX* >(MR::getJ3DModel(this));
+    PlayerModel* model = reinterpret_cast< PlayerModel* >(MR::getModel(this));
     model->viewCalc2();
     model->mFlags.clear();
-    model->directDraw(nullptr);
+    model->directDraw();
     if (mHasJetTurtle) {
         mJetTurtleShadow->drawType1();
     }
-
-    J3DPass::writeAlpha(false);
-    J3DPass::writeColor(true);
 }
 
 u32 GhostPlayer::receiveGhostPacket(GhostPacket* pPacket) {
@@ -741,7 +738,7 @@ u32 GhostPlayer::receiveGhostPacket(GhostPacket* pPacket) {
         } else if (strstr(currentAnimName, "\223\212\202\260" /* 投げ */) != nullptr) {
             mHasJetTurtle = false;
             mXanimePlayerUpper->stopAnimation();
-            MR::getJ3DModelData(this)->getJointTree().getJointNodePointer(MR::getJointIndex(this, "Spine1"))->setMtxCalc(nullptr);
+            MR::getModelData(this)->getJointNodePointer(MR::getJointIndex(this, "Spine1"))->setMtxCalc(nullptr);
         }
 
         if (mHasJetTurtle && (strcmp(currentAnimName, "\212\356\226\173" /* 基本 */) != 0 || strcmp(currentAnimName, "\203\127\203\203\203\223\203\166" /* ジャンプ */) != 0)) {

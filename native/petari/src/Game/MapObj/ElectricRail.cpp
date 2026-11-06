@@ -1,7 +1,7 @@
 #include "Game/MapObj/ElectricRail.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
+#include "Game/Render/FrameList.hpp"
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/AudioLib/AudAnmSoundObject.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/LiveActor/ShadowVolumeDrawer.hpp"
@@ -90,26 +90,25 @@ void ElectricRailSeparator::setup(const Vec3f& rVec1, const Vec3f& rVec2, const 
 
 ElectricRailShadowDrawer::ElectricRailShadowDrawer(const LiveActor* pActor, ElectricRailSeparator* pSeparator, s32 count)
     : ShadowVolumeDrawer("\211\145\225\140\211\346[\223\144\214\202\203\214\201\133\203\213\203\173\203\212\203\205\201\133\203\200]" /* 影描画[電撃レールボリューム] */), mHost(pActor) {
-    mMesh.init(0, count * 8 + 2);
-    drawShadowVolumeShape(mMesh, pSeparator, count);
+    mMesh.init(count * 8 + 2);
+    writeShadowVolumeShape(pSeparator, count);
     mMesh.send();
 }
 
-void ElectricRailShadowDrawer::loadModelDrawMtx() const {
-    J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-    J3DPass::positionMatrix(0);
+void ElectricRailShadowDrawer::loadModelDrawMtx(TypedDraw& rDraw) const {
+    rDraw.setWorld(nullptr);
 }
 
-void ElectricRailShadowDrawer::drawShape() const {
-    mMesh.draw();
+void ElectricRailShadowDrawer::drawShape(TypedDraw& rDraw) const {
+    mMesh.draw(rDraw);
 }
 
 bool ElectricRailShadowDrawer::isDraw() const {
     return MR::isValidDraw(mHost);
 }
 
-void ElectricRailShadowDrawer::drawShadowVolumeShape(NativeMesh& rMesh, ElectricRailSeparator* pSeparator, s32 val) const {
-    rMesh.begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, val * 4 + 2);
+void ElectricRailShadowDrawer::writeShadowVolumeShape(ElectricRailSeparator* pSeparator, s32 val) {
+    VertexP* vtx = mMesh.strip(val * 4 + 2);
 
     ElectricRailSeparator* separator;
     Vec3f vec24, vec30, vec3C, vec48;
@@ -125,10 +124,8 @@ void ElectricRailShadowDrawer::drawShadowVolumeShape(NativeMesh& rMesh, Electric
 
         vec30.add(vec24, vec48);
 
-        rMesh.position(vec24.x, vec24.y, vec24.z);
-        rMesh.corner();
-        rMesh.position(vec30.x, vec30.y, vec30.z);
-        rMesh.corner();
+        *vtx++ = {vec24.x, vec24.y, vec24.z};
+        *vtx++ = {vec30.x, vec30.y, vec30.z};
     }
 
     for (s32 i = 0; i < val; i++) {
@@ -142,10 +139,8 @@ void ElectricRailShadowDrawer::drawShadowVolumeShape(NativeMesh& rMesh, Electric
 
         vec30.add(vec24, vec48);
 
-        rMesh.position(vec24.x, vec24.y, vec24.z);
-        rMesh.corner();
-        rMesh.position(vec30.x, vec30.y, vec30.z);
-        rMesh.corner();
+        *vtx++ = {vec24.x, vec24.y, vec24.z};
+        *vtx++ = {vec30.x, vec30.y, vec30.z};
     }
 
     vec3C.scale(20.0f, pSeparator->mSide);
@@ -156,12 +151,10 @@ void ElectricRailShadowDrawer::drawShadowVolumeShape(NativeMesh& rMesh, Electric
 
     vec30.add(vec24, vec48);
 
-    rMesh.position(vec24.x, vec24.y, vec24.z);
-    rMesh.corner();
-    rMesh.position(vec30.x, vec30.y, vec30.z);
-    rMesh.corner();
+    *vtx++ = {vec24.x, vec24.y, vec24.z};
+    *vtx++ = {vec30.x, vec30.y, vec30.z};
 
-    rMesh.begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, val * 2);
+    vtx = mMesh.strip(val * 2);
 
     for (s32 i = 0; i < val; i++) {
         separator = &pSeparator[i];
@@ -172,13 +165,11 @@ void ElectricRailShadowDrawer::drawShadowVolumeShape(NativeMesh& rMesh, Electric
 
         vec30.sub(separator->_0, vec3C);
 
-        rMesh.position(vec24.x, vec24.y, vec24.z);
-        rMesh.corner();
-        rMesh.position(vec30.x, vec30.y, vec30.z);
-        rMesh.corner();
+        *vtx++ = {vec24.x, vec24.y, vec24.z};
+        *vtx++ = {vec30.x, vec30.y, vec30.z};
     }
 
-    rMesh.begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, val * 2);
+    vtx = mMesh.strip(val * 2);
 
     for (s32 i = 0; i < val; i++) {
         separator = &pSeparator[val - i - 1];
@@ -193,15 +184,13 @@ void ElectricRailShadowDrawer::drawShadowVolumeShape(NativeMesh& rMesh, Electric
         vec30.sub(separator->_0, vec3C);
         vec30.add(vec30, vec48);
 
-        rMesh.position(vec24.x, vec24.y, vec24.z);
-        rMesh.corner();
-        rMesh.position(vec30.x, vec30.y, vec30.z);
-        rMesh.corner();
+        *vtx++ = {vec24.x, vec24.y, vec24.z};
+        *vtx++ = {vec30.x, vec30.y, vec30.z};
     }
 }
 
 ElectricRail::ElectricRail(const char* name)
-    : LiveActor(name), mPoints(), mPointCount(), _94(), mSeparators(), mSeparatorCount(), mRailHeight(1),
+    : ElectricRailDrawn(name), mPoints(), mPointCount(), _94(), mSeparators(), mSeparatorCount(), mRailHeight(1),
       mEaseIn(30.0f), mShadowDrawer(), mIsCalcGravity() {
 }
 
@@ -273,15 +262,16 @@ void ElectricRail::initAfterPlacement() {
     setNerve(GET_NERVE(ElectricRail, ElectricRailNrvDisappeared));
 }
 
-void ElectricRail::draw() const {
+void ElectricRail::drawWith(MaterialDraw& rMaterial) const {
     if (!MR::isValidDraw(this)) {
         return;
     }
 
+    TypedDraw site(rMaterial, nullptr, MR::getCameraViewMtx());
     if (isNerve(GET_NERVE(ElectricRail, ElectricRailNrvWait))) {
-        mMesh.draw();
+        mMesh.draw(site);
     } else {
-        drawRail(mEaseIn);
+        drawRail(site, mEaseIn);
     }
 }
 
@@ -443,22 +433,22 @@ void ElectricRail::initSeparators() {
 }
 
 void ElectricRail::initMesh() {
-    mMesh.init(NEBULA_SHAPE_TEXCOORD0, mSeparatorCount * 4 * mRailHeight);
-    drawPlane(mMesh, 30.0, 30.0, -30.0, -30.0);
-    drawPlane(mMesh, -30.0, 30.0, 30.0, -30.0);
+    mMesh.init(mSeparatorCount * 4 * mRailHeight);
+    drawPlane(30.0, 30.0, -30.0, -30.0);
+    drawPlane(-30.0, 30.0, 30.0, -30.0);
     mMesh.send();
 }
 
-void ElectricRail::drawRail(f32 a1) const {
-    drawPlaneGX(a1, a1, -a1, -a1);
-    drawPlaneGX(-a1, a1, a1, -a1);
+void ElectricRail::drawRail(TypedDraw& rDraw, f32 a1) const {
+    drawPlaneGX(rDraw, a1, a1, -a1, -a1);
+    drawPlaneGX(rDraw, -a1, a1, a1, -a1);
 }
 
-void ElectricRail::drawPlane(NativeMesh& rMesh, f32 a1, f32 a2, f32 a3, f32 a4) const {
+void ElectricRail::drawPlane(f32 a1, f32 a2, f32 a3, f32 a4) {
     const Vec3f* pUp;
 
     for (s32 i = 0; i < mRailHeight; i++) {
-        rMesh.begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 2 * mSeparatorCount);
+        VertexPT* vtx = mMesh.strip(2 * mSeparatorCount);
 
         for (s32 j = 0; j < mSeparatorCount; j++) {
             ElectricRailSeparator* s = &mSeparators[j];
@@ -471,24 +461,20 @@ void ElectricRail::drawPlane(NativeMesh& rMesh, f32 a1, f32 a2, f32 a3, f32 a4) 
             v20.scale(100.0f * i);
             v21.add(v21, v20);
 
-            rMesh.position(((v21.x + (s->mSide.x * a1)) + (pUp->x * a2)), ((v21.y + (s->mSide.y * a1)) + (pUp->y * a2)),
-                           ((v21.z + (s->mSide.z * a1)) + (pUp->z * a2)));
-            rMesh.texCoord(0, v15, 0.0f);
-            rMesh.corner();
+            *vtx++ = {((v21.x + (s->mSide.x * a1)) + (pUp->x * a2)), ((v21.y + (s->mSide.y * a1)) + (pUp->y * a2)),
+                           ((v21.z + (s->mSide.z * a1)) + (pUp->z * a2)), v15, 0.0f};
 
-            rMesh.position(((v21.x + (s->mSide.x * a3)) + (pUp->x * a4)), ((v21.y + (s->mSide.y * a3)) + (pUp->y * a4)),
-                           ((v21.z + (s->mSide.z * a3)) + (pUp->z * a4)));
-            rMesh.texCoord(0, v15, 1.0f);
-            rMesh.corner();
+            *vtx++ = {((v21.x + (s->mSide.x * a3)) + (pUp->x * a4)), ((v21.y + (s->mSide.y * a3)) + (pUp->y * a4)),
+                           ((v21.z + (s->mSide.z * a3)) + (pUp->z * a4)), v15, 1.0f};
         }
     }
 }
 
-void ElectricRail::drawPlaneGX(f32 a1, f32 a2, f32 a3, f32 a4) const {
+void ElectricRail::drawPlaneGX(TypedDraw& rDraw, f32 a1, f32 a2, f32 a3, f32 a4) const {
     const Vec3f* pUp;
 
     for (s32 i = 0; i < mRailHeight; i++) {
-        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 2 * mSeparatorCount, NEBULA_SHAPE_TEXCOORD0);
+        VertexPT* vtx = rDraw.vertices< VertexPT >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 2 * mSeparatorCount);
 
         for (s32 j = 0; j < mSeparatorCount; j++) {
             ElectricRailSeparator* s = &mSeparators[j];
@@ -500,15 +486,9 @@ void ElectricRail::drawPlaneGX(f32 a1, f32 a2, f32 a3, f32 a4) const {
             v20.scale(100.0f * i);
             v21.add(v21, v20);
 
-            J3DNativeDraw::position(((v21.x + (s->mSide.x * a1)) + (pUp->x * a2)), ((v21.y + (s->mSide.y * a1)) + (pUp->y * a2)),
-                           ((v21.z + (s->mSide.z * a1)) + (pUp->z * a2)));
+            *vtx++ = {((v21.x + (s->mSide.x * a1)) + (pUp->x * a2)), ((v21.y + (s->mSide.y * a1)) + (pUp->y * a2)), ((v21.z + (s->mSide.z * a1)) + (pUp->z * a2)), v15, 0.0f};
 
-            J3DNativeDraw::texCoord(v15, 0.0f);
-
-            J3DNativeDraw::position(((v21.x + (s->mSide.x * a3)) + (pUp->x * a4)), ((v21.y + (s->mSide.y * a3)) + (pUp->y * a4)),
-                           ((v21.z + (s->mSide.z * a3)) + (pUp->z * a4)));
-
-            J3DNativeDraw::texCoord(v15, 1.0f);
+            *vtx++ = {((v21.x + (s->mSide.x * a3)) + (pUp->x * a4)), ((v21.y + (s->mSide.y * a3)) + (pUp->y * a4)), ((v21.z + (s->mSide.z * a3)) + (pUp->z * a4)), v15, 1.0f};
         }
     }
 }

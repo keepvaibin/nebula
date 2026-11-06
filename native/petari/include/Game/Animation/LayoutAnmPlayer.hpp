@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/J3DGraphAnimator/J3DAnimation.hpp>
+#include "Game/Render/Clip.hpp"
 
 namespace nw4r {
     namespace lyt {
@@ -26,5 +26,5 @@ public:
     const char* mAnimName;
     nw4r::lyt::AnimTransform* mAnimTransform;
     const LayoutManager* mManager;
-    J3DFrameCtrl mFrameCtrl;
+    FrameCtrl mFrameCtrl;
 };

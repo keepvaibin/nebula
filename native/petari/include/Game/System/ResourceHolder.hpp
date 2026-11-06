@@ -5,7 +5,7 @@
 #include "Game/System/AssetFolder.hpp"
 #include "Game/System/NebulaArena.hpp"
 
-class J3DModelData;
+class ModelData;
 
 typedef const char* ArchiveName;
 
@@ -16,7 +16,7 @@ public:
     const char* getMotionName(u32) const;
     bool isExistMaterialAnm() const;
     // Its material animations find their materials in the model.
-    void bindMaterialAnimations(J3DModelData*);
+    void bindMaterialAnimations(ModelData*);
     void newBckCtrl();
 
     Mtx44& getInitEffectMtx(int, int) const;
@@ -27,19 +27,19 @@ public:
     void mount(AssetFolder*, s32);
 
     ResFileInfo* createAndRegisterObject(const char*, void*);
-    void backupInitMaterialData(const J3DModelData*);
+    void backupInitMaterialData(const ModelData*);
 
-    // bool checkCorrectMotionsAndModel(J3DModelData*, const char*) const;
+    // bool checkCorrectMotionsAndModel(ModelData*, const char*) const;
 
     bool isCreatedAtSameHeap(ResourceHolder* pOther) const {
         return mHeap == pOther->mHeap;
     }
 
     // void makeStringAnmInfoAll(char*, u32) const;
-    // bool verifyBckData(J3DModelData*, const char*) const;
-    // bool verifyBvaData(J3DModelData*, const char*) const;
-    // bool verifyBtpData(J3DModelData*, const char*) const;
-    // bool verifyModelData(J3DModelData*, const char*) const;
+    // bool verifyBckData(ModelData*, const char*) const;
+    // bool verifyBvaData(ModelData*, const char*) const;
+    // bool verifyBtpData(ModelData*, const char*) const;
+    // bool verifyModelData(ModelData*, const char*) const;
     // bool verifyFileSize(u32, const char*) const;
 
     static int findBckIndex(const ResourceHolder* pResHolder, const char* pName) {

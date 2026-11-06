@@ -1,6 +1,6 @@
 #include "JSystem/JParticle/JPAChildShape.hpp"
 #include "JSystem/JParticle/JPANativeColor.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include "Game/Render/FrameList.hpp"
 #include "JSystem/JParticle/JPAEmitter.hpp"
 #include "JSystem/JParticle/JPAParticle.hpp"
 

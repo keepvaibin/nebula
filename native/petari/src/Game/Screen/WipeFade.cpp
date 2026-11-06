@@ -1,5 +1,5 @@
 #include "Game/Screen/WipeFade.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include "Game/Render/FrameList.hpp"
 #include "Game/Util/DrawUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -35,9 +35,6 @@ void WipeFade::draw() const {
     if (mIsWipeIn) {
         alpha = 1.0f - alpha;
     }
-
-    J3DPass::writeColor(true);
-    J3DPass::blend(NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_INV_SRC_ALPHA);
 
     NebulaColor8 fillColor;
     fillColor.r = mFillColor.r;

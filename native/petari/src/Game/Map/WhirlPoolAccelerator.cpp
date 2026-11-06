@@ -1,12 +1,12 @@
 #include "Game/Map/WhirlPoolAccelerator.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
+#include "Game/Render/FrameList.hpp"
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/Map/WaterAreaHolder.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include "Game/Util/NativeShader.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include <nebula_game_api.h>
 
 NebulaColor8 sWhirlPoolAcceleratorStageColor1 = {0x00, 0x34, 0x52, 0xFF};
@@ -108,34 +108,35 @@ void WhirlPoolAccelerator::initPoints() {
 }
 
 void WhirlPoolAccelerator::draw() const {
-    loadMaterial();
+    const SiteMaterial material = loadMaterial();
+    TypedDraw site(material, nullptr, MR::getCameraViewMtx());
     f32 u0 = mTexOffsetU0;
     f32 nextU0 = 1.0f / 6.0f + u0;
 
-    drawPlane(0.5f, 0.70710677f, -0.5f, 0.70710677f, u0, nextU0);
+    drawPlane(site, 0.5f, 0.70710677f, -0.5f, 0.70710677f, u0, nextU0);
     u0 = nextU0;
     nextU0 += 1.0f / 6.0f;
 
-    drawPlane(-0.5f, 0.70710677f, -1.0f, 0.0f, u0, nextU0);
+    drawPlane(site, -0.5f, 0.70710677f, -1.0f, 0.0f, u0, nextU0);
     u0 = nextU0;
     nextU0 += 1.0f / 6.0f;
 
-    drawPlane(-1.0f, 0.0f, -0.5f, -0.70710677f, u0, nextU0);
+    drawPlane(site, -1.0f, 0.0f, -0.5f, -0.70710677f, u0, nextU0);
     u0 = nextU0;
     nextU0 += 1.0f / 6.0f;
 
-    drawPlane(-0.5f, -0.70710677f, 0.5f, -0.70710677f, u0, nextU0);
+    drawPlane(site, -0.5f, -0.70710677f, 0.5f, -0.70710677f, u0, nextU0);
     u0 = nextU0;
     nextU0 += 1.0f / 6.0f;
 
-    drawPlane(0.5f, -0.70710677f, 1.0f, 0.0f, u0, nextU0);
+    drawPlane(site, 0.5f, -0.70710677f, 1.0f, 0.0f, u0, nextU0);
     u0 = nextU0;
     nextU0 += 1.0f / 6.0f;
 
-    drawPlane(1.0f, 0.0f, 0.5f, 0.70710677f, u0, nextU0);
+    drawPlane(site, 1.0f, 0.0f, 0.5f, 0.70710677f, u0, nextU0);
 }
 
-void WhirlPoolAccelerator::drawPlane(f32 x0, f32 y0, f32 x1, f32 y1, f32 u0, f32 u1) const {
+void WhirlPoolAccelerator::drawPlane(TypedDraw& rDraw, f32 x0, f32 y0, f32 x1, f32 y1, f32 u0, f32 u1) const {
     f32 v0 = mTexOffsetV0;
 
     Vec3f offset(0.0f, 0.0f, 30.0f);
@@ -144,7 +145,7 @@ void WhirlPoolAccelerator::drawPlane(f32 x0, f32 y0, f32 x1, f32 y1, f32 u0, f32
     MR::makeMtxRotate(rotation, 0.0f, mRotation, 0.0f);
     rotation.mult(offset, offset);
     MR::makeMtxRotate(rotation, 0.0f, 25.0f, 0.0f);
-    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, mPointCount * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
+    VertexPCT* vtx = rDraw.vertices< VertexPCT >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, mPointCount * 2);
     const WhirlPoolPoint* pPoint;
 
     for (s32 i = 0; i < mPointCount; i++) {
@@ -157,32 +158,25 @@ void WhirlPoolAccelerator::drawPlane(f32 x0, f32 y0, f32 x1, f32 y1, f32 u0, f32
         position.add(offset);
         rotation.mult(offset, offset);
 
-        J3DNativeDraw::position(position.x + side.x * x0 + normal.x * y0, position.y + side.y * x0 + normal.y * y0, position.z + side.z * x0 + normal.z * y0);
-        J3DNativeDraw::color(0xFF, 0xFF, 0xFF, mPoints[i]->mAlpha);
-        J3DNativeDraw::texCoord(u0 + pPoint->mTexCoord, v0);
+        *vtx++ = {position.x + side.x * x0 + normal.x * y0, position.y + side.y * x0 + normal.y * y0, position.z + side.z * x0 + normal.z * y0, Rgba8(0xFF, 0xFF, 0xFF, mPoints[i]->mAlpha), u0 + pPoint->mTexCoord, v0};
 
-        J3DNativeDraw::position(position.x + side.x * x1 + normal.x * y1, position.y + side.y * x1 + normal.y * y1, position.z + side.z * x1 + normal.z * y1);
-        J3DNativeDraw::color(0xFF, 0xFF, 0xFF, mPoints[i]->mAlpha);
-        J3DNativeDraw::texCoord(u1 + pPoint->mTexCoord, v0);
+        *vtx++ = {position.x + side.x * x1 + normal.x * y1, position.y + side.y * x1 + normal.y * y1, position.z + side.z * x1 + normal.z * y1, Rgba8(0xFF, 0xFF, 0xFF, mPoints[i]->mAlpha), u1 + pPoint->mTexCoord, v0};
         v0 += 0.02f;
     }
 }
 
-void WhirlPoolAccelerator::loadMaterial() const {
-    J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-    J3DPass::positionMatrix(0);
+SiteMaterial WhirlPoolAccelerator::loadMaterial() const {
     // runtime/src/render/materials/whirlpool_accelerator.hlsl: the two colours mixed by the texture at the vertex
     // alpha; drawn where above zero and blended by it, depth tested and written, no culling.
-    NebulaNativeMaterial material;
-    NativeShader::init(material, NEBULA_SHADER_WHIRLPOOL_ACCELERATOR, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL,
+    SiteMaterial material;
+    material.init(NEBULA_SHADER_WHIRLPOOL_ACCELERATOR, SiteMaterial::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL,
                        true, NEBULA_CULL_NONE);
     const NebulaColor8& rLow = sWhirlPoolAcceleratorStageColor1;
     const NebulaColor8& rHigh = sWhirlPoolAcceleratorStageColor2;
-    NativeShader::setColor(material, 0, rLow.r, rLow.g, rLow.b, rLow.a);
-    NativeShader::setColor(material, 4, rHigh.r, rHigh.g, rHigh.b, rHigh.a);
-    NativeShader::setTexture(material, 0, mTexture);
-    NativeShader::send(material);
-    J3DNativeShape::setCurrentIdentity();
+    material.setColor(0, rLow.r, rLow.g, rLow.b, rLow.a);
+    material.setColor(4, rHigh.r, rHigh.g, rHigh.b, rHigh.a);
+    material.setTexture(0, mTexture);
+    return material;
 }
 
 WhirlPoolAccelerator::~WhirlPoolAccelerator() {

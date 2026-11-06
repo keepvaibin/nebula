@@ -70,7 +70,7 @@ void Dossun::init(const JMapInfoIter& rIter) {
     initShadow();
     initNerve(GET_NERVE(Dossun, DossunNrvUpper));
     MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
-    s16 frameMax = MR::getBckFrameMax(this, "FallStart");
+    s32 frameMax = MR::getBckFrameMax(this, "FallStart");
     mRisenWaitTime = (mRisenWaitTime - frameMax <= 0) ? 0 : (mRisenWaitTime - frameMax);
     appear();
 }

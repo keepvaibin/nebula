@@ -1,9 +1,9 @@
 #include "Game/Util/JointController.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
-#include <JSystem/J3DGraphAnimator/J3DJoint.hpp>
-#include <JSystem/J3DGraphAnimator/J3DModel.hpp>
-#include <JSystem/J3DGraphBase/J3DSys.hpp>
+#include "Game/Render/ModelData.hpp"
+#include "Game/Render/Model.hpp"
+#include "Game/Render/Model.hpp"
 
 JointController::JointController() : mModel(), mJoint() {
 }
@@ -21,7 +21,7 @@ void JointController::registerCallBack() {
     mJoint->mCallBackUserData = this;
 }
 
-void JointController::calcJointMatrixAndSetSystem(J3DJoint* pJoint) {
+void JointController::calcJointMatrixAndSetSystem(Joint* pJoint) {
     MtxPtr pJointMtx = mModel->getAnmMtx(pJoint->getJntNo());
     Pos3f mtx;
     NebulaMtxCopy(pJointMtx, mtx);
@@ -29,11 +29,11 @@ void JointController::calcJointMatrixAndSetSystem(J3DJoint* pJoint) {
 
     if (calcJointMatrix(&mtx, info)) {
         NebulaMtxCopy(mtx, pJointMtx);
-        NebulaMtxCopy(mtx, J3DSys::mCurrentMtx);
+        NebulaMtxCopy(mtx, Skeleton::mCurrentMtx);
     }
 }
 
-void JointController::calcJointMatrixAfterChildAndSetSystem(J3DJoint* pJoint) {
+void JointController::calcJointMatrixAfterChildAndSetSystem(Joint* pJoint) {
     MtxPtr pJointMtx = mModel->getAnmMtx(pJoint->getJntNo());
     Pos3f mtx;
     NebulaMtxCopy(pJointMtx, mtx);
@@ -44,7 +44,7 @@ void JointController::calcJointMatrixAfterChildAndSetSystem(J3DJoint* pJoint) {
     }
 }
 
-int JointController::staticCallBack(J3DJoint* pJoint, int timing) {
+int JointController::staticCallBack(Joint* pJoint, int timing) {
     if (!pJoint) {
         return 0;
     }
@@ -69,14 +69,14 @@ int JointController::staticCallBack(J3DJoint* pJoint, int timing) {
 
 namespace MR {
     void setJointControllerParam(JointController* pController, const LiveActor* pActor, const char* pJointName) {
-        J3DJoint* pJoint = getJoint(pActor, pJointName);
-        pController->mModel = getJ3DModel(pActor);
+        Joint* pJoint = getJoint(pActor, pJointName);
+        pController->mModel = getModel(pActor);
         pController->mJoint = pJoint;
     }
 
-    void setJointControllerParam(JointController* pController, const LiveActor* pActor, u16 jointIndex) {
-        J3DJoint* pJoint = getJoint(pActor, jointIndex);
-        pController->mModel = getJ3DModel(pActor);
+    void setJointControllerParam(JointController* pController, const LiveActor* pActor, u32 jointIndex) {
+        Joint* pJoint = getJoint(pActor, jointIndex);
+        pController->mModel = getModel(pActor);
         pController->mJoint = pJoint;
     }
 };  // namespace MR

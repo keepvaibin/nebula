@@ -148,7 +148,7 @@ public:
     // elsewhere stays water). Per material index, its stage material.
     [[nodiscard]] std::vector<std::pair<std::uint16_t, const RtMaterial*>> stage_materials(
         std::string_view stage) const;
-    // A row with a `material` ("Model/material": the model's resource name and J3D's material name, models apart by
+    // A row with a `material` ("Model/material": the model's resource name and its material name, models apart by
     // spaces) names those models' material alone (MotionSignal::drawMaterial's identity): its texture's material with
     // that row on top (the Observatory's white star lamps, not every white plastic its texture is on). 0: none.
     // With a `stage` as well, the row holds on that stage alone (stage_identities).
@@ -234,7 +234,7 @@ private:
 // models such as the Observatory's power cables) take it, since no texture row can name them.
 inline constexpr std::uint64_t kRtUntexturedHash = 0xFFFFFFFFFFFFFFFFull;
 // The rows of the game's particle effects (`effect` in the hash column): no texture of their own; each row's `material`
-// names the effects ("Effect/<ParticleNames.bcsv name>", motion::kMarkerEffect) its properties hold for.
+// names the effects ("Effect/<ParticleNames.bcsv name>") its properties hold for.
 inline constexpr std::uint64_t kRtEffectHash = 0xFFFFFFFFFFFFFFFEull;
 // The loaded stage's material for its untextured surfaces (0: the stage has no `untextured` row).
 [[nodiscard]] std::uint16_t rt_stage_untextured_material() noexcept;

@@ -387,8 +387,8 @@ void MiniatureGalaxy::initPartsModel() {
         MR::hideMaterial(mStarPlateModel, "StarNumber1");
     }
 
-    mOnesTexMtx.mTexMtxInfo.mSRT.mTranslationY = powerStarNum % 10 * 0.1f;
-    mTensTexMtx.mTexMtxInfo.mSRT.mTranslationY = powerStarNum / 10 * 0.1f;
+    mOnesTexMtx.mInfo.mSRT.mTranslationY = powerStarNum % 10 * 0.1f;
+    mTensTexMtx.mInfo.mSRT.mTranslationY = powerStarNum / 10 * 0.1f;
 
     MR::prepareMaterials(mStarPlateModel);
     ::initGalaxyPart(mStarPlateModel);

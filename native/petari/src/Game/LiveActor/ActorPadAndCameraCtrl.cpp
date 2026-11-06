@@ -5,7 +5,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <JSystem/J3DGraphAnimator/J3DAnimation.hpp>
+#include "Game/Render/Clip.hpp"
 
 namespace {
     const char* sFileName = "PadAndCameraCtrl";
@@ -69,7 +69,7 @@ void ActorPadAndCameraCtrl::update() {
         updateInfoBck();
     }
 
-    J3DFrameCtrl* frameCtrl = _0->getBckCtrl();
+    FrameCtrl* frameCtrl = _0->getBckCtrl();
     for (s32 i = 0; i < mInfoNum; i++) {
         info = &mInfo[i];
         if (info->_30) {

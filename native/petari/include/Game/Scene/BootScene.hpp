@@ -18,7 +18,7 @@ public:
     bool isBeforeTitle() const;
 
     void exeMountGameData();
-    void exeWaitRayTracing();
+    void exeWaitPreparation();
     void exeWaitReadDoneSystemArchive();
     void exeDeactive();
 

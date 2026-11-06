@@ -10,7 +10,6 @@
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <JSystem/J3DGraphBase/J3DTevs.hpp>
 
 namespace NrvAstroCountDownPlate {
     NEW_NERVE(AstroCountDownPlateNrvDead, AstroCountDownPlate, Wait);

@@ -1,7 +1,7 @@
 #include "Game/Enemy/RingBeam.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
+#include "Game/Render/FrameList.hpp"
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/AudioLib/AudAnmSoundObject.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/ModelObj.hpp"
@@ -29,7 +29,7 @@ RingBeamShadowDrawer::RingBeamShadowDrawer(const LiveActor* unk0) : ShadowVolume
     _20 = 0.0f;
 }
 
-void RingBeamShadowDrawer::drawShape() const {
+void RingBeamShadowDrawer::drawShape(TypedDraw& rDraw) const {
     Pos3f MtxList[32];
     Pos3f baseMtxCopy;
     Mtx mtx;
@@ -74,7 +74,7 @@ void RingBeamShadowDrawer::drawShape() const {
         NebulaMtxMultVec(mtx, &XDirScaled, &XDirScaled);
     }
 
-    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 64, 0);
+    VertexP* vtx = rDraw.vertices< VertexP >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 64);
     for (int i = 0; i < 32; i++) {
         MtxList[i].getXDir(listXDir);
         MtxList[i].getTrans(Trans);
@@ -82,11 +82,11 @@ void RingBeamShadowDrawer::drawShape() const {
         listXDirScaledPos.scale(5.0f, listXDir);
         temp.add(Trans, listXDirScaledNeg);
         temp2.add(Trans, listXDirScaledPos);
-        J3DNativeDraw::position(temp2.x, temp2.y, temp2.z);
-        J3DNativeDraw::position(temp.x, temp.y, temp.z);
+        *vtx++ = {temp2.x, temp2.y, temp2.z};
+        *vtx++ = {temp.x, temp.y, temp.z};
     }
 
-    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 64, 0);
+    vtx = rDraw.vertices< VertexP >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 64);
     for (int i = 0; i < 32; i++) {
         MtxList[i].getXDir(listXDir);
         MtxList[i].getYDir(listYDir);
@@ -99,11 +99,11 @@ void RingBeamShadowDrawer::drawShape() const {
         temp2.add(Trans, listXDirScaledPos);
         temp.add(negYDirScaled);
         temp2.add(negYDirScaled);
-        J3DNativeDraw::position(temp.x, temp.y, temp.z);
-        J3DNativeDraw::position(temp2.x, temp2.y, temp2.z);
+        *vtx++ = {temp.x, temp.y, temp.z};
+        *vtx++ = {temp2.x, temp2.y, temp2.z};
     }
 
-    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 64, 0);
+    vtx = rDraw.vertices< VertexP >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 64);
     for (int i = 0; i < 32; i++) {
         MtxList[i].getXDir(listXDir);
         MtxList[i].getYDir(listYDir);
@@ -114,11 +114,11 @@ void RingBeamShadowDrawer::drawShape() const {
         temp.add(Trans, listXDirScaledNeg);
         temp2.add(Trans, listXDirScaledNeg);
         temp2.add(negYDirScaled);
-        J3DNativeDraw::position(temp.x, temp.y, temp.z);
-        J3DNativeDraw::position(temp2.x, temp2.y, temp2.z);
+        *vtx++ = {temp.x, temp.y, temp.z};
+        *vtx++ = {temp2.x, temp2.y, temp2.z};
     }
 
-    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 64, 0);
+    vtx = rDraw.vertices< VertexP >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 64);
     for (int i = 0; i < 32; i++) {
         MtxList[i].getXDir(listXDir);
         MtxList[i].getYDir(listYDir);
@@ -129,14 +129,13 @@ void RingBeamShadowDrawer::drawShape() const {
         temp.add(Trans, listXDirScaledPos);
         temp2.add(Trans, listXDirScaledPos);
         temp2.add(negYDirScaled);
-        J3DNativeDraw::position(temp2.x, temp2.y, temp2.z);
-        J3DNativeDraw::position(temp.x, temp.y, temp.z);
+        *vtx++ = {temp2.x, temp2.y, temp2.z};
+        *vtx++ = {temp.x, temp.y, temp.z};
     }
 }
 
-void RingBeamShadowDrawer::loadModelDrawMtx() const {
-    J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-    J3DPass::positionMatrix(0);
+void RingBeamShadowDrawer::loadModelDrawMtx(TypedDraw& rDraw) const {
+    rDraw.setWorld(nullptr);
 };
 
 bool RingBeamShadowDrawer::isDraw() const {

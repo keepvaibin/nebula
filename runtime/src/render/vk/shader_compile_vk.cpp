@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // HLSL to SPIR-V through glslang (shader_compile_vk.h).
 #include "galaxy/render/vk/shader_compile_vk.h"
+#include "../materials/nebula_limits.hlsli"
 
 // The release libraries are built with the HLSL front end; this exposes its switch for semantic decorations.
 #define ENABLE_HLSL 1
@@ -25,11 +26,10 @@ namespace {
 constexpr RegisterBinding kDrawBindings[] = {
     {"b0", 0, 0},
     {"b1", 0, 1},
-    {"t0, space1", 0, 2},
-    {"t1, space1", 0, 3},  // vertex blending: the earlier draw's vertices
-    {"t2, space1", 0, 4},  // vertex blending: verdicts and the presented frame's values
-    {"t3, space1", 0, 5},  // the rows the draw's row table names
-    {"b2", 0, 0, true},    // vertex blending: the draw's (push constants)
+    {"b2", 0, 2},
+    {"t16", 0, 3},
+    {"t17", 0, 4},
+    {"b3", 0, 0, true},
     {"t0", 1, 0},
     {"s0", 2, 0},
 };
@@ -70,8 +70,8 @@ std::string spirv_string(const std::vector<std::uint32_t>& spirv, std::size_t fi
 }
 
 // A semantic's location, as D3D12 matches stages by semantic: vertex attributes
-// (POSITION 0, NORMAL 1, TANGENT 2, BINORMAL 3, COLOR0-1 4-5, TEXCOORD0-7 6-13, BLENDINDICES0 14, BEND 15, BLENDINDICES1 16);
-// between stages COLOR0-1 at 0-1 and TEXCOORD0-16 at 2-18 (16: the curved stages' curve data); pixel outputs
+// (POSITION 0, NORMAL 1, TANGENT 2, BINORMAL 3, COLOR0-1 4-5, TEXCOORD0-15 6-21, BLENDINDICES0 22, POSITION1 23, BLENDINDICES1 24);
+// between stages COLOR0-1 at 0-1 and TEXCOORD0-20 at 2-22; pixel outputs
 // SV_TARGETn at n. `element`: the variable's element of an
 // array declared with this semantic, which takes the following indices.
 std::optional<std::uint32_t> semantic_location(std::string semantic, std::uint32_t element, bool vertex_input,
@@ -95,14 +95,15 @@ std::optional<std::uint32_t> semantic_location(std::string semantic, std::uint32
         if (name == "TANGENT" && index == 0u) return 2u;
         if (name == "BINORMAL" && index == 0u) return 3u;
         if (name == "COLOR" && index < 2u) return 4u + index;
-        if (name == "TEXCOORD" && index < 8u) return 6u + index;
-        if (name == "BLENDINDICES" && index == 0u) return 14u;
-        if (name == "BLENDINDICES" && index == 1u) return 16u;
-        if (name == "BEND" && index == 0u) return 15u;
+        if (name == "TEXCOORD" && index < NEBULA_MATERIAL_SLOTS) return 6u + index;
+        if (name == "BLENDINDICES" && index == 0u) return 6u + NEBULA_MATERIAL_SLOTS;
+        if (name == "BLENDINDICES" && index == 1u) return 8u + NEBULA_MATERIAL_SLOTS;
+        if (name == "POSITION" && index == 1u) return 7u + NEBULA_MATERIAL_SLOTS;
+        if (name == "BEND" && index == 0u) return 7u + NEBULA_MATERIAL_SLOTS;
         return std::nullopt;
     }
     if (name == "COLOR" && index < 2u) return index;
-    if (name == "TEXCOORD" && index < 17u) return 2u + index;
+    if (name == "TEXCOORD" && index <= NEBULA_MOTION_PREVIOUS_INDEX) return 2u + index;
     return std::nullopt;
 }
 

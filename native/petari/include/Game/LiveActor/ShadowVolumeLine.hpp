@@ -7,8 +7,8 @@ public:
     ShadowVolumeLine();
 
     virtual ~ShadowVolumeLine();
-    virtual void loadModelDrawMtx() const;
-    virtual void drawShape() const;
+    virtual void loadModelDrawMtx(TypedDraw& rDraw) const;
+    virtual void drawShape(TypedDraw& rDraw) const;
 
     void setFromShadowController(const ShadowController*);
     void setToShadowController(const ShadowController*);

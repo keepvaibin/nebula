@@ -1653,7 +1653,7 @@ bool MarioSwim::close() {
     }
 
     setYangleOffset(0.0f);
-    u16 jointID = getAnimator()->getUpperJointID();
+    u32 jointID = getAnimator()->getUpperJointID();
     setJointGlobalMtx(jointID, nullptr);
 
     decideEffect(true);
@@ -2531,7 +2531,7 @@ void MarioSwim::updateTilt() {
     NebulaMtxRotRad(mtxRotZ, 'Z', mCurrentTiltY);
     MR::multMtx(mUpperBodyJointMtx, mtxRotZ, mtxRotX);
 
-    u16 jointID = getAnimator()->getUpperJointID();
+    u32 jointID = getAnimator()->getUpperJointID();
     setJointGlobalMtx(jointID, mUpperBodyJointMtx);
 }
 
@@ -2859,7 +2859,7 @@ void MarioSwim::decLife() {
         Vec3f gravityVec = -getGravityVec();
         getPlayer()->forceSetHeadVecKeepSide(gravityVec);
 
-        u16 upperJoint = getAnimator()->getUpperJointID();
+        u32 upperJoint = getAnimator()->getUpperJointID();
         setJointGlobalMtx(upperJoint, nullptr);
     }
 }

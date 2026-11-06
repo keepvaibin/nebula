@@ -7,8 +7,8 @@ class ShadowVolumeBox : public ShadowVolumeDrawer {
 public:
     ShadowVolumeBox();
 
-    virtual void loadModelDrawMtx() const;
-    virtual void drawShape() const;
+    virtual void loadModelDrawMtx(TypedDraw& rDraw) const;
+    virtual void drawShape(TypedDraw& rDraw) const;
 
     void setSize(const Vec3f&);
     void makeVertexBuffer() const;

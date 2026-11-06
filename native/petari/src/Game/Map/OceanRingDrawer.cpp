@@ -1,8 +1,8 @@
 #include "Game/Map/OceanRingDrawer.hpp"
-#include "Game/Util/NativeShader.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/FrameList.hpp"
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/Map/OceanRing.hpp"
 #include "Game/Map/WaterAreaHolder.hpp"
 #include "Game/Util/CameraUtil.hpp"
@@ -56,16 +56,16 @@ OceanRingPartDrawer::OceanRingPartDrawer(const OceanRing* pRing, int a3, int a4,
 }
 
 void OceanRingPartDrawer::initMesh(f32* pTexCoordU0, f32* pTexCoordU1, f32* pTexCoordU2) {
-    mMesh.init(NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1 | NEBULA_SHAPE_TEXCOORD0 << 2, 2 * mOceanRing->mStride * (_14 - 1));
+    mMesh.init( 2 * mOceanRing->mStride * (_14 - 1));
     drawGD(pTexCoordU0, pTexCoordU1, pTexCoordU2);
     mMesh.send();
 }
 
-void OceanRingPartDrawer::draw() const {
+void OceanRingPartDrawer::draw(TypedDraw& rDraw) const {
     if (mPosition.distance(*MR::getPlayerPos()) < ::sDistancePartMesh) {
-        drawDynamic();
+        drawDynamic(rDraw);
     } else {
-        mMesh.draw();
+        mMesh.draw(rDraw);
     }
 }
 
@@ -108,24 +108,14 @@ void OceanRingPartDrawer::drawGD(f32* pTexCoordU0, f32* pTexCoordU1, f32* pTexCo
         f32 f17 = 0.0f;
         f32 f16 = 0.0f;
         f32 f15 = 0.0f;
-        mMesh.begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, (u16)mOceanRing->mStride << 1);
+        VertexPCT3* vtx = mMesh.strip((u16)mOceanRing->mStride << 1);
 
         for (s32 j = 0; j < mOceanRing->mStride; j++) {
             WaterPoint* pPoint = mOceanRing->getPoint(j, index);
-            mMesh.position(pPoint->mPosition.x, pPoint->mPosition.y, pPoint->mPosition.z);
-            mMesh.color(0xFF, 0xFF, 0xFF, pPoint->mAlpha);
-            mMesh.texCoord(0, f27, f17);
-            mMesh.texCoord(1, f25, f16);
-            mMesh.texCoord(2, f23, f15);
-            mMesh.corner();
+            *vtx++ = {pPoint->mPosition.x, pPoint->mPosition.y, pPoint->mPosition.z, Rgba8(0xFF, 0xFF, 0xFF, pPoint->mAlpha), f27, f17, f25, f16, f23, f15};
 
             pPoint = mOceanRing->getPoint(j, indexPlusOne);
-            mMesh.position(pPoint->mPosition.x, pPoint->mPosition.y, pPoint->mPosition.z);
-            mMesh.color(0xFF, 0xFF, 0xFF, pPoint->mAlpha);
-            mMesh.texCoord(0, f26, f20);
-            mMesh.texCoord(1, f24, f19);
-            mMesh.texCoord(2, f22, f18);
-            mMesh.corner();
+            *vtx++ = {pPoint->mPosition.x, pPoint->mPosition.y, pPoint->mPosition.z, Rgba8(0xFF, 0xFF, 0xFF, pPoint->mAlpha), f26, f20, f24, f19, f22, f18};
 
             f17 += f28;
             f16 += f28;
@@ -146,7 +136,7 @@ void OceanRingPartDrawer::drawGD(f32* pTexCoordU0, f32* pTexCoordU1, f32* pTexCo
     }
 }
 
-void OceanRingPartDrawer::drawDynamic() const {
+void OceanRingPartDrawer::drawDynamic(TypedDraw& rDraw) const {
     f32 f30 = 0.05f;
     f32 f29;
     f32 f28;
@@ -186,21 +176,13 @@ void OceanRingPartDrawer::drawDynamic() const {
         f32 f16 = 0.0f;
         f32 f15 = 0.0f;
 
-        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, mOceanRing->mStride * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1 | NEBULA_SHAPE_TEXCOORD0 << 2);
+        VertexPCT3* vtx = rDraw.vertices< VertexPCT3 >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, mOceanRing->mStride * 2);
         for (s32 j = 0; j < mOceanRing->mStride; j++) {
             WaterPoint* pPoint = mOceanRing->getPoint(j, index);
-            J3DNativeDraw::position(pPoint->mPosition.x, pPoint->mPosition.y, pPoint->mPosition.z);
-            J3DNativeDraw::color(0xFF, 0xFF, 0xFF, pPoint->mAlpha);
-            J3DNativeDraw::texCoord(f27, f17);
-            J3DNativeDraw::texCoord(f25, f16);
-            J3DNativeDraw::texCoord(f23, f15);
+            *vtx++ = {pPoint->mPosition.x, pPoint->mPosition.y, pPoint->mPosition.z, Rgba8(0xFF, 0xFF, 0xFF, pPoint->mAlpha), f27, f17, f25, f16, f23, f15};
 
             pPoint = mOceanRing->getPoint(j, indexPlusOne);
-            J3DNativeDraw::position(pPoint->mPosition.x, pPoint->mPosition.y, pPoint->mPosition.z);
-            J3DNativeDraw::color(0xFF, 0xFF, 0xFF, pPoint->mAlpha);
-            J3DNativeDraw::texCoord(f26, f20);
-            J3DNativeDraw::texCoord(f24, f19);
-            J3DNativeDraw::texCoord(f22, f18);
+            *vtx++ = {pPoint->mPosition.x, pPoint->mPosition.y, pPoint->mPosition.z, Rgba8(0xFF, 0xFF, 0xFF, pPoint->mAlpha), f26, f20, f24, f19, f22, f18};
 
             f17 += f28;
             f16 += f28;
@@ -210,14 +192,13 @@ void OceanRingPartDrawer::drawDynamic() const {
             f18 += f29;
         }
 
-
         f27 = f26;
         f25 = f24;
         f23 = f22;
     }
 }
 
-void OceanRingPartDrawer::drawDynamicBloom() const {
+void OceanRingPartDrawer::drawDynamicBloom(TypedDraw& rDraw) const {
     f32 f30 = 0.05f;
     f32 f28;
     f32 f27;
@@ -248,24 +229,19 @@ void OceanRingPartDrawer::drawDynamicBloom() const {
         f32 f17 = 0.0f;
         f32 f16 = 0.0f;
 
-        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, mOceanRing->mStride * 2, NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1);
+        VertexPT2* vtx = rDraw.vertices< VertexPT2 >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, mOceanRing->mStride * 2);
         for (s32 j = 0; j < mOceanRing->mStride; j++) {
             WaterPoint* pPoint = mOceanRing->getPoint(j, index);
             WaterPoint* pPoint2 = mOceanRing->getPoint(j, indexPlusOne);
-            J3DNativeDraw::position(pPoint->mPosition.x, pPoint->mPosition.y, pPoint->mPosition.z);
-            J3DNativeDraw::texCoord(f27, f17);
-            J3DNativeDraw::texCoord(f25, f16);
+            *vtx++ = {pPoint->mPosition.x, pPoint->mPosition.y, pPoint->mPosition.z, f27, f17, f25, f16};
 
-            J3DNativeDraw::position(pPoint2->mPosition.x, pPoint2->mPosition.y, pPoint2->mPosition.z);
-            J3DNativeDraw::texCoord(f26, f20);
-            J3DNativeDraw::texCoord(f24, f19);
+            *vtx++ = {pPoint2->mPosition.x, pPoint2->mPosition.y, pPoint2->mPosition.z, f26, f20, f24, f19};
 
             f17 += f28;
             f16 += f28;
             f20 += f28;
             f19 += f28;
         }
-
 
         f27 = f26;
         f25 = f24;
@@ -301,19 +277,21 @@ void OceanRingDrawer::update() {
 }
 
 void OceanRingDrawer::draw() const {
-    loadMaterial();
+    const SiteMaterial material = loadMaterial();
+    TypedDraw site(material, nullptr, MR::getCameraViewMtx());
 
     if (mRing->mIsClipped) {
-        mMesh.draw();
+        mMesh.draw(site);
     } else {
         for (s32 i = 0; i < mDrawerCount; i++) {
-            getDrawer(i)->draw();
+            getDrawer(i)->draw(site);
         }
     }
 }
 
 void OceanRingDrawer::drawBloom() const {
-    loadMaterialBloom();
+    const SiteMaterial material = loadMaterialBloom();
+    TypedDraw site(material, nullptr, MR::getCameraViewMtx());
     Vec3f zDir = MR::getCamZdir();
     zDir.scale(::sBloomCameraOffsetZ);
     Vec3f camPos = MR::getCamPos();
@@ -324,7 +302,7 @@ void OceanRingDrawer::drawBloom() const {
             OceanRingPartDrawer* drwr = getDrawer(i);
 
             if (drwr->mPosition.distance(zDir) < ::sDistancePartDrawBloom) {
-                drwr->drawDynamicBloom();
+                drwr->drawDynamicBloom(site);
             }
         }
     }
@@ -363,7 +341,7 @@ void OceanRingDrawer::initMesh() {
         flag = 1;
     }
 
-    mMesh.init(NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1 | NEBULA_SHAPE_TEXCOORD0 << 2, 2 * (flag + mRing->mSegCount));
+    mMesh.init( 2 * (flag + mRing->mSegCount));
     drawGD();
     mMesh.send();
 }
@@ -388,7 +366,7 @@ void OceanRingDrawer::drawGD() {
     f32 V10 = 0.05f * m;
     f32 V20 = 0.1f * m;
 
-    mMesh.begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, (flag + mRing->mSegCount) * 2);
+    VertexPCT3* vtx = mMesh.strip((flag + mRing->mSegCount) * 2);
 
     scalex = 1.0f;
     f32 V0 = V00 * scalex;
@@ -406,19 +384,8 @@ void OceanRingDrawer::drawGD() {
         s32 ddd = index * mRing->mStride;
         pPoint = mRing->mWaterPoints[mRing->mStride + ddd - 1];
         pPoint2 = mRing->mWaterPoints[ddd];
-        mMesh.position(pPoint->mOrigPos.x, pPoint->mOrigPos.y, pPoint->mOrigPos.z);
-        mMesh.color(0xFF, 0xFF, 0xFF, pPoint->mAlpha);
-        mMesh.texCoord(0, U0, V0);
-        mMesh.texCoord(1, U1, V1);
-        mMesh.texCoord(2, U2, V2);
-        mMesh.corner();
-
-        mMesh.position(pPoint2->mOrigPos.x, pPoint2->mOrigPos.y, pPoint2->mOrigPos.z);
-        mMesh.color(0xFF, 0xFF, 0xFF, pPoint2->mAlpha);
-        mMesh.texCoord(0, U0, V01);
-        mMesh.texCoord(1, U1, V11);
-        mMesh.texCoord(2, U2, V21);
-        mMesh.corner();
+        *vtx++ = {pPoint->mOrigPos.x, pPoint->mOrigPos.y, pPoint->mOrigPos.z, Rgba8(0xFF, 0xFF, 0xFF, pPoint->mAlpha), U0, V0, U1, V1, U2, V2};
+        *vtx++ = {pPoint2->mOrigPos.x, pPoint2->mOrigPos.y, pPoint2->mOrigPos.z, Rgba8(0xFF, 0xFF, 0xFF, pPoint2->mAlpha), U0, V01, U1, V11, U2, V21};
 
         U0 += (0.05f * scalex);
         U1 += (0.05f * scalex);
@@ -426,56 +393,44 @@ void OceanRingDrawer::drawGD() {
     }
 }
 
-void OceanRingDrawer::loadMaterial() const {
-    J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-
-    Mtx34f mtx;
-    mtx.identity();
-    mtx.mMtx[0][2] = _C;
-    mtx.mMtx[1][2] = _10;
-    J3DNativeShape::setTexture(0, mtx.toMtxPtr(), 2);
-    mtx.mMtx[0][2] = _14;
-    mtx.mMtx[1][2] = _18;
-    J3DNativeShape::setTexture(1, mtx.toMtxPtr(), 2);
-    mtx.mMtx[0][2] = _1C;
-    mtx.mMtx[1][2] = _20;
-    J3DNativeShape::setTexture(2, mtx.toMtxPtr(), 2);
-    MR::loadTexProjectionMtx(39);
+SiteMaterial OceanRingDrawer::loadMaterial() const {
 
     // runtime/src/render/materials/ocean_ring.hlsl: the water (texture 0) at the first two scrolls, color1's highlight,
     // the screen behind (texture 1, by texture matrix 3) tinted by color2 and warped by the indirect texture (2, the third
     // scroll) unless the camera is in the water; blended by the vertex alpha where above zero, depth tested and not
     // written, no culling.
     JUTTexture screen(MR::getScreenResTIMG());
-    NebulaNativeMaterial material;
-    NativeShader::init(material, NEBULA_SHADER_OCEAN_RING, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, false,
+    SiteMaterial material;
+    material.init(NEBULA_SHADER_OCEAN_RING, SiteMaterial::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, false,
                        NEBULA_CULL_NONE);
-    NativeShader::setColor(material, 0, ::color1.r, ::color1.g, ::color1.b, ::color1.a);
-    NativeShader::setColor(material, 4, ::color2.r, ::color2.g, ::color2.b, ::color2.a);
-    material.constants[8] = ::sIndirectScale;
-    material.constants[9] = ::unknownVal != 0 && MR::isCameraInWater() ? 0.0f : 1.0f;
-    material.constants[10] = static_cast< f32 >(screen.getWidth());
-    material.constants[11] = static_cast< f32 >(screen.getHeight());
-    NativeShader::setTexture(material, 0, mWaterTex);
-    NativeShader::setTexture(material, 1, &screen);
-    NativeShader::setTexture(material, 2, mWaterIndTex);
-    NativeShader::send(material);
-    static const u8 kPlaces[8] = {0, 1, 2, 3,
-                                  J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture};
-    J3DNativeShape::setCurrent(0, kPlaces);
-}
-
-void OceanRingDrawer::loadMaterialBloom() const {
-    J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-
     Mtx34f mtx;
     mtx.identity();
     mtx.mMtx[0][2] = _C;
     mtx.mMtx[1][2] = _10;
-    J3DNativeShape::setTexture(0, mtx.toMtxPtr(), 2);
+    material.setMatrix(3, 0, mtx.toMtxPtr());
     mtx.mMtx[0][2] = _14;
     mtx.mMtx[1][2] = _18;
-    J3DNativeShape::setTexture(1, mtx.toMtxPtr(), 2);
+    material.setMatrix(3, 1, mtx.toMtxPtr());
+    mtx.mMtx[0][2] = _1C;
+    mtx.mMtx[1][2] = _20;
+    material.setMatrix(3, 2, mtx.toMtxPtr());
+    Pos3f projection;
+    MR::calcTexProjectionMtx(&projection);
+    material.setMatrix(3, 3, projection);
+    material.setColor(0, ::color1.r, ::color1.g, ::color1.b, ::color1.a);
+    material.setColor(4, ::color2.r, ::color2.g, ::color2.b, ::color2.a);
+    material.constants[8] = ::sIndirectScale;
+    material.constants[9] = ::unknownVal != 0 && MR::isCameraInWater() ? 0.0f : 1.0f;
+    material.constants[10] = static_cast< f32 >(screen.getWidth());
+    material.constants[11] = static_cast< f32 >(screen.getHeight());
+    material.setTexture(0, mWaterTex);
+    material.setTexture(1, &screen);
+    material.setTexture(2, mWaterIndTex);
+    return material;
+}
+
+SiteMaterial OceanRingDrawer::loadMaterialBloom() const {
+
     Vec3f zDir = MR::getCamZdir();
     f32 v6 = ((MR::clamp(zDir.y, -0.2f, 0.1f) - -0.2f) / 0.3f);
     f32 v8 = ((MR::clamp(WaterAreaFunction::getCameraWaterDepth(), 150.0f, 300.0f) - 150.0f) / 150.0f);
@@ -488,14 +443,19 @@ void OceanRingDrawer::loadMaterialBloom() const {
     u8 v19 = (s32)(v18);
     // runtime/src/render/materials/ocean_ring_bloom.hlsl: (80, 80, 80) plus the water (texture 0) at the first two
     // scrolls times (80, 80, 80, v19); blended by alpha where above zero, depth tested and written, no culling.
-    NebulaNativeMaterial material;
-    NativeShader::init(material, NEBULA_SHADER_OCEAN_RING_BLOOM, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, true,
+    SiteMaterial material;
+    material.init(NEBULA_SHADER_OCEAN_RING_BLOOM, SiteMaterial::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, true,
                        NEBULA_CULL_NONE);
-    NativeShader::setColor(material, 0, 80, 80, 80, v19);
-    NativeShader::setColor(material, 4, 80, 80, 80, 255);
-    NativeShader::setTexture(material, 0, mWaterTex);
-    NativeShader::send(material);
-    static const u8 kPlaces[8] = {0, 1, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture,
-                                  J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture};
-    J3DNativeShape::setCurrent(0, kPlaces);
+    Mtx34f mtx;
+    mtx.identity();
+    mtx.mMtx[0][2] = _C;
+    mtx.mMtx[1][2] = _10;
+    material.setMatrix(2, 0, mtx.toMtxPtr());
+    mtx.mMtx[0][2] = _14;
+    mtx.mMtx[1][2] = _18;
+    material.setMatrix(2, 1, mtx.toMtxPtr());
+    material.setColor(0, 80, 80, 80, v19);
+    material.setColor(4, 80, 80, 80, 255);
+    material.setTexture(0, mWaterTex);
+    return material;
 }

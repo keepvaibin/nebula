@@ -1,7 +1,8 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include "Game/Util/NativeMesh.hpp"
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/MapObj/ElectricRailHolder.hpp"
 #include <nebula_geometry.hpp>
 
 class ElectricRailMovingPoint : public LiveActor {
@@ -16,13 +17,13 @@ public:
     u8 _8D;
 };
 
-class ElectricRailMoving : public LiveActor {
+class ElectricRailMoving : public ElectricRailDrawn {
 public:
     ElectricRailMoving(const char*);
 
     virtual ~ElectricRailMoving();
     virtual void init(const JMapInfoIter&);
-    virtual void draw() const;
+    virtual void drawWith(MaterialDraw& rMaterial) const;
     virtual void attackSensor(HitSensor*, HitSensor*);
 
     void disappear();
@@ -32,11 +33,11 @@ public:
     void initRail(const JMapInfoIter&);
     void initPoints();
     void initMesh();
-    void drawRail(f32) const;
-    void drawPlane(NativeMesh&, f32, f32, f32, f32) const;
-    void drawPlaneGX(f32, f32, f32, f32) const;
+    void drawRail(TypedDraw& rDraw, f32) const;
+    void drawPlane(f32, f32, f32, f32);
+    void drawPlaneGX(TypedDraw&, f32, f32, f32, f32) const;
     // A segment's two corners into `pMesh`, or drawn now when it is null.
-    void setVertexAttribute(int, int, f32, f32, f32, f32, NativeMesh* pMesh) const;
+    void setVertexAttribute(int, int, f32, f32, f32, f32, VertexPT*& rVtx) const;
     void updateHitSensorPos();
     bool updatePointPos();
     void updatePointPosAndModel();
@@ -61,7 +62,7 @@ public:
     ElectricRailMovingPoint* mMovingPoints;
     s32 _D8;
     // The rail as the renderer draws it while it waits.
-    NativeMesh mMesh;
+    SiteMesh< VertexPT > mMesh;
     s32 _E4;
     Vec3f* _E8;
     f32 _EC;

@@ -27,7 +27,7 @@ namespace nw4r {
                 SetAnisotropy(0);
             }
 
-            TexMap(const J3DNativeTexObj& rTexObj) {
+            TexMap(const SiteTexture& rTexObj) {
                 Set(rTexObj);
             }
 
@@ -39,8 +39,8 @@ namespace nw4r {
                 mBits.anisotropy = aniso;
             }
 
-            void Get(J3DNativeTexObj*) const;
-            void Set(const J3DNativeTexObj&);
+            void Get(SiteTexture*) const;
+            void Set(const SiteTexture&);
             // Image `id` of a cooked TPL file (its image a texture record).
             void ReplaceImage(const void* pTplFile, u32 id = 0);
 

@@ -1,7 +1,7 @@
 #include "Game/Map/OceanBowl.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
+#include "Game/Render/FrameList.hpp"
+#include "Game/Render/TypedDraw.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include "Game/Map/OceanBowlBloomDrawer.hpp"
 #include "Game/Map/OceanBowlPoint.hpp"
 #include "Game/Map/WaterAreaHolder.hpp"
@@ -16,7 +16,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "JSystem/JUtility/JUTTexture.hpp"
-#include "Game/Util/NativeShader.hpp"
+#include "Game/Render/TypedDraw.hpp"
 
 // These are from the debug symbol map
 namespace {
@@ -359,33 +359,25 @@ void OceanBowl::draw() const {
         return;
     }
 
-    loadMaterial();
+    const SiteMaterial material = loadMaterial();
+    TypedDraw site(material, nullptr, MR::getCameraViewMtx());
 
     u16 even = 0;
     u16 odd = 1;
     for (s32 x = 0; x < 24; x++) {
-        // Texture coordinates 0-3 are entries of the bowl's arrays (two floats each), the vertex's index in all four.
-        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 50,
-                             NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1 |
-                                 NEBULA_SHAPE_TEXCOORD0 << 2 | NEBULA_SHAPE_TEXCOORD0 << 3);
+        VertexPCT4* vtx = site.vertices< VertexPCT4 >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 50);
 
         for (s32 y = 0; y < 25; y++) {
             OceanBowlPoint* pPoint = getPoint(x + 1, y);
             OceanBowlPoint* pPoint2 = getPoint(x, y);
 
-            J3DNativeDraw::position(pPoint->mVertexPosition.x, pPoint->mVertexPosition.y, pPoint->mVertexPosition.z);
-            J3DNativeDraw::color(255, 255, 255, getPoint(x + 1, y)->mAlpha);
-            J3DNativeDraw::texCoord(mVtxTex0Array[2 * even], mVtxTex0Array[2 * even + 1]);
-            J3DNativeDraw::texCoord(mVtxTex1Array[2 * even], mVtxTex1Array[2 * even + 1]);
-            J3DNativeDraw::texCoord(mVtxTex2Array[2 * even], mVtxTex2Array[2 * even + 1]);
-            J3DNativeDraw::texCoord(mVtxTex3Array[2 * even], mVtxTex3Array[2 * even + 1]);
+            *vtx++ = {pPoint->mVertexPosition.x, pPoint->mVertexPosition.y, pPoint->mVertexPosition.z, Rgba8(255, 255, 255, getPoint(x + 1, y)->mAlpha),
+                      mVtxTex0Array[2 * even], mVtxTex0Array[2 * even + 1], mVtxTex1Array[2 * even], mVtxTex1Array[2 * even + 1],
+                      mVtxTex2Array[2 * even], mVtxTex2Array[2 * even + 1], mVtxTex3Array[2 * even], mVtxTex3Array[2 * even + 1]};
 
-            J3DNativeDraw::position(pPoint2->mVertexPosition.x, pPoint2->mVertexPosition.y, pPoint2->mVertexPosition.z);
-            J3DNativeDraw::color(255, 255, 255, getPoint(x, y)->mAlpha);
-            J3DNativeDraw::texCoord(mVtxTex0Array[2 * odd], mVtxTex0Array[2 * odd + 1]);
-            J3DNativeDraw::texCoord(mVtxTex1Array[2 * odd], mVtxTex1Array[2 * odd + 1]);
-            J3DNativeDraw::texCoord(mVtxTex2Array[2 * odd], mVtxTex2Array[2 * odd + 1]);
-            J3DNativeDraw::texCoord(mVtxTex3Array[2 * odd], mVtxTex3Array[2 * odd + 1]);
+            *vtx++ = {pPoint2->mVertexPosition.x, pPoint2->mVertexPosition.y, pPoint2->mVertexPosition.z, Rgba8(255, 255, 255, getPoint(x, y)->mAlpha),
+                      mVtxTex0Array[2 * odd], mVtxTex0Array[2 * odd + 1], mVtxTex1Array[2 * odd], mVtxTex1Array[2 * odd + 1],
+                      mVtxTex2Array[2 * odd], mVtxTex2Array[2 * odd + 1], mVtxTex3Array[2 * odd], mVtxTex3Array[2 * odd + 1]};
 
             even += 2;
             odd += 2;
@@ -393,21 +385,20 @@ void OceanBowl::draw() const {
     }
 }
 
-void OceanBowl::loadMaterial() const {
+SiteMaterial OceanBowl::loadMaterial() const {
     // runtime/src/render/materials/ocean_bowl.hlsl: the water (texture 0) and, above water, the screen behind (texture
     // 1) warped by the indirect texture (texture 2); alpha the vertex alpha times the shore mask (texture 3). Blended by
     // its alpha (added under water), depth tested, not written.
-    J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-    J3DNativeShape::setCurrentIdentity();
+    
     const bool inWater = MR::isCameraInWater();
     JUTTexture screenTexture(MR::getScreenResTIMG());
-    NebulaNativeMaterial material;
-    NativeShader::init(material, NEBULA_SHADER_OCEAN_BOWL,
-                       inWater ? NativeShader::BLEND_ADD_ALPHA : NativeShader::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL,
+    SiteMaterial material;
+    material.init(NEBULA_SHADER_OCEAN_BOWL,
+                       inWater ? SiteMaterial::BLEND_ADD_ALPHA : SiteMaterial::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL,
                        false, NEBULA_CULL_NONE);
-    NativeShader::setColor(material, 0, ::sOceanBowlStageColor0.r, ::sOceanBowlStageColor0.g, ::sOceanBowlStageColor0.b,
+    material.setColor(0, ::sOceanBowlStageColor0.r, ::sOceanBowlStageColor0.g, ::sOceanBowlStageColor0.b,
                            ::sOceanBowlStageColor0.a);
-    NativeShader::setColor(material, 4, ::sOceanBowlStageColor1.r, ::sOceanBowlStageColor1.g, ::sOceanBowlStageColor1.b,
+    material.setColor(4, ::sOceanBowlStageColor1.r, ::sOceanBowlStageColor1.g, ::sOceanBowlStageColor1.b,
                            ::sOceanBowlStageColor1.a);
     material.constants[8] = mTexU0;
     material.constants[9] = mTexV0;
@@ -428,31 +419,29 @@ void OceanBowl::loadMaterial() const {
     material.constants[28] = ::sIndirectScale / screenTexture.getWidth();
     material.constants[29] = ::sIndirectScale / screenTexture.getHeight();
     material.constants[30] = inWater ? 0.0f : 1.0f;
-    NativeShader::setTexture(material, 0, mWaterTex);
-    NativeShader::setTexture(material, 1, &screenTexture);
-    NativeShader::setTexture(material, 2, mWaterIndirectTex);
-    NativeShader::setTexture(material, 3, mMaskTex);
-    NativeShader::send(material);
+    material.setTexture(0, mWaterTex);
+    material.setTexture(1, &screenTexture);
+    material.setTexture(2, mWaterIndirectTex);
+    material.setTexture(3, mMaskTex);
+    return material;
 }
 
-void OceanBowl::loadMaterialBloom() const {
+SiteMaterial OceanBowl::loadMaterialBloom() const {
     // runtime/src/render/materials/ocean_bowl_bloom.hlsl: the water texture at its two scrolls times the grey c0 over
     // the grey c1, alpha the texture's by the vertex alpha at both; blended by its alpha where above zero, depth
     // tested and written before texturing, no culling.
-    J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-    J3DNativeShape::setCurrentIdentity();
-    NebulaNativeMaterial material;
-    NativeShader::init(material, NEBULA_SHADER_OCEAN_BOWL_BLOOM, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, true,
+    
+    SiteMaterial material;
+    material.init(NEBULA_SHADER_OCEAN_BOWL_BLOOM, SiteMaterial::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, true,
                        NEBULA_CULL_NONE);
-    material.early_depth = 1;
-    NativeShader::setColor(material, 0, ::sOceanBowlBloomStageColor0V, ::sOceanBowlBloomStageColor0V, ::sOceanBowlBloomStageColor0V,
+    material.setColor(0, ::sOceanBowlBloomStageColor0V, ::sOceanBowlBloomStageColor0V, ::sOceanBowlBloomStageColor0V,
                            255);
-    NativeShader::setColor(material, 4, ::sOceanBowlBloomStageColor1V, ::sOceanBowlBloomStageColor1V, ::sOceanBowlBloomStageColor1V,
+    material.setColor(4, ::sOceanBowlBloomStageColor1V, ::sOceanBowlBloomStageColor1V, ::sOceanBowlBloomStageColor1V,
                            255);
     material.constants[8] = mTexU0;
     material.constants[9] = mTexV0;
     material.constants[10] = mTexU1;
     material.constants[11] = mTexV1;
-    NativeShader::setTexture(material, 0, mWaterTex);
-    NativeShader::send(material);
+    material.setTexture(0, mWaterTex);
+    return material;
 }

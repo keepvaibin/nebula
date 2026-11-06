@@ -7,7 +7,7 @@ public:
     ShadowVolumeOvalPole();
 
     virtual ~ShadowVolumeOvalPole();
-    virtual void loadModelDrawMtx() const;
+    virtual void loadModelDrawMtx(TypedDraw& rDraw) const;
 
     void setSize(const Vec3f&);
 

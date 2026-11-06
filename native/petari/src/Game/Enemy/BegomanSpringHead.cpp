@@ -37,7 +37,7 @@ bool BegomanSpringHead::isSpringHop() {
     return !LiveActor::isNerve(GET_NERVE(BegomanSpringHead, HostTypeNrvWait));
 }
 
-s16 BegomanSpringHead::getHopEndBckFrameMax() {
+s32 BegomanSpringHead::getHopEndBckFrameMax() {
     return MR::getBckFrameMax(this, "HopEnd");
 }
 

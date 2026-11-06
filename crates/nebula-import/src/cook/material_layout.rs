@@ -1,5 +1,5 @@
 //! Cook layout source materials, including the tint/remap choices animations use.
-use super::{cooked_shader, normalize_program, PROGRAM_BYTES};
+use super::{normalize_program, PROGRAM_BYTES};
 use anyhow::{bail, Context, Result};
 
 fn source_size(source: &[u8]) -> Result<usize> {
@@ -147,7 +147,7 @@ pub fn cook(bytes: &[u8]) -> Result<Vec<u8>> {
                 block.extend_from_slice(&kept);
                 block.extend_from_slice(b"NSID");
                 for program in programs(&source[range])? {
-                    block.extend_from_slice(&cooked_shader(&program)?.to_le_bytes());
+                    write_form(&mut block, &program)?;
                 }
                 block.extend_from_slice(&coord_map);
                 block.extend_from_slice(&[u8::from(stages), 0, 0, 0]);
@@ -164,6 +164,44 @@ pub fn cook(bytes: &[u8]) -> Result<Vec<u8>> {
     let size = u32::try_from(result.len())?;
     result[8..12].copy_from_slice(&size.to_le_bytes());
     Ok(result)
+}
+
+/// One of a layout material's four programs as nebula_layout_form.h's record: hashes, row counts, then rows, textures and
+/// inputs in fixed room.
+fn write_form(block: &mut Vec<u8>, program: &[u8; PROGRAM_BYTES]) -> Result<()> {
+    use crate::cook::programs as gen;
+    let m = gen::material_from_program(program);
+    let mut t = gen::generate(&m, gen::Form::default(), false, &gen::layout_registers())?;
+    gen::finish_text("", gen::Form { replace: 0, normal_coord: true, ..gen::Form::default() }, &mut t);
+    if t.vertex_rows.len() + t.pixel_rows.len() > 64 || t.textures.len() > 16 || t.inputs.len() > 24 {
+        bail!("layout program past the form's room");
+    }
+    block.extend_from_slice(&gen::text_hash(&t.vertex).to_le_bytes());
+    block.extend_from_slice(&gen::text_hash(&t.pixel).to_le_bytes());
+    block.extend_from_slice(&(t.vertex_rows.len() as u16).to_le_bytes());
+    block.extend_from_slice(&(t.pixel_rows.len() as u16).to_le_bytes());
+    block.push(t.textures.len() as u8);
+    block.push(t.inputs.len() as u8);
+    block.push(u8::from(t.alpha_test) << 2);
+    block.push(0);
+    let mut rows = [0u16; 64];
+    for (i, r) in t.vertex_rows.iter().chain(t.pixel_rows.iter()).enumerate() {
+        rows[i] = u16::try_from(*r).context("layout row outside its format")?;
+    }
+    for r in rows {
+        block.extend_from_slice(&r.to_le_bytes());
+    }
+    let mut textures = [0u8; 16];
+    for (i, x) in t.textures.iter().enumerate() {
+        textures[i] = *x;
+    }
+    block.extend_from_slice(&textures);
+    let mut inputs = [0u8; 24];
+    for (i, x) in t.inputs.iter().enumerate() {
+        inputs[i] = gen::input_code(x);
+    }
+    block.extend_from_slice(&inputs);
+    Ok(())
 }
 
 pub fn programs(source: &[u8]) -> Result<[[u8; PROGRAM_BYTES]; 4]> {
@@ -331,6 +369,13 @@ pub fn programs(source: &[u8]) -> Result<[[u8; PROGRAM_BYTES]; 4]> {
             p[0] = n as u8;
         }
         *p = normalize_program(p)?;
+        // A layout's position or normal source is as sent: rows 13 and 14.
+        for i in 0..usize::from(p[1]) {
+            let at = 592 + 8 * i + 1;
+            if p[at] & 15 <= 1 {
+                p[at] = (p[at] & 0xF0) | (13 + (p[at] & 15));
+            }
+        }
     }
     Ok(result)
 }

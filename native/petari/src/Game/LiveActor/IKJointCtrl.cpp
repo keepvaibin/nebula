@@ -1,7 +1,7 @@
 #include "Game/LiveActor/IKJointCtrl.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util.hpp"
-#include <JSystem/J3DGraphAnimator/J3DJoint.hpp>
+#include "Game/Render/ModelData.hpp"
 
 #include <algorithm>
 
@@ -11,7 +11,7 @@ namespace {
 
 IKJointCtrl::IKJointCtrl(LiveActor* pActor)
     : mName(), mActor(pActor), mJoint(), mRootCtrl(), mMiddleCtrl(), mEndCtrl(), _78(0.0f, 1.0f, 0.0f), mEndLocalDir(0.0f, 1.0f, 0.0f),
-      _90(0.0f, 1.0f, 0.0f), mNearLimitRate(), mFarLimitRate(1.0f), mEndDirMaxDegree(45.0f), _A8(), _AC(), _B0(0xFFFF), _B2(0xFFFF), _B4(0xFFFF),
+      _90(0.0f, 1.0f, 0.0f), mNearLimitRate(), mFarLimitRate(1.0f), mEndDirMaxDegree(45.0f), _A8(), _AC(), _B0(NEBULA_NONE32), _B2(NEBULA_NONE32), _B4(NEBULA_NONE32),
       _B6() {
     _4.identity();
     _34.identity();
@@ -25,9 +25,9 @@ void IKJointCtrl::init(const IKJointCtrlParam& rParam) {
     MR::normalize(&mEndLocalDir);
     mEndDirMaxDegree = rParam.mEndDirMaxDegree;
 
-    J3DJoint* endJoint = MR::getJoint(mActor, mName);
-    J3DJoint* middleJoint = MR::getParentJoint(mActor, endJoint);
-    J3DJoint* rootJoint = MR::getParentJoint(mActor, middleJoint);
+    Joint* endJoint = MR::getJoint(mActor, mName);
+    Joint* middleJoint = MR::getParentJoint(mActor, endJoint);
+    Joint* rootJoint = MR::getParentJoint(mActor, middleJoint);
     mJoint = new IKJoint;
     _B0 = rootJoint->getJntNo();
     _B2 = middleJoint->getJntNo();

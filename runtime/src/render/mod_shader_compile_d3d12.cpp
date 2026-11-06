@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// One stage of a mod's material as DXIL, with Microsoft's compiler where the game's installer puts it (dxc\ beside the game).
+// One stage of a mod's program as DXIL, with Microsoft's compiler where the game's installer puts it (dxc\ beside the game).
 #include "galaxy/render/mod_shaders.h"
 
 #define WIN32_LEAN_AND_MEAN
@@ -34,7 +34,7 @@ std::vector<std::uint8_t> compile_mod_shader_stage(const std::string& source, co
         std::ofstream out(input, std::ios::binary);
         out.write(source.data(), static_cast<std::streamsize>(source.size()));
     }
-    std::wstring command = L"\"" + compiler.wstring() + L"\" -nologo -T " + (pixel ? L"ps_6_0 -E native_ps" : L"vs_6_0 -E native_vs") +
+    std::wstring command = L"\"" + compiler.wstring() + L"\" -nologo -T " + (pixel ? L"ps_6_0 -E program_ps" : L"vs_6_0 -E program_vs") +
                            L" -O3 -WX -Qstrip_debug -Qstrip_reflect";
     for (const char* define : defines) {
         command += L" -D";
@@ -57,7 +57,7 @@ std::vector<std::uint8_t> compile_mod_shader_stage(const std::string& source, co
         std::ifstream in(output, std::ios::binary);
         bytes.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
     } else {
-        problem = "a material didn't compile";
+        problem = "a program didn't compile";
     }
     fs::remove(input, error);
     fs::remove(output, error);

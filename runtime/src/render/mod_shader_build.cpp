@@ -1,48 +1,44 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// Shaders a mod needs and didn't bring, or brought for an earlier Nebula: built here from the sources the cooker wrote, in the
-// file format of mod_shaders.h. Each graphics interface compiles a stage its own way (compile_mod_shader_stage).
+// Programs a mod needs and didn't bring, or brought for an earlier Nebula: built here from the texts the cooker wrote, in the file
+// format of mod_shaders.h. Each graphics interface compiles a stage its own way (compile_mod_shader_stage).
 #include "galaxy/render/mod_shaders.h"
 
 #include <algorithm>
 #include <atomic>
+#include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <iterator>
-#include <map>
 #include <mutex>
 #include <set>
 #include <thread>
-#include <tuple>
+#include <utility>
 
 namespace galaxy::render {
 namespace {
 
 namespace fs = std::filesystem;
 
+constexpr std::size_t kHeaderBytes = 56u;
+constexpr std::size_t kEntryBytes = 32u;
+
 struct Variant {
     std::uint8_t number;
-    std::uint8_t vertex_of;  // a per-sample variant's vertex stage is another variant's
+    bool vertex;
+    bool only_with_discard;
     std::vector<const char*> defines;
 };
 
-// As native_shaders.h numbers them; what LumaLink's own conversion builds.
+// compile_programs.py's forms of a generated program.
 const std::vector<Variant>& variants() {
     static const std::vector<Variant> list = {
-        {0, 0, {}},
-        {4, 0, {"NATIVE_SAMPLE"}},
-        {5, 5, {"NATIVE_PIXEL_LIT"}},
-        {6, 5, {"NATIVE_PIXEL_LIT", "NATIVE_SAMPLE"}},
+        {kProgramBase, true, false, {}},
+        {kProgramReactive, false, false, {"NATIVE_REACTIVE"}},
+        {kProgramLayer, false, false, {"NATIVE_REACTIVE", "NATIVE_LAYER"}},
+        {kProgramMotion, true, false, {"NATIVE_MOTION"}},
+        {kProgramSample, false, true, {"NATIVE_SAMPLE"}},
     };
     return list;
-}
-
-bool has_define(const Variant& variant, const char* name) {
-    return std::any_of(variant.defines.begin(), variant.defines.end(), [name](const char* d) { return std::strcmp(d, name) == 0; });
-}
-
-bool material_has(const std::string& source, const Variant& variant) {
-    return (!has_define(variant, "NATIVE_PIXEL_LIT") || source.find("NATIVE_PIXEL_LIT") != std::string::npos) &&
-           (!has_define(variant, "NATIVE_SAMPLE") || source.find("discard") != std::string::npos);
 }
 
 std::string read_all(const fs::path& file) {
@@ -50,78 +46,54 @@ std::string read_all(const fs::path& file) {
     return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
 }
 
-// The materials a shader file of this build's interface holds.
-void materials_in(const fs::path& file, std::set<std::uint32_t>& found) {
+using Program = std::pair<std::uint64_t, bool>;  // id, pixel
+
+// The programs a file of this build's interface holds.
+void programs_in(const fs::path& file, std::set<Program>& found) {
     const std::string bytes = read_all(file);
-    if (bytes.size() < 56u || bytes.compare(0, 8, "NBSHADER") != 0 || bytes.compare(16, 40, native_shader_interface(), 40) != 0) {
+    if (bytes.size() < kHeaderBytes || bytes.compare(0, 8, "NBSHADER") != 0 || bytes.compare(16, 40, program_interface(), 40) != 0) {
         return;
     }
     std::uint32_t count = 0u;
     std::memcpy(&count, bytes.data() + 12, 4);
-    if (56u + std::uint64_t{count} * 28u > bytes.size()) {
+    if (kHeaderBytes + std::uint64_t{count} * kEntryBytes > bytes.size()) {
         return;
     }
     for (std::uint32_t i = 0u; i < count; ++i) {
-        std::uint32_t id = 0u;
-        std::memcpy(&id, bytes.data() + 56 + i * 24u, 4);
-        found.insert(id);
+        const char* entry = bytes.data() + kHeaderBytes + i * kEntryBytes;
+        std::uint64_t id = 0u;
+        std::memcpy(&id, entry, 8);
+        found.emplace(id, entry[9] != 0);
     }
 }
 
 struct Stage {
+    std::uint64_t id;
     std::uint8_t variant;
     bool pixel;
     std::vector<std::uint8_t> bytes;
 };
 
-void put32(std::string& out, std::size_t at, std::uint32_t value) {
-    std::memcpy(out.data() + at, &value, 4);
-}
-
-void put64(std::string& out, std::size_t at, std::uint64_t value) {
-    std::memcpy(out.data() + at, &value, 8);
-}
-
-std::string file_of(const std::map<std::uint32_t, std::vector<Stage>>& materials, const std::map<std::uint32_t, std::uint32_t>& layouts) {
-    struct Row {
-        std::uint32_t id;
-        std::uint8_t variant;
-        bool pixel;
-        std::uint8_t holder;
-    };
-    std::vector<Row> rows;
-    for (const auto& [id, stages] : materials) {
-        for (const Stage& stage : stages) {
-            rows.push_back({id, stage.variant, stage.pixel, stage.variant});
-            if (stage.pixel && std::none_of(stages.begin(), stages.end(), [&](const Stage& s) { return s.variant == stage.variant && !s.pixel; })) {
-                const auto it = std::find_if(variants().begin(), variants().end(), [&](const Variant& v) { return v.number == stage.variant; });
-                rows.push_back({id, stage.variant, false, it->vertex_of});
-            }
-        }
-    }
-    std::string out(56u + rows.size() * 28u, '\0');
+std::string file_of(const std::vector<Stage>& stages) {
+    std::string out(kHeaderBytes + stages.size() * kEntryBytes, '\0');
     std::memcpy(out.data(), "NBSHADER", 8);
-    put32(out, 8, 2u);
-    put32(out, 12, static_cast<std::uint32_t>(rows.size()));
-    std::memcpy(out.data() + 16, native_shader_interface(), 40);
-    std::map<std::tuple<std::uint32_t, std::uint8_t, bool>, std::pair<std::uint64_t, std::uint64_t>> places;
-    for (const auto& [id, stages] : materials) {
-        for (const Stage& stage : stages) {
-            out.resize((out.size() + 7u) & ~std::size_t{7});
-            places[{id, stage.variant, stage.pixel}] = {out.size(), stage.bytes.size()};
-            out.append(reinterpret_cast<const char*>(stage.bytes.data()), stage.bytes.size());
-        }
-    }
-    for (std::size_t i = 0u; i < rows.size(); ++i) {
-        const Row& row = rows[i];
-        const auto [offset, size] = places[{row.id, row.holder, row.pixel}];
-        const std::size_t at = 56u + i * 24u;
-        put32(out, at, row.id);
-        out[at + 4u] = static_cast<char>(row.variant);
-        out[at + 5u] = row.pixel ? 1 : 0;
-        put32(out, 56u + rows.size() * 24u + i * 4u, layouts.at(row.id));
-        put64(out, at + 8u, offset);
-        put64(out, at + 16u, size);
+    const std::uint32_t version = 3u;
+    const auto count = static_cast<std::uint32_t>(stages.size());
+    std::memcpy(out.data() + 8, &version, 4);
+    std::memcpy(out.data() + 12, &count, 4);
+    std::memcpy(out.data() + 16, program_interface(), 40);
+    for (std::size_t i = 0u; i < stages.size(); ++i) {
+        const Stage& stage = stages[i];
+        out.resize((out.size() + 7u) & ~std::size_t{7});
+        const std::uint64_t offset = out.size();
+        const std::uint64_t size = stage.bytes.size();
+        out.append(reinterpret_cast<const char*>(stage.bytes.data()), stage.bytes.size());
+        char* entry = out.data() + kHeaderBytes + i * kEntryBytes;
+        std::memcpy(entry, &stage.id, 8);
+        entry[8] = static_cast<char>(stage.variant);
+        entry[9] = stage.pixel ? 1 : 0;
+        std::memcpy(entry + 16, &offset, 8);
+        std::memcpy(entry + 24, &size, 8);
     }
     return out;
 }
@@ -133,23 +105,25 @@ ModShaderBuild build_missing_mod_shaders(const std::filesystem::path& sources, c
     ModShaderBuild result;
     std::error_code error;
     fs::remove(output, error);
-    std::set<std::uint32_t> present;
+    std::set<Program> present;
     for (const fs::path& file : brought) {
-        materials_in(file, present);
+        programs_in(file, present);
     }
     struct Job {
-        std::uint32_t id;
-        std::string source;
+        std::uint64_t id;
+        bool pixel;
+        std::string text;
     };
     std::vector<Job> jobs;
     for (const auto& entry : fs::directory_iterator(sources, error)) {
         const std::string name = entry.path().filename().string();
-        if (name.size() != 14u || name[0] != 'm' || !name.ends_with(".hlsl")) {
+        if (name.size() != 22u || (name[0] != 'v' && name[0] != 'p') || !name.ends_with(".hlsl")) {
             continue;
         }
-        const std::uint32_t id = static_cast<std::uint32_t>(std::strtoul(name.substr(1, 8).c_str(), nullptr, 16));
-        if (present.count(id) == 0u) {
-            jobs.push_back({id, read_all(entry.path())});
+        const std::uint64_t id = std::strtoull(name.substr(1, 16).c_str(), nullptr, 16);
+        const bool pixel = name[0] == 'p';
+        if (present.count({id, pixel}) == 0u && program_bytes(id, kProgramBase, pixel).size == 0u) {
+            jobs.push_back({id, pixel, read_all(entry.path())});
         }
     }
     if (jobs.empty()) {
@@ -157,7 +131,7 @@ ModShaderBuild build_missing_mod_shaders(const std::filesystem::path& sources, c
     }
     result.wanted = static_cast<unsigned>(jobs.size());
     std::mutex lock;
-    std::map<std::uint32_t, std::vector<Stage>> built;
+    std::vector<Stage> built;
     std::atomic<std::size_t> next{0u};
     std::atomic<unsigned> done{0u};
     const unsigned threads = std::clamp(std::thread::hardware_concurrency(), 1u, 4u);
@@ -169,45 +143,40 @@ ModShaderBuild build_missing_mod_shaders(const std::filesystem::path& sources, c
                 std::vector<Stage> stages;
                 bool good = true;
                 for (const Variant& variant : variants()) {
-                    if (!material_has(job.source, variant)) {
+                    if ((!job.pixel && !variant.vertex) ||
+                        (variant.only_with_discard && job.text.find("discard") == std::string::npos)) {
                         continue;
                     }
-                    for (const bool pixel : {false, true}) {
-                        if (!pixel && variant.vertex_of != variant.number) {
-                            continue;
+                    std::string problem;
+                    std::vector<std::uint8_t> bytes = compile_mod_shader_stage(job.text, sources, job.pixel, variant.defines, problem);
+                    if (bytes.empty()) {
+                        good = false;
+                        const std::lock_guard<std::mutex> guard(lock);
+                        if (result.problem.empty()) {
+                            result.problem = problem;
                         }
-                        std::string problem;
-                        std::vector<std::uint8_t> bytes = compile_mod_shader_stage(job.source, sources, pixel, variant.defines, problem);
-                        if (bytes.empty()) {
-                            good = false;
-                            const std::lock_guard<std::mutex> guard(lock);
-                            if (result.problem.empty()) result.problem = problem;
-                            break;
-                        }
-                        stages.push_back({variant.number, pixel, std::move(bytes)});
+                        break;
                     }
-                    if (!good) break;
+                    stages.push_back({job.id, variant.number, job.pixel, std::move(bytes)});
                 }
-                {
+                if (good) {
                     const std::lock_guard<std::mutex> guard(lock);
-                    if (good) built[job.id] = std::move(stages);
+                    built.insert(built.end(), std::make_move_iterator(stages.begin()), std::make_move_iterator(stages.end()));
+                    ++result.built;
                 }
                 const unsigned count = done.fetch_add(1u) + 1u;
-                if (progress) progress(count, static_cast<unsigned>(jobs.size()));
+                if (progress) {
+                    progress(count, static_cast<unsigned>(jobs.size()));
+                }
             }
         });
     }
     for (std::thread& thread : pool) {
         thread.join();
     }
-    result.built = static_cast<unsigned>(built.size());
     if (!built.empty()) {
         std::ofstream out(output, std::ios::binary);
-        std::map<std::uint32_t, std::uint32_t> layouts;
-        for (const Job& job : jobs) {
-            layouts[job.id] = material_layout_of_source(job.source);
-        }
-        const std::string bytes = file_of(built, layouts);
+        const std::string bytes = file_of(built);
         out.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
     }
     return result;

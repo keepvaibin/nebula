@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Game/Util/NativeMesh.hpp"
+#include "Game/Render/TypedDraw.hpp"
 #include <nebula_geometry.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <NebulaGpu.h>
@@ -13,10 +13,10 @@ public:
     OceanRingPartDrawer(const OceanRing*, int, int, bool, f32*, f32*, f32*);
 
     void initMesh(f32*, f32*, f32*);
-    void draw() const;
+    void draw(TypedDraw& rDraw) const;
     void drawGD(f32*, f32*, f32*);
-    void drawDynamic() const;
-    void drawDynamicBloom() const;
+    void drawDynamic(TypedDraw& rDraw) const;
+    void drawDynamicBloom(TypedDraw& rDraw) const;
 
     const OceanRing* mOceanRing;
     Vec3f mPosition;
@@ -30,7 +30,7 @@ public:
     f32 _20;
     f32 _24;
     // The ring's surface as the renderer draws it from far away.
-    NativeMesh mMesh;
+    SiteMesh< VertexPCT3 > mMesh;
 };
 
 class OceanRingDrawer {
@@ -43,8 +43,8 @@ public:
     void initParts();
     void initMesh();
     void drawGD();
-    void loadMaterial() const;
-    void loadMaterialBloom() const;
+    SiteMaterial loadMaterial() const;
+    SiteMaterial loadMaterialBloom() const;
 
     OceanRingPartDrawer* getDrawer(int idx) const {
         return mPartDrawers[idx];
@@ -66,5 +66,5 @@ public:
     JUTTexture* mWaterTex;
     JUTTexture* mWaterIndTex;
     // The ring's surface as the renderer draws it from far away.
-    NativeMesh mMesh;
+    SiteMesh< VertexPCT3 > mMesh;
 };
