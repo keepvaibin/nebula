@@ -212,13 +212,19 @@ void test_occlusion_budget_and_sky_direction() {
     }
     const Affine34 identity=affine_identity();
     const Affine34 roll={0,-1,0,100,1,0,0,200,0,0,1,300};
-    const std::uint32_t up=32767u << 16u;
-    const auto turned=eye_direction_at(up,identity,roll);
-    check(static_cast<std::int16_t>(turned&0xffffu) < -32760 && std::abs(static_cast<std::int16_t>(turned>>16u)) < 3,
+    const float up[3]={0.0f,1.0f,0.0f};
+    float turned[3]{};
+    eye_direction_at(up,identity,roll,turned);
+    check(std::fabs(turned[0]+1.0f) < 1e-6f && std::fabs(turned[1]) < 1e-6f && std::fabs(turned[2]) < 1e-6f,
           "sky up rotates with the presented camera and ignores translation");
-    const auto round_trip=eye_direction_at(turned,roll,identity);
-    check(std::abs(static_cast<std::int16_t>(round_trip&0xffffu)) < 3 && static_cast<std::int16_t>(round_trip>>16u)>32760,
+    float round_trip[3]{};
+    eye_direction_at(turned,roll,identity,round_trip);
+    check(std::fabs(round_trip[0]) < 1e-6f && std::fabs(round_trip[1]-1.0f) < 1e-6f && std::fabs(round_trip[2]) < 1e-6f,
           "sky direction survives eye/world conversion");
+    const Affine34 flat={0,0,0,0,0,0,0,0,0,0,0,0};
+    float kept[3]{};
+    eye_direction_at(up,flat,roll,kept);
+    check(kept[0]==0.0f && kept[1]==1.0f && kept[2]==0.0f, "a view without an inverse leaves the direction as it was");
 }
 
 }  // namespace

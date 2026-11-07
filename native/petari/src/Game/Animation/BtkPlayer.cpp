@@ -16,11 +16,11 @@ void BtkPlayer::apply(Clip* pClip, Model* pModel) {
             continue;
         }
         Material* pMaterial = pModel->ownMaterial(pClip->getMaterial(no));
-        if (pMaterial->getTexMtx(texMtxID) == nullptr) {
-            pMaterial->setTexMtx(texMtxID, CoordMatrix());
+        if (pMaterial->getCoordMatrix(texMtxID) == nullptr) {
+            pMaterial->setCoordMatrix(texMtxID, CoordMatrix());
         }
-        pMaterial->getTexCoord(texMtxID)->setTexGenMtx(texMtxID);
-        CoordMatrixInfo& rInfo = pMaterial->getTexMtx(texMtxID)->getTexMtxInfo();
+        pMaterial->getCoord(texMtxID)->setMatrix(texMtxID);
+        CoordMatrixInfo& rInfo = pMaterial->getCoordMatrix(texMtxID)->getInfo();
         rInfo.mInfo = (rInfo.mInfo & 0x3f) | (pClip->getCoordMode() << 7);
         const f32* pCenter = pClip->getCenter(no);
         rInfo.mCenter.x = pCenter[0];

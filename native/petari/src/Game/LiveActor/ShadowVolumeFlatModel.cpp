@@ -55,7 +55,7 @@ void ShadowVolumeFlatModel::loadModelDrawMtx(TypedDraw& rDraw) const {
         MR::preScaleMtx(dropMtx, controller->getHost()->mScale);
     }
 
-    f32 (*pJoints)[4] = static_cast< f32 (*)[4] >(Frame::arena(mModelData->getJointNum() * sizeof(Mtx), 16));
+    f32 (*pJoints)[4] = static_cast< f32 (*)[4] >(Frame::arena(mModelData->getJointCount() * sizeof(Mtx), 16));
     memcpy(pJoints[mRootJoint * 3], rootMtx.mMtx, sizeof(Mtx));
     memcpy(pJoints[mDropJoint * 3], dropMtx.mMtx, sizeof(Mtx));
     rDraw.setModelJoints(mModelData, pJoints);

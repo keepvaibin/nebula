@@ -24,7 +24,7 @@ XanimePlayer::XanimePlayer(Model* pModel, XanimeResourceTable* pRessource) {
     mCurrentAnimation = nullptr;
     _68 = nullptr;
 
-    mCore = new XanimeCore(mResourceTable->mMaxGroupInfoTableSize, mModelData->getJointNum(), flags);
+    mCore = new XanimeCore(mResourceTable->mMaxGroupInfoTableSize, mModelData->getJointCount(), flags);
 
     mWeights[0] = 0.0f;
     for (u32 i = 1; i < mResourceTable->mMaxGroupInfoTableSize; i++) {
@@ -384,16 +384,16 @@ void XanimePlayer::calcAnm(u32 arg) {
     }
 
     mCore->updateFrame();
-    mModelData->getJointNodePointer(arg)->mMtxCalc = mCore;
+    mModelData->getJointAt(arg)->mMtxCalc = mCore;
     _88 = false;
 }
 
 void XanimePlayer::overWriteMtxCalc(u32 arg) {
-    mModelData->getJointNodePointer(arg)->mMtxCalc = mCore;
+    mModelData->getJointAt(arg)->mMtxCalc = mCore;
 }
 
 void XanimePlayer::clearMtxCalc(u32 arg) {
-    mModelData->getJointNodePointer(arg)->mMtxCalc = nullptr;
+    mModelData->getJointAt(arg)->mMtxCalc = nullptr;
 }
 
 void XanimePlayer::clearAnm(u32 arg) {
@@ -401,7 +401,7 @@ void XanimePlayer::clearAnm(u32 arg) {
         return;
     }
 
-    mModelData->getJointNodePointer(arg)->mMtxCalc = nullptr;
+    mModelData->getJointAt(arg)->mMtxCalc = nullptr;
 }
 
 void XanimePlayer::updateBeforeMovement() {

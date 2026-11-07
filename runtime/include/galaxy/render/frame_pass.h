@@ -60,9 +60,9 @@ struct FramePassRequest {
 struct DisplayTexture {
     gpu::TextureRef texture;  // RGBA8
     std::uint32_t slot = 0;  // place in the picture ring
-    // GPU dimensions after scene target scaling; the copy's rectangle stays in game units.
+    // The picture's size in pixels: the frame map it was taken at, which is also its texture's size.
     std::uint32_t width = 0;
-    std::uint32_t height = 0;       // after logical y-scale and scene target scale
+    std::uint32_t height = 0;
     std::uint64_t frame_stamp = 0;  // frame index of the last copy into it
     PointerResponseStamp pointer_response{};
     bool prerecorded_movie{};

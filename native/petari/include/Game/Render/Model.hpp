@@ -8,7 +8,7 @@
 class ItemBuffer;
 class MaterialEntry;
 class Model;
-class ShapeEntry;
+class MeshEntry;
 
 // Turns a joint's place into its matrix. The game's animation is one (XanimeCore); a model file's scale mode is the plain
 // one.
@@ -64,7 +64,7 @@ public:
 };
 
 // A mesh a model has entered for drawing: chained behind others of its material.
-class ShapeEntry {
+class MeshEntry {
 public:
     void drawClear() {
         mNext = nullptr;
@@ -81,20 +81,20 @@ public:
     void offFlag(u32 flag) {
         mFlags &= ~flag;
     }
-    Mesh* getShape() const {
+    Mesh* getMesh() const {
         return mMesh;
     }
     Model* getModel() const {
         return mModel;
     }
-    void setShape(Mesh* pMesh) {
+    void setMesh(Mesh* pMesh) {
         mMesh = pMesh;
     }
     void setModel(Model* pModel) {
         mModel = pModel;
     }
 
-    ShapeEntry* mNext;
+    MeshEntry* mNext;
     Mesh* mMesh;
     Model* mModel;
     Material* mMaterial;  // what it draws: the model file's material, or the model's own copy
@@ -105,7 +105,7 @@ public:
 class MaterialEntry {
 public:
     MaterialEntry();
-    void addShapeEntry(ShapeEntry* pEntry);
+    void addMeshEntry(MeshEntry* pEntry);
     bool isSame(const MaterialEntry* pOther) const;
     bool isAlone() const {
         return (mMaterialID & cAlone) != 0;
@@ -113,8 +113,8 @@ public:
     Material* getMaterial() const {
         return mMaterial;
     }
-    ShapeEntry* getShapeEntry() const {
-        return mShapeEntry;
+    MeshEntry* getFirstMeshEntry() const {
+        return mMeshEntry;
     }
     int entry(ItemBuffer* pBuffer);
     void draw();
@@ -128,8 +128,8 @@ public:
 
     MaterialEntry* mNext;
     MaterialEntry* mFirstChild;
-    ShapeEntry* mInitShapeEntry;
-    ShapeEntry* mShapeEntry;
+    MeshEntry* mInitMeshEntry;
+    MeshEntry* mMeshEntry;
     Material* mMaterial;
     u32 mMaterialID;
 };
@@ -281,11 +281,11 @@ public:
         return mUserArea;
     }
 
-    MaterialEntry* getMatPacket(u32 index) const {
+    MaterialEntry* getMaterialEntry(u32 index) const {
         return &mMaterialEntries[index];
     }
-    ShapeEntry* getShapePacket(u32 index) const {
-        return &mShapeEntries[index];
+    MeshEntry* getMeshEntry(u32 index) const {
+        return &mMeshEntries[index];
     }
     Material* getMaterial(u32 index) const {
         return mMaterials[index];
@@ -340,7 +340,7 @@ public:
     u8* mScaleFlags;
     Mtx* mAnmMtx;
     MaterialEntry* mMaterialEntries;
-    ShapeEntry* mShapeEntries;
+    MeshEntry* mMeshEntries;
     Material** mMaterials;
     u32 mSlot;
     u32 mMotionEpoch;  // counts the model's lives (MotionSignal)

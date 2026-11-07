@@ -38,16 +38,16 @@ namespace MR {
     }
 
     void invalidateMtxCalc(ModelData* pModelData) {
-        u32 jointNum = pModelData->getJointNum();
+        u32 jointNum = pModelData->getJointCount();
         for (u32 i = 0; i < jointNum; i++) {
-            pModelData->getJointNodePointer(i)->setMtxCalc(nullptr);
+            pModelData->getJointAt(i)->setMtxCalc(nullptr);
         }
     }
 
     void invalidateJointCallback(ModelData* pModelData) {
-        u32 jointNum = pModelData->getJointNum();
+        u32 jointNum = pModelData->getJointCount();
         for (u32 i = 0; i < jointNum; i++) {
-            pModelData->getJointNodePointer(i)->setCallBack(nullptr);
+            pModelData->getJointAt(i)->setCallBack(nullptr);
         }
     }
 
@@ -110,23 +110,23 @@ namespace MR {
     }
 
     Material* getMaterial(ModelData* pModelData, const char* pMaterialName) {
-        return pModelData->getMaterialNodePointer(getMaterialNo(pModelData, pMaterialName));
+        return pModelData->getMaterialAt(getMaterialNo(pModelData, pMaterialName));
     }
 
     Material* getMaterial(ModelData* pModelData, int idx) {
-        return pModelData->getMaterialNodePointer(idx);
+        return pModelData->getMaterialAt(idx);
     }
 
     Material* getMaterial(Model* pModel, int idx) {
-        return pModel->mModelData->getMaterialNodePointer(idx);
+        return pModel->mModelData->getMaterialAt(idx);
     }
 
     Material* getMaterial(const LiveActor* pActor, int idx) {
-        return getModelData(pActor)->getMaterialNodePointer(idx);
+        return getModelData(pActor)->getMaterialAt(idx);
     }
 
     s32 getMaterialNum(Model* pModel) {
-        return pModel->mModelData->getMaterialNum();
+        return pModel->mModelData->getMaterialCount();
     }
 
     const char* getMaterialName(const ModelData* pModelData, int idx) {
@@ -138,7 +138,7 @@ namespace MR {
     }
 
     void hideMaterial(Model* pModel, const char* pMaterialName) {
-        ShapeEntry* pckt = pModel->getMatPacket(getMaterialNo(pModel, pMaterialName))->getShapeEntry();
+        MeshEntry* pckt = pModel->getMaterialEntry(getMaterialNo(pModel, pMaterialName))->getFirstMeshEntry();
         pckt->mFlags |= 0x10;
     }
 
@@ -147,7 +147,7 @@ namespace MR {
     }
 
     void showMaterial(Model* pModel, const char* pMaterialName) {
-        ShapeEntry* pckt = pModel->getMatPacket(getMaterialNo(pModel, pMaterialName))->getShapeEntry();
+        MeshEntry* pckt = pModel->getMaterialEntry(getMaterialNo(pModel, pMaterialName))->getFirstMeshEntry();
         pckt->mFlags &= ~0x10;
     }
 
@@ -179,7 +179,7 @@ namespace MR {
 
     bool isUseTex(Material* pMaterial, u32 a2) {
         for (u32 idx = 0; idx < NEBULA_MATERIAL_SLOTS; idx++) {
-            if (pMaterial->getTexNo(idx) == a2 && pMaterial->usesMap(idx)) {
+            if (pMaterial->getTextureIndex(idx) == a2 && pMaterial->usesMap(idx)) {
                 return true;
             }
         }
@@ -189,9 +189,9 @@ namespace MR {
 
     bool isNormalTexMtx(Material* pMaterial) {
         for (u32 idx = 0; idx < NEBULA_MATERIAL_SLOTS; idx++) {
-            CoordMatrix* texMtx = pMaterial->getTexMtx(idx);
+            CoordMatrix* texMtx = pMaterial->getCoordMatrix(idx);
 
-            if (texMtx != nullptr && (texMtx->getTexMtxInfo().mInfo & 0x3F) != 0 && isUseTexMtx(pMaterial, idx)) {
+            if (texMtx != nullptr && (texMtx->getInfo().mInfo & 0x3F) != 0 && isUseTexMtx(pMaterial, idx)) {
                 return false;
             }
         }
@@ -200,12 +200,12 @@ namespace MR {
     }
 
     bool isUseTexMtx(Material* pMaterial, u32 idx) {
-        return pMaterial->getTexMtx(idx) != nullptr && pMaterial->usesCoord(idx);
+        return pMaterial->getCoordMatrix(idx) != nullptr && pMaterial->usesCoord(idx);
     }
 
     bool isExistEffectTexMtx(ModelData* pModelData) {
-        for (u32 i = 0; i < pModelData->getMaterialNum(); i++) {
-            if (!isNormalTexMtx(pModelData->getMaterialNodePointer(i))) {
+        for (u32 i = 0; i < pModelData->getMaterialCount(); i++) {
+            if (!isNormalTexMtx(pModelData->getMaterialAt(i))) {
                 return true;
             }
         }
@@ -234,7 +234,7 @@ namespace MR {
     }
 
     void copyJointAnimation(Model* pCopyTo, Model* pCopyFrom) {
-        u32 jointNum = pCopyTo->getModelData()->getJointNum();
+        u32 jointNum = pCopyTo->getModelData()->getJointCount();
         for (u32 i = 0; i < jointNum; i++) {
             pCopyTo->setAnmMtx(i, pCopyFrom->getAnmMtx(i));
         }
@@ -245,16 +245,16 @@ namespace MR {
     }
 
     void syncMaterialAnimation(Model* pModel1, Model* pModel2) {
-        u32 materialNum = pModel1->getModelData()->getMaterialNum();
+        u32 materialNum = pModel1->getModelData()->getMaterialCount();
         u32 i;
         u32 j;
         u32 idx;
         for (i = 0; i < materialNum; i++) {
-            ShapeEntry* shapePacketModel2 = pModel2->getShapePacket(i);
-            idx = shapePacketModel2->getShape()->getMaterial()->getIndex();
+            MeshEntry* shapePacketModel2 = pModel2->getMeshEntry(i);
+            idx = shapePacketModel2->getMesh()->getMaterial()->getIndex();
             for (j = 0; j < materialNum; j++) {
-                ShapeEntry* shapePacketModel1 = pModel1->getShapePacket(j);
-                if (shapePacketModel1->getShape()->getMaterial()->getIndex() == idx) {
+                MeshEntry* shapePacketModel1 = pModel1->getMeshEntry(j);
+                if (shapePacketModel1->getMesh()->getMaterial()->getIndex() == idx) {
                     shapePacketModel1->mMaterial = shapePacketModel2->mMaterial;
                     break;
                 }
@@ -303,8 +303,8 @@ namespace MR {
 
     s32 getLightNumMax(ModelData* pModelData) {
         int maxNum = 0;
-        for (int i = 0; i < pModelData->getMaterialNum(); i++) {
-            int currentNum = getLightNum(pModelData->getMaterialNodePointer(i));
+        for (int i = 0; i < pModelData->getMaterialCount(); i++) {
+            int currentNum = getLightNum(pModelData->getMaterialAt(i));
 
             if (maxNum < currentNum) {
                 maxNum = currentNum;
@@ -360,8 +360,8 @@ namespace MR {
         invalidateMtxCalc(modelData);
         invalidateJointCallback(modelData);
 
-        for (u32 i = 0; i < modelData->getShapeNum(); i++) {
-            modelData->getShapeNodePointer(i)->mFlags &= ~0x1;
+        for (u32 i = 0; i < modelData->getMeshCount(); i++) {
+            modelData->getMeshAt(i)->mFlags &= ~0x1;
         }
 
         if (MR::isEqualString(pChar, "Mario") || MR::isEqualString(pChar, "Luigi") || MR::isEqualString(pChar, "MarioHandL") ||

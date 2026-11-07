@@ -8,7 +8,7 @@
 #include <JSystem/JUtility/JUTTexture.hpp>
 
 void PlayerModel::viewCalc2() {
-    capturePose(&mPose, mAnmMtx, mModelData->getJointNum(), nullptr, mBaseTransformMtx);
+    capturePose(&mPose, mAnmMtx, mModelData->getJointCount(), nullptr, mBaseTransformMtx);
     NebulaMtxCopy(ModelSys::mViewMtx, mViewAtCalc);
     mDrawPose = &mPose;
     mNormalPose = &mPose;
@@ -25,7 +25,7 @@ void PlayerModel::copyAnmMtxBuffer(const PlayerModel* pModel) {
 void PlayerModel::viewCalc3(u32 view, const f32 (*pMtx)[4]) {
     NebulaMtxCopy(ModelSys::mViewMtx, mViewAtCalc);
     ModelPose* pPose = mExtraPoses[view + _DC];
-    capturePose(pPose, mAnmMtx, mModelData->getJointNum(), nullptr, pMtx != nullptr ? pMtx : mBaseTransformMtx);
+    capturePose(pPose, mAnmMtx, mModelData->getJointCount(), nullptr, pMtx != nullptr ? pMtx : mBaseTransformMtx);
     mDrawPose = pPose;
     if ((view & 1) == 0) {
         mNormalPose = pPose;
@@ -37,7 +37,7 @@ void PlayerModel::viewCalc3(u32 view, const f32 (*pMtx)[4]) {
 void PlayerModel::viewCalcRef(u32 view, Model* pModel) {
     NebulaMtxCopy(ModelSys::mViewMtx, mViewAtCalc);
     ModelPose* pPose = mExtraPoses[view + _DC];
-    capturePose(pPose, pModel->getAnmMtxBuffer(), pModel->getModelData()->getJointNum(), nullptr, mBaseTransformMtx);
+    capturePose(pPose, pModel->getAnmMtxBuffer(), pModel->getModelData()->getJointCount(), nullptr, mBaseTransformMtx);
     pPose->mCalcMode = 2;
     pPose->mNormalFrom = mNormalPose;
     mDrawPose = pPose;
@@ -46,7 +46,7 @@ void PlayerModel::viewCalcRef(u32 view, Model* pModel) {
 void PlayerModel::viewCalcRefPos(u32 view, Model* pModel, const Vec3f& rPos, const Vec3f& rNormal) {
     viewCalcRef(view, pModel);
     ModelPose* pPose = mDrawPose;
-    const u32 count = mModelData->getDrawFullWgtMtxNum();
+    const u32 count = mModelData->getFullWeightCount();
     for (u32 i = 0; i < count; i++) {
         Mtx jointMtx;
         Pos3f orientation;
@@ -73,8 +73,8 @@ void PlayerModel::viewCalcRefPos(u32 view, Model* pModel, const Vec3f& rPos, con
 }
 
 void PlayerModel::directDraw() {
-    for (u32 i = 0; i < mModelData->getMaterialNum(); i++) {
-        drawIn(mModelData->getMaterialNodePointer(i), i);
+    for (u32 i = 0; i < mModelData->getMaterialCount(); i++) {
+        drawIn(mModelData->getMaterialAt(i), i);
     }
 }
 
@@ -148,19 +148,19 @@ void PlayerModel::drawIn(Material* pMaterial, u32 index) {
 }
 
 bool PlayerModel::simpleDrawSetup(Material* pMaterial, MaterialDraw* pDraw) {
-    if (pMaterial == nullptr || pMaterial->getShape() == nullptr || pMaterial->getShape()->isHidden()) {
+    if (pMaterial == nullptr || pMaterial->getMesh() == nullptr || pMaterial->getMesh()->isHidden()) {
         return false;
     }
-    MaterialEntry* pEntry = getMatPacket(pMaterial->getIndex());
-    ShapeEntry* pShape = getShapePacket(pMaterial->getShape()->getIndex());
+    MaterialEntry* pEntry = getMaterialEntry(pMaterial->getIndex());
+    MeshEntry* pShape = getMeshEntry(pMaterial->getMesh()->getIndex());
     pDraw->send(pEntry->getMaterial());
     pDraw->sendOwn(pShape->mMaterial, pEntry->getMaterial());
     return true;
 }
 
 void PlayerModel::simpleDrawShape(Material* pMaterial, MaterialDraw& rDraw) {
-    Mesh* pMesh = pMaterial->getShape();
-    if (!getShapePacket(pMesh->getIndex())->checkFlag(ShapeEntry::Flag_Hidden)) {
+    Mesh* pMesh = pMaterial->getMesh();
+    if (!getMeshEntry(pMesh->getIndex())->checkFlag(MeshEntry::Flag_Hidden)) {
         if (mDrawHook != nullptr) {
             mDrawHook(rDraw);
         }
@@ -326,7 +326,7 @@ PlayerModel::PlayerModel(ModelData* pData, u32 flags, u32 unused) : Model(pData,
     mDrawHook = nullptr;
     memset(mExtraPoses, 0, sizeof(mExtraPoses));
 
-    const u32 count = mModelData->getMaterialNum();
+    const u32 count = mModelData->getMaterialCount();
     _1C4 = new const void*[count];
     _1C8 = new const void*[count];
     for (u32 i = 0; i < count; i++) {

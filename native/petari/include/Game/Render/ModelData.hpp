@@ -120,28 +120,28 @@ public:
     // A material table's file (no joints or meshes).
     static ModelData* loadMaterials(void* pFile);
 
-    u32 getJointNum() const {
+    u32 getJointCount() const {
         return static_cast< u32 >(mFile->joint_count);
     }
-    u32 getMaterialNum() const {
+    u32 getMaterialCount() const {
         return static_cast< u32 >(mFile->material_count);
     }
-    u32 getShapeNum() const {
+    u32 getMeshCount() const {
         return static_cast< u32 >(mFile->mesh_count);
     }
-    u32 getTextureNum() const {
+    u32 getTextureCount() const {
         return static_cast< u32 >(mTextureOwner->mFile->texture_count);
     }
     void useTexturesOf(ModelData* pOwner) {
         mTextureOwner = pOwner->mTextureOwner;
     }
-    u32 getDrawMtxNum() const {
+    u32 getDrawMatrixCount() const {
         return static_cast< u32 >(mFile->draw_matrix_count);
     }
-    u32 getDrawFullWgtMtxNum() const {
+    u32 getFullWeightCount() const {
         return static_cast< u32 >(mFile->full_weight_count);
     }
-    u32 getWEvlpMtxNum() const {
+    u32 getEnvelopeCount() const {
         return static_cast< u32 >(mFile->envelope_count);
     }
     u8 getScaleMode() const {
@@ -151,16 +151,16 @@ public:
         return (mFile->flags & NEBULA_MODEL_HAS_BILLBOARD) != 0;
     }
 
-    Joint* getJointNodePointer(u32 index) const {
+    Joint* getJointAt(u32 index) const {
         return &mJoints[index];
     }
     Joint* getRootNode() const {
         return mFile->joint_count != 0 ? &mJoints[0] : nullptr;
     }
-    Material* getMaterialNodePointer(u32 index) const {
+    Material* getMaterialAt(u32 index) const {
         return &mMaterials[index];
     }
-    Mesh* getShapeNodePointer(u32 index) const {
+    Mesh* getMeshAt(u32 index) const {
         return &mMeshes[index];
     }
 

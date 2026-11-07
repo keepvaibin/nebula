@@ -84,7 +84,7 @@ public:
 
     void addUpdatingTexMtxFromName(Model* pModel) {
         ModelData* pModelData = pModel->getModelData();
-        u32 textureNum = pModelData->getTextureNum();
+        u32 textureNum = pModelData->getTextureCount();
         for (u32 i = 0; i < textureNum; i++) {
             if (MR::isEqualString(pModelData->getTextureName(i), sMirrorTextureName)) {
                 addUpdatingTexMtxFromTexNo(pModel, i);

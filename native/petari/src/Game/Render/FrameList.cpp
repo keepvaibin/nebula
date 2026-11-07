@@ -927,25 +927,16 @@ namespace Frame {
             rPass.scene_camera = sSceneCamera;
             rPass.scene_view = sSceneView;
             if (pView[3][3] != 0.0f) {
-                // The player's up in the eye space of the scene's view, octahedral.
+                // The player's up in the eye space of the scene's view.
                 const f32 x = pView[0][0] * pView[3][0] + pView[0][1] * pView[3][1] + pView[0][2] * pView[3][2];
                 const f32 y = pView[1][0] * pView[3][0] + pView[1][1] * pView[3][1] + pView[1][2] * pView[3][2];
                 const f32 z = pView[2][0] * pView[3][0] + pView[2][1] * pView[3][1] + pView[2][2] * pView[3][2];
-                f32 l1 = (x < 0.0f ? -x : x) + (y < 0.0f ? -y : y) + (z < 0.0f ? -z : z);
-                if (l1 > 0.0f) {
-                    f32 u = x / l1;
-                    f32 v = y / l1;
-                    if (z < 0.0f) {
-                        const f32 tu = (1.0f - (v < 0.0f ? -v : v)) * (u < 0.0f ? -1.0f : 1.0f);
-                        const f32 tv = (1.0f - (u < 0.0f ? -u : u)) * (v < 0.0f ? -1.0f : 1.0f);
-                        u = tu;
-                        v = tv;
-                    }
-                    const auto snorm = [](f32 value) -> u32 {
-                        const f32 scaled = (value < -1.0f ? -1.0f : value > 1.0f ? 1.0f : value) * 32767.0f;
-                        return static_cast< u16 >(static_cast< s16 >(scaled < 0.0f ? scaled - 0.5f : scaled + 0.5f));
-                    };
-                    pStore->mList.sky_up = snorm(u) | snorm(v) << 16;
+                const f32 squared = x * x + y * y + z * z;
+                if (squared > 0.0f) {
+                    const f32 scale = 1.0f / __builtin_sqrtf(squared);
+                    pStore->mList.sky_up[0] = x * scale;
+                    pStore->mList.sky_up[1] = y * scale;
+                    pStore->mList.sky_up[2] = z * scale;
                     pStore->mList.sky_up_known = 1;
                 }
             }

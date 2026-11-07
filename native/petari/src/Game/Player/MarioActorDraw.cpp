@@ -573,7 +573,7 @@ bool MarioActor::isAllHidden() const {
 
 void MarioActor::swapTextureInit() {
     ModelData* actorData = MR::getModelData(this);
-    const u32 textureCount = actorData->getTextureNum();
+    const u32 textureCount = actorData->getTextureCount();
     _B60 = textureCount;
     _B64 = new ResTIMG*[textureCount];
     _B6A = 0;
@@ -602,7 +602,7 @@ void MarioActor::swapTextureInit() {
 
     if (_9E4 != nullptr) {
         ModelData* beeData = MR::getModelData(_9E4);
-        const u32 textureNum = beeData->getTextureNum();
+        const u32 textureNum = beeData->getTextureCount();
 
         for (u32 i = 0; i < textureNum; i++) {
             ModelData* modelData = MR::getModelData(_9E4);
@@ -625,7 +625,7 @@ void MarioActor::swapTextureInit() {
 
     if (_A00 != nullptr) {
         ModelData* hopperData = MR::getModelData(_A00);
-        const u32 textureNum = hopperData->getTextureNum();
+        const u32 textureNum = hopperData->getTextureCount();
 
         for (u32 i = 0; i < textureNum; i++) {
             ModelData* modelData = MR::getModelData(_A00);
@@ -986,7 +986,7 @@ void MarioActor::swapTexture(const char* pMaterialName, u8 texNo) const {
 
 void MarioActor::copyMaterial(Model* pModel, u32 materialNo, s32 packetIndex) {
     ModelData* modelData = getModel()->getModelData();
-    Material* material = modelData->getJointNodePointer(materialNo)->getMesh();
+    Material* material = modelData->getJointAt(materialNo)->getMesh();
     if (material == nullptr) {
         return;
     }
@@ -1005,11 +1005,11 @@ void MarioActor::copyMaterial(Model* pModel, u32 materialNo, s32 packetIndex) {
     }
 
     for (u32 i = start; i <= end; i++) {
-        MaterialEntry* matPacket = pModel->getMatPacket(i);
-        matPacket->mMaterial = modelData->getMaterialNodePointer(materialIndex);
-        ShapeEntry* shapePacket = pModel->getShapePacket(i);
-        matPacket->mInitShapeEntry = shapePacket;
-        matPacket->addShapeEntry(shapePacket);
+        MaterialEntry* matPacket = pModel->getMaterialEntry(i);
+        matPacket->mMaterial = modelData->getMaterialAt(materialIndex);
+        MeshEntry* shapePacket = pModel->getMeshEntry(i);
+        matPacket->mInitMeshEntry = shapePacket;
+        matPacket->addMeshEntry(shapePacket);
         shapePacket->mMaterial = matPacket->mMaterial;
     }
 }

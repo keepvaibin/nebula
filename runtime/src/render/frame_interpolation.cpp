@@ -372,26 +372,22 @@ void light_at(const float* a, const float* b, const CameraMotion& camera, const 
     }
 }
 
-std::uint32_t eye_direction_at(std::uint32_t packed, const Affine34& from_view, const Affine34& to_view) noexcept {
+void eye_direction_at(const float* direction, const Affine34& from_view, const Affine34& to_view, float* out) noexcept {
+    for (unsigned i = 0; i < 3u; ++i) out[i] = direction[i];
     Affine34 inverse;
-    if (!affine_inverse(from_view, inverse)) return packed;
-    const auto sign = [](float x) { return x < 0.0f ? -1.0f : 1.0f; };
-    float x = static_cast<float>(static_cast<std::int16_t>(packed & 0xffffu)) / 32767.0f;
-    float y = static_cast<float>(static_cast<std::int16_t>(packed >> 16u)) / 32767.0f;
-    const float z = 1.0f - std::fabs(x) - std::fabs(y);
-    if (z < 0.0f) { const float old_x = x; x = (1.0f - std::fabs(y)) * sign(x); y = (1.0f - std::fabs(old_x)) * sign(y); }
-    const float wx = inverse[0]*x + inverse[1]*y + inverse[2]*z;
-    const float wy = inverse[4]*x + inverse[5]*y + inverse[6]*z;
-    const float wz = inverse[8]*x + inverse[9]*y + inverse[10]*z;
-    x = to_view[0]*wx + to_view[1]*wy + to_view[2]*wz;
-    y = to_view[4]*wx + to_view[5]*wy + to_view[6]*wz;
-    const float ez = to_view[8]*wx + to_view[9]*wy + to_view[10]*wz;
-    const float length = std::fabs(x) + std::fabs(y) + std::fabs(ez);
-    if (!(length > 0.0f) || !std::isfinite(length)) return packed;
-    x /= length; y /= length;
-    if (ez < 0.0f) { const float old_x = x; x = (1.0f-std::fabs(y))*sign(x); y=(1.0f-std::fabs(old_x))*sign(y); }
-    const auto snorm = [](float v) { return static_cast<std::uint16_t>(static_cast<std::int16_t>(std::lround(std::clamp(v,-1.0f,1.0f)*32767.0f))); };
-    return std::uint32_t{snorm(x)} | std::uint32_t{snorm(y)} << 16u;
+    if (!affine_inverse(from_view, inverse)) return;
+    const float x = direction[0], y = direction[1], z = direction[2];
+    const float wx = inverse[0] * x + inverse[1] * y + inverse[2] * z;
+    const float wy = inverse[4] * x + inverse[5] * y + inverse[6] * z;
+    const float wz = inverse[8] * x + inverse[9] * y + inverse[10] * z;
+    const float ex = to_view[0] * wx + to_view[1] * wy + to_view[2] * wz;
+    const float ey = to_view[4] * wx + to_view[5] * wy + to_view[6] * wz;
+    const float ez = to_view[8] * wx + to_view[9] * wy + to_view[10] * wz;
+    const float length = std::sqrt(ex * ex + ey * ey + ez * ez);
+    if (!(length > 0.0f) || !std::isfinite(length)) return;
+    out[0] = ex / length;
+    out[1] = ey / length;
+    out[2] = ez / length;
 }
 
 }  // namespace galaxy::render

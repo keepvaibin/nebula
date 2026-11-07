@@ -87,11 +87,11 @@ void FurCtrl::calcLayerForm() {
 void FurCtrl::drawFur() {
     ModelData* pModelData = mModel->getModelData();
 
-    if (MR::getModel(mActor)->getShapePacket(mShapeIndex)->checkFlag(0x10)) {
+    if (MR::getModel(mActor)->getMeshEntry(mShapeIndex)->checkFlag(0x10)) {
         return;
     }
 
-    Mesh* pShape = pModelData->getShapeNodePointer(mShapeIndex);
+    Mesh* pShape = pModelData->getMeshAt(mShapeIndex);
     if (pShape->isHidden()) {
         return;
     }

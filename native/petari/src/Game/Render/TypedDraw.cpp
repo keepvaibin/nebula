@@ -280,14 +280,14 @@ void TypedDraw::drawSiteMesh(u32 mesh, u32 indexCount, u32 stride, const NebulaL
 }
 
 void TypedDraw::drawModelFile(ModelData* pData) {
-    for (Material* pMaterial = pData->getJointNodePointer(0)->getMesh(); pMaterial != nullptr; pMaterial = pMaterial->getNext()) {
-        drawMesh(pMaterial->getShape());
+    for (Material* pMaterial = pData->getJointAt(0)->getMesh(); pMaterial != nullptr; pMaterial = pMaterial->getNext()) {
+        drawMesh(pMaterial->getMesh());
     }
 }
 
 u32 TypedDraw::block() {
     if (!mBlockKnown) {
-        const u32 jointCount = mJointsOf != nullptr ? mJointsOf->getJointNum() : 1u;
+        const u32 jointCount = mJointsOf != nullptr ? mJointsOf->getJointCount() : 1u;
         const f32 (*pSource)[4] = mJointsOf != nullptr ? mJoints : mMtx;
         f32 (*pJoint)[4] = static_cast< f32 (*)[4] >(Frame::arena(jointCount * sizeof(Mtx), 16));
         memcpy(pJoint, pSource, jointCount * sizeof(Mtx));

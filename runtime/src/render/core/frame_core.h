@@ -20,6 +20,7 @@
 
 #include <array>
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -107,9 +108,13 @@ struct ViewRows {
     float previous[2][4];
     float motion[4];
     float raster[4];
-    std::uint32_t light[4];
+    float sky_up[3];          // the player's up in eye space (unit), else the view's up
+    std::uint32_t view_flags; // bit 0 sky up known, bit 1 enhanced, bit 2 wide target
     float scale[4];
 };
+// The cbuffer's packing: view_sky_up and view_flags share one 16-byte row.
+static_assert(offsetof(ViewRows, sky_up) == 128 && offsetof(ViewRows, view_flags) == 140 &&
+              offsetof(ViewRows, scale) == 144 && sizeof(ViewRows) == 160);
 
 // Everything one list needs that lasts as long as the list.
 struct ListData {

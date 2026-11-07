@@ -8,6 +8,6 @@ SimpleModelDrawer::SimpleModelDrawer(NameObj* pObj, const char* pName, const cha
 
     initModelManagerWithAnm(pModelName, nullptr, false);
     mMaterial = MR::getMaterial(this, 0);
-    mShape = mMaterial->getShape();
+    mShape = mMaterial->getMesh();
     makeActorDead();
 }

@@ -77,7 +77,7 @@ void ElectricRailHolder::draw() const {
 
         MaterialEntry* pPacket = pItem->mMatPacket;
         MaterialDraw material(pPacket->getMaterial());
-        material.sendOwn(pPacket->getShapeEntry()->mMaterial, pPacket->getMaterial());
+        material.sendOwn(pPacket->getFirstMeshEntry()->mMaterial, pPacket->getMaterial());
 
         pItem->mHost->drawWith(material);
     }
@@ -171,7 +171,7 @@ void ElectricRailHolder::registerRail(const LiveActor* pActor, ElectricRailType 
     (*mRailItems.end())->mHost = static_cast< const ElectricRailDrawn* >(pActor);
 
     Model* pModel = MR::getModel(mRailModels[railType]);
-    MaterialEntry* pPacket = pModel->getMatPacket(MR::getMaterialNo(pModel, "SparkMat"));
+    MaterialEntry* pPacket = pModel->getMaterialEntry(MR::getMaterialNo(pModel, "SparkMat"));
     (*mRailItems.end())->mMatPacket = pPacket;
 
     mRailItems.mCount++;

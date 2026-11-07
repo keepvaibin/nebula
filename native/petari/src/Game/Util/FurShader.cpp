@@ -71,7 +71,7 @@ namespace {
 }  // namespace
 
 SiteMesh< VertexFur >* createFurMesh(ModelData* pData, u32 shape, const ResTIMG* pLength) {
-    const Mesh* pShape = pData->getShapeNodePointer(shape);
+    const Mesh* pShape = pData->getMeshAt(shape);
     const NebulaModelMesh& rMesh = *pShape->mFile;
     const FurLengthMap lengthMap(pLength);
     const f32* pPlaces = reinterpret_cast< const f32* >(pData->at(rMesh.positions_at));
@@ -91,11 +91,11 @@ SiteMesh< VertexFur >* createFurMesh(ModelData* pData, u32 shape, const ResTIMG*
     }
 
     // A position another (not fur) material also uses is the border: the skin stays closed there.
-    for (u32 other = 0; other < pData->getShapeNum(); other++) {
+    for (u32 other = 0; other < pData->getMeshCount(); other++) {
         if (other == shape) {
             continue;
         }
-        const Mesh* pOther = pData->getShapeNodePointer(other);
+        const Mesh* pOther = pData->getMeshAt(other);
         if (strstr(pData->getMaterialName(pOther->mMaterial->mIndex), "Fur") != nullptr) {
             continue;
         }

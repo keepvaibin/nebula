@@ -66,7 +66,7 @@ public:
         return mode == 2 || mode == 5 || mode == 8 || mode == 10 || mode == 11;
     }
 
-    CoordMatrixInfo& getTexMtxInfo() {
+    CoordMatrixInfo& getInfo() {
         return mInfo;
     }
     Mtx& getMtx() {
@@ -86,10 +86,10 @@ struct MaterialCoord {
     u8 mSource;
     u32 mMatrix;
 
-    u32 getTexGenMtx() const {
+    u32 getMatrix() const {
         return mMatrix;
     }
-    void setTexGenMtx(u32 matrix) {
+    void setMatrix(u32 matrix) {
         mMatrix = matrix;
     }
 };
@@ -109,13 +109,15 @@ public:
     u32 getID() const {
         return mFile->same_as;
     }
-    bool isDrawModeOpaTexEdge() const {
+    // The model file's draw mode (model_ir.rs read_material; a made material is 4 when it blends, else 1): with neither
+    // of the low two bits it draws in the translucent buffer.
+    bool isTranslucent() const {
         return (mFile->mode & 3) == 0;
     }
     Material* getNext() const {
         return mNext;
     }
-    Mesh* getShape() const {
+    Mesh* getMesh() const {
         return mMesh;
     }
     Joint* getJoint() const {
@@ -125,39 +127,39 @@ public:
         return mData;
     }
 
-    CoordMatrix* getTexMtx(u32 index) {
+    CoordMatrix* getCoordMatrix(u32 index) {
         return (mMatrixUsed & (1u << index)) != 0 ? &mMatrices[index] : nullptr;
     }
-    void setTexMtx(u32 index, const CoordMatrix& rMatrix) {
+    void setCoordMatrix(u32 index, const CoordMatrix& rMatrix) {
         mMatrices[index] = rMatrix;
         mMatrixUsed |= static_cast< u16 >(1u << index);
         touch();
     }
-    MaterialCoord* getTexCoord(u32 index) {
+    MaterialCoord* getCoord(u32 index) {
         touch();
         return &mCoords[index];
     }
-    u32 getTexGenNum() const {
+    u32 getCoordCount() const {
         return mFile->coord_count;
     }
-    u32 getTexNo(u32 map) const {
-        return mTexNo[map];
+    u32 getTextureIndex(u32 map) const {
+        return mTextureIndex[map];
     }
-    void setTexNo(u32 map, u32 number) {
-        mTexNo[map] = number;
+    void setTextureIndex(u32 map, u32 number) {
+        mTextureIndex[map] = number;
         mTextureStamp++;
     }
-    NebulaColor8* getMatColor(u32 index) {
+    NebulaColor8* getMaterialColor(u32 index) {
         touch();
-        return &mMatColor[index];
+        return &mMaterialColor[index];
     }
-    void setMatColor(u32 index, const NebulaColor8* pColor) {
-        mMatColor[index] = *pColor;
+    void setMaterialColor(u32 index, const NebulaColor8* pColor) {
+        mMaterialColor[index] = *pColor;
         touch();
     }
-    NebulaColor8* getAmbColor(u32 index) {
+    NebulaColor8* getAmbientColor(u32 index) {
         touch();
-        return &mAmbColor[index];
+        return &mAmbientColor[index];
     }
     NebulaColor16* getRegisterColor(u32 index) {
         touch();
@@ -216,9 +218,9 @@ public:
     Joint* mJoint;
     u32 mIndex;
     u16 mMatrixUsed;
-    u32 mTexNo[NEBULA_MATERIAL_SLOTS];
-    NebulaColor8 mMatColor[2];
-    NebulaColor8 mAmbColor[2];
+    u32 mTextureIndex[NEBULA_MATERIAL_SLOTS];
+    NebulaColor8 mMaterialColor[2];
+    NebulaColor8 mAmbientColor[2];
     NebulaColor16 mRegisters[4];
     NebulaColor8 mConstants[4];
     FogInfo mFog;

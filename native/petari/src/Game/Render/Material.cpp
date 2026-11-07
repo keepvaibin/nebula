@@ -174,11 +174,11 @@ void Material::init(ModelData* pData, u32 index) {
 
     const u32* pTextures = reinterpret_cast< const u32* >(pData->at(pFile->textures_at));
     for (u32 i = 0; i < NEBULA_MATERIAL_SLOTS; i++) {
-        mTexNo[i] = i < pFile->texture_count ? pTextures[i] : NEBULA_NONE32;
+        mTextureIndex[i] = i < pFile->texture_count ? pTextures[i] : NEBULA_NONE32;
     }
     for (u32 i = 0; i < 2; i++) {
-        memcpy(&mMatColor[i], pFile->material_color[i], 4);
-        memcpy(&mAmbColor[i], pFile->ambient_color[i], 4);
+        memcpy(&mMaterialColor[i], pFile->material_color[i], 4);
+        memcpy(&mAmbientColor[i], pFile->ambient_color[i], 4);
     }
     for (u32 i = 0; i < 4; i++) {
         mRegisters[i].r = pFile->registers[i][0];
@@ -309,7 +309,7 @@ void Material::fillRow(u32 row, f32* pOut) const {
     if (row >= NEBULA_ROW_SCALE) {
         const u32 coord = row - NEBULA_ROW_SCALE;
         const auto sizeOf = [this](u32 map, f32* pSize) {
-            const u32 number = map < NEBULA_MATERIAL_SLOTS ? mTexNo[map] : NEBULA_NONE32;
+            const u32 number = map < NEBULA_MATERIAL_SLOTS ? mTextureIndex[map] : NEBULA_NONE32;
             if (number == NEBULA_NONE32) {
                 pSize[0] = pSize[1] = 1.0f;
             } else {
@@ -360,7 +360,7 @@ void Material::fillRow(u32 row, f32* pOut) const {
         return;
     }
     if (row >= NEBULA_ROW_MATERIAL_COLOR) {
-        setColor(pOut, mMatColor[row - NEBULA_ROW_MATERIAL_COLOR]);
+        setColor(pOut, mMaterialColor[row - NEBULA_ROW_MATERIAL_COLOR]);
         return;
     }
     if (row >= NEBULA_ROW_CONSTANT) {
@@ -440,8 +440,8 @@ void MaterialDraw::send(Material* pMaterial) {
     clear();
     mMaterial = pMaterial;
     if (pMaterial->hasAmbient()) {
-        MaterialAmbient::set(0, pMaterial->mAmbColor[0]);
-        MaterialAmbient::set(1, pMaterial->mAmbColor[1]);
+        MaterialAmbient::set(0, pMaterial->mAmbientColor[0]);
+        MaterialAmbient::set(1, pMaterial->mAmbientColor[1]);
     }
 }
 
@@ -703,7 +703,7 @@ u32 MaterialDraw::tableOf(s32 formIndex, const NebulaModelForm& rForm) {
         const u32 map = pNumbers[i];
         NebulaFrameTexture& rOut = list[i];
         memset(&rOut, 0, sizeof(rOut));
-        const u32 number = pMaterial->mTexNo[map];
+        const u32 number = pMaterial->mTextureIndex[map];
         if (number != NEBULA_NONE32) {
             const ResTIMG* pTexture = pData->getTexture(number);
             rOut.texture = RenderTexture::idOf(pTexture->image());

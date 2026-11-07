@@ -219,7 +219,7 @@ typedef struct NebulaFrameList {
     uint32_t ring_index_count;
     uint32_t flags;
     uint32_t camera_epoch;
-    uint32_t sky_up;           /* octahedral, in eye space of the scene's view */
+    float sky_up[3];           /* the player's up, unit length, in eye space of the scene's view */
     uint32_t sky_up_known;
     uint32_t snapshot_number;  /* test pictures by stop; 0 none */
     /* Set by the renderer when it no longer reads this list. */

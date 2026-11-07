@@ -12,7 +12,7 @@ void BpkPlayer::apply(Clip* pClip, Model* pModel) {
     const u32 num = pClip->getEntryCount();
     for (u32 i = 0; i < num; i++) {
         if (pClip->hasMaterial(i)) {
-            pClip->getColor(i, pModel->ownMaterial(pClip->getMaterial(i))->getMatColor(0));
+            pClip->getColor(i, pModel->ownMaterial(pClip->getMaterial(i))->getMaterialColor(0));
         }
     }
 }
