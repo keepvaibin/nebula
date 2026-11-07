@@ -1,7 +1,6 @@
 #include "Game/Scene/GameScene.hpp"
 #include "Game/System/NebulaMods.hpp"
 #include "Game/System/NebulaLoadTrace.hpp"
-#include "JSystem/JAudio2/JASWaveArcLoader.hpp"
 #include "Game/System/GameThreads.hpp"
 #include <JSystem/JUtility/JUTNativeLog.hpp>
 #include "Game/Render/FrameList.hpp"

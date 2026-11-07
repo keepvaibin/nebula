@@ -94,8 +94,6 @@ void PlayerInput::extensionCallback(s32 chan, s32 result) {
         return;
     }
 
-    SpkSystem::extensionProcess(chan, result);
-
     switch (result) {
     case INPUT_HAND_MAIN:
         pInput->mHasMoveStick = false;

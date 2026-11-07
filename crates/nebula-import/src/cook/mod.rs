@@ -27,6 +27,7 @@ pub mod model_write;
 pub mod pipeline_list;
 pub mod native_data;
 pub mod overlay;
+pub mod sound;
 pub mod store;
 pub mod texture;
 pub mod thp;
@@ -198,8 +199,12 @@ pub fn cook_file(name: &str, bytes: Vec<u8>, stats: &mut Stats) -> Result<Option
         Some(audio_data::ast(&bytes).with_context(|| format!("{name}: stream"))?)
     } else if bytes.starts_with(b"THP\0") {
         Some(thp::movie(&bytes).with_context(|| format!("{name}: movie"))?)
-    } else if bytes.starts_with(b"AA_<") {
-        Some(native_data::baa(&bytes).with_context(|| format!("{name}: audio archive"))?)
+    } else if bytes.starts_with(b"AA_<") || bytes.starts_with(b"NSND") {
+        Some(sound::archive(&bytes).with_context(|| format!("{name}: audio archive"))?)
+    } else if sound::is_sequence_path(name) {
+        Some(sound::sequence(&bytes).with_context(|| format!("{name}: sequence"))?)
+    } else if extension(name) == "bme" {
+        Some(sound::me_program(&bytes).with_context(|| format!("{name}: ME program"))?)
     } else if bytes.starts_with(b"MESGbmg1") {
         Some(native_data::bmg(&bytes).with_context(|| format!("{name}: messages"))?)
     } else if matches!(extension(name).as_str(), "bcsv" | "tbl" | "pa" | "bcam" | "banmt") {
@@ -215,7 +220,7 @@ pub fn cook_file(name: &str, bytes: Vec<u8>, stats: &mut Stats) -> Result<Option
         Some(native_data::bas(&bytes).with_context(|| format!("{name}: sound animation"))?)
     } else if extension(name) == "cit" {
         Some(native_data::cit(&bytes).with_context(|| format!("{name}: chord table"))?)
-    } else if matches!(extension(name).as_str(), "brs" | "bme") || (extension(name) == "bmt" && !bytes.starts_with(b"J3D")) {
+    } else if extension(name) == "brs" || (extension(name) == "bmt" && !bytes.starts_with(b"J3D")) {
         Some(native_data::rhythm(&bytes, &extension(name)).with_context(|| format!("{name}: rhythm library file"))?)
     } else if matches!(extension(name).as_str(), "bct" | "csw") {
         Some(native_data::speaker(&bytes, &extension(name)).with_context(|| format!("{name}: speaker file"))?)

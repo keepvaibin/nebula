@@ -1,12 +1,12 @@
 #pragma once
 
-#include <JSystem/JAudio2/JASVoice.hpp>
+#include <nebula_types.h>
 
 class NebulaArena;
+struct EffectLineCommand;
 
 class AudEffector {
 public:
-    /// @brief Creates a new `AudEffector`.
     AudEffector();
 
     void initFxLine(NebulaArena*);
@@ -15,7 +15,8 @@ public:
     void setSpecialFx(s32);
     void initParams();
 
-    static JASVoice::EffectConfig mFxLine[];
+    // The four effect lines: echo to the sends, as the game sets them up once.
+    static const EffectLineCommand cFxLine[4];
 
     f32 mFxSend;
     s32 mCutoff;

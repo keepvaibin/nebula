@@ -46,7 +46,7 @@ The base types are the same fundamental types on every host (`types.h`): `s32` i
 - The game's objects reference only the C and C++ runtimes and the host's services (`tools/progress/census.py`, `native/tools/boundary.py`).
 - **Drawing**: typed records (docs/GRAPHICS_ARCHITECTURE.md). Rectangles count `NEBULA_FRAME_UNITS` across a frame or target; `J3DNativeView` and `J3DNativeTarget` turn the game's screen units into them.
 - **Depth and brightness questions**: screen probes. The game names its points, the renderer reads those pixels where the drawing has reached, and the answers come back a frame later.
-- **Audio**: voices and effect lines are records the host's mixer reads (`voices_setup`, `voices_mix`, `voices_frame`), mixed in float at the device's rate. The sound clock runs 400 ticks a second; voices name samples a second. All banks' waves are mapped when the sound system starts; a sequence's data is its file's (`JAUAudioData`).
+- **Audio**: voices and effect lines are records the host's mixer reads (`voices_setup`, `voices_mix`, `voices_frame`), mixed in float at the device's rate. The sound clock runs 400 ticks a second; voices name samples a second. All banks' waves are mapped when the sound system starts; a sequence's data is its file's (`SoundArchive`).
 - **Frame timing**: the game waits for its frame on the host's clock (`frame_wait`, `Game/System/NebulaFrameClock`).
 - **Controls**: the game reads typed input samples (`input_read`, `NebulaInputSample`).
 - **HOME Menu**: the game's entry points open Nebula's panel over the frame.
@@ -54,4 +54,4 @@ The base types are the same fundamental types on every host (`types.h`): `s32` i
 - **Movies**: the importer turns movies into frames the host decodes (`movie_video_decode`), with PCM16 sound.
 - **Display shape**: the host latches the output's shape once the frame is presented (`display_extent`), and the game draws for it: 4:3 to 32:9.
 - **Crash reports**: a fatal exception or the game's fatal call writes a minidump from a thread kept for it, and logs the module offset.
-- **Threads**: the game runs on one thread. The host's audio clock calls in on its own, kept out of sections by `Game/System/GameThreads`.
+- **Threads**: the game runs on one thread. The host's audio clock calls in on its own; the game reaches it only through the sound engine's one-way command ring (`Game/Sound/SoundRing`), and neither side takes a lock.

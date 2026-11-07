@@ -12,7 +12,7 @@ bool AudBgmRhythmStrategy::set(AudBgm* pBgm, s32 bgmIndex) {
         return false;
     }
 
-    JAISoundHandle* handle = pBgm->getRhythmHandle();
+    SoundHandle* handle = pBgm->getRhythmHandle();
     if (handle == nullptr) {
         return false;
     }
@@ -53,7 +53,7 @@ bool AudBgmRhythmStrategy::setDominant() {
         return false;
     }
 
-    JAISoundHandle* handle = mBgm->getRhythmHandle();
+    SoundHandle* handle = mBgm->getRhythmHandle();
     if (handle == nullptr) {
         return false;
     }
@@ -84,4 +84,3 @@ bool AudBgmRhythmStrategy::isDominant() const {
     return mBgmIdx == AudWrap::getRhythmMeSystem()->getBgmIdx();
 }
 
-// TODO: static init of pool memory for AudMe and AudMeTrack

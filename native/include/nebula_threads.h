@@ -20,8 +20,8 @@ typedef struct NebulaHostThread NebulaHostThread;
 NebulaHostThread* nebula_host_thread_adopt(void);
 void nebula_host_thread_pass(NebulaHostThread* pTo);
 void nebula_host_thread_wait(NebulaHostThread* pSelf);
-/* The kernel's two locks: its own state, and the section the audio thread stays out of. A lock can be left by the thread that took it. */
-enum { NEBULA_HOST_LOCK_STATE = 0, NEBULA_HOST_LOCK_AUDIO = 1 };
+/* The kernel's lock on its own state. A lock can be left by the thread that took it. */
+enum { NEBULA_HOST_LOCK_STATE = 0 };
 void nebula_host_lock(int which);
 void nebula_host_unlock(int which);
 

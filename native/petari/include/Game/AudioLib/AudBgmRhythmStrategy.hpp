@@ -2,7 +2,7 @@
 
 
 class AudBgm;
-class JAISoundHandle;
+class SoundHandle;
 
 class AudBgmRhythmStrategy {
 public:

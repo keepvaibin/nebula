@@ -1,7 +1,7 @@
 #include "Game/AudioLib/AudSpeakerWrap.hpp"
 #include "Game/Speaker/SpkSound.hpp"
 #include "Game/Speaker/SpkSystem.hpp"
-#include <JSystem/JAudio2/JASGlobal.hpp>
+#include "Game/Sound/SoundGlobal.hpp"
 #include "Game/System/NebulaInput.hpp"
 
 namespace {
@@ -14,7 +14,7 @@ const char* AudSpeakerWrap::getResName() {
 }
 
 void AudSpeakerWrap::start(s32 waveID, s32 padChannel) {
-    SpkSystem* system = JASGlobalInstance< SpkSystem >::getInstance();
+    SpkSystem* system = SoundGlobal< SpkSystem >::getInstance();
 
     if (system == nullptr) {
         return;
@@ -30,7 +30,7 @@ void AudSpeakerWrap::start(s32 waveID, s32 padChannel) {
 }
 
 bool AudSpeakerWrap::isPlayable(s32 padChannel) {
-    SpkSystem* system = JASGlobalInstance< SpkSystem >::getInstance();
+    SpkSystem* system = SoundGlobal< SpkSystem >::getInstance();
 
     if (system == nullptr) {
         return false;

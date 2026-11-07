@@ -7,7 +7,7 @@
 #include "Game/Util/HashUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <JSystem/JAudio2/JAISound.hpp>
+#include "Game/Sound/Sound.hpp"
 #include <cstring>
 
 struct SoundList {
@@ -1771,7 +1771,7 @@ void Mario::stopSoundJ(const char* pSoundName, u32 delay) {
     }
 
     if (_96C->search("\220\272" /* 声 */, pSoundName, &index)) {
-        JAISoundID soundID(soundlist[index]._14);
+        SoundID soundID(soundlist[index]._14);
         MR::stopSound(mActor, soundID, delay);
     }
 }
@@ -1779,10 +1779,10 @@ void Mario::stopSoundJ(const char* pSoundName, u32 delay) {
 void Mario::startBas(const char* pAnimName, bool arg2, f32 startFrame, f32 speed) {
     if (mActor->mSoundObject != nullptr) {
         ResourceHolder* pHolder = MR::getResourceHolder(mActor);
-        const JAUSoundAnimation* pRes = nullptr;
+        const SoundAnimation* pRes = nullptr;
 
         if (pAnimName != nullptr && pHolder->mBasResTable->isExistRes(pAnimName)) {
-            pRes = static_cast< JAUSoundAnimation* >(pHolder->mBasResTable->getRes(pAnimName));
+            pRes = static_cast< SoundAnimation* >(pHolder->mBasResTable->getRes(pAnimName));
         }
 
         if (pRes != nullptr) {

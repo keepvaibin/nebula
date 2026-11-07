@@ -6,11 +6,11 @@
 #include "Game/Enemy/Kanina.hpp"
 #include "Game/NPC/Rabbit.hpp"
 #include "Game/Player/Mario.hpp"
-#include <JSystem/JAudio2/JAISound.hpp>
-#include <JSystem/JAudio2/JAUSoundAnimator.hpp>
+#include "Game/Sound/Sound.hpp"
+#include "Game/Sound/SoundAnimator.hpp"
 #include "Game/System/NebulaArena.hpp"
 
-AudAnmSoundObject::AudAnmSoundObject(Vec3f* pPos, u8 numHandles, NebulaArena* pHeap) : AudSoundObject(pPos, numHandles, pHeap), JAUSoundAnimator(this) {
+AudAnmSoundObject::AudAnmSoundObject(Vec3f* pPos, u8 numHandles, NebulaArena* pHeap) : AudSoundObject(pPos, numHandles, pHeap), SoundAnimator(this) {
 }
 
 void AudAnmSoundObject::update(f32 time) {
@@ -21,22 +21,22 @@ void AudAnmSoundObject::update(f32 time) {
     updateAnimSound(time, *mPos, nullptr);
 }
 
-void AudAnmSoundObject::modifySoundParams(JASSoundParams* pParams, const JAUSoundAnimationSound* pSound, f32 speed) {
+void AudAnmSoundObject::modifySoundParams(SoundParams* pParams, const SoundAnimationSound* pSound, f32 speed) {
     if (speed > 3.0f) {
         speed = 3.0f;
     }
-    JAUSoundAnimator::modifySoundParams(pParams, pSound, speed);
+    SoundAnimator::modifySoundParams(pParams, pSound, speed);
 }
 
-bool AudAnmSoundObject::playsSound(const JAUSoundAnimationSound* pSound, const Vec3f& rPos, f32 speed) {
-    if (!JAUSoundAnimator::playsSound(pSound, rPos, speed)) {
+bool AudAnmSoundObject::playsSound(const SoundAnimationSound* pSound, const Vec3f& rPos, f32 speed) {
+    if (!SoundAnimator::playsSound(pSound, rPos, speed)) {
         return false;
     }
 
     return !isLimitedSound(getSoundID(pSound, rPos, speed));
 }
 
-u32 AudAnmSoundObject::getSoundID(const JAUSoundAnimationSound* pSound, const Vec3f& rPos, f32 speed) {
+u32 AudAnmSoundObject::getSoundID(const SoundAnimationSound* pSound, const Vec3f& rPos, f32 speed) {
     switch (pSound->getSoundID()) {
     case SE_EM_KANINA_STEP: {
         if (mSeVersion != Kanina::SeVersion_NORMAL) {
@@ -92,8 +92,8 @@ u32 AudAnmSoundObject::getSoundID(const JAUSoundAnimationSound* pSound, const Ve
     return convertSoundIdFromSeVersion(pSound->getSoundID());
 }
 
-JAISoundHandle* AudAnmSoundObject::getFreeHandle(const JAUSoundAnimationSound* pSound) {
-    return JAUSoundAnimator::getFreeHandle(pSound);
+SoundHandle* AudAnmSoundObject::getFreeHandle(const SoundAnimationSound* pSound) {
+    return SoundAnimator::getFreeHandle(pSound);
 }
 
 void AudAnmSoundObject::skip(f32 time) {
@@ -167,10 +167,10 @@ void AudAnmSoundObject::setStartPos(f32 time) {
     }
 }
 
-void AudAnmSoundObject::updateAnimSound(f32 time, const Vec3f& rPos, JAISoundStarter* pStarter) {
-    JAISoundHandles* handles = getAnimatorHandles();
+void AudAnmSoundObject::updateAnimSound(f32 time, const Vec3f& rPos, SoundStarter* pStarter) {
+    SoundHandles* handles = getAnimatorHandles();
     for (s32 index = 0; index < handles->getNumHandles(); index++) {
-        JAISound* sound = handles->getSound(index);
+        Sound* sound = handles->getSound(index);
         if (sound != nullptr && sound->getAnimationState() != 0) {
             sound->setPos(rPos);
         }
@@ -181,7 +181,7 @@ void AudAnmSoundObject::updateAnimSound(f32 time, const Vec3f& rPos, JAISoundSta
     }
 
     if (pStarter == nullptr) {
-        pStarter = JAISoundStarter::getInstance();
+        pStarter = SoundStarter::getInstance();
     }
 
     f32 speed = time - mLifeTime;
@@ -222,15 +222,15 @@ void AudAnmSoundObject::updateAnimSound(f32 time, const Vec3f& rPos, JAISoundSta
     mLifeTime = time;
 }
 
-void AudAnmSoundObject::startAnimSound(const Vec3f& rPos, f32 speed, JAISoundStarter* pStarter) {
-    const JAUSoundAnimationSound* sound = mSoundAnimation->getSound(mLoopSoundIndex);
+void AudAnmSoundObject::startAnimSound(const Vec3f& rPos, f32 speed, SoundStarter* pStarter) {
+    const SoundAnimationSound* sound = mSoundAnimation->getSound(mLoopSoundIndex);
     if (mIsReversed) {
         mLoopSoundIndex--;
     } else {
         mLoopSoundIndex++;
     }
 
-    JAISoundHandle* handle = getAnimatorHandles()->getHandleUserData((uintptr_t)sound);
+    SoundHandle* handle = getAnimatorHandles()->getHandleUserData((uintptr_t)sound);
     if (handle == nullptr) {
         handle = getFreeHandle(sound);
     }
@@ -270,7 +270,7 @@ void AudAnmSoundObject::startAnimSound(const Vec3f& rPos, f32 speed, JAISoundSta
     releaseHandleIfNecessary(handle, soundID);
 }
 
-bool AudAnmSoundObject::releaseHandleIfNecessary(JAISoundHandle* pHandle, u32 soundID) {
+bool AudAnmSoundObject::releaseHandleIfNecessary(SoundHandle* pHandle, u32 soundID) {
     if (pHandle == nullptr) {
         return false;
     }

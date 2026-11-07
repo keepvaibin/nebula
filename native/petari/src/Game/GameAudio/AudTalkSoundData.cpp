@@ -1,9 +1,9 @@
 #include "Game/GameAudio/AudTalkSoundData.hpp"
 #include "Game/AudioLib/AudSoundId.hpp"
-#include <JSystem/JAudio2/JAISound.hpp>
+#include "Game/Sound/Sound.hpp"
 
 namespace {
-    JAISoundID cTalkSoundList[] = {
+    SoundID cTalkSoundList[] = {
         // 0x00
         -1,
         SE_SV_KINOPIO_TALK_HEY,
@@ -180,7 +180,7 @@ namespace {
     };
 };  // namespace
 
-JAISoundID AudTalkSoundData::getSoundIDFromTalkSoundNo(u8 soundNo) {
+SoundID AudTalkSoundData::getSoundIDFromTalkSoundNo(u8 soundNo) {
     if ((s32)soundNo >= ARRAY_SIZE(::cTalkSoundList)) {
         return -1;
     }

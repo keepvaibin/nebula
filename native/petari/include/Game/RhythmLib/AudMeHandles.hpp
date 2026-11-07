@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/RhythmLib/AudMePlayer.hpp"
-#include <JSystem/JAudio2/JAISoundHandles.hpp>
+#include "Game/Sound/SoundHandles.hpp"
 
 class AudMe;
 

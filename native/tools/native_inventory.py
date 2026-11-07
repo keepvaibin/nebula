@@ -56,8 +56,7 @@ SIGNALS = [
     ("thp_tpl", r"\b(?:THP|TPL)[A-Z][A-Za-z0-9_]*\s*\(", "THP/TPL"),
     ("kernel_api", r"\b(?:NebulaKernel::|NebulaThread\b|NebulaThreadQueue\b|NebulaMutex\b|NebulaMessageQueue\b|NebulaAlarm\b|"
                    r"nebula_raise_event\b|nebula_note_event\b|nebula_switch_stack\b)", "the console scheduler under its new name"),
-    ("audio_shape", r"\b(?:NebulaAudioVoice\b|audio_mix\b|JASDsp\b|JASDSPChannel\b|JASAudioThread\b|JASCriticalSection\b|"
-                    r"sDacRate\b|nebula_game_audio_tick\b)", "DSP-shaped audio interface"),
+    ("audio_shape", r"\b(?:NebulaAudioVoice\b|audio_mix\b|sDacRate\b|nebula_game_audio_tick\b)", "DSP-shaped audio interface"),
     ("byte_order", r"\bNEBULA_BE\b|\bNEBULA_OFFSET\b|\bBE\s*<|\bBEOffset\s*<|\bSelfRel\s*<|\bbswap\w*|"
                    r"\b__builtin_bswap\w*|\bbyteswap\w*|\bRFLI_(?:LD|ST)\w*", "big-endian access"),
     ("hw_register", r"\b__(?:GXData|cpReg|peReg|piReg|memReg|VIRegs|DSPRegs|AIRegs|EXIRegs|SIRegs|PIRegs|MEMRegs)\b|"
@@ -150,8 +149,6 @@ AREAS = [
      "J2D panes/pictures/text: native 2D records at window resolution."),
     (r"^native/petari/src/JSystem/JParticle|^native/petari/libs/JSystem/include/JSystem/JParticle", "jpa", "CONVERT",
      "JPA particles: native particle records (instanced), cooked JPC data."),
-    (r"^native/petari/src/JSystem/JAudio2|^native/petari/libs/JSystem/include/JSystem/JAudio2", "jaudio", "CONVERT",
-     "JAudio2: keep the sound logic (JAI*, JAS sequencing); replace the DSP/AI/ARAM side with the native mixer."),
     (r"^native/petari/src/JSystem/JKernel|^native/petari/libs/JSystem/include/JSystem/JKernel", "jkernel", "CONVERT",
      "JKernel: heaps sized natively, archives from the cooked store, no ARAM, no Yaz0, JKRThread on host threads."),
     (r"^native/petari/src/JSystem/JUtility|^native/petari/libs/JSystem/include/JSystem/JUtility", "jutility", "CONVERT",
@@ -211,8 +208,6 @@ AREAS = [
     (r"^runtime/(?:src|include/galaxy)/render/host_window_win32", "host-ui-win32", "CONVERT",
      "Window, settings and achievements overlay: move the UI model to shared code for every host."),
     (r"^runtime/(?:src|include/galaxy)/render/", "renderer-other", "CONVERT", "Renderer: native records."),
-    (r"^runtime/(?:src|include/galaxy)/jaudio_host_mixer", "host-dsp", "REPLACE",
-     "Host copy of the JAudio DSP program: replace with a native float mixer."),
     (r"^runtime/(?:src|include/galaxy)/(?:virtual_disc|native_thp_video)",
      "host-console-model", "REPLACE",
      "Disc image, software THP: replace with cooked assets and native video."),

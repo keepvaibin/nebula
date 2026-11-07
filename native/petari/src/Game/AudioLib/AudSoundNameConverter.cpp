@@ -1,6 +1,6 @@
 #include "Game/AudioLib/AudSoundNameConverter.hpp"
 #include "Game/System/NebulaMods.hpp"
-#include <JSystem/JAudio2/JAUSoundTable.hpp>
+#include "Game/Sound/SoundTable.hpp"
 #include <JSystem/JGadget/hashcode.hpp>
 #include <cstring>
 
@@ -19,7 +19,7 @@ AudSoundNameConverter::AudSoundNameConverter()
     init();
 }
 
-JAISoundID AudSoundNameConverter::getSoundID(const char* pName) const {
+SoundID AudSoundNameConverter::getSoundID(const char* pName) const {
     return getSoundID(pName, JGadget::getHashCode(pName));
 }
 
@@ -41,7 +41,7 @@ inline s32 AudSoundNameConverter::getOtherSoundCategory(const char* pName) const
     return -1;
 }
 
-JAISoundID AudSoundNameConverter::getSoundID(const char* pName, u32 hash) const {
+SoundID AudSoundNameConverter::getSoundID(const char* pName, u32 hash) const {
     if (NebulaMods::sHasSoundEffects) {
         const u32 modded = NebulaMods::soundEffectSlow(pName);
         if (modded != static_cast< u32 >(-1)) {
@@ -73,14 +73,14 @@ JAISoundID AudSoundNameConverter::getSoundID(const char* pName, u32 hash) const 
 }
 
 void AudSoundNameConverter::init() {
-    const JAUSoundNameTable* table = JAUSoundNameTable::getInstance();
+    const SoundNameTable* table = SoundNameTable::getInstance();
     initDataTable(table);
     addSectionInfo(table, 0);
     addSectionInfo(table, 1);
     addSectionInfo(table, 2);
 }
 
-void AudSoundNameConverter::initDataTable(const JAUSoundNameTable* pTable) {
+void AudSoundNameConverter::initDataTable(const SoundNameTable* pTable) {
     mGroupItemOffsets = new u32[17];
     mNumItems = 0;
     mNumItemsSection0 = getSoundNameTableNumItem_inSection(pTable, 0);
@@ -103,7 +103,7 @@ void AudSoundNameConverter::initDataTable(const JAUSoundNameTable* pTable) {
 AudSoundNameData::AudSoundNameData() {
 }
 
-void AudSoundNameConverter::addGroupInfo(const JAUSoundNameTable* pTable, u8 sectionID, u8 groupID) {
+void AudSoundNameConverter::addGroupInfo(const SoundNameTable* pTable, u8 sectionID, u8 groupID) {
     for (u16 i = 0; i < pTable->getNumItems_inGroup(sectionID, groupID); i++) {
         AudSoundNameData& data = mSoundNameData[mNumNameDatas];
         data.mID.set(sectionID, groupID, i);
@@ -113,13 +113,13 @@ void AudSoundNameConverter::addGroupInfo(const JAUSoundNameTable* pTable, u8 sec
     }
 }
 
-void AudSoundNameConverter::addSectionInfo(const JAUSoundNameTable* pTable, u8 sectionID) {
+void AudSoundNameConverter::addSectionInfo(const SoundNameTable* pTable, u8 sectionID) {
     for (u8 i = 0; i < pTable->getNumGroups_inSection(sectionID); i++) {
         addGroupInfo(pTable, sectionID, i);
     }
 }
 
-u32 AudSoundNameConverter::getSoundNameTableNumItem_inSection(const JAUSoundNameTable* pTable, u8 sectionID) {
+u32 AudSoundNameConverter::getSoundNameTableNumItem_inSection(const SoundNameTable* pTable, u8 sectionID) {
     u32 numItems = 0;
     for (u8 i = 0; i < pTable->getNumGroups_inSection(sectionID); i++) {
         switch (sectionID) {

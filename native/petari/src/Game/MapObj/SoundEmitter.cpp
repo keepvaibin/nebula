@@ -10,7 +10,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <JSystem/JAudio2/JAISound.hpp>
+#include "Game/Sound/Sound.hpp"
 
 namespace {
     const u32 sSeTable[33] = {0x60000, 0x6000e, 0x6000f, 0x60010, 0x60011, 0x60014, 0x501a6, 0x501a7, 0x60015, 0x60016, 0x60017,

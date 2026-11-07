@@ -3,7 +3,6 @@
 #include "Game/AudioLib/AudSystem.hpp"
 #include "Game/AudioLib/AudWrap.hpp"
 #include "Game/LiveActor/Nerve.hpp"
-#include "Game/Speaker/SpkSystem.hpp"
 #include "Game/System/GameSystemFunction.hpp"
 #include "Game/System/Language.hpp"
 #include "Game/System/PlayerInputs.hpp"
@@ -108,7 +107,6 @@ void HomeButtonLayout::exeActive() {
 
     if (!bVar1) {
         AudWrap::getSystem()->exitHomeButtonMenu();
-        SpkSystem::reconnect(-1);
     }
 
     if (MR::isStarPointerModeHomeButton()) {

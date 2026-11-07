@@ -1,4 +1,5 @@
 #include "Game/RhythmLib/AudMeObject.hpp"
+#include "Game/System/NebulaArena.hpp"
 
 AudMeObject::AudMeObject(Vec3f* pPos, u8 numHandles, NebulaArena* pHeap)
     : AudMeHandles(new(pHeap, 0) AudMeHandle[numHandles], numHandles), mPos(pPos), mIsAllocated(true) {

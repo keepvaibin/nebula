@@ -1,8 +1,8 @@
 #pragma once
 
 
-class JAISoundID;
+class SoundID;
 
 namespace AudTalkSoundData {
-    JAISoundID getSoundIDFromTalkSoundNo(u8);
+    SoundID getSoundIDFromTalkSoundNo(u8);
 };  // namespace AudTalkSoundData

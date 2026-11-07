@@ -1,4 +1,4 @@
-// The game's synchronisation (Game/System/GameThreads.hpp): a mutex, a ring of messages and the section the audio thread stays out of.
+// The game's synchronisation (Game/System/GameThreads.hpp): a mutex and the frame wait.
 #include "Game/System/GameThreads.hpp"
 
 #include <nebula_game_api.h>
@@ -7,7 +7,7 @@
 #include "nebula_module.h"
 
 namespace {
-    // This thread's record and whether it is in the audio section: the host keeps them (slots 1 and 2).
+    // This thread's record: the host keeps it (slot 1).
     GameThreadRecord* selfSlot() {
         return static_cast< GameThreadRecord* >(nebula_host()->thread_slots(nebula_host()->user)[1]);
     }
@@ -16,19 +16,9 @@ namespace {
         nebula_host()->thread_slots(nebula_host()->user)[1] = pRecord;
     }
 
-    bool audioExcludedSlot() {
-        return nebula_host()->thread_slots(nebula_host()->user)[2] != nullptr;
-    }
-
-    void setAudioExcludedSlot(bool excluded) {
-        static char sOn;
-        nebula_host()->thread_slots(nebula_host()->user)[2] = excluded ? &sOn : nullptr;
-    }
-
     GameThreadRecord sMainThread;
-    GameThreadRecord sAudioThread;
 
-    // Deterministic test mode (the host's test_frame_step): the sound runs on the thread stepping the clock, at the frame's wait.
+    // Deterministic test mode (the host's test_frame_step): the frame's wait steps the clock.
     bool sTestMode;
 
     void lockState() {
@@ -66,25 +56,12 @@ namespace {
         nebula_host_thread_pass(thread->host);
     }
 
-    // This thread sleeps on `pList` until woken, with the state lock held on entry and exit. The audio section ends for the
-    // wait: a section never lasts across a sleep.
+    // This thread sleeps on `pList` until woken, with the state lock held on entry and exit.
     void block(GameWaitList* pList) {
         GameThreadRecord* self = selfSlot();
-        if (self == &sAudioThread && sTestMode) {
-            nebula_fatal("test mode: the audio thread has to wait, and no thread can run while it does");
-        }
         append(pList, self);
-        const bool inSection = audioExcludedSlot();
-        if (inSection) {
-            setAudioExcludedSlot(false);
-            nebula_host_unlock(NEBULA_HOST_LOCK_AUDIO);
-        }
         unlockState();
         nebula_host_thread_wait(self->host);
-        if (inSection) {
-            nebula_host_lock(NEBULA_HOST_LOCK_AUDIO);
-            setAudioExcludedSlot(true);
-        }
         lockState();
     }
 }  // namespace
@@ -115,36 +92,6 @@ void GameMutex::unlock() {
     unlockState();
 }
 
-void GameMessageQueue::init(void** pSlots, int32_t count) {
-    slots = pSlots;
-    capacity = count;
-    first = 0;
-    used = 0;
-}
-
-bool GameMessageQueue::send(void* pMessage) {
-    lockState();
-    const bool room = used < capacity;
-    if (room) {
-        slots[(first + used) % capacity] = pMessage;
-        used++;
-    }
-    unlockState();
-    return room;
-}
-
-bool GameMessageQueue::receive(void** ppMessage) {
-    lockState();
-    const bool any = used != 0;
-    if (any) {
-        *ppMessage = slots[first];
-        first = (first + 1) % capacity;
-        used--;
-    }
-    unlockState();
-    return any;
-}
-
 namespace GameThreads {
     void waitFrame() {
         const NebulaHostServices* host = nebula_host();
@@ -153,47 +100,6 @@ namespace GameThreads {
         } else {
             host->frame_wait(host->user);
         }
-    }
-
-    bool excludeAudio() {
-        if (audioExcludedSlot()) {
-            return false;
-        }
-        nebula_host_lock(NEBULA_HOST_LOCK_AUDIO);
-        setAudioExcludedSlot(true);
-        return true;
-    }
-
-    bool restoreAudio(bool enabled) {
-        const bool previous = !audioExcludedSlot();
-        if (enabled && audioExcludedSlot()) {
-            setAudioExcludedSlot(false);
-            nebula_host_unlock(NEBULA_HOST_LOCK_AUDIO);
-        } else if (!enabled && !audioExcludedSlot()) {
-            nebula_host_lock(NEBULA_HOST_LOCK_AUDIO);
-            setAudioExcludedSlot(true);
-        }
-        return previous;
-    }
-
-    void enterAudio() {
-        // In test mode this runs on the thread stepping the clock: its record stands aside.
-        // The output device may change its thread (SDL's does when it reopens).
-        void** const ppSlots = nebula_host()->thread_slots(nebula_host()->user);
-        if (ppSlots[3] == nullptr && !sTestMode) {
-            ppSlots[3] = nebula_host_thread_adopt();
-        }
-        if (!sTestMode) {
-            sAudioThread.host = static_cast< NebulaHostThread* >(ppSlots[3]);
-        }
-        sAudioThread.outer = selfSlot();
-        setSelfSlot(&sAudioThread);
-        excludeAudio();
-    }
-
-    void leaveAudio() {
-        restoreAudio(true);
-        setSelfSlot(sAudioThread.outer);
     }
 }  // namespace GameThreads
 
@@ -208,7 +114,6 @@ void nebula_threads_init(void) {
 
 // A diagnostic for the host's reports. A minidump has the stacks.
 void nebula_threads_dump(void) {
-    nebula_log("threads: current %p, game %p, audio %p\n", static_cast< void* >(selfSlot()), static_cast< void* >(&sMainThread),
-               static_cast< void* >(&sAudioThread));
+    nebula_log("threads: current %p, game %p\n", static_cast< void* >(selfSlot()), static_cast< void* >(&sMainThread));
 }
 }  // extern "C"

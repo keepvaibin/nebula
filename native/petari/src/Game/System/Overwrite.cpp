@@ -7,7 +7,6 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MotionSignal.hpp"
 
-#include "Game/System/NebulaArena.hpp"
 
 #include "JSystem/JUtility/JUTNativeLog.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
@@ -24,17 +23,7 @@
 #include <JSystem/JParticle/JPAFieldBlock.hpp>
 #include <JSystem/JParticle/JPAParticle.hpp>
 
-#include <JSystem/JAudio2/JASStream.hpp>
-#include <JSystem/JAudio2/JASAiCtrl.hpp>
-#include <JSystem/JAudio2/JASDriverIF.hpp>
-#include <JSystem/JAudio2/JASHeapCtrl.hpp>
-#include <JSystem/JAudio2/JASTrack.hpp>
-#include <JSystem/JAudio2/JASWaveArcLoader.hpp>
-#include <JSystem/JAudio2/JAUInitializer.hpp>
-
 #include <cstdarg>
-#include "Game/AudioLib/AudParams.hpp"
-#include "Game/System/NebulaSystemSettings.hpp"
 
 namespace {
 };  // namespace
@@ -812,35 +801,3 @@ void JPADrawRotYBillboard(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle)
     p_prj[pWork->mPrjType](pWork, matrix);
     JPADrawQuad(0);
 }
-
-void JAU_JASInitializer::initJASystem(NebulaArena* pHeap) {
-    static bool sStarted = false;
-    if (!sStarted) {
-        sStarted = true;
-        JASKernel::setupRootHeap(pHeap, heapSize_);
-        JASTrack::newMemPool(field_0x1c);
-        if (field_0x20 > 0) {
-            JASTrack::TChannelMgr::newMemPool(field_0x20);
-        }
-
-        JASDriver::startAudio();
-        JASDriver::setOutputLevel(outputLevel_);
-    }
-
-    if (waveArcDir_ != nullptr) {
-        JASWaveArcLoader::setCurrentDir(waveArcDir_);
-    }
-
-    switch (NebulaSystemSettings::soundMode()) {
-    case NebulaSystemSettings::SoundModeMono:
-        JASDriver::setOutputMode(0);
-        break;
-    case NebulaSystemSettings::SoundModeStereo:
-        JASDriver::setOutputMode(1);
-        break;
-    case NebulaSystemSettings::SoundModeSurround:
-        JASDriver::setOutputMode(2);
-        break;
-    }
-}
-

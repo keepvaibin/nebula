@@ -3,7 +3,7 @@
 #include "Game/AudioLib/AudBgmKeeper.hpp"
 #include "Game/AudioLib/AudBgmVolumeController.hpp"
 
-class JAISoundHandle;
+class SoundHandle;
 
 class AudBgmMgr {
 public:
@@ -17,10 +17,10 @@ public:
 
     ~AudBgmMgr() {};
     void movement();
-    JAISoundHandle* start(s32, u32, bool);
+    SoundHandle* start(s32, u32, bool);
     void setNextBGM(s32, u32);
     void clearNextBGM(s32);
-    JAISoundHandle* startLastBGM(s32);
+    SoundHandle* startLastBGM(s32);
     void clearLastBGM(s32);
     void pause();
     void unpause();

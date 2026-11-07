@@ -1,0 +1,345 @@
+#include "Game/Sound/StreamSound.hpp"
+#include "Game/Sound/SoundAudience.hpp"
+#include "Game/Sound/SoundChild.hpp"
+#include "Game/Sound/SoundMemory.hpp"
+#include "Game/Sound/StreamManager.hpp"
+#include "Game/Sound/StreamSource.hpp"
+#include "Game/System/GameAssets.hpp"
+#include <cstring>
+StreamSound::StreamSound(StreamManager* streamMgr_, SoundStrategyMgr< StreamSound >* soundStrategyMgr_) : JSULink< StreamSound >(this) {
+    mPrepareState = 0;
+    soundStrategyMgr = soundStrategyMgr_;
+    streamMgr = streamMgr_;
+    soundStrategy = nullptr;
+    mIsPaused = false;
+    for (int i = 0; i < NUM_CHILDREN; i++) {
+        children[i] = nullptr;
+        mSentKnown[i] = false;
+    }
+    mStream = new (SoundMemory::alloc(sizeof(StreamPlayer))) StreamPlayer();
+    mLoaded = false;
+    mFinishBase = 0;
+    mCanceled = false;
+    mInitSerial = 0;
+}
+
+StreamSound::~StreamSound() {
+    next(SOUND_STREAM_RELEASE);
+    send();
+    SoundMemory::retire(mStream, mStream->mReleased);
+}
+
+SoundCommand& StreamSound::next(u16 kind) {
+    SoundCommand& rCommand = SoundEngine::get()->ring().next();
+    rCommand.mKind = kind;
+    rCommand.mArg = 0;
+    rCommand.mValue = 0;
+    rCommand.mTarget = mStream;
+    return rCommand;
+}
+
+u64 StreamSound::send() {
+    SoundRing& rRing = SoundEngine::get()->ring();
+    rRing.send();
+    return rRing.sent();
+}
+
+void StreamSound::sendChannel(u32 channel, const SoundParams& rValues, f32 pitch) {
+    StreamMixCommand mix;
+    mix.mChannel = static_cast< u8 >(channel);
+    mix.mVolume = rValues.mVolume;
+    mix.mPan = rValues.mPan;
+    mix.mFxMix = rValues.mFxMix;
+    mix.mDolby = rValues.mDolby;
+    mix.mPitch = pitch;
+    if (channel < NUM_CHILDREN && mSentKnown[channel] && std::memcmp(&mix, &mSent[channel], sizeof(mix)) == 0) {
+        return;
+    }
+    SoundCommand& rCommand = next(SOUND_STREAM_MIX);
+    rCommand.payload< StreamMixCommand >() = mix;
+    send();
+    if (channel < NUM_CHILDREN) {
+        mSent[channel] = mix;
+        mSentKnown[channel] = true;
+    } else {
+        for (int i = 0; i < NUM_CHILDREN; i++) {
+            mSentKnown[i] = false;
+        }
+    }
+}
+
+void StreamSound::initStream() {
+    next(SOUND_STREAM_INIT);
+    mInitSerial = send();
+    mLoaded = false;
+    mCanceled = false;
+    for (int i = 0; i < NUM_CHILDREN; i++) {
+        mSentKnown[i] = false;
+    }
+}
+
+// The file is mapped: it is there now or never, and loaded as it is prepared.
+bool StreamSound::prepareStream() {
+    GameAssets::File file;
+    if (!GameAssets::open(mStreamFileEntry, &file)) {
+        return false;
+    }
+    const u8* const data = static_cast< const u8* >(GameAssets::map(mStreamFileEntry));
+    if (data == nullptr) {
+        NEBULA_PANIC("a stream of %u bytes cannot be mapped", file.mLength);
+    }
+    u32 tag;
+    std::memcpy(&tag, data, sizeof(tag));
+    if (tag != StreamPlayer::cTag) {
+        NEBULA_PANIC("a stream not cooked by this version of the importer");
+    }
+    SoundCommand& rCommand = next(SOUND_STREAM_PREPARE);
+    rCommand.payload< const u8* >() = data;
+    rCommand.mValue = (u32)getID();
+    send();
+    mLoaded = true;
+    return true;
+}
+
+bool StreamSound::finished() const {
+    return mCanceled || static_cast< u32 >(mStream->mFinishes) != mFinishBase;
+}
+
+bool StreamSound::isPaused() const {
+    return SoundEngine::get()->applied() >= mInitSerial ? static_cast< bool >(mStream->mShownPaused) : false;
+}
+
+void StreamSound::startID_(SoundID id, s32 streamFileEntry, const Vec3f* posPtr, SoundAudience* audience, int category) {
+    mCategory = category;
+    mStreamFileEntry = streamFileEntry;
+    startSound_(id, posPtr, audience);
+    mPrepareState = 0;
+
+    if (soundStrategyMgr != nullptr) {
+        soundStrategy = soundStrategyMgr->newStrategy(id);
+    } else {
+        soundStrategy = nullptr;
+    }
+}
+
+bool StreamSound::prepare_prepareStream_() {
+    switch (mPrepareState) {
+    case 0:
+        initStream();
+        mPrepareState = 1;
+        mPrepareCount = 0;
+        break;
+    case 1:
+        if (mAudible != nullptr) {
+            const SoundParams* soundParams = mAudible->getOuterParams(0);
+            sendChannel(0xff, *soundParams, soundParams->mPitch);
+        }
+
+        mLoaded = false;
+
+        if (prepareStream()) {
+            mPrepareState = 2;
+        }
+        break;
+    case 2:
+        if (mLoaded) {
+            mLoaded = false;
+            mPrepareState = 3;
+        } else {
+            increasePrepareCount_();
+        }
+        break;
+    case 3:
+        return true;
+    case 4:
+        break;
+    }
+
+    return false;
+}
+
+void StreamSound::prepare_() {
+    if (finished()) {
+        return;
+    }
+
+    switch (mStatus.getState()) {
+    case SoundStatus::State_DEAD:
+        break;
+    case SoundStatus::State_PREPARE:
+        if (prepare_prepareStream_()) {
+            mStatus.setPlaying();
+            prepare_startStream_();
+        }
+        break;
+    case SoundStatus::State_LOCK_PREPARE:
+        if (prepare_prepareStream_()) {
+            mStatus.setReadyLocked();
+        }
+        break;
+    case SoundStatus::State_READY:
+        mStatus.setPlaying();
+        prepare_startStream_();
+        break;
+    case SoundStatus::State_PLAYING:
+        break;
+    }
+}
+
+void StreamSound::prepare_startStream_() {
+    next(SOUND_STREAM_START);
+    send();
+    mFinishBase = mStream->mFinishes;
+    mCanceled = false;
+    mIsPaused = false;
+    mPrepareState = 4;
+}
+
+void StreamSound::managerMixOut_(const SoundParams& inParams, SoundActivity activity) {
+    SoundParams outParams;
+    mParams.mixOutAll(inParams, &outParams, (mStatus.isMute() || activity.isMute()) ? 0.0f : mFader.getIntensity());
+
+    if (soundStrategy != nullptr) {
+        soundStrategy->mix(this, &outParams);
+    }
+
+    const SoundParams* mixParams = &outParams;
+    if (mAudible != nullptr && mAudience != nullptr) {
+        for (int i = 0; i < mAudience->getMaxChannels(); i++) {
+            const SoundParams* outerParams = mAudible->getOuterParams(i);
+            if (outerParams != nullptr) {
+                mAudience->mixChannelOut(outParams, mAudible, i);
+                mixParams = outerParams;
+                break;
+            }
+        }
+    }
+
+    for (int i = 0; i < NUM_CHILDREN; i++) {
+        SoundParams channel;
+        if (children[i] != nullptr) {
+            const SoundParams& rChild = children[i]->mMove.mParams;
+            channel.mVolume = rChild.mVolume * mixParams->mVolume;
+            channel.mPan = (rChild.mPan + mixParams->mPan) - 0.5f;
+            channel.mFxMix = rChild.mFxMix + mixParams->mFxMix;
+            channel.mDolby = rChild.mDolby + mixParams->mDolby;
+        } else {
+            channel.mVolume = mixParams->mVolume;
+            channel.mPan = mixParams->mPan;
+            channel.mFxMix = mixParams->mFxMix;
+            channel.mDolby = mixParams->mDolby;
+        }
+        sendChannel(static_cast< u32 >(i), channel, mixParams->mPitch);
+    }
+
+    prepare_();
+
+    if (mPrepareState == 4) {
+        const bool isPaused = mStatus.isPaused() || activity.isPaused();
+        if (isPaused != mIsPaused) {
+            SoundCommand& rCommand = next(SOUND_STREAM_PAUSE);
+            rCommand.mArg = isPaused ? 1 : 0;
+            send();
+            mIsPaused = isPaused;
+        }
+    }
+}
+
+void StreamSound::dieStream_() {
+    dieSound_();
+
+    for (int i = 0; i < NUM_CHILDREN; i++) {
+        if (children[i] != nullptr) {
+            delete children[i];
+            children[i] = nullptr;
+        }
+    }
+
+    if (soundStrategy != nullptr) {
+        soundStrategyMgr->deleteStrategy(soundStrategy);
+        soundStrategy = nullptr;
+    }
+}
+
+bool StreamSound::tryDie_() {
+    if (finished()) {
+        dieStream_();
+        return true;
+    }
+
+    switch (mPrepareState) {
+    case 0:
+    case 1:
+        dieStream_();
+        return true;
+    case 2:
+    case 3:
+        mPrepareState = 5;
+        next(SOUND_STREAM_CANCEL);
+        send();
+        mCanceled = true;
+        break;
+    case 4: {
+        mPrepareState = 6;
+        SoundCommand& rCommand = next(SOUND_STREAM_STOP);
+        rCommand.mArg = 10;
+        send();
+        break;
+    }
+    }
+
+    return false;
+}
+
+void StreamSound::managerCalc_() {
+    if (finished()) {
+        mPrepareState = 0;
+        stopSound_();
+    }
+
+    if (calcSound_()) {
+        for (int i = 0; i < NUM_CHILDREN; i++) {
+            if (children[i] != nullptr) {
+                children[i]->calc();
+            }
+        }
+
+        if (soundStrategy != nullptr) {
+            soundStrategy->calc(this);
+        }
+    }
+}
+
+s32 StreamSound::getNumChild() const {
+    return NUM_CHILDREN;
+}
+
+SoundChild* StreamSound::getChild(int index) {
+    if (children[index] == nullptr) {
+        children[index] = new SoundChild();
+    }
+    return children[index];
+}
+
+void StreamSound::releaseChild(int index) {
+    if (children[index] != nullptr) {
+        delete children[index];
+        children[index] = nullptr;
+    }
+}
+
+PlayerLink* StreamSound::getPlayer() {
+    return nullptr;
+}
+
+PlayerLink* StreamSound::getChildTrack(int, TrackPath*) {
+    return nullptr;
+}
+
+StreamSound* StreamSound::asStream() {
+    return this;
+}
+
+SoundTempo* StreamSound::getTempoMgr() {
+    return nullptr;
+}

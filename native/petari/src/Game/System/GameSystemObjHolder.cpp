@@ -71,7 +71,6 @@ void GameSystemObjHolder::createAudioSystem() {
 }
 
 void GameSystemObjHolder::update() {
-    mAudioSystem->updateRhythm();
     mPlayerInputs->update();
     mStarPointerDirector->update();
 }

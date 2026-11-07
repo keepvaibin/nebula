@@ -1,12 +1,10 @@
 #include "Game/Speaker/SpkWave.hpp"
-#include "Game/System/GameThreads.hpp"
 #include "Game/Util/ByteView.hpp"
 
 SpkWave::SpkWave() : mResource(nullptr) {
 }
 
 void SpkWave::setResource(void* pResource) {
-    GameAudioExclusion crit;
     mResource = pResource;
 }
 

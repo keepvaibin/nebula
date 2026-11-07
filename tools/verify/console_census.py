@@ -31,8 +31,10 @@ GROUPS = {
     "fifo": r"\bGX[A-Z]\w+|\bGP[A-Z]\w+|\bFIFO\b|\bfifo\b|DisplayList",
     "sjis": r'"(?:\\[0-7]{3}){2,}',
     "offsets": r"\bfield_0x|\b_[0-9A-Fa-f]{2,3}\b(?!\w)",
+    # Batch 5: the audio thread's lock and the console's sound pools.
+    "audio_sync": r"\bGameAudioExclusion|\bexcludeAudio|\benterAudio|\bleaveAudio|\brestoreAudio|NEBULA_HOST_LOCK_AUDIO|\bsAudioThread|PoolAllocObject|\bSpkMixingBuffer|\bAudRhythmWrap|\bAudMeSeq",
 }
-CLOSED = {"math", "j3d"}
+CLOSED = {"math", "j3d", "audio", "audio_sync"}
 CASE_FREE = {"j3d", "jsystem", "nw4r"}
 
 compiled = {k: re.compile(v, re.I if k in CASE_FREE else 0) for k, v in GROUPS.items()}

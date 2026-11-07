@@ -37,7 +37,7 @@ namespace {
     static const s32 cBombBoundVolMaxPrm = 1000;
 };  // namespace
 
-void AudSoundObject::modifySe_Takezawa(JAISoundHandle* pHandle, s32 levelA, s32 levelB) {
+void AudSoundObject::modifySe_Takezawa(SoundHandle* pHandle, s32 levelA, s32 levelB) {
     f32 volume = 1.0f;
     f32 pitch = 1.0f;
     u32 steps = 0;
@@ -455,7 +455,7 @@ void AudSoundObject::modifySe_Takezawa(JAISoundHandle* pHandle, s32 levelA, s32 
     pHandle->getSound()->getAuxiliary().movePitch(pitch, steps);
 }
 
-bool AudSoundObject::modifyLimitedSound_Takezawa(JAISoundID soundID) {
+bool AudSoundObject::modifyLimitedSound_Takezawa(SoundID soundID) {
     if (!isPlayingID(soundID)) {
         switch (soundID) {
         case SE_RS_LV_NOTE_TIMER_SLOW:

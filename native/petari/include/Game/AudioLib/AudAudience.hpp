@@ -2,17 +2,17 @@
 
 #include "Game/AudioLib/AudAudible.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include <JSystem/JAudio2/JAISound.hpp>
-#include <JSystem/JAudio2/JASSoundParams.hpp>
-#include <JSystem/JAudio2/JAUAudible.hpp>
-#include <JSystem/JAudio2/JAUSoundInfo.hpp>
+#include "Game/Sound/Sound.hpp"
+#include "Game/Sound/SoundParams.hpp"
+#include "Game/Sound/SoundAudibleParam.hpp"
+#include "Game/Sound/SoundTableInfo.hpp"
 #include <nebula_geometry.hpp>
-#include <JSystem/JAudio2/JAIAudience.hpp>
-#include <JSystem/JAudio2/JAUAudience.hpp>
-#include <JSystem/JAudio2/JAUDoppler.hpp>
+#include "Game/Sound/SoundAudience.hpp"
+#include "Game/Sound/SoundAudience3D.hpp"
+#include "Game/Sound/SoundDoppler.hpp"
 
 
-class JAUDopplerAudibleRelPos;
+class SoundDopplerRelPos;
 
 class AudDopplerAudienceState {
 public:
@@ -44,7 +44,7 @@ public:
         return mPos;
     }
 
-    void convertAbsToRel(const Vec3f& rPos, JAUDopplerAudibleRelPos* pRel) {
+    void convertAbsToRel(const Vec3f& rPos, SoundDopplerRelPos* pRel) {
         Vec3f diff;
         diff.sub(rPos, mPos);
 
@@ -87,7 +87,7 @@ public:
     Vec3f mPrevPos;
 };
 
-class AudAudience_withSetting : public JAIAudience {
+class AudAudience_withSetting : public SoundAudience {
 public:
     /// @brief Creates a new `AudAudience_withSetting`.
     AudAudience_withSetting();
@@ -170,7 +170,7 @@ public:
         return (mSetting.mSonicSpeed + vel1) / (mSetting.mSonicSpeed + vel2);
     }
 
-    f32 calcPitch_(JAUDopplerAudibleChannel* pChannel, f32 pitch) {
+    f32 calcPitch_(SoundDopplerChannel* pChannel, f32 pitch) {
         if (pChannel->mPitch > 0.0f) {
             if (pChannel->mPitch > pitch * mSetting.mPitchDeltaRatioRange) {
                 return pChannel->mPitch;
@@ -204,7 +204,7 @@ public:
         return mSetting.mMinFxMix + mFxMixRate * (dist - mSetting.mNearDistance);
     }
 
-    JAUAudience3DSetting mSetting;
+    SoundAudience3DSetting mSetting;
     f32 mFrontDolbyRate;
     f32 mBehindDolbyRate;
     f32 mVolumeRate;
@@ -234,7 +234,7 @@ public:
         return mMaxChannels;
     }
 
-    virtual JAIAudible* newAudible(const Vec3f& rPos, JAISoundID soundID, const Vec3f* pPos, u32 mask) {
+    virtual SoundAudible* newAudible(const Vec3f& rPos, SoundID soundID, const Vec3f* pPos, u32 mask) {
         mask |= ~((1 << mMaxChannels) - 1);
         if (mask == 0xFFFFFFFF) {
             return nullptr;
@@ -246,7 +246,7 @@ public:
         }
 
         for (int i = 0; i < mMaxChannels; i++) {
-            JAUDopplerAudibleChannel* channel = audible->mChannels[i];  // TODO: inherited?
+            SoundDopplerChannel* channel = audible->mChannels[i];  // TODO: inherited?
             if (channel == nullptr) {
                 continue;
             }
@@ -255,19 +255,19 @@ public:
             Audience::calcDeltaPriority_(channel->mRelPos.mDist, false, 1);
         }
 
-        JAUSoundInfo* info = JAUSoundInfo::getInstance();
+        SoundTableInfo* info = SoundTableInfo::getInstance();
         if (info != nullptr) {
-            audible->mAudibleParam = JAUAudibleParam(info->getAudibleSw(soundID), -1);
+            audible->mAudibleParam = SoundAudibleParam(info->getAudibleSw(soundID), -1);
         }
 
         return audible;
     }
 
-    virtual void deleteAudible(JAIAudible* pAudible) {
+    virtual void deleteAudible(SoundAudible* pAudible) {
         delete pAudible;
     }
 
-    virtual u32 calcPriority(JAIAudible* pAudible) {
+    virtual u32 calcPriority(SoundAudible* pAudible) {
         Audible* audible = (Audible*)pAudible;
         if ((audible->getAudibleParam().get_BIT11()) == 0) {
             for (int i = 0; i < mMaxChannels; i++) {
@@ -284,7 +284,7 @@ public:
 
         for (int i = 0; i < mMaxChannels; i++) {
             if (audible->mChannels[i] != nullptr) {
-                JAUDopplerAudibleChannel* channel = audible->mChannels[i];
+                SoundDopplerChannel* channel = audible->mChannels[i];
                 u32 volDistBit = audible->getAudibleParam().getVolDistBit();
                 mStates[i].convertAbsToRel(audible->getPos(), &audible->mChannels[i]->mRelPos);
                 bool bit = audible->getAudibleParam().get_BIT8();
@@ -300,19 +300,19 @@ public:
 
     /*
     s32 getVolDistBit(Audible* audible) {
-        JAUAudibleParam param = audible->getAudibleParam();
+        SoundAudibleParam param = audible->getAudibleParam();
         return param.getVolDistBit();
     }
     */
 
-    virtual void mixChannelOut(const JASSoundParams& rParams, JAIAudible* pAudible, int channelNum) {
+    virtual void mixChannelOut(const SoundParams& rParams, SoundAudible* pAudible, int channelNum) {
         Audible* audible = (Audible*)pAudible;
-        JAUDopplerAudibleChannel* channel = audible->getChannel(channelNum);
+        SoundDopplerChannel* channel = audible->getChannel(channelNum);
         if (channel == nullptr) {
             return;
         }
 
-        JASSoundParams params;
+        SoundParams params;
 
         if (audible->getAudibleParam().calcVolume()) {
             params.mVolume = Audience::calcVolume_(channel->mRelPos.getDist(), audible->getVolDistBit());
@@ -392,8 +392,8 @@ public:
         audible->mIsResetting = false;
     }
 
-    f32 calcPitch(JAUDopplerAudibleChannel* pChannel, Audible* pAudible, AudienceState* pState) {
-        JAUAudibleParam param = pAudible->getAudibleParam();
+    f32 calcPitch(SoundDopplerChannel* pChannel, Audible* pAudible, AudienceState* pState) {
+        SoundAudibleParam param = pAudible->getAudibleParam();
         if (param.getDoppler() != 0) {
             f32 doppler = param.getDopplerPower();
 
@@ -408,7 +408,7 @@ public:
         }
     }
 
-    f32 calcFxMix(JAUDopplerAudibleChannel* pChannel, Audible* pAudible) {
+    f32 calcFxMix(SoundDopplerChannel* pChannel, Audible* pAudible) {
         if (pAudible->getAudibleParam().calcFxMix()) {
             return Audience::calcFxMix_(pChannel->mRelPos.getDist());
         } else {

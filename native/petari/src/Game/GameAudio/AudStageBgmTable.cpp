@@ -3,7 +3,7 @@
 #include "Game/GameAudio/AudStageBgmWrap.hpp"
 #include "Game/System/NebulaMods.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <JSystem/JAudio2/JAISound.hpp>
+#include "Game/Sound/Sound.hpp"
 
 // TODO: bgm state enum
 
@@ -129,7 +129,7 @@ u32 AudStageBgmTable::getBgmId(const char* pStageName, s32 bgmNo) {
         return modTrack;
     }
 
-    JAISoundID cometBgm = AudStageBgmWrap::getCometEventBgm(pStageName);
+    SoundID cometBgm = AudStageBgmWrap::getCometEventBgm(pStageName);
     if (cometBgm != -1) {
         return cometBgm;
     }

@@ -2,9 +2,9 @@
 
 #include "Game/AudioLib/AudBgmRhythmStrategy.hpp"
 #include "Game/AudioLib/AudTrackController.hpp"
-#include <JSystem/JAudio2/JAISound.hpp>
+#include "Game/Sound/Sound.hpp"
 
-class JAISoundID;
+class SoundID;
 class AudBgmVolumeController;
 
 class AudBgm {
@@ -13,7 +13,7 @@ public:
     AudBgm();
 
     virtual void init() = 0;
-    virtual JAISoundHandle* start(u32, bool) = 0;
+    virtual SoundHandle* start(u32, bool) = 0;
     virtual void stop(u32) = 0;
     virtual bool isPreparedPlay() = 0;
     virtual void playAfterPrepared() = 0;
@@ -21,13 +21,13 @@ public:
     virtual bool moveVolume(f32, u32) = 0;
     virtual bool moveVolumeForNoteFairy(f32, u32) = 0;
     virtual void changeTrackMuteState(s32, s32) = 0;
-    virtual JAISoundHandle* getHandle() = 0;
-    virtual JAISoundHandle* getRhythmHandle() = 0;
+    virtual SoundHandle* getHandle() = 0;
+    virtual SoundHandle* getRhythmHandle() = 0;
     virtual bool isSoundAttached() const = 0;
     virtual void pause(bool) = 0;
     virtual bool isStopping() const = 0;
     virtual bool isPaused() const = 0;
-    virtual JAISoundID getSoundID() const = 0;
+    virtual SoundID getSoundID() const = 0;
     virtual void setVolumeController(AudBgmVolumeController* pController) {
         mVolumeController = pController;
     }
@@ -52,7 +52,7 @@ public:
     AudSingleBgm();
 
     virtual void init();
-    virtual JAISoundHandle* start(u32, bool);
+    virtual SoundHandle* start(u32, bool);
     virtual void stop(u32);
     virtual bool isPreparedPlay();
     virtual void playAfterPrepared();
@@ -60,11 +60,11 @@ public:
     virtual bool moveVolume(f32, u32);
     virtual bool moveVolumeForNoteFairy(f32, u32);
     virtual void changeTrackMuteState(s32, s32);
-    virtual JAISoundHandle* getHandle() {
+    virtual SoundHandle* getHandle() {
         return &mHandle;
     }
 
-    virtual JAISoundHandle* getRhythmHandle();
+    virtual SoundHandle* getRhythmHandle();
     virtual bool isSoundAttached() const {
         return mHandle.isSoundAttached();
     }
@@ -91,7 +91,7 @@ public:
         return false;
     }
 
-    virtual JAISoundID getSoundID() const {
+    virtual SoundID getSoundID() const {
         if (!mHandle.isSoundAttached()) {
             return 0;
         }
@@ -110,8 +110,8 @@ public:
     void stopTrackControl();
     void updateTrackControl();
 
-    JAISoundHandle mHandle;
-    JAISoundID mSoundID;
+    SoundHandle mHandle;
+    SoundID mSoundID;
     AudTrackController mTrackController[mNumTracks];
 };
 
@@ -121,7 +121,7 @@ public:
     AudMultiBgm();
 
     virtual void init();
-    virtual JAISoundHandle* start(u32, bool);
+    virtual SoundHandle* start(u32, bool);
     virtual void stop(u32);
     virtual bool isPreparedPlay();
     virtual void playAfterPrepared();
@@ -129,20 +129,20 @@ public:
     virtual bool moveVolume(f32, u32);
     virtual bool moveVolumeForNoteFairy(f32, u32);
     virtual void changeTrackMuteState(s32, s32);
-    virtual JAISoundHandle* getHandle();
-    virtual JAISoundHandle* getRhythmHandle();
+    virtual SoundHandle* getHandle();
+    virtual SoundHandle* getRhythmHandle();
     virtual bool isSoundAttached() const;
     virtual void pause(bool);
     virtual bool isStopping() const;
     virtual bool isPaused() const;
-    virtual JAISoundID getSoundID() const;
+    virtual SoundID getSoundID() const;
     virtual void sendToSyncStream();
     virtual void rejectFromSyncStream();
 
     void initTrackController();
     void startTrackControl();
     void updateTrackControl();
-    JAISoundHandle* prepare(u32);
+    SoundHandle* prepare(u32);
     bool isPrepared();
     void unlock();
     void updateSyncProcess();
@@ -151,8 +151,8 @@ public:
 
     static const s32 mNumFaders = 2;
 
-    JAISoundHandle mHandle;
-    JAISoundHandle mRhythmHandle;
+    SoundHandle mHandle;
+    SoundHandle mRhythmHandle;
     AudTrackController mTrackController[mNumTracks];
     AudFader mFader[mNumFaders];
     s32 mSyncState;

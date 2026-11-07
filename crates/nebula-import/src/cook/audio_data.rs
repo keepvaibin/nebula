@@ -91,7 +91,7 @@ fn decode_afc(frames: &[u8], history: &mut (i32, i32), out: &mut [u8]) {
     }
 }
 
-/// A stream as the game plays it (JASStream.hpp): the numbers it needs as host numbers, then each channel's PCM16 samples in
+/// A stream as the game plays it (StreamPlayer::Header):the numbers it needs as host numbers, then each channel's PCM16 samples in
 /// turn. The disc's blocks and their hold-over samples are gone: the whole file is in memory while it plays.
 pub fn ast(bytes: &[u8]) -> Result<Vec<u8>> {
     if bytes.len() < AST_HEADER || &bytes[..4] != b"STRM" {

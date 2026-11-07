@@ -1,7 +1,7 @@
 #include "Game/AudioLib/CSSoundNameConverter.hpp"
 #include "Game/Speaker/SpkSystem.hpp"
 #include "Game/Speaker/SpkTable.hpp"
-#include <JSystem/JAudio2/JASGlobal.hpp>
+#include "Game/Sound/SoundGlobal.hpp"
 #include <JSystem/JGadget/hashcode.hpp>
 #include <cstring>
 
@@ -22,7 +22,7 @@ u32 CSSoundNameConverter::getSoundID(const char* pSoundName) const {
 }
 
 void CSSoundNameConverter::init() {
-    SpkTable* table = &JASGlobalInstance< SpkSystem >::getInstance()->mData->mTable;
+    SpkTable* table = &SoundGlobal< SpkSystem >::getInstance()->mData->mTable;
     initDataTable(table);
     makeDataTable(table);
 }

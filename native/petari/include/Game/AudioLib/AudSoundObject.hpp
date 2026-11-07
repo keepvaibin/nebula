@@ -2,11 +2,11 @@
 
 #include "Game/AudioLib/AudSystem.hpp"
 #include "Game/AudioLib/AudWrap.hpp"
-#include <JSystem/JAudio2/JAUSoundObject.hpp>
+#include "Game/Sound/SoundObject.hpp"
 #include <JSystem/JKernel/JKRDisposer.hpp>
 
-class JAISoundID;
-class JAISoundHandle;
+class SoundID;
+class SoundHandle;
 
 enum SE_GROUP {
     SE_SYSTEM = 0x00,
@@ -38,45 +38,45 @@ public:
 
     const char* mName;
     u32 mHash;
-    JAISoundID mID;
+    SoundID mID;
 };
 
-class AudSoundObject : public JAUSoundObject, JKRDisposer {
+class AudSoundObject : public SoundObject, JKRDisposer {
 public:
     AudSoundObject(Vec3f*, u8, NebulaArena*);
 
-    virtual JAISoundHandle* startSound(JAISoundID);
-    virtual JAISoundHandle* startLevelSound(JAISoundID);
+    virtual SoundHandle* startSound(SoundID);
+    virtual SoundHandle* startLevelSound(SoundID);
     virtual ~AudSoundObject();
 
     void addToSoundObjHolder();
     void setTrans(Vec3f*);
-    bool writePort(JAISoundHandle*, u32, u16);
-    bool isLimitedSound(JAISoundID);
-    JAISoundHandle* startLevelSound(const char*);
-    JAISoundHandle* startSoundParam(JAISoundID, s32, s32);
-    JAISoundHandle* startLevelSoundParam(JAISoundID, s32, s32);
-    JAISoundHandle* startLevelSoundParam(const char*, s32, s32);
-    bool modifyLimitedSound(JAISoundID);
-    bool isPlayingID(JAISoundID);
-    void releaseHandle(JAISoundID);
+    bool writePort(SoundHandle*, u32, u16);
+    bool isLimitedSound(SoundID);
+    SoundHandle* startLevelSound(const char*);
+    SoundHandle* startSoundParam(SoundID, s32, s32);
+    SoundHandle* startLevelSoundParam(SoundID, s32, s32);
+    SoundHandle* startLevelSoundParam(const char*, s32, s32);
+    bool modifyLimitedSound(SoundID);
+    bool isPlayingID(SoundID);
+    void releaseHandle(SoundID);
     void setMapCode(s32);
     void setMapCodeExtra(s32);
     s32 getMapCode() const;
     void clearMapCode();
-    JAISoundID convertNameToLevelSEID(const char*);
-    void limitVoiceOne(JAISoundID);
+    SoundID convertNameToLevelSEID(const char*);
+    void limitVoiceOne(SoundID);
     void stopCategorySound(u32, u32);
-    void setMapCodeToPort(JAISoundHandle*, JAISoundID);
-    void setCutoffToPort(JAISoundHandle*, JAISoundID);
-    JAISoundID convertSoundIdFromSeVersion(JAISoundID) const;
-    void modifySe_Kawamura(JAISoundHandle*, s32);
-    bool modifyLimitedSound_Kawamura(JAISoundID);
-    void modifySe_Takezawa(JAISoundHandle*, s32, s32);
-    bool modifyLimitedSound_Takezawa(JAISoundID);
-    void modifySe_Gohara(JAISoundHandle*, s32, s32);
+    void setMapCodeToPort(SoundHandle*, SoundID);
+    void setCutoffToPort(SoundHandle*, SoundID);
+    SoundID convertSoundIdFromSeVersion(SoundID) const;
+    void modifySe_Kawamura(SoundHandle*, s32);
+    bool modifyLimitedSound_Kawamura(SoundID);
+    void modifySe_Takezawa(SoundHandle*, s32, s32);
+    bool modifyLimitedSound_Takezawa(SoundID);
+    void modifySe_Gohara(SoundHandle*, s32, s32);
 
-    bool isEnableStartSound(JAISoundID soundID) {
+    bool isEnableStartSound(SoundID soundID) {
         return AudWrap::getSystem()->isEnableStartSound(soundID);
     }
 

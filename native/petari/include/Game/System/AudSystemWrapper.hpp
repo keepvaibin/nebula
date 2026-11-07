@@ -14,7 +14,6 @@ public:
     void requestResourceForInitialize();
     void createAudioSystem();
     void createSoundNameConverter();
-    void updateRhythm();
     void movement();
     void stopAllSound(u32);
     void setPlayerLuigi(bool);
@@ -30,7 +29,6 @@ public:
     AudSystem* mAudSystem;
     NebulaArena* mSolidHeap;
     NebulaArena* mHeap;
-    void* mSmrRes;
     AssetFolder* mJaiSeqRes;
     AssetFolder* mJaiChordRes;
     AssetFolder* mJaiMeRes;

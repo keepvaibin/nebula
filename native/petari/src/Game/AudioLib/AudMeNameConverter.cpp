@@ -1,5 +1,6 @@
 #include "Game/AudioLib/AudMeNameConverter.hpp"
 #include "Game/AudioLib/AudWrap.hpp"
+#include "Game/RhythmLib/AudMePlayer.hpp"
 #include "Game/RhythmLib/AudRhythmMeSystem.hpp"
 #include <JSystem/JGadget/hashcode.hpp>
 #include <cstring>

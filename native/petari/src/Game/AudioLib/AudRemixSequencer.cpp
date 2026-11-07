@@ -4,8 +4,8 @@
 #include "Game/AudioLib/AudSoundObject.hpp"
 #include "Game/AudioLib/AudWrap.hpp"
 #include "Game/Util/SingletonHolder.hpp"
-#include <JSystem/JAudio2/JAISound.hpp>
-#include <JSystem/JAudio2/JAISoundHandles.hpp>
+#include "Game/Sound/Sound.hpp"
+#include "Game/Sound/SoundHandles.hpp"
 
 namespace {
     static const char* cRemixNoteTrackSeId[] = {
@@ -49,8 +49,8 @@ bool AudRmxSeqNoteOnTimer::update(f32 f1) {
     if (_0 <= 0.0f) {
         if (_C != nullptr && _8 != nullptr) {
             AudRemixSequencer* pSeq = AudWrap::getRemixSequencer();
-            JAISoundID id = getFreeSeID();
-            JAISoundHandle* pHandle = AudWrap::getRemixSeqObject()->startSound(id);
+            SoundID id = getFreeSeID();
+            SoundHandle* pHandle = AudWrap::getRemixSeqObject()->startSound(id);
             AudWrap::getSystemSeObject()->writePort(pHandle, 0xc, _C->_0);
             AudWrap::getSystemSeObject()->writePort(pHandle, 0xb, _8->_0);
             AudWrap::getSystemSeObject()->writePort(pHandle, 0xf, _8->_4);
@@ -73,16 +73,16 @@ bool AudRmxSeqNoteOnTimer::update(f32 f1) {
     }
 }
 
-JAISoundID AudRmxSeqNoteOnTimer::getFreeSeID() {
+SoundID AudRmxSeqNoteOnTimer::getFreeSeID() {
     for (u32 i = 0; i < ARRAY_SIZE(::cRemixNoteTrackSeId); i++) {
-        JAISoundID id = AudSingletonHolder< AudSoundNameConverter >::get()->getSoundID(::cRemixNoteTrackSeId[i]);
-        JAISoundHandle* handle = AudWrap::getRemixSeqObject()->getHandleSoundID(id);
+        SoundID id = AudSingletonHolder< AudSoundNameConverter >::get()->getSoundID(::cRemixNoteTrackSeId[i]);
+        SoundHandle* handle = AudWrap::getRemixSeqObject()->getHandleSoundID(id);
         if (handle == nullptr) {
             return id;
         }
     }
 
-    JAISoundID id;
+    SoundID id;
     id.setAnonymous();
 
     return id;

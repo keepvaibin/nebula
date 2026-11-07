@@ -4,7 +4,7 @@
 #include "Game/AudioLib/AudWrap.hpp"
 #include "Game/Util/MathUtil.hpp"
 
-void AudSoundObject::modifySe_Kawamura(JAISoundHandle* pHandle, s32 level) {
+void AudSoundObject::modifySe_Kawamura(SoundHandle* pHandle, s32 level) {
     f32 volume = 1.0f;
     f32 pitch = 1.0f;
     u32 steps = 0;
@@ -258,7 +258,7 @@ void AudSoundObject::modifySe_Kawamura(JAISoundHandle* pHandle, s32 level) {
     pHandle->getSound()->getAuxiliary().movePitch(pitch, steps);
 }
 
-bool AudSoundObject::modifyLimitedSound_Kawamura(JAISoundID soundID) {
+bool AudSoundObject::modifyLimitedSound_Kawamura(SoundID soundID) {
     switch (soundID) {
     case SE_SY_GCAPTURE_APPEAR: {
         if (isPlayingID(SE_SY_SPIN_DRIVER_APPEAR)) {

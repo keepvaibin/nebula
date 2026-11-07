@@ -1,106 +1,102 @@
 #include "Game/RhythmLib/AudRhythmMeSystem.hpp"
 #include "Game/RhythmLib/AudMePlayer.hpp"
-#include "Game/RhythmLib/AudMeTrack.hpp"
-#include "Game/RhythmLib/AudRhythmHolder.hpp"
-#include "Game/RhythmLib/AudRhythmSeqParser.hpp"
-#include <JSystem/JAudio2/JAISound.hpp>
-#include "Game/System/GameThreads.hpp"
-#include <JSystem/JAudio2/JASTrack.hpp>
+#include "Game/Sound/PlayerLink.hpp"
+#include "Game/Sound/Sound.hpp"
+#include "Game/Sound/SoundHandles.hpp"
 #include "Game/System/NebulaArena.hpp"
 
-AudRhythmMeSystem::AudRhythmMeSystem(NebulaArena* pHeap, u32 numSeqParsers, bool hasMgr)
-    : JASGlobalInstance< AudRhythmMeSystem >(true), mBgmIdx(), _C(), mMeMgr() {
-    mSeqParsers = new (pHeap, 0) AudRhythmSeqParser*[numSeqParsers];
-    mRhythmHolders = new (pHeap, 0) AudRhythmHolder[numSeqParsers];
-
-    for (s32 i = 0; i < numSeqParsers; i++) {
-        mSeqParsers[i] = new (pHeap, 0) AudRhythmSeqParser();
-        mRhythmHolders[i].mSeqParser = mSeqParsers[i];
+namespace {
+    SoundCommand& next(u16 kind, s32 parserNo) {
+        SoundCommand& rCommand = SoundEngine::get()->ring().next();
+        rCommand.mKind = kind;
+        rCommand.mArg = 0;
+        rCommand.mValue = static_cast< u32 >(parserNo);
+        rCommand.mTarget = nullptr;
+        return rCommand;
     }
 
-    mNumSeqParsers = numSeqParsers;
+    void send() {
+        SoundEngine::get()->ring().send();
+    }
+}  // namespace
 
+AudRhythmMeSystem::AudRhythmMeSystem(NebulaArena* pHeap, u32 numSeqParsers, bool hasMgr)
+    : SoundGlobal< AudRhythmMeSystem >(true), mNumSeqParsers(numSeqParsers), mBgmIdx(), mBeatTrack(), mMeMgr() {
     if (numSeqParsers != 0) {
         setUsingRhythmParser(0);
     }
 
     if (hasMgr) {
-        mMeMgr = new (pHeap, 0) AudMeMgr();
+        mMeMgr = new (pHeap, 0) AudMeMgr(pHeap);
     }
 }
 
-bool AudRhythmMeSystem::setSeq(JAISoundHandle& rHandle, s32 parserNo) {
+// The music's root track and its beat track read the music's notes; the beat track is not heard.
+bool AudRhythmMeSystem::setSeq(SoundHandle& rHandle, s32 parserNo) {
     if (!rHandle.isSoundAttached()) {
         return false;
     }
 
-    {
-        GameAudioExclusion crit;
-        JASTrack* track = rHandle->getTrack();
-        if (track == nullptr) {
-            return false;
-        }
-
-        track->mSeqCtrl.mParser = mSeqParsers[parserNo];
-        track = track->getChild(0);
-        if (track == nullptr) {
-            return false;
-        }
-
-        track = track->getChild(_C);
-        if (track == nullptr) {
-            return false;
-        }
-
-        track->mSeqCtrl.mParser = mSeqParsers[parserNo];
-        track->mute(true);
+    PlayerLink* pPlayer = rHandle->getPlayer();
+    if (pPlayer == nullptr || !pPlayer->exists()) {
+        return false;
     }
 
-    mSeqParsers[parserNo]->activate();
-    mRhythmHolders[parserNo].init();
+    pPlayer->setRhythm(PlayerLink::root(), parserNo);
+    if (!pPlayer->present(PlayerLink::child(0))) {
+        return false;
+    }
+
+    const TrackPath beat = PlayerLink::grandchild(0, mBeatTrack);
+    if (!pPlayer->present(beat)) {
+        return false;
+    }
+
+    pPlayer->setRhythm(beat, parserNo);
+    pPlayer->mute(beat, true);
+
+    next(SOUND_RHYTHM_ACTIVATE, parserNo);
+    send();
     return true;
 }
 
 void AudRhythmMeSystem::rejectSeq(s32 parserNo) {
-    mSeqParsers[parserNo]->init();
-    mRhythmHolders[parserNo].init();
-}
-
-void AudRhythmMeSystem::rhythmProc() {
-    for (s32 i = 0; i < mNumSeqParsers; i++) {
-        mRhythmHolders[i].copyInfoFromParser();
-    }
+    next(SOUND_RHYTHM_INIT, parserNo);
+    send();
 }
 
 void AudRhythmMeSystem::update() {
-    for (s32 i = 0; i < mNumSeqParsers; i++) {
-        mRhythmHolders[i].movement();
-    }
-
     if (mMeMgr != nullptr) {
         mMeMgr->update();
     }
 }
 
 void AudRhythmMeSystem::setIdle(bool idle) {
-    for (s32 i = 0; i < mNumSeqParsers; i++) {
-        mRhythmHolders[i].mIsPaused = idle;
-    }
-
     if (mMeMgr != nullptr) {
         mMeMgr->setPauseFlagAll(idle);
     }
 }
 
 void AudRhythmMeSystem::setUsingRhythmParser(u32 parserNo) {
-    for (s32 i = 0; i < mNumSeqParsers; i++) {
-        if (i == parserNo) {
-            mSeqParsers[i]->mIsUsed = true;
-            mSeqParsers[i]->flushChordScale();
-        } else {
-            mSeqParsers[i]->mIsUsed = false;
-        }
-    }
-
+    next(SOUND_RHYTHM_USE, parserNo);
+    send();
     mBgmIdx = parserNo;
+}
+
+void AudRhythmMeSystem::setTempoStream(s32 parserNo, StreamPlayer* pStream, f32 beatMul, u32 introBeats, u32 loopBeats,
+                                       u32 loopStartSamples, u32 loopEndSamples) {
+    SoundCommand& rCommand = next(SOUND_TEMPO_INFO, parserNo);
+    TempoInfoCommand& rInfo = rCommand.payload< TempoInfoCommand >();
+    rInfo.mStream = pStream;
+    rInfo.mBeatMul = beatMul;
+    rInfo.mIntroBeats = introBeats;
+    rInfo.mLoopBeats = loopBeats;
+    rInfo.mLoopStartSamples = loopStartSamples;
+    rInfo.mLoopEndSamples = loopEndSamples;
+    send();
+}
+
+void AudRhythmMeSystem::rejectTempoStream(s32 parserNo) {
+    next(SOUND_TEMPO_REJECT, parserNo);
+    send();
 }

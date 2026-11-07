@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JAudio2/JAISeMgr.hpp>
+#include "Game/Sound/EffectManager.hpp"
 
 namespace AudParams {
     extern const f32 scCtgVolume[][16];
@@ -18,20 +18,20 @@ namespace AudParams {
     extern const f32 masterVolBgm;
     extern const f32 masterVolSe;
     extern const f32 masterVolStream;
-    extern const JAISeCategoryArrangementItem arrangeSE_SY;
-    extern const JAISeCategoryArrangementItem arrangeSE_PV;
-    extern const JAISeCategoryArrangementItem arrangeSE_PM;
-    extern const JAISeCategoryArrangementItem arrangeSE_BV;
-    extern const JAISeCategoryArrangementItem arrangeSE_BM;
-    extern const JAISeCategoryArrangementItem arrangeSE_EV;
-    extern const JAISeCategoryArrangementItem arrangeSE_EM;
-    extern const JAISeCategoryArrangementItem arrangeSE_SV;
-    extern const JAISeCategoryArrangementItem arrangeSE_SM;
-    extern const JAISeCategoryArrangementItem arrangeSE_OJ;
-    extern const JAISeCategoryArrangementItem arrangeSE_AT;
-    extern const JAISeCategoryArrangementItem arrangeSE_DM;
-    extern const JAISeCategoryArrangementItem arrangeSE_RS;
-    extern const JAISeCategoryArrangementItem arrangeHOMESE;
+    extern const CategoryArrangementItem arrangeSE_SY;
+    extern const CategoryArrangementItem arrangeSE_PV;
+    extern const CategoryArrangementItem arrangeSE_PM;
+    extern const CategoryArrangementItem arrangeSE_BV;
+    extern const CategoryArrangementItem arrangeSE_BM;
+    extern const CategoryArrangementItem arrangeSE_EV;
+    extern const CategoryArrangementItem arrangeSE_EM;
+    extern const CategoryArrangementItem arrangeSE_SV;
+    extern const CategoryArrangementItem arrangeSE_SM;
+    extern const CategoryArrangementItem arrangeSE_OJ;
+    extern const CategoryArrangementItem arrangeSE_AT;
+    extern const CategoryArrangementItem arrangeSE_DM;
+    extern const CategoryArrangementItem arrangeSE_RS;
+    extern const CategoryArrangementItem arrangeHOMESE;
     extern const f32 faderVolZeroVolume;
     extern const f32 faderVolDownVolume;
     extern const f32 faderInterruptedVolume;

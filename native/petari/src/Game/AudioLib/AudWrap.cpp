@@ -4,7 +4,7 @@
 #include "Game/AudioLib/AudSoundInfo.hpp"
 #include "Game/AudioLib/AudSoundNameConverter.hpp"
 #include "Game/AudioLib/AudSystem.hpp"
-#include "Game/RhythmLib/AudRhythmWrap.hpp"
+#include "Game/RhythmLib/AudRhythmMeSystem.hpp"
 
 namespace AudWrap {
     AudSystem* getSystem() {
@@ -31,11 +31,11 @@ namespace AudWrap {
         return getBgmMgr()->mBgm[AudBgmMgr::BgmType_Sub];
     }
 
-    JAISoundHandle* startStageBgm(u32 soundID, bool lock) {
+    SoundHandle* startStageBgm(u32 soundID, bool lock) {
         return getBgmMgr()->start(AudBgmMgr::BgmType_Stage, soundID, lock);
     }
 
-    JAISoundHandle* startSubBgm(u32 soundID, bool lock) {
+    SoundHandle* startSubBgm(u32 soundID, bool lock) {
         return getBgmMgr()->start(AudBgmMgr::BgmType_Sub, soundID, lock);
     }
 
@@ -43,7 +43,7 @@ namespace AudWrap {
         getBgmMgr()->setNextBGM(AudBgmMgr::BgmType_Stage, soundID);
     }
 
-    JAISoundHandle* startLastStageBgm() {
+    SoundHandle* startLastStageBgm() {
         return getBgmMgr()->startLastBGM(AudBgmMgr::BgmType_Stage);
     }
 

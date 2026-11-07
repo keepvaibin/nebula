@@ -9,7 +9,7 @@ void AudLimitedSoundInfo::init() {
     mDelay = 0;
 }
 
-void AudLimitedSoundInfo::set(JAISoundID soundID, s32 delay) {
+void AudLimitedSoundInfo::set(SoundID soundID, s32 delay) {
     mSoundID = soundID;
     mDelay = delay;
 }

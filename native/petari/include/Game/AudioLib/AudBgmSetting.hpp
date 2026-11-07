@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JAudio2/JAISound.hpp>
+#include "Game/Sound/Sound.hpp"
 
 namespace AudBgmSetting {
     struct BgmSettingInfo {
@@ -24,8 +24,8 @@ namespace AudBgmSetting {
         u32 mLoopEndSamples;    // time (sec) = val / 48000
     };
 
-    const MuteState* getMuteState(JAISoundID, s32);
-    u16 getExtraChordNum(JAISoundID, s32);
+    const MuteState* getMuteState(SoundID, s32);
+    u16 getExtraChordNum(SoundID, s32);
     u32 getSeqIdForMultiBgm(u32);
     u32 getStreamIdForMultiBgm(u32);
     f32 getBeatMulForMultiBgm(u32);

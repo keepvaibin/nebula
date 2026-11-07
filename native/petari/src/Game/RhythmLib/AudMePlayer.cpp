@@ -1,12 +1,10 @@
-#include "Game/RhythmLib/AudMeTrack.hpp"
-
+#include "Game/RhythmLib/AudMePlayer.hpp"
 #include "Game/AudioLib/AudSystem.hpp"
 #include "Game/AudioLib/AudWrap.hpp"
 #include "Game/RhythmLib/AudChordInfo.hpp"
 #include "Game/RhythmLib/AudMeHandles.hpp"
-#include "Game/RhythmLib/AudMePlayer.hpp"
-#include "Game/Util/MathUtil.hpp"
-#include "Game/System/GameThreads.hpp"
+#include "Game/Sound/MeTrack.hpp"
+#include "Game/System/NebulaArena.hpp"
 
 void AudMeHandle::releaseMe() {
     if (isMeAttached()) {
@@ -15,7 +13,9 @@ void AudMeHandle::releaseMe() {
     }
 }
 
-AudMe::AudMe() : JSULink< AudMe >(this), mHandle(), mTrack(), _18(), mPos(), mMeId(-1), _24(-1), mTimer(), _74(), mData(), _7C(), _80(1.0f) {
+AudMe::AudMe()
+    : JSULink< AudMe >(this), mHandle(), mLink(), mPos(), mMeId(-1), mStopTime(-1), mTimer(), mStartRequested(false), mTrackBound(),
+      mPlace(), mMgrVolume(1.0f), mVolume(1.0f), mOuterPan(0.5f), mOuterDolby(0.0f), mPriority(), mFadeTime() {
     initTimed();
 }
 
@@ -23,32 +23,22 @@ AudMe::~AudMe() {
     release();
 }
 
-void AudMe::requestStart(void* pData, u32 a1) {
-    mData = pData;
-    _7C = a1;
-    _74 = 1;
+void AudMe::requestStart(u32 trackBound, u32 place) {
+    mTrackBound = trackBound;
+    mPlace = place;
+    mStartRequested = true;
 }
 
-bool AudMe::start(void* pData, u32 a1) {
-    mTrack = new AudMeTrack();
-    if (mTrack == nullptr) {
-        return false;
-    }
-
-    GameAudioExclusion crit;
-    mTrack->setSeqData(pData, a1);
+void AudMe::start() {
     updateTimedParams(true);
-    mTrack->startSeq();
-
-    return true;
+    mLink.start(mTrackBound, AudMeMgr::getInstance()->programData(), mPlace, sound());
 }
 
 void AudMe::stop(s32 time) {
     if (time == -1) {
-        if (mTrack != nullptr) {
-            mTrack->stopAtCurrentNoteEnd();
+        if (mLink.exists()) {
+            mLink.stopAtNoteEnd();
         }
-
         return;
     }
 
@@ -58,7 +48,7 @@ void AudMe::stop(s32 time) {
     }
 
     if (time == 0) {
-        time = _94;
+        time = mFadeTime;
     }
 
     if (time != 0) {
@@ -70,13 +60,12 @@ void AudMe::stop(s32 time) {
 }
 
 void AudMe::release() {
-    if (mTrack != nullptr) {
-        if (mTrack->mStatus != AudMeTrack::STATUS_FREE) {
+    if (mLink.exists()) {
+        if (mLink.status() != MeTrack::STATUS_FREE) {
             stop(0);
         }
-
-        delete mTrack;
-        mTrack = nullptr;
+        // stop(0) may have released it already (doneStop).
+        mLink.release();
         mMeId = -1;
     }
 
@@ -102,16 +91,16 @@ void AudMe::releaseHandle() {
 }
 
 void AudMe::update() {
-    if (_74 == 1) {
-        start(mData, _7C);
-        _74 = 0;
+    if (mStartRequested) {
+        start();
+        mStartRequested = false;
     }
 
-    if (_24 > 0) {
-        _24--;
-        if (_24 <= 0) {
+    if (mStopTime > 0) {
+        mStopTime--;
+        if (mStopTime <= 0) {
             stop(0);
-            _24 = -1;
+            mStopTime = -1;
         }
     }
 
@@ -119,16 +108,12 @@ void AudMe::update() {
         doneStop();
     }
 
-    if (mTrack != nullptr) {
+    if (mLink.exists()) {
         updateTimedParams(false);
-        {
-            GameAudioExclusion crit;
-            mTrack->gframeProc();
-        }
+        mLink.frame(sound());
 
-        if (mTrack->mStatus == AudMeTrack::STATUS_FREE) {
-            delete mTrack;
-            mTrack = nullptr;
+        if (mLink.status() == MeTrack::STATUS_FREE) {
+            mLink.release();
         }
     }
 
@@ -161,83 +146,77 @@ void AudMe::initTimed() {
 }
 
 void AudMe::updateTimedParams(bool immediate) {
-    if (!immediate) {
-        for (s32 i = 0; i < TIMED_PARAMS; i++) {
-            if (mMoveParams[i].mDelta != 0.0f) {
-                mMoveParams[i].mValue += mMoveParams[i].mDelta;
-                if (mMoveParams[i].mDelta > 0.0f) {
-                    if (mMoveParams[i].mValue >= mMoveParams[i].mTarget) {
-                        mMoveParams[i].mValue = mMoveParams[i].mTarget;
-                        mMoveParams[i].mDelta = 0.0f;
-                    }
-                } else {
-                    if (mMoveParams[i].mValue <= mMoveParams[i].mTarget) {
-                        mMoveParams[i].mValue = mMoveParams[i].mTarget;
-                        mMoveParams[i].mDelta = 0.0f;
-                    }
+    if (immediate) {
+        return;
+    }
+
+    for (s32 i = 0; i < TIMED_PARAMS; i++) {
+        if (mMoveParams[i].mDelta != 0.0f) {
+            mMoveParams[i].mValue += mMoveParams[i].mDelta;
+            if (mMoveParams[i].mDelta > 0.0f) {
+                if (mMoveParams[i].mValue >= mMoveParams[i].mTarget) {
+                    mMoveParams[i].mValue = mMoveParams[i].mTarget;
+                    mMoveParams[i].mDelta = 0.0f;
+                }
+            } else {
+                if (mMoveParams[i].mValue <= mMoveParams[i].mTarget) {
+                    mMoveParams[i].mValue = mMoveParams[i].mTarget;
+                    mMoveParams[i].mDelta = 0.0f;
                 }
             }
         }
     }
-
-    if (mTrack == nullptr) {
-        return;
-    }
-
-    f32 volume = _80 * (mVolume * (mVolumeParam.mValue * mDistFilterParam.mValue));
-    u32 numChannelMgrs = mTrack->mNumChannelMgrs;
-    f32 pan = (mPanParam.mValue - 0.5f) + (_88 - 0.5f);
-    pan += 0.5f;
-    f32 dolby = mDolbyParam.mValue + _8C;
-
-    for (u32 i = 0; i < numChannelMgrs; i++) {
-        GameAudioExclusion crit;
-        AudMeChannelMgr* pChannelMgr = mTrack->mChannelMgrs[i];
-        if (pChannelMgr == nullptr) {
-            continue;
-        }
-
-        pChannelMgr->mParams.mVolume = volume;
-        pChannelMgr->mParams.mFxMix = mFxMixParam.mValue;
-        pChannelMgr->mParams.mPitch = mPitchParam.mValue;
-        pChannelMgr->mParams.mPan = pan;
-        pChannelMgr->mParams.mDolby = dolby;
-    }
 }
 
-void AudMe::setOuterPlayingParams(f32 volume, f32 f2, f32 f3, s32 priority, s32 a5) {
+SoundParams AudMe::sound() const {
+    SoundParams sound;
+    sound.mVolume = mMgrVolume * (mVolume * (mVolumeParam.mValue * mDistFilterParam.mValue));
+    sound.mFxMix = mFxMixParam.mValue;
+    sound.mPitch = mPitchParam.mValue;
+    f32 pan = (mPanParam.mValue - 0.5f) + (mOuterPan - 0.5f);
+    sound.mPan = pan + 0.5f;
+    sound.mDolby = mDolbyParam.mValue + mOuterDolby;
+    return sound;
+}
+
+void AudMe::setOuterPlayingParams(f32 volume, f32 pan, f32 dolby, s32 priority, s32 fadeTime) {
     mVolume = volume;
-    _88 = f2;
-    _8C = f3;
+    mOuterPan = pan;
+    mOuterDolby = dolby;
     mPriority = priority;
-    _94 = a5;
+    mFadeTime = fadeTime;
 }
 
 void AudMe::doneStop() {
-    if (mTrack != nullptr) {
-        mTrack->stopSeq();
+    if (mLink.exists()) {
+        mLink.stop();
         release();
     }
 
     releaseHandle();
-    _24 = -1;
+    mStopTime = -1;
 }
 
 void AudMe::setPauseFlag(bool pause) {
-    if (mTrack != nullptr) {
-        GameAudioExclusion crit;
-        mTrack->setPauseFlag(pause);
+    if (mLink.exists()) {
+        mLink.pause(pause);
     }
 }
 
-AudMeMgr::AudMeMgr() : JASGlobalInstance< AudMeMgr >(true), mMeSeq(), _50(1.0f) {
-    for (s32 i = 0; i < 64; i++) {
-        _10[i] = 60;
+bool AudMe::isRequested(u32 place) const {
+    if (!mLink.exists() || mLink.startPlace() != place) {
+        return false;
     }
+    const s32 status = mLink.status();
+    return status == MeTrack::STATUS_RUN || status == MeTrack::STATUS_READY;
 }
 
-void AudMeMgr::setMeSeq(void* pData) {
-    mMeSeq = (AudMeTable*)pData;
+AudMeMgr::AudMeMgr(NebulaArena* pHeap) : SoundGlobal< AudMeMgr >(true), mHeap(pHeap), mMeSeq(), mMeVolume(1.0f) {
+}
+
+void AudMeMgr::setMeSeq(const void* pData) {
+    const MeProgramFile* pFile = static_cast< const MeProgramFile* >(pData);
+    mMeSeq = pFile != nullptr && pFile->mMagic == MeProgramFile::cMagic && pFile->mVersion == MeProgramFile::cVersion ? pFile : nullptr;
 }
 
 void AudMeMgr::setMeTable(void* pData) {
@@ -258,15 +237,12 @@ bool AudMeMgr::startMe(u32 meId, AudMeHandle* pHandle, const Vec3f* pPos) {
     }
 
     if (pHandle != nullptr && pHandle->isMeAttached()) {
-        if (pHandle->getMe()->_24 > -1) {
+        if (pHandle->getMe()->mStopTime > -1) {
             pHandle->getMe()->stop(0);
         }
     }
 
-    AudMe* me = new AudMe();
-    if (me == nullptr) {
-        return false;
-    }
+    AudMe* me = new (mHeap, 0) AudMe();
 
     if (pHandle != nullptr) {
         me->attachHandle(pHandle);
@@ -276,31 +252,28 @@ bool AudMeMgr::startMe(u32 meId, AudMeHandle* pHandle, const Vec3f* pPos) {
         me->mPos = pPos;
     }
 
-    s32 startPos = getSeqStartPos(meId);
-    if (startPos < 0) {
-        pHandle->releaseMe();
-        delete me;
-        return false;
-    }
-
-    if (isRequestedMe(startPos)) {
-        pHandle->releaseMe();
+    const MeEntry* pEntry = getEntry(meId);
+    if (pEntry == nullptr || isRequestedMe(pEntry->mStart)) {
+        if (pHandle != nullptr) {
+            pHandle->releaseMe();
+        }
         delete me;
         return false;
     }
 
     me->mMeId = meId;
     setOuterPlayingParam(meId, me);
-    me->requestStart(mMeSeq, startPos);
+    me->requestStart(pEntry->mTrackBound, pEntry->mStart);
     mMeList.append(me);
-    me->_80 = _50;
+    me->mMgrVolume = mMeVolume;
     return true;
 }
 
+// A phrase that never started, or has ended, goes. A requested phrase starts in its first update.
 void AudMeMgr::freeDeadMe() {
     for (JSULink< AudMe >* it = mMeList.getFirst(); it != mMeList.getEnd();) {
         JSULink< AudMe >* next = it->getNext();
-        if (it->getObject()->mTrack == nullptr) {
+        if (!it->getObject()->isPlaying()) {
             mMeList.remove(it);
             delete it->getObject();
         }
@@ -336,31 +309,22 @@ void AudMeMgr::update() {
     freeDeadMe();
 }
 
-s32 AudMeMgr::getSeqStartPos(u32 meId) {
-    if (mMeSeq == nullptr) {
-        return -1;
+const MeEntry* AudMeMgr::getEntry(u32 meId) {
+    if (mMeSeq == nullptr || meId >= mMeSeq->mEntryCount) {
+        return nullptr;
     }
 
-    s32* pStartPos = mMeSeq->mSeqStartPos;
-    if (meId >= mMeSeq->mNumEntries) {
-        return -1;
-    }
-
-    return pStartPos[meId];
+    return reinterpret_cast< const MeEntry* >(mMeSeq + 1) + meId;
 }
 
-bool AudMeMgr::isRequestedMe(u32 meId) {
-    AudMeTrack* track;
+const u8* AudMeMgr::programData() const {
+    return reinterpret_cast< const u8* >(reinterpret_cast< const MeEntry* >(mMeSeq + 1) + mMeSeq->mEntryCount);
+}
+
+bool AudMeMgr::isRequestedMe(u32 place) {
     for (JSULink< AudMe >* it = mMeList.getFirst(); it != mMeList.getEnd(); it = it->getNext()) {
-        track = it->getObject()->mTrack;
-        if (track != nullptr) {
-            GameAudioExclusion crit;
-            if (meId == track->mMeId) {
-                bool requested = track->mStatus == AudMeTrack::STATUS_RUN || track->mStatus == AudMeTrack::STATUS_READY;
-                if (requested) {
-                    return true;
-                }
-            }
+        if (it->getObject()->isRequested(place)) {
+            return true;
         }
     }
 
@@ -371,9 +335,9 @@ void AudMeMgr::setOuterPlayingParam(s32 meId, AudMe* pMe) {
     AudMePlayingParams* params = &mParams.mParams[meId];
     f32 vol = params->mChordVolume / 127.0f;
     vol *= vol;
-    f32 f2 = params->_2 / 127.0f;
-    f32 f3 = params->_3 / 127.0f;
-    pMe->setOuterPlayingParams(vol, f2, f3, params->mPriority, params->_4);
+    f32 pan = params->mPan / 127.0f;
+    f32 dolby = params->mDolby / 127.0f;
+    pMe->setOuterPlayingParams(vol, pan, dolby, params->mPriority, params->mFadeTime);
 }
 
 void AudMePlayingParamsHolder::setResource(void* pRes) {
