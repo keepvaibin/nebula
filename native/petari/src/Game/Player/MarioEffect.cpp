@@ -905,24 +905,13 @@ void MarioActor::emitEffectWaterColumn(const Vec3f& rDir, const Vec3f& rTrans) {
     player->pushTask(&Mario::taskOnEffectCheck, 2);
 }
 
+// A common effect's name starts with 共, a material effect's with 属 (3 bytes each in UTF-8).
 bool MarioActor::isCommonEffect(const char* pName) const {
-    if (static_cast< u8 >(pName[0]) == 0x8B) {
-        if (static_cast< u8 >(pName[1]) == 0xA4) {
-            return true;
-        }
-    }
-
-    return false;
+    return strncmp(pName, "共", 3) == 0;
 }
 
 bool MarioActor::isMaterialEffect(const char* pName) const {
-    if (static_cast< u8 >(pName[0]) == 0x91) {
-        if (static_cast< u8 >(pName[1]) == 0xAE) {
-            return true;
-        }
-    }
-
-    return false;
+    return strncmp(pName, "属", 3) == 0;
 }
 
 MultiEmitter* MarioActor::playEffect(const char* pName) {
