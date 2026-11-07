@@ -18,6 +18,7 @@ class FileSelectCameraController;
 class FileSelectEffect;
 class FileSelectInfo;
 class FileSelectItem;
+class FileSelectItemDelegatorBase;
 class FileSelectSky;
 class InformationMessage;
 class Manual2P;
@@ -37,6 +38,7 @@ public:
 
     virtual ~FileSelector();
     virtual void init(const JMapInfoIter& rIter);
+    virtual bool initStep(const JMapInfoIter& rIter, uint64_t deadline);
     virtual void appear();
     virtual void kill();
     virtual void control();
@@ -52,6 +54,10 @@ public:
     void createCameraController();
     void createSky();
     void createFileItems();
+    bool createFileItemStep();
+    unsigned mInitStep = 0;
+    unsigned mInitItem = 0;
+    FileSelectItemDelegatorBase* mInitDelegator = nullptr;
     void createOperationButton();
     void createBackButton();
     void createBrosButton();

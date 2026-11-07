@@ -265,7 +265,7 @@ StarPiece* StarPieceDirector::getDeadStarPiece() {
     LiveActor* deadActor = getDeadActor();
 
     if (deadActor == nullptr) {
-        createStarPieces();
+        createStarPieces(1);
         deadActor = getDeadActor();
     }
 
@@ -323,9 +323,9 @@ StarPieceReceiverInfo* StarPieceDirector::findReceiverInfo(const NameObj* pNameO
     return nullptr;
 }
 
-void StarPieceDirector::createStarPieces() {
+void StarPieceDirector::createStarPieces(unsigned count) {
     MR::CurrentHeapRestorer heapRestorer(MR::getSceneHeap());
-    for (s32 i = 0; i < 70; i++) {
+    for (unsigned i = 0; i < count; i++) {
         StarPiece* pStarPiece = new StarPiece("\203\130\203\136\201\133\203\163\201\133\203\130\203\146\203\102\203\214\203\116\203\136\201\133\203\163\201\133\203\130" /* スターピースディレクターピース */);
         pStarPiece->initWithoutIter();
         pStarPiece->makeActorDead();

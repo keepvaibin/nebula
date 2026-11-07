@@ -1,3 +1,4 @@
+#include <stdint.h>
 #pragma once
 
 #include "Game/NameObj/NameObj.hpp"
@@ -17,6 +18,7 @@ public:
     void startActorFileLoadCommon();
     void startActorFileLoadScenario();
     void startActorPlacement();
+    bool startActorPlacementStep(uint64_t deadline);
     void initAfterScenarioSelected();
 
     StageFileLoader* mFileLoader;

@@ -13,7 +13,7 @@ public:
 
     virtual ~GameScene();
     virtual void init();
-    virtual void initAfterScenarioChosen();
+    virtual bool initAfterScenarioChosen();
     virtual void start();
     virtual void update();
     virtual void draw() const;
@@ -71,4 +71,6 @@ public:
     GameStageClearSequence* mStageClearSeq;
     bool mDraw3D;
     u8 _29;
+    unsigned mInitializePhase = 0;
+    unsigned mReservePiecesLeft = 70;
 };

@@ -413,9 +413,7 @@ void TextureStore::begin_frame(unsigned frame_slot, unsigned frames_in_flight) {
         }
     }
     kept_[frame_slot].clear();
-    for (TextureBackend::UploadChunk& chunk : pack_staging_[frame_slot]) {
-        TextureBackend::release_upload_chunk(chunk);
-    }
+    packs_.retire_uploads(std::move(pack_staging_[frame_slot]));
     pack_staging_[frame_slot].clear();
     movie_staging_[frame_slot].clear();
     packs_.begin_frame();

@@ -10,7 +10,7 @@ public:
 
     virtual ~Scene();
     virtual void init();
-    virtual void initAfterScenarioChosen() {}
+    virtual bool initAfterScenarioChosen() { return true; }
     virtual void start();
     virtual void update();
     virtual void draw() const;

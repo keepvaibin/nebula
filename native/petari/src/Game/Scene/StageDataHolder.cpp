@@ -1,3 +1,5 @@
+#include <nebula_game_api.h>
+extern "C" const NebulaHostServices* nebula_host(void);
 #include "Game/Scene/StageDataHolder.hpp"
 #include "Game/NameObj/NameObjFactory.hpp"
 #include "Game/Scene/PlacementInfoOrdered.hpp"
@@ -144,15 +146,24 @@ void StageDataHolder::requestFileLoadScenario() {
 }
 
 void StageDataHolder::initPlacement() {
-    MR::setInitializeStatePlacementPlayer();
-    initPlacementMario();
-    MR::setInitializeStatePlacementHighPriority();
-    _FC->initPlacement();
-    _104->initPlacement();
-    MR::setInitializeStatePlacement();
-    _100->initPlacement();
-    _108->initPlacement();
-    _10C->initPlacement();
+    while (!initPlacementStep(UINT64_MAX)) {}
+}
+
+bool StageDataHolder::initPlacementStep(uint64_t deadline) {
+    while (mPlacementStage < 6u) {
+        if (mPlacementStage == 0u) {
+            MR::setInitializeStatePlacementPlayer();
+            initPlacementMario();
+        } else {
+            PlacementInfoOrdered* lists[] = {_FC, _104, _100, _108, _10C};
+            if (mPlacementStage <= 2u) MR::setInitializeStatePlacementHighPriority();
+            else MR::setInitializeStatePlacement();
+            if (!lists[mPlacementStage - 1u]->initPlacementStep(deadline)) return false;
+        }
+        ++mPlacementStage;
+        if (nebula_host()->clock_ns(nebula_host()->user) >= deadline) return mPlacementStage == 6u;
+    }
+    return true;
 }
 
 JMapInfoIter StageDataHolder::getCommonPathPointInfo(const JMapInfo** ppOut, int idx) const {

@@ -38,6 +38,12 @@ namespace {
 }  // namespace
 
 namespace NebulaLoadTrace {
+    Scope::Scope(const char* name) : mName(name), mStart(enabled() ? nebula_host()->clock_ns(nebula_host()->user) : 0) {}
+    Scope::~Scope() {
+        if (!mStart) return;
+        const auto elapsed = nebula_host()->clock_ns(nebula_host()->user) - mStart;
+        if (elapsed >= 1000000ull) JUTNativeLog("load-phase: %s %.3f ms\n", mName, elapsed / 1000000.0);
+    }
     void frame() {
         if (enabled() && (MR::isPressedJump(0) || MR::isPressedFire(0))) {
             JUTNativeLog("load: press\n");

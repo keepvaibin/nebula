@@ -48,6 +48,10 @@ void SceneDataInitializer::startActorPlacement() {
     mDataHolder->initPlacement();
 }
 
+bool SceneDataInitializer::startActorPlacementStep(uint64_t deadline) {
+    return mDataHolder->initPlacementStep(deadline);
+}
+
 void SceneDataInitializer::initAfterScenarioSelected() {
     mDataHolder->initAfterScenarioSelected();
 }
