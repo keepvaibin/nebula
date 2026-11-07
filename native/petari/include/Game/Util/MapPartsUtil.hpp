@@ -10,6 +10,8 @@ class MapPartsRailRotator;
 class LiveActor;
 
 namespace MR {
+    class FormattedName;
+
     const HitSensor* getBodySensor(LiveActor*);
     void setBodySensorType(LiveActor*, u32);
     void setBodySensorTypeMapObj(LiveActor*);
@@ -22,9 +24,9 @@ namespace MR {
     bool tryStartMapPartsRotateBetweenPoints(LiveActor*, MapPartsRailMover*, MapPartsRailRotator*);
     bool isMapPartsRailMovePassedStartPointRepeat(const MapPartsRailMover*);
     bool isMapPartsRailMovePassedEndPointRepeat(const MapPartsRailMover*);
-    void getMapPartsObjectName(char*, u32, const TableIter&);
-    void getMapPartsObjectNameIfExistShapeID(char*, u32, const TableIter&);
-    void getMapPartsObjectName(char*, u32, const char*, s32);
+    void getMapPartsObjectName(FormattedName&, const TableIter&);
+    void getMapPartsObjectNameIfExistShapeID(FormattedName&, const TableIter&);
+    void getMapPartsObjectName(FormattedName&, const char*, s32);
     void initMapPartsClipping(LiveActor*, const TableIter&, Vec3f*, bool);
     bool isMapPartsPressOn(const TableIter&);
     MapPartsRailGuideDrawer* createMapPartsRailGuideDrawer(LiveActor*, const char*, const TableIter&);

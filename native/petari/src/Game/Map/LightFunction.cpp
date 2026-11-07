@@ -11,6 +11,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include <cstdio>
+#include "Game/Util/StringUtil.hpp"
 
 
 namespace {};  // namespace
@@ -62,29 +63,23 @@ s32 LightFunction::createZoneDataParser(const char* pZone, Table** pOut) {
 
 namespace {
     void getDataLightInfo(Table* pInfo, int id, LightInfo* pLightInfo, const char* pName) {
-        char colorBuf[256];
-        nebula_snprintf(colorBuf, sizeof(colorBuf), "%sColor", pName);
-        MR::getCsvDataColor(&pLightInfo->mColor, pInfo, colorBuf, id);
-        char posBuf[256];
-        nebula_snprintf(posBuf, sizeof(posBuf), "%sPos", pName);
-        MR::getCsvDataVec(&pLightInfo->mPos, pInfo, posBuf, id);
-        char camBuf[256];
-        nebula_snprintf(camBuf, sizeof(camBuf), "%sFollowCamera", pName);
-        MR::getCsvDataBool(&pLightInfo->mIsFollowCamera, pInfo, camBuf, id);
+        MR::FormattedName colorBuf("%sColor", pName);
+        MR::getCsvDataColor(&pLightInfo->mColor, pInfo, colorBuf.c_str(), id);
+        MR::FormattedName posBuf("%sPos", pName);
+        MR::getCsvDataVec(&pLightInfo->mPos, pInfo, posBuf.c_str(), id);
+        MR::FormattedName camBuf("%sFollowCamera", pName);
+        MR::getCsvDataBool(&pLightInfo->mIsFollowCamera, pInfo, camBuf.c_str(), id);
     }
 
     void getDataActorLightInfo(Table* pInfo, int lightID, ActorLightInfo* pActorInfo, const char* pName) {
-        char lightBuf[256];
-        nebula_snprintf(lightBuf, sizeof(lightBuf), "%sLight%d", pName, 0);
-        getDataLightInfo(pInfo, lightID, &pActorInfo->mInfo0, lightBuf);
-        nebula_snprintf(lightBuf, sizeof(lightBuf), "%sLight%d", pName, 1);
-        getDataLightInfo(pInfo, lightID, &pActorInfo->mInfo1, lightBuf);
-        char alphaBuf[256];
-        nebula_snprintf(alphaBuf, sizeof(alphaBuf), "%sAlpha2", pName);
-        MR::getCsvDataU8(&pActorInfo->mAlpha2, pInfo, alphaBuf, lightID);
-        char ambBuf[256];
-        nebula_snprintf(ambBuf, sizeof(ambBuf), "%sAmbient", pName);
-        MR::getCsvDataColor(&pActorInfo->mColor, pInfo, ambBuf, lightID);
+        MR::FormattedName lightBuf("%sLight%d", pName, 0);
+        getDataLightInfo(pInfo, lightID, &pActorInfo->mInfo0, lightBuf.c_str());
+        lightBuf.format("%sLight%d", pName, 1);
+        getDataLightInfo(pInfo, lightID, &pActorInfo->mInfo1, lightBuf.c_str());
+        MR::FormattedName alphaBuf("%sAlpha2", pName);
+        MR::getCsvDataU8(&pActorInfo->mAlpha2, pInfo, alphaBuf.c_str(), lightID);
+        MR::FormattedName ambBuf("%sAmbient", pName);
+        MR::getCsvDataColor(&pActorInfo->mColor, pInfo, ambBuf.c_str(), lightID);
     }
 };  // namespace
 

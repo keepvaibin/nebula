@@ -462,9 +462,10 @@ CustomTagProcessor::Operation CustomTagProcessor::exeSoundGroup(nw4r::ut::Rect* 
     u8 mask = 1 << mSoundIndex;
 
     if (mask != static_cast< u8 >(mPlayedSounds & mask)) {
-        char name[256];
-        MR::convertUTF16ToASCII(name, tag.getParamPtr(0), static_cast< s32 >(tag.getParamLength()) / 2 + 1);
-        MR::startSystemSE(name);
+        MR::FormattedName name;
+        const s32 length = static_cast< s32 >(tag.getParamLength()) / 2 + 1;
+        MR::convertUTF16ToASCII(name.room(length), tag.getParamPtr(0), length);
+        MR::startSystemSE(name.c_str());
         mPlayedSounds |= static_cast< u8 >(1 << mSoundIndex);
     }
 

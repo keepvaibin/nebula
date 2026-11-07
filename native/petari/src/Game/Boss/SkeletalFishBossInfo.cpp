@@ -3,6 +3,7 @@
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include <cstdio>
+#include "Game/Util/StringUtil.hpp"
 
 namespace {
     static const char* sParamFileName = "Param";
@@ -67,22 +68,22 @@ void SkeletalFishBossInfo::loadLevelStatus(const TableIter& rIter) {
     }
 
     for (s32 i = 0; i < levelNum; i++) {
-        char paramName[256];
+        MR::FormattedName paramName;
 
-        nebula_snprintf(paramName, sizeof(paramName), "%s%d", ::sParamNameEnergy, i);
-        rIter.getValue< s32 >(paramName, &getLevelStatus(i)->mEnergyLevel);
+        paramName.format("%s%d", ::sParamNameEnergy, i);
+        rIter.getValue< s32 >(paramName.c_str(), &getLevelStatus(i)->mEnergyLevel);
 
-        nebula_snprintf(paramName, sizeof(paramName), "%s%d", ::sParamNameSpeed, i);
-        rIter.getValue< f32 >(paramName, &getLevelStatus(i)->mSpeedLevel);
+        paramName.format("%s%d", ::sParamNameSpeed, i);
+        rIter.getValue< f32 >(paramName.c_str(), &getLevelStatus(i)->mSpeedLevel);
 
-        nebula_snprintf(paramName, sizeof(paramName), "%s%d", ::sParamNameRailID, i);
-        rIter.getValue< s32 >(paramName, &getLevelStatus(i)->mRailIDLevel);
+        paramName.format("%s%d", ::sParamNameRailID, i);
+        rIter.getValue< s32 >(paramName.c_str(), &getLevelStatus(i)->mRailIDLevel);
 
-        nebula_snprintf(paramName, sizeof(paramName), "%s%d", ::sParamNameGuardOffset, i);
-        rIter.getValue< f32 >(paramName, &getLevelStatus(i)->mGuardOffsLevel);
+        paramName.format("%s%d", ::sParamNameGuardOffset, i);
+        rIter.getValue< f32 >(paramName.c_str(), &getLevelStatus(i)->mGuardOffsLevel);
 
-        nebula_snprintf(paramName, sizeof(paramName), "%s%d", ::sParamNameGuardAppearNum, i);
-        rIter.getValue< s32 >(paramName, &getLevelStatus(i)->mGuardAppearNumLevel);
+        paramName.format("%s%d", ::sParamNameGuardAppearNum, i);
+        rIter.getValue< s32 >(paramName.c_str(), &getLevelStatus(i)->mGuardAppearNumLevel);
 
         loadGuardStatus(rIter, i, mLevelStatusArray[i].mGuardAppearNumLevel);
     }
@@ -92,12 +93,12 @@ void SkeletalFishBossInfo::loadGuardStatus(const TableIter& rIter, s32 levelIdx,
     LevelStatus* pStatus = getLevelStatus(levelIdx);
 
     for (s32 i = 0; i < guardLevel; i++) {
-        char paramName[256];
+        MR::FormattedName paramName;
 
-        nebula_snprintf(paramName, sizeof(paramName), "%s%d%s%d", ::sParamNameGuardPos, levelIdx, ::sParamNameGuard, i);
-        MR::getPlacementV3f(rIter, paramName, &pStatus->getGuardStatus(i)->mGuardPosLevel);
+        paramName.format("%s%d%s%d", ::sParamNameGuardPos, levelIdx, ::sParamNameGuard, i);
+        MR::getPlacementV3f(rIter, paramName.c_str(), &pStatus->getGuardStatus(i)->mGuardPosLevel);
 
-        nebula_snprintf(paramName, sizeof(paramName), "%s%d%s%d", ::sParamNameGuardWait, levelIdx, ::sParamNameGuard, i);
-        rIter.getValue< s32 >(paramName, &pStatus->getGuardStatus(i)->mGuardWaitLevelID);
+        paramName.format("%s%d%s%d", ::sParamNameGuardWait, levelIdx, ::sParamNameGuard, i);
+        rIter.getValue< s32 >(paramName.c_str(), &pStatus->getGuardStatus(i)->mGuardWaitLevelID);
     }
 }

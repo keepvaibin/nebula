@@ -4,6 +4,7 @@
 #include "Game/System/AssetFolder.hpp"
 #include <cstdio>
 #include <cstring>
+#include "Game/Util/StringUtil.hpp"
 
 StageFileLoader::StageFileLoader(const char* pName) {
     mZoneCount = 0;
@@ -22,14 +23,13 @@ void StageFileLoader::makeStageArchiveNameList() {
 
     for (int i = 0; i < mZoneCount; i++) {
         const char* zoneName = access.getZoneName(i);
-        char path[0x100];
-        nebula_snprintf(path, sizeof(path), "/StageData/%s.arc", zoneName);
-        u32 len = strlen(path) + 1;
+        MR::FormattedName path("/StageData/%s.arc", zoneName);
+        u32 len = strlen(path.c_str()) + 1;
         mStageFiles.at(i) = new char[len];
-        MR::copyString(mStageFiles[i], path, len);
+        MR::copyString(mStageFiles[i], path.c_str(), len);
     }
 }
 
-void StageFileLoader::makeStageArchiveName(char* buf, u32 len, const char* pZoneName) {
-    nebula_snprintf(buf, len, "/StageData/%s.arc", pZoneName);
+void StageFileLoader::makeStageArchiveName(MR::FormattedName& rName, const char* pZoneName) {
+    rName.format("/StageData/%s.arc", pZoneName);
 }

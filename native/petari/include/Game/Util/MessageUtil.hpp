@@ -2,6 +2,8 @@
 
 
 namespace MR {
+    class FormattedName;
+
     const char16_t* getSystemMessageDirect(const char*);
     const char16_t* getGameMessageDirect(const char*);
     const char16_t* getLayoutMessageDirect(const char*);
@@ -17,6 +19,6 @@ namespace MR {
     const char16_t* getGalaxyNameOnCurrentLanguage(const char*);
     const char16_t* getGalaxyNameShortOnCurrentLanguage(const char*);
     const char16_t* getScenarioNameOnCurrentLanguage(const char*, s32);
-    void getLayoutMessageID(char*, const char*, const char*);
-    void makeCometMessageID(char*, u32, const char*);
+    void getLayoutMessageID(FormattedName&, const char*, const char*);
+    void makeCometMessageID(FormattedName&, const char*);
 };  // namespace MR

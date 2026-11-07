@@ -155,25 +155,19 @@ namespace MR {
                 initEffectSyncBck(pKeeper, pModelManager, pInfo->getName(), pAnimName, 1, pInfo->mStartFrame, pInfo->mEndFrame, false);
             } else {
                 const char* const pAnimNames = pInfo->mAnimName;
-                char name[256];
-                zeroMemory(name, sizeof(name));
-                s32 nameLength = 0;
+                u32 start = 0;
                 for (u32 i = 0; i <= strlen(pAnimNames); i++) {
                     if (pAnimNames[i] == ' ' || pAnimNames[i] == '\0') {
-                        name[nameLength] = '\0';
+                        const FormattedName name("%.*s", static_cast< int >(i - start), pAnimNames + start);
                         const char* pAnimName = nullptr;
-                        findBckNameStringInResource(&pAnimName, pModelManager->getResourceHolder(), name);
+                        findBckNameStringInResource(&pAnimName, pModelManager->getResourceHolder(), name.c_str());
                         if (pEmitter->_24 == nullptr) {
                             initEffectSyncBck(pKeeper, pModelManager, pInfo->getName(), pAnimName, ::countAnimNames(pAnimNames), 0.0f, -1.0f, false);
                         } else {
                             addEffectSyncBck(pEmitter, pModelManager, pAnimName);
                         }
 
-                        nameLength = 0;
-                        zeroMemory(name, sizeof(name));
-                    } else {
-                        name[nameLength] = pAnimNames[i];
-                        nameLength++;
+                        start = i + 1;
                     }
                 }
             }
@@ -269,9 +263,8 @@ namespace MR {
         }
 
         bool isExistInResource(u16* pIndex, const char* pName, s32 number) {
-            char name[42];
-            nebula_snprintf(name, sizeof(name), "%s%02d", pName, number);
-            return isExistInResource(pIndex, name);
+            MR::FormattedName name("%s%02d", pName, number);
+            return isExistInResource(pIndex, name.c_str());
         }
 
         const char* getEffectAttributeName(s32 floorCode) {

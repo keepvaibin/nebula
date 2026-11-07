@@ -10,6 +10,7 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include <cstdio>
+#include "Game/Util/StringUtil.hpp"
 
 VolumeModelDrawInit::VolumeModelDrawInit() : NameObj("ボリュームモデル描画初期化") {
 }
@@ -18,9 +19,8 @@ VolumeModelDrawer::VolumeModelDrawer(const char* pName, const char* pFileName, M
     : NameObj(pName), mMtx(), mModelData(), mColor(0xFF, 0xA9, 0, 0xFF) {
     MR::createSceneObj(SceneObj_VolumeModelDrawInit);
     mMtx = mtx;
-    char buf[0x100];
-    nebula_snprintf(buf, sizeof(buf), "%s.arc", pFileName);
-    mModelData = (ModelData*)MR::createAndAddResourceHolder(buf)->mModelResTable->getRes(pFileName);
+    MR::FormattedName buf("%s.arc", pFileName);
+    mModelData = (ModelData*)MR::createAndAddResourceHolder(buf.c_str())->mModelResTable->getRes(pFileName);
 }
 
 // A glow on whatever stands inside the model's shape: its back faces behind a surface mark the pixel, its front faces

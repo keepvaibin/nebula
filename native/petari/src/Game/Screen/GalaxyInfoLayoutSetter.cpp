@@ -43,14 +43,14 @@ GalaxyInfoLayoutSetter::GalaxyInfoLayoutSetter(LayoutActor* pHost) : mHost(pHost
 }
 
 void GalaxyInfoLayoutSetter::replaceTexture(const char* pGalaxyName) {
-    char btiName[256];
+    MR::FormattedName btiName;
     ResTable* fileInfoTable = MR::createAndAddResourceHolder(::cTextureArcName)->mFileInfoTable;
     nw4r::lyt::TexMap* texture = nullptr;
 
     for (s32 i = 0; i < fileInfoTable->mCount; i++) {
-        nebula_snprintf(btiName, sizeof(btiName), "%s.bti", pGalaxyName);
+        btiName.format("%s.bti", pGalaxyName);
 
-        if (MR::isEqualStringCase(btiName, fileInfoTable->getResName(i))) {
+        if (MR::isEqualStringCase(btiName.c_str(), fileInfoTable->getResName(i))) {
             texture = mReplaceTexture[i];
             break;
         }
@@ -217,14 +217,14 @@ void GalaxyInfoLayoutSetter::setTextBoxStarNum(const char* pGalaxyName) {
 }
 
 void GalaxyInfoLayoutSetter::showCometWindow(int cometId) {
-    char messageId[256];
+    MR::FormattedName messageId;
 
     MR::startAnim(mHost, "CometWindow", 1);
     MR::setAnimFrameAndStop(mHost, 1.0f, 1);
     MR::setCometAnimFromId(mHost, cometId, 2);
-    MR::makeCometMessageID(messageId, sizeof(messageId), MR::getCometNameFromId(cometId));
+    MR::makeCometMessageID(messageId, MR::getCometNameFromId(cometId));
     MR::setTextBoxGameMessageRecursive(mHost, "CometName", "GalaxyInfo_CometAppear");
-    MR::setTextBoxArgGameMessageRecursive(mHost, "CometName", messageId, 0);
+    MR::setTextBoxArgGameMessageRecursive(mHost, "CometName", messageId.c_str(), 0);
 }
 
 void GalaxyInfoLayoutSetter::hideCometWindow() {

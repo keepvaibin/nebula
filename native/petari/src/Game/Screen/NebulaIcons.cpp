@@ -20,6 +20,7 @@
 #include <nw4r/ut/ResFont.h>
 #include "Game/System/NebulaClock.hpp"
 #include "Game/System/NebulaHost.hpp"
+#include "Game/Util/StringUtil.hpp"
 
 // Nebula's icons are textures of its own, never the game's: the picture font gains sheets after its own (each
 // controller family's icons, one to a cell) and a code map before its own that sends each icon's code to the glyph the
@@ -1829,7 +1830,7 @@ namespace {
             free(pHdSheet);
             return;
         }
-        char name[64];
+        MR::FormattedName name;
         for (s32 family = 0; family < cFamilies; family++) {
             drawFamily(family);
             for (s32 sheet = 0; sheet < sFont.mFamilySheets; sheet++) {
@@ -1849,14 +1850,14 @@ namespace {
                     paint(native, family + 1, cAtlas[k].mGlyph, cAtlas[k].mPlace, LookText, cAtlas[k].mModel);
                     canvasToRgba8(native, pImage, native.mWidth, 0, 0);
                     canvasToRgba8(hd, pHdImage, hd.mWidth, 0, 0);
-                    nebula_snprintf(name, sizeof(name), "%s/%s", cFamilyNames[family], cAtlas[k].mName);
-                    NebulaArtExport art = {name, nullptr, static_cast< u32 >(native.mWidth), static_cast< u32 >(native.mHeight), NEBULA_TEXTURE_LINEAR_RGBA8,
+                    name.format("%s/%s", cFamilyNames[family], cAtlas[k].mName);
+                    NebulaArtExport art = {name.c_str(), nullptr, static_cast< u32 >(native.mWidth), static_cast< u32 >(native.mHeight), NEBULA_TEXTURE_LINEAR_RGBA8,
                                            pImage, pHdImage, static_cast< u32 >(hd.mWidth), static_cast< u32 >(hd.mHeight)};
                     NebulaHost::artExport(&art);
                 }
                 const u8* pTexels = texelsOf(sFont.mSheets + (sFont.mFirstSheet + family * sFont.mFamilySheets + sheet) * sFont.mSheetBytes);
-                nebula_snprintf(name, sizeof(name), "%s/sheet-%d", cFamilyNames[family], static_cast< int >(sheet + 1));
-                NebulaArtExport art = {name, pTexels, static_cast< u32 >(sFont.mSheetWidth), static_cast< u32 >(sFont.mSheetHeight), NEBULA_TEXTURE_LINEAR_RGBA8,
+                name.format("%s/sheet-%d", cFamilyNames[family], static_cast< int >(sheet + 1));
+                NebulaArtExport art = {name.c_str(), pTexels, static_cast< u32 >(sFont.mSheetWidth), static_cast< u32 >(sFont.mSheetHeight), NEBULA_TEXTURE_LINEAR_RGBA8,
                                        pTexels, pHdSheet, static_cast< u32 >(hdSheetWidth), static_cast< u32 >(hdSheetHeight)};
                 NebulaHost::artExport(&art);
             }
@@ -1871,9 +1872,9 @@ namespace {
                     Canvas hd = {pHdPixels, size * cHdScale, size * cHdScale, static_cast< f32 >(cHdScale)};
                     paint(hd, family + 1, cAtlas[k].mGlyph, cAtlas[k].mPlace, cPictureLooks[look], cAtlas[k].mModel);
                     canvasToRgba8(hd, pHdImage, hd.mWidth, 0, 0);
-                    nebula_snprintf(name, sizeof(name), "%s/bubble-%s-%s", cFamilyNames[family], cAtlas[k].mName, look == 0 ? "up" : "pressed");
+                    name.format("%s/bubble-%s-%s", cFamilyNames[family], cAtlas[k].mName, look == 0 ? "up" : "pressed");
                     const u8* pTexels = texelsOf(sExportPicture.mRecord);
-                    NebulaArtExport art = {name, pTexels, static_cast< u32 >(size), static_cast< u32 >(size), NEBULA_TEXTURE_LINEAR_RGBA8,
+                    NebulaArtExport art = {name.c_str(), pTexels, static_cast< u32 >(size), static_cast< u32 >(size), NEBULA_TEXTURE_LINEAR_RGBA8,
                                            pTexels, pHdImage, static_cast< u32 >(hd.mWidth), static_cast< u32 >(hd.mHeight)};
                     NebulaHost::artExport(&art);
                 }
@@ -1903,14 +1904,14 @@ namespace {
                 canvasToRgba8(native, pImage, native.mWidth, 0, 0);
                 canvasToRgba8(hd, pHdImage, hd.mWidth, 0, 0);
                 keyName(slot, keyText, sizeof(keyText));
-                nebula_snprintf(name, sizeof(name), "Keyboard/%s", keyText);
-                NebulaArtExport art = {name, nullptr, static_cast< u32 >(native.mWidth), static_cast< u32 >(native.mHeight), NEBULA_TEXTURE_LINEAR_RGBA8,
+                name.format("Keyboard/%s", keyText);
+                NebulaArtExport art = {name.c_str(), nullptr, static_cast< u32 >(native.mWidth), static_cast< u32 >(native.mHeight), NEBULA_TEXTURE_LINEAR_RGBA8,
                                        pImage, pHdImage, static_cast< u32 >(hd.mWidth), static_cast< u32 >(hd.mHeight)};
                 NebulaHost::artExport(&art);
             }
             const u8* pTexels = texelsOf(sFont.mSheets + (sFont.mKeyFirstSheet + sheet) * sFont.mSheetBytes);
-            nebula_snprintf(name, sizeof(name), "Keyboard/sheet-%d", static_cast< int >(sheet + 1));
-            NebulaArtExport art = {name, pTexels, static_cast< u32 >(sFont.mSheetWidth), static_cast< u32 >(sFont.mSheetHeight), NEBULA_TEXTURE_LINEAR_RGBA8,
+            name.format("Keyboard/sheet-%d", static_cast< int >(sheet + 1));
+            NebulaArtExport art = {name.c_str(), pTexels, static_cast< u32 >(sFont.mSheetWidth), static_cast< u32 >(sFont.mSheetHeight), NEBULA_TEXTURE_LINEAR_RGBA8,
                                    pTexels, pHdSheet, static_cast< u32 >(hdSheetWidth), static_cast< u32 >(hdSheetHeight)};
             NebulaHost::artExport(&art);
         }
@@ -1925,9 +1926,9 @@ namespace {
                 paintKey(hd, slot, cPictureLooks[look], cUs, cArrowKeys);
                 canvasToRgba8(hd, pHdImage, hd.mWidth, 0, 0);
                 keyName(slot, keyText, sizeof(keyText));
-                nebula_snprintf(name, sizeof(name), "Keyboard/bubble-%s-%s", keyText, look == 0 ? "up" : "pressed");
+                name.format("Keyboard/bubble-%s-%s", keyText, look == 0 ? "up" : "pressed");
                 const u8* pTexels = texelsOf(sExportPicture.mRecord);
-                NebulaArtExport art = {name, pTexels, static_cast< u32 >(size), static_cast< u32 >(size), NEBULA_TEXTURE_LINEAR_RGBA8,
+                NebulaArtExport art = {name.c_str(), pTexels, static_cast< u32 >(size), static_cast< u32 >(size), NEBULA_TEXTURE_LINEAR_RGBA8,
                                        pTexels, pHdImage, static_cast< u32 >(hd.mWidth), static_cast< u32 >(hd.mHeight)};
                 NebulaHost::artExport(&art);
             }

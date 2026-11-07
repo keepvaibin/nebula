@@ -34,21 +34,20 @@
 #include "Game/Util/CollisionPartsFilter.hpp"
 #include "Game/Util/FurMulti.hpp"
 #include <cstdio>
+#include "Game/Util/StringUtil.hpp"
 
 namespace {
     CollisionParts* createCollisionParts(ResourceHolder* pResHolder, const char* pName, HitSensor* pSensor, const Pos3f& rMtx,
                                          MR::CollisionScaleType scaleType, s32 unk) {
         CollisionParts* parts = new CollisionParts();
-        char kcl[256];
-        nebula_snprintf(kcl, sizeof(kcl), "%s.kcl", pName);
-        char pa[256];
-        nebula_snprintf(pa, sizeof(pa), "%s.pa", pName);
+        MR::FormattedName kcl("%s.kcl", pName);
+        MR::FormattedName pa("%s.pa", pName);
         void* kclRes;
         void* paRes = nullptr;
-        kclRes = pResHolder->mFileInfoTable->getRes(kcl);
+        kclRes = pResHolder->mFileInfoTable->getRes(kcl.c_str());
 
-        if (pResHolder->mFileInfoTable->isExistRes(pa)) {
-            paRes = pResHolder->mFileInfoTable->getRes(pa);
+        if (pResHolder->mFileInfoTable->isExistRes(pa.c_str())) {
+            paRes = pResHolder->mFileInfoTable->getRes(pa.c_str());
         }
 
         switch (scaleType) {
@@ -82,13 +81,12 @@ namespace {
             return nullptr;
         }
 
-        char subModelName[0x100];
-        nebula_snprintf(subModelName, sizeof(subModelName), "%s%s", modelResName, pSubModelName);
+        MR::FormattedName subModelName("%s%s", modelResName, pSubModelName);
 
         const char* objName = createSubModelObjName(pActor, pSubModelName);
-        PartsModel* parts = new PartsModel(pActor, objName, subModelName, pMtx, drawBufferType, false);
+        PartsModel* parts = new PartsModel(pActor, objName, subModelName.c_str(), pMtx, drawBufferType, false);
         parts->initWithoutIter();
-        MR::tryStartAllAnim(parts, subModelName);
+        MR::tryStartAllAnim(parts, subModelName.c_str());
         return parts;
     }
 
@@ -243,13 +241,13 @@ namespace MR {
     }
 
     CollisionParts* tryCreateCollisionMoveLimit(LiveActor* pActor, HitSensor* pSensor) {
-        char kcl[256];
+        MR::FormattedName kcl;
         {
             const char* pKclName = "MoveLimit";
-            nebula_snprintf(kcl, sizeof(kcl), "%s.kcl", pKclName);
+            kcl.format("%s.kcl", pKclName);
         }
 
-        if (!MR::getResourceHolder(pActor)->mFileInfoTable->isExistRes(kcl)) {
+        if (!MR::getResourceHolder(pActor)->mFileInfoTable->isExistRes(kcl.c_str())) {
             return nullptr;
         }
 
@@ -266,13 +264,13 @@ namespace MR {
     }
 
     CollisionParts* tryCreateCollisionWaterSurface(LiveActor* pActor, HitSensor* pSensor) {
-        char kcl[256];
+        MR::FormattedName kcl;
         {
             const char* pKclName = "WaterSurface";
-            nebula_snprintf(kcl, sizeof(kcl), "%s.kcl", pKclName);
+            kcl.format("%s.kcl", pKclName);
         }
 
-        if (!MR::getResourceHolder(pActor)->mFileInfoTable->isExistRes(kcl)) {
+        if (!MR::getResourceHolder(pActor)->mFileInfoTable->isExistRes(kcl.c_str())) {
             return nullptr;
         }
 
@@ -289,13 +287,13 @@ namespace MR {
     }
 
     CollisionParts* tryCreateCollisionSunshade(LiveActor* pActor, HitSensor* pSensor) {
-        char kcl[256];
+        MR::FormattedName kcl;
         {
             const char* pKclName = "Sunshade";
-            nebula_snprintf(kcl, sizeof(kcl), "%s.kcl", pKclName);
+            kcl.format("%s.kcl", pKclName);
         }
 
-        if (!MR::getResourceHolder(pActor)->mFileInfoTable->isExistRes(kcl)) {
+        if (!MR::getResourceHolder(pActor)->mFileInfoTable->isExistRes(kcl.c_str())) {
             return nullptr;
         }
 
@@ -2211,13 +2209,13 @@ namespace MR {
     }
 
     CollisionParts* tryCreateCollisionMoveLimit(LiveActor* pActor, MtxPtr pMtx, HitSensor* pSensor) {
-        char kcl[256];
+        MR::FormattedName kcl;
         {
             const char* pKclName = "MoveLimit";
-            nebula_snprintf(kcl, sizeof(kcl), "%s.kcl", pKclName);
+            kcl.format("%s.kcl", pKclName);
         }
 
-        if (!getResourceHolder(pActor)->mFileInfoTable->isExistRes(kcl)) {
+        if (!getResourceHolder(pActor)->mFileInfoTable->isExistRes(kcl.c_str())) {
             return nullptr;
         }
 
@@ -2235,13 +2233,13 @@ namespace MR {
     }
 
     CollisionParts* tryCreateCollisionWaterSurface(LiveActor* pActor, MtxPtr pMtx, HitSensor* pSensor) {
-        char kcl[256];
+        MR::FormattedName kcl;
         {
             const char* pKclName = "WaterSurface";
-            nebula_snprintf(kcl, sizeof(kcl), "%s.kcl", pKclName);
+            kcl.format("%s.kcl", pKclName);
         }
 
-        if (!getResourceHolder(pActor)->mFileInfoTable->isExistRes(kcl)) {
+        if (!getResourceHolder(pActor)->mFileInfoTable->isExistRes(kcl.c_str())) {
             return nullptr;
         }
 
@@ -2259,13 +2257,13 @@ namespace MR {
     }
 
     CollisionParts* tryCreateCollisionSunshade(LiveActor* pActor, MtxPtr pMtx, HitSensor* pSensor) {
-        char kcl[256];
+        MR::FormattedName kcl;
         {
             const char* pKclName = "Sunshade";
-            nebula_snprintf(kcl, sizeof(kcl), "%s.kcl", pKclName);
+            kcl.format("%s.kcl", pKclName);
         }
 
-        if (!getResourceHolder(pActor)->mFileInfoTable->isExistRes(kcl)) {
+        if (!getResourceHolder(pActor)->mFileInfoTable->isExistRes(kcl.c_str())) {
             return nullptr;
         }
 
@@ -2325,9 +2323,8 @@ namespace MR {
     }
 
     bool isExistKcl(LiveActor* pActor, const char* pName) {
-        char kclName[256];
-        nebula_snprintf(kclName, sizeof(kclName), "%s.kcl", pName);
-        return getResourceHolder(pActor)->mFileInfoTable->isExistRes(kclName);
+        MR::FormattedName kclName("%s.kcl", pName);
+        return getResourceHolder(pActor)->mFileInfoTable->isExistRes(kclName.c_str());
     }
 
     f32 getCollisionBoundingSphereRange(const LiveActor* pActor) {

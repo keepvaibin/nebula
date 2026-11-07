@@ -9,8 +9,6 @@
 #include <cstdio>
 #include "Game/Util/ByteView.hpp"
 
-#define MESSAGE_ID_BUFFER_SIZE 256
-
 namespace MR {
     const char16_t* getSystemMessageDirect(const char* pMessageId) {
         TalkMessageInfo messageInfo = TalkMessageInfo();
@@ -203,31 +201,28 @@ namespace MR {
     }
 
     const char16_t* getGalaxyNameOnCurrentLanguage(const char* pGalaxyName) {
-        char messageId[MESSAGE_ID_BUFFER_SIZE];
-        nebula_snprintf(messageId, sizeof(messageId), "GalaxyName_%s", pGalaxyName);
+        MR::FormattedName messageId("GalaxyName_%s", pGalaxyName);
 
-        return getGameMessageDirect(messageId);
+        return getGameMessageDirect(messageId.c_str());
     }
 
     const char16_t* getGalaxyNameShortOnCurrentLanguage(const char* pGalaxyName) {
-        char messageId[MESSAGE_ID_BUFFER_SIZE];
-        nebula_snprintf(messageId, sizeof(messageId), "GalaxyNameShort_%s", pGalaxyName);
+        MR::FormattedName messageId("GalaxyNameShort_%s", pGalaxyName);
 
-        return getGameMessageDirect(messageId);
+        return getGameMessageDirect(messageId.c_str());
     }
 
     const char16_t* getScenarioNameOnCurrentLanguage(const char* pGalaxyName, s32 scenarioNo) {
-        char messageId[MESSAGE_ID_BUFFER_SIZE];
-        nebula_snprintf(messageId, sizeof(messageId), "ScenarioName_%s%d", pGalaxyName, scenarioNo);
+        MR::FormattedName messageId("ScenarioName_%s%d", pGalaxyName, scenarioNo);
 
-        return getGameMessageDirect(messageId);
+        return getGameMessageDirect(messageId.c_str());
     }
 
-    void getLayoutMessageID(char* pDst, const char* pSuperMessageId, const char* pSubMessageId) {
-        nebula_snprintf(pDst, MESSAGE_ID_BUFFER_SIZE, "Layout_%s%s", pSuperMessageId, pSubMessageId);
+    void getLayoutMessageID(FormattedName& rDst, const char* pSuperMessageId, const char* pSubMessageId) {
+        rDst.format("Layout_%s%s", pSuperMessageId, pSubMessageId);
     }
 
-    void makeCometMessageID(char* pDst, u32 bufferSize, const char* pCometName) {
-        nebula_snprintf(pDst, bufferSize, "CometName_%s", pCometName);
+    void makeCometMessageID(FormattedName& rDst, const char* pCometName) {
+        rDst.format("CometName_%s", pCometName);
     }
 };  // namespace MR

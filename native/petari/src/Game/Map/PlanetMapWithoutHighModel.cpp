@@ -2,6 +2,7 @@
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include <cstdio>
+#include "Game/Util/StringUtil.hpp"
 
 PlanetMapWithoutHighModel::PlanetMapWithoutHighModel(const char* pName) : MapObjActor(pName) {
 }
@@ -20,8 +21,7 @@ void PlanetMapWithoutHighModel::init(const TableIter& rIter) {
     info.setupConnectToScene();
     info.setupEffect(nullptr);
     info.setupFarClipping(-1.0f);
-    char modelName[256];
-    nebula_snprintf(modelName, sizeof(modelName), "%sLow", mObjectName);
-    info.setupModelName(modelName);
+    MR::FormattedName modelName("%sLow", mObjectName);
+    info.setupModelName(modelName.c_str());
     initialize(rIter, info);
 }

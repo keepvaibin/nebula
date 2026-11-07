@@ -5,8 +5,12 @@
 
 class DemoCameraInfo;
 
+namespace MR {
+    class FormattedName;
+}
+
 namespace DemoCameraFunction {
     bool isCameraTargetMario(const DemoCameraInfo*);
     bool setStringNullIfEmpty(const char**);
-    void makeAnimCameraName(char*, u32, const DemoCameraInfo*);
+    void makeAnimCameraName(MR::FormattedName&, const DemoCameraInfo*);
 };  // namespace DemoCameraFunction

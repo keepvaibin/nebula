@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <cstring>
 #include <nebula_game_api.h>
+#include "Game/Util/StringUtil.hpp"
 
 namespace {
     const bool sOff = false;
@@ -15,13 +16,12 @@ namespace {
     // The levels place view cubes for the actors that ship distance models, and only those follow them.
     bool hasDistanceModels(const LiveActor* pActor) {
         const char* res = MR::getModelResName(pActor);
-        char buf[0x100];
-        nebula_snprintf(buf, sizeof(buf), "/ObjectData/%sMiddle.arc", res);
-        if (MR::isFileExist(buf, false)) {
+        MR::FormattedName buf("/ObjectData/%sMiddle.arc", res);
+        if (MR::isFileExist(buf.c_str(), false)) {
             return true;
         }
-        nebula_snprintf(buf, sizeof(buf), "/ObjectData/%sLow.arc", res);
-        return MR::isFileExist(buf, false);
+        buf.format("/ObjectData/%sLow.arc", res);
+        return MR::isFileExist(buf.c_str(), false);
     }
 };  // namespace
 
@@ -61,16 +61,14 @@ void LodCtrl::createFarModel(int drawBufferType, int movementType, int calcAnimT
         return;
     }
     const char* res = MR::getModelResName(mActor);
-    char path[0x100];
-    nebula_snprintf(path, sizeof(path), "/ObjectData/%sLow.arc", res);
-    if (!MR::isFileExist(path, false)) {
+    MR::FormattedName path("/ObjectData/%sLow.arc", res);
+    if (!MR::isFileExist(path.c_str(), false)) {
         return;
     }
-    char name[0x100];
-    nebula_snprintf(name, sizeof(name), "%sLow", res);
-    const size_t size = strlen(name) + 1;
+    MR::FormattedName name("%sLow", res);
+    const size_t size = strlen(name.c_str()) + 1;
     char* pObjName = new char[size];
-    memcpy(pObjName, name, size);
+    memcpy(pObjName, name.c_str(), size);
     mFarModel = new ModelObj(pObjName, pObjName, mActor->getBaseMtx(), drawBufferType, movementType, calcAnimType, false);
     mFarModel->initWithoutIter();
     mFarModel->makeActorDead();
@@ -130,7 +128,6 @@ void LodCtrl::setViewCtrlPtr(const bool* pNear, const bool* pFar, const bool* pH
 }
 
 bool LodCtrlFunction::isExistLodLowModel(const char* pName) {
-    char buf[0x100];
-    nebula_snprintf(buf, sizeof(buf), "/ObjectData/%sLow.arc", pName);
-    return MR::isFileExist(buf, false);
+    MR::FormattedName buf("/ObjectData/%sLow.arc", pName);
+    return MR::isFileExist(buf.c_str(), false);
 }

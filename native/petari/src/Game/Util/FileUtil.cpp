@@ -24,24 +24,24 @@ namespace MR {
     }
 
     s32 convertPathToEntrynumConsideringLanguage(const char* pFilePath) {
-        char filePath[256];
-        makeFileNameConsideringLanguage(filePath, sizeof(filePath), pFilePath);
+        MR::FormattedName filePath;
+        makeFileNameConsideringLanguage(filePath, pFilePath);
 
-        return GameAssets::find(filePath);
+        return GameAssets::find(filePath.c_str());
     }
 
     void* loadFile(const char* pFilePath, u8* pDst, NebulaArena* pHeap) {
-        char filePath[256];
-        makeFileNameConsideringLanguage(filePath, sizeof(filePath), pFilePath);
+        MR::FormattedName filePath;
+        makeFileNameConsideringLanguage(filePath, pFilePath);
 
-        return SingletonHolder< FileLoader >::get()->loadFile(filePath, pDst, pHeap);
+        return SingletonHolder< FileLoader >::get()->loadFile(filePath.c_str(), pDst, pHeap);
     }
 
     AssetFolder* mountArchive(const char* pFilePath, NebulaArena* pHeap) {
-        char filePath[256];
-        makeFileNameConsideringLanguage(filePath, sizeof(filePath), pFilePath);
+        MR::FormattedName filePath;
+        makeFileNameConsideringLanguage(filePath, pFilePath);
 
-        return SingletonHolder< FileLoader >::get()->mountArchive(filePath, pHeap);
+        return SingletonHolder< FileLoader >::get()->mountArchive(filePath.c_str(), pHeap);
     }
 
     void mountArchiveByObjectOrLayoutName(const char* pFilePrefix, NebulaArena* pHeap) {
@@ -53,31 +53,31 @@ namespace MR {
             pLocalHeap = getSceneArchiveHeap();
         }
 
-        char objArcPath[256];
-        bool isExistObjArc = makeObjectArchiveFileNameFromPrefix(objArcPath, sizeof(objArcPath), pFilePrefix, false);
+        MR::FormattedName objArcPath;
+        bool isExistObjArc = makeObjectArchiveFileNameFromPrefix(objArcPath, pFilePrefix, false);
 
-        char layoutArcPath[256];
-        bool isExistLayoutArc = makeLayoutArchiveFileNameFromPrefix(layoutArcPath, sizeof(layoutArcPath), pFilePrefix, false);
+        MR::FormattedName layoutArcPath;
+        bool isExistLayoutArc = makeLayoutArchiveFileNameFromPrefix(layoutArcPath, pFilePrefix, false);
 
         if (isExistObjArc) {
-            mountArchive(objArcPath, pLocalHeap);
+            mountArchive(objArcPath.c_str(), pLocalHeap);
         } else if (isExistLayoutArc) {
-            mountArchive(layoutArcPath, pLocalHeap);
+            mountArchive(layoutArcPath.c_str(), pLocalHeap);
         }
     }
 
     void* getLoadedFile(const char* pFilePath) {
-        char filePath[256];
-        makeFileNameConsideringLanguage(filePath, sizeof(filePath), pFilePath);
+        MR::FormattedName filePath;
+        makeFileNameConsideringLanguage(filePath, pFilePath);
 
-        return SingletonHolder< FileLoader >::get()->getLoadedFile(filePath);
+        return SingletonHolder< FileLoader >::get()->getLoadedFile(filePath.c_str());
     }
 
     AssetFolder* getMountedArchive(const char* pFilePath) {
-        char filePath[256];
-        makeFileNameConsideringLanguage(filePath, sizeof(filePath), pFilePath);
+        MR::FormattedName filePath;
+        makeFileNameConsideringLanguage(filePath, pFilePath);
 
-        return SingletonHolder< FileLoader >::get()->getMountedArchive(filePath);
+        return SingletonHolder< FileLoader >::get()->getMountedArchive(filePath.c_str());
     }
 
     void createAndAddArchive(AssetFolder* pFolder, NebulaArena* pHeap, const char* pFilePath) {
@@ -85,10 +85,10 @@ namespace MR {
     }
 
     void getMountedArchiveAndHeap(const char* pFilePath, AssetFolder** ppArchive, NebulaArena** ppHeap) {
-        char filePath[256];
-        makeFileNameConsideringLanguage(filePath, sizeof(filePath), pFilePath);
+        MR::FormattedName filePath;
+        makeFileNameConsideringLanguage(filePath, pFilePath);
 
-        SingletonHolder< FileLoader >::get()->getMountedArchiveAndHeap(filePath, ppArchive, ppHeap);
+        SingletonHolder< FileLoader >::get()->getMountedArchiveAndHeap(filePath.c_str(), ppArchive, ppHeap);
     }
 
     void removeFile(const char* pFilePath) {
@@ -96,10 +96,10 @@ namespace MR {
     }
 
     void removeFileConsideringLanguage(const char* pFilePath) {
-        char filePath[256];
-        makeFileNameConsideringLanguage(filePath, sizeof(filePath), pFilePath);
+        MR::FormattedName filePath;
+        makeFileNameConsideringLanguage(filePath, pFilePath);
 
-        SingletonHolder< FileLoader >::get()->removeFile(filePath);
+        SingletonHolder< FileLoader >::get()->removeFile(filePath.c_str());
     }
 
     void removeResourceAndFileHolderIfIsEqualHeap(NebulaArena* pHeap) {
@@ -108,88 +108,86 @@ namespace MR {
     }
 
     bool isLoadedFile(const char* pFilePath) {
-        char filePath[256];
-        makeFileNameConsideringLanguage(filePath, sizeof(filePath), pFilePath);
+        MR::FormattedName filePath;
+        makeFileNameConsideringLanguage(filePath, pFilePath);
 
-        return SingletonHolder< FileLoader >::get()->isLoaded(filePath);
+        return SingletonHolder< FileLoader >::get()->isLoaded(filePath.c_str());
     }
 
     bool isLoadedObjectOrLayoutArchive(const char* pFilePrefix) {
-        char objArcPath[256];
-        bool isExistObjArc = makeObjectArchiveFileNameFromPrefix(objArcPath, sizeof(objArcPath), pFilePrefix, false);
+        MR::FormattedName objArcPath;
+        bool isExistObjArc = makeObjectArchiveFileNameFromPrefix(objArcPath, pFilePrefix, false);
 
-        char layoutArcPath[256];
-        makeLayoutArchiveFileNameFromPrefix(layoutArcPath, sizeof(layoutArcPath), pFilePrefix, false);
+        MR::FormattedName layoutArcPath;
+        makeLayoutArchiveFileNameFromPrefix(layoutArcPath, pFilePrefix, false);
 
         if (isExistObjArc) {
-            return isLoadedFile(objArcPath);
+            return isLoadedFile(objArcPath.c_str());
         } else {
-            return isLoadedFile(layoutArcPath);
+            return isLoadedFile(layoutArcPath.c_str());
         }
     }
 
-    void makeFileNameConsideringLanguage(char* pDst, u32 size, const char* pFilePath) {
-        addFilePrefix(pDst, size, pFilePath, getCurrentLanguagePrefix());
+    void makeFileNameConsideringLanguage(FormattedName& rDst, const char* pFilePath) {
+        addFilePrefix(rDst, pFilePath, getCurrentLanguagePrefix());
 
-        if (!isFileExist(pDst, false)) {
-            nebula_snprintf(pDst, size, "%s", pFilePath);
+        if (!isFileExist(rDst.c_str(), false)) {
+            rDst.format("%s", pFilePath);
         }
     }
 
-    bool makeObjectArchiveFileName(char* pDst, u32 size, const char* pFileName) {
-        nebula_snprintf(pDst, size, "/ObjectData/%s", pFileName);
+    bool makeObjectArchiveFileName(FormattedName& rDst, const char* pFileName) {
+        rDst.format("/ObjectData/%s", pFileName);
 
-        if (isFileExist(pDst, true)) {
+        if (isFileExist(rDst.c_str(), true)) {
             return true;
         }
 
-        nebula_snprintf(pDst, size, "/MapPartsData/%s", pFileName);
+        rDst.format("/MapPartsData/%s", pFileName);
 
-        if (isFileExist(pDst, false)) {
+        if (isFileExist(rDst.c_str(), false)) {
             return true;
         }
 
-        nebula_snprintf(pDst, size, "%s", pFileName);
+        rDst.format("%s", pFileName);
 
-        return isFileExist(pDst, true);
+        return isFileExist(rDst.c_str(), true);
     }
 
-    bool makeObjectArchiveFileNameFromPrefix(char* pDst, u32 size, const char* pFilePrefix, bool) {
-        char fileName[256];
-        nebula_snprintf(fileName, sizeof(fileName), "%s.arc", pFilePrefix);
+    bool makeObjectArchiveFileNameFromPrefix(FormattedName& rDst, const char* pFilePrefix, bool) {
+        MR::FormattedName fileName("%s.arc", pFilePrefix);
 
-        return makeObjectArchiveFileName(pDst, size, fileName);
+        return makeObjectArchiveFileName(rDst, fileName.c_str());
     }
 
-    bool makeLayoutArchiveFileName(char* pDst, u32 size, const char* pFileName) {
-        nebula_snprintf(pDst, size, "/Region/LayoutData/%s", pFileName);
+    bool makeLayoutArchiveFileName(FormattedName& rDst, const char* pFileName) {
+        rDst.format("/Region/LayoutData/%s", pFileName);
 
-        if (isFileExist(pDst, false)) {
+        if (isFileExist(rDst.c_str(), false)) {
             return true;
         }
 
-        nebula_snprintf(pDst, size, "/LayoutData/%s", pFileName);
+        rDst.format("/LayoutData/%s", pFileName);
 
-        if (isFileExist(pDst, true)) {
+        if (isFileExist(rDst.c_str(), true)) {
             return true;
         }
 
-        nebula_snprintf(pDst, size, "%s", pFileName);
+        rDst.format("%s", pFileName);
 
-        return isFileExist(pDst, false);
+        return isFileExist(rDst.c_str(), false);
     }
 
-    bool makeLayoutArchiveFileNameFromPrefix(char* pDst, u32 size, const char* pFilePrefix, bool fallback) {
-        char fileName[256];
-        nebula_snprintf(fileName, sizeof(fileName), "%s.arc", pFilePrefix);
-        bool isExistArc = makeLayoutArchiveFileName(pDst, size, fileName);
+    bool makeLayoutArchiveFileNameFromPrefix(FormattedName& rDst, const char* pFilePrefix, bool fallback) {
+        MR::FormattedName fileName("%s.arc", pFilePrefix);
+        bool isExistArc = makeLayoutArchiveFileName(rDst, fileName.c_str());
 
         const char* pAspectSuffix = isScreen16Per9() ? "16x9" : "4x3";
-        nebula_snprintf(fileName, sizeof(fileName), "%s%s.arc", pFilePrefix, pAspectSuffix);
-        bool isExistAspectArc = makeLayoutArchiveFileName(pDst, size, fileName);
+        fileName.format("%s%s.arc", pFilePrefix, pAspectSuffix);
+        bool isExistAspectArc = makeLayoutArchiveFileName(rDst, fileName.c_str());
 
-        nebula_snprintf(fileName, sizeof(fileName), "%sReplace.arc", pFilePrefix);
-        bool isExistReplaceArc = makeLayoutArchiveFileName(pDst, size, fileName);
+        fileName.format("%sReplace.arc", pFilePrefix);
+        bool isExistReplaceArc = makeLayoutArchiveFileName(rDst, fileName.c_str());
 
         bool fileFound = isExistArc || isExistAspectArc || isExistReplaceArc;
 
@@ -199,19 +197,19 @@ namespace MR {
 
         if (isExistAspectArc) {
             pAspectSuffix = isScreen16Per9() ? "16x9" : "4x3";
-            nebula_snprintf(fileName, sizeof(fileName), "%s%s.arc", pFilePrefix, pAspectSuffix);
+            fileName.format("%s%s.arc", pFilePrefix, pAspectSuffix);
         } else if (isExistReplaceArc) {
-            nebula_snprintf(fileName, sizeof(fileName), "%sReplace.arc", pFilePrefix);
+            fileName.format("%sReplace.arc", pFilePrefix);
         } else {
-            nebula_snprintf(fileName, sizeof(fileName), "%s.arc", pFilePrefix);
+            fileName.format("%s.arc", pFilePrefix);
         }
 
-        makeLayoutArchiveFileName(pDst, size, fileName);
+        makeLayoutArchiveFileName(rDst, fileName.c_str());
 
         return true;
     }
 
-    void makeScenarioArchiveFileName(char* pDst, u32 size, const char* pStageName) {
-        nebula_snprintf(pDst, size, "/StageData/%s/%sScenario.arc", pStageName, pStageName);
+    void makeScenarioArchiveFileName(FormattedName& rDst, const char* pStageName) {
+        rDst.format("/StageData/%s/%sScenario.arc", pStageName, pStageName);
     }
 };  // namespace MR

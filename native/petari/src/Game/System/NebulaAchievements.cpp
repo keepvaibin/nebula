@@ -178,12 +178,11 @@ namespace {
 
     // Its name in the played language: NebulaText's Achievement.<id>, or Achievement.<id>.Luigi on a Luigi file.
     s32 getEntryName(char16_t* pDst, s32 capacity, const char* pId) {
-        char textId[64];
-        nebula_snprintf(textId, sizeof(textId), "Achievement.%s.Luigi", pId);
-        if (GameDataFunction::isDataMario() || !NebulaText::has(textId)) {
-            nebula_snprintf(textId, sizeof(textId), "Achievement.%s", pId);
+        MR::FormattedName textId("Achievement.%s.Luigi", pId);
+        if (GameDataFunction::isDataMario() || !NebulaText::has(textId.c_str())) {
+            textId.format("Achievement.%s", pId);
         }
-        return NebulaText::get(pDst, capacity, textId);
+        return NebulaText::get(pDst, capacity, textId.c_str());
     }
 
     // Waits for its pop-up, with its name in the played language.

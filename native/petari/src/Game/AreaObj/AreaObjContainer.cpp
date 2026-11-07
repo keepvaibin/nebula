@@ -363,22 +363,20 @@ namespace {
 };  // namespace
 
 AreaObjContainer::AreaObjContainer(const char* pName) : NameObj(pName) {
-    mNumManagers = 0;
 }
 
 void AreaObjContainer::init(const TableIter& rIter) {
+    mManagers.init(ARRAY_SIZE(::cCreateTable));
     for (u32 i = 0; i < ARRAY_SIZE(::cCreateTable); i++) {
         const Name2CreateManagerFunc* pName2CreateManagerFunc = &::cCreateTable[i];
         AreaObjMgr* mgr = pName2CreateManagerFunc->mCreateFunc(pName2CreateManagerFunc->_4, pName2CreateManagerFunc->mName);
         mgr->init(TableIter());
-        s32 num = mNumManagers;
-        mNumManagers++;
-        mManagerArray[num] = mgr;
+        mManagers.push_back(mgr);
     }
 }
 
 AreaObjMgr* AreaObjContainer::getManager(const char* pName) const {
-    return *std::find_if(mManagerArray, mManagerArray + mNumManagers, [&](const auto& item) { return IsManagerName()(item, pName); });
+    return *std::find_if(mManagers.begin(), mManagers.end(), [&](const auto& item) { return IsManagerName()(item, pName); });
 }
 
 AreaObj* AreaObjContainer::getAreaObj(const char* pName, const Vec3f& rVec) const {

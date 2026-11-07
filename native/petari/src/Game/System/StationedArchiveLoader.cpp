@@ -6,6 +6,7 @@
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include "Game/System/GameAssets.hpp"
+#include "Game/Util/StringUtil.hpp"
 
 StationedArchiveLoader::Condition::~Condition() {
 }
@@ -70,11 +71,11 @@ void StationedArchiveLoader::loadScenarioData(NebulaArena* pHeap) {
             continue;
         }
 
-        char name[256];
-        MR::makeScenarioArchiveFileName(name, sizeof(name), dirEntry.mName);
+        MR::FormattedName name;
+        MR::makeScenarioArchiveFileName(name, dirEntry.mName);
 
-        if (MR::isFileExist(name, false)) {
-            MR::mountArchive(name, pHeap);
+        if (MR::isFileExist(name.c_str(), false)) {
+            MR::mountArchive(name.c_str(), pHeap);
         }
     }
 }

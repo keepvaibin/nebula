@@ -8,7 +8,11 @@ class LayoutHolder;
 class ResourceHolder;
 class ResourceHolderManager;
 
-typedef bool (*MakeArchiveFileNameFuncPtr)(char*, u32, const char*);
+namespace MR {
+    class FormattedName;
+}
+
+typedef bool (*MakeArchiveFileNameFuncPtr)(MR::FormattedName&, const char*);
 typedef void (*FuncPtrB)(const char*, CreateResourceHolderArgs*);
 typedef void (ResourceHolderManager::*FuncPtrC)(const char*, CreateResourceHolderArgs*);
 

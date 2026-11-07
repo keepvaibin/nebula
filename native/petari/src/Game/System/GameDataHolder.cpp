@@ -13,6 +13,7 @@
 #include "Game/Util/Table.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include <cstdio>
+#include "Game/Util/StringUtil.hpp"
 
 namespace {
     const char cPictureBookChapterSuffix[] = "ABCDEFGHI";
@@ -130,23 +131,19 @@ void GameDataHolder::setPictureBookChapterAlreadyRead(int value) {
 }
 
 void GameDataHolder::setRaceBestTime(const char* pName, u32 value) {
-    char hiName[256];
-    nebula_snprintf(hiName, sizeof(hiName), "%s/hi", pName);
-    setGameEventValue(hiName, value >> 16);
+    MR::FormattedName hiName("%s/hi", pName);
+    setGameEventValue(hiName.c_str(), value >> 16);
 
-    char loName[256];
-    nebula_snprintf(loName, sizeof(loName), "%s/lo", pName);
-    setGameEventValue(loName, value);
+    MR::FormattedName loName("%s/lo", pName);
+    setGameEventValue(loName.c_str(), value);
 }
 
 u32 GameDataHolder::getRaceBestTime(const char* pName) const {
-    char hiName[256];
-    nebula_snprintf(hiName, sizeof(hiName), "%s/hi", pName);
-    u32 hiValue = mEventValueChecker->getValue(hiName);
+    MR::FormattedName hiName("%s/hi", pName);
+    u32 hiValue = mEventValueChecker->getValue(hiName.c_str());
 
-    char loName[256];
-    nebula_snprintf(loName, sizeof(loName), "%s/lo", pName);
-    u32 loValue = mEventValueChecker->getValue(loName);
+    MR::FormattedName loName("%s/lo", pName);
+    u32 loValue = mEventValueChecker->getValue(loName.c_str());
 
     return hiValue << 16 | loValue;
 }
@@ -224,14 +221,13 @@ void GameDataHolder::onGalaxyScenarioFlagAlreadyVisited(const char* pGalaxyName,
 }
 
 bool GameDataHolder::isAppearGalaxy(const char* pGalaxyName) const {
-    char name[256];
-    nebula_snprintf(name, sizeof(name), "Appear%s", pGalaxyName);
+    MR::FormattedName name("Appear%s", pGalaxyName);
 
-    if (!GameEventFlagTable::isExist(name)) {
+    if (!GameEventFlagTable::isExist(name.c_str())) {
         return true;
     }
 
-    return isOnGameEventFlag(name);
+    return isOnGameEventFlag(name.c_str());
 }
 
 s32 GameDataHolder::getPlayerLeft() const {

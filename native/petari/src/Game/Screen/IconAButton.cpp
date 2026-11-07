@@ -19,8 +19,6 @@ IconAButton::IconAButton(bool connectToScene, bool connectToPause) : LayoutActor
             MR::connectToSceneTalkLayout(this);
         }
     }
-
-    mFollowPaneName[0] = '\0';
 }
 
 void IconAButton::init(const TableIter& rIter) {
@@ -34,7 +32,7 @@ void IconAButton::init(const TableIter& rIter) {
 void IconAButton::setFollowActorPane(LayoutActor* pActor, const char* pName) {
     mFollowActor = pActor;
 
-    nebula_snprintf(mFollowPaneName, sizeof(mFollowPaneName), "%s", pName);
+    mFollowPaneName.format("%s", pName);
     MR::setFollowPos(&mFollowPos, this, nullptr);
 }
 
@@ -116,6 +114,6 @@ void IconAButton::draw() const {
 
 void IconAButton::updateFollowPos() {
     if (mFollowActor != nullptr) {
-        MR::copyPaneTrans(&mFollowPos, mFollowActor, mFollowPaneName);
+        MR::copyPaneTrans(&mFollowPos, mFollowActor, mFollowPaneName.c_str());
     }
 }

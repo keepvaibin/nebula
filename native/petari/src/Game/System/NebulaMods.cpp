@@ -386,9 +386,9 @@ namespace {
         }
         // A galaxy is its scenario file: without one (a mod that ships none, or files that could not be cooked)
         // it would be a name with no stars, scenarios or stage, so it never enters a table.
-        char scenarioFile[256];
-        MR::makeScenarioArchiveFileName(scenarioFile, sizeof(scenarioFile), pGalaxy->name);
-        if (GameAssets::find(scenarioFile) < 0) {
+        MR::FormattedName scenarioFile;
+        MR::makeScenarioArchiveFileName(scenarioFile, pGalaxy->name);
+        if (GameAssets::find(scenarioFile.c_str()) < 0) {
             return -2;
         }
         NebulaDataTables::AddedGalaxy added = {};
@@ -554,15 +554,14 @@ namespace {
             return 0;
         }
         // The player holds on to the name.
-        char path[256];
-        nebula_snprintf(path, sizeof(path), pFile[0] == '/' ? "%s" : "/%s", pFile);
-        if (GameAssets::find(path) < 0) {
+        MR::FormattedName path(pFile[0] == '/' ? "%s" : "/%s", pFile);
+        if (GameAssets::find(path.c_str()) < 0) {
             return 0;
         }
         if (!MR::isExistSceneObj(SceneObj_MoviePlayerSimple)) {
             return 0;
         }
-        MR::startMoviePlayer(copyText(path));
+        MR::startMoviePlayer(copyText(path.c_str()));
         return 1;
     }
 
@@ -912,6 +911,7 @@ namespace {
     };
     const char* const cNeedTheirLevel[] = {
 #include "NebulaNeedTheirLevel.inc"
+#include "Game/Util/StringUtil.hpp"
     };
 
     template < int N >
@@ -1450,12 +1450,11 @@ namespace {
             return -1;
         }
         // A track under its own name, which the game's sound names can't be: "+SE_OJ_COIN_GET".
-        char trackName[256];
-        nebula_snprintf(trackName, sizeof(trackName), "+%s", pName);
-        if (apiAddMusic(trackName, pFile) != 0) {
+        MR::FormattedName trackName("+%s", pName);
+        if (apiAddMusic(trackName.c_str(), pFile) != 0) {
             return -1;
         }
-        const SoundEffect effect = {copyText(pName), NebulaMods::trackId(trackName)};
+        const SoundEffect effect = {copyText(pName), NebulaMods::trackId(trackName.c_str())};
         sSoundEffects.add(effect);
         NebulaMods::sHasSoundEffects = true;
         return 0;
@@ -2205,10 +2204,10 @@ namespace NebulaMods {
         NameObjArchiveListCollector collector;
         NameObjFactory::getMountObjectArchiveList(&collector, pName, rIter);
         for (s32 i = 0; i < collector.getArchiveNum(); i++) {
-            char path[256];
-            char layout[256];
+            MR::FormattedName path;
+            MR::FormattedName layout;
             const char* pArchive = collector.getArchive(i);
-            if (!MR::makeObjectArchiveFileNameFromPrefix(path, sizeof(path), pArchive, false) && !MR::makeLayoutArchiveFileNameFromPrefix(layout, sizeof(layout), pArchive, false)) {
+            if (!MR::makeObjectArchiveFileNameFromPrefix(path, pArchive, false) && !MR::makeLayoutArchiveFileNameFromPrefix(layout, pArchive, false)) {
                 nebula_log("mods: left out: %s: it has no %s.arc\n", pName, pArchive);
                 return true;
             }

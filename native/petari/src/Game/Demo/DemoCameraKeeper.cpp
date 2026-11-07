@@ -60,10 +60,10 @@ void DemoCameraKeeper::initActorCamera(DemoCameraInfo* pInfo, const TableIter& r
         return;
     }
 
-    char animCameraName[256];
-    DemoCameraFunction::makeAnimCameraName(animCameraName, sizeof(animCameraName), pInfo);
+    MR::FormattedName animCameraName;
+    DemoCameraFunction::makeAnimCameraName(animCameraName, pInfo);
 
-    MR::initAnimCamera(pInfo->_24, pInfo->_20, animCameraName);
+    MR::initAnimCamera(pInfo->_24, pInfo->_20, animCameraName.c_str());
 }
 
 void DemoCameraKeeper::executeType(const DemoCameraInfo* pInfo) {
@@ -88,12 +88,12 @@ void DemoCameraKeeper::executeType(const DemoCameraInfo* pInfo) {
 }
 
 void DemoCameraKeeper::executeFirst(const DemoCameraInfo* pInfo) {
-    char animCameraName[256];
+    MR::FormattedName animCameraName;
 
     if (pInfo->_24 != nullptr) {
         if (pInfo->mAnimCameraName != nullptr) {
-            MR::removeExtensionString(animCameraName, sizeof(animCameraName), pInfo->mAnimCameraName);
-            MR::startAnimCameraTargetSelf(pInfo->_24, pInfo->_20, animCameraName, pInfo->mAnimCameraStartFrame, 1.0f);
+            MR::removeExtensionString(animCameraName, pInfo->mAnimCameraName);
+            MR::startAnimCameraTargetSelf(pInfo->_24, pInfo->_20, animCameraName.c_str(), pInfo->mAnimCameraStartFrame, 1.0f);
         } else {
             MR::startEventCamera(pInfo->_20, pInfo->_1C, CameraTargetArg(pInfo->_24));
         }
@@ -105,13 +105,13 @@ void DemoCameraKeeper::executeFirst(const DemoCameraInfo* pInfo) {
 }
 
 void DemoCameraKeeper::executeLast(const DemoCameraInfo* pInfo) {
-    char animCameraName[256];
+    MR::FormattedName animCameraName;
     if (pInfo->mAnimCameraName == nullptr) {
         return;
     }
 
-    MR::removeExtensionString(animCameraName, sizeof(animCameraName), pInfo->mAnimCameraName);
-    MR::endAnimCamera(pInfo->_24, pInfo->_20, animCameraName, pInfo->mAnimCameraEndFrame, true);
+    MR::removeExtensionString(animCameraName, pInfo->mAnimCameraName);
+    MR::endAnimCamera(pInfo->_24, pInfo->_20, animCameraName.c_str(), pInfo->mAnimCameraEndFrame, true);
 }
 
 void DemoCameraKeeper::endCurrentCamera() {

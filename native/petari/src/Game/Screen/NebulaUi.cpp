@@ -397,10 +397,10 @@ namespace NebulaUi {
     // A button: the shadow (BackButton's ShaBButton: 1.07 by 1.1, half seen, 6 below), the rim and face (BButton:
     // 1.1), the shine (BButtonShine: 1.1, shown for the highlight), Back's arrow, and its label.
     bool makeChip(const Kits& rKits, Pane* pParent, Chip* pChip, const char* pName, bool arrow, f32 textSize, u32 textColor) {
-        char name[17];
+        MR::FormattedName name;
         pChip->mRoot = makeGroup(pParent, pName);
-        nebula_snprintf(name, sizeof(name), "%sA", pName);
-        pChip->mArt = pChip->mRoot != nullptr ? makeGroup(pChip->mRoot, name) : nullptr;
+        name.format("%sA", pName);
+        pChip->mArt = pChip->mRoot != nullptr ? makeGroup(pChip->mRoot, name.c_str()) : nullptr;
         if (pChip->mArt == nullptr) {
             return false;
         }
@@ -412,8 +412,8 @@ namespace NebulaUi {
             {"PicLShine", "PicCShine", "PicRShine"},
         };
         for (s32 layer = 0; layer < LayerNum; layer++) {
-            nebula_snprintf(name, sizeof(name), "%s%s", pName, cLayerNames[layer]);
-            Pane* pLayer = makeGroup(pChip->mArt, name);
+            name.format("%s%s", pName, cLayerNames[layer]);
+            Pane* pLayer = makeGroup(pChip->mArt, name.c_str());
             if (pLayer == nullptr) {
                 return false;
             }
@@ -425,22 +425,22 @@ namespace NebulaUi {
                 pLayer->mScale = nw4r::math::VEC2(cButtonGroup, cButtonGroup);
             }
             const f32 y = layer == LayerShadow ? -6.0f : 0.0f;
-            nebula_snprintf(name, sizeof(name), "%s%sL", pName, cLayerNames[layer]);
-            pChip->mLeft[layer] = makePiece(rKits, pLayer, cPieces[layer][0], name, y);
-            nebula_snprintf(name, sizeof(name), "%s%sC", pName, cLayerNames[layer]);
-            pChip->mMiddle[layer] = makePiece(rKits, pLayer, cPieces[layer][1], name, y);
-            nebula_snprintf(name, sizeof(name), "%s%sR", pName, cLayerNames[layer]);
-            pChip->mRight[layer] = makePiece(rKits, pLayer, cPieces[layer][2], name, y);
+            name.format("%s%sL", pName, cLayerNames[layer]);
+            pChip->mLeft[layer] = makePiece(rKits, pLayer, cPieces[layer][0], name.c_str(), y);
+            name.format("%s%sC", pName, cLayerNames[layer]);
+            pChip->mMiddle[layer] = makePiece(rKits, pLayer, cPieces[layer][1], name.c_str(), y);
+            name.format("%s%sR", pName, cLayerNames[layer]);
+            pChip->mRight[layer] = makePiece(rKits, pLayer, cPieces[layer][2], name.c_str(), y);
             if (pChip->mLeft[layer] == nullptr || pChip->mMiddle[layer] == nullptr || pChip->mRight[layer] == nullptr) {
                 return false;
             }
             if (layer == LayerFace && arrow) {
-                nebula_snprintf(name, sizeof(name), "%sArw", pName);
-                pChip->mArrow = makePiece(rKits, pLayer, "PicArrow", name, 0.0f);
+                name.format("%sArw", pName);
+                pChip->mArrow = makePiece(rKits, pLayer, "PicArrow", name.c_str(), 0.0f);
             }
         }
-        nebula_snprintf(name, sizeof(name), "%sT", pName);
-        pChip->mText = makeText(rKits, pChip->mRoot, name, 64);
+        name.format("%sT", pName);
+        pChip->mText = makeText(rKits, pChip->mRoot, name.c_str(), 64);
         if (pChip->mText == nullptr) {
             return false;
         }

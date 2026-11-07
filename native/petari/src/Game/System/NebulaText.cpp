@@ -167,16 +167,15 @@ namespace {
         sColumn = column >= 0 ? column : 0;
         JUTNativeLog("NebulaText: %s\n", pPrefix);
 
-        char path[96];
-        nebula_snprintf(path, sizeof(path), "/%s/MessageData/NebulaText.txt", pPrefix);
+        MR::FormattedName path("/%s/MessageData/NebulaText.txt", pPrefix);
         GameAssets::File file;
-        if (!GameAssets::open(path, &file)) {
+        if (!GameAssets::open(path.c_str(), &file)) {
             return;
         }
         const s32 length = file.mLength < static_cast< u32 >(cFileMax) ? static_cast< s32 >(file.mLength) : cFileMax;
         if (length > 0 && GameAssets::read(&file, sFile, length, 0) >= 0) {
             parse(sFile, length);
-            JUTNativeLog("NebulaText: %s (%d texts)\n", path, sOverrideNum);
+            JUTNativeLog("NebulaText: %s (%d texts)\n", path.c_str(), sOverrideNum);
         }
     }
 

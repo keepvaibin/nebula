@@ -8,6 +8,8 @@ class AssetFolder;
 class NebulaArena;
 
 namespace MR {
+    class FormattedName;
+
     /// @brief Determines if a file exists within the disc file system.
     /// @param[in] pFilePath A pointer to the null-terminated absolute path of the file.
     /// @param[in] considerLanguage Determines if the file is localized.
@@ -90,44 +92,38 @@ namespace MR {
     bool isLoadedObjectOrLayoutArchive(const char* pFilePrefix);
 
     /// @brief Creates an absolute path to a language-aware file.
-    /// @param[out] pDst A pointer to the path buffer to initialize.
-    /// @param[in] size The size of the path buffer, in bytes.
+    /// @param[out] rDst The path made.
     /// @param[in] pFilePath A pointer to the null-terminated absolute path of the file.
-    void makeFileNameConsideringLanguage(char* pDst, u32 size, const char* pFilePath);
+    void makeFileNameConsideringLanguage(FormattedName& rDst, const char* pFilePath);
 
     /// @brief Creates an absolute path to the given object's archive file.
-    /// @param[out] pDst A pointer to the path buffer to initialize.
-    /// @param[in] size The size of the path buffer, in bytes.
+    /// @param[out] rDst The path made.
     /// @param[in] pFileName A pointer to the null-terminated name of the archive file.
     /// @return `true` if a valid archive file exists in the file system, `false` otherwise.
-    bool makeObjectArchiveFileName(char* pDst, u32 size, const char* pFileName);
+    bool makeObjectArchiveFileName(FormattedName& rDst, const char* pFileName);
 
     /// @brief Creates an absolute path to the given object's archive file.
-    /// @param[out] pDst A pointer to the path buffer to initialize.
-    /// @param[in] size The size of the path buffer, in bytes.
+    /// @param[out] rDst The path made.
     /// @param[in] pFilePrefix A pointer to the null-terminated name of the archive file, without the extension.
     /// @param[in] unused Unused flag.
     /// @return `true` if a valid archive file exists in the file system, `false` otherwise.
-    bool makeObjectArchiveFileNameFromPrefix(char* pDst, u32 size, const char* pFilePrefix, bool unused);
+    bool makeObjectArchiveFileNameFromPrefix(FormattedName& rDst, const char* pFilePrefix, bool unused);
 
     /// @brief Creates an absolute path to the given layout's archive file.
-    /// @param[out] pDst A pointer to the path buffer to initialize.
-    /// @param[in] size The size of the path buffer, in bytes.
+    /// @param[out] rDst The path made.
     /// @param[in] pFileName A pointer to the null-terminated name of the archive file.
     /// @return `true` if a valid archive file exists in the file system, `false` otherwise.
-    bool makeLayoutArchiveFileName(char* pDst, u32 size, const char* pFileName);
+    bool makeLayoutArchiveFileName(FormattedName& rDst, const char* pFileName);
 
     /// @brief Creates an absolute path to the given layout's archive file.
-    /// @param[out] pDst A pointer to the path buffer to initialize.
-    /// @param[in] size The size of the path buffer, in bytes.
+    /// @param[out] rDst The path made.
     /// @param[in] pFilePrefix A pointer to the null-terminated name of the archive file, without the extension.
     /// @param[in] fallback Whether to fall back if none found.
     /// @return `true` if a valid archive file exists in the file system, `false` otherwise.
-    bool makeLayoutArchiveFileNameFromPrefix(char* pDst, u32 size, const char* pFilePrefix, bool fallback);
+    bool makeLayoutArchiveFileNameFromPrefix(FormattedName& rDst, const char* pFilePrefix, bool fallback);
 
     /// @brief Creates an absolute path to the given galaxy's mission archive file.
-    /// @param[out] pDst A pointer to the path buffer to initialize.
-    /// @param[in] size The size of the path buffer, in bytes.
+    /// @param[out] rDst The path made.
     /// @param[in] pStageName A pointer to the null-terminated name of the galaxy.
-    void makeScenarioArchiveFileName(char* pDst, u32 size, const char* pStageName);
+    void makeScenarioArchiveFileName(FormattedName& rDst, const char* pStageName);
 };  // namespace MR

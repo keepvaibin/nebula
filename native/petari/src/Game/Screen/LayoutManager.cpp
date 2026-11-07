@@ -136,34 +136,31 @@ LayoutManager::LayoutManager(const char* pLayoutName, bool useArchiveNamePrefix,
     mFitRuleCount = -1;
     // pLayoutName points into fileNameWithoutExtension below, so it lives as long as the constructor (the original declared
     // it in the if block: a dangling pointer once the block ends).
-    char fileNameWithoutExtension[256];
+    MR::FormattedName fileNameWithoutExtension;
     if (useArchiveNamePrefix) {
-        char fileNameFromPrefix[256];
-        MR::makeLayoutArchiveFileNameFromPrefix(fileNameFromPrefix, sizeof(fileNameFromPrefix), pLayoutName, true);
-        MR::removeExtensionString(fileNameWithoutExtension, sizeof(fileNameWithoutExtension), fileNameFromPrefix);
-        pLayoutName = MR::getBasename(fileNameWithoutExtension);
+        MR::FormattedName fileNameFromPrefix;
+        MR::makeLayoutArchiveFileNameFromPrefix(fileNameFromPrefix, pLayoutName, true);
+        MR::removeExtensionString(fileNameWithoutExtension, fileNameFromPrefix.c_str());
+        pLayoutName = MR::getBasename(fileNameWithoutExtension.c_str());
     }
 
-    char archiveName[256];
-    nebula_snprintf(archiveName, sizeof(archiveName), "%s.arc", pLayoutName);
+    MR::FormattedName archiveName("%s.arc", pLayoutName);
 
-    char fileName[256];
-    MR::copyString(fileName, pLayoutName, sizeof(fileName));
-
+    u32 nameLength = strlen(pLayoutName);
     for (u32 i = 0; i < ARRAY_SIZE(::cRemoveString); i++) {
-        char* pos = strstr(fileName, ::cRemoveString[i]);
+        const char* const pos = strstr(pLayoutName, ::cRemoveString[i]);
 
         if (pos != nullptr) {
-            pos[0] = '\0';
+            nameLength = static_cast< u32 >(pos - pLayoutName);
             break;
         }
     }
 
-    u32 len = strlen(fileName) + 1;
-    mLayoutName = new char[len];
-    MR::copyString(mLayoutName, fileName, len);
+    mLayoutName = new char[nameLength + 1];
+    memcpy(mLayoutName, pLayoutName, nameLength);
+    mLayoutName[nameLength] = '\0';
 
-    initArc(archiveName, pLayoutName);
+    initArc(archiveName.c_str(), pLayoutName);
     initPaneInfo();
     initGroupCtrlList();
     initDrawInfo();
@@ -400,9 +397,8 @@ bool LayoutManager::isPointing(const char* pName, const Vec2f& rPos) const {
 }
 
 nw4r::lyt::AnimTransform* LayoutManager::getAnimTransform(const char* pName) const {
-    char fileName[256];
-    nebula_snprintf(fileName, sizeof(fileName), "%s.brlan", pName);
-    u32 hash = MR::getHashCodeLower(fileName);
+    MR::FormattedName fileName("%s.brlan", pName);
+    u32 hash = MR::getHashCodeLower(fileName.c_str());
     for (u32 i = 0; i < mLayoutHolder->mAnimRes.mCount; i++) {
         if (mLayoutHolder->isAnimationHashEqual(hash, i)) {
             return mAnimTransList[i];
@@ -506,9 +502,8 @@ nw4r::lyt::Group* LayoutManager::getGroup(const char* pName) const {
 void LayoutManager::initArc(const char* pArchiveName, const char* pLayoutName) {
     mLayoutHolder = MR::createAndAddLayoutHolder(pArchiveName);
 
-    char layoutResName[256];
-    nebula_snprintf(layoutResName, sizeof(layoutResName), "%s.brlyt", pLayoutName);
-    void* pLayoutRes = mLayoutHolder->GetResource('blyt', layoutResName, nullptr);
+    MR::FormattedName layoutResName("%s.brlyt", pLayoutName);
+    void* pLayoutRes = mLayoutHolder->GetResource('blyt', layoutResName.c_str(), nullptr);
 
     mLayout = new nw4r::lyt::Layout();
     mLayout->Build(pLayoutRes, mLayoutHolder);
@@ -605,10 +600,10 @@ void LayoutManager::initTextBoxRecursive(nw4r::lyt::Pane* pPane, nw4r::lyt::Pane
 
     if (pTextBox != nullptr) {
         if (pUserDataPane != nullptr) {
-            char messageID[0x100];
+            MR::FormattedName messageID;
             LayoutCoreUtil::getPaneUserData(pUserDataPane, userData);
             MR::getLayoutMessageID(messageID, pLayoutName, userData);
-            LayoutCoreUtil::initTextBoxPane(pTextBox, messageID, 0x100);
+            LayoutCoreUtil::initTextBoxPane(pTextBox, messageID.c_str(), 0x100);
         } else {
             LayoutCoreUtil::initTextBoxPane(pTextBox, nullptr, textBoxBufferLength);
         }

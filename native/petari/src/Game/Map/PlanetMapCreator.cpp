@@ -386,15 +386,14 @@ bool PlanetMapCreator::isScenarioForceLow(const PlanetMapData* pData) const {
         return false;
     }
 
-    char name[256];
-    nebula_snprintf(name, sizeof(name), "%s_%d", MR::getCurrentStageName(), MR::getCurrentScenarioNo());
+    MR::FormattedName name("%s_%d", MR::getCurrentStageName(), MR::getCurrentScenarioNo());
 
     for (int i = 0; i < 8; i++) {
         if (MR::isEqualString(pData->mForceScenarioData[i], "Low")) {
             return false;
         }
 
-        if (MR::isEqualString(name, pData->mForceScenarioData[i])) {
+        if (MR::isEqualString(name.c_str(), pData->mForceScenarioData[i])) {
             return true;
         }
     }

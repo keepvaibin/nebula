@@ -282,20 +282,14 @@ void MultiEmitter::allocateEmitter(const char* pName) {
         }
     } else {
         u32 length = strlen(pName);
-        s32 nameLength = 0;
-        char name[40];
-        MR::zeroMemory(name, sizeof(name));
+        u32 start = 0;
         for (u32 i = 0; i <= length; i++) {
             if (pName[i] == ' ' || pName[i] == '\0') {
-                name[nameLength] = '\0';
+                const MR::FormattedName name("%.*s", static_cast< int >(i - start), pName + start);
                 u16 index;
-                MR::Effect::isExistInResource(&index, name);
+                MR::Effect::isExistInResource(&index, name.c_str());
                 indices.push_back(index);
-                nameLength = 0;
-                MR::zeroMemory(name, sizeof(name));
-            } else {
-                name[nameLength] = pName[i];
-                nameLength++;
+                start = i + 1;
             }
         }
     }

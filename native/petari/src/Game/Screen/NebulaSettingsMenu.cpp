@@ -562,19 +562,19 @@ namespace {
     }
 
     bool makeKeyCap(const Kits& rKits, Pane* pParent, KeyCap* pCap, const char* pName, f32 size) {
-        char name[17];
+        MR::FormattedName name;
         pCap->mSize = size;
-        nebula_snprintf(name, sizeof(name), "%sK", pName);
-        pCap->mWord = makeText(rKits, pParent, name, 16);
+        name.format("%sK", pName);
+        pCap->mWord = makeText(rKits, pParent, name.c_str(), 16);
         if (pCap->mWord == nullptr) {
             return false;
         }
         setTextStyle(pCap->mWord, size, cAccent, cAccent, 4);
         for (s32 i = 0; i < 2; i++) {
-            nebula_snprintf(name, sizeof(name), "%sB%d", pName, static_cast< int >(i));
-            pCap->mBadges[i] = makeWindow(rKits, pParent, name);
-            nebula_snprintf(name, sizeof(name), "%sL%d", pName, static_cast< int >(i));
-            pCap->mLabels[i] = makeText(rKits, pParent, name, 4);
+            name.format("%sB%d", pName, static_cast< int >(i));
+            pCap->mBadges[i] = makeWindow(rKits, pParent, name.c_str());
+            name.format("%sL%d", pName, static_cast< int >(i));
+            pCap->mLabels[i] = makeText(rKits, pParent, name.c_str(), 4);
             if (pCap->mBadges[i] == nullptr || pCap->mLabels[i] == nullptr) {
                 return false;
             }

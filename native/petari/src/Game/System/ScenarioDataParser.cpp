@@ -11,6 +11,7 @@
 #include "Game/Util/StringUtil.hpp"
 #include "Game/System/AssetFolder.hpp"
 #include <algorithm>
+#include <cstring>
 #include "Game/System/GameAssets.hpp"
 
 template const bool Table::getValue< s32 >(int, const char*, s32*) const;
@@ -46,20 +47,15 @@ namespace {
 };  // namespace
 
 ScenarioData::ScenarioData(const char* pFilePath) : mScenarioData(), mGalaxyName(), mZoneList() {
-    char fileName[256];
-    MR::removeExtensionString(fileName, sizeof(fileName), MR::getBasename(pFilePath));
+    MR::FormattedName fileName;
+    MR::removeExtensionString(fileName, MR::getBasename(pFilePath));
 
-    const char* pSuffix = "Scenario";
-    char* pGalaxyName = strstr(fileName, pSuffix);
+    const char* const pSuffix = strstr(fileName.c_str(), "Scenario");
+    const u32 galaxyNameLength = pSuffix != nullptr ? static_cast< u32 >(pSuffix - fileName.c_str()) : strlen(fileName.c_str());
 
-    if (pGalaxyName != nullptr) {
-        pGalaxyName[0] = '\0';
-    }
-
-    int galaxyNameSize = strlen(fileName) + 1;
-
-    mGalaxyName = new char[galaxyNameSize];
-    MR::copyString(mGalaxyName, fileName, galaxyNameSize);
+    mGalaxyName = new char[galaxyNameLength + 1];
+    memcpy(mGalaxyName, fileName.c_str(), galaxyNameLength);
+    mGalaxyName[galaxyNameLength] = '\0';
 
     AssetFolder* pArchive = static_cast< AssetFolder* >(MR::getMountedArchive(pFilePath));
 
@@ -179,14 +175,14 @@ ScenarioDataParser::ScenarioDataParser(const char* pName) : NameObj(pName) {
             continue;
         }
 
-        char fileName[256];
-        MR::makeScenarioArchiveFileName(fileName, sizeof(fileName), dirent.mName);
+        MR::FormattedName fileName;
+        MR::makeScenarioArchiveFileName(fileName, dirent.mName);
 
-        if (!MR::isFileExist(fileName, false)) {
+        if (!MR::isFileExist(fileName.c_str(), false)) {
             continue;
         }
 
-        mScenarioData[mScenarioDataNum++] = new ScenarioData(fileName);
+        mScenarioData[mScenarioDataNum++] = new ScenarioData(fileName.c_str());
     }
 
     MR::sort(mScenarioData, mScenarioData + mScenarioDataNum, GalaxyNameSortLt());

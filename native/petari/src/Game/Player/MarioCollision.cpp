@@ -49,7 +49,7 @@ void Mario::checkBaseTransBall() {
 
 void Mario::createAtField(bool force, f32 radius) {
     u32 hits;
-    _578 = 0;
+    _57C.clear();
     f32 checkRadius = 50.0f;
     f32 offset = 50.0f;
     u32 count = 2;
@@ -135,16 +135,7 @@ void Mario::createAtField(bool force, f32 radius) {
                 }
             }
 
-            *_57C[_578] = *triangle;
-            _578++;
-
-            if (_578 == 32) {
-                break;
-            }
-        }
-
-        if (_578 == 32) {
-            break;
+            _57C.push_back(*triangle);
         }
     }
 }

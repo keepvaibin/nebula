@@ -4,6 +4,7 @@
 #include "Game/Render/RenderTexture.hpp"
 #include <nebula_format.h>
 #include <string.h>
+#include "Game/Util/StringUtil.hpp"
 
 extern "C" const NebulaHostServices* nebula_host(void);
 
@@ -802,10 +803,9 @@ namespace Frame {
     }
 
     void notDrawn(const ModelData* pData, u32 material, u32 replace, u32 pass) {
-        char text[160];
-        nebula_snprintf(text, sizeof(text), "not drawn: %s has no form replacing %u pass %u", pData->getMaterialName(static_cast< u32 >(material)),
+        MR::FormattedName text("not drawn: %s has no form replacing %u pass %u", pData->getMaterialName(static_cast< u32 >(material)),
                         replace, pass);
-        host()->log(host()->user, text);
+        host()->log(host()->user, text.c_str());
     }
 
     void setObject(u32 slot, u32 generation) {

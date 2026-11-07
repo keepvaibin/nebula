@@ -4,6 +4,7 @@
 #include "Game/System/GameEventFlagTable.hpp"
 #include "Game/Util.hpp"
 #include <cstdio>
+#include "Game/Util/StringUtil.hpp"
 
 s32 GameDataConst::getPowerStarNumToOpenGalaxy(const char* pGalaxyName) {
     Table info;
@@ -47,10 +48,9 @@ bool GameDataConst::isQuestionGalaxy(const char* pGalaxyName) {
             continue;
         }
 
-        char flagName[256];
-        nebula_snprintf(flagName, sizeof(flagName), "Appear%s", pGalaxyName);
+        MR::FormattedName flagName("Appear%s", pGalaxyName);
 
-        if (!MR::isEqualString(accessor.getName(), flagName)) {
+        if (!MR::isEqualString(accessor.getName(), flagName.c_str())) {
             continue;
         }
 
@@ -61,10 +61,9 @@ bool GameDataConst::isQuestionGalaxy(const char* pGalaxyName) {
 }
 
 bool GameDataConst::isGalaxyAppearGreenDriver(const char* pGalaxyName) {
-    char flagName[256];
-    nebula_snprintf(flagName, sizeof(flagName), "Appear%s", pGalaxyName);
+    MR::FormattedName flagName("Appear%s", pGalaxyName);
 
-    return !GameEventFlagTable::isExist(flagName) ? false : GameEventFlagTable::isDependedAnother(flagName, "SpecialStarGreenAll");
+    return !GameEventFlagTable::isExist(flagName.c_str()) ? false : GameEventFlagTable::isDependedAnother(flagName.c_str(), "SpecialStarGreenAll");
 }
 
 u32 GameDataConst::getIncludedGrandGalaxyId(const char* pGalaxyName) {

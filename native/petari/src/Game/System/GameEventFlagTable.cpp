@@ -601,10 +601,9 @@ namespace GameEventFlagTable {
     }
 
     s32 getStarPieceNumToOpenExclamationGalaxy(const char* pGalaxyName) {
-        char flagName[256];
-        nebula_snprintf(flagName, sizeof(flagName), "StarPiece%s", pGalaxyName);
+        MR::FormattedName flagName("StarPiece%s", pGalaxyName);
 
-        GameEventFlagAccessor accessor = makeAccessor(flagName);
+        GameEventFlagAccessor accessor = makeAccessor(flagName.c_str());
 
         return accessor.getNeedStarPieceNum();
     }

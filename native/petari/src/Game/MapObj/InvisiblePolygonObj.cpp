@@ -6,6 +6,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include <cstdio>
+#include "Game/Util/StringUtil.hpp"
 
 InvisiblePolygonObj::InvisiblePolygonObj(const char* pName) : LiveActor(pName) {
     mBaseMtx.identity();
@@ -42,11 +43,11 @@ void InvisiblePolygonObj::initCollision(const TableIter& rIter) {
     initBaseMtx();
 
     const char* pName = nullptr;
-    char fileName[256];
+    MR::FormattedName fileName;
     MR::getObjectName(&pName, rIter);
-    nebula_snprintf(fileName, sizeof(fileName), "%s.arc", pName);
+    fileName.format("%s.arc", pName);
 
-    ResourceHolder* resource = MR::createAndAddResourceHolder(fileName);
+    ResourceHolder* resource = MR::createAndAddResourceHolder(fileName.c_str());
 
     initHitSensor(1);
 

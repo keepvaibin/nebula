@@ -1,13 +1,14 @@
 #pragma once
 
 #include "Game/NameObj/NameObj.hpp"
+#include "Game/Util/Array.hpp"
 #include <nebula_geometry.hpp>
 
 class CameraShakeTask;
 
+// One task per intensity.
 #define NR_VERTICAL_TASKS 7
 #define NR_HORIZONTAL_TASKS 3
-#define NR_INFINITY_TASKS 4
 
 class CameraShaker : public NameObj {
 public:
@@ -43,6 +44,11 @@ public:
 
     CameraShakeTask* mVerticalTasks[NR_VERTICAL_TASKS];
     CameraShakeTask* mHorizontalTasks[NR_HORIZONTAL_TASKS];
-    CameraShakeTask* mInfinityTasks[NR_INFINITY_TASKS];
-    NameObj* mInfinityNameObjs[NR_INFINITY_TASKS];
+    struct InfinityShake {
+        CameraShakeTask* mTask;
+        NameObj* mOwner;
+    };
+
+    // One per shaking owner at a time; an ended entry is reused.
+    MR::Vector< MR::AssignableArray< InfinityShake > > mInfinity;
 };

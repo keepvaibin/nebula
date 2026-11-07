@@ -206,12 +206,6 @@ Mario::Mario(MarioActor* pActor) : MarioModule(pActor) {
     _480 = new Triangle();
     _484 = new Triangle();
 
-    for (u32 i = 0; i < ARRAY_SIZE(_57C); i++) {
-        _57C[i] = new Triangle();
-    }
-
-    _578 = 0;
-
     _4E8.zero();
     _4F4.zero();
 
@@ -1538,13 +1532,13 @@ void Mario::writeBackPhyisicalVector() {
         }
 
         if (mActor->_334 != 0) {
-            _578 = 0;
+            _57C.clear();
         }
 
         if (!mMovementStates._22) {
-            for (i = 0; i < _578; i++) {
+            for (i = 0; i < _57C.size(); i++) {
                 Vec3f stack_e0;
-                if (!(MR::vecKillElement(mVelocity, *_57C[i]->getNormal(0), &stack_e0) < 0.0f)) {
+                if (!(MR::vecKillElement(mVelocity, *_57C[i].getNormal(0), &stack_e0) < 0.0f)) {
                     continue;
                 }
 
@@ -1552,13 +1546,13 @@ void Mario::writeBackPhyisicalVector() {
 
                 if (!_1C._D) {
                     Vec3f stack_d4;
-                    f32 f28 = MR::vecKillElement(mJumpVec, *_57C[i]->getNormal(0), &stack_d4);
+                    f32 f28 = MR::vecKillElement(mJumpVec, *_57C[i].getNormal(0), &stack_d4);
                     if (f28 <= 0.0f) {
-                        mJumpVec = stack_d4 + *_57C[i]->getNormal(0) * f28 * 0.5f;
+                        mJumpVec = stack_d4 + *_57C[i].getNormal(0) * f28 * 0.5f;
                     }
                 } else if (MR::diffAngleAbs(*getGravityVec(), mJumpVec) < MR::toRadian(6.0f)) {
                     Vec3f stack_c8;
-                    MR::vecKillElement(*_57C[i]->getNormal(0), *getGravityVec(), &stack_c8);
+                    MR::vecKillElement(*_57C[i].getNormal(0), *getGravityVec(), &stack_c8);
                     f32 _2D4Mag = mJumpVec.length();
                     MR::normalizeOrZero(&stack_c8);
                     mJumpVec += stack_c8;
@@ -1566,18 +1560,18 @@ void Mario::writeBackPhyisicalVector() {
                 }
 
                 if (rising) {
-                    if (_57C[i]->getNormal(0)->dot(*getGravityVec()) > 0.707f) {
-                        mActor->sendMsgUpperPunch(_57C[i]->mSensor);
+                    if (_57C[i].getNormal(0)->dot(*getGravityVec()) > 0.707f) {
+                        mActor->sendMsgUpperPunch(_57C[i].mSensor);
                     }
                 }
 
                 if (isPlayerModeBee() && mActor->mBeeWallWalk == 0) {
-                    const char* wallCodeString = MR::getWallCodeString(_57C[i]);
+                    const char* wallCodeString = MR::getWallCodeString(&_57C[i]);
                     if (wallCodeString != nullptr && strcmp(wallCodeString, "Fur") == 0) {
                         Triangle stack_110 = Triangle();
                         MarioActor* pActor = mActor;
                         Vec3f stack_bc;
-                        if (MR::getFirstPolyOnLineToMap(&stack_bc, &stack_110, pActor->_2A0, -(*_57C[i]->getNormal(0)) * 300.0f)) {
+                        if (MR::getFirstPolyOnLineToMap(&stack_bc, &stack_110, pActor->_2A0, -(*_57C[i].getNormal(0)) * 300.0f)) {
                             wallCodeString = MR::getWallCodeString(&stack_110);
                             if (wallCodeString != nullptr && strcmp(wallCodeString, "Fur") == 0) {
                                 MarioActor* pActor2 = getActor();
@@ -1590,12 +1584,12 @@ void Mario::writeBackPhyisicalVector() {
         }
     } else if (isSwimming()) {
         if (!mMovementStates._22) {
-            for (u32 j = 0; j < _578; j++) {
+            for (u32 j = 0; j < _57C.size(); j++) {
                 Vec3f stack_b0;
-                if (MR::vecKillElement(mVelocity, *_57C[j]->getNormal(0), &stack_b0) < 0.0f) {
+                if (MR::vecKillElement(mVelocity, *_57C[j].getNormal(0), &stack_b0) < 0.0f) {
                     mVelocity = stack_b0;
-                    f32 f28 = MR::vecKillElement(mSwim->mKnockbackVel, *_57C[j]->getNormal(0), &mSwim->mKnockbackVel);
-                    mSwim->mKnockbackVel += *_57C[j]->getNormal(0) * f28 * 0.5f;
+                    f32 f28 = MR::vecKillElement(mSwim->mKnockbackVel, *_57C[j].getNormal(0), &mSwim->mKnockbackVel);
+                    mSwim->mKnockbackVel += *_57C[j].getNormal(0) * f28 * 0.5f;
                 }
             }
         }

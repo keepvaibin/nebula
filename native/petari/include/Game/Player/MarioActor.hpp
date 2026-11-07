@@ -5,6 +5,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Player/Mario.hpp"
 #include "Game/Player/MatrixControl.hpp"
+#include "Game/Util/Array.hpp"
 #include "Game/Util/Color.hpp"
 #include "Game/Util/MapUtil.hpp"
 
@@ -736,17 +737,17 @@ public:
     f32 _4B4;
     Vec3f _4B8;
     Vec3f _4C4;
-    HitSensor* _4D0[128];
+    MR::GrowTable< HitSensor*, 128 > _4D0;  // items being pulled; null entries are free
     bool _6D0;
     f32 _6D4;
     f32 _6D8;
-    HitSensor* _6DC[64];
-    u16 _7DC;  // _6DC count
+    MR::GrowTable< HitSensor*, 64 > _6DC;
+    u32 _7DC;  // _6DC count
     u16 _7DE;
     u16 _7E0;
     u8 _7E2;
-    HitSensor* _7E4[64];
-    bool _8E4[64];
+    MR::GrowTable< HitSensor*, 64 > _7E4;  // this frame's rush sensors, _930 of them
+    MR::GrowTable< bool, 64 > _8E4;
     HitSensor* _924;
     HitSensor* _928;
     u32 _92C;
@@ -808,8 +809,9 @@ public:
     Vec3f _A18;
     u8 _A24;
     u8 _A25;
-    PlayerModel* mModels[64];  // the game's six, then a mod's power-ups' whole-body models
-    ModelHolder* mModPowerUpModels[58];
+    PlayerModel** mModels;  // the game's six, then each mod power-up's whole-body model (null when it has none)
+    ModelHolder** mModPowerUpModels;
+    s32 mNumModPowerUps;  // the power-ups registered when the models were made
     ModelHolder* _A40;
     ModelHolder* _A44;
     ModelHolder* _A48;

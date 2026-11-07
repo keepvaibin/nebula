@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Game/Scene/Scene.hpp"
+#include "Game/Util/StringUtil.hpp"
 
 class IntermissionScene : public Scene {
 public:
@@ -11,6 +12,6 @@ public:
 
     void setCurrentSceneControllerState(const char*, ...) ATTRIBUTE_PRINTF(2, 3);
 
-    char mState[0x40];
+    MR::FormattedName mState;
     u32 _54;
 };

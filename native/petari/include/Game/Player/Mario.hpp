@@ -1,6 +1,8 @@
 #pragma once
 
+#include "Game/Map/HitInfo.hpp"
 #include "Game/Player/MarioModule.hpp"
+#include "Game/Util/Array.hpp"
 #include "Game/Util/TriangleFilter.hpp"
 #include <nebula_geometry.hpp>
 
@@ -842,8 +844,7 @@ public:
     AreaObj* _56C;
     u8 _570;
     void* _574;
-    u32 _578;
-    Triangle* _57C[0x20];
+    MR::Vector< MR::FixedArray< Triangle, 32 > > _57C;  // walls touched this frame
     const HitSensor* _5FC;
     Vec3f _600;
     u8 _60C;

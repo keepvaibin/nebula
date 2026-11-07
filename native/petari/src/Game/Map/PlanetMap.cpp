@@ -134,10 +134,9 @@ void PlanetMap::initBloomModel(const char* pModelName) {
         return;
     }
 
-    char str[256];
-    nebula_snprintf(str, 256, "%sBloom", mModelName);
+    MR::FormattedName str("%sBloom", mModelName);
     const char* name = mName;
-    mBloomModel = MR::createModelObjBloomModel(name, str, getBaseMtx());
+    mBloomModel = MR::createModelObjBloomModel(name, str.c_str(), getBaseMtx());
     mBloomModel->mScale.set(mScale);
 
     f32 radiusBound = 500.0f;

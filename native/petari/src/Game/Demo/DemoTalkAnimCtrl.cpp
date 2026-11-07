@@ -26,12 +26,11 @@ DemoTalkAnimCtrl::DemoTalkAnimCtrl(LiveActor* pActor, const char* a3, const char
 }
 
 void DemoTalkAnimCtrl::initForScene(const char* a1, const char* a2, const TableIter& rIter) {
-    char buf[0x100];
-    nebula_snprintf(buf, sizeof(buf), "%s.canm", a2);
+    MR::FormattedName buf("%s.canm", a2);
     initForActor(a1);
     _35 = true;
     _34 = _10 == nullptr;
-    mHaveCamera = MR::getResourceHolder(mActor)->mFileInfoTable->isExistRes(buf);
+    mHaveCamera = MR::getResourceHolder(mActor)->mFileInfoTable->isExistRes(buf.c_str());
     _48 = MR::isExistBck(MR::getPlayerDemoActor(), a1);
     if (mHaveCamera) {
         _1C = a2;
@@ -41,12 +40,11 @@ void DemoTalkAnimCtrl::initForScene(const char* a1, const char* a2, const TableI
 }
 
 void DemoTalkAnimCtrl::updateCamera() {
-    char buf[0x100];
-    nebula_snprintf(buf, sizeof(buf), "%s%s", mActor->mName, _1C);
+    MR::FormattedName buf("%s%s", mActor->mName, _1C);
     if (DemoFunction::isPauseTimeKeepDemo(_C)) {
-        MR::pauseOnAnimCamera(mCameraInfo, buf);
+        MR::pauseOnAnimCamera(mCameraInfo, buf.c_str());
     } else {
-        MR::pauseOffAnimCamera(mCameraInfo, buf);
+        MR::pauseOffAnimCamera(mCameraInfo, buf.c_str());
     }
 }
 

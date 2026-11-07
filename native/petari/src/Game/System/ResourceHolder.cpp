@@ -84,13 +84,11 @@ void ResourceHolder::bindMaterialAnimations(ModelData* pModelData) {
 void ResourceHolder::newBckCtrl() {
     MR::CurrentHeapRestorer heap(mHeap);
     // Its table has the archive's name.
-    char name[256];
-    MR::copyString(name, mArchive->getName(), sizeof(name));
-    if (char* pDot = strrchr(name, '.')) {
-        *pDot = '\0';
-    }
+    const char* const pArchiveName = mArchive->getName();
+    const char* const pDot = strrchr(pArchiveName, '.');
+    const MR::FormattedName name("%.*s", static_cast< int >(pDot != nullptr ? pDot - pArchiveName : strlen(pArchiveName)), pArchiveName);
 
-    mBckCtrl = new BckCtrl(this, name);
+    mBckCtrl = new BckCtrl(this, name.c_str());
 }
 
 Mtx44& ResourceHolder::getInitEffectMtx(int materialIndex, int mtxIndex) const {

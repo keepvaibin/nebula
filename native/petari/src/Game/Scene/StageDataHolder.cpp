@@ -426,12 +426,12 @@ void StageDataHolder::initJmpInfo(MR::AssignableArray< Table >* pInfo, const cha
 void StageDataHolder::initAllLayerJmpInfo(MR::AssignableArray< Table >* pInfo, const char* pName) {
     s32 count = 0;
     u32 mask = ::getAllLayers(_A8, MR::getCurrentScenarioNo());
-    char buf[256];
+    MR::FormattedName buf;
 
     for (u32 i = 0; i < 33; i++) {
         if ((mask & (1 << i)) != 0) {
-            nebula_snprintf(buf, sizeof(buf), "%s/%s", pName, ::cLayerDirName[i]);
-            count += mArchive->countFile(buf);
+            buf.format("%s/%s", pName, ::cLayerDirName[i]);
+            count += mArchive->countFile(buf.c_str());
         }
     }
 
@@ -442,8 +442,8 @@ void StageDataHolder::initAllLayerJmpInfo(MR::AssignableArray< Table >* pInfo, c
 
         for (u32 i = 0; i < 33; i++) {
             if ((mask & (1 << i)) != 0) {
-                nebula_snprintf(buf, sizeof(buf), "%s/%s", pName, ::cLayerDirName[i]);
-                pInfoArray = attachJmpInfoToArray(pInfoArray, buf);
+                buf.format("%s/%s", pName, ::cLayerDirName[i]);
+                pInfoArray = attachJmpInfoToArray(pInfoArray, buf.c_str());
             }
         }
     }
@@ -456,14 +456,14 @@ void StageDataHolder::initAllLayerJmpInfo(MR::AssignableArray< Table >* pInfo, c
 
 void StageDataHolder::initLayerJmpInfo(MR::AssignableArray< Table >* pInfo, const char* pPlacementDir, const char* pMapPartsDir, u32 layerMask) {
     s32 count = 0;
-    char path[256];
+    MR::FormattedName path;
 
     for (u32 i = 0; i < 33; i++) {
         if (layerMask & (1 << i)) {
-            nebula_snprintf(path, sizeof(path), "%s/%s", pPlacementDir, ::cLayerDirName[i]);
-            count += mArchive->countFile(path);
-            nebula_snprintf(path, sizeof(path), "%s/%s", pMapPartsDir, ::cLayerDirName[i]);
-            count += mArchive->countFile(path);
+            path.format("%s/%s", pPlacementDir, ::cLayerDirName[i]);
+            count += mArchive->countFile(path.c_str());
+            path.format("%s/%s", pMapPartsDir, ::cLayerDirName[i]);
+            count += mArchive->countFile(path.c_str());
         }
     }
 
@@ -473,10 +473,10 @@ void StageDataHolder::initLayerJmpInfo(MR::AssignableArray< Table >* pInfo, cons
         pInfo->mArr = pCurrent;
         for (u32 i = 0; i < 33; i++) {
             if (layerMask & (1 << i)) {
-                nebula_snprintf(path, sizeof(path), "%s/%s", pPlacementDir, ::cLayerDirName[i]);
-                pCurrent = attachJmpInfoToArray(pCurrent, path);
-                nebula_snprintf(path, sizeof(path), "%s/%s", pMapPartsDir, ::cLayerDirName[i]);
-                pCurrent = attachJmpInfoToArray(pCurrent, path);
+                path.format("%s/%s", pPlacementDir, ::cLayerDirName[i]);
+                pCurrent = attachJmpInfoToArray(pCurrent, path.c_str());
+                path.format("%s/%s", pMapPartsDir, ::cLayerDirName[i]);
+                pCurrent = attachJmpInfoToArray(pCurrent, path.c_str());
             }
         }
     }

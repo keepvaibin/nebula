@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Game/Screen/LayoutActor.hpp"
+#include "Game/Util/StringUtil.hpp"
 
 class IconAButton : public LayoutActor {
 public:
@@ -26,5 +27,5 @@ public:
 
     Vec2f mFollowPos;
     LayoutActor* mFollowActor;
-    char mFollowPaneName[24];
+    MR::FormattedName mFollowPaneName;
 };

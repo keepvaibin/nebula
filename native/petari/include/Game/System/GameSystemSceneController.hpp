@@ -22,8 +22,8 @@ public:
     void setStage(const char*);
     void setStartIdInfo(const PlacementId&);
 
-    char mScene[32];
-    char mStage[32];
+    const char* mScene;  // MR::internName
+    const char* mStage;
     s32 mScenarioNo;
     s32 mSelectedScenarioNo;
     PlacementId* mStartIdInfo;

@@ -2,6 +2,7 @@
 
 #include "Game/Effect/MultiEmitterCallBack.hpp"
 #include "Game/Player/MarioModule.hpp"
+#include "Game/Util/Array.hpp"
 #include "Game/Util/Color.hpp"
 #include <nebula_geometry.hpp>
 
@@ -33,6 +34,8 @@ public:
     virtual ~MarioEffect();
 
     EmitterCore* addRequest(const char*, MtxPtr);
+    // The entry still follows its emitter: not back in the pool (forceDeleteEmitter's 0x200) nor made again for another owner.
+    bool isFollowing(const MovingFollowMtx&) const;
     void updateFollowMtx(MovingFollowMtx*);
     void playSwingEffect();
     void doCubeEffect();
@@ -44,5 +47,6 @@ public:
     Color8 _1C;
     Color8 _20;
     Mtx34f _24;
-    MovingFollowMtx _54[0x100];
+    MR::GrowTable< MovingFollowMtx, 16 > mFollows;
+    s32 mFollowCount;
 };

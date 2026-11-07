@@ -1,13 +1,8 @@
 #include "Game/Demo/DemoStartRequestHolder.hpp"
 #include "Game/Demo/DemoStartRequestUtil.hpp"
 #include "Game/NameObj/NameObj.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include "Game/Util/StringUtil.hpp"
-
-// Defined below; declared before this file's first use instantiates them.
-template <>
-void MR::FixedRingBuffer< const DemoStartInfo*, 16 >::push_back(const DemoStartInfo* const& rValue);
-template <>
-void MR::FixedRingBuffer< const DemoStartInfo*, 16 >::iterator::operator++();
 
 DemoStartInfo::DemoStartInfo() {
     _0 = nullptr;
@@ -50,7 +45,7 @@ void DemoStartRequestHolder::pushRequest(LiveActor* pActor, const char* pName) {
         pInfo = findEmpty();
     }
 
-    mRequestBuffer.push_back(pInfo);
+    mRequests.push_back(pInfo);
 }
 
 void DemoStartRequestHolder::pushRequest(LayoutActor* pActor, const char* pName) {
@@ -59,7 +54,7 @@ void DemoStartRequestHolder::pushRequest(LayoutActor* pActor, const char* pName)
         pInfo = findEmpty();
     }
 
-    mRequestBuffer.push_back(pInfo);
+    mRequests.push_back(pInfo);
 }
 
 void DemoStartRequestHolder::pushRequest(NerveExecutor* pExecutor, const char* pName) {
@@ -68,7 +63,7 @@ void DemoStartRequestHolder::pushRequest(NerveExecutor* pExecutor, const char* p
         pInfo = findEmpty();
     }
 
-    mRequestBuffer.push_back(pInfo);
+    mRequests.push_back(pInfo);
 }
 
 void DemoStartRequestHolder::pushRequest(NameObj* pObj, const char* pName) {
@@ -77,45 +72,39 @@ void DemoStartRequestHolder::pushRequest(NameObj* pObj, const char* pName) {
         pInfo = findEmpty();
     }
 
-    mRequestBuffer.push_back(pInfo);
+    mRequests.push_back(pInfo);
 }
 
 void DemoStartRequestHolder::popRequest() {
-    DemoStartInfo** pIter = mStartInfos;
-    const DemoStartInfo** pCurReqPtr = mRequestBuffer.mHead.mHead;
-    DemoStartInfo** pEnd = &mStartInfos[mNumInfos];
-
-    goto check;
-    do {
-        pIter++;
-    check:
-        if (pIter == pEnd) {
-            break;
-        }
-    } while (*pIter != *pCurReqPtr);
-
-    if (pIter != pEnd) {
-        DemoStartInfo* pFound = *pIter;
-        DemoStartInfo emptyInfo;
-        *pFound = emptyInfo;
+    if (mRequestHead >= mRequests.size()) {
+        return;
     }
 
-    if (mRequestBuffer.mCount != 0) {
-        ++mRequestBuffer.mHead;
-        mRequestBuffer.mCount--;
+    const DemoStartInfo* pCurrent = mRequests[mRequestHead];
+    for (DemoStartInfo** pIter = mStartInfos.begin(); pIter != mStartInfos.end(); pIter++) {
+        if (*pIter == pCurrent) {
+            **pIter = DemoStartInfo();
+            break;
+        }
+    }
+
+    mRequestHead++;
+    if (mRequestHead == mRequests.size()) {
+        mRequests.clear();
+        mRequestHead = 0;
     }
 }
 
 bool DemoStartRequestHolder::isExistRequest() const {
-    return mRequestBuffer.mCount != 0;
+    return mRequestHead < mRequests.size();
 }
 
 const DemoStartInfo* DemoStartRequestHolder::getCurrentInfo() const {
-    if (mRequestBuffer.mCount == 0) {
+    if (mRequestHead >= mRequests.size()) {
         return nullptr;
     }
 
-    return *mRequestBuffer.mHead.mHead;
+    return mRequests[mRequestHead];
 }
 
 void DemoStartRequestHolder::registerStartDemoInfo(const DemoStartInfo& rInfo) {
@@ -124,7 +113,7 @@ void DemoStartRequestHolder::registerStartDemoInfo(const DemoStartInfo& rInfo) {
 }
 
 DemoStartInfo* DemoStartRequestHolder::find(const LiveActor* pActor, const char* pName) const {
-    for (DemoStartInfo* const* pIter = mStartInfos; pIter != &mStartInfos[mNumInfos]; pIter++) {
+    for (DemoStartInfo* const* pIter = mStartInfos.begin(); pIter != mStartInfos.end(); pIter++) {
         if ((*pIter)->_0 == pActor && MR::isEqualString((*pIter)->mDemoName, pName)) {
             return *pIter;
         }
@@ -134,7 +123,7 @@ DemoStartInfo* DemoStartRequestHolder::find(const LiveActor* pActor, const char*
 }
 
 DemoStartInfo* DemoStartRequestHolder::find(const LayoutActor* pActor, const char* pName) const {
-    for (DemoStartInfo* const* pIter = mStartInfos; pIter != &mStartInfos[mNumInfos]; pIter++) {
+    for (DemoStartInfo* const* pIter = mStartInfos.begin(); pIter != mStartInfos.end(); pIter++) {
         if ((*pIter)->_4 == pActor && MR::isEqualString((*pIter)->mDemoName, pName)) {
             return *pIter;
         }
@@ -144,7 +133,7 @@ DemoStartInfo* DemoStartRequestHolder::find(const LayoutActor* pActor, const cha
 }
 
 DemoStartInfo* DemoStartRequestHolder::find(const NerveExecutor* pExecutor, const char* pName) const {
-    for (DemoStartInfo* const* pIter = mStartInfos; pIter != &mStartInfos[mNumInfos]; pIter++) {
+    for (DemoStartInfo* const* pIter = mStartInfos.begin(); pIter != mStartInfos.end(); pIter++) {
         if ((*pIter)->_8 == pExecutor && MR::isEqualString((*pIter)->mDemoName, pName)) {
             return *pIter;
         }
@@ -154,7 +143,7 @@ DemoStartInfo* DemoStartRequestHolder::find(const NerveExecutor* pExecutor, cons
 }
 
 DemoStartInfo* DemoStartRequestHolder::find(const NameObj* pObj, const char* pName) const {
-    for (DemoStartInfo* const* pIter = mStartInfos; pIter != &mStartInfos[mNumInfos]; pIter++) {
+    for (DemoStartInfo* const* pIter = mStartInfos.begin(); pIter != mStartInfos.end(); pIter++) {
         if ((*pIter)->_C == pObj && MR::isEqualString((*pIter)->mDemoName, pName)) {
             return *pIter;
         }
@@ -163,54 +152,24 @@ DemoStartInfo* DemoStartRequestHolder::find(const NameObj* pObj, const char* pNa
     return nullptr;
 }
 
-DemoStartInfo* DemoStartRequestHolder::findEmpty() const {
-    DemoStartInfo* pFound;
-    for (DemoStartInfo* const* pIter = mStartInfos; pIter != &mStartInfos[mNumInfos]; pIter++) {
+DemoStartInfo* DemoStartRequestHolder::findEmpty() {
+    for (DemoStartInfo** pIter = mStartInfos.begin(); pIter != mStartInfos.end(); pIter++) {
         if (DemoStartRequestUtil::isEmpty(*pIter)) {
-            pFound = *pIter;
-            DemoStartInfo emptyInfo;
-            *pFound = emptyInfo;
+            **pIter = DemoStartInfo();
             return *pIter;
         }
     }
 
-    return nullptr;
+    DemoStartInfo* pInfo = new (NebulaArena::findFromRoot(this), 0) DemoStartInfo();
+    mStartInfos.push_back(pInfo);
+    return pInfo;
 }
 
-DemoStartRequestHolder::DemoStartRequestHolder() : mNumInfos(), mRequestBuffer(mRequestBuffer.mBuffer, mRequestBuffer.mBuffer) {
+DemoStartRequestHolder::DemoStartRequestHolder() : mRequestHead(0) {
     mProxyObj = new NameObj("代理人");
-    for (u32 i = 0; i < ARRAY_SIZE(mStartInfos); i++) {
-        DemoStartInfo* pInfo = new DemoStartInfo();
-        s32 idx = mNumInfos;
-        mNumInfos = idx + 1;
-        mStartInfos[idx] = pInfo;
-    }
-}
-
-template <>
-MR::FixedRingBuffer< const DemoStartInfo*, 16 >::iterator::iterator(const DemoStartInfo** pHead, const DemoStartInfo** pTail) {
-    mHead = pHead;
-    mTail = pTail;
-    mEnd = pTail + 16;
-}
-
-template <>
-void MR::FixedRingBuffer< const DemoStartInfo*, 16 >::push_back(const DemoStartInfo* const& rValue) {
-    if ((u32)mCount >= 16) {
-        return;
-    }
-
-    *mEnd.mHead = rValue;
-    ++mEnd;
-    mCount++;
-}
-
-template <>
-void MR::FixedRingBuffer< const DemoStartInfo*, 16 >::iterator::operator++() {
-    const DemoStartInfo** pEnd = mEnd;
-    mHead++;
-
-    if (pEnd <= mHead) {
-        mHead = mTail;
+    mStartInfos.init(16);
+    mRequests.init(16);
+    for (s32 i = 0; i < 16; i++) {
+        mStartInfos.push_back(new DemoStartInfo());
     }
 }

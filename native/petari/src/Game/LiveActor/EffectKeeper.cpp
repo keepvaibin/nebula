@@ -23,15 +23,14 @@ namespace {
         return pEmitter->_28->getName();
     }
 
-    bool makeAttibuteEffectBaseName(char* pDst, u32 size, const char* pSrc) {
+    bool makeAttibuteEffectBaseName(MR::FormattedName& rDst, const char* pSrc) {
         const char* tag = strstr(pSrc, cAttributeEffectTag);
 
         if (tag == nullptr) {
             return false;
         }
 
-        u32 tagLength = strlen(tag);
-        MR::extractString(pDst, pSrc, strlen(pSrc) - tagLength, size);
+        rDst.format("%.*s", static_cast< int >(tag - pSrc), pSrc);
 
         return true;
     }
@@ -178,17 +177,17 @@ void EffectKeeper::forceDeleteEmitterAll() {
 }
 
 MultiEmitter* EffectKeeper::getEmitter(const char* pParam1) const {
-    char buf[256];
+    MR::FormattedName buf;
 
     if (_30 && !MR::isEqualSubString(pParam1, ::cAttributeEffectTag) && isTypeAttributeEffect(pParam1)) {
         const char* attributeName = MR::Effect::getEffectAttributeName(_28);
-        nebula_snprintf(buf, sizeof(buf), "%s%s%s", pParam1, ::cAttributeEffectTag, attributeName);
+        buf.format("%s%s%s", pParam1, ::cAttributeEffectTag, attributeName);
 
-        if (!isRegisteredEmitter(buf)) {
-            nebula_snprintf(buf, sizeof(buf), "%s%s%s", pParam1, ::cAttributeEffectTag, "Default");
+        if (!isRegisteredEmitter(buf.c_str())) {
+            buf.format("%s%s%s", pParam1, ::cAttributeEffectTag, "Default");
         }
 
-        pParam1 = buf;
+        pParam1 = buf.c_str();
     }
 
     if (_18 != nullptr && _18->mHasBeenSorted) {
@@ -255,10 +254,10 @@ void EffectKeeper::syncEffectBck(MultiEmitter* pEmitter) {
     if (b1 || b2) {
         MultiEmitter* emitter = pEmitter;
         if (MR::isEqualSubString(::getMultiEmitterName(pEmitter), ::cAttributeEffectTag)) {
-            char buf[256];
-            ::makeAttibuteEffectBaseName(buf, sizeof(buf), ::getMultiEmitterName(pEmitter));
+            MR::FormattedName buf;
+            ::makeAttibuteEffectBaseName(buf, ::getMultiEmitterName(pEmitter));
 
-            emitter = getEmitter(buf);
+            emitter = getEmitter(buf.c_str());
         }
 
         if (b1) {
@@ -296,10 +295,10 @@ void EffectKeeper::updateAttributeEffect() {
 
             (*it)->deleteForeverEmitter();
 
-            char buf[256];
-            ::makeAttibuteEffectBaseName(buf, sizeof(buf), ::getMultiEmitterName(*it));
+            MR::FormattedName buf;
+            ::makeAttibuteEffectBaseName(buf, ::getMultiEmitterName(*it));
 
-            getEmitter(buf)->createEmitter();
+            getEmitter(buf.c_str())->createEmitter();
         }
     }
 
@@ -418,15 +417,14 @@ void EffectKeeper::updateFloorCode(const Triangle* pTriangle) {
 }
 
 bool EffectKeeper::isTypeAttributeEffect(const char* pParam1) const {
-    char buf[256];
-    nebula_snprintf(buf, sizeof(buf), "%s%s", pParam1, ::cAttributeEffectTag);
+    MR::FormattedName buf("%s%s", pParam1, ::cAttributeEffectTag);
 
     for (MultiEmitter* const* it = _C.begin(); it != _C.end(); it++) {
         if ((*it)->_28 == nullptr) {
             continue;
         }
 
-        if (MR::isEqualSubString((*it)->_28->getName(), buf)) {
+        if (MR::isEqualSubString((*it)->_28->getName(), buf.c_str())) {
             return true;
         }
     }

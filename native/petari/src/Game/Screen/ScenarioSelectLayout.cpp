@@ -860,10 +860,10 @@ void ScenarioSelectLayout::exeAppearCometWarning() {
     if (MR::isStep(this, ::cCometWarningWaitFrame)) {
         int id = MR::getEncounterGalaxyCometNameId(MR::getCurrentStageName());
         const char* cometName = MR::getCometNameFromId(id);
-        char cometMsg[256];
-        MR::makeCometMessageID(cometMsg, sizeof(cometMsg), cometName);
+        MR::FormattedName cometMsg;
+        MR::makeCometMessageID(cometMsg, cometName);
         MR::setTextBoxGameMessageRecursive(this, "TextComet", "GalaxyInfo_CometAppearR");
-        MR::setTextBoxArgGameMessageRecursive(this, "TextComet", cometMsg, 0);
+        MR::setTextBoxArgGameMessageRecursive(this, "TextComet", cometMsg.c_str(), 0);
         MR::showPaneRecursive(this, "CometAppear");
         MR::startPaneAnim(this, "CometAppear", "CometAppear", 0);
         MR::setCometPaneAnimFromId(this, "CometAppear", id, 1);

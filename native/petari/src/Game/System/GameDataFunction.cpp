@@ -15,6 +15,7 @@
 #include "Game/System/UserFile.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 #include <cstdio>
+#include "Game/Util/StringUtil.hpp"
 
 namespace {
     SaveDataHandleSequence* getSaveDataHandleSequence() {
@@ -328,19 +329,19 @@ namespace GameDataFunction {
     }
 
     bool isOnGameEventFlagNormalComet(const char* pGalaxyName) {
-        char eventFlagName[256];
+        MR::FormattedName eventFlagName;
 
-        nebula_snprintf(eventFlagName, sizeof(eventFlagName), "NormalComet%s", pGalaxyName);
+        eventFlagName.format("NormalComet%s", pGalaxyName);
 
-        return getCurrentGameDataHolder()->isOnGameEventFlag(eventFlagName);
+        return getCurrentGameDataHolder()->isOnGameEventFlag(eventFlagName.c_str());
     }
 
     bool isOnGameEventFlagCoin100Comet(const char* pGalaxyName) {
-        char eventFlagName[256];
+        MR::FormattedName eventFlagName;
 
-        nebula_snprintf(eventFlagName, sizeof(eventFlagName), "Coin100Comet%s", pGalaxyName);
+        eventFlagName.format("Coin100Comet%s", pGalaxyName);
 
-        return getCurrentGameDataHolder()->isOnGameEventFlag(eventFlagName);
+        return getCurrentGameDataHolder()->isOnGameEventFlag(eventFlagName.c_str());
     }
 
     void updateGalaxyCometStatus(int cometId, u16 cometStatus, u16 pastSecond) {

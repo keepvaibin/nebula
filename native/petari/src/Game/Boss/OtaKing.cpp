@@ -123,7 +123,6 @@ OtaKing::OtaKing(const char* pName)
     MR::zeroMemory(mFeet, sizeof(mFeet));
     MR::zeroMemory(mLongFeet, sizeof(mLongFeet));
     mLongFootMtx.identity();
-    MR::zeroMemory(mBckLBuffer, sizeof(mBckLBuffer) + sizeof(mBckRBuffer));
 }
 
 void OtaKing::init(const TableIter& rIter) {
@@ -610,10 +609,10 @@ void OtaKing::startBckWaitIfNotPlaying() {
 
 void OtaKing::startBckWithFrontFoot(const char* pBckName) {
     MR::startBck(this, pBckName);
-    nebula_snprintf(mBckLBuffer, sizeof(mBckLBuffer), "%sR", pBckName);
-    MR::startBck(mFeet[0], mBckLBuffer);
-    nebula_snprintf(mBckRBuffer, sizeof(mBckRBuffer), "%sL", pBckName);
-    MR::startBck(mFeet[1], mBckRBuffer);
+    mBckLBuffer.format("%sR", pBckName);
+    MR::startBck(mFeet[0], mBckLBuffer.c_str());
+    mBckRBuffer.format("%sL", pBckName);
+    MR::startBck(mFeet[1], mBckRBuffer.c_str());
 }
 
 bool OtaKing::isNerveValidNearAttack() const {

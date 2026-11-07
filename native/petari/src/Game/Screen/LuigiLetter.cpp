@@ -8,6 +8,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <cstdio>
+#include "Game/Util/StringUtil.hpp"
 
 namespace NrvLuigiLetter {
     NEW_NERVE(HostTypeNrvAppear, LuigiLetter, Appear);
@@ -20,15 +21,15 @@ LuigiLetter::LuigiLetter(bool param1, const char* pParam2)
 }
 
 void LuigiLetter::init(const TableIter& rIter) {
-    char archiveName[256];
-    char textureName[256];
+    MR::FormattedName archiveName;
+    MR::FormattedName textureName;
 
     initLayoutManager("LuigiLetter", 1);
     initNerve(GET_NERVE(LuigiLetter, HostTypeNrvAppear));
-    nebula_snprintf(archiveName, sizeof(archiveName), "LuigiPicture%s.arc", _28);
-    nebula_snprintf(textureName, sizeof(textureName), "LuigiPicture%s.bti", _28);
+    archiveName.format("LuigiPicture%s.arc", _28);
+    textureName.format("LuigiPicture%s.bti", _28);
 
-    mTexture = MR::createLytTexMap(archiveName, textureName);
+    mTexture = MR::createLytTexMap(archiveName.c_str(), textureName.c_str());
 
     MR::replacePaneTexture(this, "PicDummy", mTexture, 0);
 
@@ -105,11 +106,10 @@ void LuigiLetter::makeArchiveListCommon(NameObjArchiveListCollector* pCollector,
         return;
     }
 
-    char archiveName[256];
-    nebula_snprintf(archiveName, sizeof(archiveName), "LuigiPicture%s", pGalaxyName);
+    MR::FormattedName archiveName("LuigiPicture%s", pGalaxyName);
 
     pCollector->addArchive("LuigiLetter");
-    pCollector->addArchive(archiveName);
+    pCollector->addArchive(archiveName.c_str());
 }
 
 namespace MR {

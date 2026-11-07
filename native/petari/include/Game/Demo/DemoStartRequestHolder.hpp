@@ -51,10 +51,11 @@ public:
     DemoStartInfo* find(const LayoutActor*, const char*) const;
     DemoStartInfo* find(const NerveExecutor*, const char*) const;
     DemoStartInfo* find(const NameObj*, const char*) const;
-    DemoStartInfo* findEmpty() const;
+    DemoStartInfo* findEmpty();
 
-    DemoStartInfo* mStartInfos[0x10];
-    s32 mNumInfos;
-    MR::FixedRingBuffer< const DemoStartInfo*, 16 > mRequestBuffer;
+    MR::Vector< MR::AssignableArray< DemoStartInfo* > > mStartInfos;
+    // A queue: requests before mRequestHead are popped; both reset when it empties.
+    MR::Vector< MR::AssignableArray< const DemoStartInfo* > > mRequests;
+    s32 mRequestHead;
     NameObj* mProxyObj;
 };

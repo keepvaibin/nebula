@@ -500,7 +500,7 @@ namespace {
 StorySequenceExecutor::StorySequenceExecutor() : NerveExecutor("StorySequenceExecutor"), mNextNerve(), mDemoObj(), mSaveObj(), _48(), _6C(), _B0() {
     mDemoObj = new NameObj("StorySequenceExecutor");
     mSaveObj = new NameObj("Save");
-    mStageName[0] = '\0';
+    mStageName = "";
     mScenarioNo = -1;
 
     initNerve(GET_NERVE_ANON(StorySequenceExecutorIdle));
@@ -1279,7 +1279,7 @@ void StorySequenceExecutor::setBeforeStageScenario(const GalaxyMoveArgument& rMo
         }
     }
 
-    nebula_snprintf(mStageName, sizeof(mStageName), "%s", pStageName);
+    mStageName = MR::internName(pStageName);
 
     mScenarioNo = scenarioNo;
 }

@@ -1,6 +1,7 @@
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util.hpp"
 #include <cstdio>
+#include "Game/Util/StringUtil.hpp"
 
 bool MR::getObjectName(const char** pName, const TableIter& rIter) {
     if (!rIter.isValid()) {
@@ -388,22 +389,21 @@ bool MR::getRailId(const TableIter& rIter, s32* pOut) {
 }
 
 bool MR::getPlacementV3f(const TableIter& rIter, const char* pName, Vec3f* pOut) {
-    char str[32];
-    nebula_sprintf(str, "%sX", pName);
+    MR::FormattedName str("%sX", pName);
 
-    if (!MR::getValue< f32 >(rIter, str, &pOut->x)) {
+    if (!MR::getValue< f32 >(rIter, str.c_str(), &pOut->x)) {
         return false;
     }
 
-    nebula_sprintf(str, "%sY", pName);
+    str.format("%sY", pName);
 
-    if (!MR::getValue< f32 >(rIter, str, &pOut->y)) {
+    if (!MR::getValue< f32 >(rIter, str.c_str(), &pOut->y)) {
         return false;
     }
 
-    nebula_sprintf(str, "%sZ", pName);
+    str.format("%sZ", pName);
 
-    return MR::getValue< f32 >(rIter, str, &pOut->z);
+    return MR::getValue< f32 >(rIter, str.c_str(), &pOut->z);
 }
 
 bool MR::getPlacementArg1WithInit(const TableIter& rIter, s32* pOut) {

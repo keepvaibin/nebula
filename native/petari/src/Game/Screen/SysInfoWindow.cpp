@@ -12,6 +12,7 @@
 #include <nw4r/lyt/pane.h>
 #include <nw4r/lyt/textBox.h>
 #include "Game/System/NebulaClock.hpp"
+#include "Game/Util/StringUtil.hpp"
 
 namespace {
     const MessageChangeFuncTableEntry cMessageChangeFuncTable[] = {
@@ -170,12 +171,12 @@ void SysInfoWindow::appear(const char* pMessageId, SysInfoType type, SysInfoText
     pMessageChangeFunc(this, mTextParentPaneName, pMessageId);
 
     if (type == Type_YesNo) {
-        char yesMessageId[256];
-        char noMessageId[256];
-        nebula_snprintf(yesMessageId, sizeof(yesMessageId), "%s_Yes", pMessageId);
-        nebula_snprintf(noMessageId, sizeof(noMessageId), "%s_No", pMessageId);
-        pMessageChangeFunc(this, "Right", yesMessageId);
-        pMessageChangeFunc(this, "Left", noMessageId);
+        MR::FormattedName yesMessageId;
+        MR::FormattedName noMessageId;
+        yesMessageId.format("%s_Yes", pMessageId);
+        noMessageId.format("%s_No", pMessageId);
+        pMessageChangeFunc(this, "Right", yesMessageId.c_str());
+        pMessageChangeFunc(this, "Left", noMessageId.c_str());
     }
 
     appear();

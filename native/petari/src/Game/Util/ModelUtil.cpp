@@ -9,6 +9,7 @@
 #include "Game/Util.hpp"
 #include "Game/Render/ModelData.hpp"
 #include <cstdio>
+#include "Game/Util/StringUtil.hpp"
 
 namespace MR {
 
@@ -387,27 +388,23 @@ namespace MR {
     }
 
     bool isExistCollisionResource(const LiveActor* pActor, const char* pName) {
-        char buff[256];
-        nebula_snprintf(buff, sizeof(buff), "%s.kcl", pName);
-        return getResourceHolder(pActor)->mFileInfoTable->findFileInfo(buff) != nullptr;
+        MR::FormattedName buff("%s.kcl", pName);
+        return getResourceHolder(pActor)->mFileInfoTable->findFileInfo(buff.c_str()) != nullptr;
     }
 
     bool isExistModel(const char* pName) {
-        char buff[0x100];
-        nebula_snprintf(buff, sizeof(buff), "/ObjectData/%s.arc", pName);
-        return isFileExist(buff, false);
+        MR::FormattedName buff("/ObjectData/%s.arc", pName);
+        return isFileExist(buff.c_str(), false);
     }
 
     bool isExistSubModel(const char* pModelName, const char* pSubModelName) {
-        char buff[0x100];
-        nebula_snprintf(buff, sizeof(buff), "%s%s", pModelName, pSubModelName);
-        return isExistModel(buff);
+        MR::FormattedName buff("%s%s", pModelName, pSubModelName);
+        return isExistModel(buff.c_str());
     }
 
     ModelData* getModelData(const char* pName) {
-        char buff[0x100];
-        nebula_snprintf(buff, sizeof(buff), "%s.arc", pName);
-        return static_cast< ModelData* >(createAndAddResourceHolder(buff)->mModelResTable->getRes(pName));
+        MR::FormattedName buff("%s.arc", pName);
+        return static_cast< ModelData* >(createAndAddResourceHolder(buff.c_str())->mModelResTable->getRes(pName));
     }
 
 };  // namespace MR

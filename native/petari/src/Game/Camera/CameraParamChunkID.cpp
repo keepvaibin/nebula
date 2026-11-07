@@ -1,4 +1,5 @@
 #include "Game/Camera/CameraParamChunkID.hpp"
+#include "Game/Util/StringUtil.hpp"
 #include <cstdio>
 #include <cstring>
 
@@ -79,40 +80,27 @@ void CameraParamChunkID::createCubeID(s32 zoneID, u16 id) {
 void CameraParamChunkID::createGroupID(s32 zoneID, const char* a2, u32 a3, u32 a4) {
     mZoneID = static_cast< s8 >(zoneID);
 
-    char buffer[0x100];
-    nebula_snprintf(buffer, sizeof(buffer), "g:%s:%d:%d", a2, a3, a4);
+    setName(MR::FormattedName("g:%s:%d:%d", a2, a3, a4));
+}
 
-    u32 actualSize = strlen(&buffer[0]);
-    char* buffer2 = getBuffer(actualSize + 1);
+void CameraParamChunkID::setName(const MR::FormattedName& rName) {
+    const u32 length = strlen(rName.c_str());
+    char* const pBuffer = getBuffer(length + 1);
 
-    memcpy(buffer2, buffer, actualSize + 1);
-    mName = buffer2;
+    memcpy(pBuffer, rName.c_str(), length + 1);
+    mName = pBuffer;
 }
 
 void CameraParamChunkID::createOtherID(s32 zoneID, const char* a2) {
     mZoneID = static_cast< s8 >(zoneID);
 
-    char buffer[0x100];
-    nebula_snprintf(buffer, sizeof(buffer), "o:%s", a2);
-
-    u32 actualSize = strlen(&buffer[0]);
-    char* buffer2 = getBuffer(actualSize + 1);
-
-    memcpy(buffer2, buffer, actualSize + 1);
-    mName = buffer2;
+    setName(MR::FormattedName("o:%s", a2));
 }
 
 void CameraParamChunkID::createEventID(s32 zoneID, const char* a2) {
     mZoneID = static_cast< s8 >(zoneID);
 
-    char buffer[0x100];
-    nebula_snprintf(buffer, sizeof(buffer), "e:%s", a2);
-
-    u32 actualSize = strlen(&buffer[0]);
-    char* buffer2 = getBuffer(actualSize + 1);
-
-    memcpy(buffer2, buffer, actualSize + 1);
-    mName = buffer2;
+    setName(MR::FormattedName("e:%s", a2));
 }
 
 void CameraParamChunkID::createStartID(s32 zoneID, u16 id) {

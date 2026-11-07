@@ -14,6 +14,7 @@
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapPartsUtil.hpp"
+#include "Game/Util/StringUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
@@ -133,28 +134,28 @@ namespace MR {
         return false;
     }
 
-    void getMapPartsObjectName(char* pBuffer, u32 size, const TableIter& rIter) {
+    void getMapPartsObjectName(FormattedName& rDst, const TableIter& rIter) {
         const char* pName = "";
         getObjectName(&pName, rIter);
         s32 shapeId = -1;
         getPlacementShapeIdWithInit(rIter, &shapeId);
-        getMapPartsObjectName(pBuffer, size, pName, shapeId);
+        getMapPartsObjectName(rDst, pName, shapeId);
     }
 
-    void getMapPartsObjectNameIfExistShapeID(char* pBuffer, u32 size, const TableIter& rIter) {
+    void getMapPartsObjectNameIfExistShapeID(FormattedName& rDst, const TableIter& rIter) {
         const char* pName = "";
         getObjectName(&pName, rIter);
         s32 shapeId = -1;
         getPlacementShapeIdWithInit(rIter, &shapeId);
         if (shapeId >= 0) {
-            getMapPartsObjectName(pBuffer, size, pName, shapeId);
+            getMapPartsObjectName(rDst, pName, shapeId);
         } else {
-            nebula_snprintf(pBuffer, size, "%s", pName);
+            rDst.format("%s", pName);
         }
     }
 
-    void getMapPartsObjectName(char* pBuffer, u32 size, const char* pName, s32 shapeId) {
-        nebula_snprintf(pBuffer, size, "%s%02d", pName, shapeId);
+    void getMapPartsObjectName(FormattedName& rDst, const char* pName, s32 shapeId) {
+        rDst.format("%s%02d", pName, shapeId);
     }
 
     void initMapPartsClipping(LiveActor* pActor, const TableIter& rIter, Vec3f* pCenter, bool ignoreRail) {

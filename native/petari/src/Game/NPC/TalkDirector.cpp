@@ -25,6 +25,7 @@
 #include "Game/Util/TalkUtil.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include <cstdio>
+#include "Game/Util/StringUtil.hpp"
 
 namespace {
     TalkDirector* getTalkDirector() {
@@ -354,11 +355,9 @@ bool TalkDirector::isInvalidTalk() const {
 void TalkDirector::appearYesNoSelector(const TalkMessageCtrl* pCtrl) const {
     const char* branchID = pCtrl->getBranchID();
 
-    char buffYes[256];
-    nebula_snprintf(buffYes, sizeof(buffYes), "Select_%s_Yes", branchID);
+    MR::FormattedName buffYes("Select_%s_Yes", branchID);
 
-    char buffNo[256];
-    nebula_snprintf(buffNo, sizeof(buffNo), "Select_%s_No", branchID);
+    MR::FormattedName buffNo("Select_%s_No", branchID);
 
     if (pCtrl->isSelectYesNo()) {
         MR::resetYesNoSelectorSE();
@@ -367,7 +366,7 @@ void TalkDirector::appearYesNoSelector(const TalkMessageCtrl* pCtrl) const {
     }
 
     MR::requestMovementOn(MR::getGameSceneLayoutHolder()->mYesNoLayout);
-    MR::appearYesNoSelector(buffYes, buffNo, nullptr);
+    MR::appearYesNoSelector(buffYes.c_str(), buffNo.c_str(), nullptr);
 }
 
 s32 TalkDirector::getDemoType(const TalkMessageCtrl* pCtrl, bool arg2) const {

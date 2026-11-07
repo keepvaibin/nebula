@@ -35,6 +35,7 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SequenceUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/StringUtil.hpp"
 #include <cstring>
 #include <nebula_format.h>
 
@@ -358,7 +359,7 @@ void CameraDirector::endEventAtLanding(s32 zoneID, const char* pName, s32 frame)
     if (getCurrentCameraMan() == mCameraManEvent) {
         CameraEvent& rEvent = mEvents.at(mEventNum);
         rEvent.mZoneID = zoneID;
-        nebula_snprintf(rEvent.mName, sizeof(rEvent.mName), "%s", pName);
+        rEvent.mName = MR::internName(pName);
         rEvent.mFrame = frame;
         mEventNum++;
     }
@@ -741,7 +742,7 @@ void CameraDirector::removeEndEventAtLanding(s32 zoneID, const char* pName) {
             }
 
             mEvents[idx].mZoneID = mEvents[mEventNum - 1].mZoneID;
-            memcpy(mEvents[idx].mName, mEvents[mEventNum - 1].mName, sizeof(mEvents[idx].mName));
+            mEvents[idx].mName = mEvents[mEventNum - 1].mName;
             mEvents[idx].mFrame = mEvents[mEventNum - 1].mFrame;
             mEventNum--;
             return;

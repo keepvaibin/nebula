@@ -30,7 +30,7 @@ public:
     bool _4;
     u32 _8;
     s16 mPowerStarId;
-    char mStageName[128];
+    const char* mStageName;  // MR::internName
     int mStarPieceNum;
     int mLast1upStarPieceNum;
     int mCoinNum;

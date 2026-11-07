@@ -160,12 +160,9 @@ MarioActor::MarioActor(const char* pName) : LiveActor(pName), _1B0(0xFFFFFFFF) {
     mBlackHoleRotateAxis.zero();
     mPosRelativeToBlackHole.zero();
 
-    for (int i = 0; i < 64; i++) {
-        mModels[i] = nullptr;
-    }
-    for (int i = 0; i < 58; i++) {
-        mModPowerUpModels[i] = nullptr;
-    }
+    mModels = nullptr;
+    mModPowerUpModels = nullptr;
+    mNumModPowerUps = 0;
 
     _A61 = false;
 
@@ -1899,7 +1896,7 @@ void MarioActor::calcAnim() {
 
         // A mod's power-up: a body of its own, or the look of one of the game's.
         const s32 modSlot = static_cast< s32 >(val) - NebulaMods::cFirstPowerUp;
-        const bool ownModel = modSlot >= 0 && modSlot < 58 && mModels[6 + modSlot] != nullptr;
+        const bool ownModel = modSlot >= 0 && modSlot < mNumModPowerUps && mModels[6 + modSlot] != nullptr;
         if (ownModel) {
             changeDisplayMode(6 + modSlot);
         } else switch (NebulaMods::powerUpLook(val)) {

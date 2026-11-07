@@ -18,6 +18,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include "Game/Util/StringUtil.hpp"
 
 namespace NrvMapObjActor {
     NEW_NERVE(HostTypeWait, MapObjActor, Wait);
@@ -322,10 +323,9 @@ void MapObjActor::initialize(const TableIter& rIter, const MapObjActorInitInfo& 
     }
 
     if (MR::isExistSubModel(mObjectName, "Bloom")) {
-        char modelName[0x100];
-        nebula_snprintf(modelName, sizeof(modelName), "%sBloom", mObjectName);
+        MR::FormattedName modelName("%sBloom", mObjectName);
         const char* pName = mName;
-        mBloomModel = MR::createModelObjBloomModel(pName, modelName, getBaseMtx());
+        mBloomModel = MR::createModelObjBloomModel(pName, modelName.c_str(), getBaseMtx());
         mBloomModel->mScale.set(mScale);
         MR::calcModelBoundingRadius(&clippingRadius, this);
         MR::setClippingFarMax(mBloomModel);
@@ -546,24 +546,24 @@ void MapObjActor::endClipped() {
 }
 
 bool MapObjActor::tryCreateBreakModel(const MapObjActorInitInfo& rInfo) {
-    char buf[0x100];
+    MR::FormattedName buf;
 
     if (rInfo._80 != nullptr) {
-        nebula_snprintf(buf, sizeof(buf), "%s", rInfo._80);
+        buf.format("%s", rInfo._80);
     } else {
-        nebula_snprintf(buf, sizeof(buf), "%sBreak", mObjectName);
+        buf.format("%sBreak", mObjectName);
     }
 
-    if (!MR::isExistModel(buf)) {
+    if (!MR::isExistModel(buf.c_str())) {
         return false;
     }
 
     if (MR::isEqualString(mObjectName, "SandUpDownTowerBreakableWallB")) {
         MtxPtr baseMtx = getBaseMtx();
-        mModelObj = MR::createModelObjMapObj("壊れモデル", buf, baseMtx);
+        mModelObj = MR::createModelObjMapObj("壊れモデル", buf.c_str(), baseMtx);
     } else {
         MtxPtr baseMtx = getBaseMtx();
-        mModelObj = MR::createModelObjMapObjStrongLight("壊れモデル", buf, baseMtx);
+        mModelObj = MR::createModelObjMapObjStrongLight("壊れモデル", buf.c_str(), baseMtx);
     }
 
     mModelObj->makeActorDead();
@@ -845,7 +845,6 @@ void MapObjActorUtil::killBloomModel(MapObjActor* pActor) {
 
 void MapObjActorUtil::appearBloomModel(MapObjActor* pActor) {
     pActor->mBloomModel->appear();
-    char buf[0x100];
-    nebula_snprintf(buf, sizeof(buf), "%sBloom", pActor->mObjectName);
-    MR::tryStartAllAnim(pActor->mBloomModel, buf);
+    MR::FormattedName buf("%sBloom", pActor->mObjectName);
+    MR::tryStartAllAnim(pActor->mBloomModel, buf.c_str());
 }

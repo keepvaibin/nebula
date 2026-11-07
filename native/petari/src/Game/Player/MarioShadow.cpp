@@ -61,10 +61,6 @@ CollisionShadow::CollisionShadow(f32 radius, f32 length) : NameObj("投影シャ
     _314.zero();
     _320.zero();
     _32C = nullptr;
-    _330 = nullptr;
-    _334 = nullptr;
-    _338 = 0;
-    _33A = 0;
     _33C = 0;
     _308 = 0;
     _E = 0;
@@ -81,32 +77,38 @@ CollisionShadow::CollisionShadow(f32 radius, f32 length) : NameObj("投影シャ
     _C = 255;
     setMode(0);
     initCaptureTex();
-    _58 = 128;
     _5A = 3;
-    _60 = new Vec3f[_58 * _5A];
-    _64 = new Vec2f[_58 * _5A];
-    _68 = new u16[_58 * _5A];
-    _5C = new u8[_58];
+    makePolygonLists(128);
     _6C = 0;
-    _32C = new Triangle[_58];
-    _330 = new Triangle[2];
-    _334 = new Triangle[2];
-    _338 = 0;
-    _33A = 0;
     _33C = 0;
     _6E = 0;
     _306 = 0;
     _304 = 0;
     _307 = 1;
+}
 
-    for (u32 i = 0; i < 128; i++) {
-        _70[i] = 0;
+void CollisionShadow::makePolygonLists(u32 num) {
+    if (_32C != nullptr) {
+        delete[] _32C;
+        delete[] _60;
+        delete[] _64;
+        delete[] _68;
+        delete[] _5C;
+        delete[] _70;
+        delete[] _F0;
+        delete[] mSortDistances;
     }
 
-    for (u32 i = 0; i < 128; i++) {
-        _F0[i] = 0;
-    }
-
+    NebulaArena* pArena = NebulaArena::findFromRoot(this);
+    _58 = num;
+    _32C = new (pArena, 0) Triangle[num];
+    _60 = new (pArena, 0) Vec3f[num * _5A];
+    _64 = new (pArena, 0) Vec2f[num * _5A];
+    _68 = new (pArena, 0) u32[num * _5A];
+    _5C = new (pArena, 0) u32[num];
+    _70 = new (pArena, 0) u32[num]();
+    _F0 = new (pArena, 0) s32[num]();
+    mSortDistances = new (pArena, 0) f32[num];
 }
 
 void CollisionShadow::create(const Vec3f& rPosition, const Vec3f& rDirection, const Vec3f& rUp) {
@@ -172,18 +174,11 @@ void CollisionShadow::create(const Vec3f& rPosition, const Vec3f& rDirection, co
     }
 
     u32 count = MR::createAreaPolygonListArray(_32C, _58, corners, 8);
-    for (u32 i = 0; i < _338; i++) {
-        _32C[count] = _330[i];
-        count++;
+    while (count >= _58) {
+        makePolygonLists(_58 * 2);
+        count = MR::createAreaPolygonListArray(_32C, _58, corners, 8);
     }
 
-    _338 = 0;
-    for (u32 i = 0; i < _33A; i++) {
-        _32C[count] = _334[i];
-        count++;
-    }
-
-    _33A = 0;
     _33C = count;
     _54 = 0;
     if (!count) {
@@ -301,7 +296,7 @@ void CollisionShadow::sendVtx(TypedDraw& rDraw) const {
         return;
     }
 
-    u16 vertexCount = _54 * _5A;
+    u32 vertexCount = _54 * _5A;
     VertexPT* vtx = rDraw.vertices< VertexPT >(_5A == 4 ? NEBULA_PRIMITIVE_QUADS : NEBULA_PRIMITIVE_TRIANGLES, vertexCount);
 
     const Vec2f* pTex;
@@ -317,7 +312,7 @@ void CollisionShadow::sendVtx(TypedDraw& rDraw) const {
 }
 
 void CollisionShadow::sendZsortedVtx(TypedDraw& rDraw, bool offset) const {
-    u16 vertexCount = _54 * _5A;
+    u32 vertexCount = _54 * _5A;
     VertexPT* vtx = rDraw.vertices< VertexPT >(_5A == 4 ? NEBULA_PRIMITIVE_QUADS : NEBULA_PRIMITIVE_TRIANGLES, vertexCount);
 
     Vec3f shift(-_24 * 5.0f);
@@ -561,7 +556,7 @@ void CollisionShadow::draw3() const {
 }
 
 void CollisionShadow::doSortPolygons() {
-    f32 distances[128];
+    f32* distances = mSortDistances;
     f32 inverseVertexCount = 0.33333334f;
     for (u32 i = 0; i < _54; i++) {
         Vec3f center(getDrawPos(0));

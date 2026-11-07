@@ -278,8 +278,8 @@ void MarioActor::attackOrPushSensorInRush(HitSensor* pSensor, f32 radius) {
 }
 
 void MarioActor::tryAddClapCoin(HitSensor* pSensor) {
-    if (_7DC != 64 && pSensor->isType(ATYPE_STAR_PIECE)) {
-        _6DC[_7DC] = pSensor;
+    if (pSensor->isType(ATYPE_STAR_PIECE)) {
+        _6DC.at(_7DC) = pSensor;
         _7DC++;
     }
 }
