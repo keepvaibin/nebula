@@ -494,15 +494,14 @@ void MaterialDraw::setCoordinate(u32 coord, const f32 (*pMtx)[4]) {
     mEdits |= Edit_Coord0 << coord;
 }
 
-void MaterialDraw::setRegister(u32 index, NebulaColor8 color) {
-    if ((index & 3) != 0) {
-        setColor(mRegisters[(index & 3) - 1], color);
-        mEdits |= Edit_Register1 << ((index & 3) - 1);
-    }
+void MaterialDraw::setRegister(MaterialRegister reg, NebulaColor8 color) {
+    const u32 number = reg - MaterialRegister_0;
+    setColor(mRegisters[number], color);
+    mEdits |= Edit_Register1 << number;
 }
 
-const f32* MaterialDraw::getRegister(u32 index) {
-    const u32 number = (index & 3) - 1;
+const f32* MaterialDraw::getRegister(MaterialRegister reg) {
+    const u32 number = reg - MaterialRegister_0;
     if ((mEdits & (Edit_Register1 << number)) == 0) {
         getMaterial()->fillRow(static_cast< u32 >(NEBULA_ROW_REGISTER + number), mRegisters[number]);
         mEdits |= Edit_Register1 << number;
