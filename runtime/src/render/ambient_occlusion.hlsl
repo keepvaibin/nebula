@@ -423,10 +423,11 @@ float ao_scale(float visibility) {
     const float value = saturate(visibility);
     // The native display-value AO uses exponent 1. Avoid a log/exp pair for every full-resolution pixel;
     // retain the general curve for any other exponent supplied by the renderer.
-    [branch] if (g_params.z == 1.0f) {
-        return value;
+    float scale = value;
+    [branch] if (g_params.z != 1.0f) {
+        scale = pow(value, g_params.z);
     }
-    return pow(value, g_params.z);
+    return scale;
 }
 
 #ifdef AO_PASS_upsample_cs
