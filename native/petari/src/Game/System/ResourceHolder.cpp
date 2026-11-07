@@ -1,9 +1,7 @@
 #include "Game/System/ResourceHolder.hpp"
-#include "Game/System/GameThreads.hpp"
 #include "Game/Render/Clip.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
-#include "Game/Util/MutexHolder.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Render/Material.hpp"
 #include <cstdio>

@@ -351,7 +351,6 @@ struct Module {
     decltype(&nebula_game_sound_frame) audio_tick;
     decltype(&nebula_game_mii_valid) mii_valid;
     decltype(&nebula_game_mii_changed) mii_changed;
-    void (*debug_dump)();  // optional: the module's thread report
 };
 Module gModule;
 
@@ -478,11 +477,6 @@ void load_module(const fs::path& path) {
     gModule.mii_valid = reinterpret_cast<decltype(gModule.mii_valid)>(find_symbol(module, "nebula_game_mii_valid"));
     gModule.mii_changed =
         reinterpret_cast<decltype(gModule.mii_changed)>(find_symbol(module, "nebula_game_mii_changed"));
-#if defined(_WIN32)
-    gModule.debug_dump = reinterpret_cast<void (*)()>(GetProcAddress(static_cast<HMODULE>(module), "nebula_game_debug_dump"));
-#else
-    gModule.debug_dump = reinterpret_cast<void (*)()>(dlsym(module, "nebula_game_debug_dump"));
-#endif
 }
 
 #if defined(NEBULA_HOST_RENDERER)
@@ -1000,8 +994,8 @@ void crash_writer() {
         }
         report_crash_facts(fs::path(path));
         SetEvent(gCrashDone);
-        // The dump and report are written: whatever the crashed thread still does (the module's thread report, a flush
-        // behind a lock another thread held when it stopped) never keeps the process alive.
+        // The dump and report are written: whatever the crashed thread still does (a flush behind a lock another thread
+        // held when it stopped) never keeps the process alive.
         Sleep(5000);
         TerminateProcess(GetCurrentProcess(), 4);
     }
@@ -1015,9 +1009,6 @@ void report_crash(EXCEPTION_POINTERS* info) {
     gCrashThread = GetCurrentThreadId();
     SetEvent(gCrashRequest);
     WaitForSingleObject(gCrashDone, 60000);
-    if (gModule.debug_dump != nullptr) {
-        gModule.debug_dump();
-    }
     std::fflush(stdout);
 }
 
@@ -2024,125 +2015,6 @@ void svc_memory_release(void*, void* start, uint64_t size) {
 #else
     munmap(start, static_cast<size_t>(size));
 #endif
-}
-
-}  // namespace
-
-// The game's threads: each sleeps on its own turn; only the one whose turn it is runs.
-struct NebulaHostThread {
-    void (*entry)(void*) = nullptr;
-    void* arg = nullptr;
-    bool turn = false;
-    bool cancelled = false;
-    std::mutex lock;
-    std::condition_variable woken;
-};
-
-namespace {
-
-#if defined(_WIN32)
-// Where each thread last went to sleep, for the dump: a hang shows who waits for what.
-constexpr int kWaitThreads = 32;
-constexpr int kWaitFrames = 10;
-struct WaitRecord {
-    DWORD id;
-    void* frames[kWaitFrames];
-    USHORT count;
-};
-WaitRecord gWaits[kWaitThreads];
-std::atomic<int> gWaitCount{0};
-thread_local int tWaitSlot = -1;
-
-void note_wait() {
-    if (tWaitSlot < 0) {
-        const int slot = gWaitCount.fetch_add(1, std::memory_order_relaxed);
-        if (slot >= kWaitThreads) {
-            return;
-        }
-        tWaitSlot = slot;
-        gWaits[slot].id = GetCurrentThreadId();
-    }
-    gWaits[tWaitSlot].count = RtlCaptureStackBackTrace(1, kWaitFrames, gWaits[tWaitSlot].frames, nullptr);
-}
-#else
-void note_wait() {}
-#endif
-
-void svc_threads_dump(void*, const void* in_module) {
-#if defined(_WIN32)
-    HMODULE module = nullptr;
-    GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-                       static_cast<const char*>(in_module), &module);
-    for (int i = 0; i < gWaitCount.load(std::memory_order_relaxed) && i < kWaitThreads; i++) {
-        char text[256];
-        int used = std::snprintf(text, sizeof(text), "thread %lu sleeps at", static_cast<unsigned long>(gWaits[i].id));
-        for (USHORT k = 0; k < gWaits[i].count && used < 230; k++) {
-            used += std::snprintf(text + used, sizeof(text) - used, " +%llx",
-                                  static_cast<unsigned long long>(static_cast<const char*>(gWaits[i].frames[k]) - reinterpret_cast<const char*>(module)));
-        }
-        log_line("threads:", text);
-    }
-#else
-    (void)in_module;
-#endif
-}
-
-void svc_thread_pass(void*, NebulaHostThread* to) {
-    {
-        const std::lock_guard<std::mutex> guard(to->lock);
-        to->turn = true;
-    }
-    to->woken.notify_one();
-}
-
-void svc_thread_exit(void*, NebulaHostThread* self) {
-    // Game threads end only with the game.
-    std::unique_lock<std::mutex> guard(self->lock);
-    self->woken.wait(guard, [] { return false; });
-}
-
-void svc_thread_wait(void* user, NebulaHostThread* self) {
-    note_wait();
-    {
-        std::unique_lock<std::mutex> guard(self->lock);
-        self->woken.wait(guard, [self] { return self->turn; });
-        self->turn = false;
-    }
-    if (self->cancelled) {
-        svc_thread_exit(user, self);
-    }
-}
-
-void svc_thread_cancel(void* user, NebulaHostThread* thread) {
-    thread->cancelled = true;
-    svc_thread_pass(user, thread);
-}
-
-NebulaHostThread* svc_thread_adopt(void*) {
-    return new NebulaHostThread();
-}
-
-NebulaHostThread* svc_thread_create(void* user, void (*entry)(void*), void* arg) {
-    auto* const thread = new NebulaHostThread();
-    thread->entry = entry;
-    thread->arg = arg;
-    std::thread([user, thread] {
-        name_thread(L"Nebula Game Thread");
-        svc_thread_wait(user, thread);
-        thread->entry(thread->arg);
-    }).detach();
-    return thread;
-}
-
-// The kernel's lock (nebula_threads.h NEBULA_HOST_LOCK_STATE).
-std::mutex gGameLocks[1];
-
-void svc_lock(void*, int which) {
-    gGameLocks[which].lock();
-}
-
-void svc_unlock(void*, int which) {
-    gGameLocks[which].unlock();
 }
 
 // GALAXY_TEST_DISC_DELAY_US: a slow drive (each way to the store takes this long), so waits on loads are exercised.
@@ -3687,10 +3559,6 @@ int main(int argc, char** argv) {
     services.heap_alloc = [](void*, size_t size) -> void* { return std::malloc(size); };
     services.heap_realloc = [](void*, void* data, size_t size) -> void* { return std::realloc(data, size); };
     services.heap_free = [](void*, void* data) { std::free(data); };
-    services.thread_slots = [](void*) -> void** {
-        static thread_local void* slots[NEBULA_THREAD_SLOTS];
-        return slots;
-    };
     services.movie_frame = svc_movie_frame;
     services.presence = svc_presence;
     services.achievement = svc_achievement;
@@ -3735,15 +3603,6 @@ int main(int argc, char** argv) {
     services.memory_commit = svc_memory_commit;
     services.memory_decommit = svc_memory_decommit;
     services.memory_release = svc_memory_release;
-    services.thread_create = svc_thread_create;
-    services.thread_adopt = svc_thread_adopt;
-    services.thread_pass = svc_thread_pass;
-    services.thread_wait = svc_thread_wait;
-    services.thread_exit = svc_thread_exit;
-    services.thread_cancel = svc_thread_cancel;
-    services.lock = svc_lock;
-    services.unlock = svc_unlock;
-    services.threads_dump = svc_threads_dump;
     services.asset_map = svc_asset_map;
     services.asset_map_private = svc_asset_map_private;
     services.asset_unmap = svc_asset_unmap;
@@ -3979,9 +3838,6 @@ int main(int argc, char** argv) {
 #if defined(NEBULA_HOST_RENDERER)
     galaxy::loss::report();
 #endif
-    if (gModule.debug_dump != nullptr) {
-        gModule.debug_dump();
-    }
 #if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
     galaxy::timeline::dump();
 #endif

@@ -7,7 +7,7 @@
 #include <nebula_game_api.h>
 
 namespace NebulaFrameClock {
-    // The game's 2D coordinates are this tall, and MR::getScreenWidth wide; nothing renders at this size. View rectangles are fractions.ractions of
+    // The game's 2D coordinates are this tall, and MR::getScreenWidth wide; nothing renders at this size. View rectangles are fractions of it.
     const u16 cScreenLines = 456;
     // The same height as a float, and the width the layout files are authored for.
     const f32 cScreenHeight = 456.0f;
@@ -17,7 +17,7 @@ namespace NebulaFrameClock {
 
     // Frames shown since start.
     u32 count();
-    // The main thread sleeps until the next frame and begins it.
+    // The game thread sleeps until the next frame and begins it.
     void waitFrame();
     // The same in two steps, for a frame that updates between them.
     void sleepUntilFrame();

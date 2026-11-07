@@ -70,8 +70,6 @@ void ResourceHolderManager::removeIfIsEqualHeap(NebulaArena* pHeap) {
     }
 }
 
-// Made by the thread that asks: every game thread holds the world while it runs, so nothing else is in the middle of
-// anything. (Handing each to the main thread cost a frame per archive.)
 void ResourceHolderManager::startCreateResourceHolder(const char* pParam1, CreateResourceHolderArgs* pArgs) {
     SingletonHolder< ResourceHolderManager >::get()->createResourceHolder(pParam1, pArgs);
 }

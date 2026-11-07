@@ -3,7 +3,6 @@
 #include "Game/System/NebulaMods.hpp"
 #include "Game/System/NebulaLoadTrace.hpp"
 #include "Game/System/NebulaArena.hpp"
-#include "Game/System/GameThreads.hpp"
 #include "Game/Render/FrameList.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/NameObj/NameObjRegister.hpp"
@@ -24,7 +23,6 @@
 #include "Game/System/GameFrame.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MemoryUtil.hpp"
-#include "Game/Util/MutexHolder.hpp"
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/SequenceUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
@@ -52,8 +50,6 @@ namespace NrvGameSystem {
 // The game thread's entry; the native platform layer starts it.
 extern "C" void nebula_game_main(void) {
     NebulaArena::create(nullptr);
-    (MR::MutexHolder< 0 >::sMutex).init();
-    (MR::MutexHolder< 2 >::sMutex).init();
     nw4r::lyt::LytInit();
     SingletonHolder< HeapMemoryWatcher >::init();
     SingletonHolder< HeapMemoryWatcher >::get()->setCurrentHeapToPermanent();

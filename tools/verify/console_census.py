@@ -33,8 +33,10 @@ GROUPS = {
     "offsets": r"\bfield_0x|\b_[0-9A-Fa-f]{2,3}\b(?!\w)",
     # Batch 5: the audio thread's lock and the console's sound pools.
     "audio_sync": r"\bGameAudioExclusion|\bexcludeAudio|\benterAudio|\bleaveAudio|\brestoreAudio|NEBULA_HOST_LOCK_AUDIO|\bsAudioThread|PoolAllocObject|\bSpkMixingBuffer|\bAudRhythmWrap|\bAudMeSeq",
+    # Batch 7: one game thread, so its locks, thread slots and the host's thread services.
+    "threads": r"\bGameMutex|\bMutexHolder|\bGameThreads|\bthread_slots|\bNEBULA_THREAD_SLOTS|\bNebulaHostThread|\bthread_adopt|\bthreads_dump|\bnebula_threads|\bsListMutex|\bsMappedLock|\bnebula_host_lock|\bNEBULA_HOST_LOCK",
 }
-CLOSED = {"math", "j3d", "audio", "audio_sync", "particles"}
+CLOSED = {"math", "j3d", "audio", "audio_sync", "particles", "threads"}
 CASE_FREE = {"j3d", "jsystem", "nw4r"}
 
 compiled = {k: re.compile(v, re.I if k in CASE_FREE else 0) for k, v in GROUPS.items()}

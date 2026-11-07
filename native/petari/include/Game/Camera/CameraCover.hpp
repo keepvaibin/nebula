@@ -1,7 +1,5 @@
 #pragma once
 
-#include "Game/System/NebulaAtomic.hpp"
-
 #include "Game/NameObj/NameObj.hpp"
 #include "Game/Screen/CaptureScreenDirector.hpp"
 #include <nebula_geometry.hpp>
@@ -23,7 +21,7 @@ public:
     }
 
     Mtx34f _C;
-    NebulaAtomic< s32 > _3C;
+    s32 _3C;
     u8 _40;
     bool _41;
     u8 _42[2];

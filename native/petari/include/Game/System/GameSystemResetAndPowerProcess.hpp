@@ -1,7 +1,5 @@
 #pragma once
 
-#include "Game/System/NebulaAtomic.hpp"
-
 #include "Game/Screen/LayoutActor.hpp"
 
 class ValueControl;
@@ -38,6 +36,6 @@ public:
     bool tryPermitReset();
 
     ValueControl* mFadeinoutControl;
-    NebulaAtomic< s32 > mResetOperation;
+    s32 mResetOperation;
     bool _5C;
 };

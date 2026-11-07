@@ -1,8 +1,8 @@
 /* The game module's interface to Nebula's host (docs/NATIVE_PORT.md, "Module layout"): plain C, so the game module
    (built against the game's own C++ library) and the host (the host's C++ library) share nothing else. The host fills
-   NebulaHostServices and calls nebula_game_attach, then runs the game on its simulation thread with nebula_game_run;
-   events from host threads (the renderer's PE tokens and stream consumption, the video retrace, audio, input, file reads)
-   come back through the nebula_game_* entry points, which may be called from any thread. */
+   NebulaHostServices and calls nebula_game_attach, then runs the game on its game thread with nebula_game_run. Game code
+   runs on that thread only, but for nebula_game_sound_frame (the host's audio clock) and nebula_game_mii_valid (any
+   thread, pure). */
 #ifndef NEBULA_GAME_API_H
 #define NEBULA_GAME_API_H
 
@@ -24,17 +24,13 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 137u
+#define NEBULA_GAME_API_VERSION 138u
 
 /* Viewports, scissors, clears, target sizes and picture points count this many units across a frame on each axis. */
 #define NEBULA_FRAME_UNITS 65536.0f
 
 /* A colour word, R << 24 | G << 16 | B << 8 | A. */
 #define NEBULA_RGBA(r, g, b, a) (((uint32_t)(r) << 24) | ((uint32_t)(g) << 16) | ((uint32_t)(b) << 8) | (uint32_t)(a))
-
-typedef struct NebulaHostThread NebulaHostThread;
-
-#define NEBULA_THREAD_SLOTS 4
 
 /* Audio (the host's mixer): the game's voices mix at the output device's rate, one tick's worth per voices_mix call
    (the clock's rate, NEBULA_AUDIO_START). A voice plays one source (PCM16 or an oscillator) through
@@ -708,9 +704,6 @@ typedef struct NebulaHostServices {
     void* (*heap_alloc)(void* user, size_t size);
     void* (*heap_realloc)(void* user, void* data, size_t size);
     void (*heap_free)(void* user, void* data);
-    /* This thread's slots (NEBULA_THREAD_SLOTS of them, null at first) for the module's per-thread values. */
-    void** (*thread_slots)(void* user);
-
 
     /* The game's files: the file or folder at `path` ("/StageData/EggStarGalaxy.arc": from the root, '/' at a name's start
        returning to it, "." and ".." steps, letters in either case, a name followed by '/' a folder): 0 when there is
@@ -728,18 +721,6 @@ typedef struct NebulaHostServices {
     int (*memory_commit)(void* user, void* start, uint64_t size);
     void (*memory_decommit)(void* user, void* start, uint64_t size);
     void (*memory_release)(void* user, void* start, uint64_t size);
-    /* The game's threads (nebula_threads.h). A new thread sleeps until passed its turn; one that ends sleeps for good: game
-       threads end only with the game. */
-    NebulaHostThread* (*thread_create)(void* user, void (*entry)(void*), void* arg);
-    NebulaHostThread* (*thread_adopt)(void* user);
-    void (*thread_pass)(void* user, NebulaHostThread* to);
-    void (*thread_wait)(void* user, NebulaHostThread* self);
-    void (*thread_exit)(void* user, NebulaHostThread* self);
-    void (*thread_cancel)(void* user, NebulaHostThread* thread);
-    void (*lock)(void* user, int which);
-    void (*unlock)(void* user, int which);
-    /* Each thread's stack at its last wait, as offsets in the module holding `in_module`, to the log. */
-    void (*threads_dump)(void* user, const void* in_module);
     /* A file's bytes in the mapped store, read-only, for the process's life, on their way into memory when this returns
        (call it where a wait for the drive does no harm); null if there is no such file. */
     const void* (*asset_map)(void* user, int32_t file);
@@ -771,14 +752,14 @@ typedef struct NebulaHostServices {
     /* Player `player`'s remote speaker: `count` 16-bit samples at 6 kHz, as the game mixes them. */
     void (*speaker_samples)(void* user, uint32_t player, const int16_t* samples, uint32_t count);
 
-    /* Audio, on the game's audio thread. voices_setup hands over the voices and the four effect lines (they stay the
+    /* Audio, on the host's audio clock (nebula_game_sound_frame). voices_setup hands over the voices and the four effect lines (they stay the
        game's; the mixer reads and advances them in voices_mix).
        voices_mix mixes one subframe at `gain`; voices_frame ends a frame: the subframes mixed since the last call, with
        the movie's sound for them, go to the output. */
     void (*voices_setup)(void* user, NebulaVoice* voices, uint32_t count, const NebulaEffectLine* effects);
     void (*voices_mix)(void* user, float gain, uint32_t used); /* `used`: voices past this have never played */
     void (*voices_frame)(void* user);
-    /* The movie player's sound, on the game's threads: movie_audio queues one frame's audio record (its stereo sample count,
+    /* The movie player's sound, on the game thread: movie_audio queues one frame's audio record (its stereo sample count,
        u32, then the samples, PCM16, left and right in turn, of the track played) for the mixer; 0 when the queue is full (null asks only that).
        sound at 32 kHz; 0 when NEBULA_MOVIE_AUDIO_QUEUE_FRAMES already wait (nothing taken). A null record asks for the frames there is room for.
        movie_audio_control: NEBULA_MOVIE_AUDIO_*. movie_audio_position: where the output has reached in the sound since the movie opened or was
@@ -818,14 +799,14 @@ typedef struct NebulaHostServices {
     /* A Nebula option (NEBULA_OPTION_*), read when the game needs it. */
     uint32_t (*option)(void* user, uint32_t what);
     /* A light of the game (NEBULA_LIGHT_*): `id` names it across frames (its object's address; 0: none), `values` as
-       the kind lists. Called on the simulation thread. */
+       the kind lists. */
     void (*game_light)(void* user, uint32_t kind, uint64_t id, const float* values);
     /* The stage being played (MR::getCurrentStageName), before each 3D scene's begin marker. */
     void (*game_stage)(void* user, const char* name);
     /* A movie (MovieStream): its disc path and NEBULA_MOVIE_OPENING when it opens, each frame it draws
        (the frame within the movie, its frame rate and the texture ids of its Y, U and V planes, `width` x
        `height` for Y and half each way for U and V), NEBULA_MOVIE_NONE when it closes. The host may show a replacement
-       video's frame of the same time in place of the planes. Called on the simulation thread. */
+       video's frame of the same time in place of the planes. */
     void (*movie_frame)(void* user, const char* name, int32_t frame, float frame_rate, uint32_t y, uint32_t u,
                         uint32_t v, uint32_t width, uint32_t height);
     /* A native equivalent of a mod's code patch (NEBULA_PATCH_*): 1 with `value` set when an enabled mod carries it,
@@ -880,9 +861,9 @@ typedef struct NebulaHostServices {
     /* The local date and time now: nanoseconds from 2000-01-01 00:00 local time (the game's clock counts from
        there; the game's saves store times in its unit). */
     int64_t (*calendar_ns)(void* user);
-    /* Deterministic test mode only (NULL otherwise; GALAXY_TEST_DETERMINISTIC): the game's time is its frames. No game
-       thread can run: the host takes one frame's audio ticks and clock and returns, so frames follow the game's own pace and every run of a build is the same. The game's clock then
-       advances one retrace per call and its alarms fire when that clock passes them. */
+    /* Deterministic test mode only (NULL otherwise; GALAXY_TEST_DETERMINISTIC): the game's time is its frames. The host
+       takes one frame's audio ticks and clock and returns, so frames follow the game's own pace and every run of a build is the same. The
+       game's clock advances one frame per call. */
     void (*test_frame_step)(void* user);
     /* A model file (NMDL) the game loaded: its meshes get ids `*first_mesh` on, in file order. The file stays mapped
        until model_free. Returns the model's id. */
@@ -965,19 +946,14 @@ enum {
 
 /* Returns NEBULA_GAME_API_VERSION, or 0 if the host's services are too old. */
 NEBULA_GAME_API uint32_t nebula_game_attach(const NebulaHostServices* host);
-/* Runs the game on the calling thread, the simulation thread. Does not return. */
+/* Runs the game on the calling thread, the game thread. Does not return. */
 NEBULA_GAME_API void nebula_game_run(void);
 /* The game's half of the plugin interface. */
 NEBULA_GAME_API const struct NebulaModApi* nebula_game_mod_api(void);
-/* A file read finished: `result` is the bytes read, or -1 on a read error. */
 /* The audio clock, while started (NEBULA_AUDIO_START): the game mixes its next frame (voices_mix, voices_frame). */
 NEBULA_GAME_API void nebula_game_sound_frame(void);
-/* Mii import. prepare: makes a Mii (a 74-byte record as a Mii file stores it) acceptable where the game would
-   refuse a detail (birthday, special Mii not kept local, favourite colour, no name), then 1 when the game takes it as
-   its database's; pure, any thread. install: places it in slot `slot` (0-99) of the loaded database, free or holding
-   the same Mii (its create ID); 0 when the database is not loaded or another Mii holds the slot. On the game thread
-   (the host's frame tick). */
-/* Whether the game takes a Mii into its database (its parts and values in range); the host keeps only these. */
+/* Whether the game takes a Mii into its database (its parts and values in range); the host keeps only these. Pure, any
+   thread. */
 NEBULA_GAME_API uint32_t nebula_game_mii_valid(const NebulaMii* mii);
 /* The host's Mii database changed (Miis imported while the game runs): the game reads its slots again. */
 NEBULA_GAME_API void nebula_game_mii_changed(void);

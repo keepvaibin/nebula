@@ -4,7 +4,6 @@
 // (a scene's, say) gives all of it back at once, runs what is registered with it and destroys the arenas made under it. There
 // is no size to give and nothing to run out of but the machine's memory. A pointer's arena is found by its address.
 
-#include "Game/System/GameThreads.hpp"
 #include "JSystem/JKernel/JKRDisposer.hpp"
 #include "JSystem/JSupport/JSUList.hpp"
 #include <NebulaGpu.h>
@@ -27,14 +26,6 @@ public:
 
     void dispose();
 
-    void lock() const {
-        mMutex.lock();
-    }
-
-    void unlock() const {
-        mMutex.unlock();
-    }
-
     void* getStartAddr() const {
         return mStart;
     }
@@ -43,7 +34,7 @@ public:
         return mEnd;
     }
 
-    // Null means the thread's current arena.
+    // Null means the current arena.
     static void* alloc(u32 size, int alignment, NebulaArena* pArena);
     static void free(void* pData, NebulaArena* pArena);
     // The arena `pData` lies in; null outside them all (a file's view, a static).
@@ -58,7 +49,7 @@ public:
     }
 
     static NebulaArena* getCurrentHeap() {
-        return currentSlot();
+        return sCurrentHeap;
     }
 
     static void setSystemHeap(NebulaArena* pArena) {
@@ -66,13 +57,11 @@ public:
     }
 
     static void setCurrentHeap(NebulaArena* pArena) {
-        setCurrentSlot(pArena);
+        sCurrentHeap = pArena;
     }
 
-    // Each thread's own; a new thread and an async function start with their starter's.
-    // This thread's current arena: the host keeps it (slot 0).
-    static NebulaArena* currentSlot();
-    static void setCurrentSlot(NebulaArena* pArena);
+    // Where plain `new` allocates. Only the game thread allocates (the sound engine's thread takes nothing).
+    static NebulaArena* sCurrentHeap;
     static NebulaArena* sRootHeap;
     static NebulaArena* sSystemHeap;
 
@@ -87,7 +76,6 @@ private:
     void* takeBlock(u32 bytes);
     void commitTo(u8* pEnd);
 
-    mutable GameMutex mMutex;
     u8* mStart;
     u8* mEnd;
     u8* mNext;       // the first byte never handed out

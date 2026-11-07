@@ -121,7 +121,7 @@ void GameSystemSceneController::checkRequestAndChangeScene() {
 
 void GameSystemSceneController::initializeScene() {
     NebulaLoadTrace::Scope loadingTrace("initializeScene");
-    MR::CurrentHeapRestorer restorer(NebulaArena::currentSlot());
+    MR::CurrentHeapRestorer restorer(NebulaArena::getCurrentHeap());
     mSceneInitializeState = SceneInitializeState_Init;
     mSceneInitializeHeld = false;
 
@@ -160,7 +160,7 @@ bool GameSystemSceneController::resumeSceneInitialize() {
     if (!mSceneInitializeHeld) {
         return false;
     }
-    MR::CurrentHeapRestorer restorer(NebulaArena::currentSlot());
+    MR::CurrentHeapRestorer restorer(NebulaArena::getCurrentHeap());
     SingletonHolder< HeapMemoryWatcher >::get()->setCurrentHeapToSceneHeap();
     bool complete = false;
     NebulaLoadTrace::measure("initAfterScenarioChosen", [&] { complete = mScene->initAfterScenarioChosen(); });
@@ -172,7 +172,7 @@ bool GameSystemSceneController::resumeSceneInitialize() {
 }
 
 void GameSystemSceneController::destroyScene() {
-    MR::CurrentHeapRestorer restorer(NebulaArena::currentSlot());
+    MR::CurrentHeapRestorer restorer(NebulaArena::getCurrentHeap());
     bool stopSound = isStopSound();
 
     delete mScene;

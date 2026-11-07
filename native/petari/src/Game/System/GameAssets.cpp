@@ -1,15 +1,12 @@
 #include "Game/Render/ModelData.hpp"
 #include "Game/Render/RenderTexture.hpp"
 #include "Game/System/GameAssets.hpp"
-#include "Game/System/NebulaAtomic.hpp"
-#include "Game/System/GameThreads.hpp"
 #include "Game/System/NebulaArena.hpp"
 
 #include <cstdlib>
 #include <cstring>
 
 #include <nebula_game_api.h>
-#include <nebula_threads.h>
 
 extern "C" {
 const NebulaHostServices* nebula_host(void);
@@ -93,7 +90,6 @@ namespace GameAssets {
         Mapped* sMapped;
         u32 sMappedCount;
         u32 sMappedMax;
-        GameMutex sMappedLock;  // all zeros: ready before anything can run
 
         void release(const Mapped& rMapped) {
             const NebulaHostServices* const host = nebula_host();
@@ -104,7 +100,6 @@ namespace GameAssets {
 
         void* loadMapped(s32 entry, u32 size, NebulaArena* pHeap) {
             const NebulaHostServices* const host = nebula_host();
-            sMappedLock.lock();
             void* pData = host->asset_map_private(host->user, entry);
             if (pData != nullptr && sMappedCount == sMappedMax) {
                 sMappedMax = sMappedMax != 0 ? sMappedMax * 2 : 512;
@@ -116,13 +111,11 @@ namespace GameAssets {
                 rMapped.mSize = size;
                 rMapped.mHeap = pHeap != nullptr ? pHeap : NebulaArena::getCurrentHeap();
             }
-            sMappedLock.unlock();
             return pData;
         }
     }  // namespace
 
     void unloadHeap(const NebulaArena* pHeap) {
-        sMappedLock.lock();
         for (u32 i = 0; i < sMappedCount;) {
             if (sMapped[i].mHeap == pHeap) {
                 release(sMapped[i]);
@@ -131,7 +124,6 @@ namespace GameAssets {
                 i++;
             }
         }
-        sMappedLock.unlock();
     }
 
     void* load(s32 entry, u8* pDst, u32 maxLength, NebulaArena* pHeap, u32* pSize) {

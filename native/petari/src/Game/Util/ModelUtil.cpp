@@ -1,6 +1,5 @@
 #include "Game/Util/Color.hpp"
 #include "Game/Util/ModelUtil.hpp"
-#include "Game/System/GameThreads.hpp"
 #include "Game/Animation/XanimePlayer.hpp"
 #include "Game/Animation/XanimeResource.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
@@ -60,9 +59,7 @@ namespace MR {
     }
 
     void calcModel(LiveActor* pActor) {
-        (MR::MutexHolder< 0 >::sMutex).lock();
         getModel(pActor)->calc();
-        (MR::MutexHolder< 0 >::sMutex).unlock();
     }
 
     ModelData* getModelData(const LiveActor* pActor) {
@@ -374,23 +371,17 @@ namespace MR {
             MR::isEqualString(pChar, "BoneMario") || MR::isEqualString(pChar, "BoneLuigi") || MR::isEqualString(pChar, "SearchLightCone") ||
             strstr(pChar, "FlexibleSphere") || strstr(pChar, "FlexibleSandPlanetParts") || MR::isEqualString(pChar, "ScaleDownRelayPlanet") ||
             MR::isEqualString(pChar, "GhostMario") || MR::isEqualString(pChar, "GhostLuigi") || MR::isEqualString(pChar, "Koura")) {
-            (MR::MutexHolder< 0 >::sMutex).lock();
             newModel = static_cast< Model* >(new PlayerModel(modelData, mdlFlag, 1));
-            (MR::MutexHolder< 0 >::sMutex).unlock();
         } else {
-            (MR::MutexHolder< 0 >::sMutex).lock();
             newModel = new Model(modelData, mdlFlag, 1);
-            (MR::MutexHolder< 0 >::sMutex).unlock();
         }
 
         Mtx mtx;
         NebulaMtxIdentity(mtx);
-        (MR::MutexHolder< 0 >::sMutex).lock();
         NebulaMtxCopy(mtx, ModelSys::mViewMtx);
         newModel->calc();
         newModel->viewCalc();
         newModel->viewCalc();
-        (MR::MutexHolder< 0 >::sMutex).unlock();
 
         return newModel;
     }

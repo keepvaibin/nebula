@@ -2,7 +2,6 @@
 #include <nebula_game_api.h>
 
 #include "nebula_module.h"
-#include "nebula_threads.h"
 
 #include <stdarg.h>
 #include <stdatomic.h>
@@ -47,7 +46,6 @@ NEBULA_GAME_API void nebula_game_run(void) {
     if (sHost == NULL) {
         nebula_fatal("nebula_game_run before nebula_game_attach");
     }
-    nebula_threads_init();
     nebula_game_main();
     nebula_fatal("the game's main returned");
 }

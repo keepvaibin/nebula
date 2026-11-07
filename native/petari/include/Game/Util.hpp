@@ -45,7 +45,6 @@
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/MultiEventCamera.hpp"
-#include "Game/Util/MutexHolder.hpp"
 #include "Game/Util/NPCUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"

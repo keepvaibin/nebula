@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Game/Util/Array.hpp"
-#include "Game/System/GameThreads.hpp"
 #include "Game/System/AssetFolder.hpp"
 
 class ArchiveHolderArchiveEntry {
@@ -50,5 +49,4 @@ public:
     ArchiveHolderArchiveEntry* findEntry(const char*) const;
 
     MR::Vector< MR::AssignableArray< ArchiveHolderArchiveEntry* > > mEntries;
-    mutable GameMutex mMutex;
 };
