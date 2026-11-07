@@ -70,8 +70,9 @@ void MeterCS() {
     const float adapted = now + (target - now) * (1.0f - exp(-min(g_seconds, 1.0f) / tau));
     u_exposure[uint2(0u, 0u)] = adapted;
     // Below the shoulder, pow(pow(c, 2.2) * exposure, 1/2.2) = c * exposure^(1/2.2).
-    // Compute the frame-uniform factor once, rather than for every pixel/MSAA sample.
-    u_exposure[uint2(1u, 0u)] = pow(adapted, 1.0f / 2.2f);
+    // Compute the frame-uniform factor once, rather than for every pixel/MSAA sample. adapted lies between now and
+    // target, both positive; abs is a free source modifier that tells the compiler so.
+    u_exposure[uint2(1u, 0u)] = pow(abs(adapted), 1.0f / 2.2f);
 }
 #else
 float4 CameraVS(uint vertex : SV_VertexID) : SV_Position {
@@ -91,7 +92,8 @@ float4 camera(float4 wide) {
     }
     const float3 x = pow(max(wide.rgb, 0.0f), 2.2f) * exposure;
     const float3 over = kKnee + (1.0f - kKnee) * (1.0f - exp((kKnee - x) / (1.0f - kKnee)));
-    return float4(pow(lerp(x, over, step(kKnee, x)), 1.0f / 2.2f), wide.a);
+    // The lerp picks x (never negative) below the knee and over (at least kKnee) above it; abs is free and says so.
+    return float4(pow(abs(lerp(x, over, step(kKnee, x))), 1.0f / 2.2f), wide.a);
 }
 
 #ifdef CAMERA_RESOLVE
