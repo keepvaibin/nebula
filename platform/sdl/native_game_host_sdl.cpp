@@ -396,7 +396,7 @@ in::PlayerInput native_game_input(std::uint64_t frame, std::int32_t star_pointer
     s_last_ms = now;
     float x = 0.0f;
     float y = 0.0f;
-    if (state.finger_ms != 0 && now - state.finger_ms <= kTouchPointerHoldMs &&
+    if (context != in::PlayContext::Menu && state.finger_ms != 0 && now - state.finger_ms <= kTouchPointerHoldMs &&
         project_window_point(state, state.finger_x, state.finger_y, x, y)) {
         if (state.finger_down || state.finger_ms > s_pointer_ms) {
             s_pointer_x = x;
@@ -462,7 +462,10 @@ in::PlayerInput native_game_input(std::uint64_t frame, std::int32_t star_pointer
     if (s_tap_waiting || tap_pressing) {
         s_pointer_ms = now;
     }
-    const bool pointer_active = s_pointer_ms != 0 && now - s_pointer_ms <= s_hold_ms;
+    // A menu touch becomes a pointer only after it resolves to a tap. A swipe never hovers buttons along its path.
+    const bool touch_menu = s_pointer_by_finger && context == in::PlayContext::Menu;
+    const bool pointer_active = s_pointer_ms != 0 && now - s_pointer_ms <= s_hold_ms &&
+        (!touch_menu || (!state.finger_down && (s_tap_waiting || tap_pressing)));
     if (pointer_active && !s_pointer_shown) {
         s_pointer_shown_frame = frame;
     }
@@ -484,9 +487,9 @@ in::PlayerInput native_game_input(std::uint64_t frame, std::int32_t star_pointer
     return snapshot;
 }
 
-void native_game_rumble(bool motor_on, std::int32_t) noexcept {
+void native_game_rumble(std::uint8_t strength, std::int32_t) noexcept {
     if (g_rumble_pad != 0) {
-        sdl::rumble(g_rumble_pad, motor_on ? g_rumble_strength : 0.0f);
+        sdl::rumble(g_rumble_pad, (static_cast<float>(strength) / 255.0f) * g_rumble_strength);
     }
 }
 

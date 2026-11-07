@@ -74,6 +74,16 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
         return new String[] {"SDL3", "main"};
     }
 
+    // A shell-launched profiling run uses copied saves/settings; never the player's writable data.
+    // BuildConfig.DEBUG is false (and this path removed by R8) in distributable release builds.
+    private boolean isProfileRun() {
+        return BuildConfig.DEBUG && getIntent().getBooleanExtra("nebula.profile", false);
+    }
+
+    private File nativeData() {
+        return isProfileRun() ? new File(GameFiles.data(this), "profiling") : GameFiles.data(this);
+    }
+
     /** The game's language follows the device's where the disc has it (runtime_settings.cpp reads LANG). */
     private static void passLocale() {
         try {
@@ -88,13 +98,13 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
         passLocale();
         // The launcher's Record diagnostics: this run only.
         final SharedPreferences prefs = GameFiles.controls(this);
-        final boolean record = prefs.getBoolean(GameFiles.RECORD_NEXT_RUN, false);
-        if (record) {
+        final boolean record = isProfileRun() || prefs.getBoolean(GameFiles.RECORD_NEXT_RUN, false);
+        if (record && !isProfileRun()) {
             prefs.edit().remove(GameFiles.RECORD_NEXT_RUN).commit();
         }
         return new String[] {
             "--pak", GameFiles.pak(this).getPath(),
-            "--saves", GameFiles.nand(this).getPath(),
+            "--saves", new File(nativeData(), "nand").getPath(),
             "--module", getApplicationInfo().nativeLibraryDir + "/libsmg_game.so",
             "--diagnostics", record ? "1" : "0",
         };
@@ -104,7 +114,7 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
     // between at its rate. Without the request Android may hold the game at 60 Hz.
     private void requestDisplayRate() {
         String maxFps = "60";
-        try (BufferedReader reader = new BufferedReader(new FileReader(GameFiles.renderConfig(this)))) {
+        try (BufferedReader reader = new BufferedReader(new FileReader(new File(nativeData(), "config.ini")))) {
             for (String line; (line = reader.readLine()) != null; ) {
                 if (line.startsWith("max_fps=")) {
                     maxFps = line.substring("max_fps=".length()).trim();
@@ -134,7 +144,7 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
     protected void onCreate(Bundle savedInstanceState) {
         // The native game's settings, saves and log: the app's private storage.
         try {
-            Os.setenv("NEBULA_DATA_DIR", GameFiles.data(this).getPath(), true);
+            Os.setenv("NEBULA_DATA_DIR", nativeData().getPath(), true);
         } catch (ErrnoException e) {
             Log.e(TAG, "NEBULA_DATA_DIR not set", e);
         }
