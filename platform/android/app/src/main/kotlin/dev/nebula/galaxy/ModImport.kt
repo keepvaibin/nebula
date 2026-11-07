@@ -25,8 +25,10 @@ object ModImport {
         fun update(done: Long, total: Long): Boolean
     }
 
+    // Paths and the answer cross as UTF-8 bytes: JNI's own strings are modified UTF-8, which spells a character past
+    // U+FFFF (an emoji in a file's name) differently from the file system.
     @JvmStatic
-    private external fun importFile(source: String, data: String, progress: Progress?): String
+    private external fun importFile(source: ByteArray, data: ByteArray, progress: Progress?): ByteArray
 
     /** [onProgress] gets the copy's share (0 to 0.5) and then the unpacking's (0.5 to 1). */
     fun import(context: Context, uri: Uri, onProgress: (Float) -> Unit): ModImportResult {
@@ -47,14 +49,14 @@ object ModImport {
                         if (read < 0) break
                         to.write(buffer, 0, read)
                         done += read
-                        if (size > 0) onProgress(0.5f * done / size)
+                        if (size > 0) onProgress(0.5f * minOf(done, size) / size)
                     }
                 }
             }
-            val answer = importFile(copy.path, data.path) { done, total ->
-                if (total > 0) onProgress(0.5f + 0.5f * done / total)
+            val answer = String(importFile(copy.path.toByteArray(Charsets.UTF_8), data.path.toByteArray(Charsets.UTF_8)) { done, total ->
+                if (total > 0) onProgress(0.5f + 0.5f * minOf(done, total) / total)
                 true
-            }.split('\n', limit = 4)
+            }, Charsets.UTF_8).split('\n', limit = 4)
             return ModImportResult(answer[0] == "1", name.substringBeforeLast('.').ifEmpty { name }, answer.getOrElse(1) { "" }, answer.getOrElse(2) { "" }, answer.getOrElse(3) { "" })
         } finally {
             incoming.deleteRecursively()

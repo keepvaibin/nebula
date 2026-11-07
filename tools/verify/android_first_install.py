@@ -72,7 +72,12 @@ def centre_black_share(path):
 def main():
     apk, disc, folder = sys.argv[1:4]
     os.makedirs(folder, exist_ok=True)
-    print(adb('install', '-r', apk).stdout.decode().strip().splitlines()[-1])
+    installed = adb('install', '-r', apk)
+    answer = (installed.stdout + installed.stderr).decode('utf8', 'replace').strip()
+    print(answer.splitlines()[-1] if answer else 'adb install said nothing')
+    if installed.returncode != 0 or 'Success' not in answer:
+        # A signature mismatch (another key's build installed) keeps the old app: uninstall it first.
+        return fail('the APK did not install')
     shell('am force-stop %s; pm clear %s' % (PACKAGE, PACKAGE))
     shell('am start -n %s/.LauncherActivity' % PACKAGE)
     if not wait_for('Choose disc image', 30):
