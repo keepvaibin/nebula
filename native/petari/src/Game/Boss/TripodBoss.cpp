@@ -27,6 +27,7 @@
 #include <nebula_geometry.hpp>
 
 #include <cstdio>
+#include "Game/Util/StringUtil.hpp"
 
 namespace {
     inline void removeHeight(Vec3f* pPosition, const Vec3f& rDelta, TripodBoss* pBoss) {
@@ -115,10 +116,9 @@ void TripodBoss::init(const TableIter& rIter) {
 
     initModelManagerWithAnm(objName, nullptr, false);
 
-    char lowName[32];
-    nebula_sprintf(lowName, "%sLow", objName);
+    MR::FormattedName lowName("%sLow", objName);
 
-    mLowModel = new ModelObj("三脚ボスLODモデル", lowName, getBaseMtx(), MR::DrawBufferType_TripodBoss, -2, -2, false);
+    mLowModel = new ModelObj("三脚ボスLODモデル", lowName.c_str(), getBaseMtx(), MR::DrawBufferType_TripodBoss, -2, -2, false);
     mLowModel->initWithoutIter();
     MR::invalidateClipping(mLowModel);
     mLowModel->makeActorAppeared();
@@ -169,8 +169,7 @@ void TripodBoss::initLeg(const TableIter& rIter) {
     const char* objName;
     MR::getObjectName(&objName, rIter);
 
-    char legShadowName[32];
-    nebula_sprintf(legShadowName, "%sLegShadow", objName);
+    MR::FormattedName legShadowName("%sLegShadow", objName);
 
     for (u32 i = 0; i < ARRAY_SIZE(mLegs); i++) {
         mLegs[i] = new TripodBossLeg("三脚ボス足");
@@ -178,7 +177,7 @@ void TripodBoss::initLeg(const TableIter& rIter) {
         mLegs[i]->setBody(this);
         mLegs[i]->setMovableArea(mMovableArea);
         mLegs[i]->initWithoutIter();
-        mLegs[i]->initShadow(legShadowName);
+        mLegs[i]->initShadow(legShadowName.c_str());
         mStepPoints[i]->initWithoutIter();
     }
 

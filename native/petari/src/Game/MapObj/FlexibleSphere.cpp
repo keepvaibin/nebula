@@ -19,6 +19,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Render/ModelData.hpp"
 #include <nebula_math.h>
+#include "Game/Util/StringUtil.hpp"
 
 #define GROW true
 #define SHRINK false
@@ -40,9 +41,9 @@ FlexibleSphere::FlexibleSphere(const char* pName) : LiveActor(pName), mTimer() {
 void FlexibleSphere::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
 
-    char arcName[256];
-    MR::getMapPartsObjectNameIfExistShapeID(arcName, 256, rIter);
-    initModelManagerWithAnm(arcName, nullptr, false);
+    MR::FormattedName arcName;
+    MR::getMapPartsObjectNameIfExistShapeID(arcName, rIter);
+    initModelManagerWithAnm(arcName.c_str(), nullptr, false);
 
     initHitSensor(1);
     MR::addHitSensorMapObj(this, "body", 8, 1000.0f, Vec3f(0.0f, 0.0f, 0.0f));
@@ -52,7 +53,7 @@ void FlexibleSphere::init(const TableIter& rIter) {
 
     initSound(4, false);
 
-    MR::initCollisionParts(this, arcName, getSensor("body"), nullptr);
+    MR::initCollisionParts(this, arcName.c_str(), getSensor("body"), nullptr);
 
     mGrowDirection = GROW;
 

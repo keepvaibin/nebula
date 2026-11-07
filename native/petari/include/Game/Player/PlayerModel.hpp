@@ -82,7 +82,7 @@ public:
 
     u8 _DC;
     u8 _DD;
-    ModelPose* mExtraPoses[16];
+    ModelPose** mExtraPoses;  // _DD of them; models that copy them share the list
     Flags mFlags;
     // What the next draws take (lighting, alpha); what was set for them.
     const MarioModelTint* _1B4;

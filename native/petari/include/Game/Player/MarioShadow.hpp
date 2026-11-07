@@ -29,6 +29,7 @@ public:
     void drawVolumeBox(const Vec3f&, const Vec3f&) const;
     void draw3() const;
     void doSortPolygons();
+    void makePolygonLists(u32 num);
     const Vec3f& getDrawPos(u32) const;
     const Vec3f& getDrawPos(u32, u32) const;
     const Vec2f& getDrawTx(u32, u32) const;
@@ -45,16 +46,17 @@ public:
     Vec3f _3C;
     Vec3f _48;
     u32 _54;
-    u16 _58;
+    u32 _58;  // room for this many polygons in each list below; doubles when a query fills it
     u16 _5A;
-    u8* _5C;
+    u32* _5C;
     Vec3f* _60;
     Vec2f* _64;
-    u16* _68;
-    u16 _6C;
-    u16 _6E;
-    u8 _70[128];
-    s32 _F0[128];
+    u32* _68;
+    u32 _6C;
+    u32 _6E;
+    u32* _70;
+    s32* _F0;
+    f32* mSortDistances;
     Vec3f _2F0;
     JUTTexture* _300;
     u8 _304;
@@ -67,10 +69,6 @@ public:
     Vec3f _314;
     Vec3f _320;
     Triangle* _32C;
-    Triangle* _330;
-    Triangle* _334;
-    u16 _338;
-    u16 _33A;
-    u16 _33C;
+    u32 _33C;
     // The volume's drawing state (built; nothing in the game draws with it).
 };

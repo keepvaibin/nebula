@@ -12,6 +12,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <cstdio>
+#include "Game/Util/StringUtil.hpp"
 
 SkeletalFishBossBattleDirector::SkeletalFishBossBattleDirector(SkeletalFishBoss* pBoss) : NameObj("スカルシャークボス戦指揮") {
     mFishBoss = pBoss;
@@ -62,11 +63,10 @@ void SkeletalFishBossBattleDirector::startPowerUpDemo2() {
 
 void SkeletalFishBossBattleDirector::playGuardAnim(const char* pAnimName, s32 numGuards) {
     for (s32 i = 0; i < numGuards; i++) {
-        char animName[256];
-        nebula_snprintf(animName, sizeof(animName), "%s%c", pAnimName, i + 'A');
+        MR::FormattedName animName("%s%c", pAnimName, i + 'A');
         mGuardModels[i]->makeActorAppeared();
         MR::requestMovementOn(mGuardModels[i]);
-        MR::startBck(mGuardModels[i], animName);
+        MR::startBck(mGuardModels[i], animName.c_str());
         MR::startSound(mGuardModels[i], "SE_BM_SKL_GUARD_APPEAR");
     }
 }

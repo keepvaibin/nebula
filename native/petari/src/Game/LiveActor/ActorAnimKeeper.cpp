@@ -101,15 +101,14 @@ bool ActorAnimKeeper::isPlaying(const char* pName) const {
 
 namespace {
     void getCsvDataAnimData(ActorAnimDataInfo* pDataInfo, const char* pAnimType, Table* pInfo, s32 index) {
-        char pOut[256];
-        nebula_snprintf(pOut, sizeof(pOut), "%sName", pAnimType);
-        MR::getCsvDataStrOrNULL(&pDataInfo->mName, pInfo, pOut, index);
+        MR::FormattedName pOut("%sName", pAnimType);
+        MR::getCsvDataStrOrNULL(&pDataInfo->mName, pInfo, pOut.c_str(), index);
 
-        nebula_snprintf(pOut, sizeof(pOut), "%sStartFrame", pAnimType);
-        MR::getCsvDataF32(&pDataInfo->mStartFrame, pInfo, pOut, index);
+        pOut.format("%sStartFrame", pAnimType);
+        MR::getCsvDataF32(&pDataInfo->mStartFrame, pInfo, pOut.c_str(), index);
 
-        nebula_snprintf(pOut, sizeof(pOut), "%sIsKeepAnim", pAnimType);
-        MR::getCsvDataU8(&pDataInfo->mIsKeepAnim, pInfo, pOut, index);
+        pOut.format("%sIsKeepAnim", pAnimType);
+        MR::getCsvDataU8(&pDataInfo->mIsKeepAnim, pInfo, pOut.c_str(), index);
     }
 };  // namespace
 

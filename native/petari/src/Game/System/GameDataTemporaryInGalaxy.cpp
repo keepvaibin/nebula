@@ -4,6 +4,7 @@
 #include "Game/Util/PlacementId.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
+#include "Game/Util/StringUtil.hpp"
 #include <cstdio>
 
 GameDataTemporaryInGalaxy::GameDataTemporaryInGalaxy() : mPlayerRestartIdInfo(nullptr), mAlreadyDoneFlag(nullptr) {
@@ -35,7 +36,7 @@ bool GameDataTemporaryInGalaxy::isStageCleared() const {
 void GameDataTemporaryInGalaxy::resetStageResultPowerStarParam() {
     _8 = 0;
     mPowerStarId = 1;
-    mStageName[0] = '\0';
+    mStageName = "";
 }
 
 void GameDataTemporaryInGalaxy::resetStageResultStarPieceParam() {
@@ -87,5 +88,5 @@ void GameDataTemporaryInGalaxy::receiveStageResultParam(const char* pStageName, 
     mStarPieceNum = starPieceNum;
     mCoinNum = coinNum;
 
-    nebula_snprintf(mStageName, sizeof(mStageName), "%s", pStageName);
+    mStageName = MR::internName(pStageName);
 }

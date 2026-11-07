@@ -11,8 +11,8 @@ void MarioActor::addRushSensor(HitSensor* pSensor, bool myBool) {
         return;
     }
 
-    _7E4[_930] = pSensor;
-    _8E4[_930] = myBool;
+    _7E4.at(_930) = pSensor;
+    _8E4.at(_930) = myBool;
     _930++;
 }
 

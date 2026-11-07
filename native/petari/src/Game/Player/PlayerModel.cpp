@@ -255,6 +255,7 @@ void PlayerModel::sendFlagState(u32 flag, MaterialDraw& rDraw) {
 
 void PlayerModel::initExtraPoses(u8 count) {
     _DD = count;
+    mExtraPoses = new ModelPose*[count];
     for (u32 i = 0; i < count; i++) {
         mExtraPoses[i] = new ModelPose;
         initPose(mExtraPoses[i]);
@@ -263,9 +264,7 @@ void PlayerModel::initExtraPoses(u8 count) {
 
 void PlayerModel::copyExtraPoses(const PlayerModel* pModel) {
     _DD = pModel->_DD;
-    for (u32 i = 0; i < _DD; i++) {
-        mExtraPoses[i] = pModel->mExtraPoses[i];
-    }
+    mExtraPoses = pModel->mExtraPoses;
 }
 
 void PlayerModel::swapDrawBuffer(u32 drawBuffer) {
@@ -324,7 +323,7 @@ PlayerModel::PlayerModel(ModelData* pData, u32 flags, u32 unused) : Model(pData,
     _1B4 = nullptr;
     _1B8 = nullptr;
     mDrawHook = nullptr;
-    memset(mExtraPoses, 0, sizeof(mExtraPoses));
+    mExtraPoses = nullptr;
 
     const u32 count = mModelData->getMaterialCount();
     _1C4 = new const void*[count];

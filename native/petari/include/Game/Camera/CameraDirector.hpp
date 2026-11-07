@@ -36,7 +36,7 @@ namespace MR {
 
 struct CameraEvent {
     s32 mZoneID;
-    char mName[128];
+    const char* mName;  // MR::internName
     s32 mFrame;
 };
 

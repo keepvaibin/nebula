@@ -32,7 +32,7 @@ void MarioActor::setupSensors() {
 
     _7DC = 0;
 
-    for (s32 idx = 0; idx < ARRAY_SIZE(_4D0); idx++) {
+    for (s32 idx = 0; idx < _4D0.size(); idx++) {
         _4D0[idx] = nullptr;
     }
 

@@ -24,9 +24,18 @@ namespace {
     };
 };  // namespace
 
+namespace {
+    // The group keeps its own copy: callers pass names they format on the stack.
+    const char* copyGroupName(const char* pName) {
+        const size_t size = strlen(pName) + 1;
+        char* const pCopy = new char[size];
+        memcpy(pCopy, pName, size);
+        return pCopy;
+    }
+}  // namespace
+
 MsgSharedGroup::MsgSharedGroup(const char* pName, s32 numMax, const TableIter& rIter)
-    : LiveActorGroup(mGroupName, numMax), mIdInfo(), mMsg(-1), mSensor(), mSensorName() {
-    MR::copyString(mGroupName, pName, sizeof(mGroupName));
+    : LiveActorGroup(copyGroupName(pName), numMax), mIdInfo(), mMsg(-1), mSensor(), mSensorName() {
     PlacementId* pIdInfo = new PlacementId();
 
     if (pIdInfo != nullptr) {

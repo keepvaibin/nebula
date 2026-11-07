@@ -2,6 +2,9 @@
 
 #include "Game/Util/Array.hpp"
 
+namespace MR {
+    class FormattedName;
+}
 
 class StageFileLoader {
 public:
@@ -9,7 +12,7 @@ public:
 
     void loadStageFiles();
     void makeStageArchiveNameList();
-    static void makeStageArchiveName(char*, u32, const char*);
+    static void makeStageArchiveName(MR::FormattedName&, const char*);
 
     MR::GrowTable< char*, 0x18 > mStageFiles;
     s32 mZoneCount;

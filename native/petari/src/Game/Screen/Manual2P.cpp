@@ -9,6 +9,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Render/Clip.hpp"
 #include <cstdio>
+#include "Game/Util/StringUtil.hpp"
 
 namespace {
     NEW_NERVE(Manual2PNrvAppear, Manual2P, Appear);
@@ -23,12 +24,12 @@ namespace {
 namespace {
     s32 countMessage(const char* pName) {
         s32 count = 0;
-        char messageID[256];
+        MR::FormattedName messageID;
 
         do {
-            nebula_snprintf(messageID, sizeof(messageID), "%s%03d", pName, count + 1);
+            messageID.format("%s%03d", pName, count + 1);
             count++;
-        } while (MR::isExistGameMessage(messageID));
+        } while (MR::isExistGameMessage(messageID.c_str()));
 
         return count;
     }

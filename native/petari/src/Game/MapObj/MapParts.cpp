@@ -4,6 +4,7 @@
 #include "Game/Util.hpp"
 #include <nebula_geometry.hpp>
 #include "math_types.hpp"
+#include "Game/Util/StringUtil.hpp"
 
 namespace {
     const char* cFollowJointName = "Move";
@@ -44,9 +45,9 @@ void MapParts::connectToScene() {
 }
 
 void MapParts::initModelAndCollision(const TableIter& rIter) {
-    char name[256];
-    MR::getMapPartsObjectName(name, sizeof(name), rIter);
-    initModelManagerWithAnm(name, nullptr, false);
+    MR::FormattedName name;
+    MR::getMapPartsObjectName(name, rIter);
+    initModelManagerWithAnm(name.c_str(), nullptr, false);
     initHitSensor(2);
     Vec3f dist;
     Vec3f lerpVec;
@@ -55,10 +56,10 @@ void MapParts::initModelAndCollision(const TableIter& rIter) {
     HitSensor* sensor = MR::addHitSensorMapObj(this, "body", sensorNum, 100.0f, sensor_offs);
     if (MR::isExistJoint(this, ::cFollowJointName)) {
         MtxPtr jointMtx = MR::getJointMtx(this, ::cFollowJointName);
-        MR::initCollisionParts(this, name, sensor, jointMtx);
+        MR::initCollisionParts(this, name.c_str(), sensor, jointMtx);
         MR::tryCreateCollisionAllOtherCategory(this, jointMtx, sensor, nullptr, nullptr, nullptr);
     } else {
-        MR::initCollisionParts(this, name, sensor, nullptr);
+        MR::initCollisionParts(this, name.c_str(), sensor, nullptr);
         MR::tryCreateCollisionAllOtherCategory(this, sensor, nullptr, nullptr, nullptr);
     }
 

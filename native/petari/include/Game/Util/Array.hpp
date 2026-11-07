@@ -158,6 +158,10 @@ namespace MR {
             return begin()[idx];
         }
 
+        s32 size() const {
+            return mSize;
+        }
+
         T* begin() {
             return mMoved != nullptr ? mMoved : mArr;
         }
@@ -409,37 +413,6 @@ namespace MR {
 
         /// @brief The number of valid elements.
         /* 0x? */ s32 mCount;
-    };
-
-    template < class T, int S >
-    class FixedRingBuffer {
-    public:
-        class iterator {
-        public:
-            inline iterator() {
-            }
-
-            iterator(T* head, T* tail);
-
-            void operator++();
-
-            T* mHead;
-            T* mTail;
-            T* mEnd;
-        };
-
-        inline FixedRingBuffer() {
-        }
-
-        FixedRingBuffer(T* pBuffer, T* pBuffer2) : mHead(pBuffer, pBuffer2), mEnd(pBuffer, pBuffer2), mCount(0) {
-        }
-
-        void push_back(const T& val);
-
-        T mBuffer[S];
-        /* 0x40 for S=16 */ iterator mHead;
-        /* 0x4C for S=16 */ iterator mEnd;
-        /* 0x58 for S=16 */ s32 mCount;
     };
 
     template < class T >

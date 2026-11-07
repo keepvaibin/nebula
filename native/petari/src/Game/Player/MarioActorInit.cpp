@@ -154,29 +154,13 @@ void MarioActor::initMember() {
     _4B4 = 0.0f;
     _4B8.zero();
     _4C4.zero();
-    for (int i = 0; i < ARRAY_SIZE(_4D0); i++) {
-        _4D0[i] = 0;
-    }
-
     _6D0 = false;
     _6D4 = 0.0f;
     _6D8 = 0.0f;
-    for (int i = 0; i < ARRAY_SIZE(_6DC); i++) {
-        _6DC[i] = nullptr;
-    }
-
     _7DC = 0;
     _7DE = 0;
     _7E0 = 0;
     _7E2 = 0;
-    for (int i = 0; i < ARRAY_SIZE(_7E4); i++) {
-        _7E4[i] = 0;
-    }
-
-    for (int i = 0; i < ARRAY_SIZE(_8E4); i++) {
-        _8E4[i] = 0;
-    }
-
     _924 = nullptr;
     _928 = 0;
     _92C = 0;
@@ -241,9 +225,7 @@ void MarioActor::initMember() {
     _A18.zero();
     _A24 = 0;
     _A25 = 0;
-    for (int i = 0; i < ARRAY_SIZE(mModels); i++) {
-        mModels[i] = nullptr;
-    }
+    mModels = nullptr;
 
     _A40 = 0;
     _A44 = 0;

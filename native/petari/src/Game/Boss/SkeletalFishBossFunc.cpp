@@ -1,6 +1,7 @@
 #include "Game/Boss/SkeletalFishBossFunc.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include <cstdio>
+#include "Game/Util/StringUtil.hpp"
 
 namespace {
     static const char* sNamePosName = "ガード出現ポイント";
@@ -29,8 +30,7 @@ s32 SkeletalFishBossFunc::getNearestGuardPosID(const Vec3f& rVec) {
 }
 
 bool SkeletalFishBossFunc::copyGuardPos(Vec3f* pOut, s32 idx) {
-    char name[256];
-    nebula_snprintf(name, sizeof(name), "%s%d", ::sNamePosName, idx);
+    MR::FormattedName name("%s%d", ::sNamePosName, idx);
 
-    return MR::tryFindNamePos(name, pOut, nullptr);
+    return MR::tryFindNamePos(name.c_str(), pOut, nullptr);
 }

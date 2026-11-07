@@ -9,34 +9,33 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include <cstdio>
+#include "Game/Util/StringUtil.hpp"
 
 namespace {
-    void createActorCameraName(char* pName, u32 nameSize, const LiveActor* pActor, const ActorCameraInfo* pInfo) {
+    void createActorCameraName(MR::FormattedName& rName, const LiveActor* pActor, const ActorCameraInfo* pInfo) {
         if (pInfo->mCameraSetID & 0x8000) {
-            nebula_snprintf(pName, nameSize, "%s共通%03d", pActor->getName(), pInfo->mCameraSetID - 0x8000);
+            rName.format("%s共通%03d", pActor->getName(), pInfo->mCameraSetID - 0x8000);
         } else {
-            nebula_snprintf(pName, nameSize, "%s固有%03d", pActor->getName(), pInfo->mCameraSetID);
+            rName.format("%s固有%03d", pActor->getName(), pInfo->mCameraSetID);
         }
     }
 
-    void createMultiActorCameraName(char* pName, u32 nameSize, const LiveActor* pActor, const ActorCameraInfo* pInfo, const char* pEventName) {
+    void createMultiActorCameraName(MR::FormattedName& rName, const LiveActor* pActor, const ActorCameraInfo* pInfo, const char* pEventName) {
         if (pInfo->mCameraSetID & 0x8000) {
-            nebula_snprintf(pName, nameSize, "%s共通%s%03d", pActor->getName(), pEventName, pInfo->mCameraSetID - 0x8000);
+            rName.format("%s共通%s%03d", pActor->getName(), pEventName, pInfo->mCameraSetID - 0x8000);
         } else {
-            nebula_snprintf(pName, nameSize, "%s固有%s%03d", pActor->getName(), pEventName, pInfo->mCameraSetID);
+            rName.format("%s固有%s%03d", pActor->getName(), pEventName, pInfo->mCameraSetID);
         }
     }
 };  // namespace
 
 namespace MR {
     void initAnimCamera(const LiveActor* pActor, const ActorCameraInfo* pInfo, const char* pEventName) {
-        char actorEventName[256];
-        nebula_snprintf(actorEventName, sizeof(actorEventName), "%s%s", pActor->getName(), pEventName);
+        MR::FormattedName actorEventName("%s%s", pActor->getName(), pEventName);
 
-        char animName[256];
-        nebula_snprintf(animName, sizeof(animName), "%s.canm", pEventName);
+        MR::FormattedName animName("%s.canm", pEventName);
 
-        declareEventCameraAnim(pInfo, actorEventName, getResourceHolder(pActor)->mFileInfoTable->getRes(animName));
+        declareEventCameraAnim(pInfo, actorEventName.c_str(), getResourceHolder(pActor)->mFileInfoTable->getRes(animName.c_str()));
     }
 
     ActorCameraInfo* createActorCameraInfo(const TableIter& rIter) {
@@ -72,15 +71,15 @@ namespace MR {
             return false;
         }
 
-        char name[256];
+        MR::FormattedName name;
 
         if (pEventName != nullptr) {
-            ::createMultiActorCameraName(name, sizeof(name), pActor, pInfo, pEventName);
+            ::createMultiActorCameraName(name, pActor, pInfo, pEventName);
         } else {
-            ::createActorCameraName(name, sizeof(name), pActor, pInfo);
+            ::createActorCameraName(name, pActor, pInfo);
         }
 
-        declareEventCamera(pInfo, name);
+        declareEventCamera(pInfo, name.c_str());
 
         return true;
     }
@@ -134,15 +133,15 @@ namespace MR {
     bool startMultiActorCameraTargetOther(const LiveActor* pActor, const ActorCameraInfo* pInfo, const char* pEventName,
                                           const CameraTargetArg& rTargetArg, s32 frame) {
         if (pInfo->mCameraSetID >= 0) {
-            char name[256];
+            MR::FormattedName name;
 
             if (pEventName != nullptr) {
-                ::createMultiActorCameraName(name, sizeof(name), pActor, pInfo, pEventName);
+                ::createMultiActorCameraName(name, pActor, pInfo, pEventName);
             } else {
-                ::createActorCameraName(name, sizeof(name), pActor, pInfo);
+                ::createActorCameraName(name, pActor, pInfo);
             }
 
-            startEventCamera(pInfo, name, rTargetArg, frame);
+            startEventCamera(pInfo, name.c_str(), rTargetArg, frame);
 
             return true;
         }
@@ -154,27 +153,24 @@ namespace MR {
         CameraTargetArg targetArg;
         setCameraTargetToPlayer(&targetArg);
 
-        char actorEventName[256];
-        nebula_snprintf(actorEventName, sizeof(actorEventName), "%s%s", pActor->getName(), pEventName);
+        MR::FormattedName actorEventName("%s%s", pActor->getName(), pEventName);
 
-        startEventCameraAnim(pInfo, actorEventName, targetArg, frame, speed);
+        startEventCameraAnim(pInfo, actorEventName.c_str(), targetArg, frame, speed);
     }
 
     void startAnimCameraTargetSelf(const LiveActor* pActor, const ActorCameraInfo* pInfo, const char* pEventName, s32 frame, f32 speed) {
         CameraTargetArg targetArg(pActor);
 
-        char actorEventName[256];
-        nebula_snprintf(actorEventName, sizeof(actorEventName), "%s%s", pActor->getName(), pEventName);
+        MR::FormattedName actorEventName("%s%s", pActor->getName(), pEventName);
 
-        startEventCameraAnim(pInfo, actorEventName, targetArg, frame, speed);
+        startEventCameraAnim(pInfo, actorEventName.c_str(), targetArg, frame, speed);
     }
 
     void startAnimCameraTargetOther(const LiveActor* pActor, const ActorCameraInfo* pInfo, const char* pEventName, const CameraTargetArg& rTargetArg,
                                     s32 frame, f32 speed) {
-        char actorEventName[256];
-        nebula_snprintf(actorEventName, sizeof(actorEventName), "%s%s", pActor->getName(), pEventName);
+        MR::FormattedName actorEventName("%s%s", pActor->getName(), pEventName);
 
-        startEventCameraAnim(pInfo, actorEventName, rTargetArg, frame, speed);
+        startEventCameraAnim(pInfo, actorEventName.c_str(), rTargetArg, frame, speed);
     }
 
     void startActorCameraProgrammable(const LiveActor* pActor, s32 frame) {
@@ -187,15 +183,15 @@ namespace MR {
 
     bool endMultiActorCamera(const LiveActor* pActor, const ActorCameraInfo* pInfo, const char* pEventName, bool resetView, s32 frame) {
         if (pInfo->mCameraSetID >= 0) {
-            char name[256];
+            MR::FormattedName name;
 
             if (pEventName != nullptr) {
-                ::createMultiActorCameraName(name, sizeof(name), pActor, pInfo, pEventName);
+                ::createMultiActorCameraName(name, pActor, pInfo, pEventName);
             } else {
-                ::createActorCameraName(name, sizeof(name), pActor, pInfo);
+                ::createActorCameraName(name, pActor, pInfo);
             }
 
-            endEventCamera(pInfo, name, resetView, frame);
+            endEventCamera(pInfo, name.c_str(), resetView, frame);
 
             return true;
         }
@@ -209,15 +205,15 @@ namespace MR {
 
     bool endMultiActorCameraAtLanding(const LiveActor* pActor, const ActorCameraInfo* pInfo, const char* pEventName, s32 frame) {
         if (pInfo->mCameraSetID >= 0) {
-            char name[256];
+            MR::FormattedName name;
 
             if (pEventName != nullptr) {
-                ::createMultiActorCameraName(name, sizeof(name), pActor, pInfo, pEventName);
+                ::createMultiActorCameraName(name, pActor, pInfo, pEventName);
             } else {
-                ::createActorCameraName(name, sizeof(name), pActor, pInfo);
+                ::createActorCameraName(name, pActor, pInfo);
             }
 
-            endEventCameraAtLanding(pInfo, name, frame);
+            endEventCameraAtLanding(pInfo, name.c_str(), frame);
 
             return true;
         }
@@ -238,15 +234,15 @@ namespace MR {
             return false;
         }
 
-        char name[256];
+        MR::FormattedName name;
 
         if (pEventName != nullptr) {
-            ::createMultiActorCameraName(name, sizeof(name), pActor, pInfo, pEventName);
+            ::createMultiActorCameraName(name, pActor, pInfo, pEventName);
         } else {
-            ::createActorCameraName(name, sizeof(name), pActor, pInfo);
+            ::createActorCameraName(name, pActor, pInfo);
         }
 
-        return isEventCameraActive(pInfo, name);
+        return isEventCameraActive(pInfo, name.c_str());
     }
 
     void setProgrammableCameraParam(const LiveActor* pActor, const Vec3f& rWPoint, const Vec3f& rPos, const Vec3f& rUpVec) {
@@ -258,34 +254,29 @@ namespace MR {
     }
 
     void initAnimCamera(const LiveActor* pActor, const ActorCameraInfo* pInfo, const char* pArcName, const char* pEventName) {
-        char actorEventName[256];
-        nebula_snprintf(actorEventName, sizeof(actorEventName), "%s%s", pActor->getName(), pEventName);
+        MR::FormattedName actorEventName("%s%s", pActor->getName(), pEventName);
 
-        char animName[256];
-        nebula_snprintf(animName, sizeof(animName), "%s.canm", pEventName);
+        MR::FormattedName animName("%s.canm", pEventName);
 
-        declareEventCameraAnim(pInfo, actorEventName, loadResourceFromArc(pArcName, animName));
+        declareEventCameraAnim(pInfo, actorEventName.c_str(), loadResourceFromArc(pArcName, animName.c_str()));
     }
 
     void endAnimCamera(const LiveActor* pActor, const ActorCameraInfo* pInfo, const char* pEventName, s32 frame, bool resetView) {
-        char actorEventName[256];
-        nebula_snprintf(actorEventName, sizeof(actorEventName), "%s%s", pActor->getName(), pEventName);
+        MR::FormattedName actorEventName("%s%s", pActor->getName(), pEventName);
 
-        endEventCamera(pInfo, actorEventName, resetView, frame);
+        endEventCamera(pInfo, actorEventName.c_str(), resetView, frame);
     }
 
     s32 getAnimCameraFrame(const LiveActor* pActor, const ActorCameraInfo* pInfo, const char* pEventName) {
-        char actorEventName[256];
-        nebula_snprintf(actorEventName, sizeof(actorEventName), "%s%s", pActor->getName(), pEventName);
+        MR::FormattedName actorEventName("%s%s", pActor->getName(), pEventName);
 
-        return getAnimCameraFrame(pInfo, actorEventName);
+        return getAnimCameraFrame(pInfo, actorEventName.c_str());
     }
 
     bool isAnimCameraEnd(const LiveActor* pActor, const ActorCameraInfo* pInfo, const char* pEventName) {
-        char actorEventName[256];
-        nebula_snprintf(actorEventName, sizeof(actorEventName), "%s%s", pActor->getName(), pEventName);
+        MR::FormattedName actorEventName("%s%s", pActor->getName(), pEventName);
 
-        return isAnimCameraEnd(pInfo, actorEventName);
+        return isAnimCameraEnd(pInfo, actorEventName.c_str());
     }
 
     s32 getActorCameraFrames(const LiveActor* pActor, const ActorCameraInfo* pInfo) {
@@ -294,15 +285,15 @@ namespace MR {
 
     s32 getMultiActorCameraFrames(const LiveActor* pActor, const ActorCameraInfo* pInfo, const char* pEventName) {
         if (pInfo->mCameraSetID >= 0) {
-            char name[256];
+            MR::FormattedName name;
 
             if (pEventName != nullptr) {
-                ::createMultiActorCameraName(name, sizeof(name), pActor, pInfo, pEventName);
+                ::createMultiActorCameraName(name, pActor, pInfo, pEventName);
             } else {
-                ::createActorCameraName(name, sizeof(name), pActor, pInfo);
+                ::createActorCameraName(name, pActor, pInfo);
             }
 
-            return getEventCameraFrames(pInfo, name);
+            return getEventCameraFrames(pInfo, name.c_str());
         }
 
         return 0;

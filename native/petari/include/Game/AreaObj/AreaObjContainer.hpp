@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Game/NameObj/NameObj.hpp"
+#include "Game/Util/Array.hpp"
 #include <nebula_geometry.hpp>
 
 class AreaObj;
@@ -28,8 +29,7 @@ public:
     AreaObj* getAreaObj(const char*, const Vec3f&) const;
 
 private:
-    AreaObjMgr* mManagerArray[0x50];
-    u32 mNumManagers;
+    MR::Vector< MR::AssignableArray< AreaObjMgr* > > mManagers;
 };
 
 namespace MR {

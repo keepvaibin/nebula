@@ -14,6 +14,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Render/Model.hpp"
 #include <cstdio>
+#include "Game/Util/StringUtil.hpp"
 
 ModelManager::ModelManager()
     : mBtkPlayer(), mBrkPlayer(), mBtpPlayer(), mBpkPlayer(), mBvaPlayer(), mXanimeResourceTable(), mXanimePlayer(), mModel(), mModelResourceHolder(),
@@ -363,16 +364,14 @@ void ModelManager::changeBckSetting(const char* pBckName, const char* pActorAnim
 }
 
 void ModelManager::init(const char* pModelName, const char* pAnimationName, bool deferMaterials) {
-    char modelArchive[256];
-    nebula_snprintf(modelArchive, sizeof(modelArchive), "%s.arc", pModelName);
-    ResourceHolder* modelHolder = MR::createAndAddResourceHolder(modelArchive);
+    MR::FormattedName modelArchive("%s.arc", pModelName);
+    ResourceHolder* modelHolder = MR::createAndAddResourceHolder(modelArchive.c_str());
     ResourceHolder* animationHolder;
     if (pAnimationName == nullptr) {
         animationHolder = modelHolder;
     } else {
-        char animationArchive[256];
-        nebula_snprintf(animationArchive, sizeof(animationArchive), "%s.arc", pAnimationName);
-        animationHolder = MR::createAndAddResourceHolder(animationArchive);
+        MR::FormattedName animationArchive("%s.arc", pAnimationName);
+        animationHolder = MR::createAndAddResourceHolder(animationArchive.c_str());
     }
 
     bool hasMaterialAnm = animationHolder->isExistMaterialAnm();

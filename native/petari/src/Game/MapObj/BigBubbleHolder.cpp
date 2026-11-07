@@ -16,7 +16,7 @@ namespace {
 };  // namespace
 
 BigBubbleHolder::BigBubbleHolder(const char* pName) : NameObj(pName), mDrawer(), mNumLimitters(), mNumBubbles(), mIsMarioBinded() {
-    for (s32 idx = 0; idx < 16; idx++) {
+    for (s32 idx = 0; idx < cBubbleCount; idx++) {
         mBubbles[idx] = nullptr;
         mDrawBubbles[idx] = nullptr;
     }
@@ -32,7 +32,7 @@ BigBubbleHolder::BigBubbleHolder(const char* pName) : NameObj(pName), mDrawer(),
 
 void BigBubbleHolder::movement() {
     mIsMarioBinded = false;
-    for (s32 idx = 0; idx < 16; idx++) {
+    for (s32 idx = 0; idx < cBubbleCount; idx++) {
         if (mBubbles[idx]->isBindMario()) {
             mIsMarioBinded = true;
             break;
@@ -62,7 +62,7 @@ BigBubble* BigBubbleHolder::generateBigBubble(LiveActor* pHost, const Vec3f& rPo
         limitter = getMoveLimitter(limitterID);
     }
 
-    for (s32 idx = 0; idx < 16; idx++) {
+    for (s32 idx = 0; idx < cBubbleCount; idx++) {
         if (MR::isDead(mBubbles[idx])) {
             mBubbles[idx]->setHost(pHost);
             mBubbles[idx]->generate(rPos, rUp, volume, isObstruct, actionType, shapeType, limitter);
@@ -85,7 +85,7 @@ BigBubbleMoveLimitter* BigBubbleHolder::getMoveLimitter(s32 limitterID) const {
 
 void BigBubbleHolder::sortDrawOrder() {
     mNumBubbles = 0;
-    for (s32 idx = 0; idx < 16; idx++) {
+    for (s32 idx = 0; idx < cBubbleCount; idx++) {
         if (mBubbles[idx]->isDraw()) {
             bool skipSort;
             s32 other = mNumBubbles;
@@ -145,7 +145,7 @@ BigBubbleHolder::~BigBubbleHolder() {
 }
 
 void BigBubbleHolder::init(const TableIter& rIter) {
-    for (s32 idx = 0; idx < 16; idx++) {
+    for (s32 idx = 0; idx < cBubbleCount; idx++) {
         mBubbles[idx] = new BigBubble("オオアワ[共有]");
         mBubbles[idx]->initWithoutIter();
     }

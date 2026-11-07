@@ -4,6 +4,7 @@
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
 #include <cstdio>
+#include "Game/Util/StringUtil.hpp"
 
 namespace {
     const char* getGlaringLightModelName(const char* pName) {
@@ -62,9 +63,8 @@ void LightCylinder::initLightCylinderByOwner(const TableIter& rIter) {
 }
 
 void LightCylinder::initLightVolume(const char* pName) {
-    char modelName[0x100];
-    nebula_snprintf(modelName, sizeof(modelName), "%sLightVolume", pName ? pName : mObjectName);
-    VolumeModelDrawer* lightVolume = new VolumeModelDrawer("光", modelName, mHostMtx ? mHostMtx : getBaseMtx());
+    MR::FormattedName modelName("%sLightVolume", pName ? pName : mObjectName);
+    VolumeModelDrawer* lightVolume = new VolumeModelDrawer("光", modelName.c_str(), mHostMtx ? mHostMtx : getBaseMtx());
     mLightVolume = lightVolume;
     lightVolume->mColor.set(mColor);
 }

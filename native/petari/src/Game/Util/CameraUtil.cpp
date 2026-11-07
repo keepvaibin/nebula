@@ -21,6 +21,7 @@
 #include "Game/Render/FrameList.hpp"
 #include "Game/Render/Model.hpp"
 #include <cstdio>
+#include "Game/Util/StringUtil.hpp"
 
 
 namespace {
@@ -500,12 +501,11 @@ namespace MR {
 
 namespace {
     char* createRegisterName(const NameObj* pNameObj, u32 id) {
-        char buff[256];
-        nebula_snprintf(buff, 256, "%s-%d", pNameObj->getName(), id);
+        MR::FormattedName buff("%s-%d", pNameObj->getName(), id);
 
-        const size_t size = strlen(buff) + 1;
+        const size_t size = strlen(buff.c_str()) + 1;
         char* out = new char[size];
-        memcpy(out, buff, size);
+        memcpy(out, buff.c_str(), size);
         return out;
     }
 };  // namespace

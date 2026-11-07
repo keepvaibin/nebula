@@ -167,7 +167,7 @@ void StaffRollPicture::exeWork() {
 }
 
 void StaffRollPicture::initReplaceTexture() {
-    char replaceTextureName[256];
+    MR::FormattedName replaceTextureName;
     const char* pReplaceTexturePrefix;
 
     mReplaceTexture = new nw4r::lyt::TexMap*[PICTURE_TEXTURE_NUM];
@@ -179,8 +179,8 @@ void StaffRollPicture::initReplaceTexture() {
     }
 
     for (s32 i = 0; i < PICTURE_TEXTURE_NUM; i++) {
-        nebula_snprintf(replaceTextureName, sizeof(replaceTextureName), "%s%03d.bti", pReplaceTexturePrefix, i);
-        mReplaceTexture[i] = MR::createLytTexMap(::cReplaceTextureArcName, replaceTextureName);
+        replaceTextureName.format("%s%03d.bti", pReplaceTexturePrefix, i);
+        mReplaceTexture[i] = MR::createLytTexMap(::cReplaceTextureArcName, replaceTextureName.c_str());
     }
 }
 

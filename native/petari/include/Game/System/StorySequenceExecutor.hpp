@@ -75,7 +75,7 @@ public:
     const Nerve* mNextNerve;
     NameObj* mDemoObj;
     NameObj* mSaveObj;
-    char mStageName[48];
+    const char* mStageName;  // MR::internName
     s32 mScenarioNo;
     MR::Vector< MR::FixedArray< const StorySequenceExecutorType::DemoSequenceInfo*, 8 > > _48;
     MR::Vector< MR::FixedArray< StorySequenceExecutorType::DemoSequenceInfo, 8 > > _6C;

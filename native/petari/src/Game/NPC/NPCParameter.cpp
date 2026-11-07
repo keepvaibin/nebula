@@ -27,15 +27,12 @@ NPCParameterV3f::NPCParameterV3f(const char* pName, Vec3f* pVec, f32 f1, f32 f2)
 }
 
 void NPCParameterV3f::read(Table* pInfo, s32 a2) {
-    char str[255];
-    MR::copyString(str, mName, sizeof(str));
-    *(str + strlen(mName) + 1) = '\0';
-    *(str + strlen(mName)) = 'X';
-    pInfo->getValue(a2, str, &_8->x);
-    *(str + strlen(mName)) = 'Y';
-    pInfo->getValue(a2, str, &_8->y);
-    *(str + strlen(mName)) = 'Z';
-    pInfo->getValue(a2, str, &_8->z);
+    MR::FormattedName key("%sX", mName);
+    pInfo->getValue(a2, key.c_str(), &_8->x);
+    key.format("%sY", mName);
+    pInfo->getValue(a2, key.c_str(), &_8->y);
+    key.format("%sZ", mName);
+    pInfo->getValue(a2, key.c_str(), &_8->z);
 }
 
 NPCParameterJoint::NPCParameterJoint(const char* pName, const char* pChar, const char** ppChar)

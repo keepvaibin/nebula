@@ -1,4 +1,5 @@
 #include "Game/Camera/DotCamParams.hpp"
+#include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Table.hpp"
 #include <cstdio>
 #include <cstring>
@@ -52,21 +53,20 @@ void DotCamReaderInBin::init(const void* pData) {
 }
 
 bool DotCamReaderInBin::getValueVec(const char* pName, Vec3f* pOut) {
-    char buffer[0x100];
-    char* pBuffer = &buffer[0];
+    MR::FormattedName key;
 
     f32 z;
     f32 y;
     f32 x;
 
-    nebula_snprintf(pBuffer, sizeof(buffer), "%s.X", pName);
-    bool success = mMapIter.getValue< f32 >(pBuffer, &x) & 1;
+    key.format("%s.X", pName);
+    bool success = mMapIter.getValue< f32 >(key.c_str(), &x) & 1;
 
-    nebula_snprintf(pBuffer, sizeof(buffer), "%s.Y", pName);
-    success &= mMapIter.getValue< f32 >(pBuffer, &y);
+    key.format("%s.Y", pName);
+    success &= mMapIter.getValue< f32 >(key.c_str(), &y);
 
-    nebula_snprintf(pBuffer, sizeof(buffer), "%s.Z", pName);
-    success &= mMapIter.getValue< f32 >(pBuffer, &z);
+    key.format("%s.Z", pName);
+    success &= mMapIter.getValue< f32 >(key.c_str(), &z);
 
     if (success) {
         pOut->x = x;

@@ -2,14 +2,16 @@
 
 #include <NebulaGpu.h>
 #include <nebula_math.h>
+#include <cstdarg>
 
 namespace MR {
+    class FormattedName;
+
     /// @brief Appends `pChild` to `pParent` as a new component to the path.
-    /// @param pDst The output pointer for the path.
-    /// @param size The size of the path buffer, in bytes.
+    /// @param rDst The path made.
     /// @param pChild The pointer to the null-terminated path component to append.
     /// @param pParent The pointer to the null-terminated path component to be appended to.
-    void addFilePrefix(char* pDst, u32 size, const char* pChild, const char* pParent);
+    void addFilePrefix(FormattedName& rDst, const char* pChild, const char* pParent);
 
     /// @brief Creates a localized datestamp.
     /// @param pDst The output pointer for the datestamp.
@@ -39,11 +41,9 @@ namespace MR {
     char16_t* addNumberFontTag(char16_t* pDst, int tag);
 
     /// @brief Removes the file extension from the given path.
-    /// @param pDst The output pointer for the path.
-    /// @param size The size of the path buffer, in bytes.
+    /// @param rDst The path made.
     /// @param pPath The pointer to the null-terminated path.
-    /// @return The pointer to the final directory separator character.
-    char* removeExtensionString(char* pDst, u32 size, const char* pPath);
+    void removeExtensionString(FormattedName& rDst, const char* pPath);
 
     /// @brief Creates a localized timestamp for the given race's best time.
     /// @param pDst The output pointer for the timestamp.
@@ -169,4 +169,34 @@ namespace MR {
     /// @param pSubStr The pointer to the null-terminated character substring to search for.
     /// @param pDst The output pointer for the parsed values.
     void scans16x4(const char* pSrc, const char* pSubStr, s16* pDst);
+
+    // One copy of each distinct name for the process's life (in the root arena), for names held across scenes.
+    const char* internName(const char* pName);
+
+    // A string formatted to any length: up to 255 bytes in itself, longer in the current arena, freed with it.
+    class FormattedName {
+    public:
+        FormattedName() : mText(mInline) {
+            mInline[0] = '\0';
+        }
+        __attribute__((format(printf, 2, 3))) explicit FormattedName(const char* pFormat, ...);
+        ~FormattedName();
+
+        // Formats again; the arguments must not read this name.
+        __attribute__((format(printf, 2, 3))) void format(const char* pFormat, ...);
+        __attribute__((format(printf, 2, 0))) void vformat(const char* pFormat, va_list args);
+        // Writable storage of `size` bytes for a caller that fills the text itself; the previous text is gone.
+        char* room(u32 size);
+
+        FormattedName(const FormattedName&) = delete;
+        FormattedName& operator=(const FormattedName&) = delete;
+
+        const char* c_str() const {
+            return mText;
+        }
+
+    private:
+        char* mText;
+        char mInline[256];
+    };
 };  // namespace MR

@@ -402,9 +402,9 @@ void Mario::tryPushToVelocity() {
             _35C.zero();
             createAtField(true, pushVec.length());
 
-            for (u32 i = 0; i < _578; i++) {
+            for (u32 i = 0; i < _57C.size(); i++) {
                 Vec3f projected;
-                if (MR::vecKillElement(pushVec, *_57C[i]->getNormal(0), &projected) < 0.0f) {
+                if (MR::vecKillElement(pushVec, *_57C[i].getNormal(0), &projected) < 0.0f) {
                     pushVec = projected;
                 }
             }

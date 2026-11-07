@@ -62,9 +62,8 @@ namespace MR {
     }
 
     bool isNPCItemFileExist(const char* pName) {
-        char path[256];
-        nebula_snprintf(path, sizeof(path), "/ObjectData/%s.arc", pName);
-        return isFileExist(path, false);
+        MR::FormattedName path("/ObjectData/%s.arc", pName);
+        return isFileExist(path.c_str(), false);
     }
 
     void initDefaultPose(NPCActor* pActor, const TableIter& rIter) {

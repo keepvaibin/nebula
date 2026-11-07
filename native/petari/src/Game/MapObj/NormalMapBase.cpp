@@ -96,11 +96,10 @@ void NormalMapBase::setupLighting() {
     mMatColor = 255;
     mAmbAlpha = 128;
     mMatAlpha = 255;
-    char fileName[256];
-    nebula_snprintf(fileName, sizeof(fileName), "%s.nrm.txt", MR::getModelResName(this));
-    if (MR::getResourceHolder(this)->mFileInfoTable->isExistRes(fileName)) {
-        const char* pData = static_cast< const char* >(MR::getResourceHolder(this)->mFileInfoTable->getRes(fileName));
-        loadData(pData, MR::getResourceHolder(this)->mFileInfoTable->findFileInfo(fileName)->_4);
+    MR::FormattedName fileName("%s.nrm.txt", MR::getModelResName(this));
+    if (MR::getResourceHolder(this)->mFileInfoTable->isExistRes(fileName.c_str())) {
+        const char* pData = static_cast< const char* >(MR::getResourceHolder(this)->mFileInfoTable->getRes(fileName.c_str()));
+        loadData(pData, MR::getResourceHolder(this)->mFileInfoTable->findFileInfo(fileName.c_str())->_4);
     }
 }
 
@@ -112,9 +111,8 @@ void NormalMapBase::setupTexture() {
         const ResTIMG* pImage = MR::getResTIMG(this, i);
         const char* pName = MR::getTextureName(this, i);
         if (strstr(pName, "Nswap_")) {
-            char fileName[256];
-            nebula_snprintf(fileName, sizeof(fileName), "%s.bti", pName + 6);
-            pImage = MR::getTexFromArc(fileName, this);
+            MR::FormattedName fileName("%s.bti", pName + 6);
+            pImage = MR::getTexFromArc(fileName.c_str(), this);
             mNormalTex = new JUTTexture(pImage);
             mTextures[i] = mNormalTex;
             mTextures[i]->mMinType = NEBULA_FILTER_LINEAR;

@@ -23,6 +23,7 @@
 #include "Game/Particle/ParticleMath.hpp"
 #include <cstdio>
 #include <cstring>
+#include "Game/Util/StringUtil.hpp"
 
 // A table's flags, written 0xAABBCCDD: AA first. By value, on any machine.
 struct EffectFlagWord {
@@ -91,36 +92,34 @@ namespace {
 };  // namespace
 
 void MarioEffect::execute(EmitterCore* pEmitter) {
-    s32 idx = 0;
-    for (s32 i = 0; i < 256; i++) {
-        if (_54[i]._68 == pEmitter) {
-            break;
+    for (s32 i = 0; i < mFollowCount; i++) {
+        if (mFollows[i]._68 == pEmitter) {
+            updateFollowMtx(&mFollows[i]);
+            return;
         }
-
-        idx++;
     }
+}
 
-    updateFollowMtx(&_54[idx]);
+bool MarioEffect::isFollowing(const MovingFollowMtx& rFollow) const {
+    return rFollow._68 != nullptr && rFollow._68->getEmitterCallBackPtr() == static_cast< const EmitterCallBack* >(this) &&
+           !rFollow._68->checkStatus(0x200);
 }
 
 EmitterCore* MarioEffect::addRequest(const char* pEffectName, MtxPtr pMtx) {
-    u32 requestIndex = 0;
-    for (; requestIndex < 256; requestIndex++) {
-        if (_54[requestIndex]._68 == nullptr) {
-            break;
-        }
-    }
-
-    if (requestIndex == 256) {
-        requestIndex = 0;
-        for (s32 i = 1; i < 256; i++) {
-            if (_54[i]._0 > _54[requestIndex]._0) {
+    s32 requestIndex = mFollowCount;
+    for (s32 i = 0; i < mFollowCount; i++) {
+        if (!isFollowing(mFollows[i])) {
+            mFollows[i]._68 = nullptr;
+            if (requestIndex == mFollowCount) {
                 requestIndex = i;
             }
         }
     }
+    if (requestIndex == mFollowCount) {
+        mFollows.at(mFollowCount++)._68 = nullptr;
+    }
 
-    MovingFollowMtx* target = &_54[requestIndex];
+    MovingFollowMtx* target = &mFollows[requestIndex];
 
     MultiEmitter* emitter = MR::emitEffectWithEmitterCallBack(mActor, pEffectName, this);
     if (emitter->getParticleEmitter(0) == nullptr) {
@@ -130,9 +129,9 @@ EmitterCore* MarioEffect::addRequest(const char* pEffectName, MtxPtr pMtx) {
     EmitterCore* baseEmitter = emitter->getParticleEmitter(0)->mEmitter;
     target->_68 = baseEmitter;
 
-    for (s32 i = 0; i < 256; i++) {
-        if (requestIndex != i && _54[i]._68 == target->_68) {
-            _54[i]._68 = nullptr;
+    for (s32 i = 0; i < mFollowCount; i++) {
+        if (requestIndex != i && mFollows[i]._68 == target->_68) {
+            mFollows[i]._68 = nullptr;
         }
     }
 
@@ -430,9 +429,9 @@ void MarioActor::initCommonEffect() {
             break;
         }
 
-        char name[0x80];
+        MR::FormattedName name;
         for (u32 materialIndex = 0; materialIndex < 7; materialIndex++) {
-            nebula_sprintf(name, "%s", entry->mName);
+            name.format("%s", entry->mName);
 
             const u8 flag2 = entry->mFlags.byte2();
             if ((flag2 & 0x8) && materialIndex != 1) {
@@ -466,13 +465,13 @@ void MarioActor::initCommonEffect() {
 
             if (flag2 != 0) {
                 const char* effectName = effectList[variant];
-                mEffectKeeper->registerEffectWithoutSRT(effectName, name + materialIndex);
+                mEffectKeeper->registerEffectWithoutSRT(effectName, name.c_str() + materialIndex);
             } else {
                 const u8 flag0 = entry->mFlags.byte0();
                 switch (flag0) {
                 case 0: {
                     const char* effectName = effectList[variant];
-                    const char* hostName = name + materialIndex;
+                    const char* hostName = name.c_str() + materialIndex;
                     mEffectKeeper->registerEffectWithoutSRT(effectName, hostName);
                     const Vec3f* rot = &mRotation;
                     const Vec3f* pos = &mPosition;
@@ -481,13 +480,13 @@ void MarioActor::initCommonEffect() {
                 }
 
                 case 1:
-                    ::addMarioEffectAtJoint(this, effectList[variant], "FootR", name + materialIndex);
+                    ::addMarioEffectAtJoint(this, effectList[variant], "FootR", name.c_str() + materialIndex);
                     break;
                 case 2:
-                    ::addMarioEffectAtJoint(this, effectList[variant], "HandR", name + materialIndex);
+                    ::addMarioEffectAtJoint(this, effectList[variant], "HandR", name.c_str() + materialIndex);
                     break;
                 case 3:
-                    ::addMarioEffectAtJoint(this, effectList[variant], "Spine1", name + materialIndex);
+                    ::addMarioEffectAtJoint(this, effectList[variant], "Spine1", name.c_str() + materialIndex);
                     break;
                 default:
                     break;
@@ -495,11 +494,11 @@ void MarioActor::initCommonEffect() {
             }
 
             if ((entry->mFlags.byte1() & 0x1) != 0) {
-                MR::getEffect(this, name + materialIndex)->forceFollowOn();
+                MR::getEffect(this, name.c_str() + materialIndex)->forceFollowOn();
             }
 
             if ((entry->mFlags.byte1() & 0x2) != 0) {
-                MR::getEffect(this, name + materialIndex)->forceScaleOn();
+                MR::getEffect(this, name.c_str() + materialIndex)->forceScaleOn();
             }
         }
 
@@ -1191,7 +1190,7 @@ void MarioActor::updateEffect() {
     }
 }
 
-MarioEffect::MarioEffect(MarioActor* pActor) : MarioModule(pActor) {
+MarioEffect::MarioEffect(MarioActor* pActor) : MarioModule(pActor), mFollowCount(0) {
     _C = -1;
     _10 = -1;
     _14 = -1;

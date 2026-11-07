@@ -86,18 +86,18 @@ ResourceHolderManagerName2Resource* ResourceHolderManager::createAndAddInner(con
         return pName2Resource;
     }
 
-    char archivePath[256];
-    (*pMakeArchiveFileNameFunc)(archivePath, sizeof(archivePath), pArcName);
+    MR::FormattedName archivePath;
+    (*pMakeArchiveFileNameFunc)(archivePath, pArcName);
 
-    if (MR::getMountedArchive(archivePath) == nullptr) {
-        MR::mountArchive(archivePath, MR::getCurrentHeap());
+    if (MR::getMountedArchive(archivePath.c_str()) == nullptr) {
+        MR::mountArchive(archivePath.c_str(), MR::getCurrentHeap());
     }
 
     CreateResourceHolderArgs args = CreateResourceHolderArgs();
 
-    (*pParam3)(archivePath, &args);
+    (*pParam3)(archivePath.c_str(), &args);
 
-    return add(archivePath, args);
+    return add(archivePath.c_str(), args);
 }
 
 ResourceHolderManagerName2Resource* ResourceHolderManager::createAndAddInnerStationed(const char* pParam1, FuncPtrC pParam2) {

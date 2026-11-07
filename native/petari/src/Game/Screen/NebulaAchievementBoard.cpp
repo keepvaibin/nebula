@@ -1439,9 +1439,8 @@ void NebulaAchievementBoard::open() {
             rCard.mGoal = 0;
         }
         if (rCard.mUnlocked) {
-            char id[48];
-            nebula_snprintf(id, sizeof(id), "AchievementHint.%s", NebulaAchievements::getId(i));
-            NebulaText::get(rCard.mHintText, 192, id);
+            MR::FormattedName id("AchievementHint.%s", NebulaAchievements::getId(i));
+            NebulaText::get(rCard.mHintText, 192, id.c_str());
         } else if (rCard.mGoal > 0) {
             // Its progress bar says enough.
             rCard.mHintText[0] = 0;

@@ -61,9 +61,9 @@ void TripodBossFixParts::init(const TableIter& rIter) {
         _ED = !(setting->mType & 0x2);
     }
 
-    char mapPartsID[0x100];
-    MR::getMapPartsObjectNameIfExistShapeID(mapPartsID, sizeof(mapPartsID), rIter);
-    initModelManagerWithAnm(mapPartsID, nullptr, false);
+    MR::FormattedName mapPartsID;
+    MR::getMapPartsObjectNameIfExistShapeID(mapPartsID, rIter);
+    initModelManagerWithAnm(mapPartsID.c_str(), nullptr, false);
 
     if (val) {
         MR::connectToScene(this, MR::MovementType_MapObjDecoration, MR::CalcAnimType_MapObjDecoration, MR::DrawBufferType_BloomModel,
@@ -86,11 +86,11 @@ void TripodBossFixParts::init(const TableIter& rIter) {
         initBreakMovement(_E4);
     }
 
-    mHasCollision = MR::isExistKcl(this, mapPartsID);
+    mHasCollision = MR::isExistKcl(this, mapPartsID.c_str());
 
     if (mHasCollision) {
         initSensor(rIter);
-        MR::initCollisionParts(this, mapPartsID, getSensor("body"), nullptr);
+        MR::initCollisionParts(this, mapPartsID.c_str(), getSensor("body"), nullptr);
     }
 
     initEffectKeeper(0, "TripodBoss", false);

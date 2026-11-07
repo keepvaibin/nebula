@@ -14,6 +14,7 @@
 #include "Game/Util/FileUtil.hpp"
 #include "Game/Util/MapPartsUtil.hpp"
 #include <cstring>
+#include "Game/Util/StringUtil.hpp"
 
 namespace {
     const Model2CreateFunc cModelChangableObjCreatorTable[] = {
@@ -111,19 +112,19 @@ namespace MR {
     }
 
     void requestMountModelChangableObjArchives(const char* pName, s32 a2) {
-        char objectName[256];
+        MR::FormattedName objectName;
 
-        MR::getMapPartsObjectName(objectName, sizeof(objectName), pName, a2);
-        MR::mountArchiveByObjectOrLayoutName(objectName, nullptr);
+        MR::getMapPartsObjectName(objectName, pName, a2);
+        MR::mountArchiveByObjectOrLayoutName(objectName.c_str(), nullptr);
     }
 
     bool isReadResourceFromStoreAtModelChangableObj(const char* pName, s32 a2) {
-        char objectName[256];
-        char archiveName[256];
+        MR::FormattedName objectName;
+        MR::FormattedName archiveName;
 
-        MR::getMapPartsObjectName(objectName, sizeof(objectName), pName, a2);
-        MR::makeObjectArchiveFileNameFromPrefix(archiveName, sizeof(archiveName), objectName, true);
+        MR::getMapPartsObjectName(objectName, pName, a2);
+        MR::makeObjectArchiveFileNameFromPrefix(archiveName, objectName.c_str(), true);
 
-        return !MR::isLoadedFile(archiveName);
+        return !MR::isLoadedFile(archiveName.c_str());
     }
 };  // namespace MR

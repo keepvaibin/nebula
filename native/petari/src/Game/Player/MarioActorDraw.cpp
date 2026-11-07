@@ -36,6 +36,7 @@
 #include <JSystem/JUtility/JUTNameTab.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <cstring>
+#include "Game/Util/StringUtil.hpp"
 
 namespace MR {
     void showMaterial(Model*, const char*);
@@ -47,6 +48,12 @@ public:
 };
 
 void MarioActor::initDrawAndModel() {
+    mNumModPowerUps = NebulaMods::powerUpCount();
+    mModels = new PlayerModel*[6 + mNumModPowerUps]();
+    if (mNumModPowerUps > 0) {
+        mModPowerUpModels = new ModelHolder*[mNumModPowerUps]();
+    }
+
     _218 = new DrawAdaptor(MR::Functor(this, &MarioActor::drawShadow), MR::DrawType_AlphaShadow);
     _21C = new DrawAdaptor(MR::Functor(this, &MarioActor::drawSilhouette), MR::DrawType_0x28);
     _220 = new DrawAdaptor(MR::Functor(this, &MarioActor::drawPreWipe), MR::DrawType_CometScreenFilter);
@@ -352,7 +359,7 @@ void MarioActor::initBoneMario() {
 }
 
 void MarioActor::initModPowerUpModels() {
-    for (s32 i = 0; i < NebulaMods::powerUpCount() && i < 58; i++) {
+    for (s32 i = 0; i < mNumModPowerUps; i++) {
         const char* pName = NebulaMods::powerUpModel(i);
         if (pName == nullptr) {
             continue;
@@ -361,9 +368,8 @@ void MarioActor::initModPowerUpModels() {
         if (!MR::isLoadedObjectOrLayoutArchive(pName)) {
             continue;
         }
-        char archive[256];
-        nebula_snprintf(archive, sizeof(archive), "%s.arc", pName);
-        MR::createAndAddResourceHolder(archive);
+        MR::FormattedName archive("%s.arc", pName);
+        MR::createAndAddResourceHolder(archive.c_str());
         ModelHolder* pHolder = new ModelHolder(pName, true);
         pHolder->initWithoutIter();
         PlayerModel* pModel = static_cast< PlayerModel* >(MR::getModel(pHolder));

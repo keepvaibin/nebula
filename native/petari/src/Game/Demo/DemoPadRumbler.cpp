@@ -1,14 +1,14 @@
 #include "Game/Demo/DemoPadRumbler.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include <cstdio>
+#include "Game/Util/StringUtil.hpp"
 
 DemoPadRumbler::DemoPadRumbler(const char* pName) : mNumPadRumbleEntries(), mPadRumbleEntries(), _8() {
     if (pName == nullptr)
         return;
 
-    char buf[0x100];
-    nebula_snprintf(buf, sizeof(buf), "MoviePadRumble%s.arc", pName);
-    Table* map = MR::createCsvParser(buf, "PadRumbleData.bcsv");
+    MR::FormattedName buf("MoviePadRumble%s.arc", pName);
+    Table* map = MR::createCsvParser(buf.c_str(), "PadRumbleData.bcsv");
 
     mNumPadRumbleEntries = MR::getCsvDataElementNum(map);
     PadRumbleInfo* infos = new PadRumbleInfo[mNumPadRumbleEntries];

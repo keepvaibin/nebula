@@ -113,10 +113,9 @@ namespace NrvGhostPlayer {
 };  // namespace NrvGhostPlayer
 
 void GhostPlayer::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
-    char archiveName[256];
-    nebula_snprintf(archiveName, sizeof(archiveName), "GhostData%s", MR::getCurrentStageName());
+    MR::FormattedName archiveName("GhostData%s", MR::getCurrentStageName());
 
-    pCollector->addArchive(archiveName);
+    pCollector->addArchive(archiveName.c_str());
 
     if (MR::isPlayerLuigi()) {
         pCollector->addArchive("GhostLuigi");
@@ -134,8 +133,8 @@ GhostPlayer::GhostPlayer(const char* pName) : LiveActor(pName), _90(), mCameraIn
 }
 
 void GhostPlayer::init(const TableIter& rIter) {
-    char gstPath[256];
-    char arcPath[256];
+    MR::FormattedName gstPath;
+    MR::FormattedName arcPath;
 
     mRaceManagerLayout = new RaceManagerLayout("レース管理用レイアウト");
     mRaceManagerLayout->init(rIter);
@@ -145,17 +144,17 @@ void GhostPlayer::init(const TableIter& rIter) {
     mGhostNames = nullptr;
     if (MR::isPlayerLuigi()) {
         const char* currentStageName = MR::getCurrentStageName();
-        nebula_sprintf(gstPath, "%sLuigi.gst", currentStageName);
+        gstPath.format("%sLuigi.gst", currentStageName);
     } else {
         const char* currentStageName = MR::getCurrentStageName();
-        nebula_sprintf(gstPath, "%s.gst", currentStageName);
+        gstPath.format("%s.gst", currentStageName);
     }
-    nebula_snprintf(arcPath, sizeof(arcPath), "GhostData%s.arc", MR::getCurrentStageName());
+    arcPath.format("GhostData%s.arc", MR::getCurrentStageName());
 
-    const u8* pFile = static_cast< const u8* >(MR::loadResourceFromArc(arcPath, gstPath));
+    const u8* pFile = static_cast< const u8* >(MR::loadResourceFromArc(arcPath.c_str(), gstPath.c_str()));
 
-    if (MR::isFileExist(gstPath, false)) {
-        pFile = static_cast< const u8* >(MR::loadFile(gstPath, nullptr, nullptr));
+    if (MR::isFileExist(gstPath.c_str(), false)) {
+        pFile = static_cast< const u8* >(MR::loadFile(gstPath.c_str(), nullptr, nullptr));
     }
 
     if (pFile == nullptr) {
@@ -165,7 +164,7 @@ void GhostPlayer::init(const TableIter& rIter) {
 
     const GhostFileHeader* pHeader = reinterpret_cast< const GhostFileHeader* >(pFile);
     if (pHeader->mMagic[0] != 'N' || pHeader->mMagic[1] != 'G' || pHeader->mMagic[2] != 'S' || pHeader->mMagic[3] != 'T') {
-        NEBULA_PANIC("GhostPlayer: %s: a recording the importer did not cook", gstPath);
+        NEBULA_PANIC("GhostPlayer: %s: a recording the importer did not cook", gstPath.c_str());
     }
     mFrame = reinterpret_cast< const GhostFrame* >(pHeader + 1);
     mFrameEnd = mFrame + pHeader->mFrameNum;

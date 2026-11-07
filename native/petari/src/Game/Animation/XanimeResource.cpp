@@ -253,10 +253,9 @@ const XanimeGroupInfo* XanimeResourceTable::getGroupInfo(const char* pPath, Xani
         }
 
         if (pPath[i] == '/') {
-            char pathOneDirectoryDown[32];
-            MR::extractString(pathOneDirectoryDown, &pPath[i], i, 32);
+            const MR::FormattedName pathOneDirectoryDown("%.*s", static_cast< int >(i), &pPath[i]);
 
-            u32 index = getIndex(pDir, pathOneDirectoryDown);
+            u32 index = getIndex(pDir, pathOneDirectoryDown.c_str());
 
             switch (pDir[index].mDirectoryType) {
             case XanimeDirectory::Recursive:

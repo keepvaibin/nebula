@@ -21,6 +21,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
+#include "Game/Util/StringUtil.hpp"
 
 GameSystemObjHolder::GameSystemObjHolder()
     : mObjHolder(), mParticleResHolder(), mCaptureScreenDirector(), mScreenPreserver(), mAudioSystem(), mPlayerInputs(), mMessageHolder(), mStarPointerDirector(), mRandom(0), mLanguage(MR::getDecidedLanguageFromIPL()) {
@@ -42,11 +43,11 @@ void GameSystemObjHolder::initMessageResource() {
     NebulaArena* pHeap = nullptr;
     MR::getMountedArchiveAndHeap("ErrorMessageArchive.arc", &pArchive, &pHeap);
 
-    char systemMessagePath[256];
+    MR::FormattedName systemMessagePath;
     const char* languagePrefix = MR::getCurrentLanguagePrefix();
-    nebula_snprintf(systemMessagePath, sizeof(systemMessagePath), "/%s/MessageData/System.arc", languagePrefix);
+    systemMessagePath.format("/%s/MessageData/System.arc", languagePrefix);
 
-    MR::createAndAddArchive(pArchive->getSubFolder(systemMessagePath, pHeap), pHeap, "/Memory/SystemMessage.arc");
+    MR::createAndAddArchive(pArchive->getSubFolder(systemMessagePath.c_str(), pHeap), pHeap, "/Memory/SystemMessage.arc");
     MR::createAndAddArchive(pArchive->getSubFolder("/LayoutData/ErrorMessageWindow.arc", pHeap), pHeap, "/Memory/ErrorMessageWindow.arc");
 
     MR::createAndAddLayoutHolderRawData("/Memory/ErrorMessageWindow.arc");

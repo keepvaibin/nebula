@@ -3,9 +3,13 @@
 #include "Game/Screen/ReplaceTagProcessor.hpp"
 #include "Game/Util/EventUtil.hpp"
 #include "Game/Util/MessageUtil.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include <cctype>
+#include <cstddef>
+#include <cstring>
 #include <cstdarg>
 #include <cstdio>
+#include <nebula_format.h>
 
 #define CENTISEC_PER_SEC 100
 #define SEC_PER_MIN 60
@@ -57,12 +61,12 @@ namespace MR {
         u16 mTag;
     };
 
-    void addFilePrefix(char* pDst, u32 size, const char* pChild, const char* pParent) {
+    void addFilePrefix(FormattedName& rDst, const char* pChild, const char* pParent) {
         if (*pChild == '/') {
             pChild++;
         }
 
-        nebula_snprintf(pDst, size, "%s/%s", pParent, pChild);
+        rDst.format("%s/%s", pParent, pChild);
     }
 
     void makeDateString(char16_t* pDst, s32 size, s32 year, s32 month, s32 day) {
@@ -120,19 +124,17 @@ namespace MR {
         return MR::addNumberFontTag(pDst, u"%d", tag);
     }
 
-    char* removeExtensionString(char* pDst, u32 size, const char* pPath) {
-        nebula_snprintf(pDst, size, "%s", pPath);
+    void removeExtensionString(FormattedName& rDst, const char* pPath) {
+        const char* const pExtSeparator = strrchr(pPath, '.');
+        const char* const pDirSeparator = strrchr(pPath, '/');
 
-        char* pExtSeparator = strrchr(pDst, '.');
-        char* pDirSeparator = strrchr(pDst, '/');
-
-        if (pExtSeparator < pDirSeparator || (pDirSeparator != nullptr && pDirSeparator + 1 == pExtSeparator)) {
-            return pDirSeparator;
+        // No dot at all: the console code wrote through a null separator here.
+        if (pExtSeparator == nullptr || pExtSeparator < pDirSeparator || (pDirSeparator != nullptr && pDirSeparator + 1 == pExtSeparator)) {
+            rDst.format("%s", pPath);
+            return;
         }
 
-        *pExtSeparator = '\0';
-
-        return pDirSeparator;
+        rDst.format("%.*s", static_cast< int >(pExtSeparator - pPath), pPath);
     }
 
     void makeRaceBestTimeString(char16_t* pDst, int raceId) {
@@ -373,6 +375,84 @@ namespace MR {
 
         for (int i = 0; i < ARRAY_SIZE(temp); i++) {
             pDst[i] = temp[i];
+        }
+    }
+
+    namespace {
+        struct InternedName {
+            InternedName* mNext;
+            u32 mHash;
+            char mText[1];
+        };
+
+        InternedName* sInterned = nullptr;
+    }  // namespace
+
+    const char* internName(const char* pName) {
+        // Null is the empty name (no stage yet at boot).
+        if (pName == nullptr) {
+            pName = "";
+        }
+        u32 hash = 2166136261u;
+        u32 length = 0;
+        for (; pName[length] != '\0'; length++) {
+            hash = (hash ^ static_cast< u8 >(pName[length])) * 16777619u;
+        }
+        for (InternedName* p = sInterned; p != nullptr; p = p->mNext) {
+            if (p->mHash == hash && strcmp(p->mText, pName) == 0) {
+                return p->mText;
+            }
+        }
+        InternedName* const pNew = static_cast< InternedName* >(
+            NebulaArena::alloc(static_cast< u32 >(offsetof(InternedName, mText)) + length + 1, 4, NebulaArena::getRootHeap()));
+        pNew->mNext = sInterned;
+        pNew->mHash = hash;
+        memcpy(pNew->mText, pName, length + 1);
+        sInterned = pNew;
+        return pNew->mText;
+    }
+
+    FormattedName::FormattedName(const char* pFormat, ...) : mText(mInline) {
+        va_list args;
+        va_start(args, pFormat);
+        vformat(pFormat, args);
+        va_end(args);
+    }
+
+    void FormattedName::format(const char* pFormat, ...) {
+        va_list args;
+        va_start(args, pFormat);
+        vformat(pFormat, args);
+        va_end(args);
+    }
+
+    void FormattedName::vformat(const char* pFormat, va_list args) {
+        char* const pOld = mText != mInline ? mText : nullptr;
+        va_list again;
+        va_copy(again, args);
+        mText = mInline;
+        const int length = nebula_vsnprintf(mInline, sizeof(mInline), pFormat, args);
+        if (length >= static_cast< int >(sizeof(mInline))) {
+            mText = new char[length + 1];
+            nebula_vsnprintf(mText, length + 1, pFormat, again);
+        }
+        va_end(again);
+        delete[] pOld;
+    }
+
+    char* FormattedName::room(u32 size) {
+        if (mText != mInline) {
+            delete[] mText;
+        }
+
+        mText = size <= sizeof(mInline) ? mInline : new char[size];
+        mText[0] = '\0';
+        return mText;
+    }
+
+    FormattedName::~FormattedName() {
+        if (mText != mInline) {
+            delete[] mText;
         }
     }
 };  // namespace MR

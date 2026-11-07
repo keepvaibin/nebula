@@ -223,9 +223,9 @@ namespace MR {
     }
 
     AssetFolder* getStageArchive(const char* pStageName) {
-        char archiveName[256];
-        StageFileLoader::makeStageArchiveName(archiveName, sizeof(archiveName), pStageName);
-        return getMountedArchive(archiveName);
+        MR::FormattedName archiveName;
+        StageFileLoader::makeStageArchiveName(archiveName, pStageName);
+        return getMountedArchive(archiveName.c_str());
     }
 
     s32 getGeneralPosNum() {

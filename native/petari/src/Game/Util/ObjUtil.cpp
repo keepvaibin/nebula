@@ -46,6 +46,7 @@
 
 #include <cstdio>
 #include <cstdarg>
+#include "Game/Util/StringUtil.hpp"
 
 namespace {
     static const Vec3f sDefaultPlayerPos = Vec3f(0, 0, 0);
@@ -520,13 +521,11 @@ const ResTIMG* MR::loadTexFromArc(const char* pArchive, const char* pFile) {
 }
 
 const ResTIMG* MR::loadTexFromArc(const char* pArchive) {
-    char arcName[256];
-    nebula_snprintf(arcName, sizeof(arcName), "%s.arc", pArchive);
+    MR::FormattedName arcName("%s.arc", pArchive);
 
-    char texName[256];
-    nebula_snprintf(texName, sizeof(texName), "%s.bti", pArchive);
+    MR::FormattedName texName("%s.bti", pArchive);
 
-    return loadTexFromArc(arcName, texName);
+    return loadTexFromArc(arcName.c_str(), texName.c_str());
 }
 
 namespace {
@@ -623,25 +622,23 @@ void MR::getCsvDataBool(bool* pOut, const Table* pMapInfo, const char* pKey, s32
 }
 
 void MR::getCsvDataVec(Vec* pOut, const Table* pMapInfo, const char* pKey, s32 idx) {
-    char key[256];
-    nebula_snprintf(key, sizeof(key), "%sX", pKey);
-    getCsvDataF32(&pOut->x, pMapInfo, key, idx);
-    nebula_snprintf(key, sizeof(key), "%sY", pKey);
-    getCsvDataF32(&pOut->y, pMapInfo, key, idx);
-    nebula_snprintf(key, sizeof(key), "%sZ", pKey);
-    getCsvDataF32(&pOut->z, pMapInfo, key, idx);
+    MR::FormattedName key("%sX", pKey);
+    getCsvDataF32(&pOut->x, pMapInfo, key.c_str(), idx);
+    key.format("%sY", pKey);
+    getCsvDataF32(&pOut->y, pMapInfo, key.c_str(), idx);
+    key.format("%sZ", pKey);
+    getCsvDataF32(&pOut->z, pMapInfo, key.c_str(), idx);
 }
 
 void MR::getCsvDataColor(NebulaColor8* pOut, const Table* pMapInfo, const char* pKey, s32 idx) {
-    char key[256];
-    nebula_snprintf(key, sizeof(key), "%sR", pKey);
-    getCsvDataU8(&pOut->r, pMapInfo, key, idx);
-    nebula_snprintf(key, sizeof(key), "%sG", pKey);
-    getCsvDataU8(&pOut->g, pMapInfo, key, idx);
-    nebula_snprintf(key, sizeof(key), "%sB", pKey);
-    getCsvDataU8(&pOut->b, pMapInfo, key, idx);
-    nebula_snprintf(key, sizeof(key), "%sA", pKey);
-    getCsvDataU8(&pOut->a, pMapInfo, key, idx);
+    MR::FormattedName key("%sR", pKey);
+    getCsvDataU8(&pOut->r, pMapInfo, key.c_str(), idx);
+    key.format("%sG", pKey);
+    getCsvDataU8(&pOut->g, pMapInfo, key.c_str(), idx);
+    key.format("%sB", pKey);
+    getCsvDataU8(&pOut->b, pMapInfo, key.c_str(), idx);
+    key.format("%sA", pKey);
+    getCsvDataU8(&pOut->a, pMapInfo, key.c_str(), idx);
 }
 
 bool MR::isStageStateScenarioOpeningCamera() {

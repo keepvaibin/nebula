@@ -182,15 +182,14 @@ void UFOBase::calcAndSetBaseMtx() {
 void UFOBase::initSubModel(const TableIter& rIter, const char* name) {
     mLODCtrl = MR::createLodCtrlMapObj(this, rIter, 100.0f);
     if (MR::isExistSubModel(name, "Bloom")) {
-        char buf[0x100];
-        nebula_snprintf(buf, sizeof(buf), "%sBloom", name);
+        MR::FormattedName buf("%sBloom", name);
         const char* name2 = mName;
-        mModel = MR::createModelObjBloomModel(name2, buf, getBaseMtx());
+        mModel = MR::createModelObjBloomModel(name2, buf.c_str(), getBaseMtx());
         f32 num = 500.0f;
         MR::calcModelBoundingRadius(&num, this);
         MR::setClippingFarMax(mModel);
         MR::setClippingTypeSphere(mModel, num);
-        MR::startBpk(mModel, buf);
+        MR::startBpk(mModel, buf.c_str());
     }
 }
 

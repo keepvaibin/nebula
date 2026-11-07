@@ -3,6 +3,7 @@
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
+#include "Game/Util/StringUtil.hpp"
 
 class ActorCameraInfo;
 class AnimScaleController;
@@ -105,8 +106,8 @@ public:
     FixedPosition* mBubbleAppearPos;
     CocoNutBall* mDownCocoNut;
     ActorCameraInfo* mAnimCamera;
-    char mBckLBuffer[0x20];
-    char mBckRBuffer[0x20];
+    MR::FormattedName mBckLBuffer;
+    MR::FormattedName mBckRBuffer;
     bool mIsLv2;
     AnimScaleController* mScaleController;
 };

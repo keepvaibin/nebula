@@ -236,10 +236,9 @@ const char* AstroMapObjFunction::getModelName(const char* pObjName, s32 domeId) 
 }
 
 const Table* AstroMapObjFunction::createAstroNamePlateParser() {
-    char arcName[256];
-    nebula_snprintf(arcName, sizeof(arcName), "%s.arc", ::cAstroNamePlateArcName);
+    MR::FormattedName arcName("%s.arc", ::cAstroNamePlateArcName);
 
-    return MR::createCsvParser(arcName, ::cAstroNamePlateFileName);
+    return MR::createCsvParser(arcName.c_str(), ::cAstroNamePlateFileName);
 }
 
 bool AstroMapObjFunction::trySetAndShowNamePlate(GalaxyNamePlate* pNamePlate, const Table* pInfo, const Vec3f& rPos,

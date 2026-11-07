@@ -173,7 +173,7 @@ void MarioActor::trySetLockOnTarget(HitSensor* pSensor) {
 }
 
 void MarioActor::tryCoinPull() {
-    for (u32 idx = 0; idx < ARRAY_SIZE(_4D0); idx++) {
+    for (s32 idx = 0; idx < _4D0.size(); idx++) {
         if (_4D0[idx] == nullptr) {
             continue;
         }
@@ -201,7 +201,7 @@ void MarioActor::tryCoinPullInRush() {
 }
 
 void MarioActor::flushCoinPull() {
-    for (u32 idx = 0; idx < ARRAY_SIZE(_4D0); idx++) {
+    for (s32 idx = 0; idx < _4D0.size(); idx++) {
         if (_4D0[idx] == nullptr) {
             continue;
         }
@@ -433,19 +433,19 @@ void MarioActor::tryTornadoPull(HitSensor* pSensor) {
                 return;
             }
 
-            for (s32 i = 0; i < 128; i++) {
+            for (s32 i = 0; i < _4D0.size(); i++) {
                 if (_4D0[i] == pSensor) {
                     return;
                 }
             }
 
             if (pSensor->receiveMessage(ACTMES_ITEM_PULL, getSensor("body"))) {
-                for (s32 i = 0; i < 128; i++) {
-                    if (_4D0[i] == nullptr) {
-                        _4D0[i] = pSensor;
-                        return;
-                    }
+                s32 i = 0;
+                while (i < _4D0.size() && _4D0[i] != nullptr) {
+                    i++;
                 }
+
+                _4D0.at(i) = pSensor;
             }
         }
 

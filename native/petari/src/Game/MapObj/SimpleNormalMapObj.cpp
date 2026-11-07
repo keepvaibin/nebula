@@ -4,6 +4,7 @@
 #include "Game/Util/MapPartsUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/StringUtil.hpp"
 
 SimpleNormalMapObj::SimpleNormalMapObj(const char* pName) : NormalMapBase(pName) {
 }
@@ -11,17 +12,17 @@ SimpleNormalMapObj::SimpleNormalMapObj(const char* pName) : NormalMapBase(pName)
 void SimpleNormalMapObj::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
 
-    char objectName[256];
-    MR::getMapPartsObjectNameIfExistShapeID(objectName, sizeof(objectName), rIter);
+    MR::FormattedName objectName;
+    MR::getMapPartsObjectNameIfExistShapeID(objectName, rIter);
 
-    initModelManagerWithAnm(objectName, nullptr, false);
+    initModelManagerWithAnm(objectName.c_str(), nullptr, false);
     MR::connectToSceneNormalMapObj(this);
     MR::initLightCtrlNoDrawMapObj(this);
     initNormalMap();
 
-    if (MR::isExistCollisionResource(this, objectName)) {
+    if (MR::isExistCollisionResource(this, objectName.c_str())) {
         initHitSensor(1);
-        MR::initCollisionParts(this, objectName, MR::addBodyMessageSensorMapObj(this), nullptr);
+        MR::initCollisionParts(this, objectName.c_str(), MR::addBodyMessageSensorMapObj(this), nullptr);
     }
 
     MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);

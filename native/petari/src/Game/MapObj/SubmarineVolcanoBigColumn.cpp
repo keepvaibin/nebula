@@ -4,6 +4,7 @@
 #include "Game/MapObj/AirBubbleHolder.hpp"
 #include "Game/Util.hpp"
 #include <cstdio>
+#include "Game/Util/StringUtil.hpp"
 
 namespace {
     static const f32 sShakeDistance = 800.0f;
@@ -104,9 +105,8 @@ bool SubmarineVolcanoBigColumn::receiveMsgEnemyAttack(u32 msg, HitSensor* pSende
 }
 
 void SubmarineVolcanoBigColumn::initBreakModel(const char* pModelName) {
-    char modelName[256];
-    nebula_snprintf(modelName, sizeof(modelName), "%sBreak", pModelName);
-    mBreakModel = MR::createModelObjMapObj("海底火山石柱壊れモデル", modelName, getBaseMtx());
+    MR::FormattedName modelName("%sBreak", pModelName);
+    mBreakModel = MR::createModelObjMapObj("海底火山石柱壊れモデル", modelName.c_str(), getBaseMtx());
     MR::invalidateClipping(mBreakModel);
     mBreakModel->makeActorDead();
 }

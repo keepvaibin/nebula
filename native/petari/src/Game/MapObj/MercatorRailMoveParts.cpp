@@ -5,6 +5,7 @@
 #include "Game/MapObj/MapPartsRailMover.hpp"
 #include "Game/MapObj/MapPartsRailRotator.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/StringUtil.hpp"
 
 MercatorRailMoveParts::MercatorRailMoveParts(const char* pName) : LiveActor(pName) {
     mRailMover = nullptr;
@@ -90,17 +91,17 @@ void MercatorRailMoveParts::updatePose() {
 }
 
 void MercatorRailMoveParts::init(const TableIter& rIter) {
-    char objName[256];
-    MR::getMapPartsObjectName(objName, sizeof(objName), rIter);
+    MR::FormattedName objName;
+    MR::getMapPartsObjectName(objName, rIter);
     MR::initDefaultPosForMercator(this, rIter, false);
     MR::getPlacementTrans(rIter, &mLocalTrans);
     MR::getPlacementRotateLocal(rIter, &mLocalRotation);
-    initModelManagerWithAnm(objName, nullptr, false);
+    initModelManagerWithAnm(objName.c_str(), nullptr, false);
     MR::connectToSceneMapObj(this);
     initHitSensor(1);
 
     MR::addHitSensorMapObj(this, "body", 4, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
-    MR::initCollisionParts(this, objName, getSensor("body"), nullptr);
+    MR::initCollisionParts(this, objName.c_str(), getSensor("body"), nullptr);
 
     if (MR::useStageSwitchReadB(this, rIter)) {
         MR::listenStageSwitchOnOffB(this, MR::Functor(this, &MercatorRailMoveParts::startMove), MR::Functor(this, &MercatorRailMoveParts::endMove));

@@ -49,7 +49,7 @@ void AssemblyBlock::init(const TableIter& rIter) {
     Vec3f stack_30;
     Vec3f stack_24;
     Vec3f stack_18;
-    char name[256];
+    MR::FormattedName name;
 
     MR::initDefaultPos(this, rIter);
     MR::tryRegisterNamePosLinkObj(this, rIter);
@@ -62,10 +62,10 @@ void AssemblyBlock::init(const TableIter& rIter) {
         _EC.setTrans(stack_3C);
     }
 
-    MR::getMapPartsObjectNameIfExistShapeID(name, sizeof(name), rIter);
-    initModelManagerWithAnm(name, nullptr, false);
+    MR::getMapPartsObjectNameIfExistShapeID(name, rIter);
+    initModelManagerWithAnm(name.c_str(), nullptr, false);
 
-    if (MR::isEqualString(name, "AssemblyBlockPartsTimerA")) {
+    if (MR::isEqualString(name.c_str(), "AssemblyBlockPartsTimerA")) {
         _13C = true;
     } else {
         _13C = false;
@@ -75,7 +75,7 @@ void AssemblyBlock::init(const TableIter& rIter) {
     _8C.set(_EC);
     MR::setBaseTRMtx(this, _8C);
 
-    if (MR::isEqualSubString(name, "PartsIce")) {
+    if (MR::isEqualSubString(name.c_str(), "PartsIce")) {
         MR::connectToSceneIndirectMapObj(this);
     } else {
         MR::connectToSceneMapObj(this);
@@ -83,7 +83,7 @@ void AssemblyBlock::init(const TableIter& rIter) {
 
     initHitSensor(1);
     MR::addBodyMessageSensorMapObj(this);
-    MR::initCollisionPartsAutoEqualScaleOne(this, name, getSensor(nullptr), nullptr);
+    MR::initCollisionPartsAutoEqualScaleOne(this, name.c_str(), getSensor(nullptr), nullptr);
 
     _BC.getTrans(stack_30);
     _EC.getTrans(stack_24);
@@ -118,7 +118,7 @@ void AssemblyBlock::init(const TableIter& rIter) {
     initSound(4, false);
     MR::initStarPointerTarget(this, boundingRadius, Vec3f(0.0f, 0.0f, 0.0f));
 
-    if (MR::isEqualString(name, "AssemblyBlockPartsTimerA")) {
+    if (MR::isEqualString(name.c_str(), "AssemblyBlockPartsTimerA")) {
         mBloomModel = MR::createBloomModel(this, getBaseMtx());
     }
 

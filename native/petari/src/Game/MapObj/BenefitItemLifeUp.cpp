@@ -5,6 +5,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include <nebula_format.h>
+#include "Game/Util/StringUtil.hpp"
 
 BenefitItemLifeUp::BenefitItemLifeUp(const char* pName) : BenefitItemObj(pName, "KinokoLifeUp") {
     if (MR::isGalaxyDarkCometAppearInCurrentStage()) {
@@ -32,13 +33,11 @@ void BenefitItemLifeUp::initModelAndEfx() {
 }
 
 void BenefitItemLifeUp::runEfx(const char* pName) {
-    char str[256];
-    nebula_snprintf(str, sizeof(str), "%sLifeUp", pName);
-    MR::emitEffect(this, str);
+    MR::FormattedName str("%sLifeUp", pName);
+    MR::emitEffect(this, str.c_str());
 }
 
 void BenefitItemLifeUp::stopEfx(const char* pName) {
-    char str[256];
-    nebula_snprintf(str, sizeof(str), "%sLifeUp", pName);
-    MR::emitEffect(this, str);
+    MR::FormattedName str("%sLifeUp", pName);
+    MR::emitEffect(this, str.c_str());
 }

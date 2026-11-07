@@ -305,11 +305,11 @@ void TalkNodeCtrl::forwardCurrentBranchNode(bool storeCurrent) {
 }
 
 void TalkNodeCtrl::createFlowNode(TalkMessageCtrl* pMsgCtrl, const TableIter& rIter, const char* pName, ActorCameraInfo** pCameraInf) {
-    char buf[0x100];
+    MR::FormattedName buf;
     s32 msgID = MR::getMessageID(rIter);
     const char* zoneName = MR::getCurrentPlacementZoneName();
-    nebula_snprintf(buf, sizeof(buf), "%s_%s%03d", zoneName, pName, msgID);
-    createFlowNodeDirect(pMsgCtrl, rIter, buf, pCameraInf);
+    buf.format("%s_%s%03d", zoneName, pName, msgID);
+    createFlowNodeDirect(pMsgCtrl, rIter, buf.c_str(), pCameraInf);
 }
 
 bool RecursiveHelper::hasNode(const TalkNode* pNode) const {
