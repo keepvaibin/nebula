@@ -2,7 +2,7 @@
 #include "Game/Effect/MultiEmitterCallBack.hpp"
 #include "Game/Effect/SingleEmitter.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include <JSystem/JParticle/JPAEmitter.hpp>
+#include "Game/Particle/EmitterCore.hpp"
 
 void MultiEmitter::setGlobalRotation(const Vec3s& rRotation, s32 idx) {
     if (idx == -1) {
@@ -250,7 +250,7 @@ void MultiEmitter::playDrawParticle(s32 idx) {
     }
 }
 
-void MultiEmitter::setParticleCallBackPtr(JPAParticleCallBack* pCallBack, s32 idx) {
+void MultiEmitter::setParticleCallBackPtr(ParticleCallBack* pCallBack, s32 idx) {
     if (idx == -1) {
         for (s32 i = 0; i < mEmitters.size(); i++) {
             SingleEmitter* pEmitter = getValidEmitter(i, false);

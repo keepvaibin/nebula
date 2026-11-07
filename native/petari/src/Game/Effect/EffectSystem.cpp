@@ -11,9 +11,9 @@
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
-#include <JSystem/JParticle/JPAParticle.hpp>
-#include <JSystem/JParticle/JPAEmitter.hpp>
-#include <JSystem/JParticle/JPAEmitterManager.hpp>
+#include "Game/Particle/ParticleCore.hpp"
+#include "Game/Particle/EmitterCore.hpp"
+#include "Game/Particle/EmitterManager.hpp"
 
 EffectSystem::EffectSystem(const char* pName, bool createAdaptors)
     : NameObj(pName), mEmitterManager(), mDrawExec(), mCalcExec(), mGroupHolder(new AutoEffectGroupHolder()), _20(true) {
@@ -100,8 +100,8 @@ namespace MR {
 EffectSystem::~EffectSystem() {
 }
 
-void EffectSystem::entry(ParticleResourceHolder* pResourceHolder, u32 particleCount, u32 emitterCount) {
-    mEmitterManager = new JPAEmitterManager(particleCount, emitterCount, MR::getCurrentHeap(), 9, 1);
+void EffectSystem::entry(ParticleResourceHolder* pResourceHolder, u32 emitterCount) {
+    mEmitterManager = new EmitterManager(emitterCount, MR::getCurrentHeap(), 9, 1);
     mEmitterManager->entryResourceManager(pResourceHolder->mResourceMgr, 0);
     mEmitterHolder = new ParticleEmitterHolder(this, emitterCount);
     pResourceHolder->swapTexture(MR::getScreenResTIMG(), "IndDummy");

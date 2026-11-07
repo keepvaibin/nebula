@@ -1,8 +1,0 @@
-#include "JSystem/JParticle/JPATexture.hpp"
-
-JPATexture::~JPATexture() {}
-
-JPATexture::JPATexture(u8 const* pData) {
-    mpData = (const JPATextureData*)pData;
-    mTexture.storeTIMG(&mpData->mResTIMG);
-}

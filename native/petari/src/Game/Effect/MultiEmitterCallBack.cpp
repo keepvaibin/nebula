@@ -4,7 +4,7 @@
 #include "Game/Effect/MultiEmitter.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
-#include <JSystem/JParticle/JPAEmitter.hpp>
+#include "Game/Particle/EmitterCore.hpp"
 
 namespace {
     Color8 getSyntheticColor(const Color8& rColor1, const Color8& rColor2) {
@@ -37,7 +37,7 @@ MultiEmitterCallBack::MultiEmitterCallBack(const MultiEmitter* pEmitter, MtxPtr 
       mPrmColor(-1, -1, -1, -1), mEnvColor(-1, -1, -1, -1), mFlags() {
 }
 
-void MultiEmitterCallBack::execute(JPABaseEmitter* pEmitter) {
+void MultiEmitterCallBack::execute(EmitterCore* pEmitter) {
     followSRT(pEmitter, false);
     effectLight(pEmitter);
     setColor(pEmitter);
@@ -81,16 +81,16 @@ void MultiEmitterCallBack::resetFollowCurrent() {
     turnFlagOff(RESET_FOLLOW_CURRENT);
 }
 
-void MultiEmitterCallBack::init(JPABaseEmitter* pEmitter) {
+void MultiEmitterCallBack::init(EmitterCore* pEmitter) {
     followSRT(pEmitter, true);
 }
 
-void MultiEmitterCallBack::setSRTFromHostMtx(JPABaseEmitter* pEmitter, MtxPtr pMtx, const FlagSRT& rFlag, bool b2) {
+void MultiEmitterCallBack::setSRTFromHostMtx(EmitterCore* pEmitter, MtxPtr pMtx, const FlagSRT& rFlag, bool b2) {
     Pos3f mtx = pMtx;
     Rot3f mtx94;
     Vec3f vecD0;
     Vec3f vecDC;
-    JPASetRMtxSTVecfromMtx(mtx, mtx94, &vecDC, &vecD0);
+    ParticleMath::splitSRT(mtx, mtx94, &vecDC, &vecD0);
 
     if (rFlag.mScale) {
         Vec3f vecE8;
@@ -112,7 +112,7 @@ void MultiEmitterCallBack::setSRTFromHostMtx(JPABaseEmitter* pEmitter, MtxPtr pM
             mtx94.concat(mtxC4);
         }
 
-        JPASetRMtxfromMtx(mtx94, pEmitter->mGlobalRot);
+        ParticleMath::splitR(mtx94, pEmitter->mGlobalRot);
     }
 
     setScaleFromHostScale(pEmitter, vecDC, rFlag.mTranslation, b2);
@@ -123,12 +123,12 @@ namespace {
         return (s32)(DEGREE_TO_S16 * deg);
     }
 
-    inline void setScaleFromHostScaleOne(MultiEmitterCallBack* pCallBack, JPABaseEmitter* pEmitter, bool b1, bool b2) {
+    inline void setScaleFromHostScaleOne(MultiEmitterCallBack* pCallBack, EmitterCore* pEmitter, bool b1, bool b2) {
         pCallBack->setScaleFromHostScale(pEmitter, Vec3f(1.0f, 1.0f, 1.0f), b1, b2);
     }
 }
 
-void MultiEmitterCallBack::setSRTFromHostSRT(JPABaseEmitter* pEmitter, const FlagSRT& rFlag, bool b2) {
+void MultiEmitterCallBack::setSRTFromHostSRT(EmitterCore* pEmitter, const FlagSRT& rFlag, bool b2) {
     if (rFlag.mScale) {
         Vec3f vecE0;
         if (rFlag.mRotation) {
@@ -150,13 +150,13 @@ void MultiEmitterCallBack::setSRTFromHostSRT(JPABaseEmitter* pEmitter, const Fla
     }
 
     if (rFlag.mRotation) {
-        JPAGetXYZRotateMtx(toS16(mRotation->x), toS16(mRotation->y), toS16(mRotation->z), pEmitter->mGlobalRot);
+        ParticleMath::xyzRotateMtx(toS16(mRotation->x), toS16(mRotation->y), toS16(mRotation->z), pEmitter->mGlobalRot);
     }
 
     setScaleFromHostScaleOne(this, pEmitter, rFlag.mTranslation, b2);
 }
 
-void MultiEmitterCallBack::setScaleFromHostScale(JPABaseEmitter* pEmitter, const Vec3f& rVec, bool b1, bool b2) {
+void MultiEmitterCallBack::setScaleFromHostScale(EmitterCore* pEmitter, const Vec3f& rVec, bool b1, bool b2) {
     Vec3f vec28(rVec);
 
     if (b1) {
@@ -174,13 +174,13 @@ void MultiEmitterCallBack::setScaleFromHostScale(JPABaseEmitter* pEmitter, const
     }
 }
 
-void MultiEmitterCallBack::effectLight(JPABaseEmitter* pEmitter) {
+void MultiEmitterCallBack::effectLight(EmitterCore* pEmitter) {
     if (MR::isNearZero(mEmitter->_2C)) {
         return;
     }
 }
 
-void MultiEmitterCallBack::followSRT(JPABaseEmitter* pEmitter, bool b2) {
+void MultiEmitterCallBack::followSRT(EmitterCore* pEmitter, bool b2) {
     FlagSRT flag;
     isFollowSRT(&flag, b2);
 
@@ -193,7 +193,7 @@ void MultiEmitterCallBack::followSRT(JPABaseEmitter* pEmitter, bool b2) {
     }
 }
 
-void MultiEmitterCallBack::setColor(JPABaseEmitter* pEmitter) {
+void MultiEmitterCallBack::setColor(EmitterCore* pEmitter) {
     if (MR::isNearZero(mEmitter->_2C)) {
         pEmitter->setGlobalPrmColor(mPrmColor.r, mPrmColor.g, mPrmColor.b);
         pEmitter->setGlobalEnvColor(mEnvColor.r, mEnvColor.g, mEnvColor.b);

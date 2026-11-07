@@ -6,8 +6,8 @@ class AutoEffectInfo;
 class EffectKeeper;
 class EffectSystem;
 class JMapInfo;
-class JPABaseEmitter;
-class JPAEmitterManager;
+class EmitterCore;
+class EmitterManager;
 class LayoutActor;
 class LiveActor;
 class ModelManager;
@@ -47,9 +47,9 @@ namespace MR {
                                          const char* pName);
         void deleteParticleEmitter(ParticleEmitter* pEmitter);
         void setLinkSingleEmitter(ParticleEmitter* pEmitter, SingleEmitter* pSingleEmitter);
-        SingleEmitter* getLinkSingleEmitter(const JPABaseEmitter* pEmitter);
+        SingleEmitter* getLinkSingleEmitter(const EmitterCore* pEmitter);
         void forceDeleteAllOneTimeEmitter();
-        void createParticleEmitter(ParticleEmitter* pEmitter, JPAEmitterManager* pManager, const Vec3f& rPosition, u16 resourceId, u8 groupId,
+        void createParticleEmitter(ParticleEmitter* pEmitter, EmitterManager* pManager, const Vec3f& rPosition, u16 resourceId, u8 groupId,
                                    u8 resourceManagerId);
         bool isExistInResource(u16* pIndex, const char* pName, s32 number);
         const char* getEffectAttributeName(s32 floorCode);

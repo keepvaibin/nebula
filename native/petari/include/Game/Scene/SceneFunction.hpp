@@ -260,7 +260,7 @@ public:
     static void initAfterScenarioSelected();
     static void initForNameObj();
     static void initForLiveActor();
-    static void initEffectSystem(u32, u32);
+    static void initEffectSystem(u32 emitterCount);
     static void allocateDrawBufferActorList();
 };
 

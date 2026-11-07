@@ -8,9 +8,9 @@
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
-#include "JSystem/JParticle/JPAEmitter.hpp"
-#include "JSystem/JParticle/JPAEmitterManager.hpp"
-#include "JSystem/JParticle/JPAResource.hpp"
+#include "Game/Particle/EmitterCore.hpp"
+#include "Game/Particle/EmitterManager.hpp"
+#include "Game/Particle/ParticleResource.hpp"
 
 extern "C" const NebulaHostServices* nebula_host(void);
 
@@ -38,8 +38,8 @@ namespace {
     u32 sEffectRoom;
 
     // "Effect/<ParticleNames.bcsv name>" of an emitter in the game's particle archive; 0 for another archive's.
-    u32 effectName(const JPAResource* pResource, const JPABaseEmitter* pEmitter) {
-        const u16 index = pResource->getUsrIdx();
+    u32 effectName(const ParticleResource* pResource, const EmitterCore* pEmitter) {
+        const u32 index = pResource->getUsrIdx();
         if (index >= sEffectRoom) {
             const u32 room = index + 1 > sEffectRoom * 2 ? index + 1 : sEffectRoom * 2;
             const NebulaHostServices* pHost = nebula_host();
@@ -65,7 +65,7 @@ namespace {
 };  // namespace
 
 namespace MotionSignal {
-    u32 drawEmitter(const JPAResource* pResource, JPABaseEmitter* pEmitter, bool child) {
+    u32 drawEmitter(const ParticleResource* pResource, EmitterCore* pEmitter, bool child) {
         if (pEmitter->mDrawSlot == 0) {
             // Two numbers: the emitter's particles and its children's.
             pEmitter->mDrawSlot = Frame::newSlot();
@@ -121,7 +121,7 @@ namespace MotionSignal {
         }
     }
 
-    void emitterInit(JPABaseEmitter* pEmitter) {
+    void emitterInit(EmitterCore* pEmitter) {
         bump(pEmitter->mMotionEpoch);
     }
 

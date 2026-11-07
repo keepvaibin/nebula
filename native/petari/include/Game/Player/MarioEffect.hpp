@@ -6,7 +6,7 @@
 #include <nebula_geometry.hpp>
 
 class MarioActor;
-class JPABaseEmitter;
+class EmitterCore;
 
 struct MovingFollowMtx {
     MovingFollowMtx() {
@@ -21,18 +21,18 @@ struct MovingFollowMtx {
     Mtx34f _4;
     Mtx34f _34;
     MtxPtr _64;
-    JPABaseEmitter* _68;
+    EmitterCore* _68;
 };
 
 class MarioEffect : public MarioModule, public MultiEmitterCallBackBase {
 public:
     MarioEffect(MarioActor*);
 
-    virtual void execute(JPABaseEmitter*);
+    virtual void execute(EmitterCore*);
 
     virtual ~MarioEffect();
 
-    JPABaseEmitter* addRequest(const char*, MtxPtr);
+    EmitterCore* addRequest(const char*, MtxPtr);
     void updateFollowMtx(MovingFollowMtx*);
     void playSwingEffect();
     void doCubeEffect();

@@ -71,9 +71,9 @@ void SceneFunction::initForLiveActor() {
     MR::createSceneObj(SceneObj_NPCDirector);
 }
 
-void SceneFunction::initEffectSystem(u32 a1, u32 a2) {
+void SceneFunction::initEffectSystem(u32 emitterCount) {
     MR::createSceneObj(SceneObj_EffectSystem);
-    MR::getEffectSystem()->entry(MR::getParticleResourceHolder(), a1, a2);
+    MR::getEffectSystem()->entry(MR::getParticleResourceHolder(), emitterCount);
 }
 
 void SceneFunction::allocateDrawBufferActorList() {

@@ -10,7 +10,7 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
 #include "Game/Render/Model.hpp"
-#include <JSystem/JParticle/JPAEmitterManager.hpp>
+#include "Game/Particle/EmitterManager.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 
 namespace {
@@ -39,7 +39,7 @@ void ParticleDrawExecutor::draw2D() const {
     if (_20) {
         Pos3f cameraMtx;
         cameraMtx.identity();
-        JPADrawInfo drawInfo(cameraMtx.toMtxPtr());
+        ParticleCamera drawInfo(cameraMtx.toMtxPtr());
 
         f32 width;
         f32 height = static_cast< s32 >(NebulaFrameClock::cScreenLines);
@@ -58,7 +58,7 @@ void ParticleDrawExecutor::draw2D() const {
 
 void ParticleDrawExecutor::drawIndirect() const {
     if (_20) {
-        JPADrawInfo drawInfo(ModelSys::getViewMtx(), MR::getRenderFovy(), MR::getAspect());
+        ParticleCamera drawInfo(ModelSys::getViewMtx(), MR::getRenderFovy(), MR::getAspect());
         mHost->mEmitterManager->draw(&drawInfo, 2);
     }
 }
@@ -69,7 +69,7 @@ void ParticleDrawExecutor::drawAfterIndirect() const {
 
 void ParticleDrawExecutor::drawFor2DModel() const {
     if (_20) {
-        JPADrawInfo drawInfo(ModelSys::getViewMtx());
+        ParticleCamera drawInfo(ModelSys::getViewMtx());
         mHost->mEmitterManager->draw(&drawInfo, 8);
     }
 }
@@ -84,7 +84,7 @@ void ParticleDrawExecutor::drawAfterImageEffect() const {
 
 void ParticleDrawExecutor::drawWithViewMtx3D(const Pos3f& rViewMtx) const {
     if (_20) {
-        JPADrawInfo drawInfo(rViewMtx);
+        ParticleCamera drawInfo(rViewMtx);
         mHost->mEmitterManager->draw(&drawInfo, 0);
         mHost->mEmitterManager->draw(&drawInfo, 1);
     }
@@ -92,21 +92,21 @@ void ParticleDrawExecutor::drawWithViewMtx3D(const Pos3f& rViewMtx) const {
 
 void ParticleDrawExecutor::drawWithViewMtxAfterIndirect(const Pos3f& rViewMtx) const {
     if (_20) {
-        JPADrawInfo drawInfo(rViewMtx);
+        ParticleCamera drawInfo(rViewMtx);
         mHost->mEmitterManager->draw(&drawInfo, 3);
     }
 }
 
 void ParticleDrawExecutor::drawWithViewMtxForBloomEffect(const Pos3f& rViewMtx) const {
     if (_20) {
-        JPADrawInfo drawInfo(rViewMtx);
+        ParticleCamera drawInfo(rViewMtx);
         mHost->mEmitterManager->draw(&drawInfo, 4);
     }
 }
 
 void ParticleDrawExecutor::drawWithViewMtxAfterImageEffect(const Pos3f& rViewMtx) const {
     if (_20) {
-        JPADrawInfo drawInfo(rViewMtx);
+        ParticleCamera drawInfo(rViewMtx);
         mHost->mEmitterManager->draw(&drawInfo, 5);
     }
 }

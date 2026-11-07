@@ -8,7 +8,7 @@
 #include "Game/Util/HashUtil.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <JSystem/JParticle/JPAEmitter.hpp>
+#include "Game/Particle/EmitterCore.hpp"
 #include <algorithm>
 #include <cstring>
 
@@ -211,17 +211,17 @@ void MultiEmitter::setContinueBckEnd(bool continueAnimEnd) {
 }
 
 void MultiEmitter::onCreateSyncClipping() {
-    turnFlagOn(JPAEmtrStts_FirstEmit);
+    turnFlagOn(EmitterStatus_FirstEmit);
 }
 
 void MultiEmitter::onForceDeleteSyncClipping() {
-    turnFlagOn(JPAEmtrStts_Immortal);
+    turnFlagOn(EmitterStatus_Immortal);
 }
 
 void MultiEmitter::stopEmitterOnClipped() {
-    if (isFlagOn(JPAEmtrStts_Immortal)) {
+    if (isFlagOn(EmitterStatus_Immortal)) {
         forceDeleteEmitter();
-    } else if (isFlagOn(JPAEmtrStts_RateStepEmit)) {
+    } else if (isFlagOn(EmitterStatus_RateStepEmit)) {
         deleteEmitter();
     } else if (_24 != nullptr) {
         stopCalcEmitter(-1);
@@ -230,14 +230,14 @@ void MultiEmitter::stopEmitterOnClipped() {
 
     for (SingleEmitter* pEmitter = mEmitters.begin(); pEmitter != mEmitters.end(); pEmitter++) {
         if (pEmitter->isValid() && !pEmitter->isOneTime()) {
-            pEmitter->mEmitter->mEmitter->setStatus(JPAEmtrStts_StopCalc);
-            pEmitter->mEmitter->mEmitter->setStatus(JPAEmtrStts_StopDraw);
+            pEmitter->mEmitter->mEmitter->setStatus(EmitterStatus_StopCalc);
+            pEmitter->mEmitter->mEmitter->setStatus(EmitterStatus_StopDraw);
         }
     }
 }
 
 void MultiEmitter::playEmitterOffClipped() {
-    if (isFlagOn(JPAEmtrStts_FirstEmit)) {
+    if (isFlagOn(EmitterStatus_FirstEmit)) {
         create(MR::getEffectSystem());
     } else if (_24 != nullptr) {
         playCalcEmitter(-1);
@@ -246,8 +246,8 @@ void MultiEmitter::playEmitterOffClipped() {
 
     for (SingleEmitter* pEmitter = mEmitters.begin(); pEmitter != mEmitters.end(); pEmitter++) {
         if (pEmitter->isValid() && !pEmitter->isOneTime()) {
-            pEmitter->mEmitter->mEmitter->clearStatus(JPAEmtrStts_StopCalc);
-            pEmitter->mEmitter->mEmitter->clearStatus(JPAEmtrStts_StopDraw);
+            pEmitter->mEmitter->mEmitter->clearStatus(EmitterStatus_StopCalc);
+            pEmitter->mEmitter->mEmitter->clearStatus(EmitterStatus_StopDraw);
         }
     }
 }

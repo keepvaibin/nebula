@@ -19,8 +19,8 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/System/NebulaHost.hpp"
-#include <JSystem/JParticle/JPAEmitter.hpp>
-#include <JSystem/JParticle/JPAMath.hpp>
+#include "Game/Particle/EmitterCore.hpp"
+#include "Game/Particle/ParticleMath.hpp"
 #include <cstdio>
 #include <cstring>
 
@@ -90,7 +90,7 @@ namespace {
 
 };  // namespace
 
-void MarioEffect::execute(JPABaseEmitter* pEmitter) {
+void MarioEffect::execute(EmitterCore* pEmitter) {
     s32 idx = 0;
     for (s32 i = 0; i < 256; i++) {
         if (_54[i]._68 == pEmitter) {
@@ -103,7 +103,7 @@ void MarioEffect::execute(JPABaseEmitter* pEmitter) {
     updateFollowMtx(&_54[idx]);
 }
 
-JPABaseEmitter* MarioEffect::addRequest(const char* pEffectName, MtxPtr pMtx) {
+EmitterCore* MarioEffect::addRequest(const char* pEffectName, MtxPtr pMtx) {
     u32 requestIndex = 0;
     for (; requestIndex < 256; requestIndex++) {
         if (_54[requestIndex]._68 == nullptr) {
@@ -127,7 +127,7 @@ JPABaseEmitter* MarioEffect::addRequest(const char* pEffectName, MtxPtr pMtx) {
         return nullptr;
     }
 
-    JPABaseEmitter* baseEmitter = emitter->getParticleEmitter(0)->mEmitter;
+    EmitterCore* baseEmitter = emitter->getParticleEmitter(0)->mEmitter;
     target->_68 = baseEmitter;
 
     for (s32 i = 0; i < 256; i++) {
@@ -589,7 +589,7 @@ MultiEmitter* MarioActor::playCommonEffect(const char* pName) {
 
                 if (needsFollow) {
                     const Triangle* tri = mMario->getGroundPolygon();
-                    JPABaseEmitter* baseEmitter = mMarioEffect->addRequest(pName + materialIndex, tri->getBaseMtx()->toMtxPtr());
+                    EmitterCore* baseEmitter = mMarioEffect->addRequest(pName + materialIndex, tri->getBaseMtx()->toMtxPtr());
 
                     if (baseEmitter != nullptr) {
                         baseEmitter->setGlobalScale(Vec3f(entry->mScale, entry->mScale, entry->mScale));

@@ -5,7 +5,7 @@
 
 class AutoEffectInfo;
 class EffectSystem;
-class JPAParticleCallBack;
+class ParticleCallBack;
 class MultiEmitterCallBack;
 class MultiEmitterCallBackBase;
 class MultiEmitterParticleCallBack;
@@ -82,7 +82,7 @@ public:
     void playCalcEmitter(s32);
     void stopDrawParticle(s32);
     void playDrawParticle(s32);
-    void setParticleCallBackPtr(JPAParticleCallBack*, s32);
+    void setParticleCallBackPtr(ParticleCallBack*, s32);
     void pauseOff(s32);
 
     // In MarioEffect
