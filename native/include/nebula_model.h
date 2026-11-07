@@ -32,6 +32,19 @@ enum {
 #define NEBULA_STATE_ALPHA_PASS (1u << 19) /* writes alpha where the pass's target keeps it */
 #define NEBULA_STATE_STENCIL(func, op) ((uint32_t)(func) << 20 | (uint32_t)((func) != 0 ? (op) : 0) << 22)
 #define NEBULA_STATE_STENCIL_OWN (1u << 24) /* its stencil, not the pass's; gone from the state a pipeline takes */
+#define NEBULA_STATE_PIXEL_SHADING (1u << 25) /* alpha test cannot reject: shade per pixel, keep MSAA coverage */
+
+/* A conservative proof independent of alpha and both reference values. Other compares may vary; NEVER and ALWAYS
+   are constant. Used by dynamic materials to avoid sample-frequency shading for a uniformly passing alpha test. */
+static inline int nebula_alpha_test_always(uint32_t compare0, uint32_t compare1, uint32_t logic) {
+    switch (logic) {
+    case 0: return compare0 == 7u && compare1 == 7u;
+    case 1: return compare0 == 7u || compare1 == 7u;
+    case 2: return (compare0 == 0u && compare1 == 7u) || (compare0 == 7u && compare1 == 0u);
+    case 3: return (compare0 == 0u && compare1 == 0u) || (compare0 == 7u && compare1 == 7u);
+    default: return 0;
+    }
+}
 
 typedef struct NebulaModelHeader {
     uint32_t magic, version, size, flags;

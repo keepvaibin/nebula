@@ -17,6 +17,7 @@ struct PassState {
     u8 stencil_func, stencil_op;  // stencil_func 0xFF: the pass's
     f32 line_width, point_size;   // lines and points in lines of a 456-line picture
     bool spread_lines, spread_points;  // a widened line's or point's texture spreads by a texel across it
+    bool pixel_shading;  // the dynamic alpha test is proved uniformly passing; MSAA still covers geometry
 
     u32 word() const;
 };
@@ -91,7 +92,7 @@ namespace Frame {
     void hostView(const f32 (*pMtx)[4], f32 left, f32 top, f32 width, f32 height, f32 nearZ, f32 farZ, f32* pOut);
 
     // The lights draws take now.
-    u32 currentLightSet();
+    u32 currentLightSet(u32 block);
     void setLight(u32 index, const NebulaLight& rLight);
     void setLightFollowsCamera(u32 mask);
 

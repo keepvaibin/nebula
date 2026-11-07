@@ -85,4 +85,7 @@ void take_rotation_of_b(AffineMotion& m) noexcept;
 void light_at(const float* a, const float* b, const CameraMotion& camera, const Affine34& camera_t, float t, bool split,
               float* out) noexcept;
 
+// An octahedral eye-space direction expressed under another view (sky/ground lighting on generated frames).
+[[nodiscard]] std::uint32_t eye_direction_at(std::uint32_t packed, const Affine34& from_view, const Affine34& to_view) noexcept;
+
 }  // namespace galaxy::render

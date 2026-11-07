@@ -291,6 +291,8 @@ void CollisionShadow::draw1() const {
     material.mState.alpha_write = 0;
     material.setStencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ADD);
     TypedDraw site(material, nullptr, MR::getCameraViewMtx());
+    // Rebuilt collision triangles can change order even with the same vertex count.
+    site.setFlags(NEBULA_ITEM_DISCRETE_VERTICES);
     sendVtx(site);
 }
 
@@ -355,6 +357,7 @@ void CollisionShadow::setViewMtx(const Vec3f& rDirection) {
     matrix.identity();
     matrix.setPositionFromLookAt(eye, _30, _2F0);
     NebulaMtxCopy(matrix, ModelSys::mViewMtx);
+    ModelSys::mViewRole = NEBULA_CAMERA_SHADOW;
     MR::setMarioShadowVec(rDirection);
 }
 
@@ -509,6 +512,8 @@ void CollisionShadow::draw3() const {
     material.mState.blend_dst = NEBULA_FACTOR_ZERO;
     material.setStencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ZERO);
     TypedDraw site(material, nullptr, MR::getCameraViewMtx());
+    // Rebuilt collision triangles can change order even with the same vertex count.
+    site.setFlags(NEBULA_ITEM_DISCRETE_VERTICES);
     sendZsortedVtx(site, true);
     if (_6E) {
         SiteMaterial clear = material;

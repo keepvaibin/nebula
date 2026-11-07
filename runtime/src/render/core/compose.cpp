@@ -222,7 +222,7 @@ void compose_rows(const ComposeInput& in, float (*out)[4]) noexcept {
 }
 
 void compose_world_rows(const ComposeInput& in, float (*out)[4]) noexcept {
-    compose(in, nullptr, in.base, false, out);
+    compose(in, in.world_view, in.base, false, out);
 }
 
 }  // namespace galaxy::render::core

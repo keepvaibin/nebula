@@ -889,7 +889,7 @@ void MaterialDraw::draw(Model* pModel, Mesh* pMesh) {
     rItem.source_hash = pMaterial->mSourceHash;
     rItem.matrix = pMesh->mFile->single_matrix != NEBULA_MODEL_NONE ? pMesh->mFile->single_matrix : 0;
     rItem.view = Frame::currentView();
-    rItem.light_set = Frame::currentLightSet();
+    rItem.light_set = Frame::currentLightSet(rItem.block);
     rItem.flags = static_cast< u32 >(mKey.mReplace != 0 || mKey.mPass != 0 ? NEBULA_ITEM_PLAIN_MESH : 0);
     rItem.line_width = 0.0f;
     rItem.point_size = 0.0f;
@@ -919,7 +919,7 @@ void MaterialDraw::drawUnder(TypedDraw& rDraw, Mesh* pMesh) {
     rItem.source_hash = pMaterial->mSourceHash;
     rItem.matrix = 0;
     rItem.view = Frame::currentView();
-    rItem.light_set = Frame::currentLightSet();
+    rItem.light_set = Frame::currentLightSet(rItem.block);
     rItem.flags = NEBULA_ITEM_PLAIN_MESH | NEBULA_ITEM_ONE_MATRIX;
     rItem.line_width = 0.0f;
     rItem.point_size = 0.0f;
@@ -940,7 +940,7 @@ void MaterialDraw::drawFlat(Model* pModel, Mesh* pMesh) {
     rItem.source_hash = getMaterial()->mSourceHash;
     rItem.matrix = pMesh->mFile->single_matrix != NEBULA_MODEL_NONE ? pMesh->mFile->single_matrix : 0;
     rItem.view = Frame::currentView();
-    rItem.light_set = Frame::currentLightSet();
+    rItem.light_set = Frame::currentLightSet(rItem.block);
     rItem.flags = NEBULA_ITEM_PLAIN_MESH;
     rItem.line_width = 0.0f;
     rItem.point_size = 0.0f;

@@ -1,3 +1,6 @@
+#include "galaxy/display_timeline.h"
+#include "galaxy/render/render_config.h"
+#include "galaxy/render/ambient_occlusion_shape.h"
 // SPDX-License-Identifier: GPL-3.0-only
 // Tests of frame interpolation and the sky-sun search.
 #include "galaxy/render/frame_interpolation.h"
@@ -202,9 +205,39 @@ std::array<float, 3> eye_direction(const Affine34& view, const std::array<float,
     return e;
 }
 
+void test_occlusion_budget_and_sky_direction() {
+    for (unsigned height=1; height<=8192; ++height) {
+        const unsigned divisor=ao::occlusion_divisor(height);
+        check((height+divisor-1u)/divisor <= ao::kFullLines,"AO stays within its working-resolution budget");
+    }
+    const Affine34 identity=affine_identity();
+    const Affine34 roll={0,-1,0,100,1,0,0,200,0,0,1,300};
+    const std::uint32_t up=32767u << 16u;
+    const auto turned=eye_direction_at(up,identity,roll);
+    check(static_cast<std::int16_t>(turned&0xffffu) < -32760 && std::abs(static_cast<std::int16_t>(turned>>16u)) < 3,
+          "sky up rotates with the presented camera and ignores translation");
+    const auto round_trip=eye_direction_at(turned,roll,identity);
+    check(std::abs(static_cast<std::int16_t>(round_trip&0xffffu)) < 3 && static_cast<std::int16_t>(round_trip>>16u)>32760,
+          "sky direction survives eye/world conversion");
+}
+
 }  // namespace
 
 int main() {
+    check(galaxy::presentation_grid_at(100, 114, 8) == 98, "presentation phase differs from app start phase");
+    check(galaxy::presentation_grid_at(148, 114, 8) == 146, "skipped callbacks retain display phase");
+    check(galaxy::presentation_grid_at(98, 114, 8) == 98, "exact presentation tick remains exact");
+    check(galaxy::presentation_grid_at(100, 0, 8) == 100, "legacy callback uses its original phase");
+
+    for (const auto height : galaxy::render::kInternalHeights) {
+        for (const auto size : {std::pair{2504u, 2256u}, std::pair{2520u, 1080u}, std::pair{1280u, 720u}, std::pair{5120u, 1440u}}) {
+            const auto got = galaxy::render::internal_extent(size.first, size.second, height);
+            check(got.second == (height ? height : size.second), "internal height follows explicit preset or output");
+            check(std::abs(double(got.first) / got.second - double(size.first) / size.second) <= 0.5 / got.second + 1e-6, "internal width follows aspect while folding or resizing");
+        }
+    }
+
+    test_occlusion_budget_and_sky_direction();
     test_tex_matrices();
     test_camera_endpoints_and_arc();
     test_camera_cut();

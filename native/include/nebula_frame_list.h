@@ -15,7 +15,7 @@ extern "C" {
 
 
 /* What a camera is for: two frames' cameras pair by this. */
-enum { NEBULA_CAMERA_SCENE = 0, NEBULA_CAMERA_MIRROR = 1, NEBULA_CAMERA_OTHER = 2 };
+enum { NEBULA_CAMERA_SCENE = 0, NEBULA_CAMERA_MIRROR = 1, NEBULA_CAMERA_OTHER = 2, NEBULA_CAMERA_SHADOW = 3, NEBULA_CAMERA_ROLE_COUNT = 4 };
 
 /* A camera: eye from world, for the blocks made under it. */
 typedef struct NebulaFrameCamera {
@@ -48,7 +48,8 @@ enum { NEBULA_LIGHTS_PER_SET = 8 };
 typedef struct NebulaFrameLightSet {
     NebulaFrameLight lights[NEBULA_LIGHTS_PER_SET];
     uint32_t follows_camera; /* bit per light: its position moves with the camera */
-    uint32_t reserved[3];
+    uint32_t camera_plus_one; /* camera whose eye space holds these lights; 0 when unknown */
+    uint32_t reserved[2];
 } NebulaFrameLightSet;
 
 /* Block flags. */
@@ -116,6 +117,7 @@ enum {
     NEBULA_ITEM_PLAIN_MESH = 1u << 3,  /* never the curved form of its mesh */
     NEBULA_ITEM_NO_CULL = 1u << 4,     /* not culled by its bounds */
     NEBULA_ITEM_PARTICLE = 1u << 5,    /* ring vertices are particle corners: position, position before, two colours, coordinate */
+    NEBULA_ITEM_DISCRETE_VERTICES = 1u << 6, /* regenerated or sorted topology: vertex ordinals have no identity */
     NEBULA_ITEM_WIDE = 1u << 8,        /* ring corners of widened lines or points */
     NEBULA_ITEM_ONE_MATRIX = 1u << 9,  /* a registered mesh under one matrix, whatever its vertices name */
     NEBULA_ITEM_SPREAD_LINES = 1u << 10,

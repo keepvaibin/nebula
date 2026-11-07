@@ -198,7 +198,7 @@ NativeOut native_out_of(float4 c) {
 #define PROGRAM_RETURN(c) return native_out_of(c)
 #endif
 
-// The inspector's picture of one stage (GALAXY_INSPECT_SHOW=stage-N); nothing otherwise.
+// The inspector's picture of one selected stage; nothing otherwise.
 #if defined(NATIVE_SHOW_STAGE)
 #define NATIVE_STAGE(n, value) if (n == NATIVE_SHOW_STAGE) { PROGRAM_RETURN(value); }
 #else

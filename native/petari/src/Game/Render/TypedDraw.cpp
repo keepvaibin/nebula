@@ -245,7 +245,7 @@ void TypedDraw::drawMesh(Mesh* pMesh) {
     rItem.part = Frame::nextPart();
     rItem.source_hash = mSource;
     rItem.view = Frame::currentView();
-    rItem.light_set = Frame::currentLightSet();
+    rItem.light_set = Frame::currentLightSet(rItem.block);
     if (mJointsOf != nullptr) {
         rItem.matrix = pMesh->mFile->single_matrix != NEBULA_MODEL_NONE ? pMesh->mFile->single_matrix : 0;
         rItem.flags = static_cast< u32 >(mFlags | NEBULA_ITEM_PLAIN_MESH);
@@ -270,7 +270,7 @@ void TypedDraw::drawSiteMesh(u32 mesh, u32 indexCount, u32 stride, const NebulaL
     rItem.part = Frame::nextPart();
     rItem.source_hash = mSource;
     rItem.view = Frame::currentView();
-    rItem.light_set = Frame::currentLightSet();
+    rItem.light_set = Frame::currentLightSet(rItem.block);
     rItem.matrix = 0;
     rItem.first = 0;
     rItem.count = indexCount;
@@ -392,7 +392,7 @@ void* TypedDraw::begin(NebulaPrimitive primitive, u32 count, u32 stride, const N
     rItem.generation = Frame::objectGeneration();
     rItem.part = Frame::nextPart();
     rItem.view = Frame::currentView();
-    rItem.light_set = Frame::currentLightSet();
+    rItem.light_set = Frame::currentLightSet(rItem.block);
     if (wide) {
         mOpen = true;
         return pVertices;
