@@ -129,9 +129,7 @@ fun NebulaApp(model: LauncherModel, onShareLog: () -> Unit) {
             text = {
                 Text(
                     if (result.ok) "Turn it on under Mods in the game's settings." +
-                        (if (result.message.contains(", BUT ")) "
-
-${result.message}" else "")
+                        (if (result.message.contains(", BUT ")) "\n\n${result.message}" else "")
                     else result.message,
                 )
             },
