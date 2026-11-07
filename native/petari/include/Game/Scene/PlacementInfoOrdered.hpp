@@ -1,4 +1,7 @@
+#include <stdint.h>
 #pragma once
+
+class NameObj;
 
 #include "Game/Util/BothDirList.hpp"
 #include "Game/Util/JMapInfo.hpp"
@@ -62,6 +65,7 @@ public:
     void sort();
     void requestFileLoad();
     void initPlacement();
+    bool initPlacementStep(uint64_t deadline);
     void insert(const Identifier&, const JMapInfoIter&);
     SameIdSet* getSameIdSet(int index) const {
         return mOrderedSetArray[index];
@@ -78,4 +82,8 @@ public:
     SameIdSet* mSetArray;
     SameIdSet** mOrderedSetArray;
     int mCount;
+    s32 mPlacementSet = 0;
+    MR::BothDirPtrLink* mPlacementLink = nullptr;
+    bool mPlacementStarted = false;
+    NameObj* mInitializing = nullptr;
 };

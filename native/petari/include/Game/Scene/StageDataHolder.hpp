@@ -1,3 +1,4 @@
+#include <stdint.h>
 #pragma once
 
 #include "Game/NameObj/NameObj.hpp"
@@ -18,6 +19,7 @@ public:
     void requestFileLoadCommon();
     void requestFileLoadScenario();
     void initPlacement();
+    bool initPlacementStep(uint64_t deadline);
     JMapInfoIter getCommonPathPointInfo(const JMapInfo** ppInfo, int index) const;
     JMapInfoIter getCommonPathPointInfoFromRailDataIndex(const JMapInfo** ppInfo, int index) const;
     s32 getCommonPathInfoElementNum() const;
@@ -93,6 +95,7 @@ public:
     PlacementInfoOrdered* _104;
     PlacementInfoOrdered* _108;
     PlacementInfoOrdered* _10C;
+    unsigned mPlacementStage = 0;
 };
 
 namespace MR {

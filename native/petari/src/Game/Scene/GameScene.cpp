@@ -140,12 +140,12 @@ GameScene::~GameScene() {
 }
 
 void GameScene::init() {
-    SceneFunction::startStageFileLoad();
+    NebulaLoadTrace::measure("SceneFunction::startStageFileLoad()", [&] { SceneFunction::startStageFileLoad(); });
     MR::requestChangeArchivePlayer(MR::isPlayerLuigi() == false);
     initNerve(GET_NERVE(GameScene, GameSceneScenarioOpeningCamera));
     SceneFunction::initForNameObj();
     SceneFunction::initForLiveActor();
-    initEffect();
+    NebulaLoadTrace::measure("initEffect()", [&] { initEffect(); });
     MR::createSceneObj(SceneObj_CameraContext);
     MR::createSceneObj(SceneObj_NameObjGroup);
     MR::createSceneObj(SceneObj_PlanetGravityManager);
@@ -175,45 +175,71 @@ void GameScene::init() {
         MR::createMoviePlayingSequence();
     }
 
-    SceneFunction::createStageDataHolder();
+    NebulaLoadTrace::measure("SceneFunction::createStageDataHolder()", [&] { SceneFunction::createStageDataHolder(); });
     MR::waitEndChangeArchivePlayer();
-    SceneFunction::startActorFileLoadCommon();
+    NebulaLoadTrace::measure("SceneFunction::startActorFileLoadCommon()", [&] { SceneFunction::startActorFileLoadCommon(); });
     MR::holdSceneInitialize();
 }
 
 // What needs the scenario: the star the player chose (MR::tryResumeSceneInitialize).
-void GameScene::initAfterScenarioChosen() {
-    if (MR::isScenarioDecided()) {
-        SceneFunction::initAfterScenarioSelected();
-        NPCFunction::createNPCData();
-        SceneFunction::startActorFileLoadScenario();
-        MR::createSceneObj(SceneObj_EventDirector);
-        MR::initSceneMessage();
-        MR::createSceneObj(SceneObj_CameraDirector);
-        MR::createSceneObj(SceneObj_GameSceneLayoutHolder);
-        MR::createSceneObj(SceneObj_StarPieceDirector);
-        MR::createSceneObj(SceneObj_SceneWipeHolder);
-        MR::createSceneObj(SceneObj_NamePosHolder);
-        MR::createSceneObj(SceneObj_InformationObserver);
-
-        if (MR::isGalaxyAnyCometAppearInCurrentStage()) {
-            MR::createSceneObj(SceneObj_CometRetryButton);
+bool GameScene::initAfterScenarioChosen() {
+    if (!MR::isScenarioDecided()) return true;
+    const auto* host = nebula_host();
+    const uint64_t deadline = host->clock_ns(host->user) + 4'000'000u;
+    do {
+        switch (mInitializePhase) {
+        case 0:
+            SceneFunction::initAfterScenarioSelected();
+            NPCFunction::createNPCData();
+            SceneFunction::startActorFileLoadScenario();
+            MR::createSceneObj(SceneObj_EventDirector);
+            MR::initSceneMessage();
+            break;
+        case 1:
+            MR::createSceneObj(SceneObj_CameraDirector);
+            MR::createSceneObj(SceneObj_GameSceneLayoutHolder);
+            MR::createSceneObj(SceneObj_StarPieceDirector);
+            MR::createSceneObj(SceneObj_SceneWipeHolder);
+            MR::createSceneObj(SceneObj_NamePosHolder);
+            MR::createSceneObj(SceneObj_InformationObserver);
+            if (MR::isGalaxyAnyCometAppearInCurrentStage()) MR::createSceneObj(SceneObj_CometRetryButton);
+            break;
+        case 2:
+            LightFunction::initLightData();
+            initSequences();
+            break;
+        case 3:
+            if (!SceneFunction::startActorPlacementStep(deadline)) return false;
+            break;
+        case 4:
+            NebulaAchievementLuma::tryCreate();
+            break;
+        case 5:
+            // The complete reserve still exists before play; each actor is an indivisible load operation.
+            while (mReservePiecesLeft != 0u) {
+                MR::getStarPieceDirector()->createStarPieces(1);
+                --mReservePiecesLeft;
+                if (host->clock_ns(host->user) >= deadline) return false;
+            }
+            break;
+        case 6:
+            MR::completeCameraParameters();
+            MR::initStarPointerGameScene();
+            MR::initEventSystemAfterPlacement();
+            MR::endInitLiveActorSystemInfo();
+            MR::setInitializeStateAfterPlacement();
+            MR::callMethodAllSceneNameObj(&NameObj::initAfterPlacement);
+            break;
+        case 7:
+            SleepControlFunc::initSyncSleepController();
+            ++mInitializePhase;
+            return true;
+        default:
+            return true;
         }
-
-        LightFunction::initLightData();
-        initSequences();
-        SceneFunction::startActorPlacement();
-        // Nebula's Achievement Luma joins the Observatory's own actors.
-        NebulaAchievementLuma::tryCreate();
-        MR::createStarPiece();
-        MR::completeCameraParameters();
-        MR::initStarPointerGameScene();
-        MR::initEventSystemAfterPlacement();
-        MR::endInitLiveActorSystemInfo();
-        MR::setInitializeStateAfterPlacement();
-        MR::callMethodAllSceneNameObj(&NameObj::initAfterPlacement);
-        SleepControlFunc::initSyncSleepController();
-    }
+        ++mInitializePhase;
+    } while (host->clock_ns(host->user) < deadline);
+    return false;
 }
 
 namespace {
@@ -474,6 +500,7 @@ void GameScene::initEffect() {
 void GameScene::drawMirror() const {
     if (isDrawMirror()) {
         Frame::mirror(true);
+        ModelSys::mViewRole = NEBULA_CAMERA_MIRROR;
         NebulaMtxCopy(MR::getMirrorCameraViewMtx(), ModelSys::mViewMtx);
         MR::loadProjectionMtx();
         CategoryList::entryDrawBufferMirror();
@@ -482,6 +509,7 @@ void GameScene::drawMirror() const {
         CategoryList::drawXlu(MR::DrawBufferType_MirrorMapObj);
         CategoryList::execute(MR::DrawType_CaptureScreenIndirect);
         Frame::mirror(false);
+        ModelSys::mViewRole = NEBULA_CAMERA_SCENE;
         MR::clearZBuffer();
         NebulaColor8 c = {0, 0, 255, 0};
         MR::fillScreen(c, true);

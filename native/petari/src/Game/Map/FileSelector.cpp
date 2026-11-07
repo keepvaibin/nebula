@@ -143,29 +143,50 @@ FileSelector::FileSelector(const char* pName)
 }
 
 void FileSelector::init(const JMapInfoIter& rIter) {
-    MR::connectToScene(this, MR::MovementType_Environment, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_None);
-    initHitSensor(1);
-    MR::addHitSensorPriorBinder(this, "body", 8, 500.0f, Vec3f(0.0f, 0.0f, 0.0f));
-    initUserFileArray();
-    MR::invalidateClipping(this);
-    createCameraController();
-    createSky();
-    createFileItems();
-    createOperationButton();
-    createBackButton();
-    createBrosButton();
-    createInfoMessage();
-    createSysInfoWindow();
-    createQuitButton();
-    createFileInfo();
-    createTitle();
-    createMiiSelect();
-    createMiiConfirmIcon();
-    createManual();
-    createSelectEffect();
-    initNerve(GET_NERVE(FileSelector, FileSelectorNrvWaitBind));
-    MR::tryRegisterDemoCast(this, rIter);
-    appear();
+    while (!initStep(rIter, UINT64_MAX)) {}
+}
+
+bool FileSelector::initStep(const JMapInfoIter& rIter, uint64_t deadline) {
+    do {
+        switch (mInitStep) {
+        case 0:
+            MR::connectToScene(this, MR::MovementType_Environment, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_None);
+            initHitSensor(1);
+            MR::addHitSensorPriorBinder(this, "body", 8, 500.0f, Vec3f(0.0f, 0.0f, 0.0f));
+            initUserFileArray();
+            MR::invalidateClipping(this);
+            break;
+        case 1: createCameraController(); break;
+        case 2: createSky(); break;
+        case 3:
+            if (!createFileItemStep()) {
+                if (nebula_host()->clock_ns(nebula_host()->user) >= deadline) return false;
+                continue;
+            }
+            break;
+        case 4: createOperationButton(); break;
+        case 5: createBackButton(); break;
+        case 6: createBrosButton(); break;
+        case 7: createInfoMessage(); break;
+        case 8: createSysInfoWindow(); break;
+        case 9: createQuitButton(); break;
+        case 10: createFileInfo(); break;
+        case 11: createTitle(); break;
+        case 12: createMiiSelect(); break;
+        case 13: createMiiConfirmIcon(); break;
+        case 14: createManual(); break;
+        case 15: createSelectEffect(); break;
+        case 16:
+            initNerve(GET_NERVE(FileSelector, FileSelectorNrvWaitBind));
+            MR::tryRegisterDemoCast(this, rIter);
+            appear();
+            ++mInitStep;
+            return true;
+        default: return true;
+        }
+        ++mInitStep;
+    } while (nebula_host()->clock_ns(nebula_host()->user) < deadline);
+    return false;
 }
 
 void FileSelector::appear() {
@@ -289,22 +310,24 @@ namespace {
 };  // namespace
 
 void FileSelector::createFileItems() {
-    mItems = new DeriveActorGroup< FileSelectItem >("\221\123\203\164\203\100\203\103\203\213\203\101\203\103\203\145\203\200\225\333\216\235" /* 全ファイルアイテム保持 */, USER_FILE_NUM);
-    _98 = new Vec3f[USER_FILE_NUM]();
+    while (!createFileItemStep()) {}
+}
 
-    calcBasePos(0.0f);
-    MR::createSceneObj(SceneObj_MiiFacePartsHolder);
-
-    FileSelectItemDelegator< FileSelector >* pDelegator = new FileSelectItemDelegator< FileSelector >(this, &FileSelector::notifyItem);
-
-    for (int i = 0; i < USER_FILE_NUM; i++) {
-        FileSelectItem* pItem = ::createFileItem(::sIndexOrder[i]);
-
-        pItem->initWithoutIter();
-        pItem->setSelectDelegator(pDelegator);
-        pItem->mPosition.set(_98[i]);
-        mItems->registerActor(pItem);
+bool FileSelector::createFileItemStep() {
+    if (mInitItem >= USER_FILE_NUM) return true;
+    if (mInitItem == 0u) {
+        mItems = new DeriveActorGroup<FileSelectItem>("File select items", USER_FILE_NUM);
+        _98 = new Vec3f[USER_FILE_NUM]();
+        calcBasePos(0.0f);
+        MR::createSceneObj(SceneObj_MiiFacePartsHolder);
+        mInitDelegator = new FileSelectItemDelegator<FileSelector>(this, &FileSelector::notifyItem);
     }
+    FileSelectItem* item = ::createFileItem(::sIndexOrder[mInitItem]);
+    item->initWithoutIter();
+    item->setSelectDelegator(mInitDelegator);
+    item->mPosition.set(_98[mInitItem]);
+    mItems->registerActor(item);
+    return ++mInitItem == USER_FILE_NUM;
 }
 
 void FileSelector::createOperationButton() {

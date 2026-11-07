@@ -51,7 +51,7 @@ public:
     void initCSSound();
     bool giftToTarget(HitSensor*, u32);
     StarPiece* getDeadStarPiece();
-    void createStarPieces();
+    void createStarPieces(unsigned count = 70);
     Vec3f calcPosCameraShoot(s32);
     void clearGotCountReceiver(const NameObj*);
     StarPieceHostInfo* findHostInfo(const NameObj*);

@@ -339,6 +339,9 @@ void TexturePacks::stop_workers() noexcept {
         if (worker.joinable()) worker.join();
     }
     workers_.clear();
+    for (auto& chunk : free_staging_) TextureBackend::release_upload_chunk(chunk);
+    free_staging_.clear();
+    free_staging_bytes_ = 0u;
     std::lock_guard<std::mutex> lock(mutex_);
     finished_.clear();
     built_.reset();
@@ -371,6 +374,54 @@ void TexturePacks::worker_main() {
             std::cerr << "[texture-pack] loader error: " << error.what() << '\n';
         }
     }
+}
+
+TextureBackend::UploadChunk TexturePacks::take_staging(std::uint64_t size) {
+    {
+        const std::lock_guard lock(mutex_);
+        auto best = free_staging_.end();
+        for (auto it = free_staging_.begin(); it != free_staging_.end(); ++it) {
+            if (it->size >= size && (best == free_staging_.end() || it->size < best->size)) best = it;
+        }
+        if (best != free_staging_.end()) {
+            TextureBackend::UploadChunk chunk = std::move(*best);
+            free_staging_bytes_ -= chunk.size;
+            free_staging_.erase(best);
+            return chunk;
+        }
+    }
+    return stager_(size);
+}
+
+void TexturePacks::retire_uploads(std::vector<TextureBackend::UploadChunk> uploads) {
+    if (uploads.empty()) return;
+    {
+        const std::lock_guard lock(mutex_);
+        // Reuse mapped buffers after their fence. This avoids repeated allocation/unmap driver stalls.
+        constexpr std::uint64_t budget = 256ull << 20;
+        for (auto& chunk : uploads) {
+            if (chunk.size <= budget - free_staging_bytes_) {
+                free_staging_bytes_ += chunk.size;
+                free_staging_.push_back(std::move(chunk));
+                chunk = {};
+            }
+        }
+    }
+    uploads.erase(std::remove_if(uploads.begin(), uploads.end(), [](const auto& chunk) { return chunk.size == 0u; }), uploads.end());
+    if (uploads.empty()) return;
+    using Chunks = std::vector<TextureBackend::UploadChunk>;
+    // The deleter also runs if shutdown cancels a queued job. The buffers' fences have already passed.
+    auto retired = std::shared_ptr<Chunks>(new Chunks(std::move(uploads)), [](Chunks* chunks) {
+        for (auto& chunk : *chunks) TextureBackend::release_upload_chunk(chunk);
+        delete chunks;
+    });
+    start_workers();
+    {
+        const std::lock_guard lock(mutex_);
+        // Reclaim before decoding more images, keeping temporary upload memory bounded.
+        jobs_.push_front([retired] {});
+    }
+    wake_.notify_one();
 }
 
 void TexturePacks::configure(const TexturePackSettings& settings) {
@@ -603,7 +654,7 @@ void TexturePacks::request(std::uint32_t slot) {
 }
 
 std::unique_ptr<TexturePacks::Load> TexturePacks::load(const Record& record, std::uint32_t slot,
-                                                       std::uint64_t generation) const {
+                                                       std::uint64_t generation) {
     // A crash while this image loads names it (NEB-T01).
     const galaxy::crash::ScopedActivity activity(galaxy::crash::Activity::TexturePack, record.file);
     const auto start = std::chrono::steady_clock::now();
@@ -633,7 +684,7 @@ std::unique_ptr<TexturePacks::Load> TexturePacks::load(const Record& record, std
         const std::uint64_t size = texture_pack_staging_layout(pixels.width, pixels.height, pixels.level_count,
                                                                pixels.offsets, pixels.pitches);
         try {
-            TextureBackend::UploadChunk chunk = stager_(size);
+            TextureBackend::UploadChunk chunk = take_staging(size);
             if (chunk.cpu_base != nullptr) {
                 for (std::uint32_t l = 0; l < pixels.level_count; ++l) {
                     const std::uint32_t lw = std::max<std::uint32_t>(1u, pixels.width >> l);
@@ -782,7 +833,13 @@ bool TexturePacks::pump(std::vector<std::pair<std::uint32_t, TexturePackPixels>>
         Slot& s = slots_[i];
         if (s.state != SlotState::Ready || !s.ready) continue;
         --outstanding_;
-        std::uint64_t bytes = s.ready->pixels.staging ? s.ready->pixels.staging->size : 0u;
+        std::uint64_t bytes = 0u;
+        if (s.ready->pixels.staging) {
+            std::vector<std::uint64_t> offsets;
+            std::vector<std::uint32_t> pitches;
+            bytes = texture_pack_staging_layout(s.ready->pixels.width, s.ready->pixels.height,
+                                               s.ready->pixels.level_count, offsets, pitches);
+        }
         for (const auto& level : s.ready->pixels.levels) bytes += level.size();
         evict_to_budget(bytes);
         if (settings_.budget_bytes != 0u && resident_bytes_ + bytes > settings_.budget_bytes) {

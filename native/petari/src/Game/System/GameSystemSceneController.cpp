@@ -1,3 +1,4 @@
+#include "Game/System/NebulaLoadTrace.hpp"
 #include "Game/System/GameSystemSceneController.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/NameObj/NameObjHolder.hpp"
@@ -119,8 +120,10 @@ void GameSystemSceneController::checkRequestAndChangeScene() {
 }
 
 void GameSystemSceneController::initializeScene() {
+    NebulaLoadTrace::Scope loadingTrace("initializeScene");
     MR::CurrentHeapRestorer restorer(NebulaArena::currentSlot());
     mSceneInitializeState = SceneInitializeState_Init;
+    mSceneInitializeHeld = false;
 
     if (SingletonHolder< HeapMemoryWatcher >::get()->mFileCacheHeap == nullptr || !isSameAtNextSceneAndStage()) {
         SingletonHolder< HeapMemoryWatcher >::get()->createFileCacheHeapOnGameHeap();
@@ -159,8 +162,10 @@ bool GameSystemSceneController::resumeSceneInitialize() {
     }
     MR::CurrentHeapRestorer restorer(NebulaArena::currentSlot());
     SingletonHolder< HeapMemoryWatcher >::get()->setCurrentHeapToSceneHeap();
+    bool complete = false;
+    NebulaLoadTrace::measure("initAfterScenarioChosen", [&] { complete = mScene->initAfterScenarioChosen(); });
+    if (!complete) return false;
     mSceneInitializeHeld = false;
-    mScene->initAfterScenarioChosen();
     SceneFunction::allocateDrawBufferActorList();
     mSceneInitializeDone = true;
     return true;

@@ -1,3 +1,6 @@
+#include <nebula_game_api.h>
+extern "C" const NebulaHostServices* nebula_host(void);
+#include "Game/System/NebulaLoadTrace.hpp"
 #include "Game/System/NebulaMods.hpp"
 #include "Game/Scene/PlacementInfoOrdered.hpp"
 #include "Game/LiveActor/AllLiveActorGroup.hpp"
@@ -80,32 +83,41 @@ void PlacementInfoOrdered::requestFileLoad() {
 }
 
 void PlacementInfoOrdered::initPlacement() {
-    NameObj* pObj;
-    SameIdSet* pSet;
-    MR::BothDirPtrLink* link;
+    while (!initPlacementStep(UINT64_MAX)) {}
+}
 
-    MR::startInitLiveActorSystemInfo();
-
-    s32 count = getUsedArrayNum();
-    for (s32 i = 0; i < count; i++) {
-        pSet = mOrderedSetArray[i];
-        CreationFuncPtr creator = ::getCreator(*pSet);
-        if (creator != nullptr) {
-            const char* pName = MR::getJapaneseObjectName(pSet->mName);
-            for (link = pSet->mList.mHead; link != nullptr; link = link->mNextLink) {
-                const JMapInfoIter& rIter = static_cast< Index* >(link->mValue)->getInfoIter();
-                if (NebulaMods::isMissingFiles(pSet->mName, rIter)) {
-                    continue;
-                }
-                MR::setCurrentPlacementZoneId(MR::getPlacedZoneId(rIter));
-                pObj = creator(pName);
-                MR::initLiveActorSystemInfo(rIter);
-                pObj->init(rIter);
-                MR::initLiveActorSystemInfo(rIter);
-                MR::clearCurrentPlacementZoneId();
-            }
-        }
+bool PlacementInfoOrdered::initPlacementStep(uint64_t deadline) {
+    if (!mPlacementStarted) {
+        MR::startInitLiveActorSystemInfo();
+        mPlacementStarted = true;
     }
+    const s32 count = getUsedArrayNum();
+    while (mPlacementSet < count) {
+        SameIdSet* set = mOrderedSetArray[mPlacementSet];
+        const CreationFuncPtr creator = ::getCreator(*set);
+        if (mPlacementLink == nullptr) mPlacementLink = set->mList.mHead;
+        if (creator == nullptr || mPlacementLink == nullptr) {
+            ++mPlacementSet;
+            mPlacementLink = nullptr;
+            continue;
+        }
+        const JMapInfoIter& iter = static_cast<Index*>(mPlacementLink->mValue)->getInfoIter();
+        if (!NebulaMods::isMissingFiles(set->mName, iter)) {
+            NebulaLoadTrace::Scope trace(set->mName);
+            MR::setCurrentPlacementZoneId(MR::getPlacedZoneId(iter));
+            if (mInitializing == nullptr) mInitializing = creator(MR::getJapaneseObjectName(set->mName));
+            MR::initLiveActorSystemInfo(iter);
+            const bool ready = mInitializing->initStep(iter, deadline);
+            MR::initLiveActorSystemInfo(iter);
+            MR::clearCurrentPlacementZoneId();
+            if (!ready) return false;
+            mInitializing = nullptr;
+        }
+        mPlacementLink = mPlacementLink->mNextLink;
+        if (mPlacementLink == nullptr) ++mPlacementSet;
+        if (nebula_host()->clock_ns(nebula_host()->user) >= deadline) return mPlacementSet >= count;
+    }
+    return true;
 }
 
 void PlacementInfoOrdered::insert(const Identifier& rIdentifier, const JMapInfoIter& rIter) {

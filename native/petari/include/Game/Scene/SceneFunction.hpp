@@ -1,3 +1,4 @@
+#include <stdint.h>
 #pragma once
 
 
@@ -255,6 +256,7 @@ public:
     static void startActorFileLoadCommon();
     static void startActorFileLoadScenario();
     static void startActorPlacement();
+    static bool startActorPlacementStep(uint64_t deadline);
     static void initAfterScenarioSelected();
     static void initForNameObj();
     static void initForLiveActor();

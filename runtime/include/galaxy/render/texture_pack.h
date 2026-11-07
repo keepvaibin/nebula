@@ -150,6 +150,8 @@ public:
     void remove_user(std::uint32_t slot) noexcept;
 
     void begin_frame() noexcept { ++frame_; }
+    // Called only after the upload fence: large driver allocations retire on a loader, never in a present.
+    void retire_uploads(std::vector<TextureBackend::UploadChunk> uploads);
     // Once per frame: publishes a finished index (returns true: every cached texture must be looked up again) and,
     // when `uploads` is empty, hands out finished loads to upload (slot and pixels, up to a byte budget). The cache
     // uploads them over the next frames (uploading()) and calls make_resident for each.
@@ -259,7 +261,7 @@ private:
 
     static SizeKey size_key(std::uint32_t width, std::uint32_t height, std::uint32_t format) noexcept;
     static NameKey name_key(SizeKey size, std::uint64_t hash, std::uint64_t palette, bool mipmapped) noexcept;
-    std::unique_ptr<Load> load(const Record& record, std::uint32_t slot, std::uint64_t generation) const;
+    std::unique_ptr<Load> load(const Record& record, std::uint32_t slot, std::uint64_t generation);
     void request(std::uint32_t slot);
     void evict_to_budget(std::uint64_t incoming);
     void clear_slots() noexcept;
@@ -267,6 +269,9 @@ private:
     void start_workers();
     void submit(std::function<void()> job);
     void worker_main();
+    TextureBackend::UploadChunk take_staging(std::uint64_t size);
+    std::vector<TextureBackend::UploadChunk> free_staging_;
+    std::uint64_t free_staging_bytes_ = 0;
     void stop_workers() noexcept;
 
     TexturePackSettings settings_;

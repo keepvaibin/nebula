@@ -51,6 +51,9 @@ public:
     void requestResume();
     void syncWithFlags();
 
+    // Loading-only continuation. Actors may yield before the scene is made playable.
+    virtual bool initStep(const JMapInfoIter& iter, uint64_t) { init(iter); return true; }
+
     const char* mName;  ///< A string to identify the NameObj.
     u16 mFlag;          ///< Flags in relation to movement.
     s16 mExecutorIdx;   ///< The index into the NameObjExecuteInfo array.
