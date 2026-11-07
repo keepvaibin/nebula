@@ -20,6 +20,10 @@ const STATE_STENCIL_MASK: u32 = 0xF << 20;
 
 static LIST: Mutex<BTreeSet<Vec<u8>>> = Mutex::new(BTreeSet::new());
 
+pub fn reset() {
+    LIST.lock().unwrap().clear();
+}
+
 fn input(code: u8, program_number: u8, m: &MeshStreams) -> [u8; 12] {
     let further = further_stride(m);
     let coords = (1..super::limits::MATERIAL_SLOTS).filter(|n| m.attributes & (MESH_COORD0 << n) != 0).count() as u32;
@@ -96,4 +100,38 @@ pub fn bytes() -> Vec<u8> {
     }
     println!("pipelines: {}", list.len());
     list.iter().flatten().copied().collect()
+}
+
+/// A base-game import must only name the programs shipped with the renderer. Mods use their own compiler path.
+pub fn checked_bytes() -> anyhow::Result<Vec<u8>> {
+    let bytes = bytes();
+    let mut vertex = BTreeSet::new();
+    let mut pixel = BTreeSet::new();
+    for line in include_str!("../../../../runtime/src/render/programs/table.tsv").lines() {
+        let mut fields = line.split('\t');
+        let stage = fields.next().unwrap_or("");
+        if let Some(hash) = fields.next().and_then(|h| u64::from_str_radix(h, 16).ok()) {
+            if stage == "v" { vertex.insert(hash); } else if stage == "p" { pixel.insert(hash); }
+        }
+    }
+    for line in include_str!("../../data/site_pipelines.txt").lines() {
+        let line = line.trim();
+        if line.len() != RECORD * 2 { continue; }
+        let id = |at| -> Option<u64> {
+            let mut words = [0u8; 8];
+            for (i, word) in words.iter_mut().enumerate() {
+                *word = u8::from_str_radix(&line[at + i * 2..at + i * 2 + 2], 16).ok()?;
+            }
+            Some(u64::from_le_bytes(words))
+        };
+        if let Some(v) = id(0) { vertex.insert(v); }
+        if let Some(p) = id(16) { pixel.insert(p); }
+    }
+    for record in bytes.chunks_exact(RECORD) {
+        let v = u64::from_le_bytes(record[..8].try_into().unwrap());
+        let p = u64::from_le_bytes(record[8..16].try_into().unwrap());
+        anyhow::ensure!(vertex.contains(&v) && pixel.contains(&p),
+            "The imported material names an uncompiled program ({v:016x}, {p:016x}); the game store was not installed");
+    }
+    Ok(bytes)
 }

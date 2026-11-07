@@ -1189,22 +1189,22 @@ pub fn input_code(input: &Input) -> u8 {
 }
 
 /// What the game's own animations write, once the store's cook has walked them. Unset (a mod's conversion): anything.
-pub static WRITTEN: std::sync::OnceLock<Written> = std::sync::OnceLock::new();
+static WRITTEN: std::sync::Mutex<Option<Written>> = std::sync::Mutex::new(None);
 
 pub fn written_or_unknown() -> Written {
-    WRITTEN.get().cloned().unwrap_or_else(Written::unknown)
+    WRITTEN.lock().unwrap_or_else(|e| e.into_inner()).clone().unwrap_or_else(Written::unknown)
 }
 
 /// Every animation that can write a register, for the store's whole cook.
-pub fn prepare_written(input: &Path) -> Result<()> {
+pub fn prepare_written_files(files: &[super::PakFile], read: &mut dyn FnMut(&super::PakFile) -> Result<Vec<u8>>) -> Result<()> {
     let mut written = Written::default();
-    walk_files(input, &mut |name, bytes| {
+    walk_partition_files(files, read, &mut |name, bytes| {
         if name.to_ascii_lowercase().ends_with(".brk") {
             written.add(&clip::read(&bytes).with_context(|| name.to_string())?);
         }
         Ok(())
     })?;
-    let _ = WRITTEN.set(written);
+    *WRITTEN.lock().unwrap_or_else(|e| e.into_inner()) = Some(written);
     Ok(())
 }
 
@@ -1444,7 +1444,8 @@ impl Written {
     }
 }
 
-fn walk_files(input: &Path, visit: &mut dyn FnMut(&str, Vec<u8>) -> Result<()>) -> Result<()> {
+fn walk_partition_files(files: &[super::PakFile], read: &mut dyn FnMut(&super::PakFile) -> Result<Vec<u8>>,
+    visit: &mut dyn FnMut(&str, Vec<u8>) -> Result<()>) -> Result<()> {
     fn walk(name: &str, bytes: Vec<u8>, visit: &mut dyn FnMut(&str, Vec<u8>) -> Result<()>) -> Result<()> {
         let mut bytes = bytes;
         if archive::is_compressed(&bytes) {
@@ -1459,20 +1460,28 @@ fn walk_files(input: &Path, visit: &mut dyn FnMut(&str, Vec<u8>) -> Result<()>) 
         }
         visit(name, bytes)
     }
-    let source = input.join("game.pak");
-    let mut pak = File::open(&source).with_context(|| format!("{} cannot be opened", source.display()))?;
-    let system = pak_system_area(&mut pak)?;
-    for file in pak_files(system.fst())? {
+    let mut order: Vec<_> = files.iter().collect();
+    order.sort_by_key(|f| f.offset);
+    for file in order {
         let lower = file.path.to_ascii_lowercase();
         if !(lower.ends_with(".arc") || lower.ends_with(".szs") || lower.ends_with(".bdl") || lower.ends_with(".bmd") || lower.ends_with(".brk")) {
             continue;
         }
+        walk(&format!("/{}", file.path), read(file)?, visit)?;
+    }
+    Ok(())
+}
+
+fn walk_files(input: &Path, visit: &mut dyn FnMut(&str, Vec<u8>) -> Result<()>) -> Result<()> {
+    let source = input.join("game.pak");
+    let mut pak = File::open(&source).with_context(|| format!("{} cannot be opened", source.display()))?;
+    let system = pak_system_area(&mut pak)?;
+    walk_partition_files(&pak_files(system.fst())?, &mut |file| {
         let mut bytes = vec![0u8; file.length as usize];
         pak.seek(SeekFrom::Start(file.offset))?;
         pak.read_exact(&mut bytes)?;
-        walk(&format!("/{}", file.path), bytes, visit)?;
-    }
-    Ok(())
+        Ok(bytes)
+    }, visit)
 }
 
 /// Whether a mesh names its matrix per vertex.
