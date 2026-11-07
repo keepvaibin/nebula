@@ -334,13 +334,18 @@ LiveControlsResult LiveControlsEngine::sample(const LiveControlsFrame& frame, Li
     // The gyro counts as moving above about 5 degrees per second, so hand
     // tremor and rest noise never take the pointer from the mouse or stick.
     constexpr float kGyroActiveUnitsPerSecond = 0.25f;
+    // From the mouse (or the finger) the gyro takes the pointer only with a deliberate turn, about 20 degrees a
+    // second: a controller held while the mouse aims never pulls the pointer away.
+    constexpr float kGyroTakesMouseUnitsPerSecond = 1.0f;
+    const float gyro_threshold = s_pointer_owner.owner == galaxy::input::PointerSource::Mouse
+        ? kGyroTakesMouseUnitsPerSecond
+        : kGyroActiveUnitsPerSecond;
     const float gyro_motion = std::sqrt(gyro_x * gyro_x + gyro_y * gyro_y);
     galaxy::input::PointerActivity activity{};
     activity.mouse = mouse_moved;
     activity.keys = std::fabs(keyboard_pointer_x) > 0.001f || std::fabs(keyboard_pointer_y) > 0.001f;
     activity.stick = stick_velocity.x != 0.0f || stick_velocity.y != 0.0f;
-    activity.gyro = pad_gyro_pointing && dt > 0.0f &&
-                    gyro_motion > kGyroActiveUnitsPerSecond * dt;
+    activity.gyro = pad_gyro_pointing && dt > 0.0f && gyro_motion > gyro_threshold * dt;
     activity.touch = pad_touch_pointing && std::fabs(touch_x) + std::fabs(touch_y) > 0.0f;
     // Recenter (pointer_control.h RecenterHold): the press gives the pointer to the recentering device
     // at the picture centre. While the button is held, the pointer stays there and that device keeps it.

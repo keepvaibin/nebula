@@ -180,6 +180,18 @@ void host_controls_and_device_motion() {
     finger.advance(); result = shared.sample(pads, finger);
     check(result.input.pointer_on && near(result.input.pointer_x, 0) && near(result.input.pointer_y, 0),
           "R recenters by default");
+
+    // A controller held while the mouse aims: its hand tremor (about 10 degrees a second) never takes the pointer.
+    LiveControlsEngine aim; Host mouse;
+    pad.sample.buttons = 0;
+    pad.gyro_x = 0.5f * 0.016667f;
+    mouse.state = finger.state;
+    mouse.state.raw_motion = true; mouse.state.inside_client = true; mouse.state.projected = {-0.3f, 0.1f, true};
+    result = aim.sample(pads, mouse);
+    mouse.state.raw_motion = false;
+    for (int i = 0; i < 60; ++i) { mouse.advance(); result = aim.sample(pads, mouse); }
+    check(result.pointer_owner == PointerSource::Mouse && result.input.pointer_x == -0.3f,
+          "a resting mouse keeps the pointer from a hand-held gyro");
 }
 }
 int main() {
