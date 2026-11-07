@@ -11,8 +11,10 @@ private const val STORE_MAGIC = "NBSTORE"
 /** False only when the file was read and is something else: a read that fails removes nothing. */
 private fun isGameStore(file: File): Boolean = runCatching {
     file.inputStream().use { input ->
-        val head = ByteArray(STORE_MAGIC.length)
-        input.read(head) == head.size && String(head, Charsets.US_ASCII) == STORE_MAGIC
+        val head = ByteArray(12)
+        input.read(head) == head.size && String(head, 0, 7, Charsets.US_ASCII) == STORE_MAGIC &&
+            head[7] == 0.toByte() && head[8] == 4.toByte() && head[9] == 0.toByte() &&
+            head[10] == 0.toByte() && head[11] == 0.toByte()
     }
 }.getOrDefault(true)
 
@@ -28,15 +30,15 @@ data class Install(
     companion object {
         fun read(context: Context): Install? {
             if (!GameFiles.installed(context)) return null
-            // A game file from before the native store cannot run: it goes, the saves stay, and setup makes a new one.
+            // Older stores need a fresh import; keep the existing files until setup replaces them.
             if (!isGameStore(GameFiles.pak(context))) {
-                GameFiles.pak(context).delete()
-                GameFiles.install(context).delete()
                 return null
             }
             val properties = Properties()
             return runCatching {
                 GameFiles.install(context).inputStream().use { properties.load(it) }
+                // Earlier direct imports omitted the animation scan and can name programs absent from the renderer.
+                if (properties.getProperty("cookVersion") != "2") return null
                 Install(
                     gameId = properties.getProperty("gameId", ""),
                     title = properties.getProperty("title", ""),
@@ -51,6 +53,7 @@ data class Install(
 
     fun write(context: Context) {
         val properties = Properties()
+        properties["cookVersion"] = "2"
         properties["gameId"] = gameId
         properties["title"] = title
         properties["format"] = format
@@ -94,7 +97,7 @@ data class GraphicsSettings(
         // The runtime's defaults: VSYNC on, 60 fps (displayRate: the display's own rate, frames in between drawn
         // from the game's motion), no anti-aliasing, bilinear enlarging, no sharpening.
         val Default = GraphicsSettings(
-            vsync = true, displayRate = false, aa = "off", msaa = 1, fsr = false,
+            vsync = true, displayRate = true, aa = "off", msaa = 1, fsr = false,
             sharpness = 0, hudAtScreen = false,
         )
 

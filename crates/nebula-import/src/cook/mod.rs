@@ -316,7 +316,11 @@ pub fn write_cooked_pak(
     progress: &mut dyn FnMut(u64, u64) -> bool,
     stats: &mut Stats,
 ) -> Result<u64> {
+    static COOK_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _cook = COOK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let files = pak_files(system.fst())?;
+    programs::prepare_written_files(&files, read)?;
+    pipeline_list::reset();
     let total: u64 = files.iter().map(|f| f.length).sum();
     let mut pak = File::create(output).with_context(|| format!("{} cannot be created", output.display()))?;
     pak.write_all(&[0u8; store::HEADER as usize])?;
@@ -374,7 +378,7 @@ pub fn write_cooked_pak(
     let layout = audio_data::layout_text(&waves).into_bytes();
     let item = StoreItem { path: String::new(), order: 0, bytes: Some(layout) };
     placed.extend(place(&mut pak, &mut at, overlay::WAVE_LAYOUT, vec![item], stats)?);
-    let item = StoreItem { path: String::new(), order: 0, bytes: Some(pipeline_list::bytes()) };
+    let item = StoreItem { path: String::new(), order: 0, bytes: Some(pipeline_list::checked_bytes()?) };
     placed.extend(place(&mut pak, &mut at, pipeline_list::PATH, vec![item], stats)?);
     let at = store::write_index(&mut pak, at, &placed, system.bytes[..8].try_into().unwrap())?;
     pak.set_len(at)?;
@@ -434,7 +438,6 @@ pub fn cook_content(input: &Path, output: &Path, progress: &mut dyn FnMut(u64, u
     if output.exists() {
         bail!("{} already exists", output.display());
     }
-    programs::prepare_written(input)?;
     let source = input.join("game.pak");
     let mut pak = File::open(&source).with_context(|| format!("{} cannot be opened", source.display()))?;
     let system = pak_system_area(&mut pak)?;

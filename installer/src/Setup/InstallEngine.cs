@@ -369,16 +369,25 @@ namespace Nebula.Setup
             catch (Exception) { return -1; }
         }
 
+        private static bool CurrentStoreValid(string content)
+        {
+            try
+            {
+                using (var reader = new BinaryReader(File.OpenRead(Path.Combine(content, "game.pak"))))
+                    return System.Text.Encoding.ASCII.GetString(reader.ReadBytes(8)) == "NBSTORE\0" && reader.ReadUInt32() == 4;
+            }
+            catch (Exception) { return false; }
+        }
         private static bool ContentValid(InstallLayout layout)
         {
-            return ContentFormatOf(layout.Content) == ContentFormatVersion;
+            return ContentFormatOf(layout.Content) == ContentFormatVersion && CurrentStoreValid(layout.Content);
         }
 
         /// <summary>This version's content, set aside by a rollback; null when there is none.</summary>
         internal static string KeptCurrentContent(InstallLayout layout)
         {
             string kept = layout.KeptContent(ContentFormatVersion);
-            return ContentFormatOf(kept) == ContentFormatVersion ? kept : null;
+            return ContentFormatOf(kept) == ContentFormatVersion && CurrentStoreValid(kept) ? kept : null;
         }
 
         /// <summary>The format-1 content to cook from: the installed one, or the one an earlier cook kept. Null: the disc is needed.</summary>
