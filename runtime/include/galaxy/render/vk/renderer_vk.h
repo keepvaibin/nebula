@@ -76,7 +76,7 @@ struct RenderLayout {
     // A texture target's pass (kSceneVariantTarget): RGBA8, one sample.
     VkRenderPass target_pass = VK_NULL_HANDLE;
     VkRenderPass target_pass_clear = VK_NULL_HANDLE;
-    // A temporal scene's passes: the scene target and depth with one more target, single-sample (DrawCall::aux_target: 1 the
+    // A temporal scene's passes: the scene target and depth with one more target, single-sample (aux 1 the
     // motion vectors, 2 the reactive mask), over the 8-bit or the wide scene's colour.
     std::array<std::array<VkRenderPass, 2>, 2> aux_passes{};
     [[nodiscard]] VkRenderPass aux_pass_for(unsigned samples_log2, unsigned aux) const noexcept {
@@ -110,7 +110,6 @@ public:
     // Why initialize failed, when the device said.
     [[nodiscard]] std::string startup_failure() const { return !init_error_.empty() ? init_error_ : vk::Context::get().failure(); }
     std::string init_error_;  // why initialize failed
-    void create_first_use_resources();
     // The window stays; everything else is made again. False: no device yet.
     // What outlives this renderer when a lost card is left behind (RenderCore::restart_renderer).
     struct Kept {
@@ -257,11 +256,10 @@ public:
     }
     [[nodiscard]] std::uint64_t frame_index() const noexcept { return frame_index_; }
 
-    // The picture's value at each point into slot `slot`'s readback, in the open frame where the stream is now;
-    // screen_probes_finished names its bytes (RGBA8 per point) once that frame's fence has passed.
-    static constexpr std::size_t kScreenProbeSlots = 12u;
+    // Each point's depth (0 near, 1 far) into slot `slot`'s readback, in the open frame where the stream is now;
+    // screen_probes_finished names the values, one float a point, once that frame's fence has passed.
     [[nodiscard]] bool record_screen_probes(std::size_t slot, std::span<const ScreenProbe> probes);
-    [[nodiscard]] const std::uint8_t* screen_probes_finished(std::size_t slot);
+    [[nodiscard]] const float* screen_probes_finished(std::size_t slot);
 
     // Test captures: the scene target and the presented backbuffer as PPM files (paths from set_debug_capture_paths).
     bool debug_copy_scene_to_readback();
@@ -373,7 +371,7 @@ private:
     // Frame recording.
     // `clear`: begins with both targets cleared to it (scene_pass_clear).
     void begin_scene_pass(const SceneClearValues* clear = nullptr);
-    // The same with a temporal scene's second target (DrawCall::aux_target); a pass open with another one ends.
+    // The same with a temporal scene's second target (`aux`: 1 the motion target, 2 the reactive mask); a pass open with another one ends.
     void begin_scene_pass_with(unsigned aux, const SceneClearValues* clear = nullptr, bool discard_color = false);
     void end_scene_pass();
     void reset_draw_bindings() noexcept;
@@ -456,28 +454,23 @@ private:
     // Layouts and passes.
     vk::RenderLayout draw_layout_{};
     VkDescriptorSetLayout utility_set_layout_ = VK_NULL_HANDLE;  // t0, s0 (linear clamp)
-    VkDescriptorSetLayout conversion_set_layout_ = VK_NULL_HANDLE;  // t0, s0 (linear), s1 (point)
     VkPipelineLayout utility_layout_ = VK_NULL_HANDLE;      // utility set + 64 bytes of push constants
-    VkPipelineLayout conversion_layout_ = VK_NULL_HANDLE;   // conversion set + 64 bytes of push constants
     VkRenderPass color_pass_ = VK_NULL_HANDLE;    // one target at the scene's format, ends shader-readable
-    VkRenderPass rgba8_pass_ = VK_NULL_HANDLE;    // the same at RGBA8: screen probes, a window-format picture
+    VkRenderPass rgba8_pass_ = VK_NULL_HANDLE;    // the same at RGBA8: a window-format picture
     VkRenderPass present_pass_ = VK_NULL_HANDLE;  // the swapchain image, cleared, ends presentable
     VkSampler linear_clamp_ = VK_NULL_HANDLE;
-    VkSampler point_clamp_ = VK_NULL_HANDLE;
     VkDescriptorPool persistent_pool_ = VK_NULL_HANDLE;
     std::vector<VkDescriptorPool> persistent_overflow_;
 
     // The scene target.
     FrameMap scene_map_{};  // the bound scene target's map (E-08)
     VkFormat depth_format_ = VK_FORMAT_UNDEFINED;
-    bool depth_linear_ = true;  // depth_format_ can be sampled with linear filtering
-    // A scene target: its targets, their framebuffer and the conversion inputs reading them.
+    // A scene target: its targets, their framebuffer and the conversion input reading its colour.
     struct SceneSet {
         gpu::TextureRef color;
         gpu::TextureRef depth;  // its sampled view is the depth aspect alone
         VkFramebuffer framebuffer = VK_NULL_HANDLE;
         VkDescriptorSet color_source = VK_NULL_HANDLE;
-        VkDescriptorSet depth_source = VK_NULL_HANDLE;
         // MSAA (samples above one): the multisampled targets the scene target pass draws into, color and depth above being
         // their resolves; resolve_framebuffer (scene_pass) holds color and depth for the depth resolve.
         unsigned samples = 1u;
@@ -535,7 +528,7 @@ private:
     bool publish_frame_pass(const FramePassRequest& params, gpu::TextureRef texture, TextureStore& textures);
     static constexpr std::uint64_t kTargetIdleFrames = 600u;
     std::unordered_map<std::uint64_t, TargetSlot> target_slots_;
-    std::vector<std::pair<VkDescriptorSet, VkDescriptorSet>> target_free_sources_;  // dropped slots' inputs
+    std::vector<VkDescriptorSet> target_free_sources_;  // dropped slots' colour inputs
     std::uint64_t target_key_ = 0;
     SceneSet target_scene_;
     FrameMap target_scene_map_{};
@@ -605,8 +598,11 @@ private:
 
     // Pipelines the renderer owns.
     VkPipeline conversion_pipeline_ = VK_NULL_HANDLE;
-    VkPipeline probe_pipeline_ = VK_NULL_HANDLE;
     VkPipeline display_filter_pipeline_ = VK_NULL_HANDLE;   // 1:1 display copies without gamma
+    // Screen probes (ScreenProbeCs): set {t0 the scene's depth, t1 the pixels, u0 the values}, the count pushed.
+    VkDescriptorSetLayout probe_set_layout_ = VK_NULL_HANDLE;
+    VkPipelineLayout probe_layout_ = VK_NULL_HANDLE;
+    VkPipeline probe_pipeline_ = VK_NULL_HANDLE;
     // The renderer's own draws into the scene target pass, per scene target sample count (log2), made at first use: masked clears,
     // and whole-colour and depth clears as draws (DeviceQuirks::clear_with_draw only; null otherwise).
     enum class SceneUtility : unsigned { ClearRgb, ClearAlpha, ClearRgba, ClearDepth, Count };
@@ -648,11 +644,15 @@ private:
     // scene target copies.
     std::unordered_map<std::uint64_t, FramePassTarget> frame_pass_targets_;
 
-    // Screen probes: one pixel of the target per point, each slot's readback fenced with its frame.
-    gpu::TextureRef probe_target_;
-    gpu::TextureRef probe_target_linear_;  // its linear twin (DeviceQuirks::linear_readback), made on first use
-    std::vector<Readback> probe_slots_;
-    // Readback::fence of probes recorded in the open frame.
+    // Screen probes: a slot's pixels (written here) and values (the dispatch writes, read back), fenced with its frame.
+    struct ProbeSlot {
+        std::shared_ptr<vk::Buffer> pixels;  // host-visible, coherent
+        std::shared_ptr<vk::Buffer> values;  // readback, a storage buffer
+        std::uint64_t capacity = 0;          // points both hold
+        std::uint64_t fence = 0;             // 0: idle
+    };
+    std::vector<ProbeSlot> probe_slots_;
+    // ProbeSlot::fence of probes recorded in the open frame.
     static constexpr std::uint64_t kProbesInFrame = ~std::uint64_t{0};
 
     VkCommandPool utility_pool_ = VK_NULL_HANDLE;  // one-time submissions (run_one_time)

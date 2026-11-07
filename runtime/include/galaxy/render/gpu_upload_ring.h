@@ -83,10 +83,6 @@ public:
     [[nodiscard]] std::size_t capacity() const { return capacity_; }
     // The addressable bytes from gpu_base(): segments and spill.
     [[nodiscard]] std::size_t total_bytes() const { return capacity_; }
-    // CPU view of a GPU address inside this ring; null outside it.
-    [[nodiscard]] const std::byte* cpu_at(gpu::Address va) const {
-        return va >= gpu_base_ && va < gpu_base_ + total_bytes() ? mapped_ + (va - gpu_base_) : nullptr;
-    }
     [[nodiscard]] std::size_t cursor() const { return cursor_; }
     // Counts the rewinds (begin_frame, resegment, initialize): memory allocated before the latest one may be reused
     // once its frame retires, so a user that keeps allocations together (the matrix arena's rows and their table)

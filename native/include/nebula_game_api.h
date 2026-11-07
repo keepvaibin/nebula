@@ -24,7 +24,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 134u
+#define NEBULA_GAME_API_VERSION 135u
 
 /* Viewports, scissors, clears, target sizes and picture points count this many units across a frame on each axis. */
 #define NEBULA_FRAME_UNITS 65536.0f
@@ -681,13 +681,10 @@ typedef struct NebulaMii {
 
 /* The channels a target pass's picture carries for the textures that sample it (NEBULA_PASS_DRAW's target). */
 typedef enum NebulaTargetChannels {
-    NEBULA_TARGET_RGBA = 0,            /* colour and alpha */
-    NEBULA_TARGET_INTENSITY_ALPHA = 1, /* intensity (the red channel) and alpha */
-    NEBULA_TARGET_ALPHA = 2,           /* alpha alone, read in every channel */
-    NEBULA_TARGET_RED = 3,             /* one colour channel, read in every channel */
-    NEBULA_TARGET_GREEN = 4,
-    NEBULA_TARGET_BLUE = 5,
-    NEBULA_TARGET_RGB = 6              /* colour, alpha read as one */
+    NEBULA_TARGET_RGBA = 0,  /* colour and alpha */
+    NEBULA_TARGET_ALPHA = 1, /* alpha, read in every channel */
+    NEBULA_TARGET_RED = 2,   /* red, read in every channel */
+    NEBULA_TARGET_RGB = 3    /* colour, alpha read as one */
 } NebulaTargetChannels;
 
 /* The channels a clear writes (NEBULA_PASS_CLEAR). */

@@ -37,7 +37,7 @@
 #include "galaxy/render/game_bloom.h"
 #include "galaxy/render/rt_types.h"
 #include "galaxy/render/gpu_placed_textures.h"
-#include "galaxy/render/draw_types.h"
+#include "galaxy/render/texture_sampler.h"
 #include "galaxy/render/gpu_types.h"
 #include "galaxy/render/renderer_common.h"
 #include "render/core/gpu_encoder.h"
@@ -193,8 +193,6 @@ public:
     bool initialize(int window_width, int window_height, const FrameMap& frame);
     [[nodiscard]] std::string startup_failure() const { return init_error_; }
     std::string init_error_;  // why initialize failed
-    // Creates the screen probes' resources up front, so the first frame that asks does not stall creating them.
-    void create_first_use_resources();
     // The window stays; everything else is made again. False: no device yet.
     // What outlives this renderer when a lost card is left behind (RenderCore::restart_renderer).
     struct Kept {
@@ -436,11 +434,10 @@ public:
     // diagnostic buffers never suppress the required blit/presentation.
     bool present(const DisplayTexture* source, bool capture_backbuffer = false, bool black = false);
 
-    // Render-owner only. The picture's value at each point into slot `slot`'s readback, in the open frame where the
-    // stream is now; screen_probes_finished names its bytes (RGBA8 per point) once that frame's fence has passed.
-    static constexpr std::size_t kScreenProbeSlots = 12u;
+    // Render-owner only. Each point's depth (0 near, 1 far) into slot `slot`'s readback, in the open frame where the
+    // stream is now; screen_probes_finished names the values, one float a point, once that frame's fence has passed.
     [[nodiscard]] bool record_screen_probes(std::size_t slot, std::span<const ScreenProbe> probes);
-    [[nodiscard]] const std::uint8_t* screen_probes_finished(std::size_t slot);  // throws when the device is gone
+    [[nodiscard]] const float* screen_probes_finished(std::size_t slot);  // throws when the device is gone
     bool debug_copy_scene_to_readback();
     void debug_log_readback();
     void debug_log_backbuffer_readback();
@@ -479,12 +476,6 @@ public:
     [[nodiscard]] UploadRing& constant_ring() { return constant_ring_; }
     [[nodiscard]] UploadRing& matrix_ring() { return matrix_ring_; }
     [[nodiscard]] unsigned frame_slot() const { return frame_slot_; }
-    // Bytes held by the scene target-copy destination cache. Destinations are allocated at the
-    // internal resolution, so this grows with the frame's area against a fixed budget.
-    // The copy-destination byte budget (192 MiB), reported next to the live bytes.
-    // Current frame's shared s0-s7 table for draws without dynamic samplers.
-    // Exhaustion is explicit; defaults never replace a requested table.
-
     // The table for per-map sampler keys (make_sampler_key in render_core.cpp), built on first use and valid
     // until sampler_generation moves.
     void bind_draw_tables(gpu::Table textures, gpu::Table samplers);
@@ -602,9 +593,8 @@ private:
     bool create_root_signature();
     bool create_sampler_heap();
     void reset_sampler_frame(); // only after this slot's fence completes
-    bool create_conversion_pipeline();  // scene target-copy conversion blit PSO
+    bool create_conversion_pipeline();  // the capture pipelines and the screen probes' compute pipeline
     bool create_clear_pipeline();
-    bool ensure_screen_probe_resources();
 
     // Records the conversion blit: fullscreen triangle into `dest` (RTV),
     // sampling the scene target color (or depth) SRV.  (src_x, src_y) is the source
@@ -875,7 +865,7 @@ private:
     std::atomic<double> measured_present_hz_{0.0};
     std::int64_t measured_present_window_qpc_ = 0;
     std::uint32_t measured_present_count_ = 0;
-    // Render target 1 bound next to the scene target (DrawCall::aux_target values).
+    // Render target 1 bound next to the scene target (0 none, 1 the motion target, 2 the reactive mask).
     std::uint8_t bound_rt_aux_ = 0;
     Microsoft::WRL::ComPtr<ID3D12Resource> reactive_target_;
     D3D12_CPU_DESCRIPTOR_HANDLE reactive_rtv_{};
@@ -1035,12 +1025,8 @@ private:
         D3D12_CPU_DESCRIPTOR_HANDLE rtv{};
         bool rtv_valid = false;
     };
-    // One texture per destination key, at the copy's scaled extent in kSceneColorFormat
-    // (a full frame copy). Bounded in
-    // bytes, not entries, since an entry's cost varies with the copy extent and the
-    // internal scale; sizes are the driver's GetResourceAllocationInfo. The 192 MiB budget
-    // is well above a scene's working set (a few pictures across a couple of formats plus one
-    // bloom workspace).
+    // One texture per capture key at the frame's extent in kSceneColorFormat, kept until the game frees the texture
+    // (free_target) or the frame's size or samples change.
     std::unordered_map<std::uint64_t, FramePassTarget> frame_pass_targets_;
     // Render-owner-only aggregate work counts, reported once at shutdown.
     // Payload bytes are copied pixels, not a device allocation-size estimate.
@@ -1058,7 +1044,6 @@ private:
     // CPU-only scratch slot. scene target source SRVs occupy an immutable prefix of the
     // active shader-visible heap.
     Microsoft::WRL::ComPtr<ID3D12PipelineState> conv_pipeline_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> probe_pipeline_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> display_filter_pipeline_;  // 1:1 display copies without gamma
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> conv_rtv_heap_;
     D3D12_CPU_DESCRIPTOR_HANDLE conv_scratch_rtv_{};
@@ -1075,13 +1060,13 @@ private:
     Microsoft::WRL::ComPtr<ID3D12RootSignature> motion_debug_root_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> motion_debug_pipeline_;
 
-    // Screen probes: one pixel of the target per point, each slot's readback fenced with its frame.
-    Microsoft::WRL::ComPtr<ID3D12Resource> probe_target_;
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> probe_rtv_heap_;
-    D3D12_CPU_DESCRIPTOR_HANDLE probe_rtv_{};
+    // Screen probes (ScreenProbeCs): the values a slot's dispatch writes, copied to its readback, fenced with its frame.
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> probe_root_signature_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> probe_pipeline_;
     struct ScreenProbeSlot {
+        Microsoft::WRL::ComPtr<ID3D12Resource> values;    // default heap, unordered access between dispatches
         Microsoft::WRL::ComPtr<ID3D12Resource> readback;
-        const std::uint8_t* rgba = nullptr;
+        const float* mapped = nullptr;
         std::uint64_t bytes = 0;
         std::uint64_t fence = 0;
     };

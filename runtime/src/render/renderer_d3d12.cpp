@@ -1061,8 +1061,8 @@ D3D12_GPU_DESCRIPTOR_HANDLE RendererD3D12::sampler_table_for(const std::array<Sa
 }
 
 
-// scene target-copy conversion pipeline: root signature (16 root constants, one SRV
-// table, static linear and point clamp samplers) and the blit PSO.
+// The capture pipelines (root signature: SceneConversionShaderConstants, one SRV table, a static linear clamp sampler)
+// and the screen probes' compute pipeline (constants, the depth's SRV table, the pixels' SRV, the values' UAV).
 bool RendererD3D12::create_conversion_pipeline() {
     {
         D3D12_DESCRIPTOR_RANGE range{};
@@ -1075,7 +1075,7 @@ bool RendererD3D12::create_conversion_pipeline() {
         params[0].ParameterType            = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
         params[0].Constants.ShaderRegister = 0;
         params[0].Constants.RegisterSpace  = 0;
-        params[0].Constants.Num32BitValues = 16;
+        params[0].Constants.Num32BitValues = kSceneConversionConstantCount;
         params[0].ShaderVisibility         = D3D12_SHADER_VISIBILITY_PIXEL;
 
         params[1].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
@@ -1083,21 +1083,17 @@ bool RendererD3D12::create_conversion_pipeline() {
         params[1].DescriptorTable.pDescriptorRanges   = &range;
         params[1].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_PIXEL;
 
-        D3D12_STATIC_SAMPLER_DESC ss[2]{};
-        ss[0].Filter           = D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT;
-        ss[0].AddressU = ss[0].AddressV = ss[0].AddressW =
-            D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-        ss[0].ShaderRegister   = 0;
-        ss[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-        ss[1] = ss[0];
-        ss[1].Filter         = D3D12_FILTER_MIN_MAG_MIP_POINT;
-        ss[1].ShaderRegister = 1;
+        D3D12_STATIC_SAMPLER_DESC ss{};
+        ss.Filter           = D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT;
+        ss.AddressU = ss.AddressV = ss.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+        ss.ShaderRegister   = 0;
+        ss.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
         D3D12_ROOT_SIGNATURE_DESC rsd{};
         rsd.NumParameters     = 2;
         rsd.pParameters       = params;
-        rsd.NumStaticSamplers = 2;
-        rsd.pStaticSamplers   = ss;
+        rsd.NumStaticSamplers = 1;
+        rsd.pStaticSamplers   = &ss;
 
         ComPtr<ID3DBlob> blob, err;
         d3d_check(D3D12SerializeRootSignature(
@@ -1131,15 +1127,41 @@ bool RendererD3D12::create_conversion_pipeline() {
         pd.SampleDesc.Count      = 1;
         d3d_check(device_->CreateGraphicsPipelineState(
             &pd, IID_PPV_ARGS(&conv_pipeline_)), "CreateConvPSO");
-        pd.RTVFormats[0] = kTargetColorFormat;
-        d3d_check(device_->CreateGraphicsPipelineState(
-            &pd, IID_PPV_ARGS(&probe_pipeline_)), "CreateProbePSO");
-        pd.RTVFormats[0] = kSceneColorFormat;
         const UtilityShaderBytes filter = utility_shader(UtilityShader::DisplayFilterPs);
         pd.PS = {filter->GetBufferPointer(), filter->GetBufferSize()};
         pd.RTVFormats[0] = kSceneColorFormat;
         d3d_check(device_->CreateGraphicsPipelineState(
             &pd, IID_PPV_ARGS(&display_filter_pipeline_)), "CreateDisplayFilterPSO");
+    }
+
+    // Screen probes: b0 the count, t0 the depth (a table), t1 the pixels and u0 the values (root views).
+    {
+        D3D12_DESCRIPTOR_RANGE range{};
+        range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+        range.NumDescriptors = 1;
+        D3D12_ROOT_PARAMETER params[4]{};
+        params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+        params[0].Constants.Num32BitValues = 1;
+        params[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+        params[1].DescriptorTable.NumDescriptorRanges = 1;
+        params[1].DescriptorTable.pDescriptorRanges = &range;
+        params[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+        params[2].Descriptor.ShaderRegister = 1;
+        params[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
+        params[3].Descriptor.ShaderRegister = 0;
+        D3D12_ROOT_SIGNATURE_DESC rsd{};
+        rsd.NumParameters = 4;
+        rsd.pParameters = params;
+        ComPtr<ID3DBlob> blob, err;
+        d3d_check(D3D12SerializeRootSignature(&rsd, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &err), "SerializeProbeRS");
+        d3d_check(device_->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(),
+                                               IID_PPV_ARGS(&probe_root_signature_)),
+                  "CreateProbeRS");
+        const UtilityShaderBytes cs = utility_shader(UtilityShader::ScreenProbeCs);
+        D3D12_COMPUTE_PIPELINE_STATE_DESC cd{};
+        cd.pRootSignature = probe_root_signature_.Get();
+        cd.CS = {cs->GetBufferPointer(), cs->GetBufferSize()};
+        d3d_check(device_->CreateComputePipelineState(&cd, IID_PPV_ARGS(&probe_pipeline_)), "CreateProbePSO");
     }
 
     // CPU-only RTV slot reused after each conversion bind is recorded.
@@ -1367,7 +1389,7 @@ void RendererD3D12::apply_window_size() {
     upscale_output_ = wanted;
     const auto config = render;
     const auto [render_width, render_height] = internal_extent(wanted.width, wanted.height, config.internal_height,
-        host_window::upscaler_render_fraction(config, wanted.width, wanted.height));
+        D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION, host_window::upscaler_render_fraction(config, wanted.width, wanted.height));
     wanted = FrameMap(render_width, render_height);
     const unsigned samples = wanted_msaa_samples();
     if (wanted == frame_ && samples == scene_msaa_.samples) {
@@ -2286,8 +2308,8 @@ void RendererD3D12::shutdown() {
     conv_scene_source_table_.reset();
     conv_scene_tables_.clear();
     conv_scene_table_ = ~std::size_t{0};
-    probe_target_.Reset();
-    probe_rtv_heap_.Reset();
+    probe_pipeline_.Reset();
+    probe_root_signature_.Reset();
     probe_slots_ = {};
     s_clear_root_sig.Reset();
     clear_rgb_pipelines_ = {};
@@ -5359,9 +5381,8 @@ void RendererD3D12::record_conversion_blit(
     command_list_->SetPipelineState(display_filter ? display_filter_pipeline_.Get() : conv_pipeline_.Get());
 
     const SceneConversionShaderConstants constants =
-        make_scene_conversion_constants(false, copy_format, src_x, src_y, step_x, step_y);
-    command_list_->SetGraphicsRoot32BitConstants(
-        0, 16, constants.values.data(), 0);
+        make_scene_conversion_constants(copy_format, src_x, src_y, step_x, step_y);
+    command_list_->SetGraphicsRoot32BitConstants(0, kSceneConversionConstantCount, &constants, 0);
     { ID3D12DescriptorHeap* draw_heaps[] = {srv_ring_.heap_for(src_srv), sampler_heap_.Get()}; command_list_->SetDescriptorHeaps(2, draw_heaps); }
     command_list_->SetGraphicsRootDescriptorTable(1, src_srv);
     command_list_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -5480,125 +5501,77 @@ bool RendererD3D12::draw_frame_pass(
     return publish_frame_pass(params, dest.texture, textures);
 }
 
-void RendererD3D12::create_first_use_resources() {
-    (void)ensure_screen_probe_resources();
-}
-
-bool RendererD3D12::ensure_screen_probe_resources() {
-    if (probe_target_) {
-        return true;
-    }
-    D3D12_HEAP_PROPERTIES default_heap{};
-    default_heap.Type = D3D12_HEAP_TYPE_DEFAULT;
-    D3D12_RESOURCE_DESC target_desc{};
-    target_desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-    target_desc.Width = kScreenProbeTile;
-    target_desc.Height = 1;
-    target_desc.DepthOrArraySize = 1;
-    target_desc.MipLevels = 1;
-    target_desc.Format = kTargetColorFormat;
-    target_desc.SampleDesc.Count = 1;
-    target_desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-    target_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
-    d3d_check(
-        device_->CreateCommittedResource(&default_heap, D3D12_HEAP_FLAG_NONE, &target_desc,
-                                         D3D12_RESOURCE_STATE_COPY_SOURCE, nullptr, IID_PPV_ARGS(&probe_target_)),
-        "screen probe target");
-    D3D12_DESCRIPTOR_HEAP_DESC rtv_heap_desc{};
-    rtv_heap_desc.NumDescriptors = 1;
-    rtv_heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
-    d3d_check(device_->CreateDescriptorHeap(&rtv_heap_desc, IID_PPV_ARGS(&probe_rtv_heap_)), "screen probe RTV heap");
-    probe_rtv_ = probe_rtv_heap_->GetCPUDescriptorHandleForHeapStart();
-    device_->CreateRenderTargetView(probe_target_.Get(), nullptr, probe_rtv_);
-    return true;
-}
-
 bool RendererD3D12::record_screen_probes(std::size_t slot, std::span<const ScreenProbe> probes) {
     if (slot >= probe_slots_.size()) probe_slots_.resize(slot + 1u);
     ScreenProbeSlot& out = probe_slots_[slot];
-    if (out.fence != 0u || !ensure_screen_probe_resources()) {
+    if (out.fence != 0u || probes.empty()) {
         return false;
     }
-    const std::uint64_t bytes = ((probes.size() + kScreenProbeTile - 1u) / kScreenProbeTile) * kScreenProbeTile * 4ull;
+    const std::uint64_t bytes = probes.size() * sizeof(float);
     if (out.bytes < bytes) {
-        D3D12_HEAP_PROPERTIES readback_heap{};
-        readback_heap.Type = D3D12_HEAP_TYPE_READBACK;
-        D3D12_RESOURCE_DESC readback_desc{};
-        readback_desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-        readback_desc.Width = bytes;
-        readback_desc.Height = 1;
-        readback_desc.DepthOrArraySize = 1;
-        readback_desc.MipLevels = 1;
-        readback_desc.SampleDesc.Count = 1;
-        readback_desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-        d3d_check(device_->CreateCommittedResource(&readback_heap, D3D12_HEAP_FLAG_NONE, &readback_desc,
-            D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&out.readback)), "screen probe readback");
-        out.rgba = pin_readback_mapping(out.readback.Get());
-        if (!out.rgba) throw std::runtime_error("screen probe readback could not be mapped");
+        D3D12_HEAP_PROPERTIES heap{};
+        D3D12_RESOURCE_DESC desc{};
+        desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+        desc.Width = bytes;
+        desc.Height = 1;
+        desc.DepthOrArraySize = 1;
+        desc.MipLevels = 1;
+        desc.SampleDesc.Count = 1;
+        desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+        heap.Type = D3D12_HEAP_TYPE_READBACK;
+        d3d_check(device_->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_COPY_DEST,
+                                                   nullptr, IID_PPV_ARGS(&out.readback)),
+                  "screen probe readback");
+        heap.Type = D3D12_HEAP_TYPE_DEFAULT;
+        desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+        d3d_check(device_->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &desc,
+                                                   D3D12_RESOURCE_STATE_UNORDERED_ACCESS, nullptr,
+                                                   IID_PPV_ARGS(&out.values)),
+                  "screen probe values");
+        out.mapped = reinterpret_cast<const float*>(pin_readback_mapping(out.readback.Get()));
+        if (out.mapped == nullptr) throw std::runtime_error("screen probe readback could not be mapped");
         out.bytes = bytes;
     }
-    ID3D12GraphicsCommandList* const list = command_list_.Get();
-    resolve_scene_on(list, false, true);
-    ID3D12Resource* const src = scene_depth_.Get();
-
-    D3D12_RESOURCE_BARRIER barriers[2]{};
-    barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    barriers[0].Transition.pResource = src;
-    barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
-    barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-    barriers[0].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    barriers[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    barriers[1].Transition.pResource = probe_target_.Get();
-    barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_SOURCE;
-    barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
-    barriers[1].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    for (std::size_t first = 0; first < probes.size(); first += kScreenProbeTile) {
-        barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_SOURCE;
-        barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
-        list->ResourceBarrier(1, &barriers[1]);
-        if (first == 0u) list->ResourceBarrier(1, &barriers[0]);
-
-        list->OMSetRenderTargets(1, &probe_rtv_, FALSE, nullptr);
-        list->SetGraphicsRootSignature(s_conv_root_sig.Get());
-        list->SetPipelineState(probe_pipeline_.Get());
-        { ID3D12DescriptorHeap* draw_heaps[] = {srv_ring_.heap_for(conv_scene_depth_srv_), sampler_heap_.Get()}; list->SetDescriptorHeaps(2, draw_heaps); }
-        list->SetGraphicsRootDescriptorTable(1, conv_scene_depth_srv_);
-        list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-        for (std::size_t i = 0; i < std::min<std::size_t>(kScreenProbeTile, probes.size() - first); ++i) {
-            if (probes[first + i].x < 0.0f || probes[first + i].y < 0.0f) {
-                continue;
-            }
-            const D3D12_VIEWPORT viewport{static_cast<float>(i), 0.0f, 1.0f, 1.0f, 0.0f, 1.0f};
-            const D3D12_RECT scissor{static_cast<LONG>(i), 0, static_cast<LONG>(i) + 1, 1};
-            list->RSSetViewports(1, &viewport);
-            list->RSSetScissorRects(1, &scissor);
-            const SceneConversionShaderConstants constants = make_screen_probe_constants(probes[first + i].x, probes[first + i].y, frame_, true);
-            list->SetGraphicsRoot32BitConstants(0, 16, constants.values.data(), 0);
-            list->DrawInstanced(3, 1, 0, 0);
-        }
-
-        std::swap(barriers[1].Transition.StateBefore, barriers[1].Transition.StateAfter);
-        list->ResourceBarrier(1, &barriers[1]);
-
-        D3D12_TEXTURE_COPY_LOCATION src_copy{};
-        src_copy.pResource = probe_target_.Get();
-        src_copy.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-        D3D12_TEXTURE_COPY_LOCATION dst_copy{};
-        dst_copy.pResource = out.readback.Get();
-        dst_copy.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-        dst_copy.PlacedFootprint.Offset = first * 4ull;
-        dst_copy.PlacedFootprint.Footprint.Format = kTargetColorFormat;
-        dst_copy.PlacedFootprint.Footprint.Width = kScreenProbeTile;
-        dst_copy.PlacedFootprint.Footprint.Height = 1;
-        dst_copy.PlacedFootprint.Footprint.Depth = 1;
-        dst_copy.PlacedFootprint.Footprint.RowPitch = kScreenProbeTile * 4u;
-        static_assert(kScreenProbeTile * 4u % D3D12_TEXTURE_DATA_PITCH_ALIGNMENT == 0u);
-        list->CopyTextureRegion(&dst_copy, 0, 0, 0, &src_copy, nullptr);
-
+    const UploadRing::Allocation pixels = constant_ring_.allocate(probes.size() * sizeof(ScreenProbePixel), 16u);
+    for (std::size_t i = 0; i < probes.size(); ++i) {
+        const ScreenProbePixel pixel = screen_probe_pixel(probes[i], frame_);
+        std::memcpy(pixels.cpu + i * sizeof(ScreenProbePixel), &pixel, sizeof(pixel));
     }
-    std::swap(barriers[0].Transition.StateBefore, barriers[0].Transition.StateAfter);
-    list->ResourceBarrier(1, &barriers[0]);
-    // The drawing state as record_conversion_blit restores it.
+
+    ID3D12GraphicsCommandList* const list = command_list_.Get();
+    resolve_scene(true, false);  // depth alone
+    D3D12_RESOURCE_BARRIER depth{};
+    depth.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    depth.Transition.pResource = scene_depth_.Get();
+    depth.Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+    depth.Transition.StateAfter = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    depth.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    list->ResourceBarrier(1, &depth);
+
+    const std::uint32_t count = static_cast<std::uint32_t>(probes.size());
+    list->SetComputeRootSignature(probe_root_signature_.Get());
+    list->SetPipelineState(probe_pipeline_.Get());
+    { ID3D12DescriptorHeap* heaps[] = {srv_ring_.heap_for(conv_scene_depth_srv_), sampler_heap_.Get()}; list->SetDescriptorHeaps(2, heaps); }
+    list->SetComputeRoot32BitConstants(0, 1, &count, 0);
+    list->SetComputeRootDescriptorTable(1, conv_scene_depth_srv_);
+    list->SetComputeRootShaderResourceView(2, pixels.gpu);
+    list->SetComputeRootUnorderedAccessView(3, out.values->GetGPUVirtualAddress());
+    list->Dispatch((count + kScreenProbeGroup - 1u) / kScreenProbeGroup, 1, 1);
+
+    D3D12_RESOURCE_BARRIER after[2]{};
+    after[0] = depth;
+    std::swap(after[0].Transition.StateBefore, after[0].Transition.StateAfter);
+    after[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    after[1].Transition.pResource = out.values.Get();
+    after[1].Transition.StateBefore = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    after[1].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
+    after[1].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    list->ResourceBarrier(2, after);
+    list->CopyBufferRegion(out.readback.Get(), 0, out.values.Get(), 0, bytes);
+    std::swap(after[1].Transition.StateBefore, after[1].Transition.StateAfter);
+    list->ResourceBarrier(1, &after[1]);
+
+    // The drawing state as the scene's draws expect it.
     list->SetGraphicsRootSignature(root_signature_.Get());
     invalidate_draw_bindings();
     bind_scene();
@@ -5606,13 +5579,13 @@ bool RendererD3D12::record_screen_probes(std::size_t slot, std::span<const Scree
     return true;
 }
 
-const std::uint8_t* RendererD3D12::screen_probes_finished(std::size_t slot) {
+const float* RendererD3D12::screen_probes_finished(std::size_t slot) {
     ScreenProbeSlot& out = probe_slots_[slot];
     if (out.fence == 0u || out.fence == kProbesInFrame || completed_fence_value() < out.fence) {
         return nullptr;
     }
     out.fence = 0u;
-    return out.rgba;
+    return out.mapped;
 }
 
 // A readback heap may stay mapped while the GPU writes it (D3D12 leaves the

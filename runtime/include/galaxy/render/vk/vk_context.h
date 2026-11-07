@@ -117,7 +117,6 @@ public:
     [[nodiscard]] const std::string& device_name() const noexcept { return device_name_; }
     [[nodiscard]] const DeviceIdentity& identity() const noexcept { return identity_; }
     [[nodiscard]] const DeviceQuirks& quirks() const noexcept { return quirks_; }
-    [[nodiscard]] bool geometry_shader() const noexcept { return geometry_shader_; }
     [[nodiscard]] bool sample_rate_shading() const noexcept { return sample_rate_shading_; }
     [[nodiscard]] bool sampler_anisotropy() const noexcept { return sampler_anisotropy_; }
     // shaderImageGatherExtended: a gather of one chosen channel (FSR 1 EASU's GatherRed/Green/Blue).
@@ -166,18 +165,16 @@ public:
                                                           VkFormat format, VkImageUsageFlags usage,
                                                           bool render_target, const char* name,
                                                           VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT);
-    // A linear-tiled transfer image (DeviceQuirks::linear_readback); empty when the device cannot copy `format` to
-    // and from linear images.
-    [[nodiscard]] std::shared_ptr<Texture> create_linear_image(std::uint32_t width, std::uint32_t height,
-                                                               VkFormat format, const char* name);
     [[nodiscard]] MappedBuffer create_mapped_buffer(std::uint64_t size, VkBufferUsageFlags usage, const char* name,
                                                     BufferPlace place = BufferPlace::Host);
     // A buffer with a GPU address.
     [[nodiscard]] std::shared_ptr<Buffer> create_buffer(std::uint64_t size, VkBufferUsageFlags usage, const char* name,
                                                         BufferPlace place = BufferPlace::Host);
     // A mapped transfer-destination buffer the CPU reads (readbacks), in cached host memory (coherent where the driver
-    // reads that back faster: DeviceQuirks::coherent_readback); no GPU address.
-    [[nodiscard]] std::shared_ptr<Buffer> create_readback_buffer(std::uint64_t size, const char* name);
+    // reads that back faster: DeviceQuirks::coherent_readback); no GPU address. `usage` adds to transfer destination
+    // (a storage buffer a compute shader writes).
+    [[nodiscard]] std::shared_ptr<Buffer> create_readback_buffer(std::uint64_t size, const char* name,
+                                                                 VkBufferUsageFlags usage = 0u);
     // Makes the GPU's writes to a readback buffer visible to the CPU (after its fence).
     void invalidate(const Buffer& buffer) const noexcept;
     void set_name(VkObjectType type, std::uint64_t handle, const char* name) const noexcept;
@@ -226,7 +223,6 @@ private:
     std::string failure_;
     DeviceIdentity identity_;
     DeviceQuirks quirks_;
-    bool geometry_shader_ = false;
     bool sample_rate_shading_ = false;
     bool sampler_anisotropy_ = false;
     bool gather_extended_ = false;

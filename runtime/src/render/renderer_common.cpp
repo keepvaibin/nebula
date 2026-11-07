@@ -24,59 +24,27 @@
 
 namespace galaxy::render {
 
-// The capture shader (captures, the frame shown, screen probes). A capture samples the frame inside its rectangle, through
-// the display's vertical filter when the game asked for it (the line above and the line, weighted), takes the colour's
-// luminance or the depth when asked, and writes the channels the picture carries. Colour stays in floating point; the
-// target's format rounds it once. A screen probe reads one pixel (depth as its 24-bit value, in three bytes).
-//
-// Root constants (b0):
-//   src_xform = src origin.xy, src texels per dest pixel .zw (scaled frame px)
-//   modes     = luminance, unused, depth, keep_alpha
-//   filt      = filter weights above/line/below (64ths), clamp_y min
-//   filt2     = clamp_y max, picture channels (7 the frame shown), the scaled one-logical-row filter offset, 1 a probe
+// The capture shader (captures and the frame shown): samples the frame inside the capture's rectangle and writes the
+// channels the picture carries (SceneConversionShaderConstants). Colour stays in floating point; the target's format
+// rounds it once.
 static constexpr char kConvPs[] = R"HLSL(
 cbuffer C : register(b0) {
-    float4 src_xform;
-    float4 modes;
-    float4 filt;
-    float4 filt2;
+    float4 src_xform;  // the rectangle's origin in frame pixels, then frame pixels per picture pixel
+    uint channels;     // NebulaTargetChannels; 4 the frame shown (not named `layout`: glslang's HLSL reserves it)
 };
 Texture2D srctex : register(t0);
 SamplerState s_lin : register(s0);
-SamplerState s_pt  : register(s1);
 struct V { float4 pos : SV_Position; float2 uv : TEXCOORD0; };
-uint4 pack_depth(float depth_sample) {
-    uint depth24 = uint(clamp(
-        (1.0 - depth_sample) * 16777216.0, 0.0, 16777215.0));
-    return uint4(
-        (depth24 >> 16) & 255u,
-        (depth24 >> 8) & 255u,
-        depth24 & 255u,
-        255u);
-}
 float4 main(V v) : SV_Target {
     float2 dims;
     srctex.GetDimensions(dims.x, dims.y);
-    float4 c;
-    if (filt2.w > 0.0) {
-        // A screen probe: the pixel src_xform.xy names.
-        const float4 texel = srctex.Load(int3(int2(src_xform.xy), 0));
-        c = modes.z != 0.0 ? float4(pack_depth(texel.r)) / 255.0 : saturate(texel);
-    } else {
-        const float2 at = (src_xform.xy + v.pos.xy * src_xform.zw) / dims;
-        c = srctex.SampleLevel(s_lin, at, 0);
-        // The depth buffer is reversed: the game's depth is one minus it.
-        c = modes.z != 0.0 ? float4(saturate(1.0 - c.rrr), 1.0) : saturate(c);
-    }
-    // The picture's channels (capture.h): the game's NebulaTargetChannels, 7 the frame shown. (Not named `layout`:
-    // glslang's HLSL front end reserves the word.)
-    uint channels = uint(filt2.y + 0.5);
-    if (channels == 3u) {          // red in every channel
-        c = c.rrrr;
-    } else if (channels == 6u || channels == 7u) { // colour, opaque
-        c.a = 1.0;
-    } else if (channels == 2u) {   // alpha in every channel
+    float4 c = saturate(srctex.SampleLevel(s_lin, (src_xform.xy + v.pos.xy * src_xform.zw) / dims, 0));
+    if (channels == 1u) {          // alpha in every channel
         c = c.aaaa;
+    } else if (channels == 2u) {   // red in every channel
+        c = c.rrrr;
+    } else if (channels >= 3u) {   // colour, opaque
+        c.a = 1.0;
     }
     return c;
 }
@@ -86,13 +54,28 @@ float4 main(V v) : SV_Target {
 static constexpr char kDisplayFilterPs[] = R"HLSL(
 cbuffer C : register(b0) {
     float4 src_xform;
-    float4 modes;
-    float4 filt;
-    float4 filt2;
+    uint channels;
 };
 Texture2D srctex : register(t0);
 float4 main(float4 pos : SV_Position) : SV_Target {
     return float4(saturate(srctex.Load(int3(int2(src_xform.xy) + int2(pos.xy), 0)).rgb), 1.0);
+}
+)HLSL";
+
+// Screen probes: each point's depth, 0 near to 1 far (the depth buffer is reversed), at the frame pixel the CPU found
+// for it (ScreenProbePixel); a point the game did not ask about (~0u) reads 0.
+static constexpr char kScreenProbeCs[] = R"HLSL(
+cbuffer C : register(b0) {
+    uint count;
+};
+Texture2D<float> depth : register(t0);
+StructuredBuffer<uint2> pixels : register(t1);
+RWStructuredBuffer<float> values : register(u0);
+[numthreads(64, 1, 1)]
+void main(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= count) return;
+    const uint2 pixel = pixels[id.x];
+    values[id.x] = pixel.x == 0xffffffffu ? 0.0 : saturate(1.0 - depth.Load(int3(int2(pixel), 0)));
 }
 )HLSL";
 
@@ -267,33 +250,22 @@ std::string_view display_filter_shader_source() noexcept {
     return std::string_view{kDisplayFilterPs, sizeof(kDisplayFilterPs) - 1u};
 }
 
-SceneConversionShaderConstants make_scene_conversion_constants(
-    bool from_depth,
-    std::uint8_t channels,
-    float src_x,
-    float src_y,
-    float step_x,
-    float step_y) noexcept {
-    return SceneConversionShaderConstants{{
-        src_x, src_y, step_x, step_y,
-        0.0f, 1.0f, from_depth ? 1.0f : 0.0f, 0.0f,
-        0.0f, 0.0f, 0.0f, 0.0f,
-        0.0f, static_cast<float>(channels), 0.0f, 0.0f,
-    }};
+std::string_view screen_probe_shader_source() noexcept {
+    return std::string_view{kScreenProbeCs, sizeof(kScreenProbeCs) - 1u};
 }
 
-SceneConversionShaderConstants make_screen_probe_constants(float x, float y, const FrameMap& map, bool depth) noexcept {
+SceneConversionShaderConstants make_scene_conversion_constants(std::uint8_t channels, float src_x, float src_y,
+                                                               float step_x, float step_y) noexcept {
+    return SceneConversionShaderConstants{{src_x, src_y, step_x, step_y}, channels};
+}
+
+ScreenProbePixel screen_probe_pixel(const ScreenProbe& probe, const FrameMap& map) noexcept {
+    // Not a number fails both tests too.
+    if (!(probe.x >= 0.0f) || !(probe.y >= 0.0f) || map.empty()) return {~0u, ~0u};
     const auto pixel = [](float at, float scale, unsigned size) {
-        return static_cast<float>(std::min(static_cast<unsigned>(at * scale), size - 1u));
+        return static_cast<std::uint32_t>(std::min(at * scale, static_cast<float>(size - 1u)));
     };
-    const float px = pixel(x, map.sx, map.width);
-    const float py = pixel(y, map.sy, map.height);
-    return SceneConversionShaderConstants{{
-        px, py, 1.0f, 1.0f,
-        0.0f, 1.0f, depth ? 1.0f : 0.0f, 1.0f,
-        0.0f, 0.0f, 0.0f, 0.0f,
-        0.0f, 255.0f, 0.0f, 1.0f,
-    }};
+    return {pixel(probe.x, map.sx, map.width), pixel(probe.y, map.sy, map.height)};
 }
 
 SceneClearValues make_scene_clear_values(std::uint32_t rgba, std::uint8_t frame_format) noexcept {

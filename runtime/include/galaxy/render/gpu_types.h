@@ -24,14 +24,6 @@ using Address = std::uint64_t;
 struct Table {
     std::uint64_t ptr = 0;  // VkDescriptorSet
 };
-using Topology = VkPrimitiveTopology;
-// D3D12's values: pipeline keys store them.
-enum TopologyType : std::uint8_t {
-    kTopologyTypePointValue = 1,
-    kTopologyTypeLineValue = 2,
-    kTopologyTypeTriangleValue = 3,
-    kTopologyTypePatchValue = 4,
-};
 struct VertexView {
     Address BufferLocation = 0;
     std::uint32_t SizeInBytes = 0;
@@ -49,14 +41,6 @@ struct Rect {
     std::int32_t bottom = 0;
 };
 
-inline constexpr TopologyType kTopologyTypeTriangle = kTopologyTypeTriangleValue;
-inline constexpr TopologyType kTopologyTypeLine = kTopologyTypeLineValue;
-inline constexpr TopologyType kTopologyTypePoint = kTopologyTypePointValue;
-inline constexpr TopologyType kTopologyTypePatch = kTopologyTypePatchValue;
-inline constexpr Topology kTopologyTriangleList = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-inline constexpr Topology kTopologyLineList = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
-inline constexpr Topology kTopologyPointList = VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
-// Curved surfaces' triangles as three-point patches (the pipeline's patch control points: 3).
 
 [[nodiscard]] inline VertexView vertex_view(Address address, std::uint32_t size, std::uint32_t stride) noexcept {
     return VertexView{address, size, stride};
@@ -105,8 +89,6 @@ struct DeviceRef {
     bool operator!=(std::nullptr_t) const noexcept { return handle != VK_NULL_HANDLE; }
     bool operator==(std::nullptr_t) const noexcept { return handle == VK_NULL_HANDLE; }
 };
-// copies stay below 640x528 at scale 6; every Vulkan device reports at least 4096.
-inline constexpr unsigned kMaxTexture2DDimension = 4096u;
 
 // An RGBA8 texture that is rendered to and sampled (display picture copies); empty when it cannot be created.
 [[nodiscard]] TextureRef create_render_texture(Device* device, std::uint32_t width, std::uint32_t height);
@@ -133,7 +115,6 @@ using TextureObject = ID3D12Resource;
 // Another reference to a texture a handle names.
 [[nodiscard]] inline TextureRef texture_ref(TextureObject* texture) { return TextureRef{texture}; }
 using CpuDescriptor = D3D12_CPU_DESCRIPTOR_HANDLE;
-inline constexpr unsigned kMaxTexture2DDimension = D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION;
 using Pipeline = ID3D12PipelineState;
 using PipelineRef = Microsoft::WRL::ComPtr<ID3D12PipelineState>;
 using Resource = ID3D12Resource;
@@ -141,20 +122,10 @@ using Resource = ID3D12Resource;
 using Address = D3D12_GPU_VIRTUAL_ADDRESS;
 // A shader-visible table of texture or sampler descriptors.
 using Table = D3D12_GPU_DESCRIPTOR_HANDLE;
-using Topology = D3D12_PRIMITIVE_TOPOLOGY;
-using TopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE;
 using VertexView = D3D12_VERTEX_BUFFER_VIEW;
 using IndexView = D3D12_INDEX_BUFFER_VIEW;
 using Rect = D3D12_RECT;
 
-inline constexpr TopologyType kTopologyTypeTriangle = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-inline constexpr TopologyType kTopologyTypeLine = D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE;
-inline constexpr TopologyType kTopologyTypePoint = D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT;
-inline constexpr TopologyType kTopologyTypePatch = D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH;
-inline constexpr Topology kTopologyTriangleList = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-inline constexpr Topology kTopologyLineList = D3D_PRIMITIVE_TOPOLOGY_LINELIST;
-inline constexpr Topology kTopologyPointList = D3D_PRIMITIVE_TOPOLOGY_POINTLIST;
-// Curved surfaces' triangles as three-point patches.
 
 [[nodiscard]] inline VertexView vertex_view(Address address, std::uint32_t size, std::uint32_t stride) noexcept {
     VertexView view{};

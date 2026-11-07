@@ -12,10 +12,10 @@
 #endif
 
 #include "galaxy/render/device_gate.h"
-#include "galaxy/render/draw_types.h"
 #include "galaxy/render/gpu_texture_backend.h"
 #include "galaxy/render/movie_replacement.h"
 #include "galaxy/render/texture_pack.h"
+#include "galaxy/render/texture_sampler.h"
 
 #include <array>
 #include <cstddef>
@@ -91,7 +91,6 @@ public:
     [[nodiscard]] TextureHandle handle(std::uint32_t id);
     // Bumps whenever `handle` of a live id changes.
     [[nodiscard]] std::uint64_t revision() const noexcept { return revision_; }
-    [[nodiscard]] std::uint64_t missing_images() const noexcept { return missing_images_; }
 #if defined(NEBULA_DEV)
     [[nodiscard]] std::uint64_t name_hash(std::uint32_t id) const noexcept {
         return id < entries_.size() && entries_[id] != nullptr ? entries_[id]->name.hash : 0u;
@@ -202,7 +201,6 @@ private:
     // Render thread. Ids are never used again, so a table naming a freed image reads nothing, not another image.
     std::vector<std::unique_ptr<Entry>> entries_;
     std::uint64_t revision_ = 1u;
-    std::uint64_t missing_images_ = 0u;
     std::unordered_set<std::uint32_t> blank_images_;
     std::vector<std::vector<Retired>> retired_;
     std::vector<std::vector<ChunkRef>> kept_;

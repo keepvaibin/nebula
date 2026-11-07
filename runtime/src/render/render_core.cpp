@@ -261,8 +261,6 @@ bool RenderCore::initialize(int w, int h) {
         return false;
     }
     boot_step("frame reads and texture cache");
-    renderer_.create_first_use_resources();
-    boot_step("first-use resources");
 
     registries_.initialize(renderer_.device(), device_gate_);
     pipelines_.initialize(renderer_.device(), renderer_.pipeline_root(), renderer_.pipeline_backend());
@@ -1643,7 +1641,6 @@ bool RenderCore::restart_device() {
         }
         device_gate_.set_device(renderer_.device());
         texture_store_.restart(renderer_.device());
-        renderer_.create_first_use_resources();
         registries_.restart(renderer_.device());
         pipelines_.initialize(renderer_.device(), renderer_.pipeline_root(), renderer_.pipeline_backend());
         device_gate_.end_rebuild(rebuilding);
@@ -1916,14 +1913,12 @@ void RenderCore::record_screen_probes(std::uint32_t channel, const ScreenProbe* 
 void RenderCore::poll_screen_probes() {
     while (!probe_flights_.empty()) {
         ScreenProbeFlight& flight = probe_flights_.front();
-        const std::uint8_t* const rgba = renderer_.screen_probes_finished(flight.slot);
-        if (rgba == nullptr) {
+        const float* const values = renderer_.screen_probes_finished(flight.slot);
+        if (values == nullptr) {
             return;
         }
         for (std::uint32_t i = 0; i < flight.count; ++i) {
-            const std::uint8_t* const pixel = rgba + std::size_t{i} * 4u;
-            flight.probes[i].value = flight.probes[i].x < 0.0f ? 0.0f
-                : static_cast<float>((std::uint32_t{pixel[0]} << 16u) | (std::uint32_t{pixel[1]} << 8u) | pixel[2]) / 16777215.0f;
+            flight.probes[i].value = values[i];
         }
         {
             const std::lock_guard guard(probe_answers_lock_);

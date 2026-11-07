@@ -331,7 +331,6 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
         const std::string list = std::string(",") + names + ",";
         const auto off = [&list](const char* name) { return list.find(std::string(",") + name + ",") != std::string::npos; };
         if (off("bc")) available.textureCompressionBC = VK_FALSE;
-        if (off("geometry")) available.geometryShader = VK_FALSE;
         if (off("anisotropy")) available.samplerAnisotropy = VK_FALSE;
         if (off("gather")) available.shaderImageGatherExtended = VK_FALSE;
     }
@@ -344,7 +343,6 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
     enabled.independentBlend = available.independentBlend;
     enabled.shaderImageGatherExtended = available.shaderImageGatherExtended;
     enabled.pipelineStatisticsQuery = available.pipelineStatisticsQuery;
-    geometry_shader_ = available.geometryShader == VK_TRUE;
     sampler_anisotropy_ = available.samplerAnisotropy == VK_TRUE;
     bc_textures_ = available.textureCompressionBC == VK_TRUE;
     gather_extended_ = available.shaderImageGatherExtended == VK_TRUE;
@@ -609,9 +607,9 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
     std::fprintf(stderr, "[vulkan] driver: %s; workarounds: %s\n", describe(identity_).c_str(),
                  describe(quirks_).c_str());
     std::fprintf(stderr,
-                 "[vulkan] features: geometry=%d depth-clamp=%d depth-clip=%d bc=%d "
+                 "[vulkan] features: depth-clamp=%d depth-clip=%d bc=%d "
                  "anisotropy=%d display-timing=%d\n",
-                 geometry_shader_, depth_clamp_, depth_clip_enable_, bc_textures_,
+                 depth_clamp_, depth_clip_enable_, bc_textures_,
                  sampler_anisotropy_, display_timing_);
     // The memory BufferPlace chooses from: each heap's size (L: device-local), each type's heap and flags (L device
     // local, V host visible, C coherent, $ cached).
@@ -808,42 +806,6 @@ void Context::collect() {
     }
 }
 
-std::shared_ptr<Texture> Context::create_linear_image(std::uint32_t width, std::uint32_t height, VkFormat format,
-                                                     const char* name) {
-    VkFormatProperties properties{};
-    vkGetPhysicalDeviceFormatProperties(physical_, format, &properties);
-    constexpr VkFormatFeatureFlags kNeeded = VK_FORMAT_FEATURE_TRANSFER_SRC_BIT | VK_FORMAT_FEATURE_TRANSFER_DST_BIT;
-    if ((properties.linearTilingFeatures & kNeeded) != kNeeded) {
-        return {};
-    }
-    auto texture = std::make_shared<Texture>();
-    VkImageCreateInfo image_info{VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
-    image_info.imageType = VK_IMAGE_TYPE_2D;
-    image_info.format = format;
-    image_info.extent = {width, height, 1};
-    image_info.mipLevels = 1;
-    image_info.arrayLayers = 1;
-    image_info.samples = VK_SAMPLE_COUNT_1_BIT;
-    image_info.tiling = VK_IMAGE_TILING_LINEAR;
-    image_info.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-    image_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    image_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    VmaAllocationCreateInfo alloc_info{};
-    alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-    VmaAllocationInfo allocated{};
-    if (vmaCreateImage(allocator_, &image_info, &alloc_info, &texture->image, &texture->allocation, &allocated) !=
-        VK_SUCCESS) {
-        return {};
-    }
-    texture->format = format;
-    texture->usage = image_info.usage;
-    texture->width = width;
-    texture->height = height;
-    texture->allocation_bytes = allocated.size;
-    set_name(VK_OBJECT_TYPE_IMAGE, reinterpret_cast<std::uint64_t>(texture->image), name);
-    return texture;
-}
-
 std::shared_ptr<Texture> Context::create_texture(std::uint32_t width, std::uint32_t height, std::uint32_t levels,
                                                  VkFormat format, VkImageUsageFlags usage, bool render_target,
                                                  const char* name, VkSampleCountFlagBits samples) {
@@ -984,10 +946,10 @@ std::shared_ptr<Buffer> Context::create_buffer(std::uint64_t size, VkBufferUsage
     return buffer;
 }
 
-std::shared_ptr<Buffer> Context::create_readback_buffer(std::uint64_t size, const char* name) {
+std::shared_ptr<Buffer> Context::create_readback_buffer(std::uint64_t size, const char* name, VkBufferUsageFlags usage) {
     VkBufferCreateInfo buffer_info{VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
     buffer_info.size = size;
-    buffer_info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    buffer_info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | usage;
     buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     // Cached host memory: the CPU reads every byte, which uncached write-combined memory makes slow. Where cached
     // memory's invalidation costs more (Mali, Adreno), coherent memory, cached as well where the device has such a type.

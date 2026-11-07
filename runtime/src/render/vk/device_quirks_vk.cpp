@@ -141,9 +141,6 @@ DeviceQuirks quirks_for(const DeviceIdentity& id) {
     // BUG_SLOW_CACHED_READBACK_MEMORY: Mali and Adreno read cached memory back slower than
     // coherent memory.
     quirks.coherent_readback = qualcomm || arm;
-    // BUG_SLOW_OPTIMAL_IMAGE_TO_BUFFER_COPY (VKStagingTexture): Qualcomm's driver allocates a
-    // temporary image for each copy from an optimal-tiled image to a buffer; a reused linear image avoids it.
-    quirks.linear_readback = qualcomm;
     // BUG_BROKEN_CLEAR_LOADOP_RENDERPASS: PowerVR's render-pass load-op clears do not clear.
     quirks.clear_by_command = id.driver == DriverKind::ImaginationProprietary;
     // Applied on every device, so not quirks: SPIR-V 1.3 (ANGLE supportsSPIRV14 and Dawn UseSpirv14: Qualcomm before
@@ -196,7 +193,6 @@ std::string describe(const DeviceQuirks& quirks) {
     };
     add(quirks.clear_with_draw, "clear-with-draw");
     add(quirks.coherent_readback, "coherent-readback");
-    add(quirks.linear_readback, "linear-readback");
     add(quirks.clear_by_command, "clear-by-command");
     return text.empty() ? "none" : text;
 }

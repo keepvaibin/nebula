@@ -50,10 +50,22 @@ void write_ppm_async(std::string path, std::vector<std::uint8_t> rgb, unsigned w
     }).detach();
 }
 
+// A conversion input (utility_set_layout_, its sampler the linear clamp): `view`, shader-readable.
+void write_conversion_input(VkDescriptorSet set, VkImageView view) {
+    const VkDescriptorImageInfo image{VK_NULL_HANDLE, view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+    VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    write.dstSet = set;
+    write.dstBinding = 0;
+    write.descriptorCount = 1;
+    write.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    write.pImageInfo = &image;
+    vkUpdateDescriptorSets(vk::Context::get().device(), 1, &write, 0, nullptr);
+}
+
 }  // namespace
 
-// An scene target set at `scale`: targets in their attachment layouts, the framebuffer, and the conversion inputs (allocated
-// once per set; rewriting them needs a GPU that no longer reads the old views, which callers ensure).
+// A scene target set at `scale`: targets in their attachment layouts, the framebuffer, and the conversion input (allocated
+// once per set; rewriting it needs a GPU that no longer reads the old views, which callers ensure).
 bool RendererVk::create_scene_set(SceneSet& set, const FrameMap& map, unsigned samples, unsigned set_width,
                                 unsigned set_height, bool target) {
     vk::Context& context = vk::Context::get();
@@ -139,10 +151,8 @@ bool RendererVk::create_scene_set(SceneSet& set, const FrameMap& map, unsigned s
     set.depth_dirty = false;
     set.turned = false;
     set.depth_serial = ++scene_depth_serial_;
-    for (VkDescriptorSet* source : {&set.color_source, &set.depth_source}) {
-        if (*source == VK_NULL_HANDLE) {
-            *source = allocate_persistent_set(conversion_set_layout_);
-        }
+    if (set.color_source == VK_NULL_HANDLE) {
+        set.color_source = allocate_persistent_set(utility_set_layout_);
     }
     if (samples > 1u) {
         if (set.ms_depth_source == VK_NULL_HANDLE) {
@@ -157,24 +167,7 @@ bool RendererVk::create_scene_set(SceneSet& set, const FrameMap& map, unsigned s
         write.pImageInfo = &ms_info;
         vkUpdateDescriptorSets(device, 1, &write, 0, nullptr);
     }
-    const VkDescriptorImageInfo color_info{VK_NULL_HANDLE, set.color->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
-    const VkDescriptorImageInfo depth_info{VK_NULL_HANDLE, set.depth->view, kDepthSampleLayout};
-    // The conversion's filtering sampler: nearest for a depth format the device cannot filter linearly.
-    const VkDescriptorImageInfo color_sampler{linear_clamp_, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_UNDEFINED};
-    const VkDescriptorImageInfo depth_sampler{depth_linear_ ? linear_clamp_ : point_clamp_, VK_NULL_HANDLE,
-                                              VK_IMAGE_LAYOUT_UNDEFINED};
-    VkWriteDescriptorSet writes[4]{};
-    for (unsigned i = 0; i < 4u; ++i) {
-        const bool is_color = (i & 1u) == 0u;
-        writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writes[i].dstSet = is_color ? set.color_source : set.depth_source;
-        writes[i].dstBinding = i < 2u ? 0u : 1u;
-        writes[i].descriptorCount = 1;
-        writes[i].descriptorType = i < 2u ? VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE : VK_DESCRIPTOR_TYPE_SAMPLER;
-        writes[i].pImageInfo = i < 2u ? (is_color ? &color_info : &depth_info)
-                                      : (is_color ? &color_sampler : &depth_sampler);
-    }
-    vkUpdateDescriptorSets(device, 4, writes, 0, nullptr);
+    write_conversion_input(set.color_source, set.color->view);
     return true;
 }
 
@@ -201,7 +194,6 @@ void RendererVk::destroy_scene_set(SceneSet& set) {
 bool RendererVk::create_scene_targets(const FrameMap& map, unsigned samples) {
     SceneSet made;
     made.color_source = scene_.color_source;
-    made.depth_source = scene_.depth_source;
     made.ms_depth_source = scene_.ms_depth_source;
     if (!create_scene_set(made, map, samples)) {
         return false;
@@ -319,6 +311,7 @@ void RendererVk::apply_window_size() {
     upscale_output_ = wanted;
     const auto config = get_render_config();
     const auto [render_width, render_height] = internal_extent(wanted.width, wanted.height, config.internal_height,
+        vk::Context::get().properties().limits.maxImageDimension2D,
         host_window::upscaler_render_fraction(config, wanted.width, wanted.height));
     wanted = FrameMap(render_width, render_height);
     const unsigned samples = wanted_msaa_samples();
@@ -569,8 +562,7 @@ bool RendererVk::begin_target_pass(std::uint64_t key, std::uint32_t width, std::
     }
     TargetSlot& slot = target_slots_[key];
     if (slot.set.color_source == VK_NULL_HANDLE && !target_free_sources_.empty()) {
-        slot.set.color_source = target_free_sources_.back().first;
-        slot.set.depth_source = target_free_sources_.back().second;
+        slot.set.color_source = target_free_sources_.back();
         target_free_sources_.pop_back();
     }
     const FrameMap map(width, height);
@@ -582,7 +574,7 @@ bool RendererVk::begin_target_pass(std::uint64_t key, std::uint32_t width, std::
         // A new set enters its attachment layouts (create_scene_set); the pass's first clear (RenderCore) fills it.
         if (!create_scene_set(slot.set, map, 1u, kFrameUnits, kFrameUnits, true)) {
             if (slot.set.color_source != VK_NULL_HANDLE) {
-                target_free_sources_.push_back({slot.set.color_source, slot.set.depth_source});
+                target_free_sources_.push_back(slot.set.color_source);
             }
             target_slots_.erase(key);
             return false;
@@ -637,7 +629,7 @@ void RendererVk::end_target_pass(std::uint8_t channels, TextureStore& textures) 
             continue;
         }
         destroy_scene_set(idle.set);
-        target_free_sources_.push_back({idle.set.color_source, idle.set.depth_source});
+        target_free_sources_.push_back(idle.set.color_source);
         it = target_slots_.erase(it);
     }
     bind_scene();
@@ -1053,10 +1045,6 @@ bool RendererVk::record_temporal_upscale(const FrameMap& output) {
     return recorded;
 }
 
-namespace {
-void write_conversion_input(VkDescriptorSet set, VkImageView view, VkSampler sampler);
-}  // namespace
-
 // DLSS Frame Generation's HUD-less picture: the output scene right after the upscale, before the 2D layer draws into it.
 void RendererVk::take_fg_hudless_scene() {
     fg_hudless_scene_ = false;
@@ -1127,12 +1115,12 @@ void RendererVk::copy_fg_hudless_display(const DisplayTexture& dest) {
     vkCmdSetScissor(commands, 0, 1, &scissor);
     const bool display_filter = sampling.step_x == 1.0f && sampling.step_y == 1.0f && display_filter_pipeline_ != VK_NULL_HANDLE;
     vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, display_filter ? display_filter_pipeline_ : conversion_pipeline_);
-    const VkDescriptorSet source = allocate_frame_set(conversion_set_layout_);
-    write_conversion_input(source, fg_hudless_scene_color_->view, linear_clamp_);
-    vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, conversion_layout_, 0, 1, &source, 0, nullptr);
+    const VkDescriptorSet source = allocate_frame_set(utility_set_layout_);
+    write_conversion_input(source, fg_hudless_scene_color_->view);
+    vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, utility_layout_, 0, 1, &source, 0, nullptr);
     const SceneConversionShaderConstants constants =
-        make_scene_conversion_constants(false, kCopyLayoutDisplay, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y);
-    vkCmdPushConstants(commands, conversion_layout_, kPushStages, 0, sizeof(constants.values), constants.values.data());
+        make_scene_conversion_constants(kCopyLayoutDisplay, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y);
+    vkCmdPushConstants(commands, utility_layout_, kPushStages, 0, sizeof(constants), &constants);
     vkCmdDraw(commands, 3, 1, 0, 0);
     vkCmdEndRenderPass(commands);
     fg_hudless_display_->layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
@@ -1392,21 +1380,9 @@ bool RendererVk::ensure_wide_set(SceneSet& set) {
     set.wide_read = false;
     set.turned = false;
     if (set.color_source == VK_NULL_HANDLE) {
-        set.color_source = allocate_persistent_set(conversion_set_layout_);
+        set.color_source = allocate_persistent_set(utility_set_layout_);
     }
-    set.depth_source = scene_.depth_source;
-    const VkDescriptorImageInfo color_info{VK_NULL_HANDLE, set.color->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
-    const VkDescriptorImageInfo color_sampler{linear_clamp_, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_UNDEFINED};
-    VkWriteDescriptorSet writes[2]{};
-    for (unsigned i = 0; i < 2u; ++i) {
-        writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writes[i].dstSet = set.color_source;
-        writes[i].dstBinding = i;
-        writes[i].descriptorCount = 1;
-        writes[i].descriptorType = i == 0u ? VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE : VK_DESCRIPTOR_TYPE_SAMPLER;
-        writes[i].pImageInfo = i == 0u ? &color_info : &color_sampler;
-    }
-    vkUpdateDescriptorSets(device, 2, writes, 0, nullptr);
+    write_conversion_input(set.color_source, set.color->view);
     return true;
 }
 
@@ -1931,11 +1907,10 @@ void RendererVk::record_conversion_blit(vk::Texture& dest, unsigned dest_w, unsi
     vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS,
                       display_filter ? display_filter_pipeline_ : conversion_pipeline_);
     const VkDescriptorSet source = scene_color_source();
-    vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, conversion_layout_, 0, 1, &source, 0, nullptr);
+    vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, utility_layout_, 0, 1, &source, 0, nullptr);
     const SceneConversionShaderConstants constants =
-        make_scene_conversion_constants(false, copy_format, src_x, src_y, step_x, step_y);
-    vkCmdPushConstants(commands, conversion_layout_, kPushStages, 0, sizeof(constants.values),
-                       constants.values.data());
+        make_scene_conversion_constants(copy_format, src_x, src_y, step_x, step_y);
+    vkCmdPushConstants(commands, utility_layout_, kPushStages, 0, sizeof(constants), &constants);
     vkCmdDraw(commands, 3, 1, 0, 0);
     vkCmdEndRenderPass(commands);
     dest.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
@@ -2091,34 +2066,14 @@ VkFramebuffer RendererVk::scene_framebuffer(bool resolved) {
     return resolved && multisampled ? color.scene_resolve_framebuffer : color.scene_framebuffer;
 }
 
-namespace {
-
-// A conversion input (conversion_set_layout_): `view` through the linear clamp sampler, as create_scene_set writes.
-void write_conversion_input(VkDescriptorSet set, VkImageView view, VkSampler sampler) {
-    const VkDescriptorImageInfo image{VK_NULL_HANDLE, view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
-    const VkDescriptorImageInfo filter{sampler, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_UNDEFINED};
-    VkWriteDescriptorSet writes[2]{};
-    for (unsigned i = 0; i < 2u; ++i) {
-        writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writes[i].dstSet = set;
-        writes[i].dstBinding = i;
-        writes[i].descriptorCount = 1;
-        writes[i].descriptorType = i == 0u ? VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE : VK_DESCRIPTOR_TYPE_SAMPLER;
-        writes[i].pImageInfo = i == 0u ? &image : &filter;
-    }
-    vkUpdateDescriptorSets(vk::Context::get().device(), 2, writes, 0, nullptr);
-}
-
-}  // namespace
-
 VkDescriptorSet RendererVk::scene_color_source() {
     if (!scene_.turned) {
         return scene_.color_source;
     }
     if (turn_source_ == VK_NULL_HANDLE || turn_source_image_ != scene_.color.get() || turn_source_frame_ != frame_index_ ||
         frame_ != &frames_[frame_slot_]) {
-        turn_source_ = allocate_frame_set(conversion_set_layout_);
-        write_conversion_input(turn_source_, scene_.color->view, linear_clamp_);
+        turn_source_ = allocate_frame_set(utility_set_layout_);
+        write_conversion_input(turn_source_, scene_.color->view);
         turn_source_image_ = scene_.color.get();
         turn_source_frame_ = frame_index_;
     }
@@ -2166,107 +2121,88 @@ bool RendererVk::draw_frame_pass(const FramePassRequest& params, TextureStore& t
     return publish_frame_pass(params, current.texture, textures);
 }
 
-void RendererVk::create_first_use_resources() {
-    vk::Context& context = vk::Context::get();
-    probe_target_ = context.create_texture(kScreenProbeTile, 1u, 1u, VK_FORMAT_R8G8B8A8_UNORM,
-                                           VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-                                           true, "screen probes");
-    if (!probe_target_) throw std::runtime_error("screen probe target unavailable");
-}
-
+// One dispatch (ScreenProbeCs): each point's pixel (screen_probe_pixel) into the slot's pixels, the scene depth sampled
+// there into its values, which the CPU reads once the frame's fence has passed.
 bool RendererVk::record_screen_probes(std::size_t slot, std::span<const ScreenProbe> probes) {
     if (slot >= probe_slots_.size()) probe_slots_.resize(slot + 1u);
-    Readback& out = probe_slots_[slot];
-    if (out.fence != 0u) {
+    ProbeSlot& out = probe_slots_[slot];
+    if (out.fence != 0u || probes.empty()) {
         return false;
     }
-    const std::uint64_t bytes = ((probes.size() + kScreenProbeTile - 1u) / kScreenProbeTile) * kScreenProbeTile * 4ull;
-    if (!out.buffer || out.buffer->size < bytes) {
-        out.buffer = vk::Context::get().create_readback_buffer(bytes, "screen probe readback");
-        if (!out.buffer) throw std::runtime_error("screen probe readback unavailable");
+    vk::Context& context = vk::Context::get();
+    if (out.capacity < probes.size()) {
+        out.pixels = context.create_buffer(probes.size() * sizeof(ScreenProbePixel), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                                           "screen probe pixels");
+        out.values = context.create_readback_buffer(probes.size() * sizeof(float), "screen probe values",
+                                                    VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+        if (!out.pixels || !out.values) throw std::runtime_error("screen probe buffers unavailable");
+        out.capacity = probes.size();
     }
+    // The slot is idle (fence 0): the GPU has finished with its pixels.
+    for (std::size_t i = 0; i < probes.size(); ++i) {
+        const ScreenProbePixel pixel = screen_probe_pixel(probes[i], scene_map_);
+        std::memcpy(out.pixels->mapped + i * sizeof(ScreenProbePixel), &pixel, sizeof(pixel));
+    }
+
     end_scene_pass();
     const VkCommandBuffer commands = commands_;
-    vk::Texture& target = *probe_target_;
-    transition_scene_for_sampling(commands, true);
-    for (std::size_t first = 0; first < probes.size(); first += kScreenProbeTile) {
-        VkRenderPassBeginInfo begin{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
-        begin.renderPass = rgba8_pass_;
-        begin.framebuffer = framebuffer_for(target);
-        begin.renderArea = {{0, 0}, {kScreenProbeTile, 1u}};
-        vkCmdBeginRenderPass(commands, &begin, VK_SUBPASS_CONTENTS_INLINE);
-        vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, probe_pipeline_);
-        const VkDescriptorSet source = scene_.depth_source;
-        vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, conversion_layout_, 0, 1, &source, 0, nullptr);
-        for (std::size_t i = 0; i < std::min<std::size_t>(kScreenProbeTile, probes.size() - first); ++i) {
-            if (probes[first + i].x < 0.0f || probes[first + i].y < 0.0f) {
-                continue;
-            }
-            const VkViewport viewport{static_cast<float>(i), 1.0f, 1.0f, -1.0f, 0.0f, 1.0f};
-            const VkRect2D scissor{{static_cast<std::int32_t>(i), 0}, {1u, 1u}};
-            vkCmdSetViewport(commands, 0, 1, &viewport);
-            vkCmdSetScissor(commands, 0, 1, &scissor);
-            const SceneConversionShaderConstants constants = make_screen_probe_constants(probes[first + i].x, probes[first + i].y, scene_map_, true);
-            vkCmdPushConstants(commands, conversion_layout_, kPushStages, 0, sizeof(constants.values), constants.values.data());
-            vkCmdDraw(commands, 3, 1, 0, 0);
-        }
-        vkCmdEndRenderPass(commands);
-        image_barrier(commands, target.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                      VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
-                      VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_READ_BIT);
-        VkBufferImageCopy region{};
-        region.bufferOffset = first * 4ull;
-        region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-        region.imageExtent = {kScreenProbeTile, 1u, 1u};
-        VkImage copy_source = target.image;
-        if (vk::Context::get().quirks().linear_readback) {
-            // Through a linear image the size of the target.
-            if (!probe_target_linear_) {
-                probe_target_linear_ = vk::Context::get().create_linear_image(target.width, target.height, target.format, "screen probes linear");
-            }
-            if (probe_target_linear_) {
-                image_barrier(commands, probe_target_linear_->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-                              VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                              VK_ACCESS_TRANSFER_READ_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT);
-                VkImageCopy copy{};
-                copy.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-                copy.dstSubresource = copy.srcSubresource;
-                copy.extent = {kScreenProbeTile, 1u, 1u};
-                vkCmdCopyImage(commands, target.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, probe_target_linear_->image,
-                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
-                image_barrier(commands, probe_target_linear_->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                              VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                              VK_ACCESS_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_READ_BIT);
-                copy_source = probe_target_linear_->image;
-            }
-        }
-        vkCmdCopyImageToBuffer(commands, copy_source, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, out.buffer->buffer, 1, &region);
-        target.layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    resolve_scene_depth(commands);
+    const VkImageAspectFlags aspects = depth_aspects(depth_format_);
+    image_barrier(commands, scene_.depth->image, aspects, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                  kDepthSampleLayout,
+                  VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+                  VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                  VK_ACCESS_SHADER_READ_BIT);
+
+    const VkDescriptorSet set = allocate_frame_set(probe_set_layout_);
+    const VkDescriptorImageInfo depth{VK_NULL_HANDLE, scene_.depth->view, kDepthSampleLayout};
+    const VkDescriptorBufferInfo pixels{out.pixels->buffer, 0, probes.size() * sizeof(ScreenProbePixel)};
+    const VkDescriptorBufferInfo values{out.values->buffer, 0, probes.size() * sizeof(float)};
+    VkWriteDescriptorSet writes[3]{};
+    for (std::uint32_t i = 0; i < 3u; ++i) {
+        writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[i].dstSet = set;
+        writes[i].dstBinding = i;
+        writes[i].descriptorCount = 1;
+        writes[i].descriptorType = i == 0u ? VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
     }
-    transition_scene_to_attachment(commands, true);
+    writes[0].pImageInfo = &depth;
+    writes[1].pBufferInfo = &pixels;
+    writes[2].pBufferInfo = &values;
+    vkUpdateDescriptorSets(context.device(), 3, writes, 0, nullptr);
+
+    const std::uint32_t count = static_cast<std::uint32_t>(probes.size());
+    vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_COMPUTE, probe_pipeline_);
+    vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_COMPUTE, probe_layout_, 0, 1, &set, 0, nullptr);
+    vkCmdPushConstants(commands, probe_layout_, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(count), &count);
+    vkCmdDispatch(commands, (count + kScreenProbeGroup - 1u) / kScreenProbeGroup, 1, 1);
+
+    image_barrier(commands, scene_.depth->image, aspects, kDepthSampleLayout,
+                  VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0,
+                  VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+                  VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
     VkBufferMemoryBarrier host{VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER};
-    host.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    host.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
     host.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
     host.srcQueueFamilyIndex = host.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    host.buffer = out.buffer->buffer;
+    host.buffer = out.values->buffer;
     host.size = VK_WHOLE_SIZE;
-    vkCmdPipelineBarrier(commands, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0, 0, nullptr, 1, &host,
-                         0, nullptr);
-    target.layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    vkCmdPipelineBarrier(commands, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0, 0, nullptr, 1,
+                         &host, 0, nullptr);
     reset_draw_bindings();
     bind_scene();
     out.fence = kProbesInFrame;  // fenced at end_frame
     return true;
 }
 
-const std::uint8_t* RendererVk::screen_probes_finished(std::size_t slot) {
-    Readback& out = probe_slots_[slot];
+const float* RendererVk::screen_probes_finished(std::size_t slot) {
+    ProbeSlot& out = probe_slots_[slot];
     if (out.fence == 0u || out.fence == kProbesInFrame || completed_fence_value() < out.fence) {
         return nullptr;
     }
-    vk::Context::get().invalidate(*out.buffer);
+    vk::Context::get().invalidate(*out.values);
     out.fence = 0u;
-    return reinterpret_cast<const std::uint8_t*>(out.buffer->mapped);
+    return reinterpret_cast<const float*>(out.values->mapped);
 }
 
 void RendererVk::set_debug_capture_paths(std::string scene_ppm_path, std::string backbuffer_ppm_path) {

@@ -255,11 +255,6 @@ bool RendererVk::create_layouts() {
             (VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT)
         ? VK_FORMAT_D24_UNORM_S8_UINT
         : VK_FORMAT_D32_SFLOAT_S8_UINT;
-    {
-        VkFormatProperties depth_properties{};
-        vkGetPhysicalDeviceFormatProperties(context.physical_device(), depth_format_, &depth_properties);
-        depth_linear_ = (depth_properties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT) != 0u;
-    }
 
     const VkShaderStageFlags stage_passes = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
     {
@@ -303,7 +298,6 @@ bool RendererVk::create_layouts() {
         vk::check(vkCreatePipelineLayout(device, &info, nullptr, &draw_layout_.layout), "draw pipeline layout");
     }
     linear_clamp_ = create_sampler(device, VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_NEAREST);
-    point_clamp_ = create_sampler(device, VK_FILTER_NEAREST, VK_SAMPLER_MIPMAP_MODE_NEAREST);
     {
         const VkDescriptorSetLayoutBinding bindings[] = {
             {0, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
@@ -316,16 +310,21 @@ bool RendererVk::create_layouts() {
     }
     {
         const VkDescriptorSetLayoutBinding bindings[] = {
-            {0, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
-            // Written per set: linear, or nearest for a depth format the device cannot filter linearly.
-            {1, VK_DESCRIPTOR_TYPE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
-            {2, VK_DESCRIPTOR_TYPE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, &point_clamp_},
+            {0, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
+            {1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
+            {2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
         };
         VkDescriptorSetLayoutCreateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
         info.bindingCount = 3;
         info.pBindings = bindings;
-        vk::check(vkCreateDescriptorSetLayout(device, &info, nullptr, &conversion_set_layout_),
-                  "conversion set layout");
+        vk::check(vkCreateDescriptorSetLayout(device, &info, nullptr, &probe_set_layout_), "probe set layout");
+        const VkPushConstantRange count{VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(std::uint32_t)};
+        VkPipelineLayoutCreateInfo layout{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+        layout.setLayoutCount = 1;
+        layout.pSetLayouts = &probe_set_layout_;
+        layout.pushConstantRangeCount = 1;
+        layout.pPushConstantRanges = &count;
+        vk::check(vkCreatePipelineLayout(device, &layout, nullptr, &probe_layout_), "probe pipeline layout");
     }
     const VkPushConstantRange push{kPushStages, 0, kPushConstantBytes};
     {
@@ -335,8 +334,6 @@ bool RendererVk::create_layouts() {
         info.pushConstantRangeCount = 1;
         info.pPushConstantRanges = &push;
         vk::check(vkCreatePipelineLayout(device, &info, nullptr, &utility_layout_), "utility pipeline layout");
-        info.pSetLayouts = &conversion_set_layout_;
-        vk::check(vkCreatePipelineLayout(device, &info, nullptr, &conversion_layout_), "conversion pipeline layout");
     }
 
     // MSAA: the counts the device renders the scene's format and the depth format with and samples the depth with.
@@ -933,12 +930,23 @@ VkPipeline RendererVk::create_utility_pipeline(VkRenderPass pass, VkPipelineLayo
 bool RendererVk::create_utility_pipelines() {
     constexpr VkColorComponentFlags kAll = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
         VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-    conversion_pipeline_ = create_utility_pipeline(color_pass_, conversion_layout_, vk::UtilitySpirv::BlitVs,
+    conversion_pipeline_ = create_utility_pipeline(color_pass_, utility_layout_, vk::UtilitySpirv::BlitVs,
                                                    vk::UtilitySpirv::SceneConversionPs, kAll, false, false, false);
-    probe_pipeline_ = create_utility_pipeline(rgba8_pass_, conversion_layout_, vk::UtilitySpirv::BlitVs,
-                                              vk::UtilitySpirv::SceneConversionPs, kAll, false, false, false);
-    display_filter_pipeline_ = create_utility_pipeline(color_pass_, conversion_layout_, vk::UtilitySpirv::BlitVs,
+    display_filter_pipeline_ = create_utility_pipeline(color_pass_, utility_layout_, vk::UtilitySpirv::BlitVs,
                                                        vk::UtilitySpirv::DisplayFilterPs, kAll, false, false, false);
+    {
+        const VkDevice device = vk::Context::get().device();
+        const VkShaderModule module = utility_module(vk::UtilitySpirv::ScreenProbeCs);
+        VkComputePipelineCreateInfo info{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
+        info.stage = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
+        info.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+        info.stage.module = module;
+        info.stage.pName = "main";
+        info.layout = probe_layout_;
+        const VkResult result = vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &info, nullptr, &probe_pipeline_);
+        vkDestroyShaderModule(device, module, nullptr);
+        vk::check(result, "screen probe pipeline");
+    }
     for (unsigned kind = 0u; kind < static_cast<unsigned>(SceneUtility::Count); ++kind) {
         (void)scene_utility_pipeline(static_cast<SceneUtility>(kind));
     }
@@ -1066,9 +1074,7 @@ void RendererVk::shutdown() {
         utility_pool_ = VK_NULL_HANDLE;
         output_scene_active_ = false;
         corner_texture_.reset();
-        probe_target_.reset();
-        probe_target_linear_.reset();
-        for (Readback& readback : probe_slots_) readback = Readback{};
+        probe_slots_.clear();
         scene_capture_ = Readback{};
         backbuffer_capture_ = Readback{};
         vertex_ring_.reset();
@@ -1125,20 +1131,18 @@ void RendererVk::shutdown() {
         }
         present_pass_ = color_pass_ = rgba8_pass_ = draw_layout_.target_pass = draw_layout_.target_pass_clear =
             draw_layout_.scene_pass = draw_layout_.scene_pass_clear = VK_NULL_HANDLE;
-        for (VkPipelineLayout layout : {draw_layout_.layout, utility_layout_, conversion_layout_}) {
+        for (VkPipelineLayout layout : {draw_layout_.layout, utility_layout_, probe_layout_}) {
             if (layout != VK_NULL_HANDLE) vkDestroyPipelineLayout(device, layout, nullptr);
         }
-        draw_layout_.layout = utility_layout_ = conversion_layout_ = VK_NULL_HANDLE;
+        draw_layout_.layout = utility_layout_ = probe_layout_ = VK_NULL_HANDLE;
         for (VkDescriptorSetLayout layout : {draw_layout_.sets[0], draw_layout_.sets[1], draw_layout_.sets[2],
-                                             utility_set_layout_, conversion_set_layout_}) {
+                                             utility_set_layout_, probe_set_layout_}) {
             if (layout != VK_NULL_HANDLE) vkDestroyDescriptorSetLayout(device, layout, nullptr);
         }
         draw_layout_.sets.fill(VK_NULL_HANDLE);
-        utility_set_layout_ = conversion_set_layout_ = VK_NULL_HANDLE;
-        for (VkSampler sampler : {linear_clamp_, point_clamp_}) {
-            if (sampler != VK_NULL_HANDLE) vkDestroySampler(device, sampler, nullptr);
-        }
-        linear_clamp_ = point_clamp_ = VK_NULL_HANDLE;
+        utility_set_layout_ = probe_set_layout_ = VK_NULL_HANDLE;
+        if (linear_clamp_ != VK_NULL_HANDLE) vkDestroySampler(device, linear_clamp_, nullptr);
+        linear_clamp_ = VK_NULL_HANDLE;
         context.collect();
     }
     if (surface_ != VK_NULL_HANDLE && context.instance() != VK_NULL_HANDLE) {
@@ -1376,9 +1380,9 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
     frame_generated_[frame_slot_] = generated;
     frame_scene_drawn_[frame_slot_] = scene_drawn_;
     timestamp_pending_[frame_slot_] = timestamps_ != VK_NULL_HANDLE;
-    for (Readback& readback : probe_slots_) {
-        if (readback.fence == kProbesInFrame) {
-            readback.fence = fence;
+    for (ProbeSlot& probes : probe_slots_) {
+        if (probes.fence == kProbesInFrame) {
+            probes.fence = fence;
         }
     }
     if (scene_capture_.buffer && scene_capture_.fence == 0u && !scene_capture_pending_path_.empty()) {

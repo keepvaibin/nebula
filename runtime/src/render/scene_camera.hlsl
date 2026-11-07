@@ -2,11 +2,12 @@
 // The scene camera (scene_camera.h): the wide scene target back to the display at the 3D scene's end.
 //
 // MeterCS: reads a grid of the picture, finds how much light the world holds past white (the sky, nothing in the depth, is
-// no light on it), and moves the exposure toward what that asks for by the time that passed (scene_camera_shape.h).
+// no light on it), and moves the exposure toward what that asks for by the time that passed (kCloseSeconds, kOpenSeconds).
 // CameraVS/CameraPS: every pixel (every sample of a
 // multisampled scene, so an edge against a highlight blends as its parts look) under the exposure and the shoulder. The
 // game's colours are display values; the shoulder works in linear light, as the enhanced lighting that goes past white.
-// Numbers: scene_camera_shape.h.
+// The wide scene target's colour is the game's own display values, with what the enhanced lighting adds past white
+// left in. A value at or below the knee passes unchanged, so what the game authored stays.
 
 cbuffer CameraConstants : register(b0) {
     float2 g_size;     // the picture's pixels
@@ -14,12 +15,18 @@ cbuffer CameraConstants : register(b0) {
     float g_pad;
 };
 
+// Linear light: where the shoulder starts (its values pass unchanged below). Authored white comes out at 0.963 linear.
 static const float kKnee = 0.9f;
 static const float kKneeDisplay = 0.9532f;  // the knee as a display value (kKnee ^ (1 / 2.2))
+// The eye closes while the scene holds light past white, which only the enhanced lighting makes: its exposure falls
+// toward this at most, and a picture of the game's own colours, however bright, leaves it open.
 static const float kLeastExposure = 0.85f;
+// Light past white, averaged over the picture, that takes the exposure to 1 / (1 + 1).
 static const float kOverRange = 1.0f;
+// The eye's time constants, seconds: it closes quickly and opens slowly; any frame rate reaches the target alike.
 static const float kCloseSeconds = 0.35f;
 static const float kOpenSeconds = 1.5f;
+// The meter's grid over the picture.
 static const uint kMeterColumns = 16u;
 static const uint kMeterRows = 9u;
 

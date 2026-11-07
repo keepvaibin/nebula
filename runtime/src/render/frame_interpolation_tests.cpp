@@ -231,7 +231,7 @@ int main() {
 
     for (const auto height : galaxy::render::kInternalHeights) {
         for (const auto size : {std::pair{2504u, 2256u}, std::pair{2520u, 1080u}, std::pair{1280u, 720u}, std::pair{5120u, 1440u}}) {
-            const auto got = galaxy::render::internal_extent(size.first, size.second, height);
+            const auto got = galaxy::render::internal_extent(size.first, size.second, height, 16384u);
             check(got.second == (height ? height : size.second), "internal height follows explicit preset or output");
             check(std::abs(double(got.first) / got.second - double(size.first) / size.second) <= 0.5 / got.second + 1e-6, "internal width follows aspect while folding or resizing");
         }
