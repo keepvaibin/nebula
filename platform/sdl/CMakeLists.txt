@@ -137,6 +137,8 @@ add_library(galaxy_render_vk STATIC
     ${rt}/input_bindings.cpp
     ${rt}/host_pointer_events.cpp
     ${rt}/input/wiimote_motion.cpp
+    ${rt}/input/controls_engine.cpp
+    ${rt}/input/live_controls_engine.cpp
     ${rt}/native_input.cpp
     ${rt}/pointer_control.cpp
     ${rt}/rumble.cpp

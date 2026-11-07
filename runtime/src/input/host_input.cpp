@@ -133,6 +133,14 @@ std::atomic<bool> g_input_missing_shown{false};
 
 void arrange_touch_controls() noexcept {}
 
+bool touch_arranging() noexcept {
+    return false;
+}
+
+void finish_arranging_touch_controls(bool) noexcept {}
+
+void reset_arranged_touch_controls() noexcept {}
+
 void input_mode_changed() noexcept {}
 
 bool touch_controls_present() noexcept {

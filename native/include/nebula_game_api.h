@@ -594,6 +594,9 @@ enum {
     NEBULA_SETTINGS_STATUS_LICENSE,          /* the maker's license: `long_text` one page, `status_number` its number from 1
                                                 (-1 loading, -2 not reachable); next: APPLY, before: REVERT, back: CLOSE */
     NEBULA_SETTINGS_STATUS_PREPARING,        /* the settings in use want pipelines still being made (`status_number` percent) */
+    NEBULA_SETTINGS_STATUS_ARRANGE,          /* the phone's on-screen controls are dragged where they go (the page under it
+                                                hidden): save: APPLY, every control where the game places it: REVERT,
+                                                cancel: CLOSE */
 };
 /* The Pair Joy-Con screen's halves (NEBULA_SETTINGS_STATUS_JOYCON). */
 enum {

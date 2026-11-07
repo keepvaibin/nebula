@@ -3,6 +3,7 @@
 #include "galaxy/input/controls_engine.h"
 #include "galaxy/controller_roster.h"
 #include "galaxy/host_pointer_events.h"
+#include "galaxy/input_bindings.h"
 #include "galaxy/pointer_control.h"
 #include <optional>
 #include <span>
@@ -69,6 +70,12 @@ struct LiveControlsFrame {
     bool script_pointer_force = false;
     galaxy::input::PlayContext context = galaxy::input::PlayContext::Play;
     galaxy::input::tilt::Section tilt_section = galaxy::input::tilt::Section::None;
+    // The host's own controls with no binding table (a phone's on-screen buttons and stick), merged with the bindings'.
+    galaxy::input::LogicalInput extra{};
+    // The device's own motion sensors (a phone) when no controller is in hand: its up steers the tilt sections and its
+    // shake spins.
+    const galaxy::input::tilt::Vec3* device_up = nullptr;
+    bool device_shake = false;
 };
 struct RumbleSelection {
     std::optional<galaxy::input::DeviceKey> device;
@@ -78,6 +85,7 @@ struct RumbleSelection {
 struct LiveControlsResult {
     galaxy::input::PlayerInput input{};
     RumbleSelection rumble{};
+    galaxy::input::PointerSource pointer_owner = galaxy::input::PointerSource::None;
 };
 class LiveControlsEngine {
 public:

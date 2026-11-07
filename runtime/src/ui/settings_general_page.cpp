@@ -111,8 +111,10 @@ std::vector<SettingsRow> general_page(const RuntimeSettings& runtime, RuntimeSet
                             host.set_touch_controls(state.touch_size, state.touch_opacity, !state.touch_vibration);
                         },
                         "A SHORT BUZZ WHEN A BUTTON IS PRESSED"});
-        rows.push_back(button_row("BUTTON PLACES", {"RESET"}, [&host](RenderConfig&, unsigned) { host.act(GeneralPageAction::ResetTouchPlaces); },
-                                  "PUTS THE BUTTONS BACK WHERE THE GAME PLACES THEM ON THIS SCREEN"));
+        rows.push_back(button_row("BUTTON PLACES", {state.touch_reset_places ? "KEEP" : "RESET"},
+                                  [&host](RenderConfig&, unsigned) { host.act(GeneralPageAction::ResetTouchPlaces); },
+                                  state.touch_reset_places ? "THE BUTTONS GO BACK TO THEIR FIRST PLACES WHEN APPLIED"
+                                                           : "PUTS THE BUTTONS BACK WHERE THE GAME PLACES THEM ON THIS SCREEN"));
     }
     {
         rows.push_back({"MIIS", {}, nullptr, {}, true});

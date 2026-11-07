@@ -265,6 +265,43 @@ RenderConfig s_settings_draft{};
 RuntimeSettings s_runtime_draft{};
 RuntimeSettings s_runtime_base{};  // the game's settings when s_runtime_draft was taken
 
+// GENERAL's on-screen control rows as the player set them, until Apply hands them to the controls; Back and closing the
+// menu drop them. Unedited, the controls' own.
+struct TouchDraft {
+    bool edited = false;
+    galaxy::host::TouchControlsSettings settings{};
+    bool reset_places = false;  // BUTTON PLACES' Reset, done at Apply
+};
+TouchDraft s_touch_draft{};
+
+galaxy::host::TouchControlsSettings touch_draft_settings() {
+    return s_touch_draft.edited ? s_touch_draft.settings : galaxy::host::touch_controls_settings();
+}
+
+unsigned touch_draft_changes() {
+    if (!galaxy::host::touch_controls_present()) return 0u;
+    const galaxy::host::TouchControlsSettings live = galaxy::host::touch_controls_settings();
+    const galaxy::host::TouchControlsSettings draft = touch_draft_settings();
+    return (draft.size != live.size ? 1u : 0u) + (draft.opacity != live.opacity ? 1u : 0u) +
+           (draft.vibration != live.vibration ? 1u : 0u) + (s_touch_draft.reset_places ? 1u : 0u);
+}
+
+void apply_touch_draft() {
+    if (touch_draft_changes() == 0u) {
+        s_touch_draft = {};
+        return;
+    }
+    const galaxy::host::TouchControlsSettings live = galaxy::host::touch_controls_settings();
+    const galaxy::host::TouchControlsSettings draft = touch_draft_settings();
+    if (draft.size != live.size || draft.opacity != live.opacity || draft.vibration != live.vibration) {
+        galaxy::host::set_touch_controls_settings(draft);
+    }
+    if (s_touch_draft.reset_places) {
+        galaxy::host::reset_touch_controls_places();
+    }
+    s_touch_draft = {};
+}
+
 void reset_runtime_draft() {
     s_runtime_draft = get_runtime_settings();
     s_runtime_base = s_runtime_draft;
@@ -280,6 +317,8 @@ constexpr std::uint64_t kDisplayConfirmMs = 15000u;
 // show. A binding row waiting for an input is s_capture_target (kGameInputCount: none). Guarded by
 // s_native_settings_mutex.
 constexpr unsigned kControlsTab = 2u;
+constexpr unsigned kAudioTab = 3u;
+constexpr unsigned kAudioResetRow = 8u;  // after the seven volumes and the sound output
 constexpr unsigned kModsTab = 5u;
 galaxy::input::ControlsConfig s_controls_draft = galaxy::input::default_controls_config();
 RuntimeInputMode s_input_mode_draft = RuntimeInputMode::Auto;
@@ -715,6 +754,7 @@ unsigned controls_changes() {
         changes += !(s_controls_draft.tuning[i] == live.tuning[i]);
     }
     changes += s_input_mode_draft != get_runtime_settings().input_mode;
+    changes += touch_draft_changes();
     return changes;
 }
 
@@ -819,6 +859,7 @@ void reset_controls_draft() {
     end_controls_capture();
     s_controls_draft = galaxy::input::get_controls_config();
     s_input_mode_draft = get_runtime_settings().input_mode;
+    s_touch_draft = {};
 }
 
 unsigned native_settings_row_count(unsigned tab) {
@@ -827,7 +868,7 @@ unsigned native_settings_row_count(unsigned tab) {
         return static_cast<unsigned>(
             settings_page(tab, s_settings_draft, s_runtime_draft, get_render_feature_caps()).size());
     }
-    return tab == 2u ? controls_row_count() : 8u;
+    return tab == 2u ? controls_row_count() : kAudioResetRow + 1u;
 }
 
 // A heading row (never selected).
@@ -891,6 +932,7 @@ void apply_controls_draft() {
         set_runtime_settings(runtime);
         galaxy::host::input_mode_changed();
     }
+    apply_touch_draft();
 }
 
 void apply_native_settings_draft() {
@@ -1259,9 +1301,12 @@ void set_native_settings_visible(bool visible) {
         settle_native_settings_row();
     }
     if (!visible) {
-        // Closing discards an unapplied draft, an unconfirmed display and an
-        // unanswered DLSS question.
+        // Closing discards an unapplied draft, an unconfirmed display, an
+        // unanswered DLSS question and controls being arranged.
         close_joycon_pairing();
+        if (galaxy::host::touch_arranging()) {
+            galaxy::host::finish_arranging_touch_controls(false);
+        }
         dlss_dismiss_prompt();
         revert_display_settings();
         s_settings_draft = get_render_config();
@@ -1350,6 +1395,9 @@ std::size_t selected_settings_buttons() {
         const ControlsRow kind = controls_row(row).kind;
         return kind == ControlsRow::Reset || kind == ControlsRow::PairJoyCon || kind == ControlsRow::ArrangeTouch ? 1u : 0u;
     }
+    if (tab == kAudioTab) {
+        return row == kAudioResetRow ? 1u : 0u;
+    }
     if (!settings_page_tab(tab)) {
         return 0u;
     }
@@ -1381,6 +1429,14 @@ void press_settings_button(unsigned button) {
     select_settings_button(button);
     if (tab == kControlsTab) {
         adjust_native_setting(1);
+        return;
+    }
+    if (tab == kAudioTab) {
+        if (row == kAudioResetRow) {
+            // Every volume and the output as a new install has them; saved with Apply.
+            s_runtime_draft.audio = RuntimeAudioSettings{};
+            std::cerr << "[settings] AUDIO: RESET\n";
+        }
         return;
     }
     if (!settings_page_tab(tab) || settings_display_confirming()) {
@@ -1502,6 +1558,24 @@ bool handle_native_settings_key(std::uintptr_t key, bool was_down, bool from_pad
     }
     if (key == galaxy::host::kBindingCaptureKey && !s_native_settings_visible.load(std::memory_order_relaxed)) {
         (void)galaxy::host::take_controller_binding_capture();
+        return true;
+    }
+    if (galaxy::host::touch_arranging() && s_native_settings_visible.load(std::memory_order_relaxed)) {
+        // The on-screen controls' editor: Enter, Space or Y saves the places, Backspace or X puts every control where
+        // the game places it (kept with Save), Escape, B or F1 cancels. The rest waits; the controls are dragged on the
+        // screen itself.
+        if (!was_down) {
+            if (key == VK_RETURN || key == VK_SPACE) {
+                galaxy::host::finish_arranging_touch_controls(true);
+                std::cerr << "[settings] ON-SCREEN CONTROLS: SAVE\n";
+            } else if (key == VK_BACK) {
+                galaxy::host::reset_arranged_touch_controls();
+                std::cerr << "[settings] ON-SCREEN CONTROLS: RESET\n";
+            } else if (key == VK_ESCAPE || key == VK_F1) {
+                galaxy::host::finish_arranging_touch_controls(false);
+                std::cerr << "[settings] ON-SCREEN CONTROLS: CANCEL\n";
+            }
+        }
         return true;
     }
     if (s_joycon_pairing && s_native_settings_visible.load(std::memory_order_relaxed)) {
@@ -2646,20 +2720,22 @@ public:
         }
         state.touch_controls = galaxy::host::touch_controls_present();
         if (state.touch_controls) {
-            const galaxy::host::TouchControlsSettings touch = galaxy::host::touch_controls_settings();
+            const galaxy::host::TouchControlsSettings touch = touch_draft_settings();
             state.touch_size = touch.size;
             state.touch_opacity = touch.opacity;
             state.touch_vibration = touch.vibration;
+            state.touch_reset_places = s_touch_draft.reset_places;
         }
         return state;
     }
     void act(ui::GeneralPageAction action) const override {
         if (action == ui::GeneralPageAction::ImportMiis) start_mii_import_dialog();
         else if (action == ui::GeneralPageAction::OpenMiiFolder) open_mii_folder();
-        else galaxy::host::reset_touch_controls_places();
+        else s_touch_draft.reset_places = !s_touch_draft.reset_places;  // pressed again: kept as they are
     }
     void set_touch_controls(unsigned size, unsigned opacity, bool vibration) const override {
-        galaxy::host::set_touch_controls_settings({size, opacity, vibration});
+        s_touch_draft.edited = true;
+        s_touch_draft.settings = {size, opacity, vibration};
     }
 };
 
@@ -2825,6 +2901,7 @@ std::string native_settings_row_text(
             case SoundOutput::Surround: return "SOUND OUTPUT: SURROUND";
             default: return "SOUND OUTPUT: STEREO";
             }
+        case kAudioResetRow: return "AUDIO DEFAULTS: RESET";
         default: return {};
         }
     default:
@@ -3537,6 +3614,9 @@ void draw_native_settings_overlay(UiCanvas& renderer) {
                           : "CONNECT A LEFT AND A RIGHT JOY-CON");
         status = pad_hints(line);
         break;
+    case NativeSettingsStatus::Arrange:
+        status = pad_hints("DRAG THE BUTTONS WHERE YOU WANT THEM  ENTER/Y SAVE  BACKSPACE/X RESET  ESC/B CANCEL");
+        break;
     default:
         break;
     }
@@ -3667,6 +3747,10 @@ NativeSettingsView build_native_settings_view() {
                 shown.value = "ARRANGE";
             }
         }
+        if (tab == kAudioTab && row == kAudioResetRow) {
+            shown.buttons = true;
+            if (row == view.selected) view.help = "EVERY VOLUME AND THE SOUND OUTPUT BACK TO THEIR DEFAULTS WHEN APPLIED";
+        }
         view.rows.push_back(std::move(shown));
     }
     view.selected_button = view.selected < view.rows.size() && view.rows[view.selected].buttons ? selected_settings_button() : 0u;
@@ -3677,7 +3761,9 @@ NativeSettingsView build_native_settings_view() {
     }
 
     const std::uint64_t now_ms = galaxy::steady_ms();
-    if (s_joycon_pairing) {
+    if (galaxy::host::touch_arranging()) {
+        view.status = NativeSettingsStatus::Arrange;
+    } else if (s_joycon_pairing) {
         // The halves; a pair made since the screen opened shows a moment, then the screen closes.
         const galaxy::host::JoyConStatus joycons = galaxy::host::joycon_status();
         if (joycons.paired != s_joycon_paired_at_open && s_joycon_paired_ms == 0u) {
@@ -4012,7 +4098,8 @@ void native_settings_input(NativeSettingsInput input, int arg) {
         break;
     }
     // The page and its rows wait while a question is up (keep the display? leave without applying?).
-    if (!visible || s_settings_leave_asking || s_joycon_pairing || settings_display_confirming() || restart_asking() || vendor_prompting()) {
+    if (!visible || s_settings_leave_asking || s_joycon_pairing || galaxy::host::touch_arranging() || settings_display_confirming() ||
+        restart_asking() || vendor_prompting()) {
         return;
     }
     switch (input) {

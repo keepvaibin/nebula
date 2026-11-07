@@ -18,6 +18,7 @@ struct GeneralPageState {
     unsigned touch_size = 0;
     unsigned touch_opacity = 60;
     bool touch_vibration = true;
+    bool touch_reset_places = false;  // BUTTON PLACES' Reset pressed, done at Apply
 };
 
 enum class GeneralPageAction { ImportMiis, OpenMiiFolder, ResetTouchPlaces };

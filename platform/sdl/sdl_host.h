@@ -116,6 +116,8 @@ struct InputState {
 void set_menu_context(bool menu) noexcept;
 // The game shows its title: a tap anywhere starts it.
 void set_title_screen(bool title) noexcept;
+// Nebula's menu is open: a finger is its mouse (native_game_input), so a swipe is no wheel.
+void set_direct_touch(bool direct) noexcept;
 // Rumble on the gamepad with this SDL id (0: none) at `strength` (0..1). Any thread: SDL's thread applies it.
 void rumble(std::uint32_t pad_id, float strength) noexcept;
 

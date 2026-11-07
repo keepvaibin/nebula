@@ -49,6 +49,7 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
     // libmain.so (platform/sdl/host_window_sdl.cpp).
     static native void nativeTouchControls(int buttons, float stickX, float stickY);
     static native void nativeTouchSettings(int sizePercent, int opacityPercent, boolean vibration);
+    static native void nativeArrangingDone();
     static native int nativeTouchWanted(int which);
     static native void nativeInputDevices(boolean keyboard, boolean mouse);
     static native int nativeInputMode();
@@ -188,6 +189,7 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
 
             @Override
             public void arrangingDone() {
+                nativeArrangingDone();
                 applyControlsVisibility();
             }
 
@@ -348,11 +350,39 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
         runOnUiThread(this::applyInputMode);
     }
 
-    // Called by libmain.so: CONTROLS' Arrange (on SDL's thread).
+    // Called by libmain.so: CONTROLS' Arrange (on SDL's thread). The game's settings window shows the editor's words
+    // and its Save, Reset and Cancel until nativeArrangingDone.
     public void arrangeControls() {
         runOnUiThread(() -> {
             if (controls != null) {
                 controls.startArranging();
+            } else {
+                nativeArrangingDone();
+            }
+        });
+    }
+
+    // Called by libmain.so: the editor's answers in the game's window (on SDL's thread).
+    public void saveArrangedControls() {
+        runOnUiThread(() -> {
+            if (controls != null && controls.isArranging()) {
+                controls.finishArranging(true);
+            }
+        });
+    }
+
+    public void cancelArrangedControls() {
+        runOnUiThread(() -> {
+            if (controls != null && controls.isArranging()) {
+                controls.finishArranging(false);
+            }
+        });
+    }
+
+    public void resetArrangedControls() {
+        runOnUiThread(() -> {
+            if (controls != null && controls.isArranging()) {
+                controls.resetArranged();
             }
         });
     }
@@ -453,14 +483,10 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
 
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
-        if (controls != null && controls.isArranging()) {
-            // Only the icons and OK answer. Back is the phone's own way of saying OK; the volume keys stay the phone's.
-            final int key = event.getKeyCode();
-            if (key == KeyEvent.KEYCODE_VOLUME_UP || key == KeyEvent.KEYCODE_VOLUME_DOWN) {
-                return super.dispatchKeyEvent(event);
-            }
-            if (key == KeyEvent.KEYCODE_BACK && event.getAction() == KeyEvent.ACTION_UP) {
-                controls.finishArranging();
+        if (controls != null && controls.isArranging() && event.getKeyCode() == KeyEvent.KEYCODE_BACK) {
+            // Back is the phone's own Cancel; a keyboard's and a controller's keys reach the editor's window in the game.
+            if (event.getAction() == KeyEvent.ACTION_UP) {
+                controls.finishArranging(false);
             }
             return true;
         }
@@ -472,9 +498,6 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
 
     @Override
     public boolean dispatchGenericMotionEvent(MotionEvent event) {
-        if (controls != null && controls.isArranging()) {
-            return true;
-        }
         if (fromController(event.getSource()) && "auto".equals(controlsMode)) {
             hideControlsForController();
         }
