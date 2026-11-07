@@ -803,6 +803,13 @@ void test_pointer_ownership() {
     PointerActivity gyro{};
     gyro.gyro = true;
     expect(owner.update(gyro, t) == PointerSource::Gyro, "the gyro takes over after the handoff");
+    t += 10'000;
+    PointerActivity held{};
+    held.gyro = true;
+    held.mouse = true;
+    expect(owner.update(held, t) == PointerSource::Mouse, "a moving mouse takes the pointer from a hand-held gyro at once");
+    t += 10'000;
+    expect(owner.update(gyro, t) == PointerSource::Mouse, "the gyro waits for the mouse's handoff");
     expect(std::string(pointer_source_name(PointerSource::Gyro)) == "gyro", "source names");
 }
 

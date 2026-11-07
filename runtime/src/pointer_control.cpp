@@ -22,6 +22,13 @@ PointerSource PointerOwner::update(const PointerActivity& activity, std::uint64_
         last_active_us = now_us;
         return owner;
     }
+    // A moving mouse takes the pointer from the gyro at once: the hand holding a controller turns it a little all the
+    // time, and a mouse moves only on purpose. (A mapper's mouse follows a stick, whose own rule stands.)
+    if (activity.mouse && owner == PointerSource::Gyro) {
+        owner = PointerSource::Mouse;
+        last_active_us = now_us;
+        return owner;
+    }
     if (owner != PointerSource::None && active(owner)) {
         last_active_us = now_us;
         return owner;
