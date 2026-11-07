@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The renderer on Vulkan (docs/VULKAN.md), with the interface RenderCore uses on RendererD3D12.
 //
-// The scene target is a colour target (RGBA8) and a depth target (D24 where the device has it, else D32 float) drawn through
+// The scene target is a colour target (A2B10G10R10) and a depth target (D32 float with stencil; D24S8 where the device lacks it or
+// its D32F clears are broken, DeviceQuirks::depth_d24) drawn through
 // one render pass; a scene target copy, screen probe or present ends that pass, and the next scene target operation begins it again. Between
 // command buffers the scene target is always in its attachment layouts. kFramesInFlight frames are recorded ahead of the GPU,
 // each in two command buffers submitted together: the frame's texture uploads, then its draws (TextureStore never

@@ -60,6 +60,7 @@ constexpr DXGI_FORMAT kWindowFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 // SMAA's blending weights: one in each channel, the alpha's as fine as the rest.
 constexpr DXGI_FORMAT kWeightsFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 constexpr DXGI_FORMAT kEdgesFormat = DXGI_FORMAT_R8G8_UNORM;
+// SMAA's edge marks: its stencil alone is used, never its depth, so the smallest format with a stencil.
 constexpr DXGI_FORMAT kStencilFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
 constexpr unsigned kRtvSlots = 7u;
 
