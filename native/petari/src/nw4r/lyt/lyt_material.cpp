@@ -193,112 +193,93 @@ namespace nw4r {
         }
 
 
-        // inlining is off the charts here. No idea why the compiler will not inline so much of these calls
-        Material::Material(const res::Material* pRes, const ResBlockSet& resBlockSet) {
+        namespace {
+            TexSRT RecordSRT(const f32 (&srt)[5]) {
+                TexSRT out;
+                out.translate = math::VEC2(srt[0], srt[1]);
+                out.rotate = srt[2];
+                out.scale = math::VEC2(srt[3], srt[4]);
+                return out;
+            }
+        }  // namespace
+
+        // A cooked material (UiMaterialData): counts within the storage caps, the forms written by the cook.
+        Material::Material(const UiMaterialData* pRes, const ResBlockSet& resBlockSet) {
             Init();
 
-            SetName(pRes->name);
+            SetName(resBlockSet.String(pRes->mName));
 
             for (int i = 0; i < 3; ++i) {
-                mRegisterColors[i] = pRes->tevCols[i];
+                mRegisterColors[i].r = pRes->mRegisters[i][0];
+                mRegisterColors[i].g = pRes->mRegisters[i][1];
+                mRegisterColors[i].b = pRes->mRegisters[i][2];
+                mRegisterColors[i].a = pRes->mRegisters[i][3];
             }
 
             for (int i = 0; i < 4; ++i) {
-                mConstantColors[i] = pRes->tevKCols[i];
+                mConstantColors[i] = detail::RecordColor(pRes->mConstants[i]);
             }
 
-            u32 resOffs = sizeof(res::Material);
-            const res::TexMap* const pResTexMap = detail::ConvertOffsToPtr< res::TexMap >(pRes, resOffs);
-            resOffs += sizeof(res::TexMap) * pRes->resNum.GetTexMapNum();
-            const TexSRT* const resTexSRTs = detail::ConvertOffsToPtr< TexSRT >(pRes, resOffs);
-            resOffs += sizeof(TexSRT) * pRes->resNum.GetTexSRTNum();
-            const TexCoordGen* const resTexCoordGens = detail::ConvertOffsToPtr< TexCoordGen >(pRes, resOffs);
-            resOffs += sizeof(TexCoordGen) * pRes->resNum.GetTexCoordGenNum();
-
-            const u8 texMapNum = ut::Min(pRes->resNum.GetTexMapNum(), u8(8));
-            const u8 texSRTNum = ut::Min(pRes->resNum.GetTexSRTNum(), u8(10));
-            const u8 texCoordGenNum = ut::Min(pRes->resNum.GetTexCoordGenNum(), u8(8));
-            const bool allocChanCtrl = 0 != pRes->resNum.GetChanCtrlNum();
-            const bool allocMatCol = 0 != pRes->resNum.GetMatColNum();
-            const bool allocAlpComp = pRes->resNum.HasAlphaCompare();
-            const bool allocBlendMode = pRes->resNum.HasBlendMode();
-            u8 indTexSRTNum = ut::Min(pRes->resNum.GetIndTexSRTNum(), u8(3));
+            const u8 texMapNum = pRes->mMapCount;
+            const u8 texSRTNum = pRes->mSrtCount;
+            const u8 texCoordGenNum = pRes->mGeneratorCount;
+            const bool allocChanCtrl = pRes->mHasChannel != 0;
+            const bool allocMatCol = pRes->mHasMaterialColor != 0;
+            const bool allocAlpComp = pRes->mHasAlphaCompare != 0;
+            const bool allocBlendMode = pRes->mHasBlend != 0;
+            const u8 indTexSRTNum = pRes->mIndirectSrtCount;
 
             ReserveStorage(texMapNum, texSRTNum, texCoordGenNum, indTexSRTNum, allocChanCtrl, allocMatCol,
                          allocAlpComp, allocBlendMode);
 
             if (mpStorage) {
                 SetTextureNum(texMapNum);
-                if (texMapNum > 0) {
-                    const res::Texture* const textures =
-                        detail::ConvertOffsToPtr< res::Texture >(resBlockSet.pTextureList, sizeof(*resBlockSet.pTextureList));
-                    TexMap* const texMaps = GetTexMapAry();
-
-                    u8 di = 0;
-                    for (u8 si = 0; si < texMapNum; ++si) {
-                        const char* const fileName = detail::ConvertOffsToPtr< char >(textures, textures[pResTexMap[si].texIdx].nameStrOffset);
-
-                        void* const pTplRes = resBlockSet.pResAccessor->GetResource(0x74696D67, fileName, nullptr);
-                        texMaps[di].ReplaceImage(pTplRes, 0);
-                        texMaps[di].SetWrapMode(pResTexMap[si].GetWarpModeS(), pResTexMap[si].GetWarpModeT());
-                        texMaps[di].SetFilter(pResTexMap[si].GetMinFilter(), pResTexMap[si].GetMagFilter());
-                        ++di;
-                    }
-                    SetTextureNum(di);
+                TexMap* const texMaps = GetTexMapAry();
+                for (u8 i = 0; i < texMapNum; ++i) {
+                    const UiMapData& rMap = pRes->mMaps[i];
+                    void* const pTplRes = resBlockSet.pResAccessor->GetResource(0x74696D67, resBlockSet.TextureName(rMap.mTexture), nullptr);
+                    texMaps[i].ReplaceImage(pTplRes, 0);
+                    texMaps[i].SetWrapMode(rMap.mWrapS, rMap.mWrapT);
+                    texMaps[i].SetFilter(rMap.mMinFilter, rMap.mMagFilter);
                 }
 
                 TexSRT* texSRTs = GetTexSRTAry();
                 for (int i = 0; i < texSRTNum; ++i) {
-                    texSRTs[i].translate = resTexSRTs[i].translate;
-                    texSRTs[i].rotate = resTexSRTs[i].rotate;
-                    texSRTs[i].scale = resTexSRTs[i].scale;
+                    texSRTs[i] = RecordSRT(pRes->mSrts[i]);
                 }
 
                 TexCoordGen* texCoordGens = GetTexCoordGenAry();
                 SetTexCoordGenNum(texCoordGenNum);
                 for (int i = 0; i < mNum.texCoordGen; ++i) {
-                    texCoordGens[i] = resTexCoordGens[i];
+                    texCoordGens[i] = TexCoordGen(pRes->mGenerators[i][0], pRes->mGenerators[i][1], pRes->mGenerators[i][2]);
                 }
 
                 if (allocChanCtrl) {
-                    const ChanCtrl* const pResChanCtrl = detail::ConvertOffsToPtr< ChanCtrl >(pRes, resOffs);
-                    GetChanCtrlAry()[0] = *pResChanCtrl;
-                    resOffs += sizeof(*pResChanCtrl);
+                    GetChanCtrlAry()[0] = ChanCtrl(pRes->mChannel[0], pRes->mChannel[1]);
                 }
 
                 if (allocMatCol) {
-                    const ut::Color* const pResMatCol = detail::ConvertOffsToPtr< ut::Color >(pRes, resOffs);
-                    GetMatColAry()[0] = *pResMatCol;
-                    resOffs += sizeof(*pResMatCol);
+                    GetMatColAry()[0] = detail::RecordColor(pRes->mMaterialColor);
                 }
 
-                if (indTexSRTNum > 0) {
-                    TexSRT* const indTexSRTs = GetIndTexSRTAry();
-                    const TexSRT* const pResIndMtx = detail::ConvertOffsToPtr< TexSRT >(pRes, resOffs);
-                    for (int i = 0; i < indTexSRTNum; ++i) {
-                        indTexSRTs[i] = pResIndMtx[i];
-                    }
+                TexSRT* const indTexSRTs = GetIndTexSRTAry();
+                for (int i = 0; i < indTexSRTNum; ++i) {
+                    indTexSRTs[i] = RecordSRT(pRes->mIndirectSrts[i]);
                 }
-                resOffs += sizeof(TexSRT) * pRes->resNum.GetIndTexSRTNum();
 
                 if (allocAlpComp) {
-                    const AlphaCompare* const pResAlphaCompare = detail::ConvertOffsToPtr< AlphaCompare >(pRes, resOffs);
-                    *GetAlphaComparePtr() = *pResAlphaCompare;
-                    resOffs += sizeof(*pResAlphaCompare);
+                    const u8* const a = pRes->mAlphaCompare;
+                    *GetAlphaComparePtr() = AlphaCompare(a[0] & 15, a[2], a[1], a[0] >> 4, a[3]);
                 }
 
                 if (allocBlendMode) {
-                    const BlendMode* const pResBlendMode = detail::ConvertOffsToPtr< BlendMode >(pRes, resOffs);
-                    *GetBlendModePtr() = *pResBlendMode;
-                    resOffs += sizeof(*pResBlendMode);
+                    const u8* const b = pRes->mBlend;
+                    *GetBlendModePtr() = BlendMode(b[0], b[1], b[2], b[3]);
                 }
             }
-            const u8* native = detail::ConvertOffsToPtr<u8>(pRes, resOffs);
-            if (memcmp(native, "NSID", 4) == 0) {
-                mNativeForms = reinterpret_cast< const detail::LayoutForm* >(native + 4);
-                memcpy(mCoordMap, native + 4 + 4 * sizeof(detail::LayoutForm), sizeof(mCoordMap));
-                mHasStages = native[4 + 4 * sizeof(detail::LayoutForm) + sizeof(mCoordMap)] != 0;
-            }
+            mNativeForms = pRes->mForms;
+            memcpy(mCoordMap, pRes->mCoordMap, sizeof(mCoordMap));
+            mHasStages = pRes->mHasStages != 0;
         }
 
 
@@ -701,23 +682,23 @@ namespace nw4r {
             }
 
             const bool remap = mRegisterColors[0] != DefaultBlackColor || !IsWhiteColor(mRegisterColors[1]);
-            const detail::LayoutForm* pForm = mNativeForms + ((useRasStage ? 1 : 0) | (remap ? 2 : 0));
+            const UiFormData* pForm = mNativeForms + ((useRasStage ? 1 : 0) | (remap ? 2 : 0));
 
-            const u32 rowCount = static_cast< u32 >(pForm->vertex_rows) + pForm->pixel_rows;
+            const u32 rowCount = static_cast< u32 >(pForm->mVertexRows) + pForm->mPixelRows;
             f32 (*pRows)[4] = static_cast< f32 (*)[4] >(Frame::arena(rowCount * 16, 16));
             DrawMatrixRows coordRows;
             for (u32 i = 0; i < rowCount; i++) {
-                const u32 row = pForm->rows[i];
+                const u32 row = pForm->mRows[i];
                 layoutRow(row, values, pRows[i]);
-                if (row >= NEBULA_ROW_COORD && i < pForm->vertex_rows) {
+                if (row >= NEBULA_ROW_COORD && i < pForm->mVertexRows) {
                     if ((row - NEBULA_ROW_COORD) % 3 == 0) { coordRows.add(i); }
                 }
             }
-            const u32 constants = Frame::addConstants(NEBULA_NONE32, pForm->vertex_rows, pForm->pixel_rows, pRows, coordRows.data(), coordRows.count());
+            const u32 constants = Frame::addConstants(NEBULA_NONE32, pForm->mVertexRows, pForm->mPixelRows, pRows, coordRows.data(), coordRows.count());
 
             NebulaFrameTexture list[NEBULA_MATERIAL_SLOTS];
-            for (u32 i = 0; i < pForm->texture_count; i++) {
-                const u32 map = pForm->textures[i];
+            for (u32 i = 0; i < pForm->mTextureCount; i++) {
+                const u32 map = pForm->mTextures[i];
                 if (map < 8 && mapUsed[map]) {
                     SiteTextures::toFrame(maps[map], &list[i]);
                 } else {
@@ -725,7 +706,7 @@ namespace nw4r {
                 }
             }
             const NebulaHostServices* pHost = nebula_host();
-            const u32 table = pForm->texture_count != 0 ? pHost->texture_table(pHost->user, list, pForm->texture_count) : 0;
+            const u32 table = pForm->mTextureCount != 0 ? pHost->texture_table(pHost->user, list, pForm->mTextureCount) : 0;
 
             // A layout material is the last word on ambient: models after it that keep the ambient in force read black.
             const NebulaColor8 black = {0, 0, 0, 0};

@@ -31,34 +31,34 @@ namespace nw4r {
     namespace lyt {
         NW4R_UT_RUNTIME_TYPEINFO_DEFINITION(TextBox, Pane);
 
-        TextBox::TextBox(const res::TextBox* pBlock, const ResBlockSet& resBlockSet) : Pane(pBlock) {
-            u16 allocStrBufLen = static_cast< u16 >(pBlock->textBufBytes / sizeof(char16_t));
+        TextBox::TextBox(const UiPaneData* pRes, const ResBlockSet& resBlockSet) : Pane(pRes, resBlockSet) {
+            const UiTextBoxData* const pBlock = resBlockSet.At< UiTextBoxData >(pRes->mPayload);
+            u16 allocStrBufLen = static_cast< u16 >(pBlock->mBufferBytes / sizeof(char16_t));
             if (allocStrBufLen > 0) {
                 allocStrBufLen -= 1;
             }
 
             Init(allocStrBufLen);
 
-            if (pBlock->textStrBytes >= sizeof(char16_t) && mTextBuf) {
-                const char16_t* const pBlockText = detail::ConvertOffsToPtr< char16_t >(pBlock, pBlock->textStrOffset);
-                const u16 resStrLen = static_cast< u16 >(pBlock->textStrBytes / sizeof(char16_t) - 1);
+            if (pBlock->mTextBytes >= sizeof(char16_t) && mTextBuf) {
+                const char16_t* const pBlockText = resBlockSet.At< char16_t >(pBlock->mText);
+                const u16 resStrLen = static_cast< u16 >(pBlock->mTextBytes / sizeof(char16_t) - 1);
                 SetString(pBlockText, 0, resStrLen);
             }
 
             for (int i = 0; i < 2; ++i) {
-                mTextColors[i] = pBlock->textCols[i];
+                mTextColors[i] = detail::RecordColor(pBlock->mColors[i]);
             }
 
-            mFontSize = pBlock->fontSize;
-            mTextPosition = pBlock->textPosition;
+            mFontSize = Size(pBlock->mFontSize[0], pBlock->mFontSize[1]);
+            mTextPosition = pBlock->mPosition;
 
-            mBits.textAlignment = pBlock->textAlignment;
+            mBits.textAlignment = pBlock->mAlignment;
 
-            mCharSpace = pBlock->charSpace;
-            mLineSpace = pBlock->lineSpace;
+            mCharSpace = pBlock->mCharSpace;
+            mLineSpace = pBlock->mLineSpace;
 
-            const res::Font* const fonts = detail::ConvertOffsToPtr< res::Font >(resBlockSet.pFontList, sizeof(*resBlockSet.pFontList));
-            const char* const fontName = detail::ConvertOffsToPtr< char >(fonts, fonts[pBlock->fontIdx].nameStrOffset);
+            const char* const fontName = resBlockSet.FontName(pBlock->mFont);
 
             if (ut::Font* pFont = resBlockSet.pResAccessor->GetFont(fontName)) {
                 mpFont = pFont;
@@ -74,10 +74,7 @@ namespace nw4r {
 
             void* pMem = Layout::AllocMemory(sizeof(Material));
             if (pMem != nullptr) {
-                const u32* const matOffsTbl = detail::ConvertOffsToPtr< u32 >(resBlockSet.pMaterialList, sizeof(*resBlockSet.pMaterialList));
-                const res::Material* const pResMaterial =
-                    detail::ConvertOffsToPtr< res::Material >(resBlockSet.pMaterialList, matOffsTbl[pBlock->materialIdx]);
-                mpMaterial = new (pMem) Material(pResMaterial, resBlockSet);
+                mpMaterial = new (pMem) Material(resBlockSet.MaterialAt(pBlock->mMaterial), resBlockSet);
             }
         }
 

@@ -14,7 +14,7 @@ namespace nw4r {
 
             Picture(u8 texNum);
             Picture(const TexMap& texMap);
-            Picture(const res::Picture*, const ResBlockSet&);
+            Picture(const UiPaneData*, const ResBlockSet&);
 
             virtual ~Picture();
             virtual void DrawSelf(const DrawInfo& rInfo);

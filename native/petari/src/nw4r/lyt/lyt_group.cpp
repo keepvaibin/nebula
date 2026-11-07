@@ -16,15 +16,15 @@ namespace nw4r {
             mbUserAllocated = false;
         }
 
-        Group::Group(const res::Group* pResGroup, Pane* pRootPane) {
+        // The cook resolved each member name to the first pane of that name in tree order (FindPaneByName from the root).
+        Group::Group(const UiGroupData* pResGroup, const ResBlockSet& rBlockSet) {
             Init();
-            strncpy(mName, pResGroup->name, sizeof(mName) - 1);
+            strncpy(mName, rBlockSet.String(pResGroup->mName), sizeof(mName) - 1);
             mName[sizeof(mName) - 1] = '\0';
 
-            const char* const paneNameBase = detail::ConvertOffsToPtr< char >(pResGroup, sizeof(res::Group));
-
-            for (int i = 0; i < pResGroup->paneNum; ++i) {
-                if (Pane* pFindPane = pRootPane->FindPaneByName(paneNameBase + i * 16, true)) {
+            const u16* const pMembers = rBlockSet.At< u16 >(pResGroup->mPanes);
+            for (u32 i = 0; i < pResGroup->mPaneCount; ++i) {
+                if (Pane* pFindPane = rBlockSet.ppPanes[pMembers[i]]) {
                     AppendPane(pFindPane);
                 }
             }

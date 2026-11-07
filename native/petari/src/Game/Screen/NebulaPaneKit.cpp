@@ -2,80 +2,36 @@
 
 #include "Game/Screen/LayoutCoreUtil.hpp"
 #include "Game/System/LayoutHolder.hpp"
-#include <cstring>
 #include <nw4r/lyt/layout.h>
 #include <nw4r/lyt/pane.h>
-#include <nw4r/lyt/resources.h>
 #include <nw4r/lyt/textBox.h>
 #include <nw4r/lyt/window.h>
 
-NebulaPaneKit::NebulaPaneKit() : mLayout(nullptr) {
-    memset(&mBlocks, 0, sizeof(mBlocks));
+NebulaPaneKit::NebulaPaneKit() : mBlocks{nullptr, nullptr, nullptr} {
 }
 
-// As Layout::Build reads it: the texture, font and material lists every pane block refers to.
 bool NebulaPaneKit::init(LayoutHolder* pHolder) {
-    mLayout = nullptr;
+    mBlocks = nw4r::lyt::ResBlockSet{nullptr, nullptr, nullptr};
     if (pHolder == nullptr || pHolder->mLayoutRes.mCount == 0) {
         return false;
     }
-    const void* pLayout = pHolder->mLayoutRes.getRes(0u);
-    const nw4r::lyt::res::BinaryFileHeader* pHeader = static_cast< const nw4r::lyt::res::BinaryFileHeader* >(pLayout);
-    if (pLayout == nullptr || !nw4r::lyt::detail::TestFileHeader(*pHeader, 'RLYT')) {
+    const UiLayoutHeader* const pLayout = static_cast< const UiLayoutHeader* >(pHolder->mLayoutRes.getRes(0u));
+    if (pLayout == nullptr || pLayout->mMagic != cUiLayoutMagic || pLayout->mVersion != cUiDataVersion) {
         return false;
     }
-    memset(&mBlocks, 0, sizeof(mBlocks));
-    mBlocks.pResAccessor = pHolder;
-    const u8* pBlock = static_cast< const u8* >(pLayout) + pHeader->headerSize;
-    for (s32 i = 0; i < pHeader->dataBlocks; i++) {
-        const nw4r::lyt::res::DataBlockHeader* pBlockHeader = reinterpret_cast< const nw4r::lyt::res::DataBlockHeader* >(pBlock);
-        switch (nw4r::lyt::detail::GetSignatureInt(pBlockHeader->kind)) {
-        case 'txl1':
-            mBlocks.pTextureList = reinterpret_cast< const nw4r::lyt::res::TextureList* >(pBlock);
-            break;
-        case 'fnl1':
-            mBlocks.pFontList = reinterpret_cast< const nw4r::lyt::res::FontList* >(pBlock);
-            break;
-        case 'mat1':
-            mBlocks.pMaterialList = reinterpret_cast< const nw4r::lyt::res::MaterialList* >(pBlock);
-            break;
-        default:
-            break;
-        }
-        pBlock += pBlockHeader->size;
-    }
-    mLayout = pLayout;
+    mBlocks = nw4r::lyt::ResBlockSet{pLayout, pHolder, nullptr};
     return true;
 }
 
-const void* NebulaPaneKit::findBlock(const char* pName, s32* pKind) const {
-    if (mLayout == nullptr) {
-        return nullptr;
-    }
-    const nw4r::lyt::res::BinaryFileHeader* pHeader = static_cast< const nw4r::lyt::res::BinaryFileHeader* >(mLayout);
-    const u8* pBlock = static_cast< const u8* >(mLayout) + pHeader->headerSize;
-    for (s32 i = 0; i < pHeader->dataBlocks; i++) {
-        const nw4r::lyt::res::DataBlockHeader* pBlockHeader = reinterpret_cast< const nw4r::lyt::res::DataBlockHeader* >(pBlock);
-        const s32 kind = nw4r::lyt::detail::GetSignatureInt(pBlockHeader->kind);
-        if (kind == 'pan1' || kind == 'pic1' || kind == 'txt1' || kind == 'wnd1' || kind == 'bnd1') {
-            const nw4r::lyt::res::Pane* pPane = reinterpret_cast< const nw4r::lyt::res::Pane* >(pBlock);
-            if (strncmp(pPane->name, pName, sizeof(pPane->name)) == 0) {
-                *pKind = kind;
-                return pBlock;
-            }
-        }
-        pBlock += pBlockHeader->size;
-    }
-    return nullptr;
-}
-
 nw4r::lyt::Pane* NebulaPaneKit::make(const char* pName, const char* pNewName) const {
-    s32 kind = 0;
-    const void* pBlock = findBlock(pName, &kind);
-    if (pBlock == nullptr) {
+    if (mBlocks.pLayout == nullptr) {
         return nullptr;
     }
-    nw4r::lyt::Pane* pPane = nw4r::lyt::Layout::BuildPaneObj(kind, pBlock, mBlocks);
+    const u32 idx = uiFindPane(mBlocks.pLayout, pName);
+    if (idx == cUiNone16) {
+        return nullptr;
+    }
+    nw4r::lyt::Pane* pPane = nw4r::lyt::Layout::BuildPaneObj(mBlocks.PaneAt(idx), mBlocks);
     if (pPane != nullptr) {
         pPane->SetName(pNewName);
         pPane->mTranslate = nw4r::math::VEC3(0.0f, 0.0f, 0.0f);

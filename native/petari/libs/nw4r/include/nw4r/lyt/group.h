@@ -1,7 +1,7 @@
 #pragma once
 
+#include "nw4r/lyt/common.h"
 #include "nw4r/lyt/pane.h"
-#include "nw4r/lyt/resources.h"
 #include "nw4r/ut/LinkList.h"
 #include <cstddef>
 
@@ -18,7 +18,7 @@ namespace nw4r {
 
         class Group {
         public:
-            Group(const res::Group*, Pane*);
+            Group(const UiGroupData*, const ResBlockSet&);
 
             virtual ~Group();
 

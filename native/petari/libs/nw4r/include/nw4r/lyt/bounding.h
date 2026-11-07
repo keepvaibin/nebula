@@ -9,7 +9,7 @@ namespace nw4r {
         class Bounding : public Pane {
         public:
             NW4R_UT_RTTI_DECL(Bounding);
-            Bounding(const res::Bounding*, const ResBlockSet&);
+            Bounding(const UiPaneData*, const ResBlockSet&);
 
             virtual ~Bounding();
             virtual void DrawSelf(const DrawInfo&);
