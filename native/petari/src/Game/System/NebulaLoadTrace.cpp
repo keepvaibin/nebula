@@ -15,8 +15,13 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
+#include "Game/Util/SingletonHolder.hpp"
+#include "Game/System/GameSystem.hpp"
+#include "Game/System/GameSystemObjHolder.hpp"
 
 namespace {
+    u32 sPlaced = 0;
+
     bool enabled() {
 #if !defined(NEBULA_DEV)
         static const bool sEnabled = false;
@@ -65,6 +70,20 @@ namespace NebulaLoadTrace {
         change("opening", opening, sOpening);
         change("control", !demo && !wipe && !systemWipe && !opening && !MR::isPlayerDead() && !MR::isPlayerHidden(), sControl);
     }
+
+    void placed(const char* pName, int zoneId) {
+        if (enabled()) {
+            JUTNativeLog("place: %u %s zone %d\n", sPlaced++, pName, zoneId);
+        }
+    }
+
+    void placementDone() {
+        if (enabled()) {
+            JUTNativeLog("place-end: %s %u objects random %08x\n", MR::getCurrentStageName(), sPlaced,
+                         SingletonHolder< GameSystem >::get()->mObjHolder->mRandom.mSeed);
+        }
+        sPlaced = 0;
+    }
 }  // namespace NebulaLoadTrace
 #else
 namespace NebulaLoadTrace {
@@ -72,6 +91,12 @@ namespace NebulaLoadTrace {
     }
 
     void gameScene() {
+    }
+
+    void placed(const char*, int) {
+    }
+
+    void placementDone() {
     }
 }  // namespace NebulaLoadTrace
 #endif
