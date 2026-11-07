@@ -167,7 +167,8 @@ LiveControlsResult LiveControlsEngine::sample(const LiveControlsFrame& frame, Li
             result.rumble.strength = tuning.vibration ? tuning.rumble : std::uint8_t{0};
         }
     }
-    logic = galaxy::input::merge_logical_input(pad_logic_all, keyboard_logic);
+    logic = galaxy::input::merge_logical_input(galaxy::input::merge_logical_input(pad_logic_all, keyboard_logic),
+                                               frame.extra);
     const float pad_pointer_x = pad_logic_all.pointer_x;
     const float pad_pointer_y = pad_logic_all.pointer_y;
     const float keyboard_pointer_x = keyboard_logic.pointer_x;
@@ -448,14 +449,19 @@ LiveControlsResult LiveControlsEngine::sample(const LiveControlsFrame& frame, Li
         pointer_active = true;
     }
     galaxy::input::set_pointer(snapshot, s_pointer_x, s_pointer_y, pointer_active);
+    result.pointer_owner = owner;
 
+    if (tilt_up == nullptr) {
+        tilt_up = frame.device_up;
+    }
     apply_tilt_accel(snapshot, s_tilt, tilt_section, tilt_up, stick_x, stick_y, recenter.pressed);
 
+    const bool device_shake = !discard_accumulated_motion && frame.device_shake;
     const bool shake_pressed =
-        script.shake || held(GameInput::Shake) || motion_shake_remote;
+        script.shake || held(GameInput::Shake) || motion_shake_remote || device_shake;
     if (shake_pressed && !s_previous_shake) {
         std::cerr << "[input-shake] vi=" << current_vi << " source="
-                  << (motion_shake_remote ? "motion" : held(GameInput::Shake) ? "binding" : "script")
+                  << (motion_shake_remote || device_shake ? "motion" : held(GameInput::Shake) ? "binding" : "script")
                   << " tilt-section=" << galaxy::input::tilt::section_name(tilt_section) << '\n';
     }
     s_previous_shake = shake_pressed;

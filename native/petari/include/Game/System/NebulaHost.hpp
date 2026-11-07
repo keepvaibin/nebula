@@ -32,6 +32,11 @@ namespace NebulaHost {
         return nebula_host()->test_scene_frame(nebula_host()->user, pAction);
     }
 
+    // Nanoseconds on a steady clock: durations a person feels (a hold, a press), the same at any frame rate.
+    inline u64 clockNs() {
+        return nebula_host()->clock_ns(nebula_host()->user);
+    }
+
 
     // An object as the host names it (markers, lights, names): its address.
     inline u64 objectId(const void* pObject) {

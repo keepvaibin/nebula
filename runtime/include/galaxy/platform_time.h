@@ -54,4 +54,11 @@ namespace galaxy {
 #endif
 }
 
+// Microseconds since an arbitrary start, from the high-resolution clock.
+[[nodiscard]] inline std::uint64_t steady_us() noexcept {
+    const std::int64_t ticks = qpc_now();
+    const std::int64_t frequency = qpc_frequency();
+    return static_cast<std::uint64_t>(ticks / frequency * 1000000 + ticks % frequency * 1000000 / frequency);
+}
+
 }  // namespace galaxy

@@ -126,13 +126,13 @@ final class TouchControlsView extends View {
     private boolean stickOnLeft = true;
     private boolean layoutLoaded;
 
-    // Arranging: the OK button, and the control under the one finger that counts.
+    // Arranging: the control under the one finger that drags. Save, Reset and Cancel are the game's own window.
     private boolean arranging;
     private int selected = -1;
     private int dragPointer = -1;
     private float dragOffsetX, dragOffsetY;
-    private int okPointer = -1;
-    private final RectF ok = new RectF();
+    private final float[] arrangedX = new float[TouchLayouts.ITEMS];  // the places when arranging began, for Cancel
+    private final float[] arrangedY = new float[TouchLayouts.ITEMS];
 
     TouchControlsView(Context context, Listener listener) {
         super(context);
@@ -187,12 +187,14 @@ final class TouchControlsView extends View {
         invalidate();
     }
 
-    // HOME over the picture on a pointer screen: in the top corner, clear of the game's own buttons.
+    // HOME over the picture on a pointer screen: in the top corner, clear of the game's own buttons. Arranging (begun
+    // from the pause screen) shows it in its place in play, the place being arranged.
     private void placeHome() {
         final Button home = buttons.get(HOME_BUTTON);
-        home.x = pointerScreen ? buttons.get(TWO_BUTTON).x : homeX;
-        home.y = pointerScreen ? buttons.get(TWO_BUTTON).y : homeY;
-        if (pointerScreen && getWidth() > 0 && getHeight() > 0) {
+        final boolean corner = pointerScreen && !arranging;
+        home.x = corner ? buttons.get(TWO_BUTTON).x : homeX;
+        home.y = corner ? buttons.get(TWO_BUTTON).y : homeY;
+        if (corner && getWidth() > 0 && getHeight() > 0) {
             // The file card (FileInfo: 286 canvas units either side, its foot 110 under the canvas's top) spans a screen
             // narrower than 16:9 at the top: HOME goes under its foot.
             final float aspect = (float) getWidth() / getHeight();
@@ -328,9 +330,6 @@ final class TouchControlsView extends View {
         homeX = buttons.get(HOME_BUTTON).x;
         homeY = buttons.get(HOME_BUTTON).y;
         placeHome();
-        if (arranging) {
-            layoutOk(width, height);
-        }
         if (layoutLoaded) {
             reportSettings();
         }
@@ -364,19 +363,21 @@ final class TouchControlsView extends View {
         invalidate();
     }
 
-    // Arranging the controls: the icons can be dragged, OK locks them in. Nothing else answers. Saved for this shape of
-    // screen.
+    // Arranging the controls: the icons can be dragged; the game's window asks Save (the places kept for this shape of
+    // screen), Reset (every control where the game places it, kept with Save) or Cancel (the places it began with). A
+    // finger that misses every control is the pointer on that window.
     void startArranging() {
         arranging = true;
         selected = -1;
         dragPointer = -1;
-        okPointer = -1;
+        System.arraycopy(layout.x, 0, arrangedX, 0, TouchLayouts.ITEMS);
+        System.arraycopy(layout.y, 0, arrangedY, 0, TouchLayouts.ITEMS);
         // A finger or button held when this began lets go.
         Arrays.fill(targets, TARGET_NONE);
         Arrays.fill(pointerBits, 0);
         stickPointer = -1;
         publish(0, 0.0f, 0.0f);
-        layoutOk(getWidth(), getHeight());
+        placeHome();
         invalidate();
     }
 
@@ -384,18 +385,32 @@ final class TouchControlsView extends View {
         return arranging;
     }
 
-    void finishArranging() {
+    void finishArranging(boolean save) {
         arranging = false;
         selected = -1;
-        layouts.save(layoutKey, layout);
+        if (save) {
+            layouts.save(layoutKey, layout);
+        } else {
+            System.arraycopy(arrangedX, 0, layout.x, 0, TouchLayouts.ITEMS);
+            System.arraycopy(arrangedY, 0, layout.y, 0, TouchLayouts.ITEMS);
+            layoutControls(getWidth(), getHeight());
+        }
+        placeHome();
         listener.arrangingDone();
         invalidate();
     }
 
-    private void layoutOk(int width, int height) {
-        final float wide = 132 * dp;
-        final float tall = 56 * dp;
-        ok.set((width - wide) / 2.0f, (height - tall) / 2.0f, (width + wide) / 2.0f, (height + tall) / 2.0f);
+    // Every control where the game places it on this shape of screen; Save keeps that.
+    void resetArranged() {
+        if (!arranging) {
+            return;
+        }
+        Arrays.fill(layout.x, Float.NaN);
+        Arrays.fill(layout.y, Float.NaN);
+        selected = -1;
+        dragPointer = -1;
+        layoutControls(getWidth(), getHeight());
+        invalidate();
     }
 
     // The control under a point: its place in a layout, or -1.
@@ -444,7 +459,7 @@ final class TouchControlsView extends View {
         invalidate();
     }
 
-    // One finger at a time moves an icon or presses OK; any other touch is nothing.
+    // One finger at a time drags a control; a finger that lands on none is the pointer on the game's window.
     private void arrangeEvent(MotionEvent event) {
         final int action = event.getActionMasked();
         final int index = event.getActionIndex();
@@ -452,54 +467,51 @@ final class TouchControlsView extends View {
         switch (action) {
         case MotionEvent.ACTION_DOWN:
         case MotionEvent.ACTION_POINTER_DOWN: {
-            if (dragPointer >= 0 || okPointer >= 0) {
+            if (id < 0 || id >= MAX_POINTERS) {
                 return;
             }
             final float x = event.getX(index);
             final float y = event.getY(index);
-            if (ok.contains(x, y)) {
-                okPointer = id;
-                invalidate();
-                return;
-            }
-            final int item = itemAt(x, y);
-            selected = item;
+            final int item = dragPointer < 0 ? itemAt(x, y) : -1;
             if (item >= 0) {
+                selected = item;
                 dragPointer = id;
                 dragOffsetX = itemX(item) - x;
                 dragOffsetY = itemY(item) - y;
                 if (haptics) {
                     performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
                 }
-            }
-            invalidate();
-            return;
-        }
-        case MotionEvent.ACTION_MOVE: {
-            if (dragPointer < 0 || selected < 0) {
+                invalidate();
                 return;
             }
-            final int finger = event.findPointerIndex(dragPointer);
-            if (finger >= 0) {
-                moveItem(selected, event.getX(finger) + dragOffsetX, event.getY(finger) + dragOffsetY);
+            if (dragPointer < 0) {
+                targets[id] = TARGET_POINTER;
+                listener.onPointer(0, id, x, y);
             }
             return;
         }
+        case MotionEvent.ACTION_MOVE:
+            for (int i = 0; i < event.getPointerCount(); ++i) {
+                final int finger = event.getPointerId(i);
+                if (finger == dragPointer) {
+                    moveItem(selected, event.getX(i) + dragOffsetX, event.getY(i) + dragOffsetY);
+                } else {
+                    move(finger, event.getX(i), event.getY(i));
+                }
+            }
+            return;
         case MotionEvent.ACTION_UP:
         case MotionEvent.ACTION_POINTER_UP:
-        case MotionEvent.ACTION_CANCEL:
             if (id == dragPointer) {
                 dragPointer = -1;
-            } else if (id == okPointer) {
-                okPointer = -1;
-                if (action != MotionEvent.ACTION_CANCEL && ok.contains(event.getX(index), event.getY(index))) {
-                    if (haptics) {
-                        performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
-                    }
-                    finishArranging();
-                    return;
-                }
-                invalidate();
+            } else {
+                up(id, event.getX(index), event.getY(index));
+            }
+            return;
+        case MotionEvent.ACTION_CANCEL:
+            dragPointer = -1;
+            for (int i = 0; i < event.getPointerCount(); ++i) {
+                up(event.getPointerId(i), event.getX(i), event.getY(i));
             }
             return;
         default:
@@ -507,35 +519,27 @@ final class TouchControlsView extends View {
         }
     }
 
+    // Only the controls over the game's window: the one last taken is ringed in white, as the game marks what it has
+    // chosen.
     private void drawArranging(Canvas canvas) {
-        // A plain backdrop: nothing behind it looks as if it could be pressed.
-        canvas.drawColor(0xFF0A1030);
-        final float savedSize = text.getTextSize();
         for (Button button : buttons) {
             drawButton(canvas, button, false);
         }
         drawDpad(canvas);
         drawStick(canvas);
         if (selected >= 0) {
-            stroke.setColor(0xFFFFD84D);
-            stroke.setAlpha(255);
-            stroke.setStrokeWidth(3 * dp);
-            canvas.drawCircle(itemX(selected), itemY(selected), itemRadius(selected) + 5 * dp, stroke);
+            final float x = itemX(selected);
+            final float y = itemY(selected);
+            final float r = itemRadius(selected);
+            stroke.setColor(0xFFFFFFFF);
+            stroke.setAlpha(70);
+            stroke.setStrokeWidth(7 * dp);
+            canvas.drawCircle(x, y, r + 6 * dp, stroke);
+            stroke.setAlpha(dragPointer >= 0 ? 255 : 210);
+            stroke.setStrokeWidth(2.5f * dp);
+            canvas.drawCircle(x, y, r + 6 * dp, stroke);
             stroke.setStrokeWidth(1.6f * dp);
         }
-        text.setTextSize(15 * dp);
-        text.setColor(0xFFC8D2F0);
-        text.setAlpha(255);
-        canvas.drawText(getContext().getString(R.string.arrange_hint), ok.centerX(), ok.top - 16 * dp, text);
-        fill.setColor(okPointer >= 0 ? 0xFFFFE680 : 0xFFFFD84D);
-        fill.setAlpha(255);
-        canvas.drawRoundRect(ok, ok.height() / 2.0f, ok.height() / 2.0f, fill);
-        text.setTextSize(21 * dp);
-        text.setColor(0xFF1B1600);
-        text.setAlpha(255);
-        final Paint.FontMetrics metrics = text.getFontMetrics();
-        canvas.drawText(getContext().getString(R.string.arrange_ok), ok.centerX(), ok.centerY() - (metrics.ascent + metrics.descent) / 2.0f, text);
-        text.setTextSize(savedSize);
     }
 
     private static void place(Button button, float x, float y, float radius) {

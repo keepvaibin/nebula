@@ -305,6 +305,8 @@ enum class NativeSettingsStatus : unsigned {
     XessFailed,       // XeSS was not installed
     License,          // the maker's license: long_text a page (next: Apply, before: Revert, back: Close)
     Preparing,        // pipelines the settings in use want are still being made (status_number percent)
+    Arrange,          // the phone's on-screen controls are dragged where they go (save: Apply, the game's places: Revert,
+                      // cancel: Close)
 };
 // The Pair Joy-Con screen's status_number (nebula_game_api.h's NEBULA_JOYCON_*, checked alike in host_main.cpp).
 inline constexpr int kJoyConLeftBit = 1;       // a left half is connected

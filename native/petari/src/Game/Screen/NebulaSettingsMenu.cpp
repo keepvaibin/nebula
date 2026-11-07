@@ -101,6 +101,7 @@ namespace {
     const s32 cRowButtonsMax = 6;    // on one row
     const f32 cModsGap = 26.0f;      // the MODS page: between its two lists
     const f32 cDragStart = 5.0f;     // how far the pointer moves something held down before it is dragged
+    const u64 cPickUpNs = 400000000u;  // a finger holding a mod this long, not moving, picks it up; moving first scrolls
     const s32 cRowChipsMax = 48;     // drawn at once: on the rows in sight
 
     // The quit question's window and text; the game's blue for what is chosen.
@@ -204,6 +205,11 @@ namespace {
          {"SettingsBack", nullptr, nullptr},
          {NEBULA_SETTINGS_CLOSE, 0, 0},
          {KeyBack, 0, 0}},
+        // The phone's on-screen controls dragged over the picture: the window alone, the page under it hidden.
+        {NEBULA_SETTINGS_STATUS_ARRANGE, "SettingsArrange", "SettingsArrange", 3,
+         {"SettingsChoiceSave", "SettingsChoiceReset", "SettingsChoiceCancel"},
+         {NEBULA_SETTINGS_APPLY, NEBULA_SETTINGS_REVERT, NEBULA_SETTINGS_CLOSE},
+         {KeyApply, KeyUndo, KeyBack}},
     };
     const s32 cQuestionNum = sizeof(cQuestions) / sizeof(cQuestions[0]);
 
@@ -843,6 +849,11 @@ private:
     bool mDragging;  // moved far enough to be dragged
     f32 mDragFromX;
     f32 mDragFromY;
+    u64 mDragStartNs;     // when the mod was held down (NebulaHost::clockNs)
+    s32 mModSwipeList;    // the list a finger scrolls (-1 none) and its scroll when the finger landed
+    f32 mModSwipeFrom;
+    bool mModFree[2];     // the list stays where a finger left it, until the keys move the selection
+    f32 mModFreeScroll[2];
     s32 mDropList;  // where it would land: the list (-1 none) and the place in it
     s32 mDropPlace;
     f32 mClipTop;  // the list's rows are cut to these
@@ -972,6 +983,11 @@ NebulaSettingsScreen::NebulaSettingsScreen()
     mDragging = false;
     mDragFromX = 0.0f;
     mDragFromY = 0.0f;
+    mDragStartNs = 0u;
+    mModSwipeList = -1;
+    mModSwipeFrom = 0.0f;
+    mModFree[0] = mModFree[1] = false;
+    mModFreeScroll[0] = mModFreeScroll[1] = 0.0f;
     mDropList = -1;
     mDropPlace = 0;
     mClipTop = 0.0f;
@@ -1699,6 +1715,7 @@ void NebulaSettingsScreen::readPointer(const NebulaSettingsView& rView) {
         rView.status == NEBULA_SETTINGS_STATUS_CAPTURE_PAD) {
         mDragRow = -1;
         mDragging = false;
+        mModSwipeList = -1;
         mPressing = false;
         mScrollDrag = false;
         mHeldArrow = 0;
@@ -1909,9 +1926,32 @@ void NebulaSettingsScreen::readModsPointer(const NebulaSettingsView& rView, f32 
     if (!mDragging) {
         mHoverRow = hovered;
     }
+    // A finger moving along a list before it picks a mod up scrolls that list; let go, it stays there.
+    if (mModSwipeList >= 0) {
+        if (MR::isHeldJump(PLAYER_1)) {
+            mModFree[mModSwipeList] = true;
+            mModFreeScroll[mModSwipeList] = mModSwipeFrom + (y - mDragFromY);
+            return;
+        }
+        mModSwipeList = -1;
+        return;
+    }
     if (mDragRow >= 0) {
         const s32 index = mDragRow - static_cast< s32 >(rView.first_row);
-        if (!mDragging && (__builtin_fabsf(x - mDragFromX) > cDragStart || __builtin_fabsf(y - mDragFromY) > cDragStart)) {
+        const bool moved = __builtin_fabsf(x - mDragFromX) > cDragStart || __builtin_fabsf(y - mDragFromY) > cDragStart;
+        if (!mDragging && rView.input == NEBULA_SETTINGS_INPUT_TOUCH) {
+            // A finger picks a mod up by holding it still; moving first, it scrolls the list it is in.
+            if (moved && index >= 0 && index < cRowsMax && mItemList[index] >= 0) {
+                mModSwipeList = mItemList[index];
+                mModSwipeFrom = mModScroll[mModSwipeList];
+                mDragRow = -1;
+                return;
+            }
+            if (NebulaHost::clockNs() - mDragStartNs >= cPickUpNs && MR::isHeldJump(PLAYER_1)) {
+                mDragging = true;
+                MR::startSystemSE("SE_SY_TALK_FOCUS_ITEM");
+            }
+        } else if (!mDragging && moved) {
             mDragging = true;
             MR::startSystemSE("SE_SY_TALK_FOCUS_ITEM");
         }
@@ -1953,6 +1993,7 @@ void NebulaSettingsScreen::readModsPointer(const NebulaSettingsView& rView, f32 
         mDragRow = hovered;
         mDragFromX = x;
         mDragFromY = y;
+        mDragStartNs = NebulaHost::clockNs();
     }
 }
 
@@ -2119,7 +2160,13 @@ void NebulaSettingsScreen::placeMods(const NebulaSettingsView& rView) {
         const f32 content = mModCounts[l] * cModHeight;
         const f32 maxScroll = content > inner ? content - inner : 0.0f;
         f32 target = mModScroll[l];
-        if (l == selectedList && !mDragging) {
+        if (mModFree[l] && !mPointerMode) {
+            mModFree[l] = false;  // the keys moved the selection: it is kept in sight again
+        }
+        if (mModFree[l]) {
+            mModFreeScroll[l] = clamp(mModFreeScroll[l], 0.0f, maxScroll);
+            target = mModFreeScroll[l];
+        } else if (l == selectedList && !mDragging) {
             const f32 top = selectedPlace * cModHeight;
             const f32 room = mPointerMode ? 0.0f : cModHeight;
             target = top - room < target ? top - room : target;
@@ -2448,6 +2495,9 @@ void NebulaSettingsScreen::place(const NebulaSettingsView& rView) {
         placeHome();
         return;
     }
+    // The on-screen controls are arranged over the picture: their window alone, the page hidden.
+    const bool arranging = rView.status == NEBULA_SETTINGS_STATUS_ARRANGE;
+    mPage->SetVisible(!arranging);
     mTitle->mTranslate = nw4r::math::VEC3(mLeft + 2.0f, textCentre(mTitleY, cTitleSize), 0.0f);
 
     // The pages' buttons share the window's width; a word too long for its button is narrowed to fit.
@@ -2525,7 +2575,7 @@ void NebulaSettingsScreen::place(const NebulaSettingsView& rView) {
 
     // The question, centred on the window, its answers along its foot; Pair Joy-Con's picture over its text.
     if (asking) {
-        mQuestionDim->mAlpha = 96;
+        mQuestionDim->mAlpha = arranging ? 0 : 96;
         // Pair Joy-Con: from the top, the letters, the halves, the text and the answer, each as far from the next as
         // the answer is from the window's ring (the text by its capitals' tops and its baseline).
         const bool joycon = rView.status == NEBULA_SETTINGS_STATUS_JOYCON;
@@ -2819,7 +2869,7 @@ void NebulaSettingsScreen::drawMenu() const {
     mQuestion->SetVisible(false);
     draw();
     mList->SetVisible(true);
-    if (!mHome) {
+    if (!mHome && mPage->IsVisible()) {
         drawClipped(mList, getLayoutManager()->mDrawInfo, mLeft - 4.0f, mRight + 18.0f, mClipTop, mClipBottom);
     }
     if (asking) {

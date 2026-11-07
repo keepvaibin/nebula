@@ -66,6 +66,7 @@ SDL_Window* g_window = nullptr;
 std::atomic<bool> g_background{false};
 std::atomic<bool> g_menu_context{false};
 std::atomic<bool> g_title_screen{false};
+std::atomic<bool> g_direct_touch{false};
 
 // SDL's thread, the only one that calls SDL's window, gamepad and Java functions. The game's threads run on stacks of
 // their own, which the Java VM refuses to attach (it aborts the process), so they leave requests here instead, done
@@ -78,9 +79,12 @@ galaxy::input::NativeSettingsPadState g_menu_pad{};
 std::optional<galaxy::input::DeviceKey> g_capture_device;
 std::optional<galaxy::input::InputSource> g_capture_result;
 std::uint32_t g_capture_previous = 0u;
-// Each pad's motion integrator and last sample time, touch surface state: SDL's thread.
+// Each pad's motion integrator, its last gyro sample's sensor time and its last accelerometer sample, touch surface
+// state: SDL's thread.
 std::array<galaxy::input::switch_hid::SwitchMotion, kMaxPads> g_motion{};
-std::array<std::uint64_t, kMaxPads> g_motion_us{};
+std::array<std::uint64_t, kMaxPads> g_motion_ns{};
+std::array<std::array<float, 3>, kMaxPads> g_accel{};
+std::array<bool, kMaxPads> g_accel_valid{};
 std::array<bool, kMaxPads> g_touch_down{};
 std::array<float, kMaxPads> g_touch_x{};
 std::array<float, kMaxPads> g_touch_y{};
@@ -271,38 +275,65 @@ float axis(SDL_Gamepad* pad, SDL_GamepadAxis which) noexcept {
     return std::clamp(static_cast<float>(SDL_GetGamepadAxis(pad, which)) / 32767.0f, -1.0f, 1.0f);
 }
 
-// A pad's gyro, accelerometer and touch surface into g_input.motion, as the Windows host's worker does.
-void sample_pad_motion(std::size_t index, SDL_Gamepad* gamepad, const galaxy::input::PadSample& sample) {
+// One of a pad's sensor samples, as it came: every gyro sample turns the pointer by its own time step (the sensor's
+// clock), with the latest accelerometer sample for gravity, as the Windows host's worker feeds each HID report. Called
+// with g_input_mutex held.
+void pad_sensor_event(const SDL_GamepadSensorEvent& event) {
     namespace sw = galaxy::input::switch_hid;
-    PadMotion& motion = g_input.motion[index];
-    const galaxy::input::SchemeTuning& tuning = galaxy::input::get_controls_config().tune(sample.scheme);
-    float gyro[3]{};
-    float accel[3]{};
-    if (SDL_GetGamepadSensorData(gamepad, SDL_SENSOR_GYRO, gyro, 3) && SDL_GetGamepadSensorData(gamepad, SDL_SENSOR_ACCEL, accel, 3)) {
-        const std::uint64_t now_us = galaxy::steady_ms() * 1000u;
-        const float dt = g_motion_us[index] != 0u ? std::min(0.1f, static_cast<float>(now_us - g_motion_us[index]) * 1e-6f) : 0.004f;
-        g_motion_us[index] = now_us;
-        sw::ImuSample imu{};
-        for (int axis_index = 0; axis_index < 3; ++axis_index) {
-            imu.gyro[axis_index] = gyro[axis_index];  // radians a second
-            imu.accel[axis_index] = accel[axis_index] / SDL_STANDARD_GRAVITY;
-        }
-        sw::MotionSettings settings{};
-        settings.shake = tuning.motion_shake != galaxy::input::MotionShake::Off;
-        settings.shake_sensitivity = tuning.shake_sensitivity;
-        settings.gyro_pointer = tuning.gyro_pointer;
-        settings.gyro_sensitivity = tuning.gyro_sensitivity;
-        settings.picture_aspect = static_cast<float>(galaxy::kDesignContentAspect);
-        const sw::SwitchMotion::Output out = g_motion[index].feed(imu, dt, now_us, settings);
-        motion.imu_live = true;
-        motion.gyro_x = std::clamp(motion.gyro_x + out.pointer_x, -4.0f, 4.0f);
-        motion.gyro_y = std::clamp(motion.gyro_y + out.pointer_y, -4.0f, 4.0f);
-        motion.gravity = g_motion[index].gravity();
-        motion.gravity_valid = g_motion[index].gravity_ready();
-        if (out.shake_started) {
-            motion.shake_until_us = now_us + sw::SwitchMotion::kShakeHoldUs;
+    std::size_t index = kMaxPads;
+    for (std::size_t i = 0; i < kMaxPads; ++i) {
+        if (g_gamepads[i] != nullptr && SDL_GetGamepadID(g_gamepads[i]) == event.which) {
+            index = i;
+            break;
         }
     }
+    if (index == kMaxPads) {
+        return;
+    }
+    if (event.sensor == SDL_SENSOR_ACCEL) {
+        for (int axis_index = 0; axis_index < 3; ++axis_index) {
+            g_accel[index][axis_index] = event.data[axis_index] / SDL_STANDARD_GRAVITY;
+        }
+        g_accel_valid[index] = true;
+        return;
+    }
+    if (event.sensor != SDL_SENSOR_GYRO || !g_accel_valid[index]) {
+        return;
+    }
+    const std::uint64_t sensor_ns = event.sensor_timestamp != 0u ? event.sensor_timestamp : event.timestamp;
+    const float dt = g_motion_ns[index] != 0u && sensor_ns > g_motion_ns[index]
+        ? std::min(0.1f, static_cast<float>(sensor_ns - g_motion_ns[index]) * 1e-9f)
+        : 0.0f;
+    g_motion_ns[index] = sensor_ns;
+    sw::ImuSample imu{};
+    for (int axis_index = 0; axis_index < 3; ++axis_index) {
+        imu.gyro[axis_index] = event.data[axis_index];  // radians a second
+        imu.accel[axis_index] = g_accel[index][axis_index];
+    }
+    const galaxy::input::SchemeTuning& tuning =
+        galaxy::input::get_controls_config().tune(scheme_of(g_gamepads[index]));
+    sw::MotionSettings settings{};
+    settings.shake = tuning.motion_shake != galaxy::input::MotionShake::Off;
+    settings.shake_sensitivity = tuning.shake_sensitivity;
+    settings.gyro_pointer = tuning.gyro_pointer;
+    settings.gyro_sensitivity = tuning.gyro_sensitivity;
+    settings.picture_aspect = static_cast<float>(galaxy::kDesignContentAspect);
+    const std::uint64_t now_us = galaxy::steady_us();
+    const sw::SwitchMotion::Output out = g_motion[index].feed(imu, dt, now_us, settings);
+    PadMotion& motion = g_input.motion[index];
+    motion.imu_live = true;
+    motion.gyro_x = std::clamp(motion.gyro_x + out.pointer_x, -4.0f, 4.0f);
+    motion.gyro_y = std::clamp(motion.gyro_y + out.pointer_y, -4.0f, 4.0f);
+    motion.gravity = g_motion[index].gravity();
+    motion.gravity_valid = g_motion[index].gravity_ready();
+    if (out.shake_started) {
+        motion.shake_until_us = now_us + sw::SwitchMotion::kShakeHoldUs;
+    }
+}
+
+// A pad's touch surface into g_input.motion, as the Windows host's worker does.
+void sample_pad_motion(std::size_t index, SDL_Gamepad* gamepad) {
+    PadMotion& motion = g_input.motion[index];
     if (SDL_GetNumGamepadTouchpads(gamepad) > 0) {
         bool down = false;
         float x = 0.0f;
@@ -363,7 +394,7 @@ void sample_gamepads() {
             g_last_input.store(kLastPad + static_cast<std::uint32_t>(sample.scheme), std::memory_order_relaxed);
             g_last_pad.store(g_input.pad_ids[i], std::memory_order_relaxed);
         }
-        sample_pad_motion(i, gamepad, sample);
+        sample_pad_motion(i, gamepad);
         if (g_capture_device.has_value() && g_capture_device->scheme == sample.scheme && !g_capture_result.has_value()) {
             const std::uint32_t fresh = bits & ~g_capture_previous;
             if (fresh != 0u) {
@@ -380,16 +411,28 @@ void sample_gamepads() {
                     }
                 }
             }
+            // The menu waits for the press: told as the Windows host tells it, it takes the input and binds it.
+            if (g_capture_result.has_value()) {
+                const std::lock_guard<std::mutex> keys(g_menu_keys_mutex);
+                g_menu_keys.push_back(galaxy::host::kBindingCaptureKey);
+            }
         }
         g_capture_previous = bits;
     }
 }
 
 void open_gamepad(SDL_JoystickID id) {
-    for (SDL_Gamepad*& slot : g_gamepads) {
+    for (std::size_t index = 0; index < kMaxPads; ++index) {
+        SDL_Gamepad*& slot = g_gamepads[index];
         if (slot == nullptr) {
             slot = SDL_OpenGamepad(id);
             if (slot != nullptr) {
+                // A new controller's motion starts from rest, never from the last one in this slot.
+                g_motion[index] = {};
+                g_motion_ns[index] = 0u;
+                g_accel_valid[index] = false;
+                g_touch_down[index] = false;
+                g_input.motion[index] = {};
                 (void)SDL_SetGamepadSensorEnabled(slot, SDL_SENSOR_GYRO, true);
                 (void)SDL_SetGamepadSensorEnabled(slot, SDL_SENSOR_ACCEL, true);
                 std::fprintf(stderr, "[input] gamepad \"%s\" connected\n", SDL_GetGamepadName(slot));
@@ -431,7 +474,8 @@ void finger_event(std::uint64_t id, float x, float y, bool down, bool up) {
     const float side = static_cast<float>(std::max(1, std::min(g_input.window_width, g_input.window_height)));
     g_finger_travel = std::max(g_finger_travel, std::hypot(x - g_finger_down_x, y - g_finger_down_y) / side);
     // A swipe on a pointer screen scrolls, once it has gone further than a tap can, the list following the finger.
-    if (!down && g_finger_travel > kTapTravel && g_menu_context.load(std::memory_order_relaxed)) {
+    if (!down && g_finger_travel > kTapTravel && g_menu_context.load(std::memory_order_relaxed) &&
+        !g_direct_touch.load(std::memory_order_relaxed)) {
         g_menu_swipe_px += y - g_finger_last_y;
     }
     g_finger_last_y = y;
@@ -654,6 +698,9 @@ void pump_events(int timeout_ms) noexcept {
         case SDL_EVENT_GAMEPAD_ADDED:
             open_gamepad(event.gdevice.which);
             break;
+        case SDL_EVENT_GAMEPAD_SENSOR_UPDATE:
+            pad_sensor_event(event.gsensor);
+            break;
         case SDL_EVENT_GAMEPAD_REMOVED:
             close_gamepad(event.gdevice.which);
             break;
@@ -741,6 +788,10 @@ void set_menu_context(bool menu) noexcept {
     g_menu_context.store(menu, std::memory_order_relaxed);
 }
 
+void set_direct_touch(bool direct) noexcept {
+    g_direct_touch.store(direct, std::memory_order_relaxed);
+}
+
 bool in_background() noexcept {
     return g_background.load(std::memory_order_acquire);
 }
@@ -792,7 +843,7 @@ extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativePhon
     imu.accel[2] = -ay / SDL_STANDARD_GRAVITY;
     sw::MotionSettings settings{};
     settings.gyro_pointer = false;
-    const std::uint64_t now_us = galaxy::steady_ms() * 1000u;
+    const std::uint64_t now_us = galaxy::steady_us();
     const sw::SwitchMotion::Output out = s_motion.feed(imu, dt, now_us, settings);
     std::lock_guard<std::mutex> lock(galaxy::sdl::g_input_mutex);
     galaxy::sdl::PadMotion& motion = galaxy::sdl::g_input.device_motion;
@@ -1204,6 +1255,7 @@ std::atomic<bool> g_external_mouse{false};
 std::atomic<unsigned> g_touch_size{0};
 std::atomic<unsigned> g_touch_opacity{60};
 std::atomic<bool> g_touch_vibration{true};
+std::atomic<bool> g_touch_arranging{false};  // the on-screen controls' editor is open
 }  // namespace
 
 bool physical_keyboard_attached() noexcept {
@@ -1211,7 +1263,21 @@ bool physical_keyboard_attached() noexcept {
 }
 
 void arrange_touch_controls() noexcept {
+    g_touch_arranging.store(true, std::memory_order_release);
     galaxy::sdl::call_activity("arrangeControls");
+}
+
+bool touch_arranging() noexcept {
+    return g_touch_arranging.load(std::memory_order_acquire);
+}
+
+// The editor answers nativeArrangingDone when it has kept or put back the places.
+void finish_arranging_touch_controls(bool save) noexcept {
+    galaxy::sdl::call_activity(save ? "saveArrangedControls" : "cancelArrangedControls");
+}
+
+void reset_arranged_touch_controls() noexcept {
+    galaxy::sdl::call_activity("resetArrangedControls");
 }
 
 void input_mode_changed() noexcept {
@@ -1239,6 +1305,14 @@ void reset_touch_controls_places() noexcept {
 }
 #else
 void arrange_touch_controls() noexcept {}
+
+bool touch_arranging() noexcept {
+    return false;
+}
+
+void finish_arranging_touch_controls(bool) noexcept {}
+
+void reset_arranged_touch_controls() noexcept {}
 
 void input_mode_changed() noexcept {}
 
@@ -1373,6 +1447,11 @@ extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativeTouc
     galaxy::host::g_touch_size.store(static_cast<unsigned>(size), std::memory_order_relaxed);
     galaxy::host::g_touch_opacity.store(static_cast<unsigned>(opacity), std::memory_order_relaxed);
     galaxy::host::g_touch_vibration.store(vibration != JNI_FALSE, std::memory_order_relaxed);
+}
+
+// The on-screen controls' editor has closed (saved, cancelled or the phone's Back).
+extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativeArrangingDone(JNIEnv*, jclass) {
+    galaxy::host::g_touch_arranging.store(false, std::memory_order_release);
 }
 
 extern "C" JNIEXPORT jint JNICALL Java_dev_nebula_galaxy_GameActivity_nativeTouchWanted(JNIEnv*, jclass, jint which) {
