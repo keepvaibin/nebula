@@ -95,8 +95,8 @@ namespace MR {
     }
 
     const char* getCurrentRegionPrefix() {
-        char prefix[2];
-        MR::extractString(prefix, getCurrentLanguagePrefix(), sizeof(prefix), 3);
+        char prefix[3];
+        MR::extractString(prefix, getCurrentLanguagePrefix(), 2, sizeof(prefix));
 
         if (MR::isEqualString(prefix, "Jp")) {
             return "Jp";

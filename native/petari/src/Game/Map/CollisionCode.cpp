@@ -123,7 +123,7 @@ const char* CollisionCode::getSoundCodeString(const TableIter& rIter) {
         return "null";
     }
 
-    if (rIter.mInfo->getValueType("Sound_code") == 0) {
+    if (rIter.mInfo->getColumnKind("Sound_code") != TableKind_Text) {
         u32 code = 0;
 
         if (rIter.getValue< u32 >("Sound_code", &code)) {
@@ -149,7 +149,7 @@ u32 CollisionCode::getCode(const TableIter& rIter, CodeTable* pCodeTable, const 
         return 0;
     }
 
-    if (rIter.mInfo->getValueType(pName) == 0) {
+    if (rIter.mInfo->getColumnKind(pName) != TableKind_Text) {
         u32 code = 0;
 
         if (rIter.getValue< u32 >(pName, &code)) {

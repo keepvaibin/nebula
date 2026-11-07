@@ -253,10 +253,12 @@ namespace MR {
         return pBasename;
     }
 
-    void extractString(char* pDst, const char* pSrc, u32 num, u32) {
-        strncpy(pDst, pSrc, num);
+    // At most num bytes, and the terminator within size.
+    void extractString(char* pDst, const char* pSrc, u32 num, u32 size) {
+        const u32 count = num < size ? num : size - 1;
+        strncpy(pDst, pSrc, count);
 
-        pDst[num] = '\0';
+        pDst[count] = '\0';
     }
 
     int convertUTF16ToASCII(char* pDst, const char16_t* pSrc, s32 num) {

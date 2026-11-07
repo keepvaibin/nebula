@@ -158,7 +158,7 @@ namespace {
         return pDirector != nullptr && isSkippableDemo(pDirector);
     }
 
-    // The log's name for what runs: a time sheet, or the starter's (Shift-JIS) name.
+    // The log's name for what runs: a time sheet, or the starter's name.
     void report(const char* pWhat) {
         const bool isScene = isGameSceneRunning();
         const DemoDirector* pDirector = isScene ? getActiveDemo() : nullptr;

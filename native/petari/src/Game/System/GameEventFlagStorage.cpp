@@ -31,7 +31,7 @@ s32 GameEventFlagStorage::serialize(u8* pData, u32 size) const {
         }
 
         GameEventFlagAccessor accessor(iter.getFlag());
-        u16 hash = MR::getHashCode(accessor.getName()) & 0x7FFF;
+        u16 hash = GameEventFlagTable::getSaveHash(accessor.getName());
         u16 data = hash | (isOn(iter.getFlag()) ? 0x8000 : 0);
         stream.write(&data, sizeof(data));
     }

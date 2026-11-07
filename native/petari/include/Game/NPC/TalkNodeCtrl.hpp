@@ -6,27 +6,26 @@
 
 class TalkMessageHistory {
 public:
-    void entry(u16);
-    bool search(u16) const;
+    void entry(u32);
+    bool search(u32) const;
 
-    u16* mHistory;
+    u32* mHistory;
     s32 mCount;
     s32 mMax;
 };
 
+// A flow node, read in place (NMSG, crates/nebula-import cook/message.rs).
 class TalkNode {
 public:
-    // A BMG FLW1 node, read in place (host order, as the importer cooks it).
-    u8 mNodeType;
-    u8 mGroupID;
-    u16 mIndex;
+    u8 mNodeType;  // 1 message, 2 branch, 3 event
+    u8 mGroupID;   // an event's kind
+    u16 mPad;
+    u32 mIndex;  // a message's number, a branch's condition, an event's first branch
     union {
-        u32 mUnknown;
-        struct {
-            u16 mNextIdx;
-            u16 mNextGroup;
-        };
+        u32 mNextIdx;  // a message's next node (MessageData::cNoNode at the end), a branch's parameter
+        u32 mArg;      // an event's value
     };
+    u32 mNextGroup;  // a message's group, a branch's first branch
 };
 
 class RecursiveHelper {

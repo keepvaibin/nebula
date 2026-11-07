@@ -589,11 +589,7 @@ Table* MR::tryCreateCsvParser(const ResourceHolder* pHolder, const char* pFormat
 }
 
 s32 MR::getCsvDataElementNum(const Table* pMapInfo) {
-    if (pMapInfo->mData != nullptr) {
-        return pMapInfo->mData->mNumEntries;
-    }
-
-    return 0;
+    return pMapInfo->getNumEntries();
 }
 
 void MR::getCsvDataStr(const char** pOut, const Table* pMapInfo, const char* pKey, s32 idx) {

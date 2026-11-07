@@ -12,11 +12,7 @@ inline void getCsvDataStr(const char** pOut, const Table* pMapInfo, const char* 
 }
 
 inline s32 getCsvDataElementNum(const Table* pMapInfo) {
-    if (pMapInfo->mData != nullptr) {
-        return pMapInfo->mData->mNumEntries;
-    }
-
-    return 0;
+    return pMapInfo->getNumEntries();
 }
 
 inline int adjustNextIndex(int index, int pointNum) {

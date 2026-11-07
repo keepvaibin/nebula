@@ -441,7 +441,7 @@ void HammerHeadPackun::initShadow() {
 }
 
 inline s32 tableEntries(const Table* table) {
-    return table->mData ? (s32)table->mData->mNumEntries : 0;
+    return table->getNumEntries();
 }
 
 inline bool Placement_inRange(const TableIter& rIter) {

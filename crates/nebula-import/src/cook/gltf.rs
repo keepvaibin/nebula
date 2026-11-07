@@ -223,7 +223,7 @@ pub fn to_collision(bytes: &[u8], folder: Option<&Path>) -> Result<(Vec<u8>, Vec
             "Camera_through": number("Camera_through"),
         }));
     }
-    let table = super::merge::table_from_json(serde_json::json!({ "rows": rows }).to_string().as_bytes())?;
+    let table = super::table::TableIr::from_json(serde_json::json!({ "rows": rows }).to_string().as_bytes())?.to_ntbl();
     Ok((super::kcl::from_triangles(&triangles)?, table))
 }
 

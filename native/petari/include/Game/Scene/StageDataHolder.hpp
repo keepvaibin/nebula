@@ -48,9 +48,6 @@ public:
 
     void initTableData();
 
-    void calcDataAddress();
-    void updateDataAddress(const MR::AssignableArray< Table >* pInfoArray);
-
     void initPlacementInfoOrderedScenario();
     void initPlacementInfoOrderedCommon();
 
@@ -86,8 +83,6 @@ public:
     u8 _E1;
     u8 _E2;
     u8 _E3;
-    uintptr_t _E4;
-    uintptr_t _E8;
     MR::AssignableArray< Table > _EC;
     MR::AssignableArray< Table > _F4;
     PlacementInfoOrdered* _FC;

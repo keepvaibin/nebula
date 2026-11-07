@@ -19,7 +19,7 @@ public:
     u32 mMsg;
     HitSensor* mSensor;
     const char* mSensorName;
-    char mGroupName[48];
+    char mGroupName[64];  // the longest group label is 48 bytes in UTF-8
 };
 
 class LiveActorGroupArray : public NameObj {

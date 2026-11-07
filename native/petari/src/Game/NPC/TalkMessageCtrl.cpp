@@ -82,8 +82,9 @@ void TalkMessageCtrl::createMessage(const TableIter& rIter, const char* pName) {
 }
 
 namespace {
-    bool isNodeEventContinue(const MessageSystem::FlowNodeEvent* pArg) {
-        return pArg->mEventType <= 4 && (1 << pArg->mEventType & 0x15);
+    // Events of kinds 0, 2 and 4 go on to the next node.
+    bool isNodeEventContinue(const TalkNode* pEvent) {
+        return pEvent->mGroupID <= 4 && (1 << pEvent->mGroupID & 0x15);
     }
 };  // namespace
 
@@ -106,7 +107,7 @@ bool TalkMessageCtrl::rootNodeEve() {
             return true;
         }
 
-        if (mEventFunc->operator()(nodeEvent->mUnknown) == false) {
+        if (mEventFunc->operator()(nodeEvent->mArg) == false) {
             return false;
         }
     } else if (groupID == 4) {
@@ -114,7 +115,7 @@ bool TalkMessageCtrl::rootNodeEve() {
             return true;
         }
 
-        if (mAnimeFunc->operator()(nodeEvent->mUnknown) == false) {
+        if (mAnimeFunc->operator()(nodeEvent->mArg) == false) {
             return false;
         }
     } else if (groupID == 3) {
@@ -125,7 +126,7 @@ bool TalkMessageCtrl::rootNodeEve() {
     } else if (groupID == 6) {
         MR::onSwitchB(mHostActor);
     } else if (groupID == 7) {
-        if (mKillFunc->operator()(nodeEvent->mUnknown) == false) {
+        if (mKillFunc->operator()(nodeEvent->mArg) == false) {
             return false;
         }
     }
@@ -237,7 +238,7 @@ bool TalkMessageCtrl::isCurrentNodeContinue() const {
         return false;
     }
 
-    return isNodeEventContinue((MessageSystem::FlowNodeEvent*)nodeEvent);
+    return isNodeEventContinue(nodeEvent);
 }
 
 void TalkMessageCtrl::rootNodeSel(bool a1) {

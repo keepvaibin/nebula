@@ -312,14 +312,7 @@ namespace DemoFunction {
         const char* sheet_name = pExecutor->mSheetName;
         Table* map = MR::tryCreateCsvParser(getDemoDirector()->mResourceHolder, "Demo%s%s.bcsv", sheet_name, pNameSuffix);
         *pMap = map;
-        if (map != nullptr) {
-            const TableData* data = map->mData;
-            if (data != nullptr) {
-                return data->mNumEntries;
-            }
-            return 0;
-        }
-        return 0;
+        return map != nullptr ? map->getNumEntries() : 0;
     }
 
     bool isDemoPartTalk(const char* pDemoName) {

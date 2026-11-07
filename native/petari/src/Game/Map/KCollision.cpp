@@ -5,7 +5,6 @@
 #include "Game/Util/Table.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include <algorithm>
-#include "Game/Util/ByteView.hpp"
 
 KCollisionServer::KCollisionServer() : mFile(), mapInfo(new Table()), mMaxVertexDistance(1.0f), mModel() {
 }
@@ -19,17 +18,17 @@ void KCollisionServer::init(void* pData, const void* pMapData) {
 }
 
 void KCollisionServer::setData(void* pData) {
-    const KCLHeader* pHeader = static_cast< const KCLHeader* >(pData);
-    // A cooked file's first offset is the header's size; the disc's, big-endian, reads at least 64 KB here.
-    if (pHeader->mPosOffset >= 0x10000) {
-        NEBULA_PANIC("KCollisionServer: a collision file not in host order (the importer cooks it)");
+    const NcolHeader* pHeader = static_cast< const NcolHeader* >(pData);
+    if (pHeader->mMagic[0] != 'N' || pHeader->mMagic[1] != 'C' || pHeader->mMagic[2] != 'O' || pHeader->mMagic[3] != 'L') {
+        NEBULA_PANIC("KCollisionServer: a collision file the importer did not cook");
     }
     u8* pBase = static_cast< u8* >(pData);
     mModel.mPos = reinterpret_cast< Vec3f* >(pBase + pHeader->mPosOffset);
     mModel.mNorms = reinterpret_cast< Vec3f* >(pBase + pHeader->mNormOffset);
     mModel.mPrisms = reinterpret_cast< KC_PrismData* >(pBase + pHeader->mPrismOffset);
-    mModel.mOctree = pBase + pHeader->mOctreeOffset;
-    mModel.mTriangleNum = static_cast< s32 >((pHeader->mOctreeOffset - pHeader->mPrismOffset) / sizeof(KC_PrismData)) - 1;
+    mModel.mOctree = reinterpret_cast< const u32* >(pBase + pHeader->mOctreeOffset);
+    mModel.mLists = reinterpret_cast< const u32* >(pBase + pHeader->mListOffset);
+    mModel.mTriangleNum = static_cast< s32 >(pHeader->mPrismNum);
     mModel.mThickness = pHeader->mThickness;
     mModel.mMin.set(pHeader->mMin[0], pHeader->mMin[1], pHeader->mMin[2]);
     mModel.mXMask = pHeader->mXMask;
@@ -108,7 +107,7 @@ KC_PrismData* KCollisionServer::checkPoint(Fxyz* pPoint, f32 param, f32* pDist) 
     }
 
     s32 shift;
-    u16* prismList = (u16*)searchBlock(&shift, x, y, z);
+    const u32* prismList = searchBlock(&shift, x, y, z);
 
     while (*++prismList != 0) {
         KC_PrismData* prism = &mFile->mPrisms[*prismList];
@@ -166,9 +165,9 @@ u32 KCollisionServer::checkArea3D(Fxyz* pMin, Fxyz* pMax, KC_PrismData** pOut, u
     s32 yStep;
     s32 zStep;
     s32 bestRemY;
-    u16* list;
-    u16* nextSkipList = nullptr;
-    u16* skipList = nullptr;
+    const u32* list;
+    const u32* nextSkipList = nullptr;
+    const u32* skipList = nullptr;
     u32 foundCount = 0;
 
     Fxyz box[2];
@@ -217,7 +216,7 @@ u32 KCollisionServer::checkArea3D(Fxyz* pMin, Fxyz* pMax, KC_PrismData** pOut, u
             bestRemY = 0;
 
             do {
-                list = reinterpret_cast< u16* >(searchBlock(&shift, x, y, z));
+                list = searchBlock(&shift, x, y, z);
                 shift = 1 << shift;
                 s32 blockSize = shift;
                 s32 remZ;
@@ -314,9 +313,9 @@ u32 KCollisionServer::checkSphere(Fxyz* pCenter, f32 radius, f32 param, u32 maxC
     s32 yStep;
     s32 zStep;
     s32 bestRemY;
-    u16* list;
-    u16* nextSkipList = nullptr;
-    u16* skipList = nullptr;
+    const u32* list;
+    const u32* nextSkipList = nullptr;
+    const u32* skipList = nullptr;
     u32 foundCount = 0;
 
     V3u pointMin;
@@ -354,7 +353,7 @@ u32 KCollisionServer::checkSphere(Fxyz* pCenter, f32 radius, f32 param, u32 maxC
             bestRemY = 0;
 
             do {
-                list = reinterpret_cast< u16* >(searchBlock(&shift, x, y, z));
+                list = searchBlock(&shift, x, y, z);
                 s32 remZ;
                 s32 blockSize = 1 << shift;
                 s32 mask = blockSize - 1;
@@ -428,9 +427,9 @@ u32 KCollisionServer::checkSphereWithThickness(Fxyz* pCenter, f32 radius, f32 pa
     s32 yStep;
     s32 zStep;
     s32 bestRemY;
-    u16* list;
-    u16* nextSkipList = nullptr;
-    u16* skipList = nullptr;
+    const u32* list;
+    const u32* nextSkipList = nullptr;
+    const u32* skipList = nullptr;
     u32 foundCount = 0;
 
     V3u pointMin;
@@ -468,7 +467,7 @@ u32 KCollisionServer::checkSphereWithThickness(Fxyz* pCenter, f32 radius, f32 pa
             bestRemY = 0;
 
             do {
-                list = reinterpret_cast< u16* >(searchBlock(&shift, x, y, z));
+                list = searchBlock(&shift, x, y, z);
                 s32 remZ;
                 s32 blockSize = 1 << shift;
                 s32 mask = blockSize - 1;
@@ -619,7 +618,7 @@ KC_PrismData* KCollisionServer::checkArrow(const Vec3f& rOrigin, const Vec3f& rD
     }
 
 searchStart:
-    u16* prismList;
+    const u32* prismList;
     u32 foundCount;
     foundCount = 0;
 
@@ -666,7 +665,7 @@ searchStart:
     bestPrism = nullptr;
 
     do {
-        prismList = reinterpret_cast< u16* >(searchBlock(&shift, cell.x, cell.y, cell.z));
+        prismList = searchBlock(&shift, cell.x, cell.y, cell.z);
         u32 blockSize = 1 << shift;
         u32 mask = blockSize - 1;
 
@@ -1415,27 +1414,28 @@ TableIter KCollisionServer::getAttributes(u32 index) const {
     return TableIter(mapInfo, prism->mAttribute);
 }
 
-s32* KCollisionServer::searchBlock(s32* pShift, const u32& rX, const u32& rY, const u32& rZ) const {
-    KCLFile* file = mFile;
-    u8* octree = reinterpret_cast< u8* >(static_cast< void* >(file->mOctree));
+const u32* KCollisionServer::searchBlock(s32* pShift, const u32& rX, const u32& rY, const u32& rZ) const {
+    const KCLFile* file = mFile;
+    const u32* block = file->mOctree;
     s32 blockWidthShift = *pShift = file->mBlockWidthShift;
 
     s32 xyShift = file->mBlockXYShift;
     s32 xShift = file->mBlockXShift;
-    s32 offset = 0;
+    u32 slot = 0;
     if (xyShift != -1 || xShift != -1) {
-        offset = (((rZ >> blockWidthShift) << xyShift) | ((rY >> blockWidthShift) << xShift) | (rX >> blockWidthShift)) * 4;
+        slot = ((rZ >> blockWidthShift) << xyShift) | ((rY >> blockWidthShift) << xShift) | (rX >> blockWidthShift);
     }
 
-    while ((offset = readBytes< s32 >(octree + offset)) >= 0) {
-        octree += offset;
+    u32 word;
+    while (((word = block[slot]) & 0x80000000u) == 0) {
+        block += word;
         (*pShift)--;
         s32 shift = *pShift;
 
-        offset = ((((rZ >> shift) & 1) << 2) | (((rY >> shift) & 1) << 1) | ((rX >> shift) & 1)) * 4;
+        slot = (((rZ >> shift) & 1) << 2) | (((rY >> shift) & 1) << 1) | ((rX >> shift) & 1);
     }
 
-    return reinterpret_cast< s32* >(octree + (offset & 0x7FFFFFFF));
+    return file->mLists + (word & 0x7FFFFFFFu);
 }
 
 void KCollisionServer::V3u::setUsingCast(const Vec3f& rPos) {

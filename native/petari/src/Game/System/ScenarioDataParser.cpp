@@ -132,11 +132,7 @@ bool ScenarioData::getValueBool(const char* pKey, s32 scenarioNo, bool* pOut) co
 }
 
 s32 ScenarioData::getZoneNum() const {
-    if (mZoneList->mData != nullptr) {
-        return mZoneList->mData->mNumEntries;
-    }
-
-    return 0;
+    return mZoneList->getNumEntries();
 }
 
 s32 ScenarioData::getZoneId(const char* pZoneName) const {

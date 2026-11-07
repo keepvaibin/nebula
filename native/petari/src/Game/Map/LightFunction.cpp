@@ -45,11 +45,7 @@ s32 LightFunction::createLightDataParser(Table** pOut) {
     ResourceHolder* holder = MR::getSceneObj< LightDirector >(SceneObj_LightDirector)->mResourceHolder;
     Table* info = MR::tryCreateCsvParser(holder, "LightData.bcsv");
     *pOut = info;
-    if (info->mData != nullptr) {
-        return info->mData->mNumEntries;
-    }
-
-    return 0;
+    return info->getNumEntries();
 }
 
 s32 LightFunction::createZoneDataParser(const char* pZone, Table** pOut) {
@@ -58,11 +54,7 @@ s32 LightFunction::createZoneDataParser(const char* pZone, Table** pOut) {
     *pOut = info;
 
     if (info != nullptr) {
-        if (info->mData != nullptr) {
-            return info->mData->mNumEntries;
-        }
-
-        return 0;
+        return info->getNumEntries();
     }
 
     return 0;
