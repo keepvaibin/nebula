@@ -220,7 +220,7 @@ bool RendererVk::initialize(int window_width, int window_height, const FrameMap&
         return false;
     }
     std::cout << "[Renderer] Vulkan scene target=" << scene_map_.width << 'x' << scene_map_.height
-              << " depth=" << (depth_format_ == VK_FORMAT_D24_UNORM_S8_UINT ? "D24S8" : "D32F") << '\n';
+              << " depth=" << (depth_format_ == VK_FORMAT_D24_UNORM_S8_UINT ? "D24S8" : "D32FS8") << '\n';
     return true;
 }
 
@@ -247,14 +247,17 @@ bool RendererVk::create_surface_and_device() {
 bool RendererVk::create_layouts() {
     const vk::Context& context = vk::Context::get();
     const VkDevice device = context.device();
-    // scene target depth: 24-bit integer.
-    VkFormatProperties format{};
-    vkGetPhysicalDeviceFormatProperties(context.physical_device(), VK_FORMAT_D24_UNORM_S8_UINT, &format);
-    depth_format_ = (format.optimalTilingFeatures & (VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT |
-                                                     VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT)) ==
-            (VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT)
-        ? VK_FORMAT_D24_UNORM_S8_UINT
-        : VK_FORMAT_D32_SFLOAT_S8_UINT;
+    // Scene depth: 32-bit float with stencil (the shadow volumes), where reversed Z keeps its precision; D24S8 where the
+    // device lacks it (Vulkan guarantees one of the two) or its D32F clears are broken (DeviceQuirks::depth_d24).
+    const auto usable = [&context](VkFormat candidate) {
+        VkFormatProperties format{};
+        vkGetPhysicalDeviceFormatProperties(context.physical_device(), candidate, &format);
+        constexpr VkFormatFeatureFlags kNeeded = VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;
+        return (format.optimalTilingFeatures & kNeeded) == kNeeded;
+    };
+    depth_format_ = !context.quirks().depth_d24 && usable(VK_FORMAT_D32_SFLOAT_S8_UINT) ? VK_FORMAT_D32_SFLOAT_S8_UINT
+                    : usable(VK_FORMAT_D24_UNORM_S8_UINT)                                ? VK_FORMAT_D24_UNORM_S8_UINT
+                                                                                         : VK_FORMAT_D32_SFLOAT_S8_UINT;
 
     const VkShaderStageFlags stage_passes = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
     {

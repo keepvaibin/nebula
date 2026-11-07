@@ -277,15 +277,16 @@ void RendererVk::run_one_time(const std::function<void(VkCommandBuffer)>& record
 }
 
 // The scale-dependent memory a new internal resolution adds must fit 90% of the device's budget (RendererD3D12's
-// rule): scene target colour and depth (8 bytes per pixel) and, at most, the display picture pair plus one full-picture copy (12 bytes per
-// pixel of the picture).
+// rule): scene target colour (4 bytes per pixel) and depth (4 for D24S8; D32F with stencil counted at 8, as drivers pad
+// it) and, at most, the display picture pair plus one full-picture copy (12 bytes per pixel of the picture).
 bool RendererVk::scene_fits_memory(const FrameMap& map) const {
     std::uint64_t usage = 0u;
     std::uint64_t budget = 0u;
     if (!vk::Context::get().device_memory_budget(usage, budget)) {
         return true;
     }
-    const auto bytes = [](const FrameMap& m) { return (8.0 + 12.0) * m.width * m.height; };
+    const double depth_bytes = depth_format_ == VK_FORMAT_D24_UNORM_S8_UINT ? 4.0 : 8.0;
+    const auto bytes = [depth_bytes](const FrameMap& m) { return (4.0 + depth_bytes + 12.0) * m.width * m.height; };
     const double needed = bytes(map) - bytes(scene_map_);
     return static_cast<double>(usage) + needed <= 0.9 * static_cast<double>(budget);
 }
@@ -496,7 +497,7 @@ void RendererVk::clear_scene(std::uint32_t clear_rgba,
         reset_draw_bindings();
         bind_scene();
     } else if (depth_enable) {
-        // Reversed-Z: the game's farthest (0xFFFFFF) clears to about 0.
+        // Reversed Z: the far plane is 0.
         VkClearAttachment attachment{};
         attachment.aspectMask = depth_aspects(depth_format_);
         attachment.clearValue.depthStencil = {clear.reversed_depth, 0u};

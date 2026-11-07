@@ -7,9 +7,9 @@
 // begin_frame() waits only on the fence of frame N - kFramesInFlight. A full
 // CPU/GPU sync happens only in shutdown() and on resize.
 //
-// All draws target the offscreen scene target (color RGBA8 + depth
-// D24_UNORM_S8_UINT, with 24-bit depth). present()
-// aspect-fits an display picture into the swap-chain backbuffer.
+// All draws target the offscreen scene target (colour R10G10B10A2 + depth
+// D32_FLOAT_S8X24_UINT, reversed Z). present()
+// aspect-fits a display picture into the swap-chain backbuffer.
 //
 // begin_frame() is the sole PSO-publication point: it drains the
 // PipelineCache completion queue before any command-list recording starts.
@@ -104,11 +104,11 @@ inline constexpr DXGI_FORMAT kReactiveMaskFormat = DXGI_FORMAT_R8_UNORM;
 // The effects layer (kRenderStateLayerTarget): its colour (what the effects added, as they blended into the scene target) and
 // transmittance (the product of their destination factors), in the scene target's own encoding.
 inline constexpr DXGI_FORMAT kLayerFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
-inline constexpr DXGI_FORMAT kSceneDepthResourceFormat =
-    DXGI_FORMAT_R24G8_TYPELESS;
-inline constexpr DXGI_FORMAT kSceneDepthFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
-inline constexpr DXGI_FORMAT kSceneDepthSrvFormat =
-    DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+// Scene depth: 32-bit float with stencil (the shadow volumes); reversed Z keeps its precision across the range.
+inline constexpr DXGI_FORMAT kSceneDepthResourceFormat = DXGI_FORMAT_R32G8X24_TYPELESS;
+inline constexpr DXGI_FORMAT kSceneDepthFormat = DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
+inline constexpr DXGI_FORMAT kSceneDepthSrvFormat = DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS;
+inline constexpr double kSceneDepthBytes = 8.0;  // per pixel and sample
 inline constexpr DXGI_FORMAT kBackbufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 
 // Builds the graphics root signature used by RendererD3D12. Root

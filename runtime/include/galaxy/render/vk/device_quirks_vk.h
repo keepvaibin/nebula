@@ -61,6 +61,8 @@ struct DeviceQuirks {
     bool coherent_readback = false;
     // Render passes clear by command, not by load op (PowerVR's load-op clears are broken).
     bool clear_by_command = false;
+    // Scene depth D24S8, not D32F with stencil (Adreno's 32-bit depth clears have no effect).
+    bool depth_d24 = false;
 };
 
 [[nodiscard]] DeviceIdentity identify(VkPhysicalDevice physical, bool has_driver_properties);

@@ -1437,9 +1437,9 @@ bool RendererD3D12::scene_fits_memory(const FrameMap& map) const {
             0u, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &info)) || info.Budget == 0u) {
         return true;
     }
-    // Size-dependent residency: scene colour and depth (8 bytes per pixel) and at most the display picture pair plus
-    // one full-picture copy (12 bytes per pixel).
-    const auto bytes = [](const FrameMap& m) { return (8.0 + 12.0) * m.width * m.height; };
+    // Size-dependent residency: scene colour (4 bytes per pixel) and depth (kSceneDepthBytes) and at most the display
+    // picture pair plus one full-picture copy (12 bytes per pixel).
+    const auto bytes = [](const FrameMap& m) { return (4.0 + kSceneDepthBytes + 12.0) * m.width * m.height; };
     const double needed = bytes(map) - bytes(frame_);
     return static_cast<double>(info.CurrentUsage) + needed <=
            0.9 * static_cast<double>(info.Budget);

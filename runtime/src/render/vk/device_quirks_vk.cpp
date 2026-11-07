@@ -143,12 +143,14 @@ DeviceQuirks quirks_for(const DeviceIdentity& id) {
     quirks.coherent_readback = qualcomm || arm;
     // BUG_BROKEN_CLEAR_LOADOP_RENDERPASS: PowerVR's render-pass load-op clears do not clear.
     quirks.clear_by_command = id.driver == DriverKind::ImaginationProprietary;
+    // Dolphin BUG_BROKEN_D32F_CLEAR: 32-bit depth clears have no effect in Adreno's Vulkan driver, no version known to
+    // be fixed; its workaround is D24S8 there.
+    quirks.depth_d24 = qualcomm;
     // Applied on every device, so not quirks: SPIR-V 1.3 (ANGLE supportsSPIRV14 and Dawn UseSpirv14: Qualcomm before
     // 512.829 crashes on SPIR-V 1.4's OpCopyLogical, Adreno 7xx too, ARM before r47 mishandles its OpSelect); no
     // maximal-reconvergence execution mode (Dawn use_spirv_reconvergence_mode, Dusklight issue 2563: Adreno 740's
     // compiler crashes); material byte masks one component at a time (BUG_BROKEN_VECTOR_BITWISE_AND: Mali returns
-    // the constant vector of a vector AND); D24S8 depth where the device has it (BUG_BROKEN_D32F_CLEAR: D32F
-    // clears do nothing on Adreno); viewport depth ranges never reversed.
+    // the constant vector of a vector AND); viewport depth ranges never reversed.
     return quirks;
 }
 
@@ -194,6 +196,7 @@ std::string describe(const DeviceQuirks& quirks) {
     add(quirks.clear_with_draw, "clear-with-draw");
     add(quirks.coherent_readback, "coherent-readback");
     add(quirks.clear_by_command, "clear-by-command");
+    add(quirks.depth_d24, "depth-d24");
     return text.empty() ? "none" : text;
 }
 
