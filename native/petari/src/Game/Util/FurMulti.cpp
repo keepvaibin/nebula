@@ -122,9 +122,8 @@ void FurMulti::onDraw(u32 mask) {
 
 namespace {
     void loadFurText(LiveActor* pActor, FurParam* pParam, DynamicFurParam* pDynamic, const char* pName) {
-        char* pText = static_cast< char* >(MR::getResourceHolder(pActor)->mFileInfoTable->getRes(pName));
-        ResFileInfo* pInfo = MR::getResourceHolder(pActor)->mFileInfoTable->findFileInfo(pName);
-        MR::initFurParamFromFile(pParam, pDynamic, pText, pInfo->_4);
+        const FurFile* pFile = static_cast< const FurFile* >(MR::getResourceHolder(pActor)->mFileInfoTable->getRes(pName));
+        MR::applyFurFile(pParam, pDynamic->mLightParam, *pFile);
     }
 };  // namespace
 

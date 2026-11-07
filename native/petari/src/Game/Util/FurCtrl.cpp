@@ -11,7 +11,6 @@
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
-#include "Game/Util/StringUtil.hpp"
 #include "Game/Render/Model.hpp"
 #include "Game/Render/ModelData.hpp"
 #include "Game/Render/TypedDraw.hpp"
@@ -194,91 +193,48 @@ void FurCtrl::setupFurClone(Model* pModel, FurCtrl* pOther) {
 }
 
 namespace MR {
-    void initFurParamFromFile(FurParam* pParam, DynamicFurParam* pDynamic, char* pText, u32 size) {
-        char line[256];
-        FurLightParam* pLight = pDynamic->mLightParam;
-        s32 lightMask = 0;
-        s32 matIntensity = 0;
-        s32 ambIntensity = 0;
-        s32 specularLightMask = 0;
-        s32 specularMatIntensity = 0;
-        s32 specularAmbIntensity = 0;
-        s32 colorSource = 0;
-        char* pRead = pText;
-        u32 position = 0;
-
-        while (true) {
-            if (position >= size) {
-                break;
-            }
-
-            u32 length = 0;
-
-            while (true) {
-                if (*pRead == '\n' || *pRead == '\r') {
-                    break;
-                }
-
-                position++;
-                line[length] = *pRead;
-                length++;
-                pRead++;
-
-                if (position >= size) {
-                    break;
-                }
-            }
-
-            line[length] = '\0';
-
-            while (true) {
-                if (position >= size) {
-                    break;
-                }
-
-                if (*pRead != '\n' && *pRead != '\r') {
-                    break;
-                }
-
-                pRead++;
-                position++;
-            }
-
-            scan32(line, "レイヤ数", &pParam->mNumLayers);
-            scanf32(line, "毛長さ", &pParam->mLength);
-            scanf32(line, "長さ偏差", &pParam->mLengthCurve);
-            scanf32(line, "ズレ(indirect)", &pParam->mIndirect);
-            scanf32(line, "ズレ偏差", &pParam->mIndirectCurve);
-            scanf32(line, "明るさ(毛先)", &pParam->mBrightnessTip);
-            scanf32(line, "明るさ(毛元)", &pParam->mBrightnessRoot);
-            scanf32(line, "明るさ偏差", &pParam->mBrightnessCurve);
-            scanf32(line, "透明度(毛先)", &pParam->mAlphaTip);
-            scanf32(line, "透明度(毛元)", &pParam->mAlphaRoot);
-            scanf32(line, "透明度偏差", &pParam->mAlphaCurve);
-            scanf32(line, "透明度・地肌(毛先)", &pParam->mSkinAlphaTip);
-            scanf32(line, "透明度・地肌(毛元)", &pParam->mSkinAlphaRoot);
-            scanf32(line, "透明度・地肌偏差", &pParam->mSkinAlphaCurve);
-            scanf32(line, "密度マップスケール", &pParam->mFurUVScale);
-            scanf32(line, "ベースマップスケール", &pParam->mBodyUVScale);
-            scanu8x4(line, "混合カラー", &pParam->mColor.r);
-            scanf32x4(line, "植毛密度", pParam->mDensity);
-            scanf32x4(line, "植毛太さ", pParam->mThickness);
-            scanu8x4(line, "混合比", pParam->mLengthMap);
-            scan32(line, "ライト0スイッチ", &lightMask);
-            scan32(line, "ライト0マテリアル", &matIntensity);
-            scan32(line, "ライト0アンビエント", &ambIntensity);
-            scan32(line, "ライト1スイッチ", &specularLightMask);
-            scan32(line, "ライト1マテリアル", &specularMatIntensity);
-            scan32(line, "ライト1アンビエント", &specularAmbIntensity);
-            scan32(line, "ライトカラーソース", &colorSource);
-            pLight->mLightMask = lightMask;
-            pLight->mMatIntensity = matIntensity;
-            pLight->mAmbIntensity = ambIntensity;
-            pLight->mSpecularLightMask = specularLightMask;
-            pLight->mSpecularMatIntensity = specularMatIntensity;
-            pLight->mSpecularAmbIntensity = specularAmbIntensity;
-            pLight->mColorSource = colorSource;
+    void applyFurFile(FurParam* pParam, FurLightParam* pLight, const FurFile& rFile) {
+        const u32 present = rFile.mPresent;
+        if (present & (1u << FurFile::cNumLayers)) {
+            pParam->mNumLayers = rFile.mNumLayers;
         }
+
+        f32* const floats[13] = {&pParam->mLength,       &pParam->mLengthCurve,   &pParam->mBrightnessTip,  &pParam->mBrightnessRoot,
+                                 &pParam->mBrightnessCurve, &pParam->mAlphaTip,    &pParam->mAlphaRoot,      &pParam->mAlphaCurve,
+                                 &pParam->mSkinAlphaTip, &pParam->mSkinAlphaRoot, &pParam->mSkinAlphaCurve, &pParam->mFurUVScale,
+                                 &pParam->mBodyUVScale};
+        for (u32 i = 0; i < 13; i++) {
+            if (present & (1u << (FurFile::cFirstFloat + i))) {
+                *floats[i] = rFile.mFloats[i];
+            }
+        }
+
+        if (present & (1u << FurFile::cColor)) {
+            pParam->mColor.r = rFile.mColor[0];
+            pParam->mColor.g = rFile.mColor[1];
+            pParam->mColor.b = rFile.mColor[2];
+            pParam->mColor.a = rFile.mColor[3];
+        }
+
+        for (u32 i = 0; i < 4; i++) {
+            if (present & (1u << FurFile::cDensity)) {
+                pParam->mDensity[i] = rFile.mDensity[i];
+            }
+            if (present & (1u << FurFile::cThickness)) {
+                pParam->mThickness[i] = rFile.mThickness[i];
+            }
+            if (present & (1u << FurFile::cLengthMap)) {
+                pParam->mLengthMap[i] = rFile.mLengthMap[i];
+            }
+        }
+
+        pLight->mLightMask = rFile.mLight[0];
+        pLight->mMatIntensity = rFile.mLight[1];
+        pLight->mAmbIntensity = rFile.mLight[2];
+        pLight->mSpecularLightMask = rFile.mLight[3];
+        pLight->mSpecularMatIntensity = rFile.mLight[4];
+        pLight->mSpecularAmbIntensity = rFile.mLight[5];
+        pLight->mColorSource = rFile.mLight[6];
     }
 };  // namespace MR
 

@@ -10,6 +10,7 @@ pub mod ghost;
 pub mod gltf;
 pub mod modern_audio;
 pub mod formats;
+pub mod fur;
 pub mod material;
 pub mod kcl;
 pub mod camera;
@@ -116,6 +117,7 @@ fn placement_table_name(name: &str) -> bool {
 /// Whether the cooker reads a file of this name (the others are copied as they are).
 pub fn cooks(name: &str) -> bool {
     matches!(extension(name).as_str(), "arc" | "szs" | "gst" | "bti" | "bmd" | "bdl" | "bmt" | "cit" | "bas" | "brs" | "bme" | "bct" | "csw" | "bck" | "bca" | "btk" | "brk" | "bpk" | "bpa" | "btp" | "bva" | "blk" | "bla" | "bxk" | "bxa" | "tpl" | "brfnt" | "jpc" | "bcsv" | "tbl" | "pa" | "bcam" | "banmt" | "canm" | "thp" | "ast")
+        || fur::is_fur_text(name)
 }
 
 /// A disc file only a console reads: the channel banner, the HOME menu (its module, its library's files and each
@@ -272,6 +274,8 @@ pub fn cook_file(name: &str, bytes: Vec<u8>, stats: &mut Stats) -> Result<Option
         Some(native_data::speaker(&bytes, &extension(name)).with_context(|| format!("{name}: speaker file"))?)
     } else if extension(name) == "kcl" {
         Some(kcl::cook(&bytes).with_context(|| format!("{name}: collision"))?)
+    } else if fur::is_fur_text(name) {
+        Some(fur::cook(&bytes).with_context(|| format!("{name}: fur"))?)
     } else if bytes.starts_with(b"RFNT") {
         let textured = formats::font(&bytes, stats).with_context(|| format!("{name}: font"))?;
         Some(native_data::font_native(&textured).with_context(|| format!("{name}: font (native layout)"))?)

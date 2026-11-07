@@ -30,50 +30,6 @@ namespace {
         return true;
     }
 
-    bool scanFloat(const char*& rP, f32* pValue) {
-        const char* p = rP;
-        while (*p == ' ' || (*p >= '\t' && *p <= '\r')) {
-            p++;
-        }
-        const bool negative = *p == '-';
-        if (*p == '-' || *p == '+') {
-            p++;
-        }
-        double value = 0.0;
-        double scale = 1.0;
-        bool any = false;
-        for (; *p >= '0' && *p <= '9'; p++) {
-            value = value * 10.0 + (*p - '0');
-            any = true;
-        }
-        if (*p == '.') {
-            for (p++; *p >= '0' && *p <= '9'; p++) {
-                value = value * 10.0 + (*p - '0');
-                scale *= 10.0;
-                any = true;
-            }
-        }
-        if (!any) {
-            return false;
-        }
-        if (*p == 'e' || *p == 'E') {
-            const char* pExponent = p + 1;
-            int exponent = 0;
-            if (scanInt(pExponent, &exponent)) {
-                p = pExponent;
-                for (; exponent > 0; exponent--) {
-                    value *= 10.0;
-                }
-                for (; exponent < 0; exponent++) {
-                    scale *= 10.0;
-                }
-            }
-        }
-        rP = p;
-        *pValue = static_cast< f32 >((negative ? -value : value) / scale);
-        return true;
-    }
-
     // The list's opening brace after any spaces.
     bool scanOpen(const char*& rP) {
         while (*rP == ' ' || (*rP >= '\t' && *rP <= '\r')) {
@@ -397,38 +353,6 @@ namespace MR {
         *pDst = temp;
     }
 
-    void scanf32(const char* pSrc, const char* pSubStr, f32* pDst) {
-        if (strstr(pSrc, pSubStr) == nullptr) {
-            return;
-        }
-
-        const char* p = pSrc;
-        scanFloat(p, pDst);
-    }
-
-    void scanu8x4(const char* pSrc, const char* pSubStr, u8* pDst) {
-        int temp[4];
-
-        if (strstr(pSrc, pSubStr) == nullptr) {
-            return;
-        }
-
-        const char* p = pSrc;
-        if (!scanOpen(p)) {
-            return;
-        }
-        for (s32 i = 0; i < 4 && scanInt(p, &temp[i]); i++) {
-            if (*p != ',') {
-                break;
-            }
-            p++;
-        }
-
-        for (int i = 0; i < ARRAY_SIZE(temp); i++) {
-            pDst[i] = temp[i];
-        }
-    }
-
     void scans16x4(const char* pSrc, const char* pSubStr, s16* pDst) {
         int temp[4];
 
@@ -449,26 +373,6 @@ namespace MR {
 
         for (int i = 0; i < ARRAY_SIZE(temp); i++) {
             pDst[i] = temp[i];
-        }
-    }
-
-    void scanf32x4(const char* pSrc, const char* pSubStr, f32* pDst) {
-        if (strstr(pSrc, pSubStr) == nullptr) {
-            return;
-        }
-
-        const char* p = pSrc;
-        if (!scanOpen(p)) {
-            return;
-        }
-        for (s32 i = 0; i < 4 && scanFloat(p, &pDst[i]); i++) {
-            if (*p == 'f') {
-                p++;
-            }
-            if (*p != ',') {
-                break;
-            }
-            p++;
         }
     }
 };  // namespace MR

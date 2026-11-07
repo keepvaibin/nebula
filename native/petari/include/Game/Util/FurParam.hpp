@@ -52,6 +52,33 @@ public:
     FurLightParam* mLightParam;
 };
 
+// A material's <name>.fur.txt as the cook writes it (cook/fur.rs).
+struct FurFile {
+    enum Value {
+        cNumLayers,
+        cFirstFloat,
+        cColor = cFirstFloat + 13,
+        cDensity,
+        cThickness,
+        cLengthMap,
+    };
+
+    char mMagic[4];
+    // A bit per Value the file gave; FurParam keeps its default for the others.
+    u32 mPresent;
+    s32 mNumLayers;
+    // mLength through mBodyUVScale in FurParam's order, without the indirect pair.
+    f32 mFloats[13];
+    u8 mColor[4];
+    f32 mDensity[4];
+    f32 mThickness[4];
+    u8 mLengthMap[4];
+    // Light 0 switch, material, ambient, light 1 switch, material, ambient, colour source; 0 when the file lacks one.
+    s32 mLight[7];
+};
+
+static_assert(sizeof(FurFile) == 132);
+
 namespace MR {
-    void initFurParamFromFile(FurParam*, DynamicFurParam*, char*, u32);
+    void applyFurFile(FurParam*, FurLightParam*, const FurFile&);
 };  // namespace MR
