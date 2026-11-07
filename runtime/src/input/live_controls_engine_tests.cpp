@@ -192,6 +192,20 @@ void host_controls_and_device_motion() {
     for (int i = 0; i < 60; ++i) { mouse.advance(); result = aim.sample(pads, mouse); }
     check(result.pointer_owner == PointerSource::Mouse && result.input.pointer_x == -0.3f,
           "a resting mouse keeps the pointer from a hand-held gyro");
+
+    // Turned half a picture past the top and back, the pointer comes back where it was: the hand and the pointer stay
+    // together.
+    LiveControlsEngine turn; Host clock;
+    pad.gyro_x = 0.0f;
+    pad.gyro_y = 0.0f;
+    (void)turn.sample(pads, clock);
+    pad.gyro_y = 0.1f;
+    for (int i = 0; i < 15; ++i) { clock.advance(); result = turn.sample(pads, clock); }
+    check(!result.input.pointer_on, "pointed past the top the pointer hides");
+    pad.gyro_y = -0.1f;
+    for (int i = 0; i < 15; ++i) { clock.advance(); result = turn.sample(pads, clock); }
+    check(result.input.pointer_on && std::fabs(result.input.pointer_y) < 0.001f,
+          "turned back, the pointer is where the controller points");
 }
 }
 int main() {
