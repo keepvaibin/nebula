@@ -19,8 +19,7 @@ VolumeModelDrawer::VolumeModelDrawer(const char* pName, const char* pFileName, M
     : NameObj(pName), mMtx(), mModelData(), mColor(0xFF, 0xA9, 0, 0xFF) {
     MR::createSceneObj(SceneObj_VolumeModelDrawInit);
     mMtx = mtx;
-    MR::FormattedName buf("%s.arc", pFileName);
-    mModelData = (ModelData*)MR::createAndAddResourceHolder(buf.c_str())->mModelResTable->getRes(pFileName);
+    mModelData = (ModelData*)MR::createAndAddResourceHolder(pFileName)->mModelResTable->getRes(pFileName);
 }
 
 // A glow on whatever stands inside the model's shape: its back faces behind a surface mark the pixel, its front faces

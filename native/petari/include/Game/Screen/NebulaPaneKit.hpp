@@ -25,7 +25,7 @@ class NebulaPaneKit {
 public:
     NebulaPaneKit();
 
-    // The layout of pHolder, the holder of the layout archive pArchive ("SysInfoWindow.arc": a name the kit keeps),
+    // The layout of pHolder, the holder of the layout archive pArchive ("SysInfoWindow": a name the kit keeps),
     // copied into pInto; false when neither it nor the game's own copy has one.
     bool init(LayoutHolder* pHolder, const char* pArchive, nw4r::lyt::Layout* pInto);
     // As above, with the archive's holder.

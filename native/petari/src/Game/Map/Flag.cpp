@@ -164,7 +164,7 @@ void Flag::init(const TableIter& rIter) {
     if (mObjName != nullptr) {
         mTexture = new JUTTexture(MR::loadTexFromArc(mObjName));
     } else {
-        mTexture = new JUTTexture(MR::loadTexFromArc("Flag.arc", "Flag.bti"));
+        mTexture = new JUTTexture(MR::loadTexFromArc("Flag", "Flag.bti"));
     }
 
     initSound(4, false);

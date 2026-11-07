@@ -62,7 +62,7 @@ void GameSystemErrorWatcher::initAfterResourceLoaded() {
     mBatteryLayout = new BatteryLayout();
     mBatteryLayout->initWithoutIter();
 
-    mUnplaggedTexMap = MR::createLytTexMap("ErrorMessageImage.arc", "FreeStyleUnplagged.bti");
+    mUnplaggedTexMap = MR::createLytTexMap("ErrorMessageImage", "FreeStyleUnplagged.bti");
 }
 
 void GameSystemErrorWatcher::movement() {

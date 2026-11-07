@@ -15,6 +15,8 @@ public:
     struct Item {
         s32 mEntry;
         bool mIsFolder;
+        // A file's NEBULA_ASSET_KIND_*.
+        u8 mKind;
         const char* mName;
         void* mData;
         u32 mSize;
@@ -44,7 +46,7 @@ public:
         return mEntry;
     }
 
-    // Its name in the store ("Kuribo.arc").
+    // Its name in the store ("Kuribo").
     const char* getName() const;
 
 private:

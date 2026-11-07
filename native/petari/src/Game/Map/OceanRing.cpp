@@ -91,7 +91,7 @@ void OceanRing::init(const TableIter& rIter) {
             mWaveHeight2 = 80.0f;
         }
 
-        MR::loadTexFromArc("OceanRing.arc", "WaterPipeInside.bti");
+        MR::loadTexFromArc("OceanRing", "WaterPipeInside.bti");
     }
 
     MR::getPlacementArg1NoInit(rIter, &mObjArg1);

@@ -107,7 +107,7 @@ void StarPointerLayout::initWithPort(s32 channel) {
 
     initNerve(GET_NERVE(StarPointerLayout, HostTypeNrvHideImmediately));
 
-    mBlur = new StarPointerBlur(new JUTTexture(MR::loadTexFromArc("StarPointerBlur.arc", "Blur.bti")));
+    mBlur = new StarPointerBlur(new JUTTexture(MR::loadTexFromArc("StarPointerBlur", "Blur.bti")));
 
     mCommandStream = new StarPointerCommandStream(&mPosition);
 

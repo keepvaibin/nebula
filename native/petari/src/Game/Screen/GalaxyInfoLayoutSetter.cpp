@@ -11,7 +11,7 @@
 #include <cstdio>
 
 namespace {
-    const char* const cTextureArcName = "GalaxyInfoTexture.arc";
+    const char* const cTextureArcName = "GalaxyInfoTexture";
 };  // namespace
 
 namespace {
@@ -99,7 +99,7 @@ void GalaxyInfoLayoutSetter::initReplaceTexture() {
     for (u32 i = 0; i < fileInfoTable->mCount; i++) {
         const char* resName = fileInfoTable->getResName(i);
 
-        mReplaceTexture[i] = MR::createLytTexMap("GalaxyInfoTexture.arc", resName);
+        mReplaceTexture[i] = MR::createLytTexMap("GalaxyInfoTexture", resName);
 
         if (MR::isEqualStringCase("GalaxyInfoTextureUnknown.bti", resName)) {
             mUnknownTexture = mReplaceTexture[i];

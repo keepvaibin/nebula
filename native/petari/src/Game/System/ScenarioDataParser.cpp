@@ -41,20 +41,27 @@ namespace {
         return hash;
     }
 
+    // A galaxy's scenario archive is named for it and ends in this.
+    const char cScenarioSuffix[] = "Scenario";
+
+    // The length of the galaxy name of a scenario archive's entry, or 0 for any other entry.
+    u32 getGalaxyNameLength(const GameAssets::FolderEntry& rEntry) {
+        const u32 suffixLength = sizeof(cScenarioSuffix) - 1;
+        const u32 length = static_cast< u32 >(strlen(rEntry.mName));
+        if (!rEntry.mIsFolder || length <= suffixLength || strcmp(rEntry.mName + length - suffixLength, cScenarioSuffix) != 0) {
+            return 0;
+        }
+        return length - suffixLength;
+    }
+
     const ScenarioData* getCurrentScenarioData() {
         return ScenarioDataFunction::getScenarioDataParser()->getScenarioData(MR::getCurrentStageName());
     }
 };  // namespace
 
-ScenarioData::ScenarioData(const char* pFilePath) : mScenarioData(), mGalaxyName(), mZoneList() {
-    MR::FormattedName fileName;
-    MR::removeExtensionString(fileName, MR::getBasename(pFilePath));
-
-    const char* const pSuffix = strstr(fileName.c_str(), "Scenario");
-    const u32 galaxyNameLength = pSuffix != nullptr ? static_cast< u32 >(pSuffix - fileName.c_str()) : strlen(fileName.c_str());
-
+ScenarioData::ScenarioData(const char* pGalaxyName, u32 galaxyNameLength, const char* pFilePath) : mScenarioData(), mGalaxyName(), mZoneList() {
     mGalaxyName = new char[galaxyNameLength + 1];
-    memcpy(mGalaxyName, fileName.c_str(), galaxyNameLength);
+    memcpy(mGalaxyName, pGalaxyName, galaxyNameLength);
     mGalaxyName[galaxyNameLength] = '\0';
 
     AssetFolder* pArchive = MR::getArchive(pFilePath);
@@ -162,27 +169,25 @@ GalaxyStatusAccessor ScenarioDataIter::makeAccessor() const {
 }
 
 ScenarioDataParser::ScenarioDataParser(const char* pName) : NameObj(pName) {
-    // The stage folders bound the galaxies (mods add folders, so there is no fixed number).
+    // The galaxies are the scenario archives in /StageData (mods add more, so there is no fixed number).
     GameAssets::FolderEntry dirent;
-    u32 folderNum = 0;
-    while (GameAssets::folderEntry("/StageData", folderNum, &dirent)) {
-        folderNum++;
+    u32 galaxyNum = 0;
+    for (u32 i = 0; GameAssets::folderEntry("/StageData", i, &dirent); i++) {
+        if (getGalaxyNameLength(dirent) != 0) {
+            galaxyNum++;
+        }
     }
-    mScenarioData = new ScenarioData*[folderNum > 0 ? folderNum : 1];
+    mScenarioData = new ScenarioData*[galaxyNum > 0 ? galaxyNum : 1];
 
-    for (u32 i = 0; i < folderNum && GameAssets::folderEntry("/StageData", i, &dirent); i++) {
-        if (!dirent.mIsFolder) {
+    for (u32 i = 0; static_cast< u32 >(mScenarioDataNum) < galaxyNum && GameAssets::folderEntry("/StageData", i, &dirent); i++) {
+        const u32 galaxyNameLength = getGalaxyNameLength(dirent);
+        if (galaxyNameLength == 0) {
             continue;
         }
 
-        MR::FormattedName fileName;
-        MR::makeScenarioArchiveFileName(fileName, dirent.mName);
-
-        if (!MR::isFileExist(fileName.c_str(), false)) {
-            continue;
-        }
-
-        mScenarioData[mScenarioDataNum++] = new ScenarioData(fileName.c_str());
+        MR::FormattedName filePath;
+        filePath.format("/StageData/%s", dirent.mName);
+        mScenarioData[mScenarioDataNum++] = new ScenarioData(dirent.mName, galaxyNameLength, filePath.c_str());
     }
 
     MR::sort(mScenarioData, mScenarioData + mScenarioDataNum, GalaxyNameSortLt());

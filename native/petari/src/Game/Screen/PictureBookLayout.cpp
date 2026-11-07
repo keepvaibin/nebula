@@ -41,7 +41,7 @@ namespace {
         s32 textureNo = 0;
 
         char chapterArcName[256];
-        nebula_snprintf(chapterArcName, sizeof(chapterArcName), "PictureBookChapter%d.arc", chapterNo);
+        nebula_snprintf(chapterArcName, sizeof(chapterArcName), "PictureBookChapter%d", chapterNo);
 
         for (;;) {
             char pageTexName[256];
@@ -189,7 +189,7 @@ void PictureBookLayout::initTexture() {
 
     for (s32 c = mChapterMin; c <= mChapterMax; c++) {
         char chapterArcName[256];
-        nebula_snprintf(chapterArcName, sizeof(chapterArcName), "PictureBookChapter%d.arc", c);
+        nebula_snprintf(chapterArcName, sizeof(chapterArcName), "PictureBookChapter%d", c);
 
         for (s32 p = 0; p < ::getTextureNum(c); p++) {
             char pageTexName[256];
@@ -200,9 +200,9 @@ void PictureBookLayout::initTexture() {
         }
     }
 
-    mTitleTexMap = MR::createLytTexMap("PictureBookTexture.arc", "PictureBookTitle.bti");
-    mCoverFrontTexMap = MR::createLytTexMap("PictureBookTexture.arc", "PictureBookCoverFront.bti");
-    mCoverBackTexMap = MR::createLytTexMap("PictureBookTexture.arc", "PictureBookCoverBack.bti");
+    mTitleTexMap = MR::createLytTexMap("PictureBookTexture", "PictureBookTitle.bti");
+    mCoverFrontTexMap = MR::createLytTexMap("PictureBookTexture", "PictureBookCoverFront.bti");
+    mCoverBackTexMap = MR::createLytTexMap("PictureBookTexture", "PictureBookCoverBack.bti");
 }
 
 void PictureBookLayout::initContentsButton() {

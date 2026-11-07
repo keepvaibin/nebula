@@ -43,11 +43,9 @@ void InvisiblePolygonObj::initCollision(const TableIter& rIter) {
     initBaseMtx();
 
     const char* pName = nullptr;
-    MR::FormattedName fileName;
     MR::getObjectName(&pName, rIter);
-    fileName.format("%s.arc", pName);
 
-    ResourceHolder* resource = MR::createAndAddResourceHolder(fileName.c_str());
+    ResourceHolder* resource = MR::createAndAddResourceHolder(pName);
 
     initHitSensor(1);
 

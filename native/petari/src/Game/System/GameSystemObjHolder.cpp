@@ -25,28 +25,28 @@
 GameSystemObjHolder::GameSystemObjHolder()
     : mObjHolder(), mParticleResHolder(), mCaptureScreenDirector(), mScreenPreserver(), mAudioSystem(), mPlayerInputs(), mMessageHolder(), mStarPointerDirector(), mRandom(0), mLanguage(MR::getDecidedLanguageFromIPL()) {
     initNameObj();
-    MR::addArchive(AssetFolder::mount("/NebulaData/ErrorMessageArchive.arc", MR::getPermanentHeap()), MR::getPermanentHeap(), "ErrorMessageArchive.arc");
+    MR::addArchive(AssetFolder::mount("/NebulaData/ErrorMessageArchive", MR::getPermanentHeap()), MR::getPermanentHeap(), "ErrorMessageArchive");
 }
 
 void GameSystemObjHolder::initAfterSystemArchiveLoaded() {
     SingletonHolder< NameObjRegister >::get()->setCurrentHolder(mObjHolder);
-    mParticleResHolder = new ParticleResourceHolder("/ParticleData/Effect.arc");
+    mParticleResHolder = new ParticleResourceHolder("/ParticleData/Effect");
     mMessageHolder->initGameData();
     MR::createStarPointerLayout();
 }
 
 void GameSystemObjHolder::initMessageResource() {
-    AssetFolder* pArchive = MR::getArchive("ErrorMessageArchive.arc");
-    NebulaArena* pHeap = MR::getArchiveArena("ErrorMessageArchive.arc");
+    AssetFolder* pArchive = MR::getArchive("ErrorMessageArchive");
+    NebulaArena* pHeap = MR::getArchiveArena("ErrorMessageArchive");
 
     MR::FormattedName systemMessagePath;
     const char* languagePrefix = MR::getCurrentLanguagePrefix();
-    systemMessagePath.format("/%s/MessageData/System.arc", languagePrefix);
+    systemMessagePath.format("/%s/MessageData/System", languagePrefix);
 
-    MR::addArchive(pArchive->getSubFolder(systemMessagePath.c_str(), pHeap), pHeap, "/Memory/SystemMessage.arc");
-    MR::addArchive(pArchive->getSubFolder("/LayoutData/ErrorMessageWindow.arc", pHeap), pHeap, "/Memory/ErrorMessageWindow.arc");
+    MR::addArchive(pArchive->getSubFolder(systemMessagePath.c_str(), pHeap), pHeap, "/Memory/SystemMessage");
+    MR::addArchive(pArchive->getSubFolder("/LayoutData/ErrorMessageWindow", pHeap), pHeap, "/Memory/ErrorMessageWindow");
 
-    MR::createAndAddLayoutHolderRawData("/Memory/ErrorMessageWindow.arc");
+    MR::createAndAddLayoutHolderRawData("/Memory/ErrorMessageWindow");
 
     mMessageHolder = new MessageHolder();
     mMessageHolder->initSystemData();

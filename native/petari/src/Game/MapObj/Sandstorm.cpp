@@ -360,11 +360,11 @@ void Sandstorm::initSandstormParam() {
     const char* arcName = nullptr;
 
     if (mType == Type_TwisterSan) {
-        arcName = "TwisterSan.arc";
+        arcName = "TwisterSan";
     } else if (mType == Type_SunakazeKun) {
-        arcName = "SunakazeKun.arc";
+        arcName = "SunakazeKun";
     } else if (mType == Type_TwisterSanSlim) {
-        arcName = "TwisterSanSlim.arc";
+        arcName = "TwisterSanSlim";
     }
 
     Table* csvParser = MR::createCsvParser(arcName, ::sParamFileName);

@@ -126,79 +126,56 @@ namespace MR {
         SingletonHolder< ResourceHolderManager >::get()->removeIfIsEqualHeap(pArena);
     }
 
-    bool isExistObjectOrLayoutArchive(const char* pFilePrefix) {
+    bool isExistObjectOrLayoutArchive(const char* pName) {
         MR::FormattedName path;
-        return makeObjectArchiveFileNameFromPrefix(path, pFilePrefix, false) || makeLayoutArchiveFileNameFromPrefix(path, pFilePrefix, false);
+        return makeObjectArchiveFileName(path, pName) || makeLayoutArchiveFileNameFromPrefix(path, pName, false);
     }
 
     void makeFileNameConsideringLanguage(FormattedName& rDst, const char* pFilePath) {
         languagePath(rDst, pFilePath, false);
     }
 
-    bool makeObjectArchiveFileName(FormattedName& rDst, const char* pFileName) {
-        rDst.format("/ObjectData/%s", pFileName);
+    bool makeObjectArchiveFileName(FormattedName& rDst, const char* pName) {
+        rDst.format("/ObjectData/%s", pName);
 
         if (isFileExist(rDst.c_str(), true)) {
             return true;
         }
 
-        rDst.format("/MapPartsData/%s", pFileName);
+        rDst.format("/MapPartsData/%s", pName);
 
         if (isFileExist(rDst.c_str(), false)) {
             return true;
         }
 
-        rDst.format("%s", pFileName);
+        rDst.format("%s", pName);
 
         return isFileExist(rDst.c_str(), true);
     }
 
-    bool makeObjectArchiveFileNameFromPrefix(FormattedName& rDst, const char* pFilePrefix, bool) {
-        MR::FormattedName fileName("%s.arc", pFilePrefix);
-
-        return makeObjectArchiveFileName(rDst, fileName.c_str());
+    bool makeLayoutArchiveFileName(FormattedName& rDst, const char* pName) {
+        return layoutPath(rDst, pName, false);
     }
 
-    bool makeLayoutArchiveFileName(FormattedName& rDst, const char* pFileName) {
-        return layoutPath(rDst, pFileName, false);
+    bool makeGameLayoutArchiveFileName(FormattedName& rDst, const char* pName) {
+        return layoutPath(rDst, pName, true);
     }
 
-    bool makeGameLayoutArchiveFileName(FormattedName& rDst, const char* pFileName) {
-        return layoutPath(rDst, pFileName, true);
-    }
-
-    bool makeLayoutArchiveFileNameFromPrefix(FormattedName& rDst, const char* pFilePrefix, bool fallback) {
-        MR::FormattedName fileName("%s.arc", pFilePrefix);
-        bool isExistArc = makeLayoutArchiveFileName(rDst, fileName.c_str());
-
-        const char* pAspectSuffix = isScreen16Per9() ? "16x9" : "4x3";
-        fileName.format("%s%s.arc", pFilePrefix, pAspectSuffix);
-        bool isExistAspectArc = makeLayoutArchiveFileName(rDst, fileName.c_str());
-
-        fileName.format("%sReplace.arc", pFilePrefix);
-        bool isExistReplaceArc = makeLayoutArchiveFileName(rDst, fileName.c_str());
-
-        bool fileFound = isExistArc || isExistAspectArc || isExistReplaceArc;
-
-        if (!fileFound && !fallback) {
-            return false;
+    bool makeLayoutArchiveFileNameFromPrefix(FormattedName& rDst, const char* pName, bool fallback) {
+        MR::FormattedName name("%s%s", pName, isScreen16Per9() ? "16x9" : "4x3");
+        if (makeLayoutArchiveFileName(rDst, name.c_str())) {
+            return true;
         }
 
-        if (isExistAspectArc) {
-            pAspectSuffix = isScreen16Per9() ? "16x9" : "4x3";
-            fileName.format("%s%s.arc", pFilePrefix, pAspectSuffix);
-        } else if (isExistReplaceArc) {
-            fileName.format("%sReplace.arc", pFilePrefix);
-        } else {
-            fileName.format("%s.arc", pFilePrefix);
+        name.format("%sReplace", pName);
+        if (makeLayoutArchiveFileName(rDst, name.c_str())) {
+            return true;
         }
 
-        makeLayoutArchiveFileName(rDst, fileName.c_str());
-
-        return true;
+        return makeLayoutArchiveFileName(rDst, pName) || fallback;
     }
 
-    void makeScenarioArchiveFileName(FormattedName& rDst, const char* pStageName) {
-        rDst.format("/StageData/%s/%sScenario.arc", pStageName, pStageName);
+    void makeScenarioArchiveFileName(FormattedName& rDst, const char* pGalaxyName) {
+        rDst.format("/StageData/%sScenario", pGalaxyName);
     }
 };  // namespace MR

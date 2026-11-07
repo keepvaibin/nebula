@@ -444,9 +444,9 @@ void WaterRoad::init(const TableIter& rIter) {
     MR::setEffectHostMtx(this, "Top", mBaseMtx);
     MR::setEffectHostMtx(this, "End", mBaseMtx);
 
-    mTexture = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "Water.bti"));
-    mIndirect = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "WaterIndirect.bti"));
-    mEnvMap = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "EnvMap.bti"));
+    mTexture = new JUTTexture(MR::loadTexFromArc("WaterWave", "Water.bti"));
+    mIndirect = new JUTTexture(MR::loadTexFromArc("WaterWave", "WaterIndirect.bti"));
+    mEnvMap = new JUTTexture(MR::loadTexFromArc("WaterWave", "EnvMap.bti"));
 
     initSound(3, false);
     mSoundObj = new AudSoundObject(&mCamRailNearestPos, 4, MR::getCurrentHeap());

@@ -46,7 +46,7 @@ void AstroDomeDemoStarter::init(const TableIter& rIter) {
     MR::invalidateClipping(this);
 
     MR::initActorCamera(this, rIter, &_F4);
-    MR::initAnimCamera(this, _F4, "AstroDomeDemoCamera.arc", "AstroDomeDemoCamera");
+    MR::initAnimCamera(this, _F4, "AstroDomeDemoCamera", "AstroDomeDemoCamera");
 
     _8C = new SpinDriverShootPath();
     _8C->init(rIter);

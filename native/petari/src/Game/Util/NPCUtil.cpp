@@ -62,7 +62,7 @@ namespace MR {
     }
 
     bool isNPCItemFileExist(const char* pName) {
-        MR::FormattedName path("/ObjectData/%s.arc", pName);
+        MR::FormattedName path("/ObjectData/%s", pName);
         return isFileExist(path.c_str(), false);
     }
 

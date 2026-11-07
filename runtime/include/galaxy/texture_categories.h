@@ -41,7 +41,7 @@ using CategoryCounts = std::array<unsigned, kCategoryCount>;
     return 1u << static_cast<unsigned>(category);
 }
 
-// The category of a game file by its path in the store ("ObjectData/Kuribo.arc/Kuribo.bdl", "LayoutData/Icon.arc/...").
+// The category of a game file by its path in the store ("ObjectData/Kuribo/Kuribo.bdl", "LayoutData/Icon/...").
 [[nodiscard]] Category category_of_path(std::string_view path) noexcept;
 // The category of an object's archive by its name, without its extension.
 [[nodiscard]] Category category_of_object(std::string_view archive) noexcept;

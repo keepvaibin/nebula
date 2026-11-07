@@ -7,8 +7,6 @@
 
 class ModelData;
 
-typedef const char* ArchiveName;
-
 class ResourceHolder {
 public:
     ResourceHolder(AssetFolder&);
@@ -21,12 +19,17 @@ public:
 
     Mtx44& getInitEffectMtx(int, int) const;
     void initializeArc(AssetFolder&);
-    u32 initEachResTable(ResTable**, AssetFolder*, const ArchiveName*);
 
-    static s32 count(AssetFolder*, const char*, s32);
-    void mount(AssetFolder*, s32);
+    // The tables: one per kind from NEBULA_ASSET_KIND_MODEL to _MATERIAL_TABLE, then the file table.
+    static constexpr u32 cTableCount = 12;
+    static ResTable* ResourceHolder::* const cTables[cTableCount];
+    // The cTables slot of a NEBULA_ASSET_KIND_*.
+    static u32 tableOf(u32);
+    // The files below a folder, by kind (NEBULA_ASSET_KIND_COUNT counts).
+    static void count(const AssetFolder&, s32, u32*);
+    void mount(const AssetFolder&, s32);
 
-    ResFileInfo* createAndRegisterObject(const char*, void*);
+    ResFileInfo* createAndRegisterObject(const AssetFolder::Item&);
     void backupInitMaterialData(const ModelData*);
 
     // bool checkCorrectMotionsAndModel(ModelData*, const char*) const;

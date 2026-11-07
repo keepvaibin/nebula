@@ -135,10 +135,10 @@ void Pole::init(const TableIter& rIter) {
     } else {
         mBaseMtx.set(mtx);
         if (MR::isEqualString(name, "PoleNoModel")) {
-            ResourceHolder* resource1 = MR::createAndAddResourceHolder("Pole.arc");
+            ResourceHolder* resource1 = MR::createAndAddResourceHolder("Pole");
             MR::initCollisionPartsFromResourceHolder(this, "Pole", getSensor("ride"), resource1, mBaseMtx.toMtxPtr());
         } else {
-            ResourceHolder* resource2 = MR::createAndAddResourceHolder("PoleSquare.arc");
+            ResourceHolder* resource2 = MR::createAndAddResourceHolder("PoleSquare");
             MR::initCollisionPartsFromResourceHolder(this, "PoleSquare", getSensor("ride"), resource2, mBaseMtx.toMtxPtr());
         }
     }

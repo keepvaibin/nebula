@@ -8,5 +8,5 @@ NPCDirector::NPCDirector() : NameObj("NPC指揮") {
 void NPCDirector::init(const TableIter& rIter) {
     mCapsParameterReader = new NPCCapsParameterReader("");
     mItemParameterReader = new NPCItemParameterReader("");
-    mDataResourceHolder = MR::createAndAddResourceHolder("NPCData.arc");
+    mDataResourceHolder = MR::createAndAddResourceHolder("NPCData");
 }

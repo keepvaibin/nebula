@@ -37,9 +37,7 @@ void LightFunction::initLightData() {
 }
 
 ResourceHolder* LightFunction::loadLightArchive() {
-    char buf[0x100];
-    nebula_snprintf(buf, sizeof(buf), "LightData.arc");
-    return MR::createAndAddResourceHolder(buf);
+    return MR::createAndAddResourceHolder("LightData");
 }
 
 s32 LightFunction::createLightDataParser(Table** pOut) {

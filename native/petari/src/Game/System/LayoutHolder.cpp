@@ -1,25 +1,10 @@
 #include "Game/System/LayoutHolder.hpp"
 #include "Game/Util/SystemUtil.hpp"
 #include "Game/System/AssetFolder.hpp"
-#include <cstdio>
 #include <cstring>
+#include <nebula_game_api.h>
 
 #include "Game/Util/StringUtil.hpp"
-
-extern "C" {
-int strncasecmp(const char* s1, const char* s2, size_t n);
-}
-
-namespace {
-    const char* const sLayoutExt[] = {
-        ".brlyt",
-        nullptr,
-    };
-    const char* const sAnimationExt[] = {
-        ".brlan",
-        nullptr,
-    };
-};  // namespace
 
 LayoutHolder::LayoutHolder(AssetFolder& rArchive) : nw4r::lyt::ResourceAccessor(), mArchive(&rArchive) {
     initializeArc();
@@ -87,44 +72,50 @@ bool LayoutHolder::isAnimationHashEqual(u32 hash, u32 fileID) const {
 }
 
 void LayoutHolder::initializeArc() {
-    u32 resCount = mArchive->countResource();
-    resCount -= initEachResTable(&mLayoutRes, ::sLayoutExt);
-    resCount -= initEachResTable(&mAnimRes, ::sAnimationExt);
+    u32 counts[NEBULA_ASSET_KIND_COUNT] = {};
+    count(mArchive->getEntry(), counts);
 
-    if (resCount > 0) {
-        mResOther.newFileInfoTable(resCount);
+    u32 other = 0;
+    for (u32 kind = 0; kind < NEBULA_ASSET_KIND_COUNT; kind++) {
+        if (&tableOf(kind) == &mResOther) {
+            other += counts[kind];
+        }
+    }
+
+    if (counts[NEBULA_ASSET_KIND_LAYOUT] != 0) {
+        mLayoutRes.newFileInfoTable(counts[NEBULA_ASSET_KIND_LAYOUT]);
+    }
+    if (counts[NEBULA_ASSET_KIND_LAYOUT_ANIMATION] != 0) {
+        mAnimRes.newFileInfoTable(counts[NEBULA_ASSET_KIND_LAYOUT_ANIMATION]);
+    }
+    if (other != 0) {
+        mResOther.newFileInfoTable(other);
     }
 
     mount(mArchive->getEntry());
 }
 
-u32 LayoutHolder::initEachResTable(ResTable* pResTable, const char* const* pExtensionTable) {
-    u32 resCount = 0;
-
-    for (s32 i = 0; pExtensionTable[i] != nullptr; i++) {
-        resCount += count(pExtensionTable[i], mArchive->getEntry());
+ResTable& LayoutHolder::tableOf(u32 kind) {
+    switch (kind) {
+    case NEBULA_ASSET_KIND_LAYOUT:
+        return mLayoutRes;
+    case NEBULA_ASSET_KIND_LAYOUT_ANIMATION:
+        return mAnimRes;
+    default:
+        return mResOther;
     }
-
-    if (resCount > 0) {
-        pResTable->newFileInfoTable(resCount);
-    }
-
-    return resCount;
 }
 
-u32 LayoutHolder::count(const char* pExtension, s32 folder) {
-    u32 resCount = 0;
+void LayoutHolder::count(s32 folder, u32* pCounts) const {
     AssetFolder::Item item;
 
     for (u32 i = 0; mArchive->getItem(folder, i, &item); i++) {
         if (item.mIsFolder) {
-            resCount += count(pExtension, item.mEntry);
-        } else if (pExtension == nullptr || strstr(item.mName, pExtension) != nullptr) {
-            resCount++;
+            count(item.mEntry, pCounts);
+        } else {
+            pCounts[item.mKind < NEBULA_ASSET_KIND_COUNT ? item.mKind : NEBULA_ASSET_KIND_OTHER]++;
         }
     }
-
-    return resCount;
 }
 
 void LayoutHolder::mount(s32 folder) {
@@ -134,21 +125,9 @@ void LayoutHolder::mount(s32 folder) {
         if (item.mIsFolder) {
             mount(item.mEntry);
         } else {
-            ResFileInfo* pInfo = createAndRegisterObject(item.mName, item.mData);
+            ResFileInfo* pInfo = tableOf(item.mKind).add(item.mName, item.mData, false);
             pInfo->_8 = item.mData;
             pInfo->_4 = item.mSize;
         }
     }
-}
-
-ResFileInfo* LayoutHolder::createAndRegisterObject(const char* pName, void* pResource) {
-    if (strstr(pName, ".brlyt") != nullptr) {
-        return mLayoutRes.add(pName, pResource, false);
-    }
-
-    if (strstr(pName, ".brlan") != nullptr) {
-        return mAnimRes.add(pName, pResource, false);
-    }
-
-    return mResOther.add(pName, pResource, false);
 }

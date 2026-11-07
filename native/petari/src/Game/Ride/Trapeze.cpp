@@ -752,7 +752,7 @@ void Trapeze::drawRope(TypedDraw& rDraw, const Vec3f& rPosA, const Vec3f& rPosB,
 
 TrapezeRopeDrawInit::TrapezeRopeDrawInit(const char* pName) : NameObj(pName) {
     mTexture = nullptr;
-    mTexture = new JUTTexture(MR::loadTexFromArc("Trapeze.arc", "TrapezeRope.bti"));
+    mTexture = new JUTTexture(MR::loadTexFromArc("Trapeze", "TrapezeRope.bti"));
 
     mMaterial = makeMaterial();
 }

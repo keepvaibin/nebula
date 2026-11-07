@@ -31,8 +31,8 @@ void OceanRingPipeOutside::init(const TableIter& rIter) {
     MR::connectToScene(this, MR::MovementType_None, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_OceanRingPipeOutside);
     initMesh();
     MR::invalidateClipping(this);
-    mWaterPipeIndirectTex = new JUTTexture(MR::loadTexFromArc("OceanRing.arc", "WaterPipeIndirect.bti"));
-    mWaterPipeHighLightTex = new JUTTexture(MR::loadTexFromArc("OceanRing.arc", "WaterPipeHighLight.bti"));
+    mWaterPipeIndirectTex = new JUTTexture(MR::loadTexFromArc("OceanRing", "WaterPipeIndirect.bti"));
+    mWaterPipeHighLightTex = new JUTTexture(MR::loadTexFromArc("OceanRing", "WaterPipeHighLight.bti"));
     makeActorAppeared();
 }
 

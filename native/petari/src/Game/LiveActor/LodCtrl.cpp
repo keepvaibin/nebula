@@ -16,11 +16,11 @@ namespace {
     // The levels place view cubes for the actors that ship distance models, and only those follow them.
     bool hasDistanceModels(const LiveActor* pActor) {
         const char* res = MR::getModelResName(pActor);
-        MR::FormattedName buf("/ObjectData/%sMiddle.arc", res);
+        MR::FormattedName buf("/ObjectData/%sMiddle", res);
         if (MR::isFileExist(buf.c_str(), false)) {
             return true;
         }
-        buf.format("/ObjectData/%sLow.arc", res);
+        buf.format("/ObjectData/%sLow", res);
         return MR::isFileExist(buf.c_str(), false);
     }
 };  // namespace
@@ -61,7 +61,7 @@ void LodCtrl::createFarModel(int drawBufferType, int movementType, int calcAnimT
         return;
     }
     const char* res = MR::getModelResName(mActor);
-    MR::FormattedName path("/ObjectData/%sLow.arc", res);
+    MR::FormattedName path("/ObjectData/%sLow", res);
     if (!MR::isFileExist(path.c_str(), false)) {
         return;
     }
@@ -128,6 +128,6 @@ void LodCtrl::setViewCtrlPtr(const bool* pNear, const bool* pFar, const bool* pH
 }
 
 bool LodCtrlFunction::isExistLodLowModel(const char* pName) {
-    MR::FormattedName buf("/ObjectData/%sLow.arc", pName);
+    MR::FormattedName buf("/ObjectData/%sLow", pName);
     return MR::isFileExist(buf.c_str(), false);
 }

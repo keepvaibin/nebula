@@ -24,7 +24,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 141u
+#define NEBULA_GAME_API_VERSION 142u
 
 /* Viewports, scissors, clears, target sizes and picture points count this many units across a frame on each axis. */
 #define NEBULA_FRAME_UNITS 65536.0f
@@ -245,9 +245,30 @@ typedef struct NebulaAssetEntry {
     uint64_t position;  /* the first byte in the store */
     uint32_t children;  /* a folder's entries */
     uint8_t folder;
-    uint8_t reserved[3];
+    uint8_t kind;       /* a file's NEBULA_ASSET_KIND_*, from the importer (cook/store.rs resource_kind) */
+    uint8_t reserved[2];
     const char* name;   /* valid for the process's life */
 } NebulaAssetEntry;
+
+/* What the game makes of a file of an archive (ResourceHolder, LayoutHolder): its name's extension, at import. */
+enum {
+    NEBULA_ASSET_KIND_OTHER = 0,
+    NEBULA_ASSET_KIND_MODEL,             /* bdl, bmd */
+    NEBULA_ASSET_KIND_MOTION,            /* bck, bca */
+    NEBULA_ASSET_KIND_TEXTURE_SRT,       /* btk */
+    NEBULA_ASSET_KIND_COLOR_KEY,         /* bpk */
+    NEBULA_ASSET_KIND_TEXTURE_PATTERN,   /* btp */
+    NEBULA_ASSET_KIND_CLUSTER_KEY,       /* blk */
+    NEBULA_ASSET_KIND_REGISTER_COLOR,    /* brk */
+    NEBULA_ASSET_KIND_SOUND_ANIMATION,   /* bas */
+    NEBULA_ASSET_KIND_MATERIALS,         /* bmt */
+    NEBULA_ASSET_KIND_VISIBILITY,        /* bva */
+    NEBULA_ASSET_KIND_MATERIAL_TABLE,    /* banmt */
+    NEBULA_ASSET_KIND_TEXTURE,           /* bti */
+    NEBULA_ASSET_KIND_LAYOUT,            /* brlyt */
+    NEBULA_ASSET_KIND_LAYOUT_ANIMATION,  /* brlan */
+    NEBULA_ASSET_KIND_COUNT
+};
 
 /* The settings the game reads from the player's system (system_setting). */
 enum {
@@ -705,7 +726,7 @@ typedef struct NebulaHostServices {
     void* (*heap_realloc)(void* user, void* data, size_t size);
     void (*heap_free)(void* user, void* data);
 
-    /* The game's files: the file or folder at `path` ("/StageData/EggStarGalaxy.arc": from the root, '/' at a name's start
+    /* The game's files: the file or folder at `path` ("/StageData/EggStarGalaxy", an archive's folder: from the root, '/' at a name's start
        returning to it, "." and ".." steps, letters in either case, a name followed by '/' a folder): 0 when there is
        none. */
     int (*asset_find)(void* user, const char* path, NebulaAssetEntry* entry);

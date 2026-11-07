@@ -136,7 +136,7 @@ void GhostPlayer::init(const TableIter& rIter) {
         const char* currentStageName = MR::getCurrentStageName();
         gstPath.format("%s.gst", currentStageName);
     }
-    arcPath.format("GhostData%s.arc", MR::getCurrentStageName());
+    arcPath.format("GhostData%s", MR::getCurrentStageName());
 
     const u8* pFile = static_cast< const u8* >(MR::loadResourceFromArc(arcPath.c_str(), gstPath.c_str()));
 

@@ -283,10 +283,10 @@ WaterPlantDrawInit::WaterPlantDrawInit()
     : NameObj("水草の描画初期化"), mAngleOffset(), mSwingPosTable(), mPlantATex(), mPlantBTex(), mPlantCTex(), mPlantDTex() {
     MR::connectToScene(this, MR::MovementType_MapObj, -1, -1, -1);
 
-    mPlantATex = new JUTTexture(MR::loadTexFromArc("WaterPlant.arc", "WaterPlantA.bti"));
-    mPlantBTex = new JUTTexture(MR::loadTexFromArc("WaterPlant.arc", "WaterPlantB.bti"));
-    mPlantCTex = new JUTTexture(MR::loadTexFromArc("WaterPlant.arc", "WaterPlantC.bti"));
-    mPlantDTex = new JUTTexture(MR::loadTexFromArc("WaterPlant.arc", "WaterPlantD.bti"));
+    mPlantATex = new JUTTexture(MR::loadTexFromArc("WaterPlant", "WaterPlantA.bti"));
+    mPlantBTex = new JUTTexture(MR::loadTexFromArc("WaterPlant", "WaterPlantB.bti"));
+    mPlantCTex = new JUTTexture(MR::loadTexFromArc("WaterPlant", "WaterPlantC.bti"));
+    mPlantDTex = new JUTTexture(MR::loadTexFromArc("WaterPlant", "WaterPlantD.bti"));
 
     mSwingPosTable = new f32[::sSwingPosTableSize];
     updateSwingPos();

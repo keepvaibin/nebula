@@ -25,7 +25,42 @@ std::uint64_t word(const std::uint8_t* at) {
     return value;
 }
 
+bool is_archive_name(std::string_view part) {
+    if (part.size() <= 4u) return false;
+    std::string ending(part.substr(part.size() - 4u));
+    for (char& c : ending) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return ending == ".arc" || ending == ".szs";
+}
+
+bool same_letters(std::string_view a, std::string_view b) {
+    return a.size() == b.size() && std::equal(a.begin(), a.end(), b.begin(), [](char x, char y) {
+               return std::tolower(static_cast<unsigned char>(x)) == std::tolower(static_cast<unsigned char>(y));
+           });
+}
+
 }  // namespace
+
+std::string store_path(std::string_view path) {
+    const std::size_t root = path.find_first_not_of('/');
+    std::string out(path.substr(0, root == std::string_view::npos ? path.size() : root));
+    if (root == std::string_view::npos) return out;
+    std::vector<std::string_view> parts;
+    for (std::string_view rest = path.substr(root);;) {
+        const std::size_t slash = rest.find('/');
+        parts.push_back(rest.substr(0, slash));
+        if (slash == std::string_view::npos) break;
+        rest.remove_prefix(slash + 1u);
+    }
+    const bool stage_folder = parts.size() > 2u && same_letters(parts[0], "StageData") && !is_archive_name(parts[1]) &&
+                              is_archive_name(parts[2]);
+    for (std::size_t i = 0; i < parts.size(); ++i) {
+        if (i == 1u && stage_folder) continue;
+        if (i != 0u) out.push_back('/');
+        const std::string_view part = parts[i];
+        out.append(is_archive_name(part) ? part.substr(0, part.size() - 4u) : part);
+    }
+    return out;
+}
 
 AssetStore::~AssetStore() {
     close();
@@ -307,6 +342,8 @@ std::optional<Entry> AssetStore::entry(std::int32_t index) const {
     Entry out;
     out.index = index;
     out.folder = (node.flags & 1u) != 0u;
+    out.archive = (node.flags & 2u) != 0u;
+    out.kind = static_cast<std::uint8_t>(node.flags >> 8);
     out.name = names_ + node.name;
     out.length = node.size;
     out.position = node.position;
@@ -359,9 +396,7 @@ std::optional<Entry> AssetStore::find(std::string_view path) const {
         // stands, unless the game has none of that name.
         std::optional<Entry> found = overlay_->find(path);
         if (found) {
-            const bool plain_folder =
-                found->folder && std::string_view(found->name != nullptr ? found->name : "").find('.') == std::string_view::npos;
-            if (!plain_folder || !find_own(path)) {
+            if (!found->folder || found->archive || !find_own(path)) {
                 found->index += static_cast<std::int32_t>(count_);
                 found->position += kOverlayPosition;
                 return found;

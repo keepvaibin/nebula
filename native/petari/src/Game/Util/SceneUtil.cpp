@@ -224,7 +224,7 @@ namespace MR {
 
     AssetFolder* getStageArchive(const char* pStageName) {
         // A zone's archive lives with the stage's files, also on the file select stage.
-        return getArchive(MR::FormattedName("/StageData/%s.arc", pStageName).c_str(), getSceneArchiveHeap());
+        return getArchive(MR::FormattedName("/StageData/%s", pStageName).c_str(), getSceneArchiveHeap());
     }
 
     s32 getGeneralPosNum() {

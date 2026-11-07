@@ -176,7 +176,7 @@ pub fn write_overlay(game_id: &str, changes: &[Change], base: Option<&Path>, out
 
 /// What a merged file holds so far: a mod's file of that name in this store, else the game's.
 fn merge_start(path: &str, base: Option<&Path>, temporary: &Path, pak: &mut File, placed: &[store::Placed]) -> Result<Vec<u8>> {
-    if let Some(mine) = placed.iter().find(|p| !p.folder && p.path.eq_ignore_ascii_case(path)) {
+    if let Some(mine) = placed.iter().find(|p| !p.folder && store::same_path(&p.path, path)) {
         pak.flush()?;
         let mut reader = File::open(temporary)?;
         reader.seek(SeekFrom::Start(mine.position))?;
@@ -242,11 +242,11 @@ fn apply_merges(changes: &[Change], base: Option<&Path>, pak: &mut File, tempora
     for (key, bytes) in merged {
         let path = placed
             .iter()
-            .find(|p| p.path.eq_ignore_ascii_case(&key))
+            .find(|p| store::same_path(&p.path, &key))
             .map(|p| p.path.clone())
-            .or_else(|| changes.iter().filter(|c| c.merge).map(|c| c.path.trim_end_matches(".json").to_string()).find(|p| p.eq_ignore_ascii_case(&key)))
+            .or_else(|| changes.iter().filter(|c| c.merge).map(|c| c.path.trim_end_matches(".json").to_string()).find(|p| store::same_path(p, &key)))
             .unwrap_or(key);
-        placed.retain(|p| !p.path.eq_ignore_ascii_case(&path));
+        placed.retain(|p| !store::same_path(&p.path, &path));
         placed.extend(place(pak, at, &path, vec![StoreItem { path: String::new(), order: 0, bytes: Some(bytes) }], stats)?);
     }
     Ok(())
@@ -285,7 +285,7 @@ fn complete_archives(changes: &[Change], base: Option<&Path>, pak: &mut File, at
         let Ok(members) = store::read_folder(base, &archive) else { continue };
         for (relative, bytes) in members {
             let path = format!("{archive}/{relative}");
-            if !placed.iter().any(|p| p.path.eq_ignore_ascii_case(&path)) {
+            if !placed.iter().any(|p| store::same_path(&p.path, &path)) {
                 placed.extend(place(pak, at, &path, vec![StoreItem { path: String::new(), order: 0, bytes: Some(bytes) }], stats)?);
             }
         }

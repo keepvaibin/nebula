@@ -47,7 +47,8 @@ public:
 
 class ScenarioData {
 public:
-    ScenarioData(const char*);
+    // A galaxy's scenario data, from its archive pFilePath; its name is the first galaxyNameLength characters of pGalaxyName.
+    ScenarioData(const char* pGalaxyName, u32 galaxyNameLength, const char* pFilePath);
 
     s32 getScenarioNum() const;
     s32 getPowerStarNum() const;

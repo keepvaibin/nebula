@@ -10,7 +10,7 @@
 #include <cstdio>
 
 namespace {
-    static const char* const sArcName = "PlanetMapDataTable.arc";
+    static const char* const sArcName = "PlanetMapDataTable";
     static const char* const sFileName = "PlanetMapDataTable.bcsv";
 
     void makeSubModelName(const char** ppDst, const Table* pIter, s32 idx, const char* pKey, const char* pSuffix) {

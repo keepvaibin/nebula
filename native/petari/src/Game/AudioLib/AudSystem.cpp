@@ -34,13 +34,13 @@
 #include "Game/System/NebulaSystemSettings.hpp"
 #include "Game/System/GameAssets.hpp"
 
-const char sAudioResFile[] = "/AudioRes/SMR.szs";
-const char sJaiSeqArc[] = "/AudioRes/Seqs/JaiSeq.arc";
-const char sJaiChordArc[] = "/AudioRes/Info/JaiChord.arc";
-const char sJaiMeArc[] = "/AudioRes/Info/JaiMe.arc";
-const char sJaiRemixArc[] = "/AudioRes/Info/JaiRemixSeq.arc";
+const char sAudioResFile[] = "/AudioRes/SMR";
+const char sJaiSeqArc[] = "/AudioRes/Seqs/JaiSeq";
+const char sJaiChordArc[] = "/AudioRes/Info/JaiChord";
+const char sJaiMeArc[] = "/AudioRes/Info/JaiMe";
+const char sJaiRemixArc[] = "/AudioRes/Info/JaiRemixSeq";
 const char sJaiAudioArc[] = "AudioRes/SMR.baa";
-const char sJaiSeqResArc[] = "/AudioRes/JaiSeq.arc";
+const char sJaiSeqResArc[] = "/AudioRes/JaiSeq";
 
 AudSystem* AudSystem::msBasic;
 

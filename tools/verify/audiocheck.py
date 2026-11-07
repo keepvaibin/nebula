@@ -86,7 +86,7 @@ def main():
             errors += result[0]
             asts += 1
             blocks += result[1]
-        cooked = read(b, fb["AudioRes/SMR.szs"])
+        cooked = read(b, fb["AudioRes/SMR"])
         aw = {name.rsplit("/", 1)[-1].lower(): name for name in fa if name.lower().endswith(".aw")}
         loaded = {}
         checked = loops = loop_moved = worst = 0
