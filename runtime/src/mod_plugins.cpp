@@ -296,7 +296,16 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
         row.has_map_position = galaxy.has_map_position ? 1 : 0;
         row.map_position[0] = galaxy.map_x;
         row.map_position[1] = galaxy.map_y;
-        if (g_api.add_galaxy(&row) != 0) say(galaxy.mod_id + ": the galaxy " + galaxy.name + " can't be added: its name clashes with one the game has");
+        const int32_t added = g_api.add_galaxy(&row);
+        if (added == -2) {
+            say(galaxy.mod_id + ": the galaxy " + galaxy.name + " is left out: it has no StageData/" + galaxy.name + "/" + galaxy.name +
+                "Scenario.arc");
+            continue;
+        }
+        if (added != 0) {
+            say(galaxy.mod_id + ": the galaxy " + galaxy.name + " can't be added: its name clashes with one the game has");
+            continue;
+        }
         if (galaxy.hungry_slot >= 0 && g_api.add_hungry_luma(galaxy.name.c_str(), galaxy.hungry_slot, galaxy.hungry_star_bits) != 0) {
             say(galaxy.mod_id + ": the hungry Luma for " + galaxy.name + " can't be added");
         }

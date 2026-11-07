@@ -308,7 +308,8 @@ typedef struct NebulaModApi {
     void (*stick)(float* x, float* y);
     void (*shake_camera)(void);
 
-    /* Only in nebula_plugin_start. 0: done. */
+    /* Only in nebula_plugin_start. 0: done; -2: the galaxy has no StageData/<name>/<name>Scenario.arc, so it is
+       left out; -1: anything else (its name clashes with one the game has). */
     int32_t (*add_galaxy)(const NebulaGalaxy* galaxy);
     /* A hungry Luma: placed in a level as TicoGalaxy with its Arg7 at `slot`, it opens `galaxy` when fed `star_bits`.
        The game's own are slots 0 to 6: using one takes its place. */
