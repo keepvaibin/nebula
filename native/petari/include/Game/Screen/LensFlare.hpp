@@ -93,6 +93,7 @@ public:
     u32 mBrightObjCount;
     struct NebulaScreenProbe* mProbes = nullptr;
     u32 mProbeCapacity = 0;
+    u32 mAsker;  // the asker its probes carry
     Vec2f _60;
     f32 _68;
     Vec2f _6C;

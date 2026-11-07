@@ -19,6 +19,7 @@ public:
     DpdInfo** mInfos;
     f32 mProjectionParameters[7];
     f32 mViewportParameters[6];
+    u32 mAsker;  // the asker its probes carry
 };
 
 class StarPointerTransformHolder {

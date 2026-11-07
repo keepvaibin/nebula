@@ -264,6 +264,12 @@ namespace {
     u32 sSceneCamera = NEBULA_NONE32;
     u32 sSceneView = NEBULA_NONE32;
 
+    // The last asker given out. A probe set ends with one more point that shows nothing and carries its asker in user_x
+    // (a whole number a float holds exactly), so an answer finds its asker.
+    const u32 cLastAsker = 1u << 24;
+    u32 sProbeAskers;
+    Grown< NebulaScreenProbe > sProbeAnswers;
+
     void resetStore(Store* pStore) {
         pStore->mPasses.mCount = 0;
         pStore->mItems.mCount = 0;
@@ -890,11 +896,18 @@ namespace Frame {
         addPass(NEBULA_PASS_SHOW);
     }
 
-    void probeScreen(u32 channel, const NebulaScreenProbe* pProbes, u32 count) {
+    u32 newProbeAsker() {
+        sProbeAskers = sProbeAskers == cLastAsker ? 1u : sProbeAskers + 1u;
+        return sProbeAskers;
+    }
+
+    void probeScreen(u32 channel, u32 asker, const NebulaScreenProbe* pProbes, u32 count) {
+        if (count == 0) {
+            return;
+        }
         Store* pStore = store();
         const u32 first = pStore->mProbes.mCount;
-        const u32 sent = count;
-        for (u32 i = 0; i < sent; i++) {
+        for (u32 i = 0; i < count; i++) {
             NebulaScreenProbe& rProbe = pStore->mProbes.add();
             rProbe = pProbes[i];
             if (rProbe.x >= 0.0f) {
@@ -902,14 +915,25 @@ namespace Frame {
                 rProbe.y *= NEBULA_FRAME_UNITS;
             }
         }
+        NebulaScreenProbe& rMark = pStore->mProbes.add();
+        rMark = NebulaScreenProbe{-1.0f, -1.0f, static_cast< f32 >(asker), 0.0f, 0.0f, 0.0f};
         NebulaFramePass& rPass = addPass(NEBULA_PASS_PROBE);
         rPass.probe_channel = channel;
         rPass.first_probe = first;
-        rPass.probe_count = sent;
+        rPass.probe_count = count + 1;
     }
 
-    u32 screenProbeResults(u32 channel, NebulaScreenProbe* pProbes, u32 capacity) {
-        return host()->probe_results(host()->user, channel, pProbes, capacity);
+    // The channel's latest answers if they answer this asker's probes; none before its first have come back.
+    u32 screenProbeResults(u32 channel, u32 asker, NebulaScreenProbe* pProbes, u32 capacity) {
+        if (sProbeAnswers.mRoom < capacity + 1) {
+            sProbeAnswers.reserve(capacity + 1);
+        }
+        const u32 done = host()->probe_results(host()->user, channel, sProbeAnswers.mData, capacity + 1);
+        if (done == 0 || sProbeAnswers.mData[done - 1].user_x != static_cast< f32 >(asker)) {
+            return 0;
+        }
+        memcpy(pProbes, sProbeAnswers.mData, (done - 1) * sizeof(NebulaScreenProbe));
+        return done - 1;
     }
 
     void sceneBegin(const f32 (*pView)[4]) {

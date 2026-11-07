@@ -44,7 +44,7 @@ namespace NrvTalkDirector {
     NEW_NERVE(TalkDirectorNrvTerm, TalkDirector, Term);
 };  // namespace NrvTalkDirector
 
-TalkPeekZ::TalkPeekZ() {
+TalkPeekZ::TalkPeekZ() : mAsker(Frame::newProbeAsker()) {
 }
 
 void TalkPeekZ::setDrawSyncToken() {
@@ -54,7 +54,7 @@ void TalkPeekZ::setDrawSyncToken() {
     // The depth at the balloon's point asked last; then the picture drawn so far, at its point now.
     NebulaScreenProbe probe;
     _8 = 0.0f;
-    if (Frame::screenProbeResults(cReadbackChannel, &probe, 1) == 1 && probe.x >= 0.0f) {
+    if (Frame::screenProbeResults(cReadbackChannel, mAsker, &probe, 1) == 1 && probe.x >= 0.0f) {
         _8 = probe.value;
         TDDraw::invProject(&_14, Vec3f(probe.user_x, probe.user_y, _8), const_cast< MtxPtr >(MR::getCameraViewMtx().mMtx), &_20,
                            &_3C, true);
@@ -71,7 +71,7 @@ void TalkPeekZ::setDrawSyncToken() {
         probe.x = pos.x;
         probe.y = pos.y;
     }
-    Frame::probeScreen(cReadbackChannel, &probe, 1);
+    Frame::probeScreen(cReadbackChannel, mAsker, &probe, 1);
 }
 
 TalkDirector::TalkDirector(const char* pName)
