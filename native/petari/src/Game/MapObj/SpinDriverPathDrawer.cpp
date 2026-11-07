@@ -39,10 +39,10 @@ SpinDriverPathDrawInit::SpinDriverPathDrawInit()
     : NameObj("スピンドライバーレール描画初期化"), mOrangeTexture(), mGreenTexture(), mPinkTexture(), mMaskTexture(), mIsPathAtOpa() {
     MR::registerPreDrawFunction(MR::Functor(this, &SpinDriverPathDrawInit::initDraw), MR::DrawType_SpinDriverPathDrawer);
 
-    mOrangeTexture = new JUTTexture(MR::loadTexFromArc("SpinDriverPath.arc", "NormalColor.bti"));
-    mGreenTexture = new JUTTexture(MR::loadTexFromArc("SpinDriverPath.arc", "Green.bti"));
-    mPinkTexture = new JUTTexture(MR::loadTexFromArc("SpinDriverPath.arc", "Pink.bti"));
-    mMaskTexture = new JUTTexture(MR::loadTexFromArc("SpinDriverPath.arc", "Mask.bti"));
+    mOrangeTexture = new JUTTexture(MR::loadTexFromArc("SpinDriverPath", "NormalColor.bti"));
+    mGreenTexture = new JUTTexture(MR::loadTexFromArc("SpinDriverPath", "Green.bti"));
+    mPinkTexture = new JUTTexture(MR::loadTexFromArc("SpinDriverPath", "Pink.bti"));
+    mMaskTexture = new JUTTexture(MR::loadTexFromArc("SpinDriverPath", "Mask.bti"));
 }
 
 SpinDriverPathDrawer::SpinDriverPathDrawer(SpinDriverShootPath* pShootPath)

@@ -227,7 +227,7 @@ struct WaveEntry {
 };
 static_assert(sizeof(WaveEntry) == 36, "NWBK wave");
 
-// The sound archive (AudioRes/SMR.szs): the sound table with its names, the effect programs, the banks and the wave banks.
+// The sound archive (AudioRes/SMR): the sound table with its names, the effect programs, the banks and the wave banks.
 // The table and the name table were two trees of the same numbering that need not agree: each level keeps both counts, and
 // an entry says which of the two hold it.
 struct SoundArchiveFile {

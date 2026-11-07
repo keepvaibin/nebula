@@ -303,9 +303,7 @@ namespace DemoFunction {
     }
 
     ResourceHolder* loadDemoArchive() {
-        char buf[0x100];
-        nebula_snprintf(buf, sizeof(buf), "DemoSheet.arc");
-        return MR::createAndAddResourceHolder(buf);
+        return MR::createAndAddResourceHolder("DemoSheet");
     }
 
     s32 createSheetParser(const DemoExecutor* pExecutor, const char* pNameSuffix, Table** pMap) {

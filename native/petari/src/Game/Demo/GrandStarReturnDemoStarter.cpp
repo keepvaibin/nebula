@@ -75,7 +75,7 @@ void GrandStarReturnDemoStarter::init(const TableIter& rIter) {
     for (int i = 0; i < 6; i++) {
         char buffer[256];
         nebula_snprintf(buffer, sizeof(buffer), "DemoAstroReturn%d", i + 1);
-        MR::initAnimCamera(this, mActorCameraInfo, "DemoAstroReturn.arc", buffer);
+        MR::initAnimCamera(this, mActorCameraInfo, "DemoAstroReturn", buffer);
     }
 
     initNerve(GET_NERVE(GrandStarReturnDemoStarter, GrandStarReturnDemoStarterNrvMove));

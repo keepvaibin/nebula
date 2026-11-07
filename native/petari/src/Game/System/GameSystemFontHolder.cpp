@@ -18,10 +18,10 @@ nw4r::ut::Font* GameSystemFontHolder::getMessageFont() const {
 }
 
 void GameSystemFontHolder::createFontFromEmbeddedData() {
-    AssetFolder* pArchive = MR::getArchive("ErrorMessageArchive.arc");
-    NebulaArena* pHeap = MR::getArchiveArena("ErrorMessageArchive.arc");
+    AssetFolder* pArchive = MR::getArchive("ErrorMessageArchive");
+    NebulaArena* pHeap = MR::getArchiveArena("ErrorMessageArchive");
 
-    const char* embeddedFontPath = "/LayoutData/EmbeddedFont.arc";
+    const char* embeddedFontPath = "/LayoutData/EmbeddedFont";
 
     _4 = pArchive->getSubFolder(embeddedFontPath, pHeap);
     mEmbeddedMessageFont = new (pHeap, -4) nw4r::ut::ResFont();
@@ -37,7 +37,7 @@ namespace {
 };  // namespace
 
 void GameSystemFontHolder::createFontFromFile() {
-    AssetFolder* pArchive = MR::getArchive("/LayoutData/Font.arc");
+    AssetFolder* pArchive = MR::getArchive("/LayoutData/Font");
 
     mMessageFont = createFont(pArchive, "/MessageFont26.brfnt");
 

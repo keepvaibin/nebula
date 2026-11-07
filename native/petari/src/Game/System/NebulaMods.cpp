@@ -2198,11 +2198,8 @@ namespace NebulaMods {
         const ObjectEntry* pEntry = sObjects.mCount != 0 ? findObject(pName) : nullptr;
         const char* const archives[] = {pClass != nullptr ? pClass->mName : nullptr, pEntry != nullptr ? pEntry->mArchive : nullptr};
         for (const char* pArchive : archives) {
-            MR::FormattedName path;
-            MR::FormattedName layout;
-            if (pArchive != nullptr && !MR::makeObjectArchiveFileNameFromPrefix(path, pArchive, false) &&
-                !MR::makeLayoutArchiveFileNameFromPrefix(layout, pArchive, false)) {
-                nebula_log("mods: left out: %s: it has no %s.arc\n", pName, pArchive);
+            if (pArchive != nullptr && !MR::isExistObjectOrLayoutArchive(pArchive)) {
+                nebula_log("mods: left out: %s: it has no archive %s\n", pName, pArchive);
                 return true;
             }
         }

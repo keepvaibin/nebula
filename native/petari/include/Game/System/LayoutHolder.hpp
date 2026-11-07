@@ -30,10 +30,11 @@ public:
 
     bool isAnimationHashEqual(u32, u32) const;
     void initializeArc();
-    u32 initEachResTable(ResTable*, const char* const*);
-    u32 count(const char*, s32);
+    // The table a NEBULA_ASSET_KIND_* goes in.
+    ResTable& tableOf(u32);
+    // The files below a folder, by kind (NEBULA_ASSET_KIND_COUNT counts).
+    void count(s32, u32*) const;
     void mount(s32);
-    ResFileInfo* createAndRegisterObject(const char*, void*);
 
     AssetFolder* mArchive;
     ResTable mLayoutRes;

@@ -487,7 +487,7 @@ Table* StageDataHolder::attachJmpInfoToArray(Table* pInfo, const char* pDirector
 }
 
 void StageDataHolder::initTableData() {
-    void* tableFile = MR::getArchive("/StageData/ObjNameTable.arc")->getResource("ObjNameTable.tbl");
+    void* tableFile = MR::getArchive("/StageData/ObjNameTable")->getResource("ObjNameTable.tbl");
 
     mObjNameTbl = new Table();
     mObjNameTbl->attach(tableFile);

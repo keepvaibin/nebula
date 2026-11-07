@@ -65,9 +65,9 @@ void OceanBowl::init(const TableIter& rIter) {
     initPoints();
     WaterAreaFunction::entryOceanBowl(this);
 
-    mWaterTex = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "Water.bti"));
-    mWaterIndirectTex = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "WaterIndirect.bti"));
-    mMaskTex = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "Mask.bti"));
+    mWaterTex = new JUTTexture(MR::loadTexFromArc("WaterWave", "Water.bti"));
+    mWaterIndirectTex = new JUTTexture(MR::loadTexFromArc("WaterWave", "WaterIndirect.bti"));
+    mMaskTex = new JUTTexture(MR::loadTexFromArc("WaterWave", "Mask.bti"));
 
     mBloomDrawer = new OceanBowlBloomDrawer(this);
     mBloomDrawer->initWithoutIter();

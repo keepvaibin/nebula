@@ -11,27 +11,15 @@
 #include "Game/Util/MotionSignal.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/Render/Material.hpp"
+#include <nebula_game_api.h>
 
-namespace {
-    static const ArchiveName sModelExt[] = {".bdl", ".bmd", nullptr};
-    static const ArchiveName sMotionExt[] = {".bck", ".bca", nullptr};
-    static const ArchiveName sBtkExt[] = {".btk", nullptr};
-    static const ArchiveName sBpkExt[] = {".bpk", nullptr};
-    static const ArchiveName sBtpExt[] = {".btp", nullptr};
-    static const ArchiveName sBlkExt[] = {".blk", nullptr};
-    static const ArchiveName sBrkExt[] = {".brk", nullptr};
-    static const ArchiveName sBasExt[] = {".bas", nullptr};
-    static const ArchiveName sBmtExt[] = {".bmt", nullptr};
-    static const ArchiveName sBvaExt[] = {".bva", nullptr};
-    static const ArchiveName sBanmtExt[] = {".banmt", nullptr};
-
-    // static const bool cIgnoreCheckPosFormatList = ;
-    // static const bool cIgnoreCheckNrmCompressList = ;
-    // static const bool cIgnoreCheckPlanetKLowSizeList = ;
-    // static const bool cIgnoreCheckAll = ;
-
-    // static const __ sPlanetLowSizeBorder = ;
-};  // namespace
+// tableOf's order: a kind's table, then the file table.
+ResTable* ResourceHolder::* const ResourceHolder::cTables[ResourceHolder::cTableCount] = {
+    &ResourceHolder::mModelResTable, &ResourceHolder::mMotionResTable, &ResourceHolder::mBtkResTable, &ResourceHolder::mBpkResTable,
+    &ResourceHolder::mBtpResTable,   &ResourceHolder::mBlkResTable,    &ResourceHolder::mBrkResTable, &ResourceHolder::mBasResTable,
+    &ResourceHolder::mBmtResTable,   &ResourceHolder::mBvaResTable,    &ResourceHolder::mBanmtResTable, &ResourceHolder::mFileInfoTable,
+};
+static_assert(NEBULA_ASSET_KIND_MATERIAL_TABLE - NEBULA_ASSET_KIND_MODEL + 2 == ResourceHolder::cTableCount);
 
 ResourceHolder::ResourceHolder(AssetFolder& rArchive)
     : mModelResTable(&mDefaultTable), mMotionResTable(&mDefaultTable), mBtkResTable(&mDefaultTable), mBpkResTable(&mDefaultTable),
@@ -84,11 +72,7 @@ void ResourceHolder::bindMaterialAnimations(ModelData* pModelData) {
 void ResourceHolder::newBckCtrl() {
     MR::CurrentHeapRestorer heap(mHeap);
     // Its table has the archive's name.
-    const char* const pArchiveName = mArchive->getName();
-    const char* const pDot = strrchr(pArchiveName, '.');
-    const MR::FormattedName name("%.*s", static_cast< int >(pDot != nullptr ? pDot - pArchiveName : strlen(pArchiveName)), pArchiveName);
-
-    mBckCtrl = new BckCtrl(this, name.c_str());
+    mBckCtrl = new BckCtrl(this, mArchive->getName());
 }
 
 Mtx44& ResourceHolder::getInitEffectMtx(int materialIndex, int mtxIndex) const {
@@ -96,64 +80,50 @@ Mtx44& ResourceHolder::getInitEffectMtx(int materialIndex, int mtxIndex) const {
 }
 
 void ResourceHolder::initializeArc(AssetFolder& rArchive) {
-    u32 fileInfoSize = rArchive.countResource();
-    fileInfoSize -= initEachResTable(&mModelResTable, &rArchive, ::sModelExt);
-    fileInfoSize -= initEachResTable(&mMotionResTable, &rArchive, ::sMotionExt);
-    fileInfoSize -= initEachResTable(&mBlkResTable, &rArchive, ::sBlkExt);
-    fileInfoSize -= initEachResTable(&mBtkResTable, &rArchive, ::sBtkExt);
-    fileInfoSize -= initEachResTable(&mBpkResTable, &rArchive, ::sBpkExt);
-    fileInfoSize -= initEachResTable(&mBtpResTable, &rArchive, ::sBtpExt);
-    fileInfoSize -= initEachResTable(&mBrkResTable, &rArchive, ::sBrkExt);
-    fileInfoSize -= initEachResTable(&mBasResTable, &rArchive, ::sBasExt);
-    fileInfoSize -= initEachResTable(&mBmtResTable, &rArchive, ::sBmtExt);
-    fileInfoSize -= initEachResTable(&mBvaResTable, &rArchive, ::sBvaExt);
-    fileInfoSize -= initEachResTable(&mBanmtResTable, &rArchive, ::sBanmtExt);
+    u32 counts[NEBULA_ASSET_KIND_COUNT] = {};
+    count(rArchive, rArchive.getEntry(), counts);
 
-    if (fileInfoSize > 0) {
-        mFileInfoTable = new (mHeap, 0) ResTable();
-        mFileInfoTable->newFileInfoTable(fileInfoSize);
+    u32 sizes[cTableCount] = {};
+    for (u32 kind = 0; kind < NEBULA_ASSET_KIND_COUNT; kind++) {
+        sizes[tableOf(kind)] += counts[kind];
     }
 
-    mount(&rArchive, rArchive.getEntry());
-}
-
-u32 ResourceHolder::initEachResTable(ResTable** pResTable, AssetFolder* pArchive, const ArchiveName* pExtNames) {
-    u32 numResources = 0;
-    for (s32 idx = 0; pExtNames[idx] != nullptr; idx++) {
-        numResources += count(pArchive, pExtNames[idx], pArchive->getEntry());
-    }
-
-    if (numResources != 0) {
-        *pResTable = new (mHeap, 0) ResTable();
-        (*pResTable)->newFileInfoTable(numResources);
-    }
-
-    return numResources;
-}
-
-s32 ResourceHolder::count(AssetFolder* pArchive, const char* pExtName, s32 folder) {
-    s32 num = 0;
-    AssetFolder::Item item;
-
-    for (u32 i = 0; pArchive->getItem(folder, i, &item); i++) {
-        if (item.mIsFolder) {
-            num += count(pArchive, pExtName, item.mEntry);
-        } else if (pExtName == nullptr || strstr(item.mName, pExtName) != nullptr) {
-            num++;
+    for (u32 table = 0; table < cTableCount; table++) {
+        if (sizes[table] != 0) {
+            ResTable* const pTable = new (mHeap, 0) ResTable();
+            pTable->newFileInfoTable(sizes[table]);
+            this->*cTables[table] = pTable;
         }
     }
 
-    return num;
+    mount(rArchive, rArchive.getEntry());
 }
 
-void ResourceHolder::mount(AssetFolder* pArchive, s32 folder) {
+u32 ResourceHolder::tableOf(u32 kind) {
+    // The model through material-table kinds have a table each, in that order; textures and the rest are files.
+    return kind >= NEBULA_ASSET_KIND_MODEL && kind <= NEBULA_ASSET_KIND_MATERIAL_TABLE ? kind - NEBULA_ASSET_KIND_MODEL : cTableCount - 1;
+}
+
+void ResourceHolder::count(const AssetFolder& rArchive, s32 folder, u32* pCounts) {
     AssetFolder::Item item;
 
-    for (u32 i = 0; pArchive->getItem(folder, i, &item); i++) {
+    for (u32 i = 0; rArchive.getItem(folder, i, &item); i++) {
         if (item.mIsFolder) {
-            mount(pArchive, item.mEntry);
+            count(rArchive, item.mEntry, pCounts);
         } else {
-            ResFileInfo* info = createAndRegisterObject(item.mName, item.mData);
+            pCounts[item.mKind < NEBULA_ASSET_KIND_COUNT ? item.mKind : NEBULA_ASSET_KIND_OTHER]++;
+        }
+    }
+}
+
+void ResourceHolder::mount(const AssetFolder& rArchive, s32 folder) {
+    AssetFolder::Item item;
+
+    for (u32 i = 0; rArchive.getItem(folder, i, &item); i++) {
+        if (item.mIsFolder) {
+            mount(rArchive, item.mEntry);
+        } else {
+            ResFileInfo* info = createAndRegisterObject(item);
             info->_8 = item.mData;
             info->_4 = item.mSize;
             mTotalResourceSize += info->_4;
@@ -161,68 +131,42 @@ void ResourceHolder::mount(AssetFolder* pArchive, s32 folder) {
     }
 }
 
-ResFileInfo* ResourceHolder::createAndRegisterObject(const char* pName, void* pData) {
-    if (strstr(pName, ".btp") != nullptr) {
-        return mBtpResTable->add(pName, Clip::load(pData), true);
-    }
+ResFileInfo* ResourceHolder::createAndRegisterObject(const AssetFolder::Item& rItem) {
+    const char* const pName = rItem.mName;
+    void* const pData = rItem.mData;
 
-    if (strstr(pName, ".bpk") != nullptr) {
-        return mBpkResTable->add(pName, Clip::load(pData), true);
+    switch (rItem.mKind) {
+    case NEBULA_ASSET_KIND_MODEL: {
+        ModelData* const pModelData = ModelData::load(pData);
+        pModelData->setResourceName(pName);
+        return mModelResTable->add(pName, pModelData, true);
     }
-
-    if (strstr(pName, ".btk") != nullptr) {
-        return mBtkResTable->add(pName, Clip::load(pData), true);
-    }
-
-    if (strstr(pName, ".brk") != nullptr) {
-        return mBrkResTable->add(pName, Clip::load(pData), true);
-    }
-
-    if (strstr(pName, ".blk") != nullptr) {
-        return mBlkResTable->add(pName, Clip::load(pData), true);
-    }
-
-    if (strstr(pName, ".bck") != nullptr) {
-        return mMotionResTable->add(pName, pData == nullptr ? nullptr : Clip::load(pData), true);
-    }
-
-    if (strstr(pName, ".bca") != nullptr) {
+    case NEBULA_ASSET_KIND_MOTION:
         return mMotionResTable->add(pName, Clip::load(pData), true);
-    }
-
-    if (strstr(pName, ".bas") != nullptr) {
+    case NEBULA_ASSET_KIND_TEXTURE_SRT:
+        return mBtkResTable->add(pName, Clip::load(pData), true);
+    case NEBULA_ASSET_KIND_COLOR_KEY:
+        return mBpkResTable->add(pName, Clip::load(pData), true);
+    case NEBULA_ASSET_KIND_TEXTURE_PATTERN:
+        return mBtpResTable->add(pName, Clip::load(pData), true);
+    case NEBULA_ASSET_KIND_CLUSTER_KEY:
+        return mBlkResTable->add(pName, Clip::load(pData), true);
+    case NEBULA_ASSET_KIND_REGISTER_COLOR:
+        return mBrkResTable->add(pName, Clip::load(pData), true);
+    case NEBULA_ASSET_KIND_SOUND_ANIMATION:
         return mBasResTable->add(pName, pData, true);
-    }
-
-    if (strstr(pName, ".bmt") != nullptr) {
+    case NEBULA_ASSET_KIND_MATERIALS:
         return mBmtResTable->add(pName, ModelData::loadMaterials(pData), true);
-    }
-
-    if (strstr(pName, ".bva") != nullptr) {
+    case NEBULA_ASSET_KIND_VISIBILITY:
         return mBvaResTable->add(pName, Clip::load(pData), true);
-    }
-
-    if (strstr(pName, ".banmt") != nullptr) {
+    case NEBULA_ASSET_KIND_MATERIAL_TABLE:
         return mBanmtResTable->add(pName, pData, true);
+    case NEBULA_ASSET_KIND_TEXTURE:
+        // Found by its file name, extension and all.
+        return mFileInfoTable->add(pName, new ResTIMG(ResTIMG::fromNative(*static_cast< const NebulaTextureInfo* >(pData))), false);
+    default:
+        return mFileInfoTable->add(pName, pData, false);
     }
-
-    if (strstr(pName, ".bdl") != nullptr) {
-        ModelData* modelData = ModelData::load(pData);
-        modelData->setResourceName(pName);
-        return mModelResTable->add(pName, modelData, true);
-    }
-
-    if (strstr(pName, ".bmd") != nullptr) {
-        ModelData* modelData = ModelData::load(pData);
-        modelData->setResourceName(pName);
-        return mModelResTable->add(pName, modelData, true);
-    }
-
-    if (strstr(pName, ".bti") != nullptr) {
-        auto* pTexture = new ResTIMG(ResTIMG::fromNative(*static_cast< const NebulaTextureInfo* >(pData)));
-        return mFileInfoTable->add(pName, pTexture, false);  // found by its file name, extension and all
-    }
-    return mFileInfoTable->add(pName, pData, false);
 }
 
 void ResourceHolder::backupInitMaterialData(const ModelData* pModelData) {

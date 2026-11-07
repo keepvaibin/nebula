@@ -25,7 +25,7 @@ void LuigiLetter::init(const TableIter& rIter) {
 
     initLayoutManager("LuigiLetter", 1);
     initNerve(GET_NERVE(LuigiLetter, HostTypeNrvAppear));
-    archiveName.format("LuigiPicture%s.arc", _28);
+    archiveName.format("LuigiPicture%s", _28);
     textureName.format("LuigiPicture%s.bti", _28);
 
     mTexture = MR::createLytTexMap(archiveName.c_str(), textureName.c_str());

@@ -393,7 +393,7 @@ namespace MR {
     }
 
     bool isExistModel(const char* pName) {
-        MR::FormattedName buff("/ObjectData/%s.arc", pName);
+        MR::FormattedName buff("/ObjectData/%s", pName);
         return isFileExist(buff.c_str(), false);
     }
 
@@ -403,8 +403,7 @@ namespace MR {
     }
 
     ModelData* getModelData(const char* pName) {
-        MR::FormattedName buff("%s.arc", pName);
-        return static_cast< ModelData* >(createAndAddResourceHolder(buff.c_str())->mModelResTable->getRes(pName));
+        return static_cast< ModelData* >(createAndAddResourceHolder(pName)->mModelResTable->getRes(pName));
     }
 
 };  // namespace MR

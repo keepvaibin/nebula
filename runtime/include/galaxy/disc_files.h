@@ -17,6 +17,8 @@ namespace galaxy::disc {
 struct Entry {
     std::int32_t index = -1;    // 0 is the root folder
     bool folder = false;
+    bool archive = false;       // an archive's folder: one block, which a mods' store replaces whole
+    std::uint8_t kind = 0;      // a file's NEBULA_ASSET_KIND_*
     std::uint64_t length = 0;   // a file's length in bytes; a folder's, from its first file to its last one's end
     std::uint64_t position = 0; // the first byte in the store
     std::uint32_t children = 0; // a folder's entries
@@ -102,9 +104,13 @@ private:
     unsigned revision_ = 0;
 };
 
+// The store's name for a disc or mod path (cook/store.rs store_path): an archive or compressed file loses its ".arc" or
+// ".szs", and an archive in a stage's folder (StageData/<S>/<S>Scenario.arc) is in StageData. A store path maps to itself.
+[[nodiscard]] std::string store_path(std::string_view path);
+
 // The store's first bytes hold this.
 inline constexpr char kStoreMagic[8] = {'N', 'B', 'S', 'T', 'O', 'R', 'E', '\0'};
 // The store's contents' form (cook/store.rs VERSION): a store of another version needs importing again.
-inline constexpr std::uint32_t kStoreVersion = 13u;
+inline constexpr std::uint32_t kStoreVersion = 14u;
 
 }  // namespace galaxy::disc

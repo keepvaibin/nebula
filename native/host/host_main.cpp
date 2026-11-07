@@ -1954,6 +1954,7 @@ int disc_entry_out(const std::optional<galaxy::disc::Entry>& entry, NebulaAssetE
     out->position = entry->position;
     out->children = entry->children;
     out->folder = entry->folder ? 1 : 0;
+    out->kind = entry->kind;
     out->name = entry->name;
     return 1;
 }

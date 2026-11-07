@@ -364,15 +364,8 @@ void ModelManager::changeBckSetting(const char* pBckName, const char* pActorAnim
 }
 
 void ModelManager::init(const char* pModelName, const char* pAnimationName, bool deferMaterials) {
-    MR::FormattedName modelArchive("%s.arc", pModelName);
-    ResourceHolder* modelHolder = MR::createAndAddResourceHolder(modelArchive.c_str());
-    ResourceHolder* animationHolder;
-    if (pAnimationName == nullptr) {
-        animationHolder = modelHolder;
-    } else {
-        MR::FormattedName animationArchive("%s.arc", pAnimationName);
-        animationHolder = MR::createAndAddResourceHolder(animationArchive.c_str());
-    }
+    ResourceHolder* modelHolder = MR::createAndAddResourceHolder(pModelName);
+    ResourceHolder* animationHolder = pAnimationName == nullptr ? modelHolder : MR::createAndAddResourceHolder(pAnimationName);
 
     bool hasMaterialAnm = animationHolder->isExistMaterialAnm();
     bool hasMovingMaterial = MaterialUpdater::hasMovingMaterial(static_cast< ModelData* >(modelHolder->mModelResTable->getRes(pModelName)));

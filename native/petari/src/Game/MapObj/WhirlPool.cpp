@@ -26,8 +26,8 @@ void WhirlPool::init(const TableIter& rIter) {
     mHeight = 100.0f * mScale.y;
     MR::calcActorAxisY(&mAxis, this);
     initPoints();
-    mTexture = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "Water.bti"));
-    mIndirectTexture = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "WaterIndirect.bti"));
+    mTexture = new JUTTexture(MR::loadTexFromArc("WaterWave", "Water.bti"));
+    mIndirectTexture = new JUTTexture(MR::loadTexFromArc("WaterWave", "WaterIndirect.bti"));
     initSound(4, false);
     mClippingCenter.set(mPosition);
     mClippingCenter.y -= mRadius / 2.0f;

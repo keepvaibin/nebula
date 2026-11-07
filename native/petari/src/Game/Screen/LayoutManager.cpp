@@ -140,7 +140,7 @@ LayoutManager::LayoutManager(const char* pLayoutName, bool useArchiveNamePrefix,
         pLayoutName = MR::getBasename(fileNameWithoutExtension.c_str());
     }
 
-    MR::FormattedName archiveName("%s.arc", pLayoutName);
+    MR::FormattedName archiveName("%s", pLayoutName);
 
     u32 nameLength = strlen(pLayoutName);
     for (u32 i = 0; i < ARRAY_SIZE(::cRemoveString); i++) {

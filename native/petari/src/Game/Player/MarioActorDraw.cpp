@@ -63,8 +63,8 @@ void MarioActor::initDrawAndModel() {
 
     // MarioAnime's material animations are bound to this player's model, also when a ghost's model used the archive first
     // or the other player's did before a restart of the same stage.
-    ResourceHolder* const pPlayerHolder = MR::createAndAddResourceHolder(gIsLuigi ? "Luigi.arc" : "Mario.arc");
-    MR::createAndAddResourceHolder("MarioAnime.arc")
+    ResourceHolder* const pPlayerHolder = MR::createAndAddResourceHolder(gIsLuigi ? "Luigi" : "Mario");
+    MR::createAndAddResourceHolder("MarioAnime")
         ->bindMaterialAnimations(static_cast< ModelData* >(pPlayerHolder->mModelResTable->getRes(gIsLuigi ? "luigi" : "mario")));
 
     if (gIsLuigi) {
@@ -144,10 +144,10 @@ void MarioActor::initBeeMario() {
     const char* archiveName;
     if (gIsLuigi) {
         modelName = "BeeLuigi";
-        archiveName = "BeeLuigi.arc";
+        archiveName = "BeeLuigi";
     } else {
         modelName = "BeeMario";
-        archiveName = "BeeMario.arc";
+        archiveName = "BeeMario";
     }
 
     MR::createAndAddResourceHolder(archiveName);
@@ -183,10 +183,10 @@ void MarioActor::initHopperMario() {
     const char* archiveName;
     if (gIsLuigi) {
         modelName = "HopperLuigi";
-        archiveName = "HopperLuigi.arc";
+        archiveName = "HopperLuigi";
     } else {
         modelName = "HopperMario";
-        archiveName = "HopperMario.arc";
+        archiveName = "HopperMario";
     }
 
     MR::createAndAddResourceHolder(archiveName);
@@ -213,10 +213,10 @@ void MarioActor::initIceMario() {
     const char* archiveName;
     if (gIsLuigi) {
         modelName = "IceLuigi";
-        archiveName = "IceLuigi.arc";
+        archiveName = "IceLuigi";
     } else {
         modelName = "IceMario";
-        archiveName = "IceMario.arc";
+        archiveName = "IceMario";
     }
 
     MR::createAndAddResourceHolder(archiveName);
@@ -252,10 +252,10 @@ void MarioActor::initInvincibleMario() {
     const char* archiveName;
     if (gIsLuigi) {
         modelName = "InvincibleLuigi";
-        archiveName = "InvincibleLuigi.arc";
+        archiveName = "InvincibleLuigi";
     } else {
         modelName = "InvincibleMario";
-        archiveName = "InvincibleMario.arc";
+        archiveName = "InvincibleMario";
     }
 
     MR::createAndAddResourceHolder(archiveName);
@@ -333,8 +333,7 @@ void MarioActor::initModPowerUpModels() {
         if (!MR::isExistObjectOrLayoutArchive(pName)) {
             continue;
         }
-        MR::FormattedName archive("%s.arc", pName);
-        MR::createAndAddResourceHolder(archive.c_str());
+        MR::createAndAddResourceHolder(pName);
         ModelHolder* pHolder = new ModelHolder(pName, true);
         pHolder->initWithoutIter();
         PlayerModel* pModel = static_cast< PlayerModel* >(MR::getModel(pHolder));

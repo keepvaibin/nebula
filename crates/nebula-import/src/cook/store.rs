@@ -4,9 +4,11 @@
 //! Header: magic, version u32, node count u32, nodes u64, hashes u64, names u64, names' size u64, game id 6 bytes, disc
 //! number, revision.
 //! Node, 40 bytes: position u64 and size u64 (a file's bytes; a folder's, from its first file's first byte to its last
-//! one's end), name u32, parent u32, flags u32 (1: folder), first child u32, child count u32, reserved u32. Node 0 is the
-//! root; a folder's children are consecutive nodes. An archive of the source is a folder whose files lie side by side, so
-//! the game has it as one block.
+//! one's end), name u32, parent u32, flags u32 (bit 0: folder; bit 1: an archive's folder, one block; bits 8-15: a
+//! file's resource_kind), first child u32,
+//! child count u32, reserved u32. Node 0 is the root; a folder's children are consecutive nodes. An archive of the
+//! source is a folder whose files lie side by side, so the game has it as one block. Paths are store_path's: the cook
+//! and the reads here take disc or mod paths.
 //! Hash, 16 bytes: FNV-1a 64 of the lower-case path without a leading '/', node u32, reserved u32; sorted by hash.
 
 use anyhow::{bail, Result};
@@ -15,7 +17,7 @@ use std::fs::File;
 use std::io::{Seek, SeekFrom, Write};
 
 pub const MAGIC: &[u8; 8] = b"NBSTORE\0";
-pub const VERSION: u32 = 13;
+pub const VERSION: u32 = 14;
 /// The files start past this.
 pub const HEADER: u64 = 64;
 
@@ -31,7 +33,72 @@ struct Node {
     name: String,
     parent: usize,
     file: Option<(u64, u64)>,
+    archive: bool,
     children: Vec<usize>,
+}
+
+/// The store's name for a path of the disc or of a mod, where any part may be an archive ("X.arc/y"): an archive or
+/// a compressed file loses its container's extension, and an archive in a stage's folder (StageData/<S>/<S>Scenario.arc)
+/// leaves that folder for StageData (StageData/<S>Scenario), whose StageData/<S> is the stage's archive. A store path
+/// maps to itself.
+pub fn store_path(path: &str) -> String {
+    let body = path.trim_start_matches('/');
+    let mut out = path[..path.len() - body.len()].to_string();
+    for (index, (part, _)) in store_parts(body).iter().enumerate() {
+        if index != 0 {
+            out.push('/');
+        }
+        out.push_str(part);
+    }
+    out
+}
+
+/// store_path's parts of a path without its leading '/', each with whether it is an archive (one block: a mods' store
+/// replaces it whole, where a plain folder of theirs only adds to the game's).
+fn store_parts(path: &str) -> Vec<(&str, bool)> {
+    let is_archive = |part: &str| {
+        let lower = part.to_ascii_lowercase();
+        part.len() > 4 && (lower.ends_with(".arc") || lower.ends_with(".szs"))
+    };
+    let parts: Vec<&str> = path.split('/').collect();
+    let stage_folder = parts.len() > 2 && parts[0].eq_ignore_ascii_case("StageData") && !is_archive(parts[1]) && is_archive(parts[2]);
+    let mut out = Vec::with_capacity(parts.len());
+    for (index, part) in parts.iter().enumerate() {
+        if index == 1 && stage_folder {
+            continue;
+        }
+        let archive = is_archive(part);
+        out.push((if archive { &part[..part.len() - 4] } else { part }, archive));
+    }
+    out
+}
+
+/// Whether two disc, mod or store paths name the same place in a store.
+pub fn same_path(a: &str, b: &str) -> bool {
+    store_path(a).eq_ignore_ascii_case(&store_path(b))
+}
+
+/// What the game makes of a file, by its name: a node's flags bits 8-15 (nebula_game_api.h NEBULA_ASSET_KIND_*).
+pub fn resource_kind(path: &str) -> u32 {
+    let name = path.rsplit('/').next().unwrap_or(path);
+    let Some((_, extension)) = name.rsplit_once('.') else { return 0 };
+    match extension.to_ascii_lowercase().as_str() {
+        "bdl" | "bmd" => 1,
+        "bck" | "bca" => 2,
+        "btk" => 3,
+        "bpk" => 4,
+        "btp" => 5,
+        "blk" => 6,
+        "brk" => 7,
+        "bas" => 8,
+        "bmt" => 9,
+        "bva" => 10,
+        "banmt" => 11,
+        "bti" => 12,
+        "brlyt" => 13,
+        "brlan" => 14,
+        _ => 0,
+    }
 }
 
 /// FNV-1a 64 of a path, letters in lower case.
@@ -45,13 +112,13 @@ pub fn path_hash(path: &str) -> u64 {
 
 /// Writes the index at `at` and the header at 0; returns the store's size.
 pub fn write_index(pak: &mut File, at: u64, files: &[Placed], game_id: &[u8; 8]) -> Result<u64> {
-    let mut nodes = vec![Node { name: String::new(), parent: 0, file: None, children: Vec::new() }];
+    let mut nodes = vec![Node { name: String::new(), parent: 0, file: None, archive: false, children: Vec::new() }];
     let mut folders: BTreeMap<String, usize> = BTreeMap::new();
     for file in files {
         let mut parent = 0usize;
         let mut prefix = String::new();
-        let mut parts = file.path.split('/').peekable();
-        while let Some(part) = parts.next() {
+        let mut parts = store_parts(file.path.trim_start_matches('/')).into_iter().peekable();
+        while let Some((part, archive)) = parts.next() {
             if !prefix.is_empty() {
                 prefix.push('/');
             }
@@ -60,15 +127,16 @@ pub fn write_index(pak: &mut File, at: u64, files: &[Placed], game_id: &[u8; 8])
                 parent = match folders.get(&prefix) {
                     Some(&node) => node,
                     None => {
-                        nodes.push(Node { name: part.to_string(), parent, file: None, children: Vec::new() });
+                        nodes.push(Node { name: part.to_string(), parent, file: None, archive: false, children: Vec::new() });
                         let node = nodes.len() - 1;
                         nodes[parent].children.push(node);
                         folders.insert(prefix.clone(), node);
                         node
                     }
                 };
+                nodes[parent].archive |= archive;
             } else {
-                nodes.push(Node { name: part.to_string(), parent, file: Some((file.position, file.size)), children: Vec::new() });
+                nodes.push(Node { name: part.to_string(), parent, file: Some((file.position, file.size)), archive: false, children: Vec::new() });
                 let node = nodes.len() - 1;
                 nodes[parent].children.push(node);
             }
@@ -113,7 +181,7 @@ pub fn write_index(pak: &mut File, at: u64, files: &[Placed], game_id: &[u8; 8])
             at
         };
         let (start, end) = ranges[node].unwrap_or((0, 0));
-        let flags = if n.file.is_some() { 0u32 } else { 1u32 };
+        let flags = if n.file.is_some() { resource_kind(&n.name) << 8 } else { 1 | (u32::from(n.archive) << 1) };
         let first = n.children.first().map_or(0, |c| new_index[*c]);
         table.extend_from_slice(&start.to_le_bytes());
         table.extend_from_slice(&(end - start).to_le_bytes());
@@ -171,7 +239,7 @@ pub fn read_file(pak_path: &std::path::Path, path: &str) -> Result<Vec<u8>> {
     let word = |at: usize| u64::from_le_bytes(header[at..at + 8].try_into().unwrap());
     let count = u32::from_le_bytes(header[12..16].try_into().unwrap()) as u64;
     let (nodes_at, hashes_at) = (word(16), word(24));
-    let wanted = path_hash(path);
+    let wanted = path_hash(&store_path(path));
     let mut hashes = vec![0u8; (count * 16) as usize];
     pak.seek(SeekFrom::Start(hashes_at))?;
     pak.read_exact(&mut hashes)?;
@@ -212,7 +280,7 @@ pub fn visit_folder(pak_path: &std::path::Path, path: &str, visit: &mut dyn FnMu
     let count = u64::from(u32::from_le_bytes(header[12..16].try_into().unwrap()));
     let (nodes_at, hashes_at) = (word(16), word(24));
     let names_at = hashes_at + count * 16;
-    let wanted = path_hash(path);
+    let wanted = path_hash(&store_path(path));
     let mut hashes = vec![0u8; (count * 16) as usize];
     pak.seek(SeekFrom::Start(hashes_at))?;
     pak.read_exact(&mut hashes)?;
@@ -280,6 +348,45 @@ mod tests {
     }
 
     #[test]
+    fn archives_lose_their_extension_and_a_scenario_leaves_its_stage_folder() {
+        for (disc, store) in [
+            ("ObjectData/Kuribo.arc", "ObjectData/Kuribo"),
+            ("ObjectData/Kuribo.ARC/kuribo.bdl", "ObjectData/Kuribo/kuribo.bdl"),
+            ("/StageData/EggStarGalaxy.arc", "/StageData/EggStarGalaxy"),
+            ("StageData/EggStarGalaxy.arc/jmp/placement", "StageData/EggStarGalaxy/jmp/placement"),
+            ("StageData/EggStarGalaxy/EggStarGalaxyScenario.arc", "StageData/EggStarGalaxyScenario"),
+            ("/StageData/EggStarGalaxy/EggStarGalaxyScenario.arc/x.bcsv", "/StageData/EggStarGalaxyScenario/x.bcsv"),
+            ("AudioRes/SMR.szs", "AudioRes/SMR"),
+            ("NebulaData/ErrorMessageArchive.arc/LayoutData/ErrorMessageWindow.arc/x.brlyt", "NebulaData/ErrorMessageArchive/LayoutData/ErrorMessageWindow/x.brlyt"),
+            ("StageData/EggStarGalaxy/jmp/placement", "StageData/EggStarGalaxy/jmp/placement"),
+            (".arc", ".arc"),
+        ] {
+            assert_eq!(store_path(disc), store);
+            assert_eq!(store_path(store), store);
+        }
+        assert_eq!(resource_kind("x/kuribo.bdl"), 1);
+        assert_eq!(resource_kind("walk.BCK"), 2);
+        assert_eq!(resource_kind("camera/cameraparam.bcam"), 0);
+        assert_eq!(resource_kind("flag.bti"), 12);
+        assert_eq!(resource_kind("noextension"), 0);
+    }
+
+    #[test]
+    fn a_files_kind_is_in_its_flags() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("store");
+        let mut pak = File::create(&path).unwrap();
+        let file = |path: &str| Placed { path: path.to_string(), position: 0x100, size: 1, folder: false };
+        write_index(&mut pak, 0x200, &[file("o.arc/m.bdl"), file("o.arc/w.bck")], b"RMGE01\0\0").unwrap();
+        drop(pak);
+        let bytes = std::fs::read(&path).unwrap();
+        let nodes = u64::from_le_bytes(bytes[16..24].try_into().unwrap()) as usize;
+        let flags = |i: usize| u32::from_le_bytes(bytes[nodes + i * 40 + 24..nodes + i * 40 + 28].try_into().unwrap());
+        assert_eq!((flags(1), flags(2), flags(3)), (3, 1 << 8, 2 << 8));
+        assert_eq!(read_file(&path, "O.arc/m.bdl").unwrap(), [0]);
+    }
+
+    #[test]
     fn a_folder_holds_its_files_range_and_an_empty_one_stays() {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("store");
@@ -296,11 +403,11 @@ mod tests {
         let word = |at: usize| u64::from_le_bytes(bytes[at..at + 8].try_into().unwrap());
         let nodes = word(16) as usize;
         let count = u32::from_le_bytes(bytes[12..16].try_into().unwrap()) as usize;
-        // Breadth first: the root, x.arc, empty.arc, a.bin, sub, b.bin.
+        // Breadth first: the root, x, empty (both archives), a.bin, sub, b.bin.
         assert_eq!(count, 6);
         let node = |i: usize| (word(nodes + i * 40), word(nodes + i * 40 + 8), u32::from_le_bytes(bytes[nodes + i * 40 + 24..nodes + i * 40 + 28].try_into().unwrap()));
-        assert_eq!(node(1), (0x100, 0x42, 1));
-        assert_eq!(node(2), (0, 0, 1));
+        assert_eq!(node(1), (0x100, 0x42, 3));
+        assert_eq!(node(2), (0, 0, 3));
         assert_eq!(node(3), (0x140, 2, 0));
         assert_eq!(node(4), (0x100, 3, 1));
     }

@@ -10,7 +10,7 @@ namespace {
 };  // namespace
 
 const char* AudSpeakerWrap::getResName() {
-    return "/AudioRes/SpkRes/SpkRes.arc";
+    return "/AudioRes/SpkRes/SpkRes";
 }
 
 void AudSpeakerWrap::start(s32 waveID, s32 padChannel) {

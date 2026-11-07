@@ -36,16 +36,16 @@ namespace {
     // Bedroom, Engine Room and Garden), the faces of the file select's Mii choices, and the storybook's front cover
     // (the right half of its cover texture).
     const NebulaAchievementIcon cTextureIcons[] = {
-        {0, "MapDomeIcon.arc", true, "mymapdome1.tpl", 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f},
-        {0, "MapDomeIcon.arc", true, "mymapdome2.tpl", 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f},
-        {0, "MapDomeIcon.arc", true, "mymapdome3.tpl", 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f},
-        {0, "MapDomeIcon.arc", true, "mymapdome4.tpl", 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f},
-        {0, "MapDomeIcon.arc", true, "mymapdome5.tpl", 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f},
-        {0, "MapDomeIcon.arc", true, "mymapdome6.tpl", 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f},
-        {0, "MiiIcon.arc", true, "mymiimario.tpl", 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.2f},
-        {0, "MiiIcon.arc", true, "mymiiluigi.tpl", 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.2f},
-        {0, "MiiIcon.arc", true, "mymiipeach.tpl", 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.2f},
-        {0, "PictureBookTexture.arc", false, "PictureBookCoverFront.bti", 0.5f, 0.0f, 1.0f, 1.0f, 208.0f, 240.0f},
+        {0, "MapDomeIcon", true, "mymapdome1.tpl", 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f},
+        {0, "MapDomeIcon", true, "mymapdome2.tpl", 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f},
+        {0, "MapDomeIcon", true, "mymapdome3.tpl", 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f},
+        {0, "MapDomeIcon", true, "mymapdome4.tpl", 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f},
+        {0, "MapDomeIcon", true, "mymapdome5.tpl", 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f},
+        {0, "MapDomeIcon", true, "mymapdome6.tpl", 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f},
+        {0, "MiiIcon", true, "mymiimario.tpl", 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.2f},
+        {0, "MiiIcon", true, "mymiiluigi.tpl", 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.2f},
+        {0, "MiiIcon", true, "mymiipeach.tpl", 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.2f},
+        {0, "PictureBookTexture", false, "PictureBookCoverFront.bti", 0.5f, 0.0f, 1.0f, 1.0f, 208.0f, 240.0f},
     };
     const NebulaAchievementIcon* const cIconDome = &cTextureIcons[0];
     const NebulaAchievementIcon& cIconMario = cTextureIcons[6];

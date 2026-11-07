@@ -21,7 +21,7 @@ MiiFacePartsHolder::~MiiFacePartsHolder() {
 }
 
 void MiiFacePartsHolder::init(const TableIter& rIter) {
-    AssetFolder* pArchive = MR::getArchive("/ObjectData/MiiFaceDatabase.arc");
+    AssetFolder* pArchive = MR::getArchive("/ObjectData/MiiFaceDatabase");
     const void* pParts = pArchive != nullptr ? pArchive->getResource("/MiiParts.npt") : nullptr;
     mReady = pParts != nullptr && Mii::setParts(pParts, pArchive->getResSize(pParts));
 

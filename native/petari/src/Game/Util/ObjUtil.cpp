@@ -521,11 +521,9 @@ const ResTIMG* MR::loadTexFromArc(const char* pArchive, const char* pFile) {
 }
 
 const ResTIMG* MR::loadTexFromArc(const char* pArchive) {
-    MR::FormattedName arcName("%s.arc", pArchive);
-
     MR::FormattedName texName("%s.bti", pArchive);
 
-    return loadTexFromArc(arcName.c_str(), texName.c_str());
+    return loadTexFromArc(pArchive, texName.c_str());
 }
 
 namespace {

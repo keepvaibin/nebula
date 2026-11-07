@@ -261,8 +261,8 @@ OceanRingDrawer::OceanRingDrawer(const OceanRing* pOceanRing) {
     mWaterTex = nullptr;
     mWaterIndTex = nullptr;
 
-    mWaterTex = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "Water.bti"));
-    mWaterIndTex = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "WaterIndirect.bti"));
+    mWaterTex = new JUTTexture(MR::loadTexFromArc("WaterWave", "Water.bti"));
+    mWaterIndTex = new JUTTexture(MR::loadTexFromArc("WaterWave", "WaterIndirect.bti"));
     initParts();
     initMesh();
 }

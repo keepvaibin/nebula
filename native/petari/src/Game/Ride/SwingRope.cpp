@@ -779,7 +779,7 @@ void SwingRope::drawBind(TypedDraw& rDraw) const {
 
 SwingRopeGroup::SwingRopeGroup(const char* pName) : NameObj(pName) {
     mTexture = nullptr;
-    mTexture = new JUTTexture(MR::loadTexFromArc("SwingRope.arc", "SwingRope.bti"));
+    mTexture = new JUTTexture(MR::loadTexFromArc("SwingRope", "SwingRope.bti"));
 
     mMaterial = makeMaterial();
 }

@@ -9,8 +9,8 @@
 #include <cstring>
 #include "Game/System/AssetFolder.hpp"
 
-#define SYSTEMMESSAGE_ARC "/Memory/SystemMessage.arc"
-#define MESSAGE_ARC "/MessageData/Message.arc"
+#define SYSTEMMESSAGE_ARC "/Memory/SystemMessage"
+#define MESSAGE_ARC "/MessageData/Message"
 
 bool MessageData::getMessageDirect(TalkMessageInfo* pMessageInfo, const char* pMessage) const {
     if (const char16_t* pWords = NebulaMods::text(pMessage)) {

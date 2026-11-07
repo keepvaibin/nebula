@@ -157,8 +157,8 @@ void OceanSphere::init(const TableIter& rIter) {
     initMesh();
     WaterAreaFunction::entryOceanSphere(this);
 
-    mWaterTex = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "OceanSphere.bti"));
-    mWaterEnvTex = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "OceanSphereEnvRef.bti"));
+    mWaterTex = new JUTTexture(MR::loadTexFromArc("WaterWave", "OceanSphere.bti"));
+    mWaterEnvTex = new JUTTexture(MR::loadTexFromArc("WaterWave", "OceanSphereEnvRef.bti"));
 
     MR::setClippingTypeSphere(this, mRadius);
     MR::setClippingFarMax(this);

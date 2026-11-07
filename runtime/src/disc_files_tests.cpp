@@ -116,6 +116,16 @@ int main() {
     passed &= expect(table.load(bytes.data(), bytes.size()), "the store loads");
     passed &= expect(table.game_id() == "RMGE01" && table.revision() == 2, "the game id and revision");
 
+    using galaxy::disc::store_path;
+    for (const auto& [disc, store] : {std::pair{"ObjectData/Kuribo.ARC/kuribo.bdl", "ObjectData/Kuribo/kuribo.bdl"},
+                                      std::pair{"/StageData/EggStarGalaxy.arc", "/StageData/EggStarGalaxy"},
+                                      std::pair{"/StageData/EggStarGalaxy/EggStarGalaxyScenario.arc/x.bcsv",
+                                                "/StageData/EggStarGalaxyScenario/x.bcsv"},
+                                      std::pair{"stagedata/A/jmp/b", "stagedata/A/jmp/b"}, std::pair{"/AudioRes/SMR.szs", "/AudioRes/SMR"},
+                                      std::pair{".arc", ".arc"}, std::pair{"/", "/"}, std::pair{"", ""}}) {
+        passed &= expect(store_path(disc) == store && store_path(store) == store, disc);
+    }
+
     auto found = [&table](const char* path) { return table.find(path) ? table.find(path)->index : -1; };
     passed &= expect(found("/StageData/EggStarGalaxy/EggStarGalaxy.arc") == 7, "an absolute path");
     passed &= expect(found("stagedata/eggstargalaxy/EGGSTARGALAXY.ARC") == 7, "letters in either case, from the root");

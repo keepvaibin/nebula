@@ -1424,19 +1424,19 @@ std::string language_folder(const std::string& game_id, unsigned language) {
 
 namespace {
 
-// A store's files of a name, archives as files, by path from the root.
+// Where a disc file name (`name`: "Mario.arc"; `stored`, its store name in lower case) is in a store, archives as files:
+// each place's folder in the store with `name` after it, a disc path as plans take.
 void find_names(const galaxy::disc::AssetStore& store, std::int32_t folder, const std::string& path,
-                const std::string& name, std::vector<std::string>& out) {
+                const std::string& name, const std::string& stored, std::vector<std::string>& out) {
     const std::optional<galaxy::disc::Entry> self = store.entry(folder);
     if (!self) return;
     for (std::uint32_t c = 0; c < self->children; ++c) {
         const std::optional<galaxy::disc::Entry> child = store.child(folder, c);
         if (!child || child->name == nullptr) continue;
         const std::string child_name(child->name);
-        const std::string child_path = path + "/" + child_name;
-        if (lower(child_name) == name) out.push_back(child_path);
-        if (child->folder && child_name.find('.') == std::string::npos) {
-            find_names(store, child->index, child_path, name, out);
+        if (lower(child_name) == stored) out.push_back(path + "/" + name);
+        if (child->folder && !child->archive) {
+            find_names(store, child->index, path + "/" + child_name, name, stored, out);
         }
     }
 }
@@ -1475,7 +1475,7 @@ DiscPlan plan_disc_changes(const galaxy::disc::AssetStore& store, const std::str
     }
     DiscPlan plan;
     std::vector<std::string> active;
-    std::map<std::string, DiscPlan::File> chosen;  // by the lower-case path, the last set winning
+    std::map<std::string, DiscPlan::File> chosen;  // by the lower-case store path, the last set winning
     struct Placed {
         std::string disc;
         fs::path host;
@@ -1561,7 +1561,7 @@ DiscPlan plan_disc_changes(const galaxy::disc::AssetStore& store, const std::str
                 return;
             }
             if (!f.disc.empty() && f.disc[0] == '/') {
-                if (!f.create && !store.find(f.disc)) {
+                if (!f.create && !store.find(galaxy::disc::store_path(f.disc))) {
                     note(f.disc + ": the game has no such file and the patch does not create it");
                     return;
                 }
@@ -1569,7 +1569,7 @@ DiscPlan plan_disc_changes(const galaxy::disc::AssetStore& store, const std::str
                 return;
             }
             std::vector<std::string> paths;
-            find_names(store, 0, {}, lower(f.disc), paths);
+            find_names(store, 0, {}, f.disc, lower(galaxy::disc::store_path(f.disc)), paths);
             if (paths.empty()) note(f.disc + ": no file of that name in the game");
             for (const std::string& path : paths) set_file(path, *host);
         };
@@ -1728,7 +1728,7 @@ DiscPlan plan_disc_changes(const galaxy::disc::AssetStore& store, const std::str
         }
         for (const fs::path& file : layout.loose) {
             std::vector<std::string> paths;
-            find_names(store, 0, {}, lower(utf8_name(file)), paths);
+            find_names(store, 0, {}, utf8_name(file), lower(galaxy::disc::store_path(utf8_name(file))), paths);
             if (paths.empty()) note(utf8_name(file) + ": no file of that name in the game");
             for (const std::string& path : paths) set_file(path, file);
         }
@@ -1762,12 +1762,12 @@ DiscPlan plan_disc_changes(const galaxy::disc::AssetStore& store, const std::str
             // The game's own tables, but for the one that says where each galaxy is and what opens it.
             if (lower(p.disc).starts_with("/nebuladata/") && lower(p.disc) != "/nebuladata/galaxyinfotable.bcsv") continue;
             // A save's shape follows the galaxy list: a mod that adds a galaxy never plays on normal saves.
-            if (plan.save_folder.empty() && lower(p.disc).starts_with("/stagedata/") && lower(p.disc).ends_with("scenario.arc") && !store.find(p.disc)) {
+            if (plan.save_folder.empty() && lower(p.disc).starts_with("/stagedata/") && lower(p.disc).ends_with("scenario.arc") && !store.find(galaxy::disc::store_path(p.disc))) {
                 plan.save_folder = saves_of(mod.luma ? mod.luma->save_tag : mod.id);
                 plan.save_clone = false;
                 note("it adds a galaxy, so it keeps its own saves");
             }
-            chosen[lower(p.disc)] = {p.disc, p.host};
+            chosen[lower(galaxy::disc::store_path(p.disc))] = {p.disc, p.host};
         }
     }
     for (auto& [key, file] : chosen) plan.files.push_back(std::move(file));

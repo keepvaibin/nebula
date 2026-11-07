@@ -7,7 +7,7 @@ DemoPadRumbler::DemoPadRumbler(const char* pName) : mNumPadRumbleEntries(), mPad
     if (pName == nullptr)
         return;
 
-    MR::FormattedName buf("MoviePadRumble%s.arc", pName);
+    MR::FormattedName buf("MoviePadRumble%s", pName);
     Table* map = MR::createCsvParser(buf.c_str(), "PadRumbleData.bcsv");
 
     mNumPadRumbleEntries = MR::getCsvDataElementNum(map);

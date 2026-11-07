@@ -204,7 +204,7 @@ void PlantStalk::drawGrowUp(TypedDraw& rDraw) const {
 
 PlantStalkDrawInit::PlantStalkDrawInit(const char* pName) : NameObj(pName) {
     mTexture = nullptr;
-    mTexture = new JUTTexture(MR::loadTexFromArc("Plant.arc", "PlantStalk.bti"));
+    mTexture = new JUTTexture(MR::loadTexFromArc("Plant", "PlantStalk.bti"));
 
     mMaterial = makeMaterial();
 }

@@ -21,8 +21,8 @@ BigBubbleDrawer::BigBubbleDrawer() {
     mBubbleTexture = nullptr;
     mRainbowTexture = nullptr;
     _8 = 0.0f;
-    mBubbleTexture = new JUTTexture(MR::loadTexFromArc("BigBubble.arc", "Bubble.bti"));
-    mRainbowTexture = new JUTTexture(MR::loadTexFromArc("BigBubble.arc", "Rainbow.bti"));
+    mBubbleTexture = new JUTTexture(MR::loadTexFromArc("BigBubble", "Bubble.bti"));
+    mRainbowTexture = new JUTTexture(MR::loadTexFromArc("BigBubble", "Rainbow.bti"));
 }
 
 void BigBubbleDrawer::setUpDraw() const {

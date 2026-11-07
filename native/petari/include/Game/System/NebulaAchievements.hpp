@@ -5,7 +5,7 @@
 // LayoutData, or an object archive's BTI in ObjectData), the part [u0, u1] x [v0, v1] of it.
 struct NebulaAchievementIcon {
     s32 mGlyph;             // the picture font's code (MR::addPictureFontTag); 0: the texture
-    const char* mArchive;   // "MapDomeIcon.arc"
+    const char* mArchive;   // "MapDomeIcon"
     bool mLayoutArchive;    // LayoutData (else ObjectData)
     const char* mTexture;   // "mymapdome1.tpl", "PictureBookCoverFront.bti"
     f32 mU0, mV0, mU1, mV1;

@@ -166,6 +166,7 @@ bool AssetFolder::getItem(s32 folder, u32 index, Item* pItem) const {
 
     pItem->mEntry = entry.index;
     pItem->mIsFolder = entry.folder != 0;
+    pItem->mKind = entry.kind;
     pItem->mName = entry.name;
     pItem->mData = dataOf(entry);
     pItem->mSize = entry.length;

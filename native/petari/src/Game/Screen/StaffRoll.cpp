@@ -52,7 +52,7 @@ namespace {
     };
     const char* cStaffRollDemoName = "StaffRoll";
     const char* cSaveAfterStaffRollDemoName = "SaveAfterStaffRoll";
-    const char* cReplaceTextureArcName = "StaffRollTexture.arc";
+    const char* cReplaceTextureArcName = "StaffRollTexture";
     const char* cReplaceTexturePrefixHalf = "MStaffRollTexture";
     const char* cReplaceTexturePrefixComp = "LStaffRollTexture";
     const char* cStaffRollMsgId = "StaffList000";

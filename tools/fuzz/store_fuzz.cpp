@@ -33,7 +33,7 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size
             }
         }
     }
-    for (const char* const path : {"", "/", "a", "a/b", "AudioRes/SMR.szs", "../x", "//", "a//b"}) {
+    for (const char* const path : {"", "/", "a", "a/b", "AudioRes/SMR", "../x", "//", "a//b"}) {
         (void)store.find(path);
     }
     return static_cast<int>(names & 0u);

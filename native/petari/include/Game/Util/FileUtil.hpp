@@ -36,44 +36,29 @@ namespace MR {
     // Before the arena goes: the resource and layout holders made from its archives.
     void removeResourceHolders(NebulaArena* pArena);
 
-    // Whether the store has the object or layout archive pFilePrefix ("Kuribo": its .arc in ObjectData or LayoutData).
-    bool isExistObjectOrLayoutArchive(const char* pFilePrefix);
+    // Whether the store has the object or layout archive pName ("Kuribo", in ObjectData or LayoutData).
+    bool isExistObjectOrLayoutArchive(const char* pName);
 
     /// @brief Creates an absolute path to a language-aware file.
     /// @param[out] rDst The path made.
     /// @param[in] pFilePath A pointer to the null-terminated absolute path of the file.
     void makeFileNameConsideringLanguage(FormattedName& rDst, const char* pFilePath);
 
-    /// @brief Creates an absolute path to the given object's archive file.
-    /// @param[out] rDst The path made.
-    /// @param[in] pFileName A pointer to the null-terminated name of the archive file.
-    /// @return `true` if a valid archive file exists in the file system, `false` otherwise.
-    bool makeObjectArchiveFileName(FormattedName& rDst, const char* pFileName);
+    // The store path of the object archive pName ("Kuribo": the language's, ObjectData's or MapPartsData's, else pName
+    // itself); whether the store has it.
+    bool makeObjectArchiveFileName(FormattedName& rDst, const char* pName);
 
-    /// @brief Creates an absolute path to the given object's archive file.
-    /// @param[out] rDst The path made.
-    /// @param[in] pFilePrefix A pointer to the null-terminated name of the archive file, without the extension.
-    /// @param[in] unused Unused flag.
-    /// @return `true` if a valid archive file exists in the file system, `false` otherwise.
-    bool makeObjectArchiveFileNameFromPrefix(FormattedName& rDst, const char* pFilePrefix, bool unused);
+    // The store path of the layout archive pName (the region's or LayoutData's, else pName itself); whether the store
+    // has it.
+    bool makeLayoutArchiveFileName(FormattedName& rDst, const char* pName);
 
-    /// @brief Creates an absolute path to the given layout's archive file.
-    /// @param[out] rDst The path made.
-    /// @param[in] pFileName A pointer to the null-terminated name of the archive file.
-    /// @return `true` if a valid archive file exists in the file system, `false` otherwise.
-    bool makeLayoutArchiveFileName(FormattedName& rDst, const char* pFileName);
-    // As makeLayoutArchiveFileName, among the game's own files.
-    bool makeGameLayoutArchiveFileName(FormattedName& rDst, const char* pFileName);
+    // As makeLayoutArchiveFileName, among the game's own files (under the mods').
+    bool makeGameLayoutArchiveFileName(FormattedName& rDst, const char* pName);
 
-    /// @brief Creates an absolute path to the given layout's archive file.
-    /// @param[out] rDst The path made.
-    /// @param[in] pFilePrefix A pointer to the null-terminated name of the archive file, without the extension.
-    /// @param[in] fallback Whether to fall back if none found.
-    /// @return `true` if a valid archive file exists in the file system, `false` otherwise.
-    bool makeLayoutArchiveFileNameFromPrefix(FormattedName& rDst, const char* pFilePrefix, bool fallback);
+    // The store path of layout pName's archive: its screen shape's (pName16x9 or pName4x3), else its replacement
+    // (pNameReplace), else pName. Whether the store has one; with fallback, rDst names pName's even when it has none.
+    bool makeLayoutArchiveFileNameFromPrefix(FormattedName& rDst, const char* pName, bool fallback);
 
-    /// @brief Creates an absolute path to the given galaxy's mission archive file.
-    /// @param[out] rDst The path made.
-    /// @param[in] pStageName A pointer to the null-terminated name of the galaxy.
-    void makeScenarioArchiveFileName(FormattedName& rDst, const char* pStageName);
+    // The store path of a galaxy's scenario archive (StageData/<galaxy>Scenario).
+    void makeScenarioArchiveFileName(FormattedName& rDst, const char* pGalaxyName);
 };  // namespace MR
