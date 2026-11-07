@@ -27,6 +27,19 @@ namespace {
         }
     };
 
+    // FNV-1a over the name folded as MR::isEqualStringCase folds it (ASCII letters only).
+    u32 hashGalaxyName(const char* pName) {
+        u32 hash = 2166136261u;
+        for (; *pName != '\0'; pName++) {
+            u32 c = static_cast< u8 >(*pName);
+            if (c >= 'A' && c <= 'Z') {
+                c += 'a' - 'A';
+            }
+            hash = (hash ^ c) * 16777619u;
+        }
+        return hash;
+    }
+
     const ScenarioData* getCurrentScenarioData() {
         return ScenarioDataFunction::getScenarioDataParser()->getScenarioData(MR::getCurrentStageName());
     }
@@ -143,7 +156,7 @@ ScenarioDataIter::ScenarioDataIter(const ScenarioDataParser* pParser, int param2
 }
 
 bool ScenarioDataIter::isEnd() const {
-    return mParser->mScenarioData.size() <= mCur;
+    return mParser->getScenarioDataNum() <= mCur;
 }
 
 void ScenarioDataIter::goNext() {
@@ -156,9 +169,16 @@ GalaxyStatusAccessor ScenarioDataIter::makeAccessor() const {
     return GalaxyStatusAccessor(mParser->getScenarioData(mCur));
 }
 
-ScenarioDataParser::ScenarioDataParser(const char* pName) : NameObj(pName), mScenarioData() {
+ScenarioDataParser::ScenarioDataParser(const char* pName) : NameObj(pName) {
+    // The stage folders bound the galaxies (mods add folders, so there is no fixed number).
     GameAssets::FolderEntry dirent;
-    for (u32 i = 0; GameAssets::folderEntry("/StageData", i, &dirent); i++) {
+    u32 folderNum = 0;
+    while (GameAssets::folderEntry("/StageData", folderNum, &dirent)) {
+        folderNum++;
+    }
+    mScenarioData = new ScenarioData*[folderNum > 0 ? folderNum : 1];
+
+    for (u32 i = 0; i < folderNum && GameAssets::folderEntry("/StageData", i, &dirent); i++) {
         if (!dirent.mIsFolder) {
             continue;
         }
@@ -170,23 +190,40 @@ ScenarioDataParser::ScenarioDataParser(const char* pName) : NameObj(pName), mSce
             continue;
         }
 
-        ScenarioData* pData = new ScenarioData(fileName);
-
-        u32 index = mScenarioData.mCount;
-        u32 nextCount = index;
-        nextCount++;
-
-        mScenarioData.mArray[index] = pData;
-        mScenarioData.mCount = nextCount;
+        mScenarioData[mScenarioDataNum++] = new ScenarioData(fileName);
     }
 
-    MR::sort(mScenarioData.begin(), mScenarioData.end(), GalaxyNameSortLt());
+    MR::sort(mScenarioData, mScenarioData + mScenarioDataNum, GalaxyNameSortLt());
+
+    // The name index: the first galaxy of each name in sorted order, as a scan of the list finds it.
+    u32 slotNum = 4;
+    while (slotNum < static_cast< u32 >(mScenarioDataNum) * 2) {
+        slotNum <<= 1;
+    }
+    mNameSlots = new u32[slotNum];
+    mNameSlotMask = slotNum - 1;
+    for (u32 i = 0; i < slotNum; i++) {
+        mNameSlots[i] = cNoSlot;
+    }
+    for (s32 i = 0; i < mScenarioDataNum; i++) {
+        const char* pGalaxyName = mScenarioData[i]->mGalaxyName;
+        u32 slot = hashGalaxyName(pGalaxyName) & mNameSlotMask;
+        while (mNameSlots[slot] != cNoSlot && !MR::isEqualStringCase(mScenarioData[mNameSlots[slot]]->mGalaxyName, pGalaxyName)) {
+            slot = (slot + 1) & mNameSlotMask;
+        }
+        if (mNameSlots[slot] == cNoSlot) {
+            mNameSlots[slot] = static_cast< u32 >(i);
+        }
+    }
 }
 
 const ScenarioData* ScenarioDataParser::getScenarioData(const char* pGalaxyName) const {
-    for (s32 i = 0; i < mScenarioData.size(); i++) {
-        const ScenarioData* pScenarioData = mScenarioData[i];
+    if (pGalaxyName == nullptr) {
+        return nullptr;
+    }
 
+    for (u32 slot = hashGalaxyName(pGalaxyName) & mNameSlotMask; mNameSlots[slot] != cNoSlot; slot = (slot + 1) & mNameSlotMask) {
+        const ScenarioData* pScenarioData = mScenarioData[mNameSlots[slot]];
         if (MR::isEqualStringCase(pScenarioData->mGalaxyName, pGalaxyName)) {
             return pScenarioData;
         }

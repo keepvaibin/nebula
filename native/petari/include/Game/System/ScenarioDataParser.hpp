@@ -14,11 +14,23 @@ public:
     /// @param pName A pointer to the null-terminated name of the object.
     ScenarioDataParser(const char* pName);
 
+    // The galaxy of that name (any case), through the name index: null when there is none.
     const ScenarioData* getScenarioData(const char*) const;
     const ScenarioData* getScenarioData(s32) const;
+    s32 getScenarioDataNum() const {
+        return mScenarioDataNum;
+    }
     GalaxyStatusAccessor makeAccessor(const char*) const;
 
-    MR::Vector< MR::FixedArray< ScenarioData*, 1024 > > mScenarioData;
+private:
+    static constexpr u32 cNoSlot = 0xFFFFFFFFu;
+
+    // Every stage folder with a scenario file, in GalaxyNameSortTable order; built once, sized to the folders.
+    ScenarioData** mScenarioData = nullptr;
+    s32 mScenarioDataNum = 0;
+    // Open addressing on the case-folded name, at most half full: an index into mScenarioData, or cNoSlot.
+    u32* mNameSlots = nullptr;
+    u32 mNameSlotMask = 0;
 };
 
 class ScenarioDataIter {
