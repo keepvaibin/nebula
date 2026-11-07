@@ -1,3 +1,4 @@
+#include "Game/System/NebulaText.hpp"
 #include "Game/Screen/StarPointerGuidance.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/PlayerInputUtil.hpp"
@@ -50,6 +51,12 @@ void StarPointerGuidance::init(const JMapInfoIter& rIter) {
 
     mTextLineNum1P = MR::getTextLineNumMaxRecursive(this, "PointerFrame1");
     mTextLineNum2P = MR::getTextLineNumMaxRecursive(this, "PointerFrame2");
+#if !defined(__ANDROID__)
+    char16_t prompt[128];
+    NebulaText::get(prompt, 128, "PointerSelect");
+    MR::setTextBoxMessageRecursive(this, "Guide1", prompt);
+    MR::setTextBoxMessageRecursive(this, "Guide2", prompt);
+#endif
 }
 
 void StarPointerGuidance::control() {
@@ -67,6 +74,11 @@ void StarPointerGuidance::control() {
 }
 
 void StarPointerGuidance::checkRequest2P() {
+#if defined(__ANDROID__)
+    mIsActiveRequest2P = false;
+    mRequestTime2P = 0;
+    return;
+#endif
     if (!mIsActiveRequest2P) {
         if (mSpineFrame2P->getCurrentNerve() == GET_NERVE(StarPointerGuidance, HostTypeNrvWait2P)) {
             mSpineFrame2P->setNerve(GET_NERVE(StarPointerGuidance, HostTypeNrvEnd2P));
@@ -128,7 +140,11 @@ void StarPointerGuidance::checkRequest1P() {
     mRequestTime1P++;
 
     // A pad that holds the menu (Nebula's menu focus) needs no pointer: the frame asking for it goes.
+#if defined(__ANDROID__)
+    const bool isPointerWanted = false;  // touch selection has no off-screen pointing requirement
+#else
     const bool isPointerWanted = !MR::isStarPointerInScreen(PLAYER_1) && !NebulaMenuFocus::isActive();
+#endif
     if (isPointerWanted) {
         if (mOutScreenTime > ::hOutScreenTime || mRequestTime1P == 1) {
             if (mSpineGuidance->isCurrentNerve(GET_NERVE(StarPointerGuidance, HostTypeNrvWaitBlueStarGuide))) {

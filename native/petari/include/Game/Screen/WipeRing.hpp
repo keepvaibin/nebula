@@ -7,6 +7,7 @@ public:
     WipeRing(bool, const char*);
 
     virtual void init(const JMapInfoIter&);
+    virtual void calcAnim();
     virtual void wipe(s32);
     virtual void forceClose();
     virtual void forceOpen();

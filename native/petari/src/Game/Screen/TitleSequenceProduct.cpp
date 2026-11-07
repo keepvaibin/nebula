@@ -64,6 +64,12 @@ TitleSequenceProduct::TitleSequenceProduct()
     static_cast< nw4r::lyt::TextBox* >(MR::getPane(mPressStartLayout, "TxtStart"))->AllocStringBuffer(96);
     static_cast< nw4r::lyt::TextBox* >(MR::getPane(mPressStartLayout, "ShaStart"))->AllocStringBuffer(96);
     MR::setTextBoxMessageRecursive(mPressStartLayout, "PressAB", sPrompt);
+#else
+    static char16_t sPrompt[128];
+    NebulaText::get(sPrompt, 128, "PressAnyStart");
+    static_cast<nw4r::lyt::TextBox*>(MR::getPane(mPressStartLayout, "TxtStart"))->AllocStringBuffer(128);
+    static_cast<nw4r::lyt::TextBox*>(MR::getPane(mPressStartLayout, "ShaStart"))->AllocStringBuffer(128);
+    MR::setTextBoxMessageRecursive(mPressStartLayout, "PressAB", sPrompt);
 #endif
     mAButtonChecker = new TriggerChecker();
     mBButtonChecker = new TriggerChecker();
@@ -124,7 +130,7 @@ void TitleSequenceProduct::exeLogoDisplay() {
 #if defined(__ANDROID__)
     if (mAButtonChecker->getLevel() || mBButtonChecker->getLevel()) {
 #else
-    if (mAButtonChecker->getLevel() && mBButtonChecker->getLevel()) {
+    if (MR::isHeldAnyWithoutHome(PLAYER_1)) {
 #endif
         MR::stopStageBGM(75);
         MR::startSystemSE("SE_SY_GAME_START");

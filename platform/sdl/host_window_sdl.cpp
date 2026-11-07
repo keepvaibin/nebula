@@ -1076,7 +1076,11 @@ VkSurfaceKHR create_vulkan_surface(VkInstance instance, NativeWindow window) {
     if (auto* native = static_cast<ANativeWindow*>(SDL_GetPointerProperty(
             SDL_GetWindowProperties(static_cast<SDL_Window*>(window)), SDL_PROP_WINDOW_ANDROID_WINDOW_POINTER,
             nullptr))) {
-        ANativeWindow_setFrameRate(native, 60.0f, ANATIVEWINDOW_FRAME_RATE_COMPATIBILITY_FIXED_SOURCE);
+        const auto cfg = galaxy::render::get_render_config();
+        // Match Display lets the activity's requested mode set the rate; a fixed 60-Hz surface vote defeats it.
+        ANativeWindow_setFrameRate(native, cfg.max_fps,
+            cfg.max_fps > 0.0f ? ANATIVEWINDOW_FRAME_RATE_COMPATIBILITY_FIXED_SOURCE
+                               : ANATIVEWINDOW_FRAME_RATE_COMPATIBILITY_DEFAULT);
     }
 #endif
     return surface;
