@@ -65,7 +65,7 @@ bool SceneCameraVk::initialize() {
         shutdown();
         return false;
     }
-    exposure_ = Context::get().create_texture(1u, 1u, 1u, VK_FORMAT_R32_SFLOAT,
+    exposure_ = Context::get().create_texture(2u, 1u, 1u, VK_FORMAT_R32_SFLOAT,
                                               VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, false,
                                               "scene camera exposure");
     if (!exposure_) {
@@ -109,13 +109,14 @@ VkPipeline SceneCameraVk::pipeline(Kind kind, VkRenderPass pass, unsigned sample
     const VkShaderModule vs = module_of(UtilitySpirv::CameraVs);
     const VkShaderModule ps = module_of(kind == kWiden           ? UtilitySpirv::CameraWidenPs
                                         : kind == kCameraSamples ? UtilitySpirv::CameraSamplesPs
+                                        : kind == kCameraResolve ? UtilitySpirv::CameraResolvePs
                                                                  : UtilitySpirv::CameraPs);
     if (vs != VK_NULL_HANDLE && ps != VK_NULL_HANDLE) {
         VkPipelineShaderStageCreateInfo stages[2]{};
         stages[0] = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0, VK_SHADER_STAGE_VERTEX_BIT, vs,
                      "CameraVS", nullptr};
         stages[1] = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0, VK_SHADER_STAGE_FRAGMENT_BIT, ps,
-                     kind == kWiden ? "WidenPS" : "CameraPS", nullptr};
+                     kind == kWiden ? "WidenPS" : kind == kCameraResolve ? "CameraResolvePS" : "CameraPS", nullptr};
         VkPipelineVertexInputStateCreateInfo vertex_input{VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
         VkPipelineInputAssemblyStateCreateInfo input_assembly{VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
         input_assembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
@@ -242,8 +243,8 @@ void SceneCameraVk::meter(VkCommandBuffer commands, const Texture& wide, const T
 }
 
 void SceneCameraVk::draw(VkCommandBuffer commands, VkRenderPass pass, unsigned samples_log2, const Texture& wide,
-                         bool per_sample, const SetAllocator& allocate) {
-    const VkPipeline camera = pipeline(per_sample ? kCameraSamples : kCamera, pass, samples_log2);
+                         bool per_sample, const SetAllocator& allocate, bool resolve) {
+    const VkPipeline camera = pipeline(resolve ? kCameraResolve : per_sample ? kCameraSamples : kCamera, pass, samples_log2);
     if (camera != VK_NULL_HANDLE) {
         full_screen(commands, camera, set_of(allocate, wide), wide.width, wide.height);
     }

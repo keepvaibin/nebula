@@ -236,7 +236,8 @@ gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, un
     const auto* layout = static_cast<const vk::RenderLayout*>(root_);
     const VkDevice device = device_;
     const unsigned samples_log2 = variant & kSceneVariantSamplesMask;
-    const unsigned program = program_variant(desc.pixel, aux, samples_log2);
+    const unsigned program = program_variant(desc.pixel, aux,
+        (desc.state & NEBULA_STATE_PIXEL_SHADING) != 0u ? 0u : samples_log2);
     const ProgramBytes vs = program_bytes(desc.vertex, program, false);
     const ProgramBytes ps = program_bytes(desc.pixel, program, true);
     if (vs.size == 0u || ps.size == 0u) {
@@ -443,6 +444,9 @@ gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, un
 
 void Pipelines::destroy_all() noexcept {
     const VkDevice device = device_;
+    // A simulated loss leaves the queue alive; complete its references before destroying pipelines.
+    // On a real loss this returns VK_ERROR_DEVICE_LOST and teardown can continue.
+    if (device != VK_NULL_HANDLE) (void)vkDeviceWaitIdle(device);
     for (const VkPipeline pipeline : owned_) {
         vkDestroyPipeline(device, pipeline, nullptr);
     }

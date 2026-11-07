@@ -307,7 +307,8 @@ endforeach()
 set(galaxy_camera_hlsl "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/render/scene_camera.hlsl")
 set(galaxy_camera_headers "")
 foreach(galaxy_camera_pass meter_cs:MeterCS:cs_5_0:CAMERA_METER vs:CameraVS:vs_5_0:CAMERA_PLAIN ps:CameraPS:ps_5_0:CAMERA_PLAIN
-        samples_ps:CameraPS:ps_5_0:CAMERA_SAMPLES widen_ps:WidenPS:ps_5_0:CAMERA_PLAIN)
+        samples_ps:CameraPS:ps_5_0:CAMERA_SAMPLES resolve_ps:CameraResolvePS:ps_5_0:CAMERA_RESOLVE
+        widen_ps:WidenPS:ps_5_0:CAMERA_PLAIN)
     string(REPLACE ":" ";" galaxy_camera_pair "${galaxy_camera_pass}")
     list(GET galaxy_camera_pair 0 galaxy_camera_name)
     list(GET galaxy_camera_pair 1 galaxy_camera_entry)
@@ -596,6 +597,9 @@ target_include_directories(galaxy_game_asset_extract_tests PRIVATE native/includ
 target_link_libraries(galaxy_game_asset_extract_tests PRIVATE galaxy_disc_files)
 galaxy_test(galaxy_frame_interpolation_tests SOURCES ${render_src}/frame_interpolation_tests.cpp
     ${render_src}/frame_interpolation.cpp ${render_src}/affine.cpp)
+galaxy_test(galaxy_core_pairing_tests SOURCES ${render_src}/core/pairing_tests.cpp ${render_src}/core/pairing.cpp
+    ${render_src}/frame_interpolation.cpp ${render_src}/affine.cpp)
+target_include_directories(galaxy_core_pairing_tests PRIVATE runtime/src native/include)
 galaxy_test(galaxy_window_owner_tests SOURCES ${render_src}/window_owner_tests.cpp ${render_src}/window_owner.cpp)
 set_tests_properties(galaxy_window_owner_tests PROPERTIES TIMEOUT 20)
 # Tests of the renderer library.

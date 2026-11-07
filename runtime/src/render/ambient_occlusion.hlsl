@@ -279,7 +279,44 @@ void AoCS(uint3 id : SV_DispatchThreadID) {
 
 #ifdef AO_PASS_ssao_cs
 static const uint kSsaoSamples = 16u;
-static const float kSsaoTurns = 7.0f;  // the least discrepancy for this count (McGuire et al.)
+// The spiral and Bayer phase each have 16 possible angles. Rotate constant unit vectors instead of doing
+// 16 trigonometric evaluations per pixel. Sample count, radius, phase pattern and weights are unchanged.
+static const float2 kSsaoSpiral[16] = {
+    float2(0.1950903220f, 0.9807852804f),
+    float2(-0.5555702330f, -0.8314696123f),
+    float2(0.8314696123f, 0.5555702330f),
+    float2(-0.9807852804f, -0.1950903220f),
+    float2(0.9807852804f, -0.1950903220f),
+    float2(-0.8314696123f, 0.5555702330f),
+    float2(0.5555702330f, -0.8314696123f),
+    float2(-0.1950903220f, 0.9807852804f),
+    float2(-0.1950903220f, -0.9807852804f),
+    float2(0.5555702330f, 0.8314696123f),
+    float2(-0.8314696123f, -0.5555702330f),
+    float2(0.9807852804f, 0.1950903220f),
+    float2(-0.9807852804f, 0.1950903220f),
+    float2(0.8314696123f, -0.5555702330f),
+    float2(-0.5555702330f, 0.8314696123f),
+    float2(0.1950903220f, -0.9807852804f)
+};
+static const float2 kSsaoPhase[16] = {
+    float2(0.9807852804f, 0.1950903220f),
+    float2(0.8314696123f, 0.5555702330f),
+    float2(0.5555702330f, 0.8314696123f),
+    float2(0.1950903220f, 0.9807852804f),
+    float2(-0.1950903220f, 0.9807852804f),
+    float2(-0.5555702330f, 0.8314696123f),
+    float2(-0.8314696123f, 0.5555702330f),
+    float2(-0.9807852804f, 0.1950903220f),
+    float2(-0.9807852804f, -0.1950903220f),
+    float2(-0.8314696123f, -0.5555702330f),
+    float2(-0.5555702330f, -0.8314696123f),
+    float2(-0.1950903220f, -0.9807852804f),
+    float2(0.1950903220f, -0.9807852804f),
+    float2(0.5555702330f, -0.8314696123f),
+    float2(0.8314696123f, -0.5555702330f),
+    float2(0.9807852804f, -0.1950903220f)
+};
 
 [numthreads(8, 8, 1)]
 void SsaoCS(uint3 id : SV_DispatchThreadID) {
@@ -300,7 +337,7 @@ void SsaoCS(uint3 id : SV_DispatchThreadID) {
         return;
     }
     const uint2 cell = id.xy & 3u;
-    const float phase = (float(kBayer[cell.y * 4u + cell.x]) + 0.5f) / 16.0f * 2.0f * kPi;
+    const float2 phase = kSsaoPhase[kBayer[cell.y * 4u + cell.x]];
     const float r2 = radius * radius;
     // Past the facets of a low-poly surface: the normal comes from the depth, and a neighbour facet's small rise is no occluder.
     const float bias = 0.12f * radius;
@@ -309,9 +346,9 @@ void SsaoCS(uint3 id : SV_DispatchThreadID) {
     [unroll]
     for (uint i = 0u; i < kSsaoSamples; ++i) {
         const float alpha = (float(i) + 0.5f) / float(kSsaoSamples);
-        const float angle = alpha * kSsaoTurns * 2.0f * kPi + phase;
-        float2 unit;
-        sincos(angle, unit.y, unit.x);
+        const float2 basis = kSsaoSpiral[i];
+        const float2 unit = float2(basis.x * phase.x - basis.y * phase.y,
+                                  basis.x * phase.y + basis.y * phase.x);
         const int2 offset = int2(round(unit * (alpha * screen_radius + 1.0f)));
         float3 q;
         if (point_at(o + offset, q)) {
@@ -383,7 +420,13 @@ ApplyOut ApplyVS(uint vertex : SV_VertexID) {
 
 // The colour multiplier of a visibility on the scene target's display values.
 float ao_scale(float visibility) {
-    return pow(saturate(visibility), g_params.z);
+    const float value = saturate(visibility);
+    // The native display-value AO uses exponent 1. Avoid a log/exp pair for every full-resolution pixel;
+    // retain the general curve for any other exponent supplied by the renderer.
+    [branch] if (g_params.z == 1.0f) {
+        return value;
+    }
+    return pow(value, g_params.z);
 }
 
 #ifdef AO_PASS_upsample_cs

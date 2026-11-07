@@ -18,20 +18,25 @@ function(nebula_fidelityfx_android headers portable names)
     set(sdk "${fidelityfx_sdk_SOURCE_DIR}/sdk")
 
     set(shaders "${NEBULA_FFX_VK_SHADERS}")
+    if(shaders AND NOT EXISTS "${shaders}/nebula-luma16.txt")
+        message(FATAL_ERROR "FidelityFX Vulkan shaders need the rgba16f luma-history fix. Use the desktop fidelityfx-vk-luma16-build shader output or clear NEBULA_FFX_VK_SHADERS to regenerate.")
+    endif()
     if(NOT shaders)
         if(NOT CMAKE_HOST_WIN32)
             message(STATUS "FSR 3 left out: its shader compiler runs on Windows (or set NEBULA_FFX_VK_SHADERS)")
             return()
         endif()
-        set(build "${CMAKE_BINARY_DIR}/fidelityfx-vk-build")
+        include("${CMAKE_CURRENT_FUNCTION_LIST_DIR}/fidelityfx_vulkan_fixes.cmake")
+        nebula_fidelityfx_vulkan_sdk("${sdk}" "${CMAKE_BINARY_DIR}/fidelityfx-sdk-vulkan-fixed" fixed_sdk)
+        set(build "${CMAKE_BINARY_DIR}/fidelityfx-vk-luma16-build")
         set(shaders "${build}/src/backends/shaders/vk")
-        if(NOT EXISTS "${shaders}/ffx_fsr3upscaler_accumulate_pass_permutations.h")
+        if(NOT EXISTS "${shaders}/nebula-luma16.txt")
             message(STATUS "Compiling the FidelityFX SDK's Vulkan shaders")
             set(no_library "${CMAKE_BINARY_DIR}/fidelityfx-vk-no-library.lib")
             file(TOUCH "${no_library}")
             # The same configuration as the desktop's (cmake/fidelityfx.cmake): the SDK's libraries land in one shared folder.
             execute_process(
-                COMMAND "${CMAKE_COMMAND}" -S "${sdk}" -B "${build}" -G "Visual Studio 17 2022" -A x64
+                COMMAND "${CMAKE_COMMAND}" -S "${fixed_sdk}" -B "${build}" -G "Visual Studio 17 2022" -A x64
                         -DFFX_API_BACKEND=VK_X64 -DFFX_FSR3UPSCALER=ON -DFFX_AUTO_COMPILE_SHADERS=ON
                         "-DVulkan_INCLUDE_DIR=${headers}" "-DVulkan_LIBRARY=${no_library}" "-DCMAKE_CXX_FLAGS_INIT=/FI\"${names}\""
                 RESULT_VARIABLE result OUTPUT_QUIET ERROR_VARIABLE errors)
@@ -44,6 +49,7 @@ function(nebula_fidelityfx_android headers portable names)
             if(NOT result EQUAL 0)
                 message(FATAL_ERROR "Compiling the FidelityFX SDK's Vulkan shaders failed:\n${output}\n${errors}")
             endif()
+            file(WRITE "${shaders}/nebula-luma16.txt" "rgba16f\n")
         endif()
     endif()
 

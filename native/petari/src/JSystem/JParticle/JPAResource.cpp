@@ -962,6 +962,8 @@ namespace {
         material.constants[88] = static_cast< f32 >(pShape->getAlphaCmp0());
         material.constants[89] = static_cast< f32 >(pShape->getAlphaCmp1());
         material.constants[90] = static_cast< f32 >(pShape->getAlphaOp());
+        material.mState.pixel_shading = nebula_alpha_test_always(pShape->getAlphaCmp0(), pShape->getAlphaCmp1(),
+                                                                pShape->getAlphaOp()) != 0;
         // The references (whole values; sendParticle scales them into the alpha test's slots).
         material.constants[92] = static_cast< f32 >(pShape->getAlphaRef0());
         material.constants[93] = static_cast< f32 >(pShape->getAlphaRef1());

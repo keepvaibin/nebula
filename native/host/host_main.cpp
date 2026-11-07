@@ -55,13 +55,13 @@
 #include "galaxy/perf_hint.h"
 #include "galaxy/platform_time.h"
 #include "galaxy/pointer_control.h"
+#include "galaxy/input/wiimote_motion.h"
 #include "galaxy/achievements.h"
 #include "galaxy/stats.h"
 #if defined(_WIN32) && !defined(NEBULA_HOST_SDL)
 // A real Wii Remote over Windows HID (wiimote_hid.h).
 #define NEBULA_REAL_WIIMOTE 1
 #include "galaxy/input/wiimote_input.h"
-#include "galaxy/input/wiimote_motion.h"
 #include "galaxy/wiimote_hid.h"
 #endif
 #include "galaxy/runtime_settings.h"
@@ -3500,12 +3500,12 @@ int main(int argc, char** argv) {
         }
     }
 #endif
-#if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
     for (int i = 1; i + 1 < argc; i += 2) {
         if (std::strcmp(argv[i], "--diagnostics") == 0) {
             galaxy::g_diagnostics_recording = argv[i + 1][0] == '1';
         }
     }
+#if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
     // GALAXY_FRAME_TIMELINE=1: the frame pipeline's events (frame_timeline.h), written at exit.
     galaxy::timeline::initialize_from_environment();
 #endif
@@ -3958,7 +3958,7 @@ int main(int argc, char** argv) {
                 report_thread_cpu(tsc_hz);
             }
             ULONG64 cycles = 0;
-            if (QueryThreadCycleTime(game_thread, &cycles)) {
+            if (trace_thread_cpu && QueryThreadCycleTime(game_thread, &cycles)) {
                 const size_t used = std::strlen(text);
                 std::snprintf(text + used, sizeof(text) - used, ", game cpu %.1f ms/s",
                               (double)(cycles - game_cycles_last) * 1000.0 / tsc_hz);

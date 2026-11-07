@@ -219,7 +219,8 @@ void fill_inputs(const NebulaPipelineDesc& desc, bool motion, InputList& list) n
 gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, unsigned aux) {
     const NebulaPipelineDesc& desc = entry.desc;
     const unsigned samples_log2 = variant & kSceneVariantSamplesMask;
-    const unsigned program = program_variant(desc.pixel, aux, samples_log2);
+    const unsigned program = program_variant(desc.pixel, aux,
+        (desc.state & NEBULA_STATE_PIXEL_SHADING) != 0u ? 0u : samples_log2);
     const ProgramBytes vs = program_bytes(desc.vertex, program, false);
     const ProgramBytes ps = program_bytes(desc.pixel, program, true);
     if (vs.size == 0u || ps.size == 0u) {

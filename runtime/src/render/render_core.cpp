@@ -854,12 +854,18 @@ void RenderCore::start_interp_sequence() {
         interp_slot_due_qpc_ = locked && arrival <= now + interp_slot_period_qpc_
             ? arrival : now;
     }
+    // With no generated pictures there is no interval to interpolate. A smoothed arrival slightly in the
+    // future must not hold the only picture back while a busy queue replaces it with another sequence.
+    if (interp_sequence_.generated == 0u) {
+        interp_slot_due_qpc_ = std::min(interp_slot_due_qpc_, now);
+    }
 }
 
 // As many generated frames per game frame as the GPU fits in 15 ms (of the 16.7 ms frame). A generated frame
 // walks the whole frame list, so a game frame costs about (k + 1) generated frame times. k drops at once
-// when over budget and rises to the next higher present rate that fits after 10 s under it; with
-// none left, one is tried again every 20 s. A capped sequence runs the slot clock at 60 * (k + 1).
+// when over budget and rises after 2 s with current native scene timings (10 s for temporal reconstruction).
+// Only temporal reconstruction needs a generated-frame retry; native scene frames keep its cost estimate live.
+// A capped sequence runs the slot clock at 60 * (k + 1).
 unsigned RenderCore::interp_gpu_governor(double& rate) {
     constexpr double budget_ms = 15.0;
     const unsigned configured = interp_stopping_ ? 0u : interp_frames_;
@@ -870,7 +876,7 @@ unsigned RenderCore::interp_gpu_governor(double& rate) {
     const std::uint64_t serial = interp_sequence_serial_;
     if (serial - interp_gpu_checked_ >= 30u && serial >= interp_gpu_warm_until_) {
         interp_gpu_checked_ = serial;
-        const double generated_ms = renderer_.generated_gpu_ema_ms();
+        const double generated_ms = renderer_.interpolation_gpu_cost_ms();
         if (generated_ms > 0.0) {
             // With the temporal upscaler on generated frames the frame at t = 1
             // is one too; when no generated frame fits beside it, the game frames take
@@ -884,12 +890,15 @@ unsigned RenderCore::interp_gpu_governor(double& rate) {
             if (fits < interp_gpu_cap_) {
                 interp_gpu_cap_ = fits;
                 interp_gpu_cap_serial_ = serial;
-            } else if (fits > interp_gpu_cap_ && serial - interp_gpu_cap_serial_ >= 600u) {
+            } else if (fits > interp_gpu_cap_ && serial - interp_gpu_cap_serial_ >=
+                       (renderer_.temporal_interpolation() ? 600u : 120u)) {
                 interp_gpu_cap_ = std::min(fits, interp_step_up(interp_gpu_cap_));
                 interp_gpu_cap_serial_ = serial;
             }
         }
-        if (interp_gpu_cap_ == 0u && serial - interp_gpu_cap_serial_ >= 1200u) {
+        // Temporal reconstruction needs its own generated-frame measurement. Native replay has a fresh
+        // measurement from every completed scene frame, so never inject a known over-budget probe into play.
+        if (renderer_.temporal_interpolation() && interp_gpu_cap_ == 0u && serial - interp_gpu_cap_serial_ >= 1200u) {
             interp_gpu_cap_ = 1u;  // measure one generated frame again
             interp_gpu_cap_serial_ = serial;
             renderer_.reset_generated_gpu_ema();
@@ -935,7 +944,7 @@ void RenderCore::restart_interp_governors() {
 
 void RenderCore::note_game_frame_cadence(std::int64_t now_qpc) {
     static const std::int64_t frequency = galaxy::qpc_frequency();
-    static const bool trace = ::galaxy::run_option_u64(::galaxy::run_options().trace_present_stats, 0u) != 0u;
+    const bool trace = ::galaxy::diagnostics_recording() || ::galaxy::run_option_u64(::galaxy::run_options().trace_present_stats, 0u) != 0u;
     const std::int64_t period = frequency * 1001 / 60000;
     // Since the frame before: the game's waits on the render thread, and the render thread's generated frame time.
     const std::uint64_t waited_total = game_wait_qpc_.load(std::memory_order_relaxed);
@@ -983,7 +992,7 @@ void RenderCore::note_game_frame_cadence(std::int64_t now_qpc) {
         }
         // The walk at t = 1 alone costs the game its frames when it takes a
         // quarter of a frame or more.
-        const double generated_ms = renderer_.generated_gpu_ema_ms();
+        const double generated_ms = renderer_.interpolation_gpu_cost_ms();
         if (cap == 0u && renderer_.temporal_interpolation() && generated_ms * 4.0 >= 1000.0 / 60.0) {
             renderer_.suspend_temporal_interpolation(generated_ms);
         }
@@ -1280,7 +1289,7 @@ void RenderCore::advance_interp_sequence(bool flush) {
 // time from its slot to the vblank ending that interval. The picture shows its slot's moment, so with even motion
 // that time stays the same; its spread is the motion's unevenness on the display.
 void RenderCore::note_present_vblank(std::int64_t slot) {
-    static const bool trace = ::galaxy::run_option_u64(::galaxy::run_options().trace_present_stats, 0u) != 0u;
+    const bool trace = ::galaxy::diagnostics_recording() || ::galaxy::run_option_u64(::galaxy::run_options().trace_present_stats, 0u) != 0u;
     std::int64_t vblank = 0;
     std::int64_t period = 0;
     if (!trace || !renderer_.vblank_grid(vblank, period)) {
@@ -1314,7 +1323,7 @@ void RenderCore::note_interp_real_present() {
 }
 
 void RenderCore::report_interp_stats() {
-    static const bool trace = ::galaxy::run_option_u64(::galaxy::run_options().trace_present_stats, 0u) != 0u;
+    const bool trace = ::galaxy::diagnostics_recording() || ::galaxy::run_option_u64(::galaxy::run_options().trace_present_stats, 0u) != 0u;
     if (!trace) {
         return;
     }
@@ -1359,6 +1368,7 @@ void RenderCore::report_interp_stats() {
             << " game-fps=" << interp_cadence_fps_
             << " capped-sequences=" << std::exchange(interp_gpu_capped_, 0u)
             << " generated-gpu-ema-ms=" << renderer_.generated_gpu_ema_ms()
+            << " scene-gpu-ema-ms=" << renderer_.interpolation_gpu_cost_ms()
 #if defined(NEBULA_DEV)
             << " items-culled=" << std::exchange(stat_items_culled_, 0u)
             << " draws-no-pipeline=" << std::exchange(stat_draws_no_pipeline_, 0u)
@@ -1737,6 +1747,9 @@ void RenderCore::render_loop() {
             // frame's present is queued: that present starts its sequence.
             const auto due_slot_first = [this] {
                 if (interp_remaining_us() > 0) return false;
+                // Skipping the real endpoint is valid only after this sequence has shown an intermediate
+                // picture. Otherwise a saturated GPU can render every endpoint unseen and starve presentation.
+                if (interp_sequence_.next == 0u) return true;
                 if (interp_slot_t() < 1.0 - 1e-3) return true;
                 for (const FrameChunk& queued : frame_queue_) {
                     if (queued.present_only || queued.present_swap_chain) return false;
@@ -2182,7 +2195,8 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
     // Pipelines not yet asked for, for the settings in use.
     {
         const bool wide = render.enhanced_lighting && render.wide_scene;
-        const bool motion = renderer_.temporal_mode() || renderer_.interpolation_mode();
+        // Native interpolation replays geometry and does not write temporal reconstruction targets.
+        const bool motion = renderer_.temporal_mode();
         const unsigned samples = renderer_.scene_samples_log2();
         const std::uint32_t settings = samples | (wide ? 4u : 0u) | (motion ? 8u : 0u) | (pixel_lit_ ? 16u : 0u);
         if (settings != pipelines_settings_) {

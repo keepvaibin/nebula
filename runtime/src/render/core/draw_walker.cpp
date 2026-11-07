@@ -4,7 +4,6 @@
 
 #include "galaxy/frame_timeline.h"
 #include "galaxy/loss_report.h"
-#include "galaxy/render/game_bloom.h"
 #include "galaxy/render/render_config.h"
 #include "render/core/inspector.h"
 
@@ -72,6 +71,10 @@ void RenderCore::scan_list(ListData& now) {
     now.block_camera.assign(list.block_count, NEBULA_NONE32);
     now.block_world_wanted.assign(list.block_count, 0u);
     now.light_camera.assign(list.light_set_count, NEBULA_NONE32);
+    for (std::uint32_t s = 0; s < list.light_set_count; ++s) {
+        const auto camera = list.light_sets[s].camera_plus_one;
+        if (camera != 0u && camera <= list.camera_count) now.light_camera[s] = camera - 1u;
+    }
     std::uint32_t scene_camera = NEBULA_NONE32;
     std::uint32_t mirror_camera = NEBULA_NONE32;
     for (std::uint32_t c = list.camera_count; c != 0u; --c) {
@@ -194,7 +197,13 @@ void RenderCore::prepare_walk(ListData& now, ListData* before, const WalkTime& t
             }
         }
         if (now.block_world_wanted[b] != 0u) {
-            core::compose_world_rows(in, rows + walk_block_world_[b]);
+            core::ComposeInput world_in = in;
+            Affine34 eye_to_world{};
+            if (block.calc_mode == 1u && camera != NEBULA_NONE32 && affine_inverse(walk_cameras_[camera], eye_to_world)) {
+                // These joints already include the view. World-generated texture coordinates must remove that view.
+                world_in.world_view = reinterpret_cast<const float (*)[4]>(eye_to_world.data());
+            }
+            core::compose_world_rows(world_in, rows + walk_block_world_[b]);
         }
     }
 
@@ -440,7 +449,9 @@ const core::StaticSlot& RenderCore::walk_material(std::uint32_t index) {
     if (walk_.between && !walk_.now->constants_before.empty() && walk_.now->constants_before[index] != NEBULA_NONE32) {
         const NebulaFrameConstants& candidate = walk_.before->list->constants[walk_.now->constants_before[index]];
         if (candidate.slot == NEBULA_NONE32 && candidate.vertex_rows == constants.vertex_rows &&
-            candidate.pixel_rows == constants.pixel_rows && !walk_.now->cut) {
+            candidate.pixel_rows == constants.pixel_rows && candidate.coord_row_count == constants.coord_row_count &&
+            (constants.coord_row_count == 0u || std::memcmp(candidate.coord_rows, constants.coord_rows,
+                constants.coord_row_count * sizeof(constants.coord_rows[0])) == 0) && !walk_.now->cut) {
             other = &candidate;
         }
     }
@@ -649,6 +660,7 @@ void RenderCore::walk_draw_pass(const NebulaFramePass& pass) {
         NEBULA_INSPECT_ITEM(*this, i, instances, pass, aux, pipeline, entry);
 
         renderer_.set_draw_aux(aux);
+        renderer_.note_scene_draw(state);
         encoder.set_pipeline(pipeline);
         encoder.set_view(view.address);
         const core::StaticSlot& material = walk_material(item.constants);
@@ -748,6 +760,9 @@ void RenderCore::walk_scene_begin(const NebulaFramePass& pass) {
     if (pass.scene_camera != NEBULA_NONE32) {
         std::memcpy(view_at.data(), walk_cameras_[pass.scene_camera].data(), sizeof(view_at));
         view_rows = view_at.data();
+        if (walk_.between && list.sky_up_known != 0u) {
+            sky_up_ = eye_direction_at(list.sky_up, affine_of(list.cameras[pass.scene_camera].view), walk_cameras_[pass.scene_camera]);
+        }
         renderer_.set_scene_view(&view_at);
     } else {
         renderer_.set_scene_view(nullptr);
@@ -810,6 +825,11 @@ void RenderCore::walk_scene_end() {
     scene_mip_bias_ = 0.0f;
     collect_ao_objects_ = false;
     renderer_.end_wide_scene();
+    // Once 3D is complete, post-AA and the 2D layer need one value per pixel. Keep all the selected
+    // geometry samples through the resolve, without writing their identical post-AA result back N times.
+    if (renderer_.begin_output_scene(true)) {
+        display_pictures_.set_frame_map(renderer_.frame_map());
+    }
     renderer_.record_scene_aa();
     if (renderer_.begin_output_scene()) {
         display_pictures_.set_frame_map(renderer_.frame_map());
@@ -886,13 +906,28 @@ void RenderCore::walk_list(ListData& now, ListData* before, const WalkTime& time
             }
             walk_draw_pass(pass);
             break;
-        case NEBULA_PASS_CLEAR:
-            renderer_.clear_scene(pass.clear_rgba, (pass.clear_channels & 1u) != 0u, (pass.clear_channels & 2u) != 0u,
-                                  (pass.clear_channels & 4u) != 0u, 0u, 0u, kFrameUnits, kFrameUnits, target_open_ ? 1u : 0u);
+        case NEBULA_PASS_CLEAR: {
+            const bool starts_hdr = !target_open_ && (pass.clear_channels & 5u) == 5u &&
+                p + 1u < list.pass_count && list.passes[p + 1u].kind == NEBULA_PASS_SCENE_BEGIN &&
+                enhanced_lighting_ && get_render_config().wide_scene && !renderer_.temporal_mode();
+            SceneClearValues clear = make_scene_clear_values(pass.clear_rgba, 0u);
+            if (starts_hdr) {
+                // The skipped SDR attachment would have rounded the clear before widening it to FP16.
+                // Preserve that RGB10A2 conversion for non-black clears as well.
+                for (unsigned c = 0u; c < 4u; ++c) {
+                    const float levels = c == 3u ? 3.0f : 1023.0f;
+                    clear.color[c] = std::round(clear.color[c] * levels) / levels;
+                }
+            }
+            if (!starts_hdr || !renderer_.begin_wide_scene(true, &clear)) {
+                renderer_.clear_scene(pass.clear_rgba, (pass.clear_channels & 1u) != 0u, (pass.clear_channels & 2u) != 0u,
+                                      (pass.clear_channels & 4u) != 0u, 0u, 0u, kFrameUnits, kFrameUnits, target_open_ ? 1u : 0u);
+            }
             if (pass.layer == NEBULA_LAYER_TARGET) {
                 target_channels = pass.channels;
             }
             break;
+        }
         case NEBULA_PASS_COPY_FRAME: {
             FramePassRequest request{};
             request.key = pass.target;

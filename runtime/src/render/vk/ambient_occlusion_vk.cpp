@@ -254,7 +254,7 @@ void AmbientOcclusionVk::dispatch(VkCommandBuffer commands, Pass pass, VkDescrip
 
 bool AmbientOcclusionVk::prepare(VkCommandBuffer commands, const Texture& depth, VkImageLayout depth_layout,
                                  const RtView& view, bool ssao, std::span<const ao::ObjectOccluder> objects, UploadRing& ring,
-                                 const SetAllocator& allocate) {
+                                 const SetAllocator& allocate, const StageMarker& mark) {
     if (!ready_) {
         return false;
     }
@@ -282,9 +282,13 @@ bool AmbientOcclusionVk::prepare(VkCommandBuffer commands, const Texture& depth,
     const auto buffer = reinterpret_cast<VkBuffer>(ring.resource());
     objects_ = {buffer, objects_at.offset, object_bytes};
     tiles_ = {buffer, tiles_at.offset, tile_bytes};
-    dispatch(commands, kDistance, set_of(allocate, depth.view, depth_layout, *denoised_, *distance_, *distance_), kDistance == 0u ? width : width, height);
+    if (mark) mark(Stage::Distance);
+    dispatch(commands, kDistance, set_of(allocate, depth.view, depth_layout, *denoised_, *distance_, *distance_), width, height);
+    if (mark) mark(Stage::Occlusion);
     dispatch(commands, ssao ? kSsao : kOcclusion, set_of(allocate, depth.view, depth_layout, *denoised_, *distance_, *raw_), width, height);
+    if (mark) mark(Stage::Denoise);
     dispatch(commands, kDenoise, set_of(allocate, depth.view, depth_layout, *raw_, *distance_, *denoised_), width, height);
+    if (mark) mark(Stage::Upsample);
     dispatch(commands, kUpsample, set_of(allocate, depth.view, depth_layout, *denoised_, *distance_, *scale_), depth.width, depth.height);
     return true;
 }

@@ -18,6 +18,8 @@ namespace galaxy::render::vk {
 class AmbientOcclusionVk {
 public:
     using SetAllocator = std::function<VkDescriptorSet(VkDescriptorSetLayout)>;
+    enum class Stage { Distance, Occlusion, Denoise, Upsample };
+    using StageMarker = std::function<void(Stage)>;
 
     AmbientOcclusionVk() = default;
     AmbientOcclusionVk(const AmbientOcclusionVk&) = delete;
@@ -32,7 +34,8 @@ public:
     // Outside a render pass, the scene's single-sample depth readable as `depth_layout`: the colour multiplier of each
     // scene target pixel. False: nothing to multiply.
     bool prepare(VkCommandBuffer commands, const Texture& depth, VkImageLayout depth_layout, const RtView& view,
-                 bool ssao, std::span<const ao::ObjectOccluder> objects, UploadRing& ring, const SetAllocator& allocate);
+                 bool ssao, std::span<const ao::ObjectOccluder> objects, UploadRing& ring, const SetAllocator& allocate,
+                 const StageMarker& mark = {});
     // Inside a scene target pass of 2^samples_log2 samples: the multiply.
     void finish(VkCommandBuffer commands, VkRenderPass pass, unsigned samples_log2, const SetAllocator& allocate);
 

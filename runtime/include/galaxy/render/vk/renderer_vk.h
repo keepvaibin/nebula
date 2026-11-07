@@ -71,6 +71,8 @@ struct RenderLayout {
     // The same passes over the wide scene's colour format (kSceneVariantHdr), by samples.
     std::array<VkRenderPass, 4> wide_passes{};
     std::array<VkRenderPass, 4> wide_passes_clear{};
+    // Full-screen colour replacements preserve depth but never load old colour.
+    std::array<std::array<VkRenderPass, 4>, 2> discard_color_passes{};
     // A texture target's pass (kSceneVariantTarget): RGBA8, one sample.
     VkRenderPass target_pass = VK_NULL_HANDLE;
     VkRenderPass target_pass_clear = VK_NULL_HANDLE;
@@ -133,6 +135,9 @@ public:
     void game_bloom(std::uint32_t kind, std::uint32_t a, std::uint32_t b);
     void reset_generated_gpu_ema() noexcept { generated_gpu_ema_ms_ = 0.0; }
     [[nodiscard]] double generated_gpu_ema_ms() const noexcept { return generated_gpu_ema_ms_; }
+    [[nodiscard]] double interpolation_gpu_cost_ms() const noexcept {
+        return temporal_interp_ ? generated_gpu_ema_ms_ : native_scene_gpu_ema_ms_;
+    }
     void suspend_temporal_interpolation(double ms_per_frame);
     [[nodiscard]] bool temporal_interpolation() const noexcept { return temporal_interp_; }
     [[nodiscard]] unsigned temporal_output_width() const noexcept { return temporal_output_w_; }
@@ -146,7 +151,7 @@ public:
     [[nodiscard]] bool layer_window() const noexcept { return false; }
     [[nodiscard]] std::int64_t last_present_qpc() const noexcept { return swap_present_qpc_; }
     // The 3D scene in a wide target while `wanted` (the enhanced lighting), its camera at the end (scene_camera_vk.h).
-    void begin_wide_scene(bool wanted);
+    bool begin_wide_scene(bool wanted, const SceneClearValues* initial_clear = nullptr);
     void end_wide_scene();
     [[nodiscard]] bool temporal_mode() const;
     [[nodiscard]] gpu::Table texture_table_for(const TextureHandle* handles, unsigned count, const TextureStore& cache);
@@ -192,6 +197,11 @@ public:
     // What the walker draws through. Aux targets beside the scene target: 0 none, 1 motion, 2 reactive.
     [[nodiscard]] gpu::Encoder& encoder() noexcept { return encoder_; }
     void set_draw_aux(unsigned aux);
+    void note_scene_draw(std::uint32_t state) noexcept {
+        scene_drawn_ = true;
+        constexpr std::uint32_t depth_write = (1u << 10u) | (1u << 14u);
+        if (scene_.samples > 1u && (state & depth_write) == depth_write) scene_.depth_dirty = true;
+    }
     // A buffer of `bytes` zeros, for streams a mesh lacks.
     [[nodiscard]] gpu::Address zero_stream(std::uint32_t bytes);
     // The frame so far is the frame's picture now: `fresh` (or a new target) takes its place.
@@ -210,7 +220,7 @@ public:
 
     // The 2D layer at the window's resolution (hud_output_resolution): at the scene's end the scene target is resampled into
     // an scene target at the window's scale, which the 2D layer and the display copy then use, until end_output_scene.
-    [[nodiscard]] bool begin_output_scene();
+    [[nodiscard]] bool begin_output_scene(bool resolve_msaa_only = false);
     // A pass into texture target `key` (E-07): its target, `width` x `height` game units at the scene target's scale, takes
     // the scene target's place until end_target_pass, so the pass's draws and clears go to it. Each key keeps its target
     // between passes (made again only when its size or the scene target's scale changes); the pass is drawn once a game
@@ -364,7 +374,7 @@ private:
     // `clear`: begins with both targets cleared to it (scene_pass_clear).
     void begin_scene_pass(const SceneClearValues* clear = nullptr);
     // The same with a temporal scene's second target (DrawCall::aux_target); a pass open with another one ends.
-    void begin_scene_pass_with(unsigned aux, const SceneClearValues* clear);
+    void begin_scene_pass_with(unsigned aux, const SceneClearValues* clear = nullptr, bool discard_color = false);
     void end_scene_pass();
     void reset_draw_bindings() noexcept;
     [[nodiscard]] VkDescriptorSet allocate_frame_set(VkDescriptorSetLayout layout);
@@ -410,7 +420,7 @@ private:
     // The scene target's framebuffer and colour conversion input: the set's own, or for an image taken into the
     // scene, the image's framebuffer (vk::Texture::scene_framebuffer, with the scene target's depth) and a set in the
     // frame's descriptors.
-    [[nodiscard]] VkFramebuffer scene_framebuffer();
+    [[nodiscard]] VkFramebuffer scene_framebuffer(bool resolved = false);
     [[nodiscard]] VkDescriptorSet scene_color_source();
     [[nodiscard]] VkFramebuffer framebuffer_for(vk::Texture& texture);
     void refresh_display_rate();
@@ -485,8 +495,9 @@ private:
     SceneSet scene_;
     // The wide scene's colour targets (begin_wide_scene).
     SceneSet wide_scene_;
+    bool wide_base_sampled_ = false;
     bool ensure_wide_set(SceneSet& set);
-    void record_wide_begin();
+    void record_wide_begin(const SceneClearValues* initial_clear);
     void record_wide_end();
     vk::SceneCameraVk scene_camera_;
     std::chrono::steady_clock::time_point camera_metered_{};
@@ -689,6 +700,9 @@ private:
     // The frame's GPU time (timestamps) of frames that presented a generated picture: the interpolation's GPU governor.
     std::array<bool, kFramesInFlight> frame_generated_{};
     double generated_gpu_ema_ms_ = 0.0;
+    double native_scene_gpu_ema_ms_ = 0.0;
+    bool scene_drawn_ = false;
+    std::array<bool, kFramesInFlight> frame_scene_drawn_{};
     double generated_gpu_ms_ = 0.0;
     std::uint64_t generated_gpu_samples_ = 0;
     // Presents the acquired image (swap_image_) after its submission.
@@ -709,6 +723,8 @@ private:
         std::uint32_t next_id = 0;
         std::int64_t last_slot = 0;
         std::int64_t vsync_ns = 0;  // the display's vsync interval (Choreographer)
+        std::array<std::uint32_t, 64> requested_id{};
+        std::array<std::int64_t, 64> requested_period{};
         std::array<std::int64_t, 64> requested{};  // each presentID's slot, by presentID % 64
         std::int64_t refresh_ns = 0;
         std::int64_t last_actual = 0;
@@ -716,6 +732,11 @@ private:
         unsigned on_slot = 0;
         unsigned late = 0;
         unsigned unrequested = 0;
+        unsigned duplicates = 0;
+        unsigned available_late = 0;
+        unsigned delayed_late = 0;
+        unsigned intervals = 0;
+        std::int64_t interval_sum = 0, interval_max = 0, margin_sum = 0;
         unsigned even = 0;  // shown one retrace period after the frame before
     };
     PresentTiming present_timing_;
@@ -751,11 +772,15 @@ private:
     // the frame's commands; the time to the next mark (or the frame's end) is that pass's. The curved surfaces' sort,
     // in the upload commands, takes the two queries after the frame's marks.
     enum class GpuPass : std::uint8_t {
-        Scene, Resolve, FramePass, DisplayCopy, Bloom, SceneAa, SceneAo, Upscale, RayTracing, Present, Camera, Count
+        Scene, Resolve, FramePass, DisplayCopy, Bloom, SceneAa, SceneAo, Upscale, RayTracing, Present, Camera,
+        AoDistance, AoOcclusion, AoDenoise, AoUpsample, AoApply, Count
     };
     static constexpr unsigned kGpuPassSlots = 512;
     void gpu_pass(GpuPass pass);
     void read_gpu_passes();
+    void prepare_gpu_pass_queries();
+    bool profile_frame_ = false;
+    unsigned profile_samples_ = 0;
     class GpuPassScope {
     public:
         GpuPassScope(RendererVk& renderer, GpuPass pass) : renderer_(renderer), outer_(renderer.current_pass_) {

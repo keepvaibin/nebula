@@ -269,7 +269,7 @@ public:
     // every scene target path (draws, clears, copies, probes) works unchanged on either.
     // begin_output_scene returns false when the split is off or the scene target already
     // covers the window.
-    [[nodiscard]] bool begin_output_scene();
+    [[nodiscard]] bool begin_output_scene(bool resolve_msaa_only = false);
     // A pass into texture target `key` (E-07): its target, `width` x `height` game units at the scene target's scale, takes
     // the scene target's place until end_target_pass, so the pass's draws and clears go to it. Each key keeps its target
     // between passes (made again only when its size or the scene target's scale changes); the pass is drawn once a
@@ -286,7 +286,7 @@ public:
     // before the 2D layer and begin_output_scene. A temporal upscaler antialiases the scene itself.
     void record_scene_aa();
     // The 3D scene in a wide target while `wanted` (the enhanced lighting), its camera at the end (scene_camera.h).
-    void begin_wide_scene(bool wanted);
+    bool begin_wide_scene(bool wanted, const SceneClearValues* initial_clear = nullptr);
     void end_wide_scene();
     // Ambient occlusion (ambient_occlusion.h) of the scene drawn so far, from the view `set_scene_ao_view` gave:
     // after the opaque phases, before the translucent ones.
@@ -352,6 +352,9 @@ public:
     }
     // Smoothed GPU time of one generated frame (0 until measured), for the budget.
     [[nodiscard]] double generated_gpu_ema_ms() const noexcept { return generated_gpu_ema_ms_; }
+    [[nodiscard]] double interpolation_gpu_cost_ms() const noexcept {
+        return temporal_interpolation() ? generated_gpu_ema_ms_ : native_scene_gpu_ema_ms_;
+    }
     // The GPU cannot afford a generated frame per presented frame: the game frames take
     // the temporal upscaler (60 presents) until the display or upscaler
     // settings change.
@@ -389,6 +392,14 @@ public:
 // What the walker draws through. Aux targets beside the scene target: 0 none, 1 motion, 2 reactive, 3 reactive and layer.
     [[nodiscard]] gpu::Encoder& encoder() noexcept { return encoder_; }
     void set_draw_aux(unsigned aux);
+    void note_scene_draw(std::uint32_t state) noexcept {
+        scene_drawn_ = true;
+        if (scene_msaa_.samples > 1u) {
+            constexpr std::uint32_t depth_write = (1u << 10u) | (1u << 14u);
+            scene_msaa_.depth_dirty |= (state & depth_write) == depth_write;
+            scene_msaa_.color_dirty |= (state & ((1u << 17u) | (1u << 18u) | (1u << 19u))) != 0u;
+        }
+    }
     // A buffer of `bytes` zeros, for streams a mesh lacks.
     [[nodiscard]] gpu::Address zero_stream(std::uint32_t bytes);
     // The frame so far is the frame's picture now: `fresh` (or a new target) takes its place.
@@ -857,6 +868,9 @@ private:
     double generated_gpu_ms_ = 0.0;
     std::uint64_t generated_gpu_samples_ = 0;
     double generated_gpu_ema_ms_ = 0.0;
+    double native_scene_gpu_ema_ms_ = 0.0;
+    bool scene_drawn_ = false;
+    std::array<bool, kFramesInFlight> frame_scene_drawn_{};
     std::array<bool, kFramesInFlight> frame_generated_{};
     std::atomic<double> measured_present_hz_{0.0};
     std::int64_t measured_present_window_qpc_ = 0;
