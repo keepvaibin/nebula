@@ -8,6 +8,7 @@
 set(NEBULA_ARCHIVE_SOURCES "${CMAKE_SOURCE_DIR}/third_party/archive" CACHE PATH
     "zlib, xz and libarchive sources for the mods importer")
 set(NEBULA_ARCHIVE_PREFIX "${CMAKE_BINARY_DIR}/archive-deps")
+set(nebula_archive_android_include "${CMAKE_CURRENT_LIST_DIR}/android")
 
 function(nebula_archive_dep name source)
     set(stamp "${NEBULA_ARCHIVE_PREFIX}/${name}.built")
@@ -21,7 +22,9 @@ function(nebula_archive_dep name source)
         list(APPEND toolchain "-DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}")
     endif()
     if(ANDROID)
-        list(APPEND toolchain "-DANDROID_ABI=${ANDROID_ABI}" "-DANDROID_PLATFORM=${ANDROID_PLATFORM}")
+        # cmake/android holds the large-file header libarchive includes on Android (64-bit ABIs need no mapping).
+        list(APPEND toolchain "-DANDROID_ABI=${ANDROID_ABI}" "-DANDROID_PLATFORM=${ANDROID_PLATFORM}"
+             "-DCMAKE_C_FLAGS=-I${nebula_archive_android_include}")
     endif()
     if(CMAKE_OSX_ARCHITECTURES)
         list(APPEND toolchain "-DCMAKE_OSX_ARCHITECTURES=${CMAKE_OSX_ARCHITECTURES}")
