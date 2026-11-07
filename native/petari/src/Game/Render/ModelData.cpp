@@ -178,7 +178,7 @@ s32 ModelData::findMaterial(const char* pName) const {
 }
 
 s32 ModelData::findTexture(const char* pName) const {
-    for (u32 i = 0; i < getTextureNum(); i++) {
+    for (u32 i = 0; i < getTextureCount(); i++) {
         if (strcmp(getTextureName(i), pName) == 0) {
             return static_cast< s32 >(i);
         }

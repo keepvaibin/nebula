@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The game's lights at the pixel, for a program's lit form. Per pixel: the light formulas of the vertex stage on the
-// interpolated position and normal. Enhanced (view_light.w bit 1): the lit colour channel adds its lights in linear light,
+// interpolated position and normal. Enhanced (view_flags bit 1): the lit colour channel adds its lights in linear light,
 // each along its authored falloff, under a soft shoulder; the ambient is a sky hemisphere about the player's up whose
 // reflection takes its share from the diffuse light; the first light's highlight is GGX, its lobe widened by the normal's
 // change across the pixel (Tokuyoshi and Kaplanyan 2019); an environment map gains Fresnel. Highlights are added after the
@@ -21,7 +21,7 @@ static const float kEnhMetalF0 = 0.50;       // least peak of a metal's F0 (its 
 static const float kEnhEnvBase = 1.0;        // environment lookup gain facing the viewer
 static const float kEnhEnvGraze = 0.80;      // gain added at grazing angles, Schlick (1 - N.V)^5
 
-bool enh_on() { return (view_light.w & 2u) != 0u; }
+bool enh_on() { return (view_flags & 2u) != 0u; }
 
 float3 enh_lin(float3 c) { return pow(max(c, 0.0), 2.2); }
 float3 enh_srgb(float3 c) { return pow(max(c, 0.0), 1.0 / 2.2); }
@@ -60,17 +60,9 @@ void enh_light(uint base, uint n, bool spot, float3 P, out float3 ldir, out floa
     lcol = rows[at].rgb / 255.0;
 }
 
-// The player's up in eye space (octahedral, x and y in snorm16 halves), else the view's up.
+// The player's up in eye space, else the view's up.
 float3 enh_up() {
-    if ((view_light.w & 1u) == 0u) {
-        return float3(0.0, 1.0, 0.0);
-    }
-    const uint packed = view_light.z;
-    const float2 f = float2(int2(int(packed << 16u), int(packed)) >> 16) / 32767.0;
-    float3 n = float3(f, 1.0 - abs(f.x) - abs(f.y));
-    const float t = saturate(-n.z);
-    n.xy += float2(n.x >= 0.0 ? -t : t, n.y >= 0.0 ? -t : t);
-    return normalize(n);
+    return (view_flags & 1u) != 0u ? view_sky_up : float3(0.0, 1.0, 0.0);
 }
 
 struct EnhShade {
@@ -183,7 +175,7 @@ float3 enh_finish(float3 frag, EnhShade e) {
     const float peak = max(max(c.r, c.g), max(c.b, 1e-4));
     const float3 f0 = saturate(c * (max(peak, kEnhMetalF0) / peak));
     const float3 lit = c + e.spec + e.metal * (f0 + (1.0 - f0) * e.metal_fw);
-    return enh_srgb((view_light.w & 4u) != 0u ? lit : enh_shoulder(lit));
+    return enh_srgb((view_flags & 4u) != 0u ? lit : enh_shoulder(lit));
 }
 
 float4 enh_env(float4 t) {

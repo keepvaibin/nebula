@@ -24,7 +24,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 135u
+#define NEBULA_GAME_API_VERSION 136u
 
 /* Viewports, scissors, clears, target sizes and picture points count this many units across a frame on each axis. */
 #define NEBULA_FRAME_UNITS 65536.0f
@@ -175,17 +175,6 @@ typedef struct NebulaTextureImage {
     uint8_t format;
     uint32_t levels;
 } NebulaTextureImage;
-
-/* How a site's vertices group. */
-typedef enum NebulaPrimitive {
-    NEBULA_PRIMITIVE_QUADS = 0,          /* drawn as (0 1 2)(0 2 3) */
-    NEBULA_PRIMITIVE_TRIANGLES = 1,
-    NEBULA_PRIMITIVE_TRIANGLE_STRIP = 2, /* odd triangles turned to keep the winding */
-    NEBULA_PRIMITIVE_TRIANGLE_FAN = 3,   /* around vertex 0 */
-    NEBULA_PRIMITIVE_LINES = 4,
-    NEBULA_PRIMITIVE_LINE_STRIP = 5,
-    NEBULA_PRIMITIVE_POINTS = 6
-} NebulaPrimitive;
 
 /* A written shader (runtime/src/render/materials/<name>.hlsl). */
 typedef enum NebulaShaderId {

@@ -10,7 +10,7 @@
 #include <algorithm>
 
 MaterialUpdater::MaterialUpdater(Model* pModel, const ResourceHolder* pResHolder) : mModel(pModel), mFogCtrl(), mResHolder(pResHolder) {
-    mMaterialCtrl.init(mModel->getModelData()->getMaterialNum() * 4);
+    mMaterialCtrl.init(mModel->getModelData()->getMaterialCount() * 4);
 }
 
 void MaterialUpdater::update() {
@@ -66,11 +66,11 @@ void MaterialUpdater::checkMaterial() {
 
 void MaterialUpdater::checkViewProjmapEffectMtx() {
     Material* material;
-    for (u32 i = 0; i < mModel->getModelData()->getMaterialNum(); i++) {
-        material = mModel->getModelData()->getMaterialNodePointer(i);
+    for (u32 i = 0; i < mModel->getModelData()->getMaterialCount(); i++) {
+        material = mModel->getModelData()->getMaterialAt(i);
         for (u32 j = 0; j < NEBULA_MATERIAL_SLOTS; j++) {
-            CoordMatrix* texMtx = material->getTexMtx(j);
-            if (texMtx && (texMtx->getTexMtxInfo().mInfo & 0x3FU) == CoordMatrixMode_ViewProjmap && MR::isUseTexMtx(material, j)) {
+            CoordMatrix* texMtx = material->getCoordMatrix(j);
+            if (texMtx && (texMtx->getInfo().mInfo & 0x3FU) == CoordMatrixMode_ViewProjmap && MR::isUseTexMtx(material, j)) {
                 addViewProjmapEffectMtxSetter();
                 return;
             }
@@ -92,7 +92,7 @@ MarioShadowProjmapMtxSetter* MaterialUpdater::addMarioShadowProjmapMtxSetter() {
 
 void MaterialUpdater::checkTexture() {
     bool hasShadowSetter = false;
-    for (u32 i = 0; i < mModel->getModelData()->getTextureNum(); i++) {
+    for (u32 i = 0; i < mModel->getModelData()->getTextureCount(); i++) {
         const char* name = mModel->getModelData()->getTextureName(i);
         if (MR::isEqualString(name, "IndDummy")) {
             mModel->getModelData()->setTexture(i, *MR::getScreenResTIMG());
@@ -119,8 +119,8 @@ bool MaterialUpdater::hasMovingMaterial(const ModelData* pModelData) {
         return true;
     }
 
-    for (u32 i = 0; i < pModelData->getMaterialNum(); i++) {
-        if (!MR::isNormalTexMtx(pModelData->getMaterialNodePointer(i))) {
+    for (u32 i = 0; i < pModelData->getMaterialCount(); i++) {
+        if (!MR::isNormalTexMtx(pModelData->getMaterialAt(i))) {
             return true;
         }
     }

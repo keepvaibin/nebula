@@ -246,7 +246,7 @@ void MarioActor::drawSearchLight() const {
     TDDraw::setupNative(&view, 0, 1, 1);
 
     PlayerModel* model = static_cast< PlayerModel* >(MR::getModel(mSearchLight));
-    Material* const material = model->getModelData()->getMaterialNodePointer(0);
+    Material* const material = model->getModelData()->getMaterialAt(0);
     MaterialDraw draw;
     if (model->simpleDrawSetup(material, &draw)) {
         // Gradually fade in the search light.

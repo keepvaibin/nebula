@@ -14,7 +14,7 @@ void BtpPlayer::apply(Clip* pClip, Model* pModel) {
         if (pClip->hasMaterial(i)) {
             u32 texNo;
             pClip->getTexture(i, &texNo);
-            pModel->ownMaterial(pClip->getMaterial(i))->setTexNo(pClip->getSlot(i), texNo);
+            pModel->ownMaterial(pClip->getMaterial(i))->setTextureIndex(pClip->getSlot(i), texNo);
         }
     }
 }

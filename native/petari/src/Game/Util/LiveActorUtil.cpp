@@ -1628,7 +1628,7 @@ namespace MR {
     void changeModelDataTexAll(LiveActor* pActor, const char* pTexName, const ResTIMG& rTimg) {
         ModelData* pModelData = MR::getModelData(pActor);
 
-        for (u32 texIndex = 0; texIndex < pModelData->getTextureNum(); texIndex++) {
+        for (u32 texIndex = 0; texIndex < pModelData->getTextureCount(); texIndex++) {
             const char* name = pModelData->getTextureName(texIndex);
 
             if (strcmp(name, pTexName) != 0) {

@@ -139,12 +139,12 @@ namespace Skeleton {
 
     void evaluate(Model* pModel, const Vec& rScale, const Mtx& rMtx) {
         ModelData* pData = pModel->getModelData();
-        if (pData->getJointNum() == 0) {
+        if (pData->getJointCount() == 0) {
             return;
         }
-        if (sStackRoom < pData->getJointNum()) {
+        if (sStackRoom < pData->getJointCount()) {
             const NebulaHostServices* pHost = nebula_host();
-            sStackRoom = pData->getJointNum() * 2u;
+            sStackRoom = pData->getJointCount() * 2u;
             sStack = static_cast< Saved* >(pHost->heap_realloc(pHost->user, sStack, sStackRoom * sizeof(Saved)));
         }
         mModel = pModel;
@@ -156,7 +156,7 @@ namespace Skeleton {
         const u32 count = pData->mFile->step_count;
         Saved* pTop = sStack;
         for (u32 i = 0; i < count; i++) {
-            Joint* pJoint = pData->getJointNodePointer(pSteps[i].joint);
+            Joint* pJoint = pData->getJointAt(pSteps[i].joint);
             if (pSteps[i].op == NEBULA_STEP_ENTER) {
                 NebulaMtxCopy(mCurrentMtx, pTop->mMtx);
                 pTop->mS = mCurrentS;
@@ -208,18 +208,18 @@ namespace ModelSys {
 MaterialEntry::MaterialEntry() {
     mNext = nullptr;
     mFirstChild = nullptr;
-    mInitShapeEntry = nullptr;
-    mShapeEntry = nullptr;
+    mInitMeshEntry = nullptr;
+    mMeshEntry = nullptr;
     mMaterial = nullptr;
     mMaterialID = NEBULA_NONE32;
 }
 
-void MaterialEntry::addShapeEntry(ShapeEntry* pEntry) {
-    if (mShapeEntry == nullptr) {
-        mShapeEntry = pEntry;
+void MaterialEntry::addMeshEntry(MeshEntry* pEntry) {
+    if (mMeshEntry == nullptr) {
+        mMeshEntry = pEntry;
     } else {
-        pEntry->mNext = mShapeEntry;
-        mShapeEntry = pEntry;
+        pEntry->mNext = mMeshEntry;
+        mMeshEntry = pEntry;
     }
 }
 
@@ -243,9 +243,9 @@ int MaterialEntry::entry(ItemBuffer* pBuffer) {
 void MaterialEntry::draw() {
     MaterialDraw draw;
     draw.send(mMaterial);
-    for (ShapeEntry* pShape = mShapeEntry; pShape != nullptr; pShape = pShape->mNext) {
+    for (MeshEntry* pShape = mMeshEntry; pShape != nullptr; pShape = pShape->mNext) {
         draw.sendOwn(pShape->mMaterial, mMaterial);
-        if (!pShape->checkFlag(ShapeEntry::Flag_Hidden) && pShape->mMesh != nullptr) {
+        if (!pShape->checkFlag(MeshEntry::Flag_Hidden) && pShape->mMesh != nullptr) {
             draw.draw(pShape->mModel, pShape->mMesh);
         }
     }
@@ -290,13 +290,13 @@ void ItemBuffer::add(u64 key, MaterialEntry* pEntry) {
 
 int ItemBuffer::entryMatSort(MaterialEntry* pEntry) {
     pEntry->drawClear();
-    pEntry->getShapeEntry()->drawClear();
+    pEntry->getFirstMeshEntry()->drawClear();
 
     // The same image together, wherever it was loaded, so that draw order does not depend on memory layout.
     u32 image = 0;
     if (!pEntry->isAlone()) {
         Material* pMaterial = pEntry->getMaterial();
-        const u32 texNo = pMaterial->getTexNo(0);
+        const u32 texNo = pMaterial->getTextureIndex(0);
         if (texNo != NEBULA_NONE32) {
             const ResTIMG* pTimg = pMaterial->getModelData()->getTexture(texNo);
             const NebulaTexture* pRecord = nebula_texture_record(pTimg->image());
@@ -304,7 +304,7 @@ int ItemBuffer::entryMatSort(MaterialEntry* pEntry) {
         }
         for (u32 i = 0; i < mEntryCount; i++) {
             if (static_cast< u32 >(mEntries[i].mKey >> 32) == image && mEntries[i].mEntry->isSame(pEntry)) {
-                mEntries[i].mEntry->addShapeEntry(pEntry->getShapeEntry());
+                mEntries[i].mEntry->addMeshEntry(pEntry->getFirstMeshEntry());
                 return 0;
             }
         }
@@ -315,7 +315,7 @@ int ItemBuffer::entryMatSort(MaterialEntry* pEntry) {
 
 int ItemBuffer::entryZSort(MaterialEntry* pEntry) {
     pEntry->drawClear();
-    pEntry->getShapeEntry()->drawClear();
+    pEntry->getFirstMeshEntry()->drawClear();
 
     const f32 x = mZMtx[0][3];
     const f32 y = mZMtx[1][3];
@@ -331,7 +331,7 @@ int ItemBuffer::entryZSort(MaterialEntry* pEntry) {
 
 int ItemBuffer::entryNonSort(MaterialEntry* pEntry) {
     pEntry->drawClear();
-    pEntry->getShapeEntry()->drawClear();
+    pEntry->getFirstMeshEntry()->drawClear();
 
     add(0, pEntry);
     return 1;
@@ -410,7 +410,7 @@ void Model::init(ModelData* pData, u32 flags) {
     mSlot = Frame::newSlot();
     mFlags = flags & (ModelFlag_NoView | ModelFlag_UseDefaultBase);
 
-    const u32 jointNum = pData->getJointNum();
+    const u32 jointNum = pData->getJointCount();
     if (jointNum != 0) {
         mScaleFlags = new u8[jointNum];
         mAnmMtx = new Mtx[jointNum];
@@ -418,29 +418,29 @@ void Model::init(ModelData* pData, u32 flags) {
     initPose(&mPose);
     mDrawPose = &mPose;
 
-    const u32 shapeNum = pData->getShapeNum();
+    const u32 shapeNum = pData->getMeshCount();
     if (shapeNum != 0) {
-        mShapeEntries = new ShapeEntry[shapeNum];
-        memset(mShapeEntries, 0, shapeNum * sizeof(ShapeEntry));
+        mMeshEntries = new MeshEntry[shapeNum];
+        memset(mMeshEntries, 0, shapeNum * sizeof(MeshEntry));
         for (u32 i = 0; i < shapeNum; i++) {
-            mShapeEntries[i].setShape(pData->getShapeNodePointer(i));
-            mShapeEntries[i].setModel(this);
+            mMeshEntries[i].setMesh(pData->getMeshAt(i));
+            mMeshEntries[i].setModel(this);
         }
     }
-    const u32 materialNum = pData->getMaterialNum();
+    const u32 materialNum = pData->getMaterialCount();
     if (materialNum != 0) {
         mMaterialEntries = new MaterialEntry[materialNum];
         mMaterials = new Material*[materialNum];
     }
     for (u32 i = 0; i < materialNum; i++) {
-        Material* pMaterial = pData->getMaterialNodePointer(i);
+        Material* pMaterial = pData->getMaterialAt(i);
         MaterialEntry* pEntry = &mMaterialEntries[i];
-        ShapeEntry* pShape = &mShapeEntries[pMaterial->getShape()->getIndex()];
+        MeshEntry* pShape = &mMeshEntries[pMaterial->getMesh()->getIndex()];
         mMaterials[i] = pMaterial;
         pShape->mMaterial = pMaterial;
         pEntry->mMaterial = pMaterial;
-        pEntry->mInitShapeEntry = pShape;
-        pEntry->addShapeEntry(pShape);
+        pEntry->mInitMeshEntry = pShape;
+        pEntry->addMeshEntry(pShape);
         pEntry->mMaterialID = pMaterial->getID();
     }
 }
@@ -452,21 +452,21 @@ void Model::initPose(ModelPose* pPose) {
 }
 
 Material* Model::ownMaterial(u32 index) {
-    Material* pShared = mModelData->getMaterialNodePointer(index);
+    Material* pShared = mModelData->getMaterialAt(index);
     if (mMaterials[index] == pShared) {
         Material* pOwn = new Material(*pShared);
         pOwn->mForms = nullptr;
         mMaterials[index] = pOwn;
-        mShapeEntries[pShared->getShape()->getIndex()].mMaterial = pOwn;
+        mMeshEntries[pShared->getMesh()->getIndex()].mMaterial = pOwn;
     }
     return mMaterials[index];
 }
 
 void Model::calcMaterial() {
-    const u32 materialNum = mModelData->getMaterialNum();
+    const u32 materialNum = mModelData->getMaterialCount();
     for (u32 i = 0; i < materialNum; i++) {
         Material* pMaterial = mMaterials[i];
-        if (pMaterial != mModelData->getMaterialNodePointer(i)) {
+        if (pMaterial != mModelData->getMaterialAt(i)) {
             pMaterial->calc();
         }
     }
@@ -493,8 +493,8 @@ void Model::calc() {
 }
 
 void Model::entry() {
-    for (u32 i = 0; i < mModelData->getJointNum(); i++) {
-        Joint* pJoint = mModelData->getJointNodePointer(i);
+    for (u32 i = 0; i < mModelData->getJointCount(); i++) {
+        Joint* pJoint = mModelData->getJointAt(i);
         if (pJoint->getMesh() == nullptr) {
             continue;
         }
@@ -502,12 +502,12 @@ void Model::entry() {
         ModelSys::mDrawBuffer[0]->setZMtx(anmMtx);
         ModelSys::mDrawBuffer[1]->setZMtx(anmMtx);
         for (Material* pMaterial = pJoint->getMesh(); pMaterial != nullptr; pMaterial = pMaterial->getNext()) {
-            if (pMaterial->getShape()->isHidden()) {
+            if (pMaterial->getMesh()->isHidden()) {
                 continue;
             }
             MaterialEntry* pEntry = &mMaterialEntries[pMaterial->getIndex()];
-            pEntry->mShapeEntry = &mShapeEntries[pMaterial->getShape()->getIndex()];
-            ItemBuffer* pBuffer = ModelSys::mDrawBuffer[pMaterial->isDrawModeOpaTexEdge() ? 1 : 0];
+            pEntry->mMeshEntry = &mMeshEntries[pMaterial->getMesh()->getIndex()];
+            ItemBuffer* pBuffer = ModelSys::mDrawBuffer[pMaterial->isTranslucent() ? 1 : 0];
             if (pEntry->entry(pBuffer) != 0) {
                 ModelSys::mEntryNum++;
             }
@@ -571,7 +571,7 @@ void Model::movePoseView(ModelPose* pPose, const f32 (*pLeft)[4]) {
 }
 
 void Model::viewCalc() {
-    capturePose(&mPose, mAnmMtx, mModelData->getJointNum(), mScaleFlags, mBaseTransformMtx);
+    capturePose(&mPose, mAnmMtx, mModelData->getJointCount(), mScaleFlags, mBaseTransformMtx);
     NebulaMtxCopy(ModelSys::mViewMtx, mViewAtCalc);
     mDrawPose = &mPose;
     mNormalPose = &mPose;

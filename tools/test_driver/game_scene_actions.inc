@@ -116,16 +116,16 @@
                 if (pActor != nullptr && pActor->mModelManager != nullptr &&
                     MR::isEqualStringCase(MR::getModelResName(pActor), action.stage)) {
                     ModelData* pData = MR::getModelData(pActor);
-                    for (u16 m = 0; pData != nullptr && m < pData->getMaterialNum(); ++m) {
-                        Material* pMaterial = pData->getMaterialNodePointer(m);
+                    for (u16 m = 0; pData != nullptr && m < pData->getMaterialCount(); ++m) {
+                        Material* pMaterial = pData->getMaterialAt(m);
                         JUTNativeLog("test: material %s %u %s\n", action.stage, m, pData->getMaterialName(m));
-                        for (u32 c = 0; c < pMaterial->getTexGenNum(); ++c) {
-                            MaterialCoord* pCoord = pMaterial->getTexCoord(c);
-                            CoordMatrix* pMtx = pMaterial->getTexMtx(c);
+                        for (u32 c = 0; c < pMaterial->getCoordCount(); ++c) {
+                            MaterialCoord* pCoord = pMaterial->getCoord(c);
+                            CoordMatrix* pMtx = pMaterial->getCoordMatrix(c);
                             JUTNativeLog("test: coordinate %u %u type %u source %u matrix %u info %u projection %u used %u\n", m, c,
                                          pCoord->mType, pCoord->mSource, pCoord->mMatrix,
-                                         pMtx != nullptr ? pMtx->getTexMtxInfo().mInfo : 255u,
-                                         pMtx != nullptr ? pMtx->getTexMtxInfo().mProjection : 255u,
+                                         pMtx != nullptr ? pMtx->getInfo().mInfo : 255u,
+                                         pMtx != nullptr ? pMtx->getInfo().mProjection : 255u,
                                          pMaterial->usesCoord(c) ? 1u : 0u);
                         }
                     }

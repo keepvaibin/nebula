@@ -38,9 +38,6 @@
 #include "post_fsr_rcas_scaled_ps.h"
 #include "post_resample_ps.h"
 #include "post_fxaa_ps.h"
-#include "post_resample_box_ps.h"
-#include "post_fsr_easu_box_ps.h"
-#include "post_fsr_rcas_scaled_box_ps.h"
 
 namespace galaxy::render {
 namespace {
@@ -243,23 +240,6 @@ bool PostProcessor::initialize(ID3D12Device* device, ID3D12CommandQueue* queue,
         shutdown();
         return false;
     }
-    // Optional: without them every display copy is a copy.
-    if (!create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_fsr_easu_box_ps)), kColorFormat, 0,
-                         easu_box_) ||
-        !create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_fsr_easu_box_ps)), kWindowFormat, 0,
-                         easu_box_window_) ||
-        !create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_fsr_rcas_scaled_box_ps)), kWindowFormat,
-                         0, rcas_scaled_box_) ||
-        !create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_resample_box_ps)), kColorFormat, 0,
-                         resample_box_) ||
-        !create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_resample_box_ps)), kWindowFormat, 0,
-                         resample_box_window_)) {
-        easu_box_.Reset();
-        easu_box_window_.Reset();
-        rcas_scaled_box_.Reset();
-        resample_box_.Reset();
-        resample_box_window_.Reset();
-    }
     fault_selftest_ = test_fault("selftest");
     fault_targets_ = test_fault("targets");
     constexpr UINT8 kRgb = D3D12_COLOR_WRITE_ENABLE_RED | D3D12_COLOR_WRITE_ENABLE_GREEN |
@@ -324,11 +304,6 @@ bool PostProcessor::initialize(ID3D12Device* device, ID3D12CommandQueue* queue,
 }
 
 void PostProcessor::shutdown() noexcept {
-    easu_box_.Reset();
-    easu_box_window_.Reset();
-    rcas_scaled_box_.Reset();
-    resample_box_.Reset();
-    resample_box_window_.Reset();
     easu_window_.Reset();
     resample_window_.Reset();
     ready_ = false;
@@ -893,13 +868,6 @@ void PostProcessor::record(ID3D12GraphicsCommandList* list,
         0.0f, 0.0f, static_cast<float>(target_width), static_cast<float>(target_height), 0.0f, 1.0f};
     Constants c{};
     set_post_input_size(c, source_width, source_height);
-    // A pass reading `input` (the picture, or one the size of it) takes the picture's place in its texture; whether
-    // that is a taller texture (the box variant reads it).
-    const auto picture_in = [&](Constants& constants, ID3D12Resource* input) {
-        const D3D12_RESOURCE_DESC desc = input->GetDesc();
-        set_post_source(constants, source_width, source_height, static_cast<unsigned>(desc.Width), desc.Height);
-        return desc.Width != source_width || desc.Height != source_height;
-    };
 
     // Enlarging on both axes with sharpening: enlargement and RCAS in one pass straight into the
     // target, without a window-sized intermediate.
@@ -915,8 +883,7 @@ void PostProcessor::record(ID3D12GraphicsCommandList* list,
         s.origin[0] = static_cast<std::int32_t>(viewport.TopLeftX);
         s.origin[1] = static_cast<std::int32_t>(viewport.TopLeftY);
         s.origin[2] = 1;
-        const bool held = picture_in(s, image);
-        draw(list, srv_ring, (held ? rcas_scaled_box_ : rcas_scaled_).Get(), {image}, viewport, s);
+        draw(list, srv_ring, rcas_scaled_.Get(), {image}, viewport, s);
         return;
     }
 
@@ -953,9 +920,7 @@ void PostProcessor::record(ID3D12GraphicsCommandList* list,
                                static_cast<float>(target_width), static_cast<float>(target_height));
         D3D12_VIEWPORT vp{};
         into(!plan.rcas, vp, e);
-        const bool held = picture_in(e, image);
-        draw(list, srv_ring, (plan.rcas ? (held ? easu_box_ : easu_) : (held ? easu_box_window_ : easu_window_)).Get(), {image},
-             vp, e);
+        draw(list, srv_ring, (plan.rcas ? easu_ : easu_window_).Get(), {image}, vp, e);
         if (plan.rcas) {
             transition(list, scaled_, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
             image = scaled_.resource.Get();
@@ -968,10 +933,7 @@ void PostProcessor::record(ID3D12GraphicsCommandList* list,
         r.params[3] = static_cast<float>(target_height);
         D3D12_VIEWPORT vp{};
         into(plan.resample_to_target, vp, r);
-        const bool held = picture_in(r, image);
-        draw(list, srv_ring,
-             (plan.resample_to_target ? (held ? resample_box_window_ : resample_window_) : (held ? resample_box_ : resample_)).Get(),
-             {image}, vp, r);
+        draw(list, srv_ring, (plan.resample_to_target ? resample_window_ : resample_).Get(), {image}, vp, r);
         if (!plan.resample_to_target) {
             transition(list, scaled_, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
             image = scaled_.resource.Get();

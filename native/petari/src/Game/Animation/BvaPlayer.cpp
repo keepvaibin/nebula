@@ -12,15 +12,15 @@ void BvaPlayer::calc() {
 
     reflectFrame();
 
-    u32 shapeNum = mModel->getModelData()->getShapeNum();
+    u32 shapeNum = mModel->getModelData()->getMeshCount();
     for (u32 idx = 0; idx < shapeNum; idx++) {
         u8 visibility = 0;
         pAnmVisibility->getVisibility(idx, &visibility);
 
         if (visibility != 0) {
-            mModel->getShapePacket(idx)->offFlag(ShapeEntry::Flag_Hidden);
+            mModel->getMeshEntry(idx)->offFlag(MeshEntry::Flag_Hidden);
         } else {
-            mModel->getShapePacket(idx)->onFlag(ShapeEntry::Flag_Hidden);
+            mModel->getMeshEntry(idx)->onFlag(MeshEntry::Flag_Hidden);
         }
     }
 }

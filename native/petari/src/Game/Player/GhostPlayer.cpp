@@ -738,7 +738,7 @@ u32 GhostPlayer::receiveGhostPacket(GhostPacket* pPacket) {
         } else if (strstr(currentAnimName, "\223\212\202\260" /* 投げ */) != nullptr) {
             mHasJetTurtle = false;
             mXanimePlayerUpper->stopAnimation();
-            MR::getModelData(this)->getJointNodePointer(MR::getJointIndex(this, "Spine1"))->setMtxCalc(nullptr);
+            MR::getModelData(this)->getJointAt(MR::getJointIndex(this, "Spine1"))->setMtxCalc(nullptr);
         }
 
         if (mHasJetTurtle && (strcmp(currentAnimName, "\212\356\226\173" /* 基本 */) != 0 || strcmp(currentAnimName, "\203\127\203\203\203\223\203\166" /* ジャンプ */) != 0)) {

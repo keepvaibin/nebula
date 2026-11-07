@@ -24,10 +24,6 @@ cbuffer PostConstants : register(b0) {
     float4 g_params;
     // xy: viewport origin in render-target pixels.
     int4 g_origin;
-    // The pass input's picture inside its texture, from its top left (a handed-over scene target holds its 640 x 456 picture
-    // in a taller texture): xy scale a picture coordinate into the texture, zw the texture coordinate of the picture's last
-    // texel centre. Zero: the input is all picture.
-    float4 g_source;
 };
 
 SamplerState LinearSampler : register(s0);
@@ -48,17 +44,6 @@ FullscreenOut FullscreenTriangle(uint id) {
 // Integer pixel inside the pass viewport.
 int2 ViewportPixel(float4 pos) {
     return int2(pos.xy) - g_origin.xy;
-}
-
-// A picture coordinate (0-1 over the pass input's picture) in its texture. The SOURCE_BOX variants read a picture held
-// from the top left of a taller texture (a handed-over scene target), held inside it as the sampler's clamp holds a picture
-// that fills its texture; the others read the texture as it is.
-float2 SourceUv(float2 uv) {
-#if defined(SOURCE_BOX)
-    return min(uv * g_source.xy, g_source.zw);
-#else
-    return uv;
-#endif
 }
 
 // The last write to the window, 8 bits a channel from the scene's 10: a pixel between two levels takes one of them by a
@@ -113,30 +98,11 @@ float3 FinalWrite(float3 color, int2 p) {
 Texture2D inputTex : register(t0);
 
 #if defined(PASS_FSR_EASU)
-// The 2x2 texels about picture coordinate `p` in GatherRed/Green/Blue's order. Inside a taller texture, a quad that
-// reaches past the picture's right or bottom edge takes the edge texels, as the sampler's clamp gives them.
+// The 2x2 texels about picture coordinate `p` in GatherRed/Green/Blue's order.
 AF4 SourceGather(AF2 p, uint channel) {
-    AF2 q = p;
-#if defined(SOURCE_BOX)
-    {
-        const float2 picture = g_rt_metrics.zw;
-        const int2 base = int2(floor(p * picture - 0.5));
-        if (any(base + 1 >= int2(picture))) {
-            const int2 last = int2(picture) - 1;
-            const int2 t0 = clamp(base, int2(0, 0), last);
-            const int2 t1 = clamp(base + 1, int2(0, 0), last);
-            const float4 lower_left = inputTex.Load(int3(t0.x, t1.y, 0));
-            const float4 lower_right = inputTex.Load(int3(t1.x, t1.y, 0));
-            const float4 upper_right = inputTex.Load(int3(t1.x, t0.y, 0));
-            const float4 upper_left = inputTex.Load(int3(t0.x, t0.y, 0));
-            return AF4(lower_left[channel], lower_right[channel], upper_right[channel], upper_left[channel]);
-        }
-        q = p * g_source.xy;
-    }
-#endif
-    return channel == 0u ? inputTex.GatherRed(LinearSampler, q)
-         : channel == 1u ? inputTex.GatherGreen(LinearSampler, q)
-                         : inputTex.GatherBlue(LinearSampler, q);
+    return channel == 0u ? inputTex.GatherRed(LinearSampler, p)
+         : channel == 1u ? inputTex.GatherGreen(LinearSampler, p)
+                         : inputTex.GatherBlue(LinearSampler, p);
 }
 AF4 FsrEasuRF(AF2 p) { return SourceGather(p, 0u); }
 AF4 FsrEasuGF(AF2 p) { return SourceGather(p, 1u); }
@@ -160,7 +126,7 @@ void FsrRcasInputF(inout AF1 r, inout AF1 g, inout AF1 b) {}
 AF4 FsrRcasLoadF(ASU2 p) {
     const int2 last = int2(g_params.zw) - 1;
     const float2 uv = (float2(clamp(int2(p), int2(0, 0), last)) + 0.5) / g_params.zw;
-    return inputTex.SampleLevel(LinearSampler, SourceUv(uv), 0);
+    return inputTex.SampleLevel(LinearSampler, uv, 0);
 }
 void FsrRcasInputF(inout AF1 r, inout AF1 g, inout AF1 b) {}
 #define FSR_RCAS_F 1
@@ -358,7 +324,7 @@ float4 PSMain(FullscreenOut i) : SV_Target {
     [loop] for (int y = 0; y < taps.y; ++y) {
         [loop] for (int x = 0; x < taps.x; ++x) {
             const float2 p = start + (float2(x, y) + 0.5) * step;
-            sum += inputTex.SampleLevel(LinearSampler, SourceUv(p / source), 0).rgb;
+            sum += inputTex.SampleLevel(LinearSampler, p / source, 0).rgb;
         }
     }
     return float4(FinalWrite(sum / float(taps.x * taps.y), ViewportPixel(i.pos)), 1.0);

@@ -19,7 +19,8 @@ cbuffer View : register(b0) {
     float4 motion_prev_proj[2];
     float4 motion_params;      // xy the jitter, z this frame's half viewport, w last frame's
     float4 line_point_raster;  // the viewport's width and height in pixels, the half line width and half point size
-    uint4 view_light;          // z: sky up in eye space, octahedral; w: bit 0 sky up known, bit 1 enhanced, bit 2 wide target
+    float3 view_sky_up;        // the player's up in eye space, unit length
+    uint view_flags;           // bit 0 view_sky_up known, bit 1 enhanced, bit 2 wide target
     float4 view_scale;         // x: the frame scale; y: particles' time in this frame; z: their time in the frame before
 };
 

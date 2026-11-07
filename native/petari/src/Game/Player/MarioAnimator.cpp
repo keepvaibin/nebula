@@ -815,7 +815,7 @@ void MarioAnimator::calc() {
     } else {
         u32 spineIdx = MR::getJointIndex(mActor, "Spine1");
         ModelData* modelData = mActor->getModelData();
-        Joint* joint = modelData->getJointNodePointer(spineIdx);
+        Joint* joint = modelData->getJointAt(spineIdx);
         joint->setMtxCalc(nullptr);
         mXanimePlayer->calcAnm(0);
     }

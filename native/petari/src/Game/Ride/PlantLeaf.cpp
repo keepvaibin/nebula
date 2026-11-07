@@ -36,7 +36,7 @@ PlantLeafDrawInit::PlantLeafDrawInit(const char* pName) : LiveActor(pName), mMat
     initModelManagerWithAnm("PlantLeaf", 0, false);
     ModelData* pModelData = MR::getModelData(this);
     mMaterial = MR::getMaterial(pModelData, 0);
-    mShape = mMaterial->getShape();
+    mShape = mMaterial->getMesh();
 }
 
 void PlantLeaf::init(const JMapInfoIter&) {

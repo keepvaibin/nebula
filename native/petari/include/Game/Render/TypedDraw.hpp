@@ -7,6 +7,17 @@
 #include <cstddef>
 #include <string.h>
 
+// How a site's vertices group; TypedDraw turns each into triangle indices (lines and points widen to triangles).
+enum NebulaPrimitive {
+    NEBULA_PRIMITIVE_QUADS = 0,          // drawn as (0 1 2)(0 2 3)
+    NEBULA_PRIMITIVE_TRIANGLES = 1,
+    NEBULA_PRIMITIVE_TRIANGLE_STRIP = 2, // odd triangles turned to keep the winding
+    NEBULA_PRIMITIVE_TRIANGLE_FAN = 3,   // around vertex 0
+    NEBULA_PRIMITIVE_LINES = 4,
+    NEBULA_PRIMITIVE_LINE_STRIP = 5,
+    NEBULA_PRIMITIVE_POINTS = 6
+};
+
 // A colour as a vertex holds it: red first.
 struct Rgba8 {
     u8 r, g, b, a;
@@ -453,7 +464,6 @@ public:
     void drawModelFile(ModelData* pData);
     // The model file's matrices for the next meshes, by joint.
     void setModelJoints(const ModelData* pData, const f32 (*pJoints)[4]);
-    // A matrix block made elsewhere for the next draws.
     // The block the next item draws under.
     u32 currentBlock() {
         finish();

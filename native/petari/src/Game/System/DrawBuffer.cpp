@@ -43,7 +43,7 @@ void DrawBufferShapeDrawer::draw() const {
     MaterialDraw draw(pShared);
 
     for (s32 idx = 0; idx < mNumPackets; idx++) {
-        ShapeEntry* packet = mPackets[idx]->mShapePacket;
+        MeshEntry* packet = mPackets[idx]->mShapePacket;
 
         if (getLightLoader(idx) != nullptr) {
             getLightLoader(idx)->loadLight();
@@ -53,19 +53,19 @@ void DrawBufferShapeDrawer::draw() const {
             if (packet->mMaterial != pShared) {
                 draw.sendOwn(packet->mMaterial, pShared);
             }
-            if (!packet->checkFlag(ShapeEntry::Flag_Hidden)) {
+            if (!packet->checkFlag(MeshEntry::Flag_Hidden)) {
                 draw.draw(packet->mModel, packet->mMesh);
             }
         }
     }
 }
 
-void DrawBufferShapeDrawer::add(const ShapeEntry* pShapePacket, const ActorLightCtrl* pLightCtrl) {
+void DrawBufferShapeDrawer::add(const MeshEntry* pShapePacket, const ActorLightCtrl* pLightCtrl) {
     bool setLightLoader = false;
     s32 index = findLightSortIndex(pLightCtrl, &setLightLoader);
 
     PacketInfo* packet = mPackets[mNumPackets];
-    packet->mShapePacket = const_cast< ShapeEntry* >(pShapePacket);
+    packet->mShapePacket = const_cast< MeshEntry* >(pShapePacket);
     packet->mLightCtrl = const_cast< ActorLightCtrl* >(pLightCtrl);
 
     if (setLightLoader) {
@@ -82,7 +82,7 @@ void DrawBufferShapeDrawer::add(const ShapeEntry* pShapePacket, const ActorLight
     mNumPackets++;
 }
 
-void DrawBufferShapeDrawer::remove(const ShapeEntry* pShapePacket) {
+void DrawBufferShapeDrawer::remove(const MeshEntry* pShapePacket) {
     PacketInfo* packet;
     for (s32 removeIdx = 0; removeIdx < mNumPackets; removeIdx++) {
         packet = mPackets[removeIdx];
@@ -105,7 +105,7 @@ void DrawBufferShapeDrawer::resetLightSort(const ActorLightCtrl* pLightCtrl) {
     for (s32 idx = 0; idx < mNumPackets; idx++) {
         packet = mPackets[idx];
         if (packet->mLightCtrl == pLightCtrl) {
-            ShapeEntry* shapePacket = packet->mShapePacket;
+            MeshEntry* shapePacket = packet->mShapePacket;
             remove(shapePacket);
             add(shapePacket, pLightCtrl);
             return;
@@ -159,7 +159,7 @@ void DrawBuffer::add(const LiveActor* pActor) {
     ActorLightCtrl* lightCtrl = MR::getLightCtrl(pActor);
 
     for (s32 idx = 0; idx < mNumMaterials; idx++) {
-        getShapeDrawerByMatNo(idx)->add(model->getShapePacket(mModelData->getMaterialNodePointer(idx)->getShape()->mIndex), lightCtrl);
+        getShapeDrawerByMatNo(idx)->add(model->getMeshEntry(mModelData->getMaterialAt(idx)->getMesh()->mIndex), lightCtrl);
     }
     mNumActors++;
 }
@@ -168,7 +168,7 @@ void DrawBuffer::remove(const LiveActor* pActor) {
     Model* model = MR::getModel(pActor);
 
     for (s32 idx = 0; idx < mNumMaterials; idx++) {
-        getShapeDrawerByMatNo(idx)->remove(model->getShapePacket(mModelData->getMaterialNodePointer(idx)->getShape()->mIndex));
+        getShapeDrawerByMatNo(idx)->remove(model->getMeshEntry(mModelData->getMaterialAt(idx)->getMesh()->mIndex));
     }
     mNumActors--;
 }
@@ -218,7 +218,7 @@ void DrawBuffer::initTable() {
     for (idx = 0; idx < MR::getMaterialNum(model); idx++) {
         if (::getSortedMaterialIndex(idx, model) < 0) {
             mNumShapeDrawers++;
-            if (!MR::getMaterial(model, idx)->isDrawModeOpaTexEdge()) {
+            if (!MR::getMaterial(model, idx)->isTranslucent()) {
                 numOpaMaterials++;
             }
         }
@@ -249,13 +249,13 @@ void DrawBuffer::initTable() {
             continue;
         }
 
-        if (!material->isDrawModeOpaTexEdge()) {
+        if (!material->isTranslucent()) {
             mMaterialNos[idx] = opaIndex;
-            mShapeDrawers[opaIndex] = new DrawBufferShapeDrawer(material, mModel->getMatPacket(idx));
+            mShapeDrawers[opaIndex] = new DrawBufferShapeDrawer(material, mModel->getMaterialEntry(idx));
             opaIndex++;
         } else {
             mMaterialNos[idx] = xluIndex + mNumOpaShapeDrawers;
-            mShapeDrawers[xluIndex + mNumOpaShapeDrawers] = new DrawBufferShapeDrawer(material, mModel->getMatPacket(idx));
+            mShapeDrawers[xluIndex + mNumOpaShapeDrawers] = new DrawBufferShapeDrawer(material, mModel->getMaterialEntry(idx));
             xluIndex++;
         }
     }

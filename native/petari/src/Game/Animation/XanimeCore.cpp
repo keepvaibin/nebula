@@ -63,7 +63,7 @@ void XanimeCore::enableJointTransform(ModelData* pModelData) {
     mTransformList = new XjointTransform[mJointCount];
 
     for (u32 i = 0; i < mJointCount; i++) {
-        Joint* pJoint = pModelData->getJointNodePointer(i);
+        Joint* pJoint = pModelData->getJointAt(i);
         mTransformList[i]._0 = pJoint;
         mTransformList[i]._44 = pJoint->getTransformInfo();
 
@@ -87,7 +87,7 @@ void XanimeCore::enableJointTransform(ModelData* pModelData) {
 
 void XanimeCore::reconfigJointTransform(ModelData* pModelData) {
     for (u32 i = 0; i < mJointCount; i++) {
-        Joint* pJoint = pModelData->getJointNodePointer(i);
+        Joint* pJoint = pModelData->getJointAt(i);
         mTransformList[i]._0 = pJoint;
         mTransformList[i]._44 = pJoint->getTransformInfo();
     }
@@ -685,7 +685,7 @@ void XanimeCore::calcScaleBlendSpecial() {
 }
 
 void XanimeCore::freezeCopy(ModelData* pModelData, XanimeCore* pOther, u32 joint, u32 duration) {
-    Joint* pChild = pModelData->getJointNodePointer(joint)->getChild();
+    Joint* pChild = pModelData->getJointAt(joint)->getChild();
 
     if (pChild != nullptr) {
         freezeCopy(pModelData, pOther, pChild->getJntNo(), duration);
@@ -713,7 +713,7 @@ void XanimeCore::freezeCopy(ModelData* pModelData, XanimeCore* pOther, u32 joint
 
 void XanimeCore::initT(ModelData* pModelData) {
     for (u32 i = 0; i < mJointCount; i++) {
-        const TransformInfo& rTransform = pModelData->getJointNodePointer(i)->getTransformInfo();
+        const TransformInfo& rTransform = pModelData->getJointAt(i)->getTransformInfo();
         Quaternion rotation;
         eulerRadiansToQuat(rTransform.mRotation.x, rTransform.mRotation.y, rTransform.mRotation.z, &rotation);
         mJointList[i]._0._0 = reinterpret_cast< const Vec3f& >(rTransform.mScale);
@@ -730,7 +730,7 @@ void XanimeCore::fixT(Vec3f* pTranslate) {
     ModelData* pModelData = Skeleton::mModel->getModelData();
 
     if (joint != 0 && joint != _C) {
-        *pTranslate = reinterpret_cast< const Vec3f& >(pModelData->getJointNodePointer(joint)->getTransformInfo().mTranslate);
+        *pTranslate = reinterpret_cast< const Vec3f& >(pModelData->getJointAt(joint)->getTransformInfo().mTranslate);
     }
 }
 

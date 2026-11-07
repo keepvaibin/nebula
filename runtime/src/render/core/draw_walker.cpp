@@ -415,8 +415,8 @@ const RenderCore::WalkView& RenderCore::walk_view(std::uint32_t index, const Neb
     rows.motion[3] = -0.5f * height;
     rows.raster[0] = width;
     rows.raster[1] = height;
-    rows.light[2] = sky_up_;
-    rows.light[3] = sky_up_known_;
+    std::memcpy(rows.sky_up, sky_up_, sizeof(rows.sky_up));
+    rows.view_flags = view_flags_;
     rows.scale[1] = walk_.time.t;
     rows.scale[2] = walk_.time.t_prev;
     std::memcpy(out.cpu, &rows, sizeof(rows));
@@ -752,8 +752,8 @@ void RenderCore::walk_scene_begin(const NebulaFramePass& pass) {
     const NebulaFrameList& list = *walk_.now->list;
     const RenderConfig cfg = get_render_config();
     const bool wide = enhanced_lighting_ && cfg.wide_scene;
-    sky_up_ = list.sky_up;
-    sky_up_known_ = (list.sky_up_known != 0u ? 1u : 0u) | (enhanced_lighting_ ? 2u : 0u) | (wide ? 4u : 0u);
+    std::memcpy(sky_up_, list.sky_up, sizeof(sky_up_));
+    view_flags_ = (list.sky_up_known != 0u ? 1u : 0u) | (enhanced_lighting_ ? 2u : 0u) | (wide ? 4u : 0u);
     scene_phase_ = true;
     std::array<float, 12> view_at{};
     const float* view_rows = nullptr;
@@ -761,7 +761,8 @@ void RenderCore::walk_scene_begin(const NebulaFramePass& pass) {
         std::memcpy(view_at.data(), walk_cameras_[pass.scene_camera].data(), sizeof(view_at));
         view_rows = view_at.data();
         if (walk_.between && list.sky_up_known != 0u) {
-            sky_up_ = eye_direction_at(list.sky_up, affine_of(list.cameras[pass.scene_camera].view), walk_cameras_[pass.scene_camera]);
+            eye_direction_at(list.sky_up, affine_of(list.cameras[pass.scene_camera].view), walk_cameras_[pass.scene_camera],
+                             sky_up_);
         }
         renderer_.set_scene_view(&view_at);
     } else {

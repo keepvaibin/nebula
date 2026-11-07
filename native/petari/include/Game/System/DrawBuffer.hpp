@@ -6,12 +6,12 @@ class Material;
 class MaterialEntry;
 class ModelData;
 class Model;
-class ShapeEntry;
+class MeshEntry;
 // class LiveActor;
 class ActorLightCtrl;
 
 struct PacketInfo {
-    ShapeEntry* mShapePacket;
+    MeshEntry* mShapePacket;
     ActorLightCtrl* mLightLoader;
     ActorLightCtrl* mLightCtrl;
 };
@@ -23,12 +23,12 @@ public:
     void init(s32);
     void swap(DrawBufferShapeDrawer*);
     void draw() const;
-    void add(const ShapeEntry*, const ActorLightCtrl*);
-    void remove(const ShapeEntry*);
+    void add(const MeshEntry*, const ActorLightCtrl*);
+    void remove(const MeshEntry*);
     void resetLightSort(const ActorLightCtrl*);
     s32 findLightSortIndex(const ActorLightCtrl*, bool*) const;
 
-    ShapeEntry* getShapePacket(int index) const {
+    MeshEntry* getMeshEntry(int index) const {
         return mPackets[index]->mShapePacket;
     }
 

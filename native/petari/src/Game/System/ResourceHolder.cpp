@@ -230,15 +230,15 @@ ResFileInfo* ResourceHolder::createAndRegisterObject(const char* pName, void* pD
 }
 
 void ResourceHolder::backupInitMaterialData(const ModelData* pModelData) {
-    u32 numMaterials = pModelData->getMaterialNum();
+    u32 numMaterials = pModelData->getMaterialCount();
     mBackupMaterialData = new Mtx44[numMaterials * NEBULA_MATERIAL_SLOTS];
 
     for (u32 matIdx = 0; matIdx < numMaterials; matIdx++) {
-        Material* material = pModelData->getMaterialNodePointer(matIdx);
+        Material* material = pModelData->getMaterialAt(matIdx);
         for (u32 mtxIdx = 0; mtxIdx < NEBULA_MATERIAL_SLOTS; mtxIdx++) {
-            CoordMatrix* texMtx = material->getTexMtx(mtxIdx);
+            CoordMatrix* texMtx = material->getCoordMatrix(mtxIdx);
             if (texMtx != nullptr) {
-                NebulaMtx44Copy(texMtx->getTexMtxInfo().mEffectMtx, mBackupMaterialData[matIdx * NEBULA_MATERIAL_SLOTS + mtxIdx]);
+                NebulaMtx44Copy(texMtx->getInfo().mEffectMtx, mBackupMaterialData[matIdx * NEBULA_MATERIAL_SLOTS + mtxIdx]);
             } else {
                 NebulaMtx44Identity(mBackupMaterialData[matIdx * NEBULA_MATERIAL_SLOTS + mtxIdx]);
             }

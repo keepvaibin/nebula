@@ -138,7 +138,7 @@ namespace MR {
         ModelData* pModelData = getModelData(pActor);
         count = 0;
 
-        for (i = 0; i < pModelData->getMaterialNum(); i++) {
+        for (i = 0; i < pModelData->getMaterialCount(); i++) {
             if (strstr(pModelData->getMaterialName(i), "Fur")) {
                 count++;
             }
@@ -155,9 +155,9 @@ namespace MR {
         dynamicParam.mLightParam->mLightType = lightType;
         u32 layer = 0;
 
-        for (u32 i = 0; i < pModelData->getMaterialNum(); i++) {
+        for (u32 i = 0; i < pModelData->getMaterialCount(); i++) {
             if (strstr(pModelData->getMaterialName(i), "Fur")) {
-                shape = pModelData->getMaterialNodePointer(i)->getShape()->getIndex();
+                shape = pModelData->getMaterialAt(i)->getMesh()->getIndex();
                 char name[256];
                 nebula_snprintf(name, sizeof(name), "%sBody", pModelData->getMaterialName(i));
                 ResTIMG* pBody;

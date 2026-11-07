@@ -108,7 +108,7 @@ void NormalMapBase::setupLighting() {
 void NormalMapBase::setupTexture() {
     _90 = nullptr;
     mNormalTex = nullptr;
-    const u32 textureCount = MR::getModelData(this)->getTextureNum();
+    const u32 textureCount = MR::getModelData(this)->getTextureCount();
     for (u32 i = 0; i < textureCount; i++) {
         const ResTIMG* pImage = MR::getResTIMG(this, i);
         const char* pName = MR::getTextureName(this, i);
@@ -269,8 +269,8 @@ bool NormalMapBase::isNormalMapMaterial(const char* pName) const {
 
 void NormalMapBase::standardDraw(Model* pModel) const {
     if ((_138 & 0x10) == 0) {
-        for (u32 i = 0; i < pModel->mModelData->getMaterialNum(); i++) {
-            Material* pMaterial = pModel->mModelData->getMaterialNodePointer(i);
+        for (u32 i = 0; i < pModel->mModelData->getMaterialCount(); i++) {
+            Material* pMaterial = pModel->mModelData->getMaterialAt(i);
             const char* pMaterialName = MR::getMaterialName(pModel->mModelData, pMaterial->mIndex);
             if (!isNormalMapMaterial(pMaterialName)) {
                 MR::simpleDraw(pModel, pMaterial);
@@ -280,11 +280,11 @@ void NormalMapBase::standardDraw(Model* pModel) const {
 }
 
 void NormalMapBase::shapeAnalyzeDraw(Model* pModel) const {
-    for (u32 i = 0; i < pModel->mModelData->getShapeNum(); i++) {
-        Mesh* pShape = pModel->mModelData->getShapeNodePointer(i);
+    for (u32 i = 0; i < pModel->mModelData->getMeshCount(); i++) {
+        Mesh* pShape = pModel->mModelData->getMeshAt(i);
         bool found = false;
-        for (u32 j = 0; j < pModel->mModelData->getJointNum(); j++) {
-            Joint* pJoint = pModel->mModelData->getJointNodePointer(j);
+        for (u32 j = 0; j < pModel->mModelData->getJointCount(); j++) {
+            Joint* pJoint = pModel->mModelData->getJointAt(j);
             Material* pMaterial = pJoint->getMesh();
             while (pMaterial) {
                 const char* pName = MR::getMaterialName(pModel->mModelData, pMaterial->mIndex);
@@ -293,7 +293,7 @@ void NormalMapBase::shapeAnalyzeDraw(Model* pModel) const {
                     continue;
                 }
 
-                if (pMaterial->getShape() == pShape) {
+                if (pMaterial->getMesh() == pShape) {
                     setStageForObject_Material();
                     Pos3f localMtx;
                     Pos3f viewMtx;
@@ -373,38 +373,38 @@ void NormalMapBase::loadNormalTex(const JUTTexture* pTex, u32 slot) const {
 }
 
 void NormalMapBase::loadTexture1(Material* pMaterial) const {
-    sNormalMap.setTexture(2, mTextures[pMaterial->getTexNo(0)]);
-    loadNormalTex(mTextures[pMaterial->getTexNo(1)], 0);
+    sNormalMap.setTexture(2, mTextures[pMaterial->getTextureIndex(0)]);
+    loadNormalTex(mTextures[pMaterial->getTextureIndex(1)], 0);
 }
 
 void NormalMapBase::drawMaterialSetting(Material* pMaterial) const {
     loadTexture1(pMaterial);
     loadTexMtxBtk(pMaterial);
-    sNormalMap.setMatrix(9, 2, pMaterial->getTexMtx(0)->getMtx());
+    sNormalMap.setMatrix(9, 2, pMaterial->getCoordMatrix(0)->getMtx());
     Color8 ambient;
     Color8 material;
     ambient.set(mAmbColor, mAmbColor, mAmbColor, mAmbAlpha);
     material.set(mMatColor, mMatColor, mMatColor, mMatAlpha);
     if (mUseModelLightReg & 1) {
-        NebulaColor8* pColor = pMaterial->getAmbColor(0);
+        NebulaColor8* pColor = pMaterial->getAmbientColor(0);
         ambient.r = pColor->r;
         ambient.g = pColor->g;
         ambient.b = pColor->b;
     }
 
     if (mUseModelLightReg & 2) {
-        ambient.a = pMaterial->getAmbColor(0)->a;
+        ambient.a = pMaterial->getAmbientColor(0)->a;
     }
 
     if (mUseModelLightReg & 4) {
-        NebulaColor8* pColor = pMaterial->getMatColor(0);
+        NebulaColor8* pColor = pMaterial->getMaterialColor(0);
         material.r = pColor->r;
         material.g = pColor->g;
         material.b = pColor->b;
     }
 
     if (mUseModelLightReg & 8) {
-        material.a = pMaterial->getMatColor(0)->a;
+        material.a = pMaterial->getMaterialColor(0)->a;
     }
 
     sNormalMap.setColor(0, material.r, material.g, material.b, material.a);

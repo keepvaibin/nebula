@@ -286,13 +286,13 @@ namespace MR {
     }
 
     void simpleDraw(Model* pModel, Material* pMaterial) {
-        if (pMaterial != nullptr && pMaterial->getShape() != nullptr && !pMaterial->getShape()->isHidden()) {
-            MaterialEntry* pMatPacket = pModel->getMatPacket(pMaterial->getIndex());
-            ShapeEntry* pShapePacket = pModel->getShapePacket(pMaterial->getShape()->getIndex());
+        if (pMaterial != nullptr && pMaterial->getMesh() != nullptr && !pMaterial->getMesh()->isHidden()) {
+            MaterialEntry* pMatPacket = pModel->getMaterialEntry(pMaterial->getIndex());
+            MeshEntry* pShapePacket = pModel->getMeshEntry(pMaterial->getMesh()->getIndex());
             MaterialDraw draw(pMatPacket->getMaterial());
             draw.sendOwn(pShapePacket->mMaterial, pMatPacket->getMaterial());
-            if (!pShapePacket->checkFlag(ShapeEntry::Flag_Hidden)) {
-                draw.draw(pModel, pShapePacket->getShape());
+            if (!pShapePacket->checkFlag(MeshEntry::Flag_Hidden)) {
+                draw.draw(pModel, pShapePacket->getMesh());
             }
         }
     }

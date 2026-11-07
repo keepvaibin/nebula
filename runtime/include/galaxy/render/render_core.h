@@ -261,7 +261,8 @@ private:
     gpu::Address walk_rows_ring_ = 0u, walk_vertex_ring_ = 0u, walk_ring_previous_ = 0u;
     const float (*walk_rows_cpu_)[4] = nullptr;
     std::unordered_map<std::uint32_t, std::uint64_t> generated_written_;
-    std::uint32_t sky_up_ = 0u, sky_up_known_ = 0u;
+    float sky_up_[3]{0.0f, 1.0f, 0.0f};
+    std::uint32_t view_flags_ = 0u;  // ViewRows::view_flags
     bool target_open_ = false;
 #if defined(NEBULA_DEV)
     std::uint64_t stat_items_culled_ = 0u, stat_draws_no_pipeline_ = 0u;

@@ -10,7 +10,7 @@
 
 namespace MR {
     Joint* getJoint(Model* pModel, const char* pName) {
-        return pModel->mModelData->getJointNodePointer((u32)pModel->mModelData->findJoint(pName));
+        return pModel->mModelData->getJointAt((u32)pModel->mModelData->findJoint(pName));
     }
 
     Joint* getJoint(const LiveActor* pActor, const char* pName) {
@@ -18,7 +18,7 @@ namespace MR {
     }
 
     Joint* getJoint(const LiveActor* pActor, u32 idx) {
-        return MR::getModelData(pActor)->getJointNodePointer(idx);
+        return MR::getModelData(pActor)->getJointAt(idx);
     }
 
     MtxPtr getJointMtx(Model* pModel, const char* pName) {
@@ -43,7 +43,7 @@ namespace MR {
     }
 
     s32 getJointNum(const LiveActor* pActor) {
-        return MR::getModelData(pActor)->getJointNum();
+        return MR::getModelData(pActor)->getJointCount();
     }
 
     bool isExistJoint(const LiveActor* pActor, const char* pName) {
@@ -78,7 +78,7 @@ namespace MR {
 
     void hideJoint(Joint* pJoint) {
         for (Material* mat = pJoint->getMesh(); mat != nullptr; mat = mat->mNext) {
-            mat->getShape()->hide();
+            mat->getMesh()->hide();
         }
     }
 
@@ -111,7 +111,7 @@ namespace MR {
 
     void showJoint(Joint* pJoint) {
         for (Material* mat = pJoint->getMesh(); mat != nullptr; mat = mat->mNext) {
-            mat->getShape()->show();
+            mat->getMesh()->show();
         }
     }
 
@@ -184,7 +184,7 @@ namespace MR {
     }
 
     Joint* getParentJoint(ModelData* pModelData, Joint* pJoint) {
-        Joint* pParent = searchChildJoint(pModelData->getJointNodePointer(0), pJoint);
+        Joint* pParent = searchChildJoint(pModelData->getJointAt(0), pJoint);
         if (pParent == reinterpret_cast< Joint* >(-1)) {
             return nullptr;
         }
