@@ -2,9 +2,7 @@
 #include "galaxy/host_env.h"
 #include "galaxy/run_options.h"
 
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <Windows.h>
+#include "galaxy/windows_api.h"
 #include <Shlobj.h>
 #include <shellapi.h>
 

@@ -7,7 +7,7 @@
 //
 // The output is one file of frames: per frame a u64 system-relative time (100 ns), u32 width, u32 height, then the
 // pixels as RGB, every `scale`-th pixel of every `scale`-th row. tools/wgc_capture/frames.py reads it.
-#include <windows.h>
+#include "galaxy/windows_api.h"
 #include <d3d11.h>
 #include <dxgi.h>
 #include <inspectable.h>

@@ -10,10 +10,7 @@
 #include <cstring>
 
 #if defined(_WIN32)
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
+#include "galaxy/windows_api.h"
 #else
 __asm__(".section .rodata\n.balign 16\n.global nebula_programs_begin\nnebula_programs_begin:\n.incbin \"" GALAXY_PROGRAM_BLOB
         "\"\n.previous\n");

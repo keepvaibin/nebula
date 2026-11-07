@@ -2,12 +2,7 @@
 // Mod import (mod_import.h): libarchive (third_party/archive) reads the archives.
 
 #if defined(_WIN32)
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
+#include "galaxy/windows_api.h"
 #endif
 
 #include "galaxy/mod_import.h"
@@ -27,7 +22,6 @@
 #include <system_error>
 
 #if defined(_WIN32)
-#include <windows.h>
 #include <shellapi.h>
 #else
 #include <unistd.h>

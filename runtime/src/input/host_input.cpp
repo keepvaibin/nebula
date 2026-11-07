@@ -24,9 +24,7 @@
 #include "galaxy/runtime_settings.h"
 #include "galaxy/scope_exit.h"
 
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <Windows.h>
+#include "galaxy/windows_api.h"
 #include "galaxy/windows_power.h"
 #include <Xinput.h>
 #include <mmdeviceapi.h>

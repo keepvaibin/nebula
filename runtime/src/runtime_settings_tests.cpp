@@ -1,7 +1,7 @@
 #include "galaxy/runtime_settings.h"
 #include "galaxy/input_bindings.h"
 
-#include <Windows.h>
+#include "galaxy/windows_api.h"
 
 #include <cstdlib>
 #include <clocale>

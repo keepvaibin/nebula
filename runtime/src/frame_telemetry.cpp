@@ -1,9 +1,7 @@
 // Windows: the frame counts published in shared memory for Nebula's monitoring tools. Elsewhere there is no reader
 // and the publisher does nothing.
 #if defined(_WIN32)
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <Windows.h>
+#include "galaxy/windows_api.h"
 #include "galaxy/platform_time.h"
 
 #include "galaxy/frame_telemetry.h"

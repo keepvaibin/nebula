@@ -8,13 +8,7 @@
 // updates. Render thread only. Built without the SDK headers
 // (GALAXY_STREAMLINE_SDK), every call reports Streamline as absent.
 
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <Windows.h>
+#include "galaxy/windows_api.h"
 #include <d3d12.h>
 #include <dxgi1_4.h>
 #include <wrl/client.h>

@@ -1,7 +1,7 @@
 // The Bluetooth LE side of switch2_ble.h, through Windows' GATT API.
 #include "galaxy/switch2_ble.h"
 
-#include <windows.h>
+#include "galaxy/windows_api.h"
 
 #include <winrt/Windows.Devices.Bluetooth.Advertisement.h>
 #include <winrt/Windows.Devices.Bluetooth.GenericAttributeProfile.h>

@@ -3,12 +3,7 @@
 // Texture packs: hashes, names, DDS layouts and decodes, PNG round trips, the index, loads, the budget and dumps, and
 // the texture cache swapping a replacement in on a WARP device.
 
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
+#include "galaxy/windows_api.h"
 
 #include "galaxy/render/render_core.h"
 #include "galaxy/render/rt_materials.h"

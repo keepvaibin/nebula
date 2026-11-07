@@ -1,9 +1,7 @@
 #include "galaxy/render/render_config.h"
 #include "galaxy/experimental_ultrawide_aspect.h"
 
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <Windows.h>
+#include "galaxy/windows_api.h"
 
 #include <algorithm>
 #include <cstdio>

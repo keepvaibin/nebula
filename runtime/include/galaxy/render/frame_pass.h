@@ -7,12 +7,7 @@
 //
 // A picture is never converted to YUV or written to game memory.
 
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
+#include "galaxy/windows_api.h"
 #include "galaxy/render/gpu_types.h"
 #include "galaxy/render/texture_sampler.h"
 #include "galaxy/render/pointer_response.h"

@@ -2,9 +2,7 @@
 #include "galaxy/input/raw_mouse_win32.h"
 #include "galaxy/run_options.h"
 #include "galaxy/host_env.h"
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <Windows.h>
+#include "galaxy/windows_api.h"
 #include <atomic>
 #include <cstring>
 

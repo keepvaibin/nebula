@@ -91,12 +91,18 @@ function(galaxy_host_options target)
     endif()
 endfunction()
 
-# How a plugin replaces a game function on Windows.
-set(nebula_minhook_sources)
+# How a plugin replaces a game function on Windows: MinHook as upstream ships it, in its own library with its warnings
+# off, so the host's /W4 /WX is never overridden file by file (each override was a D9025 notice); host options and IPO
+# as the host's own code.
 if(WIN32)
     set(nebula_minhook_dir "${CMAKE_CURRENT_LIST_DIR}/third_party/minhook")
-    set(nebula_minhook_sources "${nebula_minhook_dir}/src/buffer.c" "${nebula_minhook_dir}/src/hook.c" "${nebula_minhook_dir}/src/trampoline.c" "${nebula_minhook_dir}/src/hde/hde64.c")
-    set_source_files_properties(${nebula_minhook_sources} PROPERTIES COMPILE_OPTIONS "/W0;/WX-;/wd4310;/wd4244;/wd4267;/wd4100;/wd4701;/wd4706")
+    add_library(nebula_minhook STATIC "${nebula_minhook_dir}/src/buffer.c" "${nebula_minhook_dir}/src/hook.c"
+        "${nebula_minhook_dir}/src/trampoline.c" "${nebula_minhook_dir}/src/hde/hde64.c")
+    target_include_directories(nebula_minhook PUBLIC "${nebula_minhook_dir}/include")
+    if(MSVC)
+        target_compile_options(nebula_minhook PRIVATE /W0)
+    endif()
+    galaxy_host_options(nebula_minhook)
 endif()
 include_directories("${CMAKE_CURRENT_LIST_DIR}/third_party/minhook/include" "${CMAKE_CURRENT_LIST_DIR}/native/include")
 
@@ -175,7 +181,6 @@ add_library(galaxy_native_host STATIC
     runtime/src/mod_xml.cpp
     runtime/src/luma.cpp
     runtime/src/mod_plugins.cpp
-    ${nebula_minhook_sources}
     runtime/src/mods.cpp
     runtime/src/texture_categories.cpp
     runtime/src/mod_import.cpp
@@ -204,6 +209,9 @@ target_link_libraries(galaxy_native_host
         xinput9_1_0
 )
 galaxy_host_options(galaxy_native_host)
+if(WIN32)
+    target_link_libraries(galaxy_native_host PRIVATE nebula_minhook)
+endif()
 
 # The same passes for the Vulkan renderer, compiled on the device (cmake/post_shader_sources.cmake).
 include(cmake/post_shader_sources.cmake)
@@ -494,6 +502,9 @@ if(NEBULA_HOST_IPO)
                 galaxy_frame_cadence_diagnostics galaxy_runtime_settings galaxy_atomic_file galaxy_audio_mixer)
             set_property(TARGET ${target} PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
         endforeach()
+        if(TARGET nebula_minhook)
+            set_property(TARGET nebula_minhook PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
+        endif()
         set(nebula_host_ipo_effective ON)
     else()
         message(STATUS "Host IPO unavailable: ${nebula_host_ipo_error}")
