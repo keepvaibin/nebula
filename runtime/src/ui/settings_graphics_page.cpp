@@ -21,6 +21,17 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
     char text[96]{};
     rows.push_back({"RESOLUTION", {}, nullptr, {}, true});
     {
+        const unsigned height = normalized_internal_height(render.internal_height);
+        const std::string value = height ? std::to_string(height) + "P" + (height == 2160 ? " (4K)" : "") : "MATCH DISPLAY";
+        rows.push_back({"INTERNAL RESOLUTION", value,
+            [](RenderConfig& draft, int delta) {
+                const auto found = std::find(kInternalHeights.begin(), kInternalHeights.end(), normalized_internal_height(draft.internal_height));
+                draft.internal_height = kInternalHeights[settings_step(unsigned(found - kInternalHeights.begin()), unsigned(kInternalHeights.size()), delta)];
+                // An explicit resolution is an exact height; a new selection starts at native quality.
+                draft.spatial_quality = 0;
+            }, "3D PIXEL HEIGHT. WIDTH FOLLOWS ASPECT. MATCH DISPLAY FOLLOWS WINDOW SIZE AND FOLDING"});
+    }
+    {
         static constexpr const char* kUpscalers[] = {"OFF", "FSR 1", "FSR 3", "DLSS", "XESS"};
         const std::vector<unsigned>& choices = state.upscalers;
         const bool offered = std::find(choices.begin(), choices.end(), render.upscaler) != choices.end();

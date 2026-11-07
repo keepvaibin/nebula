@@ -13,12 +13,14 @@ namespace {
 class Host final : public galaxy::ui::DisplayPageHost {
 public:
     bool empty_sizes = false;
+    bool phone = false;
     mutable int last = -1;
     galaxy::ui::DisplayPageState query(const galaxy::ui::RenderConfig& render) const override {
         galaxy::ui::DisplayPageState state;
         state.monitors = {{"first", "First"}, {"second", "Second"}};
         state.current_monitor = std::strcmp(render.monitor.data(), "second") == 0 ? 1u : 0u;
         state.output_size = {1280, 720};
+        state.fullscreen_only = phone;
         if (!empty_sizes) state.window_sizes = {{640, 480}, {1280, 720}, {1920, 1080}};
         state.frame_rates.refresh_hz = 144;
         return state;
@@ -58,6 +60,9 @@ int main() {
         const unsigned width = config.window_width;
         row(rows, "RESOLUTION").change(config, -1);
         check(config.window_width == width, "empty window choices ignored");
+        host.phone = true;
+        rows = galaxy::ui::display_page(config, host);
+        check(std::none_of(rows.begin(), rows.end(), [](const auto& r) { return r.label == "RESOLUTION" || r.label == "MONITOR" || r.label == "DISPLAY MODE"; }), "phone output follows the surface, without desktop display controls");
         std::cout << "Display page: passed\n";
         return 0;
     } catch (const std::exception& error) {

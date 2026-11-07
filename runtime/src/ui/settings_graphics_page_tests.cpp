@@ -42,6 +42,9 @@ int main() {
         config.max_fps = 60;
         auto rows = galaxy::ui::graphics_page(config, host);
         check(row(rows, "ANTI-ALIASING").value == "OFF", "anti-aliasing label");
+        check(row(rows, "INTERNAL RESOLUTION").value == "MATCH DISPLAY", "default internal resolution follows output");
+        row(rows, "INTERNAL RESOLUTION").change(config, 1);
+        check(config.internal_height == 144u && config.spatial_quality == 0u, "pixel height selection starts at exact native quality");
         check(row(rows, "  REPLACEMENTS").value == "7 TEXTURES", "texture summary");
         row(rows, "UPSCALING").change(config, 1);
         check(config.upscaler == 1, "upscaler action");

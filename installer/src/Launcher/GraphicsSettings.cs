@@ -169,6 +169,9 @@ namespace Nebula.Launcher
         public int Msaa = 0;
         public int TemporalQuality = 1;
         public int FrameGeneration = 0;
+        public static readonly int[] InternalHeights = { 0, 144, 240, 360, 480, 720, 1080, 1440, 2160 };
+        public static readonly string[] InternalResolutions = { "Match display", "144p", "240p", "360p", "480p", "720p", "1080p", "1440p", "2160p (4K)" };
+        public int InternalHeight = 0;
         public int SpatialQuality = 0;
         public bool GeneratedMipmaps = false, PerPixelLighting = false, EnhancedLighting = false, AmbientOcclusion = false;
         public bool HudOutputResolution = false, RayTracing = false;
@@ -240,6 +243,8 @@ namespace Nebula.Launcher
             settings.TemporalQuality = Choice(values, "temporal_quality", TemporalQualityCount, settings.TemporalQuality);
             settings.FrameGeneration = Choice(values, "frame_generation", 6, settings.FrameGeneration);
             settings.SpatialQuality = Choice(values, "spatial_quality", TemporalQualityCount, settings.SpatialQuality);
+            settings.InternalHeight = Choice(values, "internal_height", 2161, 0);
+            if (Array.IndexOf(InternalHeights, settings.InternalHeight) < 0) settings.InternalHeight = 0;
             settings.Sharpness = Math.Min(Choice(values, "sharpness", 101, settings.Sharpness), 100);
             int anisotropy = Choice(values, "anisotropic_filtering", 17, -1);
             if (anisotropy >= 1)
@@ -290,6 +295,7 @@ namespace Nebula.Launcher
                 new KeyValuePair<string, string>("upscaler", n(Upscaler)),
                 new KeyValuePair<string, string>("temporal_quality", n(TemporalQuality)),
                 new KeyValuePair<string, string>("frame_generation", n(FrameGeneration)),
+                new KeyValuePair<string, string>("internal_height", n(InternalHeight)),
                 new KeyValuePair<string, string>("spatial_quality", n(SpatialQuality)),
                 new KeyValuePair<string, string>("sharpness", n(Sharpness)),
                 new KeyValuePair<string, string>("anisotropic_filtering", n(Anisotropy[Math.Max(0, Math.Min(TextureFilter, Anisotropy.Length - 1))])),

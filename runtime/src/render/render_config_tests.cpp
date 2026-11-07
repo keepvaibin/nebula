@@ -445,6 +445,7 @@ int main() {
         const ScopedEnv width_env("GALAXY_WINDOW_WIDTH", "");
         const ScopedEnv height_env("GALAXY_WINDOW_HEIGHT", "");
         galaxy::render::RenderConfig custom{};
+        custom.internal_height = 240u;
         custom.window_width = 3440u;
         custom.window_height = 1440u;
         galaxy::render::set_render_config(custom);
@@ -457,6 +458,8 @@ int main() {
             galaxy::render::get_render_config().window_width == 3440u &&
                 galaxy::render::get_render_config().window_height == 1440u,
             "a saved custom aspect and resolution survive reload");
+        passed &= expect(galaxy::render::get_render_config().internal_height == 240u,
+            "internal resolution persists independently of the output resolution");
 
         {
             std::ofstream file(path, std::ios::binary | std::ios::trunc);
