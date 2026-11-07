@@ -19,6 +19,7 @@ namespace NebulaLoadTrace {
     void frame();
     void gameScene();
     // Creation order of the placed objects and the game's random state after them (the N-63 order proof).
+    void sorted(const char* pName, int priority, int count);
     void placed(const char* pName, int zoneId);
     void placementDone();
 }  // namespace NebulaLoadTrace

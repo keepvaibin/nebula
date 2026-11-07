@@ -71,6 +71,12 @@ namespace NebulaLoadTrace {
         change("control", !demo && !wipe && !systemWipe && !opening && !MR::isPlayerDead() && !MR::isPlayerHidden(), sControl);
     }
 
+    void sorted(const char* pName, int priority, int count) {
+        if (enabled()) {
+            JUTNativeLog("place-set: %s priority %d count %d\n", pName, priority, count);
+        }
+    }
+
     void placed(const char* pName, int zoneId) {
         if (enabled()) {
             JUTNativeLog("place: %u %s zone %d\n", sPlaced++, pName, zoneId);
@@ -91,6 +97,9 @@ namespace NebulaLoadTrace {
     }
 
     void gameScene() {
+    }
+
+    void sorted(const char*, int, int) {
     }
 
     void placed(const char*, int) {
