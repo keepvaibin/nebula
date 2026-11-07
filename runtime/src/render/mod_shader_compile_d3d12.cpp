@@ -2,9 +2,7 @@
 // One stage of a mod's program as DXIL, with Microsoft's compiler where the game's installer puts it (dxc\ beside the game).
 #include "galaxy/render/mod_shaders.h"
 
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <windows.h>
+#include "galaxy/windows_api.h"
 
 #include <atomic>
 #include <fstream>

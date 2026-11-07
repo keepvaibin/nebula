@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "galaxy/input/key_positions_win32.h"
 #include <algorithm>
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <Windows.h>
+#include "galaxy/windows_api.h"
 
 namespace galaxy::host {
 namespace {

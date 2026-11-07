@@ -2,13 +2,9 @@
 // render_api.cpp exposes it through the galaxy::render API in render_api.h.
 
 #if defined(_WIN32)
-#define WIN32_LEAN_AND_MEAN
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
+#include "galaxy/windows_api.h"
 #pragma warning(push, 0)
 #include "galaxy/portable.h"
-#include <Windows.h>
 #if !defined(NEBULA_GPU_VULKAN)
 #include <d3d12.h>
 #endif

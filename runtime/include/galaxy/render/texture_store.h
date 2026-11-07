@@ -4,12 +4,7 @@
 // and queues the work; the render thread applies the queue at the first walk of the list submitted after it.
 // Replacements (texture packs, the game's larger paintings, movies) take an id's place in `handle`.
 
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
+#include "galaxy/windows_api.h"
 
 #include "galaxy/render/device_gate.h"
 #include "galaxy/render/gpu_texture_backend.h"

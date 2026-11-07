@@ -2,7 +2,7 @@
 #include "galaxy/host_env.h"
 #include "galaxy/test_data_paths.h"
 
-#include <Windows.h>
+#include "galaxy/windows_api.h"
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>

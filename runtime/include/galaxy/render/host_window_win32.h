@@ -5,13 +5,7 @@
 // pointer, focus, size, placement), the settings overlay's and the HOME Menu's state, keys and drawing, and the state
 // the renderer and the window thread share.
 
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <Windows.h>
+#include "galaxy/windows_api.h"
 
 #include "galaxy/render/display_modes.h"
 #include "galaxy/render/host_window.h"

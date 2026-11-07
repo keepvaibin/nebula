@@ -5,9 +5,7 @@
 #include "galaxy/test_data_paths.h"
 #include "switches.h"
 
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <Windows.h>
+#include "galaxy/windows_api.h"
 #include <Shlobj.h>
 #include <shellapi.h>
 

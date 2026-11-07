@@ -10,9 +10,7 @@
 #include "galaxy/rumble.h"
 #include "galaxy/steam_controller.h"
 
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <Windows.h>
+#include "galaxy/windows_api.h"
 #include <Xinput.h>
 #include <cfgmgr32.h>
 #include <hidsdi.h>

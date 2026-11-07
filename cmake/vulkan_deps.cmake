@@ -52,6 +52,20 @@ if(NOT EXISTS "${glslang_SOURCE_DIR}/CMakeLists.txt")
     message(FATAL_ERROR "glslang's sources are missing (${glslang_SOURCE_DIR})")
 endif()
 add_subdirectory("${glslang_SOURCE_DIR}" "${CMAKE_BINARY_DIR}/glslang" EXCLUDE_FROM_ALL)
+# glslang turns its External dependencies' warnings off (-w), and SPIRV-Tools then asks for /W2 /WX on its own
+# targets: MSVC overrides one with the other in every file (D9025). Keep glslang's -w; drop SPIRV-Tools' level.
+if(MSVC)
+    foreach(target SPIRV-Tools-static SPIRV-Tools-opt SPIRV-Tools-shared SPIRV-Tools-link SPIRV-Tools-lint
+            SPIRV-Tools-reduce SPIRV-Tools-diff)
+        if(TARGET ${target})
+            get_target_property(nebula_spirv_options ${target} COMPILE_OPTIONS)
+            if(nebula_spirv_options)
+                list(REMOVE_ITEM nebula_spirv_options /W2 /WX)
+                set_target_properties(${target} PROPERTIES COMPILE_OPTIONS "${nebula_spirv_options}")
+            endif()
+        endif()
+    endforeach()
+endif()
 # The renderer includes glslang's SPIR-V headers in their installed layout (glslang/SPIRV/...).
 file(GLOB nebula_glslang_spirv_headers "${glslang_SOURCE_DIR}/SPIRV/*.h" "${glslang_SOURCE_DIR}/SPIRV/*.hpp")
 file(COPY ${nebula_glslang_spirv_headers} DESTINATION "${CMAKE_BINARY_DIR}/glslang-include/glslang/SPIRV")
@@ -59,8 +73,9 @@ file(COPY ${nebula_glslang_spirv_headers} DESTINATION "${CMAKE_BINARY_DIR}/glsla
 add_library(nebula_vulkan_deps INTERFACE)
 target_include_directories(nebula_vulkan_deps SYSTEM INTERFACE
     "${vulkan_headers_SOURCE_DIR}/include" "${volk_SOURCE_DIR}" "${vma_SOURCE_DIR}/include")
+# vulkan.h includes Windows.h itself for the Win32 surface, maybe before galaxy/windows_api.h: give it the same options.
 target_compile_definitions(nebula_vulkan_deps INTERFACE NEBULA_GPU_VULKAN VK_NO_PROTOTYPES
-    $<$<PLATFORM_ID:Windows>:VK_USE_PLATFORM_WIN32_KHR NOMINMAX>
+    $<$<PLATFORM_ID:Windows>:VK_USE_PLATFORM_WIN32_KHR WIN32_LEAN_AND_MEAN NOMINMAX>
     $<$<PLATFORM_ID:Android>:VK_USE_PLATFORM_ANDROID_KHR>)
 # The shader compiler: the build tools' (tools/dev/native_spirv.cpp, utility_spirv.cpp) and the game's, for mods' materials.
 add_library(nebula_shader_compiler INTERFACE)

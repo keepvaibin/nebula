@@ -2,13 +2,7 @@
 
 // Temporal upscaling of the D3D12 scene (AMD FidelityFX FSR 3.1).
 
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <Windows.h>
+#include "galaxy/windows_api.h"
 #include <d3d12.h>
 
 #include "galaxy/render/post_process_settings.h"

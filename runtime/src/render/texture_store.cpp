@@ -1,11 +1,6 @@
 // Textures by id: levels staged on the calling thread, created and uploaded on the render thread.
 
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
+#include "galaxy/windows_api.h"
 
 #include "galaxy/render/texture_store.h"
 

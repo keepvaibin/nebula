@@ -3,9 +3,7 @@
 #include "galaxy/controller_hid.h"
 #include "galaxy/runtime_settings.h"
 
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <Windows.h>
+#include "galaxy/windows_api.h"
 #include <cfgmgr32.h>
 #include <hidsdi.h>
 #include <hidpi.h>

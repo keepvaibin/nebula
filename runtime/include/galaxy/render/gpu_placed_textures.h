@@ -8,13 +8,7 @@
 // releases it with the resource. Callers release a texture only after the GPU
 // has finished with it.
 
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <Windows.h>
+#include "galaxy/windows_api.h"
 #include <d3d12.h>
 #include <wrl/client.h>
 

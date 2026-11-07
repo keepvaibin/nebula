@@ -15,10 +15,7 @@
 #include <memory>
 
 #if defined(_WIN32)
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
+#include "galaxy/windows_api.h"
 #if defined(_M_X64) || defined(__x86_64__)
 #include <MinHook.h>
 #define NEBULA_HAS_FUNCTION_HOOKS 1

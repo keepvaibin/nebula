@@ -1,6 +1,4 @@
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <Windows.h>
+#include "galaxy/windows_api.h"
 #include "galaxy/frame_telemetry.h"
 #include <atomic>
 #include <cstring>

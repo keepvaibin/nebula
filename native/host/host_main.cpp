@@ -8,9 +8,7 @@
 //
 //   <host> --pak <game.pak> --saves <dir> [--module <smg_game.dll>] [--seconds N]
 #if defined(_WIN32)
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
+#include "galaxy/windows_api.h"
 #endif
 #if defined(_WIN32) && defined(NEBULA_HOST_RENDERER) && !defined(NEBULA_HOST_SDL)
 #include <dwmapi.h>
@@ -126,7 +124,6 @@ inline int64_t perf_hint_retrace() noexcept { return 0; }
 #include <vector>
 
 #if defined(_WIN32)
-#include <windows.h>
 #include <shellapi.h>
 #include <intrin.h>
 #include <dbghelp.h>

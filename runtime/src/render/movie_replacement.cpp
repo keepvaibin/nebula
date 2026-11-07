@@ -17,13 +17,7 @@
 #include <thread>
 
 #if defined(_WIN32)
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
+#include "galaxy/windows_api.h"
 #include <d3d11.h>
 #include <d3d10.h>
 #include <mfapi.h>

@@ -4,9 +4,7 @@
 #include "galaxy/host_pointer_events.h"
 #include "galaxy/content_viewport.h"
 
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <Windows.h>
+#include "galaxy/windows_api.h"
 
 #include <atomic>
 #include <cstdint>
