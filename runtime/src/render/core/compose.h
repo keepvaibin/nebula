@@ -31,6 +31,7 @@ struct ComposeInput {
     std::uint32_t joint_count = 0u;
     const float (*view)[4] = nullptr;    // null: no camera over the joints
     const float (*base)[4] = nullptr;    // calc mode 2
+    const float (*world_view)[4] = nullptr; // eye -> world for joints already in eye space
     const float* normal_scale = nullptr;
 };
 

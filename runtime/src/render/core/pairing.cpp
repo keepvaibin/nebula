@@ -38,12 +38,12 @@ void Pairing::pair(ListData& now, const ListData* before) {
 
     // Cameras pair by what they are for, in order.
     {
-        std::array<std::uint32_t, 3> next{};
+        std::array<std::uint32_t, NEBULA_CAMERA_ROLE_COUNT> next{};
         for (std::uint32_t c = 0; c < list.camera_count; ++c) {
-            const std::uint32_t role = std::min<std::uint32_t>(list.cameras[c].role, 2u);
+            const std::uint32_t role = std::min<std::uint32_t>(list.cameras[c].role, NEBULA_CAMERA_ROLE_COUNT - 1u);
             std::uint32_t seen = 0u;
             for (std::uint32_t p = 0; p < last.camera_count; ++p) {
-                if (std::min<std::uint32_t>(last.cameras[p].role, 2u) == role && seen++ == next[role]) {
+                if (std::min<std::uint32_t>(last.cameras[p].role, NEBULA_CAMERA_ROLE_COUNT - 1u) == role && seen++ == next[role]) {
                     now.camera_before[c] = p;
                     break;
                 }
@@ -76,7 +76,7 @@ void Pairing::pair(ListData& now, const ListData* before) {
         for (std::uint32_t p = slots_[block.slot].first; p != NEBULA_NONE32; p = next_in_slot_[p]) {
             const NebulaFrameBlock& other = last.blocks[p];
             if (used_[p] != 0u || other.generation != block.generation || other.joint_count != block.joint_count ||
-                other.model != block.model) {
+                other.model != block.model || other.calc_mode != block.calc_mode) {
                 continue;
             }
             const std::uint32_t other_camera = other.camera != NEBULA_NONE32 ? other.camera : NEBULA_NONE32;
@@ -120,20 +120,34 @@ void Pairing::pair(ListData& now, const ListData* before) {
                 continue;
             }
             const std::uint32_t pair = found->second;
-            if (next_item_[pair] != NEBULA_NONE32) {
-                found->second = next_item_[pair];
-            }
+            if (next_item_[pair] != NEBULA_NONE32) found->second = next_item_[pair];
+            else items.erase(found);  // a previous draw can be consumed only once
             const NebulaFrameItem& other = last.items[pair];
+            if (item.pipeline != other.pipeline || item.mesh != other.mesh || item.textures != other.textures ||
+                item.matrix != other.matrix || item.flags != other.flags || item.source_hash != other.source_hash ||
+                now.block_before[item.block] != other.block) {
+                continue;
+            }
+            if (((item.flags | other.flags) & NEBULA_ITEM_DISCRETE_VERTICES) != 0u) {
+                continue;
+            }
             now.item_before[i] = pair;
             if (now.constants_before[item.constants] == NEBULA_NONE32) {
                 now.constants_before[item.constants] = other.constants;
             }
-            if (now.view_before[item.view] == NEBULA_NONE32) {
+            if (now.view_before[item.view] == NEBULA_NONE32 &&
+                list.views[item.view].orthographic == last.views[other.view].orthographic) {
                 now.view_before[item.view] = other.view;
             }
             if (item.light_set != NEBULA_NONE32 && other.light_set != NEBULA_NONE32 &&
-                now.light_set_before[item.light_set] == NEBULA_NONE32) {
-                now.light_set_before[item.light_set] = other.light_set;
+                now.light_set_before[item.light_set] == NEBULA_NONE32 &&
+                list.light_sets[item.light_set].follows_camera == last.light_sets[other.light_set].follows_camera) {
+                const auto camera = list.light_sets[item.light_set].camera_plus_one;
+                const auto previous_camera = last.light_sets[other.light_set].camera_plus_one;
+                const bool same_camera = camera == 0u ? previous_camera == 0u
+                    : camera <= list.camera_count && now.camera_before[camera - 1u] != NEBULA_NONE32 &&
+                      now.camera_before[camera - 1u] + 1u == previous_camera;
+                if (same_camera) now.light_set_before[item.light_set] = other.light_set;
             }
         }
     }
@@ -183,7 +197,7 @@ void Pairing::prepare_motion(ListData& now, const ListData& before) {
         const NebulaFrameBlock* other = p != NEBULA_NONE32 ? &last.blocks[p] : nullptr;
         const auto first = static_cast<std::uint32_t>(now.joint_motion.size());
 
-        if (block.camera == NEBULA_NONE32) {
+        if (block.camera == NEBULA_NONE32 || block.calc_mode == 1u) {
             // Eye-space joints: taken apart under the camera their draws are for; no pair holds still in the world.
             const std::uint32_t camera = now.block_camera[b];
             if (camera == NEBULA_NONE32 && other == nullptr) {
@@ -249,7 +263,7 @@ void Pairing::prepare_motion(ListData& now, const ListData& before) {
 void joints_at(const ListData& now, const NebulaFrameBlock& block, std::uint32_t block_index, float t, const Affine34* camera_t,
                float (*out)[4]) noexcept {
     const std::uint32_t first = now.motion_first[block_index];
-    if (block.camera == NEBULA_NONE32) {
+    if (block.camera == NEBULA_NONE32 || block.calc_mode == 1u) {
         static const CameraMotion kNoCamera{};
         const std::uint32_t camera = now.block_camera[block_index];
         const CameraMotion& motion = camera != NEBULA_NONE32 ? now.camera_motion[camera] : kNoCamera;

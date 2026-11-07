@@ -13,6 +13,7 @@ u32 PassState::word() const {
     state |= NEBULA_STATE_CULL(cull);
     state |= color_write != 0 ? NEBULA_STATE_COLOR_WRITE : 0u;
     state |= alpha_write == 2 ? NEBULA_STATE_ALPHA_PASS : alpha_write != 0 ? NEBULA_STATE_ALPHA_WRITE : 0u;
+    state |= pixel_shading ? NEBULA_STATE_PIXEL_SHADING : 0u;
     if (stencil_func != 0xFF) {
         state |= NEBULA_STATE_STENCIL(stencil_func, stencil_op) | NEBULA_STATE_STENCIL_OWN;
     }
@@ -139,6 +140,7 @@ namespace PassStates {
         out.cull = static_cast< u8 >(state >> 15 & 3);
         out.color_write = (state & NEBULA_STATE_COLOR_WRITE) != 0 ? 1 : 0;
         out.alpha_write = (state & NEBULA_STATE_ALPHA_PASS) != 0 ? 2 : (state & NEBULA_STATE_ALPHA_WRITE) != 0 ? 1 : 0;
+        out.pixel_shading = (state & NEBULA_STATE_PIXEL_SHADING) != 0;
         if ((state & NEBULA_STATE_STENCIL_OWN) != 0) {
             out.stencil_func = static_cast< u8 >(state >> 20 & 3);
             out.stencil_op = static_cast< u8 >(state >> 22 & 3);
@@ -612,11 +614,17 @@ namespace Frame {
         hostViewport(viewport, pOut + 6);
     }
 
-    u32 currentLightSet() {
+    u32 currentLightSet(u32 block) {
         if (!sLightsSet) {
             return NEBULA_NONE32;
         }
         Store* pStore = store();
+        const u32 camera = pStore->mBlocks.mData[block].camera;
+        const u32 cameraPlusOne = camera != NEBULA_NONE32 ? camera + 1u : 0u;
+        if (sLights.camera_plus_one != cameraPlusOne) {
+            sLights.camera_plus_one = cameraPlusOne;
+            sLightsDirty = true;
+        }
         if (sLightsDirty || sLightSet == NEBULA_NONE32) {
             pStore->mLightSets.add() = sLights;
             sLightSet = static_cast< u32 >(pStore->mLightSets.mCount - 1);
@@ -856,6 +864,13 @@ namespace Frame {
         const NebulaHostServices* pHost = nebula_host();
         for (u32 i = 0; i < file.mLength / sizeof(NebulaPipelineDesc); i++) {
             pHost->pipeline_register(pHost->user, &pDesc[i]);
+            if (pDesc[i].pixel == (NEBULA_PROGRAM_SITE | static_cast< u64 >(NEBULA_SHADER_PARTICLE) << 1)) {
+                // Dynamic emitters choose this form only after proving their alpha test cannot reject. Prepare both
+                // forms with the existing particle state list, before play, so the optimization adds no first-use hitch.
+                NebulaPipelineDesc pixel = pDesc[i];
+                pixel.state |= NEBULA_STATE_PIXEL_SHADING;
+                pHost->pipeline_register(pHost->user, &pixel);
+            }
         }
     }
 

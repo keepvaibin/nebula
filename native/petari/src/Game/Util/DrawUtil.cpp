@@ -45,6 +45,7 @@ namespace MR {
         Mtx viewMtx;
         NebulaMtxIdentity(viewMtx);
         NebulaMtxCopy(viewMtx, ModelSys::mViewMtx);
+        ModelSys::mViewRole = NEBULA_CAMERA_OTHER;
     }
 
     void drawInitFor2DModel() {
@@ -57,6 +58,7 @@ namespace MR {
         Mtx viewMtx;
         NebulaMtxIdentity(viewMtx);
         NebulaMtxCopy(viewMtx, ModelSys::mViewMtx);
+        ModelSys::mViewRole = NEBULA_CAMERA_OTHER;
     }
 
     void setDefaultViewportAndScissor() {

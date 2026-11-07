@@ -132,6 +132,7 @@ namespace MR {
 
     void loadViewMtx() {
         NebulaMtxCopy(::getCameraContext()->getViewMtx(), ModelSys::mViewMtx);
+        ModelSys::mViewRole = NEBULA_CAMERA_SCENE;
     }
 
     const Pos3f& getCameraViewMtx() {
