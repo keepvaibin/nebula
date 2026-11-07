@@ -1,23 +1,22 @@
 #pragma once
 
-#include <JSystem/JAudio2/JAISound.hpp>
-#include <JSystem/JAudio2/JASHeapCtrl.hpp>
+#include "Game/Sound/Sound.hpp"
 
-class JAISe;
-struct JASSoundParams;
+class EffectSound;
+struct SoundParams;
 
-class AudSeStrategy : public JAISoundStrategy< JAISe >, public JASPoolAllocObject< AudSeStrategy > {
+class AudSeStrategy : public SoundStrategy< EffectSound > {
 public:
     AudSeStrategy() {};
 
-    virtual void calc(JAISe*);
-    virtual void mix(JAISe*, JASSoundParams*);
+    virtual void calc(EffectSound*);
+    virtual void mix(EffectSound*, SoundParams*);
 };
 
-class AudSeStrategyMgr : public JAISoundStrategyMgr< JAISe > {
+class AudSeStrategyMgr : public SoundStrategyMgr< EffectSound > {
 public:
     AudSeStrategyMgr() {};
 
-    virtual JAISoundStrategy< JAISe >* newStrategy(JAISoundID);
-    virtual bool deleteStrategy(JAISoundStrategy< JAISe >*);
+    virtual SoundStrategy< EffectSound >* newStrategy(SoundID);
+    virtual bool deleteStrategy(SoundStrategy< EffectSound >*);
 };

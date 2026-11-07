@@ -24,8 +24,4 @@ namespace AudUtil {
         }
         return ret;
     }
-
-    bool isProperCurrentStageOrAudioDebugMode() {
-        return true;
-    }
 };  // namespace AudUtil

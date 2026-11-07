@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/Util/SingletonHolder.hpp"
-#include <JSystem/JAudio2/JAISound.hpp>
+#include "Game/Sound/Sound.hpp"
 
 struct AudMeNameData {
     const char* mName;

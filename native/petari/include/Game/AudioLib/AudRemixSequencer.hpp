@@ -1,7 +1,7 @@
 #pragma once
 
 
-class JAISoundID;
+class SoundID;
 struct RemixNoteData;
 struct RemixNoteTrackData;
 
@@ -12,7 +12,7 @@ public:
     void initData();
     void setData(const RemixNoteTrackData*, const RemixNoteData*);
     bool update(f32);
-    JAISoundID getFreeSeID();
+    SoundID getFreeSeID();
 
     f32 _0;
     f32 _4;

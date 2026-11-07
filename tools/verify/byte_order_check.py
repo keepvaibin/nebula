@@ -9,10 +9,6 @@ import glob, os, re, sys
 
 REVIEWED = {
     'MarioSound.cpp': 'kind() reads the word with a shift; the bytes are unused',
-    'JAISound.hpp': 'every part is read and written with shifts on mComposite',
-    'JASChannel.hpp': 'a pointer or a number, one at a time, never both',
-    'JASWSParser.hpp': 'mData is only copied whole',
-    'JAUAudible.hpp': 'the switch is read with shifts on the u16',
     'TalkNodeCtrl.hpp': 'the cooked flow node is laid out per kind of node',
 }
 COLOR_CAST = re.compile(

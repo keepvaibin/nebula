@@ -2,7 +2,7 @@
 #include "Game/AudioLib/AudSoundId.hpp"
 #include "Game/AudioLib/AudSystem.hpp"
 #include "Game/AudioLib/AudWrap.hpp"
-#include <JSystem/JAudio2/JAISoundChild.hpp>
+#include "Game/Sound/SoundChild.hpp"
 
 namespace {
     f32 sSpeedMin = 2.0f;
@@ -32,9 +32,9 @@ void AudTamakoroBgmCtrl::init() {
 void AudTamakoroBgmCtrl::control(f32 speed, bool disabled, s32 frames) {
     AudBgm* bgm = AudWrap::getStageBgm();
     if (bgm != nullptr) {
-        JAISoundHandle* handle = bgm->getHandle();
+        SoundHandle* handle = bgm->getHandle();
         if (handle != nullptr && handle->isSoundAttached()) {
-            JAISoundID id = handle->getSound()->getID();
+            SoundID id = handle->getSound()->getID();
             if (id == BGM_TAMAKORO || id == BGM_TAMAKORO_2) {
                 if (mSteps > ::sFirstBarSteps) {
                     if (speed < ::sSpeedMin) {
@@ -76,22 +76,22 @@ void AudTamakoroBgmCtrl::control(f32 speed, bool disabled, s32 frames) {
     }
 }
 
-void AudTamakoroBgmCtrl::modifyTempo(JAISoundHandle* pHandle, f32 tempo) {
+void AudTamakoroBgmCtrl::modifyTempo(SoundHandle* pHandle, f32 tempo) {
     if (pHandle != nullptr && pHandle->isSoundAttached()) {
-        JAITempoMgr* mgr = pHandle->getSound()->getTempoMgr();
+        SoundTempo* mgr = pHandle->getSound()->getTempoMgr();
         if (mgr != nullptr) {
             mgr->mTransition.set(tempo, mgr->getTempo(), 10);
         }
     }
 }
 
-void AudTamakoroBgmCtrl::modifyPitch(JAISoundHandle* pHandle, f32 pitch) {
+void AudTamakoroBgmCtrl::modifyPitch(SoundHandle* pHandle, f32 pitch) {
     if (pHandle != nullptr && pHandle->isSoundAttached()) {
         for (s32 i = 0; i < 16; i++) {
             if (i == ::sPercTrack) {
                 continue;
             }
-            JAISoundChild* child = pHandle->getSound()->getChild(i);
+            SoundChild* child = pHandle->getSound()->getChild(i);
             if (child == nullptr) {
                 continue;
             }

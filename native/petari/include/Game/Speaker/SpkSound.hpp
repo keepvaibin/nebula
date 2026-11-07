@@ -1,11 +1,10 @@
 #pragma once
 
-#include <JSystem/JAudio2/JASGlobal.hpp>
-#include <JSystem/JAudio2/JASHeapCtrl.hpp>
+#include "Game/Sound/SoundGlobal.hpp"
+#include "Game/Sound/SpeakerMixer.hpp"
 #include <JSystem/JSupport/JSUList.hpp>
-#include <NebulaGpu.h>
-#include <nebula_math.h>
 
+class NebulaArena;
 class SpkSound;
 
 class SpkSoundHandle {
@@ -26,84 +25,53 @@ public:
     SpkSound* mSound;
 };
 
-class SpkSoundVolume {
-public:
-    SpkSoundVolume();
-
-    void setRelease(s32);
-    void setFadeOut(s32);
-    f32 calc(bool&);
-
-    f32 mReleaseVolume;
-    f32 mReleaseRate;
-    f32 mFadeOutVolume;
-    f32 mFadeOutRate;
-    f32 mFadeVolume;
-    f32 mFadeTarget;
-    f32 mFadeRate;
-    f32 mBaseVolume;
-};
-
-class SpkSound : public JSULink< SpkSound >, public JASPoolAllocObject< SpkSound > {
+// One speaker sound as the game plays it: started locked, heard from the next frame, stopped by a fade out or its release. The
+// audio thread's SpeakerVoice mixes it; its state is the game's own until the audio thread has run the game's last change.
+class SpkSound : public JSULink< SpkSound > {
 public:
     enum State {
-        State_0 = 0,
-        State_LOCK = 1,    // TODO: probably better name
-        State_UNLOCK = 2,  // TODO: probably better name
-        State_STOP = 3,
-        State_DEAD = 4,
+        State_0 = SpeakerVoice::STATE_NONE,
+        State_LOCK = SpeakerVoice::STATE_LOCK,
+        State_UNLOCK = SpeakerVoice::STATE_UNLOCK,
+        State_STOP = SpeakerVoice::STATE_STOP,
+        State_DEAD = SpeakerVoice::STATE_DEAD,
     };
 
     SpkSound();
     ~SpkSound();
 
-    void update(f32);
     void stop(s32);
     void attachHandle(SpkSoundHandle*);
     void releaseHandle();
     bool start(s32, s32);
     void unlock();
-    bool setWaveData(s32);
-
-    bool isLoopValid() const {
-        return mLoopStartPos >= 0 && mLoopEndPos > mLoopStartPos;
-    }
+    // A sound still locked goes before it is heard.
+    void kill();
+    s32 getState() const;
 
     SpkSoundHandle* mSoundHandle;
     s32 mWaveID;
-    s16* mWave;
-    s32 mWavePtr;
     s32 mPadChannel;
-    u32 _24;
+    // In 40-sample blocks.
     u32 mReleaseTime;
-    s32 mWaveSize;
-    s32 mLoopStartPos;
-    s32 mLoopEndPos;
+
+private:
+    void setState(s32 state);
+
     s32 mState;
-    s32 _3C;
-    SpkSoundVolume mVolume;
+    u64 mStateSerial;
+    SpeakerVoice* mVoice;
+    void* mMemory;
 };
 
-class SpkSoundHolder : JASGlobalInstance< SpkSoundHolder > {
+class SpkSoundHolder : SoundGlobal< SpkSoundHolder > {
 public:
-    SpkSoundHolder();
+    SpkSoundHolder(NebulaArena* pHeap);
 
     bool startSound(s32, s32, SpkSoundHandle*);
-    bool update(s32);
-    bool updateEachSound(s32);
     void freeDeadSound(s32);
     void framework();
 
-    f32 getBaseVolume() const {
-        return mBaseVolume;
-    }
-
-    f32 get_44() const {
-        return _44 / 15.0f;
-    }
-
+    NebulaArena* mHeap;
     JSUList< SpkSound > mSoundList[4];
-    f32 mVolume[4];
-    f32 mBaseVolume;
-    s32 _44;
 };

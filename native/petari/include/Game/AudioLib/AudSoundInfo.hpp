@@ -1,20 +1,23 @@
 #pragma once
 
-#include <JSystem/JAudio2/JAUStdSoundInfo.hpp>
+#include "Game/Sound/StdSoundInfo.hpp"
 
-// TODO: JAUStdSoundInfo or just JAUSoundInfo?
-class AudSoundInfo : public JAUSoundInfo {
+// The game's reading of the sound table: the sound switches' bits.
+class AudSoundInfo : public StdSoundInfo {
 public:
-    u16 getSoundSw(JAISoundID) const;
-    bool isLimitNumPlaying(JAISoundID) const;
-    bool isLimitCountPlaying(JAISoundID) const;
-    u16 getChordResIdBgm(JAISoundID) const;
-    bool isRhythmBgm(JAISoundID) const;
-    bool isFanfareSe(JAISoundID) const;
-    bool isUseFxMix(JAISoundID) const;
-    bool isUseLpf(JAISoundID) const;
+    AudSoundInfo() : StdSoundInfo(true) {
+    }
+
+    u16 getSoundSw(SoundID) const;
+    bool isLimitNumPlaying(SoundID) const;
+    bool isLimitCountPlaying(SoundID) const;
+    u16 getChordResIdBgm(SoundID) const;
+    bool isRhythmBgm(SoundID) const;
+    bool isFanfareSe(SoundID) const;
+    bool isUseFxMix(SoundID) const;
+    bool isUseLpf(SoundID) const;
 
     static AudSoundInfo* getInstance() {
-        return static_cast< AudSoundInfo* >(JAUSoundInfo::getInstance());
+        return static_cast< AudSoundInfo* >(SoundTableInfo::getInstance());
     }
 };

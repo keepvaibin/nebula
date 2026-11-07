@@ -1,0 +1,203 @@
+#include "Game/Sound/StreamPlayer.hpp"
+#include <cstring>
+
+namespace {
+    const SeqPoint cReleaseTable[2] = {
+        {0x0000, 0x0002, 0x0000},
+        {0x000F, 0x0000, 0x0000},
+    };
+    const OscData cStreamEnv = {Oscillator::TARGET_VOLUME, 1.0f, nullptr, cReleaseTable, 1.0f, 0.0f};
+    // A stream's samples stay mapped while it plays.
+    const u32 cAlwaysLive = 1;
+}  // namespace
+
+void StreamPlayer::init() {
+    mPaused = false;
+    mShownPaused = false;
+    mLoaded = false;
+    mArmed = false;
+    mVolume = 1.0f;
+    mPitch = 1.0f;
+    for (u32 i = 0; i < cChannels; i++) {
+        mChannelVolume[i] = 1.0f;
+        mChannelPan[i] = 0.5f;
+        mChannelFxMix[i] = 0.0f;
+        mChannelDolby[i] = 0.0f;
+    }
+    mMixConfig[0] = 0xffff;
+    mMessageHead = 0;
+    mMessageCount = 0;
+}
+
+void StreamPlayer::prepare(SoundEngine* pEngine, const u8* pData, u32 ownerSound) {
+    mEngine = pEngine;
+    mOwnerSound = ownerSound;
+    std::memcpy(&mHeader, pData, sizeof(mHeader));
+    mData = pData;
+    mVolume = mHeader.volume / 127.0f;
+    mLoaded = true;
+    mArmed = true;
+    mJob.mKind = SoundJob::JOB_STREAM;
+    mJob.mData = this;
+    mJob.mCall = runJob;
+    mEngine->addJob(&mJob);
+}
+
+void StreamPlayer::post(u32 message) {
+    if (mMessageCount == 16) {
+        return;
+    }
+    mMessages[(mMessageHead + mMessageCount) % 16] = message;
+    mMessageCount++;
+}
+
+void StreamPlayer::cancel() {
+    mArmed = false;
+    if (mJob.mListed) {
+        mEngine->removeJob(&mJob);
+    }
+}
+
+void StreamPlayer::release(SoundEngine* pEngine) {
+    cancel();
+    pEngine->voices().forgetOwners(this, this + 1);
+    mReleased = true;
+}
+
+void StreamPlayer::finish() {
+    if (mJob.mListed) {
+        mEngine->removeJob(&mJob);
+    }
+    if (mArmed) {
+        mArmed = false;
+        mFinishes = mFinishes + 1;
+    }
+}
+
+void StreamPlayer::mix(const StreamMixCommand& rMix) {
+    mPitch = rMix.mPitch;
+    for (u32 i = 0; i < cChannels; i++) {
+        if (rMix.mChannel == 0xff || rMix.mChannel == i) {
+            mChannelVolume[i] = rMix.mVolume;
+            mChannelPan[i] = rMix.mPan;
+            mChannelFxMix[i] = rMix.mFxMix;
+            mChannelDolby[i] = rMix.mDolby;
+        }
+    }
+}
+
+void StreamPlayer::runJob(void* pSelf) {
+    static_cast< StreamPlayer* >(pSelf)->process();
+}
+
+void StreamPlayer::noteEvent(u32 event, Note* pNote, NebulaVoice* pVoice, StreamPlayer* pStream) {
+    pStream->updateChannel(event, pNote, pVoice);
+}
+
+void StreamPlayer::updateChannel(u32 event, Note* pNote, NebulaVoice* pVoice) {
+    switch (event) {
+    case NOTE_START:
+        if (mUpdateChannel == nullptr) {
+            mUpdateChannel = pNote;
+            mPosition = 0;
+            mLoopCount = 0;
+        }
+        break;
+    case NOTE_PLAY:
+        if (pVoice->starting == 0 && pNote == mUpdateChannel) {
+            const u32 position = pVoice->address / sizeof(s16);
+            if (position < mPosition && mHeader.loop != 0) {
+                mLoopCount = mLoopCount + 1;
+            }
+            mPosition = position;
+        }
+        break;
+    case NOTE_STOP: {
+        bool open = false;
+        for (u32 i = 0; i < cChannels; i++) {
+            if (pNote == mChannels[i]) {
+                mChannels[i] = nullptr;
+            } else if (mChannels[i] != nullptr) {
+                open = true;
+            }
+        }
+        if (!open) {
+            finish();
+        }
+        break;
+    }
+    }
+    pNote->mPause = mPaused;
+}
+
+void StreamPlayer::process() {
+    if (!mLoaded) {
+        return;
+    }
+    while (mMessageCount != 0) {
+        const u32 message = mMessages[mMessageHead];
+        mMessageHead = (mMessageHead + 1) % 16;
+        mMessageCount--;
+        switch (message & 0xff) {
+        case MESSAGE_START:
+            channelStart();
+            break;
+        case MESSAGE_STOP:
+            channelStop(static_cast< u16 >(message >> 16));
+            break;
+        case MESSAGE_PAUSE:
+            mPaused = true;
+            break;
+        case MESSAGE_RESUME:
+            mPaused = false;
+            break;
+        }
+        mShownPaused = mPaused;
+    }
+    for (u32 i = 0; i < mHeader.channels; i++) {
+        Note* note = mChannels[i];
+        if (note != nullptr) {
+            NoteParams params;
+            params.mVolume = mVolume * mChannelVolume[i];
+            params.mPitch = mPitch;
+            params.mPan = mChannelPan[i];
+            params.mFxMix = mChannelFxMix[i];
+            params.mDolby = mChannelDolby[i];
+            note->mParams = params;
+        }
+    }
+}
+
+void StreamPlayer::channelStart() {
+    for (u32 i = 0; i < mHeader.channels; i++) {
+        Note prepared;
+        prepared.mOwner = OWNER_STREAM;
+        prepared.mOwnerData = this;
+        prepared.mPriority = 0x7f7f;
+        for (u32 j = 0; j < 6; j++) {
+            prepared.mMixConfig[j] = mMixConfig[j];
+        }
+        prepared.mSourceRate = static_cast< f32 >(mHeader.rate);
+        prepared.mOsc[0].initStart(&cStreamEnv);
+        prepared.mFormat = 3;  // PCM16
+        prepared.mLoop = mHeader.loop != 0 ? 0xffffffffu : 0u;
+        prepared.mLoopStart = mHeader.loop_start;
+        prepared.mLoopEnd = mHeader.loop_end;
+        prepared.mSampleCount = mHeader.loop_end;
+        prepared.mWaveLive = &cAlwaysLive;
+        prepared.mWave = mData + sizeof(Header) + i * static_cast< size_t >(mHeader.samples) * sizeof(s16);
+        prepared.mWaveEnd = prepared.mWave + static_cast< size_t >(mHeader.samples) * sizeof(s16);
+        prepared.mKind = Note::KIND_WAVE;
+        mChannels[i] = mEngine->voices().play(prepared, true);
+    }
+    mUpdateChannel = nullptr;
+}
+
+void StreamPlayer::channelStop(u16 directRelease) {
+    for (u32 i = 0; i < mHeader.channels; i++) {
+        Note* note = mChannels[i];
+        if (note != nullptr) {
+            mEngine->voices().releaseNote(note, directRelease);
+        }
+    }
+}

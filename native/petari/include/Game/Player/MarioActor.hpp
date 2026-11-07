@@ -21,7 +21,7 @@ class Clip;
 class Model;
 class ModelData;
 class PlayerModel;
-class JAIAudible;
+class SoundAudible;
 class JUTTexture;
 class JetTurtleShadow;
 class MarioAnimator;
@@ -63,9 +63,9 @@ enum PlayerMode {
 
 template < int SIZE, class T, class U >
 class AudGenericAudible;
-class JAUDopplerAudibleChannel;
-class JAUDopplerAudibleAbsPos;
-typedef AudGenericAudible< 4, JAUDopplerAudibleChannel, JAUDopplerAudibleAbsPos > AudGeneric;
+class SoundDopplerChannel;
+class SoundDopplerAbsPos;
+typedef AudGenericAudible< 4, SoundDopplerChannel, SoundDopplerAbsPos > AudGeneric;
 
 extern bool gIsLuigi;  // (cc68 - 10000)(r13)
 

@@ -7,13 +7,11 @@
 #include "Game/AudioLib/AudSoundInfo.hpp"
 #include "Game/AudioLib/AudSystem.hpp"
 #include "Game/AudioLib/AudWrap.hpp"
-#include "Game/RhythmLib/AudBgmTempoAdjuster.hpp"
 #include "Game/RhythmLib/AudRhythmMeSystem.hpp"
-#include "Game/RhythmLib/AudRhythmSeqParser.hpp"
-#include <JSystem/JAudio2/JAISound.hpp>
-#include <JSystem/JAudio2/JAISoundChild.hpp>
-#include <JSystem/JAudio2/JAISoundInfo.hpp>
-#include "Game/System/GameThreads.hpp"
+#include "Game/Sound/Sound.hpp"
+#include "Game/Sound/SoundChild.hpp"
+#include "Game/Sound/SoundInfo.hpp"
+#include "Game/Sound/StreamSound.hpp"
 
 AudBgm::AudBgm() : mVolumeController() {
 }
@@ -48,8 +46,8 @@ void AudSingleBgm::movement() {
     }
 }
 
-JAISoundHandle* AudSingleBgm::start(u32 soundID, bool lock) {
-    JAISoundID id = soundID;
+SoundHandle* AudSingleBgm::start(u32 soundID, bool lock) {
+    SoundID id = soundID;
     mSoundID = soundID;
 
     if (mHandle.isSoundAttached()) {
@@ -107,7 +105,7 @@ void AudSingleBgm::playAfterPrepared() {
     }
 }
 
-JAISoundHandle* AudSingleBgm::getRhythmHandle() {
+SoundHandle* AudSingleBgm::getRhythmHandle() {
     if (mHandle.isSoundAttached()) {
         if (mHandle->getID().getSectionID() == 0x1) {  //  BGM or MBGM
             return &mHandle;
@@ -216,7 +214,7 @@ void AudMultiBgm::init() {
     }
 }
 
-JAISoundHandle* AudMultiBgm::start(u32 soundID, bool lock) {
+SoundHandle* AudMultiBgm::start(u32 soundID, bool lock) {
     if (!isStopping()) {
         stop(0);
     }
@@ -258,17 +256,15 @@ void AudMultiBgm::sendToSyncStream() {
     AudRhythmMeSystem* meSystem = AudRhythmMeSystem::getInstance();
     s32 idx = mRhythmStrategy.mBgmIdx;
     if (idx >= 0) {
-        AudBgmTempoAdjuster* adjuster = meSystem->getSeqParser(idx)->getTempoAdjuster();
         f32 beatMul = AudBgmSetting::getBeatMulForMultiBgm(mBgmId);
         u32 introBeats = AudBgmSetting::getIntroBeatsForMultiBgm(mBgmId);
         u32 loopBeats = AudBgmSetting::getLoopBeatsForMultiBgm(mBgmId);
         u32 loopStartSamples = AudBgmSetting::getLoopStartSamplesForMultiBgm(mBgmId);
         u32 loopEndSamples = AudBgmSetting::getLoopEndSamplesForMultiBgm(mBgmId);
-        JAIStream* stream = mHandle->asStream();
+        StreamSound* stream = mHandle->asStream();
 
-        GameAudioExclusion crit;
-        adjuster->setInfo(beatMul, introBeats, loopBeats, loopStartSamples, loopEndSamples);
-        adjuster->setStream(stream);
+        meSystem->setTempoStream(idx, stream != nullptr ? stream->player() : nullptr, beatMul, introBeats, loopBeats, loopStartSamples,
+                                 loopEndSamples);
     }
 }
 
@@ -276,9 +272,7 @@ void AudMultiBgm::rejectFromSyncStream() {
     AudRhythmMeSystem* meSystem = AudRhythmMeSystem::getInstance();
     s32 idx = mRhythmStrategy.mBgmIdx;
     if (idx >= 0) {
-        GameAudioExclusion crit;
-        AudBgmTempoAdjuster* adjuster = meSystem->getSeqParser(idx)->getTempoAdjuster();
-        adjuster->reject();
+        meSystem->rejectTempoStream(idx);
     }
 }
 
@@ -346,7 +340,7 @@ void AudMultiBgm::changeTrackMuteState(s32 track, s32 time) {
         return;
     }
 
-    JAISoundID soundID = mRhythmHandle->getID();
+    SoundID soundID = mRhythmHandle->getID();
 
     if (soundID.getSectionID() == 0x2) {  // STM
         return;
@@ -407,11 +401,11 @@ void AudMultiBgm::changeTrackMuteState(s32 track, s32 time) {
     }
 }
 
-JAISoundHandle* AudMultiBgm::getHandle() {
+SoundHandle* AudMultiBgm::getHandle() {
     return &mHandle;
 }
 
-JAISoundHandle* AudMultiBgm::getRhythmHandle() {
+SoundHandle* AudMultiBgm::getRhythmHandle() {
     return &mRhythmHandle;
 }
 
@@ -441,7 +435,7 @@ bool AudMultiBgm::isPaused() const {
     return false;
 }
 
-JAISoundID AudMultiBgm::getSoundID() const {
+SoundID AudMultiBgm::getSoundID() const {
     if (!mHandle.isSoundAttached()) {
         return 0;
     }
@@ -467,7 +461,7 @@ void AudMultiBgm::updateTrackControl() {
     }
 }
 
-JAISoundHandle* AudMultiBgm::prepare(u32 id) {
+SoundHandle* AudMultiBgm::prepare(u32 id) {
     u32 bgmId = id & ~(0x01010000);
 
     u32 seqID = AudBgmSetting::getSeqIdForMultiBgm(bgmId);

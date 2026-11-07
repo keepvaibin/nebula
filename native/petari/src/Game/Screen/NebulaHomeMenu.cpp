@@ -1,6 +1,6 @@
 #include "Game/Screen/NebulaHomeMenu.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <JSystem/JAudio2/JAISound.hpp>
+#include "Game/Sound/Sound.hpp"
 
 #include <nebula_game_api.h>
 
@@ -27,7 +27,7 @@ namespace {
     }
 
     void play(Sound sound) {
-        MR::startSystemSE(JAISoundID(sound + 0xD0000));
+        MR::startSystemSE(SoundID(sound + 0xD0000));
     }
 }  // namespace
 

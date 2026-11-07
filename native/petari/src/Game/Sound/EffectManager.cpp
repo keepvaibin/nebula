@@ -1,0 +1,245 @@
+#include "Game/Sound/EffectManager.hpp"
+#include "Game/Sound/SoundHandles.hpp"
+#include "Game/Sound/SoundInfo.hpp"
+
+void EffectCategory::managerCalc_() {
+    mParams.calc();
+
+    for (JSULink< EffectSound >* i = mSeList.getFirst(); i != mSeList.getEnd(); i = i->getNext()) {
+        i->getObject()->categoryCalc_();
+    }
+
+    sortByPriority_();
+}
+
+void EffectCategory::freeDeadSe_() {
+    JSULink< EffectSound >* i = mSeList.getFirst();
+    while (i != mSeList.getEnd()) {
+        JSULink< EffectSound >* link_next = i->getNext();
+        if (i->getObject()->isDead()) {
+            mSeList.remove(i);
+            delete i->getObject();
+        }
+        i = link_next;
+    }
+}
+
+bool EffectCategory::acceptsNewSe_(u32 priority) const {
+    int maxSe = getMaxSe();
+    if (maxSe <= 0) {
+        return true;
+    }
+
+    int stopCount = 0;
+    for (JSULink< EffectSound >* i = mSeList.getFirst(); i != mSeList.getEnd(); i = i->getNext()) {
+        if (priority < i->getObject()->getProperPriority_()) {
+            return true;
+        }
+        if (!i->getObject()->isStopping()) {
+            stopCount++;
+        }
+    }
+
+    if (stopCount < maxSe) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
+void EffectCategory::sortByPriority_() {
+    for (u32 i = mSeList.getNumLinks(); i != 0; i--) {
+        JSULink< EffectSound >* link = mSeList.getFirst();
+        u32 lowestPriority = link->getObject()->getPriority_();
+        JSULink< EffectSound >* current = link->getNext();
+
+        for (int j = 1; j < i; j++) {
+            u32 itemPriority = current->getObject()->getPriority_();
+            if (itemPriority < lowestPriority) {
+                lowestPriority = itemPriority;
+                link = current;
+            }
+            current = current->getNext();
+        }
+
+        mSeList.remove(link);
+        mSeList.append(link);
+    }
+}
+
+void EffectCategory::stop(u32 fadeTime) {
+    for (JSULink< EffectSound >* i = mSeList.getFirst(); i != mSeList.getEnd(); i = i->getNext()) {
+        i->getObject()->stop(fadeTime);
+    }
+}
+
+void EffectCategory::stop() {
+    for (JSULink< EffectSound >* i = mSeList.getFirst(); i != mSeList.getEnd(); i = i->getNext()) {
+        i->getObject()->stop();
+    }
+}
+
+void EffectCategory::stopSoundID(SoundID id) {
+    if (!id.isAnonymous()) {
+        for (JSULink< EffectSound >* i = mSeList.getFirst(); i != mSeList.getEnd(); i = i->getNext()) {
+            if ((u32)i->getObject()->getID() == (u32)id) {
+                i->getObject()->stop();
+            }
+        }
+    }
+}
+
+void EffectCategory::managerMixOut_(const SoundMove& params, SoundActivity activity) {
+    SoundParams mixParams;
+    mixParams.combine(params.mParams, mParams.mParams);
+    JSULink< EffectSound >* i = mSeList.getFirst();
+    int maxActiveSe = getMaxActiveSe();
+
+    if (maxActiveSe > 0) {
+        while (i != mSeList.getEnd() && maxActiveSe > 0 && !i->getObject()->isFarAway()) {
+            i->getObject()->categoryMixOut_(true, mixParams, activity);
+            i = i->getNext();
+            maxActiveSe--;
+        }
+        for (; i != mSeList.getEnd(); i = i->getNext()) {
+            i->getObject()->categoryMixOut_(false, mixParams, activity);
+        }
+    } else {
+        while (i != mSeList.getEnd() && !i->getObject()->isFarAway()) {
+            i->getObject()->categoryMixOut_(true, mixParams, activity);
+            i = i->getNext();
+        }
+        for (; i != mSeList.getEnd(); i = i->getNext()) {
+            i->getObject()->categoryMixOut_(false, mixParams, activity);
+        }
+    }
+}
+
+EffectManager::EffectManager(bool setInstance) : SoundGlobal< EffectManager >(setInstance) {
+    mAudience = nullptr;
+    mSeqDataMgr = nullptr;
+    mStrategyMgr = nullptr;
+    mParams.init();
+    mSoundActivity.init();
+}
+
+void EffectManager::setCategoryArrangement(const CategoryArrangement& arrangement) {
+    for (int i = 0; i < NUM_CATEGORIES; i++) {
+        mCategoryMgrs[i].setMaxActiveSe(arrangement.mItems[i].mMaxActiveSe);
+        mCategoryMgrs[i].setMaxInactiveSe(arrangement.mItems[i].mMaxInactiveSe);
+    }
+}
+
+void EffectManager::stop() {
+    for (int i = 0; i < NUM_CATEGORIES; i++) {
+        mCategoryMgrs[i].stop();
+    }
+}
+
+void EffectManager::stop(u32 fadeTime) {
+    for (int i = 0; i < NUM_CATEGORIES; i++) {
+        mCategoryMgrs[i].stop(fadeTime);
+    }
+}
+
+void EffectManager::stopSoundID(SoundID id) {
+    for (int i = 0; i < NUM_CATEGORIES; i++) {
+        mCategoryMgrs[i].stopSoundID(id);
+    }
+}
+
+void EffectManager::initParams() {
+    for (int i = 0; i < NUM_CATEGORIES; i++) {
+        mCategoryMgrs[i].getParams()->init();
+    }
+}
+
+void EffectManager::setAudience(SoundAudience* audience) {
+    mAudience = audience;
+}
+
+void EffectManager::setStrategyMgr(SoundStrategyMgr< EffectSound >* soundStrategyMgr) {
+    mStrategyMgr = soundStrategyMgr;
+}
+
+void EffectManager::setSeqDataMgr(SeqSource* seqDataMgr) {
+    mSeqDataMgr = seqDataMgr;
+}
+
+EffectSound* EffectManager::newSe_(int category, u32 priority) {
+    if (category < 0) {
+        category = 0;
+    }
+
+    EffectCategory* categoryMgr = &mCategoryMgrs[category];
+    if (!categoryMgr->acceptsNewSe_(priority)) {
+        return nullptr;
+    }
+
+    EffectSound* se = new EffectSound(this, mStrategyMgr, priority);
+    if (se == nullptr) {
+        return nullptr;
+    }
+
+    categoryMgr->appendSe_(se);
+    return se;
+}
+
+void EffectManager::calc() {
+    mParams.calc();
+    for (int i = 0; i < NUM_CATEGORIES; i++) {
+        mCategoryMgrs[i].managerCalc_();
+    }
+    for (int i = 0; i < NUM_CATEGORIES; i++) {
+        mCategoryMgrs[i].freeDeadSe_();
+    }
+}
+
+void EffectManager::mixOut() {
+    for (int i = 0; i < NUM_CATEGORIES; i++) {
+        mCategoryMgrs[i].managerMixOut_(mParams, mSoundActivity);
+    }
+}
+
+int EffectManager::getNumActiveSe() const {
+    int num = 0;
+    for (int i = 0; i < NUM_CATEGORIES; i++) {
+        num += mCategoryMgrs[i].getNumSe();
+    }
+    return num;
+}
+
+bool EffectManager::startSound(SoundID id, SoundHandle* handle, const Vec3f* posPtr) {
+    if (handle != nullptr && handle->isSoundAttached()) {
+        (*handle)->stop();
+    }
+
+    SoundInfo* soundInfoPtr = SoundGlobal< SoundInfo >::getInstance();
+    u32 priority;
+    u32 category;
+    if (soundInfoPtr != nullptr) {
+        category = soundInfoPtr->getCategory(id);
+        priority = soundInfoPtr->getPriority(id);
+    } else {
+        category = id.getGroupID();
+        priority = 0;
+    }
+
+    EffectSound* se = newSe_(category, priority);
+    if (se == nullptr) {
+        return false;
+    }
+
+    SoundAudience* audiencePtr = mAudience;
+    se->startID_(id, posPtr, audiencePtr);
+
+    if (soundInfoPtr != nullptr) {
+        soundInfoPtr->getSeInfo(id, se);
+    }
+
+    if (handle != nullptr) {
+        se->attachHandle(handle);
+    }
+
+    return true;
+}

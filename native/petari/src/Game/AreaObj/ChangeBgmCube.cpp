@@ -9,7 +9,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <JSystem/JAudio2/JAISound.hpp>
+#include "Game/Sound/Sound.hpp"
 
 ChangeBgmCube::ChangeBgmCube(int formType, const char* pName) : AreaObj(formType, pName), _3C() {
 }
@@ -83,7 +83,7 @@ void ChangeBgmCube::movement() {
                 break;
             }
 
-            JAISoundID bgmId = JAISoundID(AudStageBgmTable::getBgmId(MR::getCurrentStageName(), objArg1));
+            SoundID bgmId = SoundID(AudStageBgmTable::getBgmId(MR::getCurrentStageName(), objArg1));
 
             if (!bgmId.isAnonymous()) {
                 if (AudWrap::getBgmMgr()->mCurrentBGM[0] == bgmId) {
@@ -138,7 +138,7 @@ void ChangeBgmCube::movement() {
             }
 
             if (objArg2 >= 0) {
-                JAISoundID bgmId = JAISoundID(AudStageBgmTable::getBgmId(MR::getCurrentStageName(), objArg2));
+                SoundID bgmId = SoundID(AudStageBgmTable::getBgmId(MR::getCurrentStageName(), objArg2));
 
                 if (!bgmId.isAnonymous()) {
                     if (AudWrap::getBgmMgr()->mCurrentBGM[0] == bgmId) {

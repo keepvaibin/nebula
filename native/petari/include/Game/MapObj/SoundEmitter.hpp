@@ -2,7 +2,7 @@
 
 #include "Game/LiveActor/LiveActor.hpp"
 
-class JAISoundID;
+class SoundID;
 
 class SoundEmitter : public LiveActor {
 public:

@@ -88,7 +88,7 @@ fn modern_files(change: &Change, bytes: &[u8]) -> Result<Vec<(String, Vec<u8>, b
 
 /// One file of a mod as store items. A wave archive needs the sound archive that lays it out.
 fn cook_change(change: &Change, bytes: Vec<u8>, waves: &BTreeMap<String, Vec<audio_data::WavePlace>>, stats: &mut Stats) -> Result<Vec<StoreItem>> {
-    if cooks(&change.path) || archive::is_compressed(&bytes) {
+    if cooks(&change.path) || archive::is_compressed(&bytes) || super::sound::is_sequence_path(&change.path) {
         return cook_entry(&change.path, bytes, stats);
     }
     if bytes.is_empty() {

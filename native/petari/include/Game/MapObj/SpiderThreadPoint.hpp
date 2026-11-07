@@ -25,7 +25,7 @@ public:
         return rPos.z - mPosition.z;
     }
 
-    // TODO: this should be removed when the appropriate inline in JAudio is made/found
+    // Two levels as one sound parameter: a's whole part in the high half, b's in the low.
     inline s32 systemLevelParam(f32 a, f32 b) {
         return static_cast< s16 >((s32)(a)) << 16 | (static_cast< s16 >((s32)(b)) & 0xFFFF);
     }

@@ -1,26 +1,26 @@
 #include "Game/AudioLib/AudSoundInfo.hpp"
 #include "Game/AudioLib/AudSystem.hpp"
 #include "Game/AudioLib/AudWrap.hpp"
-#include <JSystem/JAudio2/JAISound.hpp>
-#include <JSystem/JAudio2/JAUSoundTable.hpp>
+#include "Game/Sound/Sound.hpp"
+#include "Game/Sound/SoundTable.hpp"
 
-u16 AudSoundInfo::getSoundSw(JAISoundID soundID) const {
-    void* data = JASGlobalInstance< JAUSoundTable >::getInstance()->getData(soundID);
-    u8 typeID = JASGlobalInstance< JAUSoundTable >::getInstance()->getTypeID(soundID);
-    if (data != nullptr) {
-        switch (typeID & 0xF0) {
-        case DATA_BGM:
-            return reinterpret_cast< JAUSoundTableBgm* >(data)->mSoundSw;
-        case DATA_SE:
-            return reinterpret_cast< JAUSoundTableSe* >(data)->mSoundSw;
-        case DATA_STREAM:
-            return 0;
-        }
+namespace {
+    // The sound's item and its type's top four bits; type 0 when there is no item.
+    const SoundItem* item(SoundID soundID, u32* pType) {
+        const SoundTable* table = SoundGlobal< SoundTable >::getInstance();
+        const SoundItem* data = table->getData(soundID);
+        *pType = data != nullptr ? table->getTypeID(soundID) & 0xF0u : 0;
+        return data;
     }
-    return 0;
+}  // namespace
+
+u16 AudSoundInfo::getSoundSw(SoundID soundID) const {
+    u32 type;
+    const SoundItem* data = item(soundID, &type);
+    return type == DATA_BGM || type == DATA_SE ? data->mSoundSw : 0;
 }
 
-bool AudSoundInfo::isLimitNumPlaying(JAISoundID soundID) const {
+bool AudSoundInfo::isLimitNumPlaying(SoundID soundID) const {
     s32 numOfPlaying = AudWrap::getSystem()->getNumOfPlaying(soundID);
     u16 sw = (getSoundSw(soundID) >> 3) & 3;
     if (sw == 0) {
@@ -29,7 +29,7 @@ bool AudSoundInfo::isLimitNumPlaying(JAISoundID soundID) const {
     return sw <= numOfPlaying;
 }
 
-bool AudSoundInfo::isLimitCountPlaying(JAISoundID soundID) const {
+bool AudSoundInfo::isLimitCountPlaying(SoundID soundID) const {
     u32 max;
     switch (getSoundSw(soundID) & 0x60) {
     case 0x20:
@@ -47,77 +47,32 @@ bool AudSoundInfo::isLimitCountPlaying(JAISoundID soundID) const {
     return AudWrap::getSystem()->getPlayCountMin(soundID) < max;
 }
 
-u16 AudSoundInfo::getChordResIdBgm(JAISoundID soundID) const {
-    void* data = JASGlobalInstance< JAUSoundTable >::getInstance()->getData(soundID);
-    u8 typeID = JASGlobalInstance< JAUSoundTable >::getInstance()->getTypeID(soundID);
-    if (data != nullptr) {
-        switch (typeID & 0xF0) {
-        case DATA_BGM:
-            return reinterpret_cast< JAUSoundTableBgm* >(data)->mChordResId;
-        case DATA_SE:
-        case DATA_STREAM:
-            return -1;
-        }
-    }
-    return -1;
+u16 AudSoundInfo::getChordResIdBgm(SoundID soundID) const {
+    u32 type;
+    const SoundItem* data = item(soundID, &type);
+    return type == DATA_BGM ? data->mChordResource : 0xffff;
 }
 
-bool AudSoundInfo::isRhythmBgm(JAISoundID soundID) const {
-    void* data = JASGlobalInstance< JAUSoundTable >::getInstance()->getData(soundID);
-    u8 typeID = JASGlobalInstance< JAUSoundTable >::getInstance()->getTypeID(soundID);
-    if (data != nullptr) {
-        switch (typeID & 0xF0) {
-        case DATA_BGM:
-            return getSoundSw(soundID) & 1;
-        case DATA_SE:
-        case DATA_STREAM:
-            return false;
-        }
-    }
-    return false;
+bool AudSoundInfo::isRhythmBgm(SoundID soundID) const {
+    u32 type;
+    item(soundID, &type);
+    return type == DATA_BGM && (getSoundSw(soundID) & 1) != 0;
 }
 
-bool AudSoundInfo::isFanfareSe(JAISoundID soundID) const {
-    void* data = JASGlobalInstance< JAUSoundTable >::getInstance()->getData(soundID);
-    u8 typeID = JASGlobalInstance< JAUSoundTable >::getInstance()->getTypeID(soundID);
-    if (data != nullptr) {
-        switch (typeID & 0xF0) {
-        case DATA_SE:
-            return (getSoundSw(soundID) >> 8) & 1;
-        case DATA_BGM:
-        case DATA_STREAM:
-            return false;
-        }
-    }
-    return false;
+bool AudSoundInfo::isFanfareSe(SoundID soundID) const {
+    u32 type;
+    item(soundID, &type);
+    return type == DATA_SE && ((getSoundSw(soundID) >> 8) & 1) != 0;
 }
 
-bool AudSoundInfo::isUseFxMix(JAISoundID soundID) const {
-    void* data = JASGlobalInstance< JAUSoundTable >::getInstance()->getData(soundID);
-    u8 typeID = JASGlobalInstance< JAUSoundTable >::getInstance()->getTypeID(soundID);
-    if (data != nullptr) {
-        switch (typeID & 0xF0) {
-        case DATA_SE:
-            return (reinterpret_cast< JAUSoundTableSe* >(data)->mSoundSw >> 9) & 1;
-        case DATA_BGM:
-        case DATA_STREAM:
-            return false;
-        }
-    }
-    return false;
+bool AudSoundInfo::isUseFxMix(SoundID soundID) const {
+    u32 type;
+    const SoundItem* data = item(soundID, &type);
+    return type == DATA_SE && ((data->mSoundSw >> 9) & 1) != 0;
 }
 
-bool AudSoundInfo::isUseLpf(JAISoundID soundID) const {
-    void* data = JASGlobalInstance< JAUSoundTable >::getInstance()->getData(soundID);
-    u8 typeID = JASGlobalInstance< JAUSoundTable >::getInstance()->getTypeID(soundID);
-    if (data != nullptr) {
-        switch (typeID & 0xF0) {
-        case DATA_SE:
-            return (reinterpret_cast< JAUSoundTableSe* >(data)->mSoundSw >> 10) & 1;
-        case DATA_BGM:
-        case DATA_STREAM:
-            return false;
-        }
-    }
-    return false;
+bool AudSoundInfo::isUseLpf(SoundID soundID) const {
+    u32 type;
+    const SoundItem* data = item(soundID, &type);
+    return type == DATA_SE && ((data->mSoundSw >> 10) & 1) != 0;
 }

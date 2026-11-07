@@ -1,19 +1,21 @@
 #pragma once
 
-#include <JSystem/JAudio2/JASGlobal.hpp>
-#include <JSystem/JAudio2/JASHeapCtrl.hpp>
+#include "Game/Sound/MeLink.hpp"
+#include "Game/Sound/SoundGlobal.hpp"
 #include <nebula_geometry.hpp>
 #include <JSystem/JSupport/JSUList.hpp>
 
 class AudMeHandle;
-class AudMeTrack;
+class NebulaArena;
+struct MeProgramFile;
+struct MeEntry;
 
 struct AudMePlayingParams {
     u8 mPriority;
     u8 mChordVolume;
-    u8 _2;
-    u8 _3;
-    u16 _4;
+    u8 mPan;
+    u8 mDolby;
+    u16 mFadeTime;
     u8 _6;
     u8 _7;
 };
@@ -36,7 +38,8 @@ public:
     }
 };
 
-class AudMe : public JSULink< AudMe >, public JASPoolAllocObject< AudMe > {
+// One Me phrase as the game plays it: its fades and the values it sends its player each frame.
+class AudMe : public JSULink< AudMe > {
 public:
     static const s32 TIMED_PARAMS = 6;
 
@@ -56,11 +59,10 @@ public:
     };
 
     AudMe();
-
     ~AudMe();
 
-    void requestStart(void*, u32);
-    bool start(void*, u32);
+    void requestStart(u32 trackBound, u32 place);
+    void start();
     void stop(s32);
     void release();
     void attachHandle(AudMeHandle*);
@@ -72,14 +74,18 @@ public:
     void setOuterPlayingParams(f32, f32, f32, s32, s32);
     void doneStop();
     void setPauseFlag(bool);
+    bool isPlaying() const {
+        return mLink.exists();
+    }
+    // A phrase started at `place` that has not ended.
+    bool isRequested(u32 place) const;
 
     AudMeHandle* mHandle;
-    AudMeTrack* mTrack;
-    u32 _18;
+    MeLink mLink;
     const Vec3f* mPos;
     s32 mMeId;
-    s32 _24;     // mStopTime
-    u32 mTimer;  // mTimer
+    s32 mStopTime;
+    u32 mTimer;
     union {
         struct {
             MoveParam_ mVolumeParam;
@@ -91,27 +97,25 @@ public:
         };
         MoveParam_ mMoveParams[TIMED_PARAMS];
     };
-    s32 _74;
-    void* mData;
-    u32 _7C;
-    f32 _80;
+    bool mStartRequested;
+    u32 mTrackBound;
+    u32 mPlace;
+    f32 mMgrVolume;
     f32 mVolume;
-    f32 _88;
-    f32 _8C;
+    f32 mOuterPan;
+    f32 mOuterDolby;
     s32 mPriority;
-    s32 _94;
+    s32 mFadeTime;
+
+private:
+    SoundParams sound() const;
 };
 
-struct AudMeTable {
-    s32 mNumEntries;
-    s32 mSeqStartPos[1];
-};
-
-class AudMeMgr : public JASGlobalInstance< AudMeMgr > {
+class AudMeMgr : public SoundGlobal< AudMeMgr > {
 public:
-    AudMeMgr();
+    AudMeMgr(NebulaArena* pHeap);
 
-    void setMeSeq(void*);
+    void setMeSeq(const void*);
     void setMeTable(void*);
     bool startMe(u32, AudMeHandle*, const Vec3f*);
     void freeDeadMe();
@@ -119,17 +123,19 @@ public:
     void stopAll(s32);
     void setPauseFlagAll(bool);
     void update();
-    s32 getSeqStartPos(u32);
+    const MeEntry* getEntry(u32);
     bool isRequestedMe(u32);
     void setOuterPlayingParam(s32, AudMe*);
+    // The program bytes every phrase reads.
+    const u8* programData() const;
 
     u8 getPriority(int index) {
         return mParams.mParams[index].mPriority;
     }
 
-    AudMeTable* mMeSeq;
+    NebulaArena* mHeap;
+    const MeProgramFile* mMeSeq;
     JSUList< AudMe > mMeList;
-    u8 _10[64];  // mNotes?
-    f32 _50;
+    f32 mMeVolume;
     AudMePlayingParamsHolder mParams;
 };

@@ -1,7 +1,7 @@
 #include "Game/AudioLib/AudBgmMgr.hpp"
 #include "Game/AudioLib/AudBgm.hpp"
 #include "Game/AudioLib/AudBgmKeeper.hpp"
-#include <JSystem/JAudio2/JAISound.hpp>
+#include "Game/Sound/Sound.hpp"
 
 AudBgmMgr::AudBgmMgr() : _8FC(false) {
     for (int idx = 0; idx < 2; idx++) {
@@ -29,7 +29,7 @@ void AudBgmMgr::movement() {
     }
 }
 
-JAISoundHandle* AudBgmMgr::start(s32 bgmIndex, u32 soundID, bool lock) {
+SoundHandle* AudBgmMgr::start(s32 bgmIndex, u32 soundID, bool lock) {
     // A name with no sound: what was playing goes on.
     if (soundID == static_cast< u32 >(-1)) {
         return nullptr;
@@ -54,7 +54,7 @@ JAISoundHandle* AudBgmMgr::start(s32 bgmIndex, u32 soundID, bool lock) {
 
     mBgm[bgmIndex]->setVolumeController(&mVolumeController[bgmIndex]);
 
-    JAISoundHandle* handle;
+    SoundHandle* handle;
     if ((soundID & 0x10000) == 0) {
         handle = mBgm[bgmIndex]->start(soundID, lock);
     } else {
@@ -78,7 +78,7 @@ void AudBgmMgr::clearNextBGM(s32 bgmIndex) {
     mNextBGM[bgmIndex] = -1;
 }
 
-JAISoundHandle* AudBgmMgr::startLastBGM(s32 bgmIndex) {
+SoundHandle* AudBgmMgr::startLastBGM(s32 bgmIndex) {
     if (mLastBGM[bgmIndex] == -1) {
         return nullptr;
     }
@@ -117,7 +117,7 @@ void AudBgmMgr::volDownStageBgmWhenSubBgmPlaying() {
         return;
     }
 
-    JAISoundHandle* handle = bgm->getHandle();
+    SoundHandle* handle = bgm->getHandle();
     if (handle == nullptr) {
         return;
     }
@@ -126,7 +126,7 @@ void AudBgmMgr::volDownStageBgmWhenSubBgmPlaying() {
         mVolumeController[BgmType_Stage].interruptedByOther();
     }
 
-    JAISoundHandle* rhythmHandle = bgm->getRhythmHandle();
+    SoundHandle* rhythmHandle = bgm->getRhythmHandle();
     if (rhythmHandle == nullptr) {
         return;
     }
@@ -156,12 +156,12 @@ void AudBgmMgr::releaseStoppingBgm(s32 bgmIndex) {
         return;
     }
 
-    JAISoundHandle* handle = mBgm[bgmIndex]->getHandle();
+    SoundHandle* handle = mBgm[bgmIndex]->getHandle();
     if (handle == nullptr) {
         return;
     }
 
-    JAISoundHandle* rhythmHandle = mBgm[bgmIndex]->getRhythmHandle();
+    SoundHandle* rhythmHandle = mBgm[bgmIndex]->getRhythmHandle();
     if (rhythmHandle != nullptr) {
         if (!rhythmHandle->isSoundAttached()) {
             stopRhythmProcess(bgmIndex);

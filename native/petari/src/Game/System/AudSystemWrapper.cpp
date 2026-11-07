@@ -13,10 +13,6 @@
 #include "Game/System/NebulaArena.hpp"
 #include "Game/System/AssetFolder.hpp"
 
-namespace AudRhythmWrap {
-    void rhythmProc();
-};  // namespace AudRhythmWrap
-
 AudSystemWrapper::AudSystemWrapper(NebulaArena* pSolidHeap, NebulaArena* pHeap) {
     volatile AudSystemWrapper* self = this;
 
@@ -24,7 +20,6 @@ AudSystemWrapper::AudSystemWrapper(NebulaArena* pSolidHeap, NebulaArena* pHeap) 
     self->mSolidHeap = pSolidHeap;
     self->mAudSystem = nullptr;
     self->mHeap = pHeap;
-    self->mSmrRes = nullptr;
     self->mJaiSeqRes = nullptr;
     self->mJaiChordRes = nullptr;
     self->mJaiMeRes = nullptr;
@@ -35,7 +30,6 @@ AudSystemWrapper::AudSystemWrapper(NebulaArena* pSolidHeap, NebulaArena* pHeap) 
 }
 
 void AudSystemWrapper::requestResourceForInitialize() {
-    MR::loadFile(sAudioResFile, nullptr, mHeap);
     MR::mountArchive(sJaiSeqArc, mSolidHeap);
     MR::mountArchive(sJaiChordArc, mSolidHeap);
     MR::mountArchive(sJaiMeArc, mSolidHeap);
@@ -50,10 +44,7 @@ void AudSystemWrapper::createAudioSystem() {
         return;
     }
 
-    mAudSystem = AudNewAudSystem(mSolidHeap, mSmrRes, mJaiSeqRes, mJaiChordRes, mJaiMeRes, mJaiRemixSeqRes);
-
-    MR::removeFileConsideringLanguage(sAudioResFile);
-    mSmrRes = nullptr;
+    mAudSystem = AudNewAudSystem(mSolidHeap, mJaiSeqRes, mJaiChordRes, mJaiMeRes, mJaiRemixSeqRes);
 
     mAudSystem->setSpeakerResource(mSpkRes);
     createSoundNameConverter();
@@ -64,14 +55,6 @@ void AudSystemWrapper::createSoundNameConverter() {
     AudSingletonHolder< AudSoundNameConverter >::init();
     AudSingletonHolder< AudMeNameConverter >::init();
     AudSingletonHolder< CSSoundNameConverter >::init();
-}
-
-void AudSystemWrapper::updateRhythm() {
-    if (mAudSystem == nullptr) {
-        return;
-    }
-
-    AudRhythmWrap::rhythmProc();
 }
 
 void AudSystemWrapper::movement() {
@@ -134,7 +117,6 @@ void AudSystemWrapper::resumeReset() {
 }
 
 void AudSystemWrapper::receiveResourceForInitialize() {
-    mSmrRes = MR::getLoadedFile(sAudioResFile);
     mJaiSeqRes = MR::getMountedArchive(sJaiSeqArc);
     mJaiChordRes = MR::getMountedArchive(sJaiChordArc);
     mJaiMeRes = MR::getMountedArchive(sJaiMeArc);

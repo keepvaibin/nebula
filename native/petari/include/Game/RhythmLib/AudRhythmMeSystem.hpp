@@ -1,41 +1,37 @@
 #pragma once
 
 #include "Game/RhythmLib/AudChordInfo.hpp"
-#include "Game/RhythmLib/AudRhythmHolder.hpp"
-#include "Game/RhythmLib/AudRhythmSeqParser.hpp"
-#include "Game/RhythmLib/AudRhythmWrap.hpp"
-#include <JSystem/JAudio2/JASGlobal.hpp>
+#include "Game/Sound/SoundGlobal.hpp"
 
-class JAISoundHandle;
+class SoundHandle;
 class NebulaArena;
 class AudMeMgr;
+class StreamPlayer;
 
-class AudRhythmMeSystem : public JASGlobalInstance< AudRhythmMeSystem > {
+// The game's side of the music logic: which beat reader each music uses, sent to the audio thread's RhythmSystem, and the Me
+// phrases.
+class AudRhythmMeSystem : public SoundGlobal< AudRhythmMeSystem > {
 public:
     AudRhythmMeSystem(NebulaArena*, u32, bool);
 
-    AudRhythmMeSystem();
-
-    bool setSeq(JAISoundHandle&, s32);
+    bool setSeq(SoundHandle&, s32);
     void rejectSeq(s32);
-    void rhythmProc();
     void update();
     void setIdle(bool);
     void setUsingRhythmParser(u32);
+    // The beat reader `parserNo` follows the stream's clock.
+    void setTempoStream(s32 parserNo, StreamPlayer* pStream, f32 beatMul, u32 introBeats, u32 loopBeats, u32 loopStartSamples,
+                        u32 loopEndSamples);
+    void rejectTempoStream(s32 parserNo);
 
     s32 getBgmIdx() const {
         return mBgmIdx;
     }
 
-    AudRhythmSeqParser* getSeqParser(int index) const {
-        return mSeqParsers[index];
-    }
-
-    AudRhythmSeqParser** mSeqParsers;
     u32 mNumSeqParsers;
     s32 mBgmIdx;
-    u32 _C;
-    AudRhythmHolder* mRhythmHolders;
+    // The music track whose child's notes the beat reader hears.
+    u32 mBeatTrack;
     AudMeMgr* mMeMgr;
     AudChordInfo mChordInfo;
 };

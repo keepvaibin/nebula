@@ -2134,7 +2134,8 @@ NebulaHostThread* svc_thread_create(void* user, void (*entry)(void*), void* arg)
     return thread;
 }
 
-std::mutex gGameLocks[2];
+// The kernel's lock (nebula_threads.h NEBULA_HOST_LOCK_STATE).
+std::mutex gGameLocks[1];
 
 void svc_lock(void*, int which) {
     gGameLocks[which].lock();

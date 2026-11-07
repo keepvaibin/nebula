@@ -5,8 +5,8 @@
 
 class AudSeKeeper;
 class AudSoundObject;
-class JAISoundHandle;
-class JAISoundID;
+class SoundHandle;
+class SoundID;
 class LiveActor;
 
 namespace MR {
@@ -43,27 +43,27 @@ namespace MR {
         EventBgmID_Surfing = EventBgmID_Race_01,
     };
 
-    JAISoundHandle* startSystemSE(const char* pName, s32 param2 = -1, s32 param3 = -1);
-    JAISoundHandle* startSystemSE(JAISoundID id, s32 param2 = -1, s32 param3 = -1);
-    JAISoundHandle* startSystemLevelSE(const char*, s32 param2 = -1, s32 param3 = -1);
-    JAISoundHandle* startSystemLevelSE(JAISoundID, s32 param2 = -1, s32 param3 = -1);
+    SoundHandle* startSystemSE(const char* pName, s32 param2 = -1, s32 param3 = -1);
+    SoundHandle* startSystemSE(SoundID id, s32 param2 = -1, s32 param3 = -1);
+    SoundHandle* startSystemLevelSE(const char*, s32 param2 = -1, s32 param3 = -1);
+    SoundHandle* startSystemLevelSE(SoundID, s32 param2 = -1, s32 param3 = -1);
     void stopSystemSE(const char* pName, u32 param2 = 0);
-    void stopSystemSE(JAISoundID id, u32 param2 = 0);
-    JAISoundHandle* startAtmosphereSE(const char* pName, s32 param2 = -1, s32 param3 = -1);
-    JAISoundHandle* startAtmosphereLevelSE(const char* pName, s32 param2 = -1, s32 param3 = -1);
-    JAISoundHandle* startSoundObject(AudSoundObject* pSoundObject, const char* pName);
-    JAISoundHandle* startSoundObjectLevel(AudSoundObject* pSoundObject, const char* pName, s32 param3 = -1);
-    JAISoundHandle* startSoundObjectLevel(AudSoundObject* pSoundObject, JAISoundID id, s32 param3 = -1);
-    JAISoundHandle* startSoundObjectLevelParam(AudSoundObject* pSoundObject, const char* pName, s32 param3 = -1, s32 param4 = -1, s32 param5 = -1);
-    JAISoundHandle* startSoundObjectLevelParam(AudSoundObject* pSoundObject, JAISoundID id, s32 param3 = -1, s32 param4 = -1, s32 param5 = -1);
-    JAISoundHandle* startSound(const LiveActor*, const char*, s32 param3 = -1, s32 param4 = -1);
-    JAISoundHandle* startSound(const LiveActor*, JAISoundID, s32 param3 = -1, s32 param4 = -1);
-    JAISoundHandle* startSoundSeVer(const LiveActor* pActor, const char* pName, s32 param3 = -1, s32 param4 = -1);
-    JAISoundHandle* startLevelSound(const LiveActor* pActor, const char* pName, s32 param3 = -1, s32 param4 = -1, s32 param5 = -1);
-    JAISoundHandle* startLevelSound(const LiveActor* pActor, JAISoundID id, s32 param3 = -1, s32 param4 = -1, s32 param5 = -1);
-    JAISoundHandle* startLevelSoundSeVer(const LiveActor* pActor, const char* pName, s32 param3 = -1, s32 param4 = -1, s32 param5 = -1);
+    void stopSystemSE(SoundID id, u32 param2 = 0);
+    SoundHandle* startAtmosphereSE(const char* pName, s32 param2 = -1, s32 param3 = -1);
+    SoundHandle* startAtmosphereLevelSE(const char* pName, s32 param2 = -1, s32 param3 = -1);
+    SoundHandle* startSoundObject(AudSoundObject* pSoundObject, const char* pName);
+    SoundHandle* startSoundObjectLevel(AudSoundObject* pSoundObject, const char* pName, s32 param3 = -1);
+    SoundHandle* startSoundObjectLevel(AudSoundObject* pSoundObject, SoundID id, s32 param3 = -1);
+    SoundHandle* startSoundObjectLevelParam(AudSoundObject* pSoundObject, const char* pName, s32 param3 = -1, s32 param4 = -1, s32 param5 = -1);
+    SoundHandle* startSoundObjectLevelParam(AudSoundObject* pSoundObject, SoundID id, s32 param3 = -1, s32 param4 = -1, s32 param5 = -1);
+    SoundHandle* startSound(const LiveActor*, const char*, s32 param3 = -1, s32 param4 = -1);
+    SoundHandle* startSound(const LiveActor*, SoundID, s32 param3 = -1, s32 param4 = -1);
+    SoundHandle* startSoundSeVer(const LiveActor* pActor, const char* pName, s32 param3 = -1, s32 param4 = -1);
+    SoundHandle* startLevelSound(const LiveActor* pActor, const char* pName, s32 param3 = -1, s32 param4 = -1, s32 param5 = -1);
+    SoundHandle* startLevelSound(const LiveActor* pActor, SoundID id, s32 param3 = -1, s32 param4 = -1, s32 param5 = -1);
+    SoundHandle* startLevelSoundSeVer(const LiveActor* pActor, const char* pName, s32 param3 = -1, s32 param4 = -1, s32 param5 = -1);
     void stopSound(const LiveActor* pActor, const char* pName, u32 param3 = 0);
-    void stopSound(const LiveActor* pActor, JAISoundID id, u32 param3 = 0);
+    void stopSound(const LiveActor* pActor, SoundID id, u32 param3 = 0);
     void setSeVersion(const LiveActor*, u32);
     void releaseSoundHandle(const LiveActor*, const char*);
     void startBas(const LiveActor*, const char*, bool, f32, f32);
@@ -78,14 +78,14 @@ namespace MR {
     void startRemixSound(s32, s32, f32);
     s32 getRemixMelodyNoteNum(s32);
     void limitedSound(const char*, s32);
-    JAISoundHandle* startStageBGM(const char*, bool);
-    JAISoundHandle* startStageBGMFromStageName(const char*, const char*, s32);
+    SoundHandle* startStageBGM(const char*, bool);
+    SoundHandle* startStageBGMFromStageName(const char*, const char*, s32);
     void stopStageBGM(u32);
     void unlockStageBGM();
     void setNextStageBGM(const char*);
     void moveVolumeStageBGM(f32, u32);
     void moveVolumeStageBGMForNoteFairy(f32, u32);
-    JAISoundHandle* startLastStageBGM();
+    SoundHandle* startLastStageBGM();
     bool isPlayingStageBgm();
     bool isPlayingStageBgmID(u32);
     bool isPlayingStageBgmName(const char*);
@@ -94,7 +94,7 @@ namespace MR {
     bool isPreparedStageBgm();
     void setStageBGMState(s32, u32);
     void setStageBGMStateBit(u32);
-    JAISoundHandle* startSubBGM(const char*, bool);
+    SoundHandle* startSubBGM(const char*, bool);
     void stopSubBGM(u32);
     void moveVolumeSubBGM(f32, u32);
     bool isPlayingSubBgmID(u32);
@@ -125,7 +125,7 @@ namespace MR {
     void start2PAttackAssistSound();
     void limitedStarPieceHitSound();
     void startCurrentStageBGM();
-    JAISoundHandle* startBossBGM(s32);
-    JAISoundHandle* startEventBGM(s32);
-    JAISoundHandle* startAfterBossBGM();
+    SoundHandle* startBossBGM(s32);
+    SoundHandle* startEventBGM(s32);
+    SoundHandle* startAfterBossBGM();
 };  // namespace MR

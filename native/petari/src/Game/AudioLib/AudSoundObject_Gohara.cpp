@@ -4,7 +4,7 @@
 #include "Game/AudioLib/AudWrap.hpp"
 #include "Game/Util/MathUtil.hpp"
 
-void AudSoundObject::modifySe_Gohara(JAISoundHandle* pHandle, s32 levelA, s32 levelB) {
+void AudSoundObject::modifySe_Gohara(SoundHandle* pHandle, s32 levelA, s32 levelB) {
     f32 volume = 1.0f;
     f32 pitch = 1.0f;
     u32 steps = 0;

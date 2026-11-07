@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JAudio2/JAISound.hpp>
+#include "Game/Sound/Sound.hpp"
 
 class AudLimitedSoundInfo {
 public:
@@ -8,10 +8,10 @@ public:
     AudLimitedSoundInfo();
 
     void init();
-    void set(JAISoundID, s32);
+    void set(SoundID, s32);
     void update();
     bool isFree();
 
-    JAISoundID mSoundID;
+    SoundID mSoundID;
     s32 mDelay;
 };

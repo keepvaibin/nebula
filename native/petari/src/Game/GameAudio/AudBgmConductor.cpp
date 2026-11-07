@@ -8,7 +8,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <JSystem/JAudio2/JAISound.hpp>
+#include "Game/Sound/Sound.hpp"
 
 AudBgmConductor::AudBgmConductor()
     : NameObj("AudBgmConductor"), mStateBits(0), mState(0), mStartDelay(-1), mFadeInDelay(-1), mStopImmediately(false) {
@@ -56,7 +56,7 @@ void AudBgmConductor::movement() {
         return;
     }
 
-    JAISoundID id = bgm->getSoundID();
+    SoundID id = bgm->getSoundID();
 
     u32 time = 90;
     s32 state;
