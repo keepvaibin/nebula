@@ -384,6 +384,13 @@ namespace {
         if (pGalaxy == nullptr || pGalaxy->size < sizeof(NebulaGalaxy) || pGalaxy->name == nullptr) {
             return -1;
         }
+        // A galaxy is its scenario file: without one (a mod that ships none, or files that could not be cooked)
+        // it would be a name with no stars, scenarios or stage, so it never enters a table.
+        char scenarioFile[256];
+        MR::makeScenarioArchiveFileName(scenarioFile, sizeof(scenarioFile), pGalaxy->name);
+        if (GameAssets::find(scenarioFile) < 0) {
+            return -2;
+        }
         NebulaDataTables::AddedGalaxy added = {};
         added.mName = copyText(pGalaxy->name);
         added.mPane = copyText(pGalaxy->map_pane);
