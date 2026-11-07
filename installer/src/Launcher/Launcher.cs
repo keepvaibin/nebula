@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
@@ -216,7 +216,6 @@ namespace Nebula.Launcher
         private void StartRecorded(ProcessStartInfo start, string saves)
         {
             string session = Sessions.Create("diagnostics");
-            start.EnvironmentVariables["GALAXY_CRASH_DUMP_DIR"] = session;
             start.EnvironmentVariables["GALAXY_FRAME_TIMELINE_PATH"] = Path.Combine(session, "timeline.bin");
             var launchFiles = new Dictionary<string, object>();
             foreach (string name in new[] { "NebulaNative.exe", "smg_game.dll", "Nebula.exe" })
@@ -301,7 +300,7 @@ namespace Nebula.Launcher
         private readonly CheckBox vsync = new CheckBox();
         private readonly CheckBox askUpdates = new CheckBox();
         private readonly ComboBox antiAliasing = new ComboBox(), aaQuality = new ComboBox(), msaa = new ComboBox(),
-            upscaler = new ComboBox(),
+            upscaler = new ComboBox(), internalResolution = new ComboBox(),
             dlssQuality = new ComboBox(), textureFilter = new ComboBox(), lighting = new ComboBox(),
             interpolation = new ComboBox(), rtQuality = new ComboBox();
         // The frame rate row's label: TARGET with interpolation, LIMIT without.
@@ -432,6 +431,8 @@ namespace Nebula.Launcher
             aspect.Items.AddRange(GraphicsSettings.Aspects);
 
             y = 16;
+            Row(image, NebulaText.Of("Internal resolution"), internalResolution, ref y);
+            internalResolution.Items.AddRange(GraphicsSettings.InternalResolutions);
             Row(image, NebulaText.Of("Upscaling"), upscaler, ref y);
             Row(image, NebulaText.Of("Upscaler quality"), dlssQuality, ref y);
             Label(image, NebulaText.Of("Sharpening (0-100)"), 12, y + 3);
@@ -954,6 +955,7 @@ namespace Nebula.Launcher
             lighting.SelectedIndex = graphics.EnhancedLighting ? 0 : graphics.PerPixelLighting ? 1 : 2;
             mipmaps.Checked = graphics.GeneratedMipmaps;
             occlusion.Checked = graphics.AmbientOcclusion;
+            internalResolution.SelectedIndex = Math.Max(0, Array.IndexOf(GraphicsSettings.InternalHeights, graphics.InternalHeight));
             hudOutput.Checked = graphics.HudOutputResolution;
             rayTracing.Checked = graphics.RayTracing;
             rtQuality.SelectedIndex = Math.Max(0, Array.IndexOf(GraphicsSettings.RtQualityOrder, graphics.RtQuality));
@@ -1165,6 +1167,7 @@ namespace Nebula.Launcher
                     else
                         graphics.SpatialQuality = Math.Max(0, dlssQuality.SelectedIndex);
                 }
+                graphics.InternalHeight = GraphicsSettings.InternalHeights[Math.Max(0, internalResolution.SelectedIndex)];
                 graphics.AntiAliasing = antiAliasing.SelectedIndex;
                 graphics.Quality = aaQuality.SelectedIndex;
                 graphics.Msaa = Math.Max(0, msaa.SelectedIndex);

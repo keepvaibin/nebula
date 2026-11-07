@@ -1623,6 +1623,12 @@ void NebulaSettingsScreen::setQuestion(s32 question) {
 
 // The HOME Menu as the host has it: its title and rows, or "are you sure?" and its answers; the selected one focused.
 void NebulaSettingsScreen::fillHome(s32 homeView) {
+    // HOME reuses the modal, but never its progress bar or controller-pairing illustration.
+    mProgressTrack->SetVisible(false);
+    mProgressFill->SetVisible(false);
+    mJoyCon->SetVisible(false);
+    mQuestionText->SetVisible(true);
+    setAnchor(mQuestionText, 4);
     const s32 asking = homeView >> 8 & 0xFF;
     if (mHomeView < 0 || asking != (mHomeView >> 8 & 0xFF)) {
         char16_t text[256];

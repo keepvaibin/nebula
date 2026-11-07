@@ -16,6 +16,7 @@ struct DisplayPageState {
     std::pair<unsigned, unsigned> output_size;
     std::vector<std::pair<unsigned, unsigned>> window_sizes;
     FrameRateCaps frame_rates;
+    bool fullscreen_only = false;
 };
 enum class DisplayChange { Monitor, Mode, Resolution, Aspect };
 class DisplayPageHost {

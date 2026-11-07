@@ -511,6 +511,7 @@ unsigned pending_settings_changes() {
     changes += d.upscaler != live.upscaler;
     changes += d.temporal_quality != live.temporal_quality;
     changes += d.spatial_quality != live.spatial_quality;
+    changes += d.internal_height != live.internal_height;
     changes += d.sharpness != live.sharpness;
     changes += d.anisotropic_filtering != live.anisotropic_filtering;
     changes += d.enhanced_mipmaps != live.enhanced_mipmaps;
@@ -917,6 +918,7 @@ void apply_native_settings_draft() {
     const bool dlss_asked = dlss_hold_back(applied, live);
     applied.temporal_quality = next.temporal_quality;
     applied.spatial_quality = next.spatial_quality;
+    applied.internal_height = next.internal_height;
     applied.sharpness = next.sharpness;
     applied.anisotropic_filtering = next.anisotropic_filtering;
     applied.enhanced_mipmaps = next.enhanced_mipmaps;
@@ -1832,6 +1834,9 @@ public:
             state.monitors.push_back({monitor.id, monitor.name});
             if (&monitor == current) state.current_monitor = i;
         }
+#if defined(__ANDROID__)
+        state.fullscreen_only = true;
+#endif
         state.output_size = settings_output_size(render);
         state.window_sizes = settings_window_sizes(current, render.aspect_mode);
         state.frame_rates = settings_frame_rate_caps(render);

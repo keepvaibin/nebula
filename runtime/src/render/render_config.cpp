@@ -151,6 +151,7 @@ static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
     else if (std::strcmp(key, "wide_scene") == 0) cfg.wide_scene = parse_bool(val, cfg.wide_scene);
     else if (std::strcmp(key, "bloom") == 0) cfg.bloom = std::min(parse_uint(val, cfg.bloom), kMaxBloom);
     else if (std::strcmp(key, "post_process") == 0) cfg.post_process = parse_bool(val, cfg.post_process);
+    else if (std::strcmp(key, "internal_height") == 0) cfg.internal_height = normalized_internal_height(parse_uint(val, cfg.internal_height));
     else if (std::strcmp(key, "hud_output_resolution") == 0) cfg.hud_output_resolution = parse_bool(val, cfg.hud_output_resolution);
     else if (std::strcmp(key, "aa") == 0) {
         static constexpr const char* kNames[] = {"off", "smaa", "auto", "fxaa"};
@@ -250,6 +251,7 @@ static void clamp_unimplemented_features(RenderConfig& cfg) {
     cfg.frame_generation = std::min(cfg.frame_generation, 5u);
     cfg.temporal_quality = std::min(cfg.temporal_quality, 4u);
     cfg.spatial_quality = std::min(cfg.spatial_quality, 4u);
+    cfg.internal_height = normalized_internal_height(cfg.internal_height);
     cfg.sharpness = std::min(cfg.sharpness, 100u);
     // Win32 client geometry is int while DXGI's is UINT: keep sizes representable in both.
     constexpr unsigned kMaxWindowDimension =
@@ -579,6 +581,7 @@ bool save_render_config_to_file() {
              << "upscaler=" << cfg.upscaler << '\n'
              << "frame_generation=" << cfg.frame_generation << '\n'
              << "temporal_quality=" << cfg.temporal_quality << '\n'
+             << "internal_height=" << cfg.internal_height << '\n'
              << "spatial_quality=" << cfg.spatial_quality << '\n'
              << "sharpness=" << cfg.sharpness << '\n'
              << "hud_output_resolution="

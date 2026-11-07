@@ -13,7 +13,7 @@ std::vector<SettingsRow> display_page(const RenderConfig& render, const DisplayP
     char text[96]{};
     const DisplayPageState state = host.query(render);
     rows.push_back({"SCREEN", {}, nullptr, {}, true});
-    {
+    if (!state.fullscreen_only) {
         std::string value = "PRIMARY";
         if (state.current_monitor && *state.current_monitor < state.monitors.size()) {
             const std::size_t index = *state.current_monitor;
@@ -38,7 +38,7 @@ std::vector<SettingsRow> display_page(const RenderConfig& render, const DisplayP
         }
         rows.push_back(std::move(row));
     }
-    {
+    if (!state.fullscreen_only) {
         static constexpr const char* kModes[] = {"WINDOWED", "BORDERLESS FULLSCREEN"};
         rows.push_back({"DISPLAY MODE", kModes[std::min(render.display_mode, kDisplayBorderless)],
                         [&host](RenderConfig& draft, int delta) {
@@ -47,7 +47,7 @@ std::vector<SettingsRow> display_page(const RenderConfig& render, const DisplayP
                         },
                         "BORDERLESS FILLS THE SCREEN AND SWITCHES INSTANTLY"});
     }
-    {
+    if (!state.fullscreen_only) {
         const auto [w, h] = state.output_size;
         std::snprintf(text, sizeof(text), "%uX%u", w, h);
         SettingsRow row{"RESOLUTION", text, nullptr, "BORDERLESS USES THE DESKTOP RESOLUTION"};
@@ -75,7 +75,7 @@ std::vector<SettingsRow> display_page(const RenderConfig& render, const DisplayP
     {
         const unsigned hz = state.frame_rates.refresh_hz;
         std::snprintf(text, sizeof(text), "%u HZ", hz != 0u ? hz : 60u);
-        rows.push_back({"REFRESH RATE", text, nullptr, "SET IN THE WINDOWS DISPLAY SETTINGS"});
+        rows.push_back({"REFRESH RATE", text, nullptr, state.fullscreen_only ? "FOLLOWS THE PHONE DISPLAY" : "SET IN THE SYSTEM DISPLAY SETTINGS"});
     }
     {
         static constexpr const char* kAspects[] = {"AUTO", "4:3", "3:2", "16:10", "16:9", "21:9", "32:9"};
@@ -94,8 +94,8 @@ std::vector<SettingsRow> display_page(const RenderConfig& render, const DisplayP
                     },
                     "WAITS FOR THE DISPLAY: NO TEARING, A LITTLE MORE LATENCY"});
     rows.push_back({"INTERFACE", {}, nullptr, {}, true});
-    rows.push_back({"HUD RESOLUTION", render.hud_output_resolution ? "DISPLAY" : "INTERNAL",
-                    [&host](RenderConfig& draft, int) { draft.hud_output_resolution = !draft.hud_output_resolution; },
+    rows.push_back({"HUD RESOLUTION", (render.hud_output_resolution || render.internal_height != 0u) ? "DISPLAY" : "INTERNAL",
+                    [fixed = render.internal_height != 0u](RenderConfig& draft, int) { if (!fixed) draft.hud_output_resolution = !draft.hud_output_resolution; },
                     "DISPLAY DRAWS MENUS AND TEXT SHARP AT THE SCREEN RESOLUTION"});
     return rows;
 }

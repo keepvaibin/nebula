@@ -97,6 +97,9 @@ struct RenderConfig {
     // Bilinear and FSR 1: 0 renders at the INTERNAL RES row; 1-4 render at the output scale divided by 1.5, 1.7, 2
     // or 3 (the temporal_quality ratios).
     unsigned spatial_quality     = 0;
+    // 0 follows the content area of the output; otherwise the selected vertical pixel count.
+    // Width follows the current content aspect, including a fold or window resize.
+    unsigned internal_height     = 0;
     // RCAS strength 0-100; 0 skips the pass.
     unsigned sharpness           = 0;
 
@@ -170,6 +173,21 @@ inline unsigned interpolated_frames_per_game_frame(double rate) {
     if (!(rate > 61.0)) return 0u;
     const double frames = std::ceil(rate / 60.0 - 1e-3) - 1.0;
     return static_cast<unsigned>(std::clamp(frames, 1.0, 7.0));
+}
+
+inline constexpr std::array<unsigned, 9> kInternalHeights{0, 144, 240, 360, 480, 720, 1080, 1440, 2160};
+inline unsigned normalized_internal_height(unsigned height) {
+    return std::find(kInternalHeights.begin(), kInternalHeights.end(), height) != kInternalHeights.end() ? height : 0u;
+}
+// A common sizing rule for both encoders. Bounds preserve aspect and fit the GPU's 2D texture limit.
+inline std::pair<unsigned, unsigned> internal_extent(unsigned output_width, unsigned output_height,
+                                                     unsigned height, float quality = 1.0f) {
+    if (!output_width || !output_height) return {1u, 1u};
+    height = normalized_internal_height(height);
+    const double scale = (height ? double(height) / output_height : 1.0) * quality;
+    const double bounded = std::min(scale, 16384.0 / std::max(output_width, output_height));
+    return {std::max(1u, unsigned(std::lround(output_width * bounded))),
+            std::max(1u, unsigned(std::lround(output_height * bounded)))};
 }
 
 inline constexpr unsigned kDisplayWindowed = 0u;
