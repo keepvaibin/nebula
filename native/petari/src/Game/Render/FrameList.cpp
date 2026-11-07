@@ -213,6 +213,7 @@ namespace {
         Grown< NebulaFrameConstants > mConstants;
         Grown< NebulaScreenProbe > mProbes;
         Grown< u32 > mRingIndices;
+        Grown< NebulaParticleInstance > mParticles;
         u8* mRingVertices;
         u32 mRingBytes;
         u32 mRingRoom;
@@ -280,6 +281,7 @@ namespace {
         pStore->mConstants.mCount = 0;
         pStore->mProbes.mCount = 0;
         pStore->mRingIndices.mCount = 0;
+        pStore->mParticles.mCount = 0;
         pStore->mRingBytes = 0;
         pStore->mPage = pStore->mFirstPage;
         if (pStore->mPage != nullptr) {
@@ -419,6 +421,8 @@ namespace Frame {
         rList.ring_vertices = pStore->mRingVertices;
         rList.ring_indices = pStore->mRingIndices.mData;
         rList.probes = pStore->mProbes.mData;
+        rList.particles = pStore->mParticles.mData;
+        rList.particle_count = pStore->mParticles.mCount;
         rList.pass_count = pStore->mPasses.mCount;
         rList.item_count = pStore->mItems.mCount;
         rList.view_count = pStore->mViews.mCount;
@@ -706,6 +710,25 @@ namespace Frame {
                 rEntry.mPipeline = host()->pipeline_register(host()->user, &desc);
                 return rEntry.mPipeline;
         }
+    }
+
+    u32 particlePipeline(u32 state) {
+        const u64 key = static_cast< u64 >(NEBULA_SHADER_PARTICLE_INSTANCES) << 1 << 16;
+        SitePipeline& rEntry = siteEntry(key, state);
+        if (rEntry.mPipeline != 0) {
+            return rEntry.mPipeline;
+        }
+        NebulaPipelineDesc desc;
+        memset(&desc, 0, sizeof(desc));
+        desc.vertex = NEBULA_PROGRAM_SITE | static_cast< u64 >(NEBULA_SHADER_PARTICLE_INSTANCES) << 1;
+        desc.pixel = NEBULA_PROGRAM_SITE | static_cast< u64 >(NEBULA_SHADER_PARTICLE) << 1;
+        desc.state = state;
+        // No vertex streams: the stride only keeps the layout from naming a matrix stream.
+        desc.position_stride = sizeof(NebulaParticleInstance);
+        rEntry.mKey = key;
+        rEntry.mState = state;
+        rEntry.mPipeline = host()->pipeline_register(host()->user, &desc);
+        return rEntry.mPipeline;
     }
 
     u32 sitePipeline(u32 shader, u32 state, const NebulaModelMesh* pMesh) {
@@ -1046,5 +1069,13 @@ namespace FrameRing {
         *pFirst = rRing.mCount;
         rRing.mCount += count;
         return rRing.mData + *pFirst;
+    }
+
+    NebulaParticleInstance& particle() {
+        return store()->mParticles.add();
+    }
+
+    u32 particleCount() {
+        return store()->mParticles.mCount;
     }
 }  // namespace FrameRing

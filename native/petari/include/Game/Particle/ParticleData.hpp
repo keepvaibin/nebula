@@ -106,7 +106,6 @@ struct ParticleShapeData {
     u8 mPrjTex;
     u8 mDrawFwdAhead;
     u8 mDrawPrntAhead;
-    u8 mClipOn;
     u8 mTexCrdAnmOn;
     u8 mNoDrawParent;
     u8 mNoDrawChild;
@@ -120,6 +119,7 @@ struct ParticleShapeData {
     u8 mColorLoopMask;
     u8 mTexLoopMask;
     u8 mLoopValue;
+    u8 mPad;
     s16 mColorAnmFrameMax;
     NebulaColor8 mPrm;
     NebulaColor8 mEnv;
@@ -181,11 +181,11 @@ struct ChildShapeData {
     u8 mScaleInherited;
     u8 mAlphaInherited;
     u8 mColorInherited;
-    u8 mClipOn;
     u8 mFieldAffected;
     u8 mScaleOutOn;
     u8 mAlphaOutOn;
     u8 mRotateOn;
+    u8 mPad;
     f32 mPosRndm;
     f32 mBaseVel;
     f32 mBaseVelRndm;

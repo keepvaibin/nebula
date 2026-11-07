@@ -192,6 +192,9 @@ struct Access {
                     std::fprintf(f, w == 0u ? "%08x" : ",%08x", word);
                 }
             }
+        } else if ((item.flags & NEBULA_ITEM_INSTANCES) != 0u) {
+            std::fprintf(f, "\tparticles=%u,%u,%u,%016" PRIx64, item.ring_at, item.ring_count, item.count,
+                         hash_bytes(list.particles + item.ring_at, std::size_t{item.ring_count} * sizeof(NebulaParticleInstance)));
         } else {
             const core::GpuMesh& mesh = core.registries_.mesh(item.mesh);
             std::fprintf(f, "\tmesh=%u,%u,%u,%u", mesh.vertex_count, mesh.index_count, mesh.refined_vertex_count, mesh.refined_index_count);
@@ -384,6 +387,10 @@ struct Access {
         const Settings& c = settings();
         const NebulaFrameList& list = *core.walk_.now->list;
         const NebulaFrameItem& item = list.items[index];
+        if ((item.flags & NEBULA_ITEM_INSTANCES) != 0u) {
+            std::fprintf(f, "M\tindex=%u\tparticles\n", index);  // corners the vertex stage builds: none to read here
+            return;
+        }
         const bool ring = (item.flags & NEBULA_ITEM_RING) != 0u;
         const core::GpuMesh* mesh = ring ? nullptr : &core.registries_.mesh(item.mesh);
         const std::byte* positions = ring ? static_cast<const std::byte*>(list.ring_vertices) + item.ring_at

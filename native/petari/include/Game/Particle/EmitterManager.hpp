@@ -2,7 +2,6 @@
 
 #include <nebula_geometry.hpp>
 #include "Game/Particle/ParticleCamera.hpp"
-#include "JSystem/JParticle/JPAList.hpp"
 #include "JSystem/JSupport/JSUList.hpp"
 
 class EmitterCallBack;

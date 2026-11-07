@@ -315,6 +315,30 @@ u32 TypedDraw::block() {
     return mBlock;
 }
 
+void TypedDraw::drawParticles(u32 first, u32 count, u32 vertices) {
+    finish();
+    NebulaFrameItem& rItem = Frame::addItem();
+    rItem.mesh = 0;
+    rItem.pipeline = Frame::particlePipeline(Frame::finishState(mState.word()));
+    rItem.constants = mConstants;
+    rItem.textures = mTable;
+    rItem.block = block();
+    rItem.slot = Frame::objectSlot();
+    rItem.generation = Frame::objectGeneration();
+    rItem.part = Frame::nextPart();
+    rItem.source_hash = mSource;
+    rItem.view = Frame::currentView();
+    rItem.light_set = NEBULA_NONE32;
+    rItem.matrix = 0;
+    rItem.ring_at = first;
+    rItem.ring_count = count;
+    rItem.first = 0;
+    rItem.count = vertices;
+    rItem.flags = static_cast< u32 >(NEBULA_ITEM_INSTANCES);
+    rItem.line_width = 0.0f;
+    rItem.point_size = 0.0f;
+}
+
 namespace {
     // The indices that draw `count` vertices as triangles.
     u32 indexCount(NebulaPrimitive primitive, u32 count) {

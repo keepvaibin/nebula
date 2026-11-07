@@ -1,6 +1,9 @@
 #include "JSystem/JSupport/JSUOutputStream.hpp"
 #include "JSystem/JSupport/JSURandomOutputStream.hpp"
 
+JSUOutputStream::~JSUOutputStream() {
+}
+
 s32 JSUOutputStream::write(const void* buffer, s32 numBytes) {
     s32 bytesWrote = writeData(buffer, numBytes);
     if (bytesWrote != numBytes) {

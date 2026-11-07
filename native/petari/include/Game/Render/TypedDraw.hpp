@@ -417,6 +417,9 @@ struct SiteMaterial {
 namespace FrameRing {
     void* vertices(u32 bytes, u32* pAt);
     u32* indices(u32 count, u32* pFirst);
+    // The frame's next instanced particle (written in place before the next is asked for), and how many there are.
+    NebulaParticleInstance& particle();
+    u32 particleCount();
 }  // namespace FrameRing
 
 class Mesh;
@@ -484,6 +487,8 @@ public:
     }
     // A registered site mesh of `indexCount` indices under the site's matrix.
     void drawSiteMesh(u32 mesh, u32 indexCount, u32 stride, const NebulaLayoutInput* pInputs, u32 inputCount, u32 flags);
+    // The frame's instanced particles `first` to `first + count`, `vertices` each, through the particle material.
+    void drawParticles(u32 first, u32 count, u32 vertices);
 
     template < class T >
     T* vertices(NebulaPrimitive primitive, u32 count) {

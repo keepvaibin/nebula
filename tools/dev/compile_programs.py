@@ -22,7 +22,9 @@ WRITTEN = """whirlpool ocean_bowl screen_blur flat_color clip_fill big_bubble wh
 tex_modulate water_plant ocean_ring_pipe_inside ocean_sphere ocean_sphere_env ocean_ring ocean_ring_bloom water_road
 ocean_ring_pipe_outside color_tex_alpha vertex_color dd_texture dd_texture_color tex_vertex_alpha tex_alpha_lerp trample_star
 tex_const_alpha font_text j2d_picture fur particle ocean_bowl_bloom mii_face mii_texture image_effect gaussian_blur dof_final
-normal_map movie water_camera frame_ripple frame_depth""".split()
+normal_map movie water_camera frame_ripple frame_depth particle_instances""".split()
+# Vertex stages of another's pixel stage, never widened: particle_instances (particle.hlsl's pixel stage).
+VERTEX_ONLY = {"particle_instances"}
 
 VARIANTS = {
     "base": (0, []),
@@ -83,6 +85,8 @@ def main():
         source = os.path.join(MATERIALS, name + ".hlsl")
         row = SITE | number << 1
         add_program("vs", row, source, "native_vs")
+        if name in VERTEX_ONLY:
+            continue
         add_program("ps", row, source, "native_ps")
         # Lines and points are widened in this form.
         text = read(source)

@@ -24,7 +24,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 136u
+#define NEBULA_GAME_API_VERSION 137u
 
 /* Viewports, scissors, clears, target sizes and picture points count this many units across a frame on each axis. */
 #define NEBULA_FRAME_UNITS 65536.0f
@@ -208,7 +208,7 @@ typedef enum NebulaShaderId {
     NEBULA_SHADER_FONT_TEXT = 27,            /* nw4r CharWriter: glyphs mapped between two colours, by the vertex colour */
     NEBULA_SHADER_J2D_PICTURE = 28,          /* J2DPicture: up to four textures blended by constant ratios, remapped */
     NEBULA_SHADER_FUR = 29,                  /* FurDrawer: a fur shell over the body texture, lit */
-    NEBULA_SHADER_PARTICLE = 30,             /* JPA particles: the texture by the emitter's colours, its colour mode */
+    NEBULA_SHADER_PARTICLE = 30,             /* particles: the texture by the emitter's colours, its colour mode */
     NEBULA_SHADER_OCEAN_BOWL_BLOOM = 31,     /* Beach Bowl's sea from under water: the water at two scrolls over grey */
     NEBULA_SHADER_MII_FACE = 32,             /* Mii faces: a part's form, Mii's light or the Mii NPCs' stages */
     NEBULA_SHADER_MII_TEXTURE = 33,          /* a Mii's face texture parts: eyes, eyebrows, mouth, mustache, mole */
@@ -220,6 +220,7 @@ typedef enum NebulaShaderId {
     NEBULA_SHADER_WATER_CAMERA = 39, /* WaterCameraFilter: the screen warped and darkened under water */
     NEBULA_SHADER_FRAME_RIPPLE = 40, /* MarioActor's heat and cold ripples: the frame, each row moved by a wave */
     NEBULA_SHADER_FRAME_DEPTH = 41, /* the frame's depth as the game reads it, averaged over the pass's pixel */
+    NEBULA_SHADER_PARTICLE_INSTANCES = 42, /* the particle material's vertex stage for NEBULA_ITEM_INSTANCES draws */
     NEBULA_SHADER_COUNT
 } NebulaShaderId;
 

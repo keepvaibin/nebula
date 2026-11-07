@@ -1,7 +1,4 @@
-#define JPA_LIST_DEFER_INLINE
-#define JPA_EMITTER_DEFER_INLINE
 #define JSU_LIST_DEFER_INLINE
-#include "JSystem/JParticle/JPANativeColor.hpp"
 #include "Game/Particle/EmitterManager.hpp"
 #include "Game/Render/FrameList.hpp"
 #include "Game/System/NebulaArena.hpp"
@@ -9,6 +6,8 @@
 #include "Game/Particle/ParticleCore.hpp"
 #include "Game/Particle/ParticleChunk.hpp"
 #include "Game/Particle/ParticleResources.hpp"
+#include "Game/Particle/ParticleDraw.hpp"
+#include "Game/Util/MathUtil.hpp"
 
 void EmitterManager::addEmitters(u32 num) {
     EmitterCore* p_emtr_link = new (mHeap, 0) EmitterCore[num];
@@ -95,11 +94,30 @@ void EmitterManager::calc(u8 group_id) {
     }
 }
 
+void EmitterManager::calcYBBCam() {
+    Vec3f axis(0.0f, pWd->mPosCamMtx[1][1], pWd->mPosCamMtx[2][1]);
+    if (!MR::isNearZero(axis)) {
+        MR::normalize(&axis);
+        pWd->mYBBCamMtx[0][0] = 1.0f;
+        pWd->mYBBCamMtx[0][1] = 0.0f;
+        pWd->mYBBCamMtx[0][2] = 0.0f;
+        pWd->mYBBCamMtx[0][3] = pWd->mPosCamMtx[0][3];
+        pWd->mYBBCamMtx[1][0] = 0.0f;
+        pWd->mYBBCamMtx[1][1] = axis.y;
+        pWd->mYBBCamMtx[1][2] = -axis.z;
+        pWd->mYBBCamMtx[1][3] = pWd->mPosCamMtx[1][3];
+        pWd->mYBBCamMtx[2][0] = 0.0f;
+        pWd->mYBBCamMtx[2][1] = axis.z;
+        pWd->mYBBCamMtx[2][2] = axis.y;
+        pWd->mYBBCamMtx[2][3] = pWd->mPosCamMtx[2][3];
+    }
+}
+
 void EmitterManager::draw(ParticleCamera const* drawInfo, u8 group_id) {
     drawInfo->getCamMtx(pWd->mPosCamMtx);
     drawInfo->getPrjMtx(pWd->mPrjMtx);
     calcYBBCam();
-    JPAParticleBatch::camera(pWd->mPosCamMtx);
+    ParticleDraw::camera(pWd->mPosCamMtx);
 
     for (JSULink< EmitterCore >* pLink = pEmtrUseList[group_id].getFirst(); pLink != pEmtrUseList[group_id].getEnd(); pLink = pLink->getNext()) {
         EmitterCore* emtr = pLink->getObject();
@@ -122,11 +140,4 @@ void EmitterManager::entryResourceManager(ParticleResources* resMgr, u8 resMgrID
     pResMgrAry[resMgrID] = resMgr;
 }
 
-#include "JSystem/JParticle/JPAListInline.hpp"
-
-template JPAList< ParticleCore >::JPAList();
-template JPANode< ParticleCore >::JPANode();
-template JPANode< ParticleCore >::~JPANode();
-
-#include "JSystem/JParticle/JPAEmitterInline.hpp"
 #include "JSystem/JSupport/JSUListInline.hpp"

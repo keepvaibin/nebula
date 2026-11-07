@@ -147,8 +147,6 @@ AREAS = [
      "packets as native draw records; loaders read cooked native data."),
     (r"^native/petari/src/JSystem/J2DGraph|^native/petari/libs/JSystem/include/JSystem/J2DGraph", "j2d", "CONVERT",
      "J2D panes/pictures/text: native 2D records at window resolution."),
-    (r"^native/petari/src/JSystem/JParticle|^native/petari/libs/JSystem/include/JSystem/JParticle", "jpa", "CONVERT",
-     "JPA particles: native particle records (instanced), cooked JPC data."),
     (r"^native/petari/src/JSystem/JKernel|^native/petari/libs/JSystem/include/JSystem/JKernel", "jkernel", "CONVERT",
      "JKernel: heaps sized natively, archives from the cooked store, no ARAM, no Yaz0, JKRThread on host threads."),
     (r"^native/petari/src/JSystem/JUtility|^native/petari/libs/JSystem/include/JSystem/JUtility", "jutility", "CONVERT",
@@ -230,7 +228,7 @@ AREAS = [(re.compile(p), a, d, w) for p, a, d, w in AREAS]
 # Requirement IDs per area (the requirements document's map from areas to requirements).
 REQUIREMENTS = {
     "game": "B-01..B-07", "game-system": "B-10..B-17", "game-screen": "B-20..B-22, E-12", "game-util": "B-25, B-26",
-    "game-audio": "B-30, H", "game-nwc24": "B-31", "j3d": "B-40, E-04, E-05", "j2d": "B-41, E-12", "jpa": "B-42",
+    "game-audio": "B-30, H", "game-nwc24": "B-31", "j3d": "B-40, E-04, E-05", "j2d": "B-41, E-12",
     "jaudio": "B-43, H", "jkernel": "B-44, D-01", "jutility": "B-45", "jsystem-support": "B-46, C-08",
     "nw4r-lyt": "B-50", "nw4r-ut": "B-51", "nw4r-db": "B-52", "nw4r-other": "B-52", "mii": "B-55",
     "petari-other": "B-04, P-05", "msl": "C-07", "byte-order": "C-05", "host-api": "C-06",

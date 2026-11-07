@@ -127,13 +127,13 @@ private:
     const ExtraShapeData* mpData;
 };
 
-void JPACalcAlphaFlickAnm(EmitterWork*, ParticleCore*);
-void JPACalcAlphaAnm(EmitterWork*, ParticleCore*);
-void JPACalcScaleX(EmitterWork*, ParticleCore*);
-void JPACalcScaleY(EmitterWork*, ParticleCore*);
-void JPACalcScaleCopy(EmitterWork*, ParticleCore*);
-void JPACalcScaleAnmNormal(EmitterWork*, ParticleCore*);
-void JPACalcScaleAnmRepeatX(EmitterWork*, ParticleCore*);
-void JPACalcScaleAnmReverseX(EmitterWork*, ParticleCore*);
-void JPACalcScaleAnmRepeatY(EmitterWork*, ParticleCore*);
-void JPACalcScaleAnmReverseY(EmitterWork*, ParticleCore*);
+void ParticleCalcAlphaFlickAnm(EmitterWork*, ParticleCore*);
+void ParticleCalcAlphaAnm(EmitterWork*, ParticleCore*);
+void ParticleCalcScaleX(EmitterWork*, ParticleCore*);
+void ParticleCalcScaleY(EmitterWork*, ParticleCore*);
+void ParticleCalcScaleCopy(EmitterWork*, ParticleCore*);
+void ParticleCalcScaleAnmNormal(EmitterWork*, ParticleCore*);
+void ParticleCalcScaleAnmRepeatX(EmitterWork*, ParticleCore*);
+void ParticleCalcScaleAnmReverseX(EmitterWork*, ParticleCore*);
+void ParticleCalcScaleAnmRepeatY(EmitterWork*, ParticleCore*);
+void ParticleCalcScaleAnmReverseY(EmitterWork*, ParticleCore*);

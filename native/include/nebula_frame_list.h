@@ -118,11 +118,24 @@ enum {
     NEBULA_ITEM_NO_CULL = 1u << 4,     /* not culled by its bounds */
     NEBULA_ITEM_PARTICLE = 1u << 5,    /* ring vertices are particle corners: position, position before, two colours, coordinate */
     NEBULA_ITEM_DISCRETE_VERTICES = 1u << 6, /* regenerated or sorted topology: vertex ordinals have no identity */
+    NEBULA_ITEM_INSTANCES = 1u << 7,   /* particles: `ring_count` of the list's `particles` from `ring_at`, `count` vertices each */
     NEBULA_ITEM_WIDE = 1u << 8,        /* ring corners of widened lines or points */
     NEBULA_ITEM_ONE_MATRIX = 1u << 9,  /* a registered mesh under one matrix, whatever its vertices name */
     NEBULA_ITEM_SPREAD_LINES = 1u << 10,
     NEBULA_ITEM_SPREAD_POINTS = 1u << 11,
 };
+
+/* A particle a NEBULA_ITEM_INSTANCES draw places (particle_instances.hlsl): ten rows of four floats. Its corners, in the
+   particle's own units, are the draw's (the particle material's quad); the vertex stage takes each through `now` and
+   `before` and places it at the presented frame's time. */
+typedef struct NebulaParticleInstance {
+    float now[3][4];     /* the particle's matrix in the world this game frame */
+    float before[3][4];  /* and the one before (the same when it did not move on from one) */
+    float coord[3][4];   /* coord_mode 1: s, t from the corner's (rows 0-1); 2: s, t, q from its place in the particle */
+    uint32_t prm, env;   /* R << 24 | G << 16 | B << 8 | A */
+    uint32_t coord_mode; /* 0: the corner's own coordinates */
+    uint32_t reserved;
+} NebulaParticleInstance;
 
 /* One draw. Everything it needs is named here. `slot`, `generation`, `part` and the view name it from frame to frame. */
 typedef struct NebulaFrameItem {
@@ -213,10 +226,12 @@ typedef struct NebulaFrameList {
     const void* ring_vertices;
     const uint32_t* ring_indices;
     const struct NebulaScreenProbe* probes;
+    const NebulaParticleInstance* particles;
     uint32_t pass_count, item_count, view_count, camera_count;
     uint32_t block_count, light_set_count, constants_count, probe_count;
     uint64_t ring_vertex_bytes;
     uint32_t ring_index_count;
+    uint32_t particle_count;
     uint32_t flags;
     uint32_t camera_epoch;
     float sky_up[3];           /* the player's up, unit length, in eye space of the scene's view */

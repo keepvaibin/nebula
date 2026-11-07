@@ -189,7 +189,9 @@ pub fn cook_file(name: &str, bytes: Vec<u8>, stats: &mut Stats) -> Result<Option
     } else if native_data::is_animation_file(&bytes) {
         Some(clip::write(&clip::read(&bytes).with_context(|| format!("{name}: animation"))?))
     } else if bytes.starts_with(b"JPAC2-10") {
-        Some(particles::write(&particles::read_jpc(&bytes, stats).with_context(|| format!("{name}: particles"))?))
+        let ir = particles::read_jpc(&bytes, stats).with_context(|| format!("{name}: particles"))?;
+        pipeline_list::add_particles(&ir);
+        Some(particles::write(&ir))
     } else if bytes.starts_with(&[0x00, 0x20, 0xAF, 0x30]) {
         let textured = formats::tpl(&bytes, stats).with_context(|| format!("{name}: layout textures"))?;
         Some(native_data::tpl_host(&textured).with_context(|| format!("{name}: layout textures (host order)"))?)

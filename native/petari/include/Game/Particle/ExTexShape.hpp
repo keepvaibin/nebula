@@ -37,4 +37,4 @@ public:
     const ExTexShapeData* mpData;
 };
 
-void JPALoadExTex(EmitterWork*);
+void ParticleLoadExTex(EmitterWork*);

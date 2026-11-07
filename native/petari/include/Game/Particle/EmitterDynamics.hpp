@@ -4,17 +4,13 @@
 
 struct EmitterWork;
 
-typedef void (*JPADynamicsCalcVolumeFunc)(EmitterWork*);
-
 class EmitterDynamics {
 public:
     explicit EmitterDynamics(const EmitterDynamicsData* pData);
-    void init();
     void create(EmitterWork*);
 
-    void calc(EmitterWork* work) {
-        mpCalcVolumeFunc(work);
-    }
+    // A new particle's place and velocity in the emitter's volume.
+    void calc(EmitterWork* work);
 
     s16 getStartFrame() const {
         return mpData->mStartFrame;
@@ -94,5 +90,4 @@ public:
 
 public:
     const EmitterDynamicsData* mpData;
-    JPADynamicsCalcVolumeFunc mpCalcVolumeFunc;
 };

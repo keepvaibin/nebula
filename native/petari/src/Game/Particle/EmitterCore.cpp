@@ -1,12 +1,22 @@
-#define JPA_LIST_DEFER_INLINE
 #include "Game/Particle/EmitterCore.hpp"
 #include "Game/Particle/ParticleShape.hpp"
 #include "Game/Particle/EmitterManager.hpp"
 #include "Game/Particle/ParticleCore.hpp"
 #include "Game/Particle/ParticleChunk.hpp"
 #include "Game/Particle/ParticleResources.hpp"
+#include "Game/Particle/EmitterDynamics.hpp"
+#include "Game/Util/MathUtil.hpp"
+#include "Game/Util/MotionSignal.hpp"
 
 EmitterCallBack::~EmitterCallBack() {
+}
+
+EmitterCore::EmitterCore() : mLink(this), mpChunks(NULL), mpLastChunk(NULL), mRndm(0) {
+    mDrawSlot = 0;
+    mMotionEpoch = 0;
+}
+
+EmitterCore::~EmitterCore() {
 }
 
 // Out of free slots: one more chunk, its slots in order.
@@ -28,7 +38,7 @@ void EmitterCore::releaseChunks() {
         mpEmtrMgr->giveChunks(mpChunks, mpLastChunk);
     }
     mpChunks = mpLastChunk = NULL;
-    mPtclPool = JPAList< ParticleCore >();
+    mPtclPool = ParticleList();
 }
 
 ParticleCore* EmitterCore::createParticle() {
@@ -36,11 +46,11 @@ ParticleCore* EmitterCore::createParticle() {
         addChunk(this);
     }
 
-    JPANode< ParticleCore >* node = mPtclPool.pop_front();
+    ParticleSlot* node = mPtclPool.pop_front();
     mAlivePtclBase.push_front(node);
     mpRes->getDyn()->calc(mpEmtrMgr->pWd);
-    node->mData.init_p(mpEmtrMgr->pWd);
-    return &node->mData;
+    node->mParticle.init_p(mpEmtrMgr->pWd);
+    return &node->mParticle;
 }
 
 ParticleCore* EmitterCore::createChild(ParticleCore* parent) {
@@ -48,10 +58,62 @@ ParticleCore* EmitterCore::createChild(ParticleCore* parent) {
         addChunk(this);
     }
 
-    JPANode< ParticleCore >* node = mPtclPool.pop_front();
+    ParticleSlot* node = mPtclPool.pop_front();
     mAlivePtclChld.push_front(node);
-    node->mData.init_c(mpEmtrMgr->pWd, parent);
-    return &node->mData;
+    node->mParticle.init_c(mpEmtrMgr->pWd, parent);
+    return &node->mParticle;
+}
+
+void EmitterCore::init(EmitterManager* pManager, ParticleResource* pResource) {
+    MotionSignal::emitterInit(this);
+    mpEmtrMgr = pManager;
+    mpRes = pResource;
+    const EmitterDynamicsData* pData = mpRes->getDyn()->mpData;
+    mLocalScl.set< f32 >(pData->mEmitterScl.x, pData->mEmitterScl.y, pData->mEmitterScl.z);
+    pData = mpRes->getDyn()->mpData;
+    mLocalTrs.set< f32 >(pData->mEmitterTrs.x, pData->mEmitterTrs.y, pData->mEmitterTrs.z);
+    pData = mpRes->getDyn()->mpData;
+    mLocalDir.set< f32 >(pData->mEmitterDir.x, pData->mEmitterDir.y, pData->mEmitterDir.z);
+    if (!MR::isNearZero(mLocalDir)) {
+        MR::normalize(&mLocalDir);
+    }
+
+    const Vec3< s16 >& rRotation = mpRes->getDyn()->mpData->mEmitterRot;
+    const s16 x = rRotation.x;
+    const s16 z = rRotation.z;
+    const s16 y = rRotation.y;
+    mLocalRot.set(x, y, z);
+    mMaxFrame = mpRes->getDyn()->getMaxFrame();
+    mLifeTime = mpRes->getDyn()->getLifetime();
+    mVolumeSize = mpRes->getDyn()->getVolumeSize();
+    mRate = mpRes->getDyn()->getRate();
+    mRateStep = mpRes->getDyn()->getRateStep();
+    mVolumeSweep = mpRes->getDyn()->getVolumeSweep();
+    mVolumeMinRad = mpRes->getDyn()->getVolumeMinRad();
+    mAwayFromCenterSpeed = mpRes->getDyn()->getInitVelOmni();
+    mAwayFromAxisSpeed = mpRes->getDyn()->getInitVelAxis();
+    mDirSpeed = mpRes->getDyn()->getInitVelDir();
+    mSpread = mpRes->getDyn()->getInitVelDirSp();
+    mRndmDirSpeed = mpRes->getDyn()->getInitVelRndm();
+    mAirResist = mpRes->getDyn()->getAirRes();
+    mRndm.set_seed(mpEmtrMgr->pWd->mRndm.get_rndm_u());
+    NebulaMtxIdentity(mGlobalRot);
+    mGlobalScl.set(1.0f, 1.0f, 1.0f);
+    mGlobalTrs.zero();
+    mGlobalPScl.set(1.0f, 1.0f);
+    mGlobalPrmClr.r = mGlobalPrmClr.g = mGlobalPrmClr.b = mGlobalPrmClr.a = mGlobalEnvClr.r = mGlobalEnvClr.g = mGlobalEnvClr.b = mGlobalEnvClr.a =
+        255;
+    pResource->getBsp()->getPrmClr(&mPrmClr);
+    pResource->getBsp()->getEnvClr(&mEnvClr);
+    mpUserWork = 0;
+    mScaleOut = 1.0f;
+    mEmitCount = 0.0f;
+    mStatus = 0x30;
+    mDrawTimes = 1;
+    mTick = 0;
+    mWaitTime = 0;
+    mRateStepTimer = 0;
+    mTexAnmIdx = 0;
 }
 
 void EmitterCore::deleteAllParticle() {
@@ -106,4 +168,3 @@ void EmitterCore::calcEmitterGlobalPosition(Vec3f* dst) const {
     NebulaMtxMultVec(mtx, mLocalTrs, *dst);
 }
 
-#include "JSystem/JParticle/JPAListInline.hpp"

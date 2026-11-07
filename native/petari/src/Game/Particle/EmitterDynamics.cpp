@@ -113,7 +113,6 @@ static void volumeTorus(EmitterWork* work) {
 }
 
 EmitterDynamics::EmitterDynamics(const EmitterDynamicsData* pData) : mpData(pData) {
-    init();
 }
 
 enum {
@@ -126,28 +125,28 @@ enum {
     VOL_Line = 0x06,
 };
 
-void EmitterDynamics::init() {
+void EmitterDynamics::calc(EmitterWork* work) {
     switch (getVolumeType()) {
     case VOL_Cube:
-        mpCalcVolumeFunc = &volumeCube;
+        volumeCube(work);
         break;
     case VOL_Sphere:
-        mpCalcVolumeFunc = &volumeSphere;
+        volumeSphere(work);
         break;
     case VOL_Cylinder:
-        mpCalcVolumeFunc = &volumeCylinder;
+        volumeCylinder(work);
         break;
     case VOL_Torus:
-        mpCalcVolumeFunc = &volumeTorus;
+        volumeTorus(work);
         break;
     case VOL_Point:
-        mpCalcVolumeFunc = &volumePoint;
+        volumePoint(work);
         break;
     case VOL_Circle:
-        mpCalcVolumeFunc = &volumeCircle;
+        volumeCircle(work);
         break;
     case VOL_Line:
-        mpCalcVolumeFunc = &volumeLine;
+        volumeLine(work);
         break;
     }
 }
@@ -157,7 +156,6 @@ void EmitterDynamics::create(EmitterWork* work) {
         s32 emitCount;
         s32 createCount;
 
-        // Probably an inlined function.
         if (work->mpEmtr->checkFlag(DynamicsFlag_FixedInterval)) {
             s32 count;
             if (getVolumeType() == VOL_Sphere) {
@@ -186,7 +184,6 @@ void EmitterDynamics::create(EmitterWork* work) {
             emitCount = 0;
         }
 
-        // Probably an inlined function.
         createCount = emitCount;
         while (createCount > 0) {
             ParticleCore* ptcl = work->mpEmtr->createParticle();

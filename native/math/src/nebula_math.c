@@ -83,6 +83,10 @@ void NebulaMtxRotTrig(Mtx m, char axis, f32 sinA, f32 cosA) {
     }
 }
 
+void NebulaMtxRotRad(Mtx m, char axis, f32 rad) {
+    NebulaMtxRotTrig(m, axis, NebulaSin(rad), NebulaCos(rad));
+}
+
 /* A rotation of rad radians about axis, which is normalised first. */
 void NebulaMtxRotAxisRad(Mtx m, const Vec* axis, f32 rad) {
     const f32 s = sinf(rad), c = cosf(rad), t = 1.0f - c;
