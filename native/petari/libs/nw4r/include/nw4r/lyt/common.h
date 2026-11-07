@@ -1,6 +1,7 @@
 #pragma once
 
-#include "nw4r/lyt/resources.h"
+#include "Game/Ui/UiData.hpp"
+#include "nw4r/lyt/types.h"
 #include "nw4r/math/types.h"
 #include "nw4r/ut/Color.h"
 #include "nw4r/ut/inlines.h"
@@ -23,27 +24,12 @@ namespace nw4r {
             bool IsModulateVertexColor(ut::Color*, u8);
             const ut::Color MultipleAlpha(const ut::Color, u8);
             void MultipleAlpha(ut::Color*, const ut::Color*, u8);
-            // A material's form as the cook wrote it, in the layout file (not aligned).
-            struct __attribute__((packed)) LayoutForm {
-                u64 vertex;
-                u64 pixel;
-                u16 vertex_rows;
-                u16 pixel_rows;
-                u8 texture_count;
-                u8 input_count;
-                u8 flags;
-                u8 reserved;
-                u16 rows[64];
-                u8 textures[16];
-                u8 inputs[24];
-            };
-
             // What the pane draws with next: its eye matrix, and a written shader or a form with its values.
             void SetDrawMtx(const f32 (*pMtx)[4]);
             const f32 (*GetDrawMtx())[4];
             void SetDrawNothing();
             void SetDrawPicture(const SiteMaterial& rMaterial);
-            void SetDrawForm(const LayoutForm* pForm, u32 constants, u32 table, u32 state);
+            void SetDrawForm(const UiFormData* pForm, u32 constants, u32 table, u32 state);
 
             void DrawQuad(const math::VEC2&, const Size&, u8, const math::VEC2 (*)[4], const ut::Color*);
             void DrawQuad(const math::VEC2&, const Size&, u8, const math::VEC2 (*)[4], const ut::Color*, u8);
@@ -72,40 +58,45 @@ namespace nw4r {
                 u8 mNum;
                 math::VEC2 (*mData)[4];
             };
-
-            inline const char* GetStrTableStr(const void* pTable, int idx) {
-                const u32* offs = static_cast< const u32* >(pTable);
-                const char* pool = static_cast< const char* >(pTable);
-                return &pool[offs[idx]];
-            }
         };  // namespace detail
 
         class ResourceAccessor;
 
+        // The cooked layout a pane is built from (UiData.hpp), and where its images and fonts are found.
+        class Pane;
         struct ResBlockSet {
-            const res::TextureList* pTextureList;
-            const res::FontList* pFontList;
-            const res::MaterialList* pMaterialList;
+            const UiLayoutHeader* pLayout;
             ResourceAccessor* pResAccessor;
+            Pane** ppPanes;  // while a layout builds: its panes so far, by index (groups name theirs by index)
+
+            template < typename T >
+            const T* At(u32 offset) const {
+                return uiAt< T >(pLayout, offset);
+            }
+            const char* String(u32 offset) const {
+                return At< char >(pLayout->mStrings + offset);
+            }
+            const UiPaneData* PaneAt(u32 idx) const {
+                return At< UiPaneData >(pLayout->mPanes) + idx;
+            }
+            const UiMaterialData* MaterialAt(u32 idx) const {
+                return At< UiMaterialData >(pLayout->mMaterials + idx * pLayout->mMaterialStride);
+            }
+            const char* TextureName(u32 idx) const {
+                return String(At< u32 >(pLayout->mTextures)[idx]);
+            }
+            const char* FontName(u32 idx) const {
+                return String(At< u32 >(pLayout->mFonts)[idx]);
+            }
         };
 
         namespace detail {
+            inline ut::Color RecordColor(const u8 (&rgba)[4]) {
+                return ut::Color(u32(rgba[0]) << 24 | u32(rgba[1]) << 16 | u32(rgba[2]) << 8 | u32(rgba[3]));
+            }
+
             bool EqualsResName(const char*, const char*);
             bool EqualsMaterialName(const char*, const char*);
-            bool TestFileHeader(const res::BinaryFileHeader&, u32);
-
-            inline bool TestFileVersion(const res::BinaryFileHeader& fileHeader) {
-                u8 upper = ut::BitExtract(fileHeader.version, 8, 8);
-                u8 lower = ut::BitExtract(fileHeader.version, 0, 8);
-                return upper == 0 && lower >= 8 && lower <= 10;
-            }
-
-            inline s32 GetSignatureInt(const char sig[4]) {
-                // The block kind's four characters, first character highest.
-                const u8* p = reinterpret_cast< const u8* >(sig);
-                return s32((u32)p[0] << 24 | (u32)p[1] << 16 | (u32)p[2] << 8 | p[3]);
-            }
-
             inline u8 GetVtxColorElement(const ut::Color* pColors, u32 idx) {
                 return reinterpret_cast< const u8* >(&pColors[idx / 4])[idx % 4];
             }

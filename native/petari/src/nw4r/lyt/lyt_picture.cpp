@@ -24,29 +24,23 @@ namespace nw4r {
             }
         }
 
-        Picture::Picture(const res::Picture* pRes, const ResBlockSet& rBlockSet) : Pane(pRes) {
-            u8 num = ut::Min< u8 >(pRes->texCoordNum, 8);
+        Picture::Picture(const UiPaneData* pRes, const ResBlockSet& rBlockSet) : Pane(pRes, rBlockSet) {
+            const UiPictureData* const pPic = rBlockSet.At< UiPictureData >(pRes->mPayload);
+            u8 num = ut::Min< u8 >(pPic->mCoordCount, 8);
             Init(num);
 
             for (int i = 0; i < 4; i++) {
-                mVtxColors[i] = pRes->vtxCols[i];
+                mVtxColors[i] = detail::RecordColor(pPic->mVertexColors[i]);
             }
 
             if (num > 0 && !mTexCoordAry.IsEmpty()) {
-                mTexCoordAry.Copy(reinterpret_cast< const u8* >(pRes) + sizeof(res::Picture), num);
+                mTexCoordAry.Copy(rBlockSet.At< u8 >(pPic->mCoords), num);
             }
 
             void* pMaterialBuf = Layout::AllocMemory(sizeof(Material));
 
             if (pMaterialBuf != NULL) {
-                const u32* const pMatOffsetTbl = detail::ConvertOffsToPtr< u32 >(rBlockSet.pMaterialList, sizeof(res::MaterialList));
-
-                const res::Material* const pResMaterial =
-                    detail::ConvertOffsToPtr< res::Material >(rBlockSet.pMaterialList, pMatOffsetTbl[pRes->materialIdx]);
-
-                Material* pMaterial = new (pMaterialBuf) Material(pResMaterial, rBlockSet);
-
-                mpMaterial = pMaterial;
+                mpMaterial = new (pMaterialBuf) Material(rBlockSet.MaterialAt(pPic->mMaterial), rBlockSet);
             }
         }
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Game/Ui/UiData.hpp"
 #include "nw4r/lyt/animation.h"
 #include "nw4r/lyt/group.h"
 #include "nw4r/lyt/types.h"
@@ -61,7 +62,7 @@ namespace nw4r {
 
             const ut::Rect GetLayoutRect() const;
 
-            static Pane* BuildPaneObj(s32, const void*, const ResBlockSet&);
+            static Pane* BuildPaneObj(const UiPaneData*, const ResBlockSet&);
 
             GroupContainer* GetGroupContainer() const { return mpGroupContainer; }
 

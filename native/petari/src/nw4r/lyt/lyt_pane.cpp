@@ -47,22 +47,26 @@ namespace nw4r {
             SetVisible(true);
         }
 
-        Pane::Pane(const res::Pane* pRes) {
+        Pane::Pane(const UiPaneData* pRes, const ResBlockSet& rBlockSet) {
             Init();
 
-            mBasePosition = pRes->basePosition;
+            mBasePosition = pRes->mBasePosition;
 
-            SetName(pRes->name);
-            SetUserData(pRes->userData);
+            SetName(rBlockSet.String(pRes->mName));
+            memcpy(mUserData, pRes->mUserData, sizeof(pRes->mUserData));
+            mUserData[sizeof(pRes->mUserData)] = '\0';
 
-            mTranslate = pRes->translate;
-            mRotate = pRes->rotate;
-            mScale = pRes->scale;
-            mSize = pRes->size;
+            mTranslate = math::VEC3(pRes->mTranslate[0], pRes->mTranslate[1], pRes->mTranslate[2]);
+            mRotate = math::VEC3(pRes->mRotate[0], pRes->mRotate[1], pRes->mRotate[2]);
+            mScale = math::VEC2(pRes->mScale[0], pRes->mScale[1]);
+            mSize = Size(pRes->mSize[0], pRes->mSize[1]);
 
-            mAlpha = pRes->alpha;
+            mAlpha = pRes->mAlpha;
             mGlbAlpha = mAlpha;
-            mFlag = pRes->flag;
+            mFlag = 0;
+            SetVisible(pRes->mVisible != 0);
+            SetInfluencedAlpha(pRes->mInfluencedAlpha != 0);
+            detail::SetBit(&mFlag, 2, pRes->mLocationAdjust != 0);
         }
 
         Pane::~Pane() {

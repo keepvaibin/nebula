@@ -23,7 +23,7 @@ namespace nw4r {
         public:
             NW4R_UT_RUNTIME_TYPEINFO;
 
-            TextBox(const res::TextBox*, const ResBlockSet&);
+            TextBox(const UiPaneData*, const ResBlockSet&);
 
             virtual ~TextBox();
             virtual void DrawSelf(const DrawInfo& drawInfo);

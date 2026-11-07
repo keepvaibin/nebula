@@ -24,7 +24,7 @@ namespace nw4r {
 
             NW4R_UT_RTTI_DECL(Window);
 
-            Window(const res::Window*, const ResBlockSet&);
+            Window(const UiPaneData*, const ResBlockSet&);
 
             virtual ~Window();
             virtual void DrawSelf(const DrawInfo&);

@@ -28,8 +28,5 @@ public:
     nw4r::lyt::TextBox* makeText(const char* pName, const char* pNewName, u32 length) const;
 
 private:
-    const void* findBlock(const char* pName, s32* pKind) const;
-
-    const void* mLayout;
-    nw4r::lyt::ResBlockSet mBlocks;
+    nw4r::lyt::ResBlockSet mBlocks;  // the holder's cooked layout; none before init
 };

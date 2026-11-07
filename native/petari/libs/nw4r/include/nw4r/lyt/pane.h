@@ -1,6 +1,6 @@
 #pragma once
 
-#include "nw4r/lyt/resources.h"
+#include "Game/Ui/UiData.hpp"
 #include "nw4r/lyt/types.h"
 #include "nw4r/math/types.h"
 #include "nw4r/ut/Color.h"
@@ -30,6 +30,7 @@ namespace nw4r {
         class Material;
         class DrawInfo;
         class Pane;
+        struct ResBlockSet;
 
         typedef ut::LinkList< Pane, offsetof(detail::PaneBase, mLink) > PaneList;
 
@@ -38,7 +39,7 @@ namespace nw4r {
             NW4R_UT_RUNTIME_TYPEINFO;
 
             Pane();
-            Pane(const res::Pane*);
+            Pane(const UiPaneData*, const ResBlockSet&);
             virtual ~Pane();
             virtual void CalculateMtx(const DrawInfo&);
             virtual void Draw(const DrawInfo&);

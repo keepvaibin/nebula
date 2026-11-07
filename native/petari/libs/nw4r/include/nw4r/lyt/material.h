@@ -24,7 +24,7 @@ namespace nw4r {
         class Material {
         public:
             Material();
-            Material(const res::Material*, const ResBlockSet&);
+            Material(const UiMaterialData*, const ResBlockSet&);
 
             const char* GetName() const {
                 return mName;
@@ -170,7 +170,7 @@ namespace nw4r {
             void* mpStorage;
             char mName[21];
             u8 mbUserAllocated;
-            const detail::LayoutForm* mNativeForms;  // the cook's four forms in the layout file
+            const UiFormData* mNativeForms;  // the cook's four forms in the layout file
             u8 mCoordMap[8];  // each texture coordinate's texture (the cook's; its size scales the coordinate)
             bool mHasStages;  // the shader combines more than the default of a material without its own
         };

@@ -37,7 +37,7 @@ namespace {
     DrawKind sDrawKind = Draw_Nothing;
     Mtx sDrawMtx;
     SiteMaterial sDrawPicture;
-    const nw4r::lyt::detail::LayoutForm* sDrawForm = nullptr;
+    const UiFormData* sDrawForm = nullptr;
     u32 sDrawConstants = 0;
     u32 sDrawTable = 0;
     u32 sDrawState = 0;
@@ -105,14 +105,6 @@ namespace nw4r {
 
             bool EqualsMaterialName(const char* a1, const char* a2) {
                 return strncmp(a1, a2, 0x14) == 0;
-            }
-
-            bool TestFileHeader(const res::BinaryFileHeader& fileHeader, u32 sig) {
-                // A layout the importer cooked reads its byte-order mark as 0xFEFF; a big-endian one as 0xFFFE.
-                if (fileHeader.byteOrder == 0xFFFE) {
-                    NEBULA_PANIC("lyt: a layout not in host order (the importer cooks it)");
-                }
-                return GetSignatureInt(fileHeader.signature) == sig && fileHeader.byteOrder == 0xFEFF;
             }
 
             TexCoordAry::TexCoordAry() {
@@ -213,7 +205,7 @@ namespace nw4r {
                 sDrawPicture = rMaterial;
             }
 
-            void SetDrawForm(const LayoutForm* pForm, u32 constants, u32 table, u32 state) {
+            void SetDrawForm(const UiFormData* pForm, u32 constants, u32 table, u32 state) {
                 sDrawKind = Draw_Form;
                 sDrawForm = pForm;
                 sDrawConstants = constants;
@@ -231,11 +223,8 @@ namespace nw4r {
                     return;
                 }
                 TypedDraw site = TypedDraw::eyeSpace(sDrawMtx);
-                u64 vertex;
-                u64 pixel;
-                memcpy(&vertex, &sDrawForm->vertex, sizeof(vertex));
-                memcpy(&pixel, &sDrawForm->pixel, sizeof(pixel));
-                site.setForm(vertex, pixel, sDrawForm->inputs, sDrawForm->input_count, sDrawConstants, sDrawTable, sDrawState);
+                site.setForm(sDrawForm->mVertex, sDrawForm->mPixel, sDrawForm->mInputs, sDrawForm->mInputCount, sDrawConstants, sDrawTable,
+                             sDrawState);
                 writeQuad(site, basePt, size, num, texCoords, vtxColors);
             }
 

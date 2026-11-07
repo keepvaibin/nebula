@@ -28,6 +28,7 @@ pub mod pipeline_list;
 pub mod native_data;
 pub mod overlay;
 pub mod particles;
+pub mod ui_layout;
 pub mod sound;
 pub mod store;
 pub mod texture;
@@ -195,8 +196,12 @@ pub fn cook_file(name: &str, bytes: Vec<u8>, stats: &mut Stats) -> Result<Option
     } else if bytes.starts_with(&[0x00, 0x20, 0xAF, 0x30]) {
         let textured = formats::tpl(&bytes, stats).with_context(|| format!("{name}: layout textures"))?;
         Some(native_data::tpl_host(&textured).with_context(|| format!("{name}: layout textures (host order)"))?)
-    } else if bytes.starts_with(b"RLYT") || bytes.starts_with(b"RLAN") {
-        Some(material::layout::cook(&bytes).with_context(|| format!("{name}: native layout materials"))?)
+    } else if bytes.starts_with(b"RLYT") {
+        let ir = ui_layout::read_layout(&bytes).with_context(|| format!("{name}: layout"))?;
+        Some(ui_layout::write_layout(&ir).with_context(|| format!("{name}: cooked layout"))?)
+    } else if bytes.starts_with(b"RLAN") {
+        let ir = ui_layout::read_animation(&bytes).with_context(|| format!("{name}: layout animation"))?;
+        Some(ui_layout::write_animation(&ir).with_context(|| format!("{name}: cooked layout animation"))?)
     } else if bytes.starts_with(b"STRM") && extension(name) == "ast" {
         Some(audio_data::ast(&bytes).with_context(|| format!("{name}: stream"))?)
     } else if bytes.starts_with(b"THP\0") {

@@ -120,59 +120,53 @@ namespace nw4r {
 
         NW4R_UT_RTTI_DEF_DERIVED(Window, Pane);
 
-        Window::Window(const res::Window* pRes, const ResBlockSet& rBlockSet) : Pane(pRes) {
-            mContentInflation = pRes->inflation;
+        Window::Window(const UiPaneData* pRes, const ResBlockSet& rBlockSet) : Pane(pRes, rBlockSet) {
+            const UiWindowData* const pWnd = rBlockSet.At< UiWindowData >(pRes->mPayload);
+            mContentInflation.l = pWnd->mInflation[0];
+            mContentInflation.r = pWnd->mInflation[1];
+            mContentInflation.t = pWnd->mInflation[2];
+            mContentInflation.b = pWnd->mInflation[3];
 
-            const u32* const pMatOffsetTbl = detail::ConvertOffsToPtr< u32 >(rBlockSet.pMaterialList, sizeof(res::MaterialList));
-
-            const res::WindowContent* pResContent = detail::ConvertOffsToPtr< res::WindowContent >(pRes, pRes->contentOffset);
+            const UiPictureData* const pResContent = rBlockSet.At< UiPictureData >(pWnd->mContent);
 
             for (int i = 0; i < 4; i++) {
-                mContent.vtxColors[i] = pResContent->vtxCols[i];
+                mContent.vtxColors[i] = detail::RecordColor(pResContent->mVertexColors[i]);
             }
 
-            if (pResContent->texCoordNum > 0) {
-                u8 num = ut::Min< u8 >(pResContent->texCoordNum, 8);
+            if (pResContent->mCoordCount > 0) {
+                u8 num = ut::Min< u8 >(pResContent->mCoordCount, 8);
                 mContent.texCoordAry.Reserve(num);
 
                 if (!mContent.texCoordAry.IsEmpty()) {
-                    mContent.texCoordAry.Copy(reinterpret_cast< const u8* >(pResContent) + sizeof(res::WindowContent), num);
+                    mContent.texCoordAry.Copy(rBlockSet.At< u8 >(pResContent->mCoords), num);
                 }
             }
 
             void* pMaterialBuf = Layout::AllocMemory(sizeof(Material));
 
             if (pMaterialBuf != NULL) {
-                const res::Material* const pResMaterial =
-                    detail::ConvertOffsToPtr< res::Material >(rBlockSet.pMaterialList, pMatOffsetTbl[pResContent->materialIdx]);
-
-                mpMaterial = new (pMaterialBuf) Material(pResMaterial, rBlockSet);
+                mpMaterial = new (pMaterialBuf) Material(rBlockSet.MaterialAt(pResContent->mMaterial), rBlockSet);
             }
 
             mFrameNum = 0;
             mFrames = NULL;
 
-            if (pRes->frameNum > 0) {
-                mFrames = static_cast< Frame* >(Layout::AllocMemory(pRes->frameNum * sizeof(Frame)));
+            if (pWnd->mFrameCount > 0) {
+                mFrames = static_cast< Frame* >(Layout::AllocMemory(pWnd->mFrameCount * sizeof(Frame)));
 
                 if (mFrames != NULL) {
-                    mFrameNum = pRes->frameNum;
+                    mFrameNum = pWnd->mFrameCount;
 
-                    const u32* const pFrmOffsetTbl = detail::ConvertOffsToPtr< u32 >(pRes, pRes->frameOffsetTableOffset);
+                    const UiWindowFrameData* const pResFrames = rBlockSet.At< UiWindowFrameData >(pWnd->mFrames);
 
                     for (int i = 0; i < mFrameNum; i++) {
-                        const res::WindowFrame* const pResFrame = detail::ConvertOffsToPtr< res::WindowFrame >(pRes, pFrmOffsetTbl[i]);
-
-                        mFrames[i].textureFlip = pResFrame->textureFlip;
+                        mFrames[i].textureFlip = pResFrames[i].mFlip;
                         mFrames[i].pMaterial = NULL;
 
                         void* pMaterialBuf = Layout::AllocMemory(sizeof(Material));
 
                         if (pMaterialBuf != NULL) {
-                            const res::Material* const pResMaterial =
-                                detail::ConvertOffsToPtr< res::Material >(rBlockSet.pMaterialList, pMatOffsetTbl[pResFrame->materialIdx]);
-
-                            mFrames[i].pMaterial = new (pMaterialBuf) Material(pResMaterial, rBlockSet);
+                            mFrames[i].pMaterial = new (pMaterialBuf) Material(rBlockSet.MaterialAt(pResFrames[i].mMaterial), rBlockSet);
                         }
                     }
                 }

@@ -2,7 +2,7 @@
 use super::{normalize_program, PROGRAM_BYTES};
 use anyhow::{bail, Context, Result};
 
-fn source_size(source: &[u8]) -> Result<usize> {
+pub fn source_size(source: &[u8]) -> Result<usize> {
     let bits = u32::from_be_bytes(
         source
             .get(60..64)
@@ -78,33 +78,14 @@ pub fn file_programs(bytes: &[u8]) -> Result<Vec<[u8; PROGRAM_BYTES]>> {
     Ok(result)
 }
 
-/// A material without the stages its shaders were cooked from: the bytes kept, each coordinate's texture (the map of
-/// the last stage using it, 255 none) and whether it had stages of its own.
-fn without_stages(source: &[u8], native: &[u8]) -> Result<(Vec<u8>, [u8; 8], bool)> {
+/// Each coordinate's texture (the map of the last stage or indirect order using it, 255 none) and whether the
+/// material has stages of its own; with none, coordinate i reads map i.
+pub fn coord_map(source: &[u8]) -> Result<([u8; 8], bool)> {
     let bits = u32::from_be_bytes(source.get(60..64).context("short layout material")?.try_into()?);
     let textures = (bits & 15) as usize;
-    let tex_srt = ((bits >> 4) & 15) as usize;
-    let generators = ((bits >> 8) & 15) as usize;
-    let swaps = ((bits >> 12) & 1) as usize * 4;
-    let indirect_srt = ((bits >> 13) & 3) as usize * 20;
-    let indirect = ((bits >> 15) & 7) as usize;
+    let (orders_at, stages_at, rest_at) = stage_ranges(bits);
+    let source = source.get(..rest_at).context("layout material truncated")?;
     let stages = ((bits >> 18) & 31) as usize;
-    let head = 64
-        + textures * 4
-        + tex_srt * 20
-        + generators * 4
-        + ((bits >> 25) & 1) as usize * 4
-        + ((bits >> 27) & 1) as usize * 4;
-    let srt_at = head + swaps;
-    let orders_at = srt_at + indirect_srt;
-    let stages_at = orders_at + indirect * 4;
-    let rest_at = stages_at + stages * 16;
-    if native.len() < rest_at || source.len() < rest_at {
-        bail!("layout material truncated");
-    }
-    let mut kept = native[..head].to_vec();
-    kept.extend_from_slice(&native[srt_at..orders_at]);
-    kept.extend_from_slice(&native[rest_at..]);
     let mut coord_map = [255u8; 8];
     let mut set = |coord: u8, map: u8, high: u8| {
         if coord < 8 && map < 8 && high == 0 {
@@ -118,57 +99,31 @@ fn without_stages(source: &[u8], native: &[u8]) -> Result<(Vec<u8>, [u8; 8], boo
         set(o[0], o[1], 0);
     }
     if stages == 0 {
-        for i in 0..textures.min(8) {
-            coord_map[i] = i as u8;
+        for (i, c) in coord_map.iter_mut().enumerate().take(textures.min(8)) {
+            *c = i as u8;
         }
     }
-    Ok((kept, coord_map, stages != 0))
+    Ok((coord_map, stages != 0))
 }
 
-pub fn cook(bytes: &[u8]) -> Result<Vec<u8>> {
-    let converted = super::super::native_data::layout(bytes)?;
-    if !bytes.starts_with(b"RLYT") || bytes[4..6] == [255, 254] {
-        return Ok(converted);
-    }
-    let mut at = u16::from_be_bytes(bytes[12..14].try_into()?) as usize;
-    let blocks = u16::from_be_bytes(bytes[14..16].try_into()?) as usize;
-    let mut result = converted[..at].to_vec();
-    for _ in 0..blocks {
-        let size = u32::from_be_bytes(bytes[at + 4..at + 8].try_into()?) as usize;
-        let source = &bytes[at..at + size];
-        let native = &converted[at..at + size];
-        if source.starts_with(b"mat1") {
-            let ranges = material_ranges(source)?;
-            let mut block = native[..12 + ranges.len() * 4].to_vec();
-            for (i, range) in ranges.into_iter().enumerate() {
-                let offset = u32::try_from(block.len())?;
-                block[12 + i * 4..16 + i * 4].copy_from_slice(&offset.to_le_bytes());
-                let (kept, coord_map, stages) = without_stages(&source[range.clone()], &native[range.clone()])?;
-                block.extend_from_slice(&kept);
-                block.extend_from_slice(b"NSID");
-                for program in programs(&source[range])? {
-                    write_form(&mut block, &program)?;
-                }
-                block.extend_from_slice(&coord_map);
-                block.extend_from_slice(&[u8::from(stages), 0, 0, 0]);
-            }
-            let size = u32::try_from(block.len())?;
-            block[4..8].copy_from_slice(&size.to_le_bytes());
-            result.extend_from_slice(&block);
-        } else {
-            result.extend_from_slice(native);
-        }
-        at += size;
-    }
-    result.extend_from_slice(&converted[at..]);
-    let size = u32::try_from(result.len())?;
-    result[8..12].copy_from_slice(&size.to_le_bytes());
-    Ok(result)
+/// Where a material's indirect orders, stages and what follows them start.
+fn stage_ranges(bits: u32) -> (usize, usize, usize) {
+    let textures = (bits & 15) as usize;
+    let tex_srt = ((bits >> 4) & 15) as usize;
+    let generators = ((bits >> 8) & 15) as usize;
+    let swaps = ((bits >> 12) & 1) as usize * 4;
+    let indirect_srt = ((bits >> 13) & 3) as usize * 20;
+    let indirect = ((bits >> 15) & 7) as usize;
+    let stages = ((bits >> 18) & 31) as usize;
+    let head = 64 + textures * 4 + tex_srt * 20 + generators * 4 + ((bits >> 25) & 1) as usize * 4 + ((bits >> 27) & 1) as usize * 4;
+    let orders_at = head + swaps + indirect_srt;
+    let stages_at = orders_at + indirect * 4;
+    (orders_at, stages_at, stages_at + stages * 16)
 }
 
-/// One of a layout material's four programs as nebula_layout_form.h's record: hashes, row counts, then rows, textures and
+/// One of a layout material's four programs as a UiFormData record (Game/Ui/UiData.hpp): hashes, row counts, then rows, textures and
 /// inputs in fixed room.
-fn write_form(block: &mut Vec<u8>, program: &[u8; PROGRAM_BYTES]) -> Result<()> {
+pub fn write_form(block: &mut Vec<u8>, program: &[u8; PROGRAM_BYTES]) -> Result<()> {
     use crate::cook::programs as gen;
     let m = gen::material_from_program(program);
     let mut t = gen::generate(&m, gen::Form::default(), false, &gen::layout_registers())?;
