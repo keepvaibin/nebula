@@ -32,10 +32,10 @@ public:
                const SetAllocator& allocate);
     // `wide` is the wide colour, sampled: the multisampled target when `per_sample`, else the resolved one.
     void draw(VkCommandBuffer commands, VkRenderPass pass, unsigned samples_log2, const Texture& wide, bool per_sample,
-              const SetAllocator& allocate);
+              const SetAllocator& allocate, bool resolve = false);
 
 private:
-    enum Kind : unsigned { kWiden, kCamera, kCameraSamples, kKinds };
+    enum Kind : unsigned { kWiden, kCamera, kCameraSamples, kCameraResolve, kKinds };
     [[nodiscard]] VkPipeline pipeline(Kind kind, VkRenderPass pass, unsigned samples_log2);
     [[nodiscard]] VkDescriptorSet set_of(const SetAllocator& allocate, const Texture& sampled, const Texture* depth = nullptr,
                                          VkImageLayout depth_layout = VK_IMAGE_LAYOUT_GENERAL) const;

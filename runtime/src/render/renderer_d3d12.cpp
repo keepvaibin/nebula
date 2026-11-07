@@ -1365,11 +1365,10 @@ void RendererD3D12::apply_window_size() {
     }
     FrameMap wanted(static_cast<unsigned>(content.width), static_cast<unsigned>(content.height));
     upscale_output_ = wanted;
-    const float render_fraction = host_window::upscaler_render_fraction(render, wanted.width, wanted.height);
-    if (render_fraction < 1.0f) {
-        wanted = FrameMap(std::max(static_cast<unsigned>(std::lround(wanted.width * render_fraction)), 1u),
-                          std::max(static_cast<unsigned>(std::lround(wanted.height * render_fraction)), 1u));
-    }
+    const auto config = render;
+    const auto [render_width, render_height] = internal_extent(wanted.width, wanted.height, config.internal_height,
+        host_window::upscaler_render_fraction(config, wanted.width, wanted.height));
+    wanted = FrameMap(render_width, render_height);
     const unsigned samples = wanted_msaa_samples();
     if (wanted == frame_ && samples == scene_msaa_.samples) {
         return;
@@ -1903,7 +1902,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
                     D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
                     IID_PPV_ARGS(&timestamp_readback_)),
                 "Create timestamp readback");
-            const bool passes = [] {
+            const bool passes = ::galaxy::diagnostics_recording() || [] {
                 char value[8]{};
                 std::size_t length = 0u;
                 return ::galaxy::run_option_read(&length, value, sizeof(value), ::galaxy::run_options().gpu_passes) == 0 && length > 1u &&
@@ -2198,6 +2197,8 @@ RendererD3D12::Kept RendererD3D12::take_apart_lost_device() {
 }
 
 void RendererD3D12::shutdown() {
+    native_scene_gpu_ema_ms_ = 0.0;
+    frame_scene_drawn_.fill(false);
     if (fsr_swap_chain_ && swap_chain_) {
         wait_for_gpu();
         fsr_generation_.destroy(swap_chain_.Get());
@@ -2975,6 +2976,7 @@ void RendererD3D12::test_lose_device() {
 }
 
 void RendererD3D12::begin_frame() {
+    scene_drawn_ = false;
     // Display and size changes apply here, between command-list recordings.
     // They wait for the GPU themselves, so they come before any per-slot state
     // below is touched.
@@ -3101,6 +3103,10 @@ void RendererD3D12::begin_frame() {
                     static_cast<double>(timestamps[1] - timestamps[0]) *
                     1000.0 / static_cast<double>(timestamp_frequency_);
                 telemetry_gpu_ms_ += gpu_ms;
+                if (frame_scene_drawn_[frame_slot_]) {
+                    native_scene_gpu_ema_ms_ = native_scene_gpu_ema_ms_ == 0.0 ? gpu_ms :
+                        native_scene_gpu_ema_ms_ + (gpu_ms - native_scene_gpu_ema_ms_) * 0.1;
+                }
                 telemetry_gpu_by_place_[timestamp_list_place_[frame_slot_]] += gpu_ms;
                 if (frame_generated_[frame_slot_]) {
                     generated_gpu_ms_ += gpu_ms;
@@ -3249,9 +3255,6 @@ UINT RendererD3D12::present_sync_interval(unsigned configured, float max_fps) {
     if (configured != 1u) {
         return configured;
     }
-    if (display_refresh_presents_++ % 120u == 0u) {
-        refresh_display_rate();
-    }
     const double hz = display_refresh_hz_;
     if (hz <= 0.0) {
         return 1u;
@@ -3270,6 +3273,10 @@ UINT RendererD3D12::present_sync_interval(unsigned configured, float max_fps) {
 }
 
 void RendererD3D12::present_to_swap_chain() {
+    // Automatic-rate interpolation needs the display clock even with VSync and diagnostics off.
+    if (display_refresh_presents_++ % 120u == 0u) {
+        refresh_display_rate();
+    }
     const RenderConfig cfg = get_render_config();
     const bool generating = frame_generation_running();
     // With frame generation the sync interval is 0 or 1 (Streamline paces the generated frames).
@@ -3401,9 +3408,6 @@ void RendererD3D12::present_to_swap_chain() {
             }
             last_stats_present_count_ = shown.PresentCount;
             last_stats_present_refresh_count_ = shown.PresentRefreshCount;
-        }
-        if (display_refresh_hz_ == 0.0) {
-            refresh_display_rate();
         }
     }
 
@@ -3616,6 +3620,7 @@ std::uint64_t RendererD3D12::end_frame(
     history_used_ = vertex_ring_.cursor() != history_begin_vertex_ || matrix_ring_.cursor() != history_begin_matrix_;
     history_segment_fence_[history_segment_] = submitted_fence;
     frame_generated_[frame_slot_] = generated;
+    frame_scene_drawn_[frame_slot_] = scene_drawn_;
     for (ScreenProbeSlot& slot : probe_slots_) {
         if (slot.fence == kProbesInFrame) {
             slot.fence = submitted_fence;
@@ -4800,7 +4805,7 @@ void RendererD3D12::present_fg_hudless(const DisplayTexture& source, const D3D12
 
 void RendererD3D12::record_scene_aa() {
     const GpuPassScope pass{*this, GpuPass::SceneAa};
-    if (!post_process_.ready() || output_scene_active_ || scene_temporal_ || !scene_color_ ||
+    if (!post_process_.ready() || scene_temporal_ || !scene_color_ ||
         post_process_.settings().aa == PostProcessSettings::Aa::kOff) {
         return;
     }
@@ -4896,15 +4901,29 @@ bool RendererD3D12::ensure_wide_set(SceneTargetSet& set, ComPtr<ID3D12Descriptor
     return true;
 }
 
-void RendererD3D12::begin_wide_scene(bool wanted) {
+bool RendererD3D12::begin_wide_scene(bool wanted, const SceneClearValues* initial_clear) {
     if (!wanted || scene_hdr_ || !camera_pass_.ready() || !scene_color_ || output_scene_active_ || target_pass_active_) {
-        return;
+        return false;
     }
     SceneTargetSet& set = hdr_scene_scene_;
     if (!ensure_wide_set(set, hdr_scene_rtv_heap_)) {
-        return;
+        return false;
+    }
+    if (initial_clear != nullptr) {
+        const GpuPassScope pass{*this, GpuPass::Camera};
+        swap_scene_with(set);
+        command_list_->ClearRenderTargetView(scene_rtv_, initial_clear->color.data(), 0u, nullptr);
+        command_list_->ClearDepthStencilView(scene_dsv_, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL,
+                                             initial_clear->reversed_depth, 0u, 0u, nullptr);
+        scene_msaa_.color_dirty = scene_msaa_.samples > 1u;
+        scene_msaa_.depth_dirty = scene_msaa_.samples > 1u;
+        invalidate_draw_bindings();
+        bound_rt_aux_ = 0xFFu;
+        bind_scene();
+        return true;
     }
     record_hdr_begin();
+    return true;
 }
 
 void RendererD3D12::record_hdr_begin() {
@@ -4944,6 +4963,14 @@ void RendererD3D12::record_hdr_end() {
     SceneTargetSet& set = hdr_scene_scene_;
     swap_scene_with(set);
     scene_msaa_.depth_dirty = set.msaa.depth_dirty;
+    const bool resolve_output = set.msaa.samples > 1u && output_frame_for_window() == frame_ &&
+                                ensure_output_scene(frame_);
+    if (resolve_output) {
+        swap_scene_sets();
+        const auto far_values = make_scene_clear_values(0u, 0u);
+        command_list_->ClearDepthStencilView(scene_dsv_, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL,
+                                             far_values.reversed_depth, 0u, 0u, nullptr);
+    }
     const auto now = std::chrono::steady_clock::now();
     const float seconds = std::chrono::duration<float>(now - camera_metered_).count();
     camera_metered_ = now;
@@ -4951,11 +4978,12 @@ void RendererD3D12::record_hdr_end() {
     SceneCamera::Inputs in{};
     in.wide = set.color.Get();
     in.wide_ms = set.msaa.samples > 1u ? set.msaa.color.Get() : nullptr;
-    in.depth = scene_depth_.Get();
+    in.depth = set.depth.Get();
     in.rtv = scene_rtv_;
     in.width = static_cast<unsigned>(desc.Width);
     in.height = desc.Height;
     in.samples = set.msaa.samples;
+    in.resolve = resolve_output;
     // After a load or a long pause the eye starts open.
     in.seconds = seconds > 1.0f ? -1.0f : seconds;
     static_cast<void>(camera_pass_.record(command_list_.Get(), srv_ring_, in));
@@ -5133,20 +5161,24 @@ void RendererD3D12::game_bloom(std::uint32_t kind, std::uint32_t a, std::uint32_
     bound_rt_aux_ = 0xFFu;
 }
 
-bool RendererD3D12::begin_output_scene() {
+bool RendererD3D12::begin_output_scene(bool resolve_msaa_only) {
+    if (resolve_msaa_only && (output_scene_active_ || scene_temporal_ || scene_msaa_.samples <= 1u ||
+                             output_frame_for_window() != frame_)) {
+        return false;
+    }
     const bool temporal = scene_temporal_;
     scene_temporal_ = false;
     // Nebula's screens with small text are drawn at the window's resolution whatever the HUD's (sharp_2d): at the
     // internal scale their letters would lose strokes on a wide or large window. Otherwise the game's layouts keep at
     // least the design's density on a window wider than 16:9 or narrower than 4:3, never above the window's.
-    const bool full = temporal || get_render_config().hud_output_resolution || sharp_2d_requested();
+    const bool full = resolve_msaa_only || temporal || (get_render_config().hud_output_resolution || get_render_config().internal_height != 0u) || sharp_2d_requested();
     if (output_scene_active_ || !full) {
         return false;
     }
     // A temporal upscaler outputs the internal resolution; the 2D layer alone
     // goes to the window's.
     const FrameMap output = temporal ? FrameMap(temporal_output_w_, temporal_output_h_) : output_frame_for_window();
-    if (output.empty() || output.width < frame_.width || (output == frame_ && !temporal) ||
+    if (output.empty() || output.width < frame_.width || (output == frame_ && !temporal && !resolve_msaa_only) ||
         !ensure_output_scene(output)) {
         temporal_history_valid_ = false;
         return false;
@@ -5200,7 +5232,8 @@ void RendererD3D12::clear_scene(
     unsigned rect_x, unsigned rect_y, unsigned rect_w, unsigned rect_h,
     std::uint8_t pixel_format) {
     if (scene_msaa_.samples > 1u) {
-        scene_msaa_.color_dirty = scene_msaa_.depth_dirty = true;
+        scene_msaa_.color_dirty |= color_enable || alpha_enable;
+        scene_msaa_.depth_dirty |= depth_enable;
     }
     const D3D12_CPU_DESCRIPTOR_HANDLE rtv = scene_rtv_;
     const D3D12_CPU_DESCRIPTOR_HANDLE dsv = scene_dsv_;

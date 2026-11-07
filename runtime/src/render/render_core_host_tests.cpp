@@ -218,6 +218,10 @@ void test_pairing_by_identity() {
 
 void test_wide_identity_parts_do_not_alias_generations() {
     ListStore before, now;
+    before.joints = {rotation_y(0.0f,0.0f,0.0f,0.0f)};now.joints=before.joints;
+    before.blocks={block_of(before.joints[0],&before.scale_free,1u,1u)};
+    now.blocks={block_of(now.joints[0],&now.scale_free,1u,1u)};
+    before.blocks[0].camera=now.blocks[0].camera=NEBULA_NONE32;
     before.items = {item_of(0u, 5u, 1u, 0x10000u), item_of(0u, 5u, 0x10001u, 0u)};
     now.items = {before.items[1], before.items[0], item_of(0u, 5u, 1u, 0u)};
     before.finish(); now.finish();
@@ -289,10 +293,45 @@ void test_teleport_shows_this_frame() {
     check(pairing.teleports == 1u, "a teleport is counted");
 }
 
+void test_eye_space_world_rows() {
+    const Affine34 world={1,0,0,500,0,1,0,200,0,0,1,-10000};
+    for (const float yaw : {0.0f, .1f, 1.0f}) {
+        const float c=std::cos(yaw), s=std::sin(yaw);
+        const Affine34 view={c,0,s,50,0,1,0,-10,-s,0,c,30};
+        const Affine34 eye=affine_multiply(view,world);
+        Affine34 inverse;check(affine_inverse(view,inverse),"camera is invertible");
+        std::uint32_t flags=1u;
+        ComposeInput in;in.joints=reinterpret_cast<const float(*)[4]>(eye.data());in.scale_flags=&flags;in.joint_count=1;
+        in.world_view=reinterpret_cast<const float(*)[4]>(inverse.data());
+        float rows[6][4]{};compose_world_rows(in,rows);
+        check(same_rows(rows,reinterpret_cast<const float(*)[4]>(world.data()),3u),"eye-space model world texture coordinates stay fixed as the camera rotates");
+    }
+}
+
 }  // namespace
 
 int main() {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
+    // Exhaust the comparison/logic combinations and representative reference extremes. A proof must never
+    // label a potentially rejecting alpha test as uniformly passing, for any input alpha in the byte range.
+    const auto compare = [](unsigned op, unsigned a, unsigned r) {
+        switch (op) {
+        case 0: return false; case 1: return a < r; case 2: return a == r; case 3: return a <= r;
+        case 4: return a > r; case 5: return a != r; case 6: return a >= r; default: return true;
+        }
+    };
+    unsigned proved = 0;
+    for (unsigned c0=0; c0<8; ++c0) for (unsigned c1=0; c1<8; ++c1) for (unsigned op=0; op<4; ++op) {
+        if (!nebula_alpha_test_always(c0,c1,op)) continue;
+        ++proved;
+        for (unsigned a=0; a<256; ++a) for (unsigned r0 : {0u,127u,255u}) for (unsigned r1 : {0u,127u,255u}) {
+            const bool x=compare(c0,a,r0), y=compare(c1,a,r1);
+            check(op==0 ? x&&y : op==1 ? x||y : op==2 ? x!=y : x==y,
+                  "pixel shading proof preserves every passing alpha sample");
+        }
+    }
+    check(proved == 20u, "all constant truth-table cases are recognized");
+    test_eye_space_world_rows();
     test_compose_joints_under_camera();
     test_compose_envelope_and_billboard();
     test_pairing_by_identity();

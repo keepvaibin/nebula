@@ -113,7 +113,7 @@ Texture::~Texture() {
     const VkImage image_handle = image;
     VmaAllocation_T* const allocation_handle = allocation;
     const VkImageView views[2] = {view, target_view};
-    const VkFramebuffer framebuffers[2] = {framebuffer, scene_framebuffer};
+    const VkFramebuffer framebuffers[3] = {framebuffer, scene_framebuffer, scene_resolve_framebuffer};
     context.defer([=] {
         for (const VkFramebuffer f : framebuffers) {
             if (f != VK_NULL_HANDLE) {
@@ -464,7 +464,8 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
         has_device_extension(physical_, VK_EXT_SUBGROUP_SIZE_CONTROL_EXTENSION_NAME) &&
         has_device_extension(physical_, VK_KHR_SEPARATE_DEPTH_STENCIL_LAYOUTS_EXTENSION_NAME) &&
         has_device_extension(physical_, VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME) &&
-        available.independentBlend == VK_TRUE && available.shaderStorageImageWriteWithoutFormat == VK_TRUE &&
+        available.independentBlend == VK_TRUE && available.shaderInt16 == VK_TRUE &&
+        available.shaderStorageImageWriteWithoutFormat == VK_TRUE &&
         available.shaderStorageImageExtendedFormats == VK_TRUE) {
         float16.pNext = &storage16;
         storage16.pNext = &subgroup;
@@ -476,6 +477,7 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
                               subgroup.subgroupSizeControl == VK_TRUE && subgroup.computeFullSubgroups == VK_TRUE &&
                               separate.separateDepthStencilLayouts == VK_TRUE;
         if (temporal_upscaling_) {
+            enabled.shaderInt16 = VK_TRUE;
             device_extensions.push_back(VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME);
             device_extensions.push_back(VK_EXT_SUBGROUP_SIZE_CONTROL_EXTENSION_NAME);
             device_extensions.push_back(VK_KHR_SEPARATE_DEPTH_STENCIL_LAYOUTS_EXTENSION_NAME);
@@ -834,6 +836,7 @@ std::shared_ptr<Texture> Context::create_linear_image(std::uint32_t width, std::
         return {};
     }
     texture->format = format;
+    texture->usage = image_info.usage;
     texture->width = width;
     texture->height = height;
     texture->allocation_bytes = allocated.size;
@@ -867,6 +870,7 @@ std::shared_ptr<Texture> Context::create_texture(std::uint32_t width, std::uint3
     texture->width = width;
     texture->height = height;
     texture->levels = levels;
+    texture->usage = image_info.usage;
     texture->allocation_bytes = allocated.size;
     const bool depth = format == VK_FORMAT_D32_SFLOAT || format == VK_FORMAT_D24_UNORM_S8_UINT ||
         format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D16_UNORM;

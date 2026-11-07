@@ -12,6 +12,7 @@
 #include "camera_vs.h"
 #include "camera_ps.h"
 #include "camera_samples_ps.h"
+#include "camera_resolve_ps.h"
 #include "camera_widen_ps.h"
 
 namespace galaxy::render {
@@ -80,7 +81,7 @@ bool SceneCamera::initialize(ID3D12Device* device) {
     heap.Type = D3D12_HEAP_TYPE_DEFAULT;
     D3D12_RESOURCE_DESC rd{};
     rd.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-    rd.Width = 1;
+    rd.Width = 2;  // linear exposure and its precomputed display-space gain
     rd.Height = 1;
     rd.DepthOrArraySize = 1;
     rd.MipLevels = 1;
@@ -100,24 +101,28 @@ bool SceneCamera::initialize(ID3D12Device* device) {
 }
 
 void SceneCamera::shutdown() {
+    exposure_ready_ = false;
     ready_ = false;
     root_signature_.Reset();
     meter_.Reset();
     camera_ = {};
+    camera_resolve_.Reset();
     widen_ = {};
     exposure_.Reset();
     device_ = nullptr;
 }
 
-ID3D12PipelineState* SceneCamera::camera_pipeline(unsigned samples) {
+ID3D12PipelineState* SceneCamera::camera_pipeline(unsigned samples, bool resolve) {
     const unsigned index = std::min(static_cast<unsigned>(std::countr_zero(std::max(samples, 1u))), 3u);
-    if (camera_[index]) {
-        return camera_[index].Get();
+    auto& output = resolve ? camera_resolve_ : camera_[index];
+    if (output) {
+        return output.Get();
     }
     D3D12_GRAPHICS_PIPELINE_STATE_DESC pd{};
     pd.pRootSignature = root_signature_.Get();
     pd.VS = code(g_camera_vs, sizeof(g_camera_vs));
-    pd.PS = index != 0u ? code(g_camera_samples_ps, sizeof(g_camera_samples_ps)) : code(g_camera_ps, sizeof(g_camera_ps));
+    pd.PS = resolve ? code(g_camera_resolve_ps, sizeof(g_camera_resolve_ps)) :
+        index != 0u ? code(g_camera_samples_ps, sizeof(g_camera_samples_ps)) : code(g_camera_ps, sizeof(g_camera_ps));
     pd.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
     pd.SampleMask = UINT_MAX;
     pd.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
@@ -127,12 +132,12 @@ ID3D12PipelineState* SceneCamera::camera_pipeline(unsigned samples) {
     pd.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     pd.NumRenderTargets = 1;
     pd.RTVFormats[0] = kSceneColorFormat;
-    pd.SampleDesc.Count = 1u << index;
-    if (FAILED(device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&camera_[index])))) {
+    pd.SampleDesc.Count = resolve ? 1u : 1u << index;
+    if (FAILED(device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&output)))) {
         std::cerr << "[scene-camera] pipeline failed for " << (1u << index) << " samples\n";
         return nullptr;
     }
-    return camera_[index].Get();
+    return output.Get();
 }
 
 ID3D12PipelineState* SceneCamera::widen_pipeline(unsigned samples) {
@@ -166,14 +171,15 @@ bool SceneCamera::record(ID3D12GraphicsCommandList* list, DescriptorRing& ring, 
         return false;
     }
     const bool samples = in.samples > 1u && in.wide_ms != nullptr;
-    ID3D12PipelineState* const pipeline = camera_pipeline(samples ? in.samples : 1u);
+    ID3D12PipelineState* const pipeline = camera_pipeline(samples ? in.samples : 1u, samples && in.resolve);
     if (pipeline == nullptr) {
         return false;
     }
     camera::Constants constants{};
     constants.width = static_cast<float>(in.width);
     constants.height = static_cast<float>(in.height);
-    constants.seconds = in.seconds;
+    constants.seconds = exposure_ready_ ? in.seconds : -1.0f;
+    exposure_ready_ = true;
 
     // Two tables: the meter's (the resolved picture, the exposure, its storage view) and the camera's (the picture it
     // writes from, the exposure).

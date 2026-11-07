@@ -39,6 +39,7 @@ public:
         D3D12_CPU_DESCRIPTOR_HANDLE rtv{};  // the scene target
         unsigned width = 0u, height = 0u, samples = 1u;
         float seconds = 0.0f;  // since the last meter; below zero the eye starts open
+        bool resolve = false;  // tone-map MSAA samples directly into a single-sample output
     };
     // The pipeline state is left set for this pass; the caller binds its own again.
     bool record(ID3D12GraphicsCommandList* list, DescriptorRing& ring, const Inputs& in);
@@ -51,15 +52,17 @@ public:
     bool widen(ID3D12GraphicsCommandList* list, DescriptorRing& ring, const WidenInputs& in);
 
 private:
-    [[nodiscard]] ID3D12PipelineState* camera_pipeline(unsigned samples);
+    [[nodiscard]] ID3D12PipelineState* camera_pipeline(unsigned samples, bool resolve);
     [[nodiscard]] ID3D12PipelineState* widen_pipeline(unsigned samples);
 
     ID3D12Device* device_ = nullptr;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> root_signature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> meter_;
     std::array<Microsoft::WRL::ComPtr<ID3D12PipelineState>, 4> camera_{};
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> camera_resolve_;
     std::array<Microsoft::WRL::ComPtr<ID3D12PipelineState>, 4> widen_{};
     Microsoft::WRL::ComPtr<ID3D12Resource> exposure_;
+    bool exposure_ready_ = false;
     bool ready_ = false;
 };
 

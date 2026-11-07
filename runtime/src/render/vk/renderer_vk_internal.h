@@ -3,6 +3,7 @@
 #pragma once
 
 #include <volk.h>
+#include "galaxy/render/renderer_common.h"
 
 #include <cstdint>
 #include <vector>
@@ -57,17 +58,16 @@ struct PoolSizes {
 inline constexpr std::uint32_t kPassStorageImages = 64u;
 // The storage buffers they take: the ambient occlusion's objects and tiles, per set of its passes.
 inline constexpr std::uint32_t kPassStorageBuffers = 128u;
-// game constants sets (set 0: b0 and b1, the matrix palette, vertex blending's earlier vertices and verdicts): room for
+// Native constants sets (set 0: b0, b1, b2, composed rows and instance table): room for
 // `sets` of them.
 constexpr PoolSizes constants_sets(std::uint32_t sets, PoolSizes others = {}) {
-    others.dynamic_uniforms += 2u * sets;
-    others.dynamic_storage += sets;
+    others.dynamic_uniforms += 3u * sets;
     others.storage += 2u * sets;
     return others;
 }
 // The persistent pool (and each overflow pool after it): samplers, the corner set and cached constants sets.
 inline constexpr std::uint32_t kPersistentSets = 1024u;
-inline constexpr PoolSizes kPersistentPool = constants_sets(64u, {.images = 64u, .samplers = 1024u * 8u});
+inline constexpr PoolSizes kPersistentPool = constants_sets(64u, {.images = kPersistentSets * kTableTextures, .samplers = kPersistentSets * kTableTextures});
 
 VkDescriptorPool create_pool(VkDevice device, std::uint32_t sets, const PoolSizes& sizes);
 

@@ -116,7 +116,7 @@ void Pipelines::prepare(std::uint32_t id, const PipelineEntry& entry, const std:
         }
         for (const unsigned variant : variants) {
             add(variant, 0u);
-            if (!motion || (variant & 8u) != 0u) {
+            if (!motion || (variant & kSceneVariantTarget) != 0u || (variant & kSceneVariantSamplesMask) != 0u) {
                 continue;
             }
             add(variant, 1u);

@@ -35,7 +35,8 @@ static_assert(sizeof(Constants) == 80u);
 
 // Scene target pixels per occlusion pixel, across and down.
 [[nodiscard]] inline unsigned occlusion_divisor(unsigned scene_height) noexcept {
-    return std::max(scene_height / kFullLines, 1u);
+    // Ceiling division keeps the working field at or below its 720-line budget at *every* resolution.
+    return std::max(scene_height / kFullLines + (scene_height % kFullLines != 0u ? 1u : 0u), 1u);
 }
 
 // The shaders' constants: false for a view with no picture.

@@ -12,6 +12,7 @@ enum class UtilitySpirv {
 #define X(name, source, stage, entry, defines) name,
 #include "galaxy/render/vk/utility_spirv_table.inc"
 #undef X
+    Count
 };
 
 [[nodiscard]] std::span<const std::uint32_t> utility_spirv(UtilitySpirv shader) noexcept;
