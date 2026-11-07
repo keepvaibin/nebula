@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # The Android app (docs/ANDROID.md), from source to a signed APK:
 #   1. per ABI: the game module (native/, libsmg_game.so), the SDL host with the Vulkan renderer (platform/sdl,
-#      libmain.so and libSDL3.so) and setup's importer (crates/nebula-import, libnebula_import.so), with the NDK;
+#      libmain.so and libSDL3.so), the launcher's mod importer (platform/sdl, libnebula_mods.so) and setup's importer
+#      (crates/nebula-import, libnebula_import.so), with the NDK;
 #   2. the license texts the app shows;
 #   3. Gradle: the launcher, SDL's Java half and the libraries, signed with the key -Signing names (debug key without).
 #
@@ -68,7 +69,7 @@ foreach ($abi in $Abis -split ",") {
     Invoke-Logged "$Work\host-$abi.log" {
         cmake -G Ninja -S "$root/platform/sdl" -B $hostBuild "-DCMAKE_TOOLCHAIN_FILE=$toolchain" "-DANDROID_ABI=$abi" `
             "-DANDROID_PLATFORM=android-31" -DCMAKE_BUILD_TYPE=Release "-DNEBULA_DEPS=$depsSlash" "-DNEBULA_HOST_TOOLS=$hostToolsSlash" $releaseFlag @ffxArgs
-        if ($LASTEXITCODE -eq 0) { cmake --build $hostBuild --target main }
+        if ($LASTEXITCODE -eq 0) { cmake --build $hostBuild --target main nebula_mods }
     }
     $upper = ($triple -replace '-', '_').ToUpper()
     $lower = $triple -replace '-', '_'
@@ -90,7 +91,7 @@ foreach ($abi in $Abis -split ",") {
     }
     $dest = Join-Path $jni $abi
     New-Item -ItemType Directory -Force $dest | Out-Null
-    Copy-Item "$module/libsmg_game.so", "$hostBuild/libmain.so", "$hostBuild/SDL3/libSDL3.so",
+    Copy-Item "$module/libsmg_game.so", "$hostBuild/libmain.so", "$hostBuild/libnebula_mods.so", "$hostBuild/SDL3/libSDL3.so",
         "$Work\cargo\$triple\release\libnebula_import.so" $dest -Force
 }
 
@@ -111,6 +112,9 @@ $texts = [ordered]@{
     "volk.txt" = @("$Deps\volk-vulkan-sdk-1.4.350.1\LICENSE.md")
     "VulkanMemoryAllocator.txt" = @("$Deps\VulkanMemoryAllocator-v3.4.0\LICENSE.txt")
     "rust-dependencies-android.txt" = @("$root\docs\licenses\rust-dependencies-android.txt")
+    "libarchive.txt" = @("$root\third_party\archive\libarchive\COPYING")
+    "xz.txt" = @("$root\third_party\archive\xz\COPYING.0BSD")
+    "zlib.txt" = @("$root\third_party\archive\zlib\LICENSE")
     "Apache-2.0.txt" = @("$Deps\Vulkan-Headers-vulkan-sdk-1.4.350.1\LICENSES\Apache-2.0.txt")
 }
 foreach ($name in $texts.Keys) {
