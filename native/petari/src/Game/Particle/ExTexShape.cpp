@@ -4,7 +4,7 @@
 
 // The indirect map (texture map 2) and the second texture (map 3). Their coordinates are the particle's own texture
 // coordinates, which the native particle shader reads directly (runtime/src/render/materials/particle.hlsl: uv[1]).
-void JPALoadExTex(EmitterWork* work) {
+void ParticleLoadExTex(EmitterWork* work) {
     ExTexShape* ets = work->mpRes->getEts();
 
     if (ets->isUseIndirect()) {

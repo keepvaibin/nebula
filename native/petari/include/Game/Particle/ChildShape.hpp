@@ -89,9 +89,6 @@ public:
     bool isColorInherited() const {
         return mpData->mColorInherited != 0;
     }
-    bool isClipOn() const {
-        return mpData->mClipOn != 0;
-    }
     bool isFieldAffected() const {
         return mpData->mFieldAffected != 0;
     }
@@ -109,7 +106,7 @@ public:
     const ChildShapeData* mpData;
 };
 
-void JPARegistChildPrmEnv(EmitterWork*);
+void ParticleRegistChildPrmEnv(EmitterWork*);
 
-void JPACalcChildAlphaOut(EmitterWork*, ParticleCore*);
-void JPACalcChildScaleOut(EmitterWork*, ParticleCore*);
+void ParticleCalcChildAlphaOut(EmitterWork*, ParticleCore*);
+void ParticleCalcChildScaleOut(EmitterWork*, ParticleCore*);

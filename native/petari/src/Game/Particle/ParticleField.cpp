@@ -3,6 +3,7 @@
 #include "Game/System/NebulaArena.hpp"
 #include "Game/Particle/EmitterCore.hpp"
 #include "Game/Particle/ParticleCore.hpp"
+#include "Game/Util/MathUtil.hpp"
 
 void FieldBase::calcAffect(ParticleField* block, ParticleCore* ptcl) {
     Vec3f vec = mAccel;
@@ -46,6 +47,67 @@ void FieldGravity::prepare(EmitterWork* work, ParticleField* block) {
 
 void FieldGravity::calc(EmitterWork* work, ParticleField* block, ParticleCore* ptcl) {
     calcAffect(block, ptcl);
+}
+
+void FieldAir::prepare(EmitterWork* pWork, ParticleField* pBlock) {
+    Vec3f direction(pBlock->getDir());
+    MR::normalizeOrZero(&direction);
+    if (pBlock->checkStatus(2)) {
+        mAccel.scale(pBlock->getMag(), direction);
+    } else {
+        NebulaMtxMultVecSR(pWork->mRotationMtx, &direction, &mAccel);
+        mAccel.scale(pBlock->getMag());
+    }
+}
+
+void FieldVortex::prepare(EmitterWork* pWork, ParticleField* pBlock) {
+    NebulaMtxMultVecSR(pWork->mGlobalRot, &pBlock->getDir(), &field_0x10);
+    MR::normalizeOrZero(&field_0x10);
+    field_0x1c = pBlock->getPos().z * pBlock->getPos().z;
+    field_0x20 = 1.0f / field_0x1c;
+}
+
+void FieldVortex::calc(EmitterWork*, ParticleField* pBlock, ParticleCore* pParticle) {
+    Vec3f radial;
+    radial.scale(field_0x10.dot(pParticle->mLocalPosition), field_0x10);
+    radial.sub(pParticle->mLocalPosition, radial);
+    f32 distanceSquared = radial.squared();
+    f32 magnitude;
+    if (distanceSquared > field_0x1c) {
+        magnitude = pBlock->getMagRndm();
+    } else {
+        f32 rate = distanceSquared * field_0x20;
+        magnitude = (1.0f - rate) * pBlock->getMag() + rate * pBlock->getMagRndm();
+    }
+
+    MR::normalizeOrZero(&radial);
+    mAccel.cross(radial, field_0x10);
+    mAccel.scale(magnitude);
+    calcAffect(pBlock, pParticle);
+}
+
+void FieldConvection::prepare(EmitterWork* pWork, ParticleField* pBlock) {
+    Vec3f radial;
+    Vec3f tangent;
+    tangent.cross(pBlock->getPos(), pBlock->getDir());
+    radial.cross(pBlock->getDir(), tangent);
+    NebulaMtxMultVecSR(pWork->mGlobalRot, &radial, &field_0x10);
+    NebulaMtxMultVecSR(pWork->mGlobalRot, &pBlock->getDir(), &field_0x1c);
+    NebulaMtxMultVecSR(pWork->mGlobalRot, &tangent, &field_0x28);
+    MR::normalizeOrZero(&field_0x10);
+    MR::normalizeOrZero(&field_0x1c);
+    MR::normalizeOrZero(&field_0x28);
+}
+
+void FieldSpin::prepare(EmitterWork* pWork, ParticleField* pBlock) {
+    Vec3f axis;
+    Mtx rotation;
+    NebulaMtxMultVecSR(pWork->mGlobalRot, &pBlock->getDir(), &axis);
+    MR::normalizeOrZero(&axis);
+    NebulaMtxRotAxisRad(rotation, &axis, pBlock->getMag());
+    field_0x10.set< f32 >(rotation[0][0], rotation[1][0], rotation[2][0]);
+    field_0x1c.set< f32 >(rotation[0][1], rotation[1][1], rotation[2][1]);
+    field_0x28.set< f32 >(rotation[0][2], rotation[1][2], rotation[2][2]);
 }
 
 void FieldAir::calc(EmitterWork* work, ParticleField* block, ParticleCore* ptcl) {

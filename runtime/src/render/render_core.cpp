@@ -2082,6 +2082,7 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
         matrix_bytes += matrices * core::kRowsPerMatrix * 16u * 2u;
     }
     matrix_bytes += std::size_t{list.light_set_count} * core::kLightRows * 16u;
+    matrix_bytes += std::size_t{list.particle_count} * sizeof(NebulaParticleInstance);
     std::size_t constant_bytes = std::size_t{list.view_count} * (sizeof(core::ViewRows) + 255u);
     for (std::uint32_t c = 0; c < list.constants_count; ++c) {
         const auto& constants = list.constants[c];

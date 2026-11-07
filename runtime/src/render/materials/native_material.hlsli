@@ -4,6 +4,7 @@
 // coordinates) and `float4 material_color(NativeVaryings i)` (its colour, alpha tested by the material itself). Bindings
 // and output variants are every program's (program.hlsli); b1 holds the material in both stages. NATIVE_WIDE: the vertices
 // are corners a site's line or point became. NATIVE_PARTICLE: the corners place themselves by the presented frame's time.
+// NATIVE_OWN_VERTEX: the includer writes its own vertex stage (particle_instances.hlsl).
 
 #include "program.hlsli"
 
@@ -43,6 +44,19 @@ float3 native_fog(float3 c, float4 pos, float4 fog, float4 fog_color) {
     }
     return lerp(c, fog_color.rgb, f);
 }
+
+#define NATIVE_VARYING_MEMBERS \
+    float4 pos : SV_Position; PER_SAMPLE float4 color : COLOR0; PER_SAMPLE float4 color1 : COLOR1; PER_SAMPLE float4 uv[NEBULA_MATERIAL_SLOTS] : TEXCOORD0; \
+    VARYINGS_MOTION
+
+// What the vertex stage writes and the pixel stage reads.
+struct NativeVaryings {
+    NATIVE_VARYING_MEMBERS
+};
+
+float4 material_color(NativeVaryings i);
+
+#if !NATIVE_OWN_VERTEX
 struct NativeVertexIn {
     float3 pos : POSITION;
     float3 nrm : NORMAL;
@@ -78,18 +92,7 @@ struct NativeVertex {
     uint pn_row;     // the position matrix's first row
 };
 
-#define NATIVE_VARYING_MEMBERS \
-    float4 pos : SV_Position; PER_SAMPLE float4 color : COLOR0; PER_SAMPLE float4 color1 : COLOR1; PER_SAMPLE float4 uv[NEBULA_MATERIAL_SLOTS] : TEXCOORD0; \
-    VARYINGS_MOTION
-
-// What the vertex stage writes and the pixel stage reads.
-struct NativeVaryings {
-    NATIVE_VARYING_MEMBERS
-};
-
 void material_vertex(NativeVertex v, inout NativeVaryings o);
-
-float4 material_color(NativeVaryings i);
 
 #if NATIVE_WIDE
 // A spreading line's or point's texture coordinates move a whole texel-space unit on its far edges.
@@ -166,6 +169,7 @@ NativeVaryings native_vs(NativeVertexIn input) {
 #endif
     return o;
 }
+#endif
 
 NativeOut native_ps(NativeVaryings i) {
     // The material's colour as it is; the target rounds it once.

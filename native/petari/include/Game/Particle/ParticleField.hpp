@@ -17,7 +17,8 @@ public:
 
     virtual ~FieldBase() {
     }
-    virtual void prepare(EmitterWork*, ParticleField*);
+    virtual void prepare(EmitterWork*, ParticleField*) {
+    }
     virtual void calc(EmitterWork*, ParticleField*, ParticleCore*) = 0;
 
     Vec3f mAccel;
@@ -212,6 +213,3 @@ private:
     };
 };
 
-#ifndef JPA_FIELD_BLOCK_DEFER_INLINE
-#include "JSystem/JParticle/JPAFieldBlockInline.hpp"
-#endif

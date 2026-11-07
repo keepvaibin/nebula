@@ -1,6 +1,6 @@
 #pragma once
 
-#include "JSystem/JParticle/JPANativeColor.hpp"
+#include "Game/Particle/ParticleDraw.hpp"
 
 #include "JSystem/JUtility/JUTTexture.hpp"
 #include "Game/Particle/ParticleData.hpp"
@@ -13,7 +13,7 @@ public:
 
     // This texture in the particle material's slot.
     void use(u32 slot) {
-        JPANativeColor::texture(slot, mTexture.texObj());
+        ParticleMaterial::texture(slot, mTexture.texObj());
     }
 
     JUTTexture* getJUTTexture() {

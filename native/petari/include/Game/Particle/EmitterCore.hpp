@@ -3,7 +3,7 @@
 #include <nebula_geometry.hpp>
 #include "Game/Particle/EmitterDynamics.hpp"
 #include "Game/Particle/EmitterCallBack.hpp"
-#include "JSystem/JParticle/JPAList.hpp"
+#include "Game/Particle/ParticleList.hpp"
 #include "Game/Particle/ParticleMath.hpp"
 #include "Game/Particle/ParticleRandom.hpp"
 #include "Game/Particle/ParticleResource.hpp"
@@ -50,8 +50,8 @@ struct EmitterWork {
     Mtx mYBBCamMtx;
     Mtx mPosCamMtx;
     Mtx mPrjMtx;
-    JPAList< ParticleCore >* mpAlivePtcl;
-    JPANode< ParticleCore >* mpCurNode;
+    ParticleList* mpAlivePtcl;
+    ParticleSlot* mpCurNode;
     s32 mVolumeAngleNum;
     s32 mVolumeAngleMax;
     s32 mVolumeX;
@@ -367,11 +367,11 @@ public:
     NebulaColor8 mGlobalEnvClr;
     uintptr_t mpUserWork;  // a pointer natively too (EffectSystemUtil's SingleEmitter)
     ParticleRandom mRndm;
-    JPAList< ParticleCore > mAlivePtclBase;
-    JPAList< ParticleCore > mAlivePtclChld;
+    ParticleList mAlivePtclBase;
+    ParticleList mAlivePtclChld;
     // This emitter's free slots, and the chunks they and its live particles are in (from the manager; back to it when
     // the emitter goes).
-    JPAList< ParticleCore > mPtclPool;
+    ParticleList mPtclPool;
     ParticleChunk* mpChunks;
     ParticleChunk* mpLastChunk;
     EmitterManager* mpEmtrMgr;
@@ -398,6 +398,3 @@ enum {
     ParticleStatus_Invisible = 0x08,
 };
 
-#ifndef JPA_EMITTER_DEFER_INLINE
-#include "JSystem/JParticle/JPAEmitterInline.hpp"
-#endif

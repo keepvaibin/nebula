@@ -146,7 +146,7 @@ public:
     u8 mTexAnmIdx;
     u8 mAnmRandom;
     u8 mPrmColorAlphaAnm;
-    // Where it was drawn (JPAParticleBatch): its matrix, or up to four corners; this game frame and the one before.
+    // Where it was drawn (ParticleDraw): its matrix, or up to four corners; this game frame and the one before.
     f32 mDrawnNow[12];
     f32 mDrawnBefore[12];
     u32 mDrawnFrame;

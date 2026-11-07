@@ -1,8 +1,6 @@
-#define JPA_LIST_DEFER_INLINE
-#define JPA_FIELD_BLOCK_DEFER_INLINE
 #include "Game/Particle/ParticleResource.hpp"
 #include "Game/Render/TypedDraw.hpp"
-#include "JSystem/JParticle/JPANativeColor.hpp"
+#include "Game/Particle/ParticleDraw.hpp"
 #include "Game/Render/Material.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/Render/FrameList.hpp"
@@ -33,28 +31,6 @@ ParticleResource::ParticleResource() {
     mUsrIdx = 0;
     mPlan = Plan();
 }
-
-static u8 jpa_pos[324] ATTRIBUTE_ALIGN(32) = {
-    0x00, 0x00, 0x00, 0x32, 0x00, 0x00, 0x32, 0xCE, 0x00, 0x00, 0xCE, 0x00, 0xE7, 0x00, 0x00, 0x19, 0x00, 0x00, 0x19, 0xCE, 0x00, 0xE7, 0xCE, 0x00,
-    0xCE, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xCE, 0x00, 0xCE, 0xCE, 0x00, 0x00, 0x19, 0x00, 0x32, 0x19, 0x00, 0x32, 0xE7, 0x00, 0x00, 0xE7, 0x00,
-    0xE7, 0x19, 0x00, 0x19, 0x19, 0x00, 0x19, 0xE7, 0x00, 0xE7, 0xE7, 0x00, 0xCE, 0x19, 0x00, 0x00, 0x19, 0x00, 0x00, 0xE7, 0x00, 0xCE, 0xE7, 0x00,
-    0x00, 0x32, 0x00, 0x32, 0x32, 0x00, 0x32, 0x00, 0x00, 0x00, 0x00, 0x00, 0xE7, 0x32, 0x00, 0x19, 0x32, 0x00, 0x19, 0x00, 0x00, 0xE7, 0x00, 0x00,
-    0xCE, 0x32, 0x00, 0x00, 0x32, 0x00, 0x00, 0x00, 0x00, 0xCE, 0x00, 0x00, 0x00, 0x00, 0x00, 0x32, 0x00, 0x00, 0x32, 0x00, 0x32, 0x00, 0x00, 0x32,
-    0xE7, 0x00, 0x00, 0x19, 0x00, 0x00, 0x19, 0x00, 0x32, 0xE7, 0x00, 0x32, 0xCE, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x32, 0xCE, 0x00, 0x32,
-    0x00, 0x00, 0xE7, 0x32, 0x00, 0xE7, 0x32, 0x00, 0x19, 0x00, 0x00, 0x19, 0xE7, 0x00, 0xE7, 0x19, 0x00, 0xE7, 0x19, 0x00, 0x19, 0xE7, 0x00, 0x19,
-    0xCE, 0x00, 0xE7, 0x00, 0x00, 0xE7, 0x00, 0x00, 0x19, 0xCE, 0x00, 0x19, 0x00, 0x00, 0xCE, 0x32, 0x00, 0xCE, 0x32, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0xE7, 0x00, 0xCE, 0x19, 0x00, 0xCE, 0x19, 0x00, 0x00, 0xE7, 0x00, 0x00, 0xCE, 0x00, 0xCE, 0x00, 0x00, 0xCE, 0x00, 0x00, 0x00, 0xCE, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x32, 0x00, 0xCE, 0x32, 0x00, 0xCE, 0x00, 0x00, 0x00, 0xE7, 0x00, 0x00, 0x19, 0x00, 0xCE, 0x19, 0x00, 0xCE, 0xE7,
-    0x00, 0x00, 0xCE, 0x00, 0x00, 0x00, 0x00, 0xCE, 0x00, 0x00, 0xCE, 0xCE, 0x00, 0x19, 0x00, 0x00, 0x19, 0x32, 0x00, 0xE7, 0x32, 0x00, 0xE7, 0x00,
-    0x00, 0x19, 0xE7, 0x00, 0x19, 0x19, 0x00, 0xE7, 0x19, 0x00, 0xE7, 0xE7, 0x00, 0x19, 0xCE, 0x00, 0x19, 0x00, 0x00, 0xE7, 0x00, 0x00, 0xE7, 0xCE,
-    0x00, 0x32, 0x00, 0x00, 0x32, 0x32, 0x00, 0x00, 0x32, 0x00, 0x00, 0x00, 0x00, 0x32, 0xE7, 0x00, 0x32, 0x19, 0x00, 0x00, 0x19, 0x00, 0x00, 0xE7,
-    0x00, 0x32, 0xCE, 0x00, 0x32, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xCE,
-};
-
-static u8 jpa_crd[32] ATTRIBUTE_ALIGN(32) = {
-    0x00, 0x00, 0x01, 0x00, 0x01, 0x01, 0x00, 0x01, 0x00, 0x00, 0x02, 0x00, 0x02, 0x01, 0x00, 0x01,
-    0x00, 0x00, 0x01, 0x00, 0x01, 0x02, 0x00, 0x02, 0x00, 0x00, 0x02, 0x00, 0x02, 0x02, 0x00, 0x02,
-};
 
 namespace {
     u8 shapeOf(u32 type, bool rotate) {
@@ -93,34 +69,34 @@ namespace {
     void drawShape(u8 shape, EmitterWork* pWork, ParticleCore* pParticle) {
         switch (shape) {
         case ParticleResource::Shape_Billboard:
-            JPADrawBillboard(pWork, pParticle);
+            ParticleDrawBillboard(pWork, pParticle);
             break;
         case ParticleResource::Shape_RotBillboard:
-            JPADrawRotBillboard(pWork, pParticle);
+            ParticleDrawRotBillboard(pWork, pParticle);
             break;
         case ParticleResource::Shape_YBillboard:
-            JPADrawYBillboard(pWork, pParticle);
+            ParticleDrawYBillboard(pWork, pParticle);
             break;
         case ParticleResource::Shape_RotYBillboard:
-            JPADrawRotYBillboard(pWork, pParticle);
+            ParticleDrawRotYBillboard(pWork, pParticle);
             break;
         case ParticleResource::Shape_Direction:
-            JPADrawDirection(pWork, pParticle);
+            ParticleDrawDirection(pWork, pParticle);
             break;
         case ParticleResource::Shape_RotDirection:
-            JPADrawRotDirection(pWork, pParticle);
+            ParticleDrawRotDirection(pWork, pParticle);
             break;
         case ParticleResource::Shape_DBillboard:
-            JPADrawDBillboard(pWork, pParticle);
+            ParticleDrawDBillboard(pWork, pParticle);
             break;
         case ParticleResource::Shape_Rotation:
-            JPADrawRotation(pWork, pParticle);
+            ParticleDrawRotation(pWork, pParticle);
             break;
         case ParticleResource::Shape_Point:
-            JPADrawPoint(pWork, pParticle);
+            ParticleDrawPoint(pWork, pParticle);
             break;
         case ParticleResource::Shape_Line:
-            JPADrawLine(pWork, pParticle);
+            ParticleDrawLine(pWork, pParticle);
             break;
         }
     }
@@ -128,13 +104,13 @@ namespace {
     void sizeOf(u8 size, EmitterWork* pWork, ParticleCore* pParticle) {
         switch (size) {
         case ParticleResource::Size_Point:
-            JPASetPointSize(pWork, pParticle);
+            ParticleSetPointSize(pWork, pParticle);
             break;
         case ParticleResource::Size_Line:
-            JPASetLineWidth(pWork, pParticle);
+            ParticleSetLineWidth(pWork, pParticle);
             break;
         case ParticleResource::Size_TexCrdAnim:
-            JPALoadCalcTexCrdMtxAnm(pWork, pParticle);
+            ParticleLoadCalcTexCrdMtxAnm(pWork, pParticle);
             break;
         }
     }
@@ -142,19 +118,19 @@ namespace {
     void texIdx(u8 anim, EmitterWork* pWork) {
         switch (anim) {
         case ParticleResource::Anim_Normal:
-            JPACalcTexIdxNormal(pWork);
+            ParticleCalcTexIdxNormal(pWork);
             break;
         case ParticleResource::Anim_Repeat:
-            JPACalcTexIdxRepeat(pWork);
+            ParticleCalcTexIdxRepeat(pWork);
             break;
         case ParticleResource::Anim_Reverse:
-            JPACalcTexIdxReverse(pWork);
+            ParticleCalcTexIdxReverse(pWork);
             break;
         case ParticleResource::Anim_Merge:
-            JPACalcTexIdxMerge(pWork);
+            ParticleCalcTexIdxMerge(pWork);
             break;
         case ParticleResource::Anim_Random:
-            JPACalcTexIdxRandom(pWork);
+            ParticleCalcTexIdxRandom(pWork);
             break;
         }
     }
@@ -162,19 +138,19 @@ namespace {
     void texIdx(u8 anim, EmitterWork* pWork, ParticleCore* pParticle) {
         switch (anim) {
         case ParticleResource::Anim_Normal:
-            JPACalcTexIdxNormal(pWork, pParticle);
+            ParticleCalcTexIdxNormal(pWork, pParticle);
             break;
         case ParticleResource::Anim_Repeat:
-            JPACalcTexIdxRepeat(pWork, pParticle);
+            ParticleCalcTexIdxRepeat(pWork, pParticle);
             break;
         case ParticleResource::Anim_Reverse:
-            JPACalcTexIdxReverse(pWork, pParticle);
+            ParticleCalcTexIdxReverse(pWork, pParticle);
             break;
         case ParticleResource::Anim_Merge:
-            JPACalcTexIdxMerge(pWork, pParticle);
+            ParticleCalcTexIdxMerge(pWork, pParticle);
             break;
         case ParticleResource::Anim_Random:
-            JPACalcTexIdxRandom(pWork, pParticle);
+            ParticleCalcTexIdxRandom(pWork, pParticle);
             break;
         }
     }
@@ -182,19 +158,19 @@ namespace {
     void clrIdx(u8 anim, EmitterWork* pWork) {
         switch (anim) {
         case ParticleResource::Anim_Normal:
-            JPACalcClrIdxNormal(pWork);
+            ParticleCalcClrIdxNormal(pWork);
             break;
         case ParticleResource::Anim_Repeat:
-            JPACalcClrIdxRepeat(pWork);
+            ParticleCalcClrIdxRepeat(pWork);
             break;
         case ParticleResource::Anim_Reverse:
-            JPACalcClrIdxReverse(pWork);
+            ParticleCalcClrIdxReverse(pWork);
             break;
         case ParticleResource::Anim_Merge:
-            JPACalcClrIdxMerge(pWork);
+            ParticleCalcClrIdxMerge(pWork);
             break;
         case ParticleResource::Anim_Random:
-            JPACalcClrIdxRandom(pWork);
+            ParticleCalcClrIdxRandom(pWork);
             break;
         }
     }
@@ -202,28 +178,28 @@ namespace {
     void clrIdx(u8 anim, EmitterWork* pWork, ParticleCore* pParticle) {
         switch (anim) {
         case ParticleResource::Anim_Normal:
-            JPACalcClrIdxNormal(pWork, pParticle);
+            ParticleCalcClrIdxNormal(pWork, pParticle);
             break;
         case ParticleResource::Anim_Repeat:
-            JPACalcClrIdxRepeat(pWork, pParticle);
+            ParticleCalcClrIdxRepeat(pWork, pParticle);
             break;
         case ParticleResource::Anim_Reverse:
-            JPACalcClrIdxReverse(pWork, pParticle);
+            ParticleCalcClrIdxReverse(pWork, pParticle);
             break;
         case ParticleResource::Anim_Merge:
-            JPACalcClrIdxMerge(pWork, pParticle);
+            ParticleCalcClrIdxMerge(pWork, pParticle);
             break;
         case ParticleResource::Anim_Random:
-            JPACalcClrIdxRandom(pWork, pParticle);
+            ParticleCalcClrIdxRandom(pWork, pParticle);
             break;
         }
     }
 
     void stripe(u8 kind, EmitterWork* pWork) {
         if (kind == ParticleResource::Stripe_Plain) {
-            JPADrawStripe(pWork);
+            ParticleDrawStripe(pWork);
         } else if (kind == ParticleResource::Stripe_Cross) {
-            JPADrawStripeX(pWork);
+            ParticleDrawStripeX(pWork);
         }
     }
 }  // namespace
@@ -409,10 +385,10 @@ bool ParticleResource::calc(EmitterWork* work, EmitterCore* emtr) {
 
         clrIdx(mPlan.mEmitterClrIdx, work);
         if (mPlan.mEmitterEnv) {
-            JPACalcEnv(work);
+            ParticleCalcEnv(work);
         }
         if (mPlan.mEmitterPrm) {
-            JPACalcPrm(work);
+            ParticleCalcPrm(work);
         }
         texIdx(mPlan.mEmitterTexIdx, work);
 
@@ -431,8 +407,8 @@ bool ParticleResource::calc(EmitterWork* work, EmitterCore* emtr) {
             }
         }
 
-        JPANode< ParticleCore >* node = emtr->mAlivePtclBase.getFirst();
-        JPANode< ParticleCore >* next;
+        ParticleSlot* node = emtr->mAlivePtclBase.getFirst();
+        ParticleSlot* next;
         while (node != emtr->mAlivePtclBase.getEnd()) {
             next = node->getNext();
             if (node->getObject()->calc_p(work)) {
@@ -441,9 +417,9 @@ bool ParticleResource::calc(EmitterWork* work, EmitterCore* emtr) {
             node = next;
         }
 
-        JPANode< ParticleCore >* child = emtr->mAlivePtclChld.getFirst();
+        ParticleSlot* child = emtr->mAlivePtclChld.getFirst();
         while (child != emtr->mAlivePtclChld.getEnd()) {
-            JPANode< ParticleCore >* childNext = child->getNext();
+            ParticleSlot* childNext = child->getNext();
             if (child->getObject()->calc_c(work)) {
                 emtr->mPtclPool.push_front(emtr->mAlivePtclChld.erase(child));
             }
@@ -473,7 +449,7 @@ void ParticleResource::draw(EmitterWork* work, EmitterCore* emtr) {
 }
 
 void ParticleResource::drawP(EmitterWork* work) {
-    JPAParticleBatch::setSource(MotionSignal::drawEmitter(this, work->mpEmtr, false));
+    ParticleDraw::setSource(MotionSignal::drawEmitter(this, work->mpEmtr, false));
     work->mpEmtr->clearStatus(0x80);
 
     work->mGlobalPtclScl.x = work->mpEmtr->mGlobalPScl.x * mpBaseShape->getBaseSizeX();
@@ -504,66 +480,66 @@ void ParticleResource::drawP(EmitterWork* work) {
 
     switch (mPlan.mEmitterColor) {
     case EmitterColor_PrmEnv:
-        JPARegistPrmEnv(work);
+        ParticleRegistPrmEnv(work);
         break;
     case EmitterColor_Env:
-        JPARegistEnv(work);
+        ParticleRegistEnv(work);
         break;
     case EmitterColor_Prm:
-        JPARegistPrm(work);
+        ParticleRegistPrm(work);
         break;
     }
     if (mPlan.mSize == Size_Point) {
-        JPASetPointSize(work);
+        ParticleSetPointSize(work);
     } else if (mPlan.mSize == Size_Line) {
-        JPASetLineWidth(work);
+        ParticleSetLineWidth(work);
     }
     if (mPlan.mPosMtxCam) {
-        JPALoadPosMtxCam(work);
+        ParticleLoadPosMtxCam(work);
     }
     switch (mPlan.mTexCrd) {
     case TexCrd_Identity:
-        JPAGenTexCrdMtxIdt(work);
+        ParticleGenTexCrdMtxIdt(work);
         break;
     case TexCrd_Projection:
-        JPAGenTexCrdMtxPrj(work);
+        ParticleGenTexCrdMtxPrj(work);
         break;
     case TexCrd_CalcAnim:
-        JPAGenCalcTexCrdMtxAnm(work);
+        ParticleGenCalcTexCrdMtxAnm(work);
         break;
     case TexCrd_Anim:
-        JPAGenTexCrdMtxAnm(work);
+        ParticleGenTexCrdMtxAnm(work);
         break;
     }
     if (mPlan.mLoadTex == LoadTex_Fixed) {
-        JPALoadTex(work);
+        ParticleLoadTex(work);
     } else if (mPlan.mLoadTex == LoadTex_Anim) {
-        JPALoadTexAnm(work);
+        ParticleLoadTexAnm(work);
     }
     if (mPlan.mExTex) {
-        JPALoadExTex(work);
+        ParticleLoadExTex(work);
     }
-    JPADrawEmitterCallBackB(work);
+    ParticleDrawEmitterCallBackB(work);
     stripe(mPlan.mStripe, work);
 
     if (mpBaseShape->isDrawFwdAhead()) {
-        JPANode< ParticleCore >* node = work->mpEmtr->mAlivePtclBase.getLast();
+        ParticleSlot* node = work->mpEmtr->mAlivePtclBase.getLast();
         for (; node != work->mpEmtr->mAlivePtclBase.getEnd(); node = node->getPrev()) {
             work->mpCurNode = node;
-            JPAParticleBatch::particle(node->getObject());
+            ParticleDraw::particle(node->getObject());
             drawParticle(work, node->getObject());
         }
     } else {
-        JPANode< ParticleCore >* node = work->mpEmtr->mAlivePtclBase.getFirst();
+        ParticleSlot* node = work->mpEmtr->mAlivePtclBase.getFirst();
         for (; node != work->mpEmtr->mAlivePtclBase.getEnd(); node = node->getNext()) {
             work->mpCurNode = node;
-            JPAParticleBatch::particle(node->getObject());
+            ParticleDraw::particle(node->getObject());
             drawParticle(work, node->getObject());
         }
     }
 
 
-    JPAParticleBatch::flush();
+    ParticleDraw::flush();
 
     if (work->mpEmtr->mpEmtrCallBack != NULL) {
         work->mpEmtr->mpEmtrCallBack->drawAfter(work->mpEmtr);
@@ -571,7 +547,7 @@ void ParticleResource::drawP(EmitterWork* work) {
 }
 
 void ParticleResource::drawC(EmitterWork* work) {
-    JPAParticleBatch::setSource(MotionSignal::drawEmitter(this, work->mpEmtr, true));
+    ParticleDraw::setSource(MotionSignal::drawEmitter(this, work->mpEmtr, true));
     work->mpEmtr->setStatus(0x80);
 
     if (mpChildShape->isScaleInherited()) {
@@ -601,26 +577,26 @@ void ParticleResource::drawC(EmitterWork* work) {
     setCTev(work);
 
     if (mPlan.mChildPrmEnv) {
-        JPARegistChildPrmEnv(work);
+        ParticleRegistChildPrmEnv(work);
     }
     if (mPlan.mChildPosMtxCam) {
-        JPALoadPosMtxCam(work);
+        ParticleLoadPosMtxCam(work);
     }
-    JPADrawEmitterCallBackB(work);
+    ParticleDrawEmitterCallBackB(work);
     stripe(mPlan.mChildStripe, work);
 
     if (mpBaseShape->isDrawFwdAhead()) {
-        JPANode< ParticleCore >* node = work->mpEmtr->mAlivePtclChld.getLast();
+        ParticleSlot* node = work->mpEmtr->mAlivePtclChld.getLast();
         for (; node != work->mpEmtr->mAlivePtclChld.getEnd(); node = node->getPrev()) {
             work->mpCurNode = node;
-            JPAParticleBatch::particle(node->getObject());
+            ParticleDraw::particle(node->getObject());
             drawChild(work, node->getObject());
         }
     } else {
-        JPANode< ParticleCore >* node = work->mpEmtr->mAlivePtclChld.getFirst();
+        ParticleSlot* node = work->mpEmtr->mAlivePtclChld.getFirst();
         for (; node != work->mpEmtr->mAlivePtclChld.getEnd(); node = node->getNext()) {
             work->mpCurNode = node;
-            JPAParticleBatch::particle(node->getObject());
+            ParticleDraw::particle(node->getObject());
             drawChild(work, node->getObject());
         }
     }
@@ -630,14 +606,14 @@ void ParticleResource::drawC(EmitterWork* work) {
         work->mpEmtr->mpEmtrCallBack->drawAfter(work->mpEmtr);
     }
 
-    JPAParticleBatch::flush();
+    ParticleDraw::flush();
 }
 
 namespace {
     // runtime/src/render/materials/particle.hlsl for the emitter's draws: the base shape's modes and alpha test, the
     // textures the emitter's functions chose, the blending, depth and culling the
     // shape and the manager set; the register file it reads follows the per-emitter and per-particle colours.
-    // The particle material in use and the colours the emitter and particle functions set (JPANativeColor): prm and
+    // The particle material in use and the colours the emitter and particle functions set (ParticleMaterial): prm and
     // env carry over from one emitter to the next.
     SiteMaterial sParticle;
     bool sParticleSent = false;
@@ -671,9 +647,10 @@ namespace {
 
     // runtime/src/render/materials/particle.hlsl for the emitter's draws: the base shape's modes and alpha test, the
     // textures as the emitter's functions load them (the drawing state's maps), the blending, depth and culling the
-    // shape and the manager set; its colours from JPANativeColor.
-    void sendParticleMaterial(const ParticleShape* pShape, u32 flags) {
-        JPAParticleBatch::begin((flags & 7) != 0);
+    // shape and the manager set; its colours from ParticleMaterial. `place` and `coord`: the first corner place and
+    // coordinate of the draws' quad in particle_instances.hlsl's tables.
+    void sendParticleMaterial(const ParticleShape* pShape, u32 flags, u32 place, u32 coord) {
+        ParticleDraw::begin((flags & 7) != 0);
         SiteMaterial& material = sParticle;
         material.init(NEBULA_SHADER_PARTICLE, SiteMaterial::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
                            NEBULA_CULL_NONE);
@@ -686,9 +663,11 @@ namespace {
         material.constants[84] = static_cast< f32 >(pShape->getStageColorMode());
         material.constants[85] = static_cast< f32 >(pShape->getStageAlphaMode());
         material.constants[86] = static_cast< f32 >(flags);
+        material.constants[87] = static_cast< f32 >(place);
         material.constants[88] = static_cast< f32 >(pShape->getAlphaCmp0());
         material.constants[89] = static_cast< f32 >(pShape->getAlphaCmp1());
         material.constants[90] = static_cast< f32 >(pShape->getAlphaOp());
+        material.constants[91] = static_cast< f32 >(coord);
         material.mState.pixel_shading = nebula_alpha_test_always(pShape->getAlphaCmp0(), pShape->getAlphaCmp1(),
                                                                 pShape->getAlphaOp()) != 0;
         // The references (whole values; sendParticle scales them into the alpha test's slots).
@@ -721,7 +700,7 @@ namespace {
 
 }  // namespace
 
-namespace JPANativeColor {
+namespace ParticleMaterial {
     const SiteMaterial& material() {
         return sParticle;
     }
@@ -740,7 +719,7 @@ namespace JPANativeColor {
         if (sParticleTextures[slot] == pTexture) {
             return;
         }
-        JPAParticleBatch::flush();
+        ParticleDraw::flush();
         sParticleTextures[slot] = pTexture;
         sParticle.setTexture(slot, *pTexture);
         if (sParticleSent) {
@@ -766,7 +745,7 @@ namespace JPANativeColor {
         sPrm = rPrm;
         sEnv = rEnv;
     }
-}  // namespace JPANativeColor
+}  // namespace ParticleMaterial
 
 void ParticleResource::setPTev() {
     u32 flags = 0;
@@ -777,9 +756,8 @@ void ParticleResource::setPTev() {
     } else {
         center_offset = 0x30;
     }
-    int pos_offset = center_offset + base_plane_type * 0x6C;
-    int crd_offset = (mpBaseShape->getTilingS() + 2 * mpBaseShape->getTilingT()) * 8;
-    JPASetQuadArrays(jpa_pos + pos_offset, jpa_crd + crd_offset);
+    const u32 place = (center_offset + base_plane_type * 0x6C) / 3;
+    const u32 coord = (mpBaseShape->getTilingS() + 2 * mpBaseShape->getTilingT()) * 4;
 
     if (mpExTexShape != NULL) {
         if (mpExTexShape->isUseIndirect()) {
@@ -796,21 +774,14 @@ void ParticleResource::setPTev() {
     if (mpBaseShape->isPrjTex()) {
         flags |= 4;
     }
-    if (mpBaseShape->isClipOn()) {
-    } else {
-    }
-    sendParticleMaterial(mpBaseShape, flags);
+    sendParticleMaterial(mpBaseShape, flags, place, coord);
 }
 
 void ParticleResource::setCTev(EmitterWork* work) {
     int base_plane_type = (mpChildShape->getType() == 3 || mpChildShape->getType() == 7) ? mpChildShape->getBasePlaneType() : 0;
-    int pos_offset = 0x30 + base_plane_type * 0x6C;
-    JPASetQuadArrays(jpa_pos + pos_offset, jpa_crd);
-    if (mpChildShape->isClipOn()) {
-    } else {
-    }
+    const u32 place = (0x30 + base_plane_type * 0x6C) / 3;
     work->mpResMgr->use(work->mpRes->getTexIdx(mpChildShape->getTexIdx()), 1);
-    sendParticleMaterial(mpBaseShape, 8);
+    sendParticleMaterial(mpBaseShape, 8, place, 0);
 }
 
 // Each particle frame, last chosen first: scale, colour, alpha, texture index.
@@ -818,58 +789,58 @@ void ParticleResource::calc_p(EmitterWork* work, ParticleCore* ptcl) {
     const Plan& p = mPlan;
     switch (p.mScaleAnimX) {
     case ScaleAnim_Normal:
-        JPACalcScaleAnmNormal(work, ptcl);
+        ParticleCalcScaleAnmNormal(work, ptcl);
         break;
     case ScaleAnim_Repeat:
-        JPACalcScaleAnmRepeatX(work, ptcl);
+        ParticleCalcScaleAnmRepeatX(work, ptcl);
         break;
     case ScaleAnim_Reverse:
-        JPACalcScaleAnmReverseX(work, ptcl);
+        ParticleCalcScaleAnmReverseX(work, ptcl);
         break;
     }
     if (p.mScaleX) {
-        JPACalcScaleX(work, ptcl);
+        ParticleCalcScaleX(work, ptcl);
     }
     switch (p.mScaleAnimY) {
     case ScaleAnim_Normal:
-        JPACalcScaleAnmNormal(work, ptcl);
+        ParticleCalcScaleAnmNormal(work, ptcl);
         break;
     case ScaleAnim_Repeat:
-        JPACalcScaleAnmRepeatY(work, ptcl);
+        ParticleCalcScaleAnmRepeatY(work, ptcl);
         break;
     case ScaleAnim_Reverse:
-        JPACalcScaleAnmReverseY(work, ptcl);
+        ParticleCalcScaleAnmReverseY(work, ptcl);
         break;
     }
     if (p.mScaleY == ScaleY_Own) {
-        JPACalcScaleY(work, ptcl);
+        ParticleCalcScaleY(work, ptcl);
     } else if (p.mScaleY == ScaleY_Copy) {
-        JPACalcScaleCopy(work, ptcl);
+        ParticleCalcScaleCopy(work, ptcl);
     }
     if (p.mColorCopy) {
-        JPACalcColorCopy(work, ptcl);
+        ParticleCalcColorCopy(work, ptcl);
     }
     clrIdx(p.mClrIdx, work, ptcl);
     if (p.mEnv) {
-        JPACalcEnv(work, ptcl);
+        ParticleCalcEnv(work, ptcl);
     }
     if (p.mPrm) {
-        JPACalcPrm(work, ptcl);
+        ParticleCalcPrm(work, ptcl);
     }
     if (p.mAlpha == Alpha_Flick) {
-        JPACalcAlphaFlickAnm(work, ptcl);
+        ParticleCalcAlphaFlickAnm(work, ptcl);
     } else if (p.mAlpha == Alpha_Anim) {
-        JPACalcAlphaAnm(work, ptcl);
+        ParticleCalcAlphaAnm(work, ptcl);
     }
     texIdx(p.mTexIdx, work, ptcl);
 }
 
 void ParticleResource::calc_c(EmitterWork* work, ParticleCore* ptcl) {
     if (mPlan.mChildAlphaOut) {
-        JPACalcChildAlphaOut(work, ptcl);
+        ParticleCalcChildAlphaOut(work, ptcl);
     }
     if (mPlan.mChildScaleOut) {
-        JPACalcChildScaleOut(work, ptcl);
+        ParticleCalcChildScaleOut(work, ptcl);
     }
 }
 
@@ -877,35 +848,35 @@ void ParticleResource::calc_c(EmitterWork* work, ParticleCore* ptcl) {
 void ParticleResource::drawParticle(EmitterWork* work, ParticleCore* ptcl) {
     switch (mPlan.mParticleColor) {
     case ParticleColor_PrmAlphaEnv:
-        JPARegistPrmAlphaEnv(work, ptcl);
+        ParticleRegistPrmAlphaEnv(work, ptcl);
         break;
     case ParticleColor_PrmAlpha:
-        JPARegistPrmAlpha(work, ptcl);
+        ParticleRegistPrmAlpha(work, ptcl);
         break;
     case ParticleColor_AlphaEnv:
-        JPARegistAlphaEnv(work, ptcl);
+        ParticleRegistAlphaEnv(work, ptcl);
         break;
     case ParticleColor_Alpha:
-        JPARegistAlpha(work, ptcl);
+        ParticleRegistAlpha(work, ptcl);
         break;
     case ParticleColor_Env:
-        JPARegistEnv(work, ptcl);
+        ParticleRegistEnv(work, ptcl);
         break;
     }
     sizeOf(mPlan.mParticleSize, work, ptcl);
     if (mPlan.mTexAnim) {
-        JPALoadTexAnm(work, ptcl);
+        ParticleLoadTexAnm(work, ptcl);
     }
-    JPADrawParticleCallBack(work, ptcl);
+    ParticleDrawParticleCallBack(work, ptcl);
     drawShape(mPlan.mShape, work, ptcl);
 }
 
 void ParticleResource::drawChild(EmitterWork* work, ParticleCore* ptcl) {
     if (mPlan.mChildPrmAlphaEnv) {
-        JPARegistPrmAlphaEnv(work, ptcl);
+        ParticleRegistPrmAlphaEnv(work, ptcl);
     }
     sizeOf(mPlan.mChildSize, work, ptcl);
-    JPADrawParticleCallBack(work, ptcl);
+    ParticleDrawParticleCallBack(work, ptcl);
     drawShape(mPlan.mChildShape, work, ptcl);
 }
 
@@ -983,8 +954,3 @@ void ParticleResource::calcWorkData_d(EmitterWork* work) {
     NebulaMtxMultVecSR(work->mGlobalRot, &work->mpEmtr->mLocalDir, &work->mGlobalEmtrDir);
 }
 
-#include "JSystem/JParticle/JPAFieldBlockInline.hpp"
-#include "JSystem/JParticle/JPAListInline.hpp"
-
-template JPANode< ParticleCore >* JPAList< ParticleCore >::erase(JPANode< ParticleCore >*);
-template void JPAList< ParticleCore >::push_front(JPANode< ParticleCore >*);

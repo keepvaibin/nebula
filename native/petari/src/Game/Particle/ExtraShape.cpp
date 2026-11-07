@@ -3,7 +3,7 @@
 #include "Game/Particle/EmitterCore.hpp"
 #include "Game/Particle/ParticleCore.hpp"
 
-void JPACalcScaleX(EmitterWork* work, ParticleCore* ptcl) {
+void ParticleCalcScaleX(EmitterWork* work, ParticleCore* ptcl) {
     ExtraShape* esp = work->mpRes->getEsp();
     if (work->mScaleAnm < esp->getScaleInTiming()) {
         ptcl->mParticleScaleX = ptcl->mScaleOut * (esp->getScaleIncRateX() * work->mScaleAnm + esp->getScaleInValueX());
@@ -14,7 +14,7 @@ void JPACalcScaleX(EmitterWork* work, ParticleCore* ptcl) {
     }
 }
 
-void JPACalcScaleY(EmitterWork* work, ParticleCore* ptcl) {
+void ParticleCalcScaleY(EmitterWork* work, ParticleCore* ptcl) {
     ExtraShape* esp = work->mpRes->getEsp();
     if (work->mScaleAnm < esp->getScaleInTiming()) {
         ptcl->mParticleScaleY = ptcl->mScaleOut * (esp->getScaleIncRateY() * work->mScaleAnm + esp->getScaleInValueY());
@@ -25,27 +25,27 @@ void JPACalcScaleY(EmitterWork* work, ParticleCore* ptcl) {
     }
 }
 
-void JPACalcScaleCopy(EmitterWork* work, ParticleCore* ptcl) {
+void ParticleCalcScaleCopy(EmitterWork* work, ParticleCore* ptcl) {
     ptcl->mParticleScaleY = ptcl->mParticleScaleX;
 }
 
-void JPACalcScaleAnmNormal(EmitterWork* work, ParticleCore* ptcl) {
+void ParticleCalcScaleAnmNormal(EmitterWork* work, ParticleCore* ptcl) {
     work->mScaleAnm = ptcl->mTime;
 }
 
-void JPACalcScaleAnmRepeatX(EmitterWork* work, ParticleCore* ptcl) {
+void ParticleCalcScaleAnmRepeatX(EmitterWork* work, ParticleCore* ptcl) {
     ExtraShape* esp = work->mpRes->getEsp();
     s16 cycle = esp->getScaleAnmCycleX();
     work->mScaleAnm = (cycle != 0 ? ptcl->mAge % cycle : ptcl->mAge) / static_cast< f32 >(cycle);
 }
 
-void JPACalcScaleAnmRepeatY(EmitterWork* work, ParticleCore* ptcl) {
+void ParticleCalcScaleAnmRepeatY(EmitterWork* work, ParticleCore* ptcl) {
     ExtraShape* esp = work->mpRes->getEsp();
     s16 cycle = esp->getScaleAnmCycleY();
     work->mScaleAnm = (cycle != 0 ? ptcl->mAge % cycle : ptcl->mAge) / static_cast< f32 >(cycle);
 }
 
-void JPACalcScaleAnmReverseX(EmitterWork* work, ParticleCore* ptcl) {
+void ParticleCalcScaleAnmReverseX(EmitterWork* work, ParticleCore* ptcl) {
     ExtraShape* esp = work->mpRes->getEsp();
     const s16 period = esp->getScaleAnmCycleX();
     f32 cycle = (period != 0 ? ptcl->mAge / period : ptcl->mAge < 0 ? -1 : 0) & 1;
@@ -53,7 +53,7 @@ void JPACalcScaleAnmReverseX(EmitterWork* work, ParticleCore* ptcl) {
     work->mScaleAnm = base + (cycle * (1.0f - base * 2.0f));
 }
 
-void JPACalcScaleAnmReverseY(EmitterWork* work, ParticleCore* ptcl) {
+void ParticleCalcScaleAnmReverseY(EmitterWork* work, ParticleCore* ptcl) {
     ExtraShape* esp = work->mpRes->getEsp();
     const s16 period = esp->getScaleAnmCycleY();
     f32 cycle = (period != 0 ? ptcl->mAge / period : ptcl->mAge < 0 ? -1 : 0) & 1;
@@ -61,7 +61,7 @@ void JPACalcScaleAnmReverseY(EmitterWork* work, ParticleCore* ptcl) {
     work->mScaleAnm = base + (cycle * (1.0f - base * 2.0f));
 }
 
-void JPACalcAlphaAnm(EmitterWork* work, ParticleCore* ptcl) {
+void ParticleCalcAlphaAnm(EmitterWork* work, ParticleCore* ptcl) {
     ExtraShape* esp = work->mpRes->getEsp();
     f32 alpha = 0.0f;
     if (ptcl->mTime < esp->getAlphaInTiming()) {
@@ -74,7 +74,7 @@ void JPACalcAlphaAnm(EmitterWork* work, ParticleCore* ptcl) {
     ptcl->mPrmColorAlphaAnm = nebula_f32_to_u8(alpha);
 }
 
-void JPACalcAlphaFlickAnm(EmitterWork* work, ParticleCore* ptcl) {
+void ParticleCalcAlphaFlickAnm(EmitterWork* work, ParticleCore* ptcl) {
     ExtraShape* esp = work->mpRes->getEsp();
     f32 alpha = 0.0f;
     if (ptcl->mTime < esp->getAlphaInTiming()) {

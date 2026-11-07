@@ -106,6 +106,8 @@ namespace Frame {
     // A cooked form's programs over a site's vertices: inputs the site has none of read zero.
     u32 formPipeline(u64 vertex, u64 pixel, const u8* pFormInputs, u32 formInputCount, u32 state, const NebulaLayoutInput* pInputs, u32 inputCount, u32 stride);
     u32 sitePipeline(u32 shader, u32 state, const NebulaLayoutInput* pInputs, u32 inputCount, u32 stride, bool wide);
+    // The particle material over instanced particles (NEBULA_ITEM_INSTANCES).
+    u32 particlePipeline(u32 state);
 
     bool pixelLit();
     void notDrawn(const ModelData* pData, u32 material, u32 replace, u32 pass);

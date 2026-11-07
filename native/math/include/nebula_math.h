@@ -57,7 +57,7 @@ void NebulaMtxPerspective(Mtx44 m, f32 fovY, f32 aspect, f32 n, f32 f);
 void NebulaMtxOrtho(Mtx44 m, f32 t, f32 b, f32 l, f32 r, f32 n, f32 f);
 void NebulaQuatFromMtx(Quaternion* r, const Mtx m);
 void NebulaQuatSlerp(const Quaternion* p, const Quaternion* q, Quaternion* r, f32 t);
-/* A rotation about the x, y or z axis by the game's own sine and cosine tables (defined with the game). */
+/* A rotation about the x, y or z axis by NebulaSin and NebulaCos. */
 void NebulaMtxRotRad(Mtx m, char axis, f32 rad);
 
 static inline void NebulaMtxIdentity(Mtx m) {

@@ -1,5 +1,8 @@
 #include "JSystem/JSupport/JSURandomInputStream.hpp"
 
+JSUInputStream::~JSUInputStream() {
+}
+
 s32 JSUInputStream::read(void* pDest, s32 length) {
     s32 read = readData(pDest, length);
     if (read != length) {

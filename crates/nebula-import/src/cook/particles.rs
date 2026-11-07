@@ -16,7 +16,7 @@ const HEADER: usize = 32;
 const RESOURCE: usize = 48;
 const DYNAMICS: usize = 0x74;
 const SHAPE: usize = 0x6C;
-const SHAPE_TEXTURE_KEYS: usize = 82; // ParticleShapeData::mTexAnmKeyNum
+const SHAPE_TEXTURE_KEYS: usize = 81; // ParticleShapeData::mTexAnmKeyNum
 const SHAPE_LAST_FRAME: usize = 86; // mColorAnmFrameMax
 const EXTRA: usize = 0x78;
 const CHILD: usize = 0x48;
@@ -289,7 +289,6 @@ fn shape(s: &Src, at: usize) -> Result<Shape> {
         .bool(flags & 0x0010_0000 != 0)
         .bool(flags & 0x0020_0000 != 0)
         .bool(flags & 0x0040_0000 != 0)
-        .bool(flags & 0x0080_0000 != 0)
         .bool(tex_crd)
         .bool((flags >> 27) & 1 != 0)
         .bool((flags >> 28) & 1 != 0)
@@ -303,6 +302,7 @@ fn shape(s: &Src, at: usize) -> Result<Shape> {
         .u8(s.u8(at + 0x2F)?)
         .u8(s.u8(at + 0x30)?)
         .u8(s.u8(at + 0x2E)?)
+        .pad(1)
         .i16(last_frame)
         .raw(s.bytes(at + 0x26, 8)?) // primary and environment colours
         .pad(12); // the table offsets
@@ -365,9 +365,10 @@ fn child(s: &Src, at: usize) -> Result<Vec<u8>> {
         .u8(((flags >> 4) & 7) as u8)
         .u8(((flags >> 7) & 7) as u8)
         .u8(((flags >> 10) & 1) as u8);
-    for bit in [0x10000, 0x20000, 0x40000, 0x10_0000, 0x20_0000, 0x40_0000, 0x80_0000, 0x100_0000] {
+    for bit in [0x10000, 0x20000, 0x40000, 0x20_0000, 0x40_0000, 0x80_0000, 0x100_0000] {
         r.bool(flags & bit != 0);
     }
+    r.pad(1);
     floats(s, &mut r, at + 0xC, 10)?;
     r.raw(s.bytes(at + 0x34, 8)?);
     r.f32(s.f32(at + 0x3C)?).i16(s.i16(at + 0x40)?).i16(s.i16(at + 0x42)?).u8(s.u8(at + 0x44)?).u8(s.u8(at + 0x45)?);
@@ -438,7 +439,7 @@ fn texture(s: &Src, at: usize) -> Result<Texture> {
     Ok(Texture { name, info: info.0, record })
 }
 
-/// A disc particle file (JPAC2-10).
+/// A disc particle file (version 2-10).
 pub fn read_jpc(bytes: &[u8], stats: &mut Stats) -> Result<ParticleIr> {
     let textured = formats::jpc(bytes, stats)?;
     let host = native_data::jpc_host(&textured)?;

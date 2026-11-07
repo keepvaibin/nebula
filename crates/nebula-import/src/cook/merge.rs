@@ -347,7 +347,9 @@ pub fn edit_rows(table: &[u8], text: &[u8]) -> Result<Vec<u8>> {
 pub fn add_particles(base: &[u8], extra: &[u8], first_index: u16) -> Result<Vec<u8>> {
     let base = super::particles::read_nptc(base)?;
     let extra = super::particles::read_nptc(extra)?;
-    Ok(super::particles::write(&super::particles::merge(&base, &extra, u32::from(first_index))?))
+    let merged = super::particles::merge(&base, &extra, u32::from(first_index))?;
+    super::pipeline_list::add_particles(&merged);
+    Ok(super::particles::write(&merged))
 }
 
 #[cfg(test)]
