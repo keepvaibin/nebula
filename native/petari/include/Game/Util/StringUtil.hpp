@@ -164,27 +164,9 @@ namespace MR {
     /// @param pDst The output pointer for the parsed value.
     void scan8(const char* pSrc, const char* pSubStr, u8* pDst);
 
-    /// @brief Parses the given character string into a 32-bit floating-point number.
-    /// @param pSrc The pointer to the null-terminated character string to read from.
-    /// @param pSubStr The pointer to the null-terminated character substring to search for.
-    /// @param pDst The output pointer for the parsed value.
-    void scanf32(const char* pSrc, const char* pSubStr, f32* pDst);
-
-    /// @brief Parses the given character string into a set of four unsigned 8-bit integers.
-    /// @param pSrc The pointer to the null-terminated character string to read from.
-    /// @param pSubStr The pointer to the null-terminated character substring to search for.
-    /// @param pDst The output pointer for the parsed values.
-    void scanu8x4(const char* pSrc, const char* pSubStr, u8* pDst);
-
     /// @brief Parses the given character string into a set of four signed 16-bit integers.
     /// @param pSrc The pointer to the null-terminated character string to read from.
     /// @param pSubStr The pointer to the null-terminated character substring to search for.
     /// @param pDst The output pointer for the parsed values.
     void scans16x4(const char* pSrc, const char* pSubStr, s16* pDst);
-
-    /// @brief Parses the given character string into a set of four 32-bit floating-point numbers.
-    /// @param pSrc The pointer to the null-terminated character string to read from.
-    /// @param pSubStr The pointer to the null-terminated character substring to search for.
-    /// @param pDst The output pointer for the parsed values.
-    void scanf32x4(const char* pSrc, const char* pSubStr, f32* pDst);
 };  // namespace MR
