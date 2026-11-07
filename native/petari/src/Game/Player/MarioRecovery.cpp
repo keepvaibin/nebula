@@ -158,9 +158,9 @@ bool MarioRecovery::start() {
     _16 = 0;
     _1A = 0;
     _34 = *getPlayer()->getLastSafetyTrans(nullptr);
-    changeAnimationNonStop("\210\370\202\253\226\337\202\265" /* 引き戻し */);
-    playSound("\220\272\215\121\202\304" /* 声慌て */);
-    playEffect("\210\370\202\253\226\337\202\265\226\101" /* 引き戻し泡 */);
+    changeAnimationNonStop("引き戻し");
+    playSound("声慌て");
+    playEffect("引き戻し泡");
     if (_12) {
         _1A = 3;
         _16 = 180;
@@ -181,7 +181,7 @@ bool MarioRecovery::start() {
     } else if (!calcFirstVector()) {
         return false;
     }
-    MR::startGlobalEventCameraNoTarget("\210\370\202\253\226\337\202\265" /* 引き戻し */);
+    MR::startGlobalEventCameraNoTarget("引き戻し");
     return true;
 }
 
@@ -208,8 +208,8 @@ bool MarioRecovery::update() {
         if (volume > 100) {
             volume = 100;
         }
-        playSound("\210\370\202\253\226\337\202\265\212\356\226\173" /* 引き戻し基本 */);
-        playSound("\210\370\202\253\226\337\202\265\225\202\227\126" /* 引き戻し浮遊 */, volume);
+        playSound("引き戻し基本");
+        playSound("引き戻し浮遊", volume);
         getPlayer()->setFrontVecKeepUp(_1C, 0.1f);
         if (_14) {
             _14--;
@@ -245,9 +245,9 @@ bool MarioRecovery::update() {
             if (distant && (shadow - getTrans()).length() > 300.0f) {
                 break;
             }
-            stopEffectForce("\210\370\202\253\226\337\202\265\226\101" /* 引き戻し泡 */);
-            playEffect("\210\370\202\253\226\337\202\265\226\101\224\152\227\364" /* 引き戻し泡破裂 */);
-            playSound("\210\370\202\253\226\337\202\265\226\101\224\152\227\364" /* 引き戻し泡破裂 */);
+            stopEffectForce("引き戻し泡");
+            playEffect("引き戻し泡破裂");
+            playSound("引き戻し泡破裂");
             _1A++;
         }
         break;
@@ -272,7 +272,7 @@ bool MarioRecovery::update() {
             } else {
                 addTrans(_58 * MR::clamp(distance, -10.0f, 10.0f), "Module");
             }
-            playSound("\210\370\202\253\226\337\202\265\212\356\226\173" /* 引き戻し基本 */);
+            playSound("引き戻し基本");
         }
         break;
     }
@@ -280,15 +280,15 @@ bool MarioRecovery::update() {
 }
 
 bool MarioRecovery::close() {
-    MR::endGlobalEventCamera("\210\370\202\253\226\337\202\265" /* 引き戻し */, -1, true);
+    MR::endGlobalEventCamera("引き戻し", -1, true);
     getPlayer()->mMovementStates._1 = true;
     getPlayer()->mMovementStates.jumping = false;
     Mario* player = getPlayer();
     player->_420 = 16;
-    stopEffectForce("\210\370\202\253\226\337\202\265\226\101" /* 引き戻し泡 */);
-    playEffect("\210\370\202\253\226\337\202\265\226\101\224\152\227\364" /* 引き戻し泡破裂 */);
+    stopEffectForce("引き戻し泡");
+    playEffect("引き戻し泡破裂");
     stopAnimation(nullptr);
-    changeAnimation(nullptr, "\212\356\226\173" /* 基本 */);
+    changeAnimation(nullptr, "基本");
     mActor->_F44 = true;
     return true;
 }

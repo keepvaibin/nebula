@@ -16,7 +16,7 @@ public:
     MiiFacePartsHolder(int);
 
     virtual ~MiiFacePartsHolder();
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void draw() const;
     virtual void calcAnim();
     virtual void calcViewAndEntry();

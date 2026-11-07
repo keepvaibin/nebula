@@ -16,7 +16,7 @@
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/PlayerInputUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
@@ -415,13 +415,13 @@ WaterRoad::WaterRoad(const char* pName)
     mBoundingBox.zero();
 }
 
-void WaterRoad::init(const JMapInfoIter& rIter) {
+void WaterRoad::init(const TableIter& rIter) {
     MR::connectToScene(this, MR::MovementType_MapObj, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_WaterRoad);
     MR::initDefaultPos(this, rIter);
     MR::makeMtxTR(mBaseMtx, this);
     mBaseMtx.getYDir(mBaseUp);
-    MR::getJMapInfoArg0NoInit(rIter, &_8C);
-    MR::getJMapInfoArg1NoInit(rIter, &mRadius);
+    MR::getPlacementArg0NoInit(rIter, &_8C);
+    MR::getPlacementArg1NoInit(rIter, &mRadius);
     initRailRider(rIter);
 
     if (MR::getRailDirection(this).dot(mBaseUp) >= ::sDotUpdateAxis) {
@@ -458,7 +458,7 @@ void WaterRoad::init(const JMapInfoIter& rIter) {
     MR::setClippingFarMax(this);
 
     bool hasDemo = MR::tryRegisterDemoCast(this, rIter);
-    MR::initMultiActorCamera(this, rIter, &mCameraInfo, "\203\157\203\103\203\223\203\150\222\206" /* バインド中 */);
+    MR::initMultiActorCamera(this, rIter, &mCameraInfo, "バインド中");
     MR::useStageSwitchWriteA(this, rIter);
     if (hasDemo) {
         makeActorDead();
@@ -476,7 +476,7 @@ void WaterRoad::appear() {
         MR::onSwitchA(this);
     }
 
-    if (MR::isDemoPartActive("\203\105\203\110\201\133\203\136\201\133\203\215\201\133\203\150\220\254\222\267" /* ウォーターロード成長 */)) {
+    if (MR::isDemoPartActive("ウォーターロード成長")) {
         setNerve(GET_NERVE(WaterRoad, WaterRoadNrvDemoGrowUp));
     } else {
         setNerve(GET_NERVE(WaterRoad, WaterRoadNrvDemoStart));
@@ -553,7 +553,7 @@ void WaterRoad::exeDemoStart() {
     MR::startLevelSound(this, "SE_OJ_LV_WATER_ROAD_APPEAR");
     MR::startAtmosphereLevelSE("SE_AT_LV_EARTHQUAKE");
 
-    if (MR::isDemoPartLastStep("\203\105\203\110\201\133\203\136\201\133\203\215\201\133\203\150\217\157\214\273" /* ウォーターロード出現 */)) {
+    if (MR::isDemoPartLastStep("ウォーターロード出現")) {
         setNerve(GET_NERVE(WaterRoad, WaterRoadNrvDemoGrowUp));
     }
 }
@@ -566,12 +566,12 @@ void WaterRoad::exeDemoGrowUp() {
         MR::tryRumblePadVeryStrong(this, PLAYER_1);
     }
 
-    updateDemo(MR::calcDemoPartStepRate("\203\105\203\110\201\133\203\136\201\133\203\215\201\133\203\150\220\254\222\267" /* ウォーターロード成長 */));
+    updateDemo(MR::calcDemoPartStepRate("ウォーターロード成長"));
 
     MR::startLevelSound(this, "SE_OJ_LV_WATER_ROAD_GROW");
     MR::startAtmosphereLevelSE("SE_AT_LV_EARTHQUAKE");
 
-    if (MR::isDemoPartLastStep("\203\105\203\110\201\133\203\136\201\133\203\215\201\133\203\150\220\254\222\267" /* ウォーターロード成長 */)) {
+    if (MR::isDemoPartLastStep("ウォーターロード成長")) {
         MR::deleteEffect(this, "Top");
         MR::emitEffect(this, "End");
         setNerve(GET_NERVE(WaterRoad, WaterRoadNrvDemoWaitEnd));
@@ -632,7 +632,7 @@ bool WaterRoad::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceive
 
         mRider = MR::getSensorHost(pSender);
         MR::moveCoordToNearestPos(this, mRider->mPosition);
-        MR::startMultiActorCameraTargetPlayer(this, mCameraInfo, "\203\157\203\103\203\223\203\150\222\206" /* バインド中 */);
+        MR::startMultiActorCameraTargetPlayer(this, mCameraInfo, "バインド中");
         setNerve(GET_NERVE(WaterRoad, WaterRoadNrvRideStart));
         return true;
     }
@@ -661,7 +661,7 @@ bool WaterRoad::updateRide() {
         MR::startSound(mRider, "SE_OJ_WATER_ROAD_BIND_END");
         MR::startSound(mRider, "SE_PV_JUMP_M");
         MR::endBindAndPlayerJump(this, Vec3f(0.0f, 0.0f, 0.0f), 0);
-        MR::endMultiActorCamera(this, mCameraInfo, "\203\157\203\103\203\223\203\150\222\206" /* バインド中 */, true);
+        MR::endMultiActorCamera(this, mCameraInfo, "バインド中", true);
         mRider = nullptr;
         setNerve(GET_NERVE(WaterRoad, WaterRoadNrvDisappear));
         return true;

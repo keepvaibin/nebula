@@ -38,7 +38,7 @@ SpiderCoin::SpiderCoin(const char* pName)
     mBaseMtx.identity();
 }
 
-void SpiderCoin::init(const JMapInfoIter& rIter) {
+void SpiderCoin::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     mThreadZ = mPosition.z;
     initModelManagerWithAnm("Coin", nullptr, false);
@@ -52,7 +52,7 @@ void SpiderCoin::init(const JMapInfoIter& rIter) {
     MR::initStarPointerTarget(this, 150.0f, Vec3f(0.0f, 80.0f, 0.0f));
 
     MR::declareCoin(this, 1);
-    mCocoonModel = new PartsModel(this, "\202\334\202\344" /* まゆ */, "SpaceCocoon", mBaseMtx, MR::DrawBufferType_NoSilhouettedMapObj, false);
+    mCocoonModel = new PartsModel(this, "まゆ", "SpaceCocoon", mBaseMtx, MR::DrawBufferType_NoSilhouettedMapObj, false);
     mCocoonModel->mScale.set(0.3f);
     mCocoonModel->initWithoutIter();
 
@@ -94,7 +94,7 @@ void SpiderCoin::exeWait() {
     }
     mPosition.set(*mPointPos);
 
-    if (MR::tryStarPointerCheck(this, true, "\216\343" /* 弱 */)) {
+    if (MR::tryStarPointerCheck(this, true, "弱")) {
         setNerve(GET_NERVE(SpiderCoin, SpiderCoinNrvTouch));
     }
 }
@@ -115,8 +115,8 @@ void SpiderCoin::exeTouch() {
         return;
     }
 
-    if (!tryRub(PLAYER_1, &mPad0Velocity) && !tryRub(PLAYER_2, &mPad1Velocity) && !MR::isStarPointerPointing(this, PLAYER_1, true, "\216\343" /* 弱 */) &&
-        !MR::isStarPointerPointing(this, PLAYER_2, true, "\216\343" /* 弱 */)) {
+    if (!tryRub(PLAYER_1, &mPad0Velocity) && !tryRub(PLAYER_2, &mPad1Velocity) && !MR::isStarPointerPointing(this, PLAYER_1, true, "弱") &&
+        !MR::isStarPointerPointing(this, PLAYER_2, true, "弱")) {
         setNerve(GET_NERVE(SpiderCoin, SpiderCoinNrvTouchAndApart));
     }
 }
@@ -128,7 +128,7 @@ void SpiderCoin::exeTouchAndApart() {
         MR::getEaseOutValue((::sStepToucnAndApart - getNerveStep()) / static_cast< f32 >(::sStepToucnAndApart), 0.0f, 1.0f, 1.0f) * ::sRotateSpeedY;
     MR::repeatDegree(&mRotation.y);
 
-    if (MR::isGreaterStep(this, ::sStepToTouch2nd) && MR::isStarPointerPointing(this, PLAYER_1, true, "\216\343" /* 弱 */)) {
+    if (MR::isGreaterStep(this, ::sStepToTouch2nd) && MR::isStarPointerPointing(this, PLAYER_1, true, "弱")) {
         kill();
         return;
     }
@@ -174,7 +174,7 @@ void SpiderCoin::calcAndSetBaseMtx() {
 }
 
 bool SpiderCoin::tryRub(s32 padChannel, Vec2f* pVel) {
-    if (!MR::isStarPointerPointing(this, padChannel, true, "\216\343" /* 弱 */) || MR::getStarPointerScreenSpeed(padChannel) < ::sPointerSpeedMin) {
+    if (!MR::isStarPointerPointing(this, padChannel, true, "弱") || MR::getStarPointerScreenSpeed(padChannel) < ::sPointerSpeedMin) {
         return false;
     }
 

@@ -8,7 +8,7 @@
 FollowCollisionArea::~FollowCollisionArea() {
 }
 
-FollowCollisionArea::FollowCollisionArea(const Vec3f& rSize, MtxPtr pMatrix, f32 offset) : NameObj("\222\307\217\135\203\122\203\212\203\127\203\207\203\223\203\107\203\212\203\101" /* 追従コリジョンエリア */) {
+FollowCollisionArea::FollowCollisionArea(const Vec3f& rSize, MtxPtr pMatrix, f32 offset) : NameObj("追従コリジョンエリア") {
     _38 = rSize;
     _34 = pMatrix;
     _44 = offset;

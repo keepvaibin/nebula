@@ -39,7 +39,7 @@ JumpBranch::JumpBranch(const char* pName)
       mSwingReverse() {
 }
 
-void JumpBranch::init(const JMapInfoIter& rIter) {
+void JumpBranch::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     mCenter.set(mPosition);
 

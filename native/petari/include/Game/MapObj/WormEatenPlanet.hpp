@@ -10,7 +10,7 @@ class WormEatenPlanet : public LiveActor {
 public:
     WormEatenPlanet(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void startClipped();
     virtual void endClipped();
     virtual void control();

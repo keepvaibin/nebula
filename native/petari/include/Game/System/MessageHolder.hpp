@@ -1,7 +1,7 @@
 #pragma once
 
 
-class JMapInfo;
+class Table;
 class TalkMessageInfo;
 class TalkNode;
 
@@ -46,7 +46,7 @@ public:
     u8* getMessageInfoTool(int) const;
     s32 findMessageIndex(const char*) const;
 
-    JMapInfo* mIDTable;
+    Table* mIDTable;
     MessageInfoBlock* mInfoBlock;
     MessageDataBlock* mDataBlock;
     u32 _C;

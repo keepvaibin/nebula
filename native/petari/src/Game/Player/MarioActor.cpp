@@ -33,7 +33,7 @@
 #include "Game/Util/EventUtil.hpp"
 #include "Game/Util/FixedPosition.hpp"
 #include "Game/Util/FootPrint.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
@@ -246,7 +246,7 @@ MarioActor::~MarioActor() {
     delete mMario;
 }
 
-void MarioActor::init(const JMapInfoIter& rInfo) {
+void MarioActor::init(const TableIter& rInfo) {
     s32 initialAnimation = -1;
     if (!MR::isValidInfo(rInfo)) {
         return;
@@ -254,16 +254,16 @@ void MarioActor::init(const JMapInfoIter& rInfo) {
 
     Vec3f position, rotation, scale;
 
-    MR::getJMapInfoTrans(rInfo, &position);
-    MR::getJMapInfoRotate(rInfo, &rotation);
-    MR::getJMapInfoScale(rInfo, &scale);
+    MR::getPlacementTrans(rInfo, &position);
+    MR::getPlacementRotate(rInfo, &rotation);
+    MR::getPlacementScale(rInfo, &scale);
 
     rotation.x = MR::repeat(rotation.x, 0.0f, 360.0f);
     rotation.y = MR::repeat(rotation.y, 0.0f, 360.0f);
     rotation.z = MR::repeat(rotation.z, 0.0f, 360.0f);
 
-    if (MR::isExistJMapArg(rInfo)) {
-        MR::getJMapInfoArg0NoInit(rInfo, &initialAnimation);
+    if (MR::isExistPlacementArg(rInfo)) {
+        MR::getPlacementArg0NoInit(rInfo, &initialAnimation);
     }
 
     init2(position, rotation, initialAnimation);
@@ -335,14 +335,14 @@ void MarioActor::init2(const Vec3f& rA, const Vec3f& rB, s32 initialAnimation) {
     addToSoundObjHolder();
     initParts();
     initMorphStringTable();
-    MR::declareGlobalEventCameraAbyss("\223\336\227\216\203\112\203\201\203\211" /* 奈落カメラ */);
-    MR::declareBlackHoleCamera("\203\165\203\211\203\142\203\116\203\172\201\133\203\213" /* ブラックホール */);
-    MR::declareGlobalEventCameraDead("\217\270\223\126\203\112\203\201\203\211" /* 昇天カメラ */, 0.35f, 0x78, 0x3C);
-    MR::declareGlobalEventCamera("\220\205\222\206\203\164\203\110\203\215\201\133" /* 水中フォロー */);
-    MR::declareGlobalEventCamera("\220\205\222\206\203\166\203\211\203\154\203\142\203\147" /* 水中プラネット */);
-    MR::declareGlobalEventCamera("\220\205\217\343\203\164\203\110\203\215\201\133" /* 水上フォロー */);
-    MR::declareGlobalEventCamera("\210\370\202\253\226\337\202\265" /* 引き戻し */);
-    MR::declareEventCameraProgrammable("\225\317\220\147\217\211\217\157\203\112\203\201\203\211" /* 変身初出カメラ */);
+    MR::declareGlobalEventCameraAbyss("奈落カメラ");
+    MR::declareBlackHoleCamera("ブラックホール");
+    MR::declareGlobalEventCameraDead("昇天カメラ", 0.35f, 0x78, 0x3C);
+    MR::declareGlobalEventCamera("水中フォロー");
+    MR::declareGlobalEventCamera("水中プラネット");
+    MR::declareGlobalEventCamera("水上フォロー");
+    MR::declareGlobalEventCamera("引き戻し");
+    MR::declareEventCameraProgrammable("変身初出カメラ");
     _2B8 = mPosition;
     _33C = mPosition;
     _348.zero();
@@ -356,17 +356,17 @@ void MarioActor::init2(const Vec3f& rA, const Vec3f& rB, s32 initialAnimation) {
     _332 = 0;
     MR::setGameCameraTargetToPlayer();
     _A0C = 0;
-    _B48 = new FootPrint("\221\253\220\325" /* 足跡 */, 0x100, -1);
+    _B48 = new FootPrint("足跡", 0x100, -1);
     _B48->setTexture(MR::getTexFromArc("Footprint.bti", this));
     switch (initialAnimation) {
     case 1:
-        mMario->changeAnimation("\212\356\226\173" /* 基本 */);
+        mMario->changeAnimation("基本");
         break;
     case 2:
-        mMario->changeAnimationNonStop("\203\105\203\110\201\133\203\116\203\103\203\223" /* ウォークイン */);
+        mMario->changeAnimationNonStop("ウォークイン");
         break;
     default:
-        mMario->changeAnimation("\203\130\203\145\201\133\203\127\203\103\203\223A" /* ステージインA */);
+        mMario->changeAnimation("ステージインA");
         break;
     }
 
@@ -425,7 +425,7 @@ void MarioActor::initAfterPlacement() {
 }
 
 void MarioActor::initAfterOpeningDemo() {
-    mMario->changeAnimationNonStop("\203\105\203\110\201\133\203\116\203\103\203\223" /* ウォークイン */);
+    mMario->changeAnimationNonStop("ウォークイン");
     _37C = 0;
 }
 
@@ -461,7 +461,7 @@ void MarioActor::changeAnimationNonStop(const char* pName) {
 }
 
 void MarioActor::changeAnimationUpper(const char* pName) {
-    if (mMario->mTargetWalkSpeedIndex == 0 && isAnimationRun("\212\356\226\173" /* 基本 */)) {
+    if (mMario->mTargetWalkSpeedIndex == 0 && isAnimationRun("基本")) {
         mMario->changeAnimation(pName);
         return;
     }
@@ -502,79 +502,79 @@ void MarioActor::changeGameOverAnimation() {
         mMario->closeStatus(nullptr);
     }
 
-    if (mMario->isAnimationRun("\221\117\225\373\217\254\203\137\203\201\201\133\203\127" /* 前方小ダメージ */)) {
+    if (mMario->isAnimationRun("前方小ダメージ")) {
         animation = 0;
     }
 
-    if (mMario->isAnimationRun("\214\343\225\373\217\254\203\137\203\201\201\133\203\127" /* 後方小ダメージ */)) {
+    if (mMario->isAnimationRun("後方小ダメージ")) {
         animation = 0;
     }
 
-    if (mMario->isAnimationRun("\203\164\203\100\203\103\203\101\203\211\203\223\221\117\222\233" /* ファイアラン前兆 */)) {
+    if (mMario->isAnimationRun("ファイアラン前兆")) {
         animation = 0;
     }
 
-    if (mMario->isAnimationRun("\211\212\202\314\203\211\203\223\203\151\201\133" /* 炎のランナー */)) {
+    if (mMario->isAnimationRun("炎のランナー")) {
         animation = 0;
     }
 
-    if (mMario->isAnimationRun("\223\144\213\103\203\137\203\201\201\133\203\127" /* 電気ダメージ */)) {
+    if (mMario->isAnimationRun("電気ダメージ")) {
         animation = 1;
     }
 
-    if (mMario->isAnimationRun("\223\144\213\103\203\137\203\201\201\133\203\127\217\111\227\271" /* 電気ダメージ終了 */)) {
+    if (mMario->isAnimationRun("電気ダメージ終了")) {
         animation = 1;
     }
 
-    if (mMario->isAnimationRun("\211\212\203\137\203\201\201\133\203\127" /* 炎ダメージ */)) {
+    if (mMario->isAnimationRun("炎ダメージ")) {
         animation = 2;
     }
 
-    if (mMario->isAnimationRun("\203\164\203\100\203\103\203\101\203\137\203\223\203\130" /* ファイアダンス */)) {
+    if (mMario->isAnimationRun("ファイアダンス")) {
         animation = 2;
     }
 
-    if (mMario->isAnimationRun("\222\206\203\137\203\201\201\133\203\127" /* 中ダメージ */)) {
+    if (mMario->isAnimationRun("中ダメージ")) {
         animation = 3;
     }
 
-    if (mMario->isAnimationRun("\222\206\203\137\203\201\201\133\203\127\213\363\222\206" /* 中ダメージ空中 */)) {
+    if (mMario->isAnimationRun("中ダメージ空中")) {
         animation = 3;
     }
 
-    if (mMario->isAnimationRun("\222\206\203\137\203\201\201\133\203\127\222\205\222\156" /* 中ダメージ着地 */)) {
+    if (mMario->isAnimationRun("中ダメージ着地")) {
         animation = 3;
     }
 
-    if (mMario->isAnimationRun("\222\206\214\343\203\137\203\201\201\133\203\127" /* 中後ダメージ */)) {
+    if (mMario->isAnimationRun("中後ダメージ")) {
         animation = 4;
     }
 
-    if (mMario->isAnimationRun("\222\206\214\343\203\137\203\201\201\133\203\127\213\363\222\206" /* 中後ダメージ空中 */)) {
+    if (mMario->isAnimationRun("中後ダメージ空中")) {
         animation = 4;
     }
 
-    if (mMario->isAnimationRun("\222\206\214\343\203\137\203\201\201\133\203\127\222\205\222\156" /* 中後ダメージ着地 */)) {
+    if (mMario->isAnimationRun("中後ダメージ着地")) {
         animation = 4;
     }
 
-    if (mMario->isAnimationRun("\227\216\211\272" /* 落下 */)) {
+    if (mMario->isAnimationRun("落下")) {
         animation = 5;
     }
 
-    if (mMario->isAnimationRun("\213\363\222\206\202\323\202\361\202\316\202\350" /* 空中ふんばり */)) {
+    if (mMario->isAnimationRun("空中ふんばり")) {
         animation = 5;
     }
 
-    if (mMario->isAnimationRun("\202\302\202\324\202\352" /* つぶれ */)) {
+    if (mMario->isAnimationRun("つぶれ")) {
         animation = 6;
     }
 
-    if (mMario->isAnimationRun("\202\302\202\324\202\352\225\234\213\101" /* つぶれ復帰 */)) {
+    if (mMario->isAnimationRun("つぶれ復帰")) {
         animation = 6;
     }
 
-    if (mMario->isAnimationRun("\225\130\214\213" /* 氷結 */) || mMario->isStatusActive(MarioStatus_Freeze)) {
+    if (mMario->isAnimationRun("氷結") || mMario->isStatusActive(MarioStatus_Freeze)) {
         animation = -1;
     }
 
@@ -600,47 +600,47 @@ void MarioActor::changeGameOverAnimation() {
 
     switch (animation) {
     case 0:
-        mMario->changeAnimationNonStop("\215\300\202\350\203\137\203\105\203\223" /* 座りダウン */);
+        mMario->changeAnimationNonStop("座りダウン");
         break;
     case 1:
-        mMario->changeAnimationNonStop("\212\264\223\144\203\137\203\105\203\223" /* 感電ダウン */);
+        mMario->changeAnimationNonStop("感電ダウン");
         break;
     case 2:
-        mMario->changeAnimationNonStop("\211\212\203\137\203\105\203\223" /* 炎ダウン */);
+        mMario->changeAnimationNonStop("炎ダウン");
         break;
     case 3:
-        mMario->changeAnimationNonStop("\213\302\214\374\202\257\203\137\203\105\203\223" /* 仰向けダウン */);
+        mMario->changeAnimationNonStop("仰向けダウン");
         break;
     case 4:
-        mMario->changeAnimationNonStop("\230\353\202\271\203\137\203\105\203\223" /* 俯せダウン */);
+        mMario->changeAnimationNonStop("俯せダウン");
         break;
     case 5:
         if (mMario->getMovementStates()._1) {
-            mMario->changeAnimationNonStop("\215\300\202\350\203\137\203\105\203\223" /* 座りダウン */);
+            mMario->changeAnimationNonStop("座りダウン");
         } else {
-            mMario->changeAnimationNonStop("\223\336\227\216\203\137\203\105\203\223" /* 奈落ダウン */);
+            mMario->changeAnimationNonStop("奈落ダウン");
         }
 
         break;
     case 6:
-        mMario->changeAnimationNonStop("\202\302\202\324\202\352\203\137\203\105\203\223" /* つぶれダウン */);
+        mMario->changeAnimationNonStop("つぶれダウン");
         break;
     case 7:
-        mMario->changeAnimationNonStop("\220\205\211\152\203\137\203\105\203\223" /* 水泳ダウン */);
+        mMario->changeAnimationNonStop("水泳ダウン");
         break;
     case 8:
-        mMario->changeAnimationNonStop("\226\204\202\334\202\350\203\137\203\105\203\223" /* 埋まりダウン */);
+        mMario->changeAnimationNonStop("埋まりダウン");
         break;
     case 9:
-        mMario->changeAnimationNonStop("\203\214\201\133\203\130\225\211\202\257" /* レース負け */);
+        mMario->changeAnimationNonStop("レース負け");
         break;
     case 10:
-        mMario->changeAnimationNonStop("\220\205\222\206\203\214\201\133\203\130\225\211\202\257" /* 水中レース負け */);
+        mMario->changeAnimationNonStop("水中レース負け");
         break;
     }
 
     _B90 = true;
-    stopEffect("\226\263\223\107\222\206" /* 無敵中 */);
+    stopEffect("無敵中");
     _A6E = 0;
 }
 
@@ -750,9 +750,9 @@ void MarioActor::movement() {
             f32 elementA = MR::vecKillElement(stack_134, stack_104, &stack_F8);
             f32 elementB = MR::vecKillElement(mVelocity, stack_104, &stack_F8);
             if (mVelocity.length() > 20.0f && elementA < elementB * 0.5f) {
-                if (mMario->isAnimationRun("\215\342\202\267\202\327\202\350\211\272\214\374\202\253\202\240\202\250\202\336\202\257" /* 坂すべり下向きあおむけ */)) {
+                if (mMario->isAnimationRun("坂すべり下向きあおむけ")) {
                     mMario->push(mMario->mFrontVec * 5.0f);
-                } else if (mMario->isAnimationRun("\215\342\202\267\202\327\202\350\217\343\214\374\202\253\202\244\202\302\202\324\202\271" /* 坂すべり上向きうつぶせ */)) {
+                } else if (mMario->isAnimationRun("坂すべり上向きうつぶせ")) {
                     mMario->push(mMario->mFrontVec * -5.0f);
                 }
 
@@ -773,7 +773,7 @@ void MarioActor::movement() {
                         mPosition = stack_E0;
                         mMario->mPosition = mPosition;
                         mMario->stopJump();
-                        mMario->changeAnimation("\212\356\226\173" /* 基本 */, "\227\216\211\272" /* 落下 */);
+                        mMario->changeAnimation("基本", "落下");
                         mMario->updateGroundInfo();
                     }
                 }
@@ -874,7 +874,7 @@ void MarioActor::movement() {
 
 void MarioActor::control() {
     if (mSuperKinokoCollected) {
-        if (MR::tryStartDemoWithoutCinemaFrame(this, "\203\175\203\212\203\111\203\130\201\133\203\160\201\133\211\273" /* マリオスーパー化 */)) {  // 6-up camera
+        if (MR::tryStartDemoWithoutCinemaFrame(this, "マリオスーパー化")) {  // 6-up camera
             mSuperKinokoCollected = false;
             u32 lifeUpHealth = 6;
             NebulaHost::codePatch(NEBULA_PATCH_LIFE_UP_HEALTH, &lifeUpHealth);
@@ -883,12 +883,12 @@ void MarioActor::control() {
             }
             MR::stopAnimFrame(this);
             MR::requestPowerUpHPMeter();
-            mMario->startPadVib("\203\175\203\212\203\111[\225\317\220\147]" /* マリオ[変身] */);
+            mMario->startPadVib("マリオ[変身]");
             MR::startSystemSE("SE_SY_SUPER_KINOKO_GET");
             _3DA = 0x5a;
         }
     } else if (mPowerupCollected) {
-        if (MR::tryStartDemoWithoutCinemaFrame(this, "\203\175\203\212\203\111\225\317\220\147" /* マリオ変身 */)) {
+        if (MR::tryStartDemoWithoutCinemaFrame(this, "マリオ変身")) {
             mPowerupCollected = false;
             mTransforming = true;
             if (mPlayerMode == 6) {
@@ -898,8 +898,8 @@ void MarioActor::control() {
 
             _3D8 = 0x40;
             MR::stopAnimFrame(this);
-            playEffect("\225\317\220\147" /* 変身 */);
-            mMario->startPadVib("\203\175\203\212\203\111[\225\317\220\147]" /* マリオ[変身] */);
+            playEffect("変身");
+            mMario->startPadVib("マリオ[変身]");
         }
     }
 
@@ -1003,8 +1003,8 @@ void MarioActor::updateBehavior() {
     updateBindRatio();
     updateEffect();
     if (_B94 && !--_B94) {
-        mMario->stopAnimationUpper("\203\156\203\223\203\175\201\133\223\212\202\260\211\361\223\135\222\206" /* ハンマー投げ回転中 */);
-        mMario->stopAnimation("\203\156\203\223\203\175\201\133\223\212\202\260\211\361\223\135\222\206" /* ハンマー投げ回転中 */);
+        mMario->stopAnimationUpper("ハンマー投げ回転中");
+        mMario->stopAnimation("ハンマー投げ回転中");
     }
 
     updatePunching();
@@ -1067,8 +1067,8 @@ void MarioActor::updatePunching() {
             canSpinring = false;
         }
 
-        if (canSpinring && !mMario->isSwimming() && !_944 && selectAction("\203\130\203\163\203\223\211\361\225\234\203\107\203\164\203\106\203\116\203\147" /* スピン回復エフェクト */) == true) {
-            playEffect("\203\130\203\163\203\223\203\212\203\223\203\117" /* スピンリング */);
+        if (canSpinring && !mMario->isSwimming() && !_944 && selectAction("スピン回復エフェクト") == true) {
+            playEffect("スピンリング");
         }
 
         bool canPunch = isInPunchTimerRange();
@@ -1084,7 +1084,7 @@ void MarioActor::updatePunching() {
         }
     }
 
-    if (mMario->isAnimationRun("\203\156\203\223\203\175\201\133\223\212\202\260\203\212\203\212\201\133\203\130" /* ハンマー投げリリース */) && mMario->getMovementStates()._1 && !_38C && !mMario->_420 && mMario->Mario::isStickOn()) {
+    if (mMario->isAnimationRun("ハンマー投げリリース") && mMario->getMovementStates()._1 && !_38C && !mMario->_420 && mMario->Mario::isStickOn()) {
         mMario->stopAnimation(nullptr);
     }
 }
@@ -1123,11 +1123,11 @@ bool MarioActor::doRush() {
             mMario->mSwim->checkWaterCube(false);
             if (mMario->mSwim->mSwimState != initial) {
                 if ((u32)mMario->mSwim->mSwimState <= MarioSwim::SWIM_STATE_ENTERING && (u32)initial - 2 <= 1) {
-                    playEffectRT("\220\205\226\312\203\127\203\203\203\223\203\166\220\205\222\214" /* 水面ジャンプ水柱 */, mMario->mSwim->mSurfacePos, mMario->mSwim->mSurfaceNorm);
+                    playEffectRT("水面ジャンプ水柱", mMario->mSwim->mSurfacePos, mMario->mSwim->mSurfaceNorm);
                     emitEffectWaterColumn(mMario->mSwim->mSurfacePos, mMario->mSwim->mSurfaceNorm);
                     // SWIM_STATE_UNDERWATER and SWIM_STATE_SURFACE
                 } else if ((u32)initial <= 1 && (u32)(mMario->mSwim->mSwimState - MarioSwim::SWIM_STATE_UNDERWATER) <= 1) {
-                    playEffectRT("\220\205\226\312\203\127\203\203\203\223\203\166\220\205\222\214" /* 水面ジャンプ水柱 */, -mMario->_328, mMario->mSwim->mSurfaceNorm);
+                    playEffectRT("水面ジャンプ水柱", -mMario->_328, mMario->mSwim->mSurfaceNorm);
                     emitEffectWaterColumn(mMario->mSwim->mSurfacePos, mMario->mSwim->mSurfaceNorm);
                 }
 
@@ -1179,7 +1179,7 @@ void MarioActor::updateSwingTimer() {
 
         if (_94E && --_94E == 0) {
             mMario->startPadVib((u32)0);
-            mMario->playSound("\203\130\203\163\203\223\211\361\225\234\217\111\227\271" /* スピン回復終了 */);
+            mMario->playSound("スピン回復終了");
             Color8 stack_8(80, 128, 200, 0);
             _1AA = 0xf;
             _1AC = 0.75f;
@@ -1189,8 +1189,8 @@ void MarioActor::updateSwingTimer() {
 
         if (_946) {
             if (--_946 == 0x18) {
-                selectAction("\203\130\203\163\203\223\211\361\225\234\203\107\203\164\203\106\203\116\203\147" /* スピン回復エフェクト */);
-                stopEffectForce("\203\130\203\163\203\223\203\212\203\223\203\117" /* スピンリング */);
+                selectAction("スピン回復エフェクト");
+                stopEffectForce("スピンリング");
             }
 
             if (_946 == 0xd) {
@@ -1239,7 +1239,7 @@ void MarioActor::updateSwingAction() {
         return;
     }
 
-    if (mMario->isAnimationRun("\225\307\202\315\202\266\202\253" /* 壁はじき */)) {
+    if (mMario->isAnimationRun("壁はじき")) {
         canRush = false;
     }
 
@@ -1287,7 +1287,7 @@ void MarioActor::updateSwingAction() {
         return;
     }
 
-    u8 action = selectAction("\203\130\203\163\203\223\203\101\203\136\203\142\203\116" /* スピンアタック */);
+    u8 action = selectAction("スピンアタック");
     switch (action) {
     case 1: {
         NebulaAchievements::countStat(NebulaStat_Spins, 1);
@@ -1304,10 +1304,10 @@ void MarioActor::updateSwingAction() {
             if (requestSpinJump2P) {
                 MR::start2PJumpAssistSound();
             }
-        } else if (!getMovementStates()._F && !mMario->isAnimationRun("\222\156\217\343\202\320\202\313\202\350" /* 地上ひねり */)) {
+        } else if (!getMovementStates()._F && !mMario->isAnimationRun("地上ひねり")) {
             const char* pLastAnimationName = mMarioAnim->mXanimePlayerUpper->getCurrentAnimationName();
             if (mPlayerMode == 4) {
-                if (!mMario->isAnimationRun("\203\156\203\140\203\130\203\163\203\223" /* ハチスピン */)) {
+                if (!mMario->isAnimationRun("ハチスピン")) {
                     didSpinPunch = trySpinPunch();
                 }
             } else {
@@ -1316,22 +1316,22 @@ void MarioActor::updateSwingAction() {
 
             _974 = 0;
             if (pLastAnimationName != mMarioAnim->mXanimePlayerUpper->getCurrentAnimationName()) {
-                mMario->playSound("\203\160\203\223\203\140\225\227\220\330\202\350" /* パンチ風切り */);
+                mMario->playSound("パンチ風切り");
             }
         }
 
         if (mPlayerMode == 4) {
             if (isJumping()) {
-                if (!mMario->isAnimationRun("\203\156\203\140\203\130\203\163\203\223\213\363\222\206" /* ハチスピン空中 */)) {
-                    mMario->playSound("\220\272\203\130\203\163\203\223" /* 声スピン */);
-                    mMario->playSound("\203\130\203\163\203\223\203\127\203\203\203\223\203\166" /* スピンジャンプ */);
+                if (!mMario->isAnimationRun("ハチスピン空中")) {
+                    mMario->playSound("声スピン");
+                    mMario->playSound("スピンジャンプ");
                 }
 
-                mMario->changeAnimation("\203\156\203\140\203\130\203\163\203\223\213\363\222\206" /* ハチスピン空中 */);
+                mMario->changeAnimation("ハチスピン空中");
             } else if (getMovementStates()._A || mBeeWallWalk != 0) {
-                mMario->changeAnimation("\203\124\203\175\201\133\203\134\203\213\203\147" /* サマーソルト */);
+                mMario->changeAnimation("サマーソルト");
             } else {
-                mMario->changeAnimation("\203\156\203\140\203\130\203\163\203\223" /* ハチスピン */);
+                mMario->changeAnimation("ハチスピン");
             }
         }
 
@@ -1370,12 +1370,12 @@ void MarioActor::updateSwingAction() {
         }
 
         if (isJumping()) {
-            mMario->changeAnimation("\203\156\203\140\203\130\203\163\203\223\213\363\222\206" /* ハチスピン空中 */);
+            mMario->changeAnimation("ハチスピン空中");
         } else {
             if (getMovementStates()._A || mBeeWallWalk != 0) {
-                mMario->changeAnimation("\203\124\203\175\201\133\203\134\203\213\203\147" /* サマーソルト */);  // Summersault
+                mMario->changeAnimation("サマーソルト");  // Summersault
             } else {
-                mMario->changeAnimation("\203\156\203\140\203\130\203\163\203\223" /* ハチスピン */);
+                mMario->changeAnimation("ハチスピン");
             }
         }
 
@@ -1515,7 +1515,7 @@ void MarioActor::incLife(u32 amt) {
     if (isEnableNerveChange() && !_3E4) {
         const u32 health = getHealth();
         if (mHealth != mMaxHealth) {
-            mMario->playSound("\203\211\203\103\203\164\211\361\225\234" /* ライフ回復 */);
+            mMario->playSound("ライフ回復");
         }
 
         mHealth += amt;
@@ -1524,7 +1524,7 @@ void MarioActor::incLife(u32 amt) {
         }
 
         if (health == 1 && mMarioAnim->isAnimationStop()) {
-            mMarioAnim->mXanimePlayer->changeTrackAnimation(3, "\203\155\201\133\203\175\203\213\203\105\203\107\203\103\203\147" /* ノーマルウエイト */);
+            mMarioAnim->mXanimePlayer->changeTrackAnimation(3, "ノーマルウエイト");
             if (mMario->_970 && strcmp(mMario->_970, "DamageWait")) {
                 mMario->startBas(nullptr, false, 0.0f, 0.0f);
                 setBlink(nullptr);
@@ -1559,7 +1559,7 @@ bool MarioActor::doPressing() {
             }
 
             if (!_390) {
-                mMario->changeAnimation("\202\302\202\324\202\352\211\360\217\234" /* つぶれ解除 */);
+                mMario->changeAnimation("つぶれ解除");
                 _F44 = true;
             }
         }
@@ -1572,7 +1572,7 @@ bool MarioActor::doPressing() {
         }
 
         if (!_390) {
-            mMario->changeAnimation("\202\302\202\324\202\352\211\360\217\234" /* つぶれ解除 */);
+            mMario->changeAnimation("つぶれ解除");
             _F44 = true;
         }
 
@@ -1731,7 +1731,7 @@ void MarioActor::calcAnimInMovement() {
         _1D4 = 10.0f;
 
         if (_3DA == 0) {
-            MR::endDemo(this, "\203\175\203\212\203\111\203\130\201\133\203\160\201\133\211\273" /* マリオスーパー化 */);
+            MR::endDemo(this, "マリオスーパー化");
             MR::releaseAnimFrame(this);
 
             _1D4 = 0.0f;
@@ -1780,7 +1780,7 @@ void MarioActor::calcAnimInMovement() {
             if (_336 == 0) {
                 MR::zoomInTargetGameCamera();
                 CameraTargetArg camera(nullptr, nullptr, nullptr, this);
-                MR::startGlobalEventCamera("\225\317\220\147\217\211\217\157\203\112\203\201\203\211" /* 変身初出カメラ */, camera, 60);
+                MR::startGlobalEventCamera("変身初出カメラ", camera, 60);
 
                 Vec3f vec(_2A0);
 
@@ -1793,7 +1793,7 @@ void MarioActor::calcAnimInMovement() {
                     vec += mMario->mJumpVec;
                 }
 
-                MR::setProgrammableCameraParam("\225\317\220\147\217\211\217\157\203\112\203\201\203\211" /* 変身初出カメラ */, vec, vec + frontVec * scale, -_240, true);
+                MR::setProgrammableCameraParam("変身初出カメラ", vec, vec + frontVec * scale, -_240, true);
             }
 
             _336 = 1;
@@ -1801,7 +1801,7 @@ void MarioActor::calcAnimInMovement() {
 
         if (--_3D8 == 0) {
             if (mTransforming) {
-                MR::endDemo(this, "\203\175\203\212\203\111\225\317\220\147" /* マリオ変身 */);
+                MR::endDemo(this, "マリオ変身");
                 mTransforming = false;
             }
 
@@ -1847,7 +1847,7 @@ void MarioActor::calcAnimInMovement() {
 
     if (_338 != 0 && --_338 == 0) {
         MR::zoomOutTargetGameCamera();
-        MR::endGlobalEventCamera("\225\317\220\147\217\211\217\157\203\112\203\201\203\211" /* 変身初出カメラ */, 60, true);
+        MR::endGlobalEventCamera("変身初出カメラ", 60, true);
     }
 }
 
@@ -2469,8 +2469,8 @@ bool MarioActor::isPunching() const {
     }
 
     if (!mMario->isAnimationTerminate(nullptr) &&
-        (mMario->isAnimationRun("\213\363\222\206\202\320\202\313\202\350" /* 空中ひねり */) || mMario->isAnimationRun("\203\101\203\103\203\130\202\320\202\313\202\350" /* アイスひねり */) || mMario->isAnimationRun("\203\101\203\103\203\130\202\320\202\313\202\350\213\363\222\206" /* アイスひねり空中 */) ||
-         mMario->isAnimationRun("\203\101\203\103\203\130\202\320\202\313\202\350\220\303\216\176" /* アイスひねり静止 */) || mMario->isAnimationRun("\203\101\203\103\203\130\202\320\202\313\202\350\210\332\223\256" /* アイスひねり移動 */))) {
+        (mMario->isAnimationRun("空中ひねり") || mMario->isAnimationRun("アイスひねり") || mMario->isAnimationRun("アイスひねり空中") ||
+         mMario->isAnimationRun("アイスひねり静止") || mMario->isAnimationRun("アイスひねり移動"))) {
         return true;
     }
 
@@ -2478,7 +2478,7 @@ bool MarioActor::isPunching() const {
 }
 
 bool MarioActor::isItemSwinging() const {
-    if (mMario->isAnimationRun("\203\145\203\152\203\130\203\126\203\207\203\142\203\147\215\266" /* テニスショット左 */) || mMario->isAnimationRun("\203\145\203\152\203\130\203\126\203\207\203\142\203\147\211\105" /* テニスショット右 */) || mMario->isAnimationRun("\203\145\203\152\203\130\203\126\203\207\203\142\203\147\222\206" /* テニスショット中 */)) {
+    if (mMario->isAnimationRun("テニスショット左") || mMario->isAnimationRun("テニスショット右") || mMario->isAnimationRun("テニスショット中")) {
         return true;
     } else {
         return false;
@@ -2512,7 +2512,7 @@ bool MarioActor::isStaggering() const {
 bool MarioActor::isSleeping() const {
     // No way that this is a real inline but only way I could make it match
     bool out = true;
-    if (!IsMarioAnimationRun("\223\301\216\352\203\105\203\107\203\103\203\1471B" /* 特殊ウエイト1B */) && !IsMarioAnimationRun("\223\301\216\352\203\105\203\107\203\103\203\1471A" /* 特殊ウエイト1A */)) {
+    if (!IsMarioAnimationRun("特殊ウエイト1B") && !IsMarioAnimationRun("特殊ウエイト1A")) {
         out = false;
     }
 
@@ -2612,7 +2612,7 @@ void MarioActor::jumpHop() {
         mMario->_430 = 0;
         mMario->mMovementStates._A = false;
 
-        changeAnimation(nullptr, "\227\216\211\272" /* 落下 */);
+        changeAnimation(nullptr, "落下");
     }
 
     if (mMario->_430 == 11) {
@@ -2700,7 +2700,7 @@ void MarioActor::setPress(u8 myChar, s32 myInt) {
         mMario->closeStatus(nullptr);
     }
 
-    mMario->startPadVib("\203\175\203\212\203\111[\202\302\202\324\202\352]" /* マリオ[つぶれ] */);
+    mMario->startPadVib("マリオ[つぶれ]");
 
     MR::forceDeleteEffectAll(this);
 
@@ -2733,8 +2733,8 @@ void MarioActor::setPress(u8 myChar, s32 myInt) {
     _39C = myChar;
     _F44 = false;
 
-    mMario->playSound("\203\166\203\214\203\130\203\137\203\201\201\133\203\127" /* プレスダメージ */);
-    mMario->playSound("\220\272\221\345\203\137\203\201\201\133\203\127" /* 声大ダメージ */);
+    mMario->playSound("プレスダメージ");
+    mMario->playSound("声大ダメージ");
 
     _FB4 = GET_NERVE(MarioActor, MarioActorNrvGameOver);
     _FB8 = 60;

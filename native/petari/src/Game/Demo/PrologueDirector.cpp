@@ -20,8 +20,8 @@
 #include "Game/Util/SoundUtil.hpp"
 
 namespace {
-    static const char* sPictureBookDemoName = "\203\166\203\215\203\215\201\133\203\117\203\146\203\202" /* プロローグデモ */;
-    static const char* sArriveDemoName = "\216\345\220\154\214\366\203\163\201\133\203\140\217\351\202\311\223\236\222\205" /* 主人公ピーチ城に到着 */;
+    static const char* sPictureBookDemoName = "プロローグデモ";
+    static const char* sArriveDemoName = "主人公ピーチ城に到着";
     static const s32 sPicBookStartWipeFrame = 60;
     static const s32 sPeachLetterWait = 20;
     static const s32 sPeachLetterStartWipeFrame = 60;
@@ -54,7 +54,7 @@ PrologueDirector::PrologueDirector(const char* pName)
     _A0.identity();
 }
 
-void PrologueDirector::init(const JMapInfoIter& rIter) {
+void PrologueDirector::init(const TableIter& rIter) {
     if (MR::useStageSwitchWriteA(this, rIter)) {
         _D0 = true;
     }
@@ -251,12 +251,12 @@ void PrologueDirector::createPictureBook() {
 }
 
 void PrologueDirector::createLetter() {
-    mLetter = new PrologueLetter("\203\163\201\133\203\140\202\251\202\347\202\314\216\350\216\206" /* ピーチからの手紙 */);
+    mLetter = new PrologueLetter("ピーチからの手紙");
     mLetter->initWithoutIter();
 }
 
 void PrologueDirector::createScenery() {
-    mScenery = new ModelObj("\224\167\214\151\217\221\212\204" /* 背景書割 */, "DemoLetter", nullptr, MR::DrawBufferType_MapObjStrongLight, -2, -2, false);
+    mScenery = new ModelObj("背景書割", "DemoLetter", nullptr, MR::DrawBufferType_MapObjStrongLight, -2, -2, false);
 
     MR::invalidateClipping(mScenery);
     mScenery->initWithoutIter();
@@ -269,7 +269,7 @@ void PrologueDirector::createScenery() {
 }
 
 void PrologueDirector::createMarioPosDummyModel() {
-    mMarioPosDummyModel = new ModelObj("\203\175\203\212\203\111\202\314\214\157\230\110" /* マリオの経路 */, "DemoPeachCastleGate", nullptr, -2, -2, -2, false);
+    mMarioPosDummyModel = new ModelObj("マリオの経路", "DemoPeachCastleGate", nullptr, -2, -2, -2, false);
     mMarioPosDummyModel->initWithoutIter();
 
     MR::invalidateClipping(mMarioPosDummyModel);
@@ -283,7 +283,7 @@ void PrologueDirector::createMarioPosDummyModel() {
 }
 
 void PrologueDirector::createCameraTarget() {
-    mCameraTarget = new CameraTargetMtx("\203\112\203\201\203\211\203\136\201\133\203\121\203\142\203\147\203\137\203\176\201\133" /* カメラターゲットダミー */);
+    mCameraTarget = new CameraTargetMtx("カメラターゲットダミー");
     mCameraTarget->mMatrix.identity();
 }
 

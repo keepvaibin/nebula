@@ -13,7 +13,7 @@
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/GravityUtil.hpp"
-#include "Game/Util/JMapInfo.hpp"
+#include "Game/Util/Table.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -82,13 +82,13 @@ namespace NrvGCapture {
 GCapture::GCapture(const char* pName)
     : LiveActor(pName), _BC(0.0f, 0.0f, 0.0f, 1.0f), mEffectPos(0, 0, 0), _D8(0, 0, 0), _E4(0, 0, 0), _F0(0, 0, 0), _FC(0, 0, 1), _108(), mTarget(),
       _110(), mCaptureRibbon(), mTractPower(), _124(), _128(0.1f), _12C(), _130(FLOAT_MAX), mGuidanceTime(), mIsStarPointerPointing(), _139() {
-    mCaptureRibbon = new GCaptureRibbon("G\203\114\203\203\203\166\203\140\203\203\201\133\203\212\203\173\203\223" /* Gキャプチャーリボン */);
-    mTargetMtx = new CameraTargetMtx("\203\112\203\201\203\211\203\136\201\133\203\121\203\142\203\147\203\137\203\176\201\133" /* カメラターゲットダミー */);
+    mCaptureRibbon = new GCaptureRibbon("Gキャプチャーリボン");
+    mTargetMtx = new CameraTargetMtx("カメラターゲットダミー");
     mSpringValue = new SpringValue(1.0f, 1.0f, 0.05f, 0.91f, 0.0f);
     _8C.identity();
 }
 
-void GCapture::init(const JMapInfoIter& rIter) {
+void GCapture::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::connectToScene(this, MR::MovementType_MapObj, MR::CalcAnimType_MapObj, MR::DrawBufferType_None, MR::DrawBufferType_EnemyDecoration);
     initSound(8, false);
@@ -525,7 +525,7 @@ void GCapture::exeHold() {
     fillGapBindTrans();
     MR::reboundVelocityFromCollision(this, 0.5f, 0.0f, 1.0f);
     bool tryAdd = tryAddVelocityReflectJumpCollision();
-    mIsStarPointerPointing = MR::isStarPointerPointing(this, 0, true, "\216\343" /* 弱 */);
+    mIsStarPointerPointing = MR::isStarPointerPointing(this, 0, true, "弱");
     addRotateAccelPointing();
     MR::attenuateVelocity(this, 0.99f);
     MR::addTransMtx(_8C, mVelocity);

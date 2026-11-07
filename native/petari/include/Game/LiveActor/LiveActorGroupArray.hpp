@@ -4,18 +4,18 @@
 #include "Game/Util/Array.hpp"
 
 class HitSensor;
-class JMapIdInfo;
+class PlacementId;
 
 class MsgSharedGroup : public LiveActorGroup {
 public:
-    MsgSharedGroup(const char*, s32, const JMapInfoIter&);
+    MsgSharedGroup(const char*, s32, const TableIter&);
 
-    virtual void init(const JMapInfoIter&) override;
+    virtual void init(const TableIter&) override;
     virtual void movement() override;
 
     void sendMsgToGroupMember(u32, HitSensor*, const char*);
 
-    JMapIdInfo* mIdInfo;
+    PlacementId* mIdInfo;
     u32 mMsg;
     HitSensor* mSensor;
     const char* mSensorName;
@@ -26,13 +26,13 @@ class LiveActorGroupArray : public NameObj {
 public:
     LiveActorGroupArray(const char* pName);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
 
     LiveActorGroup* getLiveActorGroup(const LiveActor*) const;
-    LiveActorGroup* createGroup(const JMapInfoIter&, const char*, s32);
+    LiveActorGroup* createGroup(const TableIter&, const char*, s32);
     LiveActorGroup* findGroup(const LiveActor*) const;
-    LiveActorGroup* findGroup(const JMapInfoIter&) const;
-    LiveActorGroup* entry(LiveActor*, const JMapInfoIter&, const char*, s32);
+    LiveActorGroup* findGroup(const TableIter&) const;
+    LiveActorGroup* entry(LiveActor*, const TableIter&, const char*, s32);
 
     MR::Vector< MR::FixedArray< MsgSharedGroup*, 32 > > mGroups;
 };

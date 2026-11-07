@@ -7,10 +7,10 @@ namespace NrvWipeGameOver {
     NEW_NERVE(WipeGameOverActive, WipeGameOver, Active);
 };  // namespace NrvWipeGameOver
 
-WipeGameOver::WipeGameOver() : WipeLayoutBase("\203\121\201\133\203\200\203\111\201\133\203\157\201\133" /* ゲームオーバー */) {
+WipeGameOver::WipeGameOver() : WipeLayoutBase("ゲームオーバー") {
 }
 
-void WipeGameOver::init(const JMapInfoIter& rIter) {
+void WipeGameOver::init(const TableIter& rIter) {
     initNerve(GET_NERVE(WipeGameOver, WipeGameOverWait));
     initLayoutManager("GameOver", 1);
 }

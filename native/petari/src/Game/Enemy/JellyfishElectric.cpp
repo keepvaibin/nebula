@@ -9,7 +9,7 @@
 #include "Game/Util/ActorStateUtil.hpp"
 #include "Game/Util/Color.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LightUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -48,7 +48,7 @@ JellyfishElectric::JellyfishElectric(const char* pName) : LiveActor(pName) {
     _B4.set(0.0f, 0.0f, 0.0f);
 }
 
-void JellyfishElectric::init(const JMapInfoIter& rIter) {
+void JellyfishElectric::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("JellyfishElectric", nullptr, false);
     MR::connectToSceneEnemy(this);
@@ -75,10 +75,10 @@ void JellyfishElectric::init(const JMapInfoIter& rIter) {
         initRailRider(rIter);
         MR::initAndSetRailClipping(&_B4, this, 100.0f, 500.0f);
         MR::moveCoordToNearestPos(this, mPosition);
-        MR::getJMapInfoArg0NoInit(rIter, &_A8);
-        MR::getJMapInfoArg1NoInit(rIter, &_AC);
+        MR::getPlacementArg0NoInit(rIter, &_A8);
+        MR::getPlacementArg1NoInit(rIter, &_AC);
         s32 arg2 = 0;
-        MR::getJMapInfoArg2NoInit(rIter, &arg2);
+        MR::getPlacementArg2NoInit(rIter, &arg2);
         _B0 = arg2 == 1;
     }
 

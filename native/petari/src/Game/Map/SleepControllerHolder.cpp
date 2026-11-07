@@ -3,7 +3,7 @@
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Map/SleepController.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SwitchEventFunctorListener.hpp"
 #include <algorithm>
@@ -14,7 +14,7 @@ namespace {
     }
 };  // namespace
 
-SleepControllerHolder::SleepControllerHolder() : NameObj("\203\111\203\165\203\127\203\106\203\130\203\212\201\133\203\166\212\307\227\235" /* オブジェスリープ管理 */), mSleepControl() {
+SleepControllerHolder::SleepControllerHolder() : NameObj("オブジェスリープ管理"), mSleepControl() {
     MR::connectToSceneMapObjMovement(this);
 }
 
@@ -24,7 +24,7 @@ void SleepControllerHolder::movement() {
     }
 }
 
-void SleepControllerHolder::add(NameObj* pObj, const JMapInfoIter& rIter, SwitchEventListener* pListener) {
+void SleepControllerHolder::add(NameObj* pObj, const TableIter& rIter, SwitchEventListener* pListener) {
     SleepController* sleepControl = new SleepController(rIter, pListener);
 
     mSleepControl.push_back(sleepControl);
@@ -41,7 +41,7 @@ namespace SleepControlFunc {
         ::getSleepControllerHolder()->initSync();
     }
 
-    void addSleepControl(AreaObj* pObj, const JMapInfoIter& rIter) {
+    void addSleepControl(AreaObj* pObj, const TableIter& rIter) {
         SwitchEventFunctorListener* listener;
 
         if (!MR::isExistStageSwitchSleep(rIter)) {
@@ -55,7 +55,7 @@ namespace SleepControlFunc {
         ::getSleepControllerHolder()->add(pObj, rIter, listener);
     }
 
-    void addSleepControl(LiveActor* pActor, const JMapInfoIter& rIter) {
+    void addSleepControl(LiveActor* pActor, const TableIter& rIter) {
         SwitchEventFunctorListener* listener;
 
         if (!MR::isExistStageSwitchSleep(rIter)) {

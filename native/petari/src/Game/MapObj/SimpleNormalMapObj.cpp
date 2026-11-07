@@ -8,7 +8,7 @@
 SimpleNormalMapObj::SimpleNormalMapObj(const char* pName) : NormalMapBase(pName) {
 }
 
-void SimpleNormalMapObj::init(const JMapInfoIter& rIter) {
+void SimpleNormalMapObj::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
 
     char objectName[256];

@@ -11,7 +11,7 @@
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -68,7 +68,7 @@ void BenefitItemObj::initModelAndEfx() {
     MR::addHitSensor(this, "body", ATYPE_KINOKO_ONEUP, 4, 50.0f, Vec3f(0.0f, 50.0f, 0.0f));
 }
 
-void BenefitItemObj::init(const JMapInfoIter& rIter) {
+void BenefitItemObj::init(const TableIter& rIter) {
     LiveActor::init(rIter);
 
     if (MR::isValidInfo(rIter)) {
@@ -128,14 +128,14 @@ void BenefitItemObj::init(const JMapInfoIter& rIter) {
     s32 arg7 = -1;
 
     if (MR::isValidInfo(rIter)) {
-        MR::getJMapInfoArg0NoInit(rIter, &arg0);
-        MR::getJMapInfoArg1NoInit(rIter, &arg1);
-        MR::getJMapInfoArg2NoInit(rIter, &arg2);
-        MR::getJMapInfoArg3NoInit(rIter, &arg3);
-        MR::getJMapInfoArg4NoInit(rIter, &arg4);
-        MR::getJMapInfoArg5NoInit(rIter, &arg5);
-        MR::getJMapInfoArg6NoInit(rIter, &arg6);
-        MR::getJMapInfoArg7NoInit(rIter, &arg7);
+        MR::getPlacementArg0NoInit(rIter, &arg0);
+        MR::getPlacementArg1NoInit(rIter, &arg1);
+        MR::getPlacementArg2NoInit(rIter, &arg2);
+        MR::getPlacementArg3NoInit(rIter, &arg3);
+        MR::getPlacementArg4NoInit(rIter, &arg4);
+        MR::getPlacementArg5NoInit(rIter, &arg5);
+        MR::getPlacementArg6NoInit(rIter, &arg6);
+        MR::getPlacementArg7NoInit(rIter, &arg7);
     } else {
         _E1 = 1;
         _DF = 0;
@@ -400,7 +400,7 @@ void BenefitItemObj::appearThrowUpQuestionBox() {
 }
 
 void BenefitItemObj::control() {
-    if (_E6 && MR::tryStartDemoWithoutCinemaFrame(this, "\217\157\214\273" /* 出現 */)) {
+    if (_E6 && MR::tryStartDemoWithoutCinemaFrame(this, "出現")) {
         _E6 = 0;
 
         MR::startActorCameraTargetSelf(this, mCameraInfo);
@@ -426,7 +426,7 @@ void BenefitItemObj::control() {
             _E4 = 0;
 
             MR::endActorCamera(this, mCameraInfo, false);
-            MR::endDemo(this, "\217\157\214\273" /* 出現 */);
+            MR::endDemo(this, "出現");
 
             MR::validateClipping(this);
         }

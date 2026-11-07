@@ -10,7 +10,7 @@ public:
     MapPartsRailMover(LiveActor*);
 
     virtual ~MapPartsRailMover();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void movement();
     virtual bool isWorking() const;
     virtual void start();

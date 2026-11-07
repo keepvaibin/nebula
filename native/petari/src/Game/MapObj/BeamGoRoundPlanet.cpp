@@ -8,21 +8,21 @@
 #include "Game/Util.hpp"
 #include <cstdio>
 
-BeamGoRoundBeam::BeamGoRoundBeam(MtxPtr pMtx) : LiveActor("\203\162\201\133\203\200\203\123\201\133\203\211\203\105\203\223\203\150\203\162\201\133\203\200" /* ビームゴーラウンドビーム */) {
+BeamGoRoundBeam::BeamGoRoundBeam(MtxPtr pMtx) : LiveActor("ビームゴーラウンドビーム") {
     mModelDrawer = nullptr;
     mBloomModel = nullptr;
     mBeamJointMtx = pMtx;
 }
 
-void BeamGoRoundBeam::init(const JMapInfoIter& rIter) {
+void BeamGoRoundBeam::init(const TableIter& rIter) {
     initModelManagerWithAnm("BeamGoRoundBeam", nullptr, false);
     mPosition.set< f32 >(mBeamJointMtx[0][3], mBeamJointMtx[1][3], mBeamJointMtx[2][3]);
     MR::connectToScene(this, MR::MovementType_MapObj, MR::CalcAnimType_MapObj, MR::DrawBufferType_IndirectMapObj, MR::DrawType_VolumeModel);
     initHitSensor(1);
     MR::addHitSensorCallbackEnemyAttack(this, "beam", 4, 100.0f);
     initEffectKeeper(0, nullptr, false);
-    mModelDrawer = new VolumeModelDrawer("\203\162\201\133\203\200\203\173\203\212\203\205\201\133\203\200" /* ビームボリューム */, "BeamGoRoundBeamVolume", getBaseMtx());
-    mBloomModel = MR::createModelObjBloomModel("\203\162\201\133\203\200\203\165\203\213\201\133\203\200" /* ビームブルーム */, "BeamGoRoundBeamBloom", getBaseMtx());
+    mModelDrawer = new VolumeModelDrawer("ビームボリューム", "BeamGoRoundBeamVolume", getBaseMtx());
+    mBloomModel = MR::createModelObjBloomModel("ビームブルーム", "BeamGoRoundBeamBloom", getBaseMtx());
     MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
     MR::startAllAnim(this, "BeamGoRoundBeam");
     makeActorAppeared();
@@ -66,7 +66,7 @@ BeamGoRoundPlanet::BeamGoRoundPlanet(const char* pName) : MapObjActor(pName) {
     _CC = nullptr;
 }
 
-void BeamGoRoundPlanet::init(const JMapInfoIter& rIter) {
+void BeamGoRoundPlanet::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;
     info.setupDefaultPos();

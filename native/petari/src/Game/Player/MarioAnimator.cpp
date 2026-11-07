@@ -67,15 +67,15 @@ void MarioAnimator::init() {
 
     mXanimePlayer = new XanimePlayer(MR::getModel(mActor), mResourceTable);
 
-    changeDefault("\212\356\226\173" /* 基本 */);
-    change("\212\356\226\173" /* 基本 */);
+    changeDefault("基本");
+    change("基本");
 
     mXanimePlayer->getCore()->enableJointTransform(MR::getModelData(mActor));
 
     mActor->mModelManager->mXanimePlayer = mXanimePlayer;
     mXanimePlayerUpper = new XanimePlayer(MR::getModel(mActor), mResourceTable, mXanimePlayer);
-    changeDefaultUpper("\212\356\226\173" /* 基本 */);
-    mXanimePlayerUpper->changeAnimation("\212\356\226\173" /* 基本 */);
+    changeDefaultUpper("基本");
+    mXanimePlayerUpper->changeAnimation("基本");
     mXanimePlayerUpper->mCore->shareJointTransform(mXanimePlayer->mCore);
     NebulaMtxCopy(MR::tmpMtxRotYRad(PI), _DC.toMtxPtr());
 }
@@ -133,12 +133,12 @@ bool MarioAnimator::isLandingAnimationRun() const {
         return false;
     }
 
-    if (isAnimationRun("\222\205\222\156" /* 着地 */) || isAnimationRun("\222\205\222\156B" /* 着地B */) || isAnimationRun("\222\205\222\156C" /* 着地C */) || isAnimationRun("\222\205\222\156\203\136\201\133\203\223" /* 着地ターン */) ||
-        isAnimationRun("\222\205\222\156\225\235\202\306\202\321" /* 着地幅とび */)) {
+    if (isAnimationRun("着地") || isAnimationRun("着地B") || isAnimationRun("着地C") || isAnimationRun("着地ターン") ||
+        isAnimationRun("着地幅とび")) {
         return true;
     }
 
-    if (isAnimationRun("\202\267\202\327\202\350\222\205\222\156" /* すべり着地 */)) {
+    if (isAnimationRun("すべり着地")) {
         return true;
     }
 
@@ -146,15 +146,15 @@ bool MarioAnimator::isLandingAnimationRun() const {
         return true;
     }
 
-    if (isAnimationRun("\203\156\201\133\203\150\222\205\222\156" /* ハード着地 */)) {
+    if (isAnimationRun("ハード着地")) {
         return true;
     }
 
-    if (isAnimationRun("\213\164\222\205\222\156" /* 逆着地 */)) {
+    if (isAnimationRun("逆着地")) {
         return true;
     }
 
-    if (isAnimationRun("\203\126\203\207\201\133\203\147\222\205\222\156" /* ショート着地 */)) {
+    if (isAnimationRun("ショート着地")) {
         return true;
     }
 
@@ -166,12 +166,12 @@ bool MarioAnimator::isLandingAnimationRun() const {
 }
 
 bool MarioAnimator::isCancelableAnimationRun() const {
-    if (isAnimationRun("\222\205\222\156" /* 着地 */) || isAnimationRun("\222\205\222\156B" /* 着地B */) || isAnimationRun("\222\205\222\156C" /* 着地C */) || isAnimationRun("\222\205\222\156\203\136\201\133\203\223" /* 着地ターン */) ||
-        isAnimationRun("\222\205\222\156\225\235\202\306\202\321" /* 着地幅とび */)) {
+    if (isAnimationRun("着地") || isAnimationRun("着地B") || isAnimationRun("着地C") || isAnimationRun("着地ターン") ||
+        isAnimationRun("着地幅とび")) {
         return true;
     }
 
-    if (isAnimationRun("\202\267\202\327\202\350\222\205\222\156" /* すべり着地 */)) {
+    if (isAnimationRun("すべり着地")) {
         return true;
     }
 
@@ -184,24 +184,24 @@ bool MarioAnimator::isCancelableAnimationRun() const {
 
 bool MarioAnimator::isWalkOrWaitingMotion() const {
     if (isAnimationStop()) {
-        if (isAnimationRun("\212\356\226\173" /* 基本 */) || isAnimationRun("\203\145\203\152\203\130\212\356\226\173" /* テニス基本 */)) {
+        if (isAnimationRun("基本") || isAnimationRun("テニス基本")) {
             return true;
         }
     }
 
-    if (isAnimationRun("\215\342\221\117\214\343\203\105\203\107\203\103\203\147" /* 坂前後ウエイト */)) {
+    if (isAnimationRun("坂前後ウエイト")) {
         return true;
     }
 
-    if (isAnimationRun("\215\342\215\266\211\105\203\105\203\107\203\103\203\147" /* 坂左右ウエイト */)) {
+    if (isAnimationRun("坂左右ウエイト")) {
         return true;
     }
 
-    if (isAnimationRun("\203\112\203\212\203\112\203\212\214\300\212\105" /* カリカリ限界 */)) {
+    if (isAnimationRun("カリカリ限界")) {
         return true;
     }
 
-    if (isAnimationRun("\224\362\202\321\215\236\202\335\217\200\224\365" /* 飛び込み準備 */)) {
+    if (isAnimationRun("飛び込み準備")) {
         return true;
     }
 
@@ -242,7 +242,7 @@ void MarioAnimator::update() {
     player = getPlayer();
     player->_71D = prevWalkState;
 
-    if (isWalkOrWaitingMotion() || isAnimationRun("\202\265\202\341\202\252\202\335\212\356\226\173" /* しゃがみ基本 */)) {
+    if (isWalkOrWaitingMotion() || isAnimationRun("しゃがみ基本")) {
         player = getPlayer();
         _14 = walkStateTable[player->mTargetWalkSpeedIndex];
     } else {
@@ -263,11 +263,11 @@ void MarioAnimator::update() {
                 if (player->mMovementStates._B) {
                     getPlayer()->mMovementStates.jumping = false;
                     getPlayer()->mMovementStates._B = false;
-                    stopAnimation(nullptr, "\212\356\226\173" /* 基本 */);
+                    stopAnimation(nullptr, "基本");
                 }
 
                 if (isAnimationStop()) {
-                    changeAnimation("\212\122\202\323\202\361\202\316\202\350" /* 崖ふんばり */);
+                    changeAnimation("崖ふんばり");
                 }
             }
         }
@@ -275,14 +275,14 @@ void MarioAnimator::update() {
         goto afterBrake;
     }
 
-    if (isAnimationRun("\212\122\202\323\202\361\202\316\202\350" /* 崖ふんばり */)) {
+    if (isAnimationRun("崖ふんばり")) {
         player = getPlayer();
         if (!player->mMovementStates._1) {
-            stopAnimation("\212\122\202\323\202\361\202\316\202\350" /* 崖ふんばり */, "\227\216\211\272" /* 落下 */);
+            stopAnimation("崖ふんばり", "落下");
             player = getPlayer();
             player->_414 = 15;
         } else {
-            stopAnimation("\212\122\202\323\202\361\202\316\202\350" /* 崖ふんばり */);
+            stopAnimation("崖ふんばり");
         }
     }
 
@@ -337,7 +337,7 @@ squatWalk:
             player->startBas(nullptr, false, 0.0f, 0.0f);
             break;
         default: {
-            if (!isAnimationRun("\225\235\202\306\202\321" /* 幅とび */)) {
+            if (!isAnimationRun("幅とび")) {
                 player = getPlayer();
                 player->startBas("SquatWalk", false, 0.0f, 79.0f);
             } else {
@@ -380,12 +380,12 @@ notSquat:
         goto afterBrake;
     }
 
-    if (isAnimationRun("\225\130\217\343\212\265\220\253\221\226\215\163" /* 氷上慣性走行 */)) {
+    if (isAnimationRun("氷上慣性走行")) {
         stopAnimation(nullptr);
         goto doBrake;
     }
 
-    if (isAnimationRun("\225\307\211\237\202\265" /* 壁押し */, 0)) {
+    if (isAnimationRun("壁押し", 0)) {
         player = getPlayer();
         player->decideWalkSpeed();
         player = getPlayer();
@@ -400,8 +400,8 @@ notSquat:
         goto doBrake;
     }
 
-    if (!isAnimationRun("\203\156\201\133\203\150\222\205\222\156" /* ハード着地 */)) {
-        if (isAnimationRun("\202\252\202\361\202\316\202\350\221\226\202\350" /* がんばり走り */)) {
+    if (!isAnimationRun("ハード着地")) {
+        if (isAnimationRun("がんばり走り")) {
             player = getPlayer();
             if (player->_8F0 < 1.0f) {
                 stopAnimation(nullptr);
@@ -416,17 +416,17 @@ doBrake:
     player->updateBrakeAnimation();
 
 afterBrake:
-    if (isAnimationRun("\212\356\226\173" /* 基本 */) || isAnimationRun("\202\252\202\361\202\316\202\350\221\226\202\350" /* がんばり走り */)) {
+    if (isAnimationRun("基本") || isAnimationRun("がんばり走り")) {
         setTilt();
     } else {
         resetTilt();
     }
 
-    if (isAnimationRun("\203\130\203\211\203\103\203\137\201\133\220\113" /* スライダー尻 */)) {
+    if (isAnimationRun("スライダー尻")) {
         setHipSliderTilt();
     }
 
-    if (isAnimationRun("\215\342\202\267\202\327\202\350\211\272\214\374\202\253\202\240\202\250\202\336\202\257" /* 坂すべり下向きあおむけ */, 3)) {
+    if (isAnimationRun("坂すべり下向きあおむけ", 3)) {
         setHipSlipTilt();
     }
 
@@ -774,16 +774,16 @@ void MarioAnimator::setWalkMode() {
         static_cast< u8 >(getPlayer()->checkStickFrontBack()) == 2) {
         if (!isStatusActiveID(MarioStatus_Magic) && !isStatusActiveID(MarioStatus_Skate)) {
             if (getPlayer()->mMovementStates._35) {
-                change("\203\165\203\214\201\133\203\114\212\212\202\350\217\260" /* ブレーキ滑り床 */);
+                change("ブレーキ滑り床");
             } else {
-                change("\203\165\203\214\201\133\203\114" /* ブレーキ */);
+                change("ブレーキ");
             }
         }
-    } else if (isAnimationRun("\203\165\203\214\201\133\203\114" /* ブレーキ */)) {
+    } else if (isAnimationRun("ブレーキ")) {
         getPlayer()->doBrakingAnimation();
         getPlayer()->mTargetWalkSpeedIndex = 0;
     } else {
-        mXanimePlayer->stopAnimation("\203\165\203\214\201\133\203\114\212\212\202\350\217\260" /* ブレーキ滑り床 */);
+        mXanimePlayer->stopAnimation("ブレーキ滑り床");
     }
 
     if (getPlayer()->mMovementStates._4 && !getPlayer()->mMovementStates._23) {
@@ -1061,7 +1061,7 @@ bool MarioAnimator::isMirrorAnimation() {
         camDir = -camDir;
     }
 
-    if (isAnimationRun("\225\307\202\267\202\327\202\350" /* 壁すべり */) || isAnimationRun("\225\307\202\255\202\301\202\302\202\253" /* 壁くっつき */)) {
+    if (isAnimationRun("壁すべり") || isAnimationRun("壁くっつき")) {
         if (!_10C) {
             const Vec3f& wallNorm = getPlayer()->getWallNorm();
             f32 wallDot = camDir.dot(wallNorm);
@@ -1079,7 +1079,7 @@ bool MarioAnimator::isMirrorAnimation() {
 
     // Check if walling (player mMovementStates._37 bit check)
     if (getPlayer()->mMovementStates._37) {
-        if (isAnimationRun("\203\165\203\214\201\133\203\114" /* ブレーキ */) || isAnimationRun("\203\136\201\133\203\223\203\165\203\214\201\133\203\114" /* ターンブレーキ */) || isAnimationRun("\203\136\201\133\203\223\203\127\203\203\203\223\203\166" /* ターンジャンプ */)) {
+        if (isAnimationRun("ブレーキ") || isAnimationRun("ターンブレーキ") || isAnimationRun("ターンジャンプ")) {
             if (!_10C) {
                 f32 frontDot = camDir.dot(getPlayer()->mFrontVec);
                 if (frontDot > 0.0f) {
@@ -1097,7 +1097,7 @@ bool MarioAnimator::isMirrorAnimation() {
 
     // Clear cache flag
     _10C = false;
-    if (isAnimationRun("\215\266\213\363\203\160\203\223\203\140" /* 左空パンチ */)) {
+    if (isAnimationRun("左空パンチ")) {
         return true;
     }
 
@@ -1144,7 +1144,7 @@ void MarioAnimator::changePickupAnimation(const HitSensor* pSensor) {
     switch (type) {
     case ACTMES_STAR_PIECE_GIFT_MAX:
         mActor->_494 = mActor->_49C;
-        changeAnimation("\203\112\203\165\224\262\202\253" /* カブ抜き */);
+        changeAnimation("カブ抜き");
         mActor->changeNullAnimation("PullOut", -2);
         getPlayer()->stopWalk();
         break;
@@ -1153,16 +1153,16 @@ void MarioAnimator::changePickupAnimation(const HitSensor* pSensor) {
         mActor->_494 = mActor->_498;
         if (!getPlayer()->isSwimming()) {
             if (mActor->_424 == pSensor) {
-                changeAnimationUpper("\202\320\202\353\202\242\203\116\203\103\203\142\203\116" /* ひろいクイック */);
-                playEffect("\202\320\202\353\202\242\203\116\203\103\203\142\203\116" /* ひろいクイック */);
+                changeAnimationUpper("ひろいクイック");
+                playEffect("ひろいクイック");
                 mActor->clearNullAnimation(-3);
                 startPadVib(2);
             } else if (getPlayer()->mMovementStates.jumping && !getPlayer()->mMovementStates._B) {
-                changeAnimation("\202\320\202\353\202\242\213\363\222\206" /* ひろい空中 */);
+                changeAnimation("ひろい空中");
                 mActor->clearNullAnimation(-3);
                 getPlayer()->stopWalk();
             } else {
-                changeAnimation("\202\320\202\353\202\242" /* ひろい */);
+                changeAnimation("ひろい");
                 mActor->changeNullAnimation("CarryStart", -2);
                 getPlayer()->stopWalk();
             }
@@ -1193,7 +1193,7 @@ void MarioAnimator::updateTakingAnimation(const HitSensor* pSensor) {
     switch (type) {
     case ACTMES_STAR_PIECE_GIFT_MAX:
         stopAnimation(nullptr);
-        changeAnimationUpper("\203\112\203\165\203\105\203\107\203\103\203\147" /* カブウエイト */);
+        changeAnimationUpper("カブウエイト");
         mActor->clearNullAnimation(0);
         mActor->offTakingFlag();
         break;
@@ -1201,13 +1201,13 @@ void MarioAnimator::updateTakingAnimation(const HitSensor* pSensor) {
     case ACTMES_STAR_PIECE_GIFT_1:
         if (!getPlayer()->isSwimming()) {
             s32 shouldChange = 1;
-            if (isAnimationRun("\202\320\202\353\202\242\203\116\203\103\203\142\203\116" /* ひろいクイック */)) {
+            if (isAnimationRun("ひろいクイック")) {
                 shouldChange = isAnimationTerminateUpper(nullptr);
             }
 
             if (shouldChange) {
-                if (!isAnimationRun("\202\320\202\353\202\242\213\363\222\206" /* ひろい空中 */) && mActor->isStopNullAnimation()) {
-                    changeAnimationUpper("\202\320\202\353\202\242\203\105\203\107\203\103\203\147" /* ひろいウエイト */);
+                if (!isAnimationRun("ひろい空中") && mActor->isStopNullAnimation()) {
+                    changeAnimationUpper("ひろいウエイト");
                     startPadVib(2);
                     mActor->clearNullAnimation(0);
                     mActor->offTakingFlag();
@@ -1226,19 +1226,19 @@ void MarioAnimator::changeThrowAnimation(const HitSensor* pSensor) {
     switch (type) {
     case ACTMES_STAR_PIECE_GIFT_MAX:
         stopAnimationUpper(nullptr);
-        changeAnimation("\227\274\216\350\223\212\202\260" /* 両手投げ */);
-        startPadVib("\203\175\203\212\203\111[\213\124\223\212\202\260]" /* マリオ[亀投げ] */);
+        changeAnimation("両手投げ");
+        startPadVib("マリオ[亀投げ]");
         break;
     case ACTMES_STAR_PIECE_GIFT:
     case ACTMES_STAR_PIECE_GIFT_1:
         stopAnimationUpper(nullptr);
         if (getPlayer()->isSwimming()) {
-            changeAnimation("\220\205\211\152\213\124\223\212\202\260" /* 水泳亀投げ */, "\220\205\211\152\212\356\226\173" /* 水泳基本 */);
+            changeAnimation("水泳亀投げ", "水泳基本");
         } else {
-            changeAnimation("\223\212\202\260" /* 投げ */);
+            changeAnimation("投げ");
         }
 
-        startPadVib("\203\175\203\212\203\111[\213\124\223\212\202\260]" /* マリオ[亀投げ] */);
+        startPadVib("マリオ[亀投げ]");
         break;
     }
 }
@@ -1259,12 +1259,12 @@ void MarioAnimator::waterToGround() {
     switch (state) {
     case ACTMES_STAR_PIECE_GIFT:
     case ACTMES_STAR_PIECE_GIFT_1:
-        changeAnimationUpper("\202\320\202\353\202\242\203\105\203\107\203\103\203\147" /* ひろいウエイト */);
+        changeAnimationUpper("ひろいウエイト");
         mActor->clearNullAnimation(0);
         MR::deleteEffect(swimSensor->mHost, "SwimBubble");
         break;
     case ACTMES_STAR_PIECE_GIFT_MAX:
-        changeAnimationUpper("\203\112\203\165\203\105\203\107\203\103\203\147" /* カブウエイト */);
+        changeAnimationUpper("カブウエイト");
         mActor->clearNullAnimation(0);
         break;
     }

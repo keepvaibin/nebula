@@ -4,7 +4,7 @@
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
@@ -46,15 +46,15 @@ KoopaBattleMapStair::KoopaBattleMapStair(const char* pName)
       _A8(-1), _AC(0.0f, 0.0f, 0.0f), mWaitFallStep(::sDefaultStepWaitFall), mFallStep(::sDefaultStepFall) {
 }
 
-void KoopaBattleMapStair::init(const JMapInfoIter& rIter) {
+void KoopaBattleMapStair::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
-    MR::getJMapInfoArg0NoInit(rIter, &mTimeToBreak);
-    MR::getJMapInfoArg1NoInit(rIter, &mArg1);
-    MR::getJMapInfoArg2NoInit(rIter, &mType);
-    MR::getJMapInfoArg3NoInit(rIter, &mWaitFallStep);
-    MR::getJMapInfoArg4NoInit(rIter, &mFallStep);
-    MR::getJMapInfoArg5NoInit(rIter, &mArg5);
-    MR::getJMapInfoArg6NoInit(rIter, &mArg6);
+    MR::getPlacementArg0NoInit(rIter, &mTimeToBreak);
+    MR::getPlacementArg1NoInit(rIter, &mArg1);
+    MR::getPlacementArg2NoInit(rIter, &mType);
+    MR::getPlacementArg3NoInit(rIter, &mWaitFallStep);
+    MR::getPlacementArg4NoInit(rIter, &mFallStep);
+    MR::getPlacementArg5NoInit(rIter, &mArg5);
+    MR::getPlacementArg6NoInit(rIter, &mArg6);
 
     const char* objName = nullptr;
     MR::getObjectName(&objName, rIter);

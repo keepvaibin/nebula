@@ -13,7 +13,7 @@ public:
     RainCloud(const char* pName);
 
     virtual ~RainCloud();
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void startClipped();
     virtual void endClipped();
     virtual void control();
@@ -32,7 +32,7 @@ public:
     void updateRainCylinder();
     bool isNextStartOK() const;
 
-    static void makeArchiveList(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter);
+    static void makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter);
 
     ModelObj* mCloudCylinder;
     Pos3f mRainCylinderMtx;

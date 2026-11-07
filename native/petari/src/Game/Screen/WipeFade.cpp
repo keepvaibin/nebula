@@ -12,7 +12,7 @@ WipeFade::WipeFade(const char* pName, const Color8& rFillColor)
     : WipeLayoutBase(pName), mIsWipeIn(false), mFrame(::sFadeFrame), mStep(::sFadeFrame), mFillColor(rFillColor) {
 }
 
-void WipeFade::init(const JMapInfoIter& rIter) {
+void WipeFade::init(const TableIter& rIter) {
     kill();
 }
 

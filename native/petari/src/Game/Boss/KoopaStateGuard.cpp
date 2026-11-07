@@ -19,7 +19,7 @@ namespace NrvKoopaStateGuard {
     NEW_NERVE(KoopaStateGuardNrvGuardTail, KoopaStateGuard, GuardTail);
 };  // namespace NrvKoopaStateGuard
 
-KoopaStateGuard::KoopaStateGuard(Koopa* pKoopa) : ActorStateBase< Koopa >("State[\203\113\201\133\203\150\215\125\214\202]" /* State[ガード攻撃] */, pKoopa) {
+KoopaStateGuard::KoopaStateGuard(Koopa* pKoopa) : ActorStateBase< Koopa >("State[ガード攻撃]", pKoopa) {
 }
 
 void KoopaStateGuard::init() {

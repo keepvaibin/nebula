@@ -8,8 +8,8 @@
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapInfo.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/Table.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
@@ -61,7 +61,7 @@ Rabbit::Rabbit(const char* pName) : NPCActor(pName) {
 Rabbit::~Rabbit() {
 }
 
-void Rabbit::init(const JMapInfoIter& rIter) {
+void Rabbit::init(const TableIter& rIter) {
     const char* name;
     MR::getObjectName(&name, rIter);
     MR::initDefaultPose(this, rIter);
@@ -79,12 +79,12 @@ void Rabbit::init(const JMapInfoIter& rIter) {
     mLodCtrl = MR::createLodCtrlNPC(this, rIter);
     MR::useStageSwitchWriteDead(this, rIter);
     s32 colorFrameArg = 0;
-    MR::getJMapInfoArg0NoInit(rIter, &colorFrameArg);
+    MR::getPlacementArg0NoInit(rIter, &colorFrameArg);
     MR::startBtk(this, "MoonRabbit");
     MR::setBtkFrameAndStop(this, colorFrameArg);
 
     s32 messageId;
-    if (MR::getJMapInfoMessageID(rIter, &messageId)) {
+    if (MR::getPlacementMessageID(rIter, &messageId)) {
         mMsgCtrl = MR::createTalkCtrl(this, rIter, name, Vec3f(0.0f, 160.0f, 0.0f), nullptr);
         MR::onRootNodeAutomatic(mMsgCtrl);
         MR::useStageSwitchReadA(this, rIter);
@@ -99,10 +99,10 @@ void Rabbit::init(const JMapInfoIter& rIter) {
             mBehavior = Behavior_Demo2;
         }
     } else {
-        MR::getJMapInfoArg1NoInit(rIter, &behaviorArg);
+        MR::getPlacementArg1NoInit(rIter, &behaviorArg);
         switch (behaviorArg) {
         case 0:
-            if (MR::checkJMapDataEntries(rIter)) {
+            if (MR::checkTableEntries(rIter)) {
                 initRailRider(rIter);
                 MR::moveCoordAndTransToNearestRailPos(this);
             }

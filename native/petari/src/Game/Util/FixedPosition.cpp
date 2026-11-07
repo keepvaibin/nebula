@@ -55,7 +55,7 @@ FixedPosition::FixedPosition(const LiveActor* pActor, const char* pResName, cons
     }
 
     ResourceHolder* resourceHolder = MR::getResourceHolder(pResActor);
-    JMapInfo* csv = MR::tryCreateCsvParser(resourceHolder, "%s.bcsv", pResName);
+    Table* csv = MR::tryCreateCsvParser(resourceHolder, "%s.bcsv", pResName);
 
     const char* jointName = nullptr;
     Vec3f trans(0.0f, 0.0f, 0.0f);

@@ -8,7 +8,7 @@ public:
     KoopaBattleMapPlate(const char* pName);
 
     virtual ~KoopaBattleMapPlate();
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void calcAndSetBaseMtx();
     bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 

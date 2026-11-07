@@ -20,7 +20,7 @@ ValveSwitch::ValveSwitch(const char* pName) : LiveActor(pName) {
     _90.identity();
 }
 
-void ValveSwitch::init(const JMapInfoIter& rIter) {
+void ValveSwitch::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::needStageSwitchWriteA(this, rIter);
     initModelManagerWithAnm("ValveSwitch", nullptr, false);
@@ -35,7 +35,7 @@ void ValveSwitch::init(const JMapInfoIter& rIter) {
     MR::initCollisionParts(this, "ValveCol", getSensor("binder"), _90.toMtxPtr());
     initEffectKeeper(0, nullptr, false);
     initSound(4, false);
-    MR::getJMapInfoArg0NoInit(rIter, &_C4);
+    MR::getPlacementArg0NoInit(rIter, &_C4);
     initNerve(GET_NERVE(ValveSwitch, ValveSwitchNrvWait));
     makeActorAppeared();
 }

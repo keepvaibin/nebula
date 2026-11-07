@@ -24,7 +24,7 @@
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/FootPrint.hpp"
 #include "Game/Util/GravityUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointController.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
@@ -51,7 +51,7 @@ namespace {
     static Vec3f sBodyHitOffset = Vec3f(0.0f, 200.0f, 0.0f);
     static Vec3f sEggHitOffset = Vec3f(0.0f, 200.0f, 0.0f);
     static Vec3f sMarioSetLocalPos = Vec3f(0.0f, -550.0f, 800.0f);
-    static const char* sEventCameraName = "\203\137\203\201\201\133\203\127" /* ダメージ */;
+    static const char* sEventCameraName = "ダメージ";
 
     static const char* sJointName[7] = {"Tail1", "Tail2", "Tail3", "Tail4", "Tail5", "Tail6", "Tail7"};
 
@@ -90,7 +90,7 @@ DinoPackun::DinoPackun(const char* pName)
     _110 = 0;
 }
 
-void DinoPackun::init(const JMapInfoIter& rIter) {
+void DinoPackun::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm(mSequence->getVsCount() == 1 ? "DinoPackun" : "DinoPackun2", nullptr, false);
     MR::connectToSceneEnemy(this);
@@ -142,14 +142,14 @@ void DinoPackun::init(const JMapInfoIter& rIter) {
 
 void DinoPackun::initTail() {
     mTail = new DinoPackunTail(9);
-    DinoPackunTailRoot* root = new DinoPackunTailRoot("\220\113\224\366\203\213\201\133\203\147" /* 尻尾ルート */, this);
+    DinoPackunTailRoot* root = new DinoPackunTailRoot("尻尾ルート", this);
     root->createJointController(this, "TailRoot");
     root->initWithoutIter();
     root->mKeepBendPower = ::sKeepBendPower[0];
     mTail->addTailNode(root);
 
     for (u32 i = 0; i < 7; i++) {
-        DinoPackunTailPart* p = new DinoPackunTailPart("\220\113\224\366\203\127\203\207\203\103\203\223\203\147" /* 尻尾ジョイント */, this);
+        DinoPackunTailPart* p = new DinoPackunTailPart("尻尾ジョイント", this);
         MR::copyJointPos(this, ::sJointName[i], &p->mPosition);
         p->createJointController(this, ::sJointName[i]);
         f32 keepBendPower = ::sKeepBendPower[i];
@@ -165,7 +165,7 @@ void DinoPackun::initTail() {
         mTail->addTailNode(p);
     }
 
-    mBall = new DinoPackunBall("\220\113\224\366\220\346\222\133\213\205" /* 尻尾先端球 */, this);
+    mBall = new DinoPackunBall("尻尾先端球", this);
     MR::copyJointPos(this, "TailBall", &mBall->mPosition);
     mBall->mLinkLength = 120.0f;
     mBall->setWeakSensor(getSensor("head"));
@@ -175,7 +175,7 @@ void DinoPackun::initTail() {
 }
 
 void DinoPackun::initFootPrint() {
-    mFootPrint = new FootPrint("\221\253\220\325" /* 足跡 */, 32);
+    mFootPrint = new FootPrint("足跡", 32);
     mFootPrint->setTexture(MR::getTexFromArc("DinoPackunFootprint.bti", this));
     mFootPrint->_2C = 0.0f;
     mFootPrint->_30 = 100.0f;
@@ -183,13 +183,13 @@ void DinoPackun::initFootPrint() {
     mFootPrint->mMinPrintDistance = 10.0f;
 }
 
-void DinoPackun::initDemoPosition(const JMapInfoIter& rIter) {
-    mDemoPos = new DinoPackunDemoPosition("\203\146\203\202\210\312\222\165\212\307\227\235" /* デモ位置管理 */);
+void DinoPackun::initDemoPosition(const TableIter& rIter) {
+    mDemoPos = new DinoPackunDemoPosition("デモ位置管理");
     mDemoPos->init(rIter);
 }
 
 void DinoPackun::initEggShell() {
-    mShell = new DinoPackunEggShell("\227\221\202\314\212\153" /* 卵の殻 */, getSensor("head"), MR::getJointMtx(this, "EggShell"));
+    mShell = new DinoPackunEggShell("卵の殻", getSensor("head"), MR::getJointMtx(this, "EggShell"));
     mShell->initWithoutIter();
 
     if (mSequence->getVsCount() == 1) {
@@ -200,7 +200,7 @@ void DinoPackun::initEggShell() {
         MR::startBrk(mShell, "Vs2");
     }
 
-    mShellBreakModel = MR::createPartsModelEnemy(this, "\227\221\202\314\212\153\211\363\202\352\203\202\203\146\203\213" /* 卵の殻壊れモデル */, "DinoPackunEggShellBreak", MR::getJointMtx(this, "EggShell"));
+    mShellBreakModel = MR::createPartsModelEnemy(this, "卵の殻壊れモデル", "DinoPackunEggShellBreak", MR::getJointMtx(this, "EggShell"));
     MR::initLightCtrl(mShellBreakModel);
     mShellBreakModel->makeActorDead();
     if (mSequence->getVsCount() == 1) {
@@ -211,7 +211,7 @@ void DinoPackun::initEggShell() {
 }
 
 void DinoPackun::initBall() {
-    mTailBall = MR::createPartsModelEnemy(this, "\220\113\224\366\213\312\203\202\203\146\203\213" /* 尻尾玉モデル */, "DinoPackunTailBall", MR::getJointMtx(this, "TailBall"));
+    mTailBall = MR::createPartsModelEnemy(this, "尻尾玉モデル", "DinoPackunTailBall", MR::getJointMtx(this, "TailBall"));
     MR::startBrk(mTailBall, "Normal");
 
     if (mSequence->getVsCount() == 1) {
@@ -223,20 +223,20 @@ void DinoPackun::initBall() {
     mTailBall->makeActorAppeared();
 }
 
-void DinoPackun::initCamera(const JMapInfoIter& rIter) {
+void DinoPackun::initCamera(const TableIter& rIter) {
     mCameraInfo = new ActorCameraInfo(rIter);
     MR::initAnimCamera(this, mCameraInfo, "OpeningDemo");
     MR::initAnimCamera(this, mCameraInfo, "CryDemo");
     MR::initAnimCamera(this, mCameraInfo, "AngryDemo");
     MR::initAnimCamera(this, mCameraInfo, "DownDemo");
     MR::initMultiActorCamera(this, rIter, &mCameraInfo, ::sEventCameraName);
-    MR::getJMapInfoArg7WithInit(rIter, &_F4);
+    MR::getPlacementArg7WithInit(rIter, &_F4);
 
     if (_F4 != -1) {
         MR::declareCameraRegisterVec(this, _F4, &mCameraVec);
     }
 
-    mCamTargetMtx = new CameraTargetMtx("\203\112\203\201\203\211\203\136\201\133\203\121\203\142\203\147\203\137\203\176\201\133" /* カメラターゲットダミー */);
+    mCamTargetMtx = new CameraTargetMtx("カメラターゲットダミー");
 }
 
 void DinoPackun::initScaleJointController() {

@@ -1,17 +1,17 @@
 #include "Game/Map/BezierRail.hpp"
 #include "Game/Map/RailPart.hpp"
-#include "Game/Util/JMapInfo.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/Table.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <nebula_geometry.hpp>
 #include <nebula_math.h>
 
-inline void getCsvDataStr(const char** pOut, const JMapInfo* pMapInfo, const char* pKey, s32 idx) {
+inline void getCsvDataStr(const char** pOut, const Table* pMapInfo, const char* pKey, s32 idx) {
     pMapInfo->getValue(idx, pKey, pOut);
 }
 
-inline s32 getCsvDataElementNum(const JMapInfo* pMapInfo) {
+inline s32 getCsvDataElementNum(const Table* pMapInfo) {
     if (pMapInfo->mData != nullptr) {
         return pMapInfo->mData->mNumEntries;
     }
@@ -290,12 +290,12 @@ f32 BezierRail::getRailPosCoord(int idx) const {
     return getTotalLength();
 }
 
-void BezierRail::calcCurrentRailCtrlPointIter(JMapInfoIter* pIter, f32 t, bool forward) const {
+void BezierRail::calcCurrentRailCtrlPointIter(TableIter* pIter, f32 t, bool forward) const {
     int idx = getCurrentCtrlPointIndex(t, forward);
     calcRailCtrlPointIter(pIter, idx);
 }
 
-void BezierRail::calcRailCtrlPointIter(JMapInfoIter* pIter, int idx) const {
+void BezierRail::calcRailCtrlPointIter(TableIter* pIter, int idx) const {
     pIter->mIndex = idx;
     pIter->mInfo = mInfo;
 }
@@ -378,12 +378,12 @@ int BezierRail::getCurrentCtrlPointIndex(f32 t, bool forward) const {
     return 0;
 }
 
-BezierRail::BezierRail(const JMapInfoIter& rIter, const JMapInfo* pInfo) {
+BezierRail::BezierRail(const TableIter& rIter, const Table* pInfo) {
     mInfo = pInfo;
-    mIter = new JMapInfoIter(rIter);
+    mIter = new TableIter(rIter);
 
     const char* closedValue = "";
-    const JMapInfo* info = rIter.mInfo;
+    const Table* info = rIter.mInfo;
 
     getCsvDataStr(&closedValue, info, "closed", rIter.mIndex);
     mIsClosed = MR::isEqualString(closedValue, "CLOSE");
@@ -402,8 +402,8 @@ BezierRail::BezierRail(const JMapInfoIter& rIter, const JMapInfo* pInfo) {
     mPointCoords = new f32[mNumRailParts];
 
     for (int i = 0; i < mNumRailParts; i++) {
-        JMapInfoIter iterPoint1 = JMapInfoIter(pInfo, i);
-        JMapInfoIter iterPoint2 = JMapInfoIter(pInfo, adjustNextIndex(i, mPointNum));
+        TableIter iterPoint1 = TableIter(pInfo, i);
+        TableIter iterPoint2 = TableIter(pInfo, adjustNextIndex(i, mPointNum));
 
         Vec3f point1;
         Vec3f point2;

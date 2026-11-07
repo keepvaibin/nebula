@@ -15,7 +15,7 @@ public:
     GalaxyMapIcon(const char*, LayoutActor*, const char*);
 
     virtual ~GalaxyMapIcon();
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void calcAnim();
     virtual void appear();
     virtual void control();

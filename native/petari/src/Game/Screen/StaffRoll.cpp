@@ -110,7 +110,7 @@ namespace NrvStaffRollLine {
 StaffRollLine::StaffRollLine(const char* pName) : LayoutActor(pName, true), mPosition(0.0f, 0.0f) {
 }
 
-void StaffRollLine::init(const JMapInfoIter& rIter) {
+void StaffRollLine::init(const TableIter& rIter) {
     initLayoutManager("StaffRoll", 1);
     MR::createAndAddPaneCtrl(this, ::cPaneNameText, 1);
     MR::setFollowPos(&mPosition, this, ::cPaneNameText);
@@ -143,7 +143,7 @@ namespace NrvStaffRollPicture {
 StaffRollPicture::StaffRollPicture(const char* pName) : LayoutActor(pName, true), mReplaceTexture() {
 }
 
-void StaffRollPicture::init(const JMapInfoIter& rIter) {
+void StaffRollPicture::init(const TableIter& rIter) {
     initLayoutManager("StaffRollPicture", 1);
     MR::createAndAddPaneCtrl(this, "PictureLU", 1);
     MR::createAndAddPaneCtrl(this, "PictureLD", 1);
@@ -242,7 +242,7 @@ StaffRoll::StaffRoll(const char* pName)
       _48(-1), _4C() {
 }
 
-void StaffRoll::init(const JMapInfoIter& rIter) {
+void StaffRoll::init(const TableIter& rIter) {
     MR::connectToSceneLayout(this);
     initLayoutManager("StaffRollTitle", 1);
 
@@ -262,14 +262,14 @@ void StaffRoll::init(const JMapInfoIter& rIter) {
     mLine = new StaffRollLine*[LINE_NUM];
 
     for (s32 i = 0; i < LINE_NUM; i++) {
-        mLine[i] = new StaffRollLine("\203\130\203\136\203\142\203\164\203\215\201\133\203\213\210\352\215\163" /* スタッフロール一行 */);
+        mLine[i] = new StaffRollLine("スタッフロール一行");
         mLine[i]->initWithoutIter();
     }
 
     mMsg = MR::getGameMessageDirect(::cStaffRollMsgId);
     mMsgLineNum = MR::countMessageLine(mMsg);
 
-    mPicture = new StaffRollPicture("\203\130\203\136\203\142\203\164\203\215\201\133\203\213\216\312\220\136" /* スタッフロール写真 */);
+    mPicture = new StaffRollPicture("スタッフロール写真");
     mPicture->initWithoutIter();
 
     initNerve(GET_NERVE(StaffRoll, StaffRollNrvPrepareDemo));

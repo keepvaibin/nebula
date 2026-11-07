@@ -5,7 +5,7 @@
 TripodBossRailMoveParts::TripodBossRailMoveParts(const char* pName) : TripodBossFixParts(pName), mRailMover() {
 }
 
-void TripodBossRailMoveParts::init(const JMapInfoIter& rIter) {
+void TripodBossRailMoveParts::init(const TableIter& rIter) {
     TripodBossFixParts::init(rIter);
     initRailRider(rIter);
 

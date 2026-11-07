@@ -29,7 +29,7 @@ namespace NrvAnmModelObj {
 AnmModelObj::AnmModelObj(const char* pName) : MapObjActor(pName), mJointPos(0.0f, 0.0f, 0.0f) {
 }
 
-void AnmModelObj::init(const JMapInfoIter& rIter) {
+void AnmModelObj::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;
     MapObjActorUtil::setupInitInfoSimpleMapObj(&info);
@@ -135,7 +135,7 @@ void AnmModelObj::exeDone() {
 AnmModelSwitchMove::AnmModelSwitchMove(const char* pName) : AnmModelObj(pName) {
 }
 
-void AnmModelSwitchMove::init(const JMapInfoIter& rIter) {
+void AnmModelSwitchMove::init(const TableIter& rIter) {
     AnmModelObj::init(rIter);
 
     if (MR::isDemoCast(this, nullptr)) {
@@ -160,7 +160,7 @@ bool AnmModelSwitchMove::isOnStartAnmTrigger() const {
 AnmModelGroundOnMove::AnmModelGroundOnMove(const char* pName) : AnmModelObj(pName) {
 }
 
-void AnmModelGroundOnMove::init(const JMapInfoIter& rIter) {
+void AnmModelGroundOnMove::init(const TableIter& rIter) {
     AnmModelObj::init(rIter);
     MR::useStageSwitchWriteB(this, rIter);
 }
@@ -178,7 +178,7 @@ bool AnmModelGroundOnMove::isOnStartAnmTrigger() const {
 AnmModelBindMove::AnmModelBindMove(const char* pName) : AnmModelObj(pName) {
 }
 
-void AnmModelBindMove::init(const JMapInfoIter& rIter) {
+void AnmModelBindMove::init(const TableIter& rIter) {
     AnmModelObj::init(rIter);
     MR::useStageSwitchWriteB(this, rIter);
 }
@@ -206,7 +206,7 @@ bool AnmModelBindMove::isOnStartAnmTrigger() const {
 AnmModelSwitchMoveEventCamera::AnmModelSwitchMoveEventCamera(const char* pName) : AnmModelSwitchMove(pName), mCameraInfo() {
 }
 
-void AnmModelSwitchMoveEventCamera::init(const JMapInfoIter& rIter) {
+void AnmModelSwitchMoveEventCamera::init(const TableIter& rIter) {
     AnmModelObj::init(rIter);
 
     if (MR::isDemoCast(this, nullptr) && MR::tryRegisterDemoActionNerve(this, GET_NERVE(AnmModelObj, HostTypeMove), nullptr)) {

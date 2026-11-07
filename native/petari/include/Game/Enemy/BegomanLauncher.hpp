@@ -8,7 +8,7 @@ class BegomanLauncher : public LiveActor {
 public:
     BegomanLauncher(const char* pName);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void initAfterPlacement();
     virtual void kill();
 

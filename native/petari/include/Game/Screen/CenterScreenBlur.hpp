@@ -8,8 +8,8 @@ public:
     CenterScreenBlur();
 
     /// @brief Intializes the `CenterScreenBlur` while being placed into a scene.
-    /// @param rIter The reference to an iterator over a `JMapInfo`.
-    virtual void init(const JMapInfoIter& rIter);
+    /// @param rIter The reference to an iterator over a `Table`.
+    virtual void init(const TableIter& rIter);
 
     /// @brief Draws the `CenterScreenBlur` to the screen.
     virtual void draw() const;

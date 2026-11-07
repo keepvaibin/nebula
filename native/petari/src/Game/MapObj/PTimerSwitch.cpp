@@ -26,7 +26,7 @@ void PTimerSwitch::reset() {
     _98 = false;
 }
 
-void PTimerSwitch::init(const JMapInfoIter& rIter) {
+void PTimerSwitch::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("PTimerSwitch", nullptr, false);
     MR::connectToSceneMapObj(this);

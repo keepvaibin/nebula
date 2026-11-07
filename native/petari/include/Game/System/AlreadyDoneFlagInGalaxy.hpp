@@ -2,7 +2,7 @@
 
 #include "Game/Util/Array.hpp"
 
-class JMapInfoIter;
+class TableIter;
 
 class AlreadyDoneInfo {
 public:
@@ -28,7 +28,7 @@ public:
     AlreadyDoneFlagInGalaxy(int);
 
     void clear();
-    u32 setupFlag(const char*, const JMapInfoIter&, u32*);
+    u32 setupFlag(const char*, const TableIter&, u32*);
     void updateValue(int, u32);
 
     MR::Vector< MR::AssignableArray< AlreadyDoneInfo > > mDoneInfos;

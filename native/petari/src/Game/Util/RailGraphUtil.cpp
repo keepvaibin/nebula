@@ -1,12 +1,12 @@
 #include "Game/Util/RailGraphUtil.hpp"
 #include "Game/Map/RailGraph.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "math_types.hpp"
 
 namespace {
-    inline void addRailToGraph(RailGraph* pGraph, JMapInfoIter currentRail, const JMapInfo* pPoints) {
+    inline void addRailToGraph(RailGraph* pGraph, TableIter currentRail, const Table* pPoints) {
         s32 pointCount = pPoints->getNumEntries();
         s32 firstNode = 0;
         s32 previousNode = -1;
@@ -14,7 +14,7 @@ namespace {
 
         for (s32 i = 0; i < pointCount; i++) {
             Vec3f position;
-            MR::getRailPointPos0(JMapInfoIter(pPoints, i), &position);
+            MR::getRailPointPos0(TableIter(pPoints, i), &position);
             s32 nearNode = MR::getNearNodeIndex(pGraph, position, 100.0f, nullptr);
             s32 node;
             if (nearNode == -1) {
@@ -42,10 +42,10 @@ namespace {
 };  // namespace
 
 namespace MR {
-    RailGraph* createRailGraphFromJMap(const JMapInfoIter& rIter) {
+    RailGraph* createRailGraphFromPlacement(const TableIter& rIter) {
         RailGraph* pGraph = new RailGraph;
-        const JMapInfo* pRailPoints = nullptr;
-        JMapInfoIter railIter;
+        const Table* pRailPoints = nullptr;
+        TableIter railIter;
         bool hasRail = true;
         getRailInfo(&railIter, &pRailPoints, rIter);
 

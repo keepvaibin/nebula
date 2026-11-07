@@ -3,7 +3,7 @@
 #include "Game/Enemy/WalkerStateBindStarPointer.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointController.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
@@ -51,7 +51,7 @@ SearchBeamer::SearchBeamer(const char* pName) : LiveActor(pName) {
     _B8.identity();
 }
 
-void SearchBeamer::init(const JMapInfoIter& rIter) {
+void SearchBeamer::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("SearchBeamer", nullptr, false);
     MR::connectToSceneCollisionMapObjStrongLight(this);
@@ -84,8 +84,8 @@ void SearchBeamer::init(const JMapInfoIter& rIter) {
     mBeanStartJointCtrl = MR::createJointController(this, "BeamStart", &SearchBeamer::calcJointBeamStart);
     mBeamEndJointCtrl = MR::createJointController(this, "BeamEnd", &SearchBeamer::calcJointBeamEnd);
     initBeamPos();
-    MR::getJMapInfoArg0NoInit(rIter, &_138);
-    MR::getJMapInfoArg1NoInit(rIter, &_13C);
+    MR::getPlacementArg0NoInit(rIter, &_138);
+    MR::getPlacementArg1NoInit(rIter, &_13C);
     _140 = 300.0f + _13C;
     MR::calcFrontVec(&_94, this);
     MR::calcUpVec(&_A0, this);

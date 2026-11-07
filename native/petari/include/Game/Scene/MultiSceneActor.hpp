@@ -13,7 +13,7 @@ class MultiSceneActor : public NameObj {
 public:
     MultiSceneActor(const char*, const char*, bool);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void movement();
     virtual void calcAnim();
     virtual void calcViewAndEntry();

@@ -10,7 +10,7 @@
 #include "Game/Util/ActorShadowUtil.hpp"
 #include "Game/Util/ActorStateUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -100,7 +100,7 @@ Poihana::Poihana(const char* pName)
       mFrontVec(0.0f, 0.0f, 1.0f), mBoundTimer(-1), mBehavior(POIHANA_BEHAVIOR_NORMAL), mCanDrown(), mWaterColumn(), mIsActive(), _E5() {
 }
 
-void Poihana::init(const JMapInfoIter& rIter) {
+void Poihana::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::initActorCamera(this, rIter, &mCamInfo);
     initModelManagerWithAnm("Poihana", nullptr, false);
@@ -112,7 +112,7 @@ void Poihana::init(const JMapInfoIter& rIter) {
     MR::addHitSensorAtJoint(this, "body", "Body", ATYPE_KILLER_TARGET_ENEMY, 8, 70.0f, Vec3f(0.0f, 0.0f, 0.0f));
 
     bool useSmallBinder = false;
-    MR::getJMapInfoArg7NoInit(rIter, &useSmallBinder);
+    MR::getPlacementArg7NoInit(rIter, &useSmallBinder);
 
     if (useSmallBinder) {
         initBinder(100.0f, 100.0f, 0);
@@ -136,14 +136,14 @@ void Poihana::init(const JMapInfoIter& rIter) {
     mHomePos.set(mRespawnPos);
 
     s32 launchIntensity = ::sDefaultShootHeight;
-    MR::getJMapInfoArg0NoInit(rIter, &launchIntensity);
+    MR::getPlacementArg0NoInit(rIter, &launchIntensity);
     mLaunchIntensity = NebulaSqrt(::sGravity * launchIntensity);
 
-    MR::getJMapInfoArg3NoInit(rIter, &mBehavior);
-    MR::getJMapInfoArg4NoInit(rIter, &mCanDrown);
+    MR::getPlacementArg3NoInit(rIter, &mBehavior);
+    MR::getPlacementArg4NoInit(rIter, &mCanDrown);
 
     if (mCanDrown) {
-        mWaterColumn = MR::createModelObjMapObj("\203\107\203\164\203\106\203\116\203\147\220\205\222\214" /* エフェクト水柱 */, "WaterColumn", getBaseMtx());
+        mWaterColumn = MR::createModelObjMapObj("エフェクト水柱", "WaterColumn", getBaseMtx());
         mWaterColumn->mScale.set(2.0f);
         makeActorDead();
     }

@@ -142,11 +142,11 @@ FileSelector::FileSelector(const char* pName)
 {
 }
 
-void FileSelector::init(const JMapInfoIter& rIter) {
+void FileSelector::init(const TableIter& rIter) {
     while (!initStep(rIter, UINT64_MAX)) {}
 }
 
-bool FileSelector::initStep(const JMapInfoIter& rIter, uint64_t deadline) {
+bool FileSelector::initStep(const TableIter& rIter, uint64_t deadline) {
     do {
         switch (mInitStep) {
         case 0:
@@ -291,12 +291,12 @@ void FileSelector::initUserFileArray() {
 }
 
 void FileSelector::createCameraController() {
-    mCameraController = new FileSelectCameraController("\203\164\203\100\203\103\203\213\203\132\203\214\203\116\203\147\203\112\203\201\203\211\220\247\214\344" /* ファイルセレクトカメラ制御 */);
+    mCameraController = new FileSelectCameraController("ファイルセレクトカメラ制御");
     mCameraController->initWithoutIter();
 }
 
 void FileSelector::createSky() {
-    mSky = new FileSelectSky("\203\164\203\100\203\103\203\213\203\132\203\214\203\116\203\147\211\346\226\312\202\314\213\363" /* ファイルセレクト画面の空 */);
+    mSky = new FileSelectSky("ファイルセレクト画面の空");
     mSky->initWithoutIter();
     mSky->appear();
 }
@@ -305,7 +305,7 @@ namespace {
     inline FileSelectItem* createFileItem(s32 id) {
         FileSelectIconID iconId = FileSelectIconID();
 
-        return new FileSelectItem(id, true, iconId, "\203\164\203\100\203\103\203\213\203\132\203\214\203\116\203\147\203\101\203\103\203\145\203\200" /* ファイルセレクトアイテム */);
+        return new FileSelectItem(id, true, iconId, "ファイルセレクトアイテム");
     }
 };  // namespace
 
@@ -339,14 +339,14 @@ void FileSelector::createOperationButton() {
 }
 
 void FileSelector::createBackButton() {
-    mBackButton = new BackButton("\226\337\202\351\203\173\203\136\203\223" /* 戻るボタン */, false);
+    mBackButton = new BackButton("戻るボタン", false);
     mBackButton->initWithoutIter();
 
     MR::connectToScene(mBackButton, MR::MovementType_Layout, MR::CalcAnimType_Layout, MR::DrawBufferType_None, MR::DrawType_LayoutDecoration);
 }
 
 void FileSelector::createBrosButton() {
-    mBrosButton = new BrosButton("\203\213\203\103\201\133\203\127\220\330\202\350\221\326\202\246\203\173\203\136\203\223" /* ルイージ切り替えボタン */);
+    mBrosButton = new BrosButton("ルイージ切り替えボタン");
     mBrosButton->initWithoutIter();
 }
 
@@ -472,7 +472,7 @@ bool FileSelector::updateQuitQuestion() {
 }
 
 void FileSelector::createFileInfo() {
-    mFileInfo = new FileSelectInfo(MII_NAME_LEN + 1, "\203\164\203\100\203\103\203\213\217\356\225\361" /* ファイル情報 */);
+    mFileInfo = new FileSelectInfo(MII_NAME_LEN + 1, "ファイル情報");
     mFileInfo->initWithoutIter();
 }
 
@@ -487,14 +487,14 @@ void FileSelector::createMiiSelect() {
 }
 
 void FileSelector::createMiiConfirmIcon() {
-    mMiiConfirmIcon = new MiiConfirmIcon("Mii\212\155\224\106\227\160\203\101\203\103\203\122\203\223" /* Mii確認用アイコン */);
+    mMiiConfirmIcon = new MiiConfirmIcon("Mii確認用アイコン");
     mMiiConfirmIcon->initWithoutIter();
     MR::connectToScene(mMiiConfirmIcon, MR::MovementType_Layout, MR::CalcAnimType_Layout, MR::DrawBufferType_None, MR::DrawType_LayoutDecoration);
 }
 
 
 void FileSelector::createManual() {
-    mManual = new Manual2P("\202\121\202\157\203\175\203\152\203\205\203\101\203\213" /* ２Ｐマニュアル */);
+    mManual = new Manual2P("２Ｐマニュアル");
     mManual->initWithoutIter();
 }
 

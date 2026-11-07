@@ -7,7 +7,7 @@
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/GravityUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -66,14 +66,14 @@ Butterfly::Butterfly(const char* pName) : LiveActor(pName), mHomePos(gZeroVec), 
     mQuat.set(0.0f, 0.0f, 0.0f, 1.0f);
 }
 
-void Butterfly::init(const JMapInfoIter& rIter) {
+void Butterfly::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     mHomePos.set(mPosition);
     initModelManagerWithAnm("Butterfly", nullptr, false);
     MR::connectToSceneMapObj(this);
 
     // Colors are stored in an animation for the purposes of easy indexing
-    MR::getJMapInfoArg0NoInit(rIter, &mColorIndex);
+    MR::getPlacementArg0NoInit(rIter, &mColorIndex);
     MR::startBrk(this, "Butterfly");
     MR::setBrkFrameAndStop(this, mColorIndex);
 
@@ -83,7 +83,7 @@ void Butterfly::init(const JMapInfoIter& rIter) {
     initSound(2, false);
 
     s32 arg1 = -1;
-    MR::getJMapInfoArg1NoInit(rIter, &arg1);
+    MR::getPlacementArg1NoInit(rIter, &arg1);
     if (arg1 == -1) {
         MR::declareStarPiece(this, 1);
     } else {

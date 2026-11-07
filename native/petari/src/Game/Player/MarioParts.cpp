@@ -2,7 +2,7 @@
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/PartsModel.hpp"
 #include "Game/Scene/SceneFunction.hpp"
-#include "Game/Util/JMapInfo.hpp"
+#include "Game/Util/Table.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
 #include <nebula_math.h>
@@ -30,7 +30,7 @@ MarioParts::MarioParts(LiveActor* pActor, const char* pName, const char* pModelN
     }
 }
 
-void MarioParts::init(const JMapInfoIter& rIter) {
+void MarioParts::init(const TableIter& rIter) {
     initEffectKeeper(8, _9C, false);
     initSound(8, false);
     MR::invalidateClipping(this);

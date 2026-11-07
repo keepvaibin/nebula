@@ -21,7 +21,7 @@ namespace {
     }
 };  // namespace
 
-StarPointerOnOffController::StarPointerOnOffController() : NerveExecutor("\203\130\203\136\201\133\203\174\203\103\203\223\203\136ON/OFF\220\247\214\344" /* スターポインタON/OFF制御 */), _8(false), mMode(-1) {
+StarPointerOnOffController::StarPointerOnOffController() : NerveExecutor("スターポインタON/OFF制御"), _8(false), mMode(-1) {
     for (s32 idx = 0; idx < 16; idx++) {
         mRequests[idx] = new RequestInfo();
     }

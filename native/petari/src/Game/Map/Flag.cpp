@@ -9,7 +9,7 @@
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/Color.hpp"
 #include "Game/Util/DemoUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -68,12 +68,12 @@ Flag::Flag(const char* pName)
       mAlpha(0xFF), mAlphaDistanceNear(::sDefaultAlphaDistanceNear), mAlphaDistanceFar(::sDefaultAlphaDistanceFar), mSeStep(), mDisableSound() {
 }
 
-void Flag::init(const JMapInfoIter& rIter) {
+void Flag::init(const TableIter& rIter) {
     MR::connectToScene(this, MR::MovementType_MapObj, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_Flag);
 
     if (MR::isValidInfo(rIter)) {
         MR::initDefaultPos(this, rIter);
-        MR::getJMapInfoArg1NoInit(rIter, &mStickLength);
+        MR::getPlacementArg1NoInit(rIter, &mStickLength);
         MR::getObjectName(&mObjName, rIter);
         if (MR::isEqualString(mObjName, "FlagKoopaCastle")) {
             mPointIntervalU = 1000.0f / mNumPointsU;

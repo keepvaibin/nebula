@@ -34,7 +34,7 @@ void JetTurtleShadow::drawType1() const {
     pModel->directDraw();
 }
 
-void JetTurtleShadow::init(const JMapInfoIter& rIter) {
+void JetTurtleShadow::init(const TableIter& rIter) {
     initModelManagerWithAnm("Koura", nullptr, false);
 
     makeActorDead();

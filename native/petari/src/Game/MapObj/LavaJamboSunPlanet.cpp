@@ -23,7 +23,7 @@ LavaJamboSunPlanet::LavaJamboSunPlanet(const char* pName) : LiveActor(pName) {
     _98.setZeroVec();
 }
 
-void LavaJamboSunPlanet::init(const JMapInfoIter& rIter) {
+void LavaJamboSunPlanet::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("LavaJamboSunPlanet", nullptr, false);
     initHitSensor(1);

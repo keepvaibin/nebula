@@ -32,7 +32,7 @@ bool SnowplowSwitch::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pRe
 SnowplowSwitch::~SnowplowSwitch() {
 }
 
-void SnowplowSwitch::init(const JMapInfoIter& rIter) {
+void SnowplowSwitch::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::connectToSceneMapObjMovement(this);
     MR::invalidateClipping(this);

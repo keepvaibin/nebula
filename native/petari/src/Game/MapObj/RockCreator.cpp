@@ -14,7 +14,7 @@ RockCreator::RockCreator(const char* pName)
       mIsValid(true) {
 }
 
-void RockCreator::init(const JMapInfoIter& rIter) {
+void RockCreator::init(const TableIter& rIter) {
     MR::connectToSceneMapObjMovement(this);
     initMapToolInfo(rIter);
     initRailRider(rIter);
@@ -77,20 +77,20 @@ void RockCreator::invalidate() {
     }
 }
 
-void RockCreator::initMapToolInfo(const JMapInfoIter& rIter) {
+void RockCreator::initMapToolInfo(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
-    MR::getJMapInfoArg0NoInit(rIter, &mRockSpeed);
+    MR::getPlacementArg0NoInit(rIter, &mRockSpeed);
 
-    if (MR::getJMapInfoArg1NoInit(rIter, &mSpawnDelay)) {
+    if (MR::getPlacementArg1NoInit(rIter, &mSpawnDelay)) {
         mSpawnDelay *= 60;
     }
 
     if (Rock::getType(rIter) == Rock::NormalRock) {
-        MR::getJMapInfoArg2NoInit(rIter, &mBreakModelOnRailGoal);
+        MR::getPlacementArg2NoInit(rIter, &mBreakModelOnRailGoal);
     } else {
         // ObjArg 5 is for brekaing ONLY SPECIFICALLY for WanWans.
         // if the object is a rock, ObjArg 5 determines if the rock should bounce on attack
-        MR::getJMapInfoArg5NoInit(rIter, &mBreakModelOnRailGoal);
+        MR::getPlacementArg5NoInit(rIter, &mBreakModelOnRailGoal);
     }
 }
 

@@ -7,7 +7,7 @@
 #include "Game/LiveActor/ShadowDrawer.hpp"
 #include "Game/Util/CameraUtil.hpp"
 
-ShadowVolumeBox::ShadowVolumeBox() : ShadowVolumeDrawer("\211\145\225\140\211\346[\203\173\203\212\203\205\201\133\203\200\203\173\203\142\203\116\203\130]" /* 影描画[ボリュームボックス] */), mSize(100.0f, 100.0f, 100.0f) {
+ShadowVolumeBox::ShadowVolumeBox() : ShadowVolumeDrawer("影描画[ボリュームボックス]"), mSize(100.0f, 100.0f, 100.0f) {
     for (u32 idx = 0; idx < ARRAY_SIZE(mPoints); idx++) {
         mPoints[idx].zero();
     }

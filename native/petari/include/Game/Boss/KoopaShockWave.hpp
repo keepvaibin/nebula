@@ -12,7 +12,7 @@ public:
     KoopaShockWave(Koopa*);
 
     virtual ~KoopaShockWave();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void appear();
     virtual void makeActorDead();
     virtual void calcAndSetBaseMtx();

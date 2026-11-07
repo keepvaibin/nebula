@@ -28,13 +28,13 @@
 void MarioActor::init2D() {
     MR::getGameSceneLayoutHolder()->initLifeCount(mMaxHealth);
 
-    _1B8 = new CollectCounter("\203\175\203\212\203\111\230\101\221\261\223\245\202\335" /* マリオ連続踏み */);
+    _1B8 = new CollectCounter("マリオ連続踏み");
 
     _1B8->initWithoutIter();
 }
 
 void MarioActor::initParts() {
-    mNullAnimation = new MarioNullBck("NULL\203\101\203\152\203\201" /* NULLアニメ */);
+    mNullAnimation = new MarioNullBck("NULLアニメ");
     mNullAnimation->initWithoutIter();
 
     mSearchLight = 0;
@@ -43,15 +43,15 @@ void MarioActor::initParts() {
     initSearchLight();
     initThrowing();
 
-    _9C4 = new MarioParts(this, "\225\130\214\213\203\202\203\146\203\213" /* 氷結モデル */, "MarioFreezeIce", true, nullptr, nullptr);
+    _9C4 = new MarioParts(this, "氷結モデル", "MarioFreezeIce", true, nullptr, nullptr);
     _9C4->initWithoutIter();
     _9C4->makeActorDead();
     _9C4->initFixedPosition(Vec3f(0.0f, 0.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f), nullptr);
 
-    _9A0 = new JetTurtleShadow("\203\112\203\201\203\126\203\203\203\150\203\105\203\202\203\146\203\213" /* カメシャドウモデル */);
+    _9A0 = new JetTurtleShadow("カメシャドウモデル");
     _9A0->initWithoutIter();
 
-    _994 = new MarioParts(this, "\203\130\203\163\203\223\203\140\203\122" /* スピンチコ */, "SpinTico", false, getBaseMtx(), nullptr);
+    _994 = new MarioParts(this, "スピンチコ", "SpinTico", false, getBaseMtx(), nullptr);
     _994->initWithoutIter();
     _994->kill();
 }
@@ -117,7 +117,7 @@ void MarioActor::updateTornado() {
 
     if (mMario->getMovementStates()._F && mMario->_544 > 1) {
         mTornadoMario->show();
-    } else if ((!isAnimationRun("\213\363\222\206\202\320\202\313\202\350" /* 空中ひねり */) || mMario->_430 != 8) && !mMario->isStatusActive(MarioStatus_Magic)) {
+    } else if ((!isAnimationRun("空中ひねり") || mMario->_430 != 8) && !mMario->isStatusActive(MarioStatus_Magic)) {
         if (mMario->getDrawStates()._8 || _990 != 0) {
             mTornadoMario->hideForce();
         } else {
@@ -140,10 +140,10 @@ void MarioActor::updateTakingPosition() {
         } else {
             switch (sensor->mType) {
             case ATYPE_BOMBHEI:
-                if (mMario->isAnimationTerminate("\203\112\203\165\224\262\202\253" /* カブ抜き */)) {
+                if (mMario->isAnimationTerminate("カブ抜き")) {
                     stopAnimation(nullptr);
                     _480 = false;
-                    mMario->changeAnimationUpper("\203\112\203\165\203\105\203\107\203\103\203\147" /* カブウエイト */);
+                    mMario->changeAnimationUpper("カブウエイト");
                 }
                 break;
             case ATYPE_JET_TURTLE:
@@ -245,12 +245,12 @@ const HitSensor* MarioActor::getCarrySensor() const {
 void MarioActor::changeSpecialModeAnimation(const char* pAnimName) {
     switch (mPlayerMode) {
     case 6:
-        if (!strcmp(pAnimName, "\223\301\216\352\203\105\203\107\203\103\203\1471A" /* 特殊ウエイト1A */)) {
+        if (!strcmp(pAnimName, "特殊ウエイト1A")) {
             changeTeresaAnimation("SleepStart", -1);
             return;
         }
 
-        if (strcmp(pAnimName, "\223\301\216\352\203\105\203\107\203\103\203\1471B" /* 特殊ウエイト1B */)) {
+        if (strcmp(pAnimName, "特殊ウエイト1B")) {
             return;
         }
 
@@ -262,8 +262,8 @@ void MarioActor::changeSpecialModeAnimation(const char* pAnimName) {
 void MarioActor::updateSpecialModeAnimation() {
     if (!mMario->mMovementStates._A && mMario->getCurrentStatus() == MarioStatus_None) {
         if (mMario->mMovementStates._1 && mMario->_960 == 0x20 && mMarioAnim->isAnimationStop()) {
-            mMarioAnim->mXanimePlayer->changeTrackAnimation(0, "\223\104\222\341\221\254\225\340\215\163" /* 泥低速歩行 */);
-            mMarioAnim->mXanimePlayer->changeTrackAnimation(1, "\223\104\215\202\221\254\225\340\215\163" /* 泥高速歩行 */);
+            mMarioAnim->mXanimePlayer->changeTrackAnimation(0, "泥低速歩行");
+            mMarioAnim->mXanimePlayer->changeTrackAnimation(1, "泥高速歩行");
             _B96 = 2;
         }
     } else {
@@ -275,10 +275,10 @@ void MarioActor::updateSpecialModeAnimation() {
         break;
     case PlayerMode_Bee:
         if (mBeeWallWalk && !isJumping() && mMarioAnim->isAnimationStop()) {
-            mMarioAnim->mXanimePlayer->changeTrackAnimation(0, "\203\156\203\140\231\263\231\264\221\117\220\151" /* ハチ匍匐前進 */);
-            mMarioAnim->mXanimePlayer->changeTrackAnimation(1, "\203\156\203\140\231\263\231\264\221\117\220\151" /* ハチ匍匐前進 */);
-            mMarioAnim->mXanimePlayer->changeTrackAnimation(2, "\203\156\203\140\231\263\231\264\221\117\220\151" /* ハチ匍匐前進 */);
-            mMarioAnim->mXanimePlayer->changeTrackAnimation(3, "\203\156\203\140\231\263\231\264\203\105\203\107\203\103\203\147" /* ハチ匍匐ウエイト */);
+            mMarioAnim->mXanimePlayer->changeTrackAnimation(0, "ハチ匍匐前進");
+            mMarioAnim->mXanimePlayer->changeTrackAnimation(1, "ハチ匍匐前進");
+            mMarioAnim->mXanimePlayer->changeTrackAnimation(2, "ハチ匍匐前進");
+            mMarioAnim->mXanimePlayer->changeTrackAnimation(3, "ハチ匍匐ウエイト");
         }
         break;
     default:
@@ -288,29 +288,29 @@ void MarioActor::updateSpecialModeAnimation() {
     if (_B96) {
         _B96--;
         if (!_B96 && mMario->mMovementStates._1 && mMarioAnim->isAnimationStop()) {
-            mMarioAnim->mXanimePlayer->changeTrackAnimation(0, "\223\335\215\163" /* 鈍行 */);
-            mMarioAnim->mXanimePlayer->changeTrackAnimation(1, "\225\340\215\163" /* 歩行 */);
+            mMarioAnim->mXanimePlayer->changeTrackAnimation(0, "鈍行");
+            mMarioAnim->mXanimePlayer->changeTrackAnimation(1, "歩行");
         }
     }
 }
 
 void MarioActor::initFireBall() {
     for (u32 idx = 0; idx < ARRAY_SIZE(_B54); idx++) {
-        _B54[idx] = new FireMarioBall("\203\175\203\212\203\111\211\212\213\205" /* マリオ炎球 */);
+        _B54[idx] = new FireMarioBall("マリオ炎球");
         _B54[idx]->initWithoutIter();
     }
 }
 
 void MarioActor::shootFireBall() {
-    if (isAnimationRun("\203\164\203\100\203\103\203\101\223\212\202\260" /* ファイア投げ */))
+    if (isAnimationRun("ファイア投げ"))
         return;
-    if (isAnimationRun("\203\164\203\100\203\103\203\101\203\130\203\163\203\223\213\363\222\206" /* ファイアスピン空中 */))
+    if (isAnimationRun("ファイアスピン空中"))
         return;
-    if (isAnimationRun("\203\164\203\100\203\103\203\101\203\130\203\163\203\223" /* ファイアスピン */))
+    if (isAnimationRun("ファイアスピン"))
         return;
     if (getMovementStates()._8) {
         sendMsgToSensor(mMario->getWallPolygon()->mSensor, ACTMES_FIREBALL_ATTACK);
-        changeAnimation("\203\164\203\100\203\103\203\101\203\130\203\163\203\223" /* ファイアスピン */);
+        changeAnimation("ファイアスピン");
         return;
     }
     u32 index;
@@ -329,20 +329,20 @@ void MarioActor::shootFireBall() {
     getRealPos("HandR", &position);
     position += mMario->mFrontVec * 30.0f;
     ball->appearAndThrow(position, direction);
-    playSound("\220\272\223\212\202\260" /* 声投げ */, -1);
+    playSound("声投げ", -1);
     if (!isJumping()) {
         mMario->_420 = 45;
-        changeAnimation("\203\164\203\100\203\103\203\101\203\130\203\163\203\223" /* ファイアスピン */);
+        changeAnimation("ファイアスピン");
         return;
     }
     if (mMario->_42C >= 3) {
-        changeAnimation("\203\164\203\100\203\103\203\101\223\212\202\260" /* ファイア投げ */);
+        changeAnimation("ファイア投げ");
         return;
     }
     if (mMario->_42C == 0)
-        changeAnimation("\203\164\203\100\203\103\203\101\203\130\203\163\203\223\213\363\222\206" /* ファイアスピン空中 */);
+        changeAnimation("ファイアスピン空中");
     else
-        changeAnimation("\203\164\203\100\203\103\203\101\223\212\202\260" /* ファイア投げ */);
+        changeAnimation("ファイア投げ");
     jumpHop();
     mMario->_42C++;
     f32 gravitySpeed = mMario->cutGravityElementFromJumpVec(true);
@@ -374,14 +374,14 @@ void MarioActor::updateFairyStar() {
     if (!isEnableNerveChange())
         return;
     bool enabled = true;
-    if (selectAction("\203\130\203\163\203\223\211\361\225\234\203\107\203\164\203\106\203\116\203\147" /* スピン回復エフェクト */) != 1)
+    if (selectAction("スピン回復エフェクト") != 1)
         enabled = false;
     if (_94C && enabled) {
         if (MR::isDead(_994)) {
             _994->appear();
             _994->mRotation.set(0.0f, 0.0f, 0.0f);
             MR::startBck(_994, "SpinTimer");
-            playSound("\203\130\203\163\203\223\213\226\211\302" /* スピン許可 */, -1);
+            playSound("スピン許可", -1);
         }
         Vec3f position;
         MR::copyJointPos(_994, "Center", &position);

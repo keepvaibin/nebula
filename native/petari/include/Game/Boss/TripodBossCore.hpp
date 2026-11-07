@@ -10,7 +10,7 @@ public:
     /// @param pName A pointer to the null-terminated name of the object.
     TripodBossCore(const char* pName);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void kill();
     virtual bool receiveMsgEnemyAttack(u32, HitSensor*, HitSensor*);
 

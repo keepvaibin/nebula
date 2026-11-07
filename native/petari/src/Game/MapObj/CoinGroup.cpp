@@ -19,12 +19,12 @@ namespace NrvCoinGroup {
 CoinGroup::CoinGroup(const char* pName) : LiveActor(pName), mCoinArray(), mCameraInfo(), mCoinCount(), mTimeLimit(-1), mIsPurpleCoinGroup() {
 }
 
-void CoinGroup::init(const JMapInfoIter& rIter) {
+void CoinGroup::init(const TableIter& rIter) {
     s32 count = 0;
-    MR::getJMapInfoArg0NoInit(rIter, &count);
+    MR::getPlacementArg0NoInit(rIter, &count);
     mCoinCount = count;
     mTimeLimit = -1;
-    MR::getJMapInfoArg1NoInit(rIter, &mTimeLimit);
+    MR::getPlacementArg1NoInit(rIter, &mTimeLimit);
     mCoinArray = new Coin*[mCoinCount];
 
     for (u32 i = 0; i < mCoinCount; i++) {
@@ -34,7 +34,7 @@ void CoinGroup::init(const JMapInfoIter& rIter) {
             mCoinArray[i] = static_cast< Coin* >(MR::createCoin(this, getCoinName()));
         }
 
-        mCoinArray[i]->setShadowAndPoseModeFromJMapIter(rIter);
+        mCoinArray[i]->setShadowAndPoseModeFromPlacementIter(rIter);
 
         if (mCoinArray[i]->_BA) {
             MR::initDefaultPos(mCoinArray[i], rIter);
@@ -49,7 +49,7 @@ void CoinGroup::init(const JMapInfoIter& rIter) {
     placementCoin();
 
     if (MR::tryRegisterDemoCast(this, rIter)) {
-        MR::registerDemoActionFunctor(this, MR::Functor(this, &CoinGroup::appearCoinAll), "\203\122\203\103\203\223\217\157\214\273" /* コイン出現 */);
+        MR::registerDemoActionFunctor(this, MR::Functor(this, &CoinGroup::appearCoinAll), "コイン出現");
     } else if (MR::useStageSwitchReadAppear(this, rIter)) {
         MR::connectToSceneMapObjMovement(this);
         MR::syncStageSwitchAppear(this);
@@ -109,7 +109,7 @@ void CoinGroup::appear() {
     LiveActor::appear();
 
     if (isNerve(GET_NERVE(CoinGroup, CoinGroupNrvDemoAppear))) {
-        MR::requestStartDemo(this, "\217\157\214\273" /* 出現 */, GET_NERVE(CoinGroup, CoinGroupNrvDemoAppear), GET_NERVE(CoinGroup, CoinGroupNrvTryStartDemo));
+        MR::requestStartDemo(this, "出現", GET_NERVE(CoinGroup, CoinGroupNrvDemoAppear), GET_NERVE(CoinGroup, CoinGroupNrvTryStartDemo));
     }
 }
 
@@ -138,7 +138,7 @@ void CoinGroup::exeDemoAppear() {
     }
 
     if (MR::isGreaterStep(this, ::sDemoAppearTime)) {
-        MR::endDemo(this, "\217\157\214\273" /* 出現 */);
+        MR::endDemo(this, "出現");
         MR::endActorCamera(this, mCameraInfo, false);
         setNerve(GET_NERVE(CoinGroup, CoinGroupNrvKill));
         kill();

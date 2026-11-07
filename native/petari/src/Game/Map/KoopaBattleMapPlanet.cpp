@@ -32,7 +32,7 @@ KoopaBattleMapPlanet::KoopaBattleMapPlanet(const char* pName, const char* pModel
     mBaseMtx.identity();
 }
 
-void KoopaBattleMapPlanet::init(const JMapInfoIter& rIter) {
+void KoopaBattleMapPlanet::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
 
     MR::makeMtxTR(mBaseMtx, this);
@@ -86,7 +86,7 @@ void KoopaBattleMapPlanet::exeDemoGrandStarAppear() {
 }
 
 void KoopaBattleMapPlanet::createPlate() {
-    mDamagePlateGroup = new LiveActorGroup("\203\137\203\201\201\133\203\127\203\166\203\214\201\133\203\147\202\146" /* ダメージプレートＧ */, 6);
+    mDamagePlateGroup = new LiveActorGroup("ダメージプレートＧ", 6);
     mDamagePlateGroup->initWithoutIter();
 
     for (s32 idx = 0; idx < 6; idx++) {
@@ -97,7 +97,7 @@ void KoopaBattleMapPlanet::createPlate() {
 
         mBaseMtx.mult(vec, vec);
 
-        KoopaBattleMapDamagePlate* pDamagePlate = new KoopaBattleMapDamagePlate("\203\116\203\142\203\160\203\137\203\201\201\133\203\127\203\166\203\214\201\133\203\147" /* クッパダメージプレート */);
+        KoopaBattleMapDamagePlate* pDamagePlate = new KoopaBattleMapDamagePlate("クッパダメージプレート");
         pDamagePlate->mPosition.set(vec);
         pDamagePlate->initWithoutIter();
 
@@ -114,7 +114,7 @@ void KoopaBattleMapPlanet::createPlate() {
         return;
     }
 
-    mCoinPlateGroup = new LiveActorGroup("\203\122\203\103\203\223\203\166\203\214\201\133\203\147\202\146" /* コインプレートＧ */, 4);
+    mCoinPlateGroup = new LiveActorGroup("コインプレートＧ", 4);
     mCoinPlateGroup->initWithoutIter();
 
     for (s32 idx = 0; idx < 4; idx++) {
@@ -125,14 +125,14 @@ void KoopaBattleMapPlanet::createPlate() {
 
         mBaseMtx.mult(vec, vec);
 
-        KoopaBattleMapCoinPlate* pCoinPlate = new KoopaBattleMapCoinPlate("\203\116\203\142\203\160\203\122\203\103\203\223\203\166\203\214\201\133\203\147" /* クッパコインプレート */);
+        KoopaBattleMapCoinPlate* pCoinPlate = new KoopaBattleMapCoinPlate("クッパコインプレート");
         pCoinPlate->mPosition.set(vec);
         pCoinPlate->initWithoutIter();
 
         mCoinPlateGroup->registerActor(pCoinPlate);
     }
 
-    mPlateGroup = new LiveActorGroup("\203\166\203\214\201\133\203\147\202\146" /* プレートＧ */, 4);
+    mPlateGroup = new LiveActorGroup("プレートＧ", 4);
     mPlateGroup->initWithoutIter();
 
     for (s32 idx = 0; idx < 4; idx++) {
@@ -143,7 +143,7 @@ void KoopaBattleMapPlanet::createPlate() {
 
         mBaseMtx.mult(vec, vec);
 
-        KoopaBattleMapPlate* pCoinPlate = new KoopaBattleMapPlate("\203\116\203\142\203\160\203\166\203\214\201\133\203\147" /* クッパプレート */);
+        KoopaBattleMapPlate* pCoinPlate = new KoopaBattleMapPlate("クッパプレート");
         pCoinPlate->mPosition.set(vec);
         pCoinPlate->initWithoutIter();
 

@@ -5,7 +5,7 @@
 #include "Game/GameAudio/AudStageBgmTable.hpp"
 #include "Game/System/GameDataTemporaryInGalaxy.hpp"
 #include "Game/Util/DemoUtil.hpp"
-#include "Game/Util/JMapIdInfo.hpp"
+#include "Game/Util/PlacementId.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
@@ -14,10 +14,10 @@
 RestartCube::RestartCube(int formType, const char* pName) : AreaObj(formType, pName), mIdInfo(), _40(-1), _44(-1), _48() {
 }
 
-void RestartCube::init(const JMapInfoIter& rIter) {
+void RestartCube::init(const TableIter& rIter) {
     AreaObj::init(rIter);
 
-    mIdInfo = new JMapIdInfo(mObjArg0, rIter);
+    mIdInfo = new PlacementId(mObjArg0, rIter);
     _40 = mObjArg1;
     _44 = mObjArg2;
     _48 = false;

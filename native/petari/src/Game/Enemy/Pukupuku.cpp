@@ -49,7 +49,7 @@ namespace {
     }
 };  // namespace
 
-PukupukuStateLanding::PukupukuStateLanding(Pukupuku* pParent) : ActorStateBase< Pukupuku >("\203\166\203\116\203\166\203\116\222\156\217\343" /* プクプク地上 */, pParent), mPath(), mValueCtrl(), _18() {
+PukupukuStateLanding::PukupukuStateLanding(Pukupuku* pParent) : ActorStateBase< Pukupuku >("プクプク地上", pParent), mPath(), mValueCtrl(), _18() {
     mPath = new ParabolicPath();
     mValueCtrl = new ValueControl(30);
     initNerve(GET_NERVE_ANON(PukupukuStateLandingLandingMoveLand));
@@ -229,7 +229,7 @@ Pukupuku::Pukupuku(const char* pName) : LiveActor(pName), mStateLanding(), mScal
     _A8.set< f32 >(0.0f, 0.0f, 0.0f, 1.0f);
 }
 
-void Pukupuku::init(const JMapInfoIter& rIter) {
+void Pukupuku::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::onCalcGravity(this);
     MR::useStageSwitchWriteDead(this, rIter);

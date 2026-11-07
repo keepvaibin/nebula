@@ -18,7 +18,7 @@ namespace NrvCannonFortressBreakStep {
 CannonFortressBreakStep::CannonFortressBreakStep(const char* pName) : MapObjActor(pName) {
 }
 
-void CannonFortressBreakStep::init(const JMapInfoIter& rIter) {
+void CannonFortressBreakStep::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;
     info.setupDefaultPos();

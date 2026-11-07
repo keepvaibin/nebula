@@ -9,7 +9,7 @@
 #include "Game/Util/ActorStateUtil.hpp"
 #include "Game/Util/Color.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LightUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -43,7 +43,7 @@ Jellyfish::Jellyfish(const char* pName)
     : LiveActor(pName), mController(), _94(), _98(0.0f, 0.0f, 1.0f), mIsConnectedRail(), _A8(5.0f), _AC(60), _B0(), _B4(0.0f, 0.0f, 0.0f) {
 }
 
-void Jellyfish::init(const JMapInfoIter& rIter) {
+void Jellyfish::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
 
     initModelManagerWithAnm("Jellyfish", nullptr, false);
@@ -85,11 +85,11 @@ void Jellyfish::init(const JMapInfoIter& rIter) {
         MR::initAndSetRailClipping(&_B4, this, 100.0f, 500.0f);
         MR::moveCoordToNearestPos(this, mPosition);
 
-        MR::getJMapInfoArg0NoInit(rIter, &_A8);
-        MR::getJMapInfoArg1NoInit(rIter, &_AC);
+        MR::getPlacementArg0NoInit(rIter, &_A8);
+        MR::getPlacementArg1NoInit(rIter, &_AC);
 
         s32 arg2 = 0;
-        MR::getJMapInfoArg2NoInit(rIter, &arg2);
+        MR::getPlacementArg2NoInit(rIter, &arg2);
         _B0 = arg2 == 1;
     }
 

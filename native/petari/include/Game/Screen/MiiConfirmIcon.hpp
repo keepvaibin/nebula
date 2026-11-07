@@ -14,7 +14,7 @@ public:
     /// @param pName The pointer to the null-terminated name of the object.
     MiiConfirmIcon(const char* pName);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void appear();
 
     void appear(nw4r::lyt::TexMap*, const char16_t*);

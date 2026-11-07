@@ -5,7 +5,7 @@
 #include "Game/Util.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 
@@ -26,7 +26,7 @@ SimpleFloaterObj::SimpleFloaterObj(const char* pName) : LiveActor(pName) {
 SimpleFloaterObj::~SimpleFloaterObj() {
 }
 
-void SimpleFloaterObj::init(const JMapInfoIter& rrIter) {
+void SimpleFloaterObj::init(const TableIter& rrIter) {
     MR::initDefaultPos(this, rrIter);
     MR::getObjectName(&_8C, rrIter);
     initModelManagerWithAnm(_8C, nullptr, false);

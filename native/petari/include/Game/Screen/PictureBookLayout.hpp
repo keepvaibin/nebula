@@ -17,7 +17,7 @@ class PictureBookLayout : public LayoutActor {
 public:
     PictureBookLayout(s32 chapterMin, s32 chapterMax, bool isRosettaReading);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void appear();
     virtual void kill();
     virtual void control();

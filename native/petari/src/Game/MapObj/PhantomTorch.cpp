@@ -6,7 +6,7 @@
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
@@ -28,12 +28,12 @@ PhantomTorch::PhantomTorch(const char* pName) : LiveActor(pName) {
     mIsDecorative = false;
 }
 
-void PhantomTorch::init(const JMapInfoIter& rIter) {
+void PhantomTorch::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     f32 x = mScale.x;
-    MR::getJMapInfoArg0NoInit(rIter, &mItem);
+    MR::getPlacementArg0NoInit(rIter, &mItem);
     s32 arg = -1;
-    MR::getJMapInfoArg1NoInit(rIter, &arg);
+    MR::getPlacementArg1NoInit(rIter, &arg);
     mIsDecorative = arg != -1;
     MR::getObjectName(&mParticle, rIter);
 

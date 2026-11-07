@@ -14,7 +14,7 @@ CameraManPause::CameraManPause(const char* pName)
     CameraLocalUtil::setFovy(this, 45.0f);
 }
 
-void CameraManPause::init(const JMapInfoIter& rIter) {
+void CameraManPause::init(const TableIter& rIter) {
 }
 
 void CameraManPause::calc() {

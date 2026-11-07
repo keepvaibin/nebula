@@ -14,7 +14,7 @@
 #include "Game/Util/ObjUtil.hpp"
 
 namespace {
-    static const char* cDemoCameraName = "\217\325\214\202\224\147\203\112\203\201\203\211" /* 衝撃波カメラ */;
+    static const char* cDemoCameraName = "衝撃波カメラ";
     static const s32 sStepForGenerate = 50;
     static const s32 sStepForDemoEcho = 1;
     static const f32 sHitCylinderRadius = 400.0f;
@@ -30,7 +30,7 @@ namespace NrvShockWaveGenerator {
 ShockWaveGenerator::ShockWaveGenerator(const char* pName) : LiveActor(pName), mCameraInfo() {
 }
 
-void ShockWaveGenerator::init(const JMapInfoIter& rIter) {
+void ShockWaveGenerator::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("ShockWaveGenerator", nullptr, false);
     MR::connectToSceneIndirectMapObj(this);

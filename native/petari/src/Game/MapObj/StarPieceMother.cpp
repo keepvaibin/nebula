@@ -17,7 +17,7 @@ namespace NrvStarPieceMother {
 StarPieceMother::StarPieceMother(const char* pName) : LiveActor(pName), mStarPieceArray(), _90(), _94(6), _98(), _9C(), _A0(10.0f) {
 }
 
-void StarPieceMother::init(const JMapInfoIter& rIter) {
+void StarPieceMother::init(const TableIter& rIter) {
     s32 isRailNotConnected = false;
 
     if (!MR::isValidInfo(rIter) || !MR::isConnectedWithRail(rIter)) {
@@ -50,7 +50,7 @@ void StarPieceMother::init(const JMapInfoIter& rIter) {
     MR::tryRegisterDemoCast(this, rIter);
 
     s32 arg = -1;
-    MR::getJMapInfoArg0NoInit(rIter, &arg);
+    MR::getPlacementArg0NoInit(rIter, &arg);
     if (arg != -1) {
         _94 = arg;
     }
@@ -59,7 +59,7 @@ void StarPieceMother::init(const JMapInfoIter& rIter) {
     _90 = new f32[_94];
 
     for (u32 idx = 0; idx < _94; idx++) {
-        mStarPieceArray[idx] = new StarPiece("\203\130\203\136\201\133\203\163\201\133\203\130\203\175\203\125\201\133\203\163\201\133\203\130" /* スターピースマザーピース */);
+        mStarPieceArray[idx] = new StarPiece("スターピースマザーピース");
         mStarPieceArray[idx]->initAndSetFloatingFromGroup(rIter);
         mStarPieceArray[idx]->makeActorDead();
 
@@ -77,12 +77,12 @@ void StarPieceMother::init(const JMapInfoIter& rIter) {
         initNerve(GET_NERVE(StarPieceMother, HostTypeNrvMoveOnRail));
 
         arg = -1;
-        MR::getJMapInfoArg1NoInit(rIter, &arg);
+        MR::getPlacementArg1NoInit(rIter, &arg);
         f32 railPos = (arg == -1) ? 0.0f : static_cast< f32 >(arg);
         placementPieceOnRail(railPos);
 
         arg = -1;
-        MR::getJMapInfoArg2NoInit(rIter, &arg);
+        MR::getPlacementArg2NoInit(rIter, &arg);
         if (arg != -1 && arg != 0) {
             _A0 = static_cast< f32 >(arg);
         }

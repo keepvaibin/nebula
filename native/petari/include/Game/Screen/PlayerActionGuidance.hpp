@@ -9,7 +9,7 @@ public:
     /// @brief Creates a new `PlayerActionGuidance`.
     PlayerActionGuidance();
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void control();
 
     void createSpinLayout();

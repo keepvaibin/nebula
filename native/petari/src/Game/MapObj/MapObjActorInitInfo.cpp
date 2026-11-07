@@ -1,7 +1,7 @@
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include <JSystem/JUtility/JUTNativeLog.hpp>
 #include "Game/MapObj/MapObjActor.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/MapPartsUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 
@@ -194,25 +194,25 @@ void MapObjActorUtil::setupInitInfoTypical(MapObjActorInitInfo* pInitInfo, const
     }
 }
 
-void MapObjActorUtil::setupInitInfoColorChangeArg0(MapObjActorInitInfo* pInitInfo, const JMapInfoIter& rIter) {
+void MapObjActorUtil::setupInitInfoColorChangeArg0(MapObjActorInitInfo* pInitInfo, const TableIter& rIter) {
     s32 arg0 = -1;
-    MR::getJMapInfoArg0NoInit(rIter, &arg0);
+    MR::getPlacementArg0NoInit(rIter, &arg0);
     pInitInfo->mColorChangeArg = arg0;
 }
 
-void MapObjActorUtil::setupInitInfoTextureChangeArg1(MapObjActorInitInfo* pInitInfo, const JMapInfoIter& rIter) {
+void MapObjActorUtil::setupInitInfoTextureChangeArg1(MapObjActorInitInfo* pInitInfo, const TableIter& rIter) {
     s32 arg1 = -1;
-    MR::getJMapInfoArg1NoInit(rIter, &arg1);
+    MR::getPlacementArg1NoInit(rIter, &arg1);
     pInitInfo->mTextureChangeArg = arg1;
 }
 
-void MapObjActorUtil::setupInitInfoShadowLengthArg2(MapObjActorInitInfo* pInitInfo, const JMapInfoIter& rIter) {
+void MapObjActorUtil::setupInitInfoShadowLengthArg2(MapObjActorInitInfo* pInitInfo, const TableIter& rIter) {
     f32 arg2 = -1.0f;
-    MR::getJMapInfoArg2NoInit(rIter, &arg2);
+    MR::getPlacementArg2NoInit(rIter, &arg2);
     pInitInfo->mShadowLength = arg2;
 }
 
-void MapObjActorUtil::setupInitInfoSeesaw(MapObjActorInitInfo* pInitInfo, const JMapInfoIter& rIter, const char* pName, f32 radius) {
+void MapObjActorUtil::setupInitInfoSeesaw(MapObjActorInitInfo* pInitInfo, const TableIter& rIter, const char* pName, f32 radius) {
     s32 arg = -1;
     MR::getMapPartsArgRotateAxis(&arg, rIter);
 

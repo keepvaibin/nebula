@@ -27,7 +27,7 @@ namespace NrvGravityLightRoad {
 GravityLightRoad::GravityLightRoad(const char* pName) : LiveActor(pName), mHost(), mSpeed(), mRadius(2500.0f), mEndPos(0.0f, 0.0f, 0.0f) {
 }
 
-void GravityLightRoad::init(const JMapInfoIter& rIter) {
+void GravityLightRoad::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
 
     mRadius = 2500.0f * mScale.y;

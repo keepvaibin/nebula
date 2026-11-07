@@ -13,7 +13,7 @@ ActorAnimKeeper::ActorAnimKeeper(LiveActor* pActor) : mActor(pActor), mNumInfo()
     if (!initAnimData()) {
         return;
     }
-    start("\203\146\203\164\203\110\203\213\203\147" /* デフォルト */);
+    start("デフォルト");
 }
 
 ActorAnimKeeper* ActorAnimKeeper::tryCreate(LiveActor* pActor) {
@@ -100,7 +100,7 @@ bool ActorAnimKeeper::isPlaying(const char* pName) const {
 }
 
 namespace {
-    void getCsvDataAnimData(ActorAnimDataInfo* pDataInfo, const char* pAnimType, JMapInfo* pInfo, s32 index) {
+    void getCsvDataAnimData(ActorAnimDataInfo* pDataInfo, const char* pAnimType, Table* pInfo, s32 index) {
         char pOut[256];
         nebula_snprintf(pOut, sizeof(pOut), "%sName", pAnimType);
         MR::getCsvDataStrOrNULL(&pDataInfo->mName, pInfo, pOut, index);
@@ -115,7 +115,7 @@ namespace {
 
 bool ActorAnimKeeper::initAnimData() {
     const ResourceHolder* pResourceHolder = MR::getResourceHolder(mActor);
-    JMapInfo* csvParser = MR::tryCreateCsvParser(pResourceHolder, "%s.bcsv", ::sFileName);
+    Table* csvParser = MR::tryCreateCsvParser(pResourceHolder, "%s.bcsv", ::sFileName);
 
     if (csvParser == nullptr) {
         return false;

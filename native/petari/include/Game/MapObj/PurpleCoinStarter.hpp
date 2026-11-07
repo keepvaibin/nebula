@@ -12,7 +12,7 @@ public:
     PurpleCoinStarter(const char* pName);
 
     virtual ~PurpleCoinStarter();
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
 
     void setHost(PurpleCoinHolder* pHost);
     void start();

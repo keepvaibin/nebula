@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Game/Util/JMapInfo.hpp"
+#include "Game/Util/Table.hpp"
 #include <nebula_geometry.hpp>
 
 class PlantPoint;
@@ -8,7 +8,7 @@ class RailRider;
 
 class PlantRailInfo {
 public:
-    PlantRailInfo(const JMapInfoIter&, f32);
+    PlantRailInfo(const TableIter&, f32);
 
     void calcPosAndAxisY(Vec3f*, Vec3f*, f32) const;
     void calcNearestPointPos(Vec3f*, const Vec3f&, s32) const;

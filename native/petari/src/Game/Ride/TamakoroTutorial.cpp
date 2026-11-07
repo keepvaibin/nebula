@@ -9,7 +9,7 @@
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/EventUtil.hpp"
 #include "Game/Util/PlayerInputUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -47,7 +47,7 @@ TamakoroTutorial::TamakoroTutorial(const char* pName)
     : LiveActor(pName), mHost(), mTalkCtrl(), mTalkCtrlAutomatic(), mPadAccel(0.0f, 0.0f, 0.0f), _A4(), _A5() {
 }
 
-void TamakoroTutorial::init(const JMapInfoIter& rIter) {
+void TamakoroTutorial::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("SignBoard", nullptr, false);
     MR::connectToSceneNpc(this);
@@ -63,7 +63,7 @@ void TamakoroTutorial::init(const JMapInfoIter& rIter) {
     appear();
 
     s32 omitTutorial = -1;
-    MR::getJMapInfoArg0NoInit(rIter, &omitTutorial);
+    MR::getPlacementArg0NoInit(rIter, &omitTutorial);
 
     if (omitTutorial == -1) {
         mTalkCtrl = MR::createTalkCtrlDirect(this, rIter, "Common_TamakoroTutorial000", Vec3f(0.0f, 0.0f, 0.0f), nullptr);

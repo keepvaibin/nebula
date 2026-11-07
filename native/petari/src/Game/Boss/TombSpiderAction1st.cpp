@@ -36,7 +36,7 @@ namespace NrvTombSpiderAction1st {
     NEW_NERVE(TombSpiderAction1stNrvWaitDemo, TombSpiderAction1st, WaitDemo);
 };  // namespace NrvTombSpiderAction1st
 
-TombSpiderAction1st::TombSpiderAction1st(TombSpider* pParent) : TombSpiderActionBase(pParent, "\220\355\223\254\202\120\211\361\220\355[\203\147\203\104\201\133\203\200\203\130\203\160\203\103\203\137\201\133]" /* 戦闘１回戦[トゥームスパイダー] */) {
+TombSpiderAction1st::TombSpiderAction1st(TombSpider* pParent) : TombSpiderActionBase(pParent, "戦闘１回戦[トゥームスパイダー]") {
 }
 
 void TombSpiderAction1st::init() {

@@ -9,7 +9,7 @@ public:
     CoconutTreeLeaf(const CoconutTreeLeafGroup* pGroup, MtxPtr pJointMtx, const Vec3f* pWindDirection);
 
     virtual ~CoconutTreeLeaf();
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual MtxPtr getBaseMtx() const;
     virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 
@@ -34,7 +34,7 @@ public:
     CoconutTreeLeafGroup(const char* pName);
 
     virtual ~CoconutTreeLeafGroup();
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void startClipped();
     virtual void endClipped();
     virtual void control();

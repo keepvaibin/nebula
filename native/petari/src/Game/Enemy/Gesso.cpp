@@ -59,7 +59,7 @@ Gesso::Gesso(const char* pName)
       _B8(0.0f, 1.0f, 0.0f), _C4(), _C8(0.0f, 0.0f, 0.0f), mIsMarioLeft(), mIsHighSpeedMode() {
 }
 
-void Gesso::init(const JMapInfoIter& rIter) {
+void Gesso::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     _94 = mPosition;
     MR::useStageSwitchReadAppear(this, rIter);
@@ -92,7 +92,7 @@ void Gesso::init(const JMapInfoIter& rIter) {
     if (MR::useStageSwitchReadAppear(this, rIter)) {
         MR::syncStageSwitchAppear(this);
         s32 initialBehavior;
-        MR::getJMapInfoArg0WithInit(rIter, &initialBehavior);
+        MR::getPlacementArg0WithInit(rIter, &initialBehavior);
         if (initialBehavior == 0) {
             initNerve(GET_NERVE(Gesso, GessoNrvComeFromBox));
         } else {

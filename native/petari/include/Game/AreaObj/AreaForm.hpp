@@ -3,7 +3,7 @@
 #include <nebula_geometry.hpp>
 
 
-class JMapInfoIter;
+class TableIter;
 
 class AreaForm {
 public:
@@ -18,7 +18,7 @@ public:
     AreaForm() : _4() {
     }
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual bool isInVolume(const Vec3f&) const;
 
     Pos3f* _4;
@@ -28,7 +28,7 @@ class AreaFormCube : public AreaForm {
 public:
     AreaFormCube(int);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual bool isInVolume(const Vec3f&) const;
 
     void calcWorldPos(Vec3f*) const;
@@ -64,7 +64,7 @@ class AreaFormSphere : public AreaForm {
 public:
     AreaFormSphere();
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual bool isInVolume(const Vec3f&) const;
 
     void calcUpVec(Vec3f*) const;
@@ -79,7 +79,7 @@ class AreaFormBowl : public AreaForm {
 public:
     AreaFormBowl();
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual bool isInVolume(const Vec3f&) const;
 
     void calcUpVec(const Vec3f&);
@@ -93,7 +93,7 @@ class AreaFormCylinder : public AreaForm {
 public:
     AreaFormCylinder();
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual bool isInVolume(const Vec3f&) const;
 
     void calcPos(Vec3f*) const;

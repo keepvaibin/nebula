@@ -3,8 +3,8 @@
 #include "Game/Map/RailPart.hpp"
 #include <nebula_geometry.hpp>
 
-class JMapInfo;
-class JMapInfoIter;
+class Table;
+class TableIter;
 
 class BezierRailPart {
 public:
@@ -36,7 +36,7 @@ public:
 
 class BezierRail {
 public:
-    BezierRail(const JMapInfoIter&, const JMapInfo*);
+    BezierRail(const TableIter&, const Table*);
 
     f32 normalizePos(f32, int) const;
     f32 getPartLength(int) const;
@@ -45,8 +45,8 @@ public:
     void calcPosDir(Vec3f*, Vec3f*, f32) const;
     f32 getNearestRailPosCoord(const Vec3f&) const;
     f32 getRailPosCoord(int) const;
-    void calcCurrentRailCtrlPointIter(JMapInfoIter*, f32, bool) const;
-    void calcRailCtrlPointIter(JMapInfoIter*, int) const;
+    void calcCurrentRailCtrlPointIter(TableIter*, f32, bool) const;
+    void calcRailCtrlPointIter(TableIter*, int) const;
     void getIncludedSection(const RailPart**, f32*, f32, int) const;
     int getCurrentCtrlPointIndex(f32, bool) const;
 
@@ -61,6 +61,6 @@ public:
     s32 mNumRailParts;
     RailPart* mRailParts;  // this is a direct array of RailParts, not a single RailPart
     f32* mPointCoords;
-    JMapInfoIter* mIter;
-    const JMapInfo* mInfo;
+    TableIter* mIter;
+    const Table* mInfo;
 };

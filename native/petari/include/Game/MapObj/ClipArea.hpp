@@ -11,14 +11,14 @@ public:
     /// @param pName A pointer to the null-terminated name of the object.
     ClipArea(const char* pName);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void draw() const;
     virtual MtxPtr getBaseMtx() const {
         return (MtxPtr)&mBaseMtx;
     }
     virtual bool isInArea(const Vec3f&, f32) const;
 
-    void initBaseMatrix(const JMapInfoIter&);
+    void initBaseMatrix(const TableIter&);
     void setShape(ClipAreaShape*);
 
     Pos3f mBaseMtx;

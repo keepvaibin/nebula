@@ -6,7 +6,7 @@ class ScreenBlurArea : public ImageEffectArea {
 public:
     ScreenBlurArea(int, const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
 
     virtual const char* getManagerName() const {
         return "ImageEffectArea";

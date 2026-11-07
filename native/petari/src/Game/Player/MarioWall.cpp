@@ -301,7 +301,7 @@ bool Mario::isEnableStickWall() {
         return false;
     }
 
-    if (isAnimationRun("\213\363\222\206\202\320\202\313\202\350" /* 空中ひねり */)) {
+    if (isAnimationRun("空中ひねり")) {
         if (mActor->_945 < 25) {
             return false;
         }
@@ -353,10 +353,10 @@ bool Mario::isEnableStickWall() {
     }
 
     if (mMovementStates._19) {
-        if (!isAnimationRun("\225\307\203\127\203\203\203\223\203\166" /* 壁ジャンプ */) && getPlayer()->checkStickWallSide() != 1) {
+        if (!isAnimationRun("壁ジャンプ") && getPlayer()->checkStickWallSide() != 1) {
             return false;
         }
-    } else if (!isAnimationRun("\225\307\203\127\203\203\203\223\203\166" /* 壁ジャンプ */) && !mMovementStates._9 && getPlayer()->checkStickWallSide() != 1) {
+    } else if (!isAnimationRun("壁ジャンプ") && !mMovementStates._9 && getPlayer()->checkStickWallSide() != 1) {
         return false;
     }
 
@@ -390,7 +390,7 @@ bool Mario::isEnableStickWall() {
 bool MarioWall::start() {
     _18 = 0;
     _20 = 0.0f;
-    changeAnimation("\225\307\202\255\202\301\202\302\202\253" /* 壁くっつき */);
+    changeAnimation("壁くっつき");
     startPadVib(0u);
     getPlayer()->mMovementStates._28 = false;
     getPlayer()->_20._28 = false;
@@ -401,8 +401,8 @@ bool MarioWall::start() {
     if (getPlayerMode() == PlayerMode_Ice && getPlayer()->getWallPolygon()->mSensor->isType(0x57)) {
         MarioActor* actor = mActor;
         actor->createIceWall(getPlayer()->getWallPos() - getPlayer()->getWallNorm() * 30.0f, getPlayer()->getWallNorm());
-        playEffectRT("\225\130\225\307\203\127\203\203\203\223\203\166" /* 氷壁ジャンプ */, getPlayer()->getWallNorm(), getPlayer()->getWallPos() - getPlayer()->getWallNorm() * 15.0f);
-        playSound("\203\130\203\120\201\133\203\147\222\205\222\156" /* スケート着地 */);
+        playEffectRT("氷壁ジャンプ", getPlayer()->getWallNorm(), getPlayer()->getWallPos() - getPlayer()->getWallNorm() * 15.0f);
+        playSound("スケート着地");
         _1E = 1;
     }
 
@@ -443,7 +443,7 @@ bool MarioWall::update() {
         if (getPlayer()->mVerticalSpeed < 80.0f) {
             if (!isOnSlipGround()) {
                 getPlayer()->setFrontVecKeepUp(getPlayer()->getWallNorm());
-                changeAnimation("\222\205\222\156" /* 着地 */);
+                changeAnimation("着地");
                 changeAnimationInterpoleFrame(1);
                 mActor->setBlendMtxTimer(4);
             }
@@ -481,7 +481,7 @@ bool MarioWall::update() {
 
     if (checkTrgA() && startJump()) {
         if (_1E) {
-            playSound("\203\130\203\120\201\133\203\147\203\127\203\203\203\223\203\166" /* スケートジャンプ */);
+            playSound("スケートジャンプ");
         }
 
         return false;
@@ -489,7 +489,7 @@ bool MarioWall::update() {
 
     if (mActor->isRequestRush()) {
         getPlayer()->mMovementStates._2B = false;
-        changeAnimation("\213\363\222\206\202\320\202\313\202\350" /* 空中ひねり */);
+        changeAnimation("空中ひねり");
         getPlayer()->tryWallPunch();
         getPlayer()->setWallCancel();
         return false;
@@ -516,8 +516,8 @@ bool MarioWall::update() {
 
         _18 = 0;
         speed = getActor()->getConst().getTable()->mWallDropSpeedStop;
-        changeAnimation("\225\307\202\255\202\301\202\302\202\253" /* 壁くっつき */);
-        stopEffect("\213\244\222\312\225\307\216\350\216\103\202\350" /* 共通壁手擦り */);
+        changeAnimation("壁くっつき");
+        stopEffect("共通壁手擦り");
         break;
     case 2:
         if (_1E) {
@@ -532,18 +532,18 @@ bool MarioWall::update() {
             _18 = 1;
         }
 
-        stopEffect("\213\244\222\312\225\307\216\350\216\103\202\350" /* 共通壁手擦り */);
+        stopEffect("共通壁手擦り");
         break;
     case 0:
         if (_14 < getActor()->getConst().getTable()->mWallStickTime) {
-            stopEffect("\213\244\222\312\225\307\216\350\216\103\202\350" /* 共通壁手擦り */);
+            stopEffect("共通壁手擦り");
         } else {
-            if (!isAnimationRun("\225\307\202\255\202\301\202\302\202\253" /* 壁くっつき */)) {
-                changeAnimation("\225\307\202\267\202\327\202\350" /* 壁すべり */);
+            if (!isAnimationRun("壁くっつき")) {
+                changeAnimation("壁すべり");
             }
 
-            playSound("\203\130\203\212\203\142\203\166" /* スリップ */);
-            playEffect("\213\244\222\312\225\307\216\350\216\103\202\350" /* 共通壁手擦り */);
+            playSound("スリップ");
+            playEffect("共通壁手擦り");
         }
 
         break;
@@ -584,13 +584,13 @@ bool MarioWall::update() {
 }
 
 bool MarioWall::close() {
-    stopAnimation("\225\307\202\255\202\301\202\302\202\253" /* 壁くっつき */);
-    stopAnimation("\225\307\202\267\202\327\202\350" /* 壁すべり */);
+    stopAnimation("壁くっつき");
+    stopAnimation("壁すべり");
     if (getPlayer()->mMovementStates._1) {
-        changeAnimation(nullptr, "\212\356\226\173" /* 基本 */);
+        changeAnimation(nullptr, "基本");
     }
 
-    stopEffect("\213\244\222\312\225\307\216\350\216\103\202\350" /* 共通壁手擦り */);
+    stopEffect("共通壁手擦り");
     getPlayer()->resetTornado();
     getPlayer()->mMovementStates._38 = false;
     return true;
@@ -617,7 +617,7 @@ bool MarioWall::startJump() {
     velocity.scale(mActor->getConst().getTable()->mWallJumpPowerXZ);
     velocity += getGravityVec() * -mActor->getConst().getTable()->mWallJumpPowerY;
     getPlayer()->tryWallJump(velocity, true);
-    playEffect("\213\244\222\312\225\307\203\127\203\203\203\223\203\166" /* 共通壁ジャンプ */);
+    playEffect("共通壁ジャンプ");
     _1C = 1;
     getPlayer()->mMovementStates._2B = false;
     return true;
@@ -639,8 +639,8 @@ bool MarioWall::startBackJump(u32 type) {
     getPlayer()->tryWallJump(velocity, false);
     switch (type) {
     case 0: {
-        playEffectRTZ("\214\213\212\105\203\161\203\142\203\147" /* 結界ヒット */, _24, getPlayer()->getWallPos());
-        playSound("\214\213\212\105\203\161\203\142\203\147" /* 結界ヒット */);
+        playEffectRTZ("結界ヒット", _24, getPlayer()->getWallPos());
+        playSound("結界ヒット");
         Mario* player = getPlayer();
         player->_402 = 0;
         player = getPlayer();
@@ -649,11 +649,11 @@ bool MarioWall::startBackJump(u32 type) {
     }
 
     case 1:
-        playEffectRTZ("\220\205\225\307\203\161\203\142\203\147" /* 水壁ヒット */, _24, getPlayer()->getWallPos());
-        playSound("\220\205\222\145\202\251\202\352" /* 水弾かれ */);
+        playEffectRTZ("水壁ヒット", _24, getPlayer()->getWallPos());
+        playSound("水弾かれ");
         break;
     case 2:
-        playSound("\203\147\203\211\203\223\203\174\203\212\203\223\203\127\203\203\203\223\203\166\221\345" /* トランポリンジャンプ大 */);
+        playSound("トランポリンジャンプ大");
         break;
     }
 
@@ -700,7 +700,7 @@ bool Mario::fixWallingDist() {
                     correction.z = relative.z;
                 }
 
-                addTrans(correction, "\225\307\225\342\220\263" /* 壁補正 */);
+                addTrans(correction, "壁補正");
             }
         }
     }
@@ -745,9 +745,9 @@ void Mario::tryWallPunch() {
             tryForcePowerJump(velocity, true);
             mMovementStates._2B = true;
             startPadVib(2);
-            playSound("\225\307\224\275\216\313" /* 壁反射 */);
-            playSound("\220\272\203\130\203\163\203\223\203\114\203\203\203\223\203\132\203\213" /* 声スピンキャンセル */);
-            playEffectTrans("\225\307\203\161\203\142\203\147" /* 壁ヒット */, getWallPos());
+            playSound("壁反射");
+            playSound("声スピンキャンセル");
+            playEffectTrans("壁ヒット", getWallPos());
             if (getPlayer()->mMovementStates._8) {
                 sendPunch(mFrontWallTriangle->mSensor, true);
             }

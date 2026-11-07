@@ -38,12 +38,12 @@ SuperSpinDriver::SuperSpinDriver(const char* pName, s32 color)
       _174(true), _178(), _17C(), _17D(), mIsPullPlayer(true), mIsDisableJingle() {
 }
 
-void SuperSpinDriver::init(const JMapInfoIter& rIter) {
+void SuperSpinDriver::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("SuperSpinDriver", nullptr, false);
     MR::connectToSceneNoSilhouettedMapObjStrongLight(this);
 
-    initParamFromJMapInfo(rIter);
+    initParamFromPlacement(rIter);
     initGravityAxis();
     initSensor();
     initEffectKeeper(0, nullptr, false);
@@ -85,21 +85,21 @@ void SuperSpinDriver::initAfterPlacement() {
     }
 }
 
-void SuperSpinDriver::initParamFromJMapInfo(const JMapInfoIter& rIter) {
-    MR::getJMapInfoArg0NoInit(rIter, &mFlightTime);
+void SuperSpinDriver::initParamFromPlacement(const TableIter& rIter) {
+    MR::getPlacementArg0NoInit(rIter, &mFlightTime);
 
     mShadowLength = -1.0f;
-    MR::getJMapInfoArg1NoInit(rIter, &mShadowLength);
+    MR::getPlacementArg1NoInit(rIter, &mShadowLength);
 
     s32 isPullPlayer = 0;
 
-    if (MR::getJMapInfoArg2NoInit(rIter, &isPullPlayer)) {
+    if (MR::getPlacementArg2NoInit(rIter, &isPullPlayer)) {
         mIsPullPlayer = isPullPlayer != 0;
     }
 
     s32 isDisableJingle = 0;
 
-    if (MR::getJMapInfoArg4NoInit(rIter, &isDisableJingle)) {
+    if (MR::getPlacementArg4NoInit(rIter, &isDisableJingle)) {
         mIsDisableJingle = isDisableJingle == 1;
     }
 }
@@ -129,7 +129,7 @@ void SuperSpinDriver::initEmptyModel() {
         return;
     }
 
-    mEmptyModel = MR::createModelObjMapObjStrongLight("\226\263\214\370\203\202\203\146\203\213" /* 無効モデル */, "SuperSpinDriverEmpty", getBaseMtx());
+    mEmptyModel = MR::createModelObjMapObjStrongLight("無効モデル", "SuperSpinDriverEmpty", getBaseMtx());
     MR::startBtp(mEmptyModel, "SuperSpinDriverEmpty");
     MR::setBtpFrameAndStop(mEmptyModel, mColor);
     MR::initShadowVolumeFlatModel(mEmptyModel, "SuperSpinDriverShadow", MR::getJointMtx(this, "Outside"));
@@ -143,25 +143,25 @@ void SuperSpinDriver::initEmptyModel() {
     }
 }
 
-void SuperSpinDriver::initEventCamera(const JMapInfoIter& rIter) {
+void SuperSpinDriver::initEventCamera(const TableIter& rIter) {
     mSpinDriverCamera = new SpinDriverCamera();
     mSpinDriverCamera->init(rIter, this);
 }
 
-void SuperSpinDriver::initShootPath(const JMapInfoIter& rIter) {
+void SuperSpinDriver::initShootPath(const TableIter& rIter) {
     mPlayerLandRotation = 0.0f;
-    MR::getJMapInfoArg5NoInit(rIter, &mPlayerLandRotation);
+    MR::getPlacementArg5NoInit(rIter, &mPlayerLandRotation);
 
     mShootPath = new SpinDriverShootPath();
     mShootPath->initUsingParabolic(rIter, mPosition);
     mShootPath->calcInitPose(&_100, &_E8, &_F4, mPlayerLandRotation);
 }
 
-void SuperSpinDriver::initShootPathDraw(const JMapInfoIter& rIter) {
+void SuperSpinDriver::initShootPathDraw(const TableIter& rIter) {
     s32 drawPathRangeIdx = -1;
     f32 coord = 0.0f;
 
-    MR::getJMapInfoArg7NoInit(rIter, &drawPathRangeIdx);
+    MR::getPlacementArg7NoInit(rIter, &drawPathRangeIdx);
     mDrawPathRangeIdx = MR::registerStorageSpinDriverPathDrawRange(this, rIter, drawPathRangeIdx, &coord);
 
     mPathDrawer = new SpinDriverPathDrawer(mShootPath);
@@ -190,11 +190,11 @@ void SuperSpinDriver::initColor() {
 }
 
 void SuperSpinDriver::initOperateRing() {
-    mOperateRing = new SpinDriverOperateRing("\221\200\215\354\203\212\203\223\203\117" /* 操作リング */);
+    mOperateRing = new SpinDriverOperateRing("操作リング");
     mOperateRing->initWithoutIter();
 }
 
-void SuperSpinDriver::initAppearState(const JMapInfoIter& rIter) {
+void SuperSpinDriver::initAppearState(const TableIter& rIter) {
     bool isAppear = true;
 
     if (MR::useStageSwitchReadAppear(this, rIter)) {
@@ -207,7 +207,7 @@ void SuperSpinDriver::initAppearState(const JMapInfoIter& rIter) {
         isAppear = false;
     }
 
-    if (MR::joinToGroupArray(this, rIter, "\230\146\220\257\217\157\214\273" /* 惑星出現 */, 32)) {
+    if (MR::joinToGroupArray(this, rIter, "惑星出現", 32)) {
         mSpinDriverCamera->initAppearCamera(rIter, this);
         isAppear = false;
     }
@@ -218,11 +218,11 @@ void SuperSpinDriver::initAppearState(const JMapInfoIter& rIter) {
     }
 
     s32 respawnType = 0;
-    MR::getJMapInfoArg6NoInit(rIter, &respawnType);
+    MR::getPlacementArg6NoInit(rIter, &respawnType);
 
     if (respawnType == 1) {
         _168 = 0;
-        mAlreadyDoneFlagIdx = MR::setupAlreadyDoneFlag("\203\150\203\211\203\103\203\157\217\157\214\273\215\317\202\335" /* ドライバ出現済み */, rIter, &_168);
+        mAlreadyDoneFlagIdx = MR::setupAlreadyDoneFlag("ドライバ出現済み", rIter, &_168);
     } else {
         _168 = 0;
         mAlreadyDoneFlagIdx = -1;
@@ -478,7 +478,7 @@ void SuperSpinDriver::requestAppear() {
     MR::invalidateClipping(this);
 
     if (mSpinDriverCamera->isUseAppearCamera(this)) {
-        MR::requestStartDemo(this, "\217\157\214\273" /* 出現 */, GET_NERVE(SuperSpinDriver, SuperSpinDriverNrvAppear),
+        MR::requestStartDemo(this, "出現", GET_NERVE(SuperSpinDriver, SuperSpinDriverNrvAppear),
                              GET_NERVE(SuperSpinDriver, SuperSpinDriverNrvTryDemo));
     } else {
         setNerve(GET_NERVE(SuperSpinDriver, SuperSpinDriverNrvAppear));
@@ -489,7 +489,7 @@ void SuperSpinDriver::requestEmptyAppear() {
     MR::invalidateClipping(this);
 
     if (mSpinDriverCamera->isUseAppearCamera(this)) {
-        MR::requestStartDemo(this, "\217\157\214\273" /* 出現 */, GET_NERVE(SuperSpinDriver, SuperSpinDriverNrvEmptyAppear),
+        MR::requestStartDemo(this, "出現", GET_NERVE(SuperSpinDriver, SuperSpinDriverNrvEmptyAppear),
                              GET_NERVE(SuperSpinDriver, SuperSpinDriverNrvTryDemo));
     } else {
         setNerve(GET_NERVE(SuperSpinDriver, SuperSpinDriverNrvEmptyAppear));
@@ -552,7 +552,7 @@ void SuperSpinDriver::exeEmptyAppear() {
 
             if (mSpinDriverCamera->isUseAppearCamera(this)) {
                 mSpinDriverCamera->endAppearCamera(this);
-                MR::endDemoWaitCameraInterpolating(this, "\217\157\214\273" /* 出現 */);
+                MR::endDemoWaitCameraInterpolating(this, "出現");
             }
         }
     }
@@ -599,7 +599,7 @@ void SuperSpinDriver::exeAppear() {
 
             if (mSpinDriverCamera->isUseAppearCamera(this)) {
                 mSpinDriverCamera->endAppearCamera(this);
-                MR::endDemoWaitCameraInterpolating(this, "\217\157\214\273" /* 出現 */);
+                MR::endDemoWaitCameraInterpolating(this, "出現");
             }
         }
     }

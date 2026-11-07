@@ -21,7 +21,7 @@ CrystalCage::CrystalCage(const char* pName)
     _94.identity();
 }
 
-void CrystalCage::init(const JMapInfoIter& rIter) {
+void CrystalCage::init(const TableIter& rIter) {
     const char* obj_name;
     MR::getObjectName(&obj_name, rIter);
     initMapToolInfo(rIter);
@@ -224,7 +224,7 @@ bool CrystalCage::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* 
     return false;
 }
 
-void CrystalCage::initMapToolInfo(const JMapInfoIter& rIter) {
+void CrystalCage::initMapToolInfo(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     _DC.set(mPosition);
 
@@ -237,7 +237,7 @@ void CrystalCage::initMapToolInfo(const JMapInfoIter& rIter) {
     }
 
     if (mCrystalCageType == 2) {
-        MR::getJMapInfoArg0NoInit(rIter, &_108);
+        MR::getPlacementArg0NoInit(rIter, &_108);
     } else {
         MR::useStageSwitchWriteDead(this, rIter);
 
@@ -245,10 +245,10 @@ void CrystalCage::initMapToolInfo(const JMapInfoIter& rIter) {
             MR::listenStageSwitchOnA(this, MR::Functor(this, &CrystalCage::forceBreak));
         }
 
-        MR::getJMapInfoArg0NoInit(rIter, &mIsBreakObjVisible);
-        MR::getJMapInfoArg1NoInit(rIter, &mPlayRiddleSFX);
-        MR::getJMapInfoArg2NoInit(rIter, &mHasBinding);
-        MR::getJMapInfoArg3NoInit(rIter, &_104);
+        MR::getPlacementArg0NoInit(rIter, &mIsBreakObjVisible);
+        MR::getPlacementArg1NoInit(rIter, &mPlayRiddleSFX);
+        MR::getPlacementArg2NoInit(rIter, &mHasBinding);
+        MR::getPlacementArg3NoInit(rIter, &_104);
     }
 }
 
@@ -257,9 +257,9 @@ void CrystalCage::initModel(const char* pName) {
     MR::makeMtxUpNoSupportPos(&_94, -mGravity, _DC);
 
     if (mCrystalCageType == 2) {
-        mBreakObj = MR::createModelObjMapObjStrongLight("\203\116\203\212\203\130\203\136\203\213\203\120\201\133\203\127[\221\345]\211\363\202\352\203\202\203\146\203\213" /* クリスタルケージ[大]壊れモデル */, "CrystalCageLBreak", (MtxPtr)&_94);
+        mBreakObj = MR::createModelObjMapObjStrongLight("クリスタルケージ[大]壊れモデル", "CrystalCageLBreak", (MtxPtr)&_94);
     } else {
-        mBreakObj = MR::createModelObjMapObjStrongLight("\203\116\203\212\203\130\203\136\203\213\203\120\201\133\203\127[\217\254]\211\363\202\352\203\202\203\146\203\213" /* クリスタルケージ[小]壊れモデル */, "CrystalCageSBreak", (MtxPtr)&_94);
+        mBreakObj = MR::createModelObjMapObjStrongLight("クリスタルケージ[小]壊れモデル", "CrystalCageSBreak", (MtxPtr)&_94);
     }
 
     MR::invalidateClipping(mBreakObj);

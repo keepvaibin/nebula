@@ -31,7 +31,7 @@ namespace NrvLavaHomeSeesawRotator {
 };  // namespace NrvLavaHomeSeesawRotator
 
 LavaHomeSeesawRotator::LavaHomeSeesawRotator(LiveActor* pHost, const char* pMoveSound, f32 moveSoundSpeed)
-    : MapPartsRotatorBase(pHost, "\203\126\201\133\203\134\201\133(1\216\262)" /* シーソー(1軸) */), mAngularSpeedMax(), mInertia(::sInertiaConstDefault), mRotateAngle(), mRestoreForce(),
+    : MapPartsRotatorBase(pHost, "シーソー(1軸)"), mAngularSpeedMax(), mInertia(::sInertiaConstDefault), mRotateAngle(), mRestoreForce(),
       mIsHipDropped(), mRotateAxis(0.0f, 0.0f, 1.0f), mAngularVelocity(), mInitialUp(0.0f, 1.0f, 0.0f), mMoveSound(pMoveSound),
       mMoveSoundSpeed(moveSoundSpeed) {
     mRotateMtx.identity();
@@ -41,7 +41,7 @@ LavaHomeSeesawRotator::LavaHomeSeesawRotator(LiveActor* pHost, const char* pMove
 MapPartsRotatorBase::~MapPartsRotatorBase() {
 }
 
-void LavaHomeSeesawRotator::init(const JMapInfoIter& rIter) {
+void LavaHomeSeesawRotator::init(const TableIter& rIter) {
     initNerve(GET_NERVE(LavaHomeSeesawRotator, HostTypeWait));
 
     MR::getMapPartsArgRotateSpeed(&mAngularSpeedMax, rIter);

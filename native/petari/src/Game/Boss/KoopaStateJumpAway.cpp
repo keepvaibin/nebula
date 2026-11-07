@@ -22,7 +22,7 @@ namespace NrvKoopaStateJumpAway {
     NEW_NERVE(KoopaStateJumpAwayNrvLand, KoopaStateJumpAway, Land);
 };  // namespace NrvKoopaStateJumpAway
 
-KoopaStateJumpAway::KoopaStateJumpAway(Koopa* pKoopa) : ActorStateBase< Koopa >("State[\203\127\203\203\203\223\203\166\202\305\227\243\202\352\202\351]" /* State[ジャンプで離れる] */, pKoopa) {
+KoopaStateJumpAway::KoopaStateJumpAway(Koopa* pKoopa) : ActorStateBase< Koopa >("State[ジャンプで離れる]", pKoopa) {
 }
 
 void KoopaStateJumpAway::init() {

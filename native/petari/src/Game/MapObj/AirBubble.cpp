@@ -32,7 +32,7 @@ namespace NrvAirBubble {
 AirBubble::AirBubble(const char* pName) : LiveActor(pName), _A4(0.0f, 0.0f, 1.0f), _B0(), mLife(::cDefaultLife) {
 }
 
-void AirBubble::init(const JMapInfoIter& rIter) {
+void AirBubble::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::useStageSwitchWriteDead(this, rIter);
     initModelManagerWithAnm("AirBubble", nullptr, false);

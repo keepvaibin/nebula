@@ -7,7 +7,7 @@ public:
     LavaBallRisingPlanetLava(const char*);
 
     virtual ~LavaBallRisingPlanetLava();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
 
     void exeWait();
     void exeScaleUp();

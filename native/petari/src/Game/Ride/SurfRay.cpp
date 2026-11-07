@@ -146,9 +146,9 @@ SurfRay::SurfRay(const char* pName, s32 channel)
     mEffectHostMtx.identity();
 }
 
-void SurfRay::init(const JMapInfoIter& pMapInfoIter) {
+void SurfRay::init(const TableIter& pMapInfoIter) {
     if (MR::hasRetryGalaxySequence()) {
-        MR::resetPosition(this, "\203\130\203\136\201\133\203\147\210\312\222\165\201\151\203\124\201\133\203\164\203\102\203\223\201\152" /* スタート位置（サーフィン） */);
+        MR::resetPosition(this, "スタート位置（サーフィン）");
     } else {
         MR::initDefaultPos(this, pMapInfoIter);
     }
@@ -184,7 +184,7 @@ void SurfRay::init(const JMapInfoIter& pMapInfoIter) {
     initNerve(GET_NERVE(SurfRay, SurfRayNrvWaitPlayer));
 
     MR::useStageSwitchWriteA(this, pMapInfoIter);
-    MR::tryFindNamePos("\203\217\201\133\203\166\210\312\222\165\201\151\203\124\201\133\203\164\203\102\203\223\201\152" /* ワープ位置（サーフィン） */, &mWarpPos, nullptr);
+    MR::tryFindNamePos("ワープ位置（サーフィン）", &mWarpPos, nullptr);
 
     mActorJointCtrl = new ActorJointCtrl(this);
     mTwistBuffer = new f32[mTwistBufferSize];
@@ -234,7 +234,7 @@ void SurfRay::exeWait() {
 
 void SurfRay::exeRideAccel() {
     if (MR::isFirstStep(this)) {
-        MR::startBckPlayerJ("\203\124\201\133\203\164\203\102\203\223\201\151\211\301\221\254\201\152" /* サーフィン（加速） */);
+        MR::startBckPlayerJ("サーフィン（加速）");
         MR::startBck(this, "RunDash");
     }
 
@@ -245,7 +245,7 @@ void SurfRay::exeRideAccel() {
 
 void SurfRay::exeRideAccelTwist() {
     if (MR::isFirstStep(this)) {
-        MR::startBckPlayerJ("\203\124\201\133\203\164\203\102\203\223\214\130\202\253\212\112\216\156\201\151\211\301\221\254\201\152" /* サーフィン傾き開始（加速） */);
+        MR::startBckPlayerJ("サーフィン傾き開始（加速）");
     }
 
     if (!updateRideAccel() && MR::isBckStoppedPlayer()) {
@@ -256,7 +256,7 @@ void SurfRay::exeRideAccelTwist() {
 void SurfRay::exeRideFree() {
     if (MR::isFirstStep(this)) {
         MR::startBck(this, "Run");
-        MR::startBckPlayerJ("\203\124\201\133\203\164\203\102\203\223" /* サーフィン */);
+        MR::startBckPlayerJ("サーフィン");
     }
 
     if (!updateRideFree() && isTwistStart()) {
@@ -266,7 +266,7 @@ void SurfRay::exeRideFree() {
 
 void SurfRay::exeRideFreeTwist() {
     if (MR::isFirstStep(this)) {
-        MR::startBckPlayerJ("\203\124\201\133\203\164\203\102\203\223\214\130\202\253\212\112\216\156" /* サーフィン傾き開始 */);
+        MR::startBckPlayerJ("サーフィン傾き開始");
     }
 
     if (!updateRideFree() && MR::isBckStoppedPlayer()) {
@@ -276,7 +276,7 @@ void SurfRay::exeRideFreeTwist() {
 
 void SurfRay::exeRideJump() {
     if (MR::isFirstStep(this)) {
-        MR::startBckPlayerJ("\203\124\201\133\203\164\203\102\203\223\203\127\203\203\203\223\203\166" /* サーフィンジャンプ */);
+        MR::startBckPlayerJ("サーフィンジャンプ");
         MR::startBck(this, "Jump");
         MR::startSound(mRider, "SE_PV_JUMP_S");
     }
@@ -288,7 +288,7 @@ void SurfRay::exeRideJump() {
 
 void SurfRay::exeRideJumpHigh() {
     if (MR::isFirstStep(this)) {
-        MR::startBckPlayerJ("\203\124\201\133\203\164\203\102\203\223\203\156\203\103\203\127\203\203\203\223\203\166" /* サーフィンハイジャンプ */);
+        MR::startBckPlayerJ("サーフィンハイジャンプ");
         MR::startBck(this, "Jump");
         MR::startSound(mRider, "SE_PV_JUMP_JOY");
     }
@@ -300,7 +300,7 @@ void SurfRay::exeRideJumpHigh() {
 
 void SurfRay::exeRideFall() {
     if (MR::isFirstStep(this)) {
-        MR::startBckPlayerJ("\203\124\201\133\203\164\203\102\203\223\227\216\211\272" /* サーフィン落下 */);
+        MR::startBckPlayerJ("サーフィン落下");
         MR::startBck(this, "Fall");
     }
 
@@ -312,7 +312,7 @@ void SurfRay::exeRideFall() {
 
 void SurfRay::exeRideLand() {
     if (MR::isFirstStep(this)) {
-        MR::startBckPlayerJ("\203\124\201\133\203\164\203\102\203\223\222\205\222\156" /* サーフィン着地 */);
+        MR::startBckPlayerJ("サーフィン着地");
         MR::startBck(this, "Land");
     }
 
@@ -333,7 +333,7 @@ void SurfRay::exeTutorial() {
     switch (mLectureIdx) {
     case 0:
         if (MR::isFirstStep(this)) {
-            MR::startBckPlayerJ("\203\124\201\133\203\164\203\102\203\223\222\205\222\156" /* サーフィン着地 */);
+            MR::startBckPlayerJ("サーフィン着地");
             MR::startBck(this, "Land");
         }
 
@@ -386,7 +386,7 @@ void SurfRay::exeTutorial() {
     case 7:
     case 11: {
         if (MR::isFirstStep(this)) {
-            MR::startBckPlayerJ("\203\124\201\133\203\164\203\102\203\223\214\130\202\253\212\112\216\156" /* サーフィン傾き開始 */);
+            MR::startBckPlayerJ("サーフィン傾き開始");
         }
 
         f32 rot = MR::abs((mRotation.z / 70.0f) * 0.6f);
@@ -411,7 +411,7 @@ void SurfRay::exeWipeOut() {
     }
 
     if (!updateRide() && !MR::isWipeActive()) {
-        MR::resetPosition(this, "\203\130\203\136\201\133\203\147\210\312\222\165\201\151\203\124\201\133\203\164\203\102\203\223\201\152" /* スタート位置（サーフィン） */);
+        MR::resetPosition(this, "スタート位置（サーフィン）");
         resetAllInfo();
         MR::startBckPlayer("SurfRide", 0);
         MR::resetCameraMan();
@@ -550,7 +550,7 @@ bool SurfRay::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver)
 
     if (MR::isMsgTutorialOmit(msg)) {
         mInTutorialArea = false;
-        MR::resetPosition(this, "\203\130\203\136\201\133\203\147\210\312\222\165\201\151\203\124\201\133\203\164\203\102\203\223\201\152" /* スタート位置（サーフィン） */);
+        MR::resetPosition(this, "スタート位置（サーフィン）");
         resetAllInfo();
         MR::setPlayerPos(mPosition);
         MR::startBckPlayer("SurfRide", 0);

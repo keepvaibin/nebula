@@ -6,7 +6,7 @@
 #include "Game/Util/MtxUtil.hpp"
 #include <nebula_geometry.hpp>
 
-ShadowVolumeOval::ShadowVolumeOval() : ShadowVolumeModel("\211\145\225\140\211\346[\203\173\203\212\203\205\201\133\203\200\221\310\213\205]" /* 影描画[ボリューム楕球] */), mSize(100.0f, 100.0f, 200.0f) {
+ShadowVolumeOval::ShadowVolumeOval() : ShadowVolumeModel("影描画[ボリューム楕球]"), mSize(100.0f, 100.0f, 200.0f) {
     initVolumeModel("ShadowVolumeSphere");
 }
 

@@ -18,7 +18,7 @@ namespace NrvWaterfallCaveCover {
     NEW_NERVE(HostTypeBreak, WaterfallCaveCover, Break);
 };  // namespace NrvWaterfallCaveCover
 
-void WaterfallCaveCover::init(const JMapInfoIter& rIter) {
+void WaterfallCaveCover::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo rInitInfo;
     rInitInfo.setupDefaultPos();
@@ -48,7 +48,7 @@ void WaterfallCaveCover::exeBreak() {
         MR::invalidateHitSensor(this, "body");
         MR::invalidateCollisionParts(this);
         MapObjActorUtil::startBreak(this);
-        MR::startRumbleWithShakeCameraStrong(this, "\222\206" /* 中 */, "\216\343" /* 弱 */, 1000.0f, FLOAT_MAX);
+        MR::startRumbleWithShakeCameraStrong(this, "中", "弱", 1000.0f, FLOAT_MAX);
         MR::startSound(this, "SE_OJ_WATERFALL_COVER_BREAK");
     }
 

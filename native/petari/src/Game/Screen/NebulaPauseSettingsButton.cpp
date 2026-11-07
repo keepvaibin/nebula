@@ -20,7 +20,7 @@ namespace {
 NebulaPauseSettingsButton::NebulaPauseSettingsButton() : LayoutActor("NebulaPauseSettings", true), mButton(nullptr) {
 }
 
-void NebulaPauseSettingsButton::init(const JMapInfoIter& rIter) {
+void NebulaPauseSettingsButton::init(const TableIter& rIter) {
     initLayoutManager("PauseMenu", 1);
 
     // Its own name for the canvas rules (LayoutAspect): it stays in the middle at every width.

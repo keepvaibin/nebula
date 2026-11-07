@@ -10,7 +10,7 @@ public:
     HipDropMoveObj(const char* pName);
 
     virtual ~HipDropMoveObj();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
     virtual void moveStart() {};
     virtual void moving() {};

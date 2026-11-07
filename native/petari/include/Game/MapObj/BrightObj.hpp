@@ -58,7 +58,7 @@ public:
     BrightObj(const char*);
 
     virtual ~BrightObj();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void control();
 
     virtual void calcBrightInfo(NebulaScreenProbe*);
@@ -72,7 +72,7 @@ public:
     BrightSun(const char*);
 
     virtual ~BrightSun();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void control();
 
     virtual void calcBrightInfo(NebulaScreenProbe*);

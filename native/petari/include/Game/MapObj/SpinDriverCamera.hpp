@@ -4,7 +4,7 @@
 
 class ActorCameraInfo;
 class CameraTargetMtx;
-class JMapInfoIter;
+class TableIter;
 class LiveActor;
 class MultiEventCamera;
 
@@ -22,8 +22,8 @@ public:
     void end();
     void updateTargetMatrix(const Vec3f&, const Vec3f&);
     bool isUseAppearCamera(LiveActor*) const;
-    void init(const JMapInfoIter&, LiveActor*);
-    void initAppearCamera(const JMapInfoIter&, LiveActor*);
+    void init(const TableIter&, LiveActor*);
+    void initAppearCamera(const TableIter&, LiveActor*);
 
     MultiEventCamera* mCamera;
     CameraTargetMtx* mTargetMtx;

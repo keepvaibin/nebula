@@ -14,9 +14,9 @@
 #define JMAP_VALUE_TYPE_STRING_PTR 6
 #define JMAP_VALUE_TYPE_NULL 7
 
-class JMapInfoIter;
+class TableIter;
 
-struct JMapItem {
+struct TableColumn {
     u32 mHash;
     u32 mMask;
     u16 mOffsData;
@@ -25,13 +25,13 @@ struct JMapItem {
 };
 
 // BCSV, in host order as the importer cooks it (crates/nebula-import cook/native_data.rs): the header, the field
-// table and each entry's values (JMapInfo::getValueFast reads them).
-struct JMapData {
+// table and each entry's values (Table::getValueFast reads them).
+struct TableData {
     s32 mNumEntries;
     s32 mNumFields;
     s32 mDataOffset;
     u32 mEntrySize;
-    const JMapItem mItems[];
+    const TableColumn mItems[];
 };
 
 template < typename T >
@@ -44,16 +44,16 @@ inline bool compareValues< const char* >(const char* pA, const char* pB) {
     return strcmp(pA, pB) == 0;
 }
 
-inline const char* getEntryAddress(const JMapData* pData, s32 dataOffset, int entryIndex) {
+inline const char* getEntryAddress(const TableData* pData, s32 dataOffset, int entryIndex) {
     return reinterpret_cast< const char* >(pData) + dataOffset + entryIndex * pData->mEntrySize;
 }
 
-class JMapInfo {
+class Table {
 public:
-    JMapInfo();
-    ~JMapInfo();
+    Table();
+    ~Table();
 
-    inline bool operator==(const JMapInfo& rInfo) const {
+    inline bool operator==(const Table& rInfo) const {
         return mData == rInfo.mData;
     }
 
@@ -78,35 +78,35 @@ public:
     bool getValueFast(int entryIndex, int itemIndex, u32* pValueOut) const;
     bool getValueFast(int entryIndex, int itemIndex, s32* pValueOut) const;
     bool getValueFast(int entryIndex, int itemIndex, f32* pValueOut) const {
-        const JMapItem* pItem = &mData->mItems[itemIndex];
+        const TableColumn* pItem = &mData->mItems[itemIndex];
         const char* pValue = getEntryAddress(mData, mData->mDataOffset, entryIndex) + pItem->mOffsData;
         *pValueOut = readBytes< f32 >(pValue);
         return true;
     }
     bool getValueFast(int entryIndex, int itemIndex, bool* pValueOut) const {
-        const JMapItem* pItem = &mData->mItems[itemIndex];
+        const TableColumn* pItem = &mData->mItems[itemIndex];
         const char* pValue = getEntryAddress(mData, mData->mDataOffset, entryIndex) + pItem->mOffsData;
         *pValueOut = (readBytes< u32 >(pValue) & pItem->mMask) != 0;
         return true;
     }
 
-    JMapInfoIter findElementBinary(const char* pKey, const char* pValue) const;
+    TableIter findElementBinary(const char* pKey, const char* pValue) const;
 
     template < typename T >
     const bool getValue(int entryIndex, const char* pKey, T* pValueOut) const;
 
     template < typename T >
-    JMapInfoIter findElement(const char* pKey, T searchValue, int startIndex) const;
+    TableIter findElement(const char* pKey, T searchValue, int startIndex) const;
 
-    inline JMapInfoIter begin() const;
-    inline JMapInfoIter end() const;
+    inline TableIter begin() const;
+    inline TableIter end() const;
 
-    const JMapData* mData;
+    const TableData* mData;
     const char* mName;
 };
 
 template < typename T >
-const bool JMapInfo::getValue(int entryIndex, const char* pKey, T* pValueOut) const {
+const bool Table::getValue(int entryIndex, const char* pKey, T* pValueOut) const {
     s32 itemIndex = searchItemInfo(pKey);
     if (itemIndex < 0) {
         return false;
@@ -115,19 +115,19 @@ const bool JMapInfo::getValue(int entryIndex, const char* pKey, T* pValueOut) co
     return getValueFast(entryIndex, itemIndex, pValueOut);
 }
 
-class JMapInfoIter {
+class TableIter {
 public:
-    JMapInfoIter() : mInfo(), mIndex(-1) {
+    TableIter() : mInfo(), mIndex(-1) {
     }
 
-    JMapInfoIter(const JMapInfo* pInfo, s32 index) : mInfo(pInfo), mIndex(index) {
+    TableIter(const Table* pInfo, s32 index) : mInfo(pInfo), mIndex(index) {
     }
 
-    bool operator==(const JMapInfoIter& rIter) const {
+    bool operator==(const TableIter& rIter) const {
         return mIndex == rIter.mIndex && mInfo != nullptr && rIter.mInfo != nullptr && *mInfo == *rIter.mInfo;
     }
 
-    bool operator!=(const JMapInfoIter& rIter) const {
+    bool operator!=(const TableIter& rIter) const {
         return !(*this == rIter);
     }
 
@@ -144,19 +144,19 @@ public:
         return mInfo->getValue(mIndex, pKey, pValueOut);
     }
 
-    const JMapInfo* mInfo;
+    const Table* mInfo;
     s32 mIndex;
 };
 
 template < typename T >
-JMapInfoIter JMapInfo::findElement(const char* pKey, T searchValue, int startIndex) const {
+TableIter Table::findElement(const char* pKey, T searchValue, int startIndex) const {
     int entryIndex = startIndex;
     T value;
 
     while (entryIndex < getNumEntries()) {
         getValue< T >(entryIndex, pKey, &value);
         if (compareValues< T >(value, searchValue)) {
-            return JMapInfoIter(this, entryIndex);
+            return TableIter(this, entryIndex);
         }
 
         entryIndex++;
@@ -165,14 +165,14 @@ JMapInfoIter JMapInfo::findElement(const char* pKey, T searchValue, int startInd
     return end();
 }
 
-JMapInfoIter JMapInfo::begin() const {
-    return JMapInfoIter(this, 0);
+TableIter Table::begin() const {
+    return TableIter(this, 0);
 }
 
-JMapInfoIter JMapInfo::end() const {
-    return JMapInfoIter(this, getNumEntries());
+TableIter Table::end() const {
+    return TableIter(this, getNumEntries());
 }
 
 namespace MR {
-    JMapInfoIter findJMapInfoElementNoCase(const JMapInfo* pInfo, const char* pKey, const char* pValue, int startIndex);
+    TableIter findTableElementNoCase(const Table* pInfo, const char* pKey, const char* pValue, int startIndex);
 };  // namespace MR

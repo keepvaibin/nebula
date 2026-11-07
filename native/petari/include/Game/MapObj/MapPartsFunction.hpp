@@ -10,7 +10,7 @@ class MapPartsFunction : public NameObj {
 public:
     MapPartsFunction(LiveActor* pHost, const char* pName);
 
-    virtual void init(const JMapInfoIter& rIter) {
+    virtual void init(const TableIter& rIter) {
     }
 
     virtual void movement();

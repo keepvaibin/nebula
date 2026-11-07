@@ -14,7 +14,7 @@ public:
     virtual ~GravityLight() {
     }
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void control();
     virtual MtxPtr getBaseMtx() const {
         return (MtxPtr)&mBaseMtx;

@@ -10,7 +10,7 @@ public:
     /// @param timeLimit The number of seconds to initialize the timer with.
     CometEventExecutorTimeLimit(u32 timeLimit);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void appear();
     virtual void kill();
 

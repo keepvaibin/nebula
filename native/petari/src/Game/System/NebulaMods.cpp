@@ -29,7 +29,7 @@
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/EventUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
@@ -42,7 +42,7 @@
 #include "Game/Map/HitInfo.hpp"
 #include "Game/NameObj/NameObjFactory.hpp"
 #include "Game/Util/FileUtil.hpp"
-#include "Game/Util/JMapInfo.hpp"
+#include "Game/Util/Table.hpp"
 #include "Game/AreaObj/AreaObj.hpp"
 #include "Game/LiveActor/HitSensorInfo.hpp"
 #include "Game/LiveActor/HitSensorKeeper.hpp"
@@ -179,17 +179,17 @@ namespace {
             sPluginActorTable = *reinterpret_cast< void** >(this);
         }
 
-        virtual void init(const JMapInfoIter& rIter) {
+        virtual void init(const TableIter& rIter) {
             if (rIter.isValid()) {
                 MR::initDefaultPos(this, rIter);
-                MR::getJMapInfoArg0NoInit(rIter, &mArgs[0]);
-                MR::getJMapInfoArg1NoInit(rIter, &mArgs[1]);
-                MR::getJMapInfoArg2NoInit(rIter, &mArgs[2]);
-                MR::getJMapInfoArg3NoInit(rIter, &mArgs[3]);
-                MR::getJMapInfoArg4NoInit(rIter, &mArgs[4]);
-                MR::getJMapInfoArg5NoInit(rIter, &mArgs[5]);
-                MR::getJMapInfoArg6NoInit(rIter, &mArgs[6]);
-                MR::getJMapInfoArg7NoInit(rIter, &mArgs[7]);
+                MR::getPlacementArg0NoInit(rIter, &mArgs[0]);
+                MR::getPlacementArg1NoInit(rIter, &mArgs[1]);
+                MR::getPlacementArg2NoInit(rIter, &mArgs[2]);
+                MR::getPlacementArg3NoInit(rIter, &mArgs[3]);
+                MR::getPlacementArg4NoInit(rIter, &mArgs[4]);
+                MR::getPlacementArg5NoInit(rIter, &mArgs[5]);
+                MR::getPlacementArg6NoInit(rIter, &mArgs[6]);
+                MR::getPlacementArg7NoInit(rIter, &mArgs[7]);
                 MR::useStageSwitchWriteA(this, rIter);
                 MR::useStageSwitchWriteB(this, rIter);
                 MR::useStageSwitchWriteDead(this, rIter);
@@ -955,7 +955,7 @@ namespace {
             if (pCreator == nullptr) {
                 return nullptr;
             }
-            const JMapInfoIter noPlacement;
+            const TableIter noPlacement;
             NameObjFactory::requestMountObjectArchives(pName, noPlacement);
             pObject = pCreator(copyText(pName));
         }
@@ -1692,7 +1692,7 @@ namespace {
     public:
         PluginLayout(const char* pArchive) : LayoutActor("PluginLayout", true), mArchive(pArchive) {}
 
-        virtual void init(const JMapInfoIter&) {
+        virtual void init(const TableIter&) {
             initLayoutManager(mArchive, 1);
             MR::connectToSceneLayout(this);
             appear();
@@ -2198,7 +2198,7 @@ namespace NebulaMods {
         return notOwn && MR::isEqualStringCase(pStage, pAskedName) ? 0 : -1;
     }
 
-    bool isMissingFiles(const char* pName, const JMapInfoIter& rIter) {
+    bool isMissingFiles(const char* pName, const TableIter& rIter) {
         if (!sAskedForApi) {
             return false;
         }

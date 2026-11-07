@@ -9,7 +9,7 @@ class SunakazeKunTrap : public ModelObj {
 public:
     SunakazeKunTrap(LiveActor*, const Vec3f&);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void attackSensor(HitSensor*, HitSensor*);
 
     void exeTrap();
@@ -31,7 +31,7 @@ public:
     /// @param pName A pointer to the null-terminated name of the object.
     Sandstorm(const char* pName);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void startClipped();
     virtual void endClipped();
     virtual void control();
@@ -40,7 +40,7 @@ public:
     virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
 
-    static void makeArchiveList(NameObjArchiveListCollector*, const JMapInfoIter&);
+    static void makeArchiveList(NameObjArchiveListCollector*, const TableIter&);
 
     void initSandstormParam();
     void initTrapModel();

@@ -11,7 +11,7 @@ class Metbo : public LiveActor {
 public:
     Metbo(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void kill();
     virtual void control();

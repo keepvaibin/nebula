@@ -150,36 +150,36 @@ Unizo::Unizo(const char* pName)
 Unizo::~Unizo() {
 }
 
-void Unizo::initType(const JMapInfoIter& rIter) {
+void Unizo::initType(const TableIter& rIter) {
     const char* pName = mName;
-    if (MR::isEqualStringCase(pName, "\203\105\203\152\203\135\201\133" /* ウニゾー */)) {
+    if (MR::isEqualStringCase(pName, "ウニゾー")) {
         mType = TypeSea;
-    } else if (MR::isEqualStringCase(pName, "\227\244\203\105\203\152\203\135\201\133" /* 陸ウニゾー */)) {
+    } else if (MR::isEqualStringCase(pName, "陸ウニゾー")) {
         mType = TypeLand;
-    } else if (MR::isEqualStringCase(pName, "\220\363\220\243\203\105\203\152\203\135\201\133" /* 浅瀬ウニゾー */)) {
+    } else if (MR::isEqualStringCase(pName, "浅瀬ウニゾー")) {
         mType = TypeShoal;
     }
 }
 
-void Unizo::init(const JMapInfoIter& rIter) {
+void Unizo::init(const TableIter& rIter) {
     initType(rIter);
 
     if (mType == TypeSea) {
         initModelManagerWithAnm("Unizo", nullptr, false);
-        mBreakModel = new ModelObj("\203\105\203\152\203\135\201\133\211\363\202\352\203\202\203\146\203\213" /* ウニゾー壊れモデル */, "UnizoBreak", nullptr, MR::DrawBufferType_Enemy, -2, -2, false);
+        mBreakModel = new ModelObj("ウニゾー壊れモデル", "UnizoBreak", nullptr, MR::DrawBufferType_Enemy, -2, -2, false);
         mBreakModel->initWithoutIter();
         mBreakModel->makeActorDead();
     } else if (mType == TypeLand) {
         mRollHeight = ::sRollHeightLand;
         mGravityRate = ::sGravityRateLand;
         initModelManagerWithAnm("UnizoLand", nullptr, false);
-        mBreakModel = new ModelObj("\227\244\203\105\203\152\203\135\201\133\211\363\202\352\203\202\203\146\203\213" /* 陸ウニゾー壊れモデル */, "UnizoLandBreak", nullptr, MR::DrawBufferType_Enemy, -2, -2, false);
+        mBreakModel = new ModelObj("陸ウニゾー壊れモデル", "UnizoLandBreak", nullptr, MR::DrawBufferType_Enemy, -2, -2, false);
         mBreakModel->initWithoutIter();
         mBreakModel->makeActorDead();
         MR::initFur(this);
     } else if (mType == TypeShoal) {
         initModelManagerWithAnm("UnizoShoal", nullptr, false);
-        mBreakModel = new ModelObj("\220\363\220\243\203\105\203\152\203\135\201\133\211\363\202\352\203\202\203\146\203\213" /* 浅瀬ウニゾー壊れモデル */, "UnizoShoalBreak", nullptr, MR::DrawBufferType_Enemy, -2, -2, false);
+        mBreakModel = new ModelObj("浅瀬ウニゾー壊れモデル", "UnizoShoalBreak", nullptr, MR::DrawBufferType_Enemy, -2, -2, false);
         mBreakModel->initWithoutIter();
         mBreakModel->makeActorDead();
     }

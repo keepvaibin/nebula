@@ -4,7 +4,7 @@
 LightArea::LightArea(int formType, const char* pName) : AreaObj(formType, pName), mPlacedZoneID(-1) {
 }
 
-void LightArea::init(const JMapInfoIter& rIter) {
+void LightArea::init(const TableIter& rIter) {
     AreaObj::init(rIter);
     mPlacedZoneID = MR::getPlacedZoneId(rIter);
 }

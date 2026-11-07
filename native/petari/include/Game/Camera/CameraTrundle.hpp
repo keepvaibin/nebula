@@ -4,7 +4,7 @@
 
 class CameraTrundle : public Camera {
 public:
-    CameraTrundle(const char* pName = "\203\147\203\211\203\223\203\150\203\213\203\112\203\201\203\211" /* トランドルカメラ */);
+    CameraTrundle(const char* pName = "トランドルカメラ");
 
     virtual void reset();
     virtual CameraTargetObj* calc();

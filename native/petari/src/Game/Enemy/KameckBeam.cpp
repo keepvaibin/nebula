@@ -57,7 +57,7 @@ KameckBeam::KameckBeam(const char* pName)
     }
 }
 
-void KameckBeam::init(const JMapInfoIter& rIter) {
+void KameckBeam::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::connectToSceneEnemyDecorationMovementCalcAnim(this);
     initNerve(GET_NERVE(KameckBeam, KameckBeamNrvFollowWand));

@@ -9,12 +9,12 @@ class MapPartsRailGuideDrawer : public MapPartsFunction {
 public:
     MapPartsRailGuideDrawer(LiveActor* pHost, const char* pModelName);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual bool isWorking() const;
     virtual void start();
     virtual void end();
 
-    void initGuidePoints(const JMapInfoIter& rIter);
+    void initGuidePoints(const TableIter& rIter);
 
     void show();
     void hide();

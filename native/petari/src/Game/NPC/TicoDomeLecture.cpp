@@ -22,7 +22,7 @@ namespace {
 TicoDomeLecture::TicoDomeLecture(const char* pName) : LiveActor(pName), _8C(gZeroVec), _98(gZeroVec) {
 }
 
-void TicoDomeLecture::init(const JMapInfoIter& rIter) {
+void TicoDomeLecture::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     _8C.set(mPosition);
     _98.set(mRotation);
@@ -57,7 +57,7 @@ void TicoDomeLecture::exeWait() {
 }
 
 void TicoDomeLecture::exeMove() {
-    const char* demoName = "\203\140\203\122\210\332\223\256" /* チコ移動 */;
+    const char* demoName = "チコ移動";
     if (MR::isFirstStep(this)) {
         MR::startBck(this, "Fly");
     }

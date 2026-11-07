@@ -1,7 +1,7 @@
 #include "Game/Boss/TripodBossBaseJointPosition.hpp"
 #include "Game/Boss/TripodBossAccesser.hpp"
 #include "Game/Util/BaseMatrixFollowTargetHolder.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -10,11 +10,11 @@ TripodBossBaseJointPosition::TripodBossBaseJointPosition(const char* pName) : Li
     mMtx.identity();
 }
 
-void TripodBossBaseJointPosition::init(const JMapInfoIter& rIter) {
+void TripodBossBaseJointPosition::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::connectToSceneCollisionEnemyMovement(this);
-    MR::getJMapInfoArg0NoInit(rIter, &mID);
-    MR::getJMapInfoMatrixFromRT(rIter, &mMtx);
+    MR::getPlacementArg0NoInit(rIter, &mID);
+    MR::getPlacementMatrixFromRT(rIter, &mMtx);
     MR::addBaseMatrixFollowTarget(this, rIter, nullptr, nullptr);
     MR::addTripodBossParts(this);
     MR::invalidateClipping(this);

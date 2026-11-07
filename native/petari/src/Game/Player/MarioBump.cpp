@@ -47,7 +47,7 @@ void Mario::startBump(const Vec3f& rVec) {
         closeStatus(mBump);
     }
 
-    setTrans(rVec, "\222\151\215\267" /* 段差 */);
+    setTrans(rVec, "段差");
     changeStatus(mBump);
     mVelocity.zero();
     _3D0 = 0;

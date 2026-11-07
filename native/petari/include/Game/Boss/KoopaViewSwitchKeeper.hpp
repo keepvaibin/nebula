@@ -7,6 +7,6 @@ public:
     KoopaViewSwitchKeeper(const char* pName);
 
     virtual ~KoopaViewSwitchKeeper();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
 };

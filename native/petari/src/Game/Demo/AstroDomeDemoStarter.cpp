@@ -6,7 +6,7 @@
 #include "math_types.hpp"
 
 namespace {
-    const char* const cJumpOutPartName = "\224\362\202\321\217\157\202\267" /* 飛び出す */;
+    const char* const cJumpOutPartName = "飛び出す";
     const Vec cAppearRotate = {90.0f, -5.0f, 0.0f};
     // const s32 cJumpOutStopStep = _;
     // const s32 cJumpOutStopFrame = _;
@@ -35,7 +35,7 @@ AstroDomeDemoStarter::AstroDomeDemoStarter(const char* pName) : LiveActor(pName)
     _C4.identity();
 }
 
-void AstroDomeDemoStarter::init(const JMapInfoIter& rIter) {
+void AstroDomeDemoStarter::init(const TableIter& rIter) {
     initModelManagerWithAnm("SuperSpinDriver", nullptr, false);
     MR::hideModel(this);
     MR::connectToSceneNoSilhouettedMapObjStrongLight(this);
@@ -61,8 +61,8 @@ void AstroDomeDemoStarter::init(const JMapInfoIter& rIter) {
     initNerve(GET_NERVE(AstroDomeDemoStarter, AstroDomeDemoStarterNrvSpinDriverAppear));
 
     MR::tryRegisterDemoCast(this, rIter);
-    MR::registerDemoActionNerve(this, GET_NERVE(AstroDomeDemoStarter, AstroDomeDemoStarterNrvSpinDriverStart), "\203\130\203\163\203\223\203\150\203\211\203\103\203\157\213\116\223\256" /* スピンドライバ起動 */);
-    MR::registerDemoActionNerve(this, GET_NERVE(AstroDomeDemoStarter, AstroDomeDemoStarterNrvJumpOut), "\224\362\202\321\217\157\202\267" /* 飛び出す */);
+    MR::registerDemoActionNerve(this, GET_NERVE(AstroDomeDemoStarter, AstroDomeDemoStarterNrvSpinDriverStart), "スピンドライバ起動");
+    MR::registerDemoActionNerve(this, GET_NERVE(AstroDomeDemoStarter, AstroDomeDemoStarterNrvJumpOut), "飛び出す");
     MR::registerDemoActionFunctor(this, MR::Functor(this, &AstroDomeDemoStarter::startJumpOut), nullptr);
     MR::needStageSwitchWriteA(this, rIter);
 
@@ -141,7 +141,7 @@ void AstroDomeDemoStarter::exeSpinDriverAppear() {
     MR::startLevelSound(this, "SE_OJ_LV_SPIN_DRV_CAPTURE");
 
     Pos3f slerpMtx;
-    MR::blendMtxRotateSlerp(_C4, _94, MR::calcDemoPartStepRate("\203\130\203\163\203\223\203\150\203\211\203\103\203\157\217\157\214\273" /* スピンドライバ出現 */), slerpMtx);
+    MR::blendMtxRotateSlerp(_C4, _94, MR::calcDemoPartStepRate("スピンドライバ出現"), slerpMtx);
     slerpMtx.setTrans(mPosition);
     MR::setPlayerBaseMtx(slerpMtx);
 }

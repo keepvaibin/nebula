@@ -23,7 +23,7 @@
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/EventUtil.hpp"
 #include "Game/Util/PlayerInputUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LightUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
@@ -143,14 +143,14 @@ TicoFat::TicoFat(const char* pName) : NPCActor(pName) {
     _1AC.identity();
 }
 
-void TicoFat::makeArchiveList(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter) {
+void TicoFat::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
     NPCActorItem item("TicoFat");
     if (MR::getNPCItemData(&item, 0)) {
         NPCActor::addArchive(pCollector, item);
     }
 }
 
-void TicoFat::init(const JMapInfoIter& rIter) {
+void TicoFat::init(const TableIter& rIter) {
     NPCActorCaps caps("TicoFat");
     NPCActorItem item("TicoFat");
     caps.setDefault();
@@ -173,7 +173,7 @@ void TicoFat::init(const JMapInfoIter& rIter) {
     mScaleController = new AnimScaleController(&::sParam);
     NPCActor::initialize(rIter, caps);
     s32 itemType = _1DC;
-    MR::getJMapInfoArg0NoInit(rIter, &itemType);
+    MR::getPlacementArg0NoInit(rIter, &itemType);
     _1DC = itemType;
 
     switch (_1DC) {
@@ -194,7 +194,7 @@ void TicoFat::init(const JMapInfoIter& rIter) {
     }
 
     s32 numItem = 10;
-    MR::getJMapInfoArg1NoInit(rIter, &numItem);
+    MR::getPlacementArg1NoInit(rIter, &numItem);
     _1E0 = _1E4 = numItem;
     mCurrentFed = 0;
     MR::addHitSensorAtJointEye(this, "Mouth", "Mouth", 8, 30.0f, Vec3f(0.0f, 0.0f, 0.0f));
@@ -211,21 +211,21 @@ void TicoFat::init(const JMapInfoIter& rIter) {
     MR::onStartOnlyFront(mMsgCtrl);
     MR::onStartOnlyFront(_16C);
     s32 arg2 = -1;
-    MR::getJMapInfoArg2NoInit(rIter, &arg2);
+    MR::getPlacementArg2NoInit(rIter, &arg2);
     if (arg2 != -1) {
         startEat();
     }
 
     s32 arg3 = -1;
-    MR::getJMapInfoArg3NoInit(rIter, &arg3);
+    MR::getPlacementArg3NoInit(rIter, &arg3);
     _1F4 = arg3;
     mMeter = new FullnessMeter(this, _1E4, _1E4 - _1E0);
     mMeter->initWithoutIter();
     mMeter->setNumber(_1E4 - _1E0);
-    MR::initMultiActorCamera(this, rIter, &mCameraInfo, "\225\317\220\147" /* 変身 */);
-    MR::initMultiActorCamera(this, rIter, &mCameraInfo, "\224\362\215\163" /* 飛行 */);
-    MR::initMultiActorCamera(this, rIter, &mCameraInfo, "\212\354\202\321" /* 喜び */);
-    MR::declareEventCameraProgrammable("\203\146\203\165\203\140\203\122\203\112\203\201\203\211" /* デブチコカメラ */);
+    MR::initMultiActorCamera(this, rIter, &mCameraInfo, "変身");
+    MR::initMultiActorCamera(this, rIter, &mCameraInfo, "飛行");
+    MR::initMultiActorCamera(this, rIter, &mCameraInfo, "喜び");
+    MR::declareEventCameraProgrammable("デブチコカメラ");
     MR::useStageSwitchWriteA(this, rIter);
     MR::getNPCItemData(&item, 0);
     equipment(item, 0);
@@ -238,7 +238,7 @@ void TicoFat::init(const JMapInfoIter& rIter) {
         if (_1DC == -1) {
             mShootPath = new SpinDriverShootPath();
             mShootPath->initUsingParabolic(rIter, mPosition);
-            MR::getJMapInfoArg4NoInit(rIter, &_1FC);
+            MR::getPlacementArg4NoInit(rIter, &_1FC);
         }
     }
 
@@ -246,7 +246,7 @@ void TicoFat::init(const JMapInfoIter& rIter) {
     MR::startBrk(this, "Normal");
     MR::setBrkFrameAndStop(this, 0.0f);
     setScale(calcScale());
-    MR::joinToGroupArray(this, rIter, "\230\146\220\257\217\157\214\273" /* 惑星出現 */, 32);
+    MR::joinToGroupArray(this, rIter, "惑星出現", 32);
     AstroDemoFunction::tryRegisterSimpleCastIfAstroGalaxy(this);
     setDefaults();
     _12C = 1000.0f;
@@ -288,7 +288,7 @@ void TicoFat::setCameraParam() {
     trans = _C0;
     Vec3f* ptr = &trans;
     MR::setProgrammableCameraParam(
-        "\203\146\203\165\203\140\203\122\203\112\203\201\203\211" /* デブチコカメラ */, (*ptr + (xDir * 0.0f) + (yDir * 0.0f)) + (zDir * 0.0f),
+        "デブチコカメラ", (*ptr + (xDir * 0.0f) + (yDir * 0.0f)) + (zDir * 0.0f),
         (*ptr + (xDir * 0.0f)) + ((yDir * 100.0f)) + (zDir * MR::getLinerValueFromMinMax(calcScale(), 1.0f, 1.9f, 1300.0f, 1680.0f)), yDir, false);
 }
 
@@ -330,13 +330,13 @@ void TicoFat::control() {
             if (_170 == 0) {
                 _170 = 1;
                 CameraTargetArg arg(this);
-                MR::startGlobalEventCamera("\203\146\203\165\203\140\203\122\203\112\203\201\203\211" /* デブチコカメラ */, arg, 120);
+                MR::startGlobalEventCamera("デブチコカメラ", arg, 120);
                 setCameraParam();
             }
         } else {
             if (_170) {
                 _170 = 0;
-                MR::endGlobalEventCamera("\203\146\203\165\203\140\203\122\203\112\203\201\203\211" /* デブチコカメラ */, 120, true);
+                MR::endGlobalEventCamera("デブチコカメラ", 120, true);
             }
         }
 
@@ -505,8 +505,8 @@ bool TicoFat::enableAppear() {
     return true;
 }
 
-void TicoFat::initStarPieceSaveData(const JMapInfoIter& rIter) {
-    if (MR::getJMapInfoArg7WithInit(rIter, &_1EC)) {
+void TicoFat::initStarPieceSaveData(const TableIter& rIter) {
+    if (MR::getPlacementArg7WithInit(rIter, &_1EC)) {
         s32 starPieceNum = MR::getStarPieceNumGivingToTicoSeed(_1EC);
         _1E0 = (_1E4 - starPieceNum <= 0) ? 0 : _1E4 - starPieceNum;
     }
@@ -768,13 +768,13 @@ void TicoFat::exeTest() {
         setMessage(2);
     }
 
-    if (MR::tryStartDemo(this, "\225\317\220\147" /* 変身 */)) {
+    if (MR::tryStartDemo(this, "変身")) {
         MR::invalidateHitSensors(this);
         MR::stopPlayerFpView();
         MR::tryTalkForceWithoutDemo(_16C);
 
         if (_1EC == 6) {
-            MR::startMultiActorCameraTargetSelf(this, mCameraInfo, "\212\354\202\321" /* 喜び */);
+            MR::startMultiActorCameraTargetSelf(this, mCameraInfo, "喜び");
         }
 
         MR::requestMovementOn(_94);
@@ -812,7 +812,7 @@ void TicoFat::exeMeta() {
 
 void TicoFat::exeDemo() {
     if (MR::isFirstStep(this)) {
-        MR::startMultiActorCameraTargetSelf(this, mCameraInfo, "\225\317\220\147" /* 変身 */);
+        MR::startMultiActorCameraTargetSelf(this, mCameraInfo, "変身");
         MR::startAction(this, getActionName("Demo"));
         MR::startSound(this, "SE_SM_TICOFAT_META");
     }
@@ -836,7 +836,7 @@ void TicoFat::exeDemo() {
     }
 
     if (MR::isBckStopped(this)) {
-        MR::endMultiActorCamera(this, mCameraInfo, "\225\317\220\147" /* 変身 */, false);
+        MR::endMultiActorCamera(this, mCameraInfo, "変身", false);
         if (_1DC == -1 && MR::isExistRail(this)) {
             setNerve(GET_NERVE(TicoFat, TicoFatNrvFly));
         } else {
@@ -849,7 +849,7 @@ void TicoFat::exeDemo() {
 void TicoFat::exeFly() {
     if (MR::isFirstStep(this)) {
         _1F8 = 0.0f;
-        MR::startMultiActorCameraTargetSelf(this, mCameraInfo, "\224\362\215\163" /* 飛行 */);
+        MR::startMultiActorCameraTargetSelf(this, mCameraInfo, "飛行");
         MR::startAction(this, getActionName("Fly"));
         MR::startSound(this, "SE_DM_TICOFAT_MORPH_FLY");
         MR::tryRumblePadWeak(this, PLAYER_1);
@@ -953,8 +953,8 @@ void TicoFat::exeAfter() {
     }
 
     if (MR::isGreaterEqualStep(this, 60)) {
-        MR::endMultiActorCamera(this, mCameraInfo, "\224\362\215\163" /* 飛行 */, false);
-        MR::endDemo(this, "\225\317\220\147" /* 変身 */);
+        MR::endMultiActorCamera(this, mCameraInfo, "飛行", false);
+        MR::endDemo(this, "変身");
         disappear(true);
         kill();
     }

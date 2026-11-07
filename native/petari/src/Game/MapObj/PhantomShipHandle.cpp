@@ -25,7 +25,7 @@ void PhantomShipHandle::calcAndSetBaseMtx() {
     MR::setBaseTRMtx(this, baseMtx);
 }
 
-void PhantomShipHandle::init(const JMapInfoIter& rIter) {
+void PhantomShipHandle::init(const TableIter& rIter) {
     MR::initDefaultPosNoRepeat(this, rIter);
     initModelManagerWithAnm("PhantomShipHandle", nullptr, false);
 

@@ -10,10 +10,10 @@ namespace NrvYesNoLayout {
     NEW_NERVE(YesNoLayoutNrvSelecting, YesNoLayout, Selecting);
 };  // namespace NrvYesNoLayout
 
-YesNoLayout::YesNoLayout() : SimpleLayout("Yes/No\203\214\203\103\203\101\203\105\203\147" /* Yes/Noレイアウト */, "SelectButton", 1, 68), mController(nullptr), _24(false) {
+YesNoLayout::YesNoLayout() : SimpleLayout("Yes/Noレイアウト", "SelectButton", 1, 68), mController(nullptr), _24(false) {
 }
 
-void YesNoLayout::init(const JMapInfoIter& rIter) {
+void YesNoLayout::init(const TableIter& rIter) {
     MR::createAndAddPaneCtrl(this, "Left", 1);
     MR::createAndAddPaneCtrl(this, "Right", 1);
     initEffectKeeper(0, nullptr, nullptr);

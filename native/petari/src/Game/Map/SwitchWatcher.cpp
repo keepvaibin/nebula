@@ -3,7 +3,7 @@
 #include "Game/Map/StageSwitch.hpp"
 
 SwitchWatcher::SwitchWatcher(const StageSwitchCtrl* pSwitchCtrl)
-    : NameObj("\203\130\203\103\203\142\203\140\212\304\216\213" /* スイッチ監視 */), mFlags(), mSwitchCtrl(pSwitchCtrl), mSwitchListenerA(), mSwitchListenerB(), mSwitchListenerAppear() {
+    : NameObj("スイッチ監視"), mFlags(), mSwitchCtrl(pSwitchCtrl), mSwitchListenerA(), mSwitchListenerB(), mSwitchListenerAppear() {
 }
 
 void SwitchWatcher::movement() {

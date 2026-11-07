@@ -58,7 +58,7 @@ BegomanBaby::BegomanBaby(NameObj* pHost, const char* pName) : BegomanBase(pName)
     mWaterColumnMatrix.identity();
 }
 
-void BegomanBaby::init(const JMapInfoIter& rIter) {
+void BegomanBaby::init(const TableIter& rIter) {
     initCore(rIter, "BegomanBaby", false);
     MR::declareStarPiece(this, 3);
 

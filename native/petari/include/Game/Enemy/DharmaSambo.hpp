@@ -15,7 +15,7 @@ public:
     DharmaSambo(const char*);
 
     virtual ~DharmaSambo();
-    virtual void init(const JMapInfoIter&) override;
+    virtual void init(const TableIter&) override;
     virtual void initAfterPlacement() override;
     virtual void appear() override;
     virtual void kill() override;
@@ -61,7 +61,7 @@ public:
     DharmaSamboParts(DharmaSambo*, const char*, const char*, MtxPtr, int, int, int);
 
     virtual ~DharmaSamboParts();
-    virtual void init(const JMapInfoIter&) override;
+    virtual void init(const TableIter&) override;
     virtual void appear() override;
     virtual void kill() override;
     virtual void control() override;

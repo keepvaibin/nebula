@@ -37,7 +37,7 @@ namespace NrvSysInfoWindow {
 };  // namespace NrvSysInfoWindow
 
 SysInfoWindow::SysInfoWindow(SysInfoWindowType windowType, SysInfoExecuteType executeType)
-    : LayoutActor("\203\126\203\130\203\145\203\200\227\160\203\103\203\223\203\164\203\110\203\201\201\133\203\126\203\207\203\223\203\105\203\102\203\223\203\150\203\105" /* システム用インフォメーションウィンドウ */, true), mWindowType(windowType), mType(Type_Key), mYesNoSelector(nullptr),
+    : LayoutActor("システム用インフォメーションウィンドウ", true), mWindowType(windowType), mType(Type_Key), mYesNoSelector(nullptr),
       mIconAButton(nullptr), mTextParentPaneName(nullptr), mWindowParentPaneName(nullptr), _38(executeType == ExecuteType_Children)
       ,
       mIsBackAnswersNo(false), mDimPane(nullptr), mDim(0.0f), mDimFloor(0.0f), mDimLinger(0), mDimEpoch(0),
@@ -55,7 +55,7 @@ SysInfoWindow::SysInfoWindow(SysInfoWindowType windowType, SysInfoExecuteType ex
     }
 }
 
-void SysInfoWindow::init(const JMapInfoIter& rIter) {
+void SysInfoWindow::init(const TableIter& rIter) {
     initLayoutManager(getLayoutName(), 1);
     MR::createAndAddPaneCtrl(this, mTextParentPaneName, 1);
     MR::createAndAddPaneCtrl(this, mWindowParentPaneName, 1);

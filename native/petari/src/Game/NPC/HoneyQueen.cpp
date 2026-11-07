@@ -33,7 +33,7 @@ namespace NrvHoneyQueen {
 HoneyQueen::HoneyQueen(const char* pName) : NPCActor(pName), mWing() {
 }
 
-void HoneyQueen::init(const JMapInfoIter& rIter) {
+void HoneyQueen::init(const TableIter& rIter) {
     NPCActorCaps caps = "HoneyQueen";
     caps.setDefault();
     caps.mWaitNerve = GET_NERVE(HoneyQueen, HoneyQueenNrvWait);
@@ -69,7 +69,7 @@ void HoneyQueen::init(const JMapInfoIter& rIter) {
 
     MR::excludeCalcShadowToActorAll(this, this);
 
-    mWing = MR::createModelObjNpc("\211\110" /* 羽 */, "HoneyQueenWing", MR::getJointMtx(this, "Center"));
+    mWing = MR::createModelObjNpc("羽", "HoneyQueenWing", MR::getJointMtx(this, "Center"));
     mWing->makeActorAppeared();
     MR::startBck(mWing, "HoneyQueenWing");
     MR::startBtk(mWing, "HoneyQueenWing");
@@ -79,9 +79,9 @@ void HoneyQueen::init(const JMapInfoIter& rIter) {
     }
 
     if (MR::tryRegisterDemoCast(this, rIter)) {
-        MR::registerDemoActionFunctor(this, MR::Functor(this, &HoneyQueen::fadeOut), "\203\164\203\106\201\133\203\150\203\101\203\105\203\147" /* フェードアウト */);
-        MR::registerDemoActionFunctor(this, MR::Functor(this, &HoneyQueen::fadeIn), "\203\164\203\106\201\133\203\150\203\103\203\223" /* フェードイン */);
-        MR::registerDemoActionFunctor(this, MR::Functor(this, &HoneyQueen::talkEntry), "\211\171\214\251" /* 謁見 */);
+        MR::registerDemoActionFunctor(this, MR::Functor(this, &HoneyQueen::fadeOut), "フェードアウト");
+        MR::registerDemoActionFunctor(this, MR::Functor(this, &HoneyQueen::fadeIn), "フェードイン");
+        MR::registerDemoActionFunctor(this, MR::Functor(this, &HoneyQueen::talkEntry), "謁見");
         MR::tryRegisterDemoCast(mWing, rIter);
 
         _188 = 1;

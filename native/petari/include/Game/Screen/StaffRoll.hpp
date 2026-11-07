@@ -19,7 +19,7 @@ public:
     virtual ~StaffRollLine() {
     }
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void appear();
 
     void exeScroll();
@@ -41,7 +41,7 @@ public:
     virtual ~StaffRollPicture() {
     }
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
 
     void initReplaceTexture();
     void startPictureAction(s32, const char*, const char*);
@@ -61,7 +61,7 @@ public:
     virtual ~StaffRoll() {
     }
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void appear();
     virtual void movement();
     virtual void draw() const;

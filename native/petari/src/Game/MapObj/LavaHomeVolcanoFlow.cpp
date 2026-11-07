@@ -15,7 +15,7 @@ namespace NrvLavaHomeVolcanoFlow {
 LavaHomeVolcanoFlow::LavaHomeVolcanoFlow(const char* pName) : LiveActor(pName) {
 }
 
-void LavaHomeVolcanoFlow::init(const JMapInfoIter& rIter) {
+void LavaHomeVolcanoFlow::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("LavaHomeVolcanoFlow", nullptr, false);
     initEffectKeeper(0, nullptr, false);

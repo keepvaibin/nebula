@@ -13,7 +13,7 @@ namespace {
 ShadowVolumeOvalPole::~ShadowVolumeOvalPole() {
 }
 
-ShadowVolumeOvalPole::ShadowVolumeOvalPole() : ShadowVolumeModel("\211\145\225\140\211\346[\203\173\203\212\203\205\201\133\203\200\221\310\211\176\222\214]" /* 影描画[ボリューム楕円柱] */) {
+ShadowVolumeOvalPole::ShadowVolumeOvalPole() : ShadowVolumeModel("影描画[ボリューム楕円柱]") {
     mSize.x = 100.0f;
     mSize.y = 100.0f;
     mSize.z = 200.0f;

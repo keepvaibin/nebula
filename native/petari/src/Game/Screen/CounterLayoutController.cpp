@@ -24,19 +24,19 @@ namespace NrvCounterLayoutController {
 };  // namespace NrvCounterLayoutController
 
 CounterLayoutController::CounterLayoutController()
-    : LayoutActor("\203\112\203\105\203\223\203\136\214\156\203\214\203\103\203\101\203\105\203\147\220\247\214\344" /* カウンタ系レイアウト制御 */, true), mPlayerNotMovingFrame(), _24(), mCoinCounter(), mStarPieceCounter(), mPlayerLeft(),
+    : LayoutActor("カウンタ系レイアウト制御", true), mPlayerNotMovingFrame(), _24(), mCoinCounter(), mStarPieceCounter(), mPlayerLeft(),
       mStarCounter(), mHPMeter() {
 }
 
-void CounterLayoutController::init(const JMapInfoIter& rIter) {
+void CounterLayoutController::init(const TableIter& rIter) {
     MR::connectToSceneLayout(this);
     initNerve(GET_NERVE(CounterLayoutController, CounterLayoutControllerNrvPlayerMoving));
 
-    mCoinCounter = new CoinCounter("\203\122\203\103\203\223\203\112\203\105\203\223\203\136" /* コインカウンタ */);
+    mCoinCounter = new CoinCounter("コインカウンタ");
     mCoinCounter->initWithoutIter();
-    mStarPieceCounter = new StarPieceCounter("\203\130\203\136\201\133\203\163\201\133\203\130\203\112\203\105\203\223\203\136" /* スターピースカウンタ */);
+    mStarPieceCounter = new StarPieceCounter("スターピースカウンタ");
     mStarPieceCounter->initWithoutIter();
-    mPlayerLeft = new PlayerLeft("\203\166\203\214\203\103\203\204\201\133\216\143\213\100\225\134\216\246" /* プレイヤー残機表示 */);
+    mPlayerLeft = new PlayerLeft("プレイヤー残機表示");
     mPlayerLeft->initWithoutIter();
     mStarCounter = new StarCounter();
     mStarCounter->initWithoutIter();

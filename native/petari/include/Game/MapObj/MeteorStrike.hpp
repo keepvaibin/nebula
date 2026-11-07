@@ -14,7 +14,7 @@ class MeteorStrike : public LiveActor {
 public:
     MeteorStrike(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void appear();
     virtual void kill();
@@ -24,8 +24,8 @@ public:
 
     void appear(s32);
     bool getMovedPos(Vec3f*, s32) const;
-    static f32 getSpeed(const JMapInfoIter&);
-    void initMapToolInfo(const JMapInfoIter&);
+    static f32 getSpeed(const TableIter&);
+    void initMapToolInfo(const TableIter&);
     void initModel();
     void initRailDirection();
     void calcBreakPosture(const Vec3f&, Pos3f*);

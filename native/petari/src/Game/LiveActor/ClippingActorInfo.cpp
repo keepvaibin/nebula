@@ -127,8 +127,8 @@ void ClippingActorInfo::setTypeToSphere(f32 radius, const Vec3f* pCenter) {
     }
 }
 
-void ClippingActorInfo::setGroupClippingNo(const JMapInfoIter& rIter) {
-    mInfo = new JMapIdInfo(MR::createJMapIdInfoFromClippingGroupId(rIter));
+void ClippingActorInfo::setGroupClippingNo(const TableIter& rIter) {
+    mInfo = new PlacementId(MR::createPlacementIdFromClippingGroupId(rIter));
 }
 
 ClippingActorInfoList::ClippingActorInfoList(int a1) {

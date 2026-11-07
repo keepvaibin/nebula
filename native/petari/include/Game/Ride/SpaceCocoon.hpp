@@ -15,7 +15,7 @@ class SpaceCocoon : public LiveActor {
 public:
     SpaceCocoon(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void draw() const;
     virtual void calcAnim();
     virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);

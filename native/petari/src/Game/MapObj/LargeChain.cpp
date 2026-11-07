@@ -3,7 +3,7 @@
 #include "Game/MapObj/LargeChainParts.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 
@@ -20,11 +20,11 @@ namespace NrvLargeChain {
 LargeChain::LargeChain(const char* pName) : LiveActor(pName), _8C(), _90(), mChainArray(), mChainCount(1) {
 }
 
-void LargeChain::init(const JMapInfoIter& rIter) {
+void LargeChain::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
 
     s32 chainLen;
-    MR::getJMapInfoArg0NoInit(rIter, &chainLen);
+    MR::getPlacementArg0NoInit(rIter, &chainLen);
     mChainCount = static_cast< s32 >(chainLen / ::sPartsLength);
 
     createChainParts();
@@ -97,8 +97,8 @@ namespace {
 };  // namespace
 
 void LargeChain::createChainParts() {
-    _8C = new LargeChainParts("\214\305\222\350\215\275 \211\272" /* 固定鎖 下 */);
-    _90 = new LargeChainParts("\214\305\222\350\215\275 \217\343" /* 固定鎖 上 */);
+    _8C = new LargeChainParts("固定鎖 下");
+    _90 = new LargeChainParts("固定鎖 上");
     mChainArray = ::createChainArray(mChainCount);
 
     for (u32 i = 0; i < mChainCount; i++) {

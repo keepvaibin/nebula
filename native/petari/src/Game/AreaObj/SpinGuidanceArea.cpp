@@ -1,7 +1,7 @@
 #include "Game/AreaObj/SpinGuidanceArea.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Screen/PlayerActionGuidance.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 
 SpinGuidanceArea::SpinGuidanceArea(int formType, const char* pName) : AreaObj(formType, pName) {
@@ -10,7 +10,7 @@ SpinGuidanceArea::SpinGuidanceArea(int formType, const char* pName) : AreaObj(fo
 SpinGuidanceArea::~SpinGuidanceArea() {
 }
 
-void SpinGuidanceArea::init(const JMapInfoIter& rIter) {
+void SpinGuidanceArea::init(const TableIter& rIter) {
     AreaObj::init(rIter);
     MR::createSceneObj(SceneObj_PlayerActionGuidance);
 

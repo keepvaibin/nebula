@@ -1,8 +1,8 @@
 #include "Game/Util/BaseMatrixFollowTargetHolder.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
-#include "Game/Util/JMapLinkInfo.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementLink.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 
 namespace {
@@ -11,13 +11,13 @@ namespace {
     }
 };  // namespace
 
-BaseMatrixFollower::BaseMatrixFollower(NameObj* pObj, const JMapInfoIter& rIter) {
+BaseMatrixFollower::BaseMatrixFollower(NameObj* pObj, const TableIter& rIter) {
     mFollowerObj = pObj;
     mLinkInfo = nullptr;
     mFollowTarget = nullptr;
     mFollowID = -1;
-    MR::getJMapInfoFollowID(rIter, &mFollowID);
-    mLinkInfo = new JMapLinkInfo(rIter, false);
+    MR::getPlacementFollowID(rIter, &mFollowID);
+    mLinkInfo = new PlacementLink(rIter, false);
 }
 
 NameObj* BaseMatrixFollower::getFollowTargetActor() const {
@@ -43,7 +43,7 @@ bool BaseMatrixFollower::isValid() const {
     return mFollowTarget->isValid(mFollowID);
 }
 
-BaseMatrixFollowTarget::BaseMatrixFollowTarget(const JMapLinkInfo* pInfo) {
+BaseMatrixFollowTarget::BaseMatrixFollowTarget(const PlacementLink* pInfo) {
     mLinkInfo = pInfo;
     _30 = nullptr;
     mActor = nullptr;
@@ -117,18 +117,18 @@ void BaseMatrixFollowTargetHolder::addFollower(BaseMatrixFollower* pFollower) {
     pFollower->mFollowTarget = pTarget;
 }
 
-void BaseMatrixFollowTargetHolder::setFollowTargetInfo(LiveActor* pActor, const JMapInfoIter& rIter, const Pos3f* pBaseMtx,
+void BaseMatrixFollowTargetHolder::setFollowTargetInfo(LiveActor* pActor, const TableIter& rIter, const Pos3f* pBaseMtx,
                                                        BaseMatrixFollowValidater* pValidater) {
-    JMapLinkInfo linkInfo(rIter, true);
+    PlacementLink linkInfo(rIter, true);
     BaseMatrixFollowTarget* pTarget = findFollowTarget(&linkInfo);
     if (pTarget) {
         Pos3f mtx;
-        MR::getJMapInfoMatrixFromRT(rIter, &mtx);
+        MR::getPlacementMatrixFromRT(rIter, &mtx);
         pTarget->set(pActor, mtx, pBaseMtx, pValidater);
     }
 }
 
-BaseMatrixFollowTarget* BaseMatrixFollowTargetHolder::findFollowTarget(const JMapLinkInfo* pLinkInfo) {
+BaseMatrixFollowTarget* BaseMatrixFollowTargetHolder::findFollowTarget(const PlacementLink* pLinkInfo) {
     if (!pLinkInfo) {
         return nullptr;
     }
@@ -151,12 +151,12 @@ BaseMatrixFollowTarget* BaseMatrixFollowTargetHolder::findFollowTarget(const Bas
 }
 
 namespace MR {
-    bool isValidFollowID(const JMapInfoIter& rIter) {
+    bool isValidFollowID(const TableIter& rIter) {
         if (!isValidInfo(rIter)) {
             return false;
         }
 
-        JMapLinkInfo linkInfo(rIter, false);
+        PlacementLink linkInfo(rIter, false);
         return linkInfo.isValid();
     }
 
@@ -165,7 +165,7 @@ namespace MR {
         ::getBaseMatrixFollowTargetHolder()->addFollower(pFollower);
     }
 
-    void addBaseMatrixFollowTarget(LiveActor* pActor, const JMapInfoIter& rIter, const Pos3f* pBaseMtx, BaseMatrixFollowValidater* pValidater) {
+    void addBaseMatrixFollowTarget(LiveActor* pActor, const TableIter& rIter, const Pos3f* pBaseMtx, BaseMatrixFollowValidater* pValidater) {
         if (isValidInfo(rIter) && isExistSceneObj(SceneObj_BaseMatrixFollowTargetHolder)) {
             ::getBaseMatrixFollowTargetHolder()->setFollowTargetInfo(pActor, rIter, pBaseMtx, pValidater);
         }

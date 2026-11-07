@@ -6,7 +6,7 @@ class GalaxyMapTicoIcon : public LayoutActor {
 public:
     GalaxyMapTicoIcon(int, const char*, LayoutActor*, const char*);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void appear();
     virtual void control();
 

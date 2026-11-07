@@ -3,13 +3,13 @@
 #include <nebula_geometry.hpp>
 
 class LiveActor;
-class JMapInfoIter;
+class TableIter;
 class SpinDriverShootPath;
 class SpinDriverPathDrawer;
 
 class ReturnDemoRailMove {
 public:
-    ReturnDemoRailMove(LiveActor*, LiveActor*, const JMapInfoIter&, bool, Pos3f*);
+    ReturnDemoRailMove(LiveActor*, LiveActor*, const TableIter&, bool, Pos3f*);
 
     void posToStart();
     void posToEnd();

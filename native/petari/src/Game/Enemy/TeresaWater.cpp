@@ -25,7 +25,7 @@ TeresaWater::TeresaWater(const char* pName) : LiveActor(pName), _8C(), _90() {
     _B8 = nullptr;
 }
 
-void TeresaWater::init(const JMapInfoIter& rIter) {
+void TeresaWater::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("TeresaWater", nullptr, false);
     MR::connectToSceneEnemy(this);
@@ -46,7 +46,7 @@ void TeresaWater::init(const JMapInfoIter& rIter) {
     MR::declareCoin(this, 1);
     MR::calcFrontVec(&_94, this);
     f32 arg0 = ::sDefaultMoveLength;
-    MR::getJMapInfoArg0NoInit(rIter, &arg0);
+    MR::getPlacementArg0NoInit(rIter, &arg0);
     _AC.set(mPosition);
     _A0.scaleAdd(arg0, _94, _AC);
     _B8 = &_A0;

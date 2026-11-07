@@ -1,7 +1,7 @@
 #include "Game/Map/SeaGull.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -15,12 +15,12 @@ namespace NrvSeaGull {
 };  // namespace NrvSeaGull
 
 SeaGull::SeaGull(SeaGullGroup* pGroup)
-    : LiveActor("\203\112\203\202\203\201" /* カモメ */), mSeaGullGroup(pGroup), mPointIndex(), mIsReverse(), mTargetUpdateTimer(MR::getRandom(0, 180)), mTargetPosition(),
+    : LiveActor("カモメ"), mSeaGullGroup(pGroup), mPointIndex(), mIsReverse(), mTargetUpdateTimer(MR::getRandom(0, 180)), mTargetPosition(),
       mUp(0.0f, 1.0f, 0.0f), mFront(0.0f, 0.0f, 1.0f), mBankedUp(0.0f, 1.0f, 0.0f), mSide(1.0f, 0.0f, 0.0f), mHoverTimer(), mBankAngle(),
       mGlideTimer(), mLiftTimer(), mChirpTimer() {
 }
 
-void SeaGull::init(const JMapInfoIter& rIter) {
+void SeaGull::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::calcActorAxis(&mSide, &mBankedUp, &mFront, this);
     MR::calcActorAxisY(&mUp, this);
@@ -218,9 +218,9 @@ void SeaGull::calcAndSetBaseMtx() {
 SeaGullGroup::SeaGullGroup(const char* pName) : LiveActor(pName), mPointCount(), mPoints() {
 }
 
-void SeaGullGroup::init(const JMapInfoIter& rIter) {
+void SeaGullGroup::init(const TableIter& rIter) {
     s32 birdCount = 10;
-    MR::getJMapInfoArg0NoInit(rIter, &birdCount);
+    MR::getPlacementArg0NoInit(rIter, &birdCount);
     initRailRider(rIter);
     mPosition.set(MR::getRailPos(this));
     mPointCount = static_cast< s32 >(MR::getRailTotalLength(this) / 500.0f) + 1;

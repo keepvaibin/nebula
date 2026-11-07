@@ -8,7 +8,7 @@
 #include "Game/Util/ActorCameraUtil.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
@@ -64,17 +64,17 @@ void TripodBossGuardWall::kill() {
     LiveActor::kill();
 }
 
-void TripodBossGuardWall::init(const JMapInfoIter& rIter) {
+void TripodBossGuardWall::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::connectToSceneMapObjDecorationMovement(this);
     mStartTrans = mPosition;
     initModelManagerWithAnm("TripodBossGuardWall", nullptr, false);
-    MR::getJMapInfoArg0NoInit(rIter, &mJointID);
+    MR::getPlacementArg0NoInit(rIter, &mJointID);
     initSound(4, false);
     initNerve(GET_NERVE(TriPodBossGuardWall, TripodBossGuardWallNrvWait));
     mCameraInfo = MR::createActorCameraInfo(rIter);
     MR::initAnimCamera(this, mCameraInfo, "2ndDemo");
-    mCameraTargetMtx = new CameraTargetMtx("\203\112\203\201\203\211\203\136\201\133\203\121\203\142\203\147\203\137\203\176\201\133" /* カメラターゲットダミー */);
+    mCameraTargetMtx = new CameraTargetMtx("カメラターゲットダミー");
 
     if (MR::useStageSwitchReadAppear(this, rIter)) {
         MR::listenStageSwitchOnAppear(this, MR::Functor(this, &TripodBossGuardWall::requestStart));

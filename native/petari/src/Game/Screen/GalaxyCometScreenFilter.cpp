@@ -4,7 +4,7 @@
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 
-GalaxyCometScreenFilter::GalaxyCometScreenFilter() : LayoutActor("\203\122\203\201\203\142\203\147\227\160\211\346\226\312\223\150\202\350\222\327\202\265" /* コメット用画面塗り潰し */, true), _20(true) {
+GalaxyCometScreenFilter::GalaxyCometScreenFilter() : LayoutActor("コメット用画面塗り潰し", true), _20(true) {
     MR::connectToScene(this, MR::MovementType_Layout, MR::CalcAnimType_Layout, MR::DrawBufferType_None, MR::DrawType_CometScreenFilter);
     initLayoutManager("CometScreenFilter", 1);
     appear();

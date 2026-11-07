@@ -13,7 +13,7 @@ namespace {
     public:
         AstroDomeCheckerBase(int param1);
 
-        void operator()(const JMapInfoIter& rIter);
+        void operator()(const TableIter& rIter);
 
         virtual void execute(const char* pGalaxyName) {
         }
@@ -115,21 +115,21 @@ s32 GalaxyMapDomeIcon::calcDomeStatus() const {
 }
 
 bool GalaxyMapDomeIcon::isComplete() const {
-    JMapInfo mapInfo = JMapInfo();
+    Table mapInfo = Table();
 
     mapInfo.attach(NebulaDataTables::getGalaxyInfoTable());
 
     CheckerIsComplete checker = CheckerIsComplete(_20);
 
-    JMapInfoIter begin = mapInfo.begin();
-    for (JMapInfoIter current = begin; current != mapInfo.end(); current.mIndex++) {
+    TableIter begin = mapInfo.begin();
+    for (TableIter current = begin; current != mapInfo.end(); current.mIndex++) {
         checker(current);
     }
 
     return checker.mIsPass;
 }
 
-void GalaxyMapDomeIcon::init(const JMapInfoIter& rIter) {
+void GalaxyMapDomeIcon::init(const TableIter& rIter) {
     initLayoutManager("MapDomeIcon", 3);
 
     mNamePlate = new GalaxyNamePlate(nullptr, false);
@@ -175,14 +175,14 @@ void GalaxyMapDomeIcon::syncStatus() {
 }
 
 bool GalaxyMapDomeIcon::hasNewGalaxy() const {
-    JMapInfo mapInfo = JMapInfo();
+    Table mapInfo = Table();
 
     mapInfo.attach(NebulaDataTables::getGalaxyInfoTable());
 
     CheckerIsExistNewGalaxy checker = CheckerIsExistNewGalaxy(_20);
 
-    JMapInfoIter begin = mapInfo.begin();
-    for (JMapInfoIter current = begin; current != mapInfo.end(); current.mIndex++) {
+    TableIter begin = mapInfo.begin();
+    for (TableIter current = begin; current != mapInfo.end(); current.mIndex++) {
         checker(current);
     }
 
@@ -196,7 +196,7 @@ namespace {
 };  // namespace
 
 namespace {
-    void AstroDomeCheckerBase::operator()(const JMapInfoIter& rIter) {
+    void AstroDomeCheckerBase::operator()(const TableIter& rIter) {
         const char* pMapPaneName = nullptr;
         const char* pName = nullptr;
 

@@ -4,7 +4,7 @@
 
 class CameraTalk : public Camera {
 public:
-    CameraTalk(const char* pName = "\211\357\230\142\203\112\203\201\203\211" /* 会話カメラ */);
+    CameraTalk(const char* pName = "会話カメラ");
 
     virtual void reset();
     virtual CameraTargetObj* calc();

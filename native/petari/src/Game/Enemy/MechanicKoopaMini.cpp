@@ -11,8 +11,8 @@
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapInfo.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/Table.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -76,7 +76,7 @@ void MechanicKoopaMini::onAppearSwitchOn() {
     }
 }
 
-void MechanicKoopaMini::init(const JMapInfoIter& rIter) {
+void MechanicKoopaMini::init(const TableIter& rIter) {
     if (MR::isValidInfo(rIter)) {
         MR::isConnectedWithRail(rIter);
     }
@@ -90,7 +90,7 @@ void MechanicKoopaMini::init(const JMapInfoIter& rIter) {
     }
 
     s32 arg = -1;
-    MR::getJMapInfoArg0NoInit(rIter, &arg);
+    MR::getPlacementArg0NoInit(rIter, &arg);
     if (arg == -1) {
         mIsAppearJumping = false;
     } else {
@@ -98,7 +98,7 @@ void MechanicKoopaMini::init(const JMapInfoIter& rIter) {
     }
 
     arg = -1;
-    MR::getJMapInfoArg1NoInit(rIter, &arg);
+    MR::getPlacementArg1NoInit(rIter, &arg);
     if (arg == -1) {
         mIsForbidPause = false;
     } else {

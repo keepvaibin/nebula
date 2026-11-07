@@ -13,10 +13,10 @@ namespace NrvStarCounter {
     NEW_NERVE(StarCounterNrvDisappear, StarCounter, Disappear);
 };  // namespace NrvStarCounter
 
-StarCounter::StarCounter() : LayoutActor("\203\130\203\136\201\133\203\112\203\105\203\223\203\136" /* スターカウンタ */, true), mPowerStarNum(0), mLayoutAppearer(nullptr), mPaneRumbler(nullptr) {
+StarCounter::StarCounter() : LayoutActor("スターカウンタ", true), mPowerStarNum(0), mLayoutAppearer(nullptr), mPaneRumbler(nullptr) {
 }
 
-void StarCounter::init(const JMapInfoIter& rIter) {
+void StarCounter::init(const TableIter& rIter) {
     initLayoutManager("StarCounter", 2);
     MR::createAndAddPaneCtrl(this, "Counter", 1);
 

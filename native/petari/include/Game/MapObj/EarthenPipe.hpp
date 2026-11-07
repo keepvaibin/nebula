@@ -10,7 +10,7 @@ class EarthenPipe : public LiveActor {
 public:
     EarthenPipe(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void calcAnim() {};
     virtual void makeActorAppeared();
     virtual MtxPtr getBaseMtx() const {
@@ -81,7 +81,7 @@ public:
         s32 mPipeID;
     };
 
-    void entry(EarthenPipe*, const JMapInfoIter&);
+    void entry(EarthenPipe*, const TableIter&);
 
     s32 mNumEntries;
     Entry* mPipeEntries;

@@ -5,7 +5,7 @@
 
 DemoTimeKeeper::DemoTimeKeeper(const DemoExecutor* pExecutor)
     : mExecutor(pExecutor), mMainPartInfos(), mSubPartInfos(), mNumPartInfos(), _10(-1), mCurrentStep(-1), _18(-1), mIsPaused() {
-    JMapInfo* pMap = nullptr;
+    Table* pMap = nullptr;
     mNumPartInfos = DemoFunction::createSheetParser(mExecutor, "Time", &pMap);
     mMainPartInfos = new DemoTimePartInfo[mNumPartInfos];
 

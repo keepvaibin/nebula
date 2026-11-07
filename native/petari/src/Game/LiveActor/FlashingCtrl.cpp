@@ -4,7 +4,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 
-FlashingCtrl::FlashingCtrl(LiveActor* pActor, bool toggleDraw) : NameObj("\223\137\226\305" /* 点滅 */) {
+FlashingCtrl::FlashingCtrl(LiveActor* pActor, bool toggleDraw) : NameObj("点滅") {
     mActor = pActor;
     mToggleDraw = toggleDraw;
     mIsEnded = true;

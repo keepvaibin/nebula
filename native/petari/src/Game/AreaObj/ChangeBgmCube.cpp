@@ -14,7 +14,7 @@
 ChangeBgmCube::ChangeBgmCube(int formType, const char* pName) : AreaObj(formType, pName), _3C() {
 }
 
-void ChangeBgmCube::init(const JMapInfoIter& rIter) {
+void ChangeBgmCube::init(const TableIter& rIter) {
     AreaObj::init(rIter);
     MR::connectToSceneAreaObj(this);
 }

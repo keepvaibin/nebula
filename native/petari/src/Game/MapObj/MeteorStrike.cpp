@@ -7,7 +7,7 @@
 #include "Game/Util/ActorShadowUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/GravityUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -51,7 +51,7 @@ inline void MeteorStrike::initRailDirection() {
     MR::normalize(&mRailDir);
 }
 
-void MeteorStrike::init(const JMapInfoIter& rIter) {
+void MeteorStrike::init(const TableIter& rIter) {
     initMapToolInfo(rIter);
     initModel();
 
@@ -168,9 +168,9 @@ bool MeteorStrike::getMovedPos(Vec3f* pDst, s32 step) const {
     return true;
 }
 
-f32 MeteorStrike::getSpeed(const JMapInfoIter& rIter) {
+f32 MeteorStrike::getSpeed(const TableIter& rIter) {
     f32 arg0 = 10.0f;
-    MR::getJMapInfoArg0NoInit(rIter, &arg0);
+    MR::getPlacementArg0NoInit(rIter, &arg0);
     return arg0;
 }
 
@@ -219,7 +219,7 @@ bool MeteorStrike::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor
     return MR::isMsgStarPieceReflect(msg);
 }
 
-void MeteorStrike::initMapToolInfo(const JMapInfoIter& rIter) {
+void MeteorStrike::initMapToolInfo(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
 
     mStepSize = getSpeed(rIter);
@@ -239,9 +239,9 @@ void MeteorStrike::initModel() {
     }
 
     if (mType == MeteorStrikeType_Cannon) {
-        mBrokenModel = MR::createModelObjMapObjStrongLight("\203\201\203\145\203\111\203\114\203\203\203\155\203\223\211\363\202\352\203\202\203\146\203\213" /* メテオキャノン壊れモデル */, "MeteorCannonBreak", nullptr);
+        mBrokenModel = MR::createModelObjMapObjStrongLight("メテオキャノン壊れモデル", "MeteorCannonBreak", nullptr);
     } else {
-        mBrokenModel = MR::createModelObjMapObjStrongLight("\203\201\203\145\203\111\203\130\203\147\203\211\203\103\203\116\211\363\202\352\203\202\203\146\203\213" /* メテオストライク壊れモデル */, "MeteorStrikeBreak", nullptr);
+        mBrokenModel = MR::createModelObjMapObjStrongLight("メテオストライク壊れモデル", "MeteorStrikeBreak", nullptr);
     }
 
     mBrokenModel->mPosition.set(mPosition);
@@ -282,7 +282,7 @@ void MeteorStrike::emitEffectColumn(const Pos3f& rPos) {
 void MeteorStrike::startRumble() {
     f32 strongDistMax = mType == MeteorStrikeType_Cannon ? ::cRumbleDistanceCannonL : ::cRumbleDistance;
     f32 mediumDistMax = mType == MeteorStrikeType_Cannon ? FLOAT_MAX : ::cRumbleDistance * 2;
-    MR::startRumbleWithShakeCameraWeak(this, "\213\255" /* 強 */, "\222\206" /* 中 */, strongDistMax, mediumDistMax);
+    MR::startRumbleWithShakeCameraWeak(this, "強", "中", strongDistMax, mediumDistMax);
 }
 
 bool MeteorStrike::isInScreen() const {

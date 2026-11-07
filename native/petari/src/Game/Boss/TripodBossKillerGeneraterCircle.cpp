@@ -1,6 +1,6 @@
 #include "Game/Boss/TripodBossKillerGeneraterCircle.hpp"
 #include "Game/Boss/TripodBossKillerGenerater.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
@@ -45,14 +45,14 @@ TripodBossKillerGeneraterCircle::TripodBossKillerGeneraterCircle(const char* pNa
     : NameObj(pName), mGenerater(), mPosition(0.0f, 0.0f, 0.0f), mAngleTable(), mAngleNum(), _30(), _34(), _38(), _3C(), _40() {
 }
 
-void TripodBossKillerGeneraterCircle::init(const JMapInfoIter& rIter) {
+void TripodBossKillerGeneraterCircle::init(const TableIter& rIter) {
     const char* objName;
     MR::getObjectName(&objName, rIter);
 
     const SetUpData* dataPtr = ::getSetUpData(objName);
 
-    MR::getJMapInfoTrans(rIter, &mPosition);
-    MR::getJMapInfoRotate(rIter, &mRotation);
+    MR::getPlacementTrans(rIter, &mPosition);
+    MR::getPlacementRotate(rIter, &mRotation);
 
     mAngleTable = dataPtr->mAngleTable;
     mAngleNum = dataPtr->mAngleNum;

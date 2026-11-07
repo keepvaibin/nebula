@@ -7,7 +7,7 @@ public:
     BloomArea(int, const char*);
 
     virtual ~BloomArea();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
 
     virtual const char* getManagerName() const {
         return "ImageEffectArea";

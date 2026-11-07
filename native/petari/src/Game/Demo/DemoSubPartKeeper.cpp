@@ -4,7 +4,7 @@
 #include <cstring>
 
 DemoSubPartKeeper::DemoSubPartKeeper(const DemoExecutor* pExecutor) : mExecutor(pExecutor), mNumSubPartInfos(), mSubPartInfos() {
-    JMapInfo* map = nullptr;
+    Table* map = nullptr;
     mNumSubPartInfos = DemoFunction::createSheetParser(mExecutor, "SubPart", &map);
     mSubPartInfos = new DemoSubPartInfo[mNumSubPartInfos];
     for (int i = 0; i < mNumSubPartInfos; i++) {

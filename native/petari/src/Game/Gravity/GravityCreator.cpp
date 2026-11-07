@@ -4,29 +4,29 @@
 GravityCreator::GravityCreator() {
 }
 
-PlanetGravity* GravityCreator::createFromJMap(const JMapInfoIter& rIter) {
+PlanetGravity* GravityCreator::createFromPlacement(const TableIter& rIter) {
     PlanetGravity* instance = createInstance();
 
     if (instance) {
         Vec3f trans(0, 0, 0);
         Vec3f rotate(0, 0, 0);
         Vec3f scale(1, 1, 1);
-        MR::getJMapInfoTrans(rIter, &trans);
-        MR::getJMapInfoRotate(rIter, &rotate);
-        MR::getJMapInfoScale(rIter, &scale);
+        MR::getPlacementTrans(rIter, &trans);
+        MR::getPlacementRotate(rIter, &rotate);
+        MR::getPlacementScale(rIter, &scale);
         settingFromSRT(trans, rotate, scale);
 
         s32 arg0;
         s32 arg1;
         s32 arg2;
-        MR::getJMapInfoArg0WithInit(rIter, &arg0);
-        MR::getJMapInfoArg1WithInit(rIter, &arg1);
-        MR::getJMapInfoArg2WithInit(rIter, &arg2);
-        settingFromJMapArgs(arg0, arg1, arg2);
+        MR::getPlacementArg0WithInit(rIter, &arg0);
+        MR::getPlacementArg1WithInit(rIter, &arg1);
+        MR::getPlacementArg2WithInit(rIter, &arg2);
+        settingFromPlacementArgs(arg0, arg1, arg2);
 
-        settingFromJMapOtherParam(rIter);
+        settingFromPlacementOtherParam(rIter);
 
-        MR::settingGravityParamFromJMap(instance, rIter);
+        MR::settingGravityParamFromPlacement(instance, rIter);
         getGravity()->updateIdentityMtx();
         MR::registerGravity(instance);
     }
@@ -58,7 +58,7 @@ void CubeGravityCreator::settingFromSRT(const Vec3f& rTrans, const Vec3f& rRotat
     mGravityInstance->setCube(mtx);
 }
 
-void CubeGravityCreator::settingFromJMapArgs(s32 arg0, s32 arg1, s32 arg2) {
+void CubeGravityCreator::settingFromPlacementArgs(s32 arg0, s32 arg1, s32 arg2) {
     u8 activeFaces = 0;
 
     if (arg0 & 1) {
@@ -109,7 +109,7 @@ void DiskGravityCreator::settingFromSRT(const Vec3f& rTrans, const Vec3f& rRotat
     mGravityInstance->setRadius(500.0f * MR::getMaxElement(rScale));
 }
 
-void DiskGravityCreator::settingFromJMapArgs(s32 arg0, s32 arg1, s32 arg2) {
+void DiskGravityCreator::settingFromPlacementArgs(s32 arg0, s32 arg1, s32 arg2) {
     // Obj_arg0 = enable both sides?
     mGravityInstance->setBothSide(arg0 != 0);
 
@@ -148,7 +148,7 @@ void DiskTorusGravityCreator::settingFromSRT(const Vec3f& rTrans, const Vec3f& r
     mGravityInstance->setRadius(500.0f * MR::getMaxElement(rScale));
 }
 
-void DiskTorusGravityCreator::settingFromJMapArgs(s32 arg0, s32 arg1, s32 arg2) {
+void DiskTorusGravityCreator::settingFromPlacementArgs(s32 arg0, s32 arg1, s32 arg2) {
     // Obj_arg0 = enable both sides?
     mGravityInstance->setBothSide(arg0 != 0);
 
@@ -188,7 +188,7 @@ void ConeGravityCreator::settingFromSRT(const Vec3f& rTrans, const Vec3f& rRotat
     mGravityInstance->setLocalMatrix(localMtx);
 }
 
-void ConeGravityCreator::settingFromJMapArgs(s32 arg0, s32 arg1, s32 arg2) {
+void ConeGravityCreator::settingFromPlacementArgs(s32 arg0, s32 arg1, s32 arg2) {
     // Obj_arg0 = is enable bottom?
     mGravityInstance->setEnableBottom(arg0 != 0);
 
@@ -249,7 +249,7 @@ PlanetGravity* PlaneInBoxGravityCreator::getGravity() {
     return mGravityInstance;
 }
 
-void PlaneInBoxGravityCreator::settingFromJMapArgs(s32 arg0, s32 arg1, s32 arg2) {
+void PlaneInBoxGravityCreator::settingFromPlacementArgs(s32 arg0, s32 arg1, s32 arg2) {
     // Obj_arg0 = base distance
     mGravityInstance->setBaseDistance(arg0);
 
@@ -294,7 +294,7 @@ void PlaneInCylinderGravityCreator::settingFromSRT(const Vec3f& rTrans, const Ve
     mGravityInstance->setRangeCylinder(500.0f * rScale.x, 500.0f * rScale.y);
 }
 
-void PlaneInCylinderGravityCreator::settingFromJMapArgs(s32 arg0, s32 arg1, s32 arg2) {
+void PlaneInCylinderGravityCreator::settingFromPlacementArgs(s32 arg0, s32 arg1, s32 arg2) {
     // Obj_arg0 = base distance
     mGravityInstance->setBaseDistance(arg0);
 }
@@ -334,7 +334,7 @@ void SegmentGravityCreator::settingFromSRT(const Vec3f& rTrans, const Vec3f& rRo
     mGravityInstance->setSideVector(sideVec);
 }
 
-void SegmentGravityCreator::settingFromJMapArgs(s32 arg0, s32 arg1, s32 arg2) {
+void SegmentGravityCreator::settingFromPlacementArgs(s32 arg0, s32 arg1, s32 arg2) {
     // Obj_arg0 = valid edge
     switch (arg0) {
     case 0:
@@ -372,11 +372,11 @@ PlanetGravity* WireGravityCreator::createInstance() {
     return mGravityInstance;
 }
 
-void WireGravityCreator::settingFromJMapOtherParam(const JMapInfoIter& rIter) {
-    // Get data from JMap
+void WireGravityCreator::settingFromPlacementOtherParam(const TableIter& rIter) {
+    // Get data from Placement
     mRailRider = new RailRider(rIter);
     s32 numPointsInBetween = 20;
-    MR::getJMapInfoArg0NoInit(rIter, &numPointsInBetween);
+    MR::getPlacementArg0NoInit(rIter, &numPointsInBetween);
 
     // Determine number of points, the interval and allocate the necessary space
     u32 numPoints = numPointsInBetween + 2;

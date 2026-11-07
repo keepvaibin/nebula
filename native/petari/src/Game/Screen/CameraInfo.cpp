@@ -20,7 +20,7 @@ namespace NrvCameraInfo {
 CameraInfo::CameraInfo(const char* pName) : LayoutActor(pName, true), mStep(-1), mIsActive(true) {
 }
 
-void CameraInfo::init(const JMapInfoIter& rIter) {
+void CameraInfo::init(const TableIter& rIter) {
     initLayoutManager("CameraInfo", 2);
     MR::createAndAddPaneCtrl(this, "Forbid", 1);
     MR::hidePane(this, "Forbid");

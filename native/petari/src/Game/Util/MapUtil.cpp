@@ -619,11 +619,11 @@ namespace MR {
         return getCollisionDirector()->mCode->getSoundCodeString(*pTriangle);
     }
 
-    s32 getFloorCodeIndex(const JMapInfoIter& rIter) {
+    s32 getFloorCodeIndex(const TableIter& rIter) {
         return getCollisionDirector()->mCode->getFloorCode(rIter);
     }
 
-    s32 getSoundCodeIndex(const JMapInfoIter& rIter) {
+    s32 getSoundCodeIndex(const TableIter& rIter) {
         return getCollisionDirector()->mCode->getSoundCode(rIter);
     }
 
@@ -643,7 +643,7 @@ namespace MR {
         return getCollisionDirector()->mCode->getCameraCode(pTriangle->getAttributes());
     }
 
-    bool isGroundCodeWaterIter(const JMapInfoIter& rIter) {
+    bool isGroundCodeWaterIter(const TableIter& rIter) {
         s32 code = getFloorCodeIndex(rIter);
 
         return code == CollisionFloorCode_WaterBottomH || code == CollisionFloorCode_WaterBottomM || code == CollisionFloorCode_WaterBottomL ||

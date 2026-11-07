@@ -4,7 +4,7 @@
 DepthOfFieldArea::DepthOfFieldArea(int formType, const char* pName) : ImageEffectArea(IMAGE_EFFECT_TYPE_DOF, formType, pName), mIsPlayerSync() {
 }
 
-void DepthOfFieldArea::init(const JMapInfoIter& rIter) {
+void DepthOfFieldArea::init(const TableIter& rIter) {
     AreaObj::init(rIter);
 
     mIsPlayerSync = mObjArg0 > 0;

@@ -13,8 +13,8 @@
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/FixedPosition.hpp"
 #include "Game/Util/PlayerInputUtil.hpp"
-#include "Game/Util/JMapInfo.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/Table.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
@@ -123,12 +123,12 @@ s32 StringSpider::getSearchToAttackTime() {
     return 60;
 }
 
-void StringSpider::init(const JMapInfoIter& rIter) {
+void StringSpider::init(const TableIter& rIter) {
     if (MR::isValidInfo(rIter)) {
         MR::initDefaultPos(this, rIter);
 
         s32 arg = -1;
-        MR::getJMapInfoArg0NoInit(rIter, &arg);
+        MR::getPlacementArg0NoInit(rIter, &arg);
         if (arg != -1) {
             f32 fArg = arg;
             _B4 = fArg * 0.333f;
@@ -136,7 +136,7 @@ void StringSpider::init(const JMapInfoIter& rIter) {
         }
 
         arg = -1;
-        MR::getJMapInfoArg1NoInit(rIter, &arg);
+        MR::getPlacementArg1NoInit(rIter, &arg);
         if (arg == 2) {
             _C0 = new Vec3f();
             _C4 = new Vec3f();
@@ -176,7 +176,7 @@ void StringSpider::init(const JMapInfoIter& rIter) {
     MR::onCalcGravity(this);
 
     s32 arg2 = -1;
-    MR::getJMapInfoArg2NoInit(rIter, &arg2);
+    MR::getPlacementArg2NoInit(rIter, &arg2);
     if (arg2 > 0) {
         MR::initShadowVolumeCylinder(this, mScale.y * 80.0f);
         MR::setShadowDropLength(this, nullptr, arg2);
@@ -186,7 +186,7 @@ void StringSpider::init(const JMapInfoIter& rIter) {
 
     mFixedPos = new FixedPosition((MtxPtr) nullptr, Vec3f(0.0f, 0.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
     MR::setGroupClipping(this, rIter, 16);
-    mString = new StringSpiderString("\203\130\203\147\203\212\203\223\203\117\203\130\203\160\203\103\203\137\201\133\202\314\216\205" /* ストリングスパイダーの糸 */);
+    mString = new StringSpiderString("ストリングスパイダーの糸");
     MR::resetPosition(mString, mPosition);
     mString->makeActorAppeared();
     makeActorAppeared();
@@ -290,7 +290,7 @@ void StringSpider::reactDPD() {
         _BC--;
     }
 
-    if (MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false)) {
+    if (MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
         if (!_B8 && _BC == 0) {
             Vec2f screenVel = *MR::getStarPointerScreenVelocity(1);
             if (screenVel.length() < 20.0f) {

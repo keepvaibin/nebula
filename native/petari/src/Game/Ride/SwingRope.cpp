@@ -97,7 +97,7 @@ SwingRope::SwingRope(const char* pName)
     mRideMtx.identity();
 }
 
-void SwingRope::init(const JMapInfoIter& rIter) {
+void SwingRope::init(const TableIter& rIter) {
     MR::createSceneObj(SceneObj_SwingRopeGroup);
     MR::connectToScene(this, MR::MovementType_Ride, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_SwingRope);
     MR::initDefaultPos(this, rIter);

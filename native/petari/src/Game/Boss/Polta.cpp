@@ -18,7 +18,7 @@
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/BaseMatrixFollowTargetHolder.hpp"
 #include "Game/Util/CameraUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -34,11 +34,11 @@ namespace {
     static const f32 sTurnMaxSpeed = 1.1f;
 };  // namespace
 
-BombTeresaHolder::BombTeresaHolder() : DeriveActorGroup< BombTeresa >("\203\173\203\200\203\145\203\214\203\124\212\307\227\235" /* ボムテレサ管理 */, ::sBombTeresaBufferSize) {
+BombTeresaHolder::BombTeresaHolder() : DeriveActorGroup< BombTeresa >("ボムテレサ管理", ::sBombTeresaBufferSize) {
     BombTeresa* bombTeresa;
 
     for (int i = 0; i < ::sBombTeresaBufferSize; i++) {
-        bombTeresa = new BombTeresa("\203\174\203\213\203\136\227\160\203\173\203\200\203\145\203\214\203\124" /* ポルタ用ボムテレサ */);
+        bombTeresa = new BombTeresa("ポルタ用ボムテレサ");
         bombTeresa->initWithoutIter();
         bombTeresa->makeActorDead();
         bombTeresa->_EF = true;
@@ -46,7 +46,7 @@ BombTeresaHolder::BombTeresaHolder() : DeriveActorGroup< BombTeresa >("\203\173\
     }
 }
 
-void Polta::init(const JMapInfoIter& rIter) {
+void Polta::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("Polta", nullptr, false);
     MR::connectToSceneCollisionEnemy(this);
@@ -81,28 +81,28 @@ void Polta::init(const JMapInfoIter& rIter) {
 
 void Polta::initArm() {
     calcAnim();
-    mLeftArm = new PoltaArm("\215\266\230\162" /* 左腕 */, "PoltaLeftArm", getBaseMtx());
-    mRightArm = new PoltaArm("\211\105\230\162" /* 右腕 */, "PoltaRightArm", getBaseMtx());
+    mLeftArm = new PoltaArm("左腕", "PoltaLeftArm", getBaseMtx());
+    mRightArm = new PoltaArm("右腕", "PoltaRightArm", getBaseMtx());
     mLeftArm->initWithoutIter();
     mRightArm->initWithoutIter();
 }
 
 void Polta::initPartsModel() {
-    mBreakModel = MR::createModelObjEnemy("\211\363\202\352\203\202\203\146\203\213" /* 壊れモデル */, "PoltaBodyBreak", getBaseMtx());
+    mBreakModel = MR::createModelObjEnemy("壊れモデル", "PoltaBodyBreak", getBaseMtx());
     mBreakModel->initWithoutIter();
     MR::initLightCtrl(mBreakModel);
     MR::invalidateClipping(mBreakModel);
     mBreakModel->makeActorDead();
-    mFormationModel = MR::createModelObjEnemy("\215\207\221\314\211\211\217\157\212\342\203\202\203\146\203\213" /* 合体演出岩モデル */, "PoltaFormationRock", getBaseMtx());
+    mFormationModel = MR::createModelObjEnemy("合体演出岩モデル", "PoltaFormationRock", getBaseMtx());
     mFormationModel->initWithoutIter();
     MR::initLightCtrl(mFormationModel);
     MR::invalidateClipping(mFormationModel);
     mFormationModel->makeActorDead();
 }
 
-void Polta::initCamera(const JMapInfoIter& rIter) {
+void Polta::initCamera(const TableIter& rIter) {
     s32 cameraRegisterIndex = -1;
-    MR::getJMapInfoArg7WithInit(rIter, &cameraRegisterIndex);
+    MR::getPlacementArg7WithInit(rIter, &cameraRegisterIndex);
 
     if (cameraRegisterIndex != -1) {
         MR::declareCameraRegisterVec(this, cameraRegisterIndex, &mPosition);

@@ -15,7 +15,7 @@ PicketSwitch::PicketSwitch(const char* pName) : LiveActor(pName) {
 PicketSwitch::~PicketSwitch() {
 }
 
-void PicketSwitch::init(const JMapInfoIter& rIter) {
+void PicketSwitch::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::needStageSwitchWriteA(this, rIter);
     const char* pName;

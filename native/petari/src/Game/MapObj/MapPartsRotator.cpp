@@ -15,7 +15,7 @@ namespace NrvMapPartsRotator {
     NEW_NERVE(HostTypeStopAtEnd, MapPartsRotator, StopAtEnd);
 };  // namespace NrvMapPartsRotator
 
-MapPartsRotator::MapPartsRotator(LiveActor* pActor) : MapPartsRotatorBase(pActor, "\216\251\220\147\211\361\223\135" /* 自身回転 */) {
+MapPartsRotator::MapPartsRotator(LiveActor* pActor) : MapPartsRotatorBase(pActor, "自身回転") {
     _18 = 0.0f;
     mRotateAngle = 0.0f;
     mRotateStopTime = 0;
@@ -34,7 +34,7 @@ MapPartsRotator::MapPartsRotator(LiveActor* pActor) : MapPartsRotatorBase(pActor
     mRotateMtx.set(mBaseHostMtx);
 }
 
-void MapPartsRotator::init(const JMapInfoIter& rIter) {
+void MapPartsRotator::init(const TableIter& rIter) {
     MR::getMapPartsArgRotateAngle(&mRotateAngle, rIter);
     MR::getMapPartsArgRotateAxis(&mRotateAxis, rIter);
     MR::getMapPartsArgRotateAccelType(&mRotateAccelType, rIter);
@@ -168,7 +168,7 @@ void MapPartsRotator::restartAtEnd() {
     }
 }
 
-void MapPartsRotator::initRotateSpeed(const JMapInfoIter& rIter) {
+void MapPartsRotator::initRotateSpeed(const TableIter& rIter) {
     if (mRotateAccelType == 2) {
         s32 rotate_time = 0;
         MR::getMapPartsArgRotateTime(&rotate_time, rIter);

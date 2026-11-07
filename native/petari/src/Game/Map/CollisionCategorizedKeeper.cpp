@@ -7,7 +7,7 @@
 #include "Game/Util/SceneUtil.hpp"
 
 CollisionCategorizedKeeper::CollisionCategorizedKeeper(s32 category)
-    : NameObj("\222\156\214\140\203\122\203\212\203\127\203\207\203\223\203\112\203\145\203\123\203\212\203\114\201\133\203\160\201\133" /* 地形コリジョンカテゴリキーパー */), mHitInfoArray(), _10(), mPartsCount(), mCategory(category), mZonesInitialized(),
+    : NameObj("地形コリジョンカテゴリキーパー"), mHitInfoArray(), _10(), mPartsCount(), mCategory(category), mZonesInitialized(),
       mUpdateZoneBounds(true) {
     mHitInfoRoom = 32;
     mHitInfoArray = new HitInfo[mHitInfoRoom];

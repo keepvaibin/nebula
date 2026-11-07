@@ -71,10 +71,10 @@ TrickRabbit::TrickRabbit(const char* pName)
     mParabolicPath = new ParabolicPath();
 }
 
-void TrickRabbit::init(const JMapInfoIter& rIter) {
+void TrickRabbit::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
 
-    if (MR::isEqualString(mName, "\202\242\202\275\202\270\202\347\227\110\227\354\203\105\203\124\203\115" /* いたずら幽霊ウサギ */)) {
+    if (MR::isEqualString(mName, "いたずら幽霊ウサギ")) {
         _E1 = true;
     } else {
         _E1 = false;
@@ -141,12 +141,12 @@ void TrickRabbit::initBind() {
     MR::onCalcGravity(this);
 }
 
-void TrickRabbit::initRoute(const JMapInfoIter& rIter) {
-    mRailGraph = MR::createRailGraphFromJMap(rIter);
+void TrickRabbit::initRoute(const TableIter& rIter) {
+    mRailGraph = MR::createRailGraphFromPlacement(rIter);
     mRailGraphIter = MR::createRailGraphIter(mRailGraph);
 }
 
-void TrickRabbit::initDemoCamera(const JMapInfoIter& rIter) {
+void TrickRabbit::initDemoCamera(const TableIter& rIter) {
     ActorCameraInfo stack_8 = ActorCameraInfo(rIter);
 
     if (stack_8.mCameraSetID == -1) {
@@ -274,7 +274,7 @@ bool TrickRabbit::requestCaught() {
 }
 
 bool TrickRabbit::tryStartDemoRunnaway() {
-    if (MR::tryStartDemoMarioPuppetable(this, "\223\246\221\226" /* 逃走 */)) {
+    if (MR::tryStartDemoMarioPuppetable(this, "逃走")) {
         MR::startEventBGM(MR::EventBgmID_Chase);
         if (mMultiEventCamera != nullptr) {
             mMultiEventCamera->start(CameraTargetArg(this), 0);
@@ -298,7 +298,7 @@ bool TrickRabbit::tryStartDemoRunnaway() {
 }
 
 void TrickRabbit::endDemoRunnaway() {
-    MR::endDemo(this, "\223\246\221\226" /* 逃走 */);
+    MR::endDemo(this, "逃走");
     if (mMultiEventCamera != nullptr) {
         mMultiEventCamera->endForce();
     }
@@ -540,7 +540,7 @@ void TrickRabbit::exeDemoJumpStart() {
 
 void TrickRabbit::exeDemoJump() {
     if (MR::isFirstStep(this)) {
-        setUpJumpParamFromJMap();
+        setUpJumpParamFromPlacement();
     }
 
     Vec3f stack_14(mPosition);
@@ -635,7 +635,7 @@ void TrickRabbit::exeJumpStart() {
 
 void TrickRabbit::exeJump() {
     if (MR::isFirstStep(this)) {
-        setUpJumpParamFromJMap();
+        setUpJumpParamFromPlacement();
     }
 
     Vec3f stack_14(mPosition);
@@ -760,7 +760,7 @@ void TrickRabbit::exeCaught() {
 void TrickRabbit::exeWaitPowerStarDemo() {
     Vec3f stack_20;
     if (MR::isFirstStep(this)) {
-        MR::endDemo(this, "\225\337\202\334\202\350" /* 捕まり */);
+        MR::endDemo(this, "捕まり");
         MR::startAfterBossBGM();
         Vec3f stack_14(mPosition - (mGravity * 200.0f));
         MR::requestAppearPowerStar(this, stack_14);
@@ -1087,7 +1087,7 @@ void TrickRabbit::setUpJumpParam() {
     _CC = calcDefaultJumpTime();
 }
 
-void TrickRabbit::setUpJumpParamFromJMap() {
+void TrickRabbit::setUpJumpParamFromPlacement() {
     f32 f = calcJumpHeight();
     Vec3f stack_8(-mGravity);
     mParabolicPath->initFromUpVectorAddHeight(mPosition, *MR::getNextNodePosition(mRailGraphIter), stack_8, f);

@@ -10,7 +10,7 @@ namespace {
     NEW_NERVE(GameScenePauseControlNormal, GameScenePauseControl, Normal);
 };  // namespace
 
-GameScenePauseControl::GameScenePauseControl(GameScene* pScene) : NerveExecutor("GameScene\203\174\201\133\203\131\220\247\214\344" /* GameSceneポーズ制御 */) {
+GameScenePauseControl::GameScenePauseControl(GameScene* pScene) : NerveExecutor("GameSceneポーズ制御") {
     mScene = pScene;
     mPauseChecker = nullptr;
     mPauseMenuOff = false;

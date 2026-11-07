@@ -8,7 +8,7 @@ class OceanSmallTurtle : public LiveActor {
 public:
     OceanSmallTurtle(const char*);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void control();
     virtual void calcAndSetBaseMtx();
 

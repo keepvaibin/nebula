@@ -8,8 +8,8 @@ public:
     DemoCastSubGroup(const char*);
 
     virtual ~DemoCastSubGroup();
-    virtual void init(const JMapInfoIter&);
-    virtual bool tryRegisterDemoActor(LiveActor*, const JMapInfoIter&, const JMapIdInfo&);
+    virtual void init(const TableIter&);
+    virtual bool tryRegisterDemoActor(LiveActor*, const TableIter&, const PlacementId&);
 
     DemoExecutor* mExecutor;
 };

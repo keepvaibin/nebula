@@ -12,14 +12,14 @@ public:
     BlackHole(const char*);
 
     virtual ~BlackHole();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void makeActorAppeared();
     virtual void kill();
     virtual void calcAndSetBaseMtx();
     virtual void attackSensor(HitSensor*, HitSensor*);
 
     bool tryStartDemoCamera();
-    void initMapToolInfo(const JMapInfoIter&);
+    void initMapToolInfo(const TableIter&);
     void initModel();
     void initCubeBox();
     bool isInCubeBox(const Vec3f&) const;

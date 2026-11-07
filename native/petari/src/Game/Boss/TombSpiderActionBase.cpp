@@ -257,7 +257,7 @@ bool TombSpiderActionBase::updateChanceStartDemo() {
         TombSpiderFunction::invalidateMainPartsSensor(mParent);
         TombSpiderFunction::invalidateGlandSensor(mParent);
         TombSpiderFunction::validateVitalSpotSensor(mParent);
-        TombSpiderFunction::startTombSpiderDemo(mParent, "\203\140\203\203\203\223\203\130\212\112\216\156" /* チャンス開始 */, "\203\140\203\203\203\223\203\130\212\112\216\156[\203\147\203\104\201\133\203\200\203\130\203\160\203\103\203\137\201\133]" /* チャンス開始[トゥームスパイダー] */);
+        TombSpiderFunction::startTombSpiderDemo(mParent, "チャンス開始", "チャンス開始[トゥームスパイダー]");
 
         MR::sendMsgToAllLiveActor(ACTMES_TOMB_SPIDER_DEMO_START, nullptr);
         MR::startAction(mParent, "ChanceStart");
@@ -268,7 +268,7 @@ bool TombSpiderActionBase::updateChanceStartDemo() {
     }
 
     if (MR::isBckStopped(mParent)) {
-        TombSpiderFunction::endTombSpiderDemo(mParent, "\203\140\203\203\203\223\203\130\212\112\216\156" /* チャンス開始 */, "\203\140\203\203\203\223\203\130\212\112\216\156[\203\147\203\104\201\133\203\200\203\130\203\160\203\103\203\137\201\133]" /* チャンス開始[トゥームスパイダー] */);
+        TombSpiderFunction::endTombSpiderDemo(mParent, "チャンス開始", "チャンス開始[トゥームスパイダー]");
         MR::onSwitchA(mParent);
         return true;
     }
@@ -354,7 +354,7 @@ bool TombSpiderActionBase::updateChanceEndDemo() {
         TombSpiderFunction::validateMainPartsSensor(mParent);
         TombSpiderFunction::validateGlandSensor(mParent);
         TombSpiderFunction::invalidateVitalSpotSensor(mParent);
-        TombSpiderFunction::startTombSpiderDemo(mParent, "\203\140\203\203\203\223\203\130\217\111\227\271" /* チャンス終了 */, "\203\140\203\203\203\223\203\130\212\112\216\156[\203\147\203\104\201\133\203\200\203\130\203\160\203\103\203\137\201\133]" /* チャンス開始[トゥームスパイダー] */);
+        TombSpiderFunction::startTombSpiderDemo(mParent, "チャンス終了", "チャンス開始[トゥームスパイダー]");
         MR::offSwitchA(mParent);
         TombSpiderFunction::appearThreadAttacherAll(mParent);
         MR::startSpiderThreadBattle();
@@ -370,7 +370,7 @@ bool TombSpiderActionBase::updateChanceEndDemo() {
 
     if (MR::isStep(this, ::sStepChanceEndDemo)) {
         mInDemo = false;
-        TombSpiderFunction::endTombSpiderDemo(mParent, "\203\140\203\203\203\223\203\130\217\111\227\271" /* チャンス終了 */, "\203\140\203\203\203\223\203\130\212\112\216\156[\203\147\203\104\201\133\203\200\203\130\203\160\203\103\203\137\201\133]" /* チャンス開始[トゥームスパイダー] */);
+        TombSpiderFunction::endTombSpiderDemo(mParent, "チャンス終了", "チャンス開始[トゥームスパイダー]");
         return true;
     }
 
@@ -382,7 +382,7 @@ bool TombSpiderActionBase::tryWaitChanceStartDemo(const Nerve* pNerve) {
         return false;
     }
     // inline? this string appears later than this
-    MR::requestStartDemoMarioPuppetable(this, mParent, "\203\140\203\203\203\223\203\130\212\112\216\156" /* チャンス開始 */, pNerve, nullptr);
+    MR::requestStartDemoMarioPuppetable(this, mParent, "チャンス開始", pNerve, nullptr);
     return true;
 }
 
@@ -391,7 +391,7 @@ bool TombSpiderActionBase::tryWaitChanceEndDemo(const Nerve* pNerve) {
         return false;
     }
     // inline? this string appears later than this
-    MR::requestStartDemoMarioPuppetable(this, mParent, "\203\140\203\203\203\223\203\130\217\111\227\271" /* チャンス終了 */, pNerve, nullptr);
+    MR::requestStartDemoMarioPuppetable(this, mParent, "チャンス終了", pNerve, nullptr);
     return true;
 }
 

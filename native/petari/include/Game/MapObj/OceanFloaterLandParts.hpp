@@ -9,15 +9,15 @@ class OceanFloaterLandParts : public LiveActor {
 public:
     OceanFloaterLandParts(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void makeActorAppeared();
     virtual void makeActorDead();
     virtual void control();
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
 
-    void initMoveType(const JMapInfoIter&);
-    void initRailMoveFunction(const JMapInfoIter&);
-    void initLodCtrl(const JMapInfoIter&);
+    void initMoveType(const TableIter&);
+    void initRailMoveFunction(const TableIter&);
+    void initLodCtrl(const TableIter&);
     void endFloatUpDemo();
     void exeWait();
     void exeMove();

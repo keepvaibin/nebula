@@ -6,7 +6,7 @@ class AudEffectDirector : public NameObj {
 public:
     AudEffectDirector();
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void movement();
 
     void setEffectType(s32, s32);

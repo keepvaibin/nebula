@@ -7,7 +7,7 @@
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/DirectDraw.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
@@ -27,13 +27,13 @@ ClipAreaDropLaser::ClipAreaDropLaser(const char* pName) : LiveActor(pName) {
     MR::createClipAreaDropHolder();
 }
 
-void ClipAreaDropLaser::init(const JMapInfoIter& rIter) {
+void ClipAreaDropLaser::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::connectToScene(this, MR::MovementType_MapObj, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_ClipAreaDropLaser);
     initRailRider(rIter);
     MR::moveCoordAndTransToRailStartPoint(this);
     mSpeed = 20.0f;
-    MR::getJMapInfoArg0NoInit(rIter, &mSpeed);
+    MR::getPlacementArg0NoInit(rIter, &mSpeed);
     initEffectKeeper(0, "ClipAreaDropLaser", false);
     initSound(4, false);
     initNerve(GET_NERVE(ClipAreaDropLaser, ClipAreaDropLaserNrvMove));

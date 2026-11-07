@@ -17,7 +17,7 @@ namespace {
 };  // namespace
 
 namespace TitleSequenceProductSub {
-    LogoLayout::LogoLayout() : SimpleLayout("\203\215\203\123" /* ロゴ */, "TitleLogo", 2, -1) {
+    LogoLayout::LogoLayout() : SimpleLayout("ロゴ", "TitleLogo", 2, -1) {
         initEffectKeeper(1, "TitleLogo", nullptr);
         kill();
     }

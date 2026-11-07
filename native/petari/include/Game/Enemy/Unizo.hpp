@@ -14,7 +14,7 @@ public:
     Unizo(const char*);
 
     virtual ~Unizo();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void appear();
     virtual void makeActorAppeared();
@@ -29,7 +29,7 @@ public:
     virtual bool receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
     virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 
-    void initType(const JMapInfoIter&);
+    void initType(const TableIter&);
     void updateRotate();
     void updateVelocity();
     void udpateInfluence();

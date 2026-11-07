@@ -28,17 +28,17 @@ namespace NrvBossKameckVs2 {
     NEW_NERVE(BossKameckVs2NrvEndDemo, BossKameckVs2, EndDemo);
 };  // namespace NrvBossKameckVs2
 
-BossKameckVs2::BossKameckVs2() : BossKameckSequencer("\203\173\203\130\203\112\203\201\203\142\203\116Vs2" /* ボスカメックVs2 */), mStateBattle(), mBarrier() {
+BossKameckVs2::BossKameckVs2() : BossKameckSequencer("ボスカメックVs2"), mStateBattle(), mBarrier() {
 }
 
-void BossKameckVs2::init(BossKameck* pBoss, const JMapInfoIter& rIter) {
+void BossKameckVs2::init(BossKameck* pBoss, const TableIter& rIter) {
     BossKameckSequencer::init(pBoss, rIter);
 
     mStateBattle = new BossKameckStateBattle(pBoss);
     mStateBattle->init();
     mStateBattle->mIsVs2 = true;
 
-    mBarrier = new BossKameckBarrier("\203\112\203\201\203\142\203\116\203\157\203\212\203\101" /* カメックバリア */, "BossKameckBarrier");
+    mBarrier = new BossKameckBarrier("カメックバリア", "BossKameckBarrier");
     mBarrier->init(rIter);
 
     initNerve(GET_NERVE(BossKameckVs2, BossKameckVs2NrvOpeningDemo));

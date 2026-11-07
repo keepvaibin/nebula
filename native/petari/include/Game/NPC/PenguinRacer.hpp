@@ -7,7 +7,7 @@ class PenguinRacer : public NPCActor, public AbstractRacer {
 public:
     PenguinRacer(const char*);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void control();
     virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
     virtual void initRacer();
@@ -25,8 +25,8 @@ public:
     void initSensor();
     void initShadow();
     void initBind();
-    void initColor(const JMapInfoIter& rIter);
-    void initEtc(const JMapInfoIter& rIter);
+    void initColor(const TableIter& rIter);
+    void initEtc(const TableIter& rIter);
 
     bool tryReaction();
 

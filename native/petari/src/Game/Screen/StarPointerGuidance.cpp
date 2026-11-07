@@ -34,7 +34,7 @@ StarPointerGuidance::StarPointerGuidance(const char* pName)
       mIsActive(true), mIsGuidanceDisabled(false), mTextLineNumGuidance(1), mTextLineNum1P(1), mTextLineNum2P(1) {
 }
 
-void StarPointerGuidance::init(const JMapInfoIter& rIter) {
+void StarPointerGuidance::init(const TableIter& rIter) {
     initLayoutManager("PointerGuidance", 1);
     MR::createAndAddPaneCtrl(this, "NPointerGuide", 1);
     MR::createAndAddPaneCtrl(this, "PointerFrame1", 1);

@@ -11,7 +11,7 @@
 #include <nebula_math.h>
 
 namespace {
-    static const char* cDemoName = "\215\273\224\231\202\164\202\145\202\156\217\343\217\270" /* 砂漠ＵＦＯ上昇 */;
+    static const char* cDemoName = "砂漠ＵＦＯ上昇";
 };  // namespace
 
 namespace NrvDesertMovingLand {
@@ -30,7 +30,7 @@ DesertMovingLand::DesertMovingLand(const char* pName) : MapObjActor(pName), _C4(
     _E4.identity();
 }
 
-void DesertMovingLand::init(const JMapInfoIter& rIter) {
+void DesertMovingLand::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info = MapObjActorInitInfo();
     MapObjActorUtil::setupInitInfoSimpleMapObj(&info);
@@ -54,9 +54,9 @@ void DesertMovingLand::init(const JMapInfoIter& rIter) {
         MR::validateCollisionParts(this);
 
     f32 arg = 2000.0f;
-    MR::getJMapInfoArg0NoInit(rIter, &arg);
-    MR::getJMapInfoArg1NoInit(rIter, &_DC);
-    MR::getJMapInfoArg2NoInit(rIter, &_E0);
+    MR::getPlacementArg0NoInit(rIter, &arg);
+    MR::getPlacementArg1NoInit(rIter, &_DC);
+    MR::getPlacementArg2NoInit(rIter, &_E0);
     Vec3f stack_3C;
     MR::calcUpVec(&stack_3C, this);
 
@@ -167,7 +167,7 @@ void DesertMovingLand::exeMoveSign() {
     if (MR::isFirstStep(this)) {
         MR::startBck(this, "Vibration");
 
-        if (MR::isDemoActive("\215\273\202\164\202\145\202\156\211\272\215\176" /* 砂ＵＦＯ下降 */))
+        if (MR::isDemoActive("砂ＵＦＯ下降"))
             MR::stopStageBGM(60);
 
         MR::shakeCameraInfinity(this, 0.15f, 1.2f);
@@ -180,7 +180,7 @@ void DesertMovingLand::exeMoveSign() {
             setNerve(GET_NERVE(DesertMovingLand, HostTypeMoveUp));
         else {
             if (isNerve(GET_NERVE(DesertMovingLand, HostTypeMoveDownSign))) {
-                if (MR::isDemoActive("\215\273\202\164\202\145\202\156\211\272\215\176" /* 砂ＵＦＯ下降 */))
+                if (MR::isDemoActive("砂ＵＦＯ下降"))
                     MR::startEventBGM(MR::EventBgmID_Hurry);
 
                 setNerve(GET_NERVE(DesertMovingLand, HostTypeMoveDown));

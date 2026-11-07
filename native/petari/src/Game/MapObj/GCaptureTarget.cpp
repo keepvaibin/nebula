@@ -10,8 +10,8 @@
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapInfo.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/Table.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
@@ -32,12 +32,12 @@ GCaptureTarget::GCaptureTarget(const char* pName)
     MR::createGCapture();
 }
 
-void GCaptureTarget::init(const JMapInfoIter& rIter) {
+void GCaptureTarget::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("GCaptureTarget", nullptr, false);
     MR::connectToSceneNoSilhouettedMapObjStrongLight(this);
-    MR::getJMapInfoArg0WithInit(rIter, &mReleaseDistance);
-    MR::getJMapInfoArg1NoInit(rIter, &mPointableRange);
+    MR::getPlacementArg0WithInit(rIter, &mReleaseDistance);
+    MR::getPlacementArg1NoInit(rIter, &mPointableRange);
     initEffectKeeper(0, nullptr, false);
     initSound(4, false);
     initNerve(GET_NERVE(GCaptureTarget, GCaptureTargetNrvWait));
@@ -60,7 +60,7 @@ void GCaptureTarget::init(const JMapInfoIter& rIter) {
     if (MR::tryRegisterDemoCast(this, rIter)) {
         makeActorDead();
     } else if (MR::useStageSwitchReadAppear(this, rIter)) {
-        MR::joinToGroupArray(this, rIter, "\203\165\203\213\201\133\203\130\203\136\201\133\217\157\214\273\203\117\203\213\201\133\203\166" /* ブルースター出現グループ */, 32);
+        MR::joinToGroupArray(this, rIter, "ブルースター出現グループ", 32);
         MR::syncStageSwitchAppear(this);
         MR::initActorCamera(this, rIter, &mCameraInfo);
         makeActorDead();
@@ -73,7 +73,7 @@ void GCaptureTarget::init(const JMapInfoIter& rIter) {
     }
 
     s32 arg;
-    MR::getJMapInfoArg2WithInit(rIter, &arg);
+    MR::getPlacementArg2WithInit(rIter, &arg);
     mFarAwayColor = arg != 0;
     MR::startBck(this, "Wait");
     MR::startBrk(this, "Switch");
@@ -92,7 +92,7 @@ void GCaptureTarget::appear() {
     setNerve(GET_NERVE(GCaptureTarget, GCaptureTargetNrvAppear));
 
     if (MR::isExistActorCamera(mCameraInfo)) {
-        MR::requestStartDemo(this, "\217\157\214\273" /* 出現 */, GET_NERVE(GCaptureTarget, GCaptureTargetNrvAppear),
+        MR::requestStartDemo(this, "出現", GET_NERVE(GCaptureTarget, GCaptureTargetNrvAppear),
                              GET_NERVE(GCaptureTarget, GCaptureTargetNrvTryDemoAppear));
     }
 }
@@ -159,7 +159,7 @@ void GCaptureTarget::exeAppear() {
 
     if (MR::isGreaterStep(this, 150)) {
         if (MR::isExistActorCamera(mCameraInfo)) {
-            MR::endDemoWaitCameraInterpolating(this, "\217\157\214\273" /* 出現 */);
+            MR::endDemoWaitCameraInterpolating(this, "出現");
             MR::endActorCamera(this, mCameraInfo, false);
         }
         setNerve(GET_NERVE(GCaptureTarget, GCaptureTargetNrvWait));
@@ -209,7 +209,7 @@ void GCaptureTarget::exePointable() {
     MR::setBckRate(this, mStarAnimSpeed);
 
     MR::reportStarPointerGrabTarget(this);
-    if (MR::isStarPointerPointing(this, 0, true, "\216\343" /* 弱 */) && MR::requestGCaptureTarget(this)) {
+    if (MR::isStarPointerPointing(this, 0, true, "弱") && MR::requestGCaptureTarget(this)) {
         MR::invalidateClipping(this);
         setNerve(GET_NERVE(GCaptureTarget, GCaptureTargetNrvHitPointer));
     } else if (!MR::isNearPlayer(this, mPointableRange)) {
@@ -245,7 +245,7 @@ void GCaptureTarget::exeHitPointer() {
         MR::setBckRate(this, mStarAnimSpeed);
 
         bool isNear = MR::isNearPlayer(this, mPointableRange);
-        if (MR::isStarPointerPointing(this, 0, true, "\216\343" /* 弱 */) && isNear) {
+        if (MR::isStarPointerPointing(this, 0, true, "弱") && isNear) {
             MR::requestGCaptureTarget(this);
         }
 

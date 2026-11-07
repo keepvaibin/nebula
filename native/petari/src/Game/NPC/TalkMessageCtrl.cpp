@@ -27,7 +27,7 @@
 #include <nebula_math.h>
 
 TalkMessageCtrl::TalkMessageCtrl(LiveActor* pHost, const Vec3f& rArg2, MtxPtr pArg3)
-    : NameObj("\211\357\230\142\220\247\214\344" /* 会話制御 */), mHostActor(pHost), mNodeCtrl(), mZoneID(-1), _1C(0.0f, 0.0f, 0.0f), mMsgBalloonFollowOffs(rArg2), mTalkDistance(240.0f),
+    : NameObj("会話制御"), mHostActor(pHost), mNodeCtrl(), mZoneID(-1), _1C(0.0f, 0.0f, 0.0f), mMsgBalloonFollowOffs(rArg2), mTalkDistance(240.0f),
       _3C(), mIsOnReadNodeAuto(true), mAlreadyDoneFlags(), mIsStartOnlyFront(), mCameraInfo(), mBranchFunc(), mEventFunc(), mAnimeFunc(), mKillFunc(),
       mMtx(pArg3), mIsOnRootNodeAuto(), _18(), mTagArg(nullptr, CustomTagArg::Type_Uninitialized) {
     mTagArg.mArgType = CustomTagArg::Type_Uninitialized;
@@ -62,7 +62,7 @@ void TalkMessageCtrl::startCamera(s32 a1) {
     } else if (inf->isCameraEvent()) {
         if (inf->mCameraSetID) {
             mCameraInfo->mCameraSetID = inf->mCameraSetID;
-            MR::startMultiActorCameraNoTarget(mHostActor, mCameraInfo, "\211\357\230\142" /* 会話 */, a1);
+            MR::startMultiActorCameraNoTarget(mHostActor, mCameraInfo, "会話", a1);
         }
     }
 }
@@ -70,7 +70,7 @@ void TalkMessageCtrl::startCamera(s32 a1) {
 TalkMessageCtrl::~TalkMessageCtrl() {
 }
 
-void TalkMessageCtrl::createMessage(const JMapInfoIter& rIter, const char* pName) {
+void TalkMessageCtrl::createMessage(const TableIter& rIter, const char* pName) {
     mNodeCtrl = new TalkNodeCtrl();
     mNodeCtrl->createFlowNode(this, rIter, pName, &mCameraInfo);
 
@@ -87,7 +87,7 @@ namespace {
     }
 };  // namespace
 
-void TalkMessageCtrl::createMessageDirect(const JMapInfoIter& rIter, const char* pName) {
+void TalkMessageCtrl::createMessageDirect(const TableIter& rIter, const char* pName) {
     mNodeCtrl = new TalkNodeCtrl();
     mNodeCtrl->createFlowNodeDirect(this, rIter, pName, &mCameraInfo);
     _3C = 1;

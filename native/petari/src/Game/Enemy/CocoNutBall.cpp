@@ -30,7 +30,7 @@ inline void CocoNutBall::initSensors(const char* const hit1, const char* const h
 
 }
 
-void CocoNutBall::init(const JMapInfoIter& rIter) {
+void CocoNutBall::init(const TableIter& rIter) {
     initModelManagerWithAnm(CocoNut::getModelName(), nullptr, false);
     MR::connectToSceneNoSilhouettedMapObjStrongLight(this);
     MR::initLightCtrl(this);
@@ -357,7 +357,7 @@ void CocoNutBall::freeze() {
 }
 
 bool CocoNutBall::isFreezable() {
-    return !MR::isHiddenModel(this) && MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false);
+    return !MR::isHiddenModel(this) && MR::isStarPointerPointing2POnPressButton(this, "弱", true, false);
 }
 
 void CocoNutBall::processApproachToPlayer() {

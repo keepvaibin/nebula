@@ -6,7 +6,7 @@ class WipeRing : public WipeLayoutBase {
 public:
     WipeRing(bool, const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void calcAnim();
     virtual void wipe(s32);
     virtual void forceClose();

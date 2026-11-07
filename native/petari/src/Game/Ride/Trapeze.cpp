@@ -72,7 +72,7 @@ Trapeze::Trapeze(const char* pName)
     mPosMtx.identity();
 }
 
-void Trapeze::init(const JMapInfoIter& rIter) {
+void Trapeze::init(const TableIter& rIter) {
     MR::createSceneObj(SceneObj_TrapezeRopeDrawInit);
     MR::connectToScene(this, MR::MovementType_Ride, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_Trapeze);
     MR::initDefaultPos(this, rIter);
@@ -107,7 +107,7 @@ void Trapeze::init(const JMapInfoIter& rIter) {
 
     MR::setClippingTypeSphere(this, mRopeLength);
 
-    mTrapezeModel = new PartsModel(this, "\226\137" /* 棒 */, "Trapeze", mPosMtx, MR::DrawBufferType_Enemy, false);
+    mTrapezeModel = new PartsModel(this, "棒", "Trapeze", mPosMtx, MR::DrawBufferType_Enemy, false);
     mTrapezeModel->initWithoutIter();
 
     MR::initShadowFromCSV(mTrapezeModel, "Shadow");

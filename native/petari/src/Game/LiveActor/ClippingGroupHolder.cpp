@@ -2,7 +2,7 @@
 #include "Game/Util/Array.hpp"
 #include "Game/LiveActor/ClippingActorInfo.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
-#include "Game/Util/JMapIdInfo.hpp"
+#include "Game/Util/PlacementId.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 
 ClippingInfoGroup::ClippingInfoGroup(const char* pGroupName, int count) : NameObj(pGroupName) {
@@ -18,8 +18,8 @@ ClippingInfoGroup::ClippingInfoGroup(const char* pGroupName, int count) : NameOb
     }
 }
 
-void ClippingInfoGroup::setGroupNo(const JMapInfoIter& rIter) {
-    _18 = new JMapIdInfo(MR::createJMapIdInfoFromClippingGroupId(rIter));
+void ClippingInfoGroup::setGroupNo(const TableIter& rIter) {
+    _18 = new PlacementId(MR::createPlacementIdFromClippingGroupId(rIter));
 }
 
 void ClippingInfoGroup::registerInfo(ClippingActorInfo* pInfo) {
@@ -99,7 +99,7 @@ void ClippingGroupHolder::movement() {
     }
 }
 
-void ClippingGroupHolder::createAndAdd(ClippingActorInfo* pInfo, const JMapInfoIter& rIter, int count) {
+void ClippingGroupHolder::createAndAdd(ClippingActorInfo* pInfo, const TableIter& rIter, int count) {
     ClippingInfoGroup* group = findGroup(rIter);
 
     if (!group) {
@@ -109,7 +109,7 @@ void ClippingGroupHolder::createAndAdd(ClippingActorInfo* pInfo, const JMapInfoI
     group->registerInfo(pInfo);
 }
 
-ClippingInfoGroup* ClippingGroupHolder::createGroup(ClippingActorInfo* pInfo, const JMapInfoIter& rIter, int count) {
+ClippingInfoGroup* ClippingGroupHolder::createGroup(ClippingActorInfo* pInfo, const TableIter& rIter, int count) {
     ClippingInfoGroup* group = new ClippingInfoGroup(pInfo->mActor->mName, count);
     group->setGroupNo(rIter);
     if (mNumGroups == mMaxGroups) {
@@ -122,11 +122,11 @@ ClippingInfoGroup* ClippingGroupHolder::createGroup(ClippingActorInfo* pInfo, co
     return group;
 }
 
-ClippingInfoGroup* ClippingGroupHolder::findGroup(const JMapInfoIter& rIter) {
-    JMapIdInfo info = MR::createJMapIdInfoFromClippingGroupId(rIter);
+ClippingInfoGroup* ClippingGroupHolder::findGroup(const TableIter& rIter) {
+    PlacementId info = MR::createPlacementIdFromClippingGroupId(rIter);
 
     for (s32 i = 0; i < mNumGroups; i++) {
-        JMapIdInfo* infoGroup = getGroup(i)->_18;
+        PlacementId* infoGroup = getGroup(i)->_18;
 
         if (info == *infoGroup) {
             return getGroup(i);
@@ -142,7 +142,7 @@ ClippingInfoGroup::~ClippingInfoGroup() {
 ClippingGroupHolder::~ClippingGroupHolder() {
 }
 
-ClippingGroupHolder::ClippingGroupHolder() : NameObj("\203\116\203\212\203\142\203\163\203\223\203\117\203\101\203\116\203\136\201\133\225\333\216\235" /* クリッピングアクター保持 */) {
+ClippingGroupHolder::ClippingGroupHolder() : NameObj("クリッピングアクター保持") {
     mNumGroups = 0;
     mInfoGroups = 0;
     mInfoGroups = new ClippingInfoGroup*[0x40];

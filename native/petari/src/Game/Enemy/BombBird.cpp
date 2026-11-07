@@ -58,7 +58,7 @@ BombBird::BombBird(const char* pName)
       mStarPointer() {
 }
 
-void BombBird::init(const JMapInfoIter& rIter) {
+void BombBird::init(const TableIter& rIter) {
     if (MR::isValidInfo(rIter)) {
         MR::isConnectedWithRail(rIter);
     }
@@ -71,7 +71,7 @@ void BombBird::init(const JMapInfoIter& rIter) {
     }
 
     s32 arg = -1;
-    MR::getJMapInfoArg0NoInit(rIter, &arg);
+    MR::getPlacementArg0NoInit(rIter, &arg);
     if (arg != -1) {
         mSearchPlayer = true;
     } else {
@@ -95,7 +95,7 @@ void BombBird::init(const JMapInfoIter& rIter) {
     mSpinHitController = new SpinHitController(this, 25, 20, 4, 1.5f, 30.0f, 40.0f, 3, false);
 
     for (BombBirdBomb** it = mBombs.begin(); it < mBombs.end(); it++) {
-        *it = new BombBirdBomb("\203\157\203\116\203\137\203\223\222\271\202\314\203\173\203\200" /* バクダン鳥のボム */);
+        *it = new BombBirdBomb("バクダン鳥のボム");
         (*it)->initWithoutIter();
         (*it)->makeActorDead();
     }

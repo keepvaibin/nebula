@@ -17,7 +17,7 @@ public:
     ExterminationChecker(const char*);
 
     virtual ~ExterminationChecker();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void control();
 
     void exeWatching();

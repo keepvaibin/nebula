@@ -18,16 +18,16 @@ bool MarioModule::isInputDisable() const {
     if (mActor->mMario->isStatusActive(MarioStatus_FpView)) {
         return true;
     }
-    if (isAnimationRun("\203\156\201\133\203\150\222\205\222\156" /* ハード着地 */)) {
+    if (isAnimationRun("ハード着地")) {
         return true;
     }
-    if (isAnimationRun("\222\206\203\137\203\201\201\133\203\127\222\205\222\156" /* 中ダメージ着地 */)) {
+    if (isAnimationRun("中ダメージ着地")) {
         return true;
     }
-    if (isAnimationRun("\222\206\214\343\203\137\203\201\201\133\203\127\222\205\222\156" /* 中後ダメージ着地 */)) {
+    if (isAnimationRun("中後ダメージ着地")) {
         return true;
     }
-    if (isAnimationRun("\203\130\203\145\201\133\203\127\203\103\203\223B" /* ステージインB */)) {
+    if (isAnimationRun("ステージインB")) {
         return true;
     }
     return mActor->_3C0;

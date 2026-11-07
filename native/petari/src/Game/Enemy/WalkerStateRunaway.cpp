@@ -41,7 +41,7 @@ WalkerStateRunawayParam::WalkerStateRunawayParam() {
 }
 
 WalkerStateRunaway::WalkerStateRunaway(LiveActor* pHost, Vec3f* pDirection, WalkerStateRunawayParam* pRunawayParam)
-    : ActorStateBase< LiveActor >("\225\340\215\163\214\136\203\101\203\116\203\136\201\133\223\246\202\260" /* 歩行型アクター逃げ */, pHost), mRunawayParam(pRunawayParam), mDirection(pDirection), _18(0), mRunawaySpeed(1.0f) {
+    : ActorStateBase< LiveActor >("歩行型アクター逃げ", pHost), mRunawayParam(pRunawayParam), mDirection(pDirection), _18(0), mRunawaySpeed(1.0f) {
     if (mRunawayParam == nullptr) {
         mRunawayParam = &::sDefaultParam;
     }

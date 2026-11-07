@@ -6,7 +6,7 @@
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorShadowUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -45,7 +45,7 @@ namespace NrvTicoRail {
 TicoRail::TicoRail(const char* pName) : LiveActor(pName), _8C(0.0f, 0.0f, 1.0f), _98(), mLodCtrl() {
 }
 
-void TicoRail::init(const JMapInfoIter& rIter) {
+void TicoRail::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("Tico", nullptr, false);
     MR::connectToSceneNpc(this);
@@ -59,12 +59,12 @@ void TicoRail::init(const JMapInfoIter& rIter) {
     _8C.set(MR::getRailDirection(this));
     mLodCtrl = MR::createLodCtrlNPC(this, rIter);
     s32 arg0 = 0;
-    MR::getJMapInfoArg0NoInit(rIter, &arg0);
+    MR::getPlacementArg0NoInit(rIter, &arg0);
     s32 color = arg0;
     MR::startBrk(this, "ColorChange");
     MR::setBrkFrameAndStop(this, color);
     AstroDemoFunction::tryRegisterGrandStarReturnAndSimpleCast(this, rIter);
-    AstroDemoFunction::tryRegisterDemo(this, "\203\157\203\147\203\211\201\133\203\117\203\212\201\133\203\223\203\150\203\211\203\103\203\157\220\340\226\276" /* バトラーグリーンドライバ説明 */, rIter);
+    AstroDemoFunction::tryRegisterDemo(this, "バトラーグリーンドライバ説明", rIter);
     s32 rand = MR::getRandom(0, 2);
 
     if (rand == 0) {

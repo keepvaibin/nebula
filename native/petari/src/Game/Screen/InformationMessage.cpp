@@ -12,10 +12,10 @@ namespace NrvInformationMessage {
     NEW_NERVE(InformationMessageNrvDisappear, InformationMessage, Disappear);
 };  // namespace NrvInformationMessage
 
-InformationMessage::InformationMessage() : LayoutActor("\203\103\203\223\203\164\203\110\203\201\201\133\203\126\203\207\203\223\203\201\203\142\203\132\201\133\203\127" /* インフォメーションメッセージ */, true), mAButtonIcon(nullptr), mIsCenter(false) {
+InformationMessage::InformationMessage() : LayoutActor("インフォメーションメッセージ", true), mAButtonIcon(nullptr), mIsCenter(false) {
 }
 
-void InformationMessage::init(const JMapInfoIter& rIter) {
+void InformationMessage::init(const TableIter& rIter) {
     initLayoutManager("InformationWindow", 2);
     MR::createAndAddPaneCtrl(this, "AButtonPosC", 1);
     MR::createAndAddPaneCtrl(this, "AButtonPosU", 1);

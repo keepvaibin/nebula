@@ -39,7 +39,7 @@ MogucchiHillPiece::MogucchiHillPiece(const char* pName) : LiveActor(pName), mHos
     _9C.identity();
 }
 
-void MogucchiHillPiece::init(const JMapInfoIter& rIter) {
+void MogucchiHillPiece::init(const TableIter& rIter) {
     initModelManagerWithAnm(mModelName, nullptr, false);
     MR::connectToSceneMapObjDecorationStrongLight(this);
     initHitSensor(1);
@@ -281,7 +281,7 @@ MogucchiHill::MogucchiHill(LiveActor* pHost, s32 pieceCount, const char* pName)
     mReserveMtx.identity();
 }
 
-void MogucchiHill::init(const JMapInfoIter& rIter) {
+void MogucchiHill::init(const TableIter& rIter) {
     MR::connectToSceneEnemyMovement(this);
     initNerve(GET_NERVE_ANON(MogucchiHillNrvMove));
     createPieces();

@@ -13,7 +13,7 @@ namespace NrvSpaceInner {
 SpaceInner::SpaceInner(const char* pName) : LiveActor(pName) {
 }
 
-void SpaceInner::init(const JMapInfoIter& rIter) {
+void SpaceInner::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("SpaceInner", 0, false);
     MR::connectToSceneSky(this);

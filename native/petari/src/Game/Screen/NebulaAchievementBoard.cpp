@@ -1087,7 +1087,7 @@ NebulaAchievementBoard::NebulaAchievementBoard()
     : LayoutActor("NebulaAchievementBoard", true), mParts(nullptr), mBackground(nullptr), mIsOpen(false) {
 }
 
-void NebulaAchievementBoard::init(const JMapInfoIter& rIter) {
+void NebulaAchievementBoard::init(const TableIter& rIter) {
     // A reset while the last scene's board was open never closed it.
     setSharp(SharpBoard, false);
     initLayoutManager("InformationWindow", 0);

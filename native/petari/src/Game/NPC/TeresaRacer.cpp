@@ -7,7 +7,7 @@
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
@@ -46,7 +46,7 @@ namespace NrvTeresaRacer {
 TeresaRacer::TeresaRacer(const char* pName) : NPCActor(pName), mTakeOutStar(), mCameraInfo(), mIsGoal(), mBgmState() {
 }
 
-void TeresaRacer::init(const JMapInfoIter& rIter) {
+void TeresaRacer::init(const TableIter& rIter) {
     NPCActorCaps caps("TeresaRacer");
     caps.setDefault();
     caps.setIndirect();
@@ -60,7 +60,7 @@ void TeresaRacer::init(const JMapInfoIter& rIter) {
 
     initialize(rIter, caps);
 
-    MR::getJMapInfoArg0WithInit(rIter, &mRacerId);
+    MR::getPlacementArg0WithInit(rIter, &mRacerId);
     if (mRacerId == 0 && MR::isPlayerLuigi()) {
         makeActorDead();
     } else if (mRacerId == 1 && !MR::isPlayerLuigi()) {
@@ -74,7 +74,7 @@ void TeresaRacer::init(const JMapInfoIter& rIter) {
 
         MR::setDistanceToTalk(getMsgCtrl(), 500.0f);
         RaceManagerFunction::entryRacerOthers(this);
-        MR::initMultiActorCamera(this, rIter, &mCameraInfo, "\211\357\230\142" /* 会話 */);  // conversation
+        MR::initMultiActorCamera(this, rIter, &mCameraInfo, "会話");  // conversation
 
         mParam.setMoveAction("WaitOpen", "WaitOpen");
         mParam.setTalkAction("WaitOpenTalk", "WaitOpenTalk");
@@ -146,7 +146,7 @@ bool TeresaRacer::eventFunc(u32 state) {
 void TeresaRacer::exeWait() {
     if (MR::tryTalkNearPlayerAndStartTalkAction(this)) {
         if (mRacerId == -1) {
-            MR::startMultiActorCameraTargetSelf(this, mCameraInfo, "\211\357\230\142" /* 会話 */);
+            MR::startMultiActorCameraTargetSelf(this, mCameraInfo, "会話");
         }
         setNerve(GET_NERVE(TeresaRacer, TeresaRacerNrvPre));
     }
@@ -163,7 +163,7 @@ void TeresaRacer::exePre() {
             setNerve(GET_NERVE(TeresaRacer, TeresaRacerNrvReady));
         } else {
             if (mRacerId == -1) {
-                MR::endMultiActorCamera(this, mCameraInfo, "\211\357\230\142" /* 会話 */, false);
+                MR::endMultiActorCamera(this, mCameraInfo, "会話", false);
             }
             setNerve(GET_NERVE(TeresaRacer, TeresaRacerNrvWait));
         }
@@ -175,7 +175,7 @@ void TeresaRacer::exeReady() {
 
 void TeresaRacer::exePost() {
     if (!MR::isActionContinuous(this) && MR::tryTalkForceAtEndAndStartTalkAction(this)) {
-        MR::endMultiActorCamera(this, mCameraInfo, "\211\357\230\142" /* 会話 */, true);
+        MR::endMultiActorCamera(this, mCameraInfo, "会話", true);
         if (RaceManagerFunction::getRaceRank() == 1) {
             setNerve(GET_NERVE(TeresaRacer, TeresaRacerNrvTalk));
         } else {
@@ -288,13 +288,13 @@ void TeresaRacer::resetRacer(const RaceManager* pRaceManager) {
     if (pRaceManager->mCurrentRace == RaceID_TeresaPhantom) {
         MR::setDefaultPose(this);
     } else {
-        MR::setNPCActorPos(this, "\203\214\201\133\203\130\217\111\227\271\214\343\210\312\222\165\203\145\203\214\203\124" /* レース終了後位置テレサ */);
+        MR::setNPCActorPos(this, "レース終了後位置テレサ");
         setInitPose();
     }
 
     turnToPlayer(180.0f);
     setNerve(GET_NERVE(TeresaRacer, TeresaRacerNrvPost));
-    MR::startMultiActorCameraTargetSelf(this, mCameraInfo, "\211\357\230\142" /* 会話 */);
+    MR::startMultiActorCameraTargetSelf(this, mCameraInfo, "会話");
     mParam._0 = true;
     mParam._1 = true;
 }

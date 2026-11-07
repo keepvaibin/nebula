@@ -4,7 +4,7 @@
 #include "Game/Util/ActorCameraUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 
-DemoPositionController::DemoPositionController(const char* pName, const JMapInfoIter& rIter) : LiveActor("\203\146\203\202\203\101\203\116\203\136\201\133\210\312\222\165" /* デモアクター位置 */), pCameraInfo() {
+DemoPositionController::DemoPositionController(const char* pName, const TableIter& rIter) : LiveActor("デモアクター位置"), pCameraInfo() {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm(pName, nullptr, false);
     pCameraInfo = new ActorCameraInfo(rIter);

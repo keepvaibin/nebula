@@ -11,7 +11,7 @@ namespace NrvSeesawMoveNut {
 SeesawMoveNut::SeesawMoveNut(const char* pName) : MapObjActor(pName), mSpeed(100.0f), mPrevAngularSpeed() {
 }
 
-void SeesawMoveNut::init(const JMapInfoIter& rIter) {
+void SeesawMoveNut::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo initInfo;
 
@@ -23,7 +23,7 @@ void SeesawMoveNut::init(const JMapInfoIter& rIter) {
 
     initialize(rIter, initInfo);
     MR::setBodySensorType(this, ATYPE_MAP_OBJ_PRESS);
-    MR::getJMapInfoArg0NoInit(rIter, &mSpeed);
+    MR::getPlacementArg0NoInit(rIter, &mSpeed);
 
     MR::calcNearestRailPos(&mPosition, this, mPosition);
 

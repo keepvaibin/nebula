@@ -9,7 +9,7 @@
 #include "Game/Gravity/SegmentGravity.hpp"
 #include "Game/Gravity/WireGravity.hpp"
 #include "Game/LiveActor/RailRider.hpp"
-#include "Game/Util/JMapInfo.hpp"
+#include "Game/Util/Table.hpp"
 
 class GravityCreator {
 public:
@@ -19,12 +19,12 @@ public:
     virtual PlanetGravity* createInstance() = 0;
     virtual void settingFromSRT(const Vec3f& rTrans, const Vec3f& rRotate, const Vec3f& rScale) {
     }
-    virtual void settingFromJMapArgs(s32 arg0, s32 arg1, s32 arg2) {
+    virtual void settingFromPlacementArgs(s32 arg0, s32 arg1, s32 arg2) {
     }
-    virtual void settingFromJMapOtherParam(const JMapInfoIter& rIter) {
+    virtual void settingFromPlacementOtherParam(const TableIter& rIter) {
     }
 
-    PlanetGravity* createFromJMap(const JMapInfoIter& rIter);
+    PlanetGravity* createFromPlacement(const TableIter& rIter);
 };
 
 class CubeGravityCreator : public GravityCreator {
@@ -35,7 +35,7 @@ public:
     virtual PlanetGravity* getGravity();
     virtual PlanetGravity* createInstance();
     virtual void settingFromSRT(const Vec3f& rTrans, const Vec3f& rRotate, const Vec3f& rScale);
-    virtual void settingFromJMapArgs(s32 arg0, s32 arg1, s32 arg2);
+    virtual void settingFromPlacementArgs(s32 arg0, s32 arg1, s32 arg2);
 
     CubeGravity* mGravityInstance;
 };
@@ -48,7 +48,7 @@ public:
     virtual PlanetGravity* getGravity();
     virtual PlanetGravity* createInstance();
     virtual void settingFromSRT(const Vec3f& rTrans, const Vec3f& rRotate, const Vec3f& rScale);
-    virtual void settingFromJMapArgs(s32 arg0, s32 arg1, s32 arg2);
+    virtual void settingFromPlacementArgs(s32 arg0, s32 arg1, s32 arg2);
 
     DiskGravity* mGravityInstance;
 };
@@ -61,7 +61,7 @@ public:
     virtual PlanetGravity* getGravity();
     virtual PlanetGravity* createInstance();
     virtual void settingFromSRT(const Vec3f& rTrans, const Vec3f& rRotate, const Vec3f& rScale);
-    virtual void settingFromJMapArgs(s32 arg0, s32 arg1, s32 arg2);
+    virtual void settingFromPlacementArgs(s32 arg0, s32 arg1, s32 arg2);
 
     DiskTorusGravity* mGravityInstance;
 };
@@ -74,7 +74,7 @@ public:
     virtual PlanetGravity* getGravity();
     virtual PlanetGravity* createInstance();
     virtual void settingFromSRT(const Vec3f& rTrans, const Vec3f& rRotate, const Vec3f& rScale);
-    virtual void settingFromJMapArgs(s32 arg0, s32 arg1, s32 arg2);
+    virtual void settingFromPlacementArgs(s32 arg0, s32 arg1, s32 arg2);
 
     ConeGravity* mGravityInstance;
 };
@@ -99,7 +99,7 @@ public:
     virtual PlanetGravity* getGravity();
     virtual PlanetGravity* createInstance();
     virtual void settingFromSRT(const Vec3f& rTrans, const Vec3f& rRotate, const Vec3f& rScale);
-    virtual void settingFromJMapArgs(s32 arg0, s32 arg1, s32 arg2);
+    virtual void settingFromPlacementArgs(s32 arg0, s32 arg1, s32 arg2);
 
     ParallelGravity* mGravityInstance;
 };
@@ -112,7 +112,7 @@ public:
     virtual PlanetGravity* getGravity();
     virtual PlanetGravity* createInstance();
     virtual void settingFromSRT(const Vec3f& rTrans, const Vec3f& rRotate, const Vec3f& rScale);
-    virtual void settingFromJMapArgs(s32 arg0, s32 arg1, s32 arg2);
+    virtual void settingFromPlacementArgs(s32 arg0, s32 arg1, s32 arg2);
 
     ParallelGravity* mGravityInstance;
 };
@@ -137,7 +137,7 @@ public:
     virtual PlanetGravity* getGravity();
     virtual PlanetGravity* createInstance();
     virtual void settingFromSRT(const Vec3f& rTrans, const Vec3f& rRotate, const Vec3f& rScale);
-    virtual void settingFromJMapArgs(s32 arg0, s32 arg1, s32 arg2);
+    virtual void settingFromPlacementArgs(s32 arg0, s32 arg1, s32 arg2);
 
     SegmentGravity* mGravityInstance;
 };
@@ -149,7 +149,7 @@ public:
 
     virtual PlanetGravity* getGravity();
     virtual PlanetGravity* createInstance();
-    virtual void settingFromJMapOtherParam(const JMapInfoIter& rIter);
+    virtual void settingFromPlacementOtherParam(const TableIter& rIter);
 
     RailRider* mRailRider;
     WireGravity* mGravityInstance;

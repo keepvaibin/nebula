@@ -26,7 +26,7 @@ ElectricBall::Ball::Ball() : mHost(), mPosition(gZeroVec), mIsActive() {
 }
 
 void ElectricBall::Ball::init(LiveActor* pActor) {
-    mHost = new PartsModel(pActor, "\203\162\203\212\203\162\203\212\203\173\201\133\203\213" /* ビリビリボール */, "ElectricBall", nullptr, -1, false);
+    mHost = new PartsModel(pActor, "ビリビリボール", "ElectricBall", nullptr, -1, false);
     mHost->initWithoutIter();
     mHost->makeActorAppeared();
 
@@ -49,13 +49,13 @@ ElectricBall::ElectricBall(const char* pName)
     mBaseMtx.identity();
 }
 
-void ElectricBall::init(const JMapInfoIter& rIter) {
+void ElectricBall::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
 
     MR::makeMtxTR(mBaseMtx, this);
 
-    MR::getJMapInfoArg1NoInit(rIter, &mRadius);
-    MR::getJMapInfoArg2NoInit(rIter, &mAngularSpeed);
+    MR::getPlacementArg1NoInit(rIter, &mRadius);
+    MR::getPlacementArg2NoInit(rIter, &mAngularSpeed);
 
     mAngularSpeed *= ::sMoveAngularSpeedDefault;
 
@@ -141,9 +141,9 @@ bool ElectricBall::receiveMsgPlayerAttack(u32 msg, HitSensor*, HitSensor*) {
     return MR::isMsgStarPieceReflect(msg);
 }
 
-void ElectricBall::initBalls(const JMapInfoIter& rIter) {
+void ElectricBall::initBalls(const TableIter& rIter) {
     s32 arg0 = ::sNumBallsDefault;
-    MR::getJMapInfoArg0NoInit(rIter, &arg0);
+    MR::getPlacementArg0NoInit(rIter, &arg0);
 
     mBalls.init(arg0);
 

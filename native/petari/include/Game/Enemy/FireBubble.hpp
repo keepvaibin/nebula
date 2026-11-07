@@ -4,8 +4,8 @@
 
 class FireBubble : public LiveActor {
 public:
-    FireBubble(const char* = "\203\157\203\165\203\213" /* バブル */);
-    virtual void init(const JMapInfoIter& rIter);
+    FireBubble(const char* = "バブル");
+    virtual void init(const TableIter& rIter);
     virtual void appear();
     virtual void kill();
     virtual void control();
@@ -15,7 +15,7 @@ public:
 
     void initHitSensors(const char* const, const char* const);
     void appear(const Vec3f&, const Vec3f&, const Vec3f&);
-    void initMapToolInfo(const JMapInfoIter& rIter);
+    void initMapToolInfo(const TableIter& rIter);
     void updateChaseFrontVec(f32);
     void updateChaseFrontVecAndVelocity(f32);
     void updateGravity(f32);

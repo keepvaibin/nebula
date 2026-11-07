@@ -6,7 +6,7 @@ class BenefitItemLifeUp : public BenefitItemObj {
 public:
     BenefitItemLifeUp(const char*);
 
-    virtual void init(const JMapInfoIter& rIter) {
+    virtual void init(const TableIter& rIter) {
         BenefitItemObj::init(rIter);
     }
     virtual void initModelAndEfx();

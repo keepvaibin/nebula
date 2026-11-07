@@ -4,11 +4,11 @@
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 
-DemoWipeInfo::DemoWipeInfo() : mPartName(), mWipeName("\203\164\203\106\201\133\203\150\203\217\203\103\203\166" /* フェードワイプ */), mWipeType(), mWipeFrame(-1) {
+DemoWipeInfo::DemoWipeInfo() : mPartName(), mWipeName("フェードワイプ"), mWipeType(), mWipeFrame(-1) {
 }
 
 DemoWipeKeeper::DemoWipeKeeper(DemoExecutor* pExecutor) : DemoSheetKeeperBase(pExecutor) {
-    JMapInfo* pMap = nullptr;
+    Table* pMap = nullptr;
     const DemoExecutor* pSheetExecutor = mExecutor;
     s32 count = DemoFunction::createSheetParser(pSheetExecutor, getTypeString(), &pMap);
     mInfo.init(count);
@@ -49,7 +49,7 @@ inline const char* DemoWipeKeeper::getTypeString() const {
 }
 
 inline const char* DemoWipeKeeper::getName() const {
-    return "\203\217\203\103\203\166" /* ワイプ */;
+    return "ワイプ";
 }
 
 #include "Game/Demo/DemoSheetKeeperInfoHolder.hpp"

@@ -13,7 +13,7 @@ DinoPackunEggShell::DinoPackunEggShell(const char* pName, HitSensor* pSensor, Mt
     _90 = mtx;
 }
 
-void DinoPackunEggShell::init(const JMapInfoIter& rIter) {
+void DinoPackunEggShell::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("DinoPackunEggShell", nullptr, false);
     MR::connectToSceneEnemyDecoration(this);

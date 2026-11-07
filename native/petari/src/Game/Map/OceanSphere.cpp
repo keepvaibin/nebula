@@ -147,7 +147,7 @@ OceanSphere::OceanSphere(const char* pName)
     mEnableStartPosCameraSwitch = false;
 }
 
-void OceanSphere::init(const JMapInfoIter& rIter) {
+void OceanSphere::init(const TableIter& rIter) {
     MR::connectToScene(this, MR::MovementType_MapObj, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_OceanSphere);
     MR::initDefaultPos(this, rIter);
     mRadius = 100.0f * mScale.x;
@@ -202,10 +202,10 @@ void OceanSphere::exeWait() {
 }
 
 void OceanSphere::exeRiseUp() {
-    f32 rate = MR::calcDemoPartStepRate("\227\116\202\253\220\205\217\343\217\270" /* 湧き水上昇 */);
+    f32 rate = MR::calcDemoPartStepRate("湧き水上昇");
     mRadius = 1000.0f + (rate * (mRadiusTarget - 1000.0f));
 
-    if (MR::isDemoPartLastStep("\227\116\202\253\220\205\217\343\217\270" /* 湧き水上昇 */)) {
+    if (MR::isDemoPartLastStep("湧き水上昇")) {
         setNerve(GET_NERVE(OceanSphere, OceanSphereNrvWait));
     }
 }

@@ -12,7 +12,7 @@ class StringSpider : public LiveActor {
 public:
     StringSpider(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void calcAnim();
     virtual void kill();

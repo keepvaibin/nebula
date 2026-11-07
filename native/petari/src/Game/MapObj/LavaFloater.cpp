@@ -7,8 +7,8 @@
 #include "Game/MapObj/FloaterFloatingForceTypeNormal.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapInfo.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/Table.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -34,7 +34,7 @@ LavaFloater::LavaFloater(const char* pName)
 LavaFloater::~LavaFloater() {
 }
 
-void LavaFloater::init(const JMapInfoIter& rIter) {
+void LavaFloater::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::getObjectName(&mObjectName, rIter);
 

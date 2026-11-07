@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Game/Util/JMapInfo.hpp"
+#include "Game/Util/Table.hpp"
 #include <nebula_geometry.hpp>
 #include <NebulaGpu.h>
 #include <nebula_math.h>
@@ -38,7 +38,7 @@ public:
 
     u32 mVersion;
     u8* _8;
-    JMapInfo mMapInfo;
-    JMapInfoIter mMapIter;
+    Table mMapInfo;
+    TableIter mMapIter;
     u8 _1C[0x10];
 };

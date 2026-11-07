@@ -5,7 +5,7 @@
 #include "Game/Screen/GalaxyNamePlate.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
@@ -47,7 +47,7 @@ AstroMapObj::AstroMapObj(const char* pName) : MapObjActor(pName) {
     _D8 = -1;
 }
 
-void AstroMapObj::init(const JMapInfoIter& rIter) {  // Pain
+void AstroMapObj::init(const TableIter& rIter) {  // Pain
     MR::getObjectName(&_CC, rIter);
     MapObjActorInitInfo mapObjInitInfo = MapObjActorInitInfo();
     _D8 = AstroMapObjFunction::getDomeIdFromArg0(rIter);
@@ -236,13 +236,13 @@ bool AstroMapObj::isEndRevival() const {
 }
 
 bool AstroMapObj::isPlayMachineSE() const {
-    if (MR::isDemoActive("\203\215\203\133\203\142\203\136\217\363\213\265\220\340\226\276\203\146\203\202" /* ロゼッタ状況説明デモ */) && MR::isDemoPartActive("\217\363\213\265\220\340\226\276[\212\107\226\173\225\134\216\246]" /* 状況説明[絵本表示] */)) {
+    if (MR::isDemoActive("ロゼッタ状況説明デモ") && MR::isDemoPartActive("状況説明[絵本表示]")) {
         return false;
     }
-    if (MR::isDemoActive("\203\117\203\211\203\223\203\150\203\130\203\136\201\133\213\101\212\322[\202\121\211\361\226\332\210\310\215\176]" /* グランドスター帰還[２回目以降] */)) {
+    if (MR::isDemoActive("グランドスター帰還[２回目以降]")) {
         return false;
     }
-    return MR::isDemoActive("\203\160\203\217\201\133\203\130\203\136\201\133\213\101\212\322" /* パワースター帰還 */) == 0;
+    return MR::isDemoActive("パワースター帰還") == 0;
 }
 
 AstroSimpleObj::AstroSimpleObj(const char* pName) : SimpleMapObjFarMax(pName) {
@@ -250,7 +250,7 @@ AstroSimpleObj::AstroSimpleObj(const char* pName) : SimpleMapObjFarMax(pName) {
     _C8 = 0;
 }
 
-void AstroSimpleObj::init(const JMapInfoIter& rIter) {
+void AstroSimpleObj::init(const TableIter& rIter) {
     SimpleMapObjFarMax::init(rIter);
     _C4 = AstroMapObjFunction::createAstroNamePlateParser();
     _C8 = new GalaxyNamePlate(0, 1);

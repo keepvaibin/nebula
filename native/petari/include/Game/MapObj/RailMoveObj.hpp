@@ -8,13 +8,13 @@ class RailMoveObj : public MapObjActor {
 public:
     RailMoveObj(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void startClipped();
     virtual void endClipped();
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
     virtual void initCaseUseSwitchB(const MapObjActorInitInfo&);
     virtual void initCaseNoUseSwitchB(const MapObjActorInitInfo&);
-    virtual void setupInitInfo(const JMapInfoIter&, MapObjActorInitInfo*);
+    virtual void setupInitInfo(const TableIter&, MapObjActorInitInfo*);
     virtual bool tryStartMove();
     virtual void startMoveInner();
     virtual void move();
@@ -34,7 +34,7 @@ class RailMoveObjPress : public RailMoveObj {
 public:
     RailMoveObjPress(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
 };
 
 class RailMoveObjBreakAtEnd : public RailMoveObj {
@@ -57,7 +57,7 @@ public:
     inline RailMoveObjSwitchShadow(const char* pName) : RailMoveObj(pName) {
     }
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initCaseUseSwitchA(const MapObjActorInitInfo&);
 
     void startOnShadow();
@@ -67,7 +67,7 @@ class RailDemoMoveObj : public RailMoveObj {
 public:
     RailDemoMoveObj(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual bool tryStartMove();
     virtual void startMoveInner();
     virtual void move();
@@ -82,7 +82,7 @@ public:
 
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
     virtual void initCaseUseSwitchB(const MapObjActorInitInfo&);
-    virtual void setupInitInfo(const JMapInfoIter&, MapObjActorInitInfo*);
+    virtual void setupInitInfo(const TableIter&, MapObjActorInitInfo*);
 
     bool tryStartRotateAtPoint();
     bool tryStartRotateBetweenPoints();

@@ -15,7 +15,7 @@ public:
     PowerStarHolder(const char*);
 
     virtual ~PowerStarHolder();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
 
     void registerPowerStar(PowerStar*, int);
     void requestAppearPowerStar(int, const Vec3f*, bool);

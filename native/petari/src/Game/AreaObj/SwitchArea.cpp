@@ -5,7 +5,7 @@
 SwitchArea::SwitchArea(int formType, const char* pName) : AreaObj(formType, pName) {
 }
 
-void SwitchArea::init(const JMapInfoIter& rIter) {
+void SwitchArea::init(const TableIter& rIter) {
     AreaObj::init(rIter);
     MR::connectToSceneAreaObj(this);
 }

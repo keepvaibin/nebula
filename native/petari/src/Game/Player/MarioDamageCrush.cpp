@@ -41,15 +41,15 @@ MarioCrush::MarioCrush(MarioActor* pActor) : MarioState(pActor, MarioStatus_Crus
 bool MarioCrush::close() {
     getPlayer()->mMovementStates._3C = true;
     mActor->mScale.set(1.0f);
-    stopAnimation("\202\265\202\321\202\352" /* しびれ */);
+    stopAnimation("しびれ");
     getPlayer()->set41E(120);
     return true;
 }
 
 bool MarioCrush::start() {
-    changeAnimationNonStop("\202\265\202\321\202\352" /* しびれ */);
-    startPadVib("\203\175\203\212\203\111[\202\265\202\321\202\352]" /* マリオ[しびれ] */);
-    playSound("\220\272\202\265\202\321\202\352" /* 声しびれ */);
+    changeAnimationNonStop("しびれ");
+    startPadVib("マリオ[しびれ]");
+    playSound("声しびれ");
 
     getPlayer()->mMovementStates._3C = true;
     mActor->mScale.set(1.0f, 0.2f, 1.0f);
@@ -86,7 +86,7 @@ bool MarioCrush::update() {
         }
 
         if (getPlayer()->getMovementStates()._1) {
-            changeAnimation("\202\265\202\321\202\352\211\361\225\234" /* しびれ回復 */);
+            changeAnimation("しびれ回復");
         }
     }
 

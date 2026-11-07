@@ -25,7 +25,7 @@ namespace NrvAstroDomeComet {
 AstroDomeComet::AstroDomeComet(const char* pName) : LiveActor(pName), mBloomModel(), mMiniGalaxy(), mPointingActors() {
 }
 
-void AstroDomeComet::init(const JMapInfoIter& rIter) {
+void AstroDomeComet::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("AstroDomeComet", nullptr, false);
     initSubModel();
@@ -35,7 +35,7 @@ void AstroDomeComet::init(const JMapInfoIter& rIter) {
     mPointingActors = new LiveActor*[::cPointingActorNum];
 
     for (s32 i = 0; i < ::cPointingActorNum; i++) {
-        mPointingActors[i] = new LiveActor("\203\174\203\103\203\223\203\145\203\102\203\223\203\117\227\160\203\101\203\116\203\136\201\133" /* ポインティング用アクター */);
+        mPointingActors[i] = new LiveActor("ポインティング用アクター");
         mPointingActors[i]->initWithoutIter();
         MR::invalidateClipping(mPointingActors[i]);
         MR::initStarPointerTargetAtMtx(mPointingActors[i], ::cPointingRadius, MR::getJointMtx(this, "CometIcon"),

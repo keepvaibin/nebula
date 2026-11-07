@@ -8,7 +8,7 @@ class SpinDriver : public LiveActor {
 public:
     SpinDriver(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void appear();
     virtual void makeActorAppeared();
@@ -17,9 +17,9 @@ public:
     virtual void calcAndSetBaseMtx();
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
 
-    void initParamFromJMapInfo(const JMapInfoIter&);
-    void initShootPath(const JMapInfoIter&);
-    void initEventCamera(const JMapInfoIter&);
+    void initParamFromPlacement(const TableIter&);
+    void initShootPath(const TableIter&);
+    void initEventCamera(const TableIter&);
     bool tryStartShoot();
     bool tryEndCapture();
     bool tryShoot();

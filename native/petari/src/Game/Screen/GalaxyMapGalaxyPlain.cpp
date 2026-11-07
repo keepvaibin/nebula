@@ -17,7 +17,7 @@ extern "C" {
 #endif
 
 GalaxyMapGalaxyPlain::GalaxyMapGalaxyPlain(const LayoutActor* pHost)
-    : LayoutActor("Galaxy\217\356\225\361\212\310\210\325\225\134\216\246" /* Galaxy情報簡易表示 */, true), mHost(pHost), mPaneName(), mNamePlate(), mGalaxyName(), mIsShow() {
+    : LayoutActor("Galaxy情報簡易表示", true), mHost(pHost), mPaneName(), mNamePlate(), mGalaxyName(), mIsShow() {
 }
 
 void GalaxyMapGalaxyPlain::show(const char* pGalaxyName, const char* pPaneName) {
@@ -65,7 +65,7 @@ void GalaxyMapGalaxyPlain::adjustTransInScreen() {
     mNamePlate->setTrans(plateTrans);
 }
 
-void GalaxyMapGalaxyPlain::init(const JMapInfoIter& rIter) {
+void GalaxyMapGalaxyPlain::init(const TableIter& rIter) {
     mNamePlate = new GalaxyNamePlate(nullptr, false);
     mNamePlate->initWithoutIter();
     mNamePlate->setShowBalloonNozzle(false);

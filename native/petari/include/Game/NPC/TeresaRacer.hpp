@@ -10,7 +10,7 @@ class TeresaRacer : public NPCActor, AbstractRacer {
 public:
     TeresaRacer(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void control();
     virtual void initRacer();
     virtual void prepRacer(const RaceManager* pRaceManager);

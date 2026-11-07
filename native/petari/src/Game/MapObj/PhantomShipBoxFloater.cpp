@@ -21,7 +21,7 @@ inline bool floaterIsMoving(FloaterFloatingForceTypeSpring* force) {
     return 0.1f < force->getCurrentVelocity().length();
 }
 
-void PhantomShipBoxFloater::init(const JMapInfoIter& rIter) {
+void PhantomShipBoxFloater::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     mFloaterOffset.set(mPosition);
     MR::getObjectName(&mObjectName, rIter);

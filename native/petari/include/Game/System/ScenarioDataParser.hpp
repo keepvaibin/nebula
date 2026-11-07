@@ -4,8 +4,8 @@
 #include "Game/Util/Array.hpp"
 
 class GalaxyStatusAccessor;
-class JMapInfo;
-class JMapInfoIter;
+class Table;
+class TableIter;
 class ScenarioData;
 
 class ScenarioDataParser : public NameObj {
@@ -53,15 +53,15 @@ public:
     s32 getPowerStarNum() const;
     bool getValueString(const char*, s32, const char**) const;
     const char* getZoneName(s32) const;
-    JMapInfoIter getScenarioDataIter(s32) const;
+    TableIter getScenarioDataIter(s32) const;
     bool getValueU32(const char*, s32, u32*) const;
     bool getValueBool(const char*, s32, bool*) const;
     s32 getZoneNum() const;
     s32 getZoneId(const char*) const;
 
-    JMapInfo* mScenarioData;
+    Table* mScenarioData;
     char* mGalaxyName;
-    JMapInfo* mZoneList;
+    Table* mZoneList;
 };
 
 namespace ScenarioDataFunction {

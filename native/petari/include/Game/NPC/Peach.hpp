@@ -7,7 +7,7 @@ public:
     Peach(const char*);
 
     virtual ~Peach();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
 
     void exeWait();
 };

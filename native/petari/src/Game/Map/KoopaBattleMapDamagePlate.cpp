@@ -23,7 +23,7 @@ KoopaBattleMapDamagePlate::KoopaBattleMapDamagePlate(const char* pName) : LiveAc
     mBaseMtx.identity();
 }
 
-void KoopaBattleMapDamagePlate::init(const JMapInfoIter& rIter) {
+void KoopaBattleMapDamagePlate::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
 
     MR::calcGravity(this);

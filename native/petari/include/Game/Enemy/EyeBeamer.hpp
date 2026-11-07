@@ -11,7 +11,7 @@ class EyeBeamer : public LiveActor {
 public:
     EyeBeamer(const char*);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void initAfterPlacement();
     virtual void draw() const;
     virtual void calcAnim();
@@ -21,9 +21,9 @@ public:
     virtual void calcAndSetBaseMtx();
     virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);
 
-    void initStartNerve(const JMapInfoIter& rIter);
+    void initStartNerve(const TableIter& rIter);
     void initModel();
-    void initRailMoveFunction(const JMapInfoIter& rIter);
+    void initRailMoveFunction(const TableIter& rIter);
     void updatePoseAndTrans();
     void updateWaterSurfaceMtx();
     void requestStartPatrol();

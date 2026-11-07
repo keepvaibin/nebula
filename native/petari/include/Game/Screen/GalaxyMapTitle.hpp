@@ -7,7 +7,7 @@ public:
     /// @brief Creates a new `GalaxyMapTitle`.
     GalaxyMapTitle();
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void appear();
 
     void setModeNormal();

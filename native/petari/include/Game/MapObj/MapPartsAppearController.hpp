@@ -8,13 +8,13 @@ class MapPartsAppearController : public MapPartsFunction {
 public:
     MapPartsAppearController(LiveActor*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void start();
     virtual void end();
     virtual bool receiveMsg(u32);
 
     void storeCurrentPosture();
-    void initSwitchMessenger(const JMapInfoIter&);
+    void initSwitchMessenger(const TableIter&);
     void startAppear();
     void startKill();
     void appearHost();

@@ -6,14 +6,14 @@
 #include "Game/Util/AreaObjUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/MessageUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <cstdio>
 
 namespace {
-    inline s32 findModelName(const JMapInfo* pInfo, const char* pModelName) {
+    inline s32 findModelName(const Table* pInfo, const char* pModelName) {
         s32 num = MR::getCsvDataElementNum(pInfo);
 
         for (s32 i = 0; i < num; i++) {
@@ -142,7 +142,7 @@ namespace {
     }
 };  // namespace
 
-void AstroMapObjFunction::makeArchiveListFromArg0(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter) {
+void AstroMapObjFunction::makeArchiveListFromArg0(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
     s32 domeId = getDomeIdFromArg0(rIter);
 
     const char* objName;
@@ -157,7 +157,7 @@ void AstroMapObjFunction::makeArchiveListFromArg0(NameObjArchiveListCollector* p
     }
 }
 
-void AstroMapObjFunction::makeArchiveListAstroNamePlate(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter) {
+void AstroMapObjFunction::makeArchiveListAstroNamePlate(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
     pCollector->addArchive("GalaxyNamePlate");
     pCollector->addArchive(::cAstroNamePlateArcName);
 }
@@ -202,9 +202,9 @@ bool AstroMapObjFunction::isEnableOpen(const char* pObjName, s32 domeId) {
     return ::getNumGrandStarForOpen(pObjName, domeId) == openedNum + 1;
 }
 
-s32 AstroMapObjFunction::getDomeIdFromArg0(const JMapInfoIter& rIter) {
+s32 AstroMapObjFunction::getDomeIdFromArg0(const TableIter& rIter) {
     s32 arg0 = -1;
-    MR::getJMapInfoArg0NoInit(rIter, &arg0);
+    MR::getPlacementArg0NoInit(rIter, &arg0);
 
     return arg0;
 }
@@ -235,14 +235,14 @@ const char* AstroMapObjFunction::getModelName(const char* pObjName, s32 domeId) 
     return pObjName;
 }
 
-const JMapInfo* AstroMapObjFunction::createAstroNamePlateParser() {
+const Table* AstroMapObjFunction::createAstroNamePlateParser() {
     char arcName[256];
     nebula_snprintf(arcName, sizeof(arcName), "%s.arc", ::cAstroNamePlateArcName);
 
     return MR::createCsvParser(arcName, ::cAstroNamePlateFileName);
 }
 
-bool AstroMapObjFunction::trySetAndShowNamePlate(GalaxyNamePlate* pNamePlate, const JMapInfo* pInfo, const Vec3f& rPos,
+bool AstroMapObjFunction::trySetAndShowNamePlate(GalaxyNamePlate* pNamePlate, const Table* pInfo, const Vec3f& rPos,
                                                  const char* pObjName, s32 domeId, bool param6) {
     AreaObj* astroOverlookAreaObj = MR::getCurrentAstroOverlookAreaObj();
 
@@ -301,17 +301,17 @@ bool AstroMapObjFunction::trySetAndShowNamePlate(GalaxyNamePlate* pNamePlate, co
     return true;
 }
 
-bool AstroMapObjFunction::tryRegisterMultiDemoAndFunction(const char* pObjName, LiveActor* pActor, const JMapInfoIter& rIter,
+bool AstroMapObjFunction::tryRegisterMultiDemoAndFunction(const char* pObjName, LiveActor* pActor, const TableIter& rIter,
                                                           const MR::FunctorBase& rFunctor) {
     const char* modelName = getModelName(pObjName, getDomeIdFromArg0(rIter));
     const char* demoName = nullptr;
 
     if (MR::isEqualString(modelName, ::cAstroDomeEntranceNameTable[1])) {
-        demoName = "\203\117\203\211\203\223\203\150\203\130\203\136\201\133\202\120\213\101\212\322" /* グランドスター１帰還 */;
+        demoName = "グランドスター１帰還";
     } else if (MR::isEqualString(modelName, ::cAstroDomeEntranceNameTable[3])) {
-        demoName = "\203\117\203\211\203\223\203\150\203\130\203\136\201\133\202\122\213\101\212\322" /* グランドスター３帰還 */;
+        demoName = "グランドスター３帰還";
     } else if (MR::isEqualString(modelName, ::cAstroDomeEntranceNameTable[5])) {
-        demoName = "\203\117\203\211\203\223\203\150\203\130\203\136\201\133\202\124\213\101\212\322" /* グランドスター５帰還 */;
+        demoName = "グランドスター５帰還";
     }
 
     if (demoName != nullptr && MR::isDemoExist(demoName) && MR::tryRegisterDemoCast(pActor, demoName, rIter)) {
@@ -323,7 +323,7 @@ bool AstroMapObjFunction::tryRegisterMultiDemoAndFunction(const char* pObjName, 
     return false;
 }
 
-void AstroMapObjFunction::initilizePeculiar(const char* pObjName, LiveActor* pActor, const JMapInfoIter& rIter) {
+void AstroMapObjFunction::initilizePeculiar(const char* pObjName, LiveActor* pActor, const TableIter& rIter) {
     s32 domeId = getDomeIdFromArg0(rIter);
 
     if (!MR::isEqualString(getModelName(pObjName, domeId), ::cAstroDomeEntranceNameTable[0])) {

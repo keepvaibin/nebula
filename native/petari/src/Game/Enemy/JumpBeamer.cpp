@@ -9,7 +9,7 @@
 #include "Game/Util/ActorShadowUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
@@ -47,9 +47,9 @@ void JumpBeamer::control() {
     updateEventCamera();
 }
 
-void JumpBeamer::init(const JMapInfoIter& rIter) {
+void JumpBeamer::init(const TableIter& rIter) {
     initModelManagerWithAnm("JumpBeamerBody", nullptr, false);
-    mHeadModel = MR::createPartsModelMapObjStrongLight(this, "\203\127\203\203\203\223\203\166\203\162\201\133\203\175\201\133\223\252" /* ジャンプビーマー頭 */, "JumpBeamerHead", _90);
+    mHeadModel = MR::createPartsModelMapObjStrongLight(this, "ジャンプビーマー頭", "JumpBeamerHead", _90);
     MR::initLightCtrl(mHeadModel);
     MR::initDefaultPos(this, rIter);
     MR::connectToSceneEnemy(this);
@@ -81,8 +81,8 @@ void JumpBeamer::init(const JMapInfoIter& rIter) {
     makeActorAppeared();
     f32 arg1 = 20.0f;
     s32 arg0 = 100;
-    MR::getJMapInfoArg0NoInit(rIter, &arg1);
-    MR::getJMapInfoArg1NoInit(rIter, &arg0);
+    MR::getPlacementArg0NoInit(rIter, &arg1);
+    MR::getPlacementArg1NoInit(rIter, &arg0);
     mBeams = new RingBeam*[5];
 
     for (s32 i = 0; i < 5; i++) {
@@ -90,7 +90,7 @@ void JumpBeamer::init(const JMapInfoIter& rIter) {
     }
 
     for (s32 i = 0; i < 3; i++) {
-        mBeams[i] = new RingBeam("\203\212\203\223\203\117\203\162\201\133\203\200" /* リングビーム */, this, false, false);
+        mBeams[i] = new RingBeam("リングビーム", this, false, false);
         mBeams[i]->init(rIter);
         mBeams[i]->setSpeed(arg1);
         mBeams[i]->setLife(arg0);

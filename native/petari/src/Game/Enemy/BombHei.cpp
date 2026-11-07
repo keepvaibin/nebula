@@ -11,7 +11,7 @@
 #include "Game/Util/ActorStateUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointController.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
@@ -101,20 +101,20 @@ BombHei::BombHei(const char* pName)
       mType(BOMB_HEI), mExplosionIgnoreCollision(false) {
 }
 
-void BombHei::init(const JMapInfoIter& rIter) {
+void BombHei::init(const TableIter& rIter) {
     if (MR::isValidInfo(rIter)) {
         MR::initDefaultPos(this, rIter);
 
         s32 detonateTime = ::hStartBrkTime;
-        MR::getJMapInfoArg0NoInit(rIter, &detonateTime);
+        MR::getPlacementArg0NoInit(rIter, &detonateTime);
         ::hCountTimer = detonateTime;
 
         s32 rangeArg = mExplodeRadius;
-        MR::getJMapInfoArg1NoInit(rIter, &rangeArg);
+        MR::getPlacementArg1NoInit(rIter, &rangeArg);
         mExplodeRadius = rangeArg;
 
         s32 ignoreCollisionArg = -1;
-        MR::getJMapInfoArg2NoInit(rIter, &ignoreCollisionArg);
+        MR::getPlacementArg2NoInit(rIter, &ignoreCollisionArg);
         if (ignoreCollisionArg != -1) {
             mExplosionIgnoreCollision = true;
         }
@@ -174,7 +174,7 @@ void BombHei::init(const JMapInfoIter& rIter) {
     appear();
 }
 
-void BombHei::setGroupClipping(const JMapInfoIter& rIter) {
+void BombHei::setGroupClipping(const TableIter& rIter) {
     MR::setGroupClipping(this, rIter, 32);
 }
 

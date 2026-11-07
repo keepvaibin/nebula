@@ -6,7 +6,7 @@ class SpinDriverOperateRing : public LiveActor {
 public:
     SpinDriverOperateRing(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void control();
 
     void setRadiusRate(f32);

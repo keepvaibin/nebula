@@ -2,7 +2,7 @@
 
 #include <nebula_geometry.hpp>
 
-class JMapInfoIter;
+class TableIter;
 class RailRider;
 class ParabolicPath;
 
@@ -10,8 +10,8 @@ class SpinDriverShootPath {
 public:
     SpinDriverShootPath();
 
-    void init(const JMapInfoIter&);
-    void initUsingParabolic(const JMapInfoIter&, const Vec3f&);
+    void init(const TableIter&);
+    void initUsingParabolic(const TableIter&, const Vec3f&);
     void setStartPosition(const Vec3f&);
     void calcPosition(Vec3f*, f32) const;
     void calcDirection(Vec3f*, f32, f32) const;

@@ -5,7 +5,7 @@
 #include "Game/System/GameSystem.hpp"
 #include "Game/System/GameSystemSceneController.hpp"
 #include "Game/Util/FileUtil.hpp"
-#include "Game/Util/JMapInfo.hpp"
+#include "Game/Util/Table.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/Util/StringUtil.hpp"
@@ -13,7 +13,7 @@
 #include <algorithm>
 #include "Game/System/GameAssets.hpp"
 
-template const bool JMapInfo::getValue< s32 >(int, const char*, s32*) const;
+template const bool Table::getValue< s32 >(int, const char*, s32*) const;
 
 namespace {
     inline const char* getGalaxyName(const ScenarioData* pData) {
@@ -63,10 +63,10 @@ ScenarioData::ScenarioData(const char* pFilePath) : mScenarioData(), mGalaxyName
 
     AssetFolder* pArchive = static_cast< AssetFolder* >(MR::getMountedArchive(pFilePath));
 
-    mScenarioData = new JMapInfo();
+    mScenarioData = new Table();
     mScenarioData->attach(pArchive->getResource("/ScenarioData.bcsv"));
 
-    mZoneList = new JMapInfo();
+    mZoneList = new Table();
     mZoneList->attach(pArchive->getResource("/ZoneList.bcsv"));
 }
 
@@ -97,7 +97,7 @@ s32 ScenarioData::getPowerStarNum() const {
 }
 
 bool ScenarioData::getValueString(const char* pKey, s32 scenarioNo, const char** ppOut) const {
-    JMapInfoIter iter = getScenarioDataIter(scenarioNo);
+    TableIter iter = getScenarioDataIter(scenarioNo);
     bool isExist = iter.getValue(pKey, ppOut);
 
     if (isExist) {
@@ -116,18 +116,18 @@ const char* ScenarioData::getZoneName(s32 zoneId) const {
     return pZoneName;
 }
 
-JMapInfoIter ScenarioData::getScenarioDataIter(s32 scenarioNo) const {
-    JMapInfoIter iter = mScenarioData->findElement< s32 >("ScenarioNo", scenarioNo, 0);
+TableIter ScenarioData::getScenarioDataIter(s32 scenarioNo) const {
+    TableIter iter = mScenarioData->findElement< s32 >("ScenarioNo", scenarioNo, 0);
     return iter;
 }
 
 bool ScenarioData::getValueU32(const char* pKey, s32 scenarioNo, u32* pOut) const {
-    JMapInfoIter iter = getScenarioDataIter(scenarioNo);
+    TableIter iter = getScenarioDataIter(scenarioNo);
     return iter.getValue(pKey, pOut);
 }
 
 bool ScenarioData::getValueBool(const char* pKey, s32 scenarioNo, bool* pOut) const {
-    JMapInfoIter iter = getScenarioDataIter(scenarioNo);
+    TableIter iter = getScenarioDataIter(scenarioNo);
     return iter.getValue(pKey, pOut);
 }
 

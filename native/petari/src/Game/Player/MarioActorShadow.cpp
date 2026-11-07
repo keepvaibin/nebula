@@ -46,7 +46,7 @@ void MarioActor::calcViewReflectionModel() {
     NebulaMtxIdentity(offset.toMtxPtr());
     f32 factor;
     f32 distance = 10.0f;
-    if (isAnimationRun("\203\136\201\133\203\223\203\127\203\203\203\223\203\166" /* ターンジャンプ */)) {
+    if (isAnimationRun("ターンジャンプ")) {
         distance = 25.0f;
     }
 

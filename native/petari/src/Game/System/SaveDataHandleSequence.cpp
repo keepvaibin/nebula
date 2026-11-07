@@ -31,7 +31,7 @@ namespace {
 };  // namespace
 
 SaveDataHandleSequence::SaveDataHandleSequence()
-    : NerveExecutor("\203\132\201\133\203\165/\203\215\201\133\203\150" /* セーブ/ロード */), mCurrentUserFile(), mBackupUserFile(), mSaveDataHandler(), mSaveErrorSequence(),
+    : NerveExecutor("セーブ/ロード"), mCurrentUserFile(), mBackupUserFile(), mSaveDataHandler(), mSaveErrorSequence(),
       mSysInfoWindowConfirm(), mSysInfoWindowSave(), _24(), mIsConfirmRemind(), mIsSaveAndQuitMsg(), _2A(), _2B(), mWorkUserFile(),
       mNerveForError(), mTempBuffer(), mOnSaveSuccessFunc(), mJustBeforeSaveFunc(), mSaveIcon()
       ,

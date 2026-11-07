@@ -24,14 +24,14 @@
 #include "Game/Util/SequenceUtil.hpp"
 
 namespace {
-    const char sDamageAirAnimation[] = "\222\206\203\137\203\201\201\133\203\127\213\363\222\206" /* 中ダメージ空中 */;
-    const char sDamageLandAnimation[] = "\222\206\203\137\203\201\201\133\203\127\222\205\222\156" /* 中ダメージ着地 */;
-    const char sBackDamageAirAnimation[] = "\222\206\214\343\203\137\203\201\201\133\203\127\213\363\222\206" /* 中後ダメージ空中 */;
-    const char sBackDamageLandAnimation[] = "\222\206\214\343\203\137\203\201\201\133\203\127\222\205\222\156" /* 中後ダメージ着地 */;
+    const char sDamageAirAnimation[] = "中ダメージ空中";
+    const char sDamageLandAnimation[] = "中ダメージ着地";
+    const char sBackDamageAirAnimation[] = "中後ダメージ空中";
+    const char sBackDamageLandAnimation[] = "中後ダメージ着地";
 };  // namespace
 
 bool Mario::isDamaging() const {
-    if (isAnimationRun("\220\205\217\343\203\137\203\201\201\133\203\127\222\206" /* 水上ダメージ中 */)) {
+    if (isAnimationRun("水上ダメージ中")) {
         return true;
     }
 
@@ -87,7 +87,7 @@ bool Mario::damageLarge(const Vec3f& rDirection) {
             mSwim->_AD = 1;
         } else {
             mDamage->setVecSize(mActor->getConst().getTable()->mJumpDistLargeDamage, mActor->getConst().getTable()->mJumpHeightLargeDamage);
-            playSound("\223\212\202\260\202\347\202\352" /* 投げられ */);
+            playSound("投げられ");
         }
 
         return true;
@@ -446,19 +446,19 @@ bool MarioDamage::start() {
     _14 = 0;
     _18 = 0;
     if (_1C.dot(getPlayer()->mFrontVec) > 0.0f) {
-        changeAnimationNonStop("\222\206\214\343\203\137\203\201\201\133\203\127" /* 中後ダメージ */);
+        changeAnimationNonStop("中後ダメージ");
         _28 = ::sBackDamageAirAnimation;
         _2C = ::sBackDamageLandAnimation;
         getPlayer()->setFrontVecKeepUp(_1C);
     } else {
-        changeAnimationNonStop("\222\206\203\137\203\201\201\133\203\127" /* 中ダメージ */);
+        changeAnimationNonStop("中ダメージ");
         _28 = ::sDamageAirAnimation;
         _2C = ::sDamageLandAnimation;
         getPlayer()->setFrontVecKeepUp(-_1C);
     }
 
     if (!_11) {
-        playEffect("\203\137\203\201\201\133\203\127" /* ダメージ */);
+        playEffect("ダメージ");
     }
 
     startPadVib(3);
@@ -472,13 +472,13 @@ bool MarioDamage::start() {
 
     _12 = !_11;
     if (_11) {
-        playSound("\220\272\223\212\202\260\202\347\202\352" /* 声投げられ */);
-        playSound("\223\212\202\260\202\347\202\352" /* 投げられ */);
+        playSound("声投げられ");
+        playSound("投げられ");
         _11 = 0;
         mActor->resetPlayerModeOnNoDamage();
     } else {
-        playSound("\220\272\217\254\203\137\203\201\201\133\203\127" /* 声小ダメージ */);
-        playSound("\203\137\203\201\201\133\203\127" /* ダメージ */);
+        playSound("声小ダメージ");
+        playSound("ダメージ");
         mActor->decLifeMiddle();
         mActor->resetPlayerModeOnDamage();
     }
@@ -550,9 +550,9 @@ bool MarioDamage::update() {
                 getPlayer()->mMovementStates.jumping = true;
             } else {
                 getPlayer()->mMovementStates.jumping = false;
-                playSound("\220\201\202\301\224\362\202\321\223\174\202\352" /* 吹っ飛び倒れ */);
+                playSound("吹っ飛び倒れ");
                 changeAnimation(_2C);
-                playEffect("\213\244\222\312\203\137\203\201\201\133\203\127\222\205\222\156" /* 共通ダメージ着地 */);
+                playEffect("共通ダメージ着地");
                 MR::vecKillElement(_1C, mActor->_240, &_1C);
                 _14 = 0;
                 _18++;
@@ -614,8 +614,8 @@ bool MarioDamage::update() {
 }
 
 bool MarioDamage::close() {
-    stopAnimation("\203\137\203\201\201\133\203\127" /* ダメージ */);
-    stopAnimation("\203\137\203\201\201\133\203\127\222\205\222\156" /* ダメージ着地 */, "\212\356\226\173" /* 基本 */);
+    stopAnimation("ダメージ");
+    stopAnimation("ダメージ着地", "基本");
     if (_12) {
         _16 = 120;
     }
@@ -717,7 +717,7 @@ bool MarioFireRun::start() {
     _12 = mActor->getConst().getTable()->mFireRunTimer1;
     _14 = 0;
     stopAnimationUpper(nullptr);
-    changeAnimation("\203\164\203\100\203\103\203\101\203\211\203\223\221\117\222\233" /* ファイアラン前兆 */);
+    changeAnimation("ファイアラン前兆");
     if (!getPlayer()->mMovementStates._1) {
         _18 = -mActor->getConst().getTable()->mFireRunFirstJump;
     } else {
@@ -769,12 +769,12 @@ bool MarioFireRun::update() {
             }
 
             _18 = 0.0f;
-            changeAnimation("\211\212\202\314\203\211\203\223\203\151\201\133" /* 炎のランナー */);
+            changeAnimation("炎のランナー");
         }
 
         break;
     case 1:
-        playSound("\211\212\203\137\203\201\201\133\203\127\211\212\217\343\222\206" /* 炎ダメージ炎上中 */);
+        playSound("炎ダメージ炎上中");
         if (!getPlayer()->mMovementStates._1) {
             _14 = 2;
             _12 += mActor->getConst().getTable()->mFireRunTimer3;
@@ -846,16 +846,16 @@ bool MarioFireRun::close() {
     }
 
     if (getPlayer()->mMovementStates.jumping) {
-        stopAnimation("\211\212\202\314\203\211\203\223\203\151\201\133" /* 炎のランナー */, "\227\216\211\272" /* 落下 */);
+        stopAnimation("炎のランナー", "落下");
     } else {
-        stopAnimation("\211\212\202\314\203\211\203\223\203\151\201\133" /* 炎のランナー */, "\212\356\226\173" /* 基本 */);
+        stopAnimation("炎のランナー", "基本");
         if (getStickP() < 0.1f) {
-            playSound("\220\272\211\212\203\137\203\201\201\133\203\127\217\111\227\271" /* 声炎ダメージ終了 */);
+            playSound("声炎ダメージ終了");
         }
     }
 
-    stopEffect("\211\212\203\137\203\201\201\133\203\127\211\214" /* 炎ダメージ煙 */);
-    stopEffect("\211\212\203\137\203\201\201\133\203\127\220\302\211\214" /* 炎ダメージ青煙 */);
+    stopEffect("炎ダメージ煙");
+    stopEffect("炎ダメージ青煙");
     mActor->_1B4 = 0;
     return true;
 }
@@ -1046,7 +1046,7 @@ bool MarioFireDance::start() {
 }
 
 void MarioFireDance::impact() {
-    changeAnimation("\203\164\203\100\203\103\203\101\203\137\203\223\203\130" /* ファイアダンス */);
+    changeAnimation("ファイアダンス");
     if (!getPlayer()->mDrawStates._10) {
         if (_14.length() > 2.0f * mActor->getConst().getTable()->mFireDanceMoveSpeed) {
             _14.setLength(2.0f * mActor->getConst().getTable()->mFireDanceMoveSpeed);
@@ -1060,22 +1060,22 @@ void MarioFireDance::impact() {
 }
 
 void MarioFireDance::impactEffect() {
-    playSound("\203\137\203\201\201\133\203\127" /* ダメージ */);
-    playEffect("\203\137\203\201\201\133\203\127" /* ダメージ */);
+    playSound("ダメージ");
+    playEffect("ダメージ");
     switch (_29) {
     case 0:
-        playSound("\220\272\211\212\203\137\203\201\201\133\203\127" /* 声炎ダメージ */);
-        playSound("\211\212\203\137\203\201\201\133\203\127" /* 炎ダメージ */);
+        playSound("声炎ダメージ");
+        playSound("炎ダメージ");
         if (mActor->_1B4) {
-            playEffect("\211\212\203\137\203\201\201\133\203\127\220\302\211\214" /* 炎ダメージ青煙 */);
+            playEffect("炎ダメージ青煙");
         } else {
-            playEffect("\211\212\203\137\203\201\201\133\203\127\211\214" /* 炎ダメージ煙 */);
+            playEffect("炎ダメージ煙");
         }
 
         break;
     case 1:
-        playSound("\220\272\220\152\203\137\203\201\201\133\203\127" /* 声針ダメージ */);
-        playSound("\220\152\203\137\203\201\201\133\203\127" /* 針ダメージ */);
+        playSound("声針ダメージ");
+        playSound("針ダメージ");
         break;
     }
 }
@@ -1097,14 +1097,14 @@ bool MarioFireDance::update() {
             _20 = -mActor->getConst().getTable()->mFireDanceSecondJump;
             impact();
             startPadVib(0u);
-            playSound("\211\212\203\137\203\201\201\133\203\127\225\234\213\101\203\157\203\105\203\223\203\150" /* 炎ダメージ復帰バウンド */);
+            playSound("炎ダメージ復帰バウンド");
             if (_29 == 1) {
-                playSound("\220\272\220\152\203\137\203\201\201\133\203\127\222\206" /* 声針ダメージ中 */);
+                playSound("声針ダメージ中");
             } else {
-                playSound("\220\272\211\212\203\137\203\201\201\133\203\127\222\206" /* 声炎ダメージ中 */);
+                playSound("声炎ダメージ中");
             }
 
-            changeAnimation("\203\164\203\100\203\103\203\101\203\137\203\223\203\130" /* ファイアダンス */);
+            changeAnimation("ファイアダンス");
         } else {
             if (!_29) {
                 mActor->decLifeLarge();
@@ -1155,9 +1155,9 @@ bool MarioFireDance::update() {
 }
 
 bool MarioFireDance::close() {
-    stopAnimation("\203\164\203\100\203\103\203\101\203\137\203\223\203\130" /* ファイアダンス */);
-    stopEffect("\211\212\203\137\203\201\201\133\203\127\211\214" /* 炎ダメージ煙 */);
-    stopEffect("\211\212\203\137\203\201\201\133\203\127\220\302\211\214" /* 炎ダメージ青煙 */);
+    stopAnimation("ファイアダンス");
+    stopEffect("炎ダメージ煙");
+    stopEffect("炎ダメージ青煙");
     return true;
 }
 
@@ -1189,8 +1189,8 @@ void Mario::checkKarikariDamage() {
             }
 
             startPadVib(2);
-            playSound("\220\272\217\254\203\137\203\201\201\133\203\127" /* 声小ダメージ */);
-            playSound("\203\137\203\201\201\133\203\127" /* ダメージ */);
+            playSound("声小ダメージ");
+            playSound("ダメージ");
             mActor->decLifeSmall();
             mActor->_BC4 = 16;
             _7D0 = 120;
@@ -1209,8 +1209,8 @@ bool Mario::doDarkDamage() {
     mActor->_3C0 = true;
     stopWalk();
     mActor->damageDropThrowMemoSensor();
-    playSound("\220\272\217\300\222\276\202\335" /* 声沼沈み */);
-    playEffect("\203\137\201\133\203\116\203\175\203\136\201\133\216\200\226\123" /* ダークマター死亡 */);
+    playSound("声沼沈み");
+    playEffect("ダークマター死亡");
     setSeVersion(1);
     changeStatus(mDarkDamage);
     return true;
@@ -1251,7 +1251,7 @@ bool MarioDarkDamage::update() {
     }
 
     if (_12) {
-        playSound("\203\137\201\133\203\116\203\175\203\136\201\133\222\276\202\335" /* ダークマター沈み */);
+        playSound("ダークマター沈み");
     }
 
     return true;

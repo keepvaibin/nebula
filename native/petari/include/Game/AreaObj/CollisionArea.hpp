@@ -9,7 +9,7 @@ public:
 
     virtual ~AreaPolygon();
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
 
     void setMtx(MtxPtr pMatrix, const Vec3f& rSize, f32 offset);
     void setSurfaceAndSync(s32 surface);
@@ -30,7 +30,7 @@ public:
 
     virtual ~CollisionArea();
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void movement();
 
     bool hitCheck(const Vec3f& rPos, f32 radius, Vec3f* pPoint, Vec3f* pNormal);

@@ -12,8 +12,8 @@
 #include "Game/Util/TalkUtil.hpp"
 
 // done due to inlining
-template const bool JMapInfo::getValue< s32 >(int, const char*, s32*) const;
-template const bool JMapInfo::getValue< const char* >(int, const char*, const char**) const;
+template const bool Table::getValue< s32 >(int, const char*, s32*) const;
+template const bool Table::getValue< const char* >(int, const char*, const char**) const;
 
 namespace {
     TalkMessageCtrl* findTalkMessageCtrl(LiveActor* pActor) {
@@ -151,7 +151,7 @@ void DemoActionInfo::executeActionLast() const {
     }
 }
 
-void DemoActionKeeper::initCast(LiveActor* pActor, const JMapInfoIter& rIter) {
+void DemoActionKeeper::initCast(LiveActor* pActor, const TableIter& rIter) {
     if (mNumInfos <= 0) {
         return;
     }
@@ -237,18 +237,18 @@ DemoActionKeeper::DemoActionKeeper(const DemoExecutor* pExector) {
     mDemoExecutor = pExector;
     mNumInfos = 0;
     mInfoArray = nullptr;
-    JMapInfo* jmap = nullptr;
-    mNumInfos = DemoFunction::createSheetParser(mDemoExecutor, "Action", &jmap);
+    Table* table = nullptr;
+    mNumInfos = DemoFunction::createSheetParser(mDemoExecutor, "Action", &table);
     mInfoArray = new DemoActionInfo*[mNumInfos];
 
     for (s32 i = 0; i < mNumInfos; i++) {
         mInfoArray[i] = new DemoActionInfo();
         DemoActionInfo* info = mInfoArray[i];
-        jmap->getValue< const char* >(i, "PartName", &info->mPartName);
-        jmap->getValue< const char* >(i, "CastName", &info->mCastName);
-        jmap->getValue< s32 >(i, "CastID", &info->mCastID);
-        jmap->getValue< s32 >(i, "ActionType", &info->mActionType);
-        jmap->getValue< const char* >(i, "PosName", &info->mPosName);
-        jmap->getValue< const char* >(i, "AnimName", &info->mAnimName);
+        table->getValue< const char* >(i, "PartName", &info->mPartName);
+        table->getValue< const char* >(i, "CastName", &info->mCastName);
+        table->getValue< s32 >(i, "CastID", &info->mCastID);
+        table->getValue< s32 >(i, "ActionType", &info->mActionType);
+        table->getValue< const char* >(i, "PosName", &info->mPosName);
+        table->getValue< const char* >(i, "AnimName", &info->mAnimName);
     }
 }

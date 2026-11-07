@@ -34,9 +34,9 @@ QuestionCoin::QuestionCoin(const char* pName)
     MR::createCoinRotater();
 }
 
-void QuestionCoin::init(const JMapInfoIter& rIter) {
+void QuestionCoin::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
-    initFromJMapInfoArg(rIter);
+    initFromPlacementArg(rIter);
 
     if (mPoseType == 0) {
         Pos3f rotation;
@@ -179,15 +179,15 @@ void QuestionCoin::endClipped() {
     MR::emitEffect(this, "Light");
 }
 
-void QuestionCoin::initFromJMapInfoArg(const JMapInfoIter& rIter) {
-    MR::getJMapInfoArg0NoInit(rIter, &mLaunchSpeed);
+void QuestionCoin::initFromPlacementArg(const TableIter& rIter) {
+    MR::getPlacementArg0NoInit(rIter, &mLaunchSpeed);
     s32 gravityType = -1;
-    MR::getJMapInfoArg1NoInit(rIter, &gravityType);
+    MR::getPlacementArg1NoInit(rIter, &gravityType);
     mIsWeakGravity = gravityType == 0;
-    MR::getJMapInfoArg2NoInit(rIter, &mPoseType);
-    MR::getJMapInfoArg3NoInit(rIter, &mShadowDropLengthType);
+    MR::getPlacementArg2NoInit(rIter, &mPoseType);
+    MR::getPlacementArg3NoInit(rIter, &mShadowDropLengthType);
     s32 calcShadow = -1;
-    MR::getJMapInfoArg4NoInit(rIter, &calcShadow);
+    MR::getPlacementArg4NoInit(rIter, &calcShadow);
     mCalcShadow = calcShadow != -1;
 }
 

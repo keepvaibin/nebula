@@ -12,7 +12,7 @@ public:
     WhirlPool(const char* pName);
 
     virtual ~WhirlPool();
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void movement();
     virtual void draw() const;
 

@@ -4,10 +4,10 @@
 
 
 class AssetFolder;
-class JMapIdInfo;
-class JMapInfo;
-class JMapInfoIter;
-class JMapLinkInfo;
+class PlacementId;
+class Table;
+class TableIter;
+class PlacementLink;
 class NameObj;
 
 namespace MR {
@@ -40,31 +40,31 @@ namespace MR {
     bool isInitializeStatePlacementSomething();
     void stopSceneForScenarioOpeningCamera();
     void playSceneForScenarioOpeningCamera();
-    const JMapIdInfo& getCurrentMarioStartIdInfo();
+    const PlacementId& getCurrentMarioStartIdInfo();
     s32 getStartPosNum();
     // A start of the main zone (its MarioNo): where Mario arrives and the way he faces (degrees); false if it has none.
     bool getMarioStartPose(s32 marioNo, Vec3f* pTrans, Vec3f* pRotate);
     s32 getCurrentStartZoneId();
-    const JMapIdInfo& getInitializeStartIdInfo();
+    const PlacementId& getInitializeStartIdInfo();
     AssetFolder* getStageArchive(const char*);
     s32 getGeneralPosNum();
-    void getGeneralPosData(const char**, Vec3f*, Vec3f*, JMapLinkInfo**, int);
-    s32 getChildObjNum(const JMapInfoIter&);
-    void getChildObjName(const char**, const JMapInfoIter&, int);
-    void initChildObj(NameObj*, const JMapInfoIter&, int);
+    void getGeneralPosData(const char**, Vec3f*, Vec3f*, PlacementLink**, int);
+    s32 getChildObjNum(const TableIter&);
+    void getChildObjName(const char**, const TableIter&, int);
+    void initChildObj(NameObj*, const TableIter&, int);
     const char* getAppearPowerStarObjName(s32);
     s32 getCurrentStageNormalScenarioNum();
     s32 getCurrentStagePowerStarNum();
     s32 getZoneNum();
     const char* getZoneNameFromZoneId(s32);
     s32 getPlacedHiddenStarScenarioNo(const char*, s32);
-    void getRailInfo(JMapInfoIter*, const JMapInfo**, const JMapInfoIter&);
-    bool getNextLinkRailInfo(JMapInfoIter*, const JMapInfo**, const JMapInfoIter&);
+    void getRailInfo(TableIter*, const Table**, const TableIter&);
+    bool getNextLinkRailInfo(TableIter*, const Table**, const TableIter&);
     s32 getCurrentStartCameraId();
-    void getStartCameraIdInfoFromStartDataIndex(JMapIdInfo*, int);
+    void getStartCameraIdInfoFromStartDataIndex(PlacementId*, int);
     s32 getPlacedRailNum(s32);
-    void getCameraRailInfo(JMapInfoIter*, const JMapInfo**, s32, s32);
-    bool getCameraRailInfoFromRailDataIndex(JMapInfoIter*, const JMapInfo**, int, s32);
+    void getCameraRailInfo(TableIter*, const Table**, s32, s32);
+    bool getCameraRailInfoFromRailDataIndex(TableIter*, const Table**, int, s32);
     void getStageCameraData(void**, s32*, s32);
     void getCurrentScenarioStartAnimCameraData(void**, s32*);
     void incCoin(int);
@@ -73,8 +73,8 @@ namespace MR {
     s32 getPurpleCoinNum();
     s32 getPowerStarNum();
     bool isPlacementLocalStage();
-    s32 getPlacedZoneId(const JMapInfoIter&);
-    const Pos3f* getZonePlacementMtx(const JMapInfoIter&);
+    s32 getPlacedZoneId(const TableIter&);
+    const Pos3f* getZonePlacementMtx(const TableIter&);
     const Pos3f* getZonePlacementMtx(s32);
     const char* getJapaneseObjectName(const char*);
     void setCurrentPlacementZoneId(s32);

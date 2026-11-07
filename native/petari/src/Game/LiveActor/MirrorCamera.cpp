@@ -11,7 +11,7 @@ MirrorCamera::MirrorCamera(const char* pName) : NameObj(pName), _C(0.0f, 0.0f, 0
     mModelTexMtx.identity();
 }
 
-void MirrorCamera::init(const JMapInfoIter& rIter) {
+void MirrorCamera::init(const TableIter& rIter) {
     MR::connectToScene(this, MR::MovementType_MirrorCamera, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_None);
 }
 

@@ -15,13 +15,13 @@ namespace NrvCinemaFrame {
     NEW_NERVE(CinemaFrameNrvFrameToScreen, CinemaFrame, FrameToScreen);
 };  // namespace NrvCinemaFrame
 
-CinemaFrame::CinemaFrame(bool isConnectToScene) : LayoutActor("\203\126\203\154\203\175\203\164\203\214\201\133\203\200" /* シネマフレーム */, true) {
+CinemaFrame::CinemaFrame(bool isConnectToScene) : LayoutActor("シネマフレーム", true) {
     if (isConnectToScene) {
         MR::connectToScene(this, MR::MovementType_Layout, MR::CalcAnimType_Layout, MR::DrawBufferType_None, MR::DrawType_CinemaFrame);
     }
 }
 
-void CinemaFrame::init(const JMapInfoIter& rIter) {
+void CinemaFrame::init(const TableIter& rIter) {
     initLayoutManager("CinemaFrame", 1);
     initNerve(GET_NERVE(CinemaFrame, CinemaFrameNrvScreen));
     kill();

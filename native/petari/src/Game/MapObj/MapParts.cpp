@@ -13,7 +13,7 @@ MapParts::MapParts(const char* pName) : LiveActor(pName) {
     _8C.setZeroVec();
 }
 
-void MapParts::init(const JMapInfoIter& rIter) {
+void MapParts::init(const TableIter& rIter) {
     if (MR::isConnectedWithRail(rIter)) {
         initRailRider(rIter);
     }
@@ -43,7 +43,7 @@ void MapParts::connectToScene() {
     MR::connectToSceneMapParts(this);
 }
 
-void MapParts::initModelAndCollision(const JMapInfoIter& rIter) {
+void MapParts::initModelAndCollision(const TableIter& rIter) {
     char name[256];
     MR::getMapPartsObjectName(name, sizeof(name), rIter);
     initModelManagerWithAnm(name, nullptr, false);

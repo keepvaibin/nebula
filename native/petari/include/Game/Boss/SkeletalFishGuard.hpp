@@ -9,7 +9,7 @@ class SkeletalFishGuard : public LiveActor {
 public:
     SkeletalFishGuard(SkeletalFishBoss*, const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void appear();
     virtual void control();

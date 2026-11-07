@@ -31,7 +31,7 @@ enum AnimType {
 
 class StarPointerLayout : public LayoutActor {
 public:
-    StarPointerLayout(const char* pName = "\203\130\203\136\201\133\203\174\203\103\203\223\203\136\203\214\203\103\203\101\203\105\203\147" /* スターポインタレイアウト */);
+    StarPointerLayout(const char* pName = "スターポインタレイアウト");
 
     virtual void draw() const;
     virtual void calcAnim();

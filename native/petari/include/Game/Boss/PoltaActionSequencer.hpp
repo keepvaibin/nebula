@@ -8,12 +8,12 @@ class PoltaDemo;
 class PoltaWaitStart;
 class PoltaBattleLv1;
 class PoltaBattleLv2;
-class JMapInfoIter;
+class TableIter;
 class HitSensor;
 
 class PoltaActionSequencer : public NerveExecutor {
 public:
-    PoltaActionSequencer(Polta*, const JMapInfoIter&);
+    PoltaActionSequencer(Polta*, const TableIter&);
 
     void attackSensor(HitSensor* pSender, HitSensor* pReceiver);
     bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);

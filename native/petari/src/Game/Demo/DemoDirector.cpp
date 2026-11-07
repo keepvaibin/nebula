@@ -13,8 +13,8 @@
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
-#include "Game/Util/JMapIdInfo.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementId.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
@@ -120,18 +120,18 @@ bool DemoDirector::isExistTimeKeepDemo(const char* pParam1) const {
     return false;
 }
 
-bool DemoDirector::registerDemoCast(LiveActor* pActor, const JMapInfoIter& rIter) {
+bool DemoDirector::registerDemoCast(LiveActor* pActor, const TableIter& rIter) {
     if (!MR::isValidInfo(rIter)) {
         return false;
     }
 
     s32 demoGroupId = -1;
 
-    if (!MR::getJMapInfoDemoGroupID(rIter, &demoGroupId)) {
+    if (!MR::getPlacementDemoGroupID(rIter, &demoGroupId)) {
         return false;
     }
 
-    JMapIdInfo idInfo = JMapIdInfo(MR::getDemoGroupID(rIter), rIter);
+    PlacementId idInfo = PlacementId(MR::getDemoGroupID(rIter), rIter);
 
     if (_18->tryRegisterDemoActor(pActor, rIter, idInfo)) {
         return true;
@@ -140,7 +140,7 @@ bool DemoDirector::registerDemoCast(LiveActor* pActor, const JMapInfoIter& rIter
     return mCastSubGroupHolder->tryRegisterDemoActor(pActor, rIter, idInfo);
 }
 
-bool DemoDirector::registerDemoCast(LiveActor* pActor, const char* pParam2, const JMapInfoIter& rIter) {
+bool DemoDirector::registerDemoCast(LiveActor* pActor, const char* pParam2, const TableIter& rIter) {
     if (_18->tryRegisterDemoActor(pActor, pParam2, rIter)) {
         return true;
     }

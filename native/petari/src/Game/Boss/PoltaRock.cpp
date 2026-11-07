@@ -25,7 +25,7 @@ PoltaRock::PoltaRock(const char* pName)
     : LiveActor(pName), mOwner(nullptr), _90(0.0f, 0.0f, 0.0f, 1.0f), _A0(0.0f, 0.0f, 1.0f), _AC(0.0f, 0.0f, 0.0f), mType(0) {
 }
 
-void PoltaRock::init(const JMapInfoIter& rIter) {
+void PoltaRock::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("PoltaRock", nullptr, false);
     MR::connectToSceneEnemy(this);

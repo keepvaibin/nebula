@@ -20,7 +20,7 @@ public:
     /// @brief Creates a new `InformationObserver`.
     InformationObserver();
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
 
     void entry(InformationObserver::TYPE, LiveActor*);
     void exeWait();

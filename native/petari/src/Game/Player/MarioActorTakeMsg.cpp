@@ -345,7 +345,7 @@ bool MarioActor::releaseThrowMemoSensor() {
 void MarioActor::tryReleaseWithMsg(u32 msg) {
     u32 maxIdx = _468;
     if (maxIdx == 0) {
-        if (isAnimationRun("\202\320\202\353\202\242\203\116\203\103\203\142\203\116" /* ひろいクイック */)) {
+        if (isAnimationRun("ひろいクイック")) {
             mMario->stopAnimationUpperForce();
             clearNullAnimation(0);
             offTakingFlag();
@@ -390,12 +390,12 @@ void MarioActor::tryReleaseWithMsg(u32 msg) {
 }
 
 void MarioActor::tryTornadoPull(HitSensor* pSensor) {
-    if (!isActionOk("\203\122\203\103\203\223\210\370\202\301\222\243\202\350" /* コイン引っ張り */)) {
+    if (!isActionOk("コイン引っ張り")) {
         return;
     }
 
     s32 type = pSensor->mType;
-    if (strcmp(pSensor->mHost->mName, "\203\112\203\201\203\142\203\116\203\162\201\133\203\200\227\160\203\112\203\201" /* カメックビーム用カメ */) == 0) {
+    if (strcmp(pSensor->mHost->mName, "カメックビーム用カメ") == 0) {
         type = 5555;
     }
 
@@ -454,7 +454,7 @@ void MarioActor::tryTornadoPull(HitSensor* pSensor) {
 
     case ATYPE_JET_TURTLE:
     case ATYPE_JET_TURTLE_SLOW:
-        if (isActionOk("\203\112\203\201\216\235\202\277" /* カメ持ち */) && pSensor->receiveMessage(ACTMES_IS_PULL_ENABLE, getSensor("body"))) {
+        if (isActionOk("カメ持ち") && pSensor->receiveMessage(ACTMES_IS_PULL_ENABLE, getSensor("body"))) {
             if ((pSensor->mPosition - mPosition).length() < 120.0f) {
                 tryGetItem(pSensor);
                 return;
@@ -466,7 +466,7 @@ void MarioActor::tryTornadoPull(HitSensor* pSensor) {
 
         break;
     case 5555:
-        if (isActionOk("\203\112\203\201\216\235\202\277" /* カメ持ち */) && pSensor->receiveMessage(ACTMES_IS_PULL_ENABLE, getSensor("body"))) {
+        if (isActionOk("カメ持ち") && pSensor->receiveMessage(ACTMES_IS_PULL_ENABLE, getSensor("body"))) {
             tryCoinPullOne(pSensor);
         }
 
@@ -489,5 +489,5 @@ void MarioActor::tryReleaseBombTeresa() {
         mMario->_420 = 25;
     }
 
-    changeAnimation("\203\156\203\223\203\175\201\133\223\212\202\260\203\212\203\212\201\133\203\130" /* ハンマー投げリリース */);
+    changeAnimation("ハンマー投げリリース");
 }

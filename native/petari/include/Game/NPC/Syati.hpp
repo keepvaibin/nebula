@@ -17,7 +17,7 @@ class Syati : public LiveActor {
 public:
     Syati(const char* pName);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void control();
     virtual void calcAndSetBaseMtx();
     virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);
@@ -42,9 +42,9 @@ public:
     void exeWaitTalkNormal();
     void exeTalkNormal();
     void exeStart();
-    void initRings(const JMapInfoIter& rIter);
+    void initRings(const TableIter& rIter);
     void initPose();
-    void initTalking(const JMapInfoIter& rIter);
+    void initTalking(const TableIter& rIter);
     void updateSwimCommon();
     void updatePoseByRail();
     void updateNumRingPassed();

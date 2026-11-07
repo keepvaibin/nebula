@@ -14,7 +14,7 @@ public:
     /// @brief Destroys the `FileSelectSky`.
     virtual ~FileSelectSky();
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void calcAnim();
     virtual void calcAndSetBaseMtx();
     virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);

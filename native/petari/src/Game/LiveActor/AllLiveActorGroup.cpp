@@ -9,7 +9,7 @@ void AllLiveActorGroup::startInitActorSystemInfo() {
     mActorNum = getObjNum();
 }
 
-void AllLiveActorGroup::initActorSystemInfo(const JMapInfoIter& rIter) {
+void AllLiveActorGroup::initActorSystemInfo(const TableIter& rIter) {
     if (getObjNum() <= 0) {
         return;
     }
@@ -40,7 +40,7 @@ namespace MR {
         getAllLiveActorGroup()->startInitActorSystemInfo();
     }
 
-    void initLiveActorSystemInfo(const JMapInfoIter& rIter) {
+    void initLiveActorSystemInfo(const TableIter& rIter) {
         getAllLiveActorGroup()->initActorSystemInfo(rIter);
     }
 

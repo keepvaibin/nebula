@@ -366,11 +366,11 @@ AreaObjContainer::AreaObjContainer(const char* pName) : NameObj(pName) {
     mNumManagers = 0;
 }
 
-void AreaObjContainer::init(const JMapInfoIter& rIter) {
+void AreaObjContainer::init(const TableIter& rIter) {
     for (u32 i = 0; i < ARRAY_SIZE(::cCreateTable); i++) {
         const Name2CreateManagerFunc* pName2CreateManagerFunc = &::cCreateTable[i];
         AreaObjMgr* mgr = pName2CreateManagerFunc->mCreateFunc(pName2CreateManagerFunc->_4, pName2CreateManagerFunc->mName);
-        mgr->init(JMapInfoIter());
+        mgr->init(TableIter());
         s32 num = mNumManagers;
         mNumManagers++;
         mManagerArray[num] = mgr;

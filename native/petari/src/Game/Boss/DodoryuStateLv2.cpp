@@ -67,10 +67,10 @@ DodoryuStateLv2::DodoryuStateLv2(Dodoryu* pHost, DodoryuChaseParam* pChaseParam,
     initWithoutIter();
 }
 
-void DodoryuStateLv2::init(const JMapInfoIter& rIter) {
+void DodoryuStateLv2::init(const TableIter& rIter) {
     MR::invalidateClipping(this);
     initNerve(GET_NERVE_ANON(DodoryuStateLv2NrvStart));
-    MR::declareEventCameraProgrammable("\203\150\203\150\203\212\203\205\203\105\202\153\202\165\202\121\203\137\203\201\201\133\203\127" /* ドドリュウＬＶ２ダメージ */);
+    MR::declareEventCameraProgrammable("ドドリュウＬＶ２ダメージ");
     makeActorAppeared();
 }
 

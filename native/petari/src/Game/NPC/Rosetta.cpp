@@ -22,13 +22,13 @@ namespace NrvRosetta {
 Rosetta::Rosetta(const char* pName) : NPCActor(pName), mFadeStarter(this, -1), mDemoExecutor(), mTalkDemoExecutor(), mObjArg0(-1) {
 }
 
-void Rosetta::makeArchiveList(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter) {
+void Rosetta::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
     pCollector->addArchive("Rosetta");
     pCollector->addArchive("RosettaMiddle");
     pCollector->addArchive("RosettaLow");
 
     s32 arg0;
-    MR::getJMapInfoArg0WithInit(rIter, &arg0);
+    MR::getPlacementArg0WithInit(rIter, &arg0);
 
     switch (arg0) {
     case 0:
@@ -43,7 +43,7 @@ void Rosetta::makeArchiveList(NameObjArchiveListCollector* pCollector, const JMa
     }
 }
 
-void Rosetta::init(const JMapInfoIter& rIter) {
+void Rosetta::init(const TableIter& rIter) {
     NPCActorCaps caps("Rosetta");
     caps.setDefault();
     caps.setIndirect();
@@ -69,11 +69,11 @@ void Rosetta::init(const JMapInfoIter& rIter) {
     }
 
     MR::startBrk(this, "Normal");
-    MR::getJMapInfoArg0NoInit(rIter, &mObjArg0);
+    MR::getPlacementArg0NoInit(rIter, &mObjArg0);
     AstroDemoFunction::tryRegisterAstroDemoAll(this, rIter);
-    MR::tryRegisterDemoCast(this, "\220\324\202\242\203\130\203\136\201\133" /* 赤いスター */, rIter);
-    MR::tryRegisterDemoCast(this, "\203\140\203\122\203\113\203\103\203\150\203\146\203\202" /* チコガイドデモ */, rIter);
-    MR::tryRegisterDemoCast(this, "\203\107\203\163\203\215\201\133\203\117\203\146\203\202" /* エピローグデモ */, rIter);
+    MR::tryRegisterDemoCast(this, "赤いスター", rIter);
+    MR::tryRegisterDemoCast(this, "チコガイドデモ", rIter);
+    MR::tryRegisterDemoCast(this, "エピローグデモ", rIter);
     AstroDemoFunction::tryRegisterSimpleCastIfAstroGalaxy(this);
 
     mTurnJointCtrl = new TurnJointCtrl(this);
@@ -82,15 +82,15 @@ void Rosetta::init(const JMapInfoIter& rIter) {
     mTurnJointCtrl->addWaist("Spine2", 0.4f, TurnJointCtrl::Z, TurnJointCtrl::X, TurnJointCtrl::Y);
     makeActorAppeared();
 
-    if (MR::isDemoCast(this, "\203\140\203\122\203\113\203\103\203\150\203\146\203\202" /* チコガイドデモ */)) {
+    if (MR::isDemoCast(this, "チコガイドデモ")) {
         mDemoExecutor = new RosettaDemoHeavensDoor1(this, rIter);
-    } else if (MR::isDemoCast(this, "\220\324\202\242\203\130\203\136\201\133" /* 赤いスター */)) {
+    } else if (MR::isDemoCast(this, "赤いスター")) {
         mDemoExecutor = new RosettaDemoHeavensDoor2(this, rIter);
-    } else if (MR::isDemoCast(this, "\203\215\203\133\203\142\203\136\217\363\213\265\220\340\226\276\203\146\203\202" /* ロゼッタ状況説明デモ */)) {
+    } else if (MR::isDemoCast(this, "ロゼッタ状況説明デモ")) {
         mDemoExecutor = new RosettaDemoAstroDomeExplain(this, rIter);
-    } else if (MR::isDemoCast(this, "\203\107\203\163\203\215\201\133\203\117\203\146\203\202" /* エピローグデモ */)) {
+    } else if (MR::isDemoCast(this, "エピローグデモ")) {
         mDemoExecutor = new RosettaDemoEpilogue(this, rIter);
-    } else if (MR::isDemoCast(this, "\203\215\203\133\203\142\203\136\215\305\217\111\214\210\220\355\203\146\203\202" /* ロゼッタ最終決戦デモ */)) {
+    } else if (MR::isDemoCast(this, "ロゼッタ最終決戦デモ")) {
         mDemoExecutor = new RosettaDemoAstroDomeFinalBattle(this, rIter);
     }
 

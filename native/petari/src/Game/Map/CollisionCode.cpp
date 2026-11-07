@@ -118,7 +118,7 @@ const char* CollisionCode::getSoundCodeString(const Triangle& rTriangle) {
     return getSoundCodeString(rTriangle.getAttributes());
 }
 
-const char* CollisionCode::getSoundCodeString(const JMapInfoIter& rIter) {
+const char* CollisionCode::getSoundCodeString(const TableIter& rIter) {
     if (!rIter.isValid()) {
         return "null";
     }
@@ -144,7 +144,7 @@ u32 CollisionCode::getCameraID(const Triangle& rTriangle) {
     return getCameraID(rTriangle.getAttributes());
 }
 
-u32 CollisionCode::getCode(const JMapInfoIter& rIter, CodeTable* pCodeTable, const char* pName) {
+u32 CollisionCode::getCode(const TableIter& rIter, CodeTable* pCodeTable, const char* pName) {
     if (!rIter.isValid()) {
         return 0;
     }
@@ -176,23 +176,23 @@ u32 CollisionCode::getCode(const JMapInfoIter& rIter, CodeTable* pCodeTable, con
     return 0;
 }
 
-u32 CollisionCode::getFloorCode(const JMapInfoIter& rIter) {
+u32 CollisionCode::getFloorCode(const TableIter& rIter) {
     return getCode(rIter, mFloorTable, "Floor_code");
 }
 
-u32 CollisionCode::getWallCode(const JMapInfoIter& rIter) {
+u32 CollisionCode::getWallCode(const TableIter& rIter) {
     return getCode(rIter, mWallTable, "Wall_code");
 }
 
-u32 CollisionCode::getSoundCode(const JMapInfoIter& rIter) {
+u32 CollisionCode::getSoundCode(const TableIter& rIter) {
     return getCode(rIter, mSoundTable, "Sound_code");
 }
 
-u32 CollisionCode::getCameraCode(const JMapInfoIter& rIter) {
+u32 CollisionCode::getCameraCode(const TableIter& rIter) {
     return getCode(rIter, mCameraTable, "Camera_through");
 }
 
-u32 CollisionCode::getCameraID(const JMapInfoIter& rIter) {
+u32 CollisionCode::getCameraID(const TableIter& rIter) {
     if (!rIter.isValid()) {
         return -1;
     }

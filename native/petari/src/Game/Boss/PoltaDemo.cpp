@@ -38,7 +38,7 @@ namespace NrvPoltaDemo {
     NEW_NERVE(PoltaDemoNrvDownDemo, PoltaDemo, DownDemo);
 };  // namespace NrvPoltaDemo
 
-PoltaDemo::PoltaDemo(Polta* pPolta) : PoltaActionBase("\203\174\203\213\203\136\203\146\203\202" /* ポルタデモ */, pPolta), mCurDemoNerve(), mCurDemoName() {
+PoltaDemo::PoltaDemo(Polta* pPolta) : PoltaActionBase("ポルタデモ", pPolta), mCurDemoNerve(), mCurDemoName() {
 }
 
 void PoltaDemo::init() {
@@ -49,15 +49,15 @@ void PoltaDemo::control() {
 }
 
 void PoltaDemo::startOpeningDemo() {
-    startTryDemo("\203\174\203\213\203\136\212\112\216\156\203\146\203\202" /* ポルタ開始デモ */, GET_NERVE(PoltaDemo, PoltaDemoNrvOpeningDemo));
+    startTryDemo("ポルタ開始デモ", GET_NERVE(PoltaDemo, PoltaDemoNrvOpeningDemo));
 }
 
 void PoltaDemo::startPowerUpDemo() {
-    startTryDemo("\203\174\203\213\203\136\203\160\203\217\201\133\203\101\203\142\203\166\203\146\203\202" /* ポルタパワーアップデモ */, GET_NERVE(PoltaDemo, PoltaDemoNrvPowerUpDemo));
+    startTryDemo("ポルタパワーアップデモ", GET_NERVE(PoltaDemo, PoltaDemoNrvPowerUpDemo));
 }
 
 void PoltaDemo::startDownDemo() {
-    startTryDemo("\203\174\203\213\203\136\203\137\203\105\203\223\203\146\203\202" /* ポルタダウンデモ */, GET_NERVE(PoltaDemo, PoltaDemoNrvDownDemo));
+    startTryDemo("ポルタダウンデモ", GET_NERVE(PoltaDemo, PoltaDemoNrvDownDemo));
 }
 
 void PoltaDemo::startDemoSetting() {
@@ -95,7 +95,7 @@ void PoltaDemo::exeOpeningDemo() {
         MR::startAction(getHost(), "OpeningDemo");
         MR::startBckPlayer("BattleWait");
         PoltaFunction::onMovement(getHost());
-        MR::setPlayerPos("\203\174\203\213\203\136\212\112\216\156\203\146\203\202\203\166\203\214\203\103\203\204\201\133\210\312\222\165" /* ポルタ開始デモプレイヤー位置 */);
+        MR::setPlayerPos("ポルタ開始デモプレイヤー位置");
         getHost()->mFormationModel->appear();
         MR::startAction(getHost()->mFormationModel, "OpeningDemo");
     }
@@ -110,7 +110,7 @@ void PoltaDemo::exeOpeningDemo() {
 
     if (MR::isActionEnd(getHost())) {
         MR::endAnimCamera(getHost(), getHost()->mCameraInfo, "OpeningDemo", -1, true);
-        MR::endDemo(getHost(), "\203\174\203\213\203\136\212\112\216\156\203\146\203\202" /* ポルタ開始デモ */);
+        MR::endDemo(getHost(), "ポルタ開始デモ");
         getHost()->mFormationModel->kill();
         kill();
     }
@@ -130,7 +130,7 @@ void PoltaDemo::exePowerUpDemo() {
         MR::startAction(PoltaFunction::getLeftArmActor(getHost()), "PowerUpDemo");
         MR::startAction(PoltaFunction::getRightArmActor(getHost()), "PowerUpDemo");
         MR::startBckPlayer("BattleWait");
-        MR::setPlayerPos("\203\174\203\213\203\136\203\146\203\202\203\166\203\214\203\103\203\204\201\133\210\312\222\165" /* ポルタデモプレイヤー位置 */);
+        MR::setPlayerPos("ポルタデモプレイヤー位置");
         getHost()->mFormationModel->appear();
         getHost()->mLeftArm->mFormationModel->appear();
         getHost()->mRightArm->mFormationModel->appear();
@@ -143,7 +143,7 @@ void PoltaDemo::exePowerUpDemo() {
         MR::startCenterScreenBlur(::sPowerUpBlurTime, ::sPowerUpBlurOffset, ::sPowerUpBlurAlpha, ::sPowerUpBlurFadeIn, ::sPowerUpBlurFadeOut);
     }
     if (MR::isActionEnd(getHost())) {
-        MR::endDemo(getHost(), "\203\174\203\213\203\136\203\160\203\217\201\133\203\101\203\142\203\166\203\146\203\202" /* ポルタパワーアップデモ */);
+        MR::endDemo(getHost(), "ポルタパワーアップデモ");
         MR::endAnimCamera(getHost(), getHost()->mCameraInfo, "PowerUpDemo", -1, true);
         MR::startStageBGM("MBGM_BOSS_09_B", false);
         MR::validateShadowAll(getHost()->mLeftArm);
@@ -164,10 +164,10 @@ void PoltaDemo::exeDownDemo() {
         MR::startAction(getHost(), "DownDemo");
         MR::startBckPlayer("BattleWait");
         PoltaFunction::onMovement(getHost());
-        MR::setPlayerPos("\203\174\203\213\203\136\203\146\203\202\203\166\203\214\203\103\203\204\201\133\210\312\222\165" /* ポルタデモプレイヤー位置 */);
+        MR::setPlayerPos("ポルタデモプレイヤー位置");
     }
     if (MR::isActionEnd(getHost())) {
-        MR::endDemo(getHost(), "\203\174\203\213\203\136\203\137\203\105\203\223\203\146\203\202" /* ポルタダウンデモ */);
+        MR::endDemo(getHost(), "ポルタダウンデモ");
         MR::endAnimCamera(getHost(), getHost()->mCameraInfo, "DownDemo", -1, true);
         getHost()->kill();
         kill();

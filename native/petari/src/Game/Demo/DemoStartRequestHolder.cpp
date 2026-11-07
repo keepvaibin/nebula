@@ -178,7 +178,7 @@ DemoStartInfo* DemoStartRequestHolder::findEmpty() const {
 }
 
 DemoStartRequestHolder::DemoStartRequestHolder() : mNumInfos(), mRequestBuffer(mRequestBuffer.mBuffer, mRequestBuffer.mBuffer) {
-    mProxyObj = new NameObj("\221\343\227\235\220\154" /* 代理人 */);
+    mProxyObj = new NameObj("代理人");
     for (u32 i = 0; i < ARRAY_SIZE(mStartInfos); i++) {
         DemoStartInfo* pInfo = new DemoStartInfo();
         s32 idx = mNumInfos;

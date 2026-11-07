@@ -2,7 +2,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/MeteorStrike.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
@@ -16,9 +16,9 @@ MeteorStrikeLauncher::MeteorStrikeLauncher(const char* pName)
     : LiveActor(pName), mMeteorStrikeArray(), mMeteorStrikeCount(), mIntervalStep(-1), mCreateStep(), mIsMeteorStrike(), mIsValidMultiMeteor() {
 }
 
-void MeteorStrikeLauncher::init(const JMapInfoIter& rIter) {
+void MeteorStrikeLauncher::init(const TableIter& rIter) {
     const char* pName = mName;
-    setName("\203\201\203\145\203\111\203\130\203\147\203\211\203\103\203\116\203\211\203\223\203\140\203\203\201\133" /* メテオストライクランチャー */);
+    setName("メテオストライクランチャー");
 
     initMapToolInfo(rIter);
 
@@ -73,18 +73,18 @@ void MeteorStrikeLauncher::kill() {
     }
 }
 
-void MeteorStrikeLauncher::initMapToolInfo(const JMapInfoIter& rIter) {
+void MeteorStrikeLauncher::initMapToolInfo(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
 
     MR::useStageSwitchReadAppear(this, rIter);
 
-    if (MR::getJMapInfoArg1NoInit(rIter, &mIntervalStep)) {
+    if (MR::getPlacementArg1NoInit(rIter, &mIntervalStep)) {
         mIntervalStep *= 60;
     }
 
     mIsMeteorStrike = MR::isEqualObjectName(rIter, "MeteorStrike");
 
-    MR::getJMapInfoArg2NoInit(rIter, &mIsValidMultiMeteor);
+    MR::getPlacementArg2NoInit(rIter, &mIsValidMultiMeteor);
 }
 
 MeteorStrike* MeteorStrikeLauncher::getUnusedMeteorStrike() {

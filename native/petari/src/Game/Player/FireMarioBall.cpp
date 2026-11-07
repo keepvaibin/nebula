@@ -32,7 +32,7 @@ FireMarioBall::FireMarioBall(const char* pName) : LiveActor(pName) {
     _8C = 0;
 }
 
-void FireMarioBall::init(const JMapInfoIter& rIter) {
+void FireMarioBall::init(const TableIter& rIter) {
     initModelManagerWithAnm("MarioFireBall", 0, false);
     MR::connectToSceneEnemyDecoration(this);
     initSensor();

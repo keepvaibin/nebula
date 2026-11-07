@@ -11,7 +11,7 @@ namespace {
 ShadowVolumeSphere::~ShadowVolumeSphere() {
 }
 
-ShadowVolumeSphere::ShadowVolumeSphere() : ShadowVolumeModel("\211\145\225\140\211\346[\203\173\203\212\203\205\201\133\203\200\213\205]" /* 影描画[ボリューム球] */), mRadius(100.0f) {
+ShadowVolumeSphere::ShadowVolumeSphere() : ShadowVolumeModel("影描画[ボリューム球]"), mRadius(100.0f) {
     initVolumeModel("ShadowVolumeSphere");
 }
 

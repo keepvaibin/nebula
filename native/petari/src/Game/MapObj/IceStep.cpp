@@ -18,7 +18,7 @@ IceStep::IceStep(const char* pName) : LiveActor(pName) {
 IceStep::~IceStep() {
 }
 
-void IceStep::init(const JMapInfoIter& rIter) {
+void IceStep::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("IceStep", nullptr, false);
 

@@ -42,7 +42,7 @@ SuddenDeathMeter::SuddenDeathMeter(const char* pName, const char* pArcName)
     initLayoutManager(pArcName, 3);
 }
 
-void SuddenDeathMeter::init(const JMapInfoIter& rIter) {
+void SuddenDeathMeter::init(const TableIter& rIter) {
     MR::createAndAddPaneCtrl(this, "HitPointMeter", 2);
     MR::createAndAddPaneCtrl(this, "HitPointNumber", 1);
     MR::createAndAddPaneCtrl(this, "Font", 2);

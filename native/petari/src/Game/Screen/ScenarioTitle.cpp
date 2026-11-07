@@ -10,10 +10,10 @@ namespace {
     NEW_NERVE(ScenarioTitleEnd, ScenarioTitle, End);
 };  // namespace
 
-ScenarioTitle::ScenarioTitle() : LayoutActor("\203\126\203\151\203\212\203\111\226\274\225\134\216\246" /* シナリオ名表示 */, true) {
+ScenarioTitle::ScenarioTitle() : LayoutActor("シナリオ名表示", true) {
 }
 
-void ScenarioTitle::init(const JMapInfoIter& rInfo) {
+void ScenarioTitle::init(const TableIter& rInfo) {
     initNerve(GET_NERVE_ANON(ScenarioTitleAppear));
     MR::connectToSceneLayout(this);
     initLayoutManager("StageTitle", 1);

@@ -15,7 +15,7 @@
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/BaseMatrixFollowTargetHolder.hpp"
 #include "Game/Util/CameraUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointController.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
@@ -51,7 +51,7 @@ BossStinkBug::BossStinkBug(const char* pName)
     _90 = new GroundChecker*[6];
 
     for (int i = 0; i < 6; i++) {
-        _90[i] = new GroundChecker("\222\156\226\312\203\140\203\106\203\142\203\116" /* 地面チェック */, 30.0f, 0.0f);
+        _90[i] = new GroundChecker("地面チェック", 30.0f, 0.0f);
         _90[i]->makeActorDead();
         MR::setBinderExceptActor(_90[i], this);
     }
@@ -75,7 +75,7 @@ void BossStinkBug::kill() {
     }
 }
 
-void BossStinkBug::init(const JMapInfoIter& rIter) {
+void BossStinkBug::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("BossStinkBug", nullptr, false);
     MR::connectToSceneCollisionEnemy(this);
@@ -97,9 +97,9 @@ void BossStinkBug::init(const JMapInfoIter& rIter) {
     MR::invalidateClipping(this);
     mActionSequencer = new BossStinkBugActionSequencer(this, rIter);
     _94 = new BossStinkBugBombHolder(this);
-    _D4 = MR::createPartsModelMapObj(this, "\211\110\203\202\203\146\203\213" /* 羽モデル */, "BossStinkBugWing", nullptr);
+    _D4 = MR::createPartsModelMapObj(this, "羽モデル", "BossStinkBugWing", nullptr);
     _D4->initFixedPosition("Switch");
-    mBombLauncher = MR::createPartsModelMapObj(this, "\203\173\203\200\224\255\216\313\214\373" /* ボム発射口 */, "BossStinkBugBombLauncher", nullptr);
+    mBombLauncher = MR::createPartsModelMapObj(this, "ボム発射口", "BossStinkBugBombLauncher", nullptr);
     mBombLauncher->initFixedPosition("Body");
     MR::declarePowerStar(this);
     initSound(12, false);
@@ -121,8 +121,8 @@ void BossStinkBug::start() {
     }
 }
 
-void BossStinkBug::initCamera(const JMapInfoIter& rIter) {
-    MR::getJMapInfoArg7WithInit(rIter, &_104);
+void BossStinkBug::initCamera(const TableIter& rIter) {
+    MR::getPlacementArg7WithInit(rIter, &_104);
 
     if (_104 != -1) {
         MR::declareCameraRegisterVec(this, _104, &_F8);

@@ -19,13 +19,13 @@ void BegomanHead::calcAndSetBaseMtx() {
     MR::setBaseScale(this, scale);
 }
 
-BegomanSpringHead::BegomanSpringHead(LiveActor* pActor, MtxPtr pMtx) : BegomanHead(pActor, "\203\157\203\154\223\252" /* バネ頭 */, "BegomanSpringHead", pMtx, 10, false) {
+BegomanSpringHead::BegomanSpringHead(LiveActor* pActor, MtxPtr pMtx) : BegomanHead(pActor, "バネ頭", "BegomanSpringHead", pMtx, 10, false) {
 }
 
 BegomanHead::~BegomanHead() {
 }
 
-void BegomanSpringHead::init(const JMapInfoIter& rIter) {
+void BegomanSpringHead::init(const TableIter& rIter) {
     initNerve(GET_NERVE(BegomanSpringHead, HostTypeNrvWait));
     MR::initLightCtrl(this);
     initHitSensor(1);

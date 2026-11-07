@@ -20,9 +20,9 @@ FirePressureBullet* FirePressureBulletHolder::callEmptyBullet() {
 FirePressureBulletHolder::~FirePressureBulletHolder() {
 }
 
-void FirePressureBulletHolder::init(const JMapInfoIter& rIter) {
+void FirePressureBulletHolder::init(const TableIter& rIter) {
     for (u32 i = 0; i < ARRAY_SIZE(mBullet); i++) {
-        mBullet[i] = new FirePressureBullet("\203\164\203\100\203\103\203\101\203\166\203\214\203\142\203\126\203\203\201\133\202\314\222\145" /* ファイアプレッシャーの弾 */);
+        mBullet[i] = new FirePressureBullet("ファイアプレッシャーの弾");
         mBullet[i]->initWithoutIter();
     }
 }

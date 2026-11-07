@@ -4,7 +4,7 @@
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorShadowUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
@@ -26,7 +26,7 @@ Birikyu::Birikyu(const char* pName)
     : LiveActor(pName), _8C(), _90(gZeroVec), _9C(gZeroVec), _A8(), _A9(), _AC(0.0f, 1.0f, 0.0f), _B8(0.0f, 0.0f, 1.0f), _C4(), _C8(10.0f) {
 }
 
-void Birikyu::init(const JMapInfoIter& rIter) {
+void Birikyu::init(const TableIter& rIter) {
     MR::getObjectName(&_8C, rIter);
     initModelManagerWithAnm(_8C, nullptr, false);
     MR::connectToSceneEnemy(this);
@@ -132,14 +132,14 @@ void Birikyu::endClipped() {
     MR::emitEffect(this, _8C);
 }
 
-void Birikyu::initFromJmpArgs(const JMapInfoIter& rIter) {
-    MR::getJMapInfoArg0NoInit(rIter, &_C8);
+void Birikyu::initFromJmpArgs(const TableIter& rIter) {
+    MR::getPlacementArg0NoInit(rIter, &_C8);
     s32 num = -1;
-    MR::getJMapInfoArg2NoInit(rIter, &num);
+    MR::getPlacementArg2NoInit(rIter, &num);
     _A8 = num == true;
 }
 
-void Birikyu::initRail(const JMapInfoIter& rIter) {
+void Birikyu::initRail(const TableIter& rIter) {
     bool result = MR::isConnectedWithRail(rIter);
     _A9 = result;
     if (_A9) {
@@ -168,7 +168,7 @@ void Birikyu::initShadow() {
 }
 
 bool Birikyu::tryStopPointing() {
-    if (MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false)) {
+    if (MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
         MR::sendMsgToGroupMember(ACTMES_GROUP_MOVE_STOP, this, getSensor("body"), "body");
         setNerve(GET_NERVE(Birikyu, HostTypeStopPointing));
 
@@ -258,7 +258,7 @@ void Birikyu::exeStopPointing() {
 
     MR::startDPDFreezeLevelSound(this);
 
-    if (!MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false)) {
+    if (!MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
         if (MR::isRegisteredEffect(this, "Touch")) {
             MR::deleteEffect(this, "Touch");
         }
@@ -272,10 +272,10 @@ BirikyuWithFace::BirikyuWithFace(const char* pName) : Birikyu(pName) {
     _CC = false;
 }
 
-void BirikyuWithFace::init(const JMapInfoIter& rIter) {
+void BirikyuWithFace::init(const TableIter& rIter) {
     Birikyu::init(rIter);
     s32 num = -1;
-    MR::getJMapInfoArg1NoInit(rIter, &num);
+    MR::getPlacementArg1NoInit(rIter, &num);
     _CC = num == 1;
 }
 

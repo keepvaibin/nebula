@@ -6,7 +6,7 @@ MogucchiRefuseTerritory::~MogucchiRefuseTerritory() {
 MogucchiRefuseTerritory::MogucchiRefuseTerritory(const char* pName) : LiveActor(pName) {
 }
 
-void MogucchiRefuseTerritory::init(const JMapInfoIter& rIter) {
+void MogucchiRefuseTerritory::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::connectToSceneEnemyMovement(this);
     initHitSensor(1);

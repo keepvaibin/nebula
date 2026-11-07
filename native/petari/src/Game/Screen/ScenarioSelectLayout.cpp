@@ -74,7 +74,7 @@ namespace NrvScenarioSelectLayout {
 };  // namespace NrvScenarioSelectLayout
 
 ScenarioSelectLayout::ScenarioSelectLayout(EffectSystem* pEffectSystem, const CameraContext* pCameraContext)
-    : LayoutActor("\203\126\203\151\203\212\203\111\221\111\221\360\203\214\203\103\203\101\203\105\203\147" /* シナリオ選択レイアウト */, true), mSelectedScenarioNo(-1), _24(), _28(), mStar(), mScenarioSky(), mEffectSystem(pEffectSystem),
+    : LayoutActor("シナリオ選択レイアウト", true), mSelectedScenarioNo(-1), _24(), _28(), mStar(), mScenarioSky(), mEffectSystem(pEffectSystem),
       mCameraContext(pCameraContext), mNewTextFollowPos(0.0f, 0.0f), mNewGreenTextFollowPos(0.0f, 0.0f), mStarTopFollowPos(0.0f, 0.0f), mBackButton(),
       mMarioPaneFollowPos(0.0f, 0.0f), mMarioPaneName(), _A4(), _A8(-1) {
     mEffectHostMtx.identity();
@@ -84,7 +84,7 @@ ScenarioSelectLayout::ScenarioSelectLayout(EffectSystem* pEffectSystem, const Ca
     }
 }
 
-void ScenarioSelectLayout::init(const JMapInfoIter& rIter) {
+void ScenarioSelectLayout::init(const TableIter& rIter) {
     initLayoutManager("ScenarioSelect", 1);
     MR::createAndAddPaneCtrl(this, "ScenarioSelect", 1);
     MR::createAndAddPaneCtrl(this, "ScenarioFrame", 1);
@@ -121,10 +121,10 @@ void ScenarioSelectLayout::init(const JMapInfoIter& rIter) {
         MR::addStarPointerTargetCircle(this, ::cStarPaneName[i], ::cPointingTargetRadius, Vec2f(0.0f, 0.0f), nullptr);
     }
 
-    mScenarioSky = new MultiSceneActor("\203\126\203\151\203\212\203\111\221\111\221\360\202\314\213\363" /* シナリオ選択の空 */, "ScenarioSelectSky", false);
+    mScenarioSky = new MultiSceneActor("シナリオ選択の空", "ScenarioSelectSky", false);
     mScenarioSky->initWithoutIter();
 
-    mBackButton = new BackButton("\226\337\202\351\203\173\203\136\203\223" /* 戻るボタン */, false);
+    mBackButton = new BackButton("戻るボタン", false);
     mBackButton->initWithoutIter();
 
     if (!NebulaRegion::isPal()) {
@@ -325,7 +325,7 @@ void ScenarioSelectLayout::updateSelectedScenario() {
         for (s32 i = 0; i < 7; i++) {
             star = mStar[i];
 
-            if (!star->_30 && MR::isStarPointerPointingTarget(this, ::cStarPaneName[i], 0, true, "\216\343" /* 弱 */)) {
+            if (!star->_30 && MR::isStarPointerPointingTarget(this, ::cStarPaneName[i], 0, true, "弱")) {
                 mSelectedScenarioNo = star->mScenarioNo;
                 _24 = 0;
                 return;

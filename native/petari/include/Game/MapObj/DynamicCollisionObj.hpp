@@ -20,7 +20,7 @@ public:
     virtual ~DynamicCollisionObj() {
     }
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
 
     void syncCollision();
     void updateTriangle();

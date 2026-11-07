@@ -28,7 +28,7 @@ public:
     /// @param pName A pointer to the null-terminated name of the object.
     Polta(const char* pName);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void calcAnim();
     virtual void makeActorAppeared();
     virtual void kill();
@@ -44,7 +44,7 @@ public:
     void initPartsModel();
     void initSensor();
     void initBombTeresaHolder();
-    void initCamera(const JMapInfoIter&);
+    void initCamera(const TableIter&);
     void appearBreakModel(const Vec3f&, const char*);
     void appearBreakModelFirst(const Vec3f&);
     void appearBreakModelMiddle(const Vec3f&);

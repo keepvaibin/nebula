@@ -9,7 +9,7 @@ public:
     DinoPackunTrackFire(const char*);
 
     virtual ~DinoPackunTrackFire();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual MtxPtr getBaseMtx() const {
         return (MtxPtr)&_8C;
     };

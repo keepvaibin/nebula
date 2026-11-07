@@ -16,7 +16,7 @@ namespace {
     static const s32 sFadeinoutFrame = 60;
 };  // namespace
 
-void TimeUpLayout::init(const JMapInfoIter& rIter) {
+void TimeUpLayout::init(const TableIter& rIter) {
     initLayoutManager("TimeUp", 1);
 }
 
@@ -31,10 +31,10 @@ namespace NrvTimeLimitLayout {
 };  // namespace NrvTimeLimitLayout
 
 TimeLimitLayout::TimeLimitLayout(u32 timeLimit)
-    : LayoutActor("\203\136\203\103\203\200\203\212\203\176\203\142\203\147" /* タイムリミット */, true), mTime(), mTimeLimit(timeLimit), mScaleControl(), mFadeControl(), mCurrentTiming(), mIsSuspend(), _35() {
+    : LayoutActor("タイムリミット", true), mTime(), mTimeLimit(timeLimit), mScaleControl(), mFadeControl(), mCurrentTiming(), mIsSuspend(), _35() {
 }
 
-void TimeLimitLayout::init(const JMapInfoIter& rIter) {
+void TimeLimitLayout::init(const TableIter& rIter) {
     initLayoutManager("TimeLimit", 1);
 
     mScaleControl = new ValueControl(::sScaleUpDownFrame);

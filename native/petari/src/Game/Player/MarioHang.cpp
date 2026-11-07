@@ -111,7 +111,7 @@ void Mario::checkHang() {
 
         if (!MR::isExistMapCollision(_4A4 - mFrontVec * 50.0f - getAirGravityVec() * 5.0f, mFrontVec * 60.0f)) {
             u8 started = 1;
-            if (isAnimationRun("\227\216\211\272" /* 落下 */)) {
+            if (isAnimationRun("落下")) {
                 started = 0;
             }
 
@@ -520,7 +520,7 @@ MarioHang::MarioHang(MarioActor* pActor) : MarioState(pActor, MarioStatus_Hang) 
 bool MarioHang::start() {
     getPlayer()->cancelSquatMode();
     stopAnimationUpper(nullptr);
-    changeAnimation("\212\122\202\302\202\251\202\334\202\350\212\112\216\156" /* 崖つかまり開始 */, "\212\122\202\302\202\251\202\334\202\350\222\206" /* 崖つかまり中 */);
+    changeAnimation("崖つかまり開始", "崖つかまり中");
     mActor->setBlendMtxTimer(mActor->getConst().getTable()->mHangBlendTime);
     _12 = 0;
     _14 = 0;
@@ -564,7 +564,7 @@ bool MarioHang::update() {
         if (getPlayer()->_8D4 != nullptr) {
             addTrans(getPlayer()->mFrontVec * -100.0f, "Module");
             mActor->setBlendMtxTimer(16);
-            stopAnimation("\212\122\202\302\202\251\202\334\202\350\222\206" /* 崖つかまり中 */, "\212\356\226\173" /* 基本 */);
+            stopAnimation("崖つかまり中", "基本");
             return false;
         }
     } else {
@@ -576,7 +576,7 @@ bool MarioHang::update() {
         }
 
         Mario* pPlayer = getPlayer();
-        if (pPlayer->_184.dot(getFrontVec()) > 0.707f && getPlayer()->_4E4 < 45.0f && !isAnimationRun("\212\122\202\302\202\251\202\334\202\350\212\112\216\156" /* 崖つかまり開始 */)) {
+        if (pPlayer->_184.dot(getFrontVec()) > 0.707f && getPlayer()->_4E4 < 45.0f && !isAnimationRun("崖つかまり開始")) {
             _1C = 1;
         }
     }
@@ -586,7 +586,7 @@ bool MarioHang::update() {
         if (mWallSensor != pPlayer->_8D4) {
             addTrans(getPlayer()->mFrontVec * -100.0f, "Module");
             mActor->setBlendMtxTimer(16);
-            stopAnimation("\212\122\202\302\202\251\202\334\202\350\222\206" /* 崖つかまり中 */, "\212\356\226\173" /* 基本 */);
+            stopAnimation("崖つかまり中", "基本");
             return false;
         }
     }
@@ -594,7 +594,7 @@ bool MarioHang::update() {
     if (_1C) {
         addTrans(getPlayer()->mFrontVec * -100.0f, "Module");
         mActor->setBlendMtxTimer(16);
-        stopAnimation("\212\122\202\302\202\251\202\334\202\350\222\206" /* 崖つかまり中 */, "\212\356\226\173" /* 基本 */);
+        stopAnimation("崖つかまり中", "基本");
         return false;
     }
 
@@ -604,7 +604,7 @@ bool MarioHang::update() {
             if (getPlayer()->getShadowNorm().dot(getGravityVec()) < -0.707f) {
                 addTrans(getPlayer()->mFrontVec * -100.0f, "Module");
                 mActor->setBlendMtxTimer(16);
-                stopAnimation("\212\122\202\302\202\251\202\334\202\350\222\206" /* 崖つかまり中 */, "\212\356\226\173" /* 基本 */);
+                stopAnimation("崖つかまり中", "基本");
                 return false;
             }
         }
@@ -620,13 +620,13 @@ bool MarioHang::update() {
         break;
     case 1:
         if (calcAngleD(getPlayer()->_368) > 5.0f) {
-            changeAnimationNonStop("\212\122\202\302\202\251\202\334\202\350\217\111\227\271\215\342" /* 崖つかまり終了坂 */);
-            changeAnimation(nullptr, "\212\356\226\173" /* 基本 */);
+            changeAnimationNonStop("崖つかまり終了坂");
+            changeAnimation(nullptr, "基本");
         } else {
-            changeAnimation("\212\122\202\302\202\251\202\334\202\350\217\111\227\271" /* 崖つかまり終了 */, "\212\356\226\173" /* 基本 */);
+            changeAnimation("崖つかまり終了", "基本");
         }
 
-        playSound("\220\272\212\122\202\302\202\251\202\334\202\350\217\111\227\271" /* 声崖つかまり終了 */);
+        playSound("声崖つかまり終了");
         _12++;
         return true;
     case 2:
@@ -645,7 +645,7 @@ bool MarioHang::update() {
     if (_1C) {
         addTrans(getPlayer()->mFrontVec * -100.0f, "Module");
         mActor->setBlendMtxTimer(16);
-        stopAnimation("\212\122\202\302\202\251\202\334\202\350\222\206" /* 崖つかまり中 */, "\212\356\226\173" /* 基本 */);
+        stopAnimation("崖つかまり中", "基本");
         return false;
     }
 
@@ -677,7 +677,7 @@ bool MarioHang::update() {
 
         break;
     case 2:
-        if (isAnimationRun("\212\122\202\302\202\251\202\334\202\350\212\112\216\156" /* 崖つかまり開始 */) && getAnimator()->getFrame() < 20.0f) {
+        if (isAnimationRun("崖つかまり開始") && getAnimator()->getFrame() < 20.0f) {
             _1D = 1;
         } else {
             addTrans(getPlayer()->mFrontVec * -100.0f, "Module");
@@ -701,21 +701,21 @@ bool MarioHang::update() {
     }
 
     if (!_12 && _14 == 2) {
-        playSound("\220\272\212\122\202\302\202\251\202\334\202\350" /* 声崖つかまり */);
+        playSound("声崖つかまり");
     }
 
     return true;
 }
 
 bool MarioHang::close() {
-    stopAnimation("\212\122\202\302\202\251\202\334\202\350\212\112\216\156" /* 崖つかまり開始 */);
-    stopAnimation("\212\122\202\302\202\251\202\334\202\350\222\206" /* 崖つかまり中 */);
-    stopAnimation("\212\122\202\302\202\251\202\334\202\350\217\111\227\271" /* 崖つかまり終了 */);
-    stopAnimation("\212\122\202\302\202\251\202\334\202\350\217\111\227\271\215\342" /* 崖つかまり終了坂 */);
+    stopAnimation("崖つかまり開始");
+    stopAnimation("崖つかまり中");
+    stopAnimation("崖つかまり終了");
+    stopAnimation("崖つかまり終了坂");
     if (getPlayer()->mMovementStates._1) {
-        changeAnimation(nullptr, "\212\356\226\173" /* 基本 */);
+        changeAnimation(nullptr, "基本");
     } else {
-        changeAnimation(nullptr, "\227\216\211\272" /* 落下 */);
+        changeAnimation(nullptr, "落下");
     }
 
     getPlayer()->setWallCancel();
@@ -734,7 +734,7 @@ bool MarioHang::notice() {
     if (getNoticedStatus() == MarioStatus_Faint) {
         addTrans(getPlayer()->mFrontVec * -150.0f, "Module");
         mActor->setBlendMtxTimer(16);
-        stopAnimation("\212\122\202\302\202\251\202\334\202\350\222\206" /* 崖つかまり中 */, "\212\356\226\173" /* 基本 */);
+        stopAnimation("崖つかまり中", "基本");
     }
 
     return false;
@@ -782,10 +782,10 @@ void MarioHang::tryClimb(bool jump) {
         return;
     }
 
-    if (isAnimationRun("\212\122\202\302\202\251\202\334\202\350\212\112\216\156" /* 崖つかまり開始 */)) {
+    if (isAnimationRun("崖つかまり開始")) {
         if (_1E && jump && getAnimationFrame() < 30.0f) {
             _16 = 5;
-            changeAnimationNonStop("\202\302\202\251\202\334\202\350\203\130\203\212\203\142\203\166\203\101\203\142\203\166\217\200\224\365" /* つかまりスリップアップ準備 */);
+            changeAnimationNonStop("つかまりスリップアップ準備");
         }
 
         _1B = 1;

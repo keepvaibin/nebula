@@ -37,7 +37,7 @@ Coin::Coin(const char* pName) : LiveActor(pName) {
     mIsNeedBubble = false;
 }
 
-void Coin::init(const JMapInfoIter& rIter) {
+void Coin::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm(mIsPurpleCoin ? "PurpleCoin" : "Coin", nullptr, false);
     MR::connectToSceneItemStrongLight(this);
@@ -50,7 +50,7 @@ void Coin::init(const JMapInfoIter& rIter) {
     initSound(1, false);
 
     if (MR::isValidInfo(rIter)) {
-        setShadowAndPoseModeFromJMapIter(rIter);
+        setShadowAndPoseModeFromPlacementIter(rIter);
     }
 
     if (_BA) {
@@ -62,7 +62,7 @@ void Coin::init(const JMapInfoIter& rIter) {
     initShadow(rIter);
 
     if (mIsNeedBubble) {
-        mAirBubble = MR::createPartsModelNoSilhouettedMapObj(this, "\203\101\203\217" /* アワ */, "AirBubble", nullptr);
+        mAirBubble = MR::createPartsModelNoSilhouettedMapObj(this, "アワ", "AirBubble", nullptr);
         mAirBubble->initFixedPosition(Vec3f(0.0f, 70.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f), nullptr);
         mAirBubble->makeActorDead();
         MR::registerDemoSimpleCastAll(mAirBubble);
@@ -95,13 +95,13 @@ void Coin::initAfterPlacement() {
     MR::setClippingRangeIncludeShadow(this, &mClippingRange, 150.0f);
 }
 
-void Coin::initShadow(const JMapInfoIter& rIter) {
+void Coin::initShadow(const TableIter& rIter) {
     f32 arg_5 = -1.0f;
     s32 arg_6 = -1;
 
     if (MR::isValidInfo(rIter)) {
-        MR::getJMapInfoArg5NoInit(rIter, &arg_5);
-        MR::getJMapInfoArg6NoInit(rIter, &arg_6);
+        MR::getPlacementArg5NoInit(rIter, &arg_5);
+        MR::getPlacementArg6NoInit(rIter, &arg_6);
     }
 
     switch (arg_6) {
@@ -123,12 +123,12 @@ void Coin::initShadow(const JMapInfoIter& rIter) {
     }
 }
 
-void Coin::setShadowAndPoseModeFromJMapIter(const JMapInfoIter& rIter) {
+void Coin::setShadowAndPoseModeFromPlacementIter(const TableIter& rIter) {
     bool arg_3 = false;
-    MR::getJMapInfoArg3WithInit(rIter, &arg_3);
+    MR::getPlacementArg3WithInit(rIter, &arg_3);
     _B9 = arg_3;
     bool arg_4 = false;
-    MR::getJMapInfoArg4WithInit(rIter, &arg_4);
+    MR::getPlacementArg4WithInit(rIter, &arg_4);
     _BA = arg_4;
     mIsNeedBubble = Coin::isNeedBubble(rIter);
 }
@@ -625,17 +625,17 @@ void Coin::attenuateVelocity() {
     MR::attenuateVelocity(this, velocity);
 }
 
-bool Coin::isNeedBubble(const JMapInfoIter& rIter) {
+bool Coin::isNeedBubble(const TableIter& rIter) {
     if (!MR::isValidInfo(rIter)) {
         return false;
     }
 
     bool arg = false;
-    MR::getJMapInfoArg7WithInit(rIter, &arg);
+    MR::getPlacementArg7WithInit(rIter, &arg);
     return arg;
 }
 
-void Coin::makeArchiveList(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter) {
+void Coin::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
     if (Coin::isNeedBubble(rIter)) {
         pCollector->addArchive("AirBubble");
     }

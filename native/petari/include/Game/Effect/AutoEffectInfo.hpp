@@ -3,7 +3,7 @@
 #include "Game/Util/Color.hpp"
 #include <nebula_geometry.hpp>
 
-class JMapInfoIter;
+class TableIter;
 
 class AutoEffectInfo {
 public:
@@ -20,7 +20,7 @@ public:
     /// @brief Creates a new `AutoEffectInfo`.
     AutoEffectInfo();
 
-    void init(const JMapInfoIter& rIter);
+    void init(const TableIter& rIter);
     const char* getName() const;
 
     const char* mGroupName;

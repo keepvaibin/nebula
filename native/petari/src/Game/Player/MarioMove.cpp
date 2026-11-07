@@ -26,7 +26,7 @@ void Mario::mainMove() {
         mWalkSpeed = 0.0f;
         a1 = true;
 
-        playSound("\215\342\212\212\202\350" /* 坂滑り */);
+        playSound("坂滑り");
     }
 
     if (_754) {
@@ -43,7 +43,7 @@ void Mario::mainMove() {
         tryJump();
         beforeJumping2D();
 
-        if (isAnimationRun("\202\273\202\314\217\352\221\253\223\245\202\335\217\343\224\274\220\147" /* その場足踏み上半身 */)) {
+        if (isAnimationRun("その場足踏み上半身")) {
             stopAnimationUpper(nullptr);
         }
 
@@ -76,7 +76,7 @@ void Mario::mainMove() {
     if (isRequestJump || mMovementStates._38) {
         if (mMovementStates._A && calcDistToCeil(false) < 160.0f) {
             mActor->sendMsgUpperPunch(_730);
-            changeAnimation("\202\265\202\341\202\252\202\335\203\101\203\142\203\160\201\133" /* しゃがみアッパー */);
+            changeAnimation("しゃがみアッパー");
         } else if (isStatusActive(MarioStatus_Skate)) {
             mSkate->exitJump();
             closeStatus(mSkate);
@@ -94,17 +94,17 @@ void Mario::mainMove() {
                 mWalkSpeed = 5.0f;
                 _434 = 180;
 
-                playSound("\203\130\203\171\203\126\203\203\203\213\203\137\203\142\203\126\203\205\213\255" /* スペシャルダッシュ強 */);
-                playSound("\203\137\203\142\203\126\203\205\211\301\221\254\213\255\220\254\214\367" /* ダッシュ加速強成功 */);
-                playSound("\220\272\225\250\203\127\203\203\203\223\203\166" /* 声物ジャンプ */);
+                playSound("スペシャルダッシュ強");
+                playSound("ダッシュ加速強成功");
+                playSound("声物ジャンプ");
             }
         } else if (a2 && mStickPos.z >= 0.5f) {
             a2 = false;
             _436 = 0;
             mWalkSpeed = 2.0f;
             _434 = 60;
-            playSound("\203\130\203\171\203\126\203\203\203\213\203\137\203\142\203\126\203\205\216\343" /* スペシャルダッシュ弱 */);
-            playSound("\220\272\225\250\203\127\203\203\203\223\203\166" /* 声物ジャンプ */);
+            playSound("スペシャルダッシュ弱");
+            playSound("声物ジャンプ");
         }
     }
 
@@ -113,7 +113,7 @@ void Mario::mainMove() {
         tryJump();
         beforeJumping2D();
 
-        if (isAnimationRun("\202\273\202\314\217\352\221\253\223\245\202\335\217\343\224\274\220\147" /* その場足踏み上半身 */)) {
+        if (isAnimationRun("その場足踏み上半身")) {
             stopAnimationUpper(nullptr);
         }
 
@@ -159,7 +159,7 @@ void Mario::mainMove() {
 
         calcShadowDir(_328, &_22C);
         _40C = 10;
-    } else if (!(mTargetWalkSpeedIndex != 0 && _71D) && (!isAnimationRun("\203\165\203\214\201\133\203\114" /* ブレーキ */) && !isAnimationRun("\203\136\201\133\203\223\203\165\203\214\201\133\203\114" /* ターンブレーキ */) && !mMovementStates._10 &&
+    } else if (!(mTargetWalkSpeedIndex != 0 && _71D) && (!isAnimationRun("ブレーキ") && !isAnimationRun("ターンブレーキ") && !mMovementStates._10 &&
                                                          !mMovementStates._F && mWalkSpeed < 0.05f && !mDrawStates._5)) {
         bool a3 = true;
         if (_40C != 0) {
@@ -201,13 +201,13 @@ void Mario::mainMove() {
                     return;
                 }
 
-                changeAnimation("\202\273\202\314\217\352\221\253\223\245\202\335" /* その場足踏み */);
+                changeAnimation("その場足踏み");
 
-                if (isAnimationRun("\203\112\203\212\203\112\203\212\214\300\212\105" /* カリカリ限界 */)) {
+                if (isAnimationRun("カリカリ限界")) {
                     return;
                 }
 
-                changeAnimationUpperWeak("\202\273\202\314\217\352\221\253\223\245\202\335\217\343\224\274\220\147" /* その場足踏み上半身 */);
+                changeAnimationUpperWeak("その場足踏み上半身");
                 return;
             } else if (!a1) {
                 setFrontVecKeepUp(_22C);
@@ -275,7 +275,7 @@ void Mario::mainMove() {
             mWalkSpeed = 0.0f;
         }
 
-        if (isAnimationRun("\203\165\203\214\201\133\203\114" /* ブレーキ */)) {
+        if (isAnimationRun("ブレーキ")) {
             a1 = true;
         }
 
@@ -298,7 +298,7 @@ void Mario::mainMove() {
             if (mMovementStates._35) {
                 _3D0 = mActor->getConst().getTable()->mTurnSlipTimeB;
                 mMovementStates._4 = true;
-                changeAnimation("\203\136\201\133\203\223\203\165\203\214\201\133\203\114\212\212\202\350\217\260" /* ターンブレーキ滑り床 */);
+                changeAnimation("ターンブレーキ滑り床");
                 _2B8 = mActor->getLastMove();
                 stopWalk();
                 _754 = 10;
@@ -307,8 +307,8 @@ void Mario::mainMove() {
                 _3D0 = mActor->getConst().getTable()->mTurnSlipTime;
                 mMovementStates._4 = true;
                 mWalkSpeed = 0.0f;
-                changeAnimation("\203\136\201\133\203\223\203\165\203\214\201\133\203\114" /* ターンブレーキ */);
-                playEffect("\213\244\222\312\203\165\203\214\201\133\203\114" /* 共通ブレーキ */);
+                changeAnimation("ターンブレーキ");
+                playEffect("共通ブレーキ");
             }
         }
 
@@ -317,7 +317,7 @@ void Mario::mainMove() {
 
     if (_3D0 != 0) {
         if (!mMovementStates._35) {
-            playSound("\203\130\203\212\203\142\203\166" /* スリップ */);
+            playSound("スリップ");
         }
 
         if (_3D0 == static_cast< u16 >(mActor->getConst().getTable()->mTurnSlipTime)) {
@@ -335,13 +335,13 @@ void Mario::mainMove() {
         if (mMovementStates._4) {
             Vec3f* frontVec = &mFrontVec;
             if (MR::diffAngleAbsHorizontal(getWorldPadDir(), *frontVec, *getGravityVec()) > MR::pi() * 90.0f / 180.0f) {
-                stopAnimation("\203\136\201\133\203\223\203\165\203\214\201\133\203\114" /* ターンブレーキ */);
+                stopAnimation("ターンブレーキ");
                 setFrontVecKeepUp(-*frontVec);
                 mMovementStates._4 = false;
             }
 
-            if (isAnimationTerminate("\203\136\201\133\203\223\203\165\203\214\201\133\203\114" /* ターンブレーキ */)) {
-                stopAnimation("\203\136\201\133\203\223\203\165\203\214\201\133\203\114" /* ターンブレーキ */);
+            if (isAnimationTerminate("ターンブレーキ")) {
+                stopAnimation("ターンブレーキ");
                 mMovementStates._4 = false;
 
                 if (mStickPos.z < 0.1f) {
@@ -351,11 +351,11 @@ void Mario::mainMove() {
         }
 
         if (isActiveTask(&Mario::taskOnSlipTurn)) {
-            if (isAnimationRun("\203\136\201\133\203\223\203\165\203\214\201\133\203\114\212\212\202\350\217\260" /* ターンブレーキ滑り床 */)) {
+            if (isAnimationRun("ターンブレーキ滑り床")) {
                 setFrontVecKeepUp(-_220);
                 a1 = true;
 
-                stopAnimation("\203\136\201\133\203\223\203\165\203\214\201\133\203\114\212\212\202\350\217\260" /* ターンブレーキ滑り床 */);
+                stopAnimation("ターンブレーキ滑り床");
                 _754 = 0;
                 _74C = 0.0f;
                 mWalkSpeed = 0.0f;
@@ -558,11 +558,11 @@ void Mario::mainMove() {
 
             mMovementStates.turning = true;
 
-            if (!isAnimationRun("\202\273\202\314\217\352\221\253\223\245\202\335" /* その場足踏み */) && dot > 0.99f) {
+            if (!isAnimationRun("その場足踏み") && dot > 0.99f) {
                 mMovementStates.turning = false;
             }
 
-            if (mMovementStates._37 && mFrontVec.dot(vec2) < 0.0f && !isAnimationRun("\203\165\203\214\201\133\203\114" /* ブレーキ */)) {
+            if (mMovementStates._37 && mFrontVec.dot(vec2) < 0.0f && !isAnimationRun("ブレーキ")) {
                 _750 = 10;
                 _74C = MR::pi();
             }
@@ -588,17 +588,17 @@ void Mario::mainMove() {
     }
 
     if (_750 != 0 && mTargetWalkSpeedIndex == 0 && isEnableTurn()) {
-        changeAnimation("\202\273\202\314\217\352\221\253\223\245\202\335" /* その場足踏み */);
+        changeAnimation("その場足踏み");
 
-        if (!isAnimationRun("\203\112\203\212\203\112\203\212\214\300\212\105" /* カリカリ限界 */)) {
-            changeAnimationUpperWeak("\202\273\202\314\217\352\221\253\223\245\202\335\217\343\224\274\220\147" /* その場足踏み上半身 */);
+        if (!isAnimationRun("カリカリ限界")) {
+            changeAnimationUpperWeak("その場足踏み上半身");
         }
     } else {
         if (mTargetWalkSpeedIndex != 0) {
-            stopAnimation("\202\273\202\314\217\352\221\253\223\245\202\335" /* その場足踏み */);
+            stopAnimation("その場足踏み");
         }
 
-        if (isAnimationRun("\202\273\202\314\217\352\221\253\223\245\202\335\217\343\224\274\220\147" /* その場足踏み上半身 */)) {
+        if (isAnimationRun("その場足踏み上半身")) {
             stopAnimationUpper(nullptr);
         }
     }
@@ -708,27 +708,27 @@ bool Mario::isEnableTurn() {
         return false;
     }
 
-    if (isAnimationRun("\215\342\202\267\202\327\202\350\217\343\214\374\202\253\202\244\202\302\202\324\202\271" /* 坂すべり上向きうつぶせ */, 2)) {
+    if (isAnimationRun("坂すべり上向きうつぶせ", 2)) {
         return false;
     }
 
-    if (isAnimationRun("\215\342\202\267\202\327\202\350\211\272\214\374\202\253\202\240\202\250\202\336\202\257" /* 坂すべり下向きあおむけ */, 3)) {
+    if (isAnimationRun("坂すべり下向きあおむけ", 3)) {
         return false;
     }
 
-    if (isAnimationRun("\215\342\202\267\202\327\202\350\211\272\214\374\202\253\217\111\227\271" /* 坂すべり下向き終了 */)) {
+    if (isAnimationRun("坂すべり下向き終了")) {
         return false;
     }
 
-    if (isAnimationRun("\215\342\202\267\202\327\202\350\217\343\214\374\202\253\217\111\227\271" /* 坂すべり上向き終了 */)) {
+    if (isAnimationRun("坂すべり上向き終了")) {
         return false;
     }
 
-    if (isAnimationRun("\224\362\202\321\215\236\202\335\216\270\224\163\222\205\222\156" /* 飛び込み失敗着地 */)) {
+    if (isAnimationRun("飛び込み失敗着地")) {
         return false;
     }
 
-    if (isAnimationRun("\224\362\202\321\215\236\202\335\216\270\224\163\211\361\223\135\222\205\222\156" /* 飛び込み失敗回転着地 */)) {
+    if (isAnimationRun("飛び込み失敗回転着地")) {
         return false;
     }
 
@@ -899,11 +899,11 @@ void Mario::calcShadowDir(const Vec3f& rInput, Vec3f* pShadowDir) {
 bool Mario::retainMoveDir(f32 stickX, f32 stickY, Vec3f* pMoveDir) {
     f32 angle = MR::atan2(stickY, stickX);
     f32 difference = MR::diffAngleAbs(angle, _2B4);
-    if (isAnimationRun("\202\273\202\314\217\352\221\253\223\245\202\335" /* その場足踏み */)) {
+    if (isAnimationRun("その場足踏み")) {
         difference = 1.0f;
     }
 
-    if (isAnimationRun("\203\136\201\133\203\223\203\165\203\214\201\133\203\114" /* ターンブレーキ */)) {
+    if (isAnimationRun("ターンブレーキ")) {
         difference = 1.0f;
     }
 
@@ -1086,7 +1086,7 @@ void Mario::doLockOnHoming() {
     calcShadowDir(direction, &shadowDir);
     if (MR::diffAngleAbsHorizontal(mFrontVec, direction, mHeadVec) >= 0.05235988f) {
         if (getAnimator()->isAnimationStop()) {
-            changeAnimation("\202\273\202\314\217\352\221\253\223\245\202\335" /* その場足踏み */);
+            changeAnimation("その場足踏み");
             if (!_750) {
                 setFrontVecKeepUp(direction, 15u);
                 _334 = direction;

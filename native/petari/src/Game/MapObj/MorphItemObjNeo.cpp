@@ -15,7 +15,7 @@
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapPartsUtil.hpp"
@@ -34,7 +34,7 @@ namespace {
     static f32 cRotateRadiusMini = 30.0f;
 };  // namespace
 
-void MorphItemObjNeo::makeArchiveList(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter) {
+void MorphItemObjNeo::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
     if (MR::isEqualObjectName(rIter, "MorphItemNeoHopper") || MR::isEqualObjectName(rIter, "Hopper")) {
         if (MR::isPlayerLuigi()) {
             pCollector->addArchive("HopperLuigi");
@@ -88,7 +88,7 @@ void MorphItemObjNeo::makeArchiveList(NameObjArchiveListCollector* pCollector, c
     s32 arg3 = -1;
 
     if (MR::isValidInfo(rIter)) {
-        MR::getJMapInfoArg3WithInit(rIter, &arg3);
+        MR::getPlacementArg3WithInit(rIter, &arg3);
     }
 
     if (MR::isEqualObjectName(rIter, "Hopper")) {
@@ -109,7 +109,7 @@ MorphItemObjNeo::MorphItemObjNeo(const char* pName, s32 type) : LiveActor(pName)
     _92 = false;
 }
 
-void MorphItemObjNeo::init(const JMapInfoIter& rIter) {
+void MorphItemObjNeo::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
 
     mSpawnPosition = mPosition;
@@ -127,28 +127,28 @@ void MorphItemObjNeo::init(const JMapInfoIter& rIter) {
     MR::offBind(this);
 
     s32 arg0 = -1;
-    MR::getJMapInfoArg0NoInit(rIter, &arg0);
+    MR::getPlacementArg0NoInit(rIter, &arg0);
 
     s32 arg1 = -1;
-    MR::getJMapInfoArg1NoInit(rIter, &arg1);
+    MR::getPlacementArg1NoInit(rIter, &arg1);
 
     s32 arg2 = -1;
-    MR::getJMapInfoArg2NoInit(rIter, &arg2);
+    MR::getPlacementArg2NoInit(rIter, &arg2);
 
     s32 arg3 = -1;
-    MR::getJMapInfoArg3NoInit(rIter, &arg3);
+    MR::getPlacementArg3NoInit(rIter, &arg3);
 
     s32 arg4 = -1;
-    MR::getJMapInfoArg4NoInit(rIter, &arg4);
+    MR::getPlacementArg4NoInit(rIter, &arg4);
 
     s32 arg5 = -1;
-    MR::getJMapInfoArg5NoInit(rIter, &arg5);
+    MR::getPlacementArg5NoInit(rIter, &arg5);
 
     s32 arg6 = -1;
-    MR::getJMapInfoArg6NoInit(rIter, &arg6);
+    MR::getPlacementArg6NoInit(rIter, &arg6);
 
     s32 arg7 = -1;
-    MR::getJMapInfoArg7NoInit(rIter, &arg7);
+    MR::getPlacementArg7NoInit(rIter, &arg7);
 
     NebulaMtxCopy(getBaseMtx(), mBaseMtx);
 
@@ -195,15 +195,15 @@ void MorphItemObjNeo::init(const JMapInfoIter& rIter) {
     }
 
     if (mContainerType == 2) {
-        mContainerModel = new ModelObj("\203\116\203\212\203\130\203\136\203\213\203\173\203\142\203\116\203\130" /* クリスタルボックス */, "CrystalBox", mBaseMtx, MR::DrawBufferType_CrystalBox, -2, -2, false);
+        mContainerModel = new ModelObj("クリスタルボックス", "CrystalBox", mBaseMtx, MR::DrawBufferType_CrystalBox, -2, -2, false);
         mContainerModel->initWithoutIter();
         mContainerModel->appear();
         MR::startBck(mContainerModel, "CrystalBox");
 
-        mContainerBreakModel = new ModelObj("\203\116\203\212\203\130\203\136\203\213\224\152\211\363" /* クリスタル破壊 */, "CrystalBoxBreak", mBaseMtx, MR::DrawBufferType_CrystalBox, -2, -2, false);
+        mContainerBreakModel = new ModelObj("クリスタル破壊", "CrystalBoxBreak", mBaseMtx, MR::DrawBufferType_CrystalBox, -2, -2, false);
         mContainerBreakModel->makeActorDead();
     } else if (mContainerType == 1) {
-        mContainerModel = new ModelObj("\203\101\203\103\203\145\203\200\226\101" /* アイテム泡 */, "ItemBubble", nullptr, -2, -2, -2, false);
+        mContainerModel = new ModelObj("アイテム泡", "ItemBubble", nullptr, -2, -2, -2, false);
         mContainerModel->initWithoutIter();
         mContainerModel->mPosition = mPosition;
         mContainerModel->mRotation = mRotation;
@@ -274,16 +274,16 @@ void MorphItemObjNeo::init(const JMapInfoIter& rIter) {
 
     if (arg5 > 0) {
         if (arg5 == 1) {
-            MR::initMultiActorCamera(this, rIter, &mActorCameraInfo, "\217\157\214\2731" /* 出現1 */);
+            MR::initMultiActorCamera(this, rIter, &mActorCameraInfo, "出現1");
             mCameraMode = 1;
         } else {
-            MR::initMultiActorCamera(this, rIter, &mActorCameraInfo, "\217\157\214\2731" /* 出現1 */);
-            MR::initMultiActorCamera(this, rIter, &mActorCameraInfo, "\217\157\214\2732" /* 出現2 */);
+            MR::initMultiActorCamera(this, rIter, &mActorCameraInfo, "出現1");
+            MR::initMultiActorCamera(this, rIter, &mActorCameraInfo, "出現2");
 
             mCameraMode = 2;
         }
 
-        mCameraTargetMtx = new CameraTargetMtx("\203\112\203\201\203\211\203\136\201\133\203\121\203\142\203\147\203\137\203\176\201\133" /* カメラターゲットダミー */);
+        mCameraTargetMtx = new CameraTargetMtx("カメラターゲットダミー");
     }
 
     mRotateMode = arg6;
@@ -396,13 +396,13 @@ void MorphItemObjNeo::control() {
         return;
     }
 
-    if (_92 && MR::tryStartDemoWithoutCinemaFrame(this, "\217\157\214\273" /* 出現 */)) {
+    if (_92 && MR::tryStartDemoWithoutCinemaFrame(this, "出現")) {
         _92 = false;
 
         Pos3f* pMtx = &mCameraTargetMtx->mMatrix;
         pMtx->set(getBaseMtx());
-        MR::startMultiActorCameraTargetSelf(this, mActorCameraInfo, "\217\157\214\2731" /* 出現1 */);
-        mAppearFrames = MR::getMultiActorCameraFrames(this, mActorCameraInfo, "\217\157\214\2731" /* 出現1 */);
+        MR::startMultiActorCameraTargetSelf(this, mActorCameraInfo, "出現1");
+        mAppearFrames = MR::getMultiActorCameraFrames(this, mActorCameraInfo, "出現1");
 
         if (mAppearFrames != 0) {
             mAppearFrames--;
@@ -833,21 +833,21 @@ void MorphItemObjNeo::exeSwitchAppear() {
     }
 
     if (mCameraMode != 0 && mAppearFrames != 0 && --mAppearFrames == 0) {
-        MR::endMultiActorCamera(this, mActorCameraInfo, "\217\157\214\2731" /* 出現1 */, false);
-        MR::endMultiActorCamera(this, mActorCameraInfo, "\217\157\214\2732" /* 出現2 */, false);
+        MR::endMultiActorCamera(this, mActorCameraInfo, "出現1", false);
+        MR::endMultiActorCamera(this, mActorCameraInfo, "出現2", false);
 
         mCameraMode--;
 
         if (mCameraMode == 0) {
-            MR::endDemo(this, "\217\157\214\273" /* 出現 */);
+            MR::endDemo(this, "出現");
             MR::validateClipping(this);
         } else {
             Pos3f* pMtx = &mCameraTargetMtx->mMatrix;
             pMtx->set(getBaseMtx());
 
-            MR::startMultiActorCameraTargetOther(this, mActorCameraInfo, "\217\157\214\2732" /* 出現2 */, CameraTargetArg(nullptr, mCameraTargetMtx, nullptr, nullptr));
+            MR::startMultiActorCameraTargetOther(this, mActorCameraInfo, "出現2", CameraTargetArg(nullptr, mCameraTargetMtx, nullptr, nullptr));
 
-            mAppearFrames = MR::getMultiActorCameraFrames(this, mActorCameraInfo, "\217\157\214\2732" /* 出現2 */);
+            mAppearFrames = MR::getMultiActorCameraFrames(this, mActorCameraInfo, "出現2");
         }
     }
 

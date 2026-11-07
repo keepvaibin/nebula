@@ -25,7 +25,7 @@ namespace NrvAstroCore {
 AstroCore::AstroCore(const char* pName) : MapObjActor(pName) {
 }
 
-void AstroCore::init(const JMapInfoIter& rIter) {
+void AstroCore::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;
     MapObjActorUtil::setupInitInfoSimpleMapObj(&info);

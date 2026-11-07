@@ -5,7 +5,7 @@
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
@@ -32,11 +32,11 @@ namespace NrvJiraira {
 Jiraira::Jiraira(const char* pName) : LiveActor(pName), _8C(), _90(500.0f) {
 }
 
-void Jiraira::init(const JMapInfoIter& rIter) {
+void Jiraira::init(const TableIter& rIter) {
     if (MR::isValidInfo(rIter)) {
         MR::initDefaultPos(this, rIter);
         s32 arg1 = _90;
-        MR::getJMapInfoArg1NoInit(rIter, &arg1);
+        MR::getPlacementArg1NoInit(rIter, &arg1);
         _90 = arg1;
         MR::useStageSwitchWriteDead(this, rIter);
     }

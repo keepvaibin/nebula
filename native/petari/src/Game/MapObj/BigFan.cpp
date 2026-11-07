@@ -21,7 +21,7 @@ BigFan::BigFan(const char* pName)
     BigFanFunction::registerBigFan(this);
 }
 
-void BigFan::init(const JMapInfoIter& rIter) {
+void BigFan::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     const char* object_name;
     MR::getObjectName(&object_name, rIter);
@@ -34,8 +34,8 @@ void BigFan::init(const JMapInfoIter& rIter) {
         MR::initCollisionParts(this, object_name, getSensor(nullptr), nullptr);
     }
 
-    MR::getJMapInfoArg0NoInit(rIter, &mWindLength);
-    MR::getJMapInfoArg1NoInit(rIter, &mWindSpeed);
+    MR::getPlacementArg0NoInit(rIter, &mWindLength);
+    MR::getPlacementArg1NoInit(rIter, &mWindSpeed);
     initWindModel();
     Vec3f front;
     MR::calcFrontVec(&front, this);
@@ -61,7 +61,7 @@ void BigFan::init(const JMapInfoIter& rIter) {
 }
 
 void BigFan::initWindModel() {
-    mWindModel = MR::createModelObjMapObj("\225\227\203\202\203\146\203\213" /* 風モデル */, "BigFanWind", getBaseMtx());
+    mWindModel = MR::createModelObjMapObj("風モデル", "BigFanWind", getBaseMtx());
     mWindModel->initWithoutIter();
     MR::invalidateClipping(mWindModel);
     MR::startBtk(mWindModel, "BigFanWind");

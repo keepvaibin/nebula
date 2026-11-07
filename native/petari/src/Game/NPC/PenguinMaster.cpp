@@ -13,7 +13,7 @@ namespace NrvPenguinMaster {
 PenguinMaster::PenguinMaster(const char* pName) : NPCActor(pName) {
 }
 
-void PenguinMaster::init(const JMapInfoIter& rIter) {
+void PenguinMaster::init(const TableIter& rIter) {
     NPCActorCaps caps = "PenguinMaster";
     caps.setDefault();
     caps.mSensor = false;

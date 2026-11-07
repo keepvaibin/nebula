@@ -43,7 +43,7 @@ inline void FireBall::initHitSensors(const char* const hitSensor) {
     MR::addHitSensorEnemy(this, hitSensor, 8, ::cSensorRadius, Vec3f(0.0f, 0.0f, 0.0f));
 }
 
-void FireBall::init(const JMapInfoIter& rIter) {
+void FireBall::init(const TableIter& rIter) {
     initModelManagerWithAnm("FireBall", nullptr, false);
 
     MR::connectToSceneEnemyDecoration(this);
@@ -220,7 +220,7 @@ void FireBall::exeThrow() {
         MR::deleteEffect(this, "FireBall");
     }
 
-    if (MR::isGreaterStep(this, ::cReflectFrame) && MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false)) {
+    if (MR::isGreaterStep(this, ::cReflectFrame) && MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
         Vec2f screenVelocity(*MR::getStarPointerScreenVelocity(*MR::getStarPointerLastPointedPort(this)));
         if (::cReflectCursorSpeed < screenVelocity.length()) {
             calcReflectVelocity();

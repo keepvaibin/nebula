@@ -11,14 +11,14 @@ public:
     /// @param pName The pointer to the null-terminated name of the object.
     PeachLetter(const char* pName);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void movement();
     virtual void appear();
 
     void exeAppear();
     void exeWait();
     void exeEnd();
-    static void makeArchiveList(NameObjArchiveListCollector*, const JMapInfoIter&);
+    static void makeArchiveList(NameObjArchiveListCollector*, const TableIter&);
 
 private:
     /// @brief The pointer to the actor instance for the A Button.

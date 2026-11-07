@@ -16,7 +16,7 @@
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/GravityUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -99,12 +99,12 @@ TripodBoss::TripodBoss(const char* pName)
     _62C = 32;
 }
 
-void TripodBoss::init(const JMapInfoIter& rIter) {
+void TripodBoss::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::connectToSceneCollisionMapObjMovementCalcAnim(this);
     Pos3f v14;
     v14.identity();
-    MR::getJMapInfoMatrixFromRT(rIter, &v14);
+    MR::getPlacementMatrixFromRT(rIter, &v14);
     _5D4 = mPosition;
     initMovableArea(v14);
     mBodyMtx.set(v14);
@@ -118,7 +118,7 @@ void TripodBoss::init(const JMapInfoIter& rIter) {
     char lowName[32];
     nebula_sprintf(lowName, "%sLow", objName);
 
-    mLowModel = new ModelObj("\216\117\213\162\203\173\203\130LOD\203\202\203\146\203\213" /* 三脚ボスLODモデル */, lowName, getBaseMtx(), MR::DrawBufferType_TripodBoss, -2, -2, false);
+    mLowModel = new ModelObj("三脚ボスLODモデル", lowName, getBaseMtx(), MR::DrawBufferType_TripodBoss, -2, -2, false);
     mLowModel->initWithoutIter();
     MR::invalidateClipping(mLowModel);
     mLowModel->makeActorAppeared();
@@ -158,14 +158,14 @@ void TripodBoss::initAfterPlacement() {
     MR::hideTripodBossParts();
 }
 
-void TripodBoss::initEventCamera(const JMapInfoIter& rIter) {
+void TripodBoss::initEventCamera(const TableIter& rIter) {
     mEventCamera = MR::createActorCameraInfo(rIter);
 
     MR::initAnimCamera(this, mEventCamera, "StartDemo");
     MR::initAnimCamera(this, mEventCamera, "EndDemo");
 }
 
-void TripodBoss::initLeg(const JMapInfoIter& rIter) {
+void TripodBoss::initLeg(const TableIter& rIter) {
     const char* objName;
     MR::getObjectName(&objName, rIter);
 
@@ -173,8 +173,8 @@ void TripodBoss::initLeg(const JMapInfoIter& rIter) {
     nebula_sprintf(legShadowName, "%sLegShadow", objName);
 
     for (u32 i = 0; i < ARRAY_SIZE(mLegs); i++) {
-        mLegs[i] = new TripodBossLeg("\216\117\213\162\203\173\203\130\221\253" /* 三脚ボス足 */);
-        mStepPoints[i] = new TripodBossStepPoint("\203\130\203\145\203\142\203\166\210\312\222\165" /* ステップ位置 */);
+        mLegs[i] = new TripodBossLeg("三脚ボス足");
+        mStepPoints[i] = new TripodBossStepPoint("ステップ位置");
         mLegs[i]->setBody(this);
         mLegs[i]->setMovableArea(mMovableArea);
         mLegs[i]->initWithoutIter();
@@ -489,7 +489,7 @@ bool TripodBoss::tryBreak() {
         }
 
         setNerve(GET_NERVE(TripodBoss, TripodBossNrvTryStartDemo));
-        MR::requestStartDemoMarioPuppetable(this, "\224\152\211\363" /* 破壊 */, GET_NERVE(TripodBoss, TripodBossNrvPainDemo), nullptr);
+        MR::requestStartDemoMarioPuppetable(this, "破壊", GET_NERVE(TripodBoss, TripodBossNrvPainDemo), nullptr);
 
         return true;
     }
@@ -506,14 +506,14 @@ void TripodBoss::requestOpeningDemo() {
         _638 = 0;
         MR::activeTripodBossParts();
         setNerve(GET_NERVE(TripodBoss, TripodBossNrvTryStartDemo));
-        MR::requestStartDemoMarioPuppetable(this, "\212\112\216\156" /* 開始 */, GET_NERVE(TripodBoss, TripodBossNrvStartDemo), nullptr);
+        MR::requestStartDemoMarioPuppetable(this, "開始", GET_NERVE(TripodBoss, TripodBossNrvStartDemo), nullptr);
     }
 }
 
 bool TripodBoss::tryDamageDemo() {
     setNerve(GET_NERVE(TripodBoss, TripodBossNrvTryStartDemo));
 
-    if (MR::tryStartDemo(this, "\203\137\203\201\201\133\203\127" /* ダメージ */)) {
+    if (MR::tryStartDemo(this, "ダメージ")) {
         setNerve(GET_NERVE(TripodBoss, TripodBossNrvDamageDemo));
 
         return true;
@@ -523,7 +523,7 @@ bool TripodBoss::tryDamageDemo() {
 }
 
 void TripodBoss::requestEndDamageDemo() {
-    endDemo("\203\137\203\201\201\133\203\127" /* ダメージ */);
+    endDemo("ダメージ");
     setNerve(GET_NERVE(TripodBoss, TripodBossNrvWait));
 
     Vec3f trans;
@@ -658,7 +658,7 @@ void TripodBoss::exeStartDemo() {
     calcDemoMovement();
 
     if (MR::isBckStopped(this)) {
-        endDemo("\212\112\216\156" /* 開始 */);
+        endDemo("開始");
         MR::endAnimCamera(this, mEventCamera, "StartDemo", 150, true);
         initLegIKPlacement();
         setNerve(GET_NERVE(TripodBoss, TripodBossNrvWait));
@@ -759,7 +759,7 @@ void TripodBoss::exeExplosionDemo() {
     }
 
     if (MR::isGreaterStep(this, ::sExplosionTime)) {
-        endDemo("\224\152\211\363" /* 破壊 */);
+        endDemo("破壊");
         MR::endAnimCamera(this, mEventCamera, "EndDemo", 0, true);
         kill();
     }

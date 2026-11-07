@@ -58,10 +58,10 @@ void MarioSubMeter::deactivate() {
 MarioSubMeter::~MarioSubMeter() {
 }
 
-void MarioSubMeter::init(const JMapInfoIter& rIter) {
-    mFlyMeter = new SubMeterLayout("\203\156\203\140\203\201\201\133\203\136\201\133" /* ハチメーター */, "FlyMeter");
+void MarioSubMeter::init(const TableIter& rIter) {
+    mFlyMeter = new SubMeterLayout("ハチメーター", "FlyMeter");
     mFlyMeter->initWithoutIter();
 
-    mAirMeter = new SubMeterLayout("\220\205\222\206\203\201\201\133\203\136\201\133" /* 水中メーター */, "AirMeter");
+    mAirMeter = new SubMeterLayout("水中メーター", "AirMeter");
     mAirMeter->initWithoutIter();
 }

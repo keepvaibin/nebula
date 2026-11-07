@@ -1,6 +1,6 @@
 #include "Game/Boss/SkeletalFishBossInfo.hpp"
 #include "Game/Boss/SkeletalFishBoss.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include <cstdio>
 
@@ -22,8 +22,8 @@ SkeletalFishBossInfo::SkeletalFishBossInfo(SkeletalFishBoss* pBoss, s32 levelNum
     createLevelStatus();
 }
 
-void SkeletalFishBossInfo::init(const JMapInfoIter& rIter) {
-    const JMapInfo* pCsvParser = MR::tryCreateCsvParser(mFishBoss, "%s.bcsv", ::sParamFileName);
+void SkeletalFishBossInfo::init(const TableIter& rIter) {
+    const Table* pCsvParser = MR::tryCreateCsvParser(mFishBoss, "%s.bcsv", ::sParamFileName);
 
     if (pCsvParser != nullptr) {
         loadLevelStatus(pCsvParser->begin());
@@ -55,7 +55,7 @@ void SkeletalFishBossInfo::createLevelStatus() {
 SkeletalFishBossInfo::GuardStatus::GuardStatus() {
 }
 
-void SkeletalFishBossInfo::loadLevelStatus(const JMapInfoIter& rIter) {
+void SkeletalFishBossInfo::loadLevelStatus(const TableIter& rIter) {
     s32 levelNum;
 
     if (!rIter.getValue< s32 >(::sParamNameLevelNum, &levelNum)) {
@@ -88,14 +88,14 @@ void SkeletalFishBossInfo::loadLevelStatus(const JMapInfoIter& rIter) {
     }
 }
 
-void SkeletalFishBossInfo::loadGuardStatus(const JMapInfoIter& rIter, s32 levelIdx, s32 guardLevel) {
+void SkeletalFishBossInfo::loadGuardStatus(const TableIter& rIter, s32 levelIdx, s32 guardLevel) {
     LevelStatus* pStatus = getLevelStatus(levelIdx);
 
     for (s32 i = 0; i < guardLevel; i++) {
         char paramName[256];
 
         nebula_snprintf(paramName, sizeof(paramName), "%s%d%s%d", ::sParamNameGuardPos, levelIdx, ::sParamNameGuard, i);
-        MR::getJMapInfoV3f(rIter, paramName, &pStatus->getGuardStatus(i)->mGuardPosLevel);
+        MR::getPlacementV3f(rIter, paramName, &pStatus->getGuardStatus(i)->mGuardPosLevel);
 
         nebula_snprintf(paramName, sizeof(paramName), "%s%d%s%d", ::sParamNameGuardWait, levelIdx, ::sParamNameGuard, i);
         rIter.getValue< s32 >(paramName, &pStatus->getGuardStatus(i)->mGuardWaitLevelID);

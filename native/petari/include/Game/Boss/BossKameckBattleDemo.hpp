@@ -8,7 +8,7 @@ class BossKameckDemoPosition;
 
 class BossKameckBattleDemo : public BossKameckAction {
 public:
-    BossKameckBattleDemo(BossKameck*, const JMapInfoIter&);
+    BossKameckBattleDemo(BossKameck*, const TableIter&);
 
     virtual void init();
     virtual void appear();
@@ -41,7 +41,7 @@ class BossKameckDemoPosition : public LiveActor {
 public:
     BossKameckDemoPosition();
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
 
     ActorCameraInfo* mCameraInfo;
 };

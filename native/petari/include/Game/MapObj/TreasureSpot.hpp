@@ -6,7 +6,7 @@ class TreasureSpot : public MapObjActor {
 public:
     TreasureSpot(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void control();
     virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
 

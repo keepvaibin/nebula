@@ -3,7 +3,7 @@
 #include "Game/System/NerveExecutor.hpp"
 #include <nebula_geometry.hpp>
 
-class JMapInfoIter;
+class TableIter;
 class LiveActor;
 class ModelObj;
 class NPCActor;
@@ -14,7 +14,7 @@ class TalkMessageCtrl;
 namespace MR {
     bool getNPCItemData(NPCActorItem*, s32);
     bool isNPCItemFileExist(const char*);
-    void initDefaultPose(NPCActor*, const JMapInfoIter&);
+    void initDefaultPose(NPCActor*, const TableIter&);
     void turnPlayerToActor(const LiveActor*, f32);
     void decidePose(NPCActor*, const Vec3f&, const Vec3f&, const Vec3f&, f32, f32, f32);
     void setNPCActorPos(NPCActor*, const char*);
@@ -30,7 +30,7 @@ namespace MR {
     void startNPCTalkCamera(const TalkMessageCtrl*, MtxPtr, f32, s32);
     void startNPCTalkCamera(const TalkMessageCtrl*, MtxPtr, MtxPtr, f32, s32);
     void endNPCTalkCamera(bool, s32 = -1);
-    void initDefaultPosAndQuat(NPCActor*, const JMapInfoIter&);
+    void initDefaultPosAndQuat(NPCActor*, const TableIter&);
     PartsModel* createNPCGoods(LiveActor*, const char*, const char*);
     PartsModel* createIndirectNPCGoods(LiveActor*, const char*, const char*);
     bool calcPlayerFaceStareVector(Vec3f*, MtxPtr, MtxPtr);

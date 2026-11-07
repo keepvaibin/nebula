@@ -6,7 +6,7 @@ class BossKameck;
 class BossKameckAction;
 class BossKameckBattleDemo;
 class HitSensor;
-class JMapInfoIter;
+class TableIter;
 
 class BossKameckSequencer : public NerveExecutor {
 public:
@@ -18,7 +18,7 @@ public:
     virtual void start() {
     }
 
-    virtual void init(BossKameck*, const JMapInfoIter&);
+    virtual void init(BossKameck*, const TableIter&);
     virtual void update();
     virtual void attackSensor(HitSensor*, HitSensor*);
     virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);

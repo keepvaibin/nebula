@@ -4,7 +4,7 @@
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/LiveActor/ActorLightCtrl.hpp"
 #include "Game/Util/DirectDraw.hpp"
-#include "Game/Util/JMapInfo.hpp"
+#include "Game/Util/Table.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -113,7 +113,7 @@ f32 GCaptureRibbon::calcLineWidth() const {
 GCaptureRibbon::~GCaptureRibbon() {
 }
 
-void GCaptureRibbon::init(const JMapInfoIter& rIter) {
+void GCaptureRibbon::init(const TableIter& rIter) {
     mTexture = new JUTTexture(MR::loadTexFromArc("GCaptureRibbon.arc", "GCaptureRibbon.bti"));
     MR::invalidateClipping(this);
     makeActorAppeared();

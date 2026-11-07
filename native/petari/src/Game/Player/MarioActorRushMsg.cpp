@@ -336,7 +336,7 @@ bool MarioActor::tryJumpRush() {
     if (jumpTarget != nullptr) {
         unsigned char autoBind;
         bool b = selectAutoBind(jumpTarget->mHost->mName, &autoBind);
-        if (!b && !isActionOk("\203\127\203\203\203\223\203\166\214\156\203\157\203\103\203\223\203\150" /* ジャンプ系バインド */)) {
+        if (!b && !isActionOk("ジャンプ系バインド")) {
             return false;
         }
 
@@ -405,7 +405,7 @@ void MarioActor::tryRushInRush() {
     if (isFixJumpRushSensor(target) && isLandEffectRushSensor(sensor924)) {
         mMario->mMovementStates._3E = false;
 
-        playEffect("\203\130\201\133\203\160\201\133\203\130\203\163\203\223\203\150\203\211\203\103\203\157\217\111\227\271" /* スーパースピンドライバ終了 */);
+        playEffect("スーパースピンドライバ終了");
     }
 
     if (_934) {

@@ -2,7 +2,7 @@
 
 
 class CodeTable;
-class JMapInfoIter;
+class TableIter;
 class Triangle;
 
 enum CollisionFloorCode {
@@ -95,18 +95,18 @@ public:
     const char* getFloorCodeString(const Triangle& rTriangle);
     const char* getWallCodeString(const Triangle& rTriangle);
     const char* getSoundCodeString(const Triangle& rTriangle);
-    const char* getSoundCodeString(const JMapInfoIter& rIter);
+    const char* getSoundCodeString(const TableIter& rIter);
     u32 getCameraID(const Triangle& rTriangle);
-    u32 getCode(const JMapInfoIter& rIter, CodeTable* pCodeTable, const char* pName);
+    u32 getCode(const TableIter& rIter, CodeTable* pCodeTable, const char* pName);
     void createFloorTable();
     void createWallTable();
     void createSoundTable();
     void createCameraTable();
-    u32 getFloorCode(const JMapInfoIter& rIter);
-    u32 getWallCode(const JMapInfoIter& rIter);
-    u32 getSoundCode(const JMapInfoIter& rIter);
-    u32 getCameraCode(const JMapInfoIter& rIter);
-    u32 getCameraID(const JMapInfoIter& rIter);
+    u32 getFloorCode(const TableIter& rIter);
+    u32 getWallCode(const TableIter& rIter);
+    u32 getSoundCode(const TableIter& rIter);
+    u32 getCameraCode(const TableIter& rIter);
+    u32 getCameraID(const TableIter& rIter);
 
     CodeTable* mFloorTable;
     CodeTable* mWallTable;

@@ -3,11 +3,11 @@
 #include "Game/Camera/CameraSubjective.hpp"
 
 CameraManSubjective::CameraManSubjective(const char* pName) : CameraMan(pName) {
-    mCamera = new CameraSubjective("\216\345\212\317\203\112\203\201\203\211" /* 主観カメラ */);
+    mCamera = new CameraSubjective("主観カメラ");
     mCamera->mCameraMan = this;
 }
 
-void CameraManSubjective::init(const JMapInfoIter& rIter) {
+void CameraManSubjective::init(const TableIter& rIter) {
 }
 
 void CameraManSubjective::calc() {

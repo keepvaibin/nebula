@@ -155,7 +155,7 @@ namespace MR {
     }
 };  // namespace MR
 
-FurDrawManager::FurDrawManager(u8 capacity) : NameObj("\203\164\203\100\201\133\225\140\211\346\203\175\203\154\201\133\203\127\203\203" /* ファー描画マネージャ */) {
+FurDrawManager::FurDrawManager(u8 capacity) : NameObj("ファー描画マネージャ") {
     mCounts[0] = 0;
     mCounts[1] = 0;
     mFurCtrls[0] = new FurCtrl*[capacity];
@@ -244,33 +244,33 @@ namespace MR {
                 position++;
             }
 
-            scan32(line, "\203\214\203\103\203\204\220\224" /* レイヤ数 */, &pParam->mNumLayers);
-            scanf32(line, "\226\321\222\267\202\263" /* 毛長さ */, &pParam->mLength);
-            scanf32(line, "\222\267\202\263\225\316\215\267" /* 長さ偏差 */, &pParam->mLengthCurve);
-            scanf32(line, "\203\131\203\214(indirect)" /* ズレ(indirect) */, &pParam->mIndirect);
-            scanf32(line, "\203\131\203\214\225\316\215\267" /* ズレ偏差 */, &pParam->mIndirectCurve);
-            scanf32(line, "\226\276\202\351\202\263(\226\321\220\346)" /* 明るさ(毛先) */, &pParam->mBrightnessTip);
-            scanf32(line, "\226\276\202\351\202\263(\226\321\214\263)" /* 明るさ(毛元) */, &pParam->mBrightnessRoot);
-            scanf32(line, "\226\276\202\351\202\263\225\316\215\267" /* 明るさ偏差 */, &pParam->mBrightnessCurve);
-            scanf32(line, "\223\247\226\276\223\170(\226\321\220\346)" /* 透明度(毛先) */, &pParam->mAlphaTip);
-            scanf32(line, "\223\247\226\276\223\170(\226\321\214\263)" /* 透明度(毛元) */, &pParam->mAlphaRoot);
-            scanf32(line, "\223\247\226\276\223\170\225\316\215\267" /* 透明度偏差 */, &pParam->mAlphaCurve);
-            scanf32(line, "\223\247\226\276\223\170\201\105\222\156\224\247(\226\321\220\346)" /* 透明度・地肌(毛先) */, &pParam->mSkinAlphaTip);
-            scanf32(line, "\223\247\226\276\223\170\201\105\222\156\224\247(\226\321\214\263)" /* 透明度・地肌(毛元) */, &pParam->mSkinAlphaRoot);
-            scanf32(line, "\223\247\226\276\223\170\201\105\222\156\224\247\225\316\215\267" /* 透明度・地肌偏差 */, &pParam->mSkinAlphaCurve);
-            scanf32(line, "\226\247\223\170\203\175\203\142\203\166\203\130\203\120\201\133\203\213" /* 密度マップスケール */, &pParam->mFurUVScale);
-            scanf32(line, "\203\170\201\133\203\130\203\175\203\142\203\166\203\130\203\120\201\133\203\213" /* ベースマップスケール */, &pParam->mBodyUVScale);
-            scanu8x4(line, "\215\254\215\207\203\112\203\211\201\133" /* 混合カラー */, &pParam->mColor.r);
-            scanf32x4(line, "\220\101\226\321\226\247\223\170" /* 植毛密度 */, pParam->mDensity);
-            scanf32x4(line, "\220\101\226\321\221\276\202\263" /* 植毛太さ */, pParam->mThickness);
-            scanu8x4(line, "\215\254\215\207\224\344" /* 混合比 */, pParam->mLengthMap);
-            scan32(line, "\203\211\203\103\203\1470\203\130\203\103\203\142\203\140" /* ライト0スイッチ */, &lightMask);
-            scan32(line, "\203\211\203\103\203\1470\203\175\203\145\203\212\203\101\203\213" /* ライト0マテリアル */, &matIntensity);
-            scan32(line, "\203\211\203\103\203\1470\203\101\203\223\203\162\203\107\203\223\203\147" /* ライト0アンビエント */, &ambIntensity);
-            scan32(line, "\203\211\203\103\203\1471\203\130\203\103\203\142\203\140" /* ライト1スイッチ */, &specularLightMask);
-            scan32(line, "\203\211\203\103\203\1471\203\175\203\145\203\212\203\101\203\213" /* ライト1マテリアル */, &specularMatIntensity);
-            scan32(line, "\203\211\203\103\203\1471\203\101\203\223\203\162\203\107\203\223\203\147" /* ライト1アンビエント */, &specularAmbIntensity);
-            scan32(line, "\203\211\203\103\203\147\203\112\203\211\201\133\203\134\201\133\203\130" /* ライトカラーソース */, &colorSource);
+            scan32(line, "レイヤ数", &pParam->mNumLayers);
+            scanf32(line, "毛長さ", &pParam->mLength);
+            scanf32(line, "長さ偏差", &pParam->mLengthCurve);
+            scanf32(line, "ズレ(indirect)", &pParam->mIndirect);
+            scanf32(line, "ズレ偏差", &pParam->mIndirectCurve);
+            scanf32(line, "明るさ(毛先)", &pParam->mBrightnessTip);
+            scanf32(line, "明るさ(毛元)", &pParam->mBrightnessRoot);
+            scanf32(line, "明るさ偏差", &pParam->mBrightnessCurve);
+            scanf32(line, "透明度(毛先)", &pParam->mAlphaTip);
+            scanf32(line, "透明度(毛元)", &pParam->mAlphaRoot);
+            scanf32(line, "透明度偏差", &pParam->mAlphaCurve);
+            scanf32(line, "透明度・地肌(毛先)", &pParam->mSkinAlphaTip);
+            scanf32(line, "透明度・地肌(毛元)", &pParam->mSkinAlphaRoot);
+            scanf32(line, "透明度・地肌偏差", &pParam->mSkinAlphaCurve);
+            scanf32(line, "密度マップスケール", &pParam->mFurUVScale);
+            scanf32(line, "ベースマップスケール", &pParam->mBodyUVScale);
+            scanu8x4(line, "混合カラー", &pParam->mColor.r);
+            scanf32x4(line, "植毛密度", pParam->mDensity);
+            scanf32x4(line, "植毛太さ", pParam->mThickness);
+            scanu8x4(line, "混合比", pParam->mLengthMap);
+            scan32(line, "ライト0スイッチ", &lightMask);
+            scan32(line, "ライト0マテリアル", &matIntensity);
+            scan32(line, "ライト0アンビエント", &ambIntensity);
+            scan32(line, "ライト1スイッチ", &specularLightMask);
+            scan32(line, "ライト1マテリアル", &specularMatIntensity);
+            scan32(line, "ライト1アンビエント", &specularAmbIntensity);
+            scan32(line, "ライトカラーソース", &colorSource);
             pLight->mLightMask = lightMask;
             pLight->mMatIntensity = matIntensity;
             pLight->mAmbIntensity = ambIntensity;

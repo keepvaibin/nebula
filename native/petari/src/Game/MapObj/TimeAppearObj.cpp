@@ -2,7 +2,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
@@ -19,14 +19,14 @@ namespace NrvTimeAppearObj {
 TimeAppearObj::TimeAppearObj(const char* pName) : MapObjActor(pName), mTimer(::sDefaultTimer) {
 }
 
-void TimeAppearObj::init(const JMapInfoIter& rIter) {
+void TimeAppearObj::init(const TableIter& rIter) {
     MapObjActorInitInfo info;
     info.setupModelName("KoopaBattleMapStairTurn");
     info.setupSound(4);
     info.setupNerve(GET_NERVE(TimeAppearObj, TimeAppearObjNrvHide));
     MapObjActorUtil::setupInitInfoSimpleMapObj(&info);
     initialize(rIter, info);
-    MR::getJMapInfoArg0NoInit(rIter, &mTimer);
+    MR::getPlacementArg0NoInit(rIter, &mTimer);
     makeActorDead();
 }
 

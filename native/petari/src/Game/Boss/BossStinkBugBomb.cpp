@@ -18,7 +18,7 @@ namespace NrvBossStinkBugBomb {
 BossStinkBugBomb::BossStinkBugBomb(const char* pName) : LiveActor(pName), _8C(0.0f, 0.0f, 0.0f, 1.0f), _9C(0.0f, 0.0f, 0.0f) {
 }
 
-void BossStinkBugBomb::init(const JMapInfoIter& rIter) {
+void BossStinkBugBomb::init(const TableIter& rIter) {
     initModelManagerWithAnm("BossStinkBugBomb", nullptr, false);
     MR::connectToSceneEnemy(this);
     MR::onCalcGravity(this);

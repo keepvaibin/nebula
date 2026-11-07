@@ -4,7 +4,7 @@
 class AreaObjMgr;
 class ClippingActorInfo;
 class ClippingActorInfoList;
-class JMapInfoIter;
+class TableIter;
 class LodCtrl;
 
 struct ViewGroupCtrlDataEntry {
@@ -24,7 +24,7 @@ public:
     // An actor made once the table stands (a plugin's spawn) is in no view group, as an actor without one.
     void initMadeDuringPlay(ClippingActorInfo*);
     void endInitViewGroupTable();
-    void entryLodCtrl(LodCtrl*, const JMapInfoIter&);
+    void entryLodCtrl(LodCtrl*, const TableIter&);
     void update();
     void startInitViewGroupTable();
 

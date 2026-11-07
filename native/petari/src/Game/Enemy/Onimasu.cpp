@@ -49,7 +49,7 @@ Onimasu::Onimasu(const char* pName) : LiveActor(pName), _BC(1.0f, 0.0f, 0.0f), _
     _E8.set(0.0f, 0.0f, 0.0f, 1.0f);
 }
 
-void Onimasu::init(const JMapInfoIter& rIter) {
+void Onimasu::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initRailRider(rIter);
     initFromRailPoint();
@@ -194,7 +194,7 @@ void Onimasu::calcAndSetBaseMtx() {
 
 void Onimasu::land() {
     emitEffectLand();
-    MR::startRumbleWithShakeCameraNormalWeak(this, "\222\206" /* 中 */, "\216\343" /* 弱 */, ::sCamShakeDistanceStrong, ::sCamShakeDistanceWeak);
+    MR::startRumbleWithShakeCameraNormalWeak(this, "中", "弱", ::sCamShakeDistanceStrong, ::sCamShakeDistanceWeak);
 
     Vec3f railPointPos;
     MR::calcRailPointPos(&railPointPos, this, getNextPointNo());

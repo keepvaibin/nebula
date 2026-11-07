@@ -3,7 +3,7 @@
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
@@ -16,13 +16,13 @@ namespace NrvSimpleEffectObj {
 
 namespace {
     const s_effectDataTable sEffectDataTable[] = {
-        {"IceLayerBreak", "SE_OJ_ICE_LAYER_BREAK", nullptr, 0, "\215\305\213\255" /* 最強 */, 7},
-        {"LavaVolcanoEruption", nullptr, nullptr, 0, "\215\305\213\255" /* 最強 */, 0},
+        {"IceLayerBreak", "SE_OJ_ICE_LAYER_BREAK", nullptr, 0, "最強", 7},
+        {"LavaVolcanoEruption", nullptr, nullptr, 0, "最強", 0},
         {"LavaHomeVolcanoFallingRock", nullptr, "SE_AT_LV_FALLING_ROCK", -1, nullptr, 0},
-        {"WaterLayerBreak", "SE_OJ_WATER_LAYER_BREAK", nullptr, 0, "\215\305\213\255" /* 最強 */, 7},
+        {"WaterLayerBreak", "SE_OJ_WATER_LAYER_BREAK", nullptr, 0, "最強", 7},
         {"DrainPipeBubbleA", nullptr, "SE_OJ_LV_PIPE_BUBBLE_A", -1, nullptr, 0},
         {"DrainPipeBubbleB", nullptr, "SE_OJ_LV_PIPE_BUBBLE_B", -1, nullptr, 0},
-        {"StarPieceClusterBreak", "SE_OJ_CRYSTAL_CAGE_L_BREAK", nullptr, 0, "\215\305\213\255" /* 最強 */, 7},
+        {"StarPieceClusterBreak", "SE_OJ_CRYSTAL_CAGE_L_BREAK", nullptr, 0, "最強", 7},
         {"BattleShipExplosionMetal", "SE_AT_BTLSHIP_EXPLODE_METAL", nullptr, -1, nullptr, 0},
         {"BattleShipExplosionRock", "SE_AT_BTLSHIP_EXPLODE_ROCK", nullptr, -1, nullptr, 0},
         {"Steam", nullptr, "SE_OJ_LV_HD_STEAM", -1, nullptr, 0},
@@ -47,7 +47,7 @@ SimpleEffectObj::SimpleEffectObj(const char* pName) : LiveActor(pName) {
     _8C = nullptr;
 }
 
-void SimpleEffectObj::init(const JMapInfoIter& rIter) {
+void SimpleEffectObj::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::connectToSceneMapObjMovement(this);
     MR::getObjectName(&_8C, rIter);

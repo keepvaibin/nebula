@@ -6,7 +6,7 @@ class Birikyu : public LiveActor {
 public:
     Birikyu(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void appear();
     virtual void startClipped();
@@ -17,8 +17,8 @@ public:
     virtual f32 getHitRadius() const;
     virtual const char* getCenterJointName() const;
 
-    void initFromJmpArgs(const JMapInfoIter&);
-    void initRail(const JMapInfoIter&);
+    void initFromJmpArgs(const TableIter&);
+    void initRail(const TableIter&);
     void initCollision();
     void initShadow();
     bool tryStopPointing();
@@ -45,7 +45,7 @@ class BirikyuWithFace : public Birikyu {
 public:
     BirikyuWithFace(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void calcAndSetBaseMtx();
     virtual f32 getHitRadius() const;
     virtual const char* getCenterJointName() const;

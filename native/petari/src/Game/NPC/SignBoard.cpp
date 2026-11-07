@@ -13,7 +13,7 @@ namespace NrvSignBoard {
 SignBoard::SignBoard(const char* pName) : NPCActor(pName) {
 }
 
-void SignBoard::init(const JMapInfoIter& rIter) {
+void SignBoard::init(const TableIter& rIter) {
     NPCActorCaps caps("SignBoard");
     caps.setDefault();
     caps.mWaitNerve = GET_NERVE(SignBoard, SignBoardNrvWait);

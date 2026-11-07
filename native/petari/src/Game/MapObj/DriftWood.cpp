@@ -32,7 +32,7 @@ namespace NrvDriftWood {
     NEW_NERVE(DriftWoodNrvVibrateTakeOff, DriftWood, Vibrate);
 };  // namespace NrvDriftWood
 
-void DriftWood::init(const JMapInfoIter& rIter) {
+void DriftWood::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;
     info.setupDefaultPos();

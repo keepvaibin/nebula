@@ -14,7 +14,7 @@ public:
     Halo(const char*);
 
     virtual ~Halo();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void appear();
     virtual void connectToScene(const MapObjActorInitInfo&);
     virtual f32 getDistance() const;
@@ -32,7 +32,7 @@ public:
     PowerStarHalo(const char*);
 
     virtual ~PowerStarHalo();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void appear();
     virtual f32 getDistance() const;
 

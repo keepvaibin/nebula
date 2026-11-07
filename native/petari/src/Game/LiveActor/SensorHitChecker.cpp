@@ -46,7 +46,7 @@ void SensorGroup::clear() const {
     }
 }
 
-void SensorHitChecker::init(const JMapInfoIter& rIter) {
+void SensorHitChecker::init(const TableIter& rIter) {
     MR::connectToScene(this, MR::MovementType_SensorHitChecker, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_None);
 }
 

@@ -10,7 +10,7 @@ public:
     UnizoLauncher(const char*);
 
     virtual ~UnizoLauncher();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
 
     void exeWait();
     void exeLaunch();

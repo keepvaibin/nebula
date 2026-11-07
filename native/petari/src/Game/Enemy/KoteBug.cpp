@@ -84,7 +84,7 @@ KoteBug::KoteBug(const char* pName)
       mJointController() {
 }
 
-void KoteBug::init(const JMapInfoIter& rIter) {
+void KoteBug::init(const TableIter& rIter) {
     if (MR::isValidInfo(rIter)) {
         MR::initDefaultPos(this, rIter);
         MR::useStageSwitchWriteDead(this, rIter);

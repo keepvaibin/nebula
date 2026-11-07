@@ -18,7 +18,7 @@ class WaterBazooka : public LiveActor {
 public:
     WaterBazooka(const char*);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void kill();
     virtual void makeActorDead();
     virtual void control();
@@ -72,7 +72,7 @@ public:
     void initBazookaCapsule();
     void initBreakModel();
     void initCameraTarget();
-    void initBullet(const JMapInfoIter&);
+    void initBullet(const TableIter&);
     bool tryShotBullet();
     ElectricPressureBullet* selectBulletElectric();
     bool tryJumpBackPlayerFromBazooka() const;

@@ -9,7 +9,7 @@
 #include "Game/Util/ActorStateUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
@@ -60,7 +60,7 @@ namespace {
 };  // namespace
 
 namespace {
-    s32 getElementList(const JMapInfoIter& rIter) {
+    s32 getElementList(const TableIter& rIter) {
         for (s32 idx = 0; idx < ARRAY_SIZE(::sElementArcName); idx++) {
             if (MR::isEqualObjectName(rIter, ::sElementArcName[idx])) {
                 return ::sElementList[idx];
@@ -124,7 +124,7 @@ Meramera::Meramera(const char* pName)
     mParabolicPath = new ParabolicPath();
 }
 
-void Meramera::init(const JMapInfoIter& rIter) {
+void Meramera::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initElementType(rIter);
 
@@ -158,7 +158,7 @@ void Meramera::init(const JMapInfoIter& rIter) {
     initAppearState(rIter);
 }
 
-void Meramera::initElementType(const JMapInfoIter& rIter) {
+void Meramera::initElementType(const TableIter& rIter) {
     mElementType = ::getElementList(rIter);
 }
 
@@ -205,17 +205,17 @@ void Meramera::initShadow() {
 
     MR::initShadowController(this, 2);
 
-    MR::addShadowSurfaceCircle(this, "\220\205\226\312\227\160" /* 水面用 */, scale * ::sShadowRadius);
-    MR::setShadowDropStartOffset(this, "\220\205\226\312\227\160" /* 水面用 */, ::sBaseScale);
-    MR::addShadowVolumeSphere(this, "\222\156\226\312\227\160" /* 地面用 */, scale * ::sShadowRadius);
+    MR::addShadowSurfaceCircle(this, "水面用", scale * ::sShadowRadius);
+    MR::setShadowDropStartOffset(this, "水面用", ::sBaseScale);
+    MR::addShadowVolumeSphere(this, "地面用", scale * ::sShadowRadius);
 }
 
-void Meramera::initAppearState(const JMapInfoIter& rIter) {
-    MR::getJMapInfoArg0WithInit(rIter, &mAppearStatus);
+void Meramera::initAppearState(const TableIter& rIter) {
+    MR::getPlacementArg0WithInit(rIter, &mAppearStatus);
 
     resetAppear();
 
-    MR::getJMapInfoArg2NoInit(rIter, &mIsValidRestart);
+    MR::getPlacementArg2NoInit(rIter, &mIsValidRestart);
 
     if (MR::useStageSwitchReadAppear(this, rIter)) {
         MR::syncStageSwitchAppear(this);

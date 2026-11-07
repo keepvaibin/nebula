@@ -6,7 +6,7 @@ RosettaChair::RosettaChair(const char* pName) : LiveActor(pName), mDefaultPositi
     mScaleMtx.identity();
 }
 
-void RosettaChair::init(const JMapInfoIter& rIter) {
+void RosettaChair::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("RosettaChair", nullptr, false);
     MR::connectToSceneMapObj(this);
@@ -19,8 +19,8 @@ void RosettaChair::init(const JMapInfoIter& rIter) {
 
     MR::setClippingTypeSphere(this, 500.0f);
     MR::tryRegisterDemoCast(this, rIter);
-    MR::registerDemoActionFunctor(this, MR::Functor(this, &RosettaChair::startDemo), "\230\116\223\307\212\112\216\156" /* 朗読開始 */);
-    MR::registerDemoActionFunctor(this, MR::Functor(this, &RosettaChair::setDefaultPose), "\203\114\203\203\203\130\203\147\223\374\202\352\212\267\202\246" /* キャスト入れ換え */);
+    MR::registerDemoActionFunctor(this, MR::Functor(this, &RosettaChair::startDemo), "朗読開始");
+    MR::registerDemoActionFunctor(this, MR::Functor(this, &RosettaChair::setDefaultPose), "キャスト入れ換え");
     mDefaultPosition.set(mPosition);
     mDefaultRotation.set(mRotation);
     MR::startBck(this, "RosettaChair");

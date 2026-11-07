@@ -14,7 +14,7 @@ class Trapeze : public LiveActor {
 public:
     Trapeze(const char*);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void draw() const;
     virtual void updateHitSensor(HitSensor* pSensor);
     virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);

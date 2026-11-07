@@ -18,7 +18,7 @@
 #include "Game/System/AssetFolder.hpp"
 #include "Game/System/NebulaArena.hpp"
 
-MiiFacePartsHolder::MiiFacePartsHolder(int partsNumMax) : LiveActorGroup("Mii\212\347\203\202\203\146\203\213\225\333\216\235" /* Mii顔モデル保持 */, partsNumMax), JKRDisposer(), _34() {
+MiiFacePartsHolder::MiiFacePartsHolder(int partsNumMax) : LiveActorGroup("Mii顔モデル保持", partsNumMax), JKRDisposer(), _34() {
 }
 
 MiiFacePartsHolder::~MiiFacePartsHolder() {
@@ -26,14 +26,14 @@ MiiFacePartsHolder::~MiiFacePartsHolder() {
     delete _34;
 }
 
-void MiiFacePartsHolder::init(const JMapInfoIter& rIter) {
+void MiiFacePartsHolder::init(const TableIter& rIter) {
     AssetFolder* pArchive = MR::getMountedArchive("/ObjectData/MiiFaceDatabase.arc");
     void* pResBuffer = pArchive->getResource("/RFL_Res.dat");
     u32 resSize = pArchive->getResSize(pResBuffer);
     _38 = MiiInitRes(pResBuffer, resSize, false);
 
     MR::connectToScene(this, MR::MovementType_None, MR::CalcAnimType_NPC, MR::DrawBufferType_None, MR::DrawType_MiiFacePartsHolder);
-    MR::connectToScene(MR::createDrawAdaptor("Mii\203\202\203\146\203\213\215\304\215\354\220\254" /* Miiモデル再作成 */, MR::Functor(this, &MiiFacePartsHolder::reinitCharModel)), MR::MovementType_None,
+    MR::connectToScene(MR::createDrawAdaptor("Miiモデル再作成", MR::Functor(this, &MiiFacePartsHolder::reinitCharModel)), MR::MovementType_None,
                        MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_MiiFaceNew);
 }
 

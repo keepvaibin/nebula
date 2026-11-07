@@ -8,7 +8,7 @@ public:
     }
 
     virtual ~DashRing();
-    virtual void init(const JMapInfoIter& rIter) {
+    virtual void init(const TableIter& rIter) {
         initCommon(rIter, "DashRing");
     }
     virtual void draw() const;
@@ -16,7 +16,7 @@ public:
     virtual void calcAndSetBaseMtx();
     virtual void attackSensor(HitSensor*, HitSensor*);
 
-    void initCommon(const JMapInfoIter&, const char*);
+    void initCommon(const TableIter&, const char*);
     void calcAxis();
     void calcSubAxis();
 

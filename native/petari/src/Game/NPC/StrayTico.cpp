@@ -35,7 +35,7 @@ StrayTico::StrayTico(const char* pName, CollectTico* pHost)
       _BC(0.0f, 0.0f, 0.0f), _C8(0.0f, 1.0f, 0.0f), _D4(0.0f, 0.0f, 1.0f), _EC(), _F0() {
 }
 
-void StrayTico::init(const JMapInfoIter& rIter) {
+void StrayTico::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("StrayTico", nullptr, false);
     MR::connectToSceneNpc(this);
@@ -50,7 +50,7 @@ void StrayTico::init(const JMapInfoIter& rIter) {
     initBinder(60.0f, 20.0f, 0);
     MR::offBind(this);
 
-    mItemBubbleModel = MR::createPartsModelMapObj(this, "\203\101\203\217" /* アワ */, "ItemBubble", nullptr);
+    mItemBubbleModel = MR::createPartsModelMapObj(this, "アワ", "ItemBubble", nullptr);
     mItemBubbleModel->initFixedPosition(Vec3f(0.0f, 0.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f), nullptr);
 
     MR::registerDemoSimpleCastAll(mItemBubbleModel);

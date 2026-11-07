@@ -54,7 +54,7 @@ class KeyCamAnmDataAccessor;
 
 class CameraAnim : public Camera {
 public:
-    CameraAnim(const char* pName = "\203\101\203\152\203\201\201\133\203\126\203\207\203\223\203\112\203\201\203\211" /* アニメーションカメラ */);
+    CameraAnim(const char* pName = "アニメーションカメラ");
 
     virtual void reset();
     virtual CameraTargetObj* calc();

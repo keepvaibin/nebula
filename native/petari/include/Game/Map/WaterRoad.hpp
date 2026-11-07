@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include "Game/Util/JMapInfo.hpp"
+#include "Game/Util/Table.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include <nebula_geometry.hpp>
 
@@ -14,7 +14,7 @@ class WaterRoad : public LiveActor {
 public:
     WaterRoad(const char*);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void appear();
     virtual void movement();
     virtual void draw() const;

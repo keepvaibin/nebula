@@ -27,7 +27,7 @@ ElectricRailMovingPoint::ElectricRailMovingPoint(const char* pName) : LiveActor(
     _8D = 1;
 }
 
-void ElectricRailMovingPoint::init(const JMapInfoIter& rIter) {
+void ElectricRailMovingPoint::init(const TableIter& rIter) {
     initModelManagerWithAnm("ElectricRailPoint", nullptr, 0);
     MR::connectToSceneMapObjDecoration(this);
 
@@ -55,9 +55,9 @@ ElectricRailMoving::ElectricRailMoving(const char* pName)
     _9C.identity();
 }
 
-void ElectricRailMoving::init(const JMapInfoIter& rIter) {
+void ElectricRailMoving::init(const TableIter& rIter) {
     s32 arg = 0;
-    MR::getJMapInfoArg4NoInit(rIter, &arg);
+    MR::getPlacementArg4NoInit(rIter, &arg);
     ElectricRailFunction::registerRail(this, (ElectricRailType)(arg + 2));
     MR::connectToSceneMapObjMovement(this);
     initMapToolInfo(rIter);
@@ -123,11 +123,11 @@ void ElectricRailMoving::attackSensor(HitSensor* pSender, HitSensor* pReceiver) 
     }
 }
 
-void ElectricRailMoving::initMapToolInfo(const JMapInfoIter& rIter) {
+void ElectricRailMoving::initMapToolInfo(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
-    MR::getJMapInfoArg0NoInit(rIter, &mSegmentNum);
-    MR::getJMapInfoArg1NoInit(rIter, &mMovementSpeed);
-    MR::getJMapInfoArg3NoInit(rIter, &mStackHeight);
+    MR::getPlacementArg0NoInit(rIter, &mSegmentNum);
+    MR::getPlacementArg1NoInit(rIter, &mMovementSpeed);
+    MR::getPlacementArg3NoInit(rIter, &mStackHeight);
 
     if (MR::useStageSwitchReadA(this, rIter)) {
         MR::listenStageSwitchOnA(this, MR::Functor(this, &ElectricRailMoving::disappear));
@@ -146,13 +146,13 @@ void ElectricRailMoving::initSensor() {
     updateHitSensorPos();
 }
 
-void ElectricRailMoving::initRail(const JMapInfoIter& rIter) {
+void ElectricRailMoving::initRail(const TableIter& rIter) {
     initRailRider(rIter);
     f32 v11;
     MR::calcRailClippingInfo(&mPosition, &v11, this, 100.0f, 500.0f);
     MR::setClippingTypeSphere(this, v11, &mPosition);
 
-    if (!MR::getJMapInfoArg2NoInit(rIter, &mSegmentLength)) {
+    if (!MR::getPlacementArg2NoInit(rIter, &mSegmentLength)) {
         mSegmentLength = MR::getRailTotalLength(this) / (2 * mSegmentNum);
     }
 

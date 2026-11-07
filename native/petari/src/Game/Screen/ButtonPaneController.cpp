@@ -160,7 +160,7 @@ void ButtonPaneController::decide() {
 }
 
 bool ButtonPaneController::isPointingPaneDirect() const {
-    return MR::isStarPointerPointingPane(mHost, mBoundingPaneName, 0, true, "\216\343" /* 弱 */);
+    return MR::isStarPointerPointingPane(mHost, mBoundingPaneName, 0, true, "弱");
 }
 
 bool ButtonPaneController::startAnimAtFirstStep(const char* pAnimName) {
@@ -194,7 +194,7 @@ bool ButtonPaneController::isPointingPane() const {
     if (NebulaMenuFocus::isActive()) {
         return mIsPointing && NebulaMenuFocus::isFocused(this);
     }
-    return mIsPointing && MR::isStarPointerPointingPane(mHost, mBoundingPaneName, 0, true, "\216\343" /* 弱 */);
+    return mIsPointing && MR::isStarPointerPointingPane(mHost, mBoundingPaneName, 0, true, "弱");
 }
 
 bool ButtonPaneController::tryPointing(bool param1) {

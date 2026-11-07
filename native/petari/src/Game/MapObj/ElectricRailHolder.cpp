@@ -148,14 +148,14 @@ f32 ElectricRailFunction::getHitSensorRadius() {
     return ::cHitSensorRadius;
 }
 
-void ElectricRailHolder::init(const JMapInfoIter& rIter) {
+void ElectricRailHolder::init(const TableIter& rIter) {
     MR::connectToScene(this, MR::MovementType_MapObjDecoration, MR::CalcAnimType_MapObj, MR::DrawBufferType_None, MR::DrawType_ElectricRailHolder);
 
     MR::invalidateClipping(this);
 
     MR::registerDemoSimpleCastAll(this);
 
-    MR::createAdaptorAndConnectToDrawBloomModel("\223\144\214\202\203\214\201\133\203\213\203\165\203\213\201\133\203\200\225\140\211\346" /* 電撃レールブルーム描画 */, MR::Functor(this, &ElectricRailHolder::draw));
+    MR::createAdaptorAndConnectToDrawBloomModel("電撃レールブルーム描画", MR::Functor(this, &ElectricRailHolder::draw));
 
     makeActorAppeared();
 }
@@ -185,7 +185,7 @@ ModelObj* ElectricRailHolder::createModel(ElectricRailType railType) const {
     switch (railType) {
     case ElectricRail_Red:
         pModelName = "ElectricRail";
-        pName = "\223\144\214\202\203\214\201\133\203\213\203\202\203\146\203\213(\211\251)" /* 電撃レールモデル(黄) */;
+        pName = "電撃レールモデル(黄)";
         pModel = new ModelObj(pName, pModelName, nullptr, MR::DrawBufferType_None, MR::MovementType_None, MR::CalcAnimType_None, false);
         pModel->initWithoutIter();
 
@@ -196,7 +196,7 @@ ModelObj* ElectricRailHolder::createModel(ElectricRailType railType) const {
         break;
     case ElectricRail_Yellow:
         pModelName = "ElectricRail";
-        pName = "\223\144\214\202\203\214\201\133\203\213\203\202\203\146\203\213(\220\324)" /* 電撃レールモデル(赤) */;
+        pName = "電撃レールモデル(赤)";
         pModel = new ModelObj(pName, pModelName, nullptr, MR::DrawBufferType_None, MR::MovementType_None, MR::CalcAnimType_None, false);
         pModel->initWithoutIter();
 
@@ -207,7 +207,7 @@ ModelObj* ElectricRailHolder::createModel(ElectricRailType railType) const {
         break;
     case ElectricRail_YellowMoving:
         pModelName = "ElectricRailMoving";
-        pName = "\210\332\223\256\223\144\214\202\203\214\201\133\203\213\203\202\203\146\203\213(\211\251)" /* 移動電撃レールモデル(黄) */;
+        pName = "移動電撃レールモデル(黄)";
         pModel = new ModelObj(pName, pModelName, nullptr, MR::DrawBufferType_None, MR::MovementType_None, MR::CalcAnimType_None, false);
         pModel->initWithoutIter();
 
@@ -218,7 +218,7 @@ ModelObj* ElectricRailHolder::createModel(ElectricRailType railType) const {
         break;
     case ElectricRail_RedMoving:;
         pModelName = "ElectricRailMoving";
-        pName = "\210\332\223\256\223\144\214\202\203\214\201\133\203\213\203\202\203\146\203\213(\220\324)" /* 移動電撃レールモデル(赤) */;
+        pName = "移動電撃レールモデル(赤)";
         pModel = new ModelObj(pName, pModelName, nullptr, MR::DrawBufferType_None, MR::MovementType_None, MR::CalcAnimType_None, false);
         pModel->initWithoutIter();
 

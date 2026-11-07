@@ -7,7 +7,7 @@ public:
     RailBlock(const char*);
 
     virtual ~RailBlock(){};
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void calcViewAndEntry();
     virtual void calcAndSetBaseMtx();
 

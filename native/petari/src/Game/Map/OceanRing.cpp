@@ -8,7 +8,7 @@
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/GravityUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MemoryUtil.hpp"
@@ -68,7 +68,7 @@ OceanRing::OceanRing(const char* pName) : LiveActor(pName) {
     mClippingBox.f.zero();
 }
 
-void OceanRing::init(const JMapInfoIter& rIter) {
+void OceanRing::init(const TableIter& rIter) {
     MR::connectToScene(this, MR::MovementType_MapObj, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_OceanRing);
     MR::initDefaultPos(this, rIter);
     initRailRider(rIter);
@@ -77,7 +77,7 @@ void OceanRing::init(const JMapInfoIter& rIter) {
     calcClippingBox();
     WaterAreaFunction::entryOceanRing(this);
     s32 arg0 = 0;
-    MR::getJMapInfoArg0NoInit(rIter, &arg0);
+    MR::getPlacementArg0NoInit(rIter, &arg0);
 
     if (arg0 == 0) {
         mOceanRingPipe = new OceanRingPipe(this, mWidthMax, ::sDefaultWidth);
@@ -94,7 +94,7 @@ void OceanRing::init(const JMapInfoIter& rIter) {
         MR::loadTexFromArc("OceanRing.arc", "WaterPipeInside.bti");
     }
 
-    MR::getJMapInfoArg1NoInit(rIter, &mObjArg1);
+    MR::getPlacementArg1NoInit(rIter, &mObjArg1);
     mBloomDrawer = new OceanRingBloomDrawer(this);
     mBloomDrawer->initWithoutIter();
     mSoundObj1 = new AudSoundObject(&mNearestToWatchCam, 4, MR::getCurrentHeap());

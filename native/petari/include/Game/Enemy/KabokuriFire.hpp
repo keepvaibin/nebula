@@ -7,7 +7,7 @@ class KabokuriFire : public LiveActor {
 public:
     KabokuriFire(const char* pName);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual MtxPtr getBaseMtx() const {
         return const_cast< Pos3f* >(&_8C)->toMtxPtr();
     }

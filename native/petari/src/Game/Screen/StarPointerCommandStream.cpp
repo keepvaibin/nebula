@@ -33,7 +33,7 @@ namespace {
 };  // namespace
 
 StarPointerCommandStream::StarPointerCommandStream(const Vec2f* pScreenPos)
-    : LayoutActor("\203\130\203\136\201\133\203\174\203\103\203\223\203\136\216\167\216\246\220\374" /* スターポインタ指示線 */, true), _20(false), mOffScreenTime(), _28(), mScreenPos(pScreenPos), mWorldPos(), mPadChannel(-1), mColor() {
+    : LayoutActor("スターポインタ指示線", true), _20(false), mOffScreenTime(), _28(), mScreenPos(pScreenPos), mWorldPos(), mPadChannel(-1), mColor() {
 }
 
 void StarPointerCommandStream::start(const Vec3f* pPos, bool b) {
@@ -61,7 +61,7 @@ void StarPointerCommandStream::clear() {
     _20 = false;
 }
 
-void StarPointerCommandStream::init(const JMapInfoIter& rIter) {
+void StarPointerCommandStream::init(const TableIter& rIter) {
     initLayoutManager("CommandStream", 1);
     MR::createAndAddPaneCtrl(this, "CommandStream", 1);
     MR::createAndAddPaneCtrl(this, "PicRibbon", 1);

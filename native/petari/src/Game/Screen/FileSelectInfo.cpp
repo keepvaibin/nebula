@@ -40,7 +40,7 @@ FileSelectInfo::FileSelectInfo(s32 nameBufferSize, const char* pName)
     MR::zeroMemory(mName, nameBufferSize * sizeof(char16_t));
 }
 
-void FileSelectInfo::init(const JMapInfoIter& rIter) {
+void FileSelectInfo::init(const TableIter& rIter) {
     initLayoutManager("FileInfo", 3);
     MR::connectToSceneLayout(this);
     initNerve(GET_NERVE_ANON(FileSelectInfoNrvAppear));
@@ -216,7 +216,7 @@ void FileSelectInfo::reflectInfo() {
 }
 
 namespace FileSelectInfoSub {
-    SlideState::SlideState(FileSelectInfo* pHost) : NerveExecutor("\203\130\203\211\203\103\203\150\217\363\221\324" /* スライド状態 */), mHost(pHost) {
+    SlideState::SlideState(FileSelectInfo* pHost) : NerveExecutor("スライド状態"), mHost(pHost) {
         initNerve(GET_NERVE_GLOBAL(SlideStateNrvNormalPos));
     }
 
@@ -256,7 +256,7 @@ namespace FileSelectInfoSub {
 };  // namespace FileSelectInfoSub
 
 namespace FileSelectInfoSub {
-    CharaState::CharaState(FileSelectInfo* pHost) : NerveExecutor("\203\114\203\203\203\211\221\111\221\360\217\363\221\324" /* キャラ選択状態 */), mHost(pHost) {
+    CharaState::CharaState(FileSelectInfo* pHost) : NerveExecutor("キャラ選択状態"), mHost(pHost) {
         initNerve(GET_NERVE_GLOBAL(CharaStateNrvMario));
     }
 

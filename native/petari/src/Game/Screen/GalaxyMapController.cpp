@@ -68,7 +68,7 @@ GalaxyMapController::GalaxyMapController()
       mWipeFrame(::sMapFadeinoutFrame) {
 }
 
-void GalaxyMapController::init(const JMapInfoIter& rIter) {
+void GalaxyMapController::init(const TableIter& rIter) {
     MR::connectToSceneLayoutOnPause(this);
 
     mMap = new GalaxyMap();
@@ -79,7 +79,7 @@ void GalaxyMapController::init(const JMapInfoIter& rIter) {
     mPowerStarList->initWithoutIter();
     mPowerStarList->kill();
 
-    mBackButton = new BackButton("\226\337\202\351" /* 戻る */, 0);
+    mBackButton = new BackButton("戻る", 0);
     mBackButton->initWithoutIter();
     mBackButton->kill();
 
@@ -89,7 +89,7 @@ void GalaxyMapController::init(const JMapInfoIter& rIter) {
 
     mMapBackground = new GalaxyMapBackground();
 
-    mWipe = new WipeFade("\203\164\203\106\201\133\203\150\203\217\203\103\203\166" /* フェードワイプ */, Color8(0, 0, 0, 255));
+    mWipe = new WipeFade("フェードワイプ", Color8(0, 0, 0, 255));
     mWipe->initWithoutIter();
 
     {

@@ -20,7 +20,7 @@ public:
     /// @param pName A pointer to the null-terminated name of the object.
     KameckBeam(const char* pName);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void calcAnim();
     virtual void kill();
     virtual void control();

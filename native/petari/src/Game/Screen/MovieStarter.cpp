@@ -2,14 +2,14 @@
 #include "Game/Screen/MoviePlayingSequence.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 
 MovieStarter::MovieStarter(const char* pName) : LiveActor(pName), mMovieType(-1) {
 }
 
-void MovieStarter::init(const JMapInfoIter& rIter) {
+void MovieStarter::init(const TableIter& rIter) {
     MR::connectToSceneLayoutMovement(this);
     MR::invalidateClipping(this);
 
@@ -19,7 +19,7 @@ void MovieStarter::init(const JMapInfoIter& rIter) {
 
     MR::useStageSwitchWriteDead(this, rIter);
     MR::createMoviePlayingSequence();
-    MR::getJMapInfoArg0WithInit(rIter, &mMovieType);
+    MR::getPlacementArg0WithInit(rIter, &mMovieType);
     makeActorDead();
 }
 

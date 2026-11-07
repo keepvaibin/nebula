@@ -12,7 +12,7 @@ CollectCounter::CollectCounter(const char* pName) : LayoutActor(pName, true) {
     mFollowPosition.y = 0.0f;
 }
 
-void CollectCounter::init(const JMapInfoIter& rIter) {
+void CollectCounter::init(const TableIter& rIter) {
     MR::connectToSceneLayout(this);
     initLayoutManager("CollectCounter", 1);
     initNerve(GET_NERVE(CollectCounter, CollectCounterNrvHide));

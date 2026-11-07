@@ -13,7 +13,7 @@ public:
     /// @param pName The pointer to the null-terminated name of the object.
     Rosetta(const char* pName);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void control();
     virtual void calcAndSetBaseMtx();
     virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor*, HitSensor*);
@@ -21,7 +21,7 @@ public:
     bool branchFunc(u32);
     bool eventFunc(u32);
 
-    static void makeArchiveList(NameObjArchiveListCollector*, const JMapInfoIter&);
+    static void makeArchiveList(NameObjArchiveListCollector*, const TableIter&);
     void startDemo(NerveExecutor*);
     void endDemo();
     void endDemoWithInterpole();

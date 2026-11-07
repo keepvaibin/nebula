@@ -15,7 +15,7 @@
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/BaseMatrixFollowTargetHolder.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -80,14 +80,14 @@ Kuribo::Kuribo(const char* pName)
       mBindStarPointer(nullptr), mStateStagger(nullptr), mStateChase(nullptr), _A8(0.0f, 0.0f, 0.0f, 1.0f), _B8(0, 0, 1), _C4(0), _C5(1) {
 }
 
-void Kuribo::init(const JMapInfoIter& rIter) {
+void Kuribo::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("Kuribo", nullptr, false);
     MR::connectToSceneEnemy(this);
     MR::initLightCtrl(this);
     MR::makeQuatAndFrontFromRotate(&_A8, &_B8, this);
     if (MR::isValidInfo(rIter)) {
-        MR::getJMapInfoArg0WithInit(rIter, &_C4);
+        MR::getPlacementArg0WithInit(rIter, &_C4);
     }
 
     if (!_C4) {
@@ -154,10 +154,10 @@ void Kuribo::initSensor() {
     MR::addHitSensor(this, "attack", ATYPE_ENEMY_ATTACK, 8, 45.0f * y_scale, Vec3f(0.0f, 75.0f * y_scale, 0.0f));
 }
 
-void Kuribo::initAppearState(const JMapInfoIter& rIter) {
+void Kuribo::initAppearState(const TableIter& rIter) {
     s32 state = -1;
     if (MR::isValidInfo(rIter)) {
-        MR::getJMapInfoArg1NoInit(rIter, &state);
+        MR::getPlacementArg1NoInit(rIter, &state);
     }
 
     switch (state) {

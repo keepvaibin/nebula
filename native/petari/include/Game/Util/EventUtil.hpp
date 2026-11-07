@@ -1,7 +1,7 @@
 #pragma once
 
 
-class JMapInfoIter;
+class TableIter;
 class LiveActor;
 class NameObj;
 
@@ -65,7 +65,7 @@ namespace MR {
     bool isUFOKinokoBeforeConstruction();
     bool isUFOKinokoUnderConstruction();
     bool isButlerMapAppear();
-    s32 setupAlreadyDoneFlag(const char*, const JMapInfoIter&, u32*);
+    s32 setupAlreadyDoneFlag(const char*, const TableIter&, u32*);
     void updateAlreadyDoneFlag(int, u32);
     bool isOnGameEventFlagGalaxyOpen(const char*);
     bool isAlreadyVisitedCurrentStageAndScenario();
@@ -100,7 +100,7 @@ namespace MR {
     u32 getRaceBestTime(int);
     u32 getRaceCurrentTime();
     void setWarpPodPathFlag(int, bool);
-    s32 registerStorageSpinDriverPathDrawRange(const NameObj*, const JMapInfoIter&, int, f32*);
+    s32 registerStorageSpinDriverPathDrawRange(const NameObj*, const TableIter&, int, f32*);
     void updateStorageSpinDriverPathDrawRange(int, f32);
     s32 getStarPieceNumGivingToTicoSeed(int);
     void addStarPieceGivingToTicoSeed(int, int);

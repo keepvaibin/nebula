@@ -35,7 +35,7 @@ TripodBossShell::~TripodBossShell() {
 TripodBossShell::TripodBossShell(const char* pName) : TripodBossFixPartsBase(pName), mBreakModel() {
 }
 
-void TripodBossShell::init(const JMapInfoIter& rIter) {
+void TripodBossShell::init(const TableIter& rIter) {
     TripodBossFixPartsBase::init(rIter);
     initModelManagerWithAnm("TripodBossShell", nullptr, false);
     MR::connectToScene(this, MR::MovementType_MapObjDecoration, MR::CalcAnimType_MapObjDecoration, MR::DrawBufferType_TripodBoss, MR::DrawType_None);
@@ -45,7 +45,7 @@ void TripodBossShell::init(const JMapInfoIter& rIter) {
     MR::initCollisionParts(this, "TripodBossShell", getSensor("killer_terget"), nullptr);
     initSound(4, false);
 
-    mBreakModel = MR::createModelObjMapObjStrongLight("\211\363\202\352\203\202\203\146\203\213" /* 壊れモデル */, "TripodBossShellBreak", getBaseMtx());
+    mBreakModel = MR::createModelObjMapObjStrongLight("壊れモデル", "TripodBossShellBreak", getBaseMtx());
     mBreakModel->initWithoutIter();
     MR::invalidateClipping(mBreakModel);
     mBreakModel->makeActorDead();

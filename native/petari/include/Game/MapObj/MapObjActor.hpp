@@ -18,7 +18,7 @@ public:
     MapObjActor(const char* pName);
     MapObjActor(const char* pName, const char* pObjName);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void initAfterPlacement();
     virtual void appear();
     virtual void kill();
@@ -31,10 +31,10 @@ public:
     virtual void initCaseNoUseSwitchA(const MapObjActorInitInfo& rInfo);
     virtual void initCaseUseSwitchB(const MapObjActorInitInfo& rInfo);
     virtual void initCaseNoUseSwitchB(const MapObjActorInitInfo& rInfo);
-    virtual void makeSubModels(const JMapInfoIter& rIter, const MapObjActorInitInfo& rInfo) {
+    virtual void makeSubModels(const TableIter& rIter, const MapObjActorInitInfo& rInfo) {
     }
 
-    void initialize(const JMapInfoIter& rIter, const MapObjActorInitInfo& rInfo);
+    void initialize(const TableIter& rIter, const MapObjActorInitInfo& rInfo);
     bool isObjectName(const char* pName) const;
     bool tryCreateBreakModel(const MapObjActorInitInfo& rInfo);
     bool tryEmitWaitEffect();
@@ -90,10 +90,10 @@ public:
     static void appearBloomModel(MapObjActor* pActor);
 
     static void setupInitInfoTypical(MapObjActorInitInfo* pInfo, const char* pName);
-    static void setupInitInfoColorChangeArg0(MapObjActorInitInfo* pInfo, const JMapInfoIter& rIter);
-    static void setupInitInfoTextureChangeArg1(MapObjActorInitInfo* pInfo, const JMapInfoIter& rIter);
-    static void setupInitInfoShadowLengthArg2(MapObjActorInitInfo* pInfo, const JMapInfoIter& rIter);
-    static void setupInitInfoSeesaw(MapObjActorInitInfo* pInfo, const JMapInfoIter& rIter, const char* pName, f32);
+    static void setupInitInfoColorChangeArg0(MapObjActorInitInfo* pInfo, const TableIter& rIter);
+    static void setupInitInfoTextureChangeArg1(MapObjActorInitInfo* pInfo, const TableIter& rIter);
+    static void setupInitInfoShadowLengthArg2(MapObjActorInitInfo* pInfo, const TableIter& rIter);
+    static void setupInitInfoSeesaw(MapObjActorInitInfo* pInfo, const TableIter& rIter, const char* pName, f32);
     static void setupInitInfoSimpleMapObj(MapObjActorInitInfo* pInfo);
     static void setupInitInfoPlanet(MapObjActorInitInfo* pInfo);
 };

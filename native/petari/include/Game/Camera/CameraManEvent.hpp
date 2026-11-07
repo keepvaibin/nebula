@@ -38,7 +38,7 @@ public:
     CameraManEvent(CameraHolder*, CameraParamChunkHolder*, const char*);
     virtual ~CameraManEvent();
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
 
     virtual void calc();
     virtual void notifyActivate();

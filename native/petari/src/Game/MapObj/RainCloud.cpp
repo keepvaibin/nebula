@@ -37,14 +37,14 @@ RainCloud::RainCloud(const char* pName)
     mSplashMtx.identity();
 }
 
-void RainCloud::init(const JMapInfoIter& rIter) {
+void RainCloud::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("RainCloud", nullptr, false);
-    MR::getJMapInfoArg3NoInit(rIter, &mNoRain);
+    MR::getPlacementArg3NoInit(rIter, &mNoRain);
 
     if (!mNoRain) {
         mRainCylinderMtx.set(getBaseMtx());
-        mCloudCylinder = new ModelObj("\211\112\211\137\211\112\224\315\210\315" /* 雨雲雨範囲 */, "RainCloudCylinder", mRainCylinderMtx, -2, -2, -2, false);
+        mCloudCylinder = new ModelObj("雨雲雨範囲", "RainCloudCylinder", mRainCylinderMtx, -2, -2, -2, false);
         mCloudCylinder->initWithoutIter();
         MR::invalidateClipping(mCloudCylinder);
     }
@@ -78,7 +78,7 @@ void RainCloud::init(const JMapInfoIter& rIter) {
 
     mLodCtrl = MR::createLodCtrlPlanet(this, rIter, -1.0f);
     MR::initShadowVolumeFlatModel(this, "RainCloudVolume", MR::getJointMtx(this, "Shadow"));
-    MR::getJMapInfoArg0NoInit(rIter, &mShadowDropLength);
+    MR::getPlacementArg0NoInit(rIter, &mShadowDropLength);
 
     f32 dropLength;
     if ((dropLength = mShadowDropLength) != -1.0f) {
@@ -108,7 +108,7 @@ void RainCloud::init(const JMapInfoIter& rIter) {
     mClippingCenter.scaleAdd(0.5f * mRainLength, mGravity, mPosition);
     MR::setClippingTypeSphere(this, boundRadius, &mClippingCenter);
     MR::setGroupClipping(this, rIter, 16);
-    MR::joinToGroupArray(this, rIter, "\211\137\217\127\222\143" /* 雲集団 */, 16);
+    MR::joinToGroupArray(this, rIter, "雲集団", 16);
     MR::startBck(this, "Wait");
 
     if (!mNoRain) {
@@ -121,9 +121,9 @@ void RainCloud::init(const JMapInfoIter& rIter) {
     makeActorAppeared();
 }
 
-void RainCloud::makeArchiveList(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter) {
+void RainCloud::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
     bool arg3 = false;
-    MR::getJMapInfoArg3NoInit(rIter, &arg3);
+    MR::getPlacementArg3NoInit(rIter, &arg3);
 
     pCollector->addArchive("RainCloud");
     pCollector->addArchive("RainCloudVolume");

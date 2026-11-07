@@ -9,7 +9,7 @@ public:
     CollectCounter(const char*);
 
     virtual ~CollectCounter();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void control();
 
     void exeHide();

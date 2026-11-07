@@ -2,7 +2,7 @@
 
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
-#include "Game/Util/JMapInfo.hpp"
+#include "Game/Util/Table.hpp"
 #include <nebula_geometry.hpp>
 #include <cstddef>
 
@@ -10,7 +10,7 @@ class ClipAreaDropLaser : public LiveActor {
 public:
     ClipAreaDropLaser(const char* pName);
     virtual ~ClipAreaDropLaser();
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void control();
     virtual void draw() const;
     void exeWait();

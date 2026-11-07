@@ -119,7 +119,7 @@ bool GalaxyMapIcon::isNewOnDiscoverMode() const {
 GalaxyMapIcon::~GalaxyMapIcon() {
 }
 
-void GalaxyMapIcon::init(const JMapInfoIter& rIter) {
+void GalaxyMapIcon::init(const TableIter& rIter) {
     initLayoutManager("MapGalaxyIcon", 2);
     MR::createAndAddPaneCtrl(this, "GalaxyIcon", 1);
 
@@ -146,7 +146,7 @@ bool GalaxyMapIcon::isPointing() const {
         return false;
     }
 
-    return MR::isStarPointerPointingPane(this, "GalaxyIcon", 0, true, "\216\343" /* 弱 */);
+    return MR::isStarPointerPointingPane(this, "GalaxyIcon", 0, true, "弱");
 }
 
 void GalaxyMapIcon::syncStatus() {

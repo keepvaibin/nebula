@@ -9,7 +9,7 @@
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -45,19 +45,19 @@ TripodBossKillerGenerater::TripodBossKillerGenerater(const char* pName)
     _E4.identity();
 }
 
-void TripodBossKillerGenerater::init(const JMapInfoIter& rIter) {
+void TripodBossKillerGenerater::init(const TableIter& rIter) {
     TripodBossFixPartsBase::init(rIter);
     MR::makeMtxTR(_E4, this);
     initModelManagerWithAnm("TripodBossKillerCannon", nullptr, false);
     MR::connectToScene(this, MR::MovementType_MapObjDecoration, MR::CalcAnimType_MapObjDecoration, MR::DrawBufferType_TripodBoss, MR::DrawType_None);
-    MR::getJMapInfoArg1NoInit(rIter, &mCanShootSettingPlayerDistance);
+    MR::getPlacementArg1NoInit(rIter, &mCanShootSettingPlayerDistance);
     initClippingSphere();
 
-    mKiller = new HomingKiller("\203\172\201\133\203\176\203\223\203\117\203\114\203\211\201\133" /* ホーミングキラー */);
+    mKiller = new HomingKiller("ホーミングキラー");
     mKiller->initWithoutIter();
 
     s32 arg2;
-    MR::getJMapInfoArg2WithInit(rIter, &arg2);
+    MR::getPlacementArg2WithInit(rIter, &arg2);
 
     if (arg2 == 0) {
         mKiller->mDisableChase = true;

@@ -196,7 +196,7 @@ const char* GalaxyStatusAccessor::getAppearPowerStarObjName(s32 scenarioNo) cons
     bool ret = mScenarioData->getValueString("AppearPowerStarObj", scenarioNo, &pObjName);
 
     if (isValidCoin100(scenarioNo)) {
-        return "\202\120\202\117\202\117\226\207\203\122\203\103\203\223" /* １００枚コイン */;
+        return "１００枚コイン";
     }
 
     if (ret) {

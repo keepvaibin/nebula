@@ -2,7 +2,7 @@
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/MapObj/MapPartsRailMover.hpp"
 #include "Game/Util/AreaObjUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
@@ -27,7 +27,7 @@ MercatorTransformCube::MercatorTransformCube(int formType, const char* pName) : 
     _3C.identity();
 }
 
-void MercatorTransformCube::init(const JMapInfoIter& rIter) {
+void MercatorTransformCube::init(const TableIter& rIter) {
     AreaObj::init(rIter);
 
     _3C.setInline(*MR::getZonePlacementMtx(rIter));
@@ -122,10 +122,10 @@ namespace MR {
         pRotation->set< f32 >(57.29577951308232f * angles.x, 57.29577951308232f * angles.y, 57.29577951308232f * angles.z);
     }
 
-    void initDefaultPosForMercator(LiveActor* pActor, const JMapInfoIter& rIter, bool applyInverse) {
-        getJMapInfoTrans(rIter, &pActor->mPosition);
+    void initDefaultPosForMercator(LiveActor* pActor, const TableIter& rIter, bool applyInverse) {
+        getPlacementTrans(rIter, &pActor->mPosition);
         Vec3f angles;
-        getJMapInfoRotate(rIter, &angles);
+        getPlacementRotate(rIter, &angles);
         Pos3f rotation;
         makeMtxRotate(rotation, angles.x, angles.y, angles.z);
         Vec3f pos;
@@ -136,7 +136,7 @@ namespace MR {
         angles.set< f32 >(57.29577951308232f * angles.x, 57.29577951308232f * angles.y, 57.29577951308232f * angles.z);
         pActor->mPosition.set(pos);
         pActor->mRotation.set(angles);
-        getJMapInfoScale(rIter, &pActor->mScale);
+        getPlacementScale(rIter, &pActor->mScale);
     }
 
     void calcNearestRailPosForMercator(Vec3f* pPos, const LiveActor* pActor, f32 step) {
@@ -278,10 +278,10 @@ namespace MR {
         }
     }
 
-    MapPartsRailMover* createMapPartsRailMoverForMercator(LiveActor* pActor, const JMapInfoIter& rIter, bool setRailPos) {
+    MapPartsRailMover* createMapPartsRailMoverForMercator(LiveActor* pActor, const TableIter& rIter, bool setRailPos) {
         Vec3f savedPos(pActor->mPosition);
         Vec3f placementPos;
-        getJMapInfoTrans(rIter, &placementPos);
+        getPlacementTrans(rIter, &placementPos);
         pActor->mPosition.set(placementPos);
         MapPartsRailMover* pMover = new MapPartsRailMover(pActor);
         pMover->init(rIter);

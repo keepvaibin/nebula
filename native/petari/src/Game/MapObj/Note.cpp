@@ -27,7 +27,7 @@ Note::Note(const char* pName, const Vec3f& rRailDirection, NoteFairy* pParent) :
     mFlashCtrl = nullptr;
 }
 
-void Note::init(const JMapInfoIter& rIter) {
+void Note::init(const TableIter& rIter) {
     MR::createSceneObj(SceneObj_NoteGroup);
     _90.set(mPosition);
     initModelManagerWithAnm("Note", nullptr, false);
@@ -118,11 +118,11 @@ void Note::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-NoteGroup::NoteGroup() : LiveActorGroup("\211\271\225\204\203\117\203\213\201\133\203\166" /* 音符グループ */, 0x100) {
+NoteGroup::NoteGroup() : LiveActorGroup("音符グループ", 0x100) {
     mRotation = 0.0f;
 }
 
-void NoteGroup::init(const JMapInfoIter& rIter) {
+void NoteGroup::init(const TableIter& rIter) {
     MR::connectToSceneMapObjMovement(this);
 }
 

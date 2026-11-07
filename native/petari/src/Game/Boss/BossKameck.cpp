@@ -14,7 +14,7 @@
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -36,7 +36,7 @@ BossKameck::BossKameck(const char* pName, const char* pModelName)
     mActorList = new ActiveActorList(8);
 }
 
-void BossKameck::init(const JMapInfoIter& rIter) {
+void BossKameck::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm(mModelName, nullptr, false);
     MR::connectToSceneEnemy(this);
@@ -54,7 +54,7 @@ void BossKameck::init(const JMapInfoIter& rIter) {
     MR::createKameckBeamTurtleHolder();
     initKameckHolder(rIter);
     initMoveRail(rIter);
-    MR::getJMapInfoArg7WithInit(rIter, &mObjArg7);
+    MR::getPlacementArg7WithInit(rIter, &mObjArg7);
 
     if (mObjArg7 != -1) {
         MR::declareCameraRegisterVec(this, mObjArg7, &mPosition);
@@ -207,7 +207,7 @@ void BossKameck::updatePose() {
     MR::blendQuatUpFront(&_90, v19, _A0, ::sUpVecBlendRate, ::sFrontVecBlendRate);
 }
 
-void BossKameck::initKameckHolder(const JMapInfoIter& rIter) {
+void BossKameck::initKameckHolder(const TableIter& rIter) {
     s32 childNum = MR::getChildObjNum(rIter);
     s32 childKameckNum = 0;
     const char* objName;
@@ -230,7 +230,7 @@ void BossKameck::initKameckHolder(const JMapInfoIter& rIter) {
         MR::getChildObjName(&objName, rIter, j);
 
         if (MR::isEqualString(objName, "ChildKameck")) {
-            Kameck* kameck = new Kameck("\203\112\203\201\203\142\203\116[\225\333\216\235\227\160]" /* カメック[保持用] */);
+            Kameck* kameck = new Kameck("カメック[保持用]");
             kameck->setBeamType(2);
             MR::initChildObj(kameck, rIter, j);
             kameck->makeActorDead();
@@ -239,7 +239,7 @@ void BossKameck::initKameckHolder(const JMapInfoIter& rIter) {
     }
 }
 
-void BossKameck::initMoveRail(const JMapInfoIter& rIter) {
+void BossKameck::initMoveRail(const TableIter& rIter) {
     s32 childObjNum = MR::getChildObjNum(rIter);
     mMoveRailNum = 0;
     const char* objName;
@@ -264,7 +264,7 @@ void BossKameck::initMoveRail(const JMapInfoIter& rIter) {
         MR::getChildObjName(&objName, rIter, j);
 
         if (MR::isEqualString(objName, "BossKameckMoveRail")) {
-            mMoveRail[moveRailNo] = new BossKameckMoveRail("\203\173\203\130\203\112\203\201\203\142\203\116\210\332\223\256\214\157\230\110" /* ボスカメック移動経路 */);
+            mMoveRail[moveRailNo] = new BossKameckMoveRail("ボスカメック移動経路");
             MR::initChildObj(mMoveRail[moveRailNo], rIter, j);
             moveRailNo++;
         }

@@ -7,7 +7,7 @@ public:
     TornadoMario(const char* pName);
 
     virtual ~TornadoMario();
-    virtual void init(const JMapInfoIter& rIter) override;
+    virtual void init(const TableIter& rIter) override;
     virtual void calcAnim() override;
     virtual void control() override;
     virtual void calcAndSetBaseMtx() override;

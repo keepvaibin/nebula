@@ -13,15 +13,15 @@ public:
     /// @param pName A pointer to the null-terminated name of the object.
     StarReturnDemoStarter(const char* pName);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void appear();
     virtual void kill();
     virtual void control();
 
-    static void makeArchiveList(NameObjArchiveListCollector*, const JMapInfoIter&);
+    static void makeArchiveList(NameObjArchiveListCollector*, const TableIter&);
 
     LiveActor* createSubModel(const char*, const char*, bool);
-    void tryRegisterDemo(const char*, const JMapInfoIter&);
+    void tryRegisterDemo(const char*, const TableIter&);
     void tryStartStageResult();
     void tryStartResultWait();
 

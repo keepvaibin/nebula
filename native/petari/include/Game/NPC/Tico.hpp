@@ -13,16 +13,16 @@ public:
     /// @param pName A pointer to the null-terminated name of the object.
     Tico(const char* pName);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void control();
     virtual void calcAndSetBaseMtx();
     virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 
-    static void makeArchiveList(NameObjArchiveListCollector*, const JMapInfoIter&);
+    static void makeArchiveList(NameObjArchiveListCollector*, const TableIter&);
 
     void initBase(s32);
-    void initBase(const JMapInfoIter&, s32);
-    void initMessage(const JMapInfoIter&, const char*);
+    void initBase(const TableIter&, s32);
+    void initMessage(const TableIter&, const char*);
     void initMessage(const char*);
     bool tryReaction();
     void setNerveMeta();

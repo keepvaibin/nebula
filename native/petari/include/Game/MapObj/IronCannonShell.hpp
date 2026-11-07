@@ -22,7 +22,7 @@ public:
     IronCannonLauncherPoint(const char*);
 
     virtual ~IronCannonLauncherPoint();
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
 
     virtual void initModelAndConnectToScene();
 
@@ -42,7 +42,7 @@ public:
     IronCannonLauncher(const char*);
 
     virtual ~IronCannonLauncher();
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
 
     virtual void initModelAndConnectToScene();
 

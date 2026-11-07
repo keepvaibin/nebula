@@ -29,7 +29,7 @@ namespace NrvRabbitStateWaitStart {
 };  // namespace NrvRabbitStateWaitStart
 
 RabbitStateWaitStart::RabbitStateWaitStart(LiveActor* pHost, Vec3f* mHostFrontVec, TalkMessageCtrl* pTalkCtrl)
-    : ActorStateBase("\202\244\202\263\202\254\211\357\230\142\221\322\202\277\217\363\221\324" /* うさぎ会話待ち状態 */, pHost), mTalkActionName("Wait"), mHostFrontVec(mHostFrontVec), mTalkCtrl(pTalkCtrl), _1C(), _1D(true) {
+    : ActorStateBase("うさぎ会話待ち状態", pHost), mTalkActionName("Wait"), mHostFrontVec(mHostFrontVec), mTalkCtrl(pTalkCtrl), _1C(), _1D(true) {
 }
 
 void RabbitStateWaitStart::setTalkActionName(const char* pName) {
@@ -146,7 +146,7 @@ bool RabbitStateWaitStart::tryPointing() {
         return false;
     }
 
-    if (MR::isStarPointerPointing2POnPressButton(mHost, "\216\343" /* 弱 */, true, false)) {
+    if (MR::isStarPointerPointing2POnPressButton(mHost, "弱", true, false)) {
         setNerve(GET_NERVE(RabbitStateWaitStart, RabbitStateWaitStartNrvPointing));
 
         return true;

@@ -11,7 +11,7 @@ public:
     /// @param pName A pointer to the null-terminated name of the object.
     TripodBossKinokoOneUp(const char* pName);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
 
     virtual MtxPtr getBaseMtx() const {
         return (MtxPtr)&_BC;

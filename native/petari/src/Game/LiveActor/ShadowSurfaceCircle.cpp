@@ -8,7 +8,7 @@
 ShadowSurfaceCircle::~ShadowSurfaceCircle() {
 }
 
-ShadowSurfaceCircle::ShadowSurfaceCircle() : ShadowSurfaceDrawer("\211\145\225\140\211\346[\220\205\226\312\211\176]" /* 影描画[水面円] */), mRadius(100.0f) {
+ShadowSurfaceCircle::ShadowSurfaceCircle() : ShadowSurfaceDrawer("影描画[水面円]"), mRadius(100.0f) {
 }
 
 void ShadowSurfaceCircle::setRadius(f32 radius) {

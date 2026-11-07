@@ -7,7 +7,7 @@ public:
     PomponPlant(const char*);
 
     virtual ~PomponPlant();
-    virtual void init(const JMapInfoIter&) override;
+    virtual void init(const TableIter&) override;
     virtual void attackSensor(HitSensor*, HitSensor*) override;
     virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*) override;
 

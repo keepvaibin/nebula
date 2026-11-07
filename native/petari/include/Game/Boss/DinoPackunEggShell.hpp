@@ -7,7 +7,7 @@ public:
     DinoPackunEggShell(const char*, HitSensor*, MtxPtr);
 
     virtual ~DinoPackunEggShell();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void control();
     virtual void calcAndSetBaseMtx();
 

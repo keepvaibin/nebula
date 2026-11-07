@@ -11,7 +11,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include <cstdio>
 
-VolumeModelDrawInit::VolumeModelDrawInit() : NameObj("\203\173\203\212\203\205\201\133\203\200\203\202\203\146\203\213\225\140\211\346\217\211\212\372\211\273" /* ボリュームモデル描画初期化 */) {
+VolumeModelDrawInit::VolumeModelDrawInit() : NameObj("ボリュームモデル描画初期化") {
 }
 
 VolumeModelDrawer::VolumeModelDrawer(const char* pName, const char* pFileName, MtxPtr mtx)

@@ -19,7 +19,7 @@ HeavensDoorDemoObj::HeavensDoorDemoObj(const char* pName) : MapObjActor(pName) {
     _C4 = false;
 }
 
-void HeavensDoorDemoObj::init(const JMapInfoIter& rIter) {
+void HeavensDoorDemoObj::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;
     MapObjActorUtil::setupInitInfoSimpleMapObj(&info);
@@ -39,7 +39,7 @@ void HeavensDoorDemoObj::init(const JMapInfoIter& rIter) {
     if (MR::isDemoCast(this, nullptr)) {
         MR::tryRegisterDemoActionNerve(this, GET_NERVE(HeavensDoorDemoObj, HeavensDoorDemoObjNrvVanish), nullptr);
         if (MapObjActor::isObjectName("HeavensDoorInsideCage")) {
-            MR::tryRegisterDemoActionFunctor(this, MR::Functor(this, &HeavensDoorDemoObj::startInsideCageDemo), "\203\176\203\152\221\276\227\172\217\301\216\270" /* ミニ太陽消失 */);
+            MR::tryRegisterDemoActionFunctor(this, MR::Functor(this, &HeavensDoorDemoObj::startInsideCageDemo), "ミニ太陽消失");
         }
     }
 }

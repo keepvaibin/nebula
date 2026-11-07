@@ -110,13 +110,13 @@ void MR::deactivateChipLayout() {
 ChipHolder::~ChipHolder() {
 }
 
-void ChipHolder::init(const JMapInfoIter& rIter) {
+void ChipHolder::init(const TableIter& rIter) {
     switch (mChipType) {
     case ChipBase::Type_Blue:
-        mChipCounter = new ChipCounter("\203\165\203\213\201\133\203\140\203\142\203\166\203\112\203\105\203\223\203\136\201\133" /* ブルーチップカウンター */, mChipType);
+        mChipCounter = new ChipCounter("ブルーチップカウンター", mChipType);
         break;
     case ChipBase::Type_Yellow:
-        mChipCounter = new ChipCounter("\203\103\203\107\203\215\201\133\203\140\203\142\203\166\203\112\203\105\203\223\203\136\201\133" /* イエローチップカウンター */, mChipType);
+        mChipCounter = new ChipCounter("イエローチップカウンター", mChipType);
         break;
     }
 

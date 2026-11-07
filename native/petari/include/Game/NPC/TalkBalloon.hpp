@@ -4,14 +4,14 @@
 
 class TalkMessageCtrl;
 class TalkTextFormer;
-class JMapInfoIter;
+class TableIter;
 class IconAButton;
 
 class TalkBalloon : public LayoutActor {
 public:
     TalkBalloon(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void kill();
 
     virtual void open(TalkMessageCtrl*);
@@ -36,7 +36,7 @@ class TalkBalloonShort : public TalkBalloon {
 public:
     TalkBalloonShort(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void open(TalkMessageCtrl*);
     virtual void close();
     virtual void updateBalloon();
@@ -53,7 +53,7 @@ class TalkBalloonEvent : public TalkBalloon {
 public:
     TalkBalloonEvent(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void open(TalkMessageCtrl*);
     virtual void close();
     virtual bool turnPage();
@@ -75,7 +75,7 @@ class TalkBalloonSign : public TalkBalloonEvent {
 public:
     TalkBalloonSign(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
 };
 
 class TalkBalloonInfo : public TalkBalloon {
@@ -97,7 +97,7 @@ class TalkBalloonIcon : public TalkBalloonShort {
 public:
     TalkBalloonIcon(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void open(TalkMessageCtrl*);
 };
 

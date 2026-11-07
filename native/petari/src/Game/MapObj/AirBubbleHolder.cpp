@@ -37,14 +37,14 @@ namespace MR {
 AirBubbleHolder::~AirBubbleHolder() {
 }
 
-void AirBubbleHolder::init(const JMapInfoIter& rIter) {
+void AirBubbleHolder::init(const TableIter& rIter) {
     createAirBubbles();
 }
 
 void AirBubbleHolder::createAirBubbles() {
     MR::CurrentHeapRestorer heapRestorer(MR::getSceneHeap());
     for (s32 i = 0; i < ::sCreateAirBubbleNum; i++) {
-        AirBubble* pAirBubble = new AirBubble("\213\363\213\103\203\101\203\217(\213\244\227\160)" /* 空気アワ(共用) */);
+        AirBubble* pAirBubble = new AirBubble("空気アワ(共用)");
         pAirBubble->initWithoutIter();
         pAirBubble->makeActorDead();
         registerActor(pAirBubble);

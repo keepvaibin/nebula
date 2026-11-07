@@ -20,7 +20,7 @@ class SpiderThread : public LiveActor {
 public:
     SpiderThread(const char*);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void movement();
     virtual void draw() const;
     virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);

@@ -4,7 +4,7 @@
 #include "Game/Boss/PoltaFunction.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 
-PoltaWaitStart::PoltaWaitStart(Polta* pPolta) : PoltaActionBase("\203\174\203\213\203\136\212\112\216\156\221\322\202\277" /* ポルタ開始待ち */, pPolta) {
+PoltaWaitStart::PoltaWaitStart(Polta* pPolta) : PoltaActionBase("ポルタ開始待ち", pPolta) {
 }
 
 void PoltaWaitStart::appear() {

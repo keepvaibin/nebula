@@ -14,7 +14,7 @@ class GalaxyMapDomeIcon : public LayoutActor {
 public:
     GalaxyMapDomeIcon(int, LayoutActor*, const char*, const char*);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void movement();
     virtual void draw() const;
     virtual void calcAnim();

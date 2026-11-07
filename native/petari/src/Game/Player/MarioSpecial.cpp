@@ -8,7 +8,7 @@
 #include "Game/Util/SceneUtil.hpp"
 
 void Mario::checkOnimasu(const HitSensor* pSensor) {
-    if (strstr(pSensor->mHost->mName, "\203\111\203\152\203\175\203\130" /* オニマス */) == nullptr) {
+    if (strstr(pSensor->mHost->mName, "オニマス") == nullptr) {
         return;
     }
 
@@ -26,7 +26,7 @@ bool Mario::isDossun(const Triangle* pTriangle) const {
         return false;
     }
 
-    if (strstr(pTriangle->mSensor->mHost->getName(), "\203\150\203\142\203\130\203\223" /* ドッスン */) != nullptr) {
+    if (strstr(pTriangle->mSensor->mHost->getName(), "ドッスン") != nullptr) {
         return true;
     }
 
@@ -354,7 +354,7 @@ bool Mario::isHeadPushEnableArea() const {
 bool Mario::isOnimasuBinderPressSkip() const {
     if (isStatusActive(MarioStatus_SideStep)) {
         if (mFrontWallTriangle->mSensor != nullptr) {
-            if (strstr(mFrontWallTriangle->mSensor->mHost->mName, "\203\111\203\152\203\175\203\130" /* オニマス */)) {
+            if (strstr(mFrontWallTriangle->mSensor->mHost->mName, "オニマス")) {
                 return true;
             }
         }

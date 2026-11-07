@@ -7,7 +7,7 @@
 #include "Game/Util.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -24,7 +24,7 @@ WoodBox::WoodBox(const char* pName) : LiveActor(pName) {
 WoodBox::~WoodBox() {
 }
 
-void WoodBox::init(const JMapInfoIter& rIter) {
+void WoodBox::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("WoodBox", nullptr, false);
     MR::connectToSceneMapObjStrongLight(this);
@@ -46,12 +46,12 @@ void WoodBox::init(const JMapInfoIter& rIter) {
     s32 arg7_PowerStar = 0;
 
     if (rIter.isValid()) {
-        MR::getJMapInfoArg0NoInit(rIter, &arg0_Coins);
-        MR::getJMapInfoArg1NoInit(rIter, &arg1_Respawn);
-        MR::getJMapInfoArg2NoInit(rIter, &arg2_StarBits);
-        MR::getJMapInfoArg3NoInit(rIter, &arg3);
-        MR::getJMapInfoArg4NoInit(rIter, &arg4_1Up);
-        MR::getJMapInfoArg7NoInit(rIter, &arg7_PowerStar);
+        MR::getPlacementArg0NoInit(rIter, &arg0_Coins);
+        MR::getPlacementArg1NoInit(rIter, &arg1_Respawn);
+        MR::getPlacementArg2NoInit(rIter, &arg2_StarBits);
+        MR::getPlacementArg3NoInit(rIter, &arg3);
+        MR::getPlacementArg4NoInit(rIter, &arg4_1Up);
+        MR::getPlacementArg7NoInit(rIter, &arg7_PowerStar);
     }
 
     calcAndSetBaseMtx();
@@ -64,7 +64,7 @@ void WoodBox::init(const JMapInfoIter& rIter) {
     if (arg7_PowerStar != 0) {
         mHasPowerStar = true;
         MR::declarePowerStar(this);
-        mStarDemoModel = MR::createPowerStarDemoModel(this, "\203\160\203\217\201\133\203\130\203\136\201\133\203\146\203\202\203\202\203\146\203\213" /* パワースターデモモデル */, mBaseMtx);
+        mStarDemoModel = MR::createPowerStarDemoModel(this, "パワースターデモモデル", mBaseMtx);
         mStarDemoModel->makeActorDead();
     }
 
@@ -84,7 +84,7 @@ void WoodBox::init(const JMapInfoIter& rIter) {
         mPlaySolveSE = true;
     }
 
-    mBreakModel = new ModelObj("\211\363\202\352\203\202\203\146\203\213" /* 壊れモデル */, "WoodBoxBreak", getBaseMtx(), MR::DrawBufferType_NoSilhouettedMapObjStrongLight, -2, -2, false);
+    mBreakModel = new ModelObj("壊れモデル", "WoodBoxBreak", getBaseMtx(), MR::DrawBufferType_NoSilhouettedMapObjStrongLight, -2, -2, false);
     mBreakModel->mScale = mScale;
     MR::initLightCtrl(mBreakModel);
     mBreakModel->kill();

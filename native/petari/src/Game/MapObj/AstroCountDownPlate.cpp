@@ -21,15 +21,15 @@ namespace NrvAstroCountDownPlate {
 namespace {
     const char* cMaterialName01 = "StarNumber01_v_x";
     const char* cMaterialName10 = "StarNumber01_v_x(2)";
-    const char* cLastBattleDemoName = "\203\215\203\133\203\142\203\136\215\305\217\111\214\210\220\355\203\146\203\202" /* ロゼッタ最終決戦デモ */;
-    const char* cStartCountDownDemoName = "\203\215\203\133\203\142\203\136\203\112\203\105\203\223\203\147\203\137\203\105\203\223\212\112\216\156\203\146\203\202" /* ロゼッタカウントダウン開始デモ */;
+    const char* cLastBattleDemoName = "ロゼッタ最終決戦デモ";
+    const char* cStartCountDownDemoName = "ロゼッタカウントダウン開始デモ";
     static const s32 sStepForCountToZero = 50;
 };  // namespace
 
 AstroCountDownPlate::AstroCountDownPlate(const char* pName) : LiveActor(pName), _1B4() {
 }
 
-void AstroCountDownPlate::init(const JMapInfoIter& rIter) {
+void AstroCountDownPlate::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("AstroCountDownPlate", nullptr, true);
     initTextureAtNumLeftStar();

@@ -10,7 +10,7 @@ public:
     TreasureBoxCracked(const char*);
 
     virtual ~TreasureBoxCracked();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void control();
     virtual void attackSensor(HitSensor*, HitSensor*);
     virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
@@ -21,11 +21,11 @@ public:
     void exeItemBound();
     void exeOpenWait();
     void exeAlwaysOpen();
-    void initItem(const JMapInfoIter&);
+    void initItem(const TableIter&);
     void initItemTrans();
-    LiveActor* initYellowChip(const JMapInfoIter&);
-    LiveActor* initBlueChip(const JMapInfoIter&);
-    LiveActor* initKinokoOneUp(const JMapInfoIter&);
+    LiveActor* initYellowChip(const TableIter&);
+    LiveActor* initBlueChip(const TableIter&);
+    LiveActor* initKinokoOneUp(const TableIter&);
     bool checkItemPos();
     bool isHalfOpen() const;
 

@@ -8,13 +8,13 @@
 #include "Game/Render/ModelData.hpp"
 
 ShadowVolumeFlatModel::ShadowVolumeFlatModel(const char* pModelName)
-    : ShadowVolumeModel("\224\302\217\363\203\126\203\203\203\150\203\105\203\173\203\212\203\205\201\133\203\200\225\140\211\346" /* 板状シャドウボリューム描画 */), mBaseMtx(), mRootJoint(-1), mDropJoint(-1) {
+    : ShadowVolumeModel("板状シャドウボリューム描画"), mBaseMtx(), mRootJoint(-1), mDropJoint(-1) {
     initVolumeModel(pModelName);
     initJointDrawMtxResister();
 }
 
 ShadowVolumeFlatModel::ShadowVolumeFlatModel()
-    : ShadowVolumeModel("\224\302\217\363\203\126\203\203\203\150\203\105\203\173\203\212\203\205\201\133\203\200\225\140\211\346" /* 板状シャドウボリューム描画 */), mBaseMtx(), mRootJoint(-1), mDropJoint(-1) {
+    : ShadowVolumeModel("板状シャドウボリューム描画"), mBaseMtx(), mRootJoint(-1), mDropJoint(-1) {
 }
 
 void ShadowVolumeFlatModel::setBaseMatrixPtr(MtxPtr pMtx) {

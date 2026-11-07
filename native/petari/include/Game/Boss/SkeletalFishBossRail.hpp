@@ -7,7 +7,7 @@ public:
     SkeletalFishBossRail(const char*);
 
     virtual ~SkeletalFishBossRail();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
 
     bool isFillUpPoint(s32) const;

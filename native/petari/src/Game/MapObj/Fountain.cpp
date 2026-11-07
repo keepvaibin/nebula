@@ -27,7 +27,7 @@ inline void Fountain::initHitSensors(const char* hitSensor) {
     MR::addHitSensorMapObj(this, hitSensor, 16, ::sSensorRadius, Vec3f(0.0f, ::sSensorOffsetY, 0.0f));
 }
 
-void Fountain::init(const JMapInfoIter& rIter) {
+void Fountain::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     Pos3f mtx;
     mtx.identity();

@@ -4,7 +4,7 @@
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -20,7 +20,7 @@ namespace NrvSurprisedGalaxy {
 SurprisedGalaxy::SurprisedGalaxy(const char* pName) : LiveActor(pName) {
 }
 
-void SurprisedGalaxy::init(const JMapInfoIter& rIter) {
+void SurprisedGalaxy::init(const TableIter& rIter) {
     const char* objName;
     MR::getObjectName(&objName, rIter);
 
@@ -81,7 +81,7 @@ void SurprisedGalaxy::exeExit() {
         MR::closeSystemWipeWhiteFade();
         MR::stopStageBGM(90);
         MR::stopSubBGM(90);
-        MR::tryStartDemo(this, "\203\115\203\203\203\211\203\116\203\126\201\133\210\332\223\256" /* ギャラクシー移動 */);
+        MR::tryStartDemo(this, "ギャラクシー移動");
     }
 
     if (MR::isSystemWipeActive()) {
@@ -89,7 +89,7 @@ void SurprisedGalaxy::exeExit() {
     }
 
     MR::onGameEventFlagGalaxyOpen(mGalaxyName);
-    MR::endDemo(this, "\203\115\203\203\203\211\203\116\203\126\201\133\210\332\223\256" /* ギャラクシー移動 */);
+    MR::endDemo(this, "ギャラクシー移動");
     MR::permitTrigSE();
     MR::requestStartScenarioSelect(mGalaxyName);
 }

@@ -127,7 +127,7 @@ MarioFpView::MarioFpView(MarioActor* pActor) : MarioState(pActor, MarioStatus_Fp
 
 bool MarioFpView::start() {
     MR::startSubjectiveCamera(-1);
-    changeAnimation("\214\251\202\351" /* 見る */);
+    changeAnimation("見る");
 
     ::sIsDisabled = true;
 
@@ -174,7 +174,7 @@ bool MarioFpView::close() {
         MR::endSubjectiveCamera(15);
     }
 
-    stopAnimation("\214\251\202\351" /* 見る */);
+    stopAnimation("見る");
 
     mActor->showBeeFur();
 

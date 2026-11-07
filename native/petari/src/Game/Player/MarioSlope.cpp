@@ -49,7 +49,7 @@ bool Mario::isUseSimpleGroundCheck() const {
 
 bool Mario::checkGroundOnSlope() {
     Vec3f normal;
-    if (isAnimationRun("\212\122\202\323\202\361\202\316\202\350" /* 崖ふんばり */)) {
+    if (isAnimationRun("崖ふんばり")) {
         normal = -*getGravityVec();
     } else {
         normal = *_45C->getNormal(0);

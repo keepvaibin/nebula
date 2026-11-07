@@ -24,8 +24,8 @@ public:
     const char* getCurrentDemoName() const;
     void endDemo(NameObj*, const char*, bool);
     bool isExistTimeKeepDemo(const char*) const;
-    bool registerDemoCast(LiveActor*, const JMapInfoIter&);
-    bool registerDemoCast(LiveActor*, const char*, const JMapInfoIter&);
+    bool registerDemoCast(LiveActor*, const TableIter&);
+    bool registerDemoCast(LiveActor*, const char*, const TableIter&);
     void registerDemoSimpleCast(LiveActor*);
     void registerDemoSimpleCast(LayoutActor*);
     void registerDemoSimpleCast(NameObj*);

@@ -19,7 +19,7 @@ namespace {
 };  // namespace
 
 namespace MR {
-    bool tryRegisterDemoCast(LiveActor* pActor, const JMapInfoIter& rIter) {
+    bool tryRegisterDemoCast(LiveActor* pActor, const TableIter& rIter) {
         return DemoFunction::getDemoDirector()->registerDemoCast(pActor, rIter);
     }
 
@@ -51,15 +51,15 @@ namespace MR {
         return true;
     }
 
-    bool tryRegisterDemoCast(LiveActor* pActor, const char* pName, const JMapInfoIter& rIter) {
+    bool tryRegisterDemoCast(LiveActor* pActor, const char* pName, const TableIter& rIter) {
         return DemoFunction::getDemoDirector()->registerDemoCast(pActor, pName, rIter);
     }
 
-    void registerDemoCast(LiveActor* pActor, const char* pName, const JMapInfoIter& rIter) {
+    void registerDemoCast(LiveActor* pActor, const char* pName, const TableIter& rIter) {
         DemoFunction::getDemoDirector()->registerDemoCast(pActor, pName, rIter);
     }
 
-    void initTalkAnimDemoCast(LiveActor* pActor, const JMapInfoIter& rIter, const char* pName1, const char* pName2) {
+    void initTalkAnimDemoCast(LiveActor* pActor, const TableIter& rIter, const char* pName1, const char* pName2) {
         DemoFunction::getDemoDirector()->registerDemoCast(pActor, pName1, rIter);
         DemoFunction::tryCreateDemoTalkAnimCtrlForActorDirect(pActor, pName1, pName2, nullptr);
     }
@@ -367,11 +367,11 @@ namespace MR {
         DemoFunction::getDemoDirector()->endDemo(pObj, pName, true);
     }
 
-    void initDemoSheetTalkAnim(LiveActor* pActor, const JMapInfoIter& rIter, const char* pName1, const char* pName2, TalkMessageCtrl* pTalkCtrl) {
+    void initDemoSheetTalkAnim(LiveActor* pActor, const TableIter& rIter, const char* pName1, const char* pName2, TalkMessageCtrl* pTalkCtrl) {
         tryInitDemoSheetTalkAnim(pActor, rIter, pName1, pName2, pTalkCtrl);
     }
 
-    void initDemoSheetTalkAnimWithMessageName(LiveActor* pActor, const JMapInfoIter& rIter, const char* pParam3, const char* pParam4,
+    void initDemoSheetTalkAnimWithMessageName(LiveActor* pActor, const TableIter& rIter, const char* pParam3, const char* pParam4,
                                               const char* pParam5) {
         TalkMessageCtrl* talkCtrl = MR::createTalkCtrl(pActor, rIter, pParam5, Vec3f(0.0f, 0.0f, 0.0f), nullptr);
 
@@ -379,14 +379,14 @@ namespace MR {
         MR::tryInitDemoSheetTalkAnim(pActor, rIter, pParam3, pParam4, talkCtrl);
     }
 
-    void initDemoSheetTalkAnimFunctor(LiveActor* pActor, const JMapInfoIter& rIter, const char* pName1, const char* pName2,
+    void initDemoSheetTalkAnimFunctor(LiveActor* pActor, const TableIter& rIter, const char* pName1, const char* pName2,
                                       TalkMessageCtrl* pTalkCtrl, const MR::FunctorBase& rFunctor) {
         if (tryInitDemoSheetTalkAnim(pActor, rIter, pName1, pName2, pTalkCtrl)) {
             DemoFunction::registerDemoActionFunctorFunction(pActor, rFunctor, pName1, nullptr);
         }
     }
 
-    bool tryInitDemoSheetTalkAnim(LiveActor* pActor, const JMapInfoIter& rIter, const char* pParam3, const char* pParam4,
+    bool tryInitDemoSheetTalkAnim(LiveActor* pActor, const TableIter& rIter, const char* pParam3, const char* pParam4,
                                   TalkMessageCtrl* pTalkCtrl) {
         if (tryRegisterDemoCast(pActor, pParam3, rIter)) {
             if (pTalkCtrl == nullptr) {
@@ -573,12 +573,12 @@ namespace MR {
     }
 
     void startTalkingSequenceWithoutCinemaFrame(NameObj* pObj) {
-        DemoStartRequestUtil::startDemoSystem(pObj, "\211\357\230\142" /* 会話 */, 3, DemoStartInfo::DemoType(0), DemoStartInfo::CinemaFrameType(1),
+        DemoStartRequestUtil::startDemoSystem(pObj, "会話", 3, DemoStartInfo::DemoType(0), DemoStartInfo::CinemaFrameType(1),
                                               DemoStartInfo::StarPointerType(0), DemoStartInfo::DeleteEffectType(0), nullptr);
     }
 
     void endTalkingSequence(NameObj* pObj) {
-        endDemo(pObj, "\211\357\230\142" /* 会話 */);
+        endDemo(pObj, "会話");
     }
 
     bool isSystemTalking() {
@@ -610,7 +610,7 @@ namespace MR {
     }
 
     void startTalkingSequence(NameObj* pObj) {
-        DemoStartRequestUtil::startDemoSystem(pObj, "\211\357\230\142" /* 会話 */, 3, DemoStartInfo::DemoType(0), DemoStartInfo::CinemaFrameType(0),
+        DemoStartRequestUtil::startDemoSystem(pObj, "会話", 3, DemoStartInfo::DemoType(0), DemoStartInfo::CinemaFrameType(0),
                                               DemoStartInfo::StarPointerType(0), DemoStartInfo::DeleteEffectType(0), nullptr);
     }
 };  // namespace MR

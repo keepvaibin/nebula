@@ -9,7 +9,7 @@ class LightCylinder : public MapObjActor {
 public:
     LightCylinder(const char*, MtxPtr, const Color8&);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void draw() const;
     virtual void calcAndSetBaseMtx();
     virtual void connectToScene(const MapObjActorInitInfo&);
@@ -19,7 +19,7 @@ public:
     virtual void initCaseNoUseSwitchA(const MapObjActorInitInfo&) {
     }
 
-    void initLightCylinderByOwner(const JMapInfoIter&);
+    void initLightCylinderByOwner(const TableIter&);
     void initLightVolume(const char*);
 
     MtxPtr mHostMtx;
@@ -31,10 +31,10 @@ class SwingLight : public MapObjActor {
 public:
     SwingLight(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initCaseUseSwitchA(const MapObjActorInitInfo&);
     virtual void initCaseNoUseSwitchA(const MapObjActorInitInfo&);
-    virtual void makeSubModels(const JMapInfoIter&, const MapObjActorInitInfo&);
+    virtual void makeSubModels(const TableIter&, const MapObjActorInitInfo&);
 
     void appearLight();
 

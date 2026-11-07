@@ -11,7 +11,7 @@ class Teresa : public LiveActor {
 public:
     Teresa(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void appear();
     virtual void makeActorAppeared();
     virtual void kill();
@@ -22,8 +22,8 @@ public:
     virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
 
-    void initDummyModel(const JMapInfoIter&);
-    void initFromJMapParam(const JMapInfoIter&);
+    void initDummyModel(const TableIter&);
+    void initFromPlacementParam(const TableIter&);
     void initSensor();
     void initBind();
     bool filterBind(const Triangle*);

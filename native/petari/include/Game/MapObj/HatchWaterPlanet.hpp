@@ -10,7 +10,7 @@ public:
     HatchWaterPlanet(const char*);
 
     virtual ~HatchWaterPlanet();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void control();
 
     void exeWait();

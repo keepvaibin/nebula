@@ -9,7 +9,7 @@ PowerStarHolder::PowerStarHolder(const char* pName) : NameObj(pName) {
     mNumInfos = 0;
 }
 
-void PowerStarHolder::init(const JMapInfoIter&) {
+void PowerStarHolder::init(const TableIter&) {
 }
 
 void PowerStarHolder::registerPowerStar(PowerStar* pStar, int starNum) {

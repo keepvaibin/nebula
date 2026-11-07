@@ -2,7 +2,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include <nebula_geometry.hpp>
@@ -15,13 +15,13 @@ namespace NrvCoinSpot {
 CoinSpot::CoinSpot(const char* pName) : LiveActor(pName), _8C(8), mIsInTornado(), _94(4), _98() {
 }
 
-void CoinSpot::init(const JMapInfoIter& rIter) {
+void CoinSpot::init(const TableIter& rIter) {
     MR::connectToSceneMapObjMovementCalcAnim(this);
 
     MR::initDefaultPos(this, rIter);
 
     s32 arg = 0;
-    MR::getJMapInfoArg0NoInit(rIter, &arg);
+    MR::getPlacementArg0NoInit(rIter, &arg);
 
     if (arg > 0) {
         _8C = arg;
@@ -75,7 +75,7 @@ void CoinSpot::exeIsInTornado() {
     }
 
     if (_98 >= _8C || MR::isGreaterStep(this, 180)) {
-        MR::deleteEffect(this, "\214\365" /* 光 */);
+        MR::deleteEffect(this, "光");
         kill();
     }
 }

@@ -10,7 +10,7 @@ public:
 
     virtual ~Fish();
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void control();
     virtual void calcAndSetBaseMtx();
 
@@ -39,7 +39,7 @@ public:
 
     virtual ~FishGroup();
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void startClipped();
     virtual void endClipped();
     virtual void control();

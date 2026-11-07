@@ -8,7 +8,7 @@ public:
     MapPartsRailGuidePoint(const LiveActor*, const char*, int, bool);
 
     virtual ~MapPartsRailGuidePoint();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
 
     f32 _8C;
     bool _90;

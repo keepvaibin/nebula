@@ -91,10 +91,10 @@ bool MarioStick::setStickSensor(const HitSensor* pSensor) {
 
 bool MarioStick::start() {
     _4C = 0;
-    changeAnimation("\203\156\203\140\225\307\202\255\202\301\202\302\202\253" /* ハチ壁くっつき */, "\203\156\203\140\225\307\202\255\202\301\202\302\202\253\222\206" /* ハチ壁くっつき中 */);
+    changeAnimation("ハチ壁くっつき", "ハチ壁くっつき中");
     startPadVib(0u);
-    playEffectTrans("\203\156\203\140\211\324\202\255\202\301\202\302\202\253" /* ハチ花くっつき */, _38);
-    playSound("\203\156\203\140\225\307\202\255\202\301\202\302\202\253" /* ハチ壁くっつき */);
+    playEffectTrans("ハチ花くっつき", _38);
+    playSound("ハチ壁くっつき");
     mActor->_F44 = 0;
     getPlayer()->setFrontVecKeepSide(-_20);
     _6C = -_20;
@@ -108,7 +108,7 @@ bool MarioStick::update() {
     getPlayer()->setTrans(_14, nullptr);
 
     if (checkTrgA()) {
-        if (!isAnimationRun("\203\156\203\140\225\307\202\255\202\301\202\302\202\253" /* ハチ壁くっつき */)) {
+        if (!isAnimationRun("ハチ壁くっつき")) {
             if (startJump()) {
                 return false;
             }
@@ -138,9 +138,9 @@ bool MarioStick::update() {
     NebulaMtxMultVec(secondRotMtx, &stack_2C, &stack_2C);
 
     if (getStickP() > 0.0f) {
-        changeAnimation("\203\156\203\140\211\324\210\332\223\256" /* ハチ花移動 */);
+        changeAnimation("ハチ花移動");
     } else {
-        stopAnimation("\203\156\203\140\211\324\210\332\223\256" /* ハチ花移動 */);
+        stopAnimation("ハチ花移動");
     }
 
     if (MR::diffAngleAbs(stack_2C, _2C) < 1.308997f) {
@@ -166,15 +166,15 @@ bool MarioStick::update() {
 }
 
 bool MarioStick::close() {
-    stopAnimation("\203\156\203\140\225\307\202\255\202\301\202\302\202\253" /* ハチ壁くっつき */, "\227\216\211\272" /* 落下 */);
+    stopAnimation("ハチ壁くっつき", "落下");
 
     if (getPlayer()->mMovementStates._1) {
-        changeAnimation(nullptr, "\212\356\226\173" /* 基本 */);
+        changeAnimation(nullptr, "基本");
     }
 
     getPlayer()->mMovementStates._38 = 0;
     mActor->_F44 = 1;
-    playEffectTrans("\203\156\203\140\211\324\202\255\202\301\202\302\202\253" /* ハチ花くっつき */, _38);
+    playEffectTrans("ハチ花くっつき", _38);
     return true;
 }
 

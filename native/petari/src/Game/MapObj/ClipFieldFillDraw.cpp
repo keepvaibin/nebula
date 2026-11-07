@@ -8,7 +8,7 @@
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DirectDraw.hpp"
 #include "Game/Util/DrawUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
@@ -21,7 +21,7 @@ ClipFieldFillDraw::ClipFieldFillDraw(const char* pName)
     MR::connectToScene(this, MR::MovementType_None, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_ClipFieldFillDraw);
 }
 
-void ClipFieldFillDraw::init(const JMapInfoIter& rIter) {
+void ClipFieldFillDraw::init(const TableIter& rIter) {
     if (MR::isValidInfo(rIter)) {
         return;
     }

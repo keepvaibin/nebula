@@ -14,7 +14,7 @@ class MorphItemObjNeo : public LiveActor {
 public:
     MorphItemObjNeo(const char*, s32);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void appear();
     virtual void kill();
@@ -26,7 +26,7 @@ public:
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
     virtual bool isDemo() const;
 
-    static void makeArchiveList(NameObjArchiveListCollector*, const JMapInfoIter&);
+    static void makeArchiveList(NameObjArchiveListCollector*, const TableIter&);
 
     void glowEffect();
 

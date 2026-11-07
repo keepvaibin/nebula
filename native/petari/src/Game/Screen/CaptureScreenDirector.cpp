@@ -14,7 +14,7 @@ namespace {
                                       {"WipeMap", 5, true, 1},     {"SystemWipe", 20, false, 1}, {"Unused", 16, false, 0}};
 };  // namespace
 
-CaptureScreenDirector::CaptureScreenDirector() : NameObj("\211\346\226\312\203\114\203\203\203\166\203\140\203\203" /* 画面キャプチャ */), _C(nullptr), mTimingType("Indirect"), mTexture(nullptr), _18(false) {
+CaptureScreenDirector::CaptureScreenDirector() : NameObj("画面キャプチャ"), _C(nullptr), mTimingType("Indirect"), mTexture(nullptr), _18(false) {
     MR::CurrentHeapRestorer heapRestorer(MR::getPermanentHeap());
 
     mTexture = JUTTexture::createTarget(1.0f, 1.0f);
@@ -83,7 +83,7 @@ const TimingInfo* CaptureScreenDirector::findFromName(const char* pName) const {
     return nullptr;
 }
 
-CaptureScreenActor::CaptureScreenActor(u32 drawType, const char* pCameraName) : NameObj("\211\346\226\312\203\114\203\203\203\166\203\140\203\203" /* 画面キャプチャ */), mCameraName(pCameraName) {
+CaptureScreenActor::CaptureScreenActor(u32 drawType, const char* pCameraName) : NameObj("画面キャプチャ"), mCameraName(pCameraName) {
     MR::connectToScene(this, MR::MovementType_None, MR::CalcAnimType_None, MR::DrawBufferType_None, drawType);
 }
 

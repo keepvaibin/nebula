@@ -6,7 +6,7 @@
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
-#include "Game/Util/JMapInfo.hpp"
+#include "Game/Util/Table.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
@@ -35,7 +35,7 @@ ScrewSwitch::ScrewSwitch(const char* pName) : LiveActor(pName) {
     mMapObjConnector = new MapObjConnector(this);
 }
 
-void ScrewSwitch::init(const JMapInfoIter& rIter) {
+void ScrewSwitch::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::needStageSwitchWriteA(this, rIter);
     MR::useStageSwitchSleep(this, rIter);

@@ -19,10 +19,10 @@ namespace NrvProloguePictureBook {
     NEW_NERVE(ProloguePictureBookEnd, ProloguePictureBook, End);
 };  // namespace NrvProloguePictureBook
 
-ProloguePictureBook::ProloguePictureBook() : LayoutActor("\203\166\203\215\203\215\201\133\203\117\202\314\212\107\226\173" /* プロローグの絵本 */, true), mIconAButton(), mPage() {
+ProloguePictureBook::ProloguePictureBook() : LayoutActor("プロローグの絵本", true), mIconAButton(), mPage() {
 }
 
-void ProloguePictureBook::init(const JMapInfoIter& rIter) {
+void ProloguePictureBook::init(const TableIter& rIter) {
     MR::connectToSceneLayout(this);
     initLayoutManager("PrologueDemo", 1);
     initNerve(GET_NERVE(ProloguePictureBook, ProloguePictureBookPlaying));

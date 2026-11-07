@@ -13,7 +13,7 @@
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/AreaObjUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointController.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
@@ -99,7 +99,7 @@ const BegomanSound* BegomanBase::getSoundBoss() {
     return &::sound_boss;
 }
 
-void BegomanBase::initCore(const JMapInfoIter& rIter, const char* pModelArcName, bool a1) {
+void BegomanBase::initCore(const TableIter& rIter, const char* pModelArcName, bool a1) {
     MR::createSceneObj(SceneObj_BegomanAttackPermitter);
     MR::useStageSwitchWriteDead(this, rIter);
     MR::useStageSwitchReadA(this, rIter);
@@ -110,7 +110,7 @@ void BegomanBase::initCore(const JMapInfoIter& rIter, const char* pModelArcName,
         mInitPos.set(mPosition);
         MR::setGroupClipping(this, rIter, 0x10);
         s32 arg0 = -1;
-        MR::getJMapInfoArg0NoInit(rIter, &arg0);
+        MR::getPlacementArg0NoInit(rIter, &arg0);
         if (arg0 == -1) {
             mCanTrySetReturn = false;
         } else {
@@ -182,7 +182,7 @@ void BegomanBase::initSensor(s32 extraSensorNum, f32 radius, f32 pushedRailRadiu
                             Vec3f(0.0f, 0.5f * pushedRailRadius * yScale, 0.0f));
 }
 
-void BegomanBase::initUseSwitchB(const JMapInfoIter& rIter, const MR::FunctorBase& rFunctor) {
+void BegomanBase::initUseSwitchB(const TableIter& rIter, const MR::FunctorBase& rFunctor) {
     if (MR::isValidInfo(rIter) && MR::useStageSwitchReadB(this, rIter)) {
         MR::listenStageSwitchOnB(this, rFunctor);
     }
@@ -1006,7 +1006,7 @@ bool BegomanBase::requestAttack() {
 BegomanAttackPermitter::BegomanAttackPermitter(const char* pName) : LiveActor(pName), _8C(), mBegoman(), mDistToPlayer(99999.0f), _98() {
 }
 
-void BegomanAttackPermitter::init(const JMapInfoIter& rIter) {
+void BegomanAttackPermitter::init(const TableIter& rIter) {
     MR::connectToSceneEnemyDecorationMovement(this);
     MR::invalidateClipping(this);
     makeActorAppeared();

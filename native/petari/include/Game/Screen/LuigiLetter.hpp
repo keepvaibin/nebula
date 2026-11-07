@@ -16,15 +16,15 @@ public:
     /// @brief Creates a new `LuigiLetter`.
     LuigiLetter(bool, const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void appear();
     virtual void movement();
 
     void exeAppear();
     void exeWait();
     void exeEnd();
-    static void makeArchiveListForNPC(NameObjArchiveListCollector*, const JMapInfoIter&);
-    static void makeArchiveListForMenu(NameObjArchiveListCollector*, const JMapInfoIter&);
+    static void makeArchiveListForNPC(NameObjArchiveListCollector*, const TableIter&);
+    static void makeArchiveListForMenu(NameObjArchiveListCollector*, const TableIter&);
     static void makeArchiveListCommon(NameObjArchiveListCollector*, const char*);
 
 private:

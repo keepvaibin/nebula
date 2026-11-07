@@ -3,7 +3,7 @@
 #include "Game/NameObj/NameObj.hpp"
 
 class ClippingActorInfo;
-class JMapIdInfo;
+class PlacementId;
 
 class ClippingInfoGroup : public NameObj {
 public:
@@ -11,7 +11,7 @@ public:
 
     virtual ~ClippingInfoGroup();
 
-    void setGroupNo(const JMapInfoIter&);
+    void setGroupNo(const TableIter&);
     void registerInfo(ClippingActorInfo*);
     bool isClippedNowAll() const;
     void startClippedAll();
@@ -20,7 +20,7 @@ public:
     int _C;
     s32 _10;
     ClippingActorInfo** _14;
-    JMapIdInfo* _18;
+    PlacementId* _18;
     u8 _1C;
 };
 
@@ -31,10 +31,10 @@ public:
     virtual ~ClippingGroupHolder();
     virtual void movement();
 
-    void createAndAdd(ClippingActorInfo*, const JMapInfoIter&, int);
-    ClippingInfoGroup* createGroup(ClippingActorInfo*, const JMapInfoIter&, int);
+    void createAndAdd(ClippingActorInfo*, const TableIter&, int);
+    ClippingInfoGroup* createGroup(ClippingActorInfo*, const TableIter&, int);
 
-    ClippingInfoGroup* findGroup(const JMapInfoIter&);
+    ClippingInfoGroup* findGroup(const TableIter&);
     ClippingInfoGroup* getGroup(int index) const {
         return mInfoGroups[index];
     }

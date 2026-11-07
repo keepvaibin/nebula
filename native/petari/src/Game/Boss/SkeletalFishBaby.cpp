@@ -10,7 +10,7 @@
 #include "Game/Util/ActorShadowUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointController.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
@@ -64,13 +64,13 @@ SkeletalFishBaby::SkeletalFishBaby(const char* pName)
     _AC.identity();
 }
 
-void SkeletalFishBaby::init(const JMapInfoIter& rIter) {
+void SkeletalFishBaby::init(const TableIter& rIter) {
     MR::createAirBubbleHolder();
     MR::initDefaultPos(this, rIter);
 
     if (rIter.isValid()) {
-        MR::getJMapInfoArg0NoInit(rIter, &mSpeedMax);
-        MR::getJMapInfoArg1NoInit(rIter, &mObjArg1);
+        MR::getPlacementArg0NoInit(rIter, &mSpeedMax);
+        MR::getPlacementArg1NoInit(rIter, &mObjArg1);
     }
 
     mSpeed = mSpeedMax;
@@ -287,7 +287,7 @@ void SkeletalFishBaby::calcAndSetBaseMtx() {
     }
 }
 
-void SkeletalFishBaby::initRail(const JMapInfoIter& rIter) {
+void SkeletalFishBaby::initRail(const TableIter& rIter) {
     if (rIter.isValid()) {
         initRailRider(rIter);
         mRailControl->setRailActor(this, nullptr, true);
@@ -326,7 +326,7 @@ bool SkeletalFishBaby::isAttackable() const {
 
 bool SkeletalFishBaby::isStarPointerPointing() const {
     for (u32 i = 0; i < ARRAY_SIZE(mStarPieceTargets); i++) {
-        if (MR::isStarPointerPointing2POnPressButton(mStarPieceTargets[i], "\216\343" /* 弱 */, true, false)) {
+        if (MR::isStarPointerPointing2POnPressButton(mStarPieceTargets[i], "弱", true, false)) {
             return true;
         }
     }

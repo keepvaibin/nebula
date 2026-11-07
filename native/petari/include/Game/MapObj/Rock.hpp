@@ -10,11 +10,11 @@ class RockCreator;
 
 class Rock : public LiveActor {
 public:
-    Rock(f32 a1 = 10.0f, const char* pName = "\203\123\203\215\203\123\203\215\212\342" /* ゴロゴロ岩 */);
+    Rock(f32 a1 = 10.0f, const char* pName = "ゴロゴロ岩");
 
     enum Type { NormalRock = 0, WanwanRolling = 1, WanwanRollingMini = 2, WanwanRollingGold = 3 };
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void appear();
     virtual void kill();
     virtual void control();
@@ -24,9 +24,9 @@ public:
     virtual bool receiveMsgEnemyAttack(u32, HitSensor*, HitSensor*);
 
     static s32 getAppearFrame();
-    static Type getType(const JMapInfoIter&);
+    static Type getType(const TableIter&);
     static s32 getAppearStarPieceNum(Type);
-    void initMapToolInfo(const JMapInfoIter&);
+    void initMapToolInfo(const TableIter&);
     void initModel();
     void initSensor();
     void initEffect();

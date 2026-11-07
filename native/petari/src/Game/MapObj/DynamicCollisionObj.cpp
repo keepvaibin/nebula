@@ -15,7 +15,7 @@ DynamicCollisionObj::DynamicCollisionObj(const char* pName) : LiveActor(pName) {
     _AC = 0;
 }
 
-void DynamicCollisionObj::init(const JMapInfoIter& rIter) {
+void DynamicCollisionObj::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::connectToScene(this, MR::MovementType_Enemy, MR::CalcAnimType_Enemy, MR::DrawBufferType_None, MR::DrawType_FlexibleSphere);
 

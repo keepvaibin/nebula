@@ -32,8 +32,8 @@ namespace {
     const s32 cCapHideStartStep = 21;
     const s32 cCapHideEndStep = 221;
     const s32 cFallStartFrameGrandStar = 360;
-    const char* const cDemoMovePartName = "\210\332\223\256" /* 移動 */;
-    const char* const cDemoWaitPartName = "\203\105\203\106\203\103\203\147" /* ウェイト */;
+    const char* const cDemoMovePartName = "移動";
+    const char* const cDemoWaitPartName = "ウェイト";
 };  // namespace
 
 namespace {
@@ -60,7 +60,7 @@ StarReturnDemoStarter::StarReturnDemoStarter(const char* pName)
     mTransform.identity();
 }
 
-void StarReturnDemoStarter::init(const JMapInfoIter& rIter) {
+void StarReturnDemoStarter::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::connectToSceneMapObjMovement(this);
     MR::invalidateClipping(this);
@@ -68,18 +68,18 @@ void StarReturnDemoStarter::init(const JMapInfoIter& rIter) {
     mStageResultInformer = new StageResultInformer();
     mStageResultInformer->initWithoutIter();
 
-    mPowerStar = createSubModel("\203\130\203\136\201\133\203\202\203\146\203\213" /* スターモデル */, ::isGrandStar() ? "GrandStar" : "PowerStar", false);
-    mLuma = createSubModel("\203\140\203\122\203\202\203\146\203\213" /* チコモデル */, "SpinTico", false);
+    mPowerStar = createSubModel("スターモデル", ::isGrandStar() ? "GrandStar" : "PowerStar", false);
+    mLuma = createSubModel("チコモデル", "SpinTico", false);
 
     if (!MR::isPlayerLuigi()) {
-        mHair = createSubModel("\224\257\202\314\226\321\203\202\203\146\203\213" /* 髪の毛モデル */, "MarioHair", true);
+        mHair = createSubModel("髪の毛モデル", "MarioHair", true);
     }
 
     mReturnDemoRailMove = new ReturnDemoRailMove(this, mPowerStar, rIter, ::isGrandStar(), &mTransform);
 
-    tryRegisterDemo("\203\117\203\211\203\223\203\150\203\130\203\136\201\133\213\101\212\322[\202\121\211\361\226\332\210\310\215\176]" /* グランドスター帰還[２回目以降] */, rIter);
-    tryRegisterDemo("\203\160\203\217\201\133\203\130\203\136\201\133\213\101\212\322" /* パワースター帰還 */, rIter);
-    tryRegisterDemo("\223\126\225\266\203\150\201\133\203\200\203\130\203\136\201\133\213\101\212\322" /* 天文ドームスター帰還 */, rIter);
+    tryRegisterDemo("グランドスター帰還[２回目以降]", rIter);
+    tryRegisterDemo("パワースター帰還", rIter);
+    tryRegisterDemo("天文ドームスター帰還", rIter);
 
     initNerve(GET_NERVE(StarReturnDemoStarter, StarReturnDemoStarterNrvAppearWait));
     makeActorDead();
@@ -90,7 +90,7 @@ void StarReturnDemoStarter::appear() {
     mReturnDemoRailMove->posToStart();
     PowerStar::setupColorAtResultSequence(mPowerStar, ::isGrandStar());
 
-    if (MR::isDemoActive("\223\126\225\266\203\150\201\133\203\200\203\130\203\136\201\133\213\101\212\322" /* 天文ドームスター帰還 */)) {
+    if (MR::isDemoActive("天文ドームスター帰還")) {
         MR::onDrawSpinDriverPathAtOpa();
     }
 
@@ -110,7 +110,7 @@ void StarReturnDemoStarter::kill() {
     }
 }
 
-void StarReturnDemoStarter::makeArchiveList(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter) {
+void StarReturnDemoStarter::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
     if (::isGrandStar()) {
         pCollector->addArchive("GrandStar");
     }
@@ -140,7 +140,7 @@ LiveActor* StarReturnDemoStarter::createSubModel(const char* pName, const char* 
     return subModel;
 }
 
-void StarReturnDemoStarter::tryRegisterDemo(const char* pDemoName, const JMapInfoIter& rIter) {
+void StarReturnDemoStarter::tryRegisterDemo(const char* pDemoName, const TableIter& rIter) {
     if (MR::isDemoExist(pDemoName) && MR::tryRegisterDemoCast(this, pDemoName, rIter)) {
         MR::tryRegisterDemoCast(mPowerStar, pDemoName, rIter);
         MR::tryRegisterDemoCast(mLuma, pDemoName, rIter);

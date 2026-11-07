@@ -41,22 +41,22 @@ MarioMagic::MarioMagic(MarioActor* pActor) : MarioState(pActor, MarioStatus_Magi
 }
 
 bool MarioMagic::start() {
-    changeAnimation("\222\156\217\343\202\320\202\313\202\350" /* 地上ひねり */);
-    stopEffect("\203\160\203\223\203\140\203\165\203\211\201\133\215\266" /* パンチブラー左 */);
-    stopEffect("\203\160\203\223\203\140\203\165\203\211\201\133\211\105" /* パンチブラー右 */);
-    playEffect("\213\244\222\312\222\156\217\343\203\130\203\163\203\223" /* 共通地上スピン */);
-    playSound("\220\272\203\130\203\163\203\223" /* 声スピン */);
-    playSound("\203\130\203\163\203\223\203\127\203\203\203\223\203\166" /* スピンジャンプ */);
+    changeAnimation("地上ひねり");
+    stopEffect("パンチブラー左");
+    stopEffect("パンチブラー右");
+    playEffect("共通地上スピン");
+    playSound("声スピン");
+    playSound("スピンジャンプ");
     startPadVib(2);
     _12 = 0;
     return true;
 }
 
 bool MarioMagic::close() {
-    stopEffect("\203\130\203\163\203\223\203\211\203\103\203\147" /* スピンライト */);
+    stopEffect("スピンライト");
 
     if (_12 < 0x1A) {
-        playEffect("\203\130\203\163\203\223\203\211\203\103\203\147\217\301\213\216" /* スピンライト消去 */);
+        playEffect("スピンライト消去");
     }
 
     return true;
@@ -66,15 +66,15 @@ bool MarioMagic::update() {
     if (mActor->isRequestJump()) {
         getPlayer()->tryJump();
         return false;
-    } else if (!isAnimationRun("\222\156\217\343\202\320\202\313\202\350" /* 地上ひねり */)) {
+    } else if (!isAnimationRun("地上ひねり")) {
         return false;
     }
 
     _12++;
 
     if (_12 == 25) {
-        stopEffect("\203\130\203\163\203\223\203\211\203\103\203\147" /* スピンライト */);
-        playEffect("\203\130\203\163\203\223\203\211\203\103\203\147\217\301\213\216" /* スピンライト消去 */);
+        stopEffect("スピンライト");
+        playEffect("スピンライト消去");
     }
 
     if (getPlayer()->mMovementStates.jumping) {

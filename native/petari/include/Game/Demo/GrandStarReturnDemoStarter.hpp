@@ -12,7 +12,7 @@ class GrandStarReturnDemoStarter : public LiveActor {
 public:
     GrandStarReturnDemoStarter(const char*);
     virtual ~GrandStarReturnDemoStarter();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void appear();
     virtual void control();
 

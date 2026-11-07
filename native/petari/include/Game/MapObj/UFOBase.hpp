@@ -11,14 +11,14 @@ class UFOBase : public LiveActor {
 public:
     UFOBase(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void kill();
     virtual void makeActorDead();
     virtual void control();
     virtual void calcAndSetBaseMtx();
     virtual void initSensorType();
 
-    void initSubModel(const JMapInfoIter&, const char*);
+    void initSubModel(const TableIter&, const char*);
     void exeWaitForPlayerOn();
     void exeMove();
     void exeWait();

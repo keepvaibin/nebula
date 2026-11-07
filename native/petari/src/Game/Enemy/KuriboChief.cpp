@@ -22,8 +22,8 @@
 #include "Game/Util/BaseMatrixFollowTargetHolder.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapInfo.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/Table.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -125,7 +125,7 @@ KuriboChief::KuriboChief(const char* pName) : LiveActor(pName) {
     _BC.set(0.0f, 0.0f, 1.0f);
 }
 
-void KuriboChief::init(const JMapInfoIter& rIter) {
+void KuriboChief::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("KuriboChief", nullptr, false);
     MR::connectToSceneEnemy(this);
@@ -148,7 +148,7 @@ void KuriboChief::init(const JMapInfoIter& rIter) {
     MR::declareStarPiece(this, 6);
 
     s32 arg = -1;
-    MR::getJMapInfoArg7WithInit(rIter, &arg);
+    MR::getPlacementArg7WithInit(rIter, &arg);
     if (arg != -1) {
         MR::declareCameraRegisterVec(this, arg, &mPosition);
     }
@@ -183,14 +183,14 @@ void KuriboChief::initState() {
     mStateBindStarPointer = new WalkerStateBindStarPointer(this, mScaleController);
 }
 
-void KuriboChief::initKeySwitch(const JMapInfoIter& rIter) {
+void KuriboChief::initKeySwitch(const TableIter& rIter) {
     if (MR::useStageSwitchWriteA(this, rIter)) {
-        mKeySwitch = new KeySwitch("\214\256\203\130\203\103\203\142\203\140" /* 鍵スイッチ */);
+        mKeySwitch = new KeySwitch("鍵スイッチ");
         mKeySwitch->initKeySwitchByOwner(rIter);
     }
 }
 
-void KuriboChief::makeArchiveList(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter) {
+void KuriboChief::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
     if (MR::isExistStageSwitchA(rIter)) {
         pCollector->addArchive("KeySwitch");
     }

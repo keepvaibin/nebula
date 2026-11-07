@@ -6,7 +6,7 @@
 TripodBossStepStartArea::TripodBossStepStartArea(int formType, const char* pName) : AreaObj(formType, pName), _3C(-1) {
 }
 
-void TripodBossStepStartArea::init(const JMapInfoIter& rIter) {
+void TripodBossStepStartArea::init(const TableIter& rIter) {
     AreaObj::init(rIter);
     MR::connectToSceneAreaObj(this);
     _3C = mObjArg0;

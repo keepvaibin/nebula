@@ -15,7 +15,7 @@ namespace {
 BrosButton::BrosButton(const char* pName) : LayoutActor(pName, true), mIsSelectedMario(true), mPaneCtrl() {
 }
 
-void BrosButton::init(const JMapInfoIter& rIter) {
+void BrosButton::init(const TableIter& rIter) {
     initLayoutManager("BrosButton", 1);
 
     mPaneCtrl = new ButtonPaneController(this, "BrosButton", "BoxBButton", 0, true);

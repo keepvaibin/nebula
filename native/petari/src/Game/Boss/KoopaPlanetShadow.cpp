@@ -10,10 +10,10 @@
 KoopaPlanetShadow::~KoopaPlanetShadow() {
 }
 
-KoopaPlanetShadow::KoopaPlanetShadow(const Koopa* pKoopa) : LiveActor("\230\146\220\257\227\160\202\314\211\145" /* 惑星用の影 */), mKoopa(pKoopa), mHipMtx() {
+KoopaPlanetShadow::KoopaPlanetShadow(const Koopa* pKoopa) : LiveActor("惑星用の影"), mKoopa(pKoopa), mHipMtx() {
 }
 
-void KoopaPlanetShadow::init(const JMapInfoIter& rIter) {
+void KoopaPlanetShadow::init(const TableIter& rIter) {
     initModelManagerWithAnm("KoopaPlanetShadow", nullptr, false);
 
     MR::connectToSceneEnemyDecoration(this);

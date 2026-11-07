@@ -19,7 +19,7 @@
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/PlayerInputUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -102,14 +102,14 @@ SpaceCocoon::SpaceCocoon(const char* pName)
     mTopMtx.identity();
 }
 
-void SpaceCocoon::init(const JMapInfoIter& rIter) {
+void SpaceCocoon::init(const TableIter& rIter) {
     MR::connectToScene(this, MR::MovementType_Ride, MR::CalcAnimType_Ride, MR::DrawBufferType_None, MR::DrawType_SpaceCocoon);
 
     MR::initDefaultPos(this, rIter);
 
-    MR::getJMapInfoArg0NoInit(rIter, &mAttackTime);
-    MR::getJMapInfoArg1NoInit(rIter, &mHeight);
-    MR::getJMapInfoArg3NoInit(rIter, &mIsKinopioCameraFocused);
+    MR::getPlacementArg0NoInit(rIter, &mAttackTime);
+    MR::getPlacementArg1NoInit(rIter, &mHeight);
+    MR::getPlacementArg3NoInit(rIter, &mIsKinopioCameraFocused);
 
     mBasePos.set(mPosition);
     MR::calcActorAxis(&mSide, &mUp, &mFront, this);
@@ -160,7 +160,7 @@ void SpaceCocoon::init(const JMapInfoIter& rIter) {
     mTopMtx.setXYZDir(topPoint->mSide, topPoint->mUp, topPoint->mFront);
     mTopMtx.setTrans(topPoint->mPosition);
 
-    mCocoonModel = new PartsModel(this, "\220\346\222\133" /* 先端 */, "SpaceCocoon", mTopMtx, MR::DrawBufferType_NoSilhouettedMapObj, false);
+    mCocoonModel = new PartsModel(this, "先端", "SpaceCocoon", mTopMtx, MR::DrawBufferType_NoSilhouettedMapObj, false);
     mCocoonModel->initWithoutIter();
 
     updateDrawPoints();
@@ -171,10 +171,10 @@ void SpaceCocoon::init(const JMapInfoIter& rIter) {
     MR::initShadowVolumeSphere(this, 100.0f);
     MR::setClippingFar200m(this);
 
-    mCameraTargetMtx = new CameraTargetMtx("\203\112\203\201\203\211\203\136\201\133\203\121\203\142\203\147\203\137\203\176\201\133" /* カメラターゲットダミー */);
-    MR::initMultiActorCamera(this, rIter, &mCameraInfo, "\203\105\203\106\203\103\203\147" /* ウェイト */);  // "wait"
-    MR::initMultiActorCamera(this, rIter, &mCameraInfo, "\221\137\202\242\222\206" /* 狙い中 */);    // "aim"
-    MR::initMultiActorCamera(this, rIter, &mCameraInfo, "\215\125\214\202\222\206" /* 攻撃中 */);    // "attack"
+    mCameraTargetMtx = new CameraTargetMtx("カメラターゲットダミー");
+    MR::initMultiActorCamera(this, rIter, &mCameraInfo, "ウェイト");  // "wait"
+    MR::initMultiActorCamera(this, rIter, &mCameraInfo, "狙い中");    // "aim"
+    MR::initMultiActorCamera(this, rIter, &mCameraInfo, "攻撃中");    // "attack"
 
     mTexture = new JUTTexture(MR::loadTexFromArc("SpaceCocoon.arc", "SpaceCocoon.bti"));
     makeActorAppeared();
@@ -229,7 +229,7 @@ void SpaceCocoon::exeBindLand() {
     if (MR::isFirstStep(this)) {
         if (!isKinopioAttached()) {
             MR::startBckPlayer("CocoonLand", 1);
-            MR::startMultiActorCameraTargetOther(this, mCameraInfo, "\203\105\203\106\203\103\203\147" /* ウェイト */, CameraTargetArg(mCameraTargetMtx));
+            MR::startMultiActorCameraTargetOther(this, mCameraInfo, "ウェイト", CameraTargetArg(mCameraTargetMtx));
             MR::startSound(mRider, "SE_PV_CATCH");
         } else {
             MR::startBckWithInterpole(mRider, "CocoonLand", 1);
@@ -281,8 +281,8 @@ void SpaceCocoon::exeBindWait() {
 }
 
 void SpaceCocoon::exeWaitKinopioAimDemo() {
-    if (MR::tryStartDemoWithoutCinemaFrameValidStarPointer(this, "\203\114\203\155\203\163\203\111\221\137\202\242\222\206" /* キノピオ狙い中 */)) {
-        MR::startMultiActorCameraTargetPlayer(this, mCameraInfo, "\221\137\202\242\222\206" /* 狙い中 */);
+    if (MR::tryStartDemoWithoutCinemaFrameValidStarPointer(this, "キノピオ狙い中")) {
+        MR::startMultiActorCameraTargetPlayer(this, mCameraInfo, "狙い中");
         setNerve(GET_NERVE(SpaceCocoon, SpaceCocoonNrvKinopioAim));
     }
 }
@@ -328,7 +328,7 @@ void SpaceCocoon::exeBindAttack() {
     updateBindAttack();
 
     if (tryAttackMap() || MR::isStep(this, mAttackTime)) {
-        MR::endMultiActorCamera(this, mCameraInfo, "\215\125\214\202\222\206" /* 攻撃中 */, true);
+        MR::endMultiActorCamera(this, mCameraInfo, "攻撃中", true);
 
         if (MR::isStep(this, mAttackTime) && !isKinopioAttached()) {
             MR::startBckPlayer("AirRotation");
@@ -465,12 +465,12 @@ bool SpaceCocoon::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pRecei
 bool SpaceCocoon::updateBindWait() {
     if (MR::getPlayerPos()->distance(mPosition) < ::sDistanceBindCancel && (!isKinopioAttached() || MR::isOnGroundPlayer())) {
         MR::reportStarPointerGrabTarget(this);
-        if (MR::isStarPointerPointing(this, PLAYER_1, true, "\216\343" /* 弱 */)) {
+        if (MR::isStarPointerPointing(this, PLAYER_1, true, "弱")) {
             MR::requestStarPointerModeBlueStarReady(this);
         }
 
         bool set;
-        if (MR::isStarPointerPointing(this, PLAYER_1, true, "\216\343" /* 弱 */) && MR::isPressedJump(PLAYER_1) &&
+        if (MR::isStarPointerPointing(this, PLAYER_1, true, "弱") && MR::isPressedJump(PLAYER_1) &&
             MR::tryStartStarPointerCommandStream(this, &mPosition, PLAYER_1, false)) {
             set = true;
         } else {
@@ -485,8 +485,8 @@ bool SpaceCocoon::updateBindWait() {
             if (isKinopioAttached()) {
                 setNerve(GET_NERVE(SpaceCocoon, SpaceCocoonNrvWaitKinopioAimDemo));
             } else {
-                MR::endMultiActorCamera(this, mCameraInfo, "\203\105\203\106\203\103\203\147" /* ウェイト */, true);
-                MR::startMultiActorCameraTargetOther(this, mCameraInfo, "\221\137\202\242\222\206" /* 狙い中 */, CameraTargetArg(mCameraTargetMtx));
+                MR::endMultiActorCamera(this, mCameraInfo, "ウェイト", true);
+                MR::startMultiActorCameraTargetOther(this, mCameraInfo, "狙い中", CameraTargetArg(mCameraTargetMtx));
                 setNerve(GET_NERVE(SpaceCocoon, SpaceCocoonNrvBindAim));
             }
             return true;
@@ -627,7 +627,7 @@ void SpaceCocoon::updateDrawPoints() {
 
 namespace {
     bool tryTouchPointer(LiveActor* pActor, s32 padChannel) {
-        if (MR::isStarPointerPointing(pActor, padChannel, false, "\216\343" /* 弱 */) && MR::getStarPointerScreenSpeed(padChannel) > ::sPointerSpeedMin) {
+        if (MR::isStarPointerPointing(pActor, padChannel, false, "弱") && MR::getStarPointerScreenSpeed(padChannel) > ::sPointerSpeedMin) {
             return true;
         }
         return false;
@@ -672,14 +672,14 @@ bool SpaceCocoon::tryRelease() {
     }
 
     endCommandStream();
-    MR::endMultiActorCamera(this, mCameraInfo, "\221\137\202\242\222\206" /* 狙い中 */, true);
+    MR::endMultiActorCamera(this, mCameraInfo, "狙い中", true);
 
     if (mPosition.distance(mNeutralPos) < ::sAimDistanceMin) {
         if (isKinopioAttached()) {
-            MR::endDemo(this, "\203\114\203\155\203\163\203\111\221\137\202\242\222\206" /* キノピオ狙い中 */);
+            MR::endDemo(this, "キノピオ狙い中");
             setNerve(GET_NERVE(SpaceCocoon, SpaceCocoonNrvKinopioWait));
         } else {
-            MR::startMultiActorCameraTargetOther(this, mCameraInfo, "\203\105\203\106\203\103\203\147" /* ウェイト */, CameraTargetArg(mCameraTargetMtx));
+            MR::startMultiActorCameraTargetOther(this, mCameraInfo, "ウェイト", CameraTargetArg(mCameraTargetMtx));
             setNerve(GET_NERVE(SpaceCocoon, SpaceCocoonNrvBindWait));
         }
         return true;
@@ -708,7 +708,7 @@ bool SpaceCocoon::tryRelease() {
     mVelocity.mult(::sBindAttackSpeed);
     MR::emitEffect(mRider, "SpaceCocoonBlur");
 
-    MR::startMultiActorCameraNoTarget(this, mCameraInfo, "\215\125\214\202\222\206" /* 攻撃中 */);
+    MR::startMultiActorCameraNoTarget(this, mCameraInfo, "攻撃中");
 
     if (isKinopioAttached()) {
         setNerve(GET_NERVE(SpaceCocoon, SpaceCocoonNrvKinopioAttack));
@@ -761,9 +761,9 @@ bool SpaceCocoon::isKinopioAttached() const {
 }
 
 void SpaceCocoon::endBind(const Vec3f& rJumpVec, bool attackSuccess) {
-    MR::endMultiActorCamera(this, mCameraInfo, "\203\105\203\106\203\103\203\147" /* ウェイト */, true);
-    MR::endMultiActorCamera(this, mCameraInfo, "\221\137\202\242\222\206" /* 狙い中 */, true);
-    MR::endMultiActorCamera(this, mCameraInfo, "\215\125\214\202\222\206" /* 攻撃中 */, true);
+    MR::endMultiActorCamera(this, mCameraInfo, "ウェイト", true);
+    MR::endMultiActorCamera(this, mCameraInfo, "狙い中", true);
+    MR::endMultiActorCamera(this, mCameraInfo, "攻撃中", true);
     MR::deleteEffect(mRider, "SpaceCocoonBlur");
 
     if (!attackSuccess) {
@@ -771,7 +771,7 @@ void SpaceCocoon::endBind(const Vec3f& rJumpVec, bool attackSuccess) {
             MR::validateClipping(mRider);
             mRider->mVelocity.set(mVelocity);
             mRider->receiveMessage(ACTMES_NPC_EVENT_END, MR::getMessageSensor(), MR::getMessageSensor());
-            MR::endDemo(this, "\203\114\203\155\203\163\203\111\221\137\202\242\222\206" /* キノピオ狙い中 */);
+            MR::endDemo(this, "キノピオ狙い中");
         } else {
             MR::endBindAndPlayerJump(this, rJumpVec, 0);
         }

@@ -3,7 +3,7 @@
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 
-class JMapInfo;
+class Table;
 
 class RailGraphEdge {
 public:
@@ -13,7 +13,7 @@ public:
     s32 getNextNode(s32) const;
     s32 getNextEdge(s32) const;
     void setNextEdge(s32, s32);
-    void setArgs(const JMapInfo*, s32);
+    void setArgs(const Table*, s32);
 
     void operator=(const RailGraphEdge& rEdge) {
         mDistance = rEdge.mDistance;

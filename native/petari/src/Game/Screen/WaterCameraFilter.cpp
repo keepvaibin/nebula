@@ -58,10 +58,10 @@ namespace NrvWaterCameraFilter {
 static NebulaColor8 sDefaultColor;
 
 WaterCameraFilter::WaterCameraFilter()
-    : LiveActor("\220\205\222\206\203\112\203\201\203\211\203\164\203\102\203\213\203\136\201\133" /* 水中カメラフィルター */), mWaterAlpha(), mWavePhase(), mWaterColor(::sDefaultColor), mScreenTex(), mFilterTex() {
+    : LiveActor("水中カメラフィルター"), mWaterAlpha(), mWavePhase(), mWaterColor(::sDefaultColor), mScreenTex(), mFilterTex() {
 }
 
-void WaterCameraFilter::init(const JMapInfoIter& rIter) {
+void WaterCameraFilter::init(const TableIter& rIter) {
     MR::connectToScene(this, MR::MovementType_MapObj, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_WaterCameraFilter);
     MR::invalidateClipping(this);
     initNerve(GET_NERVE(WaterCameraFilter, WaterCameraFilterNrvAir));

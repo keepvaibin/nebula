@@ -40,12 +40,12 @@ namespace {
 };  // namespace
 
 PlantStalk::PlantStalk()
-    : LiveActor("\214\163" /* 茎 */), mNumPlantPoints(), mPlantPoints(), mRailInfo(), mStalkLength(), mGrowthPercent(),
+    : LiveActor("茎"), mNumPlantPoints(), mPlantPoints(), mRailInfo(), mStalkLength(), mGrowthPercent(),
       mGrowSpeed(MR::getRandom(::sGrowSpeedMin, ::sGrowSpeedMax)), mGrowAccelTime(MR::getRandom(::sGrowAccelTimeMin, ::sGrowAccelTimeMax)),
       mGrownPlantPoints() {
 }
 
-void PlantStalk::init(const JMapInfoIter& rIter) {
+void PlantStalk::init(const TableIter& rIter) {
     MR::connectToScene(this, MR::MovementType_None, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_PlantStalk);
 
     initRailRider(rIter);

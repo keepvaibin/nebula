@@ -126,7 +126,7 @@ OtaKing::OtaKing(const char* pName)
     MR::zeroMemory(mBckLBuffer, sizeof(mBckLBuffer) + sizeof(mBckRBuffer));
 }
 
-void OtaKing::init(const JMapInfoIter& rIter) {
+void OtaKing::init(const TableIter& rIter) {
     initMapToolInfo(rIter);
     initModel(rIter);
     MR::connectToSceneEnemy(this);
@@ -175,13 +175,13 @@ void OtaKing::makeActorAppeared() {
 
 void OtaKing::startAppearDemo() {
     if (isNerve(GET_NERVE(OtaKing, OtaKingNrvWaitOnSwitch))) {
-        invalidateClippingAndStartDemo("\217\157\214\273" /* 出現 */, GET_NERVE(OtaKing, OtaKingNrvAppearDemo), GET_NERVE(OtaKing, OtaKingNrvWaitStartDemo));
+        invalidateClippingAndStartDemo("出現", GET_NERVE(OtaKing, OtaKingNrvAppearDemo), GET_NERVE(OtaKing, OtaKingNrvWaitStartDemo));
     }
 }
 
-void OtaKing::makeArchiveList(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter) {
+void OtaKing::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
     bool arg1 = false;
-    MR::getJMapInfoArg1NoInit(rIter, &arg1);
+    MR::getPlacementArg1NoInit(rIter, &arg1);
     bool isLv2 = arg1;
 
     pCollector->addArchive(CocoNut::getModelName());
@@ -308,22 +308,22 @@ bool OtaKing::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver)
     return false;
 }
 
-void OtaKing::initMapToolInfo(const JMapInfoIter& rIter) {
+void OtaKing::initMapToolInfo(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::useStageSwitchWriteA(this, rIter);
     MR::useStageSwitchWriteB(this, rIter);
     MR::useStageSwitchWriteDead(this, rIter);
 
     bool arg1 = false;
-    MR::getJMapInfoArg1NoInit(rIter, &arg1);
+    MR::getPlacementArg1NoInit(rIter, &arg1);
     mIsLv2 = arg1;
 }
 
-void OtaKing::initModel(const JMapInfoIter& rIter) {
+void OtaKing::initModel(const TableIter& rIter) {
     initModelManagerWithAnm(mIsLv2 ? "OtaKingLv2" : "OtaKing", nullptr, false);
 
     for (int i = 0; i < ARRAY_SIZE(mFeet); i++) {
-        mFeet[i] = new PartsModel(this, "\221\117\221\253\203\202\203\146\203\213" /* 前足モデル */, mIsLv2 ? "OtaKingFootLv2" : "OtaKingFoot", nullptr, 18, false);
+        mFeet[i] = new PartsModel(this, "前足モデル", mIsLv2 ? "OtaKingFootLv2" : "OtaKingFoot", nullptr, 18, false);
         mFeet[i]->mPosition.set(mPosition);
         mFeet[i]->initWithoutIter();
         MR::initLightCtrl(mFeet[i]);
@@ -343,11 +343,11 @@ void OtaKing::initModel(const JMapInfoIter& rIter) {
         mCocoNutBallArray[i]._D4 = 5000.0f;
 
         float arg;
-        if (MR::getJMapInfoArg0NoInit(rIter, &arg)) {
+        if (MR::getPlacementArg0NoInit(rIter, &arg)) {
             mCocoNutBallArray[i]._C0 = arg;
         }
 
-        if (MR::getJMapInfoArg2NoInit(rIter, &arg)) {
+        if (MR::getPlacementArg2NoInit(rIter, &arg)) {
             mCocoNutBallArray[i]._C4 = arg;
         }
     }
@@ -673,10 +673,10 @@ void OtaKing::appearStarPiece() {
     MR::startSoundObject(mSoundObj, "SE_OJ_STAR_PIECE_BURST");
 }
 
-void OtaKing::initLongFoot(const JMapInfoIter& rIter) {
+void OtaKing::initLongFoot(const TableIter& rIter) {
     if (!mIsLv2) {
         for (int i = 0; i < ARRAY_SIZE(mLongFeet); i++) {
-            mLongFeet[i] = new OtaKingLongFoot(this, ::cLongFootDemoBckStep[i], "\217\374\202\350\221\253" /* 飾り足 */);
+            mLongFeet[i] = new OtaKingLongFoot(this, ::cLongFootDemoBckStep[i], "飾り足");
             mLongFeet[i]->init(rIter);
             mLongFeet[i]->mScale.set(::cLongFootScale);
         }
@@ -810,7 +810,7 @@ void OtaKing::exeAppearDemo() {
 
     if (MR::isBckStopped(this)) {
         MR::validateHitSensors(this);
-        validateClippingAndEndDemo("\217\157\214\273" /* 出現 */);
+        validateClippingAndEndDemo("出現");
         MR::showPlayer();
         MR::endAnimCamera(this, mAnimCamera, "Appear", 0, true);
 
@@ -1079,7 +1079,7 @@ void OtaKing::exeDown() {
     }
 
     if (MR::isStep(this, 3)) {
-        invalidateClippingAndStartDemo("\203\137\203\105\203\223" /* ダウン */, GET_NERVE(OtaKing, OtaKingNrvDownDemo), GET_NERVE(OtaKing, OtaKingNrvWaitStartDemo));
+        invalidateClippingAndStartDemo("ダウン", GET_NERVE(OtaKing, OtaKingNrvDownDemo), GET_NERVE(OtaKing, OtaKingNrvWaitStartDemo));
     }
 }
 
@@ -1137,7 +1137,7 @@ void OtaKing::exeDownDemo() {
     }
 
     if (MR::isStep(this, ::cDownDemoFrame)) {
-        validateClippingAndEndDemo("\203\137\203\105\203\223" /* ダウン */);
+        validateClippingAndEndDemo("ダウン");
         setNerve(GET_NERVE(OtaKing, OtaKingNrvAppearStar));
     }
 }

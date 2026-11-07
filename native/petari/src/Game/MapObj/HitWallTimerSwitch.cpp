@@ -20,7 +20,7 @@ HitWallTimerSwitch::HitWallTimerSwitch(const char* pName) : LiveActor(pName) {
     _98 = 0;
 }
 
-void HitWallTimerSwitch::init(const JMapInfoIter& rIter) {
+void HitWallTimerSwitch::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("HitWallTimerSwitch", nullptr, false);
     MR::connectToSceneMapObjDecoration(this);
@@ -32,7 +32,7 @@ void HitWallTimerSwitch::init(const JMapInfoIter& rIter) {
     mConnector = new MapObjConnector(this);
     initSound(4, false);
     MR::needStageSwitchWriteA(this, rIter);
-    MR::getJMapInfoArg0NoInit(rIter, &mTimer);
+    MR::getPlacementArg0NoInit(rIter, &mTimer);
     initNerve(GET_NERVE(HitWallTimerSwitch, HitWallTimerSwitchNrvOff));
     MR::startBck(this, "Wait");
     appear();

@@ -6,7 +6,7 @@ class RailRider;
 
 class CameraRailDemo : public Camera {
 public:
-    CameraRailDemo(const char* pName = "\203\214\201\133\203\213\203\146\203\202\203\112\203\201\203\211" /* レールデモカメラ */);
+    CameraRailDemo(const char* pName = "レールデモカメラ");
 
     virtual void reset();
     virtual CameraTargetObj* calc();

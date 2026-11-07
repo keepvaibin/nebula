@@ -19,7 +19,7 @@ class OtaKing : public LiveActor {
 public:
     OtaKing(const char*);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void movement();
     virtual void makeActorAppeared();
     virtual void control();
@@ -30,9 +30,9 @@ public:
     virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 
     void startAppearDemo();
-    static void makeArchiveList(NameObjArchiveListCollector*, const JMapInfoIter&);
-    void initMapToolInfo(const JMapInfoIter& rIter);
-    void initModel(const JMapInfoIter& rIter);
+    static void makeArchiveList(NameObjArchiveListCollector*, const TableIter&);
+    void initMapToolInfo(const TableIter& rIter);
+    void initModel(const TableIter& rIter);
     void initSensor();
     void dirToPlayer();
     CocoNutBall* getDisappearedCocoNut();
@@ -53,7 +53,7 @@ public:
     void appearBubble();
     void startDemo();
     void appearStarPiece();
-    void initLongFoot(const JMapInfoIter& rIter);
+    void initLongFoot(const TableIter& rIter);
     bool tryThrowCocoNutOrFireBallIfWait(s32);
 
     void exeWaitOnSwitch();

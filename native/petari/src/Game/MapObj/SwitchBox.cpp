@@ -11,7 +11,7 @@ namespace NrvSwitchBox {
 SwitchBox::SwitchBox(const char* pName) : LiveActor(pName) {
 }
 
-void SwitchBox::init(const JMapInfoIter& rIter) {
+void SwitchBox::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("SwitchBox", nullptr, false);
     MR::connectToSceneMapObjNoCalcAnim(this);
@@ -24,8 +24,8 @@ void SwitchBox::init(const JMapInfoIter& rIter) {
 
     s32 local_38 = 1;
 
-    if (MR::checkJMapDataEntries(rIter)) {
-        MR::getJMapInfoArg1NoInit(rIter, &local_38);
+    if (MR::checkTableEntries(rIter)) {
+        MR::getPlacementArg1NoInit(rIter, &local_38);
     }
 
     setNerve(GET_NERVE(SwitchBox, SwitchBoxNrvWait));

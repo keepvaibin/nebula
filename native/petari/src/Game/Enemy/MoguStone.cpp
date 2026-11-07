@@ -33,7 +33,7 @@ MoguStone::MoguStone(const char* pName, const char* pModelName) : ModelObj(pName
     _C0 = true;
 }
 
-void MoguStone::init(const JMapInfoIter& rIter) {
+void MoguStone::init(const TableIter& rIter) {
     initBinder(40.0f * mScale.y, 0.0f, 0);
     ModelObj::init(rIter);
     initHitSensor(1);
@@ -194,7 +194,7 @@ ThrowingIce::ThrowingIce(const char* pName) : MoguStone(pName, "IceManIce"), mPa
     mScale.z = 1.3f;
 }
 
-void ThrowingIce::init(const JMapInfoIter& rIter) {
+void ThrowingIce::init(const TableIter& rIter) {
     initBinder(60.0f * mScale.y, 0.0f, 0);
     ModelObj::init(rIter);
     initHitSensor(1);

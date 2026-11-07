@@ -15,7 +15,7 @@ public:
     /// @brief Creates a new `LightDirector`.
     LightDirector();
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void movement();
 
     void initData();

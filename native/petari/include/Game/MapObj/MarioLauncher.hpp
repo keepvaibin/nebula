@@ -18,7 +18,7 @@ public:
 
     MarioLauncher(const char*);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);
     virtual bool receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver);
     virtual bool receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
@@ -63,10 +63,10 @@ public:
 
 class MarioLauncherLayout : public LayoutActor {
 public:
-    MarioLauncherLayout() : LayoutActor("\210\332\223\256\227\160\226\103\221\344\227\160\203\214\203\103\203\101\203\105\203\147" /* 移動用砲台用レイアウト */, true), mLayout() {
+    MarioLauncherLayout() : LayoutActor("移動用砲台用レイアウト", true), mLayout() {
     }
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void kill();
 
     void appearAt(const Vec2f& pos) {
@@ -76,7 +76,7 @@ public:
 
     void initLayout() {
         initLayoutManager("Telescope", 1);
-        mLayout = new SimpleLayout("\210\332\223\256\227\160\226\103\221\344\217\306\217\200" /* 移動用砲台照準 */, "Sight", 1, -1);
+        mLayout = new SimpleLayout("移動用砲台照準", "Sight", 1, -1);
         mLayout->kill();
     }
 
@@ -90,7 +90,7 @@ public:
         mReboundDir.zero();
     }
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual MtxPtr getBaseMtx() const;
     virtual void calcAndSetBaseMtx();
     virtual void calcBaseMtx();

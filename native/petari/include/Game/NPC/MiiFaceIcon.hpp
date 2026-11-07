@@ -15,7 +15,7 @@ public:
     /// @param pName The pointer to the null-terminated name of the object.
     MiiFaceIcon(u16 width, u16 height, const MiiFaceRecipe& rRecipe, const char* pName);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void movement();
 
     /// @brief Creates the icon texture.

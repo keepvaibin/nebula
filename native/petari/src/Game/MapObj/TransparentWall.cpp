@@ -3,7 +3,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/InvisiblePolygonObj.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/JMapInfo.hpp"
+#include "Game/Util/Table.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 
@@ -57,9 +57,9 @@ void TransparentWall::control() {
 TransparentWall::~TransparentWall() {
 }
 
-void TransparentWall::init(const JMapInfoIter& rrIter) {
+void TransparentWall::init(const TableIter& rrIter) {
     InvisiblePolygonObj::init(rrIter);
-    MR::getJMapInfoArg4WithInit(rrIter, &_BC);
+    MR::getPlacementArg4WithInit(rrIter, &_BC);
     makeActorAppeared();
     _C0 = false;
     MR::invalidateCollisionParts(this);

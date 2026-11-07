@@ -103,7 +103,7 @@ TripodBossLeg::TripodBossLeg(const char* pName)
     mAnkleLocalXZMtx.identity();
 }
 
-void TripodBossLeg::init(const JMapInfoIter& rIter) {
+void TripodBossLeg::init(const TableIter& rIter) {
     initNerve(GET_NERVE(TripodBossLeg, TripodBossLegNrvHold));
     MR::invalidateClipping(this);
     initHitSensor(1);

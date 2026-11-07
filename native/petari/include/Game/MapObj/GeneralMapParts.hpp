@@ -19,7 +19,7 @@ public:
     virtual ~GeneralMapParts() {
     }
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void initAfterPlacement();
     virtual void appear();
     virtual void kill();
@@ -27,9 +27,9 @@ public:
     virtual void calcAndSetBaseMtx();
     virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 
-    void initMapPartsFunction(const JMapInfoIter& rIter);
-    void initSensorType(const JMapInfoIter& rIter);
-    void initGravity(const JMapInfoIter& rIter);
+    void initMapPartsFunction(const TableIter& rIter);
+    void initSensorType(const TableIter& rIter);
+    void initGravity(const TableIter& rIter);
     void receiveMsgSwitchBOn();
     void receiveMsgSwitchBOff();
     void broadcastMsgToAllFunctions(u32 msg);

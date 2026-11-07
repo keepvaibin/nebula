@@ -13,7 +13,7 @@ public:
     ChipHolder(const char* pName, s32 chipType);
 
     virtual ~ChipHolder();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
 
     void registerChipGroup(ChipGroup*);
     ChipGroup* findChipGroup(s32) const;

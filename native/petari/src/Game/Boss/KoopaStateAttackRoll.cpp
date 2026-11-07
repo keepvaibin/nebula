@@ -42,19 +42,19 @@ namespace NrvKoopaStateAttackRoll {
 };  // namespace NrvKoopaStateAttackRoll
 
 KoopaStateAttackRoll::KoopaStateAttackRoll(Koopa* pKoopa)
-    : ActorStateBase< Koopa >("State[\203\215\201\133\203\212\203\223\203\117\215\125\214\202]" /* State[ローリング攻撃] */, pKoopa), mFigureBall(), mRollDelay(::sWaitToStartStep), mRollTime(::sRollGroundStep), _1C(),
+    : ActorStateBase< Koopa >("State[ローリング攻撃]", pKoopa), mFigureBall(), mRollDelay(::sWaitToStartStep), mRollTime(::sRollGroundStep), _1C(),
       _1D() {
 }
 
 void KoopaStateAttackRoll::init() {
     initNerve(GET_NERVE(KoopaStateAttackRoll, KoopaStateAttackRollNrvStart));
 
-    KoopaFunction::initKoopaCamera(mHost, "\203\215\201\133\203\212\203\223\203\117\215\125\214\202\212\112\216\156" /* ローリング攻撃開始 */);
-    KoopaFunction::initKoopaCamera(mHost, "\203\215\201\133\203\212\203\223\203\117\215\125\214\202" /* ローリング攻撃 */);
+    KoopaFunction::initKoopaCamera(mHost, "ローリング攻撃開始");
+    KoopaFunction::initKoopaCamera(mHost, "ローリング攻撃");
 
     KoopaFunction::createKoopaRollBall(mHost);
 
-    mFigureBall = new KoopaFigureBall("\222\307\220\325\203\173\201\133\203\213" /* 追跡ボール */, mHost, 230.0f, &::sAttackRollParamLv3Slow);
+    mFigureBall = new KoopaFigureBall("追跡ボール", mHost, 230.0f, &::sAttackRollParamLv3Slow);
     mFigureBall->initWithoutIter();
 
     kill();
@@ -120,8 +120,8 @@ void KoopaStateAttackRoll::kill() {
     MR::invalidateHitSensor(mHost, "AttackRollReceiver");
     MR::invalidateHitSensor(mHost, "AttackRollStarPiece");
 
-    KoopaFunction::endKoopaCamera(mHost, "\203\215\201\133\203\212\203\223\203\117\215\125\214\202\212\112\216\156" /* ローリング攻撃開始 */, false);
-    KoopaFunction::endKoopaCamera(mHost, "\203\215\201\133\203\212\203\223\203\117\215\125\214\202" /* ローリング攻撃 */, false);
+    KoopaFunction::endKoopaCamera(mHost, "ローリング攻撃開始", false);
+    KoopaFunction::endKoopaCamera(mHost, "ローリング攻撃", false);
 }
 
 bool KoopaStateAttackRoll::tryCalcAndSetBaseMtx() {
@@ -184,7 +184,7 @@ void KoopaStateAttackRoll::exeStart() {
         MR::startAction(mHost, "AttackRollStart");
         MR::startAction(KoopaFunction::getKoopaRollBall(mHost), "AttackRollStart");
 
-        KoopaFunction::startKoopaCamera(mHost, "\203\215\201\133\203\212\203\223\203\117\215\125\214\202\212\112\216\156" /* ローリング攻撃開始 */);
+        KoopaFunction::startKoopaCamera(mHost, "ローリング攻撃開始");
     }
 
     if (MR::isStep(this, ::sStartStepToJump)) {
@@ -223,7 +223,7 @@ void KoopaStateAttackRoll::exeRollAir() {
 
 void KoopaStateAttackRoll::exeRollGround() {
     if (MR::isFirstStep(this)) {
-        KoopaFunction::startKoopaCamera(mHost, "\203\215\201\133\203\212\203\223\203\117\215\125\214\202" /* ローリング攻撃 */);
+        KoopaFunction::startKoopaCamera(mHost, "ローリング攻撃");
     }
 
     mFigureBall->movement();
@@ -250,7 +250,7 @@ void KoopaStateAttackRoll::exeEndAir() {
         MR::startAction(mHost, "AttackRollEnd");
         MR::startAction(KoopaFunction::getKoopaRollBall(mHost), "AttackRollEnd");
 
-        KoopaFunction::endKoopaCamera(mHost, "\203\215\201\133\203\212\203\223\203\117\215\125\214\202" /* ローリング攻撃 */, false);
+        KoopaFunction::endKoopaCamera(mHost, "ローリング攻撃", false);
 
         MR::setVelocityJump(mHost, ::sEndJumpSpeed);
     }

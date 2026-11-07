@@ -17,7 +17,7 @@ NameObj::NameObj(const char* pName) : mName(pName), mFlag(), mExecutorIdx(-1) {
 NameObj::~NameObj() {
 }
 
-void NameObj::init(const JMapInfoIter& rIter) {
+void NameObj::init(const TableIter& rIter) {
 }
 
 void NameObj::initAfterPlacement() {
@@ -36,7 +36,7 @@ void NameObj::calcViewAndEntry() {
 }
 
 void NameObj::initWithoutIter() {
-    init(JMapInfoIter());
+    init(TableIter());
 }
 
 void NameObj::setName(const char* pName) {

@@ -2,12 +2,12 @@
 #include "Game/Camera/CameraPolygonCodeUtil.hpp"
 #include "Game/Map/CollisionCode.hpp"
 #include "Game/Map/CollisionDirector.hpp"
-#include "Game/Util/JMapInfo.hpp"
+#include "Game/Util/Table.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include <algorithm>
 #include "Game/Util/ByteView.hpp"
 
-KCollisionServer::KCollisionServer() : mFile(), mapInfo(new JMapInfo()), mMaxVertexDistance(1.0f), mModel() {
+KCollisionServer::KCollisionServer() : mFile(), mapInfo(new Table()), mMaxVertexDistance(1.0f), mModel() {
 }
 
 void KCollisionServer::init(void* pData, const void* pMapData) {
@@ -61,7 +61,7 @@ bool KCollisionServer::calcFarthestVertexDistance() {
 
     for (u32 i = 0; i < (u32)triCount; i++) {
         prism = &mFile->mPrisms[i + 1];
-        JMapInfoIter iter = getAttributes(i);
+        TableIter iter = getAttributes(i);
 
         if (!iter.isValid()) {
             result = false;
@@ -1409,10 +1409,10 @@ s32 KCollisionServer::getTriangleNum() const {
     return mFile->mTriangleNum;
 }
 
-JMapInfoIter KCollisionServer::getAttributes(u32 index) const {
+TableIter KCollisionServer::getAttributes(u32 index) const {
     KC_PrismData* prism = &mFile->mPrisms[1 + index];
 
-    return JMapInfoIter(mapInfo, prism->mAttribute);
+    return TableIter(mapInfo, prism->mAttribute);
 }
 
 s32* KCollisionServer::searchBlock(s32* pShift, const u32& rX, const u32& rY, const u32& rZ) const {

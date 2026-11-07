@@ -1,7 +1,7 @@
 #pragma once
 
 
-class JMapInfoIter;
+class TableIter;
 class LiveActor;
 class ShadowController;
 class ShadowDrawer;
@@ -29,25 +29,25 @@ namespace ActorShadow {
     ShadowVolumeCylinder* getShadowVolumeCylinder(const LiveActor*, const char*);
     ShadowVolumeBox* getShadowVolumeBox(const LiveActor*, const char*);
     ShadowVolumeDrawer* getShadowVolumeDrawer(const LiveActor*, const char*);
-    bool getJointNameFromCSV(const char**, const JMapInfoIter&);
-    s32 getShadowTypeFromCSV(const JMapInfoIter&);
-    void setUpShadowControlBaseMtxFromCSV(ShadowController*, LiveActor*, const JMapInfoIter&);
-    void setUpShadowControlIsFollowScaleFromCSV(ShadowController*, const JMapInfoIter&);
-    void setUpShadowControlIsSyncShowFromCSV(ShadowController*, const JMapInfoIter&);
-    void setUpShadowControlCalcCollisionFromCSV(ShadowController*, const JMapInfoIter&);
-    void setUpShadowControlCalcGravityFromCSV(ShadowController*, const JMapInfoIter&);
-    void setUpShadowControlFromCSV(ShadowController*, LiveActor*, const JMapInfoIter&);
-    ShadowController* createShadowControlFromCSV(LiveActor*, const JMapInfoIter&);
-    void setUpShadowVolumeFromCSV(ShadowVolumeDrawer*, const JMapInfoIter&);
-    ShadowSurfaceCircle* createShadowSurfaceCircleFromCSV(LiveActor*, const JMapInfoIter&);
-    ShadowSurfaceOval* createShadowSurfaceOvalFromCSV(LiveActor*, const JMapInfoIter&);
-    ShadowSurfaceBox* createShadowSurfaceBoxFromCSV(LiveActor*, const JMapInfoIter&);
-    ShadowVolumeSphere* createShadowVolumeSphereFromCSV(LiveActor*, const JMapInfoIter&);
-    ShadowVolumeOval* createShadowVolumeOvalFromCSV(LiveActor*, const JMapInfoIter&);
-    ShadowVolumeOvalPole* createShadowVolumeOvalPoleFromCSV(LiveActor*, const JMapInfoIter&);
-    ShadowVolumeCylinder* createShadowVolumeCylinderFromCSV(LiveActor*, const JMapInfoIter&);
-    ShadowVolumeBox* createShadowVolumeBoxFromCSV(LiveActor*, const JMapInfoIter&);
-    ShadowVolumeFlatModel* createShadowVolumeFlatModelFromCSV(LiveActor*, const JMapInfoIter&);
-    ShadowVolumeLine* createShadowVolumeLineFromCSV(LiveActor*, const JMapInfoIter&);
-    void addShadowFromCSV(LiveActor*, const JMapInfoIter&);
+    bool getJointNameFromCSV(const char**, const TableIter&);
+    s32 getShadowTypeFromCSV(const TableIter&);
+    void setUpShadowControlBaseMtxFromCSV(ShadowController*, LiveActor*, const TableIter&);
+    void setUpShadowControlIsFollowScaleFromCSV(ShadowController*, const TableIter&);
+    void setUpShadowControlIsSyncShowFromCSV(ShadowController*, const TableIter&);
+    void setUpShadowControlCalcCollisionFromCSV(ShadowController*, const TableIter&);
+    void setUpShadowControlCalcGravityFromCSV(ShadowController*, const TableIter&);
+    void setUpShadowControlFromCSV(ShadowController*, LiveActor*, const TableIter&);
+    ShadowController* createShadowControlFromCSV(LiveActor*, const TableIter&);
+    void setUpShadowVolumeFromCSV(ShadowVolumeDrawer*, const TableIter&);
+    ShadowSurfaceCircle* createShadowSurfaceCircleFromCSV(LiveActor*, const TableIter&);
+    ShadowSurfaceOval* createShadowSurfaceOvalFromCSV(LiveActor*, const TableIter&);
+    ShadowSurfaceBox* createShadowSurfaceBoxFromCSV(LiveActor*, const TableIter&);
+    ShadowVolumeSphere* createShadowVolumeSphereFromCSV(LiveActor*, const TableIter&);
+    ShadowVolumeOval* createShadowVolumeOvalFromCSV(LiveActor*, const TableIter&);
+    ShadowVolumeOvalPole* createShadowVolumeOvalPoleFromCSV(LiveActor*, const TableIter&);
+    ShadowVolumeCylinder* createShadowVolumeCylinderFromCSV(LiveActor*, const TableIter&);
+    ShadowVolumeBox* createShadowVolumeBoxFromCSV(LiveActor*, const TableIter&);
+    ShadowVolumeFlatModel* createShadowVolumeFlatModelFromCSV(LiveActor*, const TableIter&);
+    ShadowVolumeLine* createShadowVolumeLineFromCSV(LiveActor*, const TableIter&);
+    void addShadowFromCSV(LiveActor*, const TableIter&);
 };  // namespace ActorShadow

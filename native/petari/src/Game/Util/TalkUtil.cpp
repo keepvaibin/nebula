@@ -57,19 +57,19 @@ namespace MR {
         pCtrl->setMessageArg(arg);
     }
 
-    TalkMessageCtrl* createTalkCtrl(LiveActor* pActor, const JMapInfoIter& rIter, const char* pMessageID, const Vec3f& rOffset, MtxPtr pMtx) {
+    TalkMessageCtrl* createTalkCtrl(LiveActor* pActor, const TableIter& rIter, const char* pMessageID, const Vec3f& rOffset, MtxPtr pMtx) {
         TalkMessageCtrl* pCtrl = new TalkMessageCtrl(pActor, rOffset, pMtx);
         pCtrl->createMessage(rIter, pMessageID);
         return pCtrl;
     }
 
-    TalkMessageCtrl* createTalkCtrlDirect(LiveActor* pActor, const JMapInfoIter& rIter, const char* pMessageID, const Vec3f& rOffset, MtxPtr pMtx) {
+    TalkMessageCtrl* createTalkCtrlDirect(LiveActor* pActor, const TableIter& rIter, const char* pMessageID, const Vec3f& rOffset, MtxPtr pMtx) {
         TalkMessageCtrl* pCtrl = new TalkMessageCtrl(pActor, rOffset, pMtx);
         pCtrl->createMessageDirect(rIter, pMessageID);
         return pCtrl;
     }
 
-    TalkMessageCtrl* createTalkCtrlDirectOnRootNodeAutomatic(LiveActor* pActor, const JMapInfoIter& rIter, const char* pMessageID,
+    TalkMessageCtrl* createTalkCtrlDirectOnRootNodeAutomatic(LiveActor* pActor, const TableIter& rIter, const char* pMessageID,
                                                              const Vec3f& rOffset, MtxPtr pMtx) {
         TalkMessageCtrl* pCtrl = createTalkCtrlDirect(pActor, rIter, pMessageID, rOffset, pMtx);
         onRootNodeAutomatic(pCtrl);

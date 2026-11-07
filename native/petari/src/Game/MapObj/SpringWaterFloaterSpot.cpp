@@ -6,7 +6,7 @@
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/Functor.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -45,7 +45,7 @@ SpringWaterFloaterSpot::SpringWaterFloaterSpot(const char* pName)
       mFloatTimer() {
 }
 
-void SpringWaterFloaterSpot::init(const JMapInfoIter& rIter) {
+void SpringWaterFloaterSpot::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
 
     mInitialRotation = mRotation;
@@ -75,10 +75,10 @@ void SpringWaterFloaterSpot::init(const JMapInfoIter& rIter) {
 
     MR::tryRegisterDemoCast(this, rIter);
 
-    MR::getJMapInfoArg0NoInit(rIter, &_90);
+    MR::getPlacementArg0NoInit(rIter, &_90);
     _90 /= 100.0f;
 
-    MR::getJMapInfoArg1NoInit(rIter, &_A4);
+    MR::getPlacementArg1NoInit(rIter, &_A4);
 
     _AC.set(mPosition);
 

@@ -6,10 +6,10 @@ class Dossun : public LiveActor {
 public:
     Dossun(const char*);
 
-    virtual void init(const JMapInfoIter&) override;
+    virtual void init(const TableIter&) override;
     virtual void appear() override;
 
-    void initMapToolInfo(const JMapInfoIter&);
+    void initMapToolInfo(const TableIter&);
     void initShadow();
     void calcParameters();
     s32 getUpperFrame() const;

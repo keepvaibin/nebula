@@ -22,7 +22,7 @@ HipDropDemoMoveObj::~HipDropDemoMoveObj() {
 HipDropMoveObj::HipDropMoveObj(const char* pName) : LiveActor(pName), mModelName() {
 }
 
-void HipDropMoveObj::init(const JMapInfoIter& rIter) {
+void HipDropMoveObj::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::getObjectName(&mModelName, rIter);
     initModelManagerWithAnm(mModelName, nullptr, false);

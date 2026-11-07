@@ -12,7 +12,7 @@ class Kabokuri : public LiveActor {
 public:
     Kabokuri(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void control();
     virtual void calcAndSetBaseMtx();
     virtual void attackSensor(HitSensor*, HitSensor*);

@@ -1,7 +1,7 @@
 #include "Game/AreaObj/AstroChangeStageCube.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/JMapIdInfo.hpp"
+#include "Game/Util/PlacementId.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
@@ -18,7 +18,7 @@ namespace {
 AstroChangeStageCube::AstroChangeStageCube(int formType, const char* pName) : AreaObj(formType, pName), _3C(1), mWaitFrame() {
 }
 
-void AstroChangeStageCube::init(const JMapInfoIter& rIter) {
+void AstroChangeStageCube::init(const TableIter& rIter) {
     AreaObj::init(rIter);
     MR::connectToSceneAreaObj(this);
 
@@ -111,17 +111,17 @@ void AstroChangeStageCube::movement() {
             MR::requestGoToAstroGalaxy(_3C);
             break;
         case 2:
-            MR::requestChangeStageInGameMoving("AstroGalaxy", 1, JMapIdInfo(_3C, 0));
+            MR::requestChangeStageInGameMoving("AstroGalaxy", 1, PlacementId(_3C, 0));
             break;
         case 1:
             if (MR::isOnGameEventFlagRosettaTalkAboutTicoInTower()) {
                 MR::requestStartScenarioSelect("HeavensDoorGalaxy");
             } else {
-                MR::requestChangeStageInGameMoving("HeavensDoorGalaxy", ::cHeavensDoorScenarioNo, JMapIdInfo(_3C, 0));
+                MR::requestChangeStageInGameMoving("HeavensDoorGalaxy", ::cHeavensDoorScenarioNo, PlacementId(_3C, 0));
             }
             break;
         case 3:
-            MR::requestChangeStageInGameMoving("LibraryRoom", 1, JMapIdInfo(_3C, 0));
+            MR::requestChangeStageInGameMoving("LibraryRoom", 1, PlacementId(_3C, 0));
             break;
         case 5:
             MR::requestGoToAstroDomeFromAstroGalaxy(mObjArg2, _3C);

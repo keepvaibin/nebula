@@ -19,7 +19,7 @@ public:
     /// @param pName A pointer to the null-terminated name of the object.
     TrickRabbit(const char* pName);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void initAfterPlacement();
     virtual void control();
     virtual void calcAndSetBaseMtx();
@@ -31,8 +31,8 @@ public:
     void initModel();
     void initSensor();
     void initBind();
-    void initRoute(const JMapInfoIter& rIter);
-    void initDemoCamera(const JMapInfoIter& rIter);
+    void initRoute(const TableIter& rIter);
+    void initDemoCamera(const TableIter& rIter);
     void initState();
     bool receiveMsgTrample();
     bool requestCaught();
@@ -97,7 +97,7 @@ public:
     bool isTumbable() const;
     bool isNextEdgeJump() const;
     void setUpJumpParam();
-    void setUpJumpParamFromJMap();
+    void setUpJumpParamFromPlacement();
     s32 calcDefaultJumpTime() const;
     s32 calcJumpStartTime() const;
     s32 calcJumpTime() const;

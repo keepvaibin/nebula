@@ -3,7 +3,7 @@
 
 class ActorCameraInfo;
 class DemoExecutor;
-class JMapInfoIter;
+class TableIter;
 class LiveActor;
 
 class DemoCameraInfo {
@@ -25,13 +25,13 @@ public:
 
 class DemoCameraKeeper {
 public:
-    DemoCameraKeeper(DemoExecutor*, const JMapInfoIter&);
+    DemoCameraKeeper(DemoExecutor*, const TableIter&);
 
-    void initCast(LiveActor*, const JMapInfoIter&);
+    void initCast(LiveActor*, const TableIter&);
     void start();
     void update();
     void end();
-    void initActorCamera(DemoCameraInfo*, const JMapInfoIter&);
+    void initActorCamera(DemoCameraInfo*, const TableIter&);
     void executeType(const DemoCameraInfo*);
     void executeFirst(const DemoCameraInfo*);
     void executeLast(const DemoCameraInfo*);

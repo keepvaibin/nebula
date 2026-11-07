@@ -12,7 +12,7 @@
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/PlayerInputUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointController.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
@@ -53,8 +53,8 @@ BombTeresa::BombTeresa(const char* pName)
       _B8(0, 0, 0), _C4(0, 0, 0), _D0(0, 0, 0), _DC(), _E0(), _E4(), _E8(), _EC(), mDisableRespawning(), _EE(true), _EF() {
 }
 
-void BombTeresa::init(const JMapInfoIter& rIter) {
-    initFromJMapParam(rIter);
+void BombTeresa::init(const TableIter& rIter) {
+    initFromPlacementParam(rIter);
     initModelManagerWithAnm("BombTeresa", 0, 0);
     MR::connectToSceneEnemy(this);
     MR::initLightCtrl(this);
@@ -87,14 +87,14 @@ void BombTeresa::initAfterPlacement() {
     MR::trySetMoveLimitCollision(this);
 }
 
-void BombTeresa::initFromJMapParam(const JMapInfoIter& rIter) {
+void BombTeresa::initFromPlacementParam(const TableIter& rIter) {
     if (MR::isValidInfo(rIter)) {
         MR::initDefaultPos(this, rIter);
         mScale.mult(1.0f);
         MR::makeQuatAndFrontFromRotate(&_9C, &_AC, this);
         _D0 = mPosition;
         bool arg1Bool;
-        MR::getJMapInfoArg1WithInit(rIter, &arg1Bool);
+        MR::getPlacementArg1WithInit(rIter, &arg1Bool);
         mDisableRespawning = arg1Bool == false;
         MR::useStageSwitchWriteDead(this, rIter);
     }

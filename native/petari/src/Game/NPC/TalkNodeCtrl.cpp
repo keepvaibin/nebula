@@ -7,7 +7,7 @@
 #include "Game/Util/ActorCameraUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/System/NebulaArena.hpp"
@@ -48,7 +48,7 @@ TalkNodeCtrl::TalkNodeCtrl() : _0(), mCurrentNodeIdx(-1), mMessageInfo() {
 }
 
 // Inexplicable 0x130 bytes large stack
-void TalkNodeCtrl::createFlowNodeDirect(TalkMessageCtrl* pMsgCtrl, const JMapInfoIter& rIter, const char* pName, ActorCameraInfo** pCameraInf) {
+void TalkNodeCtrl::createFlowNodeDirect(TalkMessageCtrl* pMsgCtrl, const TableIter& rIter, const char* pName, ActorCameraInfo** pCameraInf) {
     TalkNode* node = MessageSystem::getSceneMessageData()->findNode(pName);
     _38 = node;
     mCurrentNode = node;
@@ -304,7 +304,7 @@ void TalkNodeCtrl::forwardCurrentBranchNode(bool storeCurrent) {
     updateMessage();
 }
 
-void TalkNodeCtrl::createFlowNode(TalkMessageCtrl* pMsgCtrl, const JMapInfoIter& rIter, const char* pName, ActorCameraInfo** pCameraInf) {
+void TalkNodeCtrl::createFlowNode(TalkMessageCtrl* pMsgCtrl, const TableIter& rIter, const char* pName, ActorCameraInfo** pCameraInf) {
     char buf[0x100];
     s32 msgID = MR::getMessageID(rIter);
     const char* zoneName = MR::getCurrentPlacementZoneName();
@@ -322,7 +322,7 @@ bool RecursiveHelper::hasNode(const TalkNode* pNode) const {
     return false;
 }
 
-void TalkNodeCtrl::initNodeRecursive(TalkMessageCtrl* pMsgCtrl, const JMapInfoIter& rIter, ActorCameraInfo* pCameraInf, RecursiveHelper* pHelper) {
+void TalkNodeCtrl::initNodeRecursive(TalkMessageCtrl* pMsgCtrl, const TableIter& rIter, ActorCameraInfo* pCameraInf, RecursiveHelper* pHelper) {
     TalkNode* currentNode = mCurrentNode;
 
     if (pHelper->hasNode(currentNode)) {
@@ -337,7 +337,7 @@ void TalkNodeCtrl::initNodeRecursive(TalkMessageCtrl* pMsgCtrl, const JMapInfoIt
 
     if (mMessageInfo.isCameraEvent()) {
         pCameraInf->mCameraSetID = mMessageInfo.mCameraSetID;
-        MR::initMultiActorCamera(pMsgCtrl->mHostActor, rIter, &pCameraInf, "\211\357\230\142" /* 会話 */);
+        MR::initMultiActorCamera(pMsgCtrl->mHostActor, rIter, &pCameraInf, "会話");
     }
 
     TalkNode* nodeEvent = getCurrentNodeEvent();

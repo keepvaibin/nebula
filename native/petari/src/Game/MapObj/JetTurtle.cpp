@@ -29,11 +29,11 @@ namespace NrvJetTurtle {
 JetTurtle::JetTurtle(const char* pName) : LiveActor(pName), _E3() {
 }
 
-void JetTurtle::init(const JMapInfoIter& rIter) {
+void JetTurtle::init(const TableIter& rIter) {
     init2(rIter, 0);
 }
 
-void JetTurtle::init2(const JMapInfoIter& rIter, s32 param2) {
+void JetTurtle::init2(const TableIter& rIter, s32 param2) {
     _D8 = 0;
 
     MR::initDefaultPos(this, rIter);
@@ -42,8 +42,8 @@ void JetTurtle::init2(const JMapInfoIter& rIter, s32 param2) {
     s32 arg1 = -1;
 
     if (MR::isValidInfo(rIter)) {
-        MR::getJMapInfoArg0NoInit(rIter, &shellType);
-        MR::getJMapInfoArg1NoInit(rIter, &arg1);
+        MR::getPlacementArg0NoInit(rIter, &shellType);
+        MR::getPlacementArg1NoInit(rIter, &arg1);
 
         arg1++;
     } else {
@@ -58,21 +58,21 @@ void JetTurtle::init2(const JMapInfoIter& rIter, s32 param2) {
 
     if (MR::isValidInfo(rIter)) {
         s32 arg2 = -1;
-        MR::getJMapInfoArg2NoInit(rIter, &arg2);
+        MR::getPlacementArg2NoInit(rIter, &arg2);
 
         if (arg2 == 1) {
             _E0 = false;
         }
 
         s32 arg3 = -1;
-        MR::getJMapInfoArg3NoInit(rIter, &arg3);
+        MR::getPlacementArg3NoInit(rIter, &arg3);
 
         if (arg3 == 1) {
             _E2 = true;
         }
 
         s32 arg7 = -1;
-        MR::getJMapInfoArg7NoInit(rIter, &arg7);
+        MR::getPlacementArg7NoInit(rIter, &arg7);
 
         if (arg7 != -1) {
             shadowDropLength = arg7;
@@ -908,7 +908,7 @@ bool JetTurtle::isRestart() const {
     return isNerve(GET_NERVE(JetTurtle, JetTurtleNrvRestart));
 }
 
-void GoldenTurtle::init(const JMapInfoIter& rIter) {
+void GoldenTurtle::init(const TableIter& rIter) {
     init2(rIter, 1);
     MR::startBtk(this, "KouraShine");
     getSensor("body")->setType(ATYPE_JET_TURTLE_SLOW);

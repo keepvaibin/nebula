@@ -7,7 +7,7 @@ public:
     BattleShipElevator(const char*);
 
     virtual ~BattleShipElevator();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void control();
     virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 

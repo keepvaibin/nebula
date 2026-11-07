@@ -136,7 +136,7 @@ Kanina::Kanina(const char* pName)
     _A4.set(0.0f, 0.0f, 0.0f, 1.0f);
 }
 
-void Kanina::init(const JMapInfoIter& rIter) {
+void Kanina::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::makeQuatAndFrontFromRotate(&_A4, &_D0, this);
     _98.set(mPosition);
@@ -283,7 +283,7 @@ bool Kanina::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pRec
         }
 
         if (receiveTrample(pSender, pReceiver)) {
-            MR::tryRumblePad(this, "\222\206" /* 中 */, PLAYER_1);
+            MR::tryRumblePad(this, "中", PLAYER_1);
             return true;
         }
     }
@@ -443,7 +443,7 @@ void Kanina::startRunAwayLevelSound() {
 
 bool Kanina::receiveHipDrop(HitSensor* pSender, HitSensor* pReceiver) {
     if (receiveTrample(pSender, pReceiver)) {
-        MR::tryRumblePad(this, "\222\206" /* 中 */, PLAYER_1);
+        MR::tryRumblePad(this, "中", PLAYER_1);
         MR::sendMsgAwayJump(pSender, pReceiver);
         return true;
     }
@@ -510,7 +510,7 @@ bool Kanina::isStateStayOnGround() const {
     return true;
 }
 
-void Kanina::initForType(const JMapInfoIter& rIter, KaninaType type) {
+void Kanina::initForType(const TableIter& rIter, KaninaType type) {
     mType = type;
     if (mType == KaninaType_Red) {
         MR::declareStarPiece(this, ::sStarPieceNum);
@@ -644,7 +644,7 @@ bool Kanina::tryTurn() {
 }
 
 bool Kanina::tryPointing() {
-    if (MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false)) {
+    if (MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
         setNerve(GET_NERVE(Kanina, HostTypePointing));
         return true;
     }
@@ -878,7 +878,7 @@ void Kanina::exeDamageHipDrop() {
 
         MR::startBtp(this, "Swoon");
         MR::startSound(this, "SE_EM_STOMPED_S");
-        MR::tryRumblePad(this, "\213\255" /* 強 */, PLAYER_1);
+        MR::tryRumblePad(this, "強", PLAYER_1);
         MR::invalidateHitSensors(this);
     }
 
@@ -969,12 +969,12 @@ void Kanina::exePointing() {
         MR::startDPDHitSound();
     }
 
-    if (MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false)) {
+    if (MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
         MR::startDPDFreezeLevelSound(this);
         MR::tryEmitEffect(this, "Touch");
     }
 
-    if (!MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false)) {
+    if (!MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
         setNerve(GET_NERVE(Kanina, HostTypePointingEnd));
     }
 }

@@ -7,7 +7,7 @@
 
 #define CATEGORY_KEEPER_NUM 4
 
-CollisionDirector::CollisionDirector() : NameObj("\222\156\214\140\203\122\203\212\203\127\203\207\203\223" /* 地形コリジョン */), mCategoryKeeper(), mCode() {
+CollisionDirector::CollisionDirector() : NameObj("地形コリジョン"), mCategoryKeeper(), mCode() {
     mCode = new CollisionCode();
     mCategoryKeeper = new CollisionCategorizedKeeper*[CATEGORY_KEEPER_NUM];
 
@@ -18,7 +18,7 @@ CollisionDirector::CollisionDirector() : NameObj("\222\156\214\140\203\122\203\2
     MR::connectToScene(this, MR::MovementType_CollisionDirector, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_None);
 }
 
-void CollisionDirector::init(const JMapInfoIter& rIter) {
+void CollisionDirector::init(const TableIter& rIter) {
 }
 
 void CollisionDirector::initAfterPlacement() {

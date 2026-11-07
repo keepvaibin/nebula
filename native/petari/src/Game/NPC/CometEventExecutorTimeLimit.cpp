@@ -15,10 +15,10 @@ namespace NrvCometEventExecutorTimeLimit {
 };  // namespace NrvCometEventExecutorTimeLimit
 
 CometEventExecutorTimeLimit::CometEventExecutorTimeLimit(u32 timeLimit)
-    : LiveActor("\220\247\214\300\216\236\212\324\203\122\203\201\203\142\203\147\216\300\215\163\216\322" /* 制限時間コメット実行者 */), mTimeLimitLayout(nullptr), mTimeLimit(timeLimit) {
+    : LiveActor("制限時間コメット実行者"), mTimeLimitLayout(nullptr), mTimeLimit(timeLimit) {
 }
 
-void CometEventExecutorTimeLimit::init(const JMapInfoIter&) {
+void CometEventExecutorTimeLimit::init(const TableIter&) {
     MR::connectToSceneLayoutMovement(this);
     MR::invalidateClipping(this);
 

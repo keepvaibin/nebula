@@ -8,7 +8,7 @@ public:
 
     virtual ~MirrorActor();
 
-    virtual void init(const JMapInfoIter&) override;
+    virtual void init(const TableIter&) override;
     virtual void movement() override;
     virtual void calcAnim() override;
     virtual void calcViewAndEntry() override;

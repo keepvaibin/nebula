@@ -38,7 +38,7 @@ public:
     Pukupuku(const char* pName);
 
     virtual ~Pukupuku();
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void kill();
     virtual void control();
     virtual void calcAndSetBaseMtx();

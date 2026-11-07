@@ -25,12 +25,12 @@ CollectTico::CollectTico(const char* pName) : LiveActor(pName) {
     _A0 = 0;
 }
 
-void CollectTico::init(const JMapInfoIter& rIter) {
+void CollectTico::init(const TableIter& rIter) {
     MR::connectToSceneNpcMovement(this);
     mTicoNum = MR::getChildObjNum(rIter);
     mStrayTicos = new StrayTico*[mTicoNum];
     for (s32 i = 0; i < mTicoNum; i++) {
-        mStrayTicos[i] = new StrayTico("\202\315\202\256\202\352\203\140\203\122" /* はぐれチコ */, this);
+        mStrayTicos[i] = new StrayTico("はぐれチコ", this);
         MR::initChildObj(mStrayTicos[i], rIter, i);
     }
 
@@ -38,7 +38,7 @@ void CollectTico::init(const JMapInfoIter& rIter) {
     initSound(2, false);
     initNerve(GET_NERVE(CollectTico, CollectTicoNrvWait));
     if (MR::tryRegisterDemoCast(this, rIter)) {
-        MR::registerDemoActionFunctor(this, MR::Functor(this, &CollectTico::startAppearPowerStar), "\217\127\202\337\203\140\203\122\203\130\203\136\201\133\217\157\214\273" /* 集めチコスター出現 */);
+        MR::registerDemoActionFunctor(this, MR::Functor(this, &CollectTico::startAppearPowerStar), "集めチコスター出現");
         _A0 = 1;
     }
 
@@ -58,7 +58,7 @@ void CollectTico::exeWait() {
     }
 
     if (needsDemo && !MR::isPlayerDead()) {
-        MR::requestStartDemo(this, "\203\140\203\122\217\127\202\337\203\122\203\223\203\166\203\212\201\133\203\147" /* チコ集めコンプリート */, GET_NERVE(CollectTico, CollectTicoNrvCompleteDemo),
+        MR::requestStartDemo(this, "チコ集めコンプリート", GET_NERVE(CollectTico, CollectTicoNrvCompleteDemo),
                              GET_NERVE(CollectTico, CollectTicoNrvTryStartDemo));
     }
 }
@@ -109,7 +109,7 @@ void CollectTico::exeFlash() {
             setNerve(GET_NERVE(CollectTico, CollectTicoNrvAppearPowerStar));
         }
 
-        MR::endDemo(this, "\203\140\203\122\217\127\202\337\203\122\203\223\203\166\203\212\201\133\203\147" /* チコ集めコンプリート */);
+        MR::endDemo(this, "チコ集めコンプリート");
         if (MR::isValidSwitchA(this)) {
             MR::onSwitchA(this);
         }

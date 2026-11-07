@@ -25,7 +25,7 @@ SpinDriverOperateRing::SpinDriverOperateRing(const char* pName)
       mRadiusRate(), _D8(), _DC() {
 }
 
-void SpinDriverOperateRing::init(const JMapInfoIter& rIter) {
+void SpinDriverOperateRing::init(const TableIter& rIter) {
     makeActorAppeared();
     MR::invalidateClipping(this);
 }

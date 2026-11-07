@@ -5,9 +5,9 @@ GlobalGravityObj::GlobalGravityObj(const char* pName) : LiveActor(pName) {
     mGravityCreator = nullptr;
 }
 
-void GlobalGravityObj::init(const JMapInfoIter& rIter) {
+void GlobalGravityObj::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
-    mGravityCreator->createFromJMap(rIter);
+    mGravityCreator->createFromPlacement(rIter);
 
     MR::useStageSwitchReadA(this, rIter);
     MR::useStageSwitchReadB(this, rIter);

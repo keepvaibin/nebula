@@ -3,7 +3,7 @@
 #include "Game/NPC/TicoGalaxy.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/MessageUtil.hpp"
 #include "Game/Util/NPCUtil.hpp"
 
@@ -14,7 +14,7 @@ namespace NrvTicoStarRing {
 TicoStarRing::TicoStarRing(const char* pName) : Tico(pName), mGalaxyName(), _194(), mTicoGalaxy() {
 }
 
-void TicoStarRing::init(const JMapInfoIter& rIter) {
+void TicoStarRing::init(const TableIter& rIter) {
     if (MR::isValidInfo(rIter)) {
         initBase(rIter, 2);
     } else {
@@ -25,7 +25,7 @@ void TicoStarRing::init(const JMapInfoIter& rIter) {
 
     if (MR::isValidInfo(rIter)) {
         s32 challengeGalaxy = 0;
-        MR::getJMapInfoArg0NoInit(rIter, &challengeGalaxy);
+        MR::getPlacementArg0NoInit(rIter, &challengeGalaxy);
 
         switch (challengeGalaxy) {
         case 0:

@@ -11,7 +11,7 @@ public:
     /// @param pName A pointer to the null-terminated name of the object.
     HoneyQueen(const char* pName);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void calcAnim();
     virtual void control();
     virtual void attackSensor(HitSensor*, HitSensor*);

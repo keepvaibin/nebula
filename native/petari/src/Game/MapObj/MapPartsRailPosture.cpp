@@ -10,12 +10,12 @@ namespace NrvMapPartsRailPosture {
 MapPartsRailPosture::~MapPartsRailPosture() {
 }
 
-MapPartsRailPosture::MapPartsRailPosture(LiveActor* pHost) : MapPartsFunction(pHost, "\216\160\220\250\220\247\214\344" /* 姿勢制御 */) {
+MapPartsRailPosture::MapPartsRailPosture(LiveActor* pHost) : MapPartsFunction(pHost, "姿勢制御") {
     mMovePosture = 0;
     _18.identity();
 }
 
-void MapPartsRailPosture::init(const JMapInfoIter& rIter) {
+void MapPartsRailPosture::init(const TableIter& rIter) {
     MR::getMapPartsArgMovePosture(&mMovePosture, mHost);
 
     if (mMovePosture == 0) {

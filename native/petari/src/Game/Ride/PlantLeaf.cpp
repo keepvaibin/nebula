@@ -23,7 +23,7 @@ namespace {
 };  // namespace
 
 PlantLeaf::PlantLeaf(f32 leafCoord, const Vec3f& rPosition, const Vec3f& rGrowDirection, f32 leafSize)
-    : LiveActor("\227\164\201\151\220\114\202\321\220\101\225\250\201\152" /* 葉（伸び植物） */), mSpringCoord(), mSpringSpeed(), mLeafCoord(leafCoord), mLeafSize(leafSize), mSide(1.0f, 0.0f, 0.0f),
+    : LiveActor("葉（伸び植物）"), mSpringCoord(), mSpringSpeed(), mLeafCoord(leafCoord), mLeafSize(leafSize), mSide(1.0f, 0.0f, 0.0f),
       mUp(0.0f, 1.0f, 0.0f), mFront(rGrowDirection) {
     mPosition.set(rPosition);
     MR::makeAxisFrontUp(&mSide, &mUp, mFront, mUp);
@@ -39,7 +39,7 @@ PlantLeafDrawInit::PlantLeafDrawInit(const char* pName) : LiveActor(pName), mMat
     mShape = mMaterial->getMesh();
 }
 
-void PlantLeaf::init(const JMapInfoIter&) {
+void PlantLeaf::init(const TableIter&) {
     MR::invalidateClipping(this);
     makeActorAppeared();
 }
@@ -103,7 +103,7 @@ bool PlantLeaf::updateSpring(f32 growthPercent) {
     }
 }
 
-void PlantLeafDrawInit::init(const JMapInfoIter& rIter) {
+void PlantLeafDrawInit::init(const TableIter& rIter) {
     MR::invalidateClipping(this);
     makeActorDead();
 }

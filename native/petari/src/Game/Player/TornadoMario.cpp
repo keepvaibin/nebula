@@ -10,7 +10,7 @@
 TornadoMario::TornadoMario(const char* pName) : LiveActor(pName), mUp(0.0f, 1.0f, 0.0f) {
 }
 
-void TornadoMario::init(const JMapInfoIter& rIter) {
+void TornadoMario::init(const TableIter& rIter) {
     initModelManagerWithAnm(mName, nullptr, true);
     initSound(4, false);
     MR::connectToScene(this, MR::MovementType_Player, MR::CalcAnimType_Player, MR::DrawBufferType_PlayerDecoration, MR::DrawType_None);

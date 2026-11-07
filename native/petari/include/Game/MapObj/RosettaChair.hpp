@@ -7,7 +7,7 @@ class RosettaChair : public LiveActor {
 public:
     RosettaChair(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
 
     void setDefaultPose();
     void startDemo();

@@ -2,8 +2,8 @@
 
 #include <nebula_geometry.hpp>
 
-class JMapIdInfo;
-class JMapInfoIter;
+class PlacementId;
+class TableIter;
 class LiveActor;
 struct ViewGroupCtrlDataEntry;
 
@@ -20,7 +20,7 @@ public:
     void updateDrawnClipped();
     bool isGroupClipping() const;
     void setTypeToSphere(f32, const Vec3f*);
-    void setGroupClippingNo(const JMapInfoIter&);
+    void setGroupClippingNo(const TableIter&);
 
     void setFarClipLevel(s32 level) {
         mFarClipLevel = level;
@@ -29,7 +29,7 @@ public:
     LiveActor* mActor;
     const Vec3f* _4;
     f32 _8;
-    JMapIdInfo* mInfo;
+    PlacementId* mInfo;
     s16 mFarClipLevel;
     s16 _12;
     ViewGroupCtrlDataEntry* _14;

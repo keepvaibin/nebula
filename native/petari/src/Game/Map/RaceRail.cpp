@@ -28,7 +28,7 @@ void PlayerRacer::appear() {
     RaceManagerFunction::startRaceImmediately();
 }
 
-void PlayerRacer::init(const JMapInfoIter& rIter) {
+void PlayerRacer::init(const TableIter& rIter) {
     MR::connectToSceneMapObjMovement(this);
     initRailRider(rIter);
     mCameraInfo = MR::createActorCameraInfo(rIter);
@@ -102,8 +102,8 @@ PlayerRacer::~PlayerRacer() {
 RaceRail::~RaceRail() {
 }
 
-void RaceRail::init(const JMapInfoIter& rIter) {
-    mPlayerRacer = new PlayerRacer("\203\214\201\133\203\130\224\273\222\350\227\160\203\214\201\133\203\213" /* レース判定用レール */);
+void RaceRail::init(const TableIter& rIter) {
+    mPlayerRacer = new PlayerRacer("レース判定用レール");
     mPlayerRacer->init(rIter);
     RaceManagerFunction::entryRacerPlayer(mPlayerRacer);
 }
@@ -156,7 +156,7 @@ void PlayerRacer::prepRacer(const RaceManager* pRaceManager) {
 
 void PlayerRacer::resetRacer(const RaceManager* pRaceManager) {
     MR::tryPlayerKillTakingActor();
-    MR::setPlayerPosOnGround("\203\214\201\133\203\130\217\111\227\271\214\343\210\312\222\165" /* レース終了後位置 */);
+    MR::setPlayerPosOnGround("レース終了後位置");
 
     switch (pRaceManager->mCurrentRace) {
     case RaceID_Penguin:

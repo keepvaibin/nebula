@@ -18,7 +18,7 @@
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointController.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
@@ -57,7 +57,7 @@ namespace NrvWaterBazooka {
 
 namespace {
     static const f32 sElectricBulletSpeed = 12.0f;
-    const char* const sDropPointStringTable[] = {"\227\216\211\272\223\1371" /* 落下点1 */, "\227\216\211\272\223\1372" /* 落下点2 */, "\227\216\211\272\223\1373" /* 落下点3 */, "\227\216\211\272\223\1374" /* 落下点4 */};
+    const char* const sDropPointStringTable[] = {"落下点1", "落下点2", "落下点3", "落下点4"};
 
 };  // namespace
 
@@ -67,7 +67,7 @@ WaterBazooka::WaterBazooka(const char* pName)
     mBaseMtx.identity();
 }
 
-void WaterBazooka::init(const JMapInfoIter& rIter) {
+void WaterBazooka::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
 
     const char* objectName;
@@ -103,7 +103,7 @@ void WaterBazooka::init(const JMapInfoIter& rIter) {
     initCameraTarget();
     initBullet(rIter);
 
-    MR::getJMapInfoArg0NoInit(rIter, &mHasPowerStar);
+    MR::getPlacementArg0NoInit(rIter, &mHasPowerStar);
     if (mHasPowerStar) {
         MR::declarePowerStar(this);
     }
@@ -127,7 +127,7 @@ void WaterBazooka::init(const JMapInfoIter& rIter) {
 
     if (MR::isEqualStageName("OceanPhantomCaveGalaxy")) {
         u32 a1 = 0;
-        mAlreadyDoneFlag = MR::setupAlreadyDoneFlag("\203\105\203\110\201\133\203\136\203\157\203\131\201\133\203\112\214\202\224\152" /* ウォータバズーカ撃破 */, rIter, &a1);
+        mAlreadyDoneFlag = MR::setupAlreadyDoneFlag("ウォータバズーカ撃破", rIter, &a1);
 
         if (a1 != 0) {
             if (MR::isValidSwitchDead(this)) {
@@ -671,15 +671,15 @@ void WaterBazooka::calcAndSetBaseMtx() {
 }
 
 void WaterBazooka::startDemoCrackCapsule() {
-    MR::requestStartDemoRegisteredMarioPuppetable(this, nullptr, nullptr, "\203\112\203\166\203\132\203\213\224\152\211\363" /* カプセル破壊 */);
+    MR::requestStartDemoRegisteredMarioPuppetable(this, nullptr, nullptr, "カプセル破壊");
     mCapsule->crackCapsule();
     MR::invalidateCollisionParts(mCapsule);
     setNerve(GET_NERVE(WaterBazooka, WaterBazookaNrvDemoCrackCapsule));
 }
 
 void WaterBazooka::startDemoAnger() {
-    if (MR::isDemoPartExist(this, "\217\346\221\147\210\365\223\173\202\350" /* 乗組員怒り */)) {
-        MR::requestStartDemoRegisteredMarioPuppetable(this, nullptr, nullptr, "\217\346\221\147\210\365\223\173\202\350" /* 乗組員怒り */);
+    if (MR::isDemoPartExist(this, "乗組員怒り")) {
+        MR::requestStartDemoRegisteredMarioPuppetable(this, nullptr, nullptr, "乗組員怒り");
     }
 
     mCapsule->crackCapsule();
@@ -688,7 +688,7 @@ void WaterBazooka::startDemoAnger() {
 }
 
 void WaterBazooka::startDemoBreakCapsule() {
-    MR::requestStartDemoRegisteredMarioPuppetable(this, nullptr, nullptr, "\212\256\221\123\224\152\211\363" /* 完全破壊 */);
+    MR::requestStartDemoRegisteredMarioPuppetable(this, nullptr, nullptr, "完全破壊");
     mShooter->panicDeath();
     mCapsule->breakCapsule();
     MR::invalidateCollisionParts(mCapsule);
@@ -877,22 +877,22 @@ bool WaterBazooka::isElectricLeak() const {
 }
 
 void WaterBazooka::initShooter() {
-    mShooter = new MogucchiShooter(this, "\203\105\203\110\201\133\203\136\201\133\203\157\203\131\201\133\203\112\217\346\221\147\210\365\203\202\203\117\203\142\203\140" /* ウォーターバズーカ乗組員モグッチ */);
+    mShooter = new MogucchiShooter(this, "ウォーターバズーカ乗組員モグッチ");
     mShooter->initFixedPosition("Cockpit");
     mShooter->initWithoutIter();
 }
 
 void WaterBazooka::initBazookaCapsule() {
-    mCapsule = new WaterBazookaCapsule(this, "\203\105\203\110\201\133\203\136\201\133\203\157\203\131\201\133\203\112\202\314\203\112\203\166\203\132\203\213" /* ウォーターバズーカのカプセル */);
+    mCapsule = new WaterBazookaCapsule(this, "ウォーターバズーカのカプセル");
     mCapsule->initFixedPosition("Top");
     mCapsule->initWithoutIter();
 }
 
 void WaterBazooka::initBreakModel() {
     if (mIsElectric) {
-        mBreakModel = MR::createModelObjEnemy("\203\107\203\214\203\116\203\147\203\212\203\142\203\116\203\157\203\131\201\133\203\112\211\363\202\352\203\202\203\146\203\213" /* エレクトリックバズーカ壊れモデル */, "ElectricBazookaBreak", getBaseMtx());
+        mBreakModel = MR::createModelObjEnemy("エレクトリックバズーカ壊れモデル", "ElectricBazookaBreak", getBaseMtx());
     } else {
-        mBreakModel = MR::createModelObjEnemy("\203\105\203\110\201\133\203\136\201\133\203\157\203\131\201\133\203\112\211\363\202\352\203\202\203\146\203\213" /* ウォーターバズーカ壊れモデル */, "WaterBazookaBreak", getBaseMtx());
+        mBreakModel = MR::createModelObjEnemy("ウォーターバズーカ壊れモデル", "WaterBazookaBreak", getBaseMtx());
     }
 
     mBreakModel->initWithoutIter();
@@ -901,17 +901,17 @@ void WaterBazooka::initBreakModel() {
 }
 
 void WaterBazooka::initCameraTarget() {
-    mDemoActor = new CameraTargetDemoActor(MR::getJointMtx(this, "Cockpit"), "\203\157\203\131\201\133\203\112\203\112\203\201\203\211\203\136\201\133\203\121\203\142\203\147" /* バズーカカメラターゲット */);
+    mDemoActor = new CameraTargetDemoActor(MR::getJointMtx(this, "Cockpit"), "バズーカカメラターゲット");
     mDemoActor->initWithoutIter();
     setCameraTargetMtx();
 }
 
-void WaterBazooka::initBullet(const JMapInfoIter& rIter) {
+void WaterBazooka::initBullet(const TableIter& rIter) {
     if (mIsElectric) {
         mBullets = new ElectricPressureBullet*[5];
 
         for (s32 idx = 0; idx < 5; idx++) {
-            mBullets[idx] = new ElectricPressureBullet("\203\107\203\214\203\116\203\147\203\212\203\142\203\116\203\157\203\131\201\133\203\112\202\314\222\145" /* エレクトリックバズーカの弾 */);
+            mBullets[idx] = new ElectricPressureBullet("エレクトリックバズーカの弾");
             mBullets[idx]->initWithoutIter();
             MR::tryRegisterDemoCast(mBullets[idx], rIter);
         }

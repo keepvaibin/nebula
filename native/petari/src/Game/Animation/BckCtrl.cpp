@@ -2,7 +2,7 @@
 #include "Game/Animation/XanimePlayer.hpp"
 #include "Game/System/ResourceHolder.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/JMapInfo.hpp"
+#include "Game/Util/Table.hpp"
 
 namespace {
     static const char* sDefaultPlayDataName = "_default";
@@ -35,7 +35,7 @@ namespace {
 BckCtrl::BckCtrl(ResourceHolder* pResHolder, const char* pResName) : mControlData() {
     mDefaultCtrlData.mName = ::sDefaultPlayDataName;
     s32 numCtrl = 0;
-    JMapInfo info;
+    Table info;
     if (pResHolder->mBanmtResTable->isExistRes(pResName)) {
         info.attach(pResHolder->mBanmtResTable->getRes(pResName));
         numCtrl = info.getNumEntries();
@@ -47,7 +47,7 @@ BckCtrl::BckCtrl(ResourceHolder* pResHolder, const char* pResName) : mControlDat
 
     if (info.mData != nullptr) {
         for (int i = 0; i < info.getNumEntries(); i++) {
-            JMapInfoIter iter(&info, i);
+            TableIter iter(&info, i);
 
             const char* name = "";
             iter.getValue("name", &name);

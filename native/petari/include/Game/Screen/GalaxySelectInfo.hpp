@@ -10,14 +10,14 @@ class GalaxySelectInfo : public LayoutActor {
 public:
     GalaxySelectInfo(bool);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void draw() const;
     virtual void appear();
     virtual void kill();
     virtual void control();
 
     bool show(const char*, u32, int);
-    static void makeArchiveList(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter);
+    static void makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter);
     bool show(const char*, u32, bool, int);
     void exeWait();
     void exeDisappear();

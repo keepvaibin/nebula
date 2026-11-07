@@ -94,7 +94,7 @@ TakoHei::TakoHei(const char* pName)
     MR::createTakoHeiInkHolder();
 }
 
-void TakoHei::init(const JMapInfoIter& rIter) {
+void TakoHei::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     mScale.mult(::sBaseScale);
     initModelManagerWithAnm("TakoHei", nullptr, false);

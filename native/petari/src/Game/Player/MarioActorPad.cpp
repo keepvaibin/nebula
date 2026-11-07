@@ -88,7 +88,7 @@ bool MarioActor::isRequestSpin() const {
         return false;
     }
 
-    if (isJumping() && mMario->_3BC > 6 && MR::isStarPointerPointing2P(this, "\216\343" /* 弱 */, true, false) && MR::isPressedJump(1)) {
+    if (isJumping() && mMario->_3BC > 6 && MR::isStarPointerPointing2P(this, "弱", true, false) && MR::isPressedJump(1)) {
         return true;
     }
 
@@ -124,7 +124,7 @@ bool MarioActor::isRequestJump2P() const {
         return false;
     }
 
-    if (MR::isStarPointerPointing2P(this, "\216\343" /* 弱 */, true, false) && MR::isPressedJump(1)) {
+    if (MR::isStarPointerPointing2P(this, "弱", true, false) && MR::isPressedJump(1)) {
         return true;
     }
 
@@ -365,7 +365,7 @@ bool MarioActor::isRequestSpinJump2P() const {
         return false;
     }
 
-    if (isJumping() && mMario->_3BC > 6 && MR::isStarPointerPointing2P(this, "\216\343" /* 弱 */, true, false) && MR::isPressedJump(1)) {
+    if (isJumping() && mMario->_3BC > 6 && MR::isStarPointerPointing2P(this, "弱", true, false) && MR::isPressedJump(1)) {
         return true;
     }
 

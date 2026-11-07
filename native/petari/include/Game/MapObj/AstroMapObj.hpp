@@ -9,7 +9,7 @@ public:
     AstroMapObj(const char*);
 
     virtual ~AstroMapObj() {};
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void control();
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
 
@@ -33,7 +33,7 @@ public:
     void setStateDoorOpenOrClose();
     void startDemo();
 
-    const JMapInfo* _C4;
+    const Table* _C4;
     GalaxyNamePlate* _C8;
     const char* _CC;  // Uhh...
     CollisionParts* _D0;
@@ -46,9 +46,9 @@ public:
     AstroSimpleObj(const char*);
 
     virtual ~AstroSimpleObj() {};
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void control();
 
-    const JMapInfo* _C4;
+    const Table* _C4;
     GalaxyNamePlate* _C8;
 };

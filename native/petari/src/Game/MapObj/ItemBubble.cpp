@@ -2,7 +2,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/StarPiece.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 
@@ -21,7 +21,7 @@ ItemBubble::ItemBubble(const char* pName) : LiveActor(pName), _90(), _94() {
     _8C = 0.0f;
 }
 
-void ItemBubble::init(const JMapInfoIter& rIter) {
+void ItemBubble::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::useStageSwitchWriteDead(this, rIter);
 
@@ -45,8 +45,8 @@ void ItemBubble::init(const JMapInfoIter& rIter) {
     s32 itemCount = 1;
 
     if (MR::isValidInfo(rIter)) {
-        MR::getJMapInfoArg0WithInit(rIter, &itemType);
-        MR::getJMapInfoArg1WithInit(rIter, &itemCount);
+        MR::getPlacementArg0WithInit(rIter, &itemType);
+        MR::getPlacementArg1WithInit(rIter, &itemCount);
     }
 
     if (itemCount < 1) {
@@ -62,7 +62,7 @@ void ItemBubble::init(const JMapInfoIter& rIter) {
     for (u32 i = 0; i < itemCount; i++) {
         switch (itemType) {
         case 0:
-            _90[i] = new RotPartsModel(this, "\203\137\203\176\201\133\203\122\203\103\203\223" /* ダミーコイン */, "Coin", nullptr, 15, false);
+            _90[i] = new RotPartsModel(this, "ダミーコイン", "Coin", nullptr, 15, false);
             _90[i]->initWithoutIter();
 
             switch (itemCount) {
@@ -100,9 +100,9 @@ void ItemBubble::init(const JMapInfoIter& rIter) {
 
             break;
         case 1:
-            _94[i] = new StarPiece("\203\101\203\103\203\145\203\200\203\157\203\165\203\213\203\163\201\133\203\130" /* アイテムバブルピース */);
+            _94[i] = new StarPiece("アイテムバブルピース");
             _94[i]->initWithoutIter();
-            _90[i] = new RotPartsModel(this, "\203\130\203\136\201\133\203\163\201\133\203\130" /* スターピース */, "StarPiece", nullptr, 13, true);
+            _90[i] = new RotPartsModel(this, "スターピース", "StarPiece", nullptr, 13, true);
             MR::initMaterialColor0(_90[i], "StarPiece1_v", &_94[i]->mColor);
             MR::prepareMaterials(_90[i]);
             _90[i]->initWithoutIter();

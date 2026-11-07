@@ -18,12 +18,12 @@ ClipArea::ClipArea(const char* pName) : LiveActor(pName), mShape() {
     MR::addClipArea(this);
 }
 
-void ClipArea::init(const JMapInfoIter& rIter) {
+void ClipArea::init(const TableIter& rIter) {
     initBaseMatrix(rIter);
     MR::connectToScene(this, MR::MovementType_None, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_ClipArea);
 }
 
-void ClipArea::initBaseMatrix(const JMapInfoIter& rIter) {
+void ClipArea::initBaseMatrix(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::makeMtxTR(mBaseMtx, this);
 }

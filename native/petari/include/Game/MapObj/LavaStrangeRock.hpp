@@ -18,10 +18,10 @@ public:
     LavaStrangeRock(const char* pName);
 
     virtual ~LavaStrangeRock();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void control();
 
-    void initModelAndClipping(const JMapInfoIter&);
+    void initModelAndClipping(const TableIter&);
     void initEffect();
     void exeWait();
 

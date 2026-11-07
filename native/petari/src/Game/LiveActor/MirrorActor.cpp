@@ -15,7 +15,7 @@ MirrorActor::MirrorActor(LiveActor* pActor, const char* pName, const char* pArcN
     initModelManagerWithAnm(pArcName, nullptr, false);
 }
 
-void MirrorActor::init(const JMapInfoIter& rIter) {
+void MirrorActor::init(const TableIter& rIter) {
     MR::connectToSceneMirrorMapObj(this);
     MR::copyJointAnimation(this, mHost);
     MR::syncMaterialAnimation(this, mHost);

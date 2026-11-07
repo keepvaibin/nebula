@@ -21,7 +21,7 @@ namespace NrvYesNoController {
 };  // namespace NrvYesNoController
 
 YesNoController::YesNoController(LayoutActor* pHost)
-    : NerveExecutor("\202\315\202\242\201\136\202\242\202\242\202\246\221\111\221\360\220\247\214\344" /* はい／いいえ選択制御 */), mHost(pHost), _C(), mButtonYesPaneCtrl(), mButtonNoPaneCtrl(), mCursorSE(), mYesSE(), mNoSE() {
+    : NerveExecutor("はい／いいえ選択制御"), mHost(pHost), _C(), mButtonYesPaneCtrl(), mButtonNoPaneCtrl(), mCursorSE(), mYesSE(), mNoSE() {
     mButtonYesPaneCtrl = new ButtonPaneController(mHost, "Right", "BoxRight", 0, true);
     mButtonYesPaneCtrl->_22 = false;
 

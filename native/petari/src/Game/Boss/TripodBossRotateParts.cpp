@@ -7,7 +7,7 @@
 TripodBossRotateParts::TripodBossRotateParts(const char* pName) : TripodBossFixParts(pName), mRotator() {
 }
 
-void TripodBossRotateParts::init(const JMapInfoIter& rIter) {
+void TripodBossRotateParts::init(const TableIter& rIter) {
     TripodBossFixParts::init(rIter);
 
     mRotator = new MapPartsRotator(this);

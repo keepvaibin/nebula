@@ -15,7 +15,7 @@ HatchWaterPlanet::HatchWaterPlanet(const char* pName) : LiveActor(pName) {
     mCollisionParts = nullptr;
 }
 
-void HatchWaterPlanet::init(const JMapInfoIter& rIter) {
+void HatchWaterPlanet::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("HatchWaterPlanet", nullptr, false);
     MR::connectToScenePlanet(this);

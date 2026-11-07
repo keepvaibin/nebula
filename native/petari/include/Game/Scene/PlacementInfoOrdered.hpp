@@ -4,7 +4,7 @@
 class NameObj;
 
 #include "Game/Util/BothDirList.hpp"
-#include "Game/Util/JMapInfo.hpp"
+#include "Game/Util/Table.hpp"
 #include "Game/Util/StringUtil.hpp"
 
 class NameObj;
@@ -35,11 +35,11 @@ public:
 
         ~Index();
 
-        const JMapInfoIter& getInfoIter() const {
+        const TableIter& getInfoIter() const {
             return mInfoIter;
         }
 
-        JMapInfoIter mInfoIter;
+        TableIter mInfoIter;
     };
 
     class SameIdSet : public Identifier {
@@ -66,7 +66,7 @@ public:
     void requestFileLoad();
     void initPlacement();
     bool initPlacementStep(uint64_t deadline);
-    void insert(const Identifier&, const JMapInfoIter&);
+    void insert(const Identifier&, const TableIter&);
     SameIdSet* getSameIdSet(int index) const {
         return mOrderedSetArray[index];
     }
@@ -74,8 +74,8 @@ public:
     s32 getUsedArrayNum() const;
     SameIdSet* find(const Identifier&) const;
     SameIdSet* createSameIdSet(const Identifier&);
-    Index* createIndex(const JMapInfoIter&);
-    void attach(const JMapInfo*, PlacementInfoOrdered*);
+    Index* createIndex(const TableIter&);
+    void attach(const Table*, PlacementInfoOrdered*);
 
     Index* mIndexArray;
     u32 mIndexCount;

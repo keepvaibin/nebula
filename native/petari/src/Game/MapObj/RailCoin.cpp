@@ -19,7 +19,7 @@ namespace {
 RailCoin::RailCoin(const char* pName) : CoinGroup(pName) {
 }
 
-void RailCoin::initCoinArray(const JMapInfoIter& rIter) {
+void RailCoin::initCoinArray(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initRailRider(rIter);
 }
@@ -83,5 +83,5 @@ void RailCoin::placementCoin() {
 }
 
 const char* RailCoin::getCoinName() const {
-    return mIsPurpleCoinGroup ? "\203\160\201\133\203\166\203\213\203\122\203\103\203\223(\203\214\201\133\203\213\224\172\222\165)" /* パープルコイン(レール配置) */ : "\203\122\203\103\203\223(\203\214\201\133\203\213\224\172\222\165)" /* コイン(レール配置) */;
+    return mIsPurpleCoinGroup ? "パープルコイン(レール配置)" : "コイン(レール配置)";
 }

@@ -9,7 +9,7 @@ public:
     BackButton(const char* pName, bool param2);
 
     virtual ~BackButton();
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void appear();
     virtual void control();
 

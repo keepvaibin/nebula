@@ -37,8 +37,8 @@ namespace NrvSurfRayTutorial {
     NEW_NERVE(SurfRayTutorialNrvTutorialAllEnd, SurfRayTutorial, TutorialAllEnd);
 };  // namespace NrvSurfRayTutorial
 
-SurfRayTutorial::SurfRayTutorial(LiveActor* pHost, TalkMessageCtrl* pTalkCtrl, const JMapInfoIter& rIter)
-    : NerveExecutor("\203\140\203\205\201\133\203\147\203\212\203\101\203\213\211\211\217\157" /* チュートリアル演出 */), mHost(pHost), mIsTutorialPass(), mPadAccel(0.0f, 0.0f, 0.0f), mTalkCtrl(pTalkCtrl), mChangeStep(), _28() {
+SurfRayTutorial::SurfRayTutorial(LiveActor* pHost, TalkMessageCtrl* pTalkCtrl, const TableIter& rIter)
+    : NerveExecutor("チュートリアル演出"), mHost(pHost), mIsTutorialPass(), mPadAccel(0.0f, 0.0f, 0.0f), mTalkCtrl(pTalkCtrl), mChangeStep(), _28() {
     initNerve(GET_NERVE(SurfRayTutorial, SurfRayTutorialNrvTutorialAllStart));
 
     mSurfingGuidance = new SurfingGuidance();

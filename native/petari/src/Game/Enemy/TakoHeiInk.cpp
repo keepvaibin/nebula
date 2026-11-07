@@ -17,7 +17,7 @@ namespace NrvTakoHeiInk {
 TakoHeiInk::TakoHeiInk(const char* pName) : LiveActor(pName) {
 }
 
-void TakoHeiInk::init(const JMapInfoIter& rIter) {
+void TakoHeiInk::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("TakoHeiInk", nullptr, false);
     MR::connectToSceneEnemy(this);

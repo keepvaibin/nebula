@@ -84,14 +84,14 @@ namespace {
 };  // namespace
 
 void TombSpiderParts::initParts() {
-    mGlandFrontL = ::createGland(mParent, "\223\305\221\102[\215\266\221\117]" /* 毒腺[左前] */, Vec3f(30.0f, 0.0f, -10.0f), Vec3f(-35.0f, -5.0f, 0.0f), "FrontL");
-    mGlandFrontR = ::createGland(mParent, "\223\305\221\102[\211\105\221\117]" /* 毒腺[右前] */, Vec3f(-30.0f, 0.0f, -10.0f), Vec3f(-35.0f, 5.0f, 0.0f), "FrontR");
-    mGlandRearL = ::createGland(mParent, "\223\305\221\102[\215\266\214\343]" /* 毒腺[左後] */, Vec3f(30.0f, 0.0f, -10.0f), Vec3f(-33.0f, -5.0f, 0.0f), "RearL");
-    mGlandRearR = ::createGland(mParent, "\223\305\221\102[\211\105\214\343]" /* 毒腺[右後] */, Vec3f(-30.0f, 0.0f, -10.0f), Vec3f(-33.0f, 5.0f, 0.0f), "RearR");
+    mGlandFrontL = ::createGland(mParent, "毒腺[左前]", Vec3f(30.0f, 0.0f, -10.0f), Vec3f(-35.0f, -5.0f, 0.0f), "FrontL");
+    mGlandFrontR = ::createGland(mParent, "毒腺[右前]", Vec3f(-30.0f, 0.0f, -10.0f), Vec3f(-35.0f, 5.0f, 0.0f), "FrontR");
+    mGlandRearL = ::createGland(mParent, "毒腺[左後]", Vec3f(30.0f, 0.0f, -10.0f), Vec3f(-33.0f, -5.0f, 0.0f), "RearL");
+    mGlandRearR = ::createGland(mParent, "毒腺[右後]", Vec3f(-30.0f, 0.0f, -10.0f), Vec3f(-33.0f, 5.0f, 0.0f), "RearR");
 
-    mVitalSpotC = ::createVitalSpot(mParent, "\213\175\217\212[\222\206]" /* 急所[中] */, Vec3f(0.0f, 0.0f, -320.0f), Vec3f(0.0f, 180.0f, 0.0f), "Body5");
-    mVitalSpotL = ::createVitalSpot(mParent, "\213\175\217\212[\215\266]" /* 急所[左] */, Vec3f(130.0f, -280.0f, -200.0f), Vec3f(10.0f, 167.0f, 0.0f), "Body1");
-    mVitalSpotR = ::createVitalSpot(mParent, "\213\175\217\212[\211\105]" /* 急所[右] */, Vec3f(130.0f, 280.0f, -200.0f), Vec3f(-10.0f, 167.0f, 0.0f), "Body1");
+    mVitalSpotC = ::createVitalSpot(mParent, "急所[中]", Vec3f(0.0f, 0.0f, -320.0f), Vec3f(0.0f, 180.0f, 0.0f), "Body5");
+    mVitalSpotL = ::createVitalSpot(mParent, "急所[左]", Vec3f(130.0f, -280.0f, -200.0f), Vec3f(10.0f, 167.0f, 0.0f), "Body1");
+    mVitalSpotR = ::createVitalSpot(mParent, "急所[右]", Vec3f(130.0f, 280.0f, -200.0f), Vec3f(-10.0f, 167.0f, 0.0f), "Body1");
 
     mThreadAttacherWing = new TombSpiderThreadAttacher(mParent, "WingL", ::sAttachBodyBackRadius, ::sAttachBodyBackOffset);
     mThreadAttacherWing->initWithoutIter();

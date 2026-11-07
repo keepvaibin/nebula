@@ -22,7 +22,7 @@ namespace NrvKoopaBattleVs3Lv2 {
     NEW_NERVE(KoopaBattleVs3Lv2NrvRecover, KoopaBattleVs3Lv2, Recover);
 };  // namespace NrvKoopaBattleVs3Lv2
 
-KoopaBattleVs3Lv2::KoopaBattleVs3Lv2(Koopa* pKoopa) : KoopaBattleBase("\203\116\203\142\203\160\220\355\223\254\201\151\202\165\202\223\202\122\202\153\202\226\202\121\201\152" /* クッパ戦闘（Ｖｓ３Ｌｖ２） */, pKoopa), mStateAttackRoll() {
+KoopaBattleVs3Lv2::KoopaBattleVs3Lv2(Koopa* pKoopa) : KoopaBattleBase("クッパ戦闘（Ｖｓ３Ｌｖ２）", pKoopa), mStateAttackRoll() {
 }
 
 void KoopaBattleVs3Lv2::init() {

@@ -11,7 +11,7 @@
 #include "Game/Util/ActorStateUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -88,7 +88,7 @@ Karon::Karon(const char* pName) : LiveActor(pName) {
     mStateStarPointer = nullptr;
 }
 
-void Karon::init(const JMapInfoIter& rIter) {
+void Karon::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::useStageSwitchWriteDead(this, rIter);
     if (MR::useStageSwitchReadAppear(this, rIter)) {
@@ -105,7 +105,7 @@ void Karon::init(const JMapInfoIter& rIter) {
     }
 
     s32 arg0 = -1;
-    MR::getJMapInfoArg0NoInit(rIter, &arg0);
+    MR::getPlacementArg0NoInit(rIter, &arg0);
 
     if (arg0 == -1) {
         mStopSwAnim = false;

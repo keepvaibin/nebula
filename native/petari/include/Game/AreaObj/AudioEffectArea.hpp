@@ -6,7 +6,7 @@ class AudioEffectArea : public AreaObj {
 public:
     AudioEffectArea(int, const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void movement();
 
     virtual const char* getManagerName() const {

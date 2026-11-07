@@ -185,7 +185,7 @@ void MarioActor::updateGravityVec(bool reset, bool usePosition) {
                     mMario->_430 = 0;
                 }
 
-                changeAnimation("\203\126\203\207\201\133\203\147\203\127\203\203\203\223\203\166" /* ショートジャンプ */);
+                changeAnimation("ショートジャンプ");
                 resetGround = true;
             }
 

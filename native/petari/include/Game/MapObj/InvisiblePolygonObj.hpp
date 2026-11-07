@@ -8,13 +8,13 @@ public:
     InvisiblePolygonObj(const char*);
 
     virtual ~InvisiblePolygonObj();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual MtxPtr getBaseMtx() const {
         return (MtxPtr)&mBaseMtx;
     }
 
     void initBaseMtx();
-    void initCollision(const JMapInfoIter&);
+    void initCollision(const TableIter&);
 
     Mtx34f mBaseMtx;
 };

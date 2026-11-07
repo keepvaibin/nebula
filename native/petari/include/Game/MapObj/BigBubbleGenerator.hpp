@@ -8,11 +8,11 @@ class BigBubbleGenerator : public LiveActor {
 public:
     BigBubbleGenerator(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void control();
 
-    void initFromJMapParam(const JMapInfoIter&);
+    void initFromPlacementParam(const TableIter&);
 
     void onActive();
     void offActive();

@@ -1,6 +1,6 @@
 #include "Game/Camera/CameraRailHolder.hpp"
 #include "Game/LiveActor/RailRider.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 
 CameraRailHolder::CameraRailHolder(const char* pName) : NameObj(pName), mRails() {
@@ -8,14 +8,14 @@ CameraRailHolder::CameraRailHolder(const char* pName) : NameObj(pName), mRails()
 
     for (s32 zoneId = 0; zoneId < MR::getZoneNum(); zoneId++) {
         for (s32 railId = 0; railId < MR::getPlacedRailNum(zoneId); railId++) {
-            JMapInfoIter iter;
-            const JMapInfo* info;
+            TableIter iter;
+            const Table* info;
             if (!MR::getCameraRailInfoFromRailDataIndex(&iter, &info, railId, zoneId)) {
                 continue;
             }
 
             s32 arg;
-            if (MR::getJMapInfoRailArg0NoInit(iter, &arg) && arg >= 0) {
+            if (MR::getPlacementRailArg0NoInit(iter, &arg) && arg >= 0) {
                 mRails[zoneId].mNumRails++;
             }
         }
@@ -27,14 +27,14 @@ CameraRailHolder::CameraRailHolder(const char* pName) : NameObj(pName), mRails()
         mRails[zoneId].mRails = new RailSet[mRails[zoneId].mNumRails];
         s32 railNum = 0;
         for (s32 railId = 0; railId < MR::getPlacedRailNum(zoneId); railId++) {
-            JMapInfoIter iter;
-            const JMapInfo* info;
+            TableIter iter;
+            const Table* info;
             if (!MR::getCameraRailInfoFromRailDataIndex(&iter, &info, railId, zoneId)) {
                 continue;
             }
 
             s32 arg;
-            if (MR::getJMapInfoRailArg0NoInit(iter, &arg) && arg >= 0) {
+            if (MR::getPlacementRailArg0NoInit(iter, &arg) && arg >= 0) {
                 mRails[zoneId].mRails[railNum].mRailId = arg;
                 s32 linkId;
                 iter.getValue("l_id", &linkId);

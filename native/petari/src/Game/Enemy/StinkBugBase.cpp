@@ -4,7 +4,7 @@
 #include "Game/Util/ActorShadowUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -30,7 +30,7 @@ void StinkBugBase::fixInitPos() {
     mPosition.set(_98);
 }
 
-void StinkBugBase::init(const JMapInfoIter& rIter) {
+void StinkBugBase::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     const char* objectName;
     MR::getObjectName(&objectName, rIter);

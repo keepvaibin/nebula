@@ -29,7 +29,7 @@ namespace NrvRosettaPictureBook {
 RosettaPictureBook::RosettaPictureBook(const char* pName) : LiveActor(pName), mLayout(), mIconAButton(), mIsValidOpenIconAButton() {
 }
 
-void RosettaPictureBook::init(const JMapInfoIter& rIter) {
+void RosettaPictureBook::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("RosettaPictureBook", nullptr, false);
     MR::connectToSceneMapObj(this);
@@ -59,7 +59,7 @@ void RosettaPictureBook::kill() {
     mIconAButton->kill();
 }
 
-void RosettaPictureBook::makeArchiveList(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter) {
+void RosettaPictureBook::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
     PictureBookLayout::makeArchiveList(pCollector, 1, MR::getPictureBookChapterCanRead(), false);
 }
 
@@ -95,7 +95,7 @@ void RosettaPictureBook::exeWait() {
         return;
     }
 
-    MR::requestStartDemoMarioPuppetableWithoutCinemaFrame(this, "\203\215\203\133\203\142\203\136\212\107\226\173\203\146\203\202" /* ロゼッタ絵本デモ */, GET_NERVE(RosettaPictureBook, HostTypeNrvFadeOut),
+    MR::requestStartDemoMarioPuppetableWithoutCinemaFrame(this, "ロゼッタ絵本デモ", GET_NERVE(RosettaPictureBook, HostTypeNrvFadeOut),
                                                           GET_NERVE(RosettaPictureBook, HostTypeNrvDemoWait));
 }
 
@@ -124,7 +124,7 @@ void RosettaPictureBook::exeReading() {
     }
 
     if (MR::isDead(mLayout)) {
-        MR::endDemo(this, "\203\215\203\133\203\142\203\136\212\107\226\173\203\146\203\202" /* ロゼッタ絵本デモ */);
+        MR::endDemo(this, "ロゼッタ絵本デモ");
         setNerve(GET_NERVE(RosettaPictureBook, HostTypeNrvFadeIn));
     }
 }

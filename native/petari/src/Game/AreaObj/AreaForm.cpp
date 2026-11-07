@@ -20,10 +20,10 @@ AreaFormCube::AreaFormCube(int a1) {
     mBounding.f.z = 0.0f;
 }
 
-void AreaFormCube::init(const JMapInfoIter& rIter) {
-    MR::getJMapInfoTrans(rIter, &mTranslation);
-    MR::getJMapInfoRotate(rIter, &mRotation);
-    MR::getJMapInfoScale(rIter, &mScale);
+void AreaFormCube::init(const TableIter& rIter) {
+    MR::getPlacementTrans(rIter, &mTranslation);
+    MR::getPlacementRotate(rIter, &mRotation);
+    MR::getPlacementScale(rIter, &mScale);
     updateBoxParam();
 }
 
@@ -156,8 +156,8 @@ AreaFormBowl::AreaFormBowl() {
     _20 = 0.0f;
 }
 
-void AreaFormBowl::init(const JMapInfoIter& rIter) {
-    MR::getJMapInfoTrans(rIter, &mTranslation);
+void AreaFormBowl::init(const TableIter& rIter) {
+    MR::getPlacementTrans(rIter, &mTranslation);
 
     f32 scale_x;
     rIter.getValue< f32 >("scale_x", &scale_x);
@@ -165,7 +165,7 @@ void AreaFormBowl::init(const JMapInfoIter& rIter) {
     _20 *= 500.0f;
 
     Vec3f rotation;
-    MR::getJMapInfoRotate(rIter, &rotation);
+    MR::getPlacementRotate(rIter, &rotation);
     calcUpVec(rotation);
 }
 
@@ -259,8 +259,8 @@ void AreaFormCylinder::calcDir(const Vec3f& rRotation) {
     mRotation.normalize();
 }
 
-void AreaFormSphere::init(const JMapInfoIter& rIter) {
-    MR::getJMapInfoTrans(rIter, &mTranslation);
+void AreaFormSphere::init(const TableIter& rIter) {
+    MR::getPlacementTrans(rIter, &mTranslation);
 
     f32 scale_x;
     rIter.getValue< f32 >("scale_x", &scale_x);
@@ -269,7 +269,7 @@ void AreaFormSphere::init(const JMapInfoIter& rIter) {
     mRadius *= 500.0f;
 
     Vec3f rotation;
-    MR::getJMapInfoRotate(rIter, &rotation);
+    MR::getPlacementRotate(rIter, &rotation);
 
     Vec3f up(0.0f, 1.0f, 0.0f);
 
@@ -279,11 +279,11 @@ void AreaFormSphere::init(const JMapInfoIter& rIter) {
     mUp = up;
 }
 
-void AreaFormCylinder::init(const JMapInfoIter& rIter) {
-    MR::getJMapInfoTrans(rIter, &mTranslation);
+void AreaFormCylinder::init(const TableIter& rIter) {
+    MR::getPlacementTrans(rIter, &mTranslation);
     Vec3f rotate;
 
-    MR::getJMapInfoRotate(rIter, &rotate);
+    MR::getPlacementRotate(rIter, &rotate);
     calcDir(rotate);
 
     f32 temp;

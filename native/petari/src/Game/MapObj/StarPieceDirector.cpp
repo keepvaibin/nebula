@@ -59,7 +59,7 @@ StarPieceDirector::StarPieceDirector(const char* pName)
     MR::connectToSceneMapObjMovement(this);
 
     for (int i = 0; i < ARRAY_SIZE(mStarPieceShooters); i++) {
-        mStarPieceShooters[i] = new StarPieceShooter(i, "\224\255\216\313\227\160\203\101\203\116\203\136\201\133" /* 発射用アクター */);
+        mStarPieceShooters[i] = new StarPieceShooter(i, "発射用アクター");
         mStarPieceShooters[i]->initWithoutIter();
     }
 
@@ -326,7 +326,7 @@ StarPieceReceiverInfo* StarPieceDirector::findReceiverInfo(const NameObj* pNameO
 void StarPieceDirector::createStarPieces(unsigned count) {
     MR::CurrentHeapRestorer heapRestorer(MR::getSceneHeap());
     for (unsigned i = 0; i < count; i++) {
-        StarPiece* pStarPiece = new StarPiece("\203\130\203\136\201\133\203\163\201\133\203\130\203\146\203\102\203\214\203\116\203\136\201\133\203\163\201\133\203\130" /* スターピースディレクターピース */);
+        StarPiece* pStarPiece = new StarPiece("スターピースディレクターピース");
         pStarPiece->initWithoutIter();
         pStarPiece->makeActorDead();
         registerActor(pStarPiece);
@@ -338,7 +338,7 @@ StarPieceShooter::StarPieceShooter(s32 a1, const char* pName)
     : LiveActor(pName), _90(), _8C(), _94(999999.0f), _98(), _9C(999999.0f), _A0(a1), _A4(), _A8(0, 0, 0), _B4(0, 0, 0) {
 }
 
-void StarPieceShooter::init(const JMapInfoIter& rIter) {
+void StarPieceShooter::init(const TableIter& rIter) {
     MR::connectToSceneMapObjMovementCalcAnim(this);
     MR::invalidateClipping(this);
     MR::offCalcGravity(this);

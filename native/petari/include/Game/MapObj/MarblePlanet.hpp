@@ -11,7 +11,7 @@ public:
     MarblePlanet(const char*);
 
     virtual ~MarblePlanet();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void kill();
     virtual void startClipped();
     virtual void endClipped();
@@ -34,7 +34,7 @@ public:
     MarblePlanetElectron(LiveActor*, const Vec3f&, const Vec3f&, const char*);
 
     virtual ~MarblePlanetElectron();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void control();
     virtual void attackSensor(HitSensor*, HitSensor*);
     virtual bool receiveMsgPush(HitSensor*, HitSensor*);
@@ -54,7 +54,7 @@ public:
     MarblePlanetElectronShadow(LiveActor*, const Vec3f&, const char*);
 
     virtual ~MarblePlanetElectronShadow();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void calcAndSetBaseMtx();
 
     MarblePlanetElectron* mParentElectron;

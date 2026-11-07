@@ -6,7 +6,7 @@
 AstroDomeDemoAstroGalaxy::AstroDomeDemoAstroGalaxy(const char* pName) : MapObjActor(pName) {
 }
 
-void AstroDomeDemoAstroGalaxy::init(const JMapInfoIter& rIter) {
+void AstroDomeDemoAstroGalaxy::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;
     MapObjActorUtil::setupInitInfoSimpleMapObj(&info);

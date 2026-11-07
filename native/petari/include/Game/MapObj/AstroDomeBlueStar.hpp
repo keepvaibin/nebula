@@ -14,7 +14,7 @@ public:
         /// @brief Creates a new `CaptureActor`.
         CaptureActor();
 
-        virtual void init(const JMapInfoIter&);
+        virtual void init(const TableIter&);
         virtual void kill();
 
         void updateTransTraction(const Vec3f&, const Vec3f&, s32);
@@ -36,7 +36,7 @@ public:
     /// @param pName A pointer to the null-terminated name of the object.
     AstroDomeBlueStar(const char* pName);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void draw() const;
     virtual void appear();
     virtual void kill();

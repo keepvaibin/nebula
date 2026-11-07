@@ -17,7 +17,7 @@ namespace NrvTreasureSpot {
 TreasureSpot::TreasureSpot(const char* pName) : MapObjActor(pName), mIsCoinFlower() {
 }
 
-void TreasureSpot::init(const JMapInfoIter& rIter) {
+void TreasureSpot::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;
     MapObjActorUtil::setupInitInfoSimpleMapObj(&info);

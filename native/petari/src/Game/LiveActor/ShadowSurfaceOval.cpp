@@ -14,7 +14,7 @@
 ShadowSurfaceOval::~ShadowSurfaceOval() {
 }
 
-ShadowSurfaceOval::ShadowSurfaceOval() : ShadowSurfaceDrawer("\211\145\225\140\211\346[\220\205\226\312\221\310\211\176\211\145]" /* 影描画[水面楕円影] */), mModelData(), mSize(100.0f, 100.0f, 200.0f), mColor(0, 0, 0, 64) {
+ShadowSurfaceOval::ShadowSurfaceOval() : ShadowSurfaceDrawer("影描画[水面楕円影]"), mModelData(), mSize(100.0f, 100.0f, 200.0f), mColor(0, 0, 0, 64) {
     mModelData = MR::getModelData("ShadowVolumeSphere");
 }
 

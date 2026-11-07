@@ -13,7 +13,7 @@
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/GravityUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -75,7 +75,7 @@ SpinDriver::SpinDriver(const char* pName)
       _130(270), _134(), _138(true), _13C(), _140(), _141(true), _142() {
 }
 
-void SpinDriver::init(const JMapInfoIter& rIter) {
+void SpinDriver::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("SpinDriver", nullptr, false);
 
@@ -107,7 +107,7 @@ void SpinDriver::init(const JMapInfoIter& rIter) {
 
     MR::initShadowVolumeFlatModel(this, "SpinDriverShadow", MR::getJointMtx(this, "SpinDriver"));
 
-    initParamFromJMapInfo(rIter);
+    initParamFromPlacement(rIter);
 
     MR::setClippingFar200m(this);
 
@@ -128,35 +128,35 @@ void SpinDriver::initAfterPlacement() {
     SpinDriverUtil::setShadowAndClipping(this, &_10C, _120, 300.0f, &_118);
 }
 
-void SpinDriver::initParamFromJMapInfo(const JMapInfoIter& rIter) {
+void SpinDriver::initParamFromPlacement(const TableIter& rIter) {
     if (mShootPath == nullptr) {
-        MR::getJMapInfoArg0NoInit(rIter, &_100);
+        MR::getPlacementArg0NoInit(rIter, &_100);
     } else {
-        MR::getJMapInfoArg0NoInit(rIter, &_124);
+        MR::getPlacementArg0NoInit(rIter, &_124);
     }
 
     _120 = -1.0f;
-    MR::getJMapInfoArg1NoInit(rIter, &_120);
+    MR::getPlacementArg1NoInit(rIter, &_120);
 
     s32 arg2 = 0;
 
-    if (MR::getJMapInfoArg2NoInit(rIter, &arg2)) {
+    if (MR::getPlacementArg2NoInit(rIter, &arg2)) {
         _138 = arg2 != 0;
     }
 
     s32 arg4 = 0;
 
-    if (MR::getJMapInfoArg4NoInit(rIter, &arg4)) {
+    if (MR::getPlacementArg4NoInit(rIter, &arg4)) {
         _142 = !(arg4 - 1);
     }
 }
 
-void SpinDriver::initShootPath(const JMapInfoIter& rIter) {
+void SpinDriver::initShootPath(const TableIter& rIter) {
     if (MR::isConnectedWithRail(rIter)) {
         mShootPath = new SpinDriverShootPath();
 
         _134 = 0.0f;
-        MR::getJMapInfoArg5NoInit(rIter, &_134);
+        MR::getPlacementArg5NoInit(rIter, &_134);
 
         mShootPath->initUsingParabolic(rIter, mPosition);
         mShootPath->calcInitPose(&_E8, &_D0, &_DC, _134);
@@ -167,7 +167,7 @@ void SpinDriver::initShootPath(const JMapInfoIter& rIter) {
     }
 }
 
-void SpinDriver::initEventCamera(const JMapInfoIter& rIter) {
+void SpinDriver::initEventCamera(const TableIter& rIter) {
     mSpinDriverCamera = new SpinDriverCamera();
     mSpinDriverCamera->init(rIter, this);
 
@@ -181,7 +181,7 @@ void SpinDriver::appear() {
     MR::invalidateClipping(this);
 
     if (mSpinDriverCamera->isUseAppearCamera(this)) {
-        MR::requestStartDemo(this, "\217\157\214\273" /* 出現 */, GET_NERVE(SpinDriver, SpinDriverNrvAppear), GET_NERVE(SpinDriver, SpinDriverNrvTryDemo));
+        MR::requestStartDemo(this, "出現", GET_NERVE(SpinDriver, SpinDriverNrvAppear), GET_NERVE(SpinDriver, SpinDriverNrvTryDemo));
     } else {
         setNerve(GET_NERVE(SpinDriver, SpinDriverNrvAppear));
     }
@@ -394,7 +394,7 @@ void SpinDriver::exeAppear() {
         setNerve(GET_NERVE(SpinDriver, SpinDriverNrvWait));
 
         if (mSpinDriverCamera->isUseAppearCamera(this)) {
-            MR::endDemoWaitCameraInterpolating(this, "\217\157\214\273" /* 出現 */);
+            MR::endDemoWaitCameraInterpolating(this, "出現");
             mSpinDriverCamera->endAppearCamera(this);
         }
     }

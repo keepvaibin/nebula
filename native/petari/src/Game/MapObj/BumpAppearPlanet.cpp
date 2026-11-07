@@ -13,7 +13,7 @@ namespace NrvBumpAppearPlanet {
 BumpAppearPlanet::BumpAppearPlanet(const char* pName) : MapObjActor(pName), _C4(), _C8() {
 }
 
-void BumpAppearPlanet::init(const JMapInfoIter& rIter) {
+void BumpAppearPlanet::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;
     MapObjActorUtil::setupInitInfoPlanet(&info);

@@ -14,7 +14,7 @@ namespace NrvOceanFloaterLandParts {
     NEW_NERVE(HostTypeDone, OceanFloaterLandParts, Done);
 };  // namespace NrvOceanFloaterLandParts
 
-void OceanFloaterLandParts::init(const JMapInfoIter& rIter) {
+void OceanFloaterLandParts::init(const TableIter& rIter) {
     MR::getObjectName(&mObjectName, rIter);
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm(mObjectName, nullptr, false);
@@ -46,7 +46,7 @@ void OceanFloaterLandParts::init(const JMapInfoIter& rIter) {
 
     if (MR::isEqualString("OceanFloaterTypeU", mObjectName)) {
         u32 isDone = 0;
-        mAlreadyDoneFlag = MR::setupAlreadyDoneFlag("\203\164\203\215\201\133\203\136\201\133\225\202\217\343" /* フローター浮上 */, rIter, &isDone);
+        mAlreadyDoneFlag = MR::setupAlreadyDoneFlag("フローター浮上", rIter, &isDone);
 
         if (isDone != 0) {
             MR::moveCoordToEndPos(this);
@@ -78,7 +78,7 @@ void OceanFloaterLandParts::makeActorDead() {
     LiveActor::makeActorDead();
 }
 
-void OceanFloaterLandParts::initMoveType(const JMapInfoIter& rIter) {
+void OceanFloaterLandParts::initMoveType(const TableIter& rIter) {
     initRailMoveFunction(rIter);
     MR::calcRailEndPos(&mRailEndPos, this);
     initNerve(GET_NERVE(OceanFloaterLandParts, HostTypeWait));
@@ -89,7 +89,7 @@ void OceanFloaterLandParts::initMoveType(const JMapInfoIter& rIter) {
     MR::useStageSwitchWriteA(this, rIter);
 }
 
-void OceanFloaterLandParts::initRailMoveFunction(const JMapInfoIter& rIter) {
+void OceanFloaterLandParts::initRailMoveFunction(const TableIter& rIter) {
     if (MR::isConnectedWithRail(rIter)) {
         initRailRider(rIter);
 
@@ -99,7 +99,7 @@ void OceanFloaterLandParts::initRailMoveFunction(const JMapInfoIter& rIter) {
     }
 }
 
-void OceanFloaterLandParts::initLodCtrl(const JMapInfoIter& rIter) {
+void OceanFloaterLandParts::initLodCtrl(const TableIter& rIter) {
     mLodCtrl = MR::createLodCtrlPlanet(this, rIter, -1.0f);
 }
 

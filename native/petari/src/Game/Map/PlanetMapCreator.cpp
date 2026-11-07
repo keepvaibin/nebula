@@ -14,7 +14,7 @@ namespace {
     static const char* const sArcName = "PlanetMapDataTable.arc";
     static const char* const sFileName = "PlanetMapDataTable.bcsv";
 
-    void makeSubModelName(const char** ppDst, const JMapInfo* pIter, s32 idx, const char* pKey, const char* pSuffix) {
+    void makeSubModelName(const char** ppDst, const Table* pIter, s32 idx, const char* pKey, const char* pSuffix) {
         s32 data;
         MR::getCsvDataS32(&data, pIter, pKey, idx);
 
@@ -278,7 +278,7 @@ namespace {
 };  // namespace
 
 PlanetMapCreator::PlanetMapCreator(const char* pName) : NameObj(pName), mPlanetMapData() {
-    JMapInfo* pIter = MR::createCsvParser(::sArcName, ::sFileName);
+    Table* pIter = MR::createCsvParser(::sArcName, ::sFileName);
 
     mTableCount = MR::getCsvDataElementNum(pIter);
     mPlanetMapData = new PlanetMapData*[mTableCount];
@@ -299,7 +299,7 @@ CreatorFuncPtr PlanetMapCreator::getCreateFunc(const char* pParam1) {
     return createNameObj< PlanetMap >;
 }
 
-void PlanetMapCreator::makeArchiveListPlanet(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter, const char* pName) {
+void PlanetMapCreator::makeArchiveListPlanet(NameObjArchiveListCollector* pCollector, const TableIter& rIter, const char* pName) {
     PlanetMapData* pTableData = getTableData(pName);
     if (isScenarioForceLow(pTableData)) {
         pCollector->addArchive(pTableData->mData[0]);
@@ -336,7 +336,7 @@ void PlanetMapCreator::makeArchiveListPlanet(NameObjArchiveListCollector* pColle
     ::addUniqueArchive(pCollector, pTableData->mPlanetName);
 }
 
-void PlanetMapCreator::createPlanetMapDataTable(JMapInfo* pInfo) {
+void PlanetMapCreator::createPlanetMapDataTable(Table* pInfo) {
     for (int i = 0; i < mTableCount; i++) {
         mPlanetMapData[i] = new PlanetMapData();
 
@@ -344,7 +344,7 @@ void PlanetMapCreator::createPlanetMapDataTable(JMapInfo* pInfo) {
     }
 }
 
-void PlanetMapCreator::addTableData(const JMapInfo* pInfo, s32 idx) {
+void PlanetMapCreator::addTableData(const Table* pInfo, s32 idx) {
     PlanetMapData* curData = mPlanetMapData[idx];
     MR::getCsvDataStr(&curData->mPlanetName, pInfo, "PlanetName", idx);
     ::makeSubModelName(&curData->mData[0], pInfo, idx, "LowFlag", "Low");
@@ -402,7 +402,7 @@ bool PlanetMapCreator::isScenarioForceLow(const PlanetMapData* pData) const {
     return false;
 }
 
-void PlanetMapCreatorFunction::makeArchiveList(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter, const char* pName) {
+void PlanetMapCreatorFunction::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter, const char* pName) {
     MR::getSceneObj< PlanetMapCreator >(SceneObj_PlanetMapCreator)->makeArchiveListPlanet(pCollector, rIter, pName);
 }
 

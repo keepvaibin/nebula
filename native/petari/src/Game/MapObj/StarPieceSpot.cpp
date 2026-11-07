@@ -2,7 +2,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
@@ -20,11 +20,11 @@ void StarPieceSpot::emit() {
     MR::appearStarPiece(this, mPosition, MR::getDeclareRemnantStarPieceCount(this), ::sRandomPieceValue, ::sLaunchYVel, false);
 }
 
-void StarPieceSpot::init(const JMapInfoIter& rIter) {
+void StarPieceSpot::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
 
     s32 arg0 = 5;
-    MR::getJMapInfoArg0NoInit(rIter, &arg0);
+    MR::getPlacementArg0NoInit(rIter, &arg0);
     MR::declareStarPiece(this, arg0);
 
     initSound(1, false);

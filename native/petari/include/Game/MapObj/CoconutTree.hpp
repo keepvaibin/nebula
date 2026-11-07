@@ -7,5 +7,5 @@ public:
     CoconutTree(const char*);
 
     virtual ~CoconutTree();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
 };

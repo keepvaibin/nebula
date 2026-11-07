@@ -8121,7 +8121,7 @@ namespace NameObjFactory {
         return pName2CreateFunc->mCreateFunc;
     }
 
-    void requestMountObjectArchives(const char* pName, const JMapInfoIter& rIter) {
+    void requestMountObjectArchives(const char* pName, const TableIter& rIter) {
         NameObjArchiveListCollector collector;
         getMountObjectArchiveList(&collector, pName, rIter);
 
@@ -8130,7 +8130,7 @@ namespace NameObjFactory {
         }
     }
 
-    bool isReadResourceFromStore(const char* pName, const JMapInfoIter& rIter) {
+    bool isReadResourceFromStore(const char* pName, const TableIter& rIter) {
         NameObjArchiveListCollector collector;
         getMountObjectArchiveList(&collector, pName, rIter);
 
@@ -8173,7 +8173,7 @@ namespace NameObjFactory {
         return nullptr;
     }
 
-    void getMountObjectArchiveList(NameObjArchiveListCollector* pCollector, const char* pName, const JMapInfoIter& rIter) {
+    void getMountObjectArchiveList(NameObjArchiveListCollector* pCollector, const char* pName, const TableIter& rIter) {
         NebulaMods::addArchives(pCollector, pName);
         pName = NebulaMods::objectBecomes(NEBULA_OBJECTS_PLACED, NebulaMods::objectLike(pName));
         if (pName == nullptr) {

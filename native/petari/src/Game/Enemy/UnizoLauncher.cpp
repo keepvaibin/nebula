@@ -19,7 +19,7 @@ namespace NrvUnizoLauncher {
 UnizoLauncher::UnizoLauncher(const char* pName) : LiveActor(pName) {
 }
 
-void UnizoLauncher::init(const JMapInfoIter& rIter) {
+void UnizoLauncher::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::connectToSceneEnemyMovement(this);
     initHitSensor(1);
@@ -32,7 +32,7 @@ void UnizoLauncher::init(const JMapInfoIter& rIter) {
     MR::setGroupClipping(this, rIter, 16);
 
     for (s32 i = 0; i < mUnizoNum; i++) {
-        mUnizos[i] = new Unizo("\227\244\203\105\203\152\203\135\201\133" /* 陸ウニゾー */);
+        mUnizos[i] = new Unizo("陸ウニゾー");
         mUnizos[i]->init(rIter);
         mUnizos[i]->makeActorDead();
         MR::setGroupClipping(mUnizos[i], rIter, 16);

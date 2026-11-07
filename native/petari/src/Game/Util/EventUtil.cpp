@@ -113,91 +113,91 @@ namespace MR {
     }
 
     void onGameEventFlagBeeMarioAtFirst() {
-        GameDataFunction::onGameEventFlag("\203\156\203\140\203\175\203\212\203\111\217\211\225\317\220\147" /* ハチマリオ初変身 */);
+        GameDataFunction::onGameEventFlag("ハチマリオ初変身");
     }
 
     void onGameEventFlagTeresaMarioAtFirst() {
-        GameDataFunction::onGameEventFlag("\203\145\203\214\203\124\203\175\203\212\203\111\217\211\225\317\220\147" /* テレサマリオ初変身 */);
+        GameDataFunction::onGameEventFlag("テレサマリオ初変身");
     }
 
     void onGameEventFlagHopperMarioAtFirst() {
-        GameDataFunction::onGameEventFlag("\203\172\203\142\203\160\201\133\203\175\203\212\203\111\217\211\225\317\220\147" /* ホッパーマリオ初変身 */);
+        GameDataFunction::onGameEventFlag("ホッパーマリオ初変身");
     }
 
     void onGameEventFlagFireMarioAtFirst() {
-        GameDataFunction::onGameEventFlag("\203\164\203\100\203\103\203\101\203\175\203\212\203\111\217\211\225\317\220\147" /* ファイアマリオ初変身 */);
+        GameDataFunction::onGameEventFlag("ファイアマリオ初変身");
     }
 
     void onGameEventFlagIceMarioAtFirst() {
-        GameDataFunction::onGameEventFlag("\203\101\203\103\203\130\203\175\203\212\203\111\217\211\225\317\220\147" /* アイスマリオ初変身 */);
+        GameDataFunction::onGameEventFlag("アイスマリオ初変身");
     }
 
     void onGameEventFlagFlyingMarioAtFirst() {
-        GameDataFunction::onGameEventFlag("\203\164\203\211\203\103\203\223\203\117\203\175\203\212\203\111\217\211\225\317\220\147" /* フライングマリオ初変身 */);
+        GameDataFunction::onGameEventFlag("フライングマリオ初変身");
     }
 
     void onGameEventFlagInvincibleMarioAtFirst() {
-        GameDataFunction::onGameEventFlag("\226\263\223\107\203\175\203\212\203\111\217\211\225\317\220\147" /* 無敵マリオ初変身 */);
+        GameDataFunction::onGameEventFlag("無敵マリオ初変身");
     }
 
     void onGameEventFlagLifeUpAtFirst() {
-        GameDataFunction::onGameEventFlag("\203\211\203\103\203\164\203\101\203\142\203\166\203\114\203\155\203\122\211\360\220\340" /* ライフアップキノコ解説 */);
+        GameDataFunction::onGameEventFlag("ライフアップキノコ解説");
     }
 
     void onGameEventFlagOneUpAtFirst() {
-        GameDataFunction::onGameEventFlag("\202\120\202\164\202\157\203\114\203\155\203\122\211\360\220\340" /* １ＵＰキノコ解説 */);
+        GameDataFunction::onGameEventFlag("１ＵＰキノコ解説");
     }
 
     bool isOnGameEventFlagPlayMoviePrologueA() {
-        return GameDataFunction::isPassedStoryEvent("\203\116\203\142\203\160\217\120\227\210\214\343" /* クッパ襲来後 */);
+        return GameDataFunction::isPassedStoryEvent("クッパ襲来後");
     }
 
     bool isOnGameEventFlagEndTicoGuideDemo() {
-        return GameDataFunction::isPassedStoryEvent("\203\140\203\122\203\113\203\103\203\150\203\146\203\202\217\111\227\271" /* チコガイドデモ終了 */);
+        return GameDataFunction::isPassedStoryEvent("チコガイドデモ終了");
     }
 
     bool isOnGameEventFlagEndButlerDomeLecture() {
-        return GameDataFunction::isPassedStoryEvent("\223\126\213\205\213\126\203\214\203\116\203\140\203\203\201\133" /* 天球儀レクチャー */);
+        return GameDataFunction::isPassedStoryEvent("天球儀レクチャー");
     }
 
     bool isOnGameEventFlagEndButlerGalaxyMoveLecture() {
-        return GameDataFunction::isPassedStoryEvent("\203\115\203\203\203\211\203\116\203\126\201\133\210\332\223\256\203\214\203\116\203\140\203\203\201\133" /* ギャラクシー移動レクチャー */);
+        return GameDataFunction::isPassedStoryEvent("ギャラクシー移動レクチャー");
     }
 
     bool isOnGameEventFlagEndButlerStarPieceLecture() {
-        return GameDataFunction::isPassedStoryEvent("\203\130\203\136\201\133\203\163\201\133\203\130\203\214\203\116\203\140\203\203\201\133" /* スターピースレクチャー */);
+        return GameDataFunction::isPassedStoryEvent("スターピースレクチャー");
     }
 
     bool isOnGameEventFlagBeeMarioAtFirst() {
-        return GameDataFunction::isOnGameEventFlag("\203\156\203\140\203\175\203\212\203\111\217\211\225\317\220\147" /* ハチマリオ初変身 */);
+        return GameDataFunction::isOnGameEventFlag("ハチマリオ初変身");
     }
 
     bool isOnGameEventFlagTeresaMarioAtFirst() {
-        return GameDataFunction::isOnGameEventFlag("\203\145\203\214\203\124\203\175\203\212\203\111\217\211\225\317\220\147" /* テレサマリオ初変身 */);
+        return GameDataFunction::isOnGameEventFlag("テレサマリオ初変身");
     }
 
     bool isOnGameEventFlagHopperMarioAtFirst() {
-        return GameDataFunction::isOnGameEventFlag("\203\172\203\142\203\160\201\133\203\175\203\212\203\111\217\211\225\317\220\147" /* ホッパーマリオ初変身 */);
+        return GameDataFunction::isOnGameEventFlag("ホッパーマリオ初変身");
     }
 
     bool isOnGameEventFlagFireMarioAtFirst() {
-        return GameDataFunction::isOnGameEventFlag("\203\164\203\100\203\103\203\101\203\175\203\212\203\111\217\211\225\317\220\147" /* ファイアマリオ初変身 */);
+        return GameDataFunction::isOnGameEventFlag("ファイアマリオ初変身");
     }
 
     bool isOnGameEventFlagIceMarioAtFirst() {
-        return GameDataFunction::isOnGameEventFlag("\203\101\203\103\203\130\203\175\203\212\203\111\217\211\225\317\220\147" /* アイスマリオ初変身 */);
+        return GameDataFunction::isOnGameEventFlag("アイスマリオ初変身");
     }
 
     bool isOnGameEventFlagFlyingMarioAtFirst() {
-        return GameDataFunction::isOnGameEventFlag("\203\164\203\211\203\103\203\223\203\117\203\175\203\212\203\111\217\211\225\317\220\147" /* フライングマリオ初変身 */);
+        return GameDataFunction::isOnGameEventFlag("フライングマリオ初変身");
     }
 
     bool isOnGameEventFlagSurfingTutorialAtFirst() {
-        return GameDataFunction::isOnGameEventFlag("\203\124\201\133\203\164\203\102\203\223\203\140\203\205\201\133\203\147\203\212\203\101\203\213" /* サーフィンチュートリアル */);
+        return GameDataFunction::isOnGameEventFlag("サーフィンチュートリアル");
     }
 
     bool isOnGameEventFlagTamakoroTutorialAtFirst() {
-        return GameDataFunction::isOnGameEventFlag("\203\136\203\175\203\122\203\215\203\140\203\205\201\133\203\147\203\212\203\101\203\213" /* タマコロチュートリアル */);
+        return GameDataFunction::isOnGameEventFlag("タマコロチュートリアル");
     }
 
     bool isOnGameEventFlagViewCompleteEnding() {
@@ -288,7 +288,7 @@ namespace MR {
         return GameDataFunction::hasGrandStar(2);
     }
 
-    s32 setupAlreadyDoneFlag(const char* pParam1, const JMapInfoIter& rIter, u32* pParam3) {
+    s32 setupAlreadyDoneFlag(const char* pParam1, const TableIter& rIter, u32* pParam3) {
         return GameDataFunction::setupAlreadyDoneFlag(pParam1, rIter, pParam3);
     }
 
@@ -452,7 +452,7 @@ namespace MR {
         GameDataFunction::setGameEventValueForBit("WarpPodSaveBits", bit, isOn);
     }
 
-    s32 registerStorageSpinDriverPathDrawRange(const NameObj* pParam1, const JMapInfoIter& rIter, int param3, f32* pParam4) {
+    s32 registerStorageSpinDriverPathDrawRange(const NameObj* pParam1, const TableIter& rIter, int param3, f32* pParam4) {
         const char* pStageName = MR::getCurrentStageName();
         int scenarioNo = MR::getCurrentScenarioNo();
         int zoneId = MR::getPlacedZoneId(rIter);
@@ -810,94 +810,94 @@ namespace MR {
     }
 
     void explainBeeMarioIfAtFirst() {
-        if (!GameDataFunction::isOnGameEventFlag("\203\156\203\140\203\175\203\212\203\111\217\211\225\317\220\147" /* ハチマリオ初変身 */)) {
+        if (!GameDataFunction::isOnGameEventFlag("ハチマリオ初変身")) {
             InformationObserverFunction::explainBee();
         }
     }
 
     void explainTeresaMarioIfAtFirst() {
-        if (!GameDataFunction::isOnGameEventFlag("\203\145\203\214\203\124\203\175\203\212\203\111\217\211\225\317\220\147" /* テレサマリオ初変身 */)) {
+        if (!GameDataFunction::isOnGameEventFlag("テレサマリオ初変身")) {
             InformationObserverFunction::explainTeresa();
         }
     }
 
     void explainHopperMarioIfAtFirst() {
-        if (!GameDataFunction::isOnGameEventFlag("\203\172\203\142\203\160\201\133\203\175\203\212\203\111\217\211\225\317\220\147" /* ホッパーマリオ初変身 */)) {
+        if (!GameDataFunction::isOnGameEventFlag("ホッパーマリオ初変身")) {
             InformationObserverFunction::explainHopper();
         }
     }
 
     void explainFireMarioIfAtFirst() {
-        if (!GameDataFunction::isOnGameEventFlag("\203\164\203\100\203\103\203\101\203\175\203\212\203\111\217\211\225\317\220\147" /* ファイアマリオ初変身 */)) {
+        if (!GameDataFunction::isOnGameEventFlag("ファイアマリオ初変身")) {
             InformationObserverFunction::explainFire();
         }
     }
 
     void explainIceMarioIfAtFirst() {
-        if (!GameDataFunction::isOnGameEventFlag("\203\101\203\103\203\130\203\175\203\212\203\111\217\211\225\317\220\147" /* アイスマリオ初変身 */)) {
+        if (!GameDataFunction::isOnGameEventFlag("アイスマリオ初変身")) {
             InformationObserverFunction::explainIce();
         }
     }
 
     void explainFlyingMarioIfAtFirst() {
-        if (!GameDataFunction::isOnGameEventFlag("\203\164\203\211\203\103\203\223\203\117\203\175\203\212\203\111\217\211\225\317\220\147" /* フライングマリオ初変身 */)) {
+        if (!GameDataFunction::isOnGameEventFlag("フライングマリオ初変身")) {
             InformationObserverFunction::explainFlying();
         }
     }
 
     void explainInvincibleMarioIfAtFirst() {
-        if (!GameDataFunction::isOnGameEventFlag("\226\263\223\107\203\175\203\212\203\111\217\211\225\317\220\147" /* 無敵マリオ初変身 */)) {
+        if (!GameDataFunction::isOnGameEventFlag("無敵マリオ初変身")) {
             InformationObserverFunction::explainInvincible();
         }
     }
 
     void explainLifeUpIfAtFirst() {
-        if (!GameDataFunction::isOnGameEventFlag("\203\211\203\103\203\164\203\101\203\142\203\166\203\114\203\155\203\122\211\360\220\340" /* ライフアップキノコ解説 */)) {
+        if (!GameDataFunction::isOnGameEventFlag("ライフアップキノコ解説")) {
             InformationObserverFunction::explainLifeUp();
         }
     }
 
     void explainOneUpIfAtFirst() {
-        if (!GameDataFunction::isOnGameEventFlag("\202\120\202\164\202\157\203\114\203\155\203\122\211\360\220\340" /* １ＵＰキノコ解説 */)) {
+        if (!GameDataFunction::isOnGameEventFlag("１ＵＰキノコ解説")) {
             InformationObserverFunction::explainOneUp();
         }
     }
 
     void onGameEventFlagPlayMoviePrologueA() {
-        GameDataFunction::followStoryEventByName("\203\116\203\142\203\160\217\120\227\210\214\343" /* クッパ襲来後 */);
+        GameDataFunction::followStoryEventByName("クッパ襲来後");
     }
 
     void onGameEventFlagPlayMoviePrologueB() {
-        GameDataFunction::followStoryEventByName("\203\163\201\133\203\140\217\351\225\202\217\343\214\343" /* ピーチ城浮上後 */);
+        GameDataFunction::followStoryEventByName("ピーチ城浮上後");
     }
 
     void onGameEventFlagEndTicoGuideDemo() {
-        GameDataFunction::followStoryEventByName("\203\140\203\122\203\113\203\103\203\150\203\146\203\202\217\111\227\271" /* チコガイドデモ終了 */);
+        GameDataFunction::followStoryEventByName("チコガイドデモ終了");
     }
 
     void onGameEventFlagEnableToSpinAndStarPointer() {
-        GameDataFunction::followStoryEventByName("\203\130\203\163\203\223\214\240\227\230" /* スピン権利 */);
+        GameDataFunction::followStoryEventByName("スピン権利");
         MR::setPlayerSwingPermission(true);
     }
 
     void onGameEventFlagEndButlerDomeLecture() {
-        GameDataFunction::followStoryEventByName("\223\126\213\205\213\126\203\214\203\116\203\140\203\203\201\133" /* 天球儀レクチャー */);
+        GameDataFunction::followStoryEventByName("天球儀レクチャー");
     }
 
     void onGameEventFlagEndButlerGalaxyMoveLecture() {
-        GameDataFunction::followStoryEventByName("\203\115\203\203\203\211\203\116\203\126\201\133\210\332\223\256\203\214\203\116\203\140\203\203\201\133" /* ギャラクシー移動レクチャー */);
+        GameDataFunction::followStoryEventByName("ギャラクシー移動レクチャー");
     }
 
     void onGameEventFlagEndButlerStarPieceLecture() {
-        GameDataFunction::followStoryEventByName("\203\130\203\136\201\133\203\163\201\133\203\130\203\214\203\116\203\140\203\203\201\133" /* スターピースレクチャー */);
+        GameDataFunction::followStoryEventByName("スターピースレクチャー");
     }
 
     void onGameEventFlagSurfingTutorialAtFirst() {
-        GameDataFunction::onGameEventFlag("\203\124\201\133\203\164\203\102\203\223\203\140\203\205\201\133\203\147\203\212\203\101\203\213" /* サーフィンチュートリアル */);
+        GameDataFunction::onGameEventFlag("サーフィンチュートリアル");
     }
 
     void onGameEventFlagTamakoroTutorialAtFirst() {
-        GameDataFunction::onGameEventFlag("\203\136\203\175\203\122\203\215\203\140\203\205\201\133\203\147\203\212\203\101\203\213" /* タマコロチュートリアル */);
+        GameDataFunction::onGameEventFlag("タマコロチュートリアル");
     }
 
     void onGameEventFlagRosettaTalkAboutTicoInTower() {
@@ -916,7 +916,7 @@ namespace MR {
     }
 
     bool isOnGameEventFlagUseAstroDome() {
-        return GameDataFunction::isPassedStoryEvent("\203\157\203\147\203\211\201\133\217\356\225\361\202\140" /* バトラー情報Ａ */);
+        return GameDataFunction::isPassedStoryEvent("バトラー情報Ａ");
     }
 
     bool isOnGameEventFlagGreenDriver() {

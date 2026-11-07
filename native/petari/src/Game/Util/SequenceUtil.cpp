@@ -7,7 +7,7 @@
 #include "Game/System/GameSystem.hpp"
 #include "Game/System/GameSystemSceneController.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/JMapIdInfo.hpp"
+#include "Game/Util/PlacementId.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
@@ -32,10 +32,10 @@ namespace MR {
     }
 
     void requestChangeStageAfterMiss() {
-        JMapIdInfo info = *getPlayerRestartIdInfo();
+        PlacementId info = *getPlayerRestartIdInfo();
 
         if (isGalaxyAnyCometAppearInCurrentStage()) {
-            const JMapIdInfo& rInitialInfo = getInitializeStartIdInfo();
+            const PlacementId& rInitialInfo = getInitializeStartIdInfo();
             info._0 = rInitialInfo._0;
             info.mZoneID = rInitialInfo.mZoneID;
         }
@@ -50,7 +50,7 @@ namespace MR {
         }
     }
 
-    void requestChangeStageInGameMoving(const char* pStageName, s32 scenarioNo, const JMapIdInfo& rInfo) {
+    void requestChangeStageInGameMoving(const char* pStageName, s32 scenarioNo, const PlacementId& rInfo) {
         GameSequenceFunction::requestGalaxyMove(GalaxyMoveArgument(0, pStageName, scenarioNo, &rInfo));
     }
 
@@ -117,13 +117,13 @@ namespace MR {
     }
 
     void requestGoToAstroGalaxy(s32 param1) {
-        JMapIdInfo info(param1, 0);
+        PlacementId info(param1, 0);
 
         GameSequenceFunction::requestGalaxyMove(GalaxyMoveArgument(0, "AstroGalaxy", -1, &info));
     }
 
     void requestGoToAstroDomeFromAstroGalaxy(s32 scenarioNo, s32 param2) {
-        JMapIdInfo info(param2, 0);
+        PlacementId info(param2, 0);
 
         GameSequenceFunction::requestGalaxyMove(GalaxyMoveArgument(0, "AstroDome", scenarioNo, &info));
     }

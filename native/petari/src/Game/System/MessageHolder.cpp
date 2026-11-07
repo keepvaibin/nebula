@@ -148,7 +148,7 @@ MessageData::MessageData(const char* pArchiveName)
     u8* msgData = (u8*)pArchive->getResource("Message.bmg");
     u8* mapData = (u8*)pArchive->getResource("MessageId.tbl");
 
-    mIDTable = new JMapInfo();
+    mIDTable = new Table();
     mIDTable->attach(mapData);
 
     if (msgData[cHostOrderMarkOffset] != cHostOrderMark) {
@@ -167,15 +167,15 @@ MessageData::MessageData(const char* pArchiveName)
     mFLI1Block = (MessageFLI1Block*)::getBlock('FLI1', msgData);
 }
 
-inline JMapInfoIter end(const JMapInfo* pInfo) {
-    return JMapInfoIter(pInfo, pInfo->getNumEntries());
+inline TableIter end(const Table* pInfo) {
+    return TableIter(pInfo, pInfo->getNumEntries());
 }
 
 s32 MessageData::findMessageIndex(const char* pMessage) const {
-    JMapInfoIter iter = mIDTable->findElementBinary("MessageId", pMessage);
+    TableIter iter = mIDTable->findElementBinary("MessageId", pMessage);
 
     // This *should* be mIDTable->end(), but I have had trouble
-    // getting the compiler to inline that (see comment in JMapInfo.hpp)
+    // getting the compiler to inline that (see comment in Table.hpp)
     if (iter == end(mIDTable)) {
         return -1;
     }

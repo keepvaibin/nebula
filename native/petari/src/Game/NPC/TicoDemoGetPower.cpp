@@ -24,10 +24,10 @@ namespace NrvTicoDemoGetPower {
     NEW_NERVE(TicoDemoGetPowerNrvDemo, TicoDemoGetPower, Demo);
 };  // namespace NrvTicoDemoGetPower
 
-TicoDemoGetPower::TicoDemoGetPower(Tico* pHost, const JMapInfoIter& rIter) : NerveExecutor("\203\140\203\122\203\121\203\142\203\147\203\160\203\217\201\133\203\146\203\202\216\300\215\163\216\322" /* チコゲットパワーデモ実行者 */), mHost(pHost) {
+TicoDemoGetPower::TicoDemoGetPower(Tico* pHost, const TableIter& rIter) : NerveExecutor("チコゲットパワーデモ実行者"), mHost(pHost) {
     initNerve(GET_NERVE(TicoDemoGetPower, TicoDemoGetPowerNrvWait));
-    DemoFunction::tryCreateDemoTalkAnimCtrlForScene(mHost, rIter, "DemoGetPower", "\203\130\203\163\203\223\203\121\203\142\203\147[\203\146\203\2021]" /* スピンゲット[デモ1] */, 0, 0);
-    MR::registerDemoActionFunctor(mHost, MR::Functor(this, &TicoDemoGetPower::startDemo), "\203\130\203\163\203\223\203\121\203\142\203\147[\203\146\203\2021]" /* スピンゲット[デモ1] */);
+    DemoFunction::tryCreateDemoTalkAnimCtrlForScene(mHost, rIter, "DemoGetPower", "スピンゲット[デモ1]", 0, 0);
+    MR::registerDemoActionFunctor(mHost, MR::Functor(this, &TicoDemoGetPower::startDemo), "スピンゲット[デモ1]");
     mHost->makeActorDead();
 }
 
@@ -41,12 +41,12 @@ void TicoDemoGetPower::exeWait() {
 }
 
 void TicoDemoGetPower::exeDemo() {
-    if (MR::isDemoPartFirstStep("\203\130\203\163\203\223\203\121\203\142\203\147[\203\146\203\2025]" /* スピンゲット[デモ5] */)) {
+    if (MR::isDemoPartFirstStep("スピンゲット[デモ5]")) {
         MR::explainEnableToSpin(mHost);
     }
 
-    if (MR::isDemoPartActive("\203\130\203\163\203\223\203\121\203\142\203\147[\203\146\203\2023]" /* スピンゲット[デモ3] */)) {
-        s32 partStep = MR::getDemoPartStep("\203\130\203\163\203\223\203\121\203\142\203\147[\203\146\203\2023]" /* スピンゲット[デモ3] */);
+    if (MR::isDemoPartActive("スピンゲット[デモ3]")) {
+        s32 partStep = MR::getDemoPartStep("スピンゲット[デモ3]");
 
         if (partStep == ::sTicoAppearFrame) {
             MR::startSound(mHost, "SE_SM_TICO_OP_APPEAR");
@@ -61,8 +61,8 @@ void TicoDemoGetPower::exeDemo() {
         }
     }
 
-    if (MR::isDemoPartActive("\203\130\203\163\203\223\203\121\203\142\203\147[\203\146\203\2024]" /* スピンゲット[デモ4] */)) {
-        s32 partStep = MR::getDemoPartStep("\203\130\203\163\203\223\203\121\203\142\203\147[\203\146\203\2024]" /* スピンゲット[デモ4] */);
+    if (MR::isDemoPartActive("スピンゲット[デモ4]")) {
+        s32 partStep = MR::getDemoPartStep("スピンゲット[デモ4]");
 
         if (partStep == ::sFanfareFrame) {
             MR::startSubBGM("BGM_STAR_POW_GET", false);

@@ -47,14 +47,14 @@ public:
     /// @param pName A pointer to the null-terminated name of the object.
     TripodBoss(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void kill();
     virtual void control();
     virtual void calcAndSetBaseMtx();
 
-    void initEventCamera(const JMapInfoIter&);
-    void initLeg(const JMapInfoIter&);
+    void initEventCamera(const TableIter&);
+    void initLeg(const TableIter&);
     void initLegIKPlacement();
     void initMovableArea(const Pos3f&);
     void initBodyPosition();

@@ -17,7 +17,7 @@ WhirlPool::WhirlPool(const char* pName)
       mClippingCenter(0.0f, 0.0f, 0.0f) {
 }
 
-void WhirlPool::init(const JMapInfoIter& rIter) {
+void WhirlPool::init(const TableIter& rIter) {
     MR::connectToScene(this, MR::MovementType_MapObj, -1, -1, MR::DrawType_WhirlPoolAccelerator);
     mPosition.set(*MR::getPlayerPos());
     mPosition.y = 1500.0f;

@@ -9,7 +9,7 @@ public:
     PlantGroup(const char*);
 
     virtual ~PlantGroup();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void makeActorAppeared();
     virtual void makeActorDead();
@@ -19,7 +19,7 @@ public:
     virtual void attackSensor(HitSensor*, HitSensor*);
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
 
-    void initMember(s32, const JMapInfoIter&);
+    void initMember(s32, const TableIter&);
     s32 placeOnCollisionFormCircle(Vec3f*, const Vec3f&, const Vec3f&, const Vec3f&);
     f32 calcBoundingSphereRadius(const Vec3f&);
     void emitHintEffect();
@@ -40,7 +40,7 @@ public:
     }
 
     virtual ~PlantMember();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
 
     bool tryEmitHint();
     void exeWait();

@@ -23,7 +23,7 @@ namespace NrvKoopaBattleVs3Lv1 {
 };  // namespace NrvKoopaBattleVs3Lv1
 
 KoopaBattleVs3Lv1::KoopaBattleVs3Lv1(Koopa* pKoopa)
-    : KoopaBattleBase("\203\116\203\142\203\160\220\355\223\254\201\151\202\165\202\223\202\122\202\153\202\226\202\120\201\152" /* クッパ戦闘（Ｖｓ３Ｌｖ１） */, pKoopa), mStateChaseRoll(), mStateAttackShockWave() {
+    : KoopaBattleBase("クッパ戦闘（Ｖｓ３Ｌｖ１）", pKoopa), mStateChaseRoll(), mStateAttackShockWave() {
 }
 
 void KoopaBattleVs3Lv1::init() {

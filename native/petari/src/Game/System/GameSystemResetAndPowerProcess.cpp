@@ -29,7 +29,7 @@ namespace NrvGameSystemResetAndPowerProcess {
     NEW_NERVE(GameSystemResetAndPowerProcessFadein, GameSystemResetAndPowerProcess, Fadein);
 };  // namespace NrvGameSystemResetAndPowerProcess
 
-void GameSystemResetAndPowerProcess::init(const JMapInfoIter& rIter) {
+void GameSystemResetAndPowerProcess::init(const TableIter& rIter) {
     initNerve(GET_NERVE(GameSystemResetAndPowerProcess, GameSystemResetAndPowerProcessIdle));
     appear();
 }
@@ -174,7 +174,7 @@ void GameSystemResetAndPowerProcess::control() {
 }
 
 GameSystemResetAndPowerProcess::GameSystemResetAndPowerProcess()
-    : LayoutActor("\203\212\203\132\203\142\203\147\201\105\223\144\214\271" /* リセット・電源 */, false), mFadeinoutControl(), mResetOperation(ResetOperation_Restart), _5C(true) {
+    : LayoutActor("リセット・電源", false), mFadeinoutControl(), mResetOperation(ResetOperation_Restart), _5C(true) {
     mFadeinoutControl = new ValueControl(::sFadeinoutFrame);
     mFadeinoutControl->setOne();
 }

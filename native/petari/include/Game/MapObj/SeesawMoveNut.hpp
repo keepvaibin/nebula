@@ -6,7 +6,7 @@ class SeesawMoveNut : public MapObjActor {
 public:
     SeesawMoveNut(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
 
     void exeHalfway();
     void exeEdge();

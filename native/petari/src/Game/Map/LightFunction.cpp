@@ -41,9 +41,9 @@ ResourceHolder* LightFunction::loadLightArchive() {
     return MR::createAndAddResourceHolder(buf);
 }
 
-s32 LightFunction::createLightDataParser(JMapInfo** pOut) {
+s32 LightFunction::createLightDataParser(Table** pOut) {
     ResourceHolder* holder = MR::getSceneObj< LightDirector >(SceneObj_LightDirector)->mResourceHolder;
-    JMapInfo* info = MR::tryCreateCsvParser(holder, "LightData.bcsv");
+    Table* info = MR::tryCreateCsvParser(holder, "LightData.bcsv");
     *pOut = info;
     if (info->mData != nullptr) {
         return info->mData->mNumEntries;
@@ -52,9 +52,9 @@ s32 LightFunction::createLightDataParser(JMapInfo** pOut) {
     return 0;
 }
 
-s32 LightFunction::createZoneDataParser(const char* pZone, JMapInfo** pOut) {
+s32 LightFunction::createZoneDataParser(const char* pZone, Table** pOut) {
     ResourceHolder* holder = MR::getSceneObj< LightDirector >(SceneObj_LightDirector)->mResourceHolder;
-    JMapInfo* info = MR::tryCreateCsvParser(holder, "Light%s.bcsv", pZone);
+    Table* info = MR::tryCreateCsvParser(holder, "Light%s.bcsv", pZone);
     *pOut = info;
 
     if (info != nullptr) {
@@ -69,7 +69,7 @@ s32 LightFunction::createZoneDataParser(const char* pZone, JMapInfo** pOut) {
 }
 
 namespace {
-    void getDataLightInfo(JMapInfo* pInfo, int id, LightInfo* pLightInfo, const char* pName) {
+    void getDataLightInfo(Table* pInfo, int id, LightInfo* pLightInfo, const char* pName) {
         char colorBuf[256];
         nebula_snprintf(colorBuf, sizeof(colorBuf), "%sColor", pName);
         MR::getCsvDataColor(&pLightInfo->mColor, pInfo, colorBuf, id);
@@ -81,7 +81,7 @@ namespace {
         MR::getCsvDataBool(&pLightInfo->mIsFollowCamera, pInfo, camBuf, id);
     }
 
-    void getDataActorLightInfo(JMapInfo* pInfo, int lightID, ActorLightInfo* pActorInfo, const char* pName) {
+    void getDataActorLightInfo(Table* pInfo, int lightID, ActorLightInfo* pActorInfo, const char* pName) {
         char lightBuf[256];
         nebula_snprintf(lightBuf, sizeof(lightBuf), "%sLight%d", pName, 0);
         getDataLightInfo(pInfo, lightID, &pActorInfo->mInfo0, lightBuf);
@@ -96,7 +96,7 @@ namespace {
     }
 };  // namespace
 
-void LightFunction::getAreaLightLightData(JMapInfo* pInfo, int idx, AreaLightInfo* pLightInfo) {
+void LightFunction::getAreaLightLightData(Table* pInfo, int idx, AreaLightInfo* pLightInfo) {
     MR::getCsvDataStr(&pLightInfo->mAreaLightName, pInfo, "AreaLightName", idx);
     MR::getCsvDataS32(&pLightInfo->mInterpolate, pInfo, "Interpolate", idx);
     ::getDataActorLightInfo(pInfo, idx, &pLightInfo->mPlayerLight, "Player");

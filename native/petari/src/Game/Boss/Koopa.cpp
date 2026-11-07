@@ -54,7 +54,7 @@ bool Koopa::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
 Koopa::~Koopa() {
 }
 
-void Koopa::init(const JMapInfoIter& rIter) {
+void Koopa::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("Koopa", nullptr, false);
 
@@ -76,7 +76,7 @@ void Koopa::init(const JMapInfoIter& rIter) {
     KoopaFunction::endFaceCtrlDirect(this);
 
     MR::initShadowFromCSV(this, "Shadow");
-    MR::invalidateShadowGroup(this, "\203\146\203\202\227\160" /* デモ用 */);
+    MR::invalidateShadowGroup(this, "デモ用");
 
     MR::onCalcGravity(this);
 

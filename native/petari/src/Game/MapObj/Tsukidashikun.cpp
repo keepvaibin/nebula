@@ -3,7 +3,7 @@
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -31,7 +31,7 @@ namespace NrvTsukidashikun {
 Tsukidashikun::Tsukidashikun(const char* pName) : MapObjActor(pName), mMoveSpeed(::sDefaultMoveSpeed), mWaitTimer(::sDefaultWaitTime) {
 }
 
-void Tsukidashikun::init(const JMapInfoIter& rIter) {
+void Tsukidashikun::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;
     info.setupDefaultPos();
@@ -42,8 +42,8 @@ void Tsukidashikun::init(const JMapInfoIter& rIter) {
     info.setupNerve(GET_NERVE(Tsukidashikun, TsukidashikunNrvRelax));
     initialize(rIter, info);
     MR::initLightCtrl(this);
-    MR::getJMapInfoArg0NoInit(rIter, &mMoveSpeed);
-    MR::getJMapInfoArg1NoInit(rIter, &mWaitTimer);
+    MR::getPlacementArg0NoInit(rIter, &mMoveSpeed);
+    MR::getPlacementArg1NoInit(rIter, &mWaitTimer);
     MR::moveCoordToNearestPos(this, mPosition);
 }
 

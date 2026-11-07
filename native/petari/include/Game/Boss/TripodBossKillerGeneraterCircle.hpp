@@ -12,7 +12,7 @@ public:
     TripodBossKillerGeneraterCircle(const char* pName);
 
     virtual ~TripodBossKillerGeneraterCircle();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
 
     void placementGenerater();
 

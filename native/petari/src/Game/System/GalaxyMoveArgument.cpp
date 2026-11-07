@@ -1,9 +1,9 @@
 #include "Game/System/GalaxyMoveArgument.hpp"
-#include "Game/Util/JMapIdInfo.hpp"
+#include "Game/Util/PlacementId.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 
-GalaxyMoveArgument::GalaxyMoveArgument(u32 moveType, const char* pStageName, s32 scenarioNo, const JMapIdInfo* pMapIdInfo)
+GalaxyMoveArgument::GalaxyMoveArgument(u32 moveType, const char* pStageName, s32 scenarioNo, const PlacementId* pMapIdInfo)
     : mMoveType(moveType), mStageName(pStageName), mScenarioNo(scenarioNo), _C(-1) {
     mIDInfo._0 = -1;
     mIDInfo.mZoneID = -1;

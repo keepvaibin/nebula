@@ -8,7 +8,7 @@ public:
     /// @param pName A pointer to the null-terminated name of the object.
     NeedlePlant(const char* pName);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void kill();
     virtual void attackSensor(HitSensor*, HitSensor*);
     virtual bool receiveMsgPush(HitSensor*, HitSensor*);

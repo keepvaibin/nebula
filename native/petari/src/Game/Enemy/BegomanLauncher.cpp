@@ -8,7 +8,7 @@
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/GravityUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
@@ -30,36 +30,36 @@ namespace {
 BegomanLauncher::BegomanLauncher(const char* pName) : LiveActor(pName), mBegomanCount(), mAppearDelay(), mBegomanArray(), mLaunchType(3) {
 }
 
-void BegomanLauncher::init(const JMapInfoIter& rIter) {
+void BegomanLauncher::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     s32 count = 1;
-    MR::getJMapInfoArg3NoInit(rIter, &count);
+    MR::getPlacementArg3NoInit(rIter, &count);
     mBegomanCount = count;
-    MR::getJMapInfoArg2NoInit(rIter, &mAppearDelay);
+    MR::getPlacementArg2NoInit(rIter, &mAppearDelay);
     const char* pObjectName = nullptr;
     MR::getObjectName(&pObjectName, rIter);
     mBegomanArray = new BegomanBase*[mBegomanCount];
     if (MR::isEqualString(pObjectName, "TogeBegomanLauncher")) {
-        setName("\203\147\203\121\203\170\201\133\203\123\203\175\203\223\203\211\203\223\203\140\203\203\201\133" /* トゲベーゴマンランチャー */);
+        setName("トゲベーゴマンランチャー");
         for (s32 i = 0; i < mBegomanCount; i++) {
-            mBegomanArray[i] = new BegomanSpike("\203\147\203\121\203\170\201\133\203\123\203\175\203\223" /* トゲベーゴマン */);
+            mBegomanArray[i] = new BegomanSpike("トゲベーゴマン");
             mBegomanArray[i]->mPosition.set(mPosition);
             mBegomanArray[i]->init(rIter);
             mBegomanArray[i]->makeActorDead();
         }
     } else if (MR::isEqualString(pObjectName, "BegomanBabyLauncher")) {
-        setName("\203\170\203\162\201\133\203\170\201\133\203\123\203\175\203\223\203\211\203\223\203\140\203\203\201\133" /* ベビーベーゴマンランチャー */);
+        setName("ベビーベーゴマンランチャー");
         mLaunchType = 2;
         MR::declareCoin(this, mBegomanCount);
         for (s32 i = 0; i < mBegomanCount; i++) {
-            mBegomanArray[i] = new BegomanBaby(this, "\203\211\203\223\203\140\203\203\201\133\203\170\203\162\201\133" /* ランチャーベビー */);
+            mBegomanArray[i] = new BegomanBaby(this, "ランチャーベビー");
             mBegomanArray[i]->mPosition.set(mPosition);
             mBegomanArray[i]->init(rIter);
             mBegomanArray[i]->makeActorDead();
         }
     } else {
         for (s32 i = 0; i < mBegomanCount; i++) {
-            mBegomanArray[i] = new BegomanSpring("\203\157\203\154\203\170\201\133\203\123\203\175\203\223" /* バネベーゴマン */);
+            mBegomanArray[i] = new BegomanSpring("バネベーゴマン");
             mBegomanArray[i]->mPosition.set(mPosition);
             mBegomanArray[i]->init(rIter);
             mBegomanArray[i]->makeActorDead();

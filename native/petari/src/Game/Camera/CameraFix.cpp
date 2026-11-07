@@ -6,7 +6,7 @@
 #include "Game/Util/MathUtil.hpp"
 
 CameraFix::CameraFix(const char* pName) : Camera(pName), mWPoint(0.0f, 0.0f, 0.0f), mAxis(0.0f, 0.0f, -2500.0f), mUp(0.0f, 1.0f, 0.0f) {
-    mTarget = new CameraTargetMtx("\203\112\203\201\203\211\203\136\201\133\203\121\203\142\203\147\203\137\203\176\201\133" /* カメラターゲットダミー */);
+    mTarget = new CameraTargetMtx("カメラターゲットダミー");
 }
 
 void CameraFix::reset() {

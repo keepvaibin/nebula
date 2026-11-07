@@ -15,7 +15,7 @@ SeaBottomTriplePropeller::SeaBottomTriplePropeller(const char* pName) : LiveActo
     }
 }
 
-void SeaBottomTriplePropeller::init(const JMapInfoIter& rIter) {
+void SeaBottomTriplePropeller::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("SeaBottomTriplePropeller", nullptr, false);
     MR::connectToSceneCollisionMapObj(this);

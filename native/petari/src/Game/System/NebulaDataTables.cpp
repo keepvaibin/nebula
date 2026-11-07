@@ -1,5 +1,5 @@
 #include "Game/System/GalaxyInfoTable.hpp"
-#include "Game/Util/JMapInfo.hpp"
+#include "Game/Util/Table.hpp"
 #include <cstring>
 #include "Game/System/NebulaDataTables.hpp"
 #include "Game/System/GameAssets.hpp"
@@ -39,7 +39,7 @@ namespace {
         return hash;
     }
 
-    const JMapItem* findColumn(const JMapData* pTable, const char* pName) {
+    const TableColumn* findColumn(const TableData* pTable, const char* pName) {
         const u32 hash = columnHash(pName);
         for (s32 i = 0; i < pTable->mNumFields; i++) {
             if (pTable->mItems[i].mHash == hash) {
@@ -51,7 +51,7 @@ namespace {
 
     // The table with a row for each galaxy the mods add, their words after the table's own.
     const u8* withAddedGalaxies(const u8* pBase, u32 baseLength) {
-        const JMapData* pOld = reinterpret_cast< const JMapData* >(pBase);
+        const TableData* pOld = reinterpret_cast< const TableData* >(pBase);
         const u32 rowsEnd = pOld->mDataOffset + pOld->mNumEntries * pOld->mEntrySize;
         u32 words = 1;  // the empty word
         for (s32 i = 0; i < sAddedGalaxyCount; i++) {
@@ -67,7 +67,7 @@ namespace {
         memcpy(pNew, pBase, rowsEnd);
         memset(pNew + rowsEnd, 0, added);
         memcpy(pNew + rowsEnd + added, pBase + rowsEnd, baseLength - rowsEnd);
-        JMapData* pTable = reinterpret_cast< JMapData* >(pNew);
+        TableData* pTable = reinterpret_cast< TableData* >(pNew);
         char* pPool = reinterpret_cast< char* >(pNew + rowsEnd + added);
         u32 poolEnd = baseLength - rowsEnd;
         const auto addWord = [&](const char* pWord) {
@@ -79,13 +79,13 @@ namespace {
         };
         const u32 empty = addWord("");
         const auto setWord = [&](u8* pRow, const char* pColumn, const char* pWord) {
-            if (const JMapItem* pItem = findColumn(pTable, pColumn)) {
+            if (const TableColumn* pItem = findColumn(pTable, pColumn)) {
                 const u32 at = pWord != nullptr ? addWord(pWord) : empty;
                 memcpy(pRow + pItem->mOffsData, &at, sizeof(at));
             }
         };
         const auto setByte = [&](u8* pRow, const char* pColumn, u8 value) {
-            if (const JMapItem* pItem = findColumn(pTable, pColumn)) {
+            if (const TableColumn* pItem = findColumn(pTable, pColumn)) {
                 pRow[pItem->mOffsData] = value;
             }
         };

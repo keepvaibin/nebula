@@ -28,7 +28,7 @@ WaterPressureBullet::WaterPressureBullet(const char* pName) : LiveActor(pName) {
     mCameraInfo = nullptr;
 }
 
-void WaterPressureBullet::init(const JMapInfoIter& rIter) {
+void WaterPressureBullet::init(const TableIter& rIter) {
     initModelManagerWithAnm("WaterBullet", nullptr, false);
     MR::connectToSceneMapObjStrongLight(this);
     initHitSensor(2);
@@ -59,7 +59,7 @@ void WaterPressureBullet::kill() {
 }
 
 void WaterPressureBullet::control() {
-    if (isNotBound() && MR::isStarPointerPointing2POnTriggerButton(this, "\216\343" /* 弱 */, true, false)) {
+    if (isNotBound() && MR::isStarPointerPointing2POnTriggerButton(this, "弱", true, false)) {
         kill();
     } else {
         Vec3f stack_8;

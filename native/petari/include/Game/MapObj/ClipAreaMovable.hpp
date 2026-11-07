@@ -11,12 +11,12 @@ public:
     /// @param pName A pointer to the null-terminated name of the object.
     ClipAreaMovable(const char* pName);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void makeActorAppeared();
     virtual void makeActorDead();
     virtual void control();
 
-    void initMoveFunction(const JMapInfoIter& rIter);
+    void initMoveFunction(const TableIter& rIter);
     void startMoveFunction();
     void endMoveFunction();
     void movementMoveFunction();

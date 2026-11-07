@@ -76,25 +76,25 @@ void Mario::tryJump() {
         if (mSinkTimer > 100) {
             if (mSinkTimer > 200) {
                 mSinkTimer = 128;
-                changeAnimation("\226\204\202\334\202\350\203\127\203\203\203\223\203\166A" /* 埋まりジャンプA */);
+                changeAnimation("埋まりジャンプA");
             } else {
                 mSinkTimer = 32;
-                changeAnimation("\226\204\202\334\202\350\203\127\203\203\203\223\203\166B" /* 埋まりジャンプB */);
+                changeAnimation("埋まりジャンプB");
             }
 
             if (checkCurrentFloorCodeSevere(0x12)) {
-                playSound("\223\305\217\300\222\105\217\157" /* 毒沼脱出 */);
+                playSound("毒沼脱出");
             } else {
-                playSound("\215\273\222\105\217\157" /* 砂脱出 */);
+                playSound("砂脱出");
             }
 
-            playSound("\220\272\215\273\222\105\217\157" /* 声砂脱出 */);
+            playSound("声砂脱出");
             return;
         }
     }
 
-    playEffect("\213\244\222\312\222\265\226\364" /* 共通跳躍 */);
-    stopEffectForce("\203\130\203\163\203\223\203\212\203\223\203\117" /* スピンリング */);
+    playEffect("共通跳躍");
+    stopEffectForce("スピンリング");
 
     const bool isSquat = checkSquat(true);
     mMovementStates._21 = true;
@@ -301,66 +301,66 @@ void Mario::tryJump() {
     switch (_430) {
     case 0:
         if ((mMovementStates._17) != 0) {
-            changeAnimation("\225\307\217\343\217\270" /* 壁上昇 */, "\227\216\211\272" /* 落下 */);
+            changeAnimation("壁上昇", "落下");
         } else {
-            changeAnimation("\203\127\203\203\203\223\203\166" /* ジャンプ */, "\227\216\211\272" /* 落下 */);
+            changeAnimation("ジャンプ", "落下");
         }
 
         if (mActor->mBeeWallWalk != 0) {
-            playSound("\203\156\203\140\225\307\203\127\203\203\203\223\203\166" /* ハチ壁ジャンプ */);
+            playSound("ハチ壁ジャンプ");
         } else {
-            playSound("\217\254\203\127\203\203\203\223\203\166" /* 小ジャンプ */);
+            playSound("小ジャンプ");
         }
 
         if (getPlayerMode() != 6) {
-            playSound("\220\272\217\254\203\127\203\203\203\223\203\166" /* 声小ジャンプ */);
-            playSound("\203\127\203\203\203\223\203\166\223\245\220\330" /* ジャンプ踏切 */);
+            playSound("声小ジャンプ");
+            playSound("ジャンプ踏切");
         }
 
         if (useStickJumpAnim) {
-            changeAnimation("\220\113\212\212\202\350\203\127\203\203\203\223\203\166" /* 尻滑りジャンプ */);
+            changeAnimation("尻滑りジャンプ");
             _428 = 0x1E;
         }
 
         if (getPlayerMode() == 4) {
-            changeAnimation("\203\156\203\140\203\127\203\203\203\223\203\166" /* ハチジャンプ */);
+            changeAnimation("ハチジャンプ");
             mActor->syncJumpBeeStickMode();
         }
 
         if (_10._1A) {
-            changeAnimation("\203\126\203\207\201\133\203\147\203\127\203\203\203\223\203\166" /* ショートジャンプ */, "\227\216\211\272" /* 落下 */);
+            changeAnimation("ショートジャンプ", "落下");
         }
 
         break;
     case 1:
-        changeAnimationNonStop("\203\127\203\203\203\223\203\166B" /* ジャンプB */);
-        changeAnimation(nullptr, "\227\216\211\272" /* 落下 */);
-        playSound("\222\206\203\127\203\203\203\223\203\166" /* 中ジャンプ */);
-        playSound("\220\272\222\206\203\127\203\203\203\223\203\166" /* 声中ジャンプ */);
-        playSound("\203\127\203\203\203\223\203\166\223\245\220\330" /* ジャンプ踏切 */);
+        changeAnimationNonStop("ジャンプB");
+        changeAnimation(nullptr, "落下");
+        playSound("中ジャンプ");
+        playSound("声中ジャンプ");
+        playSound("ジャンプ踏切");
         break;
     case 2:
-        playSound("\221\345\203\127\203\203\203\223\203\166" /* 大ジャンプ */);
-        playSound("\220\272\221\345\203\127\203\203\203\223\203\166" /* 声大ジャンプ */);
-        playSound("\203\127\203\203\203\223\203\166\223\245\220\330" /* ジャンプ踏切 */);
-        playEffect("\213\244\222\312\203\156\203\103\203\127\203\203\203\223\203\166" /* 共通ハイジャンプ */);
+        playSound("大ジャンプ");
+        playSound("声大ジャンプ");
+        playSound("ジャンプ踏切");
+        playEffect("共通ハイジャンプ");
 
         if (_1C._B) {
-            changeAnimation("\203\130\203\112\203\103\203\211\203\165\203\127\203\203\203\223\203\166" /* スカイラブジャンプ */, "\227\216\211\272" /* 落下 */);
+            changeAnimation("スカイラブジャンプ", "落下");
         } else if (getPlayerMode() == 1 && mWalkSpeed > 1.0f) {
-            changeAnimation("\203\137\203\142\203\126\203\205\203\127\203\203\203\223\203\166" /* ダッシュジャンプ */, "\227\216\211\272" /* 落下 */);
+            changeAnimation("ダッシュジャンプ", "落下");
         } else {
-            changeAnimation("\203\127\203\203\203\223\203\166C" /* ジャンプC */, "\227\216\211\272" /* 落下 */);
+            changeAnimation("ジャンプC", "落下");
         }
 
         break;
     case 3:
         if (isMudFloorJump) {
-            changeAnimation("\226\204\202\334\202\350\222\105\217\157\203\127\203\203\203\223\203\166" /* 埋まり脱出ジャンプ */, "\227\216\211\272" /* 落下 */);
+            changeAnimation("埋まり脱出ジャンプ", "落下");
         } else {
-            changeAnimation("\225\240\202\316\202\242\203\127\203\203\203\223\203\166" /* 腹ばいジャンプ */, "\227\216\211\272" /* 落下 */);
-            playSound("\220\272\217\254\203\127\203\203\203\223\203\166" /* 声小ジャンプ */);
-            playSound("\203\127\203\203\203\223\203\166\223\245\220\330" /* ジャンプ踏切 */);
+            changeAnimation("腹ばいジャンプ", "落下");
+            playSound("声小ジャンプ");
+            playSound("ジャンプ踏切");
         }
 
         break;
@@ -375,9 +375,9 @@ void Mario::tryJump() {
     const f32 waterDist = mSwim->checkUnderWaterFull(mFrontVec);
     if (waterDist > 500.0f && mStickPos.z == 0.0f) {
         mMovementStates._E = true;
-        changeAnimationNonStop("\224\362\202\321\215\236\202\335\203\127\203\203\203\223\203\166" /* 飛び込みジャンプ */);
-        playSound("\220\272\215\202\224\362\202\321\215\236\202\335" /* 声高飛び込み */);
-        playSound("\203\127\203\203\203\223\203\166\223\245\220\330" /* ジャンプ踏切 */);
+        changeAnimationNonStop("飛び込みジャンプ");
+        playSound("声高飛び込み");
+        playSound("ジャンプ踏切");
 
         if (mStickPos.z < 0.1f) {
             mJumpVec += mFrontVec * 5.0f;
@@ -421,11 +421,11 @@ void Mario::tryTurnJump() {
 
     mMovementStates._E = true;
     procJump(true);
-    changeAnimation("\203\136\201\133\203\223\203\127\203\203\203\223\203\166" /* ターンジャンプ */, "\227\216\211\272" /* 落下 */);
-    playSound("\214\343\203\127\203\203\203\223\203\166" /* 後ジャンプ */);
-    playSound("\220\272\214\343\203\127\203\203\203\223\203\166" /* 声後ジャンプ */);
-    playSound("\203\127\203\203\203\223\203\166\223\245\220\330" /* ジャンプ踏切 */);
-    playEffect("\213\244\222\312\203\156\203\103\203\127\203\203\203\223\203\166" /* 共通ハイジャンプ */);
+    changeAnimation("ターンジャンプ", "落下");
+    playSound("後ジャンプ");
+    playSound("声後ジャンプ");
+    playSound("ジャンプ踏切");
+    playEffect("共通ハイジャンプ");
 
     _3D0 = 0;
     mMovementStates.jumping = true;
@@ -493,11 +493,11 @@ void Mario::trySquatJump() {
     mMovementStates._E = true;
     mMovementStates._1 = false;
     procJump(true);
-    changeAnimationNonStop("\225\235\202\306\202\321" /* 幅とび */);
-    changeAnimation(nullptr, "\227\216\211\272" /* 落下 */);
-    playSound("\225\235\203\127\203\203\203\223\203\166" /* 幅ジャンプ */);
-    playSound("\220\272\225\235\203\127\203\203\203\223\203\166" /* 声幅ジャンプ */);
-    playSound("\203\127\203\203\203\223\203\166\223\245\220\330" /* ジャンプ踏切 */);
+    changeAnimationNonStop("幅とび");
+    changeAnimation(nullptr, "落下");
+    playSound("幅ジャンプ");
+    playSound("声幅ジャンプ");
+    playSound("ジャンプ踏切");
 
     mMovementStates.jumping = true;
     _3D0 = 0;
@@ -526,16 +526,16 @@ void Mario::tryBackJump() {
 
     mMovementStates._E = true;
     procJump(true);
-    changeAnimation("\202\265\202\341\202\252\202\335\203\127\203\203\203\223\203\166" /* しゃがみジャンプ */, "\227\216\211\272" /* 落下 */);
-    playSound("\214\343\203\127\203\203\203\223\203\166" /* 後ジャンプ */);
-    playSound("\220\272\214\343\203\127\203\203\203\223\203\166" /* 声後ジャンプ */);
-    playSound("\203\127\203\203\203\223\203\166\223\245\220\330" /* ジャンプ踏切 */);
-    playEffect("\213\244\222\312\203\156\203\103\203\127\203\203\203\223\203\166" /* 共通ハイジャンプ */);
+    changeAnimation("しゃがみジャンプ", "落下");
+    playSound("後ジャンプ");
+    playSound("声後ジャンプ");
+    playSound("ジャンプ踏切");
+    playEffect("共通ハイジャンプ");
 
     if (mSwim->checkUnderWaterFull(-mFrontVec) > 500.0f && mStickPos.z == 0.0f) {
-        changeAnimationNonStop("\214\343\225\373\224\362\202\321\215\236\202\335\203\127\203\203\203\223\203\166" /* 後方飛び込みジャンプ */);
-        playSound("\220\272\215\202\224\362\202\321\215\236\202\335" /* 声高飛び込み */);
-        playSound("\203\127\203\203\203\223\203\166\223\245\220\330" /* ジャンプ踏切 */);
+        changeAnimationNonStop("後方飛び込みジャンプ");
+        playSound("声高飛び込み");
+        playSound("ジャンプ踏切");
     }
 
     mWalkSpeed = 0.0f;
@@ -563,9 +563,9 @@ void Mario::tryTornadoJump() {
     mMovementStates._E = false;
     mMovementStates._F = true;
     procJump(true);
-    changeAnimation("\203\127\203\203\203\223\203\166" /* ジャンプ */, "\227\216\211\272" /* 落下 */);
-    playSound("\220\272\203\130\203\163\203\223" /* 声スピン */);
-    playSound("\203\147\203\213\203\154\201\133\203\150\203\127\203\203\203\223\203\166" /* トルネードジャンプ */);
+    changeAnimation("ジャンプ", "落下");
+    playSound("声スピン");
+    playSound("トルネードジャンプ");
 
     mMovementStates.jumping = true;
     _3D0 = 0;
@@ -643,11 +643,11 @@ void Mario::trySpinJump(u8 a1) {
         return;
     }
 
-    if (isAnimationRun("\220\205\211\152\203\130\203\163\203\223\210\332\223\256" /* 水泳スピン移動 */)) {
+    if (isAnimationRun("水泳スピン移動")) {
         return;
     }
 
-    if (isAnimationRun("\220\205\211\152\203\130\203\163\203\223\203\127\203\203\203\223\203\166" /* 水泳スピンジャンプ */)) {
+    if (isAnimationRun("水泳スピンジャンプ")) {
         return;
     }
 
@@ -667,9 +667,9 @@ void Mario::trySpinJump(u8 a1) {
 
     if (!mMovementStates._B) {
         stopAnimationUpper(nullptr);
-        changeAnimation("\213\363\222\206\202\320\202\313\202\350" /* 空中ひねり */, "\227\216\211\272" /* 落下 */);
-        playSound("\220\272\203\130\203\163\203\223" /* 声スピン */);
-        playSound("\203\130\203\163\203\223\203\127\203\203\203\223\203\166" /* スピンジャンプ */);
+        changeAnimation("空中ひねり", "落下");
+        playSound("声スピン");
+        playSound("スピンジャンプ");
         startPadVib(2);
 
         mMovementStates.jumping = true;
@@ -727,7 +727,7 @@ void Mario::tryForceJump(const Vec3f& rVec, bool a2) {
     _42C = 0;
     _76C = 0;
     procJump(false);
-    changeAnimation(nullptr, "\227\216\211\272" /* 落下 */);
+    changeAnimation(nullptr, "落下");
     mRabbit->forceJump();
     return;
 }
@@ -744,7 +744,7 @@ void Mario::tryForceFreeJump(const Vec3f& rVec) {
     _402 = mActor->getConst().getTable()->mAirWalkTime;
 
     if (getPlayerMode() == 4) {
-        playSound("\203\156\203\140\221\314\227\315\212\256\221\123\211\361\225\234" /* ハチ体力完全回復 */);
+        playSound("ハチ体力完全回復");
     }
 
     _76C = 0;
@@ -767,7 +767,7 @@ void Mario::tryForcePowerJump(const Vec3f& rVec, bool a2) {
         _402 = mActor->getConst().getTable()->mAirWalkTime;
 
         if (getPlayerMode() == 4) {
-            playSound("\203\156\203\140\221\314\227\315\212\256\221\123\211\361\225\234" /* ハチ体力完全回復 */);
+            playSound("ハチ体力完全回復");
         }
     }
 
@@ -799,7 +799,7 @@ void Mario::tryFreeJump(const Vec3f& rVec, bool a2) {
     _76C = 0;
     _344 = mSideVec;
     procJump(false);
-    changeAnimation(nullptr, "\227\216\211\272" /* 落下 */);
+    changeAnimation(nullptr, "落下");
     startPadVib(2);
     mRabbit->forceJump();
     return;
@@ -835,14 +835,14 @@ void Mario::tryWallJump(const Vec3f& rVec, bool a2) {
     mMovementStates._1D = true;
 
     if (getPlayerMode() == 5) {
-        changeAnimationNonStop("\203\172\203\142\203\160\201\133\225\307\203\127\203\203\203\223\203\166" /* ホッパー壁ジャンプ */);
-        playSound("\203\172\203\142\203\160\201\133\203\127\203\203\203\223\203\166" /* ホッパージャンプ */);
+        changeAnimationNonStop("ホッパー壁ジャンプ");
+        playSound("ホッパージャンプ");
     } else {
-        changeAnimation("\225\307\203\127\203\203\203\223\203\166" /* 壁ジャンプ */, "\227\216\211\272" /* 落下 */);
-        playSound("\203\127\203\203\203\223\203\166\223\245\220\330" /* ジャンプ踏切 */);
+        changeAnimation("壁ジャンプ", "落下");
+        playSound("ジャンプ踏切");
     }
 
-    playSound("\220\272\217\254\203\127\203\203\203\223\203\166" /* 声小ジャンプ */);
+    playSound("声小ジャンプ");
 
     if (a2) {
         setFrontVecKeepUp(rVec);
@@ -877,10 +877,10 @@ void Mario::tryStickJump(const Vec3f& rVec) {
     _76C = mActor->getConst().getTable()->mBeeGravityReviveTime;
     _770 = 0.0f;
     _3BC = 0xA;
-    playSound("\203\156\203\140\225\307\203\127\203\203\203\223\203\166" /* ハチ壁ジャンプ */);
-    playSound("\220\272\217\254\203\127\203\203\203\223\203\166" /* 声小ジャンプ */);
+    playSound("ハチ壁ジャンプ");
+    playSound("声小ジャンプ");
     setFrontVecKeepUp(rVec);
-    changeAnimationNonStop("\203\156\203\140\225\307\203\127\203\203\203\223\203\166" /* ハチ壁ジャンプ */);
+    changeAnimationNonStop("ハチ壁ジャンプ");
     return;
 }
 
@@ -891,10 +891,10 @@ void Mario::trySlipUpJump() {
         return;
     }
 
-    changeAnimation("\203\130\203\212\203\142\203\166\203\101\203\142\203\166" /* スリップアップ */);
-    playSound("\203\130\203\212\203\142\203\166\203\101\203\142\203\166" /* スリップアップ */);
-    playEffect("\203\130\203\212\203\142\203\166\203\101\203\142\203\166" /* スリップアップ */);
-    startPadVib("\203\175\203\212\203\111[\203\130\203\212\203\142\203\166\203\101\203\142\203\166]" /* マリオ[スリップアップ] */);
+    changeAnimation("スリップアップ");
+    playSound("スリップアップ");
+    playEffect("スリップアップ");
+    startPadVib("マリオ[スリップアップ]");
 
     mJumpVec = -getAirGravityVec() * mActor->getConst().getTable()->mSlipUpHeight;
 
@@ -939,10 +939,10 @@ void Mario::trySlipUpJump() {
 void Mario::tryHangSlipUp() {
     mMovementStates._5 = false;
     getPlayer()->tryJump();
-    changeAnimation("\202\302\202\251\202\334\202\350\203\130\203\212\203\142\203\166\203\101\203\142\203\166" /* つかまりスリップアップ */);
-    playSound("\203\130\203\212\203\142\203\166\203\101\203\142\203\166" /* スリップアップ */);
-    playEffect("\203\130\203\212\203\142\203\166\203\101\203\142\203\166" /* スリップアップ */);
-    startPadVib("\203\175\203\212\203\111[\203\130\203\212\203\142\203\166\203\101\203\142\203\166]" /* マリオ[スリップアップ] */);
+    changeAnimation("つかまりスリップアップ");
+    playSound("スリップアップ");
+    playEffect("スリップアップ");
+    startPadVib("マリオ[スリップアップ]");
 
     const f32 slipUpHeight = mActor->getConst().getTable()->mSlipUpHeightHang;
     mJumpVec = -getAirGravityVec() * slipUpHeight;
@@ -1040,18 +1040,18 @@ void Mario::tryDrop() {
     _10._23 = false;
     mMovementStates._B = false;
 
-    if (isAnimationRun("\215\342\202\267\202\327\202\350\217\343\214\374\202\253\202\244\202\302\202\324\202\271" /* 坂すべり上向きうつぶせ */, 2) || isAnimationRun("\215\342\202\267\202\327\202\350\211\272\214\374\202\253\202\240\202\250\202\336\202\257" /* 坂すべり下向きあおむけ */, 3)) {
+    if (isAnimationRun("坂すべり上向きうつぶせ", 2) || isAnimationRun("坂すべり下向きあおむけ", 3)) {
         _428 = 0xF;
     }
 
-    changeAnimation(nullptr, "\227\216\211\272" /* 落下 */);
+    changeAnimation(nullptr, "落下");
 
     if (getPlayerMode() == 4) {
         _408 = mActor->getConst().getTable()->mBeeGravityPowerTimeD;
         _3BC = mActor->getConst().getTable()->mBeeAirWalkInhibitTimeD - 5;
     }
 
-    if (isAnimationRun("\203\126\203\207\201\133\203\147\222\205\222\156" /* ショート着地 */)) {
+    if (isAnimationRun("ショート着地")) {
         mMovementStates._23 = true;
     }
 
@@ -1221,21 +1221,21 @@ void Mario::procJump(bool a1) {
     }
 
     if (!isRising()) {
-        if (isAnimationRun("\203\127\203\203\203\223\203\166B" /* ジャンプB */)) {
+        if (isAnimationRun("ジャンプB")) {
             stopAnimation(nullptr);
         }
 
         if (!mSwim->_1B2) {
-            if (isAnimationRun("\220\205\211\152\203\130\203\163\203\223\210\332\223\256" /* 水泳スピン移動 */)) {
+            if (isAnimationRun("水泳スピン移動")) {
                 stopAnimation(nullptr);
             }
 
-            if (isAnimationRun("\220\205\211\152\203\130\203\163\203\223\203\127\203\203\203\223\203\166" /* 水泳スピンジャンプ */)) {
+            if (isAnimationRun("水泳スピンジャンプ")) {
                 stopAnimation(nullptr);
             }
 
-            if (isAnimationRun("\220\205\211\152\203\127\203\106\203\142\203\147" /* 水泳ジェット */)) {
-                changeAnimation("\213\363\222\206\210\352\211\361\223\135" /* 空中一回転 */);
+            if (isAnimationRun("水泳ジェット")) {
+                changeAnimation("空中一回転");
             }
         }
 
@@ -1245,7 +1245,7 @@ void Mario::procJump(bool a1) {
         if (ceilDist < 160.0f) {
             jumpGravity = cutGravityElementFromJumpVec(true);
 
-            playEffectTrans("\223\126\210\344\203\161\203\142\203\147" /* 天井ヒット */, mPosition - getAirGravityVec() * ceilDist);
+            playEffectTrans("天井ヒット", mPosition - getAirGravityVec() * ceilDist);
 
             f32 reduce;
             switch (_430) {
@@ -1284,10 +1284,10 @@ void Mario::procJump(bool a1) {
             stopAnimation(nullptr);
             changeAnimationInterpoleFrame(1);
             mDrawStates._8 = true;
-            playSound("\220\272\217\254\203\127\203\203\203\223\203\166" /* 声小ジャンプ */);
+            playSound("声小ジャンプ");
 
             if (_42A != 0) {
-                playEffect("\203\130\203\163\203\223\203\211\203\103\203\147\217\301\213\216" /* スピンライト消去 */);
+                playEffect("スピンライト消去");
             }
         } else {
             mMovementStates._11 = false;
@@ -1300,7 +1300,7 @@ void Mario::procJump(bool a1) {
 
             if (_402 == 0) {
                 cancelTornadoJump();
-                playEffect("\203\130\203\163\203\223\203\211\203\103\203\147\217\301\213\216" /* スピンライト消去 */);
+                playEffect("スピンライト消去");
 
                 if (getPlayerMode() != 4) {
                     _402 = mActor->getConst().getTable()->mAirWalkTime;
@@ -1489,7 +1489,7 @@ void Mario::checkWallJumpHit() {
         if ((_10._E) == 0) {
             mJumpVec = *mFrontWallTriangle->getNormal(0) * 5.0f + getAirGravityVec() * cutGravityElementFromJumpVec(true);
             _10._E = true;
-            changeAnimation("\225\307\202\315\202\266\202\253" /* 壁はじき */);
+            changeAnimation("壁はじき");
         } else {
             const f32 jumpMag = mJumpVec.length();
             cutVecElementFromJumpVec(*mFrontWallTriangle->getNormal(0));
@@ -1499,7 +1499,7 @@ void Mario::checkWallJumpHit() {
 }
 
 void Mario::decideSlipUp() {
-    if (isAnimationRun("\225\307\202\315\202\266\202\253" /* 壁はじき */)) {
+    if (isAnimationRun("壁はじき")) {
         return;
     }
 
@@ -1621,46 +1621,46 @@ bool Mario::jumpToHipDrop() {
         _430 = 0;
     }
 
-    if (isAnimationRun("\203\112\203\212\203\112\203\212\214\300\212\105" /* カリカリ限界 */)) {
+    if (isAnimationRun("カリカリ限界")) {
         stopAnimationUpper(nullptr);
     }
 
     if (isPlayerModeHopper()) {
-        _720 = getAnimationStringPointer("\203\172\203\142\203\160\201\133\203\161\203\142\203\166\203\150\203\215\203\142\203\166\212\112\216\156" /* ホッパーヒップドロップ開始 */);
-        _724 = getAnimationStringPointer("\203\172\203\142\203\160\201\133\203\161\203\142\203\166\203\150\203\215\203\142\203\166" /* ホッパーヒップドロップ */);
-        _728 = getAnimationStringPointer("\203\161\203\142\203\166\203\150\203\215\203\142\203\166\222\205\222\156" /* ヒップドロップ着地 */);
+        _720 = getAnimationStringPointer("ホッパーヒップドロップ開始");
+        _724 = getAnimationStringPointer("ホッパーヒップドロップ");
+        _728 = getAnimationStringPointer("ヒップドロップ着地");
         startHipDropBlur();
     } else if (getPlayerMode() == 4) {
-        _720 = getAnimationStringPointer("\203\156\203\140\203\161\203\142\203\166\203\150\203\215\203\142\203\166\212\112\216\156" /* ハチヒップドロップ開始 */);
-        _724 = getAnimationStringPointer("\203\156\203\140\203\161\203\142\203\166\203\150\203\215\203\142\203\166" /* ハチヒップドロップ */);
+        _720 = getAnimationStringPointer("ハチヒップドロップ開始");
+        _724 = getAnimationStringPointer("ハチヒップドロップ");
 
         if (mActor->mBeeWallWalk != 0) {
-            _728 = getAnimationStringPointer("\203\156\203\140\203\161\203\142\203\166\203\150\203\215\203\142\203\166\225\307\222\205\222\156" /* ハチヒップドロップ壁着地 */);
+            _728 = getAnimationStringPointer("ハチヒップドロップ壁着地");
         } else {
-            _728 = getAnimationStringPointer("\203\156\203\140\203\161\203\142\203\166\203\150\203\215\203\142\203\166\222\205\222\156" /* ハチヒップドロップ着地 */);
+            _728 = getAnimationStringPointer("ハチヒップドロップ着地");
         }
     } else if (isNormalDrop) {
-        _720 = getAnimationStringPointer("\203\130\203\163\203\223\203\161\203\142\203\166\203\150\203\215\203\142\203\166\212\112\216\156" /* スピンヒップドロップ開始 */);
-        _724 = getAnimationStringPointer("\203\130\203\163\203\223\203\161\203\142\203\166\203\150\203\215\203\142\203\166" /* スピンヒップドロップ */);
-        _728 = getAnimationStringPointer("\203\130\203\163\203\223\203\161\203\142\203\166\203\150\203\215\203\142\203\166\222\205\222\156" /* スピンヒップドロップ着地 */);
-        stopEffect("\203\130\203\163\203\223\203\211\203\103\203\147" /* スピンライト */);
+        _720 = getAnimationStringPointer("スピンヒップドロップ開始");
+        _724 = getAnimationStringPointer("スピンヒップドロップ");
+        _728 = getAnimationStringPointer("スピンヒップドロップ着地");
+        stopEffect("スピンライト");
         _10._27 = true;
     } else {
-        _720 = getAnimationStringPointer("\203\161\203\142\203\166\203\150\203\215\203\142\203\166\212\112\216\156" /* ヒップドロップ開始 */);
-        _724 = getAnimationStringPointer("\203\161\203\142\203\166\203\150\203\215\203\142\203\166" /* ヒップドロップ */);
-        _728 = getAnimationStringPointer("\203\161\203\142\203\166\203\150\203\215\203\142\203\166\222\205\222\156" /* ヒップドロップ着地 */);
+        _720 = getAnimationStringPointer("ヒップドロップ開始");
+        _724 = getAnimationStringPointer("ヒップドロップ");
+        _728 = getAnimationStringPointer("ヒップドロップ着地");
         startHipDropBlur();
     }
 
     changeAnimation(_720, _724);
-    playSound("\220\113\203\150\203\215\203\142\203\166\211\361\223\135" /* 尻ドロップ回転 */);
+    playSound("尻ドロップ回転");
 
     if (isNormalDrop) {
-        playSound("\220\272\203\130\203\163\203\223\220\113\203\150\203\215\203\142\203\166" /* 声スピン尻ドロップ */);
-        playSound("\203\130\203\163\203\223\220\113\203\150\203\215\203\142\203\166\211\361\223\135" /* スピン尻ドロップ回転 */);
+        playSound("声スピン尻ドロップ");
+        playSound("スピン尻ドロップ回転");
 
     } else {
-        playSound("\220\272\220\113\203\150\203\215\203\142\203\166" /* 声尻ドロップ */);
+        playSound("声尻ドロップ");
     }
 
     _424 = mActor->getConst().getTable()->mHipDropZeroGrTime;
@@ -1722,7 +1722,7 @@ void Mario::procHipDrop() {
             }
 
             u16 endLimit = 0xF;
-            if (isAnimationRun("\203\130\203\163\203\223\203\161\203\142\203\166\203\150\203\215\203\142\203\166\222\205\222\156" /* スピンヒップドロップ着地 */)) {
+            if (isAnimationRun("スピンヒップドロップ着地")) {
                 endLimit = 0x2D;
             }
 
@@ -1743,8 +1743,8 @@ void Mario::procHipDrop() {
             if (isAnimationTerminate(nullptr) || shouldEnd) {
                 mMovementStates.jumping = false;
                 mMovementStates._B = false;
-                stopAnimation(nullptr, "\212\356\226\173" /* 基本 */);
-                stopEffect("\221\256\220\253\220\113\203\150\203\215\203\142\203\166" /* 属性尻ドロップ */);
+                stopAnimation(nullptr, "基本");
+                stopEffect("属性尻ドロップ");
 
                 if (checkTrgA()) {
                     tryJump();
@@ -1766,15 +1766,15 @@ void Mario::procHipDrop() {
             if (isCurrentFloorSink()) {
                 mMovementStates.jumping = false;
                 mMovementStates._B = false;
-                stopAnimation(nullptr, "\212\356\226\173" /* 基本 */);
+                stopAnimation(nullptr, "基本");
                 mSinkTimer = 200;
                 return;
             }
 
-            playSound("\220\113\203\150\203\215\203\142\203\166\222\205\222\156" /* 尻ドロップ着地 */);
-            playSound("\220\272\220\113\203\150\203\215\203\142\203\166\222\205\222\156" /* 声尻ドロップ着地 */);
-            playEffectRT("\221\256\220\253\220\113\203\150\203\215\203\142\203\166" /* 属性尻ドロップ */, _368, mPosition);
-            startPadVib("\215\305\213\255" /* 最強 */);
+            playSound("尻ドロップ着地");
+            playSound("声尻ドロップ着地");
+            playEffectRT("属性尻ドロップ", _368, mPosition);
+            startPadVib("最強");
             startCamVib(0);
             mDrawStates._14 = true;
             MR::removeAllClingingKarikari();
@@ -1782,7 +1782,7 @@ void Mario::procHipDrop() {
             if (_960 == 0x1B || _960 == 0x1C || _960 == 9) {
                 mMovementStates.jumping = false;
                 mMovementStates._B = false;
-                stopAnimation(nullptr, "\212\356\226\173" /* 基本 */);
+                stopAnimation(nullptr, "基本");
                 return;
             }
 
@@ -1803,7 +1803,7 @@ void Mario::procHipDrop() {
         if (MR::isNearZero(mActor->getLastMove())) {
             _422++;
             if (_422 == 0xF) {
-                stopAnimation(nullptr, "\212\356\226\173" /* 基本 */);
+                stopAnimation(nullptr, "基本");
                 mMovementStates.jumping = false;
                 mMovementStates._B = false;
                 mJumpVec.zero();
@@ -1840,8 +1840,8 @@ PROC_HIP_DROP_MOVE:
             mJumpVec.setLength(mActor->getConst().getTable()->mLimitSpeedHipDrop);
         }
 
-        if (_10._27 && isAnimationRun("\203\130\203\163\203\223\203\161\203\142\203\166\203\150\203\215\203\142\203\166" /* スピンヒップドロップ */)) {
-            playSound("\203\130\203\163\203\223\220\113\203\150\203\215\203\142\203\166\227\216\211\272" /* スピン尻ドロップ落下 */);
+        if (_10._27 && isAnimationRun("スピンヒップドロップ")) {
+            playSound("スピン尻ドロップ落下");
 
             Triangle strikeTriangles[0x20];
             HitSensor* homingSensor = nullptr;
@@ -1894,7 +1894,7 @@ PROC_HIP_DROP_MOVE:
 }
 
 void Mario::doAirWalk() {
-    if (isAnimationRun("\220\205\211\152\203\127\203\106\203\142\203\147" /* 水泳ジェット */)) {
+    if (isAnimationRun("水泳ジェット")) {
         return;
     }
 
@@ -1906,7 +1906,7 @@ void Mario::doAirWalk() {
         return;
     }
 
-    if (isAnimationRun("\225\307\202\315\202\266\202\253" /* 壁はじき */)) {
+    if (isAnimationRun("壁はじき")) {
         return;
     }
 
@@ -1921,8 +1921,8 @@ void Mario::doAirWalk() {
     if (_428 != 0) {
         _428--;
         if (_428 == 0) {
-            stopAnimation("\215\342\202\267\202\327\202\350\217\343\214\374\202\253\202\244\202\302\202\324\202\271" /* 坂すべり上向きうつぶせ */, 2);
-            stopAnimation("\215\342\202\267\202\327\202\350\211\272\214\374\202\253\202\240\202\250\202\336\202\257" /* 坂すべり下向きあおむけ */, 3);
+            stopAnimation("坂すべり上向きうつぶせ", 2);
+            stopAnimation("坂すべり下向きあおむけ", 3);
         }
 
         return;
@@ -1994,7 +1994,7 @@ void Mario::doAirWalk() {
             _3CA++;
         }
 
-        if (isAnimationRun("\203\136\201\133\203\223\203\127\203\203\203\223\203\166" /* ターンジャンプ */)) {
+        if (isAnimationRun("ターンジャンプ")) {
             _3CA = 0;
             speedKiller = 0.1f;
         } else if (_3CA < mActor->mConst->getTable()->mBackJumpLimitFrame) {
@@ -2039,10 +2039,10 @@ void Mario::doAirWalk() {
         mJumpVec += moveDir * mActor->getConst().getTable()->mWalkSpeed * 5.0f / mActor->getConst().getTable()->mAirWalkTimerFact2;
     } else if (_430 == 0xB && !isRising()) {
         mJumpVec += moveDir * mActor->getConst().getTable()->mWalkSpeed * 5.0f / mActor->getConst().getTable()->mAirWalkTimerFact2;
-        playSound("\221\330\213\363\222\206" /* 滞空中 */);
+        playSound("滞空中");
     } else if (getPlayerMode() == 4) {
         mJumpVec += moveDir * mActor->getConst().getTable()->mBeeAirWalkAcc;
-        playSound("\221\330\213\363\222\206" /* 滞空中 */);
+        playSound("滞空中");
     } else if (getPlayerMode() == 6) {
         if (mJumpVec.dot(moveDir) >= 0.0f) {
             f32 frontGravity = moveDir.dot(mFrontVec);
@@ -2126,12 +2126,12 @@ void Mario::stopJump() {
     _426 = 0;
     _428 = 0;
 
-    if (isDefaultAnimationRun("\227\216\211\272" /* 落下 */)) {
-        changeAnimation(nullptr, "\212\356\226\173" /* 基本 */);
+    if (isDefaultAnimationRun("落下")) {
+        changeAnimation(nullptr, "基本");
     }
 
     if (isDefaultAnimationRun(_724)) {
-        changeAnimation(nullptr, "\212\356\226\173" /* 基本 */);
+        changeAnimation(nullptr, "基本");
     }
 
     mWall->_1C = 0;
@@ -2141,9 +2141,9 @@ void Mario::cancelTornadoJump() {
     _430 = 0;
 
     if ((mMovementStates._1) == 0) {
-        stopAnimation("\203\130\203\163\203\223\203\127\203\203\203\223\203\166" /* スピンジャンプ */, "\227\216\211\272" /* 落下 */);
+        stopAnimation("スピンジャンプ", "落下");
     } else {
-        stopAnimation("\203\130\203\163\203\223\203\127\203\203\203\223\203\166" /* スピンジャンプ */);
+        stopAnimation("スピンジャンプ");
     }
 
     _4B0 = mPosition;
@@ -2265,12 +2265,12 @@ void Mario::checkAndTryForceJump() {
         mMovementStates._21 = true;
         mMovementStates._2E = true;
         _304 = forceJumpVec;
-        changeAnimation("\203\164\203\212\201\133\203\127\203\203\203\223\203\166" /* フリージャンプ */);
+        changeAnimation("フリージャンプ");
 
         if (mActor->isEnableNerveChange()) {
-            playSound("\203\147\203\211\203\223\203\174\203\212\203\223\203\127\203\203\203\223\203\166\221\345" /* トランポリンジャンプ大 */);
-            playSound("\220\272\221\345\203\127\203\203\203\223\203\166" /* 声大ジャンプ */);
-            playSound("\203\127\203\203\203\223\203\166\223\245\220\330" /* ジャンプ踏切 */);
+            playSound("トランポリンジャンプ大");
+            playSound("声大ジャンプ");
+            playSound("ジャンプ踏切");
         }
     }
 }
@@ -2296,7 +2296,7 @@ void Mario::doLanding() {
 
     f32 deltadot = MR::abs((mPosition - _4B0).dot(*getGravityVec()));
     if (_3BC <= 3 && deltadot < 1.0f && mJumpVec.length() < 10.0f) {
-        stopAnimation(nullptr, "\212\356\226\173" /* 基本 */);
+        stopAnimation(nullptr, "基本");
         return;
     }
 
@@ -2308,18 +2308,18 @@ void Mario::doLanding() {
     resetTornado();
 
     if (mActor->mBeeWallWalk != 0) {
-        playSound("\203\156\203\140\225\307\202\255\202\301\202\302\202\253" /* ハチ壁くっつき */);
+        playSound("ハチ壁くっつき");
     } else {
-        playSound("\222\205\222\156" /* 着地 */);
+        playSound("着地");
     }
 
-    if ((isAnimationRun("\203\130\203\120\201\133\203\147\203\101\203\116\203\132\203\213\203\127\203\203\203\223\203\166" /* スケートアクセルジャンプ */) || isAnimationRun("\203\130\203\120\201\133\203\147\203\127\203\203\203\223\203\1662" /* スケートジャンプ2 */) || isAnimationRun("\203\130\203\120\201\133\203\147\203\127\203\203\203\223\203\1663" /* スケートジャンプ3 */)) &&
+    if ((isAnimationRun("スケートアクセルジャンプ") || isAnimationRun("スケートジャンプ2") || isAnimationRun("スケートジャンプ3")) &&
         (getPlayerMode() == 3 || getPlayerMode() == 0)) {
-        playEffect("\203\130\203\120\201\133\203\147\222\205\222\156" /* スケート着地 */);
+        playEffect("スケート着地");
         if (getStickP() == 0.0f) {
             mJumpVec.zero();
             stopWalk();
-            changeAnimation("\203\130\203\120\201\133\203\147\220\303\216\176\222\205\222\156" /* スケート静止着地 */, "\212\356\226\173" /* 基本 */);
+            changeAnimation("スケート静止着地", "基本");
         } else {
             changeStatus(mSkate);
         }
@@ -2331,18 +2331,18 @@ void Mario::doLanding() {
         if (checkSquat(false)) {
             mMovementStates._A = true;
             mWalkSpeed = 1.0f;
-            stopAnimation(nullptr, "\202\265\202\341\202\252\202\335\212\356\226\173" /* しゃがみ基本 */);
+            stopAnimation(nullptr, "しゃがみ基本");
         } else {
             cancelSquatMode();
             stopAnimationUpper(nullptr);
-            changeAnimation("\203\130\203\120\201\133\203\147\220\303\216\176\222\205\222\156" /* スケート静止着地 */, "\212\356\226\173" /* 基本 */);
+            changeAnimation("スケート静止着地", "基本");
         }
 
         return;
     }
 
-    if (isAnimationRun("\203\164\201\133\203\164\203\100\203\103\203\136\201\133\222\205\222\156" /* フーファイター着地 */)) {
-        stopAnimation(nullptr, "\212\356\226\173" /* 基本 */);
+    if (isAnimationRun("フーファイター着地")) {
+        stopAnimation(nullptr, "基本");
         return;
     }
 
@@ -2354,17 +2354,17 @@ void Mario::doLanding() {
         if (landingType == 2) {
             getPlayer()->mMovementStates._3E = 0;
             stopWalk();
-            playSound("\217\144\202\242\222\205\222\156" /* 重い着地 */);
-            playSound("\220\272\203\130\203\145\201\133\203\127\203\103\203\223\222\205\222\156" /* 声ステージイン着地 */);
-            changeAnimation("\203\130\203\145\201\133\203\127\203\103\203\223B" /* ステージインB */, "\212\356\226\173" /* 基本 */);
+            playSound("重い着地");
+            playSound("声ステージイン着地");
+            changeAnimation("ステージインB", "基本");
             startCamVib(4);
             return;
         }
 
         if (landingType == 1) {
             getPlayer()->mMovementStates._3E = 0;
-            playEffect("\203\130\201\133\203\160\201\133\203\130\203\163\203\223\203\150\203\211\203\103\203\157\217\111\227\271" /* スーパースピンドライバ終了 */);
-            playEffect("\213\244\222\312\222\205\222\156\221\345" /* 共通着地大 */);
+            playEffect("スーパースピンドライバ終了");
+            playEffect("共通着地大");
             if (!isStickFull()) {
                 keepFrontSlip = true;
             }
@@ -2376,7 +2376,7 @@ void Mario::doLanding() {
                 } else {
                     stopWalk();
                     startCamVib(4);
-                    changeAnimation("\203\156\201\133\203\150\222\205\222\156" /* ハード着地 */, "\212\356\226\173" /* 基本 */);
+                    changeAnimation("ハード着地", "基本");
                     _3CE += 0x10;
                     forceSetHeadVecKeepSide(_368);
                 }
@@ -2385,19 +2385,19 @@ void Mario::doLanding() {
             }
         } else {
             if (isCurrentFloorSink()) {
-                stopAnimation(nullptr, "\212\356\226\173" /* 基本 */);
+                stopAnimation(nullptr, "基本");
                 mSinkTimer = 64;
                 return;
             }
 
             if ((_960 == 0x1B || _960 == 0x1C)) {
                 if (!strcmp(MR::getSoundCodeString(_45C), "Sand")) {
-                    stopAnimation(nullptr, "\212\356\226\173" /* 基本 */);
+                    stopAnimation(nullptr, "基本");
                     mSinkTimer = 32;
                     return;
                 }
             } else if (_3BC > 10) {
-                playEffect("\213\244\222\312\222\205\222\156\225\201\222\312" /* 共通着地普通 */);
+                playEffect("共通着地普通");
             }
         }
     }
@@ -2446,17 +2446,17 @@ void Mario::doLanding() {
 
     fixFrontVecByGravity();
 
-    if (!doHardLanding && !mDrawStates._C && _430 != 0xE && !isAnimationRun("\224\362\202\321\215\236\202\335\203\127\203\203\203\223\203\166" /* 飛び込みジャンプ */) && !isAnimationRun("\214\343\225\373\224\362\202\321\215\236\202\335\203\127\203\203\203\223\203\166" /* 後方飛び込みジャンプ */) &&
-        !_10._8 && !isAnimationRun("\220\205\217\343\203\137\203\201\201\133\203\127\222\206" /* 水上ダメージ中 */)) {
+    if (!doHardLanding && !mDrawStates._C && _430 != 0xE && !isAnimationRun("飛び込みジャンプ") && !isAnimationRun("後方飛び込みジャンプ") &&
+        !_10._8 && !isAnimationRun("水上ダメージ中")) {
         if (_430 == 5 && checkSquat(false)) {
             mMovementStates._A = true;
             mWalkSpeed = 1.0f;
-            stopAnimation(nullptr, "\202\265\202\341\202\252\202\335\212\356\226\173" /* しゃがみ基本 */);
+            stopAnimation(nullptr, "しゃがみ基本");
             goto POST_LANDING;
         }
 
         if (((isStickFull() || _60D) && _3CA == 0) || (((mMovementStates._B) == 0) && checkSquat(false))) {
-            stopAnimation(nullptr, "\212\356\226\173" /* 基本 */);
+            stopAnimation(nullptr, "基本");
             if (!_10._A) {
                 recordTurnSlipAngle();
             }
@@ -2494,7 +2494,7 @@ void Mario::doLanding() {
         if (frontDot > 6.0f && !keepFrontSlip) {
             mWalkSpeed = frontDot / mActor->getConst().getTable()->mJumpFrontSpeed;
             mWalkSpeed = MR::clamp(mWalkSpeed, 0.0f, 2.0f);
-            stopAnimation(nullptr, "\212\356\226\173" /* 基本 */);
+            stopAnimation(nullptr, "基本");
             _3FA = 0;
             _71E = 0;
 
@@ -2510,8 +2510,8 @@ void Mario::doLanding() {
         setFrontVecKeepUp(-_220);
     }
 
-    if (isAnimationRun("\224\362\202\321\215\236\202\335\203\127\203\203\203\223\203\166" /* 飛び込みジャンプ */) || isAnimationRun("\214\343\225\373\224\362\202\321\215\236\202\335\203\127\203\203\203\223\203\166" /* 後方飛び込みジャンプ */) || _10._8) {
-        if (isAnimationRun("\214\343\225\373\224\362\202\321\215\236\202\335\203\127\203\203\203\223\203\166" /* 後方飛び込みジャンプ */)) {
+    if (isAnimationRun("飛び込みジャンプ") || isAnimationRun("後方飛び込みジャンプ") || _10._8) {
+        if (isAnimationRun("後方飛び込みジャンプ")) {
             setFrontVecKeepUp(-mFrontVec);
         }
 
@@ -2520,16 +2520,16 @@ void Mario::doLanding() {
         }
 
         stopWalk();
-        if (doHardLanding || isAnimationRun("\214\343\225\373\224\362\202\321\215\236\202\335\203\127\203\203\203\223\203\166" /* 後方飛び込みジャンプ */)) {
+        if (doHardLanding || isAnimationRun("後方飛び込みジャンプ")) {
             if (doHardLanding) {
-                changeAnimation("\224\362\202\321\215\236\202\335\216\270\224\163\211\361\223\135\222\205\222\156" /* 飛び込み失敗回転着地 */, "\212\356\226\173" /* 基本 */);
+                changeAnimation("飛び込み失敗回転着地", "基本");
                 startSlidingTask(8, 5.0f, 0x19);
                 startCamVib(0);
             } else {
-                changeAnimation("\224\362\202\321\215\236\202\335\216\270\224\163\222\205\222\156" /* 飛び込み失敗着地 */, "\212\356\226\173" /* 基本 */);
+                changeAnimation("飛び込み失敗着地", "基本");
             }
         } else {
-            changeAnimation("\224\362\202\321\215\236\202\335\216\270\224\163\222\205\222\156" /* 飛び込み失敗着地 */, "\212\356\226\173" /* 基本 */);
+            changeAnimation("飛び込み失敗着地", "基本");
         }
 
         goto POST_LANDING;
@@ -2540,16 +2540,16 @@ void Mario::doLanding() {
         switch (_430) {
         case 0:
         case 7:
-            changeAnimation("\222\205\222\156" /* 着地 */, "\212\356\226\173" /* 基本 */);
+            changeAnimation("着地", "基本");
             break;
         case 1:
-            changeAnimation("\222\205\222\156B" /* 着地B */, "\212\356\226\173" /* 基本 */);
+            changeAnimation("着地B", "基本");
             break;
         case 2:
-            changeAnimation("\222\205\222\156C" /* 着地C */, "\212\356\226\173" /* 基本 */);
+            changeAnimation("着地C", "基本");
             break;
         case 4:
-            changeAnimation("\222\205\222\156\203\136\201\133\203\223" /* 着地ターン */, "\212\356\226\173" /* 基本 */);
+            changeAnimation("着地ターン", "基本");
             break;
         case 5:
             if (!checkSquat(false)) {
@@ -2560,29 +2560,29 @@ void Mario::doLanding() {
                 stopAnimationUpper(nullptr);
             }
 
-            changeAnimation("\222\205\222\156\225\235\202\306\202\321" /* 着地幅とび */, "\212\356\226\173" /* 基本 */);
+            changeAnimation("着地幅とび", "基本");
             break;
         case 6:
-            changeAnimation("\202\265\202\341\202\252\202\335\203\127\203\203\203\223\203\166\222\205\222\156" /* しゃがみジャンプ着地 */, "\212\356\226\173" /* 基本 */);
+            changeAnimation("しゃがみジャンプ着地", "基本");
             break;
         default:
-            if (isAnimationRun("\220\205\217\343\203\137\203\201\201\133\203\127\222\206" /* 水上ダメージ中 */)) {
-                changeAnimation("\222\206\203\137\203\201\201\133\203\127\222\205\222\156" /* 中ダメージ着地 */, "\212\356\226\173" /* 基本 */);
+            if (isAnimationRun("水上ダメージ中")) {
+                changeAnimation("中ダメージ着地", "基本");
             } else {
-                changeAnimation("\222\205\222\156" /* 着地 */, "\212\356\226\173" /* 基本 */);
+                changeAnimation("着地", "基本");
             }
 
             break;
         case 3:
         case 0xA:
-            stopAnimation(nullptr, "\212\356\226\173" /* 基本 */);
+            stopAnimation(nullptr, "基本");
             break;
         case 0xE:
-            playSound("\223\174\202\352" /* 倒れ */);
-            playSound("\222\205\222\156" /* 着地 */);
-            playSound("\220\272\217\254\203\137\203\201\201\133\203\127" /* 声小ダメージ */);
-            playEffect("\213\244\222\312\210\370\202\253\226\337\202\265\222\205\222\156" /* 共通引き戻し着地 */);
-            changeAnimation("\210\370\202\253\226\337\202\265\222\205\222\156" /* 引き戻し着地 */, "\212\356\226\173" /* 基本 */);
+            playSound("倒れ");
+            playSound("着地");
+            playSound("声小ダメージ");
+            playEffect("共通引き戻し着地");
+            changeAnimation("引き戻し着地", "基本");
             doHardLanding = false;
             blendWait = false;
             break;
@@ -2590,26 +2590,26 @@ void Mario::doLanding() {
 
         stopWalk();
         if (blendWait) {
-            changeAnimation("\203\126\203\207\201\133\203\147\222\205\222\156" /* ショート着地 */, "\212\356\226\173" /* 基本 */);
+            changeAnimation("ショート着地", "基本");
         }
 
         if (doHardLanding) {
-            changeAnimation("\203\156\201\133\203\150\222\205\222\156" /* ハード着地 */, "\212\356\226\173" /* 基本 */);
-            playSound("\217\144\202\242\222\205\222\156" /* 重い着地 */);
-            playSound("\220\272\222\205\222\156\222\342\216\176" /* 声着地停止 */);
+            changeAnimation("ハード着地", "基本");
+            playSound("重い着地");
+            playSound("声着地停止");
             startCamVib(4);
             _3CE += 0x10;
         }
 
         if (mActor->mBeeWallWalk != 0) {
-            changeAnimation("\203\156\203\140\231\263\231\264\222\205\222\156" /* ハチ匍匐着地 */, "\212\356\226\173" /* 基本 */);
+            changeAnimation("ハチ匍匐着地", "基本");
         }
     } else {
-        if (!isAnimationRun("\215\342\202\267\202\327\202\350\217\343\214\374\202\253\202\244\202\302\202\324\202\271" /* 坂すべり上向きうつぶせ */, 2) && !isAnimationRun("\215\342\202\267\202\327\202\350\211\272\214\374\202\253\202\240\202\250\202\336\202\257" /* 坂すべり下向きあおむけ */, 3)) {
-            stopAnimation(nullptr, "\212\356\226\173" /* 基本 */);
+        if (!isAnimationRun("坂すべり上向きうつぶせ", 2) && !isAnimationRun("坂すべり下向きあおむけ", 3)) {
+            stopAnimation(nullptr, "基本");
         }
 
-        changeAnimation("\202\267\202\327\202\350\222\205\222\156" /* すべり着地 */, "\212\356\226\173" /* 基本 */);
+        changeAnimation("すべり着地", "基本");
         _71E = 0;
     }
 
@@ -2673,8 +2673,8 @@ void Mario::incAirWalkTimer() {
     const u16 nextLimit = mActor->getConst().getTable()->mAirWalkTime;
 
     if (nextTimer >= nextLimit) {
-        playSound("\203\156\203\140\221\314\227\315\212\256\221\123\211\361\225\234" /* ハチ体力完全回復 */);
+        playSound("ハチ体力完全回復");
     } else {
-        playSound("\203\156\203\140\221\314\227\315\211\361\225\234" /* ハチ体力回復 */);
+        playSound("ハチ体力回復");
     }
 }

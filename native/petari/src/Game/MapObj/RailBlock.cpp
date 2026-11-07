@@ -19,7 +19,7 @@ namespace NrvRailBlock {
 RailBlock::RailBlock(const char* pName) : LiveActor(pName), mRailSpeed(10), mMoveTime(100), mIsConnectedToRail(), mIsBig() {
 }
 
-void RailBlock::init(const JMapInfoIter& rIter) {
+void RailBlock::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     const char* objName = nullptr;
     MR::getObjectName(&objName, rIter);
@@ -41,8 +41,8 @@ void RailBlock::init(const JMapInfoIter& rIter) {
 
     MR::setGroupClipping(this, rIter, 16);
 
-    MR::getJMapInfoArg0NoInit(rIter, &mRailSpeed);
-    MR::getJMapInfoArg1NoInit(rIter, &mMoveTime);
+    MR::getPlacementArg0NoInit(rIter, &mRailSpeed);
+    MR::getPlacementArg1NoInit(rIter, &mMoveTime);
 
     initNerve(GET_NERVE(RailBlock, RailBlockNrvMove));
 

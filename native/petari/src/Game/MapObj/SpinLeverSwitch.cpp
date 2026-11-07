@@ -19,7 +19,7 @@ SpinLeverSwitch::SpinLeverSwitch(const char* pName) : LiveActor(pName), mConnect
     mConnector = new MapObjConnector(this);
 }
 
-void SpinLeverSwitch::init(const JMapInfoIter& rIter) {
+void SpinLeverSwitch::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("SpinLeverSwitch", nullptr, false);
     MR::connectToSceneMapObj(this);

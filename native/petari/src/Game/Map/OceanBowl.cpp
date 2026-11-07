@@ -54,7 +54,7 @@ OceanBowl::OceanBowl(const char* pName)
     }
 }
 
-void OceanBowl::init(const JMapInfoIter& rIter) {
+void OceanBowl::init(const TableIter& rIter) {
     MR::connectToScene(this, MR::MovementType_MapObj, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_OceanBowl);
 
     MR::initDefaultPos(this, rIter);

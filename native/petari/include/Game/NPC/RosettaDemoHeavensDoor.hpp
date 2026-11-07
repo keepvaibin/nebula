@@ -9,9 +9,9 @@ class Rosetta;
 
 class RosettaDemoHeavensDoor1 : public NerveExecutor {
 public:
-    RosettaDemoHeavensDoor1(Rosetta* pHost, const JMapInfoIter& rIter);
+    RosettaDemoHeavensDoor1(Rosetta* pHost, const TableIter& rIter);
 
-    static void makeArchiveList(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter);
+    static void makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter);
 
     template < typename T >
     void changeNerve() {
@@ -34,9 +34,9 @@ public:
 
 class RosettaDemoHeavensDoor2 : public NerveExecutor {
 public:
-    RosettaDemoHeavensDoor2(Rosetta* pHost, const JMapInfoIter& rIter);
+    RosettaDemoHeavensDoor2(Rosetta* pHost, const TableIter& rIter);
 
-    static void makeArchiveList(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter);
+    static void makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter);
 
     template < typename T >
     void changeNerve() {

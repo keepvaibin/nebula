@@ -2,7 +2,7 @@
 #include "Game/Demo/DemoFunction.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/JMapInfo.hpp"
+#include "Game/Util/Table.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 
@@ -10,7 +10,7 @@ DemoSoundInfo::DemoSoundInfo() : mPartName(), mBgm(""), mSystemSe(""), mReturnBg
 }
 
 DemoSoundKeeper::DemoSoundKeeper(DemoExecutor* pExecutor) : DemoSheetKeeperBase(pExecutor) {
-    JMapInfo* pMap = nullptr;
+    Table* pMap = nullptr;
     const DemoExecutor* pSheetExecutor = mExecutor;
     const s32& count = DemoFunction::createSheetParser(pSheetExecutor, getTypeString(), &pMap);
     mInfo.init(count);
@@ -63,7 +63,7 @@ inline const char* DemoSoundKeeper::getTypeString() const {
 }
 
 inline const char* DemoSoundKeeper::getName() const {
-    return "\203\124\203\105\203\223\203\150" /* サウンド */;
+    return "サウンド";
 }
 
 #include "Game/Demo/DemoSheetKeeperInfoHolder.hpp"

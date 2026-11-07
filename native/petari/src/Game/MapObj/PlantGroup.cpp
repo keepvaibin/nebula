@@ -40,7 +40,7 @@ PlantGroup::PlantGroup(const char* pName)
       mHintTimer(::sHintEffectEmitInterval), mHintIndex() {
 }
 
-void PlantGroup::init(const JMapInfoIter& rIter) {
+void PlantGroup::init(const TableIter& rIter) {
     MR::connectToScene(this, MR::MovementType_MapObj, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_None);
     MR::initDefaultPos(this, rIter);
     const char* name = nullptr;
@@ -55,7 +55,7 @@ void PlantGroup::init(const JMapInfoIter& rIter) {
     }
 
     s32 count = -1;
-    MR::getJMapInfoArg0NoInit(rIter, &count);
+    MR::getPlacementArg0NoInit(rIter, &count);
 
     if (count > 0) {
         mMemberCount = count;
@@ -64,14 +64,14 @@ void PlantGroup::init(const JMapInfoIter& rIter) {
     }
 
     s32 itemCount = 0;
-    MR::getJMapInfoArg1NoInit(rIter, &itemCount);
+    MR::getPlacementArg1NoInit(rIter, &itemCount);
 
     if (itemCount < 0) {
         itemCount = 0;
     }
 
     s32 itemType = -1;
-    MR::getJMapInfoArg2NoInit(rIter, &itemType);
+    MR::getPlacementArg2NoInit(rIter, &itemType);
 
     if (itemType == 1) {
         mIsStarPiece = true;
@@ -116,16 +116,16 @@ void PlantGroup::makeActorDead() {
     }
 }
 
-void PlantGroup::initMember(s32 itemCount, const JMapInfoIter&) {
+void PlantGroup::initMember(s32 itemCount, const TableIter&) {
     mMembers = new PlantMember*[mMemberCount];
 
     for (s32 i = 0; i < mMemberCount; i++) {
         if (mPlantType == 1) {
-            mMembers[i] = new PlantMember("\211\324" /* 花 */, "Flower", false, nullptr);
+            mMembers[i] = new PlantMember("花", "Flower", false, nullptr);
         } else if (mPlantType == 2) {
-            mMembers[i] = new PlantMember("\220\302\202\242\211\324" /* 青い花 */, "FlowerBlue", false, nullptr);
+            mMembers[i] = new PlantMember("青い花", "FlowerBlue", false, nullptr);
         } else {
-            mMembers[i] = new PlantMember("\221\220" /* 草 */, "CutBush", true, nullptr);
+            mMembers[i] = new PlantMember("草", "CutBush", true, nullptr);
         }
 
         mMembers[i]->initWithoutIter();
@@ -146,7 +146,7 @@ void PlantGroup::initMember(s32 itemCount, const JMapInfoIter&) {
     }
 
     initHitSensor(1);
-    MR::addHitSensorMapObj(this, "\213\253\212\105\213\205" /* 境界球 */, 16, 100.0f, Vec3f(gZeroVec));
+    MR::addHitSensorMapObj(this, "境界球", 16, 100.0f, Vec3f(gZeroVec));
 }
 
 s32 PlantGroup::placeOnCollisionFormCircle(Vec3f* pCenter, const Vec3f& rGravity, const Vec3f& rAxisX, const Vec3f& rAxisY) {
@@ -254,7 +254,7 @@ void PlantGroup::initAfterPlacement() {
     placeOnCollisionFormCircle(&center, gravity, axisX, axisY);
     f32 radius = calcBoundingSphereRadius(center);
     f32 scale = mScale.y;
-    HitSensor* sensor = getSensor("\213\253\212\105\213\205" /* 境界球 */);
+    HitSensor* sensor = getSensor("境界球");
     sensor->mRadius = ::sSize + radius * scale;
     MR::setStarPointerTargetRadius3d(this, ::sSize + radius * scale);
     MR::setClippingTypeSphere(this, ::sSize + radius * scale);
@@ -353,7 +353,7 @@ void PlantGroup::endClipped() {
     }
 }
 
-void PlantMember::init(const JMapInfoIter&) {
+void PlantMember::init(const TableIter&) {
     _90 = 1.0f;
     mTouchType = 3;
     _9C = false;

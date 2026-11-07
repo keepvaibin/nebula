@@ -3,7 +3,7 @@
 
 class AutoEffectInfo;
 class EffectKeeper;
-class JMapInfoIter;
+class TableIter;
 class LayoutActor;
 class LiveActor;
 class MultiSceneActor;
@@ -13,7 +13,7 @@ class PaneEffectKeeper;
 class AutoEffectGroup {
 public:
     AutoEffectGroup(const char* pName, int capacity);
-    void add(const JMapInfoIter& rIter);
+    void add(const TableIter& rIter);
 
     const char* getName() const {
         return mName;

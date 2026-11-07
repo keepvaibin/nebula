@@ -89,7 +89,7 @@ namespace NrvPictureBookLayout {
 };  // namespace NrvPictureBookLayout
 
 PictureBookLayout::PictureBookLayout(s32 chapterMin, s32 chapterMax, bool isRosettaReading)
-    : LayoutActor("\212\107\226\173\203\214\203\103\203\101\203\105\203\147" /* 絵本レイアウト */, true), mChapterMin(chapterMin), mChapterMax(chapterMax), mChapterRosettaMax(chapterMax), mChapterNo(1), mPageNo(),
+    : LayoutActor("絵本レイアウト", true), mChapterMin(chapterMin), mChapterMax(chapterMax), mChapterRosettaMax(chapterMax), mChapterNo(1), mPageNo(),
       mTextIndex(), mNotReadedChapterNo(-1), mNotReadedPageNo(-1), mNotReadedTextIndex(-1), _44(), _48(), mTitleTexMap(), mCoverFrontTexMap(),
       mCoverBackTexMap(), mNextItemDir(1), mIsNextItemFast(), mIconAButton(), mContentsButtonPaneController(), mCloseButton() {
     if (!isRosettaReading) {
@@ -97,7 +97,7 @@ PictureBookLayout::PictureBookLayout(s32 chapterMin, s32 chapterMax, bool isRose
     }
 }
 
-void PictureBookLayout::init(const JMapInfoIter& rIter) {
+void PictureBookLayout::init(const TableIter& rIter) {
     initLayoutManagerWithTextBoxBufferLength("PictureBook", 512, 1);
     MR::createAndAddPaneCtrl(this, "AButtonPosition", 1);
     MR::createAndAddPaneCtrl(this, "Text", 1);

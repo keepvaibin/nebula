@@ -61,18 +61,18 @@ Kinopio::Kinopio(const char* pName)
     _16C.set(0.0f, 0.0f, 0.0f, 1.0f);
 }
 
-void Kinopio::init(const JMapInfoIter& rIter) {
+void Kinopio::init(const TableIter& rIter) {
     MR::initDefaultPosAndQuat(this, rIter);
 
     Vec3f rotation(mRotation);
     rotation.scale(MR::toRadian(1.0f));
     _A0.setEuler(rotation);
 
-    MR::getJMapInfoArg1NoInit(rIter, &mObjArg0);
-    MR::getJMapInfoArg2NoInit(rIter, &mBehavior);
-    MR::getJMapInfoArg3NoInit(rIter, &mIsSpawnPowerStarMode);
-    MR::getJMapInfoArg4NoInit(rIter, &mAppearBehavior);
-    MR::getJMapInfoArg7NoInit(rIter, &mGoodsIndex);
+    MR::getPlacementArg1NoInit(rIter, &mObjArg0);
+    MR::getPlacementArg2NoInit(rIter, &mBehavior);
+    MR::getPlacementArg3NoInit(rIter, &mIsSpawnPowerStarMode);
+    MR::getPlacementArg4NoInit(rIter, &mAppearBehavior);
+    MR::getPlacementArg7NoInit(rIter, &mGoodsIndex);
     mScale.set(::sDefaultScale);
     initModelManagerWithAnm("Kinopio", nullptr, false);
     MR::connectToSceneNpc(this);
@@ -83,7 +83,7 @@ void Kinopio::init(const JMapInfoIter& rIter) {
     MR::addHitSensorNpc(this, "Pickel", 8, 50.0f * ::sDefaultScale, Vec3f(0.0f, 50.0f * ::sDefaultScale, 40.0f * ::sDefaultScale));
     MR::invalidateHitSensor(this, "Pickel");
     s32 isInvalidateSensor = -1;
-    MR::getJMapInfoArg6NoInit(rIter, &isInvalidateSensor);
+    MR::getPlacementArg6NoInit(rIter, &isInvalidateSensor);
     if (isInvalidateSensor != -1) {
         MR::invalidateHitSensor(this, "body");
     }

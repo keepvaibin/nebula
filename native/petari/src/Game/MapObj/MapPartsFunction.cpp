@@ -3,7 +3,7 @@
 #include "Game/LiveActor/Spine.hpp"
 
 MapPartsFunction::MapPartsFunction(LiveActor* pHost, const char* pName)
-    : NameObj(pName != nullptr ? pName : "\203\175\203\142\203\166\203\160\201\133\203\143\213\100\224\134" /* マップパーツ機能 */), mSpine(), mHost(pHost), mIsActive(true) {
+    : NameObj(pName != nullptr ? pName : "マップパーツ機能"), mSpine(), mHost(pHost), mIsActive(true) {
 }
 
 bool MapPartsFunction::sendMsgToHost(u32 msg) {

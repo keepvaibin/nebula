@@ -5,7 +5,7 @@
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DrawUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
@@ -39,9 +39,9 @@ namespace NrvAstroDomeSky {
 AstroDomeSky::AstroDomeSky(const char* pName) : LiveActor(pName), mBrkFrame(), mColor(0x00, 0x00, 0x00, 0xFF), mProjmap() {
 }
 
-void AstroDomeSky::init(const JMapInfoIter& rIter) {
+void AstroDomeSky::init(const TableIter& rIter) {
     s32 arg0 = -1;
-    MR::getJMapInfoArg0NoInit(rIter, &arg0);
+    MR::getPlacementArg0NoInit(rIter, &arg0);
 
     const char* pSkyName = ::cAstroDomeSkyTable[arg0 - 1];
     initModelManagerWithAnm(pSkyName, nullptr, true);
@@ -57,9 +57,9 @@ void AstroDomeSky::init(const JMapInfoIter& rIter) {
     initNerve(GET_NERVE(AstroDomeSky, AstroDomeSkyNrvHide));
 
     MR::tryRegisterDemoCast(this, rIter);
-    MR::registerDemoActionNerve(this, GET_NERVE(AstroDomeSky, AstroDomeSkyNrvReturnDemoWait), "\210\332\223\256" /* 移動 */);
-    MR::registerDemoActionNerve(this, GET_NERVE(AstroDomeSky, AstroDomeSkyNrvDisappear), "\203\150\201\133\203\200\217\157\214\273" /* ドーム出現 */);
-    MR::registerDemoCast(this, "\203\175\203\212\203\111\224\362\202\321\217\157\202\265" /* マリオ飛び出し */, rIter);
+    MR::registerDemoActionNerve(this, GET_NERVE(AstroDomeSky, AstroDomeSkyNrvReturnDemoWait), "移動");
+    MR::registerDemoActionNerve(this, GET_NERVE(AstroDomeSky, AstroDomeSkyNrvDisappear), "ドーム出現");
+    MR::registerDemoCast(this, "マリオ飛び出し", rIter);
     MR::registerDemoSimpleCastAll(this);
 
     SphereSelectorFunction::registerTarget(this);

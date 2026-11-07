@@ -8,7 +8,7 @@ public:
     /// @param pName A pointer to the null-terminated name of the object.
     MechaKoopaPartsHead(const char* pName);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initCaseUseSwitchA(const MapObjActorInitInfo&) {};
     virtual void initCaseNoUseSwitchA(const MapObjActorInitInfo&) {};
     virtual void initCaseUseSwitchB(const MapObjActorInitInfo&) {};

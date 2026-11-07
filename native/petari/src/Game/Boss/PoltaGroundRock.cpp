@@ -22,7 +22,7 @@ PoltaGroundRock::PoltaGroundRock(const char* pName)
     : LiveActor(pName), mOwner(nullptr), mBreakModel(nullptr), _94(0.0f, 0.0f, 0.0f, 1.0f), _A4(0.0f, 0.0f, 0.0f) {
 }
 
-void PoltaGroundRock::init(const JMapInfoIter& rIter) {
+void PoltaGroundRock::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("PoltaGroundRock", nullptr, false);
     MR::connectToSceneCollisionMapObjWeakLight(this);
@@ -41,7 +41,7 @@ void PoltaGroundRock::init(const JMapInfoIter& rIter) {
 }
 
 void PoltaGroundRock::initBreakModel() {
-    mBreakModel = MR::createModelObjEnemy("\211\363\202\352\203\202\203\146\203\213" /* 壊れモデル */, "PoltaGroundRockBreak", getBaseMtx());
+    mBreakModel = MR::createModelObjEnemy("壊れモデル", "PoltaGroundRockBreak", getBaseMtx());
     mBreakModel->initWithoutIter();
     MR::initLightCtrl(mBreakModel);
     MR::invalidateClipping(mBreakModel);

@@ -38,7 +38,7 @@ Manual2P::Manual2P(const char* pName)
     : LayoutActor(pName, true), mPageIndex(), mPageNum(), mLeftPaneCtrl(), mRightPaneCtrl(), _30(true), _31(true), mBackButton() {
 }
 
-void Manual2P::init(const JMapInfoIter& rIter) {
+void Manual2P::init(const TableIter& rIter) {
     initLayoutManager("P2Manual", 2);
     MR::invalidateParentAnim(this);
     MR::createAndAddPaneCtrl(this, "LeftButton", 2);
@@ -51,7 +51,7 @@ void Manual2P::init(const JMapInfoIter& rIter) {
     mRightPaneCtrl = new ButtonPaneController(this, "RightButton", "PicRButton", 0, true);
     mRightPaneCtrl->_22 = 0;
 
-    mBackButton = new BackButton("\203\175\203\152\203\205\203\101\203\213\202\314\226\337\202\351\203\173\203\136\203\223" /* マニュアルの戻るボタン */, true);
+    mBackButton = new BackButton("マニュアルの戻るボタン", true);
     mBackButton->initWithoutIter();
     // The D-pad and stick turn the pages here (NebulaMenuFocus leaves these buttons to the pointer).
     mLeftPaneCtrl->mIsNebulaFocusable = false;

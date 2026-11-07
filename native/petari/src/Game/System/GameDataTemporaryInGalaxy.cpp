@@ -1,13 +1,13 @@
 #include "Game/System/NebulaHost.hpp"
 #include "Game/System/GameDataTemporaryInGalaxy.hpp"
 #include "Game/System/AlreadyDoneFlagInGalaxy.hpp"
-#include "Game/Util/JMapIdInfo.hpp"
+#include "Game/Util/PlacementId.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include <cstdio>
 
 GameDataTemporaryInGalaxy::GameDataTemporaryInGalaxy() : mPlayerRestartIdInfo(nullptr), mAlreadyDoneFlag(nullptr) {
-    mPlayerRestartIdInfo = new JMapIdInfo(MR::getInitializeStartIdInfo());
+    mPlayerRestartIdInfo = new PlacementId(MR::getInitializeStartIdInfo());
     mAlreadyDoneFlag = new AlreadyDoneFlagInGalaxy(64);
 
     resetStageResultParam();
@@ -19,7 +19,7 @@ void GameDataTemporaryInGalaxy::resetPlayerRestartIdInfo() {
     *mPlayerRestartIdInfo = MR::getInitializeStartIdInfo();
 }
 
-void GameDataTemporaryInGalaxy::setPlayerRestartIdInfo(const JMapIdInfo& rPlayerRestartIdInfo) {
+void GameDataTemporaryInGalaxy::setPlayerRestartIdInfo(const PlacementId& rPlayerRestartIdInfo) {
     *mPlayerRestartIdInfo = rPlayerRestartIdInfo;
 }
 
@@ -71,7 +71,7 @@ void GameDataTemporaryInGalaxy::clearAlreadyDoneFlag() {
     mAlreadyDoneFlag->clear();
 }
 
-s32 GameDataTemporaryInGalaxy::setupAlreadyDoneFlag(const char* pZoneName, const JMapInfoIter& rIter, u32* pParam3) {
+s32 GameDataTemporaryInGalaxy::setupAlreadyDoneFlag(const char* pZoneName, const TableIter& rIter, u32* pParam3) {
     return mAlreadyDoneFlag->setupFlag(pZoneName, rIter, pParam3);
 }
 

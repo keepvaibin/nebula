@@ -14,12 +14,12 @@ BallRail::BallRail(const char* pName)
     : LiveActor(pName), mRailPoints(), _90(), mNumPoints(), mAcceleration(1.5f), mDeceleration(0.995f), _AC(100.0f) {
 }
 
-void BallRail::init(const JMapInfoIter& rIter) {
-    if (MR::getJMapInfoArg0NoInit(rIter, &mAcceleration)) {
+void BallRail::init(const TableIter& rIter) {
+    if (MR::getPlacementArg0NoInit(rIter, &mAcceleration)) {
         mAcceleration /= 1000.0f;
     }
 
-    if (MR::getJMapInfoArg1NoInit(rIter, &mDeceleration)) {
+    if (MR::getPlacementArg1NoInit(rIter, &mDeceleration)) {
         mDeceleration /= 1000.0f;
     }
 

@@ -17,7 +17,7 @@ AstroDomeAsteroid::AstroDomeAsteroid(const char* pName) : LiveActor(pName) {
     mBaseMtx.identity();
 }
 
-void AstroDomeAsteroid::init(const JMapInfoIter& rIter) {
+void AstroDomeAsteroid::init(const TableIter& rIter) {
     initModelManagerWithAnm("AstroDomeAsteroid", nullptr, false);
     MR::connectToSceneMapObj(this);
     MR::invalidateClipping(this);

@@ -7,7 +7,7 @@ public:
     /// @brief Creates a new `AudBgmConductor`.
     AudBgmConductor();
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void movement();
 
     void playPinchEventBgmLevel(bool);

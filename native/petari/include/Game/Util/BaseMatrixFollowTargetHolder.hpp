@@ -4,7 +4,7 @@
 #include "Game/Util/Array.hpp"
 #include <nebula_geometry.hpp>
 
-class JMapLinkInfo;
+class PlacementLink;
 class LiveActor;
 
 class BaseMatrixFollowValidater {
@@ -30,7 +30,7 @@ public:
 
 class BaseMatrixFollowTarget {
 public:
-    BaseMatrixFollowTarget(const JMapLinkInfo*);
+    BaseMatrixFollowTarget(const PlacementLink*);
 
     void set(LiveActor*, const Pos3f&, const Pos3f*, BaseMatrixFollowValidater*);
     const MtxPtr getHostBaseMtx() const;
@@ -39,7 +39,7 @@ public:
     Mtx34f _0;
     const Pos3f* _30;
     LiveActor* mActor;
-    const JMapLinkInfo* mLinkInfo;
+    const PlacementLink* mLinkInfo;
     BaseMatrixFollowValidater* mValidater;
 };
 
@@ -55,8 +55,8 @@ public:
     virtual void movement();
 
     void addFollower(BaseMatrixFollower* pFollower);
-    void setFollowTargetInfo(LiveActor* pActor, const JMapInfoIter& rIter, const Pos3f* pBaseMtx, BaseMatrixFollowValidater* pValidater);
-    BaseMatrixFollowTarget* findFollowTarget(const JMapLinkInfo* pLinkInfo);
+    void setFollowTargetInfo(LiveActor* pActor, const TableIter& rIter, const Pos3f* pBaseMtx, BaseMatrixFollowValidater* pValidater);
+    BaseMatrixFollowTarget* findFollowTarget(const PlacementLink* pLinkInfo);
     BaseMatrixFollowTarget* findFollowTarget(const BaseMatrixFollower* pFollower);
 
     MR::Vector< MR::AssignableArray< BaseMatrixFollowTarget* > > mTargets;
@@ -65,7 +65,7 @@ public:
 
 class BaseMatrixFollower {
 public:
-    BaseMatrixFollower(NameObj*, const JMapInfoIter&);
+    BaseMatrixFollower(NameObj*, const TableIter&);
 
     virtual void setGravityFollowHost(const NameObj*) {
     }
@@ -77,7 +77,7 @@ public:
     bool isEnableFollow() const;
     bool isValid() const;
 
-    JMapLinkInfo* mLinkInfo;
+    PlacementLink* mLinkInfo;
     NameObj* mFollowerObj;
     BaseMatrixFollowTarget* mFollowTarget;
     s32 mFollowID;
@@ -89,7 +89,7 @@ namespace MR {
         return new BaseMatrixFollowValidateDelegator< T >(pHost, func);
     }
 
-    bool isValidFollowID(const JMapInfoIter&);
+    bool isValidFollowID(const TableIter&);
     void addBaseMatrixFollower(BaseMatrixFollower*);
-    void addBaseMatrixFollowTarget(LiveActor*, const JMapInfoIter&, const Pos3f*, BaseMatrixFollowValidater*);
+    void addBaseMatrixFollowTarget(LiveActor*, const TableIter&, const Pos3f*, BaseMatrixFollowValidater*);
 };  // namespace MR

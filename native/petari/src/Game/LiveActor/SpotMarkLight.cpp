@@ -3,7 +3,7 @@
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 
-SpotMarkLight::SpotMarkLight(LiveActor* pActor, f32 a3, f32 a4, MtxPtr mtx) : PartsModel(pActor, "\203\175\201\133\203\116\214\365\222\214" /* マーク光柱 */, "SpotMarkLight", mtx, -1, false) {
+SpotMarkLight::SpotMarkLight(LiveActor* pActor, f32 a3, f32 a4, MtxPtr mtx) : PartsModel(pActor, "マーク光柱", "SpotMarkLight", mtx, -1, false) {
     _9B = false;
 
     if (!mtx) {

@@ -23,7 +23,7 @@ SpaceMine::SpaceMine(const char* pName)
     : MapObjActor(pName), mRotateSpeed(::sRotateSpeedNormal), mClippingRange(gZeroVec), mShadowType(-1), mIsPlayerNear() {
 }
 
-void SpaceMine::init(const JMapInfoIter& rIter) {
+void SpaceMine::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;
     info.setupDefaultPos();
@@ -39,7 +39,7 @@ void SpaceMine::init(const JMapInfoIter& rIter) {
     sensorOffs.z = 0.0f;
     info.setupHitSensorParam(8, ::sSensorRadius, sensorOffs);
     info.setupGroupClipping(0x10);
-    MR::getJMapInfoArg0NoInit(rIter, &mShadowType);
+    MR::getPlacementArg0NoInit(rIter, &mShadowType);
 
     bool isValid = isShadowValid(mShadowType);
 
@@ -48,7 +48,7 @@ void SpaceMine::init(const JMapInfoIter& rIter) {
     }
 
     s32 arg1 = -1;
-    MR::getJMapInfoArg1NoInit(rIter, &arg1);
+    MR::getPlacementArg1NoInit(rIter, &arg1);
 
     if (arg1 != -1) {
         info.setupBinder(::sSensorRadius, 0.0f);
@@ -69,7 +69,7 @@ bool SpaceMine::isCalcShadowAlways() const {
 void SpaceMine::kill() {
     MR::emitEffect(this, "Explosion");
     MR::startSound(this, "SE_OJ_SPACEMINE_EXPLOSION");
-    MR::tryRumblePad(this, "\222\206" /* 中 */, 0);
+    MR::tryRumblePad(this, "中", 0);
     MapObjActor::kill();
 }
 

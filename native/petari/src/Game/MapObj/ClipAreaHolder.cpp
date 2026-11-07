@@ -19,7 +19,7 @@ namespace {
 ClipAreaHolder::ClipAreaHolder(const char* pName) : DeriveActorGroup< ClipArea >(pName, ::sClipAreaMax), mIsActive(true) {
 }
 
-void ClipAreaHolder::init(const JMapInfoIter& rIter) {
+void ClipAreaHolder::init(const TableIter& rIter) {
 }
 
 bool ClipAreaHolder::isInArea(const Vec3f& rParam1, f32 param2) const {

@@ -14,7 +14,7 @@ public:
     enum Behavior { Behavior_Default = 0, Behavior_Star = 1, Behavior_Tutorial = 2, Behavior_Race = 3 };
     PenguinCoach(const char*);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void initAfterPlacement();
     virtual void control();
     virtual void calcAndSetBaseMtx();

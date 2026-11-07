@@ -14,7 +14,7 @@ public:
 
     virtual void kill();
 
-    void initEventCamera(const JMapInfoIter&);
+    void initEventCamera(const TableIter&);
     void startEventCamera();
     void updateEventCamera();
     void endEventCamera();
@@ -37,7 +37,7 @@ class JumpGuarder : public JumpEmitter {
 public:
     JumpGuarder(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void control();
     virtual void attackSensor(HitSensor*, HitSensor*);
     virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);

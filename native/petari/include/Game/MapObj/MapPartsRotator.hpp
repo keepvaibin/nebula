@@ -32,7 +32,7 @@ public:
 
     enum AxisType { AxisType_XAxis, AxisType_YAxis, AxisType_ZAxis };
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual bool isWorking() const;
     virtual void start();
     virtual void end();
@@ -54,7 +54,7 @@ public:
     void updateAngle();
     void updateTargetAngle();
     void restartAtEnd();
-    void initRotateSpeed(const JMapInfoIter&);
+    void initRotateSpeed(const TableIter&);
     bool isReachedTargetAngle() const;
     void updateRotateMtx(AxisType, f32);
     void calcRotateAxisDir(AxisType, Vec3f*) const;

@@ -45,7 +45,7 @@ namespace {
 OceanWaveFloater::OceanWaveFloater(const char* pName) : MapObjActor(pName), mSpring(), mForce(), mRipplePos(gZeroVec), mSoundDelay(), mCanRipple() {
 }
 
-void OceanWaveFloater::init(const JMapInfoIter& rIter) {
+void OceanWaveFloater::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
 
     mForce = new WaveFloatingForce(this, ::getParam(mObjectName)->mStepCount, ::getParam(mObjectName)->mAmplitude, true);

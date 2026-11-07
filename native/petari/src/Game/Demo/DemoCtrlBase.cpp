@@ -11,7 +11,7 @@
 DemoCtrlBase::DemoCtrlBase(LiveActor* pActor, const char* pName) : mActor(pActor), mCameraInfo(), mDemoName(pName), mCurrentFrame(-1), _10() {
 }
 
-void DemoCtrlBase::init(const JMapInfoIter& rIter) {
+void DemoCtrlBase::init(const TableIter& rIter) {
     MR::initActorCamera(mActor, rIter, &mCameraInfo);
 }
 

@@ -15,8 +15,8 @@
 #include "Game/Util/ActorStateUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapInfo.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/Table.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -85,7 +85,7 @@ KuriboMini::KuriboMini(const char* pName) : LiveActor(pName) {
     _B8.set(0.0f, 0.0f, 1.0f);
 }
 
-void KuriboMini::init(const JMapInfoIter& rIter) {
+void KuriboMini::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("KuriboMini", nullptr, false);
     MR::connectToSceneEnemy(this);

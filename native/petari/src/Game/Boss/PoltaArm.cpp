@@ -39,7 +39,7 @@ PoltaArm::PoltaArm(const char* pName, const char* pModelName, MtxPtr pMtx)
     }
 }
 
-void PoltaArm::init(const JMapInfoIter& rIter) {
+void PoltaArm::init(const TableIter& rIter) {
     ModelObj::init(rIter);
     MR::startBtk(this, "Inner");
     MR::initShadowFromCSV(this, "Shadow");
@@ -52,12 +52,12 @@ void PoltaArm::init(const JMapInfoIter& rIter) {
 }
 
 void PoltaArm::initPartsModel() {
-    mBreakModel = MR::createModelObjEnemy("\211\363\202\352\203\202\203\146\203\213" /* 壊れモデル */, "PoltaArmBreak", _98);
+    mBreakModel = MR::createModelObjEnemy("壊れモデル", "PoltaArmBreak", _98);
     mBreakModel->initWithoutIter();
     MR::initLightCtrl(mBreakModel);
     MR::invalidateClipping(mBreakModel);
     mBreakModel->makeActorDead();
-    mFormationModel = MR::createModelObjEnemy("\215\207\221\314\211\211\217\157\212\342\203\202\203\146\203\213" /* 合体演出岩モデル */, "PoltaFormationRock", getBaseMtx());
+    mFormationModel = MR::createModelObjEnemy("合体演出岩モデル", "PoltaFormationRock", getBaseMtx());
     mFormationModel->initWithoutIter();
     MR::initLightCtrl(mFormationModel);
     MR::invalidateClipping(mFormationModel);

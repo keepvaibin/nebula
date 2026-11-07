@@ -10,7 +10,7 @@
 #include "Game/Util/ActorShadowUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/NPCUtil.hpp"
@@ -47,7 +47,7 @@ namespace NrvLuigiNPC {
 LuigiNPC::LuigiNPC(const char* pName) : NPCActor(pName), mTakeOutStar(), mType(Type_Invalid) {
 }
 
-void LuigiNPC::makeArchiveList(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter) {
+void LuigiNPC::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
     pCollector->addArchive("LuigiNPC");
     pCollector->addArchive("LuigiNPCMiddle");
     pCollector->addArchive("LuigiNPCLow");
@@ -111,7 +111,7 @@ inline void LuigiNPC::setShadowDrop(const char* const hitSensor) {
     MR::setShadowDropPositionAtJoint(this, nullptr, hitSensor, offset);
 }
 
-void LuigiNPC::init(const JMapInfoIter& rIter) {
+void LuigiNPC::init(const TableIter& rIter) {
     const char* objName;
     MR::getObjectName(&objName, rIter);
 
@@ -120,7 +120,7 @@ void LuigiNPC::init(const JMapInfoIter& rIter) {
     caps.mObjectName = "LuigiNPC";
     caps.mWaitNerve = GET_NERVE(LuigiNPC, LuigiNPCNrvWait);
 
-    MR::getJMapInfoArg0NoInit(rIter, &mType);
+    MR::getPlacementArg0NoInit(rIter, &mType);
 
     if (MR::isEqualString(objName, "LuigiEvent")) {
         mType += Type_Event;

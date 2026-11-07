@@ -6,11 +6,11 @@ namespace {
     static const s32 sMaxClipAreaDrop = 32;
 };  // namespace
 
-ClipAreaDropHolder::ClipAreaDropHolder() : DeriveActorGroup< ClipAreaDrop >("\203\116\203\212\203\142\203\166\203\107\203\212\203\101\202\314\202\265\202\270\202\255\212\307\227\235" /* クリップエリアのしずく管理 */, ::sMaxClipAreaDrop) {
+ClipAreaDropHolder::ClipAreaDropHolder() : DeriveActorGroup< ClipAreaDrop >("クリップエリアのしずく管理", ::sMaxClipAreaDrop) {
     ClipAreaDrop* pClipAreaDrop = nullptr;
 
     for (int i = 0; i < ::sMaxClipAreaDrop; i++) {
-        pClipAreaDrop = new ClipAreaDrop("\203\116\203\212\203\142\203\166\203\107\203\212\203\101\202\314\202\265\202\270\202\255" /* クリップエリアのしずく */);
+        pClipAreaDrop = new ClipAreaDrop("クリップエリアのしずく");
         pClipAreaDrop->initWithoutIter();
         registerActor(pClipAreaDrop);
     }

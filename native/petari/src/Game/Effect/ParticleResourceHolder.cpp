@@ -1,6 +1,6 @@
 #include "Game/Effect/ParticleResourceHolder.hpp"
 #include "Game/Util/FileUtil.hpp"
-#include "Game/Util/JMapInfo.hpp"
+#include "Game/Util/Table.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/System/AssetFolder.hpp"
@@ -8,7 +8,7 @@
 #include <cstring>
 
 ParticleResourceHolder::ParticleResourceHolder(const char* pArchiveName)
-    : mResourceMgr(), mAutoEffectList(new JMapInfo), mParticleNames(new JMapInfo), mNumEffectNums() {
+    : mResourceMgr(), mAutoEffectList(new Table), mParticleNames(new Table), mNumEffectNums() {
     AssetFolder* pArchive = MR::mountArchive(pArchiveName, nullptr);
     mResourceMgr = new ParticleResources(pArchive->getResource("Particles.jpc"), MR::getCurrentHeap());
     mParticleNames->attach(pArchive->getResource("ParticleNames.bcsv"));
@@ -26,7 +26,7 @@ const char* ParticleResourceHolder::getParticleName(u32 index) const {
 }
 
 u16 ParticleResourceHolder::getUserIndex(const char* pName) const {
-    const JMapInfo* pInfo = mParticleNames;
+    const Table* pInfo = mParticleNames;
     int middle;
     int last;
     int first = 0;
@@ -78,7 +78,7 @@ u16 ParticleResourceHolder::getUserIndex(const char* pName) const {
 }
 
 void ParticleResourceHolder::countAutoEffectNum() {
-    for (JMapInfoIter iter = mAutoEffectList->begin(); iter != mAutoEffectList->end(); iter.mIndex++) {
+    for (TableIter iter = mAutoEffectList->begin(); iter != mAutoEffectList->end(); iter.mIndex++) {
         const char* pGroupName = nullptr;
         iter.getValue("GroupName", &pGroupName);
 
@@ -120,7 +120,7 @@ bool ParticleResourceHolder::isExistInResource(const char* pName, u16* pIndex) c
     return true;
 }
 
-JMapInfo* ParticleResourceHolder::getAutoEffectListBinary() const {
+Table* ParticleResourceHolder::getAutoEffectListBinary() const {
     return mAutoEffectList;
 }
 

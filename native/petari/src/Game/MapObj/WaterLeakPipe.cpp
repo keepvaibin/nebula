@@ -24,10 +24,10 @@ IceStepNoSlip::~IceStepNoSlip() {
 WaterLeakPipe::~WaterLeakPipe() {
 }
 
-IceStepNoSlip::IceStepNoSlip(MtxPtr mtx) : ModelObj("\203\101\203\103\203\130\217\260" /* アイス床 */, "IceStepNoSlip", mtx, MR::DrawBufferType_IndirectMapObjStrongLight, -2, -2, false) {
+IceStepNoSlip::IceStepNoSlip(MtxPtr mtx) : ModelObj("アイス床", "IceStepNoSlip", mtx, MR::DrawBufferType_IndirectMapObjStrongLight, -2, -2, false) {
 }
 
-void IceStepNoSlip::init(const JMapInfoIter& rIter) {
+void IceStepNoSlip::init(const TableIter& rIter) {
     ModelObj::init(rIter);
     initHitSensor(1);
     MR::addBodyMessageSensorMapObj(this);
@@ -60,13 +60,13 @@ WaterLeakPipe::WaterLeakPipe(const char* pName)
     : LiveActor(pName), mIceStep(), mPipeHeight(::sDefaultHeight), mTopMtx(), mBottomMtx(), _9C(0.0f, 0.0f, 0.0f) {
 }
 
-void WaterLeakPipe::init(const JMapInfoIter& rIter) {
+void WaterLeakPipe::init(const TableIter& rIter) {
     Vec3f upVec;
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("WaterLeakPipe", nullptr, false);
     mTopMtx = MR::getJointMtx(this, "Top");
     mBottomMtx = MR::getJointMtx(this, "Bottom");
-    MR::getJMapInfoArg0NoInit(rIter, &mPipeHeight);
+    MR::getPlacementArg0NoInit(rIter, &mPipeHeight);
     initPipeHeight();
     MR::connectToSceneMapObjNoCalcAnim(this);
     initHitSensor(1);

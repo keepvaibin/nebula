@@ -3,7 +3,7 @@
 #include "Game/MapObj/ChipBase.hpp"
 #include "Game/MapObj/ChipHolder.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
@@ -117,19 +117,19 @@ ChipGroup::~ChipGroup() {
 YellowChipGroup::YellowChipGroup(const char* pName) : ChipGroup(pName, ChipBase::Type_Yellow) {
 }
 
-void ChipGroup::init(const JMapInfoIter& rIter) {
-    MR::getJMapInfoTrans(rIter, &mUIPos);
-    MR::getJMapInfoArg0WithInit(rIter, &mStageSwitchArg);
-    MR::getJMapInfoArg1WithInit(rIter, &mFlashFrame);
+void ChipGroup::init(const TableIter& rIter) {
+    MR::getPlacementTrans(rIter, &mUIPos);
+    MR::getPlacementArg0WithInit(rIter, &mStageSwitchArg);
+    MR::getPlacementArg1WithInit(rIter, &mFlashFrame);
     mUIRangeFixed = -1.0f;
-    MR::getJMapInfoArg2NoInit(rIter, &mUIRangeFixed);
+    MR::getPlacementArg2NoInit(rIter, &mUIRangeFixed);
 
     s32 arg3 = 0;
-    MR::getJMapInfoArg3NoInit(rIter, &arg3);
+    MR::getPlacementArg3NoInit(rIter, &arg3);
 
     if (arg3 == 1) {
         mIsDeactivated = 0;
-        mAlreadyDoneFlag = MR::setupAlreadyDoneFlag("\203\140\203\142\203\166\217\127\202\337\215\317\202\335" /* チップ集め済み */, rIter, &mIsDeactivated);
+        mAlreadyDoneFlag = MR::setupAlreadyDoneFlag("チップ集め済み", rIter, &mIsDeactivated);
     } else {
         mIsDeactivated = 0;
         mAlreadyDoneFlag = -1;

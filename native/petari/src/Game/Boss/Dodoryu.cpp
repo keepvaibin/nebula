@@ -66,7 +66,7 @@ namespace {
     // static const Vec3f sCamRegOffset = _;
     static const s32 sJumpOutStopSceneFrame = 8;
     // static const s32 sRumbleInterval = _;
-    static const char* sSpinOutCamera = "\203\150\203\150\203\212\203\205\203\105\220\201\202\301\224\362\202\321" /* ドドリュウ吹っ飛び */;
+    static const char* sSpinOutCamera = "ドドリュウ吹っ飛び";
     // static const f32 sSpinOutCameraInterpolation = _;
     // static const f32 sSpinOutCameraBlendRate = _;
     static const f32 sRumblePadNearDist = 500.0f;
@@ -245,12 +245,12 @@ namespace {
 
 Dodoryu::Dodoryu(const char* pName)
     : LiveActor(pName), _BC(0.0f, 0.0f, 0.0f), _C8(), _CC(), mState(), mMoveStateHolder(), mHill(), mLeadHill(), mBank(), mRabbit(),
-      _128(0.0f, 1.0f, 0.0f), _134(1.0f, 0.0f, 0.0f), mClosedAreaObj(), _144(), _148(new CameraTargetMtx("\203\112\203\201\203\211\203\136\201\133\203\121\203\142\203\147\203\137\203\176\201\133" /* カメラターゲットダミー */)),
-      _14C(new CameraTargetMtx("\203\112\203\201\203\211\203\136\201\133\203\121\203\142\203\147\203\137\203\176\201\133" /* カメラターゲットダミー */)), _150(), _154(), mAnimScaleCtrl(new AnimScaleController(nullptr)) {
+      _128(0.0f, 1.0f, 0.0f), _134(1.0f, 0.0f, 0.0f), mClosedAreaObj(), _144(), _148(new CameraTargetMtx("カメラターゲットダミー")),
+      _14C(new CameraTargetMtx("カメラターゲットダミー")), _150(), _154(), mAnimScaleCtrl(new AnimScaleController(nullptr)) {
     mBaseMtx.identity();
 }
 
-void Dodoryu::init(const JMapInfoIter& rIter) {
+void Dodoryu::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
 
     mScale.set(1.0f, 1.0f, 1.0f);
@@ -426,7 +426,7 @@ void Dodoryu::endPlayerCenterCamera() {
 
 void Dodoryu::getPlayerResetMtx(Pos3f* pMtx, u32 param2) const {
     char buf[256];
-    nebula_snprintf(buf, sizeof(buf), "\203\175\203\212\203\111\215\304\203\132\203\142\203\147%d" /* マリオ再セット%d */, param2 + 1);
+    nebula_snprintf(buf, sizeof(buf), "マリオ再セット%d", param2 + 1);
 
     MR::tryFindNamePos(buf, (MtxPtr)pMtx);
 }
@@ -708,7 +708,7 @@ void Dodoryu::initHitSensor() {
     MR::addHitSensorAtJointMapObjSimple(this, ::sStarPieceSensorName, "Hip", 16, ::sStarPieceSensorRadius, ::sStarPieceSensorOffset);
 }
 
-void Dodoryu::initSwitch(const JMapInfoIter& rIter) {
+void Dodoryu::initSwitch(const TableIter& rIter) {
     if (MR::useStageSwitchReadA(this, rIter)) {
         MR::listenStageSwitchOnA(this, MR::Functor(this, &Dodoryu::notifyOnSwitchA));
     }
@@ -790,11 +790,11 @@ void Dodoryu::updateCameraTarget() {
     _14C->mMatrix.setInline(m1);
 }
 
-DodoryuBank::DodoryuBank() : ModelObj("\203\150\203\150\203\212\203\205\203\105\220\267\223\171" /* ドドリュウ盛土 */, "DodoryuBank", reinterpret_cast< MtxPtr >(&_90), MR::DrawBufferType_MapObjStrongLight, -2, -2, false) {
+DodoryuBank::DodoryuBank() : ModelObj("ドドリュウ盛土", "DodoryuBank", reinterpret_cast< MtxPtr >(&_90), MR::DrawBufferType_MapObjStrongLight, -2, -2, false) {
     _90.identity();
 }
 
-void DodoryuBank::init(const JMapInfoIter& rIter) {
+void DodoryuBank::init(const TableIter& rIter) {
     initNerve(GET_NERVE_ANON(DodoryuBankNrvBankAppear));
     makeActorDead();
 }
@@ -806,8 +806,8 @@ void DodoryuBank::exeAppear() {
     }
 }
 
-DodoryuRabbit::DodoryuRabbit(Dodoryu* pHost, const JMapInfoIter& rIter)
-    : ModelObj("\203\150\203\150\203\212\203\205\203\105\202\311\222\307\202\355\202\352\202\351\203\105\203\124\203\115" /* ドドリュウに追われるウサギ */, "DodoryuRabbit", reinterpret_cast< MtxPtr >(&_94), MR::DrawBufferType_NPC, -2, -2, false), mHost(pHost), _C4(), mTalkCtrl(), _CC(300),
+DodoryuRabbit::DodoryuRabbit(Dodoryu* pHost, const TableIter& rIter)
+    : ModelObj("ドドリュウに追われるウサギ", "DodoryuRabbit", reinterpret_cast< MtxPtr >(&_94), MR::DrawBufferType_NPC, -2, -2, false), mHost(pHost), _C4(), mTalkCtrl(), _CC(300),
       _D0(), _D4(), _D8(), mIsDisplayMessage() {
     _94.identity();
 
@@ -820,7 +820,7 @@ DodoryuRabbit::DodoryuRabbit(Dodoryu* pHost, const JMapInfoIter& rIter)
     MR::setDistanceToTalk(mTalkCtrl, 1500.0f);
 }
 
-void DodoryuRabbit::init(const JMapInfoIter& rIter) {
+void DodoryuRabbit::init(const TableIter& rIter) {
     initNerve(GET_NERVE_ANON(DodoryuRabbitNrvRabbitEscape));
     initHitSensor(4);
     MR::addHitSensorAtJointEnemy(this, "body", "Spine", 8, 50.0f, Vec3f(0.0f, 0.0f, 0.0f));
@@ -1060,7 +1060,7 @@ bool DodoryuRabbit::tryTalk() {
     return false;
 }
 
-DodoryuLeadHill::DodoryuLeadHill(Dodoryu* pHost) : LiveActor("\203\150\203\150\203\212\203\205\203\105\222\313\220\346\223\252" /* ドドリュウ塚先頭 */), mHostBaseMtx(pHost->getBaseMtx()), _90() {
+DodoryuLeadHill::DodoryuLeadHill(Dodoryu* pHost) : LiveActor("ドドリュウ塚先頭"), mHostBaseMtx(pHost->getBaseMtx()), _90() {
     for (int i = 0; i < ARRAY_SIZE(_94); i++) {
         _94[i] = nullptr;
     }
@@ -1068,7 +1068,7 @@ DodoryuLeadHill::DodoryuLeadHill(Dodoryu* pHost) : LiveActor("\203\150\203\150\2
     initWithoutIter();
 }
 
-void DodoryuLeadHill::init(const JMapInfoIter& rIter) {
+void DodoryuLeadHill::init(const TableIter& rIter) {
     initModelManagerWithAnm("DodoryuLeadHill", nullptr, false);
     MR::connectToSceneMapObjDecorationStrongLight(this);
     MR::initLightCtrl(this);

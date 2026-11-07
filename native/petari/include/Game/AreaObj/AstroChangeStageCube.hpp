@@ -8,7 +8,7 @@ public:
 
     virtual ~AstroChangeStageCube();
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void movement();
     virtual bool isInVolume(const Vec3f&) const;
 

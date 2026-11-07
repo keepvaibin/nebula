@@ -25,22 +25,22 @@ namespace NrvKoopaDemoJumpToPlanet {
     NEW_NERVE(KoopaDemoJumpToPlanetNrvWaitPlayer, KoopaDemoJumpToPlanet, WaitPlayer);
 };  // namespace NrvKoopaDemoJumpToPlanet
 
-KoopaDemoJumpToPlanet::KoopaDemoJumpToPlanet(Koopa* pKoopa) : ActorStateBase< Koopa >("Demo[\230\146\220\257\202\334\202\305\203\127\203\203\203\223\203\166]" /* Demo[惑星までジャンプ] */, pKoopa) {
+KoopaDemoJumpToPlanet::KoopaDemoJumpToPlanet(Koopa* pKoopa) : ActorStateBase< Koopa >("Demo[惑星までジャンプ]", pKoopa) {
 }
 
 void KoopaDemoJumpToPlanet::init() {
-    KoopaFunction::initKoopaCamera(mHost, "\203\105\203\106\203\103\203\147\201\151\230\146\220\257\202\334\202\305\203\127\203\203\203\223\203\166\201\152" /* ウェイト（惑星までジャンプ） */);
-    KoopaFunction::initKoopaCamera(mHost, "\227\216\211\272\201\151\230\146\220\257\202\334\202\305\203\127\203\203\203\223\203\166\201\152" /* 落下（惑星までジャンプ） */);
-    KoopaFunction::initKoopaCamera(mHost, "\203\217\201\133\203\166\214\343\201\151\230\146\220\257\202\334\202\305\203\127\203\203\203\223\203\166\201\152" /* ワープ後（惑星までジャンプ） */);
+    KoopaFunction::initKoopaCamera(mHost, "ウェイト（惑星までジャンプ）");
+    KoopaFunction::initKoopaCamera(mHost, "落下（惑星までジャンプ）");
+    KoopaFunction::initKoopaCamera(mHost, "ワープ後（惑星までジャンプ）");
     initNerve(GET_NERVE(KoopaDemoJumpToPlanet, KoopaDemoJumpToPlanetNrvStart));
 }
 
 void KoopaDemoJumpToPlanet::kill() {
     mIsDead = true;
 
-    KoopaFunction::endKoopaCamera(mHost, "\203\105\203\106\203\103\203\147\201\151\230\146\220\257\202\334\202\305\203\127\203\203\203\223\203\166\201\152" /* ウェイト（惑星までジャンプ） */, false);
-    KoopaFunction::endKoopaCamera(mHost, "\227\216\211\272\201\151\230\146\220\257\202\334\202\305\203\127\203\203\203\223\203\166\201\152" /* 落下（惑星までジャンプ） */, false);
-    KoopaFunction::endKoopaCamera(mHost, "\203\217\201\133\203\166\214\343\201\151\230\146\220\257\202\334\202\305\203\127\203\203\203\223\203\166\201\152" /* ワープ後（惑星までジャンプ） */, false);
+    KoopaFunction::endKoopaCamera(mHost, "ウェイト（惑星までジャンプ）", false);
+    KoopaFunction::endKoopaCamera(mHost, "落下（惑星までジャンプ）", false);
+    KoopaFunction::endKoopaCamera(mHost, "ワープ後（惑星までジャンプ）", false);
 }
 
 void KoopaDemoJumpToPlanet::startReady() {
@@ -49,10 +49,10 @@ void KoopaDemoJumpToPlanet::startReady() {
 
 void KoopaDemoJumpToPlanet::exeStart() {
     if (MR::isFirstStep(this)) {
-        KoopaFunction::setKoopaPos(mHost, "\220\355\223\254\212\112\216\156\201\151\203\116\203\142\203\160\201\152" /* 戦闘開始（クッパ） */);
-        MR::setPlayerPosAndWait("\220\355\223\254\212\112\216\156\201\151\203\175\203\212\203\111\201\152" /* 戦闘開始（マリオ） */);
+        KoopaFunction::setKoopaPos(mHost, "戦闘開始（クッパ）");
+        MR::setPlayerPosAndWait("戦闘開始（マリオ）");
 
-        KoopaFunction::startKoopaCamera(mHost, "\227\216\211\272\201\151\230\146\220\257\202\334\202\305\203\127\203\203\203\223\203\166\201\152" /* 落下（惑星までジャンプ） */);
+        KoopaFunction::startKoopaCamera(mHost, "落下（惑星までジャンプ）");
         MR::startAction(mHost, "JumpSoon");
         KoopaFunction::startFaceCtrl(mHost);
 
@@ -68,11 +68,11 @@ void KoopaDemoJumpToPlanet::exeFall() {
     MR::moveAndTurnToPlayer(mHost, &mHost->mFront, ::sFallParam);
 
     if (KoopaFunction::isKoopaVs3(mHost) && MR::isStep(this, ::sFallWarpStepVs3)) {
-        KoopaFunction::setKoopaPos(mHost, "\202\153\202\226\202\120\212\112\216\156\201\151\203\116\203\142\203\160\201\152" /* Ｌｖ１開始（クッパ） */);
-        MR::setPlayerPosAndWait("\202\153\202\226\202\120\212\112\216\156\201\151\203\175\203\212\203\111\201\152" /* Ｌｖ１開始（マリオ） */);
+        KoopaFunction::setKoopaPos(mHost, "Ｌｖ１開始（クッパ）");
+        MR::setPlayerPosAndWait("Ｌｖ１開始（マリオ）");
 
-        KoopaFunction::endKoopaCamera(mHost, "\227\216\211\272\201\151\230\146\220\257\202\334\202\305\203\127\203\203\203\223\203\166\201\152" /* 落下（惑星までジャンプ） */, false);
-        KoopaFunction::startKoopaCamera(mHost, "\203\217\201\133\203\166\214\343\201\151\230\146\220\257\202\334\202\305\203\127\203\203\203\223\203\166\201\152" /* ワープ後（惑星までジャンプ） */);
+        KoopaFunction::endKoopaCamera(mHost, "落下（惑星までジャンプ）", false);
+        KoopaFunction::startKoopaCamera(mHost, "ワープ後（惑星までジャンプ）");
     }
 
     MR::startLevelSound(mHost, "SE_BM_LV_KOOPA_FALL_TO_PLANET");

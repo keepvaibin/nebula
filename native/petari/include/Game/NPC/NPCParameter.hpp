@@ -3,10 +3,10 @@
 #include "Game/NPC/NPCActor.hpp"
 #include "Game/NPC/NPCActorItem.hpp"
 #include "Game/Util/Array.hpp"
-#include "Game/Util/JMapInfo.hpp"
+#include "Game/Util/Table.hpp"
 #include <nebula_geometry.hpp>
 
-class JMapInfo;
+class Table;
 class NPCActorItem;
 
 class NPCParameterBase {
@@ -17,14 +17,14 @@ public:
 
     const char* mName;
 
-    virtual void read(JMapInfo*, s32);
+    virtual void read(Table*, s32);
 };
 
 class NPCParameterEdit : public NPCParameterBase {
 public:
     NPCParameterEdit(const char*, const char**, bool);
 
-    virtual void read(JMapInfo*, s32);
+    virtual void read(Table*, s32);
 
     const char** _8;
     bool _C;
@@ -34,7 +34,7 @@ class NPCParameterBool : public NPCParameterBase {
 public:
     NPCParameterBool(const char*, bool*);
 
-    virtual void read(JMapInfo*, s32);
+    virtual void read(Table*, s32);
 
     bool* _8;
 };
@@ -43,7 +43,7 @@ class NPCParameterV3f : public NPCParameterBase {
 public:
     NPCParameterV3f(const char*, Vec3f*, f32, f32);
 
-    virtual void read(JMapInfo*, s32);
+    virtual void read(Table*, s32);
 
     Vec3f* _8;
     f32 _C;
@@ -54,7 +54,7 @@ class NPCParameterJoint : public NPCParameterBase {
 public:
     NPCParameterJoint(const char*, const char*, const char**);
 
-    virtual void read(JMapInfo*, s32);
+    virtual void read(Table*, s32);
 
     const char** _8;
     const char* _C;
@@ -65,7 +65,7 @@ class NPCParameterReader : public NPCParameterBase, public MR::Vector< MR::Fixed
 public:
     NPCParameterReader(const char*);
 
-    virtual void read(JMapInfo*, s32);
+    virtual void read(Table*, s32);
 };
 
 class NPCCapsParameterReader : public NPCParameterReader {
@@ -90,7 +90,7 @@ class NPCParameterRange : public NPCParameterBase {
 public:
     NPCParameterRange< T >(const char*, T*, T, T);
 
-    virtual void read(JMapInfo*, s32);
+    virtual void read(Table*, s32);
 
     T* _8;
     T _C;

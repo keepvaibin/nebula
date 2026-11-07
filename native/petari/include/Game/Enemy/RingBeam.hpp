@@ -11,7 +11,7 @@ public:
     RingBeam(const char*, LiveActor*, bool, bool);
 
     virtual ~RingBeam() {};
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void appear();
     virtual void kill();
     virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);

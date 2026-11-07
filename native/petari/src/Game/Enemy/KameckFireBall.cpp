@@ -34,7 +34,7 @@ namespace NrvBossKameckBeamFire {
 KameckFireBall::KameckFireBall(const char* pName) : LiveActor(pName), mRotateQuat(0.0f, 0.0f, 0.0f, 1.0f), mEventListener() {
 }
 
-void KameckFireBall::init(const JMapInfoIter& rIter) {
+void KameckFireBall::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("BossKameckFireBall", nullptr, false);
     MR::connectToSceneEnemy(this);
@@ -147,7 +147,7 @@ void KameckFireBall::exeWait() {
         }
     }
 
-    if (MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, 1, 0)) {
+    if (MR::isStarPointerPointing2POnPressButton(this, "弱", 1, 0)) {
         kill();
     } else if (MR::isGreaterStep(this, ::sLife) || MR::isInWater(mPosition)) {
         kill();

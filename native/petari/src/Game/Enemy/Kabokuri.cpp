@@ -12,8 +12,8 @@
 #include "Game/Util/ActorStateUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapInfo.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/Table.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -65,7 +65,7 @@ Kabokuri::Kabokuri(const char* pName)
     KabokuriFireHolderFunc::createHolder();
 }
 
-void Kabokuri::init(const JMapInfoIter& rIter) {
+void Kabokuri::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initRailRider(rIter);
     MR::moveCoordAndTransToNearestRailPos(this);
@@ -73,7 +73,7 @@ void Kabokuri::init(const JMapInfoIter& rIter) {
     initModelManagerWithAnm("Kabokuri", nullptr, false);
     MR::connectToSceneEnemy(this);
     MR::initLightCtrl(this);
-    MR::getJMapInfoArg0WithInit(rIter, &mIsFloating);
+    MR::getPlacementArg0WithInit(rIter, &mIsFloating);
 
     if (!mIsFloating) {
         MR::onCalcGravity(this);
@@ -100,7 +100,7 @@ void Kabokuri::init(const JMapInfoIter& rIter) {
     mStateBindStartPointer = new WalkerStateBindStarPointer(this, mAnimeScale);
 
     // "Kabokuri kuribo"
-    mKuribo = new Kuribo("\203\112\203\173\203\116\203\212\203\116\203\212\203\173\201\133" /* カボクリクリボー */);
+    mKuribo = new Kuribo("カボクリクリボー");
 
     if (mIsFloating) {
         mKuribo->onNoGravitySupport();
@@ -110,7 +110,7 @@ void Kabokuri::init(const JMapInfoIter& rIter) {
     mKuribo->makeActorDead();
 
     // "Broken model"
-    mBreakModel = MR::createModelObjMapObjStrongLight("\211\363\202\352\203\202\203\146\203\213" /* 壊れモデル */, "KabokuriBreak", getBaseMtx());
+    mBreakModel = MR::createModelObjMapObjStrongLight("壊れモデル", "KabokuriBreak", getBaseMtx());
     mBreakModel->kill();
 
     MR::useStageSwitchWriteDead(this, rIter);

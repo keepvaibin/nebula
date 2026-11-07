@@ -11,7 +11,7 @@ public:
     /// @param pName A pointer to the null-terminated name of the object.
     KameckTurtle(const char* pName);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void makeActorAppeared();
     virtual void makeActorDead();
     virtual void control();

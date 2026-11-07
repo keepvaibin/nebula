@@ -1,10 +1,10 @@
 #pragma once
 
-#include "Game/Util/JMapIdInfo.hpp"
+#include "Game/Util/PlacementId.hpp"
 
 class GalaxyMoveArgument {
 public:
-    GalaxyMoveArgument(u32, const char*, s32, const JMapIdInfo*);
+    GalaxyMoveArgument(u32, const char*, s32, const PlacementId*);
 
     bool isEqualStage(char const*) const;
     bool isEqualStageScenario(char const*, int) const;
@@ -13,5 +13,5 @@ public:
     const char* mStageName;
     s32 mScenarioNo;
     s32 _C;
-    JMapIdInfo mIDInfo;
+    PlacementId mIDInfo;
 };

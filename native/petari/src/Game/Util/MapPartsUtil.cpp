@@ -10,7 +10,7 @@
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorShadowUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapPartsUtil.hpp"
@@ -22,8 +22,8 @@
 namespace {
     const char* cFollowJointName = "Move";
 
-    bool getJMapInfoArgNoInit(const JMapInfoIter& rIter, const char* pName, s32* pValue);
-    bool getJMapInfoArgNoInit(const JMapInfoIter& rIter, const char* pName, f32* pValue);
+    bool getPlacementArgNoInit(const TableIter& rIter, const char* pName, s32* pValue);
+    bool getPlacementArgNoInit(const TableIter& rIter, const char* pName, f32* pValue);
 };  // namespace
 
 namespace MR {
@@ -133,19 +133,19 @@ namespace MR {
         return false;
     }
 
-    void getMapPartsObjectName(char* pBuffer, u32 size, const JMapInfoIter& rIter) {
+    void getMapPartsObjectName(char* pBuffer, u32 size, const TableIter& rIter) {
         const char* pName = "";
         getObjectName(&pName, rIter);
         s32 shapeId = -1;
-        getJMapInfoShapeIdWithInit(rIter, &shapeId);
+        getPlacementShapeIdWithInit(rIter, &shapeId);
         getMapPartsObjectName(pBuffer, size, pName, shapeId);
     }
 
-    void getMapPartsObjectNameIfExistShapeID(char* pBuffer, u32 size, const JMapInfoIter& rIter) {
+    void getMapPartsObjectNameIfExistShapeID(char* pBuffer, u32 size, const TableIter& rIter) {
         const char* pName = "";
         getObjectName(&pName, rIter);
         s32 shapeId = -1;
-        getJMapInfoShapeIdWithInit(rIter, &shapeId);
+        getPlacementShapeIdWithInit(rIter, &shapeId);
         if (shapeId >= 0) {
             getMapPartsObjectName(pBuffer, size, pName, shapeId);
         } else {
@@ -157,7 +157,7 @@ namespace MR {
         nebula_snprintf(pBuffer, size, "%s%02d", pName, shapeId);
     }
 
-    void initMapPartsClipping(LiveActor* pActor, const JMapInfoIter& rIter, Vec3f* pCenter, bool ignoreRail) {
+    void initMapPartsClipping(LiveActor* pActor, const TableIter& rIter, Vec3f* pCenter, bool ignoreRail) {
         f32 radius = 0.0f;
         if (getModel(pActor)) {
             calcModelBoundingRadius(&radius, pActor);
@@ -176,7 +176,7 @@ namespace MR {
 
         setGroupClipping(pActor, rIter, 64);
         s32 farClip = -1;
-        ::getJMapInfoArgNoInit(rIter, "FarClip", &farClip);
+        ::getPlacementArgNoInit(rIter, "FarClip", &farClip);
         if (farClip != -1) {
             if (farClip == 0) {
                 setClippingFarMax(pActor);
@@ -186,18 +186,18 @@ namespace MR {
         }
     }
 
-    bool isMapPartsPressOn(const JMapInfoIter& rIter) {
+    bool isMapPartsPressOn(const TableIter& rIter) {
         s32 pressType = -1;
-        ::getJMapInfoArgNoInit(rIter, "PressType", &pressType);
+        ::getPlacementArgNoInit(rIter, "PressType", &pressType);
         return pressType == 1;
     }
 
-    MapPartsRailGuideDrawer* createMapPartsRailGuideDrawer(LiveActor* pActor, const char* pName, const JMapInfoIter& rIter) {
+    MapPartsRailGuideDrawer* createMapPartsRailGuideDrawer(LiveActor* pActor, const char* pName, const TableIter& rIter) {
         MapPartsRailGuideHolder* pHolder = static_cast< MapPartsRailGuideHolder* >(MR::createSceneObj(SceneObj_MapPartsRailGuideHolder));
         return pHolder->createRailGuide(pActor, pName, rIter);
     }
 
-    void initMapPartsShadow(LiveActor* pActor, const JMapInfoIter& rIter) {
+    void initMapPartsShadow(LiveActor* pActor, const TableIter& rIter) {
         s32 shadowType = 0;
         getMapPartsArgShadowType(&shadowType, rIter);
         if (!hasMapPartsShadow(shadowType)) {
@@ -222,7 +222,7 @@ namespace MR {
 };  // namespace MR
 
 namespace {
-    bool getJMapInfoArgNoInit(const JMapInfoIter& rIter, const char* pName, s32* pValue) {
+    bool getPlacementArgNoInit(const TableIter& rIter, const char* pName, s32* pValue) {
         s32 value;
         if (!rIter.getValue(pName, &value)) {
             return false;
@@ -236,9 +236,9 @@ namespace {
         return false;
     }
 
-    bool getJMapInfoArgNoInit(const JMapInfoIter& rIter, const char* pName, f32* pValue) {
+    bool getPlacementArgNoInit(const TableIter& rIter, const char* pName, f32* pValue) {
         s32 value;
-        if (!getJMapInfoArgNoInit(rIter, pName, &value)) {
+        if (!getPlacementArgNoInit(rIter, pName, &value)) {
             return false;
         }
 
@@ -248,44 +248,44 @@ namespace {
 };  // namespace
 
 namespace MR {
-    bool getMapPartsArgMoveConditionType(s32* pValue, const JMapInfoIter& rIter) {
-        return ::getJMapInfoArgNoInit(rIter, "MoveConditionType", pValue);
+    bool getMapPartsArgMoveConditionType(s32* pValue, const TableIter& rIter) {
+        return ::getPlacementArgNoInit(rIter, "MoveConditionType", pValue);
     }
 
-    bool getMapPartsArgRotateSpeed(f32* pValue, const JMapInfoIter& rIter) {
-        return ::getJMapInfoArgNoInit(rIter, "RotateSpeed", pValue);
+    bool getMapPartsArgRotateSpeed(f32* pValue, const TableIter& rIter) {
+        return ::getPlacementArgNoInit(rIter, "RotateSpeed", pValue);
     }
 
-    bool getMapPartsArgRotateTime(s32* pValue, const JMapInfoIter& rIter) {
-        return ::getJMapInfoArgNoInit(rIter, "RotateSpeed", pValue);
+    bool getMapPartsArgRotateTime(s32* pValue, const TableIter& rIter) {
+        return ::getPlacementArgNoInit(rIter, "RotateSpeed", pValue);
     }
 
-    bool getMapPartsArgRotateAngle(f32* pValue, const JMapInfoIter& rIter) {
-        return ::getJMapInfoArgNoInit(rIter, "RotateAngle", pValue);
+    bool getMapPartsArgRotateAngle(f32* pValue, const TableIter& rIter) {
+        return ::getPlacementArgNoInit(rIter, "RotateAngle", pValue);
     }
 
-    bool getMapPartsArgRotateAxis(s32* pValue, const JMapInfoIter& rIter) {
-        return ::getJMapInfoArgNoInit(rIter, "RotateAxis", pValue);
+    bool getMapPartsArgRotateAxis(s32* pValue, const TableIter& rIter) {
+        return ::getPlacementArgNoInit(rIter, "RotateAxis", pValue);
     }
 
-    bool getMapPartsArgRotateAccelType(s32* pValue, const JMapInfoIter& rIter) {
-        return ::getJMapInfoArgNoInit(rIter, "RotateAccelType", pValue);
+    bool getMapPartsArgRotateAccelType(s32* pValue, const TableIter& rIter) {
+        return ::getPlacementArgNoInit(rIter, "RotateAccelType", pValue);
     }
 
-    bool getMapPartsArgRotateStopTime(s32* pValue, const JMapInfoIter& rIter) {
-        return ::getJMapInfoArgNoInit(rIter, "RotateStopTime", pValue);
+    bool getMapPartsArgRotateStopTime(s32* pValue, const TableIter& rIter) {
+        return ::getPlacementArgNoInit(rIter, "RotateStopTime", pValue);
     }
 
-    bool getMapPartsArgRotateType(s32* pValue, const JMapInfoIter& rIter) {
-        return ::getJMapInfoArgNoInit(rIter, "RotateType", pValue);
+    bool getMapPartsArgRotateType(s32* pValue, const TableIter& rIter) {
+        return ::getPlacementArgNoInit(rIter, "RotateType", pValue);
     }
 
-    s32 getMapPartsArgShadowType(s32* pValue, const JMapInfoIter& rIter) {
-        return ::getJMapInfoArgNoInit(rIter, "ShadowType", pValue);
+    s32 getMapPartsArgShadowType(s32* pValue, const TableIter& rIter) {
+        return ::getPlacementArgNoInit(rIter, "ShadowType", pValue);
     }
 
-    bool getMapPartsArgSignMotionType(s32* pValue, const JMapInfoIter& rIter) {
-        return ::getJMapInfoArgNoInit(rIter, "SignMotionType", pValue);
+    bool getMapPartsArgSignMotionType(s32* pValue, const TableIter& rIter) {
+        return ::getPlacementArgNoInit(rIter, "SignMotionType", pValue);
     }
 
     bool getMapPartsArgMovePosture(s32* pValue, const LiveActor* pActor) {

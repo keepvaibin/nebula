@@ -11,7 +11,7 @@ class SpinDriverPathDrawer : public LiveActor {
 public:
     SpinDriverPathDrawer(SpinDriverShootPath*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void draw() const;
 
     s32 calcPositionCount(f32, f32) const;

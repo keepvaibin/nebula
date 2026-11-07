@@ -16,10 +16,10 @@ namespace NrvLuigiLetter {
 };  // namespace NrvLuigiLetter
 
 LuigiLetter::LuigiLetter(bool param1, const char* pParam2)
-    : LayoutActor("\203\213\203\103\201\133\203\127\202\314\216\350\216\206" /* ルイージの手紙 */, true), mTexture(nullptr), mAButtonIcon(nullptr), _28(pParam2), _2C(param1) {
+    : LayoutActor("ルイージの手紙", true), mTexture(nullptr), mAButtonIcon(nullptr), _28(pParam2), _2C(param1) {
 }
 
-void LuigiLetter::init(const JMapInfoIter& rIter) {
+void LuigiLetter::init(const TableIter& rIter) {
     char archiveName[256];
     char textureName[256];
 
@@ -92,11 +92,11 @@ void LuigiLetter::exeEnd() {
     }
 }
 
-void LuigiLetter::makeArchiveListForNPC(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter) {
+void LuigiLetter::makeArchiveListForNPC(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
     LuigiLetter::makeArchiveListCommon(pCollector, MR::getLuigiLetterGalaxyNameForNPC());
 }
 
-void LuigiLetter::makeArchiveListForMenu(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter) {
+void LuigiLetter::makeArchiveListForMenu(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
     LuigiLetter::makeArchiveListCommon(pCollector, MR::getLuigiLetterGalaxyName());
 }
 

@@ -14,11 +14,11 @@ namespace NrvDinoPackunFire {
     NEW_NERVE(DinoPackunTrackFireNrvGround, DinoPackunTrackFire, Ground);
 };  // namespace NrvDinoPackunFire
 
-DinoPackunTrackFireHolder::DinoPackunTrackFireHolder(s32 max) : DeriveActorGroup< DinoPackunTrackFire >("\203\126\203\142\203\174\220\325\211\212\212\307\227\235" /* シッポ跡炎管理 */, max) {
+DinoPackunTrackFireHolder::DinoPackunTrackFireHolder(s32 max) : DeriveActorGroup< DinoPackunTrackFire >("シッポ跡炎管理", max) {
     DinoPackunTrackFire* pTrackFire;
 
     for (s32 i = 0; i < max; i++) {
-        pTrackFire = new DinoPackunTrackFire("\203\126\203\142\203\174\220\325\211\212" /* シッポ跡炎 */);
+        pTrackFire = new DinoPackunTrackFire("シッポ跡炎");
         pTrackFire->initWithoutIter();
         registerActor(pTrackFire);
     }
@@ -28,7 +28,7 @@ DinoPackunTrackFire::DinoPackunTrackFire(const char* pName) : LiveActor(pName) {
     _8C.identity();
 }
 
-void DinoPackunTrackFire::init(const JMapInfoIter& rIter) {
+void DinoPackunTrackFire::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::connectToSceneEnemyMovement(this);
     initHitSensor(1);
@@ -54,7 +54,7 @@ void DinoPackunTrackFire::init(const JMapInfoIter& rIter) {
 void DinoPackunTrackFire::control() {
     MR::makeMtxUpNoSupportPos(&_8C, -mGravity, mPosition);
 
-    if (MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false)) {
+    if (MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
         kill();
     }
 }

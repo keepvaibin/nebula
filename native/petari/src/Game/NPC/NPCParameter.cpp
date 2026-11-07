@@ -12,21 +12,21 @@ template void MR::Vector< MR::FixedArray< NPCParameterBase*, 48 > >::push_back(N
 NPCParameterEdit::NPCParameterEdit(const char* pName, const char** pPpChar, bool a3) : NPCParameterBase(pName), _8(pPpChar), _C(a3) {
 }
 
-void NPCParameterEdit::read(JMapInfo* pInfo, s32 a2) {
+void NPCParameterEdit::read(Table* pInfo, s32 a2) {
     pInfo->getValue(a2, mName, _8);
 }
 
 NPCParameterBool::NPCParameterBool(const char* pName, bool* pBool) : NPCParameterBase(pName), _8(pBool) {
 }
 
-void NPCParameterBool::read(JMapInfo* pInfo, s32 a2) {
+void NPCParameterBool::read(Table* pInfo, s32 a2) {
     pInfo->getValue(a2, mName, _8);
 }
 
 NPCParameterV3f::NPCParameterV3f(const char* pName, Vec3f* pVec, f32 f1, f32 f2) : NPCParameterBase(pName), _8(pVec), _C(f1), _10(f2) {
 }
 
-void NPCParameterV3f::read(JMapInfo* pInfo, s32 a2) {
+void NPCParameterV3f::read(Table* pInfo, s32 a2) {
     char str[255];
     MR::copyString(str, mName, sizeof(str));
     *(str + strlen(mName) + 1) = '\0';
@@ -45,7 +45,7 @@ NPCParameterJoint::NPCParameterJoint(const char* pName, const char* pChar, const
 NPCParameterReader::NPCParameterReader(const char* pName) : NPCParameterBase(pName), MR::Vector< MR::FixedArray< NPCParameterBase*, 48 > >() {
 }
 
-void NPCParameterReader::read(JMapInfo* pInfo, s32 a2) {
+void NPCParameterReader::read(Table* pInfo, s32 a2) {
     if (a2 <= -1 || a2 >= pInfo->getNumEntries()) {
         return;
     }
@@ -75,7 +75,7 @@ NPCParameterRange< s32 >::NPCParameterRange(const char* pName, s32* pLong, s32 a
 }
 
 template <>
-void NPCParameterRange< s32 >::read(JMapInfo* pInfo, s32 a2) {
+void NPCParameterRange< s32 >::read(Table* pInfo, s32 a2) {
     pInfo->getValue(a2, mName, _8);
 }
 
@@ -84,11 +84,11 @@ NPCParameterRange< f32 >::NPCParameterRange(const char* pName, f32* pLong, f32 a
 }
 
 template <>
-void NPCParameterRange< f32 >::read(JMapInfo* pInfo, s32 a2) {
+void NPCParameterRange< f32 >::read(Table* pInfo, s32 a2) {
     pInfo->getValue(a2, mName, _8);
 }
 
-void NPCParameterJoint::read(JMapInfo* pInfo, s32 a2) {
+void NPCParameterJoint::read(Table* pInfo, s32 a2) {
     pInfo->getValue(a2, mName, _8);
 
     if (strcmp(*_8, "") == 0) {
@@ -134,5 +134,5 @@ NPCItemParameterReader::NPCItemParameterReader(const char* pName) : NPCParameter
     push_back(new NPCParameterJoint("mGoodsJoint1", pName, &mItem.mGoodsJoint1));
 }
 
-void NPCParameterBase::read(JMapInfo*, s32) {
+void NPCParameterBase::read(Table*, s32) {
 }

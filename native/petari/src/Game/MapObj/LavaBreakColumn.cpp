@@ -1,7 +1,7 @@
 #include "Game/MapObj/LavaBreakColumn.hpp"
 #include "Game/MapObj/AnmModelObj.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapInfo.hpp"
+#include "Game/Util/Table.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
@@ -21,7 +21,7 @@ void LavaBreakColumn::makeActorAppeared() {
     mIsPillarFallen = false;
 }
 
-void LavaBreakColumn::init(const JMapInfoIter& rIter) {
+void LavaBreakColumn::init(const TableIter& rIter) {
     AnmModelSwitchMove::init(rIter);
     MR::onCalcGravity(this);
     MR::setEffectHostSRT(this, "LavaColumn", &mEffectPos, nullptr, nullptr);

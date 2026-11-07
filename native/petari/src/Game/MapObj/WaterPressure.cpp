@@ -14,13 +14,13 @@ WaterPressure::~WaterPressure() {
 WaterPressure::WaterPressure(const char* pName) : PressureBase(pName), mCameraInfo(), mIsInvalidSpinKill() {
 }
 
-void WaterPressure::init(const JMapInfoIter& rIter) {
+void WaterPressure::init(const TableIter& rIter) {
     PressureBase::init(rIter);
     MR::initActorCamera(this, rIter, &mCameraInfo);
-    MR::getJMapInfoArg7NoInit(rIter, &mIsInvalidSpinKill);
+    MR::getPlacementArg7NoInit(rIter, &mIsInvalidSpinKill);
 }
 
-void WaterPressure::initBullet(const JMapInfoIter& rIter) {
+void WaterPressure::initBullet(const TableIter& rIter) {
     MR::createSceneObj(SceneObj_WaterPressureBulletHolder);
 }
 

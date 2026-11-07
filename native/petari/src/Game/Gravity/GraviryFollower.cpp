@@ -2,7 +2,7 @@
 #include "Game/Gravity/GlobalGravityObj.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 
-GraviryFollower::GraviryFollower(GlobalGravityObj* pGravityObj, const JMapInfoIter& rIter)
+GraviryFollower::GraviryFollower(GlobalGravityObj* pGravityObj, const TableIter& rIter)
     : BaseMatrixFollower(pGravityObj, rIter), mGravity(nullptr) {
     mGravity = pGravityObj->getGravity();
 }
@@ -26,7 +26,7 @@ void GraviryFollower::update() {
 }
 
 namespace MR {
-    bool addBaseMatrixFollowerGravity(GlobalGravityObj* pGravityObj, const JMapInfoIter& rIter) {
+    bool addBaseMatrixFollowerGravity(GlobalGravityObj* pGravityObj, const TableIter& rIter) {
         if (!MR::isValidFollowID(rIter)) {
             return false;
         }

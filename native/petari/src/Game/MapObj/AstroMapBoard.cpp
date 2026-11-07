@@ -18,7 +18,7 @@ namespace NrvAstroMapBoard {
 AstroMapBoard::AstroMapBoard(const char* pName) : MapObjActor(pName) {
 }
 
-void AstroMapBoard::init(const JMapInfoIter& rIter) {
+void AstroMapBoard::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;
     MapObjActorUtil::setupInitInfoSimpleMapObj(&info);
@@ -28,8 +28,8 @@ void AstroMapBoard::init(const JMapInfoIter& rIter) {
     info.setupNoAppearRiddleSE();
     initialize(rIter, info);
     AstroDemoFunction::tryRegisterGrandStarReturnAndSimpleCast(this, rIter);
-    AstroDemoFunction::tryRegisterDemo(this, "\203\215\203\133\203\142\203\136\203\147\201\133\203\140\202\314\211\212\220\340\226\276\203\146\203\202" /* ロゼッタトーチの炎説明デモ */, rIter);
-    AstroDemoFunction::tryRegisterDemo(this, "\203\215\203\133\203\142\203\136\203\147\201\133\203\140\202\314\211\212\220\151\222\273\203\146\203\202" /* ロゼッタトーチの炎進捗デモ */, rIter);
+    AstroDemoFunction::tryRegisterDemo(this, "ロゼッタトーチの炎説明デモ", rIter);
+    AstroDemoFunction::tryRegisterDemo(this, "ロゼッタトーチの炎進捗デモ", rIter);
 
     if (MR::isButlerMapAppear()) {
         makeActorAppeared();

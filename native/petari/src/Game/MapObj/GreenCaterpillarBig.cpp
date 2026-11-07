@@ -12,7 +12,7 @@ namespace NrvGreenCaterpillarBig {
 };  // namespace NrvGreenCaterpillarBig
 
 GreenCaterpillarBigBody::GreenCaterpillarBigBody(LiveActor* pCaterpillar, MtxPtr mtx)
-    : ModelObj("\203\111\203\111\203\200\203\103\203\200\203\103\221\314" /* オオムイムイ体 */, "GreenCaterpillarBigBody", mtx, -2, -2, -2, false) {
+    : ModelObj("オオムイムイ体", "GreenCaterpillarBigBody", mtx, -2, -2, -2, false) {
     mCaterpillar = pCaterpillar;
     mFrontVec.x = 0.0f;
     mFrontVec.y = 0.0f;
@@ -20,7 +20,7 @@ GreenCaterpillarBigBody::GreenCaterpillarBigBody(LiveActor* pCaterpillar, MtxPtr
     mPlanetLOD = nullptr;
 }
 
-void GreenCaterpillarBigBody::init(const JMapInfoIter& rIter) {
+void GreenCaterpillarBigBody::init(const TableIter& rIter) {
     MR::invalidateClipping(this);
     mPlanetLOD = MR::createLodCtrlPlanet(this, rIter, -1.0f);
     mPlanetLOD->validate();
@@ -81,7 +81,7 @@ GreenCaterpillarBig::GreenCaterpillarBig(const char* pName) : LiveActor(pName) {
     mPlanetLOD = nullptr;
 }
 
-void GreenCaterpillarBig::init(const JMapInfoIter& rIter) {
+void GreenCaterpillarBig::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("GreenCaterpillarBigFace", nullptr, false);
     MR::connectToSceneMapObj(this);
@@ -162,7 +162,7 @@ void GreenCaterpillarBig::exeEnd() {
     }
 }
 
-void GreenCaterpillarBig::initBodyParts(const JMapInfoIter& rIter) {
+void GreenCaterpillarBig::initBodyParts(const TableIter& rIter) {
     s32 count = MR::getRailTotalLength(this) / 300.0f;
     mBodyArrayLength = count;
     mBodyArray = new GreenCaterpillarBigBody*[count];

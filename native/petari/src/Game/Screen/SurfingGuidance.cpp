@@ -19,10 +19,10 @@ namespace {
     NEW_NERVE(SurfingGuidanceFadeOut, SurfingGuidance, FadeOut);
 };  // namespace
 
-SurfingGuidance::SurfingGuidance() : LayoutActor("\203\124\201\133\203\164\203\102\203\223\203\113\203\103\203\137\203\223\203\130" /* サーフィンガイダンス */, true), _20(), _24(), _2C() {
+SurfingGuidance::SurfingGuidance() : LayoutActor("サーフィンガイダンス", true), _20(), _24(), _2C() {
 }
 
-void SurfingGuidance::init(const JMapInfoIter& rIter) {
+void SurfingGuidance::init(const TableIter& rIter) {
     MR::connectToSceneLayout(this);
     initLayoutManager("TiltGuidance", 3);
     initNerve(GET_NERVE_ANON(SurfingGuidanceFadeIn));

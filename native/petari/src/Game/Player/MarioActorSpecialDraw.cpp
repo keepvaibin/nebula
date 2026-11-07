@@ -185,7 +185,7 @@ void MarioActor::hideBeeFur() {
 
     if (mMario->isPlayerModeInvincible()) {
         _A6E = 0;
-        stopEffect("\226\263\223\107\222\206" /* 無敵中 */);
+        stopEffect("無敵中");
     }
 }
 
@@ -509,7 +509,7 @@ void MarioActor::calcSpinEffect() {
     _6D4 = 0.0f;
     _6D8 = 0.0f;
 
-    if (selectAction("\203\130\203\163\203\223\211\361\225\234\203\107\203\164\203\106\203\116\203\147" /* スピン回復エフェクト */) != 1) {
+    if (selectAction("スピン回復エフェクト") != 1) {
         return;
     }
 
@@ -706,7 +706,7 @@ void MarioActor::showBeeFur() {
     if (mMario->isPlayerModeInvincible()) {
         MR::showJoint(getModel(), "Face0");
         _A6E = 2;
-        playEffect("\226\263\223\107\222\206" /* 無敵中 */);
+        playEffect("無敵中");
     }
 }
 

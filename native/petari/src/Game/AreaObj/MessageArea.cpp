@@ -4,7 +4,7 @@
 MessageArea::MessageArea(int formType, const char* pName) : AreaObj(formType, pName), mZoneID(-1) {
 }
 
-void MessageArea::init(const JMapInfoIter& rIter) {
+void MessageArea::init(const TableIter& rIter) {
     AreaObj::init(rIter);
 
     mZoneID = MR::getPlacedZoneId(rIter);

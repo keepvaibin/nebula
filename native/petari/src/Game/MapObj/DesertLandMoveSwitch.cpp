@@ -6,7 +6,7 @@
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -40,11 +40,11 @@ DesertLandMoveSwitch::DesertLandMoveSwitch(const char* pName) : LiveActor(pName)
     mSpringValue->setParam(0.0f, 0.0f, 0.35f, 0.75f, 0.0f);
 }
 
-void DesertLandMoveSwitch::init(const JMapInfoIter& rIter) {
+void DesertLandMoveSwitch::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
-    MR::getJMapInfoArg0NoInit(rIter, &_9C);
+    MR::getPlacementArg0NoInit(rIter, &_9C);
     s32 stack_C = -1;
-    MR::getJMapInfoArg1NoInit(rIter, &stack_C);
+    MR::getPlacementArg1NoInit(rIter, &stack_C);
     initModelAndCollision(rIter);
     MR::connectToSceneMapObj(this);
     if (stack_C == -1) {
@@ -112,7 +112,7 @@ bool DesertLandMoveSwitch::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSenso
     return false;
 }
 
-void DesertLandMoveSwitch::initModelAndCollision(const JMapInfoIter& rIter) {
+void DesertLandMoveSwitch::initModelAndCollision(const TableIter& rIter) {
     const char* pObjName = "";
     MR::getObjectName(&pObjName, rIter);
     _A0 = pObjName;

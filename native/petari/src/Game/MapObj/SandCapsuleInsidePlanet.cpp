@@ -11,7 +11,7 @@ namespace NrvSandCapsuleInsidePlanet {
 SandCapsuleInsidePlanet::SandCapsuleInsidePlanet(const char* pName) : MapObjActor(pName) {
 }
 
-void SandCapsuleInsidePlanet::init(const JMapInfoIter& rIter) {
+void SandCapsuleInsidePlanet::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;
     MapObjActorUtil::setupInitInfoPlanet(&info);

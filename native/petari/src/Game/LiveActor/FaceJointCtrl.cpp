@@ -16,7 +16,7 @@ FaceJointCtrl::FaceJointCtrl(LiveActor* pActor)
 
 void FaceJointCtrl::init() {
     const ResourceHolder* resourceHolder = MR::getResourceHolder(mHostActor);
-    JMapInfo* csv = MR::tryCreateCsvParser(resourceHolder, "%s.bcsv", ::sTextOutFileName);
+    Table* csv = MR::tryCreateCsvParser(resourceHolder, "%s.bcsv", ::sTextOutFileName);
     if (csv) {
         const char* jointName = nullptr;
         csv->getValue(0, "JointName", &jointName);

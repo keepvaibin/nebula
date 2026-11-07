@@ -3,7 +3,7 @@
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/CameraUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
@@ -34,7 +34,7 @@ namespace {
 Halo::Halo(const char* pName) : MapObjActor(pName), mDistance(70.0f) {
 }
 
-void Halo::init(const JMapInfoIter& rIter) {
+void Halo::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;
     info.setupDefaultPos();
@@ -44,7 +44,7 @@ void Halo::init(const JMapInfoIter& rIter) {
     info.setupFarClipping(-1.0f);
     info.setupAffectedScale();
     initialize(rIter, info);
-    MR::getJMapInfoArg0NoInit(rIter, &mDistance);
+    MR::getPlacementArg0NoInit(rIter, &mDistance);
 }
 
 void Halo::appear() {
@@ -151,9 +151,9 @@ PowerStarHalo::PowerStarHalo(const char* pName) : Halo(pName), mAppearDuringOpen
 Halo::~Halo() {
 }
 
-void PowerStarHalo::init(const JMapInfoIter& rIter) {
+void PowerStarHalo::init(const TableIter& rIter) {
     Halo::init(rIter);
-    MR::getJMapInfoArg1NoInit(rIter, &mAppearDuringOpeningCam);
+    MR::getPlacementArg1NoInit(rIter, &mAppearDuringOpeningCam);
 
     if (mAppearDuringOpeningCam == -1) {
         setNerve(GET_NERVE(PowerStarHalo, HostTypeWaitScenarioOpeningEnd));

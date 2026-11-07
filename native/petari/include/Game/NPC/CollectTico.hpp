@@ -8,7 +8,7 @@ class CollectTico : public LiveActor {
 public:
     CollectTico(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
 
     void exeWait();
     void exeCompleteDemo();

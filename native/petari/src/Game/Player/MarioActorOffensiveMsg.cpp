@@ -48,7 +48,7 @@ void MarioActor::attackOrPushSensor(HitSensor* pSensor, f32 distance) {
     } else {
         if (_3E5 && _945 < 15) {
             if (distance < radius + mSensorRadiusSpinStorm) {
-                if (selectAction("\203\130\203\163\203\223\203\101\203\136\203\142\203\116" /* スピンアタック */) < 4) {
+                if (selectAction("スピンアタック") < 4) {
                     pSensor->receiveMessage(ACTMES_SPIN_STORM_RANGE, getSensor("body"));
                 }
 
@@ -60,7 +60,7 @@ void MarioActor::attackOrPushSensor(HitSensor* pSensor, f32 distance) {
                     pull = true;
                 }
             }
-        } else if (isAnimationRun("\203\164\203\100\203\103\203\101\203\130\203\163\203\223" /* ファイアスピン */) && distance < radius + mSensorRadiusSpinStorm) {
+        } else if (isAnimationRun("ファイアスピン") && distance < radius + mSensorRadiusSpinStorm) {
             pSensor->receiveMessage(ACTMES_SPIN_STORM_RANGE, getSensor("body"));
         }
     }
@@ -436,7 +436,7 @@ bool MarioActor::tryGetItem(HitSensor* pSensor) {
             return false;
         }
 
-        if (!isActionOk("\203\112\203\201\216\235\202\277" /* カメ持ち */)) {
+        if (!isActionOk("カメ持ち")) {
             return false;
         }
 
@@ -462,7 +462,7 @@ bool MarioActor::tryGetItem(HitSensor* pSensor) {
             return false;
         }
 
-        if (!isActionOk("\203\112\203\201\216\235\202\277" /* カメ持ち */)) {
+        if (!isActionOk("カメ持ち")) {
             return false;
         }
 
@@ -678,15 +678,15 @@ void MarioActor::sendWallTouch(HitSensor* pReceiver, HitSensor* pSender) {
 }
 
 bool MarioActor::sendMsgUpperPunch(HitSensor* pSensor) {
-    if (!isActionOk("\203\101\203\142\203\160\201\133\203\160\203\223\203\140" /* アッパーパンチ */)) {
+    if (!isActionOk("アッパーパンチ")) {
         return false;
     }
 
     if (pSensor != nullptr && !MR::isDead(pSensor->mHost) && pSensor->receiveMessage(ACTMES_PLAYER_UPPER_PUNCH, getSensor("body"))) {
-        playSound("\220\272\217\122\202\350" /* 声蹴り */, -1);
+        playSound("声蹴り", -1);
 
         if (!mMario->isSwimming()) {
-            changeAnimation("\203\101\203\142\203\160\201\133\203\160\203\223\203\140" /* アッパーパンチ */);
+            changeAnimation("アッパーパンチ");
         }
 
         return true;

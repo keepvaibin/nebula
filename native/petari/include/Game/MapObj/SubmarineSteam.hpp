@@ -6,7 +6,7 @@ class SubmarineSteam : public LiveActor {
 public:
     SubmarineSteam(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void startClipped();
     virtual void endClipped();

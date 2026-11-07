@@ -5,7 +5,7 @@
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -24,7 +24,7 @@ namespace NrvTypicalDoor {
 TypicalDoor::TypicalDoor(const char* pName) : MapObjActor(pName), mCloseCollision(), mOpenCollision() {
 }
 
-void TypicalDoor::init(const JMapInfoIter& rIter) {
+void TypicalDoor::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;
     info.setupDefaultPos();
@@ -49,8 +49,8 @@ void TypicalDoor::init(const JMapInfoIter& rIter) {
         MR::invalidateCollisionParts(mOpenCollision);
     }
 
-    if (MR::isDemoPartExist(this, "\224\340\212\112\202\255" /* 扉開く */)) {
-        MR::registerDemoActionNerve(this, GET_NERVE(TypicalDoor, HostTypeOpen), "\224\340\212\112\202\255" /* 扉開く */);
+    if (MR::isDemoPartExist(this, "扉開く")) {
+        MR::registerDemoActionNerve(this, GET_NERVE(TypicalDoor, HostTypeOpen), "扉開く");
         setNerve(GET_NERVE(TypicalDoor, HostTypeCloseForDemo));
     }
 
@@ -117,7 +117,7 @@ void TypicalDoor::exeOpen() {
     }
 }
 
-void TypicalDoorOpen::init(const JMapInfoIter& rIter) {
+void TypicalDoorOpen::init(const TableIter& rIter) {
     TypicalDoor::init(rIter);
     open();
 }
@@ -132,9 +132,9 @@ DarknessRoomDoor::DarknessRoomDoor(const char* pName) : TypicalDoor(pName), _CC(
 TypicalDoor::~TypicalDoor() {
 }
 
-void DarknessRoomDoor::init(const JMapInfoIter& rIter) {
+void DarknessRoomDoor::init(const TableIter& rIter) {
     s32 arg0 = -1;
-    MR::getJMapInfoArg0NoInit(rIter, &arg0);
+    MR::getPlacementArg0NoInit(rIter, &arg0);
     _CC = arg0 != -1;
     TypicalDoor::init(rIter);
     MR::useStageSwitchReadA(this, rIter);

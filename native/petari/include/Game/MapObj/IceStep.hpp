@@ -7,7 +7,7 @@ public:
     IceStep(const char*);
 
     virtual ~IceStep();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void control();
     virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
     virtual bool receiveMsgEnemyAttack(u32, HitSensor*, HitSensor*);

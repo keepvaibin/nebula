@@ -79,11 +79,11 @@ bool CocoSambo::isNerveDying() {
     return isNerve(GET_NERVE(CocoSambo, CocoSamboNrvPressY)) || isNerve(GET_NERVE(CocoSambo, CocoSamboNrvBlow));
 }
 
-CocoSamboHead::CocoSamboHead(LiveActor* pHost) : PartsModel(pHost, "\203\122\203\122\203\124\203\223\203\173[\223\252]" /* ココサンボ[頭] */, "CocoSamboHead", 0, 18, 0) {
+CocoSamboHead::CocoSamboHead(LiveActor* pHost) : PartsModel(pHost, "ココサンボ[頭]", "CocoSamboHead", 0, 18, 0) {
     mFrontVec.set(0.0f, 0.0f, 1.0f);
 }
 
-void CocoSamboHead::init(const JMapInfoIter& rIter) {
+void CocoSamboHead::init(const TableIter& rIter) {
     Vec3f sensorOffs(::cHeadSensorOffset);
     sensorOffs.scale(mScale.x);
 
@@ -299,7 +299,7 @@ CocoSambo::CocoSambo(const char* pName)
       mAnimScaleParam(), mAnimScaleController(), mDpdPointingEndNerve(), mPointingActorArray() {
 }
 
-void CocoSambo::init(const JMapInfoIter& rIter) {
+void CocoSambo::init(const TableIter& rIter) {
     initMapToolInfo(rIter);
     MR::calcGravity(this);
     initModelManagerWithAnm("CocoSamboBody", nullptr, false);
@@ -318,7 +318,7 @@ void CocoSambo::init(const JMapInfoIter& rIter) {
     mPointingActorArray = new LiveActor*[::cPointingActorNum];
 
     for (s32 i = 0; i < ::cPointingActorNum; i++) {
-        mPointingActorArray[i] = new LiveActor("\203\174\203\103\203\223\203\145\203\102\203\223\203\117\227\160\203\101\203\116\203\136\201\133" /* ポインティング用アクター */);
+        mPointingActorArray[i] = new LiveActor("ポインティング用アクター");
         mPointingActorArray[i]->initWithoutIter();
         MR::invalidateClipping(mPointingActorArray[i]);
         MR::initStarPointerTargetAtMtx(mPointingActorArray[i], 80.0f * mScale.x, MR::getJointMtx(this, ::cPointingJointName[i]),
@@ -441,9 +441,9 @@ bool CocoSambo::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pR
     return false;
 }
 
-void CocoSambo::initMapToolInfo(const JMapInfoIter& rIter) {
+void CocoSambo::initMapToolInfo(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
-    MR::getJMapInfoArg0NoInit(rIter, &mPlayerSearchDistance);
+    MR::getPlacementArg0NoInit(rIter, &mPlayerSearchDistance);
     MR::useStageSwitchWriteDead(this, rIter);
     Rot3f mtx;
     MR::makeMtxRotate(mtx, mRotation);
@@ -488,7 +488,7 @@ bool CocoSambo::tryDpdPointing(const Nerve* pNerve) {
 
 bool CocoSambo::isPointing() {
     for (s32 i = 0; i < ::cPointingActorNum; i++) {
-        if (MR::isStarPointerPointing2POnPressButton(mPointingActorArray[i], "\216\343" /* 弱 */, true, false)) {
+        if (MR::isStarPointerPointing2POnPressButton(mPointingActorArray[i], "弱", true, false)) {
             return true;
         }
     }

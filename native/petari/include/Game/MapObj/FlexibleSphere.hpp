@@ -8,7 +8,7 @@ class FlexibleSphere : public LiveActor {
 public:
     FlexibleSphere(const char*);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void kill();
     virtual void control();
     virtual void draw() const;

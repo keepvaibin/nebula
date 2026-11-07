@@ -12,7 +12,7 @@
 #include "Game/Util/AreaObjUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
@@ -44,7 +44,7 @@ EyeBeamer::EyeBeamer(const char* pName)
     _9C.identity();
 }
 
-void EyeBeamer::init(const JMapInfoIter& rIter) {
+void EyeBeamer::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     mIsInMercatorCube = MR::isInAreaObj("MercatorCube", mPosition);
     initModel();
@@ -54,8 +54,8 @@ void EyeBeamer::init(const JMapInfoIter& rIter) {
     _CC.z = _DC.z;
     _CC.w = _DC.w;
     _EC.set(mPosition);
-    MR::getJMapInfoArg0NoInit(rIter, &_15C);
-    MR::getJMapInfoArg1NoInit(rIter, &_160);
+    MR::getPlacementArg0NoInit(rIter, &_15C);
+    MR::getPlacementArg1NoInit(rIter, &_160);
     initHitSensor(2);
     MR::addHitSensorMapObj(this, "body", 8, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
     MR::addHitSensorEye(this, "beam", 8, 140.0f + (0.5f * _15C), Vec3f(0.0f, 0.5f * (-_15C), 0.0f));
@@ -72,8 +72,8 @@ void EyeBeamer::init(const JMapInfoIter& rIter) {
         MR::listenStageSwitchOnA(this, MR::Functor(this, &EyeBeamer::requestStartPatrol));
 
     if (MR::tryRegisterDemoCast(this, rIter)) {
-        MR::registerDemoActionNerve(this, GET_NERVE(EyeBeamer, EyeBeamerNrvDemoTurn), "\203\101\203\103\203\162\201\133\203\175\201\133\211\361\223\135" /* アイビーマー回転 */);
-        MR::registerDemoActionNerve(this, GET_NERVE(EyeBeamer, EyeBeamerNrvDemoGotoPatrol), "\203\101\203\103\203\162\201\133\203\175\201\133\215\176\211\272" /* アイビーマー降下 */);
+        MR::registerDemoActionNerve(this, GET_NERVE(EyeBeamer, EyeBeamerNrvDemoTurn), "アイビーマー回転");
+        MR::registerDemoActionNerve(this, GET_NERVE(EyeBeamer, EyeBeamerNrvDemoGotoPatrol), "アイビーマー降下");
         setNerve(GET_NERVE(EyeBeamer, EyeBeamerNrvDemoStartWait));
     }
     MR::setGroupClipping(this, rIter, 0x20);
@@ -81,9 +81,9 @@ void EyeBeamer::init(const JMapInfoIter& rIter) {
     makeActorAppeared();
 }
 
-void EyeBeamer::initStartNerve(const JMapInfoIter& rIter) {
+void EyeBeamer::initStartNerve(const TableIter& rIter) {
     s32 arg = -1;
-    MR::getJMapInfoArg2WithInit(rIter, &arg);
+    MR::getPlacementArg2WithInit(rIter, &arg);
 
     switch (arg) {
     case -1:
@@ -100,11 +100,11 @@ void EyeBeamer::initStartNerve(const JMapInfoIter& rIter) {
 
 void EyeBeamer::initModel() {
     initModelManagerWithAnm("EyeBeamer", 0, false);
-    mBeamVolumeDrawer = new VolumeModelDrawer("\203\162\201\133\203\200\203\173\203\212\203\205\201\133\203\200" /* ビームボリューム */, "EyeBeamerBeamVolume", _9C);
-    mBeamBloom = new ModelObj("\203\162\201\133\203\200\203\165\203\213\201\133\203\200" /* ビームブルーム */, "EyeBeamerBeamBloom", _9C, MR::DrawBufferType_BloomModel, -2, -2, false);
+    mBeamVolumeDrawer = new VolumeModelDrawer("ビームボリューム", "EyeBeamerBeamVolume", _9C);
+    mBeamBloom = new ModelObj("ビームブルーム", "EyeBeamerBeamBloom", _9C, MR::DrawBufferType_BloomModel, -2, -2, false);
     mBeamBloom->initWithoutIter();
     MR::invalidateClipping(mBeamBloom);
-    mBeamMdl = new ModelObj("\203\162\201\133\203\200" /* ビーム */, "EyeBeamerBeam", _9C, MR::DrawBufferType_IndirectMapObj, -2, -2, false);
+    mBeamMdl = new ModelObj("ビーム", "EyeBeamerBeam", _9C, MR::DrawBufferType_IndirectMapObj, -2, -2, false);
     mBeamMdl->initWithoutIter();
     MR::invalidateClipping(mBeamMdl);
     MR::startBtk(mBeamMdl, "EyeBeamerBeam");
@@ -134,7 +134,7 @@ void EyeBeamer::initAfterPlacement() {
     MR::setClippingTypeSphere(this, dist, &_140);
 }
 
-void EyeBeamer::initRailMoveFunction(const JMapInfoIter& rIter) {
+void EyeBeamer::initRailMoveFunction(const TableIter& rIter) {
     if (MR::isConnectedWithRail(rIter)) {
         initRailRider(rIter);
         mRailMover = new MapPartsRailMover(this);
@@ -257,7 +257,7 @@ void EyeBeamer::exeDemoTurn() {
     if (MR::isFirstStep(this))
         MR::startSound(this, "SE_OJ_EYE_BEAMER_TURN");
 
-    f32 rate = MR::calcDemoPartStepRate("\203\101\203\103\203\162\201\133\203\175\201\133\211\361\223\135" /* アイビーマー回転 */);
+    f32 rate = MR::calcDemoPartStepRate("アイビーマー回転");
     f32 easeIn = MR::getEaseInOutValue(rate, 0.0f, 1.0f, 1.0f);
     Quat4f stack_30;
     Vec3f stack_24;
@@ -265,7 +265,7 @@ void EyeBeamer::exeDemoTurn() {
     stack_30.setRotate(stack_24, PI * easeIn);
     NebulaQuatMultiply((Quaternion*)&stack_30, (Quaternion*)&_CC, (Quaternion*)&_DC);
 
-    if (MR::isDemoPartLastStep("\203\101\203\103\203\162\201\133\203\175\201\133\211\361\223\135" /* アイビーマー回転 */)) {
+    if (MR::isDemoPartLastStep("アイビーマー回転")) {
         Quat4f stack_14;
         Vec3f stack_8;
         _CC.getXDir(stack_8);
@@ -276,10 +276,10 @@ void EyeBeamer::exeDemoTurn() {
 }
 
 void EyeBeamer::exeDemoGotoPatrol() {
-    f32 rate = MR::calcDemoPartStepRate("\203\101\203\103\203\162\201\133\203\175\201\133\215\176\211\272" /* アイビーマー降下 */);
+    f32 rate = MR::calcDemoPartStepRate("アイビーマー降下");
     f32 easeInOut = MR::getEaseInOutValue(rate, 0.0f, 1.0f, 1.0f);
     MR::vecBlend(_F8, _104, &_EC, easeInOut);
-    if (MR::isDemoPartLastStep("\203\101\203\103\203\162\201\133\203\175\201\133\215\176\211\272" /* アイビーマー降下 */))
+    if (MR::isDemoPartLastStep("アイビーマー降下"))
         setNerve(GET_NERVE(EyeBeamer, EyeBeamerNrvDemoWait));
 }
 

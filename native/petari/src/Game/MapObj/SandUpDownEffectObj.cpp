@@ -2,7 +2,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
@@ -54,7 +54,7 @@ SandUpDownEffectObj::SandUpDownEffectObj(const char* pName) : LiveActor(pName), 
     _A0.identity();
 }
 
-void SandUpDownEffectObj::init(const JMapInfoIter& rIter) {
+void SandUpDownEffectObj::init(const TableIter& rIter) {
     const char* objName;
 
     MR::initDefaultPos(this, rIter);

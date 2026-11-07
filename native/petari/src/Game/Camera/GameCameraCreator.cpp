@@ -4,7 +4,7 @@
 #include "Game/Camera/CameraParamChunkHolder.hpp"
 #include "Game/Camera/CameraParamChunkID.hpp"
 #include "Game/Util/AreaObjUtil.hpp"
-#include "Game/Util/JMapIdInfo.hpp"
+#include "Game/Util/PlacementId.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include <cstring>
 #include <cstring>
@@ -49,7 +49,7 @@ void GameCameraCreator::termCameraCodeCollection() {
 void GameCameraCreator::scanStartPos() {
     for (s32 idx = 0; idx < MR::getStartPosNum(); idx++) {
         // TODO: ctor
-        JMapIdInfo info;
+        PlacementId info;
         info._0 = -1;
         info.mZoneID = -1;
 

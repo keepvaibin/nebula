@@ -46,9 +46,9 @@ namespace {
     // static const s32 sAnimCamBlendFrame =
     // static const f32 sAnimCamRate =
     static f32 sDefaultFovy = 45.0f;
-    static const char* sTalkCameraName = "\213\244\222\312\211\357\230\142\203\112\203\201\203\211" /* 共通会話カメラ */;
-    static const char* sStartAnimCameraName = "\203\130\203\136\201\133\203\147\203\101\203\152\203\201\203\112\203\201\203\211" /* スタートアニメカメラ */;
-    static const char* sSubjectiveCameraName = "\216\345\212\317\203\112\203\201\203\211" /* 主観カメラ */;
+    static const char* sTalkCameraName = "共通会話カメラ";
+    static const char* sStartAnimCameraName = "スタートアニメカメラ";
+    static const char* sSubjectiveCameraName = "主観カメラ";
     // static const s32 sTestAnimCameraName =
     // static const s32 sConvertSize =
     // static const s32 sConvertQuality =
@@ -63,26 +63,26 @@ CameraDirector::CameraDirector(const char* pName) : NameObj(pName) {
     mOnlyCamera = new OnlyCamera("OnlyCamera");
     mPoseParam1 = new CameraPoseParam();
     mPoseParam2 = new CameraPoseParam();
-    mHolder = new CameraHolder("\203\112\203\201\203\211\203\172\203\213\203\137\201\133" /* カメラホルダー */);
-    mChunkHolder = new CameraParamChunkHolder(mHolder, "\203\160\203\211\203\201\201\133\203\136" /* パラメータ */);
+    mHolder = new CameraHolder("カメラホルダー");
+    mChunkHolder = new CameraParamChunkHolder(mHolder, "パラメータ");
     mCameraCreator = new GameCameraCreator(mChunkHolder);
-    mRailHolder = new CameraRailHolder("\203\112\203\201\203\211\203\214\201\133\203\213\212\307\227\235" /* カメラレール管理 */);
-    mRegisterHolder = new CameraRegisterHolder("\203\112\203\201\203\211\203\214\203\127\203\130\203\136" /* カメラレジスタ */);
+    mRailHolder = new CameraRailHolder("カメラレール管理");
+    mRegisterHolder = new CameraRegisterHolder("カメラレジスタ");
     mTargetHolder = new CameraTargetHolder();
-    mShaker = new CameraShaker("\220\125\223\256" /* 振動 */);
+    mShaker = new CameraShaker("振動");
     mViewInterpolator = new CameraViewInterpolator();
     mCover = new CameraCover("CameraCover");
     mRotChecker = new CameraRotChecker();
-    mCameraManGame = new CameraManGame(mHolder, mChunkHolder, "\203\121\201\133\203\200\203\112\203\201\203\211\203\175\203\223" /* ゲームカメラマン */);
-    mCameraManEvent = new CameraManEvent(mHolder, mChunkHolder, "\203\103\203\170\203\223\203\147\203\112\203\201\203\211\203\175\203\223" /* イベントカメラマン */);
-    mCameraManPause = new CameraManPause("\203\174\201\133\203\131\203\112\203\201\203\211\203\175\203\223" /* ポーズカメラマン */);
-    mCameraManSubjective = new CameraManSubjective("\216\345\212\317\203\112\203\201\203\211\203\175\203\223" /* 主観カメラマン */);
+    mCameraManGame = new CameraManGame(mHolder, mChunkHolder, "ゲームカメラマン");
+    mCameraManEvent = new CameraManEvent(mHolder, mChunkHolder, "イベントカメラマン");
+    mCameraManPause = new CameraManPause("ポーズカメラマン");
+    mCameraManSubjective = new CameraManSubjective("主観カメラマン");
     _58 = false;
     mEventNum = 0;
     mIsStartCameraActive = true;
     mStartTime = 0;
     mStartCameraCreated = false;
-    mCameraTargetMtx = new CameraTargetMtx("\203\112\203\201\203\211\203\136\201\133\203\121\203\142\203\147\203\137\203\176\201\133" /* カメラターゲットダミー */);
+    mCameraTargetMtx = new CameraTargetMtx("カメラターゲットダミー");
     mRequestCameraManReset = false;
     mRequestCameraLocalOffsetReset = false;
     mIsSubjectiveCamera = false;
@@ -103,7 +103,7 @@ CameraDirector::CameraDirector(const char* pName) : NameObj(pName) {
     MR::createCenterScreenBlur();
 }
 
-void CameraDirector::init(const JMapInfoIter& rIter) {
+void CameraDirector::init(const TableIter& rIter) {
 }
 
 void CameraDirector::movement() {

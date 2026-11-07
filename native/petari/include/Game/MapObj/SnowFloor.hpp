@@ -9,12 +9,12 @@ public:
     SnowFloor(const char*);
 
     virtual ~SnowFloor();
-    virtual void init(const JMapInfoIter&) override;
+    virtual void init(const TableIter&) override;
     virtual void draw() const override;
     virtual void control() override;
     virtual void attackSensor(HitSensor*, HitSensor*) override;
     void drawSetup();
-    void initLocalPoint(const JMapInfoIter&);
+    void initLocalPoint(const TableIter&);
     bool calcLocalPoint(const Vec3f&, Vec3f*);
     void createReduceMap(u16);
     void digPlayerWalk(const Vec3f&);

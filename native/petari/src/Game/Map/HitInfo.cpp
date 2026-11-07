@@ -174,9 +174,9 @@ void Triangle::calcForceMovePower(Vec3f* a1, const Vec3f& a2) const {
     mParts->calcForceMovePower(a1, a2);
 }
 
-JMapInfoIter Triangle::getAttributes() const {
+TableIter Triangle::getAttributes() const {
     if (mIdx == -1) {
-        return JMapInfoIter();
+        return TableIter();
     }
 
     return mParts->mServer->getAttributes(mIdx);

@@ -9,7 +9,7 @@ public:
     SoundEmitter(const char*);
 
     virtual ~SoundEmitter();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void control();
 
     void exePlaySound();

@@ -37,8 +37,8 @@ public:
     FileSelector(const char* pName);
 
     virtual ~FileSelector();
-    virtual void init(const JMapInfoIter& rIter);
-    virtual bool initStep(const JMapInfoIter& rIter, uint64_t deadline);
+    virtual void init(const TableIter& rIter);
+    virtual bool initStep(const TableIter& rIter, uint64_t deadline);
     virtual void appear();
     virtual void kill();
     virtual void control();

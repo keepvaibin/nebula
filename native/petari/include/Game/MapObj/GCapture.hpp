@@ -33,7 +33,7 @@ class GCapture : public LiveActor {
 public:
     GCapture(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void draw() const;
     virtual void control();
     virtual void attackSensor(HitSensor*, HitSensor*);

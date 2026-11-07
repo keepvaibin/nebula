@@ -2,7 +2,7 @@
 #include "Game/Util.hpp"
 #include "Game/Render/ModelData.hpp"
 
-template const bool JMapInfo::getValue< f32 >(int, const char*, f32*) const;
+template const bool Table::getValue< f32 >(int, const char*, f32*) const;
 
 namespace {
     DynamicJointCtrlParam sDefaultParam = {0.3f, 0.98f, 0.01f, 45.0f, -1};
@@ -219,7 +219,7 @@ void DynamicJointCtrl::setCallBackFunction() {
 
 DynamicJointCtrlKeeper::DynamicJointCtrlKeeper(LiveActor* pActor) : mActor(pActor), _4(), mControls() {
     const ResourceHolder* resourceHolder = MR::getResourceHolder(pActor);
-    JMapInfo* csv = MR::tryCreateCsvParser(resourceHolder, "%s.bcsv", ::sTextOutFileName);
+    Table* csv = MR::tryCreateCsvParser(resourceHolder, "%s.bcsv", ::sTextOutFileName);
     if (!csv) {
         return;
     }

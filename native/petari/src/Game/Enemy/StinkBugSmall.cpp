@@ -7,7 +7,7 @@
 #include "Game/Util/ActorStateUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -39,11 +39,11 @@ namespace NrvStinkBugSmall {
 StinkBugSmall::StinkBugSmall(const char* pName) : StinkBugBase(pName), mScaleController(), mBindStarPointer(), _C4() {
 }
 
-void StinkBugSmall::init(const JMapInfoIter& rIter) {
+void StinkBugSmall::init(const TableIter& rIter) {
     StinkBugBase::init(rIter);
-    MR::getJMapInfoArg0NoInit(rIter, &_B0);
-    MR::getJMapInfoArg1NoInit(rIter, &mRadius);
-    MR::getJMapInfoArg7NoInit(rIter, &_C4);
+    MR::getPlacementArg0NoInit(rIter, &_B0);
+    MR::getPlacementArg1NoInit(rIter, &mRadius);
+    MR::getPlacementArg7NoInit(rIter, &_C4);
     initHitSensor(3);
     Vec3f v9;
     if (_C4) {

@@ -12,7 +12,7 @@ class ScenarioSelectLayout : public LayoutActor {
 public:
     ScenarioSelectLayout(EffectSystem*, const CameraContext*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void movement();
     virtual void draw() const;
     virtual void calcAnim();

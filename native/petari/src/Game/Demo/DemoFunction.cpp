@@ -10,7 +10,7 @@
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util/DemoUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <cstdio>
@@ -198,7 +198,7 @@ namespace DemoFunction {
         return nullptr;
     }
 
-    bool isTargetDemoCast(LiveActor* pActor, const JMapInfoIter& rIter, const char* pActorName, s32 id) {
+    bool isTargetDemoCast(LiveActor* pActor, const TableIter& rIter, const char* pActorName, s32 id) {
         if (pActorName == nullptr) {
             return false;
         }
@@ -276,12 +276,12 @@ namespace DemoFunction {
         return DemoExecutorFunction::tryCreateDemoTalkAnimCtrlForActor(executor, pActor, pFileBaseName, a4);
     }
 
-    bool tryCreateDemoTalkAnimCtrlForScene(LiveActor* pActor, const JMapInfoIter& rIter, const char* pFileBaseName, const char* a4, s32 a5, s32 a6) {
+    bool tryCreateDemoTalkAnimCtrlForScene(LiveActor* pActor, const TableIter& rIter, const char* pFileBaseName, const char* a4, s32 a5, s32 a6) {
         DemoExecutor* executor = findDemoExecutor(pActor);
         return DemoExecutorFunction::tryCreateDemoTalkAnimCtrlForScene(executor, pActor, rIter, pFileBaseName, a4, a5, a6);
     }
 
-    bool tryCreateDemoTalkAnimCtrlForSceneDirect(LiveActor* pActor, const char* pDemoName, const JMapInfoIter& rIter, const char* pFileBaseName,
+    bool tryCreateDemoTalkAnimCtrlForSceneDirect(LiveActor* pActor, const char* pDemoName, const TableIter& rIter, const char* pFileBaseName,
                                                  const char* a5, s32 a6, s32 a7) {
         DemoExecutor* executor = findDemoExecutor(pDemoName);
         return DemoExecutorFunction::tryCreateDemoTalkAnimCtrlForScene(executor, pActor, rIter, pFileBaseName, a5, a6, a7);
@@ -308,12 +308,12 @@ namespace DemoFunction {
         return MR::createAndAddResourceHolder(buf);
     }
 
-    s32 createSheetParser(const DemoExecutor* pExecutor, const char* pNameSuffix, JMapInfo** pMap) {
+    s32 createSheetParser(const DemoExecutor* pExecutor, const char* pNameSuffix, Table** pMap) {
         const char* sheet_name = pExecutor->mSheetName;
-        JMapInfo* map = MR::tryCreateCsvParser(getDemoDirector()->mResourceHolder, "Demo%s%s.bcsv", sheet_name, pNameSuffix);
+        Table* map = MR::tryCreateCsvParser(getDemoDirector()->mResourceHolder, "Demo%s%s.bcsv", sheet_name, pNameSuffix);
         *pMap = map;
         if (map != nullptr) {
-            const JMapData* data = map->mData;
+            const TableData* data = map->mData;
             if (data != nullptr) {
                 return data->mNumEntries;
             }
@@ -323,6 +323,6 @@ namespace DemoFunction {
     }
 
     bool isDemoPartTalk(const char* pDemoName) {
-        return MR::isEqualSubString(pDemoName, "\211\357\230\142" /* 会話 */);
+        return MR::isEqualSubString(pDemoName, "会話");
     }
 };  // namespace DemoFunction

@@ -26,13 +26,13 @@ namespace NrvMapPartsSeesaw1AxisRotator {
 };  // namespace NrvMapPartsSeesaw1AxisRotator
 
 MapPartsSeesaw1AxisRotator::MapPartsSeesaw1AxisRotator(LiveActor* pHost, const char* pMoveSound, f32 moveSoundSpeed)
-    : MapPartsRotatorBase(pHost, "\203\126\201\133\203\134\201\133(1\216\262)" /* シーソー(1軸) */), mAngularSpeedMax(), mInertiaConst(::sInertiaConstDefault), mRotateAngle(), mRestoreForce(),
+    : MapPartsRotatorBase(pHost, "シーソー(1軸)"), mAngularSpeedMax(), mInertiaConst(::sInertiaConstDefault), mRotateAngle(), mRestoreForce(),
       mHipDrop(), mRotateAxis(0.0f, 0.0f, 1.0f), mAngularVelocity(), mAngularAccel(), mInitialUp(0.0f, 1.0f, 0.0f), mMoveSound(pMoveSound),
       mMoveSoundSpeed(moveSoundSpeed) {
     mRotateMtx.identity();
 }
 
-void MapPartsSeesaw1AxisRotator::init(const JMapInfoIter& rIter) {
+void MapPartsSeesaw1AxisRotator::init(const TableIter& rIter) {
     initNerve(GET_NERVE(MapPartsSeesaw1AxisRotator, HostTypeWait));
     MR::getMapPartsArgRotateSpeed(&mAngularSpeedMax, rIter);
     mAngularSpeedMax *= 0.01f;

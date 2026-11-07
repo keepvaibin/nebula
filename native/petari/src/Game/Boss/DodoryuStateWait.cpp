@@ -17,7 +17,7 @@ DodoryuStateWait::DodoryuStateWait(Dodoryu* pHost, const char* pName) : DodoryuS
     initWithoutIter();
 }
 
-void DodoryuStateWait::init(const JMapInfoIter& rIter) {
+void DodoryuStateWait::init(const TableIter& rIter) {
     MR::invalidateClipping(this);
     initNerve(GET_NERVE_ANON(DodoryuStateWaitNrvWait));
     makeActorAppeared();

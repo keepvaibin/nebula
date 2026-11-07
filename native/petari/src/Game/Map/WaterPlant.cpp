@@ -77,15 +77,15 @@ WaterPlant::WaterPlant(const char* pName)
       mHalfWidth(::sDefaultHalfWidth), mHeight(), mType() {
 }
 
-void WaterPlant::init(const JMapInfoIter& rIter) {
+void WaterPlant::init(const TableIter& rIter) {
     MR::createSceneObj(SceneObj_WaterPlantDrawInit);
     MR::connectToScene(this, MR::MovementType_MapObj, -1, -1, MR::DrawType_WaterPlant);
 
     MR::initDefaultPos(this, rIter);
 
-    MR::getJMapInfoArg0NoInit(rIter, &mPlantNum);
-    MR::getJMapInfoArg1NoInit(rIter, &mAreaRadius);
-    MR::getJMapInfoArg3NoInit(rIter, &mType);
+    MR::getPlacementArg0NoInit(rIter, &mPlantNum);
+    MR::getPlacementArg1NoInit(rIter, &mAreaRadius);
+    MR::getPlacementArg3NoInit(rIter, &mType);
 
     mHeight = ::sHeightTable[mType];
     initPlant();
@@ -280,7 +280,7 @@ void WaterPlant::drawDirect(TypedDraw& rDraw) const {
 }
 
 WaterPlantDrawInit::WaterPlantDrawInit()
-    : NameObj("\220\205\221\220\202\314\225\140\211\346\217\211\212\372\211\273" /* 水草の描画初期化 */), mAngleOffset(), mSwingPosTable(), mPlantATex(), mPlantBTex(), mPlantCTex(), mPlantDTex() {
+    : NameObj("水草の描画初期化"), mAngleOffset(), mSwingPosTable(), mPlantATex(), mPlantBTex(), mPlantCTex(), mPlantDTex() {
     MR::connectToScene(this, MR::MovementType_MapObj, -1, -1, -1);
 
     mPlantATex = new JUTTexture(MR::loadTexFromArc("WaterPlant.arc", "WaterPlantA.bti"));

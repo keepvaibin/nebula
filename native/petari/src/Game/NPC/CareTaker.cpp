@@ -41,14 +41,14 @@ namespace NrvCaretaker {
 Caretaker::Caretaker(const char* pName) : NPCActor(pName), mBombTimerLayout(), mObjArg0(-1), mTidyTimeLimit(::sTidyTimeLimit) {
 }
 
-void Caretaker::makeArchiveList(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter) {
+void Caretaker::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
     NPCActorItem item("Caretaker");
 
     pCollector->addArchive("CaretakerMiddle");
     pCollector->addArchive("CaretakerLow");
 
     s32 arg0 = -1;
-    MR::getJMapInfoArg0NoInit(rIter, &arg0);
+    MR::getPlacementArg0NoInit(rIter, &arg0);
 
     if (arg0 != 0) {
         return;
@@ -61,7 +61,7 @@ void Caretaker::makeArchiveList(NameObjArchiveListCollector* pCollector, const J
     }
 }
 
-void Caretaker::init(const JMapInfoIter& rIter) {
+void Caretaker::init(const TableIter& rIter) {
     NPCActorCaps caps = NPCActorCaps("Caretaker");
     NPCActorItem item = NPCActorItem("Caretaker");
     caps.setDefault();
@@ -72,11 +72,11 @@ void Caretaker::init(const JMapInfoIter& rIter) {
     caps.mSensorSize = 100.0f;
     initialize(rIter, caps);
     s32 arg3 = 0;
-    MR::getJMapInfoArg3NoInit(rIter, &arg3);
+    MR::getPlacementArg3NoInit(rIter, &arg3);
     mBodyColorFrame = arg3;
 
     s32 arg4 = 0;
-    MR::getJMapInfoArg4NoInit(rIter, &arg4);
+    MR::getPlacementArg4NoInit(rIter, &arg4);
     mObjArg4 = arg4;
 
     MR::startBrk(this, "BodyColor");
@@ -99,7 +99,7 @@ void Caretaker::init(const JMapInfoIter& rIter) {
     setAnim(mObjArg4);
 
     s32 arg0 = -1;
-    MR::getJMapInfoArg0NoInit(rIter, &arg0);
+    MR::getPlacementArg0NoInit(rIter, &arg0);
     mObjArg0 = arg0;
 
     MR::startBckNoInterpole(this, "Wait");
@@ -134,9 +134,9 @@ void Caretaker::init(const JMapInfoIter& rIter) {
         mTakeOutStar = new TakeOutStar(this, "TakeOutStarCaretaker", "TakeOutStarCaretaker", GET_NERVE(Caretaker, CaretakerNrvTakeOutStar));
 
         if (MR::isPlayerLuigi()) {
-            MR::getJMapInfoArg2NoInit(rIter, &mTidyTimeLimit);
+            MR::getPlacementArg2NoInit(rIter, &mTidyTimeLimit);
         } else {
-            MR::getJMapInfoArg1NoInit(rIter, &mTidyTimeLimit);
+            MR::getPlacementArg1NoInit(rIter, &mTidyTimeLimit);
         }
 
         mBombTimerLayout = new BombTimerLayout(true);
@@ -144,7 +144,7 @@ void Caretaker::init(const JMapInfoIter& rIter) {
         mBombTimerLayout->setTimeLimit(mTidyTimeLimit * 60);
         mBombTimerLayout->kill();
 
-        _168 = MR::joinToGroupArray(this, rIter, "\203\123\203\176\212\307\227\235" /* ゴミ管理 */, 32);
+        _168 = MR::joinToGroupArray(this, rIter, "ゴミ管理", 32);
 
         if (mMsgCtrl != nullptr) {
             MR::registerBranchFunc(getMsgCtrl(), TalkMessageFunc(this, &Caretaker::branchFuncStar));
@@ -364,7 +364,7 @@ void Caretaker::exePreTalk() {
     }
 
     if (MR::tryTalkSelectLeft(mMsgCtrl)) {
-        MR::tryStartDemoMarioPuppetableWithoutCinemaFrame(this, "\203\123\203\176\221\174\217\234\203\136\203\103\203\200\203\101\203\136\203\142\203\116" /* ゴミ掃除タイムアタック */);
+        MR::tryStartDemoMarioPuppetableWithoutCinemaFrame(this, "ゴミ掃除タイムアタック");
         MR::startAction(this, "Wait");
         MR::startBckPlayer("Watch");
         setNerve(GET_NERVE(Caretaker, CaretakerNrvPreWipeOut));
@@ -388,7 +388,7 @@ void Caretaker::exePreWipeOut() {
     MR::setRailCoordSpeed(this, 0.0f);
     MR::setRailCoord(this, 0.0f);
     MR::setDefaultPose(this);
-    MR::setPlayerPosOnGroundAndWait("\203\157\203\147\203\213\203\126\203\142\203\166\201\105\203\136\203\103\203\200\203\101\203\136\203\142\203\116\221\117\210\312\222\165" /* バトルシップ・タイムアタック前位置 */);
+    MR::setPlayerPosOnGroundAndWait("バトルシップ・タイムアタック前位置");
     MR::endNPCTalkCamera(false, 0);
     MR::callInvalidateClippingAllGroupMember(this);
     mBombTimerLayout->appear();
@@ -412,7 +412,7 @@ void Caretaker::exePreWipeIn() {
 
 void Caretaker::exePreWait() {
     if (MR::isFirstStep(this)) {
-        MR::endDemo(this, "\203\123\203\176\221\174\217\234\203\136\203\103\203\200\203\101\203\136\203\142\203\116" /* ゴミ掃除タイムアタック */);
+        MR::endDemo(this, "ゴミ掃除タイムアタック");
         MR::offPlayerControl();
         MR::onSwitchB(this);
     }
@@ -451,7 +451,7 @@ void Caretaker::exeTidy() {
         updateCounterSE();
 
         if (MR::canStartDemo() && (mBombTimerLayout->isReadyToTimeUp() || MR::isOnSwitchA(this))) {
-            MR::tryStartDemoMarioPuppetableWithoutCinemaFrame(this, "\203\123\203\176\221\174\217\234\203\136\203\103\203\200\203\101\203\136\203\142\203\116" /* ゴミ掃除タイムアタック */);
+            MR::tryStartDemoMarioPuppetableWithoutCinemaFrame(this, "ゴミ掃除タイムアタック");
             setNerve(GET_NERVE(Caretaker, CaretakerNrvPstWipeOut));
         }
     }
@@ -497,7 +497,7 @@ void Caretaker::exePstWipeOut() {
     MR::callValidateClippingAllGroupMember(this);
     MR::Effect::forceDeleteAllEmitters(MR::getEffectSystem());
     MR::tryPlayerKillTakingActor();
-    MR::setPlayerPosOnGroundAndWait("\203\157\203\147\203\213\203\126\203\142\203\166\201\105\203\136\203\103\203\200\203\101\203\136\203\142\203\116\214\343\210\312\222\165" /* バトルシップ・タイムアタック後位置 */);
+    MR::setPlayerPosOnGroundAndWait("バトルシップ・タイムアタック後位置");
     MR::startBckPlayer("Watch");
     MR::startNPCTalkCamera(getMsgCtrl(), getBaseMtx(), 1.3f, 1);
     setNerve(GET_NERVE(Caretaker, CaretakerNrvPstWipeIn));
@@ -530,7 +530,7 @@ void Caretaker::exePstTalk() {
         return;
     }
 
-    MR::endDemo(this, "\203\123\203\176\221\174\217\234\203\136\203\103\203\200\203\101\203\136\203\142\203\116" /* ゴミ掃除タイムアタック */);
+    MR::endDemo(this, "ゴミ掃除タイムアタック");
     MR::endNPCTalkCamera(false);
 
     if (MR::isOnSwitchA(this)) {

@@ -7,7 +7,7 @@ public:
     PlayerSeArea(int, const char*);
 
     virtual ~PlayerSeArea();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void movement();
 
     virtual const char* getManagerName() const {

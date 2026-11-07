@@ -19,7 +19,7 @@ public:
 
     virtual ~MercatorTransformCube();
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
 
     void convertTransAndRotate(Vec3f*, Pos3f*, const Vec3f&, bool) const;
     f32 getSphereRadius() const;
@@ -33,11 +33,11 @@ public:
 namespace MR {
     void convertMercatorPlaneToSphereTransAndRotate(Vec3f*, Pos3f*, const Vec3f&, bool);
     void convertMercatorPlaneToSphereTransAndRotate(Vec3f*, Vec3f*, const Vec3f&, bool);
-    void initDefaultPosForMercator(LiveActor*, const JMapInfoIter&, bool);
+    void initDefaultPosForMercator(LiveActor*, const TableIter&, bool);
     void calcNearestRailPosForMercator(Vec3f*, const LiveActor*, f32);
     void calcRailClippingInfoForMercator(Vec3f*, f32*, LiveActor*, f32, f32);
     void initAndSetRailClippingForMercator(Vec3f*, LiveActor*, f32, f32);
     f32 calcRailTotalLengthForMercator(const LiveActor*, f32);
     void getDivideMercatorRailPosition(DivideMercatorRailPosInfo*, const LiveActor*, u32, f32, u32);
-    MapPartsRailMover* createMapPartsRailMoverForMercator(LiveActor*, const JMapInfoIter&, bool);
+    MapPartsRailMover* createMapPartsRailMoverForMercator(LiveActor*, const TableIter&, bool);
 };  // namespace MR

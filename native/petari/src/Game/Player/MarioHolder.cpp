@@ -1,7 +1,7 @@
 #include "Game/Player/MarioHolder.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 
-MarioHolder::MarioHolder() : NameObj("\203\175\203\212\203\111\225\333\216\235" /* マリオ保持 */) {
+MarioHolder::MarioHolder() : NameObj("マリオ保持") {
     mActor = nullptr;
 }
 

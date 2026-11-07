@@ -39,7 +39,7 @@ SkeletalFishGuard::SkeletalFishGuard(SkeletalFishBoss* pFishBoss, const char* pN
     mScaleController = new AnimScaleController(nullptr);
 }
 
-void SkeletalFishGuard::init(const JMapInfoIter& rIter) {
+void SkeletalFishGuard::init(const TableIter& rIter) {
     initModelManagerWithAnm("SkeletalFishGuard", nullptr, false);
     MR::addToAttributeGroupSearchTurtle(this);
     MR::connectToSceneEnemy(this);
@@ -282,7 +282,7 @@ void SkeletalFishGuard::exeNumb() {
 
     MR::startDPDFreezeLevelSound(this);
 
-    if (!MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false)) {
+    if (!MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
         setNerve(_CC);
     }
 }
@@ -594,7 +594,7 @@ bool SkeletalFishGuard::isLineOfSightClear() const {
 }
 
 bool SkeletalFishGuard::tryShiftNumb(const Nerve* pNerve) {
-    if (MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false)) {
+    if (MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
         _CC = pNerve;
         setNerve(GET_NERVE_ANON(SkeletalFishGuardNrvNumb));
         return true;

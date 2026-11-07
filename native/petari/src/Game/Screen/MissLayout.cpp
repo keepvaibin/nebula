@@ -9,10 +9,10 @@ namespace {
     NEW_NERVE(MissLayoutNrvEnd, MissLayout, End);
 };  // namespace
 
-MissLayout::MissLayout() : LayoutActor("\203\176\203\130!" /* ミス! */, true) {
+MissLayout::MissLayout() : LayoutActor("ミス!", true) {
 }
 
-void MissLayout::init(const JMapInfoIter& rIter) {
+void MissLayout::init(const TableIter& rIter) {
     MR::connectToSceneLayout(this);
     initLayoutManager("TooBad", 1);
     initEffectKeeper(0, nullptr, nullptr);

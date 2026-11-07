@@ -16,9 +16,9 @@ public:
 
     void endInitActorSystemInfo();
     void registerActor(LiveActor*);
-    void initActorSystemInfo(LiveActor*, const JMapInfoIter&);
-    void joinToGroupClipping(LiveActor*, const JMapInfoIter&, int);
-    void entryLodCtrl(LodCtrl*, const JMapInfoIter&);
+    void initActorSystemInfo(LiveActor*, const TableIter&);
+    void joinToGroupClipping(LiveActor*, const TableIter&, int);
+    void entryLodCtrl(LodCtrl*, const TableIter&);
 
     ClippingJudge* mJudge;
     ClippingActorHolder* mActorHolder;

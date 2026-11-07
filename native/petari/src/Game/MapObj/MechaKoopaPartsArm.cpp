@@ -17,7 +17,7 @@ namespace NrvMechaKoopaPartsArm {
 MechaKoopaPartsArm::MechaKoopaPartsArm(const char* pName) : MapObjActor(pName), mIsRightArm() {
 }
 
-void MechaKoopaPartsArm::init(const JMapInfoIter& rIter) {
+void MechaKoopaPartsArm::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     mIsRightArm = isObjectName("MechaKoopaPartsArmRight");
     MapObjActorInitInfo info;

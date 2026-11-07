@@ -16,7 +16,7 @@ class NebulaAchievementBoard : public LayoutActor {
 public:
     NebulaAchievementBoard();
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void control();
 
     void open();

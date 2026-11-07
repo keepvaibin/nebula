@@ -178,14 +178,14 @@ void Mario::startHandy() {
 
 bool Mario::taskOnHandy(u32) {
     if (!mActor->_468) {
-        stopEffect("\202\242\202\242\212\276" /* いい汗 */);
+        stopEffect("いい汗");
         return false;
     }
 
     if (mTargetWalkSpeedIndex > 2) {
-        playEffect("\202\242\202\242\212\276" /* いい汗 */);
+        playEffect("いい汗");
     } else {
-        stopEffect("\202\242\202\242\212\276" /* いい汗 */);
+        stopEffect("いい汗");
     }
 
     return true;
@@ -194,9 +194,9 @@ bool Mario::taskOnHandy(u32) {
 void Mario::startHipDropBlur() {
     if (isPlayerModeHopper()) {
         if (gIsLuigi) {
-            playEffect("\203\172\203\142\203\160\201\133\220\113\227\216\203\213\203\103\201\133\203\127" /* ホッパー尻落ルイージ */);
+            playEffect("ホッパー尻落ルイージ");
         } else {
-            playEffect("\203\172\203\142\203\160\201\133\220\113\227\216" /* ホッパー尻落 */);
+            playEffect("ホッパー尻落");
         }
 
         pushTask(&Mario::taskOnHipDropBlurHopper, 0x80);
@@ -204,9 +204,9 @@ void Mario::startHipDropBlur() {
     }
 
     if (gIsLuigi) {
-        playEffect("\220\113\227\216\203\213\203\103\201\133\203\127" /* 尻落ルイージ */);
+        playEffect("尻落ルイージ");
     } else {
-        playEffect("\220\113\227\216" /* 尻落 */);
+        playEffect("尻落");
     }
 
     pushTask(&Mario::taskOnHipDropBlur, 0x80);
@@ -215,9 +215,9 @@ void Mario::startHipDropBlur() {
 bool Mario::taskOnHipDropBlurHopper(u32) {
     if (!getPlayer()->mMovementStates._B || mMovementStates._1 || isStatusActive(MarioStatus_Swim)) {
         if (gIsLuigi) {
-            stopEffect("\203\172\203\142\203\160\201\133\220\113\227\216\203\213\203\103\201\133\203\127" /* ホッパー尻落ルイージ */);
+            stopEffect("ホッパー尻落ルイージ");
         } else {
-            stopEffect("\203\172\203\142\203\160\201\133\220\113\227\216" /* ホッパー尻落 */);
+            stopEffect("ホッパー尻落");
         }
 
         return false;
@@ -229,9 +229,9 @@ bool Mario::taskOnHipDropBlurHopper(u32) {
 bool Mario::taskOnHipDropBlur(u32) {
     if (!getPlayer()->mMovementStates._B || mMovementStates._1 || isStatusActive(MarioStatus_Swim)) {
         if (gIsLuigi) {
-            stopEffect("\220\113\227\216\203\213\203\103\201\133\203\127" /* 尻落ルイージ */);
+            stopEffect("尻落ルイージ");
         } else {
-            stopEffect("\220\113\227\216" /* 尻落 */);
+            stopEffect("尻落");
         }
 
         return false;
@@ -321,7 +321,7 @@ void Mario::startHipDropSlide(const HitSensor* pSensor) {
     _A64 = pSensor->mRadius;
     _70C = getAirGravityVec();
 
-    changeAnimation("\203\161\203\142\203\166\203\150\203\215\203\142\203\166\212\212\202\350" /* ヒップドロップ滑り */);
+    changeAnimation("ヒップドロップ滑り");
 }
 
 void Mario::startJumpDropSlide(const HitSensor* pSensor) {
@@ -364,9 +364,9 @@ void Mario::startJumpDropSlide(const HitSensor* pSensor) {
         if (dot > sHopperJumpSlideDotMin) {
             f32 frontDot = mFrontVec.dot(slideDir);
             if (frontDot > sZero) {
-                changeAnimation("\203\127\203\203\203\223\203\166\217\207\212\212\202\350" /* ジャンプ順滑り */);
+                changeAnimation("ジャンプ順滑り");
             } else {
-                changeAnimation("\203\127\203\203\203\223\203\166\213\164\212\212\202\350" /* ジャンプ逆滑り */);
+                changeAnimation("ジャンプ逆滑り");
             }
         }
     }

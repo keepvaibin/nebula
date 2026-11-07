@@ -106,9 +106,9 @@ Karikari::Karikari(const char* pName)
       mFrozenTime(0), _A4(0) {
 }
 
-void Karikari::init(const JMapInfoIter& rIter) {
+void Karikari::init(const TableIter& rIter) {
     MR::createSceneObj(SceneObj_KarikariDirector);
-    MR::joinToGroup(this, "\203\112\203\212\203\112\203\212\203\146\203\102\203\214\203\116\203\136\201\133" /* カリカリディレクター */);
+    MR::joinToGroup(this, "カリカリディレクター");
     MR::initDefaultPos(this, rIter);
     MR::useStageSwitchWriteDead(this, rIter);
     if (MR::useStageSwitchReadAppear(this, rIter)) {
@@ -757,7 +757,7 @@ bool Karikari::tryDPDRelease(const Vec2f& rVel) {
 
 bool Karikari::tryDPDAttacked() {
 
-    if (MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false)) {
+    if (MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
         MR::startDPDHitSound();
         s32 padChannel = *MR::getStarPointerLastPointedPort(this);
         Vec2f pointerVel(*MR::getStarPointerScreenVelocity(padChannel));

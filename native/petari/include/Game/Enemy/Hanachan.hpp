@@ -16,7 +16,7 @@ public:
 
     HanachanParts(Hanachan*, s32, const char*, const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void kill();
     virtual void calcAndSetBaseMtx();
     virtual void attackSensor(HitSensor*, HitSensor*);
@@ -62,7 +62,7 @@ class Hanachan : public LiveActor {
 public:
     Hanachan(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void kill();
     virtual void startClipped();

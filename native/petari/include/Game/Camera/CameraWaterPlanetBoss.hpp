@@ -4,7 +4,7 @@
 
 class CameraWaterPlanetBoss : public Camera {
 public:
-    CameraWaterPlanetBoss(const char* pName = "\220\205\222\206\203\166\203\211\203\154\203\142\203\147\203\173\203\130" /* 水中プラネットボス */);
+    CameraWaterPlanetBoss(const char* pName = "水中プラネットボス");
 
     virtual void reset();
     virtual CameraTargetObj* calc();

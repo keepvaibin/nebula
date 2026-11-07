@@ -7,7 +7,7 @@
 #include "Game/NPC/TalkMessageFunc.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorShadowUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
@@ -39,7 +39,7 @@ void TicoShop::kill() {
     NPCActor::kill();
 }
 
-void TicoShop::init(const JMapInfoIter& rIter) {
+void TicoShop::init(const TableIter& rIter) {
     NPCActorCaps caps("TicoShop");
     NPCActorItem item("TicoShop");
     caps.setDefault();
@@ -64,7 +64,7 @@ void TicoShop::init(const JMapInfoIter& rIter) {
     }
 
     s32 starPieceNeed = ::sStarPieceNeed;
-    MR::getJMapInfoArg0NoInit(rIter, &starPieceNeed);
+    MR::getPlacementArg0NoInit(rIter, &starPieceNeed);
     initStarPiece(starPieceNeed);
     initMessage("Common_TicoShop000");
     MR::setMessageArg(mMsgCtrl, _194);

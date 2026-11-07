@@ -6,7 +6,7 @@ class WaterArea : public AreaObj {
 public:
     WaterArea(int, const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
 
     s32 _3C;
 };

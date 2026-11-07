@@ -5,16 +5,16 @@
 #include "Game/Util/ObjUtil.hpp"
 
 namespace {
-    static s32 cJMapBoneIDToBoneIndexTable[] = {0,  1, 2, 7,  8,  9, 14, 15, 16, 21, 3,  4,  0,  1,  5,  6,  2,  -1, -1, -1, 10,
+    static s32 cPlacementBoneIDToBoneIndexTable[] = {0,  1, 2, 7,  8,  9, 14, 15, 16, 21, 3,  4,  0,  1,  5,  6,  2,  -1, -1, -1, 10,
                                                 11, 7, 8, 12, 13, 9, -1, -1, -1, 17, 18, 14, 15, 19, 20, 16, -1, -1, -1, 21};
-    static s32 cJMapBoneIDToBoneIndexTableSize = ARRAY_SIZE(cJMapBoneIDToBoneIndexTable);
+    static s32 cPlacementBoneIDToBoneIndexTableSize = ARRAY_SIZE(cPlacementBoneIDToBoneIndexTable);
 
     s32 convertBoneIDToIndex(s32 id) {
-        if (id < 0 || cJMapBoneIDToBoneIndexTableSize <= id) {
+        if (id < 0 || cPlacementBoneIDToBoneIndexTableSize <= id) {
             return -1;
         }
 
-        return cJMapBoneIDToBoneIndexTable[id];
+        return cPlacementBoneIDToBoneIndexTable[id];
     }
 };  // namespace
 
@@ -85,11 +85,11 @@ namespace MR {
 
     void addTripodBossParts(LiveActor* pActor) {
         TripodBossAccesser::createSceneObj()->addTripodBossParts(pActor);
-        MR::joinToMovementOnOffGroup("\216\117\213\162\203\173\203\130\225\224\225\151" /* 三脚ボス部品 */, pActor, 256);
+        MR::joinToMovementOnOffGroup("三脚ボス部品", pActor, 256);
     }
 
     void addTripodBossPartsMovement(NameObj* pObj) {
-        MR::joinToMovementOnOffGroup("\216\117\213\162\203\173\203\130\225\224\225\151" /* 三脚ボス部品 */, pObj, 256);
+        MR::joinToMovementOnOffGroup("三脚ボス部品", pObj, 256);
     }
 
     bool isTripoddBossParts(const NameObj* pObj) {
@@ -109,7 +109,7 @@ namespace MR {
     }
 
     void requestMovementTripodBossParts() {
-        MR::onMovementOnOffGroup("\216\117\213\162\203\173\203\130\225\224\225\151" /* 三脚ボス部品 */);
+        MR::onMovementOnOffGroup("三脚ボス部品");
     }
 
     bool isCreatedTripodBoss() {

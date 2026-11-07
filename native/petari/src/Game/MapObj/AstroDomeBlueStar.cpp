@@ -26,11 +26,11 @@ namespace {
     const f32 cBubbleMaxRadius = 150.0f;
 };  // namespace
 
-AstroDomeBlueStar::CaptureActor::CaptureActor() : LiveActor("\203\114\203\203\203\166\203\140\203\203\227\160\203\101\203\116\203\136\201\133" /* キャプチャ用アクター */) {
+AstroDomeBlueStar::CaptureActor::CaptureActor() : LiveActor("キャプチャ用アクター") {
     mHostMtx.identity();
 }
 
-void AstroDomeBlueStar::CaptureActor::init(const JMapInfoIter& rIter) {
+void AstroDomeBlueStar::CaptureActor::init(const TableIter& rIter) {
     MR::connectToSceneMapObjDecorationMovement(this);
 
     initEffectKeeper(0, "GCapture", false);
@@ -95,7 +95,7 @@ AstroDomeBlueStar::AstroDomeBlueStar(const char* pName) : LiveActor(pName), mCap
     mBindStartMtx.identity();
 }
 
-void AstroDomeBlueStar::init(const JMapInfoIter& rIter) {
+void AstroDomeBlueStar::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("GCaptureTarget", nullptr, false);
 
@@ -117,7 +117,7 @@ void AstroDomeBlueStar::init(const JMapInfoIter& rIter) {
     initSound(6, false);
     MR::initStarPointerTarget(this, 200.0f);
 
-    mCaptureRibbon = new GCaptureRibbon("G\203\114\203\203\203\166\203\140\203\203\201\133\203\212\203\173\203\223" /* Gキャプチャーリボン */);
+    mCaptureRibbon = new GCaptureRibbon("Gキャプチャーリボン");
     mCaptureRibbon->initWithoutIter();
 
     if (MR::tryRegisterDemoCast(this, rIter)) {
@@ -125,12 +125,12 @@ void AstroDomeBlueStar::init(const JMapInfoIter& rIter) {
     }
 
     MR::tryRegisterDemoActionFunctor(this, MR::Functor(this, &AstroDomeBlueStar::forceKill), nullptr);
-    MR::registerDemoCast(this, "\203\157\203\147\203\211\201\133\225\361\215\220" /* バトラー報告 */, rIter);
-    MR::registerDemoCast(this, "\203\150\201\133\203\200\203\214\203\116\203\140\203\203\201\133\202\120" /* ドームレクチャー１ */, rIter);
-    MR::registerDemoCast(this, "\203\130\203\136\201\133\203\163\201\133\203\130\211\360\220\340\221\117\224\274" /* スターピース解説前半 */, rIter);
-    MR::registerDemoCast(this, "\203\130\203\136\201\133\203\163\201\133\203\130\211\360\220\340\214\343\224\274" /* スターピース解説後半 */, rIter);
-    MR::registerDemoActionFunctorDirect(this, MR::Functor(this, &AstroDomeBlueStar::waitAppear), "\203\130\203\136\201\133\203\163\201\133\203\130\211\360\220\340\214\343\224\274" /* スターピース解説後半 */, nullptr);
-    MR::registerDemoCast(this, "\223\126\225\266\203\150\201\133\203\200\203\130\203\136\201\133\213\101\212\322" /* 天文ドームスター帰還 */, rIter);
+    MR::registerDemoCast(this, "バトラー報告", rIter);
+    MR::registerDemoCast(this, "ドームレクチャー１", rIter);
+    MR::registerDemoCast(this, "スターピース解説前半", rIter);
+    MR::registerDemoCast(this, "スターピース解説後半", rIter);
+    MR::registerDemoActionFunctorDirect(this, MR::Functor(this, &AstroDomeBlueStar::waitAppear), "スターピース解説後半", nullptr);
+    MR::registerDemoCast(this, "天文ドームスター帰還", rIter);
     MR::registerDemoSimpleCastAll(this);
     SphereSelectorFunction::registerTarget(this);
 
@@ -305,7 +305,7 @@ void AstroDomeBlueStar::exeWait() {
         MR::reportStarPointerGrabTarget(this);
     }
 
-    if (isValidBindStart() && MR::isStarPointerPointing(this, PLAYER_1, true, "\216\343" /* 弱 */)) {
+    if (isValidBindStart() && MR::isStarPointerPointing(this, PLAYER_1, true, "弱")) {
         setNerve(GET_NERVE(AstroDomeBlueStar, AstroDomeBlueStarNrvPointing));
     }
 }
@@ -331,7 +331,7 @@ void AstroDomeBlueStar::exePointing() {
         return;
     }
 
-    if (!isValidBindStart() || !MR::isStarPointerPointing(this, PLAYER_1, true, "\216\343" /* 弱 */)) {
+    if (!isValidBindStart() || !MR::isStarPointerPointing(this, PLAYER_1, true, "弱")) {
         setNerve(GET_NERVE(AstroDomeBlueStar, AstroDomeBlueStarNrvWait));
     }
 }

@@ -6,7 +6,7 @@ class LavaBreakColumn : public AnmModelSwitchMoveEndKill {
 public:
     LavaBreakColumn(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void makeActorAppeared();
     virtual void control();
 

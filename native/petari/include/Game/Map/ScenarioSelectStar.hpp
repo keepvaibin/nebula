@@ -6,7 +6,7 @@ class ScenarioSelectStar : public MultiSceneActor {
 public:
     ScenarioSelectStar(EffectSystem*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void calcViewAndEntry();
     virtual void appear();
     virtual void kill();

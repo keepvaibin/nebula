@@ -7,7 +7,7 @@ public:
     PicketSwitch(const char*);
 
     virtual ~PicketSwitch();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 
     void exeWait();

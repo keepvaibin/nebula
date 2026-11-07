@@ -17,7 +17,7 @@ ClippingJudge::ClippingJudge(const char* pName) : NameObj(pName), mFrustum() {
     mClipDistances[7] = 5000.0f;
 }
 
-void ClippingJudge::init(const JMapInfoIter& rIter) {
+void ClippingJudge::init(const TableIter& rIter) {
 }
 
 void ClippingJudge::movement() {

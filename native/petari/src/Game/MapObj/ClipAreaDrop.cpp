@@ -22,7 +22,7 @@ ClipAreaDrop::ClipAreaDrop(const char* pName) : ClipArea(pName), mShapeSphere(),
     setShape(mShapeSphere);
 }
 
-void ClipAreaDrop::init(const JMapInfoIter& rIter) {
+void ClipAreaDrop::init(const TableIter& rIter) {
     initBaseMatrix(rIter);
     MR::connectToScene(this, MR::MovementType_ClippedMapParts, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_ClipArea);
     MR::invalidateClipping(this);

@@ -39,11 +39,11 @@ OtaRock::OtaRock(const char* pName)
     _A4.identity();
 }
 
-void OtaRock::init(const JMapInfoIter& rIter) {
+void OtaRock::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::useStageSwitchReadA(this, rIter);
     MR::useStageSwitchWriteDead(this, rIter);
-    MR::getJMapInfoArg0NoInit(rIter, &mNoThrowCocoNut);
+    MR::getPlacementArg0NoInit(rIter, &mNoThrowCocoNut);
     MR::calcGravity(this);
     initModel();
     MR::connectToSceneEnemy(this);
@@ -75,9 +75,9 @@ void OtaRock::kill() {
     LiveActor::kill();
 }
 
-void OtaRock::makeArchiveList(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter) {
+void OtaRock::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
     bool noCocoNut = false;
-    MR::getJMapInfoArg0NoInit(rIter, &noCocoNut);
+    MR::getPlacementArg0NoInit(rIter, &noCocoNut);
 
     if (!noCocoNut) {
         pCollector->addArchive(CocoNut::getModelName());

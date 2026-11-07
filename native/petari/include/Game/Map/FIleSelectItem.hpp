@@ -22,7 +22,7 @@ public:
     FileSelectItem(s32, bool, const FileSelectIconID&, const char*);
 
     virtual ~FileSelectItem();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void appear();
     virtual void makeActorAppeared();
     virtual void makeActorDead();

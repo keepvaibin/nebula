@@ -23,14 +23,14 @@ PunchingKinoko::PunchingKinoko(const char* pName)
     mInvincibleHitCoolDown = -1;
 }
 
-void PunchingKinoko::init(const JMapInfoIter& rIter) {
+void PunchingKinoko::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("PunchingKinoko", nullptr, false);
     MR::connectToSceneNoSilhouettedMapObj(this);
     MR::calcGravity(this);
     _9C.set(mPosition);
 
-    mGroundChecker = new GroundChecker("\223\252\203\122\203\212\203\127\203\207\203\223" /* 頭コリジョン */, 70.0f, 0.0f);
+    mGroundChecker = new GroundChecker("頭コリジョン", 70.0f, 0.0f);
     MR::calcPositionUpOffset(&mGroundChecker->mPosition, this, 130.0f);
     MR::resetPosition(mGroundChecker);
     MR::onCalcGravity(mGroundChecker);
@@ -64,16 +64,16 @@ void PunchingKinoko::initSensor() {
 
 void PunchingKinoko::initShadow() {
     MR::initShadowController(this, 3);
-    MR::addShadowVolumeSphere(this, "\221\314" /* 体 */, 10.0f);
-    MR::onCalcShadowOneTime(this, "\221\314" /* 体 */);
-    MR::addShadowVolumeSphere(this, "\223\252" /* 頭 */, 70.0f);
-    MR::setShadowDropPositionPtr(this, "\223\252" /* 頭 */, &mGroundChecker->mPosition);
-    MR::setShadowDropDirectionPtr(this, "\223\252" /* 頭 */, &mGroundChecker->mGravity);
-    MR::addShadowVolumeLine(this, "\202\302\202\275" /* つた */, this, "\221\314" /* 体 */, 10.0f, this, "\223\252" /* 頭 */, 10.0f);
+    MR::addShadowVolumeSphere(this, "体", 10.0f);
+    MR::onCalcShadowOneTime(this, "体");
+    MR::addShadowVolumeSphere(this, "頭", 70.0f);
+    MR::setShadowDropPositionPtr(this, "頭", &mGroundChecker->mPosition);
+    MR::setShadowDropDirectionPtr(this, "頭", &mGroundChecker->mGravity);
+    MR::addShadowVolumeLine(this, "つた", this, "体", 10.0f, this, "頭", 10.0f);
 }
 
-void PunchingKinoko::initCamera(const JMapInfoIter& rIter) {
-    MR::getJMapInfoArg7WithInit(rIter, &_98);
+void PunchingKinoko::initCamera(const TableIter& rIter) {
+    MR::getPlacementArg7WithInit(rIter, &_98);
     if (_98 != -1) {
         MR::declareCameraRegisterVec(this, _98, &_9C);
     }
@@ -457,9 +457,9 @@ void PunchingKinoko::exeCrushed() {
     if (MR::isFirstStep(this)) {
         MR::startBrk(this, "Press");
 
-        if (MR::isShadowProjected(this, "\223\252" /* 頭 */)) {
-            MR::getShadowProjectionNormal(this, "\223\252" /* 頭 */, &_A8);
-            MR::getShadowProjectionPos(this, "\223\252" /* 頭 */, &mGroundChecker->mPosition);
+        if (MR::isShadowProjected(this, "頭")) {
+            MR::getShadowProjectionNormal(this, "頭", &_A8);
+            MR::getShadowProjectionPos(this, "頭", &mGroundChecker->mPosition);
             mGroundChecker->mPosition.add(_A8 * 20.0f);
         } else {
             _A8.set(mGravity);
@@ -499,9 +499,9 @@ void PunchingKinoko::exeCrushedEnd() {
 }
 
 void PunchingKinoko::addVelocityKeepHeight() {
-    if (MR::isShadowProjected(this, "\223\252" /* 頭 */)) {
+    if (MR::isShadowProjected(this, "頭")) {
         Vec3f stack_8;
-        MR::getShadowProjectionPos(this, "\223\252" /* 頭 */, &stack_8);
+        MR::getShadowProjectionPos(this, "頭", &stack_8);
         MR::addVelocityKeepHeight(mGroundChecker, stack_8, 130.0f, 0.5f, 60.0f);
     }
 }

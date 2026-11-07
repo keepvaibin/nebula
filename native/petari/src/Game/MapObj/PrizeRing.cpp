@@ -28,7 +28,7 @@ PrizeRing::PrizeRing() : ModelObj("PrizeRing", "PrizeRing", nullptr, -2, -2, -2,
 PrizeRing::~PrizeRing() {
 }
 
-void PrizeRing::init(const JMapInfoIter& rIter) {
+void PrizeRing::init(const TableIter& rIter) {
     initNerve(GET_NERVE(PrizeRing, PrizeRingStart));
     initHitSensor(1);
     Vec3f offset;

@@ -52,7 +52,7 @@ void TrickRabbitSnow::setListener(TrickRabbitSnowListener* pListener) {
     mListener = pListener;
 }
 
-void TrickRabbitSnow::init(const JMapInfoIter& rIter) {
+void TrickRabbitSnow::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("TrickRabbit", nullptr, false);
     MR::connectToSceneNpc(this);
@@ -322,7 +322,7 @@ void TrickRabbitSnow::exeVanish() {
     Vec3f trans;
     Vec3f rotate;
 
-    if (MR::tryFindLinkNamePos(this, "\211\102\202\352\210\312\222\165" /* 隠れ位置 */, &trans, &rotate)) {
+    if (MR::tryFindLinkNamePos(this, "隠れ位置", &trans, &rotate)) {
         mPosition.set(trans);
         mRotation.set(rotate);
         MR::makeQuatAndFrontFromRotate(&mRotateQuat, &mFrontVec, this);
@@ -396,7 +396,7 @@ void TrickRabbitSnow::exeBlowDamage() {
 void TrickRabbitSnow::exeCaught() {
 
     if (MR::updateActorState(this, mStateCaught)) {
-        MR::endDemo(this, "\225\337\202\334\202\350" /* 捕まり */);
+        MR::endDemo(this, "捕まり");
         MR::forwardNode(mMsgCtrl);
         mSpotMarkLight->kill();
         mFootPrint->clear();

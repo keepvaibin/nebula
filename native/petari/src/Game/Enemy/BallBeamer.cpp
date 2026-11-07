@@ -7,7 +7,7 @@
 #include "Game/Util/ActorShadowUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -23,9 +23,9 @@ BallBeamer::BallBeamer(const char* pName) : LiveActor(pName), mBeams(), _90() {
     _98.identity();
 }
 
-void BallBeamer::makeArchiveList(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter) {
+void BallBeamer::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
     s32 arg2 = -1;
-    MR::getJMapInfoArg2NoInit(rIter, &arg2);
+    MR::getPlacementArg2NoInit(rIter, &arg2);
     pCollector->addArchive("JumpBeamerBeam");
     pCollector->addArchive("JumpBeamerBeamBloom");
     if (!arg2) {
@@ -33,7 +33,7 @@ void BallBeamer::makeArchiveList(NameObjArchiveListCollector* pCollector, const 
     }
 }
 
-void BallBeamer::init(const JMapInfoIter& rIter) {
+void BallBeamer::init(const TableIter& rIter) {
     initModelManagerWithAnm("BallBeamer", nullptr, false);
     MR::initDefaultPos(this, rIter);
     mPosition.y = mPosition.y - 50.0f;
@@ -61,14 +61,14 @@ void BallBeamer::init(const JMapInfoIter& rIter) {
     f32 arg0 = 12.0f;
     s32 arg1 = 530;
     s32 arg2 = -1;
-    MR::getJMapInfoArg0NoInit(rIter, &arg0);
-    MR::getJMapInfoArg1NoInit(rIter, &arg1);
-    MR::getJMapInfoArg2NoInit(rIter, &arg2);
+    MR::getPlacementArg0NoInit(rIter, &arg0);
+    MR::getPlacementArg1NoInit(rIter, &arg1);
+    MR::getPlacementArg2NoInit(rIter, &arg2);
     for (int i = 0; i < 12; i++) {
         if (arg2 == 0) {
-            mBeams[i] = new RingBeam("\203\212\203\223\203\117\203\162\201\133\203\200" /* リングビーム */, this, true, true);
+            mBeams[i] = new RingBeam("リングビーム", this, true, true);
         } else {
-            mBeams[i] = new RingBeam("\203\212\203\223\203\117\203\162\201\133\203\200" /* リングビーム */, this, true, false);
+            mBeams[i] = new RingBeam("リングビーム", this, true, false);
         }
         mBeams[i]->init(rIter);
         mBeams[i]->setSpeed(arg0);

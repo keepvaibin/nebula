@@ -17,7 +17,7 @@ public:
     };
 
     virtual ~ChipGroup();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void movement();
 
     void updateUIRange();

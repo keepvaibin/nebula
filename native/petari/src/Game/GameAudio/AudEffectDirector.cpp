@@ -19,10 +19,10 @@ namespace {
     };
 };  // namespace
 
-AudEffectDirector::AudEffectDirector() : NameObj("\203\111\201\133\203\146\203\102\203\111\203\107\203\164\203\106\203\116\203\147\203\146\203\102\203\214\203\116\203\136\201\133" /* オーディオエフェクトディレクター */), _C(0), _10(0), _14(0) {
+AudEffectDirector::AudEffectDirector() : NameObj("オーディオエフェクトディレクター"), _C(0), _10(0), _14(0) {
 }
 
-void AudEffectDirector::init(const JMapInfoIter& rIter) {
+void AudEffectDirector::init(const TableIter& rIter) {
     MR::connectToScene(this, MR::MovementType_AudEffectDirector, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_None);
 }
 

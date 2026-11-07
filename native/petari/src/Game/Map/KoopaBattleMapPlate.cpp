@@ -17,7 +17,7 @@ void KoopaBattleMapPlate::calcAndSetBaseMtx() {
 KoopaBattleMapPlate::~KoopaBattleMapPlate() {
 }
 
-void KoopaBattleMapPlate::init(const JMapInfoIter& rIter) {
+void KoopaBattleMapPlate::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::calcGravity(this);
     MR::makeMtxUpNoSupportPos(&_8C, -mGravity, mPosition);

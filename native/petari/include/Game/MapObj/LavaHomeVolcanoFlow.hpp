@@ -7,7 +7,7 @@ public:
     LavaHomeVolcanoFlow(const char*);
 
     virtual ~LavaHomeVolcanoFlow();
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void startClipped();
     virtual void endClipped();
 

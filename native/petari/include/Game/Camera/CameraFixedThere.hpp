@@ -9,7 +9,7 @@ public:
         CameraType_WorldUp,
     };
 
-    CameraFixedThere(const char* pName = "\202\273\202\314\217\352\222\350\223\137\203\112\203\201\203\211" /* その場定点カメラ */);
+    CameraFixedThere(const char* pName = "その場定点カメラ");
 
     virtual ~CameraFixedThere();
     virtual void reset();

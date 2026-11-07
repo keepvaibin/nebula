@@ -23,7 +23,7 @@ class DummyDisplayModel : public PartsModel {
 public:
     DummyDisplayModel(LiveActor*, const DummyDisplayModelInfo*, int, s32, s32);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void makeActorAppeared();
     virtual void makeActorDead();
     virtual void control();
@@ -37,12 +37,12 @@ public:
 };
 
 namespace MR {
-    DummyDisplayModel* createDummyDisplayModel(LiveActor*, const JMapInfoIter&, s32, const Vec3f&, const Vec3f&);
-    DummyDisplayModel* createDummyDisplayModel(LiveActor*, const JMapInfoIter&, const char*, s32);
-    DummyDisplayModel* createDummyDisplayModel(LiveActor*, const JMapInfoIter&, MtxPtr, s32, const Vec3f&, const Vec3f&);
-    DummyDisplayModel* createDummyDisplayModelCrystalItem(LiveActor*, const JMapInfoIter&, const Vec3f&, const Vec3f&);
+    DummyDisplayModel* createDummyDisplayModel(LiveActor*, const TableIter&, s32, const Vec3f&, const Vec3f&);
+    DummyDisplayModel* createDummyDisplayModel(LiveActor*, const TableIter&, const char*, s32);
+    DummyDisplayModel* createDummyDisplayModel(LiveActor*, const TableIter&, MtxPtr, s32, const Vec3f&, const Vec3f&);
+    DummyDisplayModel* createDummyDisplayModelCrystalItem(LiveActor*, const TableIter&, const Vec3f&, const Vec3f&);
     DummyDisplayModel* createDummyDisplayModelCrystalItem(LiveActor*, s32, const Vec3f&, const Vec3f&);
-    s32 getDummyDisplayModelId(const JMapInfoIter&, s32);
+    s32 getDummyDisplayModelId(const TableIter&, s32);
     s32 getDummyDisplayModelId(const LiveActor*);
-    void makeArchiveListDummyDisplayModel(NameObjArchiveListCollector*, const JMapInfoIter&);
+    void makeArchiveListDummyDisplayModel(NameObjArchiveListCollector*, const TableIter&);
 };  // namespace MR

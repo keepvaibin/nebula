@@ -16,7 +16,7 @@ SideSpikeMoveStep::SideSpikeMoveStep(const char* pName)
     : MapObjActor(pName), mScaleController(nullptr), mStateBindStarPointer(nullptr), mRailClipping(0.0f, 0.0f, 0.0f) {
 }
 
-void SideSpikeMoveStep::init(const JMapInfoIter& rIter) {
+void SideSpikeMoveStep::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;
     info.setupDefaultPos();

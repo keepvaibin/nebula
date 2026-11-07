@@ -29,7 +29,7 @@ KameckTurtle::KameckTurtle(const char* pName)
     : LiveActor(pName), mTurtle(), mRotateQuat(0.0f, 0.0f, 0.0f, 1.0f), _A4(0.0f, 0.0f, 1.0f), _B0(0.0f, 0.0f, 1.0f) {
 }
 
-void KameckTurtle::init(const JMapInfoIter& rIter) {
+void KameckTurtle::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("Koura", nullptr, false);
     MR::connectToSceneNoSilhouettedMapObjStrongLight(this);
@@ -50,7 +50,7 @@ void KameckTurtle::init(const JMapInfoIter& rIter) {
 }
 
 void KameckTurtle::initJetTurtle() {
-    mTurtle = new JetTurtle("\203\112\203\201\203\142\203\116\203\162\201\133\203\200\227\160\203\127\203\106\203\142\203\147\213\124" /* カメックビーム用ジェット亀 */);
+    mTurtle = new JetTurtle("カメックビーム用ジェット亀");
     mTurtle->initWithoutIter();
     mTurtle->becomeSlowType();
 

@@ -46,7 +46,7 @@ SnowFloor::~SnowFloor() {
 SnowFloor::SnowFloor(const char* pName) : LiveActor(pName), _E4(), _E8() {
 }
 
-void SnowFloor::init(const JMapInfoIter& rIter) {
+void SnowFloor::init(const TableIter& rIter) {
     initHitSensor(1);
     MR::addHitSensorEye(this, "eye", 16, 1.4142f * (::sTextureSize * ::sCellSize), Vec3f(0.0f, 0.0f, 0.0f));
     mSnowDepth = new f32[::sTextureSize * ::sTextureSize];
@@ -106,7 +106,7 @@ void SnowFloor::drawSetup() {
     mTexCoords[i] = 1.0f;
 }
 
-void SnowFloor::initLocalPoint(const JMapInfoIter& rIter) {
+void SnowFloor::initLocalPoint(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     Mtx mtx;
     MR::makeMtxTR(mtx, 0.0f, 0.0f, 0.0f, mRotation.x, mRotation.y, mRotation.z);
@@ -577,7 +577,7 @@ void SnowFloor::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
         return;
     }
 
-    if (MR::isEqualString(pReceiver->mHost->mName, "\203\175\203\212\203\111\211\212\213\205" /* マリオ炎球 */)) {
+    if (MR::isEqualString(pReceiver->mHost->mName, "マリオ炎球")) {
         doErase(pReceiver->mPosition, pReceiver->mRadius, ::cFireballDigAmount);
     } else {
         for (u32 i = 0; i < mCheckCount; i++) {

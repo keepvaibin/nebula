@@ -1,6 +1,6 @@
 #include "Game/Effect/RandomEffectObj.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
@@ -13,10 +13,10 @@ namespace {
 RandomEffectObj::RandomEffectObj(const char* pName) : SimpleEffectObj(pName), mStep(), mSeStep(-1), mLifeTime(::sLifeTime), mRandWidth(::sRandWidth) {
 }
 
-void RandomEffectObj::init(const JMapInfoIter& rIter) {
+void RandomEffectObj::init(const TableIter& rIter) {
     SimpleEffectObj::init(rIter);
-    MR::getJMapInfoArg0NoInit(rIter, &mLifeTime);
-    MR::getJMapInfoArg1NoInit(rIter, &mRandWidth);
+    MR::getPlacementArg0NoInit(rIter, &mLifeTime);
+    MR::getPlacementArg1NoInit(rIter, &mRandWidth);
 
     mStep = getRandomTime();
 }

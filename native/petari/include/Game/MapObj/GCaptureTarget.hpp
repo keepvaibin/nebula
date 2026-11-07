@@ -10,7 +10,7 @@ class GCaptureTarget : public LiveActor, public GCaptureTargetable {
 public:
     GCaptureTarget(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void appear();
     virtual void makeActorAppeared();

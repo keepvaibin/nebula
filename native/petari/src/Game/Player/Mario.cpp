@@ -1492,9 +1492,9 @@ void Mario::initAfterConst() {
     _814 = mPosition;
     NebulaMtxIdentity(_7E4);
     NebulaMtxIdentity(_824);
-    _720 = getAnimationStringPointer("\203\161\203\142\203\166\203\150\203\215\203\142\203\166\212\112\216\156" /* ヒップドロップ開始 */);
-    _724 = getAnimationStringPointer("\203\161\203\142\203\166\203\150\203\215\203\142\203\166" /* ヒップドロップ */);
-    _728 = getAnimationStringPointer("\203\161\203\142\203\166\203\150\203\215\203\142\203\166\222\205\222\156" /* ヒップドロップ着地 */);
+    _720 = getAnimationStringPointer("ヒップドロップ開始");
+    _724 = getAnimationStringPointer("ヒップドロップ");
+    _728 = getAnimationStringPointer("ヒップドロップ着地");
 }
 
 void Mario::writeBackPhyisicalVector() {
@@ -1856,7 +1856,7 @@ void Mario::actionMain() {
             }
         }
 
-        if (isStickOn() && isAnimationRun("\220\205\211\152\227\244\202\244\202\277\202\240\202\260" /* 水泳陸うちあげ */)) {
+        if (isStickOn() && isAnimationRun("水泳陸うちあげ")) {
             stopAnimation(nullptr);
         }
 
@@ -1886,8 +1886,8 @@ void Mario::updateGroundInfo() {
             _3C6 = 0;
         }
 
-        if (b1 && mMovementStates._1 && isDefaultAnimationRun("\227\216\211\272" /* 落下 */)) {
-            changeAnimation(nullptr, "\212\356\226\173" /* 基本 */);
+        if (b1 && mMovementStates._1 && isDefaultAnimationRun("落下")) {
+            changeAnimation(nullptr, "基本");
         }
 
         if (!isStatusActive(MarioStatus_13)) {
@@ -1945,12 +1945,12 @@ bool Mario::postureCtrl(MtxPtr) {
         }
     }
 
-    if (isAnimationRun("\215\342\202\267\202\327\202\350\217\343\214\374\202\253\202\244\202\302\202\324\202\271" /* 坂すべり上向きうつぶせ */, 2)) {
+    if (isAnimationRun("坂すべり上向きうつぶせ", 2)) {
         vec2 = _368;
     }
 
     if (isStatusActive(MarioStatus_Wait)) {
-        if (isAnimationRun("\223\301\216\352\203\105\203\107\203\103\203\1471A" /* 特殊ウエイト1A */)) {
+        if (isAnimationRun("特殊ウエイト1A")) {
             if (getAnimator()->getFrame() > 290.0f) {
                 blend = 1.0f;
             } else if (getAnimator()->getFrame() > 260.0f) {
@@ -1965,8 +1965,8 @@ bool Mario::postureCtrl(MtxPtr) {
         }
     }
 
-    if (!isSwimming() && (isAnimationRun("\220\205\211\152\203\127\203\106\203\142\203\147" /* 水泳ジェット */) || isAnimationRun("\220\205\211\152\203\130\203\163\203\223\210\332\223\256" /* 水泳スピン移動 */) || isAnimationRun("\203\212\203\223\203\117\203\137\203\142\203\126\203\205" /* リングダッシュ */) ||
-                          isAnimationRun("\220\205\211\152\203\130\203\163\203\223\203\127\203\203\203\223\203\166" /* 水泳スピンジャンプ */))) {
+    if (!isSwimming() && (isAnimationRun("水泳ジェット") || isAnimationRun("水泳スピン移動") || isAnimationRun("リングダッシュ") ||
+                          isAnimationRun("水泳スピンジャンプ"))) {
         MR::vecBlendSphere(mHeadVec, mJumpVec, &vec2, 0.1f);
 
         if (MR::normalizeOrZero(&vec2)) {
@@ -2019,7 +2019,7 @@ void Mario::createAngleMtx(MtxPtr pMtx, bool a2) {
 
     HitSensor* sensor = mActor->_470;
 
-    if (isAnimationRun("\223\212\202\260" /* 投げ */)) {
+    if (isAnimationRun("投げ")) {
         sensor = mActor->_474;
     }
 
@@ -2109,7 +2109,7 @@ void Mario::updateLookOfs() {
     }
 
     if (_97C == nullptr) {
-        if (isAnimationRun("\225\307\211\237\202\265" /* 壁押し */)) {
+        if (isAnimationRun("壁押し")) {
             Vec3f vec2;
             MR::vecKillElement(_4E8 - mPosition, mHeadVec, &vec2);
             f32 len = vec2.length();
@@ -2175,7 +2175,7 @@ const Vec3f* Mario::getGravityVec() const {
                 return &mAirGravityVec;
             }
 
-            if (isAnimationRun("\203\156\201\133\203\150\222\205\222\156" /* ハード着地 */)) {
+            if (isAnimationRun("ハード着地")) {
                 return &mAirGravityVec;
             }
 
@@ -2223,7 +2223,7 @@ const Vec3f* Mario::getGravityVec() const {
 }
 
 void Mario::touchWater() {
-    if (mActor->isActionOk("\220\205\211\360\217\234" /* 水解除 */) && mMorphResetTimer == 0) {
+    if (mActor->isActionOk("水解除") && mMorphResetTimer == 0) {
         mMorphResetTimer = 10;
     }
 }

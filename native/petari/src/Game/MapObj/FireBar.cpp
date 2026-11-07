@@ -15,19 +15,19 @@ FireBarBall::~FireBarBall() {
 FireBar::~FireBar() {
 }
 
-FireBarBall::FireBarBall(LiveActor* pParent) : ModelObj("\203\164\203\100\203\103\203\101\203\157\201\133\213\312" /* ファイアバー玉 */, "FireBarBall", 0, MR::DrawBufferType_NoShadowedMapObj, -2, -2, false) {
+FireBarBall::FireBarBall(LiveActor* pParent) : ModelObj("ファイアバー玉", "FireBarBall", 0, MR::DrawBufferType_NoShadowedMapObj, -2, -2, false) {
     mFireBarParent = pParent;
 }
 
-void FireBarBall::init(const JMapInfoIter& rIter) {
+void FireBarBall::init(const TableIter& rIter) {
     f32 shadowDropDist = 100.0f;
-    MR::getJMapInfoArg6NoInit(rIter, &shadowDropDist);
+    MR::getPlacementArg6NoInit(rIter, &shadowDropDist);
 
     if (0.0f != shadowDropDist) {
         MR::initShadowVolumeCylinder(this, 55.0f);
         MR::setShadowDropLength(this, 0, shadowDropDist);
         s32 shadowDropRotate = -1;
-        MR::getJMapInfoArg4NoInit(rIter, &shadowDropRotate);
+        MR::getPlacementArg4NoInit(rIter, &shadowDropRotate);
 
         if (shadowDropRotate == 0) {
             Vec3f upVec;
@@ -37,7 +37,7 @@ void FireBarBall::init(const JMapInfoIter& rIter) {
         }
 
         s32 cutShadows = -1;
-        MR::getJMapInfoArg2NoInit(rIter, &cutShadows);
+        MR::getPlacementArg2NoInit(rIter, &cutShadows);
 
         if (cutShadows == 0) {
             MR::setShadowVolumeEndDropOffset(this, 0, 20.0f);
@@ -86,7 +86,7 @@ FireBar::FireBar(const char* pName) : LiveActor(pName) {
     mStickDistance = 140.0f;
 }
 
-void FireBar::init(const JMapInfoIter& rIter) {
+void FireBar::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("FireBarCore", 0, false);
     MR::connectToSceneMapObj(this);
@@ -99,8 +99,8 @@ void FireBar::init(const JMapInfoIter& rIter) {
     MR::calcGravity(this);
 
     f32 shadowDropDist = 100.0f;
-    MR::getJMapInfoArg6NoInit(rIter, &shadowDropDist);
-    MR::getJMapInfoArg3NoInit(rIter, &shadowDropDist);
+    MR::getPlacementArg6NoInit(rIter, &shadowDropDist);
+    MR::getPlacementArg3NoInit(rIter, &shadowDropDist);
     shadowDropDist -= 55.0f;
 
     if (shadowDropDist > 0.0f) {
@@ -119,7 +119,7 @@ void FireBar::init(const JMapInfoIter& rIter) {
         MR::setShadowDropLength(this, 0, shadowDropDist);
 
         s32 rotateShadow = -1;
-        MR::getJMapInfoArg4NoInit(rIter, &rotateShadow);
+        MR::getPlacementArg4NoInit(rIter, &rotateShadow);
 
         if (rotateShadow == 0) {
             MR::calcUpVec(&drop_direction, this);
@@ -130,10 +130,10 @@ void FireBar::init(const JMapInfoIter& rIter) {
 
     s32 numFireBalls = 5;
     f32 fireBallSpeed = -1.0f;
-    MR::getJMapInfoArg0NoInit(rIter, &numFireBalls);
-    MR::getJMapInfoArg1NoInit(rIter, &fireBallSpeed);
-    MR::getJMapInfoArg5NoInit(rIter, &mStickDistance);
-    MR::getJMapInfoArg7NoInit(rIter, &mStickCount);
+    MR::getPlacementArg0NoInit(rIter, &numFireBalls);
+    MR::getPlacementArg1NoInit(rIter, &fireBallSpeed);
+    MR::getPlacementArg5NoInit(rIter, &mStickDistance);
+    MR::getPlacementArg7NoInit(rIter, &mStickCount);
 
     mFireBarSpeed = 0.1f * fireBallSpeed;
     mFireBallCount = mStickCount * numFireBalls;
@@ -222,7 +222,7 @@ void FireBar::updateHitSensor(HitSensor* pSensor) {
 }
 
 // meh
-void FireBar::initFireBarBall(const JMapInfoIter& rIter) {
+void FireBar::initFireBarBall(const TableIter& rIter) {
     mFireBalls = new FireBarBall*[mFireBallCount];
     s32 totalNum = mStickCount != 0 ? mFireBallCount / mStickCount : 0;
     f32 startVal = 0.0f;

@@ -32,7 +32,7 @@ StarPieceCounter::StarPieceCounter(const char* pName)
       mFollowPos(0.0f, 0.0f), _3C(0), mMode(0) {
 }
 
-void StarPieceCounter::init(const JMapInfoIter& rIter) {
+void StarPieceCounter::init(const TableIter& rIter) {
     initLayoutManager("StarPieceCounter", 3);
     MR::createAndAddPaneCtrl(this, "TSPieceCounter", 1);
     MR::setFollowPos(&mFollowPos, this, "TSPieceCounter");

@@ -11,7 +11,7 @@ public:
     TripodBossShell(const char* pName);
 
     virtual ~TripodBossShell();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void kill();
     virtual bool receiveMsgEnemyAttack(u32, HitSensor*, HitSensor*);
 

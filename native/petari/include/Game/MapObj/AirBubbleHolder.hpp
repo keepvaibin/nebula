@@ -12,7 +12,7 @@ public:
     AirBubbleHolder(const char* pName);
     virtual ~AirBubbleHolder();
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
 
     void appearAirBubble(const Vec3f&, s32);
     void createAirBubbles();

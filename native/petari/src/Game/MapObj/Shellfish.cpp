@@ -41,7 +41,7 @@ Shellfish::Shellfish(const char* pName)
     : LiveActor(pName), mScaleController(), mStarPointerState(), mItem(), mItemType(), mIsItemBound(), mLowCollision(), _A4() {
 }
 
-void Shellfish::init(const JMapInfoIter& rIter) {
+void Shellfish::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("Shellfish", nullptr, false);
     MR::connectToSceneMapObjStrongLight(this);
@@ -233,7 +233,7 @@ bool Shellfish::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* p
     return false;
 }
 
-void Shellfish::initItem(const JMapInfoIter& rIter) {
+void Shellfish::initItem(const TableIter& rIter) {
     const char* pObjectName;
     MR::getObjectName(&pObjectName, rIter);
 
@@ -262,33 +262,33 @@ void Shellfish::initItem(const JMapInfoIter& rIter) {
     MR::sendArbitraryMsg(ACTMES_ITEM_HIDE, mItem->getSensor(nullptr), getSensor("body"));
 }
 
-void Shellfish::initCoin(const JMapInfoIter&) {
-    mItem = static_cast< Coin* >(MR::createCoin(this, "\203\122\203\103\203\223" /* コイン */));
+void Shellfish::initCoin(const TableIter&) {
+    mItem = static_cast< Coin* >(MR::createCoin(this, "コイン"));
     mItem->initWithoutIter();
 }
 
-void Shellfish::initYellowChip(const JMapInfoIter& rIter) {
+void Shellfish::initYellowChip(const TableIter& rIter) {
     s32 groupId;
-    MR::getJMapInfoArg0WithInit(rIter, &groupId);
-    YellowChip* chip = new YellowChip("\203\103\203\107\203\215\201\133\203\140\203\142\203\166" /* イエローチップ */);
+    MR::getPlacementArg0WithInit(rIter, &groupId);
+    YellowChip* chip = new YellowChip("イエローチップ");
     chip->setHost(this);
     chip->setGroupID(groupId);
     mItem = chip;
     chip->initWithoutIter();
 }
 
-void Shellfish::initBlueChip(const JMapInfoIter& rIter) {
+void Shellfish::initBlueChip(const TableIter& rIter) {
     s32 groupId;
-    MR::getJMapInfoArg0WithInit(rIter, &groupId);
-    BlueChip* chip = new BlueChip("\203\165\203\213\201\133\203\140\203\142\203\166" /* ブルーチップ */);
+    MR::getPlacementArg0WithInit(rIter, &groupId);
+    BlueChip* chip = new BlueChip("ブルーチップ");
     chip->setHost(this);
     chip->setGroupID(groupId);
     mItem = chip;
     chip->initWithoutIter();
 }
 
-void Shellfish::initKinokoOneUp(const JMapInfoIter&) {
-    mItem = new BenefitItemOneUp("\202\120\202\164\202\157\203\114\203\155\203\122" /* １ＵＰキノコ */);
+void Shellfish::initKinokoOneUp(const TableIter&) {
+    mItem = new BenefitItemOneUp("１ＵＰキノコ");
     mItem->initWithoutIter();
 }
 

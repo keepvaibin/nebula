@@ -4,7 +4,7 @@
 #include "Game/Map/StageSwitch.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapPartsUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -15,13 +15,13 @@ namespace NrvMapPartsAppearController {
     NEW_NERVE(HostTypeDisappear, MapPartsAppearController, Disappear);
 };  // namespace NrvMapPartsAppearController
 
-MapPartsAppearController::MapPartsAppearController(LiveActor* pActor) : MapPartsFunction(pActor, "\217\157\214\273\220\247\214\344" /* 出現制御 */) {
+MapPartsAppearController::MapPartsAppearController(LiveActor* pActor) : MapPartsFunction(pActor, "出現制御") {
     mSignMotionType = 0;
     mPostureHolder = nullptr;
     _20 = 0;
 }
 
-void MapPartsAppearController::init(const JMapInfoIter& rIter) {
+void MapPartsAppearController::init(const TableIter& rIter) {
     initNerve(GET_NERVE(MapPartsAppearController, HostTypeWait));
     initSwitchMessenger(rIter);
     MR::getMapPartsArgSignMotionType(&mSignMotionType, rIter);
@@ -40,7 +40,7 @@ void MapPartsAppearController::storeCurrentPosture() {
     mPostureHolder->store(mHost);
 }
 
-void MapPartsAppearController::initSwitchMessenger(const JMapInfoIter& rIter) {
+void MapPartsAppearController::initSwitchMessenger(const TableIter& rIter) {
     if (MR::isExistStageSwitchAppear(rIter)) {
         MR::listenNameObjStageSwitchOnOffAppear(this, MR::createStageSwitchCtrl(this, rIter),
                                                 MR::Functor(this, &MapPartsAppearController::startAppear),

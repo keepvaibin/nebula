@@ -3,8 +3,8 @@
 #include "Game/NameObj/NameObj.hpp"
 #include "Game/Util/Array.hpp"
 
-class JMapIdInfo;
-class JMapInfoIter;
+class PlacementId;
+class TableIter;
 
 // A zone's switches, as many as its numbers reach: off until set.
 class ZoneSwitch {
@@ -21,11 +21,11 @@ private:
 
 class SwitchIdInfo {
 public:
-    SwitchIdInfo(s32 switchID, const JMapInfoIter& rIter);
+    SwitchIdInfo(s32 switchID, const TableIter& rIter);
 
     s32 getSwitchNo() const;
 
-    JMapIdInfo* mIDInfo;
+    PlacementId* mIDInfo;
     bool mIsGlobal;
 };
 
@@ -51,7 +51,7 @@ private:
 
 class StageSwitchFunction {
 public:
-    static SwitchIdInfo* createSwitchIdInfo(const char* pSwitchName, const JMapInfoIter& rIter, bool);
+    static SwitchIdInfo* createSwitchIdInfo(const char* pSwitchName, const TableIter& rIter, bool);
     static void onSwitchBySwitchIdInfo(const SwitchIdInfo& rInfo);
     static void offSwitchBySwitchIdInfo(const SwitchIdInfo& rInfo);
     static bool isOnSwitchBySwitchIdInfo(const SwitchIdInfo& rInfo);
@@ -59,7 +59,7 @@ public:
 
 class StageSwitchCtrl {
 public:
-    StageSwitchCtrl(const JMapInfoIter& rIter);
+    StageSwitchCtrl(const TableIter& rIter);
 
     void onSwitchA();
     void offSwitchA();
@@ -84,5 +84,5 @@ public:
 };
 
 namespace MR {
-    StageSwitchCtrl* createStageSwitchCtrl(NameObj* pObj, const JMapInfoIter& rIter);
+    StageSwitchCtrl* createStageSwitchCtrl(NameObj* pObj, const TableIter& rIter);
 };  // namespace MR

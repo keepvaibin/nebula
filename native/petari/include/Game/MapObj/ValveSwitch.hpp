@@ -11,7 +11,7 @@ public:
 
     virtual ~ValveSwitch() {
     }
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void control();
     virtual void calcAndSetBaseMtx();

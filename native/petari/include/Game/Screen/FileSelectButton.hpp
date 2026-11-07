@@ -15,7 +15,7 @@ public:
     /// @param pName The pointer to the null-terminated name of the object.
     FileSelectButton(const char* pName);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void appear();
     virtual void kill();
     virtual void control();

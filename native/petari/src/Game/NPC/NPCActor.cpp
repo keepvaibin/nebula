@@ -11,7 +11,7 @@
 #include "Game/Util/ActorShadowUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointController.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
@@ -232,13 +232,13 @@ NPCActor::NPCActor(const char* pName) : LiveActor(pName) {
     mReactionNerve = GET_NERVE(NPCActor, NPCActorNrvReaction);
 }
 
-void NPCActor::makeArchiveList(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter) {
+void NPCActor::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
     const char* name;
     MR::getObjectName(&name, rIter);
     NPCActorItem item(name);
 
     s32 item_type = -1;
-    MR::getJMapInfoArg7NoInit(rIter, &item_type);
+    MR::getPlacementArg7NoInit(rIter, &item_type);
 
     if (MR::getNPCItemData(&item, item_type)) {
         NPCActor::addArchive(pCollector, item);
@@ -255,7 +255,7 @@ void NPCActor::addArchive(NameObjArchiveListCollector* pCollector, const NPCActo
     }
 }
 
-void NPCActor::makeArchiveListDefault(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter) {
+void NPCActor::makeArchiveListDefault(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
     const char* objName;
     MR::getObjectName(&objName, rIter);
     NPCActorItem item(objName);
@@ -298,7 +298,7 @@ void NPCActor::setInitPose() {
     _C0.set(mPosition);
 }
 
-void NPCActor::init(const JMapInfoIter& rIter) {
+void NPCActor::init(const TableIter& rIter) {
     LiveActor::init(rIter);
 }
 
@@ -317,7 +317,7 @@ void NPCActor::initAfterPlacement() {
     }
 }
 
-void NPCActor::initialize(const JMapInfoIter& rIter, const NPCActorCaps& rCaps) {
+void NPCActor::initialize(const TableIter& rIter, const NPCActorCaps& rCaps) {
     if (rCaps.mPosition) {
         MR::initDefaultPosAndQuat(this, rIter);
     }
@@ -541,7 +541,7 @@ void NPCActor::control() {
         _E3 = true;
     }
 
-    if (mStarPointerTarget != nullptr && MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false)) {
+    if (mStarPointerTarget != nullptr && MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
         _E4 = true;
     }
 
@@ -550,9 +550,9 @@ void NPCActor::control() {
     }
 }
 
-bool NPCActor::initTalkCtrl(const JMapInfoIter& rIter, const char* pChar, const Vec3f& rVec, MtxPtr pMtx) {
+bool NPCActor::initTalkCtrl(const TableIter& rIter, const char* pChar, const Vec3f& rVec, MtxPtr pMtx) {
     s32 messageID;
-    MR::getJMapInfoMessageID(rIter, &messageID);
+    MR::getPlacementMessageID(rIter, &messageID);
     if (messageID < 0) {
         return false;
     }
@@ -562,7 +562,7 @@ bool NPCActor::initTalkCtrl(const JMapInfoIter& rIter, const char* pChar, const 
     return true;
 }
 
-bool NPCActor::initTalkCtrlDirect(const JMapInfoIter& rIter, const char* pChar, const Vec3f& rVec, MtxPtr pMtx) {
+bool NPCActor::initTalkCtrlDirect(const TableIter& rIter, const char* pChar, const Vec3f& rVec, MtxPtr pMtx) {
     mMsgCtrl = MR::createTalkCtrlDirect(this, rIter, pChar, rVec, pMtx);
     MR::onRootNodeAutomatic(mMsgCtrl);
     return true;

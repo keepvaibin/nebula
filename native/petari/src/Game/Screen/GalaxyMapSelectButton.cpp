@@ -15,10 +15,10 @@ namespace {
     NEW_NERVE(GalaxyMapSelectButtonBetweenMapToListFadein, GalaxyMapSelectButton, BetweenMapToListFadein);
 };  // namespace
 
-GalaxyMapSelectButton::GalaxyMapSelectButton() : LayoutActor("\221\111\221\360\227\160\203\173\203\136\203\223" /* 選択用ボタン */, true), _20(nullptr), mPaneCtrl(nullptr) {
+GalaxyMapSelectButton::GalaxyMapSelectButton() : LayoutActor("選択用ボタン", true), _20(nullptr), mPaneCtrl(nullptr) {
 }
 
-void GalaxyMapSelectButton::init(const JMapInfoIter& rIter) {
+void GalaxyMapSelectButton::init(const TableIter& rIter) {
     initLayoutManager("MapButton", 1);
     MR::createAndAddPaneCtrl(this, "MapList", 1);
 
