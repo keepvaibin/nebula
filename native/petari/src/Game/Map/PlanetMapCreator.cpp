@@ -1,7 +1,6 @@
 #include "Game/Map/PlanetMapCreator.hpp"
 #include "Game/Map.hpp"
 #include "Game/MapObj.hpp"
-#include "Game/NameObj/NameObjArchiveListCollector.hpp"
 #include "Game/NameObj/NameObjFactory.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util/ModelUtil.hpp"
@@ -191,70 +190,6 @@ namespace {
         },
     };
 
-    static const UniqueEntry sUniquePlanetUniqueArchiveName[] = {
-        {
-            "BeamGoRoundPlanet",
-            "BeamGoRoundBeam",
-        },
-        {
-            "BeamGoRoundPlanet",
-            "BeamGoRoundBeamVolume",
-        },
-        {
-            "BeamGoRoundPlanet",
-            "BeamGoRoundBeamBloom",
-        },
-        {
-            "MarblePlanet",
-            "MarblePlanetCore",
-        },
-        {
-            "MarblePlanet",
-            "MarblePlanetElectron",
-        },
-        {
-            "MarblePlanet",
-            "MarblePlanetElectronShadow",
-        },
-        {
-            "OceanRingPlanet",
-            "OceanRingPlanetLowInWater",
-        },
-        {
-            "WormEatenPlanet",
-            "GreenCaterpillarBigFace",
-        },
-        {
-            "WormEatenPlanet",
-            "GreenCaterpillarBigFaceLow",
-        },
-        {
-            "WormEatenPlanet",
-            "GreenCaterpillarBigBody",
-        },
-        {
-            "WormEatenPlanet",
-            "GreenCaterpillarBigBodyLow",
-        },
-        {
-            "WormEatenPlanet",
-            "WormEatenHill",
-        },
-        {
-            "WormEatenPlanet",
-            "WormEatenPlanetLow",
-        },
-    };
-
-    inline void addUniqueArchive(NameObjArchiveListCollector* pCollector, const char* pPlanetName) {
-        for (u32 i = 0; i < ARRAY_SIZE(::sUniquePlanetUniqueArchiveName); i++) {
-            const UniqueEntry* pUniqueEntry = &::sUniquePlanetUniqueArchiveName[i];
-            if (MR::isEqualString(pPlanetName, pUniqueEntry->_0)) {
-                pCollector->addArchive(pUniqueEntry->_4);
-            }
-        }
-    }
-
     const PlanetEntry* findUniquePlanetEntry(const char* pName) {
         for (u32 i = 0; i < ARRAY_SIZE(::sUniquePlanetCreateFuncTable); i++) {
             const PlanetEntry* pEntry = &::sUniquePlanetCreateFuncTable[i];
@@ -297,43 +232,6 @@ CreatorFuncPtr PlanetMapCreator::getCreateFunc(const char* pParam1) {
     }
 
     return createNameObj< PlanetMap >;
-}
-
-void PlanetMapCreator::makeArchiveListPlanet(NameObjArchiveListCollector* pCollector, const TableIter& rIter, const char* pName) {
-    PlanetMapData* pTableData = getTableData(pName);
-    if (isScenarioForceLow(pTableData)) {
-        pCollector->addArchive(pTableData->mData[0]);
-        return;
-    }
-
-    pCollector->addArchive(pTableData->mPlanetName);
-
-    const char* pData0 = pTableData->mData[0];
-    if (pData0 != nullptr) {
-        pCollector->addArchive(pData0);
-    }
-
-    const char* pData1 = pTableData->mData[1];
-    if (pData1 != nullptr) {
-        pCollector->addArchive(pData1);
-    }
-
-    const char* pData2 = pTableData->mData[2];
-    if (pData2 != nullptr) {
-        pCollector->addArchive(pData2);
-    }
-
-    const char* pData3 = pTableData->mData[3];
-    if (pData3 != nullptr) {
-        pCollector->addArchive(pData3);
-    }
-
-    const char* pData4 = pTableData->mData[4];
-    if (pData4 != nullptr) {
-        pCollector->addArchive(pData4);
-    }
-
-    ::addUniqueArchive(pCollector, pTableData->mPlanetName);
 }
 
 void PlanetMapCreator::createPlanetMapDataTable(Table* pInfo) {
@@ -399,10 +297,6 @@ bool PlanetMapCreator::isScenarioForceLow(const PlanetMapData* pData) const {
     }
 
     return false;
-}
-
-void PlanetMapCreatorFunction::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter, const char* pName) {
-    MR::getSceneObj< PlanetMapCreator >(SceneObj_PlanetMapCreator)->makeArchiveListPlanet(pCollector, rIter, pName);
 }
 
 CreatorFuncPtr PlanetMapCreatorFunction::getPlanetMapCreator(const char* pParam1) {

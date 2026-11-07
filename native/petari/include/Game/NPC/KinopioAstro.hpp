@@ -25,7 +25,6 @@ public:
     virtual void init(const TableIter& rIter);
     virtual void control();
 
-    static void makeArchiveList(NameObjArchiveListCollector*, const TableIter&);
 
     bool dispLetter(LayoutActor*) const;
     bool isDispLetterIcon() const;

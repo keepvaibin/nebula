@@ -5,61 +5,42 @@
 #include <nebula_math.h>
 
 class DynamicFurParam;
+class FurParam;
 class JUTTexture;
 struct SiteMaterial;
 struct ResTIMG;
 
 class FurDrawer {
 public:
+    // A value per shell, from the root to the tip along the curve.
     class CLayerParam {
     public:
-        CLayerParam(f32 tip, f32 curve) : mTip(tip), mCurve(curve) {
-        }
-
-        f32 calcValue(s32, s32) const;
+        f32 calcValue(s32 layer, s32 numLayers) const;
 
         f32 mTip;
         f32 mRoot;
         f32 mCurve;
     };
 
-    FurDrawer(u32, ResTIMG*, ResTIMG*);
+    FurDrawer(u32 numLayers, ResTIMG* pBody);
 
-    void update();
-    void setupMaterial(DynamicFurParam*) const;
-    void setupLayerMaterial(s32) const;
+    // The fur material of every shell: lights and fog from rParam (FurMulti gives every layer both).
+    void setupMaterial(const DynamicFurParam& rParam) const;
+    void setupLayerMaterial(s32 layer) const;
     // What setupMaterial and setupLayerMaterial have set.
     const SiteMaterial& material() const;
-    void createFurMap();
+    // The strand map from the param's density, thickness and length mix; makes the texture on first use.
+    void createFurMap(const FurParam& rParam);
 
     JUTTexture* mBodyTexture;
     JUTTexture* mFurTexture;
-    JUTTexture* mIndirectTexture;
     s32 mNumLayers;
     CLayerParam mLength;
     f32* mShells;  // each layer's reach
-    CLayerParam mIndirect;
     CLayerParam mBrightness;
     CLayerParam mAlpha;
-    f32 mFurUVScale;
-    u32 mMixFog;
-    f32 mBodyUVScale;
-    f32 mDensity[4];
-    f32 mThickness[4];
-    u8 mLengthMap[4];
     CLayerParam mColorBlend;
+    f32 mFurUVScale;
+    f32 mBodyUVScale;
     NebulaColor8 mColor;
-    u8 mCullMode;
-    u8 mMatIntensity;
-    u8 mAmbIntensity;
-    u8 mUseIndirect;
-    u8 mZCompLoc;
-    u8 mZWrite;
-    u8 mAdditive;
-    u8 mAlphaRef;
-    Mtx mFurTexMtx;
-    Mtx mIndirectTexMtx;
-    Vec3f mFogPosition;
-    f32 mFogWidth;
-    u8 mUseDensityMap;
 };

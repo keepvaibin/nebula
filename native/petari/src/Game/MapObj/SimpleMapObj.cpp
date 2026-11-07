@@ -1,7 +1,6 @@
 #include "Game/MapObj/SimpleMapObj.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
-#include "Game/NameObj/NameObjArchiveListCollector.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/MapPartsUtil.hpp"
@@ -157,17 +156,6 @@ void UFOKinokoUnderConstruction::init(const TableIter& rIter) {
 }
 
 namespace MR {
-    void makeArchiveListUFOKinokoUnderConstruction(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
-        const char* archive;
-
-        if (MR::isUFOKinokoUnderConstruction()) {
-            archive = "UFOKinokoUnderConstruction";
-        } else {
-            archive = "UFOKinokoLandingAstro";
-        }
-
-        pCollector->addArchive(archive);
-    }
 };  // namespace MR
 
 void SimpleEnvironmentObj::init(const TableIter& rIter) {

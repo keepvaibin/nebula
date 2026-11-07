@@ -46,7 +46,7 @@ public:
     /// @brief Creates a new `GameSystemSceneController`.
     GameSystemSceneController();
 
-    void initAfterStationedResourceLoaded();
+    void initAfterSystemArchiveLoaded();
     void requestChangeScene();
     void checkRequestAndChangeScene();
     void initializeScene();

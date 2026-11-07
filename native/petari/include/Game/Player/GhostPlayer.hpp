@@ -8,7 +8,6 @@ class FixedPosition;
 class HitSensor;
 class TableIter;
 class JetTurtleShadow;
-class NameObjArchiveListCollector;
 class RaceManagerLayout;
 class XanimePlayer;
 
@@ -47,7 +46,6 @@ namespace MR {
 
 class GhostPlayer : public LiveActor {
 public:
-    static void makeArchiveList(NameObjArchiveListCollector*, const TableIter&);
 
     GhostPlayer(const char*);
 

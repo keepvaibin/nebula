@@ -48,9 +48,7 @@ public:
     ResourceHolderManager();
 
     ResourceHolder* createAndAdd(const char*, NebulaArena*);
-    ResourceHolder* createAndAddStationed(const char*);
     LayoutHolder* createAndAddLayoutHolder(const char*, NebulaArena*);
-    LayoutHolder* createAndAddLayoutHolderStationed(const char*);
     LayoutHolder* createAndAddLayoutHolderRawData(const char*);
     void removeIfIsEqualHeap(NebulaArena*);
     static void startCreateResourceHolder(const char*, CreateResourceHolderArgs*);
@@ -58,7 +56,6 @@ public:
 
 private:
     ResourceHolderManagerName2Resource* createAndAddInner(const char*, MakeArchiveFileNameFuncPtr, FuncPtrB);
-    ResourceHolderManagerName2Resource* createAndAddInnerStationed(const char*, FuncPtrC);
     void createResourceHolder(const char*, CreateResourceHolderArgs*);
     void createLayoutHolder(const char*, CreateResourceHolderArgs*);
     ResourceHolderManagerName2Resource* add(const char*, const CreateResourceHolderArgs&);

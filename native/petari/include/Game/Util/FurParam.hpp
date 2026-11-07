@@ -9,8 +9,6 @@ public:
     s32 mNumLayers;
     f32 mLength;
     f32 mLengthCurve;
-    f32 mIndirect;
-    f32 mIndirectCurve;
     f32 mBrightnessTip;
     f32 mBrightnessRoot;
     f32 mBrightnessCurve;

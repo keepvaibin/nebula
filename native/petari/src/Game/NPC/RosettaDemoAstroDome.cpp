@@ -6,7 +6,6 @@
 #include "Game/NPC/Rosetta.hpp"
 #include "Game/NPC/TalkMessageFunc.hpp"
 #include "Game/System/NebulaAchievements.hpp"
-#include "Game/NameObj/NameObjArchiveListCollector.hpp"
 #include "Game/Screen/IconAButton.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
@@ -147,10 +146,6 @@ RosettaDemoAstroDomeExplain::RosettaDemoAstroDomeExplain(Rosetta* pRosetta, cons
     MR::registerDemoActionFunctorDirect(mRosetta, MR::Functor(this, &RosettaDemoAstroDomeExplain::startDemo), sDemoExplain, "状況説明[開始]");
     mMonologue = new RosettaMonologue();
     initNerve(GET_NERVE(RosettaDemoAstroDomeExplain, RosettaDemoAstroDomeExplainNrvExplainDemo));
-}
-
-void RosettaDemoAstroDomeExplain::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
-    pCollector->addArchive("PrologueStarSteward");
 }
 
 void RosettaDemoAstroDomeExplain::startDemo() {

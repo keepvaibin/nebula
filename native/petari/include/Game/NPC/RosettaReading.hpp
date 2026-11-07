@@ -2,7 +2,6 @@
 
 #include "Game/LiveActor/LiveActor.hpp"
 
-class NameObjArchiveListCollector;
 class PictureBookLayout;
 
 class RosettaReading : public LiveActor {
@@ -15,7 +14,6 @@ public:
     virtual void appear();
     virtual void kill();
 
-    static void makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter);
 
     void exePictureBookBefore();
     void exePictureBook();

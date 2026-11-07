@@ -9,7 +9,6 @@ namespace nw4r {
 };  // namespace nw4r
 
 class IconAButton;
-class NameObjArchiveListCollector;
 
 class LuigiLetter : public LayoutActor {
 public:
@@ -23,9 +22,6 @@ public:
     void exeAppear();
     void exeWait();
     void exeEnd();
-    static void makeArchiveListForNPC(NameObjArchiveListCollector*, const TableIter&);
-    static void makeArchiveListForMenu(NameObjArchiveListCollector*, const TableIter&);
-    static void makeArchiveListCommon(NameObjArchiveListCollector*, const char*);
 
 private:
     nw4r::lyt::TexMap* mTexture;

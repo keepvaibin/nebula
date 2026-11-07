@@ -17,7 +17,6 @@
 #include "Game/System/GameSystemObjHolder.hpp"
 #include "Game/System/GameSystemResetAndPowerProcess.hpp"
 #include "Game/System/GameSystemSceneController.hpp"
-#include "Game/System/GameSystemStationedArchiveLoader.hpp"
 #include "Game/System/HeapMemoryWatcher.hpp"
 #include "Game/System/HomeButtonStateNotifier.hpp"
 #include "Game/System/GameFrame.hpp"
@@ -43,7 +42,7 @@
 namespace NrvGameSystem {
     NEW_NERVE(GameSystemInitializeAudio, GameSystem, InitializeAudio);
     NEW_NERVE(GameSystemInitializeBootScene, GameSystem, InitializeBootScene);
-    NEW_NERVE(GameSystemLoadStationedArchive, GameSystem, LoadStationedArchive);
+    NEW_NERVE(GameSystemLoadSystemArchive, GameSystem, LoadSystemArchive);
     NEW_NERVE(GameSystemNormal, GameSystem, Normal);
 };  // namespace NrvGameSystem
 
@@ -67,7 +66,7 @@ extern "C" void nebula_game_main(void) {
 
 GameSystem::GameSystem()
     : NerveExecutor("GameSystem"), mSequenceDirector(nullptr), mErrorWatcher(nullptr), mFontHolder(nullptr),
-      mObjHolder(nullptr), mSceneController(nullptr), mStationedArchiveLoader(nullptr), mHomeButtonLayout(nullptr),
+      mObjHolder(nullptr), mSceneController(nullptr), mHomeButtonLayout(nullptr),
       mSystemWipeHolder(nullptr), mHomeButtonStateNotifier(nullptr), mIsExecuteLoadSystemArchive(false) {
 }
 
@@ -85,7 +84,6 @@ void GameSystem::init() {
     mErrorWatcher = new GameSystemErrorWatcher();
     SingletonHolder< GameSystemResetAndPowerProcess >::init();
     SingletonHolder< GameSystemResetAndPowerProcess >::get()->initWithoutIter();
-    mStationedArchiveLoader = new GameSystemStationedArchiveLoader();
     mHomeButtonLayout = new HomeButtonLayout();
     mHomeButtonStateNotifier = new HomeButtonStateNotifier();
     setNerve(GET_NERVE(GameSystem, GameSystemInitializeAudio));
@@ -104,7 +102,7 @@ void GameSystem::startToLoadSystemArchive() {
 
     SingletonHolder< HeapMemoryWatcher >::get()->setCurrentHeapToPermanent();
     SingletonHolder< NameObjRegister >::get()->setCurrentHolder(mObjHolder->mObjHolder);
-    setNerve(GET_NERVE(GameSystem, GameSystemLoadStationedArchive));
+    setNerve(GET_NERVE(GameSystem, GameSystemLoadSystemArchive));
 }
 
 void GameSystem::exeInitializeAudio() {
@@ -127,23 +125,21 @@ void GameSystem::exeInitializeBootScene() {
     updateSceneController();
 }
 
-void GameSystem::exeLoadStationedArchive() {
-    mStationedArchiveLoader->update();
+void GameSystem::exeLoadSystemArchive() {
+    initAfterSystemArchiveLoaded();
+    SingletonHolder< HeapMemoryWatcher >::get()->setCurrentHeapToGameHeap();
+    GameSystemFunction::setSceneNameObjHolderToNameObjRegister();
     updateSceneController();
-
-    if (mStationedArchiveLoader->isDone()) {
-        setNerve(GET_NERVE(GameSystem, GameSystemNormal));
-    }
+    setNerve(GET_NERVE(GameSystem, GameSystemNormal));
 }
 
 void GameSystem::exeNormal() {
     updateSceneController();
-    mStationedArchiveLoader->update();
 }
 
-void GameSystem::initAfterStationedResourceLoaded() {
+void GameSystem::initAfterSystemArchiveLoaded() {
     mFontHolder->createFontFromFile();
-    mObjHolder->initAfterStationedResourceLoaded();
+    mObjHolder->initAfterSystemArchiveLoaded();
     mHomeButtonLayout->initWithoutIter();
     mErrorWatcher->initAfterResourceLoaded();
     mSystemWipeHolder = MR::createSystemWipeHolder();
@@ -151,7 +147,7 @@ void GameSystem::initAfterStationedResourceLoaded() {
     NebulaCutsceneSkip::init();
     NebulaSettingsMenu::init();
     NebulaPrepare::init();
-    mSceneController->initAfterStationedResourceLoaded();
+    mSceneController->initAfterSystemArchiveLoaded();
     mSequenceDirector->initAfterResourceLoaded();
 }
 

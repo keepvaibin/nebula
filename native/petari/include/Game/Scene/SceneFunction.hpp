@@ -251,10 +251,7 @@ public:
     static void executeDrawImageEffect();
     static void executeDrawList2DNormal();
     static void executeDrawList2DMovie();
-    static void startStageFileLoad();
     static void createStageDataHolder();
-    static void startActorFileLoadCommon();
-    static void startActorFileLoadScenario();
     static void startActorPlacement();
     static bool startActorPlacementStep(uint64_t deadline);
     static void initAfterScenarioSelected();

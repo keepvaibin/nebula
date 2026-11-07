@@ -3,7 +3,6 @@
 #include "Game/Screen/LayoutActor.hpp"
 
 class GalaxyInfoLayoutSetter;
-class NameObjArchiveListCollector;
 class ValueControl;
 
 class GalaxySelectInfo : public LayoutActor {
@@ -17,7 +16,6 @@ public:
     virtual void control();
 
     bool show(const char*, u32, int);
-    static void makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter);
     bool show(const char*, u32, bool, int);
     void exeWait();
     void exeDisappear();

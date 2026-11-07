@@ -9,7 +9,7 @@
 
 // Files the cooker writes (crates/nebula-import/src/cook/dol.rs).
 namespace {
-    // A file of the folder read into the stationed arena, straight from the store: the file loader may not run yet.
+    // A file of the folder read into the current arena, straight from the store, before any archive is held.
     const u8* load(const char* pName) {
         MR::FormattedName path("/NebulaData/%s", pName);
         GameAssets::File file;

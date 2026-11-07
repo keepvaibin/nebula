@@ -3,7 +3,6 @@
 #include "Game/LiveActor/LiveActor.hpp"
 #include <nebula_geometry.hpp>
 
-class NameObjArchiveListCollector;
 class ReturnDemoRailMove;
 class StageResultInformer;
 
@@ -18,7 +17,6 @@ public:
     virtual void kill();
     virtual void control();
 
-    static void makeArchiveList(NameObjArchiveListCollector*, const TableIter&);
 
     LiveActor* createSubModel(const char*, const char*, bool);
     void tryRegisterDemo(const char*, const TableIter&);

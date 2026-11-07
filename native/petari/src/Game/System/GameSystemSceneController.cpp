@@ -77,7 +77,7 @@ GameSystemSceneController::GameSystemSceneController()
     mScenarioSelectScene = new ScenarioSelectScene();
 }
 
-void GameSystemSceneController::initAfterStationedResourceLoaded() {
+void GameSystemSceneController::initAfterSystemArchiveLoaded() {
     mScenarioParser = new ScenarioDataParser("シナリオデータ解析");
     mScenarioParser->initWithoutIter();
 
@@ -183,7 +183,7 @@ void GameSystemSceneController::destroyScene() {
     }
 
     GameSystemFunction::resetAllControllerRumble();
-    MR::removeResourceAndFileHolderIfIsEqualHeap(MR::getSceneHeap());
+    MR::removeResourceHolders(MR::getSceneHeap());
 
     if (tryDestroyFileCacheHeap(false)) {
         SingletonHolder< HeapMemoryWatcher >::get()->destroyGameHeap();
@@ -521,7 +521,7 @@ bool GameSystemSceneController::tryDestroyFileCacheHeap(bool param1) {
         return false;
     }
 
-    MR::removeResourceAndFileHolderIfIsEqualHeap(SingletonHolder< HeapMemoryWatcher >::get()->mFileCacheHeap);
+    MR::removeResourceHolders(SingletonHolder< HeapMemoryWatcher >::get()->mFileCacheHeap);
 
     return true;
 }

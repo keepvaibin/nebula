@@ -5,7 +5,6 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include <nebula_geometry.hpp>
 
-class NameObjArchiveListCollector;
 class ActorCameraInfo;
 class ModelObj;
 class CameraTargetMtx;
@@ -26,7 +25,6 @@ public:
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
     virtual bool isDemo() const;
 
-    static void makeArchiveList(NameObjArchiveListCollector*, const TableIter&);
 
     void glowEffect();
 

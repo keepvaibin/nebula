@@ -3,7 +3,6 @@
 #include "Game/LiveActor/ModelObj.hpp"
 
 class ActorCameraInfo;
-class NameObjArchiveListCollector;
 
 class SunakazeKunTrap : public ModelObj {
 public:
@@ -40,7 +39,6 @@ public:
     virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
 
-    static void makeArchiveList(NameObjArchiveListCollector*, const TableIter&);
 
     void initSandstormParam();
     void initTrapModel();

@@ -5,7 +5,6 @@
 #include "Game/LiveActor/ModelObj.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/MapPartsRailMover.hpp"
-#include "Game/NameObj/NameObjArchiveListCollector.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorShadowUtil.hpp"
@@ -119,19 +118,6 @@ void RainCloud::init(const TableIter& rIter) {
 
     initNerve(GET_NERVE(RainCloud, RainCloudNrvWait));
     makeActorAppeared();
-}
-
-void RainCloud::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
-    bool arg3 = false;
-    MR::getPlacementArg3NoInit(rIter, &arg3);
-
-    pCollector->addArchive("RainCloud");
-    pCollector->addArchive("RainCloudVolume");
-    pCollector->addArchive("RainCloudLow");
-
-    if (!arg3) {
-        pCollector->addArchive("RainCloudCylinder");
-    }
 }
 
 void RainCloud::exeAppear() {

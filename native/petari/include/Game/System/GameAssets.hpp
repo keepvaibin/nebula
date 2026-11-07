@@ -4,6 +4,7 @@
 // ("/StageData/EggStarGalaxy.arc"); a file's entry names it as the game's tables do.
 
 
+class AssetFolder;
 class NebulaArena;
 
 namespace GameAssets {
@@ -29,8 +30,13 @@ namespace GameAssets {
     s32 read(const File* pFile, void* pDst, s32 size, s32 offset);
     // The file's bytes in the mapped store, read-only, for the process's life; may wait for the drive.
     const void* map(s32 entryNum);
-    // Every file mapped for this arena: its views go with it.
+    // Every file mapped for this arena: its views go with it, and the archives held for it.
     void unloadHeap(const NebulaArena* pHeap);
+
+    // The archive held under pPath (letters in either case), or null; *ppArena, when asked, gets the arena holding it.
+    AssetFolder* findArchive(const char* pPath, NebulaArena** ppArena);
+    // Holds pFolder under pPath until pArena goes.
+    void holdArchive(const char* pPath, AssetFolder* pFolder, NebulaArena* pArena);
 
     // A whole file or folder (an archive: the bytes of its files, side by side), or its first `maxLength` bytes when that is not 0, read into pDst, or into a new block of pHeap (the
     // current heap when null): null when there is no such file. A block has a zero past the file.

@@ -5,7 +5,6 @@
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/CocoNut.hpp"
-#include "Game/NameObj/NameObjArchiveListCollector.hpp"
 #include "Game/Util.hpp"
 
 namespace {
@@ -73,15 +72,6 @@ void OtaRock::kill() {
         MR::onSwitchDead(this);
     }
     LiveActor::kill();
-}
-
-void OtaRock::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
-    bool noCocoNut = false;
-    MR::getPlacementArg0NoInit(rIter, &noCocoNut);
-
-    if (!noCocoNut) {
-        pCollector->addArchive(CocoNut::getModelName());
-    }
 }
 
 void OtaRock::control() {

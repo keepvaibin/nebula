@@ -13,7 +13,6 @@ public:
     virtual void init(const TableIter& rIter);
     virtual void initAfterPlacement();
 
-    static void makeArchiveList(NameObjArchiveListCollector*, const TableIter&);
 
     void appearBushComment(const Vec3f&);
     void appearHoleComment(const Vec3f&);

@@ -5,7 +5,6 @@
 #include "Game/LiveActor/PartsModel.hpp"
 #include "Game/NPC/NPCActorItem.hpp"
 #include "Game/NPC/TalkMessageFunc.hpp"
-#include "Game/NameObj/NameObjArchiveListCollector.hpp"
 #include "Game/Screen/GameSceneLayoutHolder.hpp"
 #include "Game/Screen/LuigiLetter.hpp"
 #include "Game/Screen/PeachLetter.hpp"
@@ -36,37 +35,6 @@ namespace {
     const f32 sMessangerTalkDistance = 3000.0f;
     const f32 sGotMailSePlayAreaRadius = 1500.0f;
 };  // namespace
-
-void KinopioAstro::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
-    NPCActorItem item("Kinopio");
-
-    s32 arg1 = 0;
-    MR::getPlacementArg1NoInit(rIter, &arg1);
-
-    if (arg1 == 2) {
-        if (!MR::isEqualStageName("PeachCastleFinalGalaxy")) {
-            if (MR::isAnyPlayerLeftSupply()) {
-                PeachLetter::makeArchiveList(pCollector, rIter);
-            }
-
-            if (MR::isLuigiLetterArrivalAtMessenger()) {
-                LuigiLetter::makeArchiveListForNPC(pCollector, rIter);
-            }
-        } else {
-            pCollector->addArchive("AllCompleteImage");
-        }
-
-        MR::getNPCItemData(&item, 3);
-        NPCActor::addArchive(pCollector, item);
-    } else {
-        s32 arg7 = -1;
-        MR::getPlacementArg7NoInit(rIter, &arg7);
-
-        if (MR::getNPCItemData(&item, arg7)) {
-            NPCActor::addArchive(pCollector, item);
-        }
-    }
-}
 
 KinopioAstro::KinopioAstro(const char* pName)
     : Kinopio(pName), mLuigiLetter(), mPeachLetter(), mLetterIconTalkCtrl(), _194(), _195(), mIsPlayerLuigi() {

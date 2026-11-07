@@ -1,7 +1,6 @@
 #include "Game/MapObj/Sandstorm.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
-#include "Game/NameObj/NameObjArchiveListCollector.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/ActorCameraUtil.hpp"
 
@@ -79,15 +78,6 @@ Sandstorm::Sandstorm(const char* pName)
     : LiveActor(pName), _8C(), mBindActor(), _94(0.0f, 0.0f, 1.0f), _A0(0.0f, 0.0f, 0.0f), mType(), mSpiralRot(), mSpiralRadius(), _B8(), _BC(),
       _C0(), _C4(), _C8(), _CC(), mSensorHeight(), mSizeUpRate(), mSensorMin(), mStepStorm(), mStepAdjust(), mStepFix(), mStepEnd(), mBindHeight(),
       mTrapModel() {
-}
-
-void Sandstorm::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
-    bool useTrapModel = false;
-    MR::getPlacementArg0NoInit(rIter, &useTrapModel);
-
-    if (useTrapModel) {
-        pCollector->addArchive("SunakazeKunTrap");
-    }
 }
 
 void Sandstorm::init(const TableIter& rIter) {

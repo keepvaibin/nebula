@@ -11,7 +11,6 @@ class CocoNutBall;
 class FireBall;
 class FireBubble;
 class FixedPosition;
-class NameObjArchiveListCollector;
 class OtaKingMagma;
 class OtaKingLongFoot;
 class PartsModel;
@@ -31,7 +30,6 @@ public:
     virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 
     void startAppearDemo();
-    static void makeArchiveList(NameObjArchiveListCollector*, const TableIter&);
     void initMapToolInfo(const TableIter& rIter);
     void initModel(const TableIter& rIter);
     void initSensor();

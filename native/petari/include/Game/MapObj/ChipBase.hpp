@@ -4,7 +4,6 @@
 
 class FlashingCtrl;
 class MapPartsRailMover;
-class NameObjArchiveListCollector;
 class PartsModel;
 
 class ChipBase : public LiveActor {
@@ -48,7 +47,6 @@ public:
     void exeGot();
     bool isGettable() const;
     static bool isNeedBubble(const TableIter&);
-    static void makeArchiveList(NameObjArchiveListCollector*, const TableIter&);
 
     FlashingCtrl* mFlashingCtrl;
     MapPartsRailMover* mRailMover;

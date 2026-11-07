@@ -10,7 +10,6 @@
 #include "Game/AudioLib/AudSoundNameConverter.hpp"
 #include "Game/LiveActor/EffectKeeper.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
-#include "Game/NameObj/NameObjArchiveListCollector.hpp"
 #include "Game/Player/MarioAccess.hpp"
 #include "Game/Player/MarioActor.hpp"
 #include "Game/Util.hpp"
@@ -943,11 +942,8 @@ namespace {
             }
         } inZone;
         if (pEntry != nullptr) {
-            if (pEntry->mArchive != nullptr && !MR::isLoadedObjectOrLayoutArchive(pEntry->mArchive)) {
-                MR::mountArchiveByObjectOrLayoutName(pEntry->mArchive, nullptr);
-                if (!MR::isLoadedObjectOrLayoutArchive(pEntry->mArchive)) {
-                    return nullptr;
-                }
+            if (pEntry->mArchive != nullptr && !MR::isExistObjectOrLayoutArchive(pEntry->mArchive)) {
+                return nullptr;
             }
             pObject = pEntry->mCreator(pEntry->mName);
         } else {
@@ -955,8 +951,6 @@ namespace {
             if (pCreator == nullptr) {
                 return nullptr;
             }
-            const TableIter noPlacement;
-            NameObjFactory::requestMountObjectArchives(pName, noPlacement);
             pObject = pCreator(copyText(pName));
         }
         if (pObject == nullptr) {
@@ -1713,8 +1707,7 @@ namespace {
         if (pName == nullptr || sStageFrames <= 0) {
             return nullptr;
         }
-        MR::mountArchiveByObjectOrLayoutName(pName, nullptr);
-        if (!MR::isLoadedObjectOrLayoutArchive(pName)) {
+        if (!MR::isExistObjectOrLayoutArchive(pName)) {
             return nullptr;
         }
         PluginLayout* pLayout = new PluginLayout(copyText(pName));
@@ -2197,17 +2190,18 @@ namespace NebulaMods {
         return notOwn && MR::isEqualStringCase(pStage, pAskedName) ? 0 : -1;
     }
 
-    bool isMissingFiles(const char* pName, const TableIter& rIter) {
+    bool isMissingFiles(const char* pName) {
         if (!sAskedForApi) {
             return false;
         }
-        NameObjArchiveListCollector collector;
-        NameObjFactory::getMountObjectArchiveList(&collector, pName, rIter);
-        for (s32 i = 0; i < collector.getArchiveNum(); i++) {
+        const ObjectClass* pClass = sObjectClasses.mCount != 0 ? findObjectClass(pName) : nullptr;
+        const ObjectEntry* pEntry = sObjects.mCount != 0 ? findObject(pName) : nullptr;
+        const char* const archives[] = {pClass != nullptr ? pClass->mName : nullptr, pEntry != nullptr ? pEntry->mArchive : nullptr};
+        for (const char* pArchive : archives) {
             MR::FormattedName path;
             MR::FormattedName layout;
-            const char* pArchive = collector.getArchive(i);
-            if (!MR::makeObjectArchiveFileNameFromPrefix(path, pArchive, false) && !MR::makeLayoutArchiveFileNameFromPrefix(layout, pArchive, false)) {
+            if (pArchive != nullptr && !MR::makeObjectArchiveFileNameFromPrefix(path, pArchive, false) &&
+                !MR::makeLayoutArchiveFileNameFromPrefix(layout, pArchive, false)) {
                 nebula_log("mods: left out: %s: it has no %s.arc\n", pName, pArchive);
                 return true;
             }
@@ -2233,16 +2227,4 @@ namespace NebulaMods {
         return pEntry != nullptr ? pEntry->mCreator : nullptr;
     }
 
-    void addArchives(NameObjArchiveListCollector* pCollector, const char* pName) {
-        if (const ObjectClass* pClass = sObjectClasses.mCount != 0 ? findObjectClass(pName) : nullptr) {
-            pCollector->addArchive(pClass->mName);
-        }
-        if (sObjects.mCount == 0) {
-            return;
-        }
-        const ObjectEntry* pEntry = findObject(pName);
-        if (pEntry != nullptr && pEntry->mArchive != nullptr) {
-            pCollector->addArchive(pEntry->mArchive);
-        }
-    }
 }  // namespace NebulaMods

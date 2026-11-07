@@ -1,7 +1,6 @@
 #include "Game/Screen/PictureBookLayout.hpp"
 #include "Game/System/NebulaFrameGen.hpp"
 #include "Game/LiveActor/Nerve.hpp"
-#include "Game/NameObj/NameObjArchiveListCollector.hpp"
 #include "Game/Screen/ButtonPaneController.hpp"
 #include "Game/Screen/IconAButton.hpp"
 #include "Game/Screen/PictureBookCloseButton.hpp"
@@ -160,23 +159,6 @@ void PictureBookLayout::kill() {
     MR::startCurrentStageBGM();
     MR::pauseOffCameraDirector();
     MR::activateGameSceneDraw3D();
-}
-
-void PictureBookLayout::makeArchiveList(NameObjArchiveListCollector* pCollector, s32 chapterMin, s32 chapterMax, bool isRosettaReading) {
-    pCollector->addArchive("PictureBook");
-
-    for (s32 c = chapterMin; c <= chapterMax; c++) {
-        char chapterArcName[256];
-
-        nebula_snprintf(chapterArcName, sizeof(chapterArcName), "PictureBookChapter%d", c);
-        pCollector->addArchive(chapterArcName);
-    }
-
-    pCollector->addArchive("PictureBookTexture");
-
-    if (!isRosettaReading) {
-        pCollector->addArchive("BackButton");
-    }
 }
 
 s32 PictureBookLayout::getChapterMax() {

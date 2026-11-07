@@ -32,7 +32,7 @@ static const unsigned char nebula_shader_rows[] = {
     1, /* TEX_CONST_ALPHA */
     3, /* FONT_TEXT */
     5, /* J2D_PICTURE */
-    20, /* FUR */
+    16, /* FUR */
     23, /* PARTICLE */
     3, /* OCEAN_BOWL_BLOOM */
     5, /* MII_FACE */

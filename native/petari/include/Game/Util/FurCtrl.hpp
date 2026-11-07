@@ -20,15 +20,12 @@ public:
     void calcLayerForm();
     void drawFur();
     void createFurMap();
-    void setupFur(Model* pModel, ResTIMG* pLength, ResTIMG* pIndirect, ResTIMG* pBody, u32 shape, u32 numLayers);
+    void setupFur(Model* pModel, ResTIMG* pLength, ResTIMG* pBody, u32 shape, u32 numLayers);
     void setupFurClone(Model* pModel, FurCtrl* pOther);
 
     LiveActor* mActor;
     DynamicFurParam mDynamicParam;
     u8 mIsClone;
-    u8 _D;
-    u8 _E;
-    u8 _F;
     Model* mModel;
     u32 mShapeIndex;
     FurParam* mParam;
@@ -37,9 +34,6 @@ public:
     u32 mNumLayers;
     FurDrawer* mDrawer;
     SiteMesh< VertexFur >* mMesh;
-    ResTIMG* mLengthMap;
-    ResTIMG* mBodyMap;
-    ResTIMG* mIndirectMap;
 };
 
 class FurDrawManager : public NameObj {

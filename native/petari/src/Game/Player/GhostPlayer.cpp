@@ -8,7 +8,6 @@
 #include "Game/LiveActor/ModelManager.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Map/RaceManager.hpp"
-#include "Game/NameObj/NameObjArchiveListCollector.hpp"
 #include <nebula_geometry.hpp>
 
 static_assert(sizeof(GhostFrame) == 32, "GhostFrame is cook/ghost.rs's 32-byte frame");
@@ -112,18 +111,6 @@ namespace NrvGhostPlayer {
     NEW_NERVE(HostTypeNrvRun, GhostPlayer, Wait);
 };  // namespace NrvGhostPlayer
 
-void GhostPlayer::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
-    MR::FormattedName archiveName("GhostData%s", MR::getCurrentStageName());
-
-    pCollector->addArchive(archiveName.c_str());
-
-    if (MR::isPlayerLuigi()) {
-        pCollector->addArchive("GhostLuigi");
-    } else {
-        pCollector->addArchive("GhostMario");
-    }
-}
-
 GhostPlayer::GhostPlayer(const char* pName) : LiveActor(pName), _90(), mCameraInfo(), mXanimePlayer() {
     _8C = 0;
     mTargetRotation.zero();
@@ -154,7 +141,7 @@ void GhostPlayer::init(const TableIter& rIter) {
     const u8* pFile = static_cast< const u8* >(MR::loadResourceFromArc(arcPath.c_str(), gstPath.c_str()));
 
     if (MR::isFileExist(gstPath.c_str(), false)) {
-        pFile = static_cast< const u8* >(MR::loadFile(gstPath.c_str(), nullptr, nullptr));
+        pFile = static_cast< const u8* >(GameAssets::load(gstPath.c_str(), nullptr, 0, nullptr, nullptr));
     }
 
     if (pFile == nullptr) {

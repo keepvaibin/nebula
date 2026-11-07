@@ -4,7 +4,6 @@
 #include <nebula_game_api.h>
 
 class NameObj;
-class NameObjArchiveListCollector;
 class LiveActor;
 class TableIter;
 
@@ -59,7 +58,6 @@ namespace NebulaMods {
     const char* objectBecomes(s32 where, const char* pName);
     // Frames, from what mods say of a comet mission; 0: they say nothing.
     u32 cometTimeLimit(const char* pGalaxy, s32 mission);
-    void addArchives(NameObjArchiveListCollector* pCollector, const char* pName);
     // The journey, if a mod says: the stage named, or the game's own.
     const char* firstStage();
     s32 firstMission();
@@ -74,8 +72,9 @@ namespace NebulaMods {
     inline s32 stageRule(const char* pStage, const char* pAskedName) {
         return sHasStageRules ? stageRuleSlow(pStage, pAskedName) : -1;
     }
-    // With a mod on: an object a level places whose archive isn't anywhere. It's left out and the log says so, not a stop.
-    bool isMissingFiles(const char* pName, const TableIter& rIter);
+    // With a mod on: an object a level places whose mod-made class or plugin names an archive the store lacks. It's left
+    // out and the log says so, not a stop. The game's own archives are in every store (a mod store lies over the base).
+    bool isMissingFiles(const char* pName);
     // A name a level places that a mod has made as another of the game's objects: that object's name. The name itself otherwise.
     const char* objectLike(const char* pName);
     // What a model named by an object of that class comes from.

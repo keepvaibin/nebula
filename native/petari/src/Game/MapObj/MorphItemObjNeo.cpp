@@ -5,7 +5,6 @@
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/ModelObj.hpp"
 #include "Game/LiveActor/Nerve.hpp"
-#include "Game/NameObj/NameObjArchiveListCollector.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util/ActorCameraUtil.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
@@ -33,75 +32,6 @@ namespace {
     static f32 cRotateRadiusPower = 2.0f;
     static f32 cRotateRadiusMini = 30.0f;
 };  // namespace
-
-void MorphItemObjNeo::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
-    if (MR::isEqualObjectName(rIter, "MorphItemNeoHopper") || MR::isEqualObjectName(rIter, "Hopper")) {
-        if (MR::isPlayerLuigi()) {
-            pCollector->addArchive("HopperLuigi");
-        } else {
-            pCollector->addArchive("HopperMario");
-        }
-    }
-
-    if (MR::isEqualObjectName(rIter, "MorphItemNeoBee")) {
-        pCollector->addArchive("BeeMarioWing");
-
-        if (MR::isPlayerLuigi()) {
-            pCollector->addArchive("BeeLuigi");
-        } else {
-            pCollector->addArchive("BeeMario");
-        }
-    }
-
-    if (MR::isEqualObjectName(rIter, "MorphItemNeoTeresa")) {
-        if (MR::isPlayerLuigi()) {
-            pCollector->addArchive("TeresaLuigi");
-        } else {
-            pCollector->addArchive("TeresaMario");
-        }
-    }
-
-    if (MR::isEqualObjectName(rIter, "MorphItemNeoIce")) {
-        pCollector->addArchive("IceMarioHandL");
-        pCollector->addArchive("IceMarioHandR");
-
-        if (MR::isPlayerLuigi()) {
-            pCollector->addArchive("IceLuigi");
-        } else {
-            pCollector->addArchive("IceMario");
-        }
-    }
-
-    if (MR::isEqualObjectName(rIter, "BenefitItemInvincible")) {
-        pCollector->addArchive("InvincibleMarioHandL");
-        pCollector->addArchive("InvincibleMarioHandR");
-
-        if (MR::isPlayerLuigi()) {
-            pCollector->addArchive("InvincibleLuigi");
-            return;
-        } else {
-            pCollector->addArchive("InvincibleMario");
-            return;
-        }
-    }
-
-    s32 arg3 = -1;
-
-    if (MR::isValidInfo(rIter)) {
-        MR::getPlacementArg3WithInit(rIter, &arg3);
-    }
-
-    if (MR::isEqualObjectName(rIter, "Hopper")) {
-        return;
-    }
-
-    if (arg3 == 0) {
-        pCollector->addArchive("ItemBubble");
-    } else if (arg3 == -1) {
-        pCollector->addArchive("CrystalBox");
-        pCollector->addArchive("CrystalBoxBreak");
-    }
-}
 
 MorphItemObjNeo::MorphItemObjNeo(const char* pName, s32 type) : LiveActor(pName), mMorphType(type), mActorCameraInfo() {
     mAppearMode = 0;

@@ -16,21 +16,8 @@ namespace {
     }
 };  // namespace
 
-void SceneFunction::startStageFileLoad() {
-    MR::createSceneObj(SceneObj_SceneDataInitializer);
-    ::getSceneDataInitializer()->startStageFileLoad();
-}
-
 void SceneFunction::createStageDataHolder() {
     ::getSceneDataInitializer()->createStageDataHolder();
-}
-
-void SceneFunction::startActorFileLoadCommon() {
-    ::getSceneDataInitializer()->startActorFileLoadCommon();
-}
-
-void SceneFunction::startActorFileLoadScenario() {
-    ::getSceneDataInitializer()->startActorFileLoadScenario();
 }
 
 void SceneFunction::startActorPlacement() {
@@ -42,7 +29,6 @@ bool SceneFunction::startActorPlacementStep(uint64_t deadline) {
 }
 
 void SceneFunction::initAfterScenarioSelected() {
-    ::getSceneDataInitializer()->startStageFileLoadAfterScenarioSelected();
     ::getSceneDataInitializer()->initAfterScenarioSelected();
 }
 

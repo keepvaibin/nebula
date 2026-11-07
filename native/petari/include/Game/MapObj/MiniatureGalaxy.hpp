@@ -20,7 +20,6 @@ enum MiniatureGalaxyState {
 class AstroDomeOrbit;
 class GalaxyNamePlate;
 class ModelObj;
-class NameObjArchiveListCollector;
 class ProjmapEffectMtxSetter;
 
 class MiniatureGalaxy : public LiveActor {
@@ -35,7 +34,6 @@ public:
     virtual void calcAndSetBaseMtx();
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
 
-    static void makeArchiveList(NameObjArchiveListCollector*, const TableIter&);
 
     void initPartsModel();
     void setScale(f32);

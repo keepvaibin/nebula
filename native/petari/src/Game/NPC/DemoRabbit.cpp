@@ -1,6 +1,5 @@
 #include "Game/NPC/DemoRabbit.hpp"
 #include "Game/LiveActor/Nerve.hpp"
-#include "Game/NameObj/NameObjArchiveListCollector.hpp"
 #include "Game/Util.hpp"
 
 namespace {
@@ -41,14 +40,6 @@ namespace NrvDemoRabbit {
 };  // namespace NrvDemoRabbit
 
 DemoRabbit::DemoRabbit(const char* pName) : NPCActor(pName) {
-}
-
-void DemoRabbit::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
-    if (MR::getDemoCastID(rIter) == 0) {
-        pCollector->addArchive("TrickRabbitBaby");
-    } else {
-        pCollector->addArchive("TrickRabbit");
-    }
 }
 
 void DemoRabbit::init(const TableIter& rIter) {

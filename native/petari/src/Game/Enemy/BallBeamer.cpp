@@ -1,7 +1,6 @@
 #include "Game/Enemy/BallBeamer.hpp"
 #include "Game/Enemy/RingBeam.hpp"
 #include "Game/LiveActor/Nerve.hpp"
-#include "Game/NameObj/NameObjArchiveListCollector.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorShadowUtil.hpp"
@@ -21,16 +20,6 @@ namespace NrvBallBeamer {
 
 BallBeamer::BallBeamer(const char* pName) : LiveActor(pName), mBeams(), _90() {
     _98.identity();
-}
-
-void BallBeamer::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
-    s32 arg2 = -1;
-    MR::getPlacementArg2NoInit(rIter, &arg2);
-    pCollector->addArchive("JumpBeamerBeam");
-    pCollector->addArchive("JumpBeamerBeamBloom");
-    if (!arg2) {
-        pCollector->addArchive("JumpBeamerBeamShadow");
-    }
 }
 
 void BallBeamer::init(const TableIter& rIter) {

@@ -19,7 +19,6 @@ public:
     virtual void control();
     virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 
-    static void makeArchiveList(NameObjArchiveListCollector*, const TableIter&);
 
     bool branchFuncStar(u32);
     bool branchFuncComet(u32);

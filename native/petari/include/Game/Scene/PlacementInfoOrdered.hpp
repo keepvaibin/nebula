@@ -63,7 +63,6 @@ public:
     PlacementInfoOrdered(int);
 
     void sort();
-    void requestFileLoad();
     void initPlacement();
     bool initPlacementStep(uint64_t deadline);
     void insert(const Identifier&, const TableIter&);

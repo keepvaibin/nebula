@@ -58,9 +58,6 @@ FurCtrl::FurCtrl(LiveActor* pActor, FurParam* pParam, bool addToManager, u8 draw
     mNumLayers = 0;
     mDrawer = nullptr;
     mMesh = nullptr;
-    mLengthMap = nullptr;
-    mBodyMap = nullptr;
-    mIndirectMap = nullptr;
     mIsClone = 0;
     mDynamicParam.mFogCtrl = nullptr;
     mDynamicParam.mLightParam = nullptr;
@@ -106,9 +103,6 @@ void FurCtrl::drawFur() {
     mDrawer->mFurUVScale = mParam->mFurUVScale * mFurUVScale;
     mDrawer->mBodyUVScale = mParam->mBodyUVScale;
     mDrawer->mColor = mParam->mColor;
-    mDrawer->mIndirect.mTip = mParam->mIndirect;
-    mDrawer->mIndirect.mRoot = 0.0f;
-    mDrawer->mIndirect.mCurve = mParam->mIndirectCurve;
     mDrawer->mBrightness.mTip = mParam->mBrightnessTip;
     mDrawer->mBrightness.mRoot = mParam->mBrightnessRoot;
     mDrawer->mBrightness.mCurve = mParam->mBrightnessCurve;
@@ -118,12 +112,7 @@ void FurCtrl::drawFur() {
     mDrawer->mColorBlend.mTip = mParam->mSkinAlphaTip;
     mDrawer->mColorBlend.mRoot = mParam->mSkinAlphaRoot;
     mDrawer->mColorBlend.mCurve = mParam->mSkinAlphaCurve;
-    mDrawer->update();
-    mDrawer->setupMaterial(&mDynamicParam);
-
-    if (mDrawer->mMixFog) {
-        mDrawer->mMixFog--;
-    }
+    mDrawer->setupMaterial(mDynamicParam);
 
     TypedDraw site(mDrawer->material(), nullptr);
     site.setModelBlock(pModelData, mModel->block(pShape->getMaterial()));
@@ -139,13 +128,7 @@ void FurCtrl::createFurMap() {
         return;
     }
 
-    for (u32 i = 0; i < 4; i++) {
-        mDrawer->mDensity[i] = mParam->mDensity[i];
-        mDrawer->mThickness[i] = mParam->mThickness[i];
-        mDrawer->mLengthMap[i] = mParam->mLengthMap[i];
-    }
-
-    mDrawer->createFurMap();
+    mDrawer->createFurMap(*mParam);
 }
 
 namespace MR {
@@ -164,15 +147,12 @@ FurDrawManager::FurDrawManager(u8 capacity) : NameObj("ファー描画マネー�
     MR::connectToScene(this, MR::MovementType_None, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_Fur);
 }
 
-void FurCtrl::setupFur(Model* pModel, ResTIMG* pLength, ResTIMG* pIndirect, ResTIMG* pBody, u32 shape, u32 numLayers) {
+void FurCtrl::setupFur(Model* pModel, ResTIMG* pLength, ResTIMG* pBody, u32 shape, u32 numLayers) {
     ModelData* pData = pModel->getModelData();
     mModel = pModel;
-    mLengthMap = pLength;
-    mBodyMap = pBody;
-    mIndirectMap = pIndirect;
     mShapeIndex = shape;
     mMesh = createFurMesh(pData, shape, pLength);
-    mDrawer = new FurDrawer(numLayers, pBody, pIndirect);
+    mDrawer = new FurDrawer(numLayers, pBody);
     mNumLayers = numLayers;
 
     mVisible = 1;
@@ -181,9 +161,6 @@ void FurCtrl::setupFur(Model* pModel, ResTIMG* pLength, ResTIMG* pIndirect, ResT
 void FurCtrl::setupFurClone(Model* pModel, FurCtrl* pOther) {
     mModel = pModel;
     mIsClone = 1;
-    mLengthMap = pOther->mLengthMap;
-    mBodyMap = pOther->mBodyMap;
-    mIndirectMap = pOther->mIndirectMap;
     mShapeIndex = pOther->mShapeIndex;
     mMesh = pOther->mMesh;
     mDrawer = pOther->mDrawer;

@@ -3,7 +3,6 @@
 #include "Game/LiveActor/PartsModel.hpp"
 #include "Game/MapObj/CoinRotater.hpp"
 #include "Game/MapObj/PowerStar.hpp"
-#include "Game/NameObj/NameObjArchiveListCollector.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/EventUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -266,11 +265,4 @@ namespace MR {
         return static_cast< const DummyDisplayModel* >(pActor)->mItemType;
     }
 
-    void makeArchiveListDummyDisplayModel(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
-        s32 id = MR::getDummyDisplayModelId(rIter, -1);
-
-        if (id >= 0) {
-            pCollector->addArchive(::cDummyDisplayModelInfoTable[id].mName);
-        }
-    }
 };  // namespace MR

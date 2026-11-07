@@ -5,7 +5,6 @@
 
 class ActorCameraInfo;
 class ModelObj;
-class NameObjArchiveListCollector;
 class PowerStarAppearPoint;
 
 class PowerStar : public LiveActor {
@@ -34,7 +33,6 @@ public:
     static s32 getBtpFrameCurrentStage(s32);
     static bool isCurrentStageKoopaVs3();
     static void initShadowPowerStar(LiveActor*, bool);
-    static void makeArchiveList(NameObjArchiveListCollector*, const TableIter&);
     void initMapToolInfo(const TableIter&);
     void initModel();
     void initSensorGrandStar();

@@ -7,7 +7,6 @@ class GameSystemErrorWatcher;
 class GameSystemFontHolder;
 class GameSystemObjHolder;
 class GameSystemSceneController;
-class GameSystemStationedArchiveLoader;
 class HomeButtonLayout;
 class HomeButtonStateNotifier;
 class SystemWipeHolder;
@@ -24,9 +23,9 @@ public:
     void startToLoadSystemArchive();
     void exeInitializeAudio();
     void exeInitializeBootScene();
-    void exeLoadStationedArchive();
+    void exeLoadSystemArchive();
     void exeNormal();
-    void initAfterStationedResourceLoaded();
+    void initAfterSystemArchiveLoaded();
     void prepareReset();
     bool isPreparedReset() const;
     void frameLoop();
@@ -41,7 +40,6 @@ public:
     GameSystemFontHolder* mFontHolder;
     GameSystemObjHolder* mObjHolder;
     GameSystemSceneController* mSceneController;
-    GameSystemStationedArchiveLoader* mStationedArchiveLoader;
     HomeButtonLayout* mHomeButtonLayout;
     SystemWipeHolder* mSystemWipeHolder;
     HomeButtonStateNotifier* mHomeButtonStateNotifier;

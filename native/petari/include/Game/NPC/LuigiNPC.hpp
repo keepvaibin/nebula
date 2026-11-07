@@ -27,7 +27,6 @@ public:
     virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
 
-    static void makeArchiveList(NameObjArchiveListCollector*, const TableIter&);
 
     void setShadowDrop(const char*);
     bool branchFunc(u32);

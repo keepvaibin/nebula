@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // FurDrawer (Game/Util/FurDrawer.cpp): one fur shell. Channel 0 lit by its lights (clamped diffuse), channel 1 the
 // specular lights; the body texture (0) by channel 0 plus the shell's brightness, mixed toward the shell colour by
-// the fur texture (1, its lookup moved by the indirect texture 2 at the shell's scale) plus the specular, doubled; the
-// alpha the shell's base plus the fur's alpha by the shell alpha; drawn above the reference; fog.
+// the fur texture (1) plus the specular, doubled; the alpha the shell's base plus the fur's alpha by the shell alpha;
+// drawn above the reference; fog.
 struct MaterialConstants {
     float4 mat0;     // channel 0's material and ambient colours (0-1)
     float4 amb0;
@@ -11,12 +11,11 @@ struct MaterialConstants {
     float4 kshell;   // r: the shell's brightness, g: its alpha, b: its base alpha
     float4 color;    // rgb: the shell colour
     float4 params;   // x: channel 0's light mask, y: channel 1's, z: sources (bit 0 channel 0's ambient from the vertex,
-                     // 1 its material, 2 and 3 channel 1's), w: 1 specular, 2 indirect
-    float4 params2;  // x: the indirect scale, y: the alpha reference (0-255), zw: texture 1's size (texels)
+                     // 1 its material, 2 and 3 channel 1's), w: 1 when specular
     float4 fog;      // start, end, near, far
     float4 fog_color;  // rgb; w: the fog type
-    float4 coord[9];  // texture matrices, three rows each
-    float4 shell;     // x: how far this shell reaches
+    float4 coord[6];  // texture matrices (body, fur), three rows each
+    float4 shell;     // x: how far this shell reaches, y: the alpha reference (0-255)
 };
 
 #define NATIVE_SHELL 1
@@ -52,24 +51,16 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
     o.color = float4(mat0 * saturate((amb0 * 255.0 + lit0) / 255.0), material.mat0.a);
     o.color1 = float4(mat1 * saturate((amb1 * 255.0 + lit1) / 255.0), material.mat1.a);
     o.uv[0] = float4(fur_coord(v, 0u), fur_coord(v, 1u));
-    o.uv[1] = float4(fur_coord(v, 2u), 0.0, 0.0);
 }
 
 float4 material_color(NativeVaryings i) {
-    const uint flags = uint(material.params.w);
-    float2 coord1 = i.uv[0].zw;
-    if ((flags & 2u) != 0u) {
-        // The offset lookup: the indirect texture's alpha and blue less 128, by the shell's scale, in texels.
-        const float3 ind = round(tex[2].Sample(samp[2], i.uv[1].xy).abg * 255.0) - 128.0;
-        coord1 = (coord1 * material.params2.zw + material.params2.x * ind.xy) / material.params2.zw;
-    }
     const float4 t0 = tex[0].Sample(samp[0], i.uv[0].xy);
-    const float4 t1 = tex[1].Sample(samp[1], coord1);
+    const float4 t1 = tex[1].Sample(samp[1], i.uv[0].zw);
     const float3 c0 = saturate(t0.rgb * i.color.rgb + material.kshell.r);
-    const float3 spec = (flags & 1u) != 0u ? i.color1.rgb : float3(0.0, 0.0, 0.0);
+    const float3 spec = material.params.w != 0.0 ? i.color1.rgb : float3(0.0, 0.0, 0.0);
     float3 c = saturate((lerp(material.color.rgb, c0, t1.rgb) + spec) * 2.0);
     const float a = saturate(material.kshell.b + t1.a * material.kshell.g);
-    if (round(a * 255.0) <= material.params2.y) {
+    if (round(a * 255.0) <= material.shell.y) {
         discard;
     }
     c = native_fog(c, i.pos, material.fog, material.fog_color);

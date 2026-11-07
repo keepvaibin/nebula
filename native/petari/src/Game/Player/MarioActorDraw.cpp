@@ -14,6 +14,7 @@
 #include "Game/Player/ModelHolder.hpp"
 #include "Game/Player/TornadoMario.hpp"
 #include "Game/Scene/SceneFunction.hpp"
+#include "Game/System/ResourceHolder.hpp"
 #include "Game/Util/ActorShadowUtil.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
@@ -60,6 +61,12 @@ void MarioActor::initDrawAndModel() {
     _228 = new DrawAdaptor(MR::Functor(this, &MarioActor::drawScreenBlend), MR::DrawType_CenterScreenBlur);
     _22C = new DrawAdaptor(MR::Functor(this, &MarioActor::drawIndirect), MR::DrawType_0x24);
 
+    // MarioAnime's material animations are bound to this player's model, also when a ghost's model used the archive first
+    // or the other player's did before a restart of the same stage.
+    ResourceHolder* const pPlayerHolder = MR::createAndAddResourceHolder(gIsLuigi ? "Luigi.arc" : "Mario.arc");
+    MR::createAndAddResourceHolder("MarioAnime.arc")
+        ->bindMaterialAnimations(static_cast< ModelData* >(pPlayerHolder->mModelResTable->getRes(gIsLuigi ? "luigi" : "mario")));
+
     if (gIsLuigi) {
         initModelManagerWithAnm("Luigi", "MarioAnime", true);
     } else {
@@ -85,19 +92,6 @@ void MarioActor::initDrawAndModel() {
     initFireBall();
 
     _3D2 |= 0x4;
-
-    // With mods on, any power-up can be given anywhere, not only where a level placed its item.
-    if (NebulaMods::hasCode()) {
-        static const char* const cPowerUpArchives[] = {"BeeMarioWing", "IceMarioHandL", "IceMarioHandR", "InvincibleMarioHandL", "InvincibleMarioHandR"};
-        static const char* const cMario[] = {"BeeMario", "HopperMario", "IceMario", "InvincibleMario", "TeresaMario", "MarioTornado"};
-        static const char* const cLuigi[] = {"BeeLuigi", "HopperLuigi", "IceLuigi", "InvincibleLuigi", "TeresaLuigi", "LuigiTornado"};
-        for (u32 i = 0; i < sizeof(cPowerUpArchives) / sizeof(cPowerUpArchives[0]); i++) {
-            MR::mountArchiveByObjectOrLayoutName(cPowerUpArchives[i], nullptr);
-        }
-        for (u32 i = 0; i < sizeof(cMario) / sizeof(cMario[0]); i++) {
-            MR::mountArchiveByObjectOrLayoutName(gIsLuigi ? cLuigi[i] : cMario[i], nullptr);
-        }
-    }
 
     initBeeMario();
     initIceMario();
@@ -156,14 +150,6 @@ void MarioActor::initBeeMario() {
         archiveName = "BeeMario.arc";
     }
 
-    if (!MR::isLoadedObjectOrLayoutArchive(modelName)) {
-        return;
-    }
-
-    if (!MR::isLoadedObjectOrLayoutArchive("BeeMarioWing")) {
-        return;
-    }
-
     MR::createAndAddResourceHolder(archiveName);
 
     _9E4 = new ModelHolder(modelName, true);
@@ -203,10 +189,6 @@ void MarioActor::initHopperMario() {
         archiveName = "HopperMario.arc";
     }
 
-    if (!MR::isLoadedObjectOrLayoutArchive(modelName)) {
-        return;
-    }
-
     MR::createAndAddResourceHolder(archiveName);
 
     _A00 = new ModelHolder(modelName, true);
@@ -235,10 +217,6 @@ void MarioActor::initIceMario() {
     } else {
         modelName = "IceMario";
         archiveName = "IceMario.arc";
-    }
-
-    if (!MR::isLoadedObjectOrLayoutArchive(modelName)) {
-        return;
     }
 
     MR::createAndAddResourceHolder(archiveName);
@@ -280,10 +258,6 @@ void MarioActor::initInvincibleMario() {
         archiveName = "InvincibleMario.arc";
     }
 
-    if (!MR::isLoadedObjectOrLayoutArchive(modelName)) {
-        return;
-    }
-
     MR::createAndAddResourceHolder(archiveName);
 
     _9C8 = new ModelHolder(modelName, true);
@@ -305,10 +279,6 @@ void MarioActor::initInvincibleMario() {
 
 void MarioActor::initTeresaMario() {
     const char* modelName = gIsLuigi ? "TeresaLuigi" : "TeresaMario";
-    if (!MR::isLoadedObjectOrLayoutArchive(modelName)) {
-        return;
-    }
-
     _9A4 = new MarioParts(this, "テレサの皮", modelName, nullptr);
     if (gIsLuigi) {
         _9A4->_9C = "TeresaMario";
@@ -330,10 +300,6 @@ void MarioActor::initTeresaMario() {
 
 void MarioActor::initTornadoMario() {
     const char* modelName = gIsLuigi ? "LuigiTornado" : "MarioTornado";
-    if (!MR::isLoadedObjectOrLayoutArchive(modelName)) {
-        return;
-    }
-
     mTornadoMario = new TornadoMario(modelName);
     mTornadoMario->initWithoutIter();
     _990 = 0;
@@ -364,8 +330,7 @@ void MarioActor::initModPowerUpModels() {
         if (pName == nullptr) {
             continue;
         }
-        MR::mountArchiveByObjectOrLayoutName(pName, nullptr);
-        if (!MR::isLoadedObjectOrLayoutArchive(pName)) {
+        if (!MR::isExistObjectOrLayoutArchive(pName)) {
             continue;
         }
         MR::FormattedName archive("%s.arc", pName);

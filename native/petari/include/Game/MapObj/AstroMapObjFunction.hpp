@@ -6,7 +6,6 @@ class GalaxyNamePlate;
 class Table;
 class TableIter;
 class LiveActor;
-class NameObjArchiveListCollector;
 
 namespace MR {
     class FunctorBase;
@@ -14,8 +13,6 @@ namespace MR {
 
 class AstroMapObjFunction {
 public:
-    static void makeArchiveListFromArg0(NameObjArchiveListCollector*, const TableIter&);
-    static void makeArchiveListAstroNamePlate(NameObjArchiveListCollector*, const TableIter&);
     static bool isAlreadyRevival(const char*, s32);
     static bool isEnableRevival(const char*, s32);
     static bool isAlreadyOpen(const char*, s32);

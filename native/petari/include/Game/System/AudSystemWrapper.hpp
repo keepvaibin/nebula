@@ -11,7 +11,6 @@ class AudSystemWrapper {
 public:
     AudSystemWrapper(NebulaArena*, NebulaArena*);
 
-    void requestResourceForInitialize();
     void createAudioSystem();
     void createSoundNameConverter();
     void movement();

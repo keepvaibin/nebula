@@ -2,7 +2,6 @@
 
 #include "Game/Map/PlanetMap.hpp"
 
-class NameObjArchiveListCollector;
 
 struct PlanetMapData {
     inline const char* getData(s32 index) const {
@@ -18,11 +17,6 @@ struct PlanetMapData {
     const char* mForceScenarioData[8];
 };
 
-struct UniqueEntry {
-    const char* _0;
-    const char* _4;
-};
-
 typedef NameObj* (*CreatorFuncPtr)(const char*);
 
 struct PlanetEntry {
@@ -35,7 +29,6 @@ public:
     PlanetMapCreator(const char*);
 
     CreatorFuncPtr getCreateFunc(const char*);
-    void makeArchiveListPlanet(NameObjArchiveListCollector*, const TableIter&, const char*);
     void createPlanetMapDataTable(Table*);
     void addTableData(const Table*, s32);
     PlanetMapData* getTableData(const char*) const;
@@ -57,7 +50,6 @@ public:
 
 class PlanetMapCreatorFunction {
 public:
-    static void makeArchiveList(NameObjArchiveListCollector*, const TableIter&, const char*);
 
     static bool isLoadArchiveAfterScenarioSelected(const char*);
     static bool isRegisteredObj(const char*);

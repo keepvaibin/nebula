@@ -143,13 +143,6 @@ TicoFat::TicoFat(const char* pName) : NPCActor(pName) {
     _1AC.identity();
 }
 
-void TicoFat::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
-    NPCActorItem item("TicoFat");
-    if (MR::getNPCItemData(&item, 0)) {
-        NPCActor::addArchive(pCollector, item);
-    }
-}
-
 void TicoFat::init(const TableIter& rIter) {
     NPCActorCaps caps("TicoFat");
     NPCActorItem item("TicoFat");

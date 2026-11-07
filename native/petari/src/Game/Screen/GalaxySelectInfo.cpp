@@ -1,6 +1,5 @@
 #include "Game/Screen/GalaxySelectInfo.hpp"
 #include "Game/LiveActor/Nerve.hpp"
-#include "Game/NameObj/NameObjArchiveListCollector.hpp"
 #include "Game/Screen/GalaxyInfoLayoutSetter.hpp"
 #include "Game/Screen/IconComet.hpp"
 #include "Game/Util/LayoutUtil.hpp"
@@ -58,12 +57,6 @@ void GalaxySelectInfo::kill() {
 
 bool GalaxySelectInfo::show(const char* pParam1, u32 param2, int param3) {
     return show(pParam1, param2, true, param3);
-}
-
-void GalaxySelectInfo::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
-    pCollector->addArchive("GalaxyInfo");
-    pCollector->addArchive("GalaxyInfoTexture");
-    pCollector->addArchive("IconComet");
 }
 
 void GalaxySelectInfo::control() {

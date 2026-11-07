@@ -7,7 +7,6 @@
 #include "Game/System/AudSystemWrapper.hpp"
 #include "Game/System/AssetFolder.hpp"
 #include "Game/System/ErrorMessageArchive.hpp"
-#include "Game/System/FileLoader.hpp"
 #include "Game/System/HeapMemoryWatcher.hpp"
 #include "Game/System/Language.hpp"
 #include "Game/System/MessageHolder.hpp"
@@ -25,13 +24,11 @@
 
 GameSystemObjHolder::GameSystemObjHolder()
     : mObjHolder(), mParticleResHolder(), mCaptureScreenDirector(), mScreenPreserver(), mAudioSystem(), mPlayerInputs(), mMessageHolder(), mStarPointerDirector(), mRandom(0), mLanguage(MR::getDecidedLanguageFromIPL()) {
-    initStore();
     initNameObj();
-    MR::createAndAddArchive(AssetFolder::mount("/NebulaData/ErrorMessageArchive.arc", MR::getPermanentHeap()), MR::getPermanentHeap(),
-                            "ErrorMessageArchive.arc");
+    MR::addArchive(AssetFolder::mount("/NebulaData/ErrorMessageArchive.arc", MR::getPermanentHeap()), MR::getPermanentHeap(), "ErrorMessageArchive.arc");
 }
 
-void GameSystemObjHolder::initAfterStationedResourceLoaded() {
+void GameSystemObjHolder::initAfterSystemArchiveLoaded() {
     SingletonHolder< NameObjRegister >::get()->setCurrentHolder(mObjHolder);
     mParticleResHolder = new ParticleResourceHolder("/ParticleData/Effect.arc");
     mMessageHolder->initGameData();
@@ -39,16 +36,15 @@ void GameSystemObjHolder::initAfterStationedResourceLoaded() {
 }
 
 void GameSystemObjHolder::initMessageResource() {
-    AssetFolder* pArchive = nullptr;
-    NebulaArena* pHeap = nullptr;
-    MR::getMountedArchiveAndHeap("ErrorMessageArchive.arc", &pArchive, &pHeap);
+    AssetFolder* pArchive = MR::getArchive("ErrorMessageArchive.arc");
+    NebulaArena* pHeap = MR::getArchiveArena("ErrorMessageArchive.arc");
 
     MR::FormattedName systemMessagePath;
     const char* languagePrefix = MR::getCurrentLanguagePrefix();
     systemMessagePath.format("/%s/MessageData/System.arc", languagePrefix);
 
-    MR::createAndAddArchive(pArchive->getSubFolder(systemMessagePath.c_str(), pHeap), pHeap, "/Memory/SystemMessage.arc");
-    MR::createAndAddArchive(pArchive->getSubFolder("/LayoutData/ErrorMessageWindow.arc", pHeap), pHeap, "/Memory/ErrorMessageWindow.arc");
+    MR::addArchive(pArchive->getSubFolder(systemMessagePath.c_str(), pHeap), pHeap, "/Memory/SystemMessage.arc");
+    MR::addArchive(pArchive->getSubFolder("/LayoutData/ErrorMessageWindow.arc", pHeap), pHeap, "/Memory/ErrorMessageWindow.arc");
 
     MR::createAndAddLayoutHolderRawData("/Memory/ErrorMessageWindow.arc");
 
@@ -94,13 +90,8 @@ void GameSystemObjHolder::captureIfAllowForScreenPreserver() {
     mScreenPreserver->captureIfAllow();
 }
 
-void GameSystemObjHolder::initStore() {
-    SingletonHolder< FileLoader >::init();
-}
-
 void GameSystemObjHolder::initAudio() {
     mAudioSystem = new AudSystemWrapper(SingletonHolder< HeapMemoryWatcher >::get()->getPermanentHeap(), MR::getPermanentHeap());
-    mAudioSystem->requestResourceForInitialize();
 }
 
 void GameSystemObjHolder::initPicture() {

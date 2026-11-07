@@ -57,7 +57,7 @@ ScenarioData::ScenarioData(const char* pFilePath) : mScenarioData(), mGalaxyName
     memcpy(mGalaxyName, fileName.c_str(), galaxyNameLength);
     mGalaxyName[galaxyNameLength] = '\0';
 
-    AssetFolder* pArchive = static_cast< AssetFolder* >(MR::getMountedArchive(pFilePath));
+    AssetFolder* pArchive = MR::getArchive(pFilePath);
 
     mScenarioData = new Table();
     mScenarioData->attach(pArchive->getResource("/ScenarioData.bcsv"));

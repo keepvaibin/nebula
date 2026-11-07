@@ -31,20 +31,9 @@ PlacementInfoOrdered::PlacementInfoOrdered(int count) : mIndexArray(), mIndexCou
 void PlacementInfoOrdered::sort() {
     s32 count = getUsedArrayNum();
     for (s32 i = 0; i < count; i++) {
+        // Player archive loaders first, then every other set: the order of a restart, when all of a stage's files are already loaded.
         SameIdSet* pSet = mOrderedSetArray[i];
-        if (NameObjFactory::isPlayerArchiveLoaderObj(pSet->mName)) {
-            pSet->mPriority = 0;
-        } else {
-            const TableIter& rIter = static_cast< Index* >(pSet->mList.mHead->mValue)->mInfoIter;
-            bool fromStore;
-            if (pSet->mShapeId != -1) {
-                fromStore = MR::isReadResourceFromStoreAtModelChangableObj(pSet->mName, pSet->mShapeId);
-            } else {
-                fromStore = NameObjFactory::isReadResourceFromStore(pSet->mName, rIter);
-            }
-
-            pSet->mPriority = (fromStore != false) + 1;
-        }
+        pSet->mPriority = NameObjFactory::isPlayerArchiveLoaderObj(pSet->mName) ? 0 : 1;
     }
 
     s32 gap = 13;
@@ -70,22 +59,6 @@ void PlacementInfoOrdered::sort() {
     }
 }
 
-void PlacementInfoOrdered::requestFileLoad() {
-    s32 count = getUsedArrayNum();
-    for (s32 i = 0; i < count; i++) {
-        SameIdSet* pSet = getSameIdSet(i);
-        if (::getCreator(*pSet) != nullptr) {
-            if (pSet->mShapeId != -1) {
-                MR::requestMountModelChangableObjArchives(pSet->mName, pSet->mShapeId);
-            } else {
-                for (MR::BothDirList< Index >::iterator iter = pSet->mList.begin(); !iter.isEnd(); iter++) {
-                    NameObjFactory::requestMountObjectArchives(pSet->mName, iter->mInfoIter);
-                }
-            }
-        }
-    }
-}
-
 void PlacementInfoOrdered::initPlacement() {
     while (!initPlacementStep(UINT64_MAX)) {}
 }
@@ -106,7 +79,7 @@ bool PlacementInfoOrdered::initPlacementStep(uint64_t deadline) {
             continue;
         }
         const TableIter& iter = static_cast<Index*>(mPlacementLink->mValue)->getInfoIter();
-        if (!NebulaMods::isMissingFiles(set->mName, iter)) {
+        if (!NebulaMods::isMissingFiles(set->mName)) {
             NebulaLoadTrace::Scope trace(set->mName);
             MR::setCurrentPlacementZoneId(MR::getPlacedZoneId(iter));
             if (mInitializing == nullptr) {

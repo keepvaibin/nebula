@@ -1,7 +1,6 @@
 #include "Game/NPC/RunawayTico.hpp"
 #include "Game/LiveActor/LodCtrl.hpp"
 #include "Game/LiveActor/Nerve.hpp"
-#include "Game/NameObj/NameObjArchiveListCollector.hpp"
 #include "Game/Util.hpp"
 #include <cstdio>
 
@@ -29,19 +28,6 @@ namespace NrvRunawayTico {
 };  // namespace NrvRunawayTico
 
 RunawayTico::RunawayTico(const char* pName) : Tico(pName), mCameraInfo(), mObjArg1(), mDemoCastID(), mIsStartRunaway(), mIsAllCaught() {
-}
-
-void RunawayTico::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
-    s32 arg0 = 0;
-    MR::getPlacementArg0NoInit(rIter, &arg0);
-
-    if (arg0 == -1) {
-        pCollector->addArchive("TicoBaby");
-    } else {
-        pCollector->addArchive("Tico");
-        pCollector->addArchive("TicoMiddle");
-        pCollector->addArchive("TicoLow");
-    }
 }
 
 void RunawayTico::init(const TableIter& rIter) {

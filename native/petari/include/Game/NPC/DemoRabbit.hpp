@@ -10,7 +10,6 @@ public:
     virtual void initAfterPlacement();
     virtual void control();
 
-    static void makeArchiveList(NameObjArchiveListCollector*, const TableIter&);
     void fadeOut();
     void fadeIn();
     void updateStopVelocity();

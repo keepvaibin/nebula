@@ -4,7 +4,6 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/NPC/NPCActorItem.hpp"
 #include "Game/NPC/TalkMessageFunc.hpp"
-#include "Game/NameObj/NameObjArchiveListCollector.hpp"
 #include "Game/Screen/BombTimerLayout.hpp"
 #include "Game/Util.hpp"
 
@@ -39,26 +38,6 @@ namespace NrvCaretaker {
 };  // namespace NrvCaretaker
 
 Caretaker::Caretaker(const char* pName) : NPCActor(pName), mBombTimerLayout(), mObjArg0(-1), mTidyTimeLimit(::sTidyTimeLimit) {
-}
-
-void Caretaker::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
-    NPCActorItem item("Caretaker");
-
-    pCollector->addArchive("CaretakerMiddle");
-    pCollector->addArchive("CaretakerLow");
-
-    s32 arg0 = -1;
-    MR::getPlacementArg0NoInit(rIter, &arg0);
-
-    if (arg0 != 0) {
-        return;
-    }
-
-    pCollector->addArchive("BombTimer");
-
-    if (MR::getNPCItemData(&item, 0)) {
-        NPCActor::addArchive(pCollector, item);
-    }
 }
 
 void Caretaker::init(const TableIter& rIter) {

@@ -9,7 +9,7 @@
 
 ParticleResourceHolder::ParticleResourceHolder(const char* pArchiveName)
     : mResourceMgr(), mAutoEffectList(new Table), mParticleNames(new Table), mNumEffectNums() {
-    AssetFolder* pArchive = MR::mountArchive(pArchiveName, nullptr);
+    AssetFolder* pArchive = MR::getArchive(pArchiveName);
     mResourceMgr = new ParticleResources(pArchive->getResource("Particles.jpc"), MR::getCurrentHeap());
     mParticleNames->attach(pArchive->getResource("ParticleNames.bcsv"));
     mAutoEffectList->attach(pArchive->getResource("AutoEffectList.bcsv"));
