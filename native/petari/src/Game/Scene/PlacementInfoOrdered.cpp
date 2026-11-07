@@ -64,6 +64,10 @@ void PlacementInfoOrdered::sort() {
             mOrderedSetArray[j + gap] = pSet;
         }
     }
+
+    for (s32 i = 0; i < count; i++) {
+        NebulaLoadTrace::sorted(mOrderedSetArray[i]->mName, mOrderedSetArray[i]->mPriority, mOrderedSetArray[i]->mList.mCount);
+    }
 }
 
 void PlacementInfoOrdered::requestFileLoad() {
