@@ -14,7 +14,7 @@
 #define NOMINMAX
 #endif
 #include "galaxy/render/gpu_types.h"
-#include "galaxy/render/draw_types.h"
+#include "galaxy/render/texture_sampler.h"
 #include "galaxy/render/pointer_response.h"
 #include "galaxy/render/render_config.h"
 
@@ -75,9 +75,7 @@ struct DisplayTexture {
     bool rtv_valid = false;
 };
 
-// Presentation accounting of scene target -> display picture copy serials. A first presentation is decided by the texture's own
-// accounted serial; the high-water mark is diagnostic only.
-// A capture's size in pixels: the whole frame, or half of it.
+// A capture's size in pixels.
 struct FrameExtent {
     std::uint32_t width = 0;
     std::uint32_t height = 0;
@@ -97,15 +95,8 @@ struct FramePassGeometry {
     unsigned dest_height,
     const FrameMap& map) noexcept;
 
-// A capture that is an exact colour/alpha identity of the frame at `map`. Rejects filtering, conversion and resampling.
-// A colour copy whose texture is one channel (I4, or I8 from R, G, B or A): the conversion writes (i, i, i, i), so
-// its destination holds the one byte (R8, viewed as R in every channel, as decoded I8 textures are).
-// A read's picture layout: the game's NebulaTargetChannels (0 RGBA, 2 alpha, 3 red, 6 colour with alpha one);
-// kCopyLayoutDisplay for the frame shown (opaque colour).
-inline constexpr std::uint8_t kCopyLayoutRgba = 0u;
-inline constexpr std::uint8_t kCopyLayoutDisplay = 7u;
-
-// One channel read in every channel (alpha, red, green or blue): an R8 picture.
+// A capture's channels: the game's NebulaTargetChannels (RGBA, ALPHA, RED, RGB), then the frame shown (opaque colour).
+inline constexpr std::uint8_t kCopyLayoutDisplay = 4u;
 
 struct ScaledSceneRect {
     std::int32_t left = 0;

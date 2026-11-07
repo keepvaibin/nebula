@@ -673,7 +673,6 @@ TextureHandle TextureStore::handle(std::uint32_t id) {
     }
     // An image that never came: blank. One that went with its scene is blank too and has lost nothing.
     if (blank_images_.insert(id).second) {
-        ++missing_images_;
         galaxy::loss::note(galaxy::loss::Kind::BlankTexture);
         std::fprintf(stderr, "[texture] no image for texture %u (drawn blank)\n", id);
     }

@@ -13,6 +13,10 @@
 
 namespace galaxy::render {
 
+std::uint32_t mod_shader_compiler_revision() noexcept {
+    return 0u;
+}
+
 std::vector<std::uint8_t> compile_mod_shader_stage(const std::string& source, const std::filesystem::path& includes, bool pixel,
                                                    const std::vector<const char*>& defines, std::string& problem) {
     namespace fs = std::filesystem;

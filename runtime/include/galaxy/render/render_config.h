@@ -179,13 +179,14 @@ inline constexpr std::array<unsigned, 9> kInternalHeights{0, 144, 240, 360, 480,
 inline unsigned normalized_internal_height(unsigned height) {
     return std::find(kInternalHeights.begin(), kInternalHeights.end(), height) != kInternalHeights.end() ? height : 0u;
 }
-// A common sizing rule for both encoders. Bounds preserve aspect and fit the GPU's 2D texture limit.
+// A common sizing rule for both encoders. Bounds preserve aspect and fit `max_dimension`, the device's largest 2D
+// texture (D3D12's required 16384, Vulkan's maxImageDimension2D).
 inline std::pair<unsigned, unsigned> internal_extent(unsigned output_width, unsigned output_height,
-                                                     unsigned height, float quality = 1.0f) {
+                                                     unsigned height, unsigned max_dimension, float quality = 1.0f) {
     if (!output_width || !output_height) return {1u, 1u};
     height = normalized_internal_height(height);
     const double scale = (height ? double(height) / output_height : 1.0) * quality;
-    const double bounded = std::min(scale, 16384.0 / std::max(output_width, output_height));
+    const double bounded = std::min(scale, double(max_dimension) / std::max(output_width, output_height));
     return {std::max(1u, unsigned(std::lround(output_width * bounded))),
             std::max(1u, unsigned(std::lround(output_height * bounded)))};
 }

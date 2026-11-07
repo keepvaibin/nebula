@@ -42,7 +42,8 @@ struct CompileOptions {
     bool keep_names = false;
 };
 
-// Changes with anything that changes compile_hlsl's output for the same source (cached SPIR-V is keyed on it).
+// Changes with anything that changes compile_hlsl's output for the same source: the shaders this device built for
+// mods are built again when it does (mod_shader_compiler_revision, the mods' cook signature).
 inline constexpr std::uint32_t kCompilerRevision = 7;
 
 // SPIR-V for `entry` of `hlsl`; empty with `error` set when it does not compile. `defines` are NAME=VALUE. Stage

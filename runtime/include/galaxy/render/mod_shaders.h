@@ -35,6 +35,10 @@ struct ModShaderBuild {
 // nor a file of `brought` holds, built into `output` in this format.
 ModShaderBuild build_missing_mod_shaders(const std::filesystem::path& sources, const std::vector<std::filesystem::path>& brought,
                                          const std::filesystem::path& output, const std::function<void(unsigned, unsigned)>& progress);
+// What, besides the program interface, decides compile_mod_shader_stage's bytes for the same text: Vulkan's HLSL front
+// end and its location rules (vk::kCompilerRevision); 0 for D3D12, whose programs bind by name. Shaders built for
+// mods on this device are built again when it changes.
+[[nodiscard]] std::uint32_t mod_shader_compiler_revision() noexcept;
 // One stage of a program for this build's graphics interface; empty, with the reason, when it can't be.
 std::vector<std::uint8_t> compile_mod_shader_stage(const std::string& source, const std::filesystem::path& includes, bool pixel,
                                                    const std::vector<const char*>& defines, std::string& problem);

@@ -102,11 +102,9 @@ gpu::TextureRef DisplayPictures::acquire_idle_texture(
     return {};
 }
 
-// A capture's size at the frame scale, within the largest texture the device makes.
+// A capture's size: the frame's own (internal_extent keeps the frame within the largest texture the device makes).
 FrameExtent frame_pass_extent(const FrameMap& map) noexcept {
-    constexpr unsigned kMaxTextureDimension = gpu::kMaxTexture2DDimension;
-    return FrameExtent{static_cast<std::uint32_t>(std::min(map.width, kMaxTextureDimension)),
-                       static_cast<std::uint32_t>(std::min(map.height, kMaxTextureDimension))};
+    return FrameExtent{map.width, map.height};
 }
 
 FramePassGeometry frame_pass_geometry(

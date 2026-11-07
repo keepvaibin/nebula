@@ -3214,10 +3214,12 @@ void prepare_mod_files(const fs::path& settings_folder, const std::string& game_
         const fs::path shaders = folder / "shaders" / galaxy::render::program_file_name();
         if (fs::is_regular_file(shaders, shaders_error)) {
             const galaxy::render::ModShadersResult loaded = galaxy::render::load_mod_shaders(shaders);
+            // Such a file adds nothing to what the cook found present: the shaders its models need are built here
+            // (build_missing_mod_shaders, "shaders built here").
             if (loaded == galaxy::render::ModShadersResult::OtherInterface) {
-                log_line("mods:", "its shaders are for another build of Nebula");
+                log_line("mods:", "its shaders are for another build of Nebula: the ones it needs are built here");
             } else if (loaded == galaxy::render::ModShadersResult::Unreadable) {
-                log_line("mods:", "its shaders could not be read: models that need them are not drawn");
+                log_line("mods:", "its shaders could not be read: the ones it needs are built here");
             }
         }
     }
@@ -3230,8 +3232,9 @@ void cook_mod_files(const galaxy::mods::DiscPlan& plan, const fs::path& settings
     const fs::path folder = settings_folder / "mods" / ".cooked";
     const fs::path overlay = folder / "mods.pak";
     const fs::path signature_file = folder / "mods.signature";
-    // Another build's shader interface means their shaders are built again.
-    const std::string signature = galaxy::mods::plan_signature(plan, game_id) + galaxy::render::program_interface() + "\n";
+    // Another build's shader interface or shader compiler means their shaders are built again.
+    const std::string signature = galaxy::mods::plan_signature(plan, game_id) + galaxy::render::program_interface() + " " +
+                                  std::to_string(galaxy::render::mod_shader_compiler_revision()) + "\n";
     std::error_code error;
     fs::create_directories(folder, error);
     std::string kept;

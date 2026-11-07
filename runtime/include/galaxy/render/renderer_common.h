@@ -22,8 +22,6 @@
 namespace galaxy::render {
 
 using ScreenProbe = ::NebulaScreenProbe;
-// Probe tiles fit every supported device; batches and readbacks grow independently.
-inline constexpr std::uint32_t kScreenProbeTile = 256u;
 // Textures one draw can read.
 inline constexpr std::uint32_t kTableTextures = NEBULA_MATERIAL_SLOTS;
 
@@ -32,12 +30,11 @@ inline constexpr std::uint8_t kSceneVariantSamplesMask = 3u;
 inline constexpr std::uint8_t kSceneVariantHdr = 4u;
 inline constexpr std::uint8_t kSceneVariantTarget = 8u;
 
-// The picture channel each sampled channel reads (0-3: R, G, B, A) for a target pass's NebulaTargetChannels
-// (E-07): RGBA, INTENSITY_ALPHA (R R R A), ALPHA (A A A A), RED, GREEN, BLUE (that channel in all four), RGB
-// (alpha one: 4).
+// The picture channel each sampled channel reads (0-3: R, G, B, A; 4 one) for a target pass's NebulaTargetChannels:
+// RGBA, ALPHA (A A A A), RED (R R R R), RGB (alpha one).
 [[nodiscard]] constexpr std::array<std::uint8_t, 4> target_channel_swizzle(std::uint8_t channels) noexcept {
-    constexpr std::array<std::array<std::uint8_t, 4>, 7> kSwizzle{{
-        {0, 1, 2, 3}, {0, 0, 0, 3}, {3, 3, 3, 3}, {0, 0, 0, 0}, {1, 1, 1, 1}, {2, 2, 2, 2}, {0, 1, 2, 4}}};
+    constexpr std::array<std::array<std::uint8_t, 4>, 4> kSwizzle{{
+        {0, 1, 2, 3}, {3, 3, 3, 3}, {0, 0, 0, 0}, {0, 1, 2, 4}}};
     return kSwizzle[channels < kSwizzle.size() ? channels : 0u];
 }
 
@@ -71,7 +68,6 @@ class SamplerTableCache {
 public:
     struct Allocation { unsigned index; bool created; };
     [[nodiscard]] Allocation get_or_allocate(const SamplerTableKey& key);
-    [[nodiscard]] bool nearly_full() const noexcept { return cursor_ + kSamplerHeapSlots / 4u > kSamplerHeapSlots; }
     void reset() noexcept {
         tables_.clear();
         cursor_ = kSamplerTableSlots;
@@ -91,14 +87,29 @@ struct SceneClearValues {
     std::uint32_t rgba,
     std::uint8_t frame_format) noexcept;
 
-// The scene target conversion shader's root constants (16 dwords).
+// The capture shader's constants (b0, five 32-bit values): the rectangle's origin in frame pixels, frame pixels per
+// picture pixel, and the picture's channels (NebulaTargetChannels; kCopyLayoutDisplay the frame shown).
 struct SceneConversionShaderConstants {
-    std::array<float, 16> values{};
+    float src_xform[4]{};
+    std::uint32_t channels = 0;
 };
+static_assert(sizeof(SceneConversionShaderConstants) == 5u * sizeof(std::uint32_t));
+inline constexpr unsigned kSceneConversionConstantCount = 5u;
 
 [[nodiscard]] std::string_view scene_conversion_shader_source() noexcept;
 // The frame shown, one frame pixel to one picture pixel (scene_conversion_shader_source's arithmetic for it).
 [[nodiscard]] std::string_view display_filter_shader_source() noexcept;
+
+// Screen probes (one compute dispatch a probe pass): t0 the scene's depth, t1 each point's frame pixel, u0 each point's
+// depth as the game reads it (0 near, 1 far); b0 the count. 64 points a group.
+[[nodiscard]] std::string_view screen_probe_shader_source() noexcept;
+inline constexpr unsigned kScreenProbeGroup = 64u;
+struct ScreenProbePixel {
+    std::uint32_t x = ~0u;
+    std::uint32_t y = ~0u;
+};
+// The frame pixel a probe names in the target `map` describes; ~0u for a point the game did not ask about (x or y below 0).
+[[nodiscard]] ScreenProbePixel screen_probe_pixel(const ScreenProbe& probe, const FrameMap& map) noexcept;
 
 // The renderers' utility shaders (HLSL; the Vulkan backend annotates and compiles the same source): the
 // fullscreen-triangle blit, the scene target colour-channel clear, the depth carry after a resolution change, and the
@@ -123,26 +134,8 @@ struct UiSolidQuadConstants {
     std::uint32_t glyph_mode;
 };
 static_assert(sizeof(UiSolidQuadConstants) == 13u * sizeof(std::uint32_t));
-[[nodiscard]] SceneConversionShaderConstants make_scene_conversion_constants(
-    bool from_depth,
-    std::uint8_t channels,
-    float src_x,
-    float src_y,
-    float step_x,
-    float step_y) noexcept;
-
-// A screen probe's constants: the capture shader reads the one pixel of the frame the point names (`depth`: as the
-// 24-bit value in three bytes, otherwise as it is).
-[[nodiscard]] SceneConversionShaderConstants make_screen_probe_constants(float x, float y, const FrameMap& map, bool depth) noexcept;
-
-// The scene target-copy destination cache's byte budget, 192 MiB. The cache grows with the internal resolution squared while
-// the budget stays fixed, so it is the one resolution-scaled GPU pool that is neither a render target nor visible in
-// a recording.
-
-// Effect copies (destinations up to 320x228: the bloom pyramid, simple bloom, depth of field, Mario's 160x160
-// shadow capture) are built at the game's own resolution, box-filtered over the scaled scene target. Their low resolution is
-// part of the effect: the blur kernels use fixed screen-relative tap offsets and rely on it to soften, so scaled
-// copies turn the taps into separate offset images. Full-size captures stay scaled. After Super Mario
+[[nodiscard]] SceneConversionShaderConstants make_scene_conversion_constants(std::uint8_t channels, float src_x, float src_y,
+                                                                             float step_x, float step_y) noexcept;
 
 // Present pacing with vsync off and a frame-rate cap. The game's frame clock paces presents; the pacer smooths one that arrives
 // early by waiting at most 2 ms toward its slot at the cap: a high-resolution sleep to 0.2 ms before the target,
@@ -165,31 +158,6 @@ private:
     bool timer_tried_ = false;
     // Sleeps until a target `remaining_ms` away.
     void sleep_before(double remaining_ms);
-};
-
-// One fully resolved draw. The renderer sets the pipeline and root arguments
-// only where they differ from the previous draw.
-struct DrawCall {
-    gpu::Pipeline* pipeline = nullptr;
-    gpu::Address vs_constants = 0;   // root CBV b0
-    gpu::Address ps_constants = 0;   // root CBV b1
-    gpu::Table texture_table{};      // t0-t7
-    gpu::Table sampler_table{};      // s0-s7
-    gpu::Address matrix_palette = 0; // root SRV t0,space1: the draw's row table
-    gpu::Address matrix_rows = 0;    // root SRV t3,space1: the rows its table names (the matrix ring, a replay's output)
-    gpu::VertexView vertex_view{};
-    gpu::VertexView extra_view{};  // RenderVertexExtra; no address: zeros
-    gpu::IndexView index_view{};
-    std::uint32_t index_count = 0;
-    gpu::Topology topology = gpu::kTopologyTriangleList;
-    gpu::Rect scissor{};
-    // The game's viewport (drawing_state.h: left, top, width, height, near and far depth); has_viewport=false (not set
-    // yet, or empty) falls back to the full frame.
-    float viewport[6]{};
-    bool  has_viewport = false;
-    // Render target 1 in temporal scenes: 1 the motion target (opaque
-    // motion writers), 2 the reactive mask (blended draws), 0 none.
-    std::uint8_t aux_target = 0;
 };
 
 }  // namespace galaxy::render

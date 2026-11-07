@@ -15,7 +15,6 @@
 // through its own staging and backend (any GPU API). Render thread only, except where noted.
 
 #include "galaxy/render/gpu_types.h"
-#include "galaxy/render/draw_types.h"
 #include "galaxy/render/gpu_texture_backend.h"
 
 #include <array>
@@ -39,6 +38,17 @@
 #include <vector>
 
 namespace galaxy::render {
+
+// Texture pack file names carry a format code (tex1_WxH_<hash>_<code>).
+enum class TexturePackFormat : std::uint8_t {
+    Gray8 = 0x1, GrayAlpha8 = 0x3, Rgb565 = 0x4, Packed16 = 0x5, Rgba8 = 0x6,
+    Palette4 = 0x8, Palette8 = 0x9, Palette14 = 0xA, Block4 = 0xE,
+};
+
+// A block record's third and fourth colours (nebula_cooked_texture.h NEBULA_TEXTURE_BLOCK4): 5/8 and 3/8.
+[[nodiscard]] constexpr std::uint8_t block4_interpolated_channel(std::uint8_t primary, std::uint8_t secondary) {
+    return static_cast<std::uint8_t>((5u * primary + 3u * secondary) >> 3u);
+}
 
 struct TexturePackName {
     std::uint32_t width = 0;

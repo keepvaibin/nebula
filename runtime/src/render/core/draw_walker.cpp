@@ -935,7 +935,7 @@ void RenderCore::walk_list(ListData& now, ListData* before, const WalkTime& time
                 request.key |= kGeneratedPicture;
                 note_generated_written(pass.target);
             }
-            request.channels = pass.channels < 7u ? static_cast<std::uint8_t>(pass.channels) : 0u;
+            request.channels = pass.channels < kCopyLayoutDisplay ? static_cast<std::uint8_t>(pass.channels) : 0u;
             (void)renderer_.draw_frame_pass(request, texture_store_);
             break;
         }
