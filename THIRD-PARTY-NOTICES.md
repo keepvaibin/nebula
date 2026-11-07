@@ -66,7 +66,9 @@ The FSR 3 upscaler and its DX12 and Vulkan backends, built from <https://github.
 
 `third_party/archive/` holds the libraries the mod importer reads zip, 7z and rar archives with: libarchive (BSD-2-Clause,
 `third_party/archive/libarchive/COPYING`), xz's liblzma (0BSD, `third_party/archive/xz/COPYING.0BSD`) and zlib (Zlib,
-`third_party/archive/zlib/LICENSE`).
+`third_party/archive/zlib/LICENSE`). xz's shell scripts (`src/scripts`) are not included, so its `CMakeLists.txt`
+configures them only when they are built. libarchive's `contrib/` is not included either: on Android its headers
+include `android_lf.h`, which `cmake/android/android_lf.h` stands in for (64-bit ABIs only, where there is nothing to map).
 
 ## SMAA (MIT)
 

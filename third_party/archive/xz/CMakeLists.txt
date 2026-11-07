@@ -2371,14 +2371,13 @@ xzdiff, xzgrep, xzmore, xzless, and their symlinks" ON)
     set(POSIX_SHELL "${XZ_POSIX_SHELL}")
 
     foreach(S xzdiff xzgrep xzmore xzless)
-        configure_file("src/scripts/${S}.in" "${S}"
-               @ONLY
-               NEWLINE_STYLE LF
-               FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
-                                GROUP_READ GROUP_EXECUTE
-                                WORLD_READ WORLD_EXECUTE)
-
         if(ENABLE_SCRIPTS)
+            configure_file("src/scripts/${S}.in" "${S}"
+                   @ONLY
+                   NEWLINE_STYLE LF
+                   FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
+                                    GROUP_READ GROUP_EXECUTE
+                                    WORLD_READ WORLD_EXECUTE)
             install(PROGRAMS "${CMAKE_CURRENT_BINARY_DIR}/${S}"
                     DESTINATION "${CMAKE_INSTALL_BINDIR}"
                     COMPONENT scripts_Runtime)
