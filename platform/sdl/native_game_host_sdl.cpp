@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The native game's host services on SDL3 platforms (native_host.h, native_audio.h): the game's sound through SDL's
-// audio stream, player 1's input from the on-screen controls, the finger on the picture, keys and gamepads (with the
-// same bindings and tuning as Windows), vibration, and the device data the game reads.
+// audio stream, player 1's input from the on-screen controls, the finger on the picture, keys and gamepads (through the
+// shared live controls, as on Windows), vibration, and the device data the game reads.
 
 #include "galaxy/render_api.h"
 #include "sdl_host.h"
 
 #include "galaxy/content_viewport.h"
 #include "galaxy/input/host_input.h"
+#include "galaxy/input/live_controls_engine.h"
 #include "galaxy/input_bindings.h"
 #include "galaxy/audio_mixer.h"
 #include "galaxy/native_audio.h"
@@ -36,8 +37,6 @@ namespace in = galaxy::input;
 
 // The finger's pointer stays where it was lifted this long, so the cursor does not blink between touches.
 constexpr std::uint64_t kTouchPointerHoldMs = 1500;
-// A pad or key pointer at rest hides after this long, as the Wii's does when the remote points away.
-constexpr std::uint64_t kStickPointerHoldMs = 3000;
 // A tap in a menu is A, counted in the game's frames so it lands at any frame rate: the game takes A on what the pointer
 // is over, which it finds some frames after the pointer arrives (InputPointer wants five valid samples, then the menu
 // its hover), and reads the remote once a frame.
@@ -55,7 +54,6 @@ constexpr std::uint64_t kGrabArmFrames = 30;
 constexpr float kTouchTargetPadDp = 24.0f;
 // The game's star pointer mode on the title (StarPointerMode_Title): its prompt asks for A and B, so the controls stay.
 constexpr std::int32_t kStarPointerModeTitle = 4;
-constexpr float kTriggerThreshold = 96.0f / 255.0f;  // the Windows host's XInput trigger threshold
 
 const in::ControlsConfig& live_controls() {
     static in::ControlsConfig config = in::get_controls_config();
@@ -90,6 +88,24 @@ in::LogicalInput touch_logic(const sdl::InputState& state) {
     logic.stick_y = state.touch_stick_y;
     return logic;
 }
+
+// The shared live controls' window services: the finger (or the mouse) is the absolute pointer, as the mouse is on
+// Windows; nothing is injected.
+class SdlControlsHost final : public controls::LiveControlsHost {
+public:
+    SdlControlsHost(const controls::PointerSample& finger, std::uint64_t now_ms, std::uint64_t now_us)
+        : finger_(finger), now_ms_(now_ms), now_us_(now_us) {}
+    std::uint64_t now_ms() override { return now_ms_; }
+    std::uint64_t now_us() override { return now_us_; }
+    bool injected(bool) override { return false; }
+    controls::PointerSample pointer(bool, bool) override { return finger_; }
+    in::NativeMousePointerProjection cursor() override { return {}; }
+
+private:
+    controls::PointerSample finger_;
+    std::uint64_t now_ms_;
+    std::uint64_t now_us_;
+};
 
 // A point in window pixels as the pointer (-1..1 across the picture, y down), through the rectangle the picture was last drawn in.
 // A circle on the picture: x, y as the pointer's (-1..1, down positive); the radius in the picture's heights.
@@ -188,6 +204,7 @@ in::PlayerInput native_game_input(std::uint64_t frame, std::int32_t star_pointer
         : in::PlayContext::Play;
     sdl::set_menu_context(context == in::PlayContext::Menu && (captured || star_pointer_mode != kStarPointerModeTitle));
     sdl::set_title_screen(star_pointer_mode == kStarPointerModeTitle);
+    sdl::set_direct_touch(captured);
     const in::tilt::Section section = tilt_section == 1u ? in::tilt::Section::StarBall
         : tilt_section == 2u ? in::tilt::Section::Ray
         : in::tilt::Section::None;
@@ -275,7 +292,9 @@ in::PlayerInput native_game_input(std::uint64_t frame, std::int32_t star_pointer
     }
     // The input mode's own devices. Auto takes them all.
     const galaxy::RuntimeInputMode input_mode = galaxy::get_runtime_input_mode_state().mode;
-    if (input_mode != galaxy::RuntimeInputMode::Auto && input_mode != galaxy::RuntimeInputMode::KeyboardMouse) {
+    const bool use_keyboard =
+        input_mode == galaxy::RuntimeInputMode::Auto || input_mode == galaxy::RuntimeInputMode::KeyboardMouse;
+    if (!use_keyboard) {
         const auto mouse = state.keys.mouse;
         state.keys = {};
         state.keys.mouse = mouse;
@@ -292,142 +311,60 @@ in::PlayerInput native_game_input(std::uint64_t frame, std::int32_t star_pointer
         }
     }
     const in::ControlsConfig& config = live_controls();
-    in::PlayerInput snapshot{};
-
-    // Gamepads: the bindings and tuning of each one's scheme, as on Windows.
-    static std::array<std::uint32_t, sdl::kMaxPads> s_previous{};
-    in::LogicalInput pads{};
-    float pad_pointer_speed = 0.0f;
-    float motion_x = 0.0f;
-    float motion_y = 0.0f;  // down positive, as the pointer's
-    bool shake_remote = false;
-    bool shake_nunchuk = false;
-    const in::tilt::Vec3* controller_up = nullptr;
-    const std::uint64_t motion_now_us = galaxy::steady_ms() * 1000u;
-    for (std::size_t i = 0; i < sdl::kMaxPads; ++i) {
-        in::PadSample sample = state.pads[i];
-        if (!sample.connected) {
-            s_previous[i] = 0u;
-            continue;
-        }
-        const in::SchemeTuning& tuning = config.tune(sample.scheme);
-        const sdl::PadMotion& motion = state.motion[i];
-        if (tuning.gyro_pointer && motion.imu_live) {
-            motion_x += motion.gyro_x;
-            motion_y -= tuning.invert_pointer_y ? -motion.gyro_y : motion.gyro_y;
-        }
-        if (tuning.touch_pointer && motion.touch_live) {
-            motion_x += motion.touch_dx * 2.0f * tuning.touch_sensitivity;
-            motion_y += (tuning.invert_pointer_y ? -motion.touch_dy : motion.touch_dy) * 2.0f * tuning.touch_sensitivity;
-        }
-        if (motion.shake_until_us != 0u && motion_now_us < motion.shake_until_us) {
-            shake_remote = shake_remote || tuning.motion_shake == in::MotionShake::Remote;
-            shake_nunchuk = shake_nunchuk || tuning.motion_shake == in::MotionShake::Nunchuk;
-        }
-        if (controller_up == nullptr && motion.gravity_valid) {
-            controller_up = &motion.gravity;
-        }
-        const in::StickVector left = in::apply_radial_deadzone(sample.axes[0], sample.axes[1], tuning.stick_deadzone);
-        const in::StickVector right =
-            in::apply_radial_deadzone(sample.axes[2], sample.axes[3], tuning.pointer_deadzone);
-        sample.axes[0] = left.x;
-        sample.axes[1] = left.y;
-        sample.axes[2] = right.x;
-        sample.axes[3] = right.y;
-        in::LogicalInput logic =
-            in::evaluate_pad_bindings(config.table(sample.scheme), sample, kTriggerThreshold, s_previous[i], false);
-        s_previous[i] = logic.pressed;
-        if (tuning.invert_pointer_y) {
-            logic.pointer_y = -logic.pointer_y;
-        }
-        if (logic.pressed != 0u || logic.stick_x != 0.0f || logic.stick_y != 0.0f || logic.pointer_x != 0.0f ||
-            logic.pointer_y != 0.0f) {
-            g_rumble_pad = state.pad_ids[i];
-            g_rumble_strength = tuning.vibration ? static_cast<float>(tuning.rumble) / 255.0f : 0.0f;
-            pad_pointer_speed = tuning.pointer_speed;
-        }
-        pads = in::merge_logical_input(pads, logic);
-    }
-    // No pad in hand: the device's own sensors are the remote's.
-    if (std::none_of(state.pads.begin(), state.pads.end(), [](const in::PadSample& pad) { return pad.connected; })) {
-        if (state.device_motion.gravity_valid) {
-            controller_up = &state.device_motion.gravity;
-        }
-        if (state.device_motion.shake_until_us != 0u && motion_now_us < state.device_motion.shake_until_us) {
-            shake_remote = true;
-        }
-    }
-    in::LogicalInput keys = in::evaluate_keyboard_bindings(config.table(in::ControlScheme::Keyboard), state.keys);
-    if (config.tune(in::ControlScheme::Keyboard).invert_pointer_y) {
-        keys.pointer_y = -keys.pointer_y;
-    }
-    const in::LogicalInput logic = in::merge_logical_input(in::merge_logical_input(pads, keys), touch_logic(state));
-    const auto held = [&logic](in::GameInput target) { return logic.held(target); };
-
-    snapshot.buttons.left = held(in::GameInput::DpadLeft);
-    snapshot.buttons.right = held(in::GameInput::DpadRight);
-    snapshot.buttons.down = held(in::GameInput::DpadDown);
-    snapshot.buttons.up = held(in::GameInput::DpadUp);
-    snapshot.buttons.plus = held(in::GameInput::Plus);
-    snapshot.buttons.minus = held(in::GameInput::Minus);
-    snapshot.buttons.one = held(in::GameInput::One);
-    snapshot.buttons.two = held(in::GameInput::Two);
-    snapshot.buttons.home = held(in::GameInput::Home);
-    // A controller's B: jump while Mario is under control, back in menus.
-    static in::JumpBackLatch s_jump_back{};
-    const in::JumpBackLatch::Output jump_back = s_jump_back.update(held(in::GameInput::JumpBack), context);
-    snapshot.buttons.a = held(in::GameInput::A) || jump_back.a;
-    snapshot.buttons.b = held(in::GameInput::B) || jump_back.b;
-    const in::StickValue stick = in::nunchuk_stick(logic.stick_x, logic.stick_y);
-    snapshot.stick_x = stick.x;
-    snapshot.stick_y = stick.y;
-    snapshot.buttons.c = held(in::GameInput::C);
-    snapshot.buttons.z = held(in::GameInput::Z);
-
-    // The pointer: the finger (or mouse) on the picture where it is; a stick or keys move it at their speed.
-    static float s_pointer_x = 0.0f;
-    static float s_pointer_y = 0.0f;
-    static std::uint64_t s_pointer_ms = 0;
-    static std::uint64_t s_hold_ms = 0;
-    static bool s_pointer_by_finger = false;
-    static std::uint64_t s_last_ms = galaxy::steady_ms();
     const std::uint64_t now = galaxy::steady_ms();
-    const float dt = std::min(0.1f, static_cast<float>(now - s_last_ms) / 1000.0f);
-    s_last_ms = now;
+    const std::uint64_t now_us = galaxy::steady_us();
+
+    // The finger (or the mouse) on the picture: where it is, while it is down and kTouchPointerHoldMs after. The shared
+    // controls take it as the mouse, so it and a controller's gyro, stick and recenter share one pointer.
+    static float s_finger_x = 0.0f;
+    static float s_finger_y = 0.0f;
+    static std::uint64_t s_finger_ms = 0;  // when the finger last put the pointer somewhere or kept it there
+    bool finger_moved = false;
+    const auto finger_to = [&finger_moved](float to_x, float to_y, std::uint64_t at_ms) {
+        s_finger_x = to_x;
+        s_finger_y = to_y;
+        s_finger_ms = at_ms;
+        finger_moved = true;
+    };
     float x = 0.0f;
     float y = 0.0f;
     if (context != in::PlayContext::Menu && state.finger_ms != 0 && now - state.finger_ms <= kTouchPointerHoldMs &&
         project_window_point(state, state.finger_x, state.finger_y, x, y)) {
-        if (state.finger_down || state.finger_ms > s_pointer_ms) {
-            s_pointer_x = x;
-            s_pointer_y = y;
-            s_pointer_ms = state.finger_ms;
-            s_hold_ms = kTouchPointerHoldMs;
-            s_pointer_by_finger = true;
+        if (state.finger_down || state.finger_ms > s_finger_ms) {
+            finger_to(x, y, state.finger_ms);
         }
     }
     // On the target itself, however far off it the fingertip landed: the game's own test decides, with a smaller circle.
     if (frame < s_grab_armed_end || s_grabbing) {
-        s_pointer_x = s_grab_target.x;
-        s_pointer_y = s_grab_target.y;
+        finger_to(s_grab_target.x, s_grab_target.y, s_finger_ms);
     }
-    const float axis_x = pads.pointer_x != 0.0f || pads.pointer_y != 0.0f ? pads.pointer_x : keys.pointer_x;
-    const float axis_y = pads.pointer_x != 0.0f || pads.pointer_y != 0.0f ? pads.pointer_y : keys.pointer_y;
-    if (axis_x != 0.0f || axis_y != 0.0f) {
-        const float speed = pad_pointer_speed > 0.0f ? pad_pointer_speed : config.tune(in::ControlScheme::Keyboard).pointer_speed;
-        s_pointer_x = std::clamp(s_pointer_x + axis_x * speed * dt, -1.0f, 1.0f);
-        s_pointer_y = std::clamp(s_pointer_y - axis_y * speed * dt, -1.0f, 1.0f);
-        s_pointer_ms = now;
-        s_hold_ms = kStickPointerHoldMs;
-        s_pointer_by_finger = false;
+    // Nebula's menu takes the finger as its mouse: it points where the finger is and, once the pointer has been there
+    // kTapHoverFrames, holds A while the finger stays (the menu presses, drags its sliders, lists and mods, and clicks
+    // where it is let go). A touch too short for that is a tap, below.
+    static std::uint64_t s_direct_land_ms = 0;
+    static std::uint64_t s_direct_land_frame = 0;
+    static std::uint64_t s_direct_held_land_ms = 0;  // the touch that held A
+    bool direct_finger = false;
+    bool direct_press = false;
+    if (captured && state.finger_down && project_window_point(state, state.finger_x, state.finger_y, x, y)) {
+        if (state.finger_land_ms != s_direct_land_ms) {
+            s_direct_land_ms = state.finger_land_ms;
+            s_direct_land_frame = frame;
+        }
+        finger_to(x, y, now);
+        direct_finger = true;
+        if (frame >= s_direct_land_frame + kTapHoverFrames) {
+            direct_press = true;
+            s_direct_held_land_ms = state.finger_land_ms;
+        }
     }
-    if (motion_x != 0.0f || motion_y != 0.0f) {
-        s_pointer_x = std::clamp(s_pointer_x + motion_x, -1.0f, 1.0f);
-        s_pointer_y = std::clamp(s_pointer_y + motion_y, -1.0f, 1.0f);
-        s_pointer_ms = now;
-        s_hold_ms = kStickPointerHoldMs;
-        s_pointer_by_finger = false;
+    // The frame after the finger leaves still has its pointer where it left, however slowly the frames come: the menu
+    // clicks on that release.
+    static bool s_direct_finger_before = false;
+    if (!direct_finger && s_direct_finger_before) {
+        s_finger_ms = now;
     }
+    s_direct_finger_before = direct_finger;
     // A tap in a menu points there and presses A.
     static std::uint64_t s_taps = state.taps;
     static bool s_tap_waiting = false;
@@ -437,12 +374,10 @@ in::PlayerInput native_game_input(std::uint64_t frame, std::int32_t star_pointer
     static std::uint64_t s_pointer_shown_frame = 0;  // since when the game has had the pointer
     if (state.taps != s_taps) {
         s_taps = state.taps;
-        if (context == in::PlayContext::Menu && project_window_point(state, state.tap_x, state.tap_y, x, y)) {
-            s_pointer_x = x;
-            s_pointer_y = y;
-            s_pointer_ms = now;
-            s_hold_ms = kTouchPointerHoldMs;
-            s_pointer_by_finger = true;
+        // In Nebula's menu a touch that held A has pressed already.
+        const bool pressed = captured && s_direct_held_land_ms == state.finger_land_ms;
+        if (!pressed && context == in::PlayContext::Menu && project_window_point(state, state.tap_x, state.tap_y, x, y)) {
+            finger_to(x, y, now);
             if (!s_pointer_shown) {
                 s_pointer_shown_frame = frame;
             }
@@ -455,35 +390,96 @@ in::PlayerInput native_game_input(std::uint64_t frame, std::int32_t star_pointer
         s_tap_press_end_frame = frame + kTapPressFrames;
     }
     const bool tap_pressing = frame < s_tap_press_end_frame;
-    if (tap_pressing) {
+    // The pointer stays until the press has landed and been let go (Nebula's menu clicks on the release), however
+    // slowly the frames come.
+    if (s_tap_waiting || frame <= s_tap_press_end_frame) {
+        s_finger_ms = now;
+    }
+    // A game menu's touch becomes a pointer only after it resolves to a tap: a swipe never hovers buttons along its path.
+    // Nebula's menu has the finger's pointer while it is down and for kTouchPointerHoldMs after, so it sees the release
+    // where the finger left.
+    const bool finger_shown = s_finger_ms != 0 && now - s_finger_ms <= kTouchPointerHoldMs &&
+        (direct_finger || captured || context != in::PlayContext::Menu ||
+         (!state.finger_down && (s_tap_waiting || tap_pressing)));
+    controls::PointerSample finger{};
+    finger.polled = true;
+    finger.window_focused = state.window_focused;
+    finger.absolute_valid = true;
+    finger.inside_client = finger_shown;
+    finger.raw_motion = finger_moved;
+    finger.projected = {s_finger_x, s_finger_y, finger_shown};
+
+    // Gamepads as on Windows: each one's scheme, dead zones, gyro, touch surface and shake.
+    std::array<controls::LivePad, sdl::kMaxPads> pads{};
+    std::size_t pad_count = 0;
+    for (std::size_t i = 0; i < sdl::kMaxPads; ++i) {
+        const in::PadSample& sample = state.pads[i];
+        if (!sample.connected) {
+            continue;
+        }
+        const in::SchemeTuning& tuning = config.tune(sample.scheme);
+        const sdl::PadMotion& motion = state.motion[i];
+        controls::LivePad& live = pads[pad_count++];
+        live.sample = sample;
+        const in::StickVector left = in::apply_radial_deadzone(sample.axes[0], sample.axes[1], tuning.stick_deadzone);
+        const in::StickVector right = in::apply_radial_deadzone(sample.axes[2], sample.axes[3], tuning.pointer_deadzone);
+        live.sample.axes[0] = left.x;
+        live.sample.axes[1] = left.y;
+        live.sample.axes[2] = right.x;
+        live.sample.axes[3] = right.y;
+        live.device_slot = static_cast<std::uint8_t>(i);
+        live.imu_live = motion.imu_live;
+        live.gyro_x = motion.gyro_x;
+        live.gyro_y = motion.gyro_y;
+        live.touch_live = motion.touch_live;
+        live.touch_dx = motion.touch_dx;
+        live.touch_dy = motion.touch_dy;
+        live.gravity_valid = motion.imu_live && motion.gravity_valid;
+        live.gravity = motion.gravity;
+        const bool shaking = motion.shake_until_us != 0u && now_us < motion.shake_until_us;
+        live.shake_remote = shaking && tuning.motion_shake == in::MotionShake::Remote;
+        live.shake_nunchuk = shaking && tuning.motion_shake == in::MotionShake::Nunchuk;
+    }
+
+    controls::LiveControlsFrame controls_frame{config};
+    controls_frame.pads = std::span<const controls::LivePad>(pads.data(), pad_count);
+    controls_frame.keyboard_levels = state.keys;
+    controls_frame.vi = frame;
+    controls_frame.window_focused = state.window_focused;
+    controls_frame.use_keyboard = use_keyboard;
+    controls_frame.use_pads = pad_count != 0u;
+    controls_frame.allow_background_device_input = true;
+    controls_frame.allow_absolute_pointer = true;
+    controls_frame.context = context;
+    controls_frame.tilt_section = section;
+    controls_frame.extra = touch_logic(state);
+    // No controller in hand: the device's own sensors are the remote's.
+    if (pad_count == 0u) {
+        if (state.device_motion.gravity_valid) {
+            controls_frame.device_up = &state.device_motion.gravity;
+        }
+        controls_frame.device_shake =
+            state.device_motion.shake_until_us != 0u && now_us < state.device_motion.shake_until_us;
+    }
+    static controls::LiveControlsEngine s_engine;
+    SdlControlsHost host(finger, now, now_us);
+    const controls::LiveControlsResult result = s_engine.sample(controls_frame, host);
+    in::PlayerInput snapshot = result.input;
+    if (direct_press || tap_pressing) {
         snapshot.buttons.a = true;
     }
-    // The pointer stays until the press has landed, however slowly the frames come.
-    if (s_tap_waiting || tap_pressing) {
-        s_pointer_ms = now;
-    }
-    // A menu touch becomes a pointer only after it resolves to a tap. A swipe never hovers buttons along its path.
-    const bool touch_menu = s_pointer_by_finger && context == in::PlayContext::Menu;
-    const bool pointer_active = s_pointer_ms != 0 && now - s_pointer_ms <= s_hold_ms &&
-        (!touch_menu || (!state.finger_down && (s_tap_waiting || tap_pressing)));
-    if (pointer_active && !s_pointer_shown) {
+    if (snapshot.pointer_on && !s_pointer_shown) {
         s_pointer_shown_frame = frame;
     }
-    s_pointer_shown = pointer_active;
-    in::set_pointer(snapshot, s_pointer_x, s_pointer_y, pointer_active);
-#if defined(__ANDROID__)
-    g_touch_pointer_state.store(!s_pointer_by_finger ? 1u : context == in::PlayContext::Menu ? 3u : 2u, std::memory_order_relaxed);
-#endif
-
-    // Tilt sections steer with the stick.
-    static in::tilt::Tilt s_tilt{};
-    const in::tilt::Tilt::Output tilt = s_tilt.update(section, controller_up, logic.stick_x, logic.stick_y, false);
-    if (tilt.active) {
-        snapshot.gravity = tilt.game;
+    s_pointer_shown = snapshot.pointer_on;
+    if (result.rumble.device.has_value() && result.rumble.device->slot < sdl::kMaxPads) {
+        g_rumble_pad = state.pad_ids[result.rumble.device->slot];
+        g_rumble_strength = static_cast<float>(result.rumble.strength) / 255.0f;
     }
-    snapshot.pointer_on = snapshot.pointer_on && in::remote_faces_screen(snapshot.gravity);
-    snapshot.shake = held(in::GameInput::Shake) || shake_remote;
-    snapshot.nunchuk_shake = held(in::GameInput::NunchukShake) || shake_nunchuk;
+#if defined(__ANDROID__)
+    const bool by_finger = result.pointer_owner == in::PointerSource::Mouse;
+    g_touch_pointer_state.store(!by_finger ? 1u : context == in::PlayContext::Menu ? 3u : 2u, std::memory_order_relaxed);
+#endif
     return snapshot;
 }
 

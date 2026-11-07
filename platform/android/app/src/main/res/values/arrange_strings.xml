@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="arrange_hint">Drag the buttons where you want them</string>
-    <string name="arrange_ok" translatable="false">OK</string>
-</resources>

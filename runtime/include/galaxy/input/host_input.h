@@ -110,8 +110,13 @@ void note_keyboard_input() noexcept;
 #endif
 // The system lists a keyboard or a mouse.
 [[nodiscard]] bool keyboard_or_mouse_attached() noexcept;
-// The phone's on-screen controls: the editor where they are arranged, and what the input mode says of them.
+// The phone's on-screen controls: the editor where they are arranged (the settings menu shows its words and answers
+// while touch_arranging() is true: from arrange_touch_controls until it is saved, cancelled or the phone's Back cancels
+// it), and what the input mode says of them.
 void arrange_touch_controls() noexcept;
+[[nodiscard]] bool touch_arranging() noexcept;
+void finish_arranging_touch_controls(bool save) noexcept;
+void reset_arranged_touch_controls() noexcept;
 void input_mode_changed() noexcept;
 // The on-screen controls' settings for the screen as it is now (each size and turn of a screen has its own size). size: in
 // percent, 0: what the game gives this screen.
