@@ -28,6 +28,11 @@ struct DriverCache {
     bool changed = false;
 };
 DriverCache gCache;
+// The library synchronizes itself except when two threads load the same pipeline, which can change that pipeline's state
+// in it unsafely (CreatePipelineLibrary, Thread Safety). A draw can ask for a pipeline while a worker loads its prepared
+// job, and two ids with one description share a name, so a name's load and store hold its hash's stripe; other names
+// load side by side, and a miss compiles outside the stripe (a duplicate store of one name fails harmlessly).
+std::array<std::mutex, 256> gNameLocks;
 
 ID3D12PipelineLibrary* driver_cache(gpu::Device* device) {
     std::lock_guard guard(gCache.lock);
@@ -54,7 +59,8 @@ ID3D12PipelineLibrary* driver_cache(gpu::Device* device) {
     return gCache.library.Get();
 }
 
-// The library is thread-safe, so the workers and draws keep storing while a copy goes out; one writer at a time.
+// Serializing needs no name lock (only loads of one name do), so the workers and draws keep going while a copy goes out;
+// one writer at a time.
 std::size_t write_driver_cache() noexcept {
     static std::mutex writing;
     std::lock_guard one(writing);
@@ -89,8 +95,8 @@ void release_driver_cache() noexcept {
     gCache.changed = false;
 }
 
-// A pipeline's name in the library: every field of its description, and the programs' bytes by their hash.
-std::array<wchar_t, 40> cache_name(const NebulaPipelineDesc& desc, unsigned program, unsigned variant, unsigned aux) noexcept {
+// A pipeline's key in the library: every field of its description, and the programs' bytes by their hash.
+std::uint64_t cache_hash(const NebulaPipelineDesc& desc, unsigned program, unsigned variant, unsigned aux) noexcept {
     std::uint64_t hash = 14695981039346656037ull;
     const auto* bytes = reinterpret_cast<const unsigned char*>(&desc);
     for (std::size_t i = 0; i < sizeof(desc); ++i) {
@@ -99,6 +105,10 @@ std::array<wchar_t, 40> cache_name(const NebulaPipelineDesc& desc, unsigned prog
     for (const unsigned value : {program, variant, aux}) {
         hash = (hash ^ value) * 1099511628211ull;
     }
+    return hash;
+}
+
+std::array<wchar_t, 40> cache_name(std::uint64_t hash) noexcept {
     std::array<wchar_t, 40> name{};
     std::swprintf(name.data(), name.size(), L"%016llx", static_cast<unsigned long long>(hash));
     return name;
@@ -347,14 +357,25 @@ gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, un
 
     gpu::PipelineRef pipeline;
     ID3D12PipelineLibrary* cache = driver_cache(device_);
-    const std::array<wchar_t, 40> name = cache_name(desc, program, variant, aux);
-    HRESULT hr = cache != nullptr ? cache->LoadGraphicsPipeline(name.data(), &pd, IID_PPV_ARGS(&pipeline)) : E_FAIL;
-    if (FAILED(hr)) {
-        hr = device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&pipeline));
-        if (SUCCEEDED(hr) && cache != nullptr) {
-            std::lock_guard guard(gCache.lock);
-            gCache.changed = SUCCEEDED(cache->StorePipeline(name.data(), pipeline.Get())) || gCache.changed;
+    HRESULT hr = E_FAIL;
+    if (cache != nullptr) {
+        const std::uint64_t hash = cache_hash(desc, program, variant, aux);
+        const std::array<wchar_t, 40> name = cache_name(hash);
+        std::mutex& named = gNameLocks[hash % gNameLocks.size()];
+        {
+            const std::lock_guard held(named);
+            hr = cache->LoadGraphicsPipeline(name.data(), &pd, IID_PPV_ARGS(&pipeline));
         }
+        if (FAILED(hr)) {
+            hr = device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&pipeline));
+            if (SUCCEEDED(hr)) {
+                const std::lock_guard held(named);
+                const std::lock_guard guard(gCache.lock);
+                gCache.changed = SUCCEEDED(cache->StorePipeline(name.data(), pipeline.Get())) || gCache.changed;
+            }
+        }
+    } else {
+        hr = device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&pipeline));
     }
     if (FAILED(hr)) {
         std::fprintf(stderr, "[pipelines] create failed %08lx: %llx %llx state %08x variant %u aux %u\n", static_cast<unsigned long>(hr),
