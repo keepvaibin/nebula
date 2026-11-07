@@ -52,8 +52,11 @@ struct StickVector {
 // Stick and key pointers stay inside the picture so they always come back.
 inline constexpr float kStickPointerLimit = 1.0f;
 // The gyro pointer may leave the picture by this much (the game hides it, as
-// a Wii Remote pointed past the screen) and returns as soon as it turns back.
-inline constexpr float kGyroPointerLimit = 1.35f;
+// a Wii Remote pointed past the screen) and returns where the controller
+// points when it turns back: a picture's width or height past each edge
+// (40 by 22.5 degrees at 16:9), so a turn past the top or bottom never leaves
+// the pointer offset from the hand.
+inline constexpr float kGyroPointerLimit = 3.0f;
 inline constexpr float kPointerVisibleLimit = 1.02f;
 
 // As in the game's Switch release, the gyro pointer hides when it is not being used and
