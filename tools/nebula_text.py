@@ -107,16 +107,17 @@ def generate():
 
 
 def c_narrow(text):
-    """UTF-8 as a C string, in octal escapes; a digit after one starts a new literal, as compilers warn of it."""
+    """The text as a C string in plain UTF-8 (the host compiles with /utf-8): quotes, backslashes and controls escaped."""
     out = []
-    escaped = False
-    for byte in text.encode('utf-8'):
-        if byte < 0x80 and chr(byte) not in '"\\?' and byte >= 0x20:
-            out.append(('""' if escaped and chr(byte).isdigit() else '') + chr(byte))
-            escaped = False
+    for ch in text:
+        if ch in '"\\':
+            out.append('\\' + ch)
+        elif ch == '\n':
+            out.append('\\n')
+        elif ord(ch) < 0x20 or ord(ch) == 0x7F:
+            out.append('\\%03o' % ord(ch))
         else:
-            out.append('\\%03o' % byte)
-            escaped = True
+            out.append(ch)
     return '"' + ''.join(out) + '"'
 
 

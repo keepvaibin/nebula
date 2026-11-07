@@ -71,7 +71,7 @@ fn modern_files(change: &Change, bytes: &[u8]) -> Result<Vec<(String, Vec<u8>, b
         return Ok(out);
     }
     if lower.ends_with(".bcsv.json") {
-        return Ok(vec![(change.path[..change.path.len() - ".json".len()].to_string(), super::merge::table_from_json(bytes)?, false)]);
+        return Ok(vec![(change.path[..change.path.len() - ".json".len()].to_string(), super::table::TableIr::from_json(bytes)?.to_ntbl(), true)]);
     }
     if lower.ends_with(".png") {
         // The game's interface keeps its pictures in another form, in a folder of that name.
@@ -207,10 +207,10 @@ fn apply_merges(changes: &[Change], base: Option<&Path>, pak: &mut File, tempora
                     Some(current) => current,
                     None => merge_start(&path, base, temporary, pak, placed)?,
                 };
-                let mut rows = super::merge::read_rows(&bytes)?;
+                let mut rows = super::table::read_rows(&bytes)?;
                 if table_key.ends_with("particlenames.bcsv") {
                     let folder = change.source.parent().map(Path::to_path_buf).unwrap_or_default();
-                    let first = super::merge::row_count(&current)?;
+                    let first = super::table::row_count(&current)?;
                     first_particle.insert(folder, u16::try_from(first).context("too many particles")?);
                     for (i, row) in rows.iter_mut().enumerate() {
                         if let Some(fields) = row.as_object_mut() {
@@ -218,8 +218,7 @@ fn apply_merges(changes: &[Change], base: Option<&Path>, pak: &mut File, tempora
                         }
                     }
                 }
-                let current = super::merge::edit_rows(&current, &bytes)?;
-                merged.insert(table_key, super::merge::add_rows(&current, &rows)?);
+                merged.insert(table_key, super::table::merge(&current, &bytes, &rows)?);
             } else if lower(&change.path).ends_with(".jpc") {
                 let folder = change.source.parent().map(Path::to_path_buf).unwrap_or_default();
                 let first = *first_particle.get(&folder).context("new particles need their names: ParticleNames.bcsv.json beside them")?;

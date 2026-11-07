@@ -46,6 +46,8 @@ namespace GameEventFlagTable {
     int getIndex(const GameEventFlag*);
     bool isDependedAnother(const char*, const char*);
     int getIndexFromHashCode(u16);
+    // The 15-bit hash a save keeps for a flag of this name: of its Shift-JIS bytes, as saves have always held it.
+    u16 getSaveHash(const char* pName);
     s32 calcSpecialPowerStarNum(const char*);
     s32 getStarPieceNumToOpenExclamationGalaxy(const char*);
     s32 calcGreenPowerStarNum();

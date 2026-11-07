@@ -1,4 +1,4 @@
-/* Says each cutscene's name as it starts and ends. The game's own names are in Shift-JIS; a mod's are what it placed. */
+/* Says each cutscene's name (UTF-8) as it starts and ends. */
 #include <nebula_mod_api.h>
 
 static const NebulaModApi* game;

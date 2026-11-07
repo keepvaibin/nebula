@@ -8,35 +8,9 @@
 #include "Game/System/NebulaText.hpp"
 #include <cstring>
 #include "Game/System/AssetFolder.hpp"
-#include "Game/Util/ByteView.hpp"
 
 #define SYSTEMMESSAGE_ARC "/Memory/SystemMessage.arc"
 #define MESSAGE_ARC "/MessageData/Message.arc"
-
-namespace {
-    u8* getBlock(u32 magic, u8* pData) {
-        u32 numBlocks = readBytes< u32 >(pData + 0xc);
-        pData += 0x20;
-
-        for (u32 i = 0; i < numBlocks; i++) {
-            u32 blockMagic = readBytes< u32 >(pData);
-
-            if (blockMagic == magic) {
-                return pData;
-            }
-
-            u32 blockSize = readBytes< u32 >(pData + 4);
-            pData += blockSize;
-        }
-
-        return nullptr;
-    }
-
-    // The importer's mark (crates/nebula-import cook/native_data.rs BMG_HOST_ORDER): the whole file is in host
-    // order, in the header's last padding byte.
-    const u32 cHostOrderMarkOffset = 0x1F;
-    const u8 cHostOrderMark = 2;
-};  // namespace
 
 bool MessageData::getMessageDirect(TalkMessageInfo* pMessageInfo, const char* pMessage) const {
     if (const char16_t* pWords = NebulaMods::text(pMessage)) {
@@ -50,7 +24,7 @@ bool MessageData::getMessageDirect(TalkMessageInfo* pMessageInfo, const char* pM
     if (strncmp(pMessage, cNebula, sizeof(cNebula) - 1) == 0) {
         const char16_t* pText = NebulaText::getTalk(pMessage + sizeof(cNebula) - 1);
         const s32 templateIndex = findMessageIndex("AstroGalaxy_Tico034");
-        if (pText == nullptr || templateIndex < 0 || templateIndex >= mInfoBlock->mItemCount) {
+        if (pText == nullptr || templateIndex < 0 || static_cast< u32 >(templateIndex) >= getMessageNum()) {
             return false;
         }
         getMessage(pMessageInfo, 0, templateIndex);
@@ -59,7 +33,7 @@ bool MessageData::getMessageDirect(TalkMessageInfo* pMessageInfo, const char* pM
     }
     s32 messageIndex = findMessageIndex(pMessage);
 
-    if (messageIndex >= 0 && messageIndex < mInfoBlock->mItemCount) {
+    if (messageIndex >= 0 && static_cast< u32 >(messageIndex) < getMessageNum()) {
         getMessage(pMessageInfo, 0, messageIndex);
 
         return true;
@@ -68,16 +42,16 @@ bool MessageData::getMessageDirect(TalkMessageInfo* pMessageInfo, const char* pM
     return false;
 }
 
-bool MessageData::getMessage(TalkMessageInfo* pMessageInfo, u16, u16 infoToolIndex) const {
-    u8* pInfoTool = getMessageInfoTool(infoToolIndex);
-    pMessageInfo->_0 = reinterpret_cast< u8* >(mDataBlock + 1) + readBytes< u32 >(pInfoTool);
-    pMessageInfo->mCameraSetID = readBytes< u16 >(pInfoTool + 4);
-    pMessageInfo->_6 = *(pInfoTool + 6);
-    pMessageInfo->mCameraType = *(pInfoTool + 7);
-    pMessageInfo->mTalkType = *(pInfoTool + 8);
-    pMessageInfo->_A = *(pInfoTool + 0xa);
-    pMessageInfo->_B = *(pInfoTool + 0xb);
-    pMessageInfo->mBalloonType = *(pInfoTool + 9);
+bool MessageData::getMessage(TalkMessageInfo* pMessageInfo, u32, u32 index) const {
+    const MessageRecord& rRecord = mMessages[index];
+    pMessageInfo->_0 = reinterpret_cast< u8* >(const_cast< char16_t* >(mText + rRecord.mText));
+    pMessageInfo->mCameraSetID = rRecord.mCameraSetID;
+    pMessageInfo->_6 = rRecord._6;
+    pMessageInfo->mCameraType = rRecord.mCameraType;
+    pMessageInfo->mTalkType = rRecord.mTalkType;
+    pMessageInfo->_A = rRecord._A;
+    pMessageInfo->_B = rRecord._B;
+    pMessageInfo->mBalloonType = rRecord.mBalloonType;
 
     return true;
 }
@@ -85,10 +59,10 @@ bool MessageData::getMessage(TalkMessageInfo* pMessageInfo, u16, u16 infoToolInd
 TalkNode* MessageData::findNode(const char* pMessage) const {
     s32 messageIndex = findMessageIndex(pMessage);
 
-    for (int i = 0; i < mFlowBlock->mNodeCount; i++) {
-        TalkNode* pNode = reinterpret_cast< TalkNode* >(mFlowBlock + 1) + i;
+    for (u32 i = 0; i < mFile->mNodeNum; i++) {
+        TalkNode* pNode = &mNodes[i];
 
-        if (pNode->mNodeType == 1 && pNode->mIndex == messageIndex) {
+        if (pNode->mNodeType == 1 && static_cast< s32 >(pNode->mIndex) == messageIndex) {
             return pNode;
         }
     }
@@ -97,19 +71,15 @@ TalkNode* MessageData::findNode(const char* pMessage) const {
 }
 
 TalkNode* MessageData::getNode(u32 index) const {
-    return reinterpret_cast< TalkNode* >(mFlowBlock + 1) + index;
+    return &mNodes[index];
 }
 
 TalkNode* MessageData::getBranchNode(u32 index) const {
-    return reinterpret_cast< TalkNode* >(mFlowBlock + 1) + _14[index];
+    return &mNodes[mBranches[index]];
 }
 
 bool MessageData::isValidBranchNode(u32 index) const {
-    return _14[index] != 0xffff;
-}
-
-u8* MessageData::getMessageInfoTool(int index) const {
-    return reinterpret_cast< u8* >(mInfoBlock + 1) + mInfoBlock->mItemSize * index;
+    return mBranches[index] != cNoNode;
 }
 
 MessageHolder::MessageHolder() : mSystemMessageData(nullptr), mGameMessageData(nullptr), mSceneMessageData(nullptr) {
@@ -140,7 +110,7 @@ MessageData* MessageSystem::getSceneMessageData() {
 }
 
 MessageData::MessageData(const char* pArchiveName)
-    : mIDTable(nullptr), mInfoBlock(nullptr), mDataBlock(nullptr), _C(0), mFlowBlock(nullptr), _14(nullptr), _18(nullptr), mFLI1Block(nullptr) {
+    : mIDTable(nullptr), mFile(nullptr), mMessages(nullptr), mText(nullptr), mNodes(nullptr), mBranches(nullptr) {
     AssetFolder* pArchive = nullptr;
     NebulaArena* pHeap = nullptr;
     MR::getMountedArchiveAndHeap(pArchiveName, &pArchive, &pHeap);
@@ -151,20 +121,14 @@ MessageData::MessageData(const char* pArchiveName)
     mIDTable = new Table();
     mIDTable->attach(mapData);
 
-    if (msgData[cHostOrderMarkOffset] != cHostOrderMark) {
-        NEBULA_PANIC("%s: Message.bmg is not in host order (the importer cooks it)",
-                              pArchiveName);
+    mFile = reinterpret_cast< const MessageFileHeader* >(msgData);
+    if (mFile->mMagic[0] != 'N' || mFile->mMagic[1] != 'M' || mFile->mMagic[2] != 'S' || mFile->mMagic[3] != 'G') {
+        NEBULA_PANIC("%s: Message.bmg the importer did not cook", pArchiveName);
     }
-    mInfoBlock = (MessageInfoBlock*)::getBlock('INF1', msgData);
-    mDataBlock = (MessageDataBlock*)::getBlock('DAT1', msgData);
-    mFlowBlock = (MessageFlowBlock*)::getBlock('FLW1', msgData);
-
-    if (mFlowBlock != nullptr) {
-        _14 = reinterpret_cast< u16* >(reinterpret_cast< TalkNode* >(mFlowBlock + 1) + mFlowBlock->mNodeCount);
-        _18 = reinterpret_cast< u8* >(_14 + mFlowBlock->_A);
-    }
-
-    mFLI1Block = (MessageFLI1Block*)::getBlock('FLI1', msgData);
+    mMessages = reinterpret_cast< const MessageRecord* >(msgData + mFile->mMessageOffset);
+    mText = reinterpret_cast< const char16_t* >(msgData + mFile->mTextOffset);
+    mNodes = reinterpret_cast< TalkNode* >(msgData + mFile->mNodeOffset);
+    mBranches = reinterpret_cast< const u32* >(msgData + mFile->mBranchOffset);
 }
 
 inline TableIter end(const Table* pInfo) {

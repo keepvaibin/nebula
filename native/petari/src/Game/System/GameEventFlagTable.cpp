@@ -525,6 +525,43 @@ namespace GameEventFlagTable {
         return false;
     }
 
+    u16 getSaveHash(const char* pName) {
+        // The flags named in Japanese; their names are UTF-8 now, their saves' hashes stay of the Shift-JIS bytes
+        // (agents/native-q/flag_save_hashes.py made these).
+        struct SavedName {
+            const char* mName;
+            u16 mHash;
+        };
+        static constexpr SavedName cJapanese[] = {
+            {"ハチマリオ初変身", 0x7ABA},
+            {"テレサマリオ初変身", 0x0C8E},
+            {"ホッパーマリオ初変身", 0x184F},
+            {"ファイアマリオ初変身", 0x0E5E},
+            {"アイスマリオ初変身", 0x62E5},
+            {"フライングマリオ初変身", 0x5965},
+            {"無敵マリオ初変身", 0x4C23},
+            {"ライフアップキノコ解説", 0x1880},
+            {"１ＵＰキノコ解説", 0x3D66},
+            {"サーフィンチュートリアル", 0x2CD5},
+            {"タマコロチュートリアル", 0x4E78},
+            {"[同期]ピーチ城浮上後", 0x628F},
+            {"[同期]バトラー情報Ａ", 0x6DFF},
+            {"[同期]スターピースレクチャー", 0x118A},
+            {"[同期]クッパスタープラント発見", 0x6EBA},
+        };
+        for (const char* p = pName; *p != '\0'; p++) {
+            if (static_cast< u8 >(*p) >= 0x80) {
+                for (const SavedName& rName : cJapanese) {
+                    if (strcmp(rName.mName, pName) == 0) {
+                        return rName.mHash;
+                    }
+                }
+                break;
+            }
+        }
+        return MR::getHashCode(pName) & 0x7FFF;
+    }
+
     int getIndexFromHashCode(u16 hashCode) {
         for (GameEventFlagIter iter = getBeginIter(); !iter.isEnd(); iter.goNext()) {
             if ((iter.getFlag()->mSaveFlag & 0x1) != 0) {
@@ -533,7 +570,7 @@ namespace GameEventFlagTable {
 
             GameEventFlagAccessor accessor = GameEventFlagAccessor(iter.getFlag());
 
-            if ((MR::getHashCode(accessor.getName()) & 0x7FFF) != hashCode) {
+            if (getSaveHash(accessor.getName()) != hashCode) {
                 continue;
             }
 

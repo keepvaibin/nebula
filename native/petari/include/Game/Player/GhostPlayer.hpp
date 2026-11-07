@@ -5,13 +5,36 @@
 class ActorCameraInfo;
 class CameraTargetMtx;
 class FixedPosition;
-class GhostPacket;
 class HitSensor;
 class TableIter;
 class JetTurtleShadow;
 class NameObjArchiveListCollector;
 class RaceManagerLayout;
 class XanimePlayer;
+
+// A ghost recording as the importer cooks it (crates/nebula-import cook/ghost.rs, NGST): a record a frame, then the
+// animation names (UTF-8).
+struct GhostFileHeader {
+    char mMagic[4];  // "NGST"
+    u32 mFrameNum;
+    u32 mNameOffset;
+    u32 mNameSize;
+};
+
+// The fields a frame's flags leave out are 0.
+struct GhostFrame {
+    u16 mFlags;  // 0x1 position, 0x800 velocity, 0x400 scale, 0x2/0x4/0x8 rotation x/y/z, 0x10 animation by name,
+                 // 0x2000 by hash, 0x20 animation frame, 0x40 << i track weight i, 0x1000 rate
+    s16 mAnimFrame;
+    s16 mPosition[3];
+    s8 mVelocity[3];
+    s8 mScale[3];
+    s8 mRotation[3];
+    s8 mTrackWeights[4];
+    s8 mRate;
+    u32 mName;  // offset in the names
+    u32 mHash;  // MR::getHashCode of the animation's name
+};
 
 f32 getShiftRatio(s8 shiftValue);
 
@@ -48,7 +71,8 @@ public:
     void initAnimation();
     void setAnimation(const char*);
     void setAnimationWeight(const f32*);
-    u32 receiveGhostPacket(GhostPacket*);
+    // The frame applied and the next made current, or 0 at the last frame (where the recording stops).
+    u32 receiveGhostFrame();
 
     u32 _8C;
     u32 _90;
@@ -72,7 +96,9 @@ public:
     FixedPosition* mHandRPos;
     u16 mAppearStarPieceCooldown;
     u16 mPlayerTrampleCooldown;
-    GhostPacket* mCurrentPacket;
+    const GhostFrame* mFrame;
+    const GhostFrame* mFrameEnd;
+    const char* mGhostNames;
     RaceManagerLayout* mRaceManagerLayout;
     CameraTargetMtx* mCameraTargetMtx;
 };

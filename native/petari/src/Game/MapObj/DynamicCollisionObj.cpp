@@ -4,8 +4,6 @@
 #include "Game/Map/KCollision.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
-#include <new>
-#include "Game/Util/ByteView.hpp"
 
 DynamicCollisionObj::DynamicCollisionObj(const char* pName) : LiveActor(pName) {
     _A4 = 0;
@@ -80,7 +78,7 @@ void DynamicCollisionObj::updateTriangle() {
 
         prism->mHeight = SaveForLater.length();
         prism->mPositionIndex = i;
-        u16 nrmidx = normalidx;
+        u32 nrmidx = normalidx;
         prism->mNormalIndex = nrmidx;
         nrmidx += 4;
         prism->mEdgeIndices[0] = nrmidxa;
@@ -156,17 +154,17 @@ void DynamicCollisionObj::createCollision() {
     mKCLFile->mPos = new Vec3f[v];
     mKCLFile->mNorms = new Vec3f[v * 4];
     mKCLFile->mPrisms = new KC_PrismData[(v + 1) * 1];
-    u16* u16array = new (4) u16[v + 3];
-    mKCLFile->mOctree = u16array;
-
-    // One leaf octree entry (the top bit): the list two bytes on. KCollisionServer reads entries in host order, so the s32
-    // is written.
-    writeBytes< s32 >(u16array, static_cast< s32 >((1u << 31) | 2u));
-
+    // One leaf (list 0) holding every prism, from the last.
+    u32* octree = new u32[1];
+    octree[0] = 1u << 31;
+    mKCLFile->mOctree = octree;
+    u32* list = new u32[v + 2];
+    list[0] = 0;  // not read
     s32 count = v;
     for (s32 i = 0; i <= v; i++) {
-        u16array[i + 2] = count--;
+        list[i + 1] = count--;
     }
+    mKCLFile->mLists = list;
 
     mKCLFile->mTriangleNum = v;
     mKCLFile->mThickness = 40.f;

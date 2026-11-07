@@ -9,7 +9,9 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Map/RaceManager.hpp"
 #include "Game/NameObj/NameObjArchiveListCollector.hpp"
-#include "Game/Player/GhostPacket.hpp"
+#include <nebula_geometry.hpp>
+
+static_assert(sizeof(GhostFrame) == 32, "GhostFrame is cook/ghost.rs's 32-byte frame");
 #include "Game/Player/PlayerModel.hpp"
 #include "Game/Player/JetTurtleShadow.hpp"
 #include "Game/Scene/SceneFunction.hpp"
@@ -138,7 +140,9 @@ void GhostPlayer::init(const TableIter& rIter) {
     mRaceManagerLayout = new RaceManagerLayout("レース管理用レイアウト");
     mRaceManagerLayout->init(rIter);
 
-    mCurrentPacket = nullptr;
+    mFrame = nullptr;
+    mFrameEnd = nullptr;
+    mGhostNames = nullptr;
     if (MR::isPlayerLuigi()) {
         const char* currentStageName = MR::getCurrentStageName();
         nebula_sprintf(gstPath, "%sLuigi.gst", currentStageName);
@@ -148,16 +152,24 @@ void GhostPlayer::init(const TableIter& rIter) {
     }
     nebula_snprintf(arcPath, sizeof(arcPath), "GhostData%s.arc", MR::getCurrentStageName());
 
-    mCurrentPacket = static_cast< GhostPacket* >(MR::loadResourceFromArc(arcPath, gstPath));
+    const u8* pFile = static_cast< const u8* >(MR::loadResourceFromArc(arcPath, gstPath));
 
     if (MR::isFileExist(gstPath, false)) {
-        mCurrentPacket = static_cast< GhostPacket* >(MR::loadFile(gstPath, nullptr, nullptr));
+        pFile = static_cast< const u8* >(MR::loadFile(gstPath, nullptr, nullptr));
     }
 
-    if (mCurrentPacket == nullptr) {
+    if (pFile == nullptr) {
         makeActorDead();
         return;
     }
+
+    const GhostFileHeader* pHeader = reinterpret_cast< const GhostFileHeader* >(pFile);
+    if (pHeader->mMagic[0] != 'N' || pHeader->mMagic[1] != 'G' || pHeader->mMagic[2] != 'S' || pHeader->mMagic[3] != 'T') {
+        NEBULA_PANIC("GhostPlayer: %s: a recording the importer did not cook", gstPath);
+    }
+    mFrame = reinterpret_cast< const GhostFrame* >(pHeader + 1);
+    mFrameEnd = mFrame + pHeader->mFrameNum;
+    mGhostNames = reinterpret_cast< const char* >(pFile + pHeader->mNameOffset);
 
     if (MR::isPlayerLuigi()) {
         initModelManagerWithAnm("GhostLuigi", nullptr, false);
@@ -241,11 +253,10 @@ void GhostPlayer::control() {
     if (strcmp("powerstarget", MR::getPlayerCurrentBckName()) == 0 && isNerve(GET_NERVE(GhostPlayer, HostTypeNrvRun))) {
         setNerve(GET_NERVE(GhostPlayer, HostTypeNrvLostDemo));
         mKilledByStar = true;
-    } else if (mCurrentPacket != nullptr) {
+    } else if (mFrame != nullptr) {
         u32 packetDelayTimer = 0;
         while (true) {
-            GhostPacket packet(mCurrentPacket, 0);
-            mCurrentPacket = reinterpret_cast< GhostPacket* >(reinterpret_cast< char* >(mCurrentPacket) + receiveGhostPacket(&packet));
+            mFrame += receiveGhostFrame();
             if (_112) {
                 if (mXanimePlayer->mWeights[3] > 0.9f) {
                     continue;
@@ -601,51 +612,45 @@ void GhostPlayer::draw() const {
     }
 }
 
-u32 GhostPlayer::receiveGhostPacket(GhostPacket* pPacket) {
-    u8 frameIndex;
-    u8 bytesRead;
-    u16 updateFlags;
-
-    pPacket->read((s8*)&frameIndex);
-    pPacket->read((s8*)&bytesRead);
-    pPacket->read((s16*)&updateFlags);
-
-    GhostPacket nextPacket = GhostPacket(pPacket->mDataPtr + bytesRead, 1);
-    u8 nextFrameIndex;
-    nextPacket.read((s8*)&nextFrameIndex);
-
-    if (++frameIndex != nextFrameIndex) {
+u32 GhostPlayer::receiveGhostFrame() {
+    if (mFrame + 1 >= mFrameEnd) {
         if (mIsDemoCameraActive && MR::isBckOneTimeAndStopped(this)) {
             MR::endActorCamera(this, mCameraInfo, false);
             mIsDemoCameraActive = false;
         }
-        return false;
+        return 0;
     }
 
-    pPacket->mCurOffs = 4;
+    const GhostFrame& rFrame = *mFrame;
+    const u16 updateFlags = rFrame.mFlags;
 
     if ((updateFlags & 0x0001) != 0) {
         Vec3s rawPos;
-        pPacket->read(&rawPos);
+        rawPos.x = rFrame.mPosition[0];
+        rawPos.y = rFrame.mPosition[1];
+        rawPos.z = rFrame.mPosition[2];
         MR::convToFloat(rawPos, -2, &mPosition);
     }
 
     if ((updateFlags & 0x0800) != 0) {
         Vec3Sc rawVel;
-        pPacket->read(&rawVel);
+        rawVel.x = rFrame.mVelocity[0];
+        rawVel.y = rFrame.mVelocity[1];
+        rawVel.z = rFrame.mVelocity[2];
         MR::convToFloat(rawVel, 0, &mVelocity);
     }
 
     if ((updateFlags & 0x0400) != 0) {
         Vec3Sc rawScale;
-        pPacket->read(&rawScale);
+        rawScale.x = rFrame.mScale[0];
+        rawScale.y = rFrame.mScale[1];
+        rawScale.z = rFrame.mScale[2];
         MR::convToFloat(rawScale, 3, &mScale);
     }
 
     if ((updateFlags & 0x0002) != 0) {
-        s8 rawRotX;
+        s8 rawRotX = rFrame.mRotation[0];
         f32 rotX;
-        pPacket->read(&rawRotX);
         MR::convToFloat(rawRotX, 7, &rotX);
         rotX *= 180.0f;
         rotX = MR::clamp(rotX, -180.0f, 180.0f);
@@ -653,9 +658,8 @@ u32 GhostPlayer::receiveGhostPacket(GhostPacket* pPacket) {
     }
 
     if ((updateFlags & 0x0004) != 0) {
-        s8 rawRotY;
+        s8 rawRotY = rFrame.mRotation[1];
         f32 rotY;
-        pPacket->read(&rawRotY);
         MR::convToFloat(rawRotY, 7, &rotY);
         rotY *= 180.0f;
         rotY = MR::clamp(rotY, -180.0f, 180.0f);
@@ -663,9 +667,8 @@ u32 GhostPlayer::receiveGhostPacket(GhostPacket* pPacket) {
     }
 
     if ((updateFlags & 0x0008) != 0) {
-        s8 rawRotZ;
+        s8 rawRotZ = rFrame.mRotation[2];
         f32 rotZ;
-        pPacket->read(&rawRotZ);
         MR::convToFloat(rawRotZ, 7, &rotZ);
         rotZ *= 180.0f;
         rotZ = MR::clamp(rotZ, -180.0f, 180.0f);
@@ -677,8 +680,7 @@ u32 GhostPlayer::receiveGhostPacket(GhostPacket* pPacket) {
     }
 
     if ((updateFlags & 0x0010) != 0) {
-        char* animName;
-        pPacket->read(&animName);
+        const char* animName = mGhostNames + rFrame.mName;
         setAnimation(animName);
         ::playSound(this, animName);
 
@@ -700,9 +702,7 @@ u32 GhostPlayer::receiveGhostPacket(GhostPacket* pPacket) {
     }
 
     if ((updateFlags & 0x2000) != 0) {
-        u32 animHash;
-        pPacket->read(&animHash);
-        mXanimePlayer->changeAnimationByHash(animHash);
+        mXanimePlayer->changeAnimationByHash(rFrame.mHash);
 
         bool isSpecialAnim = false;
         const char* currentAnimName = mXanimePlayer->getCurrentAnimationName();
@@ -752,9 +752,8 @@ u32 GhostPlayer::receiveGhostPacket(GhostPacket* pPacket) {
     }
 
     if ((updateFlags & 0x0020) != 0) {
-        s16 rawAnimFrame;
+        s16 rawAnimFrame = rFrame.mAnimFrame;
         f32 animFrame;
-        pPacket->read(&rawAnimFrame);
         MR::convToFloat(rawAnimFrame, 5, &animFrame);
         MR::getBckCtrl(this)->setFrame(animFrame);
     }
@@ -764,9 +763,8 @@ u32 GhostPlayer::receiveGhostPacket(GhostPacket* pPacket) {
             continue;
         }
 
-        s8 rawTrackWeight;
+        s8 rawTrackWeight = rFrame.mTrackWeights[i];
         f32 trackWeight;
-        pPacket->read(&rawTrackWeight);
         if ((u8)rawTrackWeight == 128) {
             rawTrackWeight = 127;
         }
@@ -776,14 +774,13 @@ u32 GhostPlayer::receiveGhostPacket(GhostPacket* pPacket) {
     }
 
     if ((updateFlags & 0x1000) != 0) {
-        s8 rawAnimRate;
+        s8 rawAnimRate = rFrame.mRate;
         f32 animRate;
-        pPacket->read(&rawAnimRate);
         MR::convToFloat(rawAnimRate, 3, &animRate);
         MR::setBckRate(this, animRate);
     }
 
-    return bytesRead;
+    return 1;
 }
 
 f32 getShiftRatio(s8 shiftValue) {

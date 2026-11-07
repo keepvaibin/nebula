@@ -38,6 +38,8 @@ if(MSVC)
     foreach(lang C CXX)
         string(REGEX REPLACE "(^| )/Ob[0-9]" "\\1/Ob3" CMAKE_${lang}_FLAGS_RELEASE "${CMAKE_${lang}_FLAGS_RELEASE}")
     endforeach()
+    # Sources and narrow literals are UTF-8 whatever the build machine's code page.
+    add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:/utf-8>)
     # AUTO builds for AVX2 when the build machine and its OS run it (Setup refuses CPUs without it), else SSE2.
     set(GALAXY_NATIVE_ISA "AUTO" CACHE STRING "Native CPU target: AUTO, SSE2, or AVX2")
     set_property(CACHE GALAXY_NATIVE_ISA PROPERTY STRINGS AUTO SSE2 AVX2)

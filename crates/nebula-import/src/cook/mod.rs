@@ -12,6 +12,8 @@ pub mod modern_audio;
 pub mod formats;
 pub mod material;
 pub mod kcl;
+pub mod camera;
+pub mod message;
 pub mod merge;
 pub mod clip;
 #[cfg(feature = "proof-tools")]
@@ -31,6 +33,7 @@ pub mod particles;
 pub mod ui_layout;
 pub mod sound;
 pub mod store;
+pub mod table;
 pub mod texture;
 pub mod thp;
 
@@ -48,6 +51,8 @@ pub struct Stats {
     pub expanded_files: u64,
     pub bytes_in: u64,
     pub bytes_out: u64,
+    /// Disc files and archive members the store leaves out: only a console or the game's tools read them.
+    pub left_out: u64,
 }
 
 impl Stats {
@@ -57,14 +62,41 @@ impl Stats {
 
     pub fn summary(&self) -> String {
         let images: Vec<String> = self.images.iter().map(|(k, v)| format!("{k} {v}")).collect();
-        format!(
-            "{} files cooked, {} expanded, {} -> {} bytes; images: {}",
+        #[allow(unused_mut)]
+        let mut summary = format!(
+            "{} files cooked, {} expanded, {} left out, {} -> {} bytes; images: {}",
             self.cooked_files,
             self.expanded_files,
+            self.left_out,
             self.bytes_in,
             self.bytes_out,
             images.join(", ")
-        )
+        );
+        #[cfg(feature = "proof-tools")]
+        summary.push_str(&format!(
+            "; tables proved: {}, reads agreeing: {}",
+            table::proof::TABLES.load(std::sync::atomic::Ordering::Relaxed),
+            table::proof::READS.load(std::sync::atomic::Ordering::Relaxed)
+        ));
+        #[cfg(feature = "proof-tools")]
+        summary.push_str(&format!(
+            "; collision models proved: {}, octree leaves agreeing: {}",
+            kcl::proof::MODELS.load(std::sync::atomic::Ordering::Relaxed),
+            kcl::proof::LEAVES.load(std::sync::atomic::Ordering::Relaxed)
+        ));
+        #[cfg(feature = "proof-tools")]
+        summary.push_str(&format!(
+            "; camera clips proved: {}, reads agreeing: {}",
+            camera::proof::CLIPS.load(std::sync::atomic::Ordering::Relaxed),
+            camera::proof::READS.load(std::sync::atomic::Ordering::Relaxed)
+        ));
+        #[cfg(feature = "proof-tools")]
+        summary.push_str(&format!(
+            "; message files proved: {}, reads agreeing: {}",
+            message::proof::FILES.load(std::sync::atomic::Ordering::Relaxed),
+            message::proof::READS.load(std::sync::atomic::Ordering::Relaxed)
+        ));
+        summary
     }
 }
 
@@ -86,14 +118,21 @@ pub fn cooks(name: &str) -> bool {
     matches!(extension(name).as_str(), "arc" | "szs" | "gst" | "bti" | "bmd" | "bdl" | "bmt" | "cit" | "bas" | "brs" | "bme" | "bct" | "csw" | "bck" | "bca" | "btk" | "brk" | "bpk" | "bpa" | "btp" | "bva" | "blk" | "bla" | "bxk" | "bxa" | "tpl" | "brfnt" | "jpc" | "bcsv" | "tbl" | "pa" | "bcam" | "banmt" | "canm" | "thp" | "ast")
 }
 
-/// A disc file only a console reads: the channel banner, the HOME menu's loadable module and the module list.
+/// A disc file only a console reads: the channel banner, the HOME menu (its module, its library's files and each
+/// language's layout), the module list, and the save data's banner and icon for the console's data manager.
 fn console_only(path: &str) -> bool {
-    path == "opening.bnr" || path.starts_with("ModuleData/")
+    path == "opening.bnr"
+        || path.starts_with("ModuleData/")
+        || path.starts_with("HomeButton2/")
+        || path.ends_with("/LayoutData/HomeButton.arc")
+        || path == "ObjectData/SaveIconBanner.arc"
 }
 
 /// An archive member left behind by the tools that made the game; no code opens one.
 fn tool_leftover(file: &str) -> bool {
     matches!(extension(file).as_str(), "ini" | "prj" | "xnim" | "dvw" | "dvmat" | "dck" | "dtp" | "backup" | "csv#")
+        || file.eq_ignore_ascii_case("collisionversion")
+        || file.eq_ignore_ascii_case("debugmoveinfo")
 }
 
 /// What a source file (or a part of one) becomes in the store: bytes at a path below it, or a folder with no files.
@@ -129,6 +168,7 @@ fn cook_entry_at(name: &str, bytes: Vec<u8>, depth: usize, stats: &mut Stats) ->
     for member in archive::members(&bytes).with_context(|| format!("{name}: archive"))? {
         let file = member.path.rsplit('/').next().unwrap_or(&member.path);
         if tool_leftover(file) {
+            stats.left_out += 1;
             continue;
         }
         for item in cook_entry_at(&format!("{name}/{file}"), member.bytes, depth + 1, stats)? {
@@ -213,16 +253,15 @@ pub fn cook_file(name: &str, bytes: Vec<u8>, stats: &mut Stats) -> Result<Option
     } else if extension(name) == "bme" {
         Some(sound::me_program(&bytes).with_context(|| format!("{name}: ME program"))?)
     } else if bytes.starts_with(b"MESGbmg1") {
-        Some(native_data::bmg(&bytes).with_context(|| format!("{name}: messages"))?)
+        Some(message::cook(&bytes).with_context(|| format!("{name}: messages"))?)
     } else if matches!(extension(name).as_str(), "bcsv" | "tbl" | "pa" | "bcam" | "banmt") {
-        native_data::bcsv(&bytes, true).with_context(|| format!("{name}: table"))?
-    } else if placement_table_name(name) && native_data::bcsv(&bytes, false).ok().flatten().is_some()
-    {
-        native_data::bcsv(&bytes, false)?
+        table::cook(&bytes, true).with_context(|| format!("{name}: table"))?
+    } else if placement_table_name(name) && table::is_bcsv(&bytes) {
+        table::cook(&bytes, false).with_context(|| format!("{name}: placement table"))?
     } else if extension(name) == "gst" {
-        Some(ghost::host_order(&bytes).with_context(|| format!("{name}: ghost"))?)
+        Some(ghost::cook(&bytes).with_context(|| format!("{name}: ghost"))?)
     } else if extension(name) == "canm" {
-        Some(native_data::canm(&bytes).with_context(|| format!("{name}: camera animation"))?)
+        Some(camera::cook(&bytes).with_context(|| format!("{name}: camera animation"))?)
     } else if extension(name) == "bas" {
         Some(native_data::bas(&bytes).with_context(|| format!("{name}: sound animation"))?)
     } else if extension(name) == "cit" {
@@ -232,7 +271,7 @@ pub fn cook_file(name: &str, bytes: Vec<u8>, stats: &mut Stats) -> Result<Option
     } else if matches!(extension(name).as_str(), "bct" | "csw") {
         Some(native_data::speaker(&bytes, &extension(name)).with_context(|| format!("{name}: speaker file"))?)
     } else if extension(name) == "kcl" {
-        Some(native_data::kcl(&bytes).with_context(|| format!("{name}: collision"))?)
+        Some(kcl::cook(&bytes).with_context(|| format!("{name}: collision"))?)
     } else if bytes.starts_with(b"RFNT") {
         let textured = formats::font(&bytes, stats).with_context(|| format!("{name}: font"))?;
         Some(native_data::font_native(&textured).with_context(|| format!("{name}: font (native layout)"))?)
@@ -352,6 +391,7 @@ pub fn write_cooked_pak(
     order.sort_by_key(|f| f.offset);
     for file in order {
         if console_only(&file.path) {
+            stats.left_out += 1;
             done += file.length;
             continue;
         }

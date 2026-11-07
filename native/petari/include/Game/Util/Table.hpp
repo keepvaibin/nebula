@@ -3,35 +3,47 @@
 #include <cstring>
 #include <NebulaGpu.h>
 #include <nebula_math.h>
-#include "Game/Util/ByteView.hpp"
-
-#define JMAP_VALUE_TYPE_LONG 0
-#define JMAP_VALUE_TYPE_STRING 1
-#define JMAP_VALUE_TYPE_FLOAT 2
-#define JMAP_VALUE_TYPE_LONG_2 3
-#define JMAP_VALUE_TYPE_SHORT 4
-#define JMAP_VALUE_TYPE_BYTE 5
-#define JMAP_VALUE_TYPE_STRING_PTR 6
-#define JMAP_VALUE_TYPE_NULL 7
 
 class TableIter;
+
+// A column's kind (crates/nebula-import/src/cook/table.rs): an int reads signed at its width, a field unsigned only, a
+// float its bits, a text its word.
+enum TableKind {
+    TableKind_Int = 0,
+    TableKind_Field = 1,
+    TableKind_Float = 2,
+    TableKind_Text = 3,
+};
 
 struct TableColumn {
     u32 mHash;
     u32 mMask;
-    u16 mOffsData;
-    u8 mShift;
-    u8 mType;
+    u8 mKind;
+    u8 mWidth;
+    u16 mPad;
 };
 
-// BCSV, in host order as the importer cooks it (crates/nebula-import cook/native_data.rs): the header, the field
-// table and each entry's values (Table::getValueFast reads them).
+// NTBL as the importer cooks it: a u32 cell per row and column (masks and shifts applied), words UTF-8.
 struct TableData {
-    s32 mNumEntries;
-    s32 mNumFields;
-    s32 mDataOffset;
-    u32 mEntrySize;
-    const TableColumn mItems[];
+    char mMagic[4];
+    u32 mRows;
+    u32 mColumns;
+    u32 mRowsAt;
+    u32 mTextAt;
+    u32 mTextSize;
+    u32 mReserved[2];
+
+    const TableColumn* columns() const {
+        return reinterpret_cast< const TableColumn* >(this + 1);
+    }
+
+    const u32* cells() const {
+        return reinterpret_cast< const u32* >(reinterpret_cast< const char* >(this) + mRowsAt);
+    }
+
+    const char* text() const {
+        return reinterpret_cast< const char* >(this) + mTextAt;
+    }
 };
 
 template < typename T >
@@ -42,10 +54,6 @@ inline bool compareValues(const T a, const T b) {
 template <>
 inline bool compareValues< const char* >(const char* pA, const char* pB) {
     return strcmp(pA, pB) == 0;
-}
-
-inline const char* getEntryAddress(const TableData* pData, s32 dataOffset, int entryIndex) {
-    return reinterpret_cast< const char* >(pData) + dataOffset + entryIndex * pData->mEntrySize;
 }
 
 class Table {
@@ -62,31 +70,55 @@ public:
     }
 
     inline int getNumEntries() const {
-        return dataExists() ? (s32)mData->mNumEntries : 0;
+        return dataExists() ? static_cast< s32 >(mData->mRows) : 0;
     }
 
     inline int getNumFields() const {
-        return dataExists() ? (s32)mData->mNumFields : 0;
+        return dataExists() ? static_cast< s32 >(mData->mColumns) : 0;
     }
 
     bool attach(const void* pData);
     void setName(const char* pName);
     const char* getName() const;
     s32 searchItemInfo(const char* pKey) const;
-    s32 getValueType(const char* pKey) const;
-    bool getValueFast(int entryIndex, int itemIndex, const char** pValueOut) const;
-    bool getValueFast(int entryIndex, int itemIndex, u32* pValueOut) const;
-    bool getValueFast(int entryIndex, int itemIndex, s32* pValueOut) const;
+    // The column's TableKind; -1 for a column the table lacks.
+    s32 getColumnKind(const char* pKey) const;
+
+    const u32* cell(int entryIndex, int itemIndex) const {
+        return mData->cells() + entryIndex * mData->mColumns + itemIndex;
+    }
+
+    bool getValueFast(int entryIndex, int itemIndex, const char** pValueOut) const {
+        const u32* pCell = cell(entryIndex, itemIndex);
+        *pValueOut = mData->columns()[itemIndex].mKind == TableKind_Text ? mData->text() + *pCell
+                                                                         : reinterpret_cast< const char* >(pCell);
+        return true;
+    }
+    bool getValueFast(int entryIndex, int itemIndex, u32* pValueOut) const {
+        const u8 kind = mData->columns()[itemIndex].mKind;
+        if (kind != TableKind_Int && kind != TableKind_Field) {
+            return false;
+        }
+        *pValueOut = *cell(entryIndex, itemIndex);
+        return true;
+    }
+    bool getValueFast(int entryIndex, int itemIndex, s32* pValueOut) const {
+        const TableColumn& rColumn = mData->columns()[itemIndex];
+        if (rColumn.mKind != TableKind_Int) {
+            return false;
+        }
+        const u32 value = *cell(entryIndex, itemIndex);
+        *pValueOut = rColumn.mWidth == 8    ? static_cast< s8 >(value)
+                     : rColumn.mWidth == 16 ? static_cast< s16 >(value)
+                                            : static_cast< s32 >(value);
+        return true;
+    }
     bool getValueFast(int entryIndex, int itemIndex, f32* pValueOut) const {
-        const TableColumn* pItem = &mData->mItems[itemIndex];
-        const char* pValue = getEntryAddress(mData, mData->mDataOffset, entryIndex) + pItem->mOffsData;
-        *pValueOut = readBytes< f32 >(pValue);
+        __builtin_memcpy(pValueOut, cell(entryIndex, itemIndex), sizeof(f32));
         return true;
     }
     bool getValueFast(int entryIndex, int itemIndex, bool* pValueOut) const {
-        const TableColumn* pItem = &mData->mItems[itemIndex];
-        const char* pValue = getEntryAddress(mData, mData->mDataOffset, entryIndex) + pItem->mOffsData;
-        *pValueOut = (readBytes< u32 >(pValue) & pItem->mMask) != 0;
+        *pValueOut = *cell(entryIndex, itemIndex) != 0;
         return true;
     }
 

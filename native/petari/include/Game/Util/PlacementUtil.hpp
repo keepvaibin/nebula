@@ -105,30 +105,6 @@ namespace MR {
     }
 
     inline bool checkTableEntries(const TableIter& rIter) {
-        bool flag;
-        bool ret;
-
-        ret = false;
-        flag = false;
-
-        if (rIter.mInfo != nullptr && rIter.mIndex >= 0) {
-            flag = true;
-        }
-
-        if (flag) {
-            s32 numEntries;
-
-            if (rIter.mInfo->mData != nullptr) {
-                numEntries = rIter.mInfo->mData->mNumEntries;
-            } else {
-                numEntries = 0;
-            }
-
-            if (rIter.mIndex < numEntries) {
-                ret = true;
-            }
-        }
-
-        return ret;
+        return rIter.isValid();
     }
 };  // namespace MR

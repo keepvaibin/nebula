@@ -9,7 +9,7 @@
 // Files the cooker writes (crates/nebula-import/src/cook/dol.rs).
 namespace {
     // A file of the folder read into the stationed arena, straight from the store: the file loader may not run yet.
-    const u8* load(const char* pName, u32* pLength = nullptr) {
+    const u8* load(const char* pName) {
         char path[64];
         nebula_snprintf(path, sizeof(path), "/NebulaData/%s", pName);
         GameAssets::File file;
@@ -20,9 +20,6 @@ namespace {
         if (pData == nullptr || GameAssets::read(&file, pData, file.mLength, 0) < static_cast< s32 >(file.mLength)) {
             NEBULA_PANIC("%s cannot be read", path);
         }
-        if (pLength != nullptr) {
-            *pLength = file.mLength;
-        }
         return pData;
     }
 }  // namespace
@@ -31,76 +28,62 @@ namespace {
     NebulaDataTables::AddedGalaxy* sAddedGalaxies = nullptr;
     s32 sAddedGalaxyCount = 0;
 
-    u32 columnHash(const char* pName) {
-        u32 hash = 0;
-        for (const char* p = pName; *p != '\0'; p++) {
-            hash = hash * 31 + static_cast< u8 >(*p);
-        }
-        return hash;
+    const char* paneOf(const NebulaDataTables::AddedGalaxy& rGalaxy) {
+        return rGalaxy.mPane != nullptr ? rGalaxy.mPane : "dummy";
     }
 
-    const TableColumn* findColumn(const TableData* pTable, const char* pName) {
-        const u32 hash = columnHash(pName);
-        for (s32 i = 0; i < pTable->mNumFields; i++) {
-            if (pTable->mItems[i].mHash == hash) {
-                return &pTable->mItems[i];
-            }
-        }
-        return nullptr;
-    }
-
-    // The table with a row for each galaxy the mods add, their words after the table's own.
-    const u8* withAddedGalaxies(const u8* pBase, u32 baseLength) {
-        const TableData* pOld = reinterpret_cast< const TableData* >(pBase);
-        const u32 rowsEnd = pOld->mDataOffset + pOld->mNumEntries * pOld->mEntrySize;
-        u32 words = 1;  // the empty word
+    // The table with a row for each galaxy the mods add: their cells after the table's own, their words after its text.
+    const u8* withAddedGalaxies(const u8* pBase) {
+        Table base;
+        base.attach(pBase);
+        const TableData* pOld = base.mData;
+        u32 words = 0;
         for (s32 i = 0; i < sAddedGalaxyCount; i++) {
             const NebulaDataTables::AddedGalaxy& rGalaxy = sAddedGalaxies[i];
-            words += strlen(rGalaxy.mName) + 1;
-            words += rGalaxy.mPane != nullptr ? strlen(rGalaxy.mPane) + 1 : 0;
+            words += strlen(rGalaxy.mName) + 1 + strlen(paneOf(rGalaxy)) + 1;
             for (int c = 0; c < 3; c++) {
                 words += rGalaxy.mConditions[c] != nullptr ? strlen(rGalaxy.mConditions[c]) + 1 : 0;
             }
         }
-        const u32 added = sAddedGalaxyCount * pOld->mEntrySize;
-        u8* pNew = static_cast< u8* >(NebulaArena::alloc(baseLength + added + words, 32, MR::getPermanentHeap()));
-        memcpy(pNew, pBase, rowsEnd);
-        memset(pNew + rowsEnd, 0, added);
-        memcpy(pNew + rowsEnd + added, pBase + rowsEnd, baseLength - rowsEnd);
-        TableData* pTable = reinterpret_cast< TableData* >(pNew);
-        char* pPool = reinterpret_cast< char* >(pNew + rowsEnd + added);
-        u32 poolEnd = baseLength - rowsEnd;
-        const auto addWord = [&](const char* pWord) {
-            const u32 at = poolEnd;
+        const u32 cellsEnd = pOld->mRowsAt + pOld->mRows * pOld->mColumns * sizeof(u32);
+        const u32 added = sAddedGalaxyCount * pOld->mColumns * sizeof(u32);
+        const u32 textAt = cellsEnd + added;
+        u8* pNew = static_cast< u8* >(NebulaArena::alloc(textAt + pOld->mTextSize + words, 32, MR::getPermanentHeap()));
+        memcpy(pNew, pBase, cellsEnd);
+        memset(pNew + cellsEnd, 0, added);  // a cell of 0: "" or 0
+        memcpy(pNew + textAt, pBase + pOld->mTextAt, pOld->mTextSize);
+        u32 textEnd = pOld->mTextSize;
+        const auto addWord = [&](const char* pWord) -> u32 {
+            if (pWord == nullptr || *pWord == '\0') {
+                return 0;
+            }
+            const u32 at = textEnd;
             const size_t length = strlen(pWord) + 1;
-            memcpy(pPool + poolEnd, pWord, length);
-            poolEnd += static_cast< u32 >(length);
+            memcpy(pNew + textAt + textEnd, pWord, length);
+            textEnd += static_cast< u32 >(length);
             return at;
         };
-        const u32 empty = addWord("");
-        const auto setWord = [&](u8* pRow, const char* pColumn, const char* pWord) {
-            if (const TableColumn* pItem = findColumn(pTable, pColumn)) {
-                const u32 at = pWord != nullptr ? addWord(pWord) : empty;
-                memcpy(pRow + pItem->mOffsData, &at, sizeof(at));
-            }
-        };
-        const auto setByte = [&](u8* pRow, const char* pColumn, u8 value) {
-            if (const TableColumn* pItem = findColumn(pTable, pColumn)) {
-                pRow[pItem->mOffsData] = value;
+        u32* pCells = reinterpret_cast< u32* >(pNew + cellsEnd);
+        const auto set = [&](s32 row, const char* pColumn, u32 value) {
+            const s32 column = base.searchItemInfo(pColumn);
+            if (column >= 0) {
+                pCells[row * pOld->mColumns + column] = value;
             }
         };
         for (s32 i = 0; i < sAddedGalaxyCount; i++) {
             const NebulaDataTables::AddedGalaxy& rGalaxy = sAddedGalaxies[i];
-            u8* pRow = pNew + rowsEnd + i * pOld->mEntrySize;
-            setWord(pRow, "name", rGalaxy.mName);
-            setWord(pRow, "MapPaneName", rGalaxy.mPane != nullptr ? rGalaxy.mPane : "dummy");
-            setWord(pRow, "OpenCondition0", rGalaxy.mConditions[0]);
-            setWord(pRow, "OpenCondition1", rGalaxy.mConditions[1]);
-            setWord(pRow, "OpenCondition2", rGalaxy.mConditions[2]);
-            setByte(pRow, "PowerStarNum", rGalaxy.mStarsToOpen);
-            setByte(pRow, "GrandGalaxyNo", rGalaxy.mDome);
+            set(i, "name", addWord(rGalaxy.mName));
+            set(i, "MapPaneName", addWord(paneOf(rGalaxy)));
+            set(i, "OpenCondition0", addWord(rGalaxy.mConditions[0]));
+            set(i, "OpenCondition1", addWord(rGalaxy.mConditions[1]));
+            set(i, "OpenCondition2", addWord(rGalaxy.mConditions[2]));
+            set(i, "PowerStarNum", rGalaxy.mStarsToOpen);
+            set(i, "GrandGalaxyNo", rGalaxy.mDome);
         }
-        pTable->mNumEntries += sAddedGalaxyCount;
+        TableData* pTable = reinterpret_cast< TableData* >(pNew);
+        pTable->mRows += sAddedGalaxyCount;
+        pTable->mTextAt = textAt;
+        pTable->mTextSize = textEnd;
         return pNew;
     }
 }  // namespace
@@ -124,10 +107,9 @@ namespace NebulaDataTables {
     const void* getGalaxyInfoTable() {
         static const u8* sTable = nullptr;
         if (sTable == nullptr) {
-            u32 length = 0;
-            sTable = load("GalaxyInfoTable.bcsv", &length);
+            sTable = load("GalaxyInfoTable.bcsv");
             if (sAddedGalaxyCount != 0) {
-                sTable = withAddedGalaxies(sTable, length);
+                sTable = withAddedGalaxies(sTable);
             }
         }
         return sTable;

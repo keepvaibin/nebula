@@ -13,10 +13,10 @@
 #include "Game/System/NebulaArena.hpp"
 #include <cstdio>
 
-void TalkMessageHistory::entry(u16 msgID) {
+void TalkMessageHistory::entry(u32 msgID) {
     if (mCount == mMax) {
         const s32 max = mMax != 0 ? mMax * 2 : 16;
-        u16* const pHistory = new (NebulaArena::findFromRoot(this), 0) u16[max];
+        u32* const pHistory = new (NebulaArena::findFromRoot(this), 0) u32[max];
         for (s32 i = 0; i < mCount; i++) {
             pHistory[i] = mHistory[i];
         }
@@ -28,7 +28,7 @@ void TalkMessageHistory::entry(u16 msgID) {
     mHistory[mCount++] = msgID;
 }
 
-bool TalkMessageHistory::search(u16 msgID) const {
+bool TalkMessageHistory::search(u32 msgID) const {
     for (s32 i = 0; i < mCount; i++) {
         if (mHistory[i] == msgID) {
             return true;
@@ -110,11 +110,11 @@ void TalkNodeCtrl::forwardFlowNode() {
     }
 
     if (node->mNodeType == 1) {
-        u16 idx = node->mNextIdx;
+        u32 idx = node->mNextIdx;
         MessageData* msg = MessageSystem::getSceneMessageData();
         mCurrentNode = msg->getNode(idx);
     } else if (node->mNodeType == 3) {
-        u16 idx = node->mIndex;
+        u32 idx = node->mIndex;
         MessageData* msg = MessageSystem::getSceneMessageData();
         mCurrentNode = msg->getBranchNode(idx);
     }
@@ -142,7 +142,7 @@ bool TalkNodeCtrl::isCurrentNodeEvent() const {
 
 TalkNode* TalkNodeCtrl::getNextNode() const {
     TalkNode* node = mCurrentNode;
-    u16 idx;
+    u32 idx;
 
     if (node == nullptr) {
         return nullptr;
@@ -150,7 +150,7 @@ TalkNode* TalkNodeCtrl::getNextNode() const {
 
     if (node->mNodeType == 1) {
         idx = node->mNextIdx;
-        if (idx != 0xFFFF) {
+        if (idx != MessageData::cNoNode) {
             return MessageSystem::getSceneMessageData()->getNode(idx);
         }
     } else if (node->mNodeType == 3) {
@@ -212,7 +212,7 @@ TalkNode* TalkNodeCtrl::getNextNodeEvent() const {
 }
 
 void TalkNodeCtrl::updateMessage() {
-    u16 idx;
+    u32 idx;
     u8 groupID;
     TalkNode* cur = mCurrentNode;
 
@@ -279,7 +279,7 @@ const char16_t* TalkNodeCtrl::getSubMessage() const {
     }
 
     TalkMessageInfo info2 = TalkMessageInfo();
-    u16 param = messageTag.getParam32(0);
+    u32 param = messageTag.getParam32(0);
 
     if (MessageSystem::getSceneMessageData()->getMessage(&info2, 0, param)) {
         return (const char16_t*)info2._0;
@@ -292,11 +292,11 @@ void TalkNodeCtrl::forwardCurrentBranchNode(bool storeCurrent) {
     TalkNode* cur = mCurrentNode;
 
     if (storeCurrent) {
-        u16 group = cur->mNextGroup;
+        u32 group = cur->mNextGroup;
         MessageData* msg = MessageSystem::getSceneMessageData();
         mCurrentNode = msg->getBranchNode(group);
     } else {
-        u16 group = cur->mNextGroup;
+        u32 group = cur->mNextGroup;
         MessageData* msg = MessageSystem::getSceneMessageData();
         mCurrentNode = msg->getBranchNode(group + 1);
     }

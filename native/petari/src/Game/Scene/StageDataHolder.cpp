@@ -41,25 +41,9 @@ namespace {
 
         for (const Table* pInfo = rArray.begin(); pInfo != rArray.end(); pInfo++) {
             if (::isPrioPlacementObjInfo(pInfo->getName())) {
-                int size;
-
-                if (pInfo->mData != nullptr) {
-                    size = pInfo->mData->mNumEntries;
-                } else {
-                    size = 0;
-                }
-
-                *pPriorityCount += size;
+                *pPriorityCount += pInfo->getNumEntries();
             } else {
-                int size;
-
-                if (pInfo->mData != nullptr) {
-                    size = pInfo->mData->mNumEntries;
-                } else {
-                    size = 0;
-                }
-
-                *pNormalCount += size;
+                *pNormalCount += pInfo->getNumEntries();
             }
         }
     }
@@ -78,7 +62,7 @@ namespace {
 
 StageDataHolder::StageDataHolder(const char* pStageName, int zoneID, bool loadCommon)
     : NameObj("StageDataHolder"), mObjNameTbl(), mStageDataHolderCount(), mArchive(MR::getStageArchive(pStageName)), _A8(pStageName), mZoneID(zoneID),
-      _E0(loadCommon), _E4(), _E8(), _FC(), _100(), _104(), _108(), _10C() {
+      _E0(loadCommon), _FC(), _100(), _104(), _108(), _10C() {
     mPlacementMtx.identity();
 }
 
@@ -131,7 +115,6 @@ void StageDataHolder::initAfterScenarioSelected() {
 
     initJmpInfo(&mListObjs, "/jmp/List");
     initJmpInfo(&mPathObjs, "/jmp/Path");
-    calcDataAddress();
 }
 
 void StageDataHolder::requestFileLoadCommon() {
@@ -241,17 +224,11 @@ TableIter StageDataHolder::getGeneralPosInfoFromDataIndex(int idx_) const {
     int idx = idx_;
 
     for (Table* pInfo = mGeneralPosObjs.mArr; pInfo != mGeneralPosObjs.end(); pInfo++) {
-        const TableData* curData = pInfo->mData;
-        bool isValid = curData;
-        int curIdx = isValid ? (s32)curData->mNumEntries : 0;
-
-        if (idx < curIdx) {
+        if (idx < pInfo->getNumEntries()) {
             return TableIter(pInfo, idx);
         }
 
-        curIdx = isValid ? (s32)curData->mNumEntries : 0;
-
-        idx -= curIdx;
+        idx -= pInfo->getNumEntries();
     }
 
     for (s32 i = 0; i < mStageDataHolderCount; i++) {
@@ -316,10 +293,15 @@ const StageDataHolder* StageDataHolder::findPlacedStageDataHolder(const TableIte
         return this;
     }
 
-    uintptr_t data = (uintptr_t)rIter.mInfo->mData + rIter.mInfo->mData->mDataOffset + rIter.mInfo->mData->mEntrySize * rIter.mIndex;
-
-    if (_E4 <= data && data < _E8) {
-        return this;
+    // The holder whose stage archive holds the row's table.
+    const TableData* pData = rIter.mInfo->mData;
+    const MR::AssignableArray< Table >* const arrays[] = {&mPlacementObjs, &mStartObjs, &mGeneralPosObjs, &mChildObjs, &mListObjs, &mPathObjs, &_EC, &_F4};
+    for (const MR::AssignableArray< Table >* pArray : arrays) {
+        for (const Table* pInfo = pArray->begin(); pInfo != pArray->end(); pInfo++) {
+            if (pInfo->mData == pData) {
+                return this;
+            }
+        }
     }
 
     for (s32 i = 0; i < mStageDataHolderCount; i++) {
@@ -584,17 +566,11 @@ TableIter StageDataHolder::getStartTableIterFromStartDataIndex(int idx_) const {
     int idx = idx_;
 
     for (Table* pInfo = mStartObjs.mArr; pInfo != mStartObjs.end(); pInfo++) {
-        const TableData* curData = pInfo->mData;
-        bool isValid = curData;
-        int curIdx = isValid ? (s32)curData->mNumEntries : 0;
-
-        if (idx < curIdx) {
+        if (idx < pInfo->getNumEntries()) {
             return TableIter(pInfo, idx);
         }
 
-        curIdx = isValid ? (s32)curData->mNumEntries : 0;
-
-        idx -= curIdx;
+        idx -= pInfo->getNumEntries();
     }
 
     for (s32 i = 0; i < mStageDataHolderCount; i++) {
@@ -609,30 +585,6 @@ TableIter StageDataHolder::getStartTableIterFromStartDataIndex(int idx_) const {
     }
 
     return TableIter();
-}
-
-void StageDataHolder::calcDataAddress() {
-    _E4 = -1;
-    _E8 = 0;
-    updateDataAddress(&mPlacementObjs);
-    updateDataAddress(&mStartObjs);
-    updateDataAddress(&mGeneralPosObjs);
-    updateDataAddress(&mChildObjs);
-    updateDataAddress(&mPathObjs);
-}
-
-void StageDataHolder::updateDataAddress(const MR::AssignableArray< Table >* pInfoArray) {
-    for (const Table* pInfo = pInfoArray->begin(); pInfo != pInfoArray->end(); pInfo++) {
-        if ((uintptr_t)pInfo->mData < _E4) {
-            _E4 = (uintptr_t)pInfo->mData;
-        }
-
-        uintptr_t addr = (pInfo->mData->mEntrySize * pInfo->mData->mNumEntries) + ((uintptr_t)pInfo->mData + pInfo->mData->mDataOffset);
-
-        if (_E8 < addr) {
-            _E8 = addr;
-        }
-    }
 }
 
 void StageDataHolder::createLocalStageDataHolder(const MR::AssignableArray< Table >& rInfoArray, bool loadCommon) {

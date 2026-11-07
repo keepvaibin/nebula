@@ -1153,7 +1153,7 @@ mod tests {
         assert_eq!(read("small.szs"), b"abcd");
         assert_eq!(read("LayoutData/FileSelect.arc"), b"archive");
         // main.dol's tables as files of their own folder (cook/dol.rs).
-        assert_eq!(read("NebulaData/StoryProgressTable.bcsv").len(), 0x1E0);
+        assert!(read("NebulaData/StoryProgressTable.bcsv").starts_with(cook::table::MAGIC));
         assert!(partition.write_content(&output, &mut |_, _| true).unwrap_err().to_string().contains("already exists"));
     }
 
@@ -1176,7 +1176,7 @@ mod tests {
         let read = |path: &str| cook::store::read_file(&output.join("game.pak"), path).unwrap();
         assert_eq!(read("small.szs"), b"abcd");
         assert_eq!(read("LayoutData/FileSelect.arc"), b"archive");
-        assert_eq!(read("NebulaData/StoryProgressTable.bcsv").len(), 0x1E0);
+        assert!(read("NebulaData/StoryProgressTable.bcsv").starts_with(cook::table::MAGIC));
         assert!(cook::cook_content(&old, &output, &mut |_, _| true).unwrap_err().to_string().contains("already exists"));
     }
 
