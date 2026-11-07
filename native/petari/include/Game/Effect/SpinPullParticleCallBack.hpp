@@ -8,12 +8,12 @@ class SpinPullParticleCallBack : public MultiEmitterParticleCallBack {
 public:
     SpinPullParticleCallBack();
 
-    virtual void execute(JPABaseEmitter*, JPABaseParticle*);
+    virtual void execute(EmitterCore*, ParticleCore*);
 
     f32 _4;
 };
 
 class MerameraParticleCallBack : public SpinPullParticleCallBack {
 public:
-    virtual void execute(JPABaseEmitter*, JPABaseParticle*);
+    virtual void execute(EmitterCore*, ParticleCore*);
 };

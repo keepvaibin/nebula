@@ -11,7 +11,7 @@ namespace {
 GravityDustParticleCallBack::GravityDustParticleCallBack(const LiveActor* pActor) : MultiEmitterParticleCallBack(), mActor(pActor) {
 }
 
-void GravityDustParticleCallBack::execute(JPABaseEmitter* pEmitter, JPABaseParticle* pParticle) {
+void GravityDustParticleCallBack::execute(EmitterCore* pEmitter, ParticleCore* pParticle) {
     Vec3f offsetPosition;
     Vec3f baseAxis;
 

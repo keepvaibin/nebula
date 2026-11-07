@@ -5,8 +5,8 @@
 // The particle material's colours (runtime/src/render/materials/particle.hlsl: prm in its register 0 slot, env in its
 // register 1 slot). The emitter and per-particle colour functions set them; the material in use takes them at once
 // (a constants-only resend) and the next emitter's material starts from them, as colours carry over.
-// An emitter's particles as one draw (JPABaseShape.cpp): begin at its material, flush when it ends.
-class JPABaseParticle;
+// An emitter's particles as one draw (ParticleShape.cpp): begin at its material, flush when it ends.
+class ParticleCore;
 struct SiteMaterial;
 
 namespace JPAParticleBatch {
@@ -20,7 +20,7 @@ namespace JPAParticleBatch {
     // What the vertices that follow are drawn as: a strip stands alone; others join the same kind.
     void primitive(u8 primitive);
     // The particle being drawn: where it was a frame ago comes from it.
-    void particle(JPABaseParticle* pParticle);
+    void particle(ParticleCore* pParticle);
     // Corner `index` (0-3) of the particle, given in the world.
     void corner(u32 index, f32 x, f32 y, f32 z, f32 s, f32 t);
     // The particle's matrix to eye space (its corners are in the shape's own units), and its coordinates' projection.

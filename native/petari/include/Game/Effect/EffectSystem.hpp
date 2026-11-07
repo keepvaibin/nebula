@@ -3,7 +3,7 @@
 #include "Game/NameObj/NameObj.hpp"
 
 class AutoEffectGroupHolder;
-class JPAEmitterManager;
+class EmitterManager;
 class MultiEmitterCallBackBase;
 class MultiEmitterParticleCallBack;
 class ParticleCalcExecutor;
@@ -24,9 +24,9 @@ public:
     void forceDeleteEmitter(ParticleEmitter*) const;
     void forceDeleteSingleEmitter(SingleEmitter*) const;
     void createSingleEmitter(SingleEmitter*, MultiEmitterCallBackBase*, MultiEmitterParticleCallBack*);
-    void entry(ParticleResourceHolder*, u32, u32);
+    void entry(ParticleResourceHolder*, u32 emitterCount);
 
-    JPAEmitterManager* mEmitterManager;
+    EmitterManager* mEmitterManager;
     ParticleEmitterHolder* mEmitterHolder;
     ParticleDrawExecutor* mDrawExec;
     ParticleCalcExecutor* mCalcExec;

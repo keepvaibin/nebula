@@ -1,14 +1,14 @@
 #include "Game/Effect/SpinPullParticleCallBack.hpp"
 
 #include "Game/Util/PlayerUtil.hpp"
-#include <JSystem/JParticle/JPAEmitter.hpp>
-#include <JSystem/JParticle/JPAParticle.hpp>
+#include "Game/Particle/EmitterCore.hpp"
+#include "Game/Particle/ParticleCore.hpp"
 
 SpinPullParticleCallBack::SpinPullParticleCallBack() : MultiEmitterParticleCallBack() {
     _4 = 1.0f;
 }
 
-void SpinPullParticleCallBack::execute(JPABaseEmitter* pEmitter, JPABaseParticle* pParticle) {
+void SpinPullParticleCallBack::execute(EmitterCore* pEmitter, ParticleCore* pParticle) {
     Vec3f baseParticlePosition;
     baseParticlePosition.set(pParticle->mPosition);
     Vec3f pullvel;
@@ -20,7 +20,7 @@ void SpinPullParticleCallBack::execute(JPABaseEmitter* pEmitter, JPABaseParticle
     pParticle->mOffsetPosition.set(baseParticleOffsetPosition + (((pullvel * _4) * time) * (time)));
 }
 
-void MerameraParticleCallBack::execute(JPABaseEmitter* pEmitter, JPABaseParticle* pParticle) {
+void MerameraParticleCallBack::execute(EmitterCore* pEmitter, ParticleCore* pParticle) {
     Vec3f baseParticlePosition;
     baseParticlePosition.set(pParticle->mPosition);
     Vec3f pullvel;

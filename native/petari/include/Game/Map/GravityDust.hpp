@@ -10,7 +10,7 @@ public:
 
     virtual ~GravityDustParticleCallBack();
 
-    virtual void execute(JPABaseEmitter* pEmitter, JPABaseParticle* pParticle);
+    virtual void execute(EmitterCore* pEmitter, ParticleCore* pParticle);
 
     const LiveActor* mActor;
 };

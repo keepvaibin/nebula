@@ -3,8 +3,8 @@
 #include <nebula_geometry.hpp>
 #include "Game/Render/FrameList.hpp"
 
-class JPABaseEmitter;
-class JPAResource;
+class EmitterCore;
+class ParticleResource;
 class LiveActor;
 
 // What the renderer needs from frame to frame: whose drawing follows, when an object starts a new life, when the camera
@@ -33,7 +33,7 @@ namespace MotionSignal {
     }
 
     // An emitter's particles draw next (its children under a slot of their own). Returns the name of its effect.
-    u32 drawEmitter(const JPAResource* pResource, JPABaseEmitter* pEmitter, bool child);
+    u32 drawEmitter(const ParticleResource* pResource, EmitterCore* pEmitter, bool child);
 
     // GameScene::draw3D's begin: the camera's world-to-eye rows, then the player's up (against its gravity) and 1, or zeros
     // without a player. The renderer's sky light comes from that up.
@@ -45,8 +45,8 @@ namespace MotionSignal {
     void died(LiveActor* pActor);
     // MarioAccess::setTrans and setBaseMtx: a jump far from where the player is starts a new life.
     void playerPlaced(LiveActor* pPlayer, const Vec3f& rTarget);
-    // JPABaseEmitter::init: a pooled emitter starts a new effect.
-    void emitterInit(JPABaseEmitter* pEmitter);
+    // EmitterCore::init: a pooled emitter starts a new effect.
+    void emitterInit(EmitterCore* pEmitter);
     // CameraViewInterpolator::reduceOscillation took its target without blending: a camera cut.
     void cameraCut();
 };  // namespace MotionSignal

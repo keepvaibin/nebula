@@ -21,8 +21,8 @@
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
-#include <JSystem/JParticle/JPAEmitter.hpp>
-#include <JSystem/JParticle/JPAEmitterManager.hpp>
+#include "Game/Particle/EmitterCore.hpp"
+#include "Game/Particle/EmitterManager.hpp"
 #include <cstdio>
 #include <cstring>
 
@@ -251,7 +251,7 @@ namespace MR {
             pEmitter->mEmitter->setUserWork(reinterpret_cast< uintptr_t >(pSingleEmitter));
         }
 
-        SingleEmitter* getLinkSingleEmitter(const JPABaseEmitter* pEmitter) {
+        SingleEmitter* getLinkSingleEmitter(const EmitterCore* pEmitter) {
             return reinterpret_cast< SingleEmitter* >(pEmitter->getUserWork());
         }
 
@@ -259,9 +259,9 @@ namespace MR {
             getEffectSystem()->mEmitterHolder->forceDeleteAllOneTimeEmitters();
         }
 
-        void createParticleEmitter(ParticleEmitter* pEmitter, JPAEmitterManager* pManager, const Vec3f& rPosition, u16 resourceId, u8 groupId,
+        void createParticleEmitter(ParticleEmitter* pEmitter, EmitterManager* pManager, const Vec3f& rPosition, u16 resourceId, u8 groupId,
                                    u8 resourceManagerId) {
-            JPABaseEmitter* pBaseEmitter = pManager->createSimpleEmitterID(rPosition, resourceId, groupId, resourceManagerId, nullptr, nullptr);
+            EmitterCore* pBaseEmitter = pManager->createSimpleEmitterID(rPosition, resourceId, groupId, resourceManagerId, nullptr, nullptr);
             if (pBaseEmitter != nullptr) {
                 pEmitter->mEmitter = pBaseEmitter;
                 pEmitter->init(resourceId);

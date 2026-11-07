@@ -17,11 +17,11 @@
 #include "Game/Render/Model.hpp"
 #include "Game/Render/Model.hpp"
 
-#include <JSystem/JParticle/JPABaseShape.hpp>
-#include <JSystem/JParticle/JPAEmitter.hpp>
-#include <JSystem/JParticle/JPAEmitterManager.hpp>
-#include <JSystem/JParticle/JPAFieldBlock.hpp>
-#include <JSystem/JParticle/JPAParticle.hpp>
+#include "Game/Particle/ParticleShape.hpp"
+#include "Game/Particle/EmitterCore.hpp"
+#include "Game/Particle/EmitterManager.hpp"
+#include "Game/Particle/ParticleField.hpp"
+#include "Game/Particle/ParticleCore.hpp"
 
 #include <cstdarg>
 
@@ -41,18 +41,18 @@ extern "C" void NebulaMtxRotRad(Mtx pMtx, char axis, f32 radians) {
 }
 
 namespace {
-    static void noLoadPrj(JPAEmitterWorkData const* pWork, const Mtx pSrt) {
+    static void noLoadPrj(EmitterWork const* pWork, const Mtx pSrt) {
     }
 
-    void loadPrj(JPAEmitterWorkData const* pWork, const Mtx pSrt) {
+    void loadPrj(EmitterWork const* pWork, const Mtx pSrt) {
         Mtx mtx;
         NebulaMtxConcat(pWork->mPrjMtx, pSrt, mtx);
         JPAParticleBatch::setProjection(mtx);
     }
 
-    static void loadPrjAnm(JPAEmitterWorkData const* pWork, const Mtx pSrt) {
+    static void loadPrjAnm(EmitterWork const* pWork, const Mtx pSrt) {
         f32 frame = pWork->mpEmtr->getAge();
-        const JPABaseShape* pShape = pWork->mpRes->getBsp();
+        const ParticleShape* pShape = pWork->mpRes->getBsp();
         f32 pivotS = 0.5f * (1.0f + pShape->getTilingS());
         f32 pivotT = 0.5f * (1.0f + pShape->getTilingT());
         f32 translationS = (frame * pShape->getIncTransX()) + pShape->getInitTransX();
@@ -81,7 +81,7 @@ namespace {
     }
 
 
-    typedef void (*projectionFunc)(JPAEmitterWorkData const*, const Mtx);
+    typedef void (*projectionFunc)(EmitterWork const*, const Mtx);
 
     static projectionFunc p_prj[3] = {
         noLoadPrj,
@@ -89,37 +89,37 @@ namespace {
         loadPrjAnm,
     };
 
-    JPANode< JPABaseParticle >* getNext(JPANode< JPABaseParticle >* pNode) {
+    JPANode< ParticleCore >* getNext(JPANode< ParticleCore >* pNode) {
         return pNode->getNext();
     }
-    JPANode< JPABaseParticle >* getPrev(JPANode< JPABaseParticle >* pNode) {
+    JPANode< ParticleCore >* getPrev(JPANode< ParticleCore >* pNode) {
         return pNode->getPrev();
     }
-    void dirTypeVel(JPAEmitterWorkData const* pWork, JPABaseParticle const* pParticle, Vec3f* pDirection) {
+    void dirTypeVel(EmitterWork const* pWork, ParticleCore const* pParticle, Vec3f* pDirection) {
         pParticle->getVelVec(*pDirection);
     }
 
-    void dirTypePos(JPAEmitterWorkData const* pWork, JPABaseParticle const* pParticle, Vec3f* pDirection) {
+    void dirTypePos(EmitterWork const* pWork, ParticleCore const* pParticle, Vec3f* pDirection) {
         pParticle->getLocalPosition(*pDirection);
     }
 
-    void dirTypePosInv(JPAEmitterWorkData const* pWork, JPABaseParticle const* pParticle, Vec3f* pDirection) {
+    void dirTypePosInv(EmitterWork const* pWork, ParticleCore const* pParticle, Vec3f* pDirection) {
         pParticle->getLocalPosition(*pDirection);
         pDirection->negate();
     }
 
-    void dirTypeEmtrDir(JPAEmitterWorkData const* pWork, JPABaseParticle const* pParticle, Vec3f* pDirection) {
+    void dirTypeEmtrDir(EmitterWork const* pWork, ParticleCore const* pParticle, Vec3f* pDirection) {
         pDirection->set(pWork->mGlobalEmtrDir);
     }
 
-    void dirTypePrevPtcl(JPAEmitterWorkData const* pWork, JPABaseParticle const* pParticle, Vec3f* pDirection) {
+    void dirTypePrevPtcl(EmitterWork const* pWork, ParticleCore const* pParticle, Vec3f* pDirection) {
         Vec3f position;
         pParticle->getGlobalPosition(position);
-        JPANode< JPABaseParticle >* pEnd = pWork->mpAlivePtcl->getEnd();
-        JPANode< JPABaseParticle >* pPrev = pWork->mpCurNode->getPrev();
+        JPANode< ParticleCore >* pEnd = pWork->mpAlivePtcl->getEnd();
+        JPANode< ParticleCore >* pPrev = pWork->mpCurNode->getPrev();
 
         if (pEnd != pPrev) {
-            JPABaseParticle* pParticle = pWork->mpCurNode->getPrev()->getObject();
+            ParticleCore* pParticle = pWork->mpCurNode->getPrev()->getObject();
             pParticle->getGlobalPosition(*pDirection);
         } else {
             pWork->mpEmtr->calcEmitterGlobalPosition(pDirection);
@@ -221,7 +221,7 @@ namespace {
         pMtx[2][2] *= scaleX;
     }
 
-    typedef void (*dirTypeFunc)(JPAEmitterWorkData const*, JPABaseParticle const*, Vec3f*);
+    typedef void (*dirTypeFunc)(EmitterWork const*, ParticleCore const*, Vec3f*);
     static dirTypeFunc p_direction[5] = {
         dirTypeVel, dirTypePos, dirTypePosInv, dirTypeEmtrDir, dirTypePrevPtcl,
     };
@@ -241,11 +241,11 @@ namespace {
 
 };  // namespace
 
-void JPABaseEmitter::init(JPAEmitterManager* pManager, JPAResource* pResource) {
+void EmitterCore::init(EmitterManager* pManager, ParticleResource* pResource) {
     MotionSignal::emitterInit(this);
     mpEmtrMgr = pManager;
     mpRes = pResource;
-    const JPADynamicsBlockData* pData = mpRes->getDyn()->mpData;
+    const EmitterDynamicsData* pData = mpRes->getDyn()->mpData;
     mLocalScl.set< f32 >(pData->mEmitterScl.x, pData->mEmitterScl.y, pData->mEmitterScl.z);
     pData = mpRes->getDyn()->mpData;
     mLocalTrs.set< f32 >(pData->mEmitterTrs.x, pData->mEmitterTrs.y, pData->mEmitterTrs.z);
@@ -293,7 +293,7 @@ void JPABaseEmitter::init(JPAEmitterManager* pManager, JPAResource* pResource) {
     mTexAnmIdx = 0;
 }
 
-void JPADrawDirection(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle) {
+void JPADrawDirection(EmitterWork* pWork, ParticleCore* pParticle) {
     if (pParticle->checkStatus(8)) {
         return;
     }
@@ -336,7 +336,7 @@ void JPADrawDirection(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle) {
     JPADrawQuad(pWork->mListType);
 }
 
-void JPADrawRotDirection(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle) {
+void JPADrawRotDirection(EmitterWork* pWork, ParticleCore* pParticle) {
     if (pParticle->checkStatus(8)) {
         return;
     }
@@ -384,7 +384,7 @@ void JPADrawRotDirection(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle) 
     JPADrawQuad(pWork->mListType);
 }
 
-void JPADrawDBillboard(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle) {
+void JPADrawDBillboard(EmitterWork* pWork, ParticleCore* pParticle) {
     if (pParticle->checkStatus(8)) {
         return;
     }
@@ -418,7 +418,7 @@ void JPADrawDBillboard(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle) {
     JPADrawQuad(0);
 }
 
-void JPADrawLine(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle) {
+void JPADrawLine(EmitterWork* pWork, ParticleCore* pParticle) {
     if (pParticle->checkStatus(8)) {
         return;
     }
@@ -437,9 +437,9 @@ void JPADrawLine(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle) {
     JPAParticleBatch::corner(1, end.x, end.y, end.z, 0.0f, 1.0f);
 }
 
-void JPADrawStripe(JPAEmitterWorkData* pWork) {
+void JPADrawStripe(EmitterWork* pWork) {
     const u32 count = pWork->mpAlivePtcl->getNum();
-    JPABaseShape* pShape = pWork->mpRes->getBsp();
+    ParticleShape* pShape = pWork->mpRes->getBsp();
     if (count < 2) {
         return;
     }
@@ -448,8 +448,8 @@ void JPADrawStripe(JPAEmitterWorkData* pWork) {
     f32 texStep = 1.0f / (count - 1.0f);
     f32 leftWidth = (1.0f + pWork->mPivot.x) * (25.0f * pWork->mGlobalPtclScl.x);
     f32 rightWidth = (1.0f - pWork->mPivot.x) * (25.0f * pWork->mGlobalPtclScl.x);
-    JPANode< JPABaseParticle >* pFirst;
-    JPANode< JPABaseParticle >* (*pNext)(JPANode< JPABaseParticle >*);
+    JPANode< ParticleCore >* pFirst;
+    JPANode< ParticleCore >* (*pNext)(JPANode< ParticleCore >*);
     if (pShape->isDrawFwdAhead()) {
         texCoord = 1.0f;
         texStep = -texStep;
@@ -468,8 +468,8 @@ void JPADrawStripe(JPAEmitterWorkData* pWork) {
     Vec3f vertices[2];
     Mtx matrix;
     JPAParticleBatch::primitive(NEBULA_PRIMITIVE_TRIANGLE_STRIP);
-    for (JPANode< JPABaseParticle >* pNode = pFirst; pNode != pWork->mpAlivePtcl->getEnd();) {
-        JPABaseParticle* pParticle = pNode->getObject();
+    for (JPANode< ParticleCore >* pNode = pFirst; pNode != pWork->mpAlivePtcl->getEnd();) {
+        ParticleCore* pParticle = pNode->getObject();
         pWork->mpCurNode = pNode;
         JPAParticleBatch::particle(pParticle);
         position.set(pParticle->mPosition);
@@ -516,9 +516,9 @@ void JPADrawStripe(JPAEmitterWorkData* pWork) {
 
 }
 
-void JPADrawStripeX(JPAEmitterWorkData* pWork) {
+void JPADrawStripeX(EmitterWork* pWork) {
     const u32 count = pWork->mpAlivePtcl->getNum();
-    JPABaseShape* pShape = pWork->mpRes->getBsp();
+    ParticleShape* pShape = pWork->mpRes->getBsp();
     if (count < 2) {
         return;
     }
@@ -530,8 +530,8 @@ void JPADrawStripeX(JPAEmitterWorkData* pWork) {
     f32 rightWidth = (1.0f - pWork->mPivot.x) * (25.0f * pWork->mGlobalPtclScl.x);
     f32 topWidth = (1.0f + pWork->mPivot.y) * (25.0f * pWork->mGlobalPtclScl.y);
     f32 bottomWidth = (1.0f - pWork->mPivot.y) * (25.0f * pWork->mGlobalPtclScl.y);
-    JPANode< JPABaseParticle >* pFirst;
-    JPANode< JPABaseParticle >* (*pNext)(JPANode< JPABaseParticle >*);
+    JPANode< ParticleCore >* pFirst;
+    JPANode< ParticleCore >* (*pNext)(JPANode< ParticleCore >*);
     if (pShape->isDrawFwdAhead()) {
         texCoord = 1.0f;
         startTexCoord = 1.0f;
@@ -551,8 +551,8 @@ void JPADrawStripeX(JPAEmitterWorkData* pWork) {
     Vec3f vertices[2];
     Mtx matrix;
     JPAParticleBatch::primitive(NEBULA_PRIMITIVE_TRIANGLE_STRIP);
-    for (JPANode< JPABaseParticle >* pNode = pFirst; pNode != pWork->mpAlivePtcl->getEnd();) {
-        JPABaseParticle* pParticle = pNode->getObject();
+    for (JPANode< ParticleCore >* pNode = pFirst; pNode != pWork->mpAlivePtcl->getEnd();) {
+        ParticleCore* pParticle = pNode->getObject();
         pWork->mpCurNode = pNode;
         JPAParticleBatch::particle(pParticle);
         position.set(pParticle->mPosition);
@@ -603,8 +603,8 @@ void JPADrawStripeX(JPAEmitterWorkData* pWork) {
 
     texCoord = startTexCoord;
     JPAParticleBatch::primitive(NEBULA_PRIMITIVE_TRIANGLE_STRIP);
-    for (JPANode< JPABaseParticle >* pNode = pFirst; pNode != pWork->mpAlivePtcl->getEnd();) {
-        JPABaseParticle* pParticle = pNode->getObject();
+    for (JPANode< ParticleCore >* pNode = pFirst; pNode != pWork->mpAlivePtcl->getEnd();) {
+        ParticleCore* pParticle = pNode->getObject();
         pWork->mpCurNode = pNode;
         JPAParticleBatch::particle(pParticle);
         position.set(pParticle->mPosition);
@@ -655,7 +655,7 @@ void JPADrawStripeX(JPAEmitterWorkData* pWork) {
 
 }
 
-void JPAFieldAir::prepare(JPAEmitterWorkData* pWork, JPAFieldBlock* pBlock) {
+void FieldAir::prepare(EmitterWork* pWork, ParticleField* pBlock) {
     Vec3f direction(pBlock->getDir());
     MR::normalizeOrZero(&direction);
     if (pBlock->checkStatus(2)) {
@@ -666,14 +666,14 @@ void JPAFieldAir::prepare(JPAEmitterWorkData* pWork, JPAFieldBlock* pBlock) {
     }
 }
 
-void JPAFieldVortex::prepare(JPAEmitterWorkData* pWork, JPAFieldBlock* pBlock) {
+void FieldVortex::prepare(EmitterWork* pWork, ParticleField* pBlock) {
     NebulaMtxMultVecSR(pWork->mGlobalRot, &pBlock->getDir(), &field_0x10);
     MR::normalizeOrZero(&field_0x10);
     field_0x1c = pBlock->getPos().z * pBlock->getPos().z;
     field_0x20 = 1.0f / field_0x1c;
 }
 
-void JPAFieldVortex::calc(JPAEmitterWorkData*, JPAFieldBlock* pBlock, JPABaseParticle* pParticle) {
+void FieldVortex::calc(EmitterWork*, ParticleField* pBlock, ParticleCore* pParticle) {
     Vec3f radial;
     radial.scale(field_0x10.dot(pParticle->mLocalPosition), field_0x10);
     radial.sub(pParticle->mLocalPosition, radial);
@@ -692,7 +692,7 @@ void JPAFieldVortex::calc(JPAEmitterWorkData*, JPAFieldBlock* pBlock, JPABasePar
     calcAffect(pBlock, pParticle);
 }
 
-void JPAFieldConvection::prepare(JPAEmitterWorkData* pWork, JPAFieldBlock* pBlock) {
+void FieldConvection::prepare(EmitterWork* pWork, ParticleField* pBlock) {
     Vec3f radial;
     Vec3f tangent;
     tangent.cross(pBlock->getPos(), pBlock->getDir());
@@ -705,7 +705,7 @@ void JPAFieldConvection::prepare(JPAEmitterWorkData* pWork, JPAFieldBlock* pBloc
     MR::normalizeOrZero(&field_0x28);
 }
 
-void JPAFieldSpin::prepare(JPAEmitterWorkData* pWork, JPAFieldBlock* pBlock) {
+void FieldSpin::prepare(EmitterWork* pWork, ParticleField* pBlock) {
     Vec3f axis;
     Mtx rotation;
     NebulaMtxMultVecSR(pWork->mGlobalRot, &pBlock->getDir(), &axis);
@@ -716,7 +716,7 @@ void JPAFieldSpin::prepare(JPAEmitterWorkData* pWork, JPAFieldBlock* pBlock) {
     field_0x28.set< f32 >(rotation[0][2], rotation[1][2], rotation[2][2]);
 }
 
-void JPAEmitterManager::calcYBBCam() {
+void EmitterManager::calcYBBCam() {
     Vec3f axis(0.0f, pWd->mPosCamMtx[1][1], pWd->mPosCamMtx[2][1]);
     if (!MR::isNearZero(axis)) {
         MR::normalize(&axis);
@@ -735,7 +735,7 @@ void JPAEmitterManager::calcYBBCam() {
     }
 }
 
-void JPADrawYBillboard(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle) {
+void JPADrawYBillboard(EmitterWork* pWork, ParticleCore* pParticle) {
     if (pParticle->checkStatus(8)) {
         return;
     }
@@ -764,7 +764,7 @@ void JPADrawYBillboard(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle) {
     JPADrawQuad(0);
 }
 
-void JPADrawRotYBillboard(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle) {
+void JPADrawRotYBillboard(EmitterWork* pWork, ParticleCore* pParticle) {
     if (pParticle->checkStatus(8)) {
         return;
     }

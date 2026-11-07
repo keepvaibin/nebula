@@ -2,7 +2,7 @@
 
 #include <nebula_geometry.hpp>
 
-class JPABaseEmitter;
+class EmitterCore;
 
 class ParticleEmitter {
 public:
@@ -22,7 +22,7 @@ public:
     void setGlobalPrmColor(u8, u8, u8);
     void setGlobalEnvColor(u8, u8, u8);
 
-    JPABaseEmitter* mEmitter;
+    EmitterCore* mEmitter;
     bool mPaused;
     bool mStopped;  // Not sure if it is stopped, but good chance it is.
 };

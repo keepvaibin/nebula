@@ -4,19 +4,19 @@
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/System/AssetFolder.hpp"
-#include <JSystem/JParticle/JPAResourceManager.hpp>
+#include "Game/Particle/ParticleResources.hpp"
 #include <cstring>
 
 ParticleResourceHolder::ParticleResourceHolder(const char* pArchiveName)
     : mResourceMgr(), mAutoEffectList(new JMapInfo), mParticleNames(new JMapInfo), mNumEffectNums() {
     AssetFolder* pArchive = MR::mountArchive(pArchiveName, nullptr);
-    mResourceMgr = new JPAResourceManager(pArchive->getResource("Particles.jpc"), MR::getCurrentHeap());
+    mResourceMgr = new ParticleResources(pArchive->getResource("Particles.jpc"), MR::getCurrentHeap());
     mParticleNames->attach(pArchive->getResource("ParticleNames.bcsv"));
     mAutoEffectList->attach(pArchive->getResource("AutoEffectList.bcsv"));
     countAutoEffectNum();
 }
 
-const char* ParticleResourceHolder::getParticleName(u16 index) const {
+const char* ParticleResourceHolder::getParticleName(u32 index) const {
     const char* pName = nullptr;
     if (mParticleNames == nullptr || index >= mParticleNames->getNumEntries() ||
         !mParticleNames->getValue(index, "name", &pName)) {

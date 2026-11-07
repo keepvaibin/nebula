@@ -4,7 +4,7 @@
 #include "Game/Effect/ParticleEmitter.hpp"
 
 #include "Game/System/NebulaArena.hpp"
-#include <JSystem/JParticle/JPAEmitter.hpp>
+#include "Game/Particle/EmitterCore.hpp"
 #include <algorithm>
 
 ParticleEmitterHolder::ParticleEmitterHolder(const EffectSystem* pEffectSystem, int numEmitters) : mEffectSystem(pEffectSystem) {
@@ -15,7 +15,7 @@ ParticleEmitterHolder::ParticleEmitterHolder(const EffectSystem* pEffectSystem, 
 void ParticleEmitterHolder::update(bool param1) {
     for (Chunk* pChunk = &mFirst; pChunk != nullptr; pChunk = pChunk->mNext)
     for (ParticleEmitter* pEmitter = pChunk->mEmitters.begin(); pEmitter != pChunk->mEmitters.end(); pEmitter++) {
-        JPABaseEmitter* pBaseEmitter = pEmitter->mEmitter;
+        EmitterCore* pBaseEmitter = pEmitter->mEmitter;
         if (pBaseEmitter == nullptr) {
             continue;
         }
@@ -63,7 +63,7 @@ void ParticleEmitterHolder::forceDeleteAllEmitters() {
 void ParticleEmitterHolder::requestMovementOnAllEmitters() {
     for (Chunk* pChunk = &mFirst; pChunk != nullptr; pChunk = pChunk->mNext)
     for (ParticleEmitter* pEmitter = pChunk->mEmitters.begin(); pEmitter != pChunk->mEmitters.end(); pEmitter++) {
-        JPABaseEmitter* pBaseEmitter = pEmitter->mEmitter;
+        EmitterCore* pBaseEmitter = pEmitter->mEmitter;
         if (pBaseEmitter == nullptr) {
             continue;
         }

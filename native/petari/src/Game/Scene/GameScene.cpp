@@ -493,7 +493,7 @@ void GameScene::initSequences() {
 
 void GameScene::initEffect() {
     // The pools grow past this when a scene asks for more.
-    SceneFunction::initEffectSystem(6144, 512);
+    SceneFunction::initEffectSystem(512);
 }
 
 void GameScene::drawMirror() const {

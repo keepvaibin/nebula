@@ -4,7 +4,7 @@
 
 
 class JMapInfo;
-class JPAResourceManager;
+class ParticleResources;
 struct ResTIMG;
 
 class ParticleResourceHolder {
@@ -25,10 +25,10 @@ public:
     bool isExistInResource(const char* pName, u16* pIndex) const;
     JMapInfo* getAutoEffectListBinary() const;
     int getAutoEffectNum(const char* pGroupName) const;
-    // Nebula: a resource's name in ParticleNames.bcsv by its user index (JPAResource::getUsrIdx; null: none).
-    const char* getParticleName(u16 index) const;
+    // Nebula: a resource's name in ParticleNames.bcsv by its user index (ParticleResource::getUsrIdx; null: none).
+    const char* getParticleName(u32 index) const;
 
-    JPAResourceManager* mResourceMgr;
+    ParticleResources* mResourceMgr;
     JMapInfo* mAutoEffectList;
     JMapInfo* mParticleNames;
     MR::GrowTable< EffectNum*, 1024 > mEffectNums;

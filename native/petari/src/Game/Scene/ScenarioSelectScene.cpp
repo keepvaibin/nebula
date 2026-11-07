@@ -54,7 +54,7 @@ void ScenarioSelectScene::init() {
     _24 = ::createDrawBuffer();
     mEffectSystem = new EffectSystem("\203\107\203\164\203\106\203\116\203\147\203\126\203\130\203\145\203\200" /* エフェクトシステム */, false);
     mEffectSystem->initWithoutIter();
-    mEffectSystem->entry(MR::getParticleResourceHolder(), 0x300, 0x20);
+    mEffectSystem->entry(MR::getParticleResourceHolder(), 0x20);
     mCameraContext = new CameraContext();
 
     Pos3f view;

@@ -1,8 +1,8 @@
 #pragma once
 
-#include <JSystem/JParticle/JPAParticle.hpp>
+#include "Game/Particle/ParticleCore.hpp"
 
-class MultiEmitterParticleCallBack : public JPAParticleCallBack {
+class MultiEmitterParticleCallBack : public ParticleCallBack {
 public:
     MultiEmitterParticleCallBack();
 

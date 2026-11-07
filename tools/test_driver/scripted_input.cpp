@@ -452,11 +452,15 @@ NativeInputReplayLog load_native_input_replay_log(const std::string& path) {
     return log;
 }
 
+// The loaded log and its path: built with the program, so nothing registers its end on the game thread.
+namespace {
+std::optional<std::string> s_loaded_path;
+std::unique_ptr<NativeInputReplayLog> s_log;
+}  // namespace
+
 const NativeInputReplayLog* active_native_input_replay_log() {
     const std::optional<std::string> path =
         read_env_string(nebula_switch::input_replay_log_name());
-    static std::optional<std::string> s_loaded_path;
-    static std::unique_ptr<NativeInputReplayLog> s_log;
     if (!path.has_value()) {
         s_loaded_path.reset();
         s_log.reset();
