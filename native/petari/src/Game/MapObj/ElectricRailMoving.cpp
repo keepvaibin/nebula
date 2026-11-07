@@ -76,7 +76,7 @@ void ElectricRailMoving::init(const JMapInfoIter& rIter) {
 void ElectricRailMoving::drawWith(MaterialDraw& rMaterial) const {
     if (MR::isValidDraw(this)) {
         rMaterial.setCoordinate(1, _9C);
-        rMaterial.setRegister(1, Color8(0xFF, 0xFF, 0xFF, _CC));
+        rMaterial.setRegister(MaterialRegister_1, Color8(0xFF, 0xFF, 0xFF, _CC));
         TypedDraw site(rMaterial, nullptr, MR::getCameraViewMtx());
 
         if (isNerve(GET_NERVE(ElectricRailMoving, ElectricRailMovingNrvWait))) {

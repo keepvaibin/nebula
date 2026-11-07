@@ -137,7 +137,7 @@ void PlayerModel::drawIn(Material* pMaterial, u32 index) {
     if (override >= 0) {
         const OverrideColor& rColor = kOverrideColors[override];
         if (rColor.a == 2) {
-            const f32* pRegister = draw.getRegister(1);
+            const f32* pRegister = draw.getRegister(MaterialRegister_0);
             draw.setFlatColor(pRegister[0], pRegister[1], pRegister[2], pRegister[3]);
         } else {
             const u8 alpha = override == 1 && (mFlags.word() & (1u << 14)) != 0 ? 64 : rColor.alpha;
@@ -283,7 +283,7 @@ void PlayerModel::setDynamicList(const MarioModelTint* pTint) {
 void MarioModelTint::send(MaterialDraw& rDraw) const {
     switch (kind) {
     case Kind_Alpha:
-        rDraw.setRegister(3, color0);
+        rDraw.setRegister(MaterialRegister_2, color0);
         {
             PassState state = PassStates::fromWord(rDraw.getState());
             PassStates::setBlend(state, NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_INV_SRC_ALPHA);
@@ -296,7 +296,7 @@ void MarioModelTint::send(MaterialDraw& rDraw) const {
         rDraw.overrideAlpha(alpha / 255.0f);
         break;
     case Kind_ReflectAlpha:
-        rDraw.setRegister(3, color0);
+        rDraw.setRegister(MaterialRegister_2, color0);
         rDraw.applyPass(NEBULA_FORM_PASS_REFLECTION_ALPHA);
         break;
     case Kind_Light:
@@ -308,7 +308,7 @@ void MarioModelTint::send(MaterialDraw& rDraw) const {
         rDraw.applyPass(NEBULA_FORM_PASS_PLAYER_LIGHT);
         break;
     case Kind_Ghost:
-        rDraw.setRegister(1, color0);
+        rDraw.setRegister(MaterialRegister_0, color0);
         break;
     default:
         break;

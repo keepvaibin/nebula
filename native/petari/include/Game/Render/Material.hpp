@@ -262,6 +262,14 @@ namespace MaterialAmbient {
 // Where a mesh keeps a vertex input, or the zero stream.
 void meshLayoutInput(NebulaPipelineDesc* pDesc, u8 semantic, const NebulaModelMesh& rMesh);
 
+// A colour register a draw sets, by name: the numbers are the console's (0 the stage output, which no draw sets), so a
+// call can never land one register down.
+enum MaterialRegister : u32 {
+    MaterialRegister_0 = 1,
+    MaterialRegister_1 = 2,
+    MaterialRegister_2 = 3,
+};
+
 // A material set up for draws: which form it draws, and what these draws change of its values. Draws take everything from
 // here; nothing carries to another set-up but the ambient colours.
 class MaterialDraw {
@@ -286,8 +294,8 @@ public:
     void applyPass(u8 pass);
 
     void setCoordinate(u32 coord, const f32 (*pMtx)[4]);
-    void setRegister(u32 index, NebulaColor8 color);
-    const f32* getRegister(u32 index);
+    void setRegister(MaterialRegister reg, NebulaColor8 color);
+    const f32* getRegister(MaterialRegister reg);
     void setMaterialColor(u32 channel, NebulaColor8 color);
     void setAmbient(u32 channel, NebulaColor8 color);
     void setFog(f32 start, f32 end, f32 nearZ, f32 farZ, NebulaColor8 color);
