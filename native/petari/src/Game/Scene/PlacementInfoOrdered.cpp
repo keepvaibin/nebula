@@ -105,7 +105,10 @@ bool PlacementInfoOrdered::initPlacementStep(uint64_t deadline) {
         if (!NebulaMods::isMissingFiles(set->mName, iter)) {
             NebulaLoadTrace::Scope trace(set->mName);
             MR::setCurrentPlacementZoneId(MR::getPlacedZoneId(iter));
-            if (mInitializing == nullptr) mInitializing = creator(MR::getJapaneseObjectName(set->mName));
+            if (mInitializing == nullptr) {
+                NebulaLoadTrace::placed(set->mName, MR::getPlacedZoneId(iter));
+                mInitializing = creator(MR::getJapaneseObjectName(set->mName));
+            }
             MR::initLiveActorSystemInfo(iter);
             const bool ready = mInitializing->initStep(iter, deadline);
             MR::initLiveActorSystemInfo(iter);
@@ -115,8 +118,12 @@ bool PlacementInfoOrdered::initPlacementStep(uint64_t deadline) {
         }
         mPlacementLink = mPlacementLink->mNextLink;
         if (mPlacementLink == nullptr) ++mPlacementSet;
-        if (nebula_host()->clock_ns(nebula_host()->user) >= deadline) return mPlacementSet >= count;
+        if (nebula_host()->clock_ns(nebula_host()->user) >= deadline) {
+            if (mPlacementSet >= count) NebulaLoadTrace::placementDone();
+            return mPlacementSet >= count;
+        }
     }
+    NebulaLoadTrace::placementDone();
     return true;
 }
 
