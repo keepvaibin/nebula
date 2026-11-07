@@ -247,7 +247,7 @@ bool SnowFloorTile::doErase(const Vec3f& rPosition, f32 radius, f32 amount) {
 }
 
 namespace {
-    // Floors move on the game's main thread.
+    // Floors move on the game thread.
     u16 sXs[4096];
     u16 sYs[4096];
     f32 sWeights[4096];

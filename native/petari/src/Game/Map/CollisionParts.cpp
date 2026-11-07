@@ -543,7 +543,7 @@ u32 CollisionParts::checkStrikeLine(HitInfo* pHitInfo, u32 maxHits, const Vec3f&
 }
 
 namespace {
-    // Area lists are asked for on the game's main thread.
+    // Area lists are asked for on the game thread.
     KC_PrismData* sAreaPrisms[512];
 }  // namespace
 

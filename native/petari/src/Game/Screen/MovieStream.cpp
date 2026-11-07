@@ -3,7 +3,6 @@
 #include "Game/Screen/MovieDraw.hpp"
 #include "Game/Render/RenderTexture.hpp"
 #include "Game/System/NebulaClock.hpp"
-#include "Game/System/GameThreads.hpp"
 #include "Game/System/NebulaSystemSettings.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/System/NebulaFrameClock.hpp"

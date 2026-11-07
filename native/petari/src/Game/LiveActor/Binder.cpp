@@ -86,7 +86,7 @@ bool Binder::compSensor(const HitInfo* pPlane1, const HitInfo* pPlane2) {
 // checks our movement in small steps, pushes the sphere out of overlapping geometry, then slides the remaining movement along the contact surface
 // records ground, wall, and roof contacts, stores our push-out vector, and optionally follows moving ground before returning the result
 namespace {
-    // Binders move on the game's main thread, one at a time.
+    // Binders move on the game thread, one at a time.
     HitInfo sLocalPlanes[32];
 }  // namespace
 

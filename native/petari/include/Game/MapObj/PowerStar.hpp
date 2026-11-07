@@ -1,7 +1,5 @@
 #pragma once
 
-#include "Game/System/NebulaAtomic.hpp"
-
 #include "Game/LiveActor/LiveActor.hpp"
 #include <nebula_geometry.hpp>
 
@@ -82,7 +80,7 @@ public:
         s32 mColorFrame;
     };
 
-    NebulaAtomic< bool > mIsGrandStar;
+    bool mIsGrandStar;
     bool _125;
     bool _126;
     bool _127;

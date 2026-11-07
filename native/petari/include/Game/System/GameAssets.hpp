@@ -25,7 +25,7 @@ namespace GameAssets {
     // The `index`-th entry of the folder at pPath, in the store's order: false past the last.
     bool folderEntry(const char* pPath, u32 index, FolderEntry* pEntry);
 
-    // Reads `size` bytes at `offset` of the file: the calling thread sleeps while the host reads, the game's other threads run.
+    // Reads `size` bytes at `offset` of the file, done when it returns.
     s32 read(const File* pFile, void* pDst, s32 size, s32 offset);
     // The file's bytes in the mapped store, read-only, for the process's life; may wait for the drive.
     const void* map(s32 entryNum);

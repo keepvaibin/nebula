@@ -1,15 +1,13 @@
 #include "Game/System/SaveBinary.hpp"
 #include "Game/Util/MemoryUtil.hpp"
-#include "Game/System/GameThreads.hpp"
 #include "Game/System/HeapMemoryWatcher.hpp"
-#include "Game/Util/MutexHolder.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include <cstring>
 
 namespace MR {
     CurrentHeapRestorer::CurrentHeapRestorer(NebulaArena* pHeap) {
-        _0 = NebulaArena::currentSlot();
+        _0 = NebulaArena::getCurrentHeap();
         MR::becomeCurrentHeap(pHeap);
     }
 
@@ -18,7 +16,7 @@ namespace MR {
     }
 
     NebulaArena* getCurrentHeap() {
-        return NebulaArena::currentSlot();
+        return NebulaArena::getCurrentHeap();
     }
 
     NebulaArena* getSceneArchiveHeap() {
@@ -38,7 +36,7 @@ namespace MR {
     }
 
     bool isEqualCurrentHeap(NebulaArena* pHeap) {
-        return NebulaArena::currentSlot() == pHeap;
+        return NebulaArena::getCurrentHeap() == pHeap;
     }
 
     void copyMemory(void* pDst, const void* pSrc, u32 size) {

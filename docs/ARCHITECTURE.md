@@ -26,8 +26,9 @@ their code differs (Petari's `VERSION` switches between them, five places), the 
 `smg_game.dll` holds the game's code, compiled with clang. [NATIVE_PORT.md](NATIVE_PORT.md) records how the decompilation was made to run
 natively.
 
-- **Threads**: every game thread is a host thread; one at a time changes the game world (`GameThreads.hpp`). The host's renderer, audio,
-  input and file threads run free of it.
+- **Threads**: the game world runs on one thread, with no locks. The sound engine runs on the host's audio clock and hears
+  from the game only through its command ring (`Game/Sound/SoundCommand.hpp`). The host's renderer and input threads run
+  free of both.
 - **Memory**: the game's heaps sit on host memory; only the machine's memory limits them.
 - **Graphics**: typed records ([GRAPHICS_ARCHITECTURE.md](GRAPHICS_ARCHITECTURE.md)).
 - **Audio**: the game writes each voice's settings in floats and hertz; the host's mixer plays them.

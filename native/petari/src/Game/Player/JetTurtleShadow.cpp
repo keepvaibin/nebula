@@ -1,10 +1,8 @@
 #include "Game/Player/JetTurtleShadow.hpp"
-#include "Game/System/GameThreads.hpp"
 #include "Game/Render/FrameList.hpp"
 #include "Game/Player/PlayerModel.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
-#include "Game/Util/MutexHolder.hpp"
 
 JetTurtleShadow::JetTurtleShadow(const char* pName) : LiveActor(pName) {
 }
@@ -12,13 +10,8 @@ JetTurtleShadow::JetTurtleShadow(const char* pName) : LiveActor(pName) {
 void JetTurtleShadow::calcType0(MtxPtr pMtx) {
     Model* pModel = MR::getModel(this);
     MR::setBaseTRMtx(this, pMtx);
-
-    (MR::MutexHolder< 0 >::sMutex).lock();
-
     pModel->calc();
     pModel->viewCalc();
-
-    (MR::MutexHolder< 0 >::sMutex).unlock();
 }
 
 void JetTurtleShadow::drawType0() const {

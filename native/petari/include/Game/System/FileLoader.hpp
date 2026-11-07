@@ -3,7 +3,6 @@
 #include "Game/System/ArchiveHolder.hpp"
 #include "Game/System/FileHolder.hpp"
 #include "Game/System/GameAssets.hpp"
-#include "Game/System/GameThreads.hpp"
 
 #include "Game/System/NebulaArena.hpp"
 #include <NebulaGpu.h>
@@ -27,7 +26,6 @@ public:
     void removeHolderIfIsEqualHeap(NebulaArena*);
     void removeFile(const char*);
 
-    GameMutex mMutex;
     FileHolder* mFileHolder;
     ArchiveHolder* mArchiveHolder;
 };

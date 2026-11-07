@@ -1,5 +1,4 @@
 #include "Game/LiveActor/ModelManager.hpp"
-#include "Game/System/GameThreads.hpp"
 #include "Game/Animation/BckCtrl.hpp"
 #include "Game/Animation/BpkPlayer.hpp"
 #include "Game/Animation/BrkPlayer.hpp"
@@ -12,7 +11,6 @@
 #include "Game/LiveActor/MaterialUpdater.hpp"
 #include "Game/System/ResourceHolder.hpp"
 #include "Game/Util/ModelUtil.hpp"
-#include "Game/Util/MutexHolder.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Render/Model.hpp"
 #include <cstdio>
@@ -69,8 +67,6 @@ void ModelManager::prepareMaterials() {
 }
 
 void ModelManager::updateList() {
-    (MR::MutexHolder< 0 >::sMutex).lock();
-
     Model* pModel = getModel();
     if (mMaterialUpdater != nullptr) {
         mMaterialUpdater->update();
@@ -93,8 +89,6 @@ void ModelManager::updateList() {
     }
 
     pModel->calcMaterial();
-
-    (MR::MutexHolder< 0 >::sMutex).unlock();
 }
 
 void ModelManager::startBck(const char* pBckName, const char* pActorAnimName) {
@@ -345,9 +339,7 @@ void ModelManager::calc() {
         mBvaPlayer->calc();
     }
 
-    (MR::MutexHolder< 0 >::sMutex).lock();
     getModel()->calc();
-    (MR::MutexHolder< 0 >::sMutex).unlock();
 
     if (mXanimePlayer != nullptr) {
         mXanimePlayer->clearAnm(0);

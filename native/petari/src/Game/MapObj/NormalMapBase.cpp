@@ -1,6 +1,5 @@
 #include "Game/Render/FrameList.hpp"
 #include "Game/MapObj/NormalMapBase.hpp"
-#include "Game/System/GameThreads.hpp"
 #include "Game/Render/RenderTexture.hpp"
 #include "Game/Render/FrameList.hpp"
 #include "Game/Render/TypedDraw.hpp"
@@ -144,9 +143,7 @@ void NormalMapBase::control() {
 void NormalMapBase::calcAnim() {
     LiveActor::calcAnim();
     updateBtkMtx();
-    (MR::MutexHolder< 0 >::sMutex).lock();
     MR::getModel(this)->viewCalc();
-    (MR::MutexHolder< 0 >::sMutex).unlock();
 }
 
 void NormalMapBase::updateBtkMtx() {

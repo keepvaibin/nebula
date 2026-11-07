@@ -1,5 +1,4 @@
 #include "Game/Util/SystemUtil.hpp"
-#include "Game/System/GameThreads.hpp"
 #include "Game/NameObj/NameObjHolder.hpp"
 #include "Game/NameObj/NameObj.hpp"  // complete for NameObjMethod's ABI size
 #include "Game/System/AudSystemWrapper.hpp"
