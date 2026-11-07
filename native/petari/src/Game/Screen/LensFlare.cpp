@@ -176,7 +176,7 @@ void LensFlareLine::controlAnim() {
 }
 
 LensFlareDirector::LensFlareDirector()
-    : NameObj("\203\214\203\223\203\131\203\164\203\214\203\101\212\307\227\235" /* レンズフレア管理 */), mRing(), mGlow(), mLine(), mBrightObjCount(), _60(0.0f, 0.0f), _68(), _6C(0.0f, 0.0f), _74(0.0f, 0.0f), _7C() {
+    : NameObj("\203\214\203\223\203\131\203\164\203\214\203\101\212\307\227\235" /* レンズフレア管理 */), mRing(), mGlow(), mLine(), mBrightObjCount(), mAsker(Frame::newProbeAsker()), _60(0.0f, 0.0f), _68(), _6C(0.0f, 0.0f), _74(0.0f, 0.0f), _7C() {
 }
 
 LensFlareDirector::~LensFlareDirector() {
@@ -212,7 +212,7 @@ void LensFlareDirector::setDrawSyncToken() {
         mProbeCapacity = count;
     }
     NebulaScreenProbe* const probes = mProbes;
-    const u32 done = Frame::screenProbeResults(BrightObjBase::cReadbackChannel, probes, count);
+    const u32 done = Frame::screenProbeResults(BrightObjBase::cReadbackChannel, mAsker, probes, count);
     for (u32 i = 0; i < mBrightObjCount && (i + 1) * BrightObjBase::cProbeCount <= done; i++) {
         const NebulaScreenProbe* pProbes = &probes[i * BrightObjBase::cProbeCount];
         if (pProbes->x != BrightObjBase::cNoProbes) {
@@ -223,7 +223,7 @@ void LensFlareDirector::setDrawSyncToken() {
     for (u32 i = 0; i < mBrightObjCount; i++) {
         mBrightObjArray[i]->calcBrightInfo(&probes[i * BrightObjBase::cProbeCount]);
     }
-    Frame::probeScreen(BrightObjBase::cReadbackChannel, probes, count);
+    Frame::probeScreen(BrightObjBase::cReadbackChannel, mAsker, probes, count);
 }
 
 s32 LensFlareDirector::checkArea() {

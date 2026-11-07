@@ -154,7 +154,7 @@ void StarPointerTransformHolder::movement() {
     mFocalLength = ((MR::getScreenHeight() * 0.5f) / MR::tan(fovyRad * 0.5f));
 }
 
-StarPointerPeekZ::StarPointerPeekZ() {
+StarPointerPeekZ::StarPointerPeekZ() : mAsker(Frame::newProbeAsker()) {
     mInfos = new DpdInfo*[2];
 }
 
@@ -164,7 +164,7 @@ void StarPointerPeekZ::setDrawSyncToken() {
     // The depth under each pointer: what was asked last, and the picture drawn so far at where they are now.
     NebulaScreenProbe probes[2];
     const u32 count = StarPointerFunction::getNumStarPointer();
-    const u32 done = Frame::screenProbeResults(cReadbackChannel, probes, count);
+    const u32 done = Frame::screenProbeResults(cReadbackChannel, mAsker, probes, count);
     for (u32 channel = 0; channel < count; channel++) {
         if (MR::isInRange(mInfos[channel]->mPos.x, 0.0f, MR::getScreenWidth() - 1) &&
             MR::isInRange(mInfos[channel]->mPos.y, 0.0f, MR::getScreenHeight() - 1)) {
@@ -180,7 +180,7 @@ void StarPointerPeekZ::setDrawSyncToken() {
             probes[channel].y = -1.0f;
         }
     }
-    Frame::probeScreen(cReadbackChannel, probes, count);
+    Frame::probeScreen(cReadbackChannel, mAsker, probes, count);
 }
 
 namespace StarPointerFunction {

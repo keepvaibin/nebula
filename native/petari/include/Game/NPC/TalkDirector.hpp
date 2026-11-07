@@ -27,6 +27,7 @@ public:
     u8 _pad[0x18];
     f32 _3C;
     u8 _pad2[0x14];
+    u32 mAsker;  // the asker its probes carry
 };
 
 class TalkDirector : public LayoutActor {
