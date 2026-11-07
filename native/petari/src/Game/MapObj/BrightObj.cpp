@@ -266,7 +266,11 @@ void BrightSun::control() {
 }
 
 void BrightSun::calcBrightInfo(NebulaScreenProbe* pProbes) {
+    // A sun not out gives no light: nothing it saw before it went stays on the screen.
     if (MR::isDead(this)) {
+        mInfo.reset();
+        mBrightness = 0.0f;
+        mIsNotVisible = true;
         pProbes[0].x = cNoProbes;
         return;
     }
