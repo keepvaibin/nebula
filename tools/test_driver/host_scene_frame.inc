@@ -64,6 +64,8 @@
                     const uint64_t frame = std::strtoull(entry.c_str() + at + 1, nullptr, 10);
                     if (kind == "kill") {
                         events.push_back({NEBULA_TEST_KILL_PLAYER, frame, 0});
+                    } else if (kind == "circleclose" || kind == "circleopen") {
+                        events.push_back({NEBULA_TEST_CIRCLE_WIPE, frame, kind == "circleopen" ? 1 : 0});
                     } else if (kind == "star") {
                         events.push_back({NEBULA_TEST_GET_STAR, frame, -1});
                     } else if (kind == "grandstar") {

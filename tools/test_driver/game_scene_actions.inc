@@ -6,6 +6,10 @@
         if (action.kind == NEBULA_TEST_CHANGE_STAGE) {
             nebula_snprintf(sStage, sizeof(sStage), "%s", action.stage);
             MR::requestChangeStageInGameMoving(sStage, action.scenario);
+        } else if (action.kind == NEBULA_TEST_CIRCLE_WIPE) {
+            if (action.scenario != 0) MR::openWipeCircle(60);
+            else MR::closeWipeCircle(60);
+            JUTNativeLog("test: circle %s, 60 frames\n", action.scenario != 0 ? "open" : "close");
         } else if (action.kind == NEBULA_TEST_PLACE_PLAYER) {
             MR::setPlayerPos(Vec3f(action.position[0], action.position[1], action.position[2]));
         } else if (action.kind == NEBULA_TEST_KILL_PLAYER) {

@@ -7,11 +7,21 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Render/Clip.hpp"
+#include "Game/Screen/LayoutManager.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
+#include "Game/System/NebulaHost.hpp"
 
 namespace {
     static const s32 sAnimFrame = 60;
     static const char* sOutAnimName = "Out";
     static const char* sInAnimName = "In";
+
+    f32 ringCanvasScale() {
+        const auto& display = MR::getDisplay();
+        if (!MR::isScreen16Per9() || !display.wide) return 1.0f;
+        return __builtin_fmaxf(1.0f, __builtin_fmaxf(display.layout_width / NebulaFrameClock::cLayoutWidth,
+                                                   display.vertical_fit));
+    }
 };  // namespace
 
 namespace {
@@ -37,15 +47,26 @@ void WipeRing::exeClose() {
     updatePlayerPos();
 }
 
+void WipeRing::calcAnim() {
+    LayoutActor::calcAnim();
+    if (!MR::isExecuteCalcAnimLayout(this)) return;
+    auto* ring = mLayoutManager->findPaneByName("Ring");
+    if (ring == nullptr) return;
+    // Scale the mask about its followed centre; moving that centre would detach it from Mario.
+    // Matrices are rebuilt above on every frame, so folding never compounds this scale.
+    const f32 scale = ringCanvasScale();
+    for (int row = 0; row < 2; ++row)
+        for (int col = 0; col < 3; ++col) ring->mGlbMtx.m[row][col] *= scale;
+}
+
 void WipeRing::exeWipeIn() {
     updatePlayerPos();
 
     if (MR::isFirstStep(this)) {
-        f32 radiusRate = calcRadius() / calcMaxRadius();
-
-        mWipeInFrame = radiusRate * MR::getAnimCtrl(this, 0)->getEnd();
         MR::getAnimCtrl(this, 0)->setRate(0.0f);
     }
+    const f32 radiusRate = __builtin_fminf(calcRadius() / calcMaxRadius(), 1.0f);
+    mWipeInFrame = radiusRate * MR::getAnimCtrl(this, 0)->getEnd();
 
     const f32 angle = (1.0f + static_cast< f32 >(getNerveStep()) / mAnimFrame) * FloatUtil::PI();
     f32 f = MR::sin(0.5f * angle);
@@ -69,11 +90,10 @@ void WipeRing::exeWipeOut() {
     updatePlayerPos();
 
     if (MR::isFirstStep(this)) {
-        f32 invRadiusRate = 1.0f - calcRadius() / calcMaxRadius();
-
-        mWipeOutFrame = invRadiusRate * MR::getAnimCtrl(this, 0)->getEnd();
         MR::getAnimCtrl(this, 0)->setRate(0.0f);
     }
+    const f32 invRadiusRate = 1.0f - __builtin_fminf(calcRadius() / calcMaxRadius(), 1.0f);
+    mWipeOutFrame = invRadiusRate * MR::getAnimCtrl(this, 0)->getEnd();
 
     const f32 angle = (static_cast< f32 >(getNerveStep()) / mAnimFrame) * FloatUtil::PI();
     f32 f = MR::sin(0.5f * angle);
@@ -180,30 +200,18 @@ bool WipeRing::getMarioCenterPos(Vec3f* pCenterPos) {
 }
 
 f32 WipeRing::calcRadius() const {
-    f32 radius = mCenterPos.length();
-
-    Vec2f screenHeightPos = Vec2f(0.0f, static_cast< f32 >(MR::getScreenHeight()));
-    f32 screenHeightDistance = mCenterPos.distance(screenHeightPos);
-
-    if (radius < screenHeightDistance) {
-        radius = screenHeightDistance;
-    }
-
-    Vec2f screenWidthPos = Vec2f(static_cast< f32 >(MR::getScreenWidth()), 0.0f);
-    f32 screenWidthDistance = mCenterPos.distance(screenWidthPos);
-
-    if (radius < screenWidthDistance) {
-        radius = screenWidthDistance;
-    }
-
-    Vec2f screenMaxPos = Vec2f(static_cast< f32 >(MR::getScreenWidth()), static_cast< f32 >(MR::getScreenHeight()));
-    f32 screenMaxDistance = mCenterPos.distance(screenMaxPos);
-
-    if (radius < screenMaxDistance) {
-        radius = screenMaxDistance;
-    }
-
-    return radius;
+    // Measure in the ring's circular coordinate system, including the taller layout canvas.
+    // Screen positions themselves always use the game's logical 456-line height.
+    const f32 width = MR::getScreenWidth(), height = MR::getScreenHeight();
+    const auto& display = MR::getDisplay();
+    const bool extended = MR::isScreen16Per9() && display.wide;
+    const f32 canvasWidth = extended ? display.layout_width : NebulaFrameClock::cLayoutWidth;
+    const f32 vertical = extended ? display.vertical_fit : 1.0f;
+    const f32 locationX = MR::isScreen16Per9() ? 0.75f : 1.0f;
+    const f32 x = __builtin_fmaxf(__builtin_fabsf(mCenterPos.x), __builtin_fabsf(width - mCenterPos.x)) *
+                  canvasWidth / (width * locationX);
+    const f32 y = __builtin_fmaxf(__builtin_fabsf(mCenterPos.y), __builtin_fabsf(height - mCenterPos.y)) * vertical;
+    return NebulaSqrt(x * x + y * y) / ringCanvasScale();
 }
 
 f32 WipeRing::calcMaxRadius() const {
