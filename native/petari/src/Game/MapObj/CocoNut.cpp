@@ -2,7 +2,6 @@
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/LiveActor/Spine.hpp"
-#include "Game/NameObj/NameObjArchiveListCollector.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "math_types.hpp"
@@ -635,10 +634,6 @@ const char* CocoNut::getModelName() {
 const char* CocoNut::getBreakEffectName() {
     bool watermelonMode = MR::isStarPieceCounterStop();
     return watermelonMode ? "BreakWatermelon" : "CocoNutBreak";
-}
-
-void CocoNut::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
-    pCollector->addArchive(getModelName());
 }
 
 void CocoNut::calcAndSetBaseMtx() {

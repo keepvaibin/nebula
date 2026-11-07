@@ -13,17 +13,23 @@ Clip* Clip::load(const void* pFile) {
     return new Clip(pHeader);
 }
 
+// The bindings live as long as the clip (in its holder's arena): a clip is bound again for each scene's player model.
 Clip::Clip(const NebulaClipHeader* pFile) : mFile(pFile), mBound(nullptr) {
     mFrame = 0.0f;
     mFrameMax = pFile->frames;
     mAttribute = pFile->loop_mode;
+    const u32 count = targetCount();
+    if (count != 0) {
+        mBound = new u32[count];
+    }
+}
+
+u32 Clip::targetCount() const {
+    return (mFile->values_at - mFile->targets_at) / sizeof(NebulaClipTarget);
 }
 
 void Clip::bind(const ModelData* pModelData) {
-    const u32 count = (mFile->values_at - mFile->targets_at) / sizeof(NebulaClipTarget);
-    if (mBound == nullptr && count != 0) {
-        mBound = new u32[count];
-    }
+    const u32 count = targetCount();
     const NebulaClipTarget* pTargets = targets();
     for (u32 i = 0; i < count; i++) {
         const s32 index = pModelData->findMaterial(reinterpret_cast< const char* >(mFile) + pTargets[i].name_at);

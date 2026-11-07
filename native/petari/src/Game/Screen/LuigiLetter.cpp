@@ -1,6 +1,5 @@
 #include "Game/Screen/LuigiLetter.hpp"
 #include "Game/LiveActor/Nerve.hpp"
-#include "Game/NameObj/NameObjArchiveListCollector.hpp"
 #include "Game/Screen/IconAButton.hpp"
 #include "Game/Util/EventUtil.hpp"
 #include "Game/Util/PlayerInputUtil.hpp"
@@ -91,25 +90,6 @@ void LuigiLetter::exeEnd() {
     if (MR::isAnimStopped(this, 0)) {
         kill();
     }
-}
-
-void LuigiLetter::makeArchiveListForNPC(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
-    LuigiLetter::makeArchiveListCommon(pCollector, MR::getLuigiLetterGalaxyNameForNPC());
-}
-
-void LuigiLetter::makeArchiveListForMenu(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
-    LuigiLetter::makeArchiveListCommon(pCollector, MR::getLuigiLetterGalaxyName());
-}
-
-void LuigiLetter::makeArchiveListCommon(NameObjArchiveListCollector* pCollector, const char* pGalaxyName) {
-    if (pGalaxyName == nullptr) {
-        return;
-    }
-
-    MR::FormattedName archiveName("LuigiPicture%s", pGalaxyName);
-
-    pCollector->addArchive("LuigiLetter");
-    pCollector->addArchive(archiveName.c_str());
 }
 
 namespace MR {

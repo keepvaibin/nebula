@@ -12,8 +12,7 @@ namespace nw4r {
 // buttons: the host names the style (the controller in use, or the one chosen) and the button each stands for
 // (NebulaHostServices::button_icons). Every text and layout that shows a button through the picture font shows them.
 namespace NebulaIcons {
-    // Once the stationed resources are loaded (the picture font among them), before the stationed heaps shrink to fit:
-    // the font's sheets, widths and code map of ours.
+    // Once the system fonts are made (the picture font among them): the font's sheets, widths and code map of ours.
     void init();
     // Each frame: the icons again when the host's choice changed, and a little more of their larger paintings.
     void update();

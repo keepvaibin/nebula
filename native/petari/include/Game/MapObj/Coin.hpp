@@ -4,7 +4,6 @@
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/PartsModel.hpp"
 
-class NameObjArchiveListCollector;
 
 class CoinHostInfo {
 public:
@@ -66,7 +65,6 @@ public:
     void calcRebouond();
     void attenuateVelocity();
     static bool isNeedBubble(const TableIter&);
-    static void makeArchiveList(NameObjArchiveListCollector*, const TableIter&);
 
     CoinHostInfo* mHostInfo;
     FlashingCtrl* mFlashCtrl;

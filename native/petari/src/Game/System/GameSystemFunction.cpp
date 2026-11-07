@@ -10,7 +10,6 @@
 #include "Game/System/GameSystemObjHolder.hpp"
 #include "Game/System/GameSystemResetAndPowerProcess.hpp"
 #include "Game/System/GameSystemSceneController.hpp"
-#include "Game/System/GameSystemStationedArchiveLoader.hpp"
 #include "Game/System/SaveDataHandleSequence.hpp"
 #include "Game/System/PlayerInput.hpp"
 #include "Game/System/PlayerInputs.hpp"
@@ -40,10 +39,6 @@ namespace {
 };  // namespace
 
 namespace GameSystemFunction {
-    void initAfterStationedResourceLoaded() {
-        SingletonHolder< GameSystem >::get()->initAfterStationedResourceLoaded();
-    }
-
     void setSceneNameObjHolderToNameObjRegister() {
         SingletonHolder< NameObjRegister >::get()->setCurrentHolder(SingletonHolder< GameSystem >::get()->mSceneController->mObjHolder);
     }
@@ -70,13 +65,6 @@ namespace GameSystemFunction {
         return !isExecuteLoadSystemArchive;
     }
 
-    void requestChangeArchivePlayer(bool isPlayerMario) {
-        SingletonHolder< GameSystem >::get()->mStationedArchiveLoader->requestChangeArchivePlayer(isPlayerMario);
-    }
-
-    void waitEndChangeArchivePlayer() {
-        SingletonHolder< GameSystem >::get()->mStationedArchiveLoader->waitDone();
-    }
 
     void activateScreenPreserver() {
         SingletonHolder< GameSystem >::get()->mObjHolder->mScreenPreserver->activate();

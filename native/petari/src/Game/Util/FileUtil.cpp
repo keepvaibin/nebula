@@ -1,131 +1,81 @@
 #include "Game/Util/FileUtil.hpp"
-#include "Game/System/FileLoader.hpp"
+#include "Game/System/AssetFolder.hpp"
+#include "Game/System/HeapMemoryWatcher.hpp"
 #include "Game/System/Language.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include "Game/System/ResourceHolderManager.hpp"
-#include "Game/Util/MemoryUtil.hpp"
+#include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
-#include <cstdio>
 #include <cstring>
-#include "Game/System/GameAssets.hpp"
+
+namespace {
+    NebulaArena* getHoldingArena() {
+        const HeapMemoryWatcher* const pWatcher = SingletonHolder< HeapMemoryWatcher >::get();
+        NebulaArena* const pCurrent = NebulaArena::getCurrentHeap();
+        if (pWatcher->mSceneHeap == nullptr || pCurrent != pWatcher->mSceneHeap) {
+            return pCurrent;
+        }
+
+        return MR::isStageFileSelect() ? pWatcher->mPermanent : pWatcher->mFileCacheHeap;
+    }
+}  // namespace
 
 namespace MR {
     bool isFileExist(const char* pFilePath, bool considerLanguage) {
-        s32 entryNum;
-
-        if (considerLanguage) {
-            entryNum = convertPathToEntrynumConsideringLanguage(pFilePath);
-        } else {
-            entryNum = GameAssets::find(pFilePath);
+        if (!considerLanguage) {
+            return GameAssets::find(pFilePath) >= 0;
         }
 
-        return entryNum >= 0;
+        MR::FormattedName filePath;
+        makeFileNameConsideringLanguage(filePath, pFilePath);
+        return GameAssets::find(filePath.c_str()) >= 0;
     }
 
-    s32 convertPathToEntrynumConsideringLanguage(const char* pFilePath) {
+    AssetFolder* getArchive(const char* pFilePath, NebulaArena* pArena) {
         MR::FormattedName filePath;
         makeFileNameConsideringLanguage(filePath, pFilePath);
 
-        return GameAssets::find(filePath.c_str());
-    }
-
-    void* loadFile(const char* pFilePath, u8* pDst, NebulaArena* pHeap) {
-        MR::FormattedName filePath;
-        makeFileNameConsideringLanguage(filePath, pFilePath);
-
-        return SingletonHolder< FileLoader >::get()->loadFile(filePath.c_str(), pDst, pHeap);
-    }
-
-    AssetFolder* mountArchive(const char* pFilePath, NebulaArena* pHeap) {
-        MR::FormattedName filePath;
-        makeFileNameConsideringLanguage(filePath, pFilePath);
-
-        return SingletonHolder< FileLoader >::get()->mountArchive(filePath.c_str(), pHeap);
-    }
-
-    void mountArchiveByObjectOrLayoutName(const char* pFilePrefix, NebulaArena* pHeap) {
-        NebulaArena* pLocalHeap;
-
-        if (pHeap != nullptr) {
-            pLocalHeap = pHeap;
-        } else {
-            pLocalHeap = getSceneArchiveHeap();
+        AssetFolder* pFolder = GameAssets::findArchive(filePath.c_str(), nullptr);
+        if (pFolder != nullptr) {
+            return pFolder;
         }
 
-        MR::FormattedName objArcPath;
-        bool isExistObjArc = makeObjectArchiveFileNameFromPrefix(objArcPath, pFilePrefix, false);
-
-        MR::FormattedName layoutArcPath;
-        bool isExistLayoutArc = makeLayoutArchiveFileNameFromPrefix(layoutArcPath, pFilePrefix, false);
-
-        if (isExistObjArc) {
-            mountArchive(objArcPath.c_str(), pLocalHeap);
-        } else if (isExistLayoutArc) {
-            mountArchive(layoutArcPath.c_str(), pLocalHeap);
+        const s32 entry = GameAssets::find(filePath.c_str());
+        if (entry < 0) {
+            return nullptr;
         }
-    }
 
-    void* getLoadedFile(const char* pFilePath) {
-        MR::FormattedName filePath;
-        makeFileNameConsideringLanguage(filePath, pFilePath);
-
-        return SingletonHolder< FileLoader >::get()->getLoadedFile(filePath.c_str());
-    }
-
-    AssetFolder* getMountedArchive(const char* pFilePath) {
-        MR::FormattedName filePath;
-        makeFileNameConsideringLanguage(filePath, pFilePath);
-
-        return SingletonHolder< FileLoader >::get()->getMountedArchive(filePath.c_str());
-    }
-
-    void createAndAddArchive(AssetFolder* pFolder, NebulaArena* pHeap, const char* pFilePath) {
-        SingletonHolder< FileLoader >::get()->createAndAddArchive(pFolder, pHeap, pFilePath);
-    }
-
-    void getMountedArchiveAndHeap(const char* pFilePath, AssetFolder** ppArchive, NebulaArena** ppHeap) {
-        MR::FormattedName filePath;
-        makeFileNameConsideringLanguage(filePath, pFilePath);
-
-        SingletonHolder< FileLoader >::get()->getMountedArchiveAndHeap(filePath.c_str(), ppArchive, ppHeap);
-    }
-
-    void removeFile(const char* pFilePath) {
-        SingletonHolder< FileLoader >::get()->removeFile(pFilePath);
-    }
-
-    void removeFileConsideringLanguage(const char* pFilePath) {
-        MR::FormattedName filePath;
-        makeFileNameConsideringLanguage(filePath, pFilePath);
-
-        SingletonHolder< FileLoader >::get()->removeFile(filePath.c_str());
-    }
-
-    void removeResourceAndFileHolderIfIsEqualHeap(NebulaArena* pHeap) {
-        SingletonHolder< ResourceHolderManager >::get()->removeIfIsEqualHeap(pHeap);
-        SingletonHolder< FileLoader >::get()->removeHolderIfIsEqualHeap(pHeap);
-    }
-
-    bool isLoadedFile(const char* pFilePath) {
-        MR::FormattedName filePath;
-        makeFileNameConsideringLanguage(filePath, pFilePath);
-
-        return SingletonHolder< FileLoader >::get()->isLoaded(filePath.c_str());
-    }
-
-    bool isLoadedObjectOrLayoutArchive(const char* pFilePrefix) {
-        MR::FormattedName objArcPath;
-        bool isExistObjArc = makeObjectArchiveFileNameFromPrefix(objArcPath, pFilePrefix, false);
-
-        MR::FormattedName layoutArcPath;
-        makeLayoutArchiveFileNameFromPrefix(layoutArcPath, pFilePrefix, false);
-
-        if (isExistObjArc) {
-            return isLoadedFile(objArcPath.c_str());
-        } else {
-            return isLoadedFile(layoutArcPath.c_str());
+        if (pArena == nullptr) {
+            pArena = getHoldingArena();
         }
+
+        pFolder = new (pArena, 0) AssetFolder(entry, GameAssets::load(entry, nullptr, 0, pArena, nullptr));
+        GameAssets::holdArchive(filePath.c_str(), pFolder, pArena);
+        return pFolder;
+    }
+
+    NebulaArena* getArchiveArena(const char* pFilePath) {
+        MR::FormattedName filePath;
+        makeFileNameConsideringLanguage(filePath, pFilePath);
+
+        NebulaArena* pArena = nullptr;
+        GameAssets::findArchive(filePath.c_str(), &pArena);
+        return pArena;
+    }
+
+    void addArchive(AssetFolder* pFolder, NebulaArena* pArena, const char* pFilePath) {
+        GameAssets::holdArchive(pFilePath, pFolder, pArena);
+    }
+
+    void removeResourceHolders(NebulaArena* pArena) {
+        SingletonHolder< ResourceHolderManager >::get()->removeIfIsEqualHeap(pArena);
+    }
+
+    bool isExistObjectOrLayoutArchive(const char* pFilePrefix) {
+        MR::FormattedName path;
+        return makeObjectArchiveFileNameFromPrefix(path, pFilePrefix, false) || makeLayoutArchiveFileNameFromPrefix(path, pFilePrefix, false);
     }
 
     void makeFileNameConsideringLanguage(FormattedName& rDst, const char* pFilePath) {

@@ -6,7 +6,6 @@
 class LodCtrl;
 class MapPartsRailMover;
 class ModelObj;
-class NameObjArchiveListCollector;
 
 class RainCloud : public LiveActor {
 public:
@@ -32,7 +31,6 @@ public:
     void updateRainCylinder();
     bool isNextStartOK() const;
 
-    static void makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter);
 
     ModelObj* mCloudCylinder;
     Pos3f mRainCylinderMtx;

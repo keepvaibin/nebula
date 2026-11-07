@@ -3,7 +3,6 @@
 #include "Game/Screen/LayoutActor.hpp"
 
 class IconAButton;
-class NameObjArchiveListCollector;
 
 class PeachLetter : public LayoutActor {
 public:
@@ -18,7 +17,6 @@ public:
     void exeAppear();
     void exeWait();
     void exeEnd();
-    static void makeArchiveList(NameObjArchiveListCollector*, const TableIter&);
 
 private:
     /// @brief The pointer to the actor instance for the A Button.

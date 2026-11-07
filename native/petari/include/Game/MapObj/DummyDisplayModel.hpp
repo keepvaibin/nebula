@@ -3,7 +3,6 @@
 #include "Game/LiveActor/PartsModel.hpp"
 
 class LodCtrl;
-class NameObjArchiveListCollector;
 
 #define ITEM_TYPE_COIN 0
 #define ITEM_TYPE_KINOPIO 1
@@ -44,5 +43,4 @@ namespace MR {
     DummyDisplayModel* createDummyDisplayModelCrystalItem(LiveActor*, s32, const Vec3f&, const Vec3f&);
     s32 getDummyDisplayModelId(const TableIter&, s32);
     s32 getDummyDisplayModelId(const LiveActor*);
-    void makeArchiveListDummyDisplayModel(NameObjArchiveListCollector*, const TableIter&);
 };  // namespace MR

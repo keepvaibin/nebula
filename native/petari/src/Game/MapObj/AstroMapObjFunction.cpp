@@ -1,6 +1,5 @@
 #include "Game/MapObj/AstroMapObjFunction.hpp"
 #include "Game/Demo/AstroDemoFunction.hpp"
-#include "Game/NameObj/NameObjArchiveListCollector.hpp"
 #include "Game/Screen/GalaxyNamePlate.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/AreaObjUtil.hpp"
@@ -141,26 +140,6 @@ namespace {
         return num;
     }
 };  // namespace
-
-void AstroMapObjFunction::makeArchiveListFromArg0(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
-    s32 domeId = getDomeIdFromArg0(rIter);
-
-    const char* objName;
-    MR::getObjectName(&objName, rIter);
-
-    const char* modelName = getModelName(objName, domeId);
-
-    pCollector->addArchive(modelName);
-
-    if (MR::isEqualString(modelName, "AstroDomeEntrance")) {
-        makeArchiveListAstroNamePlate(pCollector, rIter);
-    }
-}
-
-void AstroMapObjFunction::makeArchiveListAstroNamePlate(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
-    pCollector->addArchive("GalaxyNamePlate");
-    pCollector->addArchive(::cAstroNamePlateArcName);
-}
 
 bool AstroMapObjFunction::isAlreadyRevival(const char* pObjName, s32 domeId) {
     if (MR::isEqualString(pObjName, "AstroChildRoom")) {

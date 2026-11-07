@@ -28,14 +28,6 @@ AudSystemWrapper::AudSystemWrapper(NebulaArena* pSolidHeap, NebulaArena* pHeap) 
     mSpkHeap = NebulaArena::create(pSolidHeap);
 }
 
-void AudSystemWrapper::requestResourceForInitialize() {
-    MR::mountArchive(sJaiSeqArc, mSolidHeap);
-    MR::mountArchive(sJaiChordArc, mSolidHeap);
-    MR::mountArchive(sJaiMeArc, mSolidHeap);
-    MR::mountArchive(AudSpeakerWrap::getResName(), mSpkHeap);
-    MR::mountArchive(sJaiRemixArc, mSolidHeap);
-}
-
 void AudSystemWrapper::createAudioSystem() {
     receiveResourceForInitialize();
 
@@ -116,9 +108,9 @@ void AudSystemWrapper::resumeReset() {
 }
 
 void AudSystemWrapper::receiveResourceForInitialize() {
-    mJaiSeqRes = MR::getMountedArchive(sJaiSeqArc);
-    mJaiChordRes = MR::getMountedArchive(sJaiChordArc);
-    mJaiMeRes = MR::getMountedArchive(sJaiMeArc);
-    mSpkRes = MR::getMountedArchive(AudSpeakerWrap::getResName());
-    mJaiRemixSeqRes = MR::getMountedArchive(sJaiRemixArc);
+    mJaiSeqRes = MR::getArchive(sJaiSeqArc, mSolidHeap);
+    mJaiChordRes = MR::getArchive(sJaiChordArc, mSolidHeap);
+    mJaiMeRes = MR::getArchive(sJaiMeArc, mSolidHeap);
+    mSpkRes = MR::getArchive(AudSpeakerWrap::getResName(), mSpkHeap);
+    mJaiRemixSeqRes = MR::getArchive(sJaiRemixArc, mSolidHeap);
 }

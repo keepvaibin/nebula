@@ -3,7 +3,6 @@
 #include "Game/MapObj/MapObjActor.hpp"
 #include <nebula_geometry.hpp>
 
-class NameObjArchiveListCollector;
 
 struct SoundEffectDataEntry {
     const char* objectName;
@@ -124,5 +123,4 @@ public:
 };
 
 namespace MR {
-    void makeArchiveListUFOKinokoUnderConstruction(NameObjArchiveListCollector*, const TableIter&);
 };  // namespace MR

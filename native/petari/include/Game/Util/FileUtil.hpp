@@ -16,80 +16,23 @@ namespace MR {
     /// @return `true` if the file exists within the disc file system, `false` otherwise.
     bool isFileExist(const char* pFilePath, bool considerLanguage);
 
-    /// @brief Returns the size of a file, in bytes.
-    /// @param[in] pFilePath A pointer to the null-terminated absolute path of the file.
-    /// @param[in] considerLanguage Determines if the file is localized.
-    /// @return The size of the file, in bytes.
+    // The archive at pFilePath (the current language's when there is one), made on first use and held until the arena
+    // holding it goes: pArena, or with none given, the asker's (the current) arena, except that what a stage's scene
+    // arena asks for is held in the file cache arena (kept across a restart of that stage), and the file select's in
+    // the permanent arena. Null when the store has no such archive.
+    AssetFolder* getArchive(const char* pFilePath, NebulaArena* pArena = nullptr);
 
-    /// @brief Converts a file path to its entry number, with respect to the current language.
-    /// @param[in] pFilePath A pointer to the null-terminated absolute path of the file.
-    /// @return The entry number if the file was found, `-1` otherwise.
-    s32 convertPathToEntrynumConsideringLanguage(const char* pFilePath);
+    // The arena holding pFilePath's archive; null when none is held.
+    NebulaArena* getArchiveArena(const char* pFilePath);
 
-    /// @brief Loads a file into main memory synchronously.
-    /// @param[in] pFilePath A pointer to the null-terminated absolute path of the file.
-    /// @param[out] pDst A pointer to the target memory address, or `nullptr` to allocate.
-    /// @param[in,out] pHeap An optional pointer to the target heap.
-    /// @return A pointer to the loaded file data.
-    void* loadFile(const char* pFilePath, u8* pDst, NebulaArena* pHeap);
+    // Holds pFolder (an archive made from memory) under pFilePath until pArena goes.
+    void addArchive(AssetFolder* pFolder, NebulaArena* pArena, const char* pFilePath);
 
-    /// @brief Mounts an archive file synchronously.
-    /// @param[in] pFilePath A pointer to the null-terminated absolute path of the archive file.
-    /// @param[in,out] pHeap An optional pointer to the target heap.
-    /// @return A pointer to the mounted archive.
-    AssetFolder* mountArchive(const char* pFilePath, NebulaArena* pHeap);
+    // Before the arena goes: the resource and layout holders made from its archives.
+    void removeResourceHolders(NebulaArena* pArena);
 
-    /// @brief Requests asynchronous mounting of an object or layout archive file.
-    /// @param[in] pFilePrefix A pointer to the null-terminated name of the archive file, without the extension.
-    /// @param[in,out] pHeap An optional pointer to the target heap.
-    void mountArchiveByObjectOrLayoutName(const char* pFilePrefix, NebulaArena* pHeap);
-
-    /// @brief Returns the data of a file after it has been asynchronously loaded.
-    /// @param[in] pFilePath A pointer to the null-terminated absolute path of the file.
-    /// @return A pointer to the loaded file data.
-    void* getLoadedFile(const char* pFilePath);
-
-    /// @brief Returns the archive after it has been asynchronously mounted.
-    /// @param[in] pFilePath A pointer to the null-terminated absolute path of the archive file.
-    /// @return A pointer to the mounted archive.
-    AssetFolder* getMountedArchive(const char* pFilePath);
-
-    /// @brief Creates an archive from existing memory data.
-    /// @param[in] pArcData A pointer to the archive file data.
-    /// @param[in,out] pHeap A pointer to the target heap.
-    /// @param[in] pFilePath A pointer to the null-terminated absolute path of the file.
-    void createAndAddArchive(AssetFolder* pFolder, NebulaArena* pHeap, const char* pFilePath);
-
-    /// @brief Returns the mounted archive and heap for a given file by pointer.
-    /// @param[in] pFilePath A pointer to the null-terminated absolute path of the archive file.
-    /// @param[out] ppArchive A pointer to the archive pointer to initialize.
-    /// @param[out] ppHeap A pointer to the heap pointer to initialize.
-    void getMountedArchiveAndHeap(const char* pFilePath, AssetFolder** ppArchive, NebulaArena** ppHeap);
-
-    void removeFile(const char*);
-
-    /// @brief Removes a file from memory, with respect to the current language.
-    /// @param[in] pFilePath A pointer to the null-terminated absolute path of the file.
-    void removeFileConsideringLanguage(const char* pFilePath);
-
-    /// @brief Removes resource and file holders from memory if they belong to the given heap.
-    /// @param[in,out] pHeap A pointer to the heap to compare with.
-    void removeResourceAndFileHolderIfIsEqualHeap(NebulaArena* pHeap);
-
-
-    /// @brief Determines if an file is currently loaded.
-    /// @param[in] pFilePath A pointer to the null-terminated absolute path of the file.
-    /// @return `true` if the file is currently loaded, `false` otherwise.
-    bool isLoadedFile(const char* pFilePath);
-
-    /// @brief Determines if an archive file is currently mounted.
-    /// @param[in] pFilePath A pointer to the null-terminated absolute path of the archive file.
-    /// @return `true` if the archive file is currently mounted, `false` otherwise.
-
-    /// @brief Determines if an object or layout archive file is currently loaded.
-    /// @param[in] pFilePrefix A pointer to the null-terminated name of the archive file, without the extension.
-    /// @return `true` if the archive file is currently loaded, `false` otherwise.
-    bool isLoadedObjectOrLayoutArchive(const char* pFilePrefix);
+    // Whether the store has the object or layout archive pFilePrefix ("Kuribo": its .arc in ObjectData or LayoutData).
+    bool isExistObjectOrLayoutArchive(const char* pFilePrefix);
 
     /// @brief Creates an absolute path to a language-aware file.
     /// @param[out] rDst The path made.

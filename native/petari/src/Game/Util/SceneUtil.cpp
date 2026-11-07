@@ -7,13 +7,13 @@
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Scene/ScenePlayingResult.hpp"
 #include "Game/Scene/StageDataHolder.hpp"
-#include "Game/Scene/StageFileLoader.hpp"
 #include "Game/System/GalaxyStatusAccessor.hpp"
 #include "Game/System/GameDataFunction.hpp"
 #include "Game/System/GameSystem.hpp"
 #include "Game/System/GameSystemSceneController.hpp"
 #include "Game/System/PlacedHiddenStarScenarioTable.hpp"
 #include "Game/Util/FileUtil.hpp"
+#include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/PlacementId.hpp"
 #include "Game/Util/PlacementLink.hpp"
 #include "Game/Util/PlacementUtil.hpp"
@@ -223,9 +223,8 @@ namespace MR {
     }
 
     AssetFolder* getStageArchive(const char* pStageName) {
-        MR::FormattedName archiveName;
-        StageFileLoader::makeStageArchiveName(archiveName, pStageName);
-        return getMountedArchive(archiveName.c_str());
+        // A zone's archive lives with the stage's files, also on the file select stage.
+        return getArchive(MR::FormattedName("/StageData/%s.arc", pStageName).c_str(), getSceneArchiveHeap());
     }
 
     s32 getGeneralPosNum() {

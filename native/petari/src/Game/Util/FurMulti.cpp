@@ -22,8 +22,6 @@ namespace {
                           10.0f,
                           0.778809f,
                           0.0f,
-                          1.0f,
-                          0.0f,
                           0.0f,
                           0.6f,
                           255.0f,
@@ -44,22 +42,10 @@ FurMulti::FurMulti(LiveActor* pActor, u32 count) {
     mActor = pActor;
     mModel = MR::getModel(pActor);
     mCount = count;
-    mShapeIndices = new u32[count];
-    mDrawOrders = new u8[count];
     mFurCtrls = new FurCtrl*[count];
-
-    for (u32 i = 0; i < count; i++) {
-        mDrawOrders[i] = 255;
-    }
-
-    mAddedToManager = 0;
-    _1 = 1;
 }
 
-void FurMulti::setLayerDirect(u32 layer, u32 drawOrder, u32 shape, u32 numLayers, FurParam* pParam, ResTIMG* pBody, ResTIMG* pLength,
-                              ResTIMG* pIndirect, ResTIMG* pDensity) {
-    mShapeIndices[layer] = shape;
-    mDrawOrders[layer] = drawOrder;
+void FurMulti::setLayerDirect(u32 layer, u32 shape, u32 numLayers, FurParam* pParam, ResTIMG* pBody, ResTIMG* pLength, ResTIMG* pDensity) {
     mFurCtrls[layer] = new FurCtrl(mActor, pParam, false, 1);
     ModelData* pModelData = mModel->getModelData();
     FurMulti* pClone = MR::getFurDrawManager()->getFurBank()->check(pModelData, layer);
@@ -69,7 +55,7 @@ void FurMulti::setLayerDirect(u32 layer, u32 drawOrder, u32 shape, u32 numLayers
         return;
     }
 
-    mFurCtrls[layer]->setupFur(mModel, pLength, pIndirect, pBody, shape, numLayers);
+    mFurCtrls[layer]->setupFur(mModel, pLength, pBody, shape, numLayers);
     MR::getFurDrawManager()->mBank->regist(this, layer);
     mFurCtrls[layer]->calcLayerForm();
 
@@ -87,22 +73,16 @@ void FurMulti::setLayerDirect(u32 layer, u32 drawOrder, u32 shape, u32 numLayers
         pDensity->mImageNum = 1;
         pDensity->mLodBias = 0;
         JUTTexture* pTexture = new JUTTexture(pDensity);
-        FurDrawer* pDrawer = mFurCtrls[layer]->mDrawer;
-        pDrawer->mFurTexture = pTexture;
-        pDrawer->mUseDensityMap = 1;
+        mFurCtrls[layer]->mDrawer->mFurTexture = pTexture;
     } else {
         mFurCtrls[layer]->createFurMap();
     }
-
-    mFurCtrls[layer]->mDrawer->update();
 }
 
 void FurMulti::addToManager() {
     for (u32 i = 0; i < mCount; i++) {
         MR::getFurDrawManager()->add(mFurCtrls[i], 1);
     }
-
-    mAddedToManager = 1;
 }
 
 void FurMulti::offDraw(u32 mask) {
@@ -174,13 +154,6 @@ namespace MR {
                     pLength = static_cast< ResTIMG* >(getResourceHolder(pActor)->mFileInfoTable->getRes(name.c_str()));
                 }
 
-                name.format("%sIndirect.bti", pModelData->getMaterialName(i));
-                ResTIMG* pIndirect = nullptr;
-
-                if (getResourceHolder(pActor)->mFileInfoTable->isExistRes(name.c_str())) {
-                    pIndirect = static_cast< ResTIMG* >(getResourceHolder(pActor)->mFileInfoTable->getRes(name.c_str()));
-                }
-
                 name.format("%sDensity.bti", pModelData->getMaterialName(i));
                 ResTIMG* pDensity = nullptr;
 
@@ -196,7 +169,7 @@ namespace MR {
                     loadFurText(pActor, pParam, &dynamicParam, name.c_str());
                 }
 
-                pMulti->setLayerDirect(layer, 0, shape, pParam->mNumLayers, pParam, pBody, pLength, pIndirect, pDensity);
+                pMulti->setLayerDirect(layer, shape, pParam->mNumLayers, pParam, pBody, pLength, pDensity);
                 pMulti->mFurCtrls[layer]->mDynamicParam.mLightParam = dynamicParam.mLightParam;
                 pMulti->mFurCtrls[layer]->mDynamicParam.mFogCtrl = dynamicParam.mFogCtrl;
                 layer++;

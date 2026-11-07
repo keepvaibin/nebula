@@ -18,16 +18,8 @@ ResourceHolder* ResourceHolderManager::createAndAdd(const char* pArcName, Nebula
     return createAndAddInner(pArcName, MR::makeObjectArchiveFileName, startCreateResourceHolder)->mResourceHolder;
 }
 
-ResourceHolder* ResourceHolderManager::createAndAddStationed(const char* pParam1) {
-    return createAndAddInnerStationed(pParam1, &ResourceHolderManager::createResourceHolder)->mResourceHolder;
-}
-
 LayoutHolder* ResourceHolderManager::createAndAddLayoutHolder(const char* pParam1, NebulaArena*) {
     return createAndAddInner(pParam1, MR::makeLayoutArchiveFileName, startCreateLayoutHolder)->mLayoutHolder;
-}
-
-LayoutHolder* ResourceHolderManager::createAndAddLayoutHolderStationed(const char* pParam1) {
-    return createAndAddInnerStationed(pParam1, &ResourceHolderManager::createLayoutHolder)->mLayoutHolder;
 }
 
 LayoutHolder* ResourceHolderManager::createAndAddLayoutHolderRawData(const char* pParam1) {
@@ -88,9 +80,8 @@ ResourceHolderManagerName2Resource* ResourceHolderManager::createAndAddInner(con
 
     MR::FormattedName archivePath;
     (*pMakeArchiveFileNameFunc)(archivePath, pArcName);
-
-    if (MR::getMountedArchive(archivePath.c_str()) == nullptr) {
-        MR::mountArchive(archivePath.c_str(), MR::getCurrentHeap());
+    if (MR::getArchive(archivePath.c_str()) == nullptr) {
+        NEBULA_PANIC("%s cannot be loaded", archivePath.c_str());
     }
 
     CreateResourceHolderArgs args = CreateResourceHolderArgs();
@@ -100,29 +91,18 @@ ResourceHolderManagerName2Resource* ResourceHolderManager::createAndAddInner(con
     return add(archivePath.c_str(), args);
 }
 
-ResourceHolderManagerName2Resource* ResourceHolderManager::createAndAddInnerStationed(const char* pParam1, FuncPtrC pParam2) {
-    CreateResourceHolderArgs args = CreateResourceHolderArgs();
-
-    (this->*pParam2)(pParam1, &args);
-
-    ResourceHolderManagerName2Resource* pName2Resource = add(pParam1, args);
-
-    return pName2Resource;
-}
-
+// A holder lives in its archive's arena, so it goes with the archive.
 void ResourceHolderManager::createResourceHolder(const char* pParam1, CreateResourceHolderArgs* pArgs) {
-    AssetFolder* pArchive;
-
-    MR::getMountedArchiveAndHeap(pParam1, &pArchive, &pArgs->mHeap);
+    AssetFolder* const pArchive = MR::getArchive(pParam1);
+    pArgs->mHeap = MR::getArchiveArena(pParam1);
     MR::CurrentHeapRestorer heapRestorer(pArgs->mHeap);
 
     pArgs->mResourceHolder = new ResourceHolder(*pArchive);
 }
 
 void ResourceHolderManager::createLayoutHolder(const char* pParam1, CreateResourceHolderArgs* pArgs) {
-    AssetFolder* pArchive;
-
-    MR::getMountedArchiveAndHeap(pParam1, &pArchive, &pArgs->mHeap);
+    AssetFolder* const pArchive = MR::getArchive(pParam1);
+    pArgs->mHeap = MR::getArchiveArena(pParam1);
     MR::CurrentHeapRestorer heapRestorer(pArgs->mHeap);
 
     pArgs->mLayoutHolder = new LayoutHolder(*pArchive);

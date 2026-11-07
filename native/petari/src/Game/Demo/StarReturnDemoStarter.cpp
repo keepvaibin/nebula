@@ -4,7 +4,6 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/PowerStar.hpp"
 #include "Game/MapObj/SpinDriverPathDrawer.hpp"
-#include "Game/NameObj/NameObjArchiveListCollector.hpp"
 #include "Game/Screen/StageResultInformer.hpp"
 #include "Game/System/GameSequenceFunction.hpp"
 #include "Game/Util/CameraUtil.hpp"
@@ -108,16 +107,6 @@ void StarReturnDemoStarter::kill() {
     if (MR::isDrawSpinDriverPathAtOpa()) {
         MR::offDrawSpinDriverPathAtOpa();
     }
-}
-
-void StarReturnDemoStarter::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
-    if (::isGrandStar()) {
-        pCollector->addArchive("GrandStar");
-    }
-
-    pCollector->addArchive("SpinTico");
-    pCollector->addArchive("MarioHair");
-    pCollector->addArchive("SpinDriverPath");
 }
 
 void StarReturnDemoStarter::control() {

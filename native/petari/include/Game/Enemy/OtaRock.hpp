@@ -7,7 +7,6 @@ class AnimScaleController;
 class CocoNutBall;
 class FireBall;
 class FixedPosition;
-class NameObjArchiveListCollector;
 
 class OtaRock : public LiveActor {
 public:
@@ -25,7 +24,6 @@ public:
     virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
     virtual bool receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 
-    static void makeArchiveList(NameObjArchiveListCollector*, const TableIter&);
 
     void initModel();
     void initSensor();

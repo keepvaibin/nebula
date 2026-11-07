@@ -1,7 +1,6 @@
 #include "Game/NPC/Rosetta.hpp"
 #include "Game/Demo/AstroDemoFunction.hpp"
 #include "Game/LiveActor/Nerve.hpp"
-#include "Game/NameObj/NameObjArchiveListCollector.hpp"
 #include "Game/NPC/RosettaDemoAstroDome.hpp"
 #include "Game/NPC/RosettaDemoEpilogue.hpp"
 #include "Game/NPC/RosettaDemoHeavensDoor.hpp"
@@ -20,27 +19,6 @@ namespace NrvRosetta {
 };  // namespace NrvRosetta
 
 Rosetta::Rosetta(const char* pName) : NPCActor(pName), mFadeStarter(this, -1), mDemoExecutor(), mTalkDemoExecutor(), mObjArg0(-1) {
-}
-
-void Rosetta::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
-    pCollector->addArchive("Rosetta");
-    pCollector->addArchive("RosettaMiddle");
-    pCollector->addArchive("RosettaLow");
-
-    s32 arg0;
-    MR::getPlacementArg0WithInit(rIter, &arg0);
-
-    switch (arg0) {
-    case 0:
-        RosettaDemoHeavensDoor1::makeArchiveList(pCollector, rIter);
-        break;
-    case 1:
-        RosettaDemoHeavensDoor2::makeArchiveList(pCollector, rIter);
-        break;
-    case 2:
-        RosettaDemoAstroDomeExplain::makeArchiveList(pCollector, rIter);
-        break;
-    }
 }
 
 void Rosetta::init(const TableIter& rIter) {

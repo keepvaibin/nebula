@@ -2,7 +2,6 @@
 
 #include "Game/MapObj/MapObjActor.hpp"
 
-class NameObjArchiveListCollector;
 
 class UFOKinoko : public MapObjActor {
 public:
@@ -13,7 +12,6 @@ public:
     virtual void initCaseUseSwitchB(const MapObjActorInitInfo&);
     virtual void initCaseNoUseSwitchB(const MapObjActorInitInfo&);
 
-    static void makeArchiveList(NameObjArchiveListCollector*, const TableIter&);
 
     void startMove();
 

@@ -25,7 +25,6 @@ public:
     virtual void control();
     virtual void calcAndSetBaseMtx();
 
-    static void makeArchiveList(NameObjArchiveListCollector*, const TableIter&);
 
     void exeWait();
     void exeReaction();

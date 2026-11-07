@@ -1,6 +1,5 @@
 #include "Game/Screen/PeachLetter.hpp"
 #include "Game/LiveActor/Nerve.hpp"
-#include "Game/NameObj/NameObjArchiveListCollector.hpp"
 #include "Game/Screen/IconAButton.hpp"
 #include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
@@ -75,6 +74,3 @@ void PeachLetter::exeEnd() {
     }
 }
 
-void PeachLetter::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
-    pCollector->addArchive("PeachLetter");
-}

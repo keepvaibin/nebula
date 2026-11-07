@@ -5,7 +5,6 @@
 #include "Game/Map/SphereSelector.hpp"
 #include "Game/MapObj/AstroDomeOrbit.hpp"
 #include "Game/MapObj/MiniatureGalaxyHolder.hpp"
-#include "Game/NameObj/NameObjArchiveListCollector.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Screen/GalaxyNamePlate.hpp"
 #include "Game/System/GalaxyStatusAccessor.hpp"
@@ -215,42 +214,6 @@ void MiniatureGalaxy::kill() {
     }
 
     mOrbit->kill();
-}
-
-void MiniatureGalaxy::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
-    const char* objectName;
-
-    s32 arg0 = -1;
-    MR::getPlacementArg0NoInit(rIter, &arg0);
-    s32 type = arg0;
-
-    MR::getObjectName(&objectName, rIter);
-
-    if (type == MiniatureGalaxyType_Normal) {
-        pCollector->addArchive(objectName);
-        pCollector->addArchive("MiniatureGalaxyUnknown");
-    } else if (type == MiniatureGalaxyType_Hatena) {
-        pCollector->addArchive(objectName);
-        pCollector->addArchive("MiniHatenaGalaxy");
-    } else if (type == MiniatureGalaxyType_Koopa) {
-        const char* pStageName;
-        u32 miniLen = strlen("Mini");
-        bool isUnknownKoopa = true;
-        pStageName = objectName + miniLen;
-
-        if (!MR::isEqualSubString(objectName, "KoopaBattleVs") && MR::isAlreadyVisitedStage(pStageName)) {
-            isUnknownKoopa = false;
-        }
-
-        pCollector->addArchive(isUnknownKoopa ? "MiniKoopaGalaxy" : objectName);
-        // pCollector->addArchive(::isUseKoopaFaceModel(objectName, ::getGalayNameFromObjectName(objectName)) ? "MiniKoopaGalaxy" : objectName);
-        pCollector->addArchive("MiniatureGalaxyUnknownKoopa");
-    }
-
-    pCollector->addArchive("MiniatureGalaxyShadow");
-    pCollector->addArchive("MiniatureGalaxySelect");
-    pCollector->addArchive("MiniatureGalaxyStarNumber");
-    pCollector->addArchive("GalaxyNamePlate");
 }
 
 void MiniatureGalaxy::control() {

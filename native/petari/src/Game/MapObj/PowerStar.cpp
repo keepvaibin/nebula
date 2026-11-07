@@ -5,7 +5,6 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/PowerStarAppearPoint.hpp"
 #include "Game/MapObj/PowerStarHolder.hpp"
-#include "Game/NameObj/NameObjArchiveListCollector.hpp"
 #include "Game/Util/ActorCameraUtil.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
@@ -283,12 +282,6 @@ void PowerStar::initShadowPowerStar(LiveActor* pActor, bool a2) {
     MR::initShadowFromCSV(pActor, "Shadow");
     MR::invalidateShadowAll(pActor);
     MR::validateShadowGroup(pActor, a2 ? "円柱" : "通常");
-}
-
-void PowerStar::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
-    if (MR::isPowerStarGetDemoWithLuigiCurrentGalaxy()) {
-        pCollector->addArchive("LuigiNPC");
-    }
 }
 
 void PowerStar::control() {

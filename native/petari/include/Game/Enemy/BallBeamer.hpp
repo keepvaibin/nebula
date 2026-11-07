@@ -3,7 +3,6 @@
 #include "Game/LiveActor/LiveActor.hpp"
 #include <nebula_geometry.hpp>
 
-class NameObjArchiveListCollector;
 class RingBeam;
 
 class BallBeamer : public LiveActor {
@@ -15,7 +14,6 @@ public:
     virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
     virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 
-    static void makeArchiveList(NameObjArchiveListCollector*, const TableIter&);
     void syncSwitchOnA();
     void syncSwitchOffA();
     void syncSwitchOnB();

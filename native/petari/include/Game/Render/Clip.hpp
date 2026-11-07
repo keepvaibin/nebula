@@ -115,6 +115,7 @@ private:
     const f32* values() const {
         return reinterpret_cast< const f32* >(reinterpret_cast< const u8* >(mFile) + mFile->values_at);
     }
+    u32 targetCount() const;
     f32 value(const NebulaClipTrack& rTrack, f32 rest) const;
     u8 colorByte(const NebulaClipTrack& rTrack) const;
     f32 rotation(const NebulaClipTrack& rTrack) const;

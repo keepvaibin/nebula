@@ -3,7 +3,6 @@
 #include "Game/LiveActor/ModelObj.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/NPC/NPCActorItem.hpp"
-#include "Game/NameObj/NameObjArchiveListCollector.hpp"
 #include "Game/Util/ActorShadowUtil.hpp"
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
@@ -35,19 +34,6 @@ namespace NrvHoneyBee {
 HoneyBee::HoneyBee(const char* pName) : NPCActor(pName), _15C(-1), mArg0(), _1A0() {
     _160.identity();
     _190.zero();
-}
-
-void HoneyBee::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
-    const char* objName;
-    MR::getObjectName(&objName, rIter);
-    NPCActorItem npcItem = objName;
-
-    s32 arg0 = -1;
-    MR::getPlacementArg0NoInit(rIter, &arg0);
-
-    if (MR::getNPCItemData(&npcItem, arg0)) {
-        NPCActor::addArchive(pCollector, npcItem);
-    }
 }
 
 void HoneyBee::init(const TableIter& rIter) {

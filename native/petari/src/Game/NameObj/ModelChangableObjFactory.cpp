@@ -11,10 +11,7 @@
 #include "Game/MapObj/MercatorRotateParts.hpp"
 #include "Game/MapObj/SimpleNormalMapObj.hpp"
 #include "Game/NameObj/NameObjFactory.hpp"
-#include "Game/Util/FileUtil.hpp"
-#include "Game/Util/MapPartsUtil.hpp"
 #include <cstring>
-#include "Game/Util/StringUtil.hpp"
 
 namespace {
     const Model2CreateFunc cModelChangableObjCreatorTable[] = {
@@ -109,22 +106,5 @@ namespace MR {
         }
 
         return nullptr;
-    }
-
-    void requestMountModelChangableObjArchives(const char* pName, s32 a2) {
-        MR::FormattedName objectName;
-
-        MR::getMapPartsObjectName(objectName, pName, a2);
-        MR::mountArchiveByObjectOrLayoutName(objectName.c_str(), nullptr);
-    }
-
-    bool isReadResourceFromStoreAtModelChangableObj(const char* pName, s32 a2) {
-        MR::FormattedName objectName;
-        MR::FormattedName archiveName;
-
-        MR::getMapPartsObjectName(objectName, pName, a2);
-        MR::makeObjectArchiveFileNameFromPrefix(archiveName, objectName.c_str(), true);
-
-        return !MR::isLoadedFile(archiveName.c_str());
     }
 };  // namespace MR

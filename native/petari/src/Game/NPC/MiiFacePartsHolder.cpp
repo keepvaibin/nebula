@@ -27,7 +27,7 @@ MiiFacePartsHolder::~MiiFacePartsHolder() {
 }
 
 void MiiFacePartsHolder::init(const TableIter& rIter) {
-    AssetFolder* pArchive = MR::getMountedArchive("/ObjectData/MiiFaceDatabase.arc");
+    AssetFolder* pArchive = MR::getArchive("/ObjectData/MiiFaceDatabase.arc");
     void* pResBuffer = pArchive->getResource("/RFL_Res.dat");
     u32 resSize = pArchive->getResSize(pResBuffer);
     _38 = MiiInitRes(pResBuffer, resSize, false);

@@ -6,7 +6,7 @@
 // pause menu's Settings) and holds the whole game still as the HOME Menu does, its sound and movies with it, until it
 // has risen away again.
 namespace NebulaSettingsMenu {
-    void init();             // GameSystem, once the stationed layouts are loaded
+    void init();             // GameSystem::initAfterSystemArchiveLoaded
     void update();           // GameSystem::update, once a frame
     void draw();             // GameSystem::draw, over the scene and its wipes
     bool isFreezingScene();  // open or opening or closing: the scene waits

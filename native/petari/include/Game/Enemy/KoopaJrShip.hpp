@@ -10,7 +10,6 @@ class TableIter;
 class Kameck;
 class KoopaJr;
 class ModelObj;
-class NameObjArchiveListCollector;
 
 class KoopaJrShip : public LiveActor {
 public:
@@ -58,7 +57,6 @@ public:
     void exeBreakEnd();
     void exeTurnFront();
 
-    static void makeArchiveList(NameObjArchiveListCollector*, const TableIter&);
 
     inline bool isNextStateDamage(s32& x) {
         return --x <= 0;

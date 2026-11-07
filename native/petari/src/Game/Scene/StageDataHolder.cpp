@@ -117,17 +117,6 @@ void StageDataHolder::initAfterScenarioSelected() {
     initJmpInfo(&mPathObjs, "/jmp/Path");
 }
 
-void StageDataHolder::requestFileLoadCommon() {
-    _FC->requestFileLoad();
-    _100->requestFileLoad();
-}
-
-void StageDataHolder::requestFileLoadScenario() {
-    _104->requestFileLoad();
-    _108->requestFileLoad();
-    _10C->requestFileLoad();
-}
-
 void StageDataHolder::initPlacement() {
     while (!initPlacementStep(UINT64_MAX)) {}
 }
@@ -498,7 +487,7 @@ Table* StageDataHolder::attachJmpInfoToArray(Table* pInfo, const char* pDirector
 }
 
 void StageDataHolder::initTableData() {
-    void* tableFile = MR::getMountedArchive("/StageData/ObjNameTable.arc")->getResource("ObjNameTable.tbl");
+    void* tableFile = MR::getArchive("/StageData/ObjNameTable.arc")->getResource("ObjNameTable.tbl");
 
     mObjNameTbl = new Table();
     mObjNameTbl->attach(tableFile);

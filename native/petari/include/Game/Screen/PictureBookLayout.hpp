@@ -10,7 +10,6 @@ namespace nw4r {
 
 class ButtonPaneController;
 class IconAButton;
-class NameObjArchiveListCollector;
 class PictureBookCloseButton;
 
 class PictureBookLayout : public LayoutActor {
@@ -22,7 +21,6 @@ public:
     virtual void kill();
     virtual void control();
 
-    static void makeArchiveList(NameObjArchiveListCollector* pCollector, s32 chapterMin, s32 chapterMax, bool isRosettaReading);
     static s32 getChapterMax();
 
     void initTexture();

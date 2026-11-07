@@ -14,7 +14,7 @@ class SysInfoWindow;
 // lessons the game starts itself, stars returning to the Observatory, and the bosses' scenes. Talks Mario starts, a
 // star's get, Mario flying into a galaxy, questions, saves and the levels' own short scenes are not.
 namespace NebulaCutsceneSkip {
-    void init();                // GameSystem::initAfterStationedResourceLoaded
+    void init();                // GameSystem::initAfterSystemArchiveLoaded
     void update();              // GameSystem::update, once per step
     void draw();                // GameSystem::draw, over the scene
     bool isFreezingScene();     // the prompt and the fade out hold the scene still (GameSystem::updateSceneController)

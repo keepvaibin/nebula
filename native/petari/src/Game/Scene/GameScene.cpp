@@ -138,8 +138,7 @@ GameScene::~GameScene() {
 }
 
 void GameScene::init() {
-    NebulaLoadTrace::measure("SceneFunction::startStageFileLoad()", [&] { SceneFunction::startStageFileLoad(); });
-    MR::requestChangeArchivePlayer(MR::isPlayerLuigi() == false);
+    MR::createSceneObj(SceneObj_SceneDataInitializer);
     initNerve(GET_NERVE(GameScene, GameSceneScenarioOpeningCamera));
     SceneFunction::initForNameObj();
     SceneFunction::initForLiveActor();
@@ -174,8 +173,6 @@ void GameScene::init() {
     }
 
     NebulaLoadTrace::measure("SceneFunction::createStageDataHolder()", [&] { SceneFunction::createStageDataHolder(); });
-    MR::waitEndChangeArchivePlayer();
-    NebulaLoadTrace::measure("SceneFunction::startActorFileLoadCommon()", [&] { SceneFunction::startActorFileLoadCommon(); });
     MR::holdSceneInitialize();
 }
 
@@ -189,7 +186,6 @@ bool GameScene::initAfterScenarioChosen() {
         case 0:
             SceneFunction::initAfterScenarioSelected();
             NPCFunction::createNPCData();
-            SceneFunction::startActorFileLoadScenario();
             MR::createSceneObj(SceneObj_EventDirector);
             MR::initSceneMessage();
             break;

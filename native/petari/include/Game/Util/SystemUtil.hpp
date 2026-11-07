@@ -24,8 +24,6 @@ namespace MR {
     nw4r::ut::Font* getNumberFontNW4R();
     nw4r::ut::Font* getCinemaFontNW4R();
     ParticleResourceHolder* getParticleResourceHolder();
-    void requestChangeArchivePlayer(bool);
-    void waitEndChangeArchivePlayer();
     void callMethodAllSceneNameObj(void (NameObj::*)());
     void suspendAllSceneNameObj();
     void resumeAllSceneNameObj();

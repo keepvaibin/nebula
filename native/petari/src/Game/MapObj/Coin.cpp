@@ -3,7 +3,6 @@
 #include "Game/MapObj/CoinHolder.hpp"
 #include "Game/MapObj/CoinRotater.hpp"
 #include "Game/MapObj/PurpleCoinHolder.hpp"
-#include "Game/NameObj/NameObjArchiveListCollector.hpp"
 #include "Game/Util.hpp"
 #include <nebula_geometry.hpp>
 
@@ -633,12 +632,6 @@ bool Coin::isNeedBubble(const TableIter& rIter) {
     bool arg = false;
     MR::getPlacementArg7WithInit(rIter, &arg);
     return arg;
-}
-
-void Coin::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
-    if (Coin::isNeedBubble(rIter)) {
-        pCollector->addArchive("AirBubble");
-    }
 }
 
 namespace MR {

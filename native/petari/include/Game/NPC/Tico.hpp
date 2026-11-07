@@ -18,7 +18,6 @@ public:
     virtual void calcAndSetBaseMtx();
     virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 
-    static void makeArchiveList(NameObjArchiveListCollector*, const TableIter&);
 
     void initBase(s32);
     void initBase(const TableIter&, s32);

@@ -3,7 +3,6 @@
 #include "Game/NPC/NPCActor.hpp"
 #include "Game/Util/NPCUtil.hpp"
 
-class NameObjArchiveListCollector;
 class NerveExecutor;
 class TurnJointCtrl;
 
@@ -21,7 +20,6 @@ public:
     bool branchFunc(u32);
     bool eventFunc(u32);
 
-    static void makeArchiveList(NameObjArchiveListCollector*, const TableIter&);
     void startDemo(NerveExecutor*);
     void endDemo();
     void endDemoWithInterpole();

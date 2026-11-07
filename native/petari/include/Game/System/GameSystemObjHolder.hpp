@@ -18,7 +18,7 @@ public:
     /// @brief Creates a new `GameSystemObjHolder`.
     GameSystemObjHolder();
 
-    void initAfterStationedResourceLoaded();
+    void initAfterSystemArchiveLoaded();
     void initMessageResource();
     void init();
     void createAudioSystem();
@@ -28,7 +28,6 @@ public:
     void drawBeforeEndRender();
     void captureIfAllowForScreenPreserver();
     // The picture's width on a television's 720-pixel line, as chosen at boot: the safety frame scales from it.
-    void initStore();
     void initAudio();
     void initPicture();
     void initNameObj();

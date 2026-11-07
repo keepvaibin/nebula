@@ -5,7 +5,6 @@
 #include "Game/LiveActor/PartsModel.hpp"
 #include "Game/LiveActor/Spine.hpp"
 #include "Game/NPC/NPCActorItem.hpp"
-#include "Game/NameObj/NameObjArchiveListCollector.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorShadowUtil.hpp"
@@ -230,39 +229,6 @@ NPCActor::NPCActor(const char* pName) : LiveActor(pName) {
     mWaitNerve = GET_NERVE(NPCActor, NPCActorNrvWait);
     mTalkNerve = GET_NERVE(NPCActor, NPCActorNrvTalk);
     mReactionNerve = GET_NERVE(NPCActor, NPCActorNrvReaction);
-}
-
-void NPCActor::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
-    const char* name;
-    MR::getObjectName(&name, rIter);
-    NPCActorItem item(name);
-
-    s32 item_type = -1;
-    MR::getPlacementArg7NoInit(rIter, &item_type);
-
-    if (MR::getNPCItemData(&item, item_type)) {
-        NPCActor::addArchive(pCollector, item);
-    }
-}
-
-void NPCActor::addArchive(NameObjArchiveListCollector* pCollector, const NPCActorItem& rItem) {
-    if (!MR::isNullOrEmptyString(rItem.mGoods0) && MR::isNPCItemFileExist(rItem.mGoods0)) {
-        pCollector->addArchive(rItem.mGoods0);
-    }
-
-    if (!MR::isNullOrEmptyString(rItem.mGoods1) && MR::isNPCItemFileExist(rItem.mGoods1)) {
-        pCollector->addArchive(rItem.mGoods1);
-    }
-}
-
-void NPCActor::makeArchiveListDefault(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
-    const char* objName;
-    MR::getObjectName(&objName, rIter);
-    NPCActorItem item(objName);
-
-    if (MR::getNPCItemData(&item, 0)) {
-        NPCActor::addArchive(pCollector, item);
-    }
 }
 
 void NPCActor::setBaseMtx(const Pos3f& rPos) {

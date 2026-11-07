@@ -2,7 +2,6 @@
 #include "Game/Demo/DemoFunction.hpp"
 #include "Game/LiveActor/PartsModel.hpp"
 #include "Game/NPC/Rosetta.hpp"
-#include "Game/NameObj/NameObjArchiveListCollector.hpp"
 #include "Game/Util.hpp"
 
 namespace {
@@ -59,11 +58,6 @@ RosettaDemoHeavensDoor1::RosettaDemoHeavensDoor1(Rosetta* pHost, const TableIter
     MR::setClippingTypeSphere(mHost, 1500.0f);
     mHost->startDemo(this);
     mHost->makeActorDead();
-}
-
-void RosettaDemoHeavensDoor1::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
-    pCollector->addArchive("LightDome");
-    pCollector->addArchive("DomeHalo");
 }
 
 void RosettaDemoHeavensDoor1::preDemo() {
@@ -167,9 +161,6 @@ RosettaDemoHeavensDoor2::RosettaDemoHeavensDoor2(Rosetta* pHost, const TableIter
     MR::invalidateHitSensors(mHost);
     mHost->startDemo(this);
     initNerve(GET_NERVE(RosettaDemoHeavensDoor2, RosettaDemoHeavensDoor2NrvWait));
-}
-
-void RosettaDemoHeavensDoor2::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
 }
 
 void RosettaDemoHeavensDoor2::exeWait() {

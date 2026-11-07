@@ -2,7 +2,6 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/MapObj/StageEffectDataTable.hpp"
-#include "Game/NameObj/NameObjArchiveListCollector.hpp"
 #include "Game/Util.hpp"
 
 namespace NrvUFOKinoko {
@@ -12,15 +11,6 @@ namespace NrvUFOKinoko {
 };  // namespace NrvUFOKinoko
 
 UFOKinoko::UFOKinoko(const char* pName) : MapObjActor(pName) {
-}
-
-void UFOKinoko::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
-    bool arg7 = false;
-    MR::getPlacementArg7NoInit(rIter, &arg7);
-
-    if (arg7) {
-        pCollector->addArchive("UFOKinokoLow");
-    }
 }
 
 void UFOKinoko::init(const TableIter& rIter) {

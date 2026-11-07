@@ -111,9 +111,7 @@ MessageData* MessageSystem::getSceneMessageData() {
 
 MessageData::MessageData(const char* pArchiveName)
     : mIDTable(nullptr), mFile(nullptr), mMessages(nullptr), mText(nullptr), mNodes(nullptr), mBranches(nullptr) {
-    AssetFolder* pArchive = nullptr;
-    NebulaArena* pHeap = nullptr;
-    MR::getMountedArchiveAndHeap(pArchiveName, &pArchive, &pHeap);
+    AssetFolder* pArchive = MR::getArchive(pArchiveName);
 
     u8* msgData = (u8*)pArchive->getResource("Message.bmg");
     u8* mapData = (u8*)pArchive->getResource("MessageId.tbl");
@@ -155,7 +153,5 @@ void MessageHolder::initSystemData() {
 }
 
 void MessageHolder::initGameData() {
-    MR::mountArchive(MESSAGE_ARC, nullptr);
-
     mGameMessageData = new MessageData(MESSAGE_ARC);
 }

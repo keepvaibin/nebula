@@ -27,7 +27,8 @@ GROUPS = {
     "jsystem": r"jsystem",
     "nw4r": r"nw4r",
     "rfl": r"\bRFL[A-Z_]|\brfl[A-Z_]|MiiLib",
-    "loading": r"\bStationed|makeArchiveList|mountArchive",
+    # Batch 7 (N-63): archives are found or loaded when asked for, so the loaders, archive lists and mounts are gone.
+    "loading": r"\bStationed|makeArchiveList|mountArchive|\bFileLoader\b|\bStageFileLoader|\bArchiveHolder\b|\bFileHolder\b|\brequestMount|\bisLoadedFile|\breceiveFile|ArchiveListCollector|\bmountAsync|\bloadToMainRAM|\bisReadResourceFromStore",
     "fifo": r"\bGX[A-Z]\w+|\bGP[A-Z]\w+|\bFIFO\b|\bfifo\b|DisplayList",
     "sjis": r'"(?:\\[0-7]{3}){2,}',
     "offsets": r"\bfield_0x|\b_[0-9A-Fa-f]{2,3}\b(?!\w)",
@@ -36,7 +37,7 @@ GROUPS = {
     # Batch 7: one game thread, so its locks, thread slots and the host's thread services.
     "threads": r"\bGameMutex|\bMutexHolder|\bGameThreads|\bthread_slots|\bNEBULA_THREAD_SLOTS|\bNebulaHostThread|\bthread_adopt|\bthreads_dump|\bnebula_threads|\bsListMutex|\bsMappedLock|\bnebula_host_lock|\bNEBULA_HOST_LOCK",
 }
-CLOSED = {"math", "j3d", "audio", "audio_sync", "particles", "threads"}
+CLOSED = {"math", "j3d", "audio", "audio_sync", "particles", "threads", "loading"}
 CASE_FREE = {"j3d", "jsystem", "nw4r"}
 
 compiled = {k: re.compile(v, re.I if k in CASE_FREE else 0) for k, v in GROUPS.items()}

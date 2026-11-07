@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include "Game/NameObj/NameObjArchiveListCollector.hpp"
 
 class AnimScaleController;
 class WalkerStateWander;
@@ -29,7 +28,6 @@ public:
     void initSensor();
     void initState();
     void initKeySwitch(const TableIter&);
-    static void makeArchiveList(NameObjArchiveListCollector*, const TableIter&);
     bool requestStagger(HitSensor*, HitSensor*);
     bool requestBlowDown(HitSensor*, HitSensor*);
     bool tryFind();

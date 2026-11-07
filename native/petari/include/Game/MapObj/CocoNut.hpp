@@ -3,7 +3,6 @@
 #include "Game/LiveActor/LiveActor.hpp"
 #include <nebula_geometry.hpp>
 
-class NameObjArchiveListCollector;
 
 class CocoNut : public LiveActor {
 public:
@@ -19,7 +18,6 @@ public:
     virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
 
-    static void makeArchiveList(NameObjArchiveListCollector*, const TableIter&);
 
     void initMapToolInfo(const TableIter&);
     void initModel();

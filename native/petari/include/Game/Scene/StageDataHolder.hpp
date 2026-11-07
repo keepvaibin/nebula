@@ -16,8 +16,6 @@ public:
     virtual void init(const TableIter& rIter);
 
     void initAfterScenarioSelected();
-    void requestFileLoadCommon();
-    void requestFileLoadScenario();
     void initPlacement();
     bool initPlacementStep(uint64_t deadline);
     TableIter getCommonPathPointInfo(const Table** ppInfo, int index) const;

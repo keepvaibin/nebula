@@ -59,10 +59,6 @@ void RosettaPictureBook::kill() {
     mIconAButton->kill();
 }
 
-void RosettaPictureBook::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
-    PictureBookLayout::makeArchiveList(pCollector, 1, MR::getPictureBookChapterCanRead(), false);
-}
-
 void RosettaPictureBook::control() {
     mIsValidOpenIconAButton = false;
 }

@@ -4,7 +4,6 @@
 #include "Game/LiveActor/PartsModel.hpp"
 #include "Game/MapObj/ChipHolder.hpp"
 #include "Game/MapObj/MapPartsRailMover.hpp"
-#include "Game/NameObj/NameObjArchiveListCollector.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorShadowUtil.hpp"
@@ -380,8 +379,3 @@ bool ChipBase::isNeedBubble(const TableIter& rIter) {
     return arg3;
 }
 
-void ChipBase::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
-    if (ChipBase::isNeedBubble(rIter)) {
-        pCollector->addArchive("AirBubble");
-    }
-}

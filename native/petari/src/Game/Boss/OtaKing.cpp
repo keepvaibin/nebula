@@ -10,7 +10,6 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/LiveActor/PartsModel.hpp"
 #include "Game/MapObj/CocoNut.hpp"
-#include "Game/NameObj/NameObjArchiveListCollector.hpp"
 #include "Game/Util.hpp"
 
 #include <cstdio>
@@ -175,27 +174,6 @@ void OtaKing::makeActorAppeared() {
 void OtaKing::startAppearDemo() {
     if (isNerve(GET_NERVE(OtaKing, OtaKingNrvWaitOnSwitch))) {
         invalidateClippingAndStartDemo("出現", GET_NERVE(OtaKing, OtaKingNrvAppearDemo), GET_NERVE(OtaKing, OtaKingNrvWaitStartDemo));
-    }
-}
-
-void OtaKing::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
-    bool arg1 = false;
-    MR::getPlacementArg1NoInit(rIter, &arg1);
-    bool isLv2 = arg1;
-
-    pCollector->addArchive(CocoNut::getModelName());
-    pCollector->addArchive("FireBall");
-    pCollector->addArchive("FireBubble");
-    pCollector->addArchive("OtaKingMagma");
-    pCollector->addArchive("OtaKingMagmaBloom");
-
-    if (!isLv2) {
-        pCollector->addArchive("OtaKing");
-        pCollector->addArchive("OtaKingFoot");
-        pCollector->addArchive("OtaKingLongFoot");
-    } else {
-        pCollector->addArchive("OtaKingLv2");
-        pCollector->addArchive("OtaKingFootLv2");
     }
 }
 

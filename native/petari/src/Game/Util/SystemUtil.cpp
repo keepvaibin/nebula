@@ -61,14 +61,6 @@ namespace MR {
         return getGameSystemObjHolder()->mParticleResHolder;
     }
 
-    void requestChangeArchivePlayer(bool isPlayerMario) {
-        GameSystemFunction::requestChangeArchivePlayer(isPlayerMario);
-    }
-
-    void waitEndChangeArchivePlayer() {
-        GameSystemFunction::waitEndChangeArchivePlayer();
-    }
-
     void callMethodAllSceneNameObj(NameObjMethod pMethod) {
         ::getSceneNameObjHolder()->callMethodAllObj(pMethod);
     }

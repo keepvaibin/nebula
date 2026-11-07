@@ -4,7 +4,6 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Map/HitInfo.hpp"
 #include "Game/NPC/TalkMessageFunc.hpp"
-#include "Game/NameObj/NameObjArchiveListCollector.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorShadowUtil.hpp"
@@ -45,12 +44,6 @@ namespace NrvLuigiNPC {
 };  // namespace NrvLuigiNPC
 
 LuigiNPC::LuigiNPC(const char* pName) : NPCActor(pName), mTakeOutStar(), mType(Type_Invalid) {
-}
-
-void LuigiNPC::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
-    pCollector->addArchive("LuigiNPC");
-    pCollector->addArchive("LuigiNPCMiddle");
-    pCollector->addArchive("LuigiNPCLow");
 }
 
 bool LuigiNPC::branchFunc(u32 msg) {

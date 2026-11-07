@@ -5,7 +5,6 @@
 #include "Game/System/NerveExecutor.hpp"
 
 class IconAButton;
-class NameObjArchiveListCollector;
 class Rosetta;
 class RosettaMonologue;
 
@@ -16,7 +15,6 @@ public:
     /// @param rIter TODO.
     RosettaDemoAstroDomeExplain(Rosetta* pRosetta, const TableIter& rIter);
 
-    static void makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter);
 
     void startDemo();
     void exeDemo();

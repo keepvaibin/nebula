@@ -5,7 +5,6 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/NPC/TalkMessageFunc.hpp"
 #include "Game/NPC/TicoDemoGetPower.hpp"
-#include "Game/NameObj/NameObjArchiveListCollector.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
@@ -52,17 +51,6 @@ const f32 Tico::sFloatSeMinVolume = 0.2f;
 
 Tico::Tico(const char* pName)
     : NPCActor(pName), _15C(), _160(0.0f, 0.0f, 0.0f), _16C(), mDemoGetPower(), _174(), _178(), _17C(255, 255, 255, 255), _180(), mDemoStarter(this) {
-}
-
-void Tico::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
-    if (MR::isObjectName(rIter, "TicoBaby")) {
-        pCollector->addArchive("TicoBaby");
-        return;
-    }
-
-    pCollector->addArchive("Tico");
-    pCollector->addArchive("TicoMiddle");
-    pCollector->addArchive("TicoLow");
 }
 
 void Tico::initBase(s32 color) {

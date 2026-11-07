@@ -27,7 +27,6 @@ public:
     virtual void disappear(bool);
     virtual void appearInformation() const;
 
-    static void makeArchiveList(NameObjArchiveListCollector*, const TableIter&);
 
     const char* getActionName(const char*);
     void setCameraParam();

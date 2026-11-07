@@ -1,14 +1,11 @@
 #pragma once
 
 namespace GameSystemFunction {
-    void initAfterStationedResourceLoaded();
     void setSceneNameObjHolderToNameObjRegister();
     bool isCreatedGameDataHolder();
     bool isCreatedSystemWipe();
     bool isDoneLoadSystemArchive();
     bool tryToLoadSystemArchive();
-    void requestChangeArchivePlayer(bool);
-    void waitEndChangeArchivePlayer();
     void activateScreenPreserver();
     void deactivateScreenPreserver();
     bool isOccurredSystemWarning();

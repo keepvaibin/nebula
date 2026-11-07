@@ -13,7 +13,6 @@
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/KeySwitch.hpp"
-#include "Game/NameObj/NameObjArchiveListCollector.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorShadowUtil.hpp"
@@ -187,12 +186,6 @@ void KuriboChief::initKeySwitch(const TableIter& rIter) {
     if (MR::useStageSwitchWriteA(this, rIter)) {
         mKeySwitch = new KeySwitch("鍵スイッチ");
         mKeySwitch->initKeySwitchByOwner(rIter);
-    }
-}
-
-void KuriboChief::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
-    if (MR::isExistStageSwitchA(rIter)) {
-        pCollector->addArchive("KeySwitch");
     }
 }
 
