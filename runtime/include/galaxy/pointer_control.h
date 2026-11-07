@@ -5,8 +5,8 @@
 // finger's travel). Whichever source moved last owns the pointer; another source
 // takes it over only after the owner has been still for kPointerHandoffUs, so a
 // resting stick or a controller lying on the desk never fights a moving mouse and
-// the reverse. A finger moving on a touchpad takes it at once: the hand holding the
-// controller turns it a little all the time.
+// the reverse. A finger moving on a touchpad, and a moving mouse over the gyro, take
+// it at once: the hand holding the controller turns it a little all the time.
 
 #include <array>
 #include <cstdint>

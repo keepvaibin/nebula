@@ -255,17 +255,35 @@ void set_key(int vk, bool down) {
     if (vk == VK_LMENU || vk == VK_RMENU) g_input.keys.set_key(VK_MENU, down);
 }
 
-// The unified layout's scheme for an SDL gamepad: Nintendo's positional layout for Switch controllers, PlayStation's
-// for Sony's (as the Windows host's HID controllers).
+// The unified layout's scheme for an SDL gamepad, as the Windows host names the same controllers: Switch 2 controllers
+// by their product (SDL types the Pro Controller 2 as a standard pad), Nintendo's positional layout for Switch
+// controllers, PlayStation's for Sony's, Steam's, and the Xbox layout SDL's standard mapping follows for the rest.
 galaxy::input::ControlScheme scheme_of(SDL_Gamepad* pad) noexcept {
+    namespace sw = galaxy::input::switch_hid;
+    if (SDL_GetGamepadVendor(pad) == sw::kNintendoVendorId) {
+        switch (SDL_GetGamepadProduct(pad)) {
+        case sw::kPro2ControllerProductId:
+        case sw::kJoyCon2LeftProductId:
+        case sw::kJoyCon2RightProductId:
+        case sw::kJoyCon2GripProductId:
+        case sw::kGameCubeProductId:
+            return galaxy::input::ControlScheme::SwitchPro2;
+        default:
+            break;
+        }
+    }
     switch (SDL_GetGamepadType(pad)) {
     case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_PRO:
     case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_PAIR:
+    case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_LEFT:
+    case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_RIGHT:
         return galaxy::input::ControlScheme::SwitchPro;
     case SDL_GAMEPAD_TYPE_PS3:
     case SDL_GAMEPAD_TYPE_PS4:
     case SDL_GAMEPAD_TYPE_PS5:
         return galaxy::input::ControlScheme::PlayStation;
+    case SDL_GAMEPAD_TYPE_STEAM:
+        return galaxy::input::ControlScheme::Steam;
     default:
         return galaxy::input::ControlScheme::Xbox;
     }
@@ -718,24 +736,8 @@ void pump_events(int timeout_ms) noexcept {
             if (!sample.connected) {
                 continue;
             }
-            namespace pad = galaxy::input::pad;
-            namespace menu = galaxy::input::settings_pad;
-            std::uint16_t buttons = 0u;
-            const auto map = [&](std::uint32_t bit, std::uint16_t to) {
-                if ((sample.buttons & pad::bit(bit)) != 0u) buttons |= to;
-            };
-            map(pad::kDpadUpBit, menu::kUp);
-            map(pad::kDpadDownBit, menu::kDown);
-            map(pad::kDpadLeftBit, menu::kLeft);
-            map(pad::kDpadRightBit, menu::kRight);
-            map(pad::kStartBit, menu::kStart);
-            map(pad::kBackBit, menu::kBack);
-            map(pad::kLeftShoulderBit, menu::kShoulderLeft);
-            map(pad::kRightShoulderBit, menu::kShoulderRight);
-            map(pad::kSouthBit, menu::kA);
-            map(pad::kEastBit, menu::kB);
-            map(pad::kWestBit, menu::kX);
-            map(pad::kNorthBit, menu::kY);
+            // The unified buttons are the menu's, by their labels (Nintendo's A is the right face button), as on Windows.
+            const std::uint16_t buttons = galaxy::input::settings_pad_buttons(sample.scheme, sample.buttons);
             const galaxy::input::NativeSettingsPadStep step = galaxy::input::native_settings_pad_step(
                 g_menu_pad, buttons, sample.axes[0], sample.axes[1], galaxy::render::native_settings_overlay_visible(), galaxy::steady_ms());
             for (std::size_t i = 0; i < step.key_count; ++i) {
